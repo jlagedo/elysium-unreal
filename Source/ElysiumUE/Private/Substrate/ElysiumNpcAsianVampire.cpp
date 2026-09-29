@@ -475,8 +475,8 @@ int32 FElysiumNpcAsianVampire::SelectJumpbaseNode()
 	//     return best;
 	//
 	// Identical in shape to `SelectLedgeNode`, which filters hint type 0x4653 instead.
-	// **SEAM**: the global hint list answers empty, so the search finds nothing — which is retail's
-	// own answer for a map with no `jumpbase` hints.
+	// The list is the world's live hint list (`NavAllHintNodes`); `PositionClearForTeleport` is
+	// still a SEAM answering false, so no candidate passes yet.
 	int32 Best = INDEX_NONE;
 	float BestDistance = TNumericLimits<float>::Max();
 	TArray<int32> Hints;

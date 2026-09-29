@@ -815,11 +815,12 @@ bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 	}
 	Npc->Senses.Memory.ClosestPlayer = Player->Handle;
 
-	// The node-graph seam. Every selector asks it, and every one of them answers retail's null.
+	// The hint list. This world authors no hint, so every selector answers retail's null (the list
+	// and the nearest node over a real network are `Elysium.Substrate.PlaceSeams.*`).
 	TArray<FElysiumNpcBase::FHintWords> Nodes;
 	TArray<int32> NodeIds;
 	Npc->GatherHintNodes(Nodes, NodeIds);
-	TestEqual(TEXT("the global hint list answers empty"), Nodes.Num(), 0);
+	TestEqual(TEXT("the global hint list is this world's, empty"), Nodes.Num(), 0);
 	TestEqual(TEXT("SelectCenterNode answers null"), SheriffNpc->SelectCenterNode(), (int32)INDEX_NONE);
 	TestEqual(TEXT("SelectLedgeNode answers null"), SheriffNpc->SelectLedgeNode(false), (int32)INDEX_NONE);
 	TestEqual(TEXT("SelectLedgeNodeAsian answers null"), AsianNpc->SelectLedgeNodeAsian(),
@@ -850,8 +851,8 @@ bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 
 	// The navigator's node query, and the cache `GetNearestNodeToPlayer` keeps in front of it. The
 	// cache is keyed on ZERO, not -1, so a permanent miss re-queries every interval and never
-	// latches.
-	TestEqual(TEXT("the navigator's nearest-node query answers retail's miss value"),
+	// latches. This world has no network, so the query misses.
+	TestEqual(TEXT("with no network the nearest-node query answers retail's miss value"),
 		Npc->NavNearestNodeTo(FVector::ZeroVector), -1);
 	TestEqual(TEXT("GetNearestNodeToPlayer therefore answers 0"), Wolf->GetNearestNodeToPlayer(), 0);
 	TestTrue(TEXT("and stamps its refresh clock even on the miss"),

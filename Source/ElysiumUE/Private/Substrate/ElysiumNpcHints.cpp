@@ -124,14 +124,16 @@ bool FElysiumNpc::HintIdleActivityGate() const
 	return true;
 }
 
-bool FElysiumNpc::PatrolNodeInterestRecordName(int32 PatrolNode, FString& OutName) const
+bool FElysiumNpc::PatrolNodeInterestRecordName(int32 Record, FString& OutName) const
 {
-	// SEAM for `0x1029f730` — the patrol node's interest record. The node ids are this runtime's
-	// hint entity indices (`PatrolNodePosition`), and no node carries an interest record, so there is
-	// no `+0x468` name on it.
-	(void)PatrolNode;
-	(void)OutName;
-	return false;
+	// `record->+0x468` -- the hint's `m_strTargetName` (key `target_name`, `FHintWords::TargetName`).
+	FHintWords Words;
+	if (!HintWords(Record, Words))
+	{
+		return false;
+	}
+	OutName = Words.TargetName;
+	return true;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -268,8 +270,11 @@ int32 FElysiumNpc::ResolvePatrolInterestPlace(int32 PatrolNode)
 	{
 		return static_cast<int32>(ScheduleHost.Unknown6300);
 	}
+	// `thunk_FUN_1029f730(this, node)`: the node's hint, gated on `m_bPatrolPathUseHint` and cached
+	// at `+0x659c` (family BaseHelpers' body). 0 is retail's null.
+	const int32 Record = FUN_1029f730(PatrolNode);
 	FString RecordName;
-	if (PatrolNodeInterestRecordName(PatrolNode, RecordName) && World != nullptr)
+	if (Record != 0 && PatrolNodeInterestRecordName(Record, RecordName) && World != nullptr)
 	{
 		// `thunk_FUN_100f7770(&DAT_106eb5d8, NULL, name, 0, 0)` — the by-name lookup, whose matcher
 		// is `FElysiumEntityWorld::NameMatches`. A record with no name string is retail's empty

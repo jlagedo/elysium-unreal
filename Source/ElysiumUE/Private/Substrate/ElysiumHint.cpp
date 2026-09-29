@@ -5,6 +5,7 @@
 #include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumNodeEntity.h"
 #include "Substrate/ElysiumNpcKernelBindings.h"
+#include "Substrate/ElysiumPlaceSet.h"
 
 FName FElysiumHint::ClassName()
 {
@@ -106,13 +107,37 @@ void FElysiumHint::InputDisableHint(const FElysiumInputArgs&)
 
 void FElysiumHint::InputWalk(const FElysiumInputArgs&)
 {
-	// SEAM: `FUN_102d3e60` resolves the network node this hint is bound to; no node is bound until
-	// 0018 story 4, and retail's own null arm returns without touching anything.
+	// `0x102d0a50`: `FUN_102d3e60` resolves the node (counting an out-of-range id), and a null node
+	// returns. SEAM for the found arm: `FUN_102f97c0(node, 1)` clears bits `0xf0` of the info word
+	// (`+0x64`) of every link of the node whose far node `0x102f98d0` accepts; the place set carries
+	// no links (0018 stories 5 and 7), so there is nothing to write.
+	if (World != nullptr)
+	{
+		World->Places().ResolveHintNode(NodeId);
+	}
 }
 
 void FElysiumHint::InputDontWalk(const FElysiumInputArgs&)
 {
-	// SEAM: as `InputWalk`, with `FUN_102f97c0(node, 0)`.
+	// `0x102d0a80`: as `InputWalk`, with `FUN_102f97c0(node, 0)`, which SETS bits `0xf0`. The same
+	// link seam.
+	if (World != nullptr)
+	{
+		World->Places().ResolveHintNode(NodeId);
+	}
+}
+
+void FElysiumHint::OnPostRestore(FElysiumEntityWorld& InWorld)
+{
+	// `0x102d3ec0`: the base `CBaseEntity::OnRestore` first (`0x100aa5a0`), then the relink.
+	FElysiumEntity::OnPostRestore(InWorld);
+	const FElysiumNpcBase::FHintRestoreResult Restore =
+		FElysiumNpcBase::HintOnRestore(ToWords(), Handle, InWorld.Places());
+	if (Restore.bNodeFound && !Origin.Equals(Restore.NodeOriginCm, 0.0))
+	{
+		// `Teleport(&node->origin, NULL, NULL)` (vtable `+0x2d4`), through the runtime writer.
+		SetRuntimeOrigin(Restore.NodeOriginCm);
+	}
 }
 
 void FElysiumHint::InputSetUserData(const FElysiumInputArgs& Args)
@@ -139,7 +164,7 @@ void FElysiumHint::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("Disabled"), Disabled != 0 ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Owner"), HintOwner.IsSet() ? FString::FromInt(HintOwner.Index) : TEXT("(none)"));
 	Out.Emplace(TEXT("Next use"), FString::Printf(TEXT("%.3f"), NextUseTime));
-	Out.Emplace(TEXT("Node"), NodeId == INDEX_NONE ? TEXT("unbound (story 3)") : FString::FromInt(NodeId));
+	Out.Emplace(TEXT("Node"), NodeId == INDEX_NONE ? TEXT("none (standalone)") : FString::FromInt(NodeId));
 }
 
 void FElysiumHint::BuildClass(FElysiumClassDesc& D)

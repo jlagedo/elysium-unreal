@@ -807,9 +807,15 @@ bool FElysiumNpcKernelStartTask19BaseSearchesTest::RunTest(const FString&)
 	F.Run(0x76, 20050.f);                                                // 0x10286ec2
 	TestEqual(TEXT("WANDER splits the operand: min = n / 10000"), F.Guard->StartTaskNav.LastSearchMinUnits, 2.f);
 	TestEqual(TEXT("... max = n % 10000"), F.Guard->StartTaskNav.LastSearchMaxUnits, 50.f);
-	TestEqual(TEXT("... no node graph: 0x18"), F.Reason(), 0x18);
+	// The radial probe `0x102ed610` is story 5's seam, so it falls back to `SetRandomGoal(1.0,
+	// vec3_origin)` -- the capped point pick, which no place answers in this world (it has no
+	// network): 0x18.
+	TestEqual(TEXT("... the fallback pick is asked with an order of 1.0"), F.Guard->StartTaskNav.LastRandomGoalOrderUnits, 1.f);
+	TestEqual(TEXT("... and finds no place: 0x18"), F.Reason(), 0x18);
 	F.Run(0x1f, 200.f);                                                  // 0x10285d7f
-	TestEqual(TEXT("RANDOM_NODE: 0x18"), F.Reason(), 0x18);
+	TestEqual(TEXT("RANDOM_NODE asks the pick with the resolved order"), F.Guard->StartTaskNav.LastRandomGoalOrderUnits, 200.f);
+	TestEqual(TEXT("RANDOM_NODE with no network: 0x18 (the pick itself: Elysium.Substrate.PlaceSeams.Wander.*)"),
+		F.Reason(), 0x18);
 
 	F.Run(0x4e, 120.f);                                                  // 0x10286c69
 	// `0x10286c84` -> `0x102ee1c0`: `MOV EAX,[ECX+0x30]; MOV [EAX+0x28],ECX` -- the PATH's tolerance,

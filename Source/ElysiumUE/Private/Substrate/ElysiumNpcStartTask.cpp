@@ -30,6 +30,7 @@
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
+#include "Substrate/ElysiumNpcEngineRandom.h"
 #include "Substrate/ElysiumNpcGait.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumSchedule.h"
@@ -273,11 +274,7 @@ namespace StartTask19A
 		return Rng().FRandRange(Min, Max);
 	}
 
-	// `DAT_1070b244`'s vtable `+8`, `RandomInt(min, max)`, both ends inclusive.
-	int32 RandomInt(int32 Min, int32 Max)
-	{
-		return Rng().RandRange(Min, Max);
-	}
+	// `DAT_1070b244`'s vtable `+8`, `RandomInt(min, max)`, is `ElysiumNpcEngineRandom::RandomInt`.
 
 	FVector UnitsOf(const FVector& Cm)
 	{
@@ -819,7 +816,7 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 			&& !NpcFlags.Has(EElysiumNpcFlag2::DISABLE_BURST_FIRE))            // 0x102a4510..451a +0x14bc / 0x102a451a 0x102a451e 0x102a4527 0x102a4534
 		{
 			// `RandomInt(data->+0x3a4, data->+0x3a8)` over the weapon's data (`0x10003d91`).
-			BurstFireCount = StartTask19A::RandomInt(StartTask19WeaponMinBurst(), StartTask19WeaponMaxBurst());  // 0x102a4549 -> +0x6490
+			BurstFireCount = ElysiumNpcEngineRandom::RandomInt(StartTask19WeaponMinBurst(), StartTask19WeaponMaxBurst());  // 0x102a4549 -> +0x6490
 			return 0;
 		}
 		BurstFireCount = 1;                                                   // 0x102a455f
@@ -1057,7 +1054,7 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 		// (`0x102a3a58..3a5e`) and hands a NULL node to `CAI_Node::GetPosition(m_eHull +0x1568)`
 		// (`0x102a3a86`), which retail dereferences -- crash guard: the task stays RUNNING.
 		FVector NodeCm = FVector::ZeroVector;
-		const EPatrolNode Node = PatrolNodePosition(NodeId, NodeCm);
+		const EPatrolNode Node = PatrolNodePosition(NodeId, HullKind, NodeCm);   // m_eHull +0x1568
 		if (Node == EPatrolNode::OutOfRange)
 		{
 			++PatrolNodeMissCounter();                                            // 0x102a3a5e

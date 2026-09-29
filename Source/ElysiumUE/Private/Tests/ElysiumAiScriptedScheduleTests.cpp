@@ -130,6 +130,7 @@ namespace
 			Services.bProvideNpcMotor = true;
 
 			FElysiumNpcWorldBuilder Builder = BuildWorld(Setup);
+			ElysiumAdoptPlacesAt(World, { FVector(0.0, -200.0, 0.0), FVector(0.0, -400.0, 0.0) });   // route_1, route_2
 			World.Load(MoveTemp(Builder.Defs));
 			World.SpawnPlayer();
 			World.Activate(0.0);

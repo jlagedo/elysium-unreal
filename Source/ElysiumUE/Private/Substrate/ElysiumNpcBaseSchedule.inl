@@ -47,8 +47,6 @@ void MotorTaskComplete(bool bIgnoreTaskFailed);
  *  recovered callers; the disassembly reads the NAVIGATOR at `+0x5d34`, indexes its node list
  *  (`+0x2c`, count at `+0x00`, array at `+0x04`) and tail-jumps to slot 527 `IsUnusableNode`, which
  *  the ledger's signature table names. An index below zero or past the end bumps the global error
- *  counter `0x106c994c` and answers false, as does a null node.
- *
- *  SEAM: there is no node list on the port's motor, so the bounds test always fails and the counter
- *  is tallied instead of incremented. */
+ *  counter `0x106c994c` and answers false, as does a null node. The list is the world's place set
+ *  (0018 story 4); the node reaches slot 527 as its `FElysiumPlaceRow`. */
 bool IsUnusableNodeIndex(int32 NodeIndex) const;

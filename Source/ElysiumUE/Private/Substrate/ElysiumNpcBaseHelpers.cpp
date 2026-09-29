@@ -21,6 +21,7 @@
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcThinkCadence.h"
 #include "Substrate/ElysiumNpcTroikaHelpersShared.h"
+#include "Substrate/ElysiumPlaceSet.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
 
@@ -388,18 +389,40 @@ int32 FElysiumNpcBase::Slot571(float Distance)
 	return Distance < GDatFollowRunDistanceUnits ? GBaseHelpersActWalk : GBaseHelpersActRun;
 }
 
-bool FElysiumNpcBase::HintLosEndpoint(int32 HintNode, FVector& OutPointCm) const
+int32 FElysiumNpcBase::RetailPathingHull() const
 {
-	// `0x102d1180(hint, npc, &out)` — the point on a hint `0x102961a0` rays to: a hint bound to no
-	// network node (`m_nNodeID +0x5e4 == -1`) answers its own `GetAbsOrigin()` (vtable `+0x364`);
-	// a bound one asks the network `0x102f46d0(DAT_1093407c, &out, npc, node)`. **SEAM** for that
-	// arm only: no AI network stands here (0018 story 4), so a node-bound hint answers false.
+	// `+0x156c`. Carried on the Troika line (`FElysiumNpc::PathingHullKind`); a base-only NPC has no
+	// class that writes a pathing word of its own, so it paths on its standing hull, as
+	// `StartTaskSetGoal`'s tolerance arm already reads it.
+	const FElysiumNpc* Troika = AsNpc();
+	return Troika != nullptr ? Troika->PathingHullKind : HullKind;
+}
+
+bool FElysiumNpcBase::HintPositionCm(int32 HintNode, FVector& OutPointCm) const
+{
+	// `CAI_Hint::GetPosition` -- `0x102d1180(hint, npc, &out)`, the whole body:
+	//
+	//     if (hint->m_nNodeID (+0x5e4) == -1) out = hint->GetAbsOrigin();       // vtable +0x364
+	//     else out = 0x102f46d0(DAT_1093407c, &tmp, npc, hint->m_nNodeID);      // the network
+	//
+	// and `0x102f46d0` answers `vec3_origin` for no node array, a null NPC or an id outside
+	// `-1 < id <= count`, else `CAI_Node::GetPosition(node, npc+0x156c)` -- the PATHING hull, read off
+	// the NPC it was handed (`FElysiumPlaceSet::NetworkNodePositionCm`). Every arm writes the out
+	// vector; `this` is never null here, so the null-NPC arm is not reachable. False only when
+	// `HintNode` names no live hint (retail holds the `CAI_Hint*`, never an index to a dead one).
 	FHintWords Words;
-	if (!HintWords(HintNode, Words) || Words.NodeId != INDEX_NONE)
+	if (!HintWords(HintNode, Words))
 	{
 		return false;
 	}
-	OutPointCm = Words.OriginCm;
+	if (Words.NodeId == INDEX_NONE)                                            // 0x102d1187 CMP -1
+	{
+		OutPointCm = Words.OriginCm;                                           // vtable +0x364
+		return true;
+	}
+	OutPointCm = World != nullptr
+		? World->Places().NetworkNodePositionCm(Words.NodeId, RetailPathingHull())   // 0x102d11a8
+		: FVector::ZeroVector;
 	return true;
 }
 

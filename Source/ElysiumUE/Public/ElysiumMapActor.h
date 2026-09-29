@@ -881,9 +881,13 @@ private:
 	void PollRuntimeActivation();
 	// Adopt the level's baked meshes. There is no build arm: a map without them fails (story 21).
 	void EnsureRuntimeNavigation();
-	// Whether this level arrived with a navigation mesh already built into it, carrying tiles.
-	// A mesh with no tiles is not one: it would read as built and leave every NPC unable to path.
+	// Whether this level arrived with a navigation mesh already built into it, carrying tiles, for
+	// every agent the map's `UsedHullBits` names (the place set's, 0018 story 4); any mesh with tiles
+	// when the map declares none. A mesh with no tiles is not one: it would read as built and leave
+	// every NPC unable to path.
 	bool HasBakedNavigationMesh(const class UNavigationSystemV1& Navigation) const;
+	// Load `DA_<map>_Places` into the entity world's place set (0018 story 4), before its `Load`.
+	void AdoptMapPlaces();
 	bool IsRuntimeNavigationReady() const;
 	FElysiumMapRuntimePrerequisites CollectRuntimePrerequisites() const;
 	void ActivateRuntime();

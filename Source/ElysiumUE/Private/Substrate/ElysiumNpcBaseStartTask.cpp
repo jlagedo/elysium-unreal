@@ -29,6 +29,10 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcEngineRandom.h"
+#include "Substrate/ElysiumNpcGait.h"
+#include "Substrate/ElysiumPlaceSet.h"
+#include "Substrate/ElysiumRetailHullTable.h"
 #include "Substrate/ElysiumScheduleCorpus.h"
 #include "Substrate/ElysiumScriptedSequence.h"
 
@@ -817,10 +821,10 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 			return 0;
 		}
 		// `0x102d1180(hint, this, &out)` (`0x10285add`): the hint's `GetAbsOrigin`, or with a network
-		// node (`+0x5e4 != -1`) the node's position. When the port cannot answer, no destination is
-		// set (the route is refused) rather than routing to the zero vector.
+		// node (`+0x5e4 != -1`) the node's position at this NPC's pathing hull (`0x102f46d0`). Only a
+		// hint index that names no live hint leaves no destination (the route is refused).
 		FVector Approach = FVector::ZeroVector;
-		const bool bApproach = HintLosEndpoint(BaseScheduleHost.HintNode, Approach); // 0x10285add  0x102d1180
+		const bool bApproach = HintPositionCm(BaseScheduleHost.HintNode, Approach); // 0x10285add  0x102d1180
 		FStartTaskNavGoal Goal = MakeGoal(GOALTYPE_LOCATION, NavToleranceKeep);
 		Goal.DestCm = Approach;
 		Goal.bDestSet = bApproach;
@@ -1976,8 +1980,9 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 	//
 	// Goal flag 2 (`0x102ecf2e TEST [goal+0x24],0x2`) builds a NODE route (`0x102f3c10` /
 	// `0x102f41b0` nearest nodes, `0x102fd240` the route) and returns without `0x102f1dc0`. This
-	// runtime has no node graph (0018 story 4): the goal takes the location arm below and the mover
-	// plans it (named divergence).
+	// runtime keeps the places (0018 story 4) but no links: routing is Unreal's (the Navigation
+	// boundary), so the goal takes the location arm below and the mover plans it (named divergence;
+	// the node route's goal handling is 0018 story 5's).
 
 	// The destination: an entity goal routes to the entity (`path+0x30`), its dest words written
 	// only when the goal's own dest is not the default triple; a location goal takes `[1..3]`, or
@@ -2293,19 +2298,257 @@ bool FElysiumNpcBase::StartTaskFindLosPos(const FVector& ThreatCm, const FVector
 	return false;
 }
 
+namespace ElysiumStartTaskWanderPick
+{
+	// PORT CONSTANTS -- no retail source. Retail's walk (`0x102ff3e0`) follows the AIN's links and
+	// cannot pick a place the far side of a wall; the capped point pick (0018 story 4, "The pick,
+	// entire") draws a place in a straight line and asks Unreal for the route, so it needs a rule for
+	// a route that runs far past the order. A route longer than `kWanderDetourRatio` x the resolved
+	// distance is a detour and the pick is dropped; at most `kWanderMaxDraws` draws are made in all.
+	constexpr float kWanderDetourRatio = 2.0f;
+	constexpr int32 kWanderMaxDraws = 5;
+
+	// `+0x70`, the node type retail's walk never ENDS on (`0x102ff3e0`'s `!= 4` tests): a climb node.
+	constexpr int32 NodeTypeClimb = 4;
+	// `0x1030ba50(path, 4)`: the path type word `SetRandomGoal`'s install writes.
+	constexpr int32 PathTypeRandom = 4;
+
+	// One candidate place: its network index, where the NPC would stand there (`GetPosition` at the
+	// pathing hull), and its straight-line distance in SOURCE units.
+	struct FCandidate
+	{
+		int32 Node = INDEX_NONE;
+		FVector PositionCm = FVector::ZeroVector;
+		float DistanceUnits = 0.0f;
+		bool bAhead = false;
+	};
+}
+
+bool FElysiumNpcBase::InstallPathNoGoal(const FVector& DestCm)
+{
+	using namespace ElysiumStartTask19Base;
+	using namespace ElysiumStartTaskWanderPick;
+
+	// **The narrow seam 0018 story 5's navigator absorbs.** `0x102ed430`'s tail installs a route
+	// straight into the navigator's PATH object and never calls `SetGoal` (`0x102ecd20`):
+	//
+	//     0x1030ba50(nav->m_pPath (+0x30), 4);     // path +0x5c, the type word
+	//     0x1030b4d0(nav->m_pPath, route, 0);      // the waypoints
+	//     0x1030b8e0(nav->m_pPath);                // (unrecovered: the path's own finalisation)
+	//     nav->+0x14 = |from - path goal|^2;       // 0x1000f89e(path), SOURCE units squared
+	//
+	// So no `AI_NavGoal_t`, no goal type, no tolerance (`path+0x28` keeps the reset's value), no
+	// movement or arrival activity. The port's route is the mover's: the move is issued here with no
+	// acceptance radius, under the same body arbitration `NavBuildRoute` runs (port-only) and with
+	// the gait the schedule's navigation activity names, and nothing of `StartTaskSetGoal`'s runs.
+	FElysiumNpc* Troika = AsNpc();
+	if (Motor == nullptr)
+	{
+		return false;
+	}
+	const bool bScriptedOrderHolds = Troika != nullptr && Troika->ScriptedScheduleOrder.IsSet()
+		&& Troika->GetMind().Owner() == EElysiumBodyOwner::ScriptedSchedule;
+	if (Troika != nullptr && !bScriptedOrderHolds && !Troika->AcquireScheduleBody(TEXT("SetRandomGoal 0x102ed430")))
+	{
+		return false;
+	}
+	const int32 MoveActivity = Troika != nullptr ? Troika->ScheduleHost.NavigationActivity : INDEX_NONE;
+	const EElysiumNpcGaitKind Gait = MoveActivity == ACT_RUN ? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
+	if (Troika != nullptr)
+	{
+		Troika->MoveGoal = DestCm;
+	}
+	bMoveIssued = Motor->MoveTo(DestCm, /*AcceptanceRadiusCm=*/0.0f, ElysiumNpcGait::TravelSpeed(Motor, Gait),
+		/*bAllowPartialPath=*/false, Gait);
+	if (!bMoveIssued)
+	{
+		return false;
+	}
+	Navigator.PathTypeWord = PathTypeRandom;                                    // 0x102ed4a6 0x1030ba50(path, 4)
+	Navigator.EndpointDistanceSqrUnits = static_cast<float>(
+		FVector::DistSquared(Origin / ElysiumMove::U, DestCm / ElysiumMove::U)); // 0x102ed4e9 nav +0x14
+	++Navigator.PathNoGoalInstalls;
+	return true;
+}
+
 bool FElysiumNpcBase::StartTaskSetRandomGoal(float DistanceUnits, const FVector& Direction)
 {
+	using namespace ElysiumStartTaskWanderPick;
+
+	// `CAI_Navigator::SetRandomGoal` (`0x102ed940`): nav `+0x8` := `+0x156c`, `+0xc` := the frame
+	// counter (scratch words the port's mover does not keep), then `0x102ed430(this, GetOrigin()
+	// (slot 220), distance, direction)`, which opens with the navigator's slot 7 reset and refuses a
+	// network of no node.
+	//
+	// **NAMED MODERNIZATION (0018 story 4, decided by the owner 2026-09-21): the capped point pick.**
+	// Retail's `0x102ff3e0` WALKS the AIN from the nearest node (`0x102f3c10`), hop by hop over
+	// `0x102ff960`'s link test, until the hops add up to the distance or `0x14` steps. This draws the
+	// walk's ENDPOINT instead, as a retail place chosen by retail's tests:
+	//
+	//   1. distance = min(order, the map's wander cap for the pathing hull) -- the cap (`20 x` the
+	//      median link length, baked) stands in for the `0x14` iteration guard;
+	//   2. candidates: the places within `distance` in a straight line, never a type-4 (climb) node,
+	//      and slot 527's usability test (`0x1027db30`);
+	//   3. two tiers by the node cooldown `+0x9c`: expired (`<= curtime`, `0x102ff3e0`'s own test)
+	//      first, a cooling place only when no expired one stands;
+	//   4. within the tier, the places AHEAD (positive 2-D dot against `Direction`) at `>= distance /
+	//      2`; that empty, every place ahead; that empty, every candidate. A zero direction skips the
+	//      ahead test;
+	//   5. one `RandomInt(0, count - 1)` on the engine stream;
+	//   6. Unreal's route to it on the body's own agent (`RouteLengthTo`): no route, or one longer
+	//      than `kWanderDetourRatio x distance`, drops the pick from the pool and draws again over
+	//      what remains (tier and band re-taken), `kWanderMaxDraws` in all;
+	//   7. the route installed as a PATH, no goal (`InstallPathNoGoal`).
+	//
+	// Given up, knowingly: the dot-to-dot meander, the rotating neighbour cursor `node+0xa4`, the
+	// per-step heading replacement, the visited set, and the accumulated path length (the straight
+	// line checked against the route stands for it). Failure is the caller's `TaskFail(0x18)`; the
+	// task completes synchronously in `StartTask`, as retail's does.
 	++StartTaskNav.RandomGoalRequests;
-	StartTaskNav.LastSearchMaxUnits = DistanceUnits;
-	(void)Direction;
+	StartTaskNav.LastRandomGoalOrderUnits = DistanceUnits;
+	StartTaskNav.LastRandomGoalNode = INDEX_NONE;
+	StartTaskNav.LastRandomGoalDraws = 0;
+	StartTaskNav.LastRandomGoalDistanceUnits = 0.0f;
+	FUN_102eea70();                                                            // 0x102ed437 CALL [EAX+0x1c]
+	const FElysiumPlaceSet* Places = World != nullptr ? &World->Places() : nullptr;
+	if (Places == nullptr || Places->NumNodes() < 1)                           // 0x102ed43d CMP [ECX],0 / JG
+	{
+		return false;
+	}
+	// 1. The cap. A hull the map declares no cap for takes the human hull's figure (the bake's own
+	// rule for a hull with no link); a map with no cap at all (an unbaked test world) caps nothing.
+	const int32 Hull = RetailPathingHull();
+	float CapUnits = Places->WanderCapUnits(Hull);
+	if (CapUnits <= 0.0f)
+	{
+		CapUnits = Places->WanderCapUnits(ElysiumRetailHulls::DefaultHull);
+	}
+	const float Distance = CapUnits > 0.0f ? FMath::Min(DistanceUnits, CapUnits) : DistanceUnits;
+	StartTaskNav.LastRandomGoalDistanceUnits = Distance;
+	if (!(Distance > 0.0f))                                                    // 0x102ff3e0's `param_2 <= 0` refusal
+	{
+		return false;
+	}
+
+	// 2-3. The candidates, in two tiers.
+	const float Curtime = static_cast<float>(World->NowSeconds());            // gpGlobals->curtime
+	const FVector2D Ahead(Direction.X, Direction.Y);
+	const bool bAheadTest = !Ahead.IsZero();
+	TArray<FCandidate> Expired;
+	TArray<FCandidate> Cooling;
+	for (int32 Node = 0; Node < Places->NumNodes(); ++Node)
+	{
+		if (Places->Row(Node).Type == NodeTypeClimb)
+		{
+			continue;
+		}
+		FCandidate Candidate;
+		Candidate.Node = Node;
+		if (!Places->GetPositionCm(Node, Hull, Candidate.PositionCm))
+		{
+			continue;
+		}
+		const FVector Offset = Candidate.PositionCm - Origin;
+		Candidate.DistanceUnits = static_cast<float>(Offset.Size() / ElysiumMove::U);
+		if (Candidate.DistanceUnits > Distance || IsUnusableNodeIndex(Node))  // slot 527 via 0x1027db30
+		{
+			continue;
+		}
+		Candidate.bAhead = !bAheadTest || FVector2D::DotProduct(FVector2D(Offset.X, Offset.Y), Ahead) > 0.0;
+		(Places->NodeCooldown(Node) <= Curtime ? Expired : Cooling).Add(Candidate);   // node +0x9c
+	}
+	// 4-7. The draws. A dropped pick leaves the candidate pool, and the tier and band are taken again
+	// from what remains ("the next drawn"; "none left is TaskFail(0x18)"), so a band emptied by
+	// unroutable picks falls to the next band, and the expired tier to the cooling one, exactly as an
+	// empty one does -- within `kWanderMaxDraws` draws in all.
+	const float LongestRouteCm = kWanderDetourRatio * Distance * ElysiumMove::U;
+	for (int32 Draw = 0; Draw < kWanderMaxDraws; ++Draw)
+	{
+		TArray<FCandidate>& Tier = Expired.Num() > 0 ? Expired : Cooling;
+		TArray<int32> Band;                                                    // indices into Tier
+		for (int32 Index = 0; Index < Tier.Num(); ++Index)
+		{
+			if (Tier[Index].bAhead && Tier[Index].DistanceUnits >= Distance * 0.5f)
+			{
+				Band.Add(Index);
+			}
+		}
+		for (int32 Index = 0; Band.Num() == 0 && Index < Tier.Num(); ++Index)
+		{
+			if (Tier[Index].bAhead)
+			{
+				Band.Add(Index);
+			}
+		}
+		for (int32 Index = 0; Band.Num() == 0 && Index < Tier.Num(); ++Index)
+		{
+			Band.Add(Index);
+		}
+		if (Band.Num() == 0)
+		{
+			break;
+		}
+		const int32 Pick = Band[ElysiumNpcEngineRandom::RandomInt(0, Band.Num() - 1)];
+		const FCandidate Candidate = Tier[Pick];
+		++StartTaskNav.LastRandomGoalDraws;
+		float RouteCm = 0.0f;
+		if (Motor != nullptr && Motor->RouteLengthTo(Candidate.PositionCm, RouteCm) && RouteCm <= LongestRouteCm)
+		{
+			if (!InstallPathNoGoal(Candidate.PositionCm))
+			{
+				return false;
+			}
+			StartTaskNav.LastRandomGoalNode = Candidate.Node;
+			return true;
+		}
+		Tier.RemoveAt(Pick);
+	}
 	return false;
 }
 
 bool FElysiumNpcBase::StartTaskSetWanderGoal(float MinUnits, float MaxUnits)
 {
+	// `CAI_Navigator::SetWanderGoal` (`0x102ed540`, `TASK_WANDER 0x76`, which no shipped schedule
+	// issues -- it is only registered):
+	//
+	//     for (i = 0; i < 5; ++i) {
+	//         dist = RandomFloat(min, max);  yaw = RandomFloat(0, 359.99);      // 0x43b3feb8
+	//         dir = 0x101d2f40(yaw);                                            // the 2-D heading
+	//         if (0x102ed610(this, dir, dist, ...)) return true;                 // the radial probe
+	//     }
+	//     return SetRandomGoal(1.0, vec3_origin);                               // 0x102ed940
+	//
+	// The ten draws are the engine stream's and are made. The radial probe `0x102ed610` is a SEAM
+	// (0018 story 5's navigator), answering false, so every call reaches the fallback -- which is the
+	// capped point pick above, called as retail calls it. Under the pick an order of `1.0` unit finds
+	// no place (retail's walk always takes one hop, because it stops only AFTER a step), so the
+	// fallback fails `0x18` where retail would reach a neighbouring node: part of the named
+	// modernization, and unreached by any shipped schedule.
 	++StartTaskNav.WanderGoalRequests;
 	StartTaskNav.LastSearchMinUnits = MinUnits;
 	StartTaskNav.LastSearchMaxUnits = MaxUnits;
+	constexpr int32 RadialTries = 5;
+	constexpr float YawMax = 359.99f;                                          // 0x43b3feb8
+	constexpr float FallbackDistanceUnits = 1.0f;                              // 0x102ed5bb PUSH 0x3f800000
+	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
+	for (int32 Try = 0; Try < RadialTries; ++Try)
+	{
+		const float DistanceUnits = Stream.FRandRange(MinUnits, MaxUnits);    // 0x102ed566 DAT_1070b244 +4
+		const float YawDegrees = Stream.FRandRange(0.0f, YawMax);              // 0x102ed57c
+		if (StartTaskWanderRadialProbe(YawDegrees, DistanceUnits))             // 0x102ed59e -> 0x102ed610
+		{
+			return true;
+		}
+	}
+	return StartTaskSetRandomGoal(FallbackDistanceUnits, FVector::ZeroVector); // 0x102ed5c2, vec3_origin 0x1070d1b0
+}
+
+bool FElysiumNpcBase::StartTaskWanderRadialProbe(float YawDegrees, float DistanceUnits)
+{
+	// **SEAM** for `0x102ed610` -- the wander's radial probe along one heading (0018 story 5's
+	// navigator). Answers false: no probe stands here.
+	(void)YawDegrees;
+	(void)DistanceUnits;
 	return false;
 }
 
@@ -2404,20 +2647,10 @@ int32 FElysiumNpcBase::StartTaskActivityOperand(const FElysiumScheduleStep& Step
 
 bool FElysiumNpcBase::StartTaskHintYaw(int32 HintNode, float& OutYaw) const
 {
-	// `0x102d12e0`: a hint bound to a network node answers the node's yaw (`0x10010258` on the
-	// network `DAT_1093407c`, which family Hints seams as `HintYaw`); an unbound one answers its own
-	// `GetAngles().y` (slot 221).
-	FHintWords Words;
-	if (!HintWords(HintNode, Words))
-	{
-		return false;
-	}
-	if (Words.NodeId != INDEX_NONE)
-	{
-		return HintYaw(HintNode, OutYaw);
-	}
-	OutYaw = static_cast<float>(Words.Angles.Y);
-	return true;
+	// `0x102d12e0`: a hint bound to a network node answers the node's yaw (`0x102f47b0` on the
+	// network `DAT_1093407c`); an unbound one answers its own `GetAngles().y` (slot 221). Both arms
+	// are family Hints' `HintYaw`, the one body.
+	return HintYaw(HintNode, OutYaw);
 }
 
 bool FElysiumNpcBase::StartTaskHintFacing(int32 HintNode, FVector& OutDirection) const

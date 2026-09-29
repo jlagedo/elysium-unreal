@@ -124,6 +124,7 @@ namespace
 				Defs.Defs.Add(MoveTemp(Point));
 			}
 
+			ElysiumAdoptPlacesAt(World, { FVector(0.0, -200.0, 0.0), FVector(0.0, -400.0, 0.0) });   // route_1, route_2
 			World.Load(MoveTemp(Defs));
 			World.SpawnPlayer();
 			World.Activate(0.0);
@@ -436,6 +437,7 @@ bool FElysiumFeedTrancePatrolTest::RunTest(const FString&)
 
 	double Now = F.SettledAt;
 	F.FeedAndInterrupt(Now);
+	const double InstalledAt = Now;
 	TestEqual(TEXT("the trance is installed on a patroller"),
 		F.Guard->Schedule.Current,
 		ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MESMERIZED));
@@ -468,8 +470,14 @@ bool FElysiumFeedTrancePatrolTest::RunTest(const FString&)
 		F.Services.Count(TEXT("NpcMotor MoveTo")), MovesBefore);
 
 	// Then the route comes back.
-	const double Held = F.RunOutTrance(Now);
-	TestTrue(TEXT("the trance ended inside the recovered bound"), Held >= 30.0 && Held <= 151.0);
+	// Measured from the install: the 6.1 s this case has already stepped through are part of the
+	// trance. (The draw that sets its length shares the NPC
+	// stream with the patrol's interest roll `0x1029f650`, which rolls now that the route's node
+	// holds its hint -- so the length moves with the network, the bound does not.)
+	const bool bEnded = F.RunOutTrance(Now) >= 0.0;
+	const double Held = Now - InstalledAt;
+	TestTrue(*FString::Printf(TEXT("the trance ended inside the recovered bound (held %.1f s)"), Held),
+		bEnded && Held >= 30.0 && Held <= 151.0);
 	TestFalse(TEXT("the bits are released"), F.Guard->IsBusyWithDiscipline());
 	// The next install releases the bits through the disposition idle (`0x6b`, case 1 while still
 	// busy); after it, `SelectSchedule` case 1 step 3 (`0x102af6b6`) answers the surviving path's

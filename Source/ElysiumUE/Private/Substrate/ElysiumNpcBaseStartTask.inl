@@ -70,6 +70,10 @@ struct FStartTaskNavRecord
 	int32 CoverSearches = 0;                           // 0x102edc80
 	int32 LosSearches = 0;                             // 0x102edaa0
 	int32 RandomGoalRequests = 0;                      // 0x102ed940
+	float LastRandomGoalOrderUnits = 0.f;              // the order the last pick was handed
+	int32 LastRandomGoalNode = INDEX_NONE;             // the place the last pick installed, or -1
+	int32 LastRandomGoalDraws = 0;                     // how many draws it made
+	float LastRandomGoalDistanceUnits = 0.f;           // the capped distance it searched
 	int32 WanderGoalRequests = 0;                      // 0x102ed540
 	float LastSearchMinUnits = 0.f;
 	float LastSearchMaxUnits = 0.f;
@@ -204,14 +208,29 @@ bool StartTaskFindCoverPos(const FVector& ThreatCm, const FVector& ThreatEyeCm, 
 bool StartTaskFindLosPos(const FVector& ThreatCm, const FVector& ThreatEyeCm, float MinUnits,
 	float MaxUnits, FVector& OutCm);
 
-/** **SEAM** for `CAI_Navigator::SetRandomGoal` (`0x102ed940` → `0x102ed430`) — no node graph;
- *  answers false. */
+/** `CAI_Navigator::SetRandomGoal` (`0x102ed940` → `0x102ed430`), as 0018 story 4's **named
+ *  modernization**, the capped point pick: a retail place within `min(order, wander cap)` (SOURCE
+ *  units), never a climb node, usable by slot 527, expired cooldowns before cooling ones, ahead of
+ *  `Direction` in the outer half of the range first; one engine-stream draw, checked against
+ *  Unreal's route (`IElysiumNpcMotor::RouteLengthTo`) and installed as a path with no goal
+ *  (`InstallPathNoGoal`). False is the caller's `TaskFail(0x18)`. */
 bool StartTaskSetRandomGoal(float DistanceUnits, const FVector& Direction);
 
-/** **SEAM** for `CAI_Navigator::SetWanderGoal` (`0x102ed540`: five `RandomFloat(min, max)` /
- *  `RandomFloat(0, 359.99)` tries, then `SetRandomGoal(1.0, vec3_origin)`) — no node graph; answers
- *  false. */
+/** `CAI_Navigator::SetWanderGoal` (`0x102ed540`): five `RandomFloat(min, max)` /
+ *  `RandomFloat(0, 359.99)` draws, each handed to the radial probe `0x102ed610` (a SEAM, false),
+ *  then `SetRandomGoal(1.0, vec3_origin)` -- the pick above. */
 bool StartTaskSetWanderGoal(float MinUnits, float MaxUnits);
+
+/** **SEAM** for `0x102ed610`, `SetWanderGoal`'s radial probe along one heading (0018 story 5's
+ *  navigator). Answers false. */
+bool StartTaskWanderRadialProbe(float YawDegrees, float DistanceUnits);
+
+/** **The narrow seam 0018 story 5's navigator absorbs**: `0x102ed430`'s tail, which installs a route
+ *  into the navigator's PATH object (`0x1030ba50(path, 4)`, `0x1030b4d0`, `0x1030b8e0`) and writes
+ *  the endpoint distance² at `navigator+0x14` -- WITHOUT `SetGoal`: no goal record, no goal type, no
+ *  tolerance. Issues the mover's move to `DestCm` with no acceptance radius. False when the mover
+ *  refuses it (or the body is claimed elsewhere). */
+bool InstallPathNoGoal(const FVector& DestCm);
 
 /** `CAI_BaseNPC::FindLateralCover` (`0x102784a0`): `TestLateralCover` at `GetOrigin()`, then five
  *  pairs of lateral steps of `48.0` units (`_DAT_10447ee8`) along the right vector, left first. */
@@ -239,9 +258,9 @@ int32 StartTaskFlinchActivity();
 int32 StartTaskActivityOperand(const FElysiumScheduleStep& Step) const;
 
 /** `0x102d12e0(hint)` — the hint's yaw: a hint bound to a network node (`m_nNodeID +0x5e4 != -1`)
- *  answers the node's yaw through family Hints' `HintYaw` seam; an unbound one answers its own
- *  `GetAngles().y` (slot 221), which `FHintWords::Angles` carries. False when the hint does not
- *  resolve or the node seam refuses. */
+ *  answers the node's yaw (`0x102f47b0`); an unbound one answers its own `GetAngles().y` (slot 221),
+ *  which `FHintWords::Angles` carries. Family Hints' `HintYaw` is the body; false only when the
+ *  hint does not resolve. */
 bool StartTaskHintYaw(int32 HintNode, float& OutYaw) const;
 
 /** `0x102d11f0(hint, &out)` — `AngleVectors` of `0x102d12e0`'s yaw: the hint's facing, which the

@@ -15,6 +15,7 @@
 #include "Substrate/ElysiumNpcHintsShared.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
+#include "Substrate/ElysiumPlaceSet.h"
 #include "Substrate/ElysiumSchedule.h"
 
 // --- Moved from `ElysiumNpcHints.cpp` (story 5 step 5) ---
@@ -115,7 +116,8 @@ void FElysiumNpcBase::RestartIdealActivityId(int32 RetailActivityId)
 	SetIdealActivity(RetailActivityId);                      // 0x10289efc
 }
 
-FElysiumNpcBase::FHintRestoreResult FElysiumNpcBase::HintOnRestore(const FHintWords& Hint)
+FElysiumNpcBase::FHintRestoreResult FElysiumNpcBase::HintOnRestore(const FHintWords& Hint,
+	const FElysiumEntityHandle& HintHandle, FElysiumPlaceSet& Places)
 {
 	// `CAI_Hint::OnRestore` — slot 130, `0x102d3ec0`, handed over by family Sounds.
 	//
@@ -126,19 +128,30 @@ FElysiumNpcBase::FHintRestoreResult FElysiumNpcBase::HintOnRestore(const FHintWo
 	// as a reaction to an AI sound; the section this family added supersedes that identification.
 	//
 	// The body, verbatim:
-	//   1. the base `CBaseEntity::OnRestore`;
+	//   1. the base `CBaseEntity::OnRestore` (the caller's, `FElysiumHint::OnPostRestore`);
 	//   2. resolve the hint's own AI-network node — `0x102d3e60` bounds-checks `m_nNodeID`
-	//      (`+0x5e4`) against `(*DAT_1093407c)` and indexes `DAT_1093407c[1]`, bumping an error
-	//      counter for an out-of-range id;
+	//      (`+0x5e4`) against `(*DAT_1093407c)` and indexes `DAT_1093407c[1]`, bumping
+	//      `DAT_106c994c` for an id that is neither -1 nor inside the network;
 	//   3. NO NODE: `DevMsg("Warning: AI hint has incorrect origin")` and return;
 	//   4. a node: `Teleport(&node->origin /*+0x08..+0x10*/, NULL, NULL)` through vtable `+0x2d4`,
 	//      then claim the node by writing `this` into its `CAI_Hint*` slot at `+0xa0`.
 	//
-	// THIS RUNTIME HAS NO AI NETWORK, so step 2 never finds a node and step 3 is the arm every call
-	// takes — which is a recovered arm, not a refusal. Ported as such.
-	(void)Hint;
-	UE_LOG(LogElysiumNpcEnt, Warning, TEXT("Warning: AI hint has incorrect origin"));
-	return FHintRestoreResult{};
+	// Nothing about a node is saved (no `CAI_Node` datamap), so this is how a restored hint finds
+	// its node again: its saved `m_nNodeID`. Step 4's teleport is the caller's -- it owns the
+	// entity's runtime origin writer; the RAW origin, not `GetPosition`'s hull-lifted one.
+	FHintRestoreResult Result;
+	const int32 Node = Places.ResolveHintNode(Hint.NodeId);                    // 0x102d3ecc
+	if (Node == INDEX_NONE)                                                    // 0x102d3ed3
+	{
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("Warning: AI hint has incorrect origin"));
+		return Result;
+	}
+	Result.bNodeFound = true;
+	Result.NodeIndex = Node;
+	Result.NodeOriginCm = Places.Row(Node).OriginCm;                           // node +0x08..+0x10
+	Places.SetAttachedHint(Node, HintHandle);                                  // node +0xa0 = this
+	Result.bClaimedNode = true;
+	return Result;
 }
 
 int32 FElysiumNpcBase::ActivityIdForName(const FString& ActivityName) const

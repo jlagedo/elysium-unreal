@@ -27,6 +27,7 @@ class FElysiumDlgConversation;
 struct FElysiumDialogueSession;
 class FElysiumGameSoundBus;
 class FElysiumLineService;
+class FElysiumPlaceSet;
 // The law-record store's own type, forward-declared through its namespace so this
 // public header stays clear of the substrate's private ones (the sound bus's own posture).
 namespace ElysiumNpcWitness { class FElysiumLawEventBus; }
@@ -737,6 +738,12 @@ public:
 	// (`0x10136650`) creates unparented rows in BSP order, so the last hint the map authored heads
 	// the list. A hint is never removed from it: `Kill` on a hint hides it (`0x102d08c0`).
 	const TArray<int32>& HintList() const { return Hints; }
+	// Retail's AI network `DAT_1093407c` and the two `CNodeEnt::Spawn` globals beside it (0018
+	// story 4): the map's baked nodes plus their run-time words. The map actor adopts the map's
+	// `DA_<map>_Places` into it before `Load`; `Load` zeroes its spawn counter (`0x102f6690`) and
+	// binds every node row's hint through it. Never null.
+	FElysiumPlaceSet& Places() { return *PlaceSet; }
+	const FElysiumPlaceSet& Places() const { return *PlaceSet; }
 	const FElysiumEventQueue& Queue() const { return EventQueue; }
 	FElysiumEventQueue& Queue() { return EventQueue; }
 	const FElysiumRingBufferSink& RingBuffer() const { return *Ring; }
@@ -933,6 +940,8 @@ private:
 	TMultiMap<FName, int32> NameIndex;                // targetname -> entity index (non-unique)
 	TMultiMap<FName, int32> ClassIndex;               // classname  -> entity index
 	TArray<int32> Hints;                              // `DAT_10925450`, head first (HintList)
+	// The place set (`Places`). Held by pointer so the substrate header stays out of this public one.
+	TUniquePtr<FElysiumPlaceSet> PlaceSet;
 
 	FElysiumEventQueue EventQueue;
 	TArray<TUniquePtr<IElysiumIOSink>> Sinks;

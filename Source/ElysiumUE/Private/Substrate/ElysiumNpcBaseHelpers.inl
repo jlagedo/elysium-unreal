@@ -126,9 +126,17 @@ struct FNavPathSample
 	float RadiusUnits = 0.f;
 };
 
-/** `0x102d1180(hint, npc, &out)` — the point on a hint `0x102961a0` runs its LOS ray to: an unbound
- *  hint's origin; a network-bound one is a SEAM answering false (no AI network). */
-bool HintLosEndpoint(int32 HintNode, FVector& OutPointCm) const;
+/** `CAI_Hint::GetPosition` (`0x102d1180(hint, npc, &out)`) -- the ONE port body of the hint's
+ *  position, centimetres: an unbound hint (`m_nNodeID +0x5e4 == -1`) answers its own origin; a bound
+ *  one answers its network node at this NPC's PATHING hull (`0x102f46d0`, `+0x156c`), or
+ *  `vec3_origin` when the id is outside the network. The point `0x102961a0` rays to,
+ *  `TASK_GET_PATH_TO_HINTNODE`'s destination, and (through `HintStandPosition`, in units) the
+ *  Troika line's cover / cower stand. False only for an index that names no live hint. */
+bool HintPositionCm(int32 HintNode, FVector& OutPointCm) const;
+
+/** `+0x156c`, the PATHING hull every `0x102f46d0` / `CAI_Navigator` read hands `GetPosition`:
+ *  `FElysiumNpc::PathingHullKind` on the Troika line, the standing `HullKind` on a base-only NPC. */
+int32 RetailPathingHull() const;
 
 /** `GetCurTask()->iTask` (`0x1028a150`), the retail task NUMBER of the running program's current
  *  step: `FElysiumScheduleStep::TaskId`, which is retail's global id. False with no running step
@@ -160,8 +168,11 @@ void SetDefaultEyeOffset();
  *  Returns a retail `Activity` number — 9 `ACT_WALK` or 0x18 `ACT_SCRIPT_CUSTOM_MOVE`. */
 int32 GetScriptCustomMoveActivity() const;
 
-/** SEAM for `thunk_FUN_102d12e0(hint)` — the hint's own yaw, which both `ApplyHintLeanOffset` and
- *  `FindTacticalHintNode` turn into a forward vector. Answers false. */
+/** `thunk_FUN_102d12e0(hint)` — the ONE port body of the hint's yaw (RETAIL frame, degrees): a
+ *  network-bound hint answers its node's yaw (`0x102f47b0`, 0.0 for an id outside the network), an
+ *  unbound one its own `GetAbsAngles().y`. `ApplyHintLeanOffset`, `FindTacticalHintNode` and the
+ *  StartTask facing arms (`StartTaskHintYaw`) all read it. False only for an index that names no
+ *  live hint. */
 bool HintYaw(int32 HintNode, float& OutYaw) const;
 
 /** SEAM for slot 16 (vtable `+0x40`), the attack-extent margin `FindTacticalHintNode` caches into

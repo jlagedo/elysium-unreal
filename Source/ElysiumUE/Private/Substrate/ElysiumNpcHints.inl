@@ -107,9 +107,10 @@ bool HintIdleActivityGate() const;
 /** `0x1029f780` — the cached patrol-node interest-place resolve at `+0x6300`. */
 int32 ResolvePatrolInterestPlace(int32 PatrolNode);
 
-/** SEAM for `0x1029f730` — the patrol node's interest record, whose `+0x468` names the entity the
- *  resolve looks up. There is no patrol-node graph here. Answers false. */
-bool PatrolNodeInterestRecordName(int32 PatrolNode, FString& OutName) const;
+/** The `+0x468` of a patrol node's interest record (`0x1029f730`'s answer, a hint's entity index) —
+ *  `CAI_Hint::m_strTargetName`, the name `0x1029f780` looks up. False for an index that names no
+ *  live hint. */
+bool PatrolNodeInterestRecordName(int32 Record, FString& OutName) const;
 
 /** `0x102aa210` — the INTO → IDLE → OUTOF interest-place loop. Returns whether the caller's task
  *  is finished, which is the byte retail leaves in `AL`. */

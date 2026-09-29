@@ -9,6 +9,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcThinkCadence.h"
+#include "Substrate/ElysiumPlaceSet.h"
 #include "Substrate/ElysiumSchedule.h"
 
 // Story 29c-1, family **BaseHelpers** — `CAI_BaseNPC`'s own unnamed layer 0–9 bodies.
@@ -151,36 +152,55 @@ bool FElysiumNpc::IsUnusableNode(void* Node)
 	//   if (node->hint) { uVar1 = IsHintAvailable(hint, this); if (!uVar1) return 1; }
 	//   return 0;
 	//
-	// SEAM: this substrate carries nodes as bare indices and stands no `CAI_Node`, so the `+0xa0`
-	// read answers "no hint" and every node is usable. `Node` is retail's word, kept as `void*` by
-	// the generated signature.
-	if (Node == nullptr)
+	// `Node` is retail's `CAI_Node*`, kept as `void*` by the generated signature: in this runtime it
+	// is the place set's row (`const FElysiumPlaceRow*`, `IsUnusableNodeIndex` hands it), whose
+	// network index finds the node's hint. `IsHintAvailableToMe` stays story 8's seam (true).
+	const FElysiumPlaceRow* Row = static_cast<const FElysiumPlaceRow*>(Node);
+	if (Row == nullptr || World == nullptr)
 	{
 		return false;
 	}
-	// The hint index behind `node+0xa0`; there is no node store, so it is always absent.
-	constexpr int32 NodeHint = INDEX_NONE;
-	if (NodeHint == INDEX_NONE)
+	const FElysiumEntityHandle Hint = World->Places().AttachedHint(Row->NetworkIndex);   // node +0xa0
+	if (!Hint.IsSet())
 	{
 		return false;
 	}
-	return !IsHintAvailableToMe(NodeHint);
+	return !IsHintAvailableToMe(Hint.Index);                                   // 0x102d1540
 }
 
-// 0x1029f610 — the navigator path probe. Retail name unrecovered.
-bool FElysiumNpc::FUN_1029f610(const FElysiumEntity* GoalEntity) const
+// 0x1029f610 — the patrol path's network check. Retail name unrecovered.
+bool FElysiumNpc::FUN_1029f610(const FPatrolPathCell* Cell) const
 {
-	// `if (goal && goal->+0x04) return thunk_FUN_10307ac0(goal->+0x04, m_pNavigator->+0x2c);`
-	// else false. `+0x2c` on the navigator is its current path object, and `0x10307ac0` asks
-	// whether that path is routed through the given entity.
+	// `if (cell && cell->path (+0x4)) return 0x10307ac0(cell->path, m_pNavigator->+0x2c); return 0;`
 	//
-	// SEAM: `IElysiumNpcMotor` keeps no readable path (family Motor's `NavGoalPosition` stands the
-	// same absence), so the query answers false — which is retail's own "not on this path" arm.
-	if (GoalEntity == nullptr)
+	// `0x10307ac0(path, network)`: a null network answers false; then every id the path holds
+	// (`+0x14`, `+0xc` of them), in order -- `id < 0` answers false with nothing counted, `*network
+	// <= id` bumps `DAT_106c994c` and answers false, a null network slot answers false. All present:
+	// true. The network is the world's place set, whose every loaded slot holds a node.
+	if (Cell == nullptr || Cell->Path == nullptr)                              // 0x1029f614 / 0x1029f61c
 	{
 		return false;
 	}
-	return false;   // UNRECOVERED input: the navigator's path object at `m_pNavigator+0x2c`
+	if (World == nullptr)                                                      // 0x10307ac5 null network
+	{
+		return false;
+	}
+	const FElysiumPlaceSet& Places = World->Places();
+	const FPatrolPathRecord& Path = *Cell->Path;
+	for (int32 Index = 0; Index < Path.Count && Index < PatrolPathNodeCapacity; ++Index)
+	{
+		const int32 NodeId = Path.Nodes[Index];
+		if (NodeId < 0)                                                        // 0x10307ad8 JL
+		{
+			return false;
+		}
+		if (Places.NumNodes() <= NodeId)                                       // 0x10307adc CMP
+		{
+			++PatrolNodeMissCounter();                                         // DAT_106c994c++
+			return false;
+		}
+	}
+	return true;
 }
 
 // 0x1029f650 — the patrol node's interesting-place draw
@@ -390,10 +410,10 @@ FElysiumNpc::EHintRejectReason FElysiumNpc::FUN_102961a0(int32 HintNode) const
 	// (`0x102d1180`), and it passes only at `fraction >= 1.0` with neither `allsolid` nor
 	// `startsolid`.
 	FVector EndCm = FVector::ZeroVector;
-	if (!HintLosEndpoint(HintNode, EndCm))
+	if (!HintPositionCm(HintNode, EndCm))
 	{
-		// The endpoint seam refused, so the ray cannot be cast. Retail's failing arm is
-		// "Failed LOS check (%s)" and this is where the port stands until a hint store lands.
+		// No live hint behind the index, so there is no point to ray to (retail holds the hint
+		// itself and always has one). Retail's failing arm, "Failed LOS check (%s)".
 		return EHintRejectReason::FailedLos;
 	}
 	FVector MinsUnits = FVector::ZeroVector;
@@ -726,20 +746,37 @@ bool FElysiumNpc::ActiveWeaponMaxRangeUnits(float& OutRangeUnits) const
 
 int32 FElysiumNpc::PatrolNodeInterestRecord(int32 PatrolNode) const
 {
-	// SEAM for `0x1029f6c0` — the patrol node's interesting-place record. Family Hints stands the
-	// same absence from the name side (`PatrolNodeInterestRecordName`) and family Hints'
-	// `ResolvePatrolInterestPlace` (`0x1029f780`) caches the resolve at `+0x6300`. There is no
-	// patrol-node graph here, so the lookup answers nothing.
-	(void)PatrolNode;
-	return INDEX_NONE;
+	// `0x1029f6c0` — the patrol node's record, which is the hint the node holds (`node+0xa0`):
+	//
+	//     id = path->+0x14[path->+0x10];              // the caller's `PatrolCurrentNode`
+	//     if (id == -1) return 0;
+	//     if (id < 0 || *network <= id) { ++DAT_106c994c; return 0; }
+	//     node = network[1][id];
+	//     return node ? node->+0xa0 : 0;
+	//
+	// The node's hint is `FElysiumPlaceSet::AttachedHint`, answered as its entity index; retail's
+	// null is `INDEX_NONE` here (`seam-list.md`). A hint that has since died is no record.
+	if (PatrolNode == INDEX_NONE)                                              // 0x1029f6e0 CMP -1
+	{
+		return INDEX_NONE;
+	}
+	const FElysiumPlaceSet* Places = World != nullptr ? &World->Places() : nullptr;
+	if (Places == nullptr || !Places->IsValidNode(PatrolNode))                 // 0x1029f6f0 / 0x1029f6f4
+	{
+		++PatrolNodeMissCounter();                                             // DAT_106c994c++
+		return INDEX_NONE;
+	}
+	const FElysiumEntityHandle Hint = Places->AttachedHint(PatrolNode);       // node +0xa0
+	FHintWords Words;
+	return Hint.IsSet() && HintWords(Hint.Index, Words) ? Hint.Index : INDEX_NONE;
 }
 
 int32 FElysiumNpc::PatrolNodeInterestPercent(int32 Record) const
 {
-	// SEAM for that record's `+0x46c m_iIPPercent` — the same word `FHintWords::IpPercent` names on
-	// a hint. A `Random(0,99)` never comes in under 0, so the draw never fires.
-	(void)Record;
-	return 0;
+	// The record's `+0x46c` -- `CAI_Hint::m_iIPPercent`, key `ip_percent` (`FHintWords::IpPercent`).
+	// A record that names no live hint answers 0, the chance that never fires.
+	FHintWords Words;
+	return HintWords(Record, Words) ? Words.IpPercent : 0;
 }
 
 bool FElysiumNpc::HintLosCheck(int32 HintNode, const FElysiumEntity* Against) const

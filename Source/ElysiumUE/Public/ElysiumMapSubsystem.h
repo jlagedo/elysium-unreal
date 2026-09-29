@@ -43,9 +43,9 @@ public:
 	// entry to the landmark path.
 	bool Travel(const FString& Map, const FString& Landmark = FString());
 
-	// Whether Travel would accept Map: the project carries the map's level and all three of its
-	// `DA_<map>_*` assets. 0018 story 21-3 moved the gate off the producer's `<map>.ready` marker
-	// under the export root -- the bake's four packages ARE the proof, and nothing outside the
+	// Whether Travel would accept Map: the project carries the map's level and all four of its
+	// `DA_<map>_*` assets (the places joined in 0018 story 4). 0018 story 21-3 moved the gate off the
+	// producer's `<map>.ready` marker under the export root -- the bake's five packages ARE the proof, and nothing outside the
 	// project is consulted. Static, so a test can drive it without a UWorld or a subsystem
 	// instance; `Travel` and `BakedMaps` both route through this one predicate so the two can
 	// never disagree.

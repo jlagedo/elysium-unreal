@@ -129,9 +129,9 @@ float ExpressionBlendWeight = 0.f;
  *  the index set, and `0` is retail's own "this global is null, skip it" value. */
 static const int32* AttackCoordinatorIndices(int32& OutCount);
 
-/** SEAM for `thunk_FUN_102d1180(hint, this, out)` — the hint's own "position me at this node"
- *  query `ApplyHintLeanOffset` (`0x102b6120`) runs before it applies the lean. Answers false and
- *  leaves the point untouched; family **Hints** owns the same absent hint store. */
+/** `thunk_FUN_102d1180(hint, this, out)` — `CAI_Hint::GetPosition` as `ApplyHintLeanOffset`
+ *  (`0x102b6120`), `EyeOffset` and the cower arm read it: `HintPositionCm` (the one body) in SOURCE
+ *  units (`cm / U`). False, the point untouched, only for an index that names no live hint. */
 bool HintStandPosition(int32 HintNode, FVector& InOutPointUnits) const;
 
 /** SEAM for `thunk_FUN_102d1350(hint, this)` — the hint CLAIM `FindTacticalHintNode` takes on its

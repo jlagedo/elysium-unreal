@@ -3,6 +3,8 @@
 // `class FElysiumNpcBase`), or generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 
 #include "Substrate/ElysiumNpcBase.h"
+#include "Substrate/ElysiumNpcEngineRandom.h"
+#include "Substrate/ElysiumPlaceSet.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -92,10 +94,6 @@ namespace
 	float LifecycleRandomFloat(float Min, float Max)
 	{
 		return ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(Min, Max);
-	}
-	int32 LifecycleRandomInt(int32 Min, int32 Max)
-	{
-		return ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(Min, Max);
 	}
 }
 
@@ -434,8 +432,37 @@ void FElysiumNpcBase::MotorResetToDefault()
 // `CAI_StandoffBehavior::vfunc13` (`0x102c7600`).
 // -------------------------------------------------------------------------------------------------
 
+void FElysiumNpcBase::StandoffLowerHintNodeCooldown(const FHintWords* Hint, FElysiumPlaceSet* Places,
+	double Now)
+{
+	// The shape both arms of `0x102c7600` write, verbatim:
+	//
+	//     if (hint && 0x102d3e60(hint) && curtime < 0x102d3e60(hint)->+0x9c)
+	//         0x102d3e60(hint)->+0x9c = curtime;
+	//
+	// `0x102d3e60` is the hint's node lookup (`FElysiumPlaceSet::ResolveHintNode`): -1 answers no node
+	// silently, an id outside the network bumps `DAT_106c994c` and answers none -- on the FIRST of
+	// the three calls, which then short-circuits, so one call here counts exactly as retail does.
+	// The word is the NODE's run-time cooldown, not the hint's `m_flNextUseTime` (`+0x5ec`): the
+	// listing indexes the node pointer `0x102d3e60` returns, never the hint.
+	if (Hint == nullptr || !Hint->bValid || Places == nullptr)
+	{
+		return;
+	}
+	const int32 Node = Places->ResolveHintNode(Hint->NodeId);
+	if (Node == INDEX_NONE)
+	{
+		return;
+	}
+	const float Curtime = static_cast<float>(Now);                             // gpGlobals->curtime
+	if (Curtime < Places->NodeCooldown(Node))
+	{
+		Places->SetNodeCooldown(Node, Curtime);
+	}
+}
+
 int32 FElysiumNpcBase::StandoffSelect(FStandoffWords& Words, const FStandoffConditions& Conditions,
-	bool bInCombatState, bool bHasEnemy, FHintWords* Hint, double Now)
+	bool bInCombatState, bool bHasEnemy, const FHintWords* Hint, FElysiumPlaceSet* Places, double Now)
 {
 	// The selector, arm by arm. Every `return` below is a retail code: `0x17`, `0x25`, `0x21`,
 	// `0x29`/`0x28`, or `INDEX_NONE` for the fall-through to `CAI_Behavior::vfunc13`.
@@ -463,17 +490,11 @@ int32 FElysiumNpcBase::StandoffSelect(FStandoffWords& Words, const FStandoffCond
 		}
 	}
 	// 3. Condition 0x4c, gated on `RandomInt(0, 99) <= m_iChanceThreshold` (`+0x38`) — note `<=`,
-	//    not `<`. With an enemy standing, the claimed hint's `+0x9c` timer is MIN-ed down to curtime
-	//    and the reaction counter becomes `m_iReactionsLeft > 1 ? 1 : 0`.
-	if (Conditions.bCond0x4c && LifecycleRandomInt(0, 99) <= Words.ChanceThreshold && bHasEnemy)
+	//    not `<`. With an enemy standing, the claimed hint's NODE cooldown (`0x102d3e60(hint)+0x9c`)
+	//    is MIN-ed down to curtime and the reaction counter becomes `m_iReactionsLeft > 1 ? 1 : 0`.
+	if (Conditions.bCond0x4c && ElysiumNpcEngineRandom::RandomInt(0, 99) <= Words.ChanceThreshold && bHasEnemy)
 	{
-		// SEAM: this writes the caller's `FHintWords` VIEW. The live `ai_hint` takes the write only
-		// when its owner writes the view back (`FElysiumHint::FromWords`); the claim path that does
-		// so is 0018 story 8's, so for now nothing reaches the entity's `m_flNextUseTime`.
-		if (Hint != nullptr && Hint->bValid && Now < Hint->NextUseTime)
-		{
-			Hint->NextUseTime = Now;
-		}
+		StandoffLowerHintNodeCooldown(Hint, Places, Now);                              // 0x102c76a0..0x102c76d4
 		Words.ReactionsLeft = Words.ReactionsLeft > 1 ? 1 : 0;
 	}
 	// 4. The re-roll: an exhausted counter that has been idle longer than `_DAT_10497530` re-draws
@@ -481,7 +502,7 @@ int32 FElysiumNpcBase::StandoffSelect(FStandoffWords& Words, const FStandoffCond
 	if (Words.ReactionsLeft == 0
 		&& (Now - Words.NextReactionAt) > GStandoffElapsedThresholdSeconds)
 	{
-		Words.ReactionsLeft = LifecycleRandomInt(0, Words.ReactionChanceMax - Words.ReactionChanceMin)
+		Words.ReactionsLeft = ElysiumNpcEngineRandom::RandomInt(0, Words.ReactionChanceMax - Words.ReactionChanceMin)
 			+ Words.ReactionChanceMin;
 	}
 	// 5. A counter of exactly ONE re-stamps the next-reaction clock: `+0x44 == 0.0` means "no
@@ -494,15 +515,15 @@ int32 FElysiumNpcBase::StandoffSelect(FStandoffWords& Words, const FStandoffCond
 	}
 	// 6. A counter at or below ZERO answers `0x17`, and on the way out writes the posture from the
 	//    hint's type (`+0x5dc == 0x65` -> posture 2, else 0) and, on a `RandomInt(0,99) < 0x50`
-	//    roll, min-s the hint's `+0x9c` timer down to curtime.
+	//    roll, min-s the hint's NODE cooldown (`+0x9c`) down to curtime.
 	if (Words.ReactionsLeft < 1)
 	{
 		if (Hint != nullptr && Hint->bValid)
 		{
 			Words.Posture = Hint->HintType == 0x65 ? 2 : 0;
-			if (LifecycleRandomInt(0, 99) < 0x50 && Now < Hint->NextUseTime)
+			if (ElysiumNpcEngineRandom::RandomInt(0, 99) < 0x50)
 			{
-				Hint->NextUseTime = Now;
+				StandoffLowerHintNodeCooldown(Hint, Places, Now);                      // 0x102c7780..0x102c77b4
 			}
 		}
 		return 0x17;
@@ -526,7 +547,7 @@ int32 FElysiumNpcBase::StandoffSelect(FStandoffWords& Words, const FStandoffCond
 	if (!Conditions.bCond0x4f && !Conditions.bCond0x51 && Conditions.bCond0x60)
 	{
 		// With 0x48 also standing, a `RandomInt(0,99) > 0x31` falls through to the base instead.
-		if (Conditions.bCond0x48 && LifecycleRandomInt(0, 99) > 0x31)
+		if (Conditions.bCond0x48 && ElysiumNpcEngineRandom::RandomInt(0, 99) > 0x31)
 		{
 			return INDEX_NONE;
 		}

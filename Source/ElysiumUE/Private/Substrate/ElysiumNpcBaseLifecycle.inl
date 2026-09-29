@@ -100,12 +100,18 @@ void MotorResetToDefault();
 /** `CAI_StandoffBehavior::vfunc13` (`0x102c7600`) — the selector. Returns the retail schedule /
  *  task-continue code (`0x17`, `0x25`, `0x21`, `0x29`, `0x28`) or `INDEX_NONE` for "fall through to
  *  `CAI_Behavior::vfunc13`", which is the base this runtime does not carry. `bHasEnemy` is slot 156
- *  `GetEnemy() != NULL` (vtable `+0x29c`); `Hint` is the claimed hint node's words, or null.
+ *  `GetEnemy() != NULL` (vtable `+0x29c`); `Hint` is the claimed hint's words, or null; `Places` the
+ *  AI network whose node cooldown (`+0x9c`) two arms lower, or null for none.
  *
  *  The state 2 gate at the top (`m_NPCState == 2`, `+0x5cc0`) is the caller's: a standoff selector
  *  that is not in COMBAT falls straight through. */
 static int32 StandoffSelect(FStandoffWords& Words, const FStandoffConditions& Conditions,
-	bool bInCombatState, bool bHasEnemy, FHintWords* Hint, double Now);
+	bool bInCombatState, bool bHasEnemy, const FHintWords* Hint, FElysiumPlaceSet* Places, double Now);
+
+/** The write both arms of `0x102c7600` make: the hint's NODE (`0x102d3e60`) cooldown `+0x9c` MIN-ed
+ *  down to curtime. Nothing for no hint, an unbound one, or one whose id misses the network (which
+ *  `ResolveHintNode` counts, once, as retail's first lookup does). */
+static void StandoffLowerHintNodeCooldown(const FHintWords* Hint, FElysiumPlaceSet* Places, double Now);
 
 
 

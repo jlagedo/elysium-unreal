@@ -155,6 +155,7 @@ public:
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override;
 	virtual FElysiumLocomotionSample SampleLocomotion() const override;
 	virtual bool ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const override;
+	virtual bool RouteLengthTo(const FVector& DestCm, float& OutLengthCm) const override;
 	virtual bool CanReachLateralCover(const FVector& FeetDestination) const override;
 	virtual void SetTravelGait(EElysiumNpcGaitKind Gait, float SpeedCmPerSecond) override;
 	virtual float GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees) const override;

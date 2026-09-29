@@ -888,6 +888,7 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	Services.bHasPlayer = true;
 	Services.bProvideNpcMotor = true;
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+	ElysiumAdoptPlacesAt(World, { FVector(100.0, 25.0, 0.0), FVector(200.0, 25.0, 0.0) });   // route_1, route_2
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
 	World.Activate(0.0);
@@ -1094,6 +1095,7 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		Services.bNpcActivitiesResolve = true;
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
 		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumAdoptPlacesAt(World, { FVector(100.0, 25.0, 0.0), FVector(200.0, 25.0, 0.0) });   // route_1, route_2
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -1338,6 +1340,7 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 		Services.ResolvedNpcActivityClip = TEXT("relaxed_walk_0");
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
 		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumAdoptPlacesAt(World, { FVector(100.0, 25.0, 0.0), FVector(200.0, 25.0, 0.0) });   // route_1, route_2
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
@@ -1407,6 +1410,7 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 		Services.ClipSeconds = 3.25f;
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
 		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumAdoptPlacesAt(World, { FVector(100.0, 25.0, 0.0), FVector(200.0, 25.0, 0.0) });   // route_1, route_2
 		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);

@@ -17,6 +17,7 @@
 #include "Substrate/ElysiumScriptedCharacter.h"
 
 class FElysiumScriptedSequence;   // Substrate/ElysiumScriptedSequence.h — `CCineNPC`, the directors
+class FElysiumPlaceSet;           // Substrate/ElysiumPlaceSet.h — the AI network (0018 story 4)
 
 // One class of the NPC tree (story 5), declared inside its class body: its retail name, its census
 // row (`ElysiumNpcKernelShape::ClassNamed`, looked up once), the row as its own identity, and its

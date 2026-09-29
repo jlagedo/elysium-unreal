@@ -115,23 +115,25 @@ bool FElysiumNpc::FValidateHintType(void* Hint)
 		return false;
 	}
 
+	// Every arm hands the rule the HINT (`(int *)param_1`, `0x10295dd5` .. `0x10295e28`), which this
+	// substrate names by its entity index -- not `m_nNodeID`, the network node it is bound to.
 	switch (FValidateHintTypeArm(Words->HintType))
 	{
 	case EHintTypeArm::CoverValid:
 		// `10295dd5` — `0x10297430`, family Hints' `IsHintCoverValid`. Called, not restated.
-		return IsHintCoverValid(Words->NodeId);
+		return IsHintCoverValid(Words->HintIndex);
 	case EHintTypeArm::CoverValidLoose:
 		// `10295dba` — `0x102974f0`, family Hints' `IsHintCoverValidLoose`.
-		return IsHintCoverValidLoose(Words->NodeId);
+		return IsHintCoverValidLoose(Words->HintIndex);
 	case EHintTypeArm::Accept:
 		// `10295dac MOV AL,1`.
 		return true;
 	case EHintTypeArm::QuietCoverRule:
 		// `10295e28` — `0x10295ed0`, family BaseHelpers' `FUN_10295ed0`.
-		return FUN_10295ed0(Words->NodeId);
+		return FUN_10295ed0(Words->HintIndex);
 	case EHintTypeArm::VerboseCoverRule:
 		// `10295e0d` — `0x102961a0`, family BaseHelpers' `FUN_102961a0`, whose `None` is its pass.
-		return FUN_102961a0(Words->NodeId) == EHintRejectReason::None;
+		return FUN_102961a0(Words->HintIndex) == EHintRejectReason::None;
 	case EHintTypeArm::Refuse:
 	default:
 		return false;

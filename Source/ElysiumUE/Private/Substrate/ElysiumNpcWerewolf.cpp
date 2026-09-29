@@ -1671,9 +1671,10 @@ int32 FElysiumNpcWerewolf::GetNearestNodeToPlayer()
 	//     }
 	//     return m_iNearestNode;
 	//
-	// Note what the cache is keyed on: **zero**, not `-1`. A map whose node 0 is the nearest one
-	// re-queries every frame, and a query that fails leaves the stamp advanced so the next attempt
-	// waits the full interval. Both are reproduced.
+	// Note what the cache is keyed on: **zero**, not `-1`, and a query that fails leaves the stamp
+	// advanced so the next attempt waits the full interval. Retail caches the node POINTER, which is
+	// never zero; this caches the node INDEX, so a nearest node 0 re-queries on the next call (named
+	// divergence: no body reads the answer yet, and the query is idempotent).
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	if (NearestNodeToPlayerRefreshedAt + NearestNodeRefreshSeconds < Now)
 	{
@@ -1692,7 +1693,7 @@ int32 FElysiumNpcWerewolf::GetNearestNodeToPlayer()
 		if (Node == -1)
 		{
 			// `DevWarning(s_GetNearestNodeToPlayer_failed_1066249c)` — the string is
-			// "GetNearestNodeToPlayer failed". This is the arm the seam always takes.
+			// "GetNearestNodeToPlayer failed"; no node in range has a clear line to the player.
 			UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("GetNearestNodeToPlayer failed"));
 		}
 		else

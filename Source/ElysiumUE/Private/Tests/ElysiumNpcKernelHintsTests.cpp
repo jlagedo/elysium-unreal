@@ -15,6 +15,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
+#include "Substrate/ElysiumPlaceSet.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumNpcTestCensus.h"
 
@@ -821,16 +822,40 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 		TestTrue(TEXT("but positions at and plays a type it does"), Wolf->SetHintActivity(Hint));
 	}
 
-	// `CAI_Hint::OnRestore` (slot 130, `0x102d3ec0`), handed over from family Sounds. With no AI
-	// network, retail's "incorrect origin" arm is the only reachable one — and it IS an arm.
-	AddExpectedError(TEXT("AI hint has incorrect origin"),
-		EAutomationExpectedErrorFlags::Contains, 0);
+	// `CAI_Hint::OnRestore` (slot 130, `0x102d3ec0`), handed over from family Sounds: the node lookup
+	// `0x102d3e60` over the saved `m_nNodeID`, then either the "incorrect origin" arm or the relink.
 	{
-		const FElysiumNpcBase::FHintRestoreResult Restore =
-			FElysiumNpcBase::HintOnRestore(MakeHint(15000));
-		TestFalse(TEXT("no node was found"), Restore.bNodeFound);
-		TestFalse(TEXT("so no node was claimed"), Restore.bClaimedNode);
-		TestTrue(TEXT("and nothing was teleported"), Restore.NodeOriginCm.IsNearlyZero());
+		FElysiumPlaceSet Places;
+		FElysiumPlaceRow Row;
+		Row.OriginCm = FVector(10.0, 20.0, 30.0);
+		Row.Type = 2;
+		Places.AdoptRows({ Row, Row });
+		Places.BeginMapSpawn();
+		const FElysiumEntityHandle HintHandle(7, 3);
+
+		FElysiumNpcBase::FHintWords Standalone = MakeHint(15000);   // m_nNodeID -1
+		const FElysiumNpcBase::FHintRestoreResult None =
+			FElysiumNpcBase::HintOnRestore(Standalone, HintHandle, Places);
+		TestFalse(TEXT("a hint with no node id finds no node"), None.bNodeFound);
+		TestFalse(TEXT("so no node was claimed"), None.bClaimedNode);
+		TestTrue(TEXT("and nothing was teleported"), None.NodeOriginCm.IsNearlyZero());
+		TestEqual(TEXT("...and -1 is not counted out (0x102d3e60)"), Places.OutOfRangeCount(), 0);
+
+		FElysiumNpcBase::FHintWords Past = MakeHint(15000);
+		Past.NodeId = 2;
+		TestFalse(TEXT("an id past the network finds no node"),
+			FElysiumNpcBase::HintOnRestore(Past, HintHandle, Places).bNodeFound);
+		TestEqual(TEXT("...and counts out (DAT_106c994c)"), Places.OutOfRangeCount(), 1);
+
+		FElysiumNpcBase::FHintWords Bound = MakeHint(15000);
+		Bound.NodeId = 1;
+		const FElysiumNpcBase::FHintRestoreResult Relinked =
+			FElysiumNpcBase::HintOnRestore(Bound, HintHandle, Places);
+		TestTrue(TEXT("a bound hint finds its node"), Relinked.bNodeFound && Relinked.NodeIndex == 1);
+		TestTrue(TEXT("...claims it (node +0xa0 = this)"), Relinked.bClaimedNode
+			&& Places.AttachedHint(1) == HintHandle);
+		TestEqual(TEXT("...and stands at its raw origin"), Relinked.NodeOriginCm, Row.OriginCm);
+		TestFalse(TEXT("the other node is untouched"), Places.AttachedHint(0).IsSet());
 	}
 
 	// The remaining seams, each asked once so a future implementer sees the call site in a trace.
@@ -859,7 +884,7 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 	TestTrue(TEXT("HintIdleActivityGate answers the passing side"), Npc->HintIdleActivityGate());
 	{
 		FString Unused;
-		TestFalse(TEXT("PatrolNodeInterestRecordName answers nothing"),
+		TestFalse(TEXT("PatrolNodeInterestRecordName answers nothing for a record that is no hint"),
 			Npc->PatrolNodeInterestRecordName(0, Unused));
 	}
 	TestFalse(TEXT("IsTzimisceHintUsable answers false"), Tzim->IsTzimisceHintUsable(0, Tzim));

@@ -14,8 +14,10 @@ struct FElysiumClassDesc;
 // the world's hint list (`FElysiumEntityWorld::HintList`). Kernel queries read it through
 // `FElysiumNpcBase::HintWords`, which fills an `FHintWords` view from this entity.
 //
-// The network node (`m_nNodeID` `+0x5e4`) stays -1: the node binding is 0018 story 4's. The
-// searches over the list (`0x102d1af0`, `0x102d24b0`, `0x102d2980`) are story 4's.
+// The network node (`m_nNodeID` `+0x5e4`) is the node-row counter `CNodeEnt::Spawn` gave it (0018
+// story 4, `ElysiumNodeEntity::SpawnNodeRow`), -1 for a standalone row; the node holds the hint back
+// at `+0xa0` (`FElysiumPlaceSet::AttachedHint`). The searches over the list (`0x102d1af0`,
+// `0x102d24b0`, `0x102d2980`) are story 8's.
 class FElysiumHint final : public FElysiumEntity
 {
 public:
@@ -39,7 +41,7 @@ public:
 	FString Activity;                                // +0x450 m_strActivity
 	float TargetAngleRangeDot = 0.0f;                // +0x458 m_flTargetAngleRangeDot
 	FElysiumEntityHandle HintOwner;                  // +0x5e0 m_hHintOwner (-1 from the ctor)
-	int32 NodeId = INDEX_NONE;                       // +0x5e4 m_nNodeID; SEAM until 0018 story 4
+	int32 NodeId = INDEX_NONE;                       // +0x5e4 m_nNodeID; 0018 story 4 writes it at load
 	float NextUseTime = 0.0f;                        // +0x5ec m_flNextUseTime (FIELD_TIME, a float)
 
 	// The registered classname (`ElysiumNodeEntity::HintClassname`).
@@ -71,9 +73,9 @@ public:
 	void InputDisableHint(const FElysiumInputArgs& Args);
 
 	// `CAI_Hint::InputWalk` / `InputDontWalk` (`0x102d0a50` / `0x102d0a80`): resolve the hint's
-	// network node (`FUN_102d3e60`) and set its walk flag (`FUN_102f97c0(node, 1/0)`). SEAM: with no
-	// node bound (story 3) the lookup answers null, and retail's own null arm returns — so these do
-	// nothing here, and say so.
+	// network node (`FUN_102d3e60`, `FElysiumPlaceSet::ResolveHintNode`) and set the walk bits of its
+	// links (`FUN_102f97c0(node, 1/0)`). The lookup is real (0018 story 4) and retail's null arm
+	// returns; the link write is a SEAM -- the place set carries no links (stories 5 and 7).
 	void InputWalk(const FElysiumInputArgs& Args);
 	void InputDontWalk(const FElysiumInputArgs& Args);
 
@@ -87,6 +89,10 @@ public:
 	// SEAM for the gate itself, which this substrate does not stand globally; the hint's own inputs
 	// apply it, because a hidden hint swallowing `EnableHint` is what the shipped scripts observe.
 	bool SwallowsInput(const FElysiumInputArgs& Args) const;
+
+	// Slot 130 `CAI_Hint::OnRestore` (`0x102d3ec0`): relink onto the node its restored `m_nNodeID`
+	// names and stand at the node's origin (`FElysiumNpcBase::HintOnRestore`).
+	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override;
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 

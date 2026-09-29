@@ -7,6 +7,7 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
+#include "Substrate/ElysiumPlaceSet.h"
 
 // Story 29c-1, family **Positions** — the node selectors, the teleport clearance rules and the
 // Chang brothers' arena. The rest of the family (the trace bodies, slot 563, the Werewolf teleport
@@ -32,10 +33,12 @@ namespace
 
 void FElysiumNpc::GatherHintNodes(TArray<FHintWords>& OutNodes, TArray<int32>& OutNodeIds) const
 {
-	// `for (node = DAT_10925450; node; node = node->next (+0x5d8))` — the global `CAI_Hint` list.
-	// **SEAM**, twice over: family Motor's `NavAllHintNodes` is the list (empty) and family Hints'
-	// `HintWords` is one node's words (never valid). Nine selectors walk this and every one of them
-	// therefore answers "no node", which is retail's own answer on a map that authors none.
+	// `for (node = DAT_10925450; node; node = node->next (+0x5d8))` — the global `CAI_Hint` list,
+	// family Motor's `NavAllHintNodes` (the world's live list, head first), each entry's words
+	// through family Hints' `HintWords`. The position every selector here scores is the HINT's own
+	// `GetAbsOrigin()` (vtable `+0x364` -- `CNPC_VSheriffMan::SelectTeleportNode 0x103b0630`,
+	// `CNPC_VSabbatLeader::SelectTeleportArchway 0x103a9540`), not its network node, so
+	// `FHintWords::OriginCm` -- the hint entity's origin -- is the one gathered.
 	OutNodes.Reset();
 	OutNodeIds.Reset();
 	TArray<int32> NodeIds;
@@ -151,8 +154,43 @@ float FElysiumNpc::ShootTargetFalloff(float RangeBase, float RangeDivisor, float
 
 int32 FElysiumNpc::NavNearestNodeTo(const FVector& PositionCm) const
 {
-	// `thunk_FUN_102f41b0(m_pNavigator->GetNetwork() (+0x2c), &pos)`. **SEAM**: family Motor's
-	// standing fact — there is no `CAI_Node` array here — so this answers retail's own miss value.
-	(void)PositionCm;
+	// `thunk_FUN_102f41b0(m_pNavigator->GetNetwork() (+0x2c), &pos)` -- the network's nearest node to
+	// a POINT (no NPC, no hull):
+	//
+	//     if (*network == 0) return -1;
+	//     cached = 0x102f4520(network, pos); if (cached != -2) return cached;     // not ported
+	//     list = ListNodesInBox(10, pos - 2048, pos + 2048, CNodePosFilter(pos));  // 0x102f32f0
+	//     for (node : list, nearest first)
+	//         if (0x102f39a0(NULL, pos, node->origin (+0x08..+0x10), &flag))      // the line trace
+	//             { 0x102f45f0(network, pos, node, 0x17); return node; }
+	//     0x102f45f0(network, pos, -1, 0x17); return -1;
+	//
+	// `CNodePosFilter` (`0x102f44b0` / `0x102f44d0`) admits every node and scores the squared
+	// distance from the point to the RAW origin; `_DAT_1046bacc` is 2048.0. The trace ignores no
+	// entity and its flag is not read. The 20-entry cache `0x102f4520` / `0x102f45f0` is engine
+	// machinery in front of the search and is not ported: the search runs every call.
+	const FElysiumPlaceSet* Places = World != nullptr ? &World->Places() : nullptr;
+	if (Places == nullptr || Places->NumNodes() == 0)                          // 0x102f41b9 *this != 0
+	{
+		return -1;
+	}
+	constexpr float BoxUnits = 2048.0f;                                        // _DAT_1046bacc
+	constexpr int32 ListCount = 10;                                            // 0x102f4214 PUSH 10
+	const FVector P = PositionCm / ElysiumMove::U;
+	const FVector Half(BoxUnits, BoxUnits, BoxUnits);
+	const TArray<int32> Order = Places->ListNodesInBox(ListCount, P - Half, P + Half,
+		[](int32) { return true; },                                            // CNodePosFilter::vfunc0
+		[Places, &P](int32 Node)                                               // CNodePosFilter::vfunc1
+		{
+			return static_cast<float>(FVector::DistSquared(Places->Row(Node).OriginCm / ElysiumMove::U, P));
+		});
+	for (const int32 Node : Order)
+	{
+		if (NavNearestNodeTrace(PositionCm, Places->Row(Node).OriginCm, FElysiumEntityHandle::Invalid())
+			!= ENavNodeTrace::Blocked)                                         // 0x102f428c 0x102f39a0(0, ...)
+		{
+			return Node;
+		}
+	}
 	return -1;
 }

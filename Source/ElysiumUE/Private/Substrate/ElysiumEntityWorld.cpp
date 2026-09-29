@@ -21,6 +21,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcFrenzyShadow.h"
 #include "Substrate/ElysiumNpcWitness.h"
+#include "Substrate/ElysiumPlaceSet.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
 #include "Substrate/ElysiumSoundVolumeTable.h"
@@ -101,6 +102,8 @@ FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumSessionSubsyst
 	GameSoundBus = MakeUnique<FElysiumGameSoundBus>();
 	// The law-record store, built beside the sound bus it is modelled on.
 	LawEventBus = MakeUnique<ElysiumNpcWitness::FElysiumLawEventBus>();
+	// Empty until the map actor adopts the map's baked places; a headless world keeps it empty.
+	PlaceSet = MakeUnique<FElysiumPlaceSet>();
 	LineService = MakeUnique<FElysiumLineService>(WorldServices.Audio);
 	// The chokepoints are never uninstrumented: the ring buffer (always-on history) and
 	// the log/VLOG stream are installed before any entity spawns. The debug subsystem adds more sinks.
@@ -161,12 +164,38 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		}
 	}
 	Defs = MoveTemp(InDefs);
-	// `CNodeEnt::Spawn` (`0x102d78d0`): every hint-making `info_node*` / `info_hint` row lives as an
-	// `ai_hint`. Before construction, so the registry, the name/class indices and every reader see
-	// the entity retail's world holds; the authored classname stays on `SourceClassname`.
-	for (FElysiumEntityDef& Def : Defs.Defs)
+	// `0x102f6690` at `CWorld::Precache`: `DAT_10926a3c = 0` beside a fresh network, before any BSP
+	// entity spawns.
+	PlaceSet->BeginMapSpawn();
+	// `CNodeEnt::Spawn` (`0x102d78d0`), in BSP spawn order -- the def array's, which is the map's
+	// entity order: every hint-making `info_node*` / `info_hint` row lives as an `ai_hint`, every
+	// non-standalone node row takes the next node id and binds its hint to that node, and every row
+	// that makes no hint is removed. Before construction, so the registry, the name/class indices and
+	// every reader see the entity retail's world holds; the authored classname stays on
+	// `SourceClassname`. A retired row keeps its def (every later handle still indexes its own def)
+	// and gets no entity, as an abstract class's row does below.
+	//
+	// Retail runs this inside the spawn pass, interleaved with the other entities' `Spawn`s. Only
+	// another node row can move the counter and no map-entity `Spawn` creates one, so walking the
+	// node rows first lands every id where retail's interleaving would.
+	TArray<ElysiumNodeEntity::FSpawnResult> NodeSpawns;
+	NodeSpawns.SetNum(Defs.Defs.Num());
+	for (int32 i = 0; i < Defs.Defs.Num(); ++i)
 	{
-		ElysiumNodeEntity::ApplyHintReplacement(Def);
+		NodeSpawns[i] = ElysiumNodeEntity::SpawnNodeRow(Defs.Defs[i], *PlaceSet, FElysiumEntityHandle(i, Epoch));
+		if (NodeSpawns[i].Arm == ElysiumNodeEntity::ESpawnArm::StandaloneNoType)
+		{
+			// `0x102d7bde`: `DevMsg("WARNING: Hint node with no hint type!")`.
+			UE_LOG(LogElysiumWorld, Verbose, TEXT("WARNING: Hint node with no hint type! (#%d %s)"),
+				i, *Defs.Defs[i].Classname);
+		}
+	}
+	if (PlaceSet->OutOfRangeCount() > 0 && PlaceSet->IsAdopted())
+	{
+		// Retail counts these and says nothing; the map's bake reports the same rows (`pairing`).
+		UE_LOG(LogElysiumWorld, Log,
+			TEXT("world '%s': %d hint(s) took a node id past the network's %d nodes (DAT_106c994c)"),
+			*Defs.MapName, PlaceSet->OutOfRangeCount(), PlaceSet->NumNodes());
 	}
 	Hints.Reset();
 	for (const FElysiumEntityDef& Def : Defs.Defs)
@@ -189,6 +218,12 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 	for (int32 i = 0; i < Defs.Defs.Num(); ++i)
 	{
 		const FElysiumEntityDef& D = Defs.Defs[i];
+		if (NodeSpawns[i].bRetired)
+		{
+			// `CNodeEnt::Spawn`'s `0x1000e255` on a row that made no hint: nothing of it lives.
+			EntityList.Add(nullptr);
+			continue;
+		}
 		// The handle index IS the def-array index: stable, never recycled.
 		TUniquePtr<FElysiumEntity> Ent = FElysiumClassRegistry::Get().Create(D, FElysiumEntityHandle(i, Epoch));
 		if (!Ent)
@@ -205,9 +240,12 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 			NameIndex.Add(FName(*D.TargetName), i);
 		}
 		ClassIndex.Add(FName(*D.Classname), i);
-		if (FElysiumHint::Cast(Ent.Get()) != nullptr)
+		if (FElysiumHint* Hint = FElysiumHint::Cast(Ent.Get()))
 		{
 			Hints.Insert(i, 0);   // `0x102d2e30`: the constructor prepends
+			// `FUN_102d2f30` writes `+0x5e4` after the keyvalues and before the hint's `Spawn`
+			// (`0x102d2fce`); -1 for a standalone row and for an `ai_hint` the map authored itself.
+			Hint->NodeId = NodeSpawns[i].NodeId;
 		}
 		EntityList.Add(MoveTemp(Ent));
 	}
@@ -515,16 +553,30 @@ FElysiumEntityHandle FElysiumEntityWorld::CreateRuntimeEntityNoSpawn(FElysiumEnt
 		return FElysiumEntityHandle::Invalid();
 	}
 
-	// The synthesized def outlives the entity (it holds Def*), so own it here. Moving the unique_ptr
-	// into RuntimeDefs does not move the pointed-to object, so a Def* taken before the move stays valid.
-	ElysiumNodeEntity::ApplyHintReplacement(Def);
-	TUniquePtr<FElysiumEntityDef> Owned = MakeUnique<FElysiumEntityDef>(MoveTemp(Def));
-	const FElysiumEntityDef& Ref = *Owned;
-
 	// The handle index continues past the map's def array; Resolve indexes EntityList directly, so an
 	// append is all identity needs. (ResolveTargets copies target pointers before firing, so appending
 	// mid-delivery — the maker's Spawn input runs during ServiceEvents — never invalidates a live scan.)
 	const int32 Idx = EntityList.Num();
+
+	// `CNodeEnt::Spawn` for a node row created at run time: the counter carries on from the map's
+	// last node row, so such a hint takes an id past the baked network and counts out -- retail's
+	// out-of-range arm. Retail runs it at the entity's `Spawn`; it runs here, at creation, because
+	// this is where the def becomes an `ai_hint`, and no caller creates two node rows and spawns them
+	// out of order. A row that makes no hint is removed by retail's own `Spawn`, so nothing is built.
+	const ElysiumNodeEntity::FSpawnResult NodeSpawn =
+		ElysiumNodeEntity::SpawnNodeRow(Def, *PlaceSet, FElysiumEntityHandle(Idx, Epoch));
+	if (NodeSpawn.bRetired)
+	{
+		UE_LOG(LogElysiumWorld, Log, TEXT("(%8.3f) runtime create of node row %s makes no hint: removed (0x102d78d0)"),
+			NowSeconds(), *Def.Classname);
+		return FElysiumEntityHandle::Invalid();
+	}
+
+	// The synthesized def outlives the entity (it holds Def*), so own it here. Moving the unique_ptr
+	// into RuntimeDefs does not move the pointed-to object, so a Def* taken before the move stays valid.
+	TUniquePtr<FElysiumEntityDef> Owned = MakeUnique<FElysiumEntityDef>(MoveTemp(Def));
+	const FElysiumEntityDef& Ref = *Owned;
+
 	TUniquePtr<FElysiumEntity> Ent = FElysiumClassRegistry::Get().Create(Ref, FElysiumEntityHandle(Idx, Epoch));
 	if (!Ent)
 	{
@@ -537,9 +589,10 @@ FElysiumEntityHandle FElysiumEntityWorld::CreateRuntimeEntityNoSpawn(FElysiumEnt
 		NameIndex.Add(FName(*Ref.TargetName), Idx);
 	}
 	ClassIndex.Add(FName(*Ref.Classname), Idx);
-	if (FElysiumHint::Cast(Ent.Get()) != nullptr)
+	if (FElysiumHint* Hint = FElysiumHint::Cast(Ent.Get()))
 	{
 		Hints.Insert(Idx, 0);
+		Hint->NodeId = NodeSpawn.NodeId;
 	}
 
 	FElysiumEntity* Raw = Ent.Get();

@@ -936,7 +936,7 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		FConds C;
 		C.bCond0x40 = true;
 		TestEqual(TEXT("a standoff outside COMBAT falls through to the base"),
-			FElysiumNpcBase::StandoffSelect(W, C, /*bInCombatState=*/false, true, nullptr, 0.0),
+			FElysiumNpcBase::StandoffSelect(W, C, /*bInCombatState=*/false, true, nullptr, nullptr, 0.0),
 			INDEX_NONE);
 	}
 	// 1. Conditions 0x40 and 0x3f share ONE answer, `0x29` minus the +0x24 byte.
@@ -945,15 +945,15 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		FConds C;
 		C.bCond0x40 = true;
 		TestEqual(TEXT("condition 0x40 answers 0x29"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, 0.0), 0x29);
+			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, nullptr, 0.0), 0x29);
 		W.bCoverDirty = true;
 		TestEqual(TEXT("and 0x28 with the +0x24 byte set"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, 0.0), 0x28);
+			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, nullptr, 0.0), 0x28);
 		FConds D;
 		D.bCond0x3f = true;
 		FWords V;
 		TestEqual(TEXT("condition 0x3f takes the same arm"),
-			FElysiumNpcBase::StandoffSelect(V, D, true, true, nullptr, 0.0), 0x29);
+			FElysiumNpcBase::StandoffSelect(V, D, true, true, nullptr, nullptr, 0.0), 0x29);
 	}
 	// 2. The +0x4c latch is CONSUMED on read, and only answers 0x17 with an enemy standing.
 	{
@@ -962,13 +962,13 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		W.ReactionsLeft = 5;
 		FConds C;
 		TestEqual(TEXT("a set latch with an enemy answers 0x17"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, /*bHasEnemy=*/true, nullptr, 0.0), 0x17);
+			FElysiumNpcBase::StandoffSelect(W, C, true, /*bHasEnemy=*/true, nullptr, nullptr, 0.0), 0x17);
 		TestFalse(TEXT("and the latch is cleared by the read"), W.bSawNewEnemy);
 
 		FWords V;
 		V.bSawNewEnemy = true;
 		V.ReactionsLeft = 5;
-		FElysiumNpcBase::StandoffSelect(V, C, true, /*bHasEnemy=*/false, nullptr, 0.0);
+		FElysiumNpcBase::StandoffSelect(V, C, true, /*bHasEnemy=*/false, nullptr, nullptr, 0.0);
 		TestFalse(TEXT("a set latch with NO enemy is still cleared"), V.bSawNewEnemy);
 	}
 	// 6. An exhausted counter answers 0x17 and writes the posture off the hint's type: 0x65 is
@@ -983,14 +983,14 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		Hint.bValid = true;
 		Hint.HintType = 0x65;
 		TestEqual(TEXT("an exhausted counter answers 0x17"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, true, &Hint, 10.0), 0x17);
+			FElysiumNpcBase::StandoffSelect(W, C, true, true, &Hint, nullptr, 10.0), 0x17);
 		TestEqual(TEXT("hint type 0x65 writes posture 2"), W.Posture, 2);
 
 		FWords V;
 		V.ReactionsLeft = 0;
 		Hint.HintType = 0x66;
 		TestEqual(TEXT("any other hint type writes posture 0"),
-			FElysiumNpcBase::StandoffSelect(V, C, true, true, &Hint, 10.0), 0x17);
+			FElysiumNpcBase::StandoffSelect(V, C, true, true, &Hint, nullptr, 10.0), 0x17);
 		TestEqual(TEXT("which is 0"), V.Posture, 0);
 	}
 	// 7. Condition 0x48 promotes posture 2 to 3 and answers 0x25 — the one arm that changes posture
@@ -1002,7 +1002,7 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		FConds C;
 		C.bCond0x48 = true;
 		TestEqual(TEXT("condition 0x48 over posture 2 answers 0x25"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, 0.0), 0x25);
+			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, nullptr, 0.0), 0x25);
 		TestEqual(TEXT("and promotes the posture to 3"), W.Posture, 3);
 	}
 	// 8. 0x4f and 0x51 each SUPPRESS the 0x60 answer. That nesting is the arm order.
@@ -1012,19 +1012,19 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		FWords W;
 		W.ReactionsLeft = 2;
 		TestEqual(TEXT("condition 0x60 alone answers 0x21"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, 0.0), 0x21);
+			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, nullptr, 0.0), 0x21);
 		FConds D = C;
 		D.bCond0x4f = true;
 		FWords V;
 		V.ReactionsLeft = 2;
 		TestEqual(TEXT("condition 0x4f suppresses it"),
-			FElysiumNpcBase::StandoffSelect(V, D, true, true, nullptr, 0.0), INDEX_NONE);
+			FElysiumNpcBase::StandoffSelect(V, D, true, true, nullptr, nullptr, 0.0), INDEX_NONE);
 		FConds E = C;
 		E.bCond0x51 = true;
 		FWords W51;
 		W51.ReactionsLeft = 2;
 		TestEqual(TEXT("and so does 0x51"),
-			FElysiumNpcBase::StandoffSelect(W51, E, true, true, nullptr, 0.0), INDEX_NONE);
+			FElysiumNpcBase::StandoffSelect(W51, E, true, true, nullptr, nullptr, 0.0), INDEX_NONE);
 	}
 	// 9. Nothing standing: the base.
 	{
@@ -1032,7 +1032,7 @@ bool FElysiumNpcKernelLifecycleStandoffTest::RunTest(const FString&)
 		W.ReactionsLeft = 2;
 		FConds C;
 		TestEqual(TEXT("with nothing standing the selector declines"),
-			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, 0.0), INDEX_NONE);
+			FElysiumNpcBase::StandoffSelect(W, C, true, true, nullptr, nullptr, 0.0), INDEX_NONE);
 	}
 	return true;
 }

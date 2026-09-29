@@ -143,6 +143,14 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("DA_") + Map + TEXT("_LightQuery");
 		return BakedMapDir(Map) / Asset + TEXT(".") + Asset;
 	}
+	// This map's AI-network nodes as cooked content (0018 story 4): the `UElysiumMapPlaces` the
+	// place set (`FElysiumPlaceSet`) adopts at map activation. One asset per map, beside
+	// `DA_<map>_Entities`. Its Python twin is `elysium_pipeline.asset_paths`.
+	static FString BakedMapPlaces(const FString& Map)
+	{
+		const FString Asset = TEXT("DA_") + Map + TEXT("_Places");
+		return BakedMapDir(Map) / Asset + TEXT(".") + Asset;
+	}
 	// This map's environment as cooked content (R4.4): the `UElysiumMapEnvironment` that replaces
 	// `<map>.env`, `<map>.sky` and `<map>.spawn` -- the 2D-sky/fog set, the 3D-skybox miniature's
 	// placement transform, and the initial player spawn. One asset per map, beside

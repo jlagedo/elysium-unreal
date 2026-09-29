@@ -26,6 +26,7 @@
 // (`ElysiumMove::U`). Every helper here takes and answers SOURCE units unless it says `Cm`.
 
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcEngineRandom.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -284,11 +285,8 @@ namespace
 		return static_cast<int32>(Value);
 	}
 
-	// `vstdlib` `RandomInt(lo, hi)` / `RandomFloat(lo, hi)` through `DAT_1070b244` (`+8` / `+4`).
-	int32 StartTask19_2RandomInt(int32 Lo, int32 Hi)
-	{
-		return ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(Lo, Hi);
-	}
+	// `vstdlib` `RandomFloat(lo, hi)` through `DAT_1070b244` (`+4`); `RandomInt` (`+8`) is
+	// `ElysiumNpcEngineRandom::RandomInt`.
 	float StartTask19_2RandomFloat(float Lo, float Hi)
 	{
 		return ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(Lo, Hi);
@@ -768,7 +766,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		const int32 Activity = StartTask19_2Ftol(Operand);        // 0x102a5128 / 0x102a516f
 		if (Activity == ActCowerInto)                             // 0x102a512f / 0x102a5176 / 0x102a5135 / 0x102a517c JNZ
 		{
-			CowerAnimOffset = StartTask19_2RandomInt(0, 2) * 3;   // 0x102a5143 / 0x102a5149 / 0x102a518a RandomInt
+			CowerAnimOffset = ElysiumNpcEngineRandom::RandomInt(0, 2) * 3;   // 0x102a5143 / 0x102a5149 / 0x102a518a RandomInt
 		}
 		if (TaskId == TASK_PLAY_COWER)
 		{
@@ -790,7 +788,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	// --- index 0x5e: TASK_PLAY_COMFORT_INTO ------------------------------------------------------
 	case TASK_PLAY_COMFORT_INTO:
 	{
-		const int32 Activity = StartTask19_2RandomInt(0, 1) * 3 + ActComfortInto;   // 0x102a51bf/c2
+		const int32 Activity = ElysiumNpcEngineRandom::RandomInt(0, 1) * 3 + ActComfortInto;   // 0x102a51bf/c2
 		(void)SelectWeightedSequenceForActivity(Activity);        // 0x102a51ce, result discarded
 		SetIdealActivity(Activity);                               // 0x102a51d6
 		return 0;
@@ -1613,7 +1611,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 		int32 Side = TaskTailCoordinatorCircleSide(TaskTailEnemy167());   // 0x102a6af4 / 0x102a6b02
 		if (Side == 0)                                            // 0x102a6b0b / 0x102a6b0f JNZ
 		{
-			Side = StartTask19_2RandomInt(0, 1) != 0 ? -1 : 1;    // 0x102a6b1c..0x102a6b28
+			Side = ElysiumNpcEngineRandom::RandomInt(0, 1) != 0 ? -1 : 1;    // 0x102a6b1c..0x102a6b28
 		}
 		const float Delta = ScheduleHost.WaitFinishedDelta;
 		while (Tries < CircleTries)                               // 0x102a6b2d / 0x102a6b83 / 0x102a6b30 JGE
@@ -1719,7 +1717,7 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 	case TASK_MELEE_CHEER:
 	{
 		BaseScheduleHost.WaitFinished = Now + ScheduleHost.WaitFinishedDelta;   // 0x102a718c..0x102a7197
-		const int32 Draw = StartTask19_2RandomInt(0, 1);          // 0x102a71a5
+		const int32 Draw = ElysiumNpcEngineRandom::RandomInt(0, 1);          // 0x102a71a5
 		// 0 -> ACT_IDLE, 1 -> 3; any other draw reads an uninitialised local (`0x102a71be`), which
 		// `RandomInt(0, 1)` never answers.
 		const int32 Base = Draw == 0 ? ActIdle : ActRangeAttack2Alt;   // 0x102a71ab / 0x102a71b0 / 0x102a71b7 / 0x102a71ae JNZ

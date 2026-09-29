@@ -4,6 +4,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumNpcMotor2Shared.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -64,12 +65,18 @@ namespace
 
 bool FElysiumNpc::HintStandPosition(int32 HintNode, FVector& InOutPointUnits) const
 {
-	// `thunk_FUN_102d1180(hint, this, out)` — the hint's own "where do I stand for you" query.
-	// **SEAM**: family **Hints**' standing fact is that there is no `CAI_Hint` entity here and a
-	// hint node is a bare index. False, and the point is left exactly as the caller had it.
-	(void)HintNode;
-	(void)InOutPointUnits;
-	return false;
+	// `thunk_FUN_102d1180(hint, this, out)` — `CAI_Hint::GetPosition`, whose one port body is
+	// `HintPositionCm` (the hint's origin, or its network node at this NPC's pathing hull). This is
+	// that answer in this family's SOURCE units (`cm / U`, the frame `ApplyHintLeanOffset`'s callers
+	// scale back by `U`). False, and the point left as the caller had it, only for an index that
+	// names no live hint.
+	FVector PointCm = FVector::ZeroVector;
+	if (!HintPositionCm(HintNode, PointCm))
+	{
+		return false;
+	}
+	InOutPointUnits = PointCm / ElysiumMove::U;
+	return true;
 }
 
 bool FElysiumNpc::ClaimHintNode(int32 HintNode)
@@ -141,7 +148,9 @@ bool FElysiumNpc::ApplyHintLeanOffset(FVector& InOutPointUnits, bool bStanding) 
 		{
 			const float LeanYaw =
 				bLeaningLeft ? Yaw - TroikaHintLeanYawOffset : Yaw + TroikaHintLeanYawOffset;
-			const FVector LeanForward = FRotator(0.0, static_cast<double>(LeanYaw), 0.0).Vector();
+			// The yaw is RETAIL-frame (`HintYaw`) and the point is this family's `cm / U` frame, whose Y
+			// is Source's reflected: the forward is reflected with it.
+			const FVector LeanForward = FRotator(0.0, -static_cast<double>(LeanYaw), 0.0).Vector();
 			const float Scale = LeanScaleRecordField()
 				* (bStanding ? TroikaHintLeanScaleStand : TroikaHintLeanScaleCrouch);
 			InOutPointUnits += LeanForward * Scale;
@@ -215,8 +224,10 @@ bool FElysiumNpc::FindTacticalHintNode(uint32 SearchType)
 				&& NavHintNodeOrigin(BaseScheduleHost.HintNode, HintOriginUnits)
 				&& HintYaw(BaseScheduleHost.HintNode, Yaw))
 			{
+				// All three in the RETAIL frame: `NavHintNodeOrigin` answers Source units, `HintYaw` a
+				// Source yaw, so the cover's origin is taken into the same frame before the cross.
 				const FVector HintForward = FRotator(0.0, static_cast<double>(Yaw), 0.0).Vector();
-				const FVector Delta = (Cover->Origin / ElysiumMove::U) - HintOriginUnits;
+				const FVector Delta = NpcKernelMotor2Shared::MotorTailSourceOf(Cover->Origin) - HintOriginUnits;
 				bLeaningLeft = TroikaLeanCross2D(Delta, HintForward) <= TroikaSharedZero;
 			}
 		}

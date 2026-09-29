@@ -312,8 +312,8 @@ void UElysiumMapSubsystem::Deinitialize()
 
 namespace
 {
-	// The four packages a baked map is: its level and the three `DA_<map>_*` assets the runtime
-	// loads its entities, its environment and its collision from. The accessors answer OBJECT
+	// The five packages a baked map is: its level and the four `DA_<map>_*` assets the runtime
+	// loads its entities, its environment, its collision and its places from. The accessors answer OBJECT
 	// paths (`<package>.<object>`), and `DoesPackageExist` wants the package.
 	bool BakedPackageExists(const FString& ObjectPath)
 	{
@@ -342,7 +342,10 @@ bool UElysiumMapSubsystem::HasBakedMap(const FString& Map)
 	return FPackageName::DoesPackageExist(FElysiumContentPaths::BakedLevel(Map))
 		&& BakedPackageExists(FElysiumContentPaths::BakedMapEntities(Map))
 		&& BakedPackageExists(FElysiumContentPaths::BakedMapEnvironment(Map))
-		&& BakedPackageExists(FElysiumContentPaths::BakedMapCollision(Map));
+		&& BakedPackageExists(FElysiumContentPaths::BakedMapCollision(Map))
+		// 0018 story 4: the place set. A map without it has no node for any hint to bind to, so
+		// every wander and patrol would fail on arrival; it is refused here instead.
+		&& BakedPackageExists(FElysiumContentPaths::BakedMapPlaces(Map));
 }
 
 bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
@@ -352,14 +355,14 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 	{
 		return false;
 	}
-	// 0018 story 21-3: one gate, and it asks the project. The level and its three `DA_<map>_*`
+	// 0018 story 21-3: one gate, and it asks the project. The level and its four `DA_<map>_*`
 	// assets are everything a map is; nothing outside the project is consulted, so a game with no
 	// export root configured travels exactly as well as one with it.
 	const FString Level = FElysiumContentPaths::BakedLevel(Map);
 	if (!HasBakedMap(Map))
 	{
 		UE_LOG(LogElysiumMap, Warning,
-			TEXT("'%s' is not baked whole (%s and its three DA_%s_* assets); ")
+			TEXT("'%s' is not baked whole (%s and its four DA_%s_* assets); ")
 			TEXT("run: uv run elysium bake map --maps %s"),
 			*Map, Level.IsEmpty() ? TEXT("<no level path>") : *Level, *Map, *Map);
 		return false;

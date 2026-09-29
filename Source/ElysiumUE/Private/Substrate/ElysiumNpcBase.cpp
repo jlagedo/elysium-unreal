@@ -62,9 +62,10 @@ const FElysiumEntity* FElysiumNpcBase::FindPatrolPoint(const FString& Name) cons
 	// `Group` (`+0x5f0`) to the token with a byte-for-byte, CASE-SENSITIVE compare. First match wins.
 	// No targetname path, and no disabled/owner/cooldown or group-mask test (`python_bridge.md`).
 	//
-	// Retail answers the hint's network node (`+0x5e4`, -1 on a miss); this answers the hint
-	// itself, whose origin the patrol walks to. The node id stays a named seam until 0018 story 4,
-	// and a hint found here is never turned into a network-route failure.
+	// This is `0x102d2840` alone and answers the hint; its wrapper `0x102d2900`
+	// (`FElysiumNpc::PatrolNodeIdFor`) turns it into the hint's network node (`+0x5e4`, -1 on a miss
+	// or a standalone hint), and the patrol readers walk to that node's position
+	// (`PatrolNodePosition`), not to the hint's origin.
 	if (World == nullptr)
 	{
 		return nullptr;

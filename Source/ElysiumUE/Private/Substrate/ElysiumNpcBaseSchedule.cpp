@@ -14,6 +14,7 @@
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleShared.h"
+#include "Substrate/ElysiumPlaceSet.h"
 #include "Substrate/ElysiumScheduleNumbers.h"
 
 // --- File-scope helpers moved with the base bodies (story 5 step 5) ---
@@ -139,15 +140,19 @@ bool FElysiumNpcBase::IsUnusableNodeIndex(int32 NodeIndex) const
 {
 	// EAX = m_pNavigator (+0x5d34); EAX = [EAX + 0x2c] — the node list, count at +0x00, array at
 	// +0x04. A negative index, or one at or past the count, increments `DAT_0x106c994c` and answers
-	// false; a null node answers false without touching the counter; otherwise slot 527.
+	// false (`0x1027db5f`); a null node answers false without touching the counter; otherwise a
+	// tail-jump to slot 527 (`JMP [EAX+0x83c]`) with the node.
 	//
-	// SEAM: the port's motor carries no node list, so the count is zero and every index is out of
-	// range. The error counter is a global diagnostic with no port home, so the out-of-range arm is
-	// tallied instead.
-	ElysiumStub::Fired(TEXT("navigator"), TEXT("CAI_BaseNPC::IsUnusableNodeIndex 0x1027db30"),
-		DebugString(), FString::FromInt(NodeIndex),
-		TEXT("0002: no node list on the motor; retail bumps 0x106c994c"));
-	return false;
+	// The network is the world's place set; slot 527 takes the node as its row
+	// (`const FElysiumPlaceRow*`, the `CAI_Node*` its generated signature carries as `void*`).
+	const FElysiumPlaceSet* Places = World != nullptr ? &World->Places() : nullptr;
+	if (Places == nullptr || !Places->IsValidNode(NodeIndex))                  // 0x1027db3f JL / 0x1027db47 JGE
+	{
+		++FElysiumNpc::PatrolNodeMissCounter();                                // 0x1027db5f INC [0x106c994c]
+		return false;
+	}
+	return const_cast<FElysiumNpcBase*>(this)->IsUnusableNode(
+		const_cast<FElysiumPlaceRow*>(&Places->Row(NodeIndex)));              // 0x1027db59 slot 527
 }
 
 // -------------------------------------------------------------------------------------------------

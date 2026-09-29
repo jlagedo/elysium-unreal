@@ -721,8 +721,18 @@ namespace
 			FVector(400.0, 0.0, 0.0));
 		Point.Keys.Add(TEXT("hinttype"), TEXT("10000"));
 		Point.Keys.Add(TEXT("Group"), TEXT("pp"));
+		// The AI network the point binds: node 0, a little off the hint's origin and lifted 3 cm on
+		// every hull, so a leg that walked to the hint's origin instead of the node shows.
+		Builder.AddPlace(2, FVector(410.0, 0.0, 0.0));
+		for (float& Lift : Builder.Places[0].ZOffsetCm)
+		{
+			Lift = 3.0f;
+		}
 		return Builder;
 	}
+
+	// Where `0x102aa640` / `0x102aa860` send the leg: node 0 at `m_eHull`.
+	const FVector GScript19PatrolNodeCm(410.0, 0.0, 3.0);
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19PatrolStartTest,
@@ -767,10 +777,10 @@ bool FElysiumNpcKernelScript19PatrolStartTest::RunTest(const FString&)
 	// A real node: the goal at the node, TaskComplete.
 	Guard->BaseScheduleHost.FailureReason = 0;
 	Guard->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
-	const int32 Node[] = { Point->Handle.Index, -1 };
+	const int32 Node[] = { Guard->PatrolNodeIdFor(TEXT("pp")), -1 };   // 0x102d2900: node 0
 	Guard->BuildPatrolPath(&Guard->PatrolPathCell, 0, 0, 0, Node, EBuild::Replace);
 	Guard->IssuePatrolMoveStart(&Guard->PatrolPathCell);
-	TestTrue(TEXT("0x102aa735 SetGoal routes to the node's position"), Motor->RequestedFeet.Equals(Point->Origin, 0.01));
+	TestTrue(TEXT("0x102aa735 SetGoal routes to the node's position"), Motor->RequestedFeet.Equals(GScript19PatrolNodeCm, 0.01));
 	TestFalse(TEXT("0x102aa743 TaskComplete, no fail"), Guard->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
 
 	// Unreachable: TaskFail(0xc).
@@ -815,11 +825,11 @@ bool FElysiumNpcKernelScript19PatrolRunTest::RunTest(const FString&)
 	// A real node at the hull tolerance. The body ignores SetGoal's answer (`0x102aa954`, no fail arm
 	// of its own), but a refused route fails the task INSIDE SetGoal: `0x102f1dc0` with no
 	// route-search window (`0x102f1ee8` / `0x102f1f00`) calls `OnNavFailed(0xc)` (`0x102eeae0`).
-	const int32 Node[] = { Point->Handle.Index, -1 };
+	const int32 Node[] = { Guard->PatrolNodeIdFor(TEXT("pp")), -1 };   // 0x102d2900: node 0
 	Guard->BuildPatrolPath(&Guard->PatrolPathCell, 0, 0, 0, Node, EBuild::Replace);
 	Motor->bAcceptMoves = true;
 	Guard->IssuePatrolMoveRun(&Guard->PatrolPathCell);
-	TestTrue(TEXT("0x102aa954 SetGoal to the node"), Motor->RequestedFeet.Equals(Point->Origin, 0.01));
+	TestTrue(TEXT("0x102aa954 SetGoal to the node"), Motor->RequestedFeet.Equals(GScript19PatrolNodeCm, 0.01));
 	TestEqual(TEXT("a routed node writes no fail"), Guard->BaseScheduleHost.FailureReason, 0);
 	Motor->bAcceptMoves = false;
 	Guard->IssuePatrolMoveRun(&Guard->PatrolPathCell);

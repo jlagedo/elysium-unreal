@@ -613,10 +613,16 @@ bool FElysiumNpcKernelBaseHelpersPatrolInterestTest::RunTest(const FString&)
 	TestFalse(TEXT("the draw answers false with no interest record"), F.Npc->FUN_1029f650(3));
 	TestFalse(TEXT("and clears m_bPatrolPathUseHint (+0x65a0) on the way in"),
 		F.Npc->ScheduleHost.bPatrolPathUseHint);
-	TestEqual(TEXT("because the record seam answers nothing"),
+	// This world has no network, so node 3 is outside it: `0x1029f6c0` counts the miss and answers
+	// no record (the networked arms are `Elysium.Substrate.PlaceSeams.*`).
+	const int32 Misses = FElysiumNpc::PatrolNodeMissCounter();
+	TestEqual(TEXT("because node 3 is outside the (empty) network, there is no record"),
 		F.Npc->PatrolNodeInterestRecord(3), INDEX_NONE);
-	TestEqual(TEXT("and the ip_percent it would have rolled against is zero"),
-		F.Npc->PatrolNodeInterestPercent(0), 0);
+	TestEqual(TEXT("...and the miss bumps DAT_106c994c"), FElysiumNpc::PatrolNodeMissCounter(), Misses + 1);
+	TestEqual(TEXT("a -1 id is no record and counts nothing"), F.Npc->PatrolNodeInterestRecord(INDEX_NONE), INDEX_NONE);
+	TestEqual(TEXT("...nothing"), FElysiumNpc::PatrolNodeMissCounter(), Misses + 1);
+	TestEqual(TEXT("and a record that names no live hint rolls against zero"),
+		F.Npc->PatrolNodeInterestPercent(F.Other->Handle.Index), 0);
 
 	// The read side answers nothing unless the flag stands, and caches at +0x659c when it does.
 	F.Npc->ScheduleHost.bPatrolPathUseHint = false;
@@ -629,10 +635,10 @@ bool FElysiumNpcKernelBaseHelpersPatrolInterestTest::RunTest(const FString&)
 	TestEqual(TEXT("an empty cache re-resolves, and the seam still answers nothing"),
 		F.Npc->FUN_1029f730(3), 0);
 
-	// 0x1029f610 — the navigator path probe, which has no path to ask.
-	TestFalse(TEXT("a null goal entity answers false"), F.Npc->FUN_1029f610(nullptr));
-	TestFalse(TEXT("and so does a live one, because the navigator keeps no readable path"),
-		F.Npc->FUN_1029f610(F.Other));
+	// 0x1029f610 — the patrol cell's network check.
+	TestFalse(TEXT("a null cell answers false"), F.Npc->FUN_1029f610(nullptr));
+	FElysiumNpc::FPatrolPathCell Empty;
+	TestFalse(TEXT("so does a cell holding no path"), F.Npc->FUN_1029f610(&Empty));
 
 	return true;
 }

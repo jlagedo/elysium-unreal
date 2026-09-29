@@ -65,8 +65,8 @@ static int32 PatrolTypeForName(const FString& Name);
  *  slot 580's space (`0x102ea280`). 0 on a miss, with retail's DevMsg. */
 int32 PatrolScheduleForName(const FString& Token) const;
 
-/** `0x102d2900` -- a patrol token to its network node id: `FindPatrolPoint` (`0x102d2840`)'s hint,
- *  whose node id in this runtime is the hint's entity index (`PatrolNodePosition`). -1 on a miss. */
+/** `0x102d2900` -- a patrol token to its network node id: `FindPatrolPoint` (`0x102d2840`)'s hint's
+ *  `m_nNodeID` (`+0x5e4`, `FElysiumHint::NodeId`). -1 on a miss, and for a standalone hint. */
 int32 PatrolNodeIdFor(const FString& Token) const;
 
 /** The pool's size, `0x10307d30`'s `0x1f < cursor` bound and its `Error(..., 0x20)`. */
@@ -122,13 +122,13 @@ enum class EPatrolNode : uint8
 	Null,         // an in-range slot holding no node
 	Found,
 };
-/** SEAM for the AI network (`CAI_Network`, `m_pNavigator +0x2c`) and `CAI_Node::GetPosition`
- *  (`0x102fb0d0`), which this substrate does not build (0018 story 4). A node id stands for the
- *  entity index of the patrol hint `0x102d2840` / `0x102d2900` resolved (`FindPatrolPoint`, retail's
- *  hint `+0x5e4` node), the network's count is the entity list's, a slot holding no `FElysiumHint` is
- *  a null node, and a node's position is its hint's origin (retail offsets it by the hull's floor
- *  height, which this runtime's hint origins already stand on). */
-EPatrolNode PatrolNodePosition(int32 NodeId, FVector& OutPositionCm) const;
+/** The AI network (`CAI_Network`, `m_pNavigator +0x2c`) as the patrol readers index it -- the
+ *  world's place set (0018 story 4) -- and `CAI_Node::GetPosition(node, Hull)` (`0x102fb0d0`),
+ *  centimetres. `Hull` is the word the retail caller passes: `m_eHull` (`+0x1568`, `HullKind`) at
+ *  `0x102aa640`, `0x102aa860` and `0x102a39f4`. `NodeId` is a network index, as every
+ *  `FPatrolPathRecord::Nodes` entry is. Every loaded node is present, so `Null` answers only a hull
+ *  past the table. */
+EPatrolNode PatrolNodePosition(int32 NodeId, int32 Hull, FVector& OutPositionCm) const;
 
 // --- The navigator goal (`AI_NavGoal_t`, `CAI_Navigator::SetGoal 0x102ecd20`) ---------------------
 

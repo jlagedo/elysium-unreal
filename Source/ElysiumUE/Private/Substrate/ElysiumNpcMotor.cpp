@@ -9,6 +9,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
+#include "Substrate/ElysiumNpcMotor2Shared.h"
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "Substrate/ElysiumSchedule.h"
 
@@ -87,10 +88,11 @@ int32 FElysiumNpc::NavNodeWordAt(int32 RouteStepIndex) const
 	//     CAI_Node* n = nodes[1][node];
 	//     return n ? n->+0xa0 : 0;
 	//
-	// **SEAM**: there is no node graph. Every index is out of range on an empty array, which is the
-	// arm that bumps retail's own counter and returns 0 — so the refusal here IS one of retail's.
-	(void)RouteStepIndex;
-	return 0;
+	// The same body as family BaseHelpers' `PatrolNodeInterestRecord` -- one retail function, one
+	// port body -- here with retail's own null (0) for "no hint" rather than `INDEX_NONE`. The
+	// argument is the node id the route step carries (the caller has read `path+0x14[path+0x10]`).
+	const int32 Hint = PatrolNodeInterestRecord(RouteStepIndex);
+	return Hint == INDEX_NONE ? 0 : Hint;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -149,26 +151,39 @@ float FElysiumNpc::RetailYawConVarValue(const TCHAR* Address)
 
 bool FElysiumNpc::NavHintNodeType(int32 HintNode, int32& OutType) const
 {
-	// `CAI_Hint+0x5dc m_nHintType`. **SEAM**: `BaseScheduleHost.HintNode` is a bare index and no store
-	// carries hint types — the Squad family records the same gap for the global list.
-	(void)HintNode;
-	(void)OutType;
-	return false;
+	// `CAI_Hint+0x5dc m_nHintType`, read off the live `ai_hint` (`FElysiumHint::HintType`). A word of
+	// the HINT, not of its network node. False for an index that names no live hint.
+	FHintWords Words;
+	if (!HintWords(HintNode, Words))
+	{
+		return false;
+	}
+	OutType = Words.HintType;
+	return true;
 }
 
 bool FElysiumNpc::NavHintNodeOrigin(int32 HintNode, FVector& OutOriginUnits) const
 {
-	// The hint's `GetAbsOrigin()` (slot 217). **SEAM**, same store.
-	(void)HintNode;
-	(void)OutOriginUnits;
-	return false;
+	// The hint's `GetAbsOrigin()` (vtable `+0x364`) -- the HINT entity's own origin, which every
+	// caller here reads directly (`SelectJumpbaseNode`, `SetupSuperJump`, `FindTacticalHintNode`'s
+	// lean), not `CAI_Hint::GetPosition` (`0x102d1180`, the node). RETAIL-frame Source units, the
+	// frame those callers measure the NPC in (`MotorTailSourceOf`).
+	FHintWords Words;
+	if (!HintWords(HintNode, Words))
+	{
+		return false;
+	}
+	OutOriginUnits = NpcKernelMotor2Shared::MotorTailSourceOf(Words.OriginCm);
+	return true;
 }
 
 bool FElysiumNpc::NavAllHintNodes(TArray<int32>& OutHintNodes) const
 {
-	// The global `CAI_Hint` list `DAT_10925450`, next link `+0x5d8`. **SEAM**: an empty list.
-	OutHintNodes.Reset();
-	return false;
+	// The global `CAI_Hint` list `DAT_10925450`, next link `+0x5d8`, head first: the world's live
+	// hint list in its own order (`GlobalHintList`, `FElysiumEntityWorld::HintList`). False only
+	// with no world behind this NPC.
+	OutHintNodes = GlobalHintList();
+	return World != nullptr;
 }
 
 // -------------------------------------------------------------------------------------------------

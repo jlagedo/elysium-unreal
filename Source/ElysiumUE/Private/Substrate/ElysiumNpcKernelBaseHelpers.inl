@@ -38,14 +38,15 @@
  *  weapon half of that `||` cannot be evaluated; the hint half still is, and the body says so. */
 bool ActiveWeaponMaxRangeUnits(float& OutRangeUnits) const;
 
-/** SEAM for `0x1029f6c0` — the patrol node's interesting-place record, whose `+0x46c` is the
- *  `ip_percent` chance `0x1029f650` rolls against and whose pointer `0x1029f730` caches at `+0x659c`.
- *  There is no patrol-node graph here (family Hints stands the same absence from the name side,
- *  `PatrolNodeInterestRecordName`), so this answers `INDEX_NONE`. */
+/** `0x1029f6c0` — the patrol node's record: the hint the network node `PatrolNode` holds
+ *  (`node+0xa0`, `FElysiumPlaceSet::AttachedHint`), as its entity index. Its `+0x46c` is the
+ *  `ip_percent` chance `0x1029f650` rolls against, its pointer what `0x1029f730` caches at `+0x659c`
+ *  and its `+0x468` the place name `0x1029f780` resolves. `INDEX_NONE` (retail's 0) for a -1 id, a
+ *  node with no hint, or an id outside the network (which bumps `DAT_106c994c`). */
 int32 PatrolNodeInterestRecord(int32 PatrolNode) const;
 
-/** SEAM for that record's `+0x46c m_iIPPercent`. Answers 0 — the chance that never fires — which is
- *  distinct from "no record" above. */
+/** That record's `+0x46c m_iIPPercent` (`FHintWords::IpPercent`). 0 — the chance that never fires —
+ *  for an index that names no live hint. */
 int32 PatrolNodeInterestPercent(int32 Record) const;
 
 /** SEAM for `0x102968f0`, the hint LOS check `0x10295ed0` tails into and `0x10296c40` runs under
@@ -101,11 +102,14 @@ bool IsUpdateThinkDue() const;
 bool IsNormalThinkDue() const;
 bool IsAiThinkDue() const;
 
-/** `0x1029f610` — a local-move-goal probe: when the goal and its `+0x04` entity are both set, is
- *  that entity the one the navigator's path at `+0x2c` is routed through? Retail name UNRECOVERED.
- *  `Goal` is the `AILocalMoveGoal_t*` retail takes, which this substrate has no type for; the
- *  argument is the entity behind its `+0x04`, which is the only word the body reads. */
-bool FUN_1029f610(const FElysiumEntity* GoalEntity) const;
+struct FPatrolPathCell;   // `m_sppPatrolPath`'s cell, defined by family Script19 (`ElysiumNpcScript.inl`)
+
+/** `0x1029f610` — the patrol path's network check `CAI_BaseNPCTroika::OnRestore` (`0x102998c0`) runs
+ *  on `m_sppPatrolPath` and `m_sppPatrolPathHunt`: a cell holding a path answers `0x10307ac0(path,
+ *  m_pNavigator->+0x2c)` -- every node id it holds names a node of the network (an id past the
+ *  count bumps `DAT_106c994c`); an empty cell answers false. Retail name UNRECOVERED. (The 29c walk
+ *  read the argument as an `AILocalMoveGoal_t*`; `0x102998c0`'s two calls hand it the cells.) */
+bool FUN_1029f610(const FPatrolPathCell* Cell) const;
 
 /** `0x1029f650` — reset `m_bPatrolPathUseHint` (`+0x65a0`), then roll `Random(0, 99)` against the
  *  patrol node's interesting-place `ip_percent` and set the flag when the roll comes in under it.

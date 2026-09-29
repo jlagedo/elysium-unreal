@@ -80,6 +80,22 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	bool bProjectsToNavigable = true;
 	bool bLateralCoverReachable = true;
 	TFunction<bool(const FVector&)> LateralCoverQuery;
+	// The route-length seam (0018 story 4's wander pick). Unset is the headless answer -- no route --
+	// which every case written before the seam already assumes; a case states its world by setting
+	// `RouteQuery` (destination -> length in cm, false for "no route").
+	TFunction<bool(const FVector&, float&)> RouteQuery;
+	virtual bool RouteLengthTo(const FVector& DestCm, float& OutLengthCm) const override
+	{
+		float Length = 0.0f;
+		const bool bRoute = RouteQuery ? RouteQuery(DestCm, Length) : false;
+		Record(FString::Printf(TEXT("NpcMotor RouteLengthTo %s -> %s"), *DestCm.ToString(),
+			bRoute ? *FString::Printf(TEXT("%.1f"), Length) : TEXT("none")));
+		if (bRoute)
+		{
+			OutLengthCm = Length;
+		}
+		return bRoute;
+	}
 	virtual bool CanReachLateralCover(const FVector& Point) const override
 	{
 		return LateralCoverQuery ? LateralCoverQuery(Point) : bLateralCoverReachable;

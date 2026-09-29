@@ -11,6 +11,7 @@
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcTroikaHelpers2Shared.h"
+#include "Substrate/ElysiumPlaceSet.h"
 #include "Substrate/ElysiumSchedule.h"
 
 // --- File-scope helpers moved with the base bodies (story 5 step 5) ---
@@ -55,10 +56,27 @@ namespace
 
 bool FElysiumNpcBase::HintYaw(int32 HintNode, float& OutYaw) const
 {
-	// `thunk_FUN_102d12e0(hint)` — the hint's own facing yaw. **SEAM**, false.
-	(void)HintNode;
-	(void)OutYaw;
-	return false;
+	// `thunk_FUN_102d12e0(hint)` — the hint's yaw, the whole body:
+	//
+	//     if (hint->m_nNodeID (+0x5e4) != -1) return 0x102f47b0(DAT_1093407c, id);   // node +0x6c
+	//     return hint->GetAbsAngles()->y;                                             // vtable +0x374
+	//
+	// `0x102f47b0` answers 0.0f outside `-1 < id <= count` (`FElysiumPlaceSet::NetworkNodeYawSource`).
+	// A RETAIL-frame (Source) yaw on both arms: `FHintWords::Angles` is the keyvalue `angles`
+	// verbatim, and the node row's yaw is reflected back. False only for an index that names no
+	// live hint.
+	FHintWords Words;
+	if (!HintWords(HintNode, Words))
+	{
+		return false;
+	}
+	if (Words.NodeId != INDEX_NONE)                                            // 0x102d12e3 CMP -1
+	{
+		OutYaw = World != nullptr ? World->Places().NetworkNodeYawSource(Words.NodeId) : 0.0f;
+		return true;
+	}
+	OutYaw = static_cast<float>(Words.Angles.Y);                              // vtable +0x374, [+4]
+	return true;
 }
 
 FVector FElysiumNpcBase::HintAttackExtentsUnits() const

@@ -53,9 +53,9 @@ int32 PathingHullKind = 0;
 // --- The navigator seam --------------------------------------------------------------------------
 
 /** `FUN_1029f6c0` — resolve a `CAI_Node` through the navigator's node array (`nav+0x2c`, count at
- *  `[0]`, entries at `[1]`) using the index the argument's route step carries, and answer
- *  `node+0xa0`. **SEAM**: there is no node graph; answers 0, which is retail's own answer for a
- *  null argument or a -1 index. */
+ *  `[0]`, entries at `[1]`) using the node id the argument's route step carries, and answer
+ *  `node+0xa0`, the attached hint (its entity index here). 0 for a -1 id, an id outside the network
+ *  (which bumps `DAT_106c994c`) or a node with no hint. The body is `PatrolNodeInterestRecord`. */
 int32 NavNodeWordAt(int32 RouteStepIndex) const;
 
 // --- The motor seams -----------------------------------------------------------------------------
@@ -91,14 +91,15 @@ static float RetailYawConVarValue(const TCHAR* Address);
 
 // --- The species helpers the jump chain calls out to ---------------------------------------------
 
-/** The claimed hint node's type word (`CAI_Hint+0x5dc m_nHintType`) and its origin. `HintNode` is a
- *  bare index in this runtime and no store carries hint types or positions yet — the Squad family
- *  records the same gap on the global hint list — so both answer nothing. */
+/** The claimed hint's type word (`CAI_Hint+0x5dc m_nHintType`) and its `GetAbsOrigin()` (RETAIL
+ *  frame, Source units), read off the live `ai_hint` the index names. Both are the HINT's words, not
+ *  its node's. False for an index that names no live hint. */
 bool NavHintNodeType(int32 HintNode, int32& OutType) const;
 bool NavHintNodeOrigin(int32 HintNode, FVector& OutOriginUnits) const;
 
-/** The global `CAI_Hint` list (`DAT_10925450`, next link `+0x5d8`) that `PlayerInNoJumpZone` and
- *  `SelectJumpbaseNode` walk end to end. **SEAM**: answers an empty list. */
+/** The global `CAI_Hint` list (`DAT_10925450`, next link `+0x5d8`) that `PlayerInNoJumpZone`,
+ *  `SelectJumpbaseNode` and `GatherHintNodes` walk end to end: the world's live hint list, head
+ *  first (`GlobalHintList`). False only with no world. */
 bool NavAllHintNodes(TArray<int32>& OutHintNodes) const;
 
 // --- The non-slot bodies of this family ----------------------------------------------------------

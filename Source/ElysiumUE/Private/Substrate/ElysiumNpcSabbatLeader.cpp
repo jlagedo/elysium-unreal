@@ -732,7 +732,7 @@ bool FElysiumNpcSabbatLeader::PlayerInNoJumpZone() const
 	//     }
 	//     return false;
 	// BOTH bodies have to be inside the SAME hint's line, which is why the second test is nested.
-	// **SEAM**: the hint list answers empty, so nobody is ever in a no-jump zone.
+	// The list is the world's live hint list (`NavAllHintNodes`).
 	FElysiumPlayer* Player = Senses.Memory.ClosestPlayer.IsSet() && World != nullptr
 		? World->FindPlayer()
 		: nullptr;

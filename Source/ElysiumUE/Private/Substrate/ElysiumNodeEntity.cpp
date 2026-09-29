@@ -1,6 +1,7 @@
 #include "Substrate/ElysiumNodeEntity.h"
 
 #include "ElysiumEntityDefs.h"
+#include "Substrate/ElysiumPlaceSet.h"
 
 namespace ElysiumNodeEntity
 {
@@ -154,15 +155,53 @@ namespace ElysiumNodeEntity
 		const FString Effective = Classname.Equals(TEXT("info_node_tzimisce"), ESearchCase::IgnoreCase)
 			? FString(TEXT("info_node")) : Classname;
 		const int16 Type = static_cast<int16>(ClassHintType(Effective, AuthoredHintType(Keys)));
-		for (const TCHAR* Standalone : GStandaloneClassnames)
+		if (IsStandaloneClassname(Effective))
 		{
-			if (Effective.Equals(Standalone, ESearchCase::IgnoreCase))
-			{
-				// Otherwise `DevMsg("WARNING: Hint node with no hint type")` and no hint.
-				return Type != 0;
-			}
+			// Otherwise `DevMsg("WARNING: Hint node with no hint type")` and no hint.
+			return Type != 0;
 		}
 		return Type != 0 || AuthoredGroup(Keys);
+	}
+
+	bool IsStandaloneClassname(const FString& Classname)
+	{
+		for (const TCHAR* Standalone : GStandaloneClassnames)
+		{
+			if (Classname.Equals(Standalone, ESearchCase::IgnoreCase))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	FSpawnResult SpawnNodeRow(FElysiumEntityDef& Def, FElysiumPlaceSet& Places, const FElysiumEntityHandle& Hint)
+	{
+		FSpawnResult Result;
+		if (!IsNodeClassname(Def.Classname))
+		{
+			return Result;
+		}
+		// The standalone test runs on the classname AFTER the `info_node_tzimisce` rewrite
+		// (`0x102d78e9..0x102d7909`), which can only turn a row into `info_node` -- never into a
+		// standalone one -- so the authored classname answers the same.
+		const bool bStandalone = IsStandaloneClassname(Def.Classname);
+		const bool bHint = ApplyHintReplacement(Def);
+		if (bStandalone)
+		{
+			// `0x102d7ba5..0x102d7bdd`: `FUN_102d2f30(..., -1)`, or the DevMsg; `DAT_10926a3c` is
+			// never read on this arm.
+			Result.Arm = bHint ? ESpawnArm::StandaloneHint : ESpawnArm::StandaloneNoType;
+			Result.bRetired = !bHint;
+			return Result;
+		}
+		// `0x102d79b8`: the hint is created with `m_nNodeID = DAT_10926a3c` BEFORE the attach and the
+		// increment, so the id is the counter the row took, in range or not.
+		const int32 Counter = Places.SpawnNodeRow(bHint ? Hint : FElysiumEntityHandle::Invalid());
+		Result.Arm = bHint ? ESpawnArm::NodeHint : ESpawnArm::NodeNoHint;
+		Result.NodeId = bHint ? Counter : INDEX_NONE;
+		Result.bRetired = !bHint;
+		return Result;
 	}
 
 	bool ApplyHintReplacement(FElysiumEntityDef& Def)

@@ -13,11 +13,11 @@
 
 // 0018 story 21-3: the travel gate and the map list ask the project.
 //
-// `HasBakedMap` is a predicate over four packages -- the level and the three `DA_<map>_*` assets --
-// so it can only be asked of real content; the scratch corpus root the retired
-// `ElysiumMapExportGateTests` drove the `.ready` marker with cannot fabricate a package. This test
-// therefore runs against the mount itself: every map the gate accepts carries all four, and a level
-// that carries only its `.umap` is refused. The mount holds ~100 such stale bare levels, baked
+// `HasBakedMap` is a predicate over five packages -- the level and the four `DA_<map>_*` assets
+// (the places joined in 0018 story 4) -- so it can only be asked of real content; the scratch corpus
+// root the retired `ElysiumMapExportGateTests` drove the `.ready` marker with cannot fabricate a
+// package. This test therefore runs against the mount itself: every map the gate accepts carries all
+// five, and a level that carries only its `.umap` is refused. The mount holds ~100 such stale bare levels, baked
 // before the three assets existed, so the second half is not hypothetical.
 //
 // Abstains with no baked maps on the mount, like the other Content tests.
@@ -81,7 +81,7 @@ bool FElysiumMapListTest::RunTest(const FString&)
 		Levels.Num(), Whole.Num(), Bare.Num()));
 
 	// The gate's own claim, asked of each half directly: a map it accepts really does carry all
-	// four packages, and one it refuses is missing at least one.
+	// five packages, and one it refuses is missing at least one.
 	for (const FString& Map : Whole)
 	{
 		TestTrue(*FString::Printf(TEXT("%s: the level package exists"), *Map),
@@ -89,7 +89,8 @@ bool FElysiumMapListTest::RunTest(const FString&)
 		for (const FString& ObjectPath : {
 				FElysiumContentPaths::BakedMapEntities(Map),
 				FElysiumContentPaths::BakedMapEnvironment(Map),
-				FElysiumContentPaths::BakedMapCollision(Map) })
+				FElysiumContentPaths::BakedMapCollision(Map),
+				FElysiumContentPaths::BakedMapPlaces(Map) })
 		{
 			TestTrue(*FString::Printf(TEXT("%s: %s exists"), *Map, *ObjectPath),
 				FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(ObjectPath)));
@@ -97,14 +98,16 @@ bool FElysiumMapListTest::RunTest(const FString&)
 	}
 	for (const FString& Map : Bare)
 	{
-		const bool bAllThree =
+		const bool bAllFour =
 			FPackageName::DoesPackageExist(
 				FPackageName::ObjectPathToPackageName(FElysiumContentPaths::BakedMapEntities(Map)))
 			&& FPackageName::DoesPackageExist(
 				FPackageName::ObjectPathToPackageName(FElysiumContentPaths::BakedMapEnvironment(Map)))
 			&& FPackageName::DoesPackageExist(
-				FPackageName::ObjectPathToPackageName(FElysiumContentPaths::BakedMapCollision(Map)));
-		TestFalse(*FString::Printf(TEXT("%s is refused because an asset is missing"), *Map), bAllThree);
+				FPackageName::ObjectPathToPackageName(FElysiumContentPaths::BakedMapCollision(Map)))
+			&& FPackageName::DoesPackageExist(
+				FPackageName::ObjectPathToPackageName(FElysiumContentPaths::BakedMapPlaces(Map)));
+		TestFalse(*FString::Printf(TEXT("%s is refused because an asset is missing"), *Map), bAllFour);
 	}
 
 	// A name that is no map at all folds to no level path and must not be accepted.

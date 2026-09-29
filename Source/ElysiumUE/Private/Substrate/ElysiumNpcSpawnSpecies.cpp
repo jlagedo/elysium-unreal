@@ -41,6 +41,7 @@
 #include "Substrate/ElysiumNpcChangBros.h"
 #include "Substrate/ElysiumNpcCop.h"
 #include "Substrate/ElysiumNpcDog.h"
+#include "Substrate/ElysiumNpcEngineRandom.h"
 #include "Substrate/ElysiumNpcGargoyle.h"
 #include "Substrate/ElysiumNpcGhoulCroucher.h"
 #include "Substrate/ElysiumNpcGuard1.h"
@@ -181,14 +182,11 @@ namespace
 		return Entity.World != nullptr ? Entity.World->NowSeconds() : 0.0;
 	}
 
-	// `vstdlib RandomFloat` / `RandomInt` (`DAT_1070b244` slot 1, `[0x109f3868]`) on the NPC stream.
+	// `vstdlib RandomFloat` (`DAT_1070b244` slot 1, `[0x109f3868]`) on the NPC stream; its `RandomInt`
+	// is `ElysiumNpcEngineRandom::RandomInt`.
 	float Spawn19RandomFloat(float Min, float Max)
 	{
 		return ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(Min, Max);
-	}
-	int32 Spawn19RandomInt(int32 Min, int32 Max)
-	{
-		return ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(Min, Max);
 	}
 
 	// `UTIL_Remove` (`0x101cd940`) on another entity: `Kill`, the port's removal door.
@@ -314,7 +312,7 @@ void FElysiumNpcGhoulCroucher::Spawn()
 		bUnawareExited = false;                                                          // 0x1037b107
 		Spawn19SetModel(GSpawn19ModelStalkerFemale);                                     // 0x1037b10d slot 105
 	}
-	UnawareType = Spawn19RandomInt(0, 3);                                                // 0x1037b116 / 0x1037b11c +0x6668
+	UnawareType = ElysiumNpcEngineRandom::RandomInt(0, 3);                                                // 0x1037b116 / 0x1037b11c +0x6668
 	PlInvestigate = GSpawn19LawNever;                                                    // 0x1037b12a
 	PlCriminalFlee = GSpawn19LawNever;                                                   // 0x1037b130
 	PlCriminalAttack = GSpawn19LawNever;                                                 // 0x1037b136

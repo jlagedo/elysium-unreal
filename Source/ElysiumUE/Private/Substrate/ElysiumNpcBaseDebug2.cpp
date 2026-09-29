@@ -6,12 +6,14 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcDebug2Shared.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"
+#include "Substrate/ElysiumPlaceSet.h"
 #include "Substrate/ElysiumSchedule.h"
 
 // --- File-scope helpers moved with the base bodies (story 5 step 5) ---
@@ -67,19 +69,160 @@ void FElysiumNpcBase::DrawNavigatorRouteOverlay() const
 
 bool FElysiumNpcBase::NavigatorNearestNodePositionUnits(FVector& OutUnits) const
 {
-	// SEAM for the `0x2000` arm's three-step:
+	// The `0x2000` arm's three-step:
 	//
 	//     m_pNavigator->+0x08 = m_pNavigator->+0x04->+0x156c;   // the NPC's own +0x156c, stamped in
 	//     m_pNavigator->+0x0c = gpGlobals->+0x04;               // the frame counter
-	//     idx = CAI_Pathfinder::NearestNodeToNPC(m_pNavigator->+0x2c, this, GetOrigin());  0x102f3c10
-	//     if (idx != -1) node = pathfinder->+0x04[idx];
+	//     idx = CAI_Network::NearestNodeToNPC(m_pNavigator->+0x2c, this, GetOrigin());  0x102f3c10
+	//     if (idx != -1) node = network->+0x04[idx];
 	//     CAI_Node::GetPosition(node, out, m_eHull);            // 0x102fb0d0
 	//
-	// The two scratch writes are part of the body and are recorded here rather than made: they land
-	// on the navigator, which is a chain row. There is no node graph in this runtime, so the lookup
-	// answers -1 and this answers false.
-	(void)OutUnits;
-	return false;
+	// The two scratch writes land on navigator words the port's mover does not keep (the pathing
+	// hull is read straight off the NPC wherever retail reads `nav+8`). The final position is the
+	// STANDING hull's, `m_eHull`, not the pathing one the search measured with.
+	const int32 Node = NavNearestNodeToNpc(Origin);                            // slot 220 GetOrigin
+	FVector NodeCm = FVector::ZeroVector;
+	if (Node == INDEX_NONE || World == nullptr || !World->Places().GetPositionCm(Node, HullKind, NodeCm))
+	{
+		return false;
+	}
+	OutUnits = NodeCm / ElysiumMove::U;
+	return true;
+}
+
+namespace
+{
+	// `0x102f3c10`'s box: `local_28/24/20` = 800, 800, 200 units, or `_DAT_1046bacc` (2048) on X/Y
+	// and 2048.0 on Z when the capabilities carry `4`.
+	constexpr float GNearestNpcBoxXYUnits = 800.0f;
+	constexpr float GNearestNpcBoxZUnits = 200.0f;
+	constexpr float GNearestNpcFlyBoxUnits = 2048.0f;
+	constexpr int32 GNearestNpcCapFly = 0x4;       // bits_CAP_MOVE_FLY: type-3 (air) nodes
+	constexpr int32 GNearestNpcCapGround = 0x1;    // bits_CAP_MOVE_GROUND: type-2 nodes
+	constexpr int32 GNearestNpcNodeGround = 2;
+	constexpr int32 GNearestNpcNodeAir = 3;
+	constexpr int32 GNearestNpcNodeClimb = 4;
+	// `ListNodesInBox`'s cap at both call sites (`PUSH 10`).
+	constexpr int32 GNearestNodeListCount = 10;
+	// `0x102f1900`: a climb node is probed only with one of the info bits `0x1d`.
+	constexpr int32 GCanFitClimbBits = 0x1d;
+	// The mask `0x102f3c10` hands `CanFitAtNode` (`PUSH 0x2400b`).
+	constexpr int32 GCanFitMask = 0x2400b;
+	// `0x102f1a20`'s trace end: the point raised by `_DAT_1044e658` (the double 0.01).
+	constexpr double GCanFitRiseUnits = 0.01;
+}
+
+int32 FElysiumNpcBase::NavNearestNodeToNpc(const FVector& PositionCm) const
+{
+	const FElysiumPlaceSet* Places = World != nullptr ? &World->Places() : nullptr;
+	if (Places == nullptr || Places->NumNodes() == 0)                          // 0x102f3c3a *this == 0
+	{
+		return INDEX_NONE;
+	}
+	// The cache `0x102f4520` (20 recent answers, keyed by point and hull, reused inside a short
+	// window) and its write-back `0x102f45f0` are engine machinery -- a lookup shortcut in front of
+	// this body -- and are not ported: the search runs every call.
+	FElysiumNpcBase* Self = const_cast<FElysiumNpcBase*>(this);
+	const int32 Caps = Self->CapabilitiesGet();                                // slot 513, local_48
+	const int32 Hull = RetailPathingHull();                                    // +0x156c, local_44
+	const FVector P = PositionCm / ElysiumMove::U;
+	const FVector Half = (Caps & GNearestNpcCapFly) != 0
+		? FVector(GNearestNpcFlyBoxUnits, GNearestNpcFlyBoxUnits, GNearestNpcFlyBoxUnits)
+		: FVector(GNearestNpcBoxXYUnits, GNearestNpcBoxXYUnits, GNearestNpcBoxZUnits);
+	// `CNodeNPCFilter::vfunc0` (`0x102f40f0`): the node type against the capabilities, then slot 527.
+	auto IsValid = [Places, Caps, Self](int32 Node) -> bool
+	{
+		const int32 Type = Places->Row(Node).Type;
+		if (Type == GNearestNpcNodeAir && (Caps & GNearestNpcCapFly) == 0)
+		{
+			return false;
+		}
+		if (Type == GNearestNpcNodeGround && (Caps & GNearestNpcCapGround) == 0)
+		{
+			return false;
+		}
+		return !Self->IsUnusableNode(const_cast<FElysiumPlaceRow*>(&Places->Row(Node)));   // +0x83c
+	};
+	// `CNodeNPCFilter::vfunc1` (`0x102f4140`): the squared distance to the node at the pathing hull.
+	auto DistanceSqr = [Places, Hull, &P](int32 Node) -> float
+	{
+		FVector At = Places->Row(Node).OriginCm;
+		Places->GetPositionCm(Node, Hull, At);
+		return static_cast<float>(FVector::DistSquared(At / ElysiumMove::U, P));
+	};
+	const TArray<int32> Order = Places->ListNodesInBox(GNearestNodeListCount, P - Half, P + Half,
+		IsValid, DistanceSqr);                                                 // 0x102f32f0
+	const FVector ViewOffsetCm = EyePosition() - Origin;                       // npc +0x184..+0x18c
+	int32 Fallback = INDEX_NONE;                                               // local_10
+	for (const int32 Node : Order)
+	{
+		if (!NavCanFitAtNode(Node, Hull, GCanFitMask) || IsUnusableNodeIndex(Node))   // 0x102f1900, 0x1027db30
+		{
+			continue;
+		}
+		FVector NodeCm = Places->Row(Node).OriginCm;
+		Places->GetPositionCm(Node, Hull, NodeCm);                             // param_1[0x55b]
+		const ENavNodeTrace Trace = NavNearestNodeTrace(PositionCm, NodeCm + ViewOffsetCm, Handle);   // 0x102f3900
+		if (Trace == ENavNodeTrace::Clear)
+		{
+			return Node;
+		}
+		if (Trace == ENavNodeTrace::ClearPastFlagged && Fallback == INDEX_NONE)
+		{
+			Fallback = Node;
+		}
+	}
+	return Fallback;
+}
+
+bool FElysiumNpcBase::NavCanFitAtNode(int32 Node, int32 Hull, int32 Mask) const
+{
+	// `0x102f1900`: the node through the network (an id outside it bumps `DAT_106c994c` and reads a
+	// NULL node -- the one caller hands only listed ids), `GetPosition(node, nav+8)`, then the two
+	// geometry queries below.
+	FVector NodeCm = FVector::ZeroVector;
+	if (World == nullptr || !World->Places().GetPositionCm(Node, Hull, NodeCm))
+	{
+		return false;
+	}
+	const FElysiumPlaceRow& Row = World->Places().Row(Node);
+	const bool bProbe = Row.Type == GNearestNpcNodeGround
+		|| (Row.Type == GNearestNpcNodeClimb && (Row.Flags & GCanFitClimbBits) != 0);
+	const FVector PointUnits = NodeCm / ElysiumMove::U;
+	if (bProbe)
+	{
+		// `0x102e7270(m_pMoveProbe, pos, mask, 0, 0, 0, 0)` -- CheckStandPosition. **SEAM**: family
+		// Motor's `MoveProbeCheckStandPosition` (no hull probe here: false); a base-only NPC has no
+		// probe at all.
+		const FElysiumNpc* Troika = AsNpc();
+		if (Troika == nullptr || !Troika->MoveProbeCheckStandPosition(PointUnits, Mask))
+		{
+			return false;
+		}
+	}
+	// `0x102f1a20`: the navigator hull's box traced from the point to the point raised by 0.01; fits
+	// unless the trace starts solid. **SEAM**: `KernelHullTrace` (the clear answer).
+	FVector Mins = FVector::ZeroVector;
+	FVector Maxs = FVector::ZeroVector;
+	RetailHullExtents(Hull, EElysiumHullExtents::Full, Mins, Maxs);
+	FKernelHullTrace Trace;
+	KernelHullTrace(PointUnits, PointUnits + FVector(0.0, 0.0, GCanFitRiseUnits), Mins, Maxs, Mask, Trace);
+	return !Trace.bStartSolid;
+}
+
+FElysiumNpcBase::ENavNodeTrace FElysiumNpcBase::NavNearestNodeTrace(const FVector& StartCm,
+	const FVector& EndCm, const FElysiumEntityHandle& Ignore) const
+{
+	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr)
+	{
+		return ENavNodeTrace::Clear;                                           // no collision world
+	}
+	float Fraction = 1.0f;
+	bool bStartSolid = false;
+	Embodiment->TraceCameraHull(StartCm, EndCm, FVector::ZeroVector, Ignore, Fraction, bStartSolid);
+	// `0x102f3a5b`: clear at `fraction == 1.0` exactly (`_DAT_10449280`); startsolid is not read.
+	return Fraction == 1.0f ? ENavNodeTrace::Clear : ENavNodeTrace::Blocked;
 }
 
 void FElysiumNpcBase::DrawPathfinderDebugOverlays(int32 DebugOverlayBits) const

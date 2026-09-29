@@ -16,12 +16,15 @@
 #include "ElysiumSessionSubsystem.h"    // the clock, the level script, map snapshots
 #include "ElysiumMapEntities.h"           // ElysiumEntityDefSource::Load — DA_<map>_Entities
 #include "ElysiumMapEnvironment.h"        // ElysiumMapEnvironmentSource::Load — DA_<map>_Environment
+#include "ElysiumMapPlaces.h"             // UElysiumMapPlaces — DA_<map>_Places
 #include "ElysiumMapSubsystem.h"          // epochs, backdrop state, landmark/restore placements
 #include "ElysiumPlayerBody.h"            // IElysiumPlayerBody — placement and the movement freeze
 #include "ElysiumPresentationSubsystem.h" // the fourth world service
 #include "Audio/ElysiumSoundScheme.h"     // FElysiumSoundSchemeManager — built at load, stopped at EndPlay
 #include "Map/ElysiumMapCollision.h"      // the walkable-surface build and its readiness states
 #include "Map/ElysiumMapLog.h"
+#include "Substrate/ElysiumPlaceSet.h"      // the entity world's AI network, adopted before Load
+#include "Substrate/ElysiumRetailHullTable.h" // the navigation agent a used hull is cut for
 #include "Visual/ElysiumEntityBodies.h"   // SetMap and the map animation preload
 #include "Visual/ElysiumNativeAnimationData.h"
 #include "Visual/ElysiumExpressionPreparation.h"
@@ -463,6 +466,12 @@ void AElysiumMapActor::LoadMap()
 				// above. Null on an unconverted map, and
 				// then every brush body cooks from its def's hulls as it always has.
 				EntityWorld->SetCollisionPayload(Collision ? Collision->GetPayload() : nullptr);
+				// 0018 story 4: `DA_<map>_Places`, the map's AI network, beside the entity table the
+				// transport loaded above. Adopted before `Load`, because `Load` runs `CNodeEnt::Spawn`'s
+				// counter over it; copied by value, so the asset is released with this call. A map
+				// without one (the travel gate refuses it; a level opened directly can still reach
+				// here) runs on a network of zero nodes, every hint counted out, and says so.
+				AdoptMapPlaces();
 				// Observe model keys without changing definitions or Source I/O. The normal
 				// activation barrier waits for this native resource union to finish.
 				if (auto* Native=GI->GetSubsystem<UElysiumNativeAnimationData>())
@@ -801,23 +810,59 @@ void AElysiumMapActor::PollRuntimeActivation()
 
 bool AElysiumMapActor::HasBakedNavigationMesh(const UNavigationSystemV1& Navigation) const
 {
-	// NOTE: any agent with tiles, deliberately. The map's own `UsedHullBits` is the right set to
-	// demand -- and `verify nav` demands exactly that offline, per agent, by name -- but the word
-	// does not reach the runtime yet: the place set that carries it is story 4's. Until it does,
-	// asking for "a mesh with tiles" is the strongest question this path can ask without
-	// inventing an agent set, and a level short of one agent is caught by the harness rather
-	// than here. Stated so the gap is visible instead of looking like thoroughness.
 	// Tiles, not merely a nav-data actor: an empty mesh saved in a level would otherwise read as
 	// "already built" and leave every NPC unable to path, with nothing said about it.
-	for (const ANavigationData* Data : Navigation.NavDataSet)
+	auto HasTiles = [&Navigation](FName Agent)
 	{
-		const ARecastNavMesh* Mesh = Cast<ARecastNavMesh>(Data);
-		if (Mesh != nullptr && Mesh->GetNumActiveTiles() > 0)
+		for (const ANavigationData* Data : Navigation.NavDataSet)
 		{
-			return true;
+			const ARecastNavMesh* Mesh = Cast<ARecastNavMesh>(Data);
+			if (Mesh != nullptr && Mesh->GetNumActiveTiles() > 0
+				&& (Agent.IsNone() || Mesh->GetConfig().Name == Agent))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	// 0018 story 4: the map's own `UsedHullBits` reaches the runtime on the place set, so the
+	// demand is the one `verify nav` makes offline -- a mesh with tiles for every agent a used hull
+	// is cut for (`ElysiumRetailHulls::AgentName`; a hull with no links has no agent and is not
+	// asked for). A map that declares no hull (no place set adopted) keeps the weaker question:
+	// any agent's mesh with tiles.
+	const int32 UsedHullBits = EntityWorld ? EntityWorld->Places().UsedHullBits() : 0;
+	if (UsedHullBits == 0)
+	{
+		return HasTiles(NAME_None);
+	}
+	for (int32 Hull = 0; Hull < ElysiumRetailHulls::Count; ++Hull)
+	{
+		const FName Agent = ElysiumRetailHulls::AgentName(Hull);
+		if ((UsedHullBits & (1 << Hull)) != 0 && !Agent.IsNone() && !HasTiles(Agent))
+		{
+			return false;
 		}
 	}
-	return false;
+	return true;
+}
+
+void AElysiumMapActor::AdoptMapPlaces()
+{
+	const FString Path = FElysiumContentPaths::BakedMapPlaces(MapName);
+	const UElysiumMapPlaces* Asset = Path.IsEmpty() ? nullptr
+		: LoadObject<UElysiumMapPlaces>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	if (Asset == nullptr || !Asset->IsValidPlaces())
+	{
+		UE_LOG(LogElysium, Error,
+			TEXT("'%s': no valid places asset at %s -- every hint's node id falls outside an empty network; ")
+			TEXT("run: uv run elysium bake map --maps %s"),
+			*MapName, Path.IsEmpty() ? TEXT("<no path>") : *Path, *MapName);
+		return;
+	}
+	EntityWorld->Places().Adopt(*Asset);
+	UE_LOG(LogElysium, Log, TEXT("map '%s': %d places adopted from %s (used hulls 0x%x, %d wander caps)"),
+		*MapName, Asset->NumNodes, *Path, Asset->UsedHullBits, Asset->WanderCaps.Num());
 }
 
 //: How long a level's baked navigation meshes get to register before their absence is called a

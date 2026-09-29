@@ -281,6 +281,20 @@ public:
 		return false;
 	}
 
+	// The length of the route this body would walk from where it stands to `DestCm`, centimetres: a
+	// synchronous path query on the body's OWN nav agent (the pathing hull `+0x156c`,
+	// `AElysiumNpcBody::ApplyRetailHull`) under the nav data's DEFAULT query filter -- the wander pick
+	// (`TASK_GET_PATH_TO_RANDOM_NODE`, 0018 story 4) never sets the pedestrian byte, so the roadway is
+	// not priced. Only a complete path answers; a partial one is no route.
+	//
+	// **The narrow seam 0018 story 6's path-length service absorbs.** It exists for one caller, the
+	// capped point pick's detour test, and answers nothing more than the one number.
+	//
+	// **False means no route**, and that is also the default: a motor with no navigation behind it
+	// (a headless world, a recording double that has not opted in) cannot answer, and the caller must
+	// drop the candidate rather than walk to a guess. `OutLengthCm` is untouched on false.
+	virtual bool RouteLengthTo(const FVector& DestCm, float& OutLengthCm) const { return false; }
+
 	// TestLateralCover 0x10278220: stand at the candidate, then MoveLimit with MASK_NPCSOLID
 	// (0x202400b). Geometry only; candidate order and the sight/hint tests belong to the NPC.
 	virtual bool CanReachLateralCover(const FVector& FeetDestination) const { return false; }

@@ -598,9 +598,10 @@ bool FElysiumNpcKernelMotorNavigatorTest::RunTest(const FString&)
 	TestTrue(TEXT("ResumeScheduledMove sets bShouldMove even with no active goal"),
 		Guard->BaseScheduleHost.bShouldMove);
 
-	// `FUN_1029f6c0` `0x1029f6c0` — the node-graph read. Every index is out of range on an empty
-	// array, which is retail's own counted-refusal arm.
-	TestEqual(TEXT("the node graph answers 0 for any route step"), Guard->NavNodeWordAt(0), 0);
+	// `FUN_1029f6c0` `0x1029f6c0` — the node-graph read. This world has no network, so every index
+	// is out of range, which is retail's own counted-refusal arm (the networked arms are
+	// `Elysium.Substrate.PlaceSeams.Patrol`).
+	TestEqual(TEXT("an empty network answers 0 for any route step"), Guard->NavNodeWordAt(0), 0);
 	TestEqual(TEXT("including a negative one"), Guard->NavNodeWordAt(-1), 0);
 
 	// Slot 528 `0x10280360`. The gate is the navigator's goal state, a SEAM answering -1, so the
@@ -884,18 +885,18 @@ bool FElysiumNpcKernelMotorJumpChainTest::RunTest(const FString&)
 	TestTrue(TEXT("and Z is ignored entirely"),
 		Guard->IsPosNearStoredJumpPositions(FVector(0.0, 0.0, 9000.0)));
 
-	// The ring write pairs with it, and refuses while the hint store carries no origins.
+	// The ring write pairs with it, and refuses an index that names no hint (entity 3 is not one).
 	Guard->LastJumpPositionIdx = 0;
 	Guard->AddHintToStoredJumpPositions(3);
-	TestEqual(TEXT("the ring index did not move — the hint-origin seam refused"),
+	TestEqual(TEXT("the ring index did not move — no hint origin to store"),
 		Guard->LastJumpPositionIdx, 0);
 
-	// `SelectJumpbaseNode` `0x10361730` — the global hint list is a SEAM answering empty, so the
-	// nearest type-18000 node is nobody.
+	// `SelectJumpbaseNode` `0x10361730` — the global hint list is this world's, which authors no
+	// hint, so the nearest type-18000 node is nobody.
 	TestEqual(TEXT("no jumpbase node is found"), Guard->SelectJumpbaseNode(), INDEX_NONE);
 	TArray<int32> Hints;
-	TestFalse(TEXT("because the hint list refuses"), Guard->NavAllHintNodes(Hints));
-	TestEqual(TEXT("and is empty"), Hints.Num(), 0);
+	TestTrue(TEXT("the hint list answers the world's"), Guard->NavAllHintNodes(Hints));
+	TestEqual(TEXT("which is empty"), Hints.Num(), 0);
 
 	// `StationaryForTooLong` `0x10362670` and `UpdateMovedTimeStamp` `0x10362540`.
 	const double Now = Fixture.World.NowSeconds();

@@ -23,11 +23,13 @@
 #include "ElysiumEntity.h"       // ELYSIUM_NEVER_THINK
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMapPlaces.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "ElysiumSaveTypes.h"
 #include "Misc/AssertionMacros.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumPlaceSet.h"
 #include "Templates/Function.h"
 #include "Tests/ElysiumTestServices.h"
 #include "Tests/ElysiumNpcTestCensus.h"
@@ -54,6 +56,22 @@ T* ElysiumTestAsSpecies(FElysiumEntity* Entity)
 struct FElysiumNpcWorldBuilder
 {
 	FElysiumEntityDefs Defs;
+	// The map's AI network (0018 story 4's place set), adopted BEFORE `Load` so the node rows the
+	// defs author bind their hints to it exactly as a baked map's do (`CNodeEnt::Spawn`'s counter).
+	// Empty is a world with no network, which is every fixture written before the place set.
+	TArray<FElysiumPlaceRow> Places;
+	TArray<FElysiumPlaceWanderCap> WanderCaps;
+
+	// One synthetic place: a node of `Type` at `OriginCm`, every hull's Z offset zero. Returns its
+	// network index.
+	int32 AddPlace(int32 Type, const FVector& OriginCm, float YawDeg = 0.0f)
+	{
+		FElysiumPlaceRow Row;
+		Row.Type = Type;
+		Row.OriginCm = OriginCm;
+		Row.YawDeg = YawDeg;
+		return Places.Add(Row);
+	}
 
 	FElysiumNpcWorldBuilder(const TCHAR* MapName, uint32 Seed)
 	{
@@ -178,6 +196,21 @@ inline void ElysiumRoundTripSnapshot(FElysiumEntityWorld& From, FElysiumEntityWo
 	To.ApplySnapshot(Snapshot);
 }
 
+// The AI network a hand-built world's patrol points bind to (0018 story 4): one ground node at each
+// origin, in order, adopted BEFORE `Load` so the node rows take them in BSP order the way a baked
+// map's do. Every hull's Z offset is zero, so a node's position is exactly the origin given.
+inline void ElysiumAdoptPlacesAt(FElysiumEntityWorld& World, std::initializer_list<FVector> OriginsCm)
+{
+	TArray<FElysiumPlaceRow> Rows;
+	for (const FVector& Origin : OriginsCm)
+	{
+		FElysiumPlaceRow& Row = Rows.AddDefaulted_GetRef();
+		Row.Type = 2;
+		Row.OriginCm = Origin;
+	}
+	World.Places().AdoptRows(MoveTemp(Rows));
+}
+
 // Stands a world from a builder's defs: `Load`, `SpawnPlayer`, `Activate(0.0)`, `Tick(0.0)` — the
 // four calls every fixture's constructor ended on. A suite's own fixture holds one of these plus
 // its named entity pointers (`Guard`, `Player`, …), fetched with `Npc`/`Player` right after
@@ -197,6 +230,10 @@ struct FElysiumNpcWorldFixture
 		: World(nullptr, nullptr, Services.Bundle())
 	{
 		Configure(Services);
+		if (Builder.Places.Num() > 0)
+		{
+			World.Places().AdoptRows(MoveTemp(Builder.Places), 0, MoveTemp(Builder.WanderCaps));
+		}
 		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Builder.Defs));
 		World.SpawnPlayer();

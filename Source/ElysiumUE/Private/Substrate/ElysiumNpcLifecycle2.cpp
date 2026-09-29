@@ -480,45 +480,16 @@ void FElysiumNpc::TroikaOnRestore(bool bFromLoad)
 {
 	// `102998cx`: `0x1029f610` validates a stored route against the node network (`0x10307ac0`) and
 	// `0x1029f5d0` releases it when that fails — the two pairs `m_sppPatrolPath` and
-	// `m_sppPatrolPathHunt`, each checked and released on its own. The network is this runtime's
-	// node seam (`PatrolNodePosition`): a path any of whose ids no longer names a node is released.
+	// `m_sppPatrolPathHunt`, each checked and released on its own. A cell holding no path answers
+	// false and the release does nothing (`0x1029f5d4`).
 	auto Revalidate = [this](FPatrolPathCell& Cell)
 	{
 		++PatrolPathRevalidations;
-		if (Cell.Path == nullptr)                                        // 0x1029f614 / 0x1029f61c
+		if (!FUN_1029f610(&Cell))                                        // 0x102998ca
 		{
-			return;
-		}
-		// `0x10307ac0(path, m_pNavigator->+0x2c)`: a null network answers false with nothing counted;
-		// per node, `id < 0` answers false with nothing counted, `id >= count` bumps `DAT_106c994c`
-		// and answers false, a null network slot answers false.
-		bool bValid = World != nullptr;
-		for (int32 Index = 0; bValid && Index < Cell.Path->Count && Index < PatrolPathNodeCapacity; ++Index)
-		{
-			const int32 NodeId = Cell.Path->Nodes[Index];
-			if (NodeId < 0)                                                  // 0x10307ac0 `(int)id < 0`
-			{
-				bValid = false;
-				break;
-			}
-			FVector Position = FVector::ZeroVector;
-			const EPatrolNode Node = PatrolNodePosition(NodeId, Position);
-			if (Node == EPatrolNode::OutOfRange)                             // `*network <= id`
-			{
-				++PatrolNodeMissCounter();                                   // `DAT_106c994c++`
-				bValid = false;
-				break;
-			}
-			if (Node != EPatrolNode::Found)                                  // `network[1][id] == 0`
-			{
-				bValid = false;
-				break;
-			}
-		}
-		if (!bValid)
-		{
+			const bool bHeldPath = Cell.Path != nullptr;
 			ReleasePatrolPath(&Cell);                                    // 1029f5d0
-			++PatrolPathReleases;
+			PatrolPathReleases += bHeldPath ? 1 : 0;
 		}
 	};
 	Revalidate(PatrolPathCell);

@@ -23,6 +23,7 @@
 #include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumNpcGait.h"
 #include "Substrate/ElysiumNpcLog.h"
+#include "Substrate/ElysiumPlaceSet.h"
 
 namespace
 {
@@ -362,25 +363,29 @@ int32 FElysiumNpc::PatrolScheduleForName(const FString& Token) const
 
 int32 FElysiumNpc::PatrolNodeIdFor(const FString& Token) const
 {
-	const FElysiumEntity* Hint = FindPatrolPoint(Token);
-	return Hint != nullptr ? Hint->Handle.Index : INDEX_NONE;
+	// `0x102d2900`: `hint = 0x102d2840(list, token); return hint ? hint->m_nNodeID (+0x5e4) : -1;`
+	// The NODE id, not the hint -- a standalone patrol hint (`info_hint`, node id -1) is a miss here
+	// and `InputFollowPatrolPath` logs "Could not find node" for it, as retail does.
+	const FElysiumHint* Hint = FElysiumHint::Cast(FindPatrolPoint(Token));
+	return Hint != nullptr ? Hint->NodeId : INDEX_NONE;
 }
 
-// --- The node graph seam ---------------------------------------------------------------------------
+// --- The AI network, as the patrol readers index it --------------------------------------------------
 
-FElysiumNpc::EPatrolNode FElysiumNpc::PatrolNodePosition(int32 NodeId, FVector& OutPositionCm) const
+FElysiumNpc::EPatrolNode FElysiumNpc::PatrolNodePosition(int32 NodeId, int32 Hull, FVector& OutPositionCm) const
 {
-	const int32 Count = World != nullptr ? World->Entities().Num() : 0;   // network +0x0
-	if (NodeId < 0 || NodeId >= Count)
+	// `m_pNavigator->+0x2c`, the network: `id < 0 || *network <= id` is the out-of-range arm (the
+	// caller bumps `DAT_106c994c`); otherwise `network[1][id]`, which every loaded node fills, and
+	// `CAI_Node::GetPosition(node, hull)` (`0x102fb0d0`) with the hull word the CALLER names.
+	const FElysiumPlaceSet* Places = World != nullptr ? &World->Places() : nullptr;
+	if (Places == nullptr || !Places->IsValidNode(NodeId))
 	{
 		return EPatrolNode::OutOfRange;
 	}
-	const FElysiumHint* Hint = FElysiumHint::Cast(World->Entities()[NodeId].Get());   // network +0x4 [id]
-	if (Hint == nullptr || Hint->IsDead())
+	if (!Places->GetPositionCm(NodeId, Hull, OutPositionCm))
 	{
-		return EPatrolNode::Null;
+		return EPatrolNode::Null;                                              // a hull past the table
 	}
-	OutPositionCm = Hint->Origin;   // CAI_Node::GetPosition(m_eHull) 0x102fb0d0
 	return EPatrolNode::Found;
 }
 
@@ -408,7 +413,7 @@ void FElysiumNpc::IssuePatrolMoveStart(FPatrolPathCell* Cell)
 		return;                                               // 0x102aa7c5
 	}
 	FVector PositionCm = FVector::ZeroVector;
-	const EPatrolNode Node = PatrolNodePosition(NodeId, PositionCm); // 0x102aa670..0x102aa68c
+	const EPatrolNode Node = PatrolNodePosition(NodeId, HullKind, PositionCm); // 0x102aa670..0x102aa68c (m_eHull +0x1568)
 	if (Node == EPatrolNode::OutOfRange)                      // 0x102aa67b JL / 0x102aa683 JGE
 	{
 		++PatrolNodeMissCounter();                            // 0x102aa750 INC DAT_106c994c
@@ -452,7 +457,7 @@ void FElysiumNpc::IssuePatrolMoveRun(FPatrolPathCell* Cell)
 		return;                                               // silently: no goal, no fail
 	}
 	FVector PositionCm = FVector::ZeroVector;
-	const EPatrolNode Node = PatrolNodePosition(NodeId, PositionCm); // 0x102aa890..0x102aa8a6
+	const EPatrolNode Node = PatrolNodePosition(NodeId, HullKind, PositionCm); // 0x102aa890..0x102aa8a6 (m_eHull +0x1568)
 	if (Node == EPatrolNode::OutOfRange)                      // 0x102aa89d JL / 0x102aa8a1 JGE
 	{
 		++PatrolNodeMissCounter();                            // 0x102aa8ab..0x102aa8b3

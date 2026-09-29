@@ -18,13 +18,12 @@
 //
 // THE STANDING FACTS OF THIS FAMILY, which every body below runs into:
 //
-//   * **There is no node graph.** Retail's selectors walk the global `CAI_Hint` list `DAT_10925450`
-//     (link `node+0x5d8`, type `node+0x5dc`). Family **Hints** stood the seam for one hint's words
-//     (`FHintWords` / `HintWords()`) and family **Motor** the seam for the list itself
-//     (`NavAllHintNodes`); both answer nothing, so every selector here answers "no node" — retail's
-//     own answer on a map that authors none. This family adds no third store. Instead each selector
-//     is split: a PURE rule over a candidate list, which is where the recovered decision lives and
-//     what the test drives, plus a thin member entry point that feeds it from the two seams.
+//   * **The candidates are the live hint list.** Retail's selectors walk the global `CAI_Hint` list
+//     `DAT_10925450` (link `node+0x5d8`, type `node+0x5dc`). Family **Hints** reads one hint's words
+//     (`FHintWords` / `HintWords()`) and family **Motor** the list itself (`NavAllHintNodes`, the
+//     world's hint list since 0018 story 4). This family adds no third store. Each selector is
+//     split: a PURE rule over a candidate list, which is where the recovered decision lives and
+//     what the test drives, plus a thin member entry point that feeds it from those two reads.
 //   * **There is no NPC hull table.** `PTR_DAT_1060a750`'s records live past `.data`'s raw size in
 //     the pinned image — they are filled at runtime and are not readable from the file — so family
 //     Motor's `RetailHullExtents` answers nothing and the hull box is the zero box.
@@ -67,8 +66,8 @@ struct FTeleportNodePick
 	float Score = 0.f;
 };
 
-/** The candidate list the entry points above build: every node the hint seams can resolve.
- *  `NavAllHintNodes` + `HintWords`, both of which answer nothing, so this is empty. */
+/** The candidate list the entry points above build: every live hint on the global list, head
+ *  first (`NavAllHintNodes` + `HintWords`), each with its own origin (`GetAbsOrigin`). */
 void GatherHintNodes(TArray<FHintWords>& OutNodes, TArray<int32>& OutNodeIds) const;
 
 // --- `PositionClearForTeleport`, four species ---------------------------------------------------
@@ -204,7 +203,8 @@ bool ComputeHitboxSurroundingBox(FVector& OutMinsCm, FVector& OutMaxsCm) const;
 /** `m_Collision`'s solid-flag word (+0x02b4) — `TeleportOut` ORs in `0x4` (`FSOLID_NOT_SOLID`) and
  *  `TeleportIn` masks it out. Carried for the same reason. */
 uint32 SolidFlagsWord = 0;
-/** `thunk_FUN_102f41b0(m_pNavigator->GetNetwork(), &pos)` — the navigator's nearest-node query.
- *  **SEAM**: no node graph, so this answers retail's own miss value `-1` and the caller takes its
- *  `DevWarning` arm. */
+/** `thunk_FUN_102f41b0(m_pNavigator->GetNetwork(), &pos)` — the network's nearest node to a point:
+ *  the ten nearest raw origins inside ±2048 units (`ListNodesInBox`), nearest first, the first whose
+ *  line from the point is clear (`0x102f39a0`, `NavNearestNodeTrace`). -1 when none is, or with no
+ *  network. Its 20-entry answer cache (`0x102f4520` / `0x102f45f0`) is engine machinery, not ported. */
 int32 NavNearestNodeTo(const FVector& PositionCm) const;

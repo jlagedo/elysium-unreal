@@ -39,11 +39,13 @@ struct FHintWords
 };
 
 /** What `CAI_Hint::OnRestore` (slot 130, `0x102d3ec0`) did. `bNodeFound` false is retail's
- *  `"Warning: AI hint has incorrect origin"` arm — see the definition. */
+ *  `"Warning: AI hint has incorrect origin"` arm — see the definition. `NodeIndex` is the node the
+ *  hint relinked onto, `NodeOriginCm` its raw origin, where the hint is teleported. */
 struct FHintRestoreResult
 {
 	bool bNodeFound = false;
 	bool bClaimedNode = false;
+	int32 NodeIndex = INDEX_NONE;
 	FVector NodeOriginCm = FVector::ZeroVector;
 };
 
@@ -84,8 +86,11 @@ bool IsHintUnusable(int32 HintNode, double Now) const;
 void RestartIdealActivityId(int32 RetailActivityId);
 
 /** `CAI_Hint::OnRestore` (`0x102d3ec0`). The hint's own save-restore fixup, handed over from family
- *  Sounds. `this` is the hint, not the NPC, so it is a static helper rather than a member rule. */
-static FHintRestoreResult HintOnRestore(const FHintWords& Hint);
+ *  Sounds. `this` is the hint, not the NPC, so it is a static helper rather than a member rule:
+ *  `FElysiumHint::OnPostRestore` calls it with the hint's own handle and the world's place set, and
+ *  applies the teleport the result names. */
+static FHintRestoreResult HintOnRestore(const FHintWords& Hint, const FElysiumEntityHandle& HintHandle,
+	FElysiumPlaceSet& Places);
 
 /** SEAM for the entity vtable `+0x370` position accessor `SelectTzimisceHintNode` (`0x103bfa50`)
  *  compares through — NOT `+0x364 GetAbsOrigin`, which the rest of this family uses. Slot 220 is

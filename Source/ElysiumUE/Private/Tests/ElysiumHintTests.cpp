@@ -94,8 +94,7 @@ bool FElysiumHintNodeReplacementTest::RunTest(const FString&)
 	FElysiumNpcWorldFixture F(MoveTemp(Builder));
 
 	const FElysiumEntity* Patrol = F.World.FindByName(TEXT("pp"));
-	const FElysiumEntity* Plain = F.World.FindByName(TEXT("plain"));
-	if (!TestNotNull(TEXT("the patrol point stands"), Patrol) || !TestNotNull(TEXT("the plain node stands"), Plain))
+	if (!TestNotNull(TEXT("the patrol point stands"), Patrol))
 	{
 		return false;
 	}
@@ -103,8 +102,9 @@ bool FElysiumHintNodeReplacementTest::RunTest(const FString&)
 	TestEqual(TEXT("...and keeps its authored classname"), Patrol->Def->SourceClassname,
 		FString(TEXT("info_node_patrol_point")));
 	TestNotNull(TEXT("...as the hint class"), FElysiumHint::Cast(Patrol));
-	TestEqual(TEXT("a row that makes no hint keeps its classname"), Plain->Def->Classname, FString(TEXT("info_node")));
-	TestTrue(TEXT("...and its authored classname is not duplicated"), Plain->Def->SourceClassname.IsEmpty());
+	// `CNodeEnt::Spawn` removes every authoring row (`0x1000e255`); one that made no hint leaves
+	// nothing behind (0018 story 4).
+	TestNull(TEXT("a row that makes no hint is removed"), F.World.FindByName(TEXT("plain")));
 
 	FElysiumEntityDef Runtime;
 	Runtime.Classname = TEXT("info_node_cover_low");
@@ -147,7 +147,9 @@ bool FElysiumHintListTest::RunTest(const FString&)
 	TestEqual(TEXT("...its authored type"), Words.HintType, 10100);
 	TestEqual(TEXT("...its interest-record place name"), Words.TargetName, FString(TEXT("spot")));
 	TestEqual(TEXT("...its group folded by CAI_Hint::Spawn (1..32 -> one bit)"), Words.GroupMask, 1 << 2);
-	TestEqual(TEXT("...and no network node until story 3"), Words.NodeId, static_cast<int32>(INDEX_NONE));
+	// `info_node_hint` is no standalone class, so it takes the node-row counter (0018 story 4); the
+	// cover row before it took node 0. This world adopted no places, so both ids count out.
+	TestEqual(TEXT("...and the second node id the counter gave"), Words.NodeId, 1);
 	FElysiumNpcBase::FHintWords CoverWords;
 	Reader->HintWords(First->Handle.Index, CoverWords);
 	TestEqual(TEXT("the cover row's type is the one it authored (none), not the class-forced one"),
