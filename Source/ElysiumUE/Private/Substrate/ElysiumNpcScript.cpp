@@ -32,10 +32,19 @@ namespace
 	// `NPC_STATE_DEAD`, the state `0x1029f460` refuses to build a path in.
 	constexpr int32 GScript19NpcStateDead = 7;
 
-	// The patrol-type table `DAT_1049df20`, stride 0x14: `{type, name, startIndex, step, next}`. Only
-	// the start index (`+0x08`, `DAT_1049df28`) is read here, by `0x10307c20`; read out of the pinned
-	// image at `0x1049df28 + type * 0x14`.
+	// The patrol-type table `DAT_1049df20`, stride 0x14: `{type, name, startIndex, step, next}`, read
+	// out of the pinned image (`vampire.dll`, rows 0..3 = `{0,"0",0,1,0}`, `{1,"1",0x7fff,-1,1}`,
+	// `{2,"2",0,1,3}`, `{3,"3",0x7fff,-1,2}`). The start index (`+0x08`, `DAT_1049df28`) is read by
+	// `0x10307c20`; the step (`+0x0c`, `DAT_1049df2c`) and the next type (`+0x10`, `DAT_1049df30`) by
+	// `NextPoint 0x10307b80`.
 	constexpr int32 GScript19PatrolTypeStart[] = { 0, 0x7fff, 0, 0x7fff };
+	constexpr int32 GScript19PatrolTypeStep[] = { 1, -1, 1, -1 };
+	constexpr int32 GScript19PatrolTypeNext[] = { 0, 1, 3, 2 };
+	// Row -1, the type `0x10307aa0` leaves on a record no builder has typed yet: `NextPoint` indexes
+	// the dwords just before the table, `0x1049df18` (step, the float bits 0x3ee4f766 read as an int)
+	// and `0x1049df1c` (next, 0), read out of the same image.
+	constexpr int32 GScript19PatrolRowMinusOneStep = 0x3ee4f766;
+	constexpr int32 GScript19PatrolRowMinusOneNext = 0;
 
 	// Task fail reasons (the text table at `0x106152b0`): `0x1d` no patrol path, `0xc` no route.
 	constexpr int32 GScript19FailNoPatrolPath = 0x1d;
@@ -164,6 +173,34 @@ int32 FElysiumNpc::PatrolPathStartIndex(const FPatrolPathRecord& Path)
 	}
 	const int32 Start = GScript19PatrolTypeStart[Path.Type];
 	return Start <= Last ? Start : Last;
+}
+
+// `0x10307b80` `CAI_PatrolPath::NextPoint`.
+bool FElysiumNpc::PatrolPathNextPoint(FPatrolPathRecord& Path)
+{
+	// A type outside -1..3 indexes further off the table in retail (garbage); no builder writes one
+	// (see `PatrolPathStartIndex`), so it answers exhausted here -- a crash guard.
+	const int32 Row = Path.Type;                              // 0x10307b83..b8b EAX = type * 0x14
+	if (Row < -1 || Row >= static_cast<int32>(UE_ARRAY_COUNT(GScript19PatrolTypeStep)))
+	{
+		return true;
+	}
+	const int32 Step = Row < 0 ? GScript19PatrolRowMinusOneStep : GScript19PatrolTypeStep[Row];
+	const int32 Next = Row < 0 ? GScript19PatrolRowMinusOneNext : GScript19PatrolTypeNext[Row];
+	// 0x10307b8e..b96 cur += [0x1049df2c + row] (an x86 ADD: wraps, as retail's does).
+	Path.Current = static_cast<int32>(static_cast<uint32>(Path.Current) + static_cast<uint32>(Step));
+	if (Path.Current >= 0 && Path.Current < Path.Count)       // 0x10307b9b JS / 0x10307b9d CMP +0xc, JL
+	{
+		return false;                                         // 0x10307bbf
+	}
+	if (Path.Repeat < 1)                                      // 0x10307ba2..ba7 TEST +0x8, JLE
+	{
+		return true;                                          // 0x10307bc3 exhausted
+	}
+	--Path.Repeat;                                            // 0x10307ba9 / 0x10307baa
+	Path.Type = Next;                                         // 0x10307bad / 0x10307bb5 (the OLD row's next)
+	Path.Current = PatrolPathStartIndex(Path);                // 0x10307bb7 -> 0x10307c20 (the NEW type) / 0x10307bbc
+	return false;                                             // 0x10307bbf
 }
 
 int32& FElysiumNpc::PatrolNodeMissCounter()

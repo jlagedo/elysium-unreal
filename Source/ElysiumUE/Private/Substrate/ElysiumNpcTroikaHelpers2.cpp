@@ -106,14 +106,6 @@ bool FElysiumNpc::TargetLeadQuery(const FElysiumEntity& LeadEntity, FVector& Out
 	return false;
 }
 
-bool FElysiumNpc::TaskArgumentNeedsClear(const void* TaskArgument) const
-{
-	// `thunk_FUN_10307b80(arg->+0x4)` — the predicate `FUN_102aa9e0` gates its clear on, over an
-	// argument type this substrate stands nothing for. **SEAM**, false.
-	(void)TaskArgument;
-	return false;
-}
-
 // -------------------------------------------------------------------------------------------------
 // `0x102b6120` — the cover-lean position offset.
 // -------------------------------------------------------------------------------------------------
@@ -578,36 +570,23 @@ void FElysiumNpc::SetJumpOriginAndTarget(const FElysiumEntity* Goal, float Heigh
 // `0x102aa9e0` — the unnamed task helper.
 // -------------------------------------------------------------------------------------------------
 
-void FElysiumNpc::FUN_102aa9e0(const void* TaskArgument)
+void FElysiumNpc::FUN_102aa9e0(FPatrolPathCell* Cell)
 {
-	// `0x102aa9e0`, the whole body:
-	//     if (arg != NULL && arg->+0x4 != NULL) {
-	//         if (thunk_FUN_10307b80(arg->+0x4)) thunk_FUN_1029f5d0(arg);
-	//         thunk_FUN_1029f650(this, arg);
-	//         TaskComplete(false);                                  // 0x10273e80
-	//         return;
-	//     }
-	//     m_assertFile = "E:\\Vampire\\main\\dlls\\AI_BaseNPCT..."; m_assertLine = 0x3d9c;
-	//     this->vtable[+0x700](0x1d);                               // slot 448, TaskFail
-	//
-	// `+0x1b44`/`+0x1b48` is the ASSERT pair, which the shape map calls ABSENT (family **Motor**
-	// records the same for `OnNavFailed`); the line number `0x3d9c` is named here and not stored.
-	// The argument's own type is not stood by this substrate, so the two middle calls are seams and
-	// the branch itself is what lands. `docs/vtmb/npc-ai/programs.md` documents the body and the
-	// port does not cite it, so the `FUN_` spelling stands.
-	if (TaskArgument != nullptr)
+	if (Cell != nullptr && Cell->Path != nullptr)             // 0x102aa9e8 TEST EDI / 0x102aa9f1 TEST [EDI+4]
 	{
-		if (TaskArgumentNeedsClear(TaskArgument))
+		if (PatrolPathNextPoint(*Cell->Path))                 // 0x102aa9f3 CALL 0x1000b64f -> 0x10307b80; 0x102aa9fa
 		{
-			++TaskArgumentClears;
+			ReleasePatrolPath(Cell);                          // 0x102aa9ff CALL 0x10009638 -> 0x1029f5d0
 		}
-		++TaskArgumentForwards;
-		// `TaskComplete(false)` — `m_ScheduleState.fTaskStatus = COMPLETE`, which this runtime
-		// spells as the schedule state's external-completion latch.
-		Schedule.TaskStatus = EElysiumTaskStatus::Complete;
-		return;
+		// 0x102aaa07 CALL 0x100151f4 -> 0x1029f650(this, cell): `0x1029f6c0` reads the cell's current
+		// node, so a cell the release just emptied reads none and only the flag clear lands.
+		FUN_1029f650(PatrolCurrentNode(*Cell));
+		TaskComplete(false);                                  // 0x102aaa0c PUSH 0 / 0x102aaa10 CALL 0x1000ac68 -> 0x10273e80
+		return;                                               // 0x102aaa17
 	}
-	TaskFail(TroikaTaskArgumentAssertReason);
+	// 0x102aaa20 / 0x102aaa2a: `+0x1b44` = `AI_BaseNPCTroika.cpp`, `+0x1b48` = 0x3d9c -- the ASSERT pair
+	// the shape map calls ABSENT; the line is named here and not stored.
+	TaskFail(TroikaTaskArgumentAssertReason);                 // 0x102aaa1c PUSH 0x1d / 0x102aaa34 CALL [EAX+0x700]
 }
 
 // -------------------------------------------------------------------------------------------------

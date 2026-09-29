@@ -84,6 +84,11 @@ static void ResetPatrolPathPool();
 /** `0x10307c20` -- the index a (re)built path starts at: `min(count - 1, DAT_1049df28[type])`, whose
  *  table row is `{0, 0x7fff, 0, 0x7fff}` for types 0..3 -- types 1 and 3 start at the LAST node. */
 static int32 PatrolPathStartIndex(const FPatrolPathRecord& Path);
+/** `0x10307b80` `CAI_PatrolPath::NextPoint` -- `cur += step[type]` (`DAT_1049df2c`: +1, -1, +1, -1).
+ *  Still inside `0..count-1` answers false. Off either end: `repeat < 1` answers TRUE (exhausted,
+ *  the caller releases the path); otherwise `--repeat`, `type = next[type]` (`DAT_1049df30`:
+ *  0, 1, 3, 2 -- types 2/3 reverse, 0/1 wrap), `cur = 0x10307c20` for the new type, false. */
+static bool PatrolPathNextPoint(FPatrolPathRecord& Path);
 /** `DAT_106c994c` -- the global counter every patrol reader bumps on a node id outside the graph. */
 static int32& PatrolNodeMissCounter();
 

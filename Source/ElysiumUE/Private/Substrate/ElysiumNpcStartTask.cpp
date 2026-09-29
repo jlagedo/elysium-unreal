@@ -1080,17 +1080,16 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 	// ---------------------------------------------------------------------------------------------
 	case StartTask19A::TaskNextPatrolPoint:
 	{
-		// Arm `0x102a3b91` (index 0x14): `0x102aa9e0(this, &m_sppPatrolPath (+0x658c))`, which tests
-		// the smart pointer's pointee (`arg+0x4`).
-		// Retail hands the cell itself (never null); `0x102aa9e0` tests its pointee (`arg+0x4`).
-		FUN_102aa9e0(PatrolPathCell.Path == nullptr ? nullptr : static_cast<const void*>(&PatrolPathCell));  // 0x102a3b91 +0x658c; 0x102a3b9a
+		// Arm `0x102a3b91` (index 0x14): `0x102aa9e0(this, &m_sppPatrolPath (+0x658c))`. Retail hands
+		// the cell itself (never null); `0x102aa9e0` tests its pointee (`arg+0x4`).
+		FUN_102aa9e0(&PatrolPathCell);                        // 0x102a3b91 +0x658c; 0x102a3b9a
 		return 0;
 	}
 	// ---------------------------------------------------------------------------------------------
 	case StartTask19A::TaskNextPatrolPointHunt:
 	{
 		// Arm `0x102a3bac` (index 0x15): the same with `&m_sppPatrolPathHunt (+0x6594)`.
-		FUN_102aa9e0(PatrolPathHuntCell.Path == nullptr ? nullptr : static_cast<const void*>(&PatrolPathHuntCell));  // 0x102a3bac +0x6594; 0x102a3bb5
+		FUN_102aa9e0(&PatrolPathHuntCell);                    // 0x102a3bac +0x6594; 0x102a3bb5
 		return 0;
 	}
 	// ---------------------------------------------------------------------------------------------

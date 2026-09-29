@@ -452,6 +452,84 @@ bool FElysiumNpcKernelSelect19TroikaIdleTest::RunTest(const FString&)
 	return true;
 }
 
+// `0x102af660` case 1 orders the patrol arm (`0x102af6b6` / `0x102af6be` .. `0x102af743`) BEFORE the
+// interest arm (`0x102af6f3`), so a `use_interesting` body that holds a patrol path gets the path's
+// program back when a pass ends; it never reaches interesting-place selection. Pins both port sites
+// that bypass the selector for a `use_interesting` body: the `ScheduleDone` latch and the
+// `ThinkAutonomous` route.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19PatrolOutranksUseInterestingTest,
+	"Elysium.Substrate.NpcKernelSelect19.PatrolOutranksUseInteresting_0x102af6b6", GSelect19Flags)
+bool FElysiumNpcKernelSelect19PatrolOutranksUseInterestingTest::RunTest(const FString&)
+{
+	FSelect19Fixture F;
+	if (!TestNotNull(TEXT("the subject constructs"), F.Npc))
+	{
+		return false;
+	}
+	FElysiumNpc& N = *F.Npc;
+	FElysiumNpc::ResetPatrolPathPool();
+	N.WriteNpcStateRetail(1);
+	N.WriteIdealStateRetail(1);
+	N.bUseInteresting = true;
+	constexpr double Now = 5.0;
+
+	// `SetupPatrolType(999 2 FOLLOW_PATROL_PATH_WALK)`'s shape: a type-2 three-node path whose
+	// schedule `0x1029f460` installs (`0x1029f56b`).
+	const int32 Ids[] = { 40, 41, 42, -1 };
+	N.BuildPatrolPath(&N.PatrolPathCell, 999, 2, 0x67, Ids, FElysiumNpc::EPatrolPathBuild::Replace);
+	if (!TestNotNull(TEXT("the patrol cell holds a path"), N.PatrolPathCell.Path))
+	{
+		return false;
+	}
+	const int32 Patrol = N.Schedule.Current;
+	const FElysiumScheduleProgram* Program = ElysiumScheduleFor(Patrol);
+	if (!TestNotNull(TEXT("0x1029f56b installed SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK"), Program)
+		|| !TestEqual(TEXT("its seven tasks (NEXT_PATROL_POINT is index 6)"), Program->Tasks.Num(), 7))
+	{
+		return false;
+	}
+	TestEqual(TEXT("0x10307c20 type 2 starts at index 0"), N.PatrolPathCell.Path->Current, 0);
+
+	// Tasks 0..5 done: the pass starts task 6, `TASK_NEXT_PATROL_POINT` -> `0x102aa9e0` ->
+	// `NextPoint 0x10307b80` (+1, in range) and `TaskComplete`.
+	N.Schedule.TaskIndex = 6;
+	N.Schedule.TaskStatus = EElysiumTaskStatus::New;
+	N.MaintainSchedule(Now, /*bReduced=*/true);
+	if (!TestNotNull(TEXT("0x102aa9fa an in-range step keeps the path"), N.PatrolPathCell.Path))
+	{
+		return false;
+	}
+	TestEqual(TEXT("0x10307b96 task 6 advanced the index 0 -> 1"), N.PatrolPathCell.Path->Current, 1);
+	TestEqual(TEXT("0x102aaa10 task 6 completed"), N.Schedule.TaskStatus, EElysiumTaskStatus::Complete);
+
+	// One more pass: the program is done (`COND_SCHEDULE_DONE`); `SelectSchedule` case 1 reaches the
+	// patrol arm before `m_bUseInteresting` and answers the path's program (`0x102af743`).
+	N.MaintainSchedule(Now, /*bReduced=*/true);
+	TestEqual(TEXT("0x102af743 the path's program is selected again"), N.Schedule.Current, Patrol);
+	TestTrue(TEXT("and it is running"), N.Schedule.IsRunning());
+	TestEqual(TEXT("the path did not move again"), N.PatrolPathCell.Path->Current, 1);
+	TestNull(TEXT("no interesting place is claimed (CurrentSpotIndex none)"), N.CurrentAmbientSpot());
+	TestNotEqual(TEXT("and the body has no Ambient owner"), N.GetMind().Owner(), EElysiumBodyOwner::Ambient);
+
+	// No program at all (the route's other door, `ThinkAutonomous`): a body holding a path still
+	// goes to selection, which answers the path's program.
+	N.Schedule.Clear();
+	N.MaintainSchedule(Now, /*bReduced=*/true);
+	TestEqual(TEXT("0x102af6b6 with no program the patrol arm still wins"), N.Schedule.Current, Patrol);
+	TestNull(TEXT("still no interesting place"), N.CurrentAmbientSpot());
+	TestNotEqual(TEXT("still no Ambient owner"), N.GetMind().Owner(), EElysiumBodyOwner::Ambient);
+
+	// The path gone (`0x1029f5d0`): only now does the body reach the interest door (`0x102af6f3`),
+	// which this runtime still serves with its executor (0002/11) -- it installs no program.
+	N.ReleasePatrolPath(&N.PatrolPathCell);
+	N.Schedule.Clear();
+	N.MaintainSchedule(Now, /*bReduced=*/true);
+	TestFalse(TEXT("0x102af6f3 without a path the use_interesting body leaves the interpreter"),
+		N.Schedule.IsRunning());
+	FElysiumNpc::ResetPatrolPathPool();
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19TroikaCombatTest,
 	"Elysium.Substrate.NpcKernelSelect19.TroikaSelectSchedule.Case2Combat", GSelect19Flags)
 bool FElysiumNpcKernelSelect19TroikaCombatTest::RunTest(const FString&)

@@ -992,7 +992,11 @@ bool FElysiumNpc::ThinkSchedulePolicy(double Now, bool bReduced)
 
 void FElysiumNpc::ThinkAutonomous(double Now, bool bReduced)
 {
-	if (bUseInteresting)
+	// The patrol arm (`0x102af6b6`/`0x102af6be` .. `0x102af743`) outranks the interest arm
+	// (`0x102af6f3`): a body holding a patrol path runs `MaintainScheduleRetail` through
+	// `ThinkStanceOrIdle`, whose selection returns the path's program (or releases a schedule-0 path
+	// at `0x102af6e6`, after which the next pass reaches the interest arm here).
+	if (bUseInteresting && PatrolPathCell.Path == nullptr)
 	{
 		ThinkAmbient(Now);
 	}
@@ -1920,7 +1924,12 @@ void FElysiumNpc::ScheduleDone()
 	// families this runtime currently represents as executors outside the program registry. Their
 	// old handoff lived after Tick returned false; latch it at retail's actual completion edge so
 	// the single MaintainSchedule loop does not replace them with an idle program first.
-	bReturnToExternalExecutorAfterSchedule = bUseInteresting
+	//
+	// The interest arm is gated on "no patrol path held": `SelectSchedule` case 1 tests the patrol
+	// cell (`0x102af6b6`/`0x102af6be`, returning the path's program at `0x102af743`) BEFORE
+	// `m_bUseInteresting` (`0x102af6f3`), so a body holding a path never reaches the interest arm and
+	// must fall through to the reselect.
+	bReturnToExternalExecutorAfterSchedule = (bUseInteresting && PatrolPathCell.Path == nullptr)
 		|| ScriptedScheduleOrder.IsSet() || ScriptedScheduleOwner.IsSet();
 }
 

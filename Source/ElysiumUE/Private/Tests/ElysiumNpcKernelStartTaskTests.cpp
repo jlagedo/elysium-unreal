@@ -548,6 +548,27 @@ bool FElysiumNpcKernelStartTask19PatrolArmsTest::RunTest(const FString&)
 	F.Start(0x7e);
 	TestTrue(TEXT("0x102aa9e0 a live hunt path completes"), F.Completed());
 	N.PatrolPathHuntCell.Path = nullptr;
+	// `0x102a3b91` over a live 3-node type-0 `m_sppPatrolPath`: `0x102aa9e0` runs `NextPoint`
+	// (`0x102aa9f3` -> `0x10307b80`), whose step `DAT_1049df2c[0]` = +1 moves the index 0 -> 1 in
+	// range (no release, `0x102aa9fa`), then completes (`0x102aaa10`).
+	FElysiumNpc::ResetPatrolPathPool();
+	{
+		const int32 Ids[] = { 30, 31, 32, -1 };
+		N.BuildPatrolPath(&N.PatrolPathCell, 0, 0, 0, Ids, FElysiumNpc::EPatrolPathBuild::Replace);
+	}
+	if (TestNotNull(TEXT("the patrol cell holds a path"), N.PatrolPathCell.Path))
+	{
+		TestEqual(TEXT("0x10307c20 type 0 starts at index 0"), N.PatrolPathCell.Path->Current, 0);
+		F.Start(0x7d);
+		TestTrue(TEXT("0x102aaa10 0x7d completes"), F.Completed());
+		TestNotNull(TEXT("0x102aa9fa an in-range step keeps the path"), N.PatrolPathCell.Path);
+		if (N.PatrolPathCell.Path != nullptr)
+		{
+			TestEqual(TEXT("0x10307b96 0x7d advances the index 0 -> 1"), N.PatrolPathCell.Path->Current, 1);
+		}
+	}
+	N.ReleasePatrolPath(&N.PatrolPathCell);
+	FElysiumNpc::ResetPatrolPathPool();
 
 	// Follower backaway without a boss: 0x29 at each arm's own line.
 	N.FollowerBoss = FElysiumEntityHandle::Invalid();

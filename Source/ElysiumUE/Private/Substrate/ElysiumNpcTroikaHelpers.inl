@@ -158,16 +158,6 @@ bool TargetLeadQuery(const FElysiumEntity& Target, FVector& OutPointUnits,
  *  Counted, and resets nothing. */
 int32 NavResets = 0;
 
-/** SEAM for `thunk_FUN_10307b80(param_1->+0x4)` and `thunk_FUN_1029f5d0(param_1)` — the two halves
- *  of `FUN_102aa9e0`'s success arm over an argument this substrate has no type for. The predicate
- *  answers false; the clear is counted. */
-bool TaskArgumentNeedsClear(const void* TaskArgument) const;
-int32 TaskArgumentClears = 0;
-
-/** SEAM for `thunk_FUN_1029f650(this, param_1)` — the forward `FUN_102aa9e0` makes before it
- *  completes the task. Counted. */
-int32 TaskArgumentForwards = 0;
-
 // --- The melee quartet: which retail line this NPC's class takes ----------------------------------
 
 /** Slots 599/600/601/602 each have two shared bodies. `Troika` is `CAI_BaseNPCTroika`'s, `AndreiBlood`
@@ -274,12 +264,13 @@ void FUN_102c43f0();
  *  arm (`fVar6 - param_3 * 0.0`), which is reproduced verbatim. SOURCE units. */
 void SetJumpOriginAndTarget(const FElysiumEntity* Goal, float Height, float Backoff);
 
-/** `0x102aa9e0` — no slot and no recovered name. When the argument and its `+0x4` member are both
- *  live it runs the clear/forward/`TaskComplete(false)` chain; otherwise it stamps the ASSERT
- *  file/line at `+0x1b44`/`+0x1b48` and raises through the entity's own vtable `+0x700`
- *  (`TaskFail`) with code `0x1d`. `docs/vtmb/npc-ai/programs.md` documents it and the port does not
- *  cite it, so the `FUN_` spelling stands. */
-void FUN_102aa9e0(const void* TaskArgument);
+/** `0x102aa9e0` -- `TASK_NEXT_PATROL_POINT`'s body (StartTask arms `0x102a3b91` / `0x102a3bac`, over
+ *  `m_sppPatrolPath` / `m_sppPatrolPathHunt`). A null cell or an empty one fails the task `0x1d`
+ *  (the ASSERT pair `+0x1b44`/`+0x1b48` = `AI_BaseNPCTroika.cpp`:0x3d9c). Otherwise `NextPoint`
+ *  (`0x10307b80`); an exhausted path is released (`0x1029f5d0`); the node interest is redrawn on the
+ *  same cell (`0x1029f650`, which clears `m_bPatrolPathUseHint` first -- a released cell reads no
+ *  node); `TaskComplete(false)`. No slot and no recovered name, so the `FUN_` spelling stands. */
+void FUN_102aa9e0(FPatrolPathCell* Cell);
 
 /** `0x102a0b90` — set `m_bfAINPCFlags |= AT_CROSSWALK` (`0x4`) and store the crosswalk node at
  *  `+0x630c`. **NAMED**: 29c's target was `Slot0x630c`, but the flag bit this body sets beside the

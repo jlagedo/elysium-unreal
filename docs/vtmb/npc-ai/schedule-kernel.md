@@ -1619,7 +1619,17 @@ to `thunk_FUN_1029f650(this, arg)`, and calls `TaskComplete(false)` (`0x10273e80
 stamps the ASSERT file/line pair at `+0x1b44`/`+0x1b48` with line `0x3d9c` and raises through the
 entity's own vtable `+0x700` — slot 448, `TaskFail` — with code `0x1d`.
 
-**Unrecovered:** the argument's type, and therefore what `+0x04` is and what the two middle calls do.
+**Recovered 2026-09-28 (story 8 pass C, L13 smoke).** The argument is the patrol cell
+(`m_sppPatrolPath` `+0x658c` from arm `0x102a3b91`, `m_sppPatrolPathHunt` `+0x6594` from `0x102a3bac`),
+`+0x04` its pooled `CAI_PatrolPath`. `0x10307b80` is `CAI_PatrolPath::NextPoint`: `cur += step[type]`
+(`DAT_1049df2c`, the table row stride 0x14: +1, -1, +1, -1 for types 0..3); in `0..count-1` it answers
+false; off either end `repeat < 1` answers true (exhausted), else `--repeat`, `type = next[type]`
+(`DAT_1049df30`: 0, 1, 3, 2 -- 0/1 wrap, 2/3 reverse), `cur = 0x10307c20` for the new type, false. The
+untyped row -1 reads the dwords before the table (`0x1049df18` step 0x3ee4f766, `0x1049df1c` next 0).
+A true answer releases the cell (`0x1029f5d0`, `0x102aa9ff`); `0x1029f650` then redraws the interest on
+the same cell (`0x102aaa07`), which on a released cell only clears `+0x65a0`. Port:
+`FElysiumNpc::FUN_102aa9e0` (`ElysiumNpcTroikaHelpers2.cpp`), `PatrolPathNextPoint`
+(`ElysiumNpcScript.cpp`).
 
 ## Story 29d, family Motor10 — `CAI_Motor`, `CAI_Navigator`, the standoff goal and the hull probe
 

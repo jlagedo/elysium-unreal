@@ -715,24 +715,130 @@ bool FElysiumNpcKernelTroikaHelpersFreeBodiesTest::RunTest(const FString&)
 		Npc->NpcFlags.Has(EElysiumNpcFlag::AT_CROSSWALK));
 	TestEqual(TEXT("and stores the node at +0x630c"), Npc->AtCrosswalkNode, 9);
 
-	// `0x102aa9e0` — the branch itself. A null argument raises `TaskFail(0x1d)`; a live one
-	// forwards and completes the task.
+	// `0x102aa9e0` — the fail arm. A null cell (`0x102aa9e8`) and a cell with no path
+	// (`0x102aa9f1`) both raise `TaskFail(0x1d)` through slot 448 (`0x102aaa1c` / `0x102aaa34`); the
+	// live arms are `NextPatrolPoint_0x102aa9e0` below.
 	Npc->BaseScheduleHost.FailureReason = 0;
 	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
 	Npc->FUN_102aa9e0(nullptr);
-	TestEqual(TEXT("a null argument raises assert reason 0x1d through TaskFail (slot 448)"),
+	TestEqual(TEXT("0x102aa9e8 a null cell raises reason 0x1d through TaskFail (slot 448)"),
 		Npc->BaseScheduleHost.FailureReason, 0x1d);
 	TestTrue(TEXT("and TaskFail raised COND_TASK_FAILED with it"),
 		Npc->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
-	const int32 ForwardsBefore = Npc->TaskArgumentForwards;
-	Npc->Schedule.TaskStatus = EElysiumTaskStatus::Running;
-	int32 Dummy = 0;
-	Npc->FUN_102aa9e0(&Dummy);
-	TestEqual(TEXT("a live argument forwards once"), Npc->TaskArgumentForwards, ForwardsBefore + 1);
-	// Representation update: the forwarded `TaskComplete(false)` reaches `10273e98`, which writes
-	// literal status 4 to `+0x5c44`.
-	TestEqual(TEXT("and completes the task"), Npc->Schedule.TaskStatus,
+	Npc->BaseScheduleHost.FailureReason = 0;
+	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
+	FElysiumNpc::FPatrolPathCell EmptyCell;
+	Npc->FUN_102aa9e0(&EmptyCell);
+	TestEqual(TEXT("0x102aa9f1 a cell with no path raises reason 0x1d too"),
+		Npc->BaseScheduleHost.FailureReason, 0x1d);
+	return true;
+}
+
+// -------------------------------------------------------------------------------------------------
+// `0x102aa9e0` (TASK_NEXT_PATROL_POINT's body) over `NextPoint` `0x10307b80`, the release
+// `0x1029f5d0` and the interest draw `0x1029f650`. The step table `DAT_1049df2c` is +1/-1/+1/-1 and
+// the next-type table `DAT_1049df30` is 0/1/3/2 for types 0..3 (read out of `vampire.dll`).
+// -------------------------------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTroikaHelpersNextPatrolPointTest,
+	"Elysium.Substrate.NpcKernelTroikaHelpers.NextPatrolPoint_0x102aa9e0", GTroikaHelpersTestFlags)
+bool FElysiumNpcKernelTroikaHelpersNextPatrolPointTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("troika_next_patrol"), 0x29c1702b);
+	Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+	Builder.AddTroikaNpc(TEXT("npc"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Npc = Fixture.Npc(TEXT("npc"));
+	if (!TestNotNull(TEXT("the subject constructs"), Npc))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Npc });
+	FElysiumNpc::ResetPatrolPathPool();
+	using EBuild = FElysiumNpc::EPatrolPathBuild;
+	const int32 Five[] = { 10, 11, 12, 13, 14, -1 };
+	const int32 Three[] = { 20, 21, 22, -1 };
+
+	// Starts a live task, builds a path and runs `0x102aa9e0` over the patrol cell.
+	auto Next = [Npc](int32 Repeat, int32 Type, const int32* Ids, int32 Current)
+	{
+		Npc->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
+		Npc->BaseScheduleHost.FailureReason = 0;
+		Npc->BuildPatrolPath(&Npc->PatrolPathCell, Repeat, Type, 0, Ids, EBuild::Replace);
+		if (Npc->PatrolPathCell.Path != nullptr)
+		{
+			Npc->PatrolPathCell.Path->Current = Current;
+		}
+		Npc->Schedule.TaskStatus = EElysiumTaskStatus::Running;
+		Npc->FUN_102aa9e0(&Npc->PatrolPathCell);
+	};
+
+	// Type 1, count 5, cur 4: step -1 (`0x10307b8e` `DAT_1049df2c[1]`), still in range
+	// (`0x10307b9b` / `0x10307ba0`) -> false; no release; TaskComplete (`0x102aaa10`).
+	Next(999, 1, Five, 4);
+	if (!TestNotNull(TEXT("type 1 keeps its path"), Npc->PatrolPathCell.Path))
+	{
+		return false;
+	}
+	TestEqual(TEXT("0x10307b96 type 1 steps 4 -> 3"), Npc->PatrolPathCell.Path->Current, 3);
+	TestEqual(TEXT("in range: repeat untouched"), Npc->PatrolPathCell.Path->Repeat, 999);
+	TestEqual(TEXT("in range: type untouched"), Npc->PatrolPathCell.Path->Type, 1);
+	TestEqual(TEXT("0x102aaa10 TaskComplete(false)"), Npc->Schedule.TaskStatus, EElysiumTaskStatus::Complete);
+	TestFalse(TEXT("no TaskFail"), Npc->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
+
+	// Type 1, cur 0, repeat 999: -1 is off the front (`0x10307b9b JS`); repeat > 0 (`0x10307ba7`)
+	// -> repeat 998 (`0x10307ba9`), type next[1] = 1 (`0x10307bb5`), cur = 0x10307c20 = min(4, 0x7fff) = 4.
+	Next(999, 1, Five, 0);
+	TestNotNull(TEXT("a wrapped type-1 path is kept"), Npc->PatrolPathCell.Path);
+	if (Npc->PatrolPathCell.Path != nullptr)
+	{
+		TestEqual(TEXT("0x10307bbc type 1 wraps to the last node"), Npc->PatrolPathCell.Path->Current, 4);
+		TestEqual(TEXT("0x10307ba9 repeat 999 -> 998"), Npc->PatrolPathCell.Path->Repeat, 998);
+		TestEqual(TEXT("0x10307bb5 next[1] = 1: it loops, it does not reverse"), Npc->PatrolPathCell.Path->Type, 1);
+	}
+
+	// Type 2, count 3, cur 2, repeat 999: 3 is off the end (`0x10307ba0`) -> repeat 998, type
+	// next[2] = 3, cur = min(2, 0x7fff) = 2.
+	Next(999, 2, Three, 2);
+	TestNotNull(TEXT("a reversed type-2 path is kept"), Npc->PatrolPathCell.Path);
+	if (Npc->PatrolPathCell.Path != nullptr)
+	{
+		TestEqual(TEXT("0x10307bb5 next[2] = 3: it reverses"), Npc->PatrolPathCell.Path->Type, 3);
+		TestEqual(TEXT("0x10307bbc cur = start[3] clamped to the last node"), Npc->PatrolPathCell.Path->Current, 2);
+		TestEqual(TEXT("0x10307ba9 repeat 998"), Npc->PatrolPathCell.Path->Repeat, 998);
+	}
+
+	// Type 3, cur 0: -1 -> type next[3] = 2, cur = start[2] = 0.
+	Next(999, 3, Three, 0);
+	TestNotNull(TEXT("a reversed type-3 path is kept"), Npc->PatrolPathCell.Path);
+	if (Npc->PatrolPathCell.Path != nullptr)
+	{
+		TestEqual(TEXT("0x10307bb5 next[3] = 2"), Npc->PatrolPathCell.Path->Type, 2);
+		TestEqual(TEXT("0x10307bbc cur = start[2] = 0"), Npc->PatrolPathCell.Path->Current, 0);
+		TestEqual(TEXT("0x10307ba9 repeat 998"), Npc->PatrolPathCell.Path->Repeat, 998);
+	}
+
+	// Repeat 0, off the end: `0x10307ba7 JLE` -> true (`0x10307bc3`); `0x102aa9ff` releases the path
+	// (`0x1029f5d0`: owned byte cleared, pointer nulled); `0x102aaa07` draws on the now-empty cell,
+	// which clears `m_bPatrolPathUseHint` (`0x1029f659`) and rolls nothing; TaskComplete.
+	Npc->ScheduleHost.bPatrolPathUseHint = true;
+	Next(0, 0, Three, 2);
+	TestNull(TEXT("0x1029f5e8 an exhausted path is released"), Npc->PatrolPathCell.Path);
+	TestFalse(TEXT("0x1029f5dd and its owned byte is cleared"), Npc->PatrolPathCell.bOwned);
+	TestFalse(TEXT("0x1029f659 the draw clears m_bPatrolPathUseHint"), Npc->ScheduleHost.bPatrolPathUseHint);
+	TestEqual(TEXT("0x102aaa10 the exhausted pass still completes"), Npc->Schedule.TaskStatus,
 		EElysiumTaskStatus::Complete);
+	TestFalse(TEXT("and does not fail"), Npc->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed));
+
+	// Null path: `0x102aa9f1` -> `TaskFail(0x1d)` (`0x102aaa34`), no completion.
+	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
+	Npc->BaseScheduleHost.FailureReason = 0;
+	Npc->Schedule.TaskStatus = EElysiumTaskStatus::Running;
+	Npc->FUN_102aa9e0(&Npc->PatrolPathCell);
+	TestEqual(TEXT("0x102aaa34 a null path fails 0x1d"), Npc->BaseScheduleHost.FailureReason, 0x1d);
+	TestNotEqual(TEXT("and does not complete"), Npc->Schedule.TaskStatus, EElysiumTaskStatus::Complete);
+
+	FElysiumNpc::ResetPatrolPathPool();
 	return true;
 }
 
