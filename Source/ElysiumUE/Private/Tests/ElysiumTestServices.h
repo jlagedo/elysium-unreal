@@ -82,7 +82,8 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	TFunction<bool(const FVector&)> LateralCoverQuery;
 	// The path-length service (0018 story 4's wander pick, story 6's `QueryRoute`). Unset is the
 	// headless answer -- no route -- which every case written before the seam already assumes; a case
-	// states its world by setting `RouteQuery` (destination -> length in cm, false for "no route").
+	// states its world by setting `RouteQuery` (destination -> length in cm, false for "no route",
+	// which answers `QueryRoute == true` with `bReachable == false`; unset is `false`, no mesh).
 	// Every query's filter multiplier is recorded, in call order.
 	TFunction<bool(const FVector&, float&)> RouteQuery;
 	mutable TArray<int32> RouteMultipliers;
@@ -94,13 +95,16 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 		Record(FString::Printf(TEXT("NpcMotor QueryRoute %s x%d -> %s"), *Query.DestCm.ToString(),
 			Query.PedestrianCostMultiplier,
 			bRoute ? *FString::Printf(TEXT("%.1f"), Length) : TEXT("none")));
-		if (bRoute)
+		// The contract: false only when no mesh stands behind the motor (the knob unset); a knob that
+		// answers "no route" is a mesh that answered, so true with `bReachable == false`.
+		if (!RouteQuery)
 		{
-			Out.bReachable = true;
-			Out.bPartial = false;
-			Out.LengthCm = Length;
+			return false;
 		}
-		return bRoute;
+		Out.bReachable = bRoute;
+		Out.bPartial = false;
+		Out.LengthCm = bRoute ? Length : 0.0f;
+		return true;
 	}
 	// The navmesh raycast. Unset is the headless answer -- no NavMesh -- and a case states its mesh
 	// by setting `NavRaycastQuery` (fill the answer, true = the mesh answered).

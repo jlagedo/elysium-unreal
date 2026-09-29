@@ -8,6 +8,7 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "ElysiumCharacterProvenance.h"
+#include "ElysiumCollisionChannels.h"
 #include "ElysiumSkeletalMesh.h"
 #include "Visual/ElysiumNpcVisual.h"
 
@@ -44,6 +45,15 @@ bool AElysiumPlacedModelActor::ConfigureRest(USkeletalMesh* SkeletalMesh,
 	}
 	CollisionProxy->SetStaticMesh(StaticMesh);
 	CollisionProxy->SetCollisionProfileName(bSolid ? TEXT("BlockAll") : TEXT("ElysiumPickOnly"));
+	if (bSolid)
+	{
+		// 0018 story 6: `BlockAll` names no custom channel, so it takes `ElysiumSight`'s default,
+		// Ignore (`DefaultEngine.ini:63`), and would not stop `FVisible`. A placed model is a STATIC
+		// (GAME_LUMP) prop, met under every retail mask, so it wears no `PropMaskBit` -- only the
+		// sight Block. The bake then applies `ElysiumPropSolid` (`bake_map_v2.py:1605`), which
+		// blocks sight by itself; this keeps a configure without that step honest.
+		CollisionProxy->SetCollisionResponseToChannel(ElysiumCollision::SightChannel, ECR_Block);
+	}
 	SkeletalVisual->SetSkeletalMeshAsset(SkeletalMesh);
 	// R7.4 (G6): the bake stamps the visual it is handed through `set_fog`; stamped here as well
 	// so the rest body reads full brightness on every path that configures it.

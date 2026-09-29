@@ -52,24 +52,9 @@ AActor* AElysiumMapActor::ResolveQueryActor(const FElysiumEntityHandle& Entity) 
 			return Body;
 		}
 	}
-	// A model-backed entity standing in an actor of its own (a placed model). A brush entity's body
-	// and a runtime prop's component belong to THIS actor, which stands for every one of them, so
-	// they answer null here and are refused by handle instead.
-	const FElysiumEntity* Ent = EntityWorld ? EntityWorld->Resolve(Entity) : nullptr;
-	if (Ent == nullptr)
-	{
-		return nullptr;
-	}
-	const UPrimitiveComponent* EntityBodies[] = {
-		Ent->GetAttachBody(), Ent->GenericStaticModelBody, Ent->GenericModelBody };
-	for (const UPrimitiveComponent* Body : EntityBodies)
-	{
-		AActor* BodyOwner = Body != nullptr ? Body->GetOwner() : nullptr;
-		if (BodyOwner != nullptr && BodyOwner != this)
-		{
-			return BodyOwner;
-		}
-	}
+	// Nothing else has an actor of its own: a brush entity's body and a runtime prop's component
+	// belong to THIS actor, which stands for every one of them, so they answer null here and are
+	// refused inside the trace by handle (the brush component carries its own).
 	return nullptr;
 }
 
@@ -90,28 +75,9 @@ FElysiumEntityHandle AElysiumMapActor::HandleForActor(const AActor* Actor) const
 	{
 		return PlayerBody->GetPlayerEntity();
 	}
-	// A model-backed entity whose body stands in its own actor. Walked, not mapped: this runs once
-	// per hit the trace keeps, never per candidate.
-	if (!EntityWorld)
-	{
-		return FElysiumEntityHandle::Invalid();
-	}
-	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityWorld->Entities())
-	{
-		const FElysiumEntity* Ent = EntPtr.Get();
-		if (Ent == nullptr)
-		{
-			continue;
-		}
-		const UPrimitiveComponent* EntityBodies[] = {
-			Ent->GetAttachBody(), Ent->GenericStaticModelBody, Ent->GenericModelBody };
-		for (const UPrimitiveComponent* Body : EntityBodies)
-		{
-			if (Body != nullptr && Body->GetOwner() == Actor)
-			{
-				return Ent->Handle;
-			}
-		}
-	}
+	// Classified, never walked: an NPC body and the player pawn are the only actors that carry a
+	// handle, and a brush entity's body is named by its own component before this is asked.
+	// Everything else -- a baked static prop's `StaticMeshActor` or placed model, the world
+	// collision -- is no entity (runtime entity props are components of THIS actor).
 	return FElysiumEntityHandle::Invalid();
 }

@@ -25,8 +25,9 @@ namespace ElysiumWorldGeometry
 
 	// A synchronous path query on `NavData` for `Agent` from `FromCm` to `Query.DestCm` under
 	// `Filter` (null = the nav data's default). False = the mesh could not be asked (an end that will
-	// not project); "no complete route" is true with `Out.bReachable == false`, a refused partial the
-	// same with `Out.bPartial` set.
+	// not project); "no complete route" is true with `Out.bReachable == false`. Under
+	// `bAcceptPartial` a partial path is reachable with `Out.bPartial` set; without it the search is
+	// asked for complete paths only, so a partial never comes back.
 	bool Route(const ANavigationData& NavData, const FNavAgentProperties& Agent,
 		FSharedConstNavQueryFilter Filter, const FVector& FromCm, const FElysiumNpcRouteQuery& Query,
 		FElysiumNpcRouteAnswer& Out);
