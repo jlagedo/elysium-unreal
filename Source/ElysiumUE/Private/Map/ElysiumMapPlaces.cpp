@@ -150,10 +150,12 @@ namespace
 		}
 		for (const TSharedPtr<FJsonValue>& Value : *Crosswalks)
 		{
+			// `[a, b, motion]`: the two node indices and the link's hull-0 motion word. A two-entry
+			// pair is a payload staged before the word rode it (re-stage the map).
 			const TArray<TSharedPtr<FJsonValue>>& Pair = Value->AsArray();
-			if (Pair.Num() != 2)
+			if (Pair.Num() != 3)
 			{
-				return TEXT("a crosswalk pair is not two node indices");
+				return TEXT("a crosswalk pair is not [node, node, hull-0 motion word]");
 			}
 			const FIntPoint Ends(static_cast<int32>(Pair[0]->AsNumber()), static_cast<int32>(Pair[1]->AsNumber()));
 			if (!Out.Rows.IsValidIndex(Ends.X) || !Out.Rows.IsValidIndex(Ends.Y))
@@ -161,6 +163,7 @@ namespace
 				return FString::Printf(TEXT("crosswalk pair (%d, %d) names no node"), Ends.X, Ends.Y);
 			}
 			Out.CrosswalkPairs.Add(Ends);
+			Out.CrosswalkPairMotions.Add(static_cast<int32>(Pair[2]->AsNumber()));
 		}
 
 		const TArray<TSharedPtr<FJsonValue>>* Caps = nullptr;
@@ -204,6 +207,7 @@ bool UElysiumMapPlaces::AuthorJson(const FString& Json)
 	UsedHullBits = Staged->UsedHullBits;
 	Rows = MoveTemp(Staged->Rows);
 	CrosswalkPairs = MoveTemp(Staged->CrosswalkPairs);
+	CrosswalkPairMotions = MoveTemp(Staged->CrosswalkPairMotions);
 	WanderCaps = MoveTemp(Staged->WanderCaps);
 	PairingNodeRows = Staged->PairingNodeRows;
 	PairingOutOfRange = MoveTemp(Staged->PairingOutOfRange);

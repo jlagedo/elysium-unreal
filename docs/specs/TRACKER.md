@@ -1,11 +1,11 @@
 # Tracker — 0019 · 0018 · 0002, one serial sequence
 
-**What's next = the first unticked box** (row 12 closed 2026-09-29 and 0019 with it; row 13 is next). One story at a time, top to bottom. Tick the box here
+**What's next = the first unticked box** (row 13 closed 2026-09-30; row 14 is next). One story at a time, top to bottom. Tick the box here
 when the story's own box is ticked in its spec; the spec stays the source of truth for the text.
 Specs: [0019](0019-npc-kernel-rework/spec.md) · [0018](0018-world-ai-infrastructure/spec.md) ·
 [0002](0002-npc-ai/spec.md). Built 2026-09-21 from each spec's `## Build order` and `Consumes:` lines.
 
-Already landed: 0018/1, 2, 3, 4, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0019/8 = 0002/29e (row 07 closed 2026-09-29) · 0018/5 (row 08 closed 2026-09-29) · 0018/6 (row 09 closed 2026-09-29) · 0019/6 (row 11 closed 2026-09-29) · 0019/7 (row 12 closed 2026-09-29; **0019 is closed**).
+Already landed: 0018/1, 2, 3, 4, 21-1 … 21-7 · 0019/1 · 0019/2 pass A · 0019/8 = 0002/29e (row 07 closed 2026-09-29) · 0018/5 (row 08 closed 2026-09-29) · 0018/6 (row 09 closed 2026-09-29) · 0019/6 (row 11 closed 2026-09-29) · 0019/7 (row 12 closed 2026-09-29; **0019 is closed**) · 0018/7 (row 13 closed 2026-09-30).
 Stopped incomplete: 0018/21-8 (the whole-corpus map pass, 2026-09-21) — 37 of 108 maps green.
 It fed work to rows 08 and 18 and opened 21-9 and 21-10; 21-10 blocks its close.
 What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md](RE-BACKLOG.md).
@@ -361,7 +361,33 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
 
 ## D — the rest of the world (0018, in its listed order)
 
-- [ ] **13 · 0018/7** — Traversals: jumps, doors, crosswalks. L · Opus/high.
+- [x] **13 · 0018/7** — Traversals: jumps, doors, crosswalks. L · Opus/high. **Landed 2026-09-30.**
+  - *Jumps, faithful (the owner's decision).* No shipped NPC holds `bits_CAP_MOVE_JUMP`: slot 513 has
+    no override, `m_afCapability +0x5cec` is SAVE-only, none of the 63 `CapabilitiesAdd` literals
+    carries bit 2. So `0x102ff960` refuses every jump-only link at step 2, and `IsJumpLegal` is never
+    reached. The 25 / 117 jump links are baked as disabled records with per-hull verdicts. The hub
+    cops walk retail's ground route `452 → 151 → 453`, and link 731's stall is gone live.
+  - *Doors.* The door keeps `+0x644` / `+0x640` (SAVE), `GetNPCOpenData`, `IsCloseBlocked`, and HitTop →
+    `OnDoorFullyOpen 0x1027dd10`. Slot 531 is live from both dispatchers: the look-ahead `0x102f06e0`
+    fails `0x0e`, the move-step sink `0x1027dc10` fails `0x0c`. The alternate-AI modes 1/2/3 run.
+    `AElysiumNavDoorLink` carries the `0x102fce80` predicate, and every door is cut (tutorial 8
+    links / 8 doors, hub the smoke-shop pair).
+  - *Crosswalks, the splice (the owner's decision).* A NavMesh route is laid as [curb A, curb B, goal]
+    with retail's waypoint words (named modernization for `0x102fcd00`). There is one red/green
+    boolean per pair, the wait test `0x102a0bc0` in retail's gate order, and the queue arm
+    `0x10298340`. `PAUSE_MOVING` / `FACE_NEXT_NODE` run, so `0x102` runs. Save / restore uses −1.
+  - *Gate.* Pytest 1,154 / 8 skipped; Content 27 / 0; Substrate 1,705 / 0; `verify nav` clean. Both
+    maps idle live with 0 ensure / assert / jump refusals.
+  - *Closed on tests (the owner, 2026-09-30).* The live crosswalk wait and the live locked-door
+    refusal go to row 36. Every hub pedestrian runs the ambient executor, never `0xff` / `0x100`, so
+    no live NPC reaches either. `NpcCrosswalk.ThinkWaitsAtRed` and the eight `NpcDoorLink` tests
+    carry them until then.
+  - *Handed on.* Row 36: the two live acceptances and the `ThinkSchedulePolicy` release defect.
+    Story 3 / 21-9: the mesh walks every jump-only pair (25/25, 36/36; 117/117, 103/103), and
+    bridging keeps ground+jump. 21-10: rat link 721's pin is retired. Row 25 (0018/19): the rat-only
+    jump pairs, which have no record. Story 3's contents: `copcar` and the three crossed
+    `func_brush`. 0002/26: `BeginNavigationJump`'s launch direction. RE-BACKLOG 45–48. Detail: the
+    spec's story 7 "Landed" paragraph.
   Row 07 handed it the jump links' legality. The bake places every motion-2 link both ways without
   `IsJumpLegal` (`0x10280880`); 95 of the hub's 117 and 17 of the tutorial's 25 fail it both ways.
   Unreal then routes the hub patrol cop over link 731, which retail never plans.
@@ -421,6 +447,13 @@ evidence, `was` is the pre-cut size). "record" = done, needs only its tick and r
   the `0xaf` builder over 0018/9; the cvar wire; the typed Hunt state.
 - [ ] **36 · 0002/11** — Interesting places: the three selector arms; retires the ambient executor. M (was L) · Opus/high.
   arms and bodies landed; the executor is still the live path; `0x102daac0` unported.
+  Added 2026-09-30 by row 13 (the owner's decision: 0018/7 closed on tests). *Acceptance:* live on
+  `sm_hub_1`, a pedestrian on `0xff` → `0x100` waits at a red curb through `0x102` and crosses on
+  green, a second queues behind it, and an NPC routed over the smoke-shop link is refused by the
+  locked `basic_smoke_door` and avoids it for its timer. *Defect claim (not fixed):*
+  `ElysiumNpc.cpp:985-988` releases the ambient place under any running program. Retail's only
+  schedule-change release, `OnScheduleChange 0x102a0940` → `0x102b53d0`, runs only without
+  `PRESERVE_PATH`, which `0xff` sets. Detail: 0002's story 11 block.
 - [ ] **37 · 0002/27** — Patrol-point interest: the roll and the two task arms. XS, record (was S–M) · Fable/medium.
   one record-arm test.
 - [ ] **38 · 0002/10j** — `CheckTarget`. XS, record (was S) · Sonnet/medium.

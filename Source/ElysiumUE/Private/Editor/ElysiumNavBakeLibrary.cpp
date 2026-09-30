@@ -9,6 +9,7 @@
 #include "NavMesh/NavMeshBoundsVolume.h"
 #include "NavMesh/RecastNavMesh.h"
 #include "NavigationSystem.h"
+#include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "UObject/UObjectIterator.h"
 
@@ -220,6 +221,31 @@ FString UElysiumNavBakeLibrary::NavAreaAt(UWorld* World, const FString& AgentNam
 	}
 	const UClass* Area = Mesh->GetAreaClass(Mesh->GetPolyAreaID(Landed.NodeRef));
 	return Area != nullptr ? Area->GetName() : TEXT("NavArea_Default");
+}
+
+TArray<bool> UElysiumNavBakeLibrary::JumpLinkVerdicts(const TArray<FVector>& StartsCm,
+	const TArray<FVector>& EndsCm)
+{
+	TArray<bool> Verdicts;
+	if (StartsCm.Num() != EndsCm.Num())
+	{
+		UE_LOG(LogElysiumNavBake, Error, TEXT("JumpLinkVerdicts: %d start(s) against %d end(s)"),
+			StartsCm.Num(), EndsCm.Num());
+		return Verdicts;
+	}
+	Verdicts.Reserve(StartsCm.Num());
+	for (int32 Index = 0; Index < StartsCm.Num(); ++Index)
+	{
+		// Back into Source units and axes -- the geometry reads a Z rise and a 3-D distance, so the
+		// Y sign is immaterial, but the frame is stated the way every retail body reads it.
+		const FVector Start = NpcKernelMotorShared::SourceOf(StartsCm[Index]);
+		const FVector End = NpcKernelMotorShared::SourceOf(EndsCm[Index]);
+		// `0x102ff960`: IsJumpLegal(from, far, far) -- the apex argument is the far node.
+		Verdicts.Add(FElysiumNpcBase::IsJumpLegalGeometry(Start, End, End,
+			NpcKernelMotorShared::GJumpLegalRise, NpcKernelMotorShared::GJumpLegalDrop,
+			NpcKernelMotorShared::GJumpLegalDistance));
+	}
+	return Verdicts;
 }
 
 TArray<FString> UElysiumNavBakeLibrary::CreateNavigationForAgents(UWorld* World, int32 HullBits)

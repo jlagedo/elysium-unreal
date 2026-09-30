@@ -37,13 +37,6 @@
 // `CAI_Navigator` / `CAI_StandoffBehavior` words outside that band and (b) one NPC word the map
 // calls ABSENT. Each carries its offset and the class that owns it.
 
-/** `+0x630c`, which `ElysiumNpcKernelShapeMap.cpp` calls **ABSENT**. `SetAtCrosswalk`
- *  (`0x102a0b90`) is its one writer and it is written beside `m_bfAINPCFlags |= AT_CROSSWALK`, which
- *  is what names it: the crosswalk node this NPC is standing on. It sits between
- *  `m_iInterestingPlaceGroups` (`+0x62dc`) and `m_iRestorePedLinkNode` (`+0x6310`), so it is a NODE
- *  id like both of those and is carried as one. Nothing reads it yet. */
-int32 AtCrosswalkNode = 0;
-
 /** SEAM for `entity->+0x200`, the word slot 56 (`0x102b5120`) requires to be non-zero before it
  *  looks at the argument at all. Below every band this runtime models and **unrecovered** — the
  *  corpus holds no other reader that pins it. Answers `false`, which is retail's own early return
@@ -154,10 +147,6 @@ float IdealHintSearchRangeUnits() const;
 bool TargetLeadQuery(const FElysiumEntity& Target, FVector& OutPointUnits,
 	FVector& OutVelocityUnits) const;
 
-/** SEAM for `thunk_FUN_102ee2a0(m_pNavigator)` — the navigator reset the same body ends on.
- *  Counted, and resets nothing. */
-int32 NavResets = 0;
-
 // --- The melee quartet: which retail line this NPC's class takes ----------------------------------
 
 /** Slots 599/600/601/602 each have two shared bodies. `Troika` is `CAI_BaseNPCTroika`'s, `AndreiBlood`
@@ -200,9 +189,10 @@ int32 AdvanceAlertLevelGrade();
  *  datamap words it writes, which family **Squad**'s `HasDetectedAttack` is the reader of. */
 void RecordDetectedAttack(const FElysiumEntity* Attacker);
 
-/** `0x102bf770` — the move is over: re-apply the link's idle activity when the navigator is still
- *  on the activity this NPC made ideal, then clear `m_bShouldMove` (`+0x1a40`), reset the navigator
- *  and zero `m_flDesiredMoveYaw` (`+0x63ec`). NAMED as the inverse of family **Motor**'s
+/** `0x102bf770` — `TASK_PAUSE_MOVING`'s body: re-apply the link's idle activity when the navigator is
+ *  still on the activity this NPC made ideal, then clear `m_bShouldMove` (`+0x1a40`), PAUSE the path
+ *  (`0x102ee2a0` -> `0x1030be80`, `path+0x10 = 1`) and zero `m_flDesiredMoveYaw` (`+0x63ec`). NAMED
+ *  as the inverse of family **Motor**'s
  *  `ResumeScheduledMove` (`0x102bf7e0`), which is the sibling body. */
 void StopScheduledMove();
 
@@ -271,11 +261,6 @@ void SetJumpOriginAndTarget(const FElysiumEntity* Goal, float Height, float Back
  *  same cell (`0x1029f650`, which clears `m_bPatrolPathUseHint` first -- a released cell reads no
  *  node); `TaskComplete(false)`. No slot and no recovered name, so the `FUN_` spelling stands. */
 void FUN_102aa9e0(FPatrolPathCell* Cell);
-
-/** `0x102a0b90` — set `m_bfAINPCFlags |= AT_CROSSWALK` (`0x4`) and store the crosswalk node at
- *  `+0x630c`. **NAMED**: 29c's target was `Slot0x630c`, but the flag bit this body sets beside the
- *  write is the named `AT_CROSSWALK`, which settles what `+0x630c` is. */
-void SetAtCrosswalk(int32 CrosswalkNode);
 
 // --- `CAI_Motor`'s own vtable ---------------------------------------------------------------------
 //

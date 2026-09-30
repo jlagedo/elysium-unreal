@@ -836,8 +836,10 @@ public:
 	// pointer in this runtime
 	int32 LastSpotIndex = 0;
 	int32 InterestingDeathActivity = 0;  // +0x6308 m_iInterestingDeathActivity (datamap)
-	int32 RestorePedLinkNode = 0;  // +0x6310 m_iRestorePedLinkNode (walked)
-	int32 RestorePedLinkDestNode = 0;  // +0x6314 m_iRestorePedLinkDestNode (walked)
+	// +0x6310 / +0x6314 m_iRestorePedLinkNode / m_iRestorePedLinkDestNode (walked) -- -1, the
+	// Troika constructor `0x1028d230`'s store ("no pedestrian link to re-find").
+	int32 RestorePedLinkNode = INDEX_NONE;
+	int32 RestorePedLinkDestNode = INDEX_NONE;
 	// +0x6318 m_flNextCrosswalkUpdateTime (datamap) — FIELD_TIME; an absolute stamp
 	double NextCrosswalkUpdateTime = 0.0;
 	// +0x631c m_flNextPedInteractTime (datamap) — FIELD_TIME; an absolute stamp
@@ -940,6 +942,31 @@ public:
 	// +0x6658 m_bUnread6658 (unsettled) — unsettled in 29b-0: a constructor-zeroed byte with no
 	// reader; declared so the census stays whole
 	bool bUnread6658 = false;
+
+	// --- 0018/7: the crosswalk lane's sink and pair word (declared here for that lane) ---------
+
+	int32 PedestrianPair = INDEX_NONE;  // +0x630c m_pPedestrianLink, as a crosswalk pair index into the place set
+
+	/** `0x10298340` -- the Troika movement sink's slot 1: the obstruction's NPC at a crosswalk,
+	 *  this body's own crosswalk wait, the waypoint-reach arm, else the base `NavMoveSinkDoorStep`
+	 *  (`0x1027dc10`). True = handled, the step's status in `MoveSinkResult`. The body is the
+	 *  crosswalk lane's (`ElysiumNpcCrosswalk.cpp`). */
+	bool MovementSinkObstructed(const FNavStepFacts& Step);
+
+	// --- 0018/7: the door waypoint (the doors lane, over the crosswalk lane's leg list) ---------
+
+	/** `SplicePathWaypoint 0x10319f30` for slot 531 arm 7's found route: the local route's one
+	 *  waypoint -- `StandPos`, `bits_WP_TO_DOOR | bits_WP_DONT_SIMPLIFY` (`0x30`, `BuildLocalRoute`'s
+	 *  end flags) with the door at `wp+0x24` -- becomes the head, and the old chain follows it
+	 *  (`0x1031a0e0` appends it to the new route's last waypoint, whose goal bit it clears). The
+	 *  leg to the stand point is issued. Always true, as retail's splice. */
+	bool SpliceDoorWaypoint(const FVector& StandPosCm, const FElysiumEntity& Door);
+
+	/** `AdvancePath 0x102f0400`'s door arm, on a reached head whose flags carry `0x10`: a door handle
+	 *  that no longer resolves DevMsg's "%s trying to open a door that has been removed"
+	 *  (`0x10610080`); else the door (`+0xa4`) passing `0x1027f550` AND at toggle state 1 (closed)
+	 *  enters the alternate-AI door transaction (`0x10298800`). Called before the pop. */
+	void NavAdvanceDoorWaypoint();
 
 	// --- The retail vtable surface (`docs/vtmb/npc-kernel/signatures.md`) -------------------------
 	//

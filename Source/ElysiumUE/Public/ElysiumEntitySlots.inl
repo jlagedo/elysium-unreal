@@ -6,7 +6,7 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 220 generated slot rows of `FElysiumEntity` (CBaseEntity): 220 it introduces and 0 it overrides
+// 219 generated slot rows of `FElysiumEntity` (CBaseEntity): 219 it introduces and 0 it overrides
 // with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -545,9 +545,6 @@
 	// slot 176 0x100a4c20 (sdk) `void EndTouch(CBaseEntity*)`
 	//   layer 0, story 29c
 	virtual void EndTouch(FElysiumEntity*);
-	// slot 177 0x10027080 (sdk) `void StartBlocked(CBaseEntity*)`
-	//   layer 0, story 29c
-	virtual void StartBlocked(FElysiumEntity*);
 	// slot 178 0x100a4d40 (sdk) `void Blocked(CBaseEntity*)`
 	//   layer 0, story 29c
 	virtual void Blocked(FElysiumEntity*);

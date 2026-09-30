@@ -78,9 +78,14 @@ public:
 	// The OR of `1 << hull` over every hull a link of this graph declares.
 	UPROPERTY(VisibleAnywhere, Category = "Map") int32 UsedHullBits = 0;
 	UPROPERTY(VisibleAnywhere, Category = "Map") TArray<FElysiumPlaceRow> Rows;
-	// Node index pairs whose two ends both pair to a hint of type 11000 (`info_node_crosswalk`).
-	// Story 7's smart link reads them; nothing here does.
+	// Node index pairs whose two ends both pair to a hint of type 11000 (`info_node_crosswalk`),
+	// lower index first: the links `CAI_Hint::InputWalk` / `InputDontWalk` (`0x102f97c0`) write the
+	// signal nibble of. The place set carries their state (0018 story 7).
 	UPROPERTY(VisibleAnywhere, Category = "Map") TArray<FIntPoint> CrosswalkPairs;
+	// One per pair, parallel: the link's hull-0 motion word (`link+0x0c`). A pair without the ground
+	// bit (1) is jump-only -- the hub's 260-263 and 259-261 carry 2 -- and no pedestrian route takes
+	// it (`0x102ff960`), so the pedestrian splice lays only walkable pairs.
+	UPROPERTY(VisibleAnywhere, Category = "Map") TArray<int32> CrosswalkPairMotions;
 	UPROPERTY(VisibleAnywhere, Category = "Map") TArray<FElysiumPlaceWanderCap> WanderCaps;
 
 	// The bake's pairing report: how many node rows advanced the counter, the hint-making rows it

@@ -50,7 +50,9 @@ bool AElysiumNpcBody::QueryRoute(const FElysiumNpcRouteQuery& Query, FElysiumNpc
 		*NavData, this, FMath::Max(0, Query.PedestrianCostMultiplier));
 	// An explicit start is retail's two-point ask (`0x102ee380` -> `0x102fdcc0`); unset = from here.
 	const FVector FromCm = Query.StartCm.IsSet() ? Query.StartCm.GetValue() : GetNavAgentLocation();
-	return ElysiumWorldGeometry::Route(*NavData, *Agent, Filter, FromCm, Query, Out);
+	// The controller is the search's owner, as `MoveTo`'s own queries name it: the door smart link's
+	// per-query predicate reads the asking NPC through it (0018/7).
+	return ElysiumWorldGeometry::Route(*NavData, *Agent, Filter, FromCm, Query, Out, GetController());
 }
 
 bool AElysiumNpcBody::NavRaycast(const FElysiumNpcNavRaycast& Query, FElysiumNpcNavRaycastAnswer& Out) const

@@ -378,9 +378,9 @@ namespace
 	ELYSIUM_NPC_WORD_PRIVATE(0x6304, "FElysiumNpc::AmbientPhase",
 		"retail 1 is the INTO arm and 2 the idle dwell"),
 	ELYSIUM_NPC_WORD(0x6308, FElysiumNpc, InterestingDeathActivity),
-	ELYSIUM_NPC_WORD_ABSENT(0x630c,
-		"no navigation-link object exists in this runtime's motor seam; the two restore node ids "
-			"below carry the whole link"),
+	ELYSIUM_NPC_WORD_NOTED(0x630c, FElysiumNpc, PedestrianPair,
+		"m_pPedestrianLink, a CAI_Link*, carried as a crosswalk pair index into the place set; "
+			"INDEX_NONE is NULL (0018 story 7)"),
 	ELYSIUM_NPC_WORD(0x6310, FElysiumNpc, RestorePedLinkNode),
 	ELYSIUM_NPC_WORD(0x6314, FElysiumNpc, RestorePedLinkDestNode),
 	ELYSIUM_NPC_WORD_NOTED(0x6318, FElysiumNpc, NextCrosswalkUpdateTime,

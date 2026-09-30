@@ -30,6 +30,7 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
+#include "Substrate/ElysiumPlaceSet.h"
 
 namespace
 {
@@ -46,12 +47,17 @@ namespace
 	constexpr double GDlgCrosswalkRearmSeconds = 1.0;
 
 	// `CAI_Navigator`'s pedestrian/crosswalk path type. Both `0x102a0bc0` and `0x102a0d20` gate on
-	// `GetPathType() == 8` and on nothing else.
+	// `GetPathType() == 8` (`0x102ee620`).
 	constexpr int32 GDlgCrosswalkPathType = 8;
 
-	// The crosswalk signal's base bit. `0x10 << (((int)curtime >> 4) & 3)` walks `0x10`, `0x20`,
-	// `0x40`, `0x80` — four 16-second phases of a 64-second cycle.
-	constexpr int32 GDlgCrosswalkSignalBit = 0x10;
+	// `bits_WP_TO_NODE`, the waypoint flag `0x102a0bc0` requires (`+0x28 & 4`).
+	constexpr int32 GDlgWaypointToNode = 0x4;
+
+	// The crosswalk signal: retail's two readers test `link+0x64 & (0x10 << (((int)curtime >> 4) & 3))`,
+	// four 16-second phases of a 64-second cycle walking `0x10`, `0x20`, `0x40`, `0x80`. The only
+	// writer (`0x102f97c0`) sets or clears the whole nibble, so no phase ever answers differently from
+	// another and the port reads one boolean per pair (`FElysiumPlaceSet::IsCrosswalkRed`, decision
+	// 3). The rotation is recorded, not modelled.
 
 	// `m_szDialogQue` is a `char[0x60]`; `0x102c0470` `Q_strncpy`s into it, so a longer name is
 	// TRUNCATED rather than refused.
@@ -316,85 +322,53 @@ FElysiumEntity* FElysiumNpc::GetActiveCameraEntity() const
 // The pedestrian crosswalk rule
 // =================================================================================================
 
-int32 FElysiumNpc::CrosswalkPhaseMask(double CurTime)
-{
-	// `0x10 << (((int)curtime >> 4) & 3)` — shared verbatim by `0x102a0bc0` (`__ftol` then
-	// `SAR 4 / AND 3 / SHL`) and `0x102a0d20` (the same three instructions at `102a0e00`).
-	//
-	// A 64-second cycle in four 16-second phases, walking `0x10`, `0x20`, `0x40`, `0x80` through the
-	// link's `+0x64` flags. The truncation is retail's `__ftol` (toward zero), which for the
-	// non-negative `gpGlobals->curtime` is a floor.
-	const int32 Seconds = static_cast<int32>(CurTime);
-	return GDlgCrosswalkSignalBit << ((Seconds >> 4) & 3);
-}
-
-bool FElysiumNpc::FindCrosswalkPathNode(int32 EntityIndex, int32 LinkId, int32& OutSignalFlags) const
-{
-	// **SEAM** for `0x102f96e0` — given the waypoint's owning entity and the hint's link id, walk
-	// that entity's node array (`+0x78` count, `+0x7c` pointers), translate each node's id through
-	// `0x102dda40` and answer the node whose id matches, or NULL. `OutSignalFlags` is the matched
-	// node's `+0x64`.
-	//
-	// This runtime stands no node graph — the shape map records `+0x630c` ABSENT for the same
-	// reason — so this answers false and writes nothing. The request is recorded so the refusal is
-	// distinguishable from never having been asked.
-	CrosswalkNodeQueries.Add(FString::Printf(TEXT("node ent=%d link=%d"), EntityIndex, LinkId));
-	OutSignalFlags = 0;
-	return false;
-}
-
-void FElysiumNpc::SetAtCrosswalkLink(int32 SignalFlags)
+void FElysiumNpc::SetAtCrosswalkLink(int32 Pair)
 {
 	// 0x102a0b90 — two statements and no gate:
 	//
 	//     m_bfAINPCFlags (+0x14b8) |= 0x4;     // AT_CROSSWALK
-	//     m_pCrosswalkLink (+0x630c) = link;
+	//     m_pPedestrianLink (+0x630c) = link;
 	//
-	// The port carries the flag by name and the link as the one word its readers touch.
+	// The link is carried as its crosswalk pair (`PedestrianPair`, `INDEX_NONE` for NULL).
 	NpcFlags.Set(EElysiumNpcFlag::AT_CROSSWALK);
-	bCrosswalkLinkBound = true;
-	CrosswalkLinkSignalFlags = SignalFlags;
+	PedestrianPair = Pair;
 }
 
 bool FElysiumNpc::ResolvePedestrianPathNode(const FDialogPedWaypoint* Waypoint)
 {
-	// 0x102a0bc0 — 178 bytes, unnamed in retail; 29c's target name is kept. Its one caller is
-	// `FUN_102f0400`, the navigator's waypoint-advance, which hands it `path->CurWaypoint`
-	// (`navigator+0x30` then `+0x24`) and ignores the answer.
+	// 0x102a0bc0 — 178 bytes, unnamed in retail; 29c's target name is kept. Callers: the waypoint
+	// advance `0x102f0400` (answer ignored) and the obstruction sink `0x10298340` (arm ii).
 	//
-	// Six gates, ALL required, in this order — the first four on the waypoint, then the navigator,
-	// then the node:
+	// Five gates, in the listing's order, then the link:
 	//
 	//     waypoint != NULL
-	//     waypoint->EntityIndex (+0x10) >= 0
-	//     waypoint->Hint        (+0x30) != NULL
-	//     waypoint->Flags       (+0x28) & 0x4
-	//     GetPathType(m_pNavigator +0x5d34) == 8
-	//     node = FindPathNode(entityAt(waypoint->EntityIndex), hint->LinkId (+0x10))   // 0x102f96e0
-	//     node != NULL && (node->+0x64 & (0x10 << (((int)curtime >> 4) & 3)))
+	//     waypoint->node (+0x10) >= 0
+	//     waypoint->next (+0x30) != NULL
+	//     waypoint->flags (+0x28) & 4                       // bits_WP_TO_NODE
+	//     GetPathType(m_pNavigator +0x5d34) == 8            // 0x102ee620, pedestrian only
+	//     node = network->nodes[waypoint->node]             // bounds miss: DAT_106c994c++, NULL
+	//     link = 0x102f96e0(node, next->node (+0x10))       // this node to the NEXT waypoint's
+	//     link != NULL && (link->+0x64 & (0x10 << (((int)curtime >> 4) & 3)))
 	//
-	// and only then `SetAtCrosswalkLink(node)` (`0x102a0b90`) and `return true`.
+	// and only then `0x102a0b90(link)` and `return true`. The flag bit 2 at `+0x28` is the waypoint's
+	// own, NOT `m_bfAINPCFlags`'s `AT_CROSSWALK`: the two share a number by coincidence.
 	//
-	// The entity fetch is by INDEX into the navigator's own entity array (`navigator+0x2c`, a
-	// count/pointer pair), and an out-of-range index bumps a global error counter (`DAT_106c994c`)
-	// and yields NULL — which `0x102f96e0` then answers NULL for. Both are folded into the
-	// `FindCrosswalkPathNode` seam.
-	//
-	// The flag byte's bit 2 at `+0x28` is the waypoint's own, NOT `m_bfAINPCFlags`'s `AT_CROSSWALK`:
-	// the two share a bit number by coincidence and the body writes the second only on success.
+	// A bounds miss hands `0x102f96e0` a NULL node, which retail then dereferences (`+0x78`); every
+	// waypoint the port lays carries a node of the network, so the arm is unreachable here and the
+	// port answers false on it after the count, as a node with no links would.
 	if (Waypoint == nullptr)
 	{
 		return false;
 	}
-	if (Waypoint->EntityIndex < 0)
+	if (Waypoint->NodeId < 0)
 	{
 		return false;
 	}
-	if (!Waypoint->bHasHint)
+	if (!Waypoint->bHasNext)
 	{
 		return false;
 	}
-	if ((Waypoint->Flags & 0x4) == 0)
+	if ((Waypoint->Flags & GDlgWaypointToNode) == 0)
 	{
 		return false;
 	}
@@ -402,20 +376,18 @@ bool FElysiumNpc::ResolvePedestrianPathNode(const FDialogPedWaypoint* Waypoint)
 	{
 		return false;
 	}
-
-	int32 SignalFlags = 0;
-	if (!FindCrosswalkPathNode(Waypoint->EntityIndex, Waypoint->HintLinkId, SignalFlags))
+	FElysiumPlaceSet* Places = World != nullptr ? &World->Places() : nullptr;
+	if (Places == nullptr || !Places->IsValidNode(Waypoint->NodeId))
+	{
+		++NodeIndexErrorCount();                                             // DAT_106c994c
+		return false;
+	}
+	const int32 Pair = Places->FindCrosswalkPair(Waypoint->NodeId, Waypoint->NextNodeId);   // 0x102f96e0
+	if (Pair == INDEX_NONE || !Places->IsCrosswalkRed(Pair))
 	{
 		return false;
 	}
-
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	if ((SignalFlags & CrosswalkPhaseMask(Now)) == 0)
-	{
-		return false;
-	}
-
-	SetAtCrosswalkLink(SignalFlags);
+	SetAtCrosswalkLink(Pair);                                                // 0x102a0b90
 	return true;
 }
 
@@ -431,30 +403,27 @@ void FElysiumNpc::UpdatePedestrianInfo()
 	//     if ((m_bfAINPCFlags & AT_CROSSWALK 0x4) == 0) return;
 	//     if (m_flNextCrosswalkUpdateTime (+0x6318) >= curtime) return;   // STRICTLY less passes
 	//     m_flNextCrosswalkUpdateTime = curtime + _DAT_104454c0;          // 1.0 s
-	//     mask = 0x10 << (((int)curtime >> 4) & 3);
-	//     if (m_pCrosswalkLink (+0x630c)->+0x64 & mask) {
+	//     if (m_pPedestrianLink (+0x630c)->+0x64 & (0x10 << (((int)curtime >> 4) & 3))) {
 	//         <discarded ConVar read>;  SetCondition(0x13);  return;      // DONTWALK — and the
 	//                                                                    // AT_CROSSWALK bit STAYS
 	//     }
 	//     <discarded ConVar read>;  SetCondition(0x12);                   // WALK
 	//     m_bfAINPCFlags &= ~0x4;                                         // release the crosswalk
 	//
-	// Read the two arms the right way round: the signal bit SET is DONT-WALK (the pedestrian keeps
-	// waiting and stays latched at the crossing), and the bit CLEAR is WALK (the pedestrian is
-	// released and the latch drops). The three clears run on every pedestrian pass whether or not
-	// the NPC is at a crossing, so a condition raised last pass never survives into this one.
+	// Read the two arms the right way round: the signal SET is DONT-WALK (the pedestrian keeps
+	// waiting and stays latched at the crossing), CLEAR is WALK (the pedestrian is released and the
+	// latch drops). The three clears run on every pedestrian pass whether or not the NPC is at a
+	// crossing, so a condition raised last pass never survives into this one. The stamp is re-armed
+	// BEFORE the signal is read, so the 1 s throttle applies to both arms equally.
 	//
-	// `m_flNextCrosswalkUpdateTime` is re-armed BEFORE the signal is read, so the 1 s throttle
-	// applies to both arms equally.
+	// The signal is the pair's one boolean (decision 3). Retail dereferences the link with no NULL
+	// test; the port's `INDEX_NONE` (a link a restore could not re-find) reads green, which releases
+	// the pedestrian -- the same answer a restored waiter gets in retail, whose link words are not
+	// saved and start clear.
 	//
-	// Conditions `0x10` SHOULD_INTERACT, `0x12` CROSSWALK_WALK and `0x13` CROSSWALK_DONTWALK are
-	// this family's additions to `EElysiumNpcCond`, read off the base registrar's dump
-	// (`docs/vtmb/npc-ai/conditions-and-states.md` § "The base condition table"). SHOULD_INTERACT is
-	// cleared here and has no producer anywhere in this family — its producer is the pedestrian
-	// interaction pass (`+0x631c m_flNextPedInteractTime`), which is not a layer 0–9 row.
-	//
-	// **This body has no caller in this runtime.** Retail's only caller is `CAI_BaseNPCTroika::RunAI`
-	// (slot 432, `0x1028fcc0`), which is story 29e's generated stub.
+	// Conditions `0x10` SHOULD_INTERACT, `0x12` CROSSWALK_WALK and `0x13` CROSSWALK_DONTWALK are the
+	// base registrar's (`docs/vtmb/npc-ai/conditions-and-states.md` § "The base condition table").
+	// SHOULD_INTERACT is cleared here; its producer `0x102a0cb0` has no recovered caller.
 	if (NavigatorPathType() != GDlgCrosswalkPathType)
 	{
 		return;
@@ -476,8 +445,8 @@ void FElysiumNpc::UpdatePedestrianInfo()
 	}
 	NextCrosswalkUpdateTime = Now + GDlgCrosswalkRearmSeconds;
 
-	const int32 Mask = CrosswalkPhaseMask(Now);
-	if ((CrosswalkLinkSignalFlags & Mask) != 0)
+	const bool bRed = World != nullptr && World->Places().IsCrosswalkRed(PedestrianPair);
+	if (bRed)
 	{
 		DlgDiscardedConVarRead();
 		Cognition.Conditions.Set(EElysiumNpcCond::CrosswalkDontWalk);

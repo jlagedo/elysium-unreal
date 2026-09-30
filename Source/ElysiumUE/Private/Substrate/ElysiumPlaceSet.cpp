@@ -1,10 +1,15 @@
 #include "Substrate/ElysiumPlaceSet.h"
 
 #include "ElysiumMoveSolve.h"
+#include "Substrate/ElysiumEntityWorldShared.h"   // LogElysiumWorld
 #include "Substrate/ElysiumRetailHullTable.h"
 
 namespace
 {
+	// `bits_CAP_MOVE_GROUND`: the motion-word bit a walking hull's capabilities AND against
+	// (`0x102ff960`). A crosswalk pair whose hull-0 word lacks it is jump-only.
+	constexpr int32 GCrosswalkMoveGround = 1;
+
 	// `+0x70`, the node type, as `CNodeEnt::Spawn` writes it (`0x102d7b50` climb, `0x102d7b59` ground).
 	constexpr int32 GNodeTypeGround = 2;
 	constexpr int32 GNodeTypeClimb = 4;
@@ -37,12 +42,29 @@ namespace
 
 void FElysiumPlaceSet::Adopt(const UElysiumMapPlaces& Asset)
 {
-	AdoptRows(Asset.Rows, Asset.UsedHullBits, Asset.WanderCaps, Asset.CrosswalkPairs);
+	AdoptRows(Asset.Rows, Asset.UsedHullBits, Asset.WanderCaps, Asset.CrosswalkPairs,
+		Asset.CrosswalkPairMotions);
 	AdoptedMapName = Asset.MapName;
+	// The payload reader refuses a pair row without its motion word, but an asset authored before
+	// the word rode it adopts with every pair's word 0: no pair is walkable and the pedestrian
+	// splice is off for the whole map. Said once per map, with the fix.
+	if (Asset.CrosswalkPairMotions.Num() != Asset.CrosswalkPairs.Num())
+	{
+		static TSet<FString> Warned;
+		if (!Warned.Contains(Asset.MapName))
+		{
+			Warned.Add(Asset.MapName);
+			UE_LOG(LogElysiumWorld, Warning,
+				TEXT("%s: %d crosswalk pairs carry %d hull-0 motion words; the pairs without one read as "
+					"jump-only and no pedestrian waits at them (re-bake: uv run elysium bake map --maps %s)"),
+				*Asset.MapName, Asset.CrosswalkPairs.Num(), Asset.CrosswalkPairMotions.Num(), *Asset.MapName);
+		}
+	}
 }
 
 void FElysiumPlaceSet::AdoptRows(TArray<FElysiumPlaceRow> InRows, int32 InUsedHullBits,
-	TArray<FElysiumPlaceWanderCap> InWanderCaps, TArray<FIntPoint> InCrosswalkPairs)
+	TArray<FElysiumPlaceWanderCap> InWanderCaps, TArray<FIntPoint> InCrosswalkPairs,
+	TArray<int32> InCrosswalkMotions)
 {
 	Rows = MoveTemp(InRows);
 	for (int32 Index = 0; Index < Rows.Num(); ++Index)
@@ -52,6 +74,9 @@ void FElysiumPlaceSet::AdoptRows(TArray<FElysiumPlaceRow> InRows, int32 InUsedHu
 	HullBits = InUsedHullBits;
 	WanderCaps = MoveTemp(InWanderCaps);
 	Crosswalks = MoveTemp(InCrosswalkPairs);
+	CrosswalkMotions = MoveTemp(InCrosswalkMotions);
+	CrosswalkMotions.SetNumZeroed(Crosswalks.Num());
+	CrosswalkRed.Init(0, Crosswalks.Num());
 	AdoptedMapName.Reset();
 	bAdopted = true;
 	// The run-time words are sized to the network here and zeroed by `BeginMapSpawn`, so a place
@@ -74,6 +99,8 @@ void FElysiumPlaceSet::BeginMapSpawn()
 	Counter = 0;
 	Cooldowns.Init(0.0f, Rows.Num());
 	Attached.Init(FElysiumEntityHandle::Invalid(), Rows.Num());
+	// The links are the loaded AIN's, whose info words carry no signal nibble: every pair green.
+	CrosswalkRed.Init(0, Crosswalks.Num());
 }
 
 bool FElysiumPlaceSet::GetPositionCm(int32 Node, int32 Hull, FVector& OutCm) const
@@ -347,4 +374,71 @@ bool FElysiumPlaceSet::WanderCapFromHuman(int32 Hull) const
 {
 	const FElysiumPlaceWanderCap* Cap = FindWanderCap(Hull);
 	return Cap != nullptr && Cap->bFromHuman;
+}
+
+int32 FElysiumPlaceSet::CrosswalkPairMotion(int32 Pair) const
+{
+	return CrosswalkMotions.IsValidIndex(Pair) ? CrosswalkMotions[Pair] : 0;
+}
+
+bool FElysiumPlaceSet::IsCrosswalkPairWalkable(int32 Pair) const
+{
+	return (CrosswalkPairMotion(Pair) & GCrosswalkMoveGround) != 0;
+}
+
+int32 FElysiumPlaceSet::NumWalkableCrosswalkPairs() const
+{
+	int32 Count = 0;
+	for (int32 Pair = 0; Pair < Crosswalks.Num(); ++Pair)
+	{
+		Count += IsCrosswalkPairWalkable(Pair) ? 1 : 0;
+	}
+	return Count;
+}
+
+bool FElysiumPlaceSet::IsWalkableCrosswalkNode(int32 NodeId) const
+{
+	for (int32 Pair = 0; Pair < Crosswalks.Num(); ++Pair)
+	{
+		if ((Crosswalks[Pair].X == NodeId || Crosswalks[Pair].Y == NodeId) && IsCrosswalkPairWalkable(Pair))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+int32 FElysiumPlaceSet::FindCrosswalkPair(int32 NodeId, int32 NextNodeId) const
+{
+	// `0x102f96e0`: `for (i < node+0x78) if (0x102dda40(link[i], node+4) == dest) return link[i];`.
+	// Each pair is staged once, so the first match is the one link.
+	for (int32 Pair = 0; Pair < Crosswalks.Num(); ++Pair)
+	{
+		const FIntPoint& Ends = Crosswalks[Pair];
+		if ((Ends.X == NodeId && Ends.Y == NextNodeId) || (Ends.Y == NodeId && Ends.X == NextNodeId))
+		{
+			return Pair;
+		}
+	}
+	return INDEX_NONE;
+}
+
+void FElysiumPlaceSet::SetCrosswalkWalk(int32 NodeId, bool bWalk)
+{
+	// `0x102f97c0(node, bWalk)`: each link of the node whose far end passes `0x102f98d0` -- here,
+	// each pair holding the node -- `& 0xffffff0f` for Walk (1), `| 0xf0` for DontWalk (0). The
+	// far-end bounds miss (`DAT_106c994c++`, a null node `0x102f98d0` refuses) cannot arise: a staged
+	// pair names two nodes of the network.
+	for (int32 Pair = 0; Pair < Crosswalks.Num(); ++Pair)
+	{
+		if (Crosswalks[Pair].X == NodeId || Crosswalks[Pair].Y == NodeId)
+		{
+			CrosswalkRed[Pair] = bWalk ? 0 : 1;
+		}
+	}
+}
+
+bool FElysiumPlaceSet::IsCrosswalkRed(int32 Pair) const
+{
+	return CrosswalkRed.IsValidIndex(Pair) && CrosswalkRed[Pair] != 0;
 }

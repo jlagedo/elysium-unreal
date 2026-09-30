@@ -628,7 +628,7 @@ bool FElysiumNpcKernelTroikaHelpersTailSlotsTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// `0x102b8980`, `0x102bf560`, `0x102bf770`, `0x102c0360`, `0x102a0b90`, `0x102aa9e0`.
+// `0x102b8980`, `0x102bf560`, `0x102bf770`, `0x102c0360`, `0x102aa9e0` (`0x102a0b90` is family Dialogue's).
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTroikaHelpersFreeBodiesTest,
@@ -694,12 +694,12 @@ bool FElysiumNpcKernelTroikaHelpersFreeBodiesTest::RunTest(const FString&)
 	// `0x102bf770` — the move stop. The three unconditional writes run whatever the activity does.
 	Npc->BaseScheduleHost.bShouldMove = true;
 	Npc->ScheduleHost.DesiredMoveYaw = 42.f;
-	const int32 NavResetsBefore = Npc->NavResets;
+	Npc->Navigator.bPaused = false;
 	Npc->StopScheduledMove();
 	TestFalse(TEXT("m_bShouldMove is cleared"), Npc->BaseScheduleHost.bShouldMove);
 	TestEqual(TEXT("m_flDesiredMoveYaw is zeroed"), Npc->ScheduleHost.DesiredMoveYaw, 0.f, 0.0001f);
-	TestEqual(TEXT("and the navigator reset was asked exactly once"), Npc->NavResets,
-		NavResetsBefore + 1);
+	TestTrue(TEXT("and the path is PAUSED (0x102ee2a0 -> 0x1030be80, path+0x10 = 1), not reset"),
+		Npc->NavigatorIsPaused());
 
 	// `0x102c0360` — with no live dialog partner the whole guarded block is skipped.
 	const int32 ClearsBefore = Npc->DialogPartnerClears;
@@ -707,13 +707,6 @@ bool FElysiumNpcKernelTroikaHelpersFreeBodiesTest::RunTest(const FString&)
 	Npc->OnDialogRelease();
 	TestTrue(TEXT("no dialog partner leaves m_bCutsceneForceLOD alone"), Npc->bCutsceneForceLOD);
 	TestEqual(TEXT("and clears no partner"), Npc->DialogPartnerClears, ClearsBefore);
-
-	// `0x102a0b90` — the crosswalk stamp, named by the `AT_CROSSWALK` bit beside it.
-	TestFalse(TEXT("AT_CROSSWALK starts clear"), Npc->NpcFlags.Has(EElysiumNpcFlag::AT_CROSSWALK));
-	Npc->SetAtCrosswalk(9);
-	TestTrue(TEXT("SetAtCrosswalk raises AT_CROSSWALK"),
-		Npc->NpcFlags.Has(EElysiumNpcFlag::AT_CROSSWALK));
-	TestEqual(TEXT("and stores the node at +0x630c"), Npc->AtCrosswalkNode, 9);
 
 	// `0x102aa9e0` — the fail arm. A null cell (`0x102aa9e8`) and a cell with no path
 	// (`0x102aa9f1`) both raise `TaskFail(0x1d)` through slot 448 (`0x102aaa1c` / `0x102aaa34`); the

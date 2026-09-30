@@ -59,8 +59,9 @@ void OnStateChangeTroika(EElysiumNpcState OldState, EElysiumNpcState NewState);
 // `RunAlternateAI` (`ElysiumNpcRunAi.inl`, `0x1028fd80`) is the DISPATCHER
 // (`0x1028fd80`). The two bodies below are its mode-1 arm and the producer that enters mode 1.
 
-/** `FUN_10298800` — enter alternate-AI mode 1: `m_bShouldMove = false`, stop the motor
- *  (`0x102ee2a0` on `m_pNavigator`), `m_eAlternateAI = 1`. */
+/** `FUN_10298800` — enter alternate-AI mode 1: `m_bShouldMove = false`, PAUSE the path
+ *  (`0x102ee2a0` on `m_pNavigator` -> `path+0x10 = 1`; the move step parks the body), `m_eAlternateAI
+ *  = 1`. Reached from `AdvancePath 0x102f0400`'s door arm (`FElysiumNpc::NavAdvanceDoorWaypoint`). */
 void EnterAlternateAi();
 
 /** `FUN_10290040` — `RunAlternateAI`'s **mode 1** arm, the door-opening transaction. NAMED for what
@@ -69,9 +70,11 @@ void EnterAlternateAi();
  *  mode to 0) or when the door refused a facing point. */
 bool RunAlternateAiOpeningDoor(double Now);
 
-/** SEAM for the door's own vtable `+0x3d8` — "where should an NPC stand to open me", called with
- *  `m_bOpeningDoorWait`. This substrate's doors carry no NPC-open point, so it answers false, which
- *  is retail's `iStack_10 == -1` arm: the transaction returns without arming mode 2. */
+/** The door's own vtable `+0x3d8` (`FElysiumDoorBase::GetNPCOpenData`), called with
+ *  `m_bOpeningDoorWait`, and the ONE field mode 1 reads: `FaceDir` (`+0xc`). `OutPointCm` carries
+ *  that DIRECTION (port axes), not a point -- the name predates the struct (0018/7). False is the
+ *  door's -1 (`iStack_10 == -1`: a sliding door, the wrong side of a swinging one, a non-door): the
+ *  transaction returns without arming mode 2. */
 bool OpeningDoorFacingPoint(const FElysiumEntity& Door, bool bWait, FVector& OutPointCm) const;
 
 // `FacingIdeal` (`0x10278c80`), the gate this transaction's advance arms sit behind, is family
@@ -80,9 +83,8 @@ bool OpeningDoorFacingPoint(const FElysiumEntity& Door, bool bWait, FVector& Out
 // it stands at retail's "already facing the ideal" answer of 0, so the gate is OPEN on an untouched
 // body — it is the DOOR query above, which runs first, that stops the transaction.
 
-/** SEAM for `CAI_Motor::StopMoving`-side `0x102ee2a0`, the motor-chain stop `EnterAlternateAi`
- *  performs on `m_pNavigator` before it arms the mode. The port's own `StopMoving()` is the
- *  body-facing half and is called; this names the retail call it stands for. */
+// `0x102ee2a0` is the navigator's PAUSE (`0x1030be80`, `path+0x10 = 1`), which `EnterAlternateAi`
+// writes directly (`Navigator.bPaused`); it is not a motor stop (0018/7 correction).
 
 // --- The cop / hunter pursuit counters ------------------------------------------------------------
 //

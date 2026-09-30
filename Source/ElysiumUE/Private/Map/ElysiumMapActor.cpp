@@ -34,6 +34,8 @@
 #include "Visual/ElysiumLightRig.h"        // the authored light set the light query estimates from
 #include "Visual/ElysiumMapVisuals.h"
 #include "Visual/ElysiumMeleeTrail.h"
+#include "Visual/ElysiumNavDoorLink.h"
+#include "EngineUtils.h"
 #include "Visual/ElysiumNpcVisual.h"
 #include "Map/ElysiumNpcMakerGeometry.h"
 
@@ -2565,5 +2567,59 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 		{
 			GameState->TimeControl().EndFrame();
 		}
+	}
+}
+
+// --- 0018/7: the door smart links ---
+
+void AElysiumMapActor::IndexDoorLinks()
+{
+	DoorLinks.Reset();
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+	// Only this map's own level: the baked level is the persistent level this actor is spawned into
+	// (`UElysiumMapSubsystem` opens it, then spawns the map actor), and a link in any other level
+	// (a streamed sublevel, a stage world's leftovers) is not this entity world's.
+	int32 Links = 0;
+	for (TActorIterator<AElysiumNavDoorLink> It(World); It; ++It)
+	{
+		AElysiumNavDoorLink* Link = *It;
+		if (Link == nullptr || Link->GetLevel() != GetLevel() || Link->DoorEntityIndices.Num() == 0)
+		{
+			continue;
+		}
+		Link->Adopt(this);
+		++Links;
+		// A link over several doors (one AIN link through a doorway of two leaves) answers for each.
+		for (const int32 DoorIndex : Link->DoorEntityIndices)
+		{
+			DoorLinks.Add(DoorIndex, Link);
+		}
+	}
+	bDoorLinksIndexed = true;
+	UE_LOG(LogElysium, Log, TEXT("map '%s': %d door smart link(s) adopted over %d door(s)"), *MapName,
+		Links, DoorLinks.Num());
+}
+
+AElysiumNavDoorLink* AElysiumMapActor::FindDoorLink(int32 DoorEntityIndex)
+{
+	// Indexed once the runtime is active: the links arrive with the baked level, which stands
+	// before activation, and a door can only reach its top (the one caller) inside a running map.
+	if (!bDoorLinksIndexed && IsRuntimeActive())
+	{
+		IndexDoorLinks();
+	}
+	const TWeakObjectPtr<AElysiumNavDoorLink>* Found = DoorLinks.Find(DoorEntityIndex);
+	return Found != nullptr ? Found->Get() : nullptr;
+}
+
+void AElysiumMapActor::ReleaseDoorLink(const FElysiumEntityHandle& Door)
+{
+	if (AElysiumNavDoorLink* Link = FindDoorLink(Door.Index))
+	{
+		Link->ReleaseHeldBodies();
 	}
 }

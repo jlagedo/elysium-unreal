@@ -2801,8 +2801,14 @@ per map for the runtime's place registry.
   be asked for any), `wcId` (the authored `nodeid` from `wcLookup`, -1 if none) and `hint` (BSP
   index of the bound hint, -1 if none); `pairing` — `nodeRows` (rows that advanced the counter),
   `outOfRange[] {bspIndex, counter}` and `standalone[]` (BSP indices of id -1 hints);
-  `crosswalkPairs[]` (links between two nodes bound to type-11000 hints, lower index first, link
-  order, once each); `wanderCaps[] {hull, capUnits, fromHuman}` (Source units, 20 x the median
+  `crosswalkPairs[]` (links between two nodes bound to type-11000 hints, each `[a, b, motion]`:
+  lower index first, then the link's hull-0 motion word `fields[1]` (`link+0x0c`); link order,
+  once each, by the pair's first link. Since 2026-09-30, 0018 story 7. The runtime reader
+  (`ElysiumMapPlaces.cpp`) refuses the old two-entry shape, and a pre-change asset draws a
+  once-per-map warning. The splice and the wait read only walkable pairs, those whose word carries
+  `bits_CAP_MOVE_GROUND` 1 (`walkable_crosswalk_pairs`). The hint's signal write `0x102f97c0`
+  reaches every pair: `sm_hub_1` has 8 pairs, of which 6 are walkable, and 260-263 and 259-261 are
+  jump-only, word 2); `wanderCaps[] {hull, capUnits, fromHuman}` (Source units, 20 x the median
   raw-origin length of the links whose motion word for that hull is non-zero, for every hull in
   `UsedHullBits`; a declared hull with no link borrows the human figure).
 - **Binding:** `CNodeEnt::Spawn 0x102d78d0`'s loaded branch, positional. Node-classname rows
@@ -2822,4 +2828,4 @@ of range, and every bound node's `wcId` equals its hint row's `nodeid` — the p
 built from the patch BSPs. `sp_tutorial_1`: 203 places, all ground, 49 bound hints, human cap
 2,942 (rat 3,098); `A1`/`A2`/`A3` (BSP 433–435, nodeid 39/40/41) on nodes 15/16/17. `sm_hub_1`:
 578 places, all ground, 274 bound hints, human cap 3,113 (rat 3,186); the six
-`info_node_crosswalk` rows bind nodes 258–263, which 8 crosswalk pairs join.
+`info_node_crosswalk` rows bind nodes 258–263, which 8 crosswalk pairs join (6 walkable).

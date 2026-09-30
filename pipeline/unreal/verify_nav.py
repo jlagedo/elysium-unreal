@@ -13,6 +13,8 @@ import re
 
 import unreal
 
+from elysium_pipeline.validation.nav_acceptance import FLYING_HULLS
+
 
 def cmdline_arg(key, default=""):
     """Read -Key=value off the editor command line (a quoted path is one token)."""
@@ -38,6 +40,22 @@ def log(message):
 def _vectors(rows, field):
     return [unreal.Vector(float(r[field][0]), float(r[field][1]), float(r[field][2]))
             for r in rows]
+
+
+def _jump_link_answer(actor):
+    """One `AElysiumNavJumpLink` as the level holds it: its pair, its traversability, its verdicts."""
+    return {
+        "index": int(actor.get_editor_property("source_link_index")),
+        "src": int(actor.get_editor_property("source_node")),
+        "dst": int(actor.get_editor_property("destination_node")),
+        "enabled": bool(actor.is_smart_link_enabled()),
+        "agentBits": int(actor.supported_agent_bits()),
+        "traversable": bool(actor.is_traversable()),
+        "verdicts": [{"hull": int(v.hull), "motion": int(v.motion_word),
+                      "jumpOnly": bool(v.jump_only), "capabilityUsable": bool(v.capability_usable),
+                      "legalForward": bool(v.legal_forward), "legalBack": bool(v.legal_back)}
+                     for v in actor.get_editor_property("hull_verdicts")],
+    }
 
 
 def verify_map(key, agent_names):
@@ -68,13 +86,22 @@ def verify_map(key, agent_names):
             "groundLengths": [float(v) for v in unreal.ElysiumNavVerifyLibrary.path_lengths(
                 world, agent, _vectors(ground, "startCm"), _vectors(ground, "endCm"),
                 PROJECT_EXTENT)],
-            # Jump-link endpoints are asked to PROJECT, not to path: the jump itself is a smart
-            # link, so a missing path between its ends is the link doing its job.
+            # Jump-link endpoints are asked to PROJECT, not to path: retail plans no jump link
+            # (`0x102ff960` step 2 -- no NPC holds bit 2), so a missing path between its ends is
+            # retail's own answer; the ends must still land, because ground links reach them.
             "jumpStartsLanded": [bool(v) for v in unreal.ElysiumNavVerifyLibrary.project_points(
                 world, agent, _vectors(jump, "startCm"), PROJECT_EXTENT)],
             "jumpEndsLanded": [bool(v) for v in unreal.ElysiumNavVerifyLibrary.project_points(
                 world, agent, _vectors(jump, "endCm"), PROJECT_EXTENT)],
         }
+        # 0018/7: retail has NO edge for this hull across a jump-only pair (the graph builder's
+        # walk failed there; the path-finder refuses the jump), so a mesh path between the two
+        # ends is the modernization reaching further than retail. Asked, and only reported.
+        if int(hull) not in FLYING_HULLS:
+            answers["perHull"][hull]["jumpLengths"] = [
+                float(v) for v in unreal.ElysiumNavVerifyLibrary.path_lengths(
+                    world, agent, _vectors(jump, "startCm"), _vectors(jump, "endCm"),
+                    PROJECT_EXTENT)]
         log("%s hull %s (%s): %d ground link(s), %d jump endpoint pair(s)"
             % (key["map"], hull, agent, len(ground), len(jump)))
 
@@ -100,6 +127,13 @@ def verify_map(key, agent_names):
         }
         log("%s: %d bridging link(s) asked of both %s and %s"
             % (key["map"], len(bridging), agent, base_agent))
+
+    # The baked jump-link records (0018/7), read back as the level holds them: the gate expects
+    # every staged pair present and none of them traversable.
+    answers["jumpLinks"] = [_jump_link_answer(actor) for actor in
+                            unreal.GameplayStatics.get_all_actors_of_class(
+                                world, unreal.ElysiumNavJumpLink)]
+    log("%s: %d baked jump-link record(s)" % (key["map"], len(answers["jumpLinks"])))
 
     # The place reports (0018 story 4): every place and authored point asked to project at the
     # gate's own extent and then at each wider one, so an off-mesh point is answered with how far

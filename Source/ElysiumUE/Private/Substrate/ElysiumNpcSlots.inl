@@ -58,6 +58,10 @@
 // slot 165 0x10026fb0 closed — closed at `CMC` (mechanism): no dispatch site and no other body at
 // the slot (0019/6)
 // slot 173 0x100a4e70 FElysiumEntity::Use — the `+use` door
+// slot 177 0x10027080 FElysiumDoorBase::StartBlocked — `CBaseDoor::StartBlocked` 0x100f1340, the
+// door's own body (0018/7): the activator's NPC gets flags `|= 2` and `OnDoorBlocked`, the
+// blocker's `|= 0x80` and hit-by-door 0x1027dfb0; its dispatcher is unrecovered, so nothing calls
+// it yet
 // slot 193 0x100b4b40 FElysiumEntity::EyePosition — origin plus the view offset
 // slot 202 0x100aab10 FElysiumEntity::SetOwnerEntity — the owner handle's writer
 // slot 259 0x1029b290 FElysiumNpc::HandleAnimEvent — `CAI_BaseNPC::HandleAnimEvent` 0x10274e30

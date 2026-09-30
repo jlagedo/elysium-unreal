@@ -9,6 +9,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
+#include "Substrate/ElysiumMover.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -137,9 +138,11 @@ bool FElysiumNpcBase::IsHintViewable(const FHintWords& Hint)
 
 bool FElysiumNpcBase::NavigatorHasNodeGraph() const
 {
-	// `0x102ee6a0`: `nav->m_pNetwork (+0x30) != NULL && nav->m_pNetwork->m_pNodes (+0x24) != NULL`.
-	// **SEAM**: this substrate has no AI network and no node list.
-	return false;
+	// `0x102ee6a0` is `CAI_Navigator::IsGoalActive`: `nav+0x30` is the `CAI_Path` the constructor
+	// `0x102eca50` builds (`0x1030bec0`), not a network, and `path+0x24` its head waypoint (0018/7
+	// correction; the declaration's "node graph" reading is wrong). The port's answer is the
+	// navigator's own (`NavIsGoalActive`).
+	return NavIsGoalActive();
 }
 
 const FElysiumEntity* FElysiumNpcBase::SquadFocus() const
@@ -160,28 +163,74 @@ void FElysiumNpcBase::SetSquadFocus(const FElysiumEntity* Focus)
 
 uint32 FElysiumNpcBase::DoorBlockFlags(const FElysiumEntity& Door)
 {
-	// `door+0x644`, tested `& 0x10` and `& 0x40` by `0x100f0ec0`, whose whole body is
-	// `(*(uint*)(this + 0x644) & mask) == mask`. **SEAM**: no port word; 0 is "a plain door", which
-	// takes the long-retry arm.
-	(void)Door;
-	return 0u;
+	// `door+0x644` (`FElysiumDoorBase::NpcFailedFlags`), tested `& 0x10` and `& 0x40` by
+	// `0x100f0ec0`, whose whole body is `(*(uint*)(this + 0x644) & mask) == mask`. A non-door
+	// answers 0, "a plain door" (retail never hands this a non-door: every caller has one).
+	const FElysiumDoorBase* DoorBase = const_cast<FElysiumEntity&>(Door).AsDoorBase();
+	return DoorBase != nullptr ? DoorBase->NpcFailedFlags : 0u;
 }
 
 void FElysiumNpcBase::SetDoorNextTryTime(FElysiumEntity& Door, double At)
 {
 	// `0x100f0e30`: `if (at >= door+0x640) door+0x640 = at;` — a MAX write, spelled by retail as an
-	// if/else whose refusal arm assigns the field to itself. **SEAM**: counted.
-	(void)Door;
-	(void)At;
+	// if/else whose refusal arm assigns the field to itself (`FElysiumDoorBase::RaiseNpcFailedTimer`).
+	// The count stays for the suites that assert the call.
 	++DoorNextTryWrites;
+	if (FElysiumDoorBase* DoorBase = Door.AsDoorBase())
+	{
+		DoorBase->RaiseNpcFailedTimer(At);
+	}
+}
+
+void FElysiumNpcBase::HitByDoor(FElysiumEntity& Door)
+{
+	// `0x1027dfb0`, in its order.
+	//   1. slot 158 `IsAlive` (a null door is the caller's; this takes a reference).
+	if (!IsAlive())
+	{
+		return;
+	}
+	//   `(*DAT_10924a6c)->vtable+4()` -- the `ent_trace_conditions` debug read, answer discarded.
+	//   2. `SetCondition(0x34)` and `m_hCondHitByDoor (+0x5d2c) = door`.
+	Cognition.Conditions.Set(EElysiumNpcCond::HitByDoor);
+	CondHitByDoor = Door.Handle;
+	// (`FElysiumNpc::bCondHitByDoor`, the door selector's port-only latch in `ElysiumNpc.cpp`, has
+	// no writer and no retail word; it is left to that selector's owner rather than latched here
+	// with nothing to clear it.)
+	//   3. `debug_hit_by_mode`'s gate (`DAT_1092038c`): at the shipped "1" the alternate arm,
+	//      slot 532(4) (`+0x850`), is the whole rest of the body.
+	if (!HitByDoorGate())
+	{
+		Slot532(4);
+		return;
+	}
+	//   At 0:
+	//   The door this NPC is opening goes to the door-blocked notice (5 / 20 s and the link mark).
+	const FElysiumEntity* Opening = World != nullptr ? World->Resolve(OpeningDoor) : nullptr;
+	if (Opening == &Door)
+	{
+		OnDoorBlocked(Door);                                          // 0x1027de00
+		return;
+	}
+	//   Any other door: a flat `curtime + 5.0` (`_DAT_10454110`) MAX-stamp, the squad's focus, and
+	//   `m_hBlockedDoor (+0x5d28)`.
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	SetDoorNextTryTime(Door, Now + static_cast<double>(GDoorRetryShortSeconds));   // 0x100f0e30
+	if (BaseScheduleHost.SquadDisconnected < 1 && ConnectedSquad() != nullptr)
+	{
+		SetSquadFocus(&Door);                                         // unconditional here, unlike 0x1027de00
+	}
+	BlockedDoor = Door.Handle;
 }
 
 void FElysiumNpcBase::OnDoorBlocked(FElysiumEntity& Door)
 {
-	// `0x1027de00`, 336 bytes. **Not `SetEnemy`.** Its two callers are `0x10298840` (the
-	// alternate-AI door transaction, when `0x100eec70` refuses the NPC/door pair) and `0x1027dfb0`
-	// (the hit-by-door handler, when the door that hit is the door being opened), and it writes
-	// `m_hBlockedDoor` (`+0x5d28`). `npc-kernel/signatures.md` slot 532 names the reason word.
+	// `0x1027de00`, 336 bytes. **Not `SetEnemy`.** Five callers (0018/7 findings, correction 2):
+	// `0x10298840` (the alternate-AI door transaction, when `0x100eec70` refuses the NPC/door pair),
+	// `0x1027dfb0` (the hit-by-door handler, when the door that hit is the door being opened),
+	// `0x102f06e0` (the look-ahead's refused door), `0x102ff960` (a stale door link still stale) and
+	// `0x100f1340` (`StartBlocked`, the activator's NPC). It writes `m_hBlockedDoor` (`+0x5d28`).
+	// `npc-kernel/signatures.md` slot 532 names the reason word.
 	//
 	//   1. `if (!IsAlive() || door == NULL) return;`            (slot 158, vtable +0x278)
 	if (!IsAlive())
@@ -200,13 +249,14 @@ void FElysiumNpcBase::OnDoorBlocked(FElysiumEntity& Door)
 	if ((DoorFlags & GDoorFlagNoBlockRetry) != GDoorFlagNoBlockRetry)
 	{
 		//   4. `& 0x40` picks 5.0 s (`_DAT_10454110`) over 20.0 s (`_DAT_1044eb0c`), for BOTH the
-		//      navigator mark and the door's own stamp. The navigator mark is gated on
-		//      `0x102ee6a0` and the stamp is not.
+		//      link mark and the door's own stamp. The link mark (`0x102f1fa0(nav, secs, door)`) is
+		//      gated on `0x102ee6a0` (`IsGoalActive`) and the stamp is not.
 		const bool bShort = (DoorFlags & GDoorFlagShortBlockRetry) == GDoorFlagShortBlockRetry;
 		const float Seconds = bShort ? GDoorRetryShortSeconds : GDoorRetryLongSeconds;
 		if (NavigatorHasNodeGraph())
 		{
 			++NavigatorUnreachableMarks;
+			NavMarkLinkStale(static_cast<double>(Seconds), &Door);
 		}
 		const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 		SetDoorNextTryTime(Door, Now + static_cast<double>(Seconds));

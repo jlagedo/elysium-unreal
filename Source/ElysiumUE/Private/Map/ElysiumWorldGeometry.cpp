@@ -462,7 +462,7 @@ namespace ElysiumWorldGeometry
 
 	bool Route(const ANavigationData& NavData, const FNavAgentProperties& Agent,
 		FSharedConstNavQueryFilter Filter, const FVector& FromCm, const FElysiumNpcRouteQuery& Query,
-		FElysiumNpcRouteAnswer& Out)
+		FElysiumNpcRouteAnswer& Out, const UObject* Querier)
 	{
 		const ElysiumWorldGeometryDetail::FBudgetScope Budget(FElysiumGeometryBudget::EKind::PathTest);
 		// Both ends projected at the nav data's default query extent, unfiltered -- what
@@ -476,8 +476,9 @@ namespace ElysiumWorldGeometry
 		{
 			return false;
 		}
-		// No querier: the contract carries none, and the filter arrives already resolved.
-		FPathFindingQuery PathQuery(static_cast<const UObject*>(nullptr), NavData,
+		// The querier, when the caller names one (a body's controller): custom links read it. The
+		// filter arrives already resolved.
+		FPathFindingQuery PathQuery(Querier, NavData,
 			FromOnMesh.Location, DestOnMesh.Location, Filter);
 		PathQuery.SetAllowPartialPaths(Query.bAcceptPartial);
 		PathQuery.SetNavAgentProperties(Agent);
@@ -491,6 +492,15 @@ namespace ElysiumWorldGeometry
 		Out.bReachable = bHavePath && (!bPartial || Query.bAcceptPartial);
 		Out.bPartial = bPartial;
 		Out.LengthCm = bHavePath ? static_cast<float>(Found.Path->GetLength()) : 0.f;
+		// The corners as found (0018/7: the crosswalk splice reads which curb places they pass).
+		Out.PointsCm.Reset();
+		if (bHavePath)
+		{
+			for (const FNavPathPoint& Point : Found.Path->GetPathPoints())
+			{
+				Out.PointsCm.Add(Point.Location);
+			}
+		}
 		return true;
 	}
 

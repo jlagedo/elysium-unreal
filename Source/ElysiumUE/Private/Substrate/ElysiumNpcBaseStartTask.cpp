@@ -2190,14 +2190,27 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm)
 		// The request is filled from the navigator's goal words (`MakeNavigatorMoveRequest`): the
 		// arrival radius is retail's waypoint constant, not the path's goal tolerance (`path+0x28`, which
 		// retail applies to a blocked step only, `0x102ef760`).
-		bMoveIssued = NavIssueLeg(MakeNavigatorMoveRequest(Navigator, Motor, DestCm));
+		const FElysiumNpcMoveRequest Request = MakeNavigatorMoveRequest(Navigator, Motor, DestCm);
+		if (Troika != nullptr && Navigator.GetGoalType() == GOALTYPE_PLACE_PEDESTRIAN)
+		{
+			// A pedestrian goal's route is the pedestrian search's (`0x102f2330` sees the path's
+			// pedestrian byte -> `0x102fe9f0`, chain `0x102fcd00`): its crosswalk curbs are waypoints
+			// of their own, flagged for the wait. NAMED MODERNIZATION (decision 2): the NavMesh route
+			// stands for the chain and the curbs are spliced into it as legs
+			// (`FElysiumNpc::NavLayPedestrianLegs`), the first one issued here.
+			bMoveIssued = Troika->NavLayPedestrianLegs(Request);
+		}
+		else
+		{
+			bMoveIssued = NavIssueLeg(Request);
+		}
 		if (bMoveIssued)
 		{
-			// An accepted request to the goal: the head waypoint stands and is the goal's own
-			// (`path+0x24` set, `(wp+0x28 >> 3) & 1`, `0x1030bd50`). The pop at arrival is the
-			// navigator's move step.
+			// An accepted request: the head waypoint stands (`path+0x24` set). It is the goal's own
+			// (`(wp+0x28 >> 3) & 1`, `0x1030bd50`) unless a curb leg was laid ahead of the goal. The pop
+			// at arrival is the navigator's move step.
 			Navigator.bHasHeadWaypoint = true;
-			Navigator.bHeadIsGoal = true;
+			Navigator.bHeadIsGoal = Troika == nullptr || Troika->PedestrianLegs.Num() <= 1;
 		}
 		return bMoveIssued;
 	};
@@ -2216,6 +2229,11 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm)
 	Navigator.bHasHeadWaypoint = false;
 	Navigator.bHeadIsGoal = false;
 	Navigator.LastNodePassed = INDEX_NONE;
+	if (Troika != nullptr)
+	{
+		Troika->PedestrianLegs.Reset();                                         // the list's port half
+		Troika->bNavBodyParked = false;                                         // a new route is issued fresh
+	}
 	if ((BaseScheduleHost.MemoryBits & MemoryPathFailed) == 0)                  // 0x102f1e0a TEST [+0x5d8c],0x20
 	{
 		if (Build())                                                            // 0x102f1e15 0x102f2330
@@ -2274,6 +2292,8 @@ void FElysiumNpcBase::NavClearRoute()
 	if (FElysiumNpc* Troika = AsNpc())
 	{
 		Troika->NavHeadCorner = FElysiumEntityHandle::Invalid();                       // the head waypoint's `wp+0x20`
+		Troika->PedestrianLegs.Reset();                                                // the waypoint list's curb legs
+		Troika->bNavBodyParked = false;                                                // no leg left to re-issue
 	}
 	if (Motor != nullptr)
 	{
@@ -2503,6 +2523,9 @@ bool FElysiumNpcBase::InstallPathNoGoal(const FVector& DestCm)
 	if (Troika != nullptr)
 	{
 		Troika->MoveGoal = DestCm;
+		// A new route in the path: a previous pedestrian route's curb legs are not its waypoints.
+		Troika->PedestrianLegs.Reset();
+		Troika->bNavBodyParked = false;
 	}
 	// Retail's A* prices the search from the path's own words: the pedestrian byte (`path+0x1`) is not
 	// written here, so a byte a previous type-8 goal left set still prices this route, as it would.

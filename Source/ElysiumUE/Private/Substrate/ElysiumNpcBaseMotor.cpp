@@ -3,6 +3,7 @@
 // `class FElysiumNpcBase`), or generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 
 #include "Substrate/ElysiumNpcBase.h"
+#include "Substrate/ElysiumMover.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -946,13 +947,218 @@ bool FElysiumNpcBase::NavBlockedStepCompletes()
 
 void FElysiumNpcBase::NavMarkStaleLink(float Seconds)
 {
-	// `0x102f1fa0(nav, Seconds, NULL)`: gated inside on `nav+0x50 m_fRememberStaleNodes`, a path, a
-	// head, `path+0x44 != -1` and the head's node `wp+0x10 != -1`, it marks the link in `nav+0x2c`
-	// (`link+0x64 |= 1`, `link+0x68 = curtime + Seconds`, `link+0 = -1`). SEAM: the port routes on
-	// Unreal's navmesh and keeps no link table to mark, so the call is recorded and marks nothing; the
-	// gate's `nav+0x50` (writer unrecovered, R3) has no port word until a link table exists to gate.
-	(void)Seconds;
+	// `0x102f1fa0(nav, Seconds, NULL)` from `Move`'s failure tail (4.0 s, no blocker): routed to the
+	// link the NPC's current path segment stands on (0018/7). Counted for the move-step suites.
 	++NavMoveStep.StaleMarkCalls;
+	NavMarkLinkStale(static_cast<double>(Seconds), nullptr);
+}
+
+void FElysiumNpcBase::NavMarkLinkStale(double Seconds, const FElysiumEntity* Blocker)
+{
+	// `0x102f1fa0(nav, Seconds, Blocker)`, gate by gate:
+	//   `nav+0x50 m_fRememberStaleNodes` (the constructor's 1), a path with a head (`path+0x24`),
+	//   `path+0x44` (the last node passed) and the head's node `wp+0x10` both set -- the link
+	//   between them is the one marked (`thunk_FUN_102f9400(node, headNode)`).
+	if (!bNavRememberStaleNodes || World == nullptr || !NavIsGoalActive())
+	{
+		return;
+	}
+	// The port's link: ONLY the door smart link the body is held at -- the doorway it stands in is
+	// the segment between the last node passed and the head's node. Any other segment marks
+	// nothing, named: the navmesh keeps no per-segment word (the NAMED MODERNIZATION of a NavMesh
+	// route standing for AIN links), and a door link merely AHEAD is not the segment being walked.
+	// A spliced door waypoint (the stand point) is no candidate either: its `wp+0x10` is -1, which
+	// fails retail's own gate.
+	if (!bNavLastFactsValid)
+	{
+		return;
+	}
+	const FElysiumEntityHandle LinkDoor = NavLastFacts.DoorLinkEntity;
+	FElysiumEntity* const LinkEntity = World->Resolve(LinkDoor);
+	FElysiumDoorBase* const Link = LinkEntity != nullptr ? LinkEntity->AsDoorBase() : nullptr;
+	if (Link == nullptr)
+	{
+		return;
+	}
+	// `link+0x64 |= 1`, `link+0x68 = curtime + Seconds`, `link+0 = blocker handle or -1`.
+	Link->MarkLinkStale(World->NowSeconds(), Seconds,
+		Blocker != nullptr ? Blocker->Handle : FElysiumEntityHandle::Invalid());
+}
+
+bool FElysiumNpcBase::NavCheckStaleRoute(const FVector& StartCm, const FVector& EndCm)
+{
+	// `CAI_Pathfinder::CheckStaleRoute` `0x10304a40(start, end, motionBits)`: by motion bit in the
+	// order 1 (ground), 4 (fly), 2 (jump), 8 (climb). A door smart link is a ground link, so the
+	// ground arm is the one asked: `0x103048d0(this, navType 0, start, end)`:
+	//   (a) `MoveLimit(0, start, end, 0x202400b, pct 100)`; `status >= 0` -> clear.
+	//   (b) blocked -> `0x103059d0`, a local route around the obstruction (`dist - flDistObstructed`
+	//       budget); found -> clear. SEAM answering "not found": the port has no local-route
+	//       builder over the probe's geometry (counted, `NavStaleRouteLocalRouteAsks`).
+	//   (c) the obstruction (`trace+0x1c`) an NPC (`+0x94`) -> `MoveLimit` again under `0x2400b`
+	//       (the same mask without `CONTENTS_MONSTER`): `status >= 0` -> clear.
+	//   Otherwise still stale.
+	//
+	// NAMED DIVERGENCE, the probe's geometry: `MoveLimit`'s ground arm in the port is the NavMesh
+	// raycast (`MotorMoveTraceSweep`), and every door is cut out of the mesh (0018/7), so a mesh ray
+	// across a door link would be refused whatever the door does. The probe is therefore this NPC's
+	// hull swept node to node through the collision world (`KernelHullTrace`, the characters folded
+	// by the nav filter) -- the geometry `TestGroundMove` sweeps, without its 16-unit stepping.
+	constexpr int32 MaskNpcSolid = 0x202400b;
+	constexpr int32 MaskNpcSolidNoMonster = 0x2400b;
+	FVector MinsUnits = FVector::ZeroVector;
+	FVector MaxsUnits = FVector::ZeroVector;
+	RetailCollisionExtents(*this, MinsUnits, MaxsUnits);
+	const FVector StartUnits = StartCm / ElysiumMove::U;
+	const FVector EndUnits = EndCm / ElysiumMove::U;
+	auto Clear = [](const FKernelHullTrace& Trace)
+	{
+		return Trace.Fraction == 1.0f && !Trace.bStartSolid && !Trace.bAllSolid;
+	};
+	FKernelHullTrace Probe;
+	KernelHullTrace(StartUnits, EndUnits, MinsUnits, MaxsUnits, MaskNpcSolid, Probe);   // (a)
+	if (Clear(Probe))
+	{
+		return true;
+	}
+	++NavStaleRouteLocalRouteAsks;                                                // (b) 0x103059d0, SEAM
+	const FElysiumEntity* const Obstruction = World != nullptr ? static_cast<const FElysiumEntityWorld*>(World)->Resolve(Probe.HitEntity) : nullptr;
+	if (Obstruction != nullptr && Obstruction->AsNpcBase() != nullptr)      // (c) +0x94
+	{
+		FKernelHullTrace Retry;
+		KernelHullTrace(StartUnits, EndUnits, MinsUnits, MaxsUnits, MaskNpcSolidNoMonster, Retry);
+		return Clear(Retry);
+	}
+	return false;
+}
+
+bool FElysiumNpcBase::DoorLinkPathfindingAllowed(FElysiumEntity& Door, const FVector& StartCm,
+	const FVector& EndCm)
+{
+	FElysiumDoorBase* const DoorBase = Door.AsDoorBase();
+	if (DoorBase == nullptr || World == nullptr)
+	{
+		return true;
+	}
+	FElysiumDoorLinkWords& Link = DoorBase->LinkWords;
+	// `0x102fce80` (answers TRUE for "stale"):
+	//   (1) `link+0x64` bit 1 clear -> usable.
+	if (!Link.bStale)
+	{
+		return true;
+	}
+	//   (2) `curtime > link+0x68` (strict: `fVar1 >= fVar2 && !(fVar1 == fVar2)`) -> clear, usable.
+	const double Now = World->NowSeconds();
+	if (Now > Link.StaleUntil)
+	{
+		Link.bStale = false;
+		return true;
+	}
+	//   (3) At most once per `curtime` per pathfinder (`pf+0x14`): re-probe the link's segment
+	//       (`CheckStaleRoute 0x10304a40`). A clear probe clears the bit.
+	if (PathfinderLinkProbeTime != Now)
+	{
+		PathfinderLinkProbeTime = Now;
+		if (NavCheckStaleRoute(StartCm, EndCm))
+		{
+			Link.bStale = false;
+			return true;
+		}
+	}
+	//   (4) Still stale (a second ask this `curtime` answers so without probing). `0x102ff960`'s
+	//       tail: a live `link+0` door gets the door-blocked notice, and the link is refused.
+	if (FElysiumEntity* const Blocker = World->Resolve(Link.StaleDoor))
+	{
+		OnDoorBlocked(*Blocker);                                             // 0x1027de00
+	}
+	return false;
+}
+
+float FElysiumNpcBase::NavStepDistClearUnits(const FNavStepFacts& Step) const
+{
+	if (bNavLastFactsValid && Step.Blocker.IsSet() && NavLastFacts.DoorLinkEntity == Step.Blocker)
+	{
+		return static_cast<float>(FVector::Dist2D(Origin, NavLastFacts.DoorLinkPointCm) / ElysiumMove::U);
+	}
+	return 0.f;
+}
+
+bool FElysiumNpcBase::NavObstructionPreSink(const FNavStepFacts& Step, float DistClearUnits,
+	ENavMoveResult& OutResult)
+{
+	// S1 `0x102eefb0(goal, distClear, &result)`, `this = nav+0x10`:
+	//   goal flags (`+0x38`): `AILMG_TARGET_IS_GOAL 1` -> the tolerance is `path+0x28`; else
+	//   `AILMG_TARGET_IS_TRANSITION 4` -> straight to the sink; else the tolerance is `path+0x40`
+	//   (`m_waypointTolerance`) and a reached waypoint advances. The port's legs are all plain ground
+	//   legs (no transition waypoint), and the goal's `+0x28` is the leg's remaining distance.
+	const bool bTargetIsGoal = Navigator.CurWaypointIsGoal();
+	const float ToleranceUnits = (bTargetIsGoal ? Navigator.GetGoalTolerance() : Navigator.WaypointToleranceCm)
+		/ ElysiumMove::U;
+	const float MaxDistUnits = Step.RemainingUnits;
+	//   `maxDist < distClear`: the obstruction lies past the step -> `*result = 0`, decided.
+	if (MaxDistUnits < DistClearUnits)
+	{
+		OutResult = ENavMoveResult::Ok;
+		return true;
+	}
+	//   `maxDist < tolerance`: the target is (all but) reached.
+	if (MaxDistUnits < ToleranceUnits)
+	{
+		// The goal, blocked by an NPC (`goal+0x44 == -3`) that is itself moving (slot 153 on
+		// `goal+0x60`) -> the sink after all.
+		FElysiumEntity* const Blocker = World != nullptr ? World->Resolve(Step.Blocker) : nullptr;
+		const bool bNpcBlocker = NavIsNpcBlocker(Step.Blocker);
+		if (bTargetIsGoal && bNpcBlocker && Blocker != nullptr && Blocker->IsMoving())
+		{
+			return false;
+		}
+		OutResult = ENavMoveResult::Ok;                                      // maxDist = distClear; *result = 0
+		if (!bTargetIsGoal)
+		{
+			NavLogMoveStep(TEXT("obstructed inside the waypoint tolerance: waypoint passed (S1)"));
+			NavAdvancePath();                                                // 0x102f0400
+			return true;
+		}
+		//   `distClear < 0.01` (`_DAT_1044e658`, a double) -> `*result = goal+0x44`, the probe's own
+		//   status: -3 for an NPC, -1 for any other entity (the world names no blocker here).
+		if (DistClearUnits < 0.01f)
+		{
+			OutResult = bNpcBlocker ? ENavMoveResult::BlockedNpc : ENavMoveResult::BlockedEntity;
+		}
+		return true;
+	}
+	return false;                                                            // the sink, slot 1
+}
+
+bool FElysiumNpcBase::NavMoveSinkDoorStep(const FNavStepFacts& Step)
+{
+	// `0x1027dc10` (the base sink's slot 1): `goal+0x60` (the obstruction) -> its `+0xa4` door ->
+	// NPC slot 531 `OnObstructingDoor(goal, door, distClear, &result)`; true = handled.
+	if (World == nullptr || !Step.Blocker.IsSet())
+	{
+		return false;
+	}
+	FElysiumEntity* const Blocker = World->Resolve(Step.Blocker);
+	FElysiumDoorBase* const Door = Blocker != nullptr ? Blocker->AsDoorBase() : nullptr;
+	if (Door == nullptr)
+	{
+		return false;
+	}
+	// The goal the step carries: `maxDist` the leg's remaining distance; `distClear` how far the
+	// body stands from the obstruction -- where the door link holds it, or 0 for an obstruction the
+	// body names by contact.
+	FLocalMoveGoal Goal;
+	Goal.MaxDistanceUnits = Step.RemainingUnits;
+	Goal.ExpectedBlocker = Blocker;
+	const float DistClearUnits = NavStepDistClearUnits(Step);
+	int32 Result = 0;
+	if (!OnObstructingDoor(&Goal, Door, DistClearUnits, &Result))            // slot 531 (+0x84c)
+	{
+		return false;
+	}
+	MoveSinkResult = static_cast<ENavMoveResult>(Result);
+	NavLogMoveStep(Result == 0 ? TEXT("door in the way, slot 531 handled it")
+		: TEXT("door in the way, slot 531 blocked"));
+	return true;
 }
 
 FElysiumNpcMoveRequest FElysiumNpcBase::PrepareMoveRequest(const FElysiumNpcMoveRequest& Request)
@@ -1105,12 +1311,147 @@ void FElysiumNpcBase::NavLogMoveStep(const TCHAR* Outcome, int32 FailCode) const
 
 bool FElysiumNpcBase::NavSimplifyPathDoorRefused()
 {
-	// `SimplifyPath(nav, 0)` `0x102f13d0` from the `MoveNormal` gate `0x102efd50` (every 0.5 s,
-	// `nav+0x38`): its forward pass runs the door probe `0x102f06e0`, whose NPC slot 531 answer with a
-	// non-zero word raises `OnNavFailed(0x0e)` (`0x102f08e7`) and the door notice `0x1027de00`. SEAM
-	// answering "no door refused": the door policy behind slot 531 is 0018/7's.
+	// `SimplifyPath(nav, 0)` `0x102f13d0` from the `MoveNormal` gate `0x102efd50`, on every pass.
+	return NavSimplifyPath(/*bForce*/ false);
+}
+
+bool FElysiumNpcBase::NavSimplifyPath(bool bForce)
+{
+	// `0x102f13d0`. `SetGoal 0x102ecd20` calls it forced (argument 1); the `MoveNormal` gate unforced.
+	// SEAM, the forced call: the port's pass reads the body's path facts (the next door link, its
+	// far end), which do not exist until the body holds the route `SetGoal` just requested -- a
+	// forced pass there would probe the PREVIOUS route's facts. The port's `SetGoal`
+	// (`StartTaskSetGoal`) therefore does not call it; the first `MoveNormal` pass on the new route
+	// runs the far scan when `nav+0x38` is due. Named, not wired.
 	++NavMoveStep.SimplifyPasses;
-	return false;
+	// Nav type 0 or 2 only.
+	const int32 NavTypeNow = Navigator.GetNavType();
+	if (NavTypeNow != 0 && NavTypeNow != 2)
+	{
+		return false;
+	}
+	// `102f13fc`-`102f1429`: a head waypoint, NOT the goal (it has a next waypoint, `wp+0x30`, of
+	// the head's own nav type), and head `flags & 0x2a == 0` (no `bits_WP_TO_PATHCORNER 0x2`,
+	// `bits_WP_TO_DOOR`'s neighbour `0x8` goal bit, `bits_WP_DONT_SIMPLIFY 0x20`). The port's head
+	// words are the Troika leg list's head (`PedestrianLegs`); a route with no list has one leg, the
+	// goal, which the gate refuses. The port's legs are all ground, so "same nav type" holds.
+	if (!NavIsGoalActive() || World == nullptr || Navigator.CurWaypointIsGoal())
+	{
+		return false;
+	}
+	constexpr int32 SimplifyRefusedHeadFlags = 0x2a;
+	const FElysiumNpc* const HeadOwner = AsNpc();
+	const int32 HeadFlags = HeadOwner != nullptr && HeadOwner->PedestrianLegs.Num() > 0
+		? HeadOwner->PedestrianLegs[0].Flags : 0;
+	if ((HeadFlags & SimplifyRefusedHeadFlags) != 0)
+	{
+		return false;
+	}
+	const double Now = World->NowSeconds();
+	// The two scans' radii, Source units: the far scan `0x102f0e80` `{384, 144, 36, 4}`
+	// (`0x1060fcd8`) and the quick pass `0x102f13a0` `{143.9, 144, 6, 1}`. A point more than
+	// radius + 0.1 away is skipped.
+	constexpr float FarScanRadiusUnits = 384.0f;
+	constexpr float QuickPassRadiusUnits = 143.9f;
+	// `nav+0x38`: the far scan's clock, `curtime + float [0x1049d988]` -- 0.5, read from the image.
+	constexpr double FarScanIntervalSeconds = 0.5;
+
+	// The one point a pass can probe in the port: the far end of the next door smart link on the
+	// path (the NAMED MODERNIZATION -- Detour shortcuts the rest of the path itself).
+	const bool bDoorAhead = bNavLastFactsValid && NavLastFacts.UpcomingDoorLinkEntity.IsSet();
+	auto Pass = [this, bDoorAhead](float RadiusUnits, bool& bDoorSeen) -> bool
+	{
+		if (!bDoorAhead || bDoorSeen)
+		{
+			return false;
+		}
+		const double LimitCm = static_cast<double>(RadiusUnits + 0.1f) * ElysiumMove::U;   // radius + 0.1
+		if (NavLastFacts.UpcomingDoorLinkDistanceCm > LimitCm)
+		{
+			return false;
+		}
+		return NavDoorProbe(NavLastFacts.UpcomingDoorLinkEndCm, bDoorSeen);
+	};
+
+	bool bDoorSeen = false;
+	bool bRefused = false;
+	if (bForce || NavSimplifyNextTime <= Now)
+	{
+		NavSimplifyNextTime = Now + FarScanIntervalSeconds;
+		bRefused |= Pass(FarScanRadiusUnits, bDoorSeen);                     // 0x102f0e80
+		// `0x102f0fe0` (the second far pass) is not ported: its body is unrecovered here and it
+		// probes no point the port's path carries beyond the one above.
+	}
+	// ALWAYS the quick pass -- unless a door has already been seen this tick.
+	bRefused |= Pass(QuickPassRadiusUnits, bDoorSeen);                       // 0x102f13a0
+	return bRefused;
+}
+
+bool FElysiumNpcBase::NavDoorProbe(const FVector& PointCm, bool& bOutDoorSeen)
+{
+	// `0x102f06e0`, arm by arm.
+	IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr)
+	{
+		return false;
+	}
+	//   (1) The ray: `0x2400b`, or `0x2600b` on a pedestrian path (`path+1`), from slot 193
+	//       (`WorldSpaceCenter`: the origin raised to the middle of the collision box) to the point,
+	//       `CTraceFilterSimple(this)`.
+	FVector MinsUnits = FVector::ZeroVector;
+	FVector MaxsUnits = FVector::ZeroVector;
+	RetailCollisionExtents(*this, MinsUnits, MaxsUnits);
+	FElysiumRetailTrace Ray;
+	Ray.StartCm = Origin + FVector(0.0, 0.0, (MinsUnits.Z + MaxsUnits.Z) * 0.5 * ElysiumMove::U);
+	Ray.EndCm = PointCm;
+	Ray.RetailMask = Navigator.bPedestrian ? 0x2600b : 0x2400b;
+	Ray.Ignore.Add(Handle);
+	FElysiumRetailTraceResult Hit;
+	if (!Embodiment->TraceRetail(Ray, Hit))
+	{
+		return false;                                                        // no collision world: clear
+	}
+	//   (2) `fraction == 1.0` (`_DAT_10449280`) -> `MoveLimit` toward the point (the shortcut's own
+	//       test); no door arm. The shortcut itself is the follower's.
+	if (Hit.Fraction == 1.0f)
+	{
+		return false;
+	}
+	//   (3) `hit+0x4c -> +0xa4`: the door the ray met.
+	FElysiumEntity* const HitEntity = World->Resolve(Hit.HitEntity);
+	FElysiumDoorBase* const Door = HitEntity != nullptr ? HitEntity->AsDoorBase() : nullptr;
+	if (Door == nullptr)
+	{
+		return false;
+	}
+	//       The lock test `0x100eec70(door, npc)`: REFUSED -> false, nothing written.
+	if (Door->IsUseRefused(Handle))
+	{
+		return false;
+	}
+	//       ACCEPTED -> a zeroed goal (14 + 31 dwords) with `+0x28 = dist + 10.0` (`_DAT_1044e664`),
+	//       `dist` the ray's length to where it stopped; slot 531 with `distClear = dist`.
+	const float DistUnits = static_cast<float>(FVector::Dist(Ray.StartCm, Hit.EndPosCm) / ElysiumMove::U);
+	FLocalMoveGoal Goal;
+	Goal.MaxDistanceUnits = DistUnits + 10.0f;
+	int32 Result = 0;
+	if (!OnObstructingDoor(&Goal, Door, DistUnits, &Result))                 // slot 531 (+0x84c)
+	{
+		return false;
+	}
+	//   (4) Handled: the out byte (`*puStack_1c = 1`, "a door was seen"); a non-zero result raises
+	//       `OnNavFailed(0x0e, 1)` (nav vtable `+0x28`, `0x102f08e7`) then `0x1027de00`.
+	bOutDoorSeen = true;
+	if (Result == 0)
+	{
+		return false;
+	}
+	NavLogMoveStep(TEXT("door refused, failed"), GMoveStepFailDoor);
+	NavOnNavFailed(GMoveStepFailDoor);
+	OnDoorBlocked(*Door);
+	//   (5) Every door arm answers false to its own caller (no shortcut); the port's answer is
+	//       whether the `0x0e` failure was raised.
+	return true;
 }
 
 FElysiumNpcBase::FNavStepFacts FElysiumNpcBase::NavSampleStep()
@@ -1120,6 +1461,10 @@ FElysiumNpcBase::FNavStepFacts FElysiumNpcBase::NavSampleStep()
 	// are what survive that.
 	FElysiumNpcMoveFacts Facts;
 	const bool bFacts = Motor->SampleMoveFacts(Facts);
+	// Kept for the door arms (0018/7): the look-ahead reads the next door link, the move-step sink
+	// and the stale mark the link the body is held at.
+	NavLastFacts = bFacts ? Facts : FElysiumNpcMoveFacts();
+	bNavLastFactsValid = bFacts;
 	// `GetOrigin` (slot 220) is the entity record; the body is its source.
 	const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
 	// The move's end drops the ignores registered for it (`RegisterMoveIgnores`).
@@ -1144,6 +1489,12 @@ FElysiumNpcBase::FNavStepFacts FElysiumNpcBase::NavSampleStep()
 		Step.bWaypointReached = DistUnits <= GMoveStepArrivalUnits || bSucceeded;
 		Step.bGaveUp = Facts.bRequestEnded && !bSucceeded;
 		Step.Blocker = Facts.BlockingEntity;
+		// A body its door smart link holds at the doorway is blocked by that door: retail's move
+		// probe meets the closed leaf and `goal+0x60` is the door (`0x1027dc10`).
+		if (!Step.Blocker.IsSet() && Facts.bRequestAlive && Facts.DoorLinkEntity.IsSet())
+		{
+			Step.Blocker = Facts.DoorLinkEntity;
+		}
 		Step.RemainingUnits = static_cast<float>(DistUnits);
 		return Step;
 	}
@@ -1162,12 +1513,9 @@ FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavSte
 	// The gate `0x102efd50`: the route-type / nav-type checks read the head waypoint's move type
 	// (`+0x2c`), which the follower does not report, so they are not ported; then `SimplifyPath(nav,
 	// 0)` (result ignored) and `nav+0x51 = 0`. Quirk kept: a door refusal inside the simplify pass
-	// raises `OnNavFailed(0x0e)` and the pass goes on (`MoveNormal` does not re-test `nav+0x1c`).
-	if (NavSimplifyPathDoorRefused())
-	{
-		NavLogMoveStep(TEXT("door refused, failed"), GMoveStepFailDoor);
-		NavOnNavFailed(GMoveStepFailDoor);                                   // 0x102f08e7
-	}
+	// raises `OnNavFailed(0x0e)` (inside `NavDoorProbe`, ahead of `OnDoorBlocked`, as `0x102f06e0`
+	// orders them) and the pass goes on (`MoveNormal` does not re-test `nav+0x1c`).
+	(void)NavSimplifyPathDoorRefused();
 	Navigator.bBlockerHold = false;                                          // nav+0x51 = 0
 
 	// Navigator slot 16, before any step is built (`102efb2f`).
@@ -1217,6 +1565,27 @@ FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavSte
 		return ENavMoveResult::Ok;
 	}
 
+	// S1 dispatches the movement sink's slot 1 on the obstruction before any steering: the Troika
+	// sink `0x10298340` (the crosswalk arms, then the base door arm `0x1027dc10`), or the base sink
+	// itself on a base-only NPC. Handled -> the sink's result is the step's status (a door's -2
+	// reaches the failure tail: the 4.0 s stale mark, then `0x0c`).
+	// S1's own arms (`NavObstructionPreSink`) decide first and hand the step to the sink only where
+	// retail's reach it.
+	MoveSinkResult = ENavMoveResult::Ok;
+	if (Step.Blocker.IsSet())
+	{
+		ENavMoveResult PreSinkResult = ENavMoveResult::Ok;
+		if (NavObstructionPreSink(Step, NavStepDistClearUnits(Step), PreSinkResult))
+		{
+			return PreSinkResult;
+		}
+	}
+	if (FElysiumNpc* Troika = AsNpc(); Troika && Step.Blocker.IsSet() && Troika->MovementSinkObstructed(Step)) return MoveSinkResult;
+	if (AsNpc() == nullptr && Step.Blocker.IsSet() && NavMoveSinkDoorStep(Step))
+	{
+		return MoveSinkResult;
+	}
+
 	if (!Step.bGaveUp)
 	{
 		// The step walked (`MoveEnact` -> the motor, `motor+0x30` spent). An NPC named in the way
@@ -1257,10 +1626,26 @@ void FElysiumNpcBase::NavigatorMoveStep()
 	{
 		Interval = GMoveStepMaxInterval;
 	}
-	// `102effab`: `path+0x10 m_bPaused` -> return. No stop, no fail, `nav+0x1c` untouched.
+	// `102effab`: `path+0x10 m_bPaused` -> return. No stop, no fail, `nav+0x1c` untouched. Retail's
+	// body translates only inside `Move`, so a paused path stands still while `MotorUpdateYaw`
+	// (`0x102e1e20`, the tasks' facing -- `FACE_NEXT_NODE` under schedule `0x102`, the door wait's
+	// alternate AI via `0x102bf770` from slot 464) keeps turning it. NAMED MODERNIZATION: the
+	// port's body walks its leg on its own tick, so the arm parks it (`FElysiumNpc::NavParkBody`:
+	// the request stopped, the head leg kept; a turn-in-place still runs) and the first pass past
+	// the pause that may move (`m_bShouldMove`, the gate below) re-issues that leg
+	// (`NavUnparkBody`). A base-only NPC has no park and simply returns.
+	FElysiumNpc* const PauseTroika = AsNpc();
 	if (Navigator.IsPaused())                                                // 0x102ee2e0
 	{
+		if (PauseTroika != nullptr)
+		{
+			PauseTroika->NavParkBody();
+		}
 		return;
+	}
+	if (PauseTroika != nullptr && BaseScheduleHost.bShouldMove)
+	{
+		PauseTroika->NavUnparkBody();
 	}
 	// `102effc2`: NPC slot 525 `OverrideMove(interval)` true -> return. The base `0x1027da90` declines;
 	// the ManBat's flight (`0x1038b120`) is the species body that answers true.

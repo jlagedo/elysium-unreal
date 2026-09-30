@@ -326,9 +326,25 @@ bool FElysiumNpc::TaskTailNavSetGoal(const FTaskTailNavGoal& Goal, uint32 SetGoa
 
 bool FElysiumNpc::TaskTailNavFacingWaypoint(FVector& OutPositionUnits) const
 {
-	// SEAM for `0x102a9c60` / `0x102a9f20` / `0x102a9ee0` / `0x102a9f00`.
-	(void)OutPositionUnits;
-	return false;
+	// `TASK_FACE_NEXT_NODE`'s point (`0x102a5475..0x102a54af`): `0x102a9c60` the navigator's path
+	// (`nav+0x30`), `0x102a9f20` its current waypoint (`path+0x24`; NULL -> the task fails `0x35b9`),
+	// `0x102a9ee0` that waypoint's NEXT (`wp+0x30`), taken when non-NULL (`0x102a5499 JZ` keeps the
+	// current one otherwise), and `0x102a9f00` the waypoint's own position (`wp+0x00..+0x08`).
+	//
+	// The waypoints are the navigator head's (`PedestrianHeadWaypoint`): on a pedestrian route the
+	// head leg and the leg after it, else the one leg the body walks, which has no next. Under the
+	// splice's legs the next waypoint after a curb is the far curb or the goal, where retail's chain
+	// would name the next graph node (`NavLayPedestrianLegs`, the named modernization).
+	FDialogPedWaypoint Head;
+	if (!PedestrianHeadWaypoint(Head))                         // path+0x24 == NULL
+	{
+		return false;
+	}
+	const FVector PointCm = Head.bHasNext && PedestrianLegs.Num() > 1
+		? PedestrianLegs[1].DestCm                             // wp+0x30
+		: Head.DestCm;
+	OutPositionUnits = PointCm / ElysiumMove::U;
+	return true;
 }
 
 float FElysiumNpc::TaskTailAbsYaw() const

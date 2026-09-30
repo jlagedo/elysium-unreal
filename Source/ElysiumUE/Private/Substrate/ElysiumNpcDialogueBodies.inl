@@ -109,16 +109,12 @@ struct FDialogResponsePage
 // `{0x6664, CNPC_VCameraSecurity, m_hLinkedCamera, EHANDLE, Walked}`; `+0x6668` has no census row
 // and is named from what `0x10369e70` does with it.
 
-// --- The pedestrian crosswalk link (`+0x630c`, and the one word retail reads off it) --------------
-
-/** The navigation-link object at `+0x630c`, which the shape map records as ABSENT ("no
- *  navigation-link object exists in this runtime's motor seam"). This family's two bodies read
- *  exactly ONE word off it — `link+0x64`, the retail flags whose four bits `0x10`/`0x20`/`0x40`/
- *  `0x80` are the crosswalk signal's four phases — and write the pointer itself once, in
- *  `0x102a0b90`. **SEAM**: nothing in this runtime produces a crosswalk link, so the pair below is
- *  written only by `SetAtCrosswalkLink` and by a test driving the rule. */
-bool bCrosswalkLinkBound = false;       // +0x630c != NULL
-int32 CrosswalkLinkSignalFlags = 0;     // link +0x64
+// --- The pedestrian crosswalk link (`+0x630c`) ----------------------------------------------------
+//
+// `+0x630c m_pPedestrianLink` (a `CAI_Link*`) is `FElysiumNpc::PedestrianPair` (`ElysiumNpc.h`): the
+// link as a crosswalk pair index into the entity world's place set, `INDEX_NONE` for NULL. The one
+// word the two bodies below read off the link, `link+0x64`'s signal nibble, is the place set's
+// `IsCrosswalkRed(pair)` (0018 story 7, decision 3).
 
 // --- `CBaseEntity + 0x8c`, the cached use activator -----------------------------------------------
 
@@ -145,14 +141,6 @@ TArray<FString> DialogUiCalls;
  *  `"<opcode>:<byte>,<byte>,…"` so the ORDER and the payload are assertable. */
 TArray<FString> DialogUserMessages;
 
-/** `0x102f96e0` — given a waypoint's owning entity and a link id, the path node whose id matches.
- *  **SEAM**: this runtime stands no node graph; answers false and writes nothing, so
- *  `ResolvePedestrianPathNode` reaches its own no-node arm. `OutSignalFlags` is the node's `+0x64`.
- *  The request is RECORDED so a test can assert the seam is REACHED rather than only that the body
- *  refused. */
-mutable TArray<FString> CrosswalkNodeQueries;
-bool FindCrosswalkPathNode(int32 EntityIndex, int32 LinkId, int32& OutSignalFlags) const;
-
 // --- The bodies -----------------------------------------------------------------------------------
 
 /** `CDialog::message_send` (`0x100e58e0`, 716 bytes) — push one conversation turn at the recipient.
@@ -178,33 +166,37 @@ int32 DialogGotoLineForResponse(int32 ResponseIndex);
  *  `m_iCameraOverrideIdx` (`+0x1ec4`) must be strictly positive AND `+0x19b4` must resolve. */
 FElysiumEntity* GetActiveCameraEntity() const;
 
-/** The navigator waypoint `0x102a0bc0` is handed, as the four words it reads off it. Retail's
- *  argument is `navigator->CurWaypoint` (`FUN_102f0400` fetches it from `path+0x24`) and the offsets
- *  are the body's own: `+0x10` an entity INDEX (negative = none), `+0x28` a flag byte whose bit 2
- *  must be set, `+0x30` a hint record (NULL = none) and `hint+0x10` its link id. **SEAM**: this
- *  runtime's motor carries no waypoint, so nothing constructs one outside a test. */
+/** The navigator waypoint `0x102a0bc0` is handed, as the words it reads off it. Retail's argument is
+ *  `navigator->CurWaypoint` (`FUN_102f0400` / `0x10298340` fetch it from `path+0x24`), a
+ *  `AI_Waypoint_t`: `+0x00..+0x08` the position, `+0x10` its graph NODE id (-1 for a waypoint that
+ *  is no node: the goal, a detour), `+0x28` the flag word (`4` bits_WP_TO_NODE, `8` the goal,
+ *  `0x20` bits_WP_DONT_SIMPLIFY, which the pedestrian builder `0x102fcd00` puts on both curbs of a
+ *  crosswalk pair), `+0x30` the NEXT waypoint (NULL on the last) and `next+0x10` its node id
+ *  (corrected 2026-09-19: the 09-13 walk read `+0x10` as an entity index and `+0x30` as a hint).
+ *  The port builds one from the head of `PedestrianLegs` (`PedestrianHeadWaypoint`). */
 struct FDialogPedWaypoint
 {
-	int32 EntityIndex = INDEX_NONE;   // waypoint +0x10
-	uint8 Flags = 0;                  // waypoint +0x28 — bit 2 (`0x4`) is the gate
-	bool bHasHint = false;            // waypoint +0x30 != NULL
-	int32 HintLinkId = 0;             // hint +0x10
+	FVector DestCm = FVector::ZeroVector;   // waypoint +0x00..+0x08, centimetres
+	int32 NodeId = INDEX_NONE;              // waypoint +0x10
+	int32 Flags = 0;                        // waypoint +0x28 — bit 2 (`0x4`) is the gate
+	bool bHasNext = false;                  // waypoint +0x30 != NULL
+	int32 NextNodeId = INDEX_NONE;          // next waypoint +0x10
 };
 
-/** `0x102a0bc0` (178 bytes) — the navigator's "I have reached a crosswalk waypoint" hook. Retail is
- *  unnamed and 29c's target name is kept. */
+/** `0x102a0bc0` (178 bytes) — "must I wait at this curb": the waypoint's node and the next one's
+ *  name a crosswalk link whose signal is red. Called by the waypoint advance `0x102f0400` (answer
+ *  ignored) and the obstruction sink `0x10298340`. Retail is unnamed and 29c's target name is kept. */
 bool ResolvePedestrianPathNode(const FDialogPedWaypoint* Waypoint);
 
-/** `0x102a0b90` — `m_bfAINPCFlags |= AT_CROSSWALK (0x4); m_pCrosswalkLink = link;`. The two-line
- *  helper `ResolvePedestrianPathNode` ends on, spelled as a method so the write is assertable. */
-void SetAtCrosswalkLink(int32 SignalFlags);
+/** `0x102a0b90` — `m_bfAINPCFlags |= AT_CROSSWALK (0x4); m_pPedestrianLink (+0x630c) = link;`, the
+ *  link carried as its crosswalk pair (`PedestrianPair`). The one port of the helper: the Troika
+ *  family's second copy (`SetAtCrosswalk`, which read `+0x630c` as a node id) is deleted. */
+void SetAtCrosswalkLink(int32 Pair);
 
 /** `CAI_BaseNPCTroika::UpdatePedestrianInfo` (`0x102a0d20`, 313 bytes) — the per-think crosswalk
- *  rule. `RunAI` (slot 432, `0x1028fcc0`) is its ONE caller and is still story 29e's generated stub,
- *  so nothing in this runtime calls it yet. */
+ *  rule, from `RunAI` (slot 432, `0x1028fcc0`) before conditions are gathered. */
 void UpdatePedestrianInfo();
 
-/** `0x10 << (((int)CurTime >> 4) & 3)` — the crosswalk signal's phase mask, shared verbatim by
- *  `0x102a0bc0` and `0x102a0d20`. A 64-second cycle in four 16-second phases; the float-to-int
- *  truncation is retail's `__ftol`. */
-static int32 CrosswalkPhaseMask(double CurTime);
+// The pedestrian route's crosswalk legs, the obstruction sink and the link's save words (0018
+// story 7): the crosswalk lane's own declarations, with their bodies in `ElysiumNpcCrosswalk.cpp`.
+#include "Substrate/ElysiumNpcCrosswalk.inl"

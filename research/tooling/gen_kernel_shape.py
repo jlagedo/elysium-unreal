@@ -441,6 +441,10 @@ def _load_slot_map() -> None:
          "0x101aa790 (0019/5 step 6, the step-5 carried item); a `void*` beside it would be a second "
          "producer of the same answer"),
         (173, PORT, "FElysiumEntity::Use", "the `+use` door"),
+        (177, PORT, "FElysiumDoorBase::StartBlocked",
+         "`CBaseDoor::StartBlocked` 0x100f1340, the door's own body (0018/7): the activator's NPC "
+         "gets flags `|= 2` and `OnDoorBlocked`, the blocker's `|= 0x80` and hit-by-door 0x1027dfb0; "
+         "its dispatcher is unrecovered, so nothing calls it yet"),
         (193, PORT, "FElysiumEntity::EyePosition", "origin plus the view offset"),
         (202, PORT, "FElysiumEntity::SetOwnerEntity", "the owner handle's writer"),
         (259, PORT, "FElysiumNpc::HandleAnimEvent", "`CAI_BaseNPC::HandleAnimEvent` 0x10274e30"),

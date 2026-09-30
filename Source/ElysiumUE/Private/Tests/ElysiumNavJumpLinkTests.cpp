@@ -168,10 +168,81 @@ bool FElysiumNavJumpUnavailableTest::RunTest(const FString&)
 	return true;
 }
 
+namespace ElysiumNavJumpTests
+{
+/** What the bake recorded on one hull, summed over a level's jump-link actors. */
+struct FHullCounts
+{
+	int32 Entries = 0;
+	int32 JumpOnly = 0;
+	int32 Usable = 0;
+	int32 LegalForward = 0;
+	int32 LegalBack = 0;
+};
+
+/**
+ * Every baked jump link in `Level` is a RECORD and never a route (0018/7): retail's `0x102ff960`
+ * step 2 refuses every jump-only word because no NPC holds `bits_CAP_MOVE_JUMP`. So each actor
+ * must carry no simple link, no agent and a disabled smart link, keep both directions as data,
+ * and hold one verdict per used hull. Returns the per-hull sums for the caller to pin.
+ */
+TMap<int32, FHullCounts> CheckRecords(FAutomationTestBase& Test, ULevel* Level,
+	const TArray<int32>& UsedHulls, TSet<int32>& OutFound)
+{
+	TMap<int32, FHullCounts> Counts;
+	for (AActor* Actor : Level->Actors)
+	{
+		AElysiumNavJumpLink* Link = Cast<AElysiumNavJumpLink>(Actor);
+		if (!Link) continue;
+		Test.TestFalse(TEXT("no duplicate AIN jump actors"), OutFound.Contains(Link->SourceLinkIndex));
+		OutFound.Add(Link->SourceLinkIndex);
+		Test.TestTrue(TEXT("no simple link rides beside the record"),
+			Link->PointLinks.IsEmpty() && Link->SegmentLinks.IsEmpty());
+		Test.TestFalse(TEXT("the smart link is disabled"), Link->IsSmartLinkEnabled());
+		Test.TestEqual(TEXT("the smart link supports no agent"), Link->SupportedAgentBits(), 0);
+		Test.TestFalse(TEXT("nothing about the record is traversable"), Link->IsTraversable());
+		Test.TestTrue(TEXT("the pair stays bidirectional as data"), Link->bBidirectional);
+		FVector Start, End;
+		ENavLinkDirection::Type Direction;
+		Link->GetSmartLinkComp()->GetLinkData(Start, End, Direction);
+		Test.TestTrue(TEXT("the record keeps both directions and distinct endpoints"),
+			Direction == ENavLinkDirection::BothWays && !Start.Equals(End));
+		Test.TestEqual(TEXT("one verdict per used hull"), Link->HullVerdicts.Num(), UsedHulls.Num());
+		for (int32 Index = 0; Index < Link->HullVerdicts.Num(); ++Index)
+		{
+			const FElysiumNavJumpHullVerdict& Verdict = Link->HullVerdicts[Index];
+			Test.TestEqual(TEXT("verdicts follow UsedHullBits order"), Verdict.Hull,
+				UsedHulls.IsValidIndex(Index) ? UsedHulls[Index] : INDEX_NONE);
+			Test.TestFalse(TEXT("no NPC holds the jump capability"), Verdict.bCapabilityUsable);
+			FHullCounts& Row = Counts.FindOrAdd(Verdict.Hull);
+			++Row.Entries;
+			Row.JumpOnly += Verdict.bJumpOnly ? 1 : 0;
+			Row.Usable += Verdict.bCapabilityUsable ? 1 : 0;
+			Row.LegalForward += Verdict.bLegalForward ? 1 : 0;
+			Row.LegalBack += Verdict.bLegalBack ? 1 : 0;
+		}
+	}
+	return Counts;
+}
+
+void PinHull(FAutomationTestBase& Test, const TMap<int32, FHullCounts>& Counts, int32 Hull,
+	int32 Entries, int32 JumpOnly, int32 LegalForward, int32 LegalBack)
+{
+	const FHullCounts* Row = Counts.Find(Hull);
+	if (!Test.TestNotNull(*FString::Printf(TEXT("hull %d has verdicts"), Hull), Row)) return;
+	Test.TestEqual(*FString::Printf(TEXT("hull %d: a verdict on every record"), Hull), Row->Entries, Entries);
+	Test.TestEqual(*FString::Printf(TEXT("hull %d: jump-only records"), Hull), Row->JumpOnly, JumpOnly);
+	Test.TestEqual(*FString::Printf(TEXT("hull %d: usable by any NPC"), Hull), Row->Usable, 0);
+	Test.TestEqual(*FString::Printf(TEXT("hull %d: geometry-legal src->dst"), Hull), Row->LegalForward, LegalForward);
+	Test.TestEqual(*FString::Printf(TEXT("hull %d: geometry-legal dst->src"), Hull), Row->LegalBack, LegalBack);
+}
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavJumpBakedTutorialTest,
 	"Elysium.Content.NavJumpLink.Tutorial", ElysiumNavJumpTests::Flags)
 bool FElysiumNavJumpBakedTutorialTest::RunTest(const FString&)
 {
+	using namespace ElysiumNavJumpTests;
 	const FString Package = FElysiumContentPaths::BakedLevel(TEXT("sp_tutorial_1"));
 	UWorld* Baked = LoadObject<UWorld>(nullptr, *(Package + TEXT(".sp_tutorial_1")));
 	if (!TestNotNull(TEXT("tutorial baked level exists"), Baked)
@@ -194,18 +265,40 @@ bool FElysiumNavJumpBakedTutorialTest::RunTest(const FString&)
 		const FIntPoint* Pair = Expected.Find(Link->SourceLinkIndex);
 		TestTrue(TEXT("the baked connection names the decoded AIN endpoints"), Pair
 			&& Pair->X == Link->SourceNode && Pair->Y == Link->DestinationNode);
-		TestFalse(TEXT("no duplicate AIN jump actors"), Found.Contains(Link->SourceLinkIndex));
-		Found.Add(Link->SourceLinkIndex);
-		TestTrue(TEXT("baked link uses the native traversal callback path"),
-			Link->PointLinks.IsEmpty() && Link->bSmartLinkIsRelevant && Link->IsSmartLinkEnabled());
-		FVector Start, End;
-		ENavLinkDirection::Type Direction;
-		Link->GetSmartLinkComp()->GetLinkData(Start, End, Direction);
-		TestTrue(TEXT("connection retains both directions and distinct native endpoints"),
-			Direction == ENavLinkDirection::BothWays && !Start.Equals(End));
 	}
-	TestEqual(TEXT("every tutorial human AIN jump survives baking and reloading"),
-		Found.Num(), Expected.Num());
+	// UsedHullBits 0x80001: human (0) and rat (19), in that order.
+	const TMap<int32, FHullCounts> Counts = CheckRecords(*this, Baked->PersistentLevel, {0, 19}, Found);
+	TestEqual(TEXT("every tutorial human AIN jump is recorded once"), Found.Num(), Expected.Num());
+	// The graph holds 25 human and 36 rat jump-only links (`test_map_jump_links.py`); the records
+	// are the 25 human pairs, 17 of which are jump-only for the rat too. `IsJumpLegalGeometry`
+	// with slot 521's 80 / 250 / 160 passes 8 human and 5 rat of them each way. Of the rest, one
+	// pair per hull is refused src -> dst by the distance arm and dst -> src by the rise arm (80.1,
+	// tested first); every other pair is refused both ways by the distance arm (160.1). None of it
+	// routes: step 2 refuses all of them first.
+	PinHull(*this, Counts, 0, 25, 25, 8, 8);
+	PinHull(*this, Counts, 19, 25, 17, 5, 5);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavJumpBakedHubTest,
+	"Elysium.Content.NavJumpLink.Hub", ElysiumNavJumpTests::Flags)
+bool FElysiumNavJumpBakedHubTest::RunTest(const FString&)
+{
+	using namespace ElysiumNavJumpTests;
+	const FString Package = FElysiumContentPaths::BakedLevel(TEXT("sm_hub_1"));
+	UWorld* Baked = LoadObject<UWorld>(nullptr, *(Package + TEXT(".sm_hub_1")));
+	if (!TestNotNull(TEXT("hub baked level exists"), Baked)
+		|| !TestNotNull(TEXT("hub persistent level exists"), Baked->PersistentLevel.Get())) return false;
+	TSet<int32> Found;
+	const TMap<int32, FHullCounts> Counts = CheckRecords(*this, Baked->PersistentLevel, {0, 19}, Found);
+	TestEqual(TEXT("every hub human AIN jump is recorded once"), Found.Num(), 117);
+	// Link 731 (160 <-> 151), the patrol cop's NavMesh-only shortcut before 0018/7: retail walks
+	// s2 -> 151 -> s3 over links 691 and 1581 and never takes it. It stays as a disabled record.
+	TestTrue(TEXT("link 731 is recorded"), Found.Contains(731));
+	// Graph: 117 human, 103 rat jump-only links; the 117 records are jump-only for the rat on 68.
+	// Every refused direction here is the distance arm's (160.1).
+	PinHull(*this, Counts, 0, 117, 117, 22, 22);
+	PinHull(*this, Counts, 19, 117, 68, 13, 13);
 	return true;
 }
 

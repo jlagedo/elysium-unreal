@@ -2,20 +2,19 @@
 // moved from `ElysiumNpcSenses*.inl`. Included inside `class FElysiumNpcBase`
 // (`Substrate/ElysiumNpcBase.h`); the definitions are in `ElysiumNpcBaseSenses.cpp`.
 
-/** SEAM for `CAI_Navigator::MarkNodeUnreachable` (`0x102f1fa0`), which `OnDoorBlocked`
- *  (`0x1027de00`) calls with `5.0` or `20.0` seconds and the blocking door. It reaches the AI
- *  NETWORK — it looks the door's nav link up in the node graph and stamps `node+0x64 |= 1`,
- *  `node+0x68 = curtime + seconds`. This runtime has no node graph, so the call is COUNTED and
- *  marks nothing; the retail word it stands for is the node's own unreachable-until stamp. */
+/** Counts `OnDoorBlocked` (`0x1027de00`)'s calls of the stale-link mark `0x102f1fa0(nav, 5.0 or 20.0,
+ *  door)`: `link+0x64 |= 1`, `link+0x68 = curtime + seconds`, `link+0 = door` on the link the
+ *  current path stands on. Since 0018/7 the mark is real (`NavMarkLinkStale`: the door smart link the
+ *  body is held at, the words on its door, `FElysiumDoorLinkWords`); the count stays for the suites. */
 int32 NavigatorUnreachableMarks = 0;
 
 int32 SquadFocusWrites = 0;
 
 int32 DoorNextTryWrites = 0;
 
-/** SEAM for `0x102ee6a0`, the guard retail puts in front of that call: "the navigator has a
- *  network AND that network has a node list". Answers false — there is no network — so retail's
- *  own refusal arm is the one taken and `NavigatorUnreachableMarks` never moves. */
+/** `0x102ee6a0`, the guard retail puts in front of that call: `CAI_Navigator::IsGoalActive`
+ *  (`nav+0x30` is the PATH, `path+0x24` its head), not "a network with nodes" as first read
+ *  (0018/7 correction). Answers `NavIsGoalActive()`. The name is kept for its callers. */
 bool NavigatorHasNodeGraph() const;
 
 /** `GetSquadFocus` / `SetSquadFocus` (`0x103166b0` / `0x10316660`), squad `+0x70` (the focus
@@ -27,12 +26,11 @@ const FElysiumEntity* SquadFocus() const;
 
 void SetSquadFocus(const FElysiumEntity* Focus);
 
-/** `CBaseDoor+0x644` and `+0x640`, the two words `OnDoorBlocked` reads and writes on the DOOR.
- *  `+0x644` is a flag word tested `& 0x10` (the whole retry is skipped) and `& 0x40` (the retry
- *  waits 5 s rather than 20 s); `+0x640` is a float "do not try me again before" stamp that
- *  `0x100f0e30` MAX-writes. **SEAM**: `FElysiumEntity` carries neither word and no corpus body in
- *  layers 0–9 names them, so the flags answer 0 — retail's own "no flags" door, which takes the
- *  20-second arm — and the stamp is counted. Their retail names are **unrecovered**. */
+/** `CBaseDoor+0x644` `m_bfNpcFailedFlags` and `+0x640` `m_flNpcFailedTimer` (the datamap names;
+ *  `FElysiumDoorBase::NpcFailedFlags` / `NpcFailedTimer` since 0018/7), the two words `OnDoorBlocked`
+ *  reads and writes on the DOOR. `+0x644` is tested `& 0x10` (the whole retry is skipped) and
+ *  `& 0x40` (the retry waits 5 s rather than 20 s); `+0x640` is the "do not try me again before"
+ *  stamp `0x100f0e30` MAX-writes. A non-door answers 0 and takes no write. The stamp is counted too. */
 static uint32 DoorBlockFlags(const FElysiumEntity& Door);
 
 void SetDoorNextTryTime(FElysiumEntity& Door, double At);

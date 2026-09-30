@@ -141,4 +141,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
 	static FString NavAreaAt(UWorld* World, const FString& AgentName, const FVector& PointCm,
 		const FVector& ExtentCm);
+
+	/**
+	 * Slot 521's jump geometry for each start/end pair, in this world's centimetres -- the bake's
+	 * per-hull, per-direction verdict on an AIN jump link (0018/7).
+	 *
+	 * The body is the port's own `FElysiumNpcBase::IsJumpLegalGeometry` (`FUN_10280790`) with
+	 * `CAI_BaseNPC::IsJumpLegal` `0x10280880`'s 80 / 250 / 160, exactly what
+	 * `FElysiumNpcBase::IsJumpLegal` forwards to; slot
+	 * 521's only other fill is the graph builder's `CAI_TestHull` (0018/3's bake), so the hull decides
+	 * the endpoints (the caller passes each hull's own positions) and not the thresholds. The link
+	 * predicate `0x102ff960` passes (from node, far node, far node) (`102ffa75`..`102ffaaf`), so the
+	 * apex IS the end point. These verdicts are moot for routing -- step 2 refuses every jump-only
+	 * word first, because no NPC holds `bits_CAP_MOVE_JUMP` -- and are recorded, not used.
+	 *
+	 * Batched like `UElysiumNavVerifyLibrary`: one call per map. Empty when the arrays disagree.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Nav")
+	static TArray<bool> JumpLinkVerdicts(const TArray<FVector>& StartsCm,
+		const TArray<FVector>& EndsCm);
 };

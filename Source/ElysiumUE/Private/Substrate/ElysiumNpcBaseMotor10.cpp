@@ -58,10 +58,11 @@ bool FElysiumNpcBase::MotorMoveTraceSweep(int32 Kind, const FVector& StartUnits,
 	// § "MoveLimit"): 0 ground `0x102e5d80`, 1 jump `0x102e6290`, 2 fly `0x102e6090`, 3 climb
 	// `0x102e6be0`. No port caller passes anything but ground.
 	//
-	// Jump (1, `0x102e6290`): the floor drops, `IsJumpLegal` and the ten-segment arc walk are what
-	// the navigator's jump-link traversal runs (0018/5: `AElysiumNpcBody::BeginNavigationJump`'s
-	// capsule-arc probe before `SetNavType(Jump)`), so a jump leg is priced on that path, not here;
-	// this arm keeps the initialised (admitting) record. Legality per direction is 0018/6 row 13's.
+	// Jump (1, `0x102e6290`): unreachable, and deliberately so (0018/7, owner's decision 1): retail's
+	// link predicate `0x102ff960` ANDs slot 513 `CapabilitiesGet` with the link's per-hull word and
+	// only exactly 2 reaches `IsJumpLegal` (slot 521); no shipped NPC holds capability bit 2, so no
+	// jump link is ever planned and no jump leg is ever walked. The baked jump links are records
+	// with no agent (`AElysiumNavJumpLink`); this arm keeps the initialised (admitting) record.
 	//
 	// Fly (2, `0x102e6090`): no flyer moves in the port yet; the admitting record stands until
 	// 0018 row 18 (story 0018/12, flight) builds the fly probe.

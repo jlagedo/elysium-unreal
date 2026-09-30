@@ -2814,8 +2814,8 @@ namespace
 		{ 176, TEXT(""), TEXT("EndTouch"), TEXT("void EndTouch(CBaseEntity*)"), TEXT("EndTouch"),
 			ETier::Sdk, TEXT("0x100a4c20"), 0, TEXT("29c"), false, TEXT(""), TEXT("") },
 		{ 177, TEXT(""), TEXT("StartBlocked"), TEXT("void StartBlocked(CBaseEntity*)"),
-			TEXT("StartBlocked"), ETier::Sdk, TEXT("0x10027080"), 0, TEXT("29c"), false, TEXT(""),
-			TEXT("") },
+			TEXT("FElysiumDoorBase::StartBlocked"), ETier::Sdk, TEXT("0x10027080"), 0, TEXT("29c"),
+			true, TEXT(""), TEXT("") },
 		{ 178, TEXT(""), TEXT("Blocked"), TEXT("void Blocked(CBaseEntity*)"), TEXT("Blocked"),
 			ETier::Sdk, TEXT("0x100a4d40"), 0, TEXT("29c"), false, TEXT(""), TEXT("") },
 		{ 179, TEXT(""), TEXT("EndBlocked"), TEXT("void EndBlocked()"), TEXT("EndBlocked"),
@@ -8934,7 +8934,7 @@ const FElysiumNpcShapeCensus& Census()
 		/* Slots            */ 666,
 		/* TroikaSlots      */ 617,
 		/* BranchSlots      */ 49,
-		/* PortedSlots      */ 35,
+		/* PortedSlots      */ 36,
 		/* UnsettledSlots   */ 7,
 		/* Classes          */ 77,
 		/* Classnames       */ 74,
@@ -8943,7 +8943,7 @@ const FElysiumNpcShapeCensus& Census()
 		/* DefaultSlots     */ 82,
 		/* VerdictedOverrides */ 2302,
 		/* RegistryValues   */ 218,
-		/* RowDigest        */ 0x4f9c73aa505742f3ull,
+		/* RowDigest        */ 0x795c4c52f1c87744ull,
 	};
 	return GCensus;
 }

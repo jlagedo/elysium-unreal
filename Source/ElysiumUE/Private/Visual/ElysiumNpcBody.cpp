@@ -24,6 +24,7 @@
 #include "Substrate/ElysiumNpcGait.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
+#include "Visual/ElysiumNavDoorLink.h"
 #if ENABLE_VISUAL_LOG
 #include "Substrate/ElysiumNpc.h"    // the snapshot's DebugString()
 #include "VisualLogger/VisualLoggerTypes.h"
@@ -684,6 +685,9 @@ bool AElysiumNpcBody::MoveTo(const FElysiumNpcMoveRequest& Request)
 	MoveReq.SetReachTestIncludesAgentRadius(false);   // the agent's radius is never added to the reach
 	MoveReq.SetReachTestIncludesGoalRadius(false);
 	MoveReq.SetCanStrafe(false);
+	// Jump links: no `AElysiumNavJumpLink` carries an agent or is enabled (0018/7) -- retail's
+	// `0x102ff960` step 2 ANDs `CapabilitiesGet` (slot 513, +0x5cec) with the link word and no NPC
+	// holds bit 2, so no route here may cross a jump. Nothing to filter.
 	MoveReq.SetNavigationFilter(Follower.bUsePedestrianFilter
 		? TSubclassOf<UNavigationQueryFilter>(UElysiumNavQueryFilter_Pedestrian::StaticClass())
 		: AI->GetDefaultNavigationFilterClass());
@@ -822,6 +826,92 @@ void AElysiumNpcBody::BeginMoveFacts(const FElysiumNpcMoveRequest& Request)
 	RequestGoalSnapDzCm = 0.0f;
 	RequestedFeet = Request.DestinationCm;
 	RequestedAcceptanceCm = FMath::Max(0.0f, Request.AcceptanceToleranceCm);
+	// A new request opens a new path: no door link held, none crossed yet.
+	ForgetDoorLinkHold();
+	CrossedDoorLinks.Reset();
+}
+
+void AElysiumNpcBody::HoldAtDoorLink(AElysiumNavDoorLink* Link, const FElysiumEntityHandle& Door)
+{
+	// The follower is inside the custom link (`StartUsingCustomLink` made it a custom move), so it
+	// does not steer this body until `FinishUsingCustomLink`; the crowd agent waits at the link's
+	// start. That wait IS the hold -- no `PauseFollowing` on top, which would re-seat the crowd
+	// corridor on resume.
+	HeldDoorLink = Link;
+	HeldDoorEntity = Door;
+	HeldDoorPointCm = FeetLocation();
+	CrossedDoorLinks.AddUnique(Link);
+}
+
+void AElysiumNpcBody::NoteDoorLinkCrossed(AElysiumNavDoorLink* Link)
+{
+	CrossedDoorLinks.AddUnique(Link);
+}
+
+void AElysiumNpcBody::ReleaseDoorLinkHold(AElysiumNavDoorLink* Link)
+{
+	if (Link == nullptr || HeldDoorLink.Get() != Link)
+	{
+		return;
+	}
+	HeldDoorLink.Reset();
+	HeldDoorEntity = FElysiumEntityHandle::Invalid();
+	AAIController* AI = Cast<AAIController>(GetController());
+	UPathFollowingComponent* Following = AI ? AI->GetPathFollowingComponent() : nullptr;
+	if (Following != nullptr)
+	{
+		// `UCrowdFollowingComponent::FinishUsingCustomLink` puts the crowd agent back on the link
+		// (`setAgentBackOnLink`), which walks it across the doorway.
+		Following->FinishUsingCustomLink(Link->GetSmartLinkComp());
+	}
+}
+
+void AElysiumNpcBody::ForgetDoorLinkHold()
+{
+	if (AElysiumNavDoorLink* Link = HeldDoorLink.Get())
+	{
+		Link->ForgetHeldBody(this);
+	}
+	HeldDoorLink.Reset();
+	HeldDoorEntity = FElysiumEntityHandle::Invalid();
+}
+
+void AElysiumNpcBody::FindUpcomingDoorLink(const FNavigationPath& Path, FElysiumNpcMoveFacts& Out) const
+{
+	const FNavMeshPath* MeshPath = Path.CastPath<FNavMeshPath>();
+	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	AElysiumMapActor* Map = OwningMap.Get();
+	FElysiumEntityWorld* EntityWorld = Map != nullptr ? Map->GetEntityWorld() : nullptr;
+	if (MeshPath == nullptr || NavSys == nullptr || EntityWorld == nullptr)
+	{
+		return;
+	}
+	const FVector Feet = FeetLocation();
+	// The corridor's custom links, in path order; the first door link not yet crossed is ahead.
+	for (const FNavLinkId LinkId : MeshPath->CustomNavLinkIds)
+	{
+		const UObject* LinkObject = Cast<UObject>(NavSys->GetCustomLink(LinkId));
+		const UActorComponent* LinkComponent = Cast<UActorComponent>(LinkObject);
+		AElysiumNavDoorLink* Link = LinkComponent != nullptr ? Cast<AElysiumNavDoorLink>(LinkComponent->GetOwner()) : nullptr;
+		if (Link == nullptr || CrossedDoorLinks.Contains(Link))
+		{
+			continue;
+		}
+		// The link's first door names it (the look-ahead's ray decides which leaf it meets).
+		const FElysiumEntity* Door = Link->PrimaryDoor(Map);
+		if (Door == nullptr)
+		{
+			continue;
+		}
+		// The far end: the link is walked either way, so the endpoint farther from the feet.
+		const FVector Start = Link->GetSmartLinkComp()->GetStartPoint();
+		const FVector End = Link->GetSmartLinkComp()->GetEndPoint();
+		const FVector Far = FVector::DistSquared(Feet, Start) > FVector::DistSquared(Feet, End) ? Start : End;
+		Out.UpcomingDoorLinkEntity = Door->Handle;
+		Out.UpcomingDoorLinkEndCm = Far;
+		Out.UpcomingDoorLinkDistanceCm = static_cast<float>(FVector::Dist(Feet, Far));
+		return;
+	}
 }
 
 void AElysiumNpcBody::EndMoveIssue(FAIRequestID RequestID)
@@ -1033,6 +1123,8 @@ void AElysiumNpcBody::SetHullSize(const FVector& MinsCm, const FVector& MaxsCm)
 void AElysiumNpcBody::Stop()
 {
 	ResetNavigationJump();
+	// The follower's abort below ends the custom link itself; the link only forgets this body.
+	ForgetDoorLinkHold();
 	NavigationType = EElysiumNpcNavType::Ground;
 	bNavigationJumpFailed = false;
 	// A launch ends here too. Freeze, teleport and the disable path all funnel through
@@ -1419,6 +1511,13 @@ bool AElysiumNpcBody::SampleMoveFacts(FElysiumNpcMoveFacts& Out) const
 			Out.NextCornerCm = Points[NextIndex].Location;
 			Out.bCurrentCornerIsLast = NextIndex == Points.Num() - 1;
 		}
+		// 0018/7: the door smart links -- the one holding this body, and the next one ahead.
+		if (HeldDoorLink.IsValid() && HeldDoorEntity.IsSet())
+		{
+			Out.DoorLinkEntity = HeldDoorEntity;
+			Out.DoorLinkPointCm = HeldDoorPointCm;
+		}
+		FindUpcomingDoorLink(*Path, Out);
 	}
 	return true;
 }

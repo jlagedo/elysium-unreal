@@ -205,17 +205,19 @@ def place_nav_areas(entry, actors):
         one that reaches a link. Cost 1: it is not cheaper ground, it is ground story 5's
         pedestrian query filter prefers, and marking it now is what lets that story be a filter
         change rather than a re-bake.
-      * a null area over every door NO graph link runs through. Retail's graph builds through a
-        standing door (the build mask is the one without `MOVEABLE`) while every run-time probe
-        finds it solid, so a door with a link is one NPCs use and a door without one is a wall.
-        The doors that DO carry a link are left alone: story 7 gives them their cut and their
-        smart link together, so no commit in between turns a door NPCs use into a wall.
+      * a null area over EVERY door (0018/7). Retail's graph builds through a standing door (the
+        build mask is the one without `MOVEABLE`) while every run-time probe finds it solid, so a
+        door with a link is one NPCs use and a door without one is a wall. A door WITH a link is
+        cut too -- the strip under its closed leaf -- and `bake_nav_door_links` lays its smart link
+        across the cut for exactly the agents whose hulls cross it: the cut is per mesh, the link
+        per agent, which is what closes `partialByAgent`. Both land in the same bake, so no level
+        ever stands with a used door cut and no link over it.
 
     Placed before the build, because an area mark only reaches tiles that are rasterised after it.
     """
     areas = entry.get("navAreas") or []
     doors = entry.get("navDoors") or {}
-    cut_rows = [row for row in doors.get("rows", []) if not row.get("traversable")]
+    cut_rows = list(doors.get("rows", []))
     if not areas and not cut_rows:
         if doors.get("skipped"):
             log("%s: no door answer (%s); no door is cut" % (entry["map"], doors["skipped"]))
@@ -250,7 +252,7 @@ def place_nav_areas(entry, actors):
                                      door_points, door_sizes):
         placed += len(door_sizes)
 
-    log("%s: %d nav-area convex(es) -- roadway %d, doors cut %d of %d (%d carry a link)"
+    log("%s: %d nav-area convex(es) -- roadway %d, doors cut %d of %d (%d of them under a smart link)"
         % (entry["map"], placed, sum(len(r["hulls"]) for r in areas), len(cut_rows),
            doors.get("doors", 0), doors.get("traversable", 0)))
     return placed

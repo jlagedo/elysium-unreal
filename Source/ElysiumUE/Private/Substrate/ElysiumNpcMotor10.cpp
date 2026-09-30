@@ -43,6 +43,7 @@
 
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcMotor10Shared.h"
+#include "Substrate/ElysiumMover.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -86,39 +87,50 @@ namespace
 
 int32 FElysiumNpc::RetailDoorToggleState(const FElysiumEntity& Door) const
 {
-	// **SEAM** for `door->+0x4f8 m_toggle_state` on an arbitrary door. This runtime's doors are
-	// `FElysiumMover` and carry their own phase rather than Source's four-state toggle, so `0`
-	// (`TS_AT_TOP` in retail's numbering, the rest state) is what a mover at rest answers.
-	(void)Door;
-	return GMotor10DoorToggleAtTop;
+	// `door->+0x4f8 m_toggle_state`: `FElysiumDoorBase::EToggleState` carries retail's exact
+	// numbering (0 AT_TOP, 1 AT_BOTTOM, 2 GOING_UP, 3 GOING_DOWN). A non-door answers AT_TOP, the
+	// rest state arm 7 gives up quietly on (retail never hands slot 531 a non-door).
+	const FElysiumDoorBase* DoorBase = const_cast<FElysiumEntity&>(Door).AsDoorBase();
+	return DoorBase != nullptr ? static_cast<int32>(DoorBase->State()) : GMotor10DoorToggleAtTop;
 }
 
 void FElysiumNpc::ClearDoorBlockFlags(FElysiumEntity& Door)
 {
-	// `0x100f0e70` — `door->+0x644 = 0`, eleven bytes and nothing else.
+	// `0x100f0e70` — `door->+0x644 = 0`, eleven bytes and nothing else. The write lands on the
+	// door (`FElysiumDoorBase::ClearNpcFailedFlags`); the trace row stays for the suites that
+	// assert the call order.
 	FDoorBlockWrite Write;
 	Write.Door = Door.Handle;
 	Write.Bits = 0;
 	Write.bClear = true;
 	DoorBlockWrites.Add(Write);
+	if (FElysiumDoorBase* DoorBase = Door.AsDoorBase())
+	{
+		DoorBase->ClearNpcFailedFlags();
+	}
 }
 
 void FElysiumNpc::AddDoorBlockFlags(FElysiumEntity& Door, uint32 Bits)
 {
-	// `0x100f0e90` — `door->+0x644 |= param_1`.
+	// `0x100f0e90` — `door->+0x644 |= param_1` (`FElysiumDoorBase::AddNpcFailedFlags`), traced.
 	FDoorBlockWrite Write;
 	Write.Door = Door.Handle;
 	Write.Bits = Bits;
 	Write.bClear = false;
 	DoorBlockWrites.Add(Write);
+	if (FElysiumDoorBase* DoorBase = Door.AsDoorBase())
+	{
+		DoorBase->AddNpcFailedFlags(Bits);
+	}
 }
 
 double FElysiumNpc::DoorNextTryTime(const FElysiumEntity& Door) const
 {
-	// **SEAM** for `door->+0x640`. Family Senses stands the WRITER (`SetDoorNextTryTime`) and
-	// records that `FElysiumEntity` carries no such word; `0.0` is never above `curtime`.
-	(void)Door;
-	return 0.0;
+	// `door->+0x640` (`FElysiumDoorBase::NpcFailedTimer`): MAX-written by `0x100f0e30` (family
+	// Senses' `SetDoorNextTryTime`), zeroed by `DoorHitTop`. A non-door answers 0.0, never above
+	// `curtime`.
+	const FElysiumDoorBase* DoorBase = const_cast<FElysiumEntity&>(Door).AsDoorBase();
+	return DoorBase != nullptr ? DoorBase->NpcFailedTimer : 0.0;
 }
 
 bool FElysiumNpc::CanOpenDoorNow(FElysiumEntity* Door)
@@ -149,24 +161,105 @@ bool FElysiumNpc::CanOpenDoorNow(FElysiumEntity* Door)
 bool FElysiumNpc::BuildLocalRouteThroughDoor(const FVector& FromUnits, const FVector& ToUnits,
 	int32 RouteFlags)
 {
-	// **SEAM** for `CAI_Pathfinder::BuildLocalRoute` (`0x10304130`, VProf scope at `0x10611514`),
-	// called as `(pathfinder, GetAbsOrigin(), &navPoint, 0, 0x30, -1, 1, 0.0, 0)`. Family Motor's
-	// standing fact: no pathfinder and no node graph. Answering "no waypoint" is retail's own
-	// NOT-FOUND arm, which is the one that reaches the door-type split below.
+	// `CAI_Pathfinder::BuildLocalRoute` (`0x10304130`, VProf scope at `0x10611514`), called as
+	// `(pathfinder, GetAbsOrigin(), &standPos, 0, 0x30, -1, 1, 0.0, 0)` -- the goal is
+	// `GetNPCOpenData`'s `StandPos` (findings § 1), the end flags `0x30` (`bits_WP_TO_DOOR |
+	// bits_WP_DONT_SIMPLIFY`, which `SpliceDoorWaypoint` stamps on the waypoint).
+	//
+	// NAMED MODERNIZATION (0018/7): the NavMesh route stands for the local route. The body's own
+	// agent is asked for a complete route from where it stands to the stand point
+	// (`IElysiumNpcMotor::QueryRoute`, the default filter -- the local route prices nothing); a
+	// route found is retail's FOUND arm, and no route (or no mesh to ask) its NOT-FOUND arm.
+	// `FromUnits` is the body's own origin, which is where the query starts.
 	(void)FromUnits;
-	(void)ToUnits;
 	(void)RouteFlags;
 	++Motor10Seams.BuildLocalRouteAsks;
-	return false;
+	if (Motor == nullptr)
+	{
+		return false;
+	}
+	FElysiumNpcRouteQuery Query;
+	Query.DestCm = FVector(ToUnits.X * ElysiumMove::U, -ToUnits.Y * ElysiumMove::U, ToUnits.Z * ElysiumMove::U);
+	FElysiumNpcRouteAnswer Answer;
+	return Motor->QueryRoute(Query, Answer) && Answer.bReachable;
 }
 
 bool FElysiumNpc::SplicePathWaypoint(int32 Waypoint)
 {
-	// **SEAM** for `thunk_FUN_10319f30(navigator->+0x30 + 0x24, waypoint)`. Unreachable while the
-	// search above answers nothing; declared so the arm has a real call to make.
+	// The index form the generated signature carried. The splice slot 531 makes is
+	// `SpliceDoorWaypoint` (the waypoint's position and door, which an index cannot carry); this
+	// form is kept, counted and answering false, for the kernel suite that pins it.
 	(void)Waypoint;
 	++Motor10Seams.SplicePathAsks;
 	return false;
+}
+
+bool FElysiumNpc::SpliceDoorWaypoint(const FVector& StandPosCm, const FElysiumEntity& Door)
+{
+	// `0x10319f30(path+0x24 slot, newRoute)`: `0x1031a0e0(newRoute, oldHead)` walks to the new
+	// route's last waypoint, clears its goal bit (8) and links the old chain after it (a same-node
+	// merge needs a node; the door waypoint's `wp+0x10` is -1, so it never merges); then the new
+	// route is the head (`0x10319fe0`). The local route to a stand point is the one waypoint.
+	++Motor10Seams.SplicePathAsks;
+	constexpr int32 DoorWaypointFlags = 0x30;                                // WP_TO_DOOR | DONT_SIMPLIFY
+	constexpr int32 GoalWaypointFlag = 0x8;
+	TArray<FPedestrianLeg> Chain;
+	FPedestrianLeg DoorLeg;
+	DoorLeg.DestCm = StandPosCm;
+	DoorLeg.Flags = DoorWaypointFlags;
+	DoorLeg.Door = Door.Handle;                                              // wp+0x24
+	Chain.Add(DoorLeg);
+	if (PedestrianLegs.Num() > 0)
+	{
+		Chain.Append(PedestrianLegs);
+	}
+	else if (Navigator.bHasHeadWaypoint)
+	{
+		// A route with no leg list: its one head is the leg the body walks.
+		FPedestrianLeg Head;
+		Head.DestCm = Navigator.bHeadLegRequestSet ? Navigator.HeadLegRequest.DestinationCm : Navigator.GetGoalPos();
+		Head.Flags = Navigator.bHeadIsGoal ? GoalWaypointFlag : 0;
+		Chain.Add(Head);
+	}
+	PedestrianLegs = MoveTemp(Chain);
+	Navigator.bHasHeadWaypoint = true;
+	Navigator.bHeadIsGoal = PedestrianLegs.Num() == 1;
+	// The leg to the stand point, with the route's own request words re-aimed. A refused leg leaves
+	// the head standing with no request; the next move step reads it as the body giving up.
+	if (Navigator.bHeadLegRequestSet)
+	{
+		FElysiumNpcMoveRequest Leg = Navigator.HeadLegRequest;
+		Leg.DestinationCm = StandPosCm;
+		bMoveIssued = NavIssueLeg(Leg);
+	}
+	return true;
+}
+
+void FElysiumNpc::NavAdvanceDoorWaypoint()
+{
+	// `0x102f0400`, after `0x102a0bc0`: `if (wp+0x28 & 0x10)`.
+	constexpr int32 DoorWaypointFlag = 0x10;
+	if (PedestrianLegs.Num() == 0 || (PedestrianLegs[0].Flags & DoorWaypointFlag) == 0)
+	{
+		return;
+	}
+	FElysiumEntity* const DoorEntity = World != nullptr ? World->Resolve(PedestrianLegs[0].Door) : nullptr;
+	if (DoorEntity == nullptr)
+	{
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s trying to open a door that has been removed"),
+			*DebugString());                                                 // 0x10610080 DevMsg
+		return;
+	}
+	FElysiumDoorBase* const Door = DoorEntity->AsDoorBase();                 // +0xa4
+	if (Door == nullptr)
+	{
+		return;
+	}
+	if (CanOpenDoorNow(DoorEntity)                                           // 0x1027f550
+		&& Door->State() == FElysiumDoorBase::EToggleState::AtBottom)        // +0x4f8 == 1
+	{
+		EnterAlternateAi();                                                  // 0x10298800
+	}
 }
 
 bool FElysiumNpc::OnObstructingDoor(void* MoveGoalBlock, FElysiumEntity* Door, float DistClear,
@@ -276,13 +369,15 @@ bool FElysiumNpc::OnObstructingDoor(void* MoveGoalBlock, FElysiumEntity* Door, f
 	}
 
 	// Arm 6: ask the door where an NPC should stand to open it — `door->slot 246 (+0x3d8)(this,
-	// &point, door->+0x4f8 == 2)`. Family Conditions stands that call as `OpeningDoorFacingPoint`
-	// and it is called rather than seamed a second way. A refusal (`iStack_10 == -1`) writes the
-	// RESULT pointer — **not** the move goal, which is what the decompiler's `*param_1 = 0` claims
-	// and what the listing at `10298725` (`MOV EDX,[ESP+0x3c]`, i.e. argument 4) settles.
+	// &data, door->+0x4f8 == 2)` (`FElysiumDoorBase::GetNPCOpenData`, the whole struct). A sliding
+	// door (`0x100f0ef0`) always answers -1. A refusal (`data.Activity == -1`) writes the RESULT
+	// pointer — **not** the move goal, which is what the decompiler's `*param_1 = 0` claims and what
+	// the listing at `10298725` (`MOV EDX,[ESP+0x3c]`, i.e. argument 4) settles.
 	const bool bWait = RetailDoorToggleState(*Door) == GMotor10DoorToggleGoingUp;
-	FVector NavPointCm = FVector::ZeroVector;
-	if (!OpeningDoorFacingPoint(*Door, bWait, NavPointCm))
+	const FElysiumDoorBase* DoorBase = Door->AsDoorBase();
+	const FElysiumDoorNpcOpenData OpenData = DoorBase != nullptr
+		? DoorBase->GetNPCOpenData(this, bWait) : FElysiumDoorNpcOpenData();
+	if (OpenData.Activity == INDEX_NONE)
 	{
 		if (OutResult != nullptr)
 		{
@@ -292,17 +387,17 @@ bool FElysiumNpc::OnObstructingDoor(void* MoveGoalBlock, FElysiumEntity* Door, f
 		return true;
 	}
 
-	// Arm 7: the pathfinder looks for a waypoint from this body's origin (slot 217) to that point,
-	// with flags `0x30`, hull `-1`, `1`, `0.0` and `0`.
+	// Arm 7: the pathfinder looks for a waypoint from this body's origin (slot 217) to the open
+	// data's `StandPos` (`1029864c`), with flags `0x30`, hull `-1`, `1`, `0.0` and `0`.
 	const FVector OriginUnits = NpcKernelMotor10Shared::Motor10SourceOf(Origin);
-	if (BuildLocalRouteThroughDoor(OriginUnits, NpcKernelMotor10Shared::Motor10SourceOf(NavPointCm), GMotor10DoorRouteFlags))
+	if (BuildLocalRouteThroughDoor(OriginUnits, NpcKernelMotor10Shared::Motor10SourceOf(OpenData.StandPosCm), GMotor10DoorRouteFlags))
 	{
 		// FOUND: stamp the door handle into `waypoint+0x24` and splice it into the navigator's path
-		// at `navigator->+0x30 + 0x24`.
+		// at `navigator->+0x30 + 0x24` (`102986da`). Retail's splice answers 1 always; a failed one
+		// would fall straight out with FALSE and no further write.
 		++BuildLocalRouteWaypoints;
-		if (!SplicePathWaypoint(BuildLocalRouteWaypoints))
+		if (!SpliceDoorWaypoint(OpenData.StandPosCm, *Door))
 		{
-			// A FAILED splice falls straight out with FALSE and no further write.
 			return false;
 		}
 		OpeningDoor = Door->Handle;

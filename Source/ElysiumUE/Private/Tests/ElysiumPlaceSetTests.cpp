@@ -313,7 +313,7 @@ bool FElysiumPlaceSetAuthorJsonTest::RunTest(const FString&)
 			 {"index":0,"type":2,"flags":0,"origin":[1,2,3],"yaw":-90,"zOffsets":[%s],"wcId":7,"hint":12},
 			 {"index":1,"type":4,"flags":8,"origin":[4,5,6],"yaw":45,"zOffsets":[%s],"wcId":-1,"hint":-1}],
 			"pairing":{"nodeRows":3,"outOfRange":[{"bspIndex":40,"counter":2}],"standalone":[5,6]},
-			"crosswalkPairs":[[0,1]],
+			"crosswalkPairs":[[0,1,1]],
 			"wanderCaps":[{"hull":0,"capUnits":2942.5,"fromHuman":false},{"hull":7,"capUnits":2942.5,"fromHuman":true}]})JSON"),
 			NumNodes, *Offsets, SecondOffsets);
 	};

@@ -50,14 +50,18 @@ public:
 	// words (`BeginMapSpawn` does).
 	void Adopt(const UElysiumMapPlaces& Asset);
 	// The same from bare rows (tests, and `Adopt`'s own body). A row's network index is its position.
+	// `InCrosswalkMotions` is parallel to `InCrosswalkPairs` (each pair's hull-0 motion word); a pair
+	// past its end takes 0, a word no walking hull can use.
 	void AdoptRows(TArray<FElysiumPlaceRow> InRows, int32 InUsedHullBits = 0,
-		TArray<FElysiumPlaceWanderCap> InWanderCaps = {}, TArray<FIntPoint> InCrosswalkPairs = {});
+		TArray<FElysiumPlaceWanderCap> InWanderCaps = {}, TArray<FIntPoint> InCrosswalkPairs = {},
+		TArray<int32> InCrosswalkMotions = {});
 	// True once a baked asset (or a test's rows) has been adopted.
 	bool IsAdopted() const { return bAdopted; }
 	const FString& MapName() const { return AdoptedMapName; }
 
-	// `0x102f6690` at `CWorld::Precache`: a fresh network for this map load. The counter back to 0
-	// and every node's run-time words to their ctor values (`NodeMissCounter` is left alone).
+	// `0x102f6690` at `CWorld::Precache`: a fresh network for this map load. The counter back to 0,
+	// every node's run-time words to their ctor values and every crosswalk pair green
+	// (`NodeMissCounter` is left alone).
 	void BeginMapSpawn();
 
 	// --- The nodes ------------------------------------------------------------------------------
@@ -139,8 +143,41 @@ public:
 	float WanderCapUnits(int32 Hull) const;
 	// Whether that cap is the human hull's figure standing in for a hull with no link of its own.
 	bool WanderCapFromHuman(int32 Hull) const;
-	// Node index pairs whose ends both pair to a crosswalk hint (type 11000). Story 7's.
+
+	// --- The crosswalk pairs (0018 story 7) -----------------------------------------------------
+	//
+	// Retail's crosswalk state is the signal nibble `0xf0` of a `CAI_Link`'s info word (`link+0x64`).
+	// Its only writer is `0x102f97c0` (from `CAI_Hint::InputWalk` / `InputDontWalk`), which sets or
+	// clears the whole nibble on every link of the hint's node whose far end is a crosswalk node
+	// (`0x102f98d0`: `node+0xa0 -> hint+0x5dc == 11000`). In shipped content only crosswalk hints
+	// take `Walk` / `DontWalk`, so the links written are exactly the pairs below, and one boolean
+	// per pair carries the whole state (decision 3). The readers test
+	// `link+0x64 & (0x10 << (((int)curtime >> 4) & 3))` -- a four-phase 64-second clock -- but with
+	// the nibble written whole the phase never changes an answer: all four set is red in every
+	// phase, all four clear green in every phase. The rotation is recorded, not modelled
+	// (`navigation-jump-links.md` § "The crosswalk wait, walked"). No AIN link carries `0xf0` and no
+	// link word is saved, so every pair starts green at every map load.
+
+	// Node index pairs whose ends both pair to a crosswalk hint (type 11000), lower index first.
 	const TArray<FIntPoint>& CrosswalkPairs() const { return Crosswalks; }
+	// The pair's hull-0 motion word (`link+0x0c`), 0 for a pair out of range.
+	int32 CrosswalkPairMotion(int32 Pair) const;
+	// A walking hull can take the pair: its hull-0 word carries `bits_CAP_MOVE_GROUND` (1). The two
+	// jump-only hub pairs (260-263, 259-261, word 2) are on no pedestrian route (`0x102ff960`), so
+	// the splice reads only walkable pairs.
+	bool IsCrosswalkPairWalkable(int32 Pair) const;
+	int32 NumWalkableCrosswalkPairs() const;
+	// Whether `NodeId` is an end of any walkable pair.
+	bool IsWalkableCrosswalkNode(int32 NodeId) const;
+	// `0x102f96e0(node, dest)`: the first link of `NodeId` whose far end (`0x102dda40`) is
+	// `NextNodeId`, symmetric. Answered as the crosswalk pair it is, or `INDEX_NONE`: a link that
+	// is no pair carries no signal bit, which is how every reader treats `NONE`.
+	int32 FindCrosswalkPair(int32 NodeId, int32 NextNodeId) const;
+	// `0x102f97c0(node, bWalk)`: every pair containing `NodeId` goes green (`Walk`, `& 0xffffff0f`)
+	// or red (`DontWalk`, `| 0xf0`). Walkable or not: retail's write tests no motion word.
+	void SetCrosswalkWalk(int32 NodeId, bool bWalk);
+	// `link+0x64 & phase` for the pair: red, the pedestrian waits. False for `INDEX_NONE`.
+	bool IsCrosswalkRed(int32 Pair) const;
 
 private:
 	TArray<FElysiumPlaceRow> Rows;
@@ -148,6 +185,8 @@ private:
 	TArray<FElysiumEntityHandle> Attached;           // node +0xa0, one per row
 	TArray<FElysiumPlaceWanderCap> WanderCaps;
 	TArray<FIntPoint> Crosswalks;
+	TArray<int32> CrosswalkMotions;                  // link +0x0c (hull 0), one per pair
+	TArray<uint8> CrosswalkRed;                      // link +0x64 & 0xf0 != 0, one per pair
 	FString AdoptedMapName;
 	int32 HullBits = 0;
 	int32 Counter = 0;                               // DAT_10926a3c

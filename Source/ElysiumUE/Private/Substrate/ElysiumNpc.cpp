@@ -2591,6 +2591,7 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 	// Troika `Save` calls the base's `0x1027bc60` first, and `Restore` runs the base's `Restore`
 	// first: the base half of the record leads (story 5 step 5).
 	FElysiumNpcBase::Serialize(Ar);
+	SerializePedestrianLink(Ar);  // Troika Save's tail: `+0x630c != 0`, then `link+4` / `link+8` (the archive is the mechanism)
 	SerializePatrolBlock(Ar);
 	SerializeMakerBlock(Ar);
 	SerializeMindBlock(Ar);

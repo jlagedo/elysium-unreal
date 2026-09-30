@@ -16,8 +16,13 @@ The test is the one the oracle's own census used for the pedestrian volumes: the
 grown by the agent's hull, against the link segment between its two node positions at that hull's
 Z offset. It is deliberately generous -- retail asks whether a WALK between two nodes succeeds,
 which is a swept hull, and an AABB test over-reports rather than under-reports. Over-reporting
-leaves a door uncut and passable, which story 7 then decides about; under-reporting would wall off
-a door NPCs use, silently.
+gives a door a link retail's graph may not have walked; under-reporting would wall off a door NPCs
+use, silently.
+
+Story 7 (0018/7) closes the door lane: every door is cut from every mesh, each traversable row
+carries `linkStartCm` / `linkEndCm` -- its largest crossing hull's witness link clipped to that
+hull's grown box -- and `links` groups the rows by witness link: one `AElysiumNavDoorLink` per
+AIN link, over every door it crosses, for the agents that cross them (`bake_nav_door_links`).
 """
 
 from __future__ import annotations
@@ -74,9 +79,9 @@ def hull_bounds_cm(hulls: Iterable[Sequence[float]],
     return lo, hi
 
 
-def segment_hits_box(start: Sequence[float], end: Sequence[float],
-                     lo: Sequence[float], hi: Sequence[float]) -> bool:
-    """Slab test: does the segment touch the axis-aligned box at all?"""
+def segment_box_span(start: Sequence[float], end: Sequence[float],
+                     lo: Sequence[float], hi: Sequence[float]) -> tuple[float, float] | None:
+    """Slab test: the segment parameters `(enter, exit)` inside the box, or None when it misses."""
 
     enter, exit_ = 0.0, 1.0
     for axis in range(3):
@@ -84,7 +89,7 @@ def segment_hits_box(start: Sequence[float], end: Sequence[float],
         delta = b - a
         if abs(delta) < 1e-9:
             if a < lo[axis] or a > hi[axis]:
-                return False
+                return None
             continue
         t0 = (lo[axis] - a) / delta
         t1 = (hi[axis] - a) / delta
@@ -93,8 +98,36 @@ def segment_hits_box(start: Sequence[float], end: Sequence[float],
         enter = max(enter, t0)
         exit_ = min(exit_, t1)
         if enter > exit_:
-            return False
-    return True
+            return None
+    return enter, exit_
+
+
+def segment_hits_box(start: Sequence[float], end: Sequence[float],
+                     lo: Sequence[float], hi: Sequence[float]) -> bool:
+    """Slab test: does the segment touch the axis-aligned box at all?"""
+
+    return segment_box_span(start, end, lo, hi) is not None
+
+
+def clip_link(start: Sequence[float], end: Sequence[float],
+              lo: Sequence[float], hi: Sequence[float]) -> tuple[list[float], list[float]]:
+    """The smart link's two endpoints: where the witness link enters and leaves the grown box.
+
+    The port cuts every door out of every mesh (`UElysiumNavArea_DoorCut`) and the agent's own
+    erosion keeps its mesh a hull radius off the cut, so the grown box's faces are where the mesh
+    ends on either side of the closed leaf -- the two points the smart link joins (0018/7). A
+    witness node that already stands inside the grown box keeps its own position.
+    """
+
+    span = segment_box_span(start, end, lo, hi)
+    if span is None:
+        raise ValueError("the witness link does not cross the door it witnesses")
+    enter, exit_ = span
+
+    def at(t: float) -> list[float]:
+        return [float(start[axis]) + (float(end[axis]) - float(start[axis])) * t for axis in range(3)]
+
+    return at(enter), at(exit_)
 
 
 def crossings(block: dict, doors: Sequence[dict], origins: dict, hull_radius_cm) -> list[dict]:
@@ -120,6 +153,7 @@ def crossings(block: dict, doors: Sequence[dict], origins: dict, hull_radius_cm)
         lo, hi = bounds
         crossed: list[int] = []
         witnesses: dict[int, int] = {}
+        segments: dict[int, tuple] = {}
         for hull in hulls:
             radius = float(hull_radius_cm(hull))
             grown_lo = [lo[axis] - radius for axis in range(3)]
@@ -138,8 +172,9 @@ def crossings(block: dict, doors: Sequence[dict], origins: dict, hull_radius_cm)
                 if segment_hits_box(start, end, grown_lo, grown_hi):
                     crossed.append(hull)
                     witnesses[hull] = int(link["index"])
+                    segments[hull] = (list(start), list(end))
                     break
-        rows.append({
+        row = {
             "entityIndex": int(door["entityIndex"]),
             "originCm": [float(value) for value in origin],
             "classname": door.get("classname", ""),
@@ -147,8 +182,64 @@ def crossings(block: dict, doors: Sequence[dict], origins: dict, hull_radius_cm)
             "crossedByHulls": crossed,
             "witnessLinks": witnesses,
             "traversable": bool(crossed),
-        })
+        }
+        if crossed:
+            # The link is laid for the LARGEST crossing hull (0018/7 review): its grown box contains
+            # every smaller hull's, so endpoints clipped to it are outside every crossing agent's
+            # box and each agent's mesh reaches them. Ties keep the lower hull index.
+            link_hull = max(crossed, key=lambda hull: (float(hull_radius_cm(hull)), -hull))
+            radius = float(hull_radius_cm(link_hull))
+            start, end = segments[link_hull]
+            grown_lo = [lo[axis] - radius for axis in range(3)]
+            grown_hi = [hi[axis] + radius for axis in range(3)]
+            row["linkHull"] = link_hull
+            row["linkWitness"] = witnesses[link_hull]
+            row["linkSegmentCm"] = [start, end]
+            row["linkStartCm"], row["linkEndCm"] = clip_link(start, end, grown_lo, grown_hi)
+        rows.append(row)
     return rows
+
+
+def door_links(rows: Sequence[dict], hull_radius_cm) -> list[dict]:
+    """One smart link per witness AIN link (0018/7 review): retail has ONE link through a doorway
+    however many door entities stand in it (the hub's smoke-shop pair shares link 958), and the
+    port's link holds a body while ANY of its doors is shut.
+
+    The group's segment is its largest hull's; the endpoints are where that segment enters the
+    first of the doors' grown boxes and leaves the last (each door's box grown by that hull's
+    radius), so they lie outside every crossing hull's box of every door in the group.
+    """
+
+    groups: dict[int, list[dict]] = {}
+    for row in rows:
+        if row.get("traversable"):
+            groups.setdefault(int(row["linkWitness"]), []).append(row)
+    links = []
+    for witness, members in sorted(groups.items()):
+        base = max(members, key=lambda row: (float(hull_radius_cm(row["linkHull"])), -row["linkHull"]))
+        radius = float(hull_radius_cm(base["linkHull"]))
+        start, end = base["linkSegmentCm"]
+        enter, exit_ = 1.0, 0.0
+        for row in members:
+            lo, hi = row["boundsCm"]
+            span = segment_box_span(start, end, [lo[axis] - radius for axis in range(3)],
+                                    [hi[axis] + radius for axis in range(3)])
+            if span is None:
+                raise ValueError(f"door {row['entityIndex']} does not stand on its witness link {witness}")
+            enter, exit_ = min(enter, span[0]), max(exit_, span[1])
+
+        def at(t: float) -> list[float]:
+            return [float(start[axis]) + (float(end[axis]) - float(start[axis])) * t for axis in range(3)]
+
+        links.append({
+            "witness": witness,
+            "doors": sorted(int(row["entityIndex"]) for row in members),
+            "crossedByHulls": sorted({hull for row in members for hull in row["crossedByHulls"]}),
+            "linkHull": base["linkHull"],
+            "startCm": at(enter),
+            "endCm": at(exit_),
+        })
+    return links
 
 
 def door_rows(brush_bodies: Sequence[dict]) -> list[dict]:
@@ -164,14 +255,14 @@ def stage(block: dict, brush_bodies: Sequence[dict], origins: dict, hull_radius_
     doors = door_rows(brush_bodies)
     rows = crossings(block, doors, origins, hull_radius_cm)
     traversable = [row for row in rows if row["traversable"]]
+    links = door_links(rows, hull_radius_cm)
 
     # A door can be traversable for ONE agent and not another -- the rat hull is not a subset of
     # the human one, and on `sp_tutorial_1` 1 of the 8 linked doors is crossed only by the human
     # and 2 only by the rat. A nav AREA is not per-agent (`FAreaNavModifier` marks every mesh
-    # alike), so job 6 cuts only the doors NO agent crosses and leaves these open on both meshes.
-    # That over-permits: the human may walk a doorway only the rat's graph used. It is the safe
-    # direction -- the other would wall an agent out of a door retail let it use -- and story 7
-    # closes it, since a per-agent smart link is where "traversable for THIS agent" belongs.
+    # alike), so story 7 cuts EVERY door out of every mesh and lays a smart link through each
+    # traversable one for exactly the agents that cross it (`bake_nav_door_links`): cut per mesh,
+    # link per agent. `partialByAgent` still counts the doors that need the per-agent half.
     all_hulls = {hull for row in rows for hull in row["crossedByHulls"]}
     partial = [row for row in traversable
                if all_hulls and set(row["crossedByHulls"]) != all_hulls]
@@ -180,8 +271,13 @@ def stage(block: dict, brush_bodies: Sequence[dict], origins: dict, hull_radius_
         "partialByAgent": len(partial),
         "partialRows": [row["entityIndex"] for row in partial],
         "traversable": len(traversable),
+        # Doors no graph link runs through: walls. Story 7 cuts the traversable ones as well
+        # (`bake_map_collision.place_nav_areas`) and gives each a smart link (`linked`).
         "cut": len(rows) - len(traversable),
         "rows": rows,
+        # One smart link per witness link (`bake_nav_door_links`): `linked` of them.
+        "links": links,
+        "linked": len(links),
     }
 
 

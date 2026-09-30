@@ -133,11 +133,96 @@ private:
 	void BeginMove(EMoveKind Kind, const FVector& DestLoc, const FRotator& DestRot, double TravelSeconds);
 };
 
+// `GetNPCOpenData` (door slot 246, `+0x3d8`)'s out struct, 0x1c bytes: `+0 Vector StandPos`,
+// `+0xc Vector FaceDir`, `+0x18 int Activity` (-1 = the door has no data for this NPC). Stated in
+// the PORT's frame -- `StandPosCm` world centimetres, `FaceDir` a unit direction with retail's Y
+// mirrored -- because each of the three readers hands its field straight to a port seam (the
+// route goal, `RetailVecToYaw`, the activity id). Findings § 1 / `docs/vtmb/navigation-jump-links.md`.
+struct FElysiumDoorNpcOpenData
+{
+	FVector StandPosCm = FVector::ZeroVector;   // +0x00, slot 531 arm 7's `BuildLocalRoute` goal
+	FVector FaceDir = FVector::ZeroVector;      // +0x0c, alternate-AI mode 1's facing
+	int32 Activity = INDEX_NONE;                // +0x18, `0x10298840`'s `RestartIdealActivity`
+};
+
+// The stale words of the door's smart link -- the retail `CAI_Link` words `0x102f1fa0` writes and
+// `0x102fce80` reads: `link+0x64` bit 1 (`bStale`), `link+0x68` (`StaleUntil`, an absolute curtime)
+// and `link+0` (`StaleDoor`, the blocker handle, -1 = none). The port lays ONE smart link per
+// traversable door (`AElysiumNavDoorLink`, keyed by the door's lump ordinal) where retail has one
+// AIN link per node pair per hull, so the words ride the door and the engine actor reads them
+// through the entity world. NOT saved: `CAI_Link` has no datamap, so retail loses every stale mark
+// on load (findings § 8), and so does this.
+struct FElysiumDoorLinkWords
+{
+	bool bStale = false;
+	double StaleUntil = 0.0;
+	FElysiumEntityHandle StaleDoor;
+};
+
 // The CBaseDoor 4-state machine over the mover primitive. func_door_rotating (this file) and
 // func_door derive from it; both register with BaseName "CBaseDoor".
 class FElysiumDoorBase : public FElysiumMoverBase
 {
 public:
+	// --- The NPC-failure words (0018/7) ---------------------------------------------------------
+	// `+0x644` `m_bfNpcFailedFlags` (datamap, FIELD_INTEGER) -- the NPC-failure flag word. Bits by their writers: 1 squad-focus door (slot 531
+	// arm 2), 2 `StartBlocked`'s activator, 4 slot 531 arm 4 (`0x1027f550` refused), 8 no `0xd00`
+	// capability, 0x10 retry pending (`0x1027f550`), 0x40 no route (slot 531 arm 7's failed open),
+	// 0x80 hit a character (`IsCloseBlocked` / `StartBlocked`). The bits' names are unrecovered. SAVE row.
+	uint32 NpcFailedFlags = 0;
+	// `+0x640` `m_flNpcFailedTimer` (datamap, FIELD_TIME) -- "no NPC tries me again before", an
+	// absolute curtime. SAVE row. Zeroed by
+	// `DoorHitTop 0x100f0860`.
+	double NpcFailedTimer = 0.0;
+
+	// `0x100f0e70`: `+0x644 = 0`.
+	void ClearNpcFailedFlags() { NpcFailedFlags = 0; }
+	// `0x100f0e90`: `+0x644 |= Bits`.
+	void AddNpcFailedFlags(uint32 Bits) { NpcFailedFlags |= Bits; }
+	// `0x100f0e30`: `if (At >= +0x640) +0x640 = At` -- a MAX write.
+	void RaiseNpcFailedTimer(double At)
+	{
+		if (At >= NpcFailedTimer)
+		{
+			NpcFailedTimer = At;
+		}
+	}
+	// `0x100f0ec0`: `(+0x644 & Mask) == Mask`.
+	bool HasNpcFailedFlags(uint32 Mask) const { return (NpcFailedFlags & Mask) == Mask; }
+
+	// The door's smart-link stale words (`FElysiumDoorLinkWords`).
+	FElysiumDoorLinkWords LinkWords;
+	// `0x102f1fa0`'s writes on the link: `link+0x64 |= 1`, `link+0x68 = Now + Seconds`, `link+0 =`
+	// the blocker's handle or -1. The gates (`nav+0x50`, a live path, both node ids) are the
+	// caller's (`FElysiumNpcBase::NavMarkLinkStale`).
+	void MarkLinkStale(double Now, double Seconds, const FElysiumEntityHandle& Blocker)
+	{
+		LinkWords.bStale = true;
+		LinkWords.StaleUntil = Now + Seconds;
+		LinkWords.StaleDoor = Blocker;
+	}
+
+	// Slot 246 `GetNPCOpenData` (`+0x3d8`). `CBaseDoor 0x100f0ef0`'s body is `out+0x18 = -1` and
+	// nothing else, so a sliding door answers no data and slot 531 exits at arm 6; the rotating
+	// leaf overrides (`CRotDoor::GetNPCOpenData 0x100f2bd0`). `bOpening` is `toggle_state == 2`
+	// at slot 531 and `m_bOpeningDoorWait` in the two alternate-AI callers.
+	virtual FElysiumDoorNpcOpenData GetNPCOpenData(const FElysiumEntity* Npc, bool bOpening) const
+	{
+		(void)Npc;
+		(void)bOpening;
+		return FElysiumDoorNpcOpenData();
+	}
+
+	// `CBaseDoor::IsCloseBlocked` (`0x100f0c00`): the closing volume (slot 245) against every live
+	// client / NPC's box, the linked door first when `bAskLinked`; a hit NPC is told
+	// (`+0x644 |= 0x80`, `0x1027dfb0`). True = blocked. Run by the auto-close think `0x100f09d0`.
+	bool IsCloseBlocked(bool bAskLinked);
+
+	// `CBaseDoor::StartBlocked` (`0x100f1340`, slot 177). The body is ported; its DISPATCHER is
+	// unrecovered (no vampire.dll site calls `+0x2c4`; the push code calls only `Blocked` /
+	// `PhysicsImpact`), so nothing calls it -- a named seam (findings § 3).
+	void StartBlocked(const FElysiumEntityHandle& Blocker);
+
 	// m_toggle_state — VtMB's exact values (dword @0x4f8, B.4).
 	enum class EToggleState : uint8 { AtTop = 0, AtBottom = 1, GoingUp = 2, GoingDown = 3 };
 
@@ -209,7 +294,8 @@ public:
 
 	// CBaseDoor::IsUseRefused (FUN_100eec70) — the real locked predicate, and the one the door's own
 	// `bLocked` byte only answers when no doorknob is attached. A knob owns its lock; the door reads
-	// it. NONPCS (0x200) refuses an NPC activator ahead of the knob lookup.
+	// it. Arm 1 (`0x100eef10`): `noopenwanted` refuses everyone while the player is hunted. NONPCS
+	// (0x200) refuses an NPC activator ahead of the knob lookup.
 	bool IsUseRefused(const FElysiumEntityHandle& Activator) const;
 
 	// The "user" retail's door predicates actually receive: the activator's character sub-object,
@@ -261,6 +347,16 @@ protected:
 	virtual void MoveDone() override;               // HitTop / HitBottom
 	virtual void OnMoveBlocked(const FHitResult& Hit) override;
 
+	// Slot 245, the closing volume `IsCloseBlocked` scans, world centimetres. `CBaseDoor 0x100f0a40`:
+	// the collision box translated back along `-movedir` by the travel (the box at the closed
+	// pose); `CRotDoor 0x100f2a00`: `ComputeSwingData` at the current angles (the closed leaf's box
+	// unioned with the box of its two rotated corners, about the hinge).
+	virtual FBox ComputeCloseBounds() const = 0;
+
+	// `DoorHitTop 0x100f0860`'s call into the activator's NPC: `m_hActivator (+0x53c) -> +0x94
+	// m_pBaseNPC -> OnDoorFullyOpen 0x1027dd10(door)`, and the engine's link release.
+	void NotifyActivatorFullyOpen();
+
 	// bResolveSwing (retail CRotDoor::DoorGoUp's second arg): the normal player/logic-initiated open
 	// path passes true so the rotating leaf resolves its activator-relative swing; the block-reverse
 	// reissue (OnMoveBlocked) passes false so the leaf re-opens fixed-forward, never activator-relative.
@@ -271,6 +367,9 @@ protected:
 	// through OnMoveBlocked, which needs a live pawn blocker in the swept arc. A content-free automation
 	// test drives that exact seam through this accessor. No production code references it.
 	friend struct FElysiumDoorTestAccess;
+	// 0018/7's door-link suite drives a bodiless door's arrival (`MoveDone`, the HitTop / HitBottom
+	// arms) directly: a Substrate-tier door has no brush body, so its move never runs to the end.
+	friend struct FElysiumNpcDoorLinkTestAccess;
 
 	// The `DOOR_NORMAL` hearing stimulus, raised beside the audio one-shot at both motion starts.
 	// One helper rather than two call sites so the silence rule cannot drift between open and close.

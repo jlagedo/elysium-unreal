@@ -33,8 +33,9 @@ KNOWN_DETOURS: dict[str, dict[int, dict[int, str]]] = {
             # exactly 15.24), at four times the tiles; story 5 inherits the question with the
             # step-height outliers, as the same class of finding: the graph asserts a walk the
             # agent's mesh does not offer.
+            # 721 (nodes 158->304, 152 cm straight, routed 577) stopped reproducing with 0018/7's
+            # bake: the rat now routes it at 150 cm. Its pin is retired (2026-09-30).
             406: "rat hole: nodes 81->311, 1,086 cm straight, routed 4,561 (4.2x)",
-            721: "rat hole: nodes 158->304, 152 cm straight, routed 577 (3.8x); also bridging",
             1472: "rat hole: nodes 400->175, 1,120 cm straight, routed 5,229 (4.7x)",
         },
     },

@@ -264,6 +264,22 @@ struct FElysiumNpcMoveFacts
 	// and never refuses on this; zero when the goal did not project.
 	float GoalSnap2DCm = 0.f;
 	float GoalSnapDzCm = 0.f;
+
+	// --- 0018/7: the door smart link (`AElysiumNavDoorLink`) ---
+	// The door whose smart link the follower has reached and is held at (the custom-link hold):
+	// the link's door is not open, so the body stands at the link's start until the door reaches
+	// its top (`IElysiumEmbodiment::ReleaseDoorLink`) or the request ends. Unset otherwise. The
+	// kernel reads it as retail's move-step blocker `goal+0x60` whose `+0xa4` is this door
+	// (`0x1027dc10`); `DoorLinkPointCm` is where the hold stands (the link's start), world cm.
+	FElysiumEntityHandle DoorLinkEntity;
+	FVector DoorLinkPointCm = FVector::ZeroVector;
+	// The first door smart link still AHEAD on the request's path (its corridor names it, and the
+	// body has not yet crossed it): the door, the link's far endpoint (world cm, the path point the
+	// look-ahead probes toward, `0x102f06e0`) and the straight-line distance from the feet to that
+	// point, cm. Unset when the path crosses no door link or no path is held.
+	FElysiumEntityHandle UpcomingDoorLinkEntity;
+	FVector UpcomingDoorLinkEndCm = FVector::ZeroVector;
+	float UpcomingDoorLinkDistanceCm = 0.f;
 };
 
 // One route question, asked synchronously on the body's OWN nav agent (the pathing hull `+0x156c`,
@@ -297,6 +313,10 @@ struct FElysiumNpcRouteAnswer
 	bool bPartial = false;
 	// The path's length, centimetres.
 	float LengthCm = 0.f;
+	// The route's corner points, world centimetres, start to end, as the search answered them
+	// (0018/7, the crosswalk splice reads which curb places the route passes). Empty when no path
+	// was found.
+	TArray<FVector> PointsCm;
 };
 
 // One straight walk over the navmesh surface on the body's own agent, the Detour raycast: does the
@@ -1426,6 +1446,12 @@ public:
 		Out.EndPosCm = Trace.EndCm;
 		return false;
 	}
+
+	// 0018/7: the door `Door` reached its top (`CBaseDoor::DoorHitTop 0x100f0860`), so every body
+	// its smart link (`AElysiumNavDoorLink`) is holding at the doorway finishes the custom link and
+	// walks on -- the engine half of `OnDoorFullyOpen 0x1027dd10`'s unpause. Presentation of a
+	// decision the substrate already made: nothing is reported back. Default: nothing (no links).
+	virtual void ReleaseDoorLink(const FElysiumEntityHandle& Door) {}
 
 	// `CStealthKillRules::FindVictim` `0x101be1f0`'s acquisition ray. Mask `0x201400b`
 	// (`MASK_PLAYERSOLID`: world and characters), `CTraceFilterSimple` skipping `Ignore`.

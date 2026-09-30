@@ -497,10 +497,7 @@ void FElysiumNpc::TroikaOnRestore(bool bFromLoad)
 	FElysiumNpcBase::OnRestore(bFromLoad);                                            // 1027bf50
 	++RestorePlaceScans;
 	CurrentSpotIndex = FindInterestingPlaceHoldingMe();                  // 102db5e0 -> +0x62ec
-	if (RestorePedLinkNode != -1 && RestorePedLinkDestNode != -1)
-	{
-		++NodeIndexErrorCount();                                         // always OOB: no node array
-	}
+	RestorePedestrianLink();                                             // +0x630c = 0x102f96e0(+0x6310, +0x6314)
 	const double Now = NpcKernelLifecycle19Shared::Lifecycle19Now(*this);
 	ScheduleHost.ShootAtHintNode = 0;
 	const float Jitter = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule)

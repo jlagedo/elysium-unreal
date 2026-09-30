@@ -48,10 +48,22 @@ bool FElysiumNpcBase::NavAdvancePath()
 		return true;
 	}
 
-	// (b) `npc+0x98` non-null: `0x102a0bc0(sub, wp)`, then the door arm. Neither is reached by a
-	// corner waypoint (flag `0x02` only): `0x102a0bc0` acts on waypoint flag `0x04` for a type-8 goal,
-	// and flag `0x10` starts the door transaction `0x10298800`. SEAM, 0018 story 7's: the port's route
-	// has no waypoint list to carry those flags, so no arm here reads or sets them.
+	// (b) `npc+0x98` non-null: `0x102a0bc0(sub, wp)`, its answer ignored, then the door arm. The wait
+	// test acts on waypoint flag `0x04` for a type-8 goal: on a red crosswalk it latches `AT_CROSSWALK`
+	// and the link (`0x102a0b90`), and the path still pops below -- the pedestrian walks on toward the
+	// far curb until the next think's `CROSSWALK_DONTWALK` selects schedule `0x102`, whose
+	// `PAUSE_MOVING` pauses the path. The waypoint's words are the pedestrian legs' head
+	// (`FElysiumNpc::PedestrianHeadWaypoint`); a route with no legs hands a waypoint that is no node,
+	// which the test's second gate refuses, as a corner or goal waypoint of retail's does.
+	if (Troika != nullptr)
+	{
+		FElysiumNpc::FDialogPedWaypoint Head;
+		Troika->PedestrianHeadWaypoint(Head);
+		(void)Troika->ResolvePedestrianPathNode(&Head);                     // 0x102f046a 0x102a0bc0
+		// The door arm (waypoint flag `0x10`: `0x1027f550` then `0x10298800`), the doors lane's
+		// (0018/7): the head leg a slot-531 splice laid at a door's stand point.
+		Troika->NavAdvanceDoorWaypoint();                                   // 0x102f047f..0x102f04c9
+	}
 
 	// (c) Flag `0x02` with a next waypoint: `m_pGoalEnt (+0x5de8) = m_pGoalEnt->GetNextTarget()` (slot
 	// 172, the CURRENT `m_pGoalEnt`'s next, not the waypoint's entity), then `DoFindPath` re-lays the
@@ -78,10 +90,15 @@ bool FElysiumNpcBase::NavAdvancePath()
 		return Navigator.bHasHeadWaypoint;
 	}
 
-	// The pop (`0x1030ba90`). The port's route has no waypoint list of its own, so no head stands after
-	// the one reached; the caller treats that as the end of the route. (Retail's flag `0x04` node pop
-	// stores `path+0x44 = wp+0x10`, and a pop with no next waypoint prints `"ERROR: Force end of route
-	// without goal"` and sets the goal bit on the last: both need the waypoint list.)
+	// The pop (`0x1030ba90`). A pedestrian route's curb legs are the one waypoint list the port keeps:
+	// the reached leg is popped, its node stored as `path+0x44`, and the next leg issued.
+	if (Troika != nullptr && Troika->PedestrianLegs.Num() > 1)
+	{
+		return Troika->NavPedestrianAdvance();
+	}
+	// Any other route has no waypoint list of its own, so no head stands after the one reached; the
+	// caller treats that as the end of the route. (A pop with no next waypoint prints `"ERROR: Force
+	// end of route without goal"` and sets the goal bit on the last: that needs the list.)
 	Navigator.bHasHeadWaypoint = false;
 	Navigator.bHeadIsGoal = false;
 	return false;

@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 220 generated slot bodies of `FElysiumEntity`: 52 carry the retail default story 29c recovered,
-// 35 are defined by hand in the substrate, and 115 are still stubs — 113 29c, 2 unassigned. 18 are
+// 219 generated slot bodies of `FElysiumEntity`: 52 carry the retail default story 29c recovered,
+// 35 are defined by hand in the substrate, and 114 are still stubs — 112 29c, 2 unassigned. 18 are
 // closed (0019/6) and answer the value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -1287,14 +1287,6 @@ void FElysiumEntity::EndTouch(FElysiumEntity*)
 	FireEntitySlot(TEXT("CBaseEntity::EndTouch"), TEXT("0x100a4c20"), TEXT("29c"), DebugString());
 }
 
-// slot 177 0x10027080 (sdk) `void StartBlocked(CBaseEntity*)`
-//   layer 0, story 29c
-void FElysiumEntity::StartBlocked(FElysiumEntity*)
-{
-	FireEntitySlot(TEXT("CBaseEntity::StartBlocked"), TEXT("0x10027080"), TEXT("29c"),
-		DebugString());
-}
-
 // slot 178 0x100a4d40 (sdk) `void Blocked(CBaseEntity*)`
 //   layer 0, story 29c
 void FElysiumEntity::Blocked(FElysiumEntity*)
@@ -2413,10 +2405,6 @@ namespace ElysiumNpcKernelShape
 			{ 176, TEXT("0x100a4c20"), TEXT("CBaseEntity"), TEXT("EndTouch"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::EndTouch),
-				nullptr },
-			{ 177, TEXT("0x10027080"), TEXT("CBaseEntity"), TEXT("StartBlocked"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::StartBlocked),
 				nullptr },
 			{ 178, TEXT("0x100a4d40"), TEXT("CBaseEntity"), TEXT("Blocked"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,

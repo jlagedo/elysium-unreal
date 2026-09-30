@@ -3573,7 +3573,7 @@ int32 FElysiumNpcWerewolf::StartTaskSlot442(void* Task)
 		}
 		// `IsCommand()` answers false on a ConVar, so the `+0x28` float arm is the one that runs; the
 		// other arm (`0x103ccf31`) would add 0.0. No completion: the wait finishes in RunTask.
-		BaseScheduleHost.WaitFinished = Now + static_cast<double>(ElysiumNpcTunables::ConVarFloat(EConVar::WerewolfTeleportInTime));   // 0x103ccf2a slot 1; 0x103ccf63 +0x28; 0x103ccf69 +0x5db4 (the IsCommand test 0x103ccf2f JZ)
+		BaseScheduleHost.WaitFinished = Now + static_cast<double>(ElysiumNpcTunables::ConVarFloat(ElysiumNpcTunables::EConVar::WerewolfTeleportInTime));   // 0x103ccf2a slot 1; 0x103ccf63 +0x28; 0x103ccf69 +0x5db4 (the IsCommand test 0x103ccf2f JZ)
 		return 0;                                                         // 0x103ccf7d
 	}
 	case 0x4e:

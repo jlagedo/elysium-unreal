@@ -61,6 +61,19 @@ struct FElysiumNpcWorldBuilder
 	// Empty is a world with no network, which is every fixture written before the place set.
 	TArray<FElysiumPlaceRow> Places;
 	TArray<FElysiumPlaceWanderCap> WanderCaps;
+	// The network's crosswalk pairs (0018 story 7) and each one's hull-0 motion word, parallel.
+	TArray<FIntPoint> CrosswalkPairs;
+	TArray<int32> CrosswalkMotions;
+
+	// One crosswalk pair joining two places `AddPlace` made: the link a crosswalk hint's
+	// `Walk` / `DontWalk` writes. `Motion` is its hull-0 word -- 1 a walk, 2 jump-only. Returns the
+	// pair's index. The two `info_node_crosswalk` rows that bind the nodes are the case's own
+	// (`AddEntity`, in node order, so `CNodeEnt::Spawn`'s counter lands them on the nodes).
+	int32 AddCrosswalkPair(int32 NodeA, int32 NodeB, int32 Motion = 1)
+	{
+		CrosswalkMotions.Add(Motion);
+		return CrosswalkPairs.Add(FIntPoint(FMath::Min(NodeA, NodeB), FMath::Max(NodeA, NodeB)));
+	}
 
 	// One synthetic place: a node of `Type` at `OriginCm`, every hull's Z offset zero. Returns its
 	// network index.
@@ -232,7 +245,8 @@ struct FElysiumNpcWorldFixture
 		Configure(Services);
 		if (Builder.Places.Num() > 0)
 		{
-			World.Places().AdoptRows(MoveTemp(Builder.Places), 0, MoveTemp(Builder.WanderCaps));
+			World.Places().AdoptRows(MoveTemp(Builder.Places), 0, MoveTemp(Builder.WanderCaps),
+				MoveTemp(Builder.CrosswalkPairs), MoveTemp(Builder.CrosswalkMotions));
 		}
 		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		World.Load(MoveTemp(Builder.Defs));

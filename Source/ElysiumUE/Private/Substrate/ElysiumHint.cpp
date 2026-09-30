@@ -108,22 +108,30 @@ void FElysiumHint::InputDisableHint(const FElysiumInputArgs&)
 void FElysiumHint::InputWalk(const FElysiumInputArgs&)
 {
 	// `0x102d0a50`: `FUN_102d3e60` resolves the node (counting an out-of-range id), and a null node
-	// returns. SEAM for the found arm: `FUN_102f97c0(node, 1)` clears bits `0xf0` of the info word
-	// (`+0x64`) of every link of the node whose far node `0x102f98d0` accepts; the place set carries
-	// no links (0018 stories 5 and 7), so there is nothing to write.
+	// returns. Found: `FUN_102f97c0(node, 1)` clears bits `0xf0` of the info word (`+0x64`) of every
+	// link of the node whose far node `0x102f98d0` accepts -- every crosswalk pair holding the node
+	// goes green (0018 story 7, `FElysiumPlaceSet::SetCrosswalkWalk`).
 	if (World != nullptr)
 	{
-		World->Places().ResolveHintNode(NodeId);
+		const int32 Node = World->Places().ResolveHintNode(NodeId);
+		if (Node != INDEX_NONE)
+		{
+			World->Places().SetCrosswalkWalk(Node, true);
+		}
 	}
 }
 
 void FElysiumHint::InputDontWalk(const FElysiumInputArgs&)
 {
-	// `0x102d0a80`: as `InputWalk`, with `FUN_102f97c0(node, 0)`, which SETS bits `0xf0`. The same
-	// link seam.
+	// `0x102d0a80`: as `InputWalk`, with `FUN_102f97c0(node, 0)`, which SETS bits `0xf0`: every
+	// crosswalk pair holding the node goes red.
 	if (World != nullptr)
 	{
-		World->Places().ResolveHintNode(NodeId);
+		const int32 Node = World->Places().ResolveHintNode(NodeId);
+		if (Node != INDEX_NONE)
+		{
+			World->Places().SetCrosswalkWalk(Node, false);
+		}
 	}
 }
 

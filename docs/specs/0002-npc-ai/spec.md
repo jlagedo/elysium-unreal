@@ -1383,6 +1383,25 @@ the retail contract the code must match, the job, what it consumes or provides, 
   slot 614) has no body; the executor-shaped tests (`ElysiumNpcMindTests.cpp`,
   `ElysiumNpcTests.cpp`) and debug readers must be rewritten; one interpreter-driven end-to-end
   test.
+  **Acceptance added 2026-09-30 (0018/7 closed on tests by the owner's decision; its live half is
+  this story's):** once the ambient executor is retired, live on `sm_hub_1` a `use_interesting`
+  pedestrian running `0xff` → `0x100` waits at a red crosswalk curb through `0x102` and crosses on
+  the next green (`0x102 → 0x100`, a fresh route), a second pedestrian queues behind it through
+  `0x10298340`, and an NPC routed over the smoke-shop door link is refused by the locked
+  `basic_smoke_door` (2566), fails, and avoids the link for the door's 5 / 20 s timer.
+  **Defect claim (0018/7's B-C, 2026-09-30; not fixed, owned here):** `ThinkSchedulePolicy`
+  (`ElysiumNpc.cpp:985-988`) calls `FinishAmbientUse` whenever `AmbientOwner` is set or
+  `AmbientPhase != None` while a program runs, and so releases the held place under ANY running
+  program. Retail has no such release. The only release on a schedule change is
+  `CAI_BaseNPCTroika::OnScheduleChange 0x102a0940` (slot 435), which calls `0x102b53d0` (the visit
+  release: `+0x62ec` → `0x102da600`, then `+0x62ec = 0`) only inside `(~m_bfAINPCFlags & 8) != 0`,
+  that is, only WITHOUT `PRESERVE_PATH` (`ElysiumNpcFlags.h:62`). Schedule `0xff` sets
+  `PRESERVE_PATH`, and `SetSchedule(int) 0x10280de0` keeps it, so retail holds the place across
+  `0x100 → 0x102 → 0x100`. The forced Troika path `0x102ae780` clears it, and that path does
+  release. Reached by the `sm_hub_1` pedestrians whose route passes a crosswalk pair (the
+  `streetlight_timer` cycle, § 0018/7). If this release survives the retirement, the green
+  reselect of `0x100` meets no held place and `GET_PATH_TO_INTERESTING_PLACE` fails `0x22`.
+  Retiring the executor must leave slot 435's `PRESERVE_PATH`-gated release as the only one.
   Size: M (re-read 2026-09-29 by 0019/7; was L). Effort: Opus / high.
 - [ ] **27. Patrol-point interest records.**
   Rework (2026-09-15): the node record is 0018 story 11; this story keeps the roll and the

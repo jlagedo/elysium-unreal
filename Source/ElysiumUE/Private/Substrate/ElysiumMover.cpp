@@ -16,7 +16,9 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMoveSolve.h"
 #include "Substrate/ElysiumGameSound.h"
+#include "Substrate/ElysiumNpcBase.h"
 #include "Substrate/ElysiumMoverSounds.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
@@ -392,6 +394,10 @@ void FElysiumDoorBase::Serialize(FElysiumSaveArchive& Ar)
 	uint8 State = static_cast<uint8>(ToggleState);
 	Ar << State;
 	Ar << bLocked;
+	// `+0x640` / `+0x644`, both SAVE rows of `CBaseDoor`'s datamap (findings § 8). The link's stale
+	// words are not: `CAI_Link` has no datamap.
+	Ar << NpcFailedTimer;
+	Ar << NpcFailedFlags;
 
 	if (Ar.IsLoading())
 	{
@@ -534,6 +540,19 @@ bool FElysiumDoorBase::IsUseLocked() const
 
 bool FElysiumDoorBase::IsUseRefused(const FElysiumEntityHandle& Activator) const
 {
+	// `0x100eec70`, four arms in retail's order.
+	//
+	// Arm 1, `0x100eef10`: `noopenwanted` (`+0x648`) AND a live player whose police-response
+	// counter (`0x1017f770`, `player+0x1d10`) is above zero -- for EVERY user, NPC or player. The
+	// port had this arm only in `DoorUse`; the lock test itself left it out (findings, correction 3).
+	if (bNoOpenWanted)
+	{
+		const FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr;   // 0x101cd9e0(1)
+		if (Player && Player->Police.CopsInPursuit > 0)
+		{
+			return true;
+		}
+	}
 	// NONPCS (0x200) reports "locked" for an NPC activator, ahead of the knob lookup.
 	if ((SpawnFlags & SF_DOOR_NONPCS) != 0)
 	{
@@ -599,7 +618,147 @@ void FElysiumDoorBase::Think()
 	// door never schedules a think here, so it stays open.
 	if (ToggleState == EToggleState::AtTop)
 	{
+		// The auto-close think `0x100f09d0`: `IsCloseBlocked(this, 1)`. Blocked -> the same think
+		// again at `curtime + 0.5` (`_DAT_10449270`, the double 0.5); clear -> think cleared and
+		// `DoorGoDown` (vtable `+0x3d0`, argument 1).
+		constexpr double CloseBlockedRethinkSeconds = 0.5;
+		if (IsCloseBlocked(/*bAskLinked*/ true))
+		{
+			NextThink = Now + CloseBlockedRethinkSeconds;
+			return;
+		}
+		NextThink = ELYSIUM_NEVER_THINK;
 		DoorGoDown(LastActivator);
+	}
+}
+
+bool FElysiumDoorBase::IsCloseBlocked(bool bAskLinked)
+{
+	// `CBaseDoor::IsCloseBlocked` `0x100f0c00`.
+	if (World == nullptr)
+	{
+		return false;
+	}
+	// Slot 245 (`+0x3d4`) fills the closing volume first.
+	const FBox Close = ComputeCloseBounds();
+	// The linked door (`m_hLinkedDoor`), asked with the recursion flag cleared, when this call
+	// carries it. A blocked partner blocks this leaf too.
+	if (bAskLinked)
+	{
+		if (FElysiumDoorBase* Partner = ResolveLinkedDoor())
+		{
+			if (Partner != this && Partner->IsCloseBlocked(/*bAskLinked*/ false))
+			{
+				return true;
+			}
+		}
+	}
+	if (!Close.IsValid)
+	{
+		return false;
+	}
+	// `gEntList` walk (the entity-handle list stands for it), entity-list order: skip one marked for deletion
+	// (`0x100b5190`); keep `FL_CLIENT` (0x80, the player) or `FL_NPC` (0x2000); slot 158 `IsAlive`;
+	// the box `m_Collision +0x3c` (`WorldSpaceAABB`) against the volume (`0x10240250`). The FIRST
+	// intersecting body decides: an NPC is told, and the door is blocked either way.
+	const FElysiumPlayer* Player = World->FindPlayer();
+	for (const TUniquePtr<FElysiumEntity>& Entry : World->Entities())
+	{
+		FElysiumEntity* const Other = Entry.Get();
+		if (Other == nullptr || Other->IsDead())
+		{
+			continue;
+		}
+		FElysiumNpcBase* const Npc = Other->AsNpcBase();
+		const bool bClient = Player != nullptr && static_cast<const FElysiumEntity*>(Player) == Other;
+		if (!bClient && Npc == nullptr)
+		{
+			continue;
+		}
+		if (Other->LifeState != ElysiumLifeState::Alive)
+		{
+			continue;
+		}
+		FVector MinsUnits = FVector::ZeroVector;
+		FVector MaxsUnits = FVector::ZeroVector;
+		if (!FElysiumNpcBase::RetailCollisionExtents(*Other, MinsUnits, MaxsUnits))
+		{
+			continue;
+		}
+		// Retail's OBB is in Source axes; the port's Y is mirrored, so the Y pair swaps sign.
+		const float U = ElysiumMove::U;
+		const FVector Lo(MinsUnits.X * U, -MaxsUnits.Y * U, MinsUnits.Z * U);
+		const FVector Hi(MaxsUnits.X * U, -MinsUnits.Y * U, MaxsUnits.Z * U);
+		const FBox OtherBox(Other->Origin + Lo, Other->Origin + Hi);
+		if (!OtherBox.Intersect(Close))
+		{
+			continue;
+		}
+		if (Npc != nullptr)                                                   // +0x94 m_pBaseNPC
+		{
+			AddNpcFailedFlags(0x80u);                                         // 0x100f0e90(door, 0x80)
+			Npc->HitByDoor(*this);                                            // 0x1027dfb0
+		}
+		return true;
+	}
+	return false;
+}
+
+void FElysiumDoorBase::StartBlocked(const FElysiumEntityHandle& Blocker)
+{
+	// `CBaseDoor::StartBlocked` `0x100f1340`. SEAM AT THE CALLER: slot 177 (`+0x2c4`) has no
+	// recovered dispatcher, so this body is ported and never reached (findings § 3).
+	static const FName OnBlockedClosing(TEXT("OnBlockedClosing"));
+	static const FName OnBlockedOpening(TEXT("OnBlockedOpening"));
+	if (ToggleState == EToggleState::GoingDown)                               // toggle state 3
+	{
+		FireOutput(OnBlockedClosing, Blocker);
+		return;
+	}
+	if (World != nullptr)
+	{
+		// The activator's NPC: `+0x644 |= 2`, then its door-blocked notice.
+		if (FElysiumEntity* Activator = World->Resolve(LastActivator))
+		{
+			if (FElysiumNpcBase* ActivatorNpc = Activator->AsNpcBase())
+			{
+				AddNpcFailedFlags(0x2u);
+				ActivatorNpc->OnDoorBlocked(*this);                           // 0x1027de00
+			}
+		}
+		// The blocker's NPC: `+0x644 |= 0x80`, then hit-by-door.
+		if (FElysiumEntity* BlockerEntity = World->Resolve(Blocker))
+		{
+			if (FElysiumNpcBase* BlockerNpc = BlockerEntity->AsNpcBase())
+			{
+				AddNpcFailedFlags(0x80u);
+				BlockerNpc->HitByDoor(*this);                                 // 0x1027dfb0
+			}
+		}
+	}
+	FireOutput(OnBlockedOpening, Blocker);
+}
+
+void FElysiumDoorBase::NotifyActivatorFullyOpen()
+{
+	if (World == nullptr)
+	{
+		return;
+	}
+	// `m_hActivator (+0x53c)` -> `+0x94 m_pBaseNPC` -> `0x1027dd10(npc, door)`.
+	if (FElysiumEntity* Activator = World->Resolve(LastActivator))
+	{
+		if (FElysiumNpcBase* Npc = Activator->AsNpcBase())
+		{
+			Npc->OnDoorFullyOpen(this);
+		}
+	}
+	// The engine half: every body this door's smart link holds at the doorway walks on. Retail has
+	// no hold (its navigator is simply unpaused above); the port's link hold is the custom-link
+	// wait, which only the door reaching its top ends.
+	if (IElysiumEmbodiment* Embodiment = World->Embodiment())
+	{
+		Embodiment->ReleaseDoorLink(Handle);
 	}
 }
 
@@ -716,12 +875,10 @@ void FElysiumDoorBase::MoveDone()
 	StopMoverLoop();   // the leaf arrived: end the looping `swing` moving sound
 	if (ToggleState == EToggleState::GoingUp)
 	{
-		// HitTop: fully open. Schedule the autoclose think unless the door stays open (`wait -1` or
-		// NO_AUTO_RETURN).
+		// HitTop, `CBaseDoor::DoorHitTop` `0x100f0860`, in its order: the state; the autoclose think
+		// unless the door stays open (`wait -1` or NO_AUTO_RETURN); the activator's NPC told
+		// (`OnDoorFullyOpen 0x1027dd10`); `+0x640 = 0`; then `OnFullyOpen` (`0x100cd660`).
 		ToggleState = EToggleState::AtTop;
-		static const FName OnFullyOpen(TEXT("OnFullyOpen"));
-		FireOutput(OnFullyOpen, LastActivator);
-
 		if (!StaysOpen())
 		{
 			NextThink = (World ? World->NowSeconds() : 0.0) + Wait;
@@ -730,6 +887,22 @@ void FElysiumDoorBase::MoveDone()
 		{
 			NextThink = ELYSIUM_NEVER_THINK;
 		}
+		NotifyActivatorFullyOpen();
+		NpcFailedTimer = 0.0;                                                 // param_1[400] = 0
+
+		static const FName OnFullyOpen(TEXT("OnFullyOpen"));
+		FireOutput(OnFullyOpen, LastActivator);
+		// Named, not reproduced here (0018/7 review):
+		//  * `+0x655 = 0` at the head and the tail call of slot 249 (`+0x3e4`, `CRotDoor 0x100f1990`:
+		//    `m_iBlockedCount = m_iBlockedForcedState = 0`) -- the blocked-tracking words, which this
+		//    runtime does not carry (see `ChooseOpenTarget`'s held latch).
+		//  * START_OPEN (`SF & 1`) fires `m_OnFullyClosed` (`+0x5c4`) with the DOOR as activator
+		//    instead of `m_OnFullyOpen` (`+0x5dc`): retail swaps `m_vecPosition1/2` for a START_OPEN
+		//    door, so its "top" is the closed pose. The port seats START_OPEN at the open pose AtTop
+		//    without the swap (`Spawn`), so its HitTop is physically "fully open" -- the inversion
+		//    belongs with that swap, not here.
+		//  * USE_CLOSES (`SF & 0x2000`) installs think `LAB_1000f222`, not `0x100f09d0`; the port runs
+		//    the one auto-close think for both (that think's body is unread).
 	}
 	else if (ToggleState == EToggleState::GoingDown)
 	{
@@ -1087,6 +1260,13 @@ void FElysiumDoorBase::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		Out.Emplace(TEXT("Use override"), UseOverrideName);
 	}
 	Out.Emplace(TEXT("Spawnflags"), FString::Printf(TEXT("%d = %s"), SpawnFlags, *DescribeDoorSpawnFlags(SpawnFlags)));
+	Out.Emplace(TEXT("NPC failure (+0x644 / +0x640)"),
+		FString::Printf(TEXT("0x%x / %.2f"), NpcFailedFlags, NpcFailedTimer));
+	if (LinkWords.bStale)
+	{
+		Out.Emplace(TEXT("Smart link"), FString::Printf(TEXT("stale until %.2f (blocker %s)"),
+			LinkWords.StaleUntil, *LinkWords.StaleDoor.ToString()));
+	}
 	AppendSoundDebug(Out);
 }
 
@@ -1132,6 +1312,9 @@ protected:
 
 	// A rotating door resolves its endpoint from body angles (retail CRotDoor::ResolveToggleStateFromTransform).
 	virtual bool ResolvesEndpointFromRotation() const override { return true; }
+
+	virtual FElysiumDoorNpcOpenData GetNPCOpenData(const FElysiumEntity* Npc, bool bOpening) const override;
+	virtual FBox ComputeCloseBounds() const override;
 
 private:
 	// The activator-relative open target — OpenRot (forward, +m_vecAngle2) or its mirror (back,
@@ -1217,6 +1400,114 @@ FRotator FElysiumFuncDoorRotating::ChooseOpenTarget()
 	return bSwingBack ? BackRot : OpenRot;
 }
 
+namespace
+{
+	// `0x100f3ea0(0, a, b)`: whichever of `a` / `b` lies further from zero, by more than
+	// `_DAT_104546c4` (4.0, read from the image); a tie inside that band answers 0.
+	float DoorFartherFromZero(float A, float B)
+	{
+		constexpr float Tie = 4.0f;
+		const float Diff = FMath::Abs(B) - FMath::Abs(A);
+		if (Tie < Diff)
+		{
+			return B;
+		}
+		if (Diff < -Tie)
+		{
+			return A;
+		}
+		return 0.0f;
+	}
+
+	// `0x101d2f40`: the yaw vector `(cos, sin, 0)` of an angle in degrees (x 0.017453292).
+	FVector DoorYawVector(float Degrees)
+	{
+		const float Radians = Degrees * 0.017453292f;
+		return FVector(FMath::Cos(Radians), FMath::Sin(Radians), 0.0);
+	}
+}
+
+FElysiumDoorNpcOpenData FElysiumFuncDoorRotating::GetNPCOpenData(const FElysiumEntity* Npc, bool bOpening) const
+{
+	// `CRotDoor::GetNPCOpenData` `0x100f2bd0`. Worked in retail's own frame (Source units, Y not
+	// mirrored) so every constant stays checkable; the answer is mirrored into the port's at the end.
+	FElysiumDoorNpcOpenData Out;                                              // out+0x18 = -1 on every refusal
+	// A null NPC, or spawnflags 0xc0 (the two non-yaw swing axes) -> -1 (`100f2c31`).
+	if (Npc == nullptr || (SpawnFlags & 0xc0) != 0)
+	{
+		return Out;
+	}
+	// `CRotDoor::ComputeDoorAngles` `0x100f3f20` (the spawn-time words `+0x6f8` / `+0x6fc` /
+	// `+0x700`), yaw arm: the leaf's far edge from the hinge in the collision OBB, local axes.
+	// `_DAT_10446758` = 57.29578 and `_DAT_10455050` = 90.0, both read from the image.
+	const float U = ElysiumMove::U;
+	const FBox Local = HullLocalBounds(Def);
+	if (!Local.IsValid)
+	{
+		return Out;
+	}
+	const float EdgeX = DoorFartherFromZero(static_cast<float>(Local.Min.X / U), static_cast<float>(Local.Max.X / U));
+	const float EdgeY = DoorFartherFromZero(static_cast<float>(-Local.Max.Y / U), static_cast<float>(-Local.Min.Y / U));
+	const float AngleAtRest = FMath::Atan2(EdgeY, EdgeX) * 57.29578f;         // m_fDoorAngleAtRest
+	const FVector Rest = DoorYawVector(AngleAtRest);
+	const FVector Forward = DoorYawVector(AngleAtRest + 90.0f);              // m_fDoorAngleOpenForward
+	const FVector Backward = DoorYawVector(AngleAtRest - 90.0f);             // m_fDoorAngleOpenBackward
+
+	// `d = npc.AbsOrigin - door.AbsOrigin` (both slot 217), 2-D.
+	auto SourceOf = [U](const FVector& Cm) { return FVector(Cm.X / U, -Cm.Y / U, Cm.Z / U); };
+	const FVector DoorSrc = SourceOf(Origin);
+	const FVector D = SourceOf(Npc->Origin) - DoorSrc;
+	const double ForwardDot = Forward.X * D.X + Forward.Y * D.Y;
+	const double BackwardDot = Backward.X * D.X + Backward.Y * D.Y;
+	// `_DAT_104454c4` = 0.0. Written as "not below" so a NaN falls through to -1 (`100f2e90`).
+	FVector Open;
+	if (!(ForwardDot < 0.0) && !FMath::IsNaN(ForwardDot))
+	{
+		Open = Forward;
+	}
+	else if (!(BackwardDot < 0.0) && !FMath::IsNaN(BackwardDot))
+	{
+		Open = Backward;
+	}
+	else
+	{
+		return Out;
+	}
+
+	// `bOpening`: stand 100 out (`_DAT_10450564`) and play ACT_IDLE (1); otherwise 50 out
+	// (`_DAT_1044ffe8`) and 0xc84. Both 24 along the leaf (`_DAT_1044dba8`) and 54 down
+	// (`_DAT_1045504c`). The face is always `-open`.
+	const float StandOut = bOpening ? 100.0f : 50.0f;
+	FVector StandSrc = DoorSrc + Rest * 24.0f + Open * StandOut;
+	StandSrc.Z -= 54.0f;
+	Out.StandPosCm = FVector(StandSrc.X * U, -StandSrc.Y * U, StandSrc.Z * U);
+	Out.FaceDir = FVector(-Open.X, Open.Y, -Open.Z);                          // -open, Y mirrored
+	Out.Activity = bOpening ? 1 : 0xc84;
+	return Out;
+}
+
+FBox FElysiumFuncDoorRotating::ComputeCloseBounds() const
+{
+	// `CRotDoor` slot 245 `0x100f2a00`: at `+angle2` the cached forward box (`+0x698..+0x6ac`), at
+	// `-angle2` the cached back box (`+0x6bc..+0x6d0`), else (DevMsg "ComputeCloseBounds() called
+	// when...") `ComputeSwingData` at the current angles -- and both caches are `ComputeSwingData`
+	// at those angles, so the answer is always `ComputeSwingData(current)` (`0x100f19b0`): the
+	// collision OBB's mins/maxs, unioned per axis with those two corners rotated by the angles,
+	// plus the origin. The port states it in the body's parent frame, the frame `ChooseOpenTarget`
+	// compares an activator's origin in.
+	const FBox Local = HullLocalBounds(Def);
+	if (!Local.IsValid)
+	{
+		return FBox(ForceInit);
+	}
+	const FRotator Live = Body ? Body->GetRelativeRotation() : ClosedRot;
+	const FQuat Swing = ClosedRot.Quaternion().Inverse() * Live.Quaternion();
+	FBox Out = Local;
+	Out += Swing.RotateVector(Local.Min);
+	Out += Swing.RotateVector(Local.Max);
+	return Out.ShiftBy(ClosedLoc);
+}
+
 // func_door — the sliding door / drawer / cabinet (214 uses / 40 maps; 7 on the tutorial).
 //
 // Reference: animation_and_movers.md B.2/B.4 + the decompiled CBaseDoor::Spawn (FUN_100ef260),
@@ -1250,6 +1541,17 @@ protected:
 
 	// A sliding door resolves its endpoint from body origin (retail CBaseDoor::ResolveToggleStateFromTransform).
 	virtual bool ResolvesEndpointFromRotation() const override { return false; }
+
+	// `CBaseDoor` slot 245 `0x100f0a40`: the current origin moved by `-movedir` (`_DAT_104492dc` =
+	// -1.0) times the travel (`|(size - 2)·movedir| - lip`, `_DAT_10452dc4` = 2.0), plus the
+	// collision OBB -- the box the leaf fills when closed. The port's open pose carries no 2-unit
+	// pad (`ComputeOpenTransform`), so the closed pose is `ClosedLoc` itself; the box is the hulls
+	// there. GetNPCOpenData stays the base's -1 (`0x100f0ef0`).
+	virtual FBox ComputeCloseBounds() const override
+	{
+		const FBox Local = HullLocalBounds(Def);
+		return Local.IsValid ? Local.ShiftBy(ClosedLoc) : FBox(ForceInit);
+	}
 };
 
 // --- Registration ---

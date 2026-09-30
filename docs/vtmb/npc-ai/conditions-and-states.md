@@ -1340,6 +1340,14 @@ think for as long as the mode stands. The facing gate below it is not the obstac
 **true** on a body that has not turned. Neither mode-2 advance can therefore be reached until a door
 carries an NPC-open point, whatever the yaw says.
 
+**Built 2026-09-30 (0018 story 7).** The door answers `GetNPCOpenData` (slot 246) with the
+whole struct, and mode 1 faces along its `FaceDir` (not a point turned into a yaw).
+`0x10298840` sets `Activity`, runs the lock test and fires `Open`. Modes 2 and 3 and
+`OnDoorFullyOpen` are real. The struct, the constants and the mode timers are in
+`schedule-kernel.md` § "The door's NPC-open data and the alternate-AI door modes". The lock
+test's sense in `0x10298840`: TRUE (refused) → `0x1027de00`, FALSE → `AcceptInput("Open")`.
+(The port comment at `ElysiumNpcBaseConditions.cpp:177` had it backwards and has been rewritten.)
+
 ## The Werewolf's two condition bodies — `0x103d02b0`, `0x103cc890` (2026-09-13)
 
 **`CNPC_VWerewolf::GatherAttackConditions` (`0x103d02b0`)** is the only **suppressing** species
@@ -1676,7 +1684,8 @@ the LINK from this waypoint's node (`network->nodes[id]`, `102a0c11`) to the nex
 phase bit. _(Corrected 2026-09-19: the 09-13 walk read `+0x10` as an entity index and `+0x30` as a
 hint record.)_ Only then
 `0x102a0b90`, which is two statements and no gate: `m_bfAINPCFlags |= 0x4` and
-`m_pCrosswalkLink = node`. The waypoint's own bit 2 at `+0x28` and `AT_CROSSWALK`'s bit 2 share a
+`m_pPedestrianLink (+0x630c) = link` — the `CAI_Link*` `0x102f96e0` answered, not a node
+(corrected 2026-09-30). The waypoint's own bit 2 at `+0x28` and `AT_CROSSWALK`'s bit 2 share a
 number by coincidence; the second is written only on success.
 
 **What holds the body — the movement sink's slot 1, `0x10298340` (2026-09-19).** The Troika
@@ -1691,7 +1700,15 @@ it re-runs the arrival test `0x102a0bc0` on MY navigator's current waypoint: sti
 `*pResult = 0` and "handled", so the move is swallowed for this frame and I queue behind it;
 otherwise, within **32 units** of my waypoint (`d² <= 1024.0`, `0x1045d650`, 3-D) → it advances
 the path (`0x102f0400`) itself and answers handled; otherwise the base. The waiter's own stop is
-the schedule's; this body is what keeps the walkers behind it from shoving through. Also: `OnStateChange 0x102ae140` clears `AT_CROSSWALK` on every call; `Save` writes the
+the schedule's; this body is what keeps the walkers behind it from shoving through. **Its
+side effect (2026-09-30, R-C from the asm):** the "still red" arm reaches `0x102a0b90` on MY
+object, so the blocked walker's own `AT_CROSSWALK` and link are set, and a walker queued behind
+a waiter becomes a waiter. Also: `OnStateChange 0x102ae140` clears `AT_CROSSWALK` in an
+unconditional tail, but its only real caller, `SetState 0x1026e340`, dispatches slot 463 only
+when the NPC state actually changes (`0x100d1650` in the caller list is a false positive).
+`OnScheduleChange 0x102a0940` KEEPS bit 2: its clear mask `0xbbf4b97e` and its tail `& 0xd7ffffff`
+both leave `0x4`, so a schedule change does not end a wait (corrected 2026-09-30; this sentence
+used to say "on every call"). `Save` writes the
 link as its two endpoint node ids and `OnRestore 0x102998c0` finds it again through
 `0x102f96e0`; and the throttle test is STRICT (`102a0de0 AND EAX,0x4100 / JNE` skips on
 `curtime <= stamp`) — one opencode walk read it as inclusive and was wrong.
@@ -1707,10 +1724,31 @@ per phase: `0x102f97c0` (from `CAI_Hint::InputWalk` / `InputDontWalk`) is their 
 sets or clears all four at once, and no shipped AIN carries any, so the 64-second clock never
 changes an answer — the cycle is the map's `logic_timer` (`sm_hub_1`, `hw_hub_1`: 40 s).
 
-`DAT_10924a6c` is the ConVar `ent_trace_conditions` — the static object at `0x10924a68` (registrar `0x1028bde0`: name `0x105d7ad0`, default `"1"`, help "When ent_trace is on, this will dump info about conditions also."), whose `+4` word is the pointer every condition setter reads a value through (slot 1) and discards: a debug-trace read, no game state (closed 2026-09-19). **Not built:** this runtime has no
-navigator path type, no route over graph nodes (0018 story 4's place set, landed 2026-09-29,
-carries the crosswalk pairs but no links; the link is story 7's) and no navigation link, so all three bodies refuse at the seam
-that answers for them, and `RunAI` (slot 432) is still a generated stub, so nothing calls the rule.
+`DAT_10924a6c` is the ConVar `ent_trace_conditions` — the static object at `0x10924a68` (registrar `0x1028bde0`: name `0x105d7ad0`, default `"1"`, help "When ent_trace is on, this will dump info about conditions also."), whose `+4` word is the pointer every condition setter reads a value through (slot 1) and discards: a debug-trace read, no game state (closed 2026-09-19).
+
+**The wait test's gate order, from the listing (2026-09-30, 0018 story 7).** `0x102a0bc0` tests
+in this order: waypoint non-null; `wp+0x10` (node id) `>= 0`; `wp+0x30` (next waypoint) non-null;
+`wp+0x28 & 4`; path type `0x102ee620 == 8`. Only then does it index the node array
+(`navigator+0x5d34 → +0x2c`). An id past the count bumps `DAT_106c994c` and yields a null node.
+Then `0x102f96e0(node, next+0x10)` finds ONE link, and the phase bit `0x10 << ((curtime >> 4) & 3)`
+on `link+0x64`. Set → `0x102a0b90(link)` and true. Every other exit answers false with the low
+byte cleared.
+
+**Landed 2026-09-30 (0018 story 7; the ported walk and the route side are in
+`navigation-jump-links.md` § "The crosswalk walk").** The earlier "Not built" note is retired. The
+place set holds one red/green boolean per pair. `0x102a0bc0` takes the fields `{DestCm, NodeId,
+Flags, NextNodeId, bGoal}` with the order above and one link lookup. `0x102a0b90` is ported once
+(`SetAtCrosswalkLink`, `ElysiumNpcDialogueBodies.cpp`); the second copy (`SetAtCrosswalk` /
+`AtCrosswalkNode`, which read `+0x630c` as a node id) is deleted. `0x102a0d20`'s strict stamp
+stands, and `RunAI` calls it. The queue arm `0x10298340` is `FElysiumNpc::MovementSinkObstructed`
+(`ElysiumNpcCrosswalk.cpp`), and `0x102` (`PAUSE_MOVING; FACE_NEXT_NODE; WAIT_INDEFINITE`) runs.
+The chain `0x100 → 0x102 → 0x100` on green is exercised by
+`Elysium.Substrate.NpcCrosswalk.ThinkWaitsAtRed` through real thinks, entering `0x100` as `0xff`
+does: `SetSchedule(int) 0x10280de0` keeps `PRESERVE_PATH`, while the forced Troika path
+`0x102ae780` clears it and releases the place. No live hub pedestrian reaches it while the port's
+ambient executor owns every `use_interesting` body (0002/11). Port naming defect, recorded:
+`PAUSE_MOVING`'s pause was called "StopMoving". `ElysiumNpcConditionsBodies.cpp:262` is
+corrected, but `ElysiumNpcConditions10.cpp:323-327` still calls the unpause `NavStopMoving`.
 
 ### Naming a condition, long and short — `0x102cc300`, `0x1027ede0`, `0x1027e7f0` (2026-09-13)
 

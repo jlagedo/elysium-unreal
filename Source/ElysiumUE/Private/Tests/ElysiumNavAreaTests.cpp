@@ -1,4 +1,5 @@
-// Job 6's two marks, asked of the baked levels: a priced roadway and a cut doorway.
+// Job 6's two marks, asked of the baked levels: a priced roadway and a cut doorway -- and, since
+// 0018/7, the door smart links laid across the doorways retail's graph runs through.
 //
 // Retail's door rule is a mask fact -- the graph-build mask `0x2000b` is the only movement mask
 // without `MOVEABLE 0x4000`, so `InitLinks` builds through a standing door while every run-time
@@ -19,7 +20,10 @@
 #include "Map/ElysiumNavQueryFilter_Pedestrian.h"
 #include "NavAreas/NavArea_Default.h"
 #include "NavMesh/RecastNavMesh.h"
+#include "NavigationSystem.h"
+#include "NavLinkCustomComponent.h"
 #include "Tests/AutomationCommon.h"
+#include "Visual/ElysiumNavDoorLink.h"
 
 static constexpr EAutomationTestFlags GElysiumNavAreaFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -47,6 +51,32 @@ namespace
 		}
 		return Count;
 	}
+
+	// Every door smart link in the level, by each of its doors' lump ordinals; `OutLinkCount` is how
+	// many link actors stand (one per witness AIN link).
+	TMap<int32, AElysiumNavDoorLink*> DoorLinksOf(UWorld* World, int32& OutLinkCount)
+	{
+		TMap<int32, AElysiumNavDoorLink*> Links;
+		OutLinkCount = 0;
+		for (TActorIterator<AElysiumNavDoorLink> It(World); It; ++It)
+		{
+			++OutLinkCount;
+			for (const int32 Door : It->DoorEntityIndices)
+			{
+				Links.Add(Door, *It);
+			}
+		}
+		return Links;
+	}
+
+	// The supported-agents bit of a project agent, by name (`SupportedAgents` order).
+	uint32 AgentBit(const TCHAR* Name)
+	{
+		const TArray<FNavDataConfig>& Agents = GetDefault<UNavigationSystemV1>()->GetSupportedAgents();
+		const int32 Index = Agents.IndexOfByPredicate(
+			[Name](const FNavDataConfig& Agent) { return Agent.Name == FName(Name); });
+		return Index == INDEX_NONE ? 0u : (1u << Index);
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavAreaHubTest,
@@ -66,13 +96,30 @@ bool FElysiumNavAreaHubTest::RunTest(const FString&)
 	TestEqual(TEXT("nine roadway slabs are priced"),
 		ConvexesWearing(Marks, UElysiumNavArea_Pedestrian::StaticClass()), 9);
 
-	// 29 doors, 2 of which -- the smoke-shop pair -- carry a link and keep their opening for
-	// story 7's smart link. The other 27 are walls, and they are 52 convexes rather than 27: a
-	// door entity is several brushes (leaf, frame, a double door's other half), and the mark is
-	// made from the same hulls its collision body is cooked from. The door COUNT is pinned where
-	// it is derived, over the staged rows, in `test_map_nav_doors.py`.
-	TestEqual(TEXT("the 27 cut doors are 52 convexes"),
-		ConvexesWearing(Marks, UElysiumNavArea_DoorCut::StaticClass()), 52);
+	// 29 doors, every one cut (0018/7): the 27 no link crosses are walls, 52 convexes (a door
+	// entity is several brushes -- leaf, frame, a double door's other half -- and the mark is made
+	// from the hulls its collision body is cooked from); the smoke-shop pair, 2 convexes, is cut
+	// under its smart links. The door COUNT is pinned where it is derived, in `test_map_nav_doors.py`.
+	TestEqual(TEXT("the 29 cut doors are 52 + 2 convexes"),
+		ConvexesWearing(Marks, UElysiumNavArea_DoorCut::StaticClass()), 52 + 2);
+
+	// The smoke-shop pair: ONE link (AIN link 958 crosses both leaves -- retail has one link, and
+	// its hold asks both doors), human and rat.
+	int32 LinkCount = 0;
+	const TMap<int32, AElysiumNavDoorLink*> Links = DoorLinksOf(Baked, LinkCount);
+	TestEqual(TEXT("the hub lays 1 door smart link"), LinkCount, 1);
+	const uint32 Both = AgentBit(TEXT("Human")) | AgentBit(TEXT("Rat"));
+	AElysiumNavDoorLink* const* Basic = Links.Find(2566);
+	AElysiumNavDoorLink* const* Plus = Links.Find(2567);
+	if (TestNotNull(TEXT("basic_smoke_door (2566) is on a link"), Basic)
+		&& TestNotNull(TEXT("plus_smoke_door (2567) is on a link"), Plus))
+	{
+		TestTrue(TEXT("...the same link"), *Basic == *Plus);
+		TestEqual(TEXT("...witnessed by AIN link 958"), (*Basic)->WitnessLinkIndex, 958);
+		TestTrue(TEXT("...over both doors, in lump order"), (*Basic)->DoorEntityIndices == TArray<int32>{ 2566, 2567 });
+		TestEqual(TEXT("...carrying human and rat"), static_cast<uint32>((*Basic)->SupportedAgentBits()), Both);
+		TestTrue(TEXT("...enabled"), (*Basic)->IsSmartLinkEnabled());
+	}
 	return true;
 }
 
@@ -92,10 +139,50 @@ bool FElysiumNavAreaTutorialTest::RunTest(const FString&)
 		ConvexesWearing(Marks, UElysiumNavArea_Pedestrian::StaticClass()), 0);
 
 	// 36 doors, 8 of which the graph runs through -- the designers' own choice of which encounters
-	// can reach the player, which is why the other 28 become walls rather than all 36 or none.
-	// 28 doors, 44 convexes: a door entity is several brushes.
-	TestEqual(TEXT("the 28 cut doors are 44 convexes"),
-		ConvexesWearing(Marks, UElysiumNavArea_DoorCut::StaticClass()), 44);
+	// can reach the player. Every one is cut (0018/7): the 28 walls are 44 convexes, the 8 under
+	// smart links 16 more (a door entity is several brushes).
+	TestEqual(TEXT("the 36 cut doors are 44 + 16 convexes"),
+		ConvexesWearing(Marks, UElysiumNavArea_DoorCut::StaticClass()), 44 + 16);
+
+	// The eight links, per agent (findings § 2): five crossed by both hulls, `339` by the human
+	// alone, `yetanotherfuckingdoor` (890) and `soc_int_locked_door` (1546) by the rat alone.
+	const uint32 Human = AgentBit(TEXT("Human"));
+	const uint32 Rat = AgentBit(TEXT("Rat"));
+	if (!TestTrue(TEXT("the project declares the human and rat agents"), Human != 0 && Rat != 0)) return false;
+	int32 LinkCount = 0;
+	const TMap<int32, AElysiumNavDoorLink*> Links = DoorLinksOf(Baked, LinkCount);
+	TestEqual(TEXT("the tutorial lays 8 door smart links, one door each"), LinkCount, 8);
+	TestEqual(TEXT("...over 8 doors"), Links.Num(), 8);
+	const TMap<int32, uint32> Expected = {
+		{ 183, Human | Rat },   // tutwareportal03
+		{ 331, Human | Rat },   // frontgate
+		{ 339, Human },
+		{ 592, Human | Rat },   // tutwareportal05
+		{ 851, Human | Rat },   // activisionsucks
+		{ 890, Rat },           // yetanotherfuckingdoor
+		{ 1545, Human | Rat },
+		{ 1546, Rat },          // soc_int_locked_door
+	};
+	int32 BothCount = 0, HumanOnly = 0, RatOnly = 0;
+	for (const TPair<int32, uint32>& Row : Expected)
+	{
+		AElysiumNavDoorLink* const* Link = Links.Find(Row.Key);
+		if (!TestNotNull(*FString::Printf(TEXT("door %d has its link"), Row.Key), Link))
+		{
+			continue;
+		}
+		const uint32 Bits = static_cast<uint32>((*Link)->SupportedAgentBits());
+		TestEqual(*FString::Printf(TEXT("door %d's link agents"), Row.Key), Bits, Row.Value);
+		BothCount += Bits == (Human | Rat) ? 1 : 0;
+		HumanOnly += Bits == Human ? 1 : 0;
+		RatOnly += Bits == Rat ? 1 : 0;
+		const UNavLinkCustomComponent* Smart = (*Link)->GetSmartLinkComp();
+		TestTrue(*FString::Printf(TEXT("door %d's link spans the doorway"), Row.Key),
+			FVector::Dist(Smart->GetStartPoint(), Smart->GetEndPoint()) > 20.0);
+	}
+	TestEqual(TEXT("5 links carry both agents"), BothCount, 5);
+	TestEqual(TEXT("1 link carries the human alone"), HumanOnly, 1);
+	TestEqual(TEXT("2 links carry the rat alone"), RatOnly, 2);
 	return true;
 }
 

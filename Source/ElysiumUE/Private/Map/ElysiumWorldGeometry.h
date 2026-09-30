@@ -27,10 +27,12 @@ namespace ElysiumWorldGeometry
 	// `Filter` (null = the nav data's default). False = the mesh could not be asked (an end that will
 	// not project); "no complete route" is true with `Out.bReachable == false`. Under
 	// `bAcceptPartial` a partial path is reachable with `Out.bPartial` set; without it the search is
-	// asked for complete paths only, so a partial never comes back.
+	// asked for complete paths only, so a partial never comes back. `Querier` is the search's owner
+	// (the asking body's controller): a custom link's per-query predicate reads it (0018/7, the door
+	// smart link's stale mark); null asks with no owner.
 	bool Route(const ANavigationData& NavData, const FNavAgentProperties& Agent,
 		FSharedConstNavQueryFilter Filter, const FVector& FromCm, const FElysiumNpcRouteQuery& Query,
-		FElysiumNpcRouteAnswer& Out);
+		FElysiumNpcRouteAnswer& Out, const UObject* Querier = nullptr);
 
 	// The navmesh raycast on `NavData` under `Filter`. False = the mesh could not answer.
 	bool Raycast(const ANavigationData& NavData, FSharedConstNavQueryFilter Filter,

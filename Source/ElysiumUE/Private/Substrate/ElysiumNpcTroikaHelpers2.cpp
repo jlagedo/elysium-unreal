@@ -321,19 +321,22 @@ void FElysiumNpc::StopScheduledMove()
 	//     if (m_IdealActivity == NavCurrentLinkActivity())          // +0x0ff0, 0x102ee3f0
 	//         SetActivity(ResolveLinkActivity());                   // 0x1027a6c0, 0x10272650
 	//     m_bShouldMove = 0;                                        // +0x1a40
-	//     NavReset();                                               // 0x102ee2a0
+	//     m_pNavigator->Pause();                                    // 0x102ee2a0 -> 0x1030be80, path+0x10 = 1
 	//     m_flDesiredMoveYaw = 0;                                   // +0x63ec
 	//
 	// The last three run UNCONDITIONALLY — the activity replay is the only guarded half. This is
-	// the inverse of family **Motor**'s `ResumeScheduledMove` (`0x102bf7e0`), which stops the goal
-	// and then SETS `m_bShouldMove`; the two are siblings and the asymmetry is retail's.
+	// the inverse of family **Motor**'s `ResumeScheduledMove` (`0x102bf7e0`), which unpauses the path
+	// (`0x102ee2c0`) and then SETS `m_bShouldMove`; the two are siblings and the asymmetry is retail's.
+	// The pause is the path's word and not a reset (0018 story 7, findings R-C § 6): `Move`'s first
+	// gate (`0x102effab`) returns on it, the waypoints stand, and `0x1030bb30` (a `SetGoal` that clears
+	// the route) or `0x102ee2c0` lifts it -- the crosswalk waiter's hold under schedule `0x102`.
 	if (IdealActivityNumber == NavCurrentLinkActivity())
 	{
 		LastSetActivityId = ResolveLinkActivity();
 		++SetActivityIdCalls;
 	}
 	BaseScheduleHost.bShouldMove = false;
-	++NavResets;
+	Navigator.bPaused = true;                                // 0x102ee2a0 -> 0x1030be80
 	ScheduleHost.DesiredMoveYaw = 0.f;
 }
 
@@ -616,24 +619,6 @@ void FElysiumNpc::FUN_102aa9e0(FPatrolPathCell* Cell)
 	// 0x102aaa20 / 0x102aaa2a: `+0x1b44` = `AI_BaseNPCTroika.cpp`, `+0x1b48` = 0x3d9c -- the ASSERT pair
 	// the shape map calls ABSENT; the line is named here and not stored.
 	TaskFail(TroikaTaskArgumentAssertReason);                 // 0x102aaa1c PUSH 0x1d / 0x102aaa34 CALL [EAX+0x700]
-}
-
-// -------------------------------------------------------------------------------------------------
-// `0x102a0b90` — the crosswalk stamp.
-// -------------------------------------------------------------------------------------------------
-
-void FElysiumNpc::SetAtCrosswalk(int32 CrosswalkNode)
-{
-	// `0x102a0b90`, the whole body:
-	//     m_bfAINPCFlags |= 0x4;                                    // +0x14b8, AT_CROSSWALK
-	//     *(int*)(this + 0x630c) = param_1;
-	//
-	// The flag bit is what NAMES the write: `0x4` on word one is `AT_CROSSWALK`
-	// (`ElysiumNpcFlags.h`), and `+0x630c` sits between `m_iInterestingPlaceGroups` (`+0x62dc`) and
-	// `m_iRestorePedLinkNode` (`+0x6310`) — the pedestrian link block. So the unbound word is the
-	// crosswalk NODE, and 29c's `Slot0x630c` target name is replaced by that reading.
-	NpcFlags.Set(EElysiumNpcFlag::AT_CROSSWALK);
-	AtCrosswalkNode = CrosswalkNode;
 }
 
 // -------------------------------------------------------------------------------------------------

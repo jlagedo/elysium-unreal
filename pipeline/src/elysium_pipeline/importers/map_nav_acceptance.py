@@ -24,6 +24,12 @@ between the two is unreachable for a real agent and is reported with its rise me
 a mesh defect. Cutting the agents at 40 instead would let NPCs climb what retail's own motor
 refuses.
 
+And one thing it expects of the bake rather than of a mesh (`bakedJumpLinks`, 0018/7): every
+human jump-only pair recorded as one `AElysiumNavJumpLink`, present and DISABLED with no agent.
+Retail plans no jump link -- `0x102ff960` step 2 ANDs the NPC's capabilities (slot 513) with the
+link's per-hull word and no NPC holds bit 2 -- so an enabled one is a route retail does not have,
+and fails the gate. The graph's jump rows (`perHull[h]["jump"]`) stay: they describe the graph.
+
 Beside the checks the key carries the place reports' questions (`placeQueries`, 0018 story 4):
 which places and authored points sit off each agent's mesh, which authored points no node covers,
 and whether each agent's mesh joins what the graph's zones keep apart. Those are observations --
@@ -128,6 +134,15 @@ def project(block: dict, map_name: str, *, base_hull: int = 0,
 
     # What the base hull -- the human -- already joins. Everything below is measured against it,
     # because "only the rat has this link" is only interesting where the human has no other way.
+    #
+    # 0018/7, two decisions RECORDED FOR THE CLOSE (reported, never failed):
+    #  (a) Bridging keeps the GRAPH's ground | jump union below: this key describes the graph.
+    #      Under retail reach -- no NPC takes a jump-only link, `0x102ff960` step 2 -- the hub's
+    #      rat-only links 727, 1242, 1243 and 1244 join nodes the human joins only by a jump and
+    #      would be bridging too (9 -> 13; the tutorial's 5 do not move).
+    #  (b) Only the HUMAN jump-only pairs get a record actor (`map_jump_links`, 25 tutorial / 117
+    #      hub); the rat-only jump-only links (tutorial 19, hub 35) are counted in the staged
+    #      summary and not recorded.
     base = _Components()
     for link in links:
         if _motion(link, base_hull) & (MOVE_GROUND | MOVE_JUMP):
@@ -166,7 +181,12 @@ def project(block: dict, map_name: str, *, base_hull: int = 0,
                         "reason": "rise is inside the graph builder's step and above the NPC's",
                     })
             if motion & MOVE_JUMP:
-                jump.append(row)
+                # A graph row, never a route: the endpoints must land (a retail ground link
+                # reaches each), the jump between them is refused at `0x102ff960` step 2. The
+                # word rides along so the gate can tell a jump-only pair (no retail edge for this
+                # hull at all -- `InitLinks 0x102fb4e0`'s walk failed there) and ask whether the
+                # mesh walks it anyway.
+                jump.append({**row, "motion": motion})
         per_hull[str(hull)] = {"ground": ground, "jump": jump}
 
     # The links this agent has and the base hull does not, and the subset of those that JOIN --
@@ -243,6 +263,7 @@ def stage(map_name: str, root: Path | None = None) -> dict[str, Any]:
     block = load_graph_block(map_name, root)
     key = project(block, map_name)
     key["summary"] = summarise(key)
+    key["bakedJumpLinks"] = baked_jump_links(block, map_name)
     try:
         units = producer.read_units(map_name, root)
         rows = units.entities["entities"]
@@ -253,6 +274,23 @@ def stage(map_name: str, root: Path | None = None) -> dict[str, Any]:
     except (ValueError, KeyError, OSError) as error:
         key["placeQueries"] = {"unavailable": f"{type(error).__name__}: {error}"}
     return key
+
+
+def baked_jump_links(block: dict, map_name: str) -> dict[str, Any]:
+    """What the bake must have left in the level: one disabled, agentless record per staged row.
+
+    Stated from the SAME staging the bake authors from (`map_jump_links.project_graph`), so the key
+    and the level cannot disagree about which pairs exist.
+    """
+
+    from elysium_pipeline.importers import map_jump_links
+
+    staged = map_jump_links.project_graph(block, map_name)
+    return {
+        "expected": [int(row["index"]) for row in staged["links"]],
+        "expectation": "present, disabled, no agent",
+        "summary": staged["summary"],
+    }
 
 
 # --- The place reports (0018 story 4; observations only, pins are 0018/21-9's) -----------------

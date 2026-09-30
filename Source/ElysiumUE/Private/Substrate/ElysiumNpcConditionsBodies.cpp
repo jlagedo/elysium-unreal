@@ -1,5 +1,6 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditionsBodiesShared.h"
+#include "Substrate/ElysiumMover.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -257,20 +258,33 @@ void FElysiumNpc::EnterAlternateAi()
 {
 	// `FUN_10298800`, three stores in order.
 	BaseScheduleHost.bShouldMove = false;                 // +0x1a40
-	StopMoving();                                     // 0x102ee2a0 on m_pNavigator (+0x5d34)
+	// `0x102ee2a0` on `m_pNavigator` (+0x5d34) -> `0x1030be80`: `path+0x10 m_bPaused = 1` -- the PAUSE,
+	// not a stop (0018/7 correction; it was `StopMoving`, which dropped the body's request). The move
+	// step's paused gate parks the body (`NavParkBody`) and `OnDoorFullyOpen`'s un-pause resumes it.
+	Navigator.bPaused = true;
 	AlternateAi = 1;                                  // +0x644c
 }
 
 bool FElysiumNpc::OpeningDoorFacingPoint(const FElysiumEntity& Door, bool bWait,
 	FVector& OutPointCm) const
 {
-	// SEAM for the door's own vtable `+0x3d8`, called as `(this, &point, m_bOpeningDoorWait)`. This
-	// runtime's doors carry no NPC-open point, so the transaction takes retail's
-	// `iStack_10 == -1` arm.
-	(void)Door;
-	(void)bWait;
-	(void)OutPointCm;
-	return false;
+	// The door's own vtable `+0x3d8` (`GetNPCOpenData`), called as `(this, &data,
+	// m_bOpeningDoorWait)`, and the ONE field mode 1 reads (0018/7, findings § 1): `FaceDir`
+	// (`+0xc`), which `102900ca` turns into a yaw. `OutPointCm` therefore carries a DIRECTION in the
+	// port's axes, not a point (the declaration's name predates the struct). A -1 answer (a sliding
+	// door, the wrong side of a swinging one, a non-door) is false, the `iStack_10 == -1` arm.
+	FElysiumDoorBase* DoorBase = const_cast<FElysiumEntity&>(Door).AsDoorBase();
+	if (DoorBase == nullptr)
+	{
+		return false;
+	}
+	const FElysiumDoorNpcOpenData Data = DoorBase->GetNPCOpenData(this, bWait);
+	if (Data.Activity == INDEX_NONE)
+	{
+		return false;
+	}
+	OutPointCm = Data.FaceDir;
+	return true;
 }
 
 // `FacingIdeal` (`0x10278c80`) is family **Facing**'s body and is called, not restated.
@@ -296,15 +310,15 @@ bool FElysiumNpc::RunAlternateAiOpeningDoor(double Now)
 		return false;
 	}
 
-	// 3. Face it — `0x102e0b40` on the motor, `VecToYaw` (`0x101d2c70`) over the returned direction,
-	//    then `0x102e1c10(motor, yaw, -1.0)`. `VecToYaw` answers a RETAIL yaw (Source's Y is this
-	//    world's -Y; L05 integration: was the Unreal yaw, harmless while the write was a seam), and
-	//    0 for a zero direction.
+	// 3. Face it — `0x102e0b40` on the motor, `VecToYaw` (`0x101d2c70`) over the open data's
+	//    `FaceDir` (`102900ca`; `PointCm` holds that direction), then `0x102e1c10(motor, yaw, -1.0)`.
+	//    `VecToYaw` answers a RETAIL yaw (Source's Y is this world's -Y) and 0 for a zero direction.
 	SetAlternateAiIdealYaw(NpcKernelFacingShared::RetailVecToYaw(PointCm));   // 0x101d2c70
 
 	// 4. Only once FACING does the transaction advance. Both advance arms set mode 2 and stamp an
-	//    expiry; the WAIT arm uses 1.0 s and the open arm 5.0 s, and the wait arm does not run the
-	//    follow-up at all.
+	//    expiry; the door-already-opening arm (`m_bOpeningDoorWait`) uses 1.0 s and the open arm
+	//    (`0x10298840` succeeded) 5.0 s. Mode 2 (`0x10290200`, `RunAi19AlternateAiMode2`) waits the
+	//    expiry out; `OnDoorFullyOpen 0x1027dd10` ends it early; `OnDoorBlocked` moves 1/2 to 3.
 	if (FacingIdeal())
 	{
 		if (bOpeningDoorWait)

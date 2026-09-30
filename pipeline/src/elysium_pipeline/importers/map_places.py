@@ -30,7 +30,11 @@ by, so a row this lane binds is a row that lane bakes. A parented node row is re
 counter.
 
 Two further products ride the block. **Crosswalk pairs**: the links whose two endpoints are both
-bound to a hint of type 11000 (`info_node_crosswalk`), for story 7's smart link. **Wander caps**:
+bound to a hint of type 11000 (`info_node_crosswalk`), each staged as `[a, b, motion]` with the
+link's hull-0 motion word (`link+0x0c`), for story 7's pedestrian splice and wait: a pair whose word
+lacks the ground bit (`bits_CAP_MOVE_GROUND` 1; the hub's 260-263 and 259-261 are jump-only, 2) is
+a link no pedestrian route ever takes (`0x102ff960`), so the splice and the wait read only walkable
+pairs, while the hint's signal write (`0x102f97c0`) still reaches every pair. **Wander caps**:
 per declared hull, 20 x the median raw-origin link length over the links that hull may use --
 the reach of `TASK_GET_PATH_TO_RANDOM_NODE`'s walk at its `0x14` iteration guard
 (`research/tooling/probes/census_link_lengths.py`). Source units, the unit schedule operands are
@@ -70,6 +74,10 @@ WANDER_GUARD_HOPS = 0x14
 
 #: `FUN_102d7d30`'s forced type for `info_node_crosswalk`.
 CROSSWALK_HINT_TYPE = 11000
+
+#: `bits_CAP_MOVE_GROUND`: the motion-word bit a walking hull needs. A crosswalk pair whose hull-0
+#: word lacks it (the hub's jump-only 260-263 and 259-261, word 2) is never on a pedestrian route.
+MOVE_GROUND = 1
 
 
 class MapPlacesError(ValueError):
@@ -153,8 +161,8 @@ def wander_caps(nodes: Sequence[dict[str, Any]], links: Sequence[dict[str, Any]]
 
 def crosswalk_pairs(links: Sequence[dict[str, Any]],
                     attached: dict[int, tuple[int, int]]) -> list[list[int]]:
-    """Every link joining two nodes bound to crosswalk hints, lower index first, in link order,
-    each pair once."""
+    """Every link joining two nodes bound to crosswalk hints, as `[lower, higher, motion]` -- the
+    link's hull-0 motion word (`fields[1]`) -- in link order, each pair once (its first link)."""
     crossing = {node for node, (_, hint_type) in attached.items()
                 if hint_type == CROSSWALK_HINT_TYPE}
     pairs: list[list[int]] = []
@@ -165,8 +173,15 @@ def crosswalk_pairs(links: Sequence[dict[str, Any]],
             pair = (min(src, dst), max(src, dst))
             if pair not in seen:
                 seen.add(pair)
-                pairs.append(list(pair))
+                fields = link.get("fields") or []
+                motion = int(fields[1 + HUMAN_HULL]) if len(fields) > 1 + HUMAN_HULL else 0
+                pairs.append([*pair, motion])
     return pairs
+
+
+def walkable_crosswalk_pairs(pairs: Sequence[Sequence[int]]) -> list[list[int]]:
+    """The staged pairs a walking hull can take: the ground bit in the hull-0 motion word."""
+    return [list(pair) for pair in pairs if int(pair[2]) & MOVE_GROUND]
 
 
 def _place_row(node: dict[str, Any], hint: int) -> dict[str, Any]:

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "ElysiumAnimationIntent.h"
+#include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
@@ -308,6 +309,107 @@ public:
 	#include "Substrate/ElysiumNpcBaseWerewolf.inl"
 	#include "Substrate/ElysiumNpcBaseMisc2.inl"
 	#include "Substrate/ElysiumNpcBaseDamaged.inl"
+
+	// --- 0018/7: the door transaction's base-line bodies and the navigator words they read ------
+
+	/** `CAI_BaseNPC::OnDoorFullyOpen` `0x1027dd10`, called by the door's `DoorHitTop 0x100f0860`
+	 *  on its activator's `+0x94 m_pBaseNPC`: slot 158 `IsAlive`; a null door does nothing; slot
+	 *  532(1) when the door is `m_hOpeningDoor`; the navigator un-paused ONLY if paused
+	 *  (`0x102ee2e0` / `0x102ee2c0`); `m_bShouldMove = 1`; slot 528; and the Troika's
+	 *  `m_eAlternateAI` 1 or 2 back to 0. */
+	void OnDoorFullyOpen(FElysiumEntity* Door);
+
+	/** `0x1027dfb0`, the hit-by-door notice (`IsCloseBlocked 0x100f0c00`, `StartBlocked 0x100f1340`):
+	 *  `IsAlive`; `SetCondition(0x34)`; `m_hCondHitByDoor (+0x5d2c) = door`; then, when
+	 *  `debug_hit_by_mode` is 0 (`HitByDoorGate`), the door being opened goes to `OnDoorBlocked`, any
+	 *  other door is MAX-stamped `curtime + 5.0` and becomes `m_hBlockedDoor`; at the shipped 1, the
+	 *  alternate arm: slot 532(4). */
+	void HitByDoor(FElysiumEntity& Door);
+
+	/** `0x1027dfb0`'s gate `IsCommand() || m_nValue == 0` on `DAT_1092038c`, the parent pointer of the
+	 *  ConVar `debug_hit_by_mode` (object `0x10920388`, registrar `0x10264fc0`: name `0x105cb8dc`,
+	 *  default `"1"` `0x10539978`, help "Set this to 1 to use alternate hit by door code.", read from
+	 *  the image). A ConVar is no command, so the door-notice arm runs only at 0; the SHIPPED value 1
+	 *  takes the alternate arm, slot 532(4). The port carries the shipped default (no console binds
+	 *  this ConVar). The head call `(*DAT_10924a6c)->vtable+4()` is `ent_trace_conditions`
+	 *  (`0x10924a68`, a debug read whose answer is discarded): not reproduced, no observable. */
+	static constexpr int32 DebugHitByModeShipped = 1;
+	bool HitByDoorGate() const { return DebugHitByModeShipped == 0; }
+
+	/** `0x1027dc10` -- the base movement sink's slot 1 (`this = npc+0x19b0`): the move goal's
+	 *  blocker (`goal+0x60`), its door (`+0xa4`), slot 531 `OnObstructingDoor(goal, door,
+	 *  distClear, &result)`; true = handled, the result in `MoveSinkResult`. The Troika sink
+	 *  `0x10298340` (`FElysiumNpc::MovementSinkObstructed`) tail-calls it. The port's goal is the
+	 *  step's facts: `Blocker` stands for `goal+0x60` (a door the body's smart link is held at, or
+	 *  an entity it names), `maxDist` is the leg's remaining distance and `distClear` the distance
+	 *  to where the hold stands. */
+	bool NavMoveSinkDoorStep(const FNavStepFacts& Step);
+
+	/** The movement sink's `AIMoveResult_t* pResult` (slot 1's last argument): seeded `Ok` before
+	 *  each dispatch, written by whichever sink arm handles the step; `NavMoveNormalPass` answers it. */
+	ENavMoveResult MoveSinkResult = ENavMoveResult::Ok;
+
+	/** The last move facts `NavSampleStep` read (the port's view of the path the look-ahead and the
+	 *  move-step door arms read: the door link held at, the next door link ahead). */
+	FElysiumNpcMoveFacts NavLastFacts;
+	bool bNavLastFactsValid = false;
+
+	/** `nav+0x38` -- `SimplifyPath`'s far-scan stamp (the constructor `0x102eca50` stores 0). */
+	double NavSimplifyNextTime = 0.0;
+	/** `nav+0x50` `m_fRememberStaleNodes` -- the stale mark's gate; the constructor `0x102eca50`
+	 *  stores 1 and no other writer is recovered. */
+	bool bNavRememberStaleNodes = true;
+	/** The pathfinder's `+0x14`: the `curtime` its last stale-link re-probe ran at (`0x102fce80`
+	 *  probes at most once per `curtime` per pathfinder). */
+	double PathfinderLinkProbeTime = -1.0;
+
+	/** `CAI_Navigator::SimplifyPath` `0x102f13d0`'s door half: nav type 0 or 2; when forced or
+	 *  `nav+0x38 <= curtime`, stamp `curtime + 0.5` and run the far scan (`0x102f0e80` radius 384 /
+	 *  `0x102f0fe0`); then ALWAYS the quick pass (`0x102f13a0` radius 144). Once a door has been
+	 *  seen the rest of the tick's passes are skipped. The NAMED MODERNIZATION: the navmesh
+	 *  follower shortcuts the path itself, so the only point each pass probes is the far end of the
+	 *  next door smart link on the path, when it lies inside the pass's radius. True = a door
+	 *  refused (`OnNavFailed(0x0e)` was raised inside). */
+	bool NavSimplifyPath(bool bForce);
+
+	/** `0x102f06e0` toward one path point: the ray from slot 193 (`WorldSpaceCenter`) under
+	 *  `0x2400b` (`0x2600b` on a pedestrian path, `path+1`); clear -> no door; a hit door -> the lock
+	 *  test `0x100eec70` (refused: dropped, nothing written) -> slot 531 with a zeroed goal whose
+	 *  `maxDist = dist + 10.0` -> handled sets `bOutDoorSeen`; a non-zero result raises
+	 *  `OnNavFailed(0x0e, 1)` then `OnDoorBlocked`. Answers true iff that failure was raised. */
+	bool NavDoorProbe(const FVector& PointCm, bool& bOutDoorSeen);
+
+	/** `0x102f1fa0(nav, Seconds, Blocker)`: gated on `nav+0x50`, a live path (`0x102ee6a0` inside),
+	 *  and the link the NPC's current path segment stands on; marks that link stale. The port's
+	 *  "current link" is the door smart link the body is held at, else the next one ahead on its
+	 *  path (the link between the last node passed and the head's node); a segment that is no door
+	 *  link has no link to mark. `NavMarkStaleLink` (the Move tail's 4.0 s) routes here. */
+	void NavMarkLinkStale(double Seconds, const FElysiumEntity* Blocker);
+
+	/** `0x102ff960`'s stale tail over `0x102fce80`, for the door smart link between `StartCm` and
+	 *  `EndCm` (`AElysiumNavDoorLink::IsLinkPathfindingAllowed` asks it per route query): not stale
+	 *  -> usable; `curtime > StaleUntil` (strict) -> clear, usable; else the FIRST ask this
+	 *  `curtime` re-probes the segment (`0x10304a40`: this NPC's hull swept under `0x202400b`, the
+	 *  world answer) and a clear probe clears the mark; still stale -> a live `StaleDoor` gets
+	 *  `OnDoorBlocked` and the link is refused. */
+	bool DoorLinkPathfindingAllowed(FElysiumEntity& Door, const FVector& StartCm, const FVector& EndCm);
+
+	/** `CAI_Pathfinder::CheckStaleRoute` `0x10304a40`'s ground arm `0x103048d0` between a link's two
+	 *  ends (world cm): the hull probe under `0x202400b`; blocked -> the local route `0x103059d0`
+	 *  (SEAM, not found, counted in `NavStaleRouteLocalRouteAsks`); blocked by an NPC -> the probe
+	 *  again under `0x2400b`. True = clear. */
+	bool NavCheckStaleRoute(const FVector& StartCm, const FVector& EndCm);
+	int32 NavStaleRouteLocalRouteAsks = 0;
+
+	/** S1 `0x102eefb0` -- the obstructed step's pre-sink arms, in its order, before the movement sink
+	 *  (slot 1) is asked. `MaxDistUnits` is the goal's `+0x28` (the leg's remaining distance) and
+	 *  `DistClearUnits` the distance to the obstruction. True = the step is decided here, its status
+	 *  in `OutResult`; false = hand it to the sink. */
+	bool NavObstructionPreSink(const FNavStepFacts& Step, float DistClearUnits, ENavMoveResult& OutResult);
+
+	/** The distance to the obstruction the step names, units: to where a door link holds the body,
+	 *  else 0 (the body's own capsule met it). */
+	float NavStepDistClearUnits(const FNavStepFacts& Step) const;
 
 	// --- Moved from `FElysiumNpc` (story 5 step 5) ---------------------------------------------
 

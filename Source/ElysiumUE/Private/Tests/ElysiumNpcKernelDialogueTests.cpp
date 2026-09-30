@@ -522,72 +522,87 @@ bool FElysiumNpcKernelDialogueCrosswalkTest::RunTest(const FString&)
 	FDialogueFixture F;
 	if (!TestNotNull(TEXT("guard spawned"), F.Guard)) { return false; }
 
-	// The phase mask: `0x10 << (((int)curtime >> 4) & 3)`, a 64-second cycle in four 16-second
-	// phases. The truncation is retail's `__ftol`, toward zero.
-	TestEqual(TEXT("phase 0 (t in [0,16)) is 0x10"), FElysiumNpc::CrosswalkPhaseMask(0.0), 0x10);
-	TestEqual(TEXT("t = 15.9 is still phase 0"), FElysiumNpc::CrosswalkPhaseMask(15.9), 0x10);
-	TestEqual(TEXT("t = 16 is phase 1, 0x20"), FElysiumNpc::CrosswalkPhaseMask(16.0), 0x20);
-	TestEqual(TEXT("t = 32 is phase 2, 0x40"), FElysiumNpc::CrosswalkPhaseMask(32.0), 0x40);
-	TestEqual(TEXT("t = 48 is phase 3, 0x80"), FElysiumNpc::CrosswalkPhaseMask(48.0), 0x80);
-	TestEqual(TEXT("t = 64 wraps to phase 0"), FElysiumNpc::CrosswalkPhaseMask(64.0), 0x10);
+	// The network the rule reads (0018 story 7): three ground nodes, nodes 0 and 1 a walkable
+	// crosswalk pair (pair 0), node 2 an ordinary node. Every pair starts green.
+	{
+		TArray<FElysiumPlaceRow> Rows;
+		for (int32 Node = 0; Node < 3; ++Node)
+		{
+			FElysiumPlaceRow& Row = Rows.AddDefaulted_GetRef();
+			Row.Type = 2;
+			Row.OriginCm = FVector(100.0 * Node, 0.0, 0.0);
+		}
+		F.World.World.Places().AdoptRows(MoveTemp(Rows), 1, {}, { FIntPoint(0, 1) }, { 1 });
+	}
+	FElysiumPlaceSet& Places = F.World.World.Places();
+	TestFalse(TEXT("a pair starts green (no AIN link carries 0xf0)"), Places.IsCrosswalkRed(0));
 
-	// `0x102a0b90` — the two-statement helper.
+	// `0x102a0b90` — the two-statement helper, the ONE port of it.
 	TestFalse(TEXT("AT_CROSSWALK starts clear"),
 		F.Guard->NpcFlags.Has(EElysiumNpcFlag::AT_CROSSWALK));
-	F.Guard->SetAtCrosswalkLink(0x30);
+	TestEqual(TEXT("+0x630c starts NULL"), F.Guard->PedestrianPair, static_cast<int32>(INDEX_NONE));
+	F.Guard->SetAtCrosswalkLink(0);
 	TestTrue(TEXT("0x102a0b90 raises AT_CROSSWALK (m_bfAINPCFlags 0x4)"),
 		F.Guard->NpcFlags.Has(EElysiumNpcFlag::AT_CROSSWALK));
-	TestTrue(TEXT("0x102a0b90 stores the link at +0x630c"), F.Guard->bCrosswalkLinkBound);
-	TestEqual(TEXT("...and the one word its readers touch, link+0x64"),
-		F.Guard->CrosswalkLinkSignalFlags, 0x30);
+	TestEqual(TEXT("0x102a0b90 stores the link at +0x630c (as its pair)"), F.Guard->PedestrianPair, 0);
+	F.Guard->NpcFlags.Clear(EElysiumNpcFlag::AT_CROSSWALK);
+	F.Guard->PedestrianPair = INDEX_NONE;
 
-	// --- `0x102a0bc0` — six gates, all required, in retail's order ---------------------------------
+	// --- `0x102a0bc0` — five gates in the listing's order, then the link ---------------------------
 	FElysiumNpc::FDialogPedWaypoint Waypoint;
-	Waypoint.EntityIndex = 4;
-	Waypoint.Flags = 0x4;
-	Waypoint.bHasHint = true;
-	Waypoint.HintLinkId = 77;
+	Waypoint.NodeId = 0;
+	Waypoint.Flags = 0x4 | 0x20;
+	Waypoint.bHasNext = true;
+	Waypoint.NextNodeId = 1;
+	Places.SetCrosswalkWalk(0, false);                  // DontWalk: the pair is red
 
 	TestFalse(TEXT("0x102a0bc0 gate 1: a null waypoint refuses"),
 		F.Guard->ResolvePedestrianPathNode(nullptr));
 
-	FElysiumNpc::FDialogPedWaypoint NoEntity = Waypoint;
-	NoEntity.EntityIndex = -1;
-	TestFalse(TEXT("gate 2: a negative entity index (+0x10) refuses"),
-		F.Guard->ResolvePedestrianPathNode(&NoEntity));
+	FElysiumNpc::FDialogPedWaypoint NoNode = Waypoint;
+	NoNode.NodeId = -1;
+	TestFalse(TEXT("gate 2: a waypoint that is no node (+0x10 < 0) refuses"),
+		F.Guard->ResolvePedestrianPathNode(&NoNode));
 
-	FElysiumNpc::FDialogPedWaypoint NoHint = Waypoint;
-	NoHint.bHasHint = false;
-	TestFalse(TEXT("gate 3: a null hint (+0x30) refuses"),
-		F.Guard->ResolvePedestrianPathNode(&NoHint));
+	FElysiumNpc::FDialogPedWaypoint NoNext = Waypoint;
+	NoNext.bHasNext = false;
+	TestFalse(TEXT("gate 3: the last waypoint (+0x30 NULL) refuses"),
+		F.Guard->ResolvePedestrianPathNode(&NoNext));
 
 	FElysiumNpc::FDialogPedWaypoint NoFlag = Waypoint;
-	NoFlag.Flags = 0;
+	NoFlag.Flags = 0x20;
 	TestFalse(TEXT("gate 4: the waypoint's own bit 2 (+0x28) clear refuses"),
 		F.Guard->ResolvePedestrianPathNode(&NoFlag));
 
-	// Gate 5 — the navigator's goal type (`0x102ee620`, `path+0x5c`). With no goal it is 0, not 8, and no
-	// seam below it is reached.
-	F.Guard->CrosswalkNodeQueries.Reset();
+	// Gate 5 — the navigator's goal type (`0x102ee620`, `path+0x5c`). With no goal it is 0, not 8.
 	TestEqual(TEXT("the navigator goal type answers 0 with no goal, not 8"),
 		F.Guard->NavigatorPathType(), 0);
 	TestFalse(TEXT("gate 5: a non-pedestrian path type refuses"),
 		F.Guard->ResolvePedestrianPathNode(&Waypoint));
-	TestEqual(TEXT("...and the node seam is never even asked"),
-		F.Guard->CrosswalkNodeQueries.Num(), 0);
+	TestFalse(TEXT("...and latches nothing"), F.Guard->NpcFlags.Has(EElysiumNpcFlag::AT_CROSSWALK));
 
-	// With the path type driven to retail's 8, gate 6 is reached and the node seam IS asked — the
-	// refusal is the recovered one (no node graph in this runtime), not a dropped arm.
 	F.Guard->Navigator.GoalType = 8;
-	TestFalse(TEXT("gate 6: the node seam answers nothing, so the body refuses"),
+	// The link: this node to the NEXT waypoint's node (`0x102f96e0(node, next+0x10)`).
+	FElysiumNpc::FDialogPedWaypoint NotAPair = Waypoint;
+	NotAPair.NextNodeId = 2;
+	TestFalse(TEXT("a link that is no crosswalk pair carries no signal"),
+		F.Guard->ResolvePedestrianPathNode(&NotAPair));
+	Places.SetCrosswalkWalk(1, true);                   // Walk from the other end: green again
+	TestFalse(TEXT("a green pair refuses"), F.Guard->ResolvePedestrianPathNode(&Waypoint));
+	TestFalse(TEXT("...and latches nothing"), F.Guard->NpcFlags.Has(EElysiumNpcFlag::AT_CROSSWALK));
+	Places.SetCrosswalkWalk(1, false);
+	FElysiumNpc::FDialogPedWaypoint Reversed = Waypoint;
+	Reversed.NodeId = 1;
+	Reversed.NextNodeId = 0;
+	TestTrue(TEXT("0x102f96e0 is symmetric: the far curb's waypoint finds the same red link"),
+		F.Guard->ResolvePedestrianPathNode(&Reversed));
+	F.Guard->NpcFlags.Clear(EElysiumNpcFlag::AT_CROSSWALK);
+	F.Guard->PedestrianPair = INDEX_NONE;
+	TestTrue(TEXT("every gate passed on a red pair: the test answers true"),
 		F.Guard->ResolvePedestrianPathNode(&Waypoint));
-	if (!TestEqual(TEXT("...but the seam WAS asked, with the waypoint's entity and the hint's link"),
-		F.Guard->CrosswalkNodeQueries.Num(), 1))
-	{
-		return false;
-	}
-	TestEqual(TEXT("...carrying +0x10 and hint+0x10"), F.Guard->CrosswalkNodeQueries[0],
-		FString(TEXT("node ent=4 link=77")));
+	TestTrue(TEXT("...through 0x102a0b90: AT_CROSSWALK"),
+		F.Guard->NpcFlags.Has(EElysiumNpcFlag::AT_CROSSWALK));
+	TestEqual(TEXT("...and the link at +0x630c"), F.Guard->PedestrianPair, 0);
 
 	// --- `0x102a0d20` — the per-think rule --------------------------------------------------------
 	F.Guard->Navigator.GoalType = 0;
@@ -611,20 +626,22 @@ bool FElysiumNpcKernelDialogueCrosswalkTest::RunTest(const FString&)
 
 	// The throttle: `m_flNextCrosswalkUpdateTime (+0x6318) < curtime` STRICTLY.
 	const double Now = F.World.World.NowSeconds();
-	F.Guard->SetAtCrosswalkLink(0x10);            // phase 0's bit — the DONT-WALK signal at t = 0
+	F.Guard->SetAtCrosswalkLink(0);                     // the pair is red
 	F.Guard->NextCrosswalkUpdateTime = Now + 100.0;
 	F.Guard->UpdatePedestrianInfo();
 	TestFalse(TEXT("0x102a0d20: a future stamp throttles the pass"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::CrosswalkDontWalk));
 	TestEqual(TEXT("...and does not re-arm the stamp"), F.Guard->NextCrosswalkUpdateTime,
 		Now + 100.0);
-
-	// The DONT-WALK arm: the signal bit for this phase is SET. The NPC keeps waiting and the
-	// AT_CROSSWALK latch STAYS.
-	F.Guard->NextCrosswalkUpdateTime = Now - 1.0;
-	F.Guard->CrosswalkLinkSignalFlags = FElysiumNpc::CrosswalkPhaseMask(Now);
+	F.Guard->NextCrosswalkUpdateTime = Now;
 	F.Guard->UpdatePedestrianInfo();
-	TestTrue(TEXT("0x102a0d20: the signal bit SET raises CROSSWALK_DONTWALK (0x13)"),
+	TestFalse(TEXT("0x102a0d20: a stamp EQUAL to curtime throttles too (strict)"),
+		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::CrosswalkDontWalk));
+
+	// The DONT-WALK arm: the pair is red. The NPC keeps waiting and the AT_CROSSWALK latch STAYS.
+	F.Guard->NextCrosswalkUpdateTime = Now - 1.0;
+	F.Guard->UpdatePedestrianInfo();
+	TestTrue(TEXT("0x102a0d20: a red pair raises CROSSWALK_DONTWALK (0x13)"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::CrosswalkDontWalk));
 	TestFalse(TEXT("...and NOT CROSSWALK_WALK"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::CrosswalkWalk));
@@ -634,11 +651,11 @@ bool FElysiumNpcKernelDialogueCrosswalkTest::RunTest(const FString&)
 	TestEqual(TEXT("0x102a0d20 re-arms at curtime + _DAT_104454c0 = 1.0 s, NOT 5 s"),
 		F.Guard->NextCrosswalkUpdateTime, Now + 1.0);
 
-	// The WALK arm: the signal bit for this phase is CLEAR. The NPC is released and the latch drops.
+	// The WALK arm: the pair is green. The NPC is released and the latch drops.
+	Places.SetCrosswalkWalk(0, true);
 	F.Guard->NextCrosswalkUpdateTime = Now - 1.0;
-	F.Guard->CrosswalkLinkSignalFlags = ~FElysiumNpc::CrosswalkPhaseMask(Now);
 	F.Guard->UpdatePedestrianInfo();
-	TestTrue(TEXT("0x102a0d20: the signal bit CLEAR raises CROSSWALK_WALK (0x12)"),
+	TestTrue(TEXT("0x102a0d20: a green pair raises CROSSWALK_WALK (0x12)"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::CrosswalkWalk));
 	TestFalse(TEXT("...and NOT CROSSWALK_DONTWALK"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::CrosswalkDontWalk));

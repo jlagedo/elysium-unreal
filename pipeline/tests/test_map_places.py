@@ -147,7 +147,20 @@ def test_crosswalk_pairs_are_links_between_two_crosswalk_bound_nodes():
     links = [_link(0, 1, 0, h0=1), _link(1, 0, 1, h0=1), _link(2, 1, 2, h0=1),
              _link(3, 3, 1, h0=1)]
     payload = _stage(rows, _block(4, links))
-    assert payload["crosswalkPairs"] == [[0, 1], [1, 3]]
+    assert payload["crosswalkPairs"] == [[0, 1, 1], [1, 3, 1]]
+
+
+def test_a_crosswalk_pair_carries_its_links_hull_0_motion_word():
+    # The first link of a pair decides its word; the rat's word (hull 19) is not the pair's. A
+    # jump-only pair (word 2) is staged -- the hint's signal write still reaches it -- but no walking
+    # hull takes it.
+    rows = [_row(0, "info_node_crosswalk"), _row(1, "info_node_crosswalk"),
+            _row(2, "info_node_crosswalk")]
+    links = [_link(0, 0, 1, h0=1, h19=2), _link(1, 1, 0, h0=2), _link(2, 2, 0, h0=2, h19=1),
+             _link(3, 1, 2, h0=3)]
+    payload = _stage(rows, _block(3, links))
+    assert payload["crosswalkPairs"] == [[0, 1, 1], [0, 2, 2], [1, 2, 3]]
+    assert places.walkable_crosswalk_pairs(payload["crosswalkPairs"]) == [[0, 1, 1], [1, 2, 3]]
 
 
 def test_the_wander_cap_is_twenty_median_hops_per_declared_hull():
@@ -230,5 +243,13 @@ def test_the_hub_crosswalk_nodes_pair_with_each_other():
                        if place["hint"] in crosswalk_rows}
     assert len(crosswalk_nodes) == 6
     pairs = payload["crosswalkPairs"]
-    assert pairs and {node for pair in pairs for node in pair} == crosswalk_nodes
-    assert all(a < b for a, b in pairs) and len({tuple(pair) for pair in pairs}) == len(pairs)
+    assert len(pairs) == 8
+    assert {node for a, b, _ in pairs for node in (a, b)} == crosswalk_nodes
+    assert all(a < b for a, b, _ in pairs) and len({(a, b) for a, b, _ in pairs}) == len(pairs)
+    # The hull-0 words (findings R-C): six pairs a pedestrian walks, two only a jump reaches -- the
+    # NW corner 260-263 and the south curb 259-261 -- so no pedestrian route ever takes those two.
+    walkable = places.walkable_crosswalk_pairs(pairs)
+    assert len(walkable) == 6
+    by_nodes = {(a - min(crosswalk_nodes), b - min(crosswalk_nodes)): motion for a, b, motion in pairs}
+    assert {pair for pair, motion in by_nodes.items() if not motion & places.MOVE_GROUND} == {
+        (2, 5), (1, 3)}

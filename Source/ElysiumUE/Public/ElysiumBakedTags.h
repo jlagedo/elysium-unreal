@@ -58,8 +58,10 @@ namespace ElysiumBakedTags
 	// (D3). It ships neutral: nothing overridden, so it changes no pixel until an owner call
 	// puts a number on it.
 	inline const FName PostProcess(TEXT("elysium.ppv"));
-	// AIN jump links (`AElysiumNavJumpLink`, `pipeline/unreal/bake_jump_links.py`). The engine's
-	// navigation system consumes these actors; the runtime adopts nothing from the tag.
+	// AIN jump links (`AElysiumNavJumpLink`, `pipeline/unreal/bake_jump_links.py`): disabled,
+	// agentless records of the graph's jump-only links -- retail plans none (`0x102ff960` step 2,
+	// 0018/7), so no mesh carries them and nothing routes over them; the runtime adopts nothing
+	// from the tag.
 	inline const FName NavJump(TEXT("elysium.nav-jump"));
 
 	// One overhead cable segment (0018 story 21-3): an `AElysiumRopeActor` carrying the eight facts

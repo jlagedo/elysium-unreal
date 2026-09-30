@@ -164,9 +164,11 @@ def test_a_pin_that_stops_reproducing_fails_until_it_is_removed():
     assert row["failed"] == 1 and row["stalePins"] == 1
 
 
-def test_the_pinned_detours_are_the_three_hub_rat_holes():
+def test_the_pinned_detours_are_the_two_hub_rat_holes():
+    """Three at row 08; 721 stopped reproducing with 0018/7's bake (the rat routes it at 150 cm)
+    and its pin was retired 2026-09-30."""
     from elysium_pipeline.validation.nav_known_findings import known_detours
-    assert sorted(known_detours("sm_hub_1", 19)) == [406, 721, 1472]
+    assert sorted(known_detours("sm_hub_1", 19)) == [406, 1472]
     assert known_detours("sp_tutorial_1", 19) == {}
 
 

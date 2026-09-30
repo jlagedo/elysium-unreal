@@ -361,10 +361,10 @@ bool FElysiumNpcKernelMotor10ObstructingDoorTest::RunTest(const FString&)
 	TestEqual(TEXT("...and the ask is recorded"), F.Npc->Motor10Seams.BuildLocalRouteAsks, 1);
 	TestFalse(TEXT("the path splice (0x10319f30) answers false"), F.Npc->SplicePathWaypoint(1));
 
-	// The door's toggle state seam answers 0 (`TS_AT_TOP`), which is one of the two states arm 7
-	// gives up quietly on, and which also makes `m_bOpeningDoorWait` false.
-	TestEqual(TEXT("the door toggle-state (+0x4f8) seam answers 0"),
-		F.Npc->RetailDoorToggleState(*F.Door), 0);
+	// The door's toggle state is the real word (+0x4f8) since 0018/7: a fresh door is closed,
+	// `TS_AT_BOTTOM` = 1.
+	TestEqual(TEXT("the door toggle-state (+0x4f8) reads the door: closed = 1"),
+		F.Npc->RetailDoorToggleState(*F.Door), 1);
 
 	// The NaN gate: an unordered compare RUNS the body (`TEST AH,5; JNP`), which is the arm the
 	// listing takes and a `>=` in C would not.

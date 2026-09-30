@@ -1796,7 +1796,9 @@ compare also runs the body. Every exit not named "true" below answers FALSE.
    at `10298725` is argument 4, not the move goal the decompiler names — clears the door and
    answers **true**.
 7. Otherwise `CAI_Pathfinder::BuildLocalRoute` (`0x10304130`, the VProf scope at `0x10611514`
-   names it) is asked from slot 217 `GetAbsOrigin()` with flags `0x30`, hull `-1`, `1`, `0.0`, `0`.
+   names it) is asked from slot 217 `GetAbsOrigin()` to arm 6's **`StandPos`** (the open data's
+   `+0`; `(pathfinder, AbsOrigin, &stand, 0, 0x30, -1, 1, 0.0, 0)` at `1029864c`, added
+   2026-09-30), flags `0x30`, hull `-1`, `1`, `0.0`, `0`.
    FOUND stamps `door->GetRefEHandle()` into `waypoint+0x24` and splices at `nav->+0x30 + 0x24`
    through `0x10319f30`; a FAILED splice falls straight out with **false** and no further write,
    and a successful one sets `m_hOpeningDoor`, sets `m_bOpeningDoorWait (+0x5d30) = (door->+0x4f8
@@ -1812,8 +1814,61 @@ The two door helpers are one word each: `0x100f0e70` is `door->+0x644 = 0` (elev
 **no** flag write; `(CapabilitiesGet() & 0xd00) != 0xd00` ORs `0x8`; `door->+0x640 > curtime` ORs
 `0x10`; otherwise true.
 
-**Unrecovered:** what door slot 246 is called, what `+0x644`'s bits `0x1`, `0x4`, `0x8`, `0x10` and
-`0x40` are NAMED, and the waypoint record `0x10304130` returns past its `+0x24`.
+**Unrecovered:** what `+0x644`'s bits `0x1`, `0x4`, `0x8`, `0x10` and `0x40` are NAMED, and the
+waypoint record `0x10304130` returns past its `+0x24`. (Slot 246 is `GetNPCOpenData`, closed
+2026-09-30 below.)
+
+### The door's NPC-open data and the alternate-AI door modes (2026-09-30, 0018 story 7)
+
+_Wave 0 read R-D; the constants were read from the image._
+
+**`GetNPCOpenData` (door slot 246, `+0x3d8`).** Only `CBaseDoor` (`0x100f0ef0`) and `CRotDoor`
+(`0x100f2bd0`) fill the slot. The base body is `out+0x18 = -1` and nothing else. A sliding
+`func_door` therefore always takes slot 531's arm-6 exit (`1029862f` / `10298725`: `*result = 0`,
+`0x100f0e70`, true) and never reaches arm 7. The out struct is `0x1c` bytes: `+0 Vec StandPos`,
+`+0xc Vec FaceDir`, `+0x18 int Activity` (−1 = no data). The `CRotDoor` body:
+- `npc == NULL`, or `spawnflags & 0xc0` (`100f2c31`) → −1.
+- `rest`, `fwd` and `back` are yaw vectors built from `+0x6f8`, `+0x6fc` and `+0x700` through
+  `0x101d2f40`: `(cos, sin, 0)` of the angle × 0.017453292, degrees.
+- `d = npc.AbsOrigin − door.AbsOrigin`, 2-D (slot 217 on both).
+- `fwd·d >= 0` → open = `fwd`; else `back·d >= 0` → open = `back`; else −1 (`100f2e90`). A NaN
+  answers −1.
+- `bOpening` true: `Stand = origin + rest·24 + open·100`, `z −= 54`; `Face = −open`;
+  `Activity = 1` (`ACT_IDLE`). `bOpening` false: the same with 50 in place of 100, and `Activity
+  = 0xc84` (`ACT_KICK`).
+- Constants: `_DAT_10450564` = 100.0, `_DAT_1044ffe8` = 50.0, `_DAT_1045504c` = 54.0,
+  `_DAT_1044dba8` = 24.0.
+- `bOpening` is `toggle_state == 2` (`TS_GOING_UP`) at slot 531. In the two alternate-AI callers
+  it is `m_bOpeningDoorWait` (`+0x5d30`).
+
+The three readers: slot 531 arm 7 routes to `StandPos` (above). Mode 1 `0x10290040` turns
+`FaceDir` into a yaw (`VecToYaw`, `102900ca`) and sets the motor's ideal yaw with
+`0x102e1c10(yaw, -1.0)`; a −1 answer returns false and keeps the mode. `0x10298840` hands
+`Activity` to `RestartIdealActivity` with no −1 test (`10298882`), then runs the lock test and
+`AcceptInput("Open", npc, npc)`: TRUE (refused) → `0x1027de00`, FALSE → Open.
+
+**`RunAlternateAI` (`0x1028fd80`) modes 1, 2 and 3 and their timers.**
+- **Mode 1** (`0x10290040`, face the door; walked in `conditions-and-states.md` § "The alternate-AI
+  door transaction"). The entry `0x10298800` sets `m_bShouldMove = 0`, pauses the path (`path+0x10
+  = 1`) and sets the mode to 1. Its only caller is `AdvancePath 0x102f0400`, when a `WP_TO_DOOR
+  0x10` waypoint's door passes `0x1027f550` and has toggle state 1 (closed). A dead door → mode 0,
+  false. Open data −1 → false, mode kept. Once `FacingIdeal`: a door already opening → mode 2,
+  expiry `now + 1.0`; otherwise, if `0x10298840` succeeds → mode 2, expiry `now + 5.0`.
+- **Mode 2** (`0x10290200`, above in § "`RunAlternateAI`"). `MaintainActivity`, then wait until
+  `curtime >= +0x6450`. At expiry with the door handle still live → `TaskFail(0x0e)`, clear
+  `+0x5d24` and `+0x5d30`, mode 0. Otherwise, if the path is paused (`0x102ee2e0` reads the
+  byte `path+0x10`), `0x102bf7e0`; then slot 528; mode 0.
+- **Mode 3** (`0x102902e0`, door blocked). Entered from `OnDoorBlocked` with expiry `now + 1.0`;
+  at expiry `TaskFail(0x0e)` and the same clears.
+- **Exits from modes 1 and 2:** `OnDoorFullyOpen` (below) → 0; `OnDoorBlocked` → mode 3; slot 532
+  `0x10290570` cases 1 and 8; mode 2's own expiry.
+
+**`OnDoorFullyOpen 0x1027dd10`** (called by `DoorHitTop 0x100f0860` on the NPC behind the door's
+`m_hActivator +0x53c`). It needs slot 158 (`+0x278`, alive) and a door. If the door is
+`m_hOpeningDoor (+0x5d24)` → slot 532(1). If `0x102ee2e0` answers true → `0x102ee2c0`, the
+navigator's unpause, called ONLY when paused. `m_bShouldMove (+0x1a40) = 1`. **Slot 528
+(`+0x840`)**. Then, through `+0x98`, a mode of 1 or 2 → 0. Port: `FElysiumNpcBase::OnDoorFullyOpen`
+(`ElysiumNpcBaseConditions.cpp`), called from the door's HitTop.
 
 ### `CAI_StandoffBehavior::TranslateActivity` `0x102c79e0`
 
@@ -4410,7 +4465,8 @@ The argument is `NPCThink`'s `bReduced` byte; each arm pushes it on and none rea
 (`0x10290203`); `curtime < m_flAlternateAIExpireTimer (+0x6450)` → TRUE (`0x1029021d`); else a live
 `m_hOpeningDoor (+0x5d24)` (`0x1029022c`..`0x1029024e`) → slot 448 `TaskFail(0xe)` (`0x10290256`),
 `+0x5d24 = -1`, `m_bOpeningDoorWait (+0x5d30) = 0`, `+0x644c = 0`, TRUE; a gone door → when the
-navigator's goal is set (`0x102ee2e0`, `0x10290283`) `0x102bf7e0` (`0x1029028e`), then slot 528
+path is PAUSED (`0x102ee2e0` answers the byte `path+0x10`, `0x10290283`; corrected 2026-09-30, it
+was read as "the goal is set") `0x102bf7e0` (`0x1029028e`), then slot 528
 `ValidateNavGoal` (`0x10290297`), `+0x644c = 0`, TRUE — the wait flag is left as it was.
 
 `0x102902e0` (mode 3, the door blocked): `MaintainActivity` (`0x102902e3`); at or after the expiry

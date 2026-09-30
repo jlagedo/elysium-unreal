@@ -17,6 +17,7 @@ class AElysiumMapActor;
 class AElysiumNpcBody;
 struct FElysiumNpcBodyMoveTestAccess;
 class ANavLinkProxy;
+class AElysiumNavDoorLink;
 class FElysiumEntityWorld;
 class FElysiumNpc;
 
@@ -102,6 +103,16 @@ public:
 	// which silently keys every request a MOVING body makes on no classname and empty hands.
 	void SetOwningEntity(AElysiumMapActor* InMap, const FElysiumEntityHandle& InOwner);
 	FElysiumEntityHandle GetOwningEntity() const { return OwningEntity; }
+	AElysiumMapActor* GetOwningMap() const { return OwningMap.Get(); }
+
+	// --- 0018/7: the door smart link's hold (`AElysiumNavDoorLink`) ---
+	// The follower reached `Link` and its door is not at its top: the body stands at the doorway
+	// (the custom-link wait) and `SampleMoveFacts` reports the door as `DoorLinkEntity`.
+	void HoldAtDoorLink(AElysiumNavDoorLink* Link, const FElysiumEntityHandle& Door);
+	// The door reached its top: finish the custom link, the body walks the doorway.
+	void ReleaseDoorLinkHold(AElysiumNavDoorLink* Link);
+	// The follower reached `Link` with its door open and walks straight through: no longer ahead.
+	void NoteDoorLinkCrossed(AElysiumNavDoorLink* Link);
 	// The NPC this body wears, through its own map. Null once the map or the entity is gone, or
 	// when the owner is not an NPC. OutWorld is the entity world it was resolved in, or null. The
 	// one resolution path the debug readers share, so a stale body reads as stale everywhere.
@@ -369,6 +380,17 @@ private:
 	FElysiumEntityHandle RecentBlocker;
 	uint64 RecentBlockerFrame = 0;
 	FElysiumEntityHandle EndedBlocker;
+	// The door smart link holding this body (`HoldAtDoorLink`), its door and where the hold stands;
+	// and the door links the current request has already crossed, so `SampleMoveFacts` can name the
+	// next one ahead. All reset by a new request and by `Stop()` (the follower's abort ends the
+	// custom link on its own).
+	TWeakObjectPtr<AElysiumNavDoorLink> HeldDoorLink;
+	FElysiumEntityHandle HeldDoorEntity;
+	FVector HeldDoorPointCm = FVector::ZeroVector;
+	TArray<TWeakObjectPtr<AElysiumNavDoorLink>> CrossedDoorLinks;
+	void ForgetDoorLinkHold();
+	// The first door smart link on the held path this request has not crossed, for the facts.
+	void FindUpcomingDoorLink(const struct FNavigationPath& Path, FElysiumNpcMoveFacts& Out) const;
 	// A blocking contact with the player's hull since the last `ConsumePlayerContact`. Set by
 	// `NotifyHit`, read by the map actor's per-frame drain. Not gated on anything: retail's
 	// `Touch` fires on every solid contact, launched or walking.

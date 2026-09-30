@@ -1503,12 +1503,18 @@ def _build_class():
             return placed, sky_placed, sky_ambient
 
         def _place_navigation(self, actors):
-            """Author the decoded AIN's human jump connections as native smart links."""
-            from pipeline.unreal import bake_jump_links
+            """Author the decoded AIN's jump records and the door smart links (0018/7)."""
+            from pipeline.unreal import bake_jump_links, bake_nav_door_links
             payload = self.geometry.manifest.get("jumpLinks")
             if payload is None:
                 raise ValueError("map manifest has no AIN jump links; stage the V2 map again")
-            return bake_jump_links.author(actors, payload)
+            jumps = bake_jump_links.author(actors, payload)
+            # The door answer is the collision lane's (`map_collision.nav_door_rows`); the links it
+            # names are laid here beside the jump records, before the meshes are cut.
+            entry = self._lane_entry(self.collision_entry, "collision", "BakeMapCollision")
+            doors = bake_nav_door_links.author(actors, entry.get("navDoors"))
+            log("level: %d door smart link(s)" % doors)
+            return jumps
 
         def _place_ai_infra(self, actors):
             """Author the BSP-authored AI infrastructure actors (0018 story 2)."""

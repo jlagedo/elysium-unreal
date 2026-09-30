@@ -23,9 +23,10 @@ index 0; its standing bounds are Source `(-13,-13,0)..(13,13,72)`.
 The actual path eligibility predicate `0x102ff960` rejects `linkInfo & 0x1000`, then intersects
 `link[hull+3]` with the NPC's movement capabilities (virtual `+0x804`). If the result is exactly
 2 it calls the NPC's directional jump-legality virtual `+0x824`; stale bit 1 invokes the stale
-link probe `0x102fce80`. A stale hint is not itself an unconditional rejection. The offline
-jump projection carries enabled human links whose motion mask includes 2; Unreal's path and
-capsule collision service supplies the runtime geometric test.
+link probe `0x102fce80`. A stale hint is not itself an unconditional rejection. **Corrected
+2026-09-30 (0018 story 7):** no shipped NPC's capabilities carry bit 2, so the `== 2` arm is never
+reached and no jump-only link is ever planned (§ "The capability gate" below); the offline jump
+projection is now a set of disabled records, not traversable links.
 
 **Do not copy the later Source SDK's disabled bit:** its `ai_link.h` assigns `bits_LINK_OFF=2`.
 VtMB's predicate above reads **0x1000**. The later SDK is corroboration for names, not the oracle
@@ -67,20 +68,74 @@ In flight it calls motor `+0x1c`. Upon grounding it calls motor `+0x20`, sets na
 then advances/completes the path. Requirement 13's `STOP_MOVING` reader must still see Jump
 after clearing the goal, so the body's ordinary hard Stop is not that operation during flight.
 
-The port bakes one `AElysiumNavJumpLink : ANavLinkProxy` per selected connection. It uses only
-the smart link; a parallel simple link would bypass the traversal callback. The motor begins
-a CharacterMovement flight after a native capsule arc probe succeeds, preserves the suspended follower, reports Jump, then resumes the
-follower after a valid landing or publishes failure with Ground. Goal cancellation preserves
-airborne velocity. The substrate can therefore observe airborne Jump with effectively zero
-velocity and run its recovered stuck-on-top arm. No extra flight deadline is introduced.
-An actual lost/aborted path request or movement service reports failure.
+**The port (rewritten 2026-09-30, 0018 story 7).** Retail never plans a jump-only link (§ "The
+capability gate" below), so the port flies none. `map_jump_links.py` stages one row per
+de-duplicated HUMAN jump-only pair (tutorial 25, hub 117), each carrying every used hull's motion
+word, `jumpOnly`, `capabilityUsable = false` (reason: `0x102ff960` step 2) and that hull's
+endpoints; the legality per hull per direction is computed in the editor by
+`UElysiumNavBakeLibrary::JumpLinkVerdicts`, which calls the ported `IsJumpLegalGeometry` with the
+far node as the apex (`102ffa75..aaf`). `bake_jump_links.py` places one `AElysiumNavJumpLink` per
+row as a DISABLED RECORD — no supported agents, the smart link off — holding its endpoints, pair,
+`bBidirectional` and `HullVerdicts`. The gate's `baked-jump-links-disabled` row fails a missing,
+extra, doubled or traversable link. Rat-only jump pairs get no record (tutorial 19, hub 35,
+counted in the report). The flight body this paragraph used to describe (the smart-link callback,
+the CharacterMovement flight after the capsule arc probe, the suspended follower, landing and
+failure publication, stop-during-jump) is kept with its synthetic tests
+(`Tests/ElysiumNavJumpLinkTests.cpp`) as the record of the body; nothing in production reaches it
+(`TASK_JUMP` launches through `Motor->Launch`, `ElysiumNpcStartTask_2.cpp`). The map staging
+version and the jump payload hash still take part in level invalidation.
 
-The map staging version and jump payload hash participate in level invalidation. Malformed or
-missing decoded graphs fail staging with a concrete source/export diagnostic. The pipeline
-tests cover the raw tutorial rows, wrong hulls, disabled/stale masks, duplicate directions,
-invalid endpoints, floor offsets, unit conversion and invalidation. Native automation exercises
-the smart-link callback, physical flight/landing and stop-during-jump state; a rendered tutorial
-playthrough remains a distinct acceptance step.
+### The capability gate — no shipped NPC plans a jump link (2026-09-30, 0018 story 7)
+
+_Wave 0 read R-J against the listing; the owner's decision "jumps are faithful: no jump link is
+traversable" rests on it._
+
+- **Step 2 of `0x102ff960` decides it.** `move = CapabilitiesGet() & link[0xc + 4*hull]`; only
+  `move == 2` reaches `IsJumpLegal` (slot 521, `+0x824`). `CapabilitiesGet` is slot 513 (`+0x804`),
+  held as `0x1026db30` by all 77 classes, with no override. It reads `m_afCapability +0x5cec` and
+  ORs in the active weapon's slot 360, whose bodies answer 0, `0x2000` or `0x40018000`. None of
+  those carries bit 2.
+- **Nothing puts bit 2 in `+0x5cec`.** `m_afCapability` is a SAVE-only datamap row, neither KEY
+  nor INPUT. Allocation zeroes it (`operator new 0x100aa720` → `calloc`, engine `0x201092d0`).
+  Only `CapabilitiesGet` / `Add` / `Remove` / `Clear` touch the word. All **63** `CapabilitiesAdd`
+  sites pass literals without bit 2 (the survey said 61). The damaged `CGeneric_NPC_bathack::Spawn`
+  body is `PUSH 1` at `0x1035af65`. The `CAPABILITIES` tweak parameter (`0x1029aa10`) only
+  DevMsgs. `CapabilitiesRemove` has these callers: `InputAllowOpenDoors 0x102c3540`, the fly
+  toggles `0x103580d0` / `0x1038c170` (they pass 1 or 4), and `CNPC_VBach::Spawn` / `::StartTask`.
+  `CapabilitiesClear`'s only caller is `CNPC_Crow::Spawn`.
+- **So step 4 is unreachable through the path-finder for every NPC.** A jump-only link (word 2)
+  is refused at step 2, never by geometry. Hub link 731 was refused this way. Slot 521's only
+  override is `CAI_TestHull 0x102d7760`, the graph builder's hull.
+- **No word-3 (ground | jump) link exists.** `InitLinks 0x102fb4e0` tries the jump arm only after
+  the ground walk fails, so a hull's word is never both. The `move == 3` arm above is empty too.
+  Hull-0 counts from the staged graphs: `sp_tutorial_1` 363 ground / 25 jump-only / 0 word-3;
+  `sm_hub_1` 1646 / 117 / 0. The bake's 25 / 117 are exactly the jump-only links.
+- **The hub patrol cops' real route.** `s2 → s3` has the ground route `452 → 151 → 453` over
+  links 691 and 1581 (463 u). It is also the graph's shortest route with jumps allowed. Link 731
+  hangs off node 151 and is never used. Every leg of both patrols has a ground route, so the retail
+  cop walks `s2 → 151 → s3` with no detour and no `0x0c`. The stall rows 07, 08 and 09 recorded
+  came from a NavMesh shortcut the port invented. Live 2026-09-30: both cops walk their paths on
+  `sm_hub_1`, every move a success.
+- **`0x102cc900` / `0x102ccce0` (the dynamic `info_node_link`) are unreachable by content.** Each
+  maps its Hammer ids to graph ids (first match; a bad id becomes node 0). State 0 sets link bit
+  `0x1000` (off). Only `sp_giovanni_4` authors them. There `initialstate` is never authored and
+  nothing fires `TurnOn`, so all six stay off. Only two of the six find an AIN link (31 and 30), and
+  both are jump-only. Neither the tutorial nor the hub has one. Recorded, not built.
+- **`ai_node_graph_built` is client-only.** `FUN_1002c020` in `client.dll` sets a flag that the
+  developer batch map-builder (`FUN_1002bfb0`) reads. It has no gameplay effect.
+- Not followed up: 461 hub links carry link bit `0x2000` (set by `InitLinks`, read by the
+  pedestrian search `0x102fe9f0`; the road price, row 08), the same bit as `hw_hub_1`'s 124 of 513
+  (21-9's).
+- **The Recast mesh walks what retail's ground walk refused.** The gate's report rows
+  `jump-only-walked-hull-<h>` show the mesh finding a complete ground path, near the straight line,
+  for EVERY jump-only pair: tutorial 25/25 human and 36/36 rat, hub 117/117 and 103/103. So the
+  Unreal agents accept steps retail's `InitLinks` ground probe rejected. The rows report this and
+  never fail on it. It is handed to story 3's agent step height and 21-9's judgement row. For the
+  same reason, bridging keeps the graph's ground+jump definition (under retail reach the hub's
+  rat-only 727 / 1242-1244 would be bridging, 9 → 13; 21-9).
+- **Moot, recorded.** `BeginNavigationJump` used to refuse LEGAL jumps (hub 88, tutorial 390). The
+  suspected cause is `SuggestProjectileVelocity_CustomArc` against retail's
+  `CalcJumpLaunchVelocity 0x102e7060`, and it goes to 0002/26's flight body if that ever flies.
 
 ## Tutorial connectivity: the graph's components (2026-09-12)
 
@@ -1161,7 +1216,8 @@ by `CROSSWALK_WALK 0x12`); bit clear → `0x12` and `AT_CROSSWALK` dropped.
 **The four-phase clock is inert in shipped content (2026-09-19).** `0x102f97c0` is the only
 writer of the phase bits in the image (corpus scan for `link+0x64 |=`), it writes all four at
 once (`|= 0xf0` / `&= ~0xf0`), and no shipped AIN carries any of them — link info is `0` or
-`0x2000` on all four crosswalk maps (`ain_linkinfo_census.py`). So a crossing is WALK from map
+`0x2000` on all four crosswalk maps (`ain_linkinfo_census.py`; that script no longer exists,
+2026-09-30 — the nearest is `validation/pedestrian_link_census.py`). So a crossing is WALK from map
 load until its first `DontWalk`, and whichever phase the clock is in answers the same. The
 cycle is authored in the map: `sm_hub_1` `logic_timer streetlight_timer` (`RefireTime 40`)
 fires `crosswalk_south Walk` at +0, `DontWalk` +12, `crosswalk_east_west Walk` +20, `DontWalk`
@@ -1725,7 +1781,7 @@ Verdict: the test is non-zero, so base `-1` (B) and Troika `-2` both raise `0x0e
 Troika only. In the shipped game's NPC classes the raiser is effectively Troika `-2`.
 
 The second dispatch site, NPC sink slot 1 `0x1027dc10` (Troika wrapper `0x10298340` first tries `0x102a0bc0` and a squared
-distance `< 0x1045d650` `AdvancePath`), handles a door in the step's own trace (`goal+0x60 -> +0xa4`); its result becomes
+3-D distance `<= 1024.0` (`0x1045d650`, INCLUSIVE: `TEST AH,0x41 / JP`, corrected 2026-09-30) `AdvancePath`), handles a door in the step's own trace (`goal+0x60 -> +0xa4`); its result becomes
 `MoveCalcRaw`'s status, so a refused door there surfaces as `-1`/`-2` -> stale mark 4.0 -> `0x0c`, not `0x0e` (A).
 
 Quirk kept verbatim: `OnNavFailed(0x0e)` from the gate's simplify pass sets `nav+0x1c` but does not clear the path, and
@@ -2360,8 +2416,10 @@ marks the link stale for 5 or 20 s with the door's handle, and the link predicat
 around it until the expiry or a clear re-probe. A door with NO link through it (27 of the hub's
 29) is simply a wall to an NPC. At move time the door is identified as `hit+0xa4`, `CBaseDoor`'s
 self-pointer (`0x102f06e0`), and opened by `door->AcceptInput("Open", npc, npc)` from the
-alternate-AI door transaction `0x10298840`, after the lock test `0x100eec70` (already open, or
-spawnflag `0x200` with an NPC user, or the key check, or `m_bLocked +0x55c`); the door keeps
+alternate-AI door transaction `0x10298840`, after the lock test `0x100eec70` (`noopenwanted
++0x648` AND the player's `+0x1d10 > 0` through `0x100eef10` / `0x1017f770` — corrected
+2026-09-30, this arm is not "already open" — or spawnflag `0x200` with an NPC user, or the key
+check, or `m_bLocked +0x55c`); the door keeps
 the NPC-failure word `m_bfNpcFailedFlags +0x644` and timer `m_flNpcFailedTimer +0x640` the
 notice and the obstruction selector read. (Both opencode walks, reporting after the hand walk,
 agree on the masks, the MOVEABLE reading, the `-3` arm and the door chain.)
@@ -2379,10 +2437,16 @@ through slot 10 (`102f08e1 PUSH 1 / 102f08e3 PUSH 0xe / CALL [EDX+0x28]`) and se
 door-blocked notice (`102f08ee`). The shortcut test answers false in every door arm. So a door can be opened, and a route failed with `0x0e`, from
 the look-ahead of a shortcut the NPC never takes.
 
-**The port today** (`Map/ElysiumMapCollision.cpp`): the world collider is the `.hulls` sidecar,
-pre-filtered to `SOLID|WINDOW|GRATE|MOVEABLE|PLAYERCLIP` — **MONSTERCLIP is dropped**, so the 5 /
-31 NPC-only brushes do not exist for the nav mesh, and the mesh is cut at the engine's default
-agent rather than hull 0 (26 × 72 units). The pedestrian volumes are not exported either (0018 story 3 stages them as a nav area).
+**The port today (rewritten 2026-09-30; the 2026-09-19 note described the pre-story-3 world).**
+Story 3's contents-driven world carries every answering brush by its contents word, MONSTERCLIP
+included (`research/tooling/data/contents_masks.json` → one collision profile per signature), so
+the 5 / 31 NPC-only brushes block NPCs and cut the mesh. The mesh is cut per retail hull agent
+(hull 0 is 26 × 72 units), and the pedestrian volume stands as a nav area. A door body
+(`UElysiumBrushComponent`) never affects the mesh. Story 3 cut every door that no link crosses
+(`UElysiumNavArea_DoorCut`, `bake_map_collision.py` `place_nav_areas`). Since 0018 story 7 EVERY
+door is cut, and each traversable door carries an `AElysiumNavDoorLink` (§ "Doors, landed" below):
+tutorial 8 links over 8 doors of 36 (3 partial by agent), 60 convexes; hub 1 link over the
+smoke-shop pair of 29, 63 convexes.
 
 **Nobody fills the nav-ignore set (2026-09-19).** It is the SDK's `CNavPropertyDatabase` (vtable
 `0x1049d950`, an auto game system plus an entity listener). Its insert `0x102eaaf0` (thunk
@@ -2396,6 +2460,106 @@ first arm never drops anything.
 The native witness the spec asks for (story 3, job 5) is
 still to run: a closed door with a link through it must not cut the Recast mesh, and an NPC-only
 clip brush must.
+
+### Doors, landed — the corrections and the chain the port runs (2026-09-30, 0018 story 7)
+
+_Wave 0 read R-D against the listing (constants from the image, datamap flags from
+`datamap_records-vampire.dll.json`, crossings from the `navDoors` manifest). The review V-D
+corrected two of the build's readings, and the text below keeps its corrections._
+
+**Corrections to the section above.**
+1. The lock test `0x100eec70`'s first arm is `noopenwanted` (`+0x648`) AND the player's
+   `+0x1d10 > 0`. It is not "already open"; corrected inline. The port's `IsUseRefused` now
+   carries that arm (it used to live only in `DoorUse`).
+2. **Two dispatchers of slot 531, two failure codes.** (a) The LOOK-AHEAD. `MoveNormal 0x102efaa0`
+   → its gate `0x102efd50` → `SimplifyPath 0x102f13d0(nav, 0)` on every pass (`SetGoal` passes 1,
+   forced) → `0x102f06e0`. The trace hits `hit+0xa4` and runs the lock test. REFUSED: the shortcut
+   is dropped silently, with no notice and no write. ACCEPTED: slot 531, and a true answer with a
+   non-zero result raises `OnNavFailed(0x0e, 1)` and then `0x1027de00`. (b) The MOVE STEP. Sink
+   slot 1 `0x1027dc10` (the Troika wrapper `0x10298340` tail-calls it) reads `goal+0x60 → +0xa4`
+   and calls slot 531. The result becomes the step status, then the 4.0 s stale mark, then `0x0c`.
+   **A locked door met on the move step fails `0x0c`, not `0x0e`.**
+3. **The look-ahead cadence.** `0x102f13d0` needs nav type 0 or 2, a head with a same-type next
+   waypoint, and head `flags & 0x2a == 0`. When it is forced, or `nav+0x38 <= curtime`, it sets
+   `nav+0x38 = curtime + 0.5` (`0x1049d988`). It then runs the forward scan `0x102f0e80` with the
+   table `{384, 144, 36, 4}` at `0x1060fcd8`, plus a direct test to the next waypoint when that is
+   within 384, and then `0x102f0fe0`. It ALWAYS finishes with the quick pass `0x102f13a0`
+   `{143.9, 144, 6, 1}`. Once a door has been seen, the rest of that tick's passes are skipped. A
+   scan skips points more than radius + 0.1 away and probes at most `maxSamples`, farthest first.
+4. **The link predicate `0x102fce80`** (only caller `0x102ff960`), in order: (1) `link+0x64` bit 1
+   clear → usable. (2) `curtime > link+0x68` (strict) → clear the bit, usable. (3) Otherwise, at most
+   once per `curtime` per pathfinder (stamp `pf+0x14`), re-probe with `0x10304a40` between the
+   link's two node positions; a clear probe clears the bit, usable. (4) Otherwise stale, and a
+   second ask in the same tick answers stale without probing. **While it is still stale**,
+   `0x102ff960` calls `0x1027de00(npc, link+0 door)`, refuses the link, re-arms the door timer
+   (unless flag `0x10`) and re-marks through `0x102f1fa0`. That marker marks the link on the NPC's
+   CURRENT path (`path+0x44` → head node, gated on `nav+0x50`), not the link being evaluated. An
+   open door counts ONLY through the geometric re-probe; "door at top or timer idle" is not
+   retail's rule.
+5. **The marker `0x102f1fa0`.** `link+0x64 |= 1`, `+0x68 = now + secs`, `+0 = door` (or −1).
+   `0x1027de00` writes 5 s if flag `0x40`, else 20 s, and skips the mark entirely if flag `0x10`.
+   `Move`'s tail writes 4.0 s with no door. `0x1027de00` has FIVE callers: `0x10298840`,
+   `0x1027dfb0`, `0x102f06e0`, `0x102ff960` and `0x100f1340`.
+6. **`DoorHitTop 0x100f0860` zeroes `+0x640`.** It resolves `m_hActivator (+0x53c)` → `+0x94
+   m_pBaseNPC` and calls `OnDoorFullyOpen 0x1027dd10` (`schedule-kernel.md` § "The door's NPC-open
+   data and the alternate-AI door modes"). It installs the auto-close think `0x100f09d0` at
+   `curtime + wait` unless SF `0x20` is set. The think runs `IsCloseBlocked 0x100f0c00`: the slot-245
+   closing volume, recursing into the linked door first. Each alive `FL_CLIENT` / `FL_NPC` whose
+   AABB intersects blocks it, and an NPC gets flags `|= 0x80` and the hit-by-door notice. Blocked →
+   re-think at +0.5 s (`0x10449270`); clear → `DoorGoDown`.
+7. **Hit-by-door `0x1027dfb0`** (callers `StartBlocked` and `IsCloseBlocked`) runs in this order.
+   An `IsAlive` gate; `SetCondition(0x34)`; `+0x5d2c = door`. Then the ConVar `debug_hit_by_mode`
+   (`DAT_1092038c`, ships `"1"`) chooses the arm: a zero value takes the timer arm — the door
+   being opened (`m_hOpeningDoor`) goes through `0x1027de00`, otherwise the timer gets a MAX-write
+   of `curtime + 5.0` (`_DAT_10454110`), the squad focus is set and `+0x5d28 = door`. The shipped
+   `1` takes slot 532(4). So a hit is not always a flat 5 s. `ent_trace_conditions` is the
+   debug-only read in front of every `SetCondition` (`conditions-and-states.md`).
+8. **`StartBlocked 0x100f1340` (slot 177) has no visible dispatcher.** `vtmb_callers` is empty, no
+   vampire.dll site calls `+0x2c4`, and the push code calls only `Blocked` / `PhysicsImpact`
+   (`PhysicsPusher 0x10038cb0`, `PerformRotatePush 0x10037e90`, `RegisterBlockage 0x10036e50`,
+   `VPhysicsUpdatePusher`). Unrecovered (RE-BACKLOG 45). The body: toggle state 3 →
+   `OnBlockedClosing`, stop. Otherwise the activator's NPC gets flags `|= 2` and `OnDoorBlocked`,
+   the blocker's NPC gets flags `|= 0x80` and `0x1027dfb0`, and then `OnBlockedOpening` runs.
+9. **Save.** Door SAVE rows: `+0x640`, `+0x644`, `+0x55c`. Toggle: `+0x4f8`, `+0x53c`, `+0x500`.
+   NPC: `+0x5d24`, `+0x5d30`, `+0x5d28`, `+0x5d2c`, `+0x1a40`, `+0x644c`, `+0x6450`. Path and
+   navigator: `+0x10`, `+0x38`, `+0x50`. `CAI_Link` and `AI_Waypoint_t` have no datamap, so link
+   stale marks are lost on load. Only `NPCInit` and the door bodies write `+0x644c`, so a
+   paused-at-door NPC resumes (mode 1 re-asks the open data; mode 2 waits out its rebased expiry),
+   and `m_hActivator` survives, so `OnDoorFullyOpen` still fires at the top.
+10. **`func_brush` crossings (record only).** Tutorial `knob_buff_brush` 968 (GRATE, solid until
+    `popup_36` hides it; link 111, flush with door 183); tutorial `sheriff_shield` 1213 (SOLID,
+    hidden at spawn, shown by `logic_sabbat_setup`, killed by `logic_shot_end`; link 138, the
+    frontgate link); hub `taxi_clip` 2072 (SOLID, hidden, shown by `santamonica.py:2101` at
+    `Story_State >= 5`, an unofficial-patch header; link 97). Hub `garage1` 2550 and `garage3gate`
+    2552 are WINDOW and never solid. None is a door (`+0xa4` null), so retail meets each one as a
+    blocked move step (4.0 s stale mark, then `0x0c`). These belong to story 3's contents marking.
+11. **`frontgate` is never opened by an NPC in retail.** `func_button` 614 → `logic_scene_1`
+    (1180) → `frontgate Open` at 0.0 s. `sSheriff_14` walks the sheriff out through the gate that
+    the relay already opened. The "an NPC opens frontgate" acceptance is therefore a synthetic
+    fixture. The locked-and-crossed door is the hub's `basic_smoke_door` 2566 (PUSE|LOCKED, link 958
+    on both hulls). Its pair `plus_smoke_door` 2567 is hidden and inert.
+
+**The port (landed 2026-09-30).** `FElysiumDoorBase` (`Substrate/ElysiumMover.h`) carries
+`NpcFailedFlags +0x644` and `NpcFailedTimer +0x640` as SAVE rows, with the writers `0x100f0e70` /
+`0x100f0e90` / `0x100f0e30` and the reader `0x1027f550`. It also carries `GetNPCOpenData`,
+`IsUseRefused`'s arm 1, HitTop in `0x100f0860`'s order, `IsCloseBlocked` on the auto-close, and the
+`StartBlocked` body (the dispatcher is a seam). Slot 531 reads the real toggle state and the open
+data. Arm 7's route runs to `StandPos` through `QueryRoute` (a named modernization for
+`0x10304130`), and the door waypoint (flags `0x30`, the door handle) is spliced into the Troika leg
+list before the head (`0x1031a0e0`). The look-ahead is `0x102f06e0` under `0x102f13d0`'s gate, with
+the 0.5 s stamp and always the quick pass. The move-step sink `0x1027dc10` runs with S1's pre-sink
+arms, and the stale mark goes only on the link the body is held at. `CheckStaleRoute`'s probe is a
+collision-world hull sweep with the NPC retry under `0x2400b` (a named modernization). The
+`Triangulate 0x103059d0` arm is a counted seam (`NavStaleRouteLocalRouteAsks`), and so is
+`0x102f0fe0`. `AElysiumNavDoorLink` (`Visual/ElysiumNavDoorLink.h`): one per witness link,
+`SupportedAgents` from `crossedByHulls`, endpoints clipped to the largest crossing hull. The hold
+asks every door the link crosses. The per-query predicate is `0x102fce80` (passive only off the
+game thread), and the link is never disabled, because a disabled link never reaches the predicate.
+The tests are `Elysium.Substrate.NpcDoorLink.*`, eight of them (OpenData, OpenAndPass,
+ObstructionPreSink, LockedMoveStep, DoorBlockedWindows, LinkPredicate, LookAhead,
+LockTestAndCloseBlocked). Live 2026-09-30: no NPC reaches the smoke-shop link on `sm_hub_1` while
+the ambient executor owns every pedestrian (0002/11, TRACKER row 36). `plus_smoke_door` reads
+toggle AtBottom, `+0x644 / +0x640` = `0x0 / 0.00`.
 
 ### The engine's per-brush admission test, and what a non-solid OPAQUE brush does to sight (2026-09-20, 0018 story 3)
 
@@ -2641,6 +2805,97 @@ only thing that changes the state. **A port that models the crosswalk state as o
 link pair is behaviourally identical to retail for all shipped content**; a port that implements
 the 16-second phase rotation is implementing an arm no map can reach. The rotation is recorded
 here so the choice is a decision rather than an omission.
+
+### The crosswalk walk — the route, the pairs, the queue and the save (2026-09-30, 0018 story 7)
+
+_Wave 0 read R-C (`vtmb-corpus`, the `sm_hub_1` nav-graph unit and `.hulls` sidecar; 1 u = 2.54
+cm). The queue arm was confirmed from the asm._
+
+**The route marks both curbs.** The pedestrian chain builder `0x102fcd00` walks from the goal back
+to the start and adds one waypoint per node, the START node included, with base flag 4
+(`bits_WP_TO_NODE`). When two consecutive nodes both pass `0x102f98d0` (the node's hint `node+0xa0
+→ hint+0x5dc == 11000`), the first waypoint gets `0x24` and the next `|= 0x20`
+(`bits_WP_DONT_SIMPLIFY`). Both curbs are therefore always on the route, entered at one and left at
+the other, and the simplifier cannot cut them. `BuildNodeRoute 0x10304e00` lays the entry leg
+`0x103005f0` (`0x102ffbd0` when the NPC is already exactly at the node, else `0x10304130`), then the
+chain, then the exit leg `0x103007e0`. The start node comes from `0x102f3c10`, so a pedestrian
+standing between the curbs walks back to curb A first. Start node == goal node → no chain and no
+crosswalk flags. The pedestrian search `0x102fe9f0` runs only when `BuildNodeRoute` sees the
+path's pedestrian byte. It draws one `RandomInt(5,10)` per call and multiplies the cost of `+0x64
+& 0x2000` (road) links by it, so a pedestrian may cross away from a crosswalk: priced, never made
+to wait.
+
+**The hub's 8 pairs** (hull-0 words and distances in u; hints `crosswalk_south` = nodes 258-261,
+`crosswalk_east_west` = 262 and 263):
+
+| pair | link | info | hull-0 / rat word | dist | kind |
+|---|---:|---|---|---:|---|
+| 258-259 | 1097 | 0 | 1 | 241.7 | across road |
+| 260-261 | 1106 | 0 | 1 | 245.6 | across road |
+| 262-263 | 1116 | 0 | 1 | 245.7 | across road |
+| 258-262 | 1098 | 0 | 1 | 79.9 | NE corner |
+| 260-263 | 1107 | 0 | 2 (jump) | 84.8 | NW corner |
+| 259-261 | 1111 | 0 | 2 (jump) | 351.1 | along south curb |
+| 259-260 | 1105 | 0x2000 | 1 | 426.4 | diagonal |
+| 259-262 | 1115 | 0x2000 | 1 | 303.5 | diagonal |
+
+The two jump-only pairs are never on a pedestrian route (§ "The capability gate"). The hint's
+write still reaches them. Fan-out: `crosswalk_south` writes 7 pairs and `crosswalk_east_west`
+writes 4. 258-262, 259-262 and 260-263 are written by both, and the last write wins. **The steady
+state of the 40 s `streetlight_timer`** (red = pedestrians wait): 0–12 s, 262-263 only; 12–20 s,
+all; 20–32 s, 258-259, 259-260, 259-261 and 260-261; 32–40 s, all. The road gap a body centre can
+cross (grown by the 13 u hull) is 258-259 −29…+38, 260-261 −40…+19 and 262-263 −42.5…+24.
+
+**One link read, every link written.** `0x102f96e0(node, dest)` answers the first link of `node`
+whose other end (`0x102dda40`) is `dest`, symmetrically. The wait test `0x102a0bc0` looks up
+exactly ONE link: this waypoint's node to the next waypoint's node. The hint's write `0x102f97c0`
+walks EVERY link of the node whose far end passes `0x102f98d0`.
+
+**The queue arm `0x10298340`, four arms in order.** (i) The obstruction `goal+0x60` → its `+0x98`
+NPC → ITS `+0x14b8 & 4`. If it is not set, the base runs. (ii) `0x102a0bc0` on MY current waypoint:
+true → `*result = 0`, handled. **Its side effect is `0x102a0b90` on ME**: the blocked walker's own
+`AT_CROSSWALK` and link are set, so a walker queued behind a waiter becomes a waiter.
+(iii) `|wp.pos − GetAbsOrigin (slot 217)|² <= 1024.0`, 3-D and INCLUSIVE (`TEST AH,0x41 / JP`; a NaN
+falls to the base) → `AdvancePath`, handled. (iv) The base `0x1027dc10`. The sink is dispatched
+from S1 `0x102eefb0` inside `MoveCalcRaw 0x102de7b0`, after `MoveCalcDirect 0x102ddc80` and before
+steering. A transition leg goes straight to the sink. The tolerance is `path+0x28` on the goal leg
+and `path+0x40` otherwise. When the arm handles the step, steer, S2–S4 and the −4 tail are skipped.
+The stale mark sits downstream in `Move`.
+
+**When the wait ends.** On arrival at curb A, `AdvancePath 0x102f0400` runs the wait test and
+pops, so the current waypoint becomes B. `PAUSE_MOVING 0x102bf770` pauses the path: `0x102ee2a0`
+is the navigator PAUSE (`path+0x10 = 1`), NOT `NavReset`. `PRESERVE_PATH`, set by schedule `0xff`,
+keeps the path across the schedule change (`OnScheduleChange 0x102a0940` runs its reset only
+without it; `conditions-and-states.md`). On green, schedule `0x100` calls `SetGoal`; `0x1030bb30`
+clears the pause and the goal type, and a FRESH route is built, so the splice runs again. The old
+path is not resumed.
+
+**Save and restore.** `0x102993c0` writes `WriteBool(+0x630c != 0)`, then `WriteInt(link+4)` and
+`WriteInt(link+8)`. `0x10299700` reads the flag, then the two ids into `+0x6310` / `+0x6314`.
+`OnRestore 0x102998c0` checks bounds, then `0x102f96e0` re-finds the link. The ids are never reset.
+The constructor `0x1028d230` sets both ids to −1. (The port defaulted them to 0 and counted a
+spurious out-of-bounds on every restore; now −1.) Phase bits are not saved, so a restored waiter
+sees green and is released on its next check.
+
+**The port (landed 2026-09-30).** Pairs are staged as `[a, b, hull-0 motion word]`
+(`importers/map_places.py`; `docs/contracts/seam_map_map.md`). `FElysiumPlaceSet` holds one
+`CrosswalkRed` boolean per pair, green at adoption and at `BeginMapSpawn` (the owner's decision 3,
+the four-phase clock above), with `FindCrosswalkPair` (`0x102f96e0`), `SetCrosswalkWalk`
+(`0x102f97c0`, every pair of the node, jump-only included) and `IsCrosswalkRed`. `0x102a0bc0`
+takes retail's gate order with ONE link lookup, and `0x102a0b90` is ported once
+(`SetAtCrosswalkLink`; `+0x630c` is held as a pair index). **The splice (owner's decision 2, a
+named modernization for `0x102fcd00`):** `NavLayPedestrianLegs` (`Substrate/ElysiumNpcCrosswalk.cpp`)
+turns the NavMesh route (`QueryRoute` points) into legs [curb A, curb B, …, goal] for consecutive
+walkable-pair curbs within 48 u, measured flat, start node included. The curbs carry `4 | 0x20`
+and the node id, and the goal carries `8`. A non-pedestrian lays one leg, and so does a route away
+from any crosswalk. The queue arm is `MovementSinkObstructed` (four arms; arm (ii) latches the
+walker's own `AT_CROSSWALK`; the follower is parked for the swallowed step). `PAUSE_MOVING` sets
+`path+0x10`, and the pause arm at `0x102effab` stops translation and keeps facing. A paused path
+re-issues its leg on unpause, a named modernization. `FACE_NEXT_NODE` (`0x102a5475..54af`) is
+ported, so schedule `0x102` runs. Tests: `Elysium.Substrate.NpcCrosswalk.{Signal, ThinkWaitsAtRed,
+OneLeg, QueueArm, SaveRestore}` and `Elysium.Content.Places.HubCrosswalks`. Live 2026-09-30: the
+timer's Walk / DontWalk reach the hint and the pair state. No hub pedestrian runs the `0xff` /
+`0x100` chain while the ambient executor owns it, so the live wait is 0002/11's (TRACKER row 36).
 
 ### The `146-184` pair, closed — a barrel, and a ray where retail sweeps a hull (2026-09-21, 0018 story 3)
 

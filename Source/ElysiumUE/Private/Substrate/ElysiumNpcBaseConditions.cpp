@@ -3,6 +3,7 @@
 // `class FElysiumNpcBase`), or generated in `ElysiumNpcBaseSlots.inl` for a slot body.
 
 #include "Substrate/ElysiumNpcBase.h"
+#include "Substrate/ElysiumMover.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
@@ -169,11 +170,65 @@ void FElysiumNpcBase::SetAlternateAiIdealYaw(float YawDegrees)
 
 bool FElysiumNpcBase::StartOpeningDoor(FElysiumEntity& Door)
 {
-	// SEAM for `FUN_10298840`. Its body asks the door for its point again, `RestartIdealActivity`s
-	// onto it (`0x10289ee0`), and then either `0x1027de00` (the push) when `0x100eec70` accepts the
-	// pair, or the door's own vtable `+0x1d8` use handler. None of the four has a source here.
-	(void)Door;
-	return false;
+	// `FUN_10298840`, in its order:
+	//   1. the door's slot 246 `GetNPCOpenData(this, &data, m_bOpeningDoorWait)` again;
+	//   2. `RestartIdealActivity(data.Activity)` (`0x10289ee0`) -- with NO -1 test (`10298882`), so
+	//      a -1 answer restarts activity -1;
+	//   3. the lock test `0x100eec70(door, this)`: REFUSED (true) -> the door-blocked notice
+	//      `0x1027de00` and FALSE; accepted -> the door's `AcceptInput("Open", this, this)`
+	//      (vtable `+0x1d8`, the string at `0x1056512c`) and TRUE.
+	// (The earlier comment here had the lock test's arms the other way round: the notice fires on
+	// REFUSE, as `ElysiumNpcBaseSenses.cpp`'s `OnDoorBlocked` states.)
+	FElysiumDoorBase* DoorBase = Door.AsDoorBase();
+	const FElysiumDoorNpcOpenData Data = DoorBase != nullptr
+		? DoorBase->GetNPCOpenData(this, bOpeningDoorWait) : FElysiumDoorNpcOpenData();
+	RestartIdealActivityId(Data.Activity);                                   // 0x10289ee0
+	if (DoorBase == nullptr || DoorBase->IsUseRefused(Handle))               // 0x100eec70(door, npc)
+	{
+		OnDoorBlocked(Door);                                                 // 0x1027de00
+		return false;
+	}
+	if (World != nullptr)
+	{
+		// Synchronous, through chokepoint 1: retail calls the door's `AcceptInput` directly from
+		// inside the think, so the open lands inside this call (the §2.5.1 in-handler seam).
+		World->AcceptInput(Door.Handle, FName(TEXT("Open")), FElysiumVariant::Void(), Handle, Handle);
+	}
+	return true;
+}
+
+void FElysiumNpcBase::OnDoorFullyOpen(FElysiumEntity* Door)
+{
+	// `0x1027dd10`, called by `DoorHitTop 0x100f0860` on the door's activator NPC.
+	if (!IsAlive())                                                          // slot 158
+	{
+		return;
+	}
+	if (Door == nullptr)
+	{
+		return;
+	}
+	// The door I am holding: slot 532(1) (`+0x850`), reason "fully open".
+	const FElysiumEntity* Opening = World != nullptr ? World->Resolve(OpeningDoor) : nullptr;
+	if (Opening == Door)
+	{
+		Slot532(1);
+	}
+	// Un-pause the navigator ONLY if paused (`0x102ee2e0` then `0x102ee2c0`).
+	if (Navigator.IsPaused())
+	{
+		NavStopMoving();
+	}
+	BaseScheduleHost.bShouldMove = true;                                     // +0x1a40 = 1
+	ValidateNavGoal();                                                       // slot 528 (+0x840)
+	// `+0x98 m_pBaseNPCTroika`: modes 1 and 2 (facing the door, waiting on it) end.
+	if (FElysiumNpc* const Troika = AsNpc())
+	{
+		if (Troika->AlternateAi == 1 || Troika->AlternateAi == 2)
+		{
+			Troika->AlternateAi = 0;
+		}
+	}
 }
 
 // --- Moved from `ElysiumNpcConditionsBodies.cpp` (story 5 step 5) ---

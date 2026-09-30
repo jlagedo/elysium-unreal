@@ -42,6 +42,39 @@ def test_hull_bounds_are_moved_into_world_space_by_the_entity_origin():
     assert moved == ([100.0, -50.0, 7.0], [101.0, -49.0, 8.0])
 
 
+def test_the_link_endpoints_are_where_the_witness_enters_and_leaves_the_grown_box():
+    # 0018/7: the smart link joins the two faces of the grown (cut + agent erosion) box the witness
+    # link runs through -- the mesh's edges on either side of the closed leaf.
+    start, end = doors.clip_link((-10, 0, 0), (10, 0, 0), (-2, -1, -1), (3, 1, 1))
+    assert start == pytest.approx([-2.0, 0.0, 0.0])
+    assert end == pytest.approx([3.0, 0.0, 0.0])
+
+
+def test_a_witness_node_inside_the_box_keeps_its_position():
+    start, end = doors.clip_link((0, 0, 0), (10, 0, 0), (-2, -1, -1), (3, 1, 1))
+    assert start == pytest.approx([0.0, 0.0, 0.0])
+    assert end == pytest.approx([3.0, 0.0, 0.0])
+
+
+def test_a_link_that_misses_the_box_is_refused():
+    with pytest.raises(ValueError):
+        doors.clip_link((-10, 5, 0), (10, 5, 0), (-2, -1, -1), (3, 1, 1))
+
+
+def test_one_link_per_witness_spans_every_door_it_crosses():
+    # Two leaves on one AIN link (the hub's smoke-shop pair shape): ONE link, entering the first
+    # leaf's grown box and leaving the second's.
+    def row(index, lo_x, hi_x):
+        return {"entityIndex": index, "traversable": True, "crossedByHulls": [0], "linkHull": 0,
+                "linkWitness": 7, "linkSegmentCm": [[-100.0, 0.0, 0.0], [100.0, 0.0, 0.0]],
+                "boundsCm": [[lo_x, -1.0, -1.0], [hi_x, 1.0, 1.0]]}
+    links = doors.door_links([row(10, -5.0, -4.0), row(11, 4.0, 5.0)], lambda hull: 2.0)
+    assert len(links) == 1
+    assert links[0]["doors"] == [10, 11]
+    assert links[0]["startCm"] == pytest.approx([-7.0, 0.0, 0.0])
+    assert links[0]["endCm"] == pytest.approx([7.0, 0.0, 0.0])
+
+
 def test_the_door_classnames_are_the_two_that_answer_moveable():
     assert set(doors.DOOR_CLASSNAMES) == {"func_door", "func_door_rotating"}
 
@@ -59,8 +92,8 @@ def test_hull_radius_is_the_tables_lateral_extent():
     #
     # `partial` is a door one agent's links cross and another's do not -- the rat hull is not a
     # subset of the human one. On the tutorial 5 of the 8 are crossed by both, 1 by the human
-    # alone and 2 by the rat alone. Job 6 leaves all 8 open on both meshes, because a nav area is
-    # not per-agent; story 7's smart link is where per-agent traversal belongs.
+    # alone and 2 by the rat alone. A nav area is not per-agent, so story 7 cuts all of them from
+    # every mesh and lays a per-agent smart link through each of the 8.
     ("sp_tutorial_1", 36, 8, 3),
     ("sm_hub_1", 29, 2, 0),      # the smoke-shop pair, both agents
     # 0018 story 21-2's three, measured the first time they went through the lane. Every one is a
@@ -80,7 +113,10 @@ def test_the_shipped_maps_door_answers(map_name, total, traversable, partial):
         pytest.skip(f"{map_name} nav graph not exported")
 
     import json
-    ents = paths.export_root() / map_name / f"{map_name}.ents"
+    # The bake's own sidecar root first (0018 story 21-4), then the legacy export tree.
+    ents = root / "_sidecars" / map_name / f"{map_name}.ents"
+    if not ents.is_file():
+        ents = paths.export_root() / map_name / f"{map_name}.ents"
     if not ents.is_file():
         pytest.skip(f"{map_name} .ents not exported")
     entities = json.loads(ents.read_text(encoding="ascii"))["entities"]
@@ -95,6 +131,74 @@ def test_the_shipped_maps_door_answers(map_name, total, traversable, partial):
     assert staged["traversable"] == traversable
     assert staged["cut"] == total - traversable
     assert staged["partialByAgent"] == partial
+    # 0018/7: one smart link per witness AIN link, over every door it crosses.
+    witnesses = {row["linkWitness"] for row in staged["rows"] if row["traversable"]}
+    assert staged["linked"] == len(witnesses) == len(staged["links"])
+    assert sorted(d for link in staged["links"] for d in link["doors"]) == sorted(
+        row["entityIndex"] for row in staged["rows"] if row["traversable"])
+    rows_by_door = {row["entityIndex"]: row for row in staged["rows"]}
+    for link in staged["links"]:
+        # Every crossing agent reaches both ends: they lie outside every crossing hull's grown box
+        # of every door on the link (the largest hull's faces, 0018/7 review).
+        for door in link["doors"]:
+            row = rows_by_door[door]
+            lo, hi = row["boundsCm"]
+            for hull in row["crossedByHulls"]:
+                radius = doors.hull_radius_cm(hull)
+                for point in (link["startCm"], link["endCm"]):
+                    inside = all(lo[a] - radius + 1e-3 < point[a] < hi[a] + radius - 1e-3
+                                 for a in range(3))
+                    assert not inside, (link, door, hull, point)
     # Only the two agents these maps build ever cross one: human 0 and rat 19.
     for row in staged["rows"]:
         assert set(row["crossedByHulls"]) <= {0, 19}, row
+        if row["traversable"]:
+            assert row["linkHull"] == max(row["crossedByHulls"],
+                                          key=lambda h: (doors.hull_radius_cm(h), -h))
+            assert row["linkWitness"] == row["witnessLinks"][row["linkHull"]]
+            span = math.dist(row["linkStartCm"], row["linkEndCm"])
+            # Inside the grown box: never longer than its diagonal (the box plus a hull radius on
+            # every side), never a point.
+            lo, hi = row["boundsCm"]
+            radius = doors.hull_radius_cm(row["linkHull"])
+            assert 20.0 < span <= math.dist(lo, hi) + 2.0 * math.sqrt(3.0) * radius + 1e-6, row
+        else:
+            assert "linkStartCm" not in row
+
+
+@pytest.mark.parametrize("map_name, links", [
+    # The tutorial's eight, by lump ordinal and the hulls that cross them (0018/7 findings § 2):
+    # five both, `339` human only, `yetanotherfuckingdoor` and `soc_int_locked_door` rat only.
+    ("sp_tutorial_1", {183: [0, 19], 331: [0, 19], 339: [0], 592: [0, 19], 851: [0, 19],
+                       890: [19], 1545: [0, 19], 1546: [19]}),
+    # The smoke-shop pair, both on link 958: `basic_smoke_door` (PUSE|LOCKED, the refusal test's
+    # live door) and its hidden, inert partner `plus_smoke_door`.
+    ("sm_hub_1", {2566: [0, 19], 2567: [0, 19]}),
+])
+def test_the_shipped_maps_door_links(map_name, links):
+    # `links` here are the traversable DOORS and their hulls; the smart links are grouped below.
+    pytest.importorskip("elysium_pipeline.paths")
+    from elysium_pipeline import paths
+    try:
+        root = paths.export_v2_root()
+    except RuntimeError:
+        pytest.skip("V2 export root not configured")
+    ents = root / "_sidecars" / map_name / f"{map_name}.ents"
+    if not (root / "nav-graphs" / f"{map_name}.glb").is_file() or not ents.is_file():
+        pytest.skip(f"{map_name} nav graph or sidecar .ents not exported")
+
+    import json
+    entities = json.loads(ents.read_text(encoding="ascii"))["entities"]
+    origins = {index: entity["origin"] for index, entity in enumerate(entities)
+               if isinstance(entity.get("origin"), list) and len(entity["origin"]) == 3}
+    rows = [{"entityIndex": index, "classname": entity.get("classname", ""),
+             "hulls": entity.get("hulls") or []}
+            for index, entity in enumerate(entities)]
+    staged = doors.stage(doors.load_graph_block(map_name), rows, origins, doors.hull_radius_cm)
+    linked = {row["entityIndex"]: row["crossedByHulls"] for row in staged["rows"] if row["traversable"]}
+    assert linked == links
+    if map_name == "sm_hub_1":
+        # Link 958 witnesses both leaves: ONE smart link over the pair.
+        assert [(link["witness"], link["doors"]) for link in staged["links"]] == [(958, [2566, 2567])]
+    else:
+        assert len(staged["links"]) == 8

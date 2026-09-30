@@ -323,6 +323,14 @@ public:
 		EntityWorld = MoveTemp(InWorld);
 	}
 #endif
+	// 0018/7: the level's door smart links (`AElysiumNavDoorLink`), indexed by their door's lump
+	// ordinal on first use once the runtime is active (the links are baked level actors, standing
+	// before the map activates). Each indexed link is adopted by this map, so its per-query predicate
+	// reads this entity world. Null when the door has no link.
+	class AElysiumNavDoorLink* FindDoorLink(int32 DoorEntityIndex);
+	// `IElysiumEmbodiment`: the door reached its top; its link lets every held body walk on.
+	virtual void ReleaseDoorLink(const FElysiumEntityHandle& Door) override;
+
 	// Engine overlap ingress from UElysiumBrushComponent. Runtime teleports suppress the callbacks
 	// Unreal emits inside SetActorLocation and replace them with one post-movement containment diff.
 	void RouteBrushTouch(const FElysiumEntityHandle& Brush,
@@ -763,6 +771,12 @@ private:
 	// queue, and the debug sinks. A plain C++ object (no UObject) held type-erased so the header
 	// needs only a forward declaration; destroyed with the actor on map unload.
 	TPimplPtr<FElysiumEntityWorld> EntityWorld;
+
+	// 0018/7: the level's door smart links by door lump ordinal (`FindDoorLink`). Weak: the links
+	// are the level's actors, not this one's.
+	TMap<int32, TWeakObjectPtr<class AElysiumNavDoorLink>> DoorLinks;
+	bool bDoorLinksIndexed = false;
+	void IndexDoorLinks();
 
 	// The SoundScheme manager (plain C++, owned here). Constructed alongside EntityWorld so the
 	// ambient_soundscheme entities can reach it during their spawn pass; ticked from Tick with the
