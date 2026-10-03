@@ -1,5 +1,10 @@
 # 0019 npc-kernel-rework — The kernel as data plus a class tree: extract what Troika typed, port what the bytecode observes, delete what nothing can see
 
+**CLOSED 2026-09-29** (row 12). Its hand-offs (`handoff-story-8.md`) are placed in
+[0002's consolidated spec](../0002-npc-ai/spec.md) of 2026-10-03: the body contract and the
+CCineAI translation in V3, the anim-event arms in V4, `CAI_Hint::ObjectCaps` in R3, hidden makers
+and `MemberSync` in R6, the rest "on demand".
+
 **Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
 
 ## Witness

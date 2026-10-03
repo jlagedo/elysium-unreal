@@ -29,5 +29,8 @@ shape. Renumbered 2026-09-12; the last column translates citations that predate 
 
 Retired 2026-09-12: 0000 play-tier — no beat-script driver is built; acceptance is played.
 
-**What is next** across 0019, 0018 and 0002: [`TRACKER.md`](TRACKER.md) — one serial sequence, first unticked box.
-**What still needs reverse engineering** for the same three: [`RE-BACKLOG.md`](RE-BACKLOG.md).
+**0018 and 0019 closed into 0002 on 2026-10-03** ([0002's consolidated spec](0002-npc-ai/spec.md)):
+tools and tests first, then the landed work proven live in the Green Room, then the road to close
+the character AI; 0003 onward resume after it.
+**What is next:** [`TRACKER.md`](TRACKER.md) — one serial sequence, first unticked box.
+**What still needs reverse engineering:** [`RE-BACKLOG.md`](RE-BACKLOG.md).

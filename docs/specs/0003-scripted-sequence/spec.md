@@ -1,5 +1,9 @@
 # 0003 scripted-sequence — the cutscene beat as the NPC's own schedule
 
+**2026-10-03:** stories 1–2's kernel half (`m_scriptState`, the scripted schedules and tasks,
+`CineCleanup`) fold into [0002's consolidated spec](../0002-npc-ai/spec.md), story V3. Stories 3–4
+stay here (0002's open question Q4).
+
 **Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
 
 ## Witness

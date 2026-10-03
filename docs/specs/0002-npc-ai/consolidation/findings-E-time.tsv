@@ -1,0 +1,158 @@
+group	family	source	n	n_bg	n_autobg	wall_h	med_s	p90_s	max_s	gt10s	gt60s	reply_chars_med	reply_chars_max
+Bash: build	elysium build (incl. lease-retry wrappers)	transcripts 09-19..09-30	632	163	18	20.495	109.59	426.32	602.0	416	274	297	11640
+Bash: poll	until/while+sleep loops on logs and background tasks	transcripts 09-19..09-30	696	113	52	18.870	13.82	483.49	602.9	344	185	297	19138
+Bash: test	elysium test (incl. lease-retry wrappers)	transcripts 09-19..09-30	405	43	17	11.036	62.15	199.90	601.7	348	184	377	8564
+Bash: text tools	rg/grep/sed/cat/ls over source and other	transcripts 09-19..09-30	22163	60	11	9.994	0.95	1.68	591.6	246	41	1763	29468
+Bash: test	pytest	transcripts 09-19..09-30	472	20	10	7.007	7.63	182.12	601.5	209	118	356	6540
+human-gated	AskUserQuestion	transcripts 09-19..09-30	39	0	0	4.435	161.60	972.12	3436.1	38	32	670	2187
+Bash: ad-hoc python	python: other	transcripts 09-19..09-30	4648	21	8	4.269	1.17	2.46	505.0	154	40	422	28556
+Bash: ad-hoc python	python: docs/tsv	transcripts 09-19..09-30	1851	23	9	3.909	1.19	4.92	601.2	109	38	605	29852
+Bash: kernel tooling	kernel/gen --check loop	transcripts 09-19..09-30	80	1	0	2.452	78.90	199.84	494.2	77	56	316	8706
+Bash: kernel tooling	kernel_gate	transcripts 09-19..09-30	89	2	4	1.842	57.79	211.86	330.2	76	41	1189	22541
+Bash: text tools	rg/grep/sed/cat/ls over docs, *.md, *.tsv	transcripts 09-19..09-30	4566	5	1	1.801	0.88	1.63	303.6	43	5	2181	29799
+Bash: kernel tooling	kernel_migration	transcripts 09-19..09-30	59	0	0	1.309	38.18	197.12	487.8	42	25	306	3654
+human-gated	ExitPlanMode	transcripts 09-19..09-30	28	0	0	1.267	102.79	250.25	1082.4	22	17	15324	31182
+Bash: kernel tooling	kernel_ledger	transcripts 09-19..09-30	64	6	6	1.151	33.64	121.09	601.3	52	16	461	28804
+Bash: pipeline	elysium bake/export/import	transcripts 09-19..09-30	92	27	1	0.710	17.42	75.70	601.3	43	8	473	6176
+Bash: research other	elysium research (non-kernel)	transcripts 09-19..09-30	446	8	1	0.656	1.89	6.95	601.3	34	3	527	13088
+Bash: kernel tooling	kernel (combined --check)	transcripts 09-19..09-30	61	0	0	0.623	28.66	62.19	85.1	58	12	928	9811
+Bash: kernel tooling	kernel_shape	transcripts 09-19..09-30	66	0	0	0.590	19.05	38.20	480.1	61	3	453	8148
+Bash: kernel tooling	gen_kernel_* (shape/bindings/tunables)	transcripts 09-19..09-30	117	0	0	0.551	18.66	25.07	95.5	86	1	423	5859
+elysium game MCP	elysium_status	transcripts 09-19..09-30	313	0	0	0.512	0.11	24.43	63.4	76	1	269	279
+built-in	Edit	transcripts 09-19..09-30	2290	0	0	0.386	0.51	0.83	39.1	2	0	149	636
+Bash: pipeline	elysium other	transcripts 09-19..09-30	63	21	0	0.339	2.75	45.60	356.9	17	4	317	3562
+Bash: other	other shell	transcripts 09-19..09-30	132	58	0	0.315	1.27	18.11	219.8	8	5	428	29685
+Bash: kernel tooling	kernel_story8_shape	transcripts 09-19..09-30	30	0	0	0.299	26.47	46.19	235.3	28	1	921	3505
+Bash: pipeline	elysium run play/editor	transcripts 09-19..09-30	68	56	0	0.238	1.69	411.60	431.0	2	2	428	4274
+Bash: other	git	transcripts 09-19..09-30	407	0	0	0.206	1.07	2.06	128.7	3	2	1681	29780
+built-in	Write	transcripts 09-19..09-30	1216	0	0	0.203	0.50	0.78	56.6	1	0	162	201
+Bash: kernel tooling	kernel_lists	transcripts 09-19..09-30	40	0	0	0.166	8.50	27.96	106.4	15	1	402	5819
+built-in	Grep	transcripts 09-19..09-30	2636	0	0	0.097	0.12	0.19	3.1	0	0	1729	19724
+Bash: kernel tooling	kernel_migration_inventory	transcripts 09-19..09-30	6	0	0	0.077	44.24	66.12	74.7	6	3	587	712
+built-in	Read	transcripts 09-19..09-30	4468	0	0	0.068	0.02	0.06	5.1	0	0	4233	65646
+vtmb-corpus MCP	vtmb_grep	transcripts 09-19..09-30	615	0	0	0.067	0.19	1.07	4.6	0	0	635	33810
+Bash: ad-hoc python	python: sqlite	transcripts 09-19..09-30	127	0	0	0.051	1.05	1.77	12.8	2	0	587	13382
+vtmb-corpus MCP	vtmb_code	transcripts 09-19..09-30	3047	0	0	0.051	0.01	0.03	38.3	1	0	1050	43937
+Bash: kernel tooling	kernel_skeleton	transcripts 09-19..09-30	26	1	0	0.042	5.14	11.33	29.3	6	0	811	3645
+elysium game MCP	elysium_entity_list	transcripts 09-19..09-30	169	0	0	0.039	0.05	0.93	10.6	12	0	622	14172
+built-in	Glob	transcripts 09-19..09-30	113	0	0	0.032	0.91	1.53	3.4	0	0	109	6007
+vtmb-corpus MCP	vtmb_asm	transcripts 09-19..09-30	2012	0	0	0.031	0.01	0.03	3.1	0	0	923	48818
+elysium game MCP	elysium_console_exec	transcripts 09-19..09-30	344	0	0	0.028	0.04	0.25	16.3	2	0	292	36728
+other MCP	mcp__claude_ai_Kagi_MCP__kagi_search	transcripts 09-19..09-30	21	0	0	0.026	3.40	5.94	15.6	2	0	5905	36958
+elysium game MCP	elysium_new_game	transcripts 09-19..09-30	17	0	0	0.024	0.06	0.18	85.1	1	1	231	231
+built-in	ToolSearch	transcripts 09-19..09-30	642	0	0	0.022	0.01	0.01	73.7	1	1	40	400
+built-in	Monitor	transcripts 09-19..09-30	114	0	0	0.017	0.04	0.08	24.2	2	0	302	306
+elysium game MCP	elysium_wire_report	transcripts 09-19..09-30	6	0	0	0.016	0.04	25.09	31.1	2	0	275	16602
+elysium game MCP	elysium_log_tail	transcripts 09-19..09-30	53	0	0	0.014	0.04	0.35	30.0	2	0	1397	43708
+built-in	other built-in	transcripts 09-19..09-30	197	0	0	0.014	0.02	0.11	9.2	0	0	163	10983
+other MCP	mcp__claude_ai_Kagi_MCP__kagi_extract	transcripts 09-19..09-30	14	0	0	0.013	2.50	6.08	7.8	0	0	3028	25530
+elysium game MCP	elysium_screenshot	transcripts 09-19..09-30	73	0	0	0.010	0.28	1.14	2.1	0	0	115	167
+elysium game MCP	elysium_entity_get	transcripts 09-19..09-30	86	0	0	0.010	0.05	0.07	22.1	1	0	38689	41431
+elysium game MCP	elysium_script_eval	transcripts 09-19..09-30	57	0	0	0.007	0.04	0.07	16.6	1	0	291	22047
+vtmb-corpus MCP	vtmb_fields	transcripts 09-19..09-30	314	0	0	0.007	0.01	0.26	1.6	0	0	112	17589
+elysium game MCP	elysium_entity_fire	transcripts 09-19..09-30	126	0	0	0.006	0.04	0.07	16.7	1	0	135	1072
+vtmb-corpus MCP	vtmb_string	transcripts 09-19..09-30	246	0	0	0.005	0.02	0.07	4.7	0	0	387	12886
+elysium game MCP	elysium_map_load	transcripts 09-19..09-30	120	0	0	0.005	0.04	0.08	2.0	0	0	165	185
+vtmb-corpus MCP	vtmb_callers	transcripts 09-19..09-30	352	0	0	0.005	0.01	0.03	2.3	0	0	274	5417
+vtmb-corpus MCP	vtmb_func	transcripts 09-19..09-30	320	0	0	0.004	0.01	0.03	1.8	0	0	127	1297
+vtmb-corpus MCP	vtmb_globals	transcripts 09-19..09-30	317	0	0	0.004	0.02	0.05	1.7	0	0	314	3688
+vtmb-corpus MCP	vtmb_slot	transcripts 09-19..09-30	164	0	0	0.003	0.01	0.20	2.0	0	0	26853	42849
+vtmb-corpus MCP	vtmb_vtable	transcripts 09-19..09-30	93	0	0	0.003	0.02	0.29	0.9	0	0	2259	47721
+other MCP	mcp__plugin_context7_context7__query-docs	transcripts 09-19..09-30	4	0	0	0.002	2.32	2.77	2.8	0	0	6055	6491
+vtmb-corpus MCP	vtmb_readers	transcripts 09-19..09-30	89	0	0	0.001	0.01	0.03	1.2	0	0	349	8248
+elysium game MCP	elysium_player_teleport	transcripts 09-19..09-30	78	0	0	0.001	0.04	0.07	0.6	0	0	128	217
+Bash: kernel tooling	kernel_packet	transcripts 09-19..09-30	1	0	0	0.001	4.01	4.01	4.0	0	0	263	263
+vtmb-corpus MCP	vtmb_stat	transcripts 09-19..09-30	5	0	0	0.001	0.82	1.17	1.2	0	0	1455	1455
+elysium game MCP	elysium_player_get	transcripts 09-19..09-30	23	0	0	0.001	0.04	0.15	1.1	0	0	2606	2674
+other MCP	mcp__plugin_context7_context7__resolve-library-id	transcripts 09-19..09-30	1	0	0	0.001	2.86	2.86	2.9	0	0	1875	1875
+vtmb-corpus MCP	vtmb_callees	transcripts 09-19..09-30	62	0	0	0.001	0.01	0.04	0.8	0	0	605	6365
+Bash: kernel tooling	kernel_tunables	transcripts 09-19..09-30	1	0	0	0.000	1.77	1.77	1.8	0	0	1145	1145
+elysium game MCP	elysium_io_history	transcripts 09-19..09-30	35	0	0	0.000	0.04	0.07	0.3	0	0	1266	25630
+subagent	Agent (sync wait; async launches excluded)	transcripts 09-19..09-30	651	531	0	0.000	0.01	0.01	0.0	0	0	1074	1074
+elysium game MCP	list_toolsets	transcripts 09-19..09-30	1	0	0	0.000	0.52	0.52	0.5	0	0	217	217
+elysium game MCP	elysium_maps_list	transcripts 09-19..09-30	5	0	0	0.000	0.03	0.05	0.0	0	0	997	1139
+elysium game MCP	elysium_player_noclip	transcripts 09-19..09-30	3	0	0	0.000	0.04	0.05	0.1	0	0	15	15
+vtmb-corpus MCP	vtmb_iface	transcripts 09-19..09-30	3	0	0	0.000	0.02	0.04	0.0	0	0	343	359
+elysium game MCP	elysium_audio_state	transcripts 09-19..09-30	1	0	0	0.000	0.04	0.04	0.0	0	0	18355	18355
+elysium game MCP	elysium_queue_get	transcripts 09-19..09-30	1	0	0	0.000	0.04	0.04	0.0	0	0	1457	1457
+elysium game MCP	elysium_map_reload	transcripts 09-19..09-30	1	0	0	0.000	0.02	0.02	0.0	0	0	165	165
+Bash: kernel tooling	kernel_gate_before	transcripts 09-19..09-30	1	1	0	0.000	0.00	0.00	0.0	0	0	428	428
+Bash: build	ALL (group rollup)	transcripts 09-19..09-30	632	163	18	20.495	109.59	426.32	602.0	416	274	297	11640
+Bash: poll	ALL (group rollup)	transcripts 09-19..09-30	696	113	52	18.870	13.82	483.49	602.9	344	185	297	19138
+Bash: test	ALL (group rollup)	transcripts 09-19..09-30	877	63	27	18.042	33.74	189.43	601.7	557	302	367	8564
+Bash: text tools	ALL (group rollup)	transcripts 09-19..09-30	26729	65	12	11.795	0.94	1.68	591.6	289	46	1826	29799
+Bash: kernel tooling	ALL (group rollup)	transcripts 09-19..09-30	641	11	10	9.105	23.24	120.43	601.3	507	159	537	28804
+Bash: ad-hoc python	ALL (group rollup)	transcripts 09-19..09-30	6626	44	17	8.229	1.17	2.86	601.2	265	78	474	29852
+human-gated	ALL (group rollup)	transcripts 09-19..09-30	67	0	0	5.702	122.73	614.67	3436.1	60	49	1015	31182
+Bash: pipeline	ALL (group rollup)	transcripts 09-19..09-30	223	104	1	1.287	12.54	75.70	601.3	62	14	398	6176
+built-in	ALL (group rollup)	transcripts 09-19..09-30	11676	0	0	0.840	0.10	0.62	73.7	6	1	913	65646
+elysium game MCP	ALL (group rollup)	transcripts 09-19..09-30	1512	0	0	0.675	0.04	1.30	85.1	98	2	267	43708
+Bash: research other	ALL (group rollup)	transcripts 09-19..09-30	446	8	1	0.656	1.89	6.95	601.3	34	3	527	13088
+Bash: other	ALL (group rollup)	transcripts 09-19..09-30	539	58	0	0.521	1.12	2.29	219.8	11	7	1024	29780
+vtmb-corpus MCP	ALL (group rollup)	transcripts 09-19..09-30	7639	0	0	0.183	0.01	0.16	38.3	1	0	713	48818
+other MCP	ALL (group rollup)	transcripts 09-19..09-30	40	0	0	0.042	2.99	5.94	15.6	2	0	4745	36958
+subagent	ALL (group rollup)	transcripts 09-19..09-30	651	531	0	0.000	0.01	0.01	0.0	0	0	1074	1074
+run journal	build	run journals 09-19..09-30	667	0	0	20.394	46.41	279.58	1455.7	575	313		
+run journal	test	run journals 09-19..09-30	888	0	0	12.136	22.50	130.61	905.0	888	195		
+run journal	run play	run journals 09-19..09-30	69	0	0	10.528	255.47	1274.62	7350.0	63	56		
+run journal	bake map	run journals 09-19..09-30	122	0	0	6.327	59.45	307.25	5600.3	121	59		
+run journal	research:kernel_migration	run journals 09-19..09-30	301	0	0	4.128	27.47	132.95	201.8	174	86		
+run journal	research:kernel_ledger	run journals 09-19..09-30	263	0	0	2.984	19.66	30.62	427.3	232	19		
+run journal	research:kernel_gate	run journals 09-19..09-30	101	0	0	2.540	64.09	187.09	422.3	96	55		
+run journal	research:kernel_shape	run journals 09-19..09-30	274	0	0	1.321	16.78	20.55	31.8	268	0		
+run journal	run editor	run journals 09-19..09-30	15	0	0	1.287	0.03	817.66	1798.4	6	6		
+run journal	debug gr	run journals 09-19..09-30	6	0	0	1.221	414.67	1125.52	1414.9	6	6		
+run journal	research:gen_kernel_shape	run journals 09-19..09-30	201	0	0	1.000	17.28	21.28	28.4	200	0		
+run journal	import characters	run journals 09-19..09-30	5	0	0	0.969	836.39	1434.44	1434.4	4	3		
+run journal	export map	run journals 09-19..09-30	8	0	0	0.906	13.25	1574.00	1597.4	4	2		
+run journal	research:gen_kernel_bindings	run journals 09-19..09-30	176	0	0	0.878	17.08	20.61	36.9	176	0		
+run journal	import models	run journals 09-19..09-30	5	0	0	0.848	246.12	1473.89	1473.9	3	3		
+run journal	import model-catalogues	run journals 09-19..09-30	5	0	0	0.752	483.12	781.77	781.8	5	5		
+run journal	research:kernel	run journals 09-19..09-30	97	0	0	0.716	20.84	40.84	56.6	94	0		
+run journal	import materials	run journals 09-19..09-30	3	0	0	0.519	527.30	1127.08	1127.1	3	3		
+run journal	research:kernel_lists	run journals 09-19..09-30	244	0	0	0.446	6.30	7.67	16.2	4	0		
+run journal	research:kernel_story8_shape	run journals 09-19..09-30	64	0	0	0.371	19.70	25.00	29.4	64	0		
+run journal	import textures	run journals 09-19..09-30	2	0	0	0.349	537.27	719.69	719.7	2	2		
+run journal	export bundle	run journals 09-19..09-30	7	0	0	0.295	149.49	225.22	228.5	7	7		
+run journal	bake sounds	run journals 09-19..09-30	3	0	0	0.269	465.97	501.34	501.3	2	2		
+run journal	import map-collision	run journals 09-19..09-30	42	0	0	0.231	19.59	29.12	48.6	38	0		
+run journal	research:corpus	run journals 09-19..09-30	718	0	0	0.141	0.22	0.34	163.2	3	2		
+run journal	research:decal_weather_parity	run journals 09-19..09-30	8	0	0	0.110	30.28	42.61	204.5	8	1		
+run journal	research:sidecar_snapshot	run journals 09-19..09-30	3	0	0	0.100	121.14	121.61	121.6	3	3		
+run journal	research:kernel_migration_inventory	run journals 09-19..09-30	21	0	0	0.094	9.30	13.09	139.8	6	1		
+run journal	research:knowledge	run journals 09-19..09-30	11	0	0	0.075	26.99	28.44	28.5	10	0		
+run journal	import cook-roots	run journals 09-19..09-30	6	0	0	0.056	24.73	41.83	59.2	6	0		
+run journal	verify nav	run journals 09-19..09-30	12	0	0	0.051	13.56	19.27	29.2	12	0		
+run journal	import surface-properties	run journals 09-19..09-30	4	0	0	0.049	49.56	56.38	56.4	4	0		
+run journal	research:gen_action_tables	run journals 09-19..09-30	23	0	0	0.038	6.42	6.64	7.2	0	0		
+run journal	export_v2 nav-graph-glb	run journals 09-19..09-30	18	0	0	0.034	6.39	7.38	9.9	0	0		
+run journal	verify maps	run journals 09-19..09-30	4	0	0	0.022	37.47	42.09	42.1	2	0		
+run journal	build [refused by lease]	run journals 09-19..09-30	1659	0	0	0.020	0.03	0.06	3.0	0	0		
+run journal	research:kernel_skeleton	run journals 09-19..09-30	97	0	0	0.019	0.28	3.28	4.0	0	0		
+run journal	import sound	run journals 09-19..09-30	2	0	0	0.019	32.84	34.91	34.9	2	0		
+run journal	research:merge_verdicts	run journals 09-19..09-30	7	0	0	0.018	8.05	11.05	13.6	2	0		
+run journal	import expression-tables	run journals 09-19..09-30	4	0	0	0.015	18.22	19.81	19.8	2	0		
+run journal	research:schedule_owner_survey	run journals 09-19..09-30	10	0	0	0.015	5.39	5.91	6.1	0	0		
+run journal	deps sync	run journals 09-19..09-30	2	0	0	0.015	21.78	31.72	31.7	2	0		
+run journal	research:census_links_hulls	run journals 09-19..09-30	4	0	0	0.011	13.34	13.47	13.5	3	0		
+run journal	research:entity_reading_delta	run journals 09-19..09-30	2	0	0	0.011	3.24	36.28	36.3	1	0		
+run journal	import map-entities	run journals 09-19..09-30	2	0	0	0.010	12.91	22.89	22.9	2	0		
+run journal	export_v2 map-entities-glb	run journals 09-19..09-30	1	0	0	0.010	35.75	35.75	35.8	1	0		
+run journal	export_v2 ai-schedules-glb	run journals 09-19..09-30	3	0	0	0.009	10.64	10.80	10.8	2	0		
+run journal	import dialogue	run journals 09-19..09-30	2	0	0	0.008	15.12	15.47	15.5	2	0		
+run journal	test [refused by lease]	run journals 09-19..09-30	836	0	0	0.008	0.03	0.05	0.7	0	0		
+run journal	research:gen_kernel_tunables	run journals 09-19..09-30	68	0	0	0.007	0.39	0.50	0.9	0	0		
+run journal	doctor	run journals 09-19..09-30	348	0	0	0.007	0.05	0.08	3.1	0	0		
+run journal	export_v2 map-glb	run journals 09-19..09-30	1	0	0	0.006	21.20	21.20	21.2	1	0		
+run journal	export_v2 scripts-glb	run journals 09-19..09-30	4	0	0	0.006	0.03	20.66	20.7	1	0		
+run journal	export_v2 engine-configs-glb	run journals 09-19..09-30	1	0	0	0.006	19.81	19.81	19.8	1	0		
+run journal	research:kernel_factory_map	run journals 09-19..09-30	13	0	0	0.005	0.78	2.80	2.9	0	0		
+run journal	research:test_delta	run journals 09-19..09-30	46	0	0	0.002	0.17	0.19	0.3	0	0		
+run journal	research:kernel_migration_audit	run journals 09-19..09-30	8	0	0	0.002	0.92	1.00	1.1	0	0		
+run journal	import ai-schedules	run journals 09-19..09-30	5	0	0	0.002	1.28	1.39	1.4	0	0		
+run journal	research:gen_hull_table	run journals 09-19..09-30	22	0	0	0.001	0.09	0.09	0.1	0	0		
+run journal	research:kernel_migration_replay	run journals 09-19..09-30	7	0	0	0.000	0.17	0.19	0.2	0	0		
+run journal	research:gen_contents_signatures	run journals 09-19..09-30	11	0	0	0.000	0.09	0.09	0.2	0	0		
+run journal	research:save_walk_overlap	run journals 09-19..09-30	7	0	0	0.000	0.09	0.09	0.1	0	0		
+run journal	research:gen_activity_enum	run journals 09-19..09-30	5	0	0	0.000	0.12	0.16	0.2	0	0		
+run journal	research:hull_table	run journals 09-19..09-30	5	0	0	0.000	0.09	0.11	0.1	0	0		

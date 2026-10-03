@@ -1,5 +1,10 @@
 # 0018 world-ai-infrastructure — The world's AI infrastructure: Unreal navigation, authored places, the sound world and the groups every NPC queries
 
+**CLOSED 2026-10-03.** Stories 1–7 and 21-1…21-7 landed; story 8 landed with its live tick handed on.
+Every open row (8's tick, 9–18, 20) is absorbed by [0002's consolidated spec](../0002-npc-ai/spec.md)
+(step 2's V-stories and step 3's R-stories); 12, 19 and 21-8/9/10 are "on demand" there. This text
+stays as the record of what landed and why.
+
 **Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
 
 **Revised 2026-09-17:** Unreal owns movement pathfinding and locomotion; no actor per graph

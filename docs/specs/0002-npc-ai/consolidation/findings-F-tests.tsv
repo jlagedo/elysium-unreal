@@ -1,0 +1,464 @@
+lang	file	lines	tests	cases	seconds	prefix_or_module	census	arm	scenario	content_or_corpus	port_only	seam	stub_count	duplicate	unit	infra_or_doclint	seam_lines_in_arms	touches_work_root	state	A_default	A_optin	A_delete	B_default	B_tier2	deleted_by_A	note
+cpp	ElysiumActionTableTests.cpp	1556	3	3	0.071	Elysium.Substrate.NpcActivityTables (+2)	0	1	0	0	0	0	0	0	2	0	0	0	pass	3	0	0	0	3		
+cpp	ElysiumAiScriptedScheduleTests.cpp	917	7	7	0.215	Elysium.Substrate.AiScriptedSchedule	0	0	0	0	4	0	1	1	1	0	0	0	pass; 6 with warnings	1	0	6	0	1	AiScriptedSchedule.MoveToGoal[port]; AiScriptedSchedule.AssignEnemy[port]; AiScriptedSchedule.Refusals[port]; AiScriptedSchedule.NamedSchedule[stub]; AiScriptedSchedule.Precedence[port]; AiScriptedSchedule.CombatPreemption[dupl]	
+cpp	ElysiumAnimEventTests.cpp	1011	3	3	0.025	Elysium.Substrate.AnimEventDispatch (+2)	0	0	1	0	0	0	0	0	2	0	0	0	pass	3	0	0	1	2		
+cpp	ElysiumAnimationActionTests.cpp	4463	9	9	0.075	Elysium.Substrate.AnimationArbitration (+8)	0	4	1	0	0	0	0	0	4	0	2	0	pass; 1 with warnings	9	0	0	1	8		
+cpp	ElysiumBankRemapTests.cpp	351	1	1	0.008	Elysium.Substrate.BankRemap	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+cpp	ElysiumBlockReactionTests.cpp	1106	5	5	0.048	Elysium.Substrate.BlockReaction	0	0	4	0	0	0	0	0	1	0	5	0	pass; 4 with warnings	5	0	0	4	1		
+cpp	ElysiumBodyDataTests.cpp	56	1	1	0.114	Elysium.Substrate.BodyData	0	0	0	1	0	0	0	0	0	0	0	1	pass	0	1	0	0	0		
+cpp	ElysiumBrushFadeTests.cpp	148	1	1	0.011	Elysium.Substrate.BrushCull	0	0	0	0	0	0	0	0	0	1	0	0	pass	1	0	0	0	1		
+cpp	ElysiumCameraAnchorTests.cpp	755	1	1	0.011	Elysium.Substrate.CameraAnchors	0	1	0	0	0	0	0	0	0	0	0	0	pass; 1 with warnings	1	0	0	1	0		
+cpp	ElysiumCameraAutoPositionTests.cpp	250	1	1	0.008	Elysium.Substrate.CameraAutoPosition	0	0	0	0	0	0	0	0	1	0	0	0	pass; 1 with warnings	1	0	0	0	1		
+cpp	ElysiumCameraCinematicTests.cpp	1615	2	2	0.02	Elysium.Substrate.CameraAnimated (+1)	0	0	2	0	0	0	0	0	0	0	1	0	pass; 1 with warnings	2	0	0	2	0		
+cpp	ElysiumCameraComposeTests.cpp	536	1	1	0.008	Elysium.Substrate.CameraCompose	0	1	0	0	0	0	0	0	0	0	1	0	pass	1	0	0	0	1		
+cpp	ElysiumCameraFindBestShotTests.cpp	650	1	1	0.009	Elysium.Substrate.CameraFindBestShot	0	1	0	0	0	0	0	0	0	0	0	0	pass; 1 with warnings	1	0	0	0	1		
+cpp	ElysiumCameraOverrideTests.cpp	638	3	3	0.025	Elysium.Substrate.CameraOverride (+2)	0	1	2	0	0	0	0	0	0	0	0	0	pass; 2 with warnings	3	0	0	2	1		
+cpp	ElysiumCameraShotStartTests.cpp	384	1	1	0.008	Elysium.Substrate.CameraShotStart	0	1	0	0	0	0	0	0	0	0	0	0	pass	1	0	0	0	1		
+cpp	ElysiumCameraTests.cpp	3227	10	10	0.085	Elysium.Substrate.Camera (+9)	0	6	2	0	0	0	0	0	2	0	0	0	pass; 1 with warnings	10	0	0	4	6		
+cpp	ElysiumCastDataTests.cpp	50	1	1	0.065	Elysium.Substrate.CastData	0	0	0	1	0	0	0	0	0	0	0	1	pass	0	1	0	0	0		
+cpp	ElysiumCharacterModelAdmissionTests.cpp	91	3	3	0.025	Elysium.Substrate.CharacterModelAdmission	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+cpp	ElysiumCharacterModelTests.cpp	85	3	3	0.025	Elysium.Substrate.CharacterModel	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+cpp	ElysiumClassFieldsTests.cpp	58	1	1	0.008	Elysium.Substrate.ClassFields	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+cpp	ElysiumComboChainTests.cpp	457	3	3	0.025	Elysium.Substrate.ComboChain	0	0	0	0	0	0	0	0	3	0	0	0	pass; 2 with warnings	3	0	0	0	3		
+cpp	ElysiumCompositionTests.cpp	259	1	1	0.008	Elysium.Substrate.AxisInterpRule	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+cpp	ElysiumContentTests.cpp	1318	7	7	0.095	Elysium.Policy.GamepadInputAssets (+6)	0	0	0	6	0	0	0	0	0	1	0	6	pass	1	6	0	0	1		
+cpp	ElysiumContentsSignatureTests.cpp	165	2	2	0.049	Elysium.Content.ContentsSignature	0	0	0	2	0	0	0	0	0	0	0	2	pass	0	2	0	0	0		
+cpp	ElysiumCookRootTests.cpp	67	1	1	0.008	Elysium.Substrate.CookRoot	0	0	0	0	0	0	0	0	0	1	0	0	pass	1	0	0	0	1		
+cpp	ElysiumDamageFlinchTests.cpp	1022	2	2	0.016	Elysium.Substrate.DamageFlinch	0	1	0	0	0	0	0	0	1	0	1	0	pass; 1 with warnings	2	0	0	0	2		
+cpp	ElysiumDamageTests.cpp	715	4	4	0.034	Elysium.Substrate.Damage	0	1	1	0	0	0	0	0	2	0	2	0	pass; 2 with warnings	4	0	0	1	3		
+cpp	ElysiumDecalTests.cpp	357	3	3	0.038	Elysium.Substrate.DecalImpactTrace (+2)	0	0	0	0	0	0	0	0	0	3	0	0	pass	3	0	0	0	3		
+cpp	ElysiumDialogueAudioTests.cpp	197	1	1	0.01	Elysium.Audio.DialogueTakeLetter	0	0	0	0	0	0	0	0	1	0	1	0	n/m	1	0	0	0	1		no report: duration unmeasured (est 0.01 s/test)
+cpp	ElysiumDialogueCameraRetailChainTests.cpp	890	1	1	0.018	Elysium.Substrate.DialogueCamera	0	0	1	0	0	0	0	0	0	0	0	0	pass; 1 with warnings	1	0	0	1	0		
+cpp	ElysiumDialogueCameraTests.cpp	814	6	6	0.05	Elysium.Substrate.DialogueCamera	0	1	0	0	0	0	0	0	5	0	2	0	pass; 4 with warnings	6	0	0	1	5		
+cpp	ElysiumDialogueEntryTests.cpp	543	3	3	0.072	Elysium.Substrate.DialogHolster (+2)	0	1	0	0	0	0	1	0	1	0	1	0	pass; 3 with warnings	2	0	1	1	1	DialogHolster[stub]	
+cpp	ElysiumDialogueSaveTests.cpp	182	1	1	0.01	Elysium.Session.SaveRefusedInDialogue	0	0	0	0	0	0	0	0	1	0	0	0	n/m	1	0	0	0	1		no report: duration unmeasured (est 0.01 s/test)
+cpp	ElysiumDialogueTests.cpp	1912	16	16	0.156	Elysium.Substrate.Dialogue (+14)	0	4	2	1	0	0	0	0	9	0	3	1	pass; 5 with warnings	15	1	0	3	12		
+cpp	ElysiumDialogueUITests.cpp	754	6	6	0.06	Elysium.UI.DialogueChoiceCarriesLineId (+5)	0	3	0	0	0	0	0	0	3	0	0	0	n/m	6	0	0	0	6		no report: duration unmeasured (est 0.01 s/test)
+cpp	ElysiumDisciplineTests.cpp	2088	18	18	0.151	Elysium.Substrate.Discipline	0	2	6	0	0	0	1	0	9	0	0	0	pass; 15 with warnings	17	0	1	6	11	Discipline.AiSchedule[stub]	
+cpp	ElysiumDynamicsDataTests.cpp	48	1	1	0.068	Elysium.Substrate.DynamicsData	0	0	0	1	0	0	0	0	0	0	0	1	pass	0	1	0	0	0		
+cpp	ElysiumEntityActivatePassTests.cpp	122	1	1	0.008	Elysium.Substrate.EntityWorld	0	1	0	0	0	0	0	0	0	0	0	0	pass	1	0	0	0	1		
+cpp	ElysiumEntityIOTests.cpp	1967	16	16	0.154	Elysium.Substrate.BackwardClockGuard (+15)	0	1	7	0	0	0	3	0	5	0	0	0	pass	13	0	3	7	6	MissingTargetClassification[stub]; StaleDirectHandle[stub]; WireTally[stub]	
+cpp	ElysiumEntityLifecycleTests.cpp	1103	14	14	0.233	Elysium.Substrate.ActivationLifecycle (+13)	0	0	4	0	0	0	0	0	10	0	0	0	pass; 1 with warnings	14	0	0	4	10		
+cpp	ElysiumExpressionDataTests.cpp	203	5	5	0.04	Elysium.Substrate.ExpressionData	0	0	0	0	0	0	0	0	3	2	0	0	pass	5	0	0	0	5		
+cpp	ElysiumExpressionPreparationTests.cpp	182	3	3	0.122	Elysium.Substrate.ExpressionPreparation	0	0	0	0	0	0	0	0	3	0	0	0	pass; 1 with warnings	3	0	0	1	2		
+cpp	ElysiumFacialTests.cpp	1913	14	14	0.113	Elysium.Substrate.ExpressionTable (+13)	0	1	4	0	0	0	0	0	9	0	1	0	pass; 4 with warnings	14	0	0	4	10		
+cpp	ElysiumFeedTranceTests.cpp	607	6	6	0.048	Elysium.Substrate.FeedTrance	0	3	0	0	0	0	0	0	3	0	0	0	pass; 6 with warnings	6	0	0	0	6		
+cpp	ElysiumFeedingTests.cpp	996	3	3	0.026	Elysium.Substrate.FeedMakerOutputs (+2)	0	0	2	0	0	0	0	0	1	0	0	0	pass; 2 with warnings	3	0	0	2	1		
+cpp	ElysiumFootstepSeamTests.cpp	513	4	4	0.028	Elysium.Substrate.Footsteps	0	3	0	0	0	0	0	0	1	0	0	0	pass	4	0	0	0	4		
+cpp	ElysiumFootstepSenseTests.cpp	310	2	2	0.041	Elysium.Substrate.Footsteps	0	0	0	0	0	0	0	0	1	1	0	0	pass	2	0	0	0	2		
+cpp	ElysiumGameSoundTests.cpp	524	3	3	0.025	Elysium.Substrate.GameSound	0	0	1	0	0	0	0	0	2	0	0	0	pass; 1 with warnings	3	0	0	1	2		
+cpp	ElysiumGeometryNavTests.cpp	135	1	1	1.602	Elysium.Content.Geometry	0	0	0	1	0	0	0	0	0	0	0	1	pass	0	1	0	0	0		
+cpp	ElysiumGeometryServiceTests.cpp	432	6	6	0.302	Elysium.Content.Geometry	0	0	0	6	0	0	0	0	0	0	0	6	pass; 1 with warnings	0	6	0	0	0		
+cpp	ElysiumHUDTests.cpp	1535	13	13	0.372	Elysium.Substrate.Terminal (+1)	0	3	0	0	0	0	0	0	10	0	3	0	pass; 1 with warnings	13	0	0	0	13		
+cpp	ElysiumHairDynamicsTests.cpp	235	3	3	0.025	Elysium.Substrate.HairDynamics	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+cpp	ElysiumHintContentTests.cpp	540	6	6	0.739	Elysium.Content.Hints	0	0	0	6	0	0	0	0	0	0	0	6	pass; 6 with warnings	0	6	0	0	0		
+cpp	ElysiumHintSearchTests.cpp	901	13	13	0.107	Elysium.Substrate.HintSearch	0	11	0	0	0	0	0	1	1	0	1	0	pass; 13 with warnings	12	0	1	0	12	HintSearch.Scoring[dupl]	
+cpp	ElysiumHintTests.cpp	324	6	6	0.049	Elysium.Substrate.Hint (+1)	0	4	1	0	0	0	0	0	1	0	0	0	pass; 3 with warnings	6	0	0	1	5		
+cpp	ElysiumInfraActorsTests.cpp	539	8	8	0.082	Elysium.Substrate.InfraActors (+2)	0	0	0	0	0	0	0	0	2	6	0	0	pass	8	0	0	0	8		
+cpp	ElysiumInfraContentTests.cpp	260	3	3	2.481	Elysium.Content.InfraActors	0	0	0	3	0	0	0	0	0	0	0	3	pass	0	3	0	0	0		
+cpp	ElysiumInputTests.cpp	1582	10	10	0.083	Elysium.Substrate.AppState (+9)	0	0	0	0	0	0	0	0	10	0	0	0	pass	10	0	0	0	10		
+cpp	ElysiumInteractionTests.cpp	2872	13	13	0.128	Elysium.Substrate.DialogueConditionTruthiness (+12)	0	2	6	2	0	0	0	0	3	0	0	2	pass; 4 with warnings	11	2	0	7	4		
+cpp	ElysiumInventoryTests.cpp	928	3	3	0.025	Elysium.Substrate.Inventory (+2)	0	0	2	0	0	0	0	0	1	0	0	0	pass; 3 with warnings	3	0	0	3	0		
+cpp	ElysiumKnockbackTests.cpp	1319	3	3	0.031	Elysium.Substrate.Knockback	0	0	1	0	0	0	0	0	2	0	0	0	pass; 1 with warnings	3	0	0	1	2		
+cpp	ElysiumLawTests.cpp	1337	11	11	0.089	Elysium.Substrate.Law	0	0	1	0	0	0	0	0	10	0	1	0	pass; 8 with warnings	11	0	0	1	10		
+cpp	ElysiumLightClassTests.cpp	255	2	2	0.017	Elysium.Substrate.LightDynamic (+1)	0	0	1	0	0	0	0	0	1	0	0	0	pass	2	0	0	1	1		
+cpp	ElysiumMapActorTraceFilterTests.cpp	176	5	5	0.032	Elysium.Map.TraceFilter	0	1	0	0	0	0	0	0	4	0	0	0	pass; 1 with warnings	5	0	0	0	5		
+cpp	ElysiumMapBakeLibraryTests.cpp	70	2	2	0.017	Elysium.Substrate.MapBake	0	0	0	0	0	0	0	0	0	2	0	0	pass; 2 with warnings	2	0	0	0	2		
+cpp	ElysiumMapCollisionContentTests.cpp	188	2	2	2.263	Elysium.Content.MapCollision	0	0	0	2	0	0	0	0	0	0	0	2	pass	0	2	0	0	0		
+cpp	ElysiumMapEntitiesTests.cpp	169	2	2	0.017	Elysium.Substrate.MapEntities	0	1	0	0	0	0	0	0	1	0	0	0	pass	2	0	0	0	2		
+cpp	ElysiumMapEnvironmentTests.cpp	109	2	2	0.017	Elysium.Substrate.MapEnvironment	0	0	0	0	0	0	0	0	2	0	0	0	pass	2	0	0	0	2		
+cpp	ElysiumMapListTests.cpp	178	2	2	0.034	Elysium.Content.MapList (+1)	0	0	0	2	0	0	0	0	0	0	0	2	pass	0	2	0	0	0		
+cpp	ElysiumMaterialFactoryTests.cpp	53	1	1	0.042	Elysium.Substrate.MaterialFactory	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+cpp	ElysiumMaterialProvenanceTests.cpp	526	6	6	0.049	Elysium.Substrate.MaterialProvenance	0	0	0	0	0	0	0	0	2	4	0	0	pass	6	0	0	0	6		
+cpp	ElysiumMeleeMovementTests.cpp	848	1	1	0.042	Elysium.Substrate.MeleeMovementLock	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+cpp	ElysiumMeleeStopTests.cpp	558	5	5	0.041	Elysium.Substrate.MeleeMovementStop	0	0	0	0	0	0	0	0	5	0	0	0	pass	5	0	0	0	5		
+cpp	ElysiumModelProvenanceTests.cpp	376	5	5	0.041	Elysium.Substrate.ModelProvenance	0	0	0	0	0	0	0	0	3	2	0	0	pass	5	0	0	0	5		
+cpp	ElysiumModelSettingsTests.cpp	93	2	2	0.017	Elysium.Substrate.ModelSettings	0	0	0	0	0	0	0	0	1	1	0	0	pass	2	0	0	0	2		
+cpp	ElysiumMovementTests.cpp	2074	13	13	0.178	Elysium.Substrate.ArenaSpec (+12)	0	0	0	0	0	0	0	0	12	1	0	0	pass	13	0	0	0	13		
+cpp	ElysiumMoverTests.cpp	1450	5	13	0.136	Elysium.Substrate.DoorInputOutputArity (+4)	0	0	1	0	0	0	0	0	4	0	0	0	pass	5	0	0	1	4		
+cpp	ElysiumNavAreaTests.cpp	273	3	3	0.026	Elysium.Content.NavArea	0	0	0	3	0	0	0	0	0	0	0	3	pass	0	3	0	0	0		
+cpp	ElysiumNavJumpLinkTests.cpp	306	5	5	0.059	Elysium.Content.NavJumpLink (+1)	0	0	0	2	0	0	0	0	0	3	0	2	pass	3	2	0	0	3		
+cpp	ElysiumNpcBodyMoveFactsTests.cpp	359	6	6	0.06	Elysium.Visual.NpcBody	0	0	0	0	0	0	0	0	1	5	0	0	pass	6	0	0	0	6		
+cpp	ElysiumNpcClipsTests.cpp	506	4	4	0.032	Elysium.Substrate.Clips	0	0	0	0	0	0	0	0	4	0	1	0	pass; 1 with warnings	4	0	0	0	4		
+cpp	ElysiumNpcCombatTests.cpp	1944	16	16	0.131	Elysium.Substrate.NpcCombat	0	11	0	0	2	0	0	0	3	0	1	0	pass; 16 with warnings	14	0	2	0	14	NpcCombat.Chase[port]; NpcCombat.Death[port]	
+cpp	ElysiumNpcComfortSweepTests.cpp	232	5	5	0.042	Elysium.Substrate.NpcConditions	0	0	0	0	0	0	0	0	5	0	0	0	pass; 5 with warnings	5	0	0	0	5		
+cpp	ElysiumNpcCornerChainTests.cpp	442	7	7	0.056	Elysium.Substrate.Navigator	0	7	0	0	0	0	0	0	0	0	0	0	pass; 7 with warnings	7	0	0	1	6		
+cpp	ElysiumNpcCrosswalkTests.cpp	598	6	6	0.05	Elysium.Content.Places (+1)	0	1	1	1	0	0	0	2	1	0	0	1	pass; 5 with warnings	3	1	2	1	2	NpcCrosswalk.Signal[dupl]; NpcCrosswalk.QueueArm[dupl]	
+cpp	ElysiumNpcDoorLinkTests.cpp	612	8	8	0.064	Elysium.Substrate.NpcDoorLink	0	8	0	0	0	0	0	0	0	0	0	0	pass; 8 with warnings	8	0	0	0	8		
+cpp	ElysiumNpcEnemyTests.cpp	1431	14	14	0.116	Elysium.Substrate.NpcEnemy	0	7	0	0	1	0	0	1	5	0	1	0	pass; 12 with warnings	12	0	2	0	12	NpcEnemy.ScheduleGate[dupl]; NpcEnemy.StateMachine[port]	
+cpp	ElysiumNpcFootstepTests.cpp	775	8	8	0.067	Elysium.Substrate.Footsteps	0	4	0	0	0	0	0	0	4	0	0	0	pass; 7 with warnings	8	0	0	0	8		
+cpp	ElysiumNpcGeometryConsumerTests.cpp	358	4	4	0.033	Elysium.Substrate.Geometry	0	4	0	0	0	0	0	0	0	0	0	0	pass; 4 with warnings	4	0	0	0	4		
+cpp	ElysiumNpcInvestigateTests.cpp	176	2	2	0.017	Elysium.Substrate.NpcConditions	0	0	0	0	0	0	0	0	2	0	0	0	pass; 2 with warnings	2	0	0	0	2		
+cpp	ElysiumNpcKernelAnim10Tests.cpp	1596	28	28	0.235	Elysium.Substrate.NpcKernelAnim10	1	25	0	0	1	1	0	0	0	0	1	0	pass; 27 with warnings	26	0	2	1	25	NpcKernelAnim10.AdvanceToIdealActivity[seam]; NpcKernelAnim10.Slot359[port]	
+cpp	ElysiumNpcKernelAnimTests.cpp	643	8	8	0.067	Elysium.Substrate.NpcKernelAnim	0	7	0	0	0	0	0	0	1	0	7	0	pass; 8 with warnings	8	0	0	0	8		
+cpp	ElysiumNpcKernelBaseHelpersTests.cpp	838	9	9	0.072	Elysium.Substrate.NpcKernelBaseHelpers	0	9	0	0	0	0	0	0	0	0	2	0	pass; 9 with warnings	9	0	0	0	9		
+cpp	ElysiumNpcKernelBaseSplitTests.cpp	222	4	4	0.033	Elysium.Substrate.NpcKernelBaseSplit	0	2	0	0	0	0	0	0	2	0	0	0	pass; 3 with warnings	4	0	0	0	4		
+cpp	ElysiumNpcKernelBindingsTests.cpp	516	3	3	0.025	Elysium.Substrate.NpcKernelBindings	3	0	0	0	0	0	0	0	0	0	0	0	pass; 1 with warnings	3	0	0	3	0		
+cpp	ElysiumNpcKernelBossTests.cpp	440	12	12	0.101	Elysium.Substrate.NpcKernelBoss19	0	12	0	0	0	0	0	0	0	0	0	0	pass; 12 with warnings	12	0	0	0	12		
+cpp	ElysiumNpcKernelBossesTests.cpp	1249	18	18	0.142	Elysium.Substrate.NpcKernelBosses	0	14	0	0	0	0	0	0	4	0	4	0	pass; 15 with warnings	18	0	0	0	18		
+cpp	ElysiumNpcKernelChainSlotsTests.cpp	186	4	4	0.031	Elysium.Substrate.NpcKernelChainSlots	2	0	0	0	0	0	2	0	0	0	0	0	pass; 3 with warnings	2	0	2	2	0	NpcKernelChainSlots.StubNamesItsOwner[stub]; NpcKernelChainSlots.EntityIntegrations[stub]	
+cpp	ElysiumNpcKernelClassFactoryTests.cpp	611	6	6	0.069	Elysium.Substrate.NpcKernelClass	2	1	0	0	0	0	0	0	3	0	0	0	pass; 2 with warnings	6	0	0	2	4		
+cpp	ElysiumNpcKernelClassTreeTests.cpp	160	2	2	0.017	Elysium.Substrate.NpcKernelClass	1	1	0	0	0	0	0	0	0	0	0	0	pass; 1 with warnings	2	0	0	1	1		
+cpp	ElysiumNpcKernelClosureTests.cpp	929	11	11	0.087	Elysium.Substrate.NpcKernelClosure	1	9	0	0	0	1	0	0	0	0	1	0	pass; 11 with warnings	10	0	1	1	9	NpcKernelClosure.CoverAndReloadActivity[seam]	
+cpp	ElysiumNpcKernelCombat10Tests.cpp	1536	23	23	0.19	Elysium.Substrate.NpcKernelCombat10	0	21	0	0	0	1	0	0	1	0	5	0	pass; 23 with warnings	22	0	1	0	22	NpcKernelCombat10.DodgeTest[seam]	
+cpp	ElysiumNpcKernelConditions10Tests.cpp	1112	14	14	0.118	Elysium.Substrate.NpcKernelConditions10	0	11	0	0	0	1	0	0	2	0	0	0	pass; 14 with warnings	13	0	1	0	13	NpcKernelConditions10.ResetFakeReloadCount[seam]	
+cpp	ElysiumNpcKernelConditions2Tests.cpp	1407	32	32	0.296	Elysium.Substrate.NpcKernelConditions19	0	14	0	0	0	1	0	0	17	0	2	0	pass; 32 with warnings	31	0	1	0	31	NpcKernelConditions19.Species.Pedestrian103a2c30[seam]	
+cpp	ElysiumNpcKernelConditionsTests.cpp	918	15	15	0.123	Elysium.Substrate.NpcKernelConditions	0	15	0	0	0	0	0	0	0	0	5	0	pass; 15 with warnings	15	0	0	0	15		
+cpp	ElysiumNpcKernelDamage2Tests.cpp	1275	29	29	0.236	Elysium.Substrate.NpcKernelDamage19	0	16	0	0	0	0	0	0	13	0	0	0	pass; 29 with warnings	29	0	0	0	29		
+cpp	ElysiumNpcKernelDamageTests.cpp	1524	23	23	0.188	Elysium.Substrate.NpcKernelDamage	0	20	0	0	0	2	0	0	1	0	8	0	pass; 22 with warnings	21	0	2	0	21	NpcKernelDamage.CausePlayerAOEDamage[seam]; NpcKernelDamage.Seams[seam]	
+cpp	ElysiumNpcKernelDamagedTests.cpp	295	5	5	0.042	Elysium.Substrate.NpcKernelDamaged19	0	5	0	0	0	0	0	0	0	0	0	0	pass; 5 with warnings	5	0	0	0	5		
+cpp	ElysiumNpcKernelDialogueTests.cpp	738	9	9	0.073	Elysium.Substrate.NpcKernelDialogue	0	9	0	0	0	0	0	0	0	0	0	0	pass; 9 with warnings	9	0	0	0	9		
+cpp	ElysiumNpcKernelDirectorTests.cpp	942	15	15	0.12	Elysium.Substrate.NpcKernelDirector	0	11	4	0	0	0	0	0	0	0	0	0	pass; 12 with warnings	15	0	0	4	11		
+cpp	ElysiumNpcKernelEntityChainTests.cpp	1083	16	16	0.133	Elysium.Substrate.NpcKernelEntityChain	0	13	0	0	0	3	0	0	0	0	9	0	pass; 16 with warnings	13	0	3	0	13	NpcKernelEntityChain.Standable[seam]; NpcKernelEntityChain.ClosestNpc[seam]; NpcKernelEntityChain.Autoaim[seam]	
+cpp	ElysiumNpcKernelFacingTests.cpp	787	10	10	0.081	Elysium.Substrate.NpcKernelFacing	0	10	0	0	0	0	0	0	0	0	3	0	pass; 9 with warnings	10	0	0	0	10		
+cpp	ElysiumNpcKernelGeometryTests.cpp	801	11	11	0.096	Elysium.Substrate.NpcKernelGeometry	0	10	0	0	0	1	0	0	0	0	2	0	pass; 11 with warnings	10	0	1	0	10	NpcKernelGeometry.EyePosition[seam]	
+cpp	ElysiumNpcKernelHints10Tests.cpp	430	6	6	0.05	Elysium.Substrate.NpcKernelHints10	0	6	0	0	0	0	0	0	0	0	3	0	pass; 5 with warnings	6	0	0	0	6		
+cpp	ElysiumNpcKernelHintsTests.cpp	1376	10	10	0.088	Elysium.Substrate.NpcKernelHints	0	9	0	0	1	0	0	0	0	0	2	0	pass; 8 with warnings	9	0	1	2	7	NpcKernelHints.Interest[port]	
+cpp	ElysiumNpcKernelLifecycle2Tests.cpp	1313	34	34	0.301	Elysium.Substrate.NpcKernelLifecycle19	1	28	0	0	0	0	0	0	5	0	2	0	pass; 33 with warnings	34	0	0	1	33		
+cpp	ElysiumNpcKernelLifecycleTests.cpp	1084	21	21	0.174	Elysium.Substrate.NpcKernelLifecycle	0	18	0	0	0	0	0	0	3	0	0	0	pass; 15 with warnings	21	0	0	0	21		
+cpp	ElysiumNpcKernelMaintainTests.cpp	649	6	6	0.059	Elysium.Substrate.NpcKernelMaintain19	0	1	0	0	1	0	0	0	4	0	0	0	pass; 5 with warnings	5	0	1	0	5	NpcKernelMaintain19.MaintainSchedule[port]	
+cpp	ElysiumNpcKernelMisc2Tests.cpp	1170	31	31	0.254	Elysium.Substrate.NpcKernelMisc19	0	31	0	0	0	0	0	0	0	0	0	0	pass; 31 with warnings	31	0	0	0	31		
+cpp	ElysiumNpcKernelMiscTests.cpp	560	6	6	0.054	Elysium.Substrate.NpcKernelMisc	0	5	0	0	0	1	0	0	0	0	0	0	pass; 6 with warnings	5	0	1	0	5	NpcKernelMisc.CapabilitiesGet[seam]	
+cpp	ElysiumNpcKernelMotor10Tests.cpp	476	5	5	0.042	Elysium.Substrate.NpcKernelMotor10	0	4	0	0	0	0	1	0	0	0	3	0	pass; 5 with warnings	4	0	1	0	4	NpcKernelMotor10.TestHullSpawn[stub]	
+cpp	ElysiumNpcKernelMotorTests.cpp	1367	17	17	0.143	Elysium.Substrate.NpcKernelMotor	0	15	0	0	0	1	0	0	1	0	4	0	pass; 16 with warnings	16	0	1	0	16	NpcKernelMotor.Slots[seam]	
+cpp	ElysiumNpcKernelPlayerControllerTests.cpp	1107	21	21	0.176	Elysium.Substrate.NpcKernelPlayerController	0	18	0	0	0	0	0	1	2	0	2	0	pass; 20 with warnings	20	0	1	0	20	NpcKernelPlayerController.NPCThinkThenResetThinkTimers[dupl]	
+cpp	ElysiumNpcKernelPositionsTests.cpp	973	10	10	0.079	Elysium.Substrate.NpcKernelPositions	0	9	0	0	0	1	0	0	0	0	2	0	pass; 7 with warnings	9	0	1	0	9	NpcKernelPositions.ChasePosition[seam]	
+cpp	ElysiumNpcKernelPrecache10Tests.cpp	667	8	8	0.068	Elysium.Substrate.NpcKernelPrecache10	1	6	0	0	0	0	0	0	1	0	1	0	pass; 8 with warnings	8	0	0	1	7		
+cpp	ElysiumNpcKernelRunAiTests.cpp	1087	23	23	0.189	Elysium.Substrate.NpcKernelRunAi19	0	22	0	0	0	0	0	0	1	0	0	0	pass; 23 with warnings	23	0	0	0	23		
+cpp	ElysiumNpcKernelRunTaskTests.cpp	1397	46	46	0.387	Elysium.Substrate.NpcKernelRunTask19	0	46	0	0	0	0	0	0	0	0	0	0	pass; 46 with warnings	46	0	0	0	46		
+cpp	ElysiumNpcKernelSaveRestore10Tests.cpp	628	8	8	0.064	Elysium.Substrate.NpcKernelSaveRestore10	1	7	0	0	0	0	0	0	0	0	1	0	pass; 6 with warnings	8	0	0	2	6		
+cpp	ElysiumNpcKernelScheduleTests.cpp	879	7	7	0.059	Elysium.Substrate.NpcKernelSchedule	1	5	0	0	1	0	0	0	0	0	2	0	pass; 7 with warnings	6	0	1	1	5	NpcKernelSchedule.TaskDistanceAndOrders[port]	
+cpp	ElysiumNpcKernelScriptTests.cpp	1135	23	23	0.19	Elysium.Substrate.NpcKernelScript19	0	23	0	0	0	0	0	0	0	0	0	0	pass; 23 with warnings	23	0	0	0	23		
+cpp	ElysiumNpcKernelSelectTests.cpp	1200	33	33	0.276	Elysium.Substrate.NpcKernelSelect19	0	31	0	0	2	0	0	0	0	0	0	0	pass; 33 with warnings	31	0	2	0	31	NpcKernelSelect19.TroikaSelectSchedule.Case1Idle[port]; NpcKernelSelect19.PatrolOutranksUseInteresting_0x102af6b6[port]	
+cpp	ElysiumNpcKernelSenses10Tests.cpp	1250	15	15	0.128	Elysium.Substrate.NpcKernelSenses10	0	15	0	0	0	0	0	0	0	0	1	0	pass; 15 with warnings	15	0	0	0	15		
+cpp	ElysiumNpcKernelSensesTests.cpp	796	8	8	0.065	Elysium.Substrate.NpcKernelSenses	0	8	0	0	0	0	0	0	0	0	1	0	pass; 8 with warnings	8	0	0	1	7		
+cpp	ElysiumNpcKernelShapeTests.cpp	756	6	6	0.051	Elysium.Substrate.NpcKernelShape (+1)	4	0	0	0	1	0	1	0	0	0	0	0	pass; 1 with warnings	4	0	2	4	0	NpcKernelShape.FieldOwners[port]; NpcKernelSlots.Defaults[stub]	
+cpp	ElysiumNpcKernelSocial10Tests.cpp	611	7	7	0.062	Elysium.Substrate.NpcKernelSocial10	0	7	0	0	0	0	0	0	0	0	4	0	pass; 5 with warnings	7	0	0	0	7		
+cpp	ElysiumNpcKernelSounds10Tests.cpp	587	20	20	0.165	Elysium.Substrate.NpcKernelSounds10	0	19	0	0	0	0	0	0	1	0	0	0	pass; 18 with warnings	20	0	0	0	20		
+cpp	ElysiumNpcKernelSoundsTests.cpp	742	10	10	0.084	Elysium.Substrate.NpcKernelSounds	0	8	0	0	0	2	0	0	0	0	1	0	pass; 10 with warnings	8	0	2	0	8	NpcKernelSounds.BestSound[seam]; NpcKernelSounds.Sentence[seam]	
+cpp	ElysiumNpcKernelSpawnTests.cpp	1294	51	51	0.42	Elysium.Substrate.NpcKernelSpawn19	0	39	0	0	0	0	0	0	12	0	0	0	pass; 51 with warnings	51	0	0	0	51		
+cpp	ElysiumNpcKernelSpeciesBindingsTests.cpp	813	5	5	0.084	Elysium.Substrate.NpcKernelSpeciesBindings	5	0	0	0	0	0	0	0	0	0	0	0	pass; 4 with warnings	5	0	0	5	0		
+cpp	ElysiumNpcKernelSpeciesLifecycle10Tests.cpp	897	11	11	0.097	Elysium.Substrate.NpcKernelSpeciesLifecycle10	0	8	1	0	0	0	0	0	2	0	0	0	pass; 11 with warnings	11	0	0	1	10		
+cpp	ElysiumNpcKernelSpeciesMisc10Tests.cpp	1376	25	25	0.207	Elysium.Substrate.NpcKernelSpeciesMisc10	0	20	0	0	0	0	0	0	5	0	0	0	pass; 25 with warnings	25	0	0	0	25		
+cpp	ElysiumNpcKernelSpeciesTests.cpp	2017	29	29	0.319	Elysium.Substrate.NpcKernelSpecies	1	27	0	0	0	0	1	0	0	0	6	0	pass; 28 with warnings	28	0	1	1	27	NpcKernelSpecies.WiredSlot488DeathSound[stub]	
+cpp	ElysiumNpcKernelSquadTests.cpp	525	8	8	0.067	Elysium.Substrate.NpcKernelSquad	0	8	0	0	0	0	0	0	0	0	1	0	pass; 8 with warnings	8	0	0	0	8		
+cpp	ElysiumNpcKernelStartTaskTests.cpp	729	11	11	0.092	Elysium.Substrate.NpcKernelStartTask19	0	11	0	0	0	0	0	0	0	0	0	0	pass; 10 with warnings	11	0	0	0	11		
+cpp	ElysiumNpcKernelStartTaskTests_2.cpp	916	14	14	0.128	Elysium.Substrate.NpcKernelStartTask19	0	14	0	0	0	0	0	0	0	0	0	0	pass; 14 with warnings	14	0	0	0	14		
+cpp	ElysiumNpcKernelStartTaskTests_3.cpp	879	15	15	0.12	Elysium.Substrate.NpcKernelStartTask19	0	15	0	0	0	0	0	0	0	0	1	0	pass; 15 with warnings	15	0	0	0	15		
+cpp	ElysiumNpcKernelStartTaskTests_4.cpp	2191	26	26	0.235	Elysium.Substrate.NpcKernelStartTask19	0	25	0	0	1	0	0	0	0	0	1	0	pass; 26 with warnings	25	0	1	2	23	NpcKernelStartTask19.Species.Animal_0x1035f650[port]	
+cpp	ElysiumNpcKernelStateTests.cpp	547	12	12	0.097	Elysium.Substrate.NpcKernelState19	0	1	0	0	0	0	0	0	11	0	0	0	pass; 12 with warnings	12	0	0	0	12		
+cpp	ElysiumNpcKernelTestHullTests.cpp	57	1	1	0.008	Elysium.Substrate.NpcKernelTestHull	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+cpp	ElysiumNpcKernelThinkTests.cpp	997	23	23	0.193	Elysium.Substrate.NpcKernelThink19	0	22	1	0	0	0	0	0	0	0	0	0	pass; 23 with warnings	23	0	0	1	22		
+cpp	ElysiumNpcKernelTranslateTests.cpp	240	6	6	0.06	Elysium.Substrate.NpcKernelTranslate19	0	4	0	0	0	0	0	0	2	0	0	0	pass; 6 with warnings	6	0	0	0	6		
+cpp	ElysiumNpcKernelTroikaHelpersTests.cpp	1010	13	13	0.108	Elysium.Substrate.NpcKernelTroikaHelpers	0	13	0	0	0	0	0	0	0	0	5	0	pass; 13 with warnings	13	0	0	0	13		
+cpp	ElysiumNpcKernelTunablesTests.cpp	84	1	1	0.008	Elysium.Substrate.NpcKernelTunables	1	0	0	0	0	0	0	0	0	0	0	0	pass	1	0	0	1	0		
+cpp	ElysiumNpcKernelWerewolfTests.cpp	710	17	17	0.142	Elysium.Substrate.NpcKernelWerewolf19	0	17	0	0	0	0	0	0	0	0	0	0	pass; 17 with warnings	17	0	0	0	17		
+cpp	ElysiumNpcMakerGeometryTests.cpp	155	2	2	0.021	Elysium.Substrate.NpcMakerGeometry	0	0	0	0	0	0	0	0	1	1	0	0	pass; 1 with warnings	2	0	0	0	2		
+cpp	ElysiumNpcMakerTests.cpp	303	5	5	0.042	Elysium.Substrate.NpcMaker	0	2	1	0	0	0	0	2	0	0	0	0	pass; 4 with warnings	3	0	2	1	2	NpcMaker.FleshpileThinkRearms[dupl]; NpcMaker.InstalledThinkSaved[dupl]	
+cpp	ElysiumNpcMindTests.cpp	147	3	3	0.024	Elysium.Substrate.NpcMind	0	0	0	0	3	0	0	0	0	0	0	0	pass	0	0	3	0	0	NpcMind.Admission[port]; NpcMind.BodyOwner[port]; NpcMind.Restore[port]	
+cpp	ElysiumNpcMotorSeamTests.cpp	251	5	5	0.085	Elysium.Substrate.NpcMotorSeam (+1)	0	0	0	0	0	0	0	0	1	4	0	0	pass	5	0	0	0	5		
+cpp	ElysiumNpcNavigatorMoveStepTests.cpp	834	18	18	0.147	Elysium.Substrate.Navigator	0	15	0	0	0	0	0	1	2	0	0	0	pass; 18 with warnings	17	0	1	0	17	Navigator.MoveStep.Arrived.NonGoalHead[dupl]	
+cpp	ElysiumNpcNavigatorTests.cpp	340	5	5	0.042	Elysium.Substrate.Navigator	0	3	0	0	0	0	0	1	1	0	0	0	pass; 5 with warnings	4	0	1	0	4	Navigator.Reset.Values[dupl]	
+cpp	ElysiumNpcScheduleHostTests.cpp	248	2	2	0.016	Elysium.Substrate.NpcScheduleHost	0	1	0	0	0	0	0	0	1	0	0	0	pass; 1 with warnings	2	0	0	1	1		
+cpp	ElysiumNpcSeeUnknownSweepTests.cpp	399	6	6	0.05	Elysium.Substrate.NpcConditions	0	0	0	0	0	0	0	0	6	0	0	0	pass; 6 with warnings	6	0	0	0	6		
+cpp	ElysiumNpcSensesTests.cpp	1152	12	12	0.1	Elysium.Substrate.NpcSenses	0	2	1	0	0	0	0	0	9	0	0	0	pass; 11 with warnings	12	0	0	1	11		
+cpp	ElysiumNpcSightTraceTests.cpp	231	3	3	0.025	Elysium.Substrate.Geometry	0	2	0	0	0	0	0	0	1	0	0	0	pass; 2 with warnings	3	0	0	0	3		
+cpp	ElysiumNpcSoundSweepTests.cpp	680	4	4	0.032	Elysium.Substrate.NpcConditions	0	1	0	0	0	0	0	0	3	0	0	0	pass; 4 with warnings	4	0	0	0	4		
+cpp	ElysiumNpcTests.cpp	1715	10	10	0.161	Elysium.Substrate.DispositionLevels (+6)	0	2	2	0	1	0	1	0	4	0	1	0	pass; 6 with warnings	8	0	2	3	5	Npc.ActivityResolve[port]; Npc.TeleportToEntity[stub]	
+cpp	ElysiumNpcThink19GateTests.cpp	287	6	6	0.051	Elysium.Substrate.Think19	0	6	0	0	0	0	0	0	0	0	0	0	pass; 6 with warnings	6	0	0	0	6		
+cpp	ElysiumNpcThinkCadenceTests.cpp	687	10	10	0.083	Elysium.Substrate.NpcThinkCadence	0	2	2	0	1	0	0	0	5	0	0	0	pass; 5 with warnings	9	0	1	2	7	NpcThinkCadence.ResetSites[port]	
+cpp	ElysiumNpcWitnessTests.cpp	1034	9	9	0.073	Elysium.Substrate.NpcWitness	0	4	0	0	0	0	0	0	5	0	0	0	pass; 9 with warnings	9	0	0	0	9		
+cpp	ElysiumOrnamentAnimEventTests.cpp	448	2	2	0.052	Elysium.Substrate.FeedBoundaryAnimEvents (+1)	0	1	0	0	0	0	0	0	1	0	4	0	pass; 2 with warnings	2	0	0	0	2		
+cpp	ElysiumOrphanSettingsTests.cpp	156	2	2	0.025	Elysium.Substrate.OrphanSettings	0	0	0	0	0	0	0	0	1	1	0	0	pass	2	0	0	0	2		
+cpp	ElysiumPhysicalMaterialTests.cpp	407	5	5	0.042	Elysium.Substrate.PhysicalMaterial	0	0	0	0	0	0	0	0	3	2	0	0	pass	5	0	0	0	5		
+cpp	ElysiumPhysicsDataTests.cpp	148	2	2	0.017	Elysium.Substrate.PhysicsSourceData (+1)	0	0	0	1	0	0	0	0	1	0	0	1	pass	1	1	0	0	1		
+cpp	ElysiumPlaceSeamTests.cpp	755	11	11	0.088	Elysium.Content.Places (+1)	0	5	0	1	0	0	0	2	3	0	0	1	pass; 10 with warnings	8	1	2	0	8	PlaceSeams.HintArms[dupl]; PlaceSeams.Patrol[dupl]	
+cpp	ElysiumPlaceSetTests.cpp	501	7	7	0.065	Elysium.Content.Places (+1)	0	3	0	2	0	0	0	0	2	0	0	2	pass	5	2	0	1	4		
+cpp	ElysiumPlayerAttackTests.cpp	1237	6	6	0.047	Elysium.Substrate.PlayerAttack	0	2	0	0	0	0	0	0	4	0	0	0	pass; 6 with warnings	6	0	0	1	5		
+cpp	ElysiumPlayerFootstepTests.cpp	893	7	7	0.058	Elysium.Substrate.Footsteps	0	6	0	0	0	0	0	0	1	0	0	0	pass	7	0	0	3	4		
+cpp	ElysiumPlayerWorldTests.cpp	2064	15	15	50.877	Elysium.Substrate.AnimatedPropManifest (+14)	0	0	2	0	0	0	0	0	6	7	2	0	pass; 1 with warnings	14	1	0	3	11		holds a >10 s test: MapActorTeardown
+cpp	ElysiumProgressionTests.cpp	833	3	3	0.025	Elysium.Substrate.Chargen (+2)	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	1	2		
+cpp	ElysiumPropSkinsTests.cpp	157	5	5	0.042	Elysium.Substrate.PropSkins	0	0	0	0	0	0	0	0	5	0	0	0	pass	5	0	0	0	5		
+cpp	ElysiumPropTests.cpp	642	8	8	0.064	Elysium.Substrate.AnimatedPropPlacement (+7)	0	0	3	0	0	0	0	0	5	0	0	0	pass	8	0	0	3	5		
+cpp	ElysiumReactionTests.cpp	556	7	7	0.058	Elysium.Substrate.Reaction	0	0	0	0	0	0	0	0	7	0	0	0	pass	7	0	0	0	7		
+cpp	ElysiumRetailHullTests.cpp	203	4	4	0.033	Elysium.Substrate.RetailHull	2	0	0	0	0	0	0	0	2	0	0	0	pass; 1 with warnings	4	0	0	2	2		
+cpp	ElysiumRetailMaskRecipeTests.cpp	76	1	1	0.008	Elysium.Substrate.Geometry	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+cpp	ElysiumSaveTests.cpp	1090	5	5	0.042	Elysium.Substrate.LogicRelayLifetime (+4)	0	0	1	0	0	0	0	0	4	0	0	0	pass	5	0	0	3	2		
+cpp	ElysiumSceneTests.cpp	1504	5	5	0.043	Elysium.Substrate.ChoreoScene (+4)	0	0	3	0	0	0	0	0	2	0	0	0	pass; 2 with warnings	5	0	0	3	2		
+cpp	ElysiumScheduleCorpusTests.cpp	483	6	6	0.229	Elysium.Substrate.ScheduleCorpus (+1)	0	0	0	0	0	0	0	0	6	0	0	0	pass	6	0	0	0	6		
+cpp	ElysiumScheduleIdSpaceTests.cpp	198	5	5	0.045	Elysium.Substrate.ScheduleIdSpace	5	0	0	0	0	0	0	0	0	0	0	0	pass	5	0	0	5	0		
+cpp	ElysiumScheduleIntegrationTests.cpp	173	4	4	0.034	Elysium.Substrate.ScheduleIntegration	0	2	0	0	0	0	0	0	2	0	0	0	pass; 3 with warnings	4	0	0	0	4		
+cpp	ElysiumScheduleTests.cpp	779	8	8	0.067	Elysium.Substrate.Schedule	0	4	1	0	0	0	0	0	3	0	0	0	pass; 4 with warnings	8	0	0	1	7		
+cpp	ElysiumScheduleTextTests.cpp	576	9	9	0.075	Elysium.Substrate.ScheduleText	0	2	0	0	0	0	0	0	7	0	1	0	pass	9	0	0	0	9		
+cpp	ElysiumSequenceTests.cpp	1659	10	10	0.119	Elysium.Substrate.FogDecalMID (+9)	0	0	6	0	1	0	0	0	3	0	0	0	pass; 7 with warnings	9	0	1	6	3	ScriptedSequenceBodyClaim[port]	
+cpp	ElysiumSessionSaveTests.cpp	190	1	1	0.01	Elysium.Session.SaveNamedSlot	0	0	0	0	0	0	0	0	1	0	0	0	n/m	1	0	0	1	0		no report: duration unmeasured (est 0.01 s/test)
+cpp	ElysiumSkeletalMeshTests.cpp	91	1	1	0.009	Elysium.Substrate.AuthoredMorphs	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+cpp	ElysiumSkeletalStageBuildTests.cpp	418	4	4	12.649	Elysium.Substrate.SkeletalStageBuild (+3)	0	0	0	4	0	0	0	0	0	0	0	4	pass; 1 with warnings	0	4	0	0	0		holds a >10 s test: SkeletalStageOwners
+cpp	ElysiumSkyProvenanceTests.cpp	61	1	1	0.009	Elysium.Substrate.SkyComposite	0	0	0	0	0	0	0	0	0	1	0	0	pass; 1 with warnings	1	0	0	0	1		
+cpp	ElysiumSpriteTests.cpp	120	1	1	0.008	Elysium.Substrate.EnvSprite	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+cpp	ElysiumStanceTests.cpp	471	8	8	0.068	Elysium.Substrate.Stance	0	0	2	0	0	0	0	0	6	0	0	0	pass; 2 with warnings	8	0	0	2	6		
+cpp	ElysiumStealthKillTests.cpp	543	13	13	0.109	Elysium.Substrate.StealthKill	0	1	0	0	0	0	0	1	11	0	0	0	pass; 12 with warnings	12	0	1	0	12	StealthKill.CommitAndCompletion[dupl]	
+cpp	ElysiumStealthTests.cpp	963	8	8	0.068	Elysium.Substrate.Stealth	0	2	0	0	0	0	0	0	6	0	0	0	pass; 5 with warnings	8	0	0	0	8		
+cpp	ElysiumSubstrateCoreTests.cpp	1625	13	13	0.146	Elysium.Substrate.Dice (+12)	0	1	1	1	0	0	0	0	10	0	0	1	pass	12	1	0	1	11		
+cpp	ElysiumSurfaceKnobTests.cpp	457	10	10	0.083	Elysium.Substrate.SurfaceCalibration (+1)	0	0	0	0	0	0	0	0	9	1	0	0	pass	10	0	0	0	10		
+cpp	ElysiumSwingContactTests.cpp	263	4	4	0.033	Elysium.Substrate.SwingContact	0	0	0	0	0	0	0	0	4	0	0	0	pass	4	0	0	0	4		
+cpp	ElysiumTerminalCellTests.cpp	293	3	3	0.022	Elysium.Substrate.Terminal	0	2	0	0	0	0	0	0	1	0	0	0	pass	3	0	0	0	3		
+cpp	ElysiumTerminalEmailTests.cpp	894	1	1	0.008	Elysium.Substrate.TerminalEmail	0	1	0	0	0	0	0	0	0	0	0	0	pass	1	0	0	1	0		
+cpp	ElysiumTerminalKeyTests.cpp	657	3	3	0.029	Elysium.Substrate.Terminal	0	2	0	0	0	0	0	0	0	1	0	0	pass	3	0	0	0	3		
+cpp	ElysiumTerminalPinTests.cpp	518	4	4	0.033	Elysium.Substrate.TerminalBodyRebuild (+3)	0	1	1	0	0	0	0	0	2	0	0	0	pass	4	0	0	3	1		
+cpp	ElysiumTerminalProjectionTests.cpp	368	2	2	0.026	Elysium.Substrate.Terminal	0	0	0	0	0	0	0	0	0	2	0	0	pass; 1 with warnings	2	0	0	0	2		
+cpp	ElysiumTerminalRouterTests.cpp	460	2	2	0.017	Elysium.Substrate.TerminalHudHint (+1)	0	0	2	0	0	0	0	0	0	0	0	0	pass	2	0	0	2	0		
+cpp	ElysiumTerminalScreenBufferTests.cpp	155	2	2	0.016	Elysium.Substrate.TerminalGridClamp (+1)	0	1	0	0	0	0	0	0	1	0	0	0	pass	2	0	0	0	2		
+cpp	ElysiumTerminalScreenSaverTests.cpp	232	1	1	0.009	Elysium.Substrate.TerminalScreenSaver	0	0	1	0	0	0	0	0	0	0	0	0	pass	1	0	0	1	0		
+cpp	ElysiumTextureProvenanceTests.cpp	257	3	3	0.02	Elysium.Substrate.TextureProvenance	0	0	0	0	0	0	0	0	2	1	0	0	pass	3	0	0	0	3		
+cpp	ElysiumUiArtTests.cpp	84	1	1	0.008	Elysium.Substrate.UiArt	0	0	0	1	0	0	0	0	0	0	0	1	pass	0	1	0	0	0		
+cpp	ElysiumUiStringsTests.cpp	118	2	2	0.017	Elysium.Content.UiStrings (+1)	0	0	0	1	0	0	0	0	1	0	0	1	pass	1	1	0	0	1		
+cpp	ElysiumUnarmedGaitTests.cpp	192	2	2	0.016	Elysium.Substrate.FlatGaitFan (+1)	0	2	0	0	0	0	0	0	0	0	0	0	pass	2	0	0	0	2		
+cpp	ElysiumWaterTests.cpp	446	1	1	0.008	Elysium.Substrate.Water	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+cpp	ElysiumWeaponTests.cpp	4596	18	18	0.164	Elysium.Substrate.Inventory (+2)	0	3	5	0	0	0	0	0	10	0	2	0	pass; 16 with warnings	18	0	0	7	11		
+cpp	ElysiumWieldAttachTests.cpp	292	1	1	0.008	Elysium.Substrate.WieldAttach	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+cpp	ElysiumWieldOwnershipTests.cpp	51	1	1	0.014	Elysium.Substrate.WieldOwnership	0	0	0	0	0	0	0	0	0	1	0	0	pass	1	0	0	0	1		
+cpp	ElysiumWieldRuleTests.cpp	476	4	4	0.033	Elysium.Substrate.Wield	0	3	1	0	0	0	0	0	0	0	0	0	pass; 3 with warnings	4	0	0	1	3		
+cpp	ElysiumWorldDataTests.cpp	368	3	3	0.022	Elysium.Substrate.Decals (+2)	0	0	0	1	0	0	0	0	2	0	0	1	pass	2	1	0	0	2		
+cpp	ElysiumWorldEffectsTests.cpp	2004	10	10	0.081	Elysium.Substrate.AnimationBindingIdentity (+8)	0	1	1	0	0	0	1	0	6	1	0	0	pass; 3 with warnings	9	0	1	2	7	Stubs[stub]	
+cpp	ElysiumWorldGeometryTests.cpp	293	5	5	0.064	Elysium.Substrate.Geometry	0	0	0	0	0	0	0	0	0	5	0	0	pass; 1 with warnings	5	0	0	0	5		
+cpp	ElysiumWorldLightTests.cpp	257	5	5	0.253	Elysium.Content.StealthLightQuery (+2)	0	1	0	2	0	0	0	0	2	0	0	2	pass	3	2	0	0	3		
+cpp	ElysiumDialogueTestHelpers.h	11	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumEntityDebugStateTestHelpers.h	67	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumGeometryFixture.h	310	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumMapSlice.h	205	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumMeleeTestHelpers.h	113	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumNativeCharacterTestData.h	220	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumNpcDeadClasses.h	48	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumNpcKernelOverrideCensus.cpp	5211	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		generated census data, no tests
+cpp	ElysiumNpcKernelOverrideCensus.h	43	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumNpcTestCensus.h	98	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumNpcTestFixture.h	428	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumNpcTestHooks.h	17	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumOverlapTestProbe.h	35	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumPlayerWorldFixture.h	80	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumRulebookTestFixture.h	52	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumSaveTestHelpers.h	15	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumScratchCorpusRoot.h	68	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumTerminalGym.h	287	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+cpp	ElysiumTestServices.h	2504	0	0	0	-	0	0	0	0	0	0	0	0	0	0	0	0	-	0	0	0	0	0		support header: fixtures and helpers, no tests
+py	test_accessor_pass.py	186	4	4	0.028	accessor_pass	0	0	0	0	0	0	0	0	4	0	0	0	pass	4	0	0	0	4		
+py	test_ai_infra_probes.py	87	4	4	0.025	ai_infra_probes	0	0	0	0	0	0	0	0	3	1	0	0	pass	4	0	0	1	3		
+py	test_ai_schedule_glb.py	443	25	25	0.013	formats	0	2	0	0	0	0	0	0	23	0	0	0	pass	25	0	0	0	25		
+py	test_ai_schedules_corpus_import.py	177	8	8	0.222	formats	1	0	0	0	0	0	0	0	7	0	0	0	pass	8	0	0	1	7		
+py	test_animated_props.py	372	29	29	0.095	skeletal_stage	0	0	0	0	0	0	0	0	29	0	0	0	pass	29	0	0	0	29		
+py	test_animation_publications.py	147	11	11	0.233	formats	0	0	0	0	0	0	0	0	11	0	0	0	1 skipped	11	0	0	0	11		
+py	test_area_portal_window_translation.py	63	3	3	0.001	exporters	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+py	test_asset_paths.py	45	39	39	0.022	asset_paths	0	0	0	0	0	0	0	0	39	0	0	0	pass	39	0	0	1	38		
+py	test_bake_map_ai_infra.py	170	3	3	0.01	bake_map_ai_infra	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+py	test_bake_map_captures.py	94	3	3	0.011	importers	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+py	test_bake_map_decals.py	186	7	7	0.049	bake_map_decals	0	0	0	0	0	0	0	0	7	0	0	0	pass	7	0	0	0	7		
+py	test_bake_map_details.py	128	3	3	0.009	importers	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+py	test_bake_map_lights.py	208	7	7	0.015	exporters	1	0	0	0	0	0	0	0	6	0	0	0	3 skipped	7	0	0	1	6		
+py	test_bake_map_lightstyle.py	226	15	15	0.022	asset_names	0	0	0	0	0	0	0	0	15	0	0	0	pass	15	0	0	0	15		
+py	test_bake_map_ropes.py	194	7	7	0.026	bake_map_ropes	0	0	0	0	0	0	0	0	7	0	0	0	pass	7	0	0	0	7		
+py	test_bake_map_sky.py	125	5	5	0.021	bake_map_sky	0	0	0	0	0	0	0	0	5	0	0	0	pass	5	0	0	0	5		
+py	test_bake_map_sky_scope.py	133	3	3	0.009	importers	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+py	test_bake_map_sprites.py	255	7	7	8.239	formats	0	0	0	3	0	0	0	0	4	0	0	3	pass	4	3	0	0	4		reads $ELYSIUM_WORK_ROOT/VtMB root in 3 tests
+py	test_bake_map_water.py	327	15	15	0.024	importers	0	0	0	0	0	0	0	0	15	0	0	0	pass	15	0	0	0	15		
+py	test_bake_orchestration.py	560	19	19	0.529	placed_models	0	0	0	0	0	0	0	0	19	0	0	0	pass	19	0	0	0	19		
+py	test_bake_places.py	180	5	5	0.016	bake_places	0	0	0	0	0	0	0	0	5	0	0	0	pass	5	0	0	0	5		
+py	test_bake_verify_lanes.py	245	4	4	0.022	bake_verify_lanes	0	0	0	0	0	0	0	0	4	0	0	0	pass	4	0	0	0	4		
+py	test_bake_verify_water.py	330	24	24	0.144	bake_verify_water	0	0	0	0	0	0	0	0	24	0	0	0	pass	24	0	0	0	24		
+py	test_bank_stage_families.py	29	1	1	0.001	formats	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+py	test_body_data.py	39	3	3	0.001	formats	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+py	test_cast_data.py	36	3	3	0.002	importers	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+py	test_channel_diff.py	250	18	18	0.222	validation	0	0	0	0	0	0	0	0	18	0	0	0	pass	18	0	0	0	18		
+py	test_character_body_routing.py	55	5	5	0.006	character_body_routing	0	0	0	0	0	0	0	0	5	0	0	0	pass	5	0	0	0	5		
+py	test_character_data.py	93	5	5	0.003	importers	0	0	0	0	0	0	0	0	5	0	0	0	pass	5	0	0	0	5		
+py	test_character_migration_cli.py	61	5	5	0.265	importers	0	0	5	0	0	0	0	0	0	0	0	0	pass	5	0	0	5	0		
+py	test_character_model_admission.py	76	6	6	0.006	character_model_admission	0	0	0	0	0	0	0	0	6	0	0	0	pass	6	0	0	0	6		
+py	test_character_partition.py	202	22	22	0.012	formats	0	0	0	0	0	0	0	0	22	0	0	0	pass	22	0	0	0	22		
+py	test_character_stage.py	62	4	4	0.111	importers	0	0	0	0	0	0	0	0	4	0	0	0	pass	4	0	0	0	4		
+py	test_cinematic_stage.py	33	2	2	0.001	formats	0	0	0	0	0	0	0	0	2	0	0	0	pass	2	0	0	0	2		
+py	test_class_hulls.py	83	7	7	0.241	paths	1	0	0	0	0	0	0	0	6	0	0	0	pass	7	0	0	1	6		
+py	test_clean_contract.py	220	8	8	0.137	workspace_lock	0	0	0	0	0	0	0	0	8	0	0	0	pass	8	0	0	0	8		
+py	test_cli_contract.py	184	13	13	0.562	cli	0	0	9	0	0	0	0	0	4	0	0	0	pass	13	0	0	9	4		
+py	test_cli_oracle_argv.py	90	6	6	0.266	process	0	0	1	0	0	0	0	0	5	0	0	0	pass	6	0	0	1	5		
+py	test_cli_output.py	575	31	31	1.173	cli	0	0	4	0	0	0	0	0	27	0	0	0	pass	31	0	0	4	27		
+py	test_clip_data.py	52	3	3	0.001	formats	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+py	test_cloth_data.py	85	3	3	0.002	importers	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+py	test_cloth_diff.py	20	1	1	0.001	validation	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+py	test_contracts.py	815	43	43	2.514	formats	0	0	0	1	0	0	0	0	42	0	0	1	pass	42	1	0	1	41		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_cook_roots.py	202	17	17	0.079	cook_roots	0	0	0	0	0	0	0	0	17	0	0	0	1 skipped	17	0	0	0	17		
+py	test_corpus_index_glb.py	2202	160	160	9.752	formats	5	0	0	0	0	0	0	0	154	1	0	0	pass	160	0	0	7	153		
+py	test_crt_match.py	148	6	6	0.024	crt_match	0	5	0	0	0	0	0	0	1	0	0	0	pass	6	0	0	0	6		
+py	test_dependencies.py	87	4	4	0.032	dependencies	0	0	0	0	0	0	0	0	4	0	0	0	pass	4	0	0	0	4		
+py	test_dialogue_corpus_import.py	437	23	23	2.611	validation	3	0	2	2	0	0	0	0	16	0	0	2	pass	21	2	0	5	16		reads $ELYSIUM_WORK_ROOT/VtMB root in 2 tests
+py	test_dialogue_glb.py	957	64	64	0.109	formats	1	0	0	0	0	0	0	0	63	0	0	0	pass	64	0	0	2	62		
+py	test_displacement_winding.py	104	2	2	0.002	displacement_winding	0	0	0	0	0	0	0	0	2	0	0	0	1 skipped	2	0	0	0	2		
+py	test_doctor_corpus_index.py	126	7	7	0.065	formats	0	0	0	0	0	0	0	0	7	0	0	0	pass	7	0	0	0	7		
+py	test_dynamics_data.py	64	4	4	0.002	importers	0	0	0	0	0	0	0	0	4	0	0	0	pass	4	0	0	0	4		
+py	test_effects.py	144	2	2	0.011	importers	0	0	0	2	0	0	0	0	0	0	0	2	pass	0	2	0	0	0		reads $ELYSIUM_WORK_ROOT/VtMB root in 2 tests
+py	test_engine_config_corpus_import.py	192	10	10	0.231	importers	1	0	2	0	0	0	0	0	7	0	0	0	pass	10	0	0	3	7		
+py	test_engine_config_glb.py	963	85	85	0.17	formats	1	0	0	0	0	0	0	0	84	0	0	0	pass	85	0	0	2	83		
+py	test_eskm_sections.py	118	10	10	0.066	formats	0	0	0	0	0	0	0	0	10	0	0	0	pass	10	0	0	0	10		
+py	test_export_orchestration.py	763	120	120	1.043	exporters	0	0	0	1	0	0	0	0	119	0	0	1	pass	119	1	0	1	118		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_expression_preparation.py	59	11	11	0.008	importers	0	0	0	0	0	0	0	0	11	0	0	0	pass	11	0	0	0	11		
+py	test_expression_table_glb.py	718	50	50	0.072	formats	0	0	0	0	0	0	0	0	50	0	0	0	pass	50	0	0	1	49		
+py	test_expression_table_import.py	236	28	28	0.449	formats	0	0	0	0	0	0	0	0	28	0	0	0	2 skipped	28	0	0	0	28		
+py	test_expression_table_worker.py	81	7	7	0.009	expression_table_worker	0	0	0	0	0	0	0	0	7	0	0	0	pass	7	0	0	0	7		
+py	test_font_glb.py	795	51	51	0.074	formats	1	0	0	0	0	0	0	0	50	0	0	0	pass	51	0	0	2	49		
+py	test_gen_contents_signatures.py	268	20	20	0.044	formats	2	1	0	0	0	0	0	0	17	0	0	0	pass	20	0	0	2	18		
+py	test_gen_hull_table.py	162	13	13	0.018	gen_hull_table	1	0	0	0	0	0	0	0	12	0	0	0	pass	13	0	0	1	12		
+py	test_gen_kernel_bindings.py	177	13	13	0.024	gen_kernel_bindings	0	0	0	1	0	0	0	0	12	0	0	1	pass	12	1	0	0	12		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_gen_kernel_shape.py	439	26	26	21.702	gen_kernel_shape	0	2	0	5	0	0	0	0	19	0	0	5	pass	21	5	0	0	21		reads $ELYSIUM_WORK_ROOT/VtMB root in 5 tests
+py	test_harness_options.py	96	11	11	0.004	unreal	0	0	0	0	0	0	0	0	11	0	0	0	pass	11	0	0	0	11		
+py	test_image_glb.py	913	64	64	0.048	formats	0	0	0	0	0	0	0	0	64	0	0	0	pass	64	0	0	1	63		
+py	test_import_characters_editor.py	143	5	5	0.076	asset_paths	0	0	0	0	0	0	0	0	5	0	0	0	pass	5	0	0	0	5		
+py	test_import_materials_editor.py	1117	33	33	1.137	import_materials_editor	0	0	0	0	0	0	0	0	33	0	0	0	pass	33	0	0	0	33		
+py	test_import_surface_properties_editor.py	462	11	11	0.222	import_surface_properties_editor	0	0	0	0	0	0	0	0	11	0	0	0	pass	11	0	0	0	11		
+py	test_import_textures_editor.py	882	26	26	0.96	import_textures_editor	0	0	0	0	0	0	0	0	26	0	0	0	pass	26	0	0	0	26		
+py	test_importers_models.py	267	8	8	2.347	formats	0	0	0	1	0	0	0	0	7	0	0	1	pass	7	1	0	0	7		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_install_index.py	153	9	9	0.08	formats	0	0	0	0	0	0	0	0	9	0	0	0	pass	9	0	0	0	9		
+py	test_item_models.py	115	5	5	0.047	formats	0	0	0	0	0	0	0	0	5	0	0	0	pass	5	0	0	0	5		
+py	test_kernel.py	67	3	3	0.002	kernel	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+py	test_kernel_closed.py	290	22	22	0.06	gen_kernel_shape	0	11	0	0	0	0	0	0	11	0	0	0	pass	22	0	0	0	22		
+py	test_kernel_gate.py	406	19	19	2.219	kernel_gate	1	10	0	0	0	0	0	0	7	1	0	0	pass	19	0	0	2	17		
+py	test_kernel_ledger.py	381	26	26	9.308	kernel_ledger	0	5	0	11	0	0	0	0	10	0	0	11	pass	15	11	0	0	15		reads $ELYSIUM_WORK_ROOT/VtMB root in 11 tests
+py	test_kernel_packet.py	250	9	9	0.061	kernel_packet	0	8	0	0	0	0	0	0	1	0	0	0	pass	9	0	0	0	9		
+py	test_kernel_reach.py	112	5	5	0.024	kernel_ledger	0	1	0	0	0	0	0	0	4	0	0	0	pass	5	0	0	0	5		
+py	test_kernel_shape.py	268	16	16	20.563	paths	0	1	0	4	0	0	0	0	11	0	0	4	pass	12	4	0	0	12		reads $ELYSIUM_WORK_ROOT/VtMB root in 4 tests
+py	test_kernel_skeleton.py	232	7	7	0.101	kernel_skeleton	0	6	0	1	0	0	0	0	0	0	0	1	pass	6	1	0	0	6		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_level_sidecar_recipe.py	161	7	7	0.1	level_sidecar_recipe	0	0	0	0	0	0	0	0	7	0	0	0	pass	7	0	0	0	7		
+py	test_lookdev_props_set.py	140	31	31	0.964	importers	0	0	0	8	0	0	0	0	23	0	0	8	pass	23	8	0	0	23		reads $ELYSIUM_WORK_ROOT/VtMB root in 8 tests
+py	test_lookdev_set.py	160	117	117	8.479	importers	0	0	0	23	0	0	0	0	94	0	0	23	pass	94	23	0	1	93		reads $ELYSIUM_WORK_ROOT/VtMB root in 23 tests
+py	test_make_lookdev_map_editor.py	628	26	26	0.186	make_lookdev_map_editor	1	0	0	0	0	0	0	0	25	0	0	0	pass	26	0	0	1	25		
+py	test_make_surface_knobs.py	362	7	7	0.007	importers	0	0	0	0	0	0	0	0	7	0	0	0	pass	7	0	0	0	7		
+py	test_make_v2_materials_editor.py	1250	26	26	1.079	importers	0	0	0	0	0	0	0	0	26	0	0	0	pass	26	0	0	0	26		
+py	test_manifest_contract.py	350	13	13	0.158	tasking	1	0	0	0	0	0	0	0	12	0	0	0	pass	13	0	0	1	12		
+py	test_map_ai_infra.py	199	12	12	50.342	exporters	0	1	0	6	0	0	0	0	5	0	0	6	pass	6	6	0	0	6		reads $ELYSIUM_WORK_ROOT/VtMB root in 6 tests
+py	test_map_bake_stages.py	39	4	4	0.002	map_bake_stages	0	0	0	0	0	0	0	0	4	0	0	0	pass	4	0	0	0	4		
+py	test_map_census.py	139	5	5	0.064	formats	0	0	0	0	0	0	0	0	5	0	0	0	pass	5	0	0	0	5		
+py	test_map_collision_asset.py	210	8	8	0.107	formats	0	0	0	0	0	0	0	0	8	0	0	0	pass	8	0	0	0	8		
+py	test_map_decals.py	209	22	22	49.047	exporters	0	0	0	12	0	0	0	0	10	0	0	12	pass	10	12	0	0	10		reads $ELYSIUM_WORK_ROOT/VtMB root in 12 tests
+py	test_map_entities_glb.py	1074	73	73	0.843	formats	1	0	0	0	0	0	0	0	72	0	0	0	pass	73	0	0	2	71		
+py	test_map_entity_asset.py	104	4	4	0.021	exporters	0	0	0	0	0	0	0	0	4	0	0	0	pass	4	0	0	0	4		
+py	test_map_environment_asset.py	114	8	8	0.079	importers	0	0	0	0	0	0	0	0	8	0	0	0	pass	8	0	0	0	8		
+py	test_map_geometry.py	1424	61	61	26.624	importers	0	8	0	21	0	0	0	0	32	0	0	21	6 skipped	40	21	0	1	39		reads $ELYSIUM_WORK_ROOT/VtMB root in 21 tests
+py	test_map_glb.py	1259	67	67	0.474	formats	0	0	0	0	0	0	0	0	67	0	0	0	pass	67	0	0	1	66		
+py	test_map_hulls_contents.py	111	5	5	0.003	exporters	0	1	0	0	0	0	0	0	4	0	0	0	2 skipped	5	0	0	0	5		
+py	test_map_jump_links.py	223	32	32	0.059	importers	0	4	0	3	0	0	0	0	25	0	0	3	pass	29	3	0	0	29		reads $ELYSIUM_WORK_ROOT/VtMB root in 3 tests
+py	test_map_light_query.py	67	4	4	2.897	exporters	0	1	0	1	0	0	0	0	2	0	0	1	pass	3	1	0	0	3		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_map_lighting_glb.py	891	51	51	0.188	formats	0	0	0	0	0	0	0	0	51	0	0	0	pass	51	0	0	1	50		
+py	test_map_nav_doors.py	204	18	18	1.099	importers	0	0	0	7	0	0	0	0	11	0	0	7	pass	11	7	0	0	11		reads $ELYSIUM_WORK_ROOT/VtMB root in 7 tests
+py	test_map_places.py	255	16	16	9.331	formats	0	0	0	4	0	0	0	0	12	0	0	4	pass	12	4	0	0	12		reads $ELYSIUM_WORK_ROOT/VtMB root in 4 tests
+py	test_map_producer_join.py	62	1	1	0.2	map_producer_join	0	0	0	1	0	0	0	0	0	0	0	1	pass	0	1	0	0	0		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_map_ropes.py	197	16	16	3.327	exporters	0	0	0	6	0	0	0	0	10	0	0	6	pass	10	6	0	0	10		reads $ELYSIUM_WORK_ROOT/VtMB root in 6 tests
+py	test_map_sidecars.py	457	36	36	4.194	exporters	1	3	0	4	0	0	0	0	28	0	0	4	6 skipped	32	4	0	2	30		reads $ELYSIUM_WORK_ROOT/VtMB root in 4 tests
+py	test_map_visibility_glb.py	885	60	60	0.416	formats	0	0	0	0	0	0	0	0	60	0	0	0	pass	60	0	0	1	59		
+py	test_map_weather_stage.py	161	9	9	65.985	importers	0	0	0	7	0	0	0	0	2	0	0	7	pass	2	7	0	0	2		reads $ELYSIUM_WORK_ROOT/VtMB root in 7 tests
+py	test_material_consumers.py	116	7	7	0.048	asset_paths	0	0	0	0	0	0	0	0	7	0	0	0	pass	7	0	0	0	7		
+py	test_material_glb.py	798	64	64	0.084	formats	0	2	0	0	0	0	0	0	61	1	0	0	pass	64	0	0	2	62		
+py	test_materials_stage.py	2727	104	104	5.056	formats	1	0	0	1	0	0	0	0	101	1	0	1	pass	103	1	0	3	100		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_matgraph.py	317	13	13	0.02	matgraph	0	0	0	0	0	0	0	0	13	0	0	0	pass	13	0	0	0	13		
+py	test_mdl_animation_events.py	133	12	12	0.005	formats	0	0	0	0	0	0	0	0	12	0	0	0	pass	12	0	0	0	12		
+py	test_mdl_attachments.py	65	4	4	0.002	skeletal_stage	0	0	0	0	0	0	0	0	4	0	0	0	pass	4	0	0	0	4		
+py	test_mdl_include_numbering.py	146	7	7	0.004	formats	0	0	0	0	0	0	0	0	7	0	0	0	pass	7	0	0	0	7		
+py	test_mdl_melee_sequence_fields.py	627	53	53	0.03	skeletal_stage	0	0	0	0	0	0	0	0	53	0	0	0	pass	53	0	0	1	52		
+py	test_mdl_secondary_motion.py	225	15	15	0.009	formats	0	0	0	0	0	0	0	0	15	0	0	0	pass	15	0	0	0	15		
+py	test_model_catalogue_views.py	87	6	6	0.003	placed_models	0	0	0	0	0	0	0	0	6	0	0	0	pass	6	0	0	0	6		
+py	test_model_catalogues_stage.py	187	14	14	2.49	importers	9	0	0	0	0	0	0	0	5	0	0	0	pass	14	0	0	9	5		
+py	test_model_catalogues_worker.py	185	16	16	3.4	importers	0	0	0	0	0	0	0	0	16	0	0	0	pass	16	0	0	0	16		
+py	test_model_glb.py	1552	84	84	0.303	formats	1	0	1	0	0	0	0	0	82	0	0	0	pass	84	0	0	3	81		
+py	test_model_import_editor.py	380	19	19	0.034	asset_names	1	0	0	0	0	0	0	0	18	0	0	0	pass	19	0	0	1	18		
+py	test_model_provenance_keys.py	80	1	1	0.001	importers	0	0	0	0	0	0	0	0	1	0	0	0	pass	1	0	0	0	1		
+py	test_model_skin_table.py	138	8	8	0.003	importers	0	0	0	0	0	0	0	0	8	0	0	0	pass	8	0	0	0	8		
+py	test_models_canonical_paths.py	190	27	27	0.276	asset_paths	0	0	0	0	0	0	0	0	27	0	0	0	pass	27	0	0	0	27		
+py	test_models_stage_merge.py	148	4	4	0.115	formats	0	0	0	0	0	0	0	0	4	0	0	0	pass	4	0	0	0	4		
+py	test_name_passes.py	212	8	8	0.069	name_passes	0	0	0	0	0	0	0	0	8	0	0	0	pass	8	0	0	0	8		
+py	test_native_geometry.py	436	48	48	0.184	validation	0	0	1	0	0	0	0	0	47	0	0	0	pass	48	0	0	2	46		
+py	test_native_geometry_corpus.py	84	1	1	0.0	validation	0	0	0	0	0	0	0	0	1	0	0	0	1 skipped	1	0	0	0	1		
+py	test_native_geometry_equivalence.py	101	13	13	0.033	validation	0	0	0	0	0	0	0	0	13	0	0	0	1 skipped	13	0	0	0	13		
+py	test_native_geometry_performance.py	103	1	1	0.0	validation	0	0	0	0	0	0	0	0	1	0	0	0	1 skipped	1	0	0	0	1		
+py	test_native_geometry_position_audit.py	84	3	3	0.015	validation	0	0	0	0	0	0	0	0	3	0	0	0	1 skipped	3	0	0	0	3		
+py	test_native_geometry_sign_observability.py	68	3	3	0.002	validation	0	0	0	0	0	0	0	0	3	0	0	0	1 skipped	3	0	0	0	3		
+py	test_native_geometry_source.py	137	4	4	0.002	formats	0	0	0	0	0	0	0	0	4	0	0	0	1 skipped	4	0	0	0	4		
+py	test_native_geometry_stage.py	385	59	59	2.112	validation	0	0	0	0	0	0	0	0	59	0	0	0	pass	59	0	0	1	58		
+py	test_native_geometry_tangent_verification.py	196	37	37	0.192	validation	0	0	0	0	0	0	0	0	37	0	0	0	1 skipped	37	0	0	1	36		
+py	test_native_geometry_tangents.py	116	4	4	0.001	validation	0	0	0	0	0	0	0	0	4	0	0	0	2 skipped	4	0	0	0	4		
+py	test_native_geometry_uv.py	125	31	31	0.179	validation	1	0	0	0	0	0	0	0	30	0	0	0	1 skipped	31	0	0	1	30		
+py	test_native_geometry_vectorized.py	116	15	15	0.069	validation	0	0	0	1	0	0	0	0	14	0	0	1	pass	14	1	0	0	14		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_native_model_pipeline.py	147	12	12	0.155	importers	1	0	0	0	0	0	0	0	11	0	0	0	pass	12	0	0	1	11		
+py	test_native_tangent_codec_probe.py	89	4	4	0.165	validation	0	0	0	0	0	0	0	0	4	0	0	0	1 skipped	4	0	0	0	4		
+py	test_nav_acceptance.py	375	35	35	0.022	validation	0	2	0	0	0	0	0	0	33	0	0	0	pass	35	0	0	0	35		
+py	test_nav_graph_glb.py	830	59	59	0.104	formats	1	1	0	1	0	0	0	0	56	0	0	1	pass	58	1	0	2	56		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_nav_recovery_data.py	228	16	16	3.729	nav_recovery_data	0	2	0	4	0	0	0	0	10	0	0	4	pass	12	4	0	0	12		reads $ELYSIUM_WORK_ROOT/VtMB root in 4 tests
+py	test_oracle_citations.py	132	3	3	2.08	oracle_citations	0	0	0	0	0	0	0	0	0	3	0	0	1 failed	3	0	0	3	0		
+py	test_oracle_source.py	253	18	18	0.084	formats	0	0	2	0	0	0	0	0	16	0	0	0	pass	18	0	0	2	16		
+py	test_ornament_models.py	221	14	14	0.198	formats	0	0	0	0	0	0	0	0	14	0	0	0	pass	14	0	0	0	14		
+py	test_particle_glb.py	740	62	62	0.151	formats	0	0	0	0	0	0	0	0	61	1	0	0	pass	62	0	0	2	60		
+py	test_particle_mirror.py	87	3	3	0.094	exporters	1	0	0	0	0	0	0	0	2	0	0	0	pass	3	0	0	1	2		
+py	test_pedestrian_link_census.py	126	9	9	0.062	importers	0	1	0	1	0	0	0	0	7	0	0	1	pass	8	1	0	0	8		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_physics_calibration.py	323	20	20	0.168	validation	0	1	0	0	0	0	0	0	19	0	0	0	6 skipped	20	0	0	0	20		
+py	test_physics_data.py	226	15	15	0.047	formats	0	0	0	0	0	0	0	0	15	0	0	0	1 skipped	15	0	0	0	15		
+py	test_placed_model_selection.py	120	11	11	0.345	formats	0	0	0	0	0	0	0	0	11	0	0	0	pass	11	0	0	0	11		
+py	test_prepared_prop_models_policy.py	35	3	3	0.003	prepared_prop_models_policy	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+py	test_process.py	219	12	12	5.291	process	0	0	0	0	0	0	0	0	12	0	0	0	pass	12	0	0	0	12		
+py	test_profile_package_contract.py	66	4	4	0.007	exporters	0	0	0	0	0	0	0	0	4	0	0	0	pass	4	0	0	0	4		
+py	test_ps1x.py	457	29	29	0.154	validation	0	0	0	2	0	0	0	0	27	0	0	2	pass	27	2	0	0	27		reads $ELYSIUM_WORK_ROOT/VtMB root in 2 tests
+py	test_r8_catalogues.py	259	27	27	0.055	importers	0	0	0	0	0	0	0	0	27	0	0	0	pass	27	0	0	0	27		
+py	test_recipe_policy.py	54	2	2	0.278	recipe_policy	0	0	0	0	0	0	0	0	2	0	0	0	pass	2	0	0	0	2		
+py	test_retail_capture.py	1173	25	25	0.022	formats	0	0	0	0	0	0	0	0	25	0	0	0	pass	25	0	0	0	25		
+py	test_retail_compositor.py	316	20	20	0.01	formats	0	0	0	0	0	0	0	0	20	0	0	0	pass	20	0	0	0	20		
+py	test_rig_layers.py	176	14	14	0.025	rig_layers	0	0	0	0	0	0	0	0	14	0	0	0	pass	14	0	0	0	14		
+py	test_rig_parity.py	612	37	37	0.033	rig_parity	0	0	0	0	0	0	0	0	37	0	0	0	pass	37	0	0	1	36		
+py	test_rig_pose.py	321	31	31	0.011	rig_pose	0	1	0	0	0	0	0	0	30	0	0	0	pass	31	0	0	0	31		
+py	test_scene_glb.py	774	48	48	0.647	formats	1	0	0	0	0	0	0	0	47	0	0	0	pass	48	0	0	2	46		
+py	test_scene_mirror_retirement.py	26	1	1	3.975	exporters	0	0	0	1	0	0	0	0	0	0	0	1	pass	0	1	0	0	0		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_script_corpus_import.py	250	14	14	0.535	importers	2	0	2	0	0	0	0	0	10	0	0	0	pass	14	0	0	4	10		
+py	test_script_glb.py	1213	81	81	0.38	formats	1	0	0	0	0	0	0	0	80	0	0	0	pass	81	0	0	2	79		
+py	test_shader_program_glb.py	1019	59	59	0.207	formats	2	1	0	0	0	0	0	0	56	0	0	0	pass	59	0	0	3	56		
+py	test_shared_corpus.py	239	29	29	0.116	asset_names	0	0	0	0	0	0	0	0	29	0	0	0	pass	29	0	0	0	29		
+py	test_shots_diff.py	163	8	8	0.136	paths	0	0	0	0	0	0	0	0	8	0	0	0	pass	8	0	0	0	8		
+py	test_skeletal_diff.py	50	5	5	0.003	validation	0	0	0	0	0	0	0	0	5	0	0	0	pass	5	0	0	0	5		
+py	test_skeletal_projection.py	103	6	6	0.033	validation	0	0	0	0	0	0	0	0	6	0	0	0	pass	6	0	0	0	6		
+py	test_skeletal_refpose.py	556	23	23	0.014	skeletal_stage	1	0	0	0	0	0	0	0	22	0	0	0	pass	23	0	0	1	22		
+py	test_skeletal_tangents.py	45	2	2	0.035	skeletal_stage	0	0	0	0	0	0	0	0	2	0	0	0	pass	2	0	0	0	2		
+py	test_sky_composites.py	250	23	23	0.985	importers	1	0	0	0	0	0	0	0	22	0	0	0	pass	23	0	0	1	22		
+py	test_sky_composites_editor.py	110	11	11	0.019	sky_composites_editor	0	0	0	0	0	0	0	0	11	0	0	0	pass	11	0	0	0	11		
+py	test_sky_material_bootstrap.py	123	5	5	0.007	sky_material_bootstrap	0	0	0	0	0	0	0	0	5	0	0	0	pass	5	0	0	0	5		
+py	test_sound_corpus_import.py	373	14	14	7.17	formats	1	0	2	1	0	0	0	0	10	0	0	1	pass	13	1	0	3	10		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_sound_glb.py	1033	63	63	0.21	formats	2	0	0	0	0	0	0	0	61	0	0	0	pass	63	0	0	3	60		
+py	test_sound_scheme_corpus_import.py	287	13	13	0.308	importers	1	0	2	0	0	0	0	0	10	0	0	0	pass	13	0	0	3	10		
+py	test_sound_scheme_glb.py	706	50	50	0.19	formats	0	0	0	0	0	0	0	0	50	0	0	0	pass	50	0	0	1	49		
+py	test_sound_script_glb.py	778	66	66	0.285	formats	1	0	0	0	0	0	0	0	65	0	0	0	pass	66	0	0	2	64		
+py	test_sounds_bake.py	654	42	42	19.978	asset_paths	2	0	0	1	0	0	0	0	39	0	0	1	pass	41	1	0	3	38		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_source_warning_contract.py	37	2	2	0.001	exporters	0	0	0	0	0	0	0	0	2	0	0	0	pass	2	0	0	0	2		
+py	test_surface_properties_import.py	492	20	20	0.399	formats	0	0	0	0	0	0	0	0	20	0	0	0	pass	20	0	0	0	20		
+py	test_surface_property_glb.py	326	29	29	0.042	formats	0	0	0	0	0	0	0	0	29	0	0	0	pass	29	0	0	0	29		
+py	test_tasking_contract.py	163	7	7	0.016	tasking	0	0	0	0	0	0	0	0	7	0	0	0	pass	7	0	0	0	7		
+py	test_texture_corpus_import.py	901	51	51	1.44	formats	1	0	2	1	0	0	0	0	43	4	0	1	1 skipped	50	1	0	8	42		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_texture_glb.py	727	42	42	0.091	formats	0	0	0	0	0	0	0	0	41	1	0	0	pass	42	0	0	2	40		
+py	test_tooling_config.py	186	3	3	0.048	tooling_config	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+py	test_triangle_topology.py	27	5	5	0.004	importers	0	0	0	0	0	0	0	0	5	0	0	0	pass	5	0	0	0	5		
+py	test_tuning_keys.py	21	2	2	0.001	importers	0	0	0	0	0	0	0	0	2	0	0	0	pass	2	0	0	0	2		
+py	test_tuning_migration.py	79	2	2	0.024	tuning_migration	0	0	0	0	0	0	0	0	2	0	0	0	pass	2	0	0	0	2		
+py	test_ui_resource_glb.py	1313	77	77	0.352	formats	1	0	0	0	0	0	0	0	76	0	0	0	pass	77	0	0	2	75		
+py	test_ui_strings_corpus_import.py	201	9	9	0.21	importers	1	0	2	0	0	0	0	0	6	0	0	0	pass	9	0	0	3	6		
+py	test_unit_contract.py	858	68	68	0.1	formats	0	0	0	0	0	0	0	0	68	0	0	0	pass	68	0	0	1	67		
+py	test_unit_precision.py	44	7	7	0.003	exporters	0	0	0	0	0	0	0	0	7	0	0	0	pass	7	0	0	0	7		
+py	test_unreal_launch_args.py	90	4	4	0.01	unreal_launch_args	0	0	0	0	0	0	0	0	4	0	0	0	pass	4	0	0	0	4		
+py	test_unreal_test_report.py	285	16	16	0.099	process	0	0	0	0	0	0	0	0	16	0	0	0	pass	16	0	0	0	16		
+py	test_vdata_corpus_import.py	307	14	14	1.007	formats	4	0	1	1	0	0	0	0	8	0	0	1	pass	13	1	0	5	8		reads $ELYSIUM_WORK_ROOT/VtMB root in 1 tests
+py	test_vdata_glb.py	856	66	66	0.14	formats	6	0	0	0	0	0	0	0	60	0	0	0	pass	66	0	0	7	59		
+py	test_vpk_index.py	199	7	7	0.074	formats	0	0	0	0	0	0	0	0	7	0	0	0	pass	7	0	0	0	7		
+py	test_weather_contract.py	254	16	16	0.054	formats	0	0	0	0	0	0	0	0	16	0	0	0	pass	16	0	0	0	16		
+py	test_wield_corpus.py	666	40	40	0.187	formats	0	0	0	0	0	0	0	0	40	0	0	0	pass	40	0	0	1	39		
+py	test_wield_stage.py	57	3	3	0.02	formats	0	0	0	0	0	0	0	0	3	0	0	0	pass	3	0	0	0	3		
+py	test_workspace_lock.py	139	4	4	0.146	workspace_lock	0	0	1	0	0	0	0	0	3	0	0	0	pass	4	0	0	1	3		
+py	glb_review/test_core_banks.py	222	13	13	0.162	core_banks	0	0	0	0	0	0	0	0	13	0	0	0	pass	13	0	0	0	13		
+py	glb_review/test_core_dds.py	119	15	15	0.009	core_dds	0	0	0	0	0	0	0	0	15	0	0	0	pass	15	0	0	0	15		
+py	glb_review/test_core_glb.py	104	12	12	0.047	core_glb	0	0	0	0	0	0	0	0	12	0	0	0	pass	12	0	0	0	12		
+py	glb_review/test_core_ids.py	125	35	35	0.022	core_ids	0	0	0	0	0	0	0	0	35	0	0	0	pass	35	0	0	0	35		
+py	glb_review/test_core_index.py	228	16	16	0.123	core_index	0	0	0	0	0	0	0	0	16	0	0	0	pass	16	0	0	0	16		
+py	glb_review/test_core_ktx2.py	157	21	21	0.015	core_ktx2	0	0	0	0	0	0	0	0	21	0	0	0	pass	21	0	0	0	21		
+py	glb_review/test_core_report.py	212	16	16	0.237	core_report	0	0	0	0	0	0	0	0	16	0	0	0	pass	16	0	0	0	16		
+py	glb_review/test_core_rig.py	76	6	6	0.003	core_rig	0	0	0	0	0	0	0	0	6	0	0	0	pass	6	0	0	0	6		
+py	glb_review/test_core_seams.py	227	40	40	0.021	formats	0	0	0	0	0	0	0	0	40	0	0	0	1 failed	40	0	0	1	39		
+py	glb_review/test_core_surfprop.py	151	9	9	0.185	core_surfprop	0	0	0	0	0	0	0	0	9	0	0	0	pass	9	0	0	0	9		
