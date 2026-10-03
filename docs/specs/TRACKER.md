@@ -7,7 +7,7 @@ closed into it. The previous tracker (rows 01–50) is
 needs a READ is [RE-BACKLOG.md](RE-BACKLOG.md).
 
 Serial, one checkout, no worktrees: each wave fans out ≤3 coders on disjoint files, then one
-integrator builds and tests once (spec rule 7).
+integrator builds and tests once (spec rule 8).
 
 ## Step 1 — the instrument: tools and tests (no development before gate 1)
 

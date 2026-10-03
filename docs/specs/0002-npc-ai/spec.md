@@ -228,28 +228,35 @@ report.
 - [ ] **T5. The Green Room as the live test suite.** *Today:* `gr_scenario cover` is one console
   verb over a hand-authored C++ row; the observer is a human reading `npc_trace_tail` over MCP.
   *Job:*
-  - **Scenarios are data**, one JSON record per scenario under `Content/ElysiumAuthored/Arena/`, so
-    adding or tuning one needs no build: the stage (the arena room, or a named variant), the cast
-    (classname + keyvalues, or `from_map: <map> <targetname>` to stand a retail row verbatim from
-    the map's baked `DA_<map>_Entities`), hints and places, the player (seat, armed, visible), a
-    timed script of actions (move or teleport the player, fire an input, damage, emit a sound,
-    set a relationship, save, load, any console verb), and the expectations.
-  - **Expectations** are ordered matches over the trace ring with `≤ t` bounds (`Schedule:`,
-    `Task:`, condition set/clear, break, task fail) plus `never` lines and end-state probes (a
-    field of `npc_brief`). The trace gains the events a scenario must see and today cannot: anim
-    events fired, damage taken, death and corpse, hint claim and release, entity outputs fired,
-    sounds emitted; and the two unnamed conditions (`0x29`, `0x57`) and `npc_brief`'s units.
-  - **One boot runs them all:** `uv run elysium arena [names…]` launches the lab headless with a
-    fixed timestep and no rendering (confirm `-nullrhi` holds for the body and the anim graph;
-    `-RenderOffScreen` otherwise), runs each scenario on a freshly rebuilt stage world, and
-    writes `$ELYSIUM_WORK_ROOT/reports/arena/<timestamp>/index.json`: pass/fail per scenario, the
-    first unmet expectation, the trace, wall and game time. The same record runs live with
-    `elysium.gr_scenario <name>` for observation over MCP.
-  - **The harness's own tests:** a scenario that must fail, a bound that must trip.
-  *Acceptance:* `cover` (the 2026-09-30 run) as a record, red exactly at known red 1; the suite of
-  that scenario under 30 s wall. *Size:* M. *Model:* Opus/high. *Owns:* `Debug/ElysiumArena*`,
-  `Debug/ElysiumGreenRoomConsole.cpp`, a new `Debug/ElysiumArenaScenario*`, the trace file,
-  `unreal.py`'s `arena` launcher.
+  - **Scenarios are data**, one JSON record per scenario under `Arena/scenarios/` (tracked text;
+    `Content/ElysiumAuthored/` holds packages only), so adding or tuning one needs no build: the
+    stage, the cast (classname + keyvalues, or `from_map` to stand retail rows verbatim from the
+    map's baked `DA_<map>_Entities`), further entity rows, the player's seat, a timed script of
+    actions (teleport or walk the player, fire an input, spawn, kill, any console verb), and the
+    expectations. Schema: `Arena/README.md`.
+  - **Expectations** are ordered matches over a stream of trace events, each with a deadline,
+    plus `never` events and end-state probes. The events are a new seam on the entity world (a
+    sink; one tap per kind, nothing emitted without a sink): schedule, task, task done, task fail,
+    break, condition set / clear, NPC state, sequence handed to the body with its applied rate,
+    sequence finished, anim event, move goal / arrival / failure, damage, death, corpse, hint
+    claim / release, entity output / input (`stories/wave2/seam.md`). The two unnamed conditions
+    (`0x29`, `0x57`) and `npc_brief`'s units are fixed with it.
+  - **Two hosts, one runner.** The lab needs a real RHI, so the suite is a new headless run
+    (`-ElysiumArena`: `-nullrhi`, fixed timestep), modelled on the cast harness: it stands the
+    arena in the stage world and runs each record on a freshly rebuilt entity world. With
+    `"stage": "map:<map>"` the same runner drives a retail map's own entities (doors, crosswalks
+    and paths that the arena does not have). `elysium.gr_scenario <name>` runs the same record in
+    the lab, rendered, for observation over MCP.
+  - **One command:** `uv run elysium arena [names…]` boots once per stage, writes
+    `$ELYSIUM_WORK_ROOT/reports/arena/<timestamp>/index.json` (per scenario: result, the first
+    unmet expectation, the trace file, wall and game time) and exits non-zero on a failure. A
+    record's `known_red` turns its failure into `expected-fail` and its pass into
+    `unexpected-pass`, which is how step 2 tracks its reds.
+  - **The harness's own tests:** a scenario that must fail, a bound that must trip, and a control
+    (a path-free program whose finite sequence finishes headless, proving the host animates).
+  *Acceptance:* `cover` (the 2026-09-30 run) as a record, red exactly at known red 1; the arena
+  host's suite under 30 s wall. *Size:* L, two coders (`stories/wave2/brief-A-scenarios.md`,
+  `brief-B-trace.md`). *Model:* Opus/high.
 - [ ] **T6. The incremental build.** *Measured:* builds are the largest single wait, 20.5
   agent-hours in 12 days: 667 real builds, median 46 s, p90 280 s, max 1,456 s. Known compile
   costs: `ElysiumTestServices.h` (2,504 lines, included by 102 of 120 test files, pulling
@@ -266,8 +273,9 @@ report.
 Waves: **wave 1 (Python)** — three coders on disjoint files: T1; T2's Python half; T4 with T3's
 `pytest` half (markers, xdist, the import hazard, the two failing tests). Then the integrator:
 default `pytest` in budget, every `--check` byte-identical, the timings re-measured. **Wave 2
-(C++)** — three coders: T3's C++ half; T5 (plus its launcher); T2's C++ half (the `elysium` MCP
-read caps). Then the integrator: one build, the default run, the arena suite. **Wave 3** — T6
+(C++)** — three coders: T5's scenario record, runner and two hosts; T5's trace events and
+launcher with T2's C++ half (the `elysium` MCP read caps); T3's C++ half. Then the integrator: one
+build, the default run, the arm tier once, the arena suite. **Wave 3** — T6
 alone, one agent holding the build. Gate 1 is the integrator's report after wave 3 against the
 numbers above.
 
