@@ -129,7 +129,7 @@ default `pytest` ≤20 s wall, both with zero failures; a three-prefix C++ run i
 waves' journals; `uv run elysium arena` runs every scenario in one headless boot and writes its
 report.
 
-- [ ] **T1. The `kernel_*` tools under budget.** *Measured (`findings-E-time.md` §3–4, profiled at
+- [x] **T1. The `kernel_*` tools under budget.** *Measured (`findings-E-time.md` §3–4, profiled at
   HEAD):* 1,960 runs in 12 days, 14.6 machine-hours. **One chain is 5.4 h of it:**
   `kernel_shape.build`, rebuilt from scratch by `kernel_shape`, `gen_kernel_shape`,
   `gen_kernel_bindings`, `kernel_story8_shape`, `kernel` and the gate's residue (852 runs, ~17–18 s
@@ -146,7 +146,16 @@ report.
   the slow-query log. The reading-packet tools (`kernel_skeleton`, `kernel_packet`) are timed and
   brought under budget before any step-2 fix uses them. *Acceptance:* every `--check`
   byte-identical before and after; the timings re-measured and recorded. *Size:* M.
-  *Model:* Opus/high.
+  *Model:* Opus/high. *Landed (wave 1, 2026-10-03):* `kernel_cache.py` (the corpus stage, SDK
+  index and shape pickled on an input hash; a per-file citation cache; the `--check` stamp), the
+  regex `_strip`, cached `sdk_members`, the gate's residue from the cached build, `--reach` in
+  `kernel --check`. Integrator's re-measure (s, cold / warm / unchanged): `kernel_ledger` 5.5 /
+  2.5 / 0.29, `kernel_lists` 4.6 / 1.0 / 0.22, `kernel_shape` 7.4 / 1.6 / 0.25,
+  `gen_kernel_shape` 8.1 / 2.5 / 0.23, `gen_kernel_bindings` 7.8 / 2.0 / 0.23,
+  `kernel_story8_shape` 8.0 / 2.6 / 0.24, `kernel_gate --family` 8.3 / 3.3 / 3.3 (before 146),
+  **`kernel --check` 10.5 cold (0.5 s over; profiled: the ledger build 5.2 and the shape build
+  4.5, each once — no duplication)** / 4.9 / 0.44. Every generated file byte-identical to `HEAD`;
+  the two `reach/` cuts regenerated (they were stale against the committed verdicts).
 - [ ] **T2. The corpus MCP and the text tree under budget.** *Measured (`findings-E-time.md` §1,
   §5):* the corpus MCP is fast (7,639 calls, 0.2 h, one call over 10 s) but its replies are large
   (`vtmb_slot` median 27 KB); the text tree is where queries cost: 1,851 agent-written Python
@@ -167,7 +176,12 @@ report.
   the questions the 1,851 one-off scripts kept asking (read their shapes from the transcripts)
   become `research` verbs over the same index. *Acceptance:* a fixed probe set (every
   `vtmb_*` tool on `CAI_BaseNPC`, `StartTask`, `0x1028a380`) under 10 s each; no default reply over
-  20 KB. *Size:* M. *Model:* Sonnet/high.
+  20 KB. *Size:* M. *Model:* Sonnet/high. *Python half landed (wave 1, 2026-10-03):* the 60 s
+  deadline, the journal and the caps in `corpus_mcp.py`, `vtmb_where` and `research
+  where|section|verdict|cited|rows` (`research/tooling/lookup/`); the probe set's 43 calls at
+  ≤0.11 s and ≤19.7 KB (`vtmb_code 0x103692c0` 38 s → 0.002 s), `where` ≤0.09 s, the index's
+  cold rebuild 1.3 s; the search index rebuilt (`corpus reindex --search-only`, 8.6 s). Open: the
+  `elysium` MCP read caps (C++, wave 2).
 - [ ] **T3. The test scale-down (tiered).** *Measured (`findings-F-tests.md`):* C++ 1,778 tests,
   default run 122 s wall (19 s boot, 87.7 s of bodies, of which `MapActorTeardown` alone is
   50.6 s); `pytest` 4,600 tests, 384 s serial, of which 150 corpus-reading tests are 326 s; 1,241
@@ -186,8 +200,13 @@ report.
   `test_oracle_citations` citations; `ai-schedules`' extension missing from `ROOT_EXTENSIONS`);
   the 4,249 pipeline-unit tests stay in the default — moving them saves ~6 s on 8 workers.
   (Test compile cost is T6's.) *Budgets:* default C++ run ≤25 s wall (19 s of it is boot); default
-  `pytest` ≤20 s wall; zero failures in both. *Size:* M. *Model:* Sonnet/medium.
-- [ ] **T4. The runner, the lease and the waits.** *Measured:* an `elysium test` run is 19 s of
+  `pytest` ≤20 s wall; zero failures in both. *Size:* M. *Model:* Sonnet/medium. *`pytest` half
+  landed (wave 1, 2026-10-03):* the `corpus` marker (off by default; `-m corpus` 154 passed in
+  71 s), `pytest-xdist -n auto`, the import-time root writes moved to `conftest.py`, both failing
+  tests fixed at their cause. Default run 4,526 passed, 0 failed, **19.7–25.9 s wall over eleven
+  runs (not reliably under 20 s: 76 s of test bodies, the rest xdist's 16-worker start and
+  per-report overhead)**. Open: the C++ half (wave 2).
+- [x] **T4. The runner, the lease and the waits.** *Measured:* an `elysium test` run is 19 s of
   editor boot around 0.1–0.7 s of tests; the shared export-root lease refused 1,659 builds and 836
   test runs in 12 days, and the retry wrappers cost 9.2 h; agents' sleep-polling loops on build and
   test logs cost 18.9 h (52 hit the 600 s tool limit) because no command blocks until done; the
@@ -199,7 +218,13 @@ report.
   the report slug capped (~40 chars + a hash); the summary per prefix with failures by name; the
   shell's login-profile cost measured and the slow step named for the owner (machine
   configuration, outside the repo). *Acceptance:* zero lease refusals and zero polling loops in a
-  day's journal. *Size:* S. *Model:* Sonnet/medium.
+  day's journal. *Size:* S. *Model:* Sonnet/medium. *Landed (wave 1, 2026-10-03):* the checkout
+  lease (`Saved/Elysium/leases/`), a 30-minute wait naming the holder, `--no-wait` /
+  `ELYSIUM_NO_WAIT=1` exit 8, `build`/`test` verdict lines, `test A B C` in one boot with a
+  per-prefix summary and a capped slug, the research watchdog (10 s warn, 60 s stop,
+  `slow-queries.tsv`, `RESEARCH_NOT_A_QUERY` on the tools that are runs). Live: three prefixes,
+  71 tests, one boot, 24.2 s warm (46.5 s on a cold first boot); a concurrent `--no-wait` refused
+  with 8, a concurrent plain run waited and ran. The day's journal is read at gate 1's census.
 - [ ] **T5. The Green Room as the live test suite.** *Today:* `gr_scenario cover` is one console
   verb over a hand-authored C++ row; the observer is a human reading `npc_trace_tail` over MCP.
   *Job:*

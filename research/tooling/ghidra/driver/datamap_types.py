@@ -30,6 +30,9 @@ from pathlib import Path
 
 from elysium_pipeline.paths import repo_root, research_root
 
+# Read by `elysium research`: both phases are headless Ghidra runs, not queries.
+RESEARCH_NOT_A_QUERY = "drives headless Ghidra (ApplyDatamapTypes.java per program)"
+
 # Only these carry datamaps; the rest of the project's programs define no entity.
 PROGRAMS = ("vampire.dll", "client.dll", "engine.dll")
 

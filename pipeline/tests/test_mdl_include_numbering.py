@@ -11,14 +11,11 @@ Every image here is synthesised in-code, so nothing depends on the user's game i
 
 from __future__ import annotations
 
-import os
 import struct
-import tempfile
 
 # `mdl_skel` imports cleanly without an install, but the exporters beside it resolve the VtMB
-# root as they load; an existing directory is all the import needs and nothing here reads it.
-os.environ.setdefault("ELYSIUM_VTMB_ROOT", tempfile.gettempdir())
-
+# root as they load; the package's `conftest.py` leaves it set to an existing directory and
+# nothing here reads it.
 from elysium_pipeline.formats import mdl_skel as S  # noqa: E402
 
 SEQ_STRIDE = 764

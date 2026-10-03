@@ -537,6 +537,7 @@ def _corpus_keys() -> list[str]:
     return keys
 
 
+@pytest.mark.corpus
 def test_every_corpus_key_addresses_its_own_asset():
     """The injectivity the sound fold exists for, asserted over all 10,892 keys rather than a
     sample: no two address one asset, and none is refused. This is also what guards the fold's one

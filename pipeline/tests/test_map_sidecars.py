@@ -291,6 +291,7 @@ def test_every_meshed_func_lod_row_carries_its_cull_range_in_the_ents(map_name):
 
 
 @pytest.mark.parametrize("map_name", ("sm_pier_1",) + WORKING_MAPS)
+@pytest.mark.corpus
 def test_a_sky_brush_entity_carries_no_hulls_in_the_ents(map_name):
     """Corpus-gated. `sm_pier_1`'s `brush_8/9/10` are sky-flagged `func_brush` Solids that lived at
     raw z ~= 4939 -- above the map's own `world_maxs.z 512` -- and the runtime scales a miniature's

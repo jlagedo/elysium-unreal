@@ -379,6 +379,7 @@ def _shader_source_root() -> Path | None:
     return root if root.is_dir() else None
 
 
+@pytest.mark.corpus
 def test_the_corpus_parses_every_unit_or_names_an_excluded_opcode():
     root = _shader_source_root()
     if root is None:
@@ -410,6 +411,7 @@ def test_the_corpus_parses_every_unit_or_names_an_excluded_opcode():
     assert supported_units + sum(excluded.values()) == len(paths)
 
 
+@pytest.mark.corpus
 def test_vertexlitgeneric_maskedenvmapv2_matches_its_closed_form_algebra():
     root = _shader_source_root()
     if root is None:

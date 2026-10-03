@@ -43,6 +43,9 @@ from elysium_pipeline.formats import install, mdl_skel
 from elysium_pipeline.paths import research_root
 from research.tooling.capture.capture_live_pose import ProcessReader
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "reads the live retail game's memory"
+
 
 RECIPES = ("life_rig_resolution", "life_rig_chaos")
 RECIPE = RECIPES[0]

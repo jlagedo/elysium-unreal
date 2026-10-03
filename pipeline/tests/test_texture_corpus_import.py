@@ -770,6 +770,7 @@ def _legacy_cube_pairs() -> list[tuple[Path, Path]]:
     return list(pairs.values())
 
 
+@pytest.mark.corpus
 def test_staged_cubes_match_the_legacy_env_cubemap_faces(tmp_path):
     """The legacy bake imports env cubes in VTF order with no rotation (`tex_to_png.cubemap_dds`)
     and the game draws them right today; the staged DDS must show the same face in each slot."""

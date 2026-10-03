@@ -1,7 +1,10 @@
 """Retiring expressions cannot change or remove the retained scene/lip mirrors."""
+import pytest
+
 from elysium_pipeline.exporters import UE_extract_scenes as lane
 
 
+@pytest.mark.corpus
 def test_scenes_and_lip_keep_patch_precedence_and_bytes_without_expression_writes(tmp_path, monkeypatch):
     retail, patch, out = (tmp_path / name for name in ("retail", "patch", "out"))
     sources = {

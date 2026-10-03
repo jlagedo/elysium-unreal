@@ -43,6 +43,7 @@ def test_shadow_mask_includes_shadowonly_but_excludes_glass_grate_clip():
     assert all((value & query.SHADOW_MASK) == 0 for value in (2, 8, 0x10000, 0x20000))
 
 
+@pytest.mark.corpus
 def test_tutorial_v2_gameplay_light_inputs():
     unit = sidecars.unit_paths("sp_tutorial_1")["root"]
     if not unit.exists():

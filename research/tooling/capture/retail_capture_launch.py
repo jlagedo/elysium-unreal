@@ -24,6 +24,9 @@ from research.tooling.capture.retail_capture_native import (
     run as run_native,
 )
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "launches the retail game suspended and injects the capture probe"
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)

@@ -354,6 +354,7 @@ def test_a_node_width_off_the_corpus_law_is_the_documented_anomaly():
     assert anomaly["expectedNodeWidth"] == 9
 
 
+@pytest.mark.corpus
 def test_the_node_width_law_holds_on_the_shipped_graphs_this_project_bakes():
     """The check used to assume 32 tokens and so flagged every graph outside 97..128 nodes --
     79 of 101 published units, `sm_pawnshop_1` (5 nodes, 29 wide) among them. Against the law it

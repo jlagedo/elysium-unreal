@@ -175,6 +175,7 @@ SEGMENT_PINS = {
 
 
 @pytest.mark.parametrize("map_name", sorted(SEGMENT_PINS))
+@pytest.mark.corpus
 def test_segment_pins(map_name):
     root = _export_root()
     if not (root / "maps" / f"{map_name}.entities.glb").is_file():
@@ -185,6 +186,7 @@ def test_segment_pins(map_name):
     assert [row["index"] for row in payload["rows"]] == list(range(SEGMENT_PINS[map_name]))
 
 
+@pytest.mark.corpus
 def test_soc_3_strings_four_chains_of_alphatest_chain():
     """`sp_soc_3`'s four cables are `cable/chainb`, an `$alphatest` texture ~47% cut out: rendering
     one opaque turns a chain into a solid tube with a chain painted on it."""

@@ -106,6 +106,7 @@ def test_unit_exists_in_the_corpus(entry):
 
 
 @pytest.mark.parametrize("entry", _load_entries(), ids=lambda entry: entry["label"])
+@pytest.mark.corpus
 def test_mesh_is_an_asset_path_in_the_manifest(entry):
     assets = _manifest_assets()
     if assets is None:
@@ -117,6 +118,7 @@ def test_mesh_is_an_asset_path_in_the_manifest(entry):
     )
 
 
+@pytest.mark.corpus
 def test_set_covers_at_least_one_multi_lod_unit():
     assets = _manifest_assets()
     if assets is None:
@@ -128,6 +130,7 @@ def test_set_covers_at_least_one_multi_lod_unit():
     assert multi_lod, "no props-row entry resolves to a multi-LOD baked mesh"
 
 
+@pytest.mark.corpus
 def test_set_covers_at_least_one_bbox_collision_unit():
     assets = _manifest_assets()
     if assets is None:

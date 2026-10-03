@@ -149,6 +149,7 @@ BAKE_GOAL_PINS = {
 
 
 @pytest.mark.parametrize("map_name", sorted(BAKE_GOAL_PINS))
+@pytest.mark.corpus
 def test_bake_goal_pins(map_name):
     root = _export_root()
     if not (root / "maps" / f"{map_name}.entities.glb").is_file():
@@ -157,6 +158,7 @@ def test_bake_goal_pins(map_name):
     assert payload["counts"] == BAKE_GOAL_PINS[map_name]
 
 
+@pytest.mark.corpus
 def test_tutorial_patrol_point_pt1():
     root = _export_root()
     if not (root / "maps" / "sp_tutorial_1.entities.glb").is_file():
@@ -174,6 +176,7 @@ def test_tutorial_patrol_point_pt1():
 ONCE_LUMP_UNREADABLE = ("la_ventruetower_2", "la_ventruetower_3", "sp_giovanni_2b")
 
 
+@pytest.mark.corpus
 def test_every_exported_map_stages():
     root = _export_root()
     totals = collections.Counter()
@@ -189,6 +192,7 @@ def test_every_exported_map_stages():
     assert all(totals[family] > 0 for family in infra.FAMILIES), totals
 
 
+@pytest.mark.corpus
 def test_the_three_once_unreadable_maps_stage():
     # 0018 story 21-7: the text reconstruction refused these three outright, for every lane.
     root = _export_root()

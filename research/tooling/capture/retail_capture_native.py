@@ -16,6 +16,9 @@ import subprocess
 
 from elysium_pipeline.paths import research_root
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "configures, builds and tests the native capture project (cmake / ctest)"
+
 
 ROOT = Path(__file__).resolve().parent / "native"
 VSWHERE = (

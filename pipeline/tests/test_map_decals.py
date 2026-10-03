@@ -190,6 +190,7 @@ PLACED_PINS = {
 
 
 @pytest.mark.parametrize("map_name", sorted(PLACED_PINS))
+@pytest.mark.corpus
 def test_each_map_places_the_decals_the_decoder_placed(map_name):
     _export_root()
     payload = decals.stage_map(map_name)
@@ -201,6 +202,7 @@ def test_each_map_places_the_decals_the_decoder_placed(map_name):
 
 
 @pytest.mark.parametrize("map_name", sorted(PLACED_PINS))
+@pytest.mark.corpus
 def test_every_row_names_an_importable_material_and_a_real_quad(map_name):
     root = _export_root()
     for row in decals.stage_map(map_name)["rows"]:

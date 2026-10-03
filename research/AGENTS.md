@@ -39,3 +39,10 @@ resolves `research/cases/<name>/` first and falls back to a unique
 `research/tooling/**/<name>.py`, so a case and a tool may not share a name. Remaining
 arguments pass through to the tool, which means `--help` is consumed by the CLI and never
 reaches it.
+
+A tool is a query: the CLI prints its output, warns past 10 s, stops it at 60 s and logs it
+to `$ELYSIUM_WORK_ROOT/logs/slow-queries.tsv` -- a stopped query is optimized, never retried
+as-is. A tool that is a run (it drives Ghidra, captures from the retail game, or builds a
+database) declares `RESEARCH_NOT_A_QUERY = "<why>"` at module level, or a dict from the run
+subcommands (or `--mode` switches) to the reason when its other modes are queries
+(`corpus.py`); never on a tool that answers from existing data.

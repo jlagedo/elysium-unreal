@@ -270,6 +270,7 @@ def _legacy_vdata_root() -> Path | None:
     return root if root.is_dir() else None
 
 
+@pytest.mark.corpus
 def test_the_deployed_corpus_is_byte_identical_to_the_legacy_mirror():
     """Env-gated: runs only where both the legacy mirror and a deployed corpus already exist.
 

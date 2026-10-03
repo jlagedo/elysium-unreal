@@ -8,13 +8,10 @@ import contextlib
 import io
 import os
 import struct
-import tempfile
 from types import SimpleNamespace
 from unittest import mock
 
 import pytest
-
-os.environ.setdefault("ELYSIUM_VTMB_ROOT", tempfile.gettempdir())
 
 from elysium_pipeline.formats import install, vpk
 

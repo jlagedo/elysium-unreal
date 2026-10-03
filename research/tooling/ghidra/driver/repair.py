@@ -39,6 +39,9 @@ from pathlib import Path
 
 from elysium_pipeline.paths import repo_root, research_root
 
+# Read by `elysium research`: every phase is a headless Ghidra run, minutes long, not a query.
+RESEARCH_NOT_A_QUERY = "drives headless Ghidra (one analyzeHeadless run per pass and program)"
+
 PROGRAMS = (
     "vampire.dll",
     "client.dll",

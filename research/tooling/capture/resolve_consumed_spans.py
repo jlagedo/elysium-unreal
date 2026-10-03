@@ -52,6 +52,9 @@ from research.tooling.capture.calibrate_theatre_capture import (
     resolve_session,
 )
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "builds a capture database's span dictionary"
+
 RESOLVER_VERSION = 1
 REPORT_NAME = "consumed-spans.json"
 

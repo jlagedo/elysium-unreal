@@ -10,14 +10,12 @@ skip when it is not on the machine.
 from __future__ import annotations
 
 import collections
-import os
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
 
-os.environ.setdefault("ELYSIUM_WORK_ROOT", tempfile.gettempdir())
+import _kernel_build
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "research" / "tooling" / "ghidra" / "driver"))
@@ -201,24 +199,34 @@ def test_overlay_rows_parse(tmp_path, monkeypatch):
     assert shape.signatures_overlay[(617, "CNPCMaker")]["method"] == "MakeNPC"
 
 
-# --- against the real corpus -----------------------------------------------------------------
+def test_a_kept_layout_names_a_vector_component_as_the_flattening_did():
+    # `kernel_cache` pickles the shape's layouts; `interior_name` tells a vector's interior by
+    # identity, so the restore derives each member's interior again (a copy read "SDK 2013 interior").
+    import pickle
 
-def _corpus_present() -> bool:
-    try:
-        from elysium_pipeline.paths import research_root
-        return (ks.kl.corpus._corpus_dir() / "corpus.sqlite").is_file() and \
-            dl.load(research_root(), ks.kl.MODULE) is not None
-    except Exception:  # noqa: BLE001 -- no work root on this machine
-        return False
+    members = dl.flatten(RECORDS, "Derived")
+    shape = ks.Shape.__new__(ks.Shape)
+    shape.evidence = collections.defaultdict(lambda: collections.defaultdict(ks.Evidence))
+    shape.misplaced, shape.guess_only = collections.Counter(), collections.defaultdict(collections.Counter)
+    shape._layout, shape._extent = {"Derived": members}, {"Derived": 0x70}
+    state = pickle.loads(pickle.dumps(shape.corpus_state([{"slot": 1}])))
+    fresh = ks.Shape.__new__(ks.Shape)
+    fresh.evidence = collections.defaultdict(lambda: collections.defaultdict(ks.Evidence))
+    fresh.misplaced, fresh.guess_only = collections.Counter(), collections.defaultdict(collections.Counter)
+    fresh._layout, fresh._extent = {}, {}
+    assert fresh.restore(state) == [{"slot": 1}]
+    vector = next(m for m in fresh._layout["Derived"] if m.name == "m_Timer.m_vecWhere")
+    assert dl.interior_name(vector, vector.off + 4)[2] == "Vector component"
 
 
-@pytest.fixture(scope="module")
+# --- against the real corpus (opt in: `pytest -m corpus`) ------------------------------------
+
+@pytest.fixture
 def built():
-    if not _corpus_present():
-        pytest.skip("the Ghidra corpus or the datamap records are not on this machine")
-    return ks.build(ks.kl.MODULE, ks.kl.DEFAULT_DEPTH, REPO)
+    return _kernel_build.shape()   # one build per process, on the ledger tests' ledger
 
 
+@pytest.mark.corpus
 def test_npc_state_and_schedule_state_types(built):
     shape, rows, _ = built
     by_off = {(r.table, r.off): r for r in rows if r.tier == "datamap" and "." not in r.member}
@@ -229,11 +237,13 @@ def test_npc_state_and_schedule_state_types(built):
     assert by_off[(ks.TROIKA, 0x5E0C)].type == "COutputEvent"
 
 
+@pytest.mark.corpus
 def test_secondary_vtable_word_is_seen(built):
     shape, _, _ = built
     assert "vftable" in shape.evidence[ks.TROIKA][0x19B0].kinds
 
 
+@pytest.mark.corpus
 def test_start_task_signature_is_the_sdks(built):
     _, _, sigs = built
     row = next(s for s in sigs if s["slot"] == 442)
@@ -241,6 +251,7 @@ def test_start_task_signature_is_the_sdks(built):
     assert row["tier"] in ("sdk", "walked")
 
 
+@pytest.mark.corpus
 def test_check_mode_matches_committed_tables(built):
     out = REPO / "docs" / "vtmb" / "npc-kernel"
     if not (out / "layout.md").is_file():

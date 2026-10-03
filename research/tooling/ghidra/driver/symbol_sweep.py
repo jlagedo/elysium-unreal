@@ -32,6 +32,9 @@ from pathlib import Path
 
 from elysium_pipeline.paths import repo_root, research_root
 
+# Read by `elysium research`: every phase is a headless Ghidra run, minutes long, not a query.
+RESEARCH_NOT_A_QUERY = "drives headless Ghidra (NameFromStrings.java per program)"
+
 # The programs the vtmb project holds. `research/tooling/ghidra/driver/README.md` records
 # which of them carry RTTI and which need `MakeFuncs` before their code is owned at all.
 PROGRAMS = (

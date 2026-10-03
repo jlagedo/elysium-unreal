@@ -39,11 +39,19 @@ elysium_pipeline = ["exporters/*.toml"]
 [dependency-groups]
 dev = [
     "pytest",
+    "pytest-xdist",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["pipeline/tests", "tools/elysium_glb_review/tests"]
 norecursedirs = ["tools/elysium_glb_review/tests/blender"]
+markers = [
+    "corpus: reads the VtMB install, $ELYSIUM_WORK_ROOT exports or a built corpus (opt in with `pytest -m corpus`)",
+]
+# The corpus tier is 326 s of the 384 s serial run; the default run leaves it out and
+# `-m corpus` (a later -m wins over this one) runs only it. `-n auto` spreads the rest over the
+# cores (58 s serial -> 16 s on 16 cores, measured 2026-10-03); `-n 0` runs one process.
+addopts = "-m 'not corpus' -n auto"
 
 [tool.uv]
 package = true

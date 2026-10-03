@@ -31,7 +31,7 @@ Rules (CLAUDE.md): cite addresses; every arm in order; what a failure writes; bu
    comment (`ElysiumNpcHints.cpp` ~:100) has a recovered shape; confirm arm for arm and name
    `_DAT_10449258`'s value (`docs/vtmb/npc-ai/rdata-cells.md` may have it).
 6. `0x102d1fe0` — the "fifth cursor writer". Who calls it (`vtmb_callers`)? If a live caller exists
-   (an NPC class the census lists live, `docs/vtmb/npc-kernel/population.md`), walk it fully;
+   (an NPC class the census lists live, `docs/vtmb/npc-ai/population.md`), walk it fully;
    otherwise record caller and one-line shape only.
 7. The list walkers `0x102d0910`, `0x102d31c0`, `0x103cb4b0`: callers only, and whether any is
    reached from a live class. One line each.

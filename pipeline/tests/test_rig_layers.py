@@ -13,11 +13,9 @@ import json
 import os
 import tempfile
 
-# `analyze_rig_layers` defers its `install` import to `build`, so the module
-# imports without a configured game root. The default keeps a sibling module on
-# the same chain honest if the import order ever changes.
-os.environ.setdefault("ELYSIUM_VTMB_ROOT", tempfile.gettempdir())
-
+# `analyze_rig_layers` defers its `install` import to `build`, so the module imports without a
+# configured game root. The package's `conftest.py` sets one anyway, which keeps a sibling module
+# on the same chain honest if the import order ever changes.
 from research.tooling.capture.analyze_rig_layers import (  # noqa: E402
     ClipSpace,
     channels_for_frame,

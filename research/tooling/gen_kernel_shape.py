@@ -757,12 +757,19 @@ CLASS_DECL_RE = re.compile(r"^\s*(?:class|struct)\s+(?:\w+_API\s+)?(\w+)(?:\s+fi
 NPC_LINE = ("FElysiumScriptedCharacter", "FElysiumNpcBase", "FElysiumNpc")
 
 
+_BRACE_RE = re.compile(r"[{}]")
+
+
 def _class_body(text: str, start: int) -> str:
-    depth, index = 1, start
-    while index < len(text) and depth:
-        depth += {"{": 1, "}": -1}.get(text[index], 0)
-        index += 1
-    return text[start:index - 1]
+    """The text from `start` to the brace that closes the one before it (to the last character
+    but one when nothing closes it). Brace by brace, not character by character: this was half of
+    the scan over every source file."""
+    depth = 1
+    for brace in _BRACE_RE.finditer(text, start):
+        depth += 1 if brace.group() == "{" else -1
+        if depth == 0:
+            return text[start:brace.start()]
+    return text[start:max(len(text), start) - 1]
 
 
 def _class_scope_lines(body: str) -> list[str]:
@@ -991,7 +998,14 @@ def close_layers(row: Slot, ledger) -> None:
 
 
 def build(repo: Path, module: str, depth: int) -> Model:
-    shape, rows, sigs = ks.build(module, depth, repo)
+    """The census model on `kernel_shape.build`."""
+    return model_of(repo, ks.build(module, depth, repo))
+
+
+def model_of(repo: Path, built: tuple) -> Model:
+    """The census model on `built`, a `kernel_shape.build` answer (shape, rows, signatures). Rows
+    left out (`rows=False`) leave the words out and nothing else."""
+    shape, rows, sigs = built
     ledger = shape.ledger
 
     # --- words -----------------------------------------------------------------------------------
@@ -1923,6 +1937,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     repo = repo_root()
+    if args.check and not args.report:
+        return kl.kernel_cache.stamped("gen_kernel_shape", vars(args), repo, lambda: _main(args, repo))
+    return _main(args, repo)
+
+
+def _main(args: argparse.Namespace, repo: Path) -> int:
     model = build(repo, args.module, args.depth)
     report(model)
     if args.report:

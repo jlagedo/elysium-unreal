@@ -1422,6 +1422,13 @@ def main(argv: list[str] | None = None) -> int:
                         help="print the classification tables and exit, writing nothing")
     args = parser.parse_args(argv)
 
+    if args.check and not args.report:
+        return kl.kernel_cache.stamped("gen_kernel_bindings", vars(args), repo_root(),
+                                       lambda: _main(args))
+    return _main(args)
+
+
+def _main(args: argparse.Namespace) -> int:
     model = build(repo_root())
     report(model)
     if args.report:

@@ -25,6 +25,7 @@ def _gltf_extension(path, key):
     return json.loads(data[20:20 + length])["extensions"][key]
 
 
+@pytest.mark.corpus
 def test_rotating_door_hulls_are_origin_relative_not_world_space():
     ents_path = (paths.export_v2_root() / "_sidecars" / "sm_pawnshop_1"
                  / "sm_pawnshop_1.ents")

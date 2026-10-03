@@ -85,6 +85,7 @@ def _staged(map_name):
     return jump.stage_map(map_name, root)
 
 
+@pytest.mark.corpus
 def test_tutorial_decoded_ain_has_its_human_jump_connections():
     payload = _staged("sp_tutorial_1")
     # The PATCH's own graph, which is the one the patched install runs (0018 story 3): 203 nodes
@@ -146,6 +147,7 @@ def test_a_verdict_change_invalidates_the_level_recipe():
     ("sp_tutorial_1", 25, 36, 17),
     ("sm_hub_1", 117, 103, 68),
 ])
+@pytest.mark.corpus
 def test_the_witness_graphs_per_hull_jump_counts_and_none_usable(map_name, human, rat, recorded_rat):
     payload = _staged(map_name)
     summary = payload["summary"]

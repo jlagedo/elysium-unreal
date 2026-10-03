@@ -9,14 +9,10 @@ exercised here on hand-built events.
 
 from __future__ import annotations
 
-import os
 import struct
-import tempfile
 
-# `rig_parity` imports the format modules, which resolve the VtMB root as they
-# load; an existing directory is all the import needs, and nothing here reads it.
-os.environ.setdefault("ELYSIUM_VTMB_ROOT", tempfile.gettempdir())
-
+# `rig_parity` imports the format modules, which resolve the VtMB root as they load; the
+# package's `conftest.py` leaves that root set to an existing directory, and nothing here reads it.
 from research.tooling.capture.analyze_rig_pose import (  # noqa: E402
     resolve_body,
     CLOCK_TOLERANCE_SECONDS,

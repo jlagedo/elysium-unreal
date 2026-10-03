@@ -58,7 +58,20 @@ import subprocess
 import time
 from pathlib import Path
 
-from elysium_pipeline.paths import repo_root, research_root, vtmb_root
+from elysium_pipeline.paths import cache_root, repo_root, research_root, vtmb_root
+
+# Read by `elysium research`, keyed on the subcommand: these build the corpus (a headless Ghidra
+# pass, or a load into SQLite) and are runs; every other subcommand is a query, warned at 10 s
+# and stopped at 60 s.
+RESEARCH_NOT_A_QUERY = {
+    "dump": "drives headless Ghidra (DumpCorpus over every program)",
+    "vtables": "drives headless Ghidra (DumpVtables)",
+    "pyapi": "drives headless Ghidra (ApplyPythonApi)",
+    "externals": "drives headless Ghidra (DumpExternals)",
+    "listing": "drives headless Ghidra (DumpListing)",
+    "build": "loads the dumps into the SQLite corpus",
+    "reindex": "rebuilds the corpus's call graph and search index",
+}
 
 PROGRAMS = (
     "vampire.dll",
@@ -1102,18 +1115,28 @@ def build(programs: list[str]) -> int:
     return 0
 
 
-def reindex() -> int:
+def reindex(search_only: bool = False) -> int:
     """Everything `build` derives from rows already in the database, without re-reading a dump.
 
     The two derived structures -- the search index and the virtual half of the call graph -- are
     the ones whose *rules* change while the decompilation underneath does not. Re-running the
     Ghidra pass to pick up a tokenizer change would cost an overnight run for nothing.
+
+    `search_only` rebuilds the search index and nothing else (8 s). `grep` reads a stale index as
+    "scan instead" (`_index_is_current`), so this is what brings it back to milliseconds when only
+    the decompilation moved under it.
     """
     if not _database().is_file():
         print(f"no corpus at {_database()}; run `corpus build` first")
         return 1
     connection = sqlite3.connect(_database())
     connection.row_factory = sqlite3.Row
+    if search_only:
+        _build_index(connection)
+        connection.commit()
+        connection.close()
+        print(f"database: {_database()}  {_database().stat().st_size // (1 << 20)} MiB")
+        return 0
     # The schema first: `_ensure_indices` indexes tables, and a table the running schema declares
     # but this database predates does not exist yet.
     connection.executescript(SCHEMA)
@@ -1208,6 +1231,75 @@ def _stamp(connection: sqlite3.Connection, module: str, corpus: Path) -> None:
                        (module, path, digest, dumped, dumped))
 
 
+# Every question an agent asks is bounded twice, because both ways of being too much cost the
+# caller the same thing -- its turn. A query is stopped at a deadline (`corpus_mcp` sets 60 s), and
+# a default reply is held to REPLY_LIMIT characters, each cut naming the parameter that gets more.
+#
+# The deadline is cooperative. SQLite calls `_progress` every `_PROGRESS_OPS` virtual-machine
+# instructions and a non-zero answer aborts the statement (`OperationalError: interrupted`); the
+# Python loops that are not SQL -- `grep`'s per-line regex pass, the renderers -- call
+# `check_deadline()` between rows. Nothing runs on another thread: CPython's `re` holds the GIL
+# for the whole of a match, so a watchdog thread could not wake while a pattern was running away,
+# and a runaway match is a single line of decompiled C, which the per-line check bounds.
+class QueryTimeout(Exception):
+    """The running query passed its deadline and was abandoned."""
+
+
+# `time.monotonic()` past which the running query is abandoned. None is no deadline: the CLI, and
+# every other module that imports this one, never sets it.
+_DEADLINE: float | None = None
+_PROGRESS_OPS = 20_000
+
+# Characters. 20,000 is what one agent turn can carry without a compaction; the measured defaults
+# were 27 KB (`slot`), 55-58 KB (`fields`, `vtable`), 60 KB (`code`), 128 KB (`closure`).
+REPLY_LIMIT = 20_000
+
+
+def _progress() -> int:
+    return 1 if _DEADLINE is not None and time.monotonic() > _DEADLINE else 0
+
+
+def begin_deadline(seconds: float) -> None:
+    global _DEADLINE
+    _DEADLINE = time.monotonic() + seconds
+
+
+def end_deadline() -> None:
+    global _DEADLINE
+    _DEADLINE = None
+
+
+def deadline_expired() -> bool:
+    return _DEADLINE is not None and time.monotonic() > _DEADLINE
+
+
+def check_deadline() -> None:
+    if deadline_expired():
+        raise QueryTimeout()
+
+
+# What a reply keeps back from its budget for the lines `take` does not see: the headers above the
+# rows, the banner, and the sentence that says what was cut and which parameter gets the rest.
+REPLY_MARGIN = 700
+
+
+class Budget:
+    """What a reply may still spend. `take` reports whether a line fits and charges it if so; the
+    first line that does not fit latches `cut`, so a caller can stop and say what it withheld.
+    The budget is `limit` less REPLY_MARGIN, so the whole reply stays inside `limit`."""
+
+    def __init__(self, limit: int = REPLY_LIMIT) -> None:
+        self.left = limit - REPLY_MARGIN
+        self.cut = False
+
+    def take(self, text: str) -> bool:
+        if self.cut or len(text) + 1 > self.left:
+            self.cut = True
+            return False
+        self.left -= len(text) + 1
+        return True
+
+
 # The MCP server is long-lived and answers many queries against an unchanging database, so the
 # per-query setup is the cost that matters there, not the query. Both of these are held open:
 # the connection (whose page cache is the point) and the staleness verdict (which reads every
@@ -1228,6 +1320,7 @@ def _listing_connection() -> sqlite3.Connection | None:
     _LISTING.row_factory = sqlite3.Row
     for pragma in ("mmap_size = 1073741824", "cache_size = -65536", "temp_store = MEMORY"):
         _LISTING.execute(f"PRAGMA {pragma}")
+    _LISTING.set_progress_handler(_progress, _PROGRESS_OPS)
     return _LISTING
 
 
@@ -1251,7 +1344,9 @@ def _connect() -> sqlite3.Connection:
     connection.executescript(SCHEMA)
     _migrate(connection)
     _ensure_indices(connection)
+    connection.set_progress_handler(_progress, _PROGRESS_OPS)
     _CONNECTION = connection
+    _FTS_VERDICT.clear()
     for warning in _staleness(connection):
         print(warning)
     return connection
@@ -1275,10 +1370,17 @@ def _staleness(connection: sqlite3.Connection) -> list[str]:
     marker = research_root() / "ghidra" / "last-apply.json"
 
     # Hashing eight DLLs end to end costs ~80 ms, and the answer only changes when one of the
-    # inputs does. Key the verdict on their cheap stats -- size and mtime of every binary, plus
-    # the apply stamp -- so a repeat query pays nothing while any real change still re-hashes.
+    # inputs does. Key the verdict on their cheap stats -- size and mtime of every binary, the
+    # apply stamp and the database itself -- so a repeat query pays nothing while any real change
+    # still re-hashes. The verdict is also kept on disk (`_staleness_cache`): a fresh MCP server
+    # process starts with nothing in memory, and the first call it answers used to read every
+    # binary end to end before it touched the query -- the one step on the path that is a
+    # function of the DLLs' size rather than of the question, and the first to stall when the
+    # disk is busy with something else.
     def _fingerprint() -> tuple:
-        parts: list = [marker.stat().st_mtime_ns if marker.is_file() else 0]
+        database = _database().stat()
+        parts: list = [marker.stat().st_mtime_ns if marker.is_file() else 0,
+                       database.st_size, database.st_mtime_ns]
         for one in rows:
             path = Path(one["binary"]) if one["binary"] else None
             if path is not None and path.is_file():
@@ -1291,6 +1393,10 @@ def _staleness(connection: sqlite3.Connection) -> list[str]:
     key = _fingerprint()
     if _STALENESS is not None and _STALENESS[0] == key:
         return _STALENESS[1]
+    remembered = _read_staleness_cache(key)
+    if remembered is not None:
+        _STALENESS = (key, remembered)
+        return remembered
     applied: dict[str, float] = {}
     if marker.is_file():
         try:
@@ -1308,7 +1414,34 @@ def _staleness(connection: sqlite3.Connection) -> list[str]:
             warnings.append(f"STALE: {row['module']} was renamed or retyped after this corpus "
                             f"was dumped; re-run `corpus dump {row['module']}`")
     _STALENESS = (key, warnings)
+    _write_staleness_cache(key, warnings)
     return warnings
+
+
+def _staleness_cache() -> Path:
+    return cache_root() / "corpus-staleness.json"
+
+
+def _read_staleness_cache(key: tuple) -> list[str] | None:
+    """The verdict recorded for exactly these inputs, or None -- unreadable, absent and stale all
+    mean "compute it"; a cache that cannot be read must cost a hash, never a wrong answer."""
+    try:
+        stored = json.loads(_staleness_cache().read_text(encoding="utf-8"))
+        if stored["key"] == json.dumps(key):
+            return [str(one) for one in stored["warnings"]]
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return None
+
+
+def _write_staleness_cache(key: tuple, warnings: list[str]) -> None:
+    try:
+        path = _staleness_cache()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"key": json.dumps(key), "warnings": warnings}),
+                        encoding="utf-8")
+    except OSError:
+        pass        # the next process hashes again; nothing is wrong
 
 
 def _sha256(path: Path) -> str:
@@ -1342,15 +1475,32 @@ def _contains(text: str) -> str:
     return f"%{escaped}%"
 
 
-def _resolve(connection: sqlite3.Connection, reference: str) -> list[sqlite3.Row]:
+# What a lookup reads of a function. `functions` rows carry their own C -- 98 KB for
+# `CAI_BaseNPC::StartTask`, 132 KB for its Troika twin -- and SQLite keeps a row's columns in
+# declaration order, so a column declared AFTER `code` (`warn`, `name_src`, `name_dump`) can only
+# be reached by walking the whole overflow chain of the C in front of it. `SELECT *` therefore
+# pulls every page of every matching body through the cache to answer `callers`, `twin` or `asm`,
+# none of which reads it. "light" stops short of `code`; "meta" adds the columns behind it (the
+# damage banner and the naming evidence, which `func` prints); "code" is the whole row.
+FUNCTION_COLUMNS = {
+    "light": "module, addr, name, ns, size, cc, thunk",
+    "meta": "module, addr, name, ns, size, cc, thunk, warn, name_src, name_dump",
+    "code": "*",
+}
+
+
+def _resolve(connection: sqlite3.Connection, reference: str,
+             detail: str = "light") -> list[sqlite3.Row]:
     """A function by address, by bare name, or by `Class::method`."""
     reference = reference.strip()
     if not reference:
         return []
+    columns = FUNCTION_COLUMNS[detail]
     if "::" in reference:
         cls, _, member = reference.partition("::")
         return connection.execute(
-            "SELECT * FROM functions WHERE ns = ? AND name = ?", (cls, member)).fetchall()
+            f"SELECT {columns} FROM functions WHERE ns = ? AND name = ?",
+            (cls, member)).fetchall()
     # Normalised in Python, not in SQL. `lower(addr) = lower(?)` applies a function to the
     # COLUMN, which makes `functions_addr` unusable and sends every reference lookup -- the one
     # each of func/code/callers/callees/asm/twin begins with -- back to a full scan of 71,235
@@ -1359,17 +1509,17 @@ def _resolve(connection: sqlite3.Connection, reference: str) -> list[sqlite3.Row
     if candidate.startswith("0x"):
         candidate = candidate[2:]
     rows = connection.execute(
-        "SELECT * FROM functions WHERE addr = ?", (candidate,)).fetchall()
+        f"SELECT {columns} FROM functions WHERE addr = ?", (candidate,)).fetchall()
     if rows:
         return rows
     # Exact name first for the same reason: a leading-wildcard LIKE cannot use an index, and
     # OR-ing it beside the equality denies the index to both halves.
     rows = connection.execute(
-        "SELECT * FROM functions WHERE name = ?", (reference,)).fetchall()
+        f"SELECT {columns} FROM functions WHERE name = ?", (reference,)).fetchall()
     if rows:
         return rows
     return connection.execute(
-        "SELECT * FROM functions WHERE name LIKE ? ESCAPE '\\' LIMIT 21",
+        f"SELECT {columns} FROM functions WHERE name LIKE ? ESCAPE '\\' LIMIT 21",
         (_contains(reference),)).fetchall()
 
 
@@ -1397,7 +1547,7 @@ def _label(row: sqlite3.Row) -> str:
 
 def command_func(reference: str) -> int:
     connection = _connect()
-    rows = _resolve(connection, reference)
+    rows = _resolve(connection, reference, "meta")
     if not rows:
         _miss(reference)
         return 1
@@ -1444,9 +1594,14 @@ def command_func(reference: str) -> int:
 # failure the banner exists to prevent. Only a warning that changes what the C MEANS is severe.
 # How much of one answer a caller should have to read before deciding it is the wrong answer.
 # Every tool here feeds an agent's context, so an unbounded print is a cost the caller cannot
-# refuse; each cap says what it cut and how to get the rest.
-CODE_LIMIT = 60_000
-ROW_LIMIT = 400
+# refuse; each cap says what it cut and which parameter gets the rest (`REPLY_LIMIT`, above, is
+# the budget a default reply may spend; the per-tool row counts below sit inside it).
+ASM_LINES = 400
+SLOT_LIMIT = 50
+CLOSURE_ROWS = 40
+CLOSURE_BRIEF_ROWS = 12
+CLOSURE_ASKED_ROWS = 400
+HOP_LIMIT = 100
 
 
 SEVERE_WARNINGS = (
@@ -1467,47 +1622,117 @@ def _severe(warn: str) -> list[str]:
 
 def _damage(row: sqlite3.Row) -> None:
     """Say when the decompiler's own output is not to be trusted whole."""
-    warn = row["warn"] if "warn" in row.keys() else ""
+    _damage_text(row["warn"] if "warn" in row.keys() else "", row["addr"])
+
+
+def _damage_text(warn: str, addr: str) -> None:
     severe = _severe(warn)
     if not severe:
         return
     print(f"    !! DAMAGED DECOMPILATION — {'; '.join(severe)}")
-    print(f"    !! read the listing instead: corpus asm {row['addr']}")
+    print(f"    !! read the listing instead: corpus asm {addr}")
 
 
-def command_code(reference: str) -> int:
+# What one explicit page may spend. A default reply stops at REPLY_LIMIT; a caller that names the
+# page it wants (`lines=`, `max_lines=`) has said how much it is prepared to read, but a request
+# for the whole of a 300 KB body is still not a page.
+PAGE_LIMIT = 100_000
+
+
+def command_code(reference: str, from_line: int = 1, lines: int | None = None) -> int:
+    """One function's C, a page at a time.
+
+    A boundary defect makes one "function" out of dozens -- `104126e0` decompiles to 300 KB -- and
+    handing that back whole is not an answer, it is the caller's whole reading budget spent on a
+    body `outliers` already says is not one function. So a reply stops at REPLY_LIMIT characters
+    and says which line it stopped at; `from_line` (1-based) resumes there and `lines` sets the
+    page length, which raises the ceiling to PAGE_LIMIT because the caller has named how much.
+    """
     connection = _connect()
     rows = _resolve(connection, reference)
     if not rows:
         _miss(reference)
         return 1
-    for row in rows[:3]:
+    budget = Budget(REPLY_LIMIT if lines is None else PAGE_LIMIT)
+    first = max(1, from_line)
+    shown_rows = rows[:3]
+    for number, row in enumerate(shown_rows):
         print(f"// {_label(row)}")
-        _damage(row)
-        code = row["code"] or "// no decompilation in the corpus"
-        # A boundary defect makes one "function" out of dozens, and 104126e0 decompiles to
-        # 300 KB. Handing that back whole is not an answer -- it is the caller's whole reading
-        # budget spent on a function that `outliers` already says is not one function.
-        if len(code) > CODE_LIMIT:
-            lines = code.splitlines()
-            kept = 0
-            for index, line in enumerate(lines):
-                kept += len(line) + 1
-                if kept > CODE_LIMIT:
-                    break
-            print("\n".join(lines[:index]))
-            print(f"\n// … truncated at {CODE_LIMIT // 1000} KB of {len(code) // 1000} KB "
-                  f"({index} of {len(lines)} lines). This body is {row['size']} bytes, which "
-                  f"is a boundary defect more often than a real function — `corpus outliers` "
-                  f"lists them, and `corpus grep` searches inside it without printing it.")
-        else:
-            print(code)
+        # The body is read only for a row that is printed: a name that matches seventy-four
+        # functions (`StartTask`) would otherwise read every one of their decompilations.
+        found = connection.execute(
+            "SELECT code, warn FROM functions WHERE module = ? AND addr = ?",
+            (row["module"], row["addr"])).fetchone()
+        _damage_text(found["warn"] if found else "", row["addr"])
+        body = (found["code"] if found else "") or "// no decompilation in the corpus"
+        body_lines = body.splitlines()
+        total = len(body_lines)
+        last = total if lines is None else min(total, first - 1 + max(1, lines))
+        if first > total:
+            print(f"// from_line={first} is past the end: this body has {total} line(s)")
+            continue
+        printed = first - 1
+        for text in body_lines[first - 1:last]:
+            if not budget.take(text):
+                break
+            print(text)
+            printed += 1
+            check_deadline()
+        if printed < total:
+            ceiling = "the 100 KB page ceiling" if lines is not None else \
+                f"the {REPLY_LIMIT // 1000} KB default"
+            reason = f"stopped at {ceiling}" if printed < last else "page ends here"
+            print(f"\n// … lines {first}-{printed} of {total} shown ({reason}); "
+                  f"from_line={printed + 1} continues, lines= sets the page length."
+                  + (f" This body is {row['size']} bytes, which is a boundary defect more often "
+                     f"than a real function — `outliers` lists them, and `grep` searches inside "
+                     f"one without printing it." if row["size"] > 20_000 else ""))
+        if budget.cut:
+            skipped = len(shown_rows) - number - 1
+            if skipped:
+                print(f"// … {skipped} more matching function(s) not printed; "
+                      f"pass an address to read one")
+            break
     _truncated(rows, 3, reference)
     return 0
 
 
-def command_asm(reference: str) -> int:
-    """The disassembly, from the listing database beside the corpus."""
+def _asm_position(lines: list[str], value: str | None, upper: bool) -> int | None:
+    """A line index for an `asm` bound: a line number, or an address into the listing.
+
+    A value is an address when it carries `0x` or has six or more hex digits; anything else is a
+    1-based line number. `from` lands on the first instruction at or after the address, `to` on
+    the last one at or before it -- an address inside an instruction is not an error.
+    """
+    if value in (None, ""):
+        return None
+    text = str(value).strip().lower()
+    if text.startswith("0x") or (len(text) >= 6 and re.fullmatch(r"[0-9a-f]+", text)):
+        try:
+            target = int(text, 16)
+        except ValueError:
+            raise ValueError(f"{value!r} is neither a line number nor an address") from None
+        held = [(int(line[:8], 16), index) for index, line in enumerate(lines)
+                if re.match(r"[0-9a-f]{8}  ", line)]
+        if upper:
+            before = [index for address, index in held if address <= target]
+            return before[-1] if before else 0
+        after = [index for address, index in held if address >= target]
+        return after[0] if after else len(lines) - 1
+    try:
+        number = int(text)
+    except ValueError:
+        raise ValueError(f"{value!r} is neither a line number nor an address") from None
+    return max(0, min(len(lines) - 1, number - 1))
+
+
+def command_asm(reference: str, max_lines: int = ASM_LINES, start: str | None = None,
+                end: str | None = None) -> int:
+    """The disassembly, from the listing database beside the corpus.
+
+    A page of at most `max_lines` instructions, from `start` (a line number or an address) to `end`.
+    `StartTask` is 4,992 lines and 148 KB; the default page is the first 400.
+    """
     connection = _connect()
     rows = _resolve(connection, reference)
     if not rows:
@@ -1518,15 +1743,48 @@ def command_asm(reference: str) -> int:
         print(f"no listing database at {_listing_database()}; run `corpus listing` then "
               f"`corpus build` to create it")
         return 1
-    for row in rows[:2]:
+    max_lines = max(1, max_lines)
+    budget = Budget(REPLY_LIMIT if max_lines <= ASM_LINES else PAGE_LIMIT)
+    for number, row in enumerate(rows[:2]):
         print(f"// {_label(row)}")
         found = listings.execute("SELECT asm FROM listing WHERE module = ? AND addr = ?",
                                  (row["module"], row["addr"])).fetchone()
-        print(found["asm"] if found else "// this function is not in the listing database")
+        if not found:
+            print("// this function is not in the listing database")
+            continue
+        listing = found["asm"].splitlines()
+        total = len(listing)
+        first = _asm_position(listing, start, upper=False) or 0
+        last = _asm_position(listing, end, upper=True)
+        last = total - 1 if last is None else last
+        window = listing[first:min(last + 1, first + max_lines)]
+        printed = first
+        for text in window:
+            if not budget.take(text):
+                break
+            print(text)
+            printed += 1
+        if printed <= last:
+            address = listing[printed][:8] if printed < total else ""
+            print(f"\n// … lines {first + 1}-{printed} of {total} shown"
+                  f"{' (the 20 KB default)' if budget.cut else ''}; from={printed + 1} or "
+                  f"from=0x{address} continues, to= ends the page, max_lines= sets its length")
+        if budget.cut:
+            break
+    _truncated(rows, 2, reference)
     return 0
 
 
-def command_hop(reference: str, direction: str) -> int:
+def _cap(rows: list, limit: int, what: str):
+    """The first `limit` rows of a section; after the last one, how many were left."""
+    for index, one in enumerate(rows):
+        if index == limit:
+            print(f"  … {len(rows) - limit} more {what}; limit= raises the cap")
+            return
+        yield one
+
+
+def command_hop(reference: str, direction: str, limit: int = HOP_LIMIT) -> int:
     connection = _connect()
     rows = _resolve(connection, reference)
     if not rows:
@@ -1535,12 +1793,12 @@ def command_hop(reference: str, direction: str) -> int:
     row = rows[0]
     if direction == "callees":
         found = connection.execute(
-            """SELECT f.*, e.kind FROM edges e JOIN functions f
+            """SELECT f.module, f.addr, f.ns, f.name, e.kind FROM edges e JOIN functions f
                ON f.module = e.module AND f.addr = e.callee
                WHERE e.module = ? AND e.caller = ? ORDER BY e.kind, f.addr""",
             (row["module"], row["addr"])).fetchall()
         print(f"{len(found)} callees of {_label(row)}")
-        for one in found:
+        for one in _cap(found, limit, "callee(s)"):
             print(f"  {_label(one)}  [{one['kind']}]")
         # Ghidra files a call into another DLL under an `EXTERNAL:` address, which is not in
         # this module's function table -- so the JOIN above drops it and the count above is
@@ -1554,7 +1812,7 @@ def command_hop(reference: str, direction: str) -> int:
         if imported:
             print(f"\n{len(imported)} call(s) into another DLL — imported, so the corpus holds "
                   f"no body:")
-            for one in imported:
+            for one in _cap(imported, limit, "import(s)"):
                 if one["name"]:
                     original = (f"  (imported as {one['imported']})"
                                 if one["imported"] and one["imported"] != one["name"] else "")
@@ -1574,7 +1832,7 @@ def command_hop(reference: str, direction: str) -> int:
             (row["module"], row["addr"])).fetchall()
         if crossing:
             print(f"\n{len(crossing)} call(s) into another module through a named interface:")
-            for one in crossing:
+            for one in _cap(crossing, limit, "crossing(s)"):
                 owner = f"{one['ns']}::" if one["ns"] and one["ns"] != "Global" else ""
                 print(f"    {one['iface']:24} slot {one['slot']:4}  {one['to_module']:14} "
                       f"{one['to_addr']}  {owner}{one['name'] or '<not a function>'}")
@@ -1588,44 +1846,43 @@ def command_hop(reference: str, direction: str) -> int:
         if unresolved:
             print(f"\n{len(unresolved)} virtual dispatch(es) whose receiver class the code does "
                   f"not state:")
-            for one in unresolved:
+            for one in _cap(unresolved, limit, "dispatch(es)"):
                 print(f"    slot {one['slot']:4} on {one['recv']}"
                       f"    (corpus slot {one['slot']})")
         return 0
 
+    # Only what `_label` prints -- never `f.*`, which would read the decompilation of every caller.
     direct = connection.execute(
-        """SELECT f.* FROM edges e JOIN functions f
+        """SELECT f.module, f.addr, f.ns, f.name FROM edges e JOIN functions f
            ON f.module = e.module AND f.addr = e.caller
            WHERE e.module = ? AND e.callee = ? AND e.kind = 'direct' ORDER BY f.addr""",
         (row["module"], row["addr"])).fetchall()
     virtual = connection.execute(
-        """SELECT f.* FROM edges e JOIN functions f
+        """SELECT f.module, f.addr, f.ns, f.name FROM edges e JOIN functions f
            ON f.module = e.module AND f.addr = e.caller
            WHERE e.module = ? AND e.callee = ? AND e.kind = 'virtual' ORDER BY f.addr""",
         (row["module"], row["addr"])).fetchall()
 
     print(f"{_label(row)}")
     print(f"\n{len(direct)} DIRECT caller(s) — a static call reference:")
-    for one in direct:
+    for one in _cap(direct, limit, "direct caller(s)"):
         print("  " + _label(one))
 
     print(f"\n{len(virtual)} VIRTUAL caller(s) — the site's receiver class holds this function "
           f"at that slot:")
-    for one in virtual:
+    for one in _cap(virtual, limit, "virtual caller(s)"):
         print("  " + _label(one))
 
     crossing = connection.execute(
-        """SELECT f.*, x.iface, x.slot, x.module AS from_module FROM xedges x JOIN functions f
+        """SELECT f.module, f.addr, f.ns, f.name, x.iface, x.slot FROM xedges x JOIN functions f
            ON f.module = x.module AND f.addr = x.caller
            WHERE x.to_module = ? AND x.to_addr = ? ORDER BY x.module, f.addr""",
         (row["module"], row["addr"])).fetchall()
     if crossing:
         print(f"\n{len(crossing)} CROSS-MODULE caller(s) — another binary reaches this through a "
               f"named interface, so no local reference exists:")
-        for one in crossing[:60]:
+        for one in _cap(crossing, limit, "cross-module caller(s)"):
             print(f"  {_label(one)}  via {one['iface']} slot {one['slot']}")
-        if len(crossing) > 60:
-            print(f"  … {len(crossing) - 60} more")
 
     # Every table this function sits in, so the possible set is the union of its slots.
     slots = connection.execute(
@@ -1637,7 +1894,7 @@ def command_hop(reference: str, direction: str) -> int:
     numbers = [one["slot"] for one in slots]
     placeholders = ",".join("?" * len(numbers))
     possible = connection.execute(
-        f"""SELECT f.*, v.slot, v.recv FROM vcalls v JOIN functions f
+        f"""SELECT f.module, f.addr, f.ns, f.name, v.slot, v.recv FROM vcalls v JOIN functions f
             ON f.module = v.module AND f.addr = v.caller
             WHERE v.module = ? AND v.cls = '' AND v.slot IN ({placeholders})
             ORDER BY v.slot, f.addr""",
@@ -1645,10 +1902,8 @@ def command_hop(reference: str, direction: str) -> int:
     print(f"\n{len(possible)} POSSIBLE caller(s) — a dispatch at slot "
           f"{', '.join(str(n) for n in numbers)} whose receiver class the code does not state. "
           f"These are candidates, not facts:")
-    for one in possible[:60]:
+    for one in _cap(possible, limit, "possible caller(s)"):
         print(f"  {_label(one)}  slot {one['slot']} on {one['recv']}")
-    if len(possible) > 60:
-        print(f"  … {len(possible) - 60} more")
 
     # A call through a BASE pointer resolves to the base's own implementation, so an override is
     # not reachable from it by this join. Those sites are counted rather than listed: they are
@@ -1668,24 +1923,100 @@ def command_hop(reference: str, direction: str) -> int:
     return 0
 
 
-LITERAL = re.compile(r"[A-Za-z_][A-Za-z0-9_]{3,}")
-METACHARACTERS = set(r".^$*+?{}[]\|()")
+try:                                        # the regex parser is private; 3.11 moved it here
+    import re._parser as _sre_parse
+except ImportError:                         # pragma: no cover -- an interpreter that lacks it
+    _sre_parse = None                       # simply never prefilters, and scans
+
+
+def _requirements(sequence) -> list[list[str]]:
+    """What every match of a parsed pattern must contain, as clauses of literals.
+
+    A clause is a list of literals of which AT LEAST ONE must appear in any text the pattern
+    matches; the pattern needs every clause. A run of plain characters is a one-literal clause. An
+    alternation is one clause holding the best literal of each branch -- and no clause at all when
+    some branch has none, because a branch with nothing to look for can match anything. A group, or
+    a repeat that runs at least once, passes its own content through. Everything else -- a class,
+    `.`, an anchor, a lookahead, a back-reference, an optional or `{0,n}` repeat -- requires
+    nothing and ends the run it stands in.
+
+    A literal that is not required is the failure this exists to avoid: prefiltering on it would
+    drop hits silently, and a short answer has the same shape as a complete one. So the walk
+    only ever adds a requirement it can prove, and shorter than three characters, or not ASCII,
+    is no requirement -- the trigram index cannot answer the first and `re.IGNORECASE` folds the
+    second differently from SQLite's tokenizer.
+    """
+    clauses: list[list[str]] = []
+    run: list[str] = []
+
+    def end_run() -> None:
+        if len(run) >= 3:
+            clauses.append(["".join(run)])
+        run.clear()
+
+    for operation, argument in sequence:
+        kind = str(operation)
+        if kind == "LITERAL" and argument < 128:
+            run.append(chr(argument))
+            continue
+        end_run()
+        if kind == "SUBPATTERN":
+            clauses.extend(_requirements(argument[-1]))
+        elif kind in ("MAX_REPEAT", "MIN_REPEAT", "POSSESSIVE_REPEAT") and argument[0] >= 1:
+            clauses.extend(_requirements(argument[2]))
+        elif kind == "ATOMIC_GROUP":
+            clauses.extend(_requirements(argument))
+        elif kind == "BRANCH":
+            chosen: list[str] | None = []
+            for branch in argument[1]:
+                singles = [clause[0] for clause in _requirements(branch) if len(clause) == 1]
+                if not singles:
+                    chosen = None
+                    break
+                chosen.append(max(singles, key=len))
+            if chosen:
+                clauses.append(sorted(set(chosen)))
+    end_run()
+    return clauses
 
 
 def _prefilter(pattern: str) -> str | None:
-    """The longest literal run a regex must contain, usable as a full-text prefilter.
+    """A full-text query that every match of `pattern` satisfies, or None when there is none.
 
-    Two conditions, and both are load-bearing:
-
-    * no metacharacter anywhere -- a literal lifted out of an alternation or an optional group
-      is not required to appear in a match, and prefiltering on one silently drops hits;
-    * at least three characters -- a trigram index cannot answer a query shorter than one
-      trigram, and asking it anyway returns nothing rather than everything.
+    The index holds trigrams, which is substring semantics, so the query is the pattern's required
+    literals (`_requirements`): the three most selective clauses, ANDed. `grep` still runs the
+    regex over each candidate -- the index only decides which functions it reads -- so an
+    over-wide candidate set costs time and an under-wide one costs correctness, which is why only
+    a provable requirement goes in. `thunk_FUN_102ee140|thunk_FUN_102ee620|thunk_FUN_102ee680`
+    scanned all 60 MB in 3.6 s; it is `"thunk_FUN_102ee" AND ("140" OR "620" OR "680")` here.
     """
-    if any(character in METACHARACTERS for character in pattern):
+    if _sre_parse is None:
         return None
-    words = [word for word in LITERAL.findall(pattern) if len(word) >= 3]
-    return max(words, key=len) if words else None
+    try:
+        clauses = _requirements(_sre_parse.parse(pattern, re.IGNORECASE))
+    except Exception:               # a pattern the private parser refuses is a pattern we scan
+        return None
+    unique: list[list[str]] = []
+    for clause in sorted(clauses, key=lambda one: -min(len(text) for text in one)):
+        if clause not in unique:
+            unique.append(clause)
+    terms = []
+    for clause in unique[:3]:
+        quoted = ['"' + text.replace('"', '""') + '"' for text in clause]
+        terms.append(quoted[0] if len(quoted) == 1 else "(" + " OR ".join(quoted) + ")")
+    return " AND ".join(terms) or None
+
+
+def _excerpt(line: str, expression: re.Pattern, width: int = 240) -> str:
+    """A matching line, cut to `width` characters around the match rather than from its start --
+    a hit that falls past the cut would print a line that does not show why it matched."""
+    line = line.strip()
+    if len(line) <= width:
+        return line
+    found = expression.search(line)
+    start = max(0, (found.start() if found else 0) - width // 3)
+    shown = line[start:start + width]
+    return ("… " if start else "") + shown + (" …" if start + width < len(line) else "")
 
 
 def _index_is_trigram(connection: sqlite3.Connection) -> bool:
@@ -1698,6 +2029,60 @@ def _index_is_trigram(connection: sqlite3.Connection) -> bool:
     row = connection.execute(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'code_fts'").fetchone()
     return bool(row and "trigram" in (row[0] or ""))
+
+
+# Whether `code_fts` still describes the code in `functions`, decided once per connection.
+_FTS_VERDICT: dict[int, tuple[bool, str]] = {}
+FTS_SAMPLE = 200
+
+
+def _index_is_current(connection: sqlite3.Connection) -> tuple[bool, str]:
+    """Whether the search index was built from the code `functions` holds now.
+
+    The index is external-content: it keeps trigrams and no text, so a row whose `code` changed
+    after the index was built is silently indexed under its OLD text. A prefilter built on that
+    drops real hits and adds false candidates, and the answer is a count that looks like any
+    other. Measured on the shipped corpus: 9% of `vampire.dll`'s rows (366 of 4,000 sampled) no
+    longer matched their index, and `/Disciplin/` answered 421 functions against a true 430.
+
+    The index records how many trigrams each row had (`code_fts_docsize`), and a row of N
+    characters has N - 2. Checking that for an even sample of rows needs no new state, costs a few
+    milliseconds, and sees a stale index with certainty (a 9% rate is missed once in 10^8 draws).
+    More than 1% of the sample disagreeing means the index is not to be trusted.
+    """
+    key = id(connection)
+    if key in _FTS_VERDICT:
+        return _FTS_VERDICT[key]
+    try:
+        ids = [row[0] for row in connection.execute("SELECT id FROM code_fts_docsize ORDER BY id")]
+        step = max(1, len(ids) // FTS_SAMPLE)
+        checked = bad = 0
+        for rowid in ids[::step][:FTS_SAMPLE]:
+            row = connection.execute(
+                "SELECT length(f.code), d.sz FROM code_fts_docsize d "
+                "LEFT JOIN functions f ON f.rowid = d.id WHERE d.id = ?", (rowid,)).fetchone()
+            checked += 1
+            # The size is one varint per column, and the table has one column.
+            tokens, shift = 0, 0
+            for byte in bytes(row[1]):
+                tokens = (tokens << 7) | (byte & 0x7F)
+                if not byte & 0x80:
+                    break
+            if row[0] is None or abs(tokens - max(row[0] - 2, 0)) > 2:
+                bad += 1
+        if not checked:
+            verdict = (False, "it holds no rows")
+        elif bad > checked // 100:
+            verdict = (False, f"{bad} of {checked} sampled functions differ from the text it was "
+                              f"built from")
+        else:
+            verdict = (True, "")
+    except sqlite3.OperationalError as error:
+        if "interrupted" in str(error) and deadline_expired():
+            raise QueryTimeout() from error
+        verdict = (False, f"it cannot be read ({error})")
+    _FTS_VERDICT[key] = verdict
+    return verdict
 
 
 def command_grep(pattern: str, module: str | None, limit: int) -> int:
@@ -1718,7 +2103,16 @@ def command_grep(pattern: str, module: str | None, limit: int) -> int:
     query = "SELECT * FROM functions WHERE code != ''"
     parameters: list[str] = []
 
-    literal = _prefilter(pattern) if _index_is_trigram(connection) else None
+    literal = None
+    stale = ""
+    if _index_is_trigram(connection):
+        current, why = _index_is_current(connection)
+        if current:
+            literal = _prefilter(pattern)
+        else:
+            stale = (f"(the search index is stale — {why}; scanning every decompiled function "
+                     f"instead. `corpus reindex --search-only` rebuilds it in seconds, after which "
+                     f"a pattern with a literal answers in milliseconds)")
     if literal:
         try:
             # Through a temporary table rather than an IN list: a common literal matches tens of
@@ -1727,31 +2121,42 @@ def command_grep(pattern: str, module: str | None, limit: int) -> int:
             connection.execute("DROP TABLE IF EXISTS temp.candidates")
             connection.execute("CREATE TEMP TABLE candidates (rowid_ INTEGER PRIMARY KEY)")
             connection.execute("INSERT OR IGNORE INTO candidates "
-                               "SELECT rowid FROM code_fts WHERE code_fts MATCH ?",
-                               (f'"{literal}"',))
+                               "SELECT rowid FROM code_fts WHERE code_fts MATCH ?", (literal,))
             found = connection.execute("SELECT count(*) FROM candidates").fetchone()[0]
             query = ("SELECT * FROM functions WHERE rowid IN (SELECT rowid_ FROM candidates)")
-            print(f"(indexed on {literal!r}: {found} candidate functions)")
+            print(f"(indexed on {literal}: {found} candidate functions)")
         except sqlite3.OperationalError as error:
+            if "interrupted" in str(error) and deadline_expired():
+                raise QueryTimeout() from error
             print(f"(no search index — scanning the whole corpus: {error})")
     else:
-        print("(scanning every decompiled function — the pattern carries no literal the "
-              "index can narrow on)")
+        print(stale or "(scanning every decompiled function — the pattern carries no literal the "
+                       "index can narrow on)")
     if module:
         query += " AND module = ?"
         parameters.append(module)
+    # A page of matches is a count of functions, so the default is also held to a character
+    # budget: forty functions at six lines each is 33 KB when the lines are long. Asking for more
+    # functions (`limit` above the default) is asking for more characters.
+    budget = Budget(REPLY_LIMIT if limit <= 40 else PAGE_LIMIT)
     hits = 0
     for row in connection.execute(query, parameters):
+        check_deadline()
         lines = [line for line in (row["code"] or "").splitlines() if expression.search(line)]
         if not lines:
             continue
-        print(_label(row))
+        block = [_label(row)] + [f"    {_excerpt(line, expression)}" for line in lines[:6]]
+        if not all(budget.take(text) for text in block):
+            print(f"... stopped at the {REPLY_LIMIT // 1000} KB reply cap after {hits} functions; "
+                  f"narrow with module= or a longer pattern, or raise limit=")
+            break
+        print(block[0])
         _damage(row)
-        for line in lines[:6]:
-            print("    " + line.strip())
+        for text in block[1:]:
+            print(text)
         hits += 1
         if hits >= limit:
-            print(f"... stopped at {limit} functions; narrow the pattern or raise --limit")
+            print(f"... stopped at {limit} functions; narrow the pattern or raise limit=")
             break
     print(f"{hits} function(s) match /{pattern}/")
     return 0
@@ -1765,27 +2170,66 @@ def command_str(text: str, limit: int) -> int:
     rows = connection.execute(
         "SELECT * FROM strings WHERE text LIKE ? ESCAPE '\\' ORDER BY module, addr LIMIT ?",
         (_contains(text), max(1, limit))).fetchall()
+    budget = Budget(REPLY_LIMIT if limit <= 40 else PAGE_LIMIT)
+    shown = 0
     for row in rows:
+        check_deadline()
         referencing = connection.execute(
-            """SELECT f.* FROM string_refs r LEFT JOIN functions f
+            """SELECT f.module, f.addr, f.ns, f.name FROM string_refs r LEFT JOIN functions f
                ON f.module = r.module AND f.addr = r.func_addr
                WHERE r.module = ? AND r.str_addr = ?""",
             (row["module"], row["addr"])).fetchall()
-        print(f"{row['module']:18} {row['addr']:10} {row['text'][:100]!r}")
-        for one in referencing:
-            print("    " + (_label(one) if one["addr"] else "    <unowned code>"))
-    print(f"{len(rows)} string(s) match {text!r}")
+        block = [f"{row['module']:18} {row['addr']:10} {row['text'][:100]!r}"]
+        block += ["    " + (_label(one) if one["addr"] else "    <unowned code>")
+                  for one in referencing]
+        if not all(budget.take(line) for line in block):
+            print(f"... stopped at the {REPLY_LIMIT // 1000} KB reply cap; a longer text narrows "
+                  f"it, limit= sets how many strings to read")
+            break
+        print("\n".join(block))
+        shown += 1
+    print(f"{shown} string(s) match {text!r}")
     return 0
 
 
-def command_vtable(cls: str) -> int:
-    """A class's dispatch table, slot by slot — the shape of its virtual interface."""
+def _spans(spec, what: str) -> list[tuple[int, int]]:
+    """`430-450`, `442`, `5,9,12-20` (hex allowed: `0x100-0x1ff`) as inclusive (low, high) pairs."""
+    if isinstance(spec, int):
+        return [(spec, spec)]
+    spans = []
+    for part in str(spec).replace(" ", "").split(","):
+        if not part:
+            continue
+        low, dash, high = part.partition("-")
+        try:
+            spans.append((int(low, 0), int(high, 0) if dash else int(low, 0)))
+        except ValueError:
+            raise ValueError(f"{part!r} is not a {what}; write one number (442), a span "
+                             f"(430-450) or a comma list (5,9,12-20)") from None
+    if not spans:
+        raise ValueError(f"no {what} given; write one number (442), a span (430-450) or a "
+                         f"comma list (5,9,12-20)")
+    return [(min(span), max(span)) for span in spans]
+
+
+def _within(value: int, spans: list[tuple[int, int]] | None) -> bool:
+    return spans is None or any(low <= value <= high for low, high in spans)
+
+
+def command_vtable(cls: str, slots=None, overridden_only: bool = False) -> int:
+    """A class's dispatch table, slot by slot — the shape of its virtual interface.
+
+    `CAI_BaseNPC` has 591 slots and 58 KB of table. A default reply stops at REPLY_LIMIT and names
+    the slot it stopped at; `slots` (`430-450`) reads a range and `overridden_only` keeps the slots
+    whose body is this class's own -- the ones it defines or overrides, not the ones it inherits.
+    """
     connection = _connect()
+    wanted = _spans(slots, "slot range") if slots not in (None, "") else None
     # The caller counts come back in ONE grouped query rather than one per slot: a wide class
     # has hundreds of slots, and a per-slot count turns a single answer into hundreds of
-    # round trips.
+    # round trips. Nothing of the function's decompilation is read: `warn` sits behind it.
     rows = connection.execute(
-        """SELECT v.*, f.name, f.ns, f.size, f.warn,
+        """SELECT v.*, f.name, f.ns, f.size,
                   (SELECT count(*) FROM edges e
                    WHERE e.module = v.module AND e.callee = v.func) AS callers
            FROM vtables v
@@ -1794,21 +2238,42 @@ def command_vtable(cls: str) -> int:
     if not rows:
         print(f"no vftable in the corpus belongs to {cls!r}")
         return 1
+    kept = [row for row in rows if _within(row["slot"], wanted)
+            and (not overridden_only or row["ns"] == cls)]
+    budget = Budget(REPLY_LIMIT if wanted is None else PAGE_LIMIT)
     module = None
-    for row in rows:
+    shown = 0
+    for row in kept:
+        check_deadline()
+        block = []
         if row["module"] != module:
-            module = row["module"]
-            print(f"\n{module}  table {row['table_addr']}"
-                  + (f"  subobject at +{row['sub']}" if row["sub"] else ""))
+            block.append(f"\n{row['module']}  table {row['table_addr']}"
+                         + (f"  subobject at +{row['sub']}" if row["sub"] else ""))
         name = row["name"] or "<not a function in the corpus>"
         owner = f"{row['ns']}::" if row["ns"] and row["ns"] != "Global" else ""
-        print(f"  #{row['slot']:<4} {row['func']}  {owner}{name:44} callers={row['callers']}"
-              f"{'  [thunked]' if row['thunk'] else ''}")
-    print(f"\n{len(rows)} slot(s) in {cls}")
+        block.append(f"  #{row['slot']:<4} {row['func']}  {owner}{name:44} "
+                     f"callers={row['callers']}{'  [thunked]' if row['thunk'] else ''}")
+        if not all(budget.take(text) for text in block):
+            rest = kept[shown:]
+            print(f"  … {len(rest)} more slot(s), #{rest[0]['slot']} to #{rest[-1]['slot']}, "
+                  f"past the {REPLY_LIMIT // 1000} KB default; slots={rest[0]['slot']}-"
+                  f"{rest[-1]['slot']} reads them, overridden_only=true lists only the slots "
+                  f"{cls} itself defines")
+            break
+        print("\n".join(block))
+        module = row["module"]
+        shown += 1
+    note = []
+    if wanted is not None:
+        note.append("in the range")
+    if overridden_only:
+        note.append("this class's own")
+    print(f"\n{len(kept)} slot(s) in {cls}"
+          + (f" ({' and '.join(note)}; the table has {len(rows)})" if note else ""))
     return 0
 
 
-def command_slot(slot: int, module: str | None) -> int:
+def command_slot(slot: int, module: str | None, limit: int = SLOT_LIMIT) -> int:
     """Every class that fills one slot — one virtual compared across the whole hierarchy.
 
     This is also the honest answer to "who overrides this": a dispatch through a base pointer can
@@ -1841,12 +2306,21 @@ def command_slot(slot: int, module: str | None) -> int:
             print(f"no vftable in the corpus has a slot {slot}; the widest table has "
                   f"{widest + 1} slots (0–{widest})")
         return 1
-    for row in rows[:ROW_LIMIT]:
-        print(f"  {row['module']:18} {row['cls']:42} {row['func']}  "
-              + (f"{row['ns']}::{row['name']}" if row["name"] else "<not a function>"))
-    if len(rows) > ROW_LIMIT:
-        print(f"  … {len(rows) - ROW_LIMIT} more class(es) not listed; pass a module to narrow "
-              f"it")
+    # Slot 1 is filled by 1,742 classes and answered with 39 KB. The first `limit` are the
+    # answer to "who overrides this" for a reader who wants a sample; the count below is the
+    # answer for one who wants the number, and `limit=` / `module=` get the rest.
+    budget = Budget(REPLY_LIMIT if limit <= SLOT_LIMIT else PAGE_LIMIT)
+    shown = 0
+    for row in rows[:max(1, limit)]:
+        line = (f"  {row['module']:18} {row['cls']:42} {row['func']}  "
+                + (f"{row['ns']}::{row['name']}" if row["name"] else "<not a function>"))
+        if not budget.take(line):
+            break
+        print(line)
+        shown += 1
+    if len(rows) > shown:
+        print(f"  … {len(rows) - shown} more class(es) not listed; limit= raises the cap, "
+              f"module= narrows it")
     sites = connection.execute(
         "SELECT count(*) FROM vcalls WHERE slot = ?" + (" AND module = ?" if module else ""),
         parameters).fetchone()[0]
@@ -1911,7 +2385,8 @@ def _unnamed_datum(connection: sqlite3.Connection, text: str) -> int:
             print(f"    {len(group)} {label}:")
             for row in group[:20]:
                 owner = connection.execute(
-                    "SELECT * FROM functions WHERE module = ? AND addr = ?",
+                    f"SELECT {FUNCTION_COLUMNS['light']} FROM functions "
+                    f"WHERE module = ? AND addr = ?",
                     (module, row["func_addr"])).fetchone()
                 print("      " + (_label(owner) if owner else f"{module} {row['func_addr']}"))
             if len(group) > 20:
@@ -1936,7 +2411,7 @@ def command_globals(text: str, limit: int) -> int:
         return 1
     for row in rows:
         referencing = connection.execute(
-            """SELECT f.*, r.kind FROM global_refs r JOIN functions f
+            """SELECT f.module, f.addr, f.ns, f.name, r.kind FROM global_refs r JOIN functions f
                ON f.module = r.module AND f.addr = r.func_addr
                WHERE r.module = ? AND r.addr = ? ORDER BY f.addr""",
             (row["module"], row["addr"])).fetchall()
@@ -2377,8 +2852,8 @@ def command_twin(reference: str) -> int:
         print(f"{_label(row)} has no recovered name, so it cannot be matched across modules")
         return 1
     found = connection.execute(
-        "SELECT * FROM functions WHERE name = ? AND ns = ? ORDER BY module",
-        (row["name"], row["ns"])).fetchall()
+        f"SELECT {FUNCTION_COLUMNS['light']} FROM functions WHERE name = ? AND ns = ? "
+        f"ORDER BY module", (row["name"], row["ns"])).fetchall()
     for one in found:
         marker = "  <- this one" if one["module"] == row["module"] else ""
         print(f"  {_label(one)}  {one['size']} bytes{marker}")
@@ -2386,7 +2861,10 @@ def command_twin(reference: str) -> int:
     return 0
 
 
-def command_fields(cls: str, offset: int | None) -> int:
+def command_fields(cls: str, offset: int | None, span=None, name: str | None = None) -> int:
+    """A class's fields by offset. `CAI_BaseNPC` has 620 and 55 KB of them; a default reply stops
+    at REPLY_LIMIT and names where, `span` (`0x100-0x200`) reads a range and `name` keeps the
+    fields whose name contains the text."""
     connection = _connect()
     query = "SELECT * FROM fields WHERE cls = ?"
     parameters: list = [cls]
@@ -2404,9 +2882,30 @@ def command_fields(cls: str, offset: int | None) -> int:
         else:
             print(f"no class structure named {cls!r}")
         return 1
-    for row in rows:
-        print(f"  +0x{row['off']:05x}  {row['name']:38} {row['type']:16} {row['note']}")
-    print(f"{len(rows)} field(s) in {cls}")
+    wanted = _spans(span, "offset range") if span not in (None, "") else None
+    needle = (name or "").strip().lower()
+    kept = [row for row in rows if _within(row["off"], wanted)
+            and (not needle or needle in (row["name"] or "").lower())]
+    # Asking for a range, a name or one offset is asking for that much, so only a bare class is
+    # held to the default.
+    asked = wanted is not None or bool(needle) or offset is not None
+    budget = Budget(PAGE_LIMIT if asked else REPLY_LIMIT)
+    shown = 0
+    for row in kept:
+        line = f"  +0x{row['off']:05x}  {row['name']:38} {row['type']:16} {row['note']}"
+        if not budget.take(line):
+            rest = kept[shown:]
+            print(f"  … {len(rest)} more field(s), +0x{rest[0]['off']:x} to "
+                  f"+0x{rest[-1]['off']:x}, past the {REPLY_LIMIT // 1000} KB default; "
+                  f"range=0x{rest[0]['off']:x}-0x{rest[-1]['off']:x} reads them, name= keeps "
+                  f"the fields whose name contains a text")
+            break
+        print(line)
+        shown += 1
+    if wanted is None and not needle:
+        print(f"{len(rows)} field(s) in {cls}")
+    else:
+        print(f"{len(kept)} of {len(rows)} field(s) in {cls} match")
     return 0
 
 
@@ -2421,7 +2920,7 @@ def command_readers(offset: int, cls: str | None, limit: int) -> int:
         for row in names:
             print(f"    {row['cls']}::{row['name']}")
 
-    query = """SELECT a.kind, a.cls, a.field, f.* FROM accesses a
+    query = """SELECT a.kind, a.cls, a.field, f.module, f.addr, f.ns, f.name FROM accesses a
                JOIN functions f ON f.module = a.module AND f.addr = a.func_addr
                WHERE a.off = ?"""
     parameters: list = [offset]
@@ -2457,62 +2956,125 @@ def command_readers(offset: int, cls: str | None, limit: int) -> int:
     return 0
 
 
-def command_closure(cls: str, out: Path | None, with_code: bool = True) -> int:
-    """One class, whole: what RE work should read instead of re-deriving from the binary."""
+CLOSURE_SECTIONS = ("fields", "methods", "strings")
+
+
+def command_closure(cls: str, out: Path | None, with_code: bool = True, sections=None,
+                    brief: bool = False, limit: int | None = None) -> int:
+    """One class, whole: what RE work should read instead of re-deriving from the binary.
+
+    Written to a file (`out`) it is whole. Printed, it is a reply: `CAI_BaseNPC` is 620 fields, 600
+    methods and 1,500 strings, 128 KB, so the default prints each section's first rows and says how
+    many it left. `brief` is the counts and the dozen busiest methods; `sections` (`methods`,
+    `fields,strings`) prints only those, to `limit` rows each; the decompilation is `out`'s alone.
+    """
     connection = _connect()
+    if isinstance(sections, str):
+        sections = [one for one in sections.replace(" ", "").split(",") if one]
+    chosen = [str(one).lower() for one in (sections or [])]
+    unknown = [one for one in chosen if one not in CLOSURE_SECTIONS]
+    if unknown:
+        raise ValueError(f"no closure section {unknown[0]!r}; sections are "
+                         f"{', '.join(CLOSURE_SECTIONS)}, comma-separated")
+    whole = out is not None
+    rows_each = (None if whole else limit if limit else
+                 CLOSURE_ASKED_ROWS if chosen else
+                 CLOSURE_BRIEF_ROWS if brief else CLOSURE_ROWS)
+    show = chosen or list(CLOSURE_SECTIONS)
+
+    fields = connection.execute(
+        "SELECT * FROM fields WHERE cls = ? ORDER BY off", (cls,)).fetchall()
+    # The decompilations are read only when a file is being written: `SELECT *` here carried the
+    # C of every method of the class -- a megabyte for `CAI_BaseNPC` -- into a reply that prints
+    # none of it.
+    methods = connection.execute(
+        f"SELECT {FUNCTION_COLUMNS['light']} FROM functions WHERE ns = ? ORDER BY addr",
+        (cls,)).fetchall()
+    if not fields and not methods:
+        print(f"nothing in the corpus belongs to {cls!r}")
+        return 1
+
     lines: list[str] = []
 
     def say(text: str = "") -> None:
         lines.append(text)
 
-    fields = connection.execute(
-        "SELECT * FROM fields WHERE cls = ? ORDER BY off", (cls,)).fetchall()
-    methods = connection.execute(
-        "SELECT * FROM functions WHERE ns = ? ORDER BY addr", (cls,)).fetchall()
-    if not fields and not methods:
-        print(f"nothing in the corpus belongs to {cls!r}")
-        return 1
+    def more(shown: int, total: int, what: str, section: str) -> None:
+        if rows_each is not None and total > shown:
+            how = ("limit= raises the row count" if chosen
+                   else f"sections={section} lists them, limit= sets how many rows")
+            say(f"  … {total - shown} more {what}; {how}")
+
+    def callers_of(row) -> int:
+        return connection.execute(
+            "SELECT count(*) FROM edges WHERE module = ? AND callee = ?",
+            (row["module"], row["addr"])).fetchone()[0]
 
     say(f"# {cls} — subsystem closure")
     say()
     say(f"{len(fields)} fields, {len(methods)} methods. Generated from the corpus; the binary "
         f"was not read.")
     say()
-    say("## Fields")
-    say()
-    for row in fields:
-        say(f"  +0x{row['off']:05x}  {row['name']:38} {row['type']:14} {row['note']}")
-    say()
-    say("## Methods")
-    say()
-    for row in methods:
-        callers = connection.execute(
-            "SELECT count(*) FROM edges WHERE module = ? AND callee = ?",
-            (row["module"], row["addr"])).fetchone()[0]
-        say(f"  {row['addr']}  {row['name']:44} {row['cc']:12} "
-            f"{row['size']:6} bytes  callers={callers}")
-    say()
-    say("## Strings these methods reference")
-    say()
-    for row in methods:
-        referenced = connection.execute(
-            """SELECT s.text FROM string_refs r JOIN strings s
-               ON s.module = r.module AND s.addr = r.str_addr
-               WHERE r.module = ? AND r.func_addr = ?""",
-            (row["module"], row["addr"])).fetchall()
-        for one in referenced:
-            say(f"  {row['name']:40} {one['text'][:90]!r}")
-    say()
-    if with_code:
+    if "fields" in show:
+        say("## Fields")
+        say()
+        kept = fields if rows_each is None else fields[:rows_each]
+        for row in kept:
+            say(f"  +0x{row['off']:05x}  {row['name']:38} {row['type']:14} {row['note']}")
+        more(len(kept), len(fields), "field(s)", "fields")
+        say()
+    if "methods" in show:
+        say("## Methods")
+        say()
+        counts: dict[tuple[str, str], int] = {}
+        ordered = list(methods)
+        if brief and not chosen:
+            # The busiest are the ones worth a name in a summary, and "busiest" needs every count.
+            counts = {(row["module"], row["addr"]): callers_of(row) for row in ordered}
+            ordered.sort(key=lambda row: -counts[(row["module"], row["addr"])])
+            say(f"  (the {min(len(ordered), CLOSURE_BRIEF_ROWS)} busiest by caller count)")
+        kept = ordered if rows_each is None else ordered[:rows_each]
+        for row in kept:
+            check_deadline()
+            callers = counts.get((row["module"], row["addr"]))
+            if callers is None:
+                callers = callers_of(row)
+            say(f"  {row['addr']}  {row['name']:44} {row['cc']:12} "
+                f"{row['size']:6} bytes  callers={callers}")
+        more(len(kept), len(methods), "method(s)", "methods")
+        say()
+    if "strings" in show:
+        say("## Strings these methods reference")
+        say()
+        shown = total = 0
+        for row in methods:
+            check_deadline()
+            referenced = connection.execute(
+                """SELECT s.text FROM string_refs r JOIN strings s
+                   ON s.module = r.module AND s.addr = r.str_addr
+                   WHERE r.module = ? AND r.func_addr = ?""",
+                (row["module"], row["addr"])).fetchall()
+            for one in referenced:
+                total += 1
+                if rows_each is None or shown < rows_each:
+                    say(f"  {row['name']:40} {one['text'][:90]!r}")
+                    shown += 1
+        more(shown, total, "string reference(s)", "strings")
+        say()
+    if whole and with_code:
         say("## Decompilation")
         say()
         for row in methods:
+            found = connection.execute("SELECT code FROM functions WHERE module = ? AND addr = ?",
+                                       (row["module"], row["addr"])).fetchone()
             say(f"### {row['addr']}  {cls}::{row['name']}")
             say()
-            say(row["code"] or "// no decompilation in the corpus")
+            say((found["code"] if found else "") or "// no decompilation in the corpus")
             say()
     else:
-        say("Decompilation omitted; read one method with `corpus code <addr>`.")
+        say("Decompilation omitted; read one method with `code <addr>`"
+            + ("" if whole else " (`corpus closure --out` writes the whole class, C included)")
+            + ".")
         say()
 
     text = "\n".join(lines)
@@ -2617,8 +3179,12 @@ def main() -> int:
     build_parser = sub.add_parser("build", help="load the dumps into SQLite")
     build_parser.add_argument("program", nargs="*", default=[])
 
-    sub.add_parser("reindex", help="rebuild the search index and the virtual call graph from "
-                                   "rows already loaded — no dump is re-read")
+    reindex_parser = sub.add_parser(
+        "reindex", help="rebuild the search index and the virtual call graph from rows already "
+                        "loaded — no dump is re-read")
+    reindex_parser.add_argument("--search-only", action="store_true",
+                                help="rebuild only the search index (8 s); leave the call graph "
+                                     "and the names overlay as they are")
 
     sub.add_parser("stat", help="what the database holds")
 
@@ -2628,13 +3194,29 @@ def main() -> int:
                             ("twin", "the same function in another module")):
         one = sub.add_parser(name, help=help_text)
         one.add_argument("reference")
+        if name == "code":
+            one.add_argument("--from-line", type=int, default=1,
+                             help="first line of the page (the default page is 20 KB)")
+            one.add_argument("--lines", type=int, default=None, help="page length in lines")
+        elif name == "asm":
+            one.add_argument("--max-lines", type=int, default=ASM_LINES)
+            one.add_argument("--from", dest="start", default=None,
+                             help="a line number, or an address (0x... or 6+ hex digits)")
+            one.add_argument("--to", dest="end", default=None, help="likewise")
+        elif name in ("callers", "callees"):
+            one.add_argument("--limit", type=int, default=HOP_LIMIT,
+                             help="rows per section")
 
     vtable_parser = sub.add_parser("vtable", help="a class's slots, in order")
     vtable_parser.add_argument("cls")
+    vtable_parser.add_argument("--slots", default=None, help="430-450, 442, or 5,9,12-20")
+    vtable_parser.add_argument("--overridden-only", action="store_true",
+                               help="only the slots whose body is this class's own")
 
     slot_parser = sub.add_parser("slot", help="every class that fills a slot")
     slot_parser.add_argument("slot")
     slot_parser.add_argument("--module", default=None)
+    slot_parser.add_argument("--limit", type=int, default=SLOT_LIMIT)
 
     globals_parser = sub.add_parser("globals", help="a global and what touches it")
     globals_parser.add_argument("text")
@@ -2675,6 +3257,8 @@ def main() -> int:
     fields_parser = sub.add_parser("fields", help="a class's fields")
     fields_parser.add_argument("cls")
     fields_parser.add_argument("--offset", default=None)
+    fields_parser.add_argument("--range", dest="span", default=None, help="0x100-0x1ff")
+    fields_parser.add_argument("--name", default=None, help="fields whose name contains this")
 
     readers_parser = sub.add_parser("readers", help="every function that touches an offset")
     readers_parser.add_argument("offset")
@@ -2686,6 +3270,11 @@ def main() -> int:
     closure_parser.add_argument("--out", type=Path, default=None)
     closure_parser.add_argument("--no-code", action="store_true",
                                 help="structure only; leave the decompilation to `code`")
+    closure_parser.add_argument("--sections", default=None,
+                                help="fields, methods, strings (comma-separated)")
+    closure_parser.add_argument("--brief", action="store_true",
+                                help="counts and the busiest methods")
+    closure_parser.add_argument("--limit", type=int, default=None, help="rows per section")
 
     args = parser.parse_args()
     if args.command == "dump":
@@ -2705,21 +3294,21 @@ def main() -> int:
     if args.command == "build":
         return build(list(args.program) or list(PROGRAMS))
     if args.command == "reindex":
-        return reindex()
+        return reindex(args.search_only)
     if args.command == "stat":
         return command_stat()
     if args.command == "func":
         return command_func(args.reference)
     if args.command == "code":
-        return command_code(args.reference)
+        return command_code(args.reference, args.from_line, args.lines)
     if args.command == "asm":
-        return command_asm(args.reference)
+        return command_asm(args.reference, args.max_lines, args.start, args.end)
     if args.command == "twin":
         return command_twin(args.reference)
     if args.command == "vtable":
-        return command_vtable(args.cls)
+        return command_vtable(args.cls, args.slots, args.overridden_only)
     if args.command == "slot":
-        return command_slot(_offset(args.slot), args.module)
+        return command_slot(_offset(args.slot), args.module, args.limit)
     if args.command == "globals":
         return command_globals(args.text, args.limit)
     if args.command == "iface":
@@ -2734,16 +3323,18 @@ def main() -> int:
         return command_harvest(args.out, args.limit, args.max_distance,
                                tuple(p.strip() for p in args.passes.split(",") if p.strip()))
     if args.command in ("callers", "callees"):
-        return command_hop(args.reference, args.command)
+        return command_hop(args.reference, args.command, args.limit)
     if args.command == "grep":
         return command_grep(args.pattern, args.module, args.limit)
     if args.command == "str":
         return command_str(args.text, args.limit)
     if args.command == "fields":
-        return command_fields(args.cls, _offset(args.offset) if args.offset else None)
+        return command_fields(args.cls, _offset(args.offset) if args.offset else None,
+                              args.span, args.name)
     if args.command == "readers":
         return command_readers(_offset(args.offset), args.cls, args.limit)
-    return command_closure(args.cls, args.out, not args.no_code)
+    return command_closure(args.cls, args.out, not args.no_code, args.sections, args.brief,
+                           args.limit)
 
 
 if __name__ == "__main__":

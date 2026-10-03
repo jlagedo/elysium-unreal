@@ -239,6 +239,7 @@ def test_detail_records_map_to_instanced_placements_in_lump_order():
 
 
 @pytest.mark.parametrize("map_name", WORKING_MAPS)
+@pytest.mark.corpus
 def test_reader_places_every_detail_record_of_the_root_unit(map_name):
     unit = MG.sidecars.unit_paths(map_name)["root"]
     if not unit.is_file():
@@ -434,6 +435,7 @@ def test_material_report_classifies_animation_and_appearance_class_from_provenan
 
 
 @pytest.mark.parametrize("map_name", WORKING_MAPS)
+@pytest.mark.corpus
 def test_every_face_group_on_the_working_corpus_resolves_a_staged_and_imported_instance(map_name):
     unit = MG.sidecars.unit_paths(map_name)["root"]
     if not unit.is_file():
@@ -510,6 +512,7 @@ def test_cubemap_sample_takes_the_placement_frame_and_the_sky_area_rule():
 
 
 @pytest.mark.parametrize("map_name", WORKING_MAPS)
+@pytest.mark.corpus
 def test_reader_stands_one_capture_per_lump_42_sample_on_the_working_corpus(map_name):
     unit = MG.sidecars.unit_paths(map_name)["root"]
     if not unit.is_file():
@@ -797,6 +800,7 @@ WATER_CORPUS = (
 
 
 @pytest.mark.parametrize("map_name,surface_z_cm,material,brush_count", WATER_CORPUS)
+@pytest.mark.corpus
 def test_water_volumes_on_the_exported_corpus(map_name, surface_z_cm, material, brush_count):
     unit = MG.sidecars.unit_paths(map_name)["root"]
     if not unit.is_file():
@@ -1262,6 +1266,7 @@ def _water_corpus(map_name):
 
 
 @pytest.mark.parametrize("map_name", sorted(WATER_MAP_PINS))
+@pytest.mark.corpus
 def test_the_water_face_split_on_the_exported_corpus(map_name):
     pins = WATER_MAP_PINS[map_name]
     geometry, _volumes = _water_corpus(map_name)
@@ -1306,6 +1311,7 @@ def test_the_water_face_split_on_the_exported_corpus(map_name):
 
 
 @pytest.mark.parametrize("map_name", sorted(WATER_MAP_PINS))
+@pytest.mark.corpus
 def test_the_water_volume_rows_on_the_exported_corpus(map_name):
     pins = WATER_MAP_PINS[map_name]
     _geometry, volumes = _water_corpus(map_name)
@@ -1359,6 +1365,7 @@ _LEAF_NEAR_WATER_BIT = 0x200
 
 
 @pytest.mark.parametrize("map_name", sorted(WATER_MAP_PINS))
+@pytest.mark.corpus
 def test_the_pvs_union_reproduces_vtmbs_own_near_water_annotation(map_name):
     """G9/G23. The derivation is the contract because the leaf bit is not always there: it is
     set-equal to the annotation on the two maps that carry it, and it is the only answer on

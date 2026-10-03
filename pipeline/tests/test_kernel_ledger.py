@@ -9,16 +9,12 @@ during story 25a against the generated tables, and skip when the corpus is not o
 
 from __future__ import annotations
 
-import os
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
 
-# `kernel_ledger` imports `corpus`, which resolves the work root as it loads; an existing
-# directory is all the import needs, and nothing here reads it unless the corpus is present.
-os.environ.setdefault("ELYSIUM_WORK_ROOT", tempfile.gettempdir())
+import _kernel_build
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "research" / "tooling" / "ghidra" / "driver"))
@@ -275,22 +271,14 @@ def test_bodies_packs_split_on_rows_and_on_size():
     assert list(packs) == [f"band-0-9-pack-{n:02d}.md" for n in (1, 2, 3)]
 
 
-# --- against the real corpus -----------------------------------------------------------------
+# --- against the real corpus (opt in: `pytest -m corpus`) ------------------------------------
 
-def _corpus_present() -> bool:
-    try:
-        return (kl.corpus._corpus_dir() / "corpus.sqlite").is_file()
-    except Exception:  # noqa: BLE001 -- no work root on this machine
-        return False
-
-
-@pytest.fixture(scope="module")
+@pytest.fixture
 def ledger():
-    if not _corpus_present():
-        pytest.skip("the Ghidra corpus is not on this machine")
-    return kl.build(kl.MODULE, kl.DEFAULT_DEPTH, REPO)
+    return _kernel_build.ledger()   # one build per process, shared with the shape's tests
 
 
+@pytest.mark.corpus
 def test_clear_schedule_has_twelve_callers(ledger):
     # `ClearSchedule 0x10280d30`, reached through thunk `0x10006a8c` (story 25a).
     callers = ledger.all_callers["10280d30"]
@@ -300,6 +288,7 @@ def test_clear_schedule_has_twelve_callers(ledger):
     }
 
 
+@pytest.mark.corpus
 def test_slot_420_is_npcinit(ledger):
     bodies = ledger.slot_bodies[420]
     assert bodies["CAI_BaseNPC"] == "10273390"
@@ -307,11 +296,13 @@ def test_slot_420_is_npcinit(ledger):
     assert bodies["CNPC_VCamera"] == "103692c0"
 
 
+@pytest.mark.corpus
 def test_slot_379_troika_override(ledger):
     assert ledger.slot_bodies[379]["CAI_BaseNPCTroika"] == "102b5c00"
     assert ledger.slot_bodies[379]["CAI_BaseNPC"] == "1026cdc0"
 
 
+@pytest.mark.corpus
 def test_save_position_walk_flag(ledger):
     # `m_fSavePositionWalk +0x63e0`: read by `GetSchedule 0x102ae920`, written by the spawner's
     # helper `0x102ae8e0` (outside the closure: an untyped touch) and reset by NPCInit/TaskFail.
@@ -321,6 +312,7 @@ def test_save_position_walk_flag(ledger):
     assert "102ae8e0" in ledger.other_touches[0x63E0]
 
 
+@pytest.mark.corpus
 def test_ideal_schedule_name_and_clear_schedule_writes(ledger):
     assert ledger.fields[0x5C3C]["name"] == "m_IdealSchedule"
     clear = ledger.functions["10280d30"]
@@ -328,6 +320,7 @@ def test_ideal_schedule_name_and_clear_schedule_writes(ledger):
     assert clear.guessed  # `__fastcall` body: the receiver is `param_1`
 
 
+@pytest.mark.corpus
 def test_queued_burn_producer_is_a_species_offset(ledger):
     # `+0x65a8` is not a Troika datamap field; the corpus sees Troika's grapple entry and
     # `RunTask` touch it through `this`.
@@ -336,6 +329,7 @@ def test_queued_burn_producer_is_a_species_offset(ledger):
     assert 0x65A8 in touchers
 
 
+@pytest.mark.corpus
 def test_family_and_layers(ledger):
     assert len(ledger.family) == 77
     assert "CAI_BaseNPCTroika" in ledger.family and "CNPC_VCamera" in ledger.family
@@ -345,6 +339,7 @@ def test_family_and_layers(ledger):
     assert sum(len(c) for layer in ledger.layers for c in layer) == len(ledger.closure)
 
 
+@pytest.mark.corpus
 def test_vtable_tail_past_the_dump_bound(ledger):
     # `DumpVtables.java` used to stop at 600; Troika's primary table holds 617 and
     # CNPC_VTzimisce's 628. The tail entries are JMP thunks the dump resolves to their bodies.
@@ -355,6 +350,7 @@ def test_vtable_tail_past_the_dump_bound(ledger):
     assert ("CAI_BaseNPCTroika", 614) in ledger.functions["102c23f0"].slots
 
 
+@pytest.mark.corpus
 def test_field_types_come_from_the_datamap(ledger):
     if not ledger.field_types:
         pytest.skip("the datamap records are not on this machine")
@@ -363,6 +359,7 @@ def test_field_types_come_from_the_datamap(ledger):
     assert ledger.field_types[0x159C] == "int"          # an image record the builder replay lacks
 
 
+@pytest.mark.corpus
 def test_check_mode_matches_committed_tables(ledger):
     out = REPO / "docs" / "vtmb" / "npc-kernel"
     if not (out / "functions.md").is_file():
@@ -370,6 +367,7 @@ def test_check_mode_matches_committed_tables(ledger):
     assert kl.emit(ledger.render(), out, check=True) == 0
 
 
+@pytest.mark.corpus
 def test_own_bodies_are_the_vtable_diff(ledger):
     # 0019 story 5 commit B: own bodies are the class's primary vtable diffed against its direct
     # base's, not a count of bodies Ghidra happened to name on the class. The three folds of commit

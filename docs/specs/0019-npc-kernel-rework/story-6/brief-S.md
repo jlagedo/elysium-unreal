@@ -23,7 +23,7 @@ does not carry yet:
    `GetGroundVelocityToApply` rows (`ElysiumEntitySlotBodies.cpp:496,527,772,785`, whose
    "Unreal service" is "UCharacterMovementComponent floor test via the 0018/5 movement seam").
    Retail's ground question is `CAI_BaseNPC::CheckOnGround` (`0x1027b8a0`-area; read
-   `docs/vtmb/npc-kernel/functions.md` for the exact address and `docs/vtmb/npc-ai/index.md`
+   `docs/vtmb/npc-kernel/functions.md` for the exact address and `docs/vtmb/npc-kernel/index.md`
    for its section): it asks "is there ground under the hull within the step height, and what
    entity is it". The seam answers: `bOnGround`, `GroundEntityHandle` (an `FElysiumEntityHandle`
    or the id type the motor already uses for the enemy/target), `FloorNormal`, `FloorDistance`,

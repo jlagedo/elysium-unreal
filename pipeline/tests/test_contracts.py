@@ -32,6 +32,7 @@ def test_source_to_unreal_contract() -> None:
     assert bsp.source_dir_to_unreal(1.0, 2.0, 3.0) == (1.0, -2.0, 3.0)
 
 
+@pytest.mark.corpus
 def test_coordinate_owners_are_unique() -> None:
     definitions: list[Path] = []
     for root in (REPO / "pipeline/src", REPO / "pipeline/unreal"):

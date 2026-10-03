@@ -59,8 +59,15 @@ A reported defect is a question about VtMB, never a request for a patch.
 - Before changing code, recover what retail does. For an NPC question start from the
   kernel ledger, `docs/vtmb/npc-kernel/` (`functions.md`, `fields.md`, `slots.md`,
   `entries.md`: what a function touches, who writes a field, who fills a slot, who calls in
-  from outside), then the walked prose in `docs/vtmb/npc-ai/` (`index.md` maps an address to
-  its section), then the `vtmb-corpus` decompilation for what neither holds. Cite addresses.
+  from outside), then the walked prose in `docs/vtmb/npc-ai/`, then the `vtmb-corpus`
+  decompilation for what neither holds. Cite addresses.
+- Look an address, name, field or slot up before searching `docs/` for it: the `vtmb_where`
+  tool, or `uv run elysium research where 0x1028a380 m_scriptState "slot 442"`,
+  answers in under a second with its ledger rows, its `docs/vtmb` sections (file, heading,
+  line) and the port lines that cite it. `research section <addr|name>` prints just the
+  doc section about it, `research verdict <addr>` its porting verdict, `research cited
+  --table unported.tsv` what the port never cites, `research rows <table.tsv> col=value`
+  any `.tsv`. Do not grep `functions.md` or read a checklist whole.
 - Compare the whole retail behaviour against the port. The deliverable is the port of
   that behaviour: every arm, every state it reads, its priority order, and what it
   writes — with the substrate sources it needs (senses, navigator, sounds, memory)

@@ -106,6 +106,7 @@ def test_the_flagged_totals_are_gated():
     assert census.verdict(exact) == []
 
 
+@pytest.mark.corpus
 def test_the_published_hub_matrix():
     pytest.importorskip("elysium_pipeline.paths")
     from elysium_pipeline import paths

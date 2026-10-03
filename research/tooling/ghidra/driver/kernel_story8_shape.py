@@ -693,6 +693,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="verify; write nothing")
     args = parser.parse_args(argv)
     repo = repo_root()
+    if args.check:
+        return kl.kernel_cache.stamped("kernel_story8_shape", vars(args), repo, lambda: _main(args, repo))
+    return _main(args, repo)
+
+
+def _main(args: argparse.Namespace, repo: Path) -> int:
     files, skipped, forwards, spines, flipped = plan(repo)
     stale = []
     for path, text in sorted(files.items()):

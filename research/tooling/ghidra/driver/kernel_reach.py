@@ -90,11 +90,23 @@ def population(rows: list[dict], factories: dict[str, str]) -> Population:
     return pop
 
 
+def entities_path(map_name: str) -> Path:
+    return export_v2_root() / "maps" / f"{map_name}.entities.glb"
+
+
+def inputs(repo: Path, maps: list[str]) -> list[Path]:
+    """What a cut of `maps` reads beyond the ledger's own inputs: each map's published entities
+    and the deployed schedule corpus (`kernel_cache.stamped` fingerprints them)."""
+    if not maps:
+        return []
+    return [*(entities_path(m) for m in maps), repo.joinpath(*SCHEDULE_CORPUS)]
+
+
 def read_map_entities(map_name: str) -> list[dict]:
     from elysium_pipeline.formats.map_entities_glb.model import MAP_ENTITIES_EXTENSION
     from elysium_pipeline.formats.unit_contract import read_glb
 
-    path = export_v2_root() / "maps" / f"{map_name}.entities.glb"
+    path = entities_path(map_name)
     if not path.is_file():
         raise SystemExit(f"kernel_reach: no published entities for {map_name!r} ({path})")
     document, _ = read_glb(path)

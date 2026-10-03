@@ -9,6 +9,9 @@ import subprocess
 import sys
 from elysium_pipeline.paths import research_root
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "compiles the pose hook DLL and its injector (cl.exe)"
+
 
 ROOT = Path(__file__).resolve().parent
 SOURCE = ROOT

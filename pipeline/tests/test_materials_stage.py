@@ -1401,6 +1401,7 @@ def test_decal_master_exposed_params_pinned_against_cpp_header():
 # --- UNIT_DIVERGENCES stays honest against the real corpus -----------------------------------------
 
 
+@pytest.mark.corpus
 def test_unit_divergences_key_every_real_unit_and_are_actually_used():
     """Every `UNIT_DIVERGENCES` key names a real corpus unit, and every one of its per-unit VMT
     keys was actually consumed (recorded in that unit's own `omissions`) the last time the real

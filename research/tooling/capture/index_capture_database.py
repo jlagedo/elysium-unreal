@@ -48,6 +48,9 @@ from research.tooling.capture.resolve_consumed_spans import file_sha256, tool_co
 from research.tooling.capture.verify_capture_integrity import _tools, aggregate
 from research.tooling.capture.verify_capture_index import spine as spine_coverage
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "builds a capture database's spine tables"
+
 
 INDEX_VERSION = 1
 

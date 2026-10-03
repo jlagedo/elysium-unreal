@@ -12,12 +12,9 @@ from __future__ import annotations
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
-
-os.environ.setdefault("ELYSIUM_WORK_ROOT", tempfile.gettempdir())
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "research" / "tooling"))
@@ -144,12 +141,12 @@ def test_an_absent_row_is_recorded_not_generated():
     assert model.saved == [] and [r.name for r in model.save_unbound] == ["m_vecLastOccludeOrigin"]
 
 
-REPLAY = Path(os.environ.get("ELYSIUM_WORK_ROOT", "")) / "research/ghidra/types/datamap_records-vampire.dll.json"
-
-
-@pytest.mark.skipif(not REPLAY.is_file(), reason="the datamap replay is not on this machine")
+@pytest.mark.corpus
 def test_the_committed_species_map_answers_every_species_field():
-    data = json.loads(REPLAY.read_text(encoding="utf-8"))
+    replay = Path(os.environ.get("ELYSIUM_WORK_ROOT", "")) / "research/ghidra/types/datamap_records-vampire.dll.json"
+    if not replay.is_file():
+        pytest.skip("the datamap replay is not on this machine")
+    data = json.loads(replay.read_text(encoding="utf-8"))
     species = gkb.parse_species_map(REPO.joinpath(*gkb.SPECIES_SHAPE_MAP).read_text(encoding="utf-8"))
     models = {t: gkb.classify_species(gkb.species_binding(t), t, data, species)
               for t in gkb.SPECIES_TABLES}

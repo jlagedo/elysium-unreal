@@ -27,6 +27,7 @@ def _texture(key):
     return {"assetPath": f"/ElysiumBaked/Textures/particles/T_{stem}", "width": 64, "height": 32}
 
 
+@pytest.mark.corpus
 def test_fire2_emitter_stages_to_its_two_live_leaves_and_barrelfireemitter_resolves():
     try:
         root = paths.export_v2_root()
@@ -94,6 +95,7 @@ def test_fire2_emitter_stages_to_its_two_live_leaves_and_barrelfireemitter_resol
 # --- water-complete Phase 0 F1/F2/F3: the four splash/drip roots resolve, sprites bound ----------
 
 
+@pytest.mark.corpus
 def test_the_four_water_splash_and_drip_roots_stage_with_their_sprite_leaves():
     """`water-complete.md` owner decision 5 / Phase 0 verdicts F1-F3: the water-entry splash pair
     (`waterbigsplash_emitter`, `watersplash_emitter`), the hub's A2 archetype

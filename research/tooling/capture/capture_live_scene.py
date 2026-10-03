@@ -23,6 +23,13 @@ from research.tooling.capture.generated_binary_profiles import (
     target as profile_target,
 )
 
+# Read by `elysium research`: these modes are runs, not queries, so the 10 s / 60 s budget skips them;
+# every other invocation is a query under it.
+RESEARCH_NOT_A_QUERY = {
+    "start": "builds and injects the live scene hook and waits for it",
+    "stop": "waits for the live scene hook to finish",
+}
+
 
 ROOT = Path(__file__).resolve().parent
 OUTPUT_ROOT = research_root() / "live-pose"

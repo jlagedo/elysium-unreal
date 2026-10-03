@@ -11,6 +11,9 @@ import sqlite3
 import struct
 from typing import BinaryIO, Iterator
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "builds a capture session's SQLite database from its trace streams"
+
 
 POSE_FILE_HEADER = struct.Struct("<8sIIQqIIIII65s11s")
 POSE_RECORD_HEADER = struct.Struct("<4sIQqIIIIII5I64s3II32s")

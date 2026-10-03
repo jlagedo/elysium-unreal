@@ -121,6 +121,7 @@ def test_unit_exists_in_the_corpus(entry):
 
 
 @pytest.mark.parametrize("entry", _load_entries(), ids=lambda entry: entry["label"])
+@pytest.mark.corpus
 def test_material_is_an_asset_path_in_the_manifest(entry):
     asset_paths = _manifest_asset_paths()
     if asset_paths is None:
@@ -131,6 +132,7 @@ def test_material_is_an_asset_path_in_the_manifest(entry):
     )
 
 
+@pytest.mark.corpus
 def test_set_covers_at_least_two_instance_of_instance_entries():
     """The stronger form of `test_set_covers_at_least_two_patched_map_instances`: not just a
     `maps/`-prefixed unit, but one the manifest itself records as `patched` with its `parent` a

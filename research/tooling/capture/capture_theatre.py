@@ -59,6 +59,9 @@ from research.tooling.capture.retail_capture_native import (
     run as run_native,
 )
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "launches the retail game and captures a theatre session"
+
 
 PRE_MAP_WAITS = 180
 # A property of retail_launcher.cpp's --timeout-ms ceiling, not of any scene.

@@ -22,6 +22,9 @@ import time
 from pathlib import Path
 from elysium_pipeline.paths import repo_root, research_root
 
+# Read by `elysium research`: a context pack is a serialized series of headless Ghidra runs.
+RESEARCH_NOT_A_QUERY = "drives headless Ghidra (DumpFuncs / DumpAsm / DumpXrefs per seed)"
+
 
 KINDS = ("funcs", "asm", "xrefs", "fields", "vtables", "datamaps", "consts", "grep")
 

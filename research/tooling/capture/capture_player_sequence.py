@@ -26,6 +26,9 @@ import psutil
 
 from elysium_pipeline.paths import research_root, vtmb_root
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "launches the retail game and a collector and captures a sequence"
+
 
 DEFAULT_MODEL = (
     "models/character/pc/male/tremere/armor0/tremere_Male_Armor_0.mdl"

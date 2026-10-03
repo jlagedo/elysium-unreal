@@ -90,6 +90,7 @@ def test_vectorized_keeps_channel_membership_and_diagnostics(geometry_fixture, c
             assert "morph" in result["reason"]
 
 
+@pytest.mark.corpus
 def test_outcomes_match_the_pinned_preoptimization_scalar_reader(geometry_fixture):
     root = Path("E:/elysium-work/_r8_explore/agents/geometry/performance")
     path = root / "native_geometry_before_vectorization.py"

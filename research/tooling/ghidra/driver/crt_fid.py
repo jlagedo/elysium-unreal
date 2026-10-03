@@ -34,6 +34,10 @@ from pathlib import Path
 
 from elysium_pipeline.paths import cache_root, repo_root, research_root
 
+# Read by `elysium research`: staging and building a FID database and applying it are runs
+# (headless Ghidra over every COFF member), not queries.
+RESEARCH_NOT_A_QUERY = "builds and applies a Ghidra FID database (headless Ghidra)"
+
 GHIDRA_DIR_NAME = "ghidra_12.1.2_PUBLIC"
 SOURCE_ARCHIVE = "vc6sp5-lib.zip"
 LOCK_DELAY_SECONDS = 9.0

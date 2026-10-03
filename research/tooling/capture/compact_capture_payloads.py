@@ -38,6 +38,9 @@ from research.tooling.capture.calibrate_theatre_capture import (
 )
 from research.tooling.capture.resolve_consumed_spans import file_sha256, tool_commit
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "rewrites a capture database's payloads into a content-addressed store"
+
 
 COMPACT_VERSION = 1
 EVENT_TABLE = "record_events"

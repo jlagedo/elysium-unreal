@@ -32,6 +32,9 @@ from pathlib import Path
 
 from elysium_pipeline.paths import research_root
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "replays every static-init function and writes the datamap records"
+
 REC = 0x2C
 FT = {0: "void", 1: "float", 2: "string", 3: "vector", 4: "int", 5: "bool", 6: "short",
       7: "char", 8: "color32", 9: "embedded", 10: "custom", 11: "classptr", 12: "ehandle",

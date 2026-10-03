@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 from collections import Counter, deque
-from contextlib import contextmanager, nullcontext, redirect_stdout
+from contextlib import ExitStack, contextmanager, nullcontext, redirect_stdout
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import importlib.util
@@ -17,7 +18,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 import typer
 from rich.console import Console
@@ -30,10 +31,15 @@ from elysium_pipeline.dependencies import (
     load_project_lock,
     sync_dependencies,
 )
-from elysium_pipeline.process import ProcessFailure, ProcessRunner
+from elysium_pipeline.process import ProcessFailure, ProcessRunner, ProcessTimeout
 from elysium_pipeline.reporting import ExitCode, RunReport
 from elysium_pipeline.validation import nav_gate
-from elysium_pipeline.workspace_lock import WorkspaceLease, assert_project_idle
+from elysium_pipeline.workspace_lock import (
+    DEFAULT_WAIT_SECONDS,
+    POLL_SECONDS,
+    WorkspaceLease,
+    assert_project_idle,
+)
 
 
 console = Console()
@@ -89,6 +95,8 @@ class CliState:
     #: Writes one line into this run's log. Set by `_execute` while the handle is open, so a
     #: command's own verdict lands in the record as well as on the console.
     log_sink: Callable[[str], None] | None = None
+    #: `--no-wait`: a held lease refuses the command at once instead of being waited for.
+    no_wait: bool = False
 
     def resolve(
         self,
@@ -682,6 +690,58 @@ def _emit_json(
     typer.echo(json.dumps(envelope, indent=2, sort_keys=True, default=str))
 
 
+def _duration(seconds: float) -> str:
+    """`46.2s` under a minute, `3m12s` after."""
+
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes, rest = divmod(int(seconds), 60)
+    return f"{minutes}m{rest:02d}s"
+
+
+#: How often a command waiting for a held lease looks at it again.
+LEASE_POLL_SECONDS = POLL_SECONDS
+
+
+def _wait_seconds(state: CliState) -> float:
+    """How long a held lease is waited for: the default bound, or none under `--no-wait`."""
+
+    refuse = state.no_wait or os.environ.get("ELYSIUM_NO_WAIT", "").strip().lower() not in (
+        "", "0", "false", "no", "off")
+    return 0.0 if refuse else DEFAULT_WAIT_SECONDS
+
+
+@contextmanager
+def _leases(
+    config: ProjectConfig,
+    name: str,
+    *,
+    checkout: bool,
+    export: bool,
+    wait_seconds: float,
+    announce: Callable[[str], None],
+):
+    """The leases one command holds for its whole run, taken in a fixed order.
+
+    The checkout's first, the export root's second, and never the other way round, so two commands
+    that each need both cannot wait on each other. Each is waited for up to `wait_seconds` (none
+    refuses at once) and `announce` is told, once per lease, who is being waited for.
+    """
+
+    options = {
+        "wait_seconds": wait_seconds,
+        "poll_seconds": LEASE_POLL_SECONDS,
+        "on_wait": announce,
+    }
+    with ExitStack() as stack:
+        if checkout:
+            stack.enter_context(WorkspaceLease.for_checkout(config.repo_root, name, **options))
+        if export and config.export_root is not None:
+            stack.enter_context(
+                WorkspaceLease(config.export_root, name, config.repo_root, **options))
+        yield
+
+
 def _execute(
     state: CliState,
     name: str,
@@ -692,7 +752,21 @@ def _execute(
     require_work: bool = True,
     require_ue: bool = False,
     activity: bool = False,
+    checkout: bool = False,
+    verdict: bool = False,
+    answer: bool = False,
 ) -> Any:
+    """Run one command with its log, its report, its leases and its exit code.
+
+    `activity` takes the export-root lease, the one every checkout shares, for a command that
+    writes exports or bakes; one that also needs Unreal (`require_ue`) takes its checkout's lease
+    as well, because an editor holds that checkout's binaries. `checkout` takes only the checkout's
+    lease, for a command that runs or builds the checkout's own binaries (`build`, `test`, `run`)
+    and writes nothing the other checkouts read. A held lease is waited for (30 minutes, naming the
+    holder) unless `--no-wait`. `verdict` ends the output with one line: result, duration, exit code.
+    `answer` prints the child's output unfiltered, for a command whose output is its result.
+    """
+
     report = RunReport(command=name, arguments=sys.argv[1:])
     state.payload.clear()
     # In JSON mode stdout belongs to the envelope alone, so the child echo, the progress
@@ -733,7 +807,9 @@ def _execute(
         # without the tee an action's bare `print()` lands in front of it. `doctor --repo-only`
         # is exactly that shape -- it needs no work root, so it has no log root either.
         if log_handle is not None or state.json_output:
-            if state.verbose:
+            # `answer`: the child's output IS the command's result (a research lookup), so every
+            # line reaches the console as `--verbose` would put it; the log still keeps them all.
+            if state.verbose or answer:
                 sink = signal_sink = lambda line: out.print(
                     line, markup=False, soft_wrap=True)
             else:
@@ -745,16 +821,20 @@ def _execute(
             log=log_handle,
             output_sink=sink,
         )
-        lease = nullcontext()
-        if activity:
-            assert_project_idle(config.project)
-            if config.export_root is not None:
-                lease = WorkspaceLease(
-                    config.export_root,
-                    name,
-                    config.repo_root,
-                )
-        with lease:
+
+        def announce(text: str) -> None:
+            if state.log_sink is not None:
+                state.log_sink(text)
+            out.print(text, markup=False, soft_wrap=True)
+
+        holds_binaries = checkout or (activity and require_ue)
+        with (_leases(config, name, checkout=holds_binaries, export=activity,
+                      wait_seconds=_wait_seconds(state), announce=announce)
+              if activity or checkout else nullcontext()):
+            # After the leases, not before: a holder that just released took its editor down with
+            # it, so what is left standing is something this checkout did not start.
+            if activity or checkout:
+                assert_project_idle(config.project)
             with (nullcontext() if sink is None
                   else _teed_stdout(log_handle, sink, signal_sink)):
                 result = action(config, runner)
@@ -844,6 +924,12 @@ def _execute(
             out.print(f"[dim]run report: {report_path}[/dim]", soft_wrap=True)
         if log_path:
             out.print(f"[dim]log: {log_path}[/dim]", soft_wrap=True)
+        if verdict:
+            line = _verdict_line(name, failed, code, time.monotonic() - before,
+                                 child_echo.counts() if child_echo is not None else {})
+            if state.log_sink is not None:
+                state.log_sink(line)
+            out.print(line, markup=False, soft_wrap=True)
     finally:
         state.log_sink = None
         if log_handle is not None:
@@ -853,6 +939,17 @@ def _execute(
     if failed:
         raise typer.Exit(code)
     return result
+
+
+def _verdict_line(name: str, failed: bool, code: int, seconds: float,
+                  counts: dict[str, int]) -> str:
+    """The last line of a command that opts in: what it did, how long it took, what it exits."""
+
+    head = f"{name} FAILED (exit {code}) in {_duration(seconds)}" if failed else (
+        f"{name} ok in {_duration(seconds)}")
+    notes = [f"{counts[key]} {key.rstrip('s')}(s)" for key in ("errors", "warnings")
+             if counts.get(key)]
+    return head + (" -- " + ", ".join(notes) if notes else "")
 
 
 def _shared_cache_root(config: ProjectConfig) -> Path | None:
@@ -1039,7 +1136,18 @@ def build_command(
     clean: bool = typer.Option(False, "--clean"),
     analyze: bool = typer.Option(False, "--analyze"),
     json_output: bool = typer.Option(False, "--json"),
+    no_wait: bool = typer.Option(
+        False, "--no-wait",
+        help="Refuse at once (exit 8) if another command holds this checkout, instead of waiting."),
 ) -> None:
+    """Build the editor target; blocks until it ends and finishes with one verdict line.
+
+    A command holding this checkout's binaries (a test, a play session, a build) is waited for, up to 30 minutes, with the holder named; `--no-wait` refuses (exit 8) instead.
+
+    Exit codes: 0 built, 4 the build failed or was killed, 8 refused or gave up waiting, 2 bad usage.
+
+    Run it in the foreground, or in the background and wait for the notification; there is nothing to poll.
+    """
     selected = [
         name for name, enabled in (
             ("rebuild", rebuild),
@@ -1052,6 +1160,7 @@ def build_command(
     mode = selected[0] if selected else ""
     state = _state(ctx)
     state.json_output = json_output
+    state.no_wait = no_wait
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal
@@ -1071,7 +1180,8 @@ def build_command(
         ExitCode.BUILD,
         action,
         require_ue=True,
-        activity=True,
+        checkout=True,
+        verdict=True,
     )
 
 
@@ -1096,7 +1206,7 @@ def ide_clangd(ctx: typer.Context) -> None:
         ExitCode.BUILD,
         action,
         require_ue=True,
-        activity=True,
+        checkout=True,
     )
 
 
@@ -3728,22 +3838,103 @@ def blender_report(
     _execute(state, "blender report", ExitCode.VALIDATION, action, activity=True)
 
 
+def _test_summary_lines(summary: dict, *, failure_limit: int = 12) -> list[str]:
+    """The per-prefix result of an automation run, and every failed test by name.
+
+    One screen: a line per prefix (its verdict, counts and time), then the failures with the first
+    error each logged and where it was raised, capped so a broken run cannot scroll the verdict away.
+    """
+
+    lines: list[str] = []
+    rows = summary.get("prefixes") or []
+    width = max((len(row["prefix"]) for row in rows), default=0)
+    for row in rows:
+        verdict = "FAIL " if row["failed"] else ("EMPTY" if not row["total"] else "ok   ")
+        counts = (f"{row['total']} test(s), {row['failed']} failed, {row['abstained']} abstained,"
+                  f" {row['seconds']:.1f}s" if row["total"] else "matched no test")
+        lines.append(f"  {verdict} {row['prefix']:<{width}}  {counts}")
+    failures = summary.get("failures") or []
+    for failure in failures[:failure_limit]:
+        detail = f": {failure['message'][:160]}" if failure.get("message") else ""
+        where = f" ({failure['where']})" if failure.get("where") else ""
+        lines.append(f"    FAILED {failure['name']}{detail}{where}")
+    if len(failures) > failure_limit:
+        lines.append(f"    ... and {len(failures) - failure_limit} more failed; the report names them")
+    for name in (summary.get("abstentions") or [])[:8]:
+        lines.append(f"    abstained: {name}")
+    if len(summary.get("abstentions") or []) > 8:
+        lines.append(f"    ... and {len(summary['abstentions']) - 8} more abstained")
+    if summary.get("report_path"):
+        lines.append(f"  automation report: {summary['report_path']}")
+    return lines
+
+
+def _test_payload(summary: dict) -> dict[str, Any]:
+    """What `--json` carries for a test run, on the failing path as well as the passing one."""
+
+    return {
+        "filter": "+".join(row["prefix"] for row in summary.get("prefixes") or []),
+        "total": summary["total"],
+        "executed": summary["executed"],
+        "abstained": summary["abstained"],
+        "failed": summary["failed"],
+        "seconds": summary["seconds"],
+        "abstentions": summary["abstentions"],
+        "failures": summary.get("failures", []),
+        "prefixes": summary.get("prefixes", []),
+        "automation_report": summary.get("report_path"),
+    }
+
+
 @app.command("test")
 def test_command(
     ctx: typer.Context,
-    filter_name: str = typer.Argument("Elysium."),
+    filters: list[str] = typer.Argument(
+        None,
+        help="Automation test prefixes or tier names (default `Elysium.`). Every prefix runs in "
+             "ONE editor boot and gets its own line in the summary.",
+    ),
     stems: list[str] = typer.Option(
         None, "--stem", help="Widen the per-model parity slice (repeatable)."
     ),
     json_output: bool = typer.Option(False, "--json"),
+    no_wait: bool = typer.Option(
+        False, "--no-wait",
+        help="Refuse at once (exit 8) if another command holds this checkout, instead of waiting."),
 ) -> None:
+    """Run automation tests in one editor boot; blocks until done and prints a summary.
+
+    `elysium test A B C` runs the three prefixes in ONE boot (about 19 s around well under a second of tests) and reports each, then every failed test by name with its first error.
+
+    A command holding this checkout's binaries is waited for, up to 30 minutes, with the holder named; `--no-wait` refuses (exit 8) instead.
+
+    Exit codes: 0 every prefix ran and passed, 7 a test failed or a prefix matched nothing, 6 the editor run itself failed (crash, hang, no report), 8 refused or gave up waiting, 2 bad usage.
+    """
+
     state = _state(ctx)
     state.json_output = json_output
+    state.no_wait = no_wait
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal
 
-        summary = unreal.run_tests(config, runner, filter_name, parity_stems=stems or ())
+        def show(summary: dict) -> None:
+            state.payload.update(_test_payload(summary))
+            for line in _test_summary_lines(summary):
+                if state.log_sink is not None:
+                    state.log_sink(line)
+                if not json_output:
+                    console.print(line, markup=False, soft_wrap=True)
+
+        try:
+            summary = unreal.run_tests(
+                config, runner, filters or ["Elysium."], parity_stems=stems or ())
+        except unreal.UnrealFailure as failure:
+            # The run failed on its verdict: the summary is the answer, so it is shown before the
+            # error line rather than left inside the exception.
+            if failure.summary is not None:
+                show(failure.summary)
+            raise
         # A test that declines to run still reports Success, so the executed count is the only
         # honest measure of what a green tier covered.
         _summary(
@@ -3752,21 +3943,11 @@ def test_command(
             f" in {summary['seconds']:.1f}s"
             + (f"; {summary['abstained']} abstained (prerequisite unavailable)"
                if summary["abstained"] else ""),
-            filter=filter_name,
-            total=summary["total"],
-            executed=summary["executed"],
-            abstained=summary["abstained"],
-            failed=summary["failed"],
-            seconds=summary["seconds"],
-            abstentions=summary["abstentions"],
-            automation_report=summary["report_path"],
+            **_test_payload(summary),
         )
         if not json_output:
-            console.print(f"automation report: {summary['report_path']}", soft_wrap=True)
-            for name in summary["abstentions"][:8]:
-                console.print(f"  abstained: {name}")
-            if len(summary["abstentions"]) > 8:
-                console.print(f"  ... and {len(summary['abstentions']) - 8} more")
+            for line in _test_summary_lines(summary):
+                console.print(line, markup=False, soft_wrap=True)
 
     _execute(
         state,
@@ -3774,24 +3955,39 @@ def test_command(
         ExitCode.VALIDATION,
         action,
         require_ue=True,
-        activity=True,
+        checkout=True,
+        verdict=True,
     )
 
 
 @run_app.command("editor", context_settings=PASSTHROUGH)
-def run_editor(ctx: typer.Context, extra: list[str] = typer.Argument(None)) -> None:
+def run_editor(
+    ctx: typer.Context,
+    extra: list[str] = typer.Argument(None),
+    no_wait: bool = typer.Option(
+        False, "--no-wait",
+        help="Refuse at once (exit 8) if another command holds this checkout, instead of waiting."),
+) -> None:
+    """Launch the editor.
+
+    Holds this checkout's lease for the whole session: a build or a test waits (or, with `--no-wait`, is refused) until the editor is closed.
+    """
+
+    state = _state(ctx)
+    state.no_wait = no_wait
+
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal
 
         unreal.run_editor(config, runner, [*(extra or ()), *ctx.args])
 
     _execute(
-        _state(ctx),
+        state,
         "run editor",
         ExitCode.UNREAL_OR_BAKE,
         action,
         require_ue=True,
-        activity=True,
+        checkout=True,
     )
 
 
@@ -3800,6 +3996,9 @@ def run_play(
     ctx: typer.Context,
     map_name: str | None = typer.Argument(None),
     extra: list[str] = typer.Argument(None),
+    no_wait: bool = typer.Option(
+        False, "--no-wait",
+        help="Refuse at once (exit 8) if another command holds this checkout, instead of waiting."),
 ) -> None:
     """Launch the game with Unreal's live log console and retained `Saved/Logs` session log.
 
@@ -3808,7 +4007,12 @@ def run_play(
     `play gr <model> <clip>` is the one target that is not a map: it boots into the green room's
     stage world with Cog up and the green-room window docked down the left edge, the same room
     `elysium.gr` opens from a running session. The model and the clip are optional.
+
+    Holds this checkout's lease for the whole session: a build or a test waits (or, with `--no-wait`, is refused) until the game is closed.
     """
+
+    state = _state(ctx)
+    state.no_wait = no_wait
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal
@@ -3816,12 +4020,12 @@ def run_play(
         unreal.run_play(config, runner, map_name, [*(extra or ()), *ctx.args])
 
     _execute(
-        _state(ctx),
+        state,
         "run play",
         ExitCode.UNREAL_OR_BAKE,
         action,
         require_ue=True,
-        activity=True,
+        checkout=True,
     )
 
 
@@ -3964,7 +4168,13 @@ def debug_modelroom(ctx: typer.Context, args: list[str] = typer.Argument(None)) 
 
 
 @app.command("gr", context_settings=PASSTHROUGH)
-def green_room(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> None:
+def green_room(
+    ctx: typer.Context,
+    args: list[str] = typer.Argument(None),
+    no_wait: bool = typer.Option(
+        False, "--no-wait",
+        help="Refuse at once (exit 8) if another command holds this checkout, instead of waiting."),
+) -> None:
     """Open the interactive green room: one body, live, with cloth tuning.
 
     Usage: `gr <model> <clip> <map>`, and all three are optional -- with no model the stage
@@ -3983,11 +4193,13 @@ def green_room(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> No
 
     Top level rather than under `debug` because it is driven by hand rather than run as a
     check, and it captures nothing.
+
+    Holds this checkout's lease for the whole session: a build or a test waits (or, with `--no-wait`, is refused) until it is closed.
     """
-    _debug(ctx, "gr", [*(args or ()), *ctx.args])
+    _debug(ctx, "gr", [*(args or ()), *ctx.args], no_wait=no_wait)
 
 
-def _debug(ctx: typer.Context, kind: str, args: list[str]) -> None:
+def _debug(ctx: typer.Context, kind: str, args: list[str], *, no_wait: bool = False) -> None:
     # The rendering is already offscreen; this is only about what happens to the sheet afterwards.
     # `--no-open` leaves it on disk and reports the path, which is what an unattended or scripted
     # run wants — handing a file to the shell's image viewer is a side effect nothing asked for.
@@ -4003,14 +4215,153 @@ def _debug(ctx: typer.Context, kind: str, args: list[str]) -> None:
             if open_sheet and os.name == "nt" and output.is_file():
                 os.startfile(output)  # type: ignore[attr-defined]
 
+    state = _state(ctx)
+    state.no_wait = no_wait
     _execute(
-        _state(ctx),
+        state,
         f"debug {kind}",
         ExitCode.VALIDATION,
         action,
         require_ue=True,
-        activity=True,
+        checkout=True,
     )
+
+
+#: A research tool is a query -- an agent asks it a question and waits -- and the owner's rule is
+#: that a query past 10 s is noted and one past 60 s is stopped, never retried as it stands.
+RESEARCH_WARN_SECONDS = 10.0
+RESEARCH_STOP_SECONDS = 60.0
+
+#: The slow-query log, shared with the corpus MCP: one tab-separated row per query that ran past
+#: the warning, under the work root's `logs/`.
+SLOW_QUERY_LOG = "slow-queries.tsv"
+SLOW_QUERY_HEADER = "time\tsource\tquery\tseconds"
+
+#: A tool that is a run rather than a query (it launches agent workers, drives Ghidra, captures
+#: from the retail game, or builds a database) says so by defining this module constant as a
+#: sentence saying why. A tool whose subcommands are some runs and some queries (`corpus dump` /
+#: `corpus code`) defines it as a dict literal from the subcommand -- the first argument -- or from
+#: the `--switch` that selects a run mode, to the reason, and only those invocations are exempt.
+#: The command reads it from the tool's own source,
+#: so the exemption lives where the tool is written and a caller cannot grant it by adding a flag.
+RESEARCH_EXEMPT_MARKER = "RESEARCH_NOT_A_QUERY"
+
+
+def _research_exemption(tool: Path, values: Sequence[str] = ()) -> str | None:
+    """The reason a research tool (or the subcommand `values[0]`) is not a query, else `None`.
+
+    Read from the source, not by importing the tool: most of them do real work at import. Only a
+    top-level assignment of a non-empty string, or of a dict literal of non-empty strings keyed on
+    the subcommand, counts, so a bare `True` -- an exemption with no reason given -- does not.
+    """
+
+    try:
+        text = tool.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    if RESEARCH_EXEMPT_MARKER not in text:
+        return None
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return None
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        else:
+            continue
+        if not any(isinstance(t, ast.Name) and t.id == RESEARCH_EXEMPT_MARKER for t in targets):
+            continue
+        try:
+            value = ast.literal_eval(node.value) if node.value is not None else None
+        except (ValueError, SyntaxError):
+            return None
+        if isinstance(value, dict):
+            # A subcommand is the first argument; a `--mode` switch (a tool whose runs are
+            # selected by a flag, `--attach`) may stand anywhere among them.
+            given = {v.split("=", 1)[0] for v in values if v.startswith("--")}
+            value = next((reason for key, reason in value.items() if isinstance(key, str) and (
+                key in given if key.startswith("--") else bool(values) and key == values[0])),
+                None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def log_slow_query(log_root: Path | None, source: str, query: str, seconds: float) -> Path | None:
+    """Append one row to `$ELYSIUM_WORK_ROOT/logs/slow-queries.tsv`: time, source, query, seconds.
+
+    The same file, header and row shape the corpus MCP writes (`corpus_mcp.journal`), so the two
+    sources read as one log; only `source` tells them apart.
+    """
+
+    if log_root is None:
+        return None
+    path = log_root / SLOW_QUERY_LOG
+    row = "\t".join((
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        source,
+        " ".join(query.split())[:500],
+        f"{seconds:.3f}",
+    ))
+    try:
+        log_root.mkdir(parents=True, exist_ok=True)
+        fresh = not path.exists() or path.stat().st_size == 0
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write((SLOW_QUERY_HEADER + "\n" if fresh else "") + row + "\n")
+    except OSError:
+        return None
+    return path
+
+
+def _run_research_tool(
+    config: ProjectConfig,
+    runner: ProcessRunner,
+    tool: Path,
+    case: str,
+    values: list[str],
+) -> None:
+    """Run one research tool under the query budget.
+
+    A warning line the moment it passes 10 s, a row in the slow-query log when it ends, and a stop
+    at 60 s with a message to optimize it. A tool that declares `RESEARCH_NOT_A_QUERY` is run
+    without any of that.
+    """
+
+    exempt = _research_exemption(tool, values)
+    command = [sys.executable, str(tool), *values]
+    if exempt:
+        result = runner.run(command, category=int(ExitCode.VALIDATION))
+        if result.returncode:
+            raise ProcessFailure(result, int(ExitCode.VALIDATION))
+        return
+
+    def warn() -> None:
+        text = (f"warning: research {case} is past {RESEARCH_WARN_SECONDS:.0f} s; it is stopped at "
+                f"{RESEARCH_STOP_SECONDS:.0f} s -- optimize it ({SLOW_QUERY_LOG} records it)")
+        (runner.output_sink or (lambda line: console.print(line, markup=False)))(text)
+
+    timer = threading.Timer(RESEARCH_WARN_SECONDS, warn)
+    timer.daemon = True
+    started = time.monotonic()
+    timer.start()
+    try:
+        result = runner.run(
+            command, timeout=RESEARCH_STOP_SECONDS, category=int(ExitCode.VALIDATION))
+    except ProcessTimeout as exc:
+        raise exc.annotate(
+            f"stopped at {RESEARCH_STOP_SECONDS:.0f} s: a research query is not retried as it "
+            f"stands -- narrow it or optimize the tool (a tool that is a run rather than a query "
+            f"defines {RESEARCH_EXEMPT_MARKER} = \"<why>\" in its module)")
+    finally:
+        timer.cancel()
+        elapsed = time.monotonic() - started
+        if elapsed > RESEARCH_WARN_SECONDS:
+            log_slow_query(config.log_root, "research", " ".join([case, *values]), elapsed)
+    if result.returncode:
+        raise ProcessFailure(result, int(ExitCode.VALIDATION))
 
 
 @app.command("research", context_settings=PASSTHROUGH)
@@ -4019,6 +4370,8 @@ def research(
     case: str = typer.Argument(...),
     args: list[str] = typer.Argument(None),
 ) -> None:
+    """Run a research case or tool; a tool is a query, so it is warned at 10 s and stopped at 60 s."""
+
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         case_root = config.repo_root / "research" / "cases" / case
         values = [*(args or ()), *ctx.args]
@@ -4035,10 +4388,10 @@ def research(
                     else f"ambiguous research tool {case}: {', '.join(map(str, matches))}"
                 )
                 raise ValueError(detail)
-            result = runner.run([sys.executable, str(matches[0]), *values])
-            if result.returncode:
-                raise ProcessFailure(result, int(ExitCode.VALIDATION))
+            _run_research_tool(config, runner, matches[0], case, values)
             return
+        # A case is a Ghidra pass -- a run that changes the project, minutes long by nature --
+        # not a query, so the budget does not apply to it.
         if values and values[0].endswith(".json"):
             spec = Path(values.pop(0))
             if not spec.is_absolute():
@@ -4065,6 +4418,8 @@ def research(
         ExitCode.VALIDATION,
         action,
         require_game=False,
+        # A research tool's output is its answer; filtered to "signal" it was all withheld.
+        answer=True,
     )
 
 

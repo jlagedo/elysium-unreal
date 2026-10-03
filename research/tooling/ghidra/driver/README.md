@@ -51,7 +51,7 @@ section E), the script API surface, and the choreographed scenes.
 | `corpus.py`      | ✅ | drives `DumpCorpus`, `DumpVtables`, `DumpExternals`, `DumpListing` and `ApplyPythonApi`, loads SQLite, resolves the named-interface graph, and answers every corpus query |
 | `repair.py`      | ✅ | drives the repair passes: `boundaries`, `jumptables`, `thiscall`, `signatures`, each `report` then `apply` |
 | `pyapi.py`       | ✅ | extracts the CPython 2.1.2 C API from `Include/*.h` into the prototype file `ApplyPythonApi` applies |
-| `corpus_mcp.py`  | ✅ | the same queries as MCP tools (`vtmb_*`), registered in `.mcp.json` as `vtmb-corpus` |
+| `corpus_mcp.py`  | ✅ | the same queries as MCP tools (`vtmb_*`), registered in `.mcp.json` as `vtmb-corpus`; every call under a 60 s deadline, journaled to `$ELYSIUM_WORK_ROOT/logs/corpus-mcp.tsv` (and `slow-queries.tsv` past 10 s), a default reply held to 20 KB; plus `vtmb_where`, the address index (`research/tooling/lookup/`) |
 | `kernel_ledger.py` | ✅ | the NPC kernel as tables (`docs/vtmb/npc-kernel/`): classes, slots, fields, functions, build order, coverage, and a porting checklist per layer band; `--bodies` writes the reading packs out of repo; `--reach <map>` the reach cut |
 | `kernel_reach.py` | ✅ | the reach cut (0019 story 7): one map's population → its retail classes → the schedule texts, task / condition identities, functions and species rows they can execute; `reach/<map>.md` + `.tsv`, and `coverage.md`'s per-map column |
 | `kernel_shape.py` + `kernel_fields.tsv` / `kernel_signatures.tsv` | ✅ | the same kernel's *shape*: `layout.md` and `signatures.md`, from the datamaps, SDK 2013's headers and the two reading overlays |
@@ -503,12 +503,21 @@ confident shape of an answer:
 roughly 3.5× the code size on disk (the corpus goes 173 → 275 MiB) and that is the price of an
 answer that is not silently short.
 
-Two rules follow, and both are in `_prefilter`: the index is only consulted for a pattern with
-**no metacharacter at all** (a literal lifted out of an alternation is not required to appear in
-a match), and only for a literal of **three characters or more** (a trigram index cannot answer a
-query shorter than one trigram, and returns nothing rather than everything). `command_grep` also
+Three rules follow. `_prefilter` only puts a literal in the query that **every match must contain**:
+it walks the parsed pattern (`re._parser`), takes each run of plain characters, passes through a
+group or a repeat that runs at least once, and for an alternation takes the best literal of *each*
+branch — `thunk_FUN_102ee140|thunk_FUN_102ee620|…` becomes `"thunk_FUN_102ee" AND ("140" OR "620"
+…)`, 3.6 s of scanning becoming 10 ms — and **no clause at all** when some branch has nothing of
+three characters in it (a branch with nothing to look for matches anything; a trigram index cannot
+answer a query shorter than one trigram, and returns nothing rather than everything). `command_grep`
 reads `code_fts`'s stored definition before trusting it, because a corpus built by the old
-tokenizer still answers `MATCH` — just wrongly.
+tokenizer still answers `MATCH` — just wrongly. And it checks the index is **current**
+(`_index_is_current`): the table is external-content, so a row whose `code` changed after the build
+is indexed under its old text, and the prefilter silently drops real hits and adds false ones. A
+sample of 200 rows is compared with the trigram count the index recorded for each (N characters is
+N − 2 trigrams); a corpus where 9% of `vampire.dll`'s rows had moved under the index answered
+`/Disciplin/` with 421 against a true 430. A stale index means a scan, said so in the reply, until
+`corpus reindex --search-only` (8 s) rebuilds it.
 
 ### A search term is not a LIKE pattern
 

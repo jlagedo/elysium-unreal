@@ -392,6 +392,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     repo = repo_root()
+    if args.check and not (args.packs or args.fold or args.closed):
+        return kl.kernel_cache.stamped("kernel_lists", vars(args), repo, lambda: _main(args, repo))
+    return _main(args, repo)
+
+
+def _main(args: argparse.Namespace, repo: Path) -> int:
     ledger = kl.build(args.module, args.depth, repo)
     work = research_root() / PACK_DIR
     if args.packs:

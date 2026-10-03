@@ -413,6 +413,7 @@ def _legacy_root() -> Path | None:
 
 
 @pytest.mark.parametrize("directory, suffix", [("dlg", ".dlg"), ("scenes", ".vcd")])
+@pytest.mark.corpus
 def test_the_deployed_tree_matches_the_legacy_mirror_byte_for_byte(directory, suffix):
     """The corpus tree is the legacy tree: same relative paths, same bytes.
 

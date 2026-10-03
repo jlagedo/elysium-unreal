@@ -102,6 +102,7 @@ def test_hull_radius_is_the_tables_lateral_extent():
     ("sm_pawnshop_1", 10, 0, 0),   # a shop: no encounter's graph runs through any of its doors
     ("sp_theatre", 9, 0, 0),
 ])
+@pytest.mark.corpus
 def test_the_shipped_maps_door_answers(map_name, total, traversable, partial):
     pytest.importorskip("elysium_pipeline.paths")
     from elysium_pipeline import paths
@@ -175,6 +176,7 @@ def test_the_shipped_maps_door_answers(map_name, total, traversable, partial):
     # live door) and its hidden, inert partner `plus_smoke_door`.
     ("sm_hub_1", {2566: [0, 19], 2567: [0, 19]}),
 ])
+@pytest.mark.corpus
 def test_the_shipped_maps_door_links(map_name, links):
     # `links` here are the traversable DOORS and their hulls; the smart links are grouped below.
     pytest.importorskip("elysium_pipeline.paths")

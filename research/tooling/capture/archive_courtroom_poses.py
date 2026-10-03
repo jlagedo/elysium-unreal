@@ -20,6 +20,9 @@ import numpy as np
 from elysium_pipeline.formats import install, mdl_skel
 from elysium_pipeline.paths import export_root, research_root
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "builds the courtroom cinematics' pose archive"
+
 
 DEFAULT_OUTPUT = research_root() / "live-pose" / "courtroom_authored"
 MAP_ENTITIES = export_root() / "sp_theatre" / "sp_theatre.ents"

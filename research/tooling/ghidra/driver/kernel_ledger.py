@@ -86,6 +86,7 @@ sys.path.insert(0, str(_HERE.parents[1]))   # research/tooling, for `probes`
 sys.path.insert(0, str(_HERE.parents[3]))   # the repository, for `research.tooling.probes`
 import corpus  # noqa: E402  -- `_severe`, `_corpus_dir`: the corpus's own reading of itself
 import datamap_layout  # noqa: E402  -- the datamap records' types, which the corpus's `fields` drops
+import kernel_cache  # noqa: E402  -- the corpus stage and the citation scan, kept between runs
 
 from elysium_pipeline.paths import repo_root, research_root  # noqa: E402
 
@@ -498,10 +499,10 @@ class Ledger:
         self.slot_count: dict[str, int] = {}
         self.this_dispatch: dict[str, set[int]] = collections.defaultdict(set)
         self.slot_dispatch_sites: dict[int, int] = collections.Counter()
-        self.fields: dict[int, sqlite3.Row] = {}
+        self.fields: dict[int, dict] = {}       # offset -> the corpus `fields` row
         self.field_types: dict[int, str] = {}   # offset -> Source type from the datamap record
         self.class_fields: dict[str, dict[str, int]] = collections.defaultdict(dict)
-        self.species_fields: dict[str, list[sqlite3.Row]] = collections.defaultdict(list)
+        self.species_fields: dict[str, list[dict]] = collections.defaultdict(list)
         self.closure: dict[str, int] = {}
         self.closure_edges: set[tuple[str, str, str]] = set()
         self.port_addr: dict[str, list[Citation]] = collections.defaultdict(list)
@@ -545,13 +546,19 @@ class Ledger:
         self._load_dispatch()
         self._load_hierarchy()
 
+    def _tuples(self, sql: str, params: tuple):
+        """The corpus's rows as plain tuples: on the module-wide scans `sqlite3.Row` is most of the
+        cost of a cold load."""
+        cursor = self.db.cursor()
+        cursor.row_factory = None
+        return cursor.execute(sql, params)
+
     def _load_functions(self) -> None:
-        for row in self.db.execute(
+        for addr, name, ns, size, thunk, warn, code, cc in self._tuples(
                 "SELECT addr, name, ns, size, thunk, warn, code, cc FROM functions WHERE module = ?",
                 (self.module,)):
-            self.functions[row["addr"]] = Function(
-                row["addr"], row["name"], row["ns"] or "", row["size"] or 0,
-                bool(row["thunk"]), row["warn"] or "", row["code"] or "", cc=row["cc"] or "")
+            self.functions[addr] = Function(addr, name, ns or "", size or 0, bool(thunk), warn or "",
+                                            code or "", cc=cc or "")
         for row in self.db.execute(
                 "SELECT addr, name, tier, evidence FROM names WHERE module = ?", (self.module,)):
             if row["tier"] == "unsettled":
@@ -595,13 +602,16 @@ class Ledger:
         """A thunk is `JMP target`; the corpus stores no edge for it, so the listing says."""
         thunks = [a for a, f in self.functions.items() if f.thunk]
         if self.listing is not None:
+            listing: dict[str, str] = {}
+            for at in range(0, len(thunks), 500):   # one query per few hundred, not per thunk
+                chunk = thunks[at:at + 500]
+                listing.update(self.listing.execute(
+                    f"SELECT addr, asm FROM listing WHERE module = ? AND addr IN "
+                    f"({','.join('?' * len(chunk))})", (self.module, *chunk)))
             for addr in thunks:
-                row = self.listing.execute(
-                    "SELECT asm FROM listing WHERE module = ? AND addr = ?",
-                    (self.module, addr)).fetchone()
-                if not row:
+                if addr not in listing:
                     continue
-                match = JMP_RE.search(row[0])
+                match = JMP_RE.search(listing[addr])
                 if match and match.group(1).lower() in self.functions:
                     self.thunk_target[addr] = match.group(1).lower()
         for addr in thunks:
@@ -614,6 +624,8 @@ class Ledger:
                     self.thunk_target[addr] = target
 
     def resolve(self, addr: str) -> str:
+        if addr not in self.thunk_target:   # most addresses: asked ~460k times on a cold load
+            return addr
         seen = set()
         while addr in self.thunk_target and addr not in seen:
             seen.add(addr)
@@ -621,17 +633,20 @@ class Ledger:
         return addr
 
     def _load_edges(self) -> None:
-        for row in self.db.execute(
+        for caller, callee, kind in self._tuples(
                 "SELECT caller, callee, kind FROM edges WHERE module = ?", (self.module,)):
-            callee = self.resolve(row["callee"])
-            caller = self.resolve(row["caller"])
+            callee = self.resolve(callee)
+            caller = self.resolve(caller)
             if callee in self.functions and caller != callee:
-                self.edges[caller].add((callee, row["kind"] or "direct"))
+                self.edges[caller].add((callee, kind or "direct"))
                 self.all_callers[callee].add(caller)
 
     def _load_family(self) -> None:
+        # The two module-wide reads scan the table: through `vtables_slot` (module only) every row
+        # is a random lookup, four times slower. A class has one primary table, so the bare
+        # `table_addr` beside `max(slot)` is that table whatever the scan order.
         rows = self.db.execute(
-            "SELECT cls, table_addr, max(slot) + 1 AS slots FROM vtables "
+            "SELECT cls, table_addr, max(slot) + 1 AS slots FROM vtables NOT INDEXED "
             "WHERE module = ? AND sub = 0 GROUP BY cls", (self.module,)).fetchall()
         for row in rows:
             self.slot_count[row["cls"]] = row["slots"]
@@ -639,16 +654,16 @@ class Ledger:
         self.family = sorted(r["cls"] for r in rows if r["slots"] >= FAMILY_MIN_SLOTS)
         self.helpers = [c for c in HELPER_CLASSES if c in self.slot_count or self._has_fields(c)]
         placeholders = ",".join("?" * len(self.family))
-        for row in self.db.execute(
+        for cls, slot, func in self._tuples(
                 f"SELECT cls, slot, func FROM vtables WHERE module = ? AND sub = 0 "
                 f"AND cls IN ({placeholders})", (self.module, *self.family)):
-            self.slot_bodies[row["slot"]][row["cls"]] = self.resolve(row["func"])
-        for row in self.db.execute(
-                "SELECT cls, slot, func FROM vtables WHERE module = ? AND sub = 0",
+            self.slot_bodies[slot][cls] = self.resolve(func)
+        for cls, slot, func in self._tuples(   # every reader of `fn.slots` sorts it or sets it
+                "SELECT cls, slot, func FROM vtables NOT INDEXED WHERE module = ? AND sub = 0",
                 (self.module,)):
-            fn = self.functions.get(self.resolve(row["func"]))
+            fn = self.functions.get(self.resolve(func))
             if fn is not None:
-                fn.slots.append((row["cls"], row["slot"]))
+                fn.slots.append((cls, slot))
 
     def primary_table(self, cls: str) -> dict[int, str]:
         """`cls`'s primary vtable, slot -> resolved body, for any class of the module."""
@@ -683,10 +698,11 @@ class Ledger:
                                (self.module, cls)).fetchone() is not None
 
     def _load_fields(self) -> None:
+        # Rows as dicts, not `sqlite3.Row`s: the corpus stage is pickled (`kernel_cache`).
         for row in self.db.execute(
                 "SELECT * FROM fields WHERE module = ? AND cls = 'CAI_BaseNPCTroika' ORDER BY off",
                 (self.module,)):
-            self.fields[row["off"]] = row
+            self.fields[row["off"]] = dict(row)
         records = datamap_layout.load(research_root(), self.module)
         if records is not None:
             def flat(name: str) -> str:
@@ -708,7 +724,7 @@ class Ledger:
                     (self.module, cls)):
                 self.class_fields[cls][row["name"]] = row["off"]
                 if cls in self.family and row["off"] not in self.fields:
-                    self.species_fields[cls].append(row)
+                    self.species_fields[cls].append(dict(row))
 
     def _load_dispatch(self) -> None:
         for row in self.db.execute(
@@ -732,12 +748,18 @@ class Ledger:
             from probes import npc_translation_survey, weapon_activity_survey  # noqa: WPS433
             binary = Path(self.meta.get("binary") or "")
             if binary.is_file():
-                data = binary.read_bytes()
-                image = weapon_activity_survey.PEImage(data)
-                classes = npc_translation_survey.find_npc_classes(image)
-                classes = npc_translation_survey.decode_translation_slots(image, classes)
-                for row in classes:
-                    self.bases[row["cpp_class"]] = row["direct_base"]
+                # The RTTI walk answers per image and probe code; kept apart from the corpus stage
+                # so a ledger edit does not repeat it.
+                key = kernel_cache.digest("bases", kernel_cache.stat(binary), kernel_cache.code(
+                    "../../probes/npc_translation_survey.py", "../../probes/weapon_activity_survey.py"))
+                found = kernel_cache.load("bases", key)
+                if not isinstance(found, dict):
+                    image = weapon_activity_survey.PEImage(binary.read_bytes())
+                    classes = npc_translation_survey.find_npc_classes(image)
+                    classes = npc_translation_survey.decode_translation_slots(image, classes)
+                    found = {row["cpp_class"]: row["direct_base"] for row in classes}
+                    kernel_cache.store("bases", key, found)
+                self.bases.update(found)
                 if self.bases:
                     return
         except Exception as error:  # noqa: BLE001 -- the committed table is the fallback
@@ -806,20 +828,20 @@ class Ledger:
         # a receiver it could not type. Outside the closure these are the producers that live in
         # another subsystem (a spawner writing an NPC's save position), so they are listed as
         # candidates beside the classified closure rows.
-        for row in self.db.execute(
+        for func_addr, off in self._tuples(
                 "SELECT DISTINCT func_addr, off FROM accesses WHERE module = ? AND off IS NOT NULL",
                 (self.module,)):
-            addr = self.resolve(row["func_addr"])
+            addr = self.resolve(func_addr)
             if addr in self.functions and addr not in self.closure \
-                    and addr not in self.other_touches[row["off"]]:
-                self.other_touches[row["off"]].append(addr)
-        for row in self.db.execute(
+                    and addr not in self.other_touches[off]:
+                self.other_touches[off].append(addr)
+        for func_addr, text in self._tuples(
                 "SELECT r.func_addr, s.text FROM string_refs r JOIN strings s "
                 "ON s.module = r.module AND s.addr = r.str_addr WHERE r.module = ?",
                 (self.module,)):
-            fn = self.functions.get(self.resolve(row["func_addr"]))
+            fn = self.functions.get(self.resolve(func_addr))
             if fn is not None and fn.addr in self.closure:
-                fn.strings.append(row["text"])
+                fn.strings.append(text)
 
     @staticmethod
     def _scan(code: str, names: dict[str, int],
@@ -861,7 +883,12 @@ class Ledger:
         return reads, writes
 
     def citations(self) -> None:
-        """Where the port and the oracle already speak about an address or an offset."""
+        """Where the port and the oracle already speak about an address or an offset.
+
+        Each file's scan is kept on its size and mtime (`kernel_cache.FileScans`, one table per
+        checkout), so a run after an edit rescans the edited files and merges the rest."""
+        scans = kernel_cache.FileScans("citations", kernel_cache.digest(
+            kernel_cache.checkout(self.repo), kernel_cache.code("kernel_ledger.py")))
         source = self.repo / "Source" / "ElysiumUE"
         for path in sorted(source.rglob("*")):
             if path.suffix not in (".h", ".cpp"):
@@ -873,14 +900,15 @@ class Ledger:
                 # its meaning, which is "a body somewhere in this runtime speaks about this
                 # function". A census is the ledger's own reflection, not a citation of it.
                 continue
-            self._scan_citations(path, self.port_addr, self.port_off, member=True)
+            self._scan_citations(path, self.port_addr, self.port_off, member=True, scans=scans)
         for path in sorted((self.repo / "docs" / "vtmb").rglob("*.md")):
             # The ledger's own tables, and the reach cuts it writes beneath them (`reach/`).
             if DEFAULT_OUTPUT[-1] in (path.parent.name, path.parent.parent.name):
                 continue
-            self._scan_citations(path, self.oracle_addr, self.oracle_off, sections=True)
+            self._scan_citations(path, self.oracle_addr, self.oracle_off, sections=True, scans=scans)
         for path in sorted((self.repo / "docs" / "specs").rglob("*.md")):
-            self._scan_citations(path, self.spec_addr, collections.defaultdict(list))
+            self._scan_citations(path, self.spec_addr, collections.defaultdict(list), scans=scans)
+        scans.save()
         for table in (self.port_addr, self.oracle_addr, self.spec_addr):
             for addr in list(table):
                 kind, owner = self.locate(addr)
@@ -914,26 +942,29 @@ class Ledger:
         return list(found)
 
     def _scan_citations(self, path: Path, by_addr: dict, by_off: dict,
-                        member: bool = False, sections: bool = False) -> None:
-        rel = path.relative_to(self.repo).as_posix()
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-        section = ""
-        for number, line in enumerate(lines, 1):
-            if sections and line.startswith("#"):
-                section = line.lstrip("#").strip()
-            seam = bool(SEAM_RE.search(line))
-            for match in ADDRESS_RE.finditer(line):
-                addr = match.group(1).lower()
-                by_addr[addr].append(Citation(rel, number, seam, line.strip()))
+                        member: bool = False, sections: bool = False,
+                        scans: kernel_cache.FileScans | None = None) -> None:
+        full, base = str(path), str(self.repo)
+        # `relative_to` normalises case per call on Windows: a third of a warm scan, for a prefix.
+        rel = (full[len(base) + 1:].replace(os.sep, "/") if full.startswith(base + os.sep)
+               else path.relative_to(self.repo).as_posix())
+        member = member and path.suffix == ".h"
+        if scans is None:
+            lines, declared = _scan_file(path, member, sections)
+        else:
+            lines, declared = scans.get(path, rel, (member, sections),
+                                        lambda: _scan_file(path, member, sections))
+        for number, text, seam, addrs, offs, section in lines:
+            cite = Citation(rel, number, seam, text)
+            for addr in addrs:
+                by_addr[addr].append(cite)
                 if sections and section:
                     self.oracle_sections[addr].append((rel, section))
-            for match in OFFSET_RE.finditer(line):
-                off = int(match.group(1), 16)
-                by_off[off].append(Citation(rel, number, seam, line.strip()))
-                if member and path.suffix == ".h" and off not in self.port_member:
-                    ident = self._declared_member(lines, number - 1)
-                    if ident:
-                        self.port_member[off] = ident
+            for off in offs:
+                by_off[off].append(cite)
+        # The first header (in scan order) whose cited line declares a member names the offset.
+        for off, ident in declared.items():
+            self.port_member.setdefault(off, ident)
 
     @staticmethod
     def _declared_member(lines: list[str], index: int) -> str:
@@ -1057,11 +1088,14 @@ class Ledger:
 
     def core(self) -> list[str]:
         """The closure's core: a family or helper class method, or a body touching an offset past
-        `CBaseCombatCharacter`'s layout. The set the spec's build order counts."""
-        start = self.npc_range_start()
-        owned = set(self.family) | set(self.helpers)
-        return [a for a in sorted(self.closure)
-                if self.functions[a].ns in owned or self.touches_npc(self.functions[a], start)]
+        `CBaseCombatCharacter`'s layout. The set the spec's build order counts. Made once (the
+        render asks for it per band); a fresh list each time."""
+        if "_core" not in self.__dict__:
+            start = self.npc_range_start()
+            owned = set(self.family) | set(self.helpers)
+            self._core = [a for a in sorted(self.closure)
+                          if self.functions[a].ns in owned or self.touches_npc(self.functions[a], start)]
+        return list(self._core)
 
     @staticmethod
     def _list_cell(items: list[str], limit: int = 8) -> str:
@@ -1411,7 +1445,9 @@ class Ledger:
         closure = sorted(self.closure)
         cited = [a for a in closure if self.cites(self.port_addr, a)]
         walked = [a for a in closure if self.cites(self.oracle_addr, a)]
-        neither = [a for a in closure if a not in cited and a not in walked]
+        seen = set(cited) | set(walked)   # membership in sets: as lists it was 16M comparisons
+        neither = [a for a in closure if a not in seen]
+        unseen = set(neither)
         kinds = collections.Counter(self.stale_kinds[a] for a in self.port_addr if a in self.stale_kinds)
         damaged = [a for a in closure if self.functions[a].damaged]
         unnamed = [a for a in closure if self.functions[a].unnamed]
@@ -1514,7 +1550,7 @@ class Ledger:
                 "| Function | Outside callers |", "|---|---|"]
         for addr in sorted(self.closure):
             outside = [c for c in self.all_callers.get(addr, ()) if c not in self.closure]
-            if outside and addr in neither:
+            if outside and addr in unseen:
                 out.append(f"| {self._fn_cell(addr)} | {self._list_cell([self._fn_cell(a) for a in sorted(outside)], 4)} |")
         out += ["", "## Stale port citations", "", "| Where | Line |", "|---|---|"]
         for c in self.stale_port:
@@ -1609,6 +1645,38 @@ class Ledger:
         return match.group(1).lower() if match else ""
 
 
+def _scan_file(path: Path, member: bool, sections: bool) -> tuple[list[tuple], dict[int, str]]:
+    """One file's citations, as `Ledger._scan_citations` merges them and `kernel_cache` keeps them:
+    per line holding an address or an offset, (number, stripped text, seam, addresses, offsets,
+    the section it sits in); and, for a port header (`member`), the member the first cited line of
+    each offset declares."""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    out: list[tuple] = []
+    declared: dict[int, str] = {}
+    if "0x" not in text:   # both spellings carry it: nothing to cite, whatever the sections
+        return out, declared
+    lines = text.splitlines()
+    section = ""
+    for number, line in enumerate(lines, 1):
+        if sections and line.startswith("#"):
+            section = line.lstrip("#").strip()
+        if "0x" not in line:   # both spellings carry it
+            continue
+        addrs = [match.group(1).lower() for match in ADDRESS_RE.finditer(line)]
+        offs = [int(match.group(1), 16) for match in OFFSET_RE.finditer(line)]
+        if not addrs and not offs:
+            continue
+        out.append((number, line.strip(), bool(SEAM_RE.search(line)), addrs, offs,
+                    section if sections else ""))
+        if member:
+            for off in offs:
+                if off not in declared:
+                    ident = Ledger._declared_member(lines, number - 1)
+                    if ident:
+                        declared[off] = ident
+    return out, declared
+
+
 def _cell(text: str) -> str:
     """One overlay cell as a table cell: the pipe is the table's, so it cannot travel in the text."""
     return (text or "").replace("|", "¦")
@@ -1667,13 +1735,36 @@ def _tarjan(nodes: list[str], succ: dict[str, set[str]]) -> list[list[str]]:
     return components
 
 
-def build(module: str, depth: int, repo: Path) -> Ledger:
+# What the corpus stage fills -- `load` (all but the classnames), `walk`, `directions`, `order` --
+# and `kernel_cache` keeps between runs on the corpus's own inputs. The verdict overlay, the
+# classnames and the citations stand on the checkout and are read fresh on every build.
+CORPUS_STATE = ("functions", "thunk_target", "edges", "family", "helpers", "bases", "vtable_addr",
+                "slot_bodies", "slot_count", "this_dispatch", "slot_dispatch_sites", "fields",
+                "field_types", "class_fields", "species_fields", "closure", "closure_edges",
+                "globals", "string_addrs", "vtable_owner", "ranges", "unsettled", "all_callers",
+                "other_touches", "layers", "layer_of", "unwritten", "later_producers",
+                "_primary_tables")
+
+
+def build(module: str, depth: int, repo: Path, citations: bool = True) -> Ledger:
+    """The ledger, its corpus stage from `kernel_cache` when the corpus has not changed. Without
+    `citations` the port and oracle tables stay empty: for a caller that reads only the corpus
+    stage and the verdicts (the census slots `kernel_shape --unported` lists)."""
     ledger = Ledger(module, depth, repo)
-    ledger.load()
-    ledger.walk()
-    ledger.directions()
-    ledger.citations()
-    ledger.order()
+    ledger.cache_key = kernel_cache.ledger_key(ledger)
+    state = kernel_cache.load("ledger", ledger.cache_key)
+    if isinstance(state, dict) and set(state) == set(CORPUS_STATE):
+        ledger.__dict__.update(state)
+        ledger.classnames = factory_classnames(repo)
+    else:
+        ledger.load()
+        ledger.walk()
+        ledger.directions()
+        ledger.order()   # the call graph and the field touches only: no citation reaches it
+        ledger.__dict__.setdefault("_primary_tables", {})
+        kernel_cache.store("ledger", ledger.cache_key, {name: getattr(ledger, name) for name in CORPUS_STATE})
+    if citations:
+        ledger.citations()
     return ledger
 
 
@@ -1722,6 +1813,16 @@ def main(argv: list[str] | None = None) -> int:
                              "deployed schedule corpus")
     args = parser.parse_args(argv)
     repo = repo_root()
+    if args.check and not args.out and not args.bodies:
+        # Nothing it reads or compares changed since a pass: the pass again, without the build.
+        import kernel_reach
+
+        return kernel_cache.stamped("kernel_ledger", vars(args), repo, lambda: _main(args, repo),
+                                    extra=kernel_reach.inputs(repo, args.reach))
+    return _main(args, repo)
+
+
+def _main(args: argparse.Namespace, repo: Path) -> int:
     out_dir = Path(args.out) if args.out else repo.joinpath(*DEFAULT_OUTPUT)
     ledger = build(args.module, args.depth, repo)
     reach_files: dict[str, str] = {}
@@ -1757,4 +1858,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Run as the importable module, not as `__main__`: the corpus stage `kernel_cache` pickles holds
+    # this module's classes, and the other tools read them back as `kernel_ledger.Function`.
+    import kernel_ledger
+
+    sys.exit(kernel_ledger.main())

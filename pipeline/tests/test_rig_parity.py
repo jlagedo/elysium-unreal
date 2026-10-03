@@ -13,10 +13,8 @@ from collections import Counter
 import os
 import tempfile
 
-# `analyze_rig_resolution` imports `install`, which resolves the VtMB root as it
-# loads; an existing directory is all the import needs, and nothing here reads it.
-os.environ.setdefault("ELYSIUM_VTMB_ROOT", tempfile.gettempdir())
-
+# `analyze_rig_resolution` imports `install`, which resolves the VtMB root as it loads; the
+# package's `conftest.py` leaves it set to an existing directory, and nothing here reads it.
 from research.tooling.capture import analyze_rig_resolution as analyzer  # noqa: E402
 from research.tooling.capture.rig_parity import (  # noqa: E402
     UNREAL_SKIP_CM,

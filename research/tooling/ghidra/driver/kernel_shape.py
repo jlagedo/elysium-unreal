@@ -50,6 +50,7 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
 import datamap_layout as dl  # noqa: E402
+import kernel_cache  # noqa: E402
 import kernel_ledger as kl  # noqa: E402
 import name_passes  # noqa: E402
 import sdk_layout  # noqa: E402
@@ -241,46 +242,10 @@ def scan_body(code: str, token: str = "this",
 
 
 def sdk_members(sdk: sdk_layout.Sdk | None, cls: str) -> list[tuple[str, str]]:
-    """(type, name) of the data members `cls` declares in the SDK header, in declaration order."""
-    if sdk is None or sdk.header(cls) is None:
-        return []
-    text = sdk.header(cls).read_text(encoding="utf-8", errors="replace")
-    kept, _ = sdk_layout.preprocess(text)
-    joined = "\n".join(line for _, line in kept)
-    head = re.search(rf"\b(?:class|struct|abstract_class)\s+{re.escape(cls)}\s*(:[^;{{]*)?\{{", joined)
-    if not head:
-        return []
-    open_at = head.end() - 1
-    body = joined[open_at + 1:sdk_layout._match_brace(joined, open_at)]
-    out: list[tuple[str, str]] = []
-    depth = 0
-    statement: list[str] = []
-    for c in body:
-        if c == "{":
-            depth += 1
-            if depth == 1:
-                statement = []
-            continue
-        if c == "}":
-            depth -= 1
-            statement = []
-            continue
-        if depth:
-            continue
-        if c == ";":
-            stmt = re.sub(r"\b(public|protected|private)\s*:", " ", "".join(statement)).strip()
-            stmt = re.sub(r"^(?:[A-Z_][A-Z0-9_]*\s*\([^;]*?\)\s*)+", "", stmt).strip()
-            statement = []
-            if not stmt or "(" in stmt or stmt.startswith(("typedef", "friend", "using", "enum",
-                                                           "static", "class", "struct", "template")):
-                continue
-            m = re.match(r"^(?P<type>.+?)\s*[\s\*&](?P<name>[A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*(?::\s*\d+)?$",
-                         stmt, re.S)
-            if m:
-                out.append((" ".join(m.group("type").split()), m.group("name")))
-            continue
-        statement.append(c)
-    return out
+    """(type, name) of the data members `cls` declares in the SDK header, in declaration order.
+    The index answers each class once (`Sdk.members`); this was 36% of a run re-reading the header
+    on each of its 272 calls."""
+    return [] if sdk is None else sdk.members(cls)
 
 
 class Shape:
@@ -289,7 +254,6 @@ class Shape:
         self.records = records
         self.sdk = sdk
         self.module = ledger.module
-        self.words = name_passes.Corpus(ledger.db, self.module, ledger.listing)
         self.base_of: dict[str, str] = {}
         for cls, entry in records.by_class.items():
             if entry.get("base"):
@@ -306,15 +270,43 @@ class Shape:
         self.fields_overlay: dict[tuple[str, int], list[dict]] = collections.defaultdict(list)
         self.signatures_overlay: dict[tuple[int, str], dict] = {}
 
+    # -- the corpus half, kept between runs ----------------------------------------------------
+
+    def corpus_state(self, signature_rows: list[dict]) -> dict:
+        """What `gather` and `signature_rows` derived from the corpus stage, the SDK and the
+        records -- no overlay, no citation -- with the layouts they flattened on the way."""
+        return {"evidence": {table: dict(offs) for table, offs in self.evidence.items()},
+                "misplaced": self.misplaced, "guess_only": dict(self.guess_only),
+                "layout": self._layout, "extent": self._extent, "signature_rows": signature_rows}
+
+    def restore(self, state: dict) -> list[dict]:
+        """`corpus_state` back in place; answers the signature rows."""
+        for table, offs in state["evidence"].items():
+            self.evidence[table].update(offs)
+        self.misplaced = state["misplaced"]
+        self.guess_only.update(state["guess_only"])
+        # A member's interior is one of `datamap_layout`'s module tuples, and `interior_name` tells
+        # a vector's by identity (`is VECTOR_INTERIOR`); unpickled it is an equal copy, so each is
+        # derived again exactly as the flattening did.
+        for members in state["layout"].values():
+            for member in members:
+                member.interior = dl._interior(member)
+        self._layout.update(state["layout"])
+        self._extent.update(state["extent"])
+        return state["signature_rows"]
+
     # -- classes -------------------------------------------------------------------------------
 
     def _chain(self, cls: str) -> list[str]:
-        """`cls` and its bases, most-derived first."""
-        out = []
-        while cls and cls not in out:
-            out.append(cls)
-            cls = self.base_of.get(cls, "")
-        return out
+        """`cls` and its bases, most-derived first (a fresh list; the walk is made once per class)."""
+        chains = self.__dict__.setdefault("_chains", {})
+        if cls not in chains:
+            out, at = [], cls
+            while at and at not in out:
+                out.append(at)
+                at = self.base_of.get(at, "")
+            chains[cls] = out
+        return list(chains[cls])
 
     def layout(self, cls: str) -> list[dl.Member]:
         if cls not in self._layout:
@@ -342,8 +334,12 @@ class Shape:
         return self._layout[cls]
 
     def _span(self, cls: str) -> int:
-        tops = [m for m in dl.flatten(self.records, cls, expand=False)]
-        return max((m.off + (m.width or 4) for m in tops), default=0)
+        # Asked once per image record per chain class by `layout`: flattened once per class.
+        spans = self.__dict__.setdefault("_spans", {})
+        if cls not in spans:
+            tops = [m for m in dl.flatten(self.records, cls, expand=False)]
+            spans[cls] = max((m.off + (m.width or 4) for m in tops), default=0)
+        return spans[cls]
 
     def extent(self, cls: str) -> int:
         if cls not in self._extent:
@@ -378,6 +374,8 @@ class Shape:
         """A constructor or destructor: the body installs a family class's primary vtable on its
         receiver (`*param_1 = &vftable_CAI_BaseNPCTroika`). Returns the most-derived class it
         installs, the receiver's token, and the receiver's pointee width."""
+        if "vftable_" not in fn.code:   # every body is asked; few install a table
+            return None
         found = [(m.group(1), m.group(2)) for m in CTOR_RE.finditer(fn.code)
                  if m.group(2) in self.family or m.group(2) in self.troika_chain]
         if not found:
@@ -606,7 +604,8 @@ class Shape:
 
     # -- signatures ----------------------------------------------------------------------------
 
-    def signatures(self) -> list[dict]:
+    def signature_rows(self) -> list[dict]:
+        """One row per virtual from the image, its call sites and the SDK; no reading applied."""
         sdk_slots: list[sdk_layout.Slot] = []
         if self.sdk is not None:
             sdk_slots, _ = self.sdk.vtable(sdk_layout.NPC_CHAIN)
@@ -619,14 +618,16 @@ class Shape:
                 for m in self.sdk.methods(cls)[1]:
                     declared[m.name].append(m)
         usage = self._call_site_usage()
+        groups = self._slot_groups()
+        listing = self._asm(b for _, _, bodies in groups for b in bodies)
         out = []
-        for slot, cls, bodies in self._slot_groups():
+        for slot, cls, bodies in groups:
             fns = [self.ledger.functions[b] for b in bodies if b in self.ledger.functions]
             names = collections.Counter(f.name for f in fns if not f.unnamed and not f.name.startswith("~"))
             method = names.most_common(1)[0][0] if len(names) == 1 else ""
             if not method and names:
                 method = " / ".join(sorted(names))
-            words = {self.words.words(b) for b in bodies} - {None}
+            words = {_ret_words(listing.get(b, "")) for b in bodies} - {None}
             protos = [p for p in (self._prototype(f) for f in fns) if p]
             ret_seen = collections.Counter(p[0] for p in protos)
             use = usage.get(slot, collections.Counter()) if not cls else collections.Counter()
@@ -638,6 +639,21 @@ class Shape:
                 self._match_sdk(row, method, words, by_name, declared)
             if row["tier"] != "sdk":
                 self._from_evidence(row)
+            out.append(row)
+        return out
+
+    def signatures(self) -> list[dict]:
+        """One row per virtual: what the image and the SDK say (`signature_rows`), then what a
+        reading recorded (`overlay_signatures`)."""
+        return self.overlay_signatures(self.signature_rows())
+
+    def overlay_signatures(self, rows: list[dict]) -> list[dict]:
+        """`kernel_signatures.tsv` over the derived rows, on copies: the derived rows are the
+        corpus half `kernel_cache` keeps, and an overlay edit must not need them rebuilt."""
+        out = []
+        for row in rows:
+            row = dict(row)
+            slot, cls = row["slot"], row["cls"]
             # A reading may name the true introducer, a base with no dumped table of its own
             # (`CAI_BaseActor` under `CAI_BaseHumanoid`).
             overlay = next((self.signatures_overlay[(slot, c)] for c in ([cls] + self._chain(cls)[1:] if cls else [""])
@@ -650,6 +666,20 @@ class Shape:
                            why=overlay["evidence"])
             out.append(row)
         return out
+
+    def _asm(self, addrs) -> dict[str, str]:
+        """The listing of each address the listing holds, read in batches of a few hundred."""
+        found: dict[str, str] = {}
+        if self.ledger.listing is None:
+            return found
+        wanted = sorted(set(addrs))
+        for at in range(0, len(wanted), 500):
+            chunk = wanted[at:at + 500]
+            for addr, asm in self.ledger.listing.execute(
+                    f"SELECT addr, asm FROM listing WHERE module = ? AND addr IN ({','.join('?' * len(chunk))})",
+                    (self.module, *chunk)):
+                found[addr] = asm
+        return found
 
     def introducer(self, cls: str, slot: int) -> str:
         """The most-base class in `cls`'s chain whose own primary vtable already holds `slot`."""
@@ -808,8 +838,10 @@ class Shape:
         if self.ledger.listing is None:
             return usage
         wanted: dict[str, set[int]] = collections.defaultdict(set)
-        for caller, slot, cls, recv in self.ledger.db.execute(
-                "SELECT caller, slot, cls, recv FROM vcalls WHERE module = ?", (self.module,)):
+        # Module-wide: a table scan into plain tuples (the sites gather into sets, so the scan
+        # order is not seen).
+        for caller, slot, cls, recv in self.ledger._tuples(
+                "SELECT caller, slot, cls, recv FROM vcalls NOT INDEXED WHERE module = ?", (self.module,)):
             if slot not in self.ledger.slot_bodies:
                 continue
             if cls in self.family or cls in self.troika_chain:
@@ -825,12 +857,11 @@ class Shape:
             i = bisect.bisect_right(starts, int(caller, 16)) - 1
             if i >= 0:
                 by_func[f"{starts[i]:08x}"] |= slots
+        listing = self._asm(by_func)
         for func, slots in sorted(by_func.items()):
-            row = self.ledger.listing.execute(
-                "SELECT asm FROM listing WHERE module = ? AND addr = ?", (self.module, func)).fetchone()
-            if not row:
+            if func not in listing:
                 continue
-            lines = row[0].splitlines()
+            lines = listing[func].splitlines()
             for i, line in enumerate(lines):
                 m = CALL_SITE_RE.match(line)
                 if not m:
@@ -840,6 +871,16 @@ class Shape:
                     continue
                 usage[off // 4][_use_after(lines[i + 1:i + 3])] += 1
         return usage
+
+
+def _ret_words(asm: str) -> int | None:
+    """Stack words a body pops on return, from its `RET n` instructions -- the image's own
+    statement of a `__thiscall` virtual's arity; None for a tail jump or returns that disagree.
+    `name_passes.Corpus.words` over a listing already read (that class loads the whole function
+    and vtable tables first, which the signatures never use)."""
+    found = {int(m.group(1), 16) if m.group(1) else int(m.group(2) or 0)
+             for m in name_passes.RET.finditer(asm)}
+    return next(iter(found)) // 4 if len(found) == 1 and next(iter(found)) % 4 == 0 else None
 
 
 def _use_after(lines: list[str]) -> str:
@@ -1002,18 +1043,34 @@ def render(shape: Shape, rows: list[Row], sigs: list[dict]) -> dict[str, str]:
             "signatures.md": signatures_md, "signatures.tsv": signatures_tsv}
 
 
-def build(module: str, depth: int, repo: Path) -> tuple[Shape, list[Row], list[dict]]:
-    ledger = kl.build(module, depth, repo)
+def build(module: str, depth: int, repo: Path, ledger: kl.Ledger | None = None,
+          rows: bool = True) -> tuple[Shape, list[Row], list[dict]]:
+    """The shape on `ledger` (built here when not given): the layout rows and the signatures.
+    Without `rows` the layout rows are left out (an empty list) -- the census slots alone."""
+    ledger = ledger if ledger is not None else kl.build(module, depth, repo)
     records = dl.load(research_root(), module)
     if records is None:
         raise SystemExit(f"kernel_shape: no datamap records for {module}; run "
                          "`uv run elysium research datamap_types report` first")
-    root = sdk_layout.sdk_root(research_root())
-    sdk = sdk_layout.Sdk(root) if root else None
+    sdk = kernel_cache.sdk_index(research_root())
     shape = Shape(ledger, records, sdk)
     shape.load_overlays()
-    shape.gather()
-    return shape, shape.rows(), shape.signatures()
+    # The evidence and the derived signatures stand on the corpus stage, the SDK and the records
+    # alone, and `kernel_cache` keeps them; the two reading overlays and the citation hints are
+    # applied on every build.
+    key = kernel_cache.shape_key(ledger, sdk, records)
+    state = kernel_cache.load("shape", key)
+    kept = isinstance(state, dict)
+    if kept:
+        derived = shape.restore(state)
+    else:
+        shape.gather()
+        derived = shape.signature_rows()
+    table = shape.rows() if rows else []
+    if not kept:   # after the rows, so the layouts they flattened are kept too
+        kernel_cache.store("shape", key, shape.corpus_state(derived))
+    kernel_cache.keep_sdk(sdk)
+    return shape, table, shape.overlay_signatures(derived)
 
 
 def residue(shape: Shape, rows: list[Row], sigs: list[dict]) -> str:
@@ -1066,7 +1123,10 @@ def unported_rows(repo: Path, module: str = kl.MODULE, depth: int = kl.DEFAULT_D
     """
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     import gen_kernel_shape as g
-    model = g.build(repo, module, depth)
+    # The census slots alone: no layout rows, so no citation scan beneath them. Through the module
+    # globals, so a process that shares its builds (`kernel.share_builds`) shares these too.
+    ledger = kl.build(module, depth, repo, citations=False)
+    model = g.model_of(repo, build(module, depth, repo, ledger=ledger, rows=False))
     _, unported = override_rows(repo, model)
     return unported
 
@@ -1220,6 +1280,12 @@ def main(argv: list[str] | None = None) -> int:
                              "the committed pin is docs/vtmb/npc-kernel/unported.tsv")
     args = parser.parse_args(argv)
     repo = repo_root()
+    if args.check and not (args.out or args.residue or args.unported):
+        return kernel_cache.stamped("kernel_shape", vars(args), repo, lambda: _main(args, repo))
+    return _main(args, repo)
+
+
+def _main(args: argparse.Namespace, repo: Path) -> int:
     if args.unported:
         rows_out = unported_rows(repo, args.module, args.depth)
         text = ("# The live rules the port does not carry yet (`kernel_shape --unported`); the set must "
@@ -1243,4 +1309,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Run as the importable module, not as `__main__`: the shape half `kernel_cache` pickles holds
+    # this module's `Evidence`, and the other tools read it back as `kernel_shape.Evidence`.
+    import kernel_shape
+
+    sys.exit(kernel_shape.main())

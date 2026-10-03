@@ -2458,7 +2458,7 @@ function	0x1027e7f0	FUN_1027e7f0	-		layer 0
 function	0x1027ede0	CAI_BaseNPC::GetShortConditionName	CCineNPC#408, CNPCMaker#408, CNPC_VHumanCombatant#408, CNPC_VPedestrian#408, CNPC_VRat#408, CNPC_VVampire#408	dead	layer 1
 function	0x1027ee00	CAI_BaseNPC::GetLastSharedCondition	CCineNPC#409, CNPCMaker#409, CNPC_VHumanCombatant#409, CNPC_VPedestrian#409, CNPC_VRat#409, CNPC_VVampire#409	dead	layer 0
 function	0x1027ee20	FUN_1027ee20	-		layer 0
-function	0x1027ef20	FUN_1027ef20	-	dead	layer 11
+function	0x1027ef20	FUN_1027ef20	-	mechanism	layer 11
 function	0x1027efb0	FUN_1027efb0	-	dead	layer 1
 function	0x1027f270	FUN_1027f270	-		layer 0
 function	0x1027f550	FUN_1027f550	-		layer 1
@@ -2535,9 +2535,9 @@ function	0x1028d610	FUN_1028d610	-		layer 16
 function	0x1028d6e0	CAI_BaseNPCTroika::UpdateOnRemove	CNPCMaker#180, CNPC_VHumanCombatant#180, CNPC_VPedestrian#180, CNPC_VRat#180, CNPC_VVampire#180	rule	layer 15
 function	0x1028d860	CAI_BaseNPCTroika::FUN_1028d860	CNPCMaker#583, CNPC_VHumanCombatant#583, CNPC_VPedestrian#583, CNPC_VRat#583, CNPC_VVampire#583	present	layer 1
 function	0x1028d910	CAI_BaseNPCTroika::FUN_1028d910	CNPCMaker#584, CNPC_VHumanCombatant#584, CNPC_VPedestrian#584, CNPC_VRat#584, CNPC_VVampire#584	present	layer 1
-function	0x1028d990	FUN_1028d990	-	dead	layer 11
-function	0x1028de10	CAI_BaseNPCTroika::FUN_1028de10	CNPCMaker#18, CNPC_VHumanCombatant#18, CNPC_VPedestrian#18, CNPC_VRat#18, CNPC_VVampire#18	dead	layer 12
-function	0x1028de90	CAI_BaseNPCTroika::FUN_1028de90	CNPCMaker#17, CNPC_VHumanCombatant#17, CNPC_VPedestrian#17, CNPC_VRat#17, CNPC_VVampire#17	dead	layer 12
+function	0x1028d990	FUN_1028d990	-	mechanism	layer 11
+function	0x1028de10	CAI_BaseNPCTroika::FUN_1028de10	CNPCMaker#18, CNPC_VHumanCombatant#18, CNPC_VPedestrian#18, CNPC_VRat#18, CNPC_VVampire#18	mechanism	layer 12
+function	0x1028de90	CAI_BaseNPCTroika::FUN_1028de90	CNPCMaker#17, CNPC_VHumanCombatant#17, CNPC_VPedestrian#17, CNPC_VRat#17, CNPC_VVampire#17	mechanism	layer 12
 function	0x1028df30	CAI_BaseNPCTroika::FUN_1028df30	CNPCMaker#20, CNPC_VHumanCombatant#20, CNPC_VPedestrian#20, CNPC_VRat#20, CNPC_VVampire#20	dead	layer 12
 function	0x1028dfb0	CAI_BaseNPCTroika::FUN_1028dfb0	CNPCMaker#19, CNPC_VHumanCombatant#19, CNPC_VPedestrian#19, CNPC_VRat#19, CNPC_VVampire#19	dead	layer 1
 function	0x1028e030	FUN_1028e030	-		layer 4

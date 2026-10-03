@@ -16,6 +16,7 @@ from elysium_pipeline import workspace_lock
 from elysium_pipeline.asset_paths import baked_level_path
 from elysium_pipeline.paths import saved_debug_root
 from elysium_pipeline.process import ProcessTimeout
+from elysium_pipeline.reporting import ExitCode
 from elysium_pipeline.importers import map_geometry
 
 
@@ -98,9 +99,28 @@ CLOTH_TIMEOUT_SECONDS = 1800.0
 #: journals in `$ELYSIUM_WORK_ROOT/logs/` are the durable record.
 TEST_REPORT_RETENTION = 50
 
+#: How much of a filter a report directory's name spells out. A report path is
+#: `<work>/reports/tests/<stamp>-<slug>/index.json`, and a three-prefix run's slug used to be the
+#: whole filter: 310 characters, past what Windows opens, so the commandlet never wrote `index.json`
+#: and the run read as "matched no test". Longer than this the slug is cut and an 8-hex digest of
+#: the whole filter follows, so two long filters that share a start still get two directories.
+TEST_REPORT_SLUG_CHARS = 40
+
 
 class UnrealFailure(RuntimeError):
-    pass
+    """An Unreal launch or an automation verdict that failed.
+
+    `exit_code`, when given, is the CLI exit code the failure maps to; a failure without one takes
+    its command's own category. `summary` is the parsed automation report of a run that failed on
+    its verdict, so the caller can still say which test failed in which prefix.
+    """
+
+    def __init__(self, message: str = "", *, exit_code: int | None = None,
+                 summary: dict | None = None) -> None:
+        super().__init__(message)
+        if exit_code is not None:
+            self.exit_code = int(exit_code)
+        self.summary = summary
 
 
 class MapStageFailure(RuntimeError):
@@ -121,7 +141,8 @@ _HEADLESS_EDITOR_ARGS = ("-NoLiveCoding", "-noP4", "-nosound")
 
 
 def _run(config, runner, executable: Path | str, args: Sequence[str], *,
-         timeout: float | None = None, idle_timeout: float | None = None) -> None:
+         timeout: float | None = None, idle_timeout: float | None = None,
+         category: int | None = None) -> None:
     arguments = list(map(str, args))
     executable_name = Path(executable).name.casefold()
     tail_lines = None
@@ -142,12 +163,17 @@ def _run(config, runner, executable: Path | str, args: Sequence[str], *,
     bounds = {"timeout": timeout}
     if idle_timeout is not None:
         bounds["idle_timeout"] = idle_timeout
+    # `category` is the exit code a killed child maps to (the runner's default is "toolchain",
+    # which says nothing about a build that hung); it rides along only when the caller names one.
+    if category is not None:
+        bounds["category"] = int(category)
     result = runner.run(
         [str(executable), *arguments], cwd=config.repo_root, tail_lines=tail_lines,
         **bounds,
     )
     if result.returncode:
-        raise UnrealFailure(f"{executable} exited with {result.returncode}")
+        raise UnrealFailure(f"{executable} exited with {result.returncode}",
+                            exit_code=category)
 
 
 def editor_executable(config, *, commandlet: bool = False) -> Path:
@@ -209,7 +235,7 @@ def build(config, runner, mode: str = "", extra: Sequence[str] = ()) -> None:
     # A deadline and no idle bound: UnrealBuildTool is legitimately silent for minutes while
     # one large translation unit or the link runs, so silence here is not a hang.
     _run(config, runner, config.ue_root / "Engine" / "Build" / "BatchFiles" / script,
-         arguments, timeout=BUILD_TIMEOUT_SECONDS)
+         arguments, timeout=BUILD_TIMEOUT_SECONDS, category=ExitCode.BUILD)
 
 
 def generate_clang_database(config, runner) -> None:
@@ -916,36 +942,72 @@ def verify_bakes(config, runner, maps: Sequence[str], *, batch_size: int = 4) ->
         )
 
 
-def run_tests(config, runner, filter_name: str = "Elysium.", *,
+def resolve_test_filters(filter_name: str | Sequence[str]) -> list[str]:
+    """The automation prefixes a request names, tier words resolved, duplicates dropped.
+
+    Each prefix is a tier name (`substrate`) or a fully qualified filter (`Elysium.Substrate.Npc.`);
+    a single argument may also join several with `+`, which is how Unreal itself separates them.
+    """
+    names = [filter_name] if isinstance(filter_name, str) else list(filter_name)
+    resolved: list[str] = []
+    for name in names:
+        for part in (piece.strip() for piece in name.split("+")):
+            if not part:
+                continue
+            selected = TEST_TIERS.get(part.lower())
+            if selected is None:
+                # A bare word is a tier name and only these exist; anything carrying a dot is a
+                # caller spelling a fully qualified filter, which is passed through untouched.
+                if "." not in part:
+                    raise UnrealFailure(
+                        f"unknown test tier '{part}'; expected one of "
+                        f"{', '.join(sorted(TEST_TIERS))}, or a fully qualified filter such as "
+                        f"'Elysium.Substrate.Knockback.'",
+                        exit_code=int(ExitCode.USAGE_OR_CONFIG),
+                    )
+                selected = part
+            if selected not in resolved:
+                resolved.append(selected)
+    return resolved or ["Elysium."]
+
+
+def report_slug(selected: str) -> str:
+    """The directory-name form of a filter: slugified, and capped with a digest when long."""
+
+    slug = re.sub(r"[^a-z0-9]+", "-", selected.lower()).strip("-") or "all"
+    if len(slug) <= TEST_REPORT_SLUG_CHARS:
+        return slug
+    digest = hashlib.sha1(selected.encode("utf-8")).hexdigest()[:8]
+    return f"{slug[:TEST_REPORT_SLUG_CHARS].rstrip('-')}-{digest}"
+
+
+def run_tests(config, runner, filter_name: str | Sequence[str] = "Elysium.", *,
               parity_stems: Sequence[str] = ()) -> dict:
     """Run an automation selection and report what actually executed.
+
+    `filter_name` is one prefix or several, and every prefix runs in ONE editor boot (Unreal takes
+    them joined with `+`): the boot is 19 s around well under a second of tests. The summary says
+    how each prefix fared, so a green run that left one prefix empty cannot hide behind the others.
 
     `parity_stems` widens the per-model parity slice, which is otherwise two hard-coded bodies.
     It is the only test in the suite built for slice iteration, and it was previously reachable
     only by invoking the commandlet by hand.
 
     Raises rather than returning a green summary when the run proved nothing: an unknown tier
-    name, a selection that matched no test, a tier that abstained entirely, or a report that
-    counts failures. `Automation RunTest` matches by substring and reports success for a
-    selection that matched nothing, so a typo is otherwise indistinguishable from a clean run.
+    name, a selection that matched no test, a prefix that matched none, a tier that abstained
+    entirely, or a report that counts failures. `Automation RunTest` matches by substring and
+    reports success for a selection that matched nothing, so a typo is otherwise indistinguishable
+    from a clean run. A raised `UnrealFailure` carries the parsed summary and the exit code that
+    says which kind of failure it was (7 for a verdict, 6 for a run that did not complete).
     """
-    selected = TEST_TIERS.get(filter_name.lower())
-    if selected is None:
-        # A bare word is a tier name and only these exist; anything carrying a dot is a caller
-        # spelling a fully qualified filter, which is passed through untouched.
-        if "." not in filter_name:
-            raise UnrealFailure(
-                f"unknown test tier '{filter_name}'; expected one of "
-                f"{', '.join(sorted(TEST_TIERS))}, or a fully qualified filter such as "
-                f"'Elysium.Substrate.Knockback.'"
-            )
-        selected = filter_name
+    prefixes = resolve_test_filters(filter_name)
+    selected = "+".join(prefixes)
     if config.work_root is None:
         raise UnrealFailure("automation needs ELYSIUM_WORK_ROOT for its retained report")
     reports_dir = config.work_root / "reports" / "tests"
     prune_test_reports(reports_dir, TEST_REPORT_RETENTION - 1)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
-    slug = re.sub(r"[^a-z0-9]+", "-", selected.lower()).strip("-") or "all"
+    slug = report_slug(selected)
     report = reports_dir / f"{stamp}-{slug}"
     suffix = 1
     while report.exists():
@@ -966,30 +1028,40 @@ def run_tests(config, runner, filter_name: str = "Elysium.", *,
         arguments.insert(2, "-ElysiumParityStems=" + ",".join(parity_stems))
     try:
         _run(config, runner, editor_executable(config, commandlet=True), arguments,
-             timeout=TEST_TIMEOUT_SECONDS, idle_timeout=TEST_IDLE_TIMEOUT_SECONDS)
+             timeout=TEST_TIMEOUT_SECONDS, idle_timeout=TEST_IDLE_TIMEOUT_SECONDS,
+             category=ExitCode.UNREAL_OR_BAKE)
     except ProcessTimeout as exc:
         # A killed run leaves a report directory the caller would otherwise never be pointed
         # at, and the only statement of which test wedged is in the streamed output: the last
         # line is whatever the test logged before it hung, not the controller's start line.
         raise exc.annotate(_killed_run_context(exc.result.output, report))
-    summary = summarize_test_report(report)
+    summary = summarize_test_report(report, prefixes)
     summary["report_path"] = str(report.resolve())
+    verdict = int(ExitCode.VALIDATION)
+    where = f"(report: {summary['report_path']})"
     if not summary["total"]:
         raise UnrealFailure(
-            f"'{selected}' matched no test; the run proved nothing "
-            f"(report: {summary['report_path']})"
-        )
+            f"'{selected}' matched no test; the run proved nothing {where}",
+            exit_code=verdict, summary=summary)
     if summary["failed"]:
+        names = [failure["name"] for failure in summary["failures"]]
+        listed = f": {', '.join(names[:5])}{', ...' if len(names) > 5 else ''}" if names else ""
         raise UnrealFailure(
-            f"{summary['failed']} of {summary['total']} test(s) failed "
-            f"(report: {summary['report_path']})"
-        )
+            f"{summary['failed']} of {summary['total']} test(s) failed{listed} {where}",
+            exit_code=verdict, summary=summary)
+    # An empty prefix is only an answer when others ran: a lone filter's emptiness is the overall
+    # total above, and a report that attributes nothing to any prefix has no per-prefix rows.
+    empty = [row["prefix"] for row in summary["prefixes"] if not row["total"]]
+    if empty and len(empty) < len(summary["prefixes"]):
+        raise UnrealFailure(
+            f"{len(empty)} of {len(prefixes)} prefix(es) matched no test: {', '.join(empty)}; "
+            f"the others ran {where}",
+            exit_code=verdict, summary=summary)
     if not summary["executed"]:
         raise UnrealFailure(
             f"all {summary['total']} test(s) under '{selected}' abstained; the prerequisite "
-            f"they need is unavailable, so the tier is vacuous "
-            f"(report: {summary['report_path']})"
-        )
+            f"they need is unavailable, so the tier is vacuous {where}",
+            exit_code=verdict, summary=summary)
     return summary
 
 
@@ -1045,16 +1117,41 @@ def prune_test_reports(reports_dir: Path, keep: int = TEST_REPORT_RETENTION) -> 
     return removed
 
 
-def summarize_test_report(report_dir: Path) -> dict:
-    """{total, executed, abstained, failed, seconds, abstentions} from an automation report.
+def _first_error(test: dict) -> tuple[str, str]:
+    """The first error a failed test logged, and the `File.cpp:line` that raised it."""
+
+    for entry in test.get("entries", []):
+        event = entry.get("event", {})
+        if str(event.get("type", "")).lower() != "error":
+            continue
+        message = " ".join(str(event.get("message", "")).split())
+        filename = entry.get("filename") or ""
+        where = f"{Path(str(filename)).name}:{entry.get('lineNumber', 0)}" if filename else ""
+        return message[:240], where
+    return "", ""
+
+
+def _prefix_row(prefix: str) -> dict:
+    return {"prefix": prefix, "total": 0, "executed": 0, "abstained": 0, "failed": 0,
+            "seconds": 0.0, "failures": []}
+
+
+def summarize_test_report(report_dir: Path, prefixes: Sequence[str] = ()) -> dict:
+    """{total, executed, abstained, failed, seconds, abstentions, failures, prefixes} from a report.
 
     The commandlet's exit code is the only verdict the pipeline reads, and a test that declines to
     run reports Success -- so a tier can be green while most of it never touched an asset. This
     reads the report back so the count that matters is visible: how many tests actually ran.
+
+    `failures` names every failed test with its first error and where it was raised. `prefixes`
+    answers the same counts per requested prefix (a test belongs to every prefix it matches, by
+    the substring rule `Automation RunTest` itself uses), so one boot that ran three prefixes
+    reports three results and an empty prefix is visible.
     """
     index = report_dir / "index.json"
     summary = {"total": 0, "executed": 0, "abstained": 0, "failed": 0,
-               "seconds": 0.0, "abstentions": []}
+               "seconds": 0.0, "abstentions": [], "failures": [],
+               "prefixes": [_prefix_row(prefix) for prefix in prefixes]}
     if not index.is_file():
         return summary
     try:
@@ -1067,19 +1164,40 @@ def summarize_test_report(report_dir: Path) -> dict:
     summary["failed"] = int(data.get("failed", 0) or 0)
     summary["seconds"] = float(data.get("totalDuration", 0.0) or 0.0)
     for test in tests:
+        path = test.get("fullTestPath", "?")
         messages = " ".join(
             entry.get("event", {}).get("message", "") for entry in test.get("entries", [])
         )
         # New tests emit the token explicitly. The legacy phrases keep reports from older editor
         # builds readable while the C++ suite migrates; they can go once every supported build
         # emits TEST_ABSTENTION_TOKEN.
-        if (TEST_ABSTENTION_TOKEN in messages
-                or "marked incomplete" in messages
-                or "skipping content validation" in messages):
+        abstained = (TEST_ABSTENTION_TOKEN in messages
+                     or "marked incomplete" in messages
+                     or "skipping content validation" in messages)
+        if abstained:
             summary["abstained"] += 1
-            summary["abstentions"].append(test.get("fullTestPath", "?"))
+            summary["abstentions"].append(path)
         else:
             summary["executed"] += 1
+        failure = None
+        if test.get("state") == "Fail" or int(test.get("errors", 0) or 0) > 0:
+            message, where = _first_error(test)
+            failure = {"name": path, "message": message, "where": where}
+            summary["failures"].append(failure)
+        for row in summary["prefixes"]:
+            if row["prefix"].casefold() not in path.casefold():
+                continue
+            row["total"] += 1
+            row["abstained" if abstained else "executed"] += 1
+            row["seconds"] += float(test.get("duration", 0.0) or 0.0)
+            if failure is not None:
+                row["failed"] += 1
+                row["failures"].append(failure)
+    if tests and not any(row["total"] for row in summary["prefixes"]):
+        # Not one test matched any prefix by name, so the report is organised some way this
+        # attribution does not know (a run Unreal filtered by something other than the test path).
+        # The overall counts still stand; per-prefix rows that all read "empty" would be noise.
+        summary["prefixes"] = []
     return summary
 
 

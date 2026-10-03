@@ -12,12 +12,16 @@ integrator builds and tests once (spec rule 7).
 ## Step 1 — the instrument: tools and tests (no development before gate 1)
 
 Wave 1 (Python; T2's and T3's Python halves):
-- [ ] **T1** — The `kernel_*` tools under budget (10 s cold, 1 s unchanged). M · Opus/high.
+- [x] **T1** — The `kernel_*` tools under budget (10 s cold, 1 s unchanged). M · Opus/high.
+  Landed wave 1: unchanged ≤0.44 s; cold ≤8.3 s except `kernel --check` 10.5 s (reported).
 - [ ] **T2** — The corpus MCP and the text tree under budget; the address index. M · Sonnet/high.
-- [ ] **T4** — The runner, the lease and the waits (blocking build/test, no polling). S · Sonnet/medium.
+  Python half landed wave 1 (probe set ≤0.11 s, ≤19.7 KB; `research where`); C++ half in wave 2.
+- [x] **T4** — The runner, the lease and the waits (blocking build/test, no polling). S · Sonnet/medium.
+  Landed wave 1: three prefixes in one boot 24.2 s; `--no-wait` exit 8; waits name the holder.
 
 Wave 2 (C++; T2's and T3's C++ halves):
-- [ ] **T3** — The test scale-down, tiered. M · Sonnet/medium.
+- [ ] **T3** — The test scale-down, tiered. M · Sonnet/medium. Its `pytest` half landed in
+  wave 1 (0 failures; default run 19.7–25.9 s, not reliably under the 20 s budget).
 - [ ] **T5** — The Green Room as the live test suite (`uv run elysium arena`). M · Opus/high.
 
 Wave 3 (build work, one agent):

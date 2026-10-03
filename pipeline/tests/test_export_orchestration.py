@@ -692,6 +692,7 @@ def test_glb_corpus_workers_are_spawn_importable() -> None:
         assert getattr(workers, worker.__name__, None) is worker
 
 
+@pytest.mark.corpus
 def test_every_named_worker_delegates_to_a_declared_seam() -> None:
     # The wrapper names its seam by string, and the inline branch every other test takes
     # never reads it: a typo would surface only in a real pooled run of that one kind.

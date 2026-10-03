@@ -7,15 +7,9 @@ themselves are covered by their own tests.
 
 from __future__ import annotations
 
-import os
 import sys
-import tempfile
 import types
 from pathlib import Path
-
-# The runner imports every generator, and they import `corpus`, which resolves the work root as it
-# loads; an existing directory is all the import needs.
-os.environ.setdefault("ELYSIUM_WORK_ROOT", tempfile.gettempdir())
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "research" / "tooling"))

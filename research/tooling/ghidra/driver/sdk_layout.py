@@ -19,6 +19,7 @@ treats a disagreement in gap length as "this stretch changed" and names nothing 
 from __future__ import annotations
 
 import re
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -94,30 +95,25 @@ def sdk_root(research: Path) -> Path | None:
     return None
 
 
+# One token `_strip` removes, leftmost first: a line comment up to (not including) its newline, a
+# block comment to its `*/` or the end, a literal to its unescaped closing quote or the end (a
+# trailing backslash included). The alternatives cannot start at the same character.
+_STRIP_RE = re.compile(r"//[^\n]*"
+                       r"|/\*(?:.*?\*/|.*)"
+                       r"|\"(?:[^\"\\]|\\.)*(?:\"|\\?\Z)"
+                       r"|'(?:[^'\\]|\\.)*(?:'|\\?\Z)", re.S)
+
+
+def _stripped(m: re.Match) -> str:
+    token = m.group()
+    if token[0] in "\"'":
+        return token[0] * 2
+    return "" if token[1] == "/" else "\n" * token.count("\n")
+
+
 def _strip(text: str) -> str:
     """Comments and literals out, line structure kept (so `#` directives stay on their lines)."""
-    out = []
-    i, n = 0, len(text)
-    while i < n:
-        c = text[i]
-        if text.startswith("//", i):
-            j = text.find("\n", i)
-            i = n if j < 0 else j
-        elif text.startswith("/*", i):
-            j = text.find("*/", i + 2)
-            chunk = text[i:(n if j < 0 else j + 2)]
-            out.append("\n" * chunk.count("\n"))
-            i = n if j < 0 else j + 2
-        elif c in "\"'":
-            j = i + 1
-            while j < n and text[j] != c:
-                j += 2 if text[j] == "\\" else 1
-            out.append(c + c)
-            i = j + 1
-        else:
-            out.append(c)
-            i += 1
-    return "".join(out)
+    return _STRIP_RE.sub(_stripped, text)
 
 
 def _condition(expr: str) -> bool:
@@ -129,7 +125,12 @@ def _condition(expr: str) -> bool:
     if not re.fullmatch(r"[\d\s()]*(?:(?:and|or|not|==|!=|<=|>=|<|>)[\d\s()]*)*", expr):
         return False
     try:
-        return bool(eval(expr, {"__builtins__": {}}))  # noqa: S307 -- digits and and/or/not only
+        # Two numbers side by side (`1 (0)`, a macro call the header's `#if` spells) compile as a
+        # call, which Python lints with a SyntaxWarning before the eval fails; the answer is False
+        # either way, so the lint is silenced rather than printed on every run.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            return bool(eval(expr, {"__builtins__": {}}))  # noqa: S307 -- digits and and/or/not only
     except Exception:  # noqa: BLE001
         return False
 
@@ -184,6 +185,17 @@ def preprocess(text: str) -> tuple[list[tuple[int, str]], dict[str, tuple[list[s
                 params = [p.strip() for p in (m.group(3) or "").split(",") if p.strip()]
                 macros[m.group(1)] = (params, m.group(4))
     return kept, macros
+
+
+# `preprocess` keeps a function-like `#define` only: a directive line (continuations joined) that
+# spells `NAME(` right after `define`. Searched on the stripped, joined text -- more loosely than
+# `preprocess` reads it, never less -- this says which of ~2,000 headers can hold one at all.
+_CONTINUATION_RE = re.compile(r"\\[^\S\n]*\n")
+_FUNCTION_DEFINE_RE = re.compile(r"#\s*define\s*\w+\(")
+
+
+def _defines_a_function_macro(text: str) -> bool:
+    return bool(_FUNCTION_DEFINE_RE.search(_CONTINUATION_RE.sub(" ", _strip(text))))
 
 
 def virtual_macros(macros: dict[str, tuple[list[str], str]]) -> set[str]:
@@ -324,6 +336,46 @@ def class_methods(text: str, cls: str,
     return base, methods
 
 
+def class_members(text: str, cls: str) -> list[tuple[str, str]]:
+    """(type, name) of the data members `cls` declares in a header's text, in declaration order."""
+    kept, _ = preprocess(text)
+    joined = "\n".join(line for _, line in kept)
+    head = re.search(rf"\b(?:class|struct|abstract_class)\s+{re.escape(cls)}\s*(:[^;{{]*)?\{{", joined)
+    if not head:
+        return []
+    open_at = head.end() - 1
+    body = joined[open_at + 1:_match_brace(joined, open_at)]
+    out: list[tuple[str, str]] = []
+    depth = 0
+    statement: list[str] = []
+    for c in body:
+        if c == "{":
+            depth += 1
+            if depth == 1:
+                statement = []
+            continue
+        if c == "}":
+            depth -= 1
+            statement = []
+            continue
+        if depth:
+            continue
+        if c == ";":
+            stmt = re.sub(r"\b(public|protected|private)\s*:", " ", "".join(statement)).strip()
+            stmt = re.sub(r"^(?:[A-Z_][A-Z0-9_]*\s*\([^;]*?\)\s*)+", "", stmt).strip()
+            statement = []
+            if not stmt or "(" in stmt or stmt.startswith(("typedef", "friend", "using", "enum",
+                                                           "static", "class", "struct", "template")):
+                continue
+            m = re.match(r"^(?P<type>.+?)\s*[\s\*&](?P<name>[A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*(?::\s*\d+)?$",
+                         stmt, re.S)
+            if m:
+                out.append((" ".join(m.group("type").split()), m.group("name")))
+            continue
+        statement.append(c)
+    return out
+
+
 def _record(cls: str, statement: str, line: int, macros: dict, wanted: set[str],
             methods: list[Method]) -> None:
     statement = re.sub(r"\b(public|protected|private)\s*:", " ", statement)
@@ -386,6 +438,11 @@ class Sdk:
         self._text: dict[Path, str] = {}
         self.macros: dict[str, tuple[list[str], str]] = {}
         self._scalars: set[str] | None = None
+        # Answers per class, kept so a pickled index (`kernel_cache`) carries them: each re-reads
+        # and re-preprocesses the class's header, and the shape asks for the same few classes
+        # hundreds of times.
+        self._methods: dict[str, tuple[str | None, list[Method]]] = {}
+        self._members: dict[str, list[tuple[str, str]]] = {}
         pattern = re.compile(r"^\s*(?:class|struct|abstract_class)\s+([A-Za-z_]\w*)\s*(?::[^;{]*)?\{?\s*$",
                              re.M)
         for sub in HEADER_DIRS:
@@ -396,7 +453,7 @@ class Sdk:
                 text = path.read_text(encoding="utf-8", errors="replace")
                 for m in pattern.finditer(text):
                     self._decl.setdefault(m.group(1), path)
-                if "#define" in text:
+                if "#define" in text and _defines_a_function_macro(text):
                     for name, macro in preprocess(text)[1].items():
                         self.macros.setdefault(name, macro)
 
@@ -416,10 +473,12 @@ class Sdk:
                     continue
                 for path in base.rglob("*.h"):
                     text = path.read_text(encoding="utf-8", errors="replace")
-                    found.update(enum.findall(text))
-                    found.update(typedef_enum.findall(text))
-                    found.update(typedef.findall(text))
-                    found.update(pointer_typedef.findall(text))
+                    if "enum" in text:      # each pattern spells its keyword; most headers lack both
+                        found.update(enum.findall(text))
+                    if "typedef" in text:
+                        found.update(typedef_enum.findall(text))
+                        found.update(typedef.findall(text))
+                        found.update(pointer_typedef.findall(text))
             self._scalars = found
         return self._scalars
 
@@ -455,12 +514,38 @@ class Sdk:
     def header(self, cls: str) -> Path | None:
         return self._decl.get(cls)
 
+    def __getstate__(self) -> dict:
+        # Pickled without the header texts it read on the way (`kernel_cache.sdk_index`).
+        state = {k: v for k, v in self.__dict__.items() if k not in ("cache_key", "cache_size")}
+        state["_text"] = {}
+        return state
+
+    def answers(self) -> int:
+        """How many per-class answers the index holds (what a stored copy would gain)."""
+        return len(self._methods) + len(self._members) + (self._scalars is not None)
+
+    def _header_text(self, path: Path) -> str:
+        if path not in self._text:
+            self._text[path] = path.read_text(encoding="utf-8", errors="replace")
+        return self._text[path]
+
     def methods(self, cls: str) -> tuple[str | None, list[Method]]:
         path = self._decl.get(cls)
         if path is None:
             return None, []
-        text = self._text.setdefault(path, path.read_text(encoding="utf-8", errors="replace"))
-        return class_methods(text, cls, self.macros)
+        if cls not in self._methods:
+            self._methods[cls] = class_methods(self._header_text(path), cls, self.macros)
+        base, methods = self._methods[cls]
+        return base, list(methods)
+
+    def members(self, cls: str) -> list[tuple[str, str]]:
+        """(type, name) of the data members `cls` declares in its header, in declaration order."""
+        path = self._decl.get(cls)
+        if path is None:
+            return []
+        if cls not in self._members:
+            self._members[cls] = class_members(self._header_text(path), cls)
+        return list(self._members[cls])
 
     def vtable(self, chain: tuple[str, ...] = NPC_CHAIN) -> tuple[list[Slot], dict[str, int]]:
         """The flattened primary vtable down `chain`, and each class's table length."""

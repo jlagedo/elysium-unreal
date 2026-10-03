@@ -10,15 +10,10 @@ asserts the two constants the pilot read by hand, and skips when the corpus is n
 
 from __future__ import annotations
 
-import os
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
-
-os.environ.setdefault("ELYSIUM_WORK_ROOT", tempfile.gettempdir())
-os.environ.setdefault("ELYSIUM_VTMB_ROOT", tempfile.gettempdir())
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "research" / "tooling" / "ghidra" / "driver"))
@@ -220,8 +215,10 @@ def _corpus_present() -> bool:
         return False
 
 
-@pytest.mark.skipif(not _corpus_present(), reason="the Ghidra corpus is not on this machine")
+@pytest.mark.corpus
 def test_pilot_function_against_the_hand_read():
+    if not _corpus_present():
+        pytest.skip("the Ghidra corpus is not on this machine")
     sk = ks.Builder(ks.Image(ks.vtmb_root() / "Vampire" / "dlls" / "vampire.dll"), ks.Names()).build(0x10271900)
     assert len(sk.arms) == 8
     values = {g["va"]: g["value"] for g in sk.globals_}

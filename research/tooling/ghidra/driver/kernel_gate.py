@@ -68,6 +68,7 @@ import bisect
 import contextlib
 import dataclasses
 import io
+import itertools
 import json
 import re
 import subprocess
@@ -143,6 +144,9 @@ HEX8_RE = re.compile(r"(?<![0-9a-z])(?:0x|fun_|dat_|lab_|sub_)?([0-9a-f]{8})(?![
 # and the seam address search `(?<![0-9a-f])<addr>(?![0-9a-f])`; `_is_citation` narrows a run to
 # HEX8_RE's stricter bounds.
 RUN8_RE = re.compile(r"(?<![0-9a-f])[0-9a-f]{8}(?![0-9a-f])")
+# The same runs, found as every run of eight or more hex digits and kept at exactly eight: the
+# regex no longer tests both bounds at every character (`SourceIndex._add`, ~40% faster).
+HEX_RUN_RE = re.compile(r"[0-9a-f]{8,}")
 _ALNUM = frozenset("0123456789abcdefghijklmnopqrstuvwxyz")
 _CITE_PREFIXES = ("0x", "fun_", "dat_", "lab_", "sub_")
 NAMED_RE = re.compile(r"0x[0-9a-f]{8}(?![0-9a-f])")
@@ -247,10 +251,11 @@ class SourceIndex:
         low = text.lower()
         self._lower[rel] = low
         toks: set[str] = set()
-        starts = [0]
-        for ln in low.splitlines(keepends=True):
-            starts.append(starts[-1] + len(ln))
-        for m in RUN8_RE.finditer(low):
+        # Where each line starts, as `str.splitlines` breaks them, summed in C.
+        starts = [0, *itertools.accumulate(map(len, low.splitlines(keepends=True)))]
+        for m in HEX_RUN_RE.finditer(low):
+            if m.end() - m.start() != 8:
+                continue
             tok = m.group()
             site = (rel, bisect.bisect_right(starts, m.start()))
             runs = self.runs.setdefault(tok, [])

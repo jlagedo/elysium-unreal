@@ -25,6 +25,9 @@ from research.tooling.capture.generated_binary_profiles import (
     target as profile_target,
 )
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "records the live retail game's memory (ReadProcessMemory)"
+
 
 PROCESS_QUERY_INFORMATION = 0x0400
 PROCESS_VM_READ = 0x0010

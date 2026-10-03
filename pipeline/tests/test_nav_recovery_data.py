@@ -103,6 +103,7 @@ def test_two_small_hulls_are_larger_than_their_full_ones():
 
 
 @pytest.mark.skipif(not _have_install(), reason="VtMB install not configured")
+@pytest.mark.corpus
 def test_hull_table_still_matches_the_image():
     import hull_table
 
@@ -176,6 +177,7 @@ def test_the_ground_move_clamp_constants():
 # ---------------------------------------------------------------- the graphs retail loads
 
 @pytest.mark.skipif(not _have_install(), reason="VtMB install not configured")
+@pytest.mark.corpus
 def test_the_witness_graphs_are_the_patch_loose_ones():
     """The pins are the patch's graphs (203/429, 578/1,862), not the packed 116/234."""
 
@@ -192,6 +194,7 @@ def test_the_witness_graphs_are_the_patch_loose_ones():
 
 
 @pytest.mark.skipif(not _have_install(), reason="VtMB install not configured")
+@pytest.mark.corpus
 def test_the_rat_links_that_bridge_separate_human_node_sets():
     """Story 3's one-sided acceptance: these must path on the rat mesh and not the human one."""
 
@@ -212,6 +215,7 @@ def test_the_rat_links_that_bridge_separate_human_node_sets():
 
 
 @pytest.mark.skipif(not _have_install(), reason="VtMB install not configured")
+@pytest.mark.corpus
 def test_the_witness_maps_carry_the_signatures_the_spec_pins():
     import contents_signatures
 

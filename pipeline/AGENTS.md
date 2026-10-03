@@ -13,8 +13,14 @@ Python tests run from the repository root as `uv run pytest`.
 `elysium_pipeline.paths` is the only offline path resolver, and `ELYSIUM_EXPORT_ROOT` optionally
 overrides `$ELYSIUM_WORK_ROOT/exports`.
 
-`elysium_pipeline.workspace_lock` owns the cross-process generated-state lease and the
-Unreal-process liveness check that guards it.
+`elysium_pipeline.workspace_lock` owns the cross-process leases and the Unreal-process liveness
+check that guards them. Two scopes: the **checkout lease** (inside the checkout, `Saved/Elysium/
+leases/`) is held by `build`, `test`, `run`, `gr` and `debug` for as long as they run, so a build
+is exclusive against anything holding that checkout's binaries and an idle sibling checkout never
+blocks it; the **export-root lease** (shared by every checkout) is held only by commands that
+write exports or bakes. A held lease is waited for (30 minutes, naming the holder in one line);
+`--no-wait` (or `ELYSIUM_NO_WAIT=1`) refuses at once. A refusal exits 8, apart from a failed
+build (4), a failed test (7) and a run that did not complete (6).
 
 ## Coordinate contract
 

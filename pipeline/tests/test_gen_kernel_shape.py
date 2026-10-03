@@ -10,16 +10,12 @@ corpus is not on the machine.
 
 from __future__ import annotations
 
-import os
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
 
-# The generator imports `kernel_ledger`, which imports `corpus`, which resolves the work root as it
-# loads; an existing directory is all the import needs.
-os.environ.setdefault("ELYSIUM_WORK_ROOT", tempfile.gettempdir())
+import _kernel_build
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "research" / "tooling"))
@@ -265,24 +261,14 @@ def test_constant_return_reads_only_a_one_statement_body():
     assert gks.constant_return("") == ""
 
 
-# --- against the real corpus -----------------------------------------------------------------
+# --- against the real corpus (opt in: `pytest -m corpus`) ------------------------------------
 
-def _corpus_present() -> bool:
-    try:
-        import corpus  # noqa: WPS433
-
-        return (corpus._corpus_dir() / "corpus.sqlite").is_file()
-    except Exception:  # noqa: BLE001 -- no work root on this machine
-        return False
-
-
-@pytest.fixture(scope="module")
+@pytest.fixture
 def model():
-    if not _corpus_present():
-        pytest.skip("the Ghidra corpus is not on this machine")
-    return gks.build(REPO, gks.kl.MODULE, gks.kl.DEFAULT_DEPTH)
+    return _kernel_build.model()   # one build per process, on the shape tests' shape
 
 
+@pytest.mark.corpus
 def test_the_census_carries_the_shape_29b_landed(model):
     troika = [w for w in model.words if w.table == gks.BASE_TABLE]
     assert len(troika) == 756                      # top-level words of the flattened layout
@@ -293,6 +279,7 @@ def test_the_census_carries_the_shape_29b_landed(model):
     assert sorted(row.slot for row in model.slots) == list(range(gks.TROIKA_SLOTS))
 
 
+@pytest.mark.corpus
 def test_every_slot_has_a_port_callable_and_no_two_share_a_name(model):
     names: dict[str, int] = {}
     for row in model.slots:
@@ -310,6 +297,7 @@ def test_every_slot_has_a_port_callable_and_no_two_share_a_name(model):
         names[key] = row.slot
 
 
+@pytest.mark.corpus
 def test_no_generated_slot_shadows_the_port_chain(model):
     for row in model.slots:
         if row.port_kind != gks.PORT:
@@ -317,6 +305,7 @@ def test_no_generated_slot_shadows_the_port_chain(model):
                 f"slot {row.slot} would shadow `{row.port_name}` in the port's entity chain"
 
 
+@pytest.mark.corpus
 def test_unsettled_rows_carry_over_as_recorded(model):
     # 29b-0 left seven top-level words and seven Troika-line slots unsettled; they land as their
     # recorded type and arity rather than being dropped.
@@ -332,6 +321,7 @@ def test_unsettled_rows_carry_over_as_recorded(model):
         assert len(row.params_port) == len([p for p in row.params.split(",") if p.strip()])
 
 
+@pytest.mark.corpus
 def test_check_mode_matches_the_committed_files(model):
     if not REPO.joinpath(*gks.CENSUS_OUTPUT).is_file():
         pytest.skip("the census is not committed yet")

@@ -70,6 +70,7 @@ def test_a_missing_model_unit_fails_the_stage_rather_than_dropping_cover():
         meshes.triangles("models/nothing/at/all.mdl")
 
 
+@pytest.mark.corpus
 def test_lod0_triangles_are_the_mesh_the_corpus_obj_carried():
     """164 triangles is what `UE_extract_corpus.decode_prop_models` wrote into
     `shared/props/models_scenery_structural_shoplight_shoplightwithbulbs.obj`, whose vertices the
@@ -85,12 +86,14 @@ def test_lod0_triangles_are_the_mesh_the_corpus_obj_carried():
     assert 10.0 < float(extent.max()) < 1000.0
 
 
+@pytest.mark.corpus
 def test_only_the_rain_map_stages_a_payload():
     _export_root()
     assert weather_lane.stage_map("sp_tutorial_1") is None
     assert weather_lane.stage_map("sm_pawnshop_1") is None
 
 
+@pytest.mark.corpus
 def test_the_rain_map_reproduces_the_decoder_s_cover_set():
     _export_root()
     payload = weather_lane.stage_map(RAIN_MAP)
@@ -102,6 +105,7 @@ def test_the_rain_map_reproduces_the_decoder_s_cover_set():
     assert len(payload["sha256"]) == 64
 
 
+@pytest.mark.corpus
 def test_the_footprint_the_bake_pins_survives_the_port():
     _export_root()
     bounds = weather_lane.stage_map(RAIN_MAP)["document"]["world_bounds_cm"]
@@ -110,6 +114,7 @@ def test_the_footprint_the_bake_pins_survives_the_port():
     assert footprint[1] == pytest.approx(FOOTPRINT_CM[1], abs=0.01)
 
 
+@pytest.mark.corpus
 def test_the_bounds_are_the_world_scene_s_and_no_prop_widens_them():
     """The decoder took its AABB over the world vertices BEFORE appending prop cover, so a prop
     hanging outside the world's extent cannot stretch the raster. Measured: the hub's prop cover
@@ -130,6 +135,7 @@ def test_the_bounds_are_the_world_scene_s_and_no_prop_widens_them():
     assert (props.max(axis=0) > world.max(axis=0)).any()
 
 
+@pytest.mark.corpus
 def test_water_refract_and_additive_groups_are_not_cover():
     """The decoder dropped all three before rasterising -- rain falls through a canal and through
     an additive glow card. The counts differ, which is what proves the filter ran."""
@@ -145,6 +151,7 @@ def test_water_refract_and_additive_groups_are_not_cover():
     assert kept < geometry.world.tri_count
 
 
+@pytest.mark.corpus
 def test_only_solid_non_sky_props_are_cover():
     """The placement record decides both, not the model: `solid` is vbsp's own `SOLID_*` word and
     `sky` is the 3D-skybox area rule. `formats.weather` read exactly these two fields off the

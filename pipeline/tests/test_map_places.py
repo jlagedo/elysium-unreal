@@ -209,6 +209,7 @@ def _witness(map_name):
     ("sp_tutorial_1", 203, 2942, 49),
     ("sm_hub_1", 578, 3113, 274),
 ])
+@pytest.mark.corpus
 def test_the_witness_place_sets(map_name, nodes, human_cap, paired):
     payload, rows = _witness(map_name)
     assert payload["numNodes"] == len(payload["places"]) == nodes
@@ -224,6 +225,7 @@ def test_the_witness_place_sets(map_name, nodes, human_cap, paired):
     assert round(caps[0]["capUnits"]) == human_cap and not caps[0]["fromHuman"]
 
 
+@pytest.mark.corpus
 def test_the_thugs_patrol_points_are_bound_to_their_nodes():
     payload, rows = _witness("sp_tutorial_1")
     by_hint = {place["hint"]: place for place in payload["places"] if place["hint"] >= 0}
@@ -234,6 +236,7 @@ def test_the_thugs_patrol_points_are_bound_to_their_nodes():
         assert by_hint[bsp_index]["wcId"] == nodeid
 
 
+@pytest.mark.corpus
 def test_the_hub_crosswalk_nodes_pair_with_each_other():
     payload, rows = _witness("sm_hub_1")
     crosswalk_rows = {index for index, row in enumerate(rows)

@@ -394,6 +394,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     repo = repo_root()
+    if args.check and not args.report:
+        image = Path(args.binary) if args.binary else vtmb_root() / "Vampire" / "dlls" / "vampire.dll"
+        return kl.kernel_cache.stamped("gen_kernel_tunables", vars(args), repo,
+                                       lambda: _main(args, repo), extra=[image])
+    return _main(args, repo)
+
+
+def _main(args: argparse.Namespace, repo: Path) -> int:
     rows = kl.load_tunables(OVERLAY)
     image = load_image(args.binary)
     if args.report:

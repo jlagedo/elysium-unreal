@@ -233,6 +233,7 @@ def test_the_two_halves_share_the_manifest_version(module):
 
 
 @pytest.mark.parametrize("map_name", WORKING_MAPS)
+@pytest.mark.corpus
 def test_every_env_sprite_of_the_working_corpus_is_a_row(map_name):
     unit = MG.sidecars.unit_paths(map_name)["root"]
     if not unit.is_file():

@@ -21,6 +21,13 @@ from research.tooling.capture.retail_capture_native import (
     run as run_native,
 )
 
+# Read by `elysium research`: these modes are runs, not queries, so the 10 s / 60 s budget skips them;
+# every other invocation is a query under it.
+RESEARCH_NOT_A_QUERY = {
+    "--prepare": "builds the native capture project (cmake)",
+    "--attach": "injects the viewmodel hook into the retail game and waits",
+}
+
 
 MODULES = {
     "vampire.dll": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",

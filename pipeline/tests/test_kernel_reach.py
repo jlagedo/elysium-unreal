@@ -5,12 +5,8 @@ from __future__ import annotations
 
 import collections
 import json
-import os
 import sys
-import tempfile
 from pathlib import Path
-
-os.environ.setdefault("ELYSIUM_WORK_ROOT", tempfile.gettempdir())
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "research" / "tooling" / "ghidra" / "driver"))

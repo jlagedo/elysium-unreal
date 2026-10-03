@@ -348,6 +348,7 @@ def _legacy_root() -> Path | None:
 
 
 @pytest.mark.parametrize("directory, suffix", [("lip", ".lip")])
+@pytest.mark.corpus
 def test_the_deployed_lip_tree_matches_the_legacy_mirror_byte_for_byte(directory, suffix):
     """The deployed `lip/` mirror is the legacy `lip/` mirror's own bytes, under the legacy key.
 

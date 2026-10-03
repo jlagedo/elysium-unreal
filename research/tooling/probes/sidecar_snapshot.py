@@ -23,6 +23,9 @@ from pathlib import Path
 from elysium_pipeline.exporters import UE_map_sidecars as producer
 from elysium_pipeline.paths import export_v2_root
 
+# Read by `elysium research`: this tool is a run, not a query, so the 10 s / 60 s budget skips it.
+RESEARCH_NOT_A_QUERY = "writes every map's sidecars"
+
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="sidecar_snapshot", description=__doc__)
