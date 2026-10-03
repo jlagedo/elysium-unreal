@@ -1866,6 +1866,15 @@ def _emit(output: Path, text: str, check: bool) -> int:
         print(f"check: {output.name} matches the ledger")
         return 0
     output.parent.mkdir(parents=True, exist_ok=True)
+    # Unchanged text is not rewritten. These are C++ sources, headers and `.inl`s included inside
+    # the kernel's class bodies: a rewrite with the same bytes still stamps a new time on them, and
+    # the next build recompiles the whole module (spec 0002 T6: 3 m 22 s after a `research kernel`
+    # that changed nothing).
+    if output.is_file():
+        with open(output, encoding="utf-8", newline="") as handle:
+            if handle.read().replace("\r\n", "\n") == text:
+                print(f"unchanged {output}")
+                return 0
     output.write_text(text, encoding="utf-8", newline="\n")
     print(f"wrote {output}")
     return 0

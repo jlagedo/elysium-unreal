@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "AIController.h"
@@ -51,6 +53,7 @@ FVector Feet(AElysiumNpcBody* Body)
 }
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavJumpFlightTest,
 	"Elysium.Arm.NavJumpLink.Flight", ElysiumNavJumpTests::Flags)
 bool FElysiumNavJumpFlightTest::RunTest(const FString&)
@@ -167,6 +170,7 @@ bool FElysiumNavJumpUnavailableTest::RunTest(const FString&)
 	TestEqual(TEXT("failed move probe never publishes Jump"), Body->SampleNavigation().Type, EElysiumNpcNavType::Ground);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 namespace ElysiumNavJumpTests
 {

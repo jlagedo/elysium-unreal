@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumClassRegistry.h"
@@ -57,6 +59,7 @@ namespace
 // Slot 103 `Spawn` `0x101a6f10` and the constant own slots.
 // -------------------------------------------------------------------------------------------------
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorSpawnTest,
 	"Elysium.Arm.NpcKernelDirector.Spawn", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorSpawnTest::RunTest(const FString&)
@@ -393,6 +396,7 @@ bool FElysiumNpcKernelDirectorAiFinishScheduleTest::RunTest(const FString&)
 	TestEqual(TEXT("a dead NPC keeps NPC_STATE_DEAD"), Guard->IdealStateRetail(), 7);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // -------------------------------------------------------------------------------------------------
 // `DelayStart` `0x101a8cf0`, `IsTimeToStart` `0x101a7540`, `LinkedSequence` `0x101a8130`.
@@ -465,6 +469,7 @@ bool FElysiumNpcKernelDirectorStartGateTest::RunTest(const FString&)
 // `CanInterrupt` `0x101a8930`, `AllowInterrupt` `0x101a8890`, slot 459 `0x101a89a0`.
 // -------------------------------------------------------------------------------------------------
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorInterruptTest,
 	"Elysium.Arm.NpcKernelDirector.Interrupt", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorInterruptTest::RunTest(const FString&)
@@ -568,6 +573,7 @@ bool FElysiumNpcKernelDirectorRemovalTest::RunTest(const FString&)
 	TestNotEqual(TEXT("which is no longer in NPC_STATE_SCRIPT"), Jack->NpcStateRetail(), 4);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // -------------------------------------------------------------------------------------------------
 // Persistence of an idle director: the `CCineNPC` / `CCineAISchedule` datamap SAVE rows and the
@@ -719,6 +725,7 @@ bool FElysiumNpcKernelDirectorRevisitTest::RunTest(const FString&)
 // `Event_Killed` `0x10265ad0`: a killed NPC in SCRIPT runs `CancelScript` at once, mid-play.
 // -------------------------------------------------------------------------------------------------
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorKilledTest,
 	"Elysium.Arm.NpcKernelDirector.KilledMidPlay", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorKilledTest::RunTest(const FString&)
@@ -903,6 +910,7 @@ bool FElysiumNpcKernelDirectorProceduralRadiusTest::RunTest(const FString&)
 		ElysiumEntityDebugTest::CounterValue(F.World.FindByName(TEXT("begun"))), 1.f);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // -------------------------------------------------------------------------------------------------
 // Open question 8.1: directors stand in the Troika Look walk (retail's AI list), and `BestEnemy`'s

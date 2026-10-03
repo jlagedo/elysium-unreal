@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumContentPaths.h"
@@ -64,6 +66,7 @@ namespace ElysiumPlaceSetTests
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSetGetPositionTest,
 	"Elysium.Arm.PlaceSet.GetPosition", GElysiumPlaceSetTestFlags)
 bool FElysiumPlaceSetGetPositionTest::RunTest(const FString&)
@@ -119,6 +122,7 @@ bool FElysiumPlaceSetGetPositionTest::RunTest(const FString&)
 	TestEqual(TEXT("...and leaves the out-parameter alone"), Untouched, FVector(7.0));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSetCounterTest,
 	"Elysium.Substrate.PlaceSet.Counter", GElysiumPlaceSetTestFlags)
@@ -214,6 +218,7 @@ bool FElysiumPlaceSetCounterTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSetStorageTest,
 	"Elysium.Arm.PlaceSet.Storage", GElysiumPlaceSetTestFlags)
 bool FElysiumPlaceSetStorageTest::RunTest(const FString&)
@@ -295,8 +300,10 @@ bool FElysiumPlaceSetRestoreTest::RunTest(const FString&)
 	TestEqual(TEXT("...counting nothing"), ElysiumAiNetwork::NodeMissCounter() - Misses, 0);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #if WITH_EDITOR
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSetAuthorJsonTest,
 	"Elysium.Arm.PlaceSet.AuthorJson", GElysiumPlaceSetTestFlags)
 bool FElysiumPlaceSetAuthorJsonTest::RunTest(const FString&)
@@ -347,6 +354,7 @@ bool FElysiumPlaceSetAuthorJsonTest::RunTest(const FString&)
 	TestEqual(TEXT("...and a refusal leaves the asset as it was"), Asset->Rows.Num(), 2);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 #endif
 
 // --- The baked assets -----------------------------------------------------------------------------

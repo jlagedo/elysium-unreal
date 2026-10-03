@@ -18,6 +18,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -332,6 +334,7 @@ namespace
 // Cycle 11b — the Masquerade level outputs and the level-5 loss transaction
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawMasqueradeOutputsTest,
 	"Elysium.Arm.Law.MasqueradeOutputs", GElysiumTestFlags)
 bool FElysiumLawMasqueradeOutputsTest::RunTest(const FString&)
@@ -1010,6 +1013,7 @@ bool FElysiumLawFeedProducerTest::RunTest(const FString&)
 		F.Player->CriminalActCount(), CriminalActs + 1);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // `trigger_player_activity_level`
@@ -1131,6 +1135,7 @@ bool FElysiumLawActivityTriggerTest::RunTest(const FString&)
 // The save block
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawSaveTest,
 	"Elysium.Arm.Law.Save", GElysiumTestFlags)
 bool FElysiumLawSaveTest::RunTest(const FString&)
@@ -1328,6 +1333,7 @@ bool FElysiumLawRecordTest::RunTest(const FString&)
 	TestEqual(TEXT("...and so does the pursuit state"), F.Player->Police.CopsInPursuit, 1);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 }   // namespace ElysiumLawTests
 

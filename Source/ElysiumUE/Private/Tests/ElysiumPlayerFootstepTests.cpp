@@ -22,6 +22,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumAnimEvent.h"
@@ -154,6 +156,7 @@ namespace
 
 // --- Elysium.Arm.Footsteps.PlayerClock ----------------------------------------------------
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerStepClockTest,
 	"Elysium.Arm.Footsteps.PlayerClock", GElysiumTestFlags)
 bool FElysiumPlayerStepClockTest::RunTest(const FString&)
@@ -632,6 +635,7 @@ bool FElysiumPlayerWaterStepTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // --- Elysium.Substrate.Footsteps.PlayerHearing --------------------------------------------------
 
@@ -797,6 +801,7 @@ bool FElysiumPlayerHearingTest::RunTest(const FString&)
 
 // --- Elysium.Arm.Footsteps.PlayerSwallows -------------------------------------------------
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerSwallowsTest,
 	"Elysium.Arm.Footsteps.PlayerSwallows", GElysiumTestFlags)
 bool FElysiumPlayerSwallowsTest::RunTest(const FString&)
@@ -886,6 +891,7 @@ bool FElysiumPlayerServerFootstepsOffTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 } // namespace ElysiumPlayerFootstepTests
 

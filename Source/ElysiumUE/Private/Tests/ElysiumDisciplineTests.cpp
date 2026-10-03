@@ -8,6 +8,8 @@
 // the seam that makes this domain runnable headless (K10).
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumContentPaths.h"
@@ -560,6 +562,7 @@ namespace
 // The rulebook: the record parser's own shapes, with no file behind them
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineRulebookTest,
 	"Elysium.Arm.Discipline.Rulebook", GElysiumTestFlags)
 bool FElysiumDisciplineRulebookTest::RunTest(const FString&)
@@ -691,6 +694,7 @@ bool FElysiumDisciplinePayloadTest::RunTest(const FString&)
 		Layer.ApplyToTrait(EC::Attributes, ElysiumSlot::AutomaticSoakSuccesses, 0), 3);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // Activation: the learned gate, the single payment, tier memory and renewal
@@ -966,6 +970,7 @@ bool FElysiumDisciplineTeardownTest::RunTest(const FString&)
 // The per-power joins: Fortitude -> soak, Potence -> the melee floor, Bloodshield -> buffer
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineFortitudeTest,
 	"Elysium.Arm.Discipline.Fortitude", GElysiumTestFlags)
 bool FElysiumDisciplineFortitudeTest::RunTest(const FString&)
@@ -1019,6 +1024,7 @@ bool FElysiumDisciplineFortitudeTest::RunTest(const FString&)
 		Trait(*Player, EC::Attributes, ElysiumSlot::AutomaticSoakSuccesses), 0);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplinePotenceTest,
 	"Elysium.Substrate.Discipline.Potence", GElysiumTestFlags)
@@ -1152,6 +1158,7 @@ bool FElysiumDisciplinePotenceTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineBloodshieldTest,
 	"Elysium.Arm.Discipline.Bloodshield", GElysiumTestFlags)
 bool FElysiumDisciplineBloodshieldTest::RunTest(const FString&)
@@ -1210,6 +1217,7 @@ bool FElysiumDisciplineBloodshieldTest::RunTest(const FString&)
 		Player->Disciplines.TargetEffects.Num(), 0);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // The targeted transaction: gate order, the single payment, per-target application
@@ -1356,6 +1364,7 @@ bool FElysiumDisciplineTargetedTest::RunTest(const FString&)
 // The three interruption flags, each through its own subscription
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineInterruptionTest,
 	"Elysium.Arm.Discipline.Interruption", GElysiumTestFlags)
 bool FElysiumDisciplineInterruptionTest::RunTest(const FString&)
@@ -1773,6 +1782,7 @@ bool FElysiumDisciplineNpcPersistenceTest::RunTest(const FString&)
 		HasEffect(*Restored, DazeGroup));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineSoundTransactionsTest,
@@ -1843,6 +1853,7 @@ bool FElysiumDisciplineSoundTransactionsTest::RunTest(const FString&)
 }
 
 // R8: the non-task flag writer, including direct-mask overlap and cleanup callbacks.
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineFlagResolverTest,
 	"Elysium.Arm.Discipline.FlagResolvers", GElysiumTestFlags)
 bool FElysiumDisciplineFlagResolverTest::RunTest(const FString&)
@@ -2067,6 +2078,7 @@ bool FElysiumDisciplineFlagSaveTest::RunTest(const FString&)
 	TestEqual(TEXT("player comfort counter round trip"), Player->ComfortingCount, 2);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // The Content tier: the real `disciplinetgt_*` corpus, and the `Active_*` blocks beside it
 

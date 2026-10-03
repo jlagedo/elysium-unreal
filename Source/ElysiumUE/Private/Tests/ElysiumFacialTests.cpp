@@ -13,6 +13,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumCameraSolve.h"   // FElysiumCameraShot, a by-value member of the recording services
@@ -196,6 +198,7 @@ namespace
 // The target ramp — `R_StudioFlexVerts`' trapezoid, against hand-computed values.
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFlexRampTest, "Elysium.Arm.FlexRamp", GElysiumFacialTestFlags)
 bool FElysiumFlexRampTest::RunTest(const FString&)
 {
@@ -240,6 +243,7 @@ bool FElysiumFlexRampTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // The rule machine and the lid combine, over the hand-written rig.
@@ -366,6 +370,7 @@ bool FElysiumFlexRulesTest::RunTest(const FString&)
 // The test rig reproduces both halves of the shipped shape: `mouth` is computed by a rule and read by
 // no morph target, and `jaw_drop` is the controller whose morph actually moves.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFlexJawTest, "Elysium.Arm.FlexJaw", GElysiumFacialTestFlags)
 bool FElysiumFlexJawTest::RunTest(const FString&)
 {
@@ -898,6 +903,7 @@ bool FElysiumEyeLidTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // The whole chain on a real body: a controller write reaching the component's morph weights.
@@ -936,6 +942,7 @@ namespace
 		"\"short\" \"_\" 0.100 1.000 0.200 1.000 0.300 1.000 0.400 1.000 0.500 \"one number short\"\r\n");
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionTableTest,
 	"Elysium.Arm.ExpressionTable", GElysiumFacialTestFlags)
 bool FElysiumExpressionTableTest::RunTest(const FString&)
@@ -1024,6 +1031,7 @@ bool FElysiumExpressionTableTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // The wire: a scene's expression events composed onto an actor's flex controllers.
@@ -1503,6 +1511,7 @@ namespace
 		"\"t\" \"t\" 0.900 1.000 0.500 0.000 \"value under zero influence\"\r\n");
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLipTrackTest,
 	"Elysium.Arm.LipTrack", GElysiumFacialTestFlags)
 bool FElysiumLipTrackTest::RunTest(const FString&)
@@ -1697,6 +1706,7 @@ bool FElysiumLipSampleTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneLipsyncTest,
 	"Elysium.Substrate.SceneLipsync", GElysiumFacialTestFlags)

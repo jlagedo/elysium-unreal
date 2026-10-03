@@ -184,3 +184,25 @@ def test_local_file_is_used_when_arguments_and_environment_are_absent() -> None:
             assert os.environ["UE-LocalDataCachePath"] == str(local_ddc.resolve())
             assert os.environ["TEMP"] == str(process_temp.resolve())
             assert os.environ["TMP"] == str(process_temp.resolve())
+
+
+def test_the_zen_server_outlives_a_launch_unless_the_owner_says_otherwise() -> None:
+    # Spec 0002 T6: a fresh Zen server per headless boot cost up to 13.5 s, so every launch the
+    # pipeline makes asks Unreal to keep the one it finds (or starts) running.
+    with tempfile.TemporaryDirectory() as temporary:
+        repo = Path(temporary)
+        project = config.ProjectConfig(
+            repo_root=repo, project=repo / "ElysiumUE.uproject", game_root=None, work_root=None,
+            export_root=None, export_v2_root=None, ue_root=None, unreal_zen_data_path=None,
+            unreal_local_data_cache_path=None, unreal_shader_work_root=None, temp_root=None)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            project.apply_environment()
+            assert os.environ[config.ZEN_LIFETIME_VARIABLE] == "false"
+        (repo / ".elysium.local.env").write_text(
+            f"{config.ZEN_LIFETIME_VARIABLE}=true\n", encoding="utf-8")
+        with mock.patch.dict(os.environ, {}, clear=True):
+            project.apply_environment()
+            assert os.environ[config.ZEN_LIFETIME_VARIABLE] == "true"
+        with mock.patch.dict(os.environ, {config.ZEN_LIFETIME_VARIABLE: "0"}, clear=True):
+            project.apply_environment()
+            assert os.environ[config.ZEN_LIFETIME_VARIABLE] == "0", "the process environment wins"

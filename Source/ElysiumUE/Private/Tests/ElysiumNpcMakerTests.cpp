@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntity.h"
@@ -65,6 +67,7 @@ namespace
 
 // D1: `CNPCMaker_Fleshpile`'s think `0x1034c8b0` re-arms `m_flNextThink = freq + curtime` and does
 // nothing else; the runners come from Andrei's task `0x154` (`SummonRunnerNear`).
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMakerFleshpileThinkTest,
 	"Elysium.Arm.NpcMaker.FleshpileThinkRearms", GElysiumNpcMakerTestFlags)
 bool FElysiumNpcMakerFleshpileThinkTest::RunTest(const FString&)
@@ -160,6 +163,7 @@ bool FElysiumNpcMakerEnableBaseThinkTest::RunTest(const FString&)
 	ZMaker->ClearZombieFistsItemForTests();
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // D5 knock-on: a slot-614 reset (`SetAIEnabled` `0x10265680`, `WakeNpcsNear` `0x1028d820`) pulls a
 // maker's think to now — retail walks the AI list and makers do not override 614 — but the pulled
@@ -223,6 +227,7 @@ bool FElysiumNpcMakerWakeTest::RunTest(const FString&)
 
 // Participation: a maker is an NPC for every AI-list walk, and answers retail's own "no" at every
 // body question — no solid, no transmit, no cone, no discipline target, no witness.
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMakerParticipationTest,
 	"Elysium.Arm.NpcMaker.Participation", GElysiumNpcMakerTestFlags)
 bool FElysiumNpcMakerParticipationTest::RunTest(const FString&)
@@ -298,5 +303,6 @@ bool FElysiumNpcMakerInstalledThinkSaveTest::RunTest(const FString&)
 		FString(FElysiumNpcMaker::MakerThinkName(B->InstalledThink)), FString(TEXT("zombie")));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif

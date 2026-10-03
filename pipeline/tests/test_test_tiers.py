@@ -146,6 +146,68 @@ def test_the_default_tier_is_small_and_the_arm_tier_is_the_bulk() -> None:
     assert counts.get("Arm", 0) > default
 
 
+_ARM_GUARD = unreal.ARM_TIER_MACRO
+_DIRECTIVE = re.compile(r"^\s*#\s*(if|ifdef|ifndef|elif|else|endif)\b(.*)$")
+
+
+def _guarded_lines(text: str) -> list[bool]:
+    """Per line, whether it sits inside an `#if` whose live branch requires the arm-tier macro."""
+
+    stack: list[bool] = []
+    guarded: list[bool] = []
+    for line in text.splitlines():
+        match = _DIRECTIVE.match(line)
+        if match:
+            kind, condition = match.group(1), match.group(2)
+            if kind in ("if", "ifdef", "ifndef"):
+                stack.append(kind != "ifndef" and _ARM_GUARD in condition
+                             and "!" not in condition.split(_ARM_GUARD)[0][-2:])
+            elif kind == "elif" and stack:
+                stack[-1] = False
+            elif kind == "else" and stack:
+                stack[-1] = False
+            elif kind == "endif" and stack:
+                stack.pop()
+        guarded.append(any(stack))
+    return guarded
+
+
+def _cases_by_guard() -> tuple[list[str], list[str], list[str]]:
+    """(arm cases outside the guard, other cases inside it, guarded files missing the header)."""
+
+    loose, hidden, headerless = [], [], []
+    for path in sorted(TESTS.glob("*.cpp")):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        guarded = _guarded_lines(text)
+        if _ARM_GUARD in text and f'#include "Tests/{unreal.ARM_TIER_HEADER.name}"' not in text:
+            headerless.append(path.name)
+        for match in _DECLARATION.finditer(text):
+            line = text.count("\n", 0, match.start())
+            name = match.group(1)
+            is_arm = name.startswith(unreal.ARM_TIER_GROUP)
+            if is_arm and not guarded[line]:
+                loose.append(f"{path.name}: {name}")
+            elif not is_arm and guarded[line]:
+                hidden.append(f"{path.name}: {name}")
+    return loose, hidden, headerless
+
+
+def test_every_arm_case_compiles_only_with_the_arm_tier() -> None:
+    # Spec 0002 T6: the arm tier is compiled on demand, so a build that runs no arm test does not pay
+    # for one. A new `Elysium.Arm.` case goes inside `#if ELYSIUM_WITH_ARM_TESTS` (the whole file's
+    # automation guard for a file of arm cases only) with `Tests/ElysiumArmTier.h` included first.
+    loose, _hidden, headerless = _cases_by_guard()
+    assert not loose, f"arm case(s) compiled without the arm tier: {loose[:10]}"
+    assert not headerless, f"file(s) test {_ARM_GUARD} without including its header: {headerless}"
+
+
+def test_no_default_or_other_opt_in_case_hides_behind_the_arm_guard() -> None:
+    # The other way round is a silent loss: a default-tier case behind the guard is absent from every
+    # plain build, so the default run would stop running it and still pass.
+    _loose, hidden, _headerless = _cases_by_guard()
+    assert not hidden, f"non-arm case(s) compiled only with the arm tier: {hidden[:10]}"
+
+
 def test_the_smoke_set_is_in_the_default_tier_and_within_its_cap() -> None:
     declared = set(_declared_tests())
     gone = sorted(set(SMOKE_SET) - declared)

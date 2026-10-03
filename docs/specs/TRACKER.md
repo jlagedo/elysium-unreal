@@ -14,24 +14,33 @@ integrator builds and tests once (spec rule 8).
 Wave 1 (Python; T2's and T3's Python halves):
 - [x] **T1** — The `kernel_*` tools under budget (10 s cold, 1 s unchanged). M · Opus/high.
   Landed wave 1: unchanged ≤0.44 s; cold ≤8.3 s except `kernel --check` 10.5 s (reported).
-- [ ] **T2** — The corpus MCP and the text tree under budget; the address index. M · Sonnet/high.
+- [x] **T2** — The corpus MCP and the text tree under budget; the address index. M · Sonnet/high.
   Python half landed wave 1 (probe set ≤0.11 s, ≤19.7 KB; `research where`); C++ half landed
-  wave 2 (`brief` 3.1 KB, `fields` 1.4 KB, `log_tail` 9.4 KB). Miss: `entity_get` on one NPC with
-  no `fields`/`brief` is 82 KB.
+  wave 2 (`brief` 3.1 KB, `fields` 1.4 KB, `log_tail` 9.4 KB). Closed wave 3: `entity_get` on one
+  NPC answers its brief by default, 3.4 KB on the wire (was 82 KB); every field on `full=true`.
 - [x] **T4** — The runner, the lease and the waits (blocking build/test, no polling). S · Sonnet/medium.
   Landed wave 1: three prefixes in one boot 24.2 s; `--no-wait` exit 8; waits name the holder.
 
 Wave 2 (C++; T2's and T3's C++ halves):
-- [ ] **T3** — The test scale-down, tiered. M · Sonnet/medium. Its `pytest` half landed in
+- [x] **T3** — The test scale-down, tiered. M · Sonnet/medium. Its `pytest` half landed in
   wave 1 (0 failures; default run 19.7–25.9 s, not reliably under the 20 s budget). C++ half landed
   wave 2: default 176 / Arm 1,551 / Content 53 / Slow 2, all 0 failed; `MapActorTeardown` 50.6 →
-  10.1 s. Misses: default C++ 35.5 s wall (2.1 s of tests; the boot), `pytest` 20.8 s.
+  10.1 s. Wave 3 (T6's boot cut): default C++ 15.6–19.6 s wall, ticked on it; `pytest` 19.7 /
+  26.0 s, still not reliably under 20 s (gate 1).
 - [x] **T5** — The Green Room as the live test suite (`uv run elysium arena`). M · Opus/high.
   Landed wave 2: 4 records in one boot, self-tests and control pass, `cover` red at known red 1
   (`seqfinished` after `smith_lean_left_into rate=0`); 28.6 s warm, 37.1 s cold (miss).
 
 Wave 3 (build work, one agent):
-- [ ] **T6** — The incremental build (today median 46 s, p90 280 s). M · Opus/high.
+- [ ] **T6** — The incremental build (today median 46 s, p90 280 s). M · Opus/high. Landed wave 3:
+  the boot cut (Zen kept running, `Automation Now`, the uncontrolled-changelist tracker off headless,
+  the arena's forced exit): default tier 22.1–22.5 s warm (35.5–45.7 with a slow Zen start) → 15.6–19.6,
+  arena 28.6–37.1 → 25.6–27.1. Plain unity (a wave's commit 226 s → 1.9 s, nothing compiled) and the
+  arm tier compiled on demand (switching it: 104 s on, 81 s off); a no-change `research kernel` no
+  longer forces a full rebuild (202 s → 1.6 s). Edit mix, s: null 1.9 → 1.9, `.cpp` 9.4 → 9.3, `ElysiumNpcBase.h` 193.6 → 156.8,
+  `ElysiumNpc.h` 187.8 → 154.2, `ElysiumEntityWorld.h` 209.8 → 182.6, arm test 13.6 → 11.9,
+  `ElysiumTestServices.h` 93.4 → 72.1, census 11.6 → 8.1. **Miss: p90 164.5 s (target 90)** — the
+  kernel headers' fan-out, compiled 3–6 at a time under the machine's commit limit.
 - [ ] **Gate 1** — zero queries over 60 s; every `kernel_*` command and corpus probe under 10 s;
   default C++ ≤25 s wall (today 122 s) and `pytest` ≤20 s (today 384 s), zero failures; three
   prefixes in one boot under 25 s; a one-`.cpp` edit rebuilt in ≤60 s; no polling loop or lease

@@ -11,7 +11,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2 | `0x101371d0` | — | 126 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHints.cpp:260 |  |
 | 3 | `0x1019ce00` | — | 102 | 0 | 0 | — | — |  |
 | 4 | `0x10137220` | — | 95 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim10.cpp:635, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:665, Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.cpp:500, +10 more |  |
-| 5 | `0x10273e10` | `CAI_BaseHumanoid#541`, `CAI_BaseNPC#541`, +75 more | 81 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses.cpp:82, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:175, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:177, +3 more | `CAI_BaseNPC#541 no SDK twin: stretch #537-#545 holds 7 retai…` |
+| 5 | `0x10273e10` | `CAI_BaseHumanoid#541`, `CAI_BaseNPC#541`, +75 more | 81 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses.cpp:82, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:177, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:179, +3 more | `CAI_BaseNPC#541 no SDK twin: stretch #537-#545 holds 7 retai…` |
 | 6 | `0x100aa7b0` | — | 82 | 0 | 0 | `CBaseEntity::operator delete` | — |  |
 | 7 | `0x10430fa0` | — | 79 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAnim.cpp:293, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseBoss.cpp:87, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:991 | `CRT: the bytes of _memcpy, _memmove stand here and at 10438c…` |
 | 8 | `0x100290c0` | — | 73 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:867, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:690, Source/ElysiumUE/Private/Substrate/ElysiumNpcThink.cpp:157 |  |
@@ -62,8 +62,8 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 53 | `0x101d2c70` | — | 26 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:95, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:833, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:190, +20 more |  |
 | 54 | `0x101de660` | — | 4 | 0 | 22 | `E:\Vampire\main\game_shared\v_discipline…` | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1007, Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1105, Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:1143, +6 more |  |
 | 55 | `0x101aae60` | `CPayphone#193` | 25 | 0 | 0 | `Phone_bone_01` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseGeometry.cpp:37, Source/ElysiumUE/Private/Substrate/ElysiumNpcGeometry.cpp:68, Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.cpp:60, +6 more |  |
-| 56 | `0x101a6d00` | `CAI_BaseHumanoid#580`, `CAI_BaseNPC#580`, +8 more | 24 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseEntityChain.cpp:103, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:239 | `CAI_BaseNPC#580 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 57 | `0x10297640` | `CAI_BaseNPCTroika#572`, `CGeneric_NPC#572`, +62 more | 20 | 1 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFacing.cpp:53, Source/ElysiumUE/Private/Substrate/ElysiumNpcFacing.cpp:103, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:74 |  |
+| 56 | `0x101a6d00` | `CAI_BaseHumanoid#580`, `CAI_BaseNPC#580`, +8 more | 24 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseEntityChain.cpp:103, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:241 | `CAI_BaseNPC#580 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 57 | `0x10297640` | `CAI_BaseNPCTroika#572`, `CGeneric_NPC#572`, +62 more | 20 | 1 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFacing.cpp:53, Source/ElysiumUE/Private/Substrate/ElysiumNpcFacing.cpp:103, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:76 |  |
 | 58 | `0x102b7690` | — | 4 | 8 | 12 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10_2.cpp:254, Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:22, Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:82, +6 more |  |
 | 59 | `0x102e20b0` | — | 24 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:192, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.cpp:191, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:232, +6 more |  |
 | 60 | `0x10273070` | — | 19 | 1 | 3 | `****ERROR***⏎⏎`, `Have the class responsible for spawning …`, +4 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:327, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:602, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:640, +19 more |  |
@@ -81,11 +81,11 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 72 | `0x1030bb30` | — | 1 | 18 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMaintain.cpp:46, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2294, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2313, +12 more |  |
 | 73 | `0x103de2b0` | `CNPC_VZombie#580` | 20 | 0 | 0 | — | — |  |
 | 74 | `0x10142e90` | — | 19 | 0 | 0 | `CBaseEntity::Instance` | — |  |
-| 75 | `0x101cf2f0` | — | 19 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:70 |  |
+| 75 | `0x101cf2f0` | — | 19 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:72 |  |
 | 76 | `0x101d88b0` | — | 3 | 14 | 2 | `Warning: Dice roll count out of bounds: …` | — |  |
 | 77 | `0x102517e0` | — | 18 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:466, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2Species.cpp:480, Source/ElysiumUE/Private/Substrate/ElysiumNpcPedestrian.cpp:65 |  |
 | 78 | `0x1027cae0` | `CAI_BaseNPC#424`, `CAI_BaseNPCTroika#424`, +73 more | 3 | 7 | 9 | — | — | `CAI_BaseNPC#424 no SDK twin: stretch #421-#431 holds 9 retai…` |
-| 79 | `0x10280360` | `CAI_BaseHumanoid#528`, `CAI_BaseNPC#528`, +75 more | 12 | 2 | 5 | `E:\Vampire\main\dlls\AI_BaseNPC_Movement…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:41, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:452, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:682 | `CAI_BaseNPC#528 no SDK twin: stretch #526-#530 holds 3 retai…` |
+| 79 | `0x10280360` | `CAI_BaseHumanoid#528`, `CAI_BaseNPC#528`, +75 more | 12 | 2 | 5 | `E:\Vampire\main\dlls\AI_BaseNPC_Movement…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:41, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:452, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:684 | `CAI_BaseNPC#528 no SDK twin: stretch #526-#530 holds 3 retai…` |
 | 80 | `0x102d6100` | — | 19 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor10.cpp:156, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:568, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:1087, +9 more |  |
 | 81 | `0x102e1e20` | — | 16 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:372, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHints.cpp:729, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1177, +14 more |  |
 | 82 | `0x102ee6a0` | — | 18 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h:382, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAnim.cpp:124, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMaintain.cpp:38, +32 more |  |
@@ -105,14 +105,14 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 96 | `0x10362c50` | `CNPC_VBach#580` | 18 | 0 | 0 | — | — |  |
 | 97 | `0x10366c70` | `CNPC_VBatSwarm#580` | 18 | 0 | 0 | — | — |  |
 | 98 | `0x10367870` | `CNPC_VBrujah#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:118 |  |
-| 99 | `0x103683b0` | `CNPC_VCamera#580`, `CNPC_VCameraSecurity#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:119, Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:120, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelScheduleTests.cpp:83, +1 more |  |
+| 99 | `0x103683b0` | `CNPC_VCamera#580`, `CNPC_VCameraSecurity#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:119, Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:120, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelScheduleTests.cpp:85, +1 more |  |
 | 100 | `0x1036a1b0` | `CNPC_VChangBros#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:121 |  |
 | 101 | `0x1036eab0` | `CNPC_VChangBrosBlade#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:122 |  |
 | 102 | `0x1036f2b0` | `CNPC_VChangBrosClaw#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:123 |  |
 | 103 | `0x1036fb10` | `CNPC_VCombatman#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:102 |  |
-| 104 | `0x10370930` | `CNPC_VCop#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:124, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelScheduleTests.cpp:135 |  |
+| 104 | `0x10370930` | `CNPC_VCop#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:124, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelScheduleTests.cpp:137 |  |
 | 105 | `0x10373530` | `CNPC_VDog#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:125 |  |
-| 106 | `0x103750e0` | `CNPC_VPlayerController#580`, `CNPC_VVampire#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:100, Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:127, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:517, +4 more |  |
+| 106 | `0x103750e0` | `CNPC_VPlayerController#580`, `CNPC_VVampire#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:100, Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:127, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:519, +4 more |  |
 | 107 | `0x10375240` | `CNPC_VFrenzyShadow#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:101 |  |
 | 108 | `0x10377070` | `CNPC_VGangrel#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:103 |  |
 | 109 | `0x10377b20` | `CNPC_VGargoyle#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:126 |  |
@@ -147,13 +147,13 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 138 | `0x103c30e0` | `CNPC_VTzimisceRunner#580` | 18 | 0 | 0 | — | — |  |
 | 139 | `0x103c77b0` | `CNPC_VVentrue#580` | 18 | 0 | 0 | — | — |  |
 | 140 | `0x103ca750` | `CNPC_VWerewolf#580` | 18 | 0 | 0 | — | — |  |
-| 141 | `0x103dc750` | `CNPC_VWolfMorph#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:101, Source/ElysiumUE/Private/Substrate/ElysiumNpcWolfMorph.h:16, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:518, +3 more |  |
+| 141 | `0x103dc750` | `CNPC_VWolfMorph#580` | 18 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:101, Source/ElysiumUE/Private/Substrate/ElysiumNpcWolfMorph.h:16, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:520, +3 more |  |
 | 142 | `0x103dd050` | `CNPC_VYukie#580` | 18 | 0 | 0 | — | — |  |
 | 143 | `0x1013d580` | — | 17 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:33, Source/ElysiumUE/Private/Substrate/ElysiumNpcFacingShared.h:16, Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:53, +6 more |  |
-| 144 | `0x101644f0` | — | 2 | 4 | 11 | — | Source/ElysiumUE/Private/Player/ElysiumAnimationIntent.cpp:525, Source/ElysiumUE/Private/Tests/ElysiumAnimationActionTests.cpp:4128, Source/ElysiumUE/Public/ElysiumAnimationIntent.h:67 |  |
+| 144 | `0x101644f0` | — | 2 | 4 | 11 | — | Source/ElysiumUE/Private/Player/ElysiumAnimationIntent.cpp:525, Source/ElysiumUE/Private/Tests/ElysiumAnimationActionTests.cpp:4140, Source/ElysiumUE/Public/ElysiumAnimationIntent.h:67 |  |
 | 145 | `0x101a7880` | `CCineNPC#583` | 1 | 7 | 9 | `**UNKNOWN**`, `E:\Vampire\main\dlls\scripted.cpp`, +14 more | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.cpp:35, Source/ElysiumUE/Private/Substrate/ElysiumNpcScriptSpecies.cpp:13, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:74, +7 more |  |
 | 146 | `0x101e4f30` | — | 8 | 9 | 0 | — | — |  |
-| 147 | `0x10200370` | — | 15 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:457, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:825 |  |
+| 147 | `0x10200370` | — | 15 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:457, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:827 |  |
 | 148 | `0x1024cef0` | — | 2 | 15 | 0 | — | — |  |
 | 149 | `0x1024ddf0` | — | 2 | 15 | 0 | — | — |  |
 | 150 | `0x102b3e00` | `CAI_BaseNPCTroika#472`, `CGeneric_NPC#472`, +60 more | 2 | 6 | 9 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:187, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:669, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:45, +2 more |  |
@@ -161,7 +161,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 152 | `0x102d6120` | — | 17 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor10.cpp:156, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:590, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:1087, +6 more |  |
 | 153 | `0x1030bec0` | — | 1 | 16 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses.cpp:142, Source/ElysiumUE/Private/Substrate/ElysiumNpcNavigator.cpp:5, Source/ElysiumUE/Private/Substrate/ElysiumNpcNavigator.h:40, +2 more |  |
 | 154 | `0x103a2e30` | `CNPC_VPedestrian#461` | 1 | 5 | 11 | `E:\Vampire\main\dlls\hl2_dll\NPC_VPedest…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcPedestrian.cpp:43, Source/ElysiumUE/Private/Substrate/ElysiumNpcPedestrian.cpp:145, Source/ElysiumUE/Private/Substrate/ElysiumNpcPedestrian.cpp:146, +2 more |  |
-| 155 | `0x10027020` | `CAISound#168`, `CAI_BaseHumanoid#168`, +431 more | 15 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses.cpp:75, Source/ElysiumUE/Private/Substrate/ElysiumNpcSensesBodies.cpp:77, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:155, +1 more | `CAI_BaseNPC#168 no SDK twin: stretch #163-#173 holds 9 retai…` |
+| 155 | `0x10027020` | `CAISound#168`, `CAI_BaseHumanoid#168`, +431 more | 15 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses.cpp:75, Source/ElysiumUE/Private/Substrate/ElysiumNpcSensesBodies.cpp:77, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:157, +1 more | `CAI_BaseNPC#168 no SDK twin: stretch #163-#173 holds 9 retai…` |
 | 156 | `0x100fbc90` | — | 14 | 2 | 0 | `env_particle` | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTaskSpecies.cpp:616, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTaskSpecies.cpp:619 |  |
 | 157 | `0x1013dc60` | — | 9 | 3 | 4 | — | — |  |
 | 158 | `0x101e0520` | — | 1 | 10 | 5 | `ERROR: Overflowed targeted discipline fl…` | — |  |
@@ -169,7 +169,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 160 | `0x1024da80` | — | 1 | 0 | 15 | — | — |  |
 | 161 | `0x10260de0` | `CAI_BaseHumanoid#5` | 0 | 11 | 5 | — | — |  |
 | 162 | `0x10273ad0` | `CAI_BaseHumanoid#422`, `CAI_BaseNPC#422`, +11 more | 1 | 6 | 9 | `ReadyNPC()--%s couldn't find target %s`, `NPC %s stuck in wall--level design error…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:456 | `CAI_BaseNPC#422 no SDK twin: stretch #421-#431 holds 9 retai…` |
-| 163 | `0x10289d10` | `CAI_BaseHumanoid#572`, `CAI_BaseNPC#572`, +11 more | 13 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:338, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:52 | `CAI_BaseNPC#572 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 163 | `0x10289d10` | `CAI_BaseHumanoid#572`, `CAI_BaseNPC#572`, +11 more | 13 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:338, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:54 | `CAI_BaseNPC#572 no SDK twin: stretch #566-#583 holds 16 reta…` |
 | 164 | `0x1028a150` | — | 14 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:255, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:274, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2275, +2 more |  |
 | 165 | `0x102a9c80` | — | 1 | 15 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:312, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1359, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1362 |  |
 | 166 | `0x102a9d20` | — | 1 | 15 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:346, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:312, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1411, +2 more |  |
@@ -227,13 +227,13 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 218 | `0x10260a50` | — | 6 | 2 | 5 | `ResetSequence : %s: %s -> %s 	 (current …`, `ResetSequence : %s: %s -> %s 	 (current …` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAnim.cpp:112, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAnim.cpp:148, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAnim.cpp:341, +1 more |  |
 | 219 | `0x10280de0` | — | 11 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.cpp:126, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.cpp:131, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.h:28, +15 more |  |
 | 220 | `0x102b4760` | `CAI_BaseNPCTroika#594`, `CGeneric_NPC#594`, +62 more | 4 | 1 | 8 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:205, Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:247, Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.h:43, +3 more |  |
-| 221 | `0x102b93c0` | `CAI_BaseNPCTroika#607`, `CGeneric_NPC#607`, +62 more | 2 | 5 | 6 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:659, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:664, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:472 |  |
-| 222 | `0x102c0010` | — | 1 | 5 | 7 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:756, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:823, Source/ElysiumUE/Public/ElysiumPlayer.h:1638 |  |
+| 221 | `0x102b93c0` | `CAI_BaseNPCTroika#607`, `CGeneric_NPC#607`, +62 more | 2 | 5 | 6 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:659, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:664, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:474 |  |
+| 222 | `0x102c0010` | — | 1 | 5 | 7 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:756, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:826, Source/ElysiumUE/Public/ElysiumPlayer.h:1638 |  |
 | 223 | `0x102c7600` | `CAI_StandoffBehavior#13` | 0 | 3 | 10 | — | — |  |
 | 224 | `0x102d14c0` | — | 10 | 0 | 3 | — | Source/ElysiumUE/Private/Debug/ElysiumGreenRoomConsole.cpp:85, Source/ElysiumUE/Private/Debug/ElysiumGreenRoomConsole.cpp:910, Source/ElysiumUE/Private/Substrate/ElysiumHint.cpp:304, +20 more |  |
 | 225 | `0x102ee1c0` | — | 12 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1340, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1834, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:476, +19 more |  |
 | 226 | `0x10326bd0` | `CAI_BaseHumanoid#364`, `CAI_BaseNPC#364`, +69 more | 10 | 0 | 3 | `NULL ENTITY`, `CBaseCombatCharacter::FInAimCone` | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:761, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:153, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.h:32, +12 more | `CAI_BaseNPC#364 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 227 | `0x1034d140` | `CNPCMaker_Zombie#617` | 9 | 0 | 4 | `item_w_zombie_fists`, `Zombies_spawning_emitter` | Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.cpp:137, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.h:34, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:540, +1 more |  |
+| 227 | `0x1034d140` | `CNPCMaker_Zombie#617` | 9 | 0 | 4 | `item_w_zombie_fists`, `Zombies_spawning_emitter` | Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.cpp:137, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.h:34, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:545, +1 more |  |
 | 228 | `0x103a25a0` | `CNPC_VPedestrian#130` | 0 | 0 | 13 | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcPedestrian.cpp:97, Source/ElysiumUE/Private/Substrate/ElysiumNpcPedestrian.cpp:98, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesBindingsTests.cpp:456 |  |
 | 229 | `0x103dc5b0` | — | 1 | 8 | 4 | — | — |  |
 | 230 | `0x1002ca10` | — | 8 | 4 | 0 | — | — |  |
@@ -259,27 +259,27 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 250 | `0x102e30d0` | — | 10 | 2 | 0 | — | — |  |
 | 251 | `0x102ee140` | — | 11 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.cpp:316, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseWerewolf.cpp:66, Source/ElysiumUE/Private/Substrate/ElysiumNpcNavigator.cpp:26, +8 more |  |
 | 252 | `0x102f90e0` | — | 6 | 3 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlaceSet.cpp:191 |  |
-| 253 | `0x10344f80` | — | 4 | 0 | 8 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.cpp:753, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:1023, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:1031 |  |
+| 253 | `0x10344f80` | — | 4 | 0 | 8 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.cpp:753, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:1028, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:1036 |  |
 | 254 | `0x103831c0` | — | 1 | 4 | 7 | `npc_VHengeyokai`, `models/character/monster/Hengeyokai/heng…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.h:209, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1383 |  |
-| 255 | `0x1038e9c0` | — | 1 | 4 | 7 | `Bip01 Spine`, `Manbat_blast_player`, +4 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:153, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpeciesMisc10.cpp:39, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesMisc10Tests.cpp:575 |  |
+| 255 | `0x1038e9c0` | — | 1 | 4 | 7 | `Bip01 Spine`, `Manbat_blast_player`, +4 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:153, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpeciesMisc10.cpp:39, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesMisc10Tests.cpp:577 |  |
 | 256 | `0x1039a750` | — | 1 | 4 | 7 | `npc_VMingXiao`, `Ming_xiao_transform_emitter2`, +3 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:454, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1987 |  |
 | 257 | `0x103a0270` | `CNPC_VNewscaster#5` | 0 | 8 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.h:25 |  |
 | 258 | `0x103a0670` | — | 1 | 3 | 8 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.h:25, Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.h:37, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpeciesMisc10.cpp:55, +2 more |  |
 | 259 | `0x103a0ab0` | — | 1 | 5 | 6 | `vdata\system\`, `%sNewscaster_Side.txt`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.h:25, Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.h:40, Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.h:52, +2 more |  |
 | 260 | `0x103b6e90` | `CNPC_VTzimisce#5` | 0 | 8 | 4 | — | — |  |
 | 261 | `0x103df850` | `CNPC_VZombie#432` | 3 | 2 | 7 | `zombie %s: player too far away, killing …` | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:15, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:610, Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.h:40, +2 more |  |
-| 262 | `0x100994c0` | `CAI_BaseHumanoid#271`, `CAI_BaseNPC#271`, +85 more | 9 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumAnimatingOverlaySlotBodies.cpp:39, Source/ElysiumUE/Private/Substrate/ElysiumAnimatingOverlaySlotBodies.cpp:108, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp:56, +1 more | `CAI_BaseNPC#271 no SDK twin: stretch #263-#276 holds 12 reta…` |
+| 262 | `0x100994c0` | `CAI_BaseHumanoid#271`, `CAI_BaseNPC#271`, +85 more | 9 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumAnimatingOverlaySlotBodies.cpp:39, Source/ElysiumUE/Private/Substrate/ElysiumAnimatingOverlaySlotBodies.cpp:108, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp:58, +1 more | `CAI_BaseNPC#271 no SDK twin: stretch #263-#276 holds 12 reta…` |
 | 263 | `0x100b5e60` | `CAI_BaseHumanoid#286`, `CAI_BaseNPC#286`, +20 more | 1 | 4 | 6 | `CBaseFlex::AddExpression:  scene or even…`, `vcd error, gesture %s of model %s is mar…` | — | `CAI_BaseNPC#286 no SDK twin: stretch #276-#292 holds 15 reta…` |
 | 264 | `0x100f7380` | — | 11 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerFleshpile.cpp:84, Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf.cpp:1396 |  |
 | 265 | `0x100fb1f0` | — | 3 | 3 | 5 | — | — |  |
 | 266 | `0x10137fe0` | — | 11 | 0 | 0 | — | — |  |
 | 267 | `0x101618e0` | — | 3 | 5 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:808, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:905, Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:958, +9 more |  |
-| 268 | `0x1017d900` | — | 2 | 5 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain2.cpp:375, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain2.cpp:380, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:647 |  |
+| 268 | `0x1017d900` | — | 2 | 5 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain2.cpp:375, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain2.cpp:380, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:649 |  |
 | 269 | `0x1017e150` | — | 4 | 5 | 2 | `CSActs:    %6.1f - Criminal level %d -> …`, `CSActs:    %6.1f - Criminal level %d -> …`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:192, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:194, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.h:73, +2 more |  |
 | 270 | `0x101a98c0` | `CCineAISchedule#586` | 7 | 0 | 4 | `ScheduledFollowPath to goal entity %s fa…`, `ScheduledMoveToGoalEntity to goal entity…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.cpp:56, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.cpp:94, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:11, +12 more |  |
 | 271 | `0x101bf860` | — | 2 | 3 | 6 | — | — |  |
 | 272 | `0x101cdba0` | — | 10 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.cpp:741, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2.cpp:611 |  |
-| 273 | `0x101cf250` | — | 11 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSaveRestore10.cpp:190, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:70 |  |
+| 273 | `0x101cf250` | — | 11 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSaveRestore10.cpp:190, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:72 |  |
 | 274 | `0x101cf390` | — | 11 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.cpp:675, Source/ElysiumUE/Private/Substrate/ElysiumNpcPedestrian.cpp:121 |  |
 | 275 | `0x101cf600` | — | 11 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPedestrian.h:34, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn.cpp:145, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawnSpecies.cpp:632, +2 more |  |
 | 276 | `0x101e12a0` | — | 9 | 0 | 2 | — | — |  |
@@ -289,7 +289,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 280 | `0x102695d0` | — | 4 | 3 | 4 | `CBaseEntity::AddSolidFlags` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.cpp:255, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSpawn.cpp:135 |  |
 | 281 | `0x10270180` | — | 3 | 4 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:428, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:453, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses.cpp:295, +14 more |  |
 | 282 | `0x10273180` | — | 7 | 1 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:328, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1771, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:3352, +9 more |  |
-| 283 | `0x1027a420` | `CAI_BaseHumanoid#509`, `CAI_BaseNPC#509`, +11 more | 3 | 0 | 8 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:31, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:186, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:444 | `CAI_BaseNPC#509 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 283 | `0x1027a420` | `CAI_BaseHumanoid#509`, `CAI_BaseNPC#509`, +11 more | 3 | 0 | 8 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:31, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:186, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:446 | `CAI_BaseNPC#509 no SDK twin: stretch #481-#513 holds 31 reta…` |
 | 284 | `0x1027a6c0` | — | 10 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:709, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:939, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1557, +6 more |  |
 | 285 | `0x1027de00` | — | 3 | 1 | 7 | — | Source/ElysiumUE/Private/Substrate/ElysiumMover.cpp:726, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:178, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:188, +21 more |  |
 | 286 | `0x102984a0` | `CAI_BaseNPCTroika#531`, `CGeneric_NPC#531`, +62 more | 0 | 3 | 8 | `⏎⏎**WARNING**⏎No door given to OnUpcomin…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:85, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:268, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:283, +2 more |  |
@@ -308,9 +308,9 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 299 | `0x10055050` | — | 1 | 4 | 5 | — | — |  |
 | 300 | `0x1006cf30` | — | 8 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumHint.cpp:94 |  |
 | 301 | `0x100a0ae0` | — | 10 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1959, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.cpp:721, Source/ElysiumUE/Private/Substrate/ElysiumNpcNavigator.h:140, +1 more |  |
-| 302 | `0x10146190` | — | 8 | 0 | 2 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelStartTaskTests_2.cpp:605 |  |
+| 302 | `0x10146190` | — | 8 | 0 | 2 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelStartTaskTests_2.cpp:607 |  |
 | 303 | `0x1017df50` | — | 5 | 3 | 2 | `CSActs:    %6.1f - Supernatural level %d…`, `CSActs:    %6.1f - Supernatural level %d…`, +1 more | — |  |
-| 304 | `0x1017ed00` | — | 2 | 6 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:502, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:509, Source/ElysiumUE/Public/ElysiumPlayer.h:2297 |  |
+| 304 | `0x1017ed00` | — | 2 | 6 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:502, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:511, Source/ElysiumUE/Public/ElysiumPlayer.h:2297 |  |
 | 305 | `0x10194780` | — | 1 | 4 | 5 | — | — |  |
 | 306 | `0x101c10d0` | `CAI_BaseHumanoid#135`, `CAI_BaseNPC#135`, +334 more | 0 | 0 | 10 | — | — | `CAI_BaseNPC#135 no SDK twin: stretch #128-#138 holds 9 retai…` |
 | 307 | `0x101ccd70` | — | 7 | 3 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2843, Source/ElysiumUE/Private/Substrate/ElysiumNpcSightTrace.h:19 |  |
@@ -322,18 +322,18 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 313 | `0x1024b9e0` | — | 1 | 4 | 5 | — | — |  |
 | 314 | `0x1025db70` | — | 5 | 2 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:131, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:144, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:540, +3 more |  |
 | 315 | `0x1025f1c0` | `CAI_BaseHumanoid#585` | 2 | 0 | 8 | — | — |  |
-| 316 | `0x1026aef0` | `CAI_BaseHumanoid#474`, `CAI_BaseNPC#474`, +11 more | 9 | 0 | 1 | `Warning: NULL Return from GetBestSound⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:55, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:375 | `CAI_BaseNPC#474 no SDK twin: stretch #470-#477 holds 6 retai…` |
+| 316 | `0x1026aef0` | `CAI_BaseHumanoid#474`, `CAI_BaseNPC#474`, +11 more | 9 | 0 | 1 | `Warning: NULL Return from GetBestSound⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:55, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:377 | `CAI_BaseNPC#474 no SDK twin: stretch #470-#477 holds 6 retai…` |
 | 317 | `0x102702d0` | `CAI_BaseHumanoid#418`, `CAI_BaseNPC#418`, +11 more | 9 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:221, Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:226 | `CAI_BaseNPC#418 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 318 | `0x1027a5c0` | `CAI_BaseHumanoid#486`, `CAI_BaseNPC#486`, +11 more | 5 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:25, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:143, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:265 | `CAI_BaseNPC#486 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 318 | `0x1027a5c0` | `CAI_BaseHumanoid#486`, `CAI_BaseNPC#486`, +11 more | 5 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:25, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:143, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:267 | `CAI_BaseNPC#486 no SDK twin: stretch #481-#513 holds 31 reta…` |
 | 319 | `0x1028ea60` | — | 3 | 7 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2Species.cpp:488, Source/ElysiumUE/Private/Substrate/ElysiumNpcPedestrian.cpp:60, Source/ElysiumUE/Private/Substrate/ElysiumNpcSensesBodies.cpp:38, +12 more |  |
 | 320 | `0x1029a070` | `CAI_BaseNPCTroika#593`, `CGeneric_NPC#593`, +61 more | 5 | 5 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:586, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:203, +4 more |  |
-| 321 | `0x102a1650` | — | 2 | 0 | 8 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:533, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1538, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:891, +1 more |  |
+| 321 | `0x102a1650` | — | 2 | 0 | 8 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:533, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1538, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:893, +1 more |  |
 | 322 | `0x102b4520` | `CAI_BaseNPCTroika#474`, `CGeneric_NPC#474`, +62 more | 9 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseState.cpp:29, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseState.cpp:142, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds.cpp:94, +2 more |  |
 | 323 | `0x102b52a0` | — | 4 | 4 | 2 | `%s(%d) :`, `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss.cpp:11, Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss.cpp:15, Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss.cpp:76, +8 more |  |
 | 324 | `0x102b53d0` | — | 8 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:1094, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:1099, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:1107, +4 more |  |
 | 325 | `0x102b8c40` | — | 1 | 6 | 3 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:38, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:284, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:782, +1 more |  |
 | 326 | `0x102bf5d0` | — | 5 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSquad.cpp:111 |  |
-| 327 | `0x102c12a0` | `CAI_BaseNPCTroika#611`, `CGeneric_NPC#611`, +61 more | 2 | 2 | 6 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:912, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:917, Source/ElysiumUE/Private/Tests/ElysiumAnimationActionTests.cpp:4322, +8 more |  |
+| 327 | `0x102c12a0` | `CAI_BaseNPCTroika#611`, `CGeneric_NPC#611`, +61 more | 2 | 2 | 6 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:912, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:917, Source/ElysiumUE/Private/Tests/ElysiumAnimationActionTests.cpp:4335, +8 more |  |
 | 328 | `0x102c9da0` | — | 1 | 9 | 0 | — | — |  |
 | 329 | `0x102d1420` | — | 8 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumHint.cpp:304, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1836, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:1843, +10 more |  |
 | 330 | `0x102e0a60` | — | 9 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:435, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:437, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTaskSpecies.cpp:796, +6 more |  |
@@ -343,7 +343,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 334 | `0x1030b950` | — | 3 | 4 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunAi.cpp:95 |  |
 | 335 | `0x103134b0` | — | 1 | 4 | 5 | — | — |  |
 | 336 | `0x103164c0` | — | 1 | 4 | 5 | — | — |  |
-| 337 | `0x10357760` | `CNPC_Crow#192` | 9 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcGeometry.cpp:94, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelGeometryTests.cpp:213 |  |
+| 337 | `0x10357760` | `CNPC_Crow#192` | 9 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcGeometry.cpp:94, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelGeometryTests.cpp:215 |  |
 | 338 | `0x1035e980` | `CNPC_VAndreiBlood#432` | 3 | 3 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:10, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:130, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelRunAiTests.cpp:11, +1 more |  |
 | 339 | `0x103662d0` | — | 2 | 4 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseBoss.cpp:70, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseBoss.h:38, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:3475, +5 more |  |
 | 340 | `0x10372cc0` | `CNPC_VCop#597` | 6 | 1 | 3 | `Player D_HT 10` | Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:66, Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:277, Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.h:71, +2 more |  |
@@ -360,8 +360,8 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 351 | `0x101554a0` | — | 1 | 1 | 7 | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags` | — |  |
 | 352 | `0x1015d680` | — | 9 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSpeciesMisc10.cpp:40 |  |
 | 353 | `0x1019ced0` | — | 1 | 8 | 0 | — | — |  |
-| 354 | `0x101a8de0` | `CCineAI#113`, `CCineAISchedule#113`, +1 more | 1 | 2 | 6 | `**********⏎`, `Could not find NPC %s in CCineNPC::Activ…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:178, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:45, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:578, +1 more |  |
-| 355 | `0x101aa5d0` | `CAI_BaseNPCTroika#586`, `CGeneric_NPC#586`, +62 more | 8 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:574, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:579, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:312 |  |
+| 354 | `0x101a8de0` | `CCineAI#113`, `CCineAISchedule#113`, +1 more | 1 | 2 | 6 | `**********⏎`, `Could not find NPC %s in CCineNPC::Activ…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:178, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:45, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:583, +1 more |  |
+| 355 | `0x101aa5d0` | `CAI_BaseNPCTroika#586`, `CGeneric_NPC#586`, +62 more | 8 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:574, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:579, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:314 |  |
 | 356 | `0x101aa910` | `CPayphone#617` | 9 | 0 | 0 | — | — |  |
 | 357 | `0x101b0c10` | — | 8 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc2.cpp:200 |  |
 | 358 | `0x101cebc0` | — | 9 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1577 |  |
@@ -370,27 +370,27 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 361 | `0x10204900` | — | 8 | 0 | 1 | — | — |  |
 | 362 | `0x1026d130` | — | 7 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.cpp:54, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.cpp:62, Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h:519, +17 more |  |
 | 363 | `0x1026e940` | — | 9 | 0 | 0 | `UTIL_TraceHull` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle2.cpp:93, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:167, Source/ElysiumUE/Private/Substrate/ElysiumNpcPositions2.cpp:42, +2 more |  |
-| 364 | `0x102709c0` | `CAI_BaseHumanoid#544`, `CAI_BaseNPC#544`, +75 more | 4 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemyMemory.h:32, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:537, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:613, +1 more | `CAI_BaseNPC#544 no SDK twin: stretch #537-#545 holds 7 retai…` |
-| 365 | `0x10274ca0` | — | 3 | 2 | 4 | `WARNING: %s has no eye offset in .qc!⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:219, Source/ElysiumUE/Private/Tests/ElysiumFixtureNoise.h:27, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:159, +1 more |  |
-| 366 | `0x10274db0` | `CAI_BaseHumanoid#533`, `CAI_BaseNPC#533`, +11 more | 7 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcGeometry.cpp:130, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelGeometryTests.cpp:350 | `CAI_BaseNPC#533 no SDK twin: stretch #530-#537 holds 6 retai…` |
+| 364 | `0x102709c0` | `CAI_BaseHumanoid#544`, `CAI_BaseNPC#544`, +75 more | 4 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemyMemory.h:32, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:537, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:615, +1 more | `CAI_BaseNPC#544 no SDK twin: stretch #537-#545 holds 7 retai…` |
+| 365 | `0x10274ca0` | — | 3 | 2 | 4 | `WARNING: %s has no eye offset in .qc!⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:219, Source/ElysiumUE/Private/Tests/ElysiumFixtureNoise.h:30, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:162, +1 more |  |
+| 366 | `0x10274db0` | `CAI_BaseHumanoid#533`, `CAI_BaseNPC#533`, +11 more | 7 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcGeometry.cpp:130, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelGeometryTests.cpp:352 | `CAI_BaseNPC#533 no SDK twin: stretch #530-#537 holds 6 retai…` |
 | 367 | `0x1027d9b0` | — | 8 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:196, Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:594, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1136, +2 more |  |
 | 368 | `0x1028e360` | — | 1 | 5 | 3 | — | — |  |
-| 369 | `0x10290570` | `CAI_BaseNPCTroika#532`, `CGeneric_NPC#532`, +62 more | 3 | 3 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:316, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:334, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions10Tests.cpp:527 |  |
+| 369 | `0x10290570` | `CAI_BaseNPCTroika#532`, `CGeneric_NPC#532`, +62 more | 3 | 3 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:316, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:334, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions10Tests.cpp:529 |  |
 | 370 | `0x10294070` | `CAI_BaseNPCTroika#510`, `CGeneric_NPC#510`, +59 more | 2 | 0 | 7 | `Float_Sound_Info` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds.cpp:51, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds.cpp:55, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds.cpp:174, +4 more |  |
 | 371 | `0x10295460` | — | 9 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumAnimatingOverlaySlotBodies.cpp:126, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.h:125, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:355, +6 more |  |
-| 372 | `0x102a0290` | — | 1 | 3 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:299, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:845, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:864 |  |
+| 372 | `0x102a0290` | — | 1 | 3 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:299, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:847, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:866 |  |
 | 373 | `0x102a9f40` | — | 1 | 5 | 3 | `Can not find interest activity '%s' in t…`, `Can not find interest into activity '%s'…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:622, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:688, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:704, +1 more |  |
 | 374 | `0x102b57c0` | `CAI_BaseNPCTroika#600`, `CGeneric_NPC#600`, +15 more | 5 | 2 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:236, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:425, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:434, +2 more |  |
-| 375 | `0x102c1a80` | — | 1 | 4 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:180, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp:199 |  |
+| 375 | `0x102c1a80` | — | 1 | 4 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:180, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp:201 |  |
 | 376 | `0x102c4ad0` | — | 1 | 7 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:2706, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers2.cpp:557, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers2.cpp:562, +2 more |  |
 | 377 | `0x102da600` | — | 2 | 3 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:1098, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:1143, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:1146, +1 more |  |
 | 378 | `0x102e1560` | — | 1 | 4 | 4 | — | — |  |
-| 379 | `0x102e8270` | — | 1 | 6 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:701, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:724, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:726 |  |
+| 379 | `0x102e8270` | — | 1 | 6 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:701, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:726, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:728 |  |
 | 380 | `0x102e8560` | — | 1 | 1 | 7 | `move_yaw`, `          The animation needs to be shor…`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMaintain.cpp:108 |  |
 | 381 | `0x102f2fe0` | — | 8 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:699, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:477, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:422, +11 more |  |
 | 382 | `0x1030b8a0` | — | 2 | 4 | 3 | — | — |  |
 | 383 | `0x103165f0` | — | 1 | 7 | 1 | — | — |  |
-| 384 | `0x1032ce40` | `CAI_BaseHumanoid#386`, `CAI_BaseNPC#386`, +83 more | 3 | 2 | 4 | `NULL ENTITY`, `CBaseCombatCharacter::Weapon_Drop` | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:258, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:645, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:521, +1 more | `CAI_BaseNPC#386 no SDK twin: stretch #384-#388 holds 3 retai…` |
+| 384 | `0x1032ce40` | `CAI_BaseHumanoid#386`, `CAI_BaseNPC#386`, +83 more | 3 | 2 | 4 | `NULL ENTITY`, `CBaseCombatCharacter::Weapon_Drop` | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:258, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:645, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:523, +1 more | `CAI_BaseNPC#386 no SDK twin: stretch #384-#388 holds 3 retai…` |
 | 385 | `0x1032fe60` | `CAI_BaseHumanoid#348`, `CAI_BaseNPC#348`, +82 more | 5 | 0 | 4 | `NULL ENTITY`, `CBaseCombatCharacter::HealthToPercent` | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:182, Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.cpp:150, Source/ElysiumUE/Private/Substrate/ElysiumNpcSabbatLeader.cpp:921, +3 more | `CAI_BaseNPC#348 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 386 | `0x1034d0a0` | `CNPCMaker_Zombie#618` | 7 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelSpeciesShapeMap.cpp:126, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.cpp:111, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.h:36, +1 more |  |
 | 387 | `0x10363b60` | `CNPC_VBach#432` | 3 | 1 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:11, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:179, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelRunAiTests.cpp:12, +1 more |  |
@@ -402,7 +402,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 393 | `0x10381960` | `CNPC_VHengeyokai#618` | 8 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.h:205, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:208, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1358, +1 more |  |
 | 394 | `0x10382970` | — | 1 | 4 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:528, Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:57, Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:239, +8 more |  |
 | 395 | `0x103937d0` | — | 1 | 0 | 8 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:100, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:218, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:2089 |  |
-| 396 | `0x103945a0` | `CNPC_VMingXiao#461` | 1 | 4 | 4 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:199, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:406 |  |
+| 396 | `0x103945a0` | `CNPC_VMingXiao#461` | 1 | 4 | 4 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:199, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:408 |  |
 | 397 | `0x10398000` | — | 8 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:459, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:465, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:823, +9 more |  |
 | 398 | `0x10398030` | — | 2 | 0 | 7 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:58, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:63, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:926, +4 more |  |
 | 399 | `0x103a0d50` | — | 2 | 3 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.cpp:134, Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.cpp:155, Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.h:26, +4 more |  |
@@ -439,12 +439,12 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 430 | `0x1025ddd0` | — | 5 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHuman.cpp:533, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:490, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceHeadClaw.cpp:135 |  |
 | 431 | `0x1025f1a0` | `CAI_BaseHumanoid#586` | 7 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:29 |  |
 | 432 | `0x10260870` | — | 2 | 3 | 3 | — | — |  |
-| 433 | `0x10268ef0` | `CAISound#146`, `CAI_BaseHumanoid#146`, +495 more | 4 | 1 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:212, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:415 | `CAI_BaseNPC#146 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 433 | `0x10268ef0` | `CAISound#146`, `CAI_BaseHumanoid#146`, +495 more | 4 | 1 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:212, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:417 | `CAI_BaseNPC#146 no SDK twin: stretch #144-#160 holds 15 reta…` |
 | 434 | `0x10278220` | — | 1 | 0 | 7 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:238, Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:12, Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:504, +3 more |  |
 | 435 | `0x10278650` | — | 4 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim10.cpp:543, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:407, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:26, +3 more |  |
 | 436 | `0x1028ae60` | — | 4 | 1 | 3 | `ERROR! Vacating an empty slot!⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSpawn.cpp:127, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSquad.cpp:73, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:257, +2 more |  |
-| 437 | `0x1028d910` | `CAI_BaseNPCTroika#584`, `CGeneric_NPC#584`, +62 more | 2 | 5 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:513, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:545, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:1087, +4 more |  |
-| 438 | `0x102b4c10` | `CAI_BaseNPCTroika#486`, `CGeneric_NPC#486`, +62 more | 8 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds.cpp:110, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:252 |  |
+| 437 | `0x1028d910` | `CAI_BaseNPCTroika#584`, `CGeneric_NPC#584`, +62 more | 2 | 5 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:513, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:545, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:1092, +4 more |  |
+| 438 | `0x102b4c10` | `CAI_BaseNPCTroika#486`, `CGeneric_NPC#486`, +62 more | 8 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds.cpp:110, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:254 |  |
 | 439 | `0x102c4e80` | — | 7 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:301, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:943, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1139, +2 more |  |
 | 440 | `0x102cd4a0` | — | 3 | 2 | 3 | — | — |  |
 | 441 | `0x102d1180` | — | 6 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:366, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:828, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:832, +14 more |  |
@@ -465,11 +465,11 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 456 | `0x102f9090` | — | 8 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlaceSet.cpp:203 |  |
 | 457 | `0x1030b4d0` | — | 7 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2063, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2517, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2557, +2 more |  |
 | 458 | `0x103126e0` | — | 1 | 2 | 5 | — | — |  |
-| 459 | `0x1033b5f0` | `CAI_BaseHumanoid#357`, `CAI_BaseNPC#357`, +83 more | 0 | 2 | 6 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.cpp:432, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:792 | `CAI_BaseNPC#357 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 459 | `0x1033b5f0` | `CAI_BaseHumanoid#357`, `CAI_BaseNPC#357`, +83 more | 0 | 2 | 6 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.cpp:432, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:794 | `CAI_BaseNPC#357 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 460 | `0x10381c80` | — | 7 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim10.cpp:58, Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim10.cpp:756, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2Species.cpp:293, +8 more |  |
 | 461 | `0x1038b1a0` | — | 1 | 2 | 5 | `E:\Vampire\main\dlls\hl2_dll\NPC_VManBat…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:172, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:180, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:184, +8 more |  |
 | 462 | `0x10398870` | — | 7 | 0 | 1 | — | — |  |
-| 463 | `0x1039e310` | `CNPC_VMingXiaoTentacle#461` | 1 | 4 | 3 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:121, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:407 |  |
+| 463 | `0x1039e310` | `CNPC_VMingXiaoTentacle#461` | 1 | 4 | 3 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:121, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:409 |  |
 | 464 | `0x103a3670` | `CNPC_VPedestrian#432` | 3 | 1 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:13, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:489, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelRunAiTests.cpp:14, +1 more |  |
 | 465 | `0x103be130` | — | 7 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim10.cpp:59, Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim10.cpp:756, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2Species.cpp:618, +4 more |  |
 | 466 | `0x103c3960` | `CNPC_VTzimisceRunner#599` | 5 | 2 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:348, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:71, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:270, +2 more |  |
@@ -477,7 +477,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 468 | `0x103c4160` | `CNPC_VTzimisceRunner#619` | 6 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:86, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:89, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:190, +2 more |  |
 | 469 | `0x103dd9a0` | `CNPC_VYukie#601` | 5 | 2 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:481, Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:32, Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:48, +5 more |  |
 | 470 | `0x103dda10` | `CNPC_VYukie#602` | 5 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:519, Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:48, Source/ElysiumUE/Private/Substrate/ElysiumNpcYukie.cpp:108, +11 more |  |
-| 471 | `0x10009601` | — | 2 | 2 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.cpp:173, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSpeciesMisc10.cpp:33, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSquadTests.cpp:174 |  |
+| 471 | `0x10009601` | — | 2 | 2 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.cpp:173, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSpeciesMisc10.cpp:33, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSquadTests.cpp:176 |  |
 | 472 | `0x10055520` | — | 6 | 0 | 1 | — | — |  |
 | 473 | `0x10071ae0` | — | 1 | 3 | 3 | — | — |  |
 | 474 | `0x10076280` | — | 5 | 0 | 2 | — | — |  |
@@ -487,7 +487,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 478 | `0x100b5c50` | `CAI_BaseHumanoid#281`, `CAI_BaseNPC#281`, +84 more | 6 | 0 | 1 | — | — | `CAI_BaseNPC#281 no SDK twin: stretch #276-#292 holds 15 reta…` |
 | 479 | `0x100d0390` | — | 3 | 4 | 0 | — | — |  |
 | 480 | `0x100ddc40` | — | 3 | 0 | 4 | — | — |  |
-| 481 | `0x100f6d80` | — | 2 | 2 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:355, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:409 |  |
+| 481 | `0x100f6d80` | — | 2 | 2 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:355, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:411 |  |
 | 482 | `0x100fbbb0` | — | 6 | 1 | 0 | — | — |  |
 | 483 | `0x1011e060` | — | 5 | 0 | 2 | — | — |  |
 | 484 | `0x10139500` | — | 7 | 0 | 0 | — | — |  |
@@ -512,7 +512,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 503 | `0x1024b830` | — | 5 | 0 | 2 | — | — |  |
 | 504 | `0x1025dca0` | — | 5 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:131, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:150, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:540, +1 more |  |
 | 505 | `0x10260540` | `CAI_BaseHumanoid#589` | 2 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:29 |  |
-| 506 | `0x102658f0` | `CAI_BaseHumanoid#402`, `CAI_BaseNPC#402`, +75 more | 2 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:541, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:666, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:673 | `CAI_BaseNPC#402 no SDK twin: stretch #397-#404 holds 6 retai…` |
+| 506 | `0x102658f0` | `CAI_BaseHumanoid#402`, `CAI_BaseNPC#402`, +75 more | 2 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:541, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:668, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:675 | `CAI_BaseNPC#402 no SDK twin: stretch #397-#404 holds 6 retai…` |
 | 507 | `0x10273dd0` | `CAI_BaseHumanoid#542`, `CAI_BaseNPC#542`, +75 more | 4 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:325, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSquad.cpp:160, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSquad.cpp:173, +1 more | `CAI_BaseNPC#542 no SDK twin: stretch #537-#545 holds 7 retai…` |
 | 508 | `0x1027a530` | `CAI_BaseHumanoid#510`, `CAI_BaseNPC#510`, +11 more | 5 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:38, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:264, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:330, +7 more | `CAI_BaseNPC#510 no SDK twin: stretch #481-#513 holds 31 reta…` |
 | 509 | `0x1027d0a0` | — | 2 | 3 | 2 | `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseScript.cpp:12, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseScript.cpp:13, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseScript.cpp:21, +7 more |  |
@@ -520,17 +520,17 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 511 | `0x1027f270` | — | 7 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.cpp:96, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.cpp:99, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.cpp:102, +11 more |  |
 | 512 | `0x1027f990` | — | 1 | 3 | 3 | — | — |  |
 | 513 | `0x1027fae0` | — | 1 | 3 | 3 | — | — |  |
-| 514 | `0x10288710` | `CAI_BaseHumanoid#445`, `CAI_BaseNPC#445`, +75 more | 1 | 0 | 6 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:565, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:710 | `CAI_BaseNPC#445 no SDK twin: stretch #444-#448 holds 3 retai…` |
+| 514 | `0x10288710` | `CAI_BaseHumanoid#445`, `CAI_BaseNPC#445`, +75 more | 1 | 0 | 6 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:565, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:712 | `CAI_BaseNPC#445 no SDK twin: stretch #444-#448 holds 3 retai…` |
 | 515 | `0x1028a190` | — | 5 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc.cpp:60, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:243, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:276, +4 more |  |
-| 516 | `0x1028eb30` | — | 1 | 6 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSensesBodies.cpp:201, Source/ElysiumUE/Private/Substrate/ElysiumNpcSensesBodies.cpp:245, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:539, +7 more |  |
+| 516 | `0x1028eb30` | — | 1 | 6 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSensesBodies.cpp:201, Source/ElysiumUE/Private/Substrate/ElysiumNpcSensesBodies.cpp:245, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:541, +7 more |  |
 | 517 | `0x1029c970` | — | 2 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:876, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:318, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:338, +7 more |  |
-| 518 | `0x102ad260` | — | 1 | 4 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.cpp:329, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:751, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:780 |  |
-| 519 | `0x102ad2d0` | — | 1 | 4 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.cpp:329, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:751, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:792 |  |
-| 520 | `0x102b2570` | — | 1 | 0 | 6 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:307, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:537 |  |
+| 518 | `0x102ad260` | — | 1 | 4 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.cpp:329, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:753, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:782 |  |
+| 519 | `0x102ad2d0` | — | 1 | 4 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.cpp:329, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:753, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:794 |  |
+| 520 | `0x102b2570` | — | 1 | 0 | 6 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:307, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:539 |  |
 | 521 | `0x102b4fb0` | `CAI_BaseNPCTroika#597`, `CGeneric_NPC#597`, +61 more | 7 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:67, Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.h:72, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:315, +3 more |  |
 | 522 | `0x102b6fe0` | — | 2 | 2 | 3 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:181, Source/ElysiumUE/Private/Substrate/ElysiumNpcHuman.cpp:341, Source/ElysiumUE/Private/Substrate/ElysiumNpcHuman.cpp:387, +5 more |  |
 | 523 | `0x102b8620` | — | 5 | 0 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:646, Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10_2.cpp:29, Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10_2.cpp:32, +1 more |  |
-| 524 | `0x102c0bb0` | — | 4 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2.cpp:267, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn.cpp:53, Source/ElysiumUE/Private/Tests/ElysiumDialogueUITests.cpp:15, +3 more |  |
+| 524 | `0x102c0bb0` | — | 4 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2.cpp:267, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn.cpp:53, Source/ElysiumUE/Private/Tests/ElysiumDialogueUITests.cpp:17, +3 more |  |
 | 525 | `0x102c3b50` | — | 6 | 0 | 1 | `UTIL_TraceHull` | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2Species.cpp:589, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:3147, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:3158, +3 more |  |
 | 526 | `0x102c5570` | — | 3 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:68, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:433, Source/ElysiumUE/Private/Substrate/ElysiumNpcPositions.cpp:116, +1 more |  |
 | 527 | `0x102c6c30` | — | 1 | 3 | 3 | — | — |  |
@@ -549,7 +549,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 540 | `0x10349d50` | — | 1 | 3 | 3 | — | — |  |
 | 541 | `0x1034a030` | — | 1 | 3 | 3 | — | — |  |
 | 542 | `0x1034bc90` | `CNPCMaker#139`, `CNPCMaker_Zombie#139` | 1 | 2 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:204, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:67, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerFleshpile.h:32, +1 more |  |
-| 543 | `0x10357be0` | — | 1 | 1 | 5 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesTests.cpp:1217 |  |
+| 543 | `0x10357be0` | — | 1 | 1 | 5 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesTests.cpp:1220 |  |
 | 544 | `0x10366400` | — | 4 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseBoss.cpp:35, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseBoss.cpp:102, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseBoss.cpp:117, +13 more |  |
 | 545 | `0x10369e70` | — | 2 | 2 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCameraSecurity.cpp:51, Source/ElysiumUE/Private/Substrate/ElysiumNpcCameraSecurity.h:27, Source/ElysiumUE/Private/Substrate/ElysiumNpcCameraSecurity.h:31, +9 more |  |
 | 546 | `0x10381c00` | — | 3 | 3 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:157, Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:155, Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:166, +18 more |  |
@@ -580,10 +580,10 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 571 | `0x10075b70` | — | 6 | 0 | 0 | — | — |  |
 | 572 | `0x10075e70` | — | 5 | 0 | 1 | — | — |  |
 | 573 | `0x10090890` | — | 4 | 1 | 1 | `NULL ENTITY`, `CBaseAnimating :: MarkEffectStartTime` | — |  |
-| 574 | `0x1009b030` | `CAISound#16`, `CAI_BaseHumanoid#16`, +495 more | 3 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:178, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:216 | `CAI_BaseNPC#16 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 574 | `0x1009b030` | `CAISound#16`, `CAI_BaseHumanoid#16`, +495 more | 3 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:178, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:218 | `CAI_BaseNPC#16 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 575 | `0x1009f380` | — | 3 | 3 | 0 | — | — |  |
 | 576 | `0x100a19c0` | — | 4 | 0 | 2 | — | — |  |
-| 577 | `0x100b5b00` | `CAI_BaseNPC#277`, `CAI_BaseNPCTroika#277`, +83 more | 5 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumFlexSlotBodies.cpp:54, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:326 | `CAI_BaseNPC#277 no SDK twin: stretch #276-#292 holds 15 reta…` |
+| 577 | `0x100b5b00` | `CAI_BaseNPC#277`, `CAI_BaseNPCTroika#277`, +83 more | 5 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumFlexSlotBodies.cpp:54, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:328 | `CAI_BaseNPC#277 no SDK twin: stretch #276-#292 holds 15 reta…` |
 | 578 | `0x100b6f80` | — | 2 | 0 | 4 | — | — |  |
 | 579 | `0x100dcd90` | — | 1 | 0 | 5 | — | — |  |
 | 580 | `0x100ddd90` | — | 2 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawnSpecies.cpp:484 |  |
@@ -623,20 +623,20 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 614 | `0x10202a10` | — | 5 | 0 | 1 | — | — |  |
 | 615 | `0x10203190` | — | 4 | 0 | 2 | — | — |  |
 | 616 | `0x10204270` | — | 6 | 0 | 0 | — | — |  |
-| 617 | `0x1023dcd0` | — | 6 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:244, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:604, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:569 |  |
+| 617 | `0x1023dcd0` | — | 6 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:244, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:604, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:571 |  |
 | 618 | `0x10245f50` | `ConVar#9` | 1 | 2 | 3 | — | — |  |
 | 619 | `0x1025de90` | — | 4 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseBoss.cpp:158, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseBoss.cpp:172, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:131, +3 more |  |
 | 620 | `0x1025e7b0` | — | 3 | 0 | 3 | — | — |  |
 | 621 | `0x1025f0b0` | `CAI_BaseHumanoid#373` | 3 | 0 | 3 | — | — |  |
 | 622 | `0x10265a90` | — | 3 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1458, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:2438, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSpawn.cpp:102, +2 more |  |
-| 623 | `0x1026b210` | `CAI_BaseNPC#372`, `CAI_BaseNPCTroika#372`, +74 more | 5 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:323, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:492 | `CAI_BaseNPC#372 no SDK twin: stretch #371-#376 holds 4 retai…` |
+| 623 | `0x1026b210` | `CAI_BaseNPC#372`, `CAI_BaseNPCTroika#372`, +74 more | 5 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:323, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:494 | `CAI_BaseNPC#372 no SDK twin: stretch #371-#376 holds 4 retai…` |
 | 624 | `0x1026c540` | — | 1 | 0 | 5 | `Unaccounted`, `CAI_BaseNPC_RunAnimation` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:590 |  |
 | 625 | `0x1026d7f0` | `CAI_BaseHumanoid#459`, `CAI_BaseNPC#459`, +72 more | 4 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:95, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:90, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:294, +2 more | `CAI_BaseNPC#459 no SDK twin: stretch #453-#461 holds 7 retai…` |
 | 626 | `0x1026f590` | `CAI_BaseHumanoid#460`, `CAI_BaseNPC#460`, +11 more | 0 | 1 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseState.cpp:90, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseState.cpp:233, Source/ElysiumUE/Private/Substrate/ElysiumNpcState.cpp:45, +1 more | `CAI_BaseNPC#460 no SDK twin: stretch #453-#461 holds 7 retai…` |
-| 627 | `0x102729d0` | — | 2 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:102, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:787, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:263 |  |
-| 628 | `0x10272f40` | — | 3 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:363, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:603, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotor10Tests.cpp:128, +1 more |  |
-| 629 | `0x10273720` | `CAI_BaseHumanoid#223`, `CAI_BaseNPC#223`, +75 more | 4 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:545, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:682, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:687 | `CAI_BaseNPC#223 no SDK twin: stretch #222-#227 holds 4 retai…` |
-| 630 | `0x10273ec0` | — | 1 | 2 | 3 | `Movement completed twice!⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAdvancePath.cpp:30, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:778, Source/ElysiumUE/Private/Tests/ElysiumNpcCombatTests.cpp:854, +3 more |  |
+| 627 | `0x102729d0` | — | 2 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:102, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:787, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:265 |  |
+| 628 | `0x10272f40` | — | 3 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:363, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:603, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotor10Tests.cpp:130, +1 more |  |
+| 629 | `0x10273720` | `CAI_BaseHumanoid#223`, `CAI_BaseNPC#223`, +75 more | 4 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:545, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:684, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:689 | `CAI_BaseNPC#223 no SDK twin: stretch #222-#227 holds 4 retai…` |
+| 630 | `0x10273ec0` | — | 1 | 2 | 3 | `Movement completed twice!⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAdvancePath.cpp:30, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:778, Source/ElysiumUE/Private/Tests/ElysiumNpcCombatTests.cpp:856, +3 more |  |
 | 631 | `0x10277d90` | `CAI_BaseHumanoid#582`, `CAI_BaseNPC#582`, +75 more | 0 | 0 | 6 | `unknown`, `Slow %.1f, %s %.1f `, +6 more | — | `CAI_BaseNPC#582 no SDK twin: stretch #566-#583 holds 16 reta…` |
 | 632 | `0x10279b70` | — | 5 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc2.cpp:95, Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss.cpp:83, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:103, +10 more |  |
 | 633 | `0x1027e740` | `CAI_BaseHumanoid#406`, `CAI_BaseNPC#406`, +75 more | 6 | 0 | 0 | — | — | `CAI_BaseNPC#406 no SDK twin: stretch #405-#420 holds 14 reta…` |
@@ -644,7 +644,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 635 | `0x1028d990` | — | 2 | 0 | 4 | `%-20s  %6.2f : %*s %s⏎%s%s %s%s %s⏎⏎`, `%6.2f : %*s %s⏎`, +7 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h:588, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseTrace.cpp:143 |  |
 | 636 | `0x1028ef20` | `CAI_BaseNPCTroika#587`, `CGeneric_NPC#587`, +46 more | 1 | 0 | 5 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h:512, Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h:535, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:271, +2 more |  |
 | 637 | `0x1028fc90` | — | 3 | 3 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:464, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:26, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:68, +2 more |  |
-| 638 | `0x10290040` | — | 1 | 2 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:20, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:97, Source/ElysiumUE/Private/Tests/ElysiumNpcDoorLinkTests.cpp:313, +2 more |  |
+| 638 | `0x10290040` | — | 1 | 2 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:20, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:97, Source/ElysiumUE/Private/Tests/ElysiumNpcDoorLinkTests.cpp:315, +2 more |  |
 | 639 | `0x102961a0` | — | 1 | 0 | 5 | `**UNKNOWN**`, `Distance (%d) < %d or > %d`, +4 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcHints10.cpp:27, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints10.cpp:135, Source/ElysiumUE/Private/Substrate/ElysiumNpcHintsShared.h:26, +36 more |  |
 | 640 | `0x10296c40` | — | 2 | 0 | 4 | `Disabled`, `Enemy outside of good range (%.2f) <= %.…`, +7 more | Source/ElysiumUE/Private/Debug/ElysiumArenaSpec.cpp:34, Source/ElysiumUE/Private/Debug/ElysiumArenaSpec.cpp:44, Source/ElysiumUE/Private/Debug/ElysiumArenaSpec.cpp:201, +44 more |  |
 | 641 | `0x1029c4a0` | — | 1 | 0 | 5 | — | — |  |
@@ -675,18 +675,18 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 666 | `0x102e0290` | — | 2 | 0 | 4 | `**NULL**`, `Asking LastKnownPosition for enemy (%s) …`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:1124, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:1161, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers2.cpp:408, +1 more |  |
 | 667 | `0x102e0bd0` | — | 2 | 2 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1565 |  |
 | 668 | `0x102e7270` | — | 5 | 0 | 1 | `Unaccounted`, `CAI_MoveProbe_TraceHull`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:404, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor10.cpp:84, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2073, +9 more |  |
-| 669 | `0x102e7880` | — | 5 | 0 | 1 | `Unaccounted`, `CAI_MoveProbe_TraceHull` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle2.cpp:90, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:999, Source/ElysiumUE/Private/Tests/ElysiumNpcGeometryConsumerTests.cpp:22, +1 more |  |
+| 669 | `0x102e7880` | — | 5 | 0 | 1 | `Unaccounted`, `CAI_MoveProbe_TraceHull` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle2.cpp:90, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:999, Source/ElysiumUE/Private/Tests/ElysiumNpcGeometryConsumerTests.cpp:24, +1 more |  |
 | 670 | `0x102edc80` | — | 3 | 2 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:376, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:1419, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1460, +2 more |  |
 | 671 | `0x102eeba0` | — | 5 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:76, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1670, Source/ElysiumUE/Private/Substrate/ElysiumNpcNavigator.h:51, +1 more |  |
 | 672 | `0x102f1dc0` | — | 4 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunAi.cpp:95, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:240, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2057, +9 more |  |
 | 673 | `0x102f8f50` | — | 1 | 5 | 0 | — | — |  |
 | 674 | `0x102f91b0` | — | 6 | 0 | 0 | — | — |  |
-| 675 | `0x10304130` | — | 5 | 0 | 1 | `Unaccounted`, `CAI_Pathfinder_BuildLocalRoute` | Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:74, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:164, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotor10Tests.cpp:352, +1 more |  |
+| 675 | `0x10304130` | — | 5 | 0 | 1 | `Unaccounted`, `CAI_Pathfinder_BuildLocalRoute` | Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:74, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:164, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotor10Tests.cpp:354, +1 more |  |
 | 676 | `0x1030b5e0` | — | 2 | 4 | 0 | — | — |  |
 | 677 | `0x1030ff10` | — | 1 | 2 | 3 | — | — |  |
 | 678 | `0x10312b20` | — | 2 | 4 | 0 | — | — |  |
-| 679 | `0x1032d0c0` | `CAI_BaseHumanoid#385`, `CAI_BaseNPC#385`, +81 more | 0 | 2 | 4 | `NULL ENTITY`, `CBaseCombatCharacter::Weapon_Drop` | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:306, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:645, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:575, +1 more | `CAI_BaseNPC#385 no SDK twin: stretch #384-#388 holds 3 retai…` |
-| 680 | `0x10334180` | `CAI_BaseHumanoid#374`, `CAI_BaseNPC#374`, +82 more | 2 | 0 | 4 | `NULL ENTITY`, `weapons/misc/ammo_pickup.wav`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:265, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:631 | `CAI_BaseNPC#374 no SDK twin: stretch #371-#376 holds 4 retai…` |
+| 679 | `0x1032d0c0` | `CAI_BaseHumanoid#385`, `CAI_BaseNPC#385`, +81 more | 0 | 2 | 4 | `NULL ENTITY`, `CBaseCombatCharacter::Weapon_Drop` | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:306, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:645, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:577, +1 more | `CAI_BaseNPC#385 no SDK twin: stretch #384-#388 holds 3 retai…` |
+| 680 | `0x10334180` | `CAI_BaseHumanoid#374`, `CAI_BaseNPC#374`, +82 more | 2 | 0 | 4 | `NULL ENTITY`, `weapons/misc/ammo_pickup.wav`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:265, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:633 | `CAI_BaseNPC#374 no SDK twin: stretch #371-#376 holds 4 retai…` |
 | 681 | `0x10365a90` | — | 1 | 1 | 4 | `Character/Boss/Bach/bach_camp_warn.wav`, `Character/Boss/Bach/bach_grenade.wav`, +7 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.h:93, Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.h:94, Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.h:118, +10 more |  |
 | 682 | `0x103747e0` | `CNPC_VDog#432` | 3 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:12, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:206, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelRunAiTests.cpp:12, +1 more |  |
 | 683 | `0x10381ba0` | — | 4 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:154, Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:240, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:867, +3 more |  |
@@ -706,7 +706,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 697 | `0x103990c0` | — | 2 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:1303, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:1323, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:194, +6 more |  |
 | 698 | `0x1039eae0` | `CNPC_VMingXiaoTentacle#601` | 5 | 1 | 0 | — | — |  |
 | 699 | `0x103acac0` | — | 2 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2Species.cpp:516, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2Species.cpp:535, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2Species.cpp:536, +7 more |  |
-| 700 | `0x103b9380` | `CNPC_VTzimisce#490` | 4 | 0 | 2 | `SPI_IDLE` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:175, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:655, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:81, +1 more |  |
+| 700 | `0x103b9380` | `CNPC_VTzimisce#490` | 4 | 0 | 2 | `SPI_IDLE` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:175, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:655, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:83, +1 more |  |
 | 701 | `0x103b9810` | `CNPC_VTzimisce#620` | 5 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2Species.cpp:94, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2Species.cpp:401 |  |
 | 702 | `0x103be050` | — | 4 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:1336, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:1600, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:489, +3 more |  |
 | 703 | `0x103be3d0` | — | 1 | 4 | 1 | `Bip01 L Forearm`, `Bip01 R Forearm` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSpecies2.cpp:46, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:94, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:112, +3 more |  |
@@ -722,7 +722,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 713 | `0x10412520` | — | 6 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHints.cpp:705, Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:94, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:876, +3 more |  |
 | 714 | `0x1000cb8a` | — | 5 | 0 | 0 | — | — |  |
 | 715 | `0x100113d8` | — | 4 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcNavigator.h:163, Source/ElysiumUE/Private/Substrate/ElysiumNpcNavigator.h:207 |  |
-| 716 | `0x10026a50` | `CAISound#65`, `CAI_BaseHumanoid#65`, +495 more | 4 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:337, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:930 | `CAI_BaseNPC#65 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 716 | `0x10026a50` | `CAISound#65`, `CAI_BaseHumanoid#65`, +495 more | 4 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:337, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:932 | `CAI_BaseNPC#65 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 717 | `0x10054c00` | — | 1 | 2 | 2 | — | — |  |
 | 718 | `0x10055170` | — | 1 | 2 | 2 | — | — |  |
 | 719 | `0x100561a0` | — | 1 | 2 | 2 | — | — |  |
@@ -770,7 +770,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 761 | `0x101c29e0` | — | 2 | 3 | 0 | — | — |  |
 | 762 | `0x101c2a30` | — | 4 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1465 |  |
 | 763 | `0x101c4dd0` | — | 1 | 1 | 3 | `NULL ENTITY`, `CBaseEntity::IsSolidFlagSet`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:231 |  |
-| 764 | `0x101d1800` | — | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:96, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:682, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions2Tests.cpp:144, +1 more |  |
+| 764 | `0x101d1800` | — | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:96, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:682, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions2Tests.cpp:146, +1 more |  |
 | 765 | `0x101daad0` | — | 2 | 0 | 3 | — | — |  |
 | 766 | `0x101dc790` | — | 3 | 0 | 2 | — | — |  |
 | 767 | `0x101dd480` | — | 1 | 2 | 2 | — | — |  |
@@ -785,7 +785,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 776 | `0x101ff010` | — | 2 | 0 | 3 | — | — |  |
 | 777 | `0x102042a0` | — | 3 | 2 | 0 | — | — |  |
 | 778 | `0x1020cc60` | — | 2 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCameraSecurity.h:41, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10_2.cpp:28, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10_2.cpp:40 |  |
-| 779 | `0x1021fe50` | — | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.cpp:159, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:208 |  |
+| 779 | `0x1021fe50` | — | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.cpp:159, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:210 |  |
 | 780 | `0x1024b400` | — | 3 | 0 | 2 | — | — |  |
 | 781 | `0x1024bb20` | — | 1 | 2 | 2 | — | — |  |
 | 782 | `0x1024bf80` | — | 4 | 0 | 1 | — | — |  |
@@ -793,28 +793,28 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 784 | `0x1025f760` | `CAI_BaseHumanoid#536` | 2 | 1 | 2 | — | — |  |
 | 785 | `0x10269f30` | — | 4 | 0 | 1 | — | — |  |
 | 786 | `0x1026b270` | `CAI_BaseHumanoid#534`, `CAI_BaseNPC#534`, +75 more | 0 | 2 | 3 | — | — | `CAI_BaseNPC#534 no SDK twin: stretch #530-#537 holds 6 retai…` |
-| 787 | `0x1026fcf0` | `CAI_BaseHumanoid#573`, `CAI_BaseNPC#573`, +75 more | 2 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:561, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:766 | `CAI_BaseNPC#573 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 787 | `0x1026fcf0` | `CAI_BaseHumanoid#573`, `CAI_BaseNPC#573`, +75 more | 2 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:561, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:768 | `CAI_BaseNPC#573 no SDK twin: stretch #566-#583 holds 16 reta…` |
 | 788 | `0x102707d0` | — | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc2.cpp:102, Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.cpp:224, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2.cpp:171, +5 more |  |
-| 789 | `0x10272790` | `CAI_BaseHumanoid#466`, `CAI_BaseNPC#466`, +11 more | 3 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:461, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:31, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:803, +1 more | `CAI_BaseNPC#466 no SDK twin: stretch #465-#467 holds 1 retai…` |
+| 789 | `0x10272790` | `CAI_BaseHumanoid#466`, `CAI_BaseNPC#466`, +11 more | 3 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:461, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:31, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:805, +1 more | `CAI_BaseNPC#466 no SDK twin: stretch #465-#467 holds 1 retai…` |
 | 790 | `0x10274080` | — | 2 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:137, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:669, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:760, +3 more |  |
 | 791 | `0x10278e30` | `CAI_BaseNPC#484`, `CAI_BaseNPCTroika#484`, +73 more | 2 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:93 | `CAI_BaseNPC#484 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 792 | `0x1027a400` | `CAI_BaseHumanoid#552`, `CAI_BaseNPC#552`, +75 more | 4 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle.cpp:30, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle.cpp:105, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:137, +1 more | `CAI_BaseNPC#552 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 793 | `0x1027a640` | `CAI_BaseHumanoid#487`, `CAI_BaseNPC#487`, +11 more | 2 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:28, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:173, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:325 | `CAI_BaseNPC#487 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 792 | `0x1027a400` | `CAI_BaseHumanoid#552`, `CAI_BaseNPC#552`, +75 more | 4 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle.cpp:30, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle.cpp:105, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:139, +1 more | `CAI_BaseNPC#552 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 793 | `0x1027a640` | `CAI_BaseHumanoid#487`, `CAI_BaseNPC#487`, +11 more | 2 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:28, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:173, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:327 | `CAI_BaseNPC#487 no SDK twin: stretch #481-#513 holds 31 reta…` |
 | 794 | `0x1027a700` | `CAI_BaseHumanoid#435`, `CAI_BaseNPC#435`, +11 more | 3 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaintain.cpp:146 | `CAI_BaseNPC#435 no SDK twin: stretch #434-#438 holds 3 retai…` |
-| 795 | `0x1027caa0` | `CAI_BaseHumanoid#511`, `CAI_BaseNPC#511`, +74 more | 4 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:291, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:675, Source/ElysiumUE/Public/ElysiumWorldServices.h:1871 | `CAI_BaseNPC#511 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 796 | `0x1027e0f0` | `CAI_BaseHumanoid#532`, `CAI_BaseNPC#532`, +11 more | 3 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions10.cpp:36, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:694 | `CAI_BaseNPC#532 no SDK twin: stretch #530-#537 holds 6 retai…` |
+| 795 | `0x1027caa0` | `CAI_BaseHumanoid#511`, `CAI_BaseNPC#511`, +74 more | 4 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:291, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:677, Source/ElysiumUE/Public/ElysiumWorldServices.h:1871 | `CAI_BaseNPC#511 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 796 | `0x1027e0f0` | `CAI_BaseHumanoid#532`, `CAI_BaseNPC#532`, +11 more | 3 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions10.cpp:36, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:696 | `CAI_BaseNPC#532 no SDK twin: stretch #530-#537 holds 6 retai…` |
 | 797 | `0x1027ef20` | — | 2 | 2 | 1 | — | Source/ElysiumUE/Public/ElysiumEntityWorld.h:801 |  |
 | 798 | `0x10288670` | — | 2 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1649, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2379, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:820, +1 more |  |
 | 799 | `0x1028e310` | `CAI_BaseNPCTroika#113`, `CGeneric_NPC#113`, +57 more | 3 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2433, Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle.cpp:183, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2Species.cpp:177 |  |
-| 800 | `0x1028ebc0` | — | 2 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:193, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:228 |  |
+| 800 | `0x1028ebc0` | — | 2 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:193, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:230 |  |
 | 801 | `0x10290350` | — | 1 | 2 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:23, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:103, Source/ElysiumUE/Private/Substrate/ElysiumNpcSaveRestore10.cpp:174, +1 more |  |
-| 802 | `0x10294400` | `CAI_BaseNPCTroika#492`, `CGeneric_NPC#492`, +54 more | 5 | 0 | 0 | `Fear_Start` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:197, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:242 |  |
-| 803 | `0x10294f40` | `CAI_BaseNPCTroika#507`, `CGeneric_NPC#507`, +60 more | 3 | 1 | 1 | `Float_Sound_Info`, `Float` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:6, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:321, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:393, +2 more |  |
+| 802 | `0x10294400` | `CAI_BaseNPCTroika#492`, `CGeneric_NPC#492`, +54 more | 5 | 0 | 0 | `Fear_Start` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:197, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:244 |  |
+| 803 | `0x10294f40` | `CAI_BaseNPCTroika#507`, `CGeneric_NPC#507`, +60 more | 3 | 1 | 1 | `Float_Sound_Info`, `Float` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:6, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:321, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:395, +2 more |  |
 | 804 | `0x1029f300` | — | 2 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp:542, Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp:170, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:461, +1 more |  |
 | 805 | `0x1029f5d0` | — | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:515, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:356, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:157, +13 more |  |
 | 806 | `0x1029f650` | — | 3 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:311, Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:282, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:582, +8 more |  |
-| 807 | `0x1029f730` | — | 2 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:332, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:494, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:741 |  |
-| 808 | `0x102b4c40` | `CAI_BaseNPCTroika#487`, `CGeneric_NPC#487`, +61 more | 2 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:638, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:308 |  |
+| 807 | `0x1029f730` | — | 2 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:332, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:494, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:743 |  |
+| 808 | `0x102b4c40` | `CAI_BaseNPCTroika#487`, `CGeneric_NPC#487`, +61 more | 2 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:638, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:310 |  |
 | 809 | `0x102b4cc0` | `CAI_BaseNPCTroika#595`, `CGeneric_NPC#595`, +62 more | 2 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2.cpp:12, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2.cpp:93, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMisc2Tests.cpp:11, +1 more |  |
 | 810 | `0x102b5de0` | — | 2 | 0 | 3 | — | Source/ElysiumUE/Private/Map/ElysiumRetailMaskRecipe.cpp:33, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:68, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:81, +25 more |  |
 | 811 | `0x102b6120` | — | 2 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:772, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1272, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers2.cpp:111, +2 more |  |
@@ -827,7 +827,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 818 | `0x102c42a0` | — | 4 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:2029, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:403, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:455, +3 more |  |
 | 819 | `0x102c4380` | — | 4 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:140, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:26, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers2.cpp:28, +4 more |  |
 | 820 | `0x102c43f0` | — | 3 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:150, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:542, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkSpecies.cpp:266, +7 more |  |
-| 821 | `0x102c4680` | — | 2 | 0 | 3 | `          Changing FollowerDistanceRunTo…`, `WARNING:  FollowerDistanceWalkTo(%f) + o…`, +4 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcSquad.cpp:217, Source/ElysiumUE/Private/Substrate/ElysiumNpcSquad.cpp:219, Source/ElysiumUE/Private/Tests/ElysiumFixtureNoise.h:30, +1 more |  |
+| 821 | `0x102c4680` | — | 2 | 0 | 3 | `          Changing FollowerDistanceRunTo…`, `WARNING:  FollowerDistanceWalkTo(%f) + o…`, +4 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcSquad.cpp:217, Source/ElysiumUE/Private/Substrate/ElysiumNpcSquad.cpp:219, Source/ElysiumUE/Private/Tests/ElysiumFixtureNoise.h:33, +1 more |  |
 | 822 | `0x102ca2a0` | — | 3 | 1 | 1 | `Unknown`, `Supernatural`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn.cpp:30, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawn.cpp:40, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:889 |  |
 | 823 | `0x102cc300` | `CAI_BaseHumanoid#458`, `CAI_BaseNPC#458`, +75 more | 4 | 0 | 1 | — | — | `CAI_BaseNPC#458 no SDK twin: stretch #453-#461 holds 7 retai…` |
 | 824 | `0x102ce7f0` | — | 1 | 2 | 2 | — | — |  |
@@ -845,13 +845,13 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 836 | `0x102e19e0` | `CAI_HumanoidMotor#18`, `CAI_Motor#18` | 2 | 0 | 3 | `move_yaw` | — |  |
 | 837 | `0x102e23a0` | — | 1 | 1 | 3 | `Unaccounted`, `CAI_Motor_MoveNormalExecute` | — |  |
 | 838 | `0x102e2690` | — | 4 | 0 | 1 | — | — |  |
-| 839 | `0x102ecb50` | `CAI_HumanoidNavigator#3`, `CAI_Navigator#3` | 0 | 4 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:89, Source/ElysiumUE/Private/Substrate/ElysiumNpcNavigator.h:189, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:641 |  |
+| 839 | `0x102ecb50` | `CAI_HumanoidNavigator#3`, `CAI_Navigator#3` | 0 | 4 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:89, Source/ElysiumUE/Private/Substrate/ElysiumNpcNavigator.h:189, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:643 |  |
 | 840 | `0x102ed310` | — | 3 | 0 | 2 | — | — |  |
 | 841 | `0x102ed940` | — | 2 | 2 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:942, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2574, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2730 |  |
 | 842 | `0x102ed9c0` | — | 2 | 2 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:462, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:1521 |  |
 | 843 | `0x102ee380` | — | 2 | 2 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcGargoyle.h:24, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:779, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:783, +8 more |  |
 | 844 | `0x102eebc0` | `CAI_HumanoidNavigator#13`, `CAI_Navigator#13` | 1 | 0 | 4 | — | — |  |
-| 845 | `0x102efd50` | — | 1 | 1 | 3 | `Warning: NPC appears to have wrong nav t…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1322, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1521, Source/ElysiumUE/Private/Tests/ElysiumNpcNavigatorMoveStepTests.cpp:721 |  |
+| 845 | `0x102efd50` | — | 1 | 1 | 3 | `Warning: NPC appears to have wrong nav t…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1322, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1521, Source/ElysiumUE/Private/Tests/ElysiumNpcNavigatorMoveStepTests.cpp:723 |  |
 | 846 | `0x102f1fa0` | — | 2 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumMover.h:148, Source/ElysiumUE/Private/Substrate/ElysiumMover.h:195, Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h:382, +8 more |  |
 | 847 | `0x102f2060` | — | 1 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcNavigator.h:112, Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:649 |  |
 | 848 | `0x102f2ea0` | — | 4 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:263, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:761, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTaskSpecies.cpp:2030, +4 more |  |
@@ -880,8 +880,8 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 871 | `0x1033d330` | — | 1 | 0 | 4 | — | — |  |
 | 872 | `0x1033d380` | — | 3 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:2162 |  |
 | 873 | `0x1033d410` | — | 3 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:2162 |  |
-| 874 | `0x10344da0` | — | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:158, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:885 |  |
-| 875 | `0x103498b0` | — | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:144, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:369, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamage2Tests.cpp:654 |  |
+| 874 | `0x10344da0` | — | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:158, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:887 |  |
+| 875 | `0x103498b0` | — | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:144, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:369, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamage2Tests.cpp:656 |  |
 | 876 | `0x1034aeb0` | `CNPCMaker#364` | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:245, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:69 |  |
 | 877 | `0x1034af30` | `CNPCMaker#619` | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:362, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:84 |  |
 | 878 | `0x1034bf50` | `CNPCMaker_Fleshpile#364` | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerFleshpile.cpp:122, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerFleshpile.h:34 |  |
@@ -892,20 +892,20 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 883 | `0x10360160` | `CNPC_VAnimal#432`, `CNPC_VRat#432`, +1 more | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:4, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:211, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:224, +3 more |  |
 | 884 | `0x10363c70` | `CNPC_VBach#390` | 0 | 3 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:17, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:385, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamage2Tests.cpp:25 |  |
 | 885 | `0x10364280` | `CNPC_VBach#606` | 3 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.cpp:118, Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.cpp:119, Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.cpp:123, +6 more |  |
-| 886 | `0x10365780` | — | 1 | 3 | 1 | `E:\Vampire\main\dlls\hl2_dll\NPC_VBach.c…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:470, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:860, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:745 |  |
+| 886 | `0x10365780` | — | 1 | 3 | 1 | `E:\Vampire\main\dlls\hl2_dll\NPC_VBach.c…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:470, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:860, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:747 |  |
 | 887 | `0x103661f0` | `CNPC_VBach#609` | 3 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.cpp:152, Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.cpp:499, Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.h:57, +4 more |  |
 | 888 | `0x10367740` | `CNPC_VBatSwarm#609` | 3 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.cpp:493, Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.h:57, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:829 |  |
-| 889 | `0x10369060` | `CNPC_VCamera#461`, `CNPC_VCameraSecurity#461` | 1 | 4 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VCamera…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:317, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:404, +1 more |  |
-| 890 | `0x10375180` | `CNPC_VPlayerController#364`, `CNPC_VWolfMorph#364` | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:227, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.h:40, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:378 |  |
+| 889 | `0x10369060` | `CNPC_VCamera#461`, `CNPC_VCameraSecurity#461` | 1 | 4 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VCamera…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:317, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:406, +1 more |  |
+| 890 | `0x10375180` | `CNPC_VPlayerController#364`, `CNPC_VWolfMorph#364` | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:227, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.h:40, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:380 |  |
 | 891 | `0x10376b70` | `CNPC_VFrenzyShadow#599` | 4 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:710, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.h:53, Source/ElysiumUE/Private/Substrate/ElysiumNpcGargoyle.cpp:316, +6 more |  |
-| 892 | `0x10376bd0` | `CNPC_VFrenzyShadow#601` | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:739, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.h:53, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:416 |  |
-| 893 | `0x10376bf0` | `CNPC_VFrenzyShadow#602` | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:748, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.h:53, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:420 |  |
+| 892 | `0x10376bd0` | `CNPC_VFrenzyShadow#601` | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:739, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.h:53, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:418 |  |
+| 893 | `0x10376bf0` | `CNPC_VFrenzyShadow#602` | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:748, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.h:53, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:422 |  |
 | 894 | `0x10378fc0` | `CNPC_VGargoyle#435` | 2 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcGargoyle.cpp:199, Source/ElysiumUE/Private/Substrate/ElysiumNpcGargoyle.cpp:201, Source/ElysiumUE/Private/Substrate/ElysiumNpcGargoyle.cpp:204 |  |
 | 895 | `0x103796a0` | — | 1 | 0 | 4 | `UTIL_TraceHull` | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:164, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:315, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:318, +1 more |  |
 | 896 | `0x10379ef0` | `CNPC_VGargoyle#599` | 4 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcGargoyle.cpp:49, Source/ElysiumUE/Private/Substrate/ElysiumNpcGargoyle.cpp:315, Source/ElysiumUE/Private/Substrate/ElysiumNpcGargoyle.h:67, +4 more |  |
 | 897 | `0x10379f50` | `CNPC_VGargoyle#601` | 5 | 0 | 0 | — | — |  |
 | 898 | `0x10379f70` | `CNPC_VGargoyle#602` | 5 | 0 | 0 | — | — |  |
-| 899 | `0x10380fc0` | — | 1 | 0 | 4 | `UTIL_TraceHull` | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:164, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:371, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelRunAiTests.cpp:688 |  |
+| 899 | `0x10380fc0` | — | 1 | 0 | 4 | `UTIL_TraceHull` | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:164, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:371, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelRunAiTests.cpp:693 |  |
 | 900 | `0x10381750` | `CNPC_VHengeyokai#599` | 4 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:111, Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.h:27 |  |
 | 901 | `0x103817b0` | `CNPC_VHengeyokai#601` | 5 | 0 | 0 | — | — |  |
 | 902 | `0x103817d0` | `CNPC_VHengeyokai#602` | 5 | 0 | 0 | — | — |  |
@@ -923,7 +923,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 914 | `0x103acba0` | — | 1 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPositions2.cpp:51, Source/ElysiumUE/Private/Substrate/ElysiumNpcScurrying.cpp:31, Source/ElysiumUE/Private/Substrate/ElysiumNpcScurrying.h:53, +6 more |  |
 | 915 | `0x103b26f0` | `CNPC_VSheriffSwarm#609` | 3 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.cpp:494, Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.h:58, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:830 |  |
 | 916 | `0x103b4600` | `CNPC_VTest#490` | 3 | 0 | 2 | — | — |  |
-| 917 | `0x103b9500` | `CNPC_VTzimisce#491` | 2 | 0 | 3 | `SPI_TAKE_DAMAGE` | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:670, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:83, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:84 |  |
+| 917 | `0x103b9500` | `CNPC_VTzimisce#491` | 2 | 0 | 3 | `SPI_TAKE_DAMAGE` | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:670, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:85, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:86 |  |
 | 918 | `0x103b9f10` | `CNPC_VTzimisce#487` | 4 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:87, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:636, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:637, +5 more |  |
 | 919 | `0x103b9f90` | — | 5 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2Species.cpp:129, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2Species.cpp:450, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2Species.cpp:454, +6 more |  |
 | 920 | `0x103bc820` | — | 3 | 0 | 2 | `E:\Vampire\main\dlls\hl2_dll\NPC_VTzimis…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:1349, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:1402, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:1450, +2 more |  |
@@ -948,8 +948,8 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 939 | `0x1008bc50` | — | 1 | 1 | 2 | `NULL ENTITY`, `CBaseAnimating::StopIgnoringCollision` | — |  |
 | 940 | `0x10095cb0` | — | 3 | 0 | 1 | `NULL ENTITY`, `CBaseAnimating::SetBoneController ` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:289, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc2.cpp:323 |  |
 | 941 | `0x10098a40` | `CAI_BaseHumanoid#267`, `CAI_BaseNPC#267`, +85 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#267 no SDK twin: stretch #263-#276 holds 12 reta…` |
-| 942 | `0x100995e0` | `CAI_BaseHumanoid#274`, `CAI_BaseNPC#274`, +85 more | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumAnimatingOverlaySlotBodies.cpp:59, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp:62 | `CAI_BaseNPC#274 no SDK twin: stretch #263-#276 holds 12 reta…` |
-| 943 | `0x100b1890` | `CAISound#213`, `CAI_BaseHumanoid#213`, +495 more | 0 | 3 | 1 | `NULL ENTITY`, `CBaseEntity::SetSize` | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:442, Source/ElysiumUE/Private/Substrate/ElysiumNpcGeometry.cpp:102, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelGeometryTests.cpp:222 | `CAI_BaseNPC#213 no SDK twin: stretch #199-#222 holds 22 reta…` |
+| 942 | `0x100995e0` | `CAI_BaseHumanoid#274`, `CAI_BaseNPC#274`, +85 more | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumAnimatingOverlaySlotBodies.cpp:59, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp:64 | `CAI_BaseNPC#274 no SDK twin: stretch #263-#276 holds 12 reta…` |
+| 943 | `0x100b1890` | `CAISound#213`, `CAI_BaseHumanoid#213`, +495 more | 0 | 3 | 1 | `NULL ENTITY`, `CBaseEntity::SetSize` | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:442, Source/ElysiumUE/Private/Substrate/ElysiumNpcGeometry.cpp:102, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelGeometryTests.cpp:224 | `CAI_BaseNPC#213 no SDK twin: stretch #199-#222 holds 22 reta…` |
 | 944 | `0x100b5040` | `CAISound#225`, `CAI_BaseHumanoid#225`, +495 more | 2 | 1 | 1 | — | — | `CAI_BaseNPC#225 no SDK twin: stretch #222-#227 holds 4 retai…` |
 | 945 | `0x100b5110` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:386, Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:395, Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf.cpp:2157, +1 more |  |
 | 946 | `0x100b5340` | — | 1 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:822 |  |
@@ -970,7 +970,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 961 | `0x100eec70` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumMover.cpp:543, Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h:377, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:177, +3 more |  |
 | 962 | `0x100f0e90` | — | 2 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumMover.cpp:699, Source/ElysiumUE/Private/Substrate/ElysiumMover.h:180, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:115, +3 more |  |
 | 963 | `0x100f2f90` | — | 2 | 2 | 0 | — | — |  |
-| 964 | `0x100f6e40` | — | 1 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:379, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:409 |  |
+| 964 | `0x100f6e40` | — | 1 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:379, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:411 |  |
 | 965 | `0x100f7b20` | — | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc2.cpp:158, Source/ElysiumUE/Private/Substrate/ElysiumNpcGargoyle.h:20, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:227, +2 more |  |
 | 966 | `0x100f8370` | — | 4 | 0 | 0 | — | — |  |
 | 967 | `0x100f8490` | — | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:206 |  |
@@ -991,14 +991,14 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 982 | `0x10155380` | — | 1 | 3 | 0 | — | — |  |
 | 983 | `0x101618a0` | — | 3 | 0 | 1 | — | — |  |
 | 984 | `0x10175180` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.cpp:101, Source/ElysiumUE/Private/Substrate/ElysiumNpcSocial10.cpp:70, Source/ElysiumUE/Private/Substrate/ElysiumNpcSocial10.cpp:160, +7 more |  |
-| 985 | `0x10178120` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:490, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:88 |  |
-| 986 | `0x1017c600` | — | 1 | 2 | 1 | `showloot⏎`, `showbarter⏎` | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1712, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSocial10Tests.cpp:544, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSocial10Tests.cpp:559, +3 more |  |
-| 987 | `0x1017e720` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:474, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:360, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:482, +1 more |  |
-| 988 | `0x1017e740` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:483, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:334, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:482, +1 more |  |
-| 989 | `0x1017f6e0` | — | 2 | 1 | 1 | `CSActs:    %6.1f - OnCopPursuitStart - %…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:401, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:563, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:571 |  |
+| 985 | `0x10178120` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:490, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:90 |  |
+| 986 | `0x1017c600` | — | 1 | 2 | 1 | `showloot⏎`, `showbarter⏎` | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1712, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSocial10Tests.cpp:546, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSocial10Tests.cpp:561, +3 more |  |
+| 987 | `0x1017e720` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:474, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:360, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:484, +1 more |  |
+| 988 | `0x1017e740` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:483, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:334, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:484, +1 more |  |
+| 989 | `0x1017f6e0` | — | 2 | 1 | 1 | `CSActs:    %6.1f - OnCopPursuitStart - %…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:401, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:563, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:573 |  |
 | 990 | `0x1017f8d0` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:234, Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:285, Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.h:36, +4 more |  |
 | 991 | `0x10181680` | — | 2 | 1 | 1 | — | Source/ElysiumUE/Private/Visual/ElysiumPlayerActionRules.cpp:209 |  |
-| 992 | `0x10183120` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1778, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSocial10Tests.cpp:544, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSocial10Tests.cpp:577, +2 more |  |
+| 992 | `0x10183120` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1778, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSocial10Tests.cpp:546, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSocial10Tests.cpp:579, +2 more |  |
 | 993 | `0x10185910` | — | 1 | 1 | 2 | — | — |  |
 | 994 | `0x10191170` | — | 1 | 0 | 3 | `%s could not find entity to attach to, d…` | — |  |
 | 995 | `0x10194d20` | — | 3 | 0 | 1 | — | — |  |
@@ -1006,7 +1006,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 997 | `0x10194f30` | — | 1 | 1 | 2 | — | — |  |
 | 998 | `0x10195160` | — | 1 | 1 | 2 | — | — |  |
 | 999 | `0x1019d130` | — | 1 | 1 | 2 | — | — |  |
-| 1000 | `0x101a6820` | `CAI_BaseHumanoid#479`, `CAI_BaseNPC#479`, +75 more | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:580 | `CAI_BaseNPC#479 no SDK twin: stretch #478-#480 holds 1 retai…` |
+| 1000 | `0x101a6820` | `CAI_BaseHumanoid#479`, `CAI_BaseNPC#479`, +75 more | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:582 | `CAI_BaseNPC#479 no SDK twin: stretch #478-#480 holds 1 retai…` |
 | 1001 | `0x101a6880` | `CAI_BaseHumanoid#488`, `CAI_BaseNPC#488`, +8 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#488 no SDK twin: stretch #481-#513 holds 31 reta…` |
 | 1002 | `0x101a68e0` | `CAI_BaseHumanoid#491`, `CAI_BaseNPC#491`, +8 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#491 no SDK twin: stretch #481-#513 holds 31 reta…` |
 | 1003 | `0x101a6900` | `CAI_BaseHumanoid#492`, `CAI_BaseNPC#492`, +11 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#492 no SDK twin: stretch #481-#513 holds 31 reta…` |
@@ -1033,14 +1033,14 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1024 | `0x101e3730` | — | 3 | 0 | 1 | `Discipline<%s> Triggered⏎` | — |  |
 | 1025 | `0x101e3d70` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.h:73 |  |
 | 1026 | `0x101e3f50` | — | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10_2.cpp:85, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:715 |  |
-| 1027 | `0x101e3ff0` | — | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:164, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:146, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamage2Tests.cpp:815 |  |
+| 1027 | `0x101e3ff0` | — | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:164, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:146, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamage2Tests.cpp:817 |  |
 | 1028 | `0x101e8ef0` | — | 2 | 0 | 2 | — | — |  |
 | 1029 | `0x101ef880` | — | 1 | 3 | 0 | — | — |  |
 | 1030 | `0x101f0b50` | — | 1 | 3 | 0 | — | — |  |
 | 1031 | `0x101f18f0` | — | 3 | 0 | 1 | — | — |  |
 | 1032 | `0x101f1be0` | — | 2 | 1 | 1 | — | — |  |
 | 1033 | `0x101f1c70` | — | 2 | 1 | 1 | — | — |  |
-| 1034 | `0x101f39d0` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.cpp:106, Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.h:30, Source/ElysiumUE/Private/Tests/ElysiumDialogueAudioTests.cpp:190 |  |
+| 1034 | `0x101f39d0` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.cpp:106, Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.h:30, Source/ElysiumUE/Private/Tests/ElysiumDialogueAudioTests.cpp:192 |  |
 | 1035 | `0x101f4600` | — | 2 | 0 | 2 | `%s\%s_%d.wav`, `%s\%s.wav`, +1 more | — |  |
 | 1036 | `0x101f55a0` | — | 3 | 0 | 1 | `func_button`, `func_rot_button`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf.cpp:246 |  |
 | 1037 | `0x101f5b60` | — | 2 | 0 | 2 | `ERROR: VSnd: Play: %s Table out of bound…` | — |  |
@@ -1068,20 +1068,20 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1059 | `0x10269bd0` | — | 3 | 0 | 1 | — | — |  |
 | 1060 | `0x1026c3d0` | — | 3 | 0 | 1 | `A.I. Disabled...⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:771, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseThink.cpp:11, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseThink.cpp:23, +8 more |  |
 | 1061 | `0x1026cec0` | `CAI_BaseHumanoid#354`, `CAI_BaseNPC#354`, +75 more | 0 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:755, Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:971, Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.cpp:167, +5 more | `CAI_BaseNPC#354 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 1062 | `0x1026cf90` | `CAI_BaseHumanoid#355`, `CAI_BaseNPC#355`, +75 more | 0 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:968, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:272, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:194, +1 more | `CAI_BaseNPC#355 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 1062 | `0x1026cf90` | `CAI_BaseHumanoid#355`, `CAI_BaseNPC#355`, +75 more | 0 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:968, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:272, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:196, +1 more | `CAI_BaseNPC#355 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 1063 | `0x1026d460` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Audio/ElysiumSoundLevel.cpp:65, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:11, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:18, +33 more |  |
 | 1064 | `0x1026d890` | `CAI_BaseHumanoid#553`, `CAI_BaseNPC#553`, +72 more | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:28, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:117, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:188, +1 more | `CAI_BaseNPC#553 no SDK twin: stretch #545-#560 holds 14 reta…` |
 | 1065 | `0x1026f4d0` | — | 2 | 0 | 2 | `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMaintain.cpp:86 |  |
 | 1066 | `0x1026ff00` | — | 1 | 0 | 3 | — | — |  |
 | 1067 | `0x10273aa0` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:759, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:764, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle2.cpp:28, +3 more |  |
 | 1068 | `0x10278090` | `CAI_BaseHumanoid#482`, `CAI_BaseNPC#482`, +24 more | 0 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnimal.cpp:20, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAnim.cpp:487, Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:190, +6 more | `CAI_BaseNPC#482 no SDK twin: stretch #481-#513 holds 31 reta…` |
-| 1069 | `0x102781e0` | — | 1 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHints.cpp:746, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerFleshpile.cpp:230, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:583 |  |
+| 1069 | `0x102781e0` | — | 1 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHints.cpp:746, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerFleshpile.cpp:230, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:585 |  |
 | 1070 | `0x102784a0` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:237, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1395, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2810, +2 more |  |
 | 1071 | `0x10278c60` | `CAI_BaseHumanoid#575`, `CAI_BaseNPC#575`, +11 more | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc.cpp:45, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor.cpp:44, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor.cpp:403, +1 more | `CAI_BaseNPC#575 no SDK twin: stretch #566-#583 holds 16 reta…` |
 | 1072 | `0x10278d90` | `CAI_BaseHumanoid#517`, `CAI_BaseNPC#517`, +75 more | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:223, Source/ElysiumUE/Public/ElysiumWorldServices.h:564 | `CAI_BaseNPC#517 no SDK twin: the SDK name it lines up with w…` |
 | 1073 | `0x1027db30` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSchedule.cpp:140, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2587, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2649, +5 more |  |
 | 1074 | `0x1027e7d0` | `CAI_BaseHumanoid#407`, `CAI_BaseNPC#407`, +75 more | 4 | 0 | 0 | — | — | `CAI_BaseNPC#407 no SDK twin: stretch #405-#420 holds 14 reta…` |
-| 1075 | `0x1028af20` | `CAI_BaseHumanoid#548`, `CAI_BaseNPC#548`, +75 more | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Debug/ElysiumGeometryVerbs.cpp:467, Source/ElysiumUE/Private/Substrate/ElysiumNpcBasePositions2.cpp:79, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPositionsTests.cpp:566, +1 more | `CAI_BaseNPC#548 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 1075 | `0x1028af20` | `CAI_BaseHumanoid#548`, `CAI_BaseNPC#548`, +75 more | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Debug/ElysiumGeometryVerbs.cpp:467, Source/ElysiumUE/Private/Substrate/ElysiumNpcBasePositions2.cpp:79, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPositionsTests.cpp:568, +1 more | `CAI_BaseNPC#548 no SDK twin: stretch #545-#560 holds 14 reta…` |
 | 1076 | `0x1028e480` | — | 1 | 0 | 3 | — | — |  |
 | 1077 | `0x1028e790` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:10, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:44, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:93 |  |
 | 1078 | `0x10290200` | — | 1 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:320, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:21, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:99, +1 more |  |
@@ -1099,15 +1099,15 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1090 | `0x102a13d0` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:1423, Source/ElysiumUE/Private/Substrate/ElysiumNpcScheduleHost.cpp:7, Source/ElysiumUE/Private/Substrate/ElysiumNpcScheduleHost.cpp:18, +9 more |  |
 | 1091 | `0x102a96b0` | — | 1 | 3 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:550, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:594 |  |
 | 1092 | `0x102aa9e0` | — | 1 | 2 | 1 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:1096, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:1097, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers2.cpp:602, +9 more |  |
-| 1093 | `0x102ae780` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcCrosswalkTests.cpp:317, Source/ElysiumUE/Private/Tests/ElysiumNpcTests.cpp:1016 |  |
+| 1093 | `0x102ae780` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcCrosswalkTests.cpp:321, Source/ElysiumUE/Private/Tests/ElysiumNpcTests.cpp:1020 |  |
 | 1094 | `0x102ae7f0` | — | 3 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamaged.cpp:55, Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:434, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2Species.cpp:57, +2 more |  |
-| 1095 | `0x102b11c0` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:349, Source/ElysiumUE/Private/Tests/ElysiumScheduleTests.cpp:738 |  |
+| 1095 | `0x102b11c0` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:349, Source/ElysiumUE/Private/Tests/ElysiumScheduleTests.cpp:742 |  |
 | 1096 | `0x102b15c0` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:560, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:278, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1142 |  |
 | 1097 | `0x102b6890` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:50, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1325, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1396 |  |
-| 1098 | `0x102b8d20` | — | 2 | 0 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:1161, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSelectTests.cpp:731 |  |
+| 1098 | `0x102b8d20` | — | 2 | 0 | 2 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:1161, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSelectTests.cpp:736 |  |
 | 1099 | `0x102bf560` | — | 1 | 2 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:707, Source/ElysiumUE/Private/Substrate/ElysiumNpcSquad.cpp:120, Source/ElysiumUE/Private/Substrate/ElysiumNpcSquad.cpp:165, +5 more |  |
 | 1100 | `0x102c4310` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:455, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:2004 |  |
-| 1101 | `0x102c48b0` | `CAI_BaseNPCTroika#608`, `CGeneric_NPC#608`, +62 more | 2 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:737, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:742, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:563 |  |
+| 1101 | `0x102c48b0` | `CAI_BaseNPCTroika#608`, `CGeneric_NPC#608`, +62 more | 2 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:737, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:742, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:565 |  |
 | 1102 | `0x102c4eb0` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:294 |  |
 | 1103 | `0x102c6b30` | — | 2 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcThink.cpp:153 |  |
 | 1104 | `0x102c7360` | — | 2 | 1 | 1 | — | — |  |
@@ -1128,7 +1128,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1119 | `0x102e2d70` | — | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:803, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1608 |  |
 | 1120 | `0x102e4f50` | — | 2 | 0 | 2 | `Unaccounted`, `CAI_MoveProbe_TestGroundMove` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:405, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor10.cpp:37, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor10.cpp:78, +4 more |  |
 | 1121 | `0x102e84a0` | — | 1 | 1 | 2 | — | — |  |
-| 1122 | `0x102ecc40` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:786, Source/ElysiumUE/Private/Tests/ElysiumNpcNavigatorMoveStepTests.cpp:747 |  |
+| 1122 | `0x102ecc40` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:786, Source/ElysiumUE/Private/Tests/ElysiumNpcNavigatorMoveStepTests.cpp:749 |  |
 | 1123 | `0x102ed610` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2728, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2732, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2751, +4 more |  |
 | 1124 | `0x102edbb0` | — | 1 | 2 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:480, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:1350 |  |
 | 1125 | `0x102edd50` | — | 1 | 2 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:444, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:1446 |  |
@@ -1145,7 +1145,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1136 | `0x102f0e80` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h:367, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1359, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1389 |  |
 | 1137 | `0x102f1860` | — | 3 | 0 | 1 | — | — |  |
 | 1138 | `0x102f1900` | — | 1 | 0 | 3 | `CanFitAtNode() called with no network!⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2073, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:989, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:1041, +3 more |  |
-| 1139 | `0x102f1a20` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:993, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:1086, Source/ElysiumUE/Private/Tests/ElysiumNpcGeometryConsumerTests.cpp:214 |  |
+| 1139 | `0x102f1a20` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:993, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:1086, Source/ElysiumUE/Private/Tests/ElysiumNpcGeometryConsumerTests.cpp:216 |  |
 | 1140 | `0x102f1cf0` | — | 1 | 0 | 3 | — | — |  |
 | 1141 | `0x102f3270` | — | 4 | 0 | 0 | — | — |  |
 | 1142 | `0x102f37d0` | — | 1 | 3 | 0 | — | — |  |
@@ -1170,16 +1170,16 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1161 | `0x10312cd0` | `CAI_BaseHumanoid#424`, `CAI_ExpressiveNPC#424` | 1 | 1 | 2 | — | — |  |
 | 1162 | `0x10316bc0` | — | 2 | 0 | 2 | — | — |  |
 | 1163 | `0x10319ee0` | — | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2233, Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:570 |  |
-| 1164 | `0x1032fc50` | `CAI_BaseHumanoid#346`, `CAI_BaseNPC#346`, +83 more | 2 | 0 | 2 | `NULL ENTITY`, `CBaseCombatCharacter::SetPoseParameter` | Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:268, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:186 | `CAI_BaseNPC#346 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 1164 | `0x1032fc50` | `CAI_BaseHumanoid#346`, `CAI_BaseNPC#346`, +83 more | 2 | 0 | 2 | `NULL ENTITY`, `CBaseCombatCharacter::SetPoseParameter` | Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:268, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:188 | `CAI_BaseNPC#346 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 1165 | `0x103300c0` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1575 |  |
-| 1166 | `0x103482e0` | `CAI_BaseHumanoid#326`, `CAI_BaseNPC#326`, +17 more | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:944, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:956, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:964 | `CAI_BaseNPC#326 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 1166 | `0x103482e0` | `CAI_BaseHumanoid#326`, `CAI_BaseNPC#326`, +17 more | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:949, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:961, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:969 | `CAI_BaseNPC#326 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 1167 | `0x1034a1a0` | — | 1 | 1 | 2 | — | — |  |
 | 1168 | `0x1034af50` | `CNPCMaker#620` | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:368, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:84 |  |
 | 1169 | `0x1034b430` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:227, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:129 |  |
 | 1170 | `0x1034bf90` | `CNPCMaker_Fleshpile#620` | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerFleshpile.cpp:153, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerFleshpile.h:42 |  |
 | 1171 | `0x1034cbd0` | `CNPCMaker_Zombie#620` | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.cpp:105, Source/ElysiumUE/Private/Substrate/ElysiumNpcMakerZombie.h:38 |  |
 | 1172 | `0x1035fd40` | `CNPC_VAnimal#482`, `CNPC_VDog#482`, +3 more | 0 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnimal.cpp:13, Source/ElysiumUE/Private/Substrate/ElysiumNpcAnimal.cpp:14, Source/ElysiumUE/Private/Substrate/ElysiumNpcAnimal.cpp:18, +9 more |  |
-| 1173 | `0x10365860` | — | 1 | 2 | 1 | `item_w_grenade_frag`, `No physics data for grenade⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.h:37, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1314 |  |
+| 1173 | `0x10365860` | — | 1 | 2 | 1 | `item_w_grenade_frag`, `No physics data for grenade⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.h:37, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1316 |  |
 | 1174 | `0x10366490` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseBoss.cpp:96, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseBoss.cpp:119, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseBoss.h:38, +5 more |  |
 | 1175 | `0x103690e0` | `CNPC_VCamera#432`, `CNPC_VCameraSecurity#432` | 4 | 0 | 0 | — | — |  |
 | 1176 | `0x103723f0` | — | 1 | 1 | 2 | `E:\Vampire\main\dlls\hl2_dll\NPC_VCop.cp…` | — |  |
@@ -1196,12 +1196,12 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1187 | `0x103850a0` | `CNPC_ProneDialog#482`, `CNPC_VAndreiBlood#482`, +40 more | 0 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAnim.cpp:483, Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:172, Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:178, +7 more |  |
 | 1188 | `0x1038c250` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:248, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1651 |  |
 | 1189 | `0x1038e640` | — | 3 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.cpp:305, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:88, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:178, +12 more |  |
-| 1190 | `0x1038f2c0` | — | 2 | 1 | 1 | `prop_physics`, `ManBat is throwing model %s⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:99, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1809, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1314, +1 more |  |
+| 1190 | `0x1038f2c0` | — | 2 | 1 | 1 | `prop_physics`, `ManBat is throwing model %s⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:99, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1809, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1316, +1 more |  |
 | 1191 | `0x1038fe30` | — | 1 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:222, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTaskSpecies.cpp:160, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTaskSpecies.cpp:1063, +1 more |  |
 | 1192 | `0x10395df0` | `CNPC_VMingXiao#600` | 3 | 1 | 0 | — | — |  |
 | 1193 | `0x10396e90` | `CNPC_VMingXiao#482` | 0 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAnim.cpp:483, Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:172, Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:178, +3 more |  |
 | 1194 | `0x103970d0` | `CNPC_VMingXiao#348` | 1 | 0 | 3 | `NULL ENTITY`, `CBaseCombatCharacter::HealthToPercent` | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:457, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:458, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:463, +2 more |  |
-| 1195 | `0x10397dd0` | — | 3 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:58, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:298, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1124, +1 more |  |
+| 1195 | `0x10397dd0` | — | 3 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:58, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:298, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1126, +1 more |  |
 | 1196 | `0x103983d0` | — | 2 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:24, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:70, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:1032, +4 more |  |
 | 1197 | `0x103998d0` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:154, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:1677, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:1751, +8 more |  |
 | 1198 | `0x1039e970` | — | 2 | 2 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VMingXi…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss.cpp:12, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:324, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.h:121, +5 more |  |
@@ -1214,20 +1214,20 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1205 | `0x103b9e30` | `CNPC_VTzimisce#627` | 2 | 0 | 2 | `SPI_FIDGET` | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:35 |  |
 | 1206 | `0x103ba250` | `CNPC_VTzimisce#533` | 3 | 0 | 1 | — | — |  |
 | 1207 | `0x103bd270` | `CNPC_VTzimisce#482` | 0 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnimal.cpp:14, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAnim.cpp:483, Source/ElysiumUE/Private/Substrate/ElysiumNpcBosses.cpp:178, +5 more |  |
-| 1208 | `0x103bf330` | — | 1 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:951, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:174, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesTests.cpp:418 |  |
+| 1208 | `0x103bf330` | — | 1 | 1 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:951, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:174, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesTests.cpp:421 |  |
 | 1209 | `0x103bf580` | `CNPC_VTzimisce#410` | 0 | 0 | 4 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:828, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:123, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:129, +1 more |  |
 | 1210 | `0x103c0160` | — | 1 | 0 | 3 | `UTIL_TraceHull` | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:164, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:578, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:592, +2 more |  |
 | 1211 | `0x103c0860` | — | 1 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:225, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:579, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:219, +1 more |  |
 | 1212 | `0x103c1d80` | `CNPC_VTzimisceHeadClaw#332` | 0 | 2 | 2 | `Bip01 Spine`, `Character/Monster/TC_FatGuy/Sluge_Affect…`, +3 more | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:890, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpeciesMisc10_2.cpp:37, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceHeadClaw.cpp:214, +2 more |  |
 | 1213 | `0x103c6a20` | — | 3 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcChangBros.cpp:814, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:1237, Source/ElysiumUE/Private/Substrate/ElysiumNpcVampireBoss.cpp:312, +2 more |  |
-| 1214 | `0x103d8df0` | — | 1 | 0 | 3 | `%s could not look up sound for activity:…`, `Character/Monster/Werewolf/Air_Sniff_1.w…`, +14 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2Species.cpp:505, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMisc2Tests.cpp:1009 |  |
+| 1214 | `0x103d8df0` | — | 1 | 0 | 3 | `%s could not look up sound for activity:…`, `Character/Monster/Werewolf/Air_Sniff_1.w…`, +14 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2Species.cpp:505, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMisc2Tests.cpp:1011 |  |
 | 1215 | `0x103dc490` | — | 1 | 1 | 2 | — | — |  |
 | 1216 | `0x10408060` | — | 2 | 0 | 2 | — | — |  |
 | 1217 | `0x1042fe90` | — | 4 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPedestrian.cpp:43, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:351, Source/ElysiumUE/Private/Substrate/ElysiumNpcSensesBodiesShared.h:24, +1 more |  |
 | 1218 | `0x10439dc0` | — | 4 | 0 | 0 | — | — | `CRT: byte-identical to 2 archive bodies (__mbscpy, _strcpy);…` |
 | 1219 | `0x10007b4e` | — | 3 | 0 | 0 | — | — |  |
 | 1220 | `0x10027000` | `CAISound#167`, `CAI_ChangeHintGroup#167`, +416 more | 3 | 0 | 0 | — | — |  |
-| 1221 | `0x10027630` | `CAISound#3`, `CAI_BaseHumanoid#3`, +495 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:125 | `CAI_BaseNPC#3 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
+| 1221 | `0x10027630` | `CAISound#3`, `CAI_BaseHumanoid#3`, +495 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:127 | `CAI_BaseNPC#3 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
 | 1222 | `0x10054ad0` | — | 1 | 0 | 2 | — | — |  |
 | 1223 | `0x10057740` | — | 1 | 1 | 1 | — | — |  |
 | 1224 | `0x10072b10` | — | 1 | 0 | 2 | `Invalid camera shot index⏎` | — |  |
@@ -1238,13 +1238,13 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1229 | `0x1008f540` | — | 2 | 0 | 1 | `NULL ENTITY`, `CBaseAnimating::ResetActivityIndexes ` | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:95 |  |
 | 1230 | `0x100990f0` | — | 1 | 0 | 2 | — | — |  |
 | 1231 | `0x10099540` | `CAI_BaseHumanoid#270`, `CAI_BaseNPC#270`, +85 more | 2 | 0 | 1 | — | — | `CAI_BaseNPC#270 no SDK twin: stretch #263-#276 holds 12 reta…` |
-| 1232 | `0x100997f0` | `CAI_BaseHumanoid#266`, `CAI_BaseNPC#266`, +85 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumAnimatingOverlaySlotBodies.cpp:82, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc.cpp:206, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:191 | `CAI_BaseNPC#266 no SDK twin: stretch #263-#276 holds 12 reta…` |
+| 1232 | `0x100997f0` | `CAI_BaseHumanoid#266`, `CAI_BaseNPC#266`, +85 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumAnimatingOverlaySlotBodies.cpp:82, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc.cpp:206, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:193 | `CAI_BaseNPC#266 no SDK twin: stretch #263-#276 holds 12 reta…` |
 | 1233 | `0x1009b5a0` | `CAISound#19`, `CAI_BaseHumanoid#19`, +431 more | 2 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::TraceMessageBare` | — | `CAI_BaseNPC#19 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 1234 | `0x1009ebb0` | `CAISound#109`, `CAI_ChangeHintGroup#109`, +159 more | 1 | 0 | 2 | `NULL ENTITY`, `CBaseEntity::KeyValue` | — |  |
 | 1235 | `0x1009eca0` | `CAISound#108`, `CAI_ChangeHintGroup#108`, +159 more | 1 | 0 | 2 | `NULL ENTITY`, `%f %f %f`, +1 more | — |  |
-| 1236 | `0x100a5030` | `CAISound#42`, `CAI_BaseHumanoid#42`, +474 more | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:309, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:679, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:717, +2 more | `CAI_BaseNPC#42 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 1236 | `0x100a5030` | `CAISound#42`, `CAI_BaseHumanoid#42`, +474 more | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:309, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:681, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:719, +2 more | `CAI_BaseNPC#42 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 1237 | `0x100aa5a0` | `CAISound#130`, `CAI_ChangeHintGroup#130`, +183 more | 2 | 0 | 1 | — | — |  |
-| 1238 | `0x100b4c00` | `CAISound#196`, `CAI_BaseHumanoid#196`, +494 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:555, Source/ElysiumUE/Private/Substrate/ElysiumNpcSensesBodies.cpp:50, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:74, +2 more | `CAI_BaseNPC#196 no SDK twin: stretch #189-#199 holds 9 retai…` |
+| 1238 | `0x100b4c00` | `CAISound#196`, `CAI_BaseHumanoid#196`, +494 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:555, Source/ElysiumUE/Private/Substrate/ElysiumNpcSensesBodies.cpp:50, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:76, +2 more | `CAI_BaseNPC#196 no SDK twin: stretch #189-#199 holds 9 retai…` |
 | 1239 | `0x100b4f30` | `CAISound#226`, `CAI_BaseHumanoid#226`, +483 more | 0 | 0 | 3 | `Infinite values from vphysics!⏎` | — | `CAI_BaseNPC#226 no SDK twin: stretch #222-#227 holds 4 retai…` |
 | 1240 | `0x100b5d80` | `CAI_BaseHumanoid#285`, `CAI_BaseNPC#285`, +84 more | 0 | 1 | 2 | — | — | `CAI_BaseNPC#285 no SDK twin: stretch #276-#292 holds 15 reta…` |
 | 1241 | `0x100b6180` | `CAI_BaseHumanoid#287`, `CAI_BaseNPC#287`, +84 more | 0 | 1 | 2 | — | — | `CAI_BaseNPC#287 no SDK twin: stretch #276-#292 holds 15 reta…` |
@@ -1252,7 +1252,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1243 | `0x100b6960` | `CAI_BaseHumanoid#289`, `CAI_BaseNPC#289`, +84 more | 1 | 0 | 2 | `left_`, `right_` | — | `CAI_BaseNPC#289 no SDK twin: stretch #276-#292 holds 15 reta…` |
 | 1244 | `0x100b6f10` | — | 2 | 0 | 1 | — | — |  |
 | 1245 | `0x100d13d0` | — | 1 | 1 | 1 | — | — |  |
-| 1246 | `0x100e58b0` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogueBodies.cpp:95, Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogueBodies.cpp:241, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:135, +6 more |  |
+| 1246 | `0x100e58b0` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogueBodies.cpp:95, Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogueBodies.cpp:241, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:137, +6 more |  |
 | 1247 | `0x100eb420` | — | 2 | 0 | 1 | — | — |  |
 | 1248 | `0x100ec530` | — | 1 | 0 | 2 | — | — |  |
 | 1249 | `0x100ecfc0` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:132, Source/ElysiumUE/Private/Substrate/ElysiumStance.cpp:65 |  |
@@ -1275,14 +1275,14 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1266 | `0x10161f10` | — | 2 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1305 |  |
 | 1267 | `0x10170090` | — | 1 | 0 | 2 | `Can't change levels while in dialog!⏎` | Source/ElysiumUE/Public/ElysiumEntityWorld.h:60 |  |
 | 1268 | `0x1017b330` | — | 1 | 0 | 2 | — | — |  |
-| 1269 | `0x1017dd80` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:399, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:467, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:468 |  |
+| 1269 | `0x1017dd80` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:399, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:469, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:470 |  |
 | 1270 | `0x1017ddd0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:73, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:436, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:452, +2 more |  |
-| 1271 | `0x1017de60` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:420, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:467, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:470 |  |
+| 1271 | `0x1017de60` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:420, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:469, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:472 |  |
 | 1272 | `0x1017e6f0` | — | 2 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:167, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:592 |  |
-| 1273 | `0x1017f650` | — | 1 | 1 | 1 | `CSActs:    %6.1f - OnCopPursuitStart - %…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:570, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:712 |  |
-| 1274 | `0x1017f7b0` | — | 1 | 1 | 1 | `CSActs:    %6.1f - OnHunterPursuitStart …` | Source/ElysiumUE/Private/Substrate/ElysiumNpcHunter.cpp:54, Source/ElysiumUE/Private/Substrate/ElysiumNpcHunter.h:35, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:712 |  |
-| 1275 | `0x1017f830` | — | 1 | 1 | 1 | `CSActs:    %6.1f - OnHunterPursuitStart …` | Source/ElysiumUE/Private/Substrate/ElysiumNpcHunter.cpp:76, Source/ElysiumUE/Private/Substrate/ElysiumNpcHunter.h:36, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:712 |  |
-| 1276 | `0x1017f9c0` | — | 1 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:402, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:603, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:548 |  |
+| 1273 | `0x1017f650` | — | 1 | 1 | 1 | `CSActs:    %6.1f - OnCopPursuitStart - %…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:570, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:714 |  |
+| 1274 | `0x1017f7b0` | — | 1 | 1 | 1 | `CSActs:    %6.1f - OnHunterPursuitStart …` | Source/ElysiumUE/Private/Substrate/ElysiumNpcHunter.cpp:54, Source/ElysiumUE/Private/Substrate/ElysiumNpcHunter.h:35, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:714 |  |
+| 1275 | `0x1017f830` | — | 1 | 1 | 1 | `CSActs:    %6.1f - OnHunterPursuitStart …` | Source/ElysiumUE/Private/Substrate/ElysiumNpcHunter.cpp:76, Source/ElysiumUE/Private/Substrate/ElysiumNpcHunter.h:36, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:714 |  |
+| 1276 | `0x1017f9c0` | — | 1 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:402, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:603, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:550 |  |
 | 1277 | `0x10182a90` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:65, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain2.cpp:459, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain2.cpp:577, +2 more |  |
 | 1278 | `0x101841f0` | — | 1 | 2 | 0 | — | — |  |
 | 1279 | `0x10194330` | — | 1 | 0 | 2 | — | — |  |
@@ -1292,7 +1292,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1283 | `0x101a68a0` | `CAI_BaseHumanoid#489`, `CAI_BaseNPC#489`, +8 more | 3 | 0 | 0 | — | — | `CAI_BaseNPC#489 no SDK twin: stretch #481-#513 holds 31 reta…` |
 | 1284 | `0x101a6ae0` | `CAI_BaseHumanoid#507`, `CAI_BaseNPC#507`, +11 more | 3 | 0 | 0 | — | — | `CAI_BaseNPC#507 no SDK twin: stretch #481-#513 holds 31 reta…` |
 | 1285 | `0x101a6ec0` | — | 3 | 0 | 0 | `         ⏎` | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:1083 |  |
-| 1286 | `0x101a7540` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:1034, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:87, Source/ElysiumUE/Private/Tests/ElysiumDialogueTests.cpp:1731, +2 more |  |
+| 1286 | `0x101a7540` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:1034, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:87, Source/ElysiumUE/Private/Tests/ElysiumDialogueTests.cpp:1741, +2 more |  |
 | 1287 | `0x101a81a0` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:28, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:1052, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:89, +1 more |  |
 | 1288 | `0x101a89a0` | `CCineAI#459`, `CCineAISchedule#459`, +1 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:108, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:238, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:206, +7 more |  |
 | 1289 | `0x101aa5f0` | `CAI_BaseNPCTroika#476`, `CGeneric_NPC#476`, +62 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseEntityChain.cpp:120, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:371, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:376, +1 more |  |
@@ -1368,24 +1368,24 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1359 | `0x1025f8e0` | `CAI_BaseHumanoid#535` | 0 | 1 | 2 | — | — |  |
 | 1360 | `0x10260930` | — | 2 | 0 | 1 | — | — |  |
 | 1361 | `0x10260980` | — | 2 | 1 | 0 | — | — |  |
-| 1362 | `0x10260dc0` | `CAI_BaseHumanoid#584`, `CAI_ExpressiveNPC#584` | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:1088 |  |
+| 1362 | `0x10260dc0` | `CAI_BaseHumanoid#584`, `CAI_ExpressiveNPC#584` | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:1093 |  |
 | 1363 | `0x102653f0` | — | 1 | 1 | 1 | — | — |  |
 | 1364 | `0x10268900` | `CAISound#185`, `CAI_BaseHumanoid#185`, +495 more | 0 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:599, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:10, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:346, +1 more | `CAI_BaseNPC#185 no SDK twin: stretch #181-#189 holds 7 retai…` |
 | 1365 | `0x1026a2a0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses.cpp:336, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.h:320, Source/ElysiumUE/Private/Substrate/ElysiumNpcSensesBodies.cpp:271, +3 more |  |
 | 1366 | `0x1026a8f0` | `CAI_BaseHumanoid#567`, `CAI_BaseNPC#567`, +74 more | 3 | 0 | 0 | — | — | `CAI_BaseNPC#567 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 1367 | `0x1026ab50` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunAi.cpp:78, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:569, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:653, +1 more |  |
-| 1368 | `0x1026af30` | `CAI_BaseHumanoid#475`, `CAI_BaseNPC#475`, +75 more | 2 | 0 | 1 | `Warning: NULL Return from GetBestScent⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:75, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:379 | `CAI_BaseNPC#475 no SDK twin: stretch #470-#477 holds 6 retai…` |
-| 1369 | `0x1026b240` | `CAI_BaseNPC#373`, `CAI_BaseNPCTroika#373`, +74 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:331, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:492 | `CAI_BaseNPC#373 no SDK twin: stretch #371-#376 holds 4 retai…` |
-| 1370 | `0x1026b480` | `CAI_BaseHumanoid#539`, `CAI_BaseNPC#539`, +75 more | 2 | 0 | 1 | `aim_pitch`, `aim_yaw` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:242, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:330 | `CAI_BaseNPC#539 no SDK twin: stretch #537-#545 holds 7 retai…` |
-| 1371 | `0x1026b4f0` | `CAI_BaseHumanoid#538`, `CAI_BaseNPC#538`, +75 more | 0 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:549, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:703 | `CAI_BaseNPC#538 no SDK twin: stretch #537-#545 holds 7 retai…` |
+| 1367 | `0x1026ab50` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunAi.cpp:78, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:569, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:655, +1 more |  |
+| 1368 | `0x1026af30` | `CAI_BaseHumanoid#475`, `CAI_BaseNPC#475`, +75 more | 2 | 0 | 1 | `Warning: NULL Return from GetBestScent⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:75, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:381 | `CAI_BaseNPC#475 no SDK twin: stretch #470-#477 holds 6 retai…` |
+| 1369 | `0x1026b240` | `CAI_BaseNPC#373`, `CAI_BaseNPCTroika#373`, +74 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:331, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:494 | `CAI_BaseNPC#373 no SDK twin: stretch #371-#376 holds 4 retai…` |
+| 1370 | `0x1026b480` | `CAI_BaseHumanoid#539`, `CAI_BaseNPC#539`, +75 more | 2 | 0 | 1 | `aim_pitch`, `aim_yaw` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:242, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:332 | `CAI_BaseNPC#539 no SDK twin: stretch #537-#545 holds 7 retai…` |
+| 1371 | `0x1026b4f0` | `CAI_BaseHumanoid#538`, `CAI_BaseNPC#538`, +75 more | 0 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:549, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:705 | `CAI_BaseNPC#538 no SDK twin: stretch #537-#545 holds 7 retai…` |
 | 1372 | `0x1026b7a0` | — | 1 | 0 | 2 | — | — |  |
-| 1373 | `0x1026d9a0` | `CAI_BaseHumanoid#555`, `CAI_BaseNPC#555`, +75 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:55, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:83, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:110, +1 more | `CAI_BaseNPC#555 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 1373 | `0x1026d9a0` | `CAI_BaseHumanoid#555`, `CAI_BaseNPC#555`, +75 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:55, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:85, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:112, +1 more | `CAI_BaseNPC#555 no SDK twin: stretch #545-#560 holds 14 reta…` |
 | 1374 | `0x102703f0` | — | 2 | 0 | 1 | — | — |  |
 | 1375 | `0x10270840` | `CAI_BaseHumanoid#564`, `CAI_BaseNPC#564`, +11 more | 3 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:151, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:193, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:94, +3 more | `CAI_BaseNPC#564 no SDK twin: stretch #560-#566 holds 5 retai…` |
 | 1376 | `0x10270890` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:276, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:475, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp:1104, +1 more |  |
 | 1377 | `0x10270aa0` | — | 2 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:401, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:450, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:526 |  |
 | 1378 | `0x10273760` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle2.cpp:38, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle2.cpp:55, Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss.cpp:87, +1 more |  |
-| 1379 | `0x10273e40` | `CAI_BaseHumanoid#543`, `CAI_BaseNPC#543`, +75 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses.cpp:103, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:191, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:195, +1 more | `CAI_BaseNPC#543 no SDK twin: stretch #537-#545 holds 7 retai…` |
+| 1379 | `0x10273e40` | `CAI_BaseHumanoid#543`, `CAI_BaseNPC#543`, +75 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses.cpp:103, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:193, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:197, +1 more | `CAI_BaseNPC#543 no SDK twin: stretch #537-#545 holds 7 retai…` |
 | 1380 | `0x102789c0` | `CAI_BaseHumanoid#197`, `CAI_BaseNPC#197`, +74 more | 0 | 0 | 3 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:808, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseGeometry.cpp:46, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseGeometry.cpp:86, +2 more | `CAI_BaseNPC#197 no SDK twin: stretch #189-#199 holds 9 retai…` |
 | 1381 | `0x10278d20` | `CAI_BaseHumanoid#518`, `CAI_BaseNPC#518`, +75 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:206, Source/ElysiumUE/Public/ElysiumWorldServices.h:564 | `CAI_BaseNPC#518 no SDK twin: the SDK name it lines up with w…` |
 | 1382 | `0x10279420` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.cpp:240 |  |
@@ -1394,8 +1394,8 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1385 | `0x1027f550` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumMover.h:169, Source/ElysiumUE/Private/Substrate/ElysiumMover.h:170, Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:967, +10 more |  |
 | 1386 | `0x1027f8f0` | — | 1 | 2 | 0 | — | — |  |
 | 1387 | `0x1027f940` | — | 1 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:607 |  |
-| 1388 | `0x10280300` | `CAI_BaseHumanoid#153`, `CAI_BaseNPC#153`, +75 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:429, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:590, Source/ElysiumUE/Private/Tests/ElysiumNpcNavigatorMoveStepTests.cpp:513 | `CAI_BaseNPC#153 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 1389 | `0x10280330` | `CAI_BaseHumanoid#529`, `CAI_BaseNPC#529`, +75 more | 3 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:252, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:713 | `CAI_BaseNPC#529 no SDK twin: stretch #526-#530 holds 3 retai…` |
+| 1388 | `0x10280300` | `CAI_BaseHumanoid#153`, `CAI_BaseNPC#153`, +75 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:429, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:592, Source/ElysiumUE/Private/Tests/ElysiumNpcNavigatorMoveStepTests.cpp:515 | `CAI_BaseNPC#153 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 1389 | `0x10280330` | `CAI_BaseHumanoid#529`, `CAI_BaseNPC#529`, +75 more | 3 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:252, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:715 | `CAI_BaseNPC#529 no SDK twin: stretch #526-#530 holds 3 retai…` |
 | 1390 | `0x10280db0` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSchedule.cpp:104, Source/ElysiumUE/Private/Substrate/ElysiumNpcScheduleHost.cpp:58, Source/ElysiumUE/Private/Substrate/ElysiumNpcScheduleHost.h:181, +1 more |  |
 | 1391 | `0x10281430` | — | 1 | 1 | 1 | — | — |  |
 | 1392 | `0x102885d0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1639, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1277 |  |
@@ -1406,18 +1406,18 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1397 | `0x1028e090` | — | 2 | 0 | 1 | — | — |  |
 | 1398 | `0x1028e8b0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:391, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:809, Source/ElysiumUE/Private/Substrate/ElysiumNpcSensesBodies.cpp:106, +1 more |  |
 | 1399 | `0x1028e940` | — | 1 | 1 | 1 | — | — |  |
-| 1400 | `0x102902e0` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:22, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:101, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelRunAiTests.cpp:333 |  |
-| 1401 | `0x102906a0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:226, Source/ElysiumUE/Private/Substrate/ElysiumNpcThink.cpp:440, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:239 |  |
+| 1400 | `0x102902e0` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:22, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAi.cpp:101, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelRunAiTests.cpp:336 |  |
+| 1401 | `0x102906a0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:226, Source/ElysiumUE/Private/Substrate/ElysiumNpcThink.cpp:440, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:241 |  |
 | 1402 | `0x102906c0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:226, Source/ElysiumUE/Private/Substrate/ElysiumNpcThink.cpp:434 |  |
 | 1403 | `0x10290700` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:226, Source/ElysiumUE/Private/Substrate/ElysiumNpcThink.cpp:370 |  |
-| 1404 | `0x10293d70` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2.cpp:496, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMisc2Tests.cpp:779, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMisc2Tests.cpp:782 |  |
+| 1404 | `0x10293d70` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2.cpp:496, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMisc2Tests.cpp:781, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMisc2Tests.cpp:784 |  |
 | 1405 | `0x10293d90` | — | 2 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:65, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:179 |  |
 | 1406 | `0x10293e50` | `CAI_BaseNPCTroika#588`, `CGeneric_NPC#588`, +60 more | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:766, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:60, Source/ElysiumUE/Private/Substrate/ElysiumNpcWolfMorph.cpp:71, +1 more |  |
-| 1407 | `0x10294280` | `CAI_BaseNPCTroika#490`, `CGeneric_NPC#490`, +54 more | 3 | 0 | 0 | `Idle_Calm` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:170, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:189 |  |
-| 1408 | `0x102953a0` | `CAI_BaseNPCTroika#564`, `CGeneric_NPC#564`, +60 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:94, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:99, Source/ElysiumUE/Private/Tests/ElysiumNpcCombatTests.cpp:904, +4 more |  |
+| 1407 | `0x10294280` | `CAI_BaseNPCTroika#490`, `CGeneric_NPC#490`, +54 more | 3 | 0 | 0 | `Idle_Calm` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:170, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:191 |  |
+| 1408 | `0x102953a0` | `CAI_BaseNPCTroika#564`, `CGeneric_NPC#564`, +60 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:94, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:99, Source/ElysiumUE/Private/Tests/ElysiumNpcCombatTests.cpp:906, +4 more |  |
 | 1409 | `0x102968f0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Map/ElysiumRetailMaskRecipe.cpp:27, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:289, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:68, +23 more |  |
 | 1410 | `0x10299a80` | — | 2 | 0 | 1 | `ERROR: %s loc( %6.2f, %6.2f, %6.2f) thin…`, `ERROR: %s loc( %6.2f, %6.2f, %6.2f) thin…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:235 |  |
-| 1411 | `0x1029a8b0` | `CAI_BaseNPCTroika#422`, `CGeneric_NPC#422`, +59 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:901 |  |
+| 1411 | `0x1029a8b0` | `CAI_BaseNPCTroika#422`, `CGeneric_NPC#422`, +59 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:904 |  |
 | 1412 | `0x1029f6c0` | — | 2 | 0 | 1 | — | — |  |
 | 1413 | `0x102a0870` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:269 |  |
 | 1414 | `0x102a1470` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:1442, Source/ElysiumUE/Private/Substrate/ElysiumNpcScheduleHost.cpp:7, Source/ElysiumUE/Private/Substrate/ElysiumNpcScheduleHost.cpp:18, +6 more |  |
@@ -1431,20 +1431,20 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1422 | `0x102a98e0` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:244, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:1912, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:477 |  |
 | 1423 | `0x102a9910` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1816 |  |
 | 1424 | `0x102a99e0` | — | 2 | 0 | 1 | `Unaccounted`, `UTIL_TraceHull`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1557, Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf.cpp:2180 |  |
-| 1425 | `0x102ad110` | `CAI_BaseNPCTroika#616`, `CGeneric_NPC#616`, +62 more | 2 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:982, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:987, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:359 |  |
+| 1425 | `0x102ad110` | `CAI_BaseNPCTroika#616`, `CGeneric_NPC#616`, +62 more | 2 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:982, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:987, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:361 |  |
 | 1426 | `0x102b1a20` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:279, Source/ElysiumUE/Private/Tests/ElysiumNpcComfortSweepTests.cpp:6 |  |
 | 1427 | `0x102b62e0` | — | 1 | 0 | 2 | — | — |  |
 | 1428 | `0x102b6650` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSchedule.cpp:567 |  |
 | 1429 | `0x102b7f40` | — | 3 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10_2Shared.h:19, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h:71, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:491, +7 more |  |
 | 1430 | `0x102b8980` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:1138, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers2.cpp:247, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers2.cpp:252, +2 more |  |
-| 1431 | `0x102b8a10` | — | 1 | 2 | 0 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:40, Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:468, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp:491 |  |
-| 1432 | `0x102b8a60` | — | 3 | 0 | 0 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:1039, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:212, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSelectTests.cpp:619, +1 more |  |
+| 1431 | `0x102b8a10` | — | 1 | 2 | 0 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:40, Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:468, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp:493 |  |
+| 1432 | `0x102b8a60` | — | 3 | 0 | 0 | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:1039, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:212, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSelectTests.cpp:624, +1 more |  |
 | 1433 | `0x102b8cd0` | — | 2 | 0 | 1 | — | — |  |
-| 1434 | `0x102bf4a0` | `CAI_BaseNPCTroika#575`, `CGeneric_NPC#575`, +62 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor.cpp:399, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:594 |  |
+| 1434 | `0x102bf4a0` | `CAI_BaseNPCTroika#575`, `CGeneric_NPC#575`, +62 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor.cpp:399, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:596 |  |
 | 1435 | `0x102c04b0` | `CAI_BaseNPCTroika#612`, `CGeneric_NPC#612`, +61 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.cpp:178, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:960, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:965, +1 more |  |
-| 1436 | `0x102c2ec0` | `CAI_BaseNPCTroika#589`, `CGeneric_NPC#589`, +62 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.cpp:236, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:638, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:658 |  |
-| 1437 | `0x102c54c0` | — | 2 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:495, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:510, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions10Tests.cpp:674 |  |
-| 1438 | `0x102c5500` | `CAI_BaseNPCTroika#419`, `CGeneric_NPC#419`, +62 more | 1 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:427, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:476, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions10Tests.cpp:633 |  |
+| 1436 | `0x102c2ec0` | `CAI_BaseNPCTroika#589`, `CGeneric_NPC#589`, +62 more | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.cpp:236, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:640, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp:660 |  |
+| 1437 | `0x102c54c0` | — | 2 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:495, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:510, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions10Tests.cpp:676 |  |
+| 1438 | `0x102c5500` | `CAI_BaseNPCTroika#419`, `CGeneric_NPC#419`, +62 more | 1 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:427, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:476, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions10Tests.cpp:635 |  |
 | 1439 | `0x102c75c0` | `CAI_StandoffBehavior#10` | 0 | 1 | 2 | — | — |  |
 | 1440 | `0x102c79e0` | `CAI_StandoffBehavior#22` | 0 | 1 | 2 | `NPC in standoff lacks needed low aim act…`, `no weapon`, +2 more | — |  |
 | 1441 | `0x102c7bd0` | `CAI_StandoffBehavior#15` | 0 | 1 | 2 | `E:\Vampire\main\dlls\ai_behavior_standof…` | — |  |
@@ -1455,7 +1455,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1446 | `0x102cc590` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:83, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:773 |  |
 | 1447 | `0x102cc6c0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:72, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:344, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:773, +2 more |  |
 | 1448 | `0x102cc730` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:58 |  |
-| 1449 | `0x102cc760` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:44, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:191, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions2Tests.cpp:174 |  |
+| 1449 | `0x102cc760` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:44, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:191, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions2Tests.cpp:176 |  |
 | 1450 | `0x102cd740` | `CAI_StandoffGoal#242` | 0 | 0 | 3 | — | — |  |
 | 1451 | `0x102cdb70` | — | 1 | 0 | 2 | — | — |  |
 | 1452 | `0x102cdd10` | — | 1 | 0 | 2 | — | — |  |
@@ -1491,14 +1491,14 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1482 | `0x102e0b80` | — | 2 | 0 | 1 | — | — |  |
 | 1483 | `0x102e0f90` | `CAI_HumanoidMotor#4`, `CAI_Motor#4` | 0 | 1 | 2 | — | — |  |
 | 1484 | `0x102e14a0` | `CAI_Motor#19` | 0 | 0 | 3 | — | — |  |
-| 1485 | `0x102e2180` | `CAI_HumanoidMotor#15`, `CAI_Motor#15` | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:133, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1201, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:236, +2 more |  |
+| 1485 | `0x102e2180` | `CAI_HumanoidMotor#15`, `CAI_Motor#15` | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:133, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1201, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:238, +2 more |  |
 | 1486 | `0x102e2750` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:192, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.cpp:191, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2387, +4 more |  |
 | 1487 | `0x102e2840` | — | 2 | 0 | 1 | — | — |  |
 | 1488 | `0x102e3450` | — | 2 | 0 | 1 | `Unaccounted`, `UTIL_TraceHull`, +1 more | — |  |
 | 1489 | `0x102e7e00` | — | 2 | 0 | 1 | — | — |  |
 | 1490 | `0x102e7e20` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor.cpp:197 |  |
-| 1491 | `0x102e7e40` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1248 |  |
-| 1492 | `0x102e8250` | — | 2 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:694, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:703, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:719, +1 more |  |
+| 1491 | `0x102e7e40` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1250 |  |
+| 1492 | `0x102e8250` | — | 2 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:694, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:703, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:721, +1 more |  |
 | 1493 | `0x102e8ac0` | — | 2 | 0 | 1 | — | — |  |
 | 1494 | `0x102ee2a0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:261, Source/ElysiumUE/Private/Substrate/ElysiumNpcCrosswalk.cpp:18, Source/ElysiumUE/Private/Substrate/ElysiumNpcNavigator.h:117, +4 more |  |
 | 1495 | `0x102ee410` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1477 |  |
@@ -1538,7 +1538,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1529 | `0x10307bf0` | — | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:263 |  |
 | 1530 | `0x1030b550` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2156, Source/ElysiumUE/Private/Substrate/ElysiumNpcNavigator.h:171 |  |
 | 1531 | `0x1030b8e0` | — | 2 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2063, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2518, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2557 |  |
-| 1532 | `0x1030f300` | — | 2 | 0 | 1 | `Couldn't find schedule %d (%s)⏎` | Source/ElysiumUE/Private/Substrate/ElysiumScheduleManager.h:4, Source/ElysiumUE/Private/Substrate/ElysiumScheduleManager.h:39, Source/ElysiumUE/Private/Tests/ElysiumScheduleTextTests.cpp:436 |  |
+| 1532 | `0x1030f300` | — | 2 | 0 | 1 | `Couldn't find schedule %d (%s)⏎` | Source/ElysiumUE/Private/Substrate/ElysiumScheduleManager.h:4, Source/ElysiumUE/Private/Substrate/ElysiumScheduleManager.h:39, Source/ElysiumUE/Private/Tests/ElysiumScheduleTextTests.cpp:438 |  |
 | 1533 | `0x1030fc90` | — | 2 | 0 | 1 | — | — |  |
 | 1534 | `0x1030ffa0` | — | 3 | 0 | 0 | — | — |  |
 | 1535 | `0x10310480` | — | 3 | 0 | 0 | — | — |  |
@@ -1569,7 +1569,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1560 | `0x1034bfb0` | `CNPCMaker_Fleshpile#5` | 0 | 0 | 3 | — | — |  |
 | 1561 | `0x1034cbf0` | `CNPCMaker_Zombie#5` | 0 | 0 | 3 | — | — |  |
 | 1562 | `0x10356770` | — | 1 | 0 | 2 | — | — |  |
-| 1563 | `0x10356f60` | `CNPC_Bullseye#141` | 0 | 0 | 3 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:378 |  |
+| 1563 | `0x10356f60` | `CNPC_Bullseye#141` | 0 | 0 | 3 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:380 |  |
 | 1564 | `0x10357e50` | — | 1 | 0 | 2 | — | — |  |
 | 1565 | `0x10358ef0` | `CNPC_Crow#490` | 3 | 0 | 0 | `NPC_Crow.Idle` | — |  |
 | 1566 | `0x10358f10` | `CNPC_Crow#489` | 3 | 0 | 0 | `NPC_Crow.Alert` | — |  |
@@ -1582,11 +1582,11 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1573 | `0x1035bb70` | `CGenericSabbat_NPC#488` | 2 | 0 | 1 | — | — |  |
 | 1574 | `0x1035bce0` | `CGenericSabbat_NPC#491` | 2 | 0 | 1 | — | — |  |
 | 1575 | `0x1035bf70` | `CGenericSabbat_NPC#432` | 3 | 0 | 0 | — | — |  |
-| 1576 | `0x1035d150` | `CNPC_VAndreiBlood#461` | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.h:31, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:735 |  |
-| 1577 | `0x103656a0` | — | 1 | 0 | 2 | `Error: Couldn't find space in inventory …`, `item_d_holy_light` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.h:133, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:815, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelStartTaskTests_4.cpp:735 |  |
+| 1576 | `0x1035d150` | `CNPC_VAndreiBlood#461` | 1 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.h:31, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:737 |  |
+| 1577 | `0x103656a0` | — | 1 | 0 | 2 | `Error: Couldn't find space in inventory …`, `item_d_holy_light` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.h:133, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:815, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelStartTaskTests_4.cpp:737 |  |
 | 1578 | `0x103674c0` | `CNPC_VBatSwarm#432` | 3 | 0 | 0 | — | — |  |
-| 1579 | `0x103680f0` | `CNPC_VCamera#490`, `CNPC_VCameraSecurity#490` | 3 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:423, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:64 |  |
-| 1580 | `0x10368130` | `CNPC_VCamera#492`, `CNPC_VCameraSecurity#492` | 3 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:433, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:65 |  |
+| 1579 | `0x103680f0` | `CNPC_VCamera#490`, `CNPC_VCameraSecurity#490` | 3 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:423, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:66 |  |
+| 1580 | `0x10368130` | `CNPC_VCamera#492`, `CNPC_VCameraSecurity#492` | 3 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:433, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:67 |  |
 | 1581 | `0x1036c7f0` | — | 2 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcChangBros.cpp:775, Source/ElysiumUE/Private/Substrate/ElysiumNpcChangBros.cpp:780, Source/ElysiumUE/Private/Substrate/ElysiumNpcChangBros.h:113, +2 more |  |
 | 1582 | `0x10370340` | `CNPC_VCombatman#432` | 3 | 0 | 0 | — | — |  |
 | 1583 | `0x103706b0` | — | 1 | 0 | 2 | — | — |  |
@@ -1647,7 +1647,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1638 | `0x103be530` | — | 1 | 2 | 0 | — | — |  |
 | 1639 | `0x103be630` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2Species.cpp:565, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:188 |  |
 | 1640 | `0x103bef20` | — | 1 | 1 | 1 | `phys_animlink`, `Bip01 R Finger1` | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2Species.cpp:423, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpecies2.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:108, +5 more |  |
-| 1641 | `0x103bf3c0` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:943, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:174, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesTests.cpp:418 |  |
+| 1641 | `0x103bf3c0` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:943, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:174, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesTests.cpp:421 |  |
 | 1642 | `0x103bf440` | — | 1 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:3064, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:239 |  |
 | 1643 | `0x103bf660` | — | 3 | 0 | 0 | `Unaccounted`, `UTIL_TraceHull`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2Species.cpp:580, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2Species.cpp:676, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2Species.cpp:679, +7 more |  |
 | 1644 | `0x103bfc20` | — | 3 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2Species.cpp:647, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:759, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:109 |  |
@@ -1664,7 +1664,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1655 | `0x10408220` | — | 1 | 0 | 2 | — | — |  |
 | 1656 | `0x10411f90` | — | 3 | 0 | 0 | `// *⏎`, `// **⏎`, +10 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:364 |  |
 | 1657 | `0x10432520` | — | 3 | 0 | 0 | — | — | `CRT: the bytes of __CIacos, __CIasin, __CIatan, __CIcos, __C…` |
-| 1658 | `0x10026a10` | `CAISound#63`, `CAI_BaseHumanoid#63`, +495 more | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:124, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:174, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:150, +2 more | `CAI_BaseNPC#63 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 1658 | `0x10026a10` | `CAISound#63`, `CAI_BaseHumanoid#63`, +495 more | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:124, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:174, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:152, +2 more | `CAI_BaseNPC#63 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 1659 | `0x10026c70` | `CAISound#134`, `CAI_BaseHumanoid#134`, +468 more | 0 | 0 | 2 | `CBaseEntity::Think`, `NULL ENTITY` | — | `CAI_BaseNPC#134 slot identity: CBaseEntity#134 is Remove, bu…` |
 | 1660 | `0x10026e70` | `CAISound#153`, `CAI_ChangeHintGroup#153`, +417 more | 1 | 0 | 1 | — | — |  |
 | 1661 | `0x1003c1c0` | — | 1 | 1 | 0 | — | — |  |
@@ -1698,13 +1698,13 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1689 | `0x10099660` | `CAI_BaseHumanoid#269`, `CAI_BaseNPC#269`, +85 more | 1 | 0 | 1 | — | — | `CAI_BaseNPC#269 no SDK twin: stretch #263-#276 holds 12 reta…` |
 | 1690 | `0x1009b500` | `CAISound#20`, `CAI_BaseHumanoid#20`, +431 more | 1 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::TraceMessageBare` | — | `CAI_BaseNPC#20 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 1691 | `0x1009c390` | — | 1 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::` | — |  |
-| 1692 | `0x100a4fe0` | `CAISound#39`, `CAI_BaseHumanoid#39`, +474 more | 0 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:291, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:679, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:710, +3 more | `CAI_BaseNPC#39 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 1692 | `0x100a4fe0` | `CAISound#39`, `CAI_BaseHumanoid#39`, +474 more | 0 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:291, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:681, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:712, +3 more | `CAI_BaseNPC#39 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 1693 | `0x100b50a0` | `CAISound#164`, `CAI_BaseHumanoid#164`, +495 more | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:346, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDamage.cpp:55 | `CAI_BaseNPC#164 no SDK twin: stretch #163-#173 holds 9 retai…` |
 | 1694 | `0x100b5b60` | `CAI_BaseHumanoid#280`, `CAI_BaseNPC#280`, +84 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#280 no SDK twin: stretch #276-#292 holds 15 reta…` |
 | 1695 | `0x100b68d0` | — | 2 | 0 | 0 | — | — |  |
 | 1696 | `0x100c1230` | — | 2 | 0 | 0 | — | — |  |
 | 1697 | `0x100c13a0` | — | 2 | 0 | 0 | — | — |  |
-| 1698 | `0x100c1c60` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumUnarmedGaitTests.cpp:132, Source/ElysiumUE/Private/Visual/ElysiumAnimSubsystem.cpp:878, Source/ElysiumUE/Private/Visual/ElysiumBlendGrids.cpp:635, +2 more |  |
+| 1698 | `0x100c1c60` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumUnarmedGaitTests.cpp:134, Source/ElysiumUE/Private/Visual/ElysiumAnimSubsystem.cpp:878, Source/ElysiumUE/Private/Visual/ElysiumBlendGrids.cpp:635, +2 more |  |
 | 1699 | `0x100c73b0` | — | 2 | 0 | 0 | — | — |  |
 | 1700 | `0x100c7480` | — | 2 | 0 | 0 | — | — |  |
 | 1701 | `0x100c7f30` | — | 1 | 0 | 1 | — | — |  |
@@ -1720,12 +1720,12 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1711 | `0x100df030` | — | 2 | 0 | 0 | — | — |  |
 | 1712 | `0x100df240` | — | 2 | 0 | 0 | `starting_condition`, `starting-condition`, +1 more | — |  |
 | 1713 | `0x100e1580` | — | 2 | 0 | 0 | — | — |  |
-| 1714 | `0x100e49b0` | — | 1 | 0 | 1 | `Dialog_Dementation_Victim_Emitter`, `Dialog_Domination_Victim_Emitter`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:291, Source/ElysiumUE/Private/Substrate/ElysiumNpcSocial10.cpp:263, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:385 |  |
-| 1715 | `0x100e4ef0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:334, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:368 |  |
+| 1714 | `0x100e49b0` | — | 1 | 0 | 1 | `Dialog_Dementation_Victim_Emitter`, `Dialog_Domination_Victim_Emitter`, +1 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:291, Source/ElysiumUE/Private/Substrate/ElysiumNpcSocial10.cpp:263, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:387 |  |
+| 1715 | `0x100e4ef0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:334, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:370 |  |
 | 1716 | `0x100eb3d0` | — | 1 | 0 | 1 | — | — |  |
 | 1717 | `0x100ec640` | — | 2 | 0 | 0 | `stance_%s_trans_%d_%d`, `stance_%s_fidget_%d`, +5 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcPrecache10.cpp:145 |  |
 | 1718 | `0x100ed460` | — | 1 | 0 | 1 | — | — |  |
-| 1719 | `0x100eef10` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumMover.cpp:545, Source/ElysiumUE/Private/Substrate/ElysiumMover.h:297, Source/ElysiumUE/Private/Tests/ElysiumNpcDoorLinkTests.cpp:573 |  |
+| 1719 | `0x100eef10` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumMover.cpp:545, Source/ElysiumUE/Private/Substrate/ElysiumMover.h:297, Source/ElysiumUE/Private/Tests/ElysiumNpcDoorLinkTests.cpp:575 |  |
 | 1720 | `0x100f0e70` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumMover.h:178, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:99, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:309, +1 more |  |
 | 1721 | `0x100f0ec0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumMover.h:190, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses.cpp:167 |  |
 | 1722 | `0x100f7d50` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc2.cpp:160, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:651, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:203, +2 more |  |
@@ -1755,7 +1755,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1746 | `0x10157890` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.h:36 |  |
 | 1747 | `0x101578b0` | — | 1 | 0 | 1 | — | — |  |
 | 1748 | `0x10157910` | — | 1 | 1 | 0 | — | — |  |
-| 1749 | `0x10160680` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:589, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:729 |  |
+| 1749 | `0x10160680` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:589, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:731 |  |
 | 1750 | `0x10161ed0` | — | 1 | 0 | 1 | — | — |  |
 | 1751 | `0x10167fd0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:109, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1172 |  |
 | 1752 | `0x10172710` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:696 |  |
@@ -1764,8 +1764,8 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1755 | `0x1017d630` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumFootsteps.h:150, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain2.cpp:445 |  |
 | 1756 | `0x1017d680` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain2.cpp:375, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain2.cpp:393, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain2.cpp:444, +2 more |  |
 | 1757 | `0x1017deb0` | — | 2 | 0 | 0 | — | — |  |
-| 1758 | `0x1017f8b0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:504, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1523, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:235, +4 more |  |
-| 1759 | `0x1017f980` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:365, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:627, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:548 |  |
+| 1758 | `0x1017f8b0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:504, Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp:1523, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:237, +4 more |  |
+| 1759 | `0x1017f980` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditionsBodies.cpp:365, Source/ElysiumUE/Private/Substrate/ElysiumNpcEntityChain.cpp:627, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:550 |  |
 | 1760 | `0x101800a0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumFeed.cpp:763, Source/ElysiumUE/Public/ElysiumPlayer.h:2003 |  |
 | 1761 | `0x10182e00` | — | 2 | 0 | 0 | — | — |  |
 | 1762 | `0x1018e790` | — | 1 | 0 | 1 | `activity_copy_prop` | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1860 |  |
@@ -1788,25 +1788,25 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1779 | `0x101a7210` | `CCineNPC#585` | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:41, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:520, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:68, +1 more |  |
 | 1780 | `0x101a7230` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc2.cpp:243, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc2.cpp:252, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:104 |  |
 | 1781 | `0x101a77a0` | — | 2 | 0 | 0 | `I like story time.⏎`, `Like story time.⏎`, +7 more | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.cpp:58, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:366, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:912, +1 more |  |
-| 1782 | `0x101a8130` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:1040, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:91, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDirectorTests.cpp:398, +1 more |  |
+| 1782 | `0x101a8130` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:1040, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:91, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDirectorTests.cpp:402, +1 more |  |
 | 1783 | `0x101a9510` | `CCineAI#584` | 2 | 0 | 0 | `%s: unknown aiscripted sequence "%s"⏎` | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.cpp:137, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.h:20, Source/ElysiumUE/Private/Substrate/ElysiumNpcScriptSpecies.cpp:13, +4 more |  |
 | 1784 | `0x101aa690` | `CAI_BaseNPCTroika#591`, `CGeneric_NPC#591`, +62 more | 2 | 0 | 0 | — | — |  |
-| 1785 | `0x101aadb0` | `CPayphone#612` | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.cpp:172, Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.h:28, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:324, +2 more |  |
+| 1785 | `0x101aadb0` | `CPayphone#612` | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.cpp:172, Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.h:28, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:326, +2 more |  |
 | 1786 | `0x101ab060` | `CCineAI#5` | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.h:10 |  |
 | 1787 | `0x101b0d80` | — | 1 | 0 | 1 | — | — |  |
 | 1788 | `0x101b3b90` | — | 2 | 0 | 0 | — | — |  |
 | 1789 | `0x101b78f0` | — | 1 | 0 | 1 | — | — |  |
 | 1790 | `0x101b9840` | — | 1 | 0 | 1 | — | — |  |
-| 1791 | `0x101b9880` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:273, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSelectTests.cpp:271 |  |
+| 1791 | `0x101b9880` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelect.cpp:273, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSelectTests.cpp:274 |  |
 | 1792 | `0x101b99a0` | — | 1 | 0 | 1 | — | — |  |
 | 1793 | `0x101babc0` | — | 2 | 0 | 0 | `Could not AllocSound() for InsertSound()…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.cpp:246, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSpawn.cpp:139 |  |
-| 1794 | `0x101beed0` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkSpecies.cpp:83, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkSpecies.cpp:189, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelThinkTests.cpp:740 |  |
+| 1794 | `0x101beed0` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkSpecies.cpp:83, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkSpecies.cpp:189, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelThinkTests.cpp:745 |  |
 | 1795 | `0x101c02d0` | — | 1 | 0 | 1 | — | — |  |
-| 1796 | `0x101c1480` | `CAI_BaseHumanoid#110`, `CAI_BaseNPC#110`, +331 more | 0 | 2 | 0 | `distance` | Source/ElysiumUE/Private/Substrate/ElysiumAnimatingSlotBodies.cpp:132, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:8, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:63, +1 more | `CAI_BaseNPC#110 no SDK twin: stretch #107-#113 holds 5 retai…` |
+| 1796 | `0x101c1480` | `CAI_BaseHumanoid#110`, `CAI_BaseNPC#110`, +331 more | 0 | 2 | 0 | `distance` | Source/ElysiumUE/Private/Substrate/ElysiumAnimatingSlotBodies.cpp:132, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:8, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:65, +1 more | `CAI_BaseNPC#110 no SDK twin: stretch #107-#113 holds 5 retai…` |
 | 1797 | `0x101c1790` | — | 1 | 0 | 1 | — | — |  |
 | 1798 | `0x101c2690` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:177 |  |
 | 1799 | `0x101c2a70` | — | 1 | 0 | 1 | — | — |  |
-| 1800 | `0x101ccc80` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2.cpp:54, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMisc2Tests.cpp:441 |  |
+| 1800 | `0x101ccc80` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2.cpp:54, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMisc2Tests.cpp:443 |  |
 | 1801 | `0x101ccec0` | — | 1 | 1 | 0 | — | — |  |
 | 1802 | `0x101cd8c0` | — | 1 | 0 | 1 | — | — |  |
 | 1803 | `0x101ce290` | — | 2 | 0 | 0 | — | — |  |
@@ -1850,8 +1850,8 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1841 | `0x101e8b30` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:109, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:646 |  |
 | 1842 | `0x101e8bf0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:161, Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:198 |  |
 | 1843 | `0x101e8c10` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:109, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunAiSpecies.cpp:651 |  |
-| 1844 | `0x101e8c50` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:161, Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:178, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:243 |  |
-| 1845 | `0x101e8c70` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:161, Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:184, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:243 |  |
+| 1844 | `0x101e8c50` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:161, Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:178, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:246 |  |
+| 1845 | `0x101e8c70` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:161, Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:184, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:246 |  |
 | 1846 | `0x101e8dc0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1261 |  |
 | 1847 | `0x101e8de0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1262 |  |
 | 1848 | `0x101e8e00` | — | 1 | 0 | 1 | — | — |  |
@@ -1873,7 +1873,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1864 | `0x101f2cd0` | — | 1 | 1 | 0 | — | — |  |
 | 1865 | `0x101f2f30` | — | 2 | 0 | 0 | — | — |  |
 | 1866 | `0x101f2f70` | — | 2 | 0 | 0 | — | — |  |
-| 1867 | `0x101f42a0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.cpp:121, Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.h:34, Source/ElysiumUE/Private/Tests/ElysiumDialogueAudioTests.cpp:191 |  |
+| 1867 | `0x101f42a0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.cpp:121, Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.h:34, Source/ElysiumUE/Private/Tests/ElysiumDialogueAudioTests.cpp:193 |  |
 | 1868 | `0x101f42d0` | — | 1 | 0 | 1 | — | — |  |
 | 1869 | `0x101f4530` | — | 1 | 0 | 1 | — | — |  |
 | 1870 | `0x101f9a80` | — | 2 | 0 | 0 | — | — |  |
@@ -1889,9 +1889,9 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1880 | `0x10230880` | — | 1 | 0 | 1 | — | — |  |
 | 1881 | `0x1023b570` | — | 1 | 0 | 1 | — | — |  |
 | 1882 | `0x1023e4b0` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp:1578, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:2235, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:416 |  |
-| 1883 | `0x1023f040` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:78 |  |
-| 1884 | `0x1023f060` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:78 |  |
-| 1885 | `0x1023f0c0` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSaveRestore10.cpp:37, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:78 |  |
+| 1883 | `0x1023f040` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:81 |  |
+| 1884 | `0x1023f060` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:81 |  |
+| 1885 | `0x1023f0c0` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSaveRestore10.cpp:37, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSaveRestore10Tests.cpp:81 |  |
 | 1886 | `0x10240250` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumMover.cpp:662, Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.cpp:200, Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.cpp:202, +1 more |  |
 | 1887 | `0x10240cb0` | — | 2 | 0 | 0 | — | — |  |
 | 1888 | `0x10245700` | — | 1 | 0 | 1 | — | — |  |
@@ -1913,19 +1913,19 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1904 | `0x10260820` | — | 1 | 0 | 1 | — | — |  |
 | 1905 | `0x102652f0` | — | 1 | 0 | 1 | — | — |  |
 | 1906 | `0x10265970` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2892 |  |
-| 1907 | `0x10266630` | `CAI_BaseHumanoid#576`, `CAI_BaseNPC#576`, +74 more | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDamage.cpp:71, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:174, Source/ElysiumUE/Private/Tests/ElysiumNpcEnemyTests.cpp:607, +3 more | `CAI_BaseNPC#576 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 1908 | `0x10266660` | `CAI_BaseHumanoid#577`, `CAI_BaseNPC#577`, +75 more | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDamage.cpp:79, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:174, Source/ElysiumUE/Private/Tests/ElysiumNpcEnemyTests.cpp:608, +4 more | `CAI_BaseNPC#577 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 1909 | `0x10268170` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:95, Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:574, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:552 |  |
+| 1907 | `0x10266630` | `CAI_BaseHumanoid#576`, `CAI_BaseNPC#576`, +74 more | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDamage.cpp:71, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:174, Source/ElysiumUE/Private/Tests/ElysiumNpcEnemyTests.cpp:612, +3 more | `CAI_BaseNPC#576 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 1908 | `0x10266660` | `CAI_BaseHumanoid#577`, `CAI_BaseNPC#577`, +75 more | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseDamage.cpp:79, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:174, Source/ElysiumUE/Private/Tests/ElysiumNpcEnemyTests.cpp:613, +4 more | `CAI_BaseNPC#577 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 1909 | `0x10268170` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:95, Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:574, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:554 |  |
 | 1910 | `0x1026a8a0` | `CAI_BaseHumanoid#471`, `CAI_BaseNPC#471`, +73 more | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle.cpp:27, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle.cpp:95, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp:766, +1 more | `CAI_BaseNPC#471 no SDK twin: stretch #470-#477 holds 6 retai…` |
 | 1911 | `0x1026d920` | `CAI_BaseHumanoid#554`, `CAI_BaseNPC#554`, +72 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#554 no SDK twin: stretch #545-#560 holds 14 reta…` |
-| 1912 | `0x1026fb40` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:158, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions2Tests.cpp:244 |  |
-| 1913 | `0x1026fbe0` | `CAI_BaseHumanoid#562`, `CAI_BaseNPC#562`, +75 more | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:557, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:795 | `CAI_BaseNPC#562 no SDK twin: stretch #560-#566 holds 5 retai…` |
+| 1912 | `0x1026fb40` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:158, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions2Tests.cpp:247 |  |
+| 1913 | `0x1026fbe0` | `CAI_BaseHumanoid#562`, `CAI_BaseNPC#562`, +75 more | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:557, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:797 | `CAI_BaseNPC#562 no SDK twin: stretch #560-#566 holds 5 retai…` |
 | 1914 | `0x10270290` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Visual/ElysiumNpcBody.cpp:582, Source/ElysiumUE/Private/Visual/ElysiumNpcBody.h:244, Source/ElysiumUE/Public/ElysiumLocomotionSample.h:102 |  |
 | 1915 | `0x102718e0` | — | 2 | 0 | 0 | — | — |  |
-| 1916 | `0x10274b30` | `CAI_BaseHumanoid#515`, `CAI_BaseNPC#515`, +75 more | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:173, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.cpp:191, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:207 | `CAI_BaseNPC#515 no SDK twin: stretch #513-#516 holds 2 retai…` |
-| 1917 | `0x102781a0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSquad.cpp:57, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSquadTests.cpp:111 |  |
-| 1918 | `0x10278900` | `CAI_BaseHumanoid#574`, `CAI_BaseNPC#574`, +74 more | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:217, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:553, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:810 | `CAI_BaseNPC#574 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 1919 | `0x10279090` | `CAI_BaseHumanoid#559`, `CAI_BaseNPC#559`, +75 more | 1 | 0 | 1 | `Player`, `!target1`, +8 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle.cpp:32, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle.cpp:112, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:192 | `CAI_BaseNPC#559 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 1916 | `0x10274b30` | `CAI_BaseHumanoid#515`, `CAI_BaseNPC#515`, +75 more | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:173, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.cpp:191, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:209 | `CAI_BaseNPC#515 no SDK twin: stretch #513-#516 holds 2 retai…` |
+| 1917 | `0x102781a0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSquad.cpp:57, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSquadTests.cpp:113 |  |
+| 1918 | `0x10278900` | `CAI_BaseHumanoid#574`, `CAI_BaseNPC#574`, +74 more | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:217, Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses10.cpp:553, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:812 | `CAI_BaseNPC#574 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 1919 | `0x10279090` | `CAI_BaseHumanoid#559`, `CAI_BaseNPC#559`, +75 more | 1 | 0 | 1 | `Player`, `!target1`, +8 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle.cpp:32, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle.cpp:112, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:194 | `CAI_BaseNPC#559 no SDK twin: stretch #545-#560 holds 14 reta…` |
 | 1920 | `0x1027be60` | — | 1 | 0 | 1 | `E:\Vampire\main\dlls\AI_BaseNPC.cpp`, `Scripted Sequence stripped on level tran…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle2.cpp:122 |  |
 | 1921 | `0x1027cc10` | `CAI_BaseHumanoid#425`, `CAI_BaseNPC#425`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#425 no SDK twin: stretch #421-#431 holds 9 retai…` |
 | 1922 | `0x1027cd50` | — | 1 | 1 | 0 | — | — |  |
@@ -1939,14 +1939,14 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1930 | `0x1027fa50` | — | 1 | 0 | 1 | — | — |  |
 | 1931 | `0x1027fba0` | — | 1 | 0 | 1 | — | — |  |
 | 1932 | `0x1027fc10` | — | 1 | 1 | 0 | — | — |  |
-| 1933 | `0x10280790` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:154 |  |
+| 1933 | `0x10280790` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:156 |  |
 | 1934 | `0x10280a20` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1698 |  |
 | 1935 | `0x10280fd0` | `CAI_BaseHumanoid#411`, `CAI_BaseNPC#411`, +75 more | 2 | 0 | 0 | — | — | `CAI_BaseNPC#411 no SDK twin: stretch #405-#420 holds 14 reta…` |
 | 1936 | `0x10288590` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1648, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:647 |  |
 | 1937 | `0x10288610` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1608 |  |
 | 1938 | `0x102886f0` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1345, Source/ElysiumUE/Private/Substrate/ElysiumNpcNavigator.h:62 |  |
-| 1939 | `0x10289ce0` | `CAI_BaseHumanoid#571`, `CAI_BaseNPC#571`, +75 more | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:341, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:703 | `CAI_BaseNPC#571 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 1940 | `0x10289fe0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:294, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:397, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:259 |  |
+| 1939 | `0x10289ce0` | `CAI_BaseHumanoid#571`, `CAI_BaseNPC#571`, +75 more | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:341, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:705 | `CAI_BaseNPC#571 no SDK twin: stretch #566-#583 holds 16 reta…` |
+| 1940 | `0x10289fe0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers.cpp:294, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:397, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:261 |  |
 | 1941 | `0x1028ac10` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1637, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:986 |  |
 | 1942 | `0x1028ac80` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1328 |  |
 | 1943 | `0x1028b160` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc.cpp:146 |  |
@@ -1954,18 +1954,18 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1945 | `0x1028b420` | — | 1 | 0 | 1 | — | — |  |
 | 1946 | `0x1028dfb0` | `CAI_BaseNPCTroika#19`, `CGeneric_NPC#19`, +62 more | 2 | 0 | 0 | — | — |  |
 | 1947 | `0x1028e700` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:10, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:49, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:61, +1 more |  |
-| 1948 | `0x1028e870` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:72, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:421, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:1303 |  |
+| 1948 | `0x1028e870` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:72, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:421, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:1305 |  |
 | 1949 | `0x1028e980` | — | 1 | 0 | 1 | — | — |  |
-| 1950 | `0x1028fa50` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:120, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:216, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions2Tests.cpp:804 |  |
+| 1950 | `0x1028fa50` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:120, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:216, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions2Tests.cpp:807 |  |
 | 1951 | `0x10293dc0` | — | 1 | 1 | 0 | — | — |  |
 | 1952 | `0x10293df0` | — | 1 | 1 | 0 | — | — |  |
 | 1953 | `0x10293e20` | — | 2 | 0 | 0 | — | — |  |
 | 1954 | `0x10293ec0` | `CAI_BaseNPCTroika#488`, `CNPCMaker#488`, +53 more | 2 | 0 | 0 | `Death` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds.cpp:140, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds.cpp:145, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:5, +5 more |  |
-| 1955 | `0x10293f80` | `CAI_BaseNPCTroika#489`, `CNPCMaker#489`, +53 more | 2 | 0 | 0 | `Target_Suspect` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:163, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:176 |  |
-| 1956 | `0x10294340` | `CAI_BaseNPCTroika#491`, `CNPCMaker#491`, +52 more | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:182, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:203 |  |
-| 1957 | `0x10294660` | `CAI_BaseNPCTroika#495`, `CNPCMaker#495`, +53 more | 2 | 0 | 0 | `Surprised` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:241, Source/ElysiumUE/Private/Substrate/ElysiumNpcState.cpp:65, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:316 |  |
-| 1958 | `0x10294870` | `CAI_BaseNPCTroika#498`, `CGeneric_NPC#498`, +60 more | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:248, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:328 |  |
-| 1959 | `0x10295a80` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:302, Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:350, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp:405, +3 more |  |
+| 1955 | `0x10293f80` | `CAI_BaseNPCTroika#489`, `CNPCMaker#489`, +53 more | 2 | 0 | 0 | `Target_Suspect` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:163, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:178 |  |
+| 1956 | `0x10294340` | `CAI_BaseNPCTroika#491`, `CNPCMaker#491`, +52 more | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:182, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:205 |  |
+| 1957 | `0x10294660` | `CAI_BaseNPCTroika#495`, `CNPCMaker#495`, +53 more | 2 | 0 | 0 | `Surprised` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:241, Source/ElysiumUE/Private/Substrate/ElysiumNpcState.cpp:65, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:318 |  |
+| 1958 | `0x10294870` | `CAI_BaseNPCTroika#498`, `CGeneric_NPC#498`, +60 more | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:248, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:330 |  |
+| 1959 | `0x10295a80` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:302, Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:350, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp:407, +3 more |  |
 | 1960 | `0x10296820` | — | 1 | 1 | 0 | — | — |  |
 | 1961 | `0x10297430` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:494, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints10.cpp:20, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints10.cpp:123, +5 more |  |
 | 1962 | `0x102974f0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:516, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints10.cpp:22, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints10.cpp:126, +3 more |  |
@@ -1976,7 +1976,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1967 | `0x1029f340` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:93 |  |
 | 1968 | `0x1029f370` | — | 1 | 0 | 1 | `ERROR: %s - Could not convert schedule '…`, `ERROR: %s - Could not find schedule '%s'…`, +2 more | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:441, Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:462 |  |
 | 1969 | `0x1029f610` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2704, Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:276, Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:481, +5 more |  |
-| 1970 | `0x1029f800` | `CAI_BaseNPCTroika#21`, `CGeneric_NPC#21`, +61 more | 0 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:708, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesTests.cpp:1331 |  |
+| 1970 | `0x1029f800` | `CAI_BaseNPCTroika#21`, `CGeneric_NPC#21`, +61 more | 0 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:708, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesTests.cpp:1334 |  |
 | 1971 | `0x1029f8f0` | `CAI_BaseNPCTroika#27`, `CGeneric_NPC#27`, +61 more | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:729, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2Species.cpp:160 |  |
 | 1972 | `0x102a0490` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:275 |  |
 | 1973 | `0x102a0bc0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAdvancePath.cpp:51, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAdvancePath.cpp:62, Source/ElysiumUE/Private/Substrate/ElysiumNpcCrosswalk.cpp:12, +11 more |  |
@@ -1990,7 +1990,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1981 | `0x102a9710` | — | 1 | 0 | 1 | — | — |  |
 | 1982 | `0x102a9730` | — | 1 | 0 | 1 | — | — |  |
 | 1983 | `0x102a9750` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:549, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1832 |  |
-| 1984 | `0x102a9770` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1487, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelStartTaskTests_2.cpp:645 |  |
+| 1984 | `0x102a9770` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1487, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelStartTaskTests_2.cpp:647 |  |
 | 1985 | `0x102a9860` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1860 |  |
 | 1986 | `0x102a98c0` | — | 1 | 0 | 1 | — | — |  |
 | 1987 | `0x102a9940` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1543 |  |
@@ -2004,17 +2004,17 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 1995 | `0x102a9ee0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:333 |  |
 | 1996 | `0x102a9f20` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:332 |  |
 | 1997 | `0x102aaa60` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:46, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:327, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:537, +2 more |  |
-| 1998 | `0x102b50b0` | `CAI_BaseNPCTroika#54`, `CGeneric_NPC#54`, +62 more | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:244, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:249, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:315 |  |
+| 1998 | `0x102b50b0` | `CAI_BaseNPCTroika#54`, `CGeneric_NPC#54`, +62 more | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:244, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:249, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:317 |  |
 | 1999 | `0x102b51e0` | `CAI_BaseNPCTroika#59`, `CGeneric_NPC#59`, +62 more | 0 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:491 |  |
 | 2000 | `0x102b5220` | `CAI_BaseNPCTroika#60`, `CGeneric_NPC#60`, +62 more | 0 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:503 |  |
 | 2001 | `0x102b5260` | `CAI_BaseNPCTroika#61`, `CGeneric_NPC#61`, +62 more | 0 | 2 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:514 |  |
 | 2002 | `0x102b59e0` | `CAI_BaseNPCTroika#603`, `CGeneric_NPC#603`, +61 more | 2 | 0 | 0 | — | — |  |
 | 2003 | `0x102bf310` | — | 1 | 0 | 1 | `move_yaw` | Source/ElysiumUE/Private/Substrate/ElysiumNpcThink.cpp:343 |  |
-| 2004 | `0x102bf510` | `CAI_BaseNPCTroika#466`, `CGeneric_NPC#466`, +62 more | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:44, Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:450, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp:359 |  |
+| 2004 | `0x102bf510` | `CAI_BaseNPCTroika#466`, `CGeneric_NPC#466`, +62 more | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:44, Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim.cpp:450, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp:361 |  |
 | 2005 | `0x102bfe10` | — | 1 | 0 | 1 | `%s got below the ground by %f units.⏎`, `I'm floating....  Me llamo %s⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcThink.cpp:96, Source/ElysiumUE/Private/Substrate/ElysiumNpcThink.cpp:341 |  |
-| 2006 | `0x102c0470` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogueBodies.cpp:62, Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogueBodies.cpp:110, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:76, +4 more |  |
+| 2006 | `0x102c0470` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogueBodies.cpp:62, Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogueBodies.cpp:110, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDialogueTests.cpp:78, +4 more |  |
 | 2007 | `0x102c4430` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf2.cpp:13, Source/ElysiumUE/Private/Substrate/ElysiumNpcWerewolf2.cpp:68, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelWerewolfTests.cpp:14, +1 more |  |
-| 2008 | `0x102c4470` | — | 1 | 1 | 0 | `!player` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss.cpp:168, Source/ElysiumUE/Private/Substrate/ElysiumNpcSquad.cpp:195, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSquadTests.cpp:234 |  |
+| 2008 | `0x102c4470` | — | 1 | 1 | 0 | `!player` | Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss.cpp:168, Source/ElysiumUE/Private/Substrate/ElysiumNpcSquad.cpp:195, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSquadTests.cpp:236 |  |
 | 2009 | `0x102c4c50` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:456, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1833 |  |
 | 2010 | `0x102c4e30` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:201, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:253 |  |
 | 2011 | `0x102c6bd0` | — | 1 | 1 | 0 | — | — |  |
@@ -2031,7 +2031,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2022 | `0x102cabd0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:130 |  |
 | 2023 | `0x102cc560` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions2.cpp:91 |  |
 | 2024 | `0x102cc5d0` | — | 1 | 1 | 0 | — | — |  |
-| 2025 | `0x102cc7e0` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:216 |  |
+| 2025 | `0x102cc7e0` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:219 |  |
 | 2026 | `0x102d0910` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumHint.cpp:119, Source/ElysiumUE/Private/Substrate/ElysiumHint.h:78, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1291, +1 more |  |
 | 2027 | `0x102d09b0` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc2.cpp:245, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc2.cpp:440, Source/ElysiumUE/Private/Substrate/ElysiumNpcMisc2Species.cpp:538, +1 more |  |
 | 2028 | `0x102d0b20` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:103, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:145, Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:300, +3 more |  |
@@ -2041,7 +2041,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2032 | `0x102d40e0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:3511, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:3910 |  |
 | 2033 | `0x102d42d0` | — | 1 | 0 | 1 | — | — |  |
 | 2034 | `0x102d4350` | — | 2 | 0 | 0 | — | — |  |
-| 2035 | `0x102d6180` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlaceSet.cpp:34, Source/ElysiumUE/Private/Substrate/ElysiumPlaceSet.h:79, Source/ElysiumUE/Private/Tests/ElysiumPlaceSetTests.cpp:111 |  |
+| 2035 | `0x102d6180` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumPlaceSet.cpp:34, Source/ElysiumUE/Private/Substrate/ElysiumPlaceSet.h:79, Source/ElysiumUE/Private/Tests/ElysiumPlaceSetTests.cpp:114 |  |
 | 2036 | `0x102d6210` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor10.cpp:145, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor10.cpp:218 |  |
 | 2037 | `0x102d9150` | — | 1 | 1 | 0 | — | — |  |
 | 2038 | `0x102d9dd0` | `CAI_InterestingPlace#130` | 0 | 1 | 1 | `Could not find InterestingPlaceType for …` | — |  |
@@ -2052,14 +2052,14 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2043 | `0x102daf50` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:98 |  |
 | 2044 | `0x102db740` | — | 1 | 1 | 0 | — | — |  |
 | 2045 | `0x102db760` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHints.cpp:307 |  |
-| 2046 | `0x102dbde0` | `CAI_InterestingPlaceConverstation#113` | 0 | 1 | 1 | `%s(%s) is not a valid target for %s. Mus…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle.cpp:199, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:585 |  |
+| 2046 | `0x102dbde0` | `CAI_InterestingPlaceConverstation#113` | 0 | 1 | 1 | `%s(%s) is not a valid target for %s. Mus…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle.cpp:199, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:587 |  |
 | 2047 | `0x102dc3e0` | — | 1 | 1 | 0 | — | — |  |
 | 2048 | `0x102dce10` | — | 1 | 1 | 0 | — | — |  |
 | 2049 | `0x102dce30` | — | 1 | 0 | 1 | — | — |  |
 | 2050 | `0x102dd610` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3.cpp:98 |  |
 | 2051 | `0x102dd9c0` | — | 2 | 0 | 0 | — | — |  |
 | 2052 | `0x102e0b60` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSaveRestore10.cpp:192 |  |
-| 2053 | `0x102e11f0` | `CAI_HumanoidMotor#7`, `CAI_Motor#7` | 0 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:371, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:275, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:396 |  |
+| 2053 | `0x102e11f0` | `CAI_HumanoidMotor#7`, `CAI_Motor#7` | 0 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:371, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelFacingTests.cpp:277, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:398 |  |
 | 2054 | `0x102e12e0` | — | 1 | 0 | 1 | — | — |  |
 | 2055 | `0x102e1440` | `CAI_Motor#10` | 0 | 0 | 2 | — | — |  |
 | 2056 | `0x102e2580` | `CAI_HumanoidMotor#17`, `CAI_Motor#17` | 0 | 0 | 2 | — | — |  |
@@ -2121,7 +2121,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2112 | `0x1030fb90` | — | 1 | 0 | 1 | — | — |  |
 | 2113 | `0x1030fc50` | — | 1 | 0 | 1 | — | — |  |
 | 2114 | `0x1030fd20` | — | 2 | 0 | 0 | — | — |  |
-| 2115 | `0x10310bc0` | — | 1 | 1 | 0 | `Could not find NPCMaker( %s )⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:2079, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBossTests.cpp:291 |  |
+| 2115 | `0x10310bc0` | — | 1 | 1 | 0 | `Could not find NPCMaker( %s )⏎` | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:2079, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBossTests.cpp:293 |  |
 | 2116 | `0x10311c10` | — | 1 | 0 | 1 | `scene:` | — |  |
 | 2117 | `0x10311ee0` | — | 1 | 0 | 1 | — | — |  |
 | 2118 | `0x10312340` | — | 1 | 0 | 1 | — | — |  |
@@ -2134,7 +2134,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2125 | `0x10319fe0` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:202 |  |
 | 2126 | `0x10326a20` | `CAI_BaseHumanoid#362`, `CAI_BaseNPC#362`, +69 more | 0 | 0 | 2 | `NULL ENTITY`, `CBaseCombatCharacter::FInViewCone` | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:169, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:276, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:281, +5 more | `CAI_BaseNPC#362 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 2127 | `0x1032b960` | — | 2 | 0 | 0 | — | — |  |
-| 2128 | `0x10330020` | `CAI_BaseHumanoid#334`, `CAI_BaseNPC#334`, +81 more | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:666, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:671, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:359 | `CAI_BaseNPC#334 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 2128 | `0x10330020` | `CAI_BaseHumanoid#334`, `CAI_BaseNPC#334`, +81 more | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:666, Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:671, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:361 | `CAI_BaseNPC#334 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 2129 | `0x1033f6d0` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorld.cpp:1071, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:569, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:577, +5 more |  |
 | 2130 | `0x103454c0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:282, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:912 |  |
 | 2131 | `0x10348ba0` | `CAI_BaseHumanoid#296`, `CAI_BaseNPC#296`, +83 more | 0 | 0 | 2 | — | — | `CAI_BaseNPC#296 no SDK twin: stretch #292-#366 holds 73 reta…` |
@@ -2157,14 +2157,14 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2148 | `0x1035e950` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:56, Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.cpp:322, Source/ElysiumUE/Private/Substrate/ElysiumNpcAndreiBlood.h:74, +2 more |  |
 | 2149 | `0x10363b40` | `CNPC_VBach#461` | 1 | 1 | 0 | — | — |  |
 | 2150 | `0x103674a0` | `CNPC_VBatSwarm#461` | 1 | 1 | 0 | — | — |  |
-| 2151 | `0x103680b0` | `CNPC_VCamera#488`, `CNPC_VCameraSecurity#488` | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:413, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:155, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:64 |  |
-| 2152 | `0x103680d0` | `CNPC_VCamera#489`, `CNPC_VCameraSecurity#489` | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:418, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:64 |  |
-| 2153 | `0x10368110` | `CNPC_VCamera#491`, `CNPC_VCameraSecurity#491` | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:428, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:65 |  |
-| 2154 | `0x10368310` | `CNPC_VCamera#507`, `CNPC_VCameraSecurity#507` | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:473, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:67 |  |
+| 2151 | `0x103680b0` | `CNPC_VCamera#488`, `CNPC_VCameraSecurity#488` | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:413, Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:155, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:66 |  |
+| 2152 | `0x103680d0` | `CNPC_VCamera#489`, `CNPC_VCameraSecurity#489` | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:418, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:66 |  |
+| 2153 | `0x10368110` | `CNPC_VCamera#491`, `CNPC_VCameraSecurity#491` | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:428, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:67 |  |
+| 2154 | `0x10368310` | `CNPC_VCamera#507`, `CNPC_VCameraSecurity#507` | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:473, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:69 |  |
 | 2155 | `0x10368370` | `CNPC_VCamera#510`, `CNPC_VCameraSecurity#510` | 2 | 0 | 0 | — | — |  |
 | 2156 | `0x10370320` | `CNPC_VCombatman#461` | 1 | 1 | 0 | — | — |  |
 | 2157 | `0x103705e0` | — | 1 | 0 | 1 | — | — |  |
-| 2158 | `0x10371ae0` | `CNPC_VCop#472` | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:184, Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:185, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:849, +2 more |  |
+| 2158 | `0x10371ae0` | `CNPC_VCop#472` | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:184, Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:185, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:851, +2 more |  |
 | 2159 | `0x10378b60` | `CNPC_VGargoyle#461` | 1 | 1 | 0 | — | — |  |
 | 2160 | `0x10378c10` | `CNPC_VGargoyle#390` | 0 | 1 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:18, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:424, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamage2Tests.cpp:25 |  |
 | 2161 | `0x10378ec0` | — | 1 | 0 | 1 | `pillar` | Source/ElysiumUE/Private/Substrate/ElysiumNpcGargoyle.h:20, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:735, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:738, +2 more |  |
@@ -2179,8 +2179,8 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2170 | `0x10381cd0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.h:23, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:844 |  |
 | 2171 | `0x103828a0` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.h:166, Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.h:209, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawnSpecies.cpp:686, +4 more |  |
 | 2172 | `0x10382d20` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.cpp:552, Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.h:140, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTaskSpecies.cpp:790, +3 more |  |
-| 2173 | `0x10383130` | — | 2 | 0 | 0 | `Hengeyokai_freeze_emitter` | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.h:144, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1411, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTranslateTests.cpp:221 |  |
-| 2174 | `0x103887d0` | `CNPC_VHunter#472` | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:185, Source/ElysiumUE/Private/Substrate/ElysiumNpcHunter.cpp:84, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:853, +2 more |  |
+| 2173 | `0x10383130` | — | 2 | 0 | 0 | `Hengeyokai_freeze_emitter` | Source/ElysiumUE/Private/Substrate/ElysiumNpcHengeyokai.h:144, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1411, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTranslateTests.cpp:223 |  |
+| 2174 | `0x103887d0` | `CNPC_VHunter#472` | 0 | 0 | 2 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCop.cpp:185, Source/ElysiumUE/Private/Substrate/ElysiumNpcHunter.cpp:84, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:855, +2 more |  |
 | 2175 | `0x10388ab0` | `CNPC_VHunter#461` | 1 | 1 | 0 | — | — |  |
 | 2176 | `0x103893c0` | `CNPC_VLasombra#592` | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcLasombra.cpp:11, Source/ElysiumUE/Private/Substrate/ElysiumNpcLasombra.cpp:12, Source/ElysiumUE/Private/Substrate/ElysiumNpcLasombra.cpp:17, +5 more |  |
 | 2177 | `0x1038e670` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.cpp:306, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:88, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:180, +5 more |  |
@@ -2189,14 +2189,14 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2180 | `0x1038f290` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.cpp:693, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.cpp:806, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:138, +1 more |  |
 | 2181 | `0x1038f640` | — | 1 | 0 | 1 | — | — |  |
 | 2182 | `0x1038f660` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:197, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:248, Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawnSpecies.cpp:714, +3 more |  |
-| 2183 | `0x1038fc80` | — | 1 | 0 | 1 | `ManBat_Minion` | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:248, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1673, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelStartTaskTests_4.cpp:1223 |  |
+| 2183 | `0x1038fc80` | — | 1 | 0 | 1 | `ManBat_Minion` | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:248, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1673, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelStartTaskTests_4.cpp:1225 |  |
 | 2184 | `0x10390040` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.cpp:706, Source/ElysiumUE/Private/Substrate/ElysiumNpcManBat.h:147, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1946, +1 more |  |
 | 2185 | `0x103908c0` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1572, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1574, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1579 |  |
 | 2186 | `0x103952b0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:528, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:571, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:345, +2 more |  |
 | 2187 | `0x10395650` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:568, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:569, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:2137, +4 more |  |
 | 2188 | `0x10397930` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:872, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:1792, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:1799, +3 more |  |
 | 2189 | `0x10397c70` | — | 1 | 0 | 1 | — | — |  |
-| 2190 | `0x10397e00` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:1718, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:234, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelGeometryTests.cpp:652, +1 more |  |
+| 2190 | `0x10397e00` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:1718, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:234, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelGeometryTests.cpp:654, +1 more |  |
 | 2191 | `0x10397e90` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss.cpp:13, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:1900, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:374, +5 more |  |
 | 2192 | `0x10397f00` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBoss.cpp:13, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:1900, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:372, +6 more |  |
 | 2193 | `0x10398630` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:1966, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:2032, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:399, +3 more |  |
@@ -2224,7 +2224,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2215 | `0x103b4bd0` | `CNPC_VTest#494` | 1 | 0 | 1 | — | — |  |
 | 2216 | `0x103b4d40` | `CNPC_VTest#495` | 1 | 0 | 1 | — | — |  |
 | 2217 | `0x103b9360` | `CNPC_VTzimisce#489` | 2 | 0 | 0 | — | — |  |
-| 2218 | `0x103bdfc0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawnSpecies.cpp:806, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpawnTests.cpp:450 |  |
+| 2218 | `0x103bdfc0` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawnSpecies.cpp:806, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpawnTests.cpp:452 |  |
 | 2219 | `0x103be180` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:1292, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:20 |  |
 | 2220 | `0x103bf560` | — | 1 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSpecies2.cpp:47, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:1324, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.h:178, +1 more |  |
 | 2221 | `0x103bfa50` | — | 1 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHints.cpp:738, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:1536, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisce.cpp:767, +2 more |  |
@@ -2238,7 +2238,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2229 | `0x104081e0` | — | 1 | 0 | 1 | — | — |  |
 | 2230 | `0x10408480` | — | 1 | 0 | 1 | — | — |  |
 | 2231 | `0x10427620` | — | 2 | 0 | 0 | — | — |  |
-| 2232 | `0x104276a0` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:745, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:491 |  |
+| 2232 | `0x104276a0` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:745, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:493 |  |
 | 2233 | `0x10427dc0` | — | 2 | 0 | 0 | — | — |  |
 | 2234 | `0x1042fb50` | — | 2 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1572, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1573, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:1578 |  |
 | 2235 | `0x1042fd40` | — | 2 | 0 | 0 | — | — |  |
@@ -2254,15 +2254,15 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2245 | `0x10026fb0` | `CAISound#165`, `CAI_BaseHumanoid#165`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#165 no SDK twin: stretch #163-#173 holds 9 retai…` |
 | 2246 | `0x10027040` | `CAISound#169`, `CAI_BaseHumanoid#169`, +493 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#169 no SDK twin: stretch #163-#173 holds 9 retai…` |
 | 2247 | `0x10027060` | `CAISound#170`, `CAI_BaseHumanoid#170`, +493 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#170 no SDK twin: stretch #163-#173 holds 9 retai…` |
-| 2248 | `0x100270c0` | `CAISound#186`, `CAI_BaseHumanoid#186`, +495 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:616, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:502 | `CAI_BaseNPC#186 no SDK twin: stretch #181-#189 holds 7 retai…` |
+| 2248 | `0x100270c0` | `CAISound#186`, `CAI_BaseHumanoid#186`, +495 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:616, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:504 | `CAI_BaseNPC#186 no SDK twin: stretch #181-#189 holds 7 retai…` |
 | 2249 | `0x10027140` | `CAISound#191`, `CAI_BaseHumanoid#191`, +493 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#191 no SDK twin: stretch #189-#199 holds 9 retai…` |
-| 2250 | `0x10027450` | `CAISound#0`, `CAI_BaseHumanoid#0`, +495 more | 0 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:476, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:127 | `CAI_BaseNPC#0 no SDK twin: no bracketing names; slot identit…` |
-| 2251 | `0x10027490` | `CAISound#116`, `CAI_BaseHumanoid#116`, +495 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:506, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:158 | `CAI_BaseNPC#116 no SDK twin: stretch #113-#118 holds 4 retai…` |
+| 2250 | `0x10027450` | `CAISound#0`, `CAI_BaseHumanoid#0`, +495 more | 0 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:476, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:129 | `CAI_BaseNPC#0 no SDK twin: no bracketing names; slot identit…` |
+| 2251 | `0x10027490` | `CAISound#116`, `CAI_BaseHumanoid#116`, +495 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:506, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:160 | `CAI_BaseNPC#116 no SDK twin: stretch #113-#118 holds 4 retai…` |
 | 2252 | `0x1002c900` | — | 1 | 0 | 0 | — | — |  |
 | 2253 | `0x1002ee60` | — | 1 | 0 | 0 | `PhysRemoveShadow` | — |  |
 | 2254 | `0x1003c1e0` | — | 1 | 0 | 0 | — | — |  |
 | 2255 | `0x1004fc10` | `CAI_BaseHumanoid#152`, `CAI_BaseNPC#152`, +334 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#152 no SDK twin: stretch #144-#160 holds 15 reta…` |
-| 2256 | `0x1004fc50` | `CAI_BaseHumanoid#137`, `CAI_BaseNPC#137`, +298 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumAnimatingSlotBodies.cpp:39, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:119 | `CAI_BaseNPC#137 no SDK twin: stretch #128-#138 holds 9 retai…` |
+| 2256 | `0x1004fc50` | `CAI_BaseHumanoid#137`, `CAI_BaseNPC#137`, +298 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumAnimatingSlotBodies.cpp:39, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:121 | `CAI_BaseNPC#137 no SDK twin: stretch #128-#138 holds 9 retai…` |
 | 2257 | `0x10050b90` | — | 1 | 0 | 0 | `CDisciplineParticle::Create` | — |  |
 | 2258 | `0x10050c70` | — | 1 | 0 | 0 | `CDisciplineParticle::Create` | — |  |
 | 2259 | `0x100576a0` | — | 1 | 0 | 0 | — | — |  |
@@ -2280,10 +2280,10 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2271 | `0x1009af00` | `CAISound#14`, `CAI_BaseHumanoid#14`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#14 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 2272 | `0x1009b2c0` | `CAISound#18`, `CAI_BaseHumanoid#18`, +431 more | 0 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::TraceMessage` | — | `CAI_BaseNPC#18 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 2273 | `0x1009b380` | `CAISound#17`, `CAI_BaseHumanoid#17`, +431 more | 0 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::TraceMessage` | — | `CAI_BaseNPC#17 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2274 | `0x100b4bc0` | `CAISound#194`, `CAI_BaseHumanoid#194`, +493 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:422, Source/ElysiumUE/Private/Substrate/ElysiumNpcGeometry.cpp:81, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelGeometryTests.cpp:137 | `CAI_BaseNPC#194 no SDK twin: stretch #189-#199 holds 9 retai…` |
-| 2275 | `0x100b4be0` | `CAISound#195`, `CAI_BaseHumanoid#195`, +493 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:435, Source/ElysiumUE/Private/Substrate/ElysiumNpcGeometry.cpp:81, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelGeometryTests.cpp:137 | `CAI_BaseNPC#195 no SDK twin: stretch #189-#199 holds 9 retai…` |
+| 2274 | `0x100b4bc0` | `CAISound#194`, `CAI_BaseHumanoid#194`, +493 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:422, Source/ElysiumUE/Private/Substrate/ElysiumNpcGeometry.cpp:81, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelGeometryTests.cpp:139 | `CAI_BaseNPC#194 no SDK twin: stretch #189-#199 holds 9 retai…` |
+| 2275 | `0x100b4be0` | `CAISound#195`, `CAI_BaseHumanoid#195`, +493 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:435, Source/ElysiumUE/Private/Substrate/ElysiumNpcGeometry.cpp:81, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelGeometryTests.cpp:139 | `CAI_BaseNPC#195 no SDK twin: stretch #189-#199 holds 9 retai…` |
 | 2276 | `0x100b4de0` | `CAISound#91`, `CAI_BaseHumanoid#91`, +494 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:77, Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:493, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:258, +2 more | `CAI_BaseNPC#91 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2277 | `0x100b4ea0` | `CAISound#154`, `CAI_BaseHumanoid#154`, +492 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:26, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:182, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:31, +1 more | `CAI_BaseNPC#154 no SDK twin: stretch #144-#160 holds 15 reta…` |
+| 2277 | `0x100b4ea0` | `CAISound#154`, `CAI_BaseHumanoid#154`, +492 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:26, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:182, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:33, +1 more | `CAI_BaseNPC#154 no SDK twin: stretch #144-#160 holds 15 reta…` |
 | 2278 | `0x100b6510` | — | 1 | 0 | 0 | — | — |  |
 | 2279 | `0x100b6850` | — | 1 | 0 | 0 | — | — |  |
 | 2280 | `0x100b6cf0` | `CAI_BaseHumanoid#288`, `CAI_BaseNPC#288`, +84 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#288 no SDK twin: stretch #276-#292 holds 15 reta…` |
@@ -2376,7 +2376,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2367 | `0x1014f910` | `CAI_BaseHumanoid#359`, `CAI_BaseNPC#359`, +17 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#359 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 2368 | `0x1014f930` | `CAI_BaseHumanoid#360`, `CAI_BaseNPC#360`, +81 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc.cpp:43, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:363, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:455 | `CAI_BaseNPC#360 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 2369 | `0x1014fa30` | `CAI_BaseHumanoid#399`, `CAI_BaseNPC#399`, +82 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#399 no SDK twin: stretch #397-#404 holds 6 retai…` |
-| 2370 | `0x1014fa50` | `CAI_BaseHumanoid#400`, `CAI_BaseNPC#400`, +82 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2501, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:1575 | `CAI_BaseNPC#400 no SDK twin: stretch #397-#404 holds 6 retai…` |
+| 2370 | `0x1014fa50` | `CAI_BaseHumanoid#400`, `CAI_BaseNPC#400`, +82 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2501, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:1580 | `CAI_BaseNPC#400 no SDK twin: stretch #397-#404 holds 6 retai…` |
 | 2371 | `0x10156ce0` | — | 1 | 0 | 0 | — | — |  |
 | 2372 | `0x10158520` | — | 1 | 0 | 0 | — | — |  |
 | 2373 | `0x10158ab0` | — | 1 | 0 | 0 | — | — |  |
@@ -2413,19 +2413,19 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2404 | `0x101a65a0` | `CAI_BaseHumanoid#441`, `CAI_BaseNPC#441`, +75 more | 0 | 0 | 1 | `Called wrong StartTask()⏎` | — | `CAI_BaseNPC#441 no SDK twin: stretch #440-#442 holds 1 retai…` |
 | 2405 | `0x101a65e0` | `CAI_BaseHumanoid#443`, `CAI_BaseNPC#443`, +75 more | 0 | 0 | 1 | `Called wrong RunTask()⏎` | — | `CAI_BaseNPC#443 no SDK twin: stretch #442-#444 holds 1 retai…` |
 | 2406 | `0x101a6640` | `CAI_BaseHumanoid#450`, `CAI_BaseNPC#450`, +75 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseEntityChain.cpp:55, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.cpp:328, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:267, +7 more | `CAI_BaseNPC#450 no SDK twin confirmed: #450 lines up with CA…` |
-| 2407 | `0x101a67c0` | `CAI_BaseHumanoid#476`, `CAI_BaseNPC#476`, +11 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseEntityChain.cpp:117, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:78 | `CAI_BaseNPC#476 no SDK twin: stretch #470-#477 holds 6 retai…` |
-| 2408 | `0x101a6840` | `CAI_BaseHumanoid#483`, `CAI_BaseNPC#483`, +75 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseEntityChain.cpp:84, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:111 | `CAI_BaseNPC#483 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 2407 | `0x101a67c0` | `CAI_BaseHumanoid#476`, `CAI_BaseNPC#476`, +11 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseEntityChain.cpp:117, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:80 | `CAI_BaseNPC#476 no SDK twin: stretch #470-#477 holds 6 retai…` |
+| 2408 | `0x101a6840` | `CAI_BaseHumanoid#483`, `CAI_BaseNPC#483`, +75 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseEntityChain.cpp:84, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:113 | `CAI_BaseNPC#483 no SDK twin: stretch #481-#513 holds 31 reta…` |
 | 2409 | `0x101a6960` | `CAI_BaseHumanoid#495`, `CAI_BaseNPC#495`, +9 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#495 no SDK twin: stretch #481-#513 holds 31 reta…` |
 | 2410 | `0x101a69c0` | `CAI_BaseHumanoid#498`, `CAI_BaseNPC#498`, +11 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#498 no SDK twin: stretch #481-#513 holds 31 reta…` |
 | 2411 | `0x101a6ba0` | `CAI_BaseHumanoid#527`, `CAI_BaseNPC#527`, +11 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#527 no SDK twin: stretch #526-#530 holds 3 retai…` |
 | 2412 | `0x101a6bc0` | `CAI_BaseNPC#536`, `CAI_BaseNPCTroika#536`, +74 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#536 no SDK twin: stretch #530-#537 holds 6 retai…` |
 | 2413 | `0x101a6c40` | `CAI_BaseHumanoid#551`, `CAI_BaseNPC#551`, +75 more | 1 | 0 | 0 | — | — | `CAI_BaseNPC#551 no SDK twin: stretch #545-#560 holds 14 reta…` |
 | 2414 | `0x101a6ce0` | `CAI_BaseHumanoid#579`, `CAI_BaseNPC#579`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#579 no SDK twin: stretch #566-#583 holds 16 reta…` |
-| 2415 | `0x101a9060` | `CCineAI#585` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.cpp:163, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.h:22, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDirectorTests.cpp:135 |  |
-| 2416 | `0x101a9770` | `CCineAISchedule#585` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.cpp:59, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:32, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDirectorTests.cpp:136 |  |
-| 2417 | `0x101aa650` | `CAI_BaseNPCTroika#30`, `CGeneric_NPC#30`, +62 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:137, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:160, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:134 |  |
-| 2418 | `0x101aa730` | `CAI_BaseNPCTroika#415`, `CGeneric_NPC#415`, +62 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:270 |  |
-| 2419 | `0x101aa950` | `CPayphone#35` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.cpp:186, Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.h:33, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:326, +2 more |  |
+| 2415 | `0x101a9060` | `CCineAI#585` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.cpp:163, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSequence.h:22, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDirectorTests.cpp:138 |  |
+| 2416 | `0x101a9770` | `CCineAISchedule#585` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.cpp:59, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:32, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDirectorTests.cpp:139 |  |
+| 2417 | `0x101aa650` | `CAI_BaseNPCTroika#30`, `CGeneric_NPC#30`, +62 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:137, Source/ElysiumUE/Private/Substrate/ElysiumNpcClosure.cpp:160, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelClosureTests.cpp:136 |  |
+| 2418 | `0x101aa730` | `CAI_BaseNPCTroika#415`, `CGeneric_NPC#415`, +62 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:272 |  |
+| 2419 | `0x101aa950` | `CPayphone#35` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.cpp:186, Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.h:33, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:328, +2 more |  |
 | 2420 | `0x101af2d0` | — | 1 | 0 | 0 | — | — |  |
 | 2421 | `0x101b0dc0` | — | 1 | 0 | 0 | `CBaseEntity::Instance`, `EmitSound:  '%s' emitted as '%s' (ent %i…`, +1 more | — |  |
 | 2422 | `0x101b1040` | — | 1 | 0 | 0 | `StopSound:  '%s' stopped as '%s' (ent %i…` | — |  |
@@ -2561,7 +2561,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2552 | `0x10262430` | `CAI_BaseHumanoid#429` | 1 | 0 | 0 | — | — |  |
 | 2553 | `0x10264330` | — | 1 | 0 | 0 | — | — |  |
 | 2554 | `0x102652d0` | — | 1 | 0 | 0 | — | — |  |
-| 2555 | `0x10266b10` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:665, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:781, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:784 |  |
+| 2555 | `0x10266b10` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSenses10.cpp:665, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:783, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:786 |  |
 | 2556 | `0x10266c80` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTaskSpecies.cpp:1558 |  |
 | 2557 | `0x10266ef0` | — | 1 | 0 | 0 | — | — |  |
 | 2558 | `0x10267260` | `CAISound#184`, `CAI_BaseHumanoid#184`, +495 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#184 no SDK twin: stretch #181-#189 holds 7 retai…` |
@@ -2572,7 +2572,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2563 | `0x1026da90` | `CAI_BaseHumanoid#556`, `CAI_BaseNPC#556`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#556 no SDK twin: stretch #545-#560 holds 14 reta…` |
 | 2564 | `0x1026ff80` | — | 1 | 0 | 0 | — | — |  |
 | 2565 | `0x10278cb0` | `CAI_BaseHumanoid#519`, `CAI_BaseNPC#519`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#519 no SDK twin: the SDK name it lines up with w…` |
-| 2566 | `0x10279000` | `CAI_BaseHumanoid#485`, `CAI_BaseNPC#485`, +75 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:133, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:410 | `CAI_BaseNPC#485 no SDK twin: stretch #481-#513 holds 31 reta…` |
+| 2566 | `0x10279000` | `CAI_BaseHumanoid#485`, `CAI_BaseNPC#485`, +75 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp:133, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:412 | `CAI_BaseNPC#485 no SDK twin: stretch #481-#513 holds 31 reta…` |
 | 2567 | `0x10279c20` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkSpecies.cpp:345, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkSpecies.cpp:350, Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.h:116, +1 more |  |
 | 2568 | `0x1027e120` | `CAI_BaseHumanoid#423`, `CAI_BaseNPC#423`, +75 more | 0 | 0 | 1 | — | — | `CAI_BaseNPC#423 no SDK twin: stretch #421-#431 holds 9 retai…` |
 | 2569 | `0x1027e590` | — | 1 | 0 | 0 | `<unnamed>`, `%s (%s: %s)`, +1 more | — |  |
@@ -2588,7 +2588,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2579 | `0x10288540` | — | 1 | 0 | 0 | — | — |  |
 | 2580 | `0x10288560` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1556 |  |
 | 2581 | `0x1028acc0` | — | 1 | 0 | 0 | — | — |  |
-| 2582 | `0x1028b0b0` | `CAI_BaseHumanoid#549`, `CAI_BaseNPC#549`, +75 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPositionsTests.cpp:560 | `CAI_BaseNPC#549 no SDK twin: stretch #545-#560 holds 14 reta…` |
+| 2582 | `0x1028b0b0` | `CAI_BaseHumanoid#549`, `CAI_BaseNPC#549`, +75 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPositionsTests.cpp:562 | `CAI_BaseNPC#549 no SDK twin: stretch #545-#560 holds 14 reta…` |
 | 2583 | `0x1028b300` | — | 1 | 0 | 0 | — | — |  |
 | 2584 | `0x1028b460` | — | 1 | 0 | 0 | — | — |  |
 | 2585 | `0x1028df30` | `CAI_BaseNPCTroika#20`, `CGeneric_NPC#20`, +62 more | 1 | 0 | 0 | — | — |  |
@@ -2597,16 +2597,16 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2588 | `0x1028e830` | — | 1 | 0 | 0 | — | — |  |
 | 2589 | `0x1028efc0` | — | 1 | 0 | 0 | `Player_Nosferatu` | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:214 |  |
 | 2590 | `0x102906e0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcThink.cpp:366, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcThinkCadence.h:16 |  |
-| 2591 | `0x10293e80` | `CAI_BaseNPCTroika#527`, `CGeneric_NPC#527`, +62 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:250, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:721, Source/ElysiumUE/Private/Tests/ElysiumPlaceSeamTests.cpp:31 |  |
+| 2591 | `0x10293e80` | `CAI_BaseNPCTroika#527`, `CGeneric_NPC#527`, +62 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:250, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelBaseHelpersTests.cpp:723, Source/ElysiumUE/Private/Tests/ElysiumPlaceSeamTests.cpp:33 |  |
 | 2592 | `0x10294040` | `CAI_BaseNPCTroika#509`, `CGeneric_NPC#509`, +58 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds.cpp:158, Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:295, Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:302, +1 more |  |
-| 2593 | `0x102944c0` | `CAI_BaseNPCTroika#493`, `CGeneric_NPC#493`, +54 more | 1 | 0 | 0 | `Target_Lost` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:204, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:254 |  |
-| 2594 | `0x10294590` | `CAI_BaseNPCTroika#494`, `CGeneric_NPC#494`, +54 more | 1 | 0 | 0 | `Target_Reacquired` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:223, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:296 |  |
-| 2595 | `0x10294930` | `CAI_BaseNPCTroika#499`, `CGeneric_NPC#499`, +60 more | 1 | 0 | 0 | `Idle_Agitated` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:257, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:341 |  |
-| 2596 | `0x10294c30` | `CAI_BaseNPCTroika#503`, `CGeneric_NPC#503`, +60 more | 1 | 0 | 0 | `Comfort` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:264, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:369 |  |
-| 2597 | `0x10294cf0` | `CAI_BaseNPCTroika#504`, `CGeneric_NPC#504`, +60 more | 1 | 0 | 0 | `Upset` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:271, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:381 |  |
-| 2598 | `0x1029fbe0` | `CAI_BaseNPCTroika#330`, `CGeneric_NPC#330`, +59 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim10.cpp:632, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamagedSpecies.cpp:27, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:984, +4 more |  |
-| 2599 | `0x1029fec0` | `CAI_BaseNPCTroika#326`, `CGeneric_NPC#326`, +62 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim10.cpp:605, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:944, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:958, +3 more |  |
-| 2600 | `0x102a0910` | `CAI_BaseNPCTroika#322`, `CGeneric_NPC#322`, +62 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:299, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:304, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:335 |  |
+| 2593 | `0x102944c0` | `CAI_BaseNPCTroika#493`, `CGeneric_NPC#493`, +54 more | 1 | 0 | 0 | `Target_Lost` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:204, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:256 |  |
+| 2594 | `0x10294590` | `CAI_BaseNPCTroika#494`, `CGeneric_NPC#494`, +54 more | 1 | 0 | 0 | `Target_Reacquired` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:223, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:298 |  |
+| 2595 | `0x10294930` | `CAI_BaseNPCTroika#499`, `CGeneric_NPC#499`, +60 more | 1 | 0 | 0 | `Idle_Agitated` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:257, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:343 |  |
+| 2596 | `0x10294c30` | `CAI_BaseNPCTroika#503`, `CGeneric_NPC#503`, +60 more | 1 | 0 | 0 | `Comfort` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:264, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:371 |  |
+| 2597 | `0x10294cf0` | `CAI_BaseNPCTroika#504`, `CGeneric_NPC#504`, +60 more | 1 | 0 | 0 | `Upset` | Source/ElysiumUE/Private/Substrate/ElysiumNpcSounds10.cpp:271, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSounds10Tests.cpp:383 |  |
+| 2598 | `0x1029fbe0` | `CAI_BaseNPCTroika#330`, `CGeneric_NPC#330`, +59 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim10.cpp:632, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamagedSpecies.cpp:27, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:989, +4 more |  |
+| 2599 | `0x1029fec0` | `CAI_BaseNPCTroika#326`, `CGeneric_NPC#326`, +62 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcAnim10.cpp:605, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:949, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:963, +3 more |  |
+| 2600 | `0x102a0910` | `CAI_BaseNPCTroika#322`, `CGeneric_NPC#322`, +62 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:299, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:304, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:337 |  |
 | 2601 | `0x102a1560` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:371, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1208, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1510 |  |
 | 2602 | `0x102a1590` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1215 |  |
 | 2603 | `0x102a15f0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:1229 |  |
@@ -2621,10 +2621,10 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2612 | `0x102a9ec0` | — | 1 | 0 | 0 | — | — |  |
 | 2613 | `0x102a9f00` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask_2.cpp:334 |  |
 | 2614 | `0x102aab70` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:223, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTask.cpp:226 |  |
-| 2615 | `0x102b2730` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:159, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:321, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions2Tests.cpp:702 |  |
-| 2616 | `0x102b5120` | `CAI_BaseNPCTroika#56`, `CGeneric_NPC#56`, +62 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:275, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:280, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:327 |  |
+| 2615 | `0x102b2730` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:159, Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions2.cpp:321, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions2Tests.cpp:705 |  |
+| 2616 | `0x102b5120` | `CAI_BaseNPCTroika#56`, `CGeneric_NPC#56`, +62 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:275, Source/ElysiumUE/Private/Substrate/ElysiumNpcTroikaHelpers.cpp:280, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:329 |  |
 | 2617 | `0x102bfdf0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcThink.cpp:337 |  |
-| 2618 | `0x102c0220` | `CAI_BaseNPCTroika#35`, `CGeneric_NPC#35`, +61 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:405, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions10Tests.cpp:597 |  |
+| 2618 | `0x102c0220` | `CAI_BaseNPCTroika#35`, `CGeneric_NPC#35`, +61 more | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:405, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions10Tests.cpp:599 |  |
 | 2619 | `0x102c0b60` | `CAI_BaseNPCTroika#613`, `CGeneric_NPC#613`, +61 more | 0 | 0 | 1 | — | — |  |
 | 2620 | `0x102c5730` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:577, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTask.cpp:1669 |  |
 | 2621 | `0x102c5780` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp:465 |  |
@@ -2660,7 +2660,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2651 | `0x102d8a90` | — | 1 | 0 | 0 | — | — |  |
 | 2652 | `0x102d8b50` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:86, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:134 |  |
 | 2653 | `0x102db3e0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc2.cpp:245, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMisc2.cpp:270 |  |
-| 2654 | `0x102db5e0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:205, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:478 |  |
+| 2654 | `0x102db5e0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp:205, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:481 |  |
 | 2655 | `0x102dbda0` | `CAI_InterestingPlaceConverstation#127` | 0 | 0 | 1 | — | — |  |
 | 2656 | `0x102dce80` | — | 1 | 0 | 0 | — | — |  |
 | 2657 | `0x102df130` | — | 1 | 0 | 0 | — | — |  |
@@ -2668,7 +2668,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2659 | `0x102e0ea0` | `CAI_HumanoidMotor#3`, `CAI_Motor#3` | 0 | 0 | 1 | `NULL ENTITY`, `CBaseEntity::SetSolid` | — |  |
 | 2660 | `0x102e1110` | `CAI_HumanoidMotor#5`, `CAI_Motor#5` | 0 | 0 | 1 | — | — |  |
 | 2661 | `0x102e1180` | `CAI_HumanoidMotor#6`, `CAI_Motor#6` | 0 | 0 | 1 | — | — |  |
-| 2662 | `0x102e1270` | `CAI_HumanoidMotor#8`, `CAI_Motor#8` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers2.cpp:90, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:938 |  |
+| 2662 | `0x102e1270` | `CAI_HumanoidMotor#8`, `CAI_Motor#8` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers2.cpp:90, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:940 |  |
 | 2663 | `0x102e1300` | `CAI_HumanoidMotor#16`, `CAI_Motor#16` | 1 | 0 | 0 | — | — |  |
 | 2664 | `0x102e1d10` | — | 1 | 0 | 0 | — | — |  |
 | 2665 | `0x102e20f0` | `CAI_HumanoidMotor#14`, `CAI_Motor#14` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseFacing.cpp:38, Source/ElysiumUE/Public/ElysiumWorldServices.h:564 |  |
@@ -2681,9 +2681,9 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2672 | `0x102ecb90` | — | 1 | 0 | 0 | — | — |  |
 | 2673 | `0x102ed540` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:2722 |  |
 | 2674 | `0x102ee1e0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle2.cpp:144 |  |
-| 2675 | `0x102eea70` | `CAI_HumanoidNavigator#7`, `CAI_Navigator#7` | 0 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers2.cpp:121, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1953, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:946 |  |
+| 2675 | `0x102eea70` | `CAI_HumanoidNavigator#7`, `CAI_Navigator#7` | 0 | 1 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseHelpers2.cpp:121, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseStartTask.cpp:1953, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelTroikaHelpersTests.cpp:948 |  |
 | 2676 | `0x102eeac0` | `CAI_HumanoidNavigator#11`, `CAI_Navigator#11` | 0 | 1 | 0 | — | — |  |
-| 2677 | `0x102eeb50` | `CAI_HumanoidNavigator#9`, `CAI_Navigator#9` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:726, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:661 |  |
+| 2677 | `0x102eeb50` | `CAI_HumanoidNavigator#9`, `CAI_Navigator#9` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:726, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:663 |  |
 | 2678 | `0x102f13a0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBase.h:368, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1360, Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:1394 |  |
 | 2679 | `0x102f2d10` | — | 1 | 0 | 0 | — | — |  |
 | 2680 | `0x102f2de0` | — | 1 | 0 | 0 | — | — |  |
@@ -2707,24 +2707,24 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2698 | `0x10307aa0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:44, Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:93, Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:239, +1 more |  |
 | 2699 | `0x10307b40` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:261 |  |
 | 2700 | `0x10307b60` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:275 |  |
-| 2701 | `0x10307d30` | — | 1 | 0 | 0 | `Patrol path pool is dry.  It will store …` | Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:105, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelScriptTests.cpp:694 |  |
+| 2701 | `0x10307d30` | — | 1 | 0 | 0 | `Patrol path pool is dry.  It will store …` | Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:105, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelScriptTests.cpp:696 |  |
 | 2702 | `0x10307db0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:131, Source/ElysiumUE/Private/Substrate/ElysiumNpcScript.cpp:303 |  |
 | 2703 | `0x10312d40` | `CAI_BaseHumanoid#583`, `CAI_ExpressiveNPC#583` | 1 | 0 | 0 | — | — |  |
-| 2704 | `0x10319f30` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:958, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:199, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotor10Tests.cpp:358 |  |
+| 2704 | `0x10319f30` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.h:958, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:199, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotor10Tests.cpp:360 |  |
 | 2705 | `0x10326ae0` | `CAI_BaseHumanoid#365`, `CAI_BaseNPC#365`, +69 more | 0 | 0 | 1 | `NULL ENTITY`, `CBaseCombatCharacter::FInAimCone` | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:790, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:159, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.h:32, +6 more | `CAI_BaseNPC#365 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 2706 | `0x1032e890` | — | 1 | 0 | 0 | — | — |  |
 | 2707 | `0x1033d970` | — | 1 | 0 | 0 | — | — |  |
 | 2708 | `0x1033d990` | — | 1 | 0 | 0 | — | — |  |
 | 2709 | `0x10345890` | — | 1 | 0 | 0 | `AngleInterp` | — |  |
 | 2710 | `0x10348100` | — | 1 | 0 | 0 | `ChooseSequenceFromList` | — |  |
-| 2711 | `0x10349830` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:242, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:607 |  |
+| 2711 | `0x10349830` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage.cpp:242, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:609 |  |
 | 2712 | `0x10349970` | — | 1 | 0 | 0 | — | — |  |
 | 2713 | `0x103499a0` | — | 1 | 0 | 0 | — | — |  |
 | 2714 | `0x1034a170` | — | 1 | 0 | 0 | — | — |  |
-| 2715 | `0x1034aed0` | `CNPCMaker#587`, `CNPCMaker_Fleshpile#587`, +1 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:270, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:75, Source/ElysiumUE/Private/Tests/ElysiumNpcMakerTests.cpp:251 |  |
+| 2715 | `0x1034aed0` | `CNPCMaker#587`, `CNPCMaker_Fleshpile#587`, +1 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:270, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:75, Source/ElysiumUE/Private/Tests/ElysiumNpcMakerTests.cpp:256 |  |
 | 2716 | `0x1034b140` | `CNPCMaker#113`, `CNPCMaker_Fleshpile#113`, +1 more | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.cpp:199, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:18, Source/ElysiumUE/Private/Substrate/ElysiumNpcMaker.h:64, +1 more |  |
 | 2717 | `0x10356f30` | `CNPC_Bullseye#576` | 1 | 0 | 0 | — | — |  |
-| 2718 | `0x103577d0` | `CNPC_Crow#197` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesTests.cpp:1217 |  |
+| 2718 | `0x103577d0` | `CNPC_Crow#197` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesTests.cpp:1220 |  |
 | 2719 | `0x10358c90` | `CNPC_Crow#567` | 1 | 0 | 0 | — | — |  |
 | 2720 | `0x10358f70` | — | 1 | 0 | 0 | `NPC_Crow.Flap` | — |  |
 | 2721 | `0x10359240` | `CNPC_Crow#546` | 1 | 0 | 0 | — | — |  |
@@ -2742,23 +2742,23 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2733 | `0x10360410` | `CNPC_VAsianVampire#5` | 0 | 0 | 1 | — | — |  |
 | 2734 | `0x10360610` | `CNPC_VAsianVampire#546` | 1 | 0 | 0 | — | — |  |
 | 2735 | `0x10362df0` | `CNPC_VBach#546` | 1 | 0 | 0 | — | — |  |
-| 2736 | `0x10364500` | `CNPC_VBach#553` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.cpp:468, Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.h:51, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMiscTests.cpp:373, +3 more |  |
+| 2736 | `0x10364500` | `CNPC_VBach#553` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.cpp:468, Source/ElysiumUE/Private/Substrate/ElysiumNpcBach.h:51, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMiscTests.cpp:375, +3 more |  |
 | 2737 | `0x10365840` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTaskSpecies.cpp:474 |  |
 | 2738 | `0x10366b30` | — | 1 | 0 | 0 | — | — |  |
 | 2739 | `0x10366e10` | `CNPC_VBatSwarm#546` | 1 | 0 | 0 | — | — |  |
-| 2740 | `0x103675e0` | `CNPC_VBatSwarm#553` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:122, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:192 |  |
+| 2740 | `0x103675e0` | `CNPC_VBatSwarm#553` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:122, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:194 |  |
 | 2741 | `0x10367a10` | `CNPC_VBrujah#546` | 1 | 0 | 0 | — | — |  |
-| 2742 | `0x10368150` | `CNPC_VCamera#493`, `CNPC_VCameraSecurity#493` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:438, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:65 |  |
-| 2743 | `0x10368170` | `CNPC_VCamera#494`, `CNPC_VCameraSecurity#494` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:443, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:65 |  |
-| 2744 | `0x10368190` | `CNPC_VCamera#495`, `CNPC_VCameraSecurity#495` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:448, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:66 |  |
-| 2745 | `0x103681f0` | `CNPC_VCamera#498`, `CNPC_VCameraSecurity#498` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:453, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:66 |  |
-| 2746 | `0x10368210` | `CNPC_VCamera#499`, `CNPC_VCameraSecurity#499` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:458, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:66 |  |
-| 2747 | `0x10368290` | `CNPC_VCamera#503`, `CNPC_VCameraSecurity#503` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:463, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:66 |  |
-| 2748 | `0x103682b0` | `CNPC_VCamera#504`, `CNPC_VCameraSecurity#504` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:468, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:67 |  |
+| 2742 | `0x10368150` | `CNPC_VCamera#493`, `CNPC_VCameraSecurity#493` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:438, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:67 |  |
+| 2743 | `0x10368170` | `CNPC_VCamera#494`, `CNPC_VCameraSecurity#494` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:443, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:67 |  |
+| 2744 | `0x10368190` | `CNPC_VCamera#495`, `CNPC_VCameraSecurity#495` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:448, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:68 |  |
+| 2745 | `0x103681f0` | `CNPC_VCamera#498`, `CNPC_VCameraSecurity#498` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:453, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:68 |  |
+| 2746 | `0x10368210` | `CNPC_VCamera#499`, `CNPC_VCameraSecurity#499` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:458, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:68 |  |
+| 2747 | `0x10368290` | `CNPC_VCamera#503`, `CNPC_VCameraSecurity#503` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:463, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:68 |  |
+| 2748 | `0x103682b0` | `CNPC_VCamera#504`, `CNPC_VCameraSecurity#504` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp:468, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSoundsTests.cpp:69 |  |
 | 2749 | `0x10368350` | `CNPC_VCamera#509`, `CNPC_VCameraSecurity#509` | 1 | 0 | 0 | — | — |  |
 | 2750 | `0x10368550` | `CNPC_VCamera#546`, `CNPC_VCameraSecurity#546` | 1 | 0 | 0 | — | — |  |
 | 2751 | `0x10368f00` | `CNPC_VCamera#564`, `CNPC_VCameraSecurity#564` | 1 | 0 | 0 | — | — |  |
-| 2752 | `0x1036a030` | `CNPC_VCameraSecurity#468` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCameraSecurity.cpp:32, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:373, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:431, +7 more |  |
+| 2752 | `0x1036a030` | `CNPC_VCameraSecurity#468` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcCameraSecurity.cpp:32, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:375, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSensesTests.cpp:433, +7 more |  |
 | 2753 | `0x1036a1f0` | `CNPC_VChangBros#5` | 0 | 0 | 1 | — | — |  |
 | 2754 | `0x1036a3f0` | `CNPC_VChangBros#546` | 1 | 0 | 0 | — | — |  |
 | 2755 | `0x1036eaf0` | `CNPC_VChangBrosBlade#5` | 0 | 0 | 1 | — | — |  |
@@ -2775,12 +2775,12 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2766 | `0x103747c0` | — | 1 | 0 | 0 | — | — |  |
 | 2767 | `0x10374e50` | — | 1 | 0 | 0 | `E:\Vampire\main\dlls\hl2_dll\NPC_VDog.cp…` | Source/ElysiumUE/Private/Substrate/ElysiumNpcDog.h:33 |  |
 | 2768 | `0x10375440` | `CNPC_VFrenzyShadow#546` | 1 | 0 | 0 | — | — |  |
-| 2769 | `0x10376b10` | `CNPC_VFrenzyShadow#390` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:128, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.h:28, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1385, +2 more |  |
+| 2769 | `0x10376b10` | `CNPC_VFrenzyShadow#390` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:128, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.h:28, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1387, +2 more |  |
 | 2770 | `0x10376c10` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:218, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.cpp:236, Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.h:66, +3 more |  |
 | 2771 | `0x10377210` | `CNPC_VGangrel#546` | 1 | 0 | 0 | — | — |  |
 | 2772 | `0x10377b60` | `CNPC_VGargoyle#5` | 0 | 0 | 1 | — | — |  |
 | 2773 | `0x10377cd0` | `CNPC_VGargoyle#546` | 1 | 0 | 0 | — | — |  |
-| 2774 | `0x10378f80` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcGargoyle.h:17, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:755, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSelectTests.cpp:1063 |  |
+| 2774 | `0x10378f80` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcGargoyle.h:17, Source/ElysiumUE/Private/Substrate/ElysiumNpcSelectSpecies.cpp:755, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSelectTests.cpp:1068 |  |
 | 2775 | `0x1037a950` | `CNPC_VGhoulCroucher#546` | 1 | 0 | 0 | — | — |  |
 | 2776 | `0x1037c800` | `CNPC_VGuard1#546` | 1 | 0 | 0 | — | — |  |
 | 2777 | `0x1037ea60` | `CNPC_VHengeyokai#546` | 1 | 0 | 0 | — | — |  |
@@ -2798,24 +2798,24 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2789 | `0x1038e880` | `CNPC_VManBat#390` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:19, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:74, Source/ElysiumUE/Private/Substrate/ElysiumNpcDamage3Species.cpp:497, +2 more |  |
 | 2790 | `0x10391010` | `CNPC_VBaseBoss#587`, `CNPC_VMingXiao#587`, +4 more | 1 | 0 | 0 | — | — |  |
 | 2791 | `0x10391390` | `CNPC_VMingXiao#546` | 1 | 0 | 0 | — | — |  |
-| 2792 | `0x10395d00` | `CNPC_VMingXiao#574` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:212, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:213, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:861, +2 more |  |
+| 2792 | `0x10395d00` | `CNPC_VMingXiao#574` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:212, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:213, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp:863, +2 more |  |
 | 2793 | `0x10395e70` | `CNPC_VMingXiao#603` | 1 | 0 | 0 | — | — |  |
 | 2794 | `0x10396000` | `CNPC_VMingXiao#127` | 0 | 0 | 1 | — | — |  |
-| 2795 | `0x10397000` | `CNPC_VMingXiao#166` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:242, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:252, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1125, +1 more |  |
+| 2795 | `0x10397000` | `CNPC_VMingXiao#166` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:242, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:252, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDamageTests.cpp:1127, +1 more |  |
 | 2796 | `0x103979d0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawnSpecies.cpp:755 |  |
 | 2797 | `0x10399ef0` | — | 1 | 0 | 0 | `**studio**` | — |  |
 | 2798 | `0x1039aa20` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:443, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTaskSpecies.cpp:198, Source/ElysiumUE/Private/Substrate/ElysiumNpcRunTaskSpecies.cpp:1288, +1 more |  |
 | 2799 | `0x1039b230` | `CNPC_VMingXiaoTentacle#546` | 1 | 0 | 0 | — | — |  |
 | 2800 | `0x1039eda0` | `CNPC_VMingXiaoTentacle#127` | 0 | 0 | 1 | — | — |  |
-| 2801 | `0x1039eee0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:779 |  |
-| 2802 | `0x1039ef10` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.h:175, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:2238, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelStartTaskTests_4.cpp:1395 |  |
+| 2801 | `0x1039eee0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:781 |  |
+| 2802 | `0x1039ef10` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.h:175, Source/ElysiumUE/Private/Substrate/ElysiumNpcStartTaskSpecies.cpp:2238, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelStartTaskTests_4.cpp:1397 |  |
 | 2803 | `0x1039ef60` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.cpp:1623, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiao.h:273, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.h:49, +1 more |  |
 | 2804 | `0x1039f7a0` | `CNPC_VMoleman#546` | 1 | 0 | 0 | — | — |  |
 | 2805 | `0x103a0090` | `CNPC_VNewscaster#493` | 1 | 0 | 0 | — | — |  |
 | 2806 | `0x103a00b0` | `CNPC_VNewscaster#494` | 1 | 0 | 0 | — | — |  |
 | 2807 | `0x103a00d0` | `CNPC_VNewscaster#495` | 1 | 0 | 0 | — | — |  |
 | 2808 | `0x103a01d0` | `CNPC_VNewscaster#587` | 1 | 0 | 0 | — | — |  |
-| 2809 | `0x103a07f0` | — | 1 | 0 | 0 | `filename`, `dependency`, +5 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.cpp:49, Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.h:60, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesMisc10Tests.cpp:737 |  |
+| 2809 | `0x103a07f0` | — | 1 | 0 | 0 | `filename`, `dependency`, +5 more | Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.cpp:49, Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.h:60, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesMisc10Tests.cpp:739 |  |
 | 2810 | `0x103a1640` | `CNPC_VNosferatu#546` | 1 | 0 | 0 | — | — |  |
 | 2811 | `0x103a1fa0` | `CNPC_VPedestrian#546` | 1 | 0 | 0 | — | — |  |
 | 2812 | `0x103a3c50` | `CNPC_VPlaceholder#546` | 1 | 0 | 0 | — | — |  |
@@ -2834,7 +2834,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2825 | `0x103ad6a0` | `CNPC_VRat#428` | 1 | 0 | 0 | — | — |  |
 | 2826 | `0x103adcb0` | `CNPC_VSheriffMan#546` | 1 | 0 | 0 | — | — |  |
 | 2827 | `0x103b1dc0` | `CNPC_VSheriffSwarm#546` | 1 | 0 | 0 | — | — |  |
-| 2828 | `0x103b2590` | `CNPC_VSheriffSwarm#553` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:122, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:192 |  |
+| 2828 | `0x103b2590` | `CNPC_VSheriffSwarm#553` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseConditions.cpp:122, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:194 |  |
 | 2829 | `0x103b2a50` | `CNPC_VStalker#546` | 1 | 0 | 0 | — | — |  |
 | 2830 | `0x103b3170` | `CNPC_VTaxiDriver#546` | 1 | 0 | 0 | — | — |  |
 | 2831 | `0x103b3cc0` | `CNPC_VTest#546` | 1 | 0 | 0 | — | — |  |
@@ -2857,7 +2857,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2848 | `0x103c12e0` | `CNPC_VTzimisceHeadClaw#324` | 1 | 0 | 0 | — | — |  |
 | 2849 | `0x103c2860` | `CNPC_VTzimisceHeadClaw#127` | 0 | 0 | 1 | — | — |  |
 | 2850 | `0x103c2a60` | `CNPC_VTzimisceRunner#546` | 1 | 0 | 0 | — | — |  |
-| 2851 | `0x103c3060` | `CNPC_VTzimisceRunner#400` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2499, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:254, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:1574 |  |
+| 2851 | `0x103c3060` | `CNPC_VTzimisceRunner#400` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp:2499, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:254, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnim10Tests.cpp:1579 |  |
 | 2852 | `0x103c3080` | `CNPC_VTzimisceRunner#325` | 1 | 0 | 0 | — | — |  |
 | 2853 | `0x103c30a0` | `CNPC_VTzimisceRunner#324` | 1 | 0 | 0 | — | — |  |
 | 2854 | `0x103c3fd0` | `CNPC_VTzimisceRunner#588` | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcKernelBaseHelpers.cpp:769, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:55, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:58, +8 more |  |
@@ -2883,11 +2883,11 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2874 | `0x103e12c0` | `CNPC_VZombie#25` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSpecies2.cpp:51, Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:68, Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:76, +5 more |  |
 | 2875 | `0x103e12f0` | `CNPC_VZombie#26` | 0 | 0 | 1 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcSpecies2.cpp:51, Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:68, Source/ElysiumUE/Private/Substrate/ElysiumNpcZombie.cpp:76, +4 more |  |
 | 2876 | `0x103eeee0` | — | 1 | 0 | 0 | — | — |  |
-| 2877 | `0x10412420` | — | 1 | 0 | 0 | `ERROR: Activity Lookup went out of range…` | Source/ElysiumUE/Private/Substrate/ElysiumRetailActivities.cpp:4540, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:867 |  |
+| 2877 | `0x10412420` | — | 1 | 0 | 0 | `ERROR: Activity Lookup went out of range…` | Source/ElysiumUE/Private/Substrate/ElysiumRetailActivities.cpp:4540, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:869 |  |
 | 2878 | `0x10412470` | — | 1 | 0 | 0 | — | — |  |
-| 2879 | `0x104124b0` | — | 1 | 0 | 0 | `***⏎Shared<->Private Activity collision!…` | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:867 |  |
-| 2880 | `0x10412550` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumRetailActivities.cpp:4524, Source/ElysiumUE/Private/Substrate/ElysiumRetailActivities.h:16, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:872 |  |
-| 2881 | `0x104126a0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumRetailActivities.cpp:4560, Source/ElysiumUE/Private/Substrate/ElysiumRetailActivities.h:29, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:871 |  |
+| 2879 | `0x104124b0` | — | 1 | 0 | 0 | `***⏎Shared<->Private Activity collision!…` | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:869 |  |
+| 2880 | `0x10412550` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumRetailActivities.cpp:4524, Source/ElysiumUE/Private/Substrate/ElysiumRetailActivities.h:16, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:874 |  |
+| 2881 | `0x104126a0` | — | 1 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumRetailActivities.cpp:4560, Source/ElysiumUE/Private/Substrate/ElysiumRetailActivities.h:29, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelHintsTests.cpp:873 |  |
 | 2882 | `0x104276d0` | — | 1 | 0 | 0 | — | — |  |
 | 2883 | `0x10427a70` | — | 1 | 0 | 0 | `***⏎Model %s tried to reference unregist…`, `***⏎Model %s tried to reference unregist…`, +2 more | — |  |
 | 2884 | `0x10427d90` | — | 1 | 0 | 0 | — | — |  |
@@ -2912,7 +2912,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2903 | `0x10026530` | `CAISound#21`, `CAI_BaseHumanoid#21`, +429 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#21 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 2904 | `0x10026550` | `CAISound#22`, `CAI_BaseHumanoid#22`, +429 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#22 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 2905 | `0x10026570` | `CAISound#23`, `CAI_BaseHumanoid#23`, +429 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#23 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2906 | `0x100265b0` | `CAISound#25`, `CAI_BaseHumanoid#25`, +492 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:456, Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:462, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesTests.cpp:1405 | `CAI_BaseNPC#25 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2906 | `0x100265b0` | `CAISound#25`, `CAI_BaseHumanoid#25`, +492 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:456, Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:462, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesTests.cpp:1408 | `CAI_BaseNPC#25 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 2907 | `0x100265d0` | `CAISound#26`, `CAI_BaseHumanoid#26`, +492 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:467, Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:471 | `CAI_BaseNPC#26 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 2908 | `0x100265f0` | `CAISound#27`, `CAI_BaseHumanoid#27`, +431 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#27 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 2909 | `0x10026650` | `CAISound#30`, `CAI_BaseHumanoid#30`, +430 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#30 no SDK twin: stretch #11-#99 holds 87 retail …` |
@@ -2920,7 +2920,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2911 | `0x10026690` | `CAISound#33`, `CAI_BaseHumanoid#33`, +486 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#33 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 2912 | `0x100266d0` | `CAISound#35`, `CAI_BaseHumanoid#35`, +238 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#35 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 2913 | `0x100266f0` | `CAISound#36`, `CAI_BaseHumanoid#36`, +482 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#36 no SDK twin: stretch #11-#99 holds 87 retail …` |
-| 2914 | `0x10026710` | `CAISound#37`, `CAI_BaseHumanoid#37`, +489 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:325, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:70 | `CAI_BaseNPC#37 no SDK twin: stretch #11-#99 holds 87 retail …` |
+| 2914 | `0x10026710` | `CAISound#37`, `CAI_BaseHumanoid#37`, +489 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:325, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:72 | `CAI_BaseNPC#37 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 2915 | `0x10026730` | `CAISound#38`, `CAI_BaseHumanoid#38`, +490 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#38 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 2916 | `0x10026750` | `CAISound#40`, `CAI_BaseHumanoid#40`, +491 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#40 no SDK twin: stretch #11-#99 holds 87 retail …` |
 | 2917 | `0x10026770` | `CAISound#41`, `CAI_BaseHumanoid#41`, +476 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#41 no SDK twin: stretch #11-#99 holds 87 retail …` |
@@ -2966,7 +2966,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2957 | `0x100273f0` | `CAISound#235`, `CAI_BaseHumanoid#235`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#235 no SDK twin: stretch #233-#237 holds 3 retai…` |
 | 2958 | `0x10027410` | `CAISound#236`, `CAI_BaseHumanoid#236`, +495 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#236 no SDK twin: stretch #233-#237 holds 3 retai…` |
 | 2959 | `0x10027430` | `CAISound#240`, `CAI_ChangeHintGroup#240`, +410 more | 0 | 0 | 0 | — | — |  |
-| 2960 | `0x10027650` | `CAISound#4`, `CAI_BaseHumanoid#4`, +495 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:486, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:119 | `CAI_BaseNPC#4 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
+| 2960 | `0x10027650` | `CAISound#4`, `CAI_BaseHumanoid#4`, +495 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:486, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:121 | `CAI_BaseNPC#4 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
 | 2961 | `0x1004fbb0` | `CAI_BaseHumanoid#108`, `CAI_BaseNPC#108`, +334 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#108 no SDK twin: stretch #107-#113 holds 5 retai…` |
 | 2962 | `0x1004fbf0` | `CAI_BaseHumanoid#109`, `CAI_BaseNPC#109`, +334 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#109 no SDK twin: stretch #107-#113 holds 5 retai…` |
 | 2963 | `0x10098eb0` | `CAI_BaseHumanoid#255`, `CAI_BaseNPC#255`, +85 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#255 no SDK twin: stretch #249-#256 holds 6 retai…` |
@@ -2986,7 +2986,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 2977 | `0x1014f7b0` | `CAI_BaseHumanoid#321`, `CAI_BaseNPC#321`, +81 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#321 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 2978 | `0x1014f7d0` | `CAI_BaseHumanoid#322`, `CAI_BaseNPC#322`, +19 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#322 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 2979 | `0x1014f850` | `CAI_BaseHumanoid#329`, `CAI_BaseNPC#329`, +82 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#329 no SDK twin: stretch #292-#366 holds 73 reta…` |
-| 2980 | `0x1014f890` | `CAI_BaseHumanoid#332`, `CAI_BaseNPC#332`, +82 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:889, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceHeadClaw.cpp:215, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesMisc10Tests.cpp:1014 | `CAI_BaseNPC#332 no SDK twin: stretch #292-#366 holds 73 reta…` |
+| 2980 | `0x1014f890` | `CAI_BaseHumanoid#332`, `CAI_BaseNPC#332`, +82 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterSlotBodies.cpp:889, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceHeadClaw.cpp:215, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesMisc10Tests.cpp:1016 | `CAI_BaseNPC#332 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 2981 | `0x1014f8b0` | `CAI_BaseHumanoid#240`, `CAI_BaseNPC#240`, +83 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#240 no SDK twin: stretch #238-#241 holds 2 retai…` |
 | 2982 | `0x1014f950` | `CAI_BaseHumanoid#361`, `CAI_BaseNPC#361`, +81 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#361 no SDK twin: stretch #292-#366 holds 73 reta…` |
 | 2983 | `0x1014f9d0` | `CAI_BaseHumanoid#377`, `CAI_BaseNPC#377`, +79 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#377 no SDK twin: stretch #376-#382 holds 5 retai…` |
@@ -3015,7 +3015,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 3006 | `0x101a6cc0` | `CAI_BaseHumanoid#578`, `CAI_BaseNPC#578`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#578 no SDK twin: stretch #566-#583 holds 16 reta…` |
 | 3007 | `0x101a6d20` | `CCineAI#117`, `CCineAISchedule#117`, +1 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntityWorldPersistence.cpp:120, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:243, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:47, +1 more |  |
 | 3008 | `0x101a6dc0` | `CCineAI#362`, `CCineAISchedule#362`, +1 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:51 |  |
-| 3009 | `0x101a6de0` | `CCineAI#365`, `CCineAISchedule#365`, +1 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:51, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDirectorTests.cpp:847 |  |
+| 3009 | `0x101a6de0` | `CCineAI#365`, `CCineAISchedule#365`, +1 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:51, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelDirectorTests.cpp:854 |  |
 | 3010 | `0x101a6e20` | `CCineAI#72`, `CCineAISchedule#72`, +1 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:428, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp:130, Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.h:38, +1 more |  |
 | 3011 | `0x101a9620` | `CCineAISchedule#82` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.cpp:18, Source/ElysiumUE/Private/Substrate/ElysiumAiScriptedSchedule.h:26 |  |
 | 3012 | `0x101aa7d0` | `CPayphone#117` | 0 | 0 | 0 | — | — |  |
@@ -3023,7 +3023,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 3014 | `0x101aa890` | `CPayphone#365` | 0 | 0 | 0 | — | — |  |
 | 3015 | `0x101aa930` | `CPayphone#72` | 0 | 0 | 0 | — | — |  |
 | 3016 | `0x101aad00` | `CPayphone#613` | 0 | 0 | 0 | — | — |  |
-| 3017 | `0x101aad90` | `CPayphone#286` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.cpp:162, Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.h:24, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:322, +2 more |  |
+| 3017 | `0x101aad90` | `CPayphone#286` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.cpp:162, Source/ElysiumUE/Private/Substrate/ElysiumNpcPayphone.h:24, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelEntityChainTests.cpp:324, +2 more |  |
 | 3018 | `0x101aae20` | `CPayphone#359` | 0 | 0 | 0 | — | — |  |
 | 3019 | `0x101aae40` | `CPayphone#37` | 0 | 0 | 0 | — | — |  |
 | 3020 | `0x101ab1b0` | `CPayphone#5` | 0 | 0 | 0 | — | — |  |
@@ -3039,7 +3039,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 3030 | `0x1027c7f0` | `CAI_BaseNPC#5` | 0 | 0 | 0 | — | — | `CAI_BaseNPC#5 no SDK twin: stretch #1-#8 holds 6 retail slot…` |
 | 3031 | `0x1027d000` | `CAI_Pathfinder#0` | 0 | 0 | 0 | — | — |  |
 | 3032 | `0x1027d9d0` | `CAI_BaseHumanoid#514`, `CAI_BaseNPC#514`, +75 more | 0 | 0 | 0 | — | — | `CAI_BaseNPC#514 no SDK twin: stretch #513-#516 holds 2 retai…` |
-| 3033 | `0x1027dc80` | `CAI_BaseHumanoid#531`, `CAI_BaseNPC#531`, +11 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:680, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:269, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:883 | `CAI_BaseNPC#531 no SDK twin: stretch #530-#537 holds 6 retai…` |
+| 3033 | `0x1027dc80` | `CAI_BaseHumanoid#531`, `CAI_BaseNPC#531`, +11 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMotor.cpp:680, Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor10.cpp:269, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp:885 | `CAI_BaseNPC#531 no SDK twin: stretch #530-#537 holds 6 retai…` |
 | 3034 | `0x1028b0f0` | `CAI_BaseHumanoid#547`, `CAI_BaseNPC#547`, +75 more | 0 | 0 | 0 | `ERROR! Subclass missing GetSlotSchedule …` | — | `CAI_BaseNPC#547 no SDK twin: stretch #545-#560 holds 14 reta…` |
 | 3035 | `0x1028cd10` | `CAI_BaseNPCTroika#82`, `CGeneric_NPC#82`, +3 more | 0 | 0 | 0 | — | — |  |
 | 3036 | `0x1028d5e0` | `CAI_BaseNPCTroika#5` | 0 | 0 | 0 | — | — |  |
@@ -3076,7 +3076,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 3067 | `0x102c8a30` | `CAI_StandoffBehavior#27`, `_0BIGKA__VCAI_BaseNPC____CAI_Behavior#27` | 0 | 0 | 0 | — | — |  |
 | 3068 | `0x102d0370` | `CAI_Hint#82` | 0 | 0 | 0 | — | — |  |
 | 3069 | `0x102d2ee0` | `CAI_Hint#117` | 0 | 0 | 0 | — | Source/ElysiumUE/Public/ElysiumEntity.h:36 |  |
-| 3070 | `0x102d2f00` | `CAI_Hint#5` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle.cpp:44, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:1036, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:1062 |  |
+| 3070 | `0x102d2f00` | `CAI_Hint#5` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle.cpp:44, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:1038, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycleTests.cpp:1064 |  |
 | 3071 | `0x102d7290` | `CAI_TestHull#117` | 0 | 0 | 0 | — | — |  |
 | 3072 | `0x102d77d0` | `CAI_TestHull#5` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTestHull.h:15 |  |
 | 3073 | `0x102d9500` | `CAI_InterestingPlace#82` | 0 | 0 | 0 | — | — |  |
@@ -3131,7 +3131,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 3122 | `0x10366cb0` | `CNPC_VBatSwarm#5` | 0 | 0 | 0 | — | — |  |
 | 3123 | `0x103672d0` | `CNPC_VBatSwarm#82` | 0 | 0 | 0 | — | — |  |
 | 3124 | `0x103673e0` | `CNPC_VBatSwarm#473` | 0 | 0 | 0 | — | — |  |
-| 3125 | `0x10367610` | `CNPC_VBatSwarm#554` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:192 |  |
+| 3125 | `0x10367610` | `CNPC_VBatSwarm#554` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:194 |  |
 | 3126 | `0x103678b0` | `CNPC_VBrujah#5` | 0 | 0 | 0 | — | — |  |
 | 3127 | `0x10367f60` | `CNPC_VCamera#82` | 0 | 0 | 0 | — | — |  |
 | 3128 | `0x103681b0` | `CNPC_VCamera#496`, `CNPC_VCameraSecurity#496` | 0 | 0 | 0 | — | — |  |
@@ -3156,8 +3156,8 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 3147 | `0x10370460` | `CNPC_VCop#82` | 0 | 0 | 0 | — | — |  |
 | 3148 | `0x10370970` | `CNPC_VCop#5` | 0 | 0 | 0 | — | — |  |
 | 3149 | `0x10373570` | `CNPC_VDog#5` | 0 | 0 | 0 | — | — |  |
-| 3150 | `0x10375140` | `CNPC_VPlayerController#362`, `CNPC_VWolfMorph#362` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:213, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.h:40, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:376 |  |
-| 3151 | `0x10375160` | `CNPC_VPlayerController#365`, `CNPC_VWolfMorph#365` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:234, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.h:40, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:379 |  |
+| 3150 | `0x10375140` | `CNPC_VPlayerController#362`, `CNPC_VWolfMorph#362` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:213, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.h:40, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:378 |  |
+| 3151 | `0x10375160` | `CNPC_VPlayerController#365`, `CNPC_VWolfMorph#365` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:234, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.h:40, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelPlayerControllerTests.cpp:381 |  |
 | 3152 | `0x103751a0` | `CNPC_VFrenzyShadow#72`, `CNPC_VPlayerController#72`, +1 more | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp:429, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp:65, Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.h:27, +1 more |  |
 | 3153 | `0x10375280` | `CNPC_VFrenzyShadow#82` | 0 | 0 | 0 | — | — |  |
 | 3154 | `0x10376f20` | `CNPC_VFrenzyShadow#5` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcFrenzyShadow.h:14 |  |
@@ -3201,7 +3201,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 3192 | `0x1039e830` | `CNPC_VMingXiaoTentacle#22` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:69, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:77, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.h:91, +3 more |  |
 | 3193 | `0x1039e860` | `CNPC_VMingXiaoTentacle#23` | 0 | 0 | 0 | — | — |  |
 | 3194 | `0x1039ebd0` | `CNPC_VMingXiaoTentacle#166` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp:538, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:211 |  |
-| 3195 | `0x1039f000` | `CNPC_VMingXiaoTentacle#130` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:82, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:83, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:1095 |  |
+| 3195 | `0x1039f000` | `CNPC_VMingXiaoTentacle#130` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:82, Source/ElysiumUE/Private/Substrate/ElysiumNpcMingXiaoTentacle.cpp:83, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:1100 |  |
 | 3196 | `0x1039f640` | `CNPC_VMoleman#5` | 0 | 0 | 0 | — | — |  |
 | 3197 | `0x103a00f0` | `CNPC_VNewscaster#496` | 0 | 0 | 0 | — | — |  |
 | 3198 | `0x103a0110` | `CNPC_VNewscaster#497` | 0 | 0 | 0 | — | — |  |
@@ -3240,7 +3240,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 3231 | `0x103b1c60` | `CNPC_VSheriffSwarm#5` | 0 | 0 | 0 | — | — |  |
 | 3232 | `0x103b2280` | `CNPC_VSheriffSwarm#82` | 0 | 0 | 0 | — | — |  |
 | 3233 | `0x103b2390` | `CNPC_VSheriffSwarm#473` | 0 | 0 | 0 | — | — |  |
-| 3234 | `0x103b25c0` | `CNPC_VSheriffSwarm#554` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:192 |  |
+| 3234 | `0x103b25c0` | `CNPC_VSheriffSwarm#554` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditionsTests.cpp:194 |  |
 | 3235 | `0x103b2770` | `CNPC_VStalker#82` | 0 | 0 | 0 | — | — |  |
 | 3236 | `0x103b28f0` | `CNPC_VStalker#5` | 0 | 0 | 0 | — | — |  |
 | 3237 | `0x103b2f50` | `CNPC_VTaxiDriver#72` | 0 | 0 | 0 | — | — |  |
@@ -3260,7 +3260,7 @@ Closure functions the image does not name and no naming pass has claimed (`FUN_`
 | 3251 | `0x103c28a0` | `CNPC_VTzimisceRunner#82` | 0 | 0 | 0 | — | — |  |
 | 3252 | `0x103c3040` | `CNPC_VTzimisceRunner#399` | 0 | 0 | 0 | — | — |  |
 | 3253 | `0x103c30c0` | `CNPC_VTzimisceRunner#329` | 0 | 0 | 0 | — | — |  |
-| 3254 | `0x103c3c40` | `CNPC_VTzimisceRunner#130` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:129, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:130, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:1237 |  |
+| 3254 | `0x103c3c40` | `CNPC_VTzimisceRunner#130` | 0 | 0 | 0 | — | Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:129, Source/ElysiumUE/Private/Substrate/ElysiumNpcTzimisceRunner.cpp:130, Source/ElysiumUE/Private/Tests/ElysiumNpcKernelLifecycle2Tests.cpp:1242 |  |
 | 3255 | `0x103c47e0` | `CNPC_VBrujah#82`, `CNPC_VGangrel#82`, +8 more | 0 | 0 | 0 | — | — |  |
 | 3256 | `0x103c4920` | `CNPC_VVampire#5` | 0 | 0 | 0 | — | — |  |
 | 3257 | `0x103c5060` | `CNPC_VVampireBoss#82` | 0 | 0 | 0 | — | — |  |

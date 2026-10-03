@@ -13,6 +13,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Substrate/ElysiumDisposition.h"
@@ -62,6 +64,7 @@ namespace
 // roll, it simply has `fidget[2] == idle[2]` forever. That equality is also the selector's own
 // availability test, which is why the ladder and the test have to be one fact.
 // ============================================================================================
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStancePrecacheTest,
 	"Elysium.Arm.Stance.Precache", GElysiumStanceTestFlags)
 bool FElysiumStancePrecacheTest::RunTest(const FString&)
@@ -273,6 +276,7 @@ bool FElysiumStanceTalkingTest::RunTest(const FString&)
 	TestEqual(TEXT("the stance index never moved"), State.Current, 0);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // ============================================================================================
 // The driver, through the real producer path. Every test above asserts the rule in isolation; this

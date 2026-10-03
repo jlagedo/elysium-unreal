@@ -1,7 +1,9 @@
 // Native queue coverage; these tests author no files and require no installed corpus.
 #include "Misc/AutomationTest.h"
 
-#if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
+#include "Tests/ElysiumArmTier.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR && ELYSIUM_WITH_ARM_TESTS
 #include "ElysiumSkyProvenance.h"
 #include "Engine/TextureCube.h"
 #include "Misc/SecureHash.h"

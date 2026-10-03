@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumContentPaths.h"
@@ -245,6 +247,7 @@ namespace
 
 // --- The signal: `Walk` / `DontWalk` -> `0x102f97c0` ----------------------------------------------
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCrosswalkSignalTest,
 	"Elysium.Arm.NpcCrosswalk.Signal", GXwTestFlags)
 bool FElysiumNpcCrosswalkSignalTest::RunTest(const FString&)
@@ -277,6 +280,7 @@ bool FElysiumNpcCrosswalkSignalTest::RunTest(const FString&)
 	TestFalse(TEXT("a fresh map load (0x102f6690) starts every pair green"), Places.IsCrosswalkRed(GXwPairBC));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // --- Arrival on red, through the real think: `0x100` -> `0x102` -> `0x100` -------------------------
 
@@ -404,6 +408,7 @@ bool FElysiumNpcCrosswalkArrivalTest::RunTest(const FString&)
 
 // --- Routes that lay one leg -----------------------------------------------------------------------
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCrosswalkOneLegTest,
 	"Elysium.Arm.NpcCrosswalk.OneLeg", GXwTestFlags)
 bool FElysiumNpcCrosswalkOneLegTest::RunTest(const FString&)
@@ -568,6 +573,7 @@ bool FElysiumNpcCrosswalkSaveTest::RunTest(const FString&)
 	TestEqual(TEXT("an unset id skips the re-find and the count"), FElysiumNpc::NodeIndexErrorCount(), Misses + 1);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // --- The hub's pairs, as baked ---------------------------------------------------------------------
 

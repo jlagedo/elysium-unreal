@@ -2,7 +2,9 @@
 // carries from its `vtmb:texture:` unit.
 #include "Misc/AutomationTest.h"
 
-#if WITH_DEV_AUTOMATION_TESTS
+#include "Tests/ElysiumArmTier.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS
 
 #include "ElysiumTextureProvenance.h"
 #include "Engine/Texture2D.h"

@@ -21,6 +21,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -212,6 +214,7 @@ bool FCond19BaseGatherStateSkipTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FCond19BaseGatherSenseGateTest,
 	"Elysium.Arm.NpcKernelConditions19.BaseGatherConditions.SenseGate", GCond19Flags)
 bool FCond19BaseGatherSenseGateTest::RunTest(const FString&)
@@ -1401,5 +1404,6 @@ bool FCond19WerewolfTest::RunTest(const FString&)
 	TestTrue(TEXT("103d0582 m_pMoveHint: CAN_SPECIAL_MOVE"), Cond19Has(*Wolf, FElysiumNpcBase::Cond19WerewolfCanSpecialMove));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif  // WITH_DEV_AUTOMATION_TESTS

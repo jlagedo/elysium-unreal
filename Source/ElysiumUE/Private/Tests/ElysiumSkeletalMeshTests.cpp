@@ -1,4 +1,6 @@
-#if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
+#include "Tests/ElysiumArmTier.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR && ELYSIUM_WITH_ARM_TESTS
 #include "ElysiumSkeletalMesh.h"
 #include "Animation/MorphTarget.h"
 #include "MeshDescription.h"

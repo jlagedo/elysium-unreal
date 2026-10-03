@@ -248,6 +248,8 @@ def _patch_the_test_run(monkeypatch, config, outcome):
 
     monkeypatch.setattr(cli.CliState, "resolve", lambda self, **_ignored: config)
     monkeypatch.setattr(unreal, "run_tests", run_tests)
+    # A selection that reaches the arm tier builds first (spec 0002 T6); the build is a stand-in.
+    monkeypatch.setattr(unreal, "build", lambda *_args, **_kwargs: calls.append("build"))
     return calls
 
 
@@ -273,9 +275,12 @@ def test_several_prefixes_reach_one_run_and_a_green_run_ends_ok(tmp_path, monkey
                    for prefix in calls[0] for group in unreal.OPT_IN_TEST_GROUPS)
 
     # `--all` is the whole suite, and a prefix beside it is a usage error that never boots the editor.
+    # It reaches the arm tier, so it switches the tier on and builds before the one boot.
     calls.clear()
+    assert unreal.arm_tier_compiled(config) is not True
     assert RUNNER.invoke(app, ["test", "--all"]).exit_code == 0
-    assert calls == [["Elysium."]]
+    assert calls == ["build", ["Elysium."]]
+    assert unreal.arm_tier_compiled(config) is True
     calls.clear()
     assert RUNNER.invoke(app, ["test", "--all", THREE[0]]).exit_code == 2
     assert calls == []

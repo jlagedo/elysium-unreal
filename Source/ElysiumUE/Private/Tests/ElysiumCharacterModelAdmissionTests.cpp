@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 #include "ElysiumCharacterModelAdmission.h"
 #include "Visual/ElysiumNativeAnimationData.h"
@@ -28,6 +30,7 @@ bool FElysiumCharacterAdmissionTicketsTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCharacterAdmissionRetirementTest, "Elysium.Arm.CharacterModelAdmission.Retirement",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumCharacterAdmissionRetirementTest::RunTest(const FString&)
@@ -87,4 +90,5 @@ bool FElysiumNativeAdmissionCancelTest::RunTest(const FString&)
 		[](bool, const FString&) {}, Error), uint64(0));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 #endif

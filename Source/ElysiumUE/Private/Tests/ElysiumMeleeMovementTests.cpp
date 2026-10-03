@@ -1,4 +1,7 @@
 #include "Misc/AutomationTest.h"
+#include "Tests/ElysiumArmTier.h"
+
+#if ELYSIUM_WITH_ARM_TESTS
 
 #include "ElysiumAnimationIntent.h"   // the segment -> claim hinge the predicate reads through
 #include "ElysiumClipMovement.h"
@@ -845,3 +848,5 @@ bool FElysiumMeleeMovementLockTest::RunTest(const FString&)
 
 	return true;
 }
+
+#endif // ELYSIUM_WITH_ARM_TESTS

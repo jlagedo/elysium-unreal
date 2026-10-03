@@ -1,4 +1,6 @@
 #include "Misc/AutomationTest.h"
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 #include "ElysiumMapLightQueryData.h"
 #include "ElysiumMoveSolve.h"
@@ -15,6 +17,7 @@
 #include "UObject/Package.h"
 #endif
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldLightMathTest, "Elysium.Arm.Stealth.WorldLightMath",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumWorldLightMathTest::RunTest(const FString&)
@@ -66,8 +69,10 @@ bool FElysiumWorldLightMathTest::RunTest(const FString&)
 	TestEqual(TEXT("empty engine style is 256/264"), StyleValue(TEXT(""), 0), 256.f / 264.f);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #if WITH_EDITOR
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightQueryPayloadTest, "Elysium.Arm.Stealth.LightQueryPayload",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumLightQueryPayloadTest::RunTest(const FString&)
@@ -87,6 +92,7 @@ bool FElysiumLightQueryPayloadTest::RunTest(const FString&)
 	TestEqual(TEXT("native convex authoring survives"), Data->Occluders->WorldHullCount(), 1);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightQueryNativeTraceTest, "Elysium.Content.PlayerWorld.StealthLightQuery",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
@@ -203,6 +209,7 @@ bool FElysiumLightQueryBakedTutorialTest::RunTest(const FString&)
 }
 #endif
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldLightQueryTest, "Elysium.Arm.Stealth.WorldLightQuery",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumWorldLightQueryTest::RunTest(const FString&)
@@ -253,4 +260,5 @@ bool FElysiumWorldLightQueryTest::RunTest(const FString&)
 	TestEqual(TEXT("solid point traces nothing"), LocalTraces + SunTraces, Before);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 #endif

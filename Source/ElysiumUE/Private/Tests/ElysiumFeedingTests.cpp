@@ -1,6 +1,8 @@
 // Content-free Substrate automation: feeding cadence, maker outputs, and placed-model body closure.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -934,6 +936,7 @@ bool FElysiumFeedMakerOutputsTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlacedModelBodyClosureTest,
 	"Elysium.Arm.PlacedModelBodyClosure", GElysiumTestFlags)
 bool FElysiumPlacedModelBodyClosureTest::RunTest(const FString&)
@@ -989,6 +992,7 @@ bool FElysiumPlacedModelBodyClosureTest::RunTest(const FString&)
 		Services.Count(TEXT("RegisterUseAnchor ")), 0);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 } // namespace ElysiumFeedingTests
 

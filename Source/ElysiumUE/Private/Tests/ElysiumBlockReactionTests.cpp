@@ -23,6 +23,8 @@
 // three terms of `WasMeleeBlocked` and the ordering against the damage exit — is driven end to end.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/ScopeExit.h"
@@ -339,6 +341,7 @@ namespace
 
 // The pure rules.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBlockReactionRuleTest,
 	"Elysium.Arm.BlockReaction.Rule", GElysiumTestFlags)
 bool FElysiumBlockReactionRuleTest::RunTest(const FString&)
@@ -412,6 +415,7 @@ bool FElysiumBlockReactionRuleTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // The producer: what a blocked contact actually plays.
 

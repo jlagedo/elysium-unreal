@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -191,6 +193,7 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 // The schedule-change door, the task surface and the host's three rows.
 // -------------------------------------------------------------------------------------------------
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScheduleTaskSurfaceTest,
 	"Elysium.Arm.NpcKernelSchedule.TaskSurface", GElysiumNpcKernelScheduleFlags)
 bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
@@ -870,5 +873,6 @@ bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif

@@ -9,5 +9,8 @@ public class ElysiumUETarget : TargetRules
 		DefaultBuildSettings = BuildSettingsVersion.V7;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_8;
 		ExtraModuleNames.Add("ElysiumUE");
+
+		// Plain unity, as the editor target (ElysiumUEEditor.Target.cs says why).
+		bUseAdaptiveUnityBuild = false;
 	}
 }

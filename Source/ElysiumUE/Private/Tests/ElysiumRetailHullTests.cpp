@@ -8,6 +8,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Substrate/ElysiumNpc.h"
@@ -61,6 +63,7 @@ bool FElysiumRetailHullTableShapeTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRetailHullSpeciesTest,
 	"Elysium.Arm.RetailHull.Species", GElysiumRetailHullFlags)
 bool FElysiumRetailHullSpeciesTest::RunTest(const FString&)
@@ -143,6 +146,7 @@ bool FElysiumRetailHullSplitTest::RunTest(const FString&)
 		ElysiumRetailHulls::AgentName(0), FName(TEXT("Human")));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRetailHullConstructorsTest,
 	"Elysium.Substrate.RetailHull.Constructors", GElysiumRetailHullFlags)

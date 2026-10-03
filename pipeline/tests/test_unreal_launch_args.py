@@ -39,6 +39,8 @@ def test_an_already_present_flag_is_not_duplicated() -> None:
         (argv, _tail), = runner.calls
         assert argv.count("-nosound") == 1
         assert "-NoLiveCoding" in argv
+        # The Perforce-only uncontrolled-changelist tracker: 1-2.6 s on a headless boot's critical path.
+        assert unreal._UNCONTROLLED_CHANGELISTS_OFF in argv
 
 
 def test_interactive_editor_keeps_live_coding_and_sound() -> None:
@@ -49,7 +51,7 @@ def test_interactive_editor_keeps_live_coding_and_sound() -> None:
                                return_value=Path("UnrealEditor.exe")):
             unreal.run_editor(config, runner)
         (argv, tail_lines), = runner.calls
-        for flag in ("-NoLiveCoding", "-noP4", "-nosound"):
+        for flag in ("-NoLiveCoding", "-noP4", "-nosound", unreal._UNCONTROLLED_CHANGELISTS_OFF):
             assert flag not in argv
         assert tail_lines == unreal.EDITOR_TAIL_LINES
 

@@ -13,6 +13,8 @@
 // montage and the pass that reads it cannot be asserted without both ends of it.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumAnimEvent.h"
@@ -373,6 +375,7 @@ namespace
 
 // The pure rule: which records an interval contains.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimEventWindowTest,
 	"Elysium.Arm.AnimEventWindow", GElysiumTestFlags)
 bool FElysiumAnimEventWindowTest::RunTest(const FString&)
@@ -749,6 +752,7 @@ bool FElysiumAnimEventWindowTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // The chain: the world pass, the handler hop, and the census.
 
@@ -948,6 +952,7 @@ bool FElysiumAnimEventDispatchTest::RunTest(const FString&)
 
 // A SIBLING of `AnimEventDispatch`, never a child of it: the automation tree treats a name that is
 // also a prefix as a group, and the leaf under it stops being discoverable.
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOneShotVisibilityTest,
 	"Elysium.Arm.AnimEventVisibility", GElysiumTestFlags)
 bool FElysiumOneShotVisibilityTest::RunTest(const FString&)
@@ -1001,6 +1006,7 @@ bool FElysiumOneShotVisibilityTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // The carrier, end to end.

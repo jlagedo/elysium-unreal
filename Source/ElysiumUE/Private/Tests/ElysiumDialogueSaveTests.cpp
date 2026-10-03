@@ -17,7 +17,9 @@
 // state-dependent hole is the only way the one chokepoint could still let a save through.
 #include "Misc/AutomationTest.h"
 
-#if WITH_DEV_AUTOMATION_TESTS
+#include "Tests/ElysiumArmTier.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS
 
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumDlg.h"

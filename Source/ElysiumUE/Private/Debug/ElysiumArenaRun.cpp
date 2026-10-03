@@ -392,7 +392,11 @@ void FElysiumArenaRun::Finish()
 	}
 	UE_LOG(LogElysiumArenaRun, Display, TEXT("arena run complete: host %s, %d result(s), %s; report %s"),
 		*HostName(), Results.Num(), bFailed ? TEXT("FAILED") : TEXT("passed"), *Path);
-	FPlatformMisc::RequestExitWithStatus(/*Force=*/false, /*ReturnCode=*/bFailed ? 1 : 0);
+	// Forced, as the automation commandline's `Quit` is: every trace was written when its record
+	// ended (`EndRecord`) and the index just above, so the engine's orderly teardown (1.4 s of every
+	// headless boot, measured 2026-10-03) writes nothing a reader needs. The forced path flushes the
+	// log before it terminates.
+	FPlatformMisc::RequestExitWithStatus(/*Force=*/true, /*ReturnCode=*/bFailed ? 1 : 0);
 }
 
 bool FElysiumArenaRun::Tick(float /*DeltaSeconds*/)

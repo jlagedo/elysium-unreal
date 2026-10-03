@@ -8,6 +8,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumRng.h"
@@ -47,6 +49,7 @@ namespace
 	constexpr double Frame = 1.0 / 60.0;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkDueTest,
 	"Elysium.Arm.NpcThinkCadence.Due", GElysiumTestFlags)
 bool FElysiumThinkDueTest::RunTest(const FString&)
@@ -263,6 +266,7 @@ bool FElysiumThinkStampsTest::RunTest(const FString&)
 	TestEqual(TEXT("...and does not touch the mirrors"), Host.LastMove, 500.0, Tol);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // --- The cadence on a live world -------------------------------------------------------------
 // Everything above is arithmetic. These drive the real `Think` and assert what a reader can see
@@ -353,6 +357,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkResetSitesTest,
 	"Elysium.Arm.NpcThinkCadence.ResetSites", GElysiumTestFlags)
 bool FElysiumThinkResetSitesTest::RunTest(const FString&)
@@ -456,6 +461,7 @@ bool FElysiumThinkResetSitesTest::RunTest(const FString&)
 	TestTrue(TEXT("a ChangeSchedule input touches no stamp"), Untouched(*Guard, Now));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // The AI console gate `0x1026c3d0` inside `NPCThink`, and what re-enabling does to a body it
 // silenced.
@@ -545,6 +551,7 @@ bool FElysiumThinkAiGateTest::RunTest(const FString&)
 }
 
 // `TASK_WAIT_PVS` (`0x102aacf0`, task 5) and the state byte's PVS/LOS force.
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkWaitPvsAndStateByteTest,
 	"Elysium.Arm.NpcThinkCadence.WaitPvsAndStateByte", GElysiumTestFlags)
 bool FElysiumThinkWaitPvsAndStateByteTest::RunTest(const FString&)
@@ -680,6 +687,7 @@ bool FElysiumThinkWasBumpedTest::RunTest(const FString&)
 		Guard->Cognition.Conditions.Has(EElysiumNpcCond::WasBumped));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 } // namespace ElysiumNpcThinkCadenceTests
 

@@ -40,6 +40,8 @@
 //     asserted is one rule's arithmetic rather than the transaction around it.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/ScopeExit.h"
@@ -414,6 +416,7 @@ namespace
 // The pure rules
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumKnockbackRuleTest,
 	"Elysium.Arm.Knockback.Rule", GElysiumTestFlags)
 bool FElysiumKnockbackRuleTest::RunTest(const FString&)
@@ -908,6 +911,7 @@ bool FElysiumKnockbackRngTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // The producer: what a knocked-back victim actually plays

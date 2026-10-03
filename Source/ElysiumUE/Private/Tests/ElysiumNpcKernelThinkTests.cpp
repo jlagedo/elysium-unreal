@@ -20,6 +20,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -141,6 +143,7 @@ namespace
 
 // --- 0x10292de0 CAI_BaseNPCTroika::NPCThink ------------------------------------------------------
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19TroikaDisableTest,
 	"Elysium.Arm.NpcKernelThink19.TroikaNPCThink.FlagsThenDisable", GThink19TestFlags)
 bool FElysiumNpcKernelThink19TroikaDisableTest::RunTest(const FString&)
@@ -163,6 +166,7 @@ bool FElysiumNpcKernelThink19TroikaDisableTest::RunTest(const FString&)
 	TestEqual(TEXT("and no slot 432"), N.RunAiCalls, 0);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19TroikaFullPassTest,
 	"Elysium.Substrate.NpcKernelThink19.TroikaNPCThink.FullPass", GThink19TestFlags)
@@ -198,6 +202,7 @@ bool FElysiumNpcKernelThink19TroikaFullPassTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19TroikaNotDueTest,
 	"Elysium.Arm.NpcKernelThink19.TroikaNPCThink.NormalNotDue", GThink19TestFlags)
 bool FElysiumNpcKernelThink19TroikaNotDueTest::RunTest(const FString&)
@@ -837,6 +842,7 @@ bool FElysiumNpcKernelThink19NewscasterTest::RunTest(const FString&)
 	TestEqual(TEXT("0x103a05f6 LastAI = curtime"), N.ScheduleHost.LastAI, Now, 0.0001);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19ZombieTest,
 	"Elysium.Substrate.NpcKernelThink19.Species.Zombie", GThink19TestFlags)
@@ -871,6 +877,7 @@ bool FElysiumNpcKernelThink19ZombieTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19ZombieReacquireTest,
 	"Elysium.Arm.NpcKernelThink19.Species.ZombieReacquire", GThink19TestFlags)
 bool FElysiumNpcKernelThink19ZombieReacquireTest::RunTest(const FString&)
@@ -992,5 +999,6 @@ bool FElysiumNpcKernelThink19WerewolfTest::RunTest(const FString&)
 	TestEqual(TEXT("0x103cb6a9 no enemy: none of the five"), WW->WerewolfLastRoundRobinArm, int32(INDEX_NONE));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif  // WITH_DEV_AUTOMATION_TESTS

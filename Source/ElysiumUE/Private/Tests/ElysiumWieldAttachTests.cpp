@@ -21,6 +21,9 @@
 // ships today.
 
 #include "Misc/AutomationTest.h"
+#include "Tests/ElysiumArmTier.h"
+
+#if ELYSIUM_WITH_ARM_TESTS
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumModelCatalogues.h"
@@ -289,3 +292,5 @@ bool FElysiumWieldAttachTest::RunTest(const FString&)
 	}
 	return true;
 }
+
+#endif // ELYSIUM_WITH_ARM_TESTS

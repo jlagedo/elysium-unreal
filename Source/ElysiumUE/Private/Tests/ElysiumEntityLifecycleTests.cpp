@@ -1,6 +1,8 @@
 // Content-free Substrate automation: new-game entry, map activation, touch admission, frame order, registry, and base I/O chain.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -137,6 +139,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // The preset New Game entries. Held as data so registration and the requests they build are
 // assertable without a game instance — every row must name a verb and an entry point, spell each
 // verb once across the whole table, and survive the trip through MakeNewGameRequest intact.
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNewGameEntriesTest,
 	"Elysium.Arm.NewGameEntries", GElysiumTestFlags)
 bool FElysiumNewGameEntriesTest::RunTest(const FString&)
@@ -340,6 +343,7 @@ bool FElysiumMapReadinessTest::RunTest(const FString&)
 		MissingSubstrate.Evaluate(Failure), EElysiumMapReadinessResult::Failed);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumActivationLifecycleTest,
 	"Elysium.Substrate.ActivationLifecycle", GElysiumTestFlags)
@@ -468,6 +472,7 @@ bool FElysiumActivationLifecycleTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTriggerPawnIdentityTest,
 	"Elysium.Arm.TriggerPawnIdentity", GElysiumTestFlags)
 bool FElysiumTriggerPawnIdentityTest::RunTest(const FString&)
@@ -665,6 +670,7 @@ bool FElysiumFilteredTouchAdmissionTest::RunTest(const FString&)
 		World.TouchBegins(), 1);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFrameOrderTest, "Elysium.Substrate.FrameOrder", GElysiumTestFlags)
 bool FElysiumFrameOrderTest::RunTest(const FString&)
@@ -881,6 +887,7 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHullCollisionBoundsTest,
 	"Elysium.Arm.HullCollisionBounds", GElysiumTestFlags)
 bool FElysiumHullCollisionBoundsTest::RunTest(const FString&)
@@ -971,6 +978,7 @@ bool FElysiumEntityNameMatchTest::RunTest(const FString&)
 		FElysiumEntityWorld::NameMatches(FString(), TEXT("*")));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // End-to-end I/O through a bare world: logic_relay -> math_counter, no bodies, no PIE.

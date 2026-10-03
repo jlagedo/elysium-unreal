@@ -6,6 +6,8 @@
 // player and the camera goes through `IElysiumEmbodiment`, which the recording double answers.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntity.h"
@@ -377,6 +379,7 @@ bool FElysiumTerminalPinTest::RunTest(const FString&)
 // rebuild that only re-registers appends a second anchor record and leaves the projection bound to
 // the body it just replaced. The sequence a rebuild must run is the one `FElysiumProp` runs:
 // unregister, destroy, build, register.
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalBodyRebuildTest,
 	"Elysium.Arm.TerminalBodyRebuild", GPinFlags)
 bool FElysiumTerminalBodyRebuildTest::RunTest(const FString&)
@@ -511,6 +514,7 @@ bool FElysiumTerminalForcedExitTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 }   // namespace ElysiumTerminalPinTests
 

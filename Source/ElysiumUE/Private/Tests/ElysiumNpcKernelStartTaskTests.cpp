@@ -30,6 +30,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -125,6 +127,7 @@ namespace
 	};
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19ArmTableTest,
 	"Elysium.Arm.NpcKernelStartTask19.ArmTable_0x102a1910", GStartTask19Flags)
 bool FElysiumNpcKernelStartTask19ArmTableTest::RunTest(const FString&)
@@ -191,6 +194,7 @@ bool FElysiumNpcKernelStartTask19SuggestStateTest::RunTest(const FString&)
 	TestTrue(TEXT("completes"), F.Completed());
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19ActivityArmsTest,
 	"Elysium.Substrate.NpcKernelStartTask19.ActivityArms_0x102a1c0f", GStartTask19Flags)
@@ -272,6 +276,7 @@ bool FElysiumNpcKernelStartTask19ActivityArmsTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19ToleranceArmsTest,
 	"Elysium.Arm.NpcKernelStartTask19.ToleranceArms_0x102a4289", GStartTask19Flags)
 bool FElysiumNpcKernelStartTask19ToleranceArmsTest::RunTest(const FString&)
@@ -724,5 +729,6 @@ bool FElysiumNpcKernelStartTask19DieIfUnseenTest::RunTest(const FString&)
 	TestEqual(TEXT("0x102a3324 UTIL_Remove"), N.UtilRemoveCalls, RemovalsBefore + 1);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif  // WITH_DEV_AUTOMATION_TESTS

@@ -1348,6 +1348,13 @@ def _emit(output: Path, text: str, check: bool) -> int:
         print(f"check: {output.name} matches the replay")
         return 0
     output.parent.mkdir(parents=True, exist_ok=True)
+    # Unchanged text is not rewritten: a same-bytes rewrite of a header the module includes still
+    # stamps a new time on it and rebuilds the module (gen_kernel_shape._emit says why).
+    if output.is_file():
+        with open(output, encoding="utf-8", newline="") as handle:
+            if handle.read().replace("\r\n", "\n") == text:
+                print(f"unchanged {output}")
+                return 0
     output.write_text(text, encoding="utf-8", newline="\n")
     print(f"wrote {output}")
     return 0

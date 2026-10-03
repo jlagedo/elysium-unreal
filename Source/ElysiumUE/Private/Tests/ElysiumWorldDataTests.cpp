@@ -1,6 +1,8 @@
 // Content-free Substrate automation: decal, rope, and world-material sidecar contracts.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -124,6 +126,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // places each ADecalActor by. Pure data + math, no RHI.
 // =====================================================================================
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDecalsTest, "Elysium.Arm.Decals", GElysiumTestFlags)
 bool FElysiumDecalsTest::RunTest(const FString&)
 {
@@ -167,6 +170,7 @@ bool FElysiumDecalsTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =====================================================================================
 // FElysiumRopeDef — the rest-length contract BuildRopes builds each UCableComponent from, and
@@ -242,6 +246,7 @@ bool FElysiumRopesTest::RunTest(const FString&)
 // param-binding depend on, and the blend flags stay mutually exclusive (the exporter writes at
 // most one). No RHI, no assets: the factory's master choice is a pure function of these fields.
 // =====================================================================================
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldMaterialsTest, "Elysium.Arm.WorldMaterials", GElysiumTestFlags)
 bool FElysiumWorldMaterialsTest::RunTest(const FString&)
 {
@@ -361,6 +366,7 @@ bool FElysiumWorldMaterialsTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 } // namespace ElysiumWorldDataTests
 

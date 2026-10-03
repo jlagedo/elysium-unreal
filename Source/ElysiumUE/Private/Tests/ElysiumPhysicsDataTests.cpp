@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
 #include "ElysiumPhysicsData.h"
 #include "ElysiumContentPaths.h"
@@ -128,6 +130,7 @@ bool FElysiumPhysicsSourceDataTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicsSourceGapTest, "Elysium.Arm.PhysicsSourceGaps",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumPhysicsSourceGapTest::RunTest(const FString&)
@@ -144,4 +147,5 @@ bool FElysiumPhysicsSourceGapTest::RunTest(const FString&)
 	TestEqual(TEXT("gap rejection is transactional"), UElysiumPhysicsData::Verify(Asset, Json), FString());
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 #endif

@@ -6,6 +6,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -230,6 +232,7 @@ namespace
 	};
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillWeaponTest,
 	"Elysium.Arm.StealthKill.Weapon", GElysiumTestFlags)
 bool FElysiumStealthKillWeaponTest::RunTest(const FString&)
@@ -490,6 +493,7 @@ bool FElysiumStealthKillLoadFailureTest::RunTest(const FString&)
 	TestFalse(TEXT("failed start cannot kill"), F.Guard->HasReportedDeath());
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillTutorialOutputTest,
 	"Elysium.Substrate.StealthKill.TutorialOutput", GElysiumTestFlags)
@@ -523,6 +527,7 @@ bool FElysiumStealthKillTutorialOutputTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillWeaponSoundTest,
 	"Elysium.Arm.StealthKill.WeaponSoundData", GElysiumTestFlags)
 bool FElysiumStealthKillWeaponSoundTest::RunTest(const FString&)
@@ -536,6 +541,7 @@ bool FElysiumStealthKillWeaponSoundTest::RunTest(const FString&)
 		FString(TEXT("Weapons/Melee/Fists/Stealth_Fists.wav")));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 }
 

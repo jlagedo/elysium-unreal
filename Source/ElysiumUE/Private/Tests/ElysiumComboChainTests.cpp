@@ -21,6 +21,8 @@
 // rather than loaded: the suite opens no export and needs no baked body.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Components/SkeletalMeshComponent.h"
@@ -317,6 +319,7 @@ bool FElysiumComboChainSequenceTest::RunTest(const FString&)
 
 // A held button chains nothing, and the live direction cannot redirect a chain.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumComboChainPressEdgeTest,
 	"Elysium.Arm.ComboChain.PressEdge", GElysiumComboTestFlags)
 bool FElysiumComboChainPressEdgeTest::RunTest(const FString&)
@@ -450,6 +453,7 @@ bool FElysiumComboChainDisplacementTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 }   // namespace ElysiumComboChainTests
 

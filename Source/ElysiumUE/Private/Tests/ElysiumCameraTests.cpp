@@ -1,6 +1,8 @@
 // Content-free Substrate automation: camera solve, reconstruction rig, authored tracks, shots, and published view state.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/ScopeExit.h"
@@ -129,6 +131,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // with no pawn, no world and no RHI — which is also what makes "0 -> 1 in 0.5 s" a number rather
 // than a stopwatch.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraTest, "Elysium.Arm.Camera", GElysiumTestFlags)
 bool FElysiumCameraTest::RunTest(const FString&)
 {
@@ -891,6 +894,7 @@ bool FElysiumCameraDrawGatesTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // The third-person rig.
 //
@@ -1475,6 +1479,7 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 // copy `FUN_10001c20` with its dev-cvar freeze. Every constant here is retail's, cited at its
 // declaration in `Public/ElysiumCameraSolve.h`.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraTrackerTest, "Elysium.Arm.CameraTracker",
 	GElysiumTestFlags)
 bool FElysiumCameraTrackerTest::RunTest(const FString&)
@@ -2026,6 +2031,7 @@ bool FElysiumCameraTrackerTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // camera_track — paired value streams and the recovered keyframe timing surface.
 
@@ -2913,6 +2919,7 @@ CameraShotTable
 // the pause menu opens is republished as *closed*, so the box reconciles to Teardown instead of
 // drawing through the menu.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumViewStateTest, "Elysium.Arm.ViewState", GElysiumTestFlags)
 bool FElysiumViewStateTest::RunTest(const FString&)
 {
@@ -3220,6 +3227,7 @@ bool FElysiumDeathViewTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 } // namespace ElysiumCameraTests
 

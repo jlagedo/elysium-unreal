@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumClassRegistry.h"
@@ -51,6 +53,7 @@ namespace ElysiumHintTests
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintNodeReplacementTest,
 	"Elysium.Arm.Hint.NodeReplacement", GElysiumHintTestFlags)
 bool FElysiumHintNodeReplacementTest::RunTest(const FString&)
@@ -281,6 +284,7 @@ bool FElysiumHintKeyfieldPermissionsTest::RunTest(const FString&)
 		Zombie != nullptr && Reg.FindInput(*Zombie, FName(TEXT("Spawn"))) != nullptr);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintBridgeTest,
 	"Elysium.Substrate.InfraBridge.Hints", GElysiumHintTestFlags)

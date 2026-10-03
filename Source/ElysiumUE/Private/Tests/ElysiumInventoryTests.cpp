@@ -1,6 +1,8 @@
 // Content-free Substrate automation: loose items, deterministic lockpicking, and container transactions.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -179,6 +181,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInventoryTest,
 	"Elysium.Arm.Inventory.Catalogue", GElysiumTestFlags)
 bool FElysiumInventoryTest::RunTest(const FString&)
@@ -472,6 +475,7 @@ bool FElysiumInventoryTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // Tutorial beat three: DefaultTouch lockpick acquisition -> held Intrusion attempt -> the

@@ -11,9 +11,12 @@
 // of -1 means "silently ignored", so a test that never logs one is not failed for it.
 //
 // Declared from `FElysiumRecordingServices`' constructor, the one object every such world is built
-// on, so a fixture needs no call of its own. No test counts one of these with an `AddExpectedError`
-// of its own (the framework credits the first matching entry only), so a test that starts to must
-// not stand its world on `FElysiumRecordingServices`.
+// on, so a fixture needs no call of its own. The framework credits a log line to the first-declared
+// expectation it matches, and to that one only; so a test that counts a line one of these also
+// matches declares its own `AddExpectedError` BEFORE its recording-services world stands, and its
+// count is the one checked while these absorb the rest. Two tests do so for stub lines today: the `-`
+// case of `ElysiumAiScriptedScheduleTests.cpp` (`CAI_BaseNPC.ChangeSchedule`, exactly once) and the
+// unregistered-name case of `ElysiumDisciplineTests.cpp` (its schedule name, at least once).
 
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"

@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumContentPaths.h"
@@ -100,6 +102,7 @@ namespace ElysiumPlaceSeamTests
 // The hint's node arms.
 // -------------------------------------------------------------------------------------------------
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSeamHintArmsTest,
 	"Elysium.Arm.PlaceSeams.HintArms", GElysiumPlaceSeamFlags)
 bool FElysiumPlaceSeamHintArmsTest::RunTest(const FString&)
@@ -349,6 +352,7 @@ bool FElysiumPlaceSeamListNodesTest::RunTest(const FString&)
 	TestTrue(TEXT("the box is inclusive at both ends"), Edge.Contains(0) && Edge.Contains(10) && !Edge.Contains(1));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // -------------------------------------------------------------------------------------------------
 // `0x102f41b0`, the network's nearest node to a point.
@@ -509,6 +513,7 @@ bool FElysiumPlaceSeamWanderOrderTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSeamWanderCapTest,
 	"Elysium.Arm.PlaceSeams.Wander.Cap", GElysiumPlaceSeamFlags)
 bool FElysiumPlaceSeamWanderCapTest::RunTest(const FString&)
@@ -692,6 +697,7 @@ bool FElysiumPlaceSeamWanderDetourTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // -------------------------------------------------------------------------------------------------
 // The pick on the baked hub.

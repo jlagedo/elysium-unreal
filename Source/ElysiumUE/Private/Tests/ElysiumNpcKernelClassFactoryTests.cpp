@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumClassRegistry.h"
@@ -170,6 +172,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassFactoriesTest,
 	"Elysium.Arm.NpcKernelClass.Factories", GElysiumNpcKernelFactoryFlags)
 bool FElysiumNpcKernelClassFactoriesTest::RunTest(const FString&)
@@ -248,6 +251,7 @@ bool FElysiumNpcKernelClassFactoriesTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassPartitionTest,
 	"Elysium.Substrate.NpcKernelClass.FactoryPartition", GElysiumNpcKernelFactoryFlags)
@@ -280,6 +284,7 @@ bool FElysiumNpcKernelClassPartitionTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassAbstractTest,
 	"Elysium.Arm.NpcKernelClass.AbstractRefusal", GElysiumNpcKernelFactoryFlags)
 bool FElysiumNpcKernelClassAbstractTest::RunTest(const FString&)
@@ -488,6 +493,7 @@ bool FElysiumNpcKernelClassMakerFactoriesTest::RunTest(const FString&)
 			: nullptr);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // The factory map in its closing form (0019 story 5 commit B).
 //

@@ -1,6 +1,8 @@
 // Content-free Substrate automation: world services, focused use sessions, filters, switches, doors, elevators, and attachment.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -420,6 +422,7 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 // the runs meant to prove neither happens.
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPerceptionQueryTest,
 	"Elysium.Arm.PerceptionQueries", GElysiumTestFlags)
 bool FElysiumPerceptionQueryTest::RunTest(const FString&)
@@ -465,6 +468,7 @@ bool FElysiumPerceptionQueryTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // Modern +use — deterministic selection order and the world-owned focus/session lifecycle.
@@ -645,6 +649,7 @@ bool FElysiumInteractionLifecycleTest::RunTest(const FString&)
 	return !HasAnyErrors();
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUseFilterTest,
 	"Elysium.Arm.UseFilter", GElysiumTestFlags)
 bool FElysiumUseFilterTest::RunTest(const FString&)
@@ -718,6 +723,7 @@ bool FElysiumUseFilterTest::RunTest(const FString&)
 	TestEqual(TEXT("an unresolved use filter remains non-blocking"), Missing->BeginCount, 1);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSwitchUseTest,
 	"Elysium.Substrate.PropSwitchUse", GElysiumTestFlags)
@@ -1423,6 +1429,7 @@ bool FElysiumRotatingAttachTest::RunTest(const FString&)
 // The fixture is project-authored and content-independent; no retail strings are embedded.
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalDefinitionTest,
 	"Elysium.Arm.TerminalDefinition", GElysiumTestFlags)
 bool FElysiumTerminalDefinitionTest::RunTest(const FString&)
@@ -1675,6 +1682,7 @@ TerminalDefinition
 	TestTrue(TEXT("the parse failure identifies the trigger"), Error.Contains(TEXT("trigger 8")));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalSessionTest,
 	"Elysium.Substrate.TerminalSession", GElysiumTestFlags)
@@ -2059,6 +2067,7 @@ static UElysiumSessionSubsystem* MakeHeadlessGameState()
 	return NewObject<UElysiumSessionSubsystem>(GameInstance);
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalDependencyTruthinessTest,
 	"Elysium.Arm.TerminalDependencyTruthiness", GElysiumTestFlags)
 bool FElysiumTerminalDependencyTruthinessTest::RunTest(const FString&)
@@ -2145,6 +2154,7 @@ bool FElysiumTerminalDependencyTruthinessTest::RunTest(const FString&)
 	World.EndPlayerUseSession(Terminal->Handle, EElysiumUseEndReason::Completed);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSignDependencyTruthinessTest,
 	"Elysium.Content.SignDependencyTruthiness", GElysiumTestFlags)
@@ -2522,6 +2532,7 @@ static FElysiumUseContext HeldContext(const FLockWorld& Fixture, const FVector& 
 
 using namespace ElysiumLockableCameraTests;
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLockableCameraTest,
 	"Elysium.Arm.LockableCamera", GElysiumTestFlags)
 bool FElysiumLockableCameraTest::RunTest(const FString&)
@@ -2865,6 +2876,7 @@ bool FElysiumLockableCameraTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 } // namespace ElysiumInteractionTests
 

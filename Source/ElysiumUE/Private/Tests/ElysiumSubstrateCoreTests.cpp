@@ -1,6 +1,8 @@
 // Content-free Substrate automation: value types, expressions, script paths, rulebook, character sheet, queue, and clock.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -125,6 +127,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // FElysiumVariant — the tagged value all four chokepoints marshal through.
 // =====================================================================================
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumVariantTest, "Elysium.Arm.Variant", GElysiumTestFlags)
 bool FElysiumVariantTest::RunTest(const FString&)
 {
@@ -157,6 +160,7 @@ bool FElysiumVariantTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =====================================================================================
 // logic_pythoncheck's gate truthiness — the retail integer-only rule (RE C073/C079).
@@ -255,6 +259,7 @@ bool FElysiumSignDismissPolicyTest::RunTest(const FString&)
 // ElysiumExpr — the restricted expression subset, and the load-bearing error-to-false.
 // =====================================================================================
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExprTest, "Elysium.Arm.Expr", GElysiumTestFlags)
 bool FElysiumExprTest::RunTest(const FString&)
 {
@@ -413,6 +418,7 @@ bool FElysiumOneOfSetTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =====================================================================================
 // FElysiumScriptFS — the embedded VM's filesystem namespace. The path policy is pure string
@@ -560,6 +566,7 @@ bool FElysiumScriptFSTest::RunTest(const FString&)
 // ElysiumKeyValues — the Source KV reader shared by sound schemes and sign panels.
 // =====================================================================================
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumKeyValuesTest, "Elysium.Arm.KeyValues", GElysiumTestFlags)
 bool FElysiumKeyValuesTest::RunTest(const FString&)
 {
@@ -777,6 +784,7 @@ bool FElysiumRulebookTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =====================================================================================
 // 9.6 — the World-of-Darkness d10 resolver, content-free.
@@ -807,6 +815,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDiceTest, "Elysium.Arm.Dice", GElysiumTestFlags)
 bool FElysiumDiceTest::RunTest(const FString&)
 {
@@ -1618,6 +1627,7 @@ bool FElysiumTimeControlTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 } // namespace ElysiumSubstrateCoreTests
 

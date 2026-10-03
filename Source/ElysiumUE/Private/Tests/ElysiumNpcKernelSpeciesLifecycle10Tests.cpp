@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntity.h"
@@ -207,6 +209,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10MakerSpawnTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10MakerSpawnFleshpileTest,
 	"Elysium.Arm.NpcKernelSpeciesLifecycle10.MakerSpawnFleshpile",
 	GSpeciesLifecycle10TestFlags)
@@ -890,6 +893,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10AndreiBloodDestroyTest::RunTest(const FS
 		N.OutputListDestroys, 1);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // `DestroyWerewolf` (the Werewolf destructor) was removed in 0019/6; its test went with it.
 

@@ -1,6 +1,8 @@
 // Content-free Substrate automation: scene parsing, timeline scheduling, mixahead, and choreography.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -127,6 +129,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // `Elysium.Content.SceneCorpus` — this one is content-free and runs on inline text.
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneParseTest, "Elysium.Arm.SceneParse", GElysiumTestFlags)
 
 bool FElysiumSceneParseTest::RunTest(const FString&)
@@ -331,6 +334,7 @@ bool FElysiumSceneParseTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // 12.1 — the choreo timeline. Drives FElysiumScenePlayer directly against a recording callback,
@@ -403,6 +407,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneTimelineTest, "Elysium.Arm.SceneTimeline", GElysiumTestFlags)
 
 bool FElysiumSceneTimelineTest::RunTest(const FString&)
@@ -622,6 +627,7 @@ bool FElysiumSceneTimelineTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // 12.2b — the lead a scene schedules its speech with belongs to the audio path we run on.

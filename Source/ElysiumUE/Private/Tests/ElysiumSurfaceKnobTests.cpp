@@ -1,7 +1,9 @@
 // Content-free Substrate automation for SF-4.1: the surface-shading knobs a human tunes by eye.
 #include "Misc/AutomationTest.h"
 
-#if WITH_DEV_AUTOMATION_TESTS
+#include "Tests/ElysiumArmTier.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS
 
 #include "ElysiumSurfaceCalibration.h"
 #include "ElysiumSurfaceSettings.h"

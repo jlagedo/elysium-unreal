@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -99,6 +101,7 @@ namespace
 	};
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TroikaNpcInitTest,
 	"Elysium.Arm.NpcKernelLifecycle19.TroikaNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TroikaNpcInitTest::RunTest(const FString&)
@@ -995,6 +998,7 @@ bool FElysiumNpcKernelLifecycle19TaxiIdleTest::RunTest(const FString&)
 	TestTrue(TEXT("senses ON"), TaxiDriver->Senses.bCanPerformSenses);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19ArmCoverageTest,
 	"Elysium.Substrate.NpcKernelLifecycle19.ArmCoverage", GLifecycle19Flags)
@@ -1030,6 +1034,7 @@ bool FElysiumNpcKernelLifecycle19ArmCoverageTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19Guard1Test,
 	"Elysium.Arm.NpcKernelLifecycle19.Guard1NPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19Guard1Test::RunTest(const FString&)
@@ -1304,5 +1309,6 @@ bool FElysiumNpcKernelLifecycle19SpeciesSmokeTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif

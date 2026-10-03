@@ -16,6 +16,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -140,6 +142,7 @@ bool FElysiumNpcKernelRunAi19BaseRunAiFullPassTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19BaseRunAiReducedTest,
 	"Elysium.Arm.NpcKernelRunAi19.BaseRunAI.Reduced", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19BaseRunAiReducedTest::RunTest(const FString&)
@@ -399,6 +402,7 @@ bool FElysiumNpcKernelRunAi19RunAlternateAiMode2Test::RunTest(const FString&)
 	TestTrue(TEXT("1029029d the wait flag is not this arm's"), N.bOpeningDoorWait);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 namespace
 {
@@ -435,6 +439,7 @@ namespace
 // 0x1035e980 CNPC_VAndreiBlood
 // =================================================================================================
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19AndreiBloodTest,
 	"Elysium.Arm.NpcKernelRunAi19.AndreiBlood", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19AndreiBloodTest::RunTest(const FString&)
@@ -1082,5 +1087,6 @@ bool FElysiumNpcKernelRunAi19ZombieGrappleTest::RunTest(const FString&)
 		N->ZombieGrappleReadyTimer, Now + 20.0);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif  // WITH_DEV_AUTOMATION_TESTS

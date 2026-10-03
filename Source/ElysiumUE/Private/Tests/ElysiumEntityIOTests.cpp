@@ -1,6 +1,8 @@
 // Content-free Substrate automation: event transport ordering, late binding, trigger lifetime, wire accounting, and logical save state.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -747,6 +749,7 @@ bool FElysiumLateBindingAndDropsTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMissingTargetClassificationTest,
 	"Elysium.Arm.MissingTargetClassification", GElysiumTestFlags)
 bool FElysiumMissingTargetClassificationTest::RunTest(const FString&)
@@ -793,6 +796,7 @@ bool FElysiumMissingTargetClassificationTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // The other half of the same contract: which TRANSPORT a caller is entitled to, and what a
@@ -865,6 +869,7 @@ namespace ElysiumEventTransportTests
 	FString CalIs(const FElysiumEntityHandle& H) { return FString::Printf(TEXT("cal=%s"), *H.ToString()); }
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSyncScriptInputTest,
 	"Elysium.Arm.SyncScriptInput", GElysiumTestFlags)
 bool FElysiumSyncScriptInputTest::RunTest(const FString&)
@@ -1310,6 +1315,7 @@ bool FElysiumTriggerStateSaveTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWaitMinusOneTest,
 	"Elysium.Substrate.WaitMinusOne", GElysiumTestFlags)
@@ -1448,6 +1454,7 @@ bool FElysiumDyingTriggerEndTouchTest::RunTest(const FString&)
 // authored surface so a wire nothing ever reached is visible at all.
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWireTallyTest,
 	"Elysium.Arm.WireTally", GElysiumTestFlags)
 bool FElysiumWireTallyTest::RunTest(const FString&)
@@ -1729,6 +1736,7 @@ bool FElysiumWireIdentitySaveTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLogicStateSaveTest,
 	"Elysium.Substrate.LogicStateSave", GElysiumTestFlags)

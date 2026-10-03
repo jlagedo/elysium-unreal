@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntity.h"
@@ -165,6 +167,7 @@ namespace
 // `sound/character/<dialog>` directory chop and globs were deleted in 0019/6 (verdict `mechanism`,
 // service `Bake`), with their cases `BasePrecache`, `DialogueDirectory` and `DialogueGlob`.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10TroikaTest,
 	"Elysium.Arm.NpcKernelPrecache10.TroikaPrecache", GPrecache10TestFlags)
 bool FElysiumNpcKernelPrecache10TroikaTest::RunTest(const FString&)
@@ -314,6 +317,7 @@ bool FElysiumNpcKernelPrecache10CameraTest::RunTest(const FString&)
 	}
 	return bOk;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =================================================================================================
 // The three `CNPCMaker*` arms, each its class's own override (story 5 fold A4).
@@ -478,6 +482,7 @@ bool FElysiumNpcKernelPrecache10MakerArmCoverageTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPrecache10MakerBaseTest,
 	"Elysium.Arm.NpcKernelPrecache10.MakerBase", GPrecache10TestFlags)
 bool FElysiumNpcKernelPrecache10MakerBaseTest::RunTest(const FString&)
@@ -660,5 +665,6 @@ bool FElysiumNpcKernelPrecache10MakerZombieTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

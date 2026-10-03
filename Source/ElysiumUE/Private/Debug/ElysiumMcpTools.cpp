@@ -1573,9 +1573,10 @@ namespace ElysiumMcpImpl
 				.Add(TEXT("index"), TEXT("integer"), TEXT("Entity index (its position in the parsed .ents array). Takes precedence over `name`."))
 				.Add(TEXT("limit"), TEXT("integer"), TEXT("Max entities to detail when `name` matches several. Default 10 for a targetname, 1 for a classname; max 100."))
 				.AddStringList(TEXT("fields"), TEXT("Only these values (field names or live_state row names, case-insensitive) instead of every field. A comma-separated string is accepted too."))
-				.Add(TEXT("brief"), TEXT("boolean"), TEXT("The 10-line elysium.npc_brief readout instead of every field. Default false."));
+				.Add(TEXT("brief"), TEXT("boolean"), TEXT("The 10-line elysium.npc_brief readout. What an NPC answers anyway; set it to have the readout for any entity. Default false."))
+				.Add(TEXT("full"), TEXT("boolean"), TEXT("Every field, for an NPC too: raw .ents keyvalues, the class chain with every live value, inputs, outputs, leaf state -- tens of KB for an NPC. Default false."));
 			Out.Add(MakeTool(TEXT("elysium_entity_get"),
-				TEXT("Detail for one or more entities: raw .ents keyvalues, the resolved class chain with every live field value, the inputs the class accepts, all 7-field outputs with their remaining `times` counts, and leaf-class runtime state. `fields` narrows it to named values and `brief` to the npc_brief readout. This is the read half of a QA loop — pair it with elysium_entity_fire."),
+				TEXT("Detail for one or more entities. An NPC answers its 10-line npc_brief readout unless `full` (every field) or `fields` (named values) is set; any other entity answers every field: raw .ents keyvalues, the resolved class chain with every live field value, the inputs the class accepts, all 7-field outputs with their remaining `times` counts, and leaf-class runtime state. This is the read half of a QA loop — pair it with elysium_entity_fire."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{
@@ -1618,10 +1619,16 @@ namespace ElysiumMcpImpl
 					const int32 Limit = FMath::Clamp(ParamInt(Params, TEXT("limit"), bByClassname ? 1 : 10), 1, 100);
 					const TArray<FString> FieldNames = ParamStrList(Params, TEXT("fields"));
 					const bool bBrief = ParamBool(Params, TEXT("brief"), false);
+					const bool bFull = ParamBool(Params, TEXT("full"), false);
 					TArray<TSharedPtr<FJsonValue>> Details;
+					// An NPC's every-field detail is ~80 KB; its default answer is the brief, and every
+					// field only on an explicit `full`. The reply then says how to get the rest.
+					int32 BriefByDefault = 0;
 					for (int32 i = 0; i < Found.Num() && i < Limit; ++i)
 					{
-						if (bBrief)
+						const bool bNpcBrief = !bBrief && FieldNames.Num() == 0 && !bFull && Found[i]->AsNpc() != nullptr;
+						BriefByDefault += bNpcBrief ? 1 : 0;
+						if (bBrief || bNpcBrief)
 						{
 							TSharedRef<FJsonObject> Brief = EntitySummary(*Found[i]);
 							TArray<TSharedPtr<FJsonValue>> Lines;
@@ -1645,11 +1652,21 @@ namespace ElysiumMcpImpl
 					TSharedRef<FJsonObject> Body = Obj();
 					Body->SetNumberField(TEXT("matched"), Found.Num());
 					Body->SetArrayField(TEXT("entities"), Details);
+					TArray<FString> More;
+					if (BriefByDefault > 0)
+					{
+						More.Add(TEXT("an NPC answers its npc_brief readout: `full=true` for every field, "
+							"`fields=[...]` for named values"));
+					}
 					if (Found.Num() > Details.Num())
 					{
-						MarkCut(Body, FString::Printf(
+						More.Add(FString::Printf(
 							TEXT("%d of %d matches detailed: raise `limit` (max 100), or name one by `index` "
 								"(elysium_entity_list lists them)"), Details.Num(), Found.Num()));
+					}
+					if (More.Num() > 0)
+					{
+						MarkCut(Body, FString::Join(More, TEXT("; ")));
 					}
 					return Structured(Body);
 				}));

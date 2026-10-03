@@ -656,6 +656,14 @@ def _summary(state: CliState, human: str, **fields: Any) -> None:
         console.print(human)
 
 
+def _note(state: CliState, line: str) -> None:
+    """One progress line: into the run log, and to the console (stderr under `--json`)."""
+
+    if state.log_sink is not None:
+        state.log_sink(line)
+    (err_console if state.json_output else console).print(line, markup=False, soft_wrap=True)
+
+
 def _emit_json(
     report: RunReport,
     payload: dict[str, Any],
@@ -1135,12 +1143,18 @@ def build_command(
     rebuild: bool = typer.Option(False, "--rebuild"),
     clean: bool = typer.Option(False, "--clean"),
     analyze: bool = typer.Option(False, "--analyze"),
+    arm: bool = typer.Option(
+        False, "--arm",
+        help="Compile the opt-in Elysium.Arm tests into this build (off by default; `test arm` and "
+             "`test --all` switch it on themselves). Use it while iterating on arm tests."),
     json_output: bool = typer.Option(False, "--json"),
     no_wait: bool = typer.Option(
         False, "--no-wait",
         help="Refuse at once (exit 8) if another command holds this checkout, instead of waiting."),
 ) -> None:
     """Build the editor target; blocks until it ends and finishes with one verdict line.
+
+    The opt-in Arm test tier (every `Elysium.Arm.*` case) is compiled out unless `--arm`: a day's builds run no arm test. Switching it recompiles test files only.
 
     A command holding this checkout's binaries (a test, a play session, a build) is waited for, up to 30 minutes, with the holder named; `--no-wait` refuses (exit 8) instead.
 
@@ -1165,13 +1179,17 @@ def build_command(
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal
 
+        if unreal.set_arm_tier(config, arm):
+            _note(state, f"arm tier: switched {'on' if arm else 'off'}; the test files recompile")
         unreal.build(config, runner, mode, ctx.args)
         # UnrealBuildTool says nothing a caller can branch on once its output is filtered,
         # so the command states its own verdict.
         _summary(
             state,
-            f"build ok: ElysiumUEEditor Win64 Development ({mode or 'incremental'})",
+            f"build ok: ElysiumUEEditor Win64 Development ({mode or 'incremental'}; "
+            f"arm tier {'on' if arm else 'off'})",
             mode=mode or "incremental",
+            arm_tier=arm,
         )
 
     _execute(
@@ -3914,6 +3932,8 @@ def test_command(
 
     With no prefix it runs the default tier: the census tests, the arena scenario tests and a small smoke set, named `Elysium.<Group>.` for the groups in `unreal.DEFAULT_TEST_GROUPS`. The opt-in tiers are `Elysium.Arm.` (per-function arm and unit tests, run at a story's close), `Elysium.Content.` (baked content) and `Elysium.Slow.`; `--all` runs `Elysium.`. A named prefix runs as it always did, and the summary names the tier.
 
+    The Arm tier is compiled only on demand: a selection that reaches an `Elysium.Arm.` case (`arm`, `--all`, an `Elysium.Arm.` prefix) switches it on and builds first, and says so; the next plain `uv run elysium build` switches it off.
+
     `elysium test A B C` runs the three prefixes in ONE boot (about 19 s around well under a second of tests) and reports each, then every failed test by name with its first error.
 
     A command holding this checkout's binaries is waited for, up to 30 minutes, with the holder named; `--no-wait` refuses (exit 8) instead.
@@ -3943,6 +3963,15 @@ def test_command(
         selection = (list(filters) if filters
                      else [unreal.ALL_TESTS_FILTER] if all_tiers
                      else list(unreal.DEFAULT_TEST_FILTER))
+        # The Arm tier is compiled on demand: a selection that reaches an arm case switches it on
+        # and builds first, so what runs is what the tree says.
+        switched, built = unreal.prepare_arm_tier(
+            config, runner, unreal.resolve_test_filters(selection))
+        if built:
+            _note(state, "arm tier: "
+                  + ("switched on and compiled into this build" if switched
+                     else "on; the build is current")
+                  + " (`uv run elysium build` switches it off, `build --arm` keeps it)")
         try:
             summary = unreal.run_tests(config, runner, selection, parity_stems=stems or ())
         except unreal.UnrealFailure as failure:

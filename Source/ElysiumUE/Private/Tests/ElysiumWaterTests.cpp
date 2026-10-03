@@ -4,7 +4,9 @@
 // is pinned here -- the classification content-free, the actor against a bare test world.
 #include "Misc/AutomationTest.h"
 
-#if WITH_DEV_AUTOMATION_TESTS
+#include "Tests/ElysiumArmTier.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS
 
 #include "Audio/ElysiumWaterAudio.h"
 #include "ElysiumBakedTags.h"

@@ -25,6 +25,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include <type_traits>
@@ -145,6 +147,7 @@ namespace RunTask19TestShared
 // `CAI_BaseNPC::RunTask` `0x10288780` -- one case per arm group, driven qualified on a Troika NPC.
 // =================================================================================================
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseWaitTest,
 	"Elysium.Arm.NpcKernelRunTask19.Base.Wait", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BaseWaitTest::RunTest(const FString&)
@@ -280,6 +283,7 @@ bool FElysiumNpcKernelRunTask19BasePathArmsTest::RunTest(const FString&)
 	TestTrue(TEXT("0x10289602: at the goal the range test passes"), Completed(N));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseActivityArmsTest,
 	"Elysium.Substrate.NpcKernelRunTask19.Base.ActivityFinishedArms", GRunTask19Flags)
@@ -311,6 +315,7 @@ bool FElysiumNpcKernelRunTask19BaseActivityArmsTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseFacingArmsTest,
 	"Elysium.Arm.NpcKernelRunTask19.Base.FacingArms", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BaseFacingArmsTest::RunTest(const FString&)
@@ -1392,5 +1397,6 @@ bool FElysiumNpcKernelRunTask19HengeyokaiTest::RunTest(const FString&)
 	TestTrue(TEXT("0xc8 completes facing"), Completed(N));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif  // WITH_DEV_AUTOMATION_TESTS

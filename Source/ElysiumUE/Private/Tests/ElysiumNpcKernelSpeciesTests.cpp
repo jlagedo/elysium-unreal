@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -233,6 +235,7 @@ bool FElysiumNpcKernelSpeciesSlotTableTest::RunTest(const FString&)
 // gave `npc_VCop` no class and made the runner a "most-derived claimant" of `CNPC_VBaseBoss`'s
 // over-claim; both were wrong, and the case now pins the factories' answers.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesCensusFactoriesTest,
 	"Elysium.Arm.NpcKernelSpecies.CensusFactories", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesCensusFactoriesTest::RunTest(const FString&)
@@ -1982,5 +1985,6 @@ bool FElysiumNpcKernelSpeciesWiredSlot609Test::RunTest(const FString&)
 		Cop->ScheduleHost.ShootAtHintNode, 77);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

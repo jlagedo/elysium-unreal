@@ -1,6 +1,8 @@
 // Content-free Substrate automation: NPC makers, interesting places, disposition, relationships, NPC state, and runtime spawn.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -144,6 +146,7 @@ namespace
 		&MakeNpcMakerSceneBlockerTestEntity, [](FElysiumClassDesc&) {});
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMakerLifecycleTest,
 	"Elysium.Arm.NpcMakerLifecycle", GElysiumTestFlags)
 bool FElysiumNpcMakerLifecycleTest::RunTest(const FString&)
@@ -740,6 +743,7 @@ bool FElysiumRelationshipsTest::RunTest(const FString&)
 		static_cast<uint8>(EElysiumRelationship::Hate));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcTest,
 	"Elysium.Substrate.Npc.Classes", GElysiumTestFlags)
@@ -1297,6 +1301,7 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 // the recovered class body, the weapon ladder and the armed/alert branch reachable at all), the
 // LABEL is what reaches the clip player rather than the concrete bank cell, the selected row's own
 // loop bit beats the caller's request, and the clip's length is what a waiting task is told.
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcActivityResolveTest,
 	"Elysium.Arm.Npc.ActivityResolve", GElysiumTestFlags)
 bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
@@ -1700,6 +1705,7 @@ bool FElysiumNpcGroupMaskTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 } // namespace ElysiumNpcTests
 

@@ -4,7 +4,9 @@
 // or refusing to draw. The clamp lives in `Find`, not at any call site.
 #include "Misc/AutomationTest.h"
 
-#if WITH_DEV_AUTOMATION_TESTS
+#include "Tests/ElysiumArmTier.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS
 
 #include "ElysiumPropSkins.h"
 

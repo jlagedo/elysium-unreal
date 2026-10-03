@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntity.h"
@@ -130,6 +132,7 @@ namespace
 // Slot 105 `SetModel`.
 // =================================================================================================
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10TroikaSetModelTest,
 	"Elysium.Arm.NpcKernelAnim10.TroikaSetModel", GAnim10TestFlags)
 bool FAnim10TroikaSetModelTest::RunTest(const FString&)
@@ -213,6 +216,7 @@ bool FAnim10ZombieLineSetModelTest::RunTest(const FString&)
 	TestEqual(TEXT("...and no +0x00bc"), F.Cop->VSoundTableIndex, 0);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10SetModelArmCoverageTest,
 	"Elysium.Substrate.NpcKernelAnim10.SetModelArmCoverage", GAnim10TestFlags)
@@ -248,6 +252,7 @@ bool FAnim10SetModelArmCoverageTest::RunTest(const FString&)
 // The activity triple.
 // =================================================================================================
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10SetActivityAndSequenceTest,
 	"Elysium.Arm.NpcKernelAnim10.SetActivityAndSequence", GAnim10TestFlags)
 bool FAnim10SetActivityAndSequenceTest::RunTest(const FString&)
@@ -1586,5 +1591,6 @@ bool FAnim10RunnerKnockbackBypassTest::RunTest(const FString&)
 	TestFalse(TEXT("and does not bypass"), F.Cop->BypassesKnockbackEligibility());
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif  // WITH_DEV_AUTOMATION_TESTS

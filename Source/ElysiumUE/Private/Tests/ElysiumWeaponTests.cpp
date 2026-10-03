@@ -9,6 +9,8 @@
 // number below is decided by the authored record alone.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/ScopeExit.h"
@@ -599,6 +601,7 @@ bool FElysiumWeaponRulesTest::RunTest(const FString&)
 // parses once when the entity spawns.
 // =====================================================================================
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponInstallTest, "Elysium.Arm.Weapons.Install",
 	GElysiumTestFlags)
 bool FElysiumWeaponInstallTest::RunTest(const FString&)
@@ -737,6 +740,7 @@ bool FElysiumWeaponWieldFunnelTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =====================================================================================
 // Melee: the accepted swing, the SWEPT CONTACT WALK over the clip's own authored
@@ -1429,6 +1433,7 @@ namespace
 	int32 DiceSeed() { return ElysiumRng::Stream(EElysiumRngStream::Dice).GetCurrentSeed(); }
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeRollTest,
 	"Elysium.Arm.Weapons.MeleeRoll", GElysiumTestFlags)
 bool FElysiumWeaponMeleeRollTest::RunTest(const FString&)
@@ -1564,6 +1569,7 @@ bool FElysiumWeaponMeleeRollTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =====================================================================================
 // The contact walk's batching: accumulation below one sub-step, the span cap above it,
@@ -1861,6 +1867,7 @@ namespace
 	};
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponComboTest, "Elysium.Arm.Weapons.Combo",
 	GElysiumTestFlags)
 bool FElysiumWeaponComboTest::RunTest(const FString&)
@@ -2058,6 +2065,7 @@ bool FElysiumWeaponComboTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =====================================================================================
 // The band a melee swing claims the base channel at, and the air fork.
@@ -2169,6 +2177,7 @@ namespace
 	};
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeBandTest, "Elysium.Arm.Weapons.MeleeBand",
 	GElysiumTestFlags)
 bool FElysiumWeaponMeleeBandTest::RunTest(const FString&)
@@ -2605,6 +2614,7 @@ bool FElysiumWeaponMeleeAirTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =====================================================================================
 // Melee acquisition distance: the authored sequence reach, and the stand-in behind it.
@@ -3135,6 +3145,7 @@ bool FElysiumWeaponRangedTest::RunTest(const FString&)
 // would resolve through the cast chain and `TranslatePlayerActivity` would never run.
 // =====================================================================================
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponAnimBodyKindTest,
 	"Elysium.Arm.Weapons.AnimBodyKind", GElysiumTestFlags)
 bool FElysiumWeaponAnimBodyKindTest::RunTest(const FString&)
@@ -3259,6 +3270,7 @@ bool FElysiumWeaponAnimBodyKindTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =====================================================================================
 // The sequence-event weapon route.
@@ -3926,6 +3938,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponLeafSchemaTest, "Elysium.Arm.Weapons.LeafSchema",
 	GElysiumTestFlags)
 bool FElysiumWeaponLeafSchemaTest::RunTest(const FString&)
@@ -4330,6 +4343,7 @@ bool FElysiumInventorySelectionTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =====================================================================================
 // EF_NODRAW — the drawn/hidden bit on an ACTIVE weapon, and the two things retail does
@@ -4383,6 +4397,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponHiddenRequestTest,
 	"Elysium.Arm.WeaponHidden.ActivityRequest", GElysiumTestFlags)
 bool FElysiumWeaponHiddenRequestTest::RunTest(const FString&)
@@ -4589,6 +4604,7 @@ bool FElysiumWeaponHiddenStateChangeTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 }   // namespace ElysiumWeaponTests
 

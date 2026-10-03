@@ -342,7 +342,7 @@ def test_every_prefix_runs_in_one_boot_joined_with_a_plus() -> None:
         summary, launches = run_prefixes(config, THREE, tests)
 
         assert len(launches) == 1, "one editor boot for the whole selection"
-        assert ("-ExecCmds=Automation RunTest "
+        assert ("-ExecCmds=Automation Now;RunTest "
                 "Elysium.Substrate.Npc.+Elysium.Substrate.Hint.+Elysium.Content.Hints.;Quit"
                 ) in launches[0]
         assert [row["prefix"] for row in summary["prefixes"]] == THREE
@@ -388,7 +388,8 @@ def test_the_default_run_is_the_default_groups_in_one_boot_and_names_its_tier() 
 
         assert len(launches) == 1
         joined = "+".join(unreal.DEFAULT_TEST_FILTER)
-        assert f"-ExecCmds=Automation RunTest {joined};Quit" in launches[0]
+        # `Now` skips the controller's 5 s wait for remote workers; this process is the only worker.
+        assert f"-ExecCmds=Automation Now;RunTest {joined};Quit" in launches[0]
         assert summary["tier"] == "default"
         assert [row["prefix"] for row in summary["prefixes"]] == list(unreal.DEFAULT_TEST_FILTER)
 

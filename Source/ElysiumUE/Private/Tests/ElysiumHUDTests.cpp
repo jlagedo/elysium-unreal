@@ -1,3 +1,5 @@
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumHUDModel.h"
@@ -111,6 +113,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNotificationPresentationRulesTest,
 	"Elysium.Arm.UI.NotificationPresentationRules",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -175,6 +178,7 @@ bool FElysiumNotificationPresentationRulesTest::RunTest(const FString& Parameter
 		Publisher->NumPendingNotifications(), 64);
 	return !HasAnyErrors();
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHUDModelProjectionTest,
 	"Elysium.Substrate.UI.HUDModelProjection",
@@ -453,6 +457,7 @@ bool FElysiumHUDBloodRailTest::RunTest(const FString& Parameters)
 // persistence after the fangs come off is `vfunc98` `0x10050560` comparing curtime against a
 // deadline `vfunc114` refreshed — three seconds (`_DAT_10227ee0`) — and there is no focus test in
 // either function.
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHUDFeedBarTest,
 	"Elysium.Arm.UI.HUDFeedBar",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -1527,5 +1532,6 @@ bool FElysiumHUDStealthLightProducerTest::RunTest(const FString&)
 	TestTrue(TEXT("standing does not discard a measured sample"), Model->Stealth.bConcealmentValid);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif

@@ -1,6 +1,8 @@
 #include "Misc/AutomationTest.h"
 
-#if WITH_DEV_AUTOMATION_TESTS
+#include "Tests/ElysiumArmTier.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS
 
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumGaitSpeeds.h"               // the per-direction speed table the fan fills

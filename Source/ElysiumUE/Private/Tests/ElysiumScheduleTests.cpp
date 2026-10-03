@@ -16,6 +16,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Substrate/ElysiumSchedule.h"
@@ -281,6 +283,7 @@ namespace
 // real case: a model carrying no `Stance_*` clips has no stance machine, and its idle schedule must
 // end — reporting why — rather than holding the NPC in a program that will never advance.
 // ============================================================================================
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleFailureTest,
 	"Elysium.Arm.Schedule.Failure", GElysiumScheduleTestFlags)
 bool FElysiumScheduleFailureTest::RunTest(const FString&)
@@ -537,6 +540,7 @@ bool FElysiumScheduleCompletionHostTest::RunTest(const FString&)
 	TestEqual(TEXT("routing an external failure does not duplicate TaskFail"), Runner.FailureReasons.Num(), PreviousFailures);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // ============================================================================================
 // Story 25 — the kernel's failure route and the random wait
@@ -737,6 +741,7 @@ bool FElysiumScheduleFailRouteTest::RunTest(const FString&)
 // `D_MILDLY_CRAZY` — the arm every `SET_FAIL_SCHEDULE Idle_Stand` program reaches. The frenzied
 // pre-table (`0x102b11c0`) and the `0x132` target are named seams until 25b / 21a register them.
 // ============================================================================================
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTroikaTranslateTest,
 	"Elysium.Arm.Schedule.TroikaTranslate", GElysiumScheduleTestFlags)
 bool FElysiumScheduleTroikaTranslateTest::RunTest(const FString&)
@@ -774,5 +779,6 @@ bool FElysiumScheduleTroikaTranslateTest::RunTest(const FString&)
 		Guard->LastTranslateScheduleRetail, 0xc9);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif // WITH_DEV_AUTOMATION_TESTS

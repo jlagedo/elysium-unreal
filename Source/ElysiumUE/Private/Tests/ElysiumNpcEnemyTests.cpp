@@ -12,6 +12,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -170,6 +172,7 @@ namespace
 // The recovered `GatherConditions` order: a stale enemy's death is seen by ChooseEnemy in
 // the SAME pass, and the committed-enemy conditions describe the enemy that pass chose.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyGatherOrderTest,
 	"Elysium.Arm.NpcEnemy.GatherOrder", GElysiumTestFlags)
 bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
@@ -265,6 +268,7 @@ bool FElysiumNpcEnemyShouldChooseTest::RunTest(const FString&)
 		ElysiumNpcEnemy::ShouldChooseNewEnemy(*F.Guard, Empty));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // `BestEnemy`: eligibility and the four arbitration rules.
 
@@ -395,6 +399,7 @@ bool FElysiumNpcEnemyBestEnemyTest::RunTest(const FString&)
 // Source units from Jack's dialogue; its 540-unit sight admission leaves a hostile player absent
 // from both the store and selection until an actual sight pass writes the record.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyMemoryAdmissionTest,
 	"Elysium.Arm.NpcEnemy.MemoryAdmission", GElysiumTestFlags)
 bool FElysiumNpcEnemyMemoryAdmissionTest::RunTest(const FString&)
@@ -1316,6 +1321,7 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 }   // namespace ElysiumNpcEnemyTests
 

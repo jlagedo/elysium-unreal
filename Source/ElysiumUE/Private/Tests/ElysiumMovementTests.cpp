@@ -1,6 +1,8 @@
 // Content-free Substrate automation: movement math, gym specifications, placement space, courses, gait speeds, and locomotion samples.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -411,6 +413,7 @@ bool FElysiumMovementTest::RunTest(const FString&)
 // moves with the geometry and could never fail; the behaviour is the headless run's to record.
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGymSpecTest, "Elysium.Arm.GymSpec", GElysiumTestFlags)
 bool FElysiumGymSpecTest::RunTest(const FString&)
 {
@@ -789,6 +792,7 @@ bool FElysiumPlayerViewTransformTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerPlacementSpaceTest,
 	"Elysium.Substrate.PlayerPlacementSpace", GElysiumTestFlags)
@@ -826,6 +830,7 @@ bool FElysiumPlayerPlacementSpaceTest::RunTest(const FString&)
 // is the only observable the T-pose failure has, so the arithmetic is worth pinning on its own.
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPoseDeviationTest,
 	"Elysium.Arm.PoseDeviation", GElysiumTestFlags)
 bool FElysiumPoseDeviationTest::RunTest(const FString&)
@@ -879,6 +884,7 @@ bool FElysiumPoseDeviationTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #if !UE_BUILD_SHIPPING
 
@@ -889,6 +895,7 @@ bool FElysiumPoseDeviationTest::RunTest(const FString&)
 // the stream carries the press, and nothing else about the stream moves.
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveCoursesTest,
 	"Elysium.Arm.MoveCourses", GElysiumTestFlags)
 bool FElysiumMoveCoursesTest::RunTest(const FString&)
@@ -1009,6 +1016,7 @@ bool FElysiumMoveCoursesTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 #endif // !UE_BUILD_SHIPPING
 
 
@@ -1034,6 +1042,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGaitSpeedsTest,
 	"Elysium.Arm.GaitSpeeds", GElysiumTestFlags)
 bool FElysiumGaitSpeedsTest::RunTest(const FString&)
@@ -2067,6 +2076,7 @@ bool FElysiumPlayerViewFlagsTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 } // namespace ElysiumMovementTests
 

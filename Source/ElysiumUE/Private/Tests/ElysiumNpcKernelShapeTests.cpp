@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Algo/Find.h"
@@ -536,6 +538,7 @@ bool FElysiumNpcKernelOverridesTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFieldOwnersTest,
 	"Elysium.Arm.NpcKernelShape.FieldOwners", GElysiumNpcShapeFlags)
 bool FElysiumNpcKernelFieldOwnersTest::RunTest(const FString&)
@@ -670,6 +673,7 @@ bool FElysiumNpcKernelFieldOwnersTest::RunTest(const FString&)
 	TestTrue(TEXT("the descriptor chain binds census words"), Bound > 0);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // --- The recovered slot defaults ------------------------------------------------------------------
 

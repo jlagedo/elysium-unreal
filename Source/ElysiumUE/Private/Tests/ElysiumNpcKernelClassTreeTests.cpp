@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumClassRegistry.h"
@@ -90,6 +92,7 @@ bool FElysiumNpcKernelClassTreeChainTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassTreeCastsTest,
 	"Elysium.Arm.NpcKernelClass.TypedCasts", GElysiumNpcKernelClassTreeFlags)
 bool FElysiumNpcKernelClassTreeCastsTest::RunTest(const FString&)
@@ -155,5 +158,6 @@ bool FElysiumNpcKernelClassTreeCastsTest::RunTest(const FString&)
 		Leader->AsSpecies<FElysiumNpcChangBros>());
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif

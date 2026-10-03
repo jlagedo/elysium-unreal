@@ -27,7 +27,7 @@ class UWorld;
 // record of `"stage": "map:<map>"` runs against the map's own entities; the map is not rebuilt between
 // records, so the launcher boots a map record alone unless it says `"shares_map": true`.
 //
-// Then `<out>/index.json` and `RequestExitWithStatus`: 0 when no result is `fail`,
+// Then `<out>/index.json` and a forced `RequestExitWithStatus`: 0 when no result is `fail`,
 // `unexpected-pass` or `error`, 1 otherwise or on a harness error (no record matched, the stage never
 // became ready). The index is the verdict a reader trusts; the exit code is a courtesy, for the reason
 // `FElysiumCastRun::Fail` states.

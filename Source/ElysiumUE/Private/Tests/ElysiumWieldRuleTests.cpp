@@ -10,6 +10,8 @@
 // this suite's statement of the retail contract, not a reading of the export.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/ScopeExit.h"
@@ -182,6 +184,7 @@ namespace
 // `ParseEquipFlag` (0x1025b740) — the name table, the `normal` composite and the accumulator rule.
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWieldEquipMaskTest,
 	"Elysium.Arm.Wield.EquipMask", GElysiumTestFlags)
 bool FElysiumWieldEquipMaskTest::RunTest(const FString&)
@@ -397,6 +400,7 @@ bool FElysiumWieldUpdateTest::RunTest(const FString&)
 		F.Player->Inventory.Has(*F.Player, GClaws));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // The NPC spawn path: the grant stays ungated and the sweep is what disarms.

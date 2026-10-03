@@ -23,7 +23,9 @@
 // loaded: the suite opens no export, builds no body and needs no baked clip.
 #include "Misc/AutomationTest.h"
 
-#if WITH_DEV_AUTOMATION_TESTS
+#include "Tests/ElysiumArmTier.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS
 
 #include "ElysiumClipMovement.h"
 #include "ElysiumComboChain.h"

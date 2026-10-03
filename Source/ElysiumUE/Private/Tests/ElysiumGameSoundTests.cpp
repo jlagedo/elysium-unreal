@@ -15,6 +15,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/ScopeExit.h"
@@ -196,6 +198,7 @@ namespace
 // unknown category does.
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGameSoundResolveTest,
 	"Elysium.Arm.GameSound.Resolve", GElysiumTestFlags)
 bool FElysiumGameSoundResolveTest::RunTest(const FString&)
@@ -400,6 +403,7 @@ bool FElysiumGameSoundWindowTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // The producers. A bus nothing pushes into is not a hearing surface — these drive the

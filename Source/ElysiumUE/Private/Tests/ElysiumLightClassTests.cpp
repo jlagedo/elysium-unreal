@@ -2,6 +2,8 @@
 // observed on the recording double, and the multiplier the rig's table turns it into.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntity.h"
@@ -185,6 +187,7 @@ bool FElysiumLightSwitchTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightDynamicTest, "Elysium.Arm.LightDynamic", GElysiumTestFlags)
 bool FElysiumLightDynamicTest::RunTest(const FString&)
 {
@@ -248,6 +251,7 @@ bool FElysiumLightDynamicTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 }   // namespace ElysiumLightClassTests
 

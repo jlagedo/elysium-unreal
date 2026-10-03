@@ -3,7 +3,9 @@
 // that says which entry in the base chain authored each field.
 #include "Misc/AutomationTest.h"
 
-#if WITH_DEV_AUTOMATION_TESTS
+#include "Tests/ElysiumArmTier.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS
 
 #include "ElysiumPhysicalMaterial.h"
 #include "ElysiumSurfacePropertyProvenance.h"

@@ -1,6 +1,8 @@
 // Content-free Substrate automation: entity-world round trip, container payload, and schema coverage.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -390,6 +392,7 @@ bool FElysiumSaveRoundTripTest::RunTest(const FString&)
 // carries a different output count for the same entity cannot restore it positionally. The gate
 // used to drop the mismatch silently (`ElysiumEntityWorldPersistence.cpp`); it must warn instead
 // and leave the freshly-built (post-`Activate`) counters alone.
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOutputCardinalityMismatchTest,
 	"Elysium.Arm.SaveOutputCardinality", GElysiumTestFlags)
 bool FElysiumOutputCardinalityMismatchTest::RunTest(const FString&)
@@ -926,6 +929,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSaveSchemaTest, "Elysium.Substrate.SaveSchema",
 	GElysiumTestFlags)

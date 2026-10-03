@@ -5,7 +5,9 @@
 // counted every body as occupying it.
 #include "Misc/AutomationTest.h"
 
-#if WITH_DEV_AUTOMATION_TESTS
+#include "Tests/ElysiumArmTier.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"

@@ -8,6 +8,8 @@
 // forced value rather than as a roll.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -138,6 +140,7 @@ namespace
 // The authored `Dmg` grammar and the soak table
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageParseTest, "Elysium.Arm.Damage.Parse",
 	GElysiumTestFlags)
 bool FElysiumDamageParseTest::RunTest(const FString&)
@@ -244,6 +247,7 @@ bool FElysiumDamageParseTest::RunTest(const FString&)
 		ElysiumDamage::NoSoakMask == 0xC8000008u);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // ElysiumDamage::Apply — the confirmed order
@@ -388,6 +392,7 @@ bool FElysiumDamageApplyTest::RunTest(const FString&)
 // FElysiumCombatCharacter::CommitDamage — the one health commit
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageCommitTest, "Elysium.Arm.Damage.Commit",
 	GElysiumTestFlags)
 bool FElysiumDamageCommitTest::RunTest(const FString&)
@@ -505,6 +510,7 @@ bool FElysiumDamageCommitTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // The producers: the two NPC outputs, the NPC input and the hurt cadence

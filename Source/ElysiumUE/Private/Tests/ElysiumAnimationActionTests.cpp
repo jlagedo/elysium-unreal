@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumAnimationIntent.h"
@@ -63,6 +65,7 @@ namespace
 // speed table may halve the gait; the assertion that says so runs the identical sample against two
 // references and requires two different answers.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationIntentTest,
 	"Elysium.Arm.AnimationIntent", GElysiumAnimationTestFlags)
 bool FElysiumAnimationIntentTest::RunTest(const FString&)
@@ -570,6 +573,7 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // Steps 4, 5 and 6 — the resolver, against a catalog built on the stack.
 //
@@ -655,6 +659,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationResolveTest,
 	"Elysium.Arm.AnimationResolve", GElysiumAnimationTestFlags)
 bool FElysiumAnimationResolveTest::RunTest(const FString&)
@@ -1978,6 +1983,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // Direction-keyed attack entry selection, the rung that sits AHEAD of the weighted draw.
 //
@@ -2023,6 +2029,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationStateMaskTest,
 	"Elysium.Arm.AnimationStateMask", GElysiumAnimationTestFlags)
 bool FElysiumAnimationStateMaskTest::RunTest(const FString&)
@@ -2238,6 +2245,7 @@ bool FElysiumAnimationStateMaskTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // The graph's own two rules: which state realizes a selection, and how long the transition
 // into it lasts.
@@ -2262,6 +2270,7 @@ namespace
 	int32 AsInt(EElysiumGraphState State) { return static_cast<int32>(State); }
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationGraphTest,
 	"Elysium.Arm.AnimationGraph", GElysiumAnimationTestFlags)
 bool FElysiumAnimationGraphTest::RunTest(const FString&)
@@ -2639,6 +2648,7 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // The driver, and the one speed number it publishes.
 //
@@ -2678,6 +2688,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationDriverTest,
 	"Elysium.Arm.AnimationDriver", GElysiumAnimationTestFlags)
 bool FElysiumAnimationDriverTest::RunTest(const FString&)
@@ -3082,6 +3093,7 @@ bool FElysiumAnimationPlayerGaitTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // The channel arbitration slot.
 //
@@ -4131,6 +4143,7 @@ namespace
 // weight 1 whose only difference is 30 fps against 18, so the tie rule alone decides whether a gait
 // cycles at the rate its ground speed asks for.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationSelectorsTest,
 	"Elysium.Arm.AnimationSelectors", GElysiumAnimationTestFlags)
 bool FElysiumAnimationSelectorsTest::RunTest(const FString&)
@@ -4456,5 +4469,6 @@ bool FElysiumAnimationBaseHoldTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif // WITH_DEV_AUTOMATION_TESTS

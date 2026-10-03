@@ -124,6 +124,11 @@ bool AElysiumMapActor::PreparePropAndWieldModels(const FElysiumEntityDefs& Defin
 	// Loading phase only. Runtime ForOwner/equip/SetModel paths consume these resident contexts.
 	ReleasePropAndWieldModels();
 	OutError.Reset();
+	// Where a load's seconds go, for the closing log line: the catalogues (and the item table the
+	// derivation installs), the native bodies, then the residency batch and its compile barrier.
+	const double StartSeconds = FPlatformTime::Seconds();
+	double CataloguesSeconds = 0.0;
+	double NativeSeconds = 0.0;
 	TArray<TSharedPtr<FStreamableHandle>> Handles;
 	auto LoadBatch = [&Handles, &OutError](const TSet<FSoftObjectPath>& Paths)
 	{
@@ -169,6 +174,7 @@ bool AElysiumMapActor::PreparePropAndWieldModels(const FElysiumEntityDefs& Defin
 		for (const auto& Pair : Skins->Data.Models) Ids.Add(Pair.Key);
 	}
 	CollectMapModelIds(Definitions, *Props, Ids, Paths);
+	CataloguesSeconds = FPlatformTime::Seconds() - StartSeconds;
 	TArray<FString> ModelIds = Ids.Array(); ModelIds.Sort();
 	if (!GatherPlacedModelPaths(Placed, Skins, ModelIds, Paths, OutError)
 		|| !FElysiumPreparedWieldModels::GatherPaths(Wield, Paths, OutError)
@@ -203,6 +209,7 @@ bool AElysiumMapActor::PreparePropAndWieldModels(const FElysiumEntityDefs& Defin
 		Handles.Add(NativeHandle); NativeHandle->WaitUntilComplete();
 		if (!UElysiumNativeAnimationData::FinishPreparation(NativeHandle, OutError)) return false;
 	}
+	NativeSeconds = FPlatformTime::Seconds() - StartSeconds - CataloguesSeconds;
 	if (!LoadBatch(Paths)) return false;
 	TArray<UObject*> ResidentAssets;
 	for (const auto& Path : Paths) ResidentAssets.Add(Path.ResolveObject());
@@ -226,8 +233,11 @@ bool AElysiumMapActor::PreparePropAndWieldModels(const FElysiumEntityDefs& Defin
 	}
 	PropModelPreparation = MoveTemp(Props); WieldModelPreparation = MoveTemp(Weapons);
 	OrnamentModelPreparation = MoveTemp(Worn);
-	UE_LOG(LogElysium, Log, TEXT("prepared native model contexts for %s: %d model IDs (%s), %d resident references"),
-		*MapName, ModelIds.Num(), bAdmitWholeCatalogue ? TEXT("whole catalogue") : TEXT("entity-derived"), ResidentAssets.Num());
+	const double TotalSeconds = FPlatformTime::Seconds() - StartSeconds;
+	UE_LOG(LogElysium, Log, TEXT("prepared native model contexts for %s: %d model IDs (%s), %d resident references ")
+		TEXT("in %.2f s (catalogues %.2f s, native bodies %.2f s, residency %.2f s)"),
+		*MapName, ModelIds.Num(), bAdmitWholeCatalogue ? TEXT("whole catalogue") : TEXT("entity-derived"), ResidentAssets.Num(),
+		TotalSeconds, CataloguesSeconds, NativeSeconds, TotalSeconds - CataloguesSeconds - NativeSeconds);
 	return true;
 }
 

@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntity.h"
@@ -71,6 +73,7 @@ namespace
 // re-base around slots 126 / 127 and went with them in 0019/6 (`FElysiumSaveArchive`).
 // -------------------------------------------------------------------------------------------------
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10Crc32Test,
 	"Elysium.Arm.NpcKernelSaveRestore10.Crc32", GSaveRestore10TestFlags)
 bool FElysiumNpcKernelSaveRestore10Crc32Test::RunTest(const FString&)
@@ -312,6 +315,7 @@ bool FElysiumNpcKernelSaveRestore10DoorMode4Test::RunTest(const FString&)
 	TestEqual(TEXT("and TaskFail is raised with reason 0xe"), N.BaseScheduleHost.FailureReason, 0xe);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // -------------------------------------------------------------------------------------------------
 // The species arm tables cover every override row the census holds.
@@ -438,6 +442,7 @@ namespace
 	};
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSaveRestore10MakerTest,
 	"Elysium.Arm.NpcKernelSaveRestore10.Maker", GSaveRestore10TestFlags)
 bool FElysiumNpcKernelSaveRestore10MakerTest::RunTest(const FString&)
@@ -622,5 +627,6 @@ bool FElysiumNpcKernelSaveRestore10SequenceActivateTest::RunTest(const FString&)
 		FElysiumNpcWorldFixture::Debug(LostBeat, TEXT("Next script")), FString(TEXT("beat_found")));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

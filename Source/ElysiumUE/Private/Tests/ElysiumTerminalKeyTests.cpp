@@ -11,6 +11,8 @@
 // pure.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumPresentationSubsystem.h"
@@ -365,6 +367,7 @@ bool FElysiumTerminalKeysTest::RunTest(const FString&)
 	return !HasAnyErrors();
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalDraftMirrorTest,
 	"Elysium.Arm.Terminal.DraftMirror", GKeyFlags)
 bool FElysiumTerminalDraftMirrorTest::RunTest(const FString&)
@@ -650,6 +653,7 @@ bool FElysiumTerminalIntentsTest::RunTest(const FString&)
 	(void)Slate;
 	return !HasAnyErrors();
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 }   // namespace ElysiumTerminalKeyTests
 

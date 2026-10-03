@@ -1,6 +1,8 @@
 // Content-free Substrate automation: dialogue parsing, branching, automatic rows, starting lines, and CPython writers.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -205,6 +207,7 @@ bool FElysiumDlgParseTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgExprTest, "Elysium.Arm.DlgExpr", GElysiumTestFlags)
 bool FElysiumDlgExprTest::RunTest(const FString&)
 {
@@ -252,6 +255,7 @@ bool FElysiumDlgExprTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // D1/D2/D4 — the col-4 dependency object, the retail turn rules and the seven clan columns.
 // Included by ElysiumDialogueTests.cpp inside its namespace; kept in its own file so the
@@ -671,6 +675,7 @@ namespace ElysiumDlgTestFixture
 	};
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgDisabledRowsTest,
 	"Elysium.Arm.DlgDisabledRows", GElysiumTestFlags)
 bool FElysiumDlgDisabledRowsTest::RunTest(const FString&)
@@ -897,6 +902,7 @@ bool FElysiumDlgCloseDuringPickTest::RunTest(const FString&)
 	TestEqual(TEXT("...and no response band"), Conv->VisibleChoices().Num(), 0);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgCorpusMountTest,
 	"Elysium.Content.DlgCorpusMount", GElysiumTestFlags)
@@ -929,6 +935,7 @@ bool FElysiumDlgCorpusMountTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgPendingActionTest,
 	"Elysium.Arm.DlgPendingAction", GElysiumTestFlags)
 bool FElysiumDlgPendingActionTest::RunTest(const FString&)
@@ -1187,6 +1194,7 @@ bool FElysiumDlgDisplayTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgBranchTest, "Elysium.Substrate.DlgBranch", GElysiumTestFlags)
 bool FElysiumDlgBranchTest::RunTest(const FString&)
@@ -1413,6 +1421,7 @@ bool FElysiumDlgAutomaticTest::RunTest(const FString&)
 // The world's half of a session: its identity, the teardown flush retail's `CDialog::Release`
 // (`0x100e5240`) owes every path, the order `CDialog::Acquire` runs the opening line's col-4 in,
 // and the two edges (`NPCNotifyDoneTalking`, a stale pick) that act on a band in flight.
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueSessionIdentityTest,
 	"Elysium.Arm.Dialogue.SessionIdentity", GElysiumTestFlags)
 bool FElysiumDialogueSessionIdentityTest::RunTest(const FString&)
@@ -1638,6 +1647,7 @@ bool FElysiumDialogueSessionIdentityTest::RunTest(const FString&)
 	World.CloseDialog(/*bSilent*/ true);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueBodySceneTest,
 	"Elysium.Substrate.Dialogue.BodyScene", GElysiumTestFlags)
@@ -1803,6 +1813,7 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgStartingLineTest,
 	"Elysium.Arm.DlgStartingLine", GElysiumTestFlags)
 bool FElysiumDlgStartingLineTest::RunTest(const FString&)
@@ -1893,6 +1904,7 @@ bool FElysiumDlgStartingLineTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // 9.3 CPython end-to-end — the writers and the two-phase spawn driven through the REAL

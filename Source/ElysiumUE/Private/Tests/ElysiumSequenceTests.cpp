@@ -1,6 +1,8 @@
 // Content-free Substrate automation: sky and fog packing plus scripted-sequence state and locomotion.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -167,6 +169,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSkyCubeTest, "Elysium.Arm.SkyCube", GElysiumTestFlags)
 bool FElysiumSkyCubeTest::RunTest(const FString&)
 {
@@ -316,6 +319,7 @@ bool FElysiumFogDecalMIDTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =====================================================================================
 // scripted_sequence — the cutscene beat's state machine, driven through the real queue.
@@ -1127,6 +1131,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptedSequenceBodyClaimTest,
 	"Elysium.Arm.ScriptedSequenceBodyClaim", GElysiumTestFlags)
 bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
@@ -1383,6 +1388,7 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // ================================================================================================
 // A beat that names ITSELF in m_iszNextScript

@@ -64,6 +64,9 @@ Plugins/ElysiumBaked/Content/
 # Pinned third-party plugins are restored by `uv run elysium deps sync`.
 Plugins/External/
 
+# The arm-tier switch: written by the pipeline (`uv run elysium build|test`) or ElysiumUE.Build.cs.
+Source/ElysiumUE/Private/Tests/ElysiumArmTier.h
+
 # Scratch and backup files never carry durable project context.
 .codex-patch/
 /logs/

@@ -29,6 +29,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -132,6 +134,7 @@ namespace
 // `CAI_BaseNPC::SelectSchedule` `0x1028a380`.
 // =================================================================================================
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19BaseIdleTest,
 	"Elysium.Arm.NpcKernelSelect19.BaseSelectSchedule.Idle", GSelect19Flags)
 bool FElysiumNpcKernelSelect19BaseIdleTest::RunTest(const FString&)
@@ -526,6 +529,7 @@ bool FElysiumNpcKernelSelect19PatrolOutranksUseInterestingTest::RunTest(const FS
 	FElysiumNpc::ResetPatrolPathPool();
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19TroikaCombatTest,
 	"Elysium.Substrate.NpcKernelSelect19.TroikaSelectSchedule.Case2Combat", GSelect19Flags)
@@ -595,6 +599,7 @@ bool FElysiumNpcKernelSelect19TroikaCombatTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19TroikaAlertTest,
 	"Elysium.Arm.NpcKernelSelect19.TroikaSelectSchedule.Case3Alert", GSelect19Flags)
 bool FElysiumNpcKernelSelect19TroikaAlertTest::RunTest(const FString&)
@@ -1195,5 +1200,6 @@ bool FElysiumNpcKernelSelect19ControllerLineTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif  // WITH_DEV_AUTOMATION_TESTS

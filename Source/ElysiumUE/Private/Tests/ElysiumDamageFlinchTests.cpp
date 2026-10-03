@@ -11,7 +11,9 @@
 // stream declared on the stack, and the producer case seeds the session's own streams and replays.
 #include "Misc/AutomationTest.h"
 
-#if WITH_DEV_AUTOMATION_TESTS
+#include "Tests/ElysiumArmTier.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS
 
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumEntityDefs.h"

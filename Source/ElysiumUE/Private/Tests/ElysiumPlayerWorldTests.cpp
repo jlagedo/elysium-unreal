@@ -1,6 +1,8 @@
 // Content-free Substrate automation: player entity, teleport, embodiment, targeting, map teardown, and story-skip contracts.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -132,6 +134,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // anything else. No RHI, no actors, no `$ELYSIUM_EXPORT_ROOT` — the recording stub is the body.
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerEntityTest, "Elysium.Arm.PlayerEntity", GElysiumTestFlags)
 bool FElysiumPlayerEntityTest::RunTest(const FString&)
 {
@@ -812,6 +815,7 @@ bool FElysiumPropBoundsTest::RunTest(const FString&)
 	TestEqual(TEXT("a covered prop takes no negative extension"), Negative, FVector::ZeroVector);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningEmbodimentTest,
 	"Elysium.Substrate.OpeningEmbodiment", GElysiumTestFlags)
@@ -1139,6 +1143,7 @@ bool FElysiumGenesisExitTest::RunTest(const FString&)
 // queued BEFORE ends, and with the queue's FIFO tie-break the END edge is the LAST writer of any
 // state both edges touch. `ReconcilePlayerTouches` must reproduce that order — the faithful
 // behaviour, not the current inverted ends-then-begins pass.
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTouchReconcileOrderTest,
 	"Elysium.Arm.TouchReconcileOrder", GElysiumTestFlags)
 bool FElysiumTouchReconcileOrderTest::RunTest(const FString&)
@@ -1234,6 +1239,7 @@ bool FElysiumTouchReconcileOrderTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // Engine integration for the one part GenesisExit cannot model on a bare entity world:
@@ -1255,6 +1261,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMotorSleepTest,
 	"Elysium.Arm.NpcMotorSleep", GElysiumTestFlags)
 bool FElysiumNpcMotorSleepTest::RunTest(const FString&)
@@ -1943,6 +1950,7 @@ bool FElysiumFeedTargetingOcclusionTest::RunTest(const FString&)
 		ElysiumFeedTargeting::HitBelongsToCandidate(Hit.GetComponent(), CandidateVisual));
 	return !HasAnyErrors();
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapActorTeardownTest,
 	"Elysium.Slow.MapActorTeardown", GElysiumTestFlags)
@@ -1992,6 +2000,7 @@ bool FElysiumMapActorTeardownTest::RunTest(const FString&)
 // destination is rewritten, and a rewrite is a direct tutorial-landmark entry.
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStorySkipTest,
 	"Elysium.Arm.StorySkip", GElysiumTestFlags)
 bool FElysiumStorySkipTest::RunTest(const FString&)
@@ -2059,6 +2068,7 @@ bool FElysiumStorySkipTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 } // namespace ElysiumPlayerWorldTests
 

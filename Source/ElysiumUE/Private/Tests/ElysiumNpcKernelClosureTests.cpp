@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -372,6 +374,7 @@ bool FElysiumNpcKernelClosureDispatchTest::RunTest(const FString&)
 // Slots 192 and 215 — `WorldSpaceCenter`, `0x10027160` and `0x100b4c30`
 // =================================================================================================
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClosureWorldSpaceCenterTest,
 	"Elysium.Arm.NpcKernelClosure.WorldSpaceCenter", GElysiumNpcKernelClosureFlags)
 bool FElysiumNpcKernelClosureWorldSpaceCenterTest::RunTest(const FString&)
@@ -919,5 +922,6 @@ bool FElysiumNpcKernelClosureViewConeTest::RunTest(const FString&)
 		N.FInViewCone(F.Victim->EyePosition()), N.FInViewCone(F.Victim));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

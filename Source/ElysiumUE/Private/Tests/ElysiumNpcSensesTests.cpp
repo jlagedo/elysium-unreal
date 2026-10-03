@@ -12,6 +12,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
@@ -192,6 +194,7 @@ namespace
 // unreachable table falls back to.
 
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesPerceptionTest,
 	"Elysium.Arm.NpcSenses.Perception", GElysiumTestFlags)
 bool FElysiumNpcSensesPerceptionTest::RunTest(const FString&)
@@ -275,6 +278,7 @@ bool FElysiumNpcSensesPerceptionTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // `SetClosestPlayer` + `SetPlayerLOS`: the 2 s cadence, the 512-unit no-trace bypass, the
@@ -503,6 +507,7 @@ static void SensesTestEnemyLos(FElysiumNpc& Npc)
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesEnemyLosTest,
 	"Elysium.Arm.NpcSenses.EnemyLos", GElysiumTestFlags)
 bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
@@ -741,6 +746,7 @@ bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 	// `m_afMemory` is the datamap walk alone, with no such drop.)
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // Where the senses do NOT run: a scripted owner suppresses condition gathering, and an
@@ -818,6 +824,7 @@ bool FElysiumNpcSensesSuppressionTest::RunTest(const FString&)
 	return true;
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesAdmissionTest,
 	"Elysium.Arm.NpcSenses.AdmissionDetails", GElysiumTestFlags)
 bool FElysiumNpcSensesAdmissionTest::RunTest(const FString&)
@@ -1145,6 +1152,7 @@ bool FElysiumNpcSensesOverrideDebounceTest::RunTest(const FString&)
 	TestFalse(TEXT("removing the effect restores actual visibility"), F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::EnemyOccluded));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 }   // namespace ElysiumNpcSensesTests
 

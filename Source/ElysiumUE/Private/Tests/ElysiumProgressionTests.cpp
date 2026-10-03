@@ -1,7 +1,9 @@
 // Content-free Substrate automation: quest state, quest presentation projection, and character generation.
 #include "Misc/AutomationTest.h"
 
-#if WITH_DEV_AUTOMATION_TESTS
+#include "Tests/ElysiumArmTier.h"
+
+#if WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS
 
 #include "HAL/IConsoleManager.h"
 #include "Misc/ScopeExit.h"

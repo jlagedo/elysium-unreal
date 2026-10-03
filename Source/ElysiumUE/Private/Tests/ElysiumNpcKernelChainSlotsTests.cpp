@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumClassRegistry.h"
@@ -48,6 +50,7 @@ namespace
 	};
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelChainIntegrationsTest,
 	"Elysium.Arm.NpcKernelChainSlots.EntityIntegrations", GChainSlotsTestFlags)
 bool FElysiumNpcKernelChainIntegrationsTest::RunTest(const FString&)
@@ -84,6 +87,7 @@ bool FElysiumNpcKernelChainIntegrationsTest::RunTest(const FString&)
 	TestEqual(TEXT("...and m_MoveCollide with it"), Npc.RetailMoveCollide, 2);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelChainDescriptorsTest,
 	"Elysium.Substrate.NpcKernelChainSlots.DescriptorChain", GChainSlotsTestFlags)

@@ -1,6 +1,8 @@
 // Content-free Substrate automation: animation binding identity, audio contracts, light rig, weather, stubs, gaze, and blend grids.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -138,6 +140,7 @@ using ElysiumDialogueTestHelpers::ElysiumDlgRow;
 // Skeleton-bound animation resolution — cache identity and cinematic root selection.
 // =====================================================================================
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationBindingIdentityTest,
 	"Elysium.Arm.AnimationBindingIdentity", GElysiumTestFlags)
 bool FElysiumAnimationBindingIdentityTest::RunTest(const FString&)
@@ -697,6 +700,7 @@ bool FElysiumWeatherStateTest::RunTest(const FString&)
 	TestTrue(TEXT("wetness targets clamp to one"), FMath::IsNearlyEqual(State.TargetWetness, 1.0f));
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeatherTimerSequenceTest,
 	"Elysium.Substrate.Weather.TimerSequence", GElysiumTestFlags)
@@ -854,6 +858,7 @@ bool FElysiumWeatherTimerSequenceTest::RunTest(const FString&)
 // rather than only in a running world. The one thing this cannot check is that the answer reaches
 // a material — that is the character verifier's and the live run's job.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGazeTest, "Elysium.Arm.Gaze", GElysiumTestFlags)
 bool FElysiumGazeTest::RunTest(const FString&)
 {
@@ -1567,6 +1572,7 @@ bool FElysiumGazeDialogueTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =====================================================================================
 // Blend grids (CAP7.3) — the axis arithmetic, content-free.
@@ -1628,6 +1634,7 @@ namespace
 	}
 }
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBlendGridAxisTest,
 	"Elysium.Arm.BlendGrids", GElysiumTestFlags)
 bool FElysiumBlendGridAxisTest::RunTest(const FString&)
@@ -1877,6 +1884,7 @@ bool FElysiumBlendGridAxisTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 } // namespace ElysiumWorldEffectsTests

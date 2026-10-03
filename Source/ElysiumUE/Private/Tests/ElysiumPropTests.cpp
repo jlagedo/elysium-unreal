@@ -1,6 +1,8 @@
 // Content-free Substrate automation: animated-prop timing, clip resynchronization, placement, fallback, and relay lifetime.
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "HAL/IConsoleManager.h"
@@ -362,6 +364,7 @@ bool FElysiumPropClipResyncTest::RunTest(const FString&)
 // full quaternion rather than rederiving a yaw is what keeps a placement's pitch and roll: 15 of
 // the corpus's animated-prop placements are leaning palms.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimatedPropPlacementTest,
 	"Elysium.Arm.AnimatedPropPlacement", GElysiumTestFlags)
 bool FElysiumAnimatedPropPlacementTest::RunTest(const FString&)
@@ -435,6 +438,7 @@ bool FElysiumAnimatedPropPlacementTest::RunTest(const FString&)
 	}
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 
 // An indexed model that bakes no playable clip is not an animated representation — it is a
@@ -479,6 +483,7 @@ bool FElysiumPropZeroClipFallbackTest::RunTest(const FString&)
 // collision from the model's `.phy` for any nonzero, non-2 value; solid 0 (or the key absent)
 // stays the prior no-collision default.
 
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSolidCollisionTest,
 	"Elysium.Arm.PropSolidCollision", GElysiumTestFlags)
 bool FElysiumPropSolidCollisionTest::RunTest(const FString&)
@@ -635,6 +640,7 @@ bool FElysiumPropSolidGatingTest::RunTest(const FString&)
 		Body->GetCollisionEnabled() == ECollisionEnabled::NoCollision);
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 } // namespace ElysiumPropTests
 

@@ -1,5 +1,7 @@
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumArmTier.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumBrushComponent.h"
@@ -1068,6 +1070,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 // The output arity of the three inputs versus the +use path. Retail fires OnOpen/OnClose twice on
 // an admitted Open/Close — once at the input, once at the motion start — while Toggle and +use
 // reach the motion helpers directly and fire once. Easy to "fix" back by accident.
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorInputOutputArityTest,
 	"Elysium.Arm.DoorInputOutputArity", GElysiumMoverTestFlags)
 bool FElysiumDoorInputOutputArityTest::RunTest(const FString&)
@@ -1161,6 +1164,7 @@ bool FElysiumDoorInputOutputArityTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 namespace ElysiumDoorKnobTests
 {
@@ -1197,6 +1201,7 @@ namespace ElysiumDoorKnobTests
 // door wrote its own unlocked state over the knob at attach time. Retail reads the other way —
 // CBaseDoor::IsUseRefused (FUN_100eec70) consults the nearest knob and only falls back to the
 // door's own byte when there is no knob, or no user.
+#if ELYSIUM_WITH_ARM_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorKnobLockAuthorityTest,
 	"Elysium.Arm.DoorKnobLockAuthority", GElysiumMoverTestFlags)
 bool FElysiumDoorKnobLockAuthorityTest::RunTest(const FString&)
@@ -1445,5 +1450,6 @@ bool FElysiumDoorNearestKnobSelectionTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif // WITH_DEV_AUTOMATION_TESTS

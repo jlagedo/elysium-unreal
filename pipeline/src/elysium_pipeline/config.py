@@ -13,6 +13,10 @@ class ConfigError(RuntimeError):
     """A required local path is missing or invalid."""
 
 
+#: Unreal's own override of `[Zen.AutoLaunch] LimitProcessLifetime` (ZenServerInterface.cpp).
+ZEN_LIFETIME_VARIABLE = "UE-ZenLimitProcessLifetime"
+
+
 def _repository_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
@@ -211,6 +215,16 @@ class ProjectConfig:
         for name, value in values.items():
             if value is not None:
                 os.environ[name] = os.fspath(value)
+        # The Zen DDC server outlives the editor that starts it (spec 0002 T6). Unreal's default
+        # starts it owned by the editor, so every headless test, arena run and bake started a fresh
+        # one and waited for it: 0.8 s at best, 13.5 s measured on 2026-10-03 (its startup loads a
+        # thousand persisted sessions), the largest single cost of a test boot. Persisting, the next
+        # launch finds it ready. Every launch from here asks the same, so none restarts it; set
+        # `UE-ZenLimitProcessLifetime=true` (environment or `.elysium.local.env`) to restore the
+        # default. `zen down` (Engine/Binaries/Win64/zen.exe) stops a running server.
+        lifetime = os.environ.get(ZEN_LIFETIME_VARIABLE) or _read_local_environment(
+            self.repo_root / ".elysium.local.env").get(ZEN_LIFETIME_VARIABLE)
+        os.environ[ZEN_LIFETIME_VARIABLE] = lifetime or "false"
         if self.temp_root is not None:
             os.environ["TEMP"] = os.fspath(self.temp_root)
             os.environ["TMP"] = os.fspath(self.temp_root)

@@ -156,7 +156,7 @@ report.
   **`kernel --check` 10.5 cold (0.5 s over; profiled: the ledger build 5.2 and the shape build
   4.5, each once — no duplication)** / 4.9 / 0.44. Every generated file byte-identical to `HEAD`;
   the two `reach/` cuts regenerated (they were stale against the committed verdicts).
-- [ ] **T2. The corpus MCP and the text tree under budget.** *Measured (`findings-E-time.md` §1,
+- [x] **T2. The corpus MCP and the text tree under budget.** *Measured (`findings-E-time.md` §1,
   §5):* the corpus MCP is fast (7,639 calls, 0.2 h, one call over 10 s) but its replies are large
   (`vtmb_slot` median 27 KB); the text tree is where queries cost: 1,851 agent-written Python
   scripts over `docs` / TSV took 3.9 h, 53 of them over 30 s (2.9 h, gate-style checks hitting the
@@ -188,8 +188,13 @@ report.
   `structuredContent` included): `brief` 3.1 KB, `fields` 1.4 KB, `log_tail` 9.4 KB, `entity_list`
   11.1 KB, `console_exec gr_hints` 1.8 KB, `wire_report` 0.8 KB. **Miss: `elysium_entity_get` on one
   NPC with no `fields`/`brief` is 82 KB** (its default stays the full detail for a targetname, as the
-  wave-2 brief kept it), so "no default reply over 20 KB" is not met; not ticked.
-- [ ] **T3. The test scale-down (tiered).** *Measured (`findings-F-tests.md`):* C++ 1,778 tests,
+  wave-2 brief kept it), so "no default reply over 20 KB" is not met; not ticked. *Closed in wave 3
+  (2026-10-03, T6's rider):* an NPC answers its `npc_brief` readout unless `full=true` (every field)
+  or `fields` is set, and the reply's `more` says how to get the rest; any other entity answers as
+  before. Measured live on the wire (`gr --arena --headless`, `gr_scenario cover`,
+  `arena_gunman`): 3.4 KB by default (was 82 KB), `brief` 3.1 KB, `fields` 1.3 KB, `full=true`
+  82.2 KB. Ticked.
+- [x] **T3. The test scale-down (tiered).** *Measured (`findings-F-tests.md`):* C++ 1,778 tests,
   default run 122 s wall (19 s boot, 87.7 s of bodies, of which `MapActorTeardown` alone is
   50.6 s); `pytest` 4,600 tests, 384 s serial, of which 150 corpus-reading tests are 326 s; 1,241
   C++ tests pass "with warnings" and eight fixture messages are 70% of 28,102 warnings; two
@@ -221,7 +226,11 @@ report.
   0 failed (189 with warnings), 13.9 s bodies, 57.2 s wall; Content 53/0 (7 with warnings), 28.6 s
   wall; Slow 2/0, 29.5 s wall, `MapActorTeardown` 50.6 s → 10.1 s (`bStageWithoutCatalogue`);
   `pytest` 4,558 passed, 0 failed, 20.8 s. **Misses: the default C++ run's ≤25 s (the boot is the
-  cost, not the 2 s of tests: T6 / gate 1) and `pytest`'s ≤20 s by 0.8 s**; not ticked.
+  cost, not the 2 s of tests: T6 / gate 1) and `pytest`'s ≤20 s by 0.8 s**; not ticked. *Wave 3
+  (T6's boot cut, 2026-10-03):* the default C++ run 176 of 176, 0 failed, **15.6–19.6 s wall** (16.6 s
+  on the first boot after a build); `--all` 1,782 of 1,782 in one boot. Ticked on the default tier;
+  `pytest` (4,568 passed, 0 failed) measured 19.7 s and 26.0 s, still not reliably under 20 s — a
+  gate-1 item.
 - [x] **T4. The runner, the lease and the waits.** *Measured:* an `elysium test` run is 19 s of
   editor boot around 0.1–0.7 s of tests; the shared export-root lease refused 1,659 builds and 836
   test runs in 12 days, and the retry wrappers cost 9.2 h; agents' sleep-polling loops on build and
@@ -295,6 +304,88 @@ report.
   one-`.cpp` edit rebuilds in ≤60 s and the p90 of a re-measured edit mix is ≤90 s (today 280 s).
   It is build work, so it runs as its own wave with one agent that holds the build.
   *Size:* M. *Model:* Opus/high.
+  *Landed (wave 3, 2026-10-03; `stories/wave3/brief-T6.md`, one agent holding the build).* **The
+  boot**, split from the engine's own log timestamps. A test boot's largest cost was the Zen DDC
+  server: Unreal starts one per launch, owned by that launch, and its startup reloads a thousand
+  persisted sessions — 0.8 s, or 13.5 s (the 35.5–45.7 s runs). Then the automation controller's
+  5 s wait for remote workers before the first test, and the uncontrolled-changelist tracker (a
+  Perforce feature: a 12 MB state file read on the critical path, 1.1–2.6 s, then a walk of 86,000
+  packages). The arena's cost is its stage-world build, 14.8 s warm: catalogues 4.6 s, native bodies
+  10.2 s (the player's chargen body and every wield model's cast body, each with every clip
+  `PrepareMany` makes resident), residency 0.03 s; then an orderly shutdown, 1.4 s. Cut: the pipeline
+  keeps the Zen server running between its launches (`UE-ZenLimitProcessLifetime=false`; `true` in
+  `.elysium.local.env` restores Unreal's default), `Automation Now` ahead of `RunTest`, the tracker
+  off for every unattended launch, and the arena host exits forced once its index and traces are on
+  disk. The stage world's residency is the game's own rule (the map path makes the same wield
+  catalogue resident) and stays; its phases are now in the `prepared native model contexts` line.
+
+  | boot, s wall | before | after |
+  |---|---|---|
+  | default tier (176 tests), warm | 22.1–22.5 (35.5–45.7 when Zen started slow) | 15.6–16.0 |
+  | default tier, first after a build | 35.5 | 16.6–19.6 |
+  | arena (4 records), warm | 28.6–29.1 | 25.6–26.1 |
+  | arena, first after a build | 37.1 | 26.1–27.1 |
+  | three prefixes in one boot | 24.2 (46.5 cold) | 12.0 |
+
+  **The build.** One edit simulated by touching the file (content unchanged), then `uv run elysium
+  build`: s wall / translation units compiled / compile CPU s. The link is 0.4 s (`.lib`) + 2.0 s
+  (`.dll`) in every row, so no linker setting is worth changing.
+
+  | edit | before | after |
+  |---|---|---|
+  | nothing (null build) | 1.9 / 0 | 1.9 / 0 |
+  | `Substrate/ElysiumNpcConditions.cpp` | 9.4 / 1 / 7 | 9.3 / 1 / 7 |
+  | `Substrate/ElysiumNpcBase.h` | 193.6 / 44 / 1,090 | 156.8 / 43 / 898 |
+  | `Substrate/ElysiumNpc.h` | 187.8 / 43 / 1,054 | 154.2 / 42 / 866 |
+  | `Public/ElysiumEntityWorld.h` | 209.8 / 48 / 1,196 | 182.6 / 47 / 1,039 |
+  | an arm test (`ElysiumNpcKernelSpawnTests.cpp`) | 13.6 / 1 / 21 | 11.9 / 1 / 15 |
+  | `Tests/ElysiumTestServices.h` | 93.4 / 19 / 544 | 72.1 / 18 / 352 |
+  | the census, alone | 11.6 / 1 / 14 | 8.1 / 1 / 4 |
+  | median / p90 of the eight | 53.5 / 198.5 | 42.0 / 164.5 |
+  | a real `.cpp` edit: first build / again / reverted | 10.9 / 8.1 / 10.8 | 9.6 / 9.5 / 9.5 |
+  | a wave's commit (~300 files leave `git status`) | 226 / 50 | 1.9 / 0 (218 files hidden from it, content unchanged) |
+  | switching the arm tier on / off | — | 104 / 21 / 626 on; 81 / 21 / 410 off |
+  | after a `research kernel` that changed nothing | 202 / 50 | 1.6 / 0 |
+
+  Where the time went, and what was done:
+  - **Adaptive unity** took every file `git status` lists out of its blob and compiled it alone, and
+    put it back when it left the list: a commit rebuilt 50 blobs (226 s), and a header edited
+    mid-story compiled every working-set file as its own translation unit (wave 2's 9 m 24 s). Off
+    (`bUseAdaptiveUnityBuild = false`, both targets): a `.cpp` edit recompiles its blob — the
+    kernel's 5 s, the heaviest 35 s — and a commit recompiles nothing.
+  - **The arm tier compiled on demand.** Every `Elysium.Arm.*` case sits behind
+    `ELYSIUM_WITH_ARM_TESTS` from the generated, Git-ignored `Tests/ElysiumArmTier.h` (only test
+    files include it, so switching it recompiles test files only): 127 arm-only files guard the whole
+    file and depend on no project header with the tier off, 72 mixed files guard their 598 arm cases.
+    A plain `build` compiles it out, `build --arm` in; `test arm`, `test --all` and any selection
+    reaching an arm case switch it on and build first, and say so. `test_test_tiers.py` fails an arm
+    case outside the guard and a default case inside it.
+  - **The hot headers.** `ElysiumNpcBase.h` reaches 348 `.cpp` (114 tests), `ElysiumNpc.h` 336 (318
+    include it directly), `ElysiumEntityWorld.h` 462 (456 directly): every source blob holds an
+    includer. The 168 default-tier cases sit in 79 files across 18 of the 21 test blobs, so every
+    test blob still compiles on a kernel-header edit, now without its arm cases: the test blobs'
+    compile CPU fell 35–40% (520 → 314 s for `ElysiumNpcBase.h`); the source blobs' 570–630 s is
+    untouched. `ElysiumTestServices.h` split by need: dropped — under unity a header is parsed once
+    per blob, and every test blob holds a file that needs the whole services.
+  - **The bound is the commit charge, not the cores.** UnrealBuildTool allows 10–11 compiles at once;
+    3–6 ran: each `cl.exe` commits the UnrealEd shared PCH (2.37 GB) privately — 2.6–2.7 GB each
+    against a 0.5–0.9 GB working set — and the machine's commit limit (32 GB of RAM and a fixed
+    21 GB pagefile, ~34 GB committed by other programs at rest) is reached with 13–14 GB of RAM
+    still free. A module PCH of the Engine set would be ~2.0 GB (the game target's measures 1.97 GB):
+    15% less per compile, not worth a module-wide PCH change; dropped.
+  - **The ledger regeneration.** `research kernel` rewrote 21 generated sources with the same bytes
+    (`ElysiumInfraKeyfields.h`, the slot `.inl`s included inside the kernel's class bodies, the
+    census), so the build after every story close's regeneration was a full one. The two generator
+    writers (`gen_kernel_shape._emit`, `gen_kernel_bindings._emit`) skip unchanged text now.
+  - **The census** compiles in 3.5–7 s within its blob: not in the way; dropped.
+  - Riders: `elysium_entity_get`'s NPC default (T2, above); `ElysiumFixtureNoise.h` says how the two
+    stub-counting tests declare their own expectation ahead of the fixture's.
+
+  **Miss: the edit mix's p90 is 164.5 s (target 90 s)** — the three kernel/world header rows, 42–47
+  blobs and 870–1,040 s of compile CPU run 3–6 at a time. The levers left: the machine's commit limit
+  (proposed to the owner), a narrower kernel header (a refactor across hundreds of includers), and
+  the default-tier cases gathered into fewer files so test blobs leave a kernel header's reach. Not
+  ticked.
 
 Waves: **wave 1 (Python)** — three coders on disjoint files: T1; T2's Python half; T4 with T3's
 `pytest` half (markers, xdist, the import hazard, the two failing tests). Then the integrator:
