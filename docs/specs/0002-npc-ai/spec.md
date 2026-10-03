@@ -396,6 +396,35 @@ build, the default run, the arm tier once, the arena suite. **Wave 3** — T6
 alone, one agent holding the build. Gate 1 is the integrator's report after wave 3 against the
 numbers above.
 
+### Gate 1, measured 2026-10-03 (waves 1–3: `327beebf`, `ae3eba85`, `809404ba`) — awaiting the owner's ruling
+
+| Clause | Target | Measured | Before |
+|---|---|---|---|
+| each `kernel_*` check | ≤10 s | ≤8.3 s cold, ≤0.44 s unchanged | 7–19 s |
+| combined `kernel --check` | ≤10 s | **10.2–10.5 s cold** (4.9 s after an edit, 0.4 s unchanged) | 21 s |
+| corpus MCP probes | ≤10 s, ≤20 KB | 0.11 s, 19.7 KB; 276 calls in the waves, max 1.7 s | replies to 148 KB |
+| default C++ tier | ≤25 s wall | 15.6–16.0 s warm, 16.6–19.6 s first after a build; 0 failed | 122 s |
+| three prefixes, one boot | ≤25 s | 12.0 s | not possible |
+| default `pytest` | ≤20 s wall | **19.7–26.0 s**; 0 failed | 384 s, 2 failing |
+| one `.cpp` edit rebuilt | ≤60 s | 9.3 s | — |
+| edit-mix p90 | ≤90 s | **164.5 s** (kernel header edits 154–183 s) | 198.5 s |
+| arena suite | runs, ≤30 s | 25.6–27.1 s | — |
+| queries over 60 s | zero | zero (two calls over 60 s were an approval wait and an edit script) | 185+ |
+| polling loops | zero | **7 short sleep-waits, 99 s in all** (two agents waiting on a process or a log) | 696 loops, 18.9 h |
+| lease refusals | zero | zero unintended (one deliberate `--no-wait` probe) | 2,495 |
+
+Census of the three waves (3.89 h, 2,875 tool calls, 148 run journals): text was read through the
+built-in tools 1,351 times against 88 shell calls; a tool was blocking for 33% of active wall time
+(40% with approval waits), now builds and test runs rather than refusals and polling.
+
+The misses, each explained: the combined `kernel --check` runs one ledger build and one shape
+build with no duplication, and only from an empty cache; `pytest`'s remainder is xdist's worker
+start on Windows (8, 12 and 16 workers measured alike); a kernel-header edit runs 3–6 compiles at
+once instead of 10–11 because each commits ~2.6 GB against the editor's precompiled header and the
+machine's commit limit is 53 GB (RAM 32 GB + a 21 GB pagefile) — a machine setting, the owner's.
+T6 stays unticked until that row is re-measured. The sleep-waits: later briefs state that a
+background command is waited on by its completion notification, never by a sleep.
+
 ## Step 2 — the landed work, proven live
 
 **Gate:** every scenario in the inventory green on one `uv run elysium arena` run; `sp_tutorial_1`
