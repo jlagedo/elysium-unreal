@@ -180,8 +180,15 @@ report.
   deadline, the journal and the caps in `corpus_mcp.py`, `vtmb_where` and `research
   where|section|verdict|cited|rows` (`research/tooling/lookup/`); the probe set's 43 calls at
   ≤0.11 s and ≤19.7 KB (`vtmb_code 0x103692c0` 38 s → 0.002 s), `where` ≤0.09 s, the index's
-  cold rebuild 1.3 s; the search index rebuilt (`corpus reindex --search-only`, 8.6 s). Open: the
-  `elysium` MCP read caps (C++, wave 2).
+  cold rebuild 1.3 s; the search index rebuilt (`corpus reindex --search-only`, 8.6 s). *C++ half
+  landed (wave 2, 2026-10-03):* `elysium_entity_get` `fields` / `brief` / `limit` (1 on a classname)
+  with `described` dropped, `elysium_console_exec` `max_lines=200` and 300-character lines,
+  `elysium_entity_list` / `elysium_log_tail` `limit=25` + `grep`, `elysium_wire_report` `limit=25`,
+  every cut naming the parameter. Measured live on the wire (the plugin's doubled
+  `structuredContent` included): `brief` 3.1 KB, `fields` 1.4 KB, `log_tail` 9.4 KB, `entity_list`
+  11.1 KB, `console_exec gr_hints` 1.8 KB, `wire_report` 0.8 KB. **Miss: `elysium_entity_get` on one
+  NPC with no `fields`/`brief` is 82 KB** (its default stays the full detail for a targetname, as the
+  wave-2 brief kept it), so "no default reply over 20 KB" is not met; not ticked.
 - [ ] **T3. The test scale-down (tiered).** *Measured (`findings-F-tests.md`):* C++ 1,778 tests,
   default run 122 s wall (19 s boot, 87.7 s of bodies, of which `MapActorTeardown` alone is
   50.6 s); `pytest` 4,600 tests, 384 s serial, of which 150 corpus-reading tests are 326 s; 1,241
@@ -205,7 +212,16 @@ report.
   71 s), `pytest-xdist -n auto`, the import-time root writes moved to `conftest.py`, both failing
   tests fixed at their cause. Default run 4,526 passed, 0 failed, **19.7–25.9 s wall over eleven
   runs (not reliably under 20 s: 76 s of test bodies, the rest xdist's 16-worker start and
-  per-report overhead)**. Open: the C++ half (wave 2).
+  per-report overhead)**. *C++ half landed (wave 2, 2026-10-03):* 1,778 → 1,774 tests, tiers by name:
+  default (`Elysium.Session.` + `Elysium.Substrate.`) 176, `Elysium.Arm` 1,551, `Elysium.Content` 53,
+  `Elysium.Slow` 2; 4 whole tests and 134 seam lines deleted, the 21 port-only tests kept (as Arm);
+  six fixture warning families declared expected from `FElysiumRecordingServices`. Integrator's run:
+  default 176 passed, 0 failed, 39 "with warnings", 2.1 s of bodies, **35.5 s wall** (first boot after
+  a build; a second run 45.7 s with a 5 s lease wait — engine init alone 26.8 s); Arm 1,551 passed,
+  0 failed (189 with warnings), 13.9 s bodies, 57.2 s wall; Content 53/0 (7 with warnings), 28.6 s
+  wall; Slow 2/0, 29.5 s wall, `MapActorTeardown` 50.6 s → 10.1 s (`bStageWithoutCatalogue`);
+  `pytest` 4,558 passed, 0 failed, 20.8 s. **Misses: the default C++ run's ≤25 s (the boot is the
+  cost, not the 2 s of tests: T6 / gate 1) and `pytest`'s ≤20 s by 0.8 s**; not ticked.
 - [x] **T4. The runner, the lease and the waits.** *Measured:* an `elysium test` run is 19 s of
   editor boot around 0.1–0.7 s of tests; the shared export-root lease refused 1,659 builds and 836
   test runs in 12 days, and the retry wrappers cost 9.2 h; agents' sleep-polling loops on build and
@@ -225,7 +241,7 @@ report.
   `slow-queries.tsv`, `RESEARCH_NOT_A_QUERY` on the tools that are runs). Live: three prefixes,
   71 tests, one boot, 24.2 s warm (46.5 s on a cold first boot); a concurrent `--no-wait` refused
   with 8, a concurrent plain run waited and ran. The day's journal is read at gate 1's census.
-- [ ] **T5. The Green Room as the live test suite.** *Today:* `gr_scenario cover` is one console
+- [x] **T5. The Green Room as the live test suite.** *Today:* `gr_scenario cover` is one console
   verb over a hand-authored C++ row; the observer is a human reading `npc_trace_tail` over MCP.
   *Job:*
   - **Scenarios are data**, one JSON record per scenario under `Arena/scenarios/` (tracked text;
@@ -256,7 +272,17 @@ report.
     (a path-free program whose finite sequence finishes headless, proving the host animates).
   *Acceptance:* `cover` (the 2026-09-30 run) as a record, red exactly at known red 1; the arena
   host's suite under 30 s wall. *Size:* L, two coders (`stories/wave2/brief-A-scenarios.md`,
-  `brief-B-trace.md`). *Model:* Opus/high.
+  `brief-B-trace.md`). *Model:* Opus/high. *Landed (wave 2, 2026-10-03):* `uv run elysium arena`,
+  one boot, 4 records: `must_fail` and `bound_trips` pass (they fail, `expect_fail`),
+  `control_sequence` passes (`idle01` rate 1, `seqfinished` at 2.0 s: the host animates), `cover`
+  `expected-fail` at expect[3] `seqfinished` (deadline 27.3 s): the walk to `cover_corner_nw` arrives
+  (7.2 s), `task_snap_to_hint` completes (7.3 s), `SCHED_TROIKA_TAKE_COVER_HINT_VS_MELEE (0xa4)` runs
+  `task_play_cover_outof`, the body is handed `smith_lean_left_into rate=0` and nothing finishes —
+  known red 1. The lab (`gr_scenario cover`, live over MCP) reproduces it event for event (106 events,
+  the same expectation, the same deadline). Wall: **28.6 s** warm, **37.1 s** on the first boot after
+  a build (miss); the four records take 2.4 s, the stage world's boot build 14.7 s warm / 22.5 s cold
+  (item catalogue, the player's chargen body, the native model contexts). The map host is not
+  exercised: no map record exists yet.
 - [ ] **T6. The incremental build.** *Measured:* builds are the largest single wait, 20.5
   agent-hours in 12 days: 667 real builds, median 46 s, p90 280 s, max 1,456 s. Known compile
   costs: `ElysiumTestServices.h` (2,504 lines, included by 102 of 120 test files, pulling

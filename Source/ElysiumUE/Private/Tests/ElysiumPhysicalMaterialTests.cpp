@@ -70,7 +70,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicalMaterialApplyJsonTest,
-	"Elysium.Substrate.PhysicalMaterial.ApplyJson", GElysiumPhysicalMaterialTestFlags)
+	"Elysium.Arm.PhysicalMaterial.ApplyJson", GElysiumPhysicalMaterialTestFlags)
 bool FElysiumPhysicalMaterialApplyJsonTest::RunTest(const FString&)
 {
 	UElysiumPhysicalMaterial* Surface = NewSurface();
@@ -171,7 +171,7 @@ bool FElysiumPhysicalMaterialApplyJsonTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicalMaterialClampsTest,
-	"Elysium.Substrate.PhysicalMaterial.Clamps", GElysiumPhysicalMaterialTestFlags)
+	"Elysium.Arm.PhysicalMaterial.Clamps", GElysiumPhysicalMaterialTestFlags)
 bool FElysiumPhysicalMaterialClampsTest::RunTest(const FString&)
 {
 	// `elasticity` runs to 2 in the shipped table and down to 0.001, and the engine's Restitution
@@ -232,7 +232,7 @@ bool FElysiumPhysicalMaterialClampsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicalMaterialReapplyReplacesTest,
-	"Elysium.Substrate.PhysicalMaterial.ReapplyReplaces", GElysiumPhysicalMaterialTestFlags)
+	"Elysium.Arm.PhysicalMaterial.ReapplyReplaces", GElysiumPhysicalMaterialTestFlags)
 bool FElysiumPhysicalMaterialReapplyReplacesTest::RunTest(const FString&)
 {
 	UElysiumPhysicalMaterial* Surface = NewSurface();
@@ -302,7 +302,7 @@ bool FElysiumPhysicalMaterialReapplyReplacesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicalMaterialRejectsBadJsonTest,
-	"Elysium.Substrate.PhysicalMaterial.RejectsBadJson", GElysiumPhysicalMaterialTestFlags)
+	"Elysium.Arm.PhysicalMaterial.RejectsBadJson", GElysiumPhysicalMaterialTestFlags)
 bool FElysiumPhysicalMaterialRejectsBadJsonTest::RunTest(const FString&)
 {
 	UElysiumPhysicalMaterial* Surface = NewSurface();
@@ -347,7 +347,7 @@ bool FElysiumPhysicalMaterialRejectsBadJsonTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicalMaterialRegistryTagsTest,
-	"Elysium.Substrate.PhysicalMaterial.RegistryTags", GElysiumPhysicalMaterialTestFlags)
+	"Elysium.Arm.PhysicalMaterial.RegistryTags", GElysiumPhysicalMaterialTestFlags)
 bool FElysiumPhysicalMaterialRegistryTagsTest::RunTest(const FString&)
 {
 	// A throwaway package: the stamp writes package metadata, and the transient package outlives

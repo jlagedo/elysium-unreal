@@ -14,7 +14,7 @@ static constexpr EAutomationTestFlags GElysiumRetailMaskRecipeFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRetailMaskRecipeTest,
-	"Elysium.Substrate.Geometry.MaskRecipe", GElysiumRetailMaskRecipeFlags)
+	"Elysium.Arm.Geometry.MaskRecipe", GElysiumRetailMaskRecipeFlags)
 bool FElysiumRetailMaskRecipeTest::RunTest(const FString&)
 {
 	struct FRow

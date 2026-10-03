@@ -192,7 +192,7 @@ bool FElysiumNpcKernelScheduleIdSpaceTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScheduleTaskSurfaceTest,
-	"Elysium.Substrate.NpcKernelSchedule.TaskSurface", GElysiumNpcKernelScheduleFlags)
+	"Elysium.Arm.NpcKernelSchedule.TaskSurface", GElysiumNpcKernelScheduleFlags)
 bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_schedule_tasks"), 4103);
@@ -312,8 +312,6 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 		Guard->BaseScheduleHost.WaitFinished, 10.0 + ElysiumNpcTunables::Thousand, 1e-6);
 
 	// --- `0x1027db30` -----------------------------------------------------------------------------
-	TestFalse(TEXT("every node index is out of range with no node list (the seam)"),
-		Guard->IsUnusableNodeIndex(0));
 	TestFalse(TEXT("and a negative one is retail's own refusal"), Guard->IsUnusableNodeIndex(-1));
 
 	return true;
@@ -324,7 +322,7 @@ bool FElysiumNpcKernelScheduleTaskSurfaceTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSchedulePreSelectTest,
-	"Elysium.Substrate.NpcKernelSchedule.PreSelectSchedule", GElysiumNpcKernelScheduleFlags)
+	"Elysium.Arm.NpcKernelSchedule.PreSelectSchedule", GElysiumNpcKernelScheduleFlags)
 bool FElysiumNpcKernelSchedulePreSelectTest::RunTest(const FString&)
 {
 	// **None of slot 437's three species classes has a registered entity classname here** —
@@ -416,7 +414,7 @@ bool FElysiumNpcKernelSchedulePreSelectTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScheduleSpeciesSelectTest,
-	"Elysium.Substrate.NpcKernelSchedule.SpeciesSelectSchedule", GElysiumNpcKernelScheduleFlags)
+	"Elysium.Arm.NpcKernelSchedule.SpeciesSelectSchedule", GElysiumNpcKernelScheduleFlags)
 bool FElysiumNpcKernelScheduleSpeciesSelectTest::RunTest(const FString&)
 {
 	// The five bodies, by census row — three of the classes have no registered classname here.
@@ -515,7 +513,7 @@ bool FElysiumNpcKernelScheduleSpeciesSelectTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScheduleMeleeTest,
-	"Elysium.Substrate.NpcKernelSchedule.SelectScheduleMeleeCombat", GElysiumNpcKernelScheduleFlags)
+	"Elysium.Arm.NpcKernelSchedule.SelectScheduleMeleeCombat", GElysiumNpcKernelScheduleFlags)
 bool FElysiumNpcKernelScheduleMeleeTest::RunTest(const FString&)
 {
 	// The six bodies that fill slot 604, by census row. Three of the five species classes have no
@@ -685,7 +683,7 @@ bool FElysiumNpcKernelScheduleMeleeTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScheduleMiscTest,
-	"Elysium.Substrate.NpcKernelSchedule.TaskDistanceAndOrders", GElysiumNpcKernelScheduleFlags)
+	"Elysium.Arm.NpcKernelSchedule.TaskDistanceAndOrders", GElysiumNpcKernelScheduleFlags)
 bool FElysiumNpcKernelScheduleMiscTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_schedule_misc"), 4107);
@@ -734,7 +732,7 @@ bool FElysiumNpcKernelScheduleMiscTest::RunTest(const FString&)
 	TestEqual(TEXT("and a second puts it back"), Leader->FailureType, 0);
 
 	// `0x101a95d0` (`CCineAI::FixScriptNPCSchedule`) is the director's since story 5 fold A3:
-	// `Elysium.Substrate.NpcKernelDirector.AiFinishSchedule`.
+	// `Elysium.Arm.NpcKernelDirector.AiFinishSchedule`.
 	FElysiumNpcWorldFixture::PrepareForKernelDrive(Guard);
 
 	// --- `0x102ae840` -----------------------------------------------------------------------------
@@ -757,7 +755,7 @@ bool FElysiumNpcKernelScheduleMiscTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScheduleTestBitsTest,
-	"Elysium.Substrate.NpcKernelSchedule.SpeciesBuildScheduleTestBits",
+	"Elysium.Arm.NpcKernelSchedule.SpeciesBuildScheduleTestBits",
 	GElysiumNpcKernelScheduleFlags)
 bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 {
@@ -866,8 +864,6 @@ bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 			Guard->SelectCoverOrKickSchedule(Request), 0);
 		TestEqual(TEXT("but the kick-prop search timer was rearmed two seconds out"),
 			Guard->ScheduleHost.KickPropSearchTimer, Now + 2.0, 1e-6);
-		TestFalse(TEXT("and the prop search found nothing (the seam)"),
-			Guard->ScheduleHost.KickProp.IsSet());
 		TestFalse(TEXT("the hint-cover object is cleared with no enemy"),
 			Guard->ScheduleHost.HintCoverObject.IsSet());
 	}

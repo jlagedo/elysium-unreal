@@ -318,7 +318,7 @@ bool FElysiumComboChainSequenceTest::RunTest(const FString&)
 // A held button chains nothing, and the live direction cannot redirect a chain.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumComboChainPressEdgeTest,
-	"Elysium.Substrate.ComboChain.PressEdge", GElysiumComboTestFlags)
+	"Elysium.Arm.ComboChain.PressEdge", GElysiumComboTestFlags)
 bool FElysiumComboChainPressEdgeTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeComboTable();
@@ -370,7 +370,7 @@ bool FElysiumComboChainPressEdgeTest::RunTest(const FString&)
 // What the chain travels: the authored displacement of the links it actually took.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumComboChainDisplacementTest,
-	"Elysium.Substrate.ComboChain.Displacement", GElysiumComboTestFlags)
+	"Elysium.Arm.ComboChain.Displacement", GElysiumComboTestFlags)
 bool FElysiumComboChainDisplacementTest::RunTest(const FString&)
 {
 	constexpr float Tolerance = 0.01f;

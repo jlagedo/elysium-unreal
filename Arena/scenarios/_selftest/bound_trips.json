@@ -1,0 +1,17 @@
+{
+  "name": "bound_trips",
+  "about": "Harness self-test: a real event -- the relay's Trigger input, which the script fires at t=2.0 -- with a deadline it cannot make (by 1.0) must fail the run at the deadline, and expect_fail turns that failure into a pass. Reported as `fail`, it means a deadline let an event count after it had passed.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 4.0,
+  "expect_fail": true,
+  "rows": [
+    { "classname": "logic_relay", "name": "selftest_relay", "at": "start" }
+  ],
+  "script": [
+    { "t": 2.0, "do": "fire", "target": "selftest_relay", "input": "Trigger" }
+  ],
+  "expect": [
+    { "who": "selftest_relay", "kind": "input", "match": "Trigger", "by": 1.0 }
+  ]
+}

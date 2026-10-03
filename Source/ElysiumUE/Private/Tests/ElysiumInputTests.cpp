@@ -125,7 +125,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // path (alias expansion -> cvar set -> Python fallthrough). Content-free: no Python, no world.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumConsoleTest, "Elysium.Substrate.Console", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumConsoleTest, "Elysium.Arm.Console", GElysiumTestFlags)
 bool FElysiumConsoleTest::RunTest(const FString&)
 {
 	FElysiumConsole C;
@@ -229,7 +229,7 @@ bool FElysiumConsoleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerViewModelsTest,
-	"Elysium.Substrate.PlayerViewModels", GElysiumTestFlags)
+	"Elysium.Arm.PlayerViewModels", GElysiumTestFlags)
 bool FElysiumPlayerViewModelsTest::RunTest(const FString&)
 {
 	FElysiumEntityDefs Defs;
@@ -265,7 +265,7 @@ bool FElysiumPlayerViewModelsTest::RunTest(const FString&)
 // asserted with no world, no controller and no input device.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCommandsTest, "Elysium.Substrate.Commands", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCommandsTest, "Elysium.Arm.Commands", GElysiumTestFlags)
 bool FElysiumCommandsTest::RunTest(const FString&)
 {
 	FElysiumCommands& Registry = FElysiumCommands::Get();
@@ -420,7 +420,7 @@ bool FElysiumCommandsTest::RunTest(const FString&)
 // headless play and replay the same mechanism as playing.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUserCmdTest, "Elysium.Substrate.UserCmd", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUserCmdTest, "Elysium.Arm.UserCmd", GElysiumTestFlags)
 bool FElysiumUserCmdTest::RunTest(const FString&)
 {
 	FElysiumUserCmdBuilder Builder;
@@ -693,10 +693,10 @@ bool FElysiumUserCmdTest::RunTest(const FString&)
 // The look response curve. The whole
 // mouse path from counts to degrees is one pure function, which is what lets the retail claim be
 // asserted rather than recalled: at the shipped tuning the curve is the identity, exactly, so
-// `Elysium.Substrate.LookCurve` failing means the faithful path moved.
+// `Elysium.Arm.LookCurve` failing means the faithful path moved.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLookCurveTest, "Elysium.Substrate.LookCurve", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLookCurveTest, "Elysium.Arm.LookCurve", GElysiumTestFlags)
 bool FElysiumLookCurveTest::RunTest(const FString&)
 {
 	using ElysiumInput::FElysiumLookTuning;
@@ -841,7 +841,7 @@ bool FElysiumLookCurveTest::RunTest(const FString&)
 // device and no local player.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStickLookTest, "Elysium.Substrate.StickLook", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStickLookTest, "Elysium.Arm.StickLook", GElysiumTestFlags)
 bool FElysiumStickLookTest::RunTest(const FString&)
 {
 	using ElysiumInput::FElysiumStickTuning;
@@ -1092,7 +1092,7 @@ bool FElysiumStickLookTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChannelRegistryTest,
-	"Elysium.Substrate.ChannelRegistry", GElysiumTestFlags)
+	"Elysium.Arm.ChannelRegistry", GElysiumTestFlags)
 bool FElysiumChannelRegistryTest::RunTest(const FString&)
 {
 	using namespace ElysiumChannels;
@@ -1165,7 +1165,7 @@ bool FElysiumChannelRegistryTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChannelRecorderTest,
-	"Elysium.Substrate.ChannelRecorder", GElysiumTestFlags)
+	"Elysium.Arm.ChannelRecorder", GElysiumTestFlags)
 bool FElysiumChannelRecorderTest::RunTest(const FString&)
 {
 	static const TCHAR* const Cols[] = { TEXT("frame"), TEXT("pz"), TEXT("onground") };
@@ -1267,7 +1267,7 @@ bool FElysiumChannelRecorderTest::RunTest(const FString&)
 // deliberately does not pause, and Boot is reachable from nowhere.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAppStateTest, "Elysium.Substrate.AppState", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAppStateTest, "Elysium.Arm.AppState", GElysiumTestFlags)
 bool FElysiumAppStateTest::RunTest(const FString&)
 {
 	using EState = EElysiumAppState;
@@ -1358,7 +1358,7 @@ bool FElysiumAppStateTest::RunTest(const FString&)
 // balanced across every screen transition the game can make.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInputScopesTest, "Elysium.Substrate.InputScopes", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInputScopesTest, "Elysium.Arm.InputScopes", GElysiumTestFlags)
 bool FElysiumInputScopesTest::RunTest(const FString&)
 {
 	using EMode = EElysiumInputMode;

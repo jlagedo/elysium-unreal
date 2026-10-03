@@ -1,0 +1,11 @@
+{
+  "name": "must_fail",
+  "about": "Harness self-test: an expectation no event can meet (no entity carries the name, no schedule the name) must fail the run at its deadline, and expect_fail turns that failure into a pass. Reported as `fail`, it means the runner passed a record it should have failed.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 3.0,
+  "expect_fail": true,
+  "expect": [
+    { "who": "selftest_nobody", "kind": "schedule", "match": "SCHED_NOTHING_CAN_MEET", "by": 2.0 }
+  ]
+}

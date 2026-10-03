@@ -91,7 +91,7 @@ bool FElysiumNpcKernelClassTreeChainTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassTreeCastsTest,
-	"Elysium.Substrate.NpcKernelClass.TypedCasts", GElysiumNpcKernelClassTreeFlags)
+	"Elysium.Arm.NpcKernelClass.TypedCasts", GElysiumNpcKernelClassTreeFlags)
 bool FElysiumNpcKernelClassTreeCastsTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_class_tree"), 5150);

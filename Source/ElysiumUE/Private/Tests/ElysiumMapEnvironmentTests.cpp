@@ -50,7 +50,7 @@ namespace
 // Every field copies straight from the reflected asset to the plain struct the runtime consumes —
 // no derivation, no renormalisation.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapEnvironmentConvertsFieldForFieldTest,
-	"Elysium.Substrate.MapEnvironment.ConvertsFieldForField", GElysiumMapEnvironmentTestFlags)
+	"Elysium.Arm.MapEnvironment.ConvertsFieldForField", GElysiumMapEnvironmentTestFlags)
 bool FElysiumMapEnvironmentConvertsFieldForFieldTest::RunTest(const FString&)
 {
 	const UElysiumMapEnvironment* Asset = BuildFullyAuthored();
@@ -84,7 +84,7 @@ bool FElysiumMapEnvironmentConvertsFieldForFieldTest::RunTest(const FString&)
 // both invalid — so a caller cannot tell "asset with nothing authored" from "no asset" by the
 // struct alone; only the source enum `Load` returns can.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapEnvironmentDefaultsMatchTheSidecarIdentityTest,
-	"Elysium.Substrate.MapEnvironment.DefaultsMatchTheSidecarIdentity",
+	"Elysium.Arm.MapEnvironment.DefaultsMatchTheSidecarIdentity",
 	GElysiumMapEnvironmentTestFlags)
 bool FElysiumMapEnvironmentDefaultsMatchTheSidecarIdentityTest::RunTest(const FString&)
 {

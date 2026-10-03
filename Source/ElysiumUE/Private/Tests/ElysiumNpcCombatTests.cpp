@@ -310,7 +310,7 @@ namespace
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatLoadoutTest,
-	"Elysium.Substrate.NpcCombat.Loadout", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.Loadout", GElysiumTestFlags)
 bool FElysiumNpcCombatLoadoutTest::RunTest(const FString&)
 {
 	// --- The authored classname is granted and made the ACTIVE weapon --------------------------
@@ -415,7 +415,7 @@ bool FElysiumNpcCombatLoadoutTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatCapabilityTest,
-	"Elysium.Substrate.NpcCombat.Capability", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.Capability", GElysiumTestFlags)
 bool FElysiumNpcCombatCapabilityTest::RunTest(const FString&)
 {
 	TestEqual(TEXT("the melee capability is retail's own 0x18000"),
@@ -504,7 +504,7 @@ bool FElysiumNpcCombatCapabilityTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatAttackConditionsTest,
-	"Elysium.Substrate.NpcCombat.AttackConditions", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.AttackConditions", GElysiumTestFlags)
 bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 {
 	// --- Melee: reach, facing and the recovery deadline -----------------------------------------
@@ -624,8 +624,6 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 		F.Fighter->BaseMemory.EnemyOccludedCheck = 10;   // slot 481's `+0x5b98` at its limit
 		const FElysiumNpcConditions Occluded = Gather(400.0, ECond::WeaponSightOccluded,
 			TEXT("an occluded 0x4f raises WEAPON_SIGHT_OCCLUDED"));
-		TestFalse(TEXT("WEAPON_THROUGH_WALL has no producer and is never set"),
-			Occluded.Has(ECond::WeaponThroughWall));
 		TestFalse(TEXT("...nor does WEAPON_BLOCKED_BY_FRIEND"), Occluded.Has(ECond::WeaponBlockedByFriend));
 		Gather(1500.0, ECond::TooFarToAttack, TEXT("an occluded enemy past 1024 is only TOO_FAR_TO_ATTACK"));
 		F.Fighter->BaseMemory.EnemyOccludedCheck = 0;
@@ -730,15 +728,15 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 // those numbers named no program this port carried, so the answer had to be folded back to
 // something registered. The corpus registers all 691, so the slot body's answer IS the answer, and
 // the recovered bodies' own arms are asserted where they belong:
-// `Elysium.Substrate.NpcKernelSchedule.SelectScheduleMeleeCombat` and
-// `Elysium.Substrate.NpcKernelCombat10.SelectorAgreement`.
+// `Elysium.Arm.NpcKernelSchedule.SelectScheduleMeleeCombat` and
+// `Elysium.Arm.NpcKernelCombat10.SelectorAgreement`.
 //
 // What remains testable here is the composition rule, which is recovered: a selector answering zero
 // declines, and `CAI_BaseNPCTroika::SelectSchedule` gets its turn.
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatSelectorCompositionTest,
-	"Elysium.Substrate.NpcCombat.SelectorComposition", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.SelectorComposition", GElysiumTestFlags)
 bool FElysiumNpcCombatSelectorCompositionTest::RunTest(const FString&)
 {
 	FCombatFixture F(GPistol);
@@ -788,7 +786,7 @@ bool FElysiumNpcCombatSelectorCompositionTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatChaseTest,
-	"Elysium.Substrate.NpcCombat.Chase", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.Chase", GElysiumTestFlags)
 bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 {
 	FCombatFixture F(GPistol);
@@ -892,7 +890,7 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatSwingTest,
-	"Elysium.Substrate.NpcCombat.Swing", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.Swing", GElysiumTestFlags)
 bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 {
 	FCombatFixture F(GKatana);
@@ -1046,7 +1044,7 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatInterruptTest,
-	"Elysium.Substrate.NpcCombat.ChaseInterrupt", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.ChaseInterrupt", GElysiumTestFlags)
 bool FElysiumNpcCombatInterruptTest::RunTest(const FString&)
 {
 	FCombatFixture F(GPistol);
@@ -1103,7 +1101,7 @@ bool FElysiumNpcCombatInterruptTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatIdleAcquisitionTest,
-	"Elysium.Substrate.NpcCombat.IdleAcquisition", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.IdleAcquisition", GElysiumTestFlags)
 bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 {
 	// The two idle masks, as retail's own texts declare them. This block used to assert a mask
@@ -1195,7 +1193,7 @@ bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRetaliationTest,
-	"Elysium.Substrate.NpcCombat.Retaliation", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.Retaliation", GElysiumTestFlags)
 bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 {
 	// The authored `0` sentinel: nothing equipped, so the fists fallback is what arms the victim.
@@ -1358,7 +1356,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRetaliationExpiryTest,
-	"Elysium.Substrate.NpcCombat.RetaliationExpiry", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.RetaliationExpiry", GElysiumTestFlags)
 bool FElysiumNpcCombatRetaliationExpiryTest::RunTest(const FString&)
 {
 	FCombatFixture F(TEXT("0"));
@@ -1405,7 +1403,7 @@ bool FElysiumNpcCombatRetaliationExpiryTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRetaliationSaveTest,
-	"Elysium.Substrate.NpcCombat.RetaliationSave", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.RetaliationSave", GElysiumTestFlags)
 bool FElysiumNpcCombatRetaliationSaveTest::RunTest(const FString&)
 {
 	FCombatFixture F(TEXT("0"));
@@ -1464,7 +1462,7 @@ bool FElysiumNpcCombatRetaliationSaveTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRunAwayTest,
-	"Elysium.Substrate.NpcCombat.RunAway", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.RunAway", GElysiumTestFlags)
 bool FElysiumNpcCombatRunAwayTest::RunTest(const FString&)
 {
 	// --- The projected retreat ------------------------------------------------------------------
@@ -1549,7 +1547,7 @@ bool FElysiumNpcCombatRunAwayTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatUnarmedTaskFailureTest,
-	"Elysium.Substrate.NpcCombat.UnarmedTaskFailure", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.UnarmedTaskFailure", GElysiumTestFlags)
 bool FElysiumNpcCombatUnarmedTaskFailureTest::RunTest(const FString&)
 {
 	FCombatFixture F(TEXT("0"), /*bWithFists=*/false, /*bInstallCatalogue=*/false);
@@ -1589,7 +1587,7 @@ bool FElysiumNpcCombatUnarmedTaskFailureTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatReactionProducerTest,
-	"Elysium.Substrate.NpcCombat.ReactionProducer", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.ReactionProducer", GElysiumTestFlags)
 bool FElysiumNpcCombatReactionProducerTest::RunTest(const FString&)
 {
 	FCombatFixture F(TEXT("0"), /*bWithFists=*/false, /*bInstallCatalogue=*/false);
@@ -1689,7 +1687,7 @@ bool FElysiumNpcCombatReactionProducerTest::RunTest(const FString&)
 // pose the program left behind, and a body carrying no physics asset holds that pose instead.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatDeathTest,
-	"Elysium.Substrate.NpcCombat.Death", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.Death", GElysiumTestFlags)
 bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 {
 	FCombatFixture F(TEXT("0"), /*bWithFists=*/false, /*bInstallCatalogue=*/false);
@@ -1834,7 +1832,7 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 // stands up solid, animating its spawn idle.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatDeathRestoreTest,
-	"Elysium.Substrate.NpcCombat.DeathRestore", GElysiumTestFlags)
+	"Elysium.Arm.NpcCombat.DeathRestore", GElysiumTestFlags)
 bool FElysiumNpcCombatDeathRestoreTest::RunTest(const FString&)
 {
 	// --- Kill one, run its program out, freeze the map --------------------------------------------

@@ -77,6 +77,20 @@ const FElysiumEntity* ElysiumNpcCond::ResolveEnemyHandle(const FElysiumEntityWor
 
 const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond)
 {
+	// Two registered conditions with no enumerator, which their producers push by number:
+	// `HINT_INVALID` 0x29 (`ElysiumNpcThink.cpp`, `0x10293164`) and `BEHIND_ENEMY` 0x57
+	// (`Cond19BehindEnemy`, `0x102710b4`). Names read off the base registrar `FUN_102c8ce0`
+	// (`docs/vtmb/npc-ai/conditions-and-states.md` § "The base condition table"; `COND_BEHIND_ENEMY`
+	// is its string `0x106024a4`). Compared rather than switched on: a case label outside the
+	// enumerators is a compiler warning.
+	if (Cond == static_cast<EElysiumNpcCond>(0x29))
+	{
+		return TEXT("HINT_INVALID");
+	}
+	if (Cond == static_cast<EElysiumNpcCond>(0x57))
+	{
+		return TEXT("BEHIND_ENEMY");
+	}
 	switch (Cond)
 	{
 	case EElysiumNpcCond::None:                  return TEXT("COND_NONE");
@@ -594,6 +608,7 @@ namespace
 		if (!Conditions.Has(EElysiumNpcCond::TaskFailed))
 		{
 			Npc.Schedule.TaskStatus = EElysiumTaskStatus::Complete;
+			Npc.TraceTaskDone();   // the AI trace's `taskdone` (debug output only, behind its sink)
 		}
 	}
 

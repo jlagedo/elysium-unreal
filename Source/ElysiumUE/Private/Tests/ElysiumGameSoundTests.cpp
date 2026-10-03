@@ -197,7 +197,7 @@ namespace
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGameSoundResolveTest,
-	"Elysium.Substrate.GameSound.Resolve", GElysiumTestFlags)
+	"Elysium.Arm.GameSound.Resolve", GElysiumTestFlags)
 bool FElysiumGameSoundResolveTest::RunTest(const FString&)
 {
 	const FElysiumSoundVolumeTable Table = MakeVolumeTable();
@@ -312,7 +312,7 @@ bool FElysiumGameSoundResolveTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGameSoundWindowTest,
-	"Elysium.Substrate.GameSound.Window", GElysiumTestFlags)
+	"Elysium.Arm.GameSound.Window", GElysiumTestFlags)
 bool FElysiumGameSoundWindowTest::RunTest(const FString&)
 {
 	const FElysiumSoundVolumeTable Table = MakeVolumeTable();

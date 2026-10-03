@@ -7,7 +7,7 @@
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCastDataTest,"Elysium.Substrate.CastData",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCastDataTest,"Elysium.Content.CastData",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumCastDataTest::RunTest(const FString&)
 {

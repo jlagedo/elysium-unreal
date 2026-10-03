@@ -75,7 +75,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapActorTraceFilterRenderModeTest,
-	"Elysium.Map.TraceFilter.RenderMode", GElysiumMapActorTraceFilterFlags)
+	"Elysium.Arm.Map.TraceFilter.RenderMode", GElysiumMapActorTraceFilterFlags)
 bool FElysiumMapActorTraceFilterRenderModeTest::RunTest(const FString&)
 {
 	// `101d3112`: `m_nRenderMode != 0` is refused unless the mask carries WINDOW `0x2`.
@@ -91,7 +91,7 @@ bool FElysiumMapActorTraceFilterRenderModeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapActorTraceFilterSolidFlagTest,
-	"Elysium.Map.TraceFilter.SolidFlag20", GElysiumMapActorTraceFilterFlags)
+	"Elysium.Arm.Map.TraceFilter.SolidFlag20", GElysiumMapActorTraceFilterFlags)
 bool FElysiumMapActorTraceFilterSolidFlagTest::RunTest(const FString&)
 {
 	// `101d30b6`: solid flag `0x20` is refused under every mask, WINDOW or not.
@@ -106,7 +106,7 @@ bool FElysiumMapActorTraceFilterSolidFlagTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapActorTraceFilterBoundTest,
-	"Elysium.Map.TraceFilter.PassBound", GElysiumMapActorTraceFilterFlags)
+	"Elysium.Arm.Map.TraceFilter.PassBound", GElysiumMapActorTraceFilterFlags)
 bool FElysiumMapActorTraceFilterBoundTest::RunTest(const FString&)
 {
 	// A world whose every pass meets a fresh refused entity stops after the bound, answering the last.
@@ -129,7 +129,7 @@ bool FElysiumMapActorTraceFilterBoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapActorTraceFilterBlocksTracesTest,
-	"Elysium.Map.TraceFilter.PropBlocksTraces", GElysiumMapActorTraceFilterFlags)
+	"Elysium.Arm.Map.TraceFilter.PropBlocksTraces", GElysiumMapActorTraceFilterFlags)
 bool FElysiumMapActorTraceFilterBlocksTracesTest::RunTest(const FString&)
 {
 	// `101d30f2`: a non-brush entity is admitted without MONSTER when `m_bBlocksTraces` (+0xfd) is set.
@@ -148,7 +148,7 @@ bool FElysiumMapActorTraceFilterBlocksTracesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapActorTraceFilterNpcTransparentPropTest,
-	"Elysium.Map.TraceFilter.PropNpcTransparent", GElysiumMapActorTraceFilterFlags)
+	"Elysium.Arm.Map.TraceFilter.PropNpcTransparent", GElysiumMapActorTraceFilterFlags)
 bool FElysiumMapActorTraceFilterNpcTransparentPropTest::RunTest(const FString&)
 {
 	// `CTraceFilterFVisible::ShouldHitEntity 0x10107630` skips `m_bNPCTransparent` (+0xfc); the plain

@@ -52,7 +52,7 @@ namespace ElysiumHintTests
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintNodeReplacementTest,
-	"Elysium.Substrate.Hint.NodeReplacement", GElysiumHintTestFlags)
+	"Elysium.Arm.Hint.NodeReplacement", GElysiumHintTestFlags)
 bool FElysiumHintNodeReplacementTest::RunTest(const FString&)
 {
 	using namespace ElysiumNodeEntity;
@@ -119,7 +119,7 @@ bool FElysiumHintNodeReplacementTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintListTest,
-	"Elysium.Substrate.Hint.List", GElysiumHintTestFlags)
+	"Elysium.Arm.Hint.List", GElysiumHintTestFlags)
 bool FElysiumHintListTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("__hint_list__"), 7);
@@ -164,7 +164,7 @@ bool FElysiumHintListTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintInputsTest,
-	"Elysium.Substrate.Hint.Inputs", GElysiumHintTestFlags)
+	"Elysium.Arm.Hint.Inputs", GElysiumHintTestFlags)
 bool FElysiumHintInputsTest::RunTest(const FString&)
 {
 	using namespace ElysiumHintTests;
@@ -214,7 +214,7 @@ bool FElysiumHintInputsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintPatrolLookupTest,
-	"Elysium.Substrate.Hint.PatrolLookup", GElysiumHintTestFlags)
+	"Elysium.Arm.Hint.PatrolLookup", GElysiumHintTestFlags)
 bool FElysiumHintPatrolLookupTest::RunTest(const FString&)
 {
 	using namespace ElysiumHintTests;
@@ -245,7 +245,7 @@ bool FElysiumHintPatrolLookupTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintKeyfieldPermissionsTest,
-	"Elysium.Substrate.Hint.KeyfieldPermissions", GElysiumHintTestFlags)
+	"Elysium.Arm.Hint.KeyfieldPermissions", GElysiumHintTestFlags)
 bool FElysiumHintKeyfieldPermissionsTest::RunTest(const FString&)
 {
 	// No keyfield of these classes carries the datamap's INPUT bit, so none is writable from Python

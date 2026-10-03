@@ -212,7 +212,7 @@ namespace
 } // namespace
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMaintain19SetScheduleTest,
-	"Elysium.Substrate.NpcKernelMaintain19.SetSchedule", GMaintain19Flags)
+	"Elysium.Arm.NpcKernelMaintain19.SetSchedule", GMaintain19Flags)
 bool FElysiumNpcKernelMaintain19SetScheduleTest::RunTest(const FString&)
 {
 	FMaintain19Fixture F(TEXT("CNPC_VWerewolf"));
@@ -293,7 +293,7 @@ bool FElysiumNpcKernelMaintain19SetScheduleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMaintain19OnScheduleChangeTest,
-	"Elysium.Substrate.NpcKernelMaintain19.OnScheduleChange", GMaintain19Flags)
+	"Elysium.Arm.NpcKernelMaintain19.OnScheduleChange", GMaintain19Flags)
 bool FElysiumNpcKernelMaintain19OnScheduleChangeTest::RunTest(const FString&)
 {
 	// Slot 435 is overridden per class, so each arm is driven on a fresh subject of that class.
@@ -372,7 +372,7 @@ bool FElysiumNpcKernelMaintain19OnScheduleChangeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMaintain19TaskMovementCompleteTest,
-	"Elysium.Substrate.NpcKernelMaintain19.TaskMovementComplete", GMaintain19Flags)
+	"Elysium.Arm.NpcKernelMaintain19.TaskMovementComplete", GMaintain19Flags)
 bool FElysiumNpcKernelMaintain19TaskMovementCompleteTest::RunTest(const FString&)
 {
 	FMaintain19Fixture F;
@@ -430,7 +430,7 @@ bool FElysiumNpcKernelMaintain19TaskMovementCompleteTest::RunTest(const FString&
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMaintain19SabbatTaskFailTest,
-	"Elysium.Substrate.NpcKernelMaintain19.SabbatTaskFail", GMaintain19Flags)
+	"Elysium.Arm.NpcKernelMaintain19.SabbatTaskFail", GMaintain19Flags)
 bool FElysiumNpcKernelMaintain19SabbatTaskFailTest::RunTest(const FString&)
 {
 	FMaintain19Fixture F(TEXT("CNPC_VSabbatLeader"));
@@ -467,7 +467,7 @@ bool FElysiumNpcKernelMaintain19SabbatTaskFailTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMaintain19LoopTest,
-	"Elysium.Substrate.NpcKernelMaintain19.MaintainSchedule", GMaintain19Flags)
+	"Elysium.Arm.NpcKernelMaintain19.MaintainSchedule", GMaintain19Flags)
 bool FElysiumNpcKernelMaintain19LoopTest::RunTest(const FString&)
 {
 	// Null schedule: select, install and start task zero in the same loop.
@@ -582,7 +582,7 @@ bool FElysiumNpcKernelMaintain19LoopTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMaintain19DoorAndMissingTest,
-	"Elysium.Substrate.NpcKernelMaintain19.DoorAndMissing", GMaintain19Flags)
+	"Elysium.Arm.NpcKernelMaintain19.DoorAndMissing", GMaintain19Flags)
 bool FElysiumNpcKernelMaintain19DoorAndMissingTest::RunTest(const FString&)
 {
 	FMaintain19Fixture F(TEXT("CAI_BaseNPCTroika"));

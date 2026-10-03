@@ -4,8 +4,11 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Containers/Ticker.h"
+#include "Templates/UniquePtr.h"
 #include "UObject/WeakObjectPtr.h"
 
+class FElysiumArenaScenarioRunner;
 class FElysiumEntityWorld;
 class FElysiumGreenRoomRun;
 class IConsoleObject;
@@ -46,8 +49,16 @@ private:
 	void Register(const TCHAR* Name, const TCHAR* Help,
 		TFunction<void(FElysiumGreenRoomRun&, const TArray<FString>&)> Body);
 
+	// `elysium.gr_scenario <name>`'s run, ticked off the core ticker until it ends, then its trace
+	// written and its verdict logged. One at a time: a second call stops the first.
+	bool TickLabScenario(float DeltaSeconds);
+	void StopLabScenario(const TCHAR* Reason);
+	void FinishLabScenario();
+
 	TWeakObjectPtr<UElysiumMapSubsystem> Owner;
 	TArray<IConsoleObject*> Commands;
+	TUniquePtr<FElysiumArenaScenarioRunner> LabScenario;
+	FTSTicker::FDelegateHandle LabScenarioTicker;
 };
 
 #endif // !UE_BUILD_SHIPPING

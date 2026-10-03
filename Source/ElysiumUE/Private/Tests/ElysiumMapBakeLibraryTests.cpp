@@ -24,7 +24,7 @@ static constexpr EAutomationTestFlags GElysiumMapBakeLibraryTestFlags =
 // No world: the build reports that it could not run (-1, distinct from "ran and built nothing")
 // and the count reports nothing found, with no crash on either.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapBakeLibraryNullWorldTest,
-	"Elysium.Substrate.MapBake.NullWorldBuildsNothing", GElysiumMapBakeLibraryTestFlags)
+	"Elysium.Arm.MapBake.NullWorldBuildsNothing", GElysiumMapBakeLibraryTestFlags)
 bool FElysiumMapBakeLibraryNullWorldTest::RunTest(const FString&)
 {
 	TestEqual(TEXT("a null world cannot be built"),
@@ -46,7 +46,7 @@ bool FElysiumMapBakeLibraryNullWorldTest::RunTest(const FString&)
 // A world with no capture at all counts 0 / 0 -- "none placed" -- rather than tripping on the
 // absent registry a never-built level has.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapBakeLibraryEmptyWorldTest,
-	"Elysium.Substrate.MapBake.EmptyWorldCountsNone", GElysiumMapBakeLibraryTestFlags)
+	"Elysium.Arm.MapBake.EmptyWorldCountsNone", GElysiumMapBakeLibraryTestFlags)
 bool FElysiumMapBakeLibraryEmptyWorldTest::RunTest(const FString&)
 {
 	UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, TEXT("ElysiumMapBakeLibraryEmpty"));

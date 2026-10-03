@@ -189,7 +189,7 @@ struct FBand
 // M-REQ — the requirement label text, in isolation. Pure: no Slate, no world, no conversation.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueChoiceLabelsTest,
-	"Elysium.UI.DialogueChoiceLabels", ElysiumDialogueUITests::GElysiumTestFlags)
+	"Elysium.Arm.UI.DialogueChoiceLabels", ElysiumDialogueUITests::GElysiumTestFlags)
 bool FElysiumDialogueChoiceLabelsTest::RunTest(const FString&)
 {
 	using namespace ElysiumDialogueUITests;
@@ -269,7 +269,7 @@ bool FElysiumDialogueChoiceLabelsTest::RunTest(const FString&)
 // The publish: what a real conversation projects into the view the box reads.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueViewPublishTest,
-	"Elysium.UI.DialogueViewPublish", ElysiumDialogueUITests::GElysiumTestFlags)
+	"Elysium.Arm.UI.DialogueViewPublish", ElysiumDialogueUITests::GElysiumTestFlags)
 bool FElysiumDialogueViewPublishTest::RunTest(const FString&)
 {
 	using namespace ElysiumDialogueUITests;
@@ -406,7 +406,7 @@ bool FElysiumDialogueViewPublishTest::RunTest(const FString&)
 // Input: a disabled row's key does nothing, and Space means skip while the voice runs.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueInputDisabledAndSkipTest,
-	"Elysium.UI.DialogueInputDisabledAndSkip", ElysiumDialogueUITests::GElysiumTestFlags)
+	"Elysium.Arm.UI.DialogueInputDisabledAndSkip", ElysiumDialogueUITests::GElysiumTestFlags)
 bool FElysiumDialogueInputDisabledAndSkipTest::RunTest(const FString&)
 {
 	using namespace ElysiumDialogueUITests;
@@ -489,7 +489,7 @@ bool FElysiumDialogueInputDisabledAndSkipTest::RunTest(const FString&)
 // would erase every requirement label at the one moment the player needs to read them.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueDisabledTerminalBandTest,
-	"Elysium.UI.DialogueDisabledTerminalBand", ElysiumDialogueUITests::GElysiumTestFlags)
+	"Elysium.Arm.UI.DialogueDisabledTerminalBand", ElysiumDialogueUITests::GElysiumTestFlags)
 bool FElysiumDialogueDisabledTerminalBandTest::RunTest(const FString&)
 {
 	using namespace ElysiumDialogueUITests;
@@ -578,7 +578,7 @@ bool FElysiumDialogueDisabledTerminalBandTest::RunTest(const FString&)
 // then name whatever sentence now sits there.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueChoiceCarriesLineIdTest,
-	"Elysium.UI.DialogueChoiceCarriesLineId", ElysiumDialogueUITests::GElysiumTestFlags)
+	"Elysium.Arm.UI.DialogueChoiceCarriesLineId", ElysiumDialogueUITests::GElysiumTestFlags)
 bool FElysiumDialogueChoiceCarriesLineIdTest::RunTest(const FString&)
 {
 	using namespace ElysiumDialogueUITests;
@@ -691,7 +691,7 @@ bool FElysiumDialogueChoiceCarriesLineIdTest::RunTest(const FString&)
 // by mouse or by focus navigation, which walks the whole band.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueLargeBandTest,
-	"Elysium.UI.DialogueLargeBand", ElysiumDialogueUITests::GElysiumTestFlags)
+	"Elysium.Arm.UI.DialogueLargeBand", ElysiumDialogueUITests::GElysiumTestFlags)
 bool FElysiumDialogueLargeBandTest::RunTest(const FString&)
 {
 	using namespace ElysiumDialogueUITests;

@@ -231,7 +231,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillWeaponTest,
-	"Elysium.Substrate.StealthKill.Weapon", GElysiumTestFlags)
+	"Elysium.Arm.StealthKill.Weapon", GElysiumTestFlags)
 bool FElysiumStealthKillWeaponTest::RunTest(const FString&)
 {
 	FKillFixture F;
@@ -251,7 +251,7 @@ bool FElysiumStealthKillWeaponTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillPostureTest,
-	"Elysium.Substrate.StealthKill.Posture", GElysiumTestFlags)
+	"Elysium.Arm.StealthKill.Posture", GElysiumTestFlags)
 bool FElysiumStealthKillPostureTest::RunTest(const FString&)
 {
 	FKillFixture F;
@@ -277,7 +277,7 @@ bool FElysiumStealthKillPostureTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillTraceTest,
-	"Elysium.Substrate.StealthKill.Trace", GElysiumTestFlags)
+	"Elysium.Arm.StealthKill.Trace", GElysiumTestFlags)
 bool FElysiumStealthKillTraceTest::RunTest(const FString&)
 {
 	FKillFixture F;
@@ -302,7 +302,7 @@ bool FElysiumStealthKillTraceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillCacheTest,
-	"Elysium.Substrate.StealthKill.Cache", GElysiumTestFlags)
+	"Elysium.Arm.StealthKill.Cache", GElysiumTestFlags)
 bool FElysiumStealthKillCacheTest::RunTest(const FString&)
 {
 	FKillFixture F;
@@ -319,7 +319,7 @@ bool FElysiumStealthKillCacheTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillArcTest,
-	"Elysium.Substrate.StealthKill.Arc", GElysiumTestFlags)
+	"Elysium.Arm.StealthKill.Arc", GElysiumTestFlags)
 bool FElysiumStealthKillArcTest::RunTest(const FString&)
 {
 	FKillFixture F;
@@ -334,7 +334,7 @@ bool FElysiumStealthKillArcTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillObliviousTest,
-	"Elysium.Substrate.StealthKill.Oblivious", GElysiumTestFlags)
+	"Elysium.Arm.StealthKill.Oblivious", GElysiumTestFlags)
 bool FElysiumStealthKillObliviousTest::RunTest(const FString&)
 {
 	FKillFixture F;
@@ -356,7 +356,7 @@ bool FElysiumStealthKillObliviousTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillValidTargetTest,
-	"Elysium.Substrate.StealthKill.ValidTarget", GElysiumTestFlags)
+	"Elysium.Arm.StealthKill.ValidTarget", GElysiumTestFlags)
 bool FElysiumStealthKillValidTargetTest::RunTest(const FString&)
 {
 	{
@@ -389,7 +389,7 @@ bool FElysiumStealthKillValidTargetTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillBusyTest,
-	"Elysium.Substrate.StealthKill.Busy", GElysiumTestFlags)
+	"Elysium.Arm.StealthKill.Busy", GElysiumTestFlags)
 bool FElysiumStealthKillBusyTest::RunTest(const FString&)
 {
 	FKillFixture F;
@@ -409,7 +409,7 @@ bool FElysiumStealthKillBusyTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillStandTest,
-	"Elysium.Substrate.StealthKill.StandAndClips", GElysiumTestFlags)
+	"Elysium.Arm.StealthKill.StandAndClips", GElysiumTestFlags)
 bool FElysiumStealthKillStandTest::RunTest(const FString&)
 {
 	FKillFixture F;
@@ -429,7 +429,7 @@ bool FElysiumStealthKillStandTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillCommitTest,
-	"Elysium.Substrate.StealthKill.CommitAndCompletion", GElysiumTestFlags)
+	"Elysium.Arm.StealthKill.CommitAndCompletion", GElysiumTestFlags)
 bool FElysiumStealthKillCommitTest::RunTest(const FString&)
 {
 	FKillFixture F;
@@ -474,7 +474,7 @@ bool FElysiumStealthKillCommitTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillLoadFailureTest,
-	"Elysium.Substrate.StealthKill.LoadFailure", GElysiumTestFlags)
+	"Elysium.Arm.StealthKill.LoadFailure", GElysiumTestFlags)
 bool FElysiumStealthKillLoadFailureTest::RunTest(const FString&)
 {
 	FKillFixture F;
@@ -524,7 +524,7 @@ bool FElysiumStealthKillTutorialOutputTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthKillWeaponSoundTest,
-	"Elysium.Substrate.StealthKill.WeaponSoundData", GElysiumTestFlags)
+	"Elysium.Arm.StealthKill.WeaponSoundData", GElysiumTestFlags)
 bool FElysiumStealthKillWeaponSoundTest::RunTest(const FString&)
 {
 	FElysiumItemDef Item;

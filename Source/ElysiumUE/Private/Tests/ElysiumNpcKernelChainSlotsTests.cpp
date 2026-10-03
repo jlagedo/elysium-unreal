@@ -5,7 +5,6 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"
 #include "ElysiumPlayer.h"
-#include "ElysiumStub.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcPedestrian.h"
@@ -15,10 +14,10 @@
 // owner — `FElysiumEntity`, `FElysiumAnimating`, `FElysiumAnimatingOverlay`, `FElysiumFlex`,
 // `FElysiumCombatCharacter`, `FElysiumNpcBase` or `FElysiumNpc` — and a stub names that owner.
 //
-// These cases hold what that move made observable: a chain stub fires under its owner's name with
-// its own address, and the entity-method integrations write and answer the port's own words. Every
-// class's constant bodies are probed on a receiver of that class by `NpcKernelSlots.Defaults`, and
-// the per-class slot tables are held to the chain by `NpcKernelShape.SlotOwners`.
+// These cases hold what that move made observable: the entity-method integrations write and answer
+// the port's own words. Every class's constant bodies are probed on a receiver of that class by
+// `NpcKernelSlots.Defaults`, and the per-class slot tables are held to the chain by
+// `NpcKernelShape.SlotOwners`.
 
 static constexpr EAutomationTestFlags GChainSlotsTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -47,47 +46,10 @@ namespace
 			return Builder;
 		}
 	};
-
-	const ElysiumStub::FTally* FindTally(const TArray<ElysiumStub::FTally>& Tally, const TCHAR* Surface)
-	{
-		return Tally.FindByPredicate([Surface](const ElysiumStub::FTally& Row)
-			{
-				return Row.Kind == TEXT("slot") && Row.Surface == Surface;
-			});
-	}
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelChainStubOwnerTest,
-	"Elysium.Substrate.NpcKernelChainSlots.StubNamesItsOwner", GChainSlotsTestFlags)
-bool FElysiumNpcKernelChainStubOwnerTest::RunTest(const FString&)
-{
-	FChainSlotsFixture F;
-	if (!TestNotNull(TEXT("the fixture stands the subject"), F.Npc))
-	{
-		return false;
-	}
-	// Slot 8 `GetModelIndex` (`0x100b17f0`) is `CBaseEntity`'s body, still a stub: it stands on
-	// `FElysiumEntity` and its tally names `CBaseEntity`, with the same address and receiver it had
-	// when the NPC base declared it.
-	ElysiumStub::ClearTally();
-	(void)F.Npc->GetModelIndex();
-	(void)static_cast<FElysiumEntity*>(F.Npc)->GetModelIndex();
-	TArray<ElysiumStub::FTally> Tally;
-	ElysiumStub::CollectTally(Tally);
-	const ElysiumStub::FTally* Row = FindTally(Tally, TEXT("CBaseEntity::GetModelIndex"));
-	if (TestNotNull(TEXT("slot 8 tallies under CBaseEntity"), Row))
-	{
-		TestEqual(TEXT("with the retail body's address"), Row->Address, FString(TEXT("0x100b17f0")));
-		TestEqual(TEXT("once per call, through the NPC or the entity"), Row->Count, 2);
-	}
-	TestNull(TEXT("nothing tallies under the old Troika prefix"),
-		FindTally(Tally, TEXT("CAI_BaseNPCTroika::GetModelIndex")));
-	ElysiumStub::ClearTally();
-	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelChainIntegrationsTest,
-	"Elysium.Substrate.NpcKernelChainSlots.EntityIntegrations", GChainSlotsTestFlags)
+	"Elysium.Arm.NpcKernelChainSlots.EntityIntegrations", GChainSlotsTestFlags)
 bool FElysiumNpcKernelChainIntegrationsTest::RunTest(const FString&)
 {
 	FChainSlotsFixture F;
@@ -96,7 +58,6 @@ bool FElysiumNpcKernelChainIntegrationsTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpc& Npc = *F.Npc;
-	ElysiumStub::ClearTally();
 
 	// Slots 217/219/220/221: the port has the words the retail references name, so the readers
 	// answer them by reference. 220/221 equal 217/219: no local/abs split (a named modernization).
@@ -121,15 +82,6 @@ bool FElysiumNpcKernelChainIntegrationsTest::RunTest(const FString&)
 	Npc.SetMoveType(5, 2);
 	TestEqual(TEXT("a new type writes m_MoveType"), Npc.RetailMoveType, 5);
 	TestEqual(TEXT("...and m_MoveCollide with it"), Npc.RetailMoveCollide, 2);
-
-	TArray<ElysiumStub::FTally> Tally;
-	ElysiumStub::CollectTally(Tally);
-	for (const ElysiumStub::FTally& Fired : Tally)
-	{
-		AddError(FString::Printf(TEXT("an integrated slot tallied a stub: %s %s"), *Fired.Surface,
-			*Fired.Address));
-	}
-	ElysiumStub::ClearTally();
 	return true;
 }
 

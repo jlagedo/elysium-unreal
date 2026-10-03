@@ -27,7 +27,7 @@ static constexpr EAutomationTestFlags GElysiumClassFieldsFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumClassFieldsSubclassVectorTest,
-	"Elysium.Substrate.ClassFields.SubclassVector", GElysiumClassFieldsFlags)
+	"Elysium.Arm.ClassFields.SubclassVector", GElysiumClassFieldsFlags)
 bool FElysiumClassFieldsSubclassVectorTest::RunTest(const FString&)
 {
 	using ElysiumClassFieldsTests::FVectorProbe;

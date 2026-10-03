@@ -391,7 +391,7 @@ bool FElysiumSaveRoundTripTest::RunTest(const FString&)
 // used to drop the mismatch silently (`ElysiumEntityWorldPersistence.cpp`); it must warn instead
 // and leave the freshly-built (post-`Activate`) counters alone.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOutputCardinalityMismatchTest,
-	"Elysium.Substrate.SaveOutputCardinality", GElysiumTestFlags)
+	"Elysium.Arm.SaveOutputCardinality", GElysiumTestFlags)
 bool FElysiumOutputCardinalityMismatchTest::RunTest(const FString&)
 {
 	FElysiumEntityWorld A(/*Owner*/ nullptr, /*GameState*/ nullptr);
@@ -460,7 +460,7 @@ bool FElysiumOutputCardinalityMismatchTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSavePayloadTest, "Elysium.Substrate.SavePayload",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSavePayloadTest, "Elysium.Arm.SavePayload",
 	GElysiumTestFlags)
 bool FElysiumSavePayloadTest::RunTest(const FString&)
 {
@@ -723,7 +723,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// which byte-shifts an old blob rather than skipping the field. With the schema recorded, an
 	// `NpcDisciplines` blob is replayed at 25, its gate is false, and the flag defaults to the
 	// estimate route, which is the only route a build before it could have written.
-	// `Elysium.Substrate.Weapons.LeafSchema` is that mechanism end to end.
+	// `Elysium.Arm.Weapons.LeafSchema` is that mechanism end to end.
 	// `WeaponSwingClipOwner` appends the bank that owns the staged swing's resolved clip to the END
 	// of that same swing block, behind its own version. Additive: a `WeaponAnimEvent` payload
 	// restores a swing with no owner, and only the contact's diagnostic line is poorer for it — the

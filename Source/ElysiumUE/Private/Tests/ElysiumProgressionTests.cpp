@@ -127,7 +127,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // every rule `docs/vtmb/game_runtime.md` -> "Quests" records is driven directly.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQuestLogTest, "Elysium.Substrate.QuestLog", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQuestLogTest, "Elysium.Arm.QuestLog", GElysiumTestFlags)
 
 namespace
 {
@@ -299,7 +299,7 @@ bool FElysiumQuestLogTest::RunTest(const FString&)
 // world, no subsystem and no viewport.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQuestViewTest, "Elysium.Substrate.QuestView", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQuestViewTest, "Elysium.Arm.QuestView", GElysiumTestFlags)
 
 bool FElysiumQuestViewTest::RunTest(const FString&)
 {
@@ -551,7 +551,7 @@ namespace ElysiumChargenTest
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChargenTest, "Elysium.Substrate.Chargen", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChargenTest, "Elysium.Arm.Chargen", GElysiumTestFlags)
 bool FElysiumChargenTest::RunTest(const FString&)
 {
 	using namespace ElysiumChargenTest;

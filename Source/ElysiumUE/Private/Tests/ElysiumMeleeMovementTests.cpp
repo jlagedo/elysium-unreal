@@ -141,7 +141,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMeleeMovementLockTest,
-	"Elysium.Substrate.MeleeMovementLock", GElysiumMeleeMoveTestFlags)
+	"Elysium.Arm.MeleeMovementLock", GElysiumMeleeMoveTestFlags)
 bool FElysiumMeleeMovementLockTest::RunTest(const FString&)
 {
 	constexpr float Dt = 1.0f / 60.0f;

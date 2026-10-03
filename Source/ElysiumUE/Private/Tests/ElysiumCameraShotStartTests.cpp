@@ -65,7 +65,7 @@ FElysiumViewSetup MakeLiveView()
 }
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraShotStartTest, "Elysium.Substrate.CameraShotStart",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraShotStartTest, "Elysium.Arm.CameraShotStart",
 	ElysiumCameraShotStartTests::GElysiumShotStartFlags)
 
 bool FElysiumCameraShotStartTest::RunTest(const FString&)

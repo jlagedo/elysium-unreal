@@ -39,7 +39,7 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionAdamStageTest, "Elysium.Substrate.ExpressionData.AdamStage",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionAdamStageTest, "Elysium.Arm.ExpressionData.AdamStage",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumExpressionAdamStageTest::RunTest(const FString&)
 {
@@ -77,7 +77,7 @@ bool FElysiumExpressionAdamStageTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionCorpusPackageTest, "Elysium.Substrate.ExpressionData.CorpusPackagePaths",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionCorpusPackageTest, "Elysium.Arm.ExpressionData.CorpusPackagePaths",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumExpressionCorpusPackageTest::RunTest(const FString&)
 {
@@ -100,7 +100,7 @@ bool FElysiumExpressionCorpusPackageTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionDataRetentionTest, "Elysium.Substrate.ExpressionData.Retention",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionDataRetentionTest, "Elysium.Arm.ExpressionData.Retention",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumExpressionDataRetentionTest::RunTest(const FString&)
 {
@@ -183,7 +183,7 @@ bool FElysiumExpressionResolverTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionEmptyTableTest, "Elysium.Substrate.ExpressionData.EmptyControllers",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionEmptyTableTest, "Elysium.Arm.ExpressionData.EmptyControllers",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumExpressionEmptyTableTest::RunTest(const FString&)
 {

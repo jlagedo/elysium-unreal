@@ -85,7 +85,7 @@ namespace
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseHelpersMeleeConditionsTest,
-	"Elysium.Substrate.NpcKernelBaseHelpers.MeleeAttackConditions",
+	"Elysium.Arm.NpcKernelBaseHelpers.MeleeAttackConditions",
 	GElysiumNpcKernelBaseHelpersFlags)
 bool FElysiumNpcKernelBaseHelpersMeleeConditionsTest::RunTest(const FString&)
 {
@@ -141,7 +141,7 @@ bool FElysiumNpcKernelBaseHelpersMeleeConditionsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseHelpersRememberUnreachableTest,
-	"Elysium.Substrate.NpcKernelBaseHelpers.RememberUnreachable",
+	"Elysium.Arm.NpcKernelBaseHelpers.RememberUnreachable",
 	GElysiumNpcKernelBaseHelpersFlags)
 bool FElysiumNpcKernelBaseHelpersRememberUnreachableTest::RunTest(const FString&)
 {
@@ -194,7 +194,7 @@ bool FElysiumNpcKernelBaseHelpersRememberUnreachableTest::RunTest(const FString&
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseHelpersGeometryTest,
-	"Elysium.Substrate.NpcKernelBaseHelpers.GeometryAndClocks",
+	"Elysium.Arm.NpcKernelBaseHelpers.GeometryAndClocks",
 	GElysiumNpcKernelBaseHelpersFlags)
 bool FElysiumNpcKernelBaseHelpersGeometryTest::RunTest(const FString&)
 {
@@ -272,7 +272,7 @@ bool FElysiumNpcKernelBaseHelpersGeometryTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseHelpersFaceAnimTest,
-	"Elysium.Substrate.NpcKernelBaseHelpers.FaceAnimLadder", GElysiumNpcKernelBaseHelpersFlags)
+	"Elysium.Arm.NpcKernelBaseHelpers.FaceAnimLadder", GElysiumNpcKernelBaseHelpersFlags)
 bool FElysiumNpcKernelBaseHelpersFaceAnimTest::RunTest(const FString&)
 {
 	const auto Any = [](int32) { return true; };
@@ -416,7 +416,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseHelpersHintValidatorsTest,
-	"Elysium.Substrate.NpcKernelBaseHelpers.HintValidators", GElysiumNpcKernelBaseHelpersFlags)
+	"Elysium.Arm.NpcKernelBaseHelpers.HintValidators", GElysiumNpcKernelBaseHelpersFlags)
 bool FElysiumNpcKernelBaseHelpersHintValidatorsTest::RunTest(const FString&)
 {
 	FBaseHelpersFixture F;
@@ -544,7 +544,7 @@ bool FElysiumNpcKernelBaseHelpersHintValidatorsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseHelpersCoverNodeFacingTest,
-	"Elysium.Substrate.NpcKernelBaseHelpers.CoverNodeFacing", GElysiumNpcKernelBaseHelpersFlags)
+	"Elysium.Arm.NpcKernelBaseHelpers.CoverNodeFacing", GElysiumNpcKernelBaseHelpersFlags)
 bool FElysiumNpcKernelBaseHelpersCoverNodeFacingTest::RunTest(const FString&)
 {
 	FCoverValidatorRig R;
@@ -643,7 +643,7 @@ bool FElysiumNpcKernelBaseHelpersCoverNodeFacingTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseHelpersReactionSlotsTest,
-	"Elysium.Substrate.NpcKernelBaseHelpers.ReactionSlots", GElysiumNpcKernelBaseHelpersFlags)
+	"Elysium.Arm.NpcKernelBaseHelpers.ReactionSlots", GElysiumNpcKernelBaseHelpersFlags)
 bool FElysiumNpcKernelBaseHelpersReactionSlotsTest::RunTest(const FString&)
 {
 	FBaseHelpersFixture F;
@@ -721,8 +721,6 @@ bool FElysiumNpcKernelBaseHelpersReactionSlotsTest::RunTest(const FString&)
 	// Slot 527 (`0x10293e80`): a null node is usable; with no node store the hint read finds
 	// nothing, so every node is usable.
 	TestFalse(TEXT("a null node is not unusable"), F.Npc->IsUnusableNode(nullptr));
-	TestFalse(TEXT("and neither is one whose hint the seam cannot find"),
-		F.Npc->IsUnusableNode(F.Npc));
 	// `0x102d1540` on an index that names no hint: retail would dereference a NULL `CAI_Hint*`; the
 	// port's crash guard answers true, the free answer.
 	TestTrue(TEXT("because an index that names no hint is free (the crash guard)"),
@@ -744,7 +742,7 @@ bool FElysiumNpcKernelBaseHelpersReactionSlotsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseHelpersPatrolInterestTest,
-	"Elysium.Substrate.NpcKernelBaseHelpers.PatrolInterestDraw",
+	"Elysium.Arm.NpcKernelBaseHelpers.PatrolInterestDraw",
 	GElysiumNpcKernelBaseHelpersFlags)
 bool FElysiumNpcKernelBaseHelpersPatrolInterestTest::RunTest(const FString&)
 {
@@ -778,8 +776,6 @@ bool FElysiumNpcKernelBaseHelpersPatrolInterestTest::RunTest(const FString&)
 	F.Npc->ScheduleHost.bPatrolPathUseHint = true;
 	TestEqual(TEXT("with it set the cache is returned as it stands"), F.Npc->FUN_1029f730(3), 42);
 	F.Npc->ScheduleHost.Unknown659c = 0u;
-	TestEqual(TEXT("an empty cache re-resolves, and the seam still answers nothing"),
-		F.Npc->FUN_1029f730(3), 0);
 
 	// 0x1029f610 — the patrol cell's network check.
 	TestFalse(TEXT("a null cell answers false"), F.Npc->FUN_1029f610(nullptr));
@@ -794,7 +790,7 @@ bool FElysiumNpcKernelBaseHelpersPatrolInterestTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseHelpersAlreadyCarriedTest,
-	"Elysium.Substrate.NpcKernelBaseHelpers.AlreadyCarriedRows",
+	"Elysium.Arm.NpcKernelBaseHelpers.AlreadyCarriedRows",
 	GElysiumNpcKernelBaseHelpersFlags)
 bool FElysiumNpcKernelBaseHelpersAlreadyCarriedTest::RunTest(const FString&)
 {

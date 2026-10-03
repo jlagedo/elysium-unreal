@@ -42,7 +42,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSkinsFindInRangeTest,
-	"Elysium.Substrate.PropSkins.FindInRange", GElysiumPropSkinsTestFlags)
+	"Elysium.Arm.PropSkins.FindInRange", GElysiumPropSkinsTestFlags)
 bool FElysiumPropSkinsFindInRangeTest::RunTest(const FString&)
 {
 	UElysiumPropSkinSet* Asset = BuildSkinSet();
@@ -62,7 +62,7 @@ bool FElysiumPropSkinsFindInRangeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSkinsFindOutOfRangeClampsToLastTest,
-	"Elysium.Substrate.PropSkins.FindOutOfRangeClampsToLast", GElysiumPropSkinsTestFlags)
+	"Elysium.Arm.PropSkins.FindOutOfRangeClampsToLast", GElysiumPropSkinsTestFlags)
 bool FElysiumPropSkinsFindOutOfRangeClampsToLastTest::RunTest(const FString&)
 {
 	UElysiumPropSkinSet* Asset = BuildSkinSet();
@@ -81,7 +81,7 @@ bool FElysiumPropSkinsFindOutOfRangeClampsToLastTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSkinsFindOutOfRangeClampsToLastWithOverrideTest,
-	"Elysium.Substrate.PropSkins.FindOutOfRangeClampsToLastWithOverride", GElysiumPropSkinsTestFlags)
+	"Elysium.Arm.PropSkins.FindOutOfRangeClampsToLastWithOverride", GElysiumPropSkinsTestFlags)
 bool FElysiumPropSkinsFindOutOfRangeClampsToLastWithOverrideTest::RunTest(const FString&)
 {
 	// A stem whose true last family (FamilyCount - 1) DOES repaint something: the clamp must land
@@ -108,7 +108,7 @@ bool FElysiumPropSkinsFindOutOfRangeClampsToLastWithOverrideTest::RunTest(const 
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSkinsFindZeroAndNegativeReturnNoneTest,
-	"Elysium.Substrate.PropSkins.FindZeroAndNegativeReturnNone", GElysiumPropSkinsTestFlags)
+	"Elysium.Arm.PropSkins.FindZeroAndNegativeReturnNone", GElysiumPropSkinsTestFlags)
 bool FElysiumPropSkinsFindZeroAndNegativeReturnNoneTest::RunTest(const FString&)
 {
 	UElysiumPropSkinSet* Asset = BuildSkinSet();
@@ -120,7 +120,7 @@ bool FElysiumPropSkinsFindZeroAndNegativeReturnNoneTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSkinsFindWithNoFamilyCountFallsBackToArrayBoundTest,
-	"Elysium.Substrate.PropSkins.FindWithNoFamilyCountFallsBackToArrayBound", GElysiumPropSkinsTestFlags)
+	"Elysium.Arm.PropSkins.FindWithNoFamilyCountFallsBackToArrayBound", GElysiumPropSkinsTestFlags)
 bool FElysiumPropSkinsFindWithNoFamilyCountFallsBackToArrayBoundTest::RunTest(const FString&)
 {
 	// An asset authored before FamilyCount existed (the legacy per-map bake): FamilyCount defaults

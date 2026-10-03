@@ -121,7 +121,7 @@ namespace NpcKernelWerewolf19Tests
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19ShouldBreakHintTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.UpdateConditionShouldBreakHint", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.UpdateConditionShouldBreakHint", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19ShouldBreakHintTest::RunTest(const FString&)
 {
 	// 0x103cc450
@@ -166,7 +166,7 @@ bool FElysiumNpcKernelWerewolf19ShouldBreakHintTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19FindBreakHintTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.FindBreakHint", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.FindBreakHint", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19FindBreakHintTest::RunTest(const FString&)
 {
 	// 0x103d0ec0
@@ -210,7 +210,7 @@ bool FElysiumNpcKernelWerewolf19FindBreakHintTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19FindEgressHintTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.FindEgressHint", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.FindEgressHint", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19FindEgressHintTest::RunTest(const FString&)
 {
 	// 0x103d1200
@@ -236,7 +236,7 @@ bool FElysiumNpcKernelWerewolf19FindEgressHintTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19IsImperativeMoveHintTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.IsImperativeMoveHint", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.IsImperativeMoveHint", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19IsImperativeMoveHintTest::RunTest(const FString&)
 {
 	// 0x103d2070
@@ -311,7 +311,7 @@ bool FElysiumNpcKernelWerewolf19IsImperativeMoveHintTest::RunTest(const FString&
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19FindTeleportHintTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.FindTeleportHint", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.FindTeleportHint", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19FindTeleportHintTest::RunTest(const FString&)
 {
 	// 0x103d3c20
@@ -356,7 +356,7 @@ bool FElysiumNpcKernelWerewolf19FindTeleportHintTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19IsEnemyUnreachableTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.IsEnemyUnreachable", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.IsEnemyUnreachable", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19IsEnemyUnreachableTest::RunTest(const FString&)
 {
 	// 0x103da0a0
@@ -383,7 +383,7 @@ bool FElysiumNpcKernelWerewolf19IsEnemyUnreachableTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19ResetHuntStateTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.WerewolfResetHuntState", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.WerewolfResetHuntState", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19ResetHuntStateTest::RunTest(const FString&)
 {
 	// 0x103cac20
@@ -414,7 +414,7 @@ bool FElysiumNpcKernelWerewolf19ResetHuntStateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19IsImperativeRandomMoveHintTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.IsImperativeRandomMoveHint", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.IsImperativeRandomMoveHint", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19IsImperativeRandomMoveHintTest::RunTest(const FString&)
 {
 	// 0x103d2810
@@ -448,7 +448,7 @@ bool FElysiumNpcKernelWerewolf19IsImperativeRandomMoveHintTest::RunTest(const FS
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19FindMoveHintTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.FindMoveHint", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.FindMoveHint", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19FindMoveHintTest::RunTest(const FString&)
 {
 	// 0x103d2a10
@@ -483,7 +483,7 @@ bool FElysiumNpcKernelWerewolf19FindMoveHintTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19ShareEnemyWithAllyTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.ShareEnemyWithAlly", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.ShareEnemyWithAlly", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19ShareEnemyWithAllyTest::RunTest(const FString&)
 {
 	// 0x10397380
@@ -515,7 +515,7 @@ bool FElysiumNpcKernelWerewolf19ShareEnemyWithAllyTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19SetFollowerBossTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.SetFollowerBoss", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.SetFollowerBoss", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19SetFollowerBossTest::RunTest(const FString&)
 {
 	// 0x102c44e0
@@ -541,7 +541,7 @@ bool FElysiumNpcKernelWerewolf19SetFollowerBossTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19SetFollowerBossNameTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.SetFollowerBossName", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.SetFollowerBossName", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19SetFollowerBossNameTest::RunTest(const FString&)
 {
 	// 0x102c4430
@@ -562,7 +562,7 @@ bool FElysiumNpcKernelWerewolf19SetFollowerBossNameTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19UpdateConditionEnemyUnreachableTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.UpdateConditionEnemyUnreachable", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.UpdateConditionEnemyUnreachable", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19UpdateConditionEnemyUnreachableTest::RunTest(const FString&)
 {
 	// 0x103cc320. The previous-pass latch `+0x66a8` is held SET so the `CheckAllMoveHints` edge
@@ -592,7 +592,7 @@ bool FElysiumNpcKernelWerewolf19UpdateConditionEnemyUnreachableTest::RunTest(con
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19CheckAllRandomMoveHintsTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.CheckAllRandomMoveHints", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.CheckAllRandomMoveHints", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19CheckAllRandomMoveHintsTest::RunTest(const FString&)
 {
 	// 0x103cf770
@@ -625,7 +625,7 @@ bool FElysiumNpcKernelWerewolf19CheckAllRandomMoveHintsTest::RunTest(const FStri
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19FindRandomMoveHintTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.FindRandomMoveHint", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.FindRandomMoveHint", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19FindRandomMoveHintTest::RunTest(const FString&)
 {
 	// 0x103d14f0
@@ -649,7 +649,7 @@ bool FElysiumNpcKernelWerewolf19FindRandomMoveHintTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19CheckTargetTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.CheckTarget", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.CheckTarget", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19CheckTargetTest::RunTest(const FString&)
 {
 	// 0x10271d10
@@ -670,7 +670,7 @@ bool FElysiumNpcKernelWerewolf19CheckTargetTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelWerewolf19CanSpecialMoveTest,
-	"Elysium.Substrate.NpcKernelWerewolf19.UpdateConditionCanSpecialMove", GWerewolf19Flags)
+	"Elysium.Arm.NpcKernelWerewolf19.UpdateConditionCanSpecialMove", GWerewolf19Flags)
 bool FElysiumNpcKernelWerewolf19CanSpecialMoveTest::RunTest(const FString&)
 {
 	// 0x103cc5c0

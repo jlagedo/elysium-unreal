@@ -77,7 +77,7 @@ const FElysiumCameraShotDef* FindShot(const TArray<FElysiumCameraShotDef>& Shots
 }
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraAnchorTest, "Elysium.Substrate.CameraAnchors",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraAnchorTest, "Elysium.Arm.CameraAnchors",
 	ElysiumCameraAnchorTests::GElysiumCameraAnchorFlags)
 
 bool FElysiumCameraAnchorTest::RunTest(const FString&)
@@ -161,7 +161,7 @@ CameraShotTable
 				// **The anchor step is asserted with `AutoPositionFromTarget` cleared.** The shipped
 				// file sets the flag, and SC7 landed the solve that reads it, so a resolve of the
 				// file verbatim answers the *framed* origin rather than the anchor's — which is the
-				// point of `Elysium.Substrate.CameraAutoPosition` and would hide this case's own
+				// point of `Elysium.Arm.CameraAutoPosition` and would hide this case's own
 				// subject, the `FollowEntAngles` offset frame. Both are asserted, in order.
 				FElysiumCameraShotDef Unframed = Def;
 				Unframed.Constraints.bAutoPositionFromTarget = false;

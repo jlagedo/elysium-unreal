@@ -133,7 +133,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19BaseIdleTest,
-	"Elysium.Substrate.NpcKernelSelect19.BaseSelectSchedule.Idle", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.BaseSelectSchedule.Idle", GSelect19Flags)
 bool FElysiumNpcKernelSelect19BaseIdleTest::RunTest(const FString&)
 {
 	// 0x1028a380 case 1.
@@ -158,7 +158,7 @@ bool FElysiumNpcKernelSelect19BaseIdleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19BaseCombatTest,
-	"Elysium.Substrate.NpcKernelSelect19.BaseSelectSchedule.Combat", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.BaseSelectSchedule.Combat", GSelect19Flags)
 bool FElysiumNpcKernelSelect19BaseCombatTest::RunTest(const FString&)
 {
 	// 0x1028a380 case 2, the ladder after the enemy-dead and flinch arms.
@@ -198,7 +198,7 @@ bool FElysiumNpcKernelSelect19BaseCombatTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19BaseAlertTest,
-	"Elysium.Substrate.NpcKernelSelect19.BaseSelectSchedule.Alert", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.BaseSelectSchedule.Alert", GSelect19Flags)
 bool FElysiumNpcKernelSelect19BaseAlertTest::RunTest(const FString&)
 {
 	// 0x1028a380 case 3.
@@ -223,7 +223,7 @@ bool FElysiumNpcKernelSelect19BaseAlertTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19BaseOtherStatesTest,
-	"Elysium.Substrate.NpcKernelSelect19.BaseSelectSchedule.OtherStates", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.BaseSelectSchedule.OtherStates", GSelect19Flags)
 bool FElysiumNpcKernelSelect19BaseOtherStatesTest::RunTest(const FString&)
 {
 	// 0x1028a380 cases 0, 5 (default), 6, 7 and 0xc.
@@ -254,7 +254,7 @@ bool FElysiumNpcKernelSelect19BaseOtherStatesTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19PreSelectForcedTest,
-	"Elysium.Substrate.NpcKernelSelect19.PreSelectSchedule.Forced", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.PreSelectSchedule.Forced", GSelect19Flags)
 bool FElysiumNpcKernelSelect19PreSelectForcedTest::RunTest(const FString&)
 {
 	// 0x102ae920: the selector id, the investigate-sound reset, the forced schedule consumed.
@@ -276,7 +276,7 @@ bool FElysiumNpcKernelSelect19PreSelectForcedTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19PreSelectCombatTest,
-	"Elysium.Substrate.NpcKernelSelect19.PreSelectSchedule.Combat", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.PreSelectSchedule.Combat", GSelect19Flags)
 bool FElysiumNpcKernelSelect19PreSelectCombatTest::RunTest(const FString&)
 {
 	// 0x102ae920 state 2: ON_FIRE, the ATTACK_UNKNOWN flag, NEW_ENEMY, and the no-enemy re-entry.
@@ -306,7 +306,7 @@ bool FElysiumNpcKernelSelect19PreSelectCombatTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19PreSelectPlayerOnHeadTest,
-	"Elysium.Substrate.NpcKernelSelect19.PreSelectSchedule.PlayerOnHead", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.PreSelectSchedule.PlayerOnHead", GSelect19Flags)
 bool FElysiumNpcKernelSelect19PreSelectPlayerOnHeadTest::RunTest(const FString&)
 {
 	// 0x102aee2a..0x102aef3a: `debug_player_on_head` modes 0, 1, 2.
@@ -333,7 +333,7 @@ bool FElysiumNpcKernelSelect19PreSelectPlayerOnHeadTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19PreSelectTailTest,
-	"Elysium.Substrate.NpcKernelSelect19.PreSelectSchedule.Tail", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.PreSelectSchedule.Tail", GSelect19Flags)
 bool FElysiumNpcKernelSelect19PreSelectTailTest::RunTest(const FString&)
 {
 	// 0x102af102..0x102af39e: the base arm, special nav, STARTLED, the idle ladder, RUN_TO_SAVED.
@@ -387,7 +387,7 @@ bool FElysiumNpcKernelSelect19PreSelectTailTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19PreSelectCrimSuspicionTest,
-	"Elysium.Substrate.NpcKernelSelect19.PreSelectSchedule.CrimSuspicion", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.PreSelectSchedule.CrimSuspicion", GSelect19Flags)
 bool FElysiumNpcKernelSelect19PreSelectCrimSuspicionTest::RunTest(const FString&)
 {
 	// 0x102aef42 state 0xe: ON_FIRE.
@@ -408,7 +408,7 @@ bool FElysiumNpcKernelSelect19PreSelectCrimSuspicionTest::RunTest(const FString&
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19TroikaIdleTest,
-	"Elysium.Substrate.NpcKernelSelect19.TroikaSelectSchedule.Case1Idle", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.TroikaSelectSchedule.Case1Idle", GSelect19Flags)
 bool FElysiumNpcKernelSelect19TroikaIdleTest::RunTest(const FString&)
 {
 	FSelect19Fixture F;
@@ -455,7 +455,7 @@ bool FElysiumNpcKernelSelect19TroikaIdleTest::RunTest(const FString&)
 // that bypass the selector for a `use_interesting` body: the `ScheduleDone` latch and the
 // `ThinkAutonomous` route.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19PatrolOutranksUseInterestingTest,
-	"Elysium.Substrate.NpcKernelSelect19.PatrolOutranksUseInteresting_0x102af6b6", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.PatrolOutranksUseInteresting_0x102af6b6", GSelect19Flags)
 bool FElysiumNpcKernelSelect19PatrolOutranksUseInterestingTest::RunTest(const FString&)
 {
 	FSelect19Fixture F;
@@ -596,7 +596,7 @@ bool FElysiumNpcKernelSelect19TroikaCombatTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19TroikaAlertTest,
-	"Elysium.Substrate.NpcKernelSelect19.TroikaSelectSchedule.Case3Alert", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.TroikaSelectSchedule.Case3Alert", GSelect19Flags)
 bool FElysiumNpcKernelSelect19TroikaAlertTest::RunTest(const FString&)
 {
 	// The settled alert selector (`conditions-and-states.md` § "guesses, settled" 1): 0x4b, never the
@@ -622,7 +622,7 @@ bool FElysiumNpcKernelSelect19TroikaAlertTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19TroikaFleeTest,
-	"Elysium.Substrate.NpcKernelSelect19.TroikaSelectSchedule.Case8Flee", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.TroikaSelectSchedule.Case8Flee", GSelect19Flags)
 bool FElysiumNpcKernelSelect19TroikaFleeTest::RunTest(const FString&)
 {
 	FSelect19Fixture F;
@@ -655,7 +655,7 @@ bool FElysiumNpcKernelSelect19TroikaFleeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19TroikaHuntTest,
-	"Elysium.Substrate.NpcKernelSelect19.TroikaSelectSchedule.CaseBHunt", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.TroikaSelectSchedule.CaseBHunt", GSelect19Flags)
 bool FElysiumNpcKernelSelect19TroikaHuntTest::RunTest(const FString&)
 {
 	FSelect19Fixture F;
@@ -679,7 +679,7 @@ bool FElysiumNpcKernelSelect19TroikaHuntTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19TroikaFixedStatesTest,
-	"Elysium.Substrate.NpcKernelSelect19.TroikaSelectSchedule.CaseCDandDefault", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.TroikaSelectSchedule.CaseCDandDefault", GSelect19Flags)
 bool FElysiumNpcKernelSelect19TroikaFixedStatesTest::RunTest(const FString&)
 {
 	FSelect19Fixture F;
@@ -698,7 +698,7 @@ bool FElysiumNpcKernelSelect19TroikaFixedStatesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19TroikaCrimSuspicionTest,
-	"Elysium.Substrate.NpcKernelSelect19.TroikaSelectSchedule.CaseECrimSuspicion", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.TroikaSelectSchedule.CaseECrimSuspicion", GSelect19Flags)
 bool FElysiumNpcKernelSelect19TroikaCrimSuspicionTest::RunTest(const FString&)
 {
 	// 0x102b0abc: the `m_iSubState` walk 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 2.
@@ -725,7 +725,7 @@ bool FElysiumNpcKernelSelect19TroikaCrimSuspicionTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19TroikaHelpersTest,
-	"Elysium.Substrate.NpcKernelSelect19.TroikaSelectSchedule.AlertHelpers", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.TroikaSelectSchedule.AlertHelpers", GSelect19Flags)
 bool FElysiumNpcKernelSelect19TroikaHelpersTest::RunTest(const FString&)
 {
 	// 0x102b8a60, 0x102b9060 and 0x102b8d20.
@@ -766,7 +766,7 @@ bool FElysiumNpcKernelSelect19TroikaHelpersTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19AnimalTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.Animal", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.Animal", GSelect19Flags)
 bool FElysiumNpcKernelSelect19AnimalTest::RunTest(const FString&)
 {
 	// 0x1035fb50.
@@ -787,7 +787,7 @@ bool FElysiumNpcKernelSelect19AnimalTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19DogTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.Dog", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.Dog", GSelect19Flags)
 bool FElysiumNpcKernelSelect19DogTest::RunTest(const FString&)
 {
 	// 0x103742d0.
@@ -813,7 +813,7 @@ bool FElysiumNpcKernelSelect19DogTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19ScurryingTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.Scurrying", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.Scurrying", GSelect19Flags)
 bool FElysiumNpcKernelSelect19ScurryingTest::RunTest(const FString&)
 {
 	// 0x103ac610.
@@ -835,7 +835,7 @@ bool FElysiumNpcKernelSelect19ScurryingTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19ZombieTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.Zombie", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.Zombie", GSelect19Flags)
 bool FElysiumNpcKernelSelect19ZombieTest::RunTest(const FString&)
 {
 	// 0x103df2e0.
@@ -860,7 +860,7 @@ bool FElysiumNpcKernelSelect19ZombieTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19HumanTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.Human", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.Human", GSelect19Flags)
 bool FElysiumNpcKernelSelect19HumanTest::RunTest(const FString&)
 {
 	// 0x10384ee0.
@@ -882,7 +882,7 @@ bool FElysiumNpcKernelSelect19HumanTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19HumanLineTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.HumanCombatantYukiePatrolGhoul", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.HumanCombatantYukiePatrolGhoul", GSelect19Flags)
 bool FElysiumNpcKernelSelect19HumanLineTest::RunTest(const FString&)
 {
 	// 0x103872d0, 0x103dd6b0, 0x10387d20 idle all chain down to the Troika body; 0x1037bd60 answers
@@ -911,7 +911,7 @@ bool FElysiumNpcKernelSelect19HumanLineTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19Guard1Test,
-	"Elysium.Substrate.NpcKernelSelect19.Species.Guard1", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.Guard1", GSelect19Flags)
 bool FElysiumNpcKernelSelect19Guard1Test::RunTest(const FString&)
 {
 	// 0x1037d130.
@@ -931,7 +931,7 @@ bool FElysiumNpcKernelSelect19Guard1Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19CopTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.Cop", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.Cop", GSelect19Flags)
 bool FElysiumNpcKernelSelect19CopTest::RunTest(const FString&)
 {
 	// 0x10371ee0: the spawner-budget arm.
@@ -959,7 +959,7 @@ bool FElysiumNpcKernelSelect19CopTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19PedestrianTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.Pedestrian", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.Pedestrian", GSelect19Flags)
 bool FElysiumNpcKernelSelect19PedestrianTest::RunTest(const FString&)
 {
 	// 0x103a29f0.
@@ -987,7 +987,7 @@ bool FElysiumNpcKernelSelect19PedestrianTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19VampireBossLineTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.AsianVampireChangBrosSheriffSabbat", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.AsianVampireChangBrosSheriffSabbat", GSelect19Flags)
 bool FElysiumNpcKernelSelect19VampireBossLineTest::RunTest(const FString&)
 {
 	// 0x10360eb0, 0x1036b250, 0x103ae8c0, 0x103a70c0, 0x103aa510.
@@ -1046,7 +1046,7 @@ bool FElysiumNpcKernelSelect19VampireBossLineTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19GargoyleHengeyokaiTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.GargoyleHengeyokai", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.GargoyleHengeyokai", GSelect19Flags)
 bool FElysiumNpcKernelSelect19GargoyleHengeyokaiTest::RunTest(const FString&)
 {
 	// 0x103788d0 and 0x1037fca0.
@@ -1080,7 +1080,7 @@ bool FElysiumNpcKernelSelect19GargoyleHengeyokaiTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19MingXiaoTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.MingXiao", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.MingXiao", GSelect19Flags)
 bool FElysiumNpcKernelSelect19MingXiaoTest::RunTest(const FString&)
 {
 	// 0x10394120 and 0x103941e0.
@@ -1103,7 +1103,7 @@ bool FElysiumNpcKernelSelect19MingXiaoTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19TzimisceLineTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.TzimisceHeadClawRunner", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.TzimisceHeadClawRunner", GSelect19Flags)
 bool FElysiumNpcKernelSelect19TzimisceLineTest::RunTest(const FString&)
 {
 	// 0x103bb7c0, 0x103c1610, 0x103c3310.
@@ -1146,7 +1146,7 @@ bool FElysiumNpcKernelSelect19TzimisceLineTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19WerewolfTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.Werewolf", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.Werewolf", GSelect19Flags)
 bool FElysiumNpcKernelSelect19WerewolfTest::RunTest(const FString&)
 {
 	// 0x103cee70.
@@ -1161,7 +1161,7 @@ bool FElysiumNpcKernelSelect19WerewolfTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19ControllerLineTest,
-	"Elysium.Substrate.NpcKernelSelect19.Species.ControllerLine", GSelect19Flags)
+	"Elysium.Arm.NpcKernelSelect19.Species.ControllerLine", GSelect19Flags)
 bool FElysiumNpcKernelSelect19ControllerLineTest::RunTest(const FString&)
 {
 	// The three rows landed in story 5 fold A2: 0x103a46b0, 0x10375d90, 0x103dceb0.

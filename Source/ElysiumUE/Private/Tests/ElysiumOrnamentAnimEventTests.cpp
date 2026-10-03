@@ -86,7 +86,7 @@ namespace
 // --- The pure format rule, and the ids the handler claims ----------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOrnamentAnimEventTest,
-	"Elysium.Substrate.OrnamentAnimEvents", GElysiumTestFlags)
+	"Elysium.Arm.OrnamentAnimEvents", GElysiumTestFlags)
 bool FElysiumOrnamentAnimEventTest::RunTest(const FString&)
 {
 	using namespace ElysiumAnimEvents;
@@ -281,7 +281,7 @@ bool FElysiumOrnamentAnimEventTest::RunTest(const FString&)
 // A SIBLING of `OrnamentAnimEvents`, never a child: the automation tree treats a name that is also a
 // prefix as a group, and the leaf under it stops being discoverable.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedBoundaryAnimEventTest,
-	"Elysium.Substrate.FeedBoundaryAnimEvents", GElysiumTestFlags)
+	"Elysium.Arm.FeedBoundaryAnimEvents", GElysiumTestFlags)
 bool FElysiumFeedBoundaryAnimEventTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;

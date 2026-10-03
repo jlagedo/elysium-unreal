@@ -191,7 +191,7 @@ namespace
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessThresholdTest,
-	"Elysium.Substrate.NpcWitness.Thresholds", GElysiumTestFlags)
+	"Elysium.Arm.NpcWitness.Thresholds", GElysiumTestFlags)
 bool FElysiumNpcWitnessThresholdTest::RunTest(const FString&)
 {
 	// "The player clamps activity to `0..5`; an authored threshold of 6 is therefore an effective
@@ -244,7 +244,7 @@ bool FElysiumNpcWitnessThresholdTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessKeyfieldTest,
-	"Elysium.Substrate.NpcWitness.Keyfields", GElysiumTestFlags)
+	"Elysium.Arm.NpcWitness.Keyfields", GElysiumTestFlags)
 bool FElysiumNpcWitnessKeyfieldTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;
@@ -291,7 +291,7 @@ bool FElysiumNpcWitnessKeyfieldTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessDirectLaneTest,
-	"Elysium.Substrate.NpcWitness.DirectLane", GElysiumTestFlags)
+	"Elysium.Arm.NpcWitness.DirectLane", GElysiumTestFlags)
 bool FElysiumNpcWitnessDirectLaneTest::RunTest(const FString&)
 {
 	// --- The lane needs the closest player AND sight ---------------------------------------------
@@ -437,7 +437,7 @@ bool FElysiumNpcWitnessDirectLaneTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessNosferatuTest,
-	"Elysium.Substrate.NpcWitness.Nosferatu", GElysiumTestFlags)
+	"Elysium.Arm.NpcWitness.Nosferatu", GElysiumTestFlags)
 bool FElysiumNpcWitnessNosferatuTest::RunTest(const FString&)
 {
 	FWitnessFixture F;
@@ -527,7 +527,7 @@ bool FElysiumNpcWitnessNosferatuTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessGlobalLaneTest,
-	"Elysium.Substrate.NpcWitness.GlobalLane", GElysiumTestFlags)
+	"Elysium.Arm.NpcWitness.GlobalLane", GElysiumTestFlags)
 bool FElysiumNpcWitnessGlobalLaneTest::RunTest(const FString&)
 {
 	// The player commits nothing in this case, so every condition raised here came off a record.
@@ -659,7 +659,7 @@ bool FElysiumNpcWitnessGlobalLaneTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessDeadlineSetterTest,
-	"Elysium.Substrate.NpcWitness.DeadlineSetters", GElysiumTestFlags)
+	"Elysium.Arm.NpcWitness.DeadlineSetters", GElysiumTestFlags)
 bool FElysiumNpcWitnessDeadlineSetterTest::RunTest(const FString&)
 {
 	// --- The feed pulse, end to end on a real victim ---------------------------------------------
@@ -755,7 +755,7 @@ bool FElysiumNpcWitnessDeadlineSetterTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessConsumerTest,
-	"Elysium.Substrate.NpcWitness.Consumers", GElysiumTestFlags)
+	"Elysium.Arm.NpcWitness.Consumers", GElysiumTestFlags)
 bool FElysiumNpcWitnessConsumerTest::RunTest(const FString&)
 {
 	// --- The flee consumer ------------------------------------------------------------------------
@@ -871,7 +871,7 @@ bool FElysiumNpcWitnessConsumerTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessSubmissionTest,
-	"Elysium.Substrate.NpcWitness.Submission", GElysiumTestFlags)
+	"Elysium.Arm.NpcWitness.Submission", GElysiumTestFlags)
 bool FElysiumNpcWitnessSubmissionTest::RunTest(const FString&)
 {
 	FWitnessFixture F;
@@ -954,7 +954,7 @@ bool FElysiumNpcWitnessSubmissionTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessSaveTest,
-	"Elysium.Substrate.NpcWitness.Save", GElysiumTestFlags)
+	"Elysium.Arm.NpcWitness.Save", GElysiumTestFlags)
 bool FElysiumNpcWitnessSaveTest::RunTest(const FString&)
 {
 	// Through the real persistence path, because since 0019/2 pass C that is the only path that

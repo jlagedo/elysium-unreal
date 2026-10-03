@@ -21,7 +21,7 @@ namespace ElysiumBrushFadeTests
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBrushCullTest, "Elysium.Substrate.BrushCull", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBrushCullTest, "Elysium.Arm.BrushCull", GElysiumTestFlags)
 bool FElysiumBrushCullTest::RunTest(const FString&)
 {
 	FTestWorldWrapper TestWorld;

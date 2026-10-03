@@ -599,7 +599,7 @@ bool FElysiumWeaponRulesTest::RunTest(const FString&)
 // parses once when the entity spawns.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponInstallTest, "Elysium.Substrate.Weapons.Install",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponInstallTest, "Elysium.Arm.Weapons.Install",
 	GElysiumTestFlags)
 bool FElysiumWeaponInstallTest::RunTest(const FString&)
 {
@@ -687,7 +687,7 @@ bool FElysiumWeaponInstallTest::RunTest(const FString&)
 // no player/NPC branch in its bookkeeping.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponWieldFunnelTest, "Elysium.Substrate.Weapons.WieldFunnel",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponWieldFunnelTest, "Elysium.Arm.Weapons.WieldFunnel",
 	GElysiumTestFlags)
 bool FElysiumWeaponWieldFunnelTest::RunTest(const FString&)
 {
@@ -947,7 +947,7 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 			NearlyEqual(Fists->NextPrimaryAttackTime, 100.0));
 		// An AI producer's intent is refused by the deadline and nothing else. The busy path — where
 		// the combo chain lives — hangs off `ItemPostFrame`'s press edge, which a schedule task never
-		// produces, so this door still answers the plain refusal (`Elysium.Substrate.Weapons.Combo`).
+		// produces, so this door still answers the plain refusal (`Elysium.Arm.Weapons.Combo`).
 		TestEqual(TEXT("a press before the deadline is refused"),
 			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary),
 			FElysiumWeapon::EVerdict::NotReady);
@@ -1430,7 +1430,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeRollTest,
-	"Elysium.Substrate.Weapons.MeleeRoll", GElysiumTestFlags)
+	"Elysium.Arm.Weapons.MeleeRoll", GElysiumTestFlags)
 bool FElysiumWeaponMeleeRollTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeWeaponTable();
@@ -1861,7 +1861,7 @@ namespace
 	};
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponComboTest, "Elysium.Substrate.Weapons.Combo",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponComboTest, "Elysium.Arm.Weapons.Combo",
 	GElysiumTestFlags)
 bool FElysiumWeaponComboTest::RunTest(const FString&)
 {
@@ -2169,7 +2169,7 @@ namespace
 	};
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeBandTest, "Elysium.Substrate.Weapons.MeleeBand",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeBandTest, "Elysium.Arm.Weapons.MeleeBand",
 	GElysiumTestFlags)
 bool FElysiumWeaponMeleeBandTest::RunTest(const FString&)
 {
@@ -2325,7 +2325,7 @@ bool FElysiumWeaponMeleeBandTest::RunTest(const FString&)
 // observable, which is what the "off the ground but not airborne" case below pins.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeAirTest, "Elysium.Substrate.Weapons.MeleeAir",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeAirTest, "Elysium.Arm.Weapons.MeleeAir",
 	GElysiumTestFlags)
 bool FElysiumWeaponMeleeAirTest::RunTest(const FString&)
 {
@@ -2441,7 +2441,7 @@ bool FElysiumWeaponMeleeAirTest::RunTest(const FString&)
 		// **Asserted at the predicate, and its publisher is asserted where the publisher lives.** A
 		// swing's forced ideal activity travels with the base-channel claim
 		// (`FElysiumClipSegment::Activity`) and the animation driver publishes it ahead of its own
-		// locomotion classification, which `Elysium.Substrate.MeleeMovementLock` asserts for the air
+		// locomotion classification, which `Elysium.Arm.MeleeMovementLock` asserts for the air
 		// form by name; `AElysiumMapActor::GetPlayerBaseActivity` is the seam that hands the same
 		// value back here. The window it is published in is the whole air clip, and whether a
 		// follow-up press can arrive inside that window is the weapon's busy predicate's answer, not
@@ -3136,7 +3136,7 @@ bool FElysiumWeaponRangedTest::RunTest(const FString&)
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponAnimBodyKindTest,
-	"Elysium.Substrate.Weapons.AnimBodyKind", GElysiumTestFlags)
+	"Elysium.Arm.Weapons.AnimBodyKind", GElysiumTestFlags)
 bool FElysiumWeaponAnimBodyKindTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeWeaponTable();
@@ -3535,7 +3535,7 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 		// only reached through one, and without it the transaction falls through to the headless
 		// timing fallback and records which pose was asked for nowhere.
 		Gunman->SetRuntimeModel(TEXT("models/character/npc/gangbanger/gangbanger_a.mdl"));
-		if (!TestNotNull(TEXT("the cast body the seam can reach exists"), Gunman->Visual))
+		if (!TestNotNull(TEXT("the cast body exists"), Gunman->Visual))
 		{
 			return false;
 		}
@@ -3926,7 +3926,7 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponLeafSchemaTest, "Elysium.Substrate.Weapons.LeafSchema",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponLeafSchemaTest, "Elysium.Arm.Weapons.LeafSchema",
 	GElysiumTestFlags)
 bool FElysiumWeaponLeafSchemaTest::RunTest(const FString&)
 {
@@ -4151,7 +4151,7 @@ bool FElysiumWeaponLeafSchemaTest::RunTest(const FString&)
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInventorySelectionTest,
-	"Elysium.Substrate.Inventory.Selection", GElysiumTestFlags)
+	"Elysium.Arm.Inventory.Selection", GElysiumTestFlags)
 bool FElysiumInventorySelectionTest::RunTest(const FString&)
 {
 	// The authored type -> section join, asserted first because everything below rides it. Four
@@ -4384,7 +4384,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponHiddenRequestTest,
-	"Elysium.Substrate.WeaponHidden.ActivityRequest", GElysiumTestFlags)
+	"Elysium.Arm.WeaponHidden.ActivityRequest", GElysiumTestFlags)
 bool FElysiumWeaponHiddenRequestTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeWeaponTable();
@@ -4443,7 +4443,7 @@ bool FElysiumWeaponHiddenRequestTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponHiddenHolsterTest,
-	"Elysium.Substrate.WeaponHidden.HolsterDeploy", GElysiumTestFlags)
+	"Elysium.Arm.WeaponHidden.HolsterDeploy", GElysiumTestFlags)
 bool FElysiumWeaponHiddenHolsterTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeWeaponTable();
@@ -4508,7 +4508,7 @@ bool FElysiumWeaponHiddenHolsterTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponHiddenStateChangeTest,
-	"Elysium.Substrate.WeaponHidden.StateChange", GElysiumTestFlags)
+	"Elysium.Arm.WeaponHidden.StateChange", GElysiumTestFlags)
 bool FElysiumWeaponHiddenStateChangeTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeWeaponTable();

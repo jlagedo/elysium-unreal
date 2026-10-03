@@ -77,7 +77,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDialogueMessageSendTest,
-	"Elysium.Substrate.NpcKernelDialogue.MessageSend", GElysiumNpcKernelDialogueFlags)
+	"Elysium.Arm.NpcKernelDialogue.MessageSend", GElysiumNpcKernelDialogueFlags)
 bool FElysiumNpcKernelDialogueMessageSendTest::RunTest(const FString&)
 {
 	FDialogueFixture F;
@@ -171,7 +171,7 @@ bool FElysiumNpcKernelDialogueMessageSendTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDialogueGotoLineTest,
-	"Elysium.Substrate.NpcKernelDialogue.GotoLineForResponse", GElysiumNpcKernelDialogueFlags)
+	"Elysium.Arm.NpcKernelDialogue.GotoLineForResponse", GElysiumNpcKernelDialogueFlags)
 bool FElysiumNpcKernelDialogueGotoLineTest::RunTest(const FString&)
 {
 	FDialogueFixture F;
@@ -236,7 +236,7 @@ bool FElysiumNpcKernelDialogueGotoLineTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDialogueCineCameraTest,
-	"Elysium.Substrate.NpcKernelDialogue.ActiveCamera", GElysiumNpcKernelDialogueFlags)
+	"Elysium.Arm.NpcKernelDialogue.ActiveCamera", GElysiumNpcKernelDialogueFlags)
 bool FElysiumNpcKernelDialogueCineCameraTest::RunTest(const FString&)
 {
 	FDialogueFixture F;
@@ -266,7 +266,7 @@ bool FElysiumNpcKernelDialogueCineCameraTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDialoguePursuitCountsTest,
-	"Elysium.Substrate.NpcKernelDialogue.PursuitCounts", GElysiumNpcKernelDialogueFlags)
+	"Elysium.Arm.NpcKernelDialogue.PursuitCounts", GElysiumNpcKernelDialogueFlags)
 bool FElysiumNpcKernelDialoguePursuitCountsTest::RunTest(const FString&)
 {
 	FDialogueFixture F;
@@ -303,7 +303,7 @@ bool FElysiumNpcKernelDialoguePursuitCountsTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDialoguePayphoneCanTalkTest,
-	"Elysium.Substrate.NpcKernelDialogue.PayphoneCanTalk", GElysiumNpcKernelDialogueFlags)
+	"Elysium.Arm.NpcKernelDialogue.PayphoneCanTalk", GElysiumNpcKernelDialogueFlags)
 bool FElysiumNpcKernelDialoguePayphoneCanTalkTest::RunTest(const FString&)
 {
 	FDialogueFixture F;
@@ -383,7 +383,7 @@ bool FElysiumNpcKernelDialoguePayphoneCanTalkTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDialogueHandleInteractionTest,
-	"Elysium.Substrate.NpcKernelDialogue.HandleInteraction", GElysiumNpcKernelDialogueFlags)
+	"Elysium.Arm.NpcKernelDialogue.HandleInteraction", GElysiumNpcKernelDialogueFlags)
 bool FElysiumNpcKernelDialogueHandleInteractionTest::RunTest(const FString&)
 {
 	FDialogueFixture F;
@@ -420,7 +420,7 @@ bool FElysiumNpcKernelDialogueHandleInteractionTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDialogueSecCameraLinkTest,
-	"Elysium.Substrate.NpcKernelDialogue.SecCameraLink", GElysiumNpcKernelDialogueFlags)
+	"Elysium.Arm.NpcKernelDialogue.SecCameraLink", GElysiumNpcKernelDialogueFlags)
 bool FElysiumNpcKernelDialogueSecCameraLinkTest::RunTest(const FString&)
 {
 	// Story 5 step 2: `npc_VCameraSecurity`'s factory builds `CNPC_VCameraSecurity`
@@ -516,7 +516,7 @@ bool FElysiumNpcKernelDialogueSecCameraLinkTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDialogueCrosswalkTest,
-	"Elysium.Substrate.NpcKernelDialogue.Crosswalk", GElysiumNpcKernelDialogueFlags)
+	"Elysium.Arm.NpcKernelDialogue.Crosswalk", GElysiumNpcKernelDialogueFlags)
 bool FElysiumNpcKernelDialogueCrosswalkTest::RunTest(const FString&)
 {
 	FDialogueFixture F;
@@ -680,7 +680,7 @@ bool FElysiumNpcKernelDialogueCrosswalkTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDialogueUseSlotsTest,
-	"Elysium.Substrate.NpcKernelDialogue.UseSlots", GElysiumNpcKernelDialogueFlags)
+	"Elysium.Arm.NpcKernelDialogue.UseSlots", GElysiumNpcKernelDialogueFlags)
 bool FElysiumNpcKernelDialogueUseSlotsTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture World([]

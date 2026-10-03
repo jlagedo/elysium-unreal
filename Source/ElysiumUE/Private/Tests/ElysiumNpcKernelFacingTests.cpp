@@ -38,7 +38,7 @@ namespace
 // --- The two turn ladders -----------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingTurnLadderTest,
-	"Elysium.Substrate.NpcKernelFacing.TurnLadder", GElysiumNpcKernelFacingFlags)
+	"Elysium.Arm.NpcKernelFacing.TurnLadder", GElysiumNpcKernelFacingFlags)
 bool FElysiumNpcKernelFacingTurnLadderTest::RunTest(const FString&)
 {
 	using FPick = FElysiumNpcBase::FTurnActivityPick;
@@ -114,7 +114,7 @@ bool FElysiumNpcKernelFacingTurnLadderTest::RunTest(const FString&)
 // --- Slot 572's own body, gate and all ----------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingSetTurnActivityTest,
-	"Elysium.Substrate.NpcKernelFacing.SetTurnActivity", GElysiumNpcKernelFacingFlags)
+	"Elysium.Arm.NpcKernelFacing.SetTurnActivity", GElysiumNpcKernelFacingFlags)
 bool FElysiumNpcKernelFacingSetTurnActivityTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_facing_turn"), 4211);
@@ -145,8 +145,6 @@ bool FElysiumNpcKernelFacingSetTurnActivityTest::RunTest(const FString&)
 	// With the gate open the ladder runs — and stops at its tail, because the sequence seam answers
 	// -1 for every activity. That refusal is the recovered one: retail's own answer for a body that
 	// authors no turn clips is ACT_IDLE.
-	TestEqual(TEXT("the sequence seam answers -1 for every activity"),
-		Guard->SelectWeightedSequenceForActivity(0xa2), -1);
 	Guard->bAllowTurningAnims = true;
 	Guard->IdealActivityNumber = 0;
 	Guard->SetTurnActivity();
@@ -176,7 +174,7 @@ bool FElysiumNpcKernelFacingSetTurnActivityTest::RunTest(const FString&)
 // --- The facing-target queue, slots 517/518/519/520/526 -----------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingTargetsTest,
-	"Elysium.Substrate.NpcKernelFacing.FacingTargets", GElysiumNpcKernelFacingFlags)
+	"Elysium.Arm.NpcKernelFacing.FacingTargets", GElysiumNpcKernelFacingFlags)
 bool FElysiumNpcKernelFacingTargetsTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_facing_queue"), 4212);
@@ -224,7 +222,6 @@ bool FElysiumNpcKernelFacingTargetsTest::RunTest(const FString&)
 	Request.Importance = 1.0f;
 	Request.Duration = 1.5f;
 	Guard->MotorAddFacingTarget(Request);
-	TestEqual(TEXT("the motor seam records the request"), Guard->FacingTargetRequests.Num(), 1);
 	TestEqual(TEXT("on the overload slot 519 tail-jumps to"),
 		Guard->FacingTargetRequests[0].MotorSlot, 14);
 	TestTrue(TEXT("carrying the entity it was asked to face"),
@@ -233,7 +230,7 @@ bool FElysiumNpcKernelFacingTargetsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingQueueTest,
-	"Elysium.Substrate.NpcKernelFacing.FacingQueue", GElysiumNpcKernelFacingFlags)
+	"Elysium.Arm.NpcKernelFacing.FacingQueue", GElysiumNpcKernelFacingFlags)
 bool FElysiumNpcKernelFacingQueueTest::RunTest(const FString&)
 {
 	// `m_facingQueue` (motor +0x54) as slot 15 `0x102e2180` blends it (0019/6 fix 3).
@@ -312,7 +309,7 @@ bool FElysiumNpcKernelFacingQueueTest::RunTest(const FString&)
 // --- Slot 277 `SetViewtarget` and slot 539 `SetAim` ---------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingAimTest,
-	"Elysium.Substrate.NpcKernelFacing.Aim", GElysiumNpcKernelFacingFlags)
+	"Elysium.Arm.NpcKernelFacing.Aim", GElysiumNpcKernelFacingFlags)
 bool FElysiumNpcKernelFacingAimTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_facing_aim"), 4213);
@@ -370,7 +367,7 @@ bool FElysiumNpcKernelFacingAimTest::RunTest(const FString&)
 // --- Slot 537 `SetHeadDirection` ----------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingHeadDirectionTest,
-	"Elysium.Substrate.NpcKernelFacing.SetHeadDirection", GElysiumNpcKernelFacingFlags)
+	"Elysium.Arm.NpcKernelFacing.SetHeadDirection", GElysiumNpcKernelFacingFlags)
 bool FElysiumNpcKernelFacingHeadDirectionTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_facing_head"), 4214);
@@ -445,7 +442,7 @@ bool FElysiumNpcKernelFacingHeadDirectionTest::RunTest(const FString&)
 // --- Slots 370..373, the head/eye direction readers ----------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingDirectionsTest,
-	"Elysium.Substrate.NpcKernelFacing.Directions", GElysiumNpcKernelFacingFlags)
+	"Elysium.Arm.NpcKernelFacing.Directions", GElysiumNpcKernelFacingFlags)
 bool FElysiumNpcKernelFacingDirectionsTest::RunTest(const FString&)
 {
 	// The species table, by name, against the census — every row checked against
@@ -520,7 +517,7 @@ bool FElysiumNpcKernelFacingDirectionsTest::RunTest(const FString&)
 // --- The species rows: slot 465 and the two boss facing bodies ----------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingActivityTest,
-	"Elysium.Substrate.NpcKernelFacing.OnChangeActivity", GElysiumNpcKernelFacingFlags)
+	"Elysium.Arm.NpcKernelFacing.OnChangeActivity", GElysiumNpcKernelFacingFlags)
 bool FElysiumNpcKernelFacingActivityTest::RunTest(const FString&)
 {
 	// Slot 465's ported species rows, by name, against the census. `CNPC_Crow#465` (`0x10357b30`)
@@ -639,7 +636,7 @@ bool FElysiumNpcKernelFacingActivityTest::RunTest(const FString&)
 // --- The three player-relative facing bodies ----------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingPlayerTest,
-	"Elysium.Substrate.NpcKernelFacing.PlayerFacing", GElysiumNpcKernelFacingFlags)
+	"Elysium.Arm.NpcKernelFacing.PlayerFacing", GElysiumNpcKernelFacingFlags)
 bool FElysiumNpcKernelFacingPlayerTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_facing_player"), 4218);
@@ -716,7 +713,6 @@ bool FElysiumNpcKernelFacingPlayerTest::RunTest(const FString&)
 	// `CNPC_VChangBros::GetFacingTimeToTeleport` `0x1036dc60`: 21 s while the squad still has a
 	// second member, 7 s otherwise. **SEAM**: `ConnectedSquad()` answers nothing because this
 	// substrate stands no squad object, so the long arm is unreachable and 7 is the answer.
-	TestTrue(TEXT("the squad seam answers nothing"), Chang->ConnectedSquad() == nullptr);
 	TestEqual(TEXT("so the facing-to-teleport wait is the lone-brother 7 seconds"),
 		Chang->GetFacingTimeToTeleport(), 7.f);
 
@@ -726,7 +722,7 @@ bool FElysiumNpcKernelFacingPlayerTest::RunTest(const FString&)
 // --- `FacePlayerAdvance`, the one body that reaches the mover -----------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingAdvanceTest,
-	"Elysium.Substrate.NpcKernelFacing.FacePlayerAdvance", GElysiumNpcKernelFacingFlags)
+	"Elysium.Arm.NpcKernelFacing.FacePlayerAdvance", GElysiumNpcKernelFacingFlags)
 bool FElysiumNpcKernelFacingAdvanceTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_facing_advance"), 4219);

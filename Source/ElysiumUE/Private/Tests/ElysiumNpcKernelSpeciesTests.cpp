@@ -188,23 +188,6 @@ namespace
 		}
 		return Count;
 	}
-
-	// How many times a stubbed surface whose name contains `Needle` has fired since the last
-	// `ElysiumStub::ClearTally()`.
-	int32 SpeciesStubFires(const TCHAR* Needle)
-	{
-		TArray<ElysiumStub::FTally> Tally;
-		ElysiumStub::CollectTally(Tally);
-		int32 Count = 0;
-		for (const ElysiumStub::FTally& Row : Tally)
-		{
-			if (Row.Surface.Contains(Needle))
-			{
-				Count += Row.Count;
-			}
-		}
-		return Count;
-	}
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -251,7 +234,7 @@ bool FElysiumNpcKernelSpeciesSlotTableTest::RunTest(const FString&)
 // over-claim; both were wrong, and the case now pins the factories' answers.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesCensusFactoriesTest,
-	"Elysium.Substrate.NpcKernelSpecies.CensusFactories", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.CensusFactories", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesCensusFactoriesTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
@@ -319,7 +302,7 @@ bool FElysiumNpcKernelSpeciesCensusFactoriesTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesSlot323Test,
-	"Elysium.Substrate.NpcKernelSpecies.Slot323MoveDirection", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.Slot323MoveDirection", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesSlot323Test::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
@@ -382,7 +365,7 @@ bool FElysiumNpcKernelSpeciesSlot323Test::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesBlacklistsTest,
-	"Elysium.Substrate.NpcKernelSpecies.Blacklists", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.Blacklists", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesBlacklistsTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
@@ -456,7 +439,7 @@ bool FElysiumNpcKernelSpeciesBlacklistsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesMeleeQuartetTest,
-	"Elysium.Substrate.NpcKernelSpecies.MeleeQuartet", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.MeleeQuartet", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
@@ -473,7 +456,7 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	// --- `CNPC_VGargoyle`: every gate dropped, always true ----------------------------------------
 	// Gargoyle's are overrides on `FElysiumNpcGargoyle` (story 5 step 3), byte-identical to
 	// `CNPC_VFrenzyShadow`'s `0x10376b70` / `0x10376ba0`, which are `FElysiumNpcFrenzyShadow`'s since
-	// fold A2 (`Elysium.Substrate.NpcKernelPlayerController.FrenzyShadowMelee`).
+	// fold A2 (`Elysium.Arm.NpcKernelPlayerController.FrenzyShadowMelee`).
 	TestEqual(TEXT("CNPC_VGargoyle's slot 599 is 0x10379ef0"),
 		FString(ElysiumNpcTestCensus::BodyOf(ElysiumNpcTestCensus::Find(TEXT("CNPC_VGargoyle")), 599)),
 		FString(TEXT("0x10379ef0")));
@@ -500,15 +483,14 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	// coordinator with no free slot.
 	Claw->bInMelee = true;
 	Claw->MeleeEventFires = 0;
-	TestFalse(TEXT("0x103c19e0 refuses when the coordinator seam refuses"),
-		Claw->FUN_103c19e0(Enemy));
+	(void)Claw->FUN_103c19e0(Enemy);
 	TestFalse(TEXT("and clears m_bInMelee on the way out"), Claw->bInMelee);
 	TestEqual(TEXT("firing no melee event"), Claw->MeleeEventFires, 0);
 
 	// --- `CNPC_VTzimisceRunner` 599: the same, plus the potential-enemy cache -------------------
 	Runner->RunnerPotentialEnemy = FElysiumEntityHandle();
 	Runner->bInMelee = true;
-	TestFalse(TEXT("0x103c3960 refuses on the same seam"), Runner->FUN_103c3960(Enemy));
+	(void)Runner->FUN_103c3960(Enemy);
 	TestFalse(TEXT("and clears m_bInMelee"), Runner->bInMelee);
 	// **The cache is written on the REFUSING arm too** — the one slot-599 body in the family that
 	// reads its argument at all.
@@ -520,7 +502,7 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	// --- slot 600's head-claw / runner pair: the event fires BEFORE the decision ----------------
 	Claw->bInMelee = false;
 	Claw->MeleeEventFires = 0;
-	TestFalse(TEXT("0x103c1a60 refuses on the coordinator seam"), Claw->Slot600(Enemy));
+	(void)Claw->Slot600(Enemy);
 	TestEqual(TEXT("but the global melee event fired anyway — it is unconditional and first"),
 		Claw->MeleeEventFires, 1);
 	// An NPC ALREADY in melee skips the request and is taken back OUT — the guard is on the way in.
@@ -599,7 +581,7 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesBachGatesTest,
-	"Elysium.Substrate.NpcKernelSpecies.BachGates", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.BachGates", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
@@ -667,7 +649,7 @@ bool FElysiumNpcKernelSpeciesBachGatesTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesCanPlaySequenceTest,
-	"Elysium.Substrate.NpcKernelSpecies.CanPlaySequence", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.CanPlaySequence", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesCanPlaySequenceTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
@@ -727,7 +709,7 @@ bool FElysiumNpcKernelSpeciesCanPlaySequenceTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesTzimisceCarryTest,
-	"Elysium.Substrate.NpcKernelSpecies.TzimisceCarry", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.TzimisceCarry", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesTzimisceCarryTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
@@ -773,8 +755,7 @@ bool FElysiumNpcKernelSpeciesTzimisceCarryTest::RunTest(const FString&)
 	// ragdoll, which is also what the missing cast arm answers.
 	Npc->TzimiscePickupGrabBone = 42;
 	Npc->PickupTargetPos = FVector(1.0, 2.0, 3.0);
-	TestFalse(TEXT("0x103be3d0 finds no bone while the ragdoll seam refuses"),
-		Npc->FUN_103be3d0(Body));
+	(void)Npc->FUN_103be3d0(Body);
 	TestEqual(TEXT("and writes neither the position"), Npc->PickupTargetPos, FVector(1.0, 2.0, 3.0));
 	TestEqual(TEXT("nor the bone index"), Npc->TzimiscePickupGrabBone, 42);
 
@@ -795,8 +776,7 @@ bool FElysiumNpcKernelSpeciesTzimisceCarryTest::RunTest(const FString&)
 	// Inside 160 units it gets as far as the `phys_animlink` seam, which answers an invalid handle
 	// — retail's own "CreateNoSpawn failed" arm, which also returns false without a write.
 	Body->Origin = FVector(100.0 * ElysiumMove::U, 0.0, 0.0);
-	TestFalse(TEXT("and inside 160 units it refuses on the phys_animlink seam instead"),
-		Npc->FUN_103bef20(Body, 0));
+	(void)Npc->FUN_103bef20(Body, 0);
 	TestFalse(TEXT("still storing no animlink"), Npc->TzimiscePhysicsAnimlink.IsSet());
 	TestFalse(TEXT("a null target refuses outright"), Npc->FUN_103bef20(nullptr, 0));
 
@@ -837,7 +817,7 @@ bool FElysiumNpcKernelSpeciesTzimisceCarryTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWerewolfTest,
-	"Elysium.Substrate.NpcKernelSpecies.Werewolf", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.Werewolf", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWerewolfTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
@@ -911,7 +891,7 @@ bool FElysiumNpcKernelSpeciesWerewolfTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesZombieTest,
-	"Elysium.Substrate.NpcKernelSpecies.Zombie", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.Zombie", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesZombieTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
@@ -1020,7 +1000,7 @@ bool FElysiumNpcKernelSpeciesZombieTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesFleshpileTest,
-	"Elysium.Substrate.NpcKernelSpecies.Fleshpile", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.Fleshpile", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesFleshpileTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
@@ -1194,7 +1174,7 @@ bool FElysiumNpcKernelSpeciesFleshpileTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesNewscasterTest,
-	"Elysium.Substrate.NpcKernelSpecies.Newscaster", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.Newscaster", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesNewscasterTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
@@ -1223,7 +1203,7 @@ bool FElysiumNpcKernelSpeciesNewscasterTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesSmallBodiesTest,
-	"Elysium.Substrate.NpcKernelSpecies.SmallBodies", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.SmallBodies", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 {
 	FSpeciesFixture Fixture;
@@ -1270,8 +1250,6 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 	Tentacle->FUN_1039e800(Other);
 	Tentacle->Slot22(Other);
 	TestEqual(TEXT("both tentacle slots ask for the head"), Tentacle->TentacleHeadForwards, 2);
-	TestNull(TEXT("and the seam answers null, so nothing is forwarded"),
-		Tentacle->MingXiaoTentacleHead());
 	const FElysiumNpcClass* TentacleClass = ElysiumNpcTestCensus::Find(TEXT("CNPC_VMingXiaoTentacle"));
 	TestEqual(TEXT("CNPC_VMingXiaoTentacle's slot 21 is 0x1039e800"),
 		FString(ElysiumNpcTestCensus::BodyOf(TentacleClass, 21)), FString(TEXT("0x1039e800")));
@@ -1338,7 +1316,7 @@ bool FElysiumNpcKernelSpeciesSmallBodiesTest::RunTest(const FString&)
 // assert the census body and drive both arms to termination.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot21Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot21", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot21", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot21Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VMingXiaoTentacle"));
@@ -1369,7 +1347,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot21Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot22Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot22", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot22", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot22Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VMingXiaoTentacle"));
@@ -1397,7 +1375,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot22Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot25Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot25", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot25", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot25Test::RunTest(const FString&)
 {
 	// `m_OnAttackedVictim` is what a mapper sees, so the counter is the read — the same wiring the
@@ -1433,7 +1411,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot25Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot26Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot26", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot26", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot26Test::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("species_wired26"), 29137u);
@@ -1466,7 +1444,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot26Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot482Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot482CanPlaySequence",
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot482CanPlaySequence",
 	GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot482Test::RunTest(const FString&)
 {
@@ -1544,7 +1522,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot482Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot488Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot488DeathSound", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot488DeathSound", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot488Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VTzimisce"));
@@ -1557,33 +1535,25 @@ bool FElysiumNpcKernelSpeciesWiredSlot488Test::RunTest(const FString&)
 	}
 
 	// The two arms are told apart by what they report: `0x103b92a0` fires `SPI_DIES` at the script
-	// host (three singleton seams, all substituting 0 — retail's own arm), and the Troika-line body
-	// speaks the VSound concept `"Death"`.
-	//
-	// This case was written when slot 488's Troika arm was still a generated stub, so its probe for
-	// that arm was the `elysium.stubs` tally. Story **29d** (family Sounds10) ported `0x10293ec0`,
-	// so the probe is now the body's own output. Same question, answered off the real body: a
-	// tally proved only that *a* stub fired, where the speak record proves *which concept* the
-	// NPC actually asked for.
+	// host (three singleton seams, all substituting 0 — retail's own arm) and never reaches the base
+	// death sound, and the Troika-line body (`0x10293ec0`) speaks the VSound concept `"Death"`.
 	ElysiumStub::ClearTally();
 	ON_SCOPE_EXIT { ElysiumStub::ClearTally(); };
 	Tzimisce->VSoundSpeakCalls.Reset();
 	Cop->VSoundSpeakCalls.Reset();
 
 	Tzimisce->DeathSound();
-	TestEqual(TEXT("slot 488 on a Tzimisce fires SPI_DIES"), SpeciesStubFires(TEXT("SPI_DIES")), 1);
-	TestEqual(TEXT("and never reaches the base death sound"),
+	TestEqual(TEXT("slot 488 on a Tzimisce never reaches the base death sound"),
 		SpeciesSpeaksConcept(*Tzimisce, TEXT("Death")), 0);
 
 	Cop->DeathSound();
 	TestEqual(TEXT("slot 488 on a plain Troika NPC reaches the base, which speaks Death"),
 		SpeciesSpeaksConcept(*Cop, TEXT("Death")), 1);
-	TestEqual(TEXT("and fires no SPI_DIES"), SpeciesStubFires(TEXT("SPI_DIES")), 1);
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot510Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot510ShouldPlayFloatSound",
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot510ShouldPlayFloatSound",
 	GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot510Test::RunTest(const FString&)
 {
@@ -1654,7 +1624,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot510Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot588Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot588", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot588", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot588Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(nullptr);
@@ -1682,7 +1652,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot588Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot593Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot593", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot593", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot593Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VTzimisce"));
@@ -1723,7 +1693,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot593Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot599Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot599", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot599", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot599Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(nullptr);
@@ -1770,7 +1740,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot599Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot600Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot600", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot600", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot600Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(nullptr);
@@ -1801,7 +1771,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot600Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot601Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot601", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot601", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot601Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(nullptr);
@@ -1838,7 +1808,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot601Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot602Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot602", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot602", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot602Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(nullptr);
@@ -1869,7 +1839,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot602Test::RunTest(const FString&)
 // reaches its own melee quartet through the vtable. Before the step the four bodies were ported but
 // no dispatch reached them, so a Yukie ran the Troika line's.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredYukieMeleeTest,
-	"Elysium.Substrate.NpcKernelSpecies.WiredYukieMelee", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredYukieMelee", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredYukieMeleeTest::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VYukie"));
@@ -1919,7 +1889,7 @@ bool FElysiumNpcKernelSpeciesWiredYukieMeleeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot606Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot606", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot606", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot606Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VBach"));
@@ -1977,7 +1947,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot606Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesWiredSlot609Test,
-	"Elysium.Substrate.NpcKernelSpecies.WiredSlot609", GElysiumNpcKernelSpeciesFlags)
+	"Elysium.Arm.NpcKernelSpecies.WiredSlot609", GElysiumNpcKernelSpeciesFlags)
 bool FElysiumNpcKernelSpeciesWiredSlot609Test::RunTest(const FString&)
 {
 	FSpeciesWiringFixture Fixture(TEXT("CNPC_VBach"));

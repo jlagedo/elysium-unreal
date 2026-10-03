@@ -935,7 +935,7 @@ bool FElysiumFeedMakerOutputsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlacedModelBodyClosureTest,
-	"Elysium.Substrate.PlacedModelBodyClosure", GElysiumTestFlags)
+	"Elysium.Arm.PlacedModelBodyClosure", GElysiumTestFlags)
 bool FElysiumPlacedModelBodyClosureTest::RunTest(const FString&)
 {
 	FElysiumEntityDefs Defs;

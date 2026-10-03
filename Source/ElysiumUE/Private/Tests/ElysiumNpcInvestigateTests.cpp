@@ -2,7 +2,7 @@
 // the `investigate_mode` / `investigate_mode_combat` switch, the flag reject, and the enemy
 // override, asserted directly on a headless world. Of its three retail callers the sound sweep is
 // now built and drives the predicate for real in
-// `Elysium.Substrate.NpcConditions.SoundSweepArms`; the see-unknown sweep (story 10b) and the
+// `Elysium.Arm.NpcConditions.SoundSweepArms`; the see-unknown sweep (story 10b) and the
 // vision producer are not, so the direct assertions here remain the only cover for the rest.
 //
 // `docs/vtmb/npc-ai/conditions-and-states.md` -> "The interest predicate" owns every fact here.
@@ -76,7 +76,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcInvestigateModesTest,
-	"Elysium.Substrate.NpcConditions.InvestigateModes", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.InvestigateModes", GElysiumTestFlags)
 bool FElysiumNpcInvestigateModesTest::RunTest(const FString&)
 {
 	FInvestigateFixture F;
@@ -134,7 +134,7 @@ bool FElysiumNpcInvestigateModesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcInvestigateGatesTest,
-	"Elysium.Substrate.NpcConditions.InvestigateGates", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.InvestigateGates", GElysiumTestFlags)
 bool FElysiumNpcInvestigateGatesTest::RunTest(const FString&)
 {
 	FInvestigateFixture F;

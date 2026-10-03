@@ -129,7 +129,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // with no pawn, no world and no RHI — which is also what makes "0 -> 1 in 0.5 s" a number rather
 // than a stopwatch.
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraTest, "Elysium.Substrate.Camera", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraTest, "Elysium.Arm.Camera", GElysiumTestFlags)
 bool FElysiumCameraTest::RunTest(const FString&)
 {
 	// Advance a weight block in fixed steps, the way a frame would.
@@ -590,7 +590,7 @@ bool FElysiumCameraTest::RunTest(const FString&)
 // gates are boolean against the one that fades. It is a pure function of weights, boom and shot
 // keys, so it asserts with no pawn, no world and no RHI.
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraDrawTest, "Elysium.Substrate.CameraDraw",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraDrawTest, "Elysium.Arm.CameraDraw",
 	GElysiumTestFlags)
 bool FElysiumCameraDrawTest::RunTest(const FString&)
 {
@@ -738,7 +738,7 @@ bool FElysiumCameraDrawTest::RunTest(const FString&)
 // alone cannot express: `m_bDrawPlayer` short-circuiting the third-person disjunction off a merely
 // *adopted* camera, the viewmodel's speed term, and a HUD that moves only on an edge.
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraDrawGatesTest, "Elysium.Substrate.CameraDrawGates",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraDrawGatesTest, "Elysium.Arm.CameraDrawGates",
 	GElysiumTestFlags)
 bool FElysiumCameraDrawGatesTest::RunTest(const FString&)
 {
@@ -1327,7 +1327,7 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 
 		// A tracked shot that authors no `TurnAccel` runs at its rate ceiling outright
 		// (`FUN_10001c80` with `TurnAccel` 0). Its position sibling does **not**: `MoveAccel` 0 is
-		// retail's crawl (M7), asserted in `Elysium.Substrate.CameraTracker`.
+		// retail's crawl (M7), asserted in `Elysium.Arm.CameraTracker`.
 		FElysiumCameraShot Value;
 		Value.bTracked = true;
 		Value.Origin = FVector(1000.0f, 0.0f, 0.0f);
@@ -1475,7 +1475,7 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 // copy `FUN_10001c20` with its dev-cvar freeze. Every constant here is retail's, cited at its
 // declaration in `Public/ElysiumCameraSolve.h`.
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraTrackerTest, "Elysium.Substrate.CameraTracker",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraTrackerTest, "Elysium.Arm.CameraTracker",
 	GElysiumTestFlags)
 bool FElysiumCameraTrackerTest::RunTest(const FString&)
 {
@@ -2727,7 +2727,7 @@ CameraShotTable
 	// `AttachType None` selects the frame the offset is added in (world axes), NOT a one-time sample:
 	// retail's camera think re-resolves all four anchors every server tick whatever this says
 	// (`vampire.dll` `FUN_1006e8e0`, loop `0x1006ea90`). The steadiness of a conversation camera is
-	// the client tracker's deadbands, asserted in `Elysium.Substrate.Camera`.
+	// the client tracker's deadbands, asserted in `Elysium.Arm.Camera`.
 	TestTrue(TEXT("and it takes its offset in world axes -- AttachType None"),
 		Def.Target1.Attach == EElysiumShotAttach::None);
 	TestTrue(TEXT("the second point is the player's eye"),
@@ -2913,7 +2913,7 @@ CameraShotTable
 // the pause menu opens is republished as *closed*, so the box reconciles to Teardown instead of
 // drawing through the menu.
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumViewStateTest, "Elysium.Substrate.ViewState", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumViewStateTest, "Elysium.Arm.ViewState", GElysiumTestFlags)
 bool FElysiumViewStateTest::RunTest(const FString&)
 {
 	using EState = EElysiumAppState;
@@ -3033,7 +3033,7 @@ bool FElysiumViewStateTest::RunTest(const FString&)
 //
 // Every number here is `docs/vtmb/camera-view-modes.md` -> "The death view".
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDeathViewTest, "Elysium.Substrate.DeathView", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDeathViewTest, "Elysium.Arm.DeathView", GElysiumTestFlags)
 bool FElysiumDeathViewTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;

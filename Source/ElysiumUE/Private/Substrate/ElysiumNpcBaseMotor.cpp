@@ -734,6 +734,10 @@ void FElysiumNpcBase::NavOnNavFailed(int32 FailReason)
 	// schedule trace rows carry that account here. `SetIdealActivity` is the Facing family's
 	// `SetIdealActivityNumber`, reused rather than duplicated. The path is NOT cleared: the head
 	// waypoint and the goal type stand for the schedule's own reaction to the failure.
+	if (IsAiTraced())
+	{
+		EmitAiTrace(TEXT("move"), FString::Printf(TEXT("fail %d"), FailReason));   // the AI trace (debug only)
+	}
 	NavResetBlockerMemory();                                                 // 0x102eeb70
 	TaskFail(FailReason);                                                    // slot 448 (+0x700)
 	SetIdealActivityNumber(ResolveLinkActivity());                           // 0x100097d2(npc, 0x1000b285(npc))
@@ -763,6 +767,10 @@ void FElysiumNpcBase::NavOnNavComplete()
 {
 	// `CAI_Navigator::OnNavComplete` (slot 8): the reset `0x102eeb70`, the owner's
 	// `TaskMovementComplete` through `0x102eccc0`, `nav+0x1c = 1`.
+	if (IsAiTraced())
+	{
+		EmitAiTrace(TEXT("move"), TEXT("arrived"));                          // the AI trace (debug only)
+	}
 	NavResetBlockerMemory();                                                 // 0x102eeb70
 	// `TaskMovementComplete` advances the goal waypoint (`0x102f0400`, the last corner's `InPass`) and
 	// ends with `ClearGoal` (`0x10273f46` -> `0x102ee270`), so the goal type (`path+0x5c`) and the head

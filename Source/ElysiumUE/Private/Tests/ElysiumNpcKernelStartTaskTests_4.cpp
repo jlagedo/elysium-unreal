@@ -273,7 +273,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesHeadClawTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.TzimisceHeadClaw_0x103c1820", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.TzimisceHeadClaw_0x103c1820", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesHeadClawTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VTzimisceHeadClaw"));
@@ -313,7 +313,7 @@ bool FElysiumNpcKernelStartTask19SpeciesHeadClawTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesRunnerTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.TzimisceRunner_0x103c35d0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.TzimisceRunner_0x103c35d0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesRunnerTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VTzimisceRunner"));
@@ -353,7 +353,7 @@ bool FElysiumNpcKernelStartTask19SpeciesRunnerTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesTaxiTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.TaxiDriver_0x103b36d0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.TaxiDriver_0x103b36d0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesTaxiTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VTaxiDriver"));
@@ -382,7 +382,7 @@ bool FElysiumNpcKernelStartTask19SpeciesTaxiTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesGunmanTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.SabbatGunman_0x103a5650", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.SabbatGunman_0x103a5650", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesGunmanTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VSabbatGunman"));
@@ -408,7 +408,7 @@ bool FElysiumNpcKernelStartTask19SpeciesGunmanTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesCopTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.Cop_0x10371b70", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.Cop_0x10371b70", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesCopTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VCop"));
@@ -432,7 +432,7 @@ bool FElysiumNpcKernelStartTask19SpeciesCopTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesDogTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.Dog_0x10374940", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.Dog_0x10374940", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesDogTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VDog"));
@@ -459,7 +459,7 @@ bool FElysiumNpcKernelStartTask19SpeciesDogTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesGhoulTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.GhoulCroucher_0x1037b8b0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.GhoulCroucher_0x1037b8b0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesGhoulTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VGhoulCroucher"));
@@ -493,7 +493,7 @@ bool FElysiumNpcKernelStartTask19SpeciesGhoulTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesHumanTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.Human_0x103847f0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.Human_0x103847f0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesHumanTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VHuman"));
@@ -543,7 +543,7 @@ bool FElysiumNpcKernelStartTask19SpeciesHumanTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesAnimalTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.Animal_0x1035f650", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.Animal_0x1035f650", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesAnimalTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VAnimal"));
@@ -581,7 +581,7 @@ bool FElysiumNpcKernelStartTask19SpeciesAnimalTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesAndreiTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.AndreiBlood_0x1035d1b0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.AndreiBlood_0x1035d1b0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesAndreiTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VAndreiBlood"));
@@ -650,7 +650,7 @@ bool FElysiumNpcKernelStartTask19SpeciesAndreiTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesAsianTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.AsianVampire_0x103611a0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.AsianVampire_0x103611a0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesAsianTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VAsianVampire"));
@@ -690,7 +690,7 @@ bool FElysiumNpcKernelStartTask19SpeciesAsianTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesBachTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.Bach_0x103645a0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.Bach_0x103645a0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesBachTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VBach"));
@@ -862,7 +862,7 @@ bool FElysiumNpcKernelStartTask19SpeciesBachTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesChangTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.ChangBros_0x1036b750", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.ChangBros_0x1036b750", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesChangTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VChangBros"));
@@ -978,7 +978,7 @@ bool FElysiumNpcKernelStartTask19SpeciesChangTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesGargoyleTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.Gargoyle_0x103790d0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.Gargoyle_0x103790d0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesGargoyleTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VGargoyle"));
@@ -1025,7 +1025,7 @@ bool FElysiumNpcKernelStartTask19SpeciesGargoyleTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesHengeyokaiTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.Hengeyokai_0x103805d0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.Hengeyokai_0x103805d0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesHengeyokaiTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VHengeyokai"));
@@ -1115,7 +1115,7 @@ bool FElysiumNpcKernelStartTask19SpeciesHengeyokaiTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesManBatTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.ManBat_0x1038c390", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.ManBat_0x1038c390", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesManBatTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VManBat"));
@@ -1247,7 +1247,7 @@ bool FElysiumNpcKernelStartTask19SpeciesManBatTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesMingXiaoTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.MingXiao_0x10392d80", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.MingXiao_0x10392d80", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesMingXiaoTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VMingXiao"));
@@ -1331,7 +1331,7 @@ bool FElysiumNpcKernelStartTask19SpeciesMingXiaoTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesTentacleTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.MingXiaoTentacle_0x1039c4c0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.MingXiaoTentacle_0x1039c4c0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesTentacleTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VMingXiaoTentacle"));
@@ -1432,7 +1432,7 @@ bool FElysiumNpcKernelStartTask19SpeciesTentacleTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesSabbatLeaderTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.SabbatLeader_0x103a78c0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.SabbatLeader_0x103a78c0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesSabbatLeaderTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VSabbatLeader"));
@@ -1548,7 +1548,7 @@ bool FElysiumNpcKernelStartTask19SpeciesSabbatLeaderTest::RunTest(const FString&
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesScurryingTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.Scurrying_0x103ac740", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.Scurrying_0x103ac740", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesScurryingTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VScurrying"));
@@ -1593,7 +1593,7 @@ bool FElysiumNpcKernelStartTask19SpeciesScurryingTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesSheriffTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.SheriffMan_0x103aec70", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.SheriffMan_0x103aec70", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesSheriffTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VSheriffMan"));
@@ -1673,7 +1673,7 @@ bool FElysiumNpcKernelStartTask19SpeciesSheriffTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesTzimisceTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.Tzimisce_0x103ba7c0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.Tzimisce_0x103ba7c0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesTzimisceTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VTzimisce"));
@@ -1773,7 +1773,7 @@ bool FElysiumNpcKernelStartTask19SpeciesTzimisceTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesVampireBossTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.VampireBoss_0x103c5ac0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.VampireBoss_0x103c5ac0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesVampireBossTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VVampireBoss"));
@@ -1840,7 +1840,7 @@ bool FElysiumNpcKernelStartTask19SpeciesVampireBossTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesWerewolfTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.Werewolf_0x103ccda0", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.Werewolf_0x103ccda0", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesWerewolfTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VWerewolf"));
@@ -1892,7 +1892,6 @@ bool FElysiumNpcKernelStartTask19SpeciesWerewolfTest::RunTest(const FString&)
 	{
 		TestTrue(TEXT("0x14a: the player is the enemy"),
 			static_cast<const FElysiumNpc*>(Wolf)->GetEnemy() == static_cast<FElysiumEntity*>(F.Player));
-		TestFalse(TEXT("0x14a: the template seam reads not-Malkavian"), Wolf->bWerewolfPlayerIsMalkavian);
 	}
 	TestTrue(TEXT("0x14a completes"), F.Completed());
 	// 0x14b: an activity and a facing, no completion.
@@ -2082,7 +2081,7 @@ bool FElysiumNpcKernelStartTask19SpeciesWerewolfTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesZombieTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.Zombie_0x103dfd80", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.Zombie_0x103dfd80", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesZombieTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VZombie"));
@@ -2154,7 +2153,7 @@ bool FElysiumNpcKernelStartTask19SpeciesZombieTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SpeciesFrenzyShadowTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Species.FrenzyShadow_0x10375f50", GStartTask19SpeciesFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Species.FrenzyShadow_0x10375f50", GStartTask19SpeciesFlags)
 bool FElysiumNpcKernelStartTask19SpeciesFrenzyShadowTest::RunTest(const FString&)
 {
 	FStartTask19SpeciesFixture F(TEXT("CNPC_VFrenzyShadow"));

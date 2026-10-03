@@ -157,7 +157,7 @@ namespace
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamaged19ScriptHideGateTest,
-	"Elysium.Substrate.NpcKernelDamaged19.ScriptHide_0x102c1ce0.GateRefused", GDamaged19TestFlags)
+	"Elysium.Arm.NpcKernelDamaged19.ScriptHide_0x102c1ce0.GateRefused", GDamaged19TestFlags)
 bool FElysiumNpcKernelDamaged19ScriptHideGateTest::RunTest(const FString&)
 {
 	FDamaged19HideCase C(TEXT("damaged19_hide_gate"), 19101);
@@ -184,7 +184,7 @@ bool FElysiumNpcKernelDamaged19ScriptHideGateTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamaged19ScriptHideLiveCineTest,
-	"Elysium.Substrate.NpcKernelDamaged19.ScriptHide_0x102c1ce0.LiveCine", GDamaged19TestFlags)
+	"Elysium.Arm.NpcKernelDamaged19.ScriptHide_0x102c1ce0.LiveCine", GDamaged19TestFlags)
 bool FElysiumNpcKernelDamaged19ScriptHideLiveCineTest::RunTest(const FString&)
 {
 	FDamaged19HideCase C(TEXT("damaged19_hide_live"), 19102);
@@ -215,7 +215,7 @@ bool FElysiumNpcKernelDamaged19ScriptHideLiveCineTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamaged19ScriptHideScriptStateTest,
-	"Elysium.Substrate.NpcKernelDamaged19.ScriptHide_0x102c1ce0.ScriptStateDeadHandle", GDamaged19TestFlags)
+	"Elysium.Arm.NpcKernelDamaged19.ScriptHide_0x102c1ce0.ScriptStateDeadHandle", GDamaged19TestFlags)
 bool FElysiumNpcKernelDamaged19ScriptHideScriptStateTest::RunTest(const FString&)
 {
 	FDamaged19HideCase C(TEXT("damaged19_hide_script"), 19103);
@@ -244,7 +244,7 @@ bool FElysiumNpcKernelDamaged19ScriptHideScriptStateTest::RunTest(const FString&
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamaged19ScriptHideScriptCineTest,
-	"Elysium.Substrate.NpcKernelDamaged19.ScriptHide_0x102c1ce0.ScriptStateLiveCine", GDamaged19TestFlags)
+	"Elysium.Arm.NpcKernelDamaged19.ScriptHide_0x102c1ce0.ScriptStateLiveCine", GDamaged19TestFlags)
 bool FElysiumNpcKernelDamaged19ScriptHideScriptCineTest::RunTest(const FString&)
 {
 	FDamaged19HideCase C(TEXT("damaged19_hide_script_cine"), 19105);
@@ -270,7 +270,7 @@ bool FElysiumNpcKernelDamaged19ScriptHideScriptCineTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamaged19ScriptHideDeadTest,
-	"Elysium.Substrate.NpcKernelDamaged19.ScriptHide_0x102c1ce0.DeadSkipsForced", GDamaged19TestFlags)
+	"Elysium.Arm.NpcKernelDamaged19.ScriptHide_0x102c1ce0.DeadSkipsForced", GDamaged19TestFlags)
 bool FElysiumNpcKernelDamaged19ScriptHideDeadTest::RunTest(const FString&)
 {
 	FDamaged19HideCase C(TEXT("damaged19_hide_dead"), 19104);

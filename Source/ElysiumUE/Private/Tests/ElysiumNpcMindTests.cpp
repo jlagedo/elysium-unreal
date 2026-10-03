@@ -8,7 +8,7 @@ static constexpr EAutomationTestFlags GElysiumNpcMindTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMindAdmissionTest,
-	"Elysium.Substrate.NpcMind.Admission", GElysiumNpcMindTestFlags)
+	"Elysium.Arm.NpcMind.Admission", GElysiumNpcMindTestFlags)
 
 bool FElysiumNpcMindAdmissionTest::RunTest(const FString&)
 {
@@ -52,7 +52,7 @@ bool FElysiumNpcMindAdmissionTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcBodyOwnerTest,
-	"Elysium.Substrate.NpcMind.BodyOwner", GElysiumNpcMindTestFlags)
+	"Elysium.Arm.NpcMind.BodyOwner", GElysiumNpcMindTestFlags)
 
 bool FElysiumNpcBodyOwnerTest::RunTest(const FString&)
 {
@@ -122,7 +122,7 @@ bool FElysiumNpcBodyOwnerTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMindRestoreTest,
-	"Elysium.Substrate.NpcMind.Restore", GElysiumNpcMindTestFlags)
+	"Elysium.Arm.NpcMind.Restore", GElysiumNpcMindTestFlags)
 
 bool FElysiumNpcMindRestoreTest::RunTest(const FString&)
 {

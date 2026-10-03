@@ -267,6 +267,16 @@ public:
 	UPROPERTY()
 	bool bStageOnly = false;
 
+	// A stage world that makes resident only what its entity defs name (every `model` key, each
+	// `additionalequipment`'s ground model, the fists, the player's chargen body -- the map path's
+	// `CollectMapModelIds`), not the whole placed/skin catalogue a lab admits so it can stand any model
+	// on demand. Set before `FinishSpawning`, like `bStageOnly`, by a headless harness that stages only
+	// what its records name (the arena run): the whole catalogue is ~50 s of residency no scenario uses.
+	// Read by `BuildStageWorld` and `RebuildStageWorld`; anything a def did not name still arrives
+	// through the late admission (`EnsurePlacedModelAdmitted`), as on a map.
+	UPROPERTY()
+	bool bStageWithoutCatalogue = false;
+
 	bool IsStageOnly() const { return bStageOnly; }
 
 	// A stage world's scenario load (0018/8): replace the stage's entity world with one built from

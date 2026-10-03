@@ -177,7 +177,7 @@ namespace
 // Round trip and well-formedness. No game files: the committed model is the whole input.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponActivityTablesTest,
-	"Elysium.Substrate.WeaponActivityTables", GElysiumActionTableFlags)
+	"Elysium.Arm.WeaponActivityTables", GElysiumActionTableFlags)
 bool FElysiumWeaponActivityTablesTest::RunTest(const FString&)
 {
 	using namespace ElysiumActionTables;
@@ -444,7 +444,7 @@ bool FElysiumWeaponActivityTablesTest::RunTest(const FString&)
 // running body into a land. The walks below are what catch that.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerActionRulesTest,
-	"Elysium.Substrate.PlayerActionRules", GElysiumActionTableFlags)
+	"Elysium.Arm.PlayerActionRules", GElysiumActionTableFlags)
 bool FElysiumPlayerActionRulesTest::RunTest(const FString&)
 {
 	using namespace ElysiumActionTables;
@@ -959,7 +959,7 @@ bool FElysiumPlayerActionRulesTest::RunTest(const FString&)
 // of those keeps the same row count.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcActivityTablesTest,
-	"Elysium.Substrate.NpcActivityTables", GElysiumActionTableFlags)
+	"Elysium.Arm.NpcActivityTables", GElysiumActionTableFlags)
 bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
 {
 	using namespace ElysiumActionTables;

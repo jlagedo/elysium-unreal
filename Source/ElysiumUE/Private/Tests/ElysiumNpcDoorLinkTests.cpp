@@ -228,7 +228,7 @@ namespace ElysiumNpcDoorLinkTestsDetail
 // --- GetNPCOpenData, the whole struct ---------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcDoorOpenDataTest,
-	"Elysium.Substrate.NpcDoorLink.OpenData", GNpcDoorLinkTestFlags)
+	"Elysium.Arm.NpcDoorLink.OpenData", GNpcDoorLinkTestFlags)
 bool FElysiumNpcDoorOpenDataTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcDoorLinkTestsDetail;
@@ -267,7 +267,7 @@ bool FElysiumNpcDoorOpenDataTest::RunTest(const FString&)
 // --- The move step: held at a closed door's link, slot 531 opens it, HitTop resumes -----------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcDoorOpenAndPassTest,
-	"Elysium.Substrate.NpcDoorLink.OpenAndPass", GNpcDoorLinkTestFlags)
+	"Elysium.Arm.NpcDoorLink.OpenAndPass", GNpcDoorLinkTestFlags)
 bool FElysiumNpcDoorOpenAndPassTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcDoorLinkTestsDetail;
@@ -339,7 +339,7 @@ bool FElysiumNpcDoorOpenAndPassTest::RunTest(const FString&)
 // --- S1's own arms: an obstruction inside the waypoint tolerance advances the path, no sink ---------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcDoorPreSinkTest,
-	"Elysium.Substrate.NpcDoorLink.ObstructionPreSink", GNpcDoorLinkTestFlags)
+	"Elysium.Arm.NpcDoorLink.ObstructionPreSink", GNpcDoorLinkTestFlags)
 bool FElysiumNpcDoorPreSinkTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcDoorLinkTestsDetail;
@@ -362,7 +362,7 @@ bool FElysiumNpcDoorPreSinkTest::RunTest(const FString&)
 // --- A locked door on the move step: OnDoorBlocked, -2, the 4.0 s tail mark, 0x0c -----------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcDoorLockedMoveStepTest,
-	"Elysium.Substrate.NpcDoorLink.LockedMoveStep", GNpcDoorLinkTestFlags)
+	"Elysium.Arm.NpcDoorLink.LockedMoveStep", GNpcDoorLinkTestFlags)
 bool FElysiumNpcDoorLockedMoveStepTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcDoorLinkTestsDetail;
@@ -393,7 +393,7 @@ bool FElysiumNpcDoorLockedMoveStepTest::RunTest(const FString&)
 // --- OnDoorBlocked's two windows and its link mark ----------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcDoorBlockedWindowsTest,
-	"Elysium.Substrate.NpcDoorLink.DoorBlockedWindows", GNpcDoorLinkTestFlags)
+	"Elysium.Arm.NpcDoorLink.DoorBlockedWindows", GNpcDoorLinkTestFlags)
 bool FElysiumNpcDoorBlockedWindowsTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcDoorLinkTestsDetail;
@@ -437,7 +437,7 @@ bool FElysiumNpcDoorBlockedWindowsTest::RunTest(const FString&)
 // --- The link predicate: stale, re-probe once per curtime, expiry --------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcDoorLinkPredicateTest,
-	"Elysium.Substrate.NpcDoorLink.LinkPredicate", GNpcDoorLinkTestFlags)
+	"Elysium.Arm.NpcDoorLink.LinkPredicate", GNpcDoorLinkTestFlags)
 bool FElysiumNpcDoorLinkPredicateTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcDoorLinkTestsDetail;
@@ -506,7 +506,7 @@ bool FElysiumNpcDoorLinkPredicateTest::RunTest(const FString&)
 // --- The look-ahead `0x102f06e0`: a pending door refuses (0x0e), a locked one is dropped silently -----
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcDoorLookAheadTest,
-	"Elysium.Substrate.NpcDoorLink.LookAhead", GNpcDoorLinkTestFlags)
+	"Elysium.Arm.NpcDoorLink.LookAhead", GNpcDoorLinkTestFlags)
 bool FElysiumNpcDoorLookAheadTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcDoorLinkTestsDetail;
@@ -563,7 +563,7 @@ bool FElysiumNpcDoorLookAheadTest::RunTest(const FString&)
 // --- The lock test's arm 1, and the auto-close scan -----------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcDoorLockTestAndCloseTest,
-	"Elysium.Substrate.NpcDoorLink.LockTestAndCloseBlocked", GNpcDoorLinkTestFlags)
+	"Elysium.Arm.NpcDoorLink.LockTestAndCloseBlocked", GNpcDoorLinkTestFlags)
 bool FElysiumNpcDoorLockTestAndCloseTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcDoorLinkTestsDetail;

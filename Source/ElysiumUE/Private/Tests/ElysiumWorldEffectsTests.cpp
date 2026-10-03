@@ -139,7 +139,7 @@ using ElysiumDialogueTestHelpers::ElysiumDlgRow;
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationBindingIdentityTest,
-	"Elysium.Substrate.AnimationBindingIdentity", GElysiumTestFlags)
+	"Elysium.Arm.AnimationBindingIdentity", GElysiumTestFlags)
 bool FElysiumAnimationBindingIdentityTest::RunTest(const FString&)
 {
 	const FString Clip(TEXT("entire_scene"));
@@ -237,7 +237,7 @@ bool FElysiumAnimationBindingIdentityTest::RunTest(const FString&)
 // through, so the mp3-before-wav order and retail's directory walk are provable with no bake on
 // disk.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAudioContractsTest,
-	"Elysium.Substrate.AudioContracts", GElysiumTestFlags)
+	"Elysium.Arm.AudioContracts", GElysiumTestFlags)
 
 bool FElysiumAudioContractsTest::RunTest(const FString&)
 {
@@ -489,13 +489,13 @@ bool FElysiumAudioContractsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightRigTest,
-	"Elysium.Substrate.LightRig", GElysiumTestFlags)
+	"Elysium.Arm.LightRig", GElysiumTestFlags)
 
 // R6.2: a `light_dynamic` is the one light with no lump-15 row, so nothing baked its values and
 // `ApplyToSource` derives them at load under the page's calibration. These assertions
 // (non-inverse-square falloff, MegaLights, shadows-from-calibration, spot cone from
 // stopdot/stopdot2) are where those formulas are proven; a BAKED source runs none of them, and
-// `Elysium.Substrate.LightRigBaked` below asserts exactly that. Synthetic sources rather than a
+// `Elysium.Arm.LightRigBaked` below asserts exactly that. Synthetic sources rather than a
 // file: 0018 story 21-1 retired the `.lights` lane, and this path never had one.
 bool FElysiumLightRigTest::RunTest(const FString&)
 {
@@ -568,12 +568,12 @@ bool FElysiumLightRigTest::RunTest(const FString&)
 		FMath::IsNearlyEqual(Point->SpecularScale, 0.7f));
 
 	// The R4.3 calibration asset keys on the lump-15 ordinal, which a runtime source has none of.
-	// `Elysium.Substrate.LightRigBaked` proves that merge on the path that carries the key.
+	// `Elysium.Arm.LightRigBaked` proves that merge on the path that carries the key.
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightRigBakedTest,
-	"Elysium.Substrate.LightRigBaked", GElysiumTestFlags)
+	"Elysium.Arm.LightRigBaked", GElysiumTestFlags)
 
 // R5.6: the bake wrote every derived value, so `AdoptBaked` opens no file and derives nothing -- the
 // actor's values are the baseline, a settings push leaves them alone, a revert returns to them,
@@ -676,7 +676,7 @@ bool FElysiumLightRigBakedTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeatherStateTest,
-	"Elysium.Substrate.Weather.State", GElysiumTestFlags)
+	"Elysium.Arm.Weather.State", GElysiumTestFlags)
 bool FElysiumWeatherStateTest::RunTest(const FString&)
 {
 	FElysiumWeatherState State;
@@ -846,125 +846,6 @@ bool FElysiumWeatherTimerSequenceTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// The stub report — that an unimplemented surface says so, and that an implemented one
-// stays quiet. The second half is the one worth guarding: a stub class names the inputs
-// the shipped maps fire at a classname with no leaf, and if such a row ever shadowed a
-// base input (Kill/ScriptHide/ScriptUnhide) it would turn a working input into a warning
-// that does nothing. The tally is the observable; the warning text is cosmetic, so the
-// volume is turned down for the duration rather than expected line by line.
-// =====================================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStubReportTest, "Elysium.Substrate.Stubs", GElysiumTestFlags)
-bool FElysiumStubReportTest::RunTest(const FString&)
-{
-	IConsoleVariable* Warn = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.StubWarn"));
-	const int32 PrevWarn = Warn ? Warn->GetInt() : 2;
-	if (Warn) { Warn->Set(0); }
-	ElysiumStub::ClearTally();
-	ON_SCOPE_EXIT
-	{
-		if (Warn) { Warn->Set(PrevWarn); }
-		ElysiumStub::ClearTally();
-	};
-
-	// One stub class (env_shake — named inputs, no leaf), one classname with no registration at
-	// all, and one real class to prove the quiet path.
-	FElysiumEntityDefs Defs;
-	Defs.MapName = TEXT("__test__");
-	for (const TCHAR* Pair : { TEXT("env_shake|quake1"), TEXT("elysium_test_unregistered|lod1"), TEXT("math_counter|counter1") })
-	{
-		FString Class, Name;
-		FString(Pair).Split(TEXT("|"), &Class, &Name);
-		FElysiumEntityDef Def;
-		Def.Classname = Class;
-		Def.TargetName = Name;
-		Defs.Defs.Add(MoveTemp(Def));
-	}
-
-	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
-	World.Load(MoveTemp(Defs));
-	World.Activate(0.0);
-
-	FElysiumEntity* Quake = World.FindByName(TEXT("quake1"));
-	FElysiumEntity* Lod = World.FindByName(TEXT("lod1"));
-	FElysiumEntity* Counter = World.FindByName(TEXT("counter1"));
-	if (!TestNotNull(TEXT("quake1 resolved"), Quake)
-		|| !TestNotNull(TEXT("lod1 resolved"), Lod)
-		|| !TestNotNull(TEXT("counter1 resolved"), Counter))
-	{
-		return false;
-	}
-
-	// A stub class is still an inert record: it names inputs, it does not implement any.
-	TestTrue(TEXT("a stub class spawns record-only"), Quake->IsRecordOnly());
-	TestTrue(TEXT("an unregistered classname spawns record-only"), Lod->IsRecordOnly());
-	TestFalse(TEXT("a real class does not"), Counter->IsRecordOnly());
-
-	auto FireAt = [&World](const TCHAR* Target, const TCHAR* Input)
-	{
-		World.AcceptInput(Target, FName(Input), FElysiumVariant::Void(),
-			FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
-	};
-	auto CountFor = [](const TCHAR* Kind, const TCHAR* Surface) -> int32
-	{
-		TArray<ElysiumStub::FTally> Rows;
-		ElysiumStub::CollectTally(Rows);
-		for (const ElysiumStub::FTally& R : Rows)
-		{
-			if (R.Kind == Kind && R.Surface == Surface) { return R.Count; }
-		}
-		return 0;
-	};
-	auto TallyMentions = [](const TCHAR* Fragment) -> bool
-	{
-		TArray<ElysiumStub::FTally> Rows;
-		ElysiumStub::CollectTally(Rows);
-		return Rows.ContainsByPredicate([Fragment](const ElysiumStub::FTally& R)
-		{
-			return R.Surface.Contains(Fragment);
-		});
-	};
-
-	// 1. A stub class's named input resolves to the shared thunk and reports under its own name.
-	FireAt(TEXT("quake1"), TEXT("StartShake"));
-	FireAt(TEXT("quake1"), TEXT("StartShake"));
-	TestEqual(TEXT("a stub input reports once per fire"),
-		CountFor(TEXT("input"), TEXT("env_shake.StartShake")), 2);
-
-	// 2. An input no class on the chain owns reports too — this is what covers the classnames the
-	//    stub table does not enumerate.
-	FireAt(TEXT("lod1"), TEXT("Frobnicate"));
-	TestEqual(TEXT("an unresolvable input reports"),
-		CountFor(TEXT("input"), TEXT("elysium_test_unregistered.Frobnicate")), 1);
-
-	// 3. A wire naming an entity the map does not contain is an authored/runtime-state outcome, not
-	//    an unimplemented surface: retail data carries stale wires, and a valid target can be killed
-	//    before a later unlimited output fires. It is counted and reported to the I/O sinks, and it
-	//    never joins the implementation work list — including as an `input` gap, which is the one
-	//    misreading that would put every dead wire in the corpus on it.
-	//    `Elysium.Substrate.EventTransport` owns the sink half.
-	const int32 UnknownTargetsBefore = World.UnknownTargets();
-	FireAt(TEXT("no_such_entity"), TEXT("Trigger"));
-	TestEqual(TEXT("an unknown target is counted as a missing receiver"),
-		World.UnknownTargets(), UnknownTargetsBefore + 1);
-	TestFalse(TEXT("a missing receiver is not an implementation stub of any kind"),
-		TallyMentions(TEXT("no_such_entity")));
-
-	// 4. The shadowing guard: base inputs still work on a stub class and report nothing.
-	FireAt(TEXT("quake1"), TEXT("ScriptHide"));
-	TestTrue(TEXT("a base input still reaches a stub class"), Quake->IsHidden());
-	TestEqual(TEXT("a base input on a stub class reports nothing"),
-		CountFor(TEXT("input"), TEXT("env_shake.ScriptHide")), 0);
-
-	// 5. And an implemented input on a real class stays quiet.
-	FireAt(TEXT("counter1"), TEXT("Add"));
-	TestEqual(TEXT("an implemented input reports nothing"),
-		CountFor(TEXT("input"), TEXT("math_counter.Add")), 0);
-
-	return true;
-}
-
-// =====================================================================================
 // Gaze — the selection cascade, the cone gate, the scripted inputs and the integrator.
 // =====================================================================================
 //
@@ -973,7 +854,7 @@ bool FElysiumStubReportTest::RunTest(const FString&)
 // rather than only in a running world. The one thing this cannot check is that the answer reaches
 // a material — that is the character verifier's and the live run's job.
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGazeTest, "Elysium.Substrate.Gaze", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGazeTest, "Elysium.Arm.Gaze", GElysiumTestFlags)
 bool FElysiumGazeTest::RunTest(const FString&)
 {
 	auto MakeWorld = [](FElysiumEntityWorld& World)
@@ -1465,7 +1346,7 @@ bool FElysiumGazeTest::RunTest(const FString&)
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGazeDialogueTest,
-	"Elysium.Substrate.GazeDialogue", GElysiumTestFlags)
+	"Elysium.Arm.GazeDialogue", GElysiumTestFlags)
 bool FElysiumGazeDialogueTest::RunTest(const FString&)
 {
 	// watcher + bystander, so a rejected dialogue arm has a lower arm to fall through TO, and so a
@@ -1748,7 +1629,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBlendGridAxisTest,
-	"Elysium.Substrate.BlendGrids", GElysiumTestFlags)
+	"Elysium.Arm.BlendGrids", GElysiumTestFlags)
 bool FElysiumBlendGridAxisTest::RunTest(const FString&)
 {
 	const FElysiumBlendTable Table = MakeYawTable();

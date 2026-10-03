@@ -112,7 +112,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10RelationTroikaTest,
-	"Elysium.Substrate.NpcKernelConditions10.IRelationTypeTroika",
+	"Elysium.Arm.NpcKernelConditions10.IRelationTypeTroika",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10RelationTroikaTest::RunTest(const FString&)
 {
@@ -145,7 +145,7 @@ bool FElysiumNpcKernelConditions10RelationTroikaTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10RelationInsaneTest,
-	"Elysium.Substrate.NpcKernelConditions10.IRelationTypeInsaneArm",
+	"Elysium.Arm.NpcKernelConditions10.IRelationTypeInsaneArm",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10RelationInsaneTest::RunTest(const FString&)
 {
@@ -186,7 +186,7 @@ bool FElysiumNpcKernelConditions10RelationInsaneTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10RelationBossTest,
-	"Elysium.Substrate.NpcKernelConditions10.IRelationTypeBossArms",
+	"Elysium.Arm.NpcKernelConditions10.IRelationTypeBossArms",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10RelationBossTest::RunTest(const FString&)
 {
@@ -253,7 +253,7 @@ bool FElysiumNpcKernelConditions10RelationBossTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10RelationSpeciesTest,
-	"Elysium.Substrate.NpcKernelConditions10.IRelationTypeSpeciesArms",
+	"Elysium.Arm.NpcKernelConditions10.IRelationTypeSpeciesArms",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 {
@@ -419,7 +419,7 @@ bool FElysiumNpcKernelConditions10RelationSpeciesTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10CanBeFedUponByTest,
-	"Elysium.Substrate.NpcKernelConditions10.CanBeFedUponBy",
+	"Elysium.Arm.NpcKernelConditions10.CanBeFedUponBy",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10CanBeFedUponByTest::RunTest(const FString&)
 {
@@ -475,7 +475,7 @@ bool FElysiumNpcKernelConditions10CanBeFedUponByTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10WitnessTest,
-	"Elysium.Substrate.NpcKernelConditions10.CanWitnessSupernatural",
+	"Elysium.Arm.NpcKernelConditions10.CanWitnessSupernatural",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10WitnessTest::RunTest(const FString&)
 {
@@ -528,7 +528,7 @@ bool FElysiumNpcKernelConditions10WitnessTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10Slot532Test,
-	"Elysium.Substrate.NpcKernelConditions10.Slot532",
+	"Elysium.Arm.NpcKernelConditions10.Slot532",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10Slot532Test::RunTest(const FString&)
 {
@@ -598,7 +598,7 @@ bool FElysiumNpcKernelConditions10Slot532Test::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10Slot35Test,
-	"Elysium.Substrate.NpcKernelConditions10.Slot35",
+	"Elysium.Arm.NpcKernelConditions10.Slot35",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10Slot35Test::RunTest(const FString&)
 {
@@ -634,7 +634,7 @@ bool FElysiumNpcKernelConditions10Slot35Test::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10BurstPauseTest,
-	"Elysium.Substrate.NpcKernelConditions10.UpdateBurstShootPause",
+	"Elysium.Arm.NpcKernelConditions10.UpdateBurstShootPause",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10BurstPauseTest::RunTest(const FString&)
 {
@@ -675,7 +675,7 @@ bool FElysiumNpcKernelConditions10BurstPauseTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10FakeReloadTest,
-	"Elysium.Substrate.NpcKernelConditions10.ResetFakeReloadCount",
+	"Elysium.Arm.NpcKernelConditions10.ResetFakeReloadCount",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10FakeReloadTest::RunTest(const FString&)
 {
@@ -685,14 +685,6 @@ bool FElysiumNpcKernelConditions10FakeReloadTest::RunTest(const FString&)
 		AddError(TEXT("no NPC"));
 		return false;
 	}
-
-	// The seam answers false with both ends zero and names the template columns it stands for.
-	int32 Min = -1;
-	int32 Max = -1;
-	TestFalse(TEXT("the char template carries no +0x34/+0x38 pair"),
-		F.Guard->CharTemplateFakeReloadRange(Min, Max));
-	TestEqual(TEXT("the seam answers a zero low end"), Min, 0);
-	TestEqual(TEXT("the seam answers a zero high end"), Max, 0);
 
 	// The write still happens: retail's body has no arm that skips its only write, and
 	// `RandomInt(0, 0)` is 0.
@@ -708,7 +700,7 @@ bool FElysiumNpcKernelConditions10FakeReloadTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10TaskFailDispatchTest,
-	"Elysium.Substrate.NpcKernelConditions10.TaskFailSpeciesDispatch",
+	"Elysium.Arm.NpcKernelConditions10.TaskFailSpeciesDispatch",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10TaskFailDispatchTest::RunTest(const FString&)
 {
@@ -876,7 +868,7 @@ bool FElysiumNpcKernelConditions10TaskFailDispatchTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10TaskFailPathTest,
-	"Elysium.Substrate.NpcKernelConditions10.TaskFailAsianVampireAndChangBros",
+	"Elysium.Arm.NpcKernelConditions10.TaskFailAsianVampireAndChangBros",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10TaskFailPathTest::RunTest(const FString&)
 {
@@ -929,7 +921,7 @@ bool FElysiumNpcKernelConditions10TaskFailPathTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10TaskFailBodyTest,
-	"Elysium.Substrate.NpcKernelConditions10.TaskFailGargoyleHengeyokaiTzimisce",
+	"Elysium.Arm.NpcKernelConditions10.TaskFailGargoyleHengeyokaiTzimisce",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10TaskFailBodyTest::RunTest(const FString&)
 {
@@ -1042,7 +1034,7 @@ bool FElysiumNpcKernelConditions10TaskFailBodyTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelConditions10TaskFailBossTest,
-	"Elysium.Substrate.NpcKernelConditions10.TaskFailMingXiaoAndSheriffMan",
+	"Elysium.Arm.NpcKernelConditions10.TaskFailMingXiaoAndSheriffMan",
 	GElysiumNpcKernelConditions10Flags)
 bool FElysiumNpcKernelConditions10TaskFailBossTest::RunTest(const FString&)
 {

@@ -93,7 +93,7 @@ CameraShotTable
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraAutoPositionTest,
-	"Elysium.Substrate.CameraAutoPosition",
+	"Elysium.Arm.CameraAutoPosition",
 	ElysiumCameraAutoPositionTests::GElysiumAutoPositionFlags)
 
 bool FElysiumCameraAutoPositionTest::RunTest(const FString&)

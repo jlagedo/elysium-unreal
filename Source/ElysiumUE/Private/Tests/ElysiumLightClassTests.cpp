@@ -185,7 +185,7 @@ bool FElysiumLightSwitchTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightDynamicTest, "Elysium.Substrate.LightDynamic", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightDynamicTest, "Elysium.Arm.LightDynamic", GElysiumTestFlags)
 bool FElysiumLightDynamicTest::RunTest(const FString&)
 {
 	FElysiumEntityDefs Defs;

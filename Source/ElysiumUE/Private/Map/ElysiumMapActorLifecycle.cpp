@@ -217,8 +217,10 @@ void AElysiumMapActor::BuildStageWorld()
 			ReleasePropAndWieldModels();
 			EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
 			FString ModelContextError;
-			// A lab stands any catalogue model on demand, so the whole catalogue is resident here.
-			if (!PreparePropAndWieldModels(FElysiumEntityDefs(), ModelContextError, /*bAdmitWholeCatalogue=*/true))
+			// A lab stands any catalogue model on demand, so the whole catalogue is resident here --
+			// unless the stage's owner stages only what its defs name (`bStageWithoutCatalogue`).
+			if (!PreparePropAndWieldModels(FElysiumEntityDefs(), ModelContextError,
+				/*bAdmitWholeCatalogue=*/!bStageWithoutCatalogue))
 			{
 				bNativeAnimationPreloadFailed = true;
 				UE_LOG(LogElysium, Warning, TEXT("green-room model contexts: %s"), *ModelContextError);
@@ -388,7 +390,9 @@ bool AElysiumMapActor::RebuildStageWorld(FElysiumEntityDefs&& Defs, TArray<FElys
 		}
 	}
 	FString ModelContextError;
-	if (!PreparePropAndWieldModels(Defs, ModelContextError, /*bAdmitWholeCatalogue=*/true))
+	// The whole catalogue as the lab's own build admits it, or -- `bStageWithoutCatalogue`, a headless
+	// scenario run -- exactly what these defs name (`CollectMapModelIds`, the map path's rule).
+	if (!PreparePropAndWieldModels(Defs, ModelContextError, /*bAdmitWholeCatalogue=*/!bStageWithoutCatalogue))
 	{
 		bNativeAnimationPreloadFailed = true;
 		UE_LOG(LogElysium, Warning, TEXT("stage model contexts: %s"), *ModelContextError);

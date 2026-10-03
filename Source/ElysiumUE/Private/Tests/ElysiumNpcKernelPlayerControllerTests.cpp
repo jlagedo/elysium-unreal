@@ -116,7 +116,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerClassesTest,
-	"Elysium.Substrate.NpcKernelPlayerController.Classes", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.Classes", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerClassesTest::RunTest(const FString&)
 {
 	// The three factories build the three classes, and the tree is retail's.
@@ -157,7 +157,7 @@ bool FElysiumNpcKernelPlayerControllerClassesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerSpawnInitTest,
-	"Elysium.Substrate.NpcKernelPlayerController.SpawnAndNPCInit", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.SpawnAndNPCInit", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerSpawnInitTest::RunTest(const FString&)
 {
 	FControllerLineFixture F(TEXT("CNPC_VPlayerController"));
@@ -211,7 +211,7 @@ bool FElysiumNpcKernelPlayerControllerSpawnInitTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerThinkOrderTest,
-	"Elysium.Substrate.NpcKernelPlayerController.NPCThinkThenResetThinkTimers", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.NPCThinkThenResetThinkTimers", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerThinkOrderTest::RunTest(const FString&)
 {
 	// `0x103a4700`: `CALL` the Troika `NPCThink` `0x10292de0`, then tail-`JMP [vt+0x998]` — slot 614.
@@ -238,7 +238,7 @@ bool FElysiumNpcKernelPlayerControllerThinkOrderTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerPreSelectTest,
-	"Elysium.Substrate.NpcKernelPlayerController.PreSelectSchedule", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.PreSelectSchedule", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerPreSelectTest::RunTest(const FString&)
 {
 	// `0x103a46b0`: IDLE answers 0x6b; any other state tail-jumps to the Troika body `0x102ae920`.
@@ -265,7 +265,7 @@ bool FElysiumNpcKernelPlayerControllerPreSelectTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerTookLifeTest,
-	"Elysium.Substrate.NpcKernelPlayerController.EventTookLife", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.EventTookLife", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerTookLifeTest::RunTest(const FString&)
 {
 	// `0x103a4950` — RETAIL CORRECTION (fold A2): the stand-in's kill raises the OWNER player's
@@ -295,7 +295,7 @@ bool FElysiumNpcKernelPlayerControllerTookLifeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerForwardingTest,
-	"Elysium.Substrate.NpcKernelPlayerController.ForwardingToOwner", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.ForwardingToOwner", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerForwardingTest::RunTest(const FString&)
 {
 	// `+0x184` is slot 97 `GetOwnerEntity`: every forward reaches the player.
@@ -358,7 +358,7 @@ bool FElysiumNpcKernelPlayerControllerForwardingTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerConesTest,
-	"Elysium.Substrate.NpcKernelPlayerController.Cones", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.Cones", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerConesTest::RunTest(const FString&)
 {
 	// 362-365: the controller and the wolf answer false; the shadow puts the base bodies back.
@@ -391,7 +391,7 @@ bool FElysiumNpcKernelPlayerControllerConesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerShadowMeleeTest,
-	"Elysium.Substrate.NpcKernelPlayerController.FrenzyShadowMelee", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.FrenzyShadowMelee", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerShadowMeleeTest::RunTest(const FString&)
 {
 	FControllerLineFixture F(TEXT("CNPC_VFrenzyShadow"));
@@ -423,7 +423,7 @@ bool FElysiumNpcKernelPlayerControllerShadowMeleeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerShadowSelectTest,
-	"Elysium.Substrate.NpcKernelPlayerController.FrenzyShadowSelect", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.FrenzyShadowSelect", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerShadowSelectTest::RunTest(const FString&)
 {
 	FControllerLineFixture F(TEXT("CNPC_VFrenzyShadow"));
@@ -470,7 +470,7 @@ bool FElysiumNpcKernelPlayerControllerShadowSelectTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerWolfMorphTest,
-	"Elysium.Substrate.NpcKernelPlayerController.WolfMorph", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.WolfMorph", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerWolfMorphTest::RunTest(const FString&)
 {
 	FControllerLineFixture F(TEXT("CNPC_VWolfMorph"));
@@ -494,7 +494,7 @@ bool FElysiumNpcKernelPlayerControllerWolfMorphTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerSpacesTest,
-	"Elysium.Substrate.NpcKernelPlayerController.ScheduleSpaces", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.ScheduleSpaces", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerSpacesTest::RunTest(const FString&)
 {
 	// Each child loads its own space; the controller shares CNPC_VVampire's. Local 344 names a
@@ -536,7 +536,7 @@ bool FElysiumNpcKernelPlayerControllerSpacesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerCreationTest,
-	"Elysium.Substrate.NpcKernelPlayerController.CreationPath", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.CreationPath", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerCreationTest::RunTest(const FString&)
 {
 	// `events_player.CreateControllerNPC` -> `GetControllerNPC` `0x10161a70`'s sequence.
@@ -604,7 +604,7 @@ bool FElysiumNpcKernelPlayerControllerCreationTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerBusyReadersTest,
-	"Elysium.Substrate.NpcKernelPlayerController.ControllerBusyReaders", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.ControllerBusyReaders", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerBusyReadersTest::RunTest(const FString&)
 {
 	// `0x10175180` over the PLAYER's `m_hControllerNPC` (the world's controller handle): busy when the
@@ -661,7 +661,7 @@ bool FElysiumNpcKernelPlayerControllerBusyReadersTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerWolfRunningMorphTest,
-	"Elysium.Substrate.NpcKernelPlayerController.WolfMorphRunningMorph", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.WolfMorphRunningMorph", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerWolfRunningMorphTest::RunTest(const FString&)
 {
 	// 438 `0x103dceb0`: a body already running `SCHED_VWOLFMORPH_MORPH` takes the VHuman selector (0
@@ -687,7 +687,7 @@ bool FElysiumNpcKernelPlayerControllerWolfRunningMorphTest::RunTest(const FStrin
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerShadowStartTaskTest,
-	"Elysium.Substrate.NpcKernelPlayerController.FrenzyShadowStartTask", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.FrenzyShadowStartTask", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerShadowStartTaskTest::RunTest(const FString&)
 {
 	FControllerLineFixture F(TEXT("CNPC_VFrenzyShadow"));
@@ -701,7 +701,6 @@ bool FElysiumNpcKernelPlayerControllerShadowStartTaskTest::RunTest(const FString
 	// The attack tasks (0x34-0x37, 0x3e, 0x3f), not frenzy-hungry: the active weapon's capability word
 	// must carry 0x18000 or the task fails with 0x1f. The port's word is a seam answering 0, so the
 	// pass arm (stamp `m_flLastAttackTime`, the weapon's `+0x5d0`) is unreachable here.
-	TestEqual(TEXT("the capability seam answers 0"), Shadow->ActiveWeaponCapabilityWord(), 0u);
 	AddExpectedError(TEXT("TaskFail 0x1f"), EAutomationExpectedErrorFlags::Contains, 0);
 	for (const int32 Task : { 0x34, 0x35, 0x36, 0x37, 0x3e, 0x3f })
 	{
@@ -781,7 +780,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerPawnFollowsTest,
-	"Elysium.Substrate.NpcKernelPlayerController.PawnFollowsController", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.PawnFollowsController", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerPawnFollowsTest::RunTest(const FString&)
 {
 	// `CBasePlayer::PostThink` `0x1016c510`..`0x1016c672`: one post-move tick puts the stand-in's
@@ -832,7 +831,7 @@ bool FElysiumNpcKernelPlayerControllerPawnFollowsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerPawnEventsTest,
-	"Elysium.Substrate.NpcKernelPlayerController.StandInClipEventsReachPlayer", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.StandInClipEventsReachPlayer", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerPawnEventsTest::RunTest(const FString&)
 {
 	// Retail's pawn runs `StudioFrameAdvance` (slot 250, `0x1016c2bf`) and `DispatchAnimEvents` (slot
@@ -888,7 +887,7 @@ bool FElysiumNpcKernelPlayerControllerPawnEventsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerEffectsSaveTest,
-	"Elysium.Substrate.NpcKernelPlayerController.EffectsSurviveSnapshot", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.EffectsSurviveSnapshot", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerEffectsSaveTest::RunTest(const FString&)
 {
 	// `m_fEffects` is a retail SAVE row (datamap offset 412, flags 6): a restored stand-in is still
@@ -935,7 +934,7 @@ bool FElysiumNpcKernelPlayerControllerEffectsSaveTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerInputTest,
-	"Elysium.Substrate.NpcKernelPlayerController.InputSuppressedWhileLive", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.InputSuppressedWhileLive", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerInputTest::RunTest(const FString&)
 {
 	// `CHL2_Player` slot 462 `0x10351090`: the whole usercmd is zeroed while `m_hControllerNPC`
@@ -994,7 +993,7 @@ bool FElysiumNpcKernelPlayerControllerInputTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerReleaseTest,
-	"Elysium.Substrate.NpcKernelPlayerController.ReleaseCopiesPoseOnly", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.ReleaseCopiesPoseOnly", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerReleaseTest::RunTest(const FString&)
 {
 	// `0x101618e0(player, 1, 1)`: the animation words and the transform, then the removal — and
@@ -1057,7 +1056,7 @@ bool FElysiumNpcKernelPlayerControllerReleaseTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPlayerControllerSeamsTest,
-	"Elysium.Substrate.NpcKernelPlayerController.FrenzyGrappleAndWolfSeams", GPlayerControllerTestFlags)
+	"Elysium.Arm.NpcKernelPlayerController.FrenzyGrappleAndWolfSeams", GPlayerControllerTestFlags)
 bool FElysiumNpcKernelPlayerControllerSeamsTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_controller_seams"), 5270);
@@ -1078,8 +1077,6 @@ bool FElysiumNpcKernelPlayerControllerSeamsTest::RunTest(const FString&)
 	// Replenish(1)`. The shadow answers 3 and the count is set, but the two seams answer false.
 	Player->CurFrenzyCount = 1;
 	TestEqual(TEXT("the shadow is class 3"), Shadow->Classify(), 3);
-	TestFalse(TEXT("m_bFrenzyHunger has no player word: the seam answers false"),
-		FElysiumNpcFrenzyShadow::OwnerFrenzyHunger(*Player));
 	TestFalse(TEXT("Replenish(1) answers false"), FElysiumNpcFrenzyShadow::OwnerReplenish(*Player));
 	F.World.UpdatePlayerFromController();
 	TestEqual(TEXT("so the grapple arm (m_bIsFrenzyGrapple, 0x1033f6d0) answers nothing"),

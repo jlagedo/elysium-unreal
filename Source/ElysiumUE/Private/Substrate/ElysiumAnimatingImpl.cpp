@@ -368,6 +368,13 @@ void FElysiumAnimating::AdvanceAnimEvents()
 			// The server band, exactly as `DispatchAnimEvents` applies it: an id at or above the
 			// ceiling is never offered to a handler at all.
 			const bool bAboveBand = Record->Event >= ElysiumAnimEvents::ServerDispatchCeiling;
+			// The AI trace's `animevent`: an event dispatched to an NPC (debug output only, behind its
+			// sink).
+			if (!bAboveBand && World->HasAiTraceSink() && AsNpc() != nullptr)
+			{
+				World->EmitAiTrace(*this, TEXT("animevent"),
+					FString::Printf(TEXT("%d %s"), Record->Event, *Record->Options));
+			}
 			if (!bAboveBand && HandleAnimEvent(*Record))
 			{
 				continue;   // claimed and acted on; the handler owns its own observability

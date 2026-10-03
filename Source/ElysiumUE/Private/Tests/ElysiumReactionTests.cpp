@@ -97,7 +97,7 @@ namespace
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionBandsTest,
-	"Elysium.Substrate.Reaction.Bands", GElysiumTestFlags)
+	"Elysium.Arm.Reaction.Bands", GElysiumTestFlags)
 bool FElysiumReactionBandsTest::RunTest(const FString&)
 {
 	const FElysiumReactionBandTable Bands = MakeBandTable();
@@ -175,7 +175,7 @@ bool FElysiumReactionBandsTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionTargetsTest,
-	"Elysium.Substrate.Reaction.Targets", GElysiumTestFlags)
+	"Elysium.Arm.Reaction.Targets", GElysiumTestFlags)
 bool FElysiumReactionTargetsTest::RunTest(const FString&)
 {
 	// --- Kindred(!Gangrel) ---------------------------------------------------------------------
@@ -233,7 +233,7 @@ bool FElysiumReactionTargetsTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionModifierExprTest,
-	"Elysium.Substrate.Reaction.ModifierExpr", GElysiumTestFlags)
+	"Elysium.Arm.Reaction.ModifierExpr", GElysiumTestFlags)
 bool FElysiumReactionModifierExprTest::RunTest(const FString&)
 {
 	EElysiumReactionModifierKind Kind;
@@ -273,7 +273,7 @@ bool FElysiumReactionModifierExprTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionConditionTest,
-	"Elysium.Substrate.Reaction.Condition", GElysiumTestFlags)
+	"Elysium.Arm.Reaction.Condition", GElysiumTestFlags)
 bool FElysiumReactionConditionTest::RunTest(const FString&)
 {
 	using EC = EElysiumReactionCondition;
@@ -303,7 +303,7 @@ bool FElysiumReactionConditionTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionFormulaEvalTest,
-	"Elysium.Substrate.Reaction.FormulaEval", GElysiumTestFlags)
+	"Elysium.Arm.Reaction.FormulaEval", GElysiumTestFlags)
 bool FElysiumReactionFormulaEvalTest::RunTest(const FString&)
 {
 	static const TCHAR* Passion = TEXT("Reaction + ((Reaction - 50)*2)");
@@ -336,7 +336,7 @@ bool FElysiumReactionFormulaEvalTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionComputeTest,
-	"Elysium.Substrate.Reaction.Compute", GElysiumTestFlags)
+	"Elysium.Arm.Reaction.Compute", GElysiumTestFlags)
 bool FElysiumReactionComputeTest::RunTest(const FString&)
 {
 	const FElysiumReactionBandTable Bands = MakeBandTable();
@@ -476,7 +476,7 @@ bool FElysiumReactionComputeTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionInertModifierTest,
-	"Elysium.Substrate.Reaction.InertModifier", GElysiumTestFlags)
+	"Elysium.Arm.Reaction.InertModifier", GElysiumTestFlags)
 bool FElysiumReactionInertModifierTest::RunTest(const FString&)
 {
 	const FElysiumReactionBandTable Bands = MakeBandTable();

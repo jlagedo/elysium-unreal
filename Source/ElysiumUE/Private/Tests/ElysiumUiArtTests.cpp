@@ -1,4 +1,4 @@
-// Elysium.Substrate.UiArt -- R6.6's path -> asset resolution: the key a screen names folds to the texture lane's `T_` package by the
+// Elysium.Content.UiArt -- R6.6's path -> asset resolution: the key a screen names folds to the texture lane's `T_` package by the
 // same rule that named it at import, the use-icon enum folds to its `hud/context_icons/` art with
 // the two on-disk aliases, and the clan sigil table is total over VtMB's 2..8 encoding. Content-
 // free: nothing here loads an asset; `Elysium.Content.UiArt` walks the real mount.
@@ -13,7 +13,7 @@
 static constexpr EAutomationTestFlags GElysiumUiArtTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUiArtTest, "Elysium.Substrate.UiArt", GElysiumUiArtTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUiArtTest, "Elysium.Content.UiArt", GElysiumUiArtTestFlags)
 bool FElysiumUiArtTest::RunTest(const FString&)
 {
 	// --- the fold: <dir>/<stem> -> /ElysiumBaked/Textures/<dir>/T_<safe stem> ---

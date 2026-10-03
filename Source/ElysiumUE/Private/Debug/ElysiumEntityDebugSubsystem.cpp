@@ -220,8 +220,9 @@ namespace
 			*Npc->NpcFlags.Describe());
 		// `vision` is `Senses.Perception.VisionDistanceCm` and `in_range` is `Senses.Memory.bPlayerInRange`,
 		// the two words `FElysiumNpcSenses::TickSight` compares (it scales the radius by the player's
-		// stealth vision scalar before the test).
-		UE_LOG(LogElysiumEnt, Display, TEXT("  player: %s relationship=%s vision=%.0f in_range=%d"),
+		// stealth vision scalar before the test). Every distance on the line is centimetres, and says so
+		// (the closest-player row prints its own `cm`).
+		UE_LOG(LogElysiumEnt, Display, TEXT("  player: %s relationship=%s vision=%.0fcm in_range=%d"),
 			*BriefRow(Rows, TEXT("Closest player")), *BriefRow(Rows, TEXT("Relationship to player")),
 			Npc->Senses.Perception.VisionDistanceCm, Npc->Senses.Memory.bPlayerInRange ? 1 : 0);
 		UE_LOG(LogElysiumEnt, Display, TEXT("  think: next_ai=%.2f next_normal=%.2f last_ai=%.2f"),

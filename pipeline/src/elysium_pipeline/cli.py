@@ -3841,11 +3841,14 @@ def blender_report(
 def _test_summary_lines(summary: dict, *, failure_limit: int = 12) -> list[str]:
     """The per-prefix result of an automation run, and every failed test by name.
 
-    One screen: a line per prefix (its verdict, counts and time), then the failures with the first
-    error each logged and where it was raised, capped so a broken run cannot scroll the verdict away.
+    One screen: the tier the selection was, a line per prefix (its verdict, counts and time), then the
+    failures with the first error each logged and where it was raised, capped so a broken run cannot
+    scroll the verdict away.
     """
 
     lines: list[str] = []
+    if summary.get("tier"):
+        lines.append(f"  tier: {summary['tier']}")
     rows = summary.get("prefixes") or []
     width = max((len(row["prefix"]) for row in rows), default=0)
     for row in rows:
@@ -3873,6 +3876,7 @@ def _test_payload(summary: dict) -> dict[str, Any]:
     """What `--json` carries for a test run, on the failing path as well as the passing one."""
 
     return {
+        "tier": summary.get("tier"),
         "filter": "+".join(row["prefix"] for row in summary.get("prefixes") or []),
         "total": summary["total"],
         "executed": summary["executed"],
@@ -3891,18 +3895,24 @@ def test_command(
     ctx: typer.Context,
     filters: list[str] = typer.Argument(
         None,
-        help="Automation test prefixes or tier names (default `Elysium.`). Every prefix runs in "
-             "ONE editor boot and gets its own line in the summary.",
+        help="Automation test prefixes or tier names (`default`, `arm`, `content`, `slow`, `all`). "
+             "None runs the default tier. Every prefix runs in ONE editor boot and gets its own "
+             "line in the summary.",
     ),
     stems: list[str] = typer.Option(
         None, "--stem", help="Widen the per-model parity slice (repeatable)."
     ),
     json_output: bool = typer.Option(False, "--json"),
+    all_tiers: bool = typer.Option(
+        False, "--all",
+        help="Run every tier (`Elysium.`): the default tier, then arm, content and slow."),
     no_wait: bool = typer.Option(
         False, "--no-wait",
         help="Refuse at once (exit 8) if another command holds this checkout, instead of waiting."),
 ) -> None:
     """Run automation tests in one editor boot; blocks until done and prints a summary.
+
+    With no prefix it runs the default tier: the census tests, the arena scenario tests and a small smoke set, named `Elysium.<Group>.` for the groups in `unreal.DEFAULT_TEST_GROUPS`. The opt-in tiers are `Elysium.Arm.` (per-function arm and unit tests, run at a story's close), `Elysium.Content.` (baked content) and `Elysium.Slow.`; `--all` runs `Elysium.`. A named prefix runs as it always did, and the summary names the tier.
 
     `elysium test A B C` runs the three prefixes in ONE boot (about 19 s around well under a second of tests) and reports each, then every failed test by name with its first error.
 
@@ -3911,6 +3921,8 @@ def test_command(
     Exit codes: 0 every prefix ran and passed, 7 a test failed or a prefix matched nothing, 6 the editor run itself failed (crash, hang, no report), 8 refused or gave up waiting, 2 bad usage.
     """
 
+    if all_tiers and filters:
+        raise typer.BadParameter("--all runs every tier; name no prefix with it")
     state = _state(ctx)
     state.json_output = json_output
     state.no_wait = no_wait
@@ -3926,9 +3938,13 @@ def test_command(
                 if not json_output:
                     console.print(line, markup=False, soft_wrap=True)
 
+        # The default tier is the explicit list of default groups kept in `unreal.py`; `--all` is
+        # every group, `Elysium.`; a named prefix runs as it always did.
+        selection = (list(filters) if filters
+                     else [unreal.ALL_TESTS_FILTER] if all_tiers
+                     else list(unreal.DEFAULT_TEST_FILTER))
         try:
-            summary = unreal.run_tests(
-                config, runner, filters or ["Elysium."], parity_stems=stems or ())
+            summary = unreal.run_tests(config, runner, selection, parity_stems=stems or ())
         except unreal.UnrealFailure as failure:
             # The run failed on its verdict: the summary is the answer, so it is shown before the
             # error line rather than left inside the exception.
@@ -3939,7 +3955,8 @@ def test_command(
         # honest measure of what a green tier covered.
         _summary(
             state,
-            f"{summary['executed']} of {summary['total']} test(s) executed"
+            (f"{summary['tier']} tier: " if summary.get("tier") else "")
+            + f"{summary['executed']} of {summary['total']} test(s) executed"
             f" in {summary['seconds']:.1f}s"
             + (f"; {summary['abstained']} abstained (prerequisite unavailable)"
                if summary["abstained"] else ""),
@@ -4435,3 +4452,57 @@ def mcp(ctx: typer.Context) -> None:
         env=os.environ.copy(),
     )
     raise typer.Exit(result.returncode)
+
+
+@app.command("arena")
+def arena_command(
+    ctx: typer.Context,
+    names: list[str] = typer.Argument(
+        None,
+        help="Scenario record names (each record's `name`); default every record under "
+             "Arena/scenarios/.",
+    ),
+    hz: int = typer.Option(60, "--hz", min=1, help="The fixed step the run is driven at."),
+    json_output: bool = typer.Option(False, "--json"),
+    no_wait: bool = typer.Option(
+        False, "--no-wait",
+        help="Refuse at once (exit 8) if another command holds this checkout, instead of waiting."),
+) -> None:
+    """Run the Green Room arena scenarios headless; blocks until done and prints a summary.
+
+    Boots once per stage -- the arena first, then each map host (a map record without `"shares_map": true` gets its own boot) -- and writes `$ELYSIUM_WORK_ROOT/reports/arena/<timestamp>/index.json`, one line per scenario and the first unmet expectation of each failure. A name that matches no record is refused before anything boots.
+
+    A command holding this checkout's binaries is waited for, up to 30 minutes, with the holder named; `--no-wait` refuses (exit 8) instead.
+
+    Exit codes: 0 no scenario failed, 7 a scenario's result is fail, unexpected-pass or error, 6 the editor could not be launched, 8 refused or gave up waiting, 2 bad usage (no records, a malformed record, an unknown name).
+    """
+
+    state = _state(ctx)
+    state.json_output = json_output
+    state.no_wait = no_wait
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import arena_suite
+
+        merged = arena_suite.run_arena(config, runner, names or (), hz=hz)
+        lines = arena_suite.summary_lines(merged)
+        _summary(state, lines[0], **arena_suite.payload(merged))
+        for line in lines[1:]:
+            if state.log_sink is not None:
+                state.log_sink(line)
+            if not json_output:
+                console.print(line, markup=False, soft_wrap=True)
+        if arena_suite.verdict(merged):
+            raise arena_suite.ArenaFailure(
+                f"{merged['failed']} of {len(merged['scenarios'])} scenario(s) failed "
+                f"(report: {arena_suite.payload(merged)['arena_report']})")
+
+    _execute(
+        state,
+        "arena",
+        ExitCode.VALIDATION,
+        action,
+        require_ue=True,
+        checkout=True,
+        verdict=True,
+    )

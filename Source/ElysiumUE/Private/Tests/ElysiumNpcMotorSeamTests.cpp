@@ -59,7 +59,7 @@ AElysiumNpcBody* SpawnBody(FPlayerWorldFixture& Fixture, const FVector& Feet,
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMotorSeamFloorTest,
-	"Elysium.Visual.NpcBody.MotorSeam.Floor", ElysiumNpcMotorSeamTests::Flags)
+	"Elysium.Arm.Visual.NpcBody.MotorSeam.Floor", ElysiumNpcMotorSeamTests::Flags)
 bool FElysiumNpcMotorSeamFloorTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcMotorSeamTests;
@@ -102,7 +102,7 @@ bool FElysiumNpcMotorSeamFloorTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMotorSeamMoveIgnoreTest,
-	"Elysium.Visual.NpcBody.MotorSeam.MoveIgnore", ElysiumNpcMotorSeamTests::Flags)
+	"Elysium.Arm.Visual.NpcBody.MotorSeam.MoveIgnore", ElysiumNpcMotorSeamTests::Flags)
 bool FElysiumNpcMotorSeamMoveIgnoreTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcMotorSeamTests;
@@ -131,7 +131,7 @@ bool FElysiumNpcMotorSeamMoveIgnoreTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMotorSeamHasPathTest,
-	"Elysium.Visual.NpcBody.MotorSeam.HasPath", ElysiumNpcMotorSeamTests::Flags)
+	"Elysium.Arm.Visual.NpcBody.MotorSeam.HasPath", ElysiumNpcMotorSeamTests::Flags)
 bool FElysiumNpcMotorSeamHasPathTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcMotorSeamTests;
@@ -170,7 +170,7 @@ bool FElysiumNpcMotorSeamHasPathTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMotorSeamTurnHullTest,
-	"Elysium.Visual.NpcBody.MotorSeam.TurnRateHullFacing", ElysiumNpcMotorSeamTests::Flags)
+	"Elysium.Arm.Visual.NpcBody.MotorSeam.TurnRateHullFacing", ElysiumNpcMotorSeamTests::Flags)
 bool FElysiumNpcMotorSeamTurnHullTest::RunTest(const FString&)
 {
 	// 0019/6 lane R3: the turn rate the kernel states, the hull resize and the facing target.
@@ -205,7 +205,7 @@ bool FElysiumNpcMotorSeamTurnHullTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMotorSeamRecordingTest,
-	"Elysium.Substrate.NpcMotorSeam.Recording", ElysiumNpcMotorSeamTests::Flags)
+	"Elysium.Arm.NpcMotorSeam.Recording", ElysiumNpcMotorSeamTests::Flags)
 bool FElysiumNpcMotorSeamRecordingTest::RunTest(const FString&)
 {
 	// The double wave 3's kernel cases drive: retail's own numbers by default, a case states the rest.

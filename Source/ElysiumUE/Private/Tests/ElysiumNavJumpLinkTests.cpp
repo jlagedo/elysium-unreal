@@ -52,7 +52,7 @@ FVector Feet(AElysiumNpcBody* Body)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavJumpFlightTest,
-	"Elysium.Substrate.NavJumpLink.Flight", ElysiumNavJumpTests::Flags)
+	"Elysium.Arm.NavJumpLink.Flight", ElysiumNavJumpTests::Flags)
 bool FElysiumNavJumpFlightTest::RunTest(const FString&)
 {
 	using namespace ElysiumNavJumpTests;
@@ -107,7 +107,7 @@ bool FElysiumNavJumpFlightTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavJumpStopTest,
-	"Elysium.Substrate.NavJumpLink.StopPreservesFlight", ElysiumNavJumpTests::Flags)
+	"Elysium.Arm.NavJumpLink.StopPreservesFlight", ElysiumNavJumpTests::Flags)
 bool FElysiumNavJumpStopTest::RunTest(const FString&)
 {
 	using namespace ElysiumNavJumpTests;
@@ -143,7 +143,7 @@ bool FElysiumNavJumpStopTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavJumpUnavailableTest,
-	"Elysium.Substrate.NavJumpLink.UnavailableAndTeardown", ElysiumNavJumpTests::Flags)
+	"Elysium.Arm.NavJumpLink.UnavailableAndTeardown", ElysiumNavJumpTests::Flags)
 bool FElysiumNavJumpUnavailableTest::RunTest(const FString&)
 {
 	using namespace ElysiumNavJumpTests;

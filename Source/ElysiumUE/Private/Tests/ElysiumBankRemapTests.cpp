@@ -57,7 +57,7 @@ namespace
 	}
 } // namespace
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBankRemapTest, "Elysium.Substrate.BankRemap",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBankRemapTest, "Elysium.Arm.BankRemap",
 	GElysiumBankRemapTestFlags)
 
 bool FElysiumBankRemapTest::RunTest(const FString&)

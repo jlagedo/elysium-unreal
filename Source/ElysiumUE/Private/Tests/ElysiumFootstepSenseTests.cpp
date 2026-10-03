@@ -75,7 +75,7 @@ static UBoxComponent* SpawnFloor(UWorld* World, const FVector& TopCentre,
 // -------------------------------------------------------------------------- the value half
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFootstepGroundSurfaceTest,
-	"Elysium.Substrate.Footsteps.GroundSurface", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.GroundSurface", GElysiumTestFlags)
 bool FElysiumFootstepGroundSurfaceTest::RunTest(const FString&)
 {
 	// The sample's own default IS the contract: a record nobody filled names no surface, which is
@@ -163,11 +163,11 @@ bool FElysiumFootstepGroundSurfaceTest::RunTest(const FString&)
 // -------------------------------------------------------------------------- the world half
 
 // The two producers against real geometry. Named under `Elysium.Substrate.` like every other
-// world-backed case in this module (`Elysium.Substrate.NpcStandingGround` spawns the same slab and
+// world-backed case in this module (`Elysium.Arm.NpcStandingGround` spawns the same slab and
 // the same body): the tiers `uv run elysium test` accepts are `substrate`, `content` and `policy`,
 // so a case under any other root would never be selected by the wave gate.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFootstepGroundSurfaceWorldTest,
-	"Elysium.Substrate.Footsteps.GroundSurfaceWorld", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.GroundSurfaceWorld", GElysiumTestFlags)
 bool FElysiumFootstepGroundSurfaceWorldTest::RunTest(const FString&)
 {
 	FTestWorldWrapper TestWorld;

@@ -37,10 +37,10 @@ namespace ElysiumFootstepSeamTests
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-// --- Elysium.Substrate.Footsteps.SoundLevel ---------------------------------------------------
+// --- Elysium.Arm.Footsteps.SoundLevel ---------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFootstepSoundLevelTest,
-	"Elysium.Substrate.Footsteps.SoundLevel", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.SoundLevel", GElysiumTestFlags)
 bool FElysiumFootstepSoundLevelTest::RunTest(const FString&)
 {
 	using namespace ElysiumSoundLevel;
@@ -209,10 +209,10 @@ bool FElysiumFootstepSoundLevelTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.Tuning -------------------------------------------------------
+// --- Elysium.Arm.Footsteps.Tuning -------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFootstepTuningTest,
-	"Elysium.Substrate.Footsteps.Tuning", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.Tuning", GElysiumTestFlags)
 bool FElysiumFootstepTuningTest::RunTest(const FString&)
 {
 	// --- The retail defaults, as the DLL constructs them ---------------------------------------
@@ -309,10 +309,10 @@ bool FElysiumFootstepTuningTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.TemplateFootfall ----------------------------------------------
+// --- Elysium.Arm.Footsteps.TemplateFootfall ----------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFootstepTemplateFootfallTest,
-	"Elysium.Substrate.Footsteps.TemplateFootfall", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.TemplateFootfall", GElysiumTestFlags)
 bool FElysiumFootstepTemplateFootfallTest::RunTest(const FString&)
 {
 	using namespace ElysiumFootstep;
@@ -407,10 +407,10 @@ bool FElysiumFootstepTemplateFootfallTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.BodySoundReplacement ------------------------------------------
+// --- Elysium.Arm.Footsteps.BodySoundReplacement ------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFootstepBodySoundTest,
-	"Elysium.Substrate.Footsteps.BodySoundReplacement", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.BodySoundReplacement", GElysiumTestFlags)
 bool FElysiumFootstepBodySoundTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;

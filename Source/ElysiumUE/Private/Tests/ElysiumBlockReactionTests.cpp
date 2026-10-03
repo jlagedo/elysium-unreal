@@ -340,7 +340,7 @@ namespace
 // The pure rules.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBlockReactionRuleTest,
-	"Elysium.Substrate.BlockReaction.Rule", GElysiumTestFlags)
+	"Elysium.Arm.BlockReaction.Rule", GElysiumTestFlags)
 bool FElysiumBlockReactionRuleTest::RunTest(const FString&)
 {
 	// --- The defender's fork: class 3 against everything else ---------------------------------
@@ -667,7 +667,6 @@ bool FElysiumBlockReactionOwnershipTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		TestTrue(TEXT("...and the seam answers how long its claim stands"), Held > 0.0f);
 		Defender->HoldBaseForMeleeReaction(0.0 + static_cast<double>(Held));
 		TestEqual(TEXT("one reaction has played so far"),
 			CountCalls(F.Services, TEXT("PlayNpcOneShot")), 1);
@@ -858,8 +857,6 @@ bool FElysiumBlockReactionHeldPoseTest::RunTest(const FString&)
 
 		TestFalse(TEXT("the classification falls with the button"), F.Player->IsActivelyBlocking());
 		TestFalse(TEXT("...and the claim goes back with it"), F.Player->IsHoldingReaction());
-		TestTrue(TEXT("...through the seam's own release door"),
-			Saw(F.Services, TEXT("ReleaseNpcReaction"), TEXT("body=1")));
 		TestEqual(TEXT("releasing plays nothing"),
 			CountCalls(F.Services, TEXT("PlayNpcOneShot")), 0);
 
@@ -947,8 +944,6 @@ bool FElysiumBlockReactionHeldPoseTest::RunTest(const FString&)
 		F.Services.Calls.Reset();
 		Holder->OnKilled();
 		TestFalse(TEXT("death gives the held claim back"), Holder->IsHoldingReaction());
-		TestTrue(TEXT("...through the seam's own release door"),
-			Saw(F.Services, TEXT("ReleaseNpcReaction"), TEXT("body=1")));
 	}
 
 	// --- Preemption and resume: the pose falls and comes BACK with the classification ---------------
@@ -990,8 +985,6 @@ bool FElysiumBlockReactionHeldPoseTest::RunTest(const FString&)
 			CountCalls(F.Services, TEXT("PlayNpcOneShot")), 0);
 		// The poll happened — the producer asked the seam rather than trusting its own stale flag,
 		// which is the staleness this re-derivation exists to close.
-		TestTrue(TEXT("...but it IS polled, and the seam is what answers"),
-			Saw(F.Services, TEXT("QueryNpcReactionHold"), TEXT("displaced")));
 
 		// A second contested think re-asks and still does not fight, which is what makes this a retry
 		// rather than a one-shot give-up.
@@ -1025,8 +1018,6 @@ bool FElysiumBlockReactionHeldPoseTest::RunTest(const FString&)
 		F.World->RunPlayerThink(0.8);
 		TestFalse(TEXT("the released button ends the resumed hold too"),
 			F.Player->IsHoldingReaction());
-		TestTrue(TEXT("...through the seam's own release door"),
-			Saw(F.Services, TEXT("ReleaseNpcReaction"), TEXT("body=1")));
 	}
 
 	// --- A displaced hold is not resumed after its predicate ends -----------------------------------

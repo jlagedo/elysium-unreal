@@ -96,7 +96,7 @@ namespace
 // --- The 0.8 s gate on the base line ------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThink19GateBaseLineTest,
-	"Elysium.Substrate.Think19.Gate.BaseLine", GThink19GateTestFlags)
+	"Elysium.Arm.Think19.Gate.BaseLine", GThink19GateTestFlags)
 bool FElysiumThink19GateBaseLineTest::RunTest(const FString&)
 {
 	FThink19GateFixture F;
@@ -135,7 +135,7 @@ bool FElysiumThink19GateBaseLineTest::RunTest(const FString&)
 // --- The network manager's one-shot: slot 584 on every NPC at build + 0.8 (0019/6) --------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThink19GateSlot584OneShotTest,
-	"Elysium.Substrate.Think19.Gate.Slot584OneShot", GThink19GateTestFlags)
+	"Elysium.Arm.Think19.Gate.Slot584OneShot", GThink19GateTestFlags)
 bool FElysiumThink19GateSlot584OneShotTest::RunTest(const FString&)
 {
 	FThink19GateFixture F;
@@ -159,7 +159,7 @@ bool FElysiumThink19GateSlot584OneShotTest::RunTest(const FString&)
 // --- A restore re-runs Precache ---------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThink19GateRestoreTest,
-	"Elysium.Substrate.Think19.Gate.RestoreRestamps", GThink19GateTestFlags)
+	"Elysium.Arm.Think19.Gate.RestoreRestamps", GThink19GateTestFlags)
 bool FElysiumThink19GateRestoreTest::RunTest(const FString&)
 {
 	FThink19GateFixture Saved;
@@ -185,7 +185,7 @@ bool FElysiumThink19GateRestoreTest::RunTest(const FString&)
 // --- The Troika line ignores the 0.8 s gate ---------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThink19GateTroikaLineTest,
-	"Elysium.Substrate.Think19.Gate.TroikaIgnoresNetworkGate", GThink19GateTestFlags)
+	"Elysium.Arm.Think19.Gate.TroikaIgnoresNetworkGate", GThink19GateTestFlags)
 bool FElysiumThink19GateTroikaLineTest::RunTest(const FString&)
 {
 	FThink19GateFixture F;
@@ -206,7 +206,7 @@ bool FElysiumThink19GateTroikaLineTest::RunTest(const FString&)
 // --- The loader byte -------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThink19GateLoaderByteTest,
-	"Elysium.Substrate.Think19.Gate.LoaderByteFollowsPlaceSet", GThink19GateTestFlags)
+	"Elysium.Arm.Think19.Gate.LoaderByteFollowsPlaceSet", GThink19GateTestFlags)
 bool FElysiumThink19GateLoaderByteTest::RunTest(const FString&)
 {
 	// A headless world that stages a map's place set: the loader byte waits for its adoption.
@@ -251,7 +251,7 @@ bool FElysiumThink19GateLoaderByteTest::RunTest(const FString&)
 // --- The ai_step arm --------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThink19GateAiStepTest,
-	"Elysium.Substrate.Think19.Gate.AiStepReadsPathHead", GThink19GateTestFlags)
+	"Elysium.Arm.Think19.Gate.AiStepReadsPathHead", GThink19GateTestFlags)
 bool FElysiumThink19GateAiStepTest::RunTest(const FString&)
 {
 	FThink19GateFixture F(EThink19GateMotor::Provided);

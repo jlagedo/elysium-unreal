@@ -27,7 +27,7 @@ static constexpr EAutomationTestFlags GElysiumSurfaceKnobTestFlags =
 // ---------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSurfaceSettingsDefaultsTest,
-	"Elysium.Substrate.SurfaceSettings.Defaults", GElysiumSurfaceKnobTestFlags)
+	"Elysium.Arm.SurfaceSettings.Defaults", GElysiumSurfaceKnobTestFlags)
 bool FElysiumSurfaceSettingsDefaultsTest::RunTest(const FString&)
 {
 	const TArray<TPair<FName, float UElysiumSurfaceSettings::*>>& Bindings =
@@ -71,7 +71,7 @@ bool FElysiumSurfaceSettingsDefaultsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSurfaceSettingsIniRoundTripTest,
-	"Elysium.Substrate.SurfaceSettings.IniRoundTrip", GElysiumSurfaceKnobTestFlags)
+	"Elysium.Arm.SurfaceSettings.IniRoundTrip", GElysiumSurfaceKnobTestFlags)
 bool FElysiumSurfaceSettingsIniRoundTripTest::RunTest(const FString&)
 {
 	UElysiumSurfaceSettings* Settings = GetMutableDefault<UElysiumSurfaceSettings>();
@@ -144,7 +144,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSurfaceCalibrationLutTexelsTest,
-	"Elysium.Substrate.SurfaceCalibration.LutTexels", GElysiumSurfaceKnobTestFlags)
+	"Elysium.Arm.SurfaceCalibration.LutTexels", GElysiumSurfaceKnobTestFlags)
 bool FElysiumSurfaceCalibrationLutTexelsTest::RunTest(const FString&)
 {
 	UElysiumSurfaceCalibration* Calibration = NewCalibration();
@@ -203,7 +203,7 @@ bool FElysiumSurfaceCalibrationLutTexelsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSurfaceCalibrationReorderIsStableTest,
-	"Elysium.Substrate.SurfaceCalibration.ReorderIsStable", GElysiumSurfaceKnobTestFlags)
+	"Elysium.Arm.SurfaceCalibration.ReorderIsStable", GElysiumSurfaceKnobTestFlags)
 bool FElysiumSurfaceCalibrationReorderIsStableTest::RunTest(const FString&)
 {
 	// Two calibrations, same rows, one reordered in Rows -- RegenerateLut writes each row at its
@@ -271,7 +271,7 @@ bool FElysiumSurfaceCalibrationReorderIsStableTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSurfaceCalibrationRowLimitTest,
-	"Elysium.Substrate.SurfaceCalibration.RowLimit", GElysiumSurfaceKnobTestFlags)
+	"Elysium.Arm.SurfaceCalibration.RowLimit", GElysiumSurfaceKnobTestFlags)
 bool FElysiumSurfaceCalibrationRowLimitTest::RunTest(const FString&)
 {
 	UElysiumSurfaceCalibration* Calibration = NewCalibration();
@@ -306,7 +306,7 @@ bool FElysiumSurfaceCalibrationRowLimitTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSurfaceCalibrationIndexOfTest,
-	"Elysium.Substrate.SurfaceCalibration.IndexOf", GElysiumSurfaceKnobTestFlags)
+	"Elysium.Arm.SurfaceCalibration.IndexOf", GElysiumSurfaceKnobTestFlags)
 bool FElysiumSurfaceCalibrationIndexOfTest::RunTest(const FString&)
 {
 	UElysiumSurfaceCalibration* Calibration = NewCalibration();
@@ -325,7 +325,7 @@ bool FElysiumSurfaceCalibrationIndexOfTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSurfaceCalibrationSeedRejectsDuplicateIndexTest,
-	"Elysium.Substrate.SurfaceCalibration.SeedRejectsDuplicateIndex", GElysiumSurfaceKnobTestFlags)
+	"Elysium.Arm.SurfaceCalibration.SeedRejectsDuplicateIndex", GElysiumSurfaceKnobTestFlags)
 bool FElysiumSurfaceCalibrationSeedRejectsDuplicateIndexTest::RunTest(const FString&)
 {
 	// SeedDefaultRows itself never produces a duplicate Index (ClaimNextFreeIndex always walks
@@ -345,7 +345,7 @@ bool FElysiumSurfaceCalibrationSeedRejectsDuplicateIndexTest::RunTest(const FStr
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSurfaceCalibrationSeedRejectsDuplicateNameTest,
-	"Elysium.Substrate.SurfaceCalibration.SeedRejectsDuplicateName", GElysiumSurfaceKnobTestFlags)
+	"Elysium.Arm.SurfaceCalibration.SeedRejectsDuplicateName", GElysiumSurfaceKnobTestFlags)
 bool FElysiumSurfaceCalibrationSeedRejectsDuplicateNameTest::RunTest(const FString&)
 {
 	UElysiumSurfaceCalibration* Calibration = NewCalibration();
@@ -372,7 +372,7 @@ bool FElysiumSurfaceCalibrationSeedRejectsDuplicateNameTest::RunTest(const FStri
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSurfaceCalibrationSeedRejectsOutOfRangeIndexTest,
-	"Elysium.Substrate.SurfaceCalibration.SeedRejectsOutOfRangeIndex", GElysiumSurfaceKnobTestFlags)
+	"Elysium.Arm.SurfaceCalibration.SeedRejectsOutOfRangeIndex", GElysiumSurfaceKnobTestFlags)
 bool FElysiumSurfaceCalibrationSeedRejectsOutOfRangeIndexTest::RunTest(const FString&)
 {
 	UElysiumSurfaceCalibration* Calibration = NewCalibration();
@@ -396,7 +396,7 @@ bool FElysiumSurfaceCalibrationSeedRejectsOutOfRangeIndexTest::RunTest(const FSt
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSurfaceCalibrationSeedIsNonDestructiveTest,
-	"Elysium.Substrate.SurfaceCalibration.SeedIsNonDestructive", GElysiumSurfaceKnobTestFlags)
+	"Elysium.Arm.SurfaceCalibration.SeedIsNonDestructive", GElysiumSurfaceKnobTestFlags)
 bool FElysiumSurfaceCalibrationSeedIsNonDestructiveTest::RunTest(const FString&)
 {
 	// C1: seed, tune a value by hand (as if from Project Settings / the editor grid), re-seed with

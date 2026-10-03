@@ -15,6 +15,7 @@ class FElysiumShotRun;
 class FElysiumMoveRun;
 class FElysiumCastRun;
 class FElysiumComposeRun;
+class FElysiumArenaRun;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumCurrentMapReady, AElysiumMapActor*);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnElysiumCurrentMapFailed, AElysiumMapActor*, const FString&);
@@ -253,4 +254,8 @@ private:
 	// graph produced, recorded off a driven body so a composition defect is a number rather than a
 	// screenshot.
 	TPimplPtr<FElysiumComposeRun> ComposeRun;
+
+	// Headless arena run, created only under -ElysiumArena: the `Arena/scenarios/` records run as a
+	// suite against the AI trace, one host per boot (the arena, or `-ElysiumMap`'s map).
+	TPimplPtr<FElysiumArenaRun> ArenaRun;
 };

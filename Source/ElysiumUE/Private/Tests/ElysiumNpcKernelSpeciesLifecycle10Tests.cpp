@@ -208,7 +208,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10MakerSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10MakerSpawnFleshpileTest,
-	"Elysium.Substrate.NpcKernelSpeciesLifecycle10.MakerSpawnFleshpile",
+	"Elysium.Arm.NpcKernelSpeciesLifecycle10.MakerSpawnFleshpile",
 	GSpeciesLifecycle10TestFlags)
 bool FElysiumNpcKernelSpeciesLifecycle10MakerSpawnFleshpileTest::RunTest(const FString&)
 {
@@ -250,7 +250,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10MakerSpawnFleshpileTest::RunTest(const F
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10MakerSpawnZombieTest,
-	"Elysium.Substrate.NpcKernelSpeciesLifecycle10.MakerSpawnZombie", GSpeciesLifecycle10TestFlags)
+	"Elysium.Arm.NpcKernelSpeciesLifecycle10.MakerSpawnZombie", GSpeciesLifecycle10TestFlags)
 bool FElysiumNpcKernelSpeciesLifecycle10MakerSpawnZombieTest::RunTest(const FString&)
 {
 	FSpeciesLifecycle10MakerFixture Fix;
@@ -317,7 +317,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10MakerSpawnZombieTest::RunTest(const FStr
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10AndreiBloodRestoreTest,
-	"Elysium.Substrate.NpcKernelSpeciesLifecycle10.AndreiBloodRestore",
+	"Elysium.Arm.NpcKernelSpeciesLifecycle10.AndreiBloodRestore",
 	GSpeciesLifecycle10TestFlags)
 bool FElysiumNpcKernelSpeciesLifecycle10AndreiBloodRestoreTest::RunTest(const FString&)
 {
@@ -352,7 +352,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10AndreiBloodRestoreTest::RunTest(const FS
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10ChangBrosRestoreTest,
-	"Elysium.Substrate.NpcKernelSpeciesLifecycle10.ChangBrosRestore", GSpeciesLifecycle10TestFlags)
+	"Elysium.Arm.NpcKernelSpeciesLifecycle10.ChangBrosRestore", GSpeciesLifecycle10TestFlags)
 bool FElysiumNpcKernelSpeciesLifecycle10ChangBrosRestoreTest::RunTest(const FString&)
 {
 	// One body, three classes — `CNPC_VChangBros`, `CNPC_VChangBrosBlade` and `CNPC_VChangBrosClaw`
@@ -405,7 +405,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10ChangBrosRestoreTest::RunTest(const FStr
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10PayphoneThinkTest,
-	"Elysium.Substrate.NpcKernelSpeciesLifecycle10.PayphoneThink", GSpeciesLifecycle10TestFlags)
+	"Elysium.Arm.NpcKernelSpeciesLifecycle10.PayphoneThink", GSpeciesLifecycle10TestFlags)
 bool FElysiumNpcKernelSpeciesLifecycle10PayphoneThinkTest::RunTest(const FString&)
 {
 	FSpeciesLifecycle10Fixture Fix(TEXT("CPayphone"));
@@ -499,7 +499,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10PayphoneThinkTest::RunTest(const FString
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10GhoulStartTouchTest,
-	"Elysium.Substrate.NpcKernelSpeciesLifecycle10.GhoulCroucherStartTouch",
+	"Elysium.Arm.NpcKernelSpeciesLifecycle10.GhoulCroucherStartTouch",
 	GSpeciesLifecycle10TestFlags)
 bool FElysiumNpcKernelSpeciesLifecycle10GhoulStartTouchTest::RunTest(const FString&)
 {
@@ -596,7 +596,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10GhoulStartTouchTest::RunTest(const FStri
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10GargoyleTouchTest,
-	"Elysium.Substrate.NpcKernelSpeciesLifecycle10.GargoyleTouch", GSpeciesLifecycle10TestFlags)
+	"Elysium.Arm.NpcKernelSpeciesLifecycle10.GargoyleTouch", GSpeciesLifecycle10TestFlags)
 bool FElysiumNpcKernelSpeciesLifecycle10GargoyleTouchTest::RunTest(const FString&)
 {
 	// The subject is a gargoyle from the start: the base-body probe below calls
@@ -679,7 +679,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10GargoyleTouchTest::RunTest(const FString
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10Guard1StateChangeTest,
-	"Elysium.Substrate.NpcKernelSpeciesLifecycle10.Guard1StateChange",
+	"Elysium.Arm.NpcKernelSpeciesLifecycle10.Guard1StateChange",
 	GSpeciesLifecycle10TestFlags)
 bool FElysiumNpcKernelSpeciesLifecycle10Guard1StateChangeTest::RunTest(const FString&)
 {
@@ -755,7 +755,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10Guard1StateChangeTest::RunTest(const FSt
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10HunterStateChangeTest,
-	"Elysium.Substrate.NpcKernelSpeciesLifecycle10.HunterStateChange",
+	"Elysium.Arm.NpcKernelSpeciesLifecycle10.HunterStateChange",
 	GSpeciesLifecycle10TestFlags)
 bool FElysiumNpcKernelSpeciesLifecycle10HunterStateChangeTest::RunTest(const FString&)
 {
@@ -843,7 +843,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10HunterStateChangeTest::RunTest(const FSt
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10AndreiBloodDestroyTest,
-	"Elysium.Substrate.NpcKernelSpeciesLifecycle10.DestroyAndreiBlood",
+	"Elysium.Arm.NpcKernelSpeciesLifecycle10.DestroyAndreiBlood",
 	GSpeciesLifecycle10TestFlags)
 bool FElysiumNpcKernelSpeciesLifecycle10AndreiBloodDestroyTest::RunTest(const FString&)
 {

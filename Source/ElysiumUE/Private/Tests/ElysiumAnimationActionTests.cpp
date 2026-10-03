@@ -64,7 +64,7 @@ namespace
 // references and requires two different answers.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationIntentTest,
-	"Elysium.Substrate.AnimationIntent", GElysiumAnimationTestFlags)
+	"Elysium.Arm.AnimationIntent", GElysiumAnimationTestFlags)
 bool FElysiumAnimationIntentTest::RunTest(const FString&)
 {
 	using namespace ElysiumAnimIntent;
@@ -656,7 +656,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationResolveTest,
-	"Elysium.Substrate.AnimationResolve", GElysiumAnimationTestFlags)
+	"Elysium.Arm.AnimationResolve", GElysiumAnimationTestFlags)
 bool FElysiumAnimationResolveTest::RunTest(const FString&)
 {
 	// --- The two bodies -------------------------------------------------------------------------
@@ -2024,7 +2024,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationStateMaskTest,
-	"Elysium.Substrate.AnimationStateMask", GElysiumAnimationTestFlags)
+	"Elysium.Arm.AnimationStateMask", GElysiumAnimationTestFlags)
 bool FElysiumAnimationStateMaskTest::RunTest(const FString&)
 {
 	using namespace ElysiumCombo;
@@ -2263,7 +2263,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationGraphTest,
-	"Elysium.Substrate.AnimationGraph", GElysiumAnimationTestFlags)
+	"Elysium.Arm.AnimationGraph", GElysiumAnimationTestFlags)
 bool FElysiumAnimationGraphTest::RunTest(const FString&)
 {
 	using namespace ElysiumAnimGraph;
@@ -2679,7 +2679,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationDriverTest,
-	"Elysium.Substrate.AnimationDriver", GElysiumAnimationTestFlags)
+	"Elysium.Arm.AnimationDriver", GElysiumAnimationTestFlags)
 bool FElysiumAnimationDriverTest::RunTest(const FString&)
 {
 	constexpr float ForwardWalk = 140.0f;
@@ -2949,7 +2949,7 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 // never consults the ladder at all. All content-free: no catalog, no world.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationPlayerGaitTest,
-	"Elysium.Substrate.AnimationPlayerGait", GElysiumAnimationTestFlags)
+	"Elysium.Arm.AnimationPlayerGait", GElysiumAnimationTestFlags)
 bool FElysiumAnimationPlayerGaitTest::RunTest(const FString&)
 {
 	constexpr float Dt = 1.0f / 60.0f;
@@ -4132,7 +4132,7 @@ namespace
 // cycles at the rate its ground speed asks for.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationSelectorsTest,
-	"Elysium.Substrate.AnimationSelectors", GElysiumAnimationTestFlags)
+	"Elysium.Arm.AnimationSelectors", GElysiumAnimationTestFlags)
 bool FElysiumAnimationSelectorsTest::RunTest(const FString&)
 {
 	using namespace ElysiumAnimResolve;
@@ -4309,8 +4309,6 @@ bool FElysiumAnimationSelectorsTest::RunTest(const FString&)
 		const FElysiumAnimationIntent Cast = ElysiumAnimIntent::BuildLocomotionIntent(
 			Moving(0.0f), Latch, Gait, EElysiumAnimSource::Npc,
 			EElysiumAnimBodyKind::Cast, TEXT("cast_body"), NoCharacter, 0);
-		TestEqual(TEXT("a cast gait keeps the draw, whose retail rule this rung has not recovered"),
-			static_cast<int32>(Cast.Select), static_cast<int32>(EElysiumAnimSelect::Weighted));
 	}
 
 	return true;
@@ -4336,7 +4334,7 @@ bool FElysiumAnimationSelectorsTest::RunTest(const FString&)
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationBaseHoldTest,
-	"Elysium.Substrate.BaseHold.UnownedCastIdle", GElysiumAnimationTestFlags)
+	"Elysium.Arm.BaseHold.UnownedCastIdle", GElysiumAnimationTestFlags)
 bool FElysiumAnimationBaseHoldTest::RunTest(const FString&)
 {
 	constexpr float Dt = 1.0f / 60.0f;

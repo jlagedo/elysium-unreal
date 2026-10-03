@@ -66,7 +66,7 @@ namespace
 // D1: `CNPCMaker_Fleshpile`'s think `0x1034c8b0` re-arms `m_flNextThink = freq + curtime` and does
 // nothing else; the runners come from Andrei's task `0x154` (`SummonRunnerNear`).
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMakerFleshpileThinkTest,
-	"Elysium.Substrate.NpcMaker.FleshpileThinkRearms", GElysiumNpcMakerTestFlags)
+	"Elysium.Arm.NpcMaker.FleshpileThinkRearms", GElysiumNpcMakerTestFlags)
 bool FElysiumNpcMakerFleshpileThinkTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("maker_fleshpile_think"), 4401u);
@@ -110,7 +110,7 @@ bool FElysiumNpcMakerFleshpileThinkTest::RunTest(const FString&)
 // D5: `InputEnable` `0x1034b490` installs the BASE think (`0x1000696a` -> `0x1034bbf0`) on every maker
 // class, and `MakerThink`'s slot-617 call still reaches the class's own `MakeNPC`.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMakerEnableBaseThinkTest,
-	"Elysium.Substrate.NpcMaker.EnableInstallsBaseThink", GElysiumNpcMakerTestFlags)
+	"Elysium.Arm.NpcMaker.EnableInstallsBaseThink", GElysiumNpcMakerTestFlags)
 bool FElysiumNpcMakerEnableBaseThinkTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("maker_enable_base"), 4402u);
@@ -224,7 +224,7 @@ bool FElysiumNpcMakerWakeTest::RunTest(const FString&)
 // Participation: a maker is an NPC for every AI-list walk, and answers retail's own "no" at every
 // body question — no solid, no transmit, no cone, no discipline target, no witness.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMakerParticipationTest,
-	"Elysium.Substrate.NpcMaker.Participation", GElysiumNpcMakerTestFlags)
+	"Elysium.Arm.NpcMaker.Participation", GElysiumNpcMakerTestFlags)
 bool FElysiumNpcMakerParticipationTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("maker_participation"), 4404u);
@@ -264,7 +264,7 @@ bool FElysiumNpcMakerParticipationTest::RunTest(const FString&)
 
 // D11: the installed think rides the maker's record.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMakerInstalledThinkSaveTest,
-	"Elysium.Substrate.NpcMaker.InstalledThinkSaved", GElysiumNpcMakerTestFlags)
+	"Elysium.Arm.NpcMaker.InstalledThinkSaved", GElysiumNpcMakerTestFlags)
 bool FElysiumNpcMakerInstalledThinkSaveTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("maker_think_save"), 4405u);

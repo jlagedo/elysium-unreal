@@ -9,7 +9,7 @@
 #include "SkeletalMeshAttributes.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAuthoredMorphRetention,
-	"Elysium.Substrate.AuthoredMorphs.NormalOnlyAndRenderCopies",
+	"Elysium.Arm.AuthoredMorphs.NormalOnlyAndRenderCopies",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FElysiumAuthoredMorphRetention::RunTest(const FString& Parameters)

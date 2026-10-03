@@ -7,7 +7,7 @@
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDynamicsDataTest,"Elysium.Substrate.DynamicsData",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDynamicsDataTest,"Elysium.Content.DynamicsData",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumDynamicsDataTest::RunTest(const FString&)
 {

@@ -124,7 +124,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // places each ADecalActor by. Pure data + math, no RHI.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDecalsTest, "Elysium.Substrate.Decals", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDecalsTest, "Elysium.Arm.Decals", GElysiumTestFlags)
 bool FElysiumDecalsTest::RunTest(const FString&)
 {
 	// --- parse: 15 tokens -> one def with fields in order; malformed lines dropped ---
@@ -177,7 +177,7 @@ bool FElysiumDecalsTest::RunTest(const FString&)
 // `pipeline/tests/test_map_ropes.py` and `bake_verify.rope_errors`.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRopesTest, "Elysium.Substrate.Ropes", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRopesTest, "Elysium.Content.Ropes", GElysiumTestFlags)
 bool FElysiumRopesTest::RunTest(const FString&)
 {
 	// A four-metre span at 2.032 m rest: the producer's own numbers for a tutorial cable.
@@ -242,7 +242,7 @@ bool FElysiumRopesTest::RunTest(const FString&)
 // param-binding depend on, and the blend flags stay mutually exclusive (the exporter writes at
 // most one). No RHI, no assets: the factory's master choice is a pure function of these fields.
 // =====================================================================================
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldMaterialsTest, "Elysium.Substrate.WorldMaterials", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldMaterialsTest, "Elysium.Arm.WorldMaterials", GElysiumTestFlags)
 bool FElysiumWorldMaterialsTest::RunTest(const FString&)
 {
 	TArray<FString> Lines;

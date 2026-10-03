@@ -38,16 +38,37 @@ TEST_ABSTENTION_TOKEN = "ELYSIUM_TEST_ABSTAIN"
 CLANG_DATABASE = "compile_commands.json"
 CLANG_DATABASE_LOCK = ".elysium-clang-database.lock"
 
-#: The tier names `uv run elysium test` accepts, and the automation filter each selects. A bare
+#: A C++ test's tier is its name's prefix, `Elysium.<Group>.<Rest>`, so a prefix filter selects a tier
+#: and the automation framework needs no tags. The groups under `Elysium.` are two lists, kept here
+#: and nowhere else, and `test_test_tiers.py` fails when a group in `Source/ElysiumUE/Private/Tests/`
+#: is in neither:
+#:
+#: - the default tier, what `uv run elysium test` runs with no argument: the census tests (generated
+#:   tables held to the tree), the arena scenario tests and a hand-picked smoke set. A prefix that
+#:   matches no test fails the run, so every group listed here must hold a test;
+#: - the opt-in tiers, run at a story's close or by name: `Arm` (the per-function arm and unit
+#:   tests, `Elysium.Arm.<Rest>` or `Elysium.Arm.<Group>.<Rest>`), `Content` (tests that read baked
+#:   maps, packages and assets) and `Slow` (the few tests that cost seconds each).
+DEFAULT_TEST_GROUPS = ("Session", "Substrate")
+OPT_IN_TEST_GROUPS = ("Arm", "Content", "Slow")
+ALL_TESTS_FILTER = "Elysium."
+DEFAULT_TEST_FILTER = tuple(f"Elysium.{group}." for group in DEFAULT_TEST_GROUPS)
+
+#: The tier names `uv run elysium test` accepts, and the automation filters each selects. A bare
 #: word that is not one of these is a typo rather than a filter -- `Automation RunTest` matches by
 #: substring and reports success for a selection that matched nothing.
 TEST_TIERS = {
-    "substrate": "Elysium.Substrate.",
-    # Needs a generated `/Game` package -- a real material graph, a declared input asset. It reads
-    # no VtMB corpus: the `content` tier that did was retired, because a suite whose coverage
-    # depended on which export profile a machine happened to have run guaranteed nothing, and made
-    # every edit pay for a parse of the whole install.
-    "policy": "Elysium.Policy.",
+    "default": DEFAULT_TEST_FILTER,
+    "all": (ALL_TESTS_FILTER,),
+    "substrate": ("Elysium.Substrate.",),
+    "arm": ("Elysium.Arm.",),
+    "slow": ("Elysium.Slow.",),
+    # Baked maps, `/Game` packages, declared input assets. None reads the VtMB corpus: the `content`
+    # tier that did was retired, because a suite whose coverage depended on which export profile a
+    # machine happened to have run guaranteed nothing, and made every edit pay for a parse of the
+    # whole install.
+    "content": ("Elysium.Content.",),
+    "policy": ("Elysium.Content.Policy.",),
 }
 
 #: How long an automation launch may take before the watchdog kills it. Well above a cold boot
@@ -945,8 +966,10 @@ def verify_bakes(config, runner, maps: Sequence[str], *, batch_size: int = 4) ->
 def resolve_test_filters(filter_name: str | Sequence[str]) -> list[str]:
     """The automation prefixes a request names, tier words resolved, duplicates dropped.
 
-    Each prefix is a tier name (`substrate`) or a fully qualified filter (`Elysium.Substrate.Npc.`);
-    a single argument may also join several with `+`, which is how Unreal itself separates them.
+    Each prefix is a tier name (`arm`) or a fully qualified filter (`Elysium.Arm.NpcKernelSelect19.`);
+    a single argument may also join several with `+`, which is how Unreal itself separates them. An
+    empty request is the default tier (`DEFAULT_TEST_FILTER`); the whole suite is the word `all`
+    (`uv run elysium test --all`).
     """
     names = [filter_name] if isinstance(filter_name, str) else list(filter_name)
     resolved: list[str] = []
@@ -962,13 +985,45 @@ def resolve_test_filters(filter_name: str | Sequence[str]) -> list[str]:
                     raise UnrealFailure(
                         f"unknown test tier '{part}'; expected one of "
                         f"{', '.join(sorted(TEST_TIERS))}, or a fully qualified filter such as "
-                        f"'Elysium.Substrate.Knockback.'",
+                        f"'Elysium.Arm.NpcKernelSelect19.'",
                         exit_code=int(ExitCode.USAGE_OR_CONFIG),
                     )
-                selected = part
-            if selected not in resolved:
-                resolved.append(selected)
-    return resolved or ["Elysium."]
+                selected = (part,)
+            for prefix in selected:
+                if prefix not in resolved:
+                    resolved.append(prefix)
+    return resolved or list(DEFAULT_TEST_FILTER)
+
+
+def selection_tier(prefixes: Sequence[str]) -> str:
+    """The tier a resolved selection names, for a summary to say: `default`, `arm`, `all`, ...
+
+    A prefix is the tier of the group it sits in: an opt-in group is its own tier, a default group is
+    `default`, the bare `Elysium.` is `all`, anything else `named`. Several tiers are joined with `+`
+    in order; a selection that is not whole groups (`Elysium.Arm.NpcKernelSelect19.`) says so.
+    """
+    tiers: list[str] = []
+    whole = True
+    for prefix in prefixes:
+        group = ""
+        if prefix == ALL_TESTS_FILTER:
+            tier = "all"
+        else:
+            if prefix.startswith(ALL_TESTS_FILTER):
+                group, _, rest = prefix[len(ALL_TESTS_FILTER):].partition(".")
+                whole = whole and rest == ""
+            else:
+                whole = False
+            if group in OPT_IN_TEST_GROUPS:
+                tier = group.lower()
+            elif group in DEFAULT_TEST_GROUPS:
+                tier = "default"
+            else:
+                tier = "named"
+        if tier not in tiers:
+            tiers.append(tier)
+    name = "+".join(tiers) or "default"
+    return name if whole else f"{name} (selected by prefix)"
 
 
 def report_slug(selected: str) -> str:
@@ -981,13 +1036,14 @@ def report_slug(selected: str) -> str:
     return f"{slug[:TEST_REPORT_SLUG_CHARS].rstrip('-')}-{digest}"
 
 
-def run_tests(config, runner, filter_name: str | Sequence[str] = "Elysium.", *,
+def run_tests(config, runner, filter_name: str | Sequence[str] = DEFAULT_TEST_FILTER, *,
               parity_stems: Sequence[str] = ()) -> dict:
     """Run an automation selection and report what actually executed.
 
     `filter_name` is one prefix or several, and every prefix runs in ONE editor boot (Unreal takes
     them joined with `+`): the boot is 19 s around well under a second of tests. The summary says
-    how each prefix fared, so a green run that left one prefix empty cannot hide behind the others.
+    how each prefix fared, so a green run that left one prefix empty cannot hide behind the others,
+    and which tier the selection was (`summary["tier"]`): the default tier unless it names others.
 
     `parity_stems` widens the per-model parity slice, which is otherwise two hard-coded bodies.
     It is the only test in the suite built for slice iteration, and it was previously reachable
@@ -1036,6 +1092,7 @@ def run_tests(config, runner, filter_name: str | Sequence[str] = "Elysium.", *,
         # line is whatever the test logged before it hung, not the controller's start line.
         raise exc.annotate(_killed_run_context(exc.result.output, report))
     summary = summarize_test_report(report, prefixes)
+    summary["tier"] = selection_tier(prefixes)
     summary["report_path"] = str(report.resolve())
     verdict = int(ExitCode.VALIDATION)
     where = f"(report: {summary['report_path']})"

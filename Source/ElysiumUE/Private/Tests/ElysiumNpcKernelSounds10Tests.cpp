@@ -64,7 +64,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10KeyValueStringTest,
-	"Elysium.Substrate.NpcKernelSounds10.KeyValueString", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.KeyValueString", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10KeyValueStringTest::RunTest(const FString&)
 {
 	FSounds10Fixture F;
@@ -112,7 +112,7 @@ bool FElysiumNpcKernelSounds10KeyValueStringTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10VSoundSeamTest,
-	"Elysium.Substrate.NpcKernelSounds10.VSoundSeam", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.VSoundSeam", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10VSoundSeamTest::RunTest(const FString&)
 {
 	// The concept lookup walks a list this runtime does not load, so the count is zero and the
@@ -158,7 +158,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10DeathSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.DeathSound", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.DeathSound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10DeathSoundTest::RunTest(const FString&)
 {
 	// `0x10293ec0`, slot 488. The concept is `"Death"` (`0x105d8c30`).
@@ -170,7 +170,7 @@ bool FElysiumNpcKernelSounds10DeathSoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10AlertSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.AlertSound", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.AlertSound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10AlertSoundTest::RunTest(const FString&)
 {
 	// `0x10293f80`, slot 489. `"Target_Suspect"` (`0x105d8c38`) — UNDERSCORED, read out of the
@@ -183,7 +183,7 @@ bool FElysiumNpcKernelSounds10AlertSoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10IdleSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.IdleSound", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.IdleSound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10IdleSoundTest::RunTest(const FString&)
 {
 	// `0x10294280`, slot 490. `"Idle_Calm"` (`0x105d8c60`).
@@ -197,7 +197,7 @@ bool FElysiumNpcKernelSounds10IdleSoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10PainSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.PainSound", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.PainSound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10PainSoundTest::RunTest(const FString&)
 {
 	// `0x10294340`, slot 491. The concept at `0x105d8c6c`, which the corpus left unnamed and the
@@ -210,7 +210,7 @@ bool FElysiumNpcKernelSounds10PainSoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10PainSoundWerewolfTest,
-	"Elysium.Substrate.NpcKernelSounds10.PainSoundWerewolf", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.PainSoundWerewolf", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10PainSoundWerewolfTest::RunTest(const FString&)
 {
 	// `CNPC_VWerewolf::vfunc491` (`0x103d87a0`), 245 bytes: the SAME concept through its own guard
@@ -236,7 +236,7 @@ bool FElysiumNpcKernelSounds10PainSoundWerewolfTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10FearSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.FearSound", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.FearSound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10FearSoundTest::RunTest(const FString&)
 {
 	// `0x10294400`, slot 492. `"Fear_Start"` (`0x105d8c74`).
@@ -248,7 +248,7 @@ bool FElysiumNpcKernelSounds10FearSoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10LostEnemySoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.LostEnemySound", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.LostEnemySound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10LostEnemySoundTest::RunTest(const FString&)
 {
 	// `0x102944c0`, slot 493 — the one hook with a roll in front: `RandomInt(0, 99) < 0x19`
@@ -290,7 +290,7 @@ bool FElysiumNpcKernelSounds10LostEnemySoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10FoundEnemySoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.FoundEnemySound", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.FoundEnemySound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10FoundEnemySoundTest::RunTest(const FString&)
 {
 	// `0x10294590`, slot 494: `IsBusyWithDiscipline()` must be false, then `"Target_Reacquired"`
@@ -310,7 +310,7 @@ bool FElysiumNpcKernelSounds10FoundEnemySoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10SurprisedSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.SurprisedSound", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.SurprisedSound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10SurprisedSoundTest::RunTest(const FString&)
 {
 	// `0x10294660`, slot 495. `"Surprised"` (`0x105d8cac`).
@@ -322,7 +322,7 @@ bool FElysiumNpcKernelSounds10SurprisedSoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10FleeSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.FleeSound", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.FleeSound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10FleeSoundTest::RunTest(const FString&)
 {
 	// `0x10294870`, slot 498. The second concept the corpus left unnamed (`0x105d8cd0`), read out
@@ -335,7 +335,7 @@ bool FElysiumNpcKernelSounds10FleeSoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10IdleAgitatedSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.IdleAgitatedSound", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.IdleAgitatedSound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10IdleAgitatedSoundTest::RunTest(const FString&)
 {
 	// `0x10294930`, slot 499. `"Idle_Agitated"` (`0x105d8cd8`).
@@ -348,7 +348,7 @@ bool FElysiumNpcKernelSounds10IdleAgitatedSoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10ExertHvySoundWerewolfTest,
-	"Elysium.Substrate.NpcKernelSounds10.ExertHvySoundWerewolf", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.ExertHvySoundWerewolf", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10ExertHvySoundWerewolfTest::RunTest(const FString&)
 {
 	// `CNPC_VWerewolf::vfunc500` (`0x103d8660`): the same concept through its own guard
@@ -363,7 +363,7 @@ bool FElysiumNpcKernelSounds10ExertHvySoundWerewolfTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10ComfortSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.ComfortSound", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.ComfortSound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10ComfortSoundTest::RunTest(const FString&)
 {
 	// `0x10294c30`, slot 503. `"Comfort"` (`0x105d8cf0`).
@@ -375,7 +375,7 @@ bool FElysiumNpcKernelSounds10ComfortSoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10UpsetSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.UpsetSound", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.UpsetSound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10UpsetSoundTest::RunTest(const FString&)
 {
 	// `0x10294cf0`, slot 504. `"Upset"` (`0x105d8cfc`).
@@ -387,7 +387,7 @@ bool FElysiumNpcKernelSounds10UpsetSoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10FloatSoundTest,
-	"Elysium.Substrate.NpcKernelSounds10.FloatSound", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.FloatSound", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10FloatSoundTest::RunTest(const FString&)
 {
 	// `0x10294f40`, slot 507 — the computed fifth argument and the state write.
@@ -432,7 +432,7 @@ bool FElysiumNpcKernelSounds10FloatSoundTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10VectorVectorsTest,
-	"Elysium.Substrate.NpcKernelSounds10.VectorVectors", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.VectorVectors", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10VectorVectorsTest::RunTest(const FString&)
 {
 	// `0x10138a90` is `VectorVectors`, NOT `AngleVectors` — the checklist's walk named the wrong
@@ -457,7 +457,7 @@ bool FElysiumNpcKernelSounds10VectorVectorsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10FireBulletsTest,
-	"Elysium.Substrate.NpcKernelSounds10.FireBullets", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.FireBullets", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10FireBulletsTest::RunTest(const FString&)
 {
 	FSounds10Fixture F;
@@ -546,7 +546,7 @@ bool FElysiumNpcKernelSounds10FireBulletsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSounds10BulletSpreadTest,
-	"Elysium.Substrate.NpcKernelSounds10.BulletSpread", GElysiumNpcKernelSounds10Flags)
+	"Elysium.Arm.NpcKernelSounds10.BulletSpread", GElysiumNpcKernelSounds10Flags)
 bool FElysiumNpcKernelSounds10BulletSpreadTest::RunTest(const FString&)
 {
 	// `0x10268170`: a rejection sample of two sums of two `RandomFloat(-0.5, 0.5)` draws, redrawn

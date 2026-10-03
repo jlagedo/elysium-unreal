@@ -196,7 +196,7 @@ namespace
 // The target ramp — `R_StudioFlexVerts`' trapezoid, against hand-computed values.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFlexRampTest, "Elysium.Substrate.FlexRamp", GElysiumFacialTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFlexRampTest, "Elysium.Arm.FlexRamp", GElysiumFacialTestFlags)
 bool FElysiumFlexRampTest::RunTest(const FString&)
 {
 	// `(0, 1, 10, 11)` — the ordinary "ramp in over 0..1, then hold" shape 45 of the 53 shipped
@@ -366,7 +366,7 @@ bool FElysiumFlexRulesTest::RunTest(const FString&)
 // The test rig reproduces both halves of the shipped shape: `mouth` is computed by a rule and read by
 // no morph target, and `jaw_drop` is the controller whose morph actually moves.
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFlexJawTest, "Elysium.Substrate.FlexJaw", GElysiumFacialTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFlexJawTest, "Elysium.Arm.FlexJaw", GElysiumFacialTestFlags)
 bool FElysiumFlexJawTest::RunTest(const FString&)
 {
 	FElysiumFacialRig Rig;
@@ -468,7 +468,7 @@ bool FElysiumFlexJawTest::RunTest(const FString&)
 // The eye basis — `R_StudioEyeballPosition`, without a mesh under it.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEyeSolveTest, "Elysium.Substrate.EyeSolve", GElysiumFacialTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEyeSolveTest, "Elysium.Arm.EyeSolve", GElysiumFacialTestFlags)
 bool FElysiumEyeSolveTest::RunTest(const FString&)
 {
 	FElysiumEyeSet Set;
@@ -610,7 +610,7 @@ bool FElysiumEyeSolveTest::RunTest(const FString&)
 // The latch is the third fidelity fact: retail recomputes the eye aim every think, so a body whose
 // maintainer stopped running rests on its authored aim on the next frame instead of holding the
 // last world point it was handed.
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEyeBlinkTest, "Elysium.Substrate.EyeBlink",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEyeBlinkTest, "Elysium.Arm.EyeBlink",
 	GElysiumFacialTestFlags)
 bool FElysiumEyeBlinkTest::RunTest(const FString&)
 {
@@ -729,7 +729,7 @@ bool FElysiumEyeBlinkTest::RunTest(const FString&)
 // composes additively with the Green Room's live debug nudge, and an absent asset leaves the debug
 // state untouched — both are what let the asset's defaults equal today's behaviour exactly.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEyeTuningComposeTest,
-	"Elysium.Substrate.EyeTuningCompose", GElysiumFacialTestFlags)
+	"Elysium.Arm.EyeTuningCompose", GElysiumFacialTestFlags)
 bool FElysiumEyeTuningComposeTest::RunTest(const FString&)
 {
 	FElysiumEyeTuning DebugTuning;
@@ -773,7 +773,7 @@ bool FElysiumEyeTuningComposeTest::RunTest(const FString&)
 // the aim term moves one, and running the pass before the rules instead of after moves one. So the
 // assertions below pin the resting *value*, not the presence of motion.
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEyeLidTest, "Elysium.Substrate.EyeLids", GElysiumFacialTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEyeLidTest, "Elysium.Arm.EyeLids", GElysiumFacialTestFlags)
 bool FElysiumEyeLidTest::RunTest(const FString&)
 {
 	FElysiumFacialRig Rig;
@@ -937,7 +937,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionTableTest,
-	"Elysium.Substrate.ExpressionTable", GElysiumFacialTestFlags)
+	"Elysium.Arm.ExpressionTable", GElysiumFacialTestFlags)
 bool FElysiumExpressionTableTest::RunTest(const FString&)
 {
 	FElysiumExpressionTable Table;
@@ -1504,7 +1504,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLipTrackTest,
-	"Elysium.Substrate.LipTrack", GElysiumFacialTestFlags)
+	"Elysium.Arm.LipTrack", GElysiumFacialTestFlags)
 bool FElysiumLipTrackTest::RunTest(const FString&)
 {
 	FElysiumLipTrack Track;
@@ -1571,7 +1571,7 @@ bool FElysiumLipTrackTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLipSampleTest,
-	"Elysium.Substrate.LipSample", GElysiumFacialTestFlags)
+	"Elysium.Arm.LipSample", GElysiumFacialTestFlags)
 bool FElysiumLipSampleTest::RunTest(const FString&)
 {
 	FElysiumLipTrack Track;

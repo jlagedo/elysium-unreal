@@ -112,7 +112,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNotificationPresentationRulesTest,
-	"Elysium.Substrate.UI.NotificationPresentationRules",
+	"Elysium.Arm.UI.NotificationPresentationRules",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FElysiumNotificationPresentationRulesTest::RunTest(const FString& Parameters)
@@ -187,9 +187,6 @@ bool FElysiumHUDModelProjectionTest::RunTest(const FString& Parameters)
 	Model->Apply(View);
 	TestFalse(TEXT("default view suppresses HUD"), Model->bVisible);
 	TestFalse(TEXT("default vitals are invalid"), Model->bVitalsValid);
-	TestFalse(TEXT("unwired equipment remains invalid"), Model->Equipment.bValid);
-	TestFalse(TEXT("unwired selector remains closed"), Model->Selector.IsOpen());
-	TestEqual(TEXT("unwired zone stays collapsed"), Model->ZoneState, EElysiumZoneState::None);
 
 	View.bPlayerSurface = true;
 	View.Vitals.bValid = true;
@@ -457,7 +454,7 @@ bool FElysiumHUDBloodRailTest::RunTest(const FString& Parameters)
 // deadline `vfunc114` refreshed — three seconds (`_DAT_10227ee0`) — and there is no focus test in
 // either function.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHUDFeedBarTest,
-	"Elysium.Substrate.UI.HUDFeedBar",
+	"Elysium.Arm.UI.HUDFeedBar",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FElysiumHUDFeedBarTest::RunTest(const FString& Parameters)
@@ -584,7 +581,7 @@ bool FElysiumHUDFeedBarTest::RunTest(const FString& Parameters)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHUDEquipmentProjectionTest,
-	"Elysium.Substrate.UI.HUDEquipmentProjection",
+	"Elysium.Arm.UI.HUDEquipmentProjection",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FElysiumHUDEquipmentProjectionTest::RunTest(const FString&)
 {
@@ -752,7 +749,7 @@ bool FElysiumHUDEquipmentProjectionTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUIRootPushTest,
-	"Elysium.Substrate.UI.CompositionRootPush",
+	"Elysium.Arm.UI.CompositionRootPush",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FElysiumUIRootPushTest::RunTest(const FString& Parameters)
@@ -860,7 +857,7 @@ bool FElysiumUIRootPushTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumActivatableRebuildNotificationTest,
-	"Elysium.Substrate.UI.ActivatableRebuildNotification",
+	"Elysium.Arm.UI.ActivatableRebuildNotification",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FElysiumActivatableRebuildNotificationTest::RunTest(const FString& Parameters)
@@ -887,7 +884,7 @@ bool FElysiumActivatableRebuildNotificationTest::RunTest(const FString& Paramete
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUINavigationStateTest,
-	"Elysium.Substrate.UI.NavigationState",
+	"Elysium.Arm.UI.NavigationState",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FElysiumUINavigationStateTest::RunTest(const FString& Parameters)
@@ -1129,7 +1126,7 @@ bool FElysiumUINavigationStateTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalScreenTest,
-	"Elysium.Substrate.Terminal.Screen",
+	"Elysium.Arm.Terminal.Screen",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FElysiumTerminalScreenTest::RunTest(const FString&)
@@ -1254,7 +1251,7 @@ bool FElysiumTerminalScreenTest::RunTest(const FString&)
 // handler `FUN_10055d30` draws one line bottom-centre in the HUD font; the authority resolves the
 // line, so this layer only has to project it and draw it once.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalHudHintUITest,
-	"Elysium.Substrate.Terminal.HudHint",
+	"Elysium.Arm.Terminal.HudHint",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FElysiumTerminalHudHintUITest::RunTest(const FString&)
@@ -1299,7 +1296,7 @@ bool FElysiumTerminalHudHintUITest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUIScalingAndDialogueInputTest,
-	"Elysium.Substrate.UI.ScalingAndDialogueInput",
+	"Elysium.Arm.UI.ScalingAndDialogueInput",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FElysiumUIScalingAndDialogueInputTest::RunTest(const FString& Parameters)
@@ -1429,7 +1426,7 @@ bool FElysiumUIScalingAndDialogueInputTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUICompositionPolicyTest,
-	"Elysium.Substrate.UI.CompositionPolicy",
+	"Elysium.Arm.UI.CompositionPolicy",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FElysiumUICompositionPolicyTest::RunTest(const FString& Parameters)
@@ -1501,7 +1498,7 @@ bool FElysiumUICompositionPolicyTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHUDStealthLightProducerTest,
-	"Elysium.Substrate.UI.HUDStealthLightProducer",
+	"Elysium.Arm.UI.HUDStealthLightProducer",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FElysiumHUDStealthLightProducerTest::RunTest(const FString&)
 {

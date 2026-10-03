@@ -173,7 +173,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMaterialProvenanceApplyJsonTest,
-	"Elysium.Substrate.MaterialProvenance.ApplyJson", GElysiumMaterialProvenanceTestFlags)
+	"Elysium.Arm.MaterialProvenance.ApplyJson", GElysiumMaterialProvenanceTestFlags)
 bool FElysiumMaterialProvenanceApplyJsonTest::RunTest(const FString&)
 {
 	UMaterialInstanceConstant* Instance = NewInstance();
@@ -298,7 +298,7 @@ bool FElysiumMaterialProvenanceApplyJsonTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMaterialProvenancePatchedUnitTest,
-	"Elysium.Substrate.MaterialProvenance.PatchedUnit", GElysiumMaterialProvenanceTestFlags)
+	"Elysium.Arm.MaterialProvenance.PatchedUnit", GElysiumMaterialProvenanceTestFlags)
 bool FElysiumMaterialProvenancePatchedUnitTest::RunTest(const FString&)
 {
 	// Review finding 9: a second fixture, from a real patched (instance-of-instance) unit, so
@@ -340,7 +340,7 @@ bool FElysiumMaterialProvenancePatchedUnitTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMaterialProvenanceReapplyReplacesTest,
-	"Elysium.Substrate.MaterialProvenance.ReapplyReplaces", GElysiumMaterialProvenanceTestFlags)
+	"Elysium.Arm.MaterialProvenance.ReapplyReplaces", GElysiumMaterialProvenanceTestFlags)
 bool FElysiumMaterialProvenanceReapplyReplacesTest::RunTest(const FString&)
 {
 	UMaterialInstanceConstant* Instance = NewInstance();
@@ -383,7 +383,7 @@ bool FElysiumMaterialProvenanceReapplyReplacesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMaterialProvenanceRejectsNonObjectTest,
-	"Elysium.Substrate.MaterialProvenance.RejectsNonObject", GElysiumMaterialProvenanceTestFlags)
+	"Elysium.Arm.MaterialProvenance.RejectsNonObject", GElysiumMaterialProvenanceTestFlags)
 bool FElysiumMaterialProvenanceRejectsNonObjectTest::RunTest(const FString&)
 {
 	UMaterialInstanceConstant* Instance = NewInstance();
@@ -408,7 +408,7 @@ bool FElysiumMaterialProvenanceRejectsNonObjectTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMaterialProvenanceRegistryTagsTest,
-	"Elysium.Substrate.MaterialProvenance.RegistryTags", GElysiumMaterialProvenanceTestFlags)
+	"Elysium.Arm.MaterialProvenance.RegistryTags", GElysiumMaterialProvenanceTestFlags)
 bool FElysiumMaterialProvenanceRegistryTagsTest::RunTest(const FString&)
 {
 	// A throwaway package: the stamp writes package metadata, and the transient package outlives
@@ -457,7 +457,7 @@ bool FElysiumMaterialProvenanceRegistryTagsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMaterialProvenanceSidecarKeysAreCoveredTest,
-	"Elysium.Substrate.MaterialProvenance.SidecarKeysAreCovered", GElysiumMaterialProvenanceTestFlags)
+	"Elysium.Arm.MaterialProvenance.SidecarKeysAreCovered", GElysiumMaterialProvenanceTestFlags)
 bool FElysiumMaterialProvenanceSidecarKeysAreCoveredTest::RunTest(const FString&)
 {
 	// C2: every top-level key GSidecar carries must be one `FromJson` actually reads (a key

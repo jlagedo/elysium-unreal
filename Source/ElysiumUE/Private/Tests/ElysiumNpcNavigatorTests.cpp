@@ -51,7 +51,7 @@ namespace
 // --- The getters' no-goal answers ------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavigatorNoGoalTest,
-	"Elysium.Substrate.Navigator.Getters.NoGoal", GNavigatorTestFlags)
+	"Elysium.Arm.Navigator.Getters.NoGoal", GNavigatorTestFlags)
 bool FElysiumNavigatorNoGoalTest::RunTest(const FString&)
 {
 	// The object alone: the path constructor's values (`0x1030bec0`).
@@ -94,7 +94,7 @@ bool FElysiumNavigatorNoGoalTest::RunTest(const FString&)
 // --- SetGoal ---------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavigatorSetGoalTest,
-	"Elysium.Substrate.Navigator.SetGoal.WritesTheWords", GNavigatorTestFlags)
+	"Elysium.Arm.Navigator.SetGoal.WritesTheWords", GNavigatorTestFlags)
 bool FElysiumNavigatorSetGoalTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(NavigatorWorld(TEXT("navigator_setgoal"), 18502),
@@ -160,7 +160,7 @@ bool FElysiumNavigatorSetGoalTest::RunTest(const FString&)
 // --- The reset -------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavigatorResetTest,
-	"Elysium.Substrate.Navigator.Reset.Values", GNavigatorTestFlags)
+	"Elysium.Arm.Navigator.Reset.Values", GNavigatorTestFlags)
 bool FElysiumNavigatorResetTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(NavigatorWorld(TEXT("navigator_reset"), 18503),
@@ -238,7 +238,7 @@ bool FElysiumNavigatorResetTest::RunTest(const FString&)
 // --- The deferred-route window, nav+0x44 == 0 ------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavigatorRetryWindowTest,
-	"Elysium.Substrate.Navigator.RetryWindow.NoIntervalRetriesEveryThink", GNavigatorTestFlags)
+	"Elysium.Arm.Navigator.RetryWindow.NoIntervalRetriesEveryThink", GNavigatorTestFlags)
 bool FElysiumNavigatorRetryWindowTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(NavigatorWorld(TEXT("navigator_retry"), 18504),
@@ -291,7 +291,7 @@ bool FElysiumNavigatorRetryWindowTest::RunTest(const FString&)
 // --- The pedestrian byte and the per-request multiplier --------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavigatorPedestrianTest,
-	"Elysium.Substrate.Navigator.Pedestrian.ByteAndMultiplier", GNavigatorTestFlags)
+	"Elysium.Arm.Navigator.Pedestrian.ByteAndMultiplier", GNavigatorTestFlags)
 bool FElysiumNavigatorPedestrianTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(NavigatorWorld(TEXT("navigator_pedestrian"), 18505),

@@ -187,13 +187,13 @@ namespace
 	}
 }
 
-// --- Elysium.Substrate.Footsteps.NpcNormal -----------------------------------------------------
+// --- Elysium.Arm.Footsteps.NpcNormal -----------------------------------------------------
 //
 // 2050 on a body whose motor publishes `concrete`, with the shipped template: one `PlayBodySound`
 // out of concrete's pools, volume 0.45, level 58, channel 4.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcFootstepNormalTest,
-	"Elysium.Substrate.Footsteps.NpcNormal", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.NpcNormal", GElysiumTestFlags)
 bool FElysiumNpcFootstepNormalTest::RunTest(const FString&)
 {
 	FStepWorld Fixture;
@@ -258,10 +258,10 @@ bool FElysiumNpcFootstepNormalTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.NpcHeavy ------------------------------------------------------
+// --- Elysium.Arm.Footsteps.NpcHeavy ------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcFootstepHeavyTest,
-	"Elysium.Substrate.Footsteps.NpcHeavy", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.NpcHeavy", GElysiumTestFlags)
 bool FElysiumNpcFootstepHeavyTest::RunTest(const FString&)
 {
 	FStepWorld Fixture;
@@ -293,13 +293,13 @@ bool FElysiumNpcFootstepHeavyTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.NpcCvarPath ---------------------------------------------------
+// --- Elysium.Arm.Footsteps.NpcCvarPath ---------------------------------------------------
 //
 // `footstep_npc_use_templates 0` (`0x109203f8`): the template is never consulted and the four cvars
 // are. The shipped defaults are 0.5/256 and 0.85/512, which are levels 57 and 63.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcFootstepCvarPathTest,
-	"Elysium.Substrate.Footsteps.NpcCvarPath", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.NpcCvarPath", GElysiumTestFlags)
 bool FElysiumNpcFootstepCvarPathTest::RunTest(const FString&)
 {
 	// The pure rule first, both sources, so the entity case below is only about the wiring.
@@ -374,13 +374,13 @@ bool FElysiumNpcFootstepCvarPathTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.NpcMuted ------------------------------------------------------
+// --- Elysium.Arm.Footsteps.NpcMuted ------------------------------------------------------
 //
 // `1026d467`: the three predicates on the LOCAL PLAYER. The gate is global — while one of them
 // holds, NO NPC in the level makes a footfall — and the id is still claimed.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcFootstepMutedTest,
-	"Elysium.Substrate.Footsteps.NpcMuted", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.NpcMuted", GElysiumTestFlags)
 bool FElysiumNpcFootstepMutedTest::RunTest(const FString&)
 {
 	FStepWorld Fixture;
@@ -467,13 +467,13 @@ bool FElysiumNpcFootstepMutedTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.NpcNoSurface --------------------------------------------------
+// --- Elysium.Arm.Footsteps.NpcNoSurface --------------------------------------------------
 //
 // `1026d597`: `if (!this->m_pSurfaceData /* +0x5b90 */) return;`. A body that has never travelled
 // has no cached surface, and its footfall is silent rather than defaulted.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcFootstepNoSurfaceTest,
-	"Elysium.Substrate.Footsteps.NpcNoSurface", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.NpcNoSurface", GElysiumTestFlags)
 bool FElysiumNpcFootstepNoSurfaceTest::RunTest(const FString&)
 {
 	FStepWorld Fixture;
@@ -509,13 +509,13 @@ bool FElysiumNpcFootstepNoSurfaceTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.NpcNoPool -----------------------------------------------------
+// --- Elysium.Arm.Footsteps.NpcNoPool -----------------------------------------------------
 //
 // A surface that RESOLVES and carries no step key anywhere in its chain, and a surface the table
 // does not carry at all. Both are `1026d666`'s empty-name return.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcFootstepNoPoolTest,
-	"Elysium.Substrate.Footsteps.NpcNoPool", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.NpcNoPool", GElysiumTestFlags)
 bool FElysiumNpcFootstepNoPoolTest::RunTest(const FString&)
 {
 	FStepWorld Fixture;
@@ -568,13 +568,13 @@ bool FElysiumNpcFootstepNoPoolTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.CoinFlip ------------------------------------------------------
+// --- Elysium.Arm.Footsteps.CoinFlip ------------------------------------------------------
 //
 // `1026d626`: `RandomInt(0,1)` — non-zero takes `stepleft`, zero takes `stepright`. The foot the
 // event named is thrown away. Pinned stream, so the sequence is a value and not a distribution.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcFootstepCoinFlipTest,
-	"Elysium.Substrate.Footsteps.CoinFlip", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.CoinFlip", GElysiumTestFlags)
 bool FElysiumNpcFootstepCoinFlipTest::RunTest(const FString&)
 {
 	const FElysiumSurfaceSounds Concrete = ConcreteRow();
@@ -633,12 +633,12 @@ bool FElysiumNpcFootstepCoinFlipTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.SpeciesPolicy -------------------------------------------------
+// --- Elysium.Arm.Footsteps.SpeciesPolicy -------------------------------------------------
 //
 // `docs/vtmb/footsteps.md` §1.7: the overrides that replace `0x1026d460` outright.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcFootstepSpeciesTest,
-	"Elysium.Substrate.Footsteps.SpeciesPolicy", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.SpeciesPolicy", GElysiumTestFlags)
 bool FElysiumNpcFootstepSpeciesTest::RunTest(const FString&)
 {
 	// --- The table, as data -------------------------------------------------------------------

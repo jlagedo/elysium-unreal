@@ -8,7 +8,7 @@
 //   * `PlayerVolumes`         — the `gamematerial` pairs, the duck scale, `footstep_pc_vol`, clamp.
 //   * `PlayerLanding`         — `CheckFalling 0x10125db0`'s volume ladder, the floating reduction
 //                               and the clock reset that double-steps.
-//   * `PlayerWater`           — the water and wade arms, moved here from `Elysium.Substrate.Water`
+//   * `PlayerWater`           — the water and wade arms, moved here from `Elysium.Arm.Water`
 //                               when the clock left `AElysiumMapActor`.
 //   * `PlayerHearing`         — `UpdatePlayerSound 0x1016b480`: the six categories, their radii and
 //                               the 250 units/s decay, plus the producer wired to a world.
@@ -152,10 +152,10 @@ namespace
 	};
 }
 
-// --- Elysium.Substrate.Footsteps.PlayerClock ----------------------------------------------------
+// --- Elysium.Arm.Footsteps.PlayerClock ----------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerStepClockTest,
-	"Elysium.Substrate.Footsteps.PlayerClock", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.PlayerClock", GElysiumTestFlags)
 bool FElysiumPlayerStepClockTest::RunTest(const FString&)
 {
 	FStepClockOut Out;
@@ -311,10 +311,10 @@ bool FElysiumPlayerStepClockTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.PlayerVolumes --------------------------------------------------
+// --- Elysium.Arm.Footsteps.PlayerVolumes --------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerStepVolumeTest,
-	"Elysium.Substrate.Footsteps.PlayerVolumes", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.PlayerVolumes", GElysiumTestFlags)
 bool FElysiumPlayerStepVolumeTest::RunTest(const FString&)
 {
 	const float Pc = 0.5f;   // `footstep_pc_vol`'s retail default
@@ -390,10 +390,10 @@ bool FElysiumPlayerStepVolumeTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.PlayerLanding --------------------------------------------------
+// --- Elysium.Arm.Footsteps.PlayerLanding --------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerLandingTest,
-	"Elysium.Substrate.Footsteps.PlayerLanding", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.PlayerLanding", GElysiumTestFlags)
 bool FElysiumPlayerLandingTest::RunTest(const FString&)
 {
 	// --- The safe-fall speed `CheckFalling` recomputes every call (`0x10125e04`) ----------------
@@ -514,15 +514,15 @@ bool FElysiumPlayerLandingTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.PlayerWater ----------------------------------------------------
-// The assertions that used to live in `Elysium.Substrate.Water`, against the substrate clock the
+// --- Elysium.Arm.Footsteps.PlayerWater ----------------------------------------------------
+// The assertions that used to live in `Elysium.Arm.Water`, against the substrate clock the
 // water and wade arms moved into. **Two numbers changed with the move and both are recoveries**:
 // the term added to the interval is `flduck` (100) and not `velwalk` (60) — the decompiled C at
 // `0x1011ec9c` mislabels the stack slot — and the water band's 60 u/s minimum gates nothing,
 // because the arm that reads it is dead.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerWaterStepTest,
-	"Elysium.Substrate.Footsteps.PlayerWater", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.PlayerWater", GElysiumTestFlags)
 bool FElysiumPlayerWaterStepTest::RunTest(const FString&)
 {
 	FStepClockOut Out;
@@ -795,10 +795,10 @@ bool FElysiumPlayerHearingTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.PlayerSwallows -------------------------------------------------
+// --- Elysium.Arm.Footsteps.PlayerSwallows -------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerSwallowsTest,
-	"Elysium.Substrate.Footsteps.PlayerSwallows", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.PlayerSwallows", GElysiumTestFlags)
 bool FElysiumPlayerSwallowsTest::RunTest(const FString&)
 {
 	TestFalse(TEXT("2049 is not a footfall"), PlayerSwallows(2049));
@@ -836,10 +836,10 @@ bool FElysiumPlayerSwallowsTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.Footsteps.PlayerServerFootstepsOff ---------------------------------------
+// --- Elysium.Arm.Footsteps.PlayerServerFootstepsOff ---------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerServerFootstepsOffTest,
-	"Elysium.Substrate.Footsteps.PlayerServerFootstepsOff", GElysiumTestFlags)
+	"Elysium.Arm.Footsteps.PlayerServerFootstepsOff", GElysiumTestFlags)
 bool FElysiumPlayerServerFootstepsOffTest::RunTest(const FString&)
 {
 	// `sv_footsteps` (`0x109ef090`) gates `UpdateStepSound` UNCONDITIONALLY — the top of the

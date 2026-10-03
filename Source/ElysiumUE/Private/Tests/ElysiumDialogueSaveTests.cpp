@@ -104,7 +104,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSaveRefusedInDialogueTest,
-	"Elysium.Session.SaveRefusedInDialogue", GSaveTestFlags)
+	"Elysium.Arm.Session.SaveRefusedInDialogue", GSaveTestFlags)
 bool FElysiumSaveRefusedInDialogueTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;

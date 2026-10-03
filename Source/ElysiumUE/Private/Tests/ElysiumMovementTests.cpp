@@ -411,7 +411,7 @@ bool FElysiumMovementTest::RunTest(const FString&)
 // moves with the geometry and could never fail; the behaviour is the headless run's to record.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGymSpecTest, "Elysium.Substrate.GymSpec", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGymSpecTest, "Elysium.Arm.GymSpec", GElysiumTestFlags)
 bool FElysiumGymSpecTest::RunTest(const FString&)
 {
 	using namespace ElysiumMove;
@@ -669,7 +669,7 @@ bool FElysiumGymSpecTest::RunTest(const FString&)
 // `ElysiumMove` turns exactly the bracket that constant owns red", asserted on the geometry with
 // no world — the headless run then confirms it on behaviour.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGymSpecOwnershipTest,
-	"Elysium.Substrate.GymSpecOwnership", GElysiumTestFlags)
+	"Elysium.Arm.GymSpecOwnership", GElysiumTestFlags)
 bool FElysiumGymSpecOwnershipTest::RunTest(const FString&)
 {
 	const FElysiumMoveTuning Base;
@@ -715,7 +715,7 @@ bool FElysiumGymSpecOwnershipTest::RunTest(const FString&)
 // The one place the spec's feet-anchored convention meets the pawn's centre-anchored box. This is
 // the "stands **on** the gym rather than above it" acceptance in the form that can be asserted:
 // the hull's own underside, not its origin, is what has to land on the floor.
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGymSeatTest, "Elysium.Substrate.GymSeat", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGymSeatTest, "Elysium.Arm.GymSeat", GElysiumTestFlags)
 bool FElysiumGymSeatTest::RunTest(const FString&)
 {
 	// The pawn's constructed hull, read off the CDO rather than restated — a half-height typed
@@ -769,7 +769,7 @@ bool FElysiumGymSeatTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerViewTransformTest,
-	"Elysium.Substrate.PlayerViewTransform", GElysiumTestFlags)
+	"Elysium.Arm.PlayerViewTransform", GElysiumTestFlags)
 bool FElysiumPlayerViewTransformTest::RunTest(const FString&)
 {
 	for (const FVector& SourceView : {
@@ -827,7 +827,7 @@ bool FElysiumPlayerPlacementSpaceTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPoseDeviationTest,
-	"Elysium.Substrate.PoseDeviation", GElysiumTestFlags)
+	"Elysium.Arm.PoseDeviation", GElysiumTestFlags)
 bool FElysiumPoseDeviationTest::RunTest(const FString&)
 {
 	TArray<FTransform> A;
@@ -890,7 +890,7 @@ bool FElysiumPoseDeviationTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveCoursesTest,
-	"Elysium.Substrate.MoveCourses", GElysiumTestFlags)
+	"Elysium.Arm.MoveCourses", GElysiumTestFlags)
 bool FElysiumMoveCoursesTest::RunTest(const FString&)
 {
 	using namespace ElysiumMoveCourses;
@@ -1035,7 +1035,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGaitSpeedsTest,
-	"Elysium.Substrate.GaitSpeeds", GElysiumTestFlags)
+	"Elysium.Arm.GaitSpeeds", GElysiumTestFlags)
 bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 {
 	// --- A table with nothing in it answers nothing, rather than answering zero convincingly -----
@@ -1269,7 +1269,7 @@ bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLocomotionSampleTest,
-	"Elysium.Substrate.Locomotion", GElysiumTestFlags)
+	"Elysium.Arm.Locomotion", GElysiumTestFlags)
 bool FElysiumLocomotionSampleTest::RunTest(const FString&)
 {
 	using namespace ElysiumLocomotion;
@@ -1432,7 +1432,7 @@ bool FElysiumLocomotionSampleTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLocomotionTraceTest,
-	"Elysium.Substrate.LocomotionTrace", GElysiumTestFlags)
+	"Elysium.Arm.LocomotionTrace", GElysiumTestFlags)
 bool FElysiumLocomotionTraceTest::RunTest(const FString&)
 {
 	const TArrayView<const TCHAR* const> Shared = ElysiumLocomotionTrace::Channels();
@@ -1609,7 +1609,7 @@ bool FElysiumLocomotionTraceTest::RunTest(const FString&)
 // the room, because the block IS the middle — a probe that reads as meaningful and measures
 // nothing. Adjacency is the property that actually produces cover, and it is what breaks if the
 // setback, the block or the room's size moves.
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumArenaSpecTest, "Elysium.Substrate.ArenaSpec",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumArenaSpecTest, "Elysium.Arm.ArenaSpec",
 	GElysiumTestFlags)
 bool FElysiumArenaSpecTest::RunTest(const FString&)
 {
@@ -1863,7 +1863,7 @@ bool FElysiumArenaSpecTest::RunTest(const FString&)
 //   3. a live grapple partner outranks the flag entirely and is what glues the player;
 //   4. the view-angle refusal is `+0x207c == 0 && !HasAllVFlags(8)`, the one-shot first.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerViewFlagsTest,
-	"Elysium.Substrate.PlayerViewFlags", GElysiumTestFlags)
+	"Elysium.Arm.PlayerViewFlags", GElysiumTestFlags)
 bool FElysiumPlayerViewFlagsTest::RunTest(const FString&)
 {
 	// --- 1. The immobilize button mask is `0x807`, and `IN_USE` is not in it -------------------

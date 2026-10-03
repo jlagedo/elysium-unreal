@@ -79,10 +79,19 @@ void FElysiumGreenRoomRun::DestroyArena()
 	// the level and keeps thinking, which reads as an AI bug rather than as a torn-down arena.
 	if (EntityWorld != nullptr && ArenaStanding.IsValid())
 	{
-		// The cover scenario's gunman carries an explicit name, which `ClearSpawned` deliberately
-		// does not match; the room names it (`ElysiumArena::CoverGunmanName`), so the room clears it.
-		const int32 Cleared = ElysiumArenaCast::ClearSpawned(*EntityWorld)
-			+ ElysiumArenaCast::ClearNamed(*EntityWorld, ElysiumArena::CoverGunmanName);
+		// A scenario record's cast carries whatever names the record gives it, which `ClearSpawned`
+		// deliberately does not match. A stage world has no map behind it, so every character standing
+		// in it is the arena's: the room clears them all.
+		int32 Cleared = ElysiumArenaCast::ClearSpawned(*EntityWorld);
+		for (const TUniquePtr<FElysiumEntity>& Entity : EntityWorld->Entities())
+		{
+			if (Entity && !Entity->IsDead() && Entity->AsNpc() != nullptr
+				&& Entity->Handle != EntityWorld->PlayerControllerHandle())
+			{
+				Entity->Kill();
+				++Cleared;
+			}
+		}
 		if (Cleared > 0)
 		{
 			UE_LOG(LogElysiumGreenRoom, Log,

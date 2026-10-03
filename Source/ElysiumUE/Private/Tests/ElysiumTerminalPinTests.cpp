@@ -378,7 +378,7 @@ bool FElysiumTerminalPinTest::RunTest(const FString&)
 // the body it just replaced. The sequence a rebuild must run is the one `FElysiumProp` runs:
 // unregister, destroy, build, register.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalBodyRebuildTest,
-	"Elysium.Substrate.TerminalBodyRebuild", GPinFlags)
+	"Elysium.Arm.TerminalBodyRebuild", GPinFlags)
 bool FElysiumTerminalBodyRebuildTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;
@@ -435,7 +435,7 @@ bool FElysiumTerminalBodyRebuildTest::RunTest(const FString&)
 // `CBasePlayer::OnTakeDamage` `0x10163020` and `CPointTeleport::InputTeleport` `0x1018dc00`.
 // Both reach the ONE release body, so both must leave the terminal exactly as `quit` does.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalForcedExitTest,
-	"Elysium.Substrate.TerminalForcedExit", GPinFlags)
+	"Elysium.Arm.TerminalForcedExit", GPinFlags)
 bool FElysiumTerminalForcedExitTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;

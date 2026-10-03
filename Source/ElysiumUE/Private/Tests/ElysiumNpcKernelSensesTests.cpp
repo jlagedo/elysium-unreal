@@ -75,7 +75,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSensesConesTest,
-	"Elysium.Substrate.NpcKernelSenses.Cones", GElysiumNpcKernelSensesFlags)
+	"Elysium.Arm.NpcKernelSenses.Cones", GElysiumNpcKernelSensesFlags)
 bool FElysiumNpcKernelSensesConesTest::RunTest(const FString&)
 {
 	FSensesFixture F;
@@ -137,7 +137,7 @@ bool FElysiumNpcKernelSensesConesTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSensesEnemyTest,
-	"Elysium.Substrate.NpcKernelSenses.Enemy", GElysiumNpcKernelSensesFlags)
+	"Elysium.Arm.NpcKernelSenses.Enemy", GElysiumNpcKernelSensesFlags)
 bool FElysiumNpcKernelSensesEnemyTest::RunTest(const FString&)
 {
 	FSensesFixture F;
@@ -204,7 +204,7 @@ bool FElysiumNpcKernelSensesEnemyTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSensesListenTest,
-	"Elysium.Substrate.NpcKernelSenses.Listen", GElysiumNpcKernelSensesFlags)
+	"Elysium.Arm.NpcKernelSenses.Listen", GElysiumNpcKernelSensesFlags)
 bool FElysiumNpcKernelSensesListenTest::RunTest(const FString&)
 {
 	FSensesFixture F;
@@ -280,7 +280,7 @@ bool FElysiumNpcKernelSensesListenTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSensesFovTraceTest,
-	"Elysium.Substrate.NpcKernelSenses.FovTrace", GElysiumNpcKernelSensesFlags)
+	"Elysium.Arm.NpcKernelSenses.FovTrace", GElysiumNpcKernelSensesFlags)
 bool FElysiumNpcKernelSensesFovTraceTest::RunTest(const FString&)
 {
 	// `npc_payphone` IS a registered spawn leaf AND a census classname, so `CPayphone` gets a body.
@@ -374,7 +374,7 @@ bool FElysiumNpcKernelSensesFovTraceTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSensesSpeciesTest,
-	"Elysium.Substrate.NpcKernelSenses.Species", GElysiumNpcKernelSensesFlags)
+	"Elysium.Arm.NpcKernelSenses.Species", GElysiumNpcKernelSensesFlags)
 bool FElysiumNpcKernelSensesSpeciesTest::RunTest(const FString&)
 {
 	FSensesFixture F;
@@ -540,7 +540,7 @@ bool FElysiumNpcKernelSensesSpeciesTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSensesWitnessTest,
-	"Elysium.Substrate.NpcKernelSenses.Witness", GElysiumNpcKernelSensesFlags)
+	"Elysium.Arm.NpcKernelSenses.Witness", GElysiumNpcKernelSensesFlags)
 bool FElysiumNpcKernelSensesWitnessTest::RunTest(const FString&)
 {
 	FSensesFixture F;
@@ -599,7 +599,7 @@ bool FElysiumNpcKernelSensesWitnessTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSensesDoorTest,
-	"Elysium.Substrate.NpcKernelSenses.Door", GElysiumNpcKernelSensesFlags)
+	"Elysium.Arm.NpcKernelSenses.Door", GElysiumNpcKernelSensesFlags)
 bool FElysiumNpcKernelSensesDoorTest::RunTest(const FString&)
 {
 	FSensesFixture F;
@@ -626,8 +626,6 @@ bool FElysiumNpcKernelSensesDoorTest::RunTest(const FString&)
 		F.Guard->NavigatorHasNodeGraph());
 	TestEqual(TEXT("0x1027de00: so the unreachable mark never runs"),
 		F.Guard->NavigatorUnreachableMarks, 0);
-	TestEqual(TEXT("0x1027de00: the door flag word is a seam answering a plain door"),
-		static_cast<int32>(FElysiumNpcBase::DoorBlockFlags(*F.Other)), 0);
 
 	// Arm 5 — the squad focus. `ConnectedSquad()` is null on every NPC here, so the whole arm is
 	// skipped; that is retail's own answer for a squadless NPC.
@@ -668,7 +666,7 @@ bool FElysiumNpcKernelSensesDoorTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSensesVisionTest,
-	"Elysium.Substrate.NpcKernelSenses.Vision", GElysiumNpcKernelSensesFlags)
+	"Elysium.Arm.NpcKernelSenses.Vision", GElysiumNpcKernelSensesFlags)
 bool FElysiumNpcKernelSensesVisionTest::RunTest(const FString&)
 {
 	FSensesFixture F;

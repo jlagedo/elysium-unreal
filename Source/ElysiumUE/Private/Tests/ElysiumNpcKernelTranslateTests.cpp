@@ -37,7 +37,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTranslate19TroikaTest,
-	"Elysium.Substrate.NpcKernelTranslate19.Troika", GTranslate19Flags)
+	"Elysium.Arm.NpcKernelTranslate19.Troika", GTranslate19Flags)
 bool FElysiumNpcKernelTranslate19TroikaTest::RunTest(const FString&)
 {
 	FTranslate19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -84,7 +84,7 @@ bool FElysiumNpcKernelTranslate19TroikaTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTranslate19BaseCineTest,
-	"Elysium.Substrate.NpcKernelTranslate19.BaseCine", GTranslate19Flags)
+	"Elysium.Arm.NpcKernelTranslate19.BaseCine", GTranslate19Flags)
 bool FElysiumNpcKernelTranslate19BaseCineTest::RunTest(const FString&)
 {
 	FTranslate19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -104,7 +104,7 @@ bool FElysiumNpcKernelTranslate19BaseCineTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTranslate19FrenziedTableTest,
-	"Elysium.Substrate.NpcKernelTranslate19.FrenziedTable", GTranslate19Flags)
+	"Elysium.Arm.NpcKernelTranslate19.FrenziedTable", GTranslate19Flags)
 bool FElysiumNpcKernelTranslate19FrenziedTableTest::RunTest(const FString&)
 {
 	FTranslate19Fixture F;
@@ -126,7 +126,7 @@ bool FElysiumNpcKernelTranslate19FrenziedTableTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTranslate19Frenzied87Test,
-	"Elysium.Substrate.NpcKernelTranslate19.Frenzied87", GTranslate19Flags)
+	"Elysium.Arm.NpcKernelTranslate19.Frenzied87", GTranslate19Flags)
 bool FElysiumNpcKernelTranslate19Frenzied87Test::RunTest(const FString&)
 {
 	FTranslate19Fixture F;
@@ -151,7 +151,7 @@ bool FElysiumNpcKernelTranslate19Frenzied87Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTranslate19WerewolfTest,
-	"Elysium.Substrate.NpcKernelTranslate19.Werewolf", GTranslate19Flags)
+	"Elysium.Arm.NpcKernelTranslate19.Werewolf", GTranslate19Flags)
 bool FElysiumNpcKernelTranslate19WerewolfTest::RunTest(const FString&)
 {
 	FTranslate19Fixture F(TEXT("CNPC_VWerewolf"));
@@ -171,7 +171,7 @@ bool FElysiumNpcKernelTranslate19WerewolfTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTranslate19SpeciesTest,
-	"Elysium.Substrate.NpcKernelTranslate19.Species", GTranslate19Flags)
+	"Elysium.Arm.NpcKernelTranslate19.Species", GTranslate19Flags)
 bool FElysiumNpcKernelTranslate19SpeciesTest::RunTest(const FString&)
 {
 	struct FCase { const TCHAR* Class; const TCHAR* Address; int32 From; int32 To; };

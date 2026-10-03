@@ -366,7 +366,7 @@ bool FElysiumTerminalKeysTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalDraftMirrorTest,
-	"Elysium.Substrate.Terminal.DraftMirror", GKeyFlags)
+	"Elysium.Arm.Terminal.DraftMirror", GKeyFlags)
 bool FElysiumTerminalDraftMirrorTest::RunTest(const FString&)
 {
 	using namespace ElysiumTerminalCells;
@@ -467,7 +467,7 @@ bool FElysiumTerminalDraftMirrorTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalIntentsTest,
-	"Elysium.Substrate.Terminal.Intents", GKeyFlags)
+	"Elysium.Arm.Terminal.Intents", GKeyFlags)
 bool FElysiumTerminalIntentsTest::RunTest(const FString&)
 {
 	ICommonInputModule::GetSettings().LoadData();

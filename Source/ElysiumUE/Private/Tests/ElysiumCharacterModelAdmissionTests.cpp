@@ -28,7 +28,7 @@ bool FElysiumCharacterAdmissionTicketsTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCharacterAdmissionRetirementTest, "Elysium.Substrate.CharacterModelAdmission.Retirement",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCharacterAdmissionRetirementTest, "Elysium.Arm.CharacterModelAdmission.Retirement",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumCharacterAdmissionRetirementTest::RunTest(const FString&)
 {
@@ -59,7 +59,7 @@ bool FElysiumCharacterAdmissionRetirementTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNativeAdmissionCancelTest, "Elysium.Substrate.CharacterModelAdmission.NativeCancellation",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNativeAdmissionCancelTest, "Elysium.Arm.CharacterModelAdmission.NativeCancellation",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumNativeAdmissionCancelTest::RunTest(const FString&)
 {

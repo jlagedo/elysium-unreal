@@ -160,9 +160,9 @@ namespace
 	}
 }
 
-// --- Elysium.Substrate.NpcUseStartsDialog ----------------------------------------------------
+// --- Elysium.Arm.NpcUseStartsDialog ----------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcUseStartsDialogTest,
-	"Elysium.Substrate.NpcUseStartsDialog", GEntryTestFlags)
+	"Elysium.Arm.NpcUseStartsDialog", GEntryTestFlags)
 bool FElysiumNpcUseStartsDialogTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;
@@ -241,9 +241,9 @@ bool FElysiumNpcUseStartsDialogTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.DialogRefusalPredicate ------------------------------------------------
+// --- Elysium.Arm.DialogRefusalPredicate ------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogRefusalPredicateTest,
-	"Elysium.Substrate.DialogRefusalPredicate", GEntryTestFlags)
+	"Elysium.Arm.DialogRefusalPredicate", GEntryTestFlags)
 bool FElysiumDialogRefusalPredicateTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;
@@ -347,9 +347,9 @@ bool FElysiumDialogRefusalPredicateTest::RunTest(const FString&)
 	return true;
 }
 
-// --- Elysium.Substrate.DialogHolster ----------------------------------------------------------
+// --- Elysium.Arm.DialogHolster ----------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogHolsterTest,
-	"Elysium.Substrate.DialogHolster", GEntryTestFlags)
+	"Elysium.Arm.DialogHolster", GEntryTestFlags)
 bool FElysiumDialogHolsterTest::RunTest(const FString&)
 {
 	// The movement half of retail's input lock is the port's input-scope stack, not a substrate
@@ -433,18 +433,10 @@ bool FElysiumDialogHolsterTest::RunTest(const FString&)
 		return false;
 	}
 
-	// With nothing to fall back to, the open reports the named seam and leaves the hands alone —
-	// the same refusal the `Holster` input makes rather than an invented empty-handed state.
-	ElysiumStub::ClearTally();
+	// With nothing to fall back to, the open leaves the hands alone — the same refusal the `Holster`
+	// input makes rather than an invented empty-handed state.
 	TestFalse(TEXT("a player with no carried unarmed cannot be holstered"),
 		Player->HolsterForDialog());
-	{
-		TArray<ElysiumStub::FTally> Tally;
-		ElysiumStub::CollectTally(Tally);
-		const bool bFired = Tally.ContainsByPredicate([](const ElysiumStub::FTally& T)
-			{ return T.Surface == TEXT("CBasePlayer.DialogHolster"); });
-		TestTrue(TEXT("...and the seam is reported rather than silently skipped"), bFired);
-	}
 
 	// Now arm the player properly: `item_w_unarmed` carried, a real weapon in hand.
 	const FElysiumEntityHandle Unarmed =

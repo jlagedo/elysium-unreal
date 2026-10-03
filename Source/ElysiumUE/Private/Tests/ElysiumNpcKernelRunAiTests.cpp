@@ -141,7 +141,7 @@ bool FElysiumNpcKernelRunAi19BaseRunAiFullPassTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19BaseRunAiReducedTest,
-	"Elysium.Substrate.NpcKernelRunAi19.BaseRunAI.Reduced", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.BaseRunAI.Reduced", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19BaseRunAiReducedTest::RunTest(const FString&)
 {
 	// 0x1026f1ea: a reduced pass skips the gather; 0x1026f30b: and the three clears. m_bRanAI is
@@ -170,7 +170,7 @@ bool FElysiumNpcKernelRunAi19BaseRunAiReducedTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19BaseRunAiDialogPartnerTest,
-	"Elysium.Substrate.NpcKernelRunAi19.BaseRunAI.DialogPartner", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.BaseRunAI.DialogPartner", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19BaseRunAiDialogPartnerTest::RunTest(const FString&)
 {
 	// 0x1026f1f9..0x1026f219: a live m_hDialogPartner skips the gather on a full pass; the end-of-pass
@@ -197,7 +197,7 @@ bool FElysiumNpcKernelRunAi19BaseRunAiDialogPartnerTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19BaseRunAiOverlayTest,
-	"Elysium.Substrate.NpcKernelRunAi19.BaseRunAI.Overlay", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.BaseRunAI.Overlay", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19BaseRunAiOverlayTest::RunTest(const FString&)
 {
 	// 0x1026f1be..0x1026f1e1: the overlay needs developer != 0 AND m_pNavigator->m_bNotOnNetwork.
@@ -226,7 +226,7 @@ bool FElysiumNpcKernelRunAi19BaseRunAiOverlayTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19TroikaRunAiTest,
-	"Elysium.Substrate.NpcKernelRunAi19.TroikaRunAI", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.TroikaRunAI", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19TroikaRunAiTest::RunTest(const FString&)
 {
 	// 0x1028fcc0: 0x1028fc90 (the stealth reset), UpdatePedestrianInfo, then the base pass with the
@@ -264,7 +264,7 @@ bool FElysiumNpcKernelRunAi19TroikaRunAiTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19RunAlternateAiGrappleTest,
-	"Elysium.Substrate.NpcKernelRunAi19.RunAlternateAI.Grapple", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.RunAlternateAI.Grapple", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19RunAlternateAiGrappleTest::RunTest(const FString&)
 {
 	// 0x1028fdf2..0x1028fe52: a live partner with role 1 answers TRUE whether or not the ideal
@@ -300,7 +300,7 @@ bool FElysiumNpcKernelRunAi19RunAlternateAiGrappleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19RunAlternateAiModesTest,
-	"Elysium.Substrate.NpcKernelRunAi19.RunAlternateAI.Modes", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.RunAlternateAI.Modes", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19RunAlternateAiModesTest::RunTest(const FString&)
 {
 	// 0x1028fe57..0x1028fecc: m_eAlternateAI 1..4 dispatch to their arms, 0 and > 4 answer false.
@@ -355,7 +355,7 @@ bool FElysiumNpcKernelRunAi19RunAlternateAiModesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19RunAlternateAiMode2Test,
-	"Elysium.Substrate.NpcKernelRunAi19.RunAlternateAI.Mode2", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.RunAlternateAI.Mode2", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19RunAlternateAiMode2Test::RunTest(const FString&)
 {
 	// 0x10290200, reached through 0x1028fe84.
@@ -436,7 +436,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19AndreiBloodTest,
-	"Elysium.Substrate.NpcKernelRunAi19.AndreiBlood", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.AndreiBlood", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19AndreiBloodTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VAndreiBlood"));
@@ -474,7 +474,7 @@ bool FElysiumNpcKernelRunAi19AndreiBloodTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19AsianVampireTest,
-	"Elysium.Substrate.NpcKernelRunAi19.AsianVampire", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.AsianVampire", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19AsianVampireTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VAsianVampire"));
@@ -501,7 +501,7 @@ bool FElysiumNpcKernelRunAi19AsianVampireTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19BachTest,
-	"Elysium.Substrate.NpcKernelRunAi19.Bach", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.Bach", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19BachTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VBach"));
@@ -556,7 +556,7 @@ bool FElysiumNpcKernelRunAi19BachTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19DogTest,
-	"Elysium.Substrate.NpcKernelRunAi19.Dog", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.Dog", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19DogTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VDog"));
@@ -621,7 +621,7 @@ bool FElysiumNpcKernelRunAi19DogTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19GargoyleTest,
-	"Elysium.Substrate.NpcKernelRunAi19.Gargoyle", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.Gargoyle", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19GargoyleTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VGargoyle"));
@@ -669,7 +669,7 @@ bool FElysiumNpcKernelRunAi19GargoyleTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19HengeyokaiTest,
-	"Elysium.Substrate.NpcKernelRunAi19.Hengeyokai", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.Hengeyokai", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19HengeyokaiTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VHengeyokai"));
@@ -715,7 +715,7 @@ bool FElysiumNpcKernelRunAi19HengeyokaiTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19ManBatTest,
-	"Elysium.Substrate.NpcKernelRunAi19.ManBat", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.ManBat", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19ManBatTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VManBat"));
@@ -746,7 +746,7 @@ bool FElysiumNpcKernelRunAi19ManBatTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19MingXiaoTentacleTest,
-	"Elysium.Substrate.NpcKernelRunAi19.MingXiaoTentacle", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.MingXiaoTentacle", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19MingXiaoTentacleTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VMingXiaoTentacle"));
@@ -803,7 +803,7 @@ bool FElysiumNpcKernelRunAi19MingXiaoTentacleTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19PedestrianTest,
-	"Elysium.Substrate.NpcKernelRunAi19.Pedestrian", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.Pedestrian", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19PedestrianTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VPedestrian"));
@@ -844,7 +844,7 @@ bool FElysiumNpcKernelRunAi19PedestrianTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19SabbatLeaderTest,
-	"Elysium.Substrate.NpcKernelRunAi19.SabbatLeader", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.SabbatLeader", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19SabbatLeaderTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VSabbatLeader"));
@@ -871,7 +871,7 @@ bool FElysiumNpcKernelRunAi19SabbatLeaderTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19SheriffManTest,
-	"Elysium.Substrate.NpcKernelRunAi19.SheriffMan", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.SheriffMan", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19SheriffManTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VSheriffMan"));
@@ -901,7 +901,7 @@ bool FElysiumNpcKernelRunAi19SheriffManTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19TzimisceTest,
-	"Elysium.Substrate.NpcKernelRunAi19.Tzimisce", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.Tzimisce", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19TzimisceTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VTzimisce"));
@@ -945,7 +945,7 @@ bool FElysiumNpcKernelRunAi19TzimisceTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19TzimisceHeadClawTest,
-	"Elysium.Substrate.NpcKernelRunAi19.TzimisceHeadClaw", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.TzimisceHeadClaw", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19TzimisceHeadClawTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VTzimisceHeadClaw"));
@@ -976,7 +976,7 @@ bool FElysiumNpcKernelRunAi19TzimisceHeadClawTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19ZombieDespawnTest,
-	"Elysium.Substrate.NpcKernelRunAi19.Zombie.Despawn", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.Zombie.Despawn", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19ZombieDespawnTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VZombie"));
@@ -1012,7 +1012,7 @@ bool FElysiumNpcKernelRunAi19ZombieDespawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunAi19ZombieGrappleTest,
-	"Elysium.Substrate.NpcKernelRunAi19.Zombie.Grapple", GRunAi19Flags)
+	"Elysium.Arm.NpcKernelRunAi19.Zombie.Grapple", GRunAi19Flags)
 bool FElysiumNpcKernelRunAi19ZombieGrappleTest::RunTest(const FString&)
 {
 	FRunAi19Fixture F(TEXT("CNPC_VZombie"));

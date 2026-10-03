@@ -15,7 +15,7 @@
 #include "UObject/Package.h"
 #endif
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldLightMathTest, "Elysium.Substrate.Stealth.WorldLightMath",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldLightMathTest, "Elysium.Arm.Stealth.WorldLightMath",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumWorldLightMathTest::RunTest(const FString&)
 {
@@ -68,7 +68,7 @@ bool FElysiumWorldLightMathTest::RunTest(const FString&)
 }
 
 #if WITH_EDITOR
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightQueryPayloadTest, "Elysium.Substrate.Stealth.LightQueryPayload",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightQueryPayloadTest, "Elysium.Arm.Stealth.LightQueryPayload",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumLightQueryPayloadTest::RunTest(const FString&)
 {
@@ -88,7 +88,7 @@ bool FElysiumLightQueryPayloadTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightQueryNativeTraceTest, "Elysium.PlayerWorld.StealthLightQuery",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightQueryNativeTraceTest, "Elysium.Content.PlayerWorld.StealthLightQuery",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumLightQueryNativeTraceTest::RunTest(const FString&)
 {
@@ -203,7 +203,7 @@ bool FElysiumLightQueryBakedTutorialTest::RunTest(const FString&)
 }
 #endif
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldLightQueryTest, "Elysium.Substrate.Stealth.WorldLightQuery",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldLightQueryTest, "Elysium.Arm.Stealth.WorldLightQuery",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumWorldLightQueryTest::RunTest(const FString&)
 {

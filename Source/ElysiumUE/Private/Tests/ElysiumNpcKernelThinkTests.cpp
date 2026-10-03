@@ -142,7 +142,7 @@ namespace
 // --- 0x10292de0 CAI_BaseNPCTroika::NPCThink ------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19TroikaDisableTest,
-	"Elysium.Substrate.NpcKernelThink19.TroikaNPCThink.FlagsThenDisable", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.TroikaNPCThink.FlagsThenDisable", GThink19TestFlags)
 bool FElysiumNpcKernelThink19TroikaDisableTest::RunTest(const FString&)
 {
 	FThink19Fixture F;
@@ -199,7 +199,7 @@ bool FElysiumNpcKernelThink19TroikaFullPassTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19TroikaNotDueTest,
-	"Elysium.Substrate.NpcKernelThink19.TroikaNPCThink.NormalNotDue", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.TroikaNPCThink.NormalNotDue", GThink19TestFlags)
 bool FElysiumNpcKernelThink19TroikaNotDueTest::RunTest(const FString&)
 {
 	FThink19Fixture F;
@@ -225,7 +225,7 @@ bool FElysiumNpcKernelThink19TroikaNotDueTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19TroikaGateRefusedTest,
-	"Elysium.Substrate.NpcKernelThink19.TroikaNPCThink.GateRefused", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.TroikaNPCThink.GateRefused", GThink19TestFlags)
 bool FElysiumNpcKernelThink19TroikaGateRefusedTest::RunTest(const FString&)
 {
 	FThink19Fixture F;
@@ -251,7 +251,7 @@ bool FElysiumNpcKernelThink19TroikaGateRefusedTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19EnemyTripleTest,
-	"Elysium.Substrate.NpcKernelThink19.TroikaNPCThink.EnemyTriple", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.TroikaNPCThink.EnemyTriple", GThink19TestFlags)
 bool FElysiumNpcKernelThink19EnemyTripleTest::RunTest(const FString&)
 {
 	FThink19Fixture F;
@@ -293,7 +293,7 @@ bool FElysiumNpcKernelThink19EnemyTripleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19HintUpkeepTest,
-	"Elysium.Substrate.NpcKernelThink19.TroikaNPCThink.HintUpkeep", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.TroikaNPCThink.HintUpkeep", GThink19TestFlags)
 bool FElysiumNpcKernelThink19HintUpkeepTest::RunTest(const FString&)
 {
 	FThink19Fixture F(nullptr, true);
@@ -349,7 +349,7 @@ bool FElysiumNpcKernelThink19HintUpkeepTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19ShootAtHintTest,
-	"Elysium.Substrate.NpcKernelThink19.TroikaNPCThink.ShootAtHint", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.TroikaNPCThink.ShootAtHint", GThink19TestFlags)
 bool FElysiumNpcKernelThink19ShootAtHintTest::RunTest(const FString&)
 {
 	FThink19Fixture F(nullptr, true);
@@ -378,7 +378,7 @@ bool FElysiumNpcKernelThink19ShootAtHintTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19ScreamDeathTest,
-	"Elysium.Substrate.NpcKernelThink19.TroikaNPCThink.ScreamDeath", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.TroikaNPCThink.ScreamDeath", GThink19TestFlags)
 bool FElysiumNpcKernelThink19ScreamDeathTest::RunTest(const FString&)
 {
 	FThink19Fixture F;
@@ -423,7 +423,7 @@ bool FElysiumNpcKernelThink19ScreamDeathTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19Set2Test,
-	"Elysium.Substrate.NpcKernelThink19.TroikaNPCThink.Set2AndAiBlock", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.TroikaNPCThink.Set2AndAiBlock", GThink19TestFlags)
 bool FElysiumNpcKernelThink19Set2Test::RunTest(const FString&)
 {
 	FThink19Fixture F;
@@ -456,7 +456,7 @@ bool FElysiumNpcKernelThink19Set2Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19TailTest,
-	"Elysium.Substrate.NpcKernelThink19.TroikaNPCThink.Tail", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.TroikaNPCThink.Tail", GThink19TestFlags)
 bool FElysiumNpcKernelThink19TailTest::RunTest(const FString&)
 {
 	FThink19Fixture F;
@@ -492,7 +492,7 @@ bool FElysiumNpcKernelThink19TailTest::RunTest(const FString&)
 // --- 0x10298070 CAI_BaseNPCTroika::UpdateCharacter ---------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19UpdateCharacterTest,
-	"Elysium.Substrate.NpcKernelThink19.UpdateCharacter.BossRegistry", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.UpdateCharacter.BossRegistry", GThink19TestFlags)
 bool FElysiumNpcKernelThink19UpdateCharacterTest::RunTest(const FString&)
 {
 	FThink19Fixture F;
@@ -547,7 +547,7 @@ bool FElysiumNpcKernelThink19UpdateCharacterTest::RunTest(const FString&)
 // --- 0x1026ca80 CAI_BaseNPC::NPCThink (and the gate 0x1026c3d0) ----------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19BaseThinkTest,
-	"Elysium.Substrate.NpcKernelThink19.BaseNPCThink", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.BaseNPCThink", GThink19TestFlags)
 bool FElysiumNpcKernelThink19BaseThinkTest::RunTest(const FString&)
 {
 	FThink19Fixture F;
@@ -591,7 +591,7 @@ bool FElysiumNpcKernelThink19BaseThinkTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19AiGateTest,
-	"Elysium.Substrate.NpcKernelThink19.AiConsoleGate", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.AiConsoleGate", GThink19TestFlags)
 bool FElysiumNpcKernelThink19AiGateTest::RunTest(const FString&)
 {
 	FThink19Fixture F;
@@ -620,7 +620,7 @@ bool FElysiumNpcKernelThink19AiGateTest::RunTest(const FString&)
 // --- The species bodies ----------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19BossCadenceTest,
-	"Elysium.Substrate.NpcKernelThink19.Species.BossCadence", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.Species.BossCadence", GThink19TestFlags)
 bool FElysiumNpcKernelThink19BossCadenceTest::RunTest(const FString&)
 {
 	// `0x103c6000` VampireBoss / SabbatLeader, `0x1035db20` AndreiBlood (the boss body alone),
@@ -643,7 +643,7 @@ bool FElysiumNpcKernelThink19BossCadenceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19TzimisceTest,
-	"Elysium.Substrate.NpcKernelThink19.Species.Tzimisce", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.Species.Tzimisce", GThink19TestFlags)
 bool FElysiumNpcKernelThink19TzimisceTest::RunTest(const FString&)
 {
 	// `0x103b9040`: `0x102c43f0` (the ignore-collision expiry) BEFORE the Troika body.
@@ -661,7 +661,7 @@ bool FElysiumNpcKernelThink19TzimisceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19CameraTest,
-	"Elysium.Substrate.NpcKernelThink19.Species.Camera", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.Species.Camera", GThink19TestFlags)
 bool FElysiumNpcKernelThink19CameraTest::RunTest(const FString&)
 {
 	// `0x10369120`: no Troika body; disabled returns with no stamp; accepted: RunAI(false), the four
@@ -710,7 +710,7 @@ bool FElysiumNpcKernelThink19CameraTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19GhoulTest,
-	"Elysium.Substrate.NpcKernelThink19.Species.GhoulCroucher", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.Species.GhoulCroucher", GThink19TestFlags)
 bool FElysiumNpcKernelThink19GhoulTest::RunTest(const FString&)
 {
 	// `0x1037b3f0`: the Troika body, then the burning emitter's rate from m_flPlayerDist.
@@ -744,7 +744,7 @@ bool FElysiumNpcKernelThink19GhoulTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19MingXiaoTest,
-	"Elysium.Substrate.NpcKernelThink19.Species.MingXiao", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.Species.MingXiao", GThink19TestFlags)
 bool FElysiumNpcKernelThink19MingXiaoTest::RunTest(const FString&)
 {
 	// `0x10394990`: the throwable-mode flags and gaze, the slime trail, the regrow sweep, then the
@@ -819,7 +819,7 @@ bool FElysiumNpcKernelThink19MingXiaoTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19NewscasterTest,
-	"Elysium.Substrate.NpcKernelThink19.Species.Newscaster", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.Species.Newscaster", GThink19TestFlags)
 bool FElysiumNpcKernelThink19NewscasterTest::RunTest(const FString&)
 {
 	// `0x103a05b0`: move and AI clocks parked at curtime + 1.0, their Last at curtime, BEFORE the base.
@@ -872,7 +872,7 @@ bool FElysiumNpcKernelThink19ZombieTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19ZombieReacquireTest,
-	"Elysium.Substrate.NpcKernelThink19.Species.ZombieReacquire", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.Species.ZombieReacquire", GThink19TestFlags)
 bool FElysiumNpcKernelThink19ZombieReacquireTest::RunTest(const FString&)
 {
 	// `0x103e0a00`, the type-1 zombie's reacquire, every arm.
@@ -916,7 +916,7 @@ bool FElysiumNpcKernelThink19ZombieReacquireTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19FrenzyShadowTest,
-	"Elysium.Substrate.NpcKernelThink19.Species.FrenzyShadow", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.Species.FrenzyShadow", GThink19TestFlags)
 bool FElysiumNpcKernelThink19FrenzyShadowTest::RunTest(const FString&)
 {
 	// `0x10375e50`: the controller think, then, in COMBAT with an enemy and COND 0x46 clear, slot 544.
@@ -940,7 +940,7 @@ bool FElysiumNpcKernelThink19FrenzyShadowTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelThink19WerewolfTest,
-	"Elysium.Substrate.NpcKernelThink19.Species.Werewolf", GThink19TestFlags)
+	"Elysium.Arm.NpcKernelThink19.Species.Werewolf", GThink19TestFlags)
 bool FElysiumNpcKernelThink19WerewolfTest::RunTest(const FString&)
 {
 	// Damaged19 `0x103cb590`.

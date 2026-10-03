@@ -93,7 +93,7 @@ namespace
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BaseDispatchTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.Dispatch_0x10286f63", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.Dispatch_0x10286f63", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BaseDispatchTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -126,7 +126,7 @@ bool FElysiumNpcKernelStartTask19BaseDispatchTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BaseBookkeepingTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.Bookkeeping_0x10282828", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.Bookkeeping_0x10282828", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BaseBookkeepingTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -186,7 +186,7 @@ bool FElysiumNpcKernelStartTask19BaseBookkeepingTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BaseTimersTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.Timers_0x10286505", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.Timers_0x10286505", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BaseTimersTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -239,7 +239,7 @@ bool FElysiumNpcKernelStartTask19BaseTimersTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BasePathGaitTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.PathGait_0x102863f1", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.PathGait_0x102863f1", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BasePathGaitTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -275,7 +275,7 @@ bool FElysiumNpcKernelStartTask19BasePathGaitTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BasePositionsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.Positions_0x10282afd", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.Positions_0x10282afd", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BasePositionsTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -319,7 +319,7 @@ bool FElysiumNpcKernelStartTask19BasePositionsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BaseTargetsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.Targets_0x10283f36", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.Targets_0x10283f36", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BaseTargetsTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -401,7 +401,7 @@ bool FElysiumNpcKernelStartTask19BaseTargetsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BaseEnemyPathsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.EnemyPaths_0x1028509b", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.EnemyPaths_0x1028509b", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BaseEnemyPathsTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -473,7 +473,7 @@ bool FElysiumNpcKernelStartTask19BaseEnemyPathsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BaseCoverTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.Cover_0x10283558", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.Cover_0x10283558", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BaseCoverTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -537,7 +537,7 @@ bool FElysiumNpcKernelStartTask19BaseCoverTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BaseStoredGoalTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.StoredGoal_0x102847a3", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.StoredGoal_0x102847a3", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BaseStoredGoalTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -601,7 +601,7 @@ bool FElysiumNpcKernelStartTask19BaseStoredGoalTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BaseFacingTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.Facing_0x10283ae3", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.Facing_0x10283ae3", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BaseFacingTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -651,7 +651,7 @@ bool FElysiumNpcKernelStartTask19BaseFacingTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BaseHintsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.Hints_0x10282a17", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.Hints_0x10282a17", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BaseHintsTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -696,7 +696,7 @@ bool FElysiumNpcKernelStartTask19BaseHintsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BaseActivitiesTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.Activities_0x10284286", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.Activities_0x10284286", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BaseActivitiesTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -736,7 +736,7 @@ bool FElysiumNpcKernelStartTask19BaseActivitiesTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BaseMovementTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.Movement_0x10286749", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.Movement_0x10286749", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BaseMovementTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -781,7 +781,7 @@ bool FElysiumNpcKernelStartTask19BaseMovementTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BaseSearchesTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.Searches_0x10286ec2", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.Searches_0x10286ec2", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BaseSearchesTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;
@@ -828,7 +828,7 @@ bool FElysiumNpcKernelStartTask19BaseSearchesTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19BaseRoutesTest,
-	"Elysium.Substrate.NpcKernelStartTask19.Base.Routes_0x10285ff8", GStartTask19BaseFlags)
+	"Elysium.Arm.NpcKernelStartTask19.Base.Routes_0x10285ff8", GStartTask19BaseFlags)
 bool FElysiumNpcKernelStartTask19BaseRoutesTest::RunTest(const FString&)
 {
 	FStartTask19BaseFixture F;

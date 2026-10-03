@@ -6,7 +6,7 @@
 #include "ElysiumPlayer.h"
 #include "Engine/SkeletalMesh.h"
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCharacterModelIdentityTest, "Elysium.Substrate.CharacterModel.Identity",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCharacterModelIdentityTest, "Elysium.Arm.CharacterModel.Identity",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumCharacterModelIdentityTest::RunTest(const FString&)
 {
@@ -32,7 +32,7 @@ bool FElysiumCharacterModelIdentityTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCharacterModelProvenanceTest, "Elysium.Substrate.CharacterModel.Provenance",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCharacterModelProvenanceTest, "Elysium.Arm.CharacterModel.Provenance",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumCharacterModelProvenanceTest::RunTest(const FString&)
 {
@@ -56,7 +56,7 @@ bool FElysiumCharacterModelProvenanceTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCharacterModelCacheTest, "Elysium.Substrate.CharacterModel.CacheIdentity",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCharacterModelCacheTest, "Elysium.Arm.CharacterModel.CacheIdentity",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumCharacterModelCacheTest::RunTest(const FString&)
 {

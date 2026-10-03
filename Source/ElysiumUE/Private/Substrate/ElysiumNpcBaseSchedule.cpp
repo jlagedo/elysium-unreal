@@ -126,6 +126,7 @@ void FElysiumNpcBase::TaskComplete(bool bIgnoreTaskFailed)
 		return;
 	}
 	Schedule.TaskStatus = EElysiumTaskStatus::Complete;
+	TraceTaskDone();   // the AI trace's `taskdone` (debug output only, behind its sink)
 }
 
 // 0x102623c0 `CAI_Motor` slot 2

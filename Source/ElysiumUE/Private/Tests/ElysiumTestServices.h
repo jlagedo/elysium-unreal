@@ -13,6 +13,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Tests/ElysiumFixtureNoise.h"
 #include "ElysiumAnimationIntent.h" // EElysiumAnimBodyKind + BodyKindName (the recorded chain)
 #include "ElysiumCameraSolve.h"   // FElysiumCameraShot (full type; ElysiumWorldServices.h only forward-declares it)
 #include "ElysiumDlg.h"
@@ -443,6 +444,10 @@ struct FElysiumRecordingServices final
 	, public IElysiumPresenter
 	, public IElysiumWeather
 {
+	// Every headless entity world is built on one of these, so this is where the warnings such a world
+	// logs by construction are declared expected (see `ElysiumFixtureNoise.h`).
+	FElysiumRecordingServices() { ElysiumFixtureNoise::Declare(); }
+
 	// The runtime addresses a model by unit id (`vtmb:model:<dir>/<base>`) or by its source path
 	// (`models/<dir>/<base>.mdl`). The double records and keys by the base name: it is what a
 	// source `.mdl` stem was, and what the literals every test asserts against read like.
@@ -1584,7 +1589,7 @@ struct FElysiumRecordingServices final
 		Record(FString::Printf(TEXT("SetPlayerBodyEntityHidden %d"), bHidden ? 1 : 0));
 	}
 	// The last entity-side gate the player pushed. The camera's half is not modelled here — it is a
-	// pure function asserted in `Elysium.Substrate.CameraDraw` with no world at all.
+	// pure function asserted in `Elysium.Arm.CameraDraw` with no world at all.
 	bool bPlayerBodyEntityHidden = false;
 
 	// The body whose pose the player's body draws (`PostThink`'s controller copy), or null for its

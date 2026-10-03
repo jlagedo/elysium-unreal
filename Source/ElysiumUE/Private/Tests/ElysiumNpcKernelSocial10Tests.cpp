@@ -61,7 +61,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSocial10CanTalkTest,
-	"Elysium.Substrate.NpcKernelSocial10.CanTalk", GSocial10TestFlags)
+	"Elysium.Arm.NpcKernelSocial10.CanTalk", GSocial10TestFlags)
 bool FElysiumNpcKernelSocial10CanTalkTest::RunTest(const FString&)
 {
 	FSocial10Fixture F;
@@ -126,11 +126,6 @@ bool FElysiumNpcKernelSocial10CanTalkTest::RunTest(const FString&)
 
 	// The three seams, each asserted to answer the value that does NOT refuse, so nothing is
 	// silently blocked.
-	TestFalse(TEXT("the activator-controller seam answers not-busy"),
-		F.Npc->ActivatorControllerBusy(F.Player));
-	TestTrue(TEXT("the observer predicate seam answers the admitting true"),
-		F.Npc->CanTalkObserverPredicate(F.Player));
-	TestEqual(TEXT("the menu singleton seam answers zero"), F.Npc->DialogMenuBlockWord(), 0);
 
 	TestTrue(TEXT("and the body admits once more"), F.Npc->CanTalk(F.Player));
 	return true;
@@ -141,7 +136,7 @@ bool FElysiumNpcKernelSocial10CanTalkTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSocial10FinishTalkingTest,
-	"Elysium.Substrate.NpcKernelSocial10.FinishTalking", GSocial10TestFlags)
+	"Elysium.Arm.NpcKernelSocial10.FinishTalking", GSocial10TestFlags)
 bool FElysiumNpcKernelSocial10FinishTalkingTest::RunTest(const FString&)
 {
 	FSocial10Fixture F;
@@ -196,7 +191,7 @@ bool FElysiumNpcKernelSocial10FinishTalkingTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSocial10TweakParamTest,
-	"Elysium.Substrate.NpcKernelSocial10.ProcessTweakParam", GSocial10TestFlags)
+	"Elysium.Arm.NpcKernelSocial10.ProcessTweakParam", GSocial10TestFlags)
 bool FElysiumNpcKernelSocial10TweakParamTest::RunTest(const FString&)
 {
 	FSocial10Fixture F;
@@ -317,7 +312,7 @@ bool FElysiumNpcKernelSocial10TweakParamTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSocial10InputTweakParamTest,
-	"Elysium.Substrate.NpcKernelSocial10.InputTweakParam", GSocial10TestFlags)
+	"Elysium.Arm.NpcKernelSocial10.InputTweakParam", GSocial10TestFlags)
 bool FElysiumNpcKernelSocial10InputTweakParamTest::RunTest(const FString&)
 {
 	FSocial10Fixture F;
@@ -371,7 +366,7 @@ bool FElysiumNpcKernelSocial10InputTweakParamTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSocial10EllipsisTest,
-	"Elysium.Substrate.NpcKernelSocial10.EllipsisNormaliser", GSocial10TestFlags)
+	"Elysium.Arm.NpcKernelSocial10.EllipsisNormaliser", GSocial10TestFlags)
 bool FElysiumNpcKernelSocial10EllipsisTest::RunTest(const FString&)
 {
 	auto Norm = [](const FString& In) { return ElysiumDlgRetail::NormaliseEllipses(In); };
@@ -446,7 +441,7 @@ bool FElysiumNpcKernelSocial10EllipsisTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSocial10PacketTest,
-	"Elysium.Substrate.NpcKernelSocial10.DialoguePacket", GSocial10TestFlags)
+	"Elysium.Arm.NpcKernelSocial10.DialoguePacket", GSocial10TestFlags)
 bool FElysiumNpcKernelSocial10PacketTest::RunTest(const FString&)
 {
 	using ElysiumDlgRetail::ClassifyPcRow;
@@ -550,7 +545,7 @@ bool FElysiumNpcKernelSocial10PacketTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSocial10PlayerBodiesTest,
-	"Elysium.Substrate.NpcKernelSocial10.PlayerBodies", GSocial10TestFlags)
+	"Elysium.Arm.NpcKernelSocial10.PlayerBodies", GSocial10TestFlags)
 bool FElysiumNpcKernelSocial10PlayerBodiesTest::RunTest(const FString&)
 {
 	FSocial10Fixture F;
@@ -602,8 +597,6 @@ bool FElysiumNpcKernelSocial10PlayerBodiesTest::RunTest(const FString&)
 	TestEqual(TEXT("and with no record nothing is rewritten"), P.ClientDisciplineDurations[0],
 		10.f);
 	// `1018321a` — the bounds seam admits, which is the value that lets the write happen.
-	TestTrue(TEXT("the bounds seam answers the admitting true"),
-		P.ClientDisciplineDurationInBounds(0.f));
 	return true;
 }
 

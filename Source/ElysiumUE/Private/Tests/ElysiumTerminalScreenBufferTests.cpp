@@ -14,7 +14,7 @@ static constexpr EAutomationTestFlags GScreenBufferFlags =
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalScreenBufferTest,
-	"Elysium.Substrate.TerminalScreenBuffer", GScreenBufferFlags)
+	"Elysium.Arm.TerminalScreenBuffer", GScreenBufferFlags)
 bool FElysiumTerminalScreenBufferTest::RunTest(const FString&)
 {
 	FElysiumTerminalScreenBuffer Screen;
@@ -117,7 +117,7 @@ bool FElysiumTerminalScreenBufferTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalGridClampTest,
-	"Elysium.Substrate.TerminalGridClamp", GScreenBufferFlags)
+	"Elysium.Arm.TerminalGridClamp", GScreenBufferFlags)
 bool FElysiumTerminalGridClampTest::RunTest(const FString&)
 {
 	// `CBaseTerminal::Spawn` `0x10217880`. The corpus authors grids on both sides of this clamp, so

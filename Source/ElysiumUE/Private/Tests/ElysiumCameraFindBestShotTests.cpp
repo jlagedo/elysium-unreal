@@ -260,7 +260,7 @@ static int32 ChosenIndex(const FString& ShotName, const TCHAR* BaseName)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraFindBestShotTest,
-	"Elysium.Substrate.CameraFindBestShot", GFlags)
+	"Elysium.Arm.CameraFindBestShot", GFlags)
 
 bool FElysiumCameraFindBestShotTest::RunTest(const FString&)
 {

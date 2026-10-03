@@ -474,6 +474,7 @@ bool FElysiumNpc::FindHintNode(int32 HintType, uint8 SearchFlags)
 	{
 		// `thunk_FUN_10273e80(this, '\0')` — `TaskComplete(false)`.
 		Schedule.TaskStatus = EElysiumTaskStatus::Complete;
+		TraceTaskDone();   // the AI trace's `taskdone` (debug output only, behind its sink)
 		return true;
 	}
 	// The miss arm writes retail's assert file and line into `+0x1b44` / `+0x1b48`

@@ -145,7 +145,7 @@ namespace
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMeleeMovementStopWindowTest,
-	"Elysium.Substrate.MeleeMovementStop.Window", GElysiumMeleeStopTestFlags)
+	"Elysium.Arm.MeleeMovementStop.Window", GElysiumMeleeStopTestFlags)
 bool FElysiumMeleeMovementStopWindowTest::RunTest(const FString&)
 {
 	FStopFixture F;
@@ -219,7 +219,7 @@ bool FElysiumMeleeMovementStopWindowTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMeleeMovementStopDirectionTest,
-	"Elysium.Substrate.MeleeMovementStop.Direction", GElysiumMeleeStopTestFlags)
+	"Elysium.Arm.MeleeMovementStop.Direction", GElysiumMeleeStopTestFlags)
 bool FElysiumMeleeMovementStopDirectionTest::RunTest(const FString&)
 {
 	// Every bit of retail's `0x79a`, one release each, plus the two nearest buttons that are NOT in
@@ -289,7 +289,7 @@ bool FElysiumMeleeMovementStopDirectionTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMeleeMovementStopScopeTest,
-	"Elysium.Substrate.MeleeMovementStop.Scope", GElysiumMeleeStopTestFlags)
+	"Elysium.Arm.MeleeMovementStop.Scope", GElysiumMeleeStopTestFlags)
 bool FElysiumMeleeMovementStopScopeTest::RunTest(const FString&)
 {
 	// --- The release cycle is the SEQUENCE's, not a constant ---------------------------------------
@@ -414,7 +414,7 @@ bool FElysiumMeleeMovementStopScopeTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMeleeMovementStopRuleTest,
-	"Elysium.Substrate.MeleeMovementStop.Rule", GElysiumMeleeStopTestFlags)
+	"Elysium.Arm.MeleeMovementStop.Rule", GElysiumMeleeStopTestFlags)
 bool FElysiumMeleeMovementStopRuleTest::RunTest(const FString&)
 {
 	using namespace ElysiumClipMovement;
@@ -479,7 +479,7 @@ bool FElysiumMeleeMovementStopRuleTest::RunTest(const FString&)
 // mechanism, and the defect the stop exists to fix is the second row of the table below.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMeleeMovementStopPayoffTest,
-	"Elysium.Substrate.MeleeMovementStop.Payoff", GElysiumMeleeStopTestFlags)
+	"Elysium.Arm.MeleeMovementStop.Payoff", GElysiumMeleeStopTestFlags)
 bool FElysiumMeleeMovementStopPayoffTest::RunTest(const FString&)
 {
 	using namespace ElysiumActionTables;

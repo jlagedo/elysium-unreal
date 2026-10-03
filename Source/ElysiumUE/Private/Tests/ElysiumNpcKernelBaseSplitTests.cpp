@@ -59,7 +59,7 @@ namespace
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseSplitTypeWordsTest,
-	"Elysium.Substrate.NpcKernelBaseSplit.TypeWords", GBaseSplitTestFlags)
+	"Elysium.Arm.NpcKernelBaseSplit.TypeWords", GBaseSplitTestFlags)
 
 bool FElysiumNpcKernelBaseSplitTypeWordsTest::RunTest(const FString&)
 {
@@ -87,7 +87,7 @@ bool FElysiumNpcKernelBaseSplitTypeWordsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseSplitBaseBodiesTest,
-	"Elysium.Substrate.NpcKernelBaseSplit.BaseBodies", GBaseSplitTestFlags)
+	"Elysium.Arm.NpcKernelBaseSplit.BaseBodies", GBaseSplitTestFlags)
 
 bool FElysiumNpcKernelBaseSplitBaseBodiesTest::RunTest(const FString&)
 {
@@ -133,7 +133,7 @@ bool FElysiumNpcKernelBaseSplitBaseBodiesTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseSplitPairsTest,
-	"Elysium.Substrate.NpcKernelBaseSplit.Pairs", GBaseSplitTestFlags)
+	"Elysium.Arm.NpcKernelBaseSplit.Pairs", GBaseSplitTestFlags)
 
 bool FElysiumNpcKernelBaseSplitPairsTest::RunTest(const FString&)
 {
@@ -184,7 +184,7 @@ bool FElysiumNpcKernelBaseSplitPairsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseSplitBindingsTest,
-	"Elysium.Substrate.NpcKernelBaseSplit.Bindings", GBaseSplitTestFlags)
+	"Elysium.Arm.NpcKernelBaseSplit.Bindings", GBaseSplitTestFlags)
 
 bool FElysiumNpcKernelBaseSplitBindingsTest::RunTest(const FString&)
 {

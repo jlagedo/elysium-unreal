@@ -1554,7 +1554,9 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 	// once and the NPC carries what it was given.
 	if (bHasForcedState)
 	{
+		const int32 TracedState = NpcStateRetail();   // read for the AI trace's `state` event only
 		Mind.RequestState(ForcedState, TEXT("aiscripted_schedule forcestate"));
+		TraceStateChange(TracedState, NpcStateRetail());
 	}
 
 	if (static_cast<EMode>(Order.Mode) == EMode::AssignEnemy)
@@ -1860,7 +1862,10 @@ void FElysiumNpc::EndDisciplineSchedule()
 	if (NpcFlags.Has(EElysiumNpcFlag2::D_DISCONNECT_SQUAD)) ReconnectToSquad();
 	const int32 Number = GetLocalScheduleId(Schedule.Current);
 	if ((Number == 0xe1 || Number == 0xe3) && !Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed))
+	{
 		Schedule.TaskStatus = EElysiumTaskStatus::Complete;
+		TraceTaskDone();   // the AI trace's `taskdone` (debug output only, behind its sink)
+	}
 }
 
 // --- The gaze cascade's NPC arms ---
@@ -2521,7 +2526,9 @@ void FElysiumNpc::ReleaseAllBodyOwnership(const TCHAR* Reason, bool bDeadMind)
 	EndScriptedSchedule(Reason);
 	ReleaseScheduleBody(Reason);
 	ClearSchedule();
+	const int32 TracedState = NpcStateRetail();   // read for the AI trace's `state` event only
 	Mind.Invalidate(Reason, bDeadMind);
+	TraceStateChange(TracedState, NpcStateRetail());
 	AmbientOwner.Reset();
 	SequenceOwner.Reset();
 	ScheduleOwner.Reset();

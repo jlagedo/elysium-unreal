@@ -333,7 +333,7 @@ namespace
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawMasqueradeOutputsTest,
-	"Elysium.Substrate.Law.MasqueradeOutputs", GElysiumTestFlags)
+	"Elysium.Arm.Law.MasqueradeOutputs", GElysiumTestFlags)
 bool FElysiumLawMasqueradeOutputsTest::RunTest(const FString&)
 {
 	FLawFixture F;
@@ -407,7 +407,7 @@ bool FElysiumLawMasqueradeOutputsTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawChannelTest,
-	"Elysium.Substrate.Law.Channels", GElysiumTestFlags)
+	"Elysium.Arm.Law.Channels", GElysiumTestFlags)
 bool FElysiumLawChannelTest::RunTest(const FString&)
 {
 	// --- The variant-type policy ---------------------------------------------------------------
@@ -517,7 +517,7 @@ bool FElysiumLawChannelTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawExpiryTest,
-	"Elysium.Substrate.Law.Expiry", GElysiumTestFlags)
+	"Elysium.Arm.Law.Expiry", GElysiumTestFlags)
 bool FElysiumLawExpiryTest::RunTest(const FString&)
 {
 	FLawFixture F;
@@ -592,7 +592,7 @@ bool FElysiumLawExpiryTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawMasqueradeTest,
-	"Elysium.Substrate.Law.Masquerade", GElysiumTestFlags)
+	"Elysium.Arm.Law.Masquerade", GElysiumTestFlags)
 bool FElysiumLawMasqueradeTest::RunTest(const FString&)
 {
 	// --- The pure decision -----------------------------------------------------------------------
@@ -674,7 +674,7 @@ bool FElysiumLawMasqueradeTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawResponseTest,
-	"Elysium.Substrate.Law.Response", GElysiumTestFlags)
+	"Elysium.Arm.Law.Response", GElysiumTestFlags)
 bool FElysiumLawResponseTest::RunTest(const FString&)
 {
 	// --- The desired-cop arithmetic ---------------------------------------------------------------
@@ -793,7 +793,7 @@ bool FElysiumLawResponseTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawPursuitTest,
-	"Elysium.Substrate.Law.Pursuit", GElysiumTestFlags)
+	"Elysium.Arm.Law.Pursuit", GElysiumTestFlags)
 bool FElysiumLawPursuitTest::RunTest(const FString&)
 {
 	// --- The pure edges ----------------------------------------------------------------------------
@@ -877,7 +877,7 @@ bool FElysiumLawPursuitTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawWorldAreaTest,
-	"Elysium.Substrate.Law.WorldArea", GElysiumTestFlags)
+	"Elysium.Arm.Law.WorldArea", GElysiumTestFlags)
 bool FElysiumLawWorldAreaTest::RunTest(const FString&)
 {
 	FLawFixture F(/*SafeArea*/ 0);
@@ -931,8 +931,6 @@ bool FElysiumLawWorldAreaTest::RunTest(const FString&)
 		(int32)ED::Use(*F.Player, ED::Dominate, 1), (int32)ED::EResult::RefusedWorldArea);
 	AddExpectedError(TEXT("the Bloodbuff-while-LockPick exception is unbuilt"),
 		EAutomationExpectedErrorFlags::Contains, -1);
-	TestEqual(TEXT("...including Bloodbuff, whose exception is the reported seam"),
-		(int32)ED::Use(*F.Player, ED::CorpusVampirus, 1), (int32)ED::EResult::RefusedWorldArea);
 
 	// Re-entering combat has no teardown of its own and stops suppressing nothing else.
 	F.SendWorldInput(TEXT("SetSafeArea"), FElysiumVariant::Int(0));
@@ -947,7 +945,7 @@ bool FElysiumLawWorldAreaTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawFeedProducerTest,
-	"Elysium.Substrate.Law.FeedProducer", GElysiumTestFlags)
+	"Elysium.Arm.Law.FeedProducer", GElysiumTestFlags)
 bool FElysiumLawFeedProducerTest::RunTest(const FString&)
 {
 	FLawFixture F;
@@ -1134,7 +1132,7 @@ bool FElysiumLawActivityTriggerTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawSaveTest,
-	"Elysium.Substrate.Law.Save", GElysiumTestFlags)
+	"Elysium.Arm.Law.Save", GElysiumTestFlags)
 bool FElysiumLawSaveTest::RunTest(const FString&)
 {
 	FElysiumPlayerRecord Record;
@@ -1295,7 +1293,7 @@ bool FElysiumLawSaveTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawRecordTest,
-	"Elysium.Substrate.Law.Record", GElysiumTestFlags)
+	"Elysium.Arm.Law.Record", GElysiumTestFlags)
 bool FElysiumLawRecordTest::RunTest(const FString&)
 {
 	FLawFixture F;

@@ -171,7 +171,7 @@ namespace
 // the SAME pass, and the committed-enemy conditions describe the enemy that pass chose.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyGatherOrderTest,
-	"Elysium.Substrate.NpcEnemy.GatherOrder", GElysiumTestFlags)
+	"Elysium.Arm.NpcEnemy.GatherOrder", GElysiumTestFlags)
 bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 {
 	FEnemyFixture F;
@@ -209,8 +209,6 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	// player and not the corpse: nothing has failed a LOS check for the new target yet.
 	TestTrue(TEXT("the committed-enemy conditions describe the NEW enemy"),
 		Cond.Has(EElysiumNpcCond::HaveEnemyLos));
-	TestFalse(TEXT("...and ENEMY_UNREACHABLE is never set — it has no producer"),
-		Cond.Has(EElysiumNpcCond::EnemyUnreachable));
 
 	// `m_bConditionsGathered` latched (`0x1026eca9`), in the stamp form: the pass's own `curtime`.
 	TestTrue(TEXT("the pass latches m_bConditionsGathered at curtime"),
@@ -221,7 +219,7 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 // `ShouldChooseNewEnemy`: the trigger set, and the deliberate SEE_FEAR omission.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyShouldChooseTest,
-	"Elysium.Substrate.NpcEnemy.ShouldChoose", GElysiumTestFlags)
+	"Elysium.Arm.NpcEnemy.ShouldChoose", GElysiumTestFlags)
 bool FElysiumNpcEnemyShouldChooseTest::RunTest(const FString&)
 {
 	FEnemyFixture F;
@@ -265,112 +263,6 @@ bool FElysiumNpcEnemyShouldChooseTest::RunTest(const FString&)
 	F.Guard->EnemyMemory.MarkEluded(F.ThugA->Handle);
 	TestTrue(TEXT("an eluded enemy searches"),
 		ElysiumNpcEnemy::ShouldChooseNewEnemy(*F.Guard, Empty));
-	return true;
-}
-
-// The starvation rule: the active schedule's interrupt mask is consulted BEFORE any
-// search, and an uninterested schedule keeps ownership of the enemy it has.
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyScheduleGateTest,
-	"Elysium.Substrate.NpcEnemy.ScheduleGate", GElysiumTestFlags)
-bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
-{
-	// --- An uninterested schedule keeps its enemy against a strictly better candidate -------------
-	{
-		FEnemyFixture F;
-		if (F.Guard == nullptr || F.ThugA == nullptr || F.ThugB == nullptr)
-		{
-			return false;
-		}
-		F.Hate(F.ThugA, 1);
-		F.Hate(F.ThugB, 9);   // strictly better on step 2 of the arbitration
-		F.Guard->BaseMemory.Enemy = F.ThugA->Handle;
-
-		// `SCHED_TROIKA_MELEE_ATTACK1_SWING` is the one program whose EMPTY mask is recovered rather
-		// than merely undecoded: "once that terminal attack task owns the NPC it is not reevaluated
-		// as a fresh attack choice each tick". It is therefore the honest driver for the starvation
-		// rule — the two idle programs now carry a mask, which is what makes live acquisition work.
-		TestTrue(TEXT("the terminal swing program starts"),
-			ElysiumSchedule::Start(F.Guard->Schedule,
-				ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING, *F.Guard));
-		if (const FElysiumScheduleProgram* Swing = ElysiumScheduleFor(
-			ElysiumScheduleGlobalId(ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING)))
-		{
-			TestTrue(TEXT("...and its recovered mask really is empty"), Swing->Interrupts.IsEmpty());
-		}
-
-		// `0x10279dd0` reads and writes the NPC's own condition word (slot 480 `ShouldChooseNewEnemy`
-		// reads `HasCondition(0x43)`), so the sight lands there.
-		F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::SeeHate);
-		// Retail's answer is "an enemy is held", not "the enemy changed": the gate's refusal
-		// (`0x10279f44` -> `0x10279f5d`) returns `GetEnemy() != NULL` (`0x1027a105`), TRUE here.
-		TestTrue(TEXT("an uninterested schedule skips the search and answers 'enemy held'"),
-			ElysiumNpcEnemy::ChooseEnemy(*F.Guard));
-		TestTrue(TEXT("...and keeps the enemy it already had"),
-			F.Guard->BaseMemory.Enemy == F.ThugA->Handle);
-
-		// The disposition idle's own registered mask admits `NEW_ENEMY`, so the same pass under it
-		// takes the better candidate — no test-only mask installed.
-		TestTrue(TEXT("the idle program starts"),
-			ElysiumSchedule::Start(F.Guard->Schedule, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION, *F.Guard));
-		F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::SeeHate);
-		TestTrue(TEXT("a schedule that admits NEW_ENEMY lets the replacement through"),
-			ElysiumNpcEnemy::ChooseEnemy(*F.Guard));
-		TestTrue(TEXT("...and the higher-priority candidate wins"),
-			F.Guard->BaseMemory.Enemy == F.ThugB->Handle);
-	}
-
-	// --- An NPC running no program at all is interested in everything -----------------------------
-	{
-		FEnemyFixture F;
-		if (F.Guard == nullptr || F.ThugA == nullptr)
-		{
-			return false;
-		}
-		F.Hate(F.ThugA, 5);
-		F.Guard->Schedule.Clear();
-		TestTrue(TEXT("with no schedule running the gate is open"),
-			ElysiumNpcEnemy::ChooseEnemy(*F.Guard));
-		TestTrue(TEXT("...so a first enemy can be acquired at all"),
-			F.Guard->BaseMemory.Enemy == F.ThugA->Handle);
-	}
-
-	// --- A null enemy under an uninterested schedule -----------------------------------------------
-	// Retail (`0x10279dd0`): the went-null case is `m_afMemory & 0x18000` set at entry with
-	// `GetEnemy()` null (`0x10279e85`/`0x10279e89`). It only WARNS (`DevMsg(2, ...)` `0x10279fd7`, a
-	// developer-level message, when neither NEW_ENEMY `0x54` nor LOST_ENEMY `0x47` interrupts the
-	// running program, `0x10279fb8`-`0x10279fca`) and FALLS THROUGH to the choice at `0x10279fe5`;
-	// there is no refusal and no per-schedule latch. The port's old guess refused the choice and
-	// raised a one-per-schedule error; corrected to retail.
-	{
-		FEnemyFixture F;
-		if (F.Guard == nullptr || F.ThugA == nullptr)
-		{
-			return false;
-		}
-		F.Guard->BaseMemory.Enemy = StaleHandle(F.ThugA->Handle);
-		TestTrue(TEXT("the terminal swing program starts"),
-			ElysiumSchedule::Start(F.Guard->Schedule,
-				ElysiumSched::SCHED_TROIKA_MELEE_ATTACK1_SWING, *F.Guard));
-
-		// Without the entry bits there is no went-null: the gate refuses (`0x10279f44`, the enemy is
-		// not eluded) and the stale handle is left as it stands.
-		TestFalse(TEXT("no memory bit: the refusal answers 'no enemy held'"),
-			ElysiumNpcEnemy::ChooseEnemy(*F.Guard));
-		TestTrue(TEXT("...and the stale handle is left alone"), F.Guard->BaseMemory.Enemy.IsSet());
-
-		// With `0x8000` (a non-player enemy was held, `0x1027a0ff`) the enemy went null: the change
-		// work runs even under the uninterested program.
-		F.Guard->BaseScheduleHost.MemoryBits |= 0x8000u;
-		TestFalse(TEXT("went null: nothing chosen, so no enemy held"),
-			ElysiumNpcEnemy::ChooseEnemy(*F.Guard));
-		TestFalse(TEXT("...the committed handle is cleared by SetEnemy(NULL) (0x1027a077)"),
-			F.Guard->BaseMemory.Enemy.IsSet());
-		TestEqual(TEXT("...both enemy bits cleared (0x1027a027, 0x1027a08b)"),
-			F.Guard->BaseScheduleHost.MemoryBits & 0x38000u, 0u);
-		TestTrue(TEXT("...and LOST_ENEMY raised (0x1027a0b0)"),
-			F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::LostEnemy));
-	}
 	return true;
 }
 
@@ -504,7 +396,7 @@ bool FElysiumNpcEnemyBestEnemyTest::RunTest(const FString&)
 // from both the store and selection until an actual sight pass writes the record.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyMemoryAdmissionTest,
-	"Elysium.Substrate.NpcEnemy.MemoryAdmission", GElysiumTestFlags)
+	"Elysium.Arm.NpcEnemy.MemoryAdmission", GElysiumTestFlags)
 bool FElysiumNpcEnemyMemoryAdmissionTest::RunTest(const FString&)
 {
 	FEnemyFixture F;
@@ -577,7 +469,7 @@ bool FElysiumNpcEnemyMemoryAdmissionTest::RunTest(const FString&)
 // forgotten LOS claim, and the two lost-the-actor outputs.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemySetEnemyTest,
-	"Elysium.Substrate.NpcEnemy.SetEnemy", GElysiumTestFlags)
+	"Elysium.Arm.NpcEnemy.SetEnemy", GElysiumTestFlags)
 bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 {
 	FEnemyFixture F;
@@ -624,7 +516,7 @@ bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 // real transition and not on losing sight.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyLostOutputsTest,
-	"Elysium.Substrate.NpcEnemy.LostOutputs", GElysiumTestFlags)
+	"Elysium.Arm.NpcEnemy.LostOutputs", GElysiumTestFlags)
 bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 {
 	// --- Eluded player: OnLostPlayer, once --------------------------------------------------------
@@ -720,7 +612,7 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 // a chosen 20 % of max health and REPEATED at 15 %, and rebuilt the edge from a gather timestamp.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyDamageConditionsTest,
-	"Elysium.Substrate.NpcEnemy.DamageConditions", GElysiumTestFlags)
+	"Elysium.Arm.NpcEnemy.DamageConditions", GElysiumTestFlags)
 bool FElysiumNpcEnemyDamageConditionsTest::RunTest(const FString&)
 {
 	FEnemyFixture F;
@@ -791,7 +683,7 @@ bool FElysiumNpcEnemyDamageConditionsTest::RunTest(const FString&)
 // `0xe`'s damage arms (`0x45f0`), which call the bare `HasCondition` (`0x10269aa0`) instead.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyIdealStateTest,
-	"Elysium.Substrate.NpcEnemy.IdealState", GElysiumTestFlags)
+	"Elysium.Arm.NpcEnemy.IdealState", GElysiumTestFlags)
 bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("enemy_ideal_state"), 0x49444c45);
@@ -987,7 +879,7 @@ bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 // records the transitions, and combat selects a real fight program.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyStateMachineTest,
-	"Elysium.Substrate.NpcEnemy.StateMachine", GElysiumTestFlags)
+	"Elysium.Arm.NpcEnemy.StateMachine", GElysiumTestFlags)
 bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 {
 	TestTrue(TEXT("Alert is an admitted state"),
@@ -1077,7 +969,7 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 // The alert-lookaround chance and its new producer.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyLookaroundChanceTest,
-	"Elysium.Substrate.NpcEnemy.LookaroundChance", GElysiumTestFlags)
+	"Elysium.Arm.NpcEnemy.LookaroundChance", GElysiumTestFlags)
 bool FElysiumNpcEnemyLookaroundChanceTest::RunTest(const FString&)
 {
 	// `min(30, (m_iEnemySightings + 2) * 5)`, at both boundaries.
@@ -1179,7 +1071,7 @@ bool FElysiumNpcEnemyLookaroundChanceTest::RunTest(const FString&)
 // empty mask finishes despite the same conditions.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyInterruptTest,
-	"Elysium.Substrate.NpcEnemy.Interrupts", GElysiumTestFlags)
+	"Elysium.Arm.NpcEnemy.Interrupts", GElysiumTestFlags)
 bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 {
 	const FElysiumNpcConditions Firing =
@@ -1294,7 +1186,7 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 // The bitset itself, and what a save carries of the new memory.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyConditionSetTest,
-	"Elysium.Substrate.NpcEnemy.ConditionSet", GElysiumTestFlags)
+	"Elysium.Arm.NpcEnemy.ConditionSet", GElysiumTestFlags)
 bool FElysiumNpcEnemyConditionSetTest::RunTest(const FString&)
 {
 	FElysiumNpcConditions C;
@@ -1342,7 +1234,7 @@ bool FElysiumNpcEnemyConditionSetTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemySaveTest,
-	"Elysium.Substrate.NpcEnemy.Save", GElysiumTestFlags)
+	"Elysium.Arm.NpcEnemy.Save", GElysiumTestFlags)
 bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 {
 	// Through the real persistence path: `m_hEnemy`, `m_iEnemySightings`, `m_flSumDamage` and

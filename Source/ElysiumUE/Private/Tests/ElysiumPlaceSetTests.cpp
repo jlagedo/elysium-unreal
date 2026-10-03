@@ -65,7 +65,7 @@ namespace ElysiumPlaceSetTests
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSetGetPositionTest,
-	"Elysium.Substrate.PlaceSet.GetPosition", GElysiumPlaceSetTestFlags)
+	"Elysium.Arm.PlaceSet.GetPosition", GElysiumPlaceSetTestFlags)
 bool FElysiumPlaceSetGetPositionTest::RunTest(const FString&)
 {
 	using namespace ElysiumPlaceSetTests;
@@ -215,7 +215,7 @@ bool FElysiumPlaceSetCounterTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSetStorageTest,
-	"Elysium.Substrate.PlaceSet.Storage", GElysiumPlaceSetTestFlags)
+	"Elysium.Arm.PlaceSet.Storage", GElysiumPlaceSetTestFlags)
 bool FElysiumPlaceSetStorageTest::RunTest(const FString&)
 {
 	using namespace ElysiumPlaceSetTests;
@@ -263,7 +263,7 @@ bool FElysiumPlaceSetStorageTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSetRestoreTest,
-	"Elysium.Substrate.PlaceSet.Restore", GElysiumPlaceSetTestFlags)
+	"Elysium.Arm.PlaceSet.Restore", GElysiumPlaceSetTestFlags)
 bool FElysiumPlaceSetRestoreTest::RunTest(const FString&)
 {
 	using namespace ElysiumPlaceSetTests;
@@ -298,7 +298,7 @@ bool FElysiumPlaceSetRestoreTest::RunTest(const FString&)
 
 #if WITH_EDITOR
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSetAuthorJsonTest,
-	"Elysium.Substrate.PlaceSet.AuthorJson", GElysiumPlaceSetTestFlags)
+	"Elysium.Arm.PlaceSet.AuthorJson", GElysiumPlaceSetTestFlags)
 bool FElysiumPlaceSetAuthorJsonTest::RunTest(const FString&)
 {
 	FString Offsets;

@@ -35,7 +35,7 @@ namespace
 // --- `KernelHullTrace`: the character list, kept or dropped ------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGeometryKernelHullTraceTest,
-	"Elysium.Substrate.Geometry.Kernel.HullTraceCharacters", GElysiumGeometryKernelFlags)
+	"Elysium.Arm.Geometry.Kernel.HullTraceCharacters", GElysiumGeometryKernelFlags)
 bool FElysiumGeometryKernelHullTraceTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("geometry_kernel_hull_trace"), 6101);
@@ -167,7 +167,7 @@ bool FElysiumGeometryKernelHullTraceTest::RunTest(const FString&)
 // --- `CanFitAtNode 0x102f1900` ----------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGeometryKernelCanFitTest,
-	"Elysium.Substrate.Geometry.Kernel.CanFitAtNode", GElysiumGeometryKernelFlags)
+	"Elysium.Arm.Geometry.Kernel.CanFitAtNode", GElysiumGeometryKernelFlags)
 bool FElysiumGeometryKernelCanFitTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("geometry_kernel_can_fit"), 6102);
@@ -246,7 +246,7 @@ bool FElysiumGeometryKernelCanFitTest::RunTest(const FString&)
 // --- The wander's radial probe `0x102ed610` ---------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGeometryKernelWanderProbeTest,
-	"Elysium.Substrate.Geometry.Kernel.WanderRadialProbe", GElysiumGeometryKernelFlags)
+	"Elysium.Arm.Geometry.Kernel.WanderRadialProbe", GElysiumGeometryKernelFlags)
 bool FElysiumGeometryKernelWanderProbeTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("geometry_kernel_wander"), 6103);
@@ -306,7 +306,7 @@ bool FElysiumGeometryKernelWanderProbeTest::RunTest(const FString&)
 // --- The floor drop `0x102e7880` -------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGeometryKernelFloorDropTest,
-	"Elysium.Substrate.Geometry.Kernel.FloorDrop", GElysiumGeometryKernelFlags)
+	"Elysium.Arm.Geometry.Kernel.FloorDrop", GElysiumGeometryKernelFlags)
 bool FElysiumGeometryKernelFloorDropTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("geometry_kernel_floor_drop"), 6104);

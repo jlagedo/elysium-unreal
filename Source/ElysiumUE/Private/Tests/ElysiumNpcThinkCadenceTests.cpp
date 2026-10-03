@@ -48,7 +48,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkDueTest,
-	"Elysium.Substrate.NpcThinkCadence.Due", GElysiumTestFlags)
+	"Elysium.Arm.NpcThinkCadence.Due", GElysiumTestFlags)
 bool FElysiumThinkDueTest::RunTest(const FString&)
 {
 	// `(stamp - curtime) <= frametime`, and equality IS due (`FCOMP` + `TEST AH,0x41`).
@@ -67,7 +67,7 @@ bool FElysiumThinkDueTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkUpdateLawTest,
-	"Elysium.Substrate.NpcThinkCadence.UpdateLaw", GElysiumTestFlags)
+	"Elysium.Arm.NpcThinkCadence.UpdateLaw", GElysiumTestFlags)
 bool FElysiumThinkUpdateLawTest::RunTest(const FString&)
 {
 	ElysiumRng::SeedAll(0x15CADE);
@@ -123,7 +123,7 @@ bool FElysiumThinkUpdateLawTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkNormalLawTest,
-	"Elysium.Substrate.NpcThinkCadence.NormalLaw", GElysiumTestFlags)
+	"Elysium.Arm.NpcThinkCadence.NormalLaw", GElysiumTestFlags)
 bool FElysiumThinkNormalLawTest::RunTest(const FString&)
 {
 	ElysiumRng::SeedAll(0x15CADE);
@@ -174,7 +174,7 @@ bool FElysiumThinkNormalLawTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkAiLawTest,
-	"Elysium.Substrate.NpcThinkCadence.AiLaw", GElysiumTestFlags)
+	"Elysium.Arm.NpcThinkCadence.AiLaw", GElysiumTestFlags)
 bool FElysiumThinkAiLawTest::RunTest(const FString&)
 {
 	ElysiumRng::SeedAll(0x15CADE);
@@ -215,7 +215,7 @@ bool FElysiumThinkAiLawTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkStampsTest,
-	"Elysium.Substrate.NpcThinkCadence.Stamps", GElysiumTestFlags)
+	"Elysium.Arm.NpcThinkCadence.Stamps", GElysiumTestFlags)
 bool FElysiumThinkStampsTest::RunTest(const FString&)
 {
 	ElysiumRng::SeedAll(0x15CADE);
@@ -354,7 +354,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkResetSitesTest,
-	"Elysium.Substrate.NpcThinkCadence.ResetSites", GElysiumTestFlags)
+	"Elysium.Arm.NpcThinkCadence.ResetSites", GElysiumTestFlags)
 bool FElysiumThinkResetSitesTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("__npcreset_test__"), 0x52455345);
@@ -546,7 +546,7 @@ bool FElysiumThinkAiGateTest::RunTest(const FString&)
 
 // `TASK_WAIT_PVS` (`0x102aacf0`, task 5) and the state byte's PVS/LOS force.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkWaitPvsAndStateByteTest,
-	"Elysium.Substrate.NpcThinkCadence.WaitPvsAndStateByte", GElysiumTestFlags)
+	"Elysium.Arm.NpcThinkCadence.WaitPvsAndStateByte", GElysiumTestFlags)
 bool FElysiumThinkWaitPvsAndStateByteTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("__npcwaitpvs_test__"), 0x57505653);
@@ -620,7 +620,7 @@ bool FElysiumThinkWaitPvsAndStateByteTest::RunTest(const FString&)
 // `COND_WAS_BUMPED` (0x38). The bit itself, its one-pass life, and the recovered guard that keeps
 // it off an NPC whose program does not list it.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkWasBumpedTest,
-	"Elysium.Substrate.NpcThinkCadence.WasBumped", GElysiumTestFlags)
+	"Elysium.Arm.NpcThinkCadence.WasBumped", GElysiumTestFlags)
 bool FElysiumThinkWasBumpedTest::RunTest(const FString&)
 {
 	TestEqual(TEXT("the condition carries its recovered id"),

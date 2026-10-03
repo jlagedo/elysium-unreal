@@ -41,7 +41,7 @@ namespace
 
 // --- The batch: a constant 100 Hz, floored, capped, and guarded ------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSwingSubStepTest,
-	"Elysium.Substrate.SwingContact.SubSteps", GElysiumTestFlags)
+	"Elysium.Arm.SwingContact.SubSteps", GElysiumTestFlags)
 bool FElysiumSwingSubStepTest::RunTest(const FString&)
 {
 	TestEqual(TEXT("a 60 Hz span runs one sub-step"), ElysiumSwing::SubStepCount(1.f / 60.f), 1);
@@ -94,7 +94,7 @@ bool FElysiumSwingSubStepTest::RunTest(const FString&)
 
 // --- The intervals: contiguous, covering, clamped at 1.0 -------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSwingIntervalTest,
-	"Elysium.Substrate.SwingContact.Intervals", GElysiumTestFlags)
+	"Elysium.Arm.SwingContact.Intervals", GElysiumTestFlags)
 bool FElysiumSwingIntervalTest::RunTest(const FString&)
 {
 	TArray<ElysiumSwing::FInterval> Steps;
@@ -151,7 +151,7 @@ bool FElysiumSwingIntervalTest::RunTest(const FString&)
 
 // --- The overlap test, including what it does with an authored backwards window --------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSwingOverlapTest,
-	"Elysium.Substrate.SwingContact.Overlap", GElysiumTestFlags)
+	"Elysium.Arm.SwingContact.Overlap", GElysiumTestFlags)
 bool FElysiumSwingOverlapTest::RunTest(const FString&)
 {
 	// The closed-interval test: touching at an endpoint IS an overlap, because a window that opens
@@ -194,7 +194,7 @@ bool FElysiumSwingOverlapTest::RunTest(const FString&)
 
 // --- Hit-once: the spread across an overlapping group, and the clear on a closed window ------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSwingHitOnceTest,
-	"Elysium.Substrate.SwingContact.HitOnce", GElysiumTestFlags)
+	"Elysium.Arm.SwingContact.HitOnce", GElysiumTestFlags)
 bool FElysiumSwingHitOnceTest::RunTest(const FString&)
 {
 	// Records 0 and 1 share a window; record 2 opens later and touches neither. This is the shape a

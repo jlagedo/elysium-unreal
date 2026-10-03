@@ -159,7 +159,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19BaseEventKilledTest,
-	"Elysium.Substrate.NpcKernelSpawn19.BaseEventKilled_0x10265ad0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.BaseEventKilled_0x10265ad0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19BaseEventKilledTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VHumanCombatant"));
@@ -200,7 +200,7 @@ bool FElysiumNpcKernelSpawn19BaseEventKilledTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19BaseEventKilledFreezeTest,
-	"Elysium.Substrate.NpcKernelSpawn19.BaseEventKilledNpcFreezeRefuses_0x10265ad0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.BaseEventKilledNpcFreezeRefuses_0x10265ad0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19BaseEventKilledFreezeTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VHumanCombatant"));
@@ -220,7 +220,7 @@ bool FElysiumNpcKernelSpawn19BaseEventKilledFreezeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19BaseEventKilledFadeTest,
-	"Elysium.Substrate.NpcKernelSpawn19.BaseEventKilledFadeArm_0x10265ad0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.BaseEventKilledFadeArm_0x10265ad0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19BaseEventKilledFadeTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VHumanCombatant"));
@@ -243,7 +243,7 @@ bool FElysiumNpcKernelSpawn19BaseEventKilledFadeTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19TroikaEventKilledTest,
-	"Elysium.Substrate.NpcKernelSpawn19.TroikaEventKilled_0x102bf340", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.TroikaEventKilled_0x102bf340", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19TroikaEventKilledTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -279,7 +279,7 @@ bool FElysiumNpcKernelSpawn19TroikaEventKilledTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19GargoyleEventKilledTest,
-	"Elysium.Substrate.NpcKernelSpawn19.GargoyleEventKilled_0x10378da0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.GargoyleEventKilled_0x10378da0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19GargoyleEventKilledTest::RunTest(const FString&)
 {
 	{
@@ -312,7 +312,7 @@ bool FElysiumNpcKernelSpawn19GargoyleEventKilledTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19HengeyokaiEventKilledTest,
-	"Elysium.Substrate.NpcKernelSpawn19.HengeyokaiEventKilled_0x10380390", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.HengeyokaiEventKilled_0x10380390", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19HengeyokaiEventKilledTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VHengeyokai"));
@@ -334,7 +334,7 @@ bool FElysiumNpcKernelSpawn19HengeyokaiEventKilledTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19ManBatEventKilledTest,
-	"Elysium.Substrate.NpcKernelSpawn19.ManBatEventKilled_0x1038e8c0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.ManBatEventKilled_0x1038e8c0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19ManBatEventKilledTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VManBat"));
@@ -361,7 +361,7 @@ bool FElysiumNpcKernelSpawn19ManBatEventKilledTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19TentacleEventKilledTest,
-	"Elysium.Substrate.NpcKernelSpawn19.MingXiaoTentacleEventKilled_0x1039e900", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.MingXiaoTentacleEventKilled_0x1039e900", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19TentacleEventKilledTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VMingXiaoTentacle"));
@@ -386,7 +386,7 @@ bool FElysiumNpcKernelSpawn19TentacleEventKilledTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19MingXiaoEventKilledTest,
-	"Elysium.Substrate.NpcKernelSpawn19.MingXiaoEventKilled_0x10395ba0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.MingXiaoEventKilled_0x10395ba0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19MingXiaoEventKilledTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VMingXiao"));
@@ -435,7 +435,7 @@ bool FElysiumNpcKernelSpawn19MingXiaoEventKilledTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19TzimisceEventKilledTest,
-	"Elysium.Substrate.NpcKernelSpawn19.TzimisceEventKilled_0x103be010", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.TzimisceEventKilled_0x103be010", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19TzimisceEventKilledTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VTzimisce"));
@@ -453,7 +453,7 @@ bool FElysiumNpcKernelSpawn19TzimisceEventKilledTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19HeadClawEventKilledTest,
-	"Elysium.Substrate.NpcKernelSpawn19.TzimisceHeadClawEventKilled_0x103c1d50", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.TzimisceHeadClawEventKilled_0x103c1d50", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19HeadClawEventKilledTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VTzimisceHeadClaw"));
@@ -473,7 +473,7 @@ bool FElysiumNpcKernelSpawn19HeadClawEventKilledTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19ZombieCreateCorpseTest,
-	"Elysium.Substrate.NpcKernelSpawn19.ZombieCreateCorpse_0x103dfbb0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.ZombieCreateCorpse_0x103dfbb0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19ZombieCreateCorpseTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VZombie"));
@@ -498,7 +498,7 @@ bool FElysiumNpcKernelSpawn19ZombieCreateCorpseTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19InputTransformModelTest,
-	"Elysium.Substrate.NpcKernelSpawn19.VampireBossInputTransformModel_0x103c75f0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.VampireBossInputTransformModel_0x103c75f0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19InputTransformModelTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VVampireBoss"));
@@ -526,7 +526,7 @@ bool FElysiumNpcKernelSpawn19InputTransformModelTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19TransformationStartTest,
-	"Elysium.Substrate.NpcKernelSpawn19.VampireBossTransformationStart_0x103c60a0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.VampireBossTransformationStart_0x103c60a0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19TransformationStartTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VVampireBoss"));
@@ -561,7 +561,7 @@ bool FElysiumNpcKernelSpawn19TransformationStartTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19TransformationStartMissTest,
-	"Elysium.Substrate.NpcKernelSpawn19.VampireBossTransformationStartFactoryMiss_0x103c60a0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.VampireBossTransformationStartFactoryMiss_0x103c60a0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19TransformationStartMissTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VVampireBoss"));
@@ -579,7 +579,7 @@ bool FElysiumNpcKernelSpawn19TransformationStartMissTest::RunTest(const FString&
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19SabbatLeaderTransformationStartTest,
-	"Elysium.Substrate.NpcKernelSpawn19.SabbatLeaderTransformationStart_0x103ab310", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.SabbatLeaderTransformationStart_0x103ab310", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19SabbatLeaderTransformationStartTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VSabbatLeader"));
@@ -607,7 +607,7 @@ bool FElysiumNpcKernelSpawn19SabbatLeaderTransformationStartTest::RunTest(const 
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19BaseSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.BaseSpawn_0x10273200", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.BaseSpawn_0x10273200", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19BaseSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VHumanCombatant"));
@@ -648,7 +648,7 @@ bool FElysiumNpcKernelSpawn19BaseSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19TroikaSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.TroikaSpawn_0x10298d30", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.TroikaSpawn_0x10298d30", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19TroikaSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -720,63 +720,63 @@ static bool Spawn19CapsCase(FAutomationTestBase& Test, const TCHAR* RetailClass,
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19AnimalSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.AnimalSpawn_0x1035f510", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.AnimalSpawn_0x1035f510", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19AnimalSpawnTest::RunTest(const FString&)
 {
 	return Spawn19CapsCase<FElysiumNpcAnimal>(*this, TEXT("CNPC_VAnimal"), 0x4000000);
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19HumanSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.HumanSpawn_0x10384690", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.HumanSpawn_0x10384690", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19HumanSpawnTest::RunTest(const FString&)
 {
 	return Spawn19CapsCase<FElysiumNpcHuman>(*this, TEXT("CNPC_VHuman"), 0xc200d00);
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19HumanCombatantSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.HumanCombatantSpawn_0x10387110", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.HumanCombatantSpawn_0x10387110", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19HumanCombatantSpawnTest::RunTest(const FString&)
 {
 	return Spawn19CapsCase<FElysiumNpcHumanCombatant>(*this, TEXT("CNPC_VHumanCombatant"), 0xc200d40);
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19PedestrianSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.PedestrianSpawn_0x103a2540", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.PedestrianSpawn_0x103a2540", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19PedestrianSpawnTest::RunTest(const FString&)
 {
 	return Spawn19CapsCase<FElysiumNpcPedestrian>(*this, TEXT("CNPC_VPedestrian"), 0xc200d00);
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19HunterSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.HunterSpawn_0x103887a0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.HunterSpawn_0x103887a0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19HunterSpawnTest::RunTest(const FString&)
 {
 	return Spawn19CapsCase<FElysiumNpcHunter>(*this, TEXT("CNPC_VHunter"), 0xc200d40);
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19AsianVampireSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.AsianVampireSpawn_0x10360c50", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.AsianVampireSpawn_0x10360c50", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19AsianVampireSpawnTest::RunTest(const FString&)
 {
 	return Spawn19CapsCase<FElysiumNpcAsianVampire>(*this, TEXT("CNPC_VAsianVampire"), 0xc201d40);
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19ChangBrosSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.ChangBrosSpawn_0x1036afc0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.ChangBrosSpawn_0x1036afc0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19ChangBrosSpawnTest::RunTest(const FString&)
 {
 	return Spawn19CapsCase<FElysiumNpcChangBros>(*this, TEXT("CNPC_VChangBros"), 0xc209d40);
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19SheriffManSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.SheriffManSpawn_0x103ae630", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.SheriffManSpawn_0x103ae630", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19SheriffManSpawnTest::RunTest(const FString&)
 {
 	return Spawn19CapsCase<FElysiumNpcSheriffMan>(*this, TEXT("CNPC_VSheriffMan"), 0xc201d40);
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19VampireSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.VampireSpawn_0x103c4ef0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.VampireSpawn_0x103c4ef0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19VampireSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VVampire"));
@@ -797,7 +797,7 @@ bool FElysiumNpcKernelSpawn19VampireSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19Guard1SpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.Guard1Spawn_0x1037cda0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.Guard1Spawn_0x1037cda0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19Guard1SpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VGuard1"));
@@ -815,7 +815,7 @@ bool FElysiumNpcKernelSpawn19Guard1SpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19YukieSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.YukieSpawn_0x103dd620", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.YukieSpawn_0x103dd620", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19YukieSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VYukie"));
@@ -831,7 +831,7 @@ bool FElysiumNpcKernelSpawn19YukieSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19CopSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.CopSpawn_0x10371a20", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.CopSpawn_0x10371a20", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19CopSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VCop"));
@@ -854,7 +854,7 @@ bool FElysiumNpcKernelSpawn19CopSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19GhoulCroucherSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.GhoulCroucherSpawn_0x1037b040", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.GhoulCroucherSpawn_0x1037b040", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19GhoulCroucherSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VGhoulCroucher"));
@@ -887,7 +887,7 @@ bool FElysiumNpcKernelSpawn19GhoulCroucherSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19AndreiBloodSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.AndreiBloodSpawn_0x1035cc20", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.AndreiBloodSpawn_0x1035cc20", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19AndreiBloodSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VAndreiBlood"));
@@ -907,7 +907,7 @@ bool FElysiumNpcKernelSpawn19AndreiBloodSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19BachSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.BachSpawn_0x10363850", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.BachSpawn_0x10363850", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19BachSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VBach"));
@@ -928,7 +928,7 @@ bool FElysiumNpcKernelSpawn19BachSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19HengeyokaiSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.HengeyokaiSpawn_0x1037fa00", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.HengeyokaiSpawn_0x1037fa00", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19HengeyokaiSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VHengeyokai"));
@@ -944,7 +944,7 @@ bool FElysiumNpcKernelSpawn19HengeyokaiSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19LasombraSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.LasombraSpawn_0x10389390", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.LasombraSpawn_0x10389390", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19LasombraSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VLasombra"));
@@ -960,7 +960,7 @@ bool FElysiumNpcKernelSpawn19LasombraSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19ManBatSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.ManBatSpawn_0x1038b030", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.ManBatSpawn_0x1038b030", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19ManBatSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VManBat"));
@@ -980,7 +980,7 @@ bool FElysiumNpcKernelSpawn19ManBatSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19SabbatLeaderSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.SabbatLeaderSpawn_0x103a6c80", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.SabbatLeaderSpawn_0x103a6c80", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19SabbatLeaderSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VSabbatLeader"));
@@ -999,7 +999,7 @@ bool FElysiumNpcKernelSpawn19SabbatLeaderSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19DogSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.DogSpawn_0x10374000", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.DogSpawn_0x10374000", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19DogSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VDog"));
@@ -1019,7 +1019,7 @@ bool FElysiumNpcKernelSpawn19DogSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19ScurryingSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.ScurryingSpawn_0x103ac430", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.ScurryingSpawn_0x103ac430", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19ScurryingSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VScurrying"));
@@ -1036,7 +1036,7 @@ bool FElysiumNpcKernelSpawn19ScurryingSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19RatSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.RatSpawn_0x103ad630", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.RatSpawn_0x103ad630", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19RatSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VRat"));
@@ -1054,7 +1054,7 @@ bool FElysiumNpcKernelSpawn19RatSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19ZombieSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.ZombieSpawn_0x103df170", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.ZombieSpawn_0x103df170", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19ZombieSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VZombie"));
@@ -1073,7 +1073,7 @@ bool FElysiumNpcKernelSpawn19ZombieSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19WerewolfSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.WerewolfSpawn_0x103caa30", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.WerewolfSpawn_0x103caa30", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19WerewolfSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VWerewolf"));
@@ -1095,7 +1095,7 @@ bool FElysiumNpcKernelSpawn19WerewolfSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19TzimisceSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.TzimisceSpawn_0x103b9060", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.TzimisceSpawn_0x103b9060", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19TzimisceSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VTzimisce"));
@@ -1115,7 +1115,7 @@ bool FElysiumNpcKernelSpawn19TzimisceSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19HeadClawSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.TzimisceHeadClawSpawn_0x103c1b90", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.TzimisceHeadClawSpawn_0x103c1b90", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19HeadClawSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VTzimisceHeadClaw"));
@@ -1137,7 +1137,7 @@ bool FElysiumNpcKernelSpawn19HeadClawSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19RunnerSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.TzimisceRunnerSpawn_0x103c3b30", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.TzimisceRunnerSpawn_0x103c3b30", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19RunnerSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VTzimisceRunner"));
@@ -1157,7 +1157,7 @@ bool FElysiumNpcKernelSpawn19RunnerSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19MingXiaoSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.MingXiaoSpawn_0x103927a0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.MingXiaoSpawn_0x103927a0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19MingXiaoSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VMingXiao"));
@@ -1190,7 +1190,7 @@ bool FElysiumNpcKernelSpawn19MingXiaoSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19TentacleSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.MingXiaoTentacleSpawn_0x1039c380", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.MingXiaoTentacleSpawn_0x1039c380", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19TentacleSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VMingXiaoTentacle"));
@@ -1211,7 +1211,7 @@ bool FElysiumNpcKernelSpawn19TentacleSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19CameraSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.CameraSpawn_0x10368b70", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.CameraSpawn_0x10368b70", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19CameraSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VCamera"));
@@ -1233,7 +1233,7 @@ bool FElysiumNpcKernelSpawn19CameraSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19PayphoneSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.PayphoneSpawn_0x101aa9c0", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.PayphoneSpawn_0x101aa9c0", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19PayphoneSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CPayphone"));
@@ -1254,7 +1254,7 @@ bool FElysiumNpcKernelSpawn19PayphoneSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19PlayerControllerSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.PlayerControllerSpawn_0x103a4510", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.PlayerControllerSpawn_0x103a4510", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19PlayerControllerSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VPlayerController"));
@@ -1276,7 +1276,7 @@ bool FElysiumNpcKernelSpawn19PlayerControllerSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpawn19FrenzyShadowSpawnTest,
-	"Elysium.Substrate.NpcKernelSpawn19.FrenzyShadowSpawn_0x10375c50", GSpawn19TestFlags)
+	"Elysium.Arm.NpcKernelSpawn19.FrenzyShadowSpawn_0x10375c50", GSpawn19TestFlags)
 bool FElysiumNpcKernelSpawn19FrenzyShadowSpawnTest::RunTest(const FString&)
 {
 	FSpawn19Fixture F(TEXT("CNPC_VFrenzyShadow"));

@@ -91,7 +91,7 @@ TArray<uint8> Source(float HandLocalX = 10.f, bool bMixedSkin = false)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSkeletalStageBuildTest,
-	"Elysium.Substrate.SkeletalStageBuild",
+	"Elysium.Content.SkeletalStageBuild",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumSkeletalStageBuildTest::RunTest(const FString&)
 {
@@ -217,7 +217,7 @@ bool FElysiumSkeletalStageBuildTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSkeletalStageMixedMorphTest,
-	"Elysium.Substrate.SkeletalStageMixedMorph",
+	"Elysium.Content.SkeletalStageMixedMorph",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumSkeletalStageMixedMorphTest::RunTest(const FString&)
 {
@@ -248,7 +248,7 @@ bool FElysiumSkeletalStageMixedMorphTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSkeletalStageMaskTest,
-	"Elysium.Substrate.SkeletalStageMasks",
+	"Elysium.Content.SkeletalStageMasks",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumSkeletalStageMaskTest::RunTest(const FString&)
 {
@@ -294,7 +294,7 @@ bool FElysiumSkeletalStageMaskTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSkeletalStageOwnerTest,
-	"Elysium.Substrate.SkeletalStageOwners",
+	"Elysium.Slow.SkeletalStageOwners",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumSkeletalStageOwnerTest::RunTest(const FString&)
 {

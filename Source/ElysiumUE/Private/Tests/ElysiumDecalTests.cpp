@@ -81,7 +81,7 @@ static void RetireProbeInstance()
 // Lay -- the orientation, the box, the sort order, and the two ways a request names nothing.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDecalLayTest, "Elysium.Substrate.DecalLay", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDecalLayTest, "Elysium.Arm.DecalLay", GElysiumTestFlags)
 bool FElysiumDecalLayTest::RunTest(const FString&)
 {
 	FTestWorldWrapper TestWorld;
@@ -177,7 +177,7 @@ bool FElysiumDecalLayTest::RunTest(const FString&)
 // A stain with a lifetime -- the fade the engine's own timer runs, and its absence from the save.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDecalLifetimeTest, "Elysium.Substrate.DecalLifetime",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDecalLifetimeTest, "Elysium.Arm.DecalLifetime",
 	GElysiumTestFlags)
 bool FElysiumDecalLifetimeTest::RunTest(const FString&)
 {
@@ -235,7 +235,7 @@ bool FElysiumDecalLifetimeTest::RunTest(const FString&)
 // The ranged shot's forward trace -- `C_TEGunshotDecal`'s decal half against a real surface.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDecalImpactTraceTest, "Elysium.Substrate.DecalImpactTrace",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDecalImpactTraceTest, "Elysium.Arm.DecalImpactTrace",
 	GElysiumTestFlags)
 bool FElysiumDecalImpactTraceTest::RunTest(const FString&)
 {

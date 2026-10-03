@@ -63,7 +63,7 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicsSourceDataTest, "Elysium.Substrate.PhysicsSourceData",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicsSourceDataTest, "Elysium.Content.PhysicsSourceData",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumPhysicsSourceDataTest::RunTest(const FString&)
 {
@@ -128,7 +128,7 @@ bool FElysiumPhysicsSourceDataTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicsSourceGapTest, "Elysium.Substrate.PhysicsSourceGaps",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicsSourceGapTest, "Elysium.Arm.PhysicsSourceGaps",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumPhysicsSourceGapTest::RunTest(const FString&)
 {

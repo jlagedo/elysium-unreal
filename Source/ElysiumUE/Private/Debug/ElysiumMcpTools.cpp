@@ -320,6 +320,62 @@ namespace ElysiumMcpImpl
 		return Params.IsValid() && Params->HasField(Key);
 	}
 
+	// A list parameter: a JSON array of strings, or one comma-separated string. Blank items dropped.
+	TArray<FString> ParamStrList(const TSharedPtr<FJsonObject>& Params, const TCHAR* Key)
+	{
+		TArray<FString> Out;
+		if (!Params.IsValid())
+		{
+			return Out;
+		}
+		const TArray<TSharedPtr<FJsonValue>>* Array = nullptr;
+		if (Params->TryGetArrayField(Key, Array) && Array != nullptr)
+		{
+			for (const TSharedPtr<FJsonValue>& Value : *Array)
+			{
+				FString Item;
+				if (Value.IsValid() && Value->TryGetString(Item))
+				{
+					Item.TrimStartAndEndInline();
+					if (!Item.IsEmpty())
+					{
+						Out.Add(MoveTemp(Item));
+					}
+				}
+			}
+			return Out;
+		}
+		FString Joined;
+		if (Params->TryGetStringField(Key, Joined))
+		{
+			TArray<FString> Parts;
+			Joined.ParseIntoArray(Parts, TEXT(","), /*InCullEmpty*/ true);
+			for (FString& Part : Parts)
+			{
+				Part.TrimStartAndEndInline();
+				if (!Part.IsEmpty())
+				{
+					Out.Add(MoveTemp(Part));
+				}
+			}
+		}
+		return Out;
+	}
+
+	// The read caps (spec 0002 step 1 T2): no default reply is large, and every cut says what it left
+	// out and how to get the rest -- `truncated: true` and a `more` sentence naming the parameter.
+	void MarkCut(const TSharedRef<FJsonObject>& Body, const FString& More)
+	{
+		Body->SetBoolField(TEXT("truncated"), true);
+		Body->SetStringField(TEXT("more"), More);
+	}
+
+	// A case-insensitive substring filter; an empty pattern keeps everything.
+	bool GrepKeeps(const FString& Pattern, const FString& Text)
+	{
+		return Pattern.IsEmpty() || Text.Contains(Pattern, ESearchCase::IgnoreCase);
+	}
+
 	// Validate and normalize a caller-supplied filesystem path against $ELYSIUM_WORK_ROOT — the
 	// screenshot `path` argument's one guard, so an agent cannot ask this process to write outside
 	// the sandboxed work tree. False (with `OutWorkRoot` still filled, for the error text) when
@@ -389,6 +445,16 @@ namespace ElysiumMcpImpl
 			{
 				RequiredKeys.Add(Name);
 			}
+			return *this;
+		}
+
+		// A list-of-strings parameter (`"type": "array"` with string items).
+		FSchema& AddStringList(const TCHAR* Name, const TCHAR* Description)
+		{
+			Add(Name, TEXT("array"), Description);
+			TSharedRef<FJsonObject> Items = Obj();
+			Items->SetStringField(TEXT("type"), TEXT("string"));
+			Props->GetObjectField(Name)->SetObjectField(TEXT("items"), Items);
 			return *this;
 		}
 
@@ -567,7 +633,6 @@ namespace ElysiumMcpImpl
 				const FElysiumVariant Value = Pair.Value.Get(Entity);
 				TSharedRef<FJsonObject> Field = Obj();
 				Field->SetStringField(TEXT("value"), Value.ToString());
-				Field->SetStringField(TEXT("described"), Value.Describe());
 				Field->SetBoolField(TEXT("keyable"), Pair.Value.bKeyable);
 				Fields->SetObjectField(Pair.Key.ToString(), Field);
 			}
@@ -688,6 +753,67 @@ namespace ElysiumMcpImpl
 		return Out;
 	}
 
+	// `elysium_entity_get fields=`: the summary plus only the named values -- a class-chain field
+	// (derived shadows base, as `EntityDetail` walks it) or a `live_state` row, matched by name
+	// case-insensitively. A name found in neither is listed under `missing_fields`.
+	TSharedRef<FJsonObject> EntityFields(const FElysiumEntity& Entity, const TArray<FString>& Names)
+	{
+		TSharedRef<FJsonObject> Out = EntitySummary(Entity);
+		TArray<const FElysiumClassDesc*> Chain;
+		ChainDescs(Entity.Class, Chain);
+		TArray<TPair<FString, FString>> DebugState;
+		Entity.GetDebugState(DebugState);
+
+		TSharedRef<FJsonObject> Fields = Obj();
+		TSharedRef<FJsonObject> State = Obj();
+		TArray<TSharedPtr<FJsonValue>> Missing;
+		for (const FString& Name : Names)
+		{
+			bool bFound = false;
+			for (const FElysiumClassDesc* Desc : Chain)
+			{
+				for (const TPair<FName, FElysiumFieldAccessor>& Pair : Desc->Fields)
+				{
+					if (Pair.Value.Get && Pair.Key.ToString().Equals(Name, ESearchCase::IgnoreCase))
+					{
+						TSharedRef<FJsonObject> Field = Obj();
+						Field->SetStringField(TEXT("value"), Pair.Value.Get(Entity).ToString());
+						Field->SetBoolField(TEXT("keyable"), Pair.Value.bKeyable);
+						Fields->SetObjectField(Pair.Key.ToString(), Field);
+						bFound = true;
+						break;
+					}
+				}
+				if (bFound)
+				{
+					break;
+				}
+			}
+			for (const TPair<FString, FString>& Pair : DebugState)
+			{
+				if (Pair.Key.Equals(Name, ESearchCase::IgnoreCase))
+				{
+					State->SetStringField(Pair.Key, Pair.Value);
+					bFound = true;
+				}
+			}
+			if (!bFound)
+			{
+				Missing.Add(MakeShared<FJsonValueString>(Name));
+			}
+		}
+		Out->SetObjectField(TEXT("fields"), Fields);
+		if (State->Values.Num() > 0)
+		{
+			Out->SetObjectField(TEXT("live_state"), State);
+		}
+		if (Missing.Num() > 0)
+		{
+			Out->SetArrayField(TEXT("missing_fields"), Missing);
+		}
+		return Out;
+	}
+
 	// Resolve a target the way `elysium.ent_fire` does: targetname first, then classname. Both are
 	// non-unique, so both fan out.
 	void ResolveEntities(FElysiumEntityWorld& World, const FString& Target, TArray<FElysiumEntity*>& Out)
@@ -726,6 +852,54 @@ namespace ElysiumMcpImpl
 			Lines.Add(V);
 		}
 	};
+
+	// Run a console command and collect what it printed: the exec Ar's lines (no category), then the
+	// log tap's delta across the call, duplicates dropped. Answers whether the command was handled.
+	bool ExecCollect(const FString& Command, TArray<FElysiumLogTap::FLine>& OutLines)
+	{
+		FElysiumLogTap& Tap = ElysiumLogTapGet();
+		const uint64 Before = Tap.Cursor();
+
+		FExecCapture Capture;
+		const bool bHandled = GEngine != nullptr && GEngine->Exec(LiveWorld(), *Command, Capture);
+
+		TArray<FElysiumLogTap::FLine> Logged;
+		Tap.CollectSince(Before, Logged);
+
+		TSet<FString> Seen;
+		for (const FString& Line : Capture.Lines)
+		{
+			if (!Line.IsEmpty() && !Seen.Contains(Line))
+			{
+				Seen.Add(Line);
+				FElysiumLogTap::FLine& Row = OutLines.AddDefaulted_GetRef();
+				Row.Text = Line;
+			}
+		}
+		for (const FElysiumLogTap::FLine& Line : Logged)
+		{
+			if (!Line.Text.IsEmpty() && !Seen.Contains(Line.Text))
+			{
+				Seen.Add(Line.Text);
+				OutLines.Add(Line);
+			}
+		}
+		return bHandled;
+	}
+
+	// The `elysium.npc_brief` readout for one entity, as the verb prints it (by index, so a shared
+	// targetname does not fan out). Empty when the verb is not registered (a Shipping build).
+	TArray<FString> NpcBriefLines(const FElysiumEntity& Entity)
+	{
+		TArray<FElysiumLogTap::FLine> Lines;
+		ExecCollect(FString::Printf(TEXT("elysium.npc_brief %d"), Entity.Handle.Index), Lines);
+		TArray<FString> Out;
+		for (const FElysiumLogTap::FLine& Line : Lines)
+		{
+			Out.Add(Line.Text);
+		}
+		return Out;
+	}
 
 	// Status.
 
@@ -1308,10 +1482,11 @@ namespace ElysiumMcpImpl
 				.Add(TEXT("classname"), TEXT("string"), TEXT("Substring-match on classname (case-insensitive)."))
 				.Add(TEXT("live_only"), TEXT("boolean"), TEXT("Drop dead and hidden records. Default false."))
 				.Add(TEXT("registered_only"), TEXT("boolean"), TEXT("Drop inert records (classnames with no leaf class registered). Default false."))
-				.Add(TEXT("limit"), TEXT("integer"), TEXT("Max entities to return. Default 100."))
+				.Add(TEXT("grep"), TEXT("string"), TEXT("Keep only entities whose targetname OR classname contains this (case-insensitive)."))
+				.Add(TEXT("limit"), TEXT("integer"), TEXT("Max entities to return. Default 25, max 2000."))
 				.Add(TEXT("offset"), TEXT("integer"), TEXT("Skip this many matches first. Default 0."));
 			Out.Add(MakeTool(TEXT("elysium_entity_list"),
-				TEXT("Browse the current map's entity substrate. A map holds ~1,200 records including inert ones (classnames with no leaf class registered), so filter and page rather than dumping everything. Returns a class histogram alongside the matches."),
+				TEXT("Browse the current map's entity substrate. A map holds ~1,200 records including inert ones (classnames with no leaf class registered), so filter and page rather than dumping everything (default 25 per page; a cut names the next `offset`). Returns a class histogram alongside the matches."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{
@@ -1325,7 +1500,8 @@ namespace ElysiumMcpImpl
 					const FString ClassFilter = ParamStr(Params, TEXT("classname"));
 					const bool bLiveOnly = ParamBool(Params, TEXT("live_only"), false);
 					const bool bRegisteredOnly = ParamBool(Params, TEXT("registered_only"), false);
-					const int32 Limit = FMath::Clamp(ParamInt(Params, TEXT("limit"), 100), 1, 2000);
+					const FString Grep = ParamStr(Params, TEXT("grep"));
+					const int32 Limit = FMath::Clamp(ParamInt(Params, TEXT("limit"), 25), 1, 2000);
 					const int32 Offset = FMath::Max(0, ParamInt(Params, TEXT("offset"), 0));
 
 					TArray<TSharedPtr<FJsonValue>> Matches;
@@ -1355,6 +1531,10 @@ namespace ElysiumMcpImpl
 						{
 							continue;
 						}
+						if (!Grep.IsEmpty() && !GrepKeeps(Grep, Entity->TargetName) && !GrepKeeps(Grep, Classname))
+						{
+							continue;
+						}
 
 						Histogram.FindOrAdd(Classname)++;
 						if (Total >= Offset && Matches.Num() < Limit)
@@ -1369,6 +1549,13 @@ namespace ElysiumMcpImpl
 					Body->SetNumberField(TEXT("world_total"), World->NumEntities());
 					Body->SetNumberField(TEXT("offset"), Offset);
 					Body->SetArrayField(TEXT("entities"), Matches);
+					if (Offset + Matches.Num() < Total)
+					{
+						MarkCut(Body, FString::Printf(
+							TEXT("entities %d..%d of %d matches: page on with `offset`=%d, raise `limit` (max 2000), "
+								"or narrow with `grep` / `name` / `classname`"),
+							Offset, Offset + Matches.Num() - 1, Total, Offset + Matches.Num()));
+					}
 
 					TSharedRef<FJsonObject> Classes = Obj();
 					for (const TPair<FString, int32>& Pair : Histogram)
@@ -1384,9 +1571,11 @@ namespace ElysiumMcpImpl
 			FSchema Schema;
 			Schema.Add(TEXT("name"), TEXT("string"), TEXT("Exact targetname, or a classname (fans out to every match)."))
 				.Add(TEXT("index"), TEXT("integer"), TEXT("Entity index (its position in the parsed .ents array). Takes precedence over `name`."))
-				.Add(TEXT("limit"), TEXT("integer"), TEXT("Max entities to detail when `name` matches several. Default 10."));
+				.Add(TEXT("limit"), TEXT("integer"), TEXT("Max entities to detail when `name` matches several. Default 10 for a targetname, 1 for a classname; max 100."))
+				.AddStringList(TEXT("fields"), TEXT("Only these values (field names or live_state row names, case-insensitive) instead of every field. A comma-separated string is accepted too."))
+				.Add(TEXT("brief"), TEXT("boolean"), TEXT("The 10-line elysium.npc_brief readout instead of every field. Default false."));
 			Out.Add(MakeTool(TEXT("elysium_entity_get"),
-				TEXT("Full detail for one or more entities: raw .ents keyvalues, the resolved class chain with every live field value, the inputs the class accepts, all 7-field outputs with their remaining `times` counts, and leaf-class runtime state. This is the read half of a QA loop — pair it with elysium_entity_fire."),
+				TEXT("Detail for one or more entities: raw .ents keyvalues, the resolved class chain with every live field value, the inputs the class accepts, all 7-field outputs with their remaining `times` counts, and leaf-class runtime state. `fields` narrows it to named values and `brief` to the npc_brief readout. This is the read half of a QA loop — pair it with elysium_entity_fire."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{
@@ -1397,6 +1586,8 @@ namespace ElysiumMcpImpl
 					}
 
 					TArray<FElysiumEntity*> Found;
+					// A classname fans out over every record of the class, so its default is one.
+					bool bByClassname = false;
 					if (HasParam(Params, TEXT("index")))
 					{
 						const int32 Index = ParamInt(Params, TEXT("index"), INDEX_NONE);
@@ -1420,18 +1611,46 @@ namespace ElysiumMcpImpl
 							return MakeErrorResult(FString::Printf(
 								TEXT("no live entity with targetname or classname '%s'"), *Name));
 						}
+						// `ResolveEntities` takes targetnames first and falls back to classnames.
+						bByClassname = !Found[0]->TargetName.Equals(Name, ESearchCase::IgnoreCase);
 					}
 
-					const int32 Limit = FMath::Clamp(ParamInt(Params, TEXT("limit"), 10), 1, 100);
+					const int32 Limit = FMath::Clamp(ParamInt(Params, TEXT("limit"), bByClassname ? 1 : 10), 1, 100);
+					const TArray<FString> FieldNames = ParamStrList(Params, TEXT("fields"));
+					const bool bBrief = ParamBool(Params, TEXT("brief"), false);
 					TArray<TSharedPtr<FJsonValue>> Details;
 					for (int32 i = 0; i < Found.Num() && i < Limit; ++i)
 					{
-						Details.Add(MakeShared<FJsonValueObject>(EntityDetail(*World, *Found[i])));
+						if (bBrief)
+						{
+							TSharedRef<FJsonObject> Brief = EntitySummary(*Found[i]);
+							TArray<TSharedPtr<FJsonValue>> Lines;
+							for (const FString& Line : NpcBriefLines(*Found[i]))
+							{
+								Lines.Add(MakeShared<FJsonValueString>(Line));
+							}
+							Brief->SetArrayField(TEXT("brief"), Lines);
+							Details.Add(MakeShared<FJsonValueObject>(Brief));
+						}
+						else if (FieldNames.Num() > 0)
+						{
+							Details.Add(MakeShared<FJsonValueObject>(EntityFields(*Found[i], FieldNames)));
+						}
+						else
+						{
+							Details.Add(MakeShared<FJsonValueObject>(EntityDetail(*World, *Found[i])));
+						}
 					}
 
 					TSharedRef<FJsonObject> Body = Obj();
 					Body->SetNumberField(TEXT("matched"), Found.Num());
 					Body->SetArrayField(TEXT("entities"), Details);
+					if (Found.Num() > Details.Num())
+					{
+						MarkCut(Body, FString::Printf(
+							TEXT("%d of %d matches detailed: raise `limit` (max 100), or name one by `index` "
+								"(elysium_entity_list lists them)"), Details.Num(), Found.Num()));
+					}
 					return Structured(Body);
 				}));
 		}
@@ -1653,7 +1872,7 @@ namespace ElysiumMcpImpl
 		{
 			FSchema Schema;
 			Schema.Add(TEXT("outcome"), TEXT("string"), TEXT("Return only wires with this outcome: never_fired, exhausted, unknown_target, unknown_input, delivered, python_only, pending. Omit for all of them."));
-			Schema.Add(TEXT("limit"), TEXT("integer"), TEXT("Maximum wire rows to return; `matched` still counts the whole set. Default 100."));
+			Schema.Add(TEXT("limit"), TEXT("integer"), TEXT("Maximum wire rows to return; `matched` still counts the whole set. Default 25, max 5000."));
 			Schema.Add(TEXT("write"), TEXT("boolean"), TEXT("Also dump the full report to _wires/<map>.json for the offline joiner. Default false."));
 			Out.Add(MakeTool(TEXT("elysium_wire_report"),
 				TEXT("Per-wire I/O accounting for the live map: every authored output row and what it did — fired, refused because `times` was spent, delivered, dead target, unresolved input, Python forwarded. The summary answers 'is the event surface working?' as a number; filtering by outcome gives the work list, and never_fired is the one that matters most."),
@@ -1684,7 +1903,7 @@ namespace ElysiumMcpImpl
 					Summary->SetNumberField(TEXT("python_forwarded"), S.PythonForwarded);
 
 					const FString Filter = ParamStr(Params, TEXT("outcome"));
-					const int32 Limit = FMath::Clamp(ParamInt(Params, TEXT("limit"), 100), 1, 5000);
+					const int32 Limit = FMath::Clamp(ParamInt(Params, TEXT("limit"), 25), 1, 5000);
 
 					TArray<TSharedPtr<FJsonValue>> Wires;
 					int32 Matched = 0;
@@ -1731,6 +1950,12 @@ namespace ElysiumMcpImpl
 					Body->SetStringField(TEXT("outcome_filter"), Filter);
 					Body->SetNumberField(TEXT("matched"), Matched);
 					Body->SetArrayField(TEXT("wires"), Wires);
+					if (Matched > Wires.Num())
+					{
+						MarkCut(Body, FString::Printf(
+							TEXT("%d of %d matching wires: raise `limit` (max 5000), filter by `outcome`, or pass "
+								"`write`=true for the whole report on disk"), Wires.Num(), Matched));
+					}
 					if (ParamBool(Params, TEXT("write"), false))
 					{
 						const FString Path = ElysiumWireDump::Write(*World);
@@ -1967,9 +2192,10 @@ namespace ElysiumMcpImpl
 	{
 		{
 			FSchema Schema;
-			Schema.Add(TEXT("command"), TEXT("string"), TEXT("A console command line, e.g. `elysium.ent_dump elevator_door` or `stat unit`."), true);
+			Schema.Add(TEXT("command"), TEXT("string"), TEXT("A console command line, e.g. `elysium.ent_dump elevator_door` or `stat unit`."), true)
+				.Add(TEXT("max_lines"), TEXT("integer"), TEXT("Most output lines to return (the first ones). Default 200, max 5000. Every line is cut at 300 characters."));
 			Out.Add(MakeTool(TEXT("elysium_console_exec"),
-				TEXT("Run a console command and return everything it printed. The full elysium.* verb set (ent_*, world.*, script.*, py.*, lights, props, showtriggers, Mute, MusicState, npc.*) plus every engine command is reachable here — use it for anything the typed tools do not cover."),
+				TEXT("Run a console command and return everything it printed (first `max_lines` lines, each cut at 300 characters; a cut says how to get the rest). The full elysium.* verb set (ent_*, world.*, script.*, py.*, lights, props, showtriggers, Mute, MusicState, npc.*) plus every engine command is reachable here — use it for anything the typed tools do not cover."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{
@@ -1982,46 +2208,49 @@ namespace ElysiumMcpImpl
 					{
 						return MakeErrorResult(TEXT("no engine"));
 					}
+					const int32 MaxLines = FMath::Clamp(ParamInt(Params, TEXT("max_lines"), 200), 1, 5000);
+					constexpr int32 MaxLineChars = 300;
 
-					// Most elysium.* verbs report through UE_LOG rather than the exec Ar, so take
-					// the log tap's delta across the call as well and merge the two.
-					FElysiumLogTap& Tap = ElysiumLogTapGet();
-					const uint64 Before = Tap.Cursor();
-
-					FExecCapture Capture;
-					const bool bHandled = GEngine->Exec(LiveWorld(), *Command, Capture);
-
-					TArray<FElysiumLogTap::FLine> Logged;
-					Tap.CollectSince(Before, Logged);
+					// Most elysium.* verbs report through UE_LOG rather than the exec Ar, so the log
+					// tap's delta across the call is merged with the Ar's lines.
+					TArray<FElysiumLogTap::FLine> Lines;
+					const bool bHandled = ExecCollect(Command, Lines);
 
 					TArray<TSharedPtr<FJsonValue>> Output;
-					TSet<FString> Seen;
-					for (const FString& Line : Capture.Lines)
+					int32 LinesCut = 0;
+					for (const FElysiumLogTap::FLine& Line : Lines)
 					{
-						if (!Line.IsEmpty() && !Seen.Contains(Line))
+						if (Output.Num() >= MaxLines)
 						{
-							Seen.Add(Line);
-							Output.Add(MakeShared<FJsonValueString>(Line));
+							break;
 						}
-					}
-					for (const FElysiumLogTap::FLine& Line : Logged)
-					{
-						if (!Line.Text.IsEmpty() && !Seen.Contains(Line.Text))
+						FString Text = Line.Category.IsEmpty()
+							? Line.Text : FString::Printf(TEXT("[%s] %s"), *Line.Category, *Line.Text);
+						if (Text.Len() > MaxLineChars)
 						{
-							Seen.Add(Line.Text);
-							Output.Add(MakeShared<FJsonValueString>(
-								FString::Printf(TEXT("[%s] %s"), *Line.Category, *Line.Text)));
+							Text = FString::Printf(TEXT("%s... (+%d chars)"), *Text.Left(MaxLineChars),
+								Text.Len() - MaxLineChars);
+							++LinesCut;
 						}
+						Output.Add(MakeShared<FJsonValueString>(MoveTemp(Text)));
 					}
 
 					TSharedRef<FJsonObject> Body = Obj();
 					Body->SetStringField(TEXT("command"), Command);
 					Body->SetBoolField(TEXT("handled"), bHandled);
+					Body->SetNumberField(TEXT("printed"), Lines.Num());
 					Body->SetArrayField(TEXT("output"), Output);
 					if (!bHandled && Output.Num() == 0)
 					{
 						Body->SetStringField(TEXT("note"),
 							TEXT("command not recognised, or it is a cvar assignment that prints nothing"));
+					}
+					if (Lines.Num() > Output.Num() || LinesCut > 0)
+					{
+						MarkCut(Body, FString::Printf(
+							TEXT("%d of %d lines returned, %d cut at %d characters: raise `max_lines` (max 5000) "
+								"for more lines; elysium_log_tail with `grep` returns a logged line whole"),
+							Output.Num(), Lines.Num(), LinesCut, MaxLineChars));
 					}
 					return Structured(Body);
 				}));
@@ -2029,32 +2258,53 @@ namespace ElysiumMcpImpl
 
 		{
 			FSchema Schema;
-			Schema.Add(TEXT("lines"), TEXT("integer"), TEXT("How many of the most recent lines to return. Default 100, ring holds 2000."))
-				.Add(TEXT("category"), TEXT("string"), TEXT("Keep only lines whose log category contains this, e.g. `Elysium` or `LogElysiumIO`."));
+			Schema.Add(TEXT("limit"), TEXT("integer"), TEXT("How many of the most recent matching lines to return. Default 25, max 2000 (the ring holds 2000)."))
+				.Add(TEXT("lines"), TEXT("integer"), TEXT("Older name for `limit`; used only when `limit` is absent."))
+				.Add(TEXT("category"), TEXT("string"), TEXT("Keep only lines whose log category contains this, e.g. `Elysium` or `LogElysiumIO`."))
+				.Add(TEXT("grep"), TEXT("string"), TEXT("Keep only lines whose text contains this (case-insensitive). Searches the whole ring."));
 			Out.Add(MakeTool(TEXT("elysium_log_tail"),
-				TEXT("Read recent engine log lines from an always-on ring buffer, optionally filtered by category. Covers output produced before you connected — the first place to look after something failed."),
+				TEXT("Read recent engine log lines from an always-on ring buffer, optionally filtered by category and text (`grep`). The last `limit` matches (default 25); a cut says how many more matched. Covers output produced before you connected — the first place to look after something failed."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{
-					const int32 Limit = FMath::Clamp(ParamInt(Params, TEXT("lines"), 100), 1, 2000);
+					const int32 Requested = HasParam(Params, TEXT("limit")) || !HasParam(Params, TEXT("lines"))
+						? ParamInt(Params, TEXT("limit"), 25) : ParamInt(Params, TEXT("lines"), 25);
+					const int32 Limit = FMath::Clamp(Requested, 1, 2000);
 					const FString Category = ParamStr(Params, TEXT("category"));
+					const FString Grep = ParamStr(Params, TEXT("grep"));
 
-					TArray<FElysiumLogTap::FLine> Lines;
-					ElysiumLogTapGet().CollectOrdered(Limit, Category, Lines);
+					// The whole ring under the category filter, then the text filter, then the tail.
+					TArray<FElysiumLogTap::FLine> Held;
+					ElysiumLogTapGet().CollectOrdered(0, Category, Held);
+					TArray<const FElysiumLogTap::FLine*> Matched;
+					for (const FElysiumLogTap::FLine& Line : Held)
+					{
+						if (GrepKeeps(Grep, Line.Text))
+						{
+							Matched.Add(&Line);
+						}
+					}
 
 					TArray<TSharedPtr<FJsonValue>> Values;
-					for (const FElysiumLogTap::FLine& Line : Lines)
+					for (int32 i = FMath::Max(0, Matched.Num() - Limit); i < Matched.Num(); ++i)
 					{
 						TSharedRef<FJsonObject> Row = Obj();
-						Row->SetStringField(TEXT("category"), Line.Category);
-						Row->SetStringField(TEXT("verbosity"), Line.Verbosity);
-						Row->SetStringField(TEXT("text"), Line.Text);
+						Row->SetStringField(TEXT("category"), Matched[i]->Category);
+						Row->SetStringField(TEXT("verbosity"), Matched[i]->Verbosity);
+						Row->SetStringField(TEXT("text"), Matched[i]->Text);
 						Values.Add(MakeShared<FJsonValueObject>(Row));
 					}
 
 					TSharedRef<FJsonObject> Body = Obj();
 					Body->SetNumberField(TEXT("returned"), Values.Num());
+					Body->SetNumberField(TEXT("matched"), Matched.Num());
 					Body->SetArrayField(TEXT("lines"), Values);
+					if (Matched.Num() > Values.Num())
+					{
+						MarkCut(Body, FString::Printf(
+							TEXT("the last %d of %d matching lines: raise `limit` (max 2000) or narrow with "
+								"`grep` / `category`"), Values.Num(), Matched.Num()));
+					}
 					return Structured(Body);
 				}));
 		}

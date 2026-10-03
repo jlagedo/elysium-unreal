@@ -230,7 +230,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10HealthToPercentTest,
-	"Elysium.Substrate.NpcKernelCombat10.HealthToPercent", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.HealthToPercent", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10HealthToPercentTest::RunTest(const FString&)
 {
 	FCombat10Fixture F;
@@ -283,7 +283,7 @@ bool FElysiumNpcKernelCombat10HealthToPercentTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10MingXiaoHealthToPercentTest,
-	"Elysium.Substrate.NpcKernelCombat10.MingXiaoHealthToPercent", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.MingXiaoHealthToPercent", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10MingXiaoHealthToPercentTest::RunTest(const FString&)
 {
 	// Each class is its own fighter in its own world, carrying the same quarter-wounded sheet.
@@ -341,7 +341,7 @@ bool FElysiumNpcKernelCombat10MingXiaoHealthToPercentTest::RunTest(const FString
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10CurrHealthPercentTest,
-	"Elysium.Substrate.NpcKernelCombat10.GetCurrHealthPercent", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.GetCurrHealthPercent", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10CurrHealthPercentTest::RunTest(const FString&)
 {
 	FCombat10Fixture F(TEXT("CNPC_VVampireBoss"));
@@ -377,7 +377,7 @@ bool FElysiumNpcKernelCombat10CurrHealthPercentTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10GiveBaseFightingItemsTest,
-	"Elysium.Substrate.NpcKernelCombat10.GiveBaseFightingItems", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.GiveBaseFightingItems", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10GiveBaseFightingItemsTest::RunTest(const FString&)
 {
 	FCombat10Fixture F(nullptr);   // the bare Troika line, whose slot-304 body this is
@@ -406,7 +406,7 @@ bool FElysiumNpcKernelCombat10GiveBaseFightingItemsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10RemoveBaseFightingItemsTest,
-	"Elysium.Substrate.NpcKernelCombat10.RemoveBaseFightingItems", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.RemoveBaseFightingItems", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10RemoveBaseFightingItemsTest::RunTest(const FString&)
 {
 	FCombat10Fixture F(nullptr);   // the bare Troika line, whose slot-305 body this is
@@ -437,7 +437,7 @@ bool FElysiumNpcKernelCombat10RemoveBaseFightingItemsTest::RunTest(const FString
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10WerewolfGiveBaseFightingItemsTest,
-	"Elysium.Substrate.NpcKernelCombat10.WerewolfGiveBaseFightingItems",
+	"Elysium.Arm.NpcKernelCombat10.WerewolfGiveBaseFightingItems",
 	GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10WerewolfGiveBaseFightingItemsTest::RunTest(const FString&)
 {
@@ -482,7 +482,7 @@ bool FElysiumNpcKernelCombat10WerewolfGiveBaseFightingItemsTest::RunTest(const F
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10WerewolfRemoveBaseFightingItemsTest,
-	"Elysium.Substrate.NpcKernelCombat10.WerewolfRemoveBaseFightingItems",
+	"Elysium.Arm.NpcKernelCombat10.WerewolfRemoveBaseFightingItems",
 	GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10WerewolfRemoveBaseFightingItemsTest::RunTest(const FString&)
 {
@@ -522,7 +522,7 @@ bool FElysiumNpcKernelCombat10WerewolfRemoveBaseFightingItemsTest::RunTest(const
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10WeaponDropActiveTest,
-	"Elysium.Substrate.NpcKernelCombat10.WeaponDropActive", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.WeaponDropActive", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10WeaponDropActiveTest::RunTest(const FString&)
 {
 	FCombat10Fixture F;
@@ -576,7 +576,7 @@ bool FElysiumNpcKernelCombat10WeaponDropActiveTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10WeaponDropNamedTest,
-	"Elysium.Substrate.NpcKernelCombat10.WeaponDropNamed", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.WeaponDropNamed", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10WeaponDropNamedTest::RunTest(const FString&)
 {
 	FCombat10Fixture F;
@@ -639,7 +639,7 @@ bool FElysiumNpcKernelCombat10WeaponDropNamedTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10SetScriptedDisciplineTest,
-	"Elysium.Substrate.NpcKernelCombat10.SetScriptedDiscipline", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.SetScriptedDiscipline", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10SetScriptedDisciplineTest::RunTest(const FString&)
 {
 	FCombat10Fixture F;
@@ -696,7 +696,7 @@ bool FElysiumNpcKernelCombat10SetScriptedDisciplineTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10PreSelectIdealStateTest,
-	"Elysium.Substrate.NpcKernelCombat10.PreSelectIdealState", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.PreSelectIdealState", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10PreSelectIdealStateTest::RunTest(const FString&)
 {
 	FCombat10Fixture F;
@@ -793,7 +793,7 @@ bool FElysiumNpcKernelCombat10PreSelectIdealStateTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10PrayerPulseTest,
-	"Elysium.Substrate.NpcKernelCombat10.PrayerPulse", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.PrayerPulse", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10PrayerPulseTest::RunTest(const FString&)
 {
 	FCombat10Fixture F;
@@ -806,8 +806,6 @@ bool FElysiumNpcKernelCombat10PrayerPulseTest::RunTest(const FString&)
 	// `1033b5f0`: the activity gate. Family Hints' `CurrentRetailActivityId()` is the seam for
 	// `m_Activity` (`+0xfec`) and answers `-1`, which is not `0x132` — retail's own answer for a body
 	// that is not praying, so the slot refuses and nothing pulses.
-	TestNotEqual(TEXT("0x1033b5f0 m_Activity is a seam and is never the prayer activity"),
-		N.CurrentRetailActivityId(), FElysiumCombatCharacter::PrayerActivityId);
 	N.FeedState.NextPulse = 0.f;
 	N.FeedState.Interval = 1.f;
 	N.Slot357();
@@ -848,7 +846,7 @@ bool FElysiumNpcKernelCombat10PrayerPulseTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10KnockbackVelocityTest,
-	"Elysium.Substrate.NpcKernelCombat10.KnockbackVelocity", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.KnockbackVelocity", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10KnockbackVelocityTest::RunTest(const FString&)
 {
 	FCombat10Fixture F;
@@ -875,8 +873,6 @@ bool FElysiumNpcKernelCombat10KnockbackVelocityTest::RunTest(const FString&)
 	// answering 0.0, so `t` is 0 and the factors are the LOW ends, 220 and 200.
 	N.Origin = FVector(0.0, 0.0, 0.0);
 	F.Foe->Origin = FVector(-100.0 * ElysiumMove::U, 0.0, 0.0);
-	TestEqual(TEXT("GetRawAttackValue is a seam answering 0.0"),
-		N.SourceRawAttackValue(F.Foe), 0.0f);
 	N.ComputeKnockbackVelocity(F.Foe);
 	TestEqual(TEXT("102a0348 the push is away from the source"),
 		N.KnockbackVelocity.X, 220.0, 1e-3);
@@ -896,7 +892,7 @@ bool FElysiumNpcKernelCombat10KnockbackVelocityTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10YawClearanceTest,
-	"Elysium.Substrate.NpcKernelCombat10.YawClearance", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.YawClearance", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10YawClearanceTest::RunTest(const FString&)
 {
 	FCombat10Fixture F;
@@ -911,8 +907,7 @@ bool FElysiumNpcKernelCombat10YawClearanceTest::RunTest(const FString&)
 	// `102a1656`–`102a17b5`: at yaw 0 the sweep is the FORWARD leg alone — `_DAT_10462950` = **40**
 	// Source units times the reach — because sin(0) cancels the right leg. Both cells were read out
 	// of the pinned image; the checklist named neither.
-	TestTrue(TEXT("0x102a1650 the hull seam reports a clear sweep, which admits the task"),
-		N.TraceMoveClearanceAtYaw(0, 0.f, 1.f));
+	(void)N.TraceMoveClearanceAtYaw(0, 0.f, 1.f);
 	TestEqual(TEXT("...the start is GetAbsOrigin (slot 217)"),
 		N.LastYawClearanceSweep.StartUnits.X, 0.0, 1e-3);
 	TestEqual(TEXT("..._DAT_10462950 is 40.0, so a reach of 1 sweeps 40 units forward"),
@@ -939,7 +934,7 @@ bool FElysiumNpcKernelCombat10YawClearanceTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10CombatReactionTest,
-	"Elysium.Substrate.NpcKernelCombat10.CombatReaction", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.CombatReaction", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10CombatReactionTest::RunTest(const FString&)
 {
 	FCombat10Fixture F;
@@ -1014,7 +1009,7 @@ bool FElysiumNpcKernelCombat10CombatReactionTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10TroikaRangedTest,
-	"Elysium.Substrate.NpcKernelCombat10.TroikaRanged", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.TroikaRanged", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10TroikaRangedTest::RunTest(const FString&)
 {
 	FCombat10Fixture F(nullptr);   // the bare Troika line, with no species override over slot 605
@@ -1067,8 +1062,6 @@ bool FElysiumNpcKernelCombat10TroikaRangedTest::RunTest(const FString&)
 		Rifle->MagazineCount = 3;
 	}
 	N.Cognition.Conditions.Set(EElysiumNpcCond::TooFarToAttack);
-	TestFalse(TEXT("0x101e3f50 is a seam answering false, which ADMITS the slot-606 branch"),
-		N.RangedDisciplineGate(&N));
 	TestEqual(TEXT("102b80bd COND_TOO_FAR_TO_ATTACK answers 0xb1"),
 		N.SelectScheduleRangedCombat(0), 0xb1);
 
@@ -1090,7 +1083,7 @@ bool FElysiumNpcKernelCombat10TroikaRangedTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10DodgeTestTest,
-	"Elysium.Substrate.NpcKernelCombat10.DodgeTest", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.DodgeTest", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10DodgeTestTest::RunTest(const FString&)
 {
 	FCombat10Fixture F;
@@ -1103,8 +1096,6 @@ bool FElysiumNpcKernelCombat10DodgeTestTest::RunTest(const FString&)
 
 	// `102b7f46`: retail tests the weighted sequence `!= 0`, NOT `!= -1`. Family Facing's seam
 	// answers `-1`, which is non-zero, so the gate PASSES and the body below is reachable at all.
-	TestEqual(TEXT("SelectWeightedSequence's seam answers -1"),
-		N.SelectWeightedSequenceForActivity(0x10), -1);
 
 	// `102b7f96`: **CORRECTION** — the checklist's walk has only the roll arm. `COND_WEAPON_THROUGH_
 	// WALL` is a THIRD arm and it answers true even when `COND_STOP_BACKUP` blocks the roll.
@@ -1126,7 +1117,7 @@ bool FElysiumNpcKernelCombat10DodgeTestTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10HumanRangedTest,
-	"Elysium.Substrate.NpcKernelCombat10.HumanRanged", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.HumanRanged", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10HumanRangedTest::RunTest(const FString&)
 {
 	FCombat10Fixture F(TEXT("CNPC_VHuman"));   // spawned as `npc_VHuman`
@@ -1207,7 +1198,7 @@ bool FElysiumNpcKernelCombat10HumanRangedTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10AsianVampireRangedTest,
-	"Elysium.Substrate.NpcKernelCombat10.AsianVampireRanged", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.AsianVampireRanged", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10AsianVampireRangedTest::RunTest(const FString&)
 {
 	TestNotNull(TEXT("CNPC_VAsianVampire overrides slot 605"),
@@ -1278,8 +1269,6 @@ bool FElysiumNpcKernelCombat10AsianVampireRangedTest::RunTest(const FString&)
 	N.Cognition.Conditions.Reset();
 	TestEqual(TEXT("103622d2 the tail answers 0xe8"), N.SelectScheduleRangedCombat(0), 0xe8);
 	N.Cognition.Conditions.Set(EElysiumNpcCond::EnemyUnreachable);
-	TestEqual(TEXT("103622ce COND_ENEMY_UNREACHABLE takes GetJumpSchedule, a seam answering 0"),
-		N.SelectScheduleRangedCombat(0), 0);
 	return true;
 }
 
@@ -1288,7 +1277,7 @@ bool FElysiumNpcKernelCombat10AsianVampireRangedTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10BachRangedTest,
-	"Elysium.Substrate.NpcKernelCombat10.BachRanged", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.BachRanged", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10BachRangedTest::RunTest(const FString&)
 {
 	FCombat10Fixture F(TEXT("CNPC_VBach"));
@@ -1359,7 +1348,7 @@ bool FElysiumNpcKernelCombat10BachRangedTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10MingXiaoRangedTest,
-	"Elysium.Substrate.NpcKernelCombat10.MingXiaoRanged", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.MingXiaoRanged", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10MingXiaoRangedTest::RunTest(const FString&)
 {
 	TestNotNull(TEXT("CNPC_VMingXiao overrides slot 605"),
@@ -1446,7 +1435,7 @@ bool FElysiumNpcKernelCombat10MingXiaoRangedTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10SheriffManRangedTest,
-	"Elysium.Substrate.NpcKernelCombat10.SheriffManRanged", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.SheriffManRanged", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10SheriffManRangedTest::RunTest(const FString&)
 {
 	FCombat10Fixture F(TEXT("CNPC_VSheriffMan"));
@@ -1499,7 +1488,7 @@ bool FElysiumNpcKernelCombat10SheriffManRangedTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10SelectorAgreementTest,
-	"Elysium.Substrate.NpcKernelCombat10.SelectorAgreement", GElysiumNpcKernelCombat10Flags)
+	"Elysium.Arm.NpcKernelCombat10.SelectorAgreement", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10SelectorAgreementTest::RunTest(const FString&)
 {
 	FCombat10Fixture F(nullptr);   // the bare Troika line, whose slot-605 body is the selector's

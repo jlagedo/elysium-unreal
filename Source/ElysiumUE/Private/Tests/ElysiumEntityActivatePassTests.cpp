@@ -75,7 +75,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEntityActivatePassTest,
-	"Elysium.Substrate.EntityWorld.ActivatePass", GElysiumActivatePassFlags)
+	"Elysium.Arm.EntityWorld.ActivatePass", GElysiumActivatePassFlags)
 bool FElysiumEntityActivatePassTest::RunTest(const FString&)
 {
 	FElysiumEntityDefs Defs;

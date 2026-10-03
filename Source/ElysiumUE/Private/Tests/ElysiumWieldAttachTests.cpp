@@ -88,7 +88,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWieldAttachTest,
-	"Elysium.Substrate.WieldAttach", GElysiumWieldFlags)
+	"Elysium.Arm.WieldAttach", GElysiumWieldFlags)
 bool FElysiumWieldAttachTest::RunTest(const FString&)
 {
 	const FReferenceSkeleton Wearer = WearerSkeleton();

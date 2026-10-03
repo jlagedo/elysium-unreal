@@ -16,6 +16,7 @@
 #include "ElysiumPlayer.h"
 #include "Player/ElysiumCameraShots.h"
 #include "Substrate/ElysiumCameraOverride.h"
+#include "Tests/ElysiumFixtureNoise.h"
 
 namespace ElysiumCameraOverrideTests
 {
@@ -458,6 +459,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraOverrideCharacterTest,
 	"Elysium.Substrate.CameraOverrideCharacter", GElysiumTestFlags)
 bool FElysiumCameraOverrideCharacterTest::RunTest(const FString&)
 {
+	ElysiumFixtureNoise::Declare();
 	FElysiumEntityWorld World(nullptr, nullptr);
 	{
 		FElysiumEntityDefs Defs;

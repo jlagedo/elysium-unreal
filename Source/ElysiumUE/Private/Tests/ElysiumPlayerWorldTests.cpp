@@ -132,7 +132,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // anything else. No RHI, no actors, no `$ELYSIUM_EXPORT_ROOT` — the recording stub is the body.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerEntityTest, "Elysium.Substrate.PlayerEntity", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerEntityTest, "Elysium.Arm.PlayerEntity", GElysiumTestFlags)
 bool FElysiumPlayerEntityTest::RunTest(const FString&)
 {
 	AddExpectedError(TEXT("base_NotAStat"), EAutomationExpectedErrorFlags::Contains, 1);
@@ -391,7 +391,7 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPointTeleportContractTest,
-	"Elysium.Substrate.PointTeleportContract", GElysiumTestFlags)
+	"Elysium.Arm.PointTeleportContract", GElysiumTestFlags)
 bool FElysiumPointTeleportContractTest::RunTest(const FString&)
 {
 	auto BuildNormalDefs = []()
@@ -582,7 +582,7 @@ bool FElysiumPointTeleportContractTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimatedPropManifestTest,
-	"Elysium.Substrate.AnimatedPropManifest", GElysiumTestFlags)
+	"Elysium.Arm.AnimatedPropManifest", GElysiumTestFlags)
 bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 {
 	const FString MinimalNpc = TEXT("\"npcs\":{\"dummy\":{"
@@ -763,7 +763,7 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 	return true;
 }
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropBoundsTest,
-	"Elysium.Substrate.PropBounds", GElysiumTestFlags)
+	"Elysium.Arm.PropBounds", GElysiumTestFlags)
 bool FElysiumPropBoundsTest::RunTest(const FString&)
 {
 	// `cin_sheriff_sword`'s bind pose in the centimetres the loaded mesh is in: a sword about a
@@ -1140,7 +1140,7 @@ bool FElysiumGenesisExitTest::RunTest(const FString&)
 // state both edges touch. `ReconcilePlayerTouches` must reproduce that order — the faithful
 // behaviour, not the current inverted ends-then-begins pass.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTouchReconcileOrderTest,
-	"Elysium.Substrate.TouchReconcileOrder", GElysiumTestFlags)
+	"Elysium.Arm.TouchReconcileOrder", GElysiumTestFlags)
 bool FElysiumTouchReconcileOrderTest::RunTest(const FString&)
 {
 	FElysiumEntityDefs Defs;
@@ -1256,7 +1256,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMotorSleepTest,
-	"Elysium.Substrate.NpcMotorSleep", GElysiumTestFlags)
+	"Elysium.Arm.NpcMotorSleep", GElysiumTestFlags)
 bool FElysiumNpcMotorSleepTest::RunTest(const FString&)
 {
 	FPlayerWorldFixture Fixture;
@@ -1321,7 +1321,7 @@ bool FElysiumNpcMotorSleepTest::RunTest(const FString&)
 // (`docs/vtmb/animation_and_movers.md` — the compact-code classifier is the player chain's), so a
 // standing NPC selecting a fall is a defect with no faithful counterpart.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcStandingGroundTest,
-	"Elysium.Substrate.NpcStandingGround", GElysiumTestFlags)
+	"Elysium.Arm.NpcStandingGround", GElysiumTestFlags)
 bool FElysiumNpcStandingGroundTest::RunTest(const FString&)
 {
 	FPlayerWorldFixture Fixture;
@@ -1410,7 +1410,7 @@ bool FElysiumNpcStandingGroundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEngineTeleportOverlapTest,
-	"Elysium.Substrate.EngineTeleportOverlap", GElysiumTestFlags)
+	"Elysium.Arm.EngineTeleportOverlap", GElysiumTestFlags)
 bool FElysiumEngineTeleportOverlapTest::RunTest(const FString&)
 {
 	FPlayerWorldFixture Fixture;
@@ -1509,7 +1509,7 @@ bool FElysiumEngineTeleportOverlapTest::RunTest(const FString&)
 // suppression-only — the attachment, its leader pose and its model survive the toggle in both
 // directions, and an NPC body never consults the local player's camera policy at all.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPawnWieldVisibilityTest,
-	"Elysium.Substrate.PawnWieldVisibility", GElysiumTestFlags)
+	"Elysium.Arm.PawnWieldVisibility", GElysiumTestFlags)
 bool FElysiumPawnWieldVisibilityTest::RunTest(const FString&)
 {
 	FPlayerWorldFixture Fixture;
@@ -1603,7 +1603,7 @@ bool FElysiumPawnWieldVisibilityTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUseTargetingEmbodimentTest,
-	"Elysium.Substrate.UseTargetingEmbodiment", GElysiumTestFlags)
+	"Elysium.Arm.UseTargetingEmbodiment", GElysiumTestFlags)
 bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 {
 	FPlayerWorldFixture Fixture;
@@ -1835,7 +1835,7 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedTargetingOcclusionTest,
-	"Elysium.Substrate.FeedTargetingOcclusion", GElysiumTestFlags)
+	"Elysium.Arm.FeedTargetingOcclusion", GElysiumTestFlags)
 bool FElysiumFeedTargetingOcclusionTest::RunTest(const FString&)
 {
 	FPlayerWorldFixture Fixture;
@@ -1945,7 +1945,7 @@ bool FElysiumFeedTargetingOcclusionTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapActorTeardownTest,
-	"Elysium.Substrate.MapActorTeardown", GElysiumTestFlags)
+	"Elysium.Slow.MapActorTeardown", GElysiumTestFlags)
 bool FElysiumMapActorTeardownTest::RunTest(const FString&)
 {
 	FPlayerWorldFixture Fixture;
@@ -1960,6 +1960,8 @@ bool FElysiumMapActorTeardownTest::RunTest(const FString&)
 		return false;
 	}
 	Map->bStageOnly = true;
+	// The teardown is the subject, not the lab's whole-catalogue residency (~50 s of this test).
+	Map->bStageWithoutCatalogue = true;
 	Map->MapName.Reset();
 	Map->FinishSpawning(FTransform::Identity);
 
@@ -1991,7 +1993,7 @@ bool FElysiumMapActorTeardownTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStorySkipTest,
-	"Elysium.Substrate.StorySkip", GElysiumTestFlags)
+	"Elysium.Arm.StorySkip", GElysiumTestFlags)
 bool FElysiumStorySkipTest::RunTest(const FString&)
 {
 	{

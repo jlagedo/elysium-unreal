@@ -258,9 +258,16 @@ void FElysiumNpcBase::TaskFail(int32 Reason)
 	// (`npc_task_text`, `0x10274000`) — `DevMsg("   TaskFail -> %s\n")` (`0x105cc5e0`). The port
 	// prints that line through the NPC trace; NAMED DIVERGENCE (debug output only): the `developer`
 	// half of the gate (shipped 0) is dropped for the print and the overlay record is not kept.
-	if ((DebugOverlays & OverlayTaskTextBit) != 0)
+	// The AI trace's `taskfail` event is the same name and number (debug output only).
+	const bool bPrint = (DebugOverlays & OverlayTaskTextBit) != 0;
+	if (bPrint || IsAiTraced())
 	{
-		NpcTraceMessage(FString::Printf(TEXT("   TaskFail -> %s (0x%x)"), ElysiumTaskFailureName(Reason), Reason));
+		const FString Failure = FString::Printf(TEXT("%s (0x%x)"), ElysiumTaskFailureName(Reason), Reason);
+		if (bPrint)
+		{
+			NpcTraceMessage(FString::Printf(TEXT("   TaskFail -> %s"), *Failure));
+		}
+		EmitAiTrace(TEXT("taskfail"), Failure);
 	}
 	// The three writes are the body.
 	BaseScheduleHost.bShouldMove = false;                                    // +0x1a40

@@ -183,7 +183,7 @@ namespace
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWieldEquipMaskTest,
-	"Elysium.Substrate.Wield.EquipMask", GElysiumTestFlags)
+	"Elysium.Arm.Wield.EquipMask", GElysiumTestFlags)
 bool FElysiumWieldEquipMaskTest::RunTest(const FString&)
 {
 	// The bit assignment IS the string table's order (0x105c76f8..0x105c775c).
@@ -250,7 +250,7 @@ bool FElysiumWieldEquipMaskTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWieldRowTest,
-	"Elysium.Substrate.Wield.Rows", GElysiumTestFlags)
+	"Elysium.Arm.Wield.Rows", GElysiumTestFlags)
 bool FElysiumWieldRowTest::RunTest(const FString&)
 {
 	const FElysiumExcludedEquipTable Table = MakeExcludedEquipTable();
@@ -309,7 +309,7 @@ bool FElysiumWieldRowTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWieldUpdateTest,
-	"Elysium.Substrate.Wield.Update", GElysiumTestFlags)
+	"Elysium.Arm.Wield.Update", GElysiumTestFlags)
 bool FElysiumWieldUpdateTest::RunTest(const FString&)
 {
 	FWieldFixture F;
@@ -455,7 +455,7 @@ bool FElysiumWieldNpcLoadoutTest::RunTest(const FString&)
 			ElysiumSlot::ExcludedEquipment), 0);
 
 	// Two ordinary thinks: the first crosses the admission barrier, the second resolves the
-	// loadout — the real production path, as `Elysium.Substrate.NpcCombat.Loadout` drives it.
+	// loadout — the real production path, as `Elysium.Arm.NpcCombat.Loadout` drives it.
 	for (int32 i = 0; i < 2; ++i)
 	{
 		FElysiumNpcWorldFixture::Wake({ Guard }, 0.0);

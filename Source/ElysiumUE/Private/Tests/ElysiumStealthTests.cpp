@@ -301,7 +301,7 @@ namespace
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthTablesTest,
-	"Elysium.Substrate.Stealth.Tables", GElysiumTestFlags)
+	"Elysium.Arm.Stealth.Tables", GElysiumTestFlags)
 bool FElysiumStealthTablesTest::RunTest(const FString&)
 {
 	const FElysiumStealthTables Tables = MakeStealthTables();
@@ -343,7 +343,7 @@ bool FElysiumStealthTablesTest::RunTest(const FString&)
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthRecomputeTest,
-	"Elysium.Substrate.Stealth.Recompute", GElysiumTestFlags)
+	"Elysium.Arm.Stealth.Recompute", GElysiumTestFlags)
 bool FElysiumStealthRecomputeTest::RunTest(const FString&)
 {
 	const FElysiumStealthTables Tables = MakeStealthTables();
@@ -475,7 +475,7 @@ bool FElysiumStealthRecomputeTest::RunTest(const FString&)
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthCadenceTest,
-	"Elysium.Substrate.Stealth.Cadence", GElysiumTestFlags)
+	"Elysium.Arm.Stealth.Cadence", GElysiumTestFlags)
 bool FElysiumStealthCadenceTest::RunTest(const FString&)
 {
 	FStealthFixture F;
@@ -571,7 +571,7 @@ bool FElysiumStealthCadenceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthEligibilityTest,
-	"Elysium.Substrate.Stealth.EligibilityAndBounds", GElysiumTestFlags)
+	"Elysium.Arm.Stealth.EligibilityAndBounds", GElysiumTestFlags)
 bool FElysiumStealthEligibilityTest::RunTest(const FString&)
 {
 	FStealthFixture F;
@@ -611,7 +611,7 @@ bool FElysiumStealthEligibilityTest::RunTest(const FString&)
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthModifierTest,
-	"Elysium.Substrate.Stealth.Modifier", GElysiumTestFlags)
+	"Elysium.Arm.Stealth.Modifier", GElysiumTestFlags)
 bool FElysiumStealthModifierTest::RunTest(const FString&)
 {
 	FStealthFixture F;
@@ -700,7 +700,7 @@ bool FElysiumStealthModifierTest::RunTest(const FString&)
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthSensesTest,
-	"Elysium.Substrate.Stealth.Senses", GElysiumTestFlags)
+	"Elysium.Arm.Stealth.Senses", GElysiumTestFlags)
 bool FElysiumStealthSensesTest::RunTest(const FString&)
 {
 	// A 1000-unit guard, so the scalar's effect on the radius is measurable in whole units.
@@ -829,7 +829,7 @@ bool FElysiumStealthSensesTest::RunTest(const FString&)
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthObserverTest,
-	"Elysium.Substrate.Stealth.Observer", GElysiumTestFlags)
+	"Elysium.Arm.Stealth.Observer", GElysiumTestFlags)
 bool FElysiumStealthObserverTest::RunTest(const FString&)
 {
 	FStealthFixture F(4000.f);
@@ -873,7 +873,7 @@ bool FElysiumStealthObserverTest::RunTest(const FString&)
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthSaveTest,
-	"Elysium.Substrate.Stealth.Save", GElysiumTestFlags)
+	"Elysium.Arm.Stealth.Save", GElysiumTestFlags)
 bool FElysiumStealthSaveTest::RunTest(const FString&)
 {
 	FElysiumPlayerRecord Record;

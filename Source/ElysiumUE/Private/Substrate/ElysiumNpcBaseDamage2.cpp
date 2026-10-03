@@ -153,6 +153,13 @@ int32 FElysiumNpcBase::OnTakeDamage_Alive(void* InInfo)
 	{
 		return 0;                                                           // 0x10265efc -> 0x10265f03
 	}
+	// The AI trace's `damage` event: the hit as this body reads it (debug output only, behind its sink).
+	if (IsAiTraced())
+	{
+		EmitAiTrace(TEXT("damage"), FString::Printf(TEXT("%g type=0x%x from=%s"),
+			Damage19BaseMagnitude(*Info), Damage19BaseCombinedBits(*Info),
+			*FElysiumEntityWorld::AiTraceName(Info->Attacker.IsSet() ? World->Resolve(Info->Attacker) : nullptr)));
+	}
 
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	const float CurTime = static_cast<float>(Now);                          // [0x1070b228]+0xc

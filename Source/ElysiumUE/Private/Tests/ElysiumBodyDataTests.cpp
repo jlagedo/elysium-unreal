@@ -8,7 +8,7 @@
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBodyDataTest, "Elysium.Substrate.BodyData",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBodyDataTest, "Elysium.Content.BodyData",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumBodyDataTest::RunTest(const FString&)
 {

@@ -13,7 +13,7 @@
 #include "Tests/ElysiumTestServices.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcTaskFailureTest,
-	"Elysium.Substrate.NpcScheduleHost.Failure", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+	"Elysium.Arm.NpcScheduleHost.Failure", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;
@@ -196,7 +196,7 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcFailureMasksTest,
-	"Elysium.Substrate.NpcScheduleHost.MasksAndSave", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+	"Elysium.Arm.NpcScheduleHost.MasksAndSave", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumNpcFailureMasksTest::RunTest(const FString&)
 {
 	FElysiumNpcFlags Flags;

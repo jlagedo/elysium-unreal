@@ -578,6 +578,11 @@ bool FElysiumNpcBase::ClaimHint(int32 HintNode)
 	// `m_hHintOwner = *npc->GetRefEHandle()` (vtable `+4`). Retail's NULL-requester arm (owner := -1)
 	// has no port caller: the requester is this NPC.
 	Hint->HintOwner = Handle;
+	if (IsAiTraced())
+	{
+		EmitAiTrace(TEXT("hint+"), FString::Printf(TEXT("%s node=%d"),   // the AI trace (debug only)
+			*FElysiumEntityWorld::AiTraceName(Hint), Hint->NodeId));
+	}
 	return true;
 }
 
@@ -607,6 +612,11 @@ void FElysiumNpcBase::ReleaseHintNode(int32 HintNode, float ReuseDelaySeconds)
 	}
 	Hint->HintOwner = FElysiumEntityHandle::Invalid();
 	Hint->NextUseTime = ReuseDelaySeconds + HS::CurTime(*World);
+	if (IsAiTraced())
+	{
+		EmitAiTrace(TEXT("hint-"), FString::Printf(TEXT("%s node=%d"),   // the AI trace (debug only)
+			*FElysiumEntityWorld::AiTraceName(Hint), Hint->NodeId));
+	}
 }
 
 bool FElysiumNpcBase::IsHintUnusable(const FHintWords& Hint, double Now, bool bOwnerAlive)

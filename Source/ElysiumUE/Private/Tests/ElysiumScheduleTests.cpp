@@ -282,7 +282,7 @@ namespace
 // end — reporting why — rather than holding the NPC in a program that will never advance.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleFailureTest,
-	"Elysium.Substrate.Schedule.Failure", GElysiumScheduleTestFlags)
+	"Elysium.Arm.Schedule.Failure", GElysiumScheduleTestFlags)
 bool FElysiumScheduleFailureTest::RunTest(const FString&)
 {
 	// --- A failing task with no fail schedule ends the program -------------------------------
@@ -328,7 +328,7 @@ bool FElysiumScheduleFailureTest::RunTest(const FString&)
 // WAIT_RANDOM 120.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleMesmerizedTest,
-	"Elysium.Substrate.Schedule.Mesmerized", GElysiumScheduleTestFlags)
+	"Elysium.Arm.Schedule.Mesmerized", GElysiumScheduleTestFlags)
 bool FElysiumScheduleMesmerizedTest::RunTest(const FString&)
 {
 	FRecordingRunner Runner;
@@ -396,7 +396,7 @@ bool FElysiumScheduleMesmerizedTest::RunTest(const FString&)
 // own decoded interrupt mask.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleDelayInterruptsTest,
-	"Elysium.Substrate.Schedule.DelayInterrupts", GElysiumScheduleTestFlags)
+	"Elysium.Arm.Schedule.DelayInterrupts", GElysiumScheduleTestFlags)
 bool FElysiumScheduleDelayInterruptsTest::RunTest(const FString&)
 {
 	const FElysiumNpcConditions Damage =
@@ -450,7 +450,7 @@ bool FElysiumScheduleDelayInterruptsTest::RunTest(const FString&)
 // control: the same condition, the same kernel, and the overlay is the only difference.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTestBitsOverlayTest,
-	"Elysium.Substrate.Schedule.TestBitsOverlay", GElysiumScheduleTestFlags)
+	"Elysium.Arm.Schedule.TestBitsOverlay", GElysiumScheduleTestFlags)
 bool FElysiumScheduleTestBitsOverlayTest::RunTest(const FString&)
 {
 	const FElysiumNpcConditions Law =
@@ -487,7 +487,7 @@ bool FElysiumScheduleTestBitsOverlayTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleFailureDispatchTest,
-	"Elysium.Substrate.Schedule.FailureDispatch", GElysiumScheduleTestFlags)
+	"Elysium.Arm.Schedule.FailureDispatch", GElysiumScheduleTestFlags)
 bool FElysiumScheduleFailureDispatchTest::RunTest(const FString&)
 {
 	FRecordingRunner Runner;
@@ -510,7 +510,7 @@ bool FElysiumScheduleFailureDispatchTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleCompletionHostTest,
-	"Elysium.Substrate.Schedule.CompletionHost", GElysiumScheduleTestFlags)
+	"Elysium.Arm.Schedule.CompletionHost", GElysiumScheduleTestFlags)
 bool FElysiumScheduleCompletionHostTest::RunTest(const FString&)
 {
 	FRecordingRunner Runner;
@@ -738,7 +738,7 @@ bool FElysiumScheduleFailRouteTest::RunTest(const FString&)
 // pre-table (`0x102b11c0`) and the `0x132` target are named seams until 25b / 21a register them.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTroikaTranslateTest,
-	"Elysium.Substrate.Schedule.TroikaTranslate", GElysiumScheduleTestFlags)
+	"Elysium.Arm.Schedule.TroikaTranslate", GElysiumScheduleTestFlags)
 bool FElysiumScheduleTroikaTranslateTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("__schedtranslate_test__"), 0x54524e53);

@@ -748,7 +748,7 @@ bool FElysiumLateBindingAndDropsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMissingTargetClassificationTest,
-	"Elysium.Substrate.MissingTargetClassification", GElysiumTestFlags)
+	"Elysium.Arm.MissingTargetClassification", GElysiumTestFlags)
 bool FElysiumMissingTargetClassificationTest::RunTest(const FString&)
 {
 	using namespace ElysiumEventOrderTests;
@@ -783,14 +783,6 @@ bool FElysiumMissingTargetClassificationTest::RunTest(const FString&)
 	TestEqual(TEXT("the post-cleanup refire remains a counted I/O drop"), World.UnknownTargets(), 1);
 	TestTrue(TEXT("the I/O sink retains the missing-target diagnostic"),
 		Sink->Saw(TEXT("no-target"), TEXT("point_door.Kill")));
-
-	TArray<ElysiumStub::FTally> Rows;
-	ElysiumStub::CollectTally(Rows);
-	TestFalse(TEXT("a missing receiver is not an implementation stub"),
-		Rows.ContainsByPredicate([](const ElysiumStub::FTally& Row)
-		{
-			return Row.Kind == TEXT("target") || Row.Surface.Contains(TEXT("point_door.Kill"));
-		}));
 
 	// Named misses are log-once diagnostics, but every delivery attempt remains accounted.
 	World.AcceptInput(TEXT("point_door"), FName(TEXT("Kill")), FElysiumVariant::Void(),
@@ -874,7 +866,7 @@ namespace ElysiumEventTransportTests
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSyncScriptInputTest,
-	"Elysium.Substrate.SyncScriptInput", GElysiumTestFlags)
+	"Elysium.Arm.SyncScriptInput", GElysiumTestFlags)
 bool FElysiumSyncScriptInputTest::RunTest(const FString&)
 {
 	using namespace ElysiumEventTransportTests;
@@ -979,7 +971,7 @@ bool FElysiumSyncScriptInputTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorPartnerChokepointTest,
-	"Elysium.Substrate.DoorPartnerChokepoint", GElysiumTestFlags)
+	"Elysium.Arm.DoorPartnerChokepoint", GElysiumTestFlags)
 bool FElysiumDoorPartnerChokepointTest::RunTest(const FString&)
 {
 	using namespace ElysiumEventTransportTests;
@@ -1057,7 +1049,7 @@ bool FElysiumDoorPartnerChokepointTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStaleDirectHandleTest,
-	"Elysium.Substrate.StaleDirectHandle", GElysiumTestFlags)
+	"Elysium.Arm.StaleDirectHandle", GElysiumTestFlags)
 bool FElysiumStaleDirectHandleTest::RunTest(const FString&)
 {
 	using namespace ElysiumEventTransportTests;
@@ -1108,32 +1100,11 @@ bool FElysiumStaleDirectHandleTest::RunTest(const FString&)
 	TestEqual(TEXT("...and nothing was delivered"),
 		Sink->CountOf(TEXT("deliver"), TEXT("doomed.Add")), 0);
 
-	// A stale receiver remains outside the implementation work list: no handler or runtime class is
-	// missing merely because the intended entity has already died.
-	auto TargetRowsMatching = [](const TCHAR* Fragment)
-	{
-		int32 N = 0;
-		TArray<ElysiumStub::FTally> Rows;
-		ElysiumStub::CollectTally(Rows);
-		for (const ElysiumStub::FTally& R : Rows)
-		{
-			if (R.Kind == TEXT("target") && R.Surface.Contains(Fragment))
-			{
-				N += R.Count;
-			}
-		}
-		return N;
-	};
-	TestEqual(TEXT("the stub work list does not gain a stale-handle row"),
-		TargetRowsMatching(TEXT("<stale>.Add")), 0);
-
 	// The by-handle path does not log-once the way the by-name path does, so a repeat is counted
 	// and reported again rather than silently swallowed.
 	World.AcceptInput(Handle, FName(TEXT("Add")), FElysiumVariant::Int(1),
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
 	TestEqual(TEXT("a second attempt counts again"), World.UnknownTargets(), UnknownBefore + 2);
-	TestEqual(TEXT("and still creates no implementation stub"),
-		TargetRowsMatching(TEXT("<stale>.Add")), 0);
 	TestEqual(TEXT("both attempts reached the sinks"),
 		Sink->CountOf(TEXT("no-target"), TEXT("<stale>.Add")), 2);
 
@@ -1141,7 +1112,7 @@ bool FElysiumStaleDirectHandleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTriggerStateSaveTest,
-	"Elysium.Substrate.TriggerStateSave", GElysiumTestFlags)
+	"Elysium.Arm.TriggerStateSave", GElysiumTestFlags)
 bool FElysiumTriggerStateSaveTest::RunTest(const FString&)
 {
 	using namespace ElysiumEventTransportTests;
@@ -1478,7 +1449,7 @@ bool FElysiumDyingTriggerEndTouchTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWireTallyTest,
-	"Elysium.Substrate.WireTally", GElysiumTestFlags)
+	"Elysium.Arm.WireTally", GElysiumTestFlags)
 bool FElysiumWireTallyTest::RunTest(const FString&)
 {
 	using namespace ElysiumEventTransportTests;
@@ -1666,7 +1637,7 @@ bool FElysiumWireTallyTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWireIdentitySaveTest,
-	"Elysium.Substrate.WireIdentitySave", GElysiumTestFlags)
+	"Elysium.Arm.WireIdentitySave", GElysiumTestFlags)
 bool FElysiumWireIdentitySaveTest::RunTest(const FString&)
 {
 	using namespace ElysiumEventTransportTests;

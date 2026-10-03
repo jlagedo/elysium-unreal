@@ -73,7 +73,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19SetStateTest,
-	"Elysium.Substrate.NpcKernelState19.SetState", GState19Flags)
+	"Elysium.Arm.NpcKernelState19.SetState", GState19Flags)
 bool FElysiumNpcKernelState19SetStateTest::RunTest(const FString&)
 {
 	FState19Fixture F;
@@ -98,7 +98,7 @@ bool FElysiumNpcKernelState19SetStateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19TroikaSelectIdealStateTest,
-	"Elysium.Substrate.NpcKernelState19.TroikaSelectIdealState", GState19Flags)
+	"Elysium.Arm.NpcKernelState19.TroikaSelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19TroikaSelectIdealStateTest::RunTest(const FString&)
 {
 	FState19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -144,7 +144,7 @@ bool FElysiumNpcKernelState19TroikaSelectIdealStateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19BaseSelectIdealStateTest,
-	"Elysium.Substrate.NpcKernelState19.BaseSelectIdealState", GState19Flags)
+	"Elysium.Arm.NpcKernelState19.BaseSelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19BaseSelectIdealStateTest::RunTest(const FString&)
 {
 	FState19Fixture F;
@@ -178,7 +178,7 @@ bool FElysiumNpcKernelState19BaseSelectIdealStateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19BachOnStateChangeTest,
-	"Elysium.Substrate.NpcKernelState19.BachOnStateChange", GState19Flags)
+	"Elysium.Arm.NpcKernelState19.BachOnStateChange", GState19Flags)
 bool FElysiumNpcKernelState19BachOnStateChangeTest::RunTest(const FString&)
 {
 	FState19Fixture F(TEXT("CNPC_VBach"));
@@ -199,7 +199,7 @@ bool FElysiumNpcKernelState19BachOnStateChangeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19SabbatLeaderTest,
-	"Elysium.Substrate.NpcKernelState19.SabbatLeaderSelectIdealState", GState19Flags)
+	"Elysium.Arm.NpcKernelState19.SabbatLeaderSelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19SabbatLeaderTest::RunTest(const FString&)
 {
 	FState19Fixture F(TEXT("CNPC_VSabbatLeader"));
@@ -221,7 +221,7 @@ bool FElysiumNpcKernelState19SabbatLeaderTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19HumanHuntTest,
-	"Elysium.Substrate.NpcKernelState19.HumanHuntConVar", GState19Flags)
+	"Elysium.Arm.NpcKernelState19.HumanHuntConVar", GState19Flags)
 bool FElysiumNpcKernelState19HumanHuntTest::RunTest(const FString&)
 {
 	FState19Fixture F(TEXT("CNPC_VHuman"));
@@ -242,7 +242,7 @@ bool FElysiumNpcKernelState19HumanHuntTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19CameraPreSelectTest,
-	"Elysium.Substrate.NpcKernelState19.CameraPreSelectIdealState", GState19Flags)
+	"Elysium.Arm.NpcKernelState19.CameraPreSelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19CameraPreSelectTest::RunTest(const FString&)
 {
 	FState19Fixture F(TEXT("CNPC_VCamera"));
@@ -257,7 +257,7 @@ bool FElysiumNpcKernelState19CameraPreSelectTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19NoAlertWithScheduleTest,
-	"Elysium.Substrate.NpcKernelState19.NoAlertStateBaseTail", GState19Flags)
+	"Elysium.Arm.NpcKernelState19.NoAlertStateBaseTail", GState19Flags)
 bool FElysiumNpcKernelState19NoAlertWithScheduleTest::RunTest(const FString&)
 {
 	FState19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -300,7 +300,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19Guard1Test,
-	"Elysium.Substrate.NpcKernelState19.Guard1SelectIdealState", GState19Flags)
+	"Elysium.Arm.NpcKernelState19.Guard1SelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19Guard1Test::RunTest(const FString&)
 {
 	FState19Fixture F(TEXT("CNPC_VGuard1"));
@@ -374,7 +374,7 @@ bool FElysiumNpcKernelState19Guard1Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19CopTest,
-	"Elysium.Substrate.NpcKernelState19.CopSelectIdealState", GState19Flags)
+	"Elysium.Arm.NpcKernelState19.CopSelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19CopTest::RunTest(const FString&)
 {
 	FState19Fixture F(TEXT("CNPC_VCop"));
@@ -442,7 +442,7 @@ bool FElysiumNpcKernelState19CopTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19TzimisceTest,
-	"Elysium.Substrate.NpcKernelState19.TzimisceSelectIdealState", GState19Flags)
+	"Elysium.Arm.NpcKernelState19.TzimisceSelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19TzimisceTest::RunTest(const FString&)
 {
 	FState19Fixture F(TEXT("CNPC_VTzimisce"));
@@ -499,7 +499,7 @@ bool FElysiumNpcKernelState19TzimisceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19PedestrianTest,
-	"Elysium.Substrate.NpcKernelState19.PedestrianSelectIdealState", GState19Flags)
+	"Elysium.Arm.NpcKernelState19.PedestrianSelectIdealState", GState19Flags)
 bool FElysiumNpcKernelState19PedestrianTest::RunTest(const FString&)
 {
 	FState19Fixture F(TEXT("CNPC_VPedestrian"));

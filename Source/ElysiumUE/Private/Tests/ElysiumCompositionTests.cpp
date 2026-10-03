@@ -168,7 +168,7 @@ namespace
 // The rule body alone: no pose, no skeleton, no engine.
 // ---------------------------------------------------------------------------------------------
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAxisInterpRuleTest, "Elysium.Substrate.AxisInterpRule",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAxisInterpRuleTest, "Elysium.Arm.AxisInterpRule",
 	GElysiumCompositionTestFlags)
 
 bool FElysiumAxisInterpRuleTest::RunTest(const FString&)

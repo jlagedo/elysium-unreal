@@ -87,7 +87,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelProvenanceApplyJsonTest,
-	"Elysium.Substrate.ModelProvenance.ApplyJson", GElysiumModelProvenanceTestFlags)
+	"Elysium.Arm.ModelProvenance.ApplyJson", GElysiumModelProvenanceTestFlags)
 bool FElysiumModelProvenanceApplyJsonTest::RunTest(const FString&)
 {
 	UStaticMesh* Mesh = NewMesh();
@@ -221,7 +221,7 @@ bool FElysiumModelProvenanceApplyJsonTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelProvenanceToleratesMissingFieldsTest,
-	"Elysium.Substrate.ModelProvenance.ToleratesMissingFields", GElysiumModelProvenanceTestFlags)
+	"Elysium.Arm.ModelProvenance.ToleratesMissingFields", GElysiumModelProvenanceTestFlags)
 bool FElysiumModelProvenanceToleratesMissingFieldsTest::RunTest(const FString&)
 {
 	// A minimal sidecar -- most of a real one's keys absent -- must not fail ApplyJson; every
@@ -264,7 +264,7 @@ bool FElysiumModelProvenanceToleratesMissingFieldsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelProvenanceReapplyReplacesTest,
-	"Elysium.Substrate.ModelProvenance.ReapplyReplaces", GElysiumModelProvenanceTestFlags)
+	"Elysium.Arm.ModelProvenance.ReapplyReplaces", GElysiumModelProvenanceTestFlags)
 bool FElysiumModelProvenanceReapplyReplacesTest::RunTest(const FString&)
 {
 	UStaticMesh* Mesh = NewMesh();
@@ -304,7 +304,7 @@ bool FElysiumModelProvenanceReapplyReplacesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelProvenanceRejectsNonObjectTest,
-	"Elysium.Substrate.ModelProvenance.RejectsNonObject", GElysiumModelProvenanceTestFlags)
+	"Elysium.Arm.ModelProvenance.RejectsNonObject", GElysiumModelProvenanceTestFlags)
 bool FElysiumModelProvenanceRejectsNonObjectTest::RunTest(const FString&)
 {
 	UStaticMesh* Mesh = NewMesh();
@@ -329,7 +329,7 @@ bool FElysiumModelProvenanceRejectsNonObjectTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelProvenanceRegistryTagsTest,
-	"Elysium.Substrate.ModelProvenance.RegistryTags", GElysiumModelProvenanceTestFlags)
+	"Elysium.Arm.ModelProvenance.RegistryTags", GElysiumModelProvenanceTestFlags)
 bool FElysiumModelProvenanceRegistryTagsTest::RunTest(const FString&)
 {
 	// A throwaway package: the stamp writes package metadata, and the transient package outlives

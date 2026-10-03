@@ -167,7 +167,7 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSkyCubeTest, "Elysium.Substrate.SkyCube", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSkyCubeTest, "Elysium.Arm.SkyCube", GElysiumTestFlags)
 bool FElysiumSkyCubeTest::RunTest(const FString&)
 {
 	// Every slice takes a distinct face, and together they are the whole set.
@@ -220,7 +220,7 @@ bool FElysiumSkyCubeTest::RunTest(const FString&)
 // This checks the packing keeps that property, and reproduces Source's own factor.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFogPackTest, "Elysium.Substrate.FogPack", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFogPackTest, "Elysium.Arm.FogPack", GElysiumTestFlags)
 bool FElysiumFogPackTest::RunTest(const FString&)
 {
 	// The slots the material graph reads (pipeline/unreal/mat_fog.py) and the bake writes
@@ -275,7 +275,7 @@ bool FElysiumFogPackTest::RunTest(const FString&)
 // engine's own default material needs no project asset).
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFogDecalMIDTest, "Elysium.Substrate.FogDecalMID", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFogDecalMIDTest, "Elysium.Arm.FogDecalMID", GElysiumTestFlags)
 bool FElysiumFogDecalMIDTest::RunTest(const FString&)
 {
 	UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(
@@ -1128,7 +1128,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptedSequenceBodyClaimTest,
-	"Elysium.Substrate.ScriptedSequenceBodyClaim", GElysiumTestFlags)
+	"Elysium.Arm.ScriptedSequenceBodyClaim", GElysiumTestFlags)
 bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 {
 	// One NPC with a stance set, and one beat aimed at it carrying an action animation.

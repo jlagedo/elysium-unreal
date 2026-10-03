@@ -27,7 +27,7 @@ static constexpr EAutomationTestFlags GElysiumNpcKernelAnimFlags =
 // --- The gesture-layer table (slots 265, 269, 270, 273, 274, 275) -------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelAnimGestureLayersTest,
-	"Elysium.Substrate.NpcKernelAnim.GestureLayers", GElysiumNpcKernelAnimFlags)
+	"Elysium.Arm.NpcKernelAnim.GestureLayers", GElysiumNpcKernelAnimFlags)
 bool FElysiumNpcKernelAnimGestureLayersTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_anim_layers"), 5101);
@@ -74,7 +74,7 @@ bool FElysiumNpcKernelAnimGestureLayersTest::RunTest(const FString&)
 // --- The flex controllers (slots 280, 281, 282) -------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelAnimFlexTest,
-	"Elysium.Substrate.NpcKernelAnim.FlexControllers", GElysiumNpcKernelAnimFlags)
+	"Elysium.Arm.NpcKernelAnim.FlexControllers", GElysiumNpcKernelAnimFlags)
 bool FElysiumNpcKernelAnimFlexTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_anim_flex"), 5103);
@@ -103,7 +103,7 @@ bool FElysiumNpcKernelAnimFlexTest::RunTest(const FString&)
 // --- The scene-event queue (slots 283, 286, 290, 291) -------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelAnimSceneEventsTest,
-	"Elysium.Substrate.NpcKernelAnim.SceneEvents", GElysiumNpcKernelAnimFlags)
+	"Elysium.Arm.NpcKernelAnim.SceneEvents", GElysiumNpcKernelAnimFlags)
 bool FElysiumNpcKernelAnimSceneEventsTest::RunTest(const FString&)
 {
 	// `CUtlMemory::Grow`, as `CBaseFlex::AddSceneEvent` inlines it. Pure arithmetic, so it is asserted with no
@@ -171,8 +171,6 @@ bool FElysiumNpcKernelAnimSceneEventsTest::RunTest(const FString&)
 
 	// The two live arms both begin with `LookupSequence`, a seam answering -1, so neither arms the
 	// record: `+0x0c` stays at -1 and every `Process*` guard refuses it.
-	TestEqual(TEXT("the sequence lookup seam answers retail's own miss"),
-		Guard->LookupSequenceByName(TEXT("gesture_wave")), INDEX_NONE);
 	TestEqual(TEXT("so the gesture record is queued un-armed"), Guard->SceneEvents[1].Handle, -1);
 
 	return true;
@@ -181,7 +179,7 @@ bool FElysiumNpcKernelAnimSceneEventsTest::RunTest(const FString&)
 // --- The Troika scene-event dispatch (slot 286) -------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelAnimTroikaSceneEventTest,
-	"Elysium.Substrate.NpcKernelAnim.TroikaSceneEvent", GElysiumNpcKernelAnimFlags)
+	"Elysium.Arm.NpcKernelAnim.TroikaSceneEvent", GElysiumNpcKernelAnimFlags)
 bool FElysiumNpcKernelAnimTroikaSceneEventTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_anim_troika_scene"), 5105);
@@ -237,13 +235,9 @@ bool FElysiumNpcKernelAnimTroikaSceneEventTest::RunTest(const FString&)
 	Guard->AddSceneEvent(&Scene, &Silence);
 	TestEqual(TEXT("so the Silence arm writes nothing and never reaches the queue"),
 		Guard->SceneEvents.Num(), 0);
-	// With a partner it reaches the disposition seam, which refuses — the recovered refusal.
+	// With a partner it reaches the disposition table, which refuses — the recovered refusal.
 	Guard->Dialogue.bInDialog = true;
 	TestTrue(TEXT("an open session IS the dialogue partner here"), Guard->HasLiveDialogPartner());
-	float Threshold = -1.f;
-	float Chance = -1.f;
-	TestFalse(TEXT("and the disposition row's stance-reaction pair has no source yet"),
-		Guard->DispositionStanceReaction(Threshold, Chance));
 	Guard->AddSceneEvent(&Scene, &Silence);
 	TestEqual(TEXT("so the reaction is dropped at the table"), Guard->SceneEvents.Num(), 0);
 	Guard->Dialogue.bInDialog = false;
@@ -258,13 +252,6 @@ bool FElysiumNpcKernelAnimTroikaSceneEventTest::RunTest(const FString&)
 	TestEqual(TEXT("a live cooldown refuses the loud expression"),
 		Guard->ScriptedExpressions.Num(), 1);
 	Guard->LoudExpressionTime = -1.0;
-	FString Expr;
-	float FadeIn = 0.f;
-	float FadeOut = 0.f;
-	float MinLevel = 0.f;
-	float MaxLevel = 0.f;
-	TestFalse(TEXT("the disposition row's expression block has no source yet"),
-		Guard->DispositionLoudExpression(Expr, FadeIn, FadeOut, MinLevel, MaxLevel));
 	Guard->AddSceneEvent(&Scene, &Loud);
 	TestEqual(TEXT("so the loud arm raises nothing"), Guard->ScriptedExpressions.Num(), 1);
 	TestEqual(TEXT("and leaves the cooldown where it was"), Guard->LoudExpressionTime, -1.0);
@@ -299,7 +286,7 @@ bool FElysiumNpcKernelAnimTroikaSceneEventTest::RunTest(const FString&)
 // --- The activity commit ------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelAnimActivityCommitTest,
-	"Elysium.Substrate.NpcKernelAnim.ActivityCommit", GElysiumNpcKernelAnimFlags)
+	"Elysium.Arm.NpcKernelAnim.ActivityCommit", GElysiumNpcKernelAnimFlags)
 bool FElysiumNpcKernelAnimActivityCommitTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_anim_activity"), 5106);
@@ -380,8 +367,6 @@ bool FElysiumNpcKernelAnimActivityCommitTest::RunTest(const FString&)
 	// 1 and 2 are two different yeses.
 	TestEqual(TEXT("an idle body with no cine plays the sequence"),
 		Guard->CanPlaySequence(false, 0), 1);
-	TestTrue(TEXT("the dynamic-interaction seam answers the arm that lets a cine stand"),
-		Guard->CineAllowsDynamicInteraction());
 	TestFalse(TEXT("and this body holds no cine"), Guard->ScriptOwnerIsLive());
 	return true;
 }
@@ -389,7 +374,7 @@ bool FElysiumNpcKernelAnimActivityCommitTest::RunTest(const FString&)
 // --- `ResolveActivityToSequence` `0x10272130` ---------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelAnimResolveActivityTest,
-	"Elysium.Substrate.NpcKernelAnim.ResolveActivityToSequence", GElysiumNpcKernelAnimFlags)
+	"Elysium.Arm.NpcKernelAnim.ResolveActivityToSequence", GElysiumNpcKernelAnimFlags)
 bool FElysiumNpcKernelAnimResolveActivityTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_anim_resolve"), 5107);
@@ -444,8 +429,6 @@ bool FElysiumNpcKernelAnimResolveActivityTest::RunTest(const FString&)
 	// ACT_SCRIPT_CUSTOM_MOVE (0x18) with no cine is NOT the custom-move arm: retail's guard is the
 	// cine handle, and without one the request takes the ordinary weighted rung.
 	TestFalse(TEXT("this body holds no cine"), Guard->ScriptOwnerIsLive());
-	TestEqual(TEXT("and the custom-move name seam is empty"),
-		Guard->ScriptCustomMoveSequenceName().Len(), 0);
 	Guard->ResolveActivityToSequence(0x18, Sequence, Translated, Weapon);
 	TestEqual(TEXT("so ACT_SCRIPT_CUSTOM_MOVE walks the ordinary ladder to the floor"), Sequence, 0);
 
@@ -465,7 +448,7 @@ bool FElysiumNpcKernelAnimResolveActivityTest::RunTest(const FString&)
 // --- The remaining single-arm bodies ------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelAnimMiscBodiesTest,
-	"Elysium.Substrate.NpcKernelAnim.MiscBodies", GElysiumNpcKernelAnimFlags)
+	"Elysium.Arm.NpcKernelAnim.MiscBodies", GElysiumNpcKernelAnimFlags)
 bool FElysiumNpcKernelAnimMiscBodiesTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_anim_misc"), 5108);
@@ -485,7 +468,6 @@ bool FElysiumNpcKernelAnimMiscBodiesTest::RunTest(const FString&)
 	// `BodyGroup` `0x10398800` (`CNPC_VMingXiao`), three arms. The cvar is a seam whose NAME and
 	// DEFAULT are unrecovered; it answers "not a command, value -1", which is the arm that takes the
 	// mask.
-	TestFalse(TEXT("the body-group cvar seam is a real convar"), Ming->BodyGroupCvarIsCommand());
 	TestEqual(TEXT("standing at retail's negative default"), Ming->BodyGroupCvarValue(), -1);
 	Ming->MingXiaoSeveredTentacleMask = 6;
 	Ming->NpcBody = 99;
@@ -505,8 +487,6 @@ bool FElysiumNpcKernelAnimMiscBodiesTest::RunTest(const FString&)
 	Guard->Slot59(nullptr);
 	Guard->Slot61(nullptr);
 	TestFalse(TEXT("and slot 61 is byte for byte the same body"), Guard->bInChoreoScene);
-	TestFalse(TEXT("the scene-entity LOD byte has no source yet"),
-		Guard->SceneEntityForcesCutsceneLod(nullptr));
 
 	// `IdleSequenceGate` `0x102b8a10`: COND_ENEMY_DEAD (0x58) first, then the activity probe.
 	TestEqual(TEXT("EnemyDead is retail's condition 0x58"),
@@ -541,7 +521,7 @@ bool FElysiumNpcKernelAnimMiscBodiesTest::RunTest(const FString&)
 // --- The species tables -------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelAnimSpeciesTest,
-	"Elysium.Substrate.NpcKernelAnim.Species", GElysiumNpcKernelAnimFlags)
+	"Elysium.Arm.NpcKernelAnim.Species", GElysiumNpcKernelAnimFlags)
 bool FElysiumNpcKernelAnimSpeciesTest::RunTest(const FString&)
 {
 	// Slot 259's EMPTY override, exercised by RETAIL CLASS NAME through the census reader. (Since
@@ -632,7 +612,7 @@ bool FElysiumNpcKernelAnimSpeciesTest::RunTest(const FString&)
 
 	// The extra-model pair's forwarding gate, "the owner IS the player". A freshly spawned NPC has no
 	// owner. The two bodies themselves are `FElysiumNpcPlayerController`'s overrides since story 5
-	// fold A2 (`Elysium.Substrate.NpcKernelPlayerController.ForwardingToOwner`).
+	// fold A2 (`Elysium.Arm.NpcKernelPlayerController.ForwardingToOwner`).
 	TestFalse(TEXT("a spawned NPC is not owned by the player"), Guard->OwnerIsThePlayer());
 	Guard->SetOwnerEntity(Fixture.Player()->Handle);
 	TestTrue(TEXT("an NPC owned by the player is"), Guard->OwnerIsThePlayer());

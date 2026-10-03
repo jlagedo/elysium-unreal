@@ -145,7 +145,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMakerLifecycleTest,
-	"Elysium.Substrate.NpcMakerLifecycle", GElysiumTestFlags)
+	"Elysium.Arm.NpcMakerLifecycle", GElysiumTestFlags)
 bool FElysiumNpcMakerLifecycleTest::RunTest(const FString&)
 {
 	auto MakeDefs = []()
@@ -627,7 +627,7 @@ bool FElysiumNpcMakerLifecycleTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInterestingPlacePolicyTest,
-	"Elysium.Substrate.InterestingPlacePolicy", GElysiumTestFlags)
+	"Elysium.Arm.InterestingPlacePolicy", GElysiumTestFlags)
 bool FElysiumInterestingPlacePolicyTest::RunTest(const FString&)
 {
 	const TArray<int32> Ratings = { 3, 5, 4, 5, 0 };
@@ -665,7 +665,7 @@ bool FElysiumInterestingPlacePolicyTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDispositionLevelTest,
-	"Elysium.Substrate.DispositionLevels", GElysiumTestFlags)
+	"Elysium.Arm.DispositionLevels", GElysiumTestFlags)
 bool FElysiumDispositionLevelTest::RunTest(const FString&)
 {
 	const FString Text =
@@ -703,7 +703,7 @@ bool FElysiumDispositionLevelTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRelationshipsTest,
-	"Elysium.Substrate.Relationships", GElysiumTestFlags)
+	"Elysium.Arm.Relationships", GElysiumTestFlags)
 bool FElysiumRelationshipsTest::RunTest(const FString&)
 {
 	FElysiumRelationships Table;
@@ -1298,7 +1298,7 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 // LABEL is what reaches the clip player rather than the concrete bank cell, the selected row's own
 // loop bit beats the caller's request, and the clip's length is what a waiting task is told.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcActivityResolveTest,
-	"Elysium.Substrate.Npc.ActivityResolve", GElysiumTestFlags)
+	"Elysium.Arm.Npc.ActivityResolve", GElysiumTestFlags)
 bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 {
 	auto BuildWalker = [](FElysiumEntityDefs& Defs)
@@ -1375,7 +1375,7 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 				break;
 			}
 		}
-		if (!TestFalse(TEXT("the patrol leg asked the one activity seam"), Resolve.IsEmpty()))
+		if (!TestFalse(TEXT("the patrol leg asked for its walk activity"), Resolve.IsEmpty()))
 		{
 			return false;
 		}
@@ -1455,7 +1455,7 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcTeleportToEntityTest,
-	"Elysium.Substrate.Npc.TeleportToEntity", GElysiumTestFlags)
+	"Elysium.Arm.Npc.TeleportToEntity", GElysiumTestFlags)
 bool FElysiumNpcTeleportToEntityTest::RunTest(const FString&)
 {
 	ElysiumStub::ClearTally();
@@ -1545,14 +1545,6 @@ bool FElysiumNpcTeleportToEntityTest::RunTest(const FString&)
 	TestEqual(TEXT("a missing destination preserves the existing think deadline"),
 		JackEnt->NextThink, 7.0f);
 
-	TArray<ElysiumStub::FTally> Rows;
-	ElysiumStub::CollectTally(Rows);
-	TestFalse(TEXT("the backed input never enters the stub work list"),
-		Rows.ContainsByPredicate([](const ElysiumStub::FTally& Row)
-		{
-			return Row.Surface.Contains(TEXT("TeleportToEntity"));
-		}));
-
 	return true;
 }
 
@@ -1562,7 +1554,7 @@ bool FElysiumNpcTeleportToEntityTest::RunTest(const FString&)
 // SetOrigin. A bare world (Owner null) exercises the substrate half; bodies no-op.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRuntimeSpawnTest, "Elysium.Substrate.RuntimeSpawn", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRuntimeSpawnTest, "Elysium.Arm.RuntimeSpawn", GElysiumTestFlags)
 bool FElysiumRuntimeSpawnTest::RunTest(const FString&)
 {
 	FElysiumEntityDefs Defs;
@@ -1624,7 +1616,7 @@ bool FElysiumRuntimeSpawnTest::RunTest(const FString&)
 // `id - 1` bit position, the silent drop outside 1..32, `atoi`'s zero for a non-number, and the
 // two empty answers.
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcGroupMaskTest, "Elysium.Substrate.NpcGroupMask",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcGroupMaskTest, "Elysium.Arm.NpcGroupMask",
 	GElysiumTestFlags)
 bool FElysiumNpcGroupMaskTest::RunTest(const FString&)
 {

@@ -421,7 +421,7 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPerceptionQueryTest,
-	"Elysium.Substrate.PerceptionQueries", GElysiumTestFlags)
+	"Elysium.Arm.PerceptionQueries", GElysiumTestFlags)
 bool FElysiumPerceptionQueryTest::RunTest(const FString&)
 {
 	const FVector Eye(0.0, 0.0, 160.0);
@@ -646,7 +646,7 @@ bool FElysiumInteractionLifecycleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUseFilterTest,
-	"Elysium.Substrate.UseFilter", GElysiumTestFlags)
+	"Elysium.Arm.UseFilter", GElysiumTestFlags)
 bool FElysiumUseFilterTest::RunTest(const FString&)
 {
 	FElysiumEntityDefs Defs;
@@ -1424,7 +1424,7 @@ bool FElysiumRotatingAttachTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalDefinitionTest,
-	"Elysium.Substrate.TerminalDefinition", GElysiumTestFlags)
+	"Elysium.Arm.TerminalDefinition", GElysiumTestFlags)
 bool FElysiumTerminalDefinitionTest::RunTest(const FString&)
 {
 	const FString Text = TEXT(R"KV(
@@ -2060,7 +2060,7 @@ static UElysiumSessionSubsystem* MakeHeadlessGameState()
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalDependencyTruthinessTest,
-	"Elysium.Substrate.TerminalDependencyTruthiness", GElysiumTestFlags)
+	"Elysium.Arm.TerminalDependencyTruthiness", GElysiumTestFlags)
 bool FElysiumTerminalDependencyTruthinessTest::RunTest(const FString&)
 {
 	// A prop_hacking directory is visible iff its dependency passes the gate; an empty dependency
@@ -2147,7 +2147,7 @@ bool FElysiumTerminalDependencyTruthinessTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSignDependencyTruthinessTest,
-	"Elysium.Substrate.SignDependencyTruthiness", GElysiumTestFlags)
+	"Elysium.Content.SignDependencyTruthiness", GElysiumTestFlags)
 bool FElysiumSignDependencyTruthinessTest::RunTest(const FString&)
 {
 	// A `Sign { dependency; filename }` wrapper selects the first block whose dependency passes the
@@ -2207,7 +2207,7 @@ bool FElysiumSignDependencyTruthinessTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueConditionTruthinessTest,
-	"Elysium.Substrate.DialogueConditionTruthiness", GElysiumTestFlags)
+	"Elysium.Content.DialogueConditionTruthiness", GElysiumTestFlags)
 bool FElysiumDialogueConditionTruthinessTest::RunTest(const FString&)
 {
 	// A `.dlg` col-4 PC-choice condition is offered iff it passes retail's CDialogDependency::Test ->
@@ -2523,7 +2523,7 @@ static FElysiumUseContext HeldContext(const FLockWorld& Fixture, const FVector& 
 using namespace ElysiumLockableCameraTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLockableCameraTest,
-	"Elysium.Substrate.LockableCamera", GElysiumTestFlags)
+	"Elysium.Arm.LockableCamera", GElysiumTestFlags)
 bool FElysiumLockableCameraTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Items = LockpickTable();

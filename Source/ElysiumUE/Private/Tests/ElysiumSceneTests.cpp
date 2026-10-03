@@ -127,7 +127,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // `Elysium.Content.SceneCorpus` — this one is content-free and runs on inline text.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneParseTest, "Elysium.Substrate.SceneParse", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneParseTest, "Elysium.Arm.SceneParse", GElysiumTestFlags)
 
 bool FElysiumSceneParseTest::RunTest(const FString&)
 {
@@ -403,7 +403,7 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneTimelineTest, "Elysium.Substrate.SceneTimeline", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneTimelineTest, "Elysium.Arm.SceneTimeline", GElysiumTestFlags)
 
 bool FElysiumSceneTimelineTest::RunTest(const FString&)
 {

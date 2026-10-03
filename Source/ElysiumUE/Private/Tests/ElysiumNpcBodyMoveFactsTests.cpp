@@ -98,7 +98,7 @@ FAIRequestID IssueAbstractRequest(AElysiumNpcBody* Body, UPathFollowingComponent
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcBodyFollowerRequestTest,
-	"Elysium.Visual.NpcBody.MoveRequest.FollowerRequest", ElysiumNpcBodyMoveTests::Flags)
+	"Elysium.Arm.Visual.NpcBody.MoveRequest.FollowerRequest", ElysiumNpcBodyMoveTests::Flags)
 bool FElysiumNpcBodyFollowerRequestTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcBodyMoveTests;
@@ -133,7 +133,7 @@ bool FElysiumNpcBodyFollowerRequestTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcBodyMoveFactsNoControllerTest,
-	"Elysium.Visual.NpcBody.MoveFacts.NoController", ElysiumNpcBodyMoveTests::Flags)
+	"Elysium.Arm.Visual.NpcBody.MoveFacts.NoController", ElysiumNpcBodyMoveTests::Flags)
 bool FElysiumNpcBodyMoveFactsNoControllerTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcBodyMoveTests;
@@ -150,7 +150,7 @@ bool FElysiumNpcBodyMoveFactsNoControllerTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcBodyMoveFactsRefusedTest,
-	"Elysium.Visual.NpcBody.MoveFacts.RefusedRequest", ElysiumNpcBodyMoveTests::Flags)
+	"Elysium.Arm.Visual.NpcBody.MoveFacts.RefusedRequest", ElysiumNpcBodyMoveTests::Flags)
 bool FElysiumNpcBodyMoveFactsRefusedTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcBodyMoveTests;
@@ -185,7 +185,7 @@ bool FElysiumNpcBodyMoveFactsRefusedTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcBodyMoveFactsAlreadyAtGoalTest,
-	"Elysium.Visual.NpcBody.MoveFacts.AlreadyAtGoal", ElysiumNpcBodyMoveTests::Flags)
+	"Elysium.Arm.Visual.NpcBody.MoveFacts.AlreadyAtGoal", ElysiumNpcBodyMoveTests::Flags)
 bool FElysiumNpcBodyMoveFactsAlreadyAtGoalTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcBodyMoveTests;
@@ -214,7 +214,7 @@ bool FElysiumNpcBodyMoveFactsAlreadyAtGoalTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcBodyMoveFactsEndsTest,
-	"Elysium.Visual.NpcBody.MoveFacts.EndsAndNewRequest", ElysiumNpcBodyMoveTests::Flags)
+	"Elysium.Arm.Visual.NpcBody.MoveFacts.EndsAndNewRequest", ElysiumNpcBodyMoveTests::Flags)
 bool FElysiumNpcBodyMoveFactsEndsTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcBodyMoveTests;
@@ -297,7 +297,7 @@ bool FElysiumNpcBodyMoveFactsEndsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcBodyMoveFactsBlockerAndPartialTest,
-	"Elysium.Visual.NpcBody.MoveFacts.BlockerAndPartial", ElysiumNpcBodyMoveTests::Flags)
+	"Elysium.Arm.Visual.NpcBody.MoveFacts.BlockerAndPartial", ElysiumNpcBodyMoveTests::Flags)
 bool FElysiumNpcBodyMoveFactsBlockerAndPartialTest::RunTest(const FString&)
 {
 	using namespace ElysiumNpcBodyMoveTests;

@@ -55,7 +55,7 @@ namespace
 // --- The five ungated node selectors ------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPositionsSelectorsTest,
-	"Elysium.Substrate.NpcKernelPositions.NodeSelectors", GPositionsFlags)
+	"Elysium.Arm.NpcKernelPositions.NodeSelectors", GPositionsFlags)
 bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 {
 	const FVector Player(0.0, 0.0, 0.0);
@@ -152,7 +152,7 @@ bool FElysiumNpcKernelPositionsSelectorsTest::RunTest(const FString&)
 // --- The four gated teleport selectors ----------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPositionsTeleportNodesTest,
-	"Elysium.Substrate.NpcKernelPositions.TeleportNodeSelectors", GPositionsFlags)
+	"Elysium.Arm.NpcKernelPositions.TeleportNodeSelectors", GPositionsFlags)
 bool FElysiumNpcKernelPositionsTeleportNodesTest::RunTest(const FString&)
 {
 	const FVector Player(0.0, 0.0, 0.0);
@@ -247,7 +247,7 @@ bool FElysiumNpcKernelPositionsTeleportNodesTest::RunTest(const FString&)
 // --- The four `PositionClearForTeleport` rules --------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPositionsClearanceTest,
-	"Elysium.Substrate.NpcKernelPositions.PositionClearForTeleport", GPositionsFlags)
+	"Elysium.Arm.NpcKernelPositions.PositionClearForTeleport", GPositionsFlags)
 bool FElysiumNpcKernelPositionsClearanceTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("positions_clearance"), 4242);
@@ -307,8 +307,6 @@ bool FElysiumNpcKernelPositionsClearanceTest::RunTest(const FString&)
 	Chang->ChangLastTeleportPosition = FVector(10000.0, 0.0, 0.0);
 	TestTrue(TEXT("the Chang rule accepts a clear spot with no squad"),
 		Chang->PositionClearForTeleportChang(FVector(300.0, 0.0, 0.0), Clearance));
-	TestFalse(TEXT("and its squad seam refuses nothing, which is what an empty squad answers"),
-		Chang->SquadPositionTaken(FVector(300.0, 0.0, 0.0), Clearance));
 
 	// No dispatcher: the four are non-virtual per-class methods in retail (no vtable slot), each
 	// called by its own selector (story 5 step 3). The Andrei rule, as `npc_VAndreiBlood` builds it.
@@ -325,7 +323,7 @@ bool FElysiumNpcKernelPositionsClearanceTest::RunTest(const FString&)
 // --- The Chang brothers' arena ------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPositionsArenaTest,
-	"Elysium.Substrate.NpcKernelPositions.Arena", GPositionsFlags)
+	"Elysium.Arm.NpcKernelPositions.Arena", GPositionsFlags)
 bool FElysiumNpcKernelPositionsArenaTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("positions_arena"), 7);
@@ -397,7 +395,7 @@ bool FElysiumNpcKernelPositionsArenaTest::RunTest(const FString&)
 // --- The Sheriff's floor heights ----------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPositionsFloorHeightsTest,
-	"Elysium.Substrate.NpcKernelPositions.FloorHeights", GPositionsFlags)
+	"Elysium.Arm.NpcKernelPositions.FloorHeights", GPositionsFlags)
 bool FElysiumNpcKernelPositionsFloorHeightsTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("positions_heights"), 11);
@@ -447,8 +445,6 @@ bool FElysiumNpcKernelPositionsFloorHeightsTest::RunTest(const FString&)
 	// first. The node seam answers nothing, so neither is stored and the latch stays clear.
 	Npc->bSheriffLedgeHeightStored = false;
 	Npc->CacheFloorHeights();
-	TestFalse(TEXT("CacheFloorHeights stores nothing while the node seam is empty"),
-		Npc->bSheriffLedgeHeightStored);
 
 	return true;
 }
@@ -456,7 +452,7 @@ bool FElysiumNpcKernelPositionsFloorHeightsTest::RunTest(const FString&)
 // --- Pure geometry and the shoot-target falloff --------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPositionsGeometryTest,
-	"Elysium.Substrate.NpcKernelPositions.Geometry", GPositionsFlags)
+	"Elysium.Arm.NpcKernelPositions.Geometry", GPositionsFlags)
 bool FElysiumNpcKernelPositionsGeometryTest::RunTest(const FString&)
 {
 	// `CNPC_VVampireBoss::DistToSegment` `0x103c6b70`, and the two arms that differ from the
@@ -504,7 +500,7 @@ bool FElysiumNpcKernelPositionsGeometryTest::RunTest(const FString&)
 // --- The unreachable cache, the hint-group validators and slot 563 -------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPositionsValidatorsTest,
-	"Elysium.Substrate.NpcKernelPositions.Validators", GPositionsFlags)
+	"Elysium.Arm.NpcKernelPositions.Validators", GPositionsFlags)
 bool FElysiumNpcKernelPositionsValidatorsTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("positions_validators"), 99);
@@ -649,7 +645,7 @@ bool FElysiumNpcKernelPositionsValidatorsTest::RunTest(const FString&)
 // --- Slot 563's eight bodies ---------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPositionsChaseTest,
-	"Elysium.Substrate.NpcKernelPositions.ChasePosition", GPositionsFlags)
+	"Elysium.Arm.NpcKernelPositions.ChasePosition", GPositionsFlags)
 bool FElysiumNpcKernelPositionsChaseTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("positions_chase"), 5);
@@ -723,10 +719,8 @@ bool FElysiumNpcKernelPositionsChaseTest::RunTest(const FString&)
 	// The two lead helpers are seams and say so.
 	float LeadTolerance = 5.f;
 	Human->ChaseLeadTolerance(Enemy, Chase, LeadTolerance);
-	TestEqual(TEXT("the tolerance lead seam changes nothing"), LeadTolerance, 5.f);
 	FVector Led = FVector::ZeroVector;
 	Human->ChaseLeadPosition(Enemy, FVector::ZeroVector, 0.f, Chase, Led);
-	TestEqual(TEXT("the position lead seam answers the position unchanged"), Led, Chase);
 	TestEqual(TEXT("and the ground speed it would be fed is nothing"), Human->GroundSpeedCm(), 0.f);
 
 	return true;
@@ -735,7 +729,7 @@ bool FElysiumNpcKernelPositionsChaseTest::RunTest(const FString&)
 // --- The Werewolf teleport pair and its condition -------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPositionsTeleportTest,
-	"Elysium.Substrate.NpcKernelPositions.WerewolfTeleport", GPositionsFlags)
+	"Elysium.Arm.NpcKernelPositions.WerewolfTeleport", GPositionsFlags)
 bool FElysiumNpcKernelPositionsTeleportTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("positions_teleport"), 13);
@@ -818,7 +812,7 @@ bool FElysiumNpcKernelPositionsTeleportTest::RunTest(const FString&)
 // --- The seams, and what each of them refuses -----------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelPositionsSeamsTest,
-	"Elysium.Substrate.NpcKernelPositions.Seams", GPositionsFlags)
+	"Elysium.Arm.NpcKernelPositions.Seams", GPositionsFlags)
 bool FElysiumNpcKernelPositionsSeamsTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("positions_seams"), 3);

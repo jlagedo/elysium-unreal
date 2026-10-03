@@ -127,7 +127,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19SetEnemyTest,
-	"Elysium.Substrate.NpcKernelMisc19.SetEnemy", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.SetEnemy", GMisc19Flags)
 bool FElysiumNpcKernelMisc19SetEnemyTest::RunTest(const FString&)
 {
 	// `SetEnemy` `0x10279a50`.
@@ -189,7 +189,7 @@ bool FElysiumNpcKernelMisc19SetEnemyTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19ChooseEnemyAcquireTest,
-	"Elysium.Substrate.NpcKernelMisc19.ChooseEnemy.Acquire", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.ChooseEnemy.Acquire", GMisc19Flags)
 bool FElysiumNpcKernelMisc19ChooseEnemyAcquireTest::RunTest(const FString&)
 {
 	// `CAI_BaseNPC::ChooseEnemy` `0x10279dd0`: no running program forces all three interrupt answers
@@ -221,7 +221,7 @@ bool FElysiumNpcKernelMisc19ChooseEnemyAcquireTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19ChooseEnemyGateTest,
-	"Elysium.Substrate.NpcKernelMisc19.ChooseEnemy.Gate", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.ChooseEnemy.Gate", GMisc19Flags)
 bool FElysiumNpcKernelMisc19ChooseEnemyGateTest::RunTest(const FString&)
 {
 	// `0x10279f30`-`0x10279f44`: a running program that lists neither NEW_ENEMY nor (with nothing
@@ -257,7 +257,7 @@ bool FElysiumNpcKernelMisc19ChooseEnemyGateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19ChooseEnemyLostTest,
-	"Elysium.Substrate.NpcKernelMisc19.ChooseEnemy.Lost", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.ChooseEnemy.Lost", GMisc19Flags)
 bool FElysiumNpcKernelMisc19ChooseEnemyLostTest::RunTest(const FString&)
 {
 	// The went-null arm (`0x10279e85`-`0x10279e8b`) and the lost outputs (`0x1027a097`-`0x1027a0da`).
@@ -328,7 +328,7 @@ bool FElysiumNpcKernelMisc19ChooseEnemyLostTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19ChooseEnemyDeadTest,
-	"Elysium.Substrate.NpcKernelMisc19.ChooseEnemy.Dead", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.ChooseEnemy.Dead", GMisc19Flags)
 bool FElysiumNpcKernelMisc19ChooseEnemyDeadTest::RunTest(const FString&)
 {
 	// `0x1027a02d`-`0x1027a04c`: a dead OLD enemy SETS ENEMY_DEAD in the change work (second judge).
@@ -366,7 +366,7 @@ bool FElysiumNpcKernelMisc19ChooseEnemyDeadTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19Slot596Test,
-	"Elysium.Substrate.NpcKernelMisc19.Slot596", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.Slot596", GMisc19Flags)
 bool FElysiumNpcKernelMisc19Slot596Test::RunTest(const FString&)
 {
 	// `CAI_BaseNPCTroika::FUN_102b4f60` `0x102b4f60`.
@@ -389,7 +389,7 @@ bool FElysiumNpcKernelMisc19Slot596Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19Slot598Test,
-	"Elysium.Substrate.NpcKernelMisc19.Slot598", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.Slot598", GMisc19Flags)
 bool FElysiumNpcKernelMisc19Slot598Test::RunTest(const FString&)
 {
 	// `CAI_BaseNPCTroika::FUN_102b4fe0` `0x102b4fe0`.
@@ -421,7 +421,7 @@ bool FElysiumNpcKernelMisc19Slot598Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19Slot595Test,
-	"Elysium.Substrate.NpcKernelMisc19.AcquireNearestHatedTarget", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.AcquireNearestHatedTarget", GMisc19Flags)
 bool FElysiumNpcKernelMisc19Slot595Test::RunTest(const FString&)
 {
 	// `CAI_BaseNPCTroika::FUN_102b4cc0` `0x102b4cc0`, slot 595.
@@ -451,7 +451,7 @@ bool FElysiumNpcKernelMisc19Slot595Test::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19BaseEnterGrappleStateTest,
-	"Elysium.Substrate.NpcKernelMisc19.BaseEnterGrappleState", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.BaseEnterGrappleState", GMisc19Flags)
 bool FElysiumNpcKernelMisc19BaseEnterGrappleStateTest::RunTest(const FString&)
 {
 	// `CAI_BaseNPC::EnterGrappleState` `0x1026cdc0`.
@@ -478,7 +478,7 @@ bool FElysiumNpcKernelMisc19BaseEnterGrappleStateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19TroikaEnterGrappleStateTest,
-	"Elysium.Substrate.NpcKernelMisc19.TroikaEnterGrappleState", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.TroikaEnterGrappleState", GMisc19Flags)
 bool FElysiumNpcKernelMisc19TroikaEnterGrappleStateTest::RunTest(const FString&)
 {
 	// `CAI_BaseNPCTroika::EnterGrappleState` `0x102b5c00`.
@@ -517,7 +517,7 @@ bool FElysiumNpcKernelMisc19TroikaEnterGrappleStateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19PayphoneEnterGrappleStateTest,
-	"Elysium.Substrate.NpcKernelMisc19.PayphoneEnterGrappleState", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.PayphoneEnterGrappleState", GMisc19Flags)
 bool FElysiumNpcKernelMisc19PayphoneEnterGrappleStateTest::RunTest(const FString&)
 {
 	// `CPayphone::EnterGrappleState` `0x101aade0`: the base body only.
@@ -538,7 +538,7 @@ bool FElysiumNpcKernelMisc19PayphoneEnterGrappleStateTest::RunTest(const FString
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19GhoulCroucherEnterGrappleStateTest,
-	"Elysium.Substrate.NpcKernelMisc19.GhoulCroucherEnterGrappleState", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.GhoulCroucherEnterGrappleState", GMisc19Flags)
 bool FElysiumNpcKernelMisc19GhoulCroucherEnterGrappleStateTest::RunTest(const FString&)
 {
 	// `CNPC_VGhoulCroucher::EnterGrappleState` `0x1037b500`.
@@ -568,7 +568,7 @@ bool FElysiumNpcKernelMisc19GhoulCroucherEnterGrappleStateTest::RunTest(const FS
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19Slot354Test,
-	"Elysium.Substrate.NpcKernelMisc19.Slot354", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.Slot354", GMisc19Flags)
 bool FElysiumNpcKernelMisc19Slot354Test::RunTest(const FString&)
 {
 	// `CAI_BaseNPC::FUN_1026cec0` `0x1026cec0`, the victim's feed-begin callback.
@@ -618,7 +618,7 @@ bool FElysiumNpcKernelMisc19Slot354Test::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19CopSlot596Test,
-	"Elysium.Substrate.NpcKernelMisc19.CopSlot596", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.CopSlot596", GMisc19Flags)
 bool FElysiumNpcKernelMisc19CopSlot596Test::RunTest(const FString&)
 {
 	// `CNPC_VCop::vfunc596` `0x10372c50`.
@@ -641,7 +641,7 @@ bool FElysiumNpcKernelMisc19CopSlot596Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19CopSlot598Test,
-	"Elysium.Substrate.NpcKernelMisc19.CopSlot598", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.CopSlot598", GMisc19Flags)
 bool FElysiumNpcKernelMisc19CopSlot598Test::RunTest(const FString&)
 {
 	// `CNPC_VCop::vfunc598` `0x10372dd0`.
@@ -676,7 +676,7 @@ bool FElysiumNpcKernelMisc19CopSlot598Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19PedestrianSlot27Test,
-	"Elysium.Substrate.NpcKernelMisc19.PedestrianSlot27", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.PedestrianSlot27", GMisc19Flags)
 bool FElysiumNpcKernelMisc19PedestrianSlot27Test::RunTest(const FString&)
 {
 	// `CNPC_VPedestrian::vfunc27` `0x103a3850`.
@@ -697,7 +697,7 @@ bool FElysiumNpcKernelMisc19PedestrianSlot27Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19AndreiBloodActivateTest,
-	"Elysium.Substrate.NpcKernelMisc19.AndreiBloodActivate", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.AndreiBloodActivate", GMisc19Flags)
 bool FElysiumNpcKernelMisc19AndreiBloodActivateTest::RunTest(const FString&)
 {
 	// `CNPC_VAndreiBlood::Activate` `0x1035dc30`.
@@ -723,7 +723,7 @@ bool FElysiumNpcKernelMisc19AndreiBloodActivateTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19PlayerSupernaturalIncidentTest,
-	"Elysium.Substrate.NpcKernelMisc19.PlayerSupernaturalIncident", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.PlayerSupernaturalIncident", GMisc19Flags)
 bool FElysiumNpcKernelMisc19PlayerSupernaturalIncidentTest::RunTest(const FString&)
 {
 	// `PlayerSupernaturalIncident` `0x1017f4a0`, arm 0 (the debug-gated witness stamp).
@@ -764,7 +764,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19TroikaHandleAnimEventTest,
-	"Elysium.Substrate.NpcKernelMisc19.TroikaHandleAnimEvent", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.TroikaHandleAnimEvent", GMisc19Flags)
 bool FElysiumNpcKernelMisc19TroikaHandleAnimEventTest::RunTest(const FString&)
 {
 	// `CAI_BaseNPCTroika::HandleAnimEvent` `0x1029b290`.
@@ -833,7 +833,7 @@ bool FElysiumNpcKernelMisc19TroikaHandleAnimEventTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19BaseHandleAnimEventTest,
-	"Elysium.Substrate.NpcKernelMisc19.BaseHandleAnimEvent", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.BaseHandleAnimEvent", GMisc19Flags)
 bool FElysiumNpcKernelMisc19BaseHandleAnimEventTest::RunTest(const FString&)
 {
 	// `CAI_BaseNPC::HandleAnimEvent` `0x10274e30`, driven directly (`N.FElysiumNpcBase::`).
@@ -908,7 +908,7 @@ bool FElysiumNpcKernelMisc19BaseHandleAnimEventTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19DogHandleAnimEventTest,
-	"Elysium.Substrate.NpcKernelMisc19.DogHandleAnimEvent", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.DogHandleAnimEvent", GMisc19Flags)
 bool FElysiumNpcKernelMisc19DogHandleAnimEventTest::RunTest(const FString&)
 {
 	// `CNPC_VDog::HandleAnimEvent` `0x10374280`: 0xbb9 with no active weapon is swallowed.
@@ -922,7 +922,7 @@ bool FElysiumNpcKernelMisc19DogHandleAnimEventTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19ManBatHandleAnimEventTest,
-	"Elysium.Substrate.NpcKernelMisc19.ManBatHandleAnimEvent", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.ManBatHandleAnimEvent", GMisc19Flags)
 bool FElysiumNpcKernelMisc19ManBatHandleAnimEventTest::RunTest(const FString&)
 {
 	// `CNPC_VManBat::HandleAnimEvent` `0x1038e000`.
@@ -946,7 +946,7 @@ bool FElysiumNpcKernelMisc19ManBatHandleAnimEventTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19GargoyleHandleAnimEventTest,
-	"Elysium.Substrate.NpcKernelMisc19.GargoyleHandleAnimEvent", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.GargoyleHandleAnimEvent", GMisc19Flags)
 bool FElysiumNpcKernelMisc19GargoyleHandleAnimEventTest::RunTest(const FString&)
 {
 	// `CNPC_VGargoyle::HandleAnimEvent` `0x103786c0`.
@@ -965,7 +965,7 @@ bool FElysiumNpcKernelMisc19GargoyleHandleAnimEventTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19TzimisceHeadClawHandleAnimEventTest,
-	"Elysium.Substrate.NpcKernelMisc19.TzimisceHeadClawHandleAnimEvent", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.TzimisceHeadClawHandleAnimEvent", GMisc19Flags)
 bool FElysiumNpcKernelMisc19TzimisceHeadClawHandleAnimEventTest::RunTest(const FString&)
 {
 	// `CNPC_VTzimisceHeadClaw::HandleAnimEvent` `0x103c1540`: slot 619 argument 1 on 0x802.
@@ -989,7 +989,7 @@ bool FElysiumNpcKernelMisc19TzimisceHeadClawHandleAnimEventTest::RunTest(const F
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19WerewolfHandleAnimEventTest,
-	"Elysium.Substrate.NpcKernelMisc19.WerewolfHandleAnimEvent", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.WerewolfHandleAnimEvent", GMisc19Flags)
 bool FElysiumNpcKernelMisc19WerewolfHandleAnimEventTest::RunTest(const FString&)
 {
 	// `CNPC_VWerewolf::HandleAnimEvent` `0x103d88e0`.
@@ -1013,7 +1013,7 @@ bool FElysiumNpcKernelMisc19WerewolfHandleAnimEventTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19SabbatLeaderHandleAnimEventTest,
-	"Elysium.Substrate.NpcKernelMisc19.SabbatLeaderHandleAnimEvent", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.SabbatLeaderHandleAnimEvent", GMisc19Flags)
 bool FElysiumNpcKernelMisc19SabbatLeaderHandleAnimEventTest::RunTest(const FString&)
 {
 	// `CNPC_VSabbatLeader::HandleAnimEvent` `0x103a7000`.
@@ -1026,7 +1026,7 @@ bool FElysiumNpcKernelMisc19SabbatLeaderHandleAnimEventTest::RunTest(const FStri
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19MingXiaoHandleAnimEventTest,
-	"Elysium.Substrate.NpcKernelMisc19.MingXiaoHandleAnimEvent", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.MingXiaoHandleAnimEvent", GMisc19Flags)
 bool FElysiumNpcKernelMisc19MingXiaoHandleAnimEventTest::RunTest(const FString&)
 {
 	// `CNPC_VMingXiao::HandleAnimEvent` `0x10392a70`.
@@ -1047,7 +1047,7 @@ bool FElysiumNpcKernelMisc19MingXiaoHandleAnimEventTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19HengeyokaiHandleAnimEventTest,
-	"Elysium.Substrate.NpcKernelMisc19.HengeyokaiHandleAnimEvent", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.HengeyokaiHandleAnimEvent", GMisc19Flags)
 bool FElysiumNpcKernelMisc19HengeyokaiHandleAnimEventTest::RunTest(const FString&)
 {
 	// `CNPC_VHengeyokai::HandleAnimEvent` `0x1037fb60`.
@@ -1077,7 +1077,7 @@ bool FElysiumNpcKernelMisc19HengeyokaiHandleAnimEventTest::RunTest(const FString
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19TzimisceHandleAnimEventTest,
-	"Elysium.Substrate.NpcKernelMisc19.TzimisceHandleAnimEvent", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.TzimisceHandleAnimEvent", GMisc19Flags)
 bool FElysiumNpcKernelMisc19TzimisceHandleAnimEventTest::RunTest(const FString&)
 {
 	// `CNPC_VTzimisce::HandleAnimEvent` `0x103ba410`.
@@ -1113,7 +1113,7 @@ bool FElysiumNpcKernelMisc19TzimisceHandleAnimEventTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19BachCamperTest,
-	"Elysium.Substrate.NpcKernelMisc19.BachGatherCamperConditions", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.BachGatherCamperConditions", GMisc19Flags)
 bool FElysiumNpcKernelMisc19BachCamperTest::RunTest(const FString&)
 {
 	// `0x10365a90`.
@@ -1145,7 +1145,7 @@ bool FElysiumNpcKernelMisc19BachCamperTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMisc19CheckAllMoveHintsTest,
-	"Elysium.Substrate.NpcKernelMisc19.CheckAllMoveHints", GMisc19Flags)
+	"Elysium.Arm.NpcKernelMisc19.CheckAllMoveHints", GMisc19Flags)
 bool FElysiumNpcKernelMisc19CheckAllMoveHintsTest::RunTest(const FString&)
 {
 	// `CNPC_VWerewolf::CheckAllMoveHints` `0x103cfc50`: with no program running and no hint in the

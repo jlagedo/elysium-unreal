@@ -24,6 +24,7 @@
 #include "Visual/ElysiumDecals.h"
 #include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
+#include "Tests/ElysiumFixtureNoise.h"
 #include "Visual/ElysiumNpcBody.h"
 #include "Visual/ElysiumLightRig.h"
 #include "ElysiumDlg.h"
@@ -137,7 +138,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // assertable without a game instance — every row must name a verb and an entry point, spell each
 // verb once across the whole table, and survive the trip through MakeNewGameRequest intact.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNewGameEntriesTest,
-	"Elysium.Substrate.NewGameEntries", GElysiumTestFlags)
+	"Elysium.Arm.NewGameEntries", GElysiumTestFlags)
 bool FElysiumNewGameEntriesTest::RunTest(const FString&)
 {
 	const FElysiumNewGameRequest Mock =
@@ -210,7 +211,7 @@ bool FElysiumNewGameEntriesTest::RunTest(const FString&)
 // this can assert them without a world, and the broadcast contract is asserted over a real delegate
 // with counting subscribers: what an application-lifetime subsystem actually binds to.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapEpochTest,
-	"Elysium.Substrate.MapEpoch", GElysiumTestFlags)
+	"Elysium.Arm.MapEpoch", GElysiumTestFlags)
 bool FElysiumMapEpochTest::RunTest(const FString&)
 {
 	FElysiumMapEpoch Epochs;
@@ -277,7 +278,7 @@ bool FElysiumMapEpochTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapReadinessTest,
-	"Elysium.Substrate.MapReadiness", GElysiumTestFlags)
+	"Elysium.Arm.MapReadiness", GElysiumTestFlags)
 bool FElysiumMapReadinessTest::RunTest(const FString&)
 {
 	FString Failure;
@@ -468,9 +469,10 @@ bool FElysiumActivationLifecycleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTriggerPawnIdentityTest,
-	"Elysium.Substrate.TriggerPawnIdentity", GElysiumTestFlags)
+	"Elysium.Arm.TriggerPawnIdentity", GElysiumTestFlags)
 bool FElysiumTriggerPawnIdentityTest::RunTest(const FString&)
 {
+	ElysiumFixtureNoise::Declare();
 	FElysiumEntityDefs Defs;
 	Defs.MapName = TEXT("__trigger_pawn_identity__");
 	FElysiumEntityDef TriggerDef;
@@ -508,7 +510,7 @@ bool FElysiumTriggerPawnIdentityTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisabledTouchAdmissionTest,
-	"Elysium.Substrate.DisabledTouchAdmission", GElysiumTestFlags)
+	"Elysium.Arm.DisabledTouchAdmission", GElysiumTestFlags)
 bool FElysiumDisabledTouchAdmissionTest::RunTest(const FString&)
 {
 	FElysiumEntityDefs Defs;
@@ -560,7 +562,7 @@ bool FElysiumDisabledTouchAdmissionTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEnvironmentalAudioTouchAdmissionTest,
-	"Elysium.Substrate.EnvironmentalAudioTouchAdmission", GElysiumTestFlags)
+	"Elysium.Arm.EnvironmentalAudioTouchAdmission", GElysiumTestFlags)
 bool FElysiumEnvironmentalAudioTouchAdmissionTest::RunTest(const FString&)
 {
 	FElysiumEntityDefs Defs;
@@ -608,7 +610,7 @@ bool FElysiumEnvironmentalAudioTouchAdmissionTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFilteredTouchAdmissionTest,
-	"Elysium.Substrate.FilteredTouchAdmission", GElysiumTestFlags)
+	"Elysium.Arm.FilteredTouchAdmission", GElysiumTestFlags)
 bool FElysiumFilteredTouchAdmissionTest::RunTest(const FString&)
 {
 	FElysiumEntityDefs Defs;
@@ -880,7 +882,7 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHullCollisionBoundsTest,
-	"Elysium.Substrate.HullCollisionBounds", GElysiumTestFlags)
+	"Elysium.Arm.HullCollisionBounds", GElysiumTestFlags)
 bool FElysiumHullCollisionBoundsTest::RunTest(const FString&)
 {
 	// The surviving collision-only component. The world, and since 0018 story 21-2 the
@@ -907,7 +909,7 @@ bool FElysiumHullCollisionBoundsTest::RunTest(const FString&)
 // FElysiumClassRegistry — the case-folded base-chain walk that drives all I/O dispatch.
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRegistryTest, "Elysium.Substrate.Registry", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRegistryTest, "Elysium.Arm.Registry", GElysiumTestFlags)
 bool FElysiumRegistryTest::RunTest(const FString&)
 {
 	const FElysiumClassRegistry& Registry = FElysiumClassRegistry::Get();
@@ -952,7 +954,7 @@ bool FElysiumRegistryTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEntityNameMatchTest,
-	"Elysium.Substrate.EntityNameMatch", GElysiumTestFlags)
+	"Elysium.Arm.EntityNameMatch", GElysiumTestFlags)
 bool FElysiumEntityNameMatchTest::RunTest(const FString&)
 {
 	TestTrue(TEXT("exact names fold case"),

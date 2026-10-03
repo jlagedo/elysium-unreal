@@ -146,7 +146,7 @@ namespace RunTask19TestShared
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseWaitTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Base.Wait", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Base.Wait", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BaseWaitTest::RunTest(const FString&)
 {
 	// `0x10288bb6` (tasks 2 / 0x67): complete once curtime is no longer below `m_flWaitFinished`.
@@ -170,7 +170,7 @@ bool FElysiumNpcKernelRunTask19BaseWaitTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseWaitFaceEnemyTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Base.WaitFaceEnemy", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Base.WaitFaceEnemy", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BaseWaitFaceEnemyTest::RunTest(const FString&)
 {
 	// `0x10288bc1` (4, 0xb0, 0xb1): motor stop (`motor+0x2c = -1`), the enemy LKP aim when slot 364
@@ -193,7 +193,7 @@ bool FElysiumNpcKernelRunTask19BaseWaitFaceEnemyTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseWaitPvsTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Base.WaitPvs", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Base.WaitPvs", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BaseWaitPvsTest::RunTest(const FString&)
 {
 	// `0x10288b7b`: spawnflag 0x400 completes at once (`0x1028970f`).
@@ -210,7 +210,7 @@ bool FElysiumNpcKernelRunTask19BaseWaitPvsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseMoveToTargetRangeTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Base.MoveToTargetRange", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Base.MoveToTargetRange", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BaseMoveToTargetRangeTest::RunTest(const FString&)
 {
 	// `0x10288c43` (0xb): no `m_hTargetEnt` -> TaskFail(1) at line 0xc09.
@@ -228,7 +228,7 @@ bool FElysiumNpcKernelRunTask19BaseMoveToTargetRangeTest::RunTest(const FString&
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseNoEntryArmsTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Base.EpilogueArmsAndDefault", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Base.EpilogueArmsAndDefault", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BaseNoEntryArmsTest::RunTest(const FString&)
 {
 	// 0x1f / 0x68 / 0x76 / 0x77 sit on the epilogue `0x10289718`; an id with no entry (0x49,
@@ -256,7 +256,7 @@ bool FElysiumNpcKernelRunTask19BaseNoEntryArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BasePathArmsTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Base.PathTimedAndWithinDist", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Base.PathTimedAndWithinDist", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BasePathArmsTest::RunTest(const FString&)
 {
 	// `0x10289614` (0x24 / 0x27): past the wait -> m_bShouldMove = 0, complete, ClearGoal.
@@ -312,7 +312,7 @@ bool FElysiumNpcKernelRunTask19BaseActivityArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseFacingArmsTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Base.FacingArms", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Base.FacingArms", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BaseFacingArmsTest::RunTest(const FString&)
 {
 	// 0x2b.. (`0x10288b4c`) and 0x6a / 0x6b (`0x102887ad`): UpdateYaw(-1) then FacingIdeal; 0x2e
@@ -343,7 +343,7 @@ bool FElysiumNpcKernelRunTask19BaseFacingArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseHintAndWeaponFailsTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Base.HintAndWeaponFails", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Base.HintAndWeaponFails", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BaseHintAndWeaponFailsTest::RunTest(const FString&)
 {
 	// 0x30 with no `m_pHintNode` -> TaskFail(4) at 0xb5c; 0x72 with no target -> TaskFail(3) at
@@ -371,7 +371,7 @@ bool FElysiumNpcKernelRunTask19BaseHintAndWeaponFailsTest::RunTest(const FString
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseReloadAndSequenceTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Base.ReloadAndSetActivity", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Base.ReloadAndSetActivity", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BaseReloadAndSequenceTest::RunTest(const FString&)
 {
 	// 0x38 (`0x102890f3`): with no active weapon a finished activity completes at `0x10289713`;
@@ -401,7 +401,7 @@ bool FElysiumNpcKernelRunTask19BaseReloadAndSequenceTest::RunTest(const FString&
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseDieTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Base.Die", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Base.Die", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BaseDieTest::RunTest(const FString&)
 {
 	// `0x10288fc4` (0x5f): finished with m_flCycle >= 1.0 -> m_lifeState 2, the (4,4,1)/(-4,-4,0)
@@ -430,7 +430,7 @@ bool FElysiumNpcKernelRunTask19BaseDieTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseScriptArmsTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Base.ScriptArms", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Base.ScriptArms", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BaseScriptArmsTest::RunTest(const FString&)
 {
 	// 0x60 with no live `m_hCine` -> "Cine died!" and complete (`0x1028942a`); 0x62 with the
@@ -455,7 +455,7 @@ bool FElysiumNpcKernelRunTask19BaseScriptArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BaseStopAndMovementTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Base.StopMovingAndWaitForMovement", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Base.StopMovingAndWaitForMovement", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BaseStopAndMovementTest::RunTest(const FString&)
 {
 	// 0x69 (`0x102888d4`) on the ground nav type: ideal activity from `0x1027a6c0`, m_bShouldMove 0,
@@ -497,7 +497,7 @@ bool FElysiumNpcKernelRunTask19BaseStopAndMovementTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TroikaChainsTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Troika.ChainsToBase", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Troika.ChainsToBase", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TroikaChainsTest::RunTest(const FString&)
 {
 	// Index 0 `0x102aad61` (2/0x67/0x68) aims and falls to the base; index 0x38 and out-of-range ids
@@ -523,7 +523,7 @@ bool FElysiumNpcKernelRunTask19TroikaChainsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TroikaWaitFaceEnemyTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Troika.WaitFaceEnemyAndCheer", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Troika.WaitFaceEnemyAndCheer", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TroikaWaitFaceEnemyTest::RunTest(const FString&)
 {
 	// Index 1 `0x102ab659` (4/0xb0/0xb1): no override and no enemy -> TaskFail(6) at 0x407c.
@@ -545,7 +545,7 @@ bool FElysiumNpcKernelRunTask19TroikaWaitFaceEnemyTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TroikaWaitPvsTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Troika.WaitPvs", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Troika.WaitPvs", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TroikaWaitPvsTest::RunTest(const FString&)
 {
 	// Index 2 `0x102aad7e`: spawnflag 0x400 completes (`0x102ac11b`).
@@ -562,7 +562,7 @@ bool FElysiumNpcKernelRunTask19TroikaWaitPvsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TroikaFacingArmsTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Troika.FacingArms", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Troika.FacingArms", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TroikaFacingArmsTest::RunTest(const FString&)
 {
 	// Index 4 (0x2e), 0x17 (0xa7/0x11d/0x12e), 0x2a (0xf7): complete on FacingIdeal. Index 0x18
@@ -590,7 +590,7 @@ bool FElysiumNpcKernelRunTask19TroikaFacingArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TroikaAttackArmsTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Troika.AttackArms", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Troika.AttackArms", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TroikaAttackArmsTest::RunTest(const FString&)
 {
 	// Index 5 `0x102ab0a9` (0x34) with no burst completes on the activity (`0x102ab1da`); a burst
@@ -625,7 +625,7 @@ bool FElysiumNpcKernelRunTask19TroikaAttackArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TroikaSetActivityTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Troika.SetActivityAndCower", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Troika.SetActivityAndCower", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TroikaSetActivityTest::RunTest(const FString&)
 {
 	// Index 8 `0x102aad1f` (0x4b): the sequence, else the one-second watchdog. Index 0x27 (0xe7):
@@ -655,7 +655,7 @@ bool FElysiumNpcKernelRunTask19TroikaSetActivityTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TroikaDieTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Troika.DieArms", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Troika.DieArms", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TroikaDieTest::RunTest(const FString&)
 {
 	// Index 0x0a `0x102abb90` (0x5f): ideal ACT_IDLE opens the gate; 0x5f credits SELF; 0xdf
@@ -692,7 +692,7 @@ bool FElysiumNpcKernelRunTask19TroikaDieTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TroikaMovementTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Troika.WaitForMovementAndPatrol", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Troika.WaitForMovementAndPatrol", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TroikaMovementTest::RunTest(const FString&)
 {
 	// Index 0x0b `0x102aaf2e` (0x6e) with no goal: m_bShouldMove 0, complete, ClearGoal. Index
@@ -734,7 +734,7 @@ bool FElysiumNpcKernelRunTask19TroikaMovementTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TroikaKnockbackAndJumpTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Troika.KnockbackAndJump", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Troika.KnockbackAndJump", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TroikaKnockbackAndJumpTest::RunTest(const FString&)
 {
 	// Index 0x10 `0x102ac4ef` (0x94) and 0x37 `0x102ac69c` (0x13a): on the ground in NAV_JUMP they
@@ -761,7 +761,7 @@ bool FElysiumNpcKernelRunTask19TroikaKnockbackAndJumpTest::RunTest(const FString
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TroikaFinishingMoveTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Troika.FinishingMoveAndOnFire", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Troika.FinishingMoveAndOnFire", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TroikaFinishingMoveTest::RunTest(const FString&)
 {
 	// Index 0x13 `0x102ac2ed` (0x99) unfinished samples the bone time (`0x102ac4c7`); finished it
@@ -793,7 +793,7 @@ bool FElysiumNpcKernelRunTask19TroikaFinishingMoveTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TroikaFlagArmsTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Troika.FlagClearingArms", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Troika.FlagClearingArms", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TroikaFlagArmsTest::RunTest(const FString&)
 {
 	// 0xde (`0x102ab045`) clears with 0xbbf5ffff; the look tasks (`0x102ab76a`) clear 0x08000000;
@@ -834,7 +834,7 @@ bool FElysiumNpcKernelRunTask19TroikaFlagArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TroikaCircleArmsTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Troika.StepBackAndCircle", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Troika.StepBackAndCircle", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TroikaCircleArmsTest::RunTest(const FString&)
 {
 	// 0x11b (`0x102abd3b`): past the wait, m_flDesiredMoveYaw 0 and complete. 0x122 (`0x102abdb8`)
@@ -860,7 +860,7 @@ bool FElysiumNpcKernelRunTask19TroikaCircleArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TroikaDialogTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Troika.RunDialogAndDisposition", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Troika.RunDialogAndDisposition", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TroikaDialogTest::RunTest(const FString&)
 {
 	// 0xb9 (`0x102ab303`): a finished dialogue (-1) completes and clears COND 0x6f. 0xba
@@ -888,7 +888,7 @@ bool FElysiumNpcKernelRunTask19TroikaDialogTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19AnimalTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.Animal", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.Animal", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19AnimalTest::RunTest(const FString&)
 {
 	// `0x1035f940` (on `CNPC_VRat`): 0x89 completes when curtime - m_flLastAttackTime exceeds the
@@ -915,7 +915,7 @@ bool FElysiumNpcKernelRunTask19AnimalTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19DogTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.Dog", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.Dog", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19DogTest::RunTest(const FString&)
 {
 	// `0x10374a20`: TASK_WAIT in ALERT aims at the local player, then CNPC_VAnimal / the base wait.
@@ -935,7 +935,7 @@ bool FElysiumNpcKernelRunTask19DogTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19ZombieTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.Zombie", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.Zombie", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19ZombieTest::RunTest(const FString&)
 {
 	// `0x103e01d0`: 0x14e completes and sets misc flag 0x80000 (`0x103e0210`); 0x151 past the wait
@@ -971,7 +971,7 @@ bool FElysiumNpcKernelRunTask19ZombieTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19HumanTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.Human", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.Human", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19HumanTest::RunTest(const FString&)
 {
 	// `0x10384ab0`: 0x8d with no enemy completes at once (`0x10384cfb`); 0x8b with no enemy keeps
@@ -1002,7 +1002,7 @@ bool FElysiumNpcKernelRunTask19HumanTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19GargoyleTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.Gargoyle", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.Gargoyle", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19GargoyleTest::RunTest(const FString&)
 {
 	// `0x103793e0`: 0x31 completes facing the ideal; 0x12f on the activity.
@@ -1026,7 +1026,7 @@ bool FElysiumNpcKernelRunTask19GargoyleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19GhoulCroucherTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.GhoulCroucher", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.GhoulCroucher", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19GhoulCroucherTest::RunTest(const FString&)
 {
 	// `0x1037b9f0`: 0x14b latches m_bUnawareExited (`0x1037ba8b`) only on a finished activity.
@@ -1048,7 +1048,7 @@ bool FElysiumNpcKernelRunTask19GhoulCroucherTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TaxiDriverTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.TaxiDriver", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.TaxiDriver", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TaxiDriverTest::RunTest(const FString&)
 {
 	// `0x103b38a0`: 0xb9 with the dialogue done completes and clears m_bFirstThink (`0x103b38df`).
@@ -1066,7 +1066,7 @@ bool FElysiumNpcKernelRunTask19TaxiDriverTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19VampireBossAndSheriffTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.VampireBossAndSheriffMan", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.VampireBossAndSheriffMan", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19VampireBossAndSheriffTest::RunTest(const FString&)
 {
 	// `0x103af780`: SheriffMan swallows 0x154; everything else goes to `0x103c5f40`, which sends
@@ -1089,7 +1089,7 @@ bool FElysiumNpcKernelRunTask19VampireBossAndSheriffTest::RunTest(const FString&
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19AndreiBloodTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.AndreiBlood", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.AndreiBlood", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19AndreiBloodTest::RunTest(const FString&)
 {
 	// `0x1035d8b0`: 0x154 sets m_bForceTeleport and completes; 0x156 then completes on it.
@@ -1111,7 +1111,7 @@ bool FElysiumNpcKernelRunTask19AndreiBloodTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19AsianVampireTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.AsianVampire", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.AsianVampire", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19AsianVampireTest::RunTest(const FString&)
 {
 	// `0x103612e0`: 0x150 clears m_bPathBlocked and completes; 0x151 keeps running.
@@ -1133,7 +1133,7 @@ bool FElysiumNpcKernelRunTask19AsianVampireTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19ChangBrosTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.ChangBros", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.ChangBros", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19ChangBrosTest::RunTest(const FString&)
 {
 	// `0x1036bfc0`: 0x156 completes once m_fEnergyChargeTime passes; 0x157 spawns the ball once the
@@ -1160,7 +1160,7 @@ bool FElysiumNpcKernelRunTask19ChangBrosTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19SabbatLeaderTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.SabbatLeader", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.SabbatLeader", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19SabbatLeaderTest::RunTest(const FString&)
 {
 	// `0x103a8990`: 0x15e completes once m_fWarningFinishTime passes; 0x162 one second after
@@ -1195,7 +1195,7 @@ bool FElysiumNpcKernelRunTask19SabbatLeaderTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19ManBatTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.ManBat", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.ManBat", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19ManBatTest::RunTest(const FString&)
 {
 	// `0x1038d130`: 0x163 waits out m_flCoastTimer; 0x159 with no fly-by target -> TaskFail(1);
@@ -1225,7 +1225,7 @@ bool FElysiumNpcKernelRunTask19ManBatTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19MingXiaoTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.MingXiao", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.MingXiao", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19MingXiaoTest::RunTest(const FString&)
 {
 	// `0x10393930`: 0x14b reaches `0x1039aa20`; 0x158 outside mode 3 releases the throw and completes.
@@ -1248,7 +1248,7 @@ bool FElysiumNpcKernelRunTask19MingXiaoTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19MingXiaoTentacleTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.MingXiaoTentacle", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.MingXiaoTentacle", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19MingXiaoTentacleTest::RunTest(const FString&)
 {
 	// `0x1039d750`: 0x14c with fewer than two flex controllers ends the frequent think and completes
@@ -1273,7 +1273,7 @@ bool FElysiumNpcKernelRunTask19MingXiaoTentacleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TzimisceTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.Tzimisce", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.Tzimisce", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TzimisceTest::RunTest(const FString&)
 {
 	// `0x103bb1e0`: 0xc1 on the activity; 0xc8 facing; 0xa7 never completes.
@@ -1298,7 +1298,7 @@ bool FElysiumNpcKernelRunTask19TzimisceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19TzimisceRunnerTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.TzimisceRunner", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.TzimisceRunner", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19TzimisceRunnerTest::RunTest(const FString&)
 {
 	// `0x103c3870`: 0x122..0x124 past the wait zero m_flDesiredMoveYaw and complete.
@@ -1317,7 +1317,7 @@ bool FElysiumNpcKernelRunTask19TzimisceRunnerTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19WerewolfTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.Werewolf", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.Werewolf", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19WerewolfTest::RunTest(const FString&)
 {
 	// `0x103cdfb0`: 0x14a completes; 0x14b finished with no move hint -> TaskFail(4); 0x15f
@@ -1345,7 +1345,7 @@ bool FElysiumNpcKernelRunTask19WerewolfTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19BachTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.Bach", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.Bach", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19BachTest::RunTest(const FString&)
 {
 	// `0x103652b0`: 0xb0 with no active weapon returns running (`0x103652eb`); 0x14a keeps running.
@@ -1369,7 +1369,7 @@ bool FElysiumNpcKernelRunTask19BachTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelRunTask19HengeyokaiTest,
-	"Elysium.Substrate.NpcKernelRunTask19.Species.Hengeyokai", GRunTask19Flags)
+	"Elysium.Arm.NpcKernelRunTask19.Species.Hengeyokai", GRunTask19Flags)
 bool FElysiumNpcKernelRunTask19HengeyokaiTest::RunTest(const FString&)
 {
 	// `0x10380cb0`: 0x134 on the activity; 0x14b reaches `0x10383470`; 0xc8 completes facing.

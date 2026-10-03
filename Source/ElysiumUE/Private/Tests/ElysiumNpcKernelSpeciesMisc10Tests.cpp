@@ -85,7 +85,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10BaseLeaveGrappleTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.BaseLeaveGrappleState", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.BaseLeaveGrappleState", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10BaseLeaveGrappleTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F;
@@ -129,7 +129,7 @@ bool FElysiumSpeciesMisc10BaseLeaveGrappleTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10EnterGrappleTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.TroikaEnterGrappleState", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.TroikaEnterGrappleState", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10EnterGrappleTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F;
@@ -190,7 +190,7 @@ bool FElysiumSpeciesMisc10EnterGrappleTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10BachTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.BachGatherAttackConditions", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.BachGatherAttackConditions", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10BachTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VBach"));
@@ -297,7 +297,7 @@ bool FElysiumSpeciesMisc10BachTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10HealthRecordTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.HealthPercentRecord", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.HealthPercentRecord", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10HealthRecordTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VVampireBoss"));
@@ -337,7 +337,7 @@ bool FElysiumSpeciesMisc10HealthRecordTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10ChangTeleportTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.ChangCheckForTeleport", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.ChangCheckForTeleport", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10ChangTeleportTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VChangBros"));
@@ -379,7 +379,7 @@ bool FElysiumSpeciesMisc10ChangTeleportTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10ChangLedgeTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.ChangSelectLedgeNode", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.ChangSelectLedgeNode", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10ChangLedgeTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VChangBros"));
@@ -443,7 +443,7 @@ bool FElysiumSpeciesMisc10ChangLedgeTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10CopSlot597Test,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.CopSlot597", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.CopSlot597", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10CopSlot597Test::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VCop"));
@@ -496,7 +496,7 @@ bool FElysiumSpeciesMisc10CopSlot597Test::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10CroucherTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.GhoulCroucherBurn", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.GhoulCroucherBurn", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10CroucherTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VGhoulCroucher"));
@@ -548,7 +548,7 @@ bool FElysiumSpeciesMisc10CroucherTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10GuardHateTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.Guard1HatePlayer", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.Guard1HatePlayer", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10GuardHateTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VGuard1"));
@@ -576,7 +576,7 @@ bool FElysiumSpeciesMisc10GuardHateTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10ManBatConeTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.ManBatScreechCone", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.ManBatScreechCone", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10ManBatConeTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VManBat"));
@@ -660,7 +660,7 @@ bool FElysiumSpeciesMisc10ManBatConeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10ManBatReleaseTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.ManBatReleaseSlowedEntity", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.ManBatReleaseSlowedEntity", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10ManBatReleaseTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VManBat"));
@@ -710,7 +710,7 @@ bool FElysiumSpeciesMisc10ManBatReleaseTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10NewscasterLoadTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.NewscasterLoad", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.NewscasterLoad", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10NewscasterLoadTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VNewscaster"));
@@ -752,7 +752,7 @@ bool FElysiumSpeciesMisc10NewscasterLoadTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10NewscasterPlayTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.NewscasterPlay", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.NewscasterPlay", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10NewscasterPlayTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VNewscaster"));
@@ -818,7 +818,7 @@ bool FElysiumSpeciesMisc10NewscasterPlayTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10PedestrianCorpseTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.PedestrianCreateCorpse", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.PedestrianCreateCorpse", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10PedestrianCorpseTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VPedestrian"));
@@ -857,7 +857,7 @@ bool FElysiumSpeciesMisc10PedestrianCorpseTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10SabbatSplashTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.SabbatBloodSplash", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.SabbatBloodSplash", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10SabbatSplashTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VSabbatLeader"));
@@ -911,7 +911,7 @@ bool FElysiumSpeciesMisc10SabbatSplashTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10SabbatRoundTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.SabbatPlayerDamage", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.SabbatPlayerDamage", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10SabbatRoundTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VSabbatLeader"));
@@ -953,7 +953,7 @@ bool FElysiumSpeciesMisc10SabbatRoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10SabbatJumpTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.SabbatCheckForJump", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.SabbatCheckForJump", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10SabbatJumpTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VSabbatLeader"));
@@ -995,7 +995,7 @@ bool FElysiumSpeciesMisc10SabbatJumpTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10HeadClawSlot332Test,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.HeadClawSlot332", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.HeadClawSlot332", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10HeadClawSlot332Test::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VTzimisceHeadClaw"));
@@ -1075,7 +1075,7 @@ bool FElysiumSpeciesMisc10HeadClawSlot332Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10HeadClawEndSlowTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.HeadClawEndSlow", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.HeadClawEndSlow", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10HeadClawEndSlowTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VTzimisceHeadClaw"));
@@ -1134,7 +1134,7 @@ bool FElysiumSpeciesMisc10HeadClawEndSlowTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10RunnerHullTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.TzimisceRunnerHull", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.TzimisceRunnerHull", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10RunnerHullTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VTzimisceRunner"));
@@ -1178,7 +1178,7 @@ bool FElysiumSpeciesMisc10RunnerHullTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10TransformTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.WaitForTransformation", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.WaitForTransformation", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10TransformTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VVampireBoss"));
@@ -1211,7 +1211,7 @@ bool FElysiumSpeciesMisc10TransformTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10BodyEmittersTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.VampireBossBodyEmitters", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.VampireBossBodyEmitters", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10BodyEmittersTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VVampireBoss"));
@@ -1255,7 +1255,7 @@ bool FElysiumSpeciesMisc10BodyEmittersTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10WerewolfTaskFailTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.WerewolfTaskFail", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.WerewolfTaskFail", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10WerewolfTaskFailTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VWerewolf"));
@@ -1301,7 +1301,7 @@ bool FElysiumSpeciesMisc10WerewolfTaskFailTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10WerewolfHasPathTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.WerewolfHasPath", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.WerewolfHasPath", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10WerewolfHasPathTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VWerewolf"));
@@ -1332,7 +1332,7 @@ bool FElysiumSpeciesMisc10WerewolfHasPathTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSpeciesMisc10SnapTest,
-	"Elysium.Substrate.NpcKernelSpeciesMisc10.SnapToAnimationPoint", GSpeciesMisc10Flags)
+	"Elysium.Arm.NpcKernelSpeciesMisc10.SnapToAnimationPoint", GSpeciesMisc10Flags)
 bool FElysiumSpeciesMisc10SnapTest::RunTest(const FString&)
 {
 	FSpeciesMisc10Fixture F(TEXT("CNPC_VWerewolf"));

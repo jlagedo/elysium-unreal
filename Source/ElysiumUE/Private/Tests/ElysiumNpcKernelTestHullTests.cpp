@@ -27,7 +27,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTestHullConstructionTest,
-	"Elysium.Substrate.NpcKernelTestHull.Construction", GElysiumNpcKernelTestHullFlags)
+	"Elysium.Arm.NpcKernelTestHull.Construction", GElysiumNpcKernelTestHullFlags)
 bool FElysiumNpcKernelTestHullConstructionTest::RunTest(const FString&)
 {
 	FElysiumNpcTestHull Hull;

@@ -171,7 +171,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassFactoriesTest,
-	"Elysium.Substrate.NpcKernelClass.Factories", GElysiumNpcKernelFactoryFlags)
+	"Elysium.Arm.NpcKernelClass.Factories", GElysiumNpcKernelFactoryFlags)
 bool FElysiumNpcKernelClassFactoriesTest::RunTest(const FString&)
 {
 	TestEqual(TEXT("the step-2 classnames"), static_cast<int32>(UE_ARRAY_COUNT(GStep2Factories)), 45);
@@ -281,7 +281,7 @@ bool FElysiumNpcKernelClassPartitionTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassAbstractTest,
-	"Elysium.Substrate.NpcKernelClass.AbstractRefusal", GElysiumNpcKernelFactoryFlags)
+	"Elysium.Arm.NpcKernelClass.AbstractRefusal", GElysiumNpcKernelFactoryFlags)
 bool FElysiumNpcKernelClassAbstractTest::RunTest(const FString&)
 {
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
@@ -368,7 +368,7 @@ bool FElysiumNpcKernelClassAbstractTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassDeadClassnamesTest,
-	"Elysium.Substrate.NpcKernelClass.DeadClassnames", GElysiumNpcKernelFactoryFlags)
+	"Elysium.Arm.NpcKernelClass.DeadClassnames", GElysiumNpcKernelFactoryFlags)
 bool FElysiumNpcKernelClassDeadClassnamesTest::RunTest(const FString&)
 {
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
@@ -414,7 +414,7 @@ bool FElysiumNpcKernelClassDeadClassnamesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelClassMakerFactoriesTest,
-	"Elysium.Substrate.NpcKernelClass.MakerFactories", GElysiumNpcKernelFactoryFlags)
+	"Elysium.Arm.NpcKernelClass.MakerFactories", GElysiumNpcKernelFactoryFlags)
 bool FElysiumNpcKernelClassMakerFactoriesTest::RunTest(const FString&)
 {
 	// The makers stand through the map-load path: a live NPC of its own class, not a record, whose

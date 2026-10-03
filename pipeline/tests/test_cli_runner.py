@@ -264,10 +264,34 @@ def test_several_prefixes_reach_one_run_and_a_green_run_ends_ok(tmp_path, monkey
         assert prefix in result.output
     assert result.output.rstrip().splitlines()[-1].startswith("test ok in ")
 
-    # With none named it is the whole suite, as it always was.
+    # With none named it is the default tier: the explicit list of default groups, in one boot.
     calls.clear()
     assert RUNNER.invoke(app, ["test"]).exit_code == 0
+    assert calls == [list(unreal.DEFAULT_TEST_FILTER)]
+    assert all(prefix.startswith("Elysium.") and prefix.endswith(".") for prefix in calls[0])
+    assert not any(prefix.startswith(f"Elysium.{group}.")
+                   for prefix in calls[0] for group in unreal.OPT_IN_TEST_GROUPS)
+
+    # `--all` is the whole suite, and a prefix beside it is a usage error that never boots the editor.
+    calls.clear()
+    assert RUNNER.invoke(app, ["test", "--all"]).exit_code == 0
     assert calls == [["Elysium."]]
+    calls.clear()
+    assert RUNNER.invoke(app, ["test", "--all", THREE[0]]).exit_code == 2
+    assert calls == []
+
+
+def test_the_summary_names_its_tier(tmp_path, monkeypatch) -> None:
+    config = _config(tmp_path)
+    summary = _summary([_row("Elysium.Arm.", 3)])
+    summary["tier"] = "arm"
+    _patch_the_test_run(monkeypatch, config, summary)
+
+    result = RUNNER.invoke(cli.app, ["test", "arm"])
+
+    assert result.exit_code == 0, result.output
+    assert "  tier: arm" in result.output
+    assert "arm tier: 3 of 3 test(s) executed" in result.output
 
 
 def test_a_failed_test_run_names_the_test_and_exits_7(tmp_path, monkeypatch) -> None:

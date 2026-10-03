@@ -63,7 +63,7 @@ namespace
 // availability test, which is why the ladder and the test have to be one fact.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStancePrecacheTest,
-	"Elysium.Substrate.Stance.Precache", GElysiumStanceTestFlags)
+	"Elysium.Arm.Stance.Precache", GElysiumStanceTestFlags)
 bool FElysiumStancePrecacheTest::RunTest(const FString&)
 {
 	FElysiumStanceClips Clips;
@@ -98,7 +98,7 @@ bool FElysiumStancePrecacheTest::RunTest(const FString&)
 // that catches a machine that randomised its opening pose.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStanceFirstPoseTest,
-	"Elysium.Substrate.Stance.FirstPose", GElysiumStanceTestFlags)
+	"Elysium.Arm.Stance.FirstPose", GElysiumStanceTestFlags)
 bool FElysiumStanceFirstPoseTest::RunTest(const FString&)
 {
 	const FElysiumStanceClips Clips = JackShapedClips();
@@ -123,7 +123,7 @@ bool FElysiumStanceFirstPoseTest::RunTest(const FString&)
 // a "does it ever change" test and fail this one.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStanceFloorTest,
-	"Elysium.Substrate.Stance.ChangeFloor", GElysiumStanceTestFlags)
+	"Elysium.Arm.Stance.ChangeFloor", GElysiumStanceTestFlags)
 bool FElysiumStanceFloorTest::RunTest(const FString&)
 {
 	const FElysiumStanceClips Clips = JackShapedClips();
@@ -162,7 +162,7 @@ bool FElysiumStanceFloorTest::RunTest(const FString&)
 // would leave it playing a one-shot forever.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStanceTransitionTest,
-	"Elysium.Substrate.Stance.Transition", GElysiumStanceTestFlags)
+	"Elysium.Arm.Stance.Transition", GElysiumStanceTestFlags)
 bool FElysiumStanceTransitionTest::RunTest(const FString&)
 {
 	const FElysiumStanceClips Clips = JackShapedClips();
@@ -204,7 +204,7 @@ bool FElysiumStanceTransitionTest::RunTest(const FString&)
 // that equality. `smiling_jack` is the shipped case, so this is not a hypothetical.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStanceFidgetTest,
-	"Elysium.Substrate.Stance.Fidget", GElysiumStanceTestFlags)
+	"Elysium.Arm.Stance.Fidget", GElysiumStanceTestFlags)
 bool FElysiumStanceFidgetTest::RunTest(const FString&)
 {
 	FElysiumDisposition Tuning = NeutralTuning();
@@ -251,7 +251,7 @@ bool FElysiumStanceFidgetTest::RunTest(const FString&)
 // playing" and its only effect is to hold the current idle.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStanceTalkingTest,
-	"Elysium.Substrate.Stance.Talking", GElysiumStanceTestFlags)
+	"Elysium.Arm.Stance.Talking", GElysiumStanceTestFlags)
 bool FElysiumStanceTalkingTest::RunTest(const FString&)
 {
 	FElysiumStanceClips Clips = JackShapedClips();

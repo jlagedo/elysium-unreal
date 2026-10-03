@@ -108,7 +108,7 @@ namespace
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailSharedTailsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.SharedTails_102a77ea_102a66d7", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.SharedTails_102a77ea_102a66d7", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailSharedTailsTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;
@@ -138,7 +138,7 @@ bool FElysiumNpcKernelStartTask19TailSharedTailsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailKnockbackTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.Knockback_102a6de4", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.Knockback_102a6de4", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailKnockbackTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;
@@ -202,7 +202,7 @@ bool FElysiumNpcKernelStartTask19TailKnockbackTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailInterestTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.Interest_102a634a", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.Interest_102a634a", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailInterestTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;
@@ -254,7 +254,7 @@ bool FElysiumNpcKernelStartTask19TailInterestTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailActivitiesTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.Activities_102a5046", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.Activities_102a5046", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailActivitiesTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;
@@ -320,7 +320,7 @@ bool FElysiumNpcKernelStartTask19TailActivitiesTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailWordsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.Words_102a52e9", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.Words_102a52e9", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailWordsTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;
@@ -381,7 +381,7 @@ bool FElysiumNpcKernelStartTask19TailWordsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailLooksTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.Looks_102a5426", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.Looks_102a5426", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailLooksTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;
@@ -460,7 +460,7 @@ bool FElysiumNpcKernelStartTask19TailLooksTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailFlagsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.FlagsAndMovement_102a585d", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.FlagsAndMovement_102a585d", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailFlagsTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;
@@ -517,7 +517,7 @@ bool FElysiumNpcKernelStartTask19TailFlagsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailDivesTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.DivesAndCover_102a5a45", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.DivesAndCover_102a5a45", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailDivesTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;
@@ -555,7 +555,7 @@ bool FElysiumNpcKernelStartTask19TailDivesTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailKickTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.HintAndKick_102a5f16", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.HintAndKick_102a5f16", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailKickTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;
@@ -617,7 +617,7 @@ bool FElysiumNpcKernelStartTask19TailKickTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailCoverTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.CoverAndBotch_102a654b", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.CoverAndBotch_102a654b", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailCoverTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;
@@ -668,7 +668,7 @@ bool FElysiumNpcKernelStartTask19TailCoverTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailWaitsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.WaitsAndSteps_102a68a8", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.WaitsAndSteps_102a68a8", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailWaitsTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;
@@ -739,7 +739,7 @@ bool FElysiumNpcKernelStartTask19TailWaitsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailCirclesTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.Circles_102a6ab7", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.Circles_102a6ab7", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailCirclesTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;
@@ -789,7 +789,7 @@ bool FElysiumNpcKernelStartTask19TailCirclesTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailAccumTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.AccumAndOblivious_102a71e4", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.AccumAndOblivious_102a71e4", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailAccumTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;
@@ -836,7 +836,7 @@ bool FElysiumNpcKernelStartTask19TailAccumTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TailLateTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TroikaTail.LateSet_102a7358", GStartTask19TailFlags)
+	"Elysium.Arm.NpcKernelStartTask19.TroikaTail.LateSet_102a7358", GStartTask19TailFlags)
 bool FElysiumNpcKernelStartTask19TailLateTest::RunTest(const FString&)
 {
 	FStartTask19TailFixture F;

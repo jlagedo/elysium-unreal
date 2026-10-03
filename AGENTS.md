@@ -11,7 +11,13 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 - `ELYSIUM_WORK_ROOT` — the out-of-repo scratch tree for exports, bakes and logs.
 - `uv run elysium` is the only public command surface;
 - `uv run elysium build` — incremental editor build.
-- `uv run elysium test <prefix>` — automation test name prefix (`Elysium.Substrate.Npc`); results in
+- `uv run elysium test` — the default tier: the census tests, the arena scenarios and a small smoke
+  set (the groups in `DEFAULT_TEST_GROUPS`, `pipeline/src/elysium_pipeline/unreal.py`). A test's tier
+  is its name's prefix: `Elysium.Arm.` the per-function arm and unit tests (opt-in, run at a story's
+  close: `uv run elysium test arm`), `Elysium.Content.` baked content, `Elysium.Slow.`; `--all` runs
+  `Elysium.`. During a story run only the scenario and the family prefix you touch.
+- `uv run elysium test <prefix>` — automation test name prefix (`Elysium.Arm.NpcKernelSelect19.`);
+  `test A B C` runs several in one boot; results in
   `$ELYSIUM_WORK_ROOT/reports/tests/<timestamp>-<slug>/index.json`.
 - `uv run elysium import <lane>` — deploy a corpus lane into `Content/ElysiumCorpus/`; the
   retail Python scripts land at `Content/ElysiumCorpus/scripts/`.

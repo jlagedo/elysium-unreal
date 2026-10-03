@@ -58,7 +58,7 @@ namespace
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorSpawnTest,
-	"Elysium.Substrate.NpcKernelDirector.Spawn", GDirectorTestFlags)
+	"Elysium.Arm.NpcKernelDirector.Spawn", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorSpawnTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("director_spawn"), 5301);
@@ -142,7 +142,7 @@ bool FElysiumNpcKernelDirectorSpawnTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorRadiusTest,
-	"Elysium.Substrate.NpcKernelDirector.RadiusGate", GDirectorTestFlags)
+	"Elysium.Arm.NpcKernelDirector.RadiusGate", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorRadiusTest::RunTest(const FString&)
 {
 	const float U = ElysiumMove::U;
@@ -222,7 +222,7 @@ bool FElysiumNpcKernelDirectorRadiusTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorQueueTest,
-	"Elysium.Substrate.NpcKernelDirector.Queue", GDirectorTestFlags)
+	"Elysium.Arm.NpcKernelDirector.Queue", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorQueueTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("director_queue"), 5303);
@@ -283,7 +283,7 @@ bool FElysiumNpcKernelDirectorQueueTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorAiPossessTest,
-	"Elysium.Substrate.NpcKernelDirector.AiPossess", GDirectorTestFlags)
+	"Elysium.Arm.NpcKernelDirector.AiPossess", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorAiPossessTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("director_ai"), 5304);
@@ -340,7 +340,7 @@ bool FElysiumNpcKernelDirectorAiPossessTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorAiFinishScheduleTest,
-	"Elysium.Substrate.NpcKernelDirector.AiFinishSchedule", GDirectorTestFlags)
+	"Elysium.Arm.NpcKernelDirector.AiFinishSchedule", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorAiFinishScheduleTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("director_ai_finish"), 5305);
@@ -466,7 +466,7 @@ bool FElysiumNpcKernelDirectorStartGateTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorInterruptTest,
-	"Elysium.Substrate.NpcKernelDirector.Interrupt", GDirectorTestFlags)
+	"Elysium.Arm.NpcKernelDirector.Interrupt", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorInterruptTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("director_interrupt"), 5307);
@@ -533,7 +533,7 @@ bool FElysiumNpcKernelDirectorInterruptTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorRemovalTest,
-	"Elysium.Substrate.NpcKernelDirector.Removal", GDirectorTestFlags)
+	"Elysium.Arm.NpcKernelDirector.Removal", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorRemovalTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("director_removal"), 5308);
@@ -720,7 +720,7 @@ bool FElysiumNpcKernelDirectorRevisitTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorKilledTest,
-	"Elysium.Substrate.NpcKernelDirector.KilledMidPlay", GDirectorTestFlags)
+	"Elysium.Arm.NpcKernelDirector.KilledMidPlay", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorKilledTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("director_killed"), 5311);
@@ -773,7 +773,7 @@ bool FElysiumNpcKernelDirectorKilledTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorAiEndToEndTest,
-	"Elysium.Substrate.NpcKernelDirector.AiEndToEnd", GDirectorTestFlags)
+	"Elysium.Arm.NpcKernelDirector.AiEndToEnd", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorAiEndToEndTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("director_ai_e2e"), 5312);
@@ -820,7 +820,7 @@ bool FElysiumNpcKernelDirectorAiEndToEndTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorSlotsTest,
-	"Elysium.Substrate.NpcKernelDirector.ConstantSlots", GDirectorTestFlags)
+	"Elysium.Arm.NpcKernelDirector.ConstantSlots", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorSlotsTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("director_slots"), 5313);
@@ -866,7 +866,7 @@ bool FElysiumNpcKernelDirectorSlotsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorProceduralRadiusTest,
-	"Elysium.Substrate.NpcKernelDirector.ProceduralRadius", GDirectorTestFlags)
+	"Elysium.Arm.NpcKernelDirector.ProceduralRadius", GDirectorTestFlags)
 bool FElysiumNpcKernelDirectorProceduralRadiusTest::RunTest(const FString&)
 {
 	const float U = ElysiumMove::U;

@@ -129,7 +129,7 @@ namespace
 // --- The chain -----------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCornerChainThreeCornersTest,
-	"Elysium.Substrate.Navigator.CornerChain.ThreeCorners", GCornerChainTestFlags)
+	"Elysium.Arm.Navigator.CornerChain.ThreeCorners", GCornerChainTestFlags)
 bool FElysiumCornerChainThreeCornersTest::RunTest(const FString&)
 {
 	GCornerLog = FCornerLog();
@@ -209,7 +209,7 @@ bool FElysiumCornerChainThreeCornersTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCornerChainSingleCornerTest,
-	"Elysium.Substrate.Navigator.CornerChain.SingleCornerIsGoal", GCornerChainTestFlags)
+	"Elysium.Arm.Navigator.CornerChain.SingleCornerIsGoal", GCornerChainTestFlags)
 bool FElysiumCornerChainSingleCornerTest::RunTest(const FString&)
 {
 	GCornerLog = FCornerLog();
@@ -243,7 +243,7 @@ bool FElysiumCornerChainSingleCornerTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCornerChainRetargetedNextTest,
-	"Elysium.Substrate.Navigator.CornerChain.NullNextCornerEndsSilently", GCornerChainTestFlags)
+	"Elysium.Arm.Navigator.CornerChain.NullNextCornerEndsSilently", GCornerChainTestFlags)
 bool FElysiumCornerChainRetargetedNextTest::RunTest(const FString&)
 {
 	GCornerLog = FCornerLog();
@@ -271,7 +271,7 @@ bool FElysiumCornerChainRetargetedNextTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCornerChainPathcornerTaskTest,
-	"Elysium.Substrate.Navigator.CornerChain.PathcornerTask_0x120", GCornerChainTestFlags)
+	"Elysium.Arm.Navigator.CornerChain.PathcornerTask_0x120", GCornerChainTestFlags)
 bool FElysiumCornerChainPathcornerTaskTest::RunTest(const FString&)
 {
 	GCornerLog = FCornerLog();
@@ -344,7 +344,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGoalFlag2NoNetworkTest,
-	"Elysium.Substrate.Navigator.GoalFlag2.NoNetworkRefuses", GCornerChainTestFlags)
+	"Elysium.Arm.Navigator.GoalFlag2.NoNetworkRefuses", GCornerChainTestFlags)
 bool FElysiumGoalFlag2NoNetworkTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(GoalFlagWorld(TEXT("goal_flag2_no_network"), 18711, false, 400.0),
@@ -378,7 +378,7 @@ bool FElysiumGoalFlag2NoNetworkTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGoalFlag2RoutesTest,
-	"Elysium.Substrate.Navigator.GoalFlag2.NodeRoute", GCornerChainTestFlags)
+	"Elysium.Arm.Navigator.GoalFlag2.NodeRoute", GCornerChainTestFlags)
 bool FElysiumGoalFlag2RoutesTest::RunTest(const FString&)
 {
 	// A node at the guard and one at the foe.
@@ -412,7 +412,7 @@ bool FElysiumGoalFlag2RoutesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGoalFlag2FarGoalTest,
-	"Elysium.Substrate.Navigator.GoalFlag2.NoNodeNearGoalRefuses", GCornerChainTestFlags)
+	"Elysium.Arm.Navigator.GoalFlag2.NoNodeNearGoalRefuses", GCornerChainTestFlags)
 bool FElysiumGoalFlag2FarGoalTest::RunTest(const FString&)
 {
 	// The only node is at the guard; the foe stands far past the 2048-unit box `0x102f41b0` searches.

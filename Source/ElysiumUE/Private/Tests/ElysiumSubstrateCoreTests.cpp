@@ -125,7 +125,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // FElysiumVariant — the tagged value all four chokepoints marshal through.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumVariantTest, "Elysium.Substrate.Variant", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumVariantTest, "Elysium.Arm.Variant", GElysiumTestFlags)
 bool FElysiumVariantTest::RunTest(const FString&)
 {
 	// Void is the falsy "no value" case (also how error-to-false surfaces).
@@ -255,7 +255,7 @@ bool FElysiumSignDismissPolicyTest::RunTest(const FString&)
 // ElysiumExpr — the restricted expression subset, and the load-bearing error-to-false.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExprTest, "Elysium.Substrate.Expr", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExprTest, "Elysium.Arm.Expr", GElysiumTestFlags)
 bool FElysiumExprTest::RunTest(const FString&)
 {
 	// A stateless/worldless env: arithmetic and comparisons resolve; names do not.
@@ -312,7 +312,7 @@ bool FElysiumExprTest::RunTest(const FString&)
 // to the datamap.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOneOfSetTest, "Elysium.Substrate.OneOfSet", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOneOfSetTest, "Elysium.Arm.OneOfSet", GElysiumTestFlags)
 bool FElysiumOneOfSetTest::RunTest(const FString&)
 {
 	// --- The selector, over a pinned roll -------------------------------------------------
@@ -420,7 +420,7 @@ bool FElysiumOneOfSetTest::RunTest(const FString&)
 // the moddir fold, the sandbox denial, and the three path styles VtMB's scripts actually use.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptFSTest, "Elysium.Substrate.ScriptFS", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptFSTest, "Elysium.Content.ScriptFS", GElysiumTestFlags)
 bool FElysiumScriptFSTest::RunTest(const FString&)
 {
 	AddExpectedError(TEXT("DENY ../../../Windows/system32/x.dll"),
@@ -560,7 +560,7 @@ bool FElysiumScriptFSTest::RunTest(const FString&)
 // ElysiumKeyValues — the Source KV reader shared by sound schemes and sign panels.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumKeyValuesTest, "Elysium.Substrate.KeyValues", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumKeyValuesTest, "Elysium.Arm.KeyValues", GElysiumTestFlags)
 bool FElysiumKeyValuesTest::RunTest(const FString&)
 {
 	// Nesting, // comments, and a quoted value that SPANS LINES (the sign-definition case a
@@ -631,7 +631,7 @@ bool FElysiumKeyValuesTest::RunTest(const FString&)
 // a failure, which is exactly why they are pinned here rather than only against the files.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRulebookTest, "Elysium.Substrate.Rulebook", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRulebookTest, "Elysium.Arm.Rulebook", GElysiumTestFlags)
 bool FElysiumRulebookTest::RunTest(const FString&)
 {
 	// --- The cost grammar: three authored forms ------------------------------------------------
@@ -807,7 +807,7 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDiceTest, "Elysium.Substrate.Dice", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDiceTest, "Elysium.Arm.Dice", GElysiumTestFlags)
 bool FElysiumDiceTest::RunTest(const FString&)
 {
 	// --- The uniform fallback is the shipped distribution ---------------------------------------
@@ -1040,7 +1040,7 @@ bool FElysiumDiceTest::RunTest(const FString&)
 // real `stats.txt`.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetTest, "Elysium.Substrate.Sheet", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetTest, "Elysium.Arm.Sheet", GElysiumTestFlags)
 bool FElysiumSheetTest::RunTest(const FString&)
 {
 	using EC = EElysiumTraitContainer;
@@ -1210,7 +1210,7 @@ bool FElysiumSheetTest::RunTest(const FString&)
 // the trait-effect layer and the experience table — are `Elysium.Content.SheetMath`'s.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetMathTest, "Elysium.Substrate.SheetMath", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetMathTest, "Elysium.Arm.SheetMath", GElysiumTestFlags)
 bool FElysiumSheetMathTest::RunTest(const FString&)
 {
 	using EC = EElysiumTraitContainer;
@@ -1452,7 +1452,7 @@ bool FElysiumSheetMathTest::RunTest(const FString&)
 // FElysiumEventQueue — the one time-sorted queue: ordering, FIFO ties, cancel-by-caller.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEventQueueTest, "Elysium.Substrate.EventQueue", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEventQueueTest, "Elysium.Arm.EventQueue", GElysiumTestFlags)
 bool FElysiumEventQueueTest::RunTest(const FString&)
 {
 	FElysiumEventQueue Queue;
@@ -1526,7 +1526,7 @@ bool FElysiumEventQueueTest::RunTest(const FString&)
 // instance), so only the clock half applies — exactly the headless case.
 // =====================================================================================
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTimeControlTest, "Elysium.Substrate.TimeControl", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTimeControlTest, "Elysium.Arm.TimeControl", GElysiumTestFlags)
 bool FElysiumTimeControlTest::RunTest(const FString&)
 {
 	FElysiumGameClock Clock;

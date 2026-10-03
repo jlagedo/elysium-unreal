@@ -63,7 +63,7 @@ static FElysiumTerminalView IdleView(const FElysiumEntityHandle& Owner, uint32 R
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalProjectionOwnershipTest,
-	"Elysium.Substrate.Terminal.ProjectionOwnership", GProjectionFlags)
+	"Elysium.Arm.Terminal.ProjectionOwnership", GProjectionFlags)
 bool FElysiumTerminalProjectionOwnershipTest::RunTest(const FString&)
 {
 	FTestWorldWrapper TestWorld;
@@ -236,7 +236,7 @@ bool FElysiumTerminalProjectionOwnershipTest::RunTest(const FString&)
 // answer injected, the whole of `RedrawTerminalProjections` is assertable headless — including its
 // order (the held session first, because it is the one a player is reading).
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalProjectionRedrawTest,
-	"Elysium.Substrate.Terminal.ProjectionRedraw", GProjectionFlags)
+	"Elysium.Arm.Terminal.ProjectionRedraw", GProjectionFlags)
 bool FElysiumTerminalProjectionRedrawTest::RunTest(const FString&)
 {
 	FTestWorldWrapper TestWorld;

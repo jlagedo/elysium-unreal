@@ -117,7 +117,7 @@ namespace
 // --- No candidate, a stale handle, and the 1.5 s grace -------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSeeUnknownSweepLostTest,
-	"Elysium.Substrate.NpcConditions.SeeUnknownSweepLost", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.SeeUnknownSweepLost", GElysiumTestFlags)
 bool FElysiumNpcSeeUnknownSweepLostTest::RunTest(const FString&)
 {
 	FSweepFixture F;
@@ -183,7 +183,7 @@ bool FElysiumNpcSeeUnknownSweepLostTest::RunTest(const FString&)
 // --- Player-only by construction, and the grace sentinel resets on a fresh sighting ---------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSeeUnknownSweepPlayerOnlyTest,
-	"Elysium.Substrate.NpcConditions.SeeUnknownSweepPlayerOnly", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.SeeUnknownSweepPlayerOnly", GElysiumTestFlags)
 bool FElysiumNpcSeeUnknownSweepPlayerOnlyTest::RunTest(const FString&)
 {
 	FSweepFixture F;
@@ -209,7 +209,7 @@ bool FElysiumNpcSeeUnknownSweepPlayerOnlyTest::RunTest(const FString&)
 // --- Clearly visible: the one-shot ATTACK_UNKNOWN roll, and UNKNOWN_RUN_TIMER ---------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSeeUnknownSweepVisibleTest,
-	"Elysium.Substrate.NpcConditions.SeeUnknownSweepVisible", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.SeeUnknownSweepVisible", GElysiumTestFlags)
 bool FElysiumNpcSeeUnknownSweepVisibleTest::RunTest(const FString&)
 {
 	FSweepFixture F;
@@ -250,7 +250,7 @@ bool FElysiumNpcSeeUnknownSweepVisibleTest::RunTest(const FString&)
 // --- Hidden/grappled: the one-shot IGNORE_UNKNOWN roll and `full_investigate` --------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSeeUnknownSweepHiddenRollTest,
-	"Elysium.Substrate.NpcConditions.SeeUnknownSweepHiddenRoll", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.SeeUnknownSweepHiddenRoll", GElysiumTestFlags)
 bool FElysiumNpcSeeUnknownSweepHiddenRollTest::RunTest(const FString&)
 {
 	FSweepFixture F;
@@ -289,7 +289,7 @@ bool FElysiumNpcSeeUnknownSweepHiddenRollTest::RunTest(const FString&)
 // --- The 2-D closing speed classification, and the mid-sweep SEE_UNKNOWN retraction --------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSeeUnknownSweepClosingSpeedTest,
-	"Elysium.Substrate.NpcConditions.SeeUnknownSweepClosingSpeed", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.SeeUnknownSweepClosingSpeed", GElysiumTestFlags)
 bool FElysiumNpcSeeUnknownSweepClosingSpeedTest::RunTest(const FString&)
 {
 	FSweepFixture F;
@@ -374,7 +374,7 @@ bool FElysiumNpcSeeUnknownSweepClosingSpeedTest::RunTest(const FString&)
 // --- The grace timer survives a save ---------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSeeUnknownSweepSaveTest,
-	"Elysium.Substrate.NpcConditions.SeeUnknownSweepSave", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.SeeUnknownSweepSave", GElysiumTestFlags)
 bool FElysiumNpcSeeUnknownSweepSaveTest::RunTest(const FString&)
 {
 	// `m_flSeeUnknownCheatVisionTime` is a retail `SAVE` row, and since 0019/2 pass C the generated

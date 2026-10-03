@@ -59,7 +59,7 @@ namespace ElysiumInfraActorsTests
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInfraKeyfieldsRoundTripTest,
-	"Elysium.Substrate.InfraKeyfields.RoundTrip", GElysiumInfraTestFlags)
+	"Elysium.Arm.InfraKeyfields.RoundTrip", GElysiumInfraTestFlags)
 bool FElysiumInfraKeyfieldsRoundTripTest::RunTest(const FString&)
 {
 	using namespace ElysiumKeyfieldAccess;
@@ -111,7 +111,7 @@ bool FElysiumInfraKeyfieldsRoundTripTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInfraActorsSpawnTest,
-	"Elysium.Substrate.InfraActors.Spawn", GElysiumInfraTestFlags)
+	"Elysium.Arm.InfraActors.Spawn", GElysiumInfraTestFlags)
 bool FElysiumInfraActorsSpawnTest::RunTest(const FString&)
 {
 	FPlayerWorldFixture Fixture;
@@ -176,7 +176,7 @@ bool FElysiumInfraActorsSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInfraActorsSaveReloadTest,
-	"Elysium.Substrate.InfraActors.SaveReload", GElysiumInfraTestFlags)
+	"Elysium.Arm.InfraActors.SaveReload", GElysiumInfraTestFlags)
 bool FElysiumInfraActorsSaveReloadTest::RunTest(const FString&)
 {
 	FPlayerWorldFixture Fixture;
@@ -213,7 +213,7 @@ bool FElysiumInfraActorsSaveReloadTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInfraActorsDefEmitTest,
-	"Elysium.Substrate.InfraActors.DefEmit", GElysiumInfraTestFlags)
+	"Elysium.Arm.InfraActors.DefEmit", GElysiumInfraTestFlags)
 bool FElysiumInfraActorsDefEmitTest::RunTest(const FString&)
 {
 	FPlayerWorldFixture Fixture;
@@ -370,7 +370,7 @@ namespace ElysiumInfraActorsTests
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInfraAdoptionReplaceTest,
-	"Elysium.Substrate.InfraAdoption.Replace", GElysiumInfraTestFlags)
+	"Elysium.Arm.InfraAdoption.Replace", GElysiumInfraTestFlags)
 bool FElysiumInfraAdoptionReplaceTest::RunTest(const FString&)
 {
 	using namespace ElysiumInfraActorsTests;
@@ -423,7 +423,7 @@ bool FElysiumInfraAdoptionReplaceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInfraAdoptionRefusalsTest,
-	"Elysium.Substrate.InfraAdoption.Refusals", GElysiumInfraTestFlags)
+	"Elysium.Arm.InfraAdoption.Refusals", GElysiumInfraTestFlags)
 bool FElysiumInfraAdoptionRefusalsTest::RunTest(const FString&)
 {
 	using namespace ElysiumInfraActorsTests;
@@ -482,7 +482,7 @@ bool FElysiumInfraAdoptionRefusalsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInfraAdoptionMovedTest,
-	"Elysium.Substrate.InfraAdoption.Moved", GElysiumInfraTestFlags)
+	"Elysium.Arm.InfraAdoption.Moved", GElysiumInfraTestFlags)
 bool FElysiumInfraAdoptionMovedTest::RunTest(const FString&)
 {
 	using namespace ElysiumInfraActorsTests;
@@ -512,7 +512,7 @@ bool FElysiumInfraAdoptionMovedTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInfraAdoptionReadinessTest,
-	"Elysium.Substrate.InfraAdoption.Readiness", GElysiumInfraTestFlags)
+	"Elysium.Arm.InfraAdoption.Readiness", GElysiumInfraTestFlags)
 bool FElysiumInfraAdoptionReadinessTest::RunTest(const FString&)
 {
 	// A refused level builds no entity world; its own arm names why, ahead of the generic one.

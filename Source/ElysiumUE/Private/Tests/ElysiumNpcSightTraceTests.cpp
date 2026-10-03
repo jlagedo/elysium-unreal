@@ -90,7 +90,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSightTraceTest,
-	"Elysium.Substrate.Geometry.Sight.Verdict", GElysiumTestFlags)
+	"Elysium.Arm.Geometry.Sight.Verdict", GElysiumTestFlags)
 bool FElysiumNpcSightTraceTest::RunTest(const FString&)
 {
 	FSightFixture F;
@@ -165,7 +165,7 @@ bool FElysiumNpcSightTraceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSightTraceHeadlessTest,
-	"Elysium.Substrate.Geometry.Sight.Headless", GElysiumTestFlags)
+	"Elysium.Arm.Geometry.Sight.Headless", GElysiumTestFlags)
 bool FElysiumNpcSightTraceHeadlessTest::RunTest(const FString&)
 {
 	FSightFixture F;
@@ -187,7 +187,7 @@ bool FElysiumNpcSightTraceHeadlessTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSightProbeTest,
-	"Elysium.Substrate.Geometry.Sight.Probe", GElysiumTestFlags)
+	"Elysium.Arm.Geometry.Sight.Probe", GElysiumTestFlags)
 bool FElysiumNpcSightProbeTest::RunTest(const FString&)
 {
 	// `FVisibleTargetOrigin 0x100a72e0`: a box 20 x 50 x 180 with its feet on the origin. The box is

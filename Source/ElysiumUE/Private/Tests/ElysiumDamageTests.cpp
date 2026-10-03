@@ -138,7 +138,7 @@ namespace
 // The authored `Dmg` grammar and the soak table
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageParseTest, "Elysium.Substrate.Damage.Parse",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageParseTest, "Elysium.Arm.Damage.Parse",
 	GElysiumTestFlags)
 bool FElysiumDamageParseTest::RunTest(const FString&)
 {
@@ -388,7 +388,7 @@ bool FElysiumDamageApplyTest::RunTest(const FString&)
 // FElysiumCombatCharacter::CommitDamage — the one health commit
 
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageCommitTest, "Elysium.Substrate.Damage.Commit",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageCommitTest, "Elysium.Arm.Damage.Commit",
 	GElysiumTestFlags)
 bool FElysiumDamageCommitTest::RunTest(const FString&)
 {

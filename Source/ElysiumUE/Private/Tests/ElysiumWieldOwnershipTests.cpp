@@ -8,7 +8,7 @@
 #include "Tests/AutomationCommon.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWieldOwnershipTest,
-	"Elysium.Substrate.WieldOwnership",
+	"Elysium.Arm.WieldOwnership",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumWieldOwnershipTest::RunTest(const FString&)
 {

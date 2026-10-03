@@ -415,7 +415,7 @@ namespace
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumKnockbackRuleTest,
-	"Elysium.Substrate.Knockback.Rule", GElysiumTestFlags)
+	"Elysium.Arm.Knockback.Rule", GElysiumTestFlags)
 bool FElysiumKnockbackRuleTest::RunTest(const FString&)
 {
 	using namespace ElysiumReactions;
@@ -869,7 +869,7 @@ bool FElysiumKnockbackRuleTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumKnockbackRngTest,
-	"Elysium.Substrate.Knockback.Rng", GElysiumTestFlags)
+	"Elysium.Arm.Knockback.Rng", GElysiumTestFlags)
 bool FElysiumKnockbackRngTest::RunTest(const FString&)
 {
 	using namespace ElysiumReactions;

@@ -196,8 +196,12 @@ float FElysiumNpcBase::StudioFrameAdvance(float IntervalArg)
 	// (the Tzimisce's `Select19SequencePastHalf` seam stands for its one reader).
 	// `m_flYawSpeed` / `m_flGroundSpeed` from the sequence (`0x1008f2e5`, `0x1008f2fa`): the clip
 	// player's speeds. `OnSequenceFinished` on the rising edge (`0x1008f316`) is an empty body
-	// (`0x10091c80`).
-	(void)bWasFinished;
+	// (`0x10091c80`); the AI trace's `seqfinished` event is emitted on that same edge (debug output
+	// only, behind its sink).
+	if (!bWasFinished && bSequenceFinished && IsAiTraced())
+	{
+		EmitAiTrace(TEXT("seqfinished"), TraceSequenceName(SequenceNumber));
+	}
 	return Interval;                                                      // 0x1008f321
 }
 

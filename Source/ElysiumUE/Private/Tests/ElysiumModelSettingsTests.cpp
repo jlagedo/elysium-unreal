@@ -16,7 +16,7 @@ static constexpr EAutomationTestFlags GElysiumModelSettingsTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelSettingsDefaultsTest,
-	"Elysium.Substrate.ModelSettings.Defaults", GElysiumModelSettingsTestFlags)
+	"Elysium.Arm.ModelSettings.Defaults", GElysiumModelSettingsTestFlags)
 bool FElysiumModelSettingsDefaultsTest::RunTest(const FString&)
 {
 	UElysiumModelSettings* Settings = GetMutableDefault<UElysiumModelSettings>();
@@ -40,7 +40,7 @@ bool FElysiumModelSettingsDefaultsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelSettingsIniRoundTripTest,
-	"Elysium.Substrate.ModelSettings.IniRoundTrip", GElysiumModelSettingsTestFlags)
+	"Elysium.Arm.ModelSettings.IniRoundTrip", GElysiumModelSettingsTestFlags)
 bool FElysiumModelSettingsIniRoundTripTest::RunTest(const FString&)
 {
 	UElysiumModelSettings* Settings = GetMutableDefault<UElysiumModelSettings>();

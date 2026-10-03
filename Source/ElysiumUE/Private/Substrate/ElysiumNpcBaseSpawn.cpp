@@ -73,6 +73,14 @@ void FElysiumNpcBase::Event_Killed(void* InInfo)
 		}
 	}
 
+	// The AI trace's `death` event: past both refusals (the freeze, the deferred death) the kill
+	// proceeds. Debug output only, behind its sink.
+	if (IsAiTraced())
+	{
+		EmitAiTrace(TEXT("death"), FElysiumEntityWorld::AiTraceName(
+			Info != nullptr && Info->Attacker.IsSet() ? World->Resolve(Info->Attacker) : nullptr));
+	}
+
 	StopLoopingSounds();                                                                 // 0x10265c78 slot 511
 
 	// `DeathSound` unless a live grapple partner stands: role `-1`, partner `-1`, a stale serial or a

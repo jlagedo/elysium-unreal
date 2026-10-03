@@ -143,10 +143,11 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueCameraSessionTest,
-	"Elysium.Substrate.DialogueCamera.Session", GElysiumDialogueCameraTestFlags)
+	"Elysium.Arm.DialogueCamera.Session", GElysiumDialogueCameraTestFlags)
 
 bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 {
+	ElysiumFixtureNoise::Declare();
 	const FElysiumClassRegistry& Registry = FElysiumClassRegistry::Get();
 	const FElysiumClassDesc* NpcClass = Registry.Find(TEXT("npc_VPedestrian"));
 	if (!TestNotNull(TEXT("NPC Tier-1 class"), NpcClass))
@@ -302,7 +303,7 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueCameraRegistryTest,
-	"Elysium.Substrate.DialogueCamera.Registry", GElysiumDialogueCameraTestFlags)
+	"Elysium.Arm.DialogueCamera.Registry", GElysiumDialogueCameraTestFlags)
 
 bool FElysiumDialogueCameraRegistryTest::RunTest(const FString&)
 {
@@ -352,10 +353,11 @@ bool FElysiumDialogueCameraRegistryTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueBodyOwnerLifecycleTest,
-	"Elysium.Substrate.DialogueCamera.BodyOwnerLifecycle", GElysiumDialogueCameraTestFlags)
+	"Elysium.Arm.DialogueCamera.BodyOwnerLifecycle", GElysiumDialogueCameraTestFlags)
 
 bool FElysiumDialogueBodyOwnerLifecycleTest::RunTest(const FString&)
 {
+	ElysiumFixtureNoise::Declare();
 	FElysiumEntityWorld World(nullptr, nullptr);
 	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 	World.Load(MakeDialogueWorldDefs());
@@ -408,7 +410,7 @@ bool FElysiumDialogueBodyOwnerLifecycleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueCameraGrammarTest,
-	"Elysium.Substrate.DialogueCamera.Grammar", GElysiumDialogueCameraTestFlags)
+	"Elysium.Arm.DialogueCamera.Grammar", GElysiumDialogueCameraTestFlags)
 
 bool FElysiumDialogueCameraGrammarTest::RunTest(const FString&)
 {
@@ -510,10 +512,11 @@ bool FElysiumDialogueCameraGrammarTest::RunTest(const FString&)
 // published; with no source shot at all it defaults SET, which is the named modernization recorded
 // (51 of the 66 shipped shot files set it).
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueCameraPovTest,
-	"Elysium.Substrate.DialogueCamera.DialogPOV", GElysiumDialogueCameraTestFlags)
+	"Elysium.Arm.DialogueCamera.DialogPOV", GElysiumDialogueCameraTestFlags)
 
 bool FElysiumDialogueCameraPovTest::RunTest(const FString&)
 {
+	ElysiumFixtureNoise::Declare();
 	// One shot file's worth of text, with the flag as the only thing that varies between the two
 	// fixtures. `DialogTarget`/`Follow` is what the shipped conversation shots use, so the resolve
 	// exercises the same anchor path a real `default_camera` does.
@@ -675,10 +678,11 @@ bool FElysiumDialogueCameraPovTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumJackCameraBasisTest,
-	"Elysium.Substrate.DialogueCamera.JackBasis", GElysiumDialogueCameraTestFlags)
+	"Elysium.Arm.DialogueCamera.JackBasis", GElysiumDialogueCameraTestFlags)
 
 bool FElysiumJackCameraBasisTest::RunTest(const FString&)
 {
+	ElysiumFixtureNoise::Declare();
 	const FString JackText = TEXT(R"KV(
 		CameraShotTable
 		{
@@ -739,7 +743,7 @@ bool FElysiumJackCameraBasisTest::RunTest(const FString&)
 	// `subject+0xFE8` — the player's dialogue partner, because every shipped `SetShot` caller passes
 	// a NULL subject and the subject falls back to `UTIL_PlayerByIndex(1)`. So the shot is resolved
 	// the way the game resolves it: with Jack as the open conversation's owner. Outside one the
-	// handle is dead and retail frames the world origin (asserted in `Elysium.Substrate.CameraAnchors`).
+	// handle is dead and retail frames the world origin (asserted in `Elysium.Arm.CameraAnchors`).
 	World.OpenDialog(Jack->Handle, MakeOneLineConversation());
 	if (!TestTrue(TEXT("Jack is the player's dialogue partner"),
 		World.GetOpenDialogOwner() == Jack->Handle))

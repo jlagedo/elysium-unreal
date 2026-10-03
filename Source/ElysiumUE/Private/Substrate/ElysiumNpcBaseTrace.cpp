@@ -6,15 +6,20 @@
 // NPC's prints — every reader of ai_debug_npc and ent_trace_conditions (2026-09-30)".
 //
 // Everything here is debug output. No rule reads a word this file writes; the world's trace ring
-// (`FElysiumEntityWorld::AppendAiDebugTrace`) and the log are the only sinks.
+// (`FElysiumEntityWorld::AppendAiDebugTrace`), the log and the AI trace sink
+// (`FElysiumEntityWorld::EmitAiTrace`, spec 0002 step 1 T5, `stories/wave2/seam.md`) are the only
+// sinks. Where a print site already formats the text, it runs under `bits || IsAiTraced()` and the
+// trace event is emitted from there.
 
 #include "Substrate/ElysiumNpcBase.h"
 
 #include "ElysiumEntityWorld.h"
+#include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Substrate/ElysiumScheduleCorpus.h"
 
 namespace
 {
@@ -39,6 +44,84 @@ namespace
 		return FString::Printf(TEXT("%s (0x%x)"),
 			ElysiumNpcCondName(static_cast<EElysiumNpcCond>(Ordinal)), Ordinal);
 	}
+
+	/** Retail's `NPC_STATE` name table, `0x1027e660` (slot 406's `GetStateName` reads it): the names
+	 *  of `0`, `1` and `7` are the 4-byte strings `DAT_10547418` / `DAT_105cd430` / `DAT_1053fd98`
+	 *  (None / Idle / Dead, the order every port reader of the table pins), the rest are labelled
+	 *  strings; `__UNKNOWN__` past `0xe`. */
+	const TCHAR* TraceStateName(int32 Retail)
+	{
+		switch (Retail)
+		{
+		case 0x0: return TEXT("None");
+		case 0x1: return TEXT("Idle");
+		case 0x2: return TEXT("Combat");
+		case 0x3: return TEXT("Alert");
+		case 0x4: return TEXT("Script");
+		case 0x5: return TEXT("Playdead");
+		case 0x6: return TEXT("Prone");
+		case 0x7: return TEXT("Dead");
+		case 0x8: return TEXT("Fleeing");
+		case 0x9: return TEXT("Retreating");
+		case 0xa: return TEXT("Cowering");
+		case 0xb: return TEXT("Hunting");
+		case 0xc: return TEXT("Dialog");
+		case 0xd: return TEXT("Oblivious");
+		case 0xe: return TEXT("CriminalSuspicion");
+		default:  return TEXT("__UNKNOWN__");
+		}
+	}
+}
+
+// --- The AI trace taps (`stories/wave2/seam.md`) --------------------------------------------------
+
+bool FElysiumNpcBase::IsAiTraced() const
+{
+	return World != nullptr && World->HasAiTraceSink();
+}
+
+void FElysiumNpcBase::EmitAiTrace(FName Kind, FString Text) const
+{
+	if (World != nullptr)
+	{
+		World->EmitAiTrace(*this, Kind, MoveTemp(Text));
+	}
+}
+
+void FElysiumNpcBase::TraceTaskDone() const
+{
+	if (!IsAiTraced())
+	{
+		return;
+	}
+	// The running step's GLOBAL task id, the one `DebugTaskStart`'s `task` event names: `TaskOps().NameOf`
+	// is keyed on it (`CurrentRetailTaskNumber` answers the class-local number, which names nothing).
+	const FElysiumScheduleProgram* Program = Schedule.IsRunning() ? ElysiumScheduleFor(Schedule.Current) : nullptr;
+	EmitAiTrace(TEXT("taskdone"), Program != nullptr && Program->Tasks.IsValidIndex(Schedule.TaskIndex)
+		? FElysiumScheduleCorpus::Get().TaskOps().NameOf(Program->Tasks[Schedule.TaskIndex].TaskId)
+		: FString(TEXT("(no task)")));
+}
+
+void FElysiumNpcBase::TraceStateChange(int32 OldRetail, int32 NewRetail) const
+{
+	if (OldRetail == NewRetail || !IsAiTraced())
+	{
+		return;
+	}
+	EmitAiTrace(TEXT("state"), FString::Printf(TEXT("%s -> %s"),
+		TraceStateName(OldRetail), TraceStateName(NewRetail)));
+}
+
+FString FElysiumNpcBase::TraceSequenceName(int32 Sequence) const
+{
+	if (const FElysiumNpc* const Troika = AsNpc())
+	{
+		if (Troika->SequenceRows.IsValidIndex(Sequence) && !Troika->SequenceRows[Sequence].Label.IsEmpty())
+		{
+			return Troika->SequenceRows[Sequence].Label;
+		}
+	}
+	return FString::Printf(TEXT("seq %d"), Sequence);
 }
 
 bool FElysiumNpcBase::IsAiDebugNpc() const
@@ -127,14 +210,31 @@ void FElysiumNpcBase::NpcTraceMessage(const FString& Message, int32 Indent) cons
 	}
 }
 
+// `CAI_BaseNPCTroika` slots 17 (`0x1028de90`, const) and 18 (`0x1028de10`): verdict `mechanism`,
+// `hand:FElysiumNpcBase::NpcTraceMessage` -- both stand as that one-line trace (debug output only).
+// `ElysiumNpcSlots.inl` declares the two overrides; their bodies went with 0019/6's deletions and
+// are restored here as the verdict states them. No port code calls either slot.
+void FElysiumNpc::TraceMessage(const TCHAR* Message, int32 IndentLevel) const
+{
+	NpcTraceMessage(Message != nullptr ? FString(Message) : FString(), IndentLevel);
+}
+
+void FElysiumNpc::TraceMessage(const TCHAR* Message, int32 IndentLevel)
+{
+	NpcTraceMessage(Message != nullptr ? FString(Message) : FString(), IndentLevel);
+}
+
 void FElysiumNpcBase::TraceConditionDelta(const FElysiumNpcConditions& Before) const
 {
 	// "When ent_trace is on, this will dump info about conditions also." (`0x105d7af0`): the
 	// `ent_trace` bit on this entity and `ent_trace_conditions > 0`. Retail's own lines at those
 	// sites were compiled out; the port prints the change, one line per condition, as
-	// `SetCondition name (id)` / `ClearCondition name (id)`.
-	if ((DebugOverlays & OverlayEntTraceBit) == 0
-		|| ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::EntTraceConditions) <= 0)
+	// `SetCondition name (id)` / `ClearCondition name (id)`. The AI trace takes the same delta as
+	// `cond+` / `cond-` events.
+	const bool bPrint = (DebugOverlays & OverlayEntTraceBit) != 0
+		&& ElysiumNpcTunables::ConVarInt(ElysiumNpcTunables::EConVar::EntTraceConditions) > 0;
+	const bool bTrace = IsAiTraced();
+	if (!bPrint && !bTrace)
 	{
 		return;
 	}
@@ -144,8 +244,15 @@ void FElysiumNpcBase::TraceConditionDelta(const FElysiumNpcConditions& Before) c
 		const bool bIs = Cognition.Conditions.HasOrdinal(Ordinal);
 		if (bWas != bIs)
 		{
-			NpcTraceMessage(FString::Printf(TEXT("%s %s"),
-				bIs ? TEXT("SetCondition") : TEXT("ClearCondition"), *TraceCondLabel(Ordinal)), 1);
+			if (bPrint)
+			{
+				NpcTraceMessage(FString::Printf(TEXT("%s %s"),
+					bIs ? TEXT("SetCondition") : TEXT("ClearCondition"), *TraceCondLabel(Ordinal)), 1);
+			}
+			if (bTrace)
+			{
+				EmitAiTrace(bIs ? FName(TEXT("cond+")) : FName(TEXT("cond-")), TraceCondLabel(Ordinal));
+			}
 		}
 	}
 }
@@ -154,10 +261,21 @@ void FElysiumNpcBase::DebugScheduleInstalled(int32 GlobalScheduleId)
 {
 	// `SetSchedule` `0x10280e50`, last statement: `if (m_debugOverlays & 0x8000000)
 	// DevMsg("Schedule: %s\n", pSchedule->GetName())` (`0x105cde18`, the name at `CAI_Schedule
-	// +0x40`). Printed as `name (global/local)`.
-	if ((DebugOverlays & OverlayTaskTextBit) != 0)
+	// +0x40`). Printed as `name (global/local)`; the AI trace's `schedule` event carries the same label.
+	const bool bPrint = (DebugOverlays & OverlayTaskTextBit) != 0;
+	const bool bTrace = IsAiTraced();
+	if (!bPrint && !bTrace)
 	{
-		NpcTraceMessage(FString::Printf(TEXT("Schedule: %s"), *ElysiumScheduleLabel(GlobalScheduleId, this)));
+		return;
+	}
+	const FString Label = ElysiumScheduleLabel(GlobalScheduleId, this);
+	if (bPrint)
+	{
+		NpcTraceMessage(FString::Printf(TEXT("Schedule: %s"), *Label));
+	}
+	if (bTrace)
+	{
+		EmitAiTrace(TEXT("schedule"), Label);
 	}
 }
 
@@ -171,8 +289,11 @@ void FElysiumNpcBase::DebugScheduleBreak(const FElysiumNpcConditions& Firing,
 	// %s\n"` (`0x105cde28`) — under `m_debugOverlays & 0x8000000`. Retail's arm is also gated on
 	// `developer != 0` (`DAT_1070af4c`, `0x1028121f`..`0x1028123d`), which ships 0: NAMED
 	// DIVERGENCE (debug output only) — the port drops that half of the gate for the print, and does
-	// not reproduce the `+0x5f34`/`+0x5f38`/`+0x5f3c` overlay record the same arm writes.
-	if ((DebugOverlays & OverlayTaskTextBit) == 0)
+	// not reproduce the `+0x5f34`/`+0x5f38`/`+0x5f3c` overlay record the same arm writes. The AI
+	// trace's `break` event is the same lowest ordinal, `!`-prefixed when inverted.
+	const bool bPrint = (DebugOverlays & OverlayTaskTextBit) != 0;
+	const bool bTrace = IsAiTraced();
+	if (!bPrint && !bTrace)
 	{
 		return;
 	}
@@ -181,8 +302,16 @@ void FElysiumNpcBase::DebugScheduleBreak(const FElysiumNpcConditions& Firing,
 		const bool bInverted = InvertedFiring.HasOrdinal(Ordinal);
 		if (bInverted || Firing.HasOrdinal(Ordinal))
 		{
-			NpcTraceMessage(FString::Printf(TEXT("   Break condition -> %s%s"),
-				bInverted ? TEXT("!") : TEXT(""), *TraceCondLabel(Ordinal)));
+			const FString Label = FString::Printf(TEXT("%s%s"),
+				bInverted ? TEXT("!") : TEXT(""), *TraceCondLabel(Ordinal));
+			if (bPrint)
+			{
+				NpcTraceMessage(FString::Printf(TEXT("   Break condition -> %s"), *Label));
+			}
+			if (bTrace)
+			{
+				EmitAiTrace(TEXT("break"), Label);
+			}
 			return;
 		}
 	}

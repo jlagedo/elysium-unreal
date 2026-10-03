@@ -209,7 +209,7 @@ namespace
 // --- The entry gates ---------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepPausedTest,
-	"Elysium.Substrate.Navigator.MoveStep.Gates.Paused", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Gates.Paused", GMoveStepTestFlags)
 bool FElysiumMoveStepPausedTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_paused"), 18601);
@@ -228,7 +228,7 @@ bool FElysiumMoveStepPausedTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepShouldMoveTest,
-	"Elysium.Substrate.Navigator.MoveStep.Gates.ShouldMoveClear", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Gates.ShouldMoveClear", GMoveStepTestFlags)
 bool FElysiumMoveStepShouldMoveTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_shouldmove"), 18602);
@@ -254,7 +254,7 @@ bool FElysiumMoveStepShouldMoveTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepNoGoalTest,
-	"Elysium.Substrate.Navigator.MoveStep.Gates.NoGoalType", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Gates.NoGoalType", GMoveStepTestFlags)
 bool FElysiumMoveStepNoGoalTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_nogoal"), 18603);
@@ -275,7 +275,7 @@ bool FElysiumMoveStepNoGoalTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepNoHeadTest,
-	"Elysium.Substrate.Navigator.MoveStep.Gates.NoHeadWaypoint", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Gates.NoHeadWaypoint", GMoveStepTestFlags)
 bool FElysiumMoveStepNoHeadTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_nohead"), 18604);
@@ -292,7 +292,7 @@ bool FElysiumMoveStepNoHeadTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepMoveWaitTest,
-	"Elysium.Substrate.Navigator.MoveStep.Gates.MoveWait", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Gates.MoveWait", GMoveStepTestFlags)
 bool FElysiumMoveStepMoveWaitTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_movewait"), 18605);
@@ -309,7 +309,7 @@ bool FElysiumMoveStepMoveWaitTest::RunTest(const FString&)
 // --- Arrival -----------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepArrivedGoalTest,
-	"Elysium.Substrate.Navigator.MoveStep.Arrived.GoalWaypoint", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Arrived.GoalWaypoint", GMoveStepTestFlags)
 bool FElysiumMoveStepArrivedGoalTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_arrived"), 18606);
@@ -348,7 +348,7 @@ bool FElysiumMoveStepArrivedGoalTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepArrivedNonGoalTest,
-	"Elysium.Substrate.Navigator.MoveStep.Arrived.NonGoalHead", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Arrived.NonGoalHead", GMoveStepTestFlags)
 bool FElysiumMoveStepArrivedNonGoalTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_nongoal"), 18607);
@@ -367,7 +367,7 @@ bool FElysiumMoveStepArrivedNonGoalTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepLastCornerTest,
-	"Elysium.Substrate.Navigator.MoveStep.Arrived.LastCornerInPass", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Arrived.LastCornerInPass", GMoveStepTestFlags)
 bool FElysiumMoveStepLastCornerTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_lastcorner"), 18615);
@@ -453,7 +453,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepNpcHoldResumesTest,
-	"Elysium.Substrate.Navigator.MoveStep.Blocked.NpcHoldResumes", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Blocked.NpcHoldResumes", GMoveStepTestFlags)
 bool FElysiumMoveStepNpcHoldResumesTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_hold_resume"), 18608);
@@ -478,7 +478,7 @@ bool FElysiumMoveStepNpcHoldResumesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepNpcHoldExhaustedTest,
-	"Elysium.Substrate.Navigator.MoveStep.Blocked.NpcHoldExhaustedFails", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Blocked.NpcHoldExhaustedFails", GMoveStepTestFlags)
 bool FElysiumMoveStepNpcHoldExhaustedTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_hold"), 18616);
@@ -527,7 +527,7 @@ bool FElysiumMoveStepNpcHoldExhaustedTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepWindowTest,
-	"Elysium.Substrate.Navigator.MoveStep.Blocked.SecondContactWindow", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Blocked.SecondContactWindow", GMoveStepTestFlags)
 bool FElysiumMoveStepWindowTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_window"), 18609);
@@ -567,7 +567,7 @@ bool FElysiumMoveStepWindowTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepHoldRetailCadenceTest,
-	"Elysium.Substrate.Navigator.MoveStep.Blocked.NpcHoldRetailCadence", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Blocked.NpcHoldRetailCadence", GMoveStepTestFlags)
 bool FElysiumMoveStepHoldRetailCadenceTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_hold_fast"), 18617);
@@ -641,7 +641,7 @@ bool FElysiumMoveStepHoldRetailCadenceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepHoldSlowCadenceTest,
-	"Elysium.Substrate.Navigator.MoveStep.Blocked.NpcHoldSlowCadence", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Blocked.NpcHoldSlowCadence", GMoveStepTestFlags)
 bool FElysiumMoveStepHoldSlowCadenceTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_hold_slow"), 18618);
@@ -705,7 +705,7 @@ bool FElysiumMoveStepHoldSlowCadenceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepSteerTest,
-	"Elysium.Substrate.Navigator.MoveStep.Blocked.NpcWhileWalking", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Blocked.NpcWhileWalking", GMoveStepTestFlags)
 bool FElysiumMoveStepSteerTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_steer"), 18610);
@@ -727,7 +727,7 @@ bool FElysiumMoveStepSteerTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepToleranceTest,
-	"Elysium.Substrate.Navigator.MoveStep.Blocked.WithinGoalTolerance", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Blocked.WithinGoalTolerance", GMoveStepTestFlags)
 bool FElysiumMoveStepToleranceTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_tolerance"), 18611);
@@ -754,7 +754,7 @@ bool FElysiumMoveStepToleranceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepWorldBlockTest,
-	"Elysium.Substrate.Navigator.MoveStep.Blocked.WorldFailsWithStaleMark", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.Blocked.WorldFailsWithStaleMark", GMoveStepTestFlags)
 bool FElysiumMoveStepWorldBlockTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_world"), 18612);
@@ -774,7 +774,7 @@ bool FElysiumMoveStepWorldBlockTest::RunTest(const FString&)
 // --- OnNavFailed and the motor without facts ---------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepOnNavFailedTest,
-	"Elysium.Substrate.Navigator.MoveStep.OnNavFailed.ResetsBlockerMemory", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.OnNavFailed.ResetsBlockerMemory", GMoveStepTestFlags)
 bool FElysiumMoveStepOnNavFailedTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_onnavfailed"), 18613);
@@ -802,7 +802,7 @@ bool FElysiumMoveStepOnNavFailedTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveStepLegacyMotorTest,
-	"Elysium.Substrate.Navigator.MoveStep.LegacyMotor.StatusFallback", GMoveStepTestFlags)
+	"Elysium.Arm.Navigator.MoveStep.LegacyMotor.StatusFallback", GMoveStepTestFlags)
 bool FElysiumMoveStepLegacyMotorTest::RunTest(const FString&)
 {
 	FMoveStepRig R(TEXT("movestep_legacy"), 18614);

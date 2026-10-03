@@ -151,6 +151,38 @@ bool FElysiumEntityWorld::IsNodeGraphLoaded() const
 	return !bPlaceSetPending || PlaceSet->IsAdopted();
 }
 
+void FElysiumEntityWorld::SetAiTraceSink(FElysiumAiTraceSink Sink)
+{
+	AiTraceSink = MoveTemp(Sink);
+}
+
+void FElysiumEntityWorld::EmitAiTrace(const FElysiumEntity& Entity, FName Kind, FString Text)
+{
+	if (!AiTraceSink)
+	{
+		return;
+	}
+	FElysiumAiTraceEvent Event;
+	Event.Time = NowSeconds();
+	Event.Entity = Entity.Handle;
+	Event.Name = Entity.TargetName;
+	Event.Kind = Kind;
+	Event.Text = MoveTemp(Text);
+	// Called through a copy, so a sink that clears or replaces itself from inside the call (a harness
+	// ending its run on the event that met its last expectation) is not destroyed while it runs.
+	const FElysiumAiTraceSink Sink = AiTraceSink;
+	Sink(Event);
+}
+
+FString FElysiumEntityWorld::AiTraceName(const FElysiumEntity* Entity)
+{
+	if (Entity == nullptr)
+	{
+		return TEXT("none");
+	}
+	return Entity->TargetName.IsEmpty() ? Entity->DebugString() : Entity->TargetName;
+}
+
 // --- Load / spawn -----------------------------------------------------------------------
 
 void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
@@ -2240,6 +2272,9 @@ void FElysiumEntityWorld::FireOutput(FElysiumEntity& Source, FName OutputName, c
 		return;
 	}
 	const double Now = NowSeconds();
+	// The AI trace's `output` event (debug output only): one per row fired, or `-> none` when the
+	// entity authors no row for this output at all.
+	bool bAiTraceRowFound = false;
 	// Retail PREPENDS each parsed action to the output object's linked list and then fires that list
 	// head to tail, so repeated rows for one output resolve in reverse lump/export order
 	// (`docs/vtmb/entity_io.md` → "Output-list and queue order"). The def keeps authoring order, so
@@ -2251,6 +2286,7 @@ void FElysiumEntityWorld::FireOutput(FElysiumEntity& Source, FName OutputName, c
 		{
 			continue;
 		}
+		bAiTraceRowFound = true;
 
 		// The wire this row IS. Built before the `times` gate so an exhausted row is still counted
 		// against its own identity — a wire that stops firing because it is spent is a different
@@ -2286,6 +2322,11 @@ void FElysiumEntityWorld::FireOutput(FElysiumEntity& Source, FName OutputName, c
 		{
 			Sink->OnOutputFired(Now, Source, O);
 		}
+		if (AiTraceSink)
+		{
+			EmitAiTrace(Source, TEXT("output"), FString::Printf(TEXT("%s -> %s.%s %s"), *O.Name,
+				O.Target.IsEmpty() ? TEXT("<py-only>") : *O.Target, *O.Input, *O.Param));
+		}
 
 		FElysiumIOEvent Ev;
 		Ev.Wire = Wire;
@@ -2300,6 +2341,10 @@ void FElysiumEntityWorld::FireOutput(FElysiumEntity& Source, FName OutputName, c
 		Ev.Activator = Activator;
 		Ev.Caller = Source.Handle;
 		AddEvent(MoveTemp(Ev));
+	}
+	if (!bAiTraceRowFound && AiTraceSink)
+	{
+		EmitAiTrace(Source, TEXT("output"), FString::Printf(TEXT("%s -> none"), *OutputName.ToString()));
 	}
 }
 
@@ -2482,6 +2527,13 @@ void FElysiumEntityWorld::DeliverInputTo(
 	Args.Activator = Event.Activator;
 	Args.Caller = Event.Caller;
 	Args.Input = Event.Input;
+	// The AI trace's `input` event, as the receiver accepts it and before its thunk runs (debug output
+	// only, behind its sink).
+	if (AiTraceSink)
+	{
+		EmitAiTrace(Target, TEXT("input"), FString::Printf(TEXT("%s %s from=%s"),
+			*Event.Input.ToString(), *Event.Param.ToString(), *AiTraceName(Resolve(Event.Activator))));
+	}
 	Thunk(Target, Args);
 	// Counted per TARGET, not per event: one fire of a `patrol_cop_*` wire is one Fired and as many
 	// Delivered as the pattern matched. "The output reached a receiver that accepted it" is the fact
@@ -2837,6 +2889,10 @@ void FElysiumEntityWorld::RemoveComfortTarget(const FElysiumEntityHandle& Target
 
 void FElysiumEntityWorld::Teardown()
 {
+	// The AI trace sink goes first, so nothing the teardown itself fires reaches a harness that is
+	// done with this world; its owner re-installs it on the rebuilt one.
+	AiTraceSink = nullptr;
+
 	// Dialogue cursors and scoped camera handles never enter a map snapshot. Release silently before
 	// the teardown freeze so travel cannot serialize a half-open scripted session.
 	if (DialogueSession)

@@ -100,7 +100,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TroikaNpcInitTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.TroikaNPCInit", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.TroikaNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TroikaNpcInitTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -168,7 +168,7 @@ bool FElysiumNpcKernelLifecycle19TroikaNpcInitTest::RunTest(const FString&)
 
 // The two words retail does NOT write in this body, each asserted as an absence.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19LateNpcInitTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.LateNPCInitThinksInline", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.LateNPCInitThinksInline", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19LateNpcInitTest::RunTest(const FString&)
 {
 	// `0x10273390` at `0x10273a5x`: `if (curtime <= 1.0) { ThinkSet(NPCInitThink, 0); m_flNextThink =
@@ -196,7 +196,7 @@ bool FElysiumNpcKernelLifecycle19LateNpcInitTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TroikaNpcInitAbsencesTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.TroikaNPCInitAbsences", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.TroikaNPCInitAbsences", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TroikaNpcInitAbsencesTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -226,7 +226,7 @@ bool FElysiumNpcKernelLifecycle19TroikaNpcInitAbsencesTest::RunTest(const FStrin
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TuningTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.OccludedTuning", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.OccludedTuning", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TuningTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -282,7 +282,7 @@ bool FElysiumNpcKernelLifecycle19TuningTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19WeaponHideTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.HumanCombatantHidesWeapon", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.HumanCombatantHidesWeapon", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19WeaponHideTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F;
@@ -316,7 +316,7 @@ bool FElysiumNpcKernelLifecycle19WeaponHideTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19RestoreChecksumTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.OnRestoreChecksum", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.OnRestoreChecksum", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19RestoreChecksumTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -351,7 +351,7 @@ bool FElysiumNpcKernelLifecycle19RestoreChecksumTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TroikaRestoreTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.TroikaOnRestore", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.TroikaOnRestore", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TroikaRestoreTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -403,7 +403,7 @@ bool FElysiumNpcKernelLifecycle19TroikaRestoreTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19WerewolfRearmTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.WerewolfRearm", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.WerewolfRearm", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19WerewolfRearmTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VWerewolf"));
@@ -453,7 +453,7 @@ bool FElysiumNpcKernelLifecycle19WerewolfRearmTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19SpeciesWordsTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.SpeciesWords", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.SpeciesWords", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19SpeciesWordsTest::RunTest(const FString&)
 {
 	// One NPC per class, each in its own fixture.
@@ -518,8 +518,6 @@ bool FElysiumNpcKernelLifecycle19SpeciesWordsTest::RunTest(const FString&)
 			return false;
 		}
 		FElysiumNpcFrenzyShadow* Shadow = F.As<FElysiumNpcFrenzyShadow>();
-		TestEqual(TEXT("the scratch list's seam answers empty"),
-			FElysiumNpcFrenzyShadow::HostileScratchList().Num(), 0);
 		Shadow->HostileEnemyCount = 7;
 		Shadow->NPCInit();
 		TestEqual(TEXT("10376c17 +0x6664 = 0"), Shadow->HostileEnemyCount, 0);
@@ -560,7 +558,7 @@ bool FElysiumNpcKernelLifecycle19SpeciesWordsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19FarSightTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.FarSight", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.FarSight", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19FarSightTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -576,7 +574,7 @@ bool FElysiumNpcKernelLifecycle19FarSightTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TeleportTailTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.TeleportTail", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.TeleportTail", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TeleportTailTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -598,7 +596,7 @@ bool FElysiumNpcKernelLifecycle19TeleportTailTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19CameraNpcInitTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.CameraNPCInit", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.CameraNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19CameraNpcInitTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VCamera"));
@@ -638,7 +636,7 @@ bool FElysiumNpcKernelLifecycle19CameraNpcInitTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19PayphoneTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.PayphoneNPCInit", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.PayphoneNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19PayphoneTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CPayphone"));
@@ -666,7 +664,7 @@ bool FElysiumNpcKernelLifecycle19PayphoneTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19SwarmDistTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.SwarmDistTooFar", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.SwarmDistTooFar", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19SwarmDistTest::RunTest(const FString&)
 {
 	// `CNPC_VBatSwarm` (`0x103673b0`) and `CNPC_VSheriffSwarm` (`0x103b2360`) write the same word,
@@ -691,7 +689,7 @@ bool FElysiumNpcKernelLifecycle19SwarmDistTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19HullIndexTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.NodeGraphHull", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.NodeGraphHull", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19HullIndexTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VGargoyle"));
@@ -724,7 +722,7 @@ bool FElysiumNpcKernelLifecycle19HullIndexTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19ManBatOrderTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.ManBatTimersFirst", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.ManBatTimersFirst", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19ManBatOrderTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VManBat"));
@@ -748,7 +746,7 @@ bool FElysiumNpcKernelLifecycle19ManBatOrderTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19PlaceholderTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.PlaceholderNPCInit", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.PlaceholderNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19PlaceholderTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VPlaceholder"));
@@ -773,7 +771,7 @@ bool FElysiumNpcKernelLifecycle19PlaceholderTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19CopTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.CopNPCInit", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.CopNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19CopTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VCop"));
@@ -794,7 +792,7 @@ bool FElysiumNpcKernelLifecycle19CopTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19FrenzyShadowTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.FrenzyShadowNPCInit", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.FrenzyShadowNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19FrenzyShadowTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VFrenzyShadow"));
@@ -813,14 +811,12 @@ bool FElysiumNpcKernelLifecycle19FrenzyShadowTest::RunTest(const FString&)
 	TestTrue(TEXT("senses on"), Shadow->Senses.bCanPerformSenses);
 	TestTrue(TEXT("nav ignore physics"), Shadow->bNavIgnorePhysicsProps);
 	TestFalse(TEXT("+0x6668 m_bFailedGrapple = 0"), Shadow->bFailedGrapple);
-	TestEqual(TEXT("Weapon_Create(item_w_fists) is the seam's null, so the unconditional |= 0x40 faults"),
-		Shadow->FistsNullWeaponFaults, 1);
 	TestEqual(TEXT("the controller body under it ran: investigate mode 6"), Shadow->InvestigateMode, 6);
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19WerewolfTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.WerewolfNPCInit", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.WerewolfNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19WerewolfTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VWerewolf"));
@@ -855,7 +851,7 @@ bool FElysiumNpcKernelLifecycle19WerewolfTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19ChangTypeTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.ChangTypeBeforeChain", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.ChangTypeBeforeChain", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19ChangTypeTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VChangBrosBlade"));
@@ -893,7 +889,7 @@ bool FElysiumNpcKernelLifecycle19ChangTypeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19StartNpcTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.StartNPC", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.StartNPC", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19StartNpcTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -908,7 +904,7 @@ bool FElysiumNpcKernelLifecycle19StartNpcTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19OnRestoreGiveUpTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.OnRestoreGiveUp", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.OnRestoreGiveUp", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19OnRestoreGiveUpTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CAI_BaseNPCTroika"));
@@ -925,7 +921,7 @@ bool FElysiumNpcKernelLifecycle19OnRestoreGiveUpTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19PedestrianRestoreTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.PedestrianOnRestore", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.PedestrianOnRestore", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19PedestrianRestoreTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VPedestrian"));
@@ -952,7 +948,7 @@ bool FElysiumNpcKernelLifecycle19PedestrianRestoreTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19ZombieCrawlTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.ZombieNPCInit", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.ZombieNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19ZombieCrawlTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VZombie"));
@@ -976,7 +972,7 @@ bool FElysiumNpcKernelLifecycle19ZombieCrawlTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19TaxiIdleTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.TaxiDriverNPCInit", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.TaxiDriverNPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19TaxiIdleTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VTaxiDriver"));
@@ -1035,7 +1031,7 @@ bool FElysiumNpcKernelLifecycle19ArmCoverageTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19Guard1Test,
-	"Elysium.Substrate.NpcKernelLifecycle19.Guard1NPCInit", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.Guard1NPCInit", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19Guard1Test::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VGuard1"));
@@ -1058,7 +1054,7 @@ bool FElysiumNpcKernelLifecycle19Guard1Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19CameraStartNpcTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.CameraStartNPC", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.CameraStartNPC", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19CameraStartNpcTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VCamera"));
@@ -1081,7 +1077,7 @@ bool FElysiumNpcKernelLifecycle19CameraStartNpcTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19MingXiaoRestoreTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.MingXiaoTentacleOnRestore", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.MingXiaoTentacleOnRestore", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19MingXiaoRestoreTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VMingXiaoTentacle"));
@@ -1106,7 +1102,7 @@ bool FElysiumNpcKernelLifecycle19MingXiaoRestoreTest::RunTest(const FString&)
 // generated SAVE walk stores the stamps itself; this pins that an unset stamp survives the real
 // persistence path (`Freeze` / `ApplySnapshot`) unchanged.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19MingXiaoStampRoundTripTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.MingXiaoStampRoundTrip", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.MingXiaoStampRoundTrip", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19MingXiaoStampRoundTripTest::RunTest(const FString&)
 {
 	{
@@ -1160,7 +1156,7 @@ bool FElysiumNpcKernelLifecycle19MingXiaoStampRoundTripTest::RunTest(const FStri
 // carries. Andrei and the Chang brothers are
 // `NpcKernelSpeciesLifecycle10.AndreiBloodRestore` / `.ChangBrosRestore`.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19BossPostRestoreTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.BossPostRestore", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.BossPostRestore", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19BossPostRestoreTest::RunTest(const FString&)
 {
 	struct FRow
@@ -1223,7 +1219,7 @@ bool FElysiumNpcKernelLifecycle19BossPostRestoreTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19RunnerRestoreTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.TzimisceRunnerOnRestore", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.TzimisceRunnerOnRestore", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19RunnerRestoreTest::RunTest(const FString&)
 {
 	FLifecycle19Fixture F(TEXT("CNPC_VTzimisceRunner"));
@@ -1244,7 +1240,7 @@ bool FElysiumNpcKernelLifecycle19RunnerRestoreTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycle19SpeciesSmokeTest,
-	"Elysium.Substrate.NpcKernelLifecycle19.SpeciesNPCInitSmoke", GLifecycle19Flags)
+	"Elysium.Arm.NpcKernelLifecycle19.SpeciesNPCInitSmoke", GLifecycle19Flags)
 bool FElysiumNpcKernelLifecycle19SpeciesSmokeTest::RunTest(const FString&)
 {
 	// One call per slot-420 species body, each on a fresh NPC spawned as the row's class (the

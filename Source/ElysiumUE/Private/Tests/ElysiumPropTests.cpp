@@ -363,7 +363,7 @@ bool FElysiumPropClipResyncTest::RunTest(const FString&)
 // the corpus's animated-prop placements are leaning palms.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimatedPropPlacementTest,
-	"Elysium.Substrate.AnimatedPropPlacement", GElysiumTestFlags)
+	"Elysium.Arm.AnimatedPropPlacement", GElysiumTestFlags)
 bool FElysiumAnimatedPropPlacementTest::RunTest(const FString&)
 {
 	auto BuildOne = [](FElysiumRecordingServices& Services, const FVector& SourceAngles,
@@ -480,7 +480,7 @@ bool FElysiumPropZeroClipFallbackTest::RunTest(const FString&)
 // stays the prior no-collision default.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSolidCollisionTest,
-	"Elysium.Substrate.PropSolidCollision", GElysiumTestFlags)
+	"Elysium.Arm.PropSolidCollision", GElysiumTestFlags)
 bool FElysiumPropSolidCollisionTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;
@@ -527,7 +527,7 @@ bool FElysiumPropSolidCollisionTest::RunTest(const FString&)
 // before `BuildPlacedModelBody` runs, so the request itself is the observable surface here.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSolidCatalogueTest,
-	"Elysium.Substrate.PropSolidCatalogue", GElysiumTestFlags)
+	"Elysium.Arm.PropSolidCatalogue", GElysiumTestFlags)
 bool FElysiumPropSolidCatalogueTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;
@@ -556,7 +556,7 @@ bool FElysiumPropSolidCatalogueTest::RunTest(const FString&)
 // (docs/vtmb/entity_visuals.md); here it is read once and applied to the cast-shadow flag.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropDisableShadowsTest,
-	"Elysium.Substrate.PropDisableShadows", GElysiumTestFlags)
+	"Elysium.Arm.PropDisableShadows", GElysiumTestFlags)
 bool FElysiumPropDisableShadowsTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;
@@ -601,7 +601,7 @@ bool FElysiumPropDisableShadowsTest::RunTest(const FString&)
 // static case: it is undrawn and non-colliding while down, and both restore together.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSolidGatingTest,
-	"Elysium.Substrate.PropSolidGating", GElysiumTestFlags)
+	"Elysium.Arm.PropSolidGating", GElysiumTestFlags)
 bool FElysiumPropSolidGatingTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;

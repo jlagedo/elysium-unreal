@@ -1492,6 +1492,12 @@ void FElysiumCombatCharacter::CreateCorpse(const FVector& Force, void* InInfo)
 		BecomeClientRagdoll();                                                 // 0x1032c29c 0x10090180
 		Corpse = this;                                                         // 0x1032c2a5 slot 137 answers `this`
 	}
+	// The AI trace's `corpse` event: which arm landed the body (debug output only, behind its sink).
+	if (World != nullptr && World->HasAiTraceSink())
+	{
+		World->EmitAiTrace(*this, TEXT("corpse"),
+			!bIsPlayer && (MiscFlags & 0x80000u) == 0 ? TEXT("ragdoll") : TEXT("static"));
+	}
 
 	// 4. The corpse's own removal (`0x1032c2e4..0x1032c423`), for a non-player corpse. A corpse that
 	//    burns away (`0x10207df0`) is removed outright at +10 s with the burning-death visuals and

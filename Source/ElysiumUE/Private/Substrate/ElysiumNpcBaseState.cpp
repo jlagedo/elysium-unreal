@@ -50,7 +50,9 @@ int32 FElysiumNpcBase::IdealStateRetail() const
 
 void FElysiumNpcBase::WriteNpcStateRetail(int32 RetailId)
 {
+	const int32 Old = NpcStateRetail();   // read for the AI trace's `state` event only
 	Mind.WriteNpcStateRetail(RetailId);
+	TraceStateChange(Old, NpcStateRetail());
 }
 
 void FElysiumNpcBase::WriteIdealStateRetail(int32 RetailId)
@@ -72,6 +74,7 @@ void FElysiumNpcBase::SetState(int32 NewRetail)
 	}
 	const int32 OldAfterStrip = NpcStateRetail();
 	Mind.WriteNpcStateRetail(NewRetail);
+	TraceStateChange(OldAfterStrip, NpcStateRetail());   // the AI trace's `state` (debug output only)
 	Mind.WriteIdealStateRetail(NewRetail);
 	if (OldAfterStrip != NewRetail)
 	{

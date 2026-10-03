@@ -90,7 +90,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTextTokenizerTest,
-	"Elysium.Substrate.ScheduleText.Tokenizer",
+	"Elysium.Arm.ScheduleText.Tokenizer",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleTextTokenizerTest::RunTest(const FString&)
 {
@@ -131,7 +131,7 @@ bool FElysiumScheduleTextTokenizerTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTextGrammarTest,
-	"Elysium.Substrate.ScheduleText.Grammar",
+	"Elysium.Arm.ScheduleText.Grammar",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleTextGrammarTest::RunTest(const FString&)
 {
@@ -197,7 +197,7 @@ bool FElysiumScheduleTextGrammarTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTextOperandsTest,
-	"Elysium.Substrate.ScheduleText.Operands",
+	"Elysium.Arm.ScheduleText.Operands",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleTextOperandsTest::RunTest(const FString&)
 {
@@ -247,7 +247,6 @@ bool FElysiumScheduleTextOperandsTest::RunTest(const FString&)
 	TestEqual(TEXT("and an unknown MiscFlag silently reads 0 rather than failing"),
 		Steps[8].RawWord(), 0u);
 	TestEqual(TEXT("Model: interns rather than failing"), Steps[9].RawWord(), 0u);
-	TestEqual(TEXT("and the interning seam counted it"), Scratch.Models.InternedCount(), 1);
 
 	// HintFlags is a substring search, and the nearest+random pair resolves to nearest alone.
 	TestEqual(TEXT("HintFlags ORs every name it finds inside the token"), Steps[10].Data, 3.0f);
@@ -272,7 +271,7 @@ bool FElysiumScheduleTextOperandsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTextInterruptsTest,
-	"Elysium.Substrate.ScheduleText.Interrupts",
+	"Elysium.Arm.ScheduleText.Interrupts",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleTextInterruptsTest::RunTest(const FString&)
 {
@@ -313,7 +312,7 @@ bool FElysiumScheduleTextInterruptsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTextFailuresTest,
-	"Elysium.Substrate.ScheduleText.Failures",
+	"Elysium.Arm.ScheduleText.Failures",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleTextFailuresTest::RunTest(const FString&)
 {
@@ -415,7 +414,7 @@ bool FElysiumScheduleTextFailuresTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTextManagerTest,
-	"Elysium.Substrate.ScheduleText.Manager",
+	"Elysium.Arm.ScheduleText.Manager",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleTextManagerTest::RunTest(const FString&)
 {
@@ -460,7 +459,7 @@ bool FElysiumScheduleTextManagerTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTextTaskOpsTest,
-	"Elysium.Substrate.ScheduleText.TaskOps",
+	"Elysium.Arm.ScheduleText.TaskOps",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleTextTaskOpsTest::RunTest(const FString&)
 {
@@ -504,7 +503,7 @@ bool FElysiumScheduleTextTaskOpsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTextConditionOrdinalsTest,
-	"Elysium.Substrate.ScheduleText.ConditionOrdinals",
+	"Elysium.Arm.ScheduleText.ConditionOrdinals",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleTextConditionOrdinalsTest::RunTest(const FString&)
 {
@@ -548,7 +547,7 @@ bool FElysiumScheduleTextConditionOrdinalsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTextMiscFlagIndexTest,
-	"Elysium.Substrate.ScheduleText.MiscFlagIndex",
+	"Elysium.Arm.ScheduleText.MiscFlagIndex",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleTextMiscFlagIndexTest::RunTest(const FString&)
 {

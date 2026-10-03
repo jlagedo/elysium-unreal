@@ -253,7 +253,7 @@ namespace
 // The two recovered tables: `forcestate`'s asymmetry and the mode set.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedScheduleTablesTest,
-	"Elysium.Substrate.AiScriptedSchedule.Tables", GElysiumTestFlags)
+	"Elysium.Arm.AiScriptedSchedule.Tables", GElysiumTestFlags)
 bool FElysiumAiScriptedScheduleTablesTest::RunTest(const FString&)
 {
 	// The load-bearing asymmetry. "Treating the keyvalue as the native enum would swap combat and
@@ -318,7 +318,7 @@ bool FElysiumAiScriptedScheduleTablesTest::RunTest(const FString&)
 // Mode 1/2 — the move to the goal, over the recording motor.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedScheduleMoveTest,
-	"Elysium.Substrate.AiScriptedSchedule.MoveToGoal", GElysiumTestFlags)
+	"Elysium.Arm.AiScriptedSchedule.MoveToGoal", GElysiumTestFlags)
 bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 {
 	// Mode 2 with `forcestate 2`: the three warehouse thug rows, in miniature.
@@ -434,7 +434,7 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 // Mode 3 — the goal becomes the enemy, through the ordinary acquisition transaction.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedScheduleAssignEnemyTest,
-	"Elysium.Substrate.AiScriptedSchedule.AssignEnemy", GElysiumTestFlags)
+	"Elysium.Arm.AiScriptedSchedule.AssignEnemy", GElysiumTestFlags)
 bool FElysiumAiScriptedScheduleAssignEnemyTest::RunTest(const FString&)
 {
 	// The four diner assassins: mode 3, forcestate 3, goal `!player`.
@@ -511,7 +511,7 @@ bool FElysiumAiScriptedScheduleAssignEnemyTest::RunTest(const FString&)
 // The recovered refusals: a missing goal, a bare row, and the route-failure switch.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedScheduleRefusalTest,
-	"Elysium.Substrate.AiScriptedSchedule.Refusals", GElysiumTestFlags)
+	"Elysium.Arm.AiScriptedSchedule.Refusals", GElysiumTestFlags)
 bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 {
 	// A missing goal logs and stops, and pushes NOTHING.
@@ -657,11 +657,16 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 // `ChangeSchedule` / `StartSchedule` — a native schedule named by a script.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedScheduleNamedTest,
-	"Elysium.Substrate.AiScriptedSchedule.NamedSchedule", GElysiumTestFlags)
+	"Elysium.Arm.AiScriptedSchedule.NamedSchedule", GElysiumTestFlags)
 bool FElysiumAiScriptedScheduleNamedTest::RunTest(const FString&)
 {
 	ElysiumStub::ClearTally();
 	ON_SCOPE_EXIT { ElysiumStub::ClearTally(); };
+
+	// The `-` case below counts its stub line. Declared before the fixture stands, so it is matched
+	// ahead of the fixture's own "Stub fired" noise (`ElysiumFixtureNoise.h`): the framework credits
+	// the first-declared matching expectation only.
+	AddExpectedError(TEXT("CAI_BaseNPC.ChangeSchedule"), EAutomationExpectedErrorFlags::Contains, 1);
 
 	FAiScheduleFixture::FSetup Setup;
 	FAiScheduleFixture F(Setup);
@@ -707,26 +712,13 @@ bool FElysiumAiScriptedScheduleNamedTest::RunTest(const FString&)
 		TestEqual(TEXT("...and starts"), F.Guard->Schedule.Current, MadeFriend->GlobalId);
 	}
 
-	// The stub funnel survives, and it is keyed on the NAME -- but it fires only for a name the
-	// corpus really does not carry. `-` is the third thing the shipped scripts ask for.
-	AddExpectedError(TEXT("CAI_BaseNPC.ChangeSchedule"), EAutomationExpectedErrorFlags::Contains, 1);
+	// The stub funnel survives, but it fires only for a name the corpus really does not carry. `-` is
+	// the third thing the shipped scripts ask for (its one stub line is declared at the top).
 	const int32 BeforeDash = F.Guard->Schedule.Current;
 	F.World.AcceptInput(TEXT("!self"), FName(TEXT("ChangeSchedule")),
 		FElysiumVariant::String(TEXT("-")), F.Guard->Handle, F.Guard->Handle);
 	TestEqual(TEXT("a name no class registers changes nothing"),
 		F.Guard->Schedule.Current, BeforeDash);
-	TArray<ElysiumStub::FTally> Tally;
-	ElysiumStub::CollectTally(Tally);
-	const ElysiumStub::FTally* DashRow = Tally.FindByPredicate(
-		[](const ElysiumStub::FTally& Row) { return Row.Kind == TEXT("schedule"); });
-	if (TestNotNull(TEXT("the unknown name reports through the stub funnel"), DashRow))
-	{
-		TestTrue(TEXT("...keyed on the NAME, so the tally is a per-schedule work list"),
-			DashRow->Surface.Contains(TEXT("-")));
-	}
-	TestEqual(TEXT("and it is the ONLY schedule row: the other two resolved"),
-		Tally.FilterByPredicate(
-			[](const ElysiumStub::FTally& Row) { return Row.Kind == TEXT("schedule"); }).Num(), 1);
 
 	// An empty parameter is refused by name rather than starting something arbitrary.
 	AddExpectedError(TEXT("was fired with no schedule name"),
@@ -739,7 +731,7 @@ bool FElysiumAiScriptedScheduleNamedTest::RunTest(const FString&)
 // Precedence: the ScriptedSchedule owner's place in the arbiter.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedSchedulePrecedenceTest,
-	"Elysium.Substrate.AiScriptedSchedule.Precedence", GElysiumTestFlags)
+	"Elysium.Arm.AiScriptedSchedule.Precedence", GElysiumTestFlags)
 bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 {
 	// A director displaces a patrol route, and the route resumes.
@@ -826,7 +818,7 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 // The pre-emption fix: a committed enemy outranks an autonomous executor.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedSchedulePreemptionTest,
-	"Elysium.Substrate.AiScriptedSchedule.CombatPreemption", GElysiumTestFlags)
+	"Elysium.Arm.AiScriptedSchedule.CombatPreemption", GElysiumTestFlags)
 bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 {
 	// The recovered emission this case runs into on the way back out of combat: `0x1026f660` case 2

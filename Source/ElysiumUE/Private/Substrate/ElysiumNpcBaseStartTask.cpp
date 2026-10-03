@@ -2127,6 +2127,12 @@ bool FElysiumNpcBase::StartTaskSetGoal(const FStartTaskNavGoal& Goal, int32 SetG
 		Navigator.TargetEntity = Goal.Target;                            // 0x102ed112 [10]
 	}
 
+	// The AI trace's `move` goal: the destination this `SetGoal` hands the route build (debug output
+	// only, behind its sink).
+	if (bHaveDest && IsAiTraced())
+	{
+		EmitAiTrace(TEXT("move"), FString::Printf(TEXT("goal %.0f %.0f %.0f"), DestCm.X, DestCm.Y, DestCm.Z));
+	}
 	// `0x102ed11e` `0x102f1dc0(this, goal flags bit 3)`.
 	const bool bRoute = NavBuildRoute(bHaveDest, DestCm);
 	StartTaskNav.bLastSetGoalResult = bRoute;
@@ -2521,6 +2527,11 @@ bool FElysiumNpcBase::InstallPathNoGoal(const FVector& DestCm)
 	if (Motor == nullptr)
 	{
 		return false;
+	}
+	// The AI trace's `move` goal for a goal-less install (debug output only, behind its sink).
+	if (IsAiTraced())
+	{
+		EmitAiTrace(TEXT("move"), FString::Printf(TEXT("goal %.0f %.0f %.0f"), DestCm.X, DestCm.Y, DestCm.Z));
 	}
 	const bool bScriptedOrderHolds = Troika != nullptr && Troika->ScriptedScheduleOrder.IsSet()
 		&& Troika->GetMind().Owner() == EElysiumBodyOwner::ScriptedSchedule;

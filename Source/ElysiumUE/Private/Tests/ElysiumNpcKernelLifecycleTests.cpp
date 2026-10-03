@@ -74,7 +74,7 @@ namespace
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleIsAliveTest,
-	"Elysium.Substrate.NpcKernelLifecycle.IsAlive", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.IsAlive", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleIsAliveTest::RunTest(const FString&)
 {
 	FLifecycleFixture Fix;
@@ -106,7 +106,7 @@ bool FElysiumNpcKernelLifecycleIsAliveTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleSlotsTest,
-	"Elysium.Substrate.NpcKernelLifecycle.Slots", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.Slots", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleSlotsTest::RunTest(const FString&)
 {
 	FLifecycleFixture Fix;
@@ -163,7 +163,7 @@ bool FElysiumNpcKernelLifecycleSlotsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleReactionDelayTest,
-	"Elysium.Substrate.NpcKernelLifecycle.ReactionDelay", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.ReactionDelay", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleReactionDelayTest::RunTest(const FString&)
 {
 	// slot 471 `GetReactionDelay` (0x1026a8a0): the whole body is `RandomFloat(0.2, 0.9)`
@@ -193,7 +193,7 @@ bool FElysiumNpcKernelLifecycleReactionDelayTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleFindNamedEntityTest,
-	"Elysium.Substrate.NpcKernelLifecycle.FindNamedEntity", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.FindNamedEntity", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleFindNamedEntityTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("lifecycle-named"), 20260913);
@@ -221,7 +221,7 @@ bool FElysiumNpcKernelLifecycleFindNamedEntityTest::RunTest(const FString&)
 	// `!playercontroller` is the player, then `thunk_FUN_101618a0` on it: the player's
 	// `m_hControllerNPC`, or NULL. RETAIL CORRECTION (story 5 fold A2): this was a seam answering the
 	// player itself; with no stand-in created it answers nothing (the creation path's own case is
-	// `Elysium.Substrate.NpcKernelPlayerController.CreationPath`).
+	// `Elysium.Arm.NpcKernelPlayerController.CreationPath`).
 	TestNull(TEXT("!playercontroller with no stand-in answers nothing"),
 		Npc->FindNamedEntity(TEXT("!playercontroller")));
 	// `!enemy` with no committed enemy falls to the tail, which is `this`.
@@ -258,7 +258,7 @@ bool FElysiumNpcKernelLifecycleFindNamedEntityTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleThinkStampsTest,
-	"Elysium.Substrate.NpcKernelLifecycle.ThinkStamps", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.ThinkStamps", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleThinkStampsTest::RunTest(const FString&)
 {
 	FLifecycleFixture Fix;
@@ -286,7 +286,7 @@ bool FElysiumNpcKernelLifecycleThinkStampsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleDormancyTest,
-	"Elysium.Substrate.NpcKernelLifecycle.Dormancy", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.Dormancy", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleDormancyTest::RunTest(const FString&)
 {
 	// The hint trio, pure over `FHintWords`.
@@ -375,11 +375,11 @@ bool FElysiumNpcKernelLifecycleDormancyTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleSpawnTest,
-	"Elysium.Substrate.NpcKernelLifecycle.Spawn", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.Spawn", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleSpawnTest::RunTest(const FString&)
 {
 	// `CCineNPC::Spawn` (0x101a6f10) is asserted on the real director since story 5 fold A3
-	// (`Elysium.Substrate.NpcKernelDirector.Spawn`).
+	// (`Elysium.Arm.NpcKernelDirector.Spawn`).
 
 	// `CAI_InterestingPlaceConverstation::Spawn` (0x102dbc80): its own init and then a TAIL JUMP to
 	// slot 104, so the precache is last.
@@ -389,7 +389,7 @@ bool FElysiumNpcKernelLifecycleSpawnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleHintSpawnTest,
-	"Elysium.Substrate.NpcKernelLifecycle.HintSpawn", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.HintSpawn", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleHintSpawnTest::RunTest(const FString&)
 {
 	// `CAI_Hint::Spawn` (0x102d0b60) — the per-hint-type default block, one row at a time.
@@ -458,7 +458,7 @@ bool FElysiumNpcKernelLifecycleHintSpawnTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecyclePrecacheTest,
-	"Elysium.Substrate.NpcKernelLifecycle.Precache", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.Precache", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecyclePrecacheTest::RunTest(const FString&)
 {
 	// `CAI_InterestingPlaceConverstation::Precache` (0x102dbcb0) — the warn-only-for-Loop asymmetry.
@@ -501,7 +501,7 @@ bool FElysiumNpcKernelLifecyclePrecacheTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleKeyValueTest,
-	"Elysium.Substrate.NpcKernelLifecycle.KeyValue", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.KeyValue", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleKeyValueTest::RunTest(const FString&)
 {
 	using EArm = FElysiumAnimating::EKeyValueArm;
@@ -555,7 +555,7 @@ bool FElysiumNpcKernelLifecycleKeyValueTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleActivateTest,
-	"Elysium.Substrate.NpcKernelLifecycle.Activate", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.Activate", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleActivateTest::RunTest(const FString&)
 {
 	FLifecycleFixture Fix;
@@ -603,7 +603,7 @@ bool FElysiumNpcKernelLifecycleActivateTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleRestoreTest,
-	"Elysium.Substrate.NpcKernelLifecycle.Restore", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.Restore", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleRestoreTest::RunTest(const FString&)
 {
 	// Slot 130 (`CBaseEntity::OnRestore`, closed at the save walk): the argument is OVERWRITTEN with 0 before the tail jump to slot 6, so
@@ -623,7 +623,7 @@ bool FElysiumNpcKernelLifecycleRestoreTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleRemovalTest,
-	"Elysium.Substrate.NpcKernelLifecycle.Removal", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.Removal", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleRemovalTest::RunTest(const FString&)
 {
 	FLifecycleFixture Fix(TEXT("npc_VHumanCombatant"), true);
@@ -663,7 +663,7 @@ bool FElysiumNpcKernelLifecycleRemovalTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleSpeciesTest,
-	"Elysium.Substrate.NpcKernelLifecycle.Species", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.Species", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleSpeciesTest::RunTest(const FString&)
 {
 	// Slot 434, by species. The Sabbat leader's forwarding body was deleted as dead in 0019/6 and its
@@ -713,7 +713,7 @@ bool FElysiumNpcKernelLifecycleSpeciesTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleFreeFunctionsTest,
-	"Elysium.Substrate.NpcKernelLifecycle.FreeFunctions", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.FreeFunctions", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleFreeFunctionsTest::RunTest(const FString&)
 {
 	FLifecycleFixture Fix;
@@ -772,7 +772,7 @@ bool FElysiumNpcKernelLifecycleFreeFunctionsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleMingXiaoProxyGateTest,
-	"Elysium.Substrate.NpcKernelLifecycle.MingXiaoProxyGate", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.MingXiaoProxyGate", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleMingXiaoProxyGateTest::RunTest(const FString&)
 {
 	// `FUN_10397b40` is a `CNPC_VMingXiao` body over the head's own words, run on the head. Its one
@@ -853,7 +853,7 @@ bool FElysiumNpcKernelLifecycleMingXiaoProxyGateTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleInterestingPlaceTest,
-	"Elysium.Substrate.NpcKernelLifecycle.InterestingPlace", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.InterestingPlace", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleInterestingPlaceTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("lifecycle-place"), 20260913);
@@ -925,7 +925,7 @@ bool FElysiumNpcKernelLifecycleInterestingPlaceTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleParseMapDataTest,
-	"Elysium.Substrate.NpcKernelLifecycle.ParseMapData", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.ParseMapData", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleParseMapDataTest::RunTest(const FString&)
 {
 	// The copy stops at the first `}` and then writes one unconditionally — so the brace is always
@@ -980,7 +980,7 @@ bool FElysiumNpcKernelLifecycleParseMapDataTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleSenseGateTest,
-	"Elysium.Substrate.NpcKernelLifecycle.SenseGate", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.SenseGate", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleSenseGateTest::RunTest(const FString&)
 {
 	FLifecycleFixture Fix;
@@ -1011,7 +1011,7 @@ bool FElysiumNpcKernelLifecycleSenseGateTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleClanOffsetTest,
-	"Elysium.Substrate.NpcKernelLifecycle.ClanOffset", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.ClanOffset", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleClanOffsetTest::RunTest(const FString&)
 {
 	// The seven clans in retail's own comparison order — Brujah, Gangrel, Nosferatu, Toreador,
@@ -1036,7 +1036,7 @@ bool FElysiumNpcKernelLifecycleClanOffsetTest::RunTest(const FString&)
 // --- `CAI_Hint::vfunc5` (`0x102d2f00`), the owner half --------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleHintDestroyedTest,
-	"Elysium.Substrate.NpcKernelLifecycle.HintDestroyed", GLifecycleTestFlags)
+	"Elysium.Arm.NpcKernelLifecycle.HintDestroyed", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleHintDestroyedTest::RunTest(const FString&)
 {
 	FLifecycleFixture Fix(TEXT("npc_VHumanCombatant"), true);

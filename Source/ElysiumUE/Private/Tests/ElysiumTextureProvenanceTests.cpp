@@ -70,7 +70,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTextureProvenanceApplyJsonTest,
-	"Elysium.Substrate.TextureProvenance.ApplyJson", GElysiumTextureProvenanceTestFlags)
+	"Elysium.Arm.TextureProvenance.ApplyJson", GElysiumTextureProvenanceTestFlags)
 bool FElysiumTextureProvenanceApplyJsonTest::RunTest(const FString&)
 {
 	UTexture2D* Texture = NewObject<UTexture2D>(GetTransientPackage(), NAME_None, RF_Transient);
@@ -177,7 +177,7 @@ bool FElysiumTextureProvenanceApplyJsonTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTextureProvenanceRegistryTagsTest,
-	"Elysium.Substrate.TextureProvenance.RegistryTags", GElysiumTextureProvenanceTestFlags)
+	"Elysium.Arm.TextureProvenance.RegistryTags", GElysiumTextureProvenanceTestFlags)
 bool FElysiumTextureProvenanceRegistryTagsTest::RunTest(const FString&)
 {
 	// A throwaway package: the stamp writes package metadata, and the transient package outlives
@@ -221,7 +221,7 @@ bool FElysiumTextureProvenanceRegistryTagsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTextureProvenanceBuiltSentinelsTest,
-	"Elysium.Substrate.TextureProvenance.BuiltSentinels", GElysiumTextureProvenanceTestFlags)
+	"Elysium.Arm.TextureProvenance.BuiltSentinels", GElysiumTextureProvenanceTestFlags)
 bool FElysiumTextureProvenanceBuiltSentinelsTest::RunTest(const FString&)
 {
 	// A texture that was never built holds no platform data; every query answers with its

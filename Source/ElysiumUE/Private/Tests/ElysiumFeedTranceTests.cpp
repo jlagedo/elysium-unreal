@@ -280,7 +280,7 @@ namespace
 // A standing bystander: fed on, released with blood left, stands entranced, and comes back whole.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedTranceStandingTest,
-	"Elysium.Substrate.FeedTrance.Standing", GElysiumTestFlags)
+	"Elysium.Arm.FeedTrance.Standing", GElysiumTestFlags)
 bool FElysiumFeedTranceStandingTest::RunTest(const FString&)
 {
 	FTranceFixture F(FTranceFixture::FSetup{});
@@ -356,7 +356,7 @@ bool FElysiumFeedTranceStandingTest::RunTest(const FString&)
 // the watchdog. This catches an implementation that compared the requested activity or model stem.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedTranceActivityIdentityTest,
-	"Elysium.Substrate.FeedTrance.ActivityIdentity", GElysiumTestFlags)
+	"Elysium.Arm.FeedTrance.ActivityIdentity", GElysiumTestFlags)
 bool FElysiumFeedTranceActivityIdentityTest::RunTest(const FString&)
 {
 	FTranceFixture F(FTranceFixture::FSetup{});
@@ -390,7 +390,7 @@ bool FElysiumFeedTranceActivityIdentityTest::RunTest(const FString&)
 // A victim that already hates the feeder: `IRelationType(attacker) == D_HT` refuses the trance.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedTranceHostileTest,
-	"Elysium.Substrate.FeedTrance.Hostile", GElysiumTestFlags)
+	"Elysium.Arm.FeedTrance.Hostile", GElysiumTestFlags)
 bool FElysiumFeedTranceHostileTest::RunTest(const FString&)
 {
 	FTranceFixture::FSetup Setup;
@@ -422,7 +422,7 @@ bool FElysiumFeedTranceHostileTest::RunTest(const FString&)
 // mid-trance with its program parked at task 0.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedTrancePatrolTest,
-	"Elysium.Substrate.FeedTrance.Patrol", GElysiumTestFlags)
+	"Elysium.Arm.FeedTrance.Patrol", GElysiumTestFlags)
 bool FElysiumFeedTrancePatrolTest::RunTest(const FString&)
 {
 	FTranceFixture::FSetup Setup;
@@ -497,7 +497,7 @@ bool FElysiumFeedTrancePatrolTest::RunTest(const FString&)
 // `SetAIEnabled(false)` `0x10265680`; `FeedInterrupt` `0x1033a9e0` calls `SetAIEnabled(true)`
 // on the way out, which re-bases every NPC's whole clock (slot 614 plus the `Last` stamps).
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedTranceAiGateTest,
-	"Elysium.Substrate.FeedTrance.AiGate", GElysiumTestFlags)
+	"Elysium.Arm.FeedTrance.AiGate", GElysiumTestFlags)
 bool FElysiumFeedTranceAiGateTest::RunTest(const FString&)
 {
 	FTranceFixture::FSetup Setup;
@@ -552,7 +552,7 @@ bool FElysiumFeedTranceAiGateTest::RunTest(const FString&)
 
 // The gate's two refusals: an observed feeder, and a combat-typed area.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedTranceAiGateRefusalsTest,
-	"Elysium.Substrate.FeedTrance.AiGateRefusals", GElysiumTestFlags)
+	"Elysium.Arm.FeedTrance.AiGateRefusals", GElysiumTestFlags)
 bool FElysiumFeedTranceAiGateRefusalsTest::RunTest(const FString&)
 {
 	// An untyped map (no `worldspawn` policy at all reads as area 0, retail's combat type).

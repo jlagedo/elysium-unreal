@@ -101,7 +101,7 @@ namespace ElysiumPlaceSeamTests
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSeamHintArmsTest,
-	"Elysium.Substrate.PlaceSeams.HintArms", GElysiumPlaceSeamFlags)
+	"Elysium.Arm.PlaceSeams.HintArms", GElysiumPlaceSeamFlags)
 bool FElysiumPlaceSeamHintArmsTest::RunTest(const FString&)
 {
 	using namespace ElysiumPlaceSeamTests;
@@ -190,7 +190,7 @@ bool FElysiumPlaceSeamHintArmsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSeamPatrolTest,
-	"Elysium.Substrate.PlaceSeams.Patrol", GElysiumPlaceSeamFlags)
+	"Elysium.Arm.PlaceSeams.Patrol", GElysiumPlaceSeamFlags)
 bool FElysiumPlaceSeamPatrolTest::RunTest(const FString&)
 {
 	using namespace ElysiumPlaceSeamTests;
@@ -277,7 +277,7 @@ bool FElysiumPlaceSeamPatrolTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSeamUnusableNodeTest,
-	"Elysium.Substrate.PlaceSeams.UnusableNode", GElysiumPlaceSeamFlags)
+	"Elysium.Arm.PlaceSeams.UnusableNode", GElysiumPlaceSeamFlags)
 bool FElysiumPlaceSeamUnusableNodeTest::RunTest(const FString&)
 {
 	using namespace ElysiumPlaceSeamTests;
@@ -310,7 +310,7 @@ bool FElysiumPlaceSeamUnusableNodeTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSeamListNodesTest,
-	"Elysium.Substrate.PlaceSeams.ListNodesInBox", GElysiumPlaceSeamFlags)
+	"Elysium.Arm.PlaceSeams.ListNodesInBox", GElysiumPlaceSeamFlags)
 bool FElysiumPlaceSeamListNodesTest::RunTest(const FString&)
 {
 	using namespace ElysiumPlaceSeamTests;
@@ -510,7 +510,7 @@ bool FElysiumPlaceSeamWanderOrderTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSeamWanderCapTest,
-	"Elysium.Substrate.PlaceSeams.Wander.Cap", GElysiumPlaceSeamFlags)
+	"Elysium.Arm.PlaceSeams.Wander.Cap", GElysiumPlaceSeamFlags)
 bool FElysiumPlaceSeamWanderCapTest::RunTest(const FString&)
 {
 	using namespace ElysiumPlaceSeamTests;
@@ -544,7 +544,7 @@ bool FElysiumPlaceSeamWanderCapTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSeamWanderTiersTest,
-	"Elysium.Substrate.PlaceSeams.Wander.Tiers", GElysiumPlaceSeamFlags)
+	"Elysium.Arm.PlaceSeams.Wander.Tiers", GElysiumPlaceSeamFlags)
 bool FElysiumPlaceSeamWanderTiersTest::RunTest(const FString&)
 {
 	using namespace ElysiumPlaceSeamTests;
@@ -586,7 +586,7 @@ bool FElysiumPlaceSeamWanderTiersTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSeamWanderFailTest,
-	"Elysium.Substrate.PlaceSeams.Wander.Fail", GElysiumPlaceSeamFlags)
+	"Elysium.Arm.PlaceSeams.Wander.Fail", GElysiumPlaceSeamFlags)
 bool FElysiumPlaceSeamWanderFailTest::RunTest(const FString&)
 {
 	using namespace ElysiumPlaceSeamTests;
@@ -618,7 +618,7 @@ bool FElysiumPlaceSeamWanderFailTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlaceSeamWanderDetourTest,
-	"Elysium.Substrate.PlaceSeams.Wander.Detour", GElysiumPlaceSeamFlags)
+	"Elysium.Arm.PlaceSeams.Wander.Detour", GElysiumPlaceSeamFlags)
 bool FElysiumPlaceSeamWanderDetourTest::RunTest(const FString&)
 {
 	using namespace ElysiumPlaceSeamTests;

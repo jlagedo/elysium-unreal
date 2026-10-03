@@ -51,7 +51,7 @@ static void PutText(FElysiumTerminalView& View, int32 Column, int32 Row, const T
 static const FVector2D Surface1024Square(1024.0, 1024.0);
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalCellMetricsTest,
-	"Elysium.Substrate.Terminal.CellMetrics", GCellFlags)
+	"Elysium.Arm.Terminal.CellMetrics", GCellFlags)
 bool FElysiumTerminalCellMetricsTest::RunTest(const FString&)
 {
 	using namespace ElysiumTerminalPaint;
@@ -118,7 +118,7 @@ bool FElysiumTerminalCellMetricsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalPaletteTest,
-	"Elysium.Substrate.Terminal.Palette", GCellFlags)
+	"Elysium.Arm.Terminal.Palette", GCellFlags)
 bool FElysiumTerminalPaletteTest::RunTest(const FString&)
 {
 	using namespace ElysiumUI;
@@ -152,7 +152,7 @@ bool FElysiumTerminalPaletteTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalCellPaintTest,
-	"Elysium.Substrate.Terminal.CellPaint", GCellFlags)
+	"Elysium.Arm.Terminal.CellPaint", GCellFlags)
 bool FElysiumTerminalCellPaintTest::RunTest(const FString&)
 {
 	using namespace ElysiumTerminalPaint;

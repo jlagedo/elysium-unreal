@@ -130,7 +130,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleCorpusOrderTest,
-	"Elysium.Substrate.ScheduleCorpus.ParentBeforeChild",
+	"Elysium.Arm.ScheduleCorpus.ParentBeforeChild",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleCorpusOrderTest::RunTest(const FString&)
 {
@@ -191,7 +191,7 @@ bool FElysiumScheduleCorpusOrderTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleCorpusBrokenGraphTest,
-	"Elysium.Substrate.ScheduleCorpus.BrokenGraph",
+	"Elysium.Arm.ScheduleCorpus.BrokenGraph",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleCorpusBrokenGraphTest::RunTest(const FString&)
 {
@@ -236,7 +236,7 @@ bool FElysiumScheduleCorpusBrokenGraphTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleCorpusTextFailureTest,
-	"Elysium.Substrate.ScheduleCorpus.TextFailureStopsOneSpace",
+	"Elysium.Arm.ScheduleCorpus.TextFailureStopsOneSpace",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleCorpusTextFailureTest::RunTest(const FString&)
 {
@@ -289,7 +289,7 @@ bool FElysiumScheduleCorpusTextFailureTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleCorpusVerifyNumbersTest,
-	"Elysium.Substrate.ScheduleCorpus.VerifyNumbers",
+	"Elysium.Arm.ScheduleCorpus.VerifyNumbers",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleCorpusVerifyNumbersTest::RunTest(const FString&)
 {
@@ -316,7 +316,7 @@ bool FElysiumScheduleCorpusVerifyNumbersTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleCorpusDeployedTest,
-	"Elysium.Substrate.ScheduleCorpus.Deployed",
+	"Elysium.Arm.ScheduleCorpus.Deployed",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleCorpusDeployedTest::RunTest(const FString&)
 {
@@ -381,7 +381,7 @@ bool FElysiumScheduleCorpusDeployedTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleWitnessTest,
-	"Elysium.Substrate.ScheduleWitness",
+	"Elysium.Arm.ScheduleWitness",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleWitnessTest::RunTest(const FString&)
 {

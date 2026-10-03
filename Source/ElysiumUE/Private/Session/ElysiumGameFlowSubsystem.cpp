@@ -395,6 +395,12 @@ void UElysiumGameFlowSubsystem::BootFromCommandLine()
 	{
 		BootKind = EBootKind::Stage;
 	}
+	// The arena scenario run's arena host likewise stands its own room; its map host names a map and
+	// takes the DevMap branch above.
+	else if (FParse::Param(FCommandLine::Get(), TEXT("ElysiumArena")))
+	{
+		BootKind = EBootKind::Stage;
+	}
 	else if (NewGameFlag == 0)
 	{
 		// -ElysiumNewGame=0 loads the story map through the dev path instead of through New Game,

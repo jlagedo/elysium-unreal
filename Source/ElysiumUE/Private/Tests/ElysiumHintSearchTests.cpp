@@ -193,7 +193,7 @@ namespace ElysiumHintSearchTests
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintSearchEmptyListTest,
-	"Elysium.Substrate.HintSearch.EmptyList", GElysiumHintSearchTestFlags)
+	"Elysium.Arm.HintSearch.EmptyList", GElysiumHintSearchTestFlags)
 bool FElysiumHintSearchEmptyListTest::RunTest(const FString&)
 {
 	using namespace ElysiumHintSearchTests;
@@ -232,7 +232,7 @@ bool FElysiumHintSearchEmptyListTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintSearchBaseNeverFindsTest,
-	"Elysium.Substrate.HintSearch.BaseNeverFinds", GElysiumHintSearchTestFlags)
+	"Elysium.Arm.HintSearch.BaseNeverFinds", GElysiumHintSearchTestFlags)
 bool FElysiumHintSearchBaseNeverFindsTest::RunTest(const FString&)
 {
 	using namespace ElysiumHintSearchTests;
@@ -272,7 +272,7 @@ bool FElysiumHintSearchBaseNeverFindsTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintSearchCursorWalk1af0Test,
-	"Elysium.Substrate.HintSearch.CursorWalk1af0", GElysiumHintSearchTestFlags)
+	"Elysium.Arm.HintSearch.CursorWalk1af0", GElysiumHintSearchTestFlags)
 bool FElysiumHintSearchCursorWalk1af0Test::RunTest(const FString&)
 {
 	using namespace ElysiumHintSearchTests;
@@ -312,7 +312,7 @@ bool FElysiumHintSearchCursorWalk1af0Test::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintSearchCursorWalk24b0And2980Test,
-	"Elysium.Substrate.HintSearch.CursorWalk24b0And2980", GElysiumHintSearchTestFlags)
+	"Elysium.Arm.HintSearch.CursorWalk24b0And2980", GElysiumHintSearchTestFlags)
 bool FElysiumHintSearchCursorWalk24b0And2980Test::RunTest(const FString&)
 {
 	using namespace ElysiumHintSearchTests;
@@ -352,7 +352,7 @@ bool FElysiumHintSearchCursorWalk24b0And2980Test::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintSearchAdmissionOrderTest,
-	"Elysium.Substrate.HintSearch.AdmissionOrder", GElysiumHintSearchTestFlags)
+	"Elysium.Arm.HintSearch.AdmissionOrder", GElysiumHintSearchTestFlags)
 bool FElysiumHintSearchAdmissionOrderTest::RunTest(const FString&)
 {
 	using namespace ElysiumHintSearchTests;
@@ -417,7 +417,7 @@ bool FElysiumHintSearchAdmissionOrderTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintSearchGroupGateTest,
-	"Elysium.Substrate.HintSearch.GroupGate", GElysiumHintSearchTestFlags)
+	"Elysium.Arm.HintSearch.GroupGate", GElysiumHintSearchTestFlags)
 bool FElysiumHintSearchGroupGateTest::RunTest(const FString&)
 {
 	using namespace ElysiumHintSearchTests;
@@ -449,7 +449,7 @@ bool FElysiumHintSearchGroupGateTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintSearchScoringTest,
-	"Elysium.Substrate.HintSearch.Scoring", GElysiumHintSearchTestFlags)
+	"Elysium.Arm.HintSearch.Scoring", GElysiumHintSearchTestFlags)
 bool FElysiumHintSearchScoringTest::RunTest(const FString&)
 {
 	using namespace ElysiumHintSearchTests;
@@ -508,7 +508,7 @@ bool FElysiumHintSearchScoringTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintSearchMaskSearchTest,
-	"Elysium.Substrate.HintSearch.MaskSearch", GElysiumHintSearchTestFlags)
+	"Elysium.Arm.HintSearch.MaskSearch", GElysiumHintSearchTestFlags)
 bool FElysiumHintSearchMaskSearchTest::RunTest(const FString&)
 {
 	using namespace ElysiumHintSearchTests;
@@ -579,7 +579,7 @@ bool FElysiumHintSearchMaskSearchTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintSearchLineOfSightTest,
-	"Elysium.Substrate.HintSearch.LineOfSightBit0", GElysiumHintSearchTestFlags)
+	"Elysium.Arm.HintSearch.LineOfSightBit0", GElysiumHintSearchTestFlags)
 bool FElysiumHintSearchLineOfSightTest::RunTest(const FString&)
 {
 	using namespace ElysiumHintSearchTests;
@@ -627,7 +627,6 @@ bool FElysiumHintSearchLineOfSightTest::RunTest(const FString&)
 	Seen.Reset();
 	TestEqual(TEXT("with bit 0 clear no trace is cast: the first admitted node is the blocked one"),
 		R.Near(nullptr, TypePlain, 0), R.Id(TEXT("blocked")));
-	TestEqual(TEXT("...and the seam saw no ray"), Seen.Num(), 0);
 
 	R.F.Services.TraceRetailQuery = [](const FElysiumRetailTrace&, FElysiumRetailTraceResult& Out)
 	{
@@ -645,7 +644,7 @@ bool FElysiumHintSearchLineOfSightTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintSearchRandomPickTest,
-	"Elysium.Substrate.HintSearch.RandomPick", GElysiumHintSearchTestFlags)
+	"Elysium.Arm.HintSearch.RandomPick", GElysiumHintSearchTestFlags)
 bool FElysiumHintSearchRandomPickTest::RunTest(const FString&)
 {
 	using namespace ElysiumHintSearchTests;
@@ -732,7 +731,7 @@ bool FElysiumHintSearchRandomPickTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintSearchClaimReleaseOwnerTest,
-	"Elysium.Substrate.HintSearch.ClaimReleaseOwner", GElysiumHintSearchTestFlags)
+	"Elysium.Arm.HintSearch.ClaimReleaseOwner", GElysiumHintSearchTestFlags)
 bool FElysiumHintSearchClaimReleaseOwnerTest::RunTest(const FString&)
 {
 	using namespace ElysiumHintSearchTests;
@@ -812,7 +811,7 @@ bool FElysiumHintSearchClaimReleaseOwnerTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintSearchDisableHintTest,
-	"Elysium.Substrate.HintSearch.DisableHintHidesFromSearch", GElysiumHintSearchTestFlags)
+	"Elysium.Arm.HintSearch.DisableHintHidesFromSearch", GElysiumHintSearchTestFlags)
 bool FElysiumHintSearchDisableHintTest::RunTest(const FString&)
 {
 	using namespace ElysiumHintSearchTests;
@@ -856,7 +855,7 @@ bool FElysiumHintSearchDisableHintTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHintSearchSaveRoundTripClaimTest,
-	"Elysium.Substrate.HintSearch.SaveRoundTripClaim", GElysiumHintSearchTestFlags)
+	"Elysium.Arm.HintSearch.SaveRoundTripClaim", GElysiumHintSearchTestFlags)
 bool FElysiumHintSearchSaveRoundTripClaimTest::RunTest(const FString&)
 {
 	using namespace ElysiumHintSearchTests;

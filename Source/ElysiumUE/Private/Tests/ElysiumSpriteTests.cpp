@@ -41,7 +41,7 @@ static FElysiumEntityDef SpriteDef(const TCHAR* Name, int32 SpawnFlags, bool bSt
 	return Def;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEnvSpriteTest, "Elysium.Substrate.EnvSprite", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEnvSpriteTest, "Elysium.Arm.EnvSprite", GElysiumTestFlags)
 bool FElysiumEnvSpriteTest::RunTest(const FString&)
 {
 	FElysiumEntityDefs Defs;

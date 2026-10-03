@@ -71,7 +71,7 @@ namespace
 // row parser `0x100ccf90`, whose port is `UE_map_sidecars.split_output` (0018 story 21-7), so a
 // staged row already carries -1 and this reader must not rewrite it a second time.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapEntitiesDeserializeRowsTest,
-	"Elysium.Substrate.MapEntities.DeserializeRows", GElysiumMapEntitiesTestFlags)
+	"Elysium.Arm.MapEntities.DeserializeRows", GElysiumMapEntitiesTestFlags)
 bool FElysiumMapEntitiesDeserializeRowsTest::RunTest(const FString&)
 {
 	FElysiumEntityDefs Defs;
@@ -122,7 +122,7 @@ bool FElysiumMapEntitiesDeserializeRowsTest::RunTest(const FString&)
 // taking the scale and not the translation, and a non-sky row left alone — the same rule
 // FElysiumEntityDefs::Parse applies, applied on this path so no consumer can tell the two apart.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapEntitiesSkyTransformTest,
-	"Elysium.Substrate.MapEntities.SkyTransform", GElysiumMapEntitiesTestFlags)
+	"Elysium.Arm.MapEntities.SkyTransform", GElysiumMapEntitiesTestFlags)
 bool FElysiumMapEntitiesSkyTransformTest::RunTest(const FString&)
 {
 	UElysiumMapEntities* Asset =

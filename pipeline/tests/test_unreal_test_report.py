@@ -352,10 +352,45 @@ def test_every_prefix_runs_in_one_boot_joined_with_a_plus() -> None:
 
 def test_a_single_argument_may_join_the_prefixes_itself() -> None:
     assert unreal.resolve_test_filters("Elysium.A.+Elysium.B.") == ["Elysium.A.", "Elysium.B."]
-    # Tier words resolve, repeats collapse, and an empty request is the whole suite.
+    # Tier words resolve, repeats collapse, and an empty request is the default tier.
     assert unreal.resolve_test_filters(["substrate", "Elysium.Substrate.", "policy"]) == [
-        "Elysium.Substrate.", "Elysium.Policy."]
-    assert unreal.resolve_test_filters([]) == ["Elysium."]
+        "Elysium.Substrate.", "Elysium.Content.Policy."]
+    assert unreal.resolve_test_filters([]) == list(unreal.DEFAULT_TEST_FILTER)
+
+
+def test_the_tier_words_select_the_tiers_by_prefix() -> None:
+    assert unreal.resolve_test_filters(["arm"]) == ["Elysium.Arm."]
+    assert unreal.resolve_test_filters("content+slow") == ["Elysium.Content.", "Elysium.Slow."]
+    assert unreal.resolve_test_filters(["all"]) == ["Elysium."]
+    # `default` is the explicit list of default groups, and the groups it names are not opt-in ones.
+    default = unreal.resolve_test_filters(["default"])
+    assert default == [f"Elysium.{group}." for group in unreal.DEFAULT_TEST_GROUPS]
+    assert not set(unreal.DEFAULT_TEST_GROUPS) & set(unreal.OPT_IN_TEST_GROUPS)
+    assert unreal.resolve_test_filters(["default", "arm"]) == [*default, "Elysium.Arm."]
+
+
+def test_a_selection_names_its_tier() -> None:
+    assert unreal.selection_tier(unreal.DEFAULT_TEST_FILTER) == "default"
+    assert unreal.selection_tier(["Elysium."]) == "all"
+    assert unreal.selection_tier(["Elysium.Arm."]) == "arm"
+    assert unreal.selection_tier(["Elysium.Arm.", "Elysium.Slow."]) == "arm+slow"
+    assert unreal.selection_tier(["Elysium.Substrate.", "Elysium.Arm."]) == "default+arm"
+    # A prefix inside a group selects part of its tier, and says so.
+    assert unreal.selection_tier(["Elysium.Arm.NpcKernelSelect19."]) == "arm (selected by prefix)"
+    assert unreal.selection_tier(["Elysium.Foo."]) == "named"
+
+
+def test_the_default_run_is_the_default_groups_in_one_boot_and_names_its_tier() -> None:
+    with TemporaryDirectory() as temp:
+        config = stub_config(Path(temp))
+        tests = [timed("Elysium.Substrate.NpcKernelThink19.A"), timed("Elysium.Session.Save")]
+        summary, launches = run_prefixes(config, [], tests)
+
+        assert len(launches) == 1
+        joined = "+".join(unreal.DEFAULT_TEST_FILTER)
+        assert f"-ExecCmds=Automation RunTest {joined};Quit" in launches[0]
+        assert summary["tier"] == "default"
+        assert [row["prefix"] for row in summary["prefixes"]] == list(unreal.DEFAULT_TEST_FILTER)
 
 
 def test_each_prefix_is_summarised_and_a_failure_is_named_with_its_error() -> None:

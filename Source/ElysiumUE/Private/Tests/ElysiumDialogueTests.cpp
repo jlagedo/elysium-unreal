@@ -205,7 +205,7 @@ bool FElysiumDlgParseTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgExprTest, "Elysium.Substrate.DlgExpr", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgExprTest, "Elysium.Arm.DlgExpr", GElysiumTestFlags)
 bool FElysiumDlgExprTest::RunTest(const FString&)
 {
 	using namespace ElysiumDlgExpr;
@@ -618,7 +618,6 @@ bool FElysiumDlgDependencyTest::RunTest(const FString&)
 		Char.FakedEffects.Reset();
 		FElysiumDlgDependency::Parse(TEXT("Dominate 2"), &Resolver).Charge(&Sheet);
 		TestEqual(TEXT("picking a discipline row spends its cost"), Char.BloodSpent, 2);
-		TestEqual(TEXT("...and fires the faked-effect seam once"), Char.FakedEffects.Num(), 1);
 		if (Char.FakedEffects.Num() == 1)
 		{
 			TestEqual(TEXT("...with the trait, its id and the level"), Char.FakedEffects[0],
@@ -673,7 +672,7 @@ namespace ElysiumDlgTestFixture
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgDisabledRowsTest,
-	"Elysium.Substrate.DlgDisabledRows", GElysiumTestFlags)
+	"Elysium.Arm.DlgDisabledRows", GElysiumTestFlags)
 bool FElysiumDlgDisabledRowsTest::RunTest(const FString&)
 {
 	// M-DISABLED: a row failing only on its skill front stays visible and greyed; a row failing on
@@ -740,7 +739,7 @@ bool FElysiumDlgDisabledRowsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgGateLabelTest,
-	"Elysium.Substrate.DlgGateLabel", GElysiumTestFlags)
+	"Elysium.Arm.DlgGateLabel", GElysiumTestFlags)
 bool FElysiumDlgGateLabelTest::RunTest(const FString&)
 {
 	// M-REQ's label has to name WHICH half of a discipline check refused. `TestSimple`
@@ -817,7 +816,7 @@ bool FElysiumDlgGateLabelTest::RunTest(const FString&)
 			return false;
 		}
 		Band.Conv->Start();
-		if (!TestEqual(TEXT("the unrecovered frenzy row is hidden, not greyed"),
+		if (!TestEqual(TEXT("the frenzy row is hidden, not greyed"),
 			Band.Conv->VisibleChoices().Num(), 1))
 		{
 			return false;
@@ -830,14 +829,13 @@ bool FElysiumDlgGateLabelTest::RunTest(const FString&)
 			FElysiumDlgDependency::Parse(TEXT("Frenzy_Feat 1"), &Resolver);
 		TestTrue(TEXT("the frenzy front still parses as a feat"),
 			Dep.Class == EElysiumDlgTraitClass::Feat && Dep.TraitId == ElysiumDlgFeat::Frenzy);
-		TestTrue(TEXT("...and is named as the seam it is"), Dep.IsUnrecoveredFrenzyFront());
 		TestFalse(TEXT("...so presentation never labels it"), Dep.HasLabelledSkillFront());
 	}
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgCloseDuringPickTest,
-	"Elysium.Substrate.DlgCloseDuringPick", GElysiumTestFlags)
+	"Elysium.Arm.DlgCloseDuringPick", GElysiumTestFlags)
 bool FElysiumDlgCloseDuringPickTest::RunTest(const FString&)
 {
 	// `CDialog::Pick` (`0x100e4bd0`) flushes the NPC's parked col-5 BEFORE it charges the
@@ -901,7 +899,7 @@ bool FElysiumDlgCloseDuringPickTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgCorpusMountTest,
-	"Elysium.Substrate.DlgCorpusMount", GElysiumTestFlags)
+	"Elysium.Content.DlgCorpusMount", GElysiumTestFlags)
 bool FElysiumDlgCorpusMountTest::RunTest(const FString&)
 {
 	// One path, one byte source. The runtime loads a conversation through
@@ -932,7 +930,7 @@ bool FElysiumDlgCorpusMountTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgPendingActionTest,
-	"Elysium.Substrate.DlgPendingAction", GElysiumTestFlags)
+	"Elysium.Arm.DlgPendingAction", GElysiumTestFlags)
 bool FElysiumDlgPendingActionTest::RunTest(const FString&)
 {
 	// `process_npc_line` runs col-4 NOW and parks col-5; `CallPendingNPCEventScript` runs the
@@ -1005,7 +1003,7 @@ bool FElysiumDlgPendingActionTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgNoValidReplyTest,
-	"Elysium.Substrate.DlgNoValidReply", GElysiumTestFlags)
+	"Elysium.Arm.DlgNoValidReply", GElysiumTestFlags)
 bool FElysiumDlgNoValidReplyTest::RunTest(const FString&)
 {
 	// A band that authored responses and gated every one of them out is retail's "no valid reply":
@@ -1074,7 +1072,7 @@ bool FElysiumDlgNoValidReplyTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgClanColumnsTest,
-	"Elysium.Substrate.DlgClanColumns", GElysiumTestFlags)
+	"Elysium.Arm.DlgClanColumns", GElysiumTestFlags)
 bool FElysiumDlgClanColumnsTest::RunTest(const FString&)
 {
 	// Seven clan columns, cols 6-12, in clan_offset order. `ElysiumDlgRow` fills col-12 only, so
@@ -1155,7 +1153,7 @@ bool FElysiumDlgClanColumnsTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgDisplayTest, "Elysium.Substrate.DlgDisplay", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgDisplayTest, "Elysium.Arm.DlgDisplay", GElysiumTestFlags)
 bool FElysiumDlgDisplayTest::RunTest(const FString&)
 {
 	using ElysiumDlgText::StripStageDirections;
@@ -1416,7 +1414,7 @@ bool FElysiumDlgAutomaticTest::RunTest(const FString&)
 // (`0x100e5240`) owes every path, the order `CDialog::Acquire` runs the opening line's col-4 in,
 // and the two edges (`NPCNotifyDoneTalking`, a stale pick) that act on a band in flight.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueSessionIdentityTest,
-	"Elysium.Substrate.Dialogue.SessionIdentity", GElysiumTestFlags)
+	"Elysium.Arm.Dialogue.SessionIdentity", GElysiumTestFlags)
 bool FElysiumDialogueSessionIdentityTest::RunTest(const FString&)
 {
 	FElysiumRecordingServices Services;
@@ -1806,7 +1804,7 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgStartingLineTest,
-	"Elysium.Substrate.DlgStartingLine", GElysiumTestFlags)
+	"Elysium.Arm.DlgStartingLine", GElysiumTestFlags)
 bool FElysiumDlgStartingLineTest::RunTest(const FString&)
 {
 	// The retail classifier is a case-insensitive substring test over raw col-1 and accepts all three

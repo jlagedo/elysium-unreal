@@ -101,7 +101,7 @@ FElysiumRetailTrace HumanBox(const FVector& StartCm, const FVector& EndCm, int32
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldGeometryCentreOffsetTest,
-	"Elysium.Substrate.Geometry.World.CentreOffset", ElysiumWorldGeometryTests::Flags)
+	"Elysium.Arm.Geometry.World.CentreOffset", ElysiumWorldGeometryTests::Flags)
 bool FElysiumWorldGeometryCentreOffsetTest::RunTest(const FString&)
 {
 	using namespace ElysiumWorldGeometryTests;
@@ -132,7 +132,7 @@ bool FElysiumWorldGeometryCentreOffsetTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldGeometryContactTest,
-	"Elysium.Substrate.Geometry.World.ContactIsNotSolid", ElysiumWorldGeometryTests::Flags)
+	"Elysium.Arm.Geometry.World.ContactIsNotSolid", ElysiumWorldGeometryTests::Flags)
 bool FElysiumWorldGeometryContactTest::RunTest(const FString&)
 {
 	using namespace ElysiumWorldGeometryTests;
@@ -166,7 +166,7 @@ bool FElysiumWorldGeometryContactTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldGeometryCharacterTest,
-	"Elysium.Substrate.Geometry.World.CharacterListedNotFolded", ElysiumWorldGeometryTests::Flags)
+	"Elysium.Arm.Geometry.World.CharacterListedNotFolded", ElysiumWorldGeometryTests::Flags)
 bool FElysiumWorldGeometryCharacterTest::RunTest(const FString&)
 {
 	using namespace ElysiumWorldGeometryTests;
@@ -211,7 +211,7 @@ bool FElysiumWorldGeometryCharacterTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldGeometryMoverTest,
-	"Elysium.Substrate.Geometry.World.MoverNeedsMoveable", ElysiumWorldGeometryTests::Flags)
+	"Elysium.Arm.Geometry.World.MoverNeedsMoveable", ElysiumWorldGeometryTests::Flags)
 bool FElysiumWorldGeometryMoverTest::RunTest(const FString&)
 {
 	using namespace ElysiumWorldGeometryTests;
@@ -252,7 +252,7 @@ bool FElysiumWorldGeometryMoverTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldGeometryPropTest,
-	"Elysium.Substrate.Geometry.World.PropNeedsMonster", ElysiumWorldGeometryTests::Flags)
+	"Elysium.Arm.Geometry.World.PropNeedsMonster", ElysiumWorldGeometryTests::Flags)
 bool FElysiumWorldGeometryPropTest::RunTest(const FString&)
 {
 	using namespace ElysiumWorldGeometryTests;

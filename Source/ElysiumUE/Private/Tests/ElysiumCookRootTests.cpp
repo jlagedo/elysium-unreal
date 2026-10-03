@@ -38,7 +38,7 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCookRootTest, "Elysium.Substrate.CookRoot",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCookRootTest, "Elysium.Arm.CookRoot",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumCookRootTest::RunTest(const FString&)
 {

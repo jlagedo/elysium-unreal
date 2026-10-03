@@ -8,7 +8,7 @@
 #include "UObject/Package.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSkySourceConservationTest,
-	"Elysium.Substrate.SkyComposite.SourceConservation",
+	"Elysium.Arm.SkyComposite.SourceConservation",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumSkySourceConservationTest::RunTest(const FString&)
 {

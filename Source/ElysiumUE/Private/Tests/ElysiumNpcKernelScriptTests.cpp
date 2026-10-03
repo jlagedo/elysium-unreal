@@ -107,7 +107,7 @@ namespace
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19CancelScriptTest,
-	"Elysium.Substrate.NpcKernelScript19.CancelScript_101a8c30", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.CancelScript_101a8c30", GScript19TestFlags)
 bool FElysiumNpcKernelScript19CancelScriptTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("script19_cancel"), 19001);
@@ -175,7 +175,7 @@ bool FElysiumNpcKernelScript19CancelScriptTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19UpdateOnRemoveTest,
-	"Elysium.Substrate.NpcKernelScript19.UpdateOnRemove_101a7140", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.UpdateOnRemove_101a7140", GScript19TestFlags)
 bool FElysiumNpcKernelScript19UpdateOnRemoveTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19DirectorWorld(TEXT("script19_remove"), 19002, TEXT("scripted_sequence")));
@@ -200,7 +200,7 @@ bool FElysiumNpcKernelScript19UpdateOnRemoveTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19FinishHoldTest,
-	"Elysium.Substrate.NpcKernelScript19.FinishHold_101a8640", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.FinishHold_101a8640", GScript19TestFlags)
 bool FElysiumNpcKernelScript19FinishHoldTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19DirectorWorld(TEXT("script19_hold"), 19003, TEXT("scripted_sequence")));
@@ -238,7 +238,7 @@ bool FElysiumNpcKernelScript19FinishHoldTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19FinishChainTest,
-	"Elysium.Substrate.NpcKernelScript19.FinishChain_101a8640", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.FinishChain_101a8640", GScript19TestFlags)
 bool FElysiumNpcKernelScript19FinishChainTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19DirectorWorld(TEXT("script19_chain"), 19004, TEXT("scripted_sequence")));
@@ -279,7 +279,7 @@ bool FElysiumNpcKernelScript19FinishChainTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19ExitScriptTest,
-	"Elysium.Substrate.NpcKernelScript19.ExitScriptedSequence_1027d0a0", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.ExitScriptedSequence_1027d0a0", GScript19TestFlags)
 bool FElysiumNpcKernelScript19ExitScriptTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19DirectorWorld(TEXT("script19_exit"), 19005, TEXT("scripted_sequence")));
@@ -313,7 +313,7 @@ bool FElysiumNpcKernelScript19ExitScriptTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19PossessTest,
-	"Elysium.Substrate.NpcKernelScript19.Possess_101a7880", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.Possess_101a7880", GScript19TestFlags)
 bool FElysiumNpcKernelScript19PossessTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19DirectorWorld(TEXT("script19_possess"), 19006, TEXT("scripted_sequence")));
@@ -374,7 +374,7 @@ bool FElysiumNpcKernelScript19PossessTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19PossessTeleportTest,
-	"Elysium.Substrate.NpcKernelScript19.PossessTeleport_101a7880", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.PossessTeleport_101a7880", GScript19TestFlags)
 bool FElysiumNpcKernelScript19PossessTeleportTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19DirectorWorld(TEXT("script19_teleport"), 19007, TEXT("scripted_sequence")));
@@ -407,7 +407,7 @@ bool FElysiumNpcKernelScript19PossessTeleportTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19SequenceDoneTest,
-	"Elysium.Substrate.NpcKernelScript19.SequenceDone_101a8460", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.SequenceDone_101a8460", GScript19TestFlags)
 bool FElysiumNpcKernelScript19SequenceDoneTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19DirectorWorld(TEXT("script19_done"), 19008, TEXT("scripted_sequence")));
@@ -444,7 +444,7 @@ bool FElysiumNpcKernelScript19SequenceDoneTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19AllowInterruptTest,
-	"Elysium.Substrate.NpcKernelScript19.AllowInterrupt_101a8890", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.AllowInterrupt_101a8890", GScript19TestFlags)
 bool FElysiumNpcKernelScript19AllowInterruptTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19DirectorWorld(TEXT("script19_allow"), 19009, TEXT("scripted_sequence")));
@@ -489,7 +489,7 @@ bool FElysiumNpcKernelScript19AllowInterruptTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19StartSequenceTest,
-	"Elysium.Substrate.NpcKernelScript19.StartSequence_101a82d0", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.StartSequence_101a82d0", GScript19TestFlags)
 bool FElysiumNpcKernelScript19StartSequenceTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19DirectorWorld(TEXT("script19_start"), 19010, TEXT("scripted_sequence")));
@@ -519,7 +519,7 @@ bool FElysiumNpcKernelScript19StartSequenceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19AiStartSequenceTest,
-	"Elysium.Substrate.NpcKernelScript19.AiStartSequence_101a9510", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.AiStartSequence_101a9510", GScript19TestFlags)
 bool FElysiumNpcKernelScript19AiStartSequenceTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19DirectorWorld(TEXT("script19_ai_start"), 19011, TEXT("aiscripted_sequence")));
@@ -546,7 +546,7 @@ bool FElysiumNpcKernelScript19AiStartSequenceTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19AiPossessTest,
-	"Elysium.Substrate.NpcKernelScript19.AiPossess_101a9080", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.AiPossess_101a9080", GScript19TestFlags)
 bool FElysiumNpcKernelScript19AiPossessTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19DirectorWorld(TEXT("script19_ai_possess"), 19012, TEXT("aiscripted_sequence")));
@@ -598,7 +598,7 @@ bool FElysiumNpcKernelScript19AiPossessTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19AiSchedulePossessTest,
-	"Elysium.Substrate.NpcKernelScript19.AiSchedulePossess_101a9790", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.AiSchedulePossess_101a9790", GScript19TestFlags)
 bool FElysiumNpcKernelScript19AiSchedulePossessTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19DirectorWorld(TEXT("script19_sched_possess"), 19013, TEXT("aiscripted_schedule")));
@@ -632,7 +632,7 @@ bool FElysiumNpcKernelScript19AiSchedulePossessTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19BuildPatrolPathTest,
-	"Elysium.Substrate.NpcKernelScript19.BuildPatrolPath_1029f460", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.BuildPatrolPath_1029f460", GScript19TestFlags)
 bool FElysiumNpcKernelScript19BuildPatrolPathTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("script19_build_patrol"), 19014);
@@ -736,7 +736,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19PatrolStartTest,
-	"Elysium.Substrate.NpcKernelScript19.IssuePatrolMoveStart_102aa640", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.IssuePatrolMoveStart_102aa640", GScript19TestFlags)
 bool FElysiumNpcKernelScript19PatrolStartTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19PatrolWorld(TEXT("script19_patrol_start"), 19015),
@@ -792,7 +792,7 @@ bool FElysiumNpcKernelScript19PatrolStartTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19PatrolRunTest,
-	"Elysium.Substrate.NpcKernelScript19.IssuePatrolMoveRun_102aa860", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.IssuePatrolMoveRun_102aa860", GScript19TestFlags)
 bool FElysiumNpcKernelScript19PatrolRunTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldFixture F(Script19PatrolWorld(TEXT("script19_patrol_run"), 19016),
@@ -849,7 +849,7 @@ bool FElysiumNpcKernelScript19PatrolRunTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19HiddenPositionTest,
-	"Elysium.Substrate.NpcKernelScript19.TryMoveToHiddenPosition_10278220", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.TryMoveToHiddenPosition_10278220", GScript19TestFlags)
 bool FElysiumNpcKernelScript19HiddenPositionTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("script19_hidden"), 19017);
@@ -905,7 +905,7 @@ bool FElysiumNpcKernelScript19HiddenPositionTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19MoveToGoalTest,
-	"Elysium.Substrate.NpcKernelScript19.ScheduledMoveToGoalEntity_102800c0", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.ScheduledMoveToGoalEntity_102800c0", GScript19TestFlags)
 bool FElysiumNpcKernelScript19MoveToGoalTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("script19_move_goal"), 19018);
@@ -939,7 +939,7 @@ bool FElysiumNpcKernelScript19MoveToGoalTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19FollowPathTest,
-	"Elysium.Substrate.NpcKernelScript19.ScheduledFollowPath_102801e0", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.ScheduledFollowPath_102801e0", GScript19TestFlags)
 bool FElysiumNpcKernelScript19FollowPathTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("script19_follow_path"), 19019);
@@ -979,7 +979,7 @@ bool FElysiumNpcKernelScript19FollowPathTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19GhoulScriptHideTest,
-	"Elysium.Substrate.NpcKernelScript19.GhoulCroucherScriptHide_1037c1c0", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.GhoulCroucherScriptHide_1037c1c0", GScript19TestFlags)
 bool FElysiumNpcKernelScript19GhoulScriptHideTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("script19_ghoul_hide"), 19020);
@@ -1015,7 +1015,7 @@ bool FElysiumNpcKernelScript19GhoulScriptHideTest::RunTest(const FString&)
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19ManBatOverrideMoveTest,
-	"Elysium.Substrate.NpcKernelScript19.ManBatOverrideMove_1038b120", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.ManBatOverrideMove_1038b120", GScript19TestFlags)
 bool FElysiumNpcKernelScript19ManBatOverrideMoveTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("script19_manbat_override"), 19021);
@@ -1049,7 +1049,7 @@ bool FElysiumNpcKernelScript19ManBatOverrideMoveTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19ManBatFlyTest,
-	"Elysium.Substrate.NpcKernelScript19.ManBatOverrideMoveFly_1038b1a0", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.ManBatOverrideMoveFly_1038b1a0", GScript19TestFlags)
 bool FElysiumNpcKernelScript19ManBatFlyTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("script19_manbat_fly"), 19022);
@@ -1089,7 +1089,7 @@ bool FElysiumNpcKernelScript19ManBatFlyTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScript19ManBatWingTurnTest,
-	"Elysium.Substrate.NpcKernelScript19.ManBatWingTurnSelect_1038e720", GScript19TestFlags)
+	"Elysium.Arm.NpcKernelScript19.ManBatWingTurnSelect_1038e720", GScript19TestFlags)
 bool FElysiumNpcKernelScript19ManBatWingTurnTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("script19_manbat_wing"), 19023);

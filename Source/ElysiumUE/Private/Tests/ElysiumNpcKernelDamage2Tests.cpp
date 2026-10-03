@@ -240,7 +240,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19BaseOnTakeDamageTest,
-	"Elysium.Substrate.NpcKernelDamage19.BaseOnTakeDamage_10265e90", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.BaseOnTakeDamage_10265e90", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19BaseOnTakeDamageTest::RunTest(const FString&)
 {
 	FDamage19Fixture F;
@@ -274,7 +274,7 @@ bool FElysiumNpcKernelDamage19BaseOnTakeDamageTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19BaseAliveOutputsTest,
-	"Elysium.Substrate.NpcKernelDamage19.BaseOnTakeDamageAlive_10265ed0_Outputs", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.BaseOnTakeDamageAlive_10265ed0_Outputs", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19BaseAliveOutputsTest::RunTest(const FString&)
 {
 	FDamage19Fixture F;
@@ -304,7 +304,7 @@ bool FElysiumNpcKernelDamage19BaseAliveOutputsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19BaseAliveConditionsTest,
-	"Elysium.Substrate.NpcKernelDamage19.BaseOnTakeDamageAlive_10265ed0_Conditions", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.BaseOnTakeDamageAlive_10265ed0_Conditions", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19BaseAliveConditionsTest::RunTest(const FString&)
 {
 	FDamage19Fixture F;
@@ -349,7 +349,7 @@ bool FElysiumNpcKernelDamage19BaseAliveConditionsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19BaseAliveGatesTest,
-	"Elysium.Substrate.NpcKernelDamage19.BaseOnTakeDamageAlive_10265ed0_Gates", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.BaseOnTakeDamageAlive_10265ed0_Gates", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19BaseAliveGatesTest::RunTest(const FString&)
 {
 	FDamage19Fixture F;
@@ -383,7 +383,7 @@ bool FElysiumNpcKernelDamage19BaseAliveGatesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19BaseAliveMemoryTest,
-	"Elysium.Substrate.NpcKernelDamage19.BaseOnTakeDamageAlive_10265ed0_Memory", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.BaseOnTakeDamageAlive_10265ed0_Memory", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19BaseAliveMemoryTest::RunTest(const FString&)
 {
 	FDamage19Fixture F;
@@ -454,7 +454,7 @@ bool FElysiumNpcKernelDamage19BaseAliveMemoryTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19TroikaOnTakeDamageTest,
-	"Elysium.Substrate.NpcKernelDamage19.TroikaOnTakeDamage_102bed30", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.TroikaOnTakeDamage_102bed30", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19TroikaOnTakeDamageTest::RunTest(const FString&)
 {
 	FDamage19Fixture F;
@@ -493,7 +493,7 @@ bool FElysiumNpcKernelDamage19TroikaOnTakeDamageTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19TroikaAliveZeroTest,
-	"Elysium.Substrate.NpcKernelDamage19.TroikaOnTakeDamageAlive_102beda0_ZeroDamage", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.TroikaOnTakeDamageAlive_102beda0_ZeroDamage", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19TroikaAliveZeroTest::RunTest(const FString&)
 {
 	FDamage19Fixture F;
@@ -523,7 +523,7 @@ bool FElysiumNpcKernelDamage19TroikaAliveZeroTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19TroikaAlivePositiveTest,
-	"Elysium.Substrate.NpcKernelDamage19.TroikaOnTakeDamageAlive_102beda0_Positive", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.TroikaOnTakeDamageAlive_102beda0_Positive", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19TroikaAlivePositiveTest::RunTest(const FString&)
 {
 	FDamage19Fixture F;
@@ -554,7 +554,7 @@ bool FElysiumNpcKernelDamage19TroikaAlivePositiveTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19Slot316Test,
-	"Elysium.Substrate.NpcKernelDamage19.Slot316_1029fa50", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.Slot316_1029fa50", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19Slot316Test::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CAI_BaseNPCTroika"), /*bArm=*/true);
@@ -616,7 +616,7 @@ bool FElysiumNpcKernelDamage19Slot316Test::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19Slot318Test,
-	"Elysium.Substrate.NpcKernelDamage19.PlayerDefenderBlockReaction_1029fcf0", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.PlayerDefenderBlockReaction_1029fcf0", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19Slot318Test::RunTest(const FString&)
 {
 	FDamage19Fixture F;
@@ -680,7 +680,7 @@ bool FElysiumNpcKernelDamage19Slot318Test::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19Slot320Test,
-	"Elysium.Substrate.NpcKernelDamage19.PlayerKnockbackReaction_102a01b0", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.PlayerKnockbackReaction_102a01b0", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19Slot320Test::RunTest(const FString&)
 {
 	FDamage19Fixture F;
@@ -726,7 +726,7 @@ bool FElysiumNpcKernelDamage19Slot320Test::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19GargoyleKnockbackTest,
-	"Elysium.Substrate.NpcKernelDamage19.GargoylePlayerKnockbackReaction_10378d30", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.GargoylePlayerKnockbackReaction_10378d30", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19GargoyleKnockbackTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VGargoyle"));
@@ -748,7 +748,7 @@ bool FElysiumNpcKernelDamage19GargoyleKnockbackTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19HengeyokaiKnockbackTest,
-	"Elysium.Substrate.NpcKernelDamage19.HengeyokaiPlayerKnockbackReaction_10380320", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.HengeyokaiPlayerKnockbackReaction_10380320", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19HengeyokaiKnockbackTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VHengeyokai"));
@@ -767,7 +767,7 @@ bool FElysiumNpcKernelDamage19HengeyokaiKnockbackTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19RunnerKnockbackTest,
-	"Elysium.Substrate.NpcKernelDamage19.TzimisceRunnerPlayerKnockbackReaction_103c43f0", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.TzimisceRunnerPlayerKnockbackReaction_103c43f0", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19RunnerKnockbackTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VTzimisceRunner"));
@@ -797,7 +797,7 @@ bool FElysiumNpcKernelDamage19RunnerKnockbackTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19PresenceTest,
-	"Elysium.Substrate.NpcKernelDamage19.UpdatePresenceEffect_1037a5b0_10381b10_103ab270", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.UpdatePresenceEffect_1037a5b0_10381b10_103ab270", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19PresenceTest::RunTest(const FString&)
 {
 	for (const TCHAR* Class : { TEXT("CNPC_VGargoyle"), TEXT("CNPC_VHengeyokai"), TEXT("CNPC_VSabbatLeader") })
@@ -826,7 +826,7 @@ bool FElysiumNpcKernelDamage19PresenceTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19AndreiTest,
-	"Elysium.Substrate.NpcKernelDamage19.AndreiBloodOnTakeDamageAlive_1035e6d0", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.AndreiBloodOnTakeDamageAlive_1035e6d0", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19AndreiTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VAndreiBlood"));
@@ -868,7 +868,7 @@ bool FElysiumNpcKernelDamage19AndreiTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19AnimalTest,
-	"Elysium.Substrate.NpcKernelDamage19.AnimalOnTakeDamageAlive_103601a0", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.AnimalOnTakeDamageAlive_103601a0", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19AnimalTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VAnimal"));
@@ -890,7 +890,7 @@ bool FElysiumNpcKernelDamage19AnimalTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19BachTest,
-	"Elysium.Substrate.NpcKernelDamage19.BachOnTakeDamageAlive_10363c70", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.BachOnTakeDamageAlive_10363c70", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19BachTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VBach"));
@@ -931,7 +931,7 @@ bool FElysiumNpcKernelDamage19BachTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19GargoyleAliveTest,
-	"Elysium.Substrate.NpcKernelDamage19.GargoyleOnTakeDamageAlive_10378c10", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.GargoyleOnTakeDamageAlive_10378c10", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19GargoyleAliveTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VGargoyle"));
@@ -958,7 +958,7 @@ bool FElysiumNpcKernelDamage19GargoyleAliveTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19GhoulCroucherTest,
-	"Elysium.Substrate.NpcKernelDamage19.GhoulCroucherOnTakeDamageAlive_1037bc90", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.GhoulCroucherOnTakeDamageAlive_1037bc90", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19GhoulCroucherTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VGhoulCroucher"));
@@ -978,7 +978,7 @@ bool FElysiumNpcKernelDamage19GhoulCroucherTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19HengeyokaiAliveTest,
-	"Elysium.Substrate.NpcKernelDamage19.HengeyokaiOnTakeDamageAlive_103801d0", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.HengeyokaiOnTakeDamageAlive_103801d0", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19HengeyokaiAliveTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VHengeyokai"));
@@ -1001,7 +1001,7 @@ bool FElysiumNpcKernelDamage19HengeyokaiAliveTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19ManBatTest,
-	"Elysium.Substrate.NpcKernelDamage19.ManBatOnTakeDamageAlive_1038e880", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.ManBatOnTakeDamageAlive_1038e880", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19ManBatTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VManBat"));
@@ -1026,7 +1026,7 @@ bool FElysiumNpcKernelDamage19ManBatTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19MingXiaoTest,
-	"Elysium.Substrate.NpcKernelDamage19.MingXiaoOnTakeDamageAlive_10395ae0", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.MingXiaoOnTakeDamageAlive_10395ae0", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19MingXiaoTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VMingXiao"));
@@ -1082,7 +1082,7 @@ bool FElysiumNpcKernelDamage19MingXiaoTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19TentacleTest,
-	"Elysium.Substrate.NpcKernelDamage19.MingXiaoTentacleOnTakeDamageAlive_1039e890", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.MingXiaoTentacleOnTakeDamageAlive_1039e890", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19TentacleTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VMingXiaoTentacle"));
@@ -1104,7 +1104,7 @@ bool FElysiumNpcKernelDamage19TentacleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19SabbatLeaderTest,
-	"Elysium.Substrate.NpcKernelDamage19.SabbatLeaderOnTakeDamageAlive_103aa480", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.SabbatLeaderOnTakeDamageAlive_103aa480", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19SabbatLeaderTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VSabbatLeader"));
@@ -1120,7 +1120,7 @@ bool FElysiumNpcKernelDamage19SabbatLeaderTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19SheriffTest,
-	"Elysium.Substrate.NpcKernelDamage19.SheriffManOnTakeDamageAlive_103b0e90", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.SheriffManOnTakeDamageAlive_103b0e90", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19SheriffTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VSheriffMan"));
@@ -1158,7 +1158,7 @@ bool FElysiumNpcKernelDamage19SheriffTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19WerewolfTest,
-	"Elysium.Substrate.NpcKernelDamage19.WerewolfOnTakeDamage_103cccc0", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.WerewolfOnTakeDamage_103cccc0", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19WerewolfTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VWerewolf"));
@@ -1178,7 +1178,7 @@ bool FElysiumNpcKernelDamage19WerewolfTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19ZombieTest,
-	"Elysium.Substrate.NpcKernelDamage19.ZombieOnTakeDamage_103e06d0", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.ZombieOnTakeDamage_103e06d0", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19ZombieTest::RunTest(const FString&)
 {
 	FDamage19Fixture F(TEXT("CNPC_VZombie"));
@@ -1223,7 +1223,7 @@ bool FElysiumNpcKernelDamage19ZombieTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDamage19CombatAliveFrenzyTest,
-	"Elysium.Substrate.NpcKernelDamage19.CombatAliveFrenzy_103302e0", GDamage19TestFlags)
+	"Elysium.Arm.NpcKernelDamage19.CombatAliveFrenzy_103302e0", GDamage19TestFlags)
 bool FElysiumNpcKernelDamage19CombatAliveFrenzyTest::RunTest(const FString&)
 {
 	FDamage19Fixture F;

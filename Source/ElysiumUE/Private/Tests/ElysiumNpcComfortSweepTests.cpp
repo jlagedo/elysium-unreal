@@ -87,7 +87,7 @@ namespace
 // --- The clock, its re-arm, and the idle test behind them ------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcComfortSweepCadenceTest,
-	"Elysium.Substrate.NpcConditions.ComfortSweepCadence", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.ComfortSweepCadence", GElysiumTestFlags)
 bool FElysiumNpcComfortSweepCadenceTest::RunTest(const FString&)
 {
 	FSweepFixture F;
@@ -110,7 +110,7 @@ bool FElysiumNpcComfortSweepCadenceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcComfortSweepNotIdleTest,
-	"Elysium.Substrate.NpcConditions.ComfortSweepNotIdle", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.ComfortSweepNotIdle", GElysiumTestFlags)
 bool FElysiumNpcComfortSweepNotIdleTest::RunTest(const FString&)
 {
 	FSweepFixture F;
@@ -139,7 +139,7 @@ bool FElysiumNpcComfortSweepNotIdleTest::RunTest(const FString&)
 // --- The nearest search: self excluded, 1024 inclusive, a tie to the later entry -------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcComfortSweepRangeTest,
-	"Elysium.Substrate.NpcConditions.ComfortSweepRange", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.ComfortSweepRange", GElysiumTestFlags)
 bool FElysiumNpcComfortSweepRangeTest::RunTest(const FString&)
 {
 	FSweepFixture F;
@@ -177,7 +177,7 @@ bool FElysiumNpcComfortSweepRangeTest::RunTest(const FString&)
 // --- Eligibility: busy with a discipline, and no installed schedule --------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcComfortSweepEligibilityTest,
-	"Elysium.Substrate.NpcConditions.ComfortSweepEligibility", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.ComfortSweepEligibility", GElysiumTestFlags)
 bool FElysiumNpcComfortSweepEligibilityTest::RunTest(const FString&)
 {
 	FSweepFixture F;
@@ -204,7 +204,7 @@ bool FElysiumNpcComfortSweepEligibilityTest::RunTest(const FString&)
 // --- The per-comforter cap of three, with no fallback to the next-nearest ---------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcComfortSweepCapTest,
-	"Elysium.Substrate.NpcConditions.ComfortSweepCap", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.ComfortSweepCap", GElysiumTestFlags)
 bool FElysiumNpcComfortSweepCapTest::RunTest(const FString&)
 {
 	FSweepFixture F;

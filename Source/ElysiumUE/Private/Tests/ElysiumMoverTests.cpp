@@ -1069,7 +1069,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 // an admitted Open/Close — once at the input, once at the motion start — while Toggle and +use
 // reach the motion helpers directly and fire once. Easy to "fix" back by accident.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorInputOutputArityTest,
-	"Elysium.Substrate.DoorInputOutputArity", GElysiumMoverTestFlags)
+	"Elysium.Arm.DoorInputOutputArity", GElysiumMoverTestFlags)
 bool FElysiumDoorInputOutputArityTest::RunTest(const FString&)
 {
 	auto Counter = [](const TCHAR* Name)
@@ -1198,7 +1198,7 @@ namespace ElysiumDoorKnobTests
 // CBaseDoor::IsUseRefused (FUN_100eec70) consults the nearest knob and only falls back to the
 // door's own byte when there is no knob, or no user.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorKnobLockAuthorityTest,
-	"Elysium.Substrate.DoorKnobLockAuthority", GElysiumMoverTestFlags)
+	"Elysium.Arm.DoorKnobLockAuthority", GElysiumMoverTestFlags)
 bool FElysiumDoorKnobLockAuthorityTest::RunTest(const FString&)
 {
 	using namespace ElysiumDoorKnobTests;
@@ -1313,7 +1313,7 @@ bool FElysiumDoorKnobLockAuthorityTest::RunTest(const FString&)
 // Lock/Unlock are per-authority. A knob's Unlock writes the knob; a door's Unlock writes the door.
 // Eleven authored wires in the corpus aim `Unlock` straight at a knob, and they must land there.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorKnobUnlockInputsTest,
-	"Elysium.Substrate.DoorKnobUnlockInputs", GElysiumMoverTestFlags)
+	"Elysium.Arm.DoorKnobUnlockInputs", GElysiumMoverTestFlags)
 bool FElysiumDoorKnobUnlockInputsTest::RunTest(const FString&)
 {
 	using namespace ElysiumDoorKnobTests;
@@ -1367,7 +1367,7 @@ bool FElysiumDoorKnobUnlockInputsTest::RunTest(const FString&)
 // GetNearestDoorknob (FUN_100ee950): Manhattan distance between world-space centres, ties to the
 // second-registered knob. A double-knobbed door asks whichever handle the user is standing at.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorNearestKnobSelectionTest,
-	"Elysium.Substrate.DoorNearestKnobSelection", GElysiumMoverTestFlags)
+	"Elysium.Arm.DoorNearestKnobSelection", GElysiumMoverTestFlags)
 bool FElysiumDoorNearestKnobSelectionTest::RunTest(const FString&)
 {
 	using namespace ElysiumDoorKnobTests;

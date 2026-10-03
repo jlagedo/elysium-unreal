@@ -38,7 +38,7 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionPreparationLifetime, "Elysium.Substrate.ExpressionPreparation.Lifetime",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionPreparationLifetime, "Elysium.Arm.ExpressionPreparation.Lifetime",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumExpressionPreparationLifetime::RunTest(const FString&)
 {
@@ -73,7 +73,7 @@ bool FElysiumExpressionPreparationLifetime::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionActorSelection, "Elysium.Substrate.ExpressionPreparation.ActorSelection",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionActorSelection, "Elysium.Arm.ExpressionPreparation.ActorSelection",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumExpressionActorSelection::RunTest(const FString&)
 {
@@ -130,7 +130,7 @@ bool FElysiumExpressionActorSelection::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionProvenanceProjection, "Elysium.Substrate.ExpressionPreparation.Provenance",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumExpressionProvenanceProjection, "Elysium.Arm.ExpressionPreparation.Provenance",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
 bool FElysiumExpressionProvenanceProjection::RunTest(const FString&)
 {

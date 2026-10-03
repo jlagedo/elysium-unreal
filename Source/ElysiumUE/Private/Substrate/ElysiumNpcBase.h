@@ -609,6 +609,23 @@ public:
 	virtual void DebugScheduleBreak(const FElysiumNpcConditions& Firing,
 		const FElysiumNpcConditions& InvertedFiring) override;
 
+	// --- The AI trace taps (spec 0002 step 1 T5, `stories/wave2/seam.md`) ---------------------------
+	// Debug output only, each behind `FElysiumEntityWorld::HasAiTraceSink()`: they read, format and
+	// emit, and never write a word a rule reads. Definitions in `ElysiumNpcBaseTrace.cpp`.
+
+	/** A harness sink is installed on this NPC's world (`FElysiumEntityWorld::HasAiTraceSink`). */
+	bool IsAiTraced() const;
+	/** `FElysiumEntityWorld::EmitAiTrace` for this NPC; a no-op without a world or a sink. */
+	void EmitAiTrace(FName Kind, FString Text) const;
+	/** `taskdone`: the running step's task name (`CurrentRetailTaskNumber`), at every writer of
+	 *  `TASKSTATUS_COMPLETE`. */
+	void TraceTaskDone() const;
+	/** `state`: `OLD -> NEW` in retail's `NPC_STATE` names (`0x1027e660`), when they differ. */
+	void TraceStateChange(int32 OldRetail, int32 NewRetail) const;
+	/** The name a `sequence` / `seqfinished` event prints for a sequence number: the sequence bridge's
+	 *  clip label on the Troika line, else `seq <n>`. */
+	FString TraceSequenceName(int32 Sequence) const;
+
 	virtual void StopMoving();
 
 	/**

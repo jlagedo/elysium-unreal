@@ -42,7 +42,7 @@ static constexpr EAutomationTestFlags GElysiumUnarmedGaitFixtureFlags =
 
 // The substitution gate, on a fixture, both ways.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGaitSubstitutionGateTest,
-	"Elysium.Substrate.GaitSubstitutionGate", GElysiumUnarmedGaitFixtureFlags)
+	"Elysium.Arm.GaitSubstitutionGate", GElysiumUnarmedGaitFixtureFlags)
 bool FElysiumGaitSubstitutionGateTest::RunTest(const FString&)
 {
 	// A body carrying a walk and no run at all: retail's last resort is the only thing that can
@@ -133,7 +133,7 @@ bool FElysiumGaitSubstitutionGateTest::RunTest(const FString&)
 // and index 0 the instant `poseparamindex[axis]` reads `-1` -- so for a sequence that binds no pose
 // parameter the weights are `{1,0,0,0}` and the speed is one number no direction can change.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFlatGaitFanTest,
-	"Elysium.Substrate.FlatGaitFan", GElysiumUnarmedGaitFixtureFlags)
+	"Elysium.Arm.FlatGaitFan", GElysiumUnarmedGaitFixtureFlags)
 bool FElysiumFlatGaitFanTest::RunTest(const FString&)
 {
 	// A rat's walk, as the corpus authors it: 11 frames at 30 fps over 71.9109 cm.

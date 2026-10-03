@@ -23,7 +23,7 @@ static constexpr EAutomationTestFlags GElysiumOrphanSettingsTestFlags =
 // = today's defaults exactly." This is the assertion that landed true — each field's default is
 // the exact number the retired cvar/literal carried.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOrphanSettingsDefaultsTest,
-	"Elysium.Substrate.OrphanSettings.Defaults", GElysiumOrphanSettingsTestFlags)
+	"Elysium.Arm.OrphanSettings.Defaults", GElysiumOrphanSettingsTestFlags)
 bool FElysiumOrphanSettingsDefaultsTest::RunTest(const FString&)
 {
 	const UElysiumUISettings* UI = GetDefault<UElysiumUISettings>();
@@ -66,7 +66,7 @@ bool FElysiumOrphanSettingsDefaultsTest::RunTest(const FString&)
 // `Config = Elysium, DefaultConfig` object, so this is the mechanism -- not the numbers -- that
 // makes "editor home" true. A page that failed to round-trip would edit live but never persist.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOrphanSettingsIniRoundTripTest,
-	"Elysium.Substrate.OrphanSettings.IniRoundTrip", GElysiumOrphanSettingsTestFlags)
+	"Elysium.Arm.OrphanSettings.IniRoundTrip", GElysiumOrphanSettingsTestFlags)
 bool FElysiumOrphanSettingsIniRoundTripTest::RunTest(const FString&)
 {
 	// One scratch file per object, not one shared by all five: GConfig caches a loaded ini by

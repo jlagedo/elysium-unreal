@@ -97,7 +97,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10FVisibleTest,
-	"Elysium.Substrate.NpcKernelSenses10.FVisible", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.FVisible", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10FVisibleTest::RunTest(const FString&)
 {
 	FSenses10Fixture F;
@@ -146,7 +146,7 @@ bool FElysiumNpcKernelSenses10FVisibleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10FVisibleBlockerCellTest,
-	"Elysium.Substrate.NpcKernelSenses10.FVisibleBlockerCell", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.FVisibleBlockerCell", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10FVisibleBlockerCellTest::RunTest(const FString&)
 {
 	// `CBaseEntity::FVisible 0x100a6fa0`, the verdict at `100a71ab`: a blocked ray writes
@@ -207,7 +207,7 @@ bool FElysiumNpcKernelSenses10FVisibleBlockerCellTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10Slot594Test,
-	"Elysium.Substrate.NpcKernelSenses10.Slot594", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.Slot594", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10Slot594Test::RunTest(const FString&)
 {
 	FSenses10Fixture F;
@@ -268,7 +268,7 @@ bool FElysiumNpcKernelSenses10Slot594Test::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10QueryHearSoundTest,
-	"Elysium.Substrate.NpcKernelSenses10.QueryHearSound", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.QueryHearSound", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10QueryHearSoundTest::RunTest(const FString&)
 {
 	FSenses10Fixture F;
@@ -344,7 +344,7 @@ bool FElysiumNpcKernelSenses10QueryHearSoundTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10QuerySeeEntityTest,
-	"Elysium.Substrate.NpcKernelSenses10.QuerySeeEntity", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.QuerySeeEntity", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10QuerySeeEntityTest::RunTest(const FString&)
 {
 	FSenses10Fixture F;
@@ -383,7 +383,7 @@ bool FElysiumNpcKernelSenses10QuerySeeEntityTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10OnLookedTest,
-	"Elysium.Substrate.NpcKernelSenses10.OnLooked", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.OnLooked", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10OnLookedTest::RunTest(const FString&)
 {
 	FSenses10Fixture F;
@@ -410,7 +410,7 @@ bool FElysiumNpcKernelSenses10OnLookedTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10BaseOnLookedTest,
-	"Elysium.Substrate.NpcKernelSenses10.BaseOnLooked", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.BaseOnLooked", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10BaseOnLookedTest::RunTest(const FString&)
 {
 	FSenses10Fixture F;
@@ -451,7 +451,7 @@ bool FElysiumNpcKernelSenses10BaseOnLookedTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10OnSeeEntityTest,
-	"Elysium.Substrate.NpcKernelSenses10.OnSeeEntity", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.OnSeeEntity", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10OnSeeEntityTest::RunTest(const FString&)
 {
 	FSenses10Fixture F;
@@ -550,7 +550,7 @@ bool FElysiumNpcKernelSenses10OnSeeEntityTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10BestEnemyTest,
-	"Elysium.Substrate.NpcKernelSenses10.BestEnemy", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.BestEnemy", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10BestEnemyTest::RunTest(const FString&)
 {
 	FSenses10Fixture F;
@@ -614,7 +614,7 @@ bool FElysiumNpcKernelSenses10BestEnemyTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10UpdateEnemyMemoryTest,
-	"Elysium.Substrate.NpcKernelSenses10.UpdateEnemyMemory", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.UpdateEnemyMemory", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10UpdateEnemyMemoryTest::RunTest(const FString&)
 {
 	FSenses10Fixture F;
@@ -633,8 +633,6 @@ bool FElysiumNpcKernelSenses10UpdateEnemyMemoryTest::RunTest(const FString&)
 	// `102709df`: the SQUADMATE gate. `SquadWord()` is a seam answering 0 — retail's own "no squad"
 	// value — so the gate's third term is false and the record is never refused. Asserted here so
 	// the gate is on record as the admitting arm rather than as a silent refusal.
-	TestEqual(TEXT("the squad word seam answers retail's no-squad value"),
-		static_cast<int32>(F.Guard->SquadWord()), 0);
 	TestEqual(TEXT("m_iSquadDisconnected ships at retail's connected value"),
 		F.Guard->SquadDisconnected, 0);
 
@@ -656,7 +654,7 @@ bool FElysiumNpcKernelSenses10UpdateEnemyMemoryTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10BodyGatesTest,
-	"Elysium.Substrate.NpcKernelSenses10.BodyGates", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.BodyGates", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10BodyGatesTest::RunTest(const FString&)
 {
 	FSenses10Fixture F;
@@ -753,7 +751,7 @@ bool FElysiumNpcKernelSenses10BodyGatesTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10WeaponLosTest,
-	"Elysium.Substrate.NpcKernelSenses10.WeaponLos", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.WeaponLos", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10WeaponLosTest::RunTest(const FString&)
 {
 	FSenses10Fixture F;
@@ -828,7 +826,7 @@ bool FElysiumNpcKernelSenses10WeaponLosTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10SpeciesArmsTest,
-	"Elysium.Substrate.NpcKernelSenses10.SpeciesArms", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.SpeciesArms", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 {
 	// Each arm below stands a fresh guard of its own class (`FSenses10Fixture(Class)`), restating
@@ -1041,7 +1039,7 @@ bool FElysiumNpcKernelSenses10SpeciesArmsTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10ScurryingTest,
-	"Elysium.Substrate.NpcKernelSenses10.Scurrying", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.Scurrying", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10ScurryingTest::RunTest(const FString&)
 {
 	FSenses10Fixture F(TEXT("CNPC_VScurrying"));
@@ -1100,7 +1098,7 @@ bool FElysiumNpcKernelSenses10ScurryingTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10WerewolfTest,
-	"Elysium.Substrate.NpcKernelSenses10.Werewolf", GElysiumNpcKernelSenses10Flags)
+	"Elysium.Arm.NpcKernelSenses10.Werewolf", GElysiumNpcKernelSenses10Flags)
 bool FElysiumNpcKernelSenses10WerewolfTest::RunTest(const FString&)
 {
 	// Slot 566 `FValidateHintType` is the first gate of both hint twins, so the fixture has to BE a

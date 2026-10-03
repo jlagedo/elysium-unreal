@@ -57,7 +57,7 @@ static FElysiumWaterVolume Basin()
 
 // `CheckWater`'s three queries and the point-in-brush test under them, plus the contract the bake
 // and the settings page share with this class. No actor, no world, no trace.
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWaterTest, "Elysium.Substrate.Water", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWaterTest, "Elysium.Arm.Water", GElysiumTestFlags)
 bool FElysiumWaterTest::RunTest(const FString&)
 {
 	TArray<FElysiumWaterVolume> Volumes;
@@ -421,7 +421,7 @@ bool FElysiumWaterTest::RunTest(const FString&)
 		// **The step clock moved.** `UpdateStepSound`'s water and wade arms are two arms of one
 		// player step clock, not a water feature; the intervals, the one-in-four wade silence, the
 		// pool selection and the foot alternation are asserted in
-		// `Elysium.Substrate.Footsteps.PlayerWater` against `ElysiumFootsteps::AdvanceStepClock`.
+		// `Elysium.Arm.Footsteps.PlayerWater` against `ElysiumFootsteps::AdvanceStepClock`.
 		// What is left in this lane is the impact, the scrape and the exit.
 
 		// The exit cue names the literal `CBaseEntity::PhysicsCheckWaterTransition` pushes, and

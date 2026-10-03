@@ -180,7 +180,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInventoryTest,
-	"Elysium.Substrate.Inventory.Catalogue", GElysiumTestFlags)
+	"Elysium.Arm.Inventory.Catalogue", GElysiumTestFlags)
 bool FElysiumInventoryTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeTestItemTable();
@@ -603,7 +603,7 @@ bool FElysiumTutorialLockpickDoorTest::RunTest(const FString&)
 		Player->Inventory.Has(*Player, TEXT("item_g_lockpick")));
 	// The knob's lock is its own, seeded from `difficulty` in Spawn — attaching to a door does not
 	// write it. Here both authorities happen to agree (spawnflags 2304 carries LOCKED, difficulty is
-	// 1); Elysium.Substrate.DoorKnobLockAuthority covers the cases where they disagree.
+	// 1); Elysium.Arm.DoorKnobLockAuthority covers the cases where they disagree.
 	TestTrue(TEXT("the doorknob starts locked from its own difficulty"), LiveKnob->IsUseLocked());
 	TestTrue(TEXT("a knobbed door keeps its slab as a look-ray target"),
 		Services.UseAnchorEnabled.FindRef(LiveDoor->Handle));

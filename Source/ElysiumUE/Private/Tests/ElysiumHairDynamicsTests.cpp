@@ -60,7 +60,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHairDynamicsSegmentLengthTest,
-	"Elysium.Substrate.HairDynamics.SegmentLengthInvariant", GElysiumHairDynamicsTestFlags)
+	"Elysium.Arm.HairDynamics.SegmentLengthInvariant", GElysiumHairDynamicsTestFlags)
 
 bool FElysiumHairDynamicsSegmentLengthTest::RunTest(const FString& Parameters)
 {
@@ -141,7 +141,7 @@ bool FElysiumHairDynamicsSegmentLengthTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHairDynamicsPresentationTuningTest,
-	"Elysium.Substrate.HairDynamics.PresentationTuning", GElysiumHairDynamicsTestFlags)
+	"Elysium.Arm.HairDynamics.PresentationTuning", GElysiumHairDynamicsTestFlags)
 
 bool FElysiumHairDynamicsPresentationTuningTest::RunTest(const FString& Parameters)
 {
@@ -187,7 +187,7 @@ bool FElysiumHairDynamicsPresentationTuningTest::RunTest(const FString& Paramete
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHairDynamicsResetRoutingTest,
-	"Elysium.Substrate.HairDynamics.ResetRouting", GElysiumHairDynamicsTestFlags)
+	"Elysium.Arm.HairDynamics.ResetRouting", GElysiumHairDynamicsTestFlags)
 
 bool FElysiumHairDynamicsResetRoutingTest::RunTest(const FString& Parameters)
 {

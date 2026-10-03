@@ -353,7 +353,7 @@ namespace
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerAttackButtonsTest,
-	"Elysium.Substrate.PlayerAttack.Buttons", GElysiumTestFlags)
+	"Elysium.Arm.PlayerAttack.Buttons", GElysiumTestFlags)
 bool FElysiumPlayerAttackButtonsTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeAttackTable();
@@ -427,7 +427,7 @@ bool FElysiumPlayerAttackButtonsTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerAttackProducerTest,
-	"Elysium.Substrate.PlayerAttack.Producer", GElysiumTestFlags)
+	"Elysium.Arm.PlayerAttack.Producer", GElysiumTestFlags)
 bool FElysiumPlayerAttackProducerTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeAttackTable();
@@ -553,7 +553,7 @@ bool FElysiumPlayerAttackProducerTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerAttackDirectionKeysTest,
-	"Elysium.Substrate.PlayerAttack.DirectionKeys", GElysiumTestFlags)
+	"Elysium.Arm.PlayerAttack.DirectionKeys", GElysiumTestFlags)
 bool FElysiumPlayerAttackDirectionKeysTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeAttackTable();
@@ -632,7 +632,7 @@ bool FElysiumPlayerAttackDirectionKeysTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerAttackRefusalsTest,
-	"Elysium.Substrate.PlayerAttack.Refusals", GElysiumTestFlags)
+	"Elysium.Arm.PlayerAttack.Refusals", GElysiumTestFlags)
 bool FElysiumPlayerAttackRefusalsTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeAttackTable();
@@ -904,7 +904,7 @@ bool FElysiumPlayerAttackRefusalsTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerAttackSecondaryCompositeTest,
-	"Elysium.Substrate.PlayerAttack.SecondaryComposite", GElysiumTestFlags)
+	"Elysium.Arm.PlayerAttack.SecondaryComposite", GElysiumTestFlags)
 bool FElysiumPlayerAttackSecondaryCompositeTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeAttackTable();
@@ -1022,7 +1022,7 @@ bool FElysiumPlayerAttackSecondaryCompositeTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerAttackReloadTest,
-	"Elysium.Substrate.PlayerAttack.Reload", GElysiumTestFlags)
+	"Elysium.Arm.PlayerAttack.Reload", GElysiumTestFlags)
 bool FElysiumPlayerAttackReloadTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeAttackTable();

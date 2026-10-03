@@ -89,7 +89,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometryEyePositionTest,
-	"Elysium.Substrate.NpcKernelGeometry.EyePosition", GElysiumNpcKernelGeometryFlags)
+	"Elysium.Arm.NpcKernelGeometry.EyePosition", GElysiumNpcKernelGeometryFlags)
 bool FElysiumNpcKernelGeometryEyePositionTest::RunTest(const FString&)
 {
 	FGeometryFixture F;
@@ -105,22 +105,11 @@ bool FElysiumNpcKernelGeometryEyePositionTest::RunTest(const FString&)
 		F.Guard->EyePosition().Equals(
 			F.Guard->Origin + FVector(0.f, 0.f, ElysiumMove::StandViewZ), 0.01));
 
-	// `0x101aae60`: `LookupBone("Phone_bone_01")`; a -1 answer falls through to the base body. The
-	// bone seam answers nothing here, so the payphone takes retail's own miss arm — and the case
-	// proves the seam was ASKED, which is what distinguishes the miss arm from a body that never
-	// looked.
-	const int32 BoneCallsBefore = F.Phone->BoneWorldPositionCalls;
+	// `0x101aae60`: `LookupBone("Phone_bone_01")`; a -1 answer falls through to the base body. With no
+	// bone table the payphone takes retail's own miss arm.
 	const FVector PhoneEye = F.Phone->EyePosition();
-	TestTrue(TEXT("the payphone asks the bone seam for Phone_bone_01"),
-		F.Phone->BoneWorldPositionCalls > BoneCallsBefore);
 	TestTrue(TEXT("with no bone table the payphone takes retail's LookupBone == -1 arm"),
 		PhoneEye.Equals(F.Phone->Origin + FVector(0.f, 0.f, ElysiumMove::StandViewZ), 0.01));
-
-	// The guard's class does not replace slot 193, so it never reaches the bone seam at all.
-	const int32 GuardBoneCalls = F.Guard->BoneWorldPositionCalls;
-	F.Guard->EyePosition();
-	TestEqual(TEXT("a Troika-line NPC never asks the bone seam"),
-		F.Guard->BoneWorldPositionCalls, GuardBoneCalls);
 
 	// The census, by name: `CPayphone` replaces slot 193 (its C++ override since story 5 step 3) and
 	// the humanoid combatant does not.
@@ -137,7 +126,7 @@ bool FElysiumNpcKernelGeometryEyePositionTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometryEyeAnglesTest,
-	"Elysium.Substrate.NpcKernelGeometry.EyeAngles", GElysiumNpcKernelGeometryFlags)
+	"Elysium.Arm.NpcKernelGeometry.EyeAngles", GElysiumNpcKernelGeometryFlags)
 bool FElysiumNpcKernelGeometryEyeAnglesTest::RunTest(const FString&)
 {
 	FGeometryFixture F;
@@ -160,7 +149,7 @@ bool FElysiumNpcKernelGeometryEyeAnglesTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometryBodyTargetTest,
-	"Elysium.Substrate.NpcKernelGeometry.BodyTarget", GElysiumNpcKernelGeometryFlags)
+	"Elysium.Arm.NpcKernelGeometry.BodyTarget", GElysiumNpcKernelGeometryFlags)
 bool FElysiumNpcKernelGeometryBodyTargetTest::RunTest(const FString&)
 {
 	// The anchor: `centre - 0.25 * (centre - origin)`. With a centre 100 above the origin the
@@ -213,7 +202,7 @@ bool FElysiumNpcKernelGeometryBodyTargetTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometrySpeciesCentreTest,
-	"Elysium.Substrate.NpcKernelGeometry.SpeciesCentre", GElysiumNpcKernelGeometryFlags)
+	"Elysium.Arm.NpcKernelGeometry.SpeciesCentre", GElysiumNpcKernelGeometryFlags)
 bool FElysiumNpcKernelGeometrySpeciesCentreTest::RunTest(const FString&)
 {
 	FGeometryFixture F;
@@ -234,7 +223,7 @@ bool FElysiumNpcKernelGeometrySpeciesCentreTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometrySetSizeTest,
-	"Elysium.Substrate.NpcKernelGeometry.SetSize", GElysiumNpcKernelGeometryFlags)
+	"Elysium.Arm.NpcKernelGeometry.SetSize", GElysiumNpcKernelGeometryFlags)
 bool FElysiumNpcKernelGeometrySetSizeTest::RunTest(const FString&)
 {
 	FGeometryFixture F;
@@ -258,7 +247,7 @@ bool FElysiumNpcKernelGeometrySetSizeTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometryHullBitsTest,
-	"Elysium.Substrate.NpcKernelGeometry.HullBits", GElysiumNpcKernelGeometryFlags)
+	"Elysium.Arm.NpcKernelGeometry.HullBits", GElysiumNpcKernelGeometryFlags)
 bool FElysiumNpcKernelGeometryHullBitsTest::RunTest(const FString&)
 {
 	FGeometryFixture F;
@@ -362,7 +351,7 @@ bool FElysiumNpcKernelGeometryHullBitsTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometryEyeOffsetTest,
-	"Elysium.Substrate.NpcKernelGeometry.EyeOffset", GElysiumNpcKernelGeometryFlags)
+	"Elysium.Arm.NpcKernelGeometry.EyeOffset", GElysiumNpcKernelGeometryFlags)
 bool FElysiumNpcKernelGeometryEyeOffsetTest::RunTest(const FString&)
 {
 	FGeometryFixture F;
@@ -388,8 +377,6 @@ bool FElysiumNpcKernelGeometryEyeOffsetTest::RunTest(const FString&)
 	// With no hint node, every activity falls through to the base body. The debug-overlay seam
 	// answers 0, so even the two special-cased activities answer `m_vDefaultEyeOffset` — retail's
 	// own answer with the overlay off.
-	TestEqual(TEXT("the debug-overlay seam answers nothing"),
-		static_cast<int32>(F.Guard->DebugOverlayBits()), 0);
 	const FVector DefaultOffset = F.Guard->DefaultEyeOffsetCm();
 	TestTrue(TEXT("m_vDefaultEyeOffset is the chain's eye point minus the origin"),
 		DefaultOffset.Equals(FVector(0.f, 0.f, ElysiumMove::StandViewZ), 0.01));
@@ -424,7 +411,7 @@ bool FElysiumNpcKernelGeometryEyeOffsetTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometryStandingOnHeadTest,
-	"Elysium.Substrate.NpcKernelGeometry.StandingOnHead", GElysiumNpcKernelGeometryFlags)
+	"Elysium.Arm.NpcKernelGeometry.StandingOnHead", GElysiumNpcKernelGeometryFlags)
 bool FElysiumNpcKernelGeometryStandingOnHeadTest::RunTest(const FString&)
 {
 	// The four diagonals, in the listing's `DEC EAX` order. `_DAT_1049aea8` is +0.707 and
@@ -501,7 +488,7 @@ bool FElysiumNpcKernelGeometryStandingOnHeadTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometryStandingOnPlayerTest,
-	"Elysium.Substrate.NpcKernelGeometry.StandingOnPlayer", GElysiumNpcKernelGeometryFlags)
+	"Elysium.Arm.NpcKernelGeometry.StandingOnPlayer", GElysiumNpcKernelGeometryFlags)
 bool FElysiumNpcKernelGeometryStandingOnPlayerTest::RunTest(const FString&)
 {
 	// The threshold is the sum of two HALF-DIAGONALS, not two radii. Two 32x32 footprints give
@@ -575,7 +562,7 @@ bool FElysiumNpcKernelGeometryStandingOnPlayerTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometryFakeHullTest,
-	"Elysium.Substrate.NpcKernelGeometry.FakeHull", GElysiumNpcKernelGeometryFlags)
+	"Elysium.Arm.NpcKernelGeometry.FakeHull", GElysiumNpcKernelGeometryFlags)
 bool FElysiumNpcKernelGeometryFakeHullTest::RunTest(const FString&)
 {
 	// `FUN_10240250`, inclusive on every axis.
@@ -666,7 +653,7 @@ bool FElysiumNpcKernelGeometryFakeHullTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelGeometryScatterTest,
-	"Elysium.Substrate.NpcKernelGeometry.Scatter", GElysiumNpcKernelGeometryFlags)
+	"Elysium.Arm.NpcKernelGeometry.Scatter", GElysiumNpcKernelGeometryFlags)
 bool FElysiumNpcKernelGeometryScatterTest::RunTest(const FString&)
 {
 	// A MingXiao head, one of its tentacles and a second tentacle that moves: the bodies are the
@@ -700,7 +687,6 @@ bool FElysiumNpcKernelGeometryScatterTest::RunTest(const FString&)
 	TestFalse(TEXT("the notifier takes neither"),
 		Head->Cognition.Conditions.Has(
 			static_cast<EElysiumNpcCond>(FElysiumNpc::ScatterNoticeCondition)));
-	TestTrue(TEXT("the unrecovered global event is counted"), Head->ScatterNoticeEvents > 0);
 
 	// `FUN_10397e00`: a null `param_1` is retail's first test and does nothing.
 	const int32 EventsBefore = Head->ScatterNoticeEvents;

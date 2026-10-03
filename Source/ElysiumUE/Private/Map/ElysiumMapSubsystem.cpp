@@ -7,6 +7,7 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumPlayerBody.h"
 #include "Debug/ElysiumGreenRoomConsole.h"
+#include "Debug/ElysiumArenaRun.h"
 #include "Debug/ElysiumCastRun.h"
 #include "Debug/ElysiumComposeRun.h"
 #include "Debug/ElysiumGreenRoomRun.h"
@@ -178,6 +179,12 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		CastRun = MakePimpl<FElysiumCastRun>(this);
 	}
+	// Under -ElysiumArena, arm the headless arena run: the `Arena/scenarios/` records as a suite, over
+	// the arena in the stage world or, with -ElysiumMap, over that map's own entities.
+	if (FElysiumArenaRun::IsRequested())
+	{
+		ArenaRun = MakePimpl<FElysiumArenaRun>(this);
+	}
 	// Under -ElysiumCompose, arm the headless composed-pose run: a driven body on a real map, and
 	// the pose its graph produced written down per frame.
 	if (FElysiumComposeRun::IsRequested())
@@ -302,6 +309,7 @@ void UElysiumMapSubsystem::Deinitialize()
 	ProbeRun.Reset();
 	MoveRun.Reset();
 	CastRun.Reset();
+	ArenaRun.Reset();
 	for (IConsoleObject* Obj : ConsoleObjects)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(Obj);
@@ -448,6 +456,9 @@ bool UElysiumMapSubsystem::SpawnPendingMap()
 	}
 	NewMap->MapName = P.Map;
 	NewMap->bStageOnly = P.bStageOnly;
+	// The headless arena run stages only what its records name; the whole-catalogue residency a lab
+	// wants (~50 s) is not paid for a stage nothing will audition on.
+	NewMap->bStageWithoutCatalogue = P.bStageOnly && ArenaRun.IsValid();
 	// CurrentMap and the delegates are installed before FinishSpawning invokes BeginPlay. Readiness
 	// normally completes on a later tick, but this ordering also makes a synchronous construction
 	// failure unambiguously belong to the current actor.

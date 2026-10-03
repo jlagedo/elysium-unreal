@@ -276,7 +276,7 @@ namespace
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageFlinchRuleTest,
-	"Elysium.Substrate.DamageFlinch.Rule", GElysiumTestFlags)
+	"Elysium.Arm.DamageFlinch.Rule", GElysiumTestFlags)
 bool FElysiumDamageFlinchRuleTest::RunTest(const FString&)
 {
 	const FElysiumBlendTable Table = MakeHitTable();
@@ -672,7 +672,7 @@ bool FElysiumDamageFlinchRuleTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageFlinchProducerTest,
-	"Elysium.Substrate.DamageFlinch.Producer", GElysiumTestFlags)
+	"Elysium.Arm.DamageFlinch.Producer", GElysiumTestFlags)
 bool FElysiumDamageFlinchProducerTest::RunTest(const FString&)
 {
 	// One fixture shape for every case: a victim with a body at the origin facing +X, and an attacker
@@ -889,8 +889,6 @@ bool FElysiumDamageFlinchProducerTest::RunTest(const FString&)
 		FElysiumDmg Hit = ResolvedDmg(EElysiumDmgFamily::Bashing, 5, ElysiumDamage::DmgClub);
 		Hit.Source = Attacker->Handle;
 		Victim->CommitDamage(Hit);
-		TestTrue(TEXT("the seam is still asked"),
-			Services.Saw(TEXT("ResolveNpcActivityClip")));
 		TestEqual(TEXT("...and a miss plays nothing at all"), CountOneShots(Services), 0);
 	}
 

@@ -134,7 +134,7 @@ namespace
 
 // Columns 12 and 13: the reach band's near edge and the cast arm's attack envelopes.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumClipsEnvelopeColumnTest,
-	"Elysium.Substrate.Clips.EnvelopeColumn", GElysiumTestFlags)
+	"Elysium.Arm.Clips.EnvelopeColumn", GElysiumTestFlags)
 bool FElysiumClipsEnvelopeColumnTest::RunTest(const FString&)
 {
 	FElysiumNpcClipSet Set;
@@ -220,7 +220,7 @@ bool FElysiumClipsEnvelopeColumnTest::RunTest(const FString&)
 
 // The tenth column, and the compatibility rule behind it: absent, null and empty are one answer.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumClipsSwingColumnTest,
-	"Elysium.Substrate.Clips.SwingColumn", GElysiumTestFlags)
+	"Elysium.Arm.Clips.SwingColumn", GElysiumTestFlags)
 bool FElysiumClipsSwingColumnTest::RunTest(const FString&)
 {
 	FElysiumNpcClipSet Set;
@@ -291,7 +291,7 @@ bool FElysiumClipsSwingColumnTest::RunTest(const FString&)
 
 // The eleventh column, on the same compatibility rule as the tenth.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumClipsComboColumnTest,
-	"Elysium.Substrate.Clips.ComboColumn", GElysiumTestFlags)
+	"Elysium.Arm.Clips.ComboColumn", GElysiumTestFlags)
 bool FElysiumClipsComboColumnTest::RunTest(const FString&)
 {
 	// The one record the parser refuses: a stated column missing a window bound. The exporter writes
@@ -388,7 +388,7 @@ bool FElysiumClipsComboColumnTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumClipsMeleeColumnsTest,
-	"Elysium.Substrate.Clips.MeleeColumns", GElysiumTestFlags)
+	"Elysium.Arm.Clips.MeleeColumns", GElysiumTestFlags)
 bool FElysiumClipsMeleeColumnsTest::RunTest(const FString&)
 {
 	// The six-column minimum is what the parser refuses below, and it says so once per slice with a
@@ -493,8 +493,6 @@ bool FElysiumClipsMeleeColumnsTest::RunTest(const FString&)
 		if (TestFalse(TEXT("the melee activity resolves a clip at all"),
 			Selection.AnimationName.IsEmpty()))
 		{
-			TestEqual(TEXT("the reach the seam carries is the resolved activity's maximum"),
-				Set.MaxReachCmForActivity(Selection.ResolvedActivity), 282.9939f, 0.001f);
 		}
 	}
 

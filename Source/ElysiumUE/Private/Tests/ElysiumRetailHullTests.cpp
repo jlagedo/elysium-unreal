@@ -62,7 +62,7 @@ bool FElysiumRetailHullTableShapeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRetailHullSpeciesTest,
-	"Elysium.Substrate.RetailHull.Species", GElysiumRetailHullFlags)
+	"Elysium.Arm.RetailHull.Species", GElysiumRetailHullFlags)
 bool FElysiumRetailHullSpeciesTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("retail_hulls"), 41011u);
@@ -102,7 +102,7 @@ bool FElysiumRetailHullSpeciesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRetailHullSplitTest,
-	"Elysium.Substrate.RetailHull.Split", GElysiumRetailHullFlags)
+	"Elysium.Arm.RetailHull.Split", GElysiumRetailHullFlags)
 bool FElysiumRetailHullSplitTest::RunTest(const FString&)
 {
 	// The three species the two-word design EXISTS for. Every other class has both words alike,

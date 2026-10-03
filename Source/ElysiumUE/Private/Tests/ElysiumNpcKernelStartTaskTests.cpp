@@ -126,7 +126,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19ArmTableTest,
-	"Elysium.Substrate.NpcKernelStartTask19.ArmTable_0x102a1910", GStartTask19Flags)
+	"Elysium.Arm.NpcKernelStartTask19.ArmTable_0x102a1910", GStartTask19Flags)
 bool FElysiumNpcKernelStartTask19ArmTableTest::RunTest(const FString&)
 {
 	// `0x102a1910`: the 74 ids of lane L01's 68 arms, each the registrar's (`FUN_10316ff0`) global id
@@ -158,7 +158,7 @@ bool FElysiumNpcKernelStartTask19ArmTableTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19SuggestStateTest,
-	"Elysium.Substrate.NpcKernelStartTask19.SuggestState_0x102a1b2b", GStartTask19Flags)
+	"Elysium.Arm.NpcKernelStartTask19.SuggestState_0x102a1b2b", GStartTask19Flags)
 bool FElysiumNpcKernelStartTask19SuggestStateTest::RunTest(const FString&)
 {
 	FStartTask19Fixture F;
@@ -273,7 +273,7 @@ bool FElysiumNpcKernelStartTask19ActivityArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19ToleranceArmsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.ToleranceArms_0x102a4289", GStartTask19Flags)
+	"Elysium.Arm.NpcKernelStartTask19.ToleranceArms_0x102a4289", GStartTask19Flags)
 bool FElysiumNpcKernelStartTask19ToleranceArmsTest::RunTest(const FString&)
 {
 	FStartTask19Fixture F;
@@ -319,7 +319,7 @@ bool FElysiumNpcKernelStartTask19ToleranceArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19TimerArmsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.TimerAndFlagArms_0x102a4a5b", GStartTask19Flags)
+	"Elysium.Arm.NpcKernelStartTask19.TimerAndFlagArms_0x102a4a5b", GStartTask19Flags)
 bool FElysiumNpcKernelStartTask19TimerArmsTest::RunTest(const FString&)
 {
 	FStartTask19Fixture F;
@@ -398,7 +398,7 @@ bool FElysiumNpcKernelStartTask19TimerArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19EnemyGoalArmsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.EnemyGoalArms_0x102a33f9", GStartTask19Flags)
+	"Elysium.Arm.NpcKernelStartTask19.EnemyGoalArms_0x102a33f9", GStartTask19Flags)
 bool FElysiumNpcKernelStartTask19EnemyGoalArmsTest::RunTest(const FString&)
 {
 	FStartTask19Fixture F;
@@ -467,7 +467,7 @@ bool FElysiumNpcKernelStartTask19EnemyGoalArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19CoverArmsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.CoverAndHintArms_0x102a20dc", GStartTask19Flags)
+	"Elysium.Arm.NpcKernelStartTask19.CoverAndHintArms_0x102a20dc", GStartTask19Flags)
 bool FElysiumNpcKernelStartTask19CoverArmsTest::RunTest(const FString&)
 {
 	FStartTask19Fixture F;
@@ -520,7 +520,7 @@ bool FElysiumNpcKernelStartTask19CoverArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19PatrolArmsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.PatrolFollowerHuntArms_0x102a39f4", GStartTask19Flags)
+	"Elysium.Arm.NpcKernelStartTask19.PatrolFollowerHuntArms_0x102a39f4", GStartTask19Flags)
 bool FElysiumNpcKernelStartTask19PatrolArmsTest::RunTest(const FString&)
 {
 	FStartTask19Fixture F;
@@ -616,7 +616,7 @@ bool FElysiumNpcKernelStartTask19PatrolArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19AttackArmsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.AttackArms_0x102a45c6", GStartTask19Flags)
+	"Elysium.Arm.NpcKernelStartTask19.AttackArms_0x102a45c6", GStartTask19Flags)
 bool FElysiumNpcKernelStartTask19AttackArmsTest::RunTest(const FString&)
 {
 	FStartTask19Fixture F;
@@ -654,7 +654,7 @@ bool FElysiumNpcKernelStartTask19AttackArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19MovementArmsTest,
-	"Elysium.Substrate.NpcKernelStartTask19.MovementAndDialogArms_0x102a1dcc", GStartTask19Flags)
+	"Elysium.Arm.NpcKernelStartTask19.MovementAndDialogArms_0x102a1dcc", GStartTask19Flags)
 bool FElysiumNpcKernelStartTask19MovementArmsTest::RunTest(const FString&)
 {
 	FStartTask19Fixture F;
@@ -701,7 +701,7 @@ bool FElysiumNpcKernelStartTask19MovementArmsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19DieIfUnseenTest,
-	"Elysium.Substrate.NpcKernelStartTask19.DieIfPlayerCantSee_0x102a3198", GStartTask19Flags)
+	"Elysium.Arm.NpcKernelStartTask19.DieIfPlayerCantSee_0x102a3198", GStartTask19Flags)
 bool FElysiumNpcKernelStartTask19DieIfUnseenTest::RunTest(const FString&)
 {
 	FStartTask19Fixture F;

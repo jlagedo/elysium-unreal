@@ -78,7 +78,7 @@ namespace NpcKernelBoss19Tests
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBoss19ResetAiStateTest,
-	"Elysium.Substrate.NpcKernelBoss19.ResetAiState", GBoss19Flags)
+	"Elysium.Arm.NpcKernelBoss19.ResetAiState", GBoss19Flags)
 bool FElysiumNpcKernelBoss19ResetAiStateTest::RunTest(const FString&)
 {
 	// 0x102b52a0
@@ -104,7 +104,7 @@ bool FElysiumNpcKernelBoss19ResetAiStateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBoss19DoPossessionTest,
-	"Elysium.Substrate.NpcKernelBoss19.DoPossession", GBoss19Flags)
+	"Elysium.Arm.NpcKernelBoss19.DoPossession", GBoss19Flags)
 bool FElysiumNpcKernelBoss19DoPossessionTest::RunTest(const FString&)
 {
 	// 0x102c51a0
@@ -138,7 +138,7 @@ bool FElysiumNpcKernelBoss19DoPossessionTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBoss19DoFrenzyTest,
-	"Elysium.Substrate.NpcKernelBoss19.DoFrenzy", GBoss19Flags)
+	"Elysium.Arm.NpcKernelBoss19.DoFrenzy", GBoss19Flags)
 bool FElysiumNpcKernelBoss19DoFrenzyTest::RunTest(const FString&)
 {
 	// 0x102c5310
@@ -165,7 +165,7 @@ bool FElysiumNpcKernelBoss19DoFrenzyTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBoss19HengeyokaiEnterMorphTest,
-	"Elysium.Substrate.NpcKernelBoss19.HengeyokaiEnterMorph", GBoss19Flags)
+	"Elysium.Arm.NpcKernelBoss19.HengeyokaiEnterMorph", GBoss19Flags)
 bool FElysiumNpcKernelBoss19HengeyokaiEnterMorphTest::RunTest(const FString&)
 {
 	// 0x103830e0
@@ -192,7 +192,7 @@ bool FElysiumNpcKernelBoss19HengeyokaiEnterMorphTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBoss19MingXiaoEnterDeathTest,
-	"Elysium.Substrate.NpcKernelBoss19.MingXiaoEnterDeath", GBoss19Flags)
+	"Elysium.Arm.NpcKernelBoss19.MingXiaoEnterDeath", GBoss19Flags)
 bool FElysiumNpcKernelBoss19MingXiaoEnterDeathTest::RunTest(const FString&)
 {
 	// 0x10395c70
@@ -223,7 +223,7 @@ bool FElysiumNpcKernelBoss19MingXiaoEnterDeathTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBoss19TentacleEnterDeathTest,
-	"Elysium.Substrate.NpcKernelBoss19.MingXiaoTentacleEnterDeath", GBoss19Flags)
+	"Elysium.Arm.NpcKernelBoss19.MingXiaoTentacleEnterDeath", GBoss19Flags)
 bool FElysiumNpcKernelBoss19TentacleEnterDeathTest::RunTest(const FString&)
 {
 	// 0x1039e970
@@ -257,7 +257,7 @@ bool FElysiumNpcKernelBoss19TentacleEnterDeathTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBoss19SabbatLeaderStartTransformationTest,
-	"Elysium.Substrate.NpcKernelBoss19.SabbatLeaderStartTransformation", GBoss19Flags)
+	"Elysium.Arm.NpcKernelBoss19.SabbatLeaderStartTransformation", GBoss19Flags)
 bool FElysiumNpcKernelBoss19SabbatLeaderStartTransformationTest::RunTest(const FString&)
 {
 	// 0x103aa3b0
@@ -284,7 +284,7 @@ bool FElysiumNpcKernelBoss19SabbatLeaderStartTransformationTest::RunTest(const F
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBoss19SpawnTentacleTest,
-	"Elysium.Substrate.NpcKernelBoss19.MingXiaoSpawnTentacle", GBoss19Flags)
+	"Elysium.Arm.NpcKernelBoss19.MingXiaoSpawnTentacle", GBoss19Flags)
 bool FElysiumNpcKernelBoss19SpawnTentacleTest::RunTest(const FString&)
 {
 	// 0x10397410. No `TentacleGenerator` maker stands in this world, so the body runs to the maker
@@ -318,7 +318,7 @@ bool FElysiumNpcKernelBoss19SpawnTentacleTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBoss19KillTentaclesTest,
-	"Elysium.Substrate.NpcKernelBoss19.MingXiaoKillTentacles", GBoss19Flags)
+	"Elysium.Arm.NpcKernelBoss19.MingXiaoKillTentacles", GBoss19Flags)
 bool FElysiumNpcKernelBoss19KillTentaclesTest::RunTest(const FString&)
 {
 	// 0x10397e90
@@ -340,7 +340,7 @@ bool FElysiumNpcKernelBoss19KillTentaclesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBoss19KillSpawnedBodiesTest,
-	"Elysium.Substrate.NpcKernelBoss19.MingXiaoKillSpawnedBodies", GBoss19Flags)
+	"Elysium.Arm.NpcKernelBoss19.MingXiaoKillSpawnedBodies", GBoss19Flags)
 bool FElysiumNpcKernelBoss19KillSpawnedBodiesTest::RunTest(const FString&)
 {
 	// 0x10397f00
@@ -362,7 +362,7 @@ bool FElysiumNpcKernelBoss19KillSpawnedBodiesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBoss19ApplyTentacleDamageTest,
-	"Elysium.Substrate.NpcKernelBoss19.MingXiaoApplyTentacleDamage", GBoss19Flags)
+	"Elysium.Arm.NpcKernelBoss19.MingXiaoApplyTentacleDamage", GBoss19Flags)
 bool FElysiumNpcKernelBoss19ApplyTentacleDamageTest::RunTest(const FString&)
 {
 	// 0x10395750
@@ -412,7 +412,7 @@ bool FElysiumNpcKernelBoss19ApplyTentacleDamageTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBoss19TzimisceRunnerSlot330Test,
-	"Elysium.Substrate.NpcKernelBoss19.TzimisceRunnerSlot330", GBoss19Flags)
+	"Elysium.Arm.NpcKernelBoss19.TzimisceRunnerSlot330", GBoss19Flags)
 bool FElysiumNpcKernelBoss19TzimisceRunnerSlot330Test::RunTest(const FString&)
 {
 	// 0x103c43b0 (family Damaged19, carried by lane L12). The tail call's target is slot 320

@@ -391,8 +391,21 @@ int32 FElysiumNpc::SequenceForActivity(int32 Activity)
 
 bool FElysiumNpc::PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops)
 {
+	// The AI trace's `sequence` event (debug output only, behind its sink): the kernel's commit
+	// reaches the body here whether or not the body plays it, and `rate` is the rate the body
+	// actually plays it at -- `ResetSequenceInfo`'s `m_flPlaybackRate = 1.0` (`0x10090a23`) when the
+	// clip starts, 0 when nothing plays it (row 0, a row with no clip, the arbiter's refusal).
+	auto TraceSequence = [this, Sequence](float AppliedRate)
+	{
+		if (IsAiTraced())
+		{
+			EmitAiTrace(TEXT("sequence"),
+				FString::Printf(TEXT("%s rate=%g"), *TraceSequenceName(Sequence), AppliedRate));
+		}
+	};
 	if (!SequenceRows.IsValidIndex(Sequence) || Sequence == 0)
 	{
+		TraceSequence(0.f);
 		return false;   // row 0 and an unknown number play nothing
 	}
 	FSequenceRow& Row = SequenceRows[Sequence];
@@ -417,9 +430,11 @@ bool FElysiumNpc::PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOut
 				ScheduleIdealActivity = FElysiumClipIdentity(Row.OwnerStem, Row.Label);
 			}
 			OutSeconds = Seconds;
+			TraceSequence(1.f);
 			return true;
 		}
 	}
+	TraceSequence(0.f);
 	if (Row.Seconds > 0.f)
 	{
 		OutSeconds = Row.Seconds;

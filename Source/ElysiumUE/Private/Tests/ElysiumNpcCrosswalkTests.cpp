@@ -246,7 +246,7 @@ namespace
 // --- The signal: `Walk` / `DontWalk` -> `0x102f97c0` ----------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCrosswalkSignalTest,
-	"Elysium.Substrate.NpcCrosswalk.Signal", GXwTestFlags)
+	"Elysium.Arm.NpcCrosswalk.Signal", GXwTestFlags)
 bool FElysiumNpcCrosswalkSignalTest::RunTest(const FString&)
 {
 	FXwRig R(TEXT("xw_signal"), 0x7c0a1);
@@ -405,7 +405,7 @@ bool FElysiumNpcCrosswalkArrivalTest::RunTest(const FString&)
 // --- Routes that lay one leg -----------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCrosswalkOneLegTest,
-	"Elysium.Substrate.NpcCrosswalk.OneLeg", GXwTestFlags)
+	"Elysium.Arm.NpcCrosswalk.OneLeg", GXwTestFlags)
 bool FElysiumNpcCrosswalkOneLegTest::RunTest(const FString&)
 {
 	FXwRig R(TEXT("xw_one_leg"), 0x7c0a3);
@@ -449,7 +449,7 @@ bool FElysiumNpcCrosswalkOneLegTest::RunTest(const FString&)
 // --- `0x10298340`: the queue behind a waiter -------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCrosswalkQueueTest,
-	"Elysium.Substrate.NpcCrosswalk.QueueArm", GXwTestFlags)
+	"Elysium.Arm.NpcCrosswalk.QueueArm", GXwTestFlags)
 bool FElysiumNpcCrosswalkQueueTest::RunTest(const FString&)
 {
 	FXwRig R(TEXT("xw_queue"), 0x7c0a4);
@@ -529,7 +529,7 @@ bool FElysiumNpcCrosswalkQueueTest::RunTest(const FString&)
 // --- The link's save words, through the real persistence path -----------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCrosswalkSaveTest,
-	"Elysium.Substrate.NpcCrosswalk.SaveRestore", GXwTestFlags)
+	"Elysium.Arm.NpcCrosswalk.SaveRestore", GXwTestFlags)
 bool FElysiumNpcCrosswalkSaveTest::RunTest(const FString&)
 {
 	FXwRig From(TEXT("xw_save"), 0x7c0a5);

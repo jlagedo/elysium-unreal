@@ -399,12 +399,20 @@ void FElysiumNpc::MaintenanceOnStartSchedule(int32 LocalScheduleId)
 
 void FElysiumNpc::DebugTaskStart(const FElysiumScheduleStep& Step)
 {
-	if ((DebugOverlays & OverlayTaskTextBit) != 0) // 0x10281d68, `npc_task_text`
+	const bool bPrint = (DebugOverlays & OverlayTaskTextBit) != 0; // 0x10281d68, `npc_task_text`
+	if (!bPrint && !IsAiTraced())
 	{
-		// "Task: %s\n" (`0x105cdf20`), through the NPC trace, as `name (id)`.
-		NpcTraceMessage(FString::Printf(TEXT("Task: %s (%d)"),
-			*FElysiumScheduleCorpus::Get().TaskOps().NameOf(Step.TaskId), Step.TaskId)); // 0x10281d83
+		return;
 	}
+	// "Task: %s\n" (`0x105cdf20`), through the NPC trace, as `name (id)`; the AI trace's `task` event
+	// adds the step's operand (debug output only).
+	const FString Task = FString::Printf(TEXT("%s (%d)"),
+		*FElysiumScheduleCorpus::Get().TaskOps().NameOf(Step.TaskId), Step.TaskId);
+	if (bPrint)
+	{
+		NpcTraceMessage(FString::Printf(TEXT("Task: %s"), *Task)); // 0x10281d83
+	}
+	EmitAiTrace(TEXT("task"), FString::Printf(TEXT("%s %g"), *Task, Step.Data));
 }
 
 void FElysiumNpc::MaintenanceStartTaskOverlay()

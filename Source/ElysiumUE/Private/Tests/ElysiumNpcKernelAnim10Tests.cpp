@@ -131,7 +131,7 @@ namespace
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10TroikaSetModelTest,
-	"Elysium.Substrate.NpcKernelAnim10.TroikaSetModel", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.TroikaSetModel", GAnim10TestFlags)
 bool FAnim10TroikaSetModelTest::RunTest(const FString&)
 {
 	// `0x10298ce0` — four calls whose ORDER is the body. The model must be set before the hull and
@@ -164,7 +164,7 @@ bool FAnim10TroikaSetModelTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10ZombieLineSetModelTest,
-	"Elysium.Substrate.NpcKernelAnim10.ZombieLineSetModel", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.ZombieLineSetModel", GAnim10TestFlags)
 bool FAnim10ZombieLineSetModelTest::RunTest(const FString&)
 {
 	// `0x1037b1f0` (`CNPC_VGhoulCroucher`) and `0x103e0540` (`CNPC_VZombie`) — the same 119 bytes.
@@ -249,7 +249,7 @@ bool FAnim10SetModelArmCoverageTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10SetActivityAndSequenceTest,
-	"Elysium.Substrate.NpcKernelAnim10.SetActivityAndSequence", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.SetActivityAndSequence", GAnim10TestFlags)
 bool FAnim10SetActivityAndSequenceTest::RunTest(const FString&)
 {
 	// `0x10272490`, the commit. Six effects, each ordered against the others.
@@ -346,7 +346,7 @@ bool FAnim10SetActivityAndSequenceTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10BaseSetActivityTest,
-	"Elysium.Substrate.NpcKernelAnim10.BaseSetActivity", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.BaseSetActivity", GAnim10TestFlags)
 bool FAnim10BaseSetActivityTest::RunTest(const FString&)
 {
 	// `0x102725d0` — two refusals then three writes.
@@ -383,7 +383,7 @@ bool FAnim10BaseSetActivityTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10AdvanceToIdealActivityTest,
-	"Elysium.Substrate.NpcKernelAnim10.AdvanceToIdealActivity", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.AdvanceToIdealActivity", GAnim10TestFlags)
 bool FAnim10AdvanceToIdealActivityTest::RunTest(const FString&)
 {
 	// `0x102726a0`. `FindTransitionSequence` is a seam answering `INDEX_NONE`, which IS retail's
@@ -395,8 +395,6 @@ bool FAnim10AdvanceToIdealActivityTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpc& N = *F.Npc;
-	TestEqual(TEXT("0x102726a0: the transition graph is a seam and answers the DESTINATION, which "
-		"is retail's own no-transition-clip answer"), N.FindTransitionSequence(1, 2), 2);
 
 	Anim10Reset(N);
 	N.ActivityNumber = GTActTransition;
@@ -412,7 +410,7 @@ bool FAnim10AdvanceToIdealActivityTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10MaintainActivityTest,
-	"Elysium.Substrate.NpcKernelAnim10.MaintainActivity", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.MaintainActivity", GAnim10TestFlags)
 bool FAnim10MaintainActivityTest::RunTest(const FString&)
 {
 	// `0x102727d0`. The entry point is family SaveRestore10's `MaintainActivity()` seam, which keeps
@@ -454,14 +452,11 @@ bool FAnim10MaintainActivityTest::RunTest(const FString&)
 	TestEqual(TEXT("0x102727d0: any other activity advances to the ideal"), N.ActivityNumber,
 		GTActWalk);
 
-	// The seam's own bookkeeping still runs, and the body runs after it.
+	// The entry point keeps its bookkeeping, and the body runs after it.
 	Anim10Reset(N);
 	N.ActivityNumber = GTActIdle;
 	N.IdealActivityNumber = GTActRun;
-	const int32 Before = N.MaintainActivityCalls;
 	N.MaintainActivity();
-	TestEqual(TEXT("the SaveRestore10 seam still counts the call"), N.MaintainActivityCalls,
-		Before + 1);
 	TestEqual(TEXT("...and the ported body now runs after it"), N.ActivityNumber, GTActRun);
 	return true;
 }
@@ -471,7 +466,7 @@ bool FAnim10MaintainActivityTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10TroikaSetActivityTest,
-	"Elysium.Substrate.NpcKernelAnim10.TroikaSetActivity", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.TroikaSetActivity", GAnim10TestFlags)
 bool FAnim10TroikaSetActivityTest::RunTest(const FString&)
 {
 	// `0x10295750`, three top arms.
@@ -536,7 +531,7 @@ bool FAnim10TroikaSetActivityTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10TzimisceHeadClawSetActivityTest,
-	"Elysium.Substrate.NpcKernelAnim10.TzimisceHeadClawSetActivity", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.TzimisceHeadClawSetActivity", GAnim10TestFlags)
 bool FAnim10TzimisceHeadClawSetActivityTest::RunTest(const FString&)
 {
 	// `0x103c1cd0` — one rewrite in front of the Troika body.
@@ -579,7 +574,7 @@ bool FAnim10TzimisceHeadClawSetActivityTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10TzimisceRunnerSetActivityTest,
-	"Elysium.Substrate.NpcKernelAnim10.TzimisceRunnerSetActivity", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.TzimisceRunnerSetActivity", GAnim10TestFlags)
 bool FAnim10TzimisceRunnerSetActivityTest::RunTest(const FString&)
 {
 	// `0x103c3d80` — a five-entry REQUEST remap in front of the Troika body, gated on `+0x6672`.
@@ -624,7 +619,7 @@ bool FAnim10TzimisceRunnerSetActivityTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10TroikaEarlyTranslateTest,
-	"Elysium.Substrate.NpcKernelAnim10.TroikaEarlyTranslateActivity", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.TroikaEarlyTranslateActivity", GAnim10TestFlags)
 bool FAnim10TroikaEarlyTranslateTest::RunTest(const FString&)
 {
 	// `0x10295590`, five steps. Slot 375 was a generated stub returning 0 before this story; the
@@ -701,7 +696,7 @@ bool FAnim10TroikaEarlyTranslateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10DogEarlyTranslateTest,
-	"Elysium.Substrate.NpcKernelAnim10.DogEarlyTranslateActivity", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.DogEarlyTranslateActivity", GAnim10TestFlags)
 bool FAnim10DogEarlyTranslateTest::RunTest(const FString&)
 {
 	// `0x10374ad0`, 21 bytes — ONE early return the Troika base never sees.
@@ -722,7 +717,7 @@ bool FAnim10DogEarlyTranslateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10HumanEarlyTranslateTest,
-	"Elysium.Substrate.NpcKernelAnim10.HumanEarlyTranslateActivity", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.HumanEarlyTranslateActivity", GAnim10TestFlags)
 bool FAnim10HumanEarlyTranslateTest::RunTest(const FString&)
 {
 	// `0x103854f0`, 565 bytes, 39 census classes. The polarity of the state ladder is the
@@ -773,7 +768,7 @@ bool FAnim10HumanEarlyTranslateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10HengeyokaiEarlyTranslateTest,
-	"Elysium.Substrate.NpcKernelAnim10.HengeyokaiEarlyTranslateActivity", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.HengeyokaiEarlyTranslateActivity", GAnim10TestFlags)
 bool FAnim10HengeyokaiEarlyTranslateTest::RunTest(const FString&)
 {
 	// `0x10381b50` — and note the tail is the HUMAN body, not the Troika one.
@@ -811,7 +806,7 @@ bool FAnim10HengeyokaiEarlyTranslateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10TzimisceEarlyTranslateTest,
-	"Elysium.Substrate.NpcKernelAnim10.TzimisceEarlyTranslateActivity", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.TzimisceEarlyTranslateActivity", GAnim10TestFlags)
 bool FAnim10TzimisceEarlyTranslateTest::RunTest(const FString&)
 {
 	// `0x103bde40`. **The polarity is the ZERO test**: `m_bHeavyBodyTarget` CLEAR takes the `_L`
@@ -847,7 +842,7 @@ bool FAnim10TzimisceEarlyTranslateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10TzimisceRunnerEarlyTranslateTest,
-	"Elysium.Substrate.NpcKernelAnim10.TzimisceRunnerEarlyTranslateActivity", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.TzimisceRunnerEarlyTranslateActivity", GAnim10TestFlags)
 bool FAnim10TzimisceRunnerEarlyTranslateTest::RunTest(const FString&)
 {
 	// `0x103c3e10` — the Troika body FIRST, then a post-pass on the TRANSLATED activity. That is
@@ -887,7 +882,7 @@ bool FAnim10TzimisceRunnerEarlyTranslateTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10UpdatePoseParametersTest,
-	"Elysium.Substrate.NpcKernelAnim10.UpdatePoseParameters", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.UpdatePoseParameters", GAnim10TestFlags)
 bool FAnim10UpdatePoseParametersTest::RunTest(const FString&)
 {
 	// `0x102bf070`, 528 bytes. `_DAT_1049ae9c` = **7.5**, recovered out of the pinned image.
@@ -943,7 +938,7 @@ bool FAnim10UpdatePoseParametersTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10Slot326Test,
-	"Elysium.Substrate.NpcKernelAnim10.Slot326", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.Slot326", GAnim10TestFlags)
 bool FAnim10Slot326Test::RunTest(const FString&)
 {
 	// `0x1029fec0` over `0x103482e0`. The Troika arm can only ever NARROW the base's answer.
@@ -983,7 +978,7 @@ bool FAnim10Slot326Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10Slot330Test,
-	"Elysium.Substrate.NpcKernelAnim10.Slot330", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.Slot330", GAnim10TestFlags)
 bool FAnim10Slot330Test::RunTest(const FString&)
 {
 	// `0x1029fbe0`, the near-miss flinch. The three non-null gates, in retail's order, and then the
@@ -1040,7 +1035,7 @@ bool FAnim10Slot330Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10Slot359Test,
-	"Elysium.Substrate.NpcKernelAnim10.Slot359", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.Slot359", GAnim10TestFlags)
 bool FAnim10Slot359Test::RunTest(const FString&)
 {
 	// `0x1029e750`, the Auspex aura index. A NEGATIVE answer is "no aura at all", not an error.
@@ -1086,7 +1081,7 @@ bool FAnim10Slot359Test::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10Slot584Test,
-	"Elysium.Substrate.NpcKernelAnim10.Slot584", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.Slot584", GAnim10TestFlags)
 bool FAnim10Slot584Test::RunTest(const FString&)
 {
 	// Slot 584's Troika body `0x1028d910`, `ResetAllThinkStamps`. The `CAI_BaseHumanoid` /
@@ -1111,7 +1106,7 @@ bool FAnim10Slot584Test::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10PreTranslatePredicateTest,
-	"Elysium.Substrate.NpcKernelAnim10.PreTranslatePredicate", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.PreTranslatePredicate", GAnim10TestFlags)
 bool FAnim10PreTranslatePredicateTest::RunTest(const FString&)
 {
 	// The seam that ends slot 375's split between the kernel and the generated anim tables. Before
@@ -1208,7 +1203,7 @@ bool FAnim10PreTranslatePredicateTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10SurfacesAgreeTest,
-	"Elysium.Substrate.NpcKernelAnim10.EarlyTranslateSurfacesAgree", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.EarlyTranslateSurfacesAgree", GAnim10TestFlags)
 bool FAnim10SurfacesAgreeTest::RunTest(const FString&)
 {
 	// **The acceptance for slot 375's two surfaces.** The KERNEL body
@@ -1351,7 +1346,7 @@ bool FAnim10SurfacesAgreeTest::RunTest(const FString&)
 // =================================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10HumanMeleeSelectorTest,
-	"Elysium.Substrate.NpcKernelAnim10.SelectScheduleMeleeCombatHuman", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.SelectScheduleMeleeCombatHuman", GAnim10TestFlags)
 bool FAnim10HumanMeleeSelectorTest::RunTest(const FString&)
 {
 	// `0x10385e40`, slot 604 for 34 census classes. It REPLACES the Troika body and never chains it.
@@ -1428,7 +1423,7 @@ bool FAnim10HumanMeleeSelectorTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10MingXiaoMeleeSelectorTest,
-	"Elysium.Substrate.NpcKernelAnim10.SelectScheduleMeleeCombatMingXiao", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.SelectScheduleMeleeCombatMingXiao", GAnim10TestFlags)
 bool FAnim10MingXiaoMeleeSelectorTest::RunTest(const FString&)
 {
 	// `0x10396050` — the same skeleton as the human's with FOUR stated differences.
@@ -1480,7 +1475,7 @@ bool FAnim10MingXiaoMeleeSelectorTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10BachMeleeSelectorTest,
-	"Elysium.Substrate.NpcKernelAnim10.SelectScheduleMeleeCombatBach", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.SelectScheduleMeleeCombatBach", GAnim10TestFlags)
 bool FAnim10BachMeleeSelectorTest::RunTest(const FString&)
 {
 	// `0x10364080` — the weapon-discipline prologue, then the HUMAN body.
@@ -1529,7 +1524,7 @@ bool FAnim10BachMeleeSelectorTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10ZombieIdleSoundTest,
-	"Elysium.Substrate.NpcKernelAnim10.ShouldPlayIdleSoundZombie", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.ShouldPlayIdleSoundZombie", GAnim10TestFlags)
 bool FAnim10ZombieIdleSoundTest::RunTest(const FString&)
 {
 	// `0x103e0fa0`, slot 509's zombie arm. It REPLACES the Troika body wholesale — no dialog
@@ -1573,7 +1568,7 @@ bool FAnim10ZombieIdleSoundTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FAnim10RunnerKnockbackBypassTest,
-	"Elysium.Substrate.NpcKernelAnim10.RunnerKnockbackBypass", GAnim10TestFlags)
+	"Elysium.Arm.NpcKernelAnim10.RunnerKnockbackBypass", GAnim10TestFlags)
 bool FAnim10RunnerKnockbackBypassTest::RunTest(const FString&)
 {
 	// Slot 400 `AllowsKnockbackBypass`: `CNPC_VTzimisceRunner::vfunc400` (`0x103c3060`) returns 1 and

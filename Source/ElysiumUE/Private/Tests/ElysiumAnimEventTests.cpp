@@ -374,7 +374,7 @@ namespace
 // The pure rule: which records an interval contains.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimEventWindowTest,
-	"Elysium.Substrate.AnimEventWindow", GElysiumTestFlags)
+	"Elysium.Arm.AnimEventWindow", GElysiumTestFlags)
 bool FElysiumAnimEventWindowTest::RunTest(const FString&)
 {
 	TArray<const FElysiumAnimEvent*> Fired;
@@ -949,7 +949,7 @@ bool FElysiumAnimEventDispatchTest::RunTest(const FString&)
 // A SIBLING of `AnimEventDispatch`, never a child of it: the automation tree treats a name that is
 // also a prefix as a group, and the leaf under it stops being discoverable.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOneShotVisibilityTest,
-	"Elysium.Substrate.AnimEventVisibility", GElysiumTestFlags)
+	"Elysium.Arm.AnimEventVisibility", GElysiumTestFlags)
 bool FElysiumOneShotVisibilityTest::RunTest(const FString&)
 {
 	// The rule itself, where it lives. Both the body factory's own tail and the recording double

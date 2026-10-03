@@ -193,7 +193,7 @@ namespace
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesPerceptionTest,
-	"Elysium.Substrate.NpcSenses.Perception", GElysiumTestFlags)
+	"Elysium.Arm.NpcSenses.Perception", GElysiumTestFlags)
 bool FElysiumNpcSensesPerceptionTest::RunTest(const FString&)
 {
 	const FElysiumRuleTable Vision = MakeVisionTable();
@@ -504,7 +504,7 @@ static void SensesTestEnemyLos(FElysiumNpc& Npc)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesEnemyLosTest,
-	"Elysium.Substrate.NpcSenses.EnemyLos", GElysiumTestFlags)
+	"Elysium.Arm.NpcSenses.EnemyLos", GElysiumTestFlags)
 bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
 {
 	FSensesFixture F;
@@ -609,7 +609,7 @@ bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesHearingTest,
-	"Elysium.Substrate.NpcSenses.Hearing", GElysiumTestFlags)
+	"Elysium.Arm.NpcSenses.Hearing", GElysiumTestFlags)
 bool FElysiumNpcSensesHearingTest::RunTest(const FString&)
 {
 	const FElysiumSoundVolumeTable Volumes = MakeVolumeTable();
@@ -683,7 +683,7 @@ bool FElysiumNpcSensesHearingTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesMemorySaveTest,
-	"Elysium.Substrate.NpcSenses.MemorySave", GElysiumTestFlags)
+	"Elysium.Arm.NpcSenses.MemorySave", GElysiumTestFlags)
 bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 {
 	// Through the real persistence path. Since 0019/2 pass C the memory record is split between two
@@ -819,7 +819,7 @@ bool FElysiumNpcSensesSuppressionTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesAdmissionTest,
-	"Elysium.Substrate.NpcSenses.AdmissionDetails", GElysiumTestFlags)
+	"Elysium.Arm.NpcSenses.AdmissionDetails", GElysiumTestFlags)
 bool FElysiumNpcSensesAdmissionTest::RunTest(const FString&)
 {
 	FSensesFixture F(540.f);
@@ -868,7 +868,7 @@ bool FElysiumNpcSensesAdmissionTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesTroikaConeTest,
-	"Elysium.Substrate.NpcSenses.TroikaCone", GElysiumTestFlags)
+	"Elysium.Arm.NpcSenses.TroikaCone", GElysiumTestFlags)
 bool FElysiumNpcSensesTroikaConeTest::RunTest(const FString&)
 {
 	IConsoleVariable* IgnorePlayerCVar =
@@ -986,7 +986,7 @@ bool FElysiumNpcSensesTroikaConeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesDeafRulesTest,
-	"Elysium.Substrate.NpcSenses.DeafZoneRules", GElysiumTestFlags)
+	"Elysium.Arm.NpcSenses.DeafZoneRules", GElysiumTestFlags)
 bool FElysiumNpcSensesDeafRulesTest::RunTest(const FString&)
 {
 	const auto Root = ElysiumKeyValues::ParseText(TEXT("StealthKillRules { DeafZoneArc { 1 60 2 80 } StatInfo { StealthKillDistMax 95 HearingScalarMax 2.5 } }"));
@@ -1012,7 +1012,7 @@ bool FElysiumNpcSensesDeafRulesTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesCombatArcTest,
-	"Elysium.Substrate.NpcSenses.CombatArc", GElysiumTestFlags)
+	"Elysium.Arm.NpcSenses.CombatArc", GElysiumTestFlags)
 bool FElysiumNpcSensesCombatArcTest::RunTest(const FString&)
 {
 	FElysiumFeatTable Feats;
@@ -1075,7 +1075,7 @@ bool FElysiumNpcSensesCombatArcTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesUnknownAuthorityTest,
-	"Elysium.Substrate.NpcSenses.UnknownAuthority", GElysiumTestFlags)
+	"Elysium.Arm.NpcSenses.UnknownAuthority", GElysiumTestFlags)
 bool FElysiumNpcSensesUnknownAuthorityTest::RunTest(const FString&)
 {
 	FSensesFixture F(540.f);
@@ -1109,7 +1109,7 @@ bool FElysiumNpcSensesUnknownAuthorityTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesOverrideDebounceTest,
-	"Elysium.Substrate.NpcSenses.OverrideAndDebounce", GElysiumTestFlags)
+	"Elysium.Arm.NpcSenses.OverrideAndDebounce", GElysiumTestFlags)
 bool FElysiumNpcSensesOverrideDebounceTest::RunTest(const FString&)
 {
 	FSensesFixture F(540.f);

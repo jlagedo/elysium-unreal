@@ -6,7 +6,7 @@
 #include "Substrate/ElysiumScheduleNumbers.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleClassSpaceIntegrationTest,
-	"Elysium.Substrate.ScheduleIntegration.ClassSpace",
+	"Elysium.Arm.ScheduleIntegration.ClassSpace",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleClassSpaceIntegrationTest::RunTest(const FString&)
 {
@@ -27,7 +27,7 @@ bool FElysiumScheduleClassSpaceIntegrationTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleFlagIntegrationTest,
-	"Elysium.Substrate.ScheduleIntegration.FlagWords",
+	"Elysium.Arm.ScheduleIntegration.FlagWords",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleFlagIntegrationTest::RunTest(const FString&)
 {
@@ -55,7 +55,7 @@ bool FElysiumScheduleFlagIntegrationTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleConditionSpaceIntegrationTest,
-	"Elysium.Substrate.ScheduleIntegration.ConditionSpace",
+	"Elysium.Arm.ScheduleIntegration.ConditionSpace",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleConditionSpaceIntegrationTest::RunTest(const FString&)
 {
@@ -92,7 +92,7 @@ bool FElysiumScheduleConditionSpaceIntegrationTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleExecutableWitnessTest,
-	"Elysium.Substrate.ScheduleIntegration.ChaseFailureWitness",
+	"Elysium.Arm.ScheduleIntegration.ChaseFailureWitness",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 bool FElysiumScheduleExecutableWitnessTest::RunTest(const FString&)
 {

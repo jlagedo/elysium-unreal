@@ -273,7 +273,7 @@ namespace
 // binds nothing and fails silently in the frame, so the contract is asserted here instead: every
 // lit master must carry every parameter ElysiumReflections names.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReflectionParamsTest,
-	"Elysium.Policy.ReflectionParams", GElysiumPolicyTestFlags)
+	"Elysium.Content.Policy.ReflectionParams", GElysiumPolicyTestFlags)
 bool FElysiumReflectionParamsTest::RunTest(const FString&)
 {
 	// This validates generated Unreal packages only. A corpus-wide export marker must not hide
@@ -389,7 +389,7 @@ bool FElysiumReflectionParamsTest::RunTest(const FString&)
 // refraction, while real lit/reflective glass compiles as Thin Translucent with a tangent-normal
 // Pixel Normal Offset. These properties and parameter names are the bake/runtime contract.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGlassMasterTest,
-	"Elysium.Policy.GlassMaster", GElysiumPolicyTestFlags)
+	"Elysium.Content.Policy.GlassMaster", GElysiumPolicyTestFlags)
 bool FElysiumGlassMasterTest::RunTest(const FString&)
 {
 	UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
@@ -451,7 +451,7 @@ bool FElysiumGlassMasterTest::RunTest(const FString&)
 // albedo; the dedicated master consumes a linear tangent normal and the original amount through
 // Pixel Normal Offset while white Thin Translucent transmission leaves the pane behind visible.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRefractMasterTest,
-	"Elysium.Policy.RefractMaster", GElysiumPolicyTestFlags)
+	"Elysium.Content.Policy.RefractMaster", GElysiumPolicyTestFlags)
 bool FElysiumRefractMasterTest::RunTest(const FString&)
 {
 	UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
@@ -523,7 +523,7 @@ bool FElysiumRefractMasterTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlacedPropMaterialUsageTest,
-	"Elysium.Policy.PlacedPropMaterialUsage", GElysiumPolicyTestFlags)
+	"Elysium.Content.Policy.PlacedPropMaterialUsage", GElysiumPolicyTestFlags)
 bool FElysiumPlacedPropMaterialUsageTest::RunTest(const FString&)
 {
 	// Every branch bake_map._master_for can select for a prop is also applied to the skeletal
@@ -575,7 +575,7 @@ bool FElysiumPlacedPropMaterialUsageTest::RunTest(const FString&)
 // that reweights a die is not a failure — it is the mechanism working — so a non-uniform table is
 // reported rather than failed, and the structural assertions still hold.
 //
-// The algorithm itself is pinned content-free in `Elysium.Substrate.Dice`.
+// The algorithm itself is pinned content-free in `Elysium.Arm.Dice`.
 
 
 // `sound_volume_table.txt` against the real file — the authored half of NPC hearing.
@@ -586,7 +586,7 @@ bool FElysiumPlacedPropMaterialUsageTest::RunTest(const FString&)
 // name resolves to the normal level and warns, so a re-export that renamed a row would quietly
 // change how far a gunshot carries.
 //
-// The bus's own resolution rules are pinned content-free in `Elysium.Substrate.GameSound.Resolve`.
+// The bus's own resolution rules are pinned content-free in `Elysium.Arm.GameSound.Resolve`.
 
 
 // The character sheet against the real rulebook — the audit that keeps the compiled slot table
@@ -618,7 +618,7 @@ bool FElysiumPlacedPropMaterialUsageTest::RunTest(const FString&)
 // spelled the second way.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMouseInputAssetsContentTest,
-	"Elysium.Policy.MouseInputAssets", GElysiumPolicyTestFlags)
+	"Elysium.Content.Policy.MouseInputAssets", GElysiumPolicyTestFlags)
 
 bool FElysiumMouseInputAssetsContentTest::RunTest(const FString&)
 {
@@ -674,7 +674,7 @@ bool FElysiumMouseInputAssetsContentTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInputGlyphAssetsContentTest,
-	"Elysium.Substrate.InputGlyphs", GElysiumSubstrateTestFlags)
+	"Elysium.Arm.InputGlyphs", GElysiumSubstrateTestFlags)
 
 bool FElysiumInputGlyphAssetsContentTest::RunTest(const FString&)
 {
@@ -760,7 +760,7 @@ bool FElysiumInputGlyphAssetsContentTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGamepadInputAssetsContentTest,
-	"Elysium.Policy.GamepadInputAssets", GElysiumPolicyTestFlags)
+	"Elysium.Content.Policy.GamepadInputAssets", GElysiumPolicyTestFlags)
 
 bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 {
@@ -976,7 +976,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	TestEqual(TEXT("RB attack needs no trigger object"), AttackMapping->Triggers.Num(), 0);
 	// **The mapping carries device-frame corrections only.** Every feel term — dead zone,
 	// saturation, response curve, rate, filter, turn ramp — is `ElysiumInput::ShapeStickLook` /
-	// `ShapeStickMove` at the command seam (`Elysium.Substrate.StickLook`), because the filter is a
+	// `ShapeStickMove` at the command seam (`Elysium.Arm.StickLook`), because the filter is a
 	// half-life and the ramp is a charge and both need the frame's *clamped, dilated* delta, which
 	// no Enhanced Input modifier ever sees. So the modifiers that are NOT here are asserted at
 	// least as firmly as the one that is: a dead zone reappearing in the asset is a second owner of
@@ -1167,7 +1167,7 @@ namespace
 	// input names, so the binding is a property of the call site rather than of the name: a bare
 	// `Whisper(...)` must reach the script's own function while `pc.Whisper(...)` reaches the input.
 	// A row in the shared native table would collapse that split, so their absence from it is the
-	// assertion. (`Elysium.Substrate.OneOfSet` guards the same rule from the other side.)
+	// assertion. (`Elysium.Arm.OneOfSet` guards the same rule from the other side.)
 	const TCHAR* const GScriptApiReceiverSplit[] = { TEXT("Whisper"), TEXT("FrenzyTrigger") };
 
 	const FElysiumApiInput GScriptApiInputs[] = {

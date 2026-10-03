@@ -1,4 +1,4 @@
-// Elysium.Substrate.MaterialFactory -- the factory shape: `FElysiumMaterialFactory::Create(MI_)` is a dynamic
+// Elysium.Arm.MaterialFactory -- the factory shape: `FElysiumMaterialFactory::Create(MI_)` is a dynamic
 // child of the imported instance and nothing else. No master selection, no texture, no feature
 // switch -- the MID carries zero overrides of its own, so every VMT-derived value is the instance's.
 #include "Misc/AutomationTest.h"
@@ -15,7 +15,7 @@ static constexpr EAutomationTestFlags GElysiumMaterialFactoryTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMaterialFactoryTest,
-	"Elysium.Substrate.MaterialFactory", GElysiumMaterialFactoryTestFlags)
+	"Elysium.Arm.MaterialFactory", GElysiumMaterialFactoryTestFlags)
 bool FElysiumMaterialFactoryTest::RunTest(const FString&)
 {
 	// Null in, null out: a rope whose `MI_` did not load gets no MID, not a MID off some default.

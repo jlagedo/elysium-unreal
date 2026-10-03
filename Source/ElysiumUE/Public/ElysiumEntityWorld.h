@@ -116,6 +116,19 @@ struct FElysiumAiDebugHintProbe
 	void Reset() { *this = FElysiumAiDebugHintProbe(); }
 };
 
+// One observable AI event, for a harness that records a run (the arena scenarios).
+// Debug output only: no rule reads it, it is never saved, and with no sink installed every tap is one
+// branch and nothing else. The kinds and their text are `docs/specs/0002-npc-ai/stories/wave2/seam.md`.
+struct FElysiumAiTraceEvent
+{
+	double Time = 0.0;              // FElysiumEntityWorld::NowSeconds() when it happened
+	FElysiumEntityHandle Entity;    // who it happened to: an NPC, a hint, any entity
+	FString Name;                   // that entity's targetname at the time (may be empty)
+	FName Kind;                     // one of the kinds below
+	FString Text;                   // the event's own text, in the format its kind states
+};
+using FElysiumAiTraceSink = TFunction<void(const FElysiumAiTraceEvent&)>;
+
 // The substrate: one plain-C++ object per map, owned by AElysiumMapActor, that
 // dies with it. It parses `.ents` into live entities, indexes them by name and class, and routes
 // every input delivery and every deferred output through the two chokepoints (AcceptInput and the
@@ -823,6 +836,17 @@ public:
 		AiDebugTraceRing.Reset();
 		AiDebugTraceHead = 0;
 	}
+	// The AI trace sink (`FElysiumAiTraceEvent`): a harness that records a run (the arena scenarios)
+	// installs one; every kernel tap is behind `HasAiTraceSink()`. Called synchronously, on the game
+	// thread, at the point the event happens. Cleared on teardown (the owner re-installs it on the
+	// rebuilt world). Debug output only: never saved, never read by a rule.
+	void SetAiTraceSink(FElysiumAiTraceSink Sink);   // an empty function clears it
+	bool HasAiTraceSink() const { return static_cast<bool>(AiTraceSink); }
+	// No-op without a sink. `Entity` may be any entity; the event carries its handle and targetname.
+	void EmitAiTrace(const FElysiumEntity& Entity, FName Kind, FString Text);
+	// How a trace event's text names another entity (an attacker, a killer, an activator): its
+	// targetname, `DebugString()` when it has none, `none` for no entity.
+	static FString AiTraceName(const FElysiumEntity* Entity);
 	// Retail's AI network `DAT_1093407c` and the two `CNodeEnt::Spawn` globals beside it (0018
 	// story 4): the map's baked nodes plus their run-time words. The map actor adopts the map's
 	// `DA_<map>_Places` into it before `Load`; `Load` zeroes its spawn counter (`0x102f6690`) and
@@ -1049,6 +1073,7 @@ private:
 	FElysiumAiDebugHintProbe AiDebugHintProbeRecord;  // AiDebugHintProbe; debug, never saved
 	TArray<FString> AiDebugTraceRing;                 // AppendAiDebugTrace; debug, never saved
 	int32 AiDebugTraceHead = 0;                       // oldest entry once the ring is full
+	FElysiumAiTraceSink AiTraceSink;                  // SetAiTraceSink; debug, never saved, cleared on teardown
 	// The place set (`Places`). Held by pointer so the substrate header stays out of this public one.
 	TUniquePtr<FElysiumPlaceSet> PlaceSet;
 	// `BuildStampSeconds`: the map build's `curtime`. Not saved: a restore re-stamps it.

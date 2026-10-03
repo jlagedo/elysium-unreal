@@ -53,7 +53,7 @@ static FElysiumCameraShot MakeTrackShot(const FVector& Origin, const FVector& Lo
 	return Shot;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraComposeTest, "Elysium.Substrate.CameraCompose",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraComposeTest, "Elysium.Arm.CameraCompose",
 	GElysiumTestFlags)
 bool FElysiumCameraComposeTest::RunTest(const FString&)
 {

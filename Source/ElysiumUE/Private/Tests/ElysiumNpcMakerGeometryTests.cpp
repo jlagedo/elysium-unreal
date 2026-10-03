@@ -51,7 +51,7 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMakerGroundCacheTest,
-	"Elysium.Substrate.NpcMakerGeometry.GroundCache", GElysiumNpcMakerGeometryFlags)
+	"Elysium.Arm.NpcMakerGeometry.GroundCache", GElysiumNpcMakerGeometryFlags)
 bool FElysiumNpcMakerGroundCacheTest::RunTest(const FString&)
 {
 	FTestWorldWrapper TestWorld;
@@ -102,7 +102,7 @@ bool FElysiumNpcMakerGroundCacheTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMakerSpawnBoxTest,
-	"Elysium.Substrate.NpcMakerGeometry.SpawnBox", GElysiumNpcMakerGeometryFlags)
+	"Elysium.Arm.NpcMakerGeometry.SpawnBox", GElysiumNpcMakerGeometryFlags)
 bool FElysiumNpcMakerSpawnBoxTest::RunTest(const FString&)
 {
 	// A room: a maker (never `FL_NPC`: it runs no `NPCInit`), a standing NPC far off, and one that

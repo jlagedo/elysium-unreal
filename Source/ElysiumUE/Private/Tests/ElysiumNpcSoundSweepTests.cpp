@@ -124,7 +124,7 @@ namespace
 // --- The gate, the two clears, and the arms' two admission routes -------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSoundSweepArmsTest,
-	"Elysium.Substrate.NpcConditions.SoundSweepArms", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.SoundSweepArms", GElysiumTestFlags)
 bool FElysiumNpcSoundSweepArmsTest::RunTest(const FString&)
 {
 	FSweepFixture F;
@@ -242,7 +242,7 @@ bool FElysiumNpcSoundSweepArmsTest::RunTest(const FString&)
 // --- Last-wins, and `HEAR_FLANK_SOUND` ----------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSoundSweepFlankTest,
-	"Elysium.Substrate.NpcConditions.SoundSweepFlank", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.SoundSweepFlank", GElysiumTestFlags)
 bool FElysiumNpcSoundSweepFlankTest::RunTest(const FString&)
 {
 	FSweepFixture F;
@@ -377,7 +377,7 @@ bool FElysiumNpcSoundSweepFlankTest::RunTest(const FString&)
 // --- The `SEE_SOUND_SOURCE` tail ------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSoundSweepSeeSourceTest,
-	"Elysium.Substrate.NpcConditions.SoundSweepSeeSource", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.SoundSweepSeeSource", GElysiumTestFlags)
 bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 {
 	FSweepFixture F;
@@ -616,7 +616,7 @@ bool FElysiumNpcSoundSweepSeeSourceTest::RunTest(const FString&)
 // --- The two clocks and the committed source survive a save --------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSoundSweepSaveTest,
-	"Elysium.Substrate.NpcConditions.SoundSweepSave", GElysiumTestFlags)
+	"Elysium.Arm.NpcConditions.SoundSweepSave", GElysiumTestFlags)
 bool FElysiumNpcSoundSweepSaveTest::RunTest(const FString&)
 {
 	// The committed source and its two clocks are retail `SAVE` rows (`m_hLastHeardEnt`,

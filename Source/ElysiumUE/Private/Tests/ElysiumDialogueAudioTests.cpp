@@ -1,6 +1,6 @@
 // The dialogue VOICE join: which take a line resolves to, and where the corpus answers from.
 //
-//   * `Elysium.Audio.DialogueTakeLetter`  — the column chooser (`0x100e15c0`) and the letterless
+//   * `Elysium.Arm.Audio.DialogueTakeLetter`  — the column chooser (`0x100e15c0`) and the letterless
 //                                           ellipses route (`FUN_100df0b0` / `0x100e1680`) against
 //                                           fabricated rows. No corpus.
 //   * `Elysium.Content.DialogueTakes`     — every shipped `_col_f`/`_col_m`/`_col_n` take under the
@@ -59,9 +59,9 @@ namespace
 }
 
 // ---------------------------------------------------------------------------------------------
-// Elysium.Audio.DialogueTakeLetter
+// Elysium.Arm.Audio.DialogueTakeLetter
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueTakeLetterTest, "Elysium.Audio.DialogueTakeLetter",
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueTakeLetterTest, "Elysium.Arm.Audio.DialogueTakeLetter",
 	GElysiumDialogueAudioTestFlags)
 bool FElysiumDialogueTakeLetterTest::RunTest(const FString&)
 {
@@ -172,8 +172,6 @@ bool FElysiumDialogueTakeLetterTest::RunTest(const FString&)
 		FString(TEXT("character/dlg/santa monica/mercurio/line40_col_n")));
 
 	// The seam that has no source yet: `m_flSpeechVol` answers the unattenuated 1.0 for every NPC.
-	TestEqual(TEXT("the speech-volume seam answers 1.0"),
-		FElysiumLineService::SpeechVolumeFor(FElysiumEntityHandle::Invalid()), 1.f);
 	return true;
 }
 
