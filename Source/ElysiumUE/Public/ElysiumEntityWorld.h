@@ -91,6 +91,31 @@ private:
 	mutable FElysiumBareEntityCameraSourcePool BareSources;
 };
 
+// What the last hint validator decided for the `ai_debug_npc` (`FElysiumEntityWorld::AiDebugNpc`).
+// Retail's failing arms hand their reason string to `0x102d0ab0`, which copies it into the hint's
+// own debug text (`CAI_Hint +0x478`, 128 bytes) and stamps `+0x4f8 = curtime + _DAT_1044e664`; the
+// passing tail's `0x102d0b20` empties the text and zeroes the stamp. The port holds no such word on
+// its `ai_hint` (debug only, never read by a rule): the text goes to the log and to this record,
+// together with the numbers the validator computed, so a console readout can print them inline.
+// Written ONLY while `IsHintDebugNpc()` holds, exactly where retail formats; never saved.
+struct FElysiumAiDebugHintProbe
+{
+	int32 HintIndex = INDEX_NONE;
+	const TCHAR* Validator = nullptr;  // the retail body that wrote it ("0x10296c40", "0x102961a0", ...)
+	FString Reason;                    // retail's reason string, verbatim; empty = the passing tail's clear
+	bool bDistance = false;
+	float DistanceUnits = 0.f;         // the 2-D band distance (hint-to-enemy / hint-to-cover), Source units
+	bool bEnemyProjection = false;
+	float EnemyProjection = 0.f;       // `0x10296c40`'s `"Projection (%.2f) < 0.2"` dot
+	bool bFacing = false;
+	float FacingProjection = 0.f;      // the facing projection the good / bad range bounds test
+	float GoodRange = 0.f;             // its lower bound (`<=` fails)
+	bool bBadRange = false;
+	float BadRange = 0.f;              // `0x10296c40`'s upper bound (`>=` fails)
+
+	void Reset() { *this = FElysiumAiDebugHintProbe(); }
+};
+
 // The substrate: one plain-C++ object per map, owned by AElysiumMapActor, that
 // dies with it. It parses `.ents` into live entities, indexes them by name and class, and routes
 // every input delivery and every deferred output through the two chokepoints (AcceptInput and the
@@ -738,6 +763,66 @@ public:
 	// (`0x10136650`) creates unparented rows in BSP order, so the last hint the map authored heads
 	// the list. A hint is never removed from it: `Kill` on a hint hides it (`0x102d08c0`).
 	const TArray<int32>& HintList() const { return Hints; }
+	// `DAT_10925458`, the live-hint count the factory `0x102d2f30` increments. The list IS the count
+	// here: nothing unlinks a hint in this substrate (the destructor `0x102d3040` has no caller yet).
+	int32 HintCount() const { return Hints.Num(); }
+	// `DAT_10925454`, the rotating search cursor the three cursor searches (`0x102d1af0`,
+	// `0x102d24b0`, `0x102d2980`) start after and write on exit, and the random pick `0x102d1760`
+	// writes. An entity index, `INDEX_NONE` for retail's NULL. Session-only, as retail's global is:
+	// zeroed with the list and by every hint the factory makes (`0x102d2f30`); never saved.
+	int32 HintCursor() const { return HintCursorIndex; }
+	void SetHintCursor(int32 HintIndex) { HintCursorIndex = HintIndex; }
+	// `DAT_10925444`, retail's `ai_debug_npc` handle: a DLL global EHANDLE every hint validator's
+	// reason-string arm resolves (serial match and a non-null slot) and compares with `this`
+	// (`FElysiumNpc::IsHintDebugNpc`). Set by the `elysium.ai_debug_npc` verb, cleared with `none`.
+	// Debug state: never saved, and cleared with the hint list (retail's handle would go stale by
+	// serial across a map change; the port's epoch restarts, so the word is dropped instead).
+	// Retail's console name for the word is `ai_hint_focus_npc` (`0x1054981c`, handler `0x10085480`,
+	// which DevMsgs "Changing hint ent to %s from %s"); the port's verbs are `elysium.ai_debug_npc`
+	// and `elysium.npc_trace`.
+	FElysiumEntityHandle AiDebugNpc() const { return AiDebugNpcHandle; }
+	void SetAiDebugNpc(const FElysiumEntityHandle& Npc) { AiDebugNpcHandle = Npc; }
+	// The last hint validator's record for that NPC (`FElysiumAiDebugHintProbe`). Never saved.
+	FElysiumAiDebugHintProbe& AiDebugHintProbe() { return AiDebugHintProbeRecord; }
+	const FElysiumAiDebugHintProbe& AiDebugHintProbe() const { return AiDebugHintProbeRecord; }
+	// Retail's per-NPC trace buffer (`ent_trace_buffer`, `0x100b0c00`): `0x1027ef20` appends each
+	// `TraceMessage` line into a 16 KB ring on the NPC (`+0x1b4e`, cursor `+0x5b50`, wrapped flag
+	// `+0x5b54`) and `ent_trace_dump_buffer` (`0x1027efb0`) prints it between "** BEGIN BUFFER DUMP
+	// FOR %s" / "** END BUFFER DUMP FOR %s". NAMED MODERNIZATION (debug output only): the port keeps
+	// ONE ring, for the `AiDebugNpc`, of whole trace entries rather than bytes, always on (retail's
+	// is off until `ent_trace_buffer`), read back by `elysium.npc_trace_tail`. Never saved.
+	static constexpr int32 AiDebugTraceCapacity = 512;
+	void AppendAiDebugTrace(FString Entry)
+	{
+		if (AiDebugTraceRing.Num() < AiDebugTraceCapacity)
+		{
+			AiDebugTraceRing.Add(MoveTemp(Entry));
+		}
+		else
+		{
+			AiDebugTraceRing[AiDebugTraceHead] = MoveTemp(Entry);
+			AiDebugTraceHead = (AiDebugTraceHead + 1) % AiDebugTraceCapacity;
+		}
+	}
+	int32 AiDebugTraceNum() const { return AiDebugTraceRing.Num(); }
+	// The last `Count` entries, oldest first.
+	TArray<FString> AiDebugTraceTail(int32 Count) const
+	{
+		TArray<FString> Out;
+		const int32 Num = AiDebugTraceRing.Num();
+		const int32 Take = FMath::Clamp(Count, 0, Num);
+		Out.Reserve(Take);
+		for (int32 i = Num - Take; i < Num; ++i)
+		{
+			Out.Add(AiDebugTraceRing[(AiDebugTraceHead + i) % Num]);
+		}
+		return Out;
+	}
+	void ResetAiDebugTrace()
+	{
+		AiDebugTraceRing.Reset();
+		AiDebugTraceHead = 0;
+	}
 	// Retail's AI network `DAT_1093407c` and the two `CNodeEnt::Spawn` globals beside it (0018
 	// story 4): the map's baked nodes plus their run-time words. The map actor adopts the map's
 	// `DA_<map>_Places` into it before `Load`; `Load` zeroes its spawn counter (`0x102f6690`) and
@@ -959,6 +1044,11 @@ private:
 	TMultiMap<FName, int32> NameIndex;                // targetname -> entity index (non-unique)
 	TMultiMap<FName, int32> ClassIndex;               // classname  -> entity index
 	TArray<int32> Hints;                              // `DAT_10925450`, head first (HintList)
+	int32 HintCursorIndex = INDEX_NONE;               // `DAT_10925454` (HintCursor); session-only
+	FElysiumEntityHandle AiDebugNpcHandle;            // `DAT_10925444` (AiDebugNpc); debug, never saved
+	FElysiumAiDebugHintProbe AiDebugHintProbeRecord;  // AiDebugHintProbe; debug, never saved
+	TArray<FString> AiDebugTraceRing;                 // AppendAiDebugTrace; debug, never saved
+	int32 AiDebugTraceHead = 0;                       // oldest entry once the ring is full
 	// The place set (`Places`). Held by pointer so the substrate header stays out of this public one.
 	TUniquePtr<FElysiumPlaceSet> PlaceSet;
 	// `BuildStampSeconds`: the map build's `curtime`. Not saved: a restore re-stamps it.

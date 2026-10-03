@@ -53,9 +53,10 @@ void FElysiumNpc::HintDeletingDestructor()
 	Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(GHintDestroyedCondition));
 	ClearScheduleHint(GHintDestroyedReuseDelay);
 
-	// SEAM: the rest of `0x102d3040` is the engine's global hint-list unlink and the node's own
-	// storage teardown. This substrate carries hint nodes as rows, not as engine objects on a list,
-	// so there is no list here and no kernel-observable state in that half.
+	// The rest of `0x102d3040` is the global hint-list unlink (`DAT_10925450`, cursor zeroed if it
+	// sat on the node) and the storage teardown. The list is `FElysiumEntityWorld::HintList` (0018/8),
+	// but no hint is ever destroyed at run time — `Kill` on a hint is slot 77's hide (`0x102d08c0`)
+	// — so the unlink has no live caller and is not stood; nothing kernel-observable is in that half.
 }
 
 FElysiumNpc::FCineUnhideRecord FElysiumNpc::TroikaScriptUnhideTail()

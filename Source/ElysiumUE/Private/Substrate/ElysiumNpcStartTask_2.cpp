@@ -37,6 +37,7 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumGameSound.h"
+#include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpcEnemy.h"
@@ -47,6 +48,7 @@
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumScheduleText.h"
 #include "Substrate/ElysiumScriptedSequence.h"
+#include "Substrate/ElysiumWeaponClasses.h"   // ElysiumWeapons::ItemRangeWords — the weapon's `+0x8b8`
 
 namespace StartTask19_2Ids
 {
@@ -401,9 +403,13 @@ int32 FElysiumNpc::TaskTailCoordinatorCircleSide(const FElysiumEntity* Enemy) co
 
 bool FElysiumNpc::TaskTailWeaponMinRangeUnits(float& OutRangeUnits) const
 {
-	// SEAM for `GetActiveWeapon()->+0x8b8`.
-	(void)OutRangeUnits;
-	return false;
+	// `GetActiveWeapon()->+0x8b8`, `m_fMinRange1`, SOURCE units: the class constructor's word (150
+	// for every firearm, `CWeaponRanged 0x10238070`; 0 for melee). False only with no active weapon.
+	ElysiumWeapons::FRangeWords Words;
+	const FElysiumEntity* HeldWeapon = ActiveWeaponEntity();
+	const bool bAnswered = HeldWeapon != nullptr && ElysiumWeapons::ItemRangeWords(*HeldWeapon, Words);
+	OutRangeUnits = bAnswered ? Words.MinRange1 : 0.f;
+	return bAnswered;
 }
 
 float FElysiumNpc::TaskTailCircleDistOverride()
@@ -1282,7 +1288,14 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			return 0;
 		}
 		RestartIdealActivityId(ActKick);                          // 0x102a5f97
-		++TaskTailHintFires;                                      // 0x102a60df 0x102d0910(hint, this)
+		// 0x102a60df `0x102d0910(hint, this)`: the hint's `m_OnNPCKicked` and its group hide walk,
+		// on the live hint (`FElysiumHint::NpcKicked`).
+		if (FElysiumHint* Hint = World != nullptr && World->Entities().IsValidIndex(BaseScheduleHost.HintNode)
+				? FElysiumHint::Cast(World->Entities()[BaseScheduleHost.HintNode].Get())
+				: nullptr)
+		{
+			Hint->NpcKicked(Handle);
+		}
 		ClearScheduleHint(KickHintReuseDelay);                    // 0x102a60eb 0x10295ab0(60.0)
 		return 0;
 
@@ -1314,7 +1327,13 @@ int32 FElysiumNpc::StartTaskTroikaTail(void* Task)
 			}
 			ScheduleHost.KickProp = FElysiumEntityHandle::Invalid();   // 0x102a60d3 0x1028ac80(h, 0)
 		}
-		++TaskTailHintFires;                                      // 0x102a60df 0x102d0910(hint, this)
+		// 0x102a60df `0x102d0910(hint, this)`, the same shared tail as TASK_KICK_HINT.
+		if (FElysiumHint* Hint = World != nullptr && World->Entities().IsValidIndex(BaseScheduleHost.HintNode)
+				? FElysiumHint::Cast(World->Entities()[BaseScheduleHost.HintNode].Get())
+				: nullptr)
+		{
+			Hint->NpcKicked(Handle);
+		}
 		ClearScheduleHint(KickHintReuseDelay);                    // 0x102a60eb
 		return 0;
 	}

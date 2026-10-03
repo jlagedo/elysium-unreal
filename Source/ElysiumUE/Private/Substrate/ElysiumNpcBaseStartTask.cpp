@@ -36,6 +36,7 @@
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "Substrate/ElysiumScheduleCorpus.h"
 #include "Substrate/ElysiumScriptedSequence.h"
+#include "Substrate/ElysiumWeaponClasses.h"   // ElysiumWeapons::ItemRangeWords — the four range words
 
 namespace ElysiumStartTask19Base
 {
@@ -1239,11 +1240,10 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 			Fail(0x465, FAIL_NO_HINT_NODE);                              // 0x10282a99
 			return 0;
 		}
-		// `0x102d1350(hint, this)` — the claim. It lives on the Troika's helper surface
-		// (`FElysiumNpc::ClaimHintNode`), which a base-only NPC does not have.
+		// `0x102d1350(hint, this)` — the claim, called directly by the base arm (0018/8: on the live
+		// hint, `FElysiumNpcBase::ClaimHint`); no Troika surface is between them in retail.
 		++StartTaskNav.HintLockAttempts;
-		FElysiumNpc* Troika = AsNpc();
-		const bool bLocked = Troika != nullptr && Troika->ClaimHintNode(BaseScheduleHost.HintNode); // 0x10282aad
+		const bool bLocked = ClaimHint(BaseScheduleHost.HintNode);          // 0x10282aad
 		if (bLocked)
 		{
 			TaskComplete(false);                                         // 0x10282aba 0x10282ab6
@@ -2433,9 +2433,17 @@ void FElysiumNpcBase::StartTaskWeaponRange(float& OutMinUnits, float& OutMaxUnit
 
 bool FElysiumNpcBase::StartTaskWeaponRangeWords(const FElysiumEntity& Weapon, float OutWords[4]) const
 {
-	(void)Weapon;
-	(void)OutWords;
-	return false;
+	// `+0x8b8 +0x8bc +0x8c0 +0x8c4`, the weapon's class words (0018 story 8, findings R3).
+	ElysiumWeapons::FRangeWords Words;
+	if (!ElysiumWeapons::ItemRangeWords(Weapon, Words))
+	{
+		return false;
+	}
+	OutWords[0] = Words.MinRange1;
+	OutWords[1] = Words.MinRange2;
+	OutWords[2] = Words.MaxRange1;
+	OutWords[3] = Words.MaxRange2;
+	return true;
 }
 
 bool FElysiumNpcBase::StartTaskFindCoverPos(const FVector& ThreatCm, const FVector& ThreatEyeCm, float MinUnits,

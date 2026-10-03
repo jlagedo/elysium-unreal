@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 1048 live own bodies the port carries as overrides, of 1419 live (class, slot) own-body rows on
-// live classes; `kernel_shape --unported` lists the other 371.
+// 1050 live own bodies the port carries as overrides, of 1419 live (class, slot) own-body rows on
+// live classes; `kernel_shape --unported` lists the other 369.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -3347,6 +3347,11 @@ namespace
 			&FElysiumNpcPedestrian::StaticRetailClass,
 			TDeclaredOn<FElysiumNpcHuman, int32(bool, int32)>::Test(&FElysiumNpcHuman::CanPlaySequence),
 			std::is_base_of_v<FElysiumNpcHuman, FElysiumNpcPedestrian> },
+		{ TEXT("CNPC_VPedestrian"), 550, TEXT("0x103a1de0"), TEXT("rule"),
+			TEXT("FElysiumNpcPedestrian"), TEXT("FElysiumNpcPedestrian"), TEXT("CoverRadius"),
+			&FElysiumNpcPedestrian::StaticRetailClass,
+			TDeclaredOn<FElysiumNpcPedestrian, float()>::Test(&FElysiumNpcPedestrian::CoverRadius),
+			std::is_base_of_v<FElysiumNpcPedestrian, FElysiumNpcPedestrian> },
 		{ TEXT("CNPC_VPedestrian"), 563, TEXT("0x10384760"), TEXT("rule"),
 			TEXT("FElysiumNpcPedestrian"), TEXT("FElysiumNpcHuman"),
 			TEXT("TranslateEnemyChasePosition"), &FElysiumNpcPedestrian::StaticRetailClass,
@@ -4281,6 +4286,11 @@ namespace
 			TEXT("FElysiumNpcTzimisce"), TEXT("FElysiumNpcTzimisce"), TEXT("GetStepDownHeight"),
 			&FElysiumNpcTzimisce::StaticRetailClass,
 			TDeclaredOn<FElysiumNpcTzimisce, float() const>::Test(&FElysiumNpcTzimisce::GetStepDownHeight),
+			std::is_base_of_v<FElysiumNpcTzimisce, FElysiumNpcTzimisce> },
+		{ TEXT("CNPC_VTzimisce"), 550, TEXT("0x103b6e30"), TEXT("rule"),
+			TEXT("FElysiumNpcTzimisce"), TEXT("FElysiumNpcTzimisce"), TEXT("CoverRadius"),
+			&FElysiumNpcTzimisce::StaticRetailClass,
+			TDeclaredOn<FElysiumNpcTzimisce, float()>::Test(&FElysiumNpcTzimisce::CoverRadius),
 			std::is_base_of_v<FElysiumNpcTzimisce, FElysiumNpcTzimisce> },
 		{ TEXT("CNPC_VTzimisce"), 563, TEXT("0x103ba640"), TEXT("rule"),
 			TEXT("FElysiumNpcTzimisce"), TEXT("FElysiumNpcTzimisce"),

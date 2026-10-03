@@ -3,9 +3,17 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
+#include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
+#include "ElysiumPlayer.h"
+#include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumInterestingPlace.h"
+#include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcEnemy.h"
+#include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumRetailActivities.h"
 #include "Substrate/ElysiumNpcAsianVampire.h"
 #include "Substrate/ElysiumNpcSabbatLeader.h"
@@ -764,11 +772,9 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 		Npc->IsHintCoverValid(0));
 	TestFalse(TEXT("IsHintCoverValidLoose refuses too, at the hint rather than the handle"),
 		Npc->IsHintCoverValidLoose(0));
-	{
-		FElysiumNpcBase::FHintWords Hint = MakeHint(0x27d8);
-		TestFalse(TEXT("and the 0x10296c40 validator seam itself answers false"),
-			Npc->ValidateHintCoverRange(Hint, nullptr, 0.0f, 0.731f));
-	}
+	// The validator behind both (`0x10296c40`), the hint LOS check (`0x102968f0`) and the idle gate
+	// (`0x102b5de0`) are bodies now, asserted arm by arm in `AttackValidator`, `HintLos` and
+	// `IdleGate` below.
 
 	// `FindHintEndEntity` (`0x103d6520`) — with both lookups refusing, retail's fallback is the
 	// hint itself.
@@ -877,13 +883,492 @@ bool FElysiumNpcKernelHintsSeamTest::RunTest(const FString&)
 		Npc->InterestingPlaceMarkerOccupant(nullptr));
 	TestEqual(TEXT("CurrentRetailActivityId answers -1"), Npc->CurrentRetailActivityId(),
 		int32(INDEX_NONE));
-	TestTrue(TEXT("HintIdleActivityGate answers the passing side"), Npc->HintIdleActivityGate());
 	{
 		FString Unused;
 		TestFalse(TEXT("PatrolNodeInterestRecordName answers nothing for a record that is no hint"),
 			Npc->PatrolNodeInterestRecordName(0, Unused));
 	}
 	TestFalse(TEXT("IsTzimisceHintUsable answers false"), Tzim->IsTzimisceHintUsable(0, Tzim));
+	return true;
+}
+
+// -------------------------------------------------------------------------------------------------
+// 0018 story 8: `0x10296c40` (the attack-position validator), `0x102968f0` (the hint LOS check) and
+// `0x102b5de0` (the idle gate), as rules over a world that stands a live hint.
+//
+// Geometry, in Source units along +X (centimetres = units x `ElysiumMove::U`): the NPC at the origin,
+// the enemy NPC at 300, a standalone hint at 100 facing yaw 0, a plain `info_target` crate off-axis.
+// So the hint-to-enemy distance is 200 and the facing projection is ~1.0.
+// -------------------------------------------------------------------------------------------------
+
+namespace ElysiumNpcKernelHintsValidatorTests
+{
+	constexpr double CmPerUnit = ElysiumMove::U;
+	constexpr int32 HintLosMask = 0x46804099;
+	constexpr int32 IdleGateMask = 0x2000000;
+
+	FVector AtUnits(double X, double Y = 0.0, double Z = 0.0)
+	{
+		return FVector(X, Y, Z) * CmPerUnit;
+	}
+
+	FElysiumNpcWorldBuilder BuildValidatorWorld(const TCHAR* Map)
+	{
+		FElysiumNpcWorldBuilder Builder(Map, 18);
+		Builder.AddNpcOfClass(TEXT("npc"), FVector::ZeroVector, nullptr);
+		Builder.AddNpcOfClass(TEXT("enemy"), AtUnits(300.0), nullptr);
+		Builder.AddEntity(TEXT("info_target"), TEXT("crate"), AtUnits(200.0, 200.0));
+		FElysiumEntityDef& Def = Builder.AddEntity(TEXT("info_node_hint"), TEXT("h"), AtUnits(100.0));
+		Def.Keys.Add(TEXT("hinttype"), TEXT("100"));
+		return Builder;
+	}
+
+	struct FValidatorRig
+	{
+		FElysiumNpcWorldFixture F;
+		FElysiumNpc* Npc = nullptr;
+		FElysiumNpc* Enemy = nullptr;
+		FElysiumEntity* Crate = nullptr;
+		FElysiumHint* Hint = nullptr;
+		FElysiumItemTable Items;
+		bool bItemsInstalled = false;
+
+		explicit FValidatorRig(const TCHAR* Map)
+			: F(BuildValidatorWorld(Map))
+		{
+			Npc = F.Npc(TEXT("npc"));
+			Enemy = F.Npc(TEXT("enemy"));
+			Crate = F.World.FindByName(TEXT("crate"));
+			Hint = FElysiumHint::Cast(F.World.FindByName(TEXT("h")));
+			FElysiumNpcWorldFixture::Quiet({ Npc, Enemy });
+			if (Hint != nullptr)
+			{
+				Hint->NodeId = INDEX_NONE;             // standalone: `0x102d1180` is its own origin
+				Hint->Angles = FVector::ZeroVector;    // facing +X
+				Hint->Disabled = 0;
+			}
+		}
+
+		~FValidatorRig()
+		{
+			F.Services.TraceRetailQuery = nullptr;
+			if (bItemsInstalled)
+			{
+				ElysiumItems::Uninstall(Items);
+			}
+		}
+
+		bool Ready(FAutomationTestBase& Test) const
+		{
+			return Test.TestNotNull(TEXT("the NPC stood"), Npc)
+				&& Test.TestNotNull(TEXT("the enemy stood"), Enemy)
+				&& Test.TestNotNull(TEXT("the crate stood"), Crate)
+				&& Test.TestNotNull(TEXT("the hint stood"), Hint);
+		}
+
+		// The live hint's words with the band opened wide and the facing at yaw 0; each case then
+		// moves the one word its arm reads.
+		FElysiumNpcBase::FHintWords Words() const
+		{
+			FElysiumNpcBase::FHintWords Out;
+			Npc->HintWords(Hint->Handle.Index, Out);
+			Out.TargetDistMin = 0.f;
+			Out.TargetDistMax = 1000.f;
+			Out.NodeId = INDEX_NONE;
+			Out.Angles = FVector::ZeroVector;
+			Out.Disabled = 0;
+			return Out;
+		}
+
+		// `GiveNamedItem` of a case-local firearm, then slot 388 when it did not become active (the
+		// pattern `ElysiumNpcKernelStartTaskTests_4.cpp` stands). A firearm is a `CWeaponRanged`,
+		// whose `+0x8c0` is 1024 (`0x10238070`, 0018 story 8) — the word arm 5 reads.
+		FElysiumEntity* GiveWeapon()
+		{
+			if (!bItemsInstalled)
+			{
+				bItemsInstalled = true;
+				FElysiumItemDef Gun;
+				Gun.Classname = TEXT("item_w_hints18_gun");
+				Gun.PrintName = Gun.Classname;
+				Gun.Type = EElysiumItemType::WeaponFirearm;
+				Gun.bWieldable = true;
+				Items.Items.Add(MoveTemp(Gun));
+				Items.Reindex();
+				ElysiumItems::Install(Items);
+			}
+			const FElysiumEntityHandle Handle =
+				Npc->Inventory.GiveNamedItem(*Npc, FString(TEXT("item_w_hints18_gun")));
+			FElysiumEntity* Item = F.World.Resolve(Handle);
+			if (Item != nullptr && Npc->ActiveWeaponEntity() != Item)
+			{
+				Npc->Weapon_Switch(Item, 0);
+			}
+			return Npc->ActiveWeaponEntity();
+		}
+	};
+
+	// A trace double that records the last request it was asked and answers `Answer`.
+	struct FTraceDouble
+	{
+		FElysiumRetailTrace Seen;
+		FElysiumRetailTraceResult Answer;
+		int32 Calls = 0;
+
+		// The rig clears the query in its destructor and every case clears it before this dies.
+		void Install(FValidatorRig& Rig)
+		{
+			Rig.F.Services.TraceRetailQuery = [this](const FElysiumRetailTrace& Request,
+				FElysiumRetailTraceResult& Out)
+			{
+				Seen = Request;
+				++Calls;
+				Out = Answer;
+				return true;
+			};
+		}
+
+		void AnswerClear()
+		{
+			Answer = FElysiumRetailTraceResult();
+		}
+
+		void AnswerBlocked(const FElysiumEntityHandle& Hit)
+		{
+			Answer = FElysiumRetailTraceResult();
+			Answer.Fraction = 0.5f;
+			Answer.HitEntity = Hit;
+		}
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelHintsAttackValidatorTest,
+	"Elysium.Substrate.NpcKernelHints.AttackValidator", GHintsTestFlags)
+bool FElysiumNpcKernelHintsAttackValidatorTest::RunTest(const FString&)
+{
+	using namespace ElysiumNpcKernelHintsValidatorTests;
+	FValidatorRig R(TEXT("__hints_attack_validator__"));
+	if (!R.Ready(*this))
+	{
+		return false;
+	}
+	FElysiumNpc* Npc = R.Npc;
+	const int32 HintId = R.Hint->Handle.Index;
+	constexpr float Good = 0.5f;
+	constexpr float Bad = 1.1f;
+	Npc->bStayEntrenched = false;
+	Npc->BaseScheduleHost.HintNode = INDEX_NONE;
+	Npc->ScheduleHost.bForceCoverLosCheck = false;
+
+	// Arm 0 (`10296c4f` / `10296c61`): a null or disabled hint fails, before the entrenched pass.
+	{
+		FElysiumNpcBase::FHintWords None;
+		TestFalse(TEXT("0x10296c40: a null hint fails"),
+			Npc->ValidateHintCoverRange(None, R.Enemy, Good, Bad));
+		FElysiumNpcBase::FHintWords Disabled = R.Words();
+		Disabled.Disabled = 1;
+		Npc->bStayEntrenched = true;
+		Npc->BaseScheduleHost.HintNode = HintId;
+		TestFalse(TEXT("0x10296c40: a disabled hint fails even as my entrenched hint"),
+			Npc->ValidateHintCoverRange(Disabled, R.Enemy, Good, Bad));
+		Npc->bStayEntrenched = false;
+		Npc->BaseScheduleHost.HintNode = INDEX_NONE;
+	}
+
+	// Arms 1 and 2, with no weapon yet: the entrenched / null-enemy PASS comes before the weapon test.
+	if (!TestNull(TEXT("precondition: the NPC holds no active weapon"), Npc->ActiveWeaponEntity()))
+	{
+		return false;
+	}
+	TestTrue(TEXT("0x10296c40 arm 1: a null enemy PASSES, weapon or not"),
+		Npc->ValidateHintCoverRange(R.Words(), nullptr, Good, Bad));
+	Npc->bStayEntrenched = true;
+	Npc->BaseScheduleHost.HintNode = HintId;
+	TestTrue(TEXT("0x10296c40 arm 1: my own hint while m_bStayEntrenched PASSES before any test"),
+		Npc->ValidateHintCoverRange(R.Words(), R.Enemy, Good, Bad));
+	Npc->BaseScheduleHost.HintNode = INDEX_NONE;
+	TestFalse(TEXT("0x10296c40 arm 2: entrenched on a hint that is not mine is no pass: no weapon fails"),
+		Npc->ValidateHintCoverRange(R.Words(), R.Enemy, Good, Bad));
+	Npc->bStayEntrenched = false;
+	TestFalse(TEXT("0x10296c40 arm 2: no active weapon fails"),
+		Npc->ValidateHintCoverRange(R.Words(), R.Enemy, Good, Bad));
+
+	if (!TestNotNull(TEXT("the NPC now holds a weapon"), R.GiveWeapon()))
+	{
+		return false;
+	}
+	TestTrue(TEXT("0x10296c40: the base layout passes every arm"),
+		Npc->ValidateHintCoverRange(R.Words(), R.Enemy, Good, Bad));
+
+	// Arm 3: |hint.z - me.z| over 64 (`_DAT_1049ae28`, a double) fails.
+	{
+		FElysiumNpcBase::FHintWords W = R.Words();
+		W.OriginCm.Z = 65.0 * CmPerUnit;
+		TestFalse(TEXT("0x10296c40 arm 3: a hint 65 units above me fails"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, Good, Bad));
+		W.OriginCm.Z = -65.0 * CmPerUnit;
+		TestFalse(TEXT("0x10296c40 arm 3: ...and 65 below (the difference is absolute)"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, Good, Bad));
+		W.OriginCm.Z = 63.0 * CmPerUnit;
+		TestTrue(TEXT("0x10296c40 arm 3: 63 units passes"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, Good, Bad));
+	}
+
+	// Arm 4: the hint-to-enemy 2-D distance (200) under m_flTargetDistMin fails.
+	{
+		FElysiumNpcBase::FHintWords W = R.Words();
+		W.TargetDistMin = 201.f;
+		TestFalse(TEXT("0x10296c40 arm 4: distance 200 < m_flTargetDistMin 201 fails"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, Good, Bad));
+		W.TargetDistMin = 199.f;
+		TestTrue(TEXT("0x10296c40 arm 4: ...and passes against 199"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, Good, Bad));
+	}
+
+	// Arm 5: unless entrenched, over m_flTargetDistMax OR the weapon's `+0x8c0` (1024) fails.
+	{
+		FElysiumNpcBase::FHintWords W = R.Words();
+		W.TargetDistMax = 199.f;
+		TestFalse(TEXT("0x10296c40 arm 5: distance 200 > m_flTargetDistMax 199 fails"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, Good, Bad));
+		Npc->bStayEntrenched = true;
+		TestTrue(TEXT("0x10296c40 arm 5: m_bStayEntrenched skips the upper bound entirely"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, Good, Bad));
+		Npc->bStayEntrenched = false;
+
+		const FVector EnemyAt = R.Enemy->Origin;
+		W.TargetDistMax = 5000.f;
+		R.Enemy->Origin = AtUnits(1200.0);   // distance 1100
+		TestFalse(TEXT("0x10296c40 arm 5: distance 1100 is past the firearm's +0x8c0 (1024)"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, Good, Bad));
+		Npc->bStayEntrenched = true;
+		TestTrue(TEXT("0x10296c40 arm 5: ...which entrenchment skips too"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, Good, Bad));
+		Npc->bStayEntrenched = false;
+		R.Enemy->Origin = AtUnits(1100.0);   // distance 1000
+		TestTrue(TEXT("0x10296c40 arm 5: distance 1000 is inside it"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, Good, Bad));
+		R.Enemy->Origin = EnemyAt;
+	}
+
+	// Arm 6: a hint that is not mine needs dot(norm(hint - enemy), norm(me - enemy)) >= 0.2.
+	{
+		const FVector MeAt = Npc->Origin;
+		Npc->Origin = AtUnits(600.0);   // past the enemy: the hint is on the other side of it
+		TestFalse(TEXT("0x10296c40 arm 6: a hint across the enemy from me fails the 0.2 projection"),
+			Npc->ValidateHintCoverRange(R.Words(), R.Enemy, Good, Bad));
+		Npc->BaseScheduleHost.HintNode = HintId;
+		TestTrue(TEXT("0x10296c40 arm 6: my own hint skips the projection"),
+			Npc->ValidateHintCoverRange(R.Words(), R.Enemy, Good, Bad));
+		Npc->BaseScheduleHost.HintNode = INDEX_NONE;
+		Npc->Origin = MeAt;
+	}
+
+	// Arm 7: the facing projection against two bounds, and they are not symmetric.
+	{
+		FElysiumNpcBase::FHintWords W = R.Words();
+		TestTrue(TEXT("0x10296c40 arm 7: dead ahead (~1.0) sits between good 0.99 and bad 1.1"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, 0.99f, Bad));
+		TestFalse(TEXT("0x10296c40 arm 7: `<= flGoodRange` fails (good 1.0)"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, 1.0f, Bad));
+		TestFalse(TEXT("0x10296c40 arm 7: `>= flBadRange` fails (bad 0.731, IsHintCoverValid's)"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, Good, 0.731f));
+		W.Angles = FVector(0.0, 180.0, 0.0);
+		TestFalse(TEXT("0x10296c40 arm 7: a hint facing away (~-1.0) is outside good 0.0"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, 0.0f, Bad));
+
+		// The facing is a SOURCE yaw (`0x102d12e0`) and the port's world has Y negated: yaw 90 faces
+		// Unreal -Y.
+		const FVector EnemyAt = R.Enemy->Origin;
+		W.Angles = FVector(0.0, 90.0, 0.0);
+		R.Enemy->Origin = AtUnits(100.0, -200.0);
+		TestTrue(TEXT("0x10296c40 arm 7: Source yaw 90 faces an enemy at Unreal -Y"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, Good, Bad));
+		R.Enemy->Origin = AtUnits(100.0, 200.0);
+		TestFalse(TEXT("0x10296c40 arm 7: ...and turns its back on one at Unreal +Y"),
+			Npc->ValidateHintCoverRange(W, R.Enemy, Good, Bad));
+		R.Enemy->Origin = EnemyAt;
+	}
+
+	// The two forwards differ only in the bad bound: 0.731 (`0x10297430`) and 1.1 (`0x102974f0`).
+	{
+		R.Hint->TargetDistMin = 0.f;
+		R.Hint->TargetDistMax = 1000.f;
+		R.Hint->TargetAngleRangeDot = Good;
+		Npc->ScheduleHost.HintCoverObject = R.Enemy->Handle;
+		TestFalse(TEXT("IsHintCoverValid: an enemy dead ahead is `inside of bad range` 0.731"),
+			Npc->IsHintCoverValid(HintId));
+		TestTrue(TEXT("IsHintCoverValidLoose: ...and inside 1.1"), Npc->IsHintCoverValidLoose(HintId));
+		Npc->ScheduleHost.HintCoverObject = FElysiumEntityHandle();
+	}
+
+	// Arm 8: only under m_bForceCoverLOSCheck, `0x102968f0(hint, enemy)` must pass.
+	{
+		FTraceDouble Trace;
+		Trace.Install(R);
+		Trace.AnswerBlocked(FElysiumEntityHandle::Invalid());
+		TestTrue(TEXT("0x10296c40 arm 8: without m_bForceCoverLOSCheck no LOS is asked"),
+			Npc->ValidateHintCoverRange(R.Words(), R.Enemy, Good, Bad));
+		TestEqual(TEXT("0x10296c40 arm 8: ...and no trace was cast"), Trace.Calls, 0);
+		Npc->ScheduleHost.bForceCoverLosCheck = true;
+		TestFalse(TEXT("0x10296c40 arm 8: forced, a blocked hint LOS fails"),
+			Npc->ValidateHintCoverRange(R.Words(), R.Enemy, Good, Bad));
+		TestEqual(TEXT("0x10296c40 arm 8: ...under the LOS mask"), Trace.Seen.RetailMask, HintLosMask);
+		Trace.AnswerClear();
+		TestTrue(TEXT("0x10296c40 arm 8: forced, a clear hint LOS passes"),
+			Npc->ValidateHintCoverRange(R.Words(), R.Enemy, Good, Bad));
+		Npc->ScheduleHost.bForceCoverLosCheck = false;
+		R.F.Services.TraceRetailQuery = nullptr;
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelHintsHintLosTest,
+	"Elysium.Substrate.NpcKernelHints.HintLos", GHintsTestFlags)
+bool FElysiumNpcKernelHintsHintLosTest::RunTest(const FString&)
+{
+	using namespace ElysiumNpcKernelHintsValidatorTests;
+	FValidatorRig R(TEXT("__hints_hint_los__"));
+	if (!R.Ready(*this))
+	{
+		return false;
+	}
+	FElysiumNpc* Npc = R.Npc;
+	const int32 HintId = R.Hint->Handle.Index;
+
+	TestFalse(TEXT("0x102968f0: a null target fails"), Npc->HintLosCheck(HintId, nullptr));
+	TestFalse(TEXT("0x102968f0: a null hint fails"), Npc->HintLosCheck(INDEX_NONE, R.Enemy));
+	TestTrue(TEXT("0x102968f0: no collision world answers the PASS arm"),
+		Npc->HintLosCheck(HintId, R.Enemy));
+
+	FTraceDouble Trace;
+	Trace.Install(R);
+	Trace.AnswerClear();
+	TestTrue(TEXT("0x102968f0: a clear line passes"), Npc->HintLosCheck(HintId, R.Enemy));
+	FVector MinsUnits = FVector::ZeroVector;
+	FVector MaxsUnits = FVector::ZeroVector;
+	FElysiumNpcBase::RetailCollisionExtents(*Npc, MinsUnits, MaxsUnits);
+	const FVector ExpectedStart = R.Hint->Origin + FVector(0.0, 0.0, MaxsUnits.Z * CmPerUnit);
+	TestTrue(TEXT("0x102968f0: the line starts at the HINT, raised by the NPC's collision maxs z"),
+		Trace.Seen.StartCm.Equals(ExpectedStart, 0.01));
+	TestTrue(TEXT("0x102968f0: ...and ends at the target's eye (slot 193)"),
+		Trace.Seen.EndCm.Equals(R.Enemy->EyePosition(), 0.01));
+	TestEqual(TEXT("0x102968f0: mask 0x46804099"), Trace.Seen.RetailMask, HintLosMask);
+	TestEqual(TEXT("0x102968f0: CTraceFilterHintLOS has no pass entity"), Trace.Seen.Ignore.Num(), 0);
+
+	Trace.AnswerBlocked(FElysiumEntityHandle::Invalid());
+	TestFalse(TEXT("0x102968f0: fraction < 1.0 fails"), Npc->HintLosCheck(HintId, R.Enemy));
+	Trace.AnswerClear();
+	Trace.Answer.bStartSolid = true;
+	TestFalse(TEXT("0x102968f0: startsolid fails at fraction 1.0"), Npc->HintLosCheck(HintId, R.Enemy));
+	Trace.AnswerClear();
+	Trace.Answer.bAllSolid = true;
+	TestFalse(TEXT("0x102968f0: allsolid fails at fraction 1.0"), Npc->HintLosCheck(HintId, R.Enemy));
+
+	// The filter refuses every combat character: a character on the line blocks nothing.
+	Trace.AnswerClear();
+	FElysiumRetailTraceCharacter Body;
+	Body.Entity = R.Enemy->Handle;
+	Body.Fraction = 0.25f;
+	Trace.Answer.Characters.Add(Body);
+	TestTrue(TEXT("0x102968f0: a character on the line is not a blocker"),
+		Npc->HintLosCheck(HintId, R.Enemy));
+	R.F.Services.TraceRetailQuery = nullptr;
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelHintsIdleGateTest,
+	"Elysium.Substrate.NpcKernelHints.IdleGate", GHintsTestFlags)
+bool FElysiumNpcKernelHintsIdleGateTest::RunTest(const FString&)
+{
+	using namespace ElysiumNpcKernelHintsValidatorTests;
+	FValidatorRig R(TEXT("__hints_idle_gate__"));
+	if (!R.Ready(*this))
+	{
+		return false;
+	}
+	FElysiumNpc* Npc = R.Npc;
+	Npc->ShootTargetOverride = FElysiumEntityHandle::Invalid();
+	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyOccluded);
+	Npc->OccludedReportTimeE = 0.0;
+	if (!TestNull(TEXT("precondition: no enemy"), Npc->GetEnemy()))
+	{
+		return false;
+	}
+
+	// Arm 2's head, no trace needed.
+	TestTrue(TEXT("0x102b5de0 arm 2: no override, not occluded, no enemy passes"),
+		Npc->HintIdleActivityGate());
+	Npc->Cognition.Conditions.Set(EElysiumNpcCond::EnemyOccluded);
+	TestFalse(TEXT("0x102b5de0 arm 2: HasCondition(0x48 ENEMY_OCCLUDED) fails"),
+		Npc->HintIdleActivityGate());
+	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyOccluded);
+
+	// `0x1028e870`: `m_flOccludedDelay + curtime - m_flOccludedReportTimeE`, time since occluded.
+	const double Now = R.F.World.NowSeconds();
+	Npc->OccludedDelay = 1.0f;
+	Npc->OccludedReportTimeE = Now - 3.0;   // 1 + 3 = 4 s
+	TestFalse(TEXT("0x102b5de0 arm 2: more than 3.0 s since occluded fails"),
+		Npc->HintIdleActivityGate());
+	Npc->OccludedReportTimeE = Now - 2.0;   // 1 + 2 = 3 s
+	TestTrue(TEXT("0x102b5de0 arm 2: exactly 3.0 s continues (only ABOVE 3.0 fails)"),
+		Npc->HintIdleActivityGate());
+	Npc->OccludedReportTimeE = 0.0;
+	Npc->OccludedDelay = 0.0f;
+
+	// The enemy trace: WorldSpaceCenter -> the enemy's BodyTarget(vec3_origin, false, false).
+	ElysiumNpcEnemy::SetEnemy(*Npc, R.Enemy->Handle);
+	if (!TestTrue(TEXT("precondition: the enemy is set"), Npc->GetEnemy() == R.Enemy))
+	{
+		return false;
+	}
+	FTraceDouble Trace;
+	Trace.Install(R);
+	Trace.AnswerClear();
+	TestTrue(TEXT("0x102b5de0 arm 2: a clear line to the enemy passes"), Npc->HintIdleActivityGate());
+	TestEqual(TEXT("0x102b5de0: mask 0x2000000"), Trace.Seen.RetailMask, IdleGateMask);
+	TestTrue(TEXT("0x102b5de0: from WorldSpaceCenter (slot 192)"),
+		Trace.Seen.StartCm.Equals(Npc->WorldSpaceCenter(), 0.01));
+	TestTrue(TEXT("0x102b5de0: to the enemy's BodyTarget (slot 197)"),
+		Trace.Seen.EndCm.Equals(R.Enemy->BodyTarget(FVector::ZeroVector, false, false), 0.01));
+	TestTrue(TEXT("0x102b5de0: CTraceFilterSimple(this) passes the NPC itself"),
+		Trace.Seen.Ignore.Contains(Npc->Handle));
+
+	Trace.AnswerBlocked(FElysiumEntityHandle::Invalid());
+	TestTrue(TEXT("0x102b5de0 arm 2: a block with no entity the port names passes"),
+		Npc->HintIdleActivityGate());
+	Trace.AnswerBlocked(R.Crate->Handle);
+	Npc->Relationships.SetEntity(R.Crate->Handle, EElysiumRelationship::Like, 5);
+	TestFalse(TEXT("0x102b5de0 arm 2: something I like (D_LI 3) in the way fails"),
+		Npc->HintIdleActivityGate());
+	Npc->Relationships.SetEntity(R.Crate->Handle, EElysiumRelationship::Neutral, 5);
+	TestFalse(TEXT("0x102b5de0 arm 2: something I ignore (D_NU 4) in the way fails"),
+		Npc->HintIdleActivityGate());
+	Npc->Relationships.SetEntity(R.Crate->Handle, EElysiumRelationship::Hate, 5);
+	TestTrue(TEXT("0x102b5de0 arm 2: something I hate in the way passes"), Npc->HintIdleActivityGate());
+	Npc->Relationships.SetEntity(R.Crate->Handle, EElysiumRelationship::Fear, 5);
+	TestTrue(TEXT("0x102b5de0 arm 2: something I fear in the way passes"), Npc->HintIdleActivityGate());
+
+	// Arm 1: a live m_hShootTargetOverride takes the whole gate; ENEMY_OCCLUDED is not read.
+	Npc->ShootTargetOverride = R.Crate->Handle;
+	Npc->Cognition.Conditions.Set(EElysiumNpcCond::EnemyOccluded);
+	Trace.AnswerClear();
+	TestTrue(TEXT("0x102b5de0 arm 1: a clear line to the override passes, occluded or not"),
+		Npc->HintIdleActivityGate());
+	TestTrue(TEXT("0x102b5de0 arm 1: the line ends at the override's origin"),
+		Trace.Seen.EndCm.Equals(R.Crate->Origin, 0.01));
+	TestEqual(TEXT("0x102b5de0 arm 1: mask 0x2000000"), Trace.Seen.RetailMask, IdleGateMask);
+	Trace.AnswerBlocked(FElysiumEntityHandle::Invalid());
+	TestFalse(TEXT("0x102b5de0 arm 1: blocked by the world fails"), Npc->HintIdleActivityGate());
+	Trace.AnswerClear();
+	Trace.Answer.bStartSolid = true;
+	TestFalse(TEXT("0x102b5de0 arm 1: startsolid in the world fails too"), Npc->HintIdleActivityGate());
+	Trace.AnswerBlocked(R.Crate->Handle);
+	TestTrue(TEXT("0x102b5de0 arm 1: blocked by any entity that is not the world passes"),
+		Npc->HintIdleActivityGate());
+	Npc->ShootTargetOverride = FElysiumEntityHandle::Invalid();
+	Npc->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyOccluded);
+	R.F.Services.TraceRetailQuery = nullptr;
 	return true;
 }
 

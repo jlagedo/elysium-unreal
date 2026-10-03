@@ -1154,6 +1154,9 @@ class HarnessOptions:
     promote: bool = False
     drive: bool = False
     arena: bool = False
+    #: `--headless`: the lab window stays closed and Cog never takes input (`-GreenRoomHeadless`),
+    #: for MCP-driven runs of the green room.
+    headless: bool = False
     #: The bodies a harness stands, in the order given. Empty means the harness's own default set,
     #: which for the composed-pose run is both of the bodies the retail capture recorded.
     bodies: tuple[str, ...] = ()
@@ -1180,6 +1183,7 @@ def _take_options(values: list[str]) -> tuple[list[str], HarnessOptions]:
         "--promote": False,
         "--drive": False,
         "--arena": False,
+        "--headless": False,
     }
     index = 0
     while index < len(values):
@@ -1221,6 +1225,7 @@ def _take_options(values: list[str]) -> tuple[list[str], HarnessOptions]:
         promote=flags["--promote"],
         drive=flags["--drive"],
         arena=flags["--arena"],
+        headless=flags["--headless"],
         bodies=tuple(bodies),
     )
 
@@ -1447,6 +1452,8 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
             launch.append("-GreenRoomArena")
         elif options.drive:
             launch.append("-GreenRoomDrive")
+        if options.headless:
+            launch.append("-GreenRoomHeadless")
         if map_name:
             launch.append(f"-ElysiumMap={map_name}")
         # An empty `-Switch=` makes Unreal's parser swallow the NEXT token as the value, so a

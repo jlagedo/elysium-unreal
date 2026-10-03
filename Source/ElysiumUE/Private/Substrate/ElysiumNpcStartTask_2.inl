@@ -97,8 +97,9 @@ FElysiumEntity* TaskTailEnemy167() const;
  *  and the arm that draws a random side. */
 int32 TaskTailCoordinatorCircleSide(const FElysiumEntity* Enemy) const;
 
-/** SEAM for `GetActiveWeapon()->+0x8b8` -- the active weapon's minimum range, SOURCE units. No
- *  weapon record carries it (the neighbouring `+0x8c0` is `ActiveWeaponMaxRangeUnits`); false. */
+/** `GetActiveWeapon()->+0x8b8` (`m_fMinRange1`) -- the active weapon's minimum range, SOURCE units
+ *  (`ElysiumWeapons::ItemRangeWords`; the neighbouring `+0x8c0` is `ActiveWeaponMaxRangeUnits`).
+ *  False only when there is no active weapon. */
 bool TaskTailWeaponMinRangeUnits(float& OutRangeUnits) const;
 
 /** SEAM for `cvar_debug_circle_dist_override` (`0x10924890`, "Overrides the distance guys want to be
@@ -122,10 +123,6 @@ int32 TaskTailDangerSounds = 0;
 /** SEAM for `0x102c41b0(this, name, 0, 0, 0)` -- the particle dispatch the knockback land arm fires
  *  (`"impact_dust_emitter"`). Recorded by name. */
 TArray<FString> TaskTailParticleDispatches;
-
-/** SEAM for `0x102d0910(hint, this)` -- the hint's `OnHintUsed`-style output (`hint+0x5bc`) and its
- *  target lookup. No hint entity stands here; counted. */
-int32 TaskTailHintFires = 0;
 
 /** SEAM for `gEntList.FindEntityByName(NULL, name)` (`0x100f7770` on `0x106eb5d8`) the kick-hint
  *  arm resolves its prop through; answers the named entity from the world, or none. */

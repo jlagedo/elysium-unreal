@@ -62,12 +62,17 @@ void FElysiumNpcBase::RunAI(bool bReduced)
 	if (!bReduced                                                             // 0x1026f1ea
 		&& !RunAi19DialogPartnerLive())                                       // 0x1026f1f9 / 0x1026f215 / 0x1026f219
 	{
+		// The set before the gather, for the `ent_trace_conditions` trace (debug output only).
+		const FElysiumNpcConditions BeforeGather = Cognition.Conditions;
 		GatherConditions();                                                   // 0x1026f237 slot 433
 		// A derived `GatherConditions` that did not call the base still latches the byte.
 		if (Cognition.GatheredAt < 0.0)                                       // 0x1026f243
 		{
 			Cognition.GatheredAt = Now;                                       // 0x1026f245
 		}
+		// Retail's `SetCondition`/`ClearCondition` sites inside the gather each sit behind a
+		// compiled-out `ent_trace_conditions` gate; the port prints what the gather changed.
+		TraceConditionDelta(BeforeGather);
 	}
 
 	// `0x1026ab50`, the shrunk-hull head probe (family Senses10), on every pass.

@@ -491,6 +491,92 @@ namespace ElysiumWeapons
 	}
 
 	TUniquePtr<FElysiumEntity> MakeWeapon() { return MakeUnique<FElysiumWeapon>(); }
+
+	// --- The constructor range words (0018 story 8, findings R3) ---------------------------------
+
+	namespace
+	{
+		// The words each retail constructor leaves, in `+0x8b8 / +0x8bc / +0x8c0 / +0x8c4` order.
+		constexpr FRangeWords GRangeWordsBase    { 65.f, 65.f, 1024.f, 1024.f };  // 0x10250ac0
+		constexpr FRangeWords GRangeWordsRanged  { 150.f, 65.f, 1024.f, 300.f };  // 0x10238070
+		constexpr FRangeWords GRangeWordsMelee   { 0.f, 0.f, 50.f, 50.f };        // 0x103e9ac0
+		constexpr FRangeWords GRangeWordsMelee108{ 0.f, 0.f, 108.f, 108.f };      // 0x103e8a30 / 0x103ec870
+		constexpr FRangeWords GRangeWordsMelee500{ 0.f, 0.f, 500.f, 500.f };      // 0x103ec2b0
+		constexpr FRangeWords GRangeWordsNone    { 0.f, 0.f, 0.f, 0.f };          // IArmor / IGeneric / IWritten
+
+		struct FClassRangeRow
+		{
+			const TCHAR* Classname;
+			FRangeWords Words;
+		};
+
+		// The factories whose class the record's `item_type` would name wrongly. Every other
+		// `item_w_*` factory builds the class its type implies (`weapon_firearm` -> `CWeaponRanged`,
+		// `weapon_melee` -> `CWeaponMelee`, `weapon_thrown` -> `CWeaponIThrown`).
+		const FClassRangeRow GClassRangeRows[] = {
+			{ TEXT("item_w_unarmed"),             GRangeWordsBase },      // 0x1000373d CWeaponUnarmed (hidden)
+			{ TEXT("item_w_tzimisce2_head"),      GRangeWordsRanged },    // 0x100047c3 CWeaponRanged (hidden)
+			{ TEXT("item_w_tzimisce_melee"),      GRangeWordsMelee108 },  // 0x1000f2bd (powerup)
+			{ TEXT("item_w_mingxiao_tentacle"),   GRangeWordsMelee108 },  // 0x10011ce3 (generic)
+			{ TEXT("item_w_mingxiao_melee"),      GRangeWordsMelee500 },  // 0x1000d035
+			{ TEXT("item_w_claws_ghoul"),         GRangeWordsMelee },     // 0x10015726 CWeaponMelee (generic)
+			{ TEXT("item_w_claws_protean4"),      GRangeWordsMelee },     // 0x100060b4 (generic)
+			{ TEXT("item_w_claws_protean5"),      GRangeWordsMelee },     // 0x100060b9 (generic)
+			{ TEXT("item_w_zombie_fists"),        GRangeWordsMelee },     // 0x10001f5f (generic)
+			{ TEXT("item_w_gargoyle_fist"),       GRangeWordsMelee },     // 0x1000d7ab (powerup)
+			{ TEXT("item_w_hengeyokai_fist"),     GRangeWordsMelee },     // 0x1001103b (powerup)
+			{ TEXT("item_w_manbat_claw"),         GRangeWordsMelee },     // 0x1000d850 (powerup)
+			{ TEXT("item_w_sabbatleader_attack"), GRangeWordsMelee },     // 0x10015393 (powerup)
+			{ TEXT("item_w_tzimisce3_claw"),      GRangeWordsMelee },     // 0x1000fa79 (powerup)
+			{ TEXT("item_w_werewolf_attacks"),    GRangeWordsMelee },     // 0x1000ccde (powerup)
+			{ TEXT("item_w_tzimisce2_claw"),      GRangeWordsMelee },     // 0x1000482c (hidden)
+		};
+	}
+
+	FRangeWords ConstructorRangeWords(const FString& Classname, const FElysiumItemDef* Record)
+	{
+		for (const FClassRangeRow& Row : GClassRangeRows)
+		{
+			if (Classname.Equals(Row.Classname, ESearchCase::IgnoreCase))
+			{
+				return Row.Words;
+			}
+		}
+		if (Record == nullptr)
+		{
+			return GRangeWordsBase;
+		}
+		switch (Record->Type)
+		{
+		case EElysiumItemType::WeaponFirearm: return GRangeWordsRanged;
+		case EElysiumItemType::WeaponMelee:   return GRangeWordsMelee;
+		case EElysiumItemType::WeaponThrown:  return GRangeWordsBase;
+		default:
+			// Every non-weapon item class recovered (`CWeaponIArmor`, `CWeaponIGeneric`,
+			// `CWeaponIWritten`) zeroes all four words.
+			return GRangeWordsNone;
+		}
+	}
+
+	bool ItemRangeWords(const FElysiumEntity& Item, FRangeWords& Out)
+	{
+		const FElysiumItem* Carried = Item.AsItem();
+		if (Carried == nullptr)
+		{
+			Out = FRangeWords();
+			return false;
+		}
+		if (const FElysiumWeapon* Weapon = Carried->AsWeapon())
+		{
+			Out = Weapon->RangeWords;
+			return true;
+		}
+		// A carried item the port does not run as a weapon controller (an NPC natural weapon whose
+		// record is `generic`/`powerup`/`hidden`): its class's constructor words. It has nowhere to
+		// hold `Weapon_Equip`'s 1e9 arm.
+		Out = ConstructorRangeWords(Carried->ClassName(), Carried->Data());
+		return true;
+	}
 }
 
 const TCHAR* FElysiumWeapon::VerdictName(EVerdict Verdict)
@@ -578,6 +664,8 @@ void FElysiumWeapon::Spawn()
 	SecondaryModeIndex = INDEX_NONE;
 
 	const FElysiumItemDef* Record = Data();
+	// The class constructor's four range words (`+0x8b8..+0x8c4`), by the classname's factory.
+	RangeWords = ElysiumWeapons::ConstructorRangeWords(ClassName(), Record);
 	if (!Record)
 	{
 		if (!IsRecordOnly())
@@ -739,6 +827,15 @@ void FElysiumWeapon::OnEquipped(FElysiumCombatCharacter& Wearer)
 		HoldAttacksUntil(Wearer.World->NowSeconds());
 	}
 	ApplyWieldVisual(*this, Wearer);
+	// `Weapon_Equip 0x1032d380`, after `Inventory_Wield`: a wielder carrying spawnflag `0x100` pins
+	// BOTH max words of its new active weapon to 1e9 (`0x4e6e6b28` into `+0x8c0` and `+0x8c4`).
+	// Retail runs it once per equip that reaches the active-weapon switch; here it runs on every
+	// draw, which only re-writes the same 1e9 (nothing lowers a max word), so no state differs.
+	if ((Wearer.SpawnFlags & ElysiumWeapons::LongRangeSpawnflag) != 0)
+	{
+		RangeWords.MaxRange1 = ElysiumWeapons::LongRangeWordUnits;
+		RangeWords.MaxRange2 = ElysiumWeapons::LongRangeWordUnits;
+	}
 	UE_LOG(LogElysiumWeapon, Verbose, TEXT("%s equipped by %s"), *DebugString(),
 		*Wearer.DebugString());
 }
@@ -779,6 +876,8 @@ void FElysiumWeapon::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	}
 	Out.Emplace(TEXT("Next attack"), FString::Printf(TEXT("primary %.3f  secondary %.3f"),
 		NextPrimaryAttackTime, NextSecondaryAttackTime));
+	Out.Emplace(TEXT("Range words"), FString::Printf(TEXT("min1 %.0f min2 %.0f max1 %.0f max2 %.0f"),
+		RangeWords.MinRange1, RangeWords.MinRange2, RangeWords.MaxRange1, RangeWords.MaxRange2));
 	Out.Emplace(TEXT("Swing"), Swing.bActive
 		? FString::Printf(TEXT("#%d %s rate %.2f commit %s recover %.3f"), Swing.Serial,
 			*Swing.Activity, Swing.PlaybackRate,
@@ -797,6 +896,41 @@ void FElysiumWeapon::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 }
 
 
+
+int32 FElysiumWeapon::RangeAttack1Conditions(const FElysiumEntity* Enemy, float Dot,
+	float DistanceUnits, double Now) const
+{
+	// Slot 365, `0x1024f670` (`RET 0xc`), arm for arm off the listing. Retail's first argument, the
+	// enemy, is never read.
+	(void)Enemy;
+	// `_DAT_10450564` (100.0f, `FCOMP float`) and `_DAT_10449270` (0.5, `FCOMP double`).
+	constexpr float TooCloseForRangedUnits = 100.0f;
+	constexpr double FacingDot = 0.5;
+
+	if (!(MagazineCount > 0))                                            // 1024f670 [+0x74c] / JG
+	{
+		return static_cast<int32>(EElysiumNpcCond::NoPrimaryAmmo);       // 0x40
+	}
+	if (DistanceUnits < TooCloseForRangedUnits)                          // 1024f682 TEST AH,5 / JP
+	{
+		return static_cast<int32>(EElysiumNpcCond::TooCloseForRanged);   // 0x08
+	}
+	if (DistanceUnits < RangeWords.MinRange1)                            // 1024f69b +0x8b8
+	{
+		return static_cast<int32>(EElysiumNpcCond::TooCloseToAttack);    // 0x5f
+	}
+	if (DistanceUnits > RangeWords.MaxRange1)                            // 1024f6b4 +0x8c0, AND 0x4100 / JNZ
+	{
+		return static_cast<int32>(EElysiumNpcCond::TooFarToAttack);      // 0x60
+	}
+	if (static_cast<double>(Dot) < FacingDot)                            // 1024f6cf
+	{
+		return static_cast<int32>(EElysiumNpcCond::NotFacingAttack);     // 0x61
+	}
+	// `0x10252410(this, 0)`: ready unless `curtime < +0x730` (NaN is ready); `NEG / SBB / AND 0x4f`.
+	return !(Now < NextPrimaryAttackTime)
+		? static_cast<int32>(EElysiumNpcCond::CanRangeAttack1) : 0;     // 1024f6e8
+}
 
 const FElysiumWeaponMode* FElysiumWeapon::ModeAt(int32 Index) const
 {

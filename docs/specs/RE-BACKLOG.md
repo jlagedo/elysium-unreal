@@ -72,6 +72,7 @@ already answered in the oracle; only the spec was corrected).
 | 46 | 0018/7 | `0x102f0fe0`, the simplifier's corner-cut pass (from `SimplifyPath 0x102f13d0` after the forward scan `0x102f0e80`; traces at `0x102f11e6` / `0x102f1241`, two segments npc → projected point → next waypoint). Question: its body past that outline, and whether it can reach slot 531 as the forward scan does. The port skips it, a counted seam (`ElysiumNpcBaseMotor.cpp:1382`) | queued | — (`navigation-jump-links.md` § "The door path") |
 | 47 | 0018/7 | The local-route arm of the stale-link re-probe: `0x103048d0` falls to `Triangulate 0x103059d0` with tolerance `\|end − start\| − trace[9]` before the NPC retry under `0x2400b`. `Triangulate`'s arithmetic is walked; what is owed is the Unreal service that answers it without changing the verdict. The port's `CheckStaleRoute` probe is a collision-world hull sweep plus the NPC retry, and the `Triangulate` arm is a counted seam (`NavStaleRouteLocalRouteAsks`, `ElysiumNpcBaseMotor.cpp:1023`) that answers "blocked" | queued | — |
 | 48 | 0018/7 | `0x102cc900` / `0x102ccce0` (the dynamic `info_node_link`). Record only: unreachable by content. Only `sp_giovanni_4` authors them, with `initialstate` never authored and no `TurnOn` fired, so all six stay off (`0x1000`); two find an AIN link (31, 30), both jump-only. Re-open if a map pass (21-8) finds an authored `initialstate` or a `TurnOn` | banked (record) | `navigation-jump-links.md` § "The capability gate" |
+| 49 | 0018/8 | Whether the engine's restore path re-runs `CAI_Hint::Spawn 0x102d0b60` (the `+0x474` class word, which is not saved). The port re-derives `ClassMask` on restore; if retail does not, its mask search `0x102d2980` finds nothing after a load. Also owed from the same story: `0x102d0910`'s output activator and caller order, `m_iszUserData`'s reader, `_DAT_1044e674` | queued | — (`shape.md` § "The claim primitives, the hint LOS check and the idle gate") |
 
 Not RE, recorded so nobody briefs them: 0018/4's open question was the owner's decision (the read
 was done; decided 2026-09-21, landed 2026-09-29); 0018/21-7's one owed read is a measurement over the six maps, part of its job 1.
@@ -111,8 +112,8 @@ port changes ride with the story named.
 Small, named, and none on a story's critical path: the retail name of goal flag `0x4` and any
 writer of it; what reads path byte `+0x00` (set by goal type 7) and the `0x8` `0x102f1dc0`
 receives; the blocked-move rule's `0x8` (0018/5 correction *(c)*) against goal word `+0x24`;
-`TASK_ATTEMPT_DIVE 0x107`'s arm; where a weapon instance's `m_fMinRange1` / `m_fMaxRange1` are
-filled from; condition `0x67`'s and `0x78`'s names; the body-fire particle's `+0x484`; the fourth
+`TASK_ATTEMPT_DIVE 0x107`'s arm; what the item text's `Range` word means (the weapon range words
+themselves are recovered, 0018 story 8); condition `0x67`'s and `0x78`'s names; the body-fire particle's `+0x484`; the fourth
 dialogue word `+0x6554`; `CAI_Motor +0x28`'s member name; two words of the scare record; the
 type-7 action dispatcher `0x101f8620`; the seven base schedule names `0x102cadd0` does not
 register; the run-time `SOUND:` table; `TASK_WAIT_PVS`'s base arm against Troika's.

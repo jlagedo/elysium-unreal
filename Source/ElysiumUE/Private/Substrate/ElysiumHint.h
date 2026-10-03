@@ -17,7 +17,8 @@ struct FElysiumClassDesc;
 // The network node (`m_nNodeID` `+0x5e4`) is the node-row counter `CNodeEnt::Spawn` gave it (0018
 // story 4, `ElysiumNodeEntity::SpawnNodeRow`), -1 for a standalone row; the node holds the hint back
 // at `+0xa0` (`FElysiumPlaceSet::AttachedHint`). The searches over the list (`0x102d1af0`,
-// `0x102d24b0`, `0x102d2980`) are story 8's.
+// `0x102d24b0`, `0x102d2980`, `0x102d1760`) and the claim trio are `FElysiumNpcBase`'s
+// (`ElysiumNpcBaseHints.cpp`, 0018 story 8); the rotating cursor is the world's.
 class FElysiumHint final : public FElysiumEntity
 {
 public:
@@ -44,6 +45,12 @@ public:
 	int32 NodeId = INDEX_NONE;                       // +0x5e4 m_nNodeID; 0018 story 4 writes it at load
 	float NextUseTime = 0.0f;                        // +0x5ec m_flNextUseTime (FIELD_TIME, a float)
 
+	// --- Session-only words, not in the datamap ----------------------------------------------------
+	// +0x474, the class word `Spawn` (`0x102d0b60`) derives from the type -- 1 for 100 / 101 /
+	// 0x27d8, 4 for 0x283c, 8 for 0x283d, 0x10 for 0x28a0, else 0 -- and `0x102d2980` masks against.
+	// Not a registered field, so the save walk never writes or reads it.
+	int32 ClassMask = 0;
+
 	// The registered classname (`ElysiumNodeEntity::HintClassname`).
 	static FName ClassName();
 
@@ -57,9 +64,23 @@ public:
 	FElysiumNpcBase::FHintWords ToWords() const;
 	void FromWords(const FElysiumNpcBase::FHintWords& Words);
 
-	// `CAI_Hint::Spawn` (`0x102d0b60`): the per-type defaults and the group fold
-	// (`FElysiumNpcBase::HintSpawn`).
+	// `CAI_Hint::Spawn` (`0x102d0b60`): the per-type defaults, the class word and the group fold
+	// (`FElysiumNpcBase::HintSpawn`), then -- on the five typed arms only -- `m_flHintRating`
+	// REPLACED by its `NPC_Cover_Distance_Scalar` row (`ApplyCoverDistanceScalar`).
 	virtual void Spawn() override;
+
+	// The tail of each typed arm of `0x102d0b60`: `FLD [+0x464]` / `__ftol` (`0x10431320`,
+	// truncating) / `0x1006caa0(table, index)` / `FSTP [+0x464]`. The table clamps (index < 0 reads
+	// row 0, at or past the count the last row); the shipped rows 0-6 are 8.0 .. 1.0, so the unset
+	// default 3 becomes 2.5. With no rulebook (a headless test world) the authored float stays.
+	void ApplyCoverDistanceScalar();
+
+	// `0x102d0910(hint, npc)`, reached from `CAI_BaseNPCTroika::StartTask` `TASK_KICK_HINT` (0x7f) /
+	// `TASK_KICK_HINT_AT` (0x80): fire `m_OnNPCKicked` (`+0x5bc`), then slot 77 `ScriptHide`
+	// (`HintScriptHide`, which also sets `m_iDisabled`) on this hint alone when `m_strGroup` is empty,
+	// else on every listed hint whose `Group` matches case-insensitively (`_strcmpi`), itself
+	// included, in list order.
+	void NpcKicked(FElysiumEntityHandle Npc);
 
 	// Slot 77 `CAI_Hint::ScriptHide` (`0x102d0860`): the base hide, then `m_iDisabled := 1`.
 	// Slot 78 `CAI_Hint::ScriptUnhide` (`0x102d0890`): the base unhide, then `m_iDisabled := 0`.

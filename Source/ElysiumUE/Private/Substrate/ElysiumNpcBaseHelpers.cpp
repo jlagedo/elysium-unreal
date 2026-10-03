@@ -391,12 +391,30 @@ bool FElysiumNpcBase::HintPositionCm(int32 HintNode, FVector& OutPointCm) const
 
 bool FElysiumNpcBase::IsHintAvailableToMe(int32 HintNode) const
 {
-	// SEAM for `0x102d1540`. Retail: the hint's `m_hHintOwner` (`+0x5e0`) is me -> true; otherwise
-	// `curtime < m_flNextUseTime` (`+0x5ec`) -> false; otherwise a LIVE owner handle -> false;
-	// else true. Family Hints ports the same three words as `IsHintUnusable`, from the other side.
-	// With no hint store there is no owner, which is retail's free answer.
-	(void)HintNode;
-	return true;
+	// `0x102d1540(hint, npc)`, in retail's order (`docs/vtmb/npc-ai/shape.md` § "The claim
+	// primitives, the hint LOS check and the idle gate"). `m_iDisabled` is NOT read: that arm is
+	// `0x102d14c0`'s (`IsHintUnusable`), not this one's.
+	FHintWords Words;
+	if (World == nullptr || !HintWords(HintNode, Words))
+	{
+		// CRASH GUARD: retail dereferences a NULL `CAI_Hint*`. An index that names no live hint
+		// answers true, the free answer.
+		return true;
+	}
+	// (1) The owner resolved by serial (a mismatch or -1 resolves to NULL) equals me -> TRUE. The
+	// `NULL == NULL` arm (a null requester skipping the time test) has no port caller.
+	const FElysiumEntity* Owner = World->Resolve(Words.HintOwner);
+	if (Owner == this)
+	{
+		return true;
+	}
+	// (2) `curtime < m_flNextUseTime` (`+0x5ec`), strict, on retail's FLOAT clock -> FALSE.
+	if (static_cast<float>(World->NowSeconds()) < static_cast<float>(Words.NextUseTime))
+	{
+		return false;
+	}
+	// (3) The owner handle valid, serial matching and the slot non-null -> FALSE; (4) else TRUE.
+	return Owner == nullptr;
 }
 
 // --- Moved from `ElysiumNpcTroikaHelpers.cpp` (story 5 step 5) ---

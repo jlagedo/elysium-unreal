@@ -173,8 +173,8 @@ static void StartTaskAngleVectors(const FVector& Angles, FVector* OutForward, FV
  *  (ties to `+0x8bc`); then `max = min(max, m_flDistTooFar)`. Source units. */
 void StartTaskWeaponRange(float& OutMinUnits, float& OutMaxUnits) const;
 
-/** **SEAM** for the active weapon's four range words `+0x8b8 +0x8bc +0x8c0 +0x8c4` (Source units).
- *  No port weapon record carries them; answers false and leaves the four at zero. */
+/** The active weapon's four range words `+0x8b8 +0x8bc +0x8c0 +0x8c4` (Source units), through
+ *  `ElysiumWeapons::ItemRangeWords`. False, leaving the four untouched, for a non-item entity. */
 bool StartTaskWeaponRangeWords(const FElysiumEntity& Weapon, float OutWords[4]) const;
 
 /** `CAI_Navigator::FindCoverPos` (`0x102edc80`): the port's navigator answers node cover through

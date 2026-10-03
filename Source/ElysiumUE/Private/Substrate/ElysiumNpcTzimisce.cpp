@@ -584,6 +584,14 @@ float FElysiumNpcTzimisce::GetStepDownHeight() const
 	return ElysiumNpcTunables::TzimisceMaxJumpSpeed;
 }
 
+// Slot 550: `0x103b6e30`, `FLD float ptr [0x104563b0]; RET` -- 4096.0 (the pooled cell the tunables
+// table names `FourThousandNinetySix`), where `CAI_BaseNPC 0x101a6c20` loads 1024.0. The radius
+// `FindTacticalHintNode` (`0x102b7110`) and the cover tasks search at.
+float FElysiumNpcTzimisce::CoverRadius()
+{
+	return ElysiumNpcTunables::FourThousandNinetySix;
+}
+
 // Slot 337: `0x103b9160`.
 int32 FElysiumNpcTzimisce::GetUsedHullBits()
 {

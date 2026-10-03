@@ -57,6 +57,8 @@ public:
 	virtual bool NavIgnoreCollision(FElysiumEntity* Other) override;
 	// Slot 523 `0x103b6df0` (the stand test's drop, SDK-named `GetStepDownHeight`): 56.0.
 	virtual float GetStepDownHeight() const override;
+	// Slot 550 `0x103b6e30` (`CoverRadius`): `FLD [0x104563b0]` = 4096.0; the base line answers 1024.0.
+	virtual float CoverRadius() override;
 	virtual int32 GetUsedHullBits() override;
 	virtual bool FValidateHintType(void* Hint) override;
 	virtual void TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& ChasePositionCm, void* Tolerance, void* SecondTolerance) override;

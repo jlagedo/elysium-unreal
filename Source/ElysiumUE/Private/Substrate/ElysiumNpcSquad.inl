@@ -29,8 +29,9 @@ int32 SquadMemberCount(const void* Squad) const;
 FElysiumEntity* SquadMember(const void* Squad, int32 Index) const;
 
 /** Retail's global `CAI_Hint` list (`DAT_10925450`, next link `+0x5d8`, `m_nHintType +0x5dc`),
- *  walked for the `Ordinal`-th node of `HintType`. This substrate has no hint-node store carrying
- *  hint types — `BaseScheduleHost.HintNode` is a bare index — so the walk answers null. */
+ *  walked head first (`FElysiumEntityWorld::HintList`) for the `Ordinal`-th hint of `HintType`
+ *  (0-based); the type is the only gate (`0x1036d100` / `0x1036e400`). Answers the hint entity, or
+ *  null off the end. Not one of the kernel "answers nothing" seams above: it is live. */
 FElysiumEntity* NthHintOfType(int32 HintType, int32 Ordinal) const;
 
 // --- Species words this family's bodies read ------------------------------------------------------

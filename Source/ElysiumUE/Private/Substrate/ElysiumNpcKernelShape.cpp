@@ -2397,11 +2397,11 @@ namespace
 			TEXT("GetAttackExtents"), ETier::Walked, TEXT("0x1009b030"), 0, TEXT("29c"), false,
 			TEXT("rule"), TEXT("") },
 		{ 17, TEXT(""), TEXT("TraceMessage"), TEXT("void TraceMessage(const char*, int) const"),
-			TEXT("TraceMessage"), ETier::Walked, TEXT("0x1009b380"), 1, TEXT("29c"), false,
-			TEXT("dead"), TEXT("") },
+			TEXT("TraceMessage"), ETier::Walked, TEXT("0x1028de90"), 12, TEXT("29d"), false,
+			TEXT("mechanism"), TEXT("") },
 		{ 18, TEXT(""), TEXT("TraceMessage"), TEXT("void TraceMessage(const char*, int)"),
-			TEXT("TraceMessage"), ETier::Walked, TEXT("0x1009b2c0"), 1, TEXT("29c"), false,
-			TEXT("dead"), TEXT("") },
+			TEXT("TraceMessage"), ETier::Walked, TEXT("0x1028de10"), 12, TEXT("29d"), false,
+			TEXT("mechanism"), TEXT("") },
 		{ 19, TEXT(""), TEXT("TraceMessageBare"), TEXT("void TraceMessageBare(const char*) const"),
 			TEXT("TraceMessageBare"), ETier::Walked, TEXT("0x1009b5a0"), 1, TEXT("29c"), false,
 			TEXT("dead"), TEXT("") },
@@ -8943,7 +8943,7 @@ const FElysiumNpcShapeCensus& Census()
 		/* DefaultSlots     */ 82,
 		/* VerdictedOverrides */ 2302,
 		/* RegistryValues   */ 218,
-		/* RowDigest        */ 0x795c4c52f1c87744ull,
+		/* RowDigest        */ 0x743f390b588cb54cull,
 	};
 	return GCensus;
 }

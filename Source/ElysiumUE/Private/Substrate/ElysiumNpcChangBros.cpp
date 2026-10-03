@@ -389,9 +389,9 @@ void FElysiumNpcChangBros::StoreArenaCenter()
 	// Both writes are inside the found arm: a map with no `0x4651` hint leaves `m_bCenterStored`
 	// false and the centre at whatever it was, which is what the Chang fight's own guard reads.
 	//
-	// The walk is exactly family **Squad**'s `NthHintOfType(type, 0)` seam — the global hint list,
-	// the same next link and the same type word — so that accessor is asked rather than a second
-	// walk stood beside it. It answers null (no hint store carries hint types here), so this takes
+	// The walk is exactly family **Squad**'s `NthHintOfType(type, 0)` — the world's hint list
+	// (`FElysiumEntityWorld::HintList`), head first, the same type word as the only gate — so that
+	// accessor is asked rather than a second walk stood beside it. A map with no `0x4651` hint takes
 	// retail's "fell off the end" arm and writes nothing.
 	const FElysiumEntity* Node = NthHintOfType(GMiscArenaCenterHintType, 0);
 	if (Node == nullptr)

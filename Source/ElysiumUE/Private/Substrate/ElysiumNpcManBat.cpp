@@ -253,11 +253,16 @@ bool FElysiumNpcManBat::FValidateHintType(void* Hint)
 
 FElysiumEntity* FElysiumNpcManBat::ManBatFindMoveGoalHint(int32 HintType, float RadiusUnits)
 {
-	// SEAM for `thunk_FUN_102d1af0(this, 20000, 0, 15000.0, 0, 0)`. Family Hints states the whole
-	// hint-store gap; this is the entity-answering form `0x1038b370` needs.
-	(void)HintType;
-	(void)RadiusUnits;
-	return nullptr;
+	// `thunk_FUN_102d1af0(this, type, 0, radius, 0, 0)` -- the type search (`FindHintNear`), flags 0
+	// (no trace, no scoring: the first admitted hint from the cursor wins), over the world's hint
+	// list. `0x1038b370` reads the found hint's ORIGIN, so the index is answered as its entity; a
+	// miss is NULL, the arm that zeroes the output velocity.
+	const int32 HintIndex = FindHintNear(HintType, 0, RadiusUnits);
+	if (World == nullptr || !World->Entities().IsValidIndex(HintIndex))
+	{
+		return nullptr;
+	}
+	return World->Entities()[HintIndex].Get();
 }
 
 void FElysiumNpcManBat::PlaceNamedEmitter(const TCHAR* Name, const FVector& PositionUnits)

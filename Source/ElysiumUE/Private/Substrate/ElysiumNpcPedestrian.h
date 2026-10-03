@@ -19,6 +19,9 @@ public:
 	virtual int32 SelectIdealStateRetail() override;
 	virtual void BuildScheduleTestBits(FElysiumNpcConditions& InOutMask) override;
 	virtual int32 IRelationType(FElysiumEntity* Candidate) override;
+	// Slot 550 `0x103a1de0` (`CoverRadius`): `FLD [0x104563b0]` = 4096.0, the cover and tactical-hint
+	// search radius; the base line answers 1024.0.
+	virtual float CoverRadius() override;
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 

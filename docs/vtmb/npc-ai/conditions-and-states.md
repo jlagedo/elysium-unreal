@@ -1622,8 +1622,28 @@ any name and just wakes its think. That entity's mode 3 (`0x101a98c0`) is the en
 `SetEnemy(goal)`, `UpdateEnemyMemory(goal, goal origin)` (slot 544), `SetCondition(NEW_ENEMY)` —
 the position goes into the MEMORY record, not `m_vSavePosition`.
 
-**Unrecovered:** a given weapon instance's `m_fMinRange1` / `m_fMaxRange1` (where the fields are
-filled from); condition `0x67`'s retail name.
+**Recovered 2026-09-30 (0018 story 8, findings R3) — where the range words come from.** The four
+words `m_fMinRange1 +0x8b8`, `m_fMinRange2 +0x8bc`, `m_fMaxRange1 +0x8c0`, `m_fMaxRange2 +0x8c4`
+(datamap SAVE only, no KEY flag) are written by the class constructors: `CBaseCombatWeapon
+0x10250ac0` 65/65/1024/1024 (kept by `CWeaponUnarmed 0x103f53f0` and `CWeaponIThrown 0x103ed110`);
+`CWeaponRanged 0x10238070` 150/65/1024/300 (every firearm factory, plus `item_w_tzimisce2_head`);
+`CWeaponMelee 0x103e9ac0` 0/0/50/50 (it zeroes the base's min words too); `_TzimisceMelee
+0x103e8a30` and `_MingXiaoTentacle 0x103ec870` 0/0/108/108; `_MingXiaoMelee 0x103ec2b0` 0/0/500/500;
+`CWeaponIArmor 0x103f3f00`, `IGeneric 0x103f42b0`, `IWritten 0x1040b270` all 0. The class is the
+classname factory's, and several NPC natural weapons author an item type that does not match it
+(`item_w_claws_ghoul` is `generic`, `item_w_werewolf_attacks` `powerup`, both `CWeaponMelee`).
+`Weapon_Equip 0x1032d380` sets both max words to 1e9 (`0x4e6e6b28`) after `Inventory_Wield` when the
+wielder has spawnflag `0x100`. `ChooseMeleeAttackSequence 0x10347180` accumulates onto the pair
+(`combat-and-damage.md`). **Correction to findings R3:** `weapon_maxrange1` is not a map keyvalue —
+no code references the string (`105c69a8`, beside `m_fMaxRange1`; the client carries the same pair)
+and the datamap gives the field SAVE only; it is a table name, not a key. Slot 365's body is read
+off the listing above; the port raises its ONE answer (`FElysiumWeapon::RangeAttack1Conditions`),
+`d` through `0x10270890` and `dot` = slot 368 `BodyDirection2D` against the flattened, normalised
+origin delta. The 0x4f follow-up (slot 562 twice, `0x66` / `0x63` from weapon slot 364) is still
+stood in for by the eye's occlusion latch.
+
+**Unrecovered:** condition `0x67`'s retail name; what the item text's `Range` (mode record `+0x270`,
+`0x10259437`) means — no server reader found; `client.dll 0x10184bc0` reads it.
 
 ## Story 29c-1, family Dialogue — the payphone gate and the pedestrian crosswalk
 

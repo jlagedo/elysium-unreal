@@ -37,18 +37,34 @@ namespace
 		FElysiumNpcWorldFixture World;
 		FElysiumNpc* Npc = nullptr;
 
-		explicit FLifecycleFixture(const TCHAR* Classname = TEXT("npc_VHumanCombatant"))
-			: World(Build(Classname))
+		explicit FLifecycleFixture(const TCHAR* Classname = TEXT("npc_VHumanCombatant"),
+			bool bWithHint = false)
+			: World(Build(Classname, bWithHint))
 		{
 			Npc = World.Npc(TEXT("subject"));
 			FElysiumNpcWorldFixture::Quiet({ Npc });
 		}
 
-		static FElysiumNpcWorldBuilder Build(const TCHAR* Classname)
+		static FElysiumNpcWorldBuilder Build(const TCHAR* Classname, bool bWithHint)
 		{
 			FElysiumNpcWorldBuilder Builder(TEXT("lifecycle"), 20260913);
 			Builder.AddNpc(TEXT("subject"), FVector(100.0, 0.0, 0.0), Classname);
+			if (bWithHint)
+			{
+				// One live `ai_hint` for the cases that hold, claim and release a hint: its
+				// `m_hHintOwner` / `m_flNextUseTime` are the words a release writes (0018 story 8).
+				FElysiumEntityDef& Def = Builder.AddEntity(TEXT("info_node_hint"), TEXT("held"),
+					FVector(200.0, 0.0, 0.0));
+				Def.Keys.Add(TEXT("hinttype"), TEXT("10100"));
+			}
 			return Builder;
+		}
+
+		// The live hint's entity index, `INDEX_NONE` when it did not stand.
+		int32 HeldHint()
+		{
+			const FElysiumEntity* Found = World.World.FindByName(TEXT("held"));
+			return Found != nullptr ? Found->Handle.Index : static_cast<int32>(INDEX_NONE);
 		}
 	};
 }
@@ -610,26 +626,33 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleRemovalTest,
 	"Elysium.Substrate.NpcKernelLifecycle.Removal", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleRemovalTest::RunTest(const FString&)
 {
-	FLifecycleFixture Fix;
+	FLifecycleFixture Fix(TEXT("npc_VHumanCombatant"), true);
 	if (!TestNotNull(TEXT("the subject spawned"), Fix.Npc))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *Fix.Npc;
-	// 0x1027ca30 — the hint release with a ZERO reuse delay. A claimed hint is given back and the
-	// node forgotten.
-	N.BaseScheduleHost.HintNode = 12;
-	N.BaseScheduleHost.bOwnsHint = true;
-	N.BaseScheduleHost.HintReusableAt = -1.0;
+	const int32 Held = Fix.HeldHint();
+	if (!TestNotEqual(TEXT("the hint stood"), Held, static_cast<int32>(INDEX_NONE)))
+	{
+		return false;
+	}
+	// 0x1027ca30 — the hint release `0x102d1420(hint, 0.0)` (no owner gate in this body): the held
+	// hint is unlocked and stamped, and the node forgotten.
+	N.BaseScheduleHost.HintNode = Held;
+	TestTrue(TEXT("the subject claims the hint"), N.ClaimHint(Held));
 	N.BaseNpcUpdateOnRemove();
+	FElysiumNpcBase::FHintWords Words;
+	TestTrue(TEXT("the hint is still live"), N.HintWords(Held, Words));
 	TestEqual(TEXT("the hint node is forgotten"), N.BaseScheduleHost.HintNode, INDEX_NONE);
-	TestFalse(TEXT("the claim is released"), N.BaseScheduleHost.bOwnsHint);
-	TestEqual(TEXT("with a zero reuse delay, which is retail's 0.0"),
-		N.BaseScheduleHost.HintReusableAt, N.World->NowSeconds());
+	TestFalse(TEXT("the claim is released: m_hHintOwner is -1"), Words.HintOwner.IsSet());
+	TestEqual(TEXT("with a zero reuse delay, which is retail's 0.0: m_flNextUseTime = curtime"),
+		Words.NextUseTime, N.World->NowSeconds(), 1e-3);
 	// A body with no hint writes nothing: retail's own guard on `m_pHintNode` (`1027ca59`).
-	N.BaseScheduleHost.HintReusableAt = -5.0;
+	TestTrue(TEXT("the subject claims the hint again"), N.ClaimHint(Held));
 	N.BaseNpcUpdateOnRemove();
-	TestEqual(TEXT("a body with no hint writes nothing"), N.BaseScheduleHost.HintReusableAt, -5.0);
+	TestTrue(TEXT("the hint is still live"), N.HintWords(Held, Words));
+	TestTrue(TEXT("a body with no hint writes nothing: the claim stands"), N.OwnsHint(Held));
 	// The squad unlink has no list to leave on this substrate.
 	TestNull(TEXT("and there is no squad to unlink from"), N.ConnectedSquad());
 	return true;
@@ -1016,17 +1039,21 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelLifecycleHintDestroyedTest,
 	"Elysium.Substrate.NpcKernelLifecycle.HintDestroyed", GLifecycleTestFlags)
 bool FElysiumNpcKernelLifecycleHintDestroyedTest::RunTest(const FString&)
 {
-	FLifecycleFixture Fix;
+	FLifecycleFixture Fix(TEXT("npc_VHumanCombatant"), true);
 	if (!TestNotNull(TEXT("the subject spawned"), Fix.Npc))
 	{
 		return false;
 	}
 	FElysiumNpc& N = *Fix.Npc;
+	const int32 Held = Fix.HeldHint();
+	if (!TestNotEqual(TEXT("the hint stood"), Held, static_cast<int32>(INDEX_NONE)))
+	{
+		return false;
+	}
 
-	// The owner is holding node 7 and owns it, with a cooldown that has not been set.
-	N.BaseScheduleHost.HintNode = 7;
-	N.BaseScheduleHost.bOwnsHint = true;
-	N.BaseScheduleHost.HintReusableAt = 0.0;
+	// The owner is holding the hint and owns it (the hint's `m_hHintOwner`), no cooldown set.
+	N.BaseScheduleHost.HintNode = Held;
+	TestTrue(TEXT("the owner claims the hint"), N.ClaimHint(Held));
 	N.Cognition.Conditions.Clear(static_cast<EElysiumNpcCond>(0x29));
 
 	N.HintDeletingDestructor();
@@ -1036,10 +1063,12 @@ bool FElysiumNpcKernelLifecycleHintDestroyedTest::RunTest(const FString&)
 		N.Cognition.Conditions.Has(static_cast<EElysiumNpcCond>(0x29)));
 	// `CAI_BaseNPCTroika::ClearHintNode(owner, 0.0)` — the reference goes, and the reuse delay is
 	// ZERO, not the 5.0 s every other caller of `ClearHintNode` passes.
+	FElysiumNpcBase::FHintWords Words;
+	TestTrue(TEXT("the hint is still live"), N.HintWords(Held, Words));
 	TestEqual(TEXT("the hint reference is dropped"), N.BaseScheduleHost.HintNode, INDEX_NONE);
-	TestFalse(TEXT("ownership is released"), N.BaseScheduleHost.bOwnsHint);
+	TestFalse(TEXT("ownership is released: m_hHintOwner is -1"), Words.HintOwner.IsSet());
 	TestEqual(TEXT("with a ZERO reuse delay: the node is gone, nothing to cool down"),
-		N.BaseScheduleHost.HintReusableAt, N.World != nullptr ? N.World->NowSeconds() : 0.0);
+		Words.NextUseTime, N.World != nullptr ? N.World->NowSeconds() : 0.0, 1e-3);
 
 	// Retail raises the condition unconditionally once the owner resolves — `ClearHintNode`'s own
 	// "no hint" arm performs no writes, but the condition has already been set by then.

@@ -399,9 +399,11 @@ void FElysiumNpc::MaintenanceOnStartSchedule(int32 LocalScheduleId)
 
 void FElysiumNpc::DebugTaskStart(const FElysiumScheduleStep& Step)
 {
-	if ((DebugOverlays & 0x08000000) != 0) // 0x10281d68
+	if ((DebugOverlays & OverlayTaskTextBit) != 0) // 0x10281d68, `npc_task_text`
 	{
-		UE_LOG(LogElysiumNpcEnt, Log, TEXT("Task: %s"), *FElysiumScheduleCorpus::Get().TaskOps().NameOf(Step.TaskId)); // 0x10281d83
+		// "Task: %s\n" (`0x105cdf20`), through the NPC trace, as `name (id)`.
+		NpcTraceMessage(FString::Printf(TEXT("Task: %s (%d)"),
+			*FElysiumScheduleCorpus::Get().TaskOps().NameOf(Step.TaskId), Step.TaskId)); // 0x10281d83
 	}
 }
 

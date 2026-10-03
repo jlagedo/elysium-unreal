@@ -572,12 +572,12 @@ FElysiumEntity* FElysiumNpc::FindKickPhysicsProp() const
 
 void FElysiumNpc::SearchForCoverHint(uint32 SearchMask)
 {
-	// SEAM for `0x102b7110`, the hint search that writes `m_pHintNode` (`+0x5ddc`). It reads
-	// `m_bLeaningLeft`, the cover-LOS counters (`+0x6404`/`+0x6408`), `m_iPeekOutCount` and
-	// `m_bStayEntrenched` and is the Hints layer's producer, not this family's.
-	ElysiumStub::Fired(TEXT("hints"), TEXT("CAI_BaseNPCTroika::SearchForCoverHint 0x102b7110"),
-		DebugString(), FString::Printf(TEXT("mask=0x%x"), SearchMask),
-		TEXT("0002/29c-1: no hint-node store"));
+	// `0x102b7110`, the tactical hint search the selector `0x102b7690` calls with its mask. The body
+	// is `FindTacticalHintNode` (`ElysiumNpcTroikaHelpers2.cpp`, live since 0018/8 over the world's
+	// hint list); this name was the selector family's seam for the same address and now forwards to
+	// it (found by the green-room cover scenario, 2026-09-30: the seam fired twice per staging and
+	// no hint could ever be claimed).
+	(void)FindTacticalHintNode(SearchMask);
 }
 
 bool FElysiumNpc::ScheduleMeleeReachGate() const

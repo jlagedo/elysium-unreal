@@ -568,6 +568,47 @@ public:
 
 	virtual void RecordScheduleEvent(const FString& Row) override;
 
+	// --- Retail's one-NPC trace (0018 story 8, brief S7) ---------------------------------------
+	// Recovered in `docs/vtmb/npc-ai/schedule-kernel.md` § "The debug NPC's prints". Definitions in
+	// `ElysiumNpcBaseTrace.cpp`.
+
+	/** `m_debugOverlays` (`+0x224`) bit `0x8000000`, which `npc_task_text` (`0x10087b70`) toggles
+	 *  and `SetSchedule` / `MaintainSchedule` / `IsScheduleValid` / `TaskFail` test before their
+	 *  "Schedule:", "Task:", "Break condition ->" and "TaskFail ->" prints. */
+	static constexpr int32 OverlayTaskTextBit = 0x08000000;
+	/** `m_debugOverlays` bit `0x80000000`, which `ent_trace` (`0x100b0ad0`) toggles: "trace this
+	 *  entity" for every `ent_trace_*` sub-switch. */
+	static constexpr int32 OverlayEntTraceBit = static_cast<int32>(0x80000000u);
+
+	/** `DAT_10925444`, the `ai_debug_npc` handle, resolved (serial match, live slot) to THIS NPC —
+	 *  the test every hint validator's reason-string arm makes (`FElysiumNpc::IsHintDebugNpc`
+	 *  forwards here) and the port's key for its one trace ring. */
+	bool IsAiDebugNpc() const;
+
+	/** `CAI_BaseNPCTroika` slot 18 (`0x1028de10`, formatter `0x1028d990`): one trace line,
+	 *  `"%-20s  %6.2f : %*s %s\n%s%s %s%s %s\n\n"` — name, `curtime`, `Indent` spaces, `Message`,
+	 *  then (only while `ent_trace_conditions > 0`) `"CONDS:"` + `" %s"` per held condition + `"\n"`,
+	 *  the `m_afMemory` letters, the `m_bfAINPCFlags` letters and `"NAV CLIMB|JUMP"`. Ungated, as
+	 *  retail's is: the caller holds the gate. Logged on `LogElysiumNpcTrace` and, for the
+	 *  `AiDebugNpc`, appended to the world's trace ring. */
+	void NpcTraceMessage(const FString& Message, int32 Indent = 0) const;
+
+	/** The port's stand-in for the 129 compiled-out `ent_trace_conditions` gates retail keeps in
+	 *  front of its `SetCondition` / `ClearCondition` call sites (`(**(*DAT_10924a6c + 4))()` with
+	 *  the answer discarded): under `ent_trace` and `ent_trace_conditions > 0`, one trace line per
+	 *  condition `GatherConditions` changed. NAMED MODERNIZATION (debug output only; retail's line
+	 *  text did not survive the compile). */
+	void TraceConditionDelta(const FElysiumNpcConditions& Before) const;
+
+	/** `SetSchedule` `0x10280e50`'s tail print under `npc_task_text`: "Schedule: %s". */
+	virtual void DebugScheduleInstalled(int32 GlobalScheduleId) override;
+
+	/** `IsScheduleValid` `0x10280ff0`'s break print under `npc_task_text`: the LOWEST ordinal that
+	 *  fired, `"   Break condition -> !%s"` when it is in the inverted set, else `"-> %s"`. Both
+	 *  sets are GLOBAL ordinals. */
+	virtual void DebugScheduleBreak(const FElysiumNpcConditions& Firing,
+		const FElysiumNpcConditions& InvertedFiring) override;
+
 	virtual void StopMoving();
 
 	/**

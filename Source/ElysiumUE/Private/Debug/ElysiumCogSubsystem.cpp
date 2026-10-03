@@ -230,8 +230,12 @@ void UElysiumCogSubsystem::PostInitialize()
 				// show has to survive the dormant-boot pass above rather than be hunted for
 				// afterwards. This runs once the hide window closes, which is why it is here and
 				// not beside the AddWindow calls.
+				// `-GreenRoomHeadless` is the unattended lab (MCP-driven checks): the window stays
+				// closed and Cog never takes the mouse or keyboard, so nothing sits between the
+				// driver and the stage. Every `elysium.gr_*` verb still works.
 				if (GreenRoomWindow != nullptr && IsValid(CogToHide)
-					&& FParse::Param(FCommandLine::Get(), TEXT("GreenRoomLab")))
+					&& FParse::Param(FCommandLine::Get(), TEXT("GreenRoomLab"))
+					&& !FParse::Param(FCommandLine::Get(), TEXT("GreenRoomHeadless")))
 				{
 					GreenRoomWindow->OpenLab();
 					// `-GreenRoomDock=left|right` parks the window against an edge of Cog's dockspace

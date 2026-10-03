@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumEntityDefs.h"   // SpawnAuthored takes a def by value
 #include "ElysiumEntityHandle.h"
 #include "Substrate/ElysiumRelationships.h"
 
@@ -87,12 +88,24 @@ namespace ElysiumArenaCast
 		// alone: law witnessing is a separate lane from combat hostility, and turning it on here
 		// would make every spawn a police test.
 		bool bAllowAlertLookaround = true;
+
+		// Any further authored keyfields (`hint_groups`, `percent_occluded_cover`, ...), written
+		// AFTER the fixed keys above, so an entry here replaces one of them rather than losing to it.
+		// Still ordinary keyvalues: the leaf's own field bindings parse them at Spawn.
+		TMap<FString, FString> ExtraKeys;
 	};
 
 	// Create, spawn and activate one character. Returns its handle, or an invalid handle with
 	// `OutError` set. The world must be ACTIVE — a dormant world defers `Activate`, and a character
 	// whose mind never armed never thinks.
 	FElysiumEntityHandle Spawn(FElysiumEntityWorld& World, const FSpawnRequest& Request,
+		FString& OutError);
+
+	// The same door for a def the caller has already shaped as a map row
+	// (`ElysiumArena::AuthoredRow` plus the class's authored keys): no key is added or rewritten.
+	// The same refusals as `Spawn` — an unbaked `model`, a dormant world, a classname that is not an
+	// NPC leaf — so a staged character that will not think says why.
+	FElysiumEntityHandle SpawnAuthored(FElysiumEntityWorld& World, FElysiumEntityDef Def,
 		FString& OutError);
 
 	// Retarget one live character at the player, after the fact. It writes the same relationship
@@ -112,6 +125,10 @@ namespace ElysiumArenaCast
 	// character spawned under an explicit targetname is deliberately NOT matched: naming one is how
 	// a caller says it is theirs to remove.
 	int32 ClearSpawned(FElysiumEntityWorld& World);
+
+	// Kill every live entity whose targetname is exactly `TargetName` (case-insensitive) — how the
+	// owner of an explicitly named character removes it. Returns the number killed.
+	int32 ClearNamed(FElysiumEntityWorld& World, const FString& TargetName);
 
 	// The prefix above, so a panel can label a row as arena-owned rather than re-deriving it.
 	const TCHAR* GeneratedNamePrefix();

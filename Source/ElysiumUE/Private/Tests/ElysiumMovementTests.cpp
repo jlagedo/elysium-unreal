@@ -1619,6 +1619,29 @@ bool FElysiumArenaSpecTest::RunTest(const FString&)
 	TestTrue(TEXT("the arena has spawn pads"), Spec.Pads.Num() > 0);
 	TestTrue(TEXT("the arena has anchors"), Spec.Anchors.Num() > 0);
 
+	// The cover network the 0018/8 scenario stands: two low-cover and two corner-cover nodes, each
+	// in group 1 (the scenario's `hint_groups` admits 1..32). A count, not a dimension: the
+	// scenario's node-id check reads one hint per row.
+	TestEqual(TEXT("the arena carries four cover nodes"), Spec.Nodes.Num(), 4);
+	{
+		int32 Low = 0;
+		int32 Corner = 0;
+		TSet<FString> NodeNames;
+		for (const ElysiumArena::FNode& Node : Spec.Nodes)
+		{
+			TestFalse(FString::Printf(TEXT("node %s is unique"), *Node.Name),
+				NodeNames.Contains(Node.Name));
+			NodeNames.Add(Node.Name);
+			TestNotNull(FString::Printf(TEXT("node %s is findable"), *Node.Name),
+				Spec.FindNode(Node.Name));
+			TestEqual(FString::Printf(TEXT("node %s is in group 1"), *Node.Name), Node.GroupId, 1);
+			Low += Node.HintType == ElysiumArena::HintTypeCoverLow ? 1 : 0;
+			Corner += Node.HintType == ElysiumArena::HintTypeCoverCorner ? 1 : 0;
+		}
+		TestEqual(TEXT("two low-cover nodes"), Low, 2);
+		TestEqual(TEXT("two corner-cover nodes"), Corner, 2);
+	}
+
 	// --- Structural invariants the builder depends on ---------------------------------------------
 	{
 		TSet<FName> SolidTags;
@@ -1692,7 +1715,12 @@ bool FElysiumArenaSpecTest::RunTest(const FString&)
 		Placed.Emplace(FString::Printf(TEXT("anchor %s"), *Anchor.Name.ToString()),
 			Anchor.FeetOrigin);
 	}
+	for (const ElysiumArena::FNode& Node : Spec.Nodes)
+	{
+		Placed.Emplace(FString::Printf(TEXT("node %s"), *Node.Name), Node.FeetCm);
+	}
 	Placed.Emplace(TEXT("the player's start"), Spec.PlayerFeet);
+	Placed.Emplace(TEXT("the player's behind-cover seat"), Spec.PlayerCoverFeet);
 
 	for (const TPair<FString, FVector>& Entry : Placed)
 	{
@@ -1759,6 +1787,23 @@ bool FElysiumArenaSpecTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("the room offers at least one cover anchor"), CoverAnchors > 0);
 
+	// A low-cover node stands against the block, in the face anchors' band; a corner-cover node is
+	// in a room corner, well clear of it.
+	for (const ElysiumArena::FNode& Node : Spec.Nodes)
+	{
+		const double Gap = GapToCover(Node.FeetCm);
+		if (Node.HintType == ElysiumArena::HintTypeCoverLow)
+		{
+			TestTrue(FString::Printf(TEXT("low-cover node %s stands against the block (gap %.0f cm)"),
+				*Node.Name, Gap), Gap > 0.0 && Gap < AgainstCm);
+		}
+		else
+		{
+			TestTrue(FString::Printf(TEXT("corner-cover node %s is clear of the block (gap %.0f cm)"),
+				*Node.Name, Gap), Gap > ClearCm);
+		}
+	}
+
 	// The player starts in the open. A fight that begins with the player already behind the only
 	// solid in the room is a fight whose acquisition never happens.
 	TestTrue(TEXT("the player starts clear of the block"), GapToCover(Spec.PlayerFeet) > ClearCm);
@@ -1784,6 +1829,25 @@ bool FElysiumArenaSpecTest::RunTest(const FString&)
 	else
 	{
 		AddError(TEXT("the arena has no behind_cover pad"));
+	}
+
+	// `gr_los on`'s seat is the same claim from the other side: out of sight from the `north` pad,
+	// where the cover scenario stands its gunman.
+	if (const ElysiumArena::FPad* North = Spec.FindPad(FName(TEXT("north"))))
+	{
+		constexpr int32 Samples = 128;
+		bool bBlocked = false;
+		for (int32 Index = 1; Index < Samples && !bBlocked; ++Index)
+		{
+			const FVector Point = FMath::Lerp(North->FeetOrigin, Spec.PlayerCoverFeet,
+				static_cast<float>(Index) / Samples);
+			bBlocked = InsideXY(*Cover, Point, 0.0f);
+		}
+		TestTrue(TEXT("the behind-cover seat is out of sight from the north pad"), bBlocked);
+	}
+	else
+	{
+		AddError(TEXT("the arena has no north pad"));
 	}
 
 	return true;

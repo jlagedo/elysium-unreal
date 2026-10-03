@@ -677,9 +677,11 @@ namespace ElysiumNpcCond
 	 * The committed enemy's range/facing/readiness conditions, gathered as step 5's tail.
 	 *
 	 * Melee capability produces `CAN_MELEE_ATTACK1` (0x51), `TOO_FAR_TO_ATTACK` (0x60) and
-	 * `WAITING_ATTACK_TIME` (0x2f); ranged capability produces `CAN_RANGE_ATTACK1` (0x4f),
-	 * `TOO_CLOSE_TO_ATTACK` (0x5f), `TOO_FAR_TO_ATTACK`, `NO_PRIMARY_AMMO` (0x40),
-	 * `WAITING_ATTACK_TIME` and `WEAPON_SIGHT_OCCLUDED` (0x66).
+	 * `WAITING_ATTACK_TIME` (0x2f); ranged capability produces `WAITING_ATTACK_TIME` and then the
+	 * ONE answer of the weapon's slot 365 (`FElysiumWeapon::RangeAttack1Conditions`, `0x1024f670`):
+	 * `NO_PRIMARY_AMMO` (0x40), `TOO_CLOSE_FOR_RANGED` (0x08), `TOO_CLOSE_TO_ATTACK` (0x5f),
+	 * `TOO_FAR_TO_ATTACK` (0x60), `NOT_FACING_ATTACK` (0x61) or `CAN_RANGE_ATTACK1` (0x4f) — the
+	 * last replaced by `WEAPON_SIGHT_OCCLUDED` (0x66) when the line-of-fire stand-in fails.
 	 *
 	 * SEAM (comment only, never set): `WEAPON_THROUGH_WALL` (0x3c) and `WEAPON_BLOCKED_BY_FRIEND`
 	 * (0x63). Both are line-of-FIRE terms about the muzzle rather than the eye — one asks whether

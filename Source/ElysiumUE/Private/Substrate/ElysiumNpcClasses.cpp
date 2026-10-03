@@ -75,6 +75,7 @@
 #include "Tests/ElysiumNpcTestHooks.h"
 
 DEFINE_LOG_CATEGORY(LogElysiumNpcEnt);
+DEFINE_LOG_CATEGORY(LogElysiumNpcTrace);
 
 #if WITH_DEV_AUTOMATION_TESTS
 bool ElysiumNpcTestHooks::ApplyResolvedTemplate(FElysiumEntity& Entity,

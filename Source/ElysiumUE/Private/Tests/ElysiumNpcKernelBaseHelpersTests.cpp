@@ -6,12 +6,16 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"
+
+#include <limits>
 
 // Story 29c-1, family **BaseHelpers** — `CAI_BaseNPC`'s own unnamed layer 0–9 bodies.
 //
@@ -325,8 +329,91 @@ bool FElysiumNpcKernelBaseHelpersFaceAnimTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// The hint validators — `0x10295ed0`, `0x102961a0`, `0x10296c40`.
+// The two cover validators — `0x10295ed0`, `0x102961a0`. (`0x10296c40` is family Hints'
+// `ValidateHintCoverRange`, tested in `ElysiumNpcKernelHintsTests.cpp`; the duplicate this family
+// carried was deleted by 0018 story 8, and its cases with it.)
 // -------------------------------------------------------------------------------------------------
+
+namespace
+{
+	// A world with one network node whose yaw is NOT the hint's authored angle: node 0 at (100, 0)
+	// stands at Unreal yaw -90, which is Source yaw 90 (`0x102f47b0` reflects the row back) — a
+	// facing of Unreal -Y. The `info_node_hint` binds to it; the crate is the cover object, 60 units
+	// toward Unreal -Y of the hint.
+	struct FCoverValidatorRig
+	{
+		FElysiumNpcWorldFixture F;
+		FElysiumNpc* Npc = nullptr;
+		FElysiumEntity* Crate = nullptr;
+		FElysiumHint* Hint = nullptr;
+
+		FCoverValidatorRig()
+			: F([]
+			{
+				FElysiumNpcWorldBuilder Builder(TEXT("basehelpers_cover"), 8u);
+				Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+				Builder.AddPlace(2, AtUnits(100.0), /*YawDeg (Unreal)=*/-90.0f);   // node 0
+				Builder.AddNpc(TEXT("guard"), FVector::ZeroVector);
+				Builder.AddEntity(TEXT("info_target"), TEXT("crate"), AtUnits(100.0, -60.0));
+				FElysiumEntityDef& Def = Builder.AddEntity(TEXT("info_node_hint"), TEXT("h"), AtUnits(100.0));
+				Def.Keys.Add(TEXT("hinttype"), TEXT("100"));
+				return Builder;
+			}())
+		{
+			Npc = F.Npc(TEXT("guard"));
+			Crate = F.World.FindByName(TEXT("crate"));
+			Hint = FElysiumHint::Cast(F.World.FindByName(TEXT("h")));
+			FElysiumNpcWorldFixture::Quiet({ Npc });
+			if (Hint != nullptr)
+			{
+				Hint->Origin = AtUnits(100.0);
+				Hint->NodeId = 0;                       // bound: `0x102d12e0` answers the node's yaw
+				Hint->Angles = FVector::ZeroVector;     // the AUTHORED angle faces +X
+				Hint->Disabled = 0;
+				Hint->TargetDistMin = 0.f;
+				Hint->TargetDistMax = 1000.f;
+				Hint->TargetAngleRangeDot = 0.5f;
+			}
+			if (Npc != nullptr && Crate != nullptr)
+			{
+				Npc->ScheduleHost.HintCoverObject = Crate->Handle;
+				Npc->BaseScheduleHost.HintNode = INDEX_NONE;
+			}
+		}
+
+		~FCoverValidatorRig()
+		{
+			F.Services.TraceRetailQuery = nullptr;
+		}
+
+		bool Ready(FAutomationTestBase& Test) const
+		{
+			return Test.TestNotNull(TEXT("the guard stood"), Npc)
+				&& Test.TestNotNull(TEXT("the crate stood"), Crate)
+				&& Test.TestNotNull(TEXT("the hint stood"), Hint);
+		}
+	};
+
+	// Records the last request and answers `Answer`.
+	struct FCoverTraceDouble
+	{
+		FElysiumRetailTrace Seen;
+		FElysiumRetailTraceResult Answer;
+		int32 Calls = 0;
+
+		void Install(FCoverValidatorRig& Rig)
+		{
+			Rig.F.Services.TraceRetailQuery = [this](const FElysiumRetailTrace& Request,
+				FElysiumRetailTraceResult& Out)
+			{
+				Seen = Request;
+				++Calls;
+				Out = Answer;
+				return true;
+			};
+		}
+	};
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseHelpersHintValidatorsTest,
 	"Elysium.Substrate.NpcKernelBaseHelpers.HintValidators", GElysiumNpcKernelBaseHelpersFlags)
@@ -339,120 +426,113 @@ bool FElysiumNpcKernelBaseHelpersHintValidatorsTest::RunTest(const FString&)
 	}
 	using EReason = FElysiumNpc::EHintRejectReason;
 	const FElysiumNpcBase::FHintWords Base = MakeHint();
+	const float NaN = std::numeric_limits<float>::quiet_NaN();
 
 	// --- 0x10295ed0's rule, the quiet twin -------------------------------------------------------
-	TestTrue(TEXT("a cover object 50 units along the hint's facing is valid"),
+	TestTrue(TEXT("0x10295ed0: a cover object 50 units along the hint's facing is valid"),
 		F.Npc->CoverHintStillValid(Base, AtUnits(50.0), FVector::ZeroVector, true));
-	TestFalse(TEXT("5 units is under m_flTargetDistMin"),
+	TestFalse(TEXT("0x10295ed0: 5 units is under m_flTargetDistMin"),
 		F.Npc->CoverHintStillValid(Base, AtUnits(5.0), FVector::ZeroVector, false));
-	TestFalse(TEXT("200 units is over m_flTargetDistMax"),
+	TestFalse(TEXT("0x10295ed0: 200 units is over m_flTargetDistMax"),
 		F.Npc->CoverHintStillValid(Base, AtUnits(200.0), FVector::ZeroVector, false));
 	// THE CURRENT HINT gets a 64-unit tolerance on BOTH ends (`_DAT_10451acc`), which is the one
 	// thing that distinguishes the two band policies.
-	TestTrue(TEXT("but 5 units passes for the hint I am already standing on"),
+	TestTrue(TEXT("0x10295ed0: but 5 units passes for the hint I am already standing on"),
 		F.Npc->CoverHintStillValid(Base, AtUnits(5.0), FVector::ZeroVector, true));
-	TestTrue(TEXT("and so does 160"),
+	TestTrue(TEXT("0x10295ed0: and so does 160"),
 		F.Npc->CoverHintStillValid(Base, AtUnits(160.0), FVector::ZeroVector, true));
-	TestFalse(TEXT("165 is past even the tolerance"),
+	TestFalse(TEXT("0x10295ed0: 165 is past even the tolerance"),
 		F.Npc->CoverHintStillValid(Base, AtUnits(165.0), FVector::ZeroVector, true));
-	// The projection: the cover object must lie ahead of the hint's own facing.
-	TestFalse(TEXT("a cover object behind the hint fails the dot floor"),
+	// The two band policies do not share a compare direction: an unordered `m_flTargetDistMax`
+	// continues on the current hint (`TEST AH,5 / JP`) and fails another (`AND EAX,0x4100 / JZ`).
+	{
+		FElysiumNpcBase::FHintWords Unordered = Base;
+		Unordered.TargetDistMax = NaN;
+		TestTrue(TEXT("0x10295ed0 10295f9c: an unordered max+64 compare continues on the current hint"),
+			F.Npc->CoverHintStillValid(Unordered, AtUnits(50.0), FVector::ZeroVector, true));
+		TestFalse(TEXT("0x10295ed0 10295fd0: ...and fails on another"),
+			F.Npc->CoverHintStillValid(Unordered, AtUnits(50.0), AtUnits(0.0, 10.0), false));
+	}
+	// The projection: the cover object must lie STRICTLY ahead of the facing past the dot floor.
+	TestFalse(TEXT("0x10295ed0: a cover object behind the hint fails the dot floor"),
 		F.Npc->CoverHintStillValid(Base, AtUnits(-50.0), FVector::ZeroVector, true));
+	{
+		FElysiumNpcBase::FHintWords Unordered = Base;
+		Unordered.TargetAngleRangeDot = NaN;
+		TestTrue(TEXT("0x10295ed0 1029603c: an unordered projection compare continues (TEST AH,0x41 / JNP)"),
+			F.Npc->CoverHintStillValid(Unordered, AtUnits(-50.0), FVector::ZeroVector, true));
+	}
+	// The facing is a SOURCE yaw through `0x101d2f40`, and the port's world has Y negated: a
+	// standalone hint at yaw 90 faces Unreal -Y.
+	{
+		FElysiumNpcBase::FHintWords Turned = Base;
+		Turned.Angles = FVector(0.0, 90.0, 0.0);
+		TestTrue(TEXT("0x10295ed0: Source yaw 90 faces a cover object at Unreal -Y"),
+			F.Npc->CoverHintStillValid(Turned, AtUnits(0.0, -50.0), FVector::ZeroVector, true));
+		TestFalse(TEXT("0x10295ed0: ...and turns its back on one at Unreal +Y"),
+			F.Npc->CoverHintStillValid(Turned, AtUnits(0.0, 50.0), FVector::ZeroVector, true));
+	}
 	{
 		FElysiumNpcBase::FHintWords Disabled = Base;
 		Disabled.Disabled = 1;
-		TestFalse(TEXT("a disabled hint is never valid"),
+		TestFalse(TEXT("0x10295ed0: a disabled hint is never valid"),
 			F.Npc->CoverHintStillValid(Disabled, AtUnits(50.0), FVector::ZeroVector, true));
 	}
 	// A hint that is NOT the current one has two extra gates: a 512-unit proximity
 	// (`_DAT_10483aac`) and, for hint type 0x283d, a forward-projection test.
-	TestTrue(TEXT("a nearby other hint passes the 512-unit proximity gate"),
+	TestTrue(TEXT("0x10295ed0: a nearby other hint passes the 512-unit proximity gate"),
 		F.Npc->CoverHintStillValid(Base, AtUnits(50.0), AtUnits(0.0, 10.0), false));
-	TestFalse(TEXT("one 600 units away does not"),
+	TestFalse(TEXT("0x10295ed0: one 600 units away does not"),
 		F.Npc->CoverHintStillValid(Base, AtUnits(50.0), AtUnits(0.0, 600.0), false));
+	{
+		// The 0x283d arm dots the direction `0x10137220` NORMALISED in place — a 3-D normalise, Z
+		// included — with the facing, in X and Y only, against 0.5 strictly.
+		FElysiumNpcBase::FHintWords Forward = Base;
+		Forward.HintType = 0x283d;
+		TestTrue(TEXT("0x10295ed0 102960b6: I stand behind a 0x283d hint -> forward projection 1.0 passes"),
+			F.Npc->CoverHintStillValid(Forward, AtUnits(50.0), AtUnits(-100.0), false));
+		TestFalse(TEXT("0x10295ed0 102960b6: in front of it -> -1.0 fails"),
+			F.Npc->CoverHintStillValid(Forward, AtUnits(50.0), AtUnits(100.0), false));
+		TestTrue(TEXT("0x10295ed0 1029609d: the direction is normalised — 0.4 units behind still dots ~1.0"),
+			F.Npc->CoverHintStillValid(Forward, AtUnits(50.0), AtUnits(-0.4), false));
+		TestFalse(TEXT("0x10295ed0 1029609d: ...in 3-D, so a steep drop dots under 0.5 in X and Y"),
+			F.Npc->CoverHintStillValid(Forward, AtUnits(50.0), AtUnits(-1.0, 0.0, -10.0), false));
+		TestTrue(TEXT("0x10295ed0: a type other than 0x283d skips that arm"),
+			F.Npc->CoverHintStillValid(Base, AtUnits(50.0), AtUnits(100.0), false));
+	}
 
 	// --- 0x102961a0's rule, the verbose twin -----------------------------------------------------
-	TestEqual(TEXT("the verbose twin accepts the same geometry"),
+	TestEqual(TEXT("0x102961a0: the verbose twin accepts the same geometry"),
 		F.Npc->CoverHintRejectReason(Base, AtUnits(50.0), true), EReason::None);
-	TestEqual(TEXT("and answers one shared reason for both band policies"),
+	TestEqual(TEXT("0x102961a0: and answers one shared reason for both band policies"),
 		F.Npc->CoverHintRejectReason(Base, AtUnits(200.0), false), EReason::DistanceOutOfBand);
-	TestEqual(TEXT("and its own reason for the projection"),
+	TestEqual(TEXT("0x102961a0: and its own reason for the projection"),
 		F.Npc->CoverHintRejectReason(Base, AtUnits(-50.0), true), EReason::OutsideGoodRange);
+	{
+		FElysiumNpcBase::FHintWords Turned = Base;
+		Turned.Angles = FVector(0.0, 90.0, 0.0);
+		TestEqual(TEXT("0x102961a0: the same Source-axis facing — yaw 90 faces Unreal -Y"),
+			F.Npc->CoverHintRejectReason(Turned, AtUnits(0.0, -50.0), true), EReason::None);
+		TestEqual(TEXT("0x102961a0: ...and not Unreal +Y"),
+			F.Npc->CoverHintRejectReason(Turned, AtUnits(0.0, 50.0), true), EReason::OutsideGoodRange);
+	}
 	{
 		// The `target_name` gate, which `0x10295ed0` does NOT have. An empty name admits everyone.
 		FElysiumNpcBase::FHintWords Named = Base;
 		Named.TargetName = TEXT("someone_else");
-		TestEqual(TEXT("a target_name naming another NPC is a mismatch"),
+		TestEqual(TEXT("0x102961a0: a target_name naming another NPC is a mismatch"),
 			F.Npc->CoverHintRejectReason(Named, AtUnits(50.0), true),
 			EReason::TargetNameMismatch);
 		Named.TargetName = F.Npc->TargetName.ToUpper();
-		TestEqual(TEXT("and the comparison is case-insensitive"),
+		TestEqual(TEXT("0x102961a0: and the comparison is case-insensitive"),
 			F.Npc->CoverHintRejectReason(Named, AtUnits(50.0), true), EReason::None);
 	}
-
-	// --- 0x10296c40's rule, the attack-position validator ----------------------------------------
-	//
-	// THE GEOMETRY EVERY CASE BELOW STANDS IN. The hint is at the origin facing +X and the enemy is
-	// somewhere along +X; `MeCm` puts the NPC BEHIND the hint, on the far side from the enemy.
-	// That position is not decoration — `0x10296c40`'s projection gate is
-	// `dot( normalize2D(me - enemy), normalize2D(hint - enemy) ) >= _DAT_10451ab4`, and retail's
-	// literal is in its own message, `"Projection (%.2f) < 0.2"`. An NPC standing ON its enemy
-	// makes `me - enemy` the zero vector, whose normalise leaves it zero in retail's
-	// `VectorNormalize` exactly as it does in the port's, so the dot is 0 and the gate rejects
-	// before any band is ever reached. Behind the hint the dot is 1 and the bands decide, which is
-	// what these cases are about.
-	const float Good = 0.5f;
-	const float Bad = 2.0f;
-	const FVector MeCm = AtUnits(-10.0);
-	F.Npc->bStayEntrenched = false;
-	TestEqual(TEXT("an enemy 50 units along the hint's facing is a valid attack position"),
-		F.Npc->AttackHintRejectReason(Base, AtUnits(50.0), MeCm, false, true, Good, Bad),
-		EReason::None);
-	TestEqual(TEXT("no active weapon refuses first"),
-		F.Npc->AttackHintRejectReason(Base, AtUnits(50.0), MeCm, false, false, Good, Bad),
-		EReason::NoActiveWeapon);
-	TestEqual(TEXT("under m_flTargetDistMin answers its own reason"),
-		F.Npc->AttackHintRejectReason(Base, AtUnits(5.0), MeCm, false, true, Good, Bad),
-		EReason::DistanceBelowMin);
-	TestEqual(TEXT("over m_flTargetDistMax answers the other"),
-		F.Npc->AttackHintRejectReason(Base, AtUnits(200.0), MeCm, false, true, Good, Bad),
-		EReason::DistanceAboveMax);
-	// `m_bStayEntrenched` SKIPS the upper bound entirely — and, on my own hint, the whole body.
-	F.Npc->bStayEntrenched = true;
-	TestEqual(TEXT("m_bStayEntrenched drops the upper bound"),
-		F.Npc->AttackHintRejectReason(Base, AtUnits(200.0), MeCm, false, true, Good, Bad),
-		EReason::None);
-	TestEqual(TEXT("and on my own hint it accepts before any test at all"),
-		F.Npc->AttackHintRejectReason(Base, AtUnits(5.0), MeCm, true, false, Good, Bad),
-		EReason::None);
-	F.Npc->bStayEntrenched = false;
-	// The projection gate itself, both ways round, and only for a hint that is not already mine.
-	TestEqual(TEXT("standing on the far side of the enemy from the hint fails the projection"),
-		F.Npc->AttackHintRejectReason(Base, AtUnits(50.0), AtUnits(150.0), false, true, Good, Bad),
-		EReason::Projection);
-	TestEqual(TEXT("and so does standing exactly on it — a zero direction dots to zero"),
-		F.Npc->AttackHintRejectReason(Base, AtUnits(50.0), AtUnits(50.0), false, true, Good, Bad),
-		EReason::Projection);
-	TestEqual(TEXT("but the current hint skips the projection entirely"),
-		F.Npc->AttackHintRejectReason(Base, AtUnits(50.0), AtUnits(150.0), true, true, Good, Bad),
-		EReason::None);
-	// The two band gates are NOT symmetric: good range is `<=` and bad range is `>=`. At 50 units
-	// the facing projection is `50 / (50 + _DAT_1046a51c)` — FLT_EPSILON keeps it a hair under 1.0.
-	TestEqual(TEXT("a facing dot at the good-range floor 1.0 is OUTSIDE it"),
-		F.Npc->AttackHintRejectReason(Base, AtUnits(50.0), MeCm, false, true, 1.0f, Bad),
-		EReason::OutsideGoodRange);
-	TestNotEqual(TEXT("the epsilon keeps it below a bad-range ceiling of 1.0"),
-		F.Npc->AttackHintRejectReason(Base, AtUnits(50.0), MeCm, false, true, Good, 1.0f),
-		EReason::InsideBadRange);
-	TestEqual(TEXT("and a ceiling just under it is reached — the bad range is `>=`"),
-		F.Npc->AttackHintRejectReason(Base, AtUnits(50.0), MeCm, false, true, Good, 0.9999f),
-		EReason::InsideBadRange);
 
 	// The seams every entry point depends on, asked and refusing.
 	FElysiumNpcBase::FHintWords Resolved;
 	TestFalse(TEXT("the hint store answers nothing"), F.Npc->HintWords(0, Resolved));
 	float RangeUnits = -1.f;
-	TestFalse(TEXT("and no weapon carries a maximum range"),
+	TestFalse(TEXT("an NPC with no active weapon has no +0x8c0 to answer"),
 		F.Npc->ActiveWeaponMaxRangeUnits(RangeUnits));
 	TestFalse(TEXT("so 0x10295ed0's entry point answers false for every node"),
 		F.Npc->FUN_10295ed0(0));
@@ -460,6 +540,101 @@ bool FElysiumNpcKernelBaseHelpersHintValidatorsTest::RunTest(const FString&)
 	TestFalse(TEXT("no NPC is the ai_debug_npc, so no reason string is ever formatted"),
 		F.Npc->IsHintDebugNpc());
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelBaseHelpersCoverNodeFacingTest,
+	"Elysium.Substrate.NpcKernelBaseHelpers.CoverNodeFacing", GElysiumNpcKernelBaseHelpersFlags)
+bool FElysiumNpcKernelBaseHelpersCoverNodeFacingTest::RunTest(const FString&)
+{
+	FCoverValidatorRig R;
+	if (!R.Ready(*this))
+	{
+		return false;
+	}
+	using EReason = FElysiumNpc::EHintRejectReason;
+	FElysiumNpc* Npc = R.Npc;
+	const int32 HintId = R.Hint->Handle.Index;
+
+	// The pure rules over words: a NODE-BOUND hint is judged by the node's yaw (`0x102d12e0` ->
+	// `0x102f47b0`), not by its authored angle.
+	FElysiumNpcBase::FHintWords Words = MakeHint();
+	Words.NodeId = 0;                                   // node 0: Source yaw 90, Unreal -Y
+	Words.Angles = FVector::ZeroVector;                 // authored: +X
+	TestTrue(TEXT("0x102d12e0: a node-bound hint faces its NODE's yaw — a cover object at Unreal -Y passes"),
+		Npc->CoverHintStillValid(Words, AtUnits(0.0, -50.0), FVector::ZeroVector, true));
+	TestFalse(TEXT("0x102d12e0: ...and one along its authored +X fails"),
+		Npc->CoverHintStillValid(Words, AtUnits(50.0), FVector::ZeroVector, true));
+	TestEqual(TEXT("0x102961a0: the verbose twin reads the same node yaw"),
+		Npc->CoverHintRejectReason(Words, AtUnits(0.0, -50.0), true), EReason::None);
+	TestEqual(TEXT("0x102961a0: ...and rejects along the authored +X"),
+		Npc->CoverHintRejectReason(Words, AtUnits(50.0), true), EReason::OutsideGoodRange);
+	Words.NodeId = 7;
+	TestTrue(TEXT("0x102f47b0: an id past the network answers yaw 0.0 — +X passes"),
+		Npc->CoverHintStillValid(Words, AtUnits(50.0), FVector::ZeroVector, true));
+	Words.NodeId = INDEX_NONE;
+	TestTrue(TEXT("0x102d12e0: an unbound hint reads its own angles (+X passes)"),
+		Npc->CoverHintStillValid(Words, AtUnits(50.0), FVector::ZeroVector, true));
+
+	// The entry point `0x10295ed0` over the live hint: the crate is the cover object, at Unreal -Y of
+	// the hint, which faces it only by its node's yaw. No collision world: `0x102968f0` passes.
+	TestTrue(TEXT("0x10295ed0: the live node-bound hint faces the cover object by its node yaw"),
+		Npc->FUN_10295ed0(HintId));
+	R.Hint->NodeId = INDEX_NONE;
+	TestFalse(TEXT("0x10295ed0: unbound, its authored +X faces past the cover object"),
+		Npc->FUN_10295ed0(HintId));
+	TestEqual(TEXT("0x102961a0: ...and the verbose twin answers the projection reason"),
+		Npc->FUN_102961a0(HintId), EReason::OutsideGoodRange);
+	R.Hint->NodeId = 0;
+
+	// `102960e5`: the tail CALLS `0x102968f0` with the COVER OBJECT as its target.
+	FCoverTraceDouble Trace;
+	Trace.Install(R);
+	Trace.Answer = FElysiumRetailTraceResult();
+	Trace.Answer.Fraction = 0.5f;
+	TestFalse(TEXT("0x10295ed0 102960e5: a blocked hint LOS fails another hint"),
+		Npc->FUN_10295ed0(HintId));
+	TestTrue(TEXT("0x10295ed0 102960e5: ...a line that ends at the cover object's eye"),
+		Trace.Seen.EndCm.Equals(R.Crate->EyePosition(), 0.01));
+	TestEqual(TEXT("0x10295ed0 102960e5: ...under 0x102968f0's mask"), Trace.Seen.RetailMask, 0x46804099);
+	Trace.Answer = FElysiumRetailTraceResult();
+	TestTrue(TEXT("0x10295ed0 102960e5: a clear hint LOS passes"), Npc->FUN_10295ed0(HintId));
+
+	// The current hint accepts before the tail: no trace is cast.
+	Trace.Answer.Fraction = 0.5f;
+	Npc->BaseScheduleHost.HintNode = HintId;
+	const int32 CallsBefore = Trace.Calls;
+	TestTrue(TEXT("0x10295ed0 10296048: the current hint accepts before 0x102968f0"),
+		Npc->FUN_10295ed0(HintId));
+	TestEqual(TEXT("0x10295ed0 10296048: ...and casts no trace"), Trace.Calls, CallsBefore);
+	TestEqual(TEXT("0x102961a0 10296459: the verbose twin's current hint accepts before its ray"),
+		Npc->FUN_102961a0(HintId), EReason::None);
+	TestEqual(TEXT("0x102961a0 10296459: ...and casts no trace"), Trace.Calls, CallsBefore);
+	Npc->BaseScheduleHost.HintNode = INDEX_NONE;
+
+	// `0x102961a0`'s inline ray: from me, raised by my collision maxs z, to `0x102d1180`.
+	TestEqual(TEXT("0x102961a0 102965bd: a blocked inline ray fails"),
+		Npc->FUN_102961a0(HintId), EReason::FailedLos);
+	FVector MinsUnits = FVector::ZeroVector;
+	FVector MaxsUnits = FVector::ZeroVector;
+	FElysiumNpcBase::RetailCollisionExtents(*Npc, MinsUnits, MaxsUnits);
+	TestTrue(TEXT("0x102961a0 1029648f: the ray starts at my origin raised by the collision maxs z"),
+		Trace.Seen.StartCm.Equals(Npc->Origin + FVector(0.0, 0.0, MaxsUnits.Z * ElysiumMove::U), 0.01));
+	FVector HintPointCm = FVector::ZeroVector;
+	Npc->HintPositionCm(HintId, HintPointCm);
+	TestTrue(TEXT("0x102961a0 102964a2: ...and ends at the hint's position for me (0x102d1180)"),
+		Trace.Seen.EndCm.Equals(HintPointCm, 0.01));
+	TestEqual(TEXT("0x102961a0 1029657e: ...under mask 0x46804099"), Trace.Seen.RetailMask, 0x46804099);
+	TestTrue(TEXT("0x102961a0 1029650f: ...with CTraceFilterSimple's pass entity, me"),
+		Trace.Seen.Ignore.Num() == 1 && Trace.Seen.Ignore[0] == Npc->Handle);
+	Trace.Answer = FElysiumRetailTraceResult();
+	Trace.Answer.bStartSolid = true;
+	TestEqual(TEXT("0x102961a0 102965dc: startsolid fails a full-fraction ray"),
+		Npc->FUN_102961a0(HintId), EReason::FailedLos);
+	Trace.Answer = FElysiumRetailTraceResult();
+	TestEqual(TEXT("0x102961a0: a clear ray passes"), Npc->FUN_102961a0(HintId), EReason::None);
+
+	R.F.Services.TraceRetailQuery = nullptr;
 	return true;
 }
 
@@ -548,7 +723,10 @@ bool FElysiumNpcKernelBaseHelpersReactionSlotsTest::RunTest(const FString&)
 	TestFalse(TEXT("a null node is not unusable"), F.Npc->IsUnusableNode(nullptr));
 	TestFalse(TEXT("and neither is one whose hint the seam cannot find"),
 		F.Npc->IsUnusableNode(F.Npc));
-	TestTrue(TEXT("because an absent hint is free"), F.Npc->IsHintAvailableToMe(0));
+	// `0x102d1540` on an index that names no hint: retail would dereference a NULL `CAI_Hint*`; the
+	// port's crash guard answers true, the free answer.
+	TestTrue(TEXT("because an index that names no hint is free (the crash guard)"),
+		F.Npc->IsHintAvailableToMe(0));
 
 	// Slot 542 (`0x10273dd0`): the ownership move family Squad already stands. The port carries one
 	// enemy memory per NPC and no squad memory to point it at, so the move changes nothing — and

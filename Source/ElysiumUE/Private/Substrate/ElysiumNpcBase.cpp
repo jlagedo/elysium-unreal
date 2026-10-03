@@ -252,8 +252,17 @@ void FElysiumNpcBase::SerializeExtendedHeader(FElysiumSaveArchive& Ar)
 void FElysiumNpcBase::TaskFail(int32 Reason)
 {
 	// `CAI_BaseNPC::TaskFail` `0x10273fc0`, slot 448's base body; the Troika override `0x1029adb0`
-	// ends in a direct call to it. The `ai_debug_task`-gated trace (`+0x5f30..+0x5f3c` and the
-	// "TaskFail -> %s" DevMsg) is dead; the three writes are the body.
+	// ends in a direct call to it. Its head is a debug arm under `developer != 0` (`DAT_1070af4c`,
+	// `0x10273fc3`..`0x10273fe3`): the overlay record `+0x5f30` (the failure text, `0x10316fa0`),
+	// `+0x5f38` (the schedule), `+0x5f3c = 0`, and — under `m_debugOverlays & 0x8000000`
+	// (`npc_task_text`, `0x10274000`) — `DevMsg("   TaskFail -> %s\n")` (`0x105cc5e0`). The port
+	// prints that line through the NPC trace; NAMED DIVERGENCE (debug output only): the `developer`
+	// half of the gate (shipped 0) is dropped for the print and the overlay record is not kept.
+	if ((DebugOverlays & OverlayTaskTextBit) != 0)
+	{
+		NpcTraceMessage(FString::Printf(TEXT("   TaskFail -> %s (0x%x)"), ElysiumTaskFailureName(Reason), Reason));
+	}
+	// The three writes are the body.
 	BaseScheduleHost.bShouldMove = false;                                    // +0x1a40
 	BaseScheduleHost.FailureReason = Reason;                                 // +0x5c50 taskFailureCode
 	Cognition.Conditions.Set(EElysiumNpcCond::TaskFailed);                   // SetCondition(0x5c)
@@ -308,6 +317,13 @@ bool FElysiumNpcBase::IsIdealActivityCurrent() const
 void FElysiumNpcBase::RecordScheduleEvent(const FString& Row)
 {
 	Mind.RecordExternal(Row);
+	// NAMED MODERNIZATION (debug output only): the port's schedule rows — among them every
+	// selector's `+0x1b2c`/`+0x1b30`/`+0x1b34` stamp (retail writes the selector id, `__FILE__` and
+	// `__LINE__` and prints nothing) — join the NPC trace under `npc_task_text`, indented 2.
+	if ((DebugOverlays & OverlayTaskTextBit) != 0)
+	{
+		NpcTraceMessage(Row, 2);
+	}
 }
 
 void FElysiumNpcBase::StopMoving()

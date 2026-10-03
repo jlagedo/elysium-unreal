@@ -6,9 +6,11 @@
 
 #include "UObject/WeakObjectPtr.h"
 
+class FElysiumEntityWorld;
 class FElysiumGreenRoomRun;
 class IConsoleObject;
 class UElysiumMapSubsystem;
+class UWorld;
 
 /**
  * The green room's `elysium.gr_*` verb set — the whole lab reachable from a console line.
@@ -34,6 +36,12 @@ private:
 	// The armed lab, or null with a reason already logged. Every verb starts here, so "no green room
 	// is standing" is one message in one place rather than one per verb.
 	FElysiumGreenRoomRun* Lab(const TCHAR* Verb) const;
+
+	// The stage world's entity world and engine world, or null with a reason logged. The arena
+	// scenario verbs (`gr_scenario`, `gr_hints`, `gr_los`) are console-only staging — they compose the
+	// builder's, the cast's and the lab's own doors and add no path the game does not already use.
+	FElysiumEntityWorld* EntityWorldFor(const TCHAR* Verb) const;
+	UWorld* World() const;
 
 	void Register(const TCHAR* Name, const TCHAR* Help,
 		TFunction<void(FElysiumGreenRoomRun&, const TArray<FString>&)> Body);

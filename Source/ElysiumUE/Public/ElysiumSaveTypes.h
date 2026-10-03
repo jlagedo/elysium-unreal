@@ -97,6 +97,10 @@ struct FElysiumSaveVersion
 		// carries and gains retail's own `AIExtendedSaveHeader_t` in their place. A mid-record
 		// change in every direction at once, so the floor moves with it.
 		NpcSaveWalkSplit = 39,
+		// 0018/8: the NPC's base schedule host drops its two hint stand-ins (the claim flag and the
+		// reuse time); the hint's own `m_hHintOwner` / `m_flNextUseTime` carry them. A mid-record
+		// change in the NPC leaf, so the floor moves.
+		NpcHintClaimOnHint = 40,
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -119,7 +123,10 @@ struct FElysiumSaveVersion
 	// of the NPC leaf and into the generated datamap walk, which changes the record in both
 	// directions at once. Every leaf gate below this line is therefore unreachable-false by
 	// construction, and a gate that can never read false is dead code rather than compatibility.
-	static constexpr int32 MinSupported = NpcSaveWalkSplit;
+	//
+	// `NpcHintClaimOnHint` removes two words from the middle of the NPC's base schedule host record;
+	// saves are disposable and the floor moves with it.
+	static constexpr int32 MinSupported = NpcHintClaimOnHint;
 
 	static const FGuid GUID;
 };

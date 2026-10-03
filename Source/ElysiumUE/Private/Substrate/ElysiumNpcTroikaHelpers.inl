@@ -127,18 +127,14 @@ static const int32* AttackCoordinatorIndices(int32& OutCount);
  *  units (`cm / U`). False, the point untouched, only for an index that names no live hint. */
 bool HintStandPosition(int32 HintNode, FVector& InOutPointUnits) const;
 
-/** SEAM for `thunk_FUN_102d1350(hint, this)` — the hint CLAIM `FindTacticalHintNode` takes on its
- *  winner; a false answer drops the node again. Answers false, which is the drop arm. */
+/** `thunk_FUN_102d1350(hint, this)` — the hint CLAIM `FindTacticalHintNode` takes on its winner; a
+ *  false answer drops the node again. Forwards to `FElysiumNpcBase::ClaimHint` (the live hint's
+ *  `m_hHintOwner`). */
 bool ClaimHintNode(int32 HintNode);
 
 /** SEAM for slot 214 (vtable `+0x358`), the record `ApplyHintLeanOffset` reads its crouch/stand
  *  scale out of at `+0x04`. The slot is unidentified in the census; answers `0.0`. */
 float LeanScaleRecordField() const;
-
-/** SEAM for slot 550 (vtable `+0x898`) — the IDEAL RANGE `FindTacticalHintNode` searches at.
- *  Answers `0.0`, so the search radius is zero and the absent hint store answers nothing either
- *  way. */
-float IdealHintSearchRangeUnits() const;
 
 /** SEAM for `thunk_FUN_102e0290(pathfinder, target, out, outRatio)` — the lead-ratio query
  *  `ComputeTargetLeadPoint` (`0x102c36d0`) asks the pathfinder (`vtable +0x874`, slot 541) for.

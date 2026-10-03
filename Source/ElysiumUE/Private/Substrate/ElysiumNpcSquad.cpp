@@ -46,10 +46,30 @@ FElysiumEntity* FElysiumNpc::SquadMember(const void* Squad, int32 Index) const
 
 FElysiumEntity* FElysiumNpc::NthHintOfType(int32 HintType, int32 Ordinal) const
 {
-	// SEAM for the global `CAI_Hint` list walk (`DAT_10925450`, next `+0x5d8`, `m_nHintType
-	// +0x5dc`). `BaseScheduleHost.HintNode` is a bare node index here; no store carries hint types yet.
-	(void)HintType;
-	(void)Ordinal;
+	// The global `CAI_Hint` list walk both retail callers inline (`CNPC_VChangBros::SelectUnitedNode
+	// 0x1036d100`, `StoreArenaCenter 0x1036e400`): from the head `DAT_10925450` along `+0x5d8`,
+	// counting the nodes whose `m_nHintType` (`+0x5dc`) equals the type, answering the `Ordinal`-th.
+	// The TYPE word is the only gate -- neither body reads `m_iDisabled`, the owner or the reuse
+	// time, so a disabled or claimed hint counts. The cursor `DAT_10925454` is not touched. Falling
+	// off the end answers NULL. The list is `FElysiumEntityWorld::HintList`, head first.
+	if (World == nullptr)
+	{
+		return nullptr;
+	}
+	int32 Seen = 0;
+	for (const int32 HintIndex : World->HintList())
+	{
+		FHintWords Words;
+		if (!HintWords(HintIndex, Words) || Words.HintType != HintType)
+		{
+			continue;   // not a live hint (crash guard: retail holds the pointer) / another type
+		}
+		if (Seen == Ordinal)
+		{
+			return World->Entities().IsValidIndex(HintIndex) ? World->Entities()[HintIndex].Get() : nullptr;
+		}
+		++Seen;
+	}
 	return nullptr;
 }
 

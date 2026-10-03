@@ -534,8 +534,22 @@ int32 FElysiumNpc::StartTask19WeaponMaxBurst() const
 
 float FElysiumNpc::StartTask19WeaponRangeWord(int32 Offset) const
 {
-	(void)Offset;   // SEAM for weapon `+0x8b8` / `+0x8bc` / `+0x8c0` / `+0x8c4`.
-	return 0.f;
+	// Weapon `+0x8b8` / `+0x8bc` / `+0x8c0` / `+0x8c4`, the active weapon's class words (0018 story 8,
+	// findings R3). Every caller has already tested `GetActiveWeapon()`; with none it reads 0.
+	ElysiumWeapons::FRangeWords Words;
+	const FElysiumEntity* HeldWeapon = ActiveWeaponEntity();
+	if (HeldWeapon == nullptr || !ElysiumWeapons::ItemRangeWords(*HeldWeapon, Words))
+	{
+		return 0.f;
+	}
+	switch (Offset)
+	{
+	case 0x8b8: return Words.MinRange1;
+	case 0x8bc: return Words.MinRange2;
+	case 0x8c0: return Words.MaxRange1;
+	case 0x8c4: return Words.MaxRange2;
+	default:    return 0.f;
+	}
 }
 
 void FElysiumNpc::StartTask19WeaponSwing(bool bSecondary)
@@ -1205,7 +1219,7 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 			}
 			else
 			{
-				BaseScheduleHost.bOwnsHint = true;
+				// The claim wrote the live hint's `m_hHintOwner`; nothing on the NPC records it.
 				FVector HintUnits = FVector::ZeroVector;
 				(void)HintStandPosition(BaseScheduleHost.HintNode, HintUnits);  // 0x102a292d 0x102d1180
 				FStartTask19NavGoal Goal;                                     // 0x102a2932..29de

@@ -712,10 +712,14 @@ running min of `+0x2CC`) and `m_fMaxRange1` (`+0x8C0`, running max of `+0x2D0`).
 bookkeeping: `CBaseCombatWeapon` (`0x1024F670`, vtable slot 365) turns the pair into
 `COND_TOO_CLOSE_TO_ATTACK` (`0x5F`) and `COND_TOO_FAR_TO_ATTACK` (`0x60`) for
 `GatherAttackConditions`, and `GatherEnemyConditions` (`0x10270B20`) maxes `m_flDistTooFar` against
-`m_fMaxRange1` for `COND_ENEMY_TOO_FAR`. **`m_fMinRange1` has no other writer in the image**, so the
-band only ever widens across every activity the weapon scores and never narrows; `m_fMaxRange1` is
-reset only in `Weapon_Equip` (`0x1032D380`) and only under spawnflag `0x100`, to `1.0e9` — which
-pins the far gate open rather than restoring a bound.
+`m_fMaxRange1` for `COND_ENEMY_TOO_FAR`. **`m_fMinRange1` has no other runtime writer in the
+image**, so the band only ever widens across every activity the weapon scores and never narrows;
+`m_fMaxRange1` is reset only in `Weapon_Equip` (`0x1032D380`) and only under spawnflag `0x100`, to
+`1.0e9` — which pins the far gate open rather than restoring a bound. The starting values are the
+class constructors' (2026-09-30, 0018 story 8): `CWeaponMelee 0x103E9AC0` 0/0/50/50, the Tzimisce
+and Ming Xiao tentacle melee classes 108, `_MingXiaoMelee` 500, `CWeaponRanged 0x10238070`
+150/65/1024/300, the base `0x10250AC0` 65/65/1024/1024 (`npc-ai/conditions-and-states.md`).
+The port does not yet run this accumulation; its words stay the constructor's.
 
 **The search.** `FUN_10348100` takes the candidate list, the parallel `actweight` array, the scored
 flags and a requested mask, and matches on `(flags & mask) == mask` — **subset, not equality**, so a

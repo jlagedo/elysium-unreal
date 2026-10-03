@@ -8,3 +8,8 @@
 // `LogElysiumNpcEnt` filter show a whole NPC's story. `ElysiumNpcClasses.cpp` — the registration
 // site — owns the definition.
 DECLARE_LOG_CATEGORY_EXTERN(LogElysiumNpcEnt, Log, All);
+
+// Retail's one-NPC trace (`CBaseEntity::TraceMessage`, slot 18, and the `npc_task_text` prints),
+// written through `FElysiumNpcBase::TraceMessage`. Its own category so the chain can be filtered
+// apart from the family's other rows. Defined beside `LogElysiumNpcEnt` in `ElysiumNpcClasses.cpp`.
+DECLARE_LOG_CATEGORY_EXTERN(LogElysiumNpcTrace, Log, All);

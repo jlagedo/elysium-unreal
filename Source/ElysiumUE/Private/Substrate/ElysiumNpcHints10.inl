@@ -20,10 +20,10 @@
 // `CNPC_VVampireBoss::SelectHintNode` (`0x103c59d0`), read against the already-ported
 // `FElysiumNpc::FindHintNode` and left `present`.
 //
-// **This family stands no second hint store.** 29c-1's family Hints built the seam
-// (`FHintWords`, `HintWords()`, `FindHintByName`, `FindHintNear`) and it is reused unchanged; every
-// body here takes an `FHintWords` or a node index and answers retail's own null arm when the seam
-// comes back empty. `ElysiumNpcHints.inl`'s `FWerewolfHintGroundpoint` IS retail's `+0x6714`
+// **This family stands no second hint store.** It reads the live hints on the world's list through
+// family Hints' view and the base searches (`FHintWords`, `HintWords()`, `FindHintByName`,
+// `FindHintNear`); every body here takes an `FHintWords` or a node index and answers retail's own
+// null arm when the index names no live hint. `ElysiumNpcHints.inl`'s `FWerewolfHintGroundpoint` IS retail's `+0x6714`
 // record and this family adds the word at `+0x00` that `GetHintEndEntity` reads.
 
 // --- Slot 566 `FValidateHintType` (`0x10295c20`) --------------------------------------------------

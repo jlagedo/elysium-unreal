@@ -335,6 +335,46 @@ namespace ElysiumWeapons
 	// with no distance to trace at all, which is the same degraded shape as the melee reach above and
 	// reports the same way. Source units — the one conversion is at the call site.
 	inline constexpr float RangedRangeSourceUnits = 1024.0f;
+
+	// --- `CBaseCombatWeapon`'s four range words (0018 story 8, findings R3) ----------------------
+	//
+	// `m_fMinRange1 +0x8b8`, `m_fMinRange2 +0x8bc`, `m_fMaxRange1 +0x8c0`, `m_fMaxRange2 +0x8c4`
+	// (datamap SAVE fields, not keyvalues). SOURCE units. The item text's `Range` key is NOT their
+	// source (`WeaponModeDataLoader 0x10259230` stores it on the mode record `+0x270`); the class
+	// constructors are:
+	//   `CBaseCombatWeapon 0x10250ac0`  65 / 65 / 1024 / 1024 (kept by `CWeaponUnarmed 0x103f53f0`
+	//                                    and `CWeaponIThrown 0x103ed110`)
+	//   `CWeaponRanged 0x10238070`      150 / 65 / 1024 / 300
+	//   `CWeaponMelee 0x103e9ac0`       0 / 0 / 50 / 50
+	//   `CWeaponMelee_TzimisceMelee 0x103e8a30`, `_MingXiaoTentacle 0x103ec870`  0 / 0 / 108 / 108
+	//   `CWeaponMelee_MingXiaoMelee 0x103ec2b0`  0 / 0 / 500 / 500
+	//   `CWeaponIArmor 0x103f3f00`, `CWeaponIGeneric 0x103f42b0`, `CWeaponIWritten 0x1040b270`  all 0
+	// Other writers: `Weapon_Equip 0x1032d380` (both max words to 1e9 under the wielder's spawnflag
+	// `0x100`, `FElysiumWeapon::OnEquipped`), and `ChooseMeleeAttackSequence 0x10347180`'s running
+	// min/max of the scored sequences' reach (`combat-and-damage.md`), which is NOT ported.
+	struct FRangeWords
+	{
+		float MinRange1 = 0.f;   // +0x8b8
+		float MinRange2 = 0.f;   // +0x8bc
+		float MaxRange1 = 0.f;   // +0x8c0
+		float MaxRange2 = 0.f;   // +0x8c4
+	};
+
+	// The words the retail class constructor writes for the item the classname's factory builds.
+	// Retail picks the class by CLASSNAME (`LINK_ENTITY_TO_CLASS`), and several NPC natural weapons
+	// author an item type their class does not match (`item_w_claws_ghoul` is `generic`, a
+	// `CWeaponMelee`), so the named factories are an exact-classname table and the record's type
+	// answers only for the rest. A null record is a weapon-family entity with no row: the base words.
+	FRangeWords ConstructorRangeWords(const FString& Classname, const FElysiumItemDef* Record);
+
+	// `GetActiveWeapon()->+0x8b8..+0x8c4` for any carried item: the weapon controller's own words
+	// (which carry the `Weapon_Equip` arm), else the constructor's for the item's class. False only
+	// for an entity that is not an item.
+	bool ItemRangeWords(const FElysiumEntity& Item, FRangeWords& Out);
+
+	// `Weapon_Equip`'s `0x4e6e6b28` (1.0e9f) and the NPC spawnflag it tests (`m_spawnflags & 0x100`).
+	inline constexpr float LongRangeWordUnits = 1.0e9f;
+	inline constexpr int32 LongRangeSpawnflag = 0x100;
 }
 
 // FElysiumWeapon — the controller.
@@ -396,6 +436,23 @@ public:
 	// pre-existing later deadline is never shortened.
 	double NextPrimaryAttackTime = 0.0;
 	double NextSecondaryAttackTime = 0.0;
+
+	// `m_fMinRange1..m_fMaxRange2` (`+0x8b8..+0x8c4`), SOURCE units: the class constructor's words
+	// (`ElysiumWeapons::ConstructorRangeWords`, written by `Spawn`), raised by `OnEquipped`'s
+	// `Weapon_Equip` spawnflag-`0x100` arm. NOT saved yet: a load re-runs `Spawn` and gets the class
+	// words back, but loses the 1e9 arm until the next equip (retail saves all four; the save
+	// version that would carry them is not this change's).
+	ElysiumWeapons::FRangeWords RangeWords;
+
+	// Weapon slot 365, `CBaseCombatWeapon 0x1024f670` — `CAN_RANGE_ATTACK1`'s producer, called by
+	// `GatherAttackConditions 0x1026dd10` at `0x1026de87` with `(enemy, dot, d)`. Answers ONE
+	// condition number, first match, every compare strict (`TEST AH,5 / JP` / `AND 0x4100 / JNZ`),
+	// so a NaN `d` or `dot` passes every edge:
+	//   magazine `+0x74c` < 1 -> 0x40; d < 100 -> 0x08; d < `+0x8b8` -> 0x5f; d > `+0x8c0` -> 0x60;
+	//   dot < 0.5 -> 0x61; else 0x4f when the `+0x730` attack timer has run out, else 0.
+	// `Enemy` is retail's first argument, which the body never reads. `Now` is `curtime`.
+	int32 RangeAttack1Conditions(const FElysiumEntity* Enemy, float Dot, float DistanceUnits,
+		double Now) const;
 
 	// The accepted-swing transaction.
 	struct FSwing

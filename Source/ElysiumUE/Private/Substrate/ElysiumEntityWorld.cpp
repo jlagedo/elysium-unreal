@@ -205,6 +205,10 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 			*Defs.MapName, SpawnMisses, PlaceSet->NumNodes());
 	}
 	Hints.Reset();
+	HintCursorIndex = INDEX_NONE;   // `DAT_10925454` goes with the list: a session global
+	AiDebugNpcHandle = FElysiumEntityHandle::Invalid();   // `DAT_10925444`: debug, dropped with the list
+	AiDebugHintProbeRecord.Reset();
+	ResetAiDebugTrace();
 	for (const FElysiumEntityDef& Def : Defs.Defs)
 	{
 		if (Def.Classname.Equals(TEXT("worldspawn"), ESearchCase::IgnoreCase))
@@ -250,6 +254,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		if (FElysiumHint* Hint = FElysiumHint::Cast(Ent.Get()))
 		{
 			Hints.Insert(i, 0);   // `0x102d2e30`: the constructor prepends
+			HintCursorIndex = INDEX_NONE;   // the factory `0x102d2f30` zeroes `DAT_10925454` per hint
 			// `FUN_102d2f30` writes `+0x5e4` after the keyvalues and before the hint's `Spawn`
 			// (`0x102d2fce`); -1 for a standalone row and for an `ai_hint` the map authored itself.
 			Hint->NodeId = NodeSpawns[i].NodeId;
@@ -602,7 +607,8 @@ FElysiumEntityHandle FElysiumEntityWorld::CreateRuntimeEntityNoSpawn(FElysiumEnt
 	ClassIndex.Add(FName(*Ref.Classname), Idx);
 	if (FElysiumHint* Hint = FElysiumHint::Cast(Ent.Get()))
 	{
-		Hints.Insert(Idx, 0);
+		Hints.Insert(Idx, 0);   // `0x102d2e30`: the constructor prepends
+		HintCursorIndex = INDEX_NONE;   // the factory `0x102d2f30` zeroes `DAT_10925454` per hint
 		Hint->NodeId = NodeSpawn.NodeId;
 	}
 
@@ -2912,6 +2918,10 @@ void FElysiumEntityWorld::Teardown()
 	NameIndex.Empty();
 	ClassIndex.Empty();
 	Hints.Empty();
+	HintCursorIndex = INDEX_NONE;
+	AiDebugNpcHandle = FElysiumEntityHandle::Invalid();
+	AiDebugHintProbeRecord.Reset();
+	ResetAiDebugTrace();
 
 	// Bodies are the world's embodiments — destroy them with the world. (The map actor also frees
 	// them when it is destroyed; this handles a world rebuild on a surviving actor, e.g. reload.)

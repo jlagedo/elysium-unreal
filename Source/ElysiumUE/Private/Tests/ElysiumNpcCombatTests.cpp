@@ -556,7 +556,7 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 		TestFalse(TEXT("...and withholds CAN_MELEE_ATTACK1"), Cond.Has(ECond::CanMeleeAttack1));
 	}
 
-	// --- Ranged: the two bands, the ammunition test and the ready answer ------------------------
+	// --- Ranged: weapon slot 365 (`0x1024f670`), one answer, first match -------------------------
 	{
 		FCombatFixture F(GPistol);
 		if (F.Fighter == nullptr || F.Target == nullptr)
@@ -575,57 +575,108 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 			return false;
 		}
 
-		// Inside the fighter's own swing reach: too close to shoot.
-		FElysiumNpcConditions Cond;
-		ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
-		TestTrue(TEXT("an enemy inside the NPC's own melee reach is TOO_CLOSE_TO_ATTACK"),
-			Cond.Has(ECond::TooCloseToAttack));
-		TestFalse(TEXT("...so the shot is not offered"), Cond.Has(ECond::CanRangeAttack1));
+		// The words are the `CWeaponRanged` constructor's (`0x10238070`), not the mode's `Range`.
+		TestEqual(TEXT("m_fMinRange1 +0x8b8 is 150"), Weapon->RangeWords.MinRange1, 150.f);
+		TestEqual(TEXT("m_fMinRange2 +0x8bc is 65"), Weapon->RangeWords.MinRange2, 65.f);
+		TestEqual(TEXT("m_fMaxRange1 +0x8c0 is 1024"), Weapon->RangeWords.MaxRange1, 1024.f);
+		TestEqual(TEXT("m_fMaxRange2 +0x8c4 is 300"), Weapon->RangeWords.MaxRange2, 300.f);
 
-		// In the band: past the near edge, inside the mode's authored `Range`.
-		F.Target->Origin = FVector(Cm(400.0), 0.0, 0.0);
-		Cond.Reset();
-		ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
-		TestTrue(TEXT("an enemy inside the authored Range is shootable"),
-			Cond.Has(ECond::CanRangeAttack1));
-		TestFalse(TEXT("...and neither band edge fires"),
-			Cond.Has(ECond::TooCloseToAttack) || Cond.Has(ECond::TooFarToAttack));
+		// Slot 365 answers exactly one of these; the gather raises that one.
+		const ECond Answers[] = { ECond::NoPrimaryAmmo, ECond::TooCloseForRanged, ECond::TooCloseToAttack,
+			ECond::TooFarToAttack, ECond::NotFacingAttack, ECond::CanRangeAttack1, ECond::WeaponSightOccluded };
+		auto Gather = [this, &F, &Answers](double AtUnits, ECond Expected, const TCHAR* What)
+		{
+			F.Target->Origin = FVector(Cm(AtUnits), 0.0, 0.0);
+			FElysiumNpcConditions Cond;
+			ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
+			int32 Raised = 0;
+			for (const ECond Answer : Answers)
+			{
+				Raised += Cond.Has(Answer) ? 1 : 0;
+			}
+			TestTrue(What, Cond.Has(Expected));
+			TestEqual(*FString::Printf(TEXT("%s: exactly one answer"), What), Raised, 1);
+			return Cond;
+		};
 
-		// Beyond the mode's authored `Range`.
-		F.Target->Origin = FVector(Cm(GPistolRangeUnits + 500.0), 0.0, 0.0);
-		Cond.Reset();
-		ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
-		TestTrue(TEXT("an enemy past the mode's authored Range is TOO_FAR_TO_ATTACK"),
-			Cond.Has(ECond::TooFarToAttack));
-		TestFalse(TEXT("...and is not shootable"), Cond.Has(ECond::CanRangeAttack1));
+		// 100 cm is ~39 units: under the 100-unit edge (`_DAT_10450564`).
+		Gather(100.0 / ElysiumMove::U, ECond::TooCloseForRanged,
+			TEXT("d < 100 is TOO_CLOSE_FOR_RANGED (0x08)"));
+		Gather(125.0, ECond::TooCloseToAttack, TEXT("100 <= d < m_fMinRange1 150 is TOO_CLOSE_TO_ATTACK (0x5f)"));
+		Gather(400.0, ECond::CanRangeAttack1, TEXT("150 <= d <= 1024, faced and ready, is CAN_RANGE_ATTACK1"));
+		// Past 1024 but inside the mode's authored `Range` 2000: the `Range` key feeds no compare.
+		Gather(1500.0, ECond::TooFarToAttack,
+			TEXT("d > m_fMaxRange1 1024 is TOO_FAR_TO_ATTACK (0x60), whatever the mode's Range"));
 
-		// `NO_PRIMARY_AMMO` (0x40) is an empty magazine AND an empty reserve.
-		F.Target->Origin = FVector(Cm(400.0), 0.0, 0.0);
+		// The facing: slot 368's body direction against the flattened direction, `dot < 0.5` (0x61).
+		F.Fighter->Angles.Y = 180.0;
+		Gather(400.0, ECond::NotFacingAttack, TEXT("an enemy behind the NPC is NOT_FACING_ATTACK (0x61)"));
+		F.Fighter->Angles.Y = 0.0;
+
+		// The empty clip is the FIRST arm (`[+0x74c] JG`), reserve or not.
 		Weapon->MagazineCount = 0;
-		Cond.Reset();
-		ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
-		TestTrue(TEXT("an empty magazine with an empty reserve raises NO_PRIMARY_AMMO"),
-			Cond.Has(ECond::NoPrimaryAmmo));
-		TestFalse(TEXT("...and withholds the shot"), Cond.Has(ECond::CanRangeAttack1));
-
+		Gather(400.0, ECond::NoPrimaryAmmo, TEXT("an empty magazine is NO_PRIMARY_AMMO (0x40)"));
 		F.Fighter->Inventory.AddReserve(TEXT("NpcCombatRound"), 12);
-		Cond.Reset();
-		ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
-		TestFalse(TEXT("a refillable magazine is a reload, not an ammunition failure"),
-			Cond.Has(ECond::NoPrimaryAmmo));
-
-		// The occlusion latch drives the line-of-fire arm.
+		Gather(125.0, ECond::NoPrimaryAmmo, TEXT("...with a reserve, and ahead of every range arm"));
 		Weapon->MagazineCount = 6;
+
+		// The occlusion stand-in replaces 0x4f only: it is slot 562's re-test of the 0x4f answer.
 		F.Fighter->BaseMemory.EnemyOccludedCheck = 10;   // slot 481's `+0x5b98` at its limit
-		Cond.Reset();
-		ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
-		TestTrue(TEXT("the occlusion latch raises WEAPON_SIGHT_OCCLUDED"),
-			Cond.Has(ECond::WeaponSightOccluded));
-		TestFalse(TEXT("...and an occluded enemy is not shootable"), Cond.Has(ECond::CanRangeAttack1));
+		const FElysiumNpcConditions Occluded = Gather(400.0, ECond::WeaponSightOccluded,
+			TEXT("an occluded 0x4f raises WEAPON_SIGHT_OCCLUDED"));
 		TestFalse(TEXT("WEAPON_THROUGH_WALL has no producer and is never set"),
-			Cond.Has(ECond::WeaponThroughWall));
-		TestFalse(TEXT("...nor does WEAPON_BLOCKED_BY_FRIEND"),
-			Cond.Has(ECond::WeaponBlockedByFriend));
+			Occluded.Has(ECond::WeaponThroughWall));
+		TestFalse(TEXT("...nor does WEAPON_BLOCKED_BY_FRIEND"), Occluded.Has(ECond::WeaponBlockedByFriend));
+		Gather(1500.0, ECond::TooFarToAttack, TEXT("an occluded enemy past 1024 is only TOO_FAR_TO_ATTACK"));
+		F.Fighter->BaseMemory.EnemyOccludedCheck = 0;
+
+		// The `+0x730` timer is the LAST arm: unexpired, slot 365 answers 0 (COND_NONE).
+		Weapon->HoldAttacksUntil(50.0);
+		{
+			F.Target->Origin = FVector(Cm(400.0), 0.0, 0.0);
+			FElysiumNpcConditions Cond;
+			ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
+			TestTrue(TEXT("an unexpired deadline raises WAITING_ATTACK_TIME (0x2f)"),
+				Cond.Has(ECond::WaitingAttackTime));
+			for (const ECond Answer : Answers)
+			{
+				TestFalse(*FString::Printf(TEXT("...and slot 365 answers nothing: no %s"),
+					ElysiumNpcCondName(Answer)), Cond.Has(Answer));
+			}
+		}
+		Weapon->NextPrimaryAttackTime = 0.0;
+
+		// `Weapon_Equip`'s spawnflag-0x100 arm pins both max words to 1e9.
+		F.Fighter->SpawnFlags |= ElysiumWeapons::LongRangeSpawnflag;
+		Weapon->OnEquipped(*F.Fighter);
+		TestEqual(TEXT("spawnflag 0x100: +0x8c0 is 1e9"), Weapon->RangeWords.MaxRange1, 1.0e9f);
+		TestEqual(TEXT("spawnflag 0x100: +0x8c4 is 1e9"), Weapon->RangeWords.MaxRange2, 1.0e9f);
+		Gather(1500.0, ECond::CanRangeAttack1, TEXT("spawnflag 0x100: an enemy past 1024 is shootable"));
+	}
+
+	// --- The constructor words of the melee classes -------------------------------------------------
+	{
+		FCombatFixture F(GKatana);
+		if (F.Fighter == nullptr)
+		{
+			return false;
+		}
+		F.RunAdmissionAndLoadout();
+		if (FElysiumWeapon* Katana = F.ActiveWeapon(F.Fighter))
+		{
+			TestEqual(TEXT("CWeaponMelee 0x103e9ac0: +0x8b8 is 0"), Katana->RangeWords.MinRange1, 0.f);
+			TestEqual(TEXT("CWeaponMelee 0x103e9ac0: +0x8c0 is 50"), Katana->RangeWords.MaxRange1, 50.f);
+		}
+		const ElysiumWeapons::FRangeWords Tentacle =
+			ElysiumWeapons::ConstructorRangeWords(TEXT("item_w_mingxiao_tentacle"), nullptr);
+		TestEqual(TEXT("CWeaponMelee_MingXiaoTentacle 0x103ec870: +0x8c0 is 108"), Tentacle.MaxRange1, 108.f);
+		const ElysiumWeapons::FRangeWords MingXiao =
+			ElysiumWeapons::ConstructorRangeWords(TEXT("item_w_mingxiao_melee"), nullptr);
+		TestEqual(TEXT("CWeaponMelee_MingXiaoMelee 0x103ec2b0: +0x8c0 is 500"), MingXiao.MaxRange1, 500.f);
+		const ElysiumWeapons::FRangeWords Unarmed =
+			ElysiumWeapons::ConstructorRangeWords(TEXT("item_w_unarmed"), nullptr);
+		TestEqual(TEXT("CWeaponUnarmed keeps the base 0x10250ac0 +0x8b8 65"), Unarmed.MinRange1, 65.f);
+		TestEqual(TEXT("...and +0x8c0 1024"), Unarmed.MaxRange1, 1024.f);
 	}
 
 	// --- The four SHOULD_* conditions stay plumbed and unset -------------------------------------
@@ -1429,9 +1480,12 @@ bool FElysiumNpcCombatRunAwayTest::RunTest(const FString&)
 		{
 			return false;
 		}
+		// 125 units: past slot 365's 100-unit `TOO_CLOSE_FOR_RANGED` edge, inside the firearm's
+		// `m_fMinRange1` 150 (`CWeaponRanged 0x10238070`, 0018 story 8).
+		F.Target->Origin = FVector(Cm(125.0), 0.0, 0.0);
 		F.CommitToTarget(10.0);
 		FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 10.0);
-		TestTrue(TEXT("an enemy inside the NPC's own reach is too close to shoot"),
+		TestTrue(TEXT("an enemy inside the firearm's minimum range is too close to shoot"),
 			F.Fighter->Cognition.Conditions.Has(ECond::TooCloseToAttack));
 		// `ShouldDodgeRangedAttack` (`0x102b7f40`) rolls under 75 at `0x102b7f5f` unless
 		// COND_STOP_BACKUP (0x2c) stands; the condition pins that arm shut so the answer does not ride

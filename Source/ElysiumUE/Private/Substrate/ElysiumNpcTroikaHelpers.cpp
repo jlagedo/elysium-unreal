@@ -46,12 +46,15 @@ namespace
 	constexpr float TroikaShootAtHintSearchMax = 2.5f;
 
 	// Slot 609's default search radius when there is no active weapon: the literal `1024.0` the
-	// body loads before it asks for one. With a weapon it is the weapon's `+0x8c0` max range.
+	// body loads before it asks for one (retail's own no-weapon value, not a stand-in). With a
+	// weapon it is the weapon's `+0x8c0` max range (`ActiveWeaponMaxRangeUnits`).
 	constexpr float TroikaShootAtHintDefaultRadiusUnits = 1024.0f;
 
-	// Slot 609's hint type and search-flag byte, both literals in the body.
-	constexpr int32 TroikaShootAtHintType = 8;
-	constexpr uint8 TroikaShootAtHintSearchFlags = 0x10;
+	// Slot 609's two literals, `0x102b6b50 thunk_FUN_102d2980(this, 8, 0x10, radius, NULL, NULL)`: the
+	// first is the FLAGS byte (bit 3, score `sqrt(d^2) x m_flHintRating`), the second the CLASS MASK
+	// (`0x10`, the class word `CAI_Hint::Spawn 0x102d0b60` gives type 10400). Not a hint type.
+	constexpr uint8 TroikaShootAtHintSearchFlags = 8;
+	constexpr int32 TroikaShootAtHintClassMask = 0x10;
 
 	// `_DAT_10463584` — slot 616's fire-immune window, the pooled 15.0f.
 	constexpr float TroikaFireImmuneSeconds = ElysiumNpcTunables::Fifteen;
@@ -789,7 +792,7 @@ int32 FElysiumNpc::FindShootAtHintNode(bool bForce)
 	//     if (!bForce && curtime < m_flNextShootAtHintSearchTime) return NULL; // +0x6440
 	//     m_flNextShootAtHintSearchTime = curtime + RandomFloat(2.0, 2.5);
 	//     radius = GetActiveWeapon() ? weapon->+0x8c0 : 1024.0;
-	//     return FindHintOfType(this, 8, 0x10, radius, NULL, NULL);            // 0x102d2980
+	//     return 0x102d2980(this, flags 8, class mask 0x10, radius, NULL, NULL);
 	//
 	// The draw is taken BEFORE the search and on every call that gets past the wait, whether or not
 	// the search finds anything — so a miss still costs a full 2.0-2.5 s cooldown.
@@ -806,15 +809,19 @@ int32 FElysiumNpc::FindShootAtHintNode(bool bForce)
 		ElysiumRng::Stream(EElysiumRngStream::NpcSchedule)
 			.FRandRange(TroikaShootAtHintSearchMin, TroikaShootAtHintSearchMax));
 
-	// The weapon's `+0x8c0` max range. **SEAM**: `FElysiumWeapon` stands no such word (family Motor
-	// records the same gap for `+0x5a0` beside it), so the default 1024.0 is what a body with an
-	// active weapon gets too, and that is stated rather than hidden.
-	const float RadiusUnits = TroikaShootAtHintDefaultRadiusUnits;
+	// `fVar6 = 1024.0`, replaced by the active weapon's `+0x8c0` when one is held (0018 story 8:
+	// the weapon's class word, 1024 for every firearm, 1e9 under `Weapon_Equip`'s spawnflag arm).
+	float RadiusUnits = TroikaShootAtHintDefaultRadiusUnits;
+	float WeaponMaxRangeUnits = 0.f;
+	if (ActiveWeaponMaxRangeUnits(WeaponMaxRangeUnits))
+	{
+		RadiusUnits = WeaponMaxRangeUnits;
+	}
 
-	// `0x102d2980` is the six-argument form of the hint search family **Hints** carries as
-	// `FindHintNear` (`0x102d1af0`) over the SAME absent global hint list. It is called rather than
-	// a second seam stood beside it; the two out-parameters retail passes are both NULL here.
-	return FindHintNear(TroikaShootAtHintType, TroikaShootAtHintSearchFlags, RadiusUnits);
+	// `0x102b6b50`: `thunk_FUN_102d2980(this, 8, 0x10, radius, NULL, NULL)` -- the CLASS-MASK search
+	// (`FindHintByClassMask`), flags 8 then mask 0x10, over the world's hint list; both
+	// out-parameters NULL (the origin is the NPC's).
+	return FindHintByClassMask(TroikaShootAtHintSearchFlags, TroikaShootAtHintClassMask, RadiusUnits);
 }
 
 void* FElysiumNpc::Slot609(bool bForce)

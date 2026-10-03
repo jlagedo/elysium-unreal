@@ -1388,6 +1388,81 @@ its recovery is written in the oracle section it names.
   Provides: the searches to 0002's cover, kick, interest and alert families. Consumes: 2, 4, 6.
   Oracle: `shape.md` (the four hint sections), `schedule-kernel.md` § "The three hint
   validators". Size: M. Effort: Opus / high.
+  **Landed 2026-09-30 (tick pending the owner's decision on the live check)** (wave 0 reads R1,
+  R2; builds A-E; review G; live check H; the oracle in `shape.md` § "The hint list and its four
+  searches" and the new § "The claim primitives, the hint LOS check and the idle gate",
+  `schedule-kernel.md` § validators). **Retail has, and the port now runs.** The four searches over
+  the world's list, cursor and count (`DAT_10925450` / `54` / `58`): `0x102d1af0` (type), `0x102d24b0`
+  (anchor), `0x102d2980` / `0x102d2940` (class mask, `2940` being mask 1), `0x102d1760` (the random
+  pick), each with retail's walk start, wrap, cursor write, admission order and tie rule. The class
+  word `+0x474` derived in `Spawn` (`0x102d0b60`). Claim `0x102d1350`, release `0x102d1420`, owner
+  test `0x102d1450` and available-to-me `0x102d1540`, on the hint's own SAVE words. The attack
+  validator `0x10296c40`, the hint LOS check `0x102968f0`, the idle gate `0x102b5de0`. The kick-hide
+  walk `0x102d0910`, now on the hint as `NpcKicked` and wired from `TASK_KICK_HINT` / `_AT`. Slot 550
+  `CoverRadius` (1024 base, 4096 for `CNPC_VPedestrian` and `CNPC_VTzimisce`). `hint_rating` is
+  REPLACED by a row of `NPC_Cover_Distance_Scalar` (8, 3.5, 3, 2.5, 2, 1.5, 1), not clamped: the
+  authored 3 becomes 2.5. **Corrected on the way.** This story's "no registry under them" line was
+  stale: the entity, list, node binding, inputs and slot 566 were already stood (0018/2, 0018/4,
+  0019/8); what was missing was the query and claim surface. The two mask-search callers
+  (`0x102b6b50`, `0x102b7110`) passed a TYPE search with `8`, the flags byte, as the type; they now
+  call `FindHintByClassMask(8, 0x10, ...)` and `(8, SearchType, CoverRadius())`. The port's comments
+  on `0x102968f0` (the ray's direction) and `0x102b5de0` (a 3.0 s elapsed-occlusion test, not a
+  distance; arm 1 fails only on a world hit) were backwards; both bodies are ported from the listing.
+  The NPC-side `bOwnsHint` / `HintReusableAt` stand-ins are deleted, and `ClearHintNode 0x10295ab0`
+  releases only when `0x102d1450` says I own it. `UpdateOnRemove` releases with delay 0 and no owner
+  gate, and the base `TASK_LOCK_HINTNODE` arm calls `0x102d1350` directly. The duplicate
+  `FUN_10296c40` / `AttackHintRejectReason` (four defects) is deleted. The cover validators
+  `0x10295ed0` / `0x102961a0` take their facing from `0x102d12e0` (a node-bound hint's NODE yaw) in
+  Source axes, normalise in 3-D and dot X/Y, keep each compare's NaN direction and call the real
+  `HintLosCheck`; `0x102961a0` casts its own ray at mask `0x46804099` (it traced at mask 0, always
+  clear). `0x102d1fe0` has no caller (dead). **Named divergences and crash guards.** A null anchor in
+  `0x102d24b0` (retail faults) answers none with the cursor untouched. A non-hint index in the claim
+  primitives (retail dereferences NULL) is guarded. `DefaultEyeOffsetCm()` stands for
+  `m_vecViewOffset`. `ClassMask` is re-derived on restore (not saved; whether retail's restore
+  re-runs `Spawn` is unread, RE-BACKLOG 49; if it does not, retail's mask search finds nothing after
+  a load). The idle gate's monsters-only mask falls back to `ECC_Pawn`, so its arm 1 can meet an
+  NPC-solid brush retail cannot. The LOS filter's `ShouldCollide` and game-rules group arms are not
+  asked (every combat character is refused, as retail). The weapon `+0x8c0` max range is still the
+  1024 stand-in. The kernel draws the random pick on `EElysiumRngStream::NpcSchedule`. Save schema
+  `NpcHintClaimOnHint = 40`, `MinSupported` moved to it. **Gate.** Editor build green;
+  `Elysium.Substrate` 1,722 / 0 (baseline 1,705: +13 `HintSearch`, +3 `NpcKernelHints`, +1
+  `NpcKernelBaseHelpers.CoverNodeFacing`); `Elysium.Content` 33 / 0 (baseline 27; +6
+  `Elysium.Content.Hints.*`, including `TutorialTacticalSearch` and `TutorialClaimAndCooldown` over
+  the baked tutorial's 49 hints). The ledger is regenerated and `uv run elysium research kernel
+  --check` is 7 / 7 (not re-run for this record): override census 1,048 to 1,050 (`CoverRadius` on
+  Pedestrian and Tzimisce), `kernel_shape --unported` 371 to 369, `unported.tsv` 393 to 393,
+  `seam-list.md` 390 to 390 (the searches and claim primitives had no ledger row). Census
+  (`story8/census.md`): tutorial 49 hints (12 mask-1 cover, 37 patrol), hub 274 (234 mask-1, 34
+  patrol, 6 crosswalk); all 108 maps 3,156 hints; 216 `EnableHint` / `DisableHint` outputs and one
+  Python site (`temple.py`). Only class mask 1 has candidates on either witness, so the cower, kick
+  and shoot-at searches must miss there. **Live check (`story8/live-check.md`, three attempts).**
+  OBSERVED: hint row 465 reads `hint_rating` 2.5 (the rulebook replacement), owner none, next use 0,
+  class mask 1; `DisableHint` sets `m_iDisabled` and hides, a hidden hint swallows `EnableHint`,
+  `ScriptUnhide` alone unhides and clears the disabled word (slot 78 `0x102d0890`), `StartHidden 1`
+  alone does not disable; Python `FindEntityByName(...).DisableHint()` works; the cower, melee and
+  shoot-at searches found nothing, as the census predicts; 0 ensure / assert over `sm_hub_1` idle
+  (about 3 min) and the whole session (136.6k log lines). **NOT OBSERVED, which is why the box stays
+  open:** an NPC's combat-time tactical search claiming a cover hint and releasing it. Each of three
+  attempts was stopped by something outside this story. (1) `thug_3` (the census witness,
+  `StartHidden 1`) sits in `FALL_TO_GROUND 0x3e` after `ScriptUnhide` with `on_ground false` and no
+  `Body owner`, sees and hates the player but never selects combat (a hidden-NPC lifecycle / motor
+  defect). (2) The hub's `patrol_cop_north` is a baton cop: it takes the melee branch (mask 8) and
+  never runs the mask-1 search, and the player fell through the world when placed off-mesh. (3)
+  `sentry3` / `Hunter1` (tutorial, ranged) read "SEEN, in cone" at 6-7 m with `D_HT 5` yet
+  `Conditions (none)` and no combat in 85 s (an authored-friendly NPC flipped by `SetRelationship`
+  never enters the sighted list; `Hunter1`'s `hint_groups` 6 admits no group-1 row). The claim and
+  release chain is pinned instead by the 13 `HintSearch` unit tests and the two tutorial content
+  tests (row 465 first from the head, 464 after the cursor moves, the 5.0 s cooldown's strict `<`).
+  **Handed on.** Seams NOT taken: the weapon `+0x8c0` max range (family Motor's), and the player's
+  `BodyTarget` stub (the idle gate traces to the world origin when the enemy is the player).
+  `0x102d0910`'s output activator and caller order, `m_iszUserData`'s reader, `_DAT_1044e674`. Story
+  9: the cooldown `+1.0` claim write and the selectors over these searches. 0002/12b (row 32): the
+  kick chooser over `NpcKicked` (no kick hint exists on either witness). RE-BACKLOG 49: whether the
+  engine's restore path re-runs `CAI_Hint::Spawn`. Also found, outside this story: the hidden-NPC
+  lifecycle (attempt 1), the senses `Sighted()` gate for a `SetRelationship`-flipped NPC (attempt
+  3), an open dialogue blinding perception (`Closest player unseen` until `EndDialog`), a `map_load`
+  of the same map keeping the previous session's entity state, and `TakeDamage 1` raising `health`
+  without writing a last-damage record.
 
 - [ ] **9. The goal selectors.**
   Retail, each walked in `navigation-jump-links.md`: the cover search `0x10301720` and its

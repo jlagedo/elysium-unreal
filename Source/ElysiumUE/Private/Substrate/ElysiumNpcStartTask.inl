@@ -189,9 +189,9 @@ uint32 StartTask19WeaponCapabilityWord() const;
 int32 StartTask19WeaponMinBurst() const;
 int32 StartTask19WeaponMaxBurst() const;
 
-/** SEAM for the active weapon's range words `+0x8b8`/`+0x8bc` (the two minimum ranges) and
- *  `+0x8c0`/`+0x8c4` (the two maximum ranges). `FElysiumWeapon` stands none; all four answer
- *  0.0, so the `2000.0` default is what an armed body's maximum is replaced by. */
+/** The active weapon's range words `+0x8b8`/`+0x8bc` (the two minimum ranges) and `+0x8c0`/`+0x8c4`
+ *  (the two maximum ranges), SOURCE units, through `ElysiumWeapons::ItemRangeWords` (0018 story 8).
+ *  0.0 with no active weapon or an offset outside the four. */
 float StartTask19WeaponRangeWord(int32 Offset) const;
 
 /** SEAM for weapon slot `0x518` (`TASK_MELEE_ATTACK1`) / `0x51c` (`TASK_MELEE_ATTACK2`), the

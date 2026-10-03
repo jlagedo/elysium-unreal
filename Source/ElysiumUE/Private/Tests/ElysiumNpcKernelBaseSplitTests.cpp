@@ -157,7 +157,9 @@ bool FElysiumNpcKernelBaseSplitPairsTest::RunTest(const FString&)
 	// recovers the base words from a Troika NPC's record.
 	Npc.BaseScheduleHost.FailureReason = 0x2a;
 	Npc.AttackExtentsCm = FVector(3.0, 4.0, 5.0);
-	Npc.BaseScheduleHost.HintReusableAt = 12.5;
+	// The held hint (`m_pHintNode` +0x5ddc) is a base word; its reuse time is the hint's own
+	// (`m_flNextUseTime`, saved by the hint), so it is no longer in this record (0018 story 8).
+	Npc.BaseScheduleHost.HintNode = 9;
 	TArray<uint8> Bytes;
 	{
 		FMemoryWriter Writer(Bytes, true);
@@ -172,7 +174,7 @@ bool FElysiumNpcKernelBaseSplitPairsTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("the base half leads the record: failure code"), Reader.BaseScheduleHost.FailureReason, 0x2a);
 	TestEqual(TEXT("attack extents"), Reader.AttackExtentsCm, FVector(3.0, 4.0, 5.0));
-	TestEqual(TEXT("hint reuse time"), Reader.BaseScheduleHost.HintReusableAt, 12.5);
+	TestEqual(TEXT("the held hint node"), Reader.BaseScheduleHost.HintNode, 9);
 	TestTrue(TEXT("and the Troika half follows it"), Bytes.Num() > 0);
 	return true;
 }

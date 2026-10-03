@@ -12,33 +12,42 @@
 
 // --- The hint seam --------------------------------------------------------------------------------
 //
-// THERE IS NO HINT NODE IN THIS SUBSTRATE. Retail's `CAI_Hint` is an ENTITY on the global hint list
-// `DAT_10925450` (next link `+0x5d8`, rotating search cursor `DAT_10925454`), and every NPC word
-// that names one — `m_pHintNode` (`+0x5ddc`), `m_pShootAtHint` (`+0x6444`), the Werewolf's move and
-// teleport hints — is a `CAI_Hint*`. This runtime carries those as BARE INDICES
-// (`FElysiumNpcScheduleHost::HintNode`), there is no hint store to index into, and no AI node graph
-// under it.
+// Retail's `CAI_Hint` is an ENTITY on the global hint list `DAT_10925450` (next link `+0x5d8`,
+// rotating search cursor `DAT_10925454`), and every NPC word that names one — `m_pHintNode`
+// (`+0x5ddc`), `m_pShootAtHint` (`+0x6444`), the Werewolf's move and teleport hints — is a
+// `CAI_Hint*`. This runtime carries those as the hint's ENTITY INDEX
+// (`FElysiumNpcScheduleHost::HintNode`); the hint is a live `ai_hint` entity (`FElysiumHint`) on the
+// world's list (`FElysiumEntityWorld::HintList` / `HintCursor`, 0018 story 8).
 //
-// So this family stands the seam rather than the store: `FHintWords` is the typed view of a hint's
-// own datamap words (`vtmb_fields CAI_Hint`), `HintWords()` is the one query that fills it, and the
-// rules over those words are ported as PURE functions that a test can drive with a hand-built
-// `FHintWords`. Every entry point that takes a node index asks the seam first and answers retail's
-// null arm when it comes back empty. Nothing here invents a hint.
+// `FHintWords` is the typed view of a hint's own datamap words (`vtmb_fields CAI_Hint`), filled from
+// the live hint by `HintWords()`; the rules over those words are ported as PURE functions a test can
+// drive with a hand-built `FHintWords`. Every entry point that takes a node index resolves it first
+// and answers retail's null arm when the index names no live hint. The four list searches and the
+// claim primitives live on `FElysiumNpcBase` (`ElysiumNpcBaseHints.inl`).
 //
-// Family **Squad** built `NthHintOfType` (`ElysiumNpcSquad.inl`) over the same absent global
-// list, walked by ordinal and answering an `FElysiumEntity*`. It is left exactly as it is: the two
-// are the same missing store seen from two sides, and the day a hint store lands it replaces both.
+// Family **Squad**'s `NthHintOfType` (`ElysiumNpcSquad.inl`) walks the same list by ordinal and
+// answers an `FElysiumEntity*`, the form its Chang Bros callers read.
 
 /** `CGlobalEntityList::FindEntityByName` + the `CAI_Hint` RTTI cast that `FindHintEndEntity`
  *  (`0x103d6520`) performs: the first entity the name matches, as a hint index, or `INDEX_NONE`
  *  when that first match is not a hint. */
 int32 FindHintByName(const FString& HintName) const;
 
-/** SEAM for `0x10296c40`, the shared range/LOS/cover validator both `IsHintCoverValid` bodies
- *  forward into. `0x10296c40` is NOT this story's row (layer 11) and is not ported here; this
- *  answers false and names it. */
-bool ValidateHintCoverRange(const FHintWords& Hint, const FElysiumEntity* CoverObject,
-	float AngleRangeDot, float BadRangeLimit) const;
+/** `0x10296c40` — is `Hint` a place to attack `Enemy` from, with my active weapon? The validator
+ *  both `IsHintCoverValid` bodies forward into (`Enemy` is their `m_hHintCoverObject`). In retail
+ *  order: a null or disabled hint fails; my own hint while entrenched, or a null enemy, PASSES; no
+ *  active weapon, a height difference over 64, a hint-to-enemy distance under `m_flTargetDistMin`
+ *  or (unless entrenched) over the weapon range or `m_flTargetDistMax`, a not-mine hint whose
+ *  enemy-relative projection is under 0.2, a facing projection `<= GoodRange` or `>= BadRange`, and
+ *  (under `m_bForceCoverLOSCheck`) a failed `HintLosCheck` each fail. Only while `IsHintDebugNpc()`
+ *  holds, each failing arm formats retail's reason string (`"Disabled"`, `"No active weapon"`,
+ *  `"Height diff (%d) > %d"`, `"Distance (%d) < %d"`, `"Distance (%d) > %d or %d"`,
+ *  `"Projection (%.2f) < 0.2"`, `"Enemy outside of good range (%.2f) <= %.2f"`,
+ *  `"Enemy inside of bad range (%.2f) >= %.2f"`, `"Failed hint LOS"`) through `HintDebugNote`, and
+ *  the distance and projections it computed land in the world's `AiDebugHintProbe`. The verdict
+ *  never depends on the gate. */
+bool ValidateHintCoverRange(const FHintWords& Hint, const FElysiumEntity* Enemy,
+	float GoodRange, float BadRange) const;
 
 // --- Species words this family's bodies read ------------------------------------------------------
 //
@@ -99,9 +108,11 @@ bool IsHintCoverValidLoose(int32 HintNode) const;
 /** `0x102aaa60` — the hint-node idle activity restart. Returns whether an activity was restarted. */
 bool PlayHintIdleActivity(double Now);
 
-/** SEAM for `0x102b5de0`, the gate `PlayHintIdleActivity` puts in front of each of its three hint
- *  types: a shoot-target/enemy LOS test through the engine trace. Answers true, which is retail's
- *  "the gate passed" answer and the arm that restarts the activity. */
+/** `0x102b5de0`, the gate `PlayHintIdleActivity` puts in front of each of its three hint types — a
+ *  friendly-fire gate over two `0x2000000` traces from `WorldSpaceCenter`. With a live
+ *  `m_hShootTargetOverride`: clear, or blocked by anything but the world, passes. Otherwise
+ *  `ENEMY_OCCLUDED` fails, more than 3.0 s since the enemy was occluded fails, no enemy passes, and
+ *  a trace to the enemy's `BodyTarget` fails only when what it hits is liked (3) or neutral (4). */
 bool HintIdleActivityGate() const;
 
 /** `0x1029f780` — the cached patrol-node interest-place resolve at `+0x6300`. */

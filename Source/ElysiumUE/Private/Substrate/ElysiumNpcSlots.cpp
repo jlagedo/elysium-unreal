@@ -6,7 +6,7 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 138 generated slot bodies of `FElysiumNpc`: 8 carry the retail default story 29c recovered, 128
+// 140 generated slot bodies of `FElysiumNpc`: 8 carry the retail default story 29c recovered, 130
 // are defined by hand in the substrate, and 2 are still stubs — 2 29c.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -43,6 +43,16 @@ namespace
 		ElysiumStub::Fired(Row, Receiver, FString(), TEXT("the NPC kernel"));
 	}
 }
+
+// slot 17 0x1028de90 (walked) `void TraceMessage(const char*, int) const`
+//   layer 12, story 29d
+// verdict `mechanism`: the body is `FElysiumNpcBase::NpcTraceMessage`, written by hand in the
+// substrate. Declared here, defined there.
+
+// slot 18 0x1028de10 (walked) `void TraceMessage(const char*, int)`
+//   layer 12, story 29d
+// verdict `mechanism`: the body is `FElysiumNpcBase::NpcTraceMessage`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 21 0x1029f800 (walked) `void vfunc21(CBaseEntity*)`
 //   layer 3, story 29c
@@ -809,6 +819,14 @@ namespace ElysiumNpcKernelShape
 		// class. `bDeclaredHere` is decided by the compiler, not written.
 		const TElysiumNpcSlotRow<FElysiumNpc> GNpcSlotRows[] =
 		{
+			{ 17, TEXT("0x1028de90"), TEXT("CAI_BaseNPCTroika"), TEXT("TraceMessage"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpc, void(const TCHAR*, int32) const>::Test(&FElysiumNpc::TraceMessage),
+				nullptr },
+			{ 18, TEXT("0x1028de10"), TEXT("CAI_BaseNPCTroika"), TEXT("TraceMessage"),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpc, void(const TCHAR*, int32)>::Test(&FElysiumNpc::TraceMessage),
+				nullptr },
 			{ 21, TEXT("0x1029f800"), TEXT("CAI_BaseNPCTroika"), TEXT("Slot21"),
 				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpc, void(FElysiumEntity*)>::Test(&FElysiumNpc::Slot21),

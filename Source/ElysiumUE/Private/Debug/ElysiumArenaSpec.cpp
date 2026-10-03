@@ -29,6 +29,26 @@ namespace
 		return FMath::RadiansToDegrees(FMath::Atan2(ToY - FromY, ToX - FromX));
 	}
 
+	// Yaw, in degrees, that puts the point `To` at `acos(TargetDot)` counter-clockwise off the facing
+	// — i.e. `dot(facing, normalize(To - From)) == TargetDot`. How a cover node is aimed: retail's
+	// `ValidateHintCoverRange` (`0x10296c40`) admits a hint by `dot(hint facing, normalize(enemy -
+	// hint))` inside its type's band, so the node is authored at a chosen dot against the scenario's
+	// enemy position rather than at a hand-written angle. Unreal-native yaw: the Source `angles` the
+	// builder writes negate it, and the Source enemy direction negates Y, so the dot is the same in
+	// both frames.
+	float YawAtDotToward(float FromX, float FromY, float ToX, float ToY, float TargetDot)
+	{
+		return YawToward(FromX, FromY, ToX, ToY) + FMath::RadiansToDegrees(FMath::Acos(TargetDot));
+	}
+
+	// The dots the cover nodes are authored at, each inside its type's `0x10296c40` band.
+	// Low cover (101, `IsHintCoverValidLoose`: good 0.87, bad 1.10): the hint faces the threat within
+	// ~18 deg, the block in front of it.
+	constexpr float CoverLowFacingDot = 0.95f;
+	// Corner cover (10200, `IsHintCoverValid`: good 0.50, bad 0.73): the threat ~52 deg off the hint's
+	// facing — mid-band, the peek round a corner rather than a stare down it.
+	constexpr float CoverCornerFacingDot = 0.62f;
+
 	FAnchor MakeAnchor(const TCHAR* Name, float X, float Y, float Yaw, int32 Rating, bool bAgainstCover)
 	{
 		FAnchor A;
@@ -38,6 +58,16 @@ namespace
 		A.Rating = Rating;
 		A.bAgainstCover = bAgainstCover;
 		return A;
+	}
+
+	FNode MakeNode(const TCHAR* Name, float X, float Y, float Yaw, int32 HintType)
+	{
+		FNode N;
+		N.Name = Name;
+		N.FeetCm = FVector(X * U, Y * U, 0.0f);
+		N.YawDeg = Yaw;
+		N.HintType = HintType;
+		return N;
 	}
 
 	FPad MakePad(const TCHAR* Name, float X, float Y)
@@ -58,6 +88,11 @@ const FPad* FSpec::FindPad(const FName& Name) const
 const FAnchor* FSpec::FindAnchor(const FName& Name) const
 {
 	return Anchors.FindByPredicate([&Name](const FAnchor& A) { return A.Name == Name; });
+}
+
+const FNode* FSpec::FindNode(const FString& Name) const
+{
+	return Nodes.FindByPredicate([&Name](const FNode& N) { return N.Name.Equals(Name, ESearchCase::IgnoreCase); });
 }
 
 FBox FSpec::Bounds() const
@@ -138,6 +173,69 @@ FSpec Build()
 	// is the one conversion to the pawn's centre and there is no other.
 	S.PlayerFeet = FVector(-(H - PadInset) * U, 0.0f, 0.0f);
 	S.PlayerYaw = 0.0f;
+
+	// The player behind the block: the `behind_cover` pad mirrored onto the player's side, ~2 m off
+	// the south face, still looking north at the solid. From the north pad the block is between.
+	S.PlayerCoverFeet = FVector(-(B + PlayerCoverSetback) * U, 0.0f, 0.0f);
+	S.PlayerCoverYaw = 0.0f;
+
+	// The cover scenario's seats (brief S4). The gunman is on `far_ne` (P*0.7, P*0.7 units, ~683 cm);
+	// the open seat is (CoverSeatXCm, far_ne.y) facing +X toward it, ~983 cm off and inside vision.
+	// That line is y = far_ne.y, so it clears the block only while the block's half width is well
+	// under far_ne's Y: asserted here, in Source units, so moving either fails the build rather than
+	// silently putting the block on the line.
+	const float FarNe = P * 0.7f;
+	static_assert(BlockHalfWidth < (RoomHalfExtent - PadInset) * 0.7f,
+		"the cover block must not reach the open seat's sight line y = far_ne.y");
+	S.CoverSeatFeet = FVector(CoverSeatXCm, FarNe * U, 0.0f);
+	S.CoverSeatYaw = YawToward(S.CoverSeatFeet.X, S.CoverSeatFeet.Y, FarNe * U, FarNe * U);
+
+	// The occluded seat: on the far_ne -> block-centre line, (BlockHalfWidth + 150 cm) past the
+	// centre, so the block sits between it and the gunman. Facing far_ne.
+	const float BehindCm = B * U + CoverBehindSetbackCm;
+	const float Diagonal = BehindCm * 0.70710678f;
+	S.CoverBehindFeet = FVector(-Diagonal, -Diagonal, 0.0f);
+	S.CoverBehindYaw = YawToward(S.CoverBehindFeet.X, S.CoverBehindFeet.Y, FarNe * U, FarNe * U);
+
+	// The cover nodes (brief S8).
+	// Aimed against the cover scenario: the ENEMY `0x10296c40` validates against is the player on the
+	// open seat (-300, 683) cm and the searching NPC is the gunman on `far_ne` (683, 683) cm. Two
+	// gates decide a node there:
+	//   facing     dot(hint facing, normalize(enemy - hint)) inside the type's band (see the dots);
+	//   projection dot(normalize(hint - enemy), normalize(npc - enemy)) >= 0.2 — the hint on the NPC's
+	//              side of the enemy.
+	// Only the type, the group and the yaw are authored: the distances, the angle range and the
+	// rating are `CAI_Hint::Spawn`'s per-type defaults. Network order is this order, so a node's index
+	// here is the node id its hint takes. Numbers below are computed from this geometry (Source
+	// units: seat (-118.1, 268.8), far_ne (268.8, 268.8)).
+	const float SeatX = CoverSeatXCm / U;
+	const float SeatY = FarNe;
+
+	// Low cover, on the block's +X (north) and -X (south) faces at the face anchors' setback.
+	// The projection gate picks the face, whatever the yaw: +X gives 0.663 (passes), -X gives -0.007
+	// (the old "Projection < 0.2" refusal) because it sits level with the seat, across from the NPC.
+	// The +X node faces the seat through the block: toward-seat yaw 131.54 deg + acos(0.95) 18.19 deg
+	// = 149.73 deg, facing (-0.864, 0.505); facing dot 0.950 (was -0.663 at yaw 0), projection
+	// 0.663, 359 units to the seat, and the seat line crosses the block's +X face.
+	const float LowNorthYaw = YawAtDotToward(FaceOut, 0.0f, SeatX, SeatY, CoverLowFacingDot);
+	S.Nodes.Add(MakeNode(TEXT("cover_low_north"),  FaceOut, 0.0f, LowNorthYaw, HintTypeCoverLow));
+	// The -X node is the +X node mirrored across the block's centre line (yaw 180 - 149.73 = 30.27
+	// deg), for the mirrored scenario (seat (+300, 683) cm, NPC at (-683, 683) cm): facing 0.950,
+	// projection 0.663 there. Against THIS seat it stays refused (facing 0.510, projection -0.007).
+	S.Nodes.Add(MakeNode(TEXT("cover_low_south"), -FaceOut, 0.0f, 180.0f - LowNorthYaw,
+		HintTypeCoverLow));
+
+	// Corner cover, in the NE and NW room corners. Facing the middle they stared at the seat (dots
+	// 0.847 and 0.992, both refused "Enemy inside of bad range" >= 0.73). Each is rotated off the
+	// seat by acos(0.62) = 51.68 deg, the way that turns it least from its old toward-the-middle yaw:
+	//   ne: toward-seat -167.08 deg -> -115.39 deg (middle -135 rotated +19.61 deg), facing
+	//       (-0.429, -0.903); facing dot 0.620, projection 0.975, 515 units.
+	//   nw: toward-seat  127.57 deg ->  179.25 deg (middle  135 rotated +44.25 deg), facing
+	//       (-1.000, 0.013); facing dot 0.620, projection 0.610, 824 units.
+	S.Nodes.Add(MakeNode(TEXT("cover_corner_ne"),  C,  C,
+		YawAtDotToward(C,  C, SeatX, SeatY, CoverCornerFacingDot), HintTypeCoverCorner));
+	S.Nodes.Add(MakeNode(TEXT("cover_corner_nw"),  C, -C,
+		YawAtDotToward(C, -C, SeatX, SeatY, CoverCornerFacingDot), HintTypeCoverCorner));
 
 	return S;
 }

@@ -523,15 +523,16 @@ bool FElysiumNpcKernelStartTask19SpeciesHumanTest::RunTest(const FString&)
 	F.Start(0x9f, 1.f);
 	TestEqual(TEXT("0x9f without a weapon fails 3"), F.Failure(), 3);
 	TestTrue(TEXT("stamped at line 0x138"), F.Traced(TEXT("NPC_VHuman.cpp"), 0x138));
-	// 0x9f with one: `weapon+0x8c0 * data + 2 * Width(m_eHull)` (the range word's seam answers 0).
+	// 0x9f with one: `weapon+0x8c0 * data + 2 * Width(m_eHull)` — a `weapon_melee` record is a
+	// `CWeaponMelee`, whose constructor (`0x103e9ac0`) writes 50 into `+0x8c0` (0018 story 8).
 	if (TestNotNull(TEXT("a weapon is active"), F.GiveWeapon(TEXT("item_w_st19_blade"))))
 	{
 		F.Start(0x9f, 1.f);
 		const float Width = StartTask19SpeciesHullWidth(*Human, Human->HullKind);
 		// `0x1038485b` thunk `0x1001402e` -> `0x102ee1c0` on `m_pNavigator`: the PATH tolerance
 		// (`path+0x28`), not `m_flGoalTolerance` (+0x6320).
-		TestEqual(TEXT("0x9f: the path tolerance is twice the hull width"), Human->Navigator.GoalToleranceCm,
-			(Width + Width) * ElysiumMove::U);
+		TestEqual(TEXT("0x9f: the path tolerance is the melee max word plus twice the hull width"),
+			Human->Navigator.GoalToleranceCm, (50.f * 1.f + (Width + Width)) * ElysiumMove::U);
 		TestTrue(TEXT("0x9f with a weapon completes"), F.Completed());
 	}
 	return true;

@@ -31,18 +31,15 @@ struct FElysiumNpcBaseScheduleHost
 
 	// +0x5c50 m_ScheduleState.taskFailureCode (datamap), written by the base `TaskFail` `0x10273fc0`.
 	int32 FailureReason = 0;
-	// The claimed hint's reuse time (hint `+0x5ec`), which a hint release stamps.
-	double HintReusableAt = 0.0;
-
 	int32 SquadDisconnected = 0; // +0x5bb0; shared-memory routing lands with the squad store
 
 	// `m_flCacheInterruptTime` (`+0x1b24`), distinct from `InterruptTime` above.
 	// `GetNewSchedule 0x102814d0` refreshes the cached masks only while this is before curtime.
 	double CacheInterruptTime = 0.0;
 
+	// `m_pHintNode` (`+0x5ddc`): the held hint's entity index. Its claim and reuse time are the HINT's
+	// own words (`m_hHintOwner +0x5e0`, `m_flNextUseTime +0x5ec`), not the NPC's.
 	int32 HintNode = INDEX_NONE;
-
-	bool bOwnsHint = false; // CAI_Hint +0x5e0; hint claim producer lands with the hint store
 
 	bool bMotorAnimationMovement = false; // CAI_Motor +0x28; task producer not built yet
 

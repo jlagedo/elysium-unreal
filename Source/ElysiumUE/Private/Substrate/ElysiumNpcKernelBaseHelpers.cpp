@@ -12,6 +12,7 @@
 #include "Substrate/ElysiumNpcThinkCadence.h"
 #include "Substrate/ElysiumPlaceSet.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Substrate/ElysiumWeaponClasses.h"   // ElysiumWeapons::ItemRangeWords — the weapon's `+0x8c0`
 
 // Story 29c-1, family **BaseHelpers** — `CAI_BaseNPC`'s own unnamed layer 0–9 bodies.
 //
@@ -53,13 +54,9 @@ namespace
 	// reads the SAME two addresses: `_DAT_1049ae3c = -140.0f`, `_DAT_1049ae38 = 140.0f`.
 	constexpr float GDatFaceAnimYawLow = ElysiumNpcTunables::MinusOneForty;   // _DAT_1049ae3c
 	constexpr float GDatFaceAnimYawHigh = ElysiumNpcTunables::OneForty;       // _DAT_1049ae38
-	// The retail string of the arm that reads `_DAT_10451ab4` is
-	// `"Projection (%.2f) < 0.2"` — the literal is in the message.
-	constexpr float GDatProjectionMin = ElysiumNpcTunables::Fifth;        // _DAT_10451ab4
 
 	// Read 2026-09-21 (`docs/vtmb/npc-ai/rdata-cells.md`) and held by the tunables table since
-	// 0019/4; each stood at a 0.0 stand-in before. The height limit is `FCOMP double ptr`: a DOUBLE.
-	constexpr double GDatHintHeightDiffUnits = ElysiumNpcTunables::SixtyFourDouble;  // 0x10296c40
+	// 0019/4; each stood at a 0.0 stand-in before.
 	constexpr float GDatFaceAnimYawMid = ElysiumNpcTunables::FaceTurnSecondEdge;   // 0x10297a20's rung 2
 	constexpr float GDatFaceAnimRandomScale = ElysiumNpcTunables::AngleQuantum;    // 0x10297a20's draw
 	constexpr float GDatDistanceEpsilon = ElysiumNpcTunables::FloatEpsilon;        // the 1/(d+eps) guard
@@ -67,6 +64,113 @@ namespace
 
 	// `CAI_Hint::m_nHintType` 0x283d — `0x10295ed0`'s one type-specific extra projection test.
 	constexpr int32 GHintTypeCoverForward = 0x283d;
+
+	// The mask `0x102961a0`'s inline ray pushes (`10296579`), the same one `0x102968f0` pushes.
+	constexpr int32 GCoverTwinLosMask = 0x46804099;
+
+	// --- The cover validators' shared geometry (`0x10295ed0` / `0x102961a0`) --------------------
+	//
+	// Both bodies work in Source units and SOURCE AXES; the port's world is centimetres with Y
+	// negated. The conversion only shows in the facing projection (a length is blind to it), and it
+	// is the same one `ValidateHintCoverRange` (`0x10296c40`, `ElysiumNpcHints.cpp`) makes.
+	FVector CoverSourceUnits(const FVector& Cm)
+	{
+		return FVector(Cm.X, -Cm.Y, Cm.Z) / static_cast<double>(ElysiumMove::U);
+	}
+
+	// `0x102d12e0(hint)` over the hint's words — `HintYaw` (`ElysiumNpcBaseHelpers2.cpp`), restated
+	// exactly as `ValidateHintCoverRange` restates it: a hint bound to a network node
+	// (`m_nNodeID +0x5e4 != -1`) answers the NODE's yaw (`0x102f47b0`, node `+0x6c`, 0.0 past the
+	// network); a standalone hint its own `GetAbsAngles().y`. A Source-frame yaw on both arms.
+	float CoverHintYawSource(const FElysiumEntityWorld* World, const FElysiumNpcBase::FHintWords& Hint)
+	{
+		if (Hint.NodeId != INDEX_NONE)
+		{
+			return World != nullptr ? World->Places().NetworkNodeYawSource(Hint.NodeId) : 0.0f;
+		}
+		return static_cast<float>(Hint.Angles.Y);
+	}
+
+	// What the band-and-projection half of both validators answers.
+	enum class ECoverGeometry : uint8
+	{
+		Pass,
+		OutOfBand,      // "Distance (%d) < %d or > %d"                 (0x102961a0's string)
+		OutsideRange,   // "Enemy outside of good range (%.2f) <= %.2f" (0x102961a0's string)
+	};
+
+	// What the run computed on the way: the 2-D distance (both reason strings' `%d` operand), the
+	// facing projection (the `"Enemy outside of good range"` `%.2f`, valid once `bProjection`) and the
+	// facing `0x101d2f40` produced, handed back because `0x10295ed0`'s 0x283d arm dots with it again.
+	struct FCoverGeometryValues
+	{
+		float Dist = 0.f;
+		bool bProjection = false;
+		float Projection = 0.f;
+		float FaceX = 0.f;
+		float FaceY = 0.f;
+	};
+
+	// `10295f32`..`1029603c` (and `102962ae`..`102963ff`, the twin's identical run).
+	ECoverGeometry CoverGeometry(const FElysiumEntityWorld* World, const FElysiumNpcBase::FHintWords& Hint,
+		const FVector& CoverObjectCm, bool bIsCurrentHint, FCoverGeometryValues& Out)
+	{
+		// `coverObject->GetAbsOrigin() - hint->GetAbsOrigin()` (slot 217 on both), X and Y only, and
+		// its 2-D length through `[0x10579660]` (the sqrt), stored as a float.
+		const FVector HintUnits = CoverSourceUnits(Hint.OriginCm);
+		const FVector CoverUnits = CoverSourceUnits(CoverObjectCm);
+		const float DeltaX = static_cast<float>(CoverUnits.X - HintUnits.X);
+		const float DeltaY = static_cast<float>(CoverUnits.Y - HintUnits.Y);
+		const float Dist = FMath::Sqrt(DeltaX * DeltaX + DeltaY * DeltaY);
+		Out.Dist = Dist;
+		const float Band = NpcKernelBaseHelpersShared::GDatAttackBandUnits;   // `_DAT_10451acc` = 64
+		if (bIsCurrentHint)
+		{
+			// `10295f83`: `FLD min; FSUB 64; FCOMP dist; AND EAX,0x4100 / JZ` continues only on an
+			// ordered `min - 64 < dist` or `==`; a greater OR UNORDERED compare fails.
+			if (!(Hint.TargetDistMin - Band <= Dist))
+			{
+				return ECoverGeometry::OutOfBand;
+			}
+			// `10295f9c`: `FLD max; FADD 64; FCOMP dist; TEST AH,5 / JP` continues on `>=` and on
+			// unordered; only an ordered `max + 64 < dist` fails.
+			if (Hint.TargetDistMax + Band < Dist)
+			{
+				return ECoverGeometry::OutOfBand;
+			}
+		}
+		else
+		{
+			// `10295fbf`: `FLD dist; FCOMP min; TEST AH,5 / JNP` fails only an ordered `dist < min`.
+			if (Dist < Hint.TargetDistMin)
+			{
+				return ECoverGeometry::OutOfBand;
+			}
+			// `10295fd0`: `FLD dist; FCOMP max; AND EAX,0x4100 / JZ` continues only on an ordered
+			// `dist < max` or `==`; a greater OR UNORDERED compare fails.
+			if (!(Dist <= Hint.TargetDistMax))
+			{
+				return ECoverGeometry::OutOfBand;
+			}
+		}
+		// `10295fe3`: the delta scaled by `_DAT_104454c0 / (dist + _DAT_1046a51c)` (1 / (d + FLT_EPSILON)),
+		// then `0x102d12e0` -> `0x101d2f40`'s `(cos, sin)` — a Source-frame yaw against Source-axis
+		// deltas — and `faceY * (dy * s) + (dx * s) * faceX`.
+		const float Scale = GDatOne / (Dist + GDatDistanceEpsilon);
+		const float YawRadians = FMath::DegreesToRadians(CoverHintYawSource(World, Hint));
+		Out.FaceX = FMath::Cos(YawRadians);
+		Out.FaceY = FMath::Sin(YawRadians);
+		const float Projection = Out.FaceY * (DeltaY * Scale) + (DeltaX * Scale) * Out.FaceX;
+		Out.bProjection = true;
+		Out.Projection = Projection;
+		// `10296031`: `FCOMP m_flTargetAngleRangeDot (+0x458); TEST AH,0x41 / JNP` fails an ordered
+		// `<` or `==` — STRICTLY greater continues, and so does an unordered compare.
+		if (Projection <= Hint.TargetAngleRangeDot)
+		{
+			return ECoverGeometry::OutsideRange;
+		}
+		return ECoverGeometry::Pass;
+	}
 
 	// The retail `Activity` numbers this family's bodies name. Spelled here because the port has no
 	// retail activity table (family Hints' `RestartIdealActivityId` says why).
@@ -244,62 +348,77 @@ int32 FElysiumNpc::FUN_1029f730(int32 PatrolNode)
 }
 
 // =================================================================================================
-// The three hint validators.
+// The two cover validators. The third hint validator, the attack-position check `0x10296c40`, is
+// family Hints' `ValidateHintCoverRange` (`ElysiumNpcHints.cpp`); the older duplicate this family
+// carried (`FUN_10296c40` / `AttackHintRejectReason`) was deleted by 0018 story 8.
 // =================================================================================================
 
 bool FElysiumNpc::CoverHintStillValid(const FHintWords& Hint, const FVector& CoverObjectCm,
 	const FVector& MyOriginCm, bool bIsCurrentHint) const
 {
-	// `0x10295ed0`'s rule, without the two seams (the cover-object resolve and `0x102968f0`).
+	// `0x10295ed0`'s rule, arm for arm off the listing, minus the cover-object resolve and the
+	// `0x102968f0` tail (the entry point holds both); `schedule-kernel.md` § "The three hint
+	// validators".
 	//
-	//   dist = Length2D(coverObject - hint)
-	//   current hint -> reject outside [m_flTargetDistMin - 64, m_flTargetDistMax + 64]
-	//   otherwise    -> reject outside [m_flTargetDistMin,      m_flTargetDistMax]
-	//   proj = dot( normalize2D(coverObject - hint), AngleVectors2D(hint yaw) )
-	//   reject unless proj > m_flTargetAngleRangeDot     (STRICTLY greater; retail's compare is
-	//                                                     `(a<b) == (a==b)`, true only for a > b)
-	//   current hint -> ACCEPT here
-	//   otherwise    -> |hint - me| must be <= 512 (`_DAT_10483aac`), and for hint type 0x283d the
-	//                   forward projection of (hint - me) on the hint facing must exceed
-	//                   `_DAT_104454d0`, and then `0x102968f0` decides.
+	//   null / m_iDisabled                        -> fail
+	//   the 2-D band (current hint widened by 64) -> fail outside it            (`CoverGeometry`)
+	//   facing projection > TargetAngleRangeDot, else fail                    (`CoverGeometry`)
+	//   current hint                              -> ACCEPT
+	//   |hint - me| <= 512, else fail; type 0x283d: forward projection > 0.5, else fail
+	//
+	// `10295edf` / `10295eed`: a null hint, or `m_iDisabled` (`+0x5e8`) set, fails.
 	if (!Hint.bValid || Hint.Disabled != 0)
 	{
 		return false;
 	}
-	const FVector DeltaUnits = (CoverObjectCm - Hint.OriginCm) / ElysiumMove::U;
-	const double Dist = FMath::Sqrt(DeltaUnits.X * DeltaUnits.X + DeltaUnits.Y * DeltaUnits.Y);
-	const double Tolerance = bIsCurrentHint ? static_cast<double>(NpcKernelBaseHelpersShared::GDatAttackBandUnits) : 0.0;
-	if (Dist < static_cast<double>(Hint.TargetDistMin) - Tolerance
-		|| Dist > static_cast<double>(Hint.TargetDistMax) + Tolerance)
+	FCoverGeometryValues Geometry;
+	const ECoverGeometry GeometryVerdict = CoverGeometry(World, Hint, CoverObjectCm, bIsCurrentHint,
+		Geometry);
+	if (IsHintDebugNpc())
+	{
+		// `0x10295ed0` is the QUIET twin: it formats no string on any arm. Only the numbers it
+		// computed are recorded for the `ai_debug_npc` readout.
+		FElysiumAiDebugHintProbe& Probe = World->AiDebugHintProbe();
+		Probe.bDistance = true;
+		Probe.DistanceUnits = Geometry.Dist;
+		Probe.bFacing = Geometry.bProjection;
+		Probe.FacingProjection = Geometry.Projection;
+		Probe.GoodRange = Hint.TargetAngleRangeDot;
+	}
+	if (GeometryVerdict != ECoverGeometry::Pass)
 	{
 		return false;
 	}
-	// `_DAT_104454c0 / (dist + _DAT_1046a51c)` is the 1/length normalise; the epsilon is what keeps
-	// a coincident pair finite.
-	const double Scale =
-		static_cast<double>(GDatOne) / (Dist + static_cast<double>(GDatDistanceEpsilon));
-	const double Yaw = FMath::DegreesToRadians(Hint.Angles.Y);   // `0x102d12e0`, the hint's yaw
-	const double FaceX = FMath::Cos(Yaw);
-	const double FaceY = FMath::Sin(Yaw);
-	const double Projection = DeltaUnits.X * Scale * FaceX + FaceY * DeltaUnits.Y * Scale;
-	if (!(Projection > static_cast<double>(Hint.TargetAngleRangeDot)))
-	{
-		return false;
-	}
+	const float FaceX = Geometry.FaceX;
+	const float FaceY = Geometry.FaceY;
+	// `10296042`: the hint I already hold (`m_pHintNode +0x5ddc`) accepts here.
 	if (bIsCurrentHint)
 	{
 		return true;
 	}
-	const FVector ToHintUnits = (Hint.OriginCm - MyOriginCm) / ElysiumMove::U;
-	if (ToHintUnits.Size() > static_cast<double>(GDatNearDistanceUnits))
+	// `1029604e`: `hint->GetAbsOrigin() - GetAbsOrigin()`, all three axes, into a buffer that
+	// `0x10137220` (`VectorNormalize`) normalises IN PLACE — `v *= 1 / (|v| + _DAT_1046a51c)`, Z
+	// included — answering the length. (The decompiled C loses the in-place write and reads the raw
+	// delta in the 0x283d arm; the listing dots the NORMALISED buffer at `[ESP+0x20]` / `[ESP+0x24]`.)
+	const FVector ToHint = CoverSourceUnits(Hint.OriginCm) - CoverSourceUnits(MyOriginCm);
+	const float Length = static_cast<float>(
+		FMath::Sqrt(ToHint.Z * ToHint.Z + ToHint.Y * ToHint.Y + ToHint.X * ToHint.X));
+	const float Inverse = GDatOne / (GDatDistanceEpsilon + Length);
+	const float DirX = static_cast<float>(ToHint.X) * Inverse;
+	const float DirY = static_cast<float>(ToHint.Y) * Inverse;
+	// `102960a3`: `FCOMP _DAT_10483aac (512); AND EAX,0x4100 / JZ` continues only on an ordered
+	// `length < 512` or `==`; a greater OR UNORDERED length fails.
+	if (!(Length <= GDatNearDistanceUnits))
 	{
 		return false;
 	}
+	// `102960b6`: for `m_nHintType` (`+0x5dc`) 0x283d only, the normalised direction dotted in X and
+	// Y with the SAME facing `0x101d2f40` produced above; `FCOMP _DAT_104454d0 (0.5); TEST AH,0x41 /
+	// JNP` fails an ordered `<=`, so strictly greater — or unordered — continues.
 	if (Hint.HintType == GHintTypeCoverForward)
 	{
-		const double ForwardProjection = ToHintUnits.X * FaceX + ToHintUnits.Y * FaceY;
-		// `_DAT_104454d0`, the pooled 0.5f, as a projection floor.
-		if (ForwardProjection <= static_cast<double>(GDatCoverForwardMin))
+		const float ForwardDot = DirY * FaceY + DirX * FaceX;
+		if (ForwardDot <= GDatCoverForwardMin)
 		{
 			return false;
 		}
@@ -309,12 +428,19 @@ bool FElysiumNpc::CoverHintStillValid(const FHintWords& Hint, const FVector& Cov
 
 bool FElysiumNpc::FUN_10295ed0(int32 HintNode) const
 {
-	// The entry point. `m_hHintCoverObject` (`+0x6448`) must resolve, and the tail is the hint LOS
-	// check `0x102968f0`.
+	// The entry point. `10295ef3`: `m_hHintCoverObject` (`+0x6448`) must resolve, AFTER the null and
+	// disabled gates (which the rule restates; they write nothing, so the order cannot show).
 	FHintWords Hint;
 	if (!HintWords(HintNode, Hint))
 	{
 		return false;
+	}
+	if (IsHintDebugNpc())
+	{
+		FElysiumAiDebugHintProbe& Probe = World->AiDebugHintProbe();
+		Probe.Reset();
+		Probe.HintIndex = Hint.HintIndex;
+		Probe.Validator = TEXT("0x10295ed0");
 	}
 	FElysiumEntity* CoverObject = (World != nullptr)
 		? const_cast<FElysiumEntityWorld*>(World)->Resolve(ScheduleHost.HintCoverObject) : nullptr;
@@ -327,16 +453,19 @@ bool FElysiumNpc::FUN_10295ed0(int32 HintNode) const
 	{
 		return false;
 	}
+	// `102960e5`: `0x102968f0(this, hint, coverObject)` — the hint LOS check, with the COVER OBJECT
+	// as its target, decides every hint that is not the current one (which accepted at `10296048`).
 	return bIsCurrentHint || HintLosCheck(HintNode, CoverObject);
 }
 
 FElysiumNpc::EHintRejectReason FElysiumNpc::CoverHintRejectReason(const FHintWords& Hint,
 	const FVector& CoverObjectCm, bool bIsCurrentHint) const
 {
-	// `0x102961a0`'s rule — the verbose twin. It shares `0x10295ed0`'s band and projection and
-	// differs in three ways: a `target_name` gate in FRONT of everything, a single shared
+	// `0x102961a0`'s rule — the verbose twin. It shares `0x10295ed0`'s band and projection
+	// (`102962ae`..`102963ff` is the same run, compare for compare: `CoverGeometry`) and differs in
+	// three ways: a `target_name` gate in FRONT of everything, a single shared
 	// "Distance (%d) < %d or > %d" reason for both band policies, and an INLINE LOS ray (which the
-	// entry point runs) instead of `0x102968f0`.
+	// entry point runs) instead of `0x102968f0`. Null and disabled fail with no string.
 	if (!Hint.bValid)
 	{
 		return EHintRejectReason::NoHint;
@@ -345,29 +474,53 @@ FElysiumNpc::EHintRejectReason FElysiumNpc::CoverHintRejectReason(const FHintWor
 	{
 		return EHintRejectReason::Disabled;
 	}
-	// `m_strTargetName` (`+0x468`) against MY `m_iName` (`+0x26c`), case-insensitive. An empty
-	// target name admits everyone; a set one admits only the NPC it names.
+	// `102961c8`: `m_strTargetName` (`+0x468`) against MY `m_iName` (`+0x26c`) through `0x1043e780`,
+	// case-insensitive. An empty target name admits everyone; a set one admits only the NPC it names.
 	if (!Hint.TargetName.IsEmpty() && !Hint.TargetName.Equals(TargetName, ESearchCase::IgnoreCase))
 	{
+		// `10296222`: the operand is the HINT's `m_strTargetName` (`+0x468`), not my name.
+		if (IsHintDebugNpc())
+		{
+			HintDebugNote(Hint, TEXT("0x102961a0"),
+				FString::Printf(TEXT("Target name mismatch (%s)"), *Hint.TargetName));
+		}
 		return EHintRejectReason::TargetNameMismatch;   // "Target name mismatch (%s)"
 	}
-	const FVector DeltaUnits = (CoverObjectCm - Hint.OriginCm) / ElysiumMove::U;
-	const double Dist = FMath::Sqrt(DeltaUnits.X * DeltaUnits.X + DeltaUnits.Y * DeltaUnits.Y);
-	const double Tolerance = bIsCurrentHint ? static_cast<double>(NpcKernelBaseHelpersShared::GDatAttackBandUnits) : 0.0;
-	if (Dist < static_cast<double>(Hint.TargetDistMin) - Tolerance
-		|| Dist > static_cast<double>(Hint.TargetDistMax) + Tolerance)
+	FCoverGeometryValues Geometry;
+	const ECoverGeometry Verdict = CoverGeometry(World, Hint, CoverObjectCm, bIsCurrentHint, Geometry);
+	if (IsHintDebugNpc())
 	{
-		return EHintRejectReason::DistanceOutOfBand;    // "Distance (%d) < %d or > %d"
+		FElysiumAiDebugHintProbe& Probe = World->AiDebugHintProbe();
+		Probe.bDistance = true;
+		Probe.DistanceUnits = Geometry.Dist;
+		Probe.bFacing = Geometry.bProjection;
+		Probe.FacingProjection = Geometry.Projection;
+		Probe.GoodRange = Hint.TargetAngleRangeDot;
 	}
-	const double Scale =
-		static_cast<double>(GDatOne) / (Dist + static_cast<double>(GDatDistanceEpsilon));
-	const double Yaw = FMath::DegreesToRadians(Hint.Angles.Y);
-	const double Projection =
-		DeltaUnits.X * Scale * FMath::Cos(Yaw) + FMath::Sin(Yaw) * DeltaUnits.Y * Scale;
-	if (!(Projection > static_cast<double>(Hint.TargetAngleRangeDot)))
+	switch (Verdict)
 	{
-		// "Enemy outside of good range (%.2f) <= %.2f"
-		return EHintRejectReason::OutsideGoodRange;
+	case ECoverGeometry::OutOfBand:
+		// `10296689`..`102966ab`: `__ftol` (truncation) of `m_flTargetDistMax`, `m_flTargetDistMin`
+		// and the distance, pushed in that order — so the string reads distance, min, max, and the
+		// bounds are the RAW words even on the current hint's 64-widened band.
+		if (IsHintDebugNpc())
+		{
+			HintDebugNote(Hint, TEXT("0x102961a0"), FString::Printf(TEXT("Distance (%d) < %d or > %d"),
+				static_cast<int32>(Geometry.Dist), static_cast<int32>(Hint.TargetDistMin),
+				static_cast<int32>(Hint.TargetDistMax)));
+		}
+		return EHintRejectReason::DistanceOutOfBand;    // "Distance (%d) < %d or > %d"
+	case ECoverGeometry::OutsideRange:
+		// `10296435`..`10296447`: the projection first, `m_flTargetAngleRangeDot` second, as doubles.
+		if (IsHintDebugNpc())
+		{
+			HintDebugNote(Hint, TEXT("0x102961a0"),
+				FString::Printf(TEXT("Enemy outside of good range (%.2f) <= %.2f"),
+					static_cast<double>(Geometry.Projection), static_cast<double>(Hint.TargetAngleRangeDot)));
+		}
+		return EHintRejectReason::OutsideGoodRange;     // "Enemy outside of good range (%.2f) <= %.2f"
+	case ECoverGeometry::Pass:
+		break;
 	}
 	return EHintRejectReason::None;
 }
@@ -378,6 +531,13 @@ FElysiumNpc::EHintRejectReason FElysiumNpc::FUN_102961a0(int32 HintNode) const
 	if (!HintWords(HintNode, Hint))
 	{
 		return EHintRejectReason::NoHint;
+	}
+	if (IsHintDebugNpc())
+	{
+		FElysiumAiDebugHintProbe& Probe = World->AiDebugHintProbe();
+		Probe.Reset();
+		Probe.HintIndex = Hint.HintIndex;
+		Probe.Validator = TEXT("0x102961a0");
 	}
 	FElysiumEntity* CoverObject = (World != nullptr)
 		? const_cast<FElysiumEntityWorld*>(World)->Resolve(ScheduleHost.HintCoverObject) : nullptr;
@@ -390,10 +550,21 @@ FElysiumNpc::EHintRejectReason FElysiumNpc::FUN_102961a0(int32 HintNode) const
 	}
 	if (!Hint.TargetName.IsEmpty() && !Hint.TargetName.Equals(TargetName, ESearchCase::IgnoreCase))
 	{
+		// `1029620a`..`10296232`: the hint's own `m_strTargetName` is the operand.
+		if (IsHintDebugNpc())
+		{
+			HintDebugNote(Hint, TEXT("0x102961a0"),
+				FString::Printf(TEXT("Target name mismatch (%s)"), *Hint.TargetName));
+		}
 		return EHintRejectReason::TargetNameMismatch;
 	}
 	if (CoverObject == nullptr)
 	{
+		// `102962a4`: pushed as the string itself, no format.
+		if (IsHintDebugNpc())
+		{
+			HintDebugNote(Hint, TEXT("0x102961a0"), TEXT("No cover object"));
+		}
 		return EHintRejectReason::NoCoverObject;        // "No cover object"
 	}
 	const bool bIsCurrentHint = HintNode == BaseScheduleHost.HintNode;
@@ -403,13 +574,17 @@ FElysiumNpc::EHintRejectReason FElysiumNpc::FUN_102961a0(int32 HintNode) const
 	{
 		return Reason;
 	}
+	// `10296459`: the current hint accepts before the ray. (Retail's pass arms return without the
+	// `0x102d0b20` clear in this body; the text a previous failure wrote stands.)
 	if (bIsCurrentHint)
 	{
 		return EHintRejectReason::None;
 	}
-	// The inline ray: from my origin raised by `m_Collision->OBBMaxs().z` to a point on the hint
-	// (`0x102d1180`), and it passes only at `fraction >= 1.0` with neither `allsolid` nor
-	// `startsolid`.
+	// `10296465`..`102965e5`, the inline ray: FROM my origin raised by `m_Collision (+0x270)->
+	// OBBMaxs().z` TO the hint's position for me (`0x102d1180` via `0x10012387`), `UTIL_TraceLine`
+	// under mask `0x46804099` with `CTraceFilterSimple(this, COLLISION_GROUP_NONE)` (`0x1000bd7f`).
+	// `FCOMP fraction, 1.0; TEST AH,5 / JNP` fails only an ORDERED `fraction < 1.0`; then `allsolid`
+	// (`+0x36`) or `startsolid` (`+0x37`) fails. Otherwise it passes.
 	FVector EndCm = FVector::ZeroVector;
 	if (!HintPositionCm(HintNode, EndCm))
 	{
@@ -420,121 +595,47 @@ FElysiumNpc::EHintRejectReason FElysiumNpc::FUN_102961a0(int32 HintNode) const
 	FVector MinsUnits = FVector::ZeroVector;
 	FVector MaxsUnits = FVector::ZeroVector;
 	RetailCollisionExtents(*this, MinsUnits, MaxsUnits);
-	const FVector StartUnits = Origin / ElysiumMove::U + FVector(0.0, 0.0, MaxsUnits.Z);
-	FKernelHullTrace Trace;
-	KernelHullTrace(StartUnits, EndCm / ElysiumMove::U, FVector::ZeroVector, FVector::ZeroVector, 0,
-		Trace);
-	return Trace.Fraction >= GDatClearFraction ? EHintRejectReason::None
-											   : EHintRejectReason::FailedLos;
-}
-
-FElysiumNpc::EHintRejectReason FElysiumNpc::AttackHintRejectReason(const FHintWords& Hint,
-	const FVector& EnemyCm, const FVector& MyOriginCm, bool bIsCurrentHint, bool bHasActiveWeapon,
-	float GoodRangeDot, float BadRangeDot) const
-{
-	// `0x10296c40`'s rule, in retail's exact order.
-	if (!Hint.bValid || Hint.Disabled != 0)
+	IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr)
 	{
-		return EHintRejectReason::Disabled;             // "Disabled"
+		// No embodiment: nothing to trace against — the PASS arm, as `HintLosCheck` answers it.
+		return EHintRejectReason::None;
 	}
-	// THE FIRST ARM IS A PASS, not a fail: my own hint while `m_bStayEntrenched` stands accepts
-	// unconditionally and skips every test below. Retail's second half of the same arm — a NULL
-	// enemy — is decided by the entry point, which has the handle.
-	if (bIsCurrentHint && bStayEntrenched)
+	FElysiumRetailTrace Trace;
+	Trace.StartCm = Origin + FVector(0.0, 0.0, MaxsUnits.Z * ElysiumMove::U);
+	Trace.EndCm = EndCm;
+	Trace.RetailMask = GCoverTwinLosMask;
+	// `CTraceFilterSimple`'s pass entity is this NPC. The mask carries no MONSTER bit, so the seam
+	// lists no character and only the world half of the answer is read.
+	Trace.Ignore.Add(Handle);
+	FElysiumRetailTraceResult Result;
+	if (!Embodiment->TraceRetail(Trace, Result))
+	{
+		return EHintRejectReason::None;   // no collision world: the clear defaults, the PASS arm
+	}
+	if (!(Result.Fraction < GDatClearFraction) && !Result.bAllSolid && !Result.bStartSolid)
 	{
 		return EHintRejectReason::None;
 	}
-	if (!bHasActiveWeapon)
+	// `1029661c`..`10296647`: the operand is `tr.m_pEnt->GetDebugName()` (`0x1000b5cd`: the
+	// targetname, else the classname), or `"**UNKNOWN**"` (`0x105477a4`) for a null `m_pEnt`. Retail's
+	// world hit is the world ENTITY (`"worldspawn"` by classname); the port's static world answers an
+	// unset `HitEntity`, read as that entity when the ray was actually stopped.
+	if (IsHintDebugNpc())
 	{
-		return EHintRejectReason::NoActiveWeapon;       // "No active weapon"
-	}
-	const double HeightDiffUnits =
-		FMath::Abs(Hint.OriginCm.Z - MyOriginCm.Z) / static_cast<double>(ElysiumMove::U);
-	if (HeightDiffUnits > GDatHintHeightDiffUnits)
-	{
-		return EHintRejectReason::HeightDiff;          // "Height diff (%d) > %d"
-	}
-	const FVector DeltaUnits = (EnemyCm - Hint.OriginCm) / ElysiumMove::U;
-	const double Dist = FMath::Sqrt(DeltaUnits.X * DeltaUnits.X + DeltaUnits.Y * DeltaUnits.Y);
-	if (Dist < static_cast<double>(Hint.TargetDistMin))
-	{
-		return EHintRejectReason::DistanceBelowMin;     // "Distance (%d) < %d"
-	}
-	// `m_bStayEntrenched` SKIPS the upper bound entirely. The bound itself is two terms ORed: the
-	// active weapon's own maximum range (`+0x8c0`) and the hint's `m_flTargetDistMax`.
-	if (!bStayEntrenched)
-	{
-		float WeaponRangeUnits = 0.f;
-		const bool bHasRange = ActiveWeaponMaxRangeUnits(WeaponRangeUnits);
-		// SEAM: no port weapon record carries a range, so only the hint term is evaluated. Stated
-		// rather than papered over — a body past the weapon's reach but inside the hint's band is
-		// accepted here and rejected in retail.
-		if ((bHasRange && static_cast<double>(WeaponRangeUnits) < Dist)
-			|| static_cast<double>(Hint.TargetDistMax) < Dist)
+		FString Blocker = TEXT("**UNKNOWN**");
+		if (const FElysiumEntity* Hit = Result.HitEntity.IsSet() ? World->Resolve(Result.HitEntity) : nullptr)
 		{
-			return EHintRejectReason::DistanceAboveMax; // "Distance (%d) > %d or %d"
+			Blocker = !Hit->TargetName.IsEmpty() ? Hit->TargetName
+				: (Hit->Def != nullptr ? Hit->Def->Classname : FString(TEXT("**UNKNOWN**")));
 		}
-	}
-	if (!bIsCurrentHint)
-	{
-		// `dot( normalize2D(me - enemy), normalize2D(hint - enemy) )` — am I already on the enemy's
-		// side of the hint?
-		FVector ToMe = (MyOriginCm - EnemyCm) / ElysiumMove::U;
-		FVector ToHint = (Hint.OriginCm - EnemyCm) / ElysiumMove::U;
-		ToMe.Z = 0.0;
-		ToHint.Z = 0.0;
-		ToMe.Normalize();
-		ToHint.Normalize();
-		if (FVector::DotProduct(ToHint, ToMe) < static_cast<double>(GDatProjectionMin))
+		else if (!Result.HitEntity.IsSet() && Result.Fraction < GDatClearFraction)
 		{
-			return EHintRejectReason::Projection;       // "Projection (%.2f) < 0.2"
+			Blocker = TEXT("worldspawn");
 		}
+		HintDebugNote(Hint, TEXT("0x102961a0"), FString::Printf(TEXT("Failed LOS check (%s)"), *Blocker));
 	}
-	const double Scale =
-		static_cast<double>(GDatOne) / (Dist + static_cast<double>(GDatDistanceEpsilon));
-	const double Yaw = FMath::DegreesToRadians(Hint.Angles.Y);
-	const double Facing =
-		DeltaUnits.X * Scale * FMath::Cos(Yaw) + FMath::Sin(Yaw) * DeltaUnits.Y * Scale;
-	// The two BAND arms, and they are not symmetric: the good-range gate is `<=` (retail's
-	// `(a < p3) != (a == p3)`) and the bad-range gate is `>=`.
-	if (Facing <= static_cast<double>(GoodRangeDot))
-	{
-		return EHintRejectReason::OutsideGoodRange;     // "Enemy outside of good range (%.2f) <= …"
-	}
-	if (Facing >= static_cast<double>(BadRangeDot))
-	{
-		return EHintRejectReason::InsideBadRange;       // "Enemy inside of bad range (%.2f) >= …"
-	}
-	return EHintRejectReason::None;
-}
-
-FElysiumNpc::EHintRejectReason FElysiumNpc::FUN_10296c40(int32 HintNode,
-	const FElysiumEntity* Enemy, float GoodRangeDot, float BadRangeDot) const
-{
-	FHintWords Hint;
-	if (!HintWords(HintNode, Hint))
-	{
-		return EHintRejectReason::Disabled;   // retail's top arm covers a null hint too
-	}
-	const bool bIsCurrentHint = HintNode == BaseScheduleHost.HintNode;
-	if ((bIsCurrentHint && bStayEntrenched) || Enemy == nullptr)
-	{
-		return EHintRejectReason::None;
-	}
-	const bool bHasActiveWeapon = World != nullptr && Inventory.ActiveWeapon.IsSet()
-		&& const_cast<FElysiumEntityWorld*>(World)->Resolve(Inventory.ActiveWeapon) != nullptr;
-	const EHintRejectReason Reason = AttackHintRejectReason(Hint, Enemy->Origin, Origin,
-		bIsCurrentHint, bHasActiveWeapon, GoodRangeDot, BadRangeDot);
-	if (Reason != EHintRejectReason::None)
-	{
-		return Reason;
-	}
-	// The LAST gate, and only under `m_bForceCoverLOSCheck` (`+0x6408`).
-	if (ScheduleHost.bForceCoverLosCheck && !HintLosCheck(HintNode, Enemy))
-	{
-		return EHintRejectReason::FailedLos;            // "Failed hint LOS"
-	}
-	return EHintRejectReason::None;
+	return EHintRejectReason::FailedLos;                // "Failed LOS check (%s)"
 }
 
 // =================================================================================================
@@ -684,11 +785,14 @@ void FElysiumNpc::Slot588()
 
 bool FElysiumNpc::ActiveWeaponMaxRangeUnits(float& OutRangeUnits) const
 {
-	// SEAM for `GetActiveWeapon()->+0x8c0`. No port weapon record carries a maximum range; the
-	// item table has damage, ammo and wield rules and no reach. Answers false and the one caller
-	// (`AttackHintRejectReason`) drops that term and says so.
-	OutRangeUnits = 0.f;
-	return false;
+	// `GetActiveWeapon()->+0x8c0`, `m_fMaxRange1`, SOURCE units: the class constructor's word
+	// (1024 for every firearm, `CWeaponRanged 0x10238070`; 50 for `CWeaponMelee 0x103e9ac0`) or
+	// `Weapon_Equip`'s 1e9 (0018 story 8, findings R3). False only with no active weapon.
+	ElysiumWeapons::FRangeWords Words;
+	const FElysiumEntity* HeldWeapon = ActiveWeaponEntity();
+	const bool bAnswered = HeldWeapon != nullptr && ElysiumWeapons::ItemRangeWords(*HeldWeapon, Words);
+	OutRangeUnits = bAnswered ? Words.MaxRange1 : 0.f;
+	return bAnswered;
 }
 
 int32 FElysiumNpc::PatrolNodeInterestRecord(int32 PatrolNode) const
@@ -726,23 +830,103 @@ int32 FElysiumNpc::PatrolNodeInterestPercent(int32 Record) const
 	return HintWords(Record, Words) ? Words.IpPercent : 0;
 }
 
-bool FElysiumNpc::HintLosCheck(int32 HintNode, const FElysiumEntity* Against) const
+bool FElysiumNpc::HintLosCheck(int32 HintNode, const FElysiumEntity* LosTarget) const
 {
-	// SEAM for `0x102968f0`. Retail traces from the NPC's shooting position to the hint's own LOS
-	// point against the target and answers a bool. With no hint store the trace has no endpoint;
-	// this answers TRUE, which is the PASS arm — the same posture family Motor's `KernelHullTrace`
-	// takes (a seam that cannot trace reports a clear line).
-	(void)HintNode;
-	(void)Against;
-	return true;
+	// `0x102968f0(hint, target)` (`__thiscall` on the NPC, `RET 8`), `docs/vtmb/npc-ai/shape.md`
+	// § "The claim primitives, the hint LOS check and the idle gate". The ray runs FROM the hint TO
+	// the target's eye — not from the NPC:
+	//
+	//     if (!hint || !target) return false;
+	//     start = 0x102d1180(hint, this);             // the hint's position for this NPC
+	//     start.z += m_Collision (+0x270)->m_vecMaxs.z;
+	//     end   = target->EyePosition();              // slot 193, +0x304
+	//     UTIL_TraceLine(start, end, 0x46804099, CTraceFilterHintLOS(group 0), &tr);
+	//     return tr.fraction >= 1.0 && !tr.allsolid && !tr.startsolid;
+	//
+	// It WRITES NOTHING: `m_iFailedCoverLOSChecks` (`+0x6404`) is only ever zeroed in the corpus.
+	// The rest of the body is debug (`r_visualizetraces`, `debug_hint_los`), not reproduced: under
+	// the `debug_hint_los` ConVar (`DAT_10924cdc`), and only while `ai_debug_npc` is unset or names
+	// this NPC, a blocked trace draws the blocker's bbox overlay and a line to the hit point with a
+	// 4-unit cross (`0x10143d80`). UNPORTED (a drawing, no state); the gate would be `IsHintDebugNpc`
+	// or an unset `AiDebugNpc`.
+	// The mask the body pushes: OPAQUE and MOVEABLE among its bits, no MONSTER, no MONSTERCLIP
+	// (`ElysiumRetailMask::Recipe`: the SIGHT channel, movers met, no characters, no entity props).
+	constexpr int32 HintLosMask = 0x46804099;
+	if (HintNode == INDEX_NONE || LosTarget == nullptr)
+	{
+		return false;
+	}
+	// `0x102d1180`: a standalone hint's `GetAbsOrigin`, a node hint's `CAI_Node::GetPosition` at the
+	// NPC's pathing hull (`+0x156c`) — `HintPositionCm` is that body. False only for an index that
+	// names no live hint, which is retail's null-hint arm (retail holds the `CAI_Hint*`).
+	FVector StartCm = FVector::ZeroVector;
+	if (!HintPositionCm(HintNode, StartCm))
+	{
+		return false;
+	}
+	FVector MinsUnits = FVector::ZeroVector;
+	FVector MaxsUnits = FVector::ZeroVector;
+	RetailCollisionExtents(*this, MinsUnits, MaxsUnits);        // `m_Collision` slot 2, `m_vecMaxs`
+	StartCm.Z += MaxsUnits.Z * ElysiumMove::U;
+
+	IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr)
+	{
+		// No embodiment: nothing to trace against, and the answer is the PASS arm — the posture this
+		// seam held before the body landed and every kernel trace takes headless.
+		return true;
+	}
+	FElysiumRetailTrace Trace;
+	Trace.StartCm = StartCm;
+	Trace.EndCm = LosTarget->EyePosition();                           // slot 193
+	Trace.RetailMask = HintLosMask;
+	// `CTraceFilterHintLOS` (vtable `0x1049ae1c`, collision group 0) has NO pass entity, and its
+	// `ShouldHitEntity` refuses every combat character (`entity+0x9c != 0`) — so neither this NPC
+	// nor the target can block, and the character list is IGNORED: only the world half of the
+	// answer is read. The mask carries no MONSTER bit, so the seam lists none anyway. Its other two
+	// arms — the entity's slot 91 `ShouldCollide(0, mask)` and the game rules' group-0 pair over
+	// the entity's `m_CollisionGroup` — have no per-entity source on the world half and are not
+	// asked (every mover the recipe admits blocks).
+	FElysiumRetailTraceResult Result;
+	if (!Embodiment->TraceRetail(Trace, Result))
+	{
+		return true;   // no collision world: `Result` keeps its clear defaults, the PASS arm
+	}
+	// `trace+0x2c` against `_DAT_104454c0` = 1.0: `TEST AH,5 / JNP` at `10296b57` jumps to the fail
+	// arm only on an ORDERED `fraction < 1.0`, so an unordered fraction reaches the solid tests —
+	// spelled `!(f < 1)` to keep that. Then `trace+0x36` allsolid and `trace+0x37` startsolid.
+	return !(Result.Fraction < GDatClearFraction) && !Result.bAllSolid && !Result.bStartSolid;
 }
 
 bool FElysiumNpc::IsHintDebugNpc() const
 {
-	// SEAM for `DAT_10925444`, the `ai_debug_npc` handle. No console selection exists here, so no
-	// NPC is the debug NPC and no reason string is ever formatted — retail's answer for every NPC
-	// but one.
-	return false;
+	// `DAT_10925444`, the `ai_debug_npc` handle, as every gated arm reads it (`10296275`..`1029629c`).
+	// The test is the base NPC's (`FElysiumNpcBase::IsAiDebugNpc`, brief S7), which the NPC trace
+	// ring keys on too; the hint validators keep this name.
+	return IsAiDebugNpc();
+}
+
+void FElysiumNpc::HintDebugNote(const FHintWords& Hint, const TCHAR* Validator, const FString& Reason) const
+{
+	// `0x102d0ab0(hint, reason)` — `Q_strncpy(hint + 0x478, reason ? reason : "Unknown failure",
+	// 0x80)` and `hint + 0x4f8 = curtime + _DAT_1044e664` — and, for an empty reason, `0x102d0b20`,
+	// which empties `+0x478` and zeroes `+0x4f8`. NAMED MODERNIZATION (debug output only): the text
+	// goes to the log and to the world's probe record instead of a 128-byte word on the hint, and it
+	// is not truncated at 127 characters. No rule reads either word.
+	if (!IsHintDebugNpc())
+	{
+		return;
+	}
+	FElysiumAiDebugHintProbe& Probe = World->AiDebugHintProbe();
+	Probe.HintIndex = Hint.HintIndex;
+	Probe.Validator = Validator;
+	Probe.Reason = Reason;
+	if (Reason.IsEmpty())
+	{
+		return;
+	}
+	UE_LOG(LogElysiumNpcEnt, Display, TEXT("%s hint #%d %s [%s]: %s"), *DebugString(), Hint.HintIndex,
+		Hint.Name.IsEmpty() ? TEXT("(unnamed)") : *Hint.Name, Validator, *Reason);
 }
 
 // =================================================================================================

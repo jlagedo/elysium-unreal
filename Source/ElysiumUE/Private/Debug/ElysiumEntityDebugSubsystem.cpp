@@ -12,7 +12,12 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumVariant.h"
+#include "ElysiumNpcFlags.h"
+#include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumNpc.h"
+#include "Visual/ElysiumNpcBody.h"
 
+#include "Components/SkeletalMeshComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -107,6 +112,277 @@ namespace
 	{
 		return FColor(uint8(C.R * K), uint8(C.G * K), uint8(C.B * K), C.A);
 	}
+
+	// --- elysium.npc_brief -------------------------------------------------------------------------
+	// A compact NPC readout (10 lines) for an unattended driver that cannot afford `ent_dump`'s ~450
+	// fields. Every value is read through an accessor that already exists: the "live_state" rows
+	// (`FElysiumNpc::GetDebugState`, the same rows `elysium_entity_get` reports), the mind's own
+	// accessors, and the kernel's `HintWords` view. Nothing here is derived a second time.
+
+	// One `GetDebugState` row by key; "(n/a)" when the leaf does not publish it.
+	FString BriefRow(const TArray<TPair<FString, FString>>& Rows, const TCHAR* Key)
+	{
+		for (const TPair<FString, FString>& Pair : Rows)
+		{
+			if (Pair.Key == Key)
+			{
+				return Pair.Value;
+			}
+		}
+		return TEXT("(n/a)");
+	}
+
+	// `m_failSchedule` (+0x5c54, `FElysiumScheduleState::FailScheduleOverride`); none = base FAIL.
+	FString BriefFailSchedule(const FElysiumScheduleState& State)
+	{
+		if (State.FailScheduleOverride == ElysiumScheduleId::None)
+		{
+			return TEXT("none");
+		}
+		return FString::Printf(TEXT("%s (0x%x)"),
+			ElysiumScheduleName(ElysiumScheduleGlobalId(State.FailScheduleOverride)),
+			State.FailScheduleOverride);
+	}
+
+	// `m_pHintNode` (`BaseScheduleHost.HintNode`, an entity index) resolved through the kernel's own
+	// `HintWords` view: name/index, type, claim owner and next use time.
+	FString BriefHintNode(const FElysiumEntityWorld& EW, const FElysiumNpc& Npc)
+	{
+		const int32 Node = Npc.BaseScheduleHost.HintNode;
+		if (Node == INDEX_NONE)
+		{
+			return TEXT("none");
+		}
+		FElysiumNpcBase::FHintWords Words;
+		if (!Npc.HintWords(Node, Words))
+		{
+			return FString::Printf(TEXT("%d (not a live hint)"), Node);
+		}
+		return FString::Printf(TEXT("%d (name=%s index=%d type=%d owner=%s next_use=%.2f)"), Node,
+			Words.Name.IsEmpty() ? TEXT("-") : *Words.Name, Words.HintIndex, Words.HintType,
+			*EW.DescribeHandle(Words.HintOwner), Words.NextUseTime);
+	}
+
+	// The motor's floor answer (`IElysiumNpcMotor::SampleFloor`). The motor is the entity body's
+	// `AElysiumNpcBody`, reached the way the other debug tooling reaches it: the skeletal body's
+	// attach-parent actor. "n/a" is a bodiless or headless NPC that reports no floor.
+	const TCHAR* BriefOnGround(const FElysiumEntity& Entity)
+	{
+		if (const USkeletalMeshComponent* Skeletal = Entity.GetSkeletalBody())
+		{
+			if (const AElysiumNpcBody* Motor = Cast<AElysiumNpcBody>(Skeletal->GetAttachParentActor()))
+			{
+				FElysiumNpcFloorFacts Floor;
+				if (Motor->SampleFloor(Floor))
+				{
+					return Floor.bOnGround ? TEXT("1") : TEXT("0");
+				}
+			}
+		}
+		return TEXT("n/a");
+	}
+
+	void BriefOne(const FElysiumEntityWorld& EW, const FElysiumEntity& Entity)
+	{
+		const FString ClassName = Entity.Def ? Entity.Def->Classname : FString();
+		UE_LOG(LogElysiumEnt, Display, TEXT("#%d %s(%s) %s hidden=%d origin=%.0f %.0f %.0f"),
+			Entity.Handle.Index, *Entity.TargetName, *ClassName,
+			Entity.IsDead() ? TEXT("dead") : TEXT("live"), Entity.IsHidden() ? 1 : 0,
+			Entity.Origin.X, Entity.Origin.Y, Entity.Origin.Z);
+
+		const FElysiumNpc* Npc = Entity.AsNpc();
+		if (Npc == nullptr)
+		{
+			UE_LOG(LogElysiumEnt, Display, TEXT("  not an NPC"));
+			return;
+		}
+
+		TArray<TPair<FString, FString>> Rows;
+		Npc->GetDebugState(Rows);
+		const FElysiumNpcMind& Mind = Npc->GetMind();
+
+		UE_LOG(LogElysiumEnt, Display, TEXT("  state: %s ideal=%s mind=%s"),
+			LexToString(Mind.State()), LexToString(Mind.IdealState()), *BriefRow(Rows, TEXT("Mind")));
+		UE_LOG(LogElysiumEnt, Display, TEXT("  schedule: %s fail=%s"),
+			*BriefRow(Rows, TEXT("Schedule")), *BriefFailSchedule(Npc->Schedule));
+		// `state_flags` is `m_bfNPCStateFlags` (+0x5b64) as `NpcStateFlags()` derives it from the state;
+		// the sense gate (`0x1026ecfd`) reads bit 0 and the idle-sound split (`0x1026ed47`) bit 1.
+		UE_LOG(LogElysiumEnt, Display, TEXT("  enemy: %s last=%s sightings=%d dist=%.0f state_flags=0x%02x"),
+			*BriefRow(Rows, TEXT("Enemy")), *BriefRow(Rows, TEXT("Last enemy")), Npc->EnemySightings,
+			Npc->ScheduleHost.EnemyDistUnits, static_cast<uint32>(Npc->NpcStateFlags()));
+		UE_LOG(LogElysiumEnt, Display, TEXT("  conditions: %s"), *BriefRow(Rows, TEXT("Conditions")));
+		UE_LOG(LogElysiumEnt, Display, TEXT("  hint: node=%s cover_obj=%s at_cover=%d shoot_at=%s"),
+			*BriefHintNode(EW, *Npc), *EW.DescribeHandle(Npc->ScheduleHost.HintCoverObject),
+			Npc->NpcFlags.Has(EElysiumNpcFlag::AT_COVER_HINT) ? 1 : 0,
+			*EW.DescribeHandle(Npc->ShootTargetOverride));
+		UE_LOG(LogElysiumEnt, Display, TEXT("  body: %s | %s on_ground=%s flags=%s"),
+			*BriefRow(Rows, TEXT("Body")), *BriefRow(Rows, TEXT("Body owner")), BriefOnGround(Entity),
+			*Npc->NpcFlags.Describe());
+		// `vision` is `Senses.Perception.VisionDistanceCm` and `in_range` is `Senses.Memory.bPlayerInRange`,
+		// the two words `FElysiumNpcSenses::TickSight` compares (it scales the radius by the player's
+		// stealth vision scalar before the test).
+		UE_LOG(LogElysiumEnt, Display, TEXT("  player: %s relationship=%s vision=%.0f in_range=%d"),
+			*BriefRow(Rows, TEXT("Closest player")), *BriefRow(Rows, TEXT("Relationship to player")),
+			Npc->Senses.Perception.VisionDistanceCm, Npc->Senses.Memory.bPlayerInRange ? 1 : 0);
+		UE_LOG(LogElysiumEnt, Display, TEXT("  think: next_ai=%.2f next_normal=%.2f last_ai=%.2f"),
+			Npc->ScheduleHost.NextAI, Npc->ScheduleHost.NextNormal, Npc->ScheduleHost.LastAI);
+		UE_LOG(LogElysiumEnt, Display, TEXT("  weapon: %s"), *BriefRow(Rows, TEXT("Weapon")));
+		// `DAT_10925444` resolves to this NPC (`FElysiumNpcBase::IsAiDebugNpc`, set by
+		// `elysium.ai_debug_npc` / `elysium.npc_trace`); `trace` is the world's ring, which holds only
+		// that NPC's entries.
+		UE_LOG(LogElysiumEnt, Display, TEXT("  debug: ai_debug_npc=%s trace=%d"),
+			Npc->IsAiDebugNpc() ? TEXT("yes") : TEXT("no"), Npc->IsAiDebugNpc() ? EW.AiDebugTraceNum() : 0);
+	}
+
+	// `elysium.npc_brief <targetname|index> [<more>...]`. A targetname matches every entity of that
+	// name, dead ones included (line 1 says live/dead); an argument that matches no name and reads as
+	// an integer is an entity index (`FElysiumEntityHandle::Index`).
+	void NpcBrief(const FElysiumEntityWorld& EW, const TArray<FString>& Args)
+	{
+		if (Args.Num() == 0)
+		{
+			UE_LOG(LogElysiumEnt, Warning, TEXT("usage: elysium.npc_brief <targetname|index> [<more>...]"));
+			return;
+		}
+		for (const FString& Arg : Args)
+		{
+			int32 Matched = 0;
+			for (const TUniquePtr<FElysiumEntity>& EntPtr : EW.Entities())
+			{
+				if (EntPtr && EntPtr->TargetName.Equals(Arg, ESearchCase::IgnoreCase))
+				{
+					BriefOne(EW, *EntPtr);
+					++Matched;
+				}
+			}
+			if (Matched > 0)
+			{
+				continue;
+			}
+			int32 Index = INDEX_NONE;
+			if (LexTryParseString(Index, *Arg))
+			{
+				for (const TUniquePtr<FElysiumEntity>& EntPtr : EW.Entities())
+				{
+					if (EntPtr && EntPtr->Handle.Index == Index)
+					{
+						BriefOne(EW, *EntPtr);
+						++Matched;
+						break;
+					}
+				}
+			}
+			if (Matched == 0)
+			{
+				UE_LOG(LogElysiumEnt, Warning, TEXT("npc_brief: no entity named or indexed '%s'"), *Arg);
+			}
+		}
+	}
+
+	// --- elysium.ai_debug_npc / elysium.npc_trace ----------------------------------------------------
+	// The debug NPC. Retail keeps three separate selections and the port's verb makes all three:
+	//   - the handle `DAT_10925444` every hint validator's reason-string arm compares with `this`
+	//     (`FElysiumNpcBase::IsAiDebugNpc`), retail's `ai_hint_focus_npc` (`0x10085480`);
+	//   - `m_debugOverlays` bit `0x8000000`, which retail's `npc_task_text` (`0x10087b70`) toggles on
+	//     the named NPC — the gate of the "Schedule:", "Task:", "Break condition ->" and
+	//     "TaskFail ->" prints;
+	//   - `m_debugOverlays` bit `0x80000000`, which retail's `ent_trace` (`0x100b0ad0`) toggles — the
+	//     "trace this entity" bit every `ent_trace_*` sub-switch (here `ent_trace_conditions`) reads.
+	// Retail's two commands TOGGLE the bit through `0x100d1ff0`; the verb sets it on the chosen NPC
+	// and clears it on the previous one, and a new selection empties the world's trace ring. The
+	// word lives on the world (`FElysiumEntityWorld::AiDebugNpc`). `none` stores retail's `-1`; no
+	// argument reports the current selection.
+	constexpr int32 AiDebugOverlayBits =
+		FElysiumNpcBase::OverlayTaskTextBit | FElysiumNpcBase::OverlayEntTraceBit;
+
+	void ClearAiDebugOverlays(FElysiumEntityWorld& EW)
+	{
+		if (FElysiumEntity* Previous = EW.Resolve(EW.AiDebugNpc()))
+		{
+			Previous->DebugOverlays &= ~AiDebugOverlayBits;
+		}
+	}
+
+	void SelectAiDebugNpc(FElysiumEntityWorld& EW, const TArray<FString>& Args)
+	{
+		if (Args.Num() == 0)
+		{
+			const FElysiumEntityHandle Current = EW.AiDebugNpc();
+			UE_LOG(LogElysiumEnt, Display, TEXT("ai_debug_npc: %s"),
+				Current.IsSet() ? *EW.DescribeHandle(Current) : TEXT("none"));
+			return;
+		}
+		const FString& Arg = Args[0];
+		if (Arg.Equals(TEXT("none"), ESearchCase::IgnoreCase))
+		{
+			ClearAiDebugOverlays(EW);
+			EW.SetAiDebugNpc(FElysiumEntityHandle::Invalid());
+			UE_LOG(LogElysiumEnt, Display, TEXT("ai_debug_npc: none"));
+			return;
+		}
+		// The first live NPC of that targetname, else an entity index.
+		const FElysiumEntity* Found = nullptr;
+		for (const TUniquePtr<FElysiumEntity>& EntPtr : EW.Entities())
+		{
+			if (EntPtr && !EntPtr->IsDead() && EntPtr->AsNpc() != nullptr
+				&& EntPtr->TargetName.Equals(Arg, ESearchCase::IgnoreCase))
+			{
+				Found = EntPtr.Get();
+				break;
+			}
+		}
+		int32 Index = INDEX_NONE;
+		if (Found == nullptr && LexTryParseString(Index, *Arg) && EW.Entities().IsValidIndex(Index))
+		{
+			const FElysiumEntity* Candidate = EW.Entities()[Index].Get();
+			Found = Candidate != nullptr && Candidate->AsNpc() != nullptr ? Candidate : nullptr;
+		}
+		if (Found == nullptr)
+		{
+			UE_LOG(LogElysiumEnt, Warning, TEXT("ai_debug_npc: no NPC named or indexed '%s'"), *Arg);
+			return;
+		}
+		if (Found->Handle != EW.AiDebugNpc())
+		{
+			ClearAiDebugOverlays(EW);
+			EW.ResetAiDebugTrace();
+		}
+		EW.SetAiDebugNpc(Found->Handle);
+		if (FElysiumEntity* Chosen = EW.Resolve(Found->Handle))
+		{
+			Chosen->DebugOverlays |= AiDebugOverlayBits;
+		}
+		UE_LOG(LogElysiumEnt, Display, TEXT("ai_debug_npc: %s"), *Found->DebugString());
+	}
+
+	// --- elysium.npc_trace_tail ----------------------------------------------------------------------
+	// Retail's `ent_trace_dump_buffer` (`0x100b0df0` -> `0x1027efb0`), for the one ring the port
+	// keeps: the last `n` trace entries of the debug NPC (default 60), oldest first, between retail's
+	// own "** BEGIN BUFFER DUMP FOR %s" / "** END BUFFER DUMP FOR %s" lines.
+	void NpcTraceTail(const FElysiumEntityWorld& EW, const TArray<FString>& Args)
+	{
+		int32 Count = 60;
+		if (Args.Num() > 0 && !LexTryParseString(Count, *Args[0]))
+		{
+			UE_LOG(LogElysiumEnt, Warning, TEXT("usage: elysium.npc_trace_tail [n]"));
+			return;
+		}
+		const FElysiumEntityHandle DebugNpc = EW.AiDebugNpc();
+		const FString Name = DebugNpc.IsSet() ? EW.DescribeHandle(DebugNpc) : FString(TEXT("none"));
+		const TArray<FString> Tail = EW.AiDebugTraceTail(Count);
+		UE_LOG(LogElysiumEnt, Display, TEXT("** BEGIN BUFFER DUMP FOR %s (%d of %d)"), *Name, Tail.Num(),
+			EW.AiDebugTraceNum());
+		for (const FString& Entry : Tail)
+		{
+			TArray<FString> Lines;
+			Entry.ParseIntoArrayLines(Lines);
+			for (const FString& Line : Lines)
+			{
+				UE_LOG(LogElysiumEnt, Display, TEXT("%s"), *Line);
+			}
+		}
+		UE_LOG(LogElysiumEnt, Display, TEXT("** END BUFFER DUMP FOR %s"), *Name);
+	}
 }
 
 // The chokepoint tap the subsystem installs into each entity world. It is owned by the world (torn
@@ -158,6 +434,61 @@ void UElysiumEntityDebugSubsystem::Initialize(FSubsystemCollectionBase& Collecti
 	ConsoleObjects.Add(CM.RegisterConsoleCommand(TEXT("elysium.ent_dump"),
 		TEXT("elysium.ent_dump [target|!picker] — dump one entity's live state, fields, keyvalues, and outputs."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args, UWorld* W) { HandleDump(Args, W); }),
+		ECVF_Cheat));
+
+	ConsoleObjects.Add(CM.RegisterConsoleCommand(TEXT("elysium.npc_brief"),
+		TEXT("elysium.npc_brief <targetname|index> [<more>...] — a 10-line NPC readout (state, schedule, enemy, "
+		     "conditions, hint, body, player, think clocks, weapon); the compact form of ent_dump for unattended runs."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args, UWorld*)
+		{
+			if (const FElysiumEntityWorld* EW = GetSubstrate())
+			{
+				NpcBrief(*EW, Args);
+			}
+			else
+			{
+				UE_LOG(LogElysiumEnt, Warning, TEXT("npc_brief: no live entity world (load a map first)"));
+			}
+		}),
+		ECVF_Cheat));
+
+	// `elysium.ai_debug_npc` and its alias `elysium.npc_trace`: one selection (see `SelectAiDebugNpc`).
+	for (const TCHAR* VerbName : { TEXT("elysium.ai_debug_npc"), TEXT("elysium.npc_trace") })
+	{
+		ConsoleObjects.Add(CM.RegisterConsoleCommand(VerbName,
+			TEXT("elysium.ai_debug_npc | elysium.npc_trace <targetname|index|none> — the debug NPC: retail's "
+			     "ai_hint_focus_npc handle (the hint validators' reason strings), plus npc_task_text and "
+			     "ent_trace on that NPC (\"Schedule:\", \"Task:\", \"Break condition ->\", \"TaskFail ->\", the "
+			     "ent_trace_conditions changes), on LogElysiumNpcTrace and the npc_trace_tail ring. "
+			     "No argument = show the current selection."),
+			FConsoleCommandWithWorldAndArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args, UWorld*)
+			{
+				if (FElysiumEntityWorld* EW = GetSubstrate())
+				{
+					SelectAiDebugNpc(*EW, Args);
+				}
+				else
+				{
+					UE_LOG(LogElysiumEnt, Warning, TEXT("ai_debug_npc: no live entity world (load a map first)"));
+				}
+			}),
+			ECVF_Cheat));
+	}
+
+	ConsoleObjects.Add(CM.RegisterConsoleCommand(TEXT("elysium.npc_trace_tail"),
+		TEXT("elysium.npc_trace_tail [n] — the debug NPC's last n trace entries (default 60), oldest first: "
+		     "retail's ent_trace_dump_buffer for the port's one ring."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args, UWorld*)
+		{
+			if (const FElysiumEntityWorld* EW = GetSubstrate())
+			{
+				NpcTraceTail(*EW, Args);
+			}
+			else
+			{
+				UE_LOG(LogElysiumEnt, Warning, TEXT("npc_trace_tail: no live entity world (load a map first)"));
+			}
+		}),
 		ECVF_Cheat));
 
 	ConsoleObjects.Add(CM.RegisterConsoleCommand(TEXT("elysium.ent_info"),

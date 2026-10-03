@@ -398,7 +398,34 @@ What the three specs still owe a READ (not a build) is tracked in [RE-BACKLOG.md
   `0x102cc900`.
   Row 09 added: the jump refusals stall both hub patrol cops (link 731 and friends, 28 refusals in
   a 3-minute idle on `sm_hub_1`).
-- [ ] **14 · 0018/8** — Hint nodes. M · Opus/high.
+- [ ] **14 · 0018/8** — Hint nodes. M · Opus/high. **Landed 2026-09-30; box left open: the owner decides the tick on the live check.**
+  - *The searches.* `0x102d1af0`, `0x102d24b0`, `0x102d2980` / `0x102d2940` and the random pick
+    `0x102d1760` run over the world's list, cursor and count; the class word `+0x474`; claim, release,
+    owner test and available-to-me (`0x102d1350`, `0x102d1420`, `0x102d1450`, `0x102d1540`) on the
+    hint's own SAVE words. The attack validator `0x10296c40`, the hint LOS check `0x102968f0`, the
+    idle gate `0x102b5de0`, the kick-hide walk `0x102d0910` (`NpcKicked`), slot 550 `CoverRadius`.
+    `hint_rating` is replaced by a row of `NPC_Cover_Distance_Scalar` (authored 3 reads 2.5).
+  - *Corrected.* The spec's "no registry" line was stale. The two mask-search callers passed a type
+    where retail passes a class mask. The port's comments on the LOS check and the idle gate were
+    backwards. The NPC-side `bOwnsHint` / `HintReusableAt` stand-ins and the duplicate `FUN_10296c40`
+    are deleted. The cover validators take the node's yaw as facing.
+  - *Gate.* Build green; Substrate 1,722 / 0 (baseline 1,705); Content 33 / 0 (baseline 27); ledger
+    regenerated, `uv run elysium research kernel --check` 7 / 7; save schema 40.
+  - *Live check, NOT fully observed (why the box is open).* Observed: `hint_rating` 2.5 on row 465,
+    `DisableHint` / `ScriptUnhide` / `EnableHint` semantics, Python `DisableHint`, 0 ensure / assert
+    over the hub idle and the whole session. **NOT observed: an NPC's combat-time tactical search
+    claiming a cover hint and releasing it**, after three attempts, each stopped outside this story:
+    `thug_3` stuck in `FALL_TO_GROUND` after `ScriptUnhide` (no body owner, never enters combat);
+    the hub's `patrol_cop_north` is a baton cop (melee branch, mask 8, never the mask-1 search);
+    `sentry3` / `Hunter1` never enter combat (`Conditions (none)` though seen; `Hunter1`'s
+    `hint_groups` admits no group-1 row). The chain is pinned by 13 `HintSearch` unit tests and
+    `Elysium.Content.Hints.TutorialTacticalSearch` / `TutorialClaimAndCooldown`. Detail:
+    `story8/live-check.md`, `landing-numbers.md` § Live check.
+  - *Handed on.* Row 15: the cooldown `+1.0` claim write and the selectors. Row 32: the kick chooser
+    over `NpcKicked`. The weapon `+0x8c0` range and the player's `BodyTarget` stub. `0x102d0910`'s
+    activator order, `m_iszUserData`'s reader. The hidden-NPC lifecycle defect (`thug_3`) and the
+    senses `Sighted()` gate for a `SetRelationship`-flipped NPC, both outside this story.
+    RE-BACKLOG 49. Detail: the spec's story 8 "Landed" paragraph.
 - [ ] **15 · 0018/9** — The goal selectors. L · Opus/high.
 - [ ] **16 · 0018/10** — Interesting places. M · Opus/high.
 - [ ] **17 · 0018/11** — Patrol paths and the patrol-point interest record. S–M · Fable/medium. Corpus pass done 2026-09-21.

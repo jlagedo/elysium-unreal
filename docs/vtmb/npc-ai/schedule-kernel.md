@@ -1542,12 +1542,16 @@ resolves to *this* NPC.
 
 `0x10296c40` (1614 bytes) validates an **attack** position against an enemy and an active weapon. Its
 first arm is a **pass**, not a fail: my own hint while `m_bStayEntrenched` (`+0x6435`) stands, or a
-null enemy, accepts before any test at all. Otherwise: no active weapon fails; a height difference
+null enemy, accepts before any test at all. A null or disabled hint fails before that (re-read
+2026-09-30, 0018 story 8). Otherwise: no active weapon fails; a height difference
 over `_DAT_1049ae28` fails; the hint-to-enemy 2-D distance below `m_flTargetDistMin` fails; unless
 `m_bStayEntrenched`, a distance over **either** the weapon's own maximum range (`weapon +0x8c0`) or
 `m_flTargetDistMax` fails; a hint that is not already mine needs
-`dot(normalize2D(hint - enemy), normalize2D(me - enemy)) >= _DAT_10451ab4` — and retail's own message
-gives that literal away, `"Projection (%.2f) < 0.2"`. The facing projection is then tested against
+`dot(normalize(hint - enemy), normalize(me - enemy)) >= _DAT_10451ab4` — and retail's own message
+gives that literal away, `"Projection (%.2f) < 0.2"`. The normalise is `0x10137220`, **3-D with an
+epsilon**, and only then are the X and Y components dotted (the section's earlier "normalize2D"
+was a shorthand; corrected 2026-09-30). Every ordered compare in this body and in `0x102968f0`
+takes its edge from the flag test, so an unordered (NaN) fraction counts as CLEAR in both traces. The facing projection is then tested against
 **two** caller-supplied bounds that are not symmetric: `<= flGoodRange` is
 `"Enemy outside of good range"` and `>= flBadRange` is `"Enemy inside of bad range"`. Last, and only
 under `m_bForceCoverLOSCheck` (`+0x6408`), `0x102968f0` must pass or the answer is
@@ -1556,6 +1560,99 @@ under `m_bForceCoverLOSCheck` (`+0x6408`), `0x102968f0` must pass or the answer 
 **Unrecovered:** `_DAT_1049ae28` (= **64.0**, float64; read 2026-09-21, `rdata-cells.md`) (the height limit), `_DAT_1046a51c` (= **1.1920928955e-7f**, float32; read 2026-09-21, `rdata-cells.md`) (the normalise epsilon) and
 what `_DAT_104454d0` (= **0.5f**, float32; read 2026-09-21, `rdata-cells.md`) means as `0x10295ed0`'s forward floor; and `0x102968f0` itself is walked only as
 "the hint LOS check" here.
+
+### The debug NPC's prints — every reader of ai_debug_npc and ent_trace_conditions (2026-09-30)
+
+Recovered for 0018 story 8, brief S7, from the corpus (`vtmb_globals`, `vtmb_asm`) and the image's
+own strings. Retail has **four** per-NPC debug switches, not one, and the port's verb
+(`elysium.ai_debug_npc` = `elysium.npc_trace`) now sets the three that gate text.
+
+**The switches.**
+
+| Switch | Object / word | Set by | Default |
+|---|---|---|---|
+| `ai_hint_focus_npc` (the port's `ai_debug_npc`) | EHANDLE `DAT_10925444` | ConCommand `0x10085480` (registered `0x10085410`, name `0x1054981c`), DevMsg `"Changing hint ent to %s from %s\n"` / `"Clearing hint ent to *UNKNOWN* from %s\n"`; `-1` at static init `0x102d0840` | `-1` |
+| `npc_task_text` | `m_debugOverlays` (`+0x224`) bit `0x8000000` | `0x10087b70` → `0x100d1ff0` (XOR-toggle on every entity the name matches) | clear |
+| `ent_trace` | `m_debugOverlays` bit `0x80000000` | `0x100b0ad0` → `0x100d1ff0` | clear |
+| `ent_trace_conditions` | ConVar `0x10924a68` (parent word `DAT_10924a6c`, value `+0x2c`) | ConVar, default `DAT_10539978` = `"1"` | `1` |
+
+`ent_trace_buffer` (`0x100b0c00`, bytes `DAT_10920534`/`DAT_10920535` = on / verbose, DevMsg
+`"Trace Buffer On%s\n"` / `"Trace Buffer Off\n"`) and `ent_trace_dump_buffer` (`0x100b0df0` →
+`0x1027efb0`) route the trace into a 16 KB per-NPC ring (`+0x1b4e`, cursor `+0x5b50`, wrapped flag
+`+0x5b54`; appender `0x1027ef20`) and dump it between `"** BEGIN BUFFER DUMP FOR %s\n"` and
+`"** END BUFFER DUMP FOR %s\n"`. The other `ent_trace_*` sub-switches (`_doors`, `_hints`, `_melee`,
+`_sound`, `_frenzy`, `_scripted`, `_moveshoot`, `_status`, `_idealact`, `_nav`, `_patrolpath`,
+statics `0x1028bd50`..`0x1028c380`) have **no reader** in the image.
+
+**Readers of `DAT_10925444`** — eight, all hint validators: `0x10295c20` (FValidateHintType, thunk
+`0x1001077b`), `0x102961a0`, `0x102968f0`, `0x10296c40` (and their thunks). Their reason strings are
+the section above; brief S5 stood them.
+
+**Readers of `ent_trace_conditions`** — 130 functions. **129 are dead gates**: the release build
+kept the virtual `IsCommand()` call (`MOV ECX,[0x10924a6c]; CALL [EAX+4]`) and discarded its answer,
+immediately before a `SetCondition` (`0x100041b0`) or `ClearCondition` call — e.g. `TaskFail`
+`0x10274034` before `SetCondition(0x5c)`, `0x1029f81a` before `SetCondition(0xa)`,
+`CAI_BaseNPC::GatherConditions` `0x1026ee2c` before `SetCondition(0x67)`. Whatever those sites
+printed was compiled out; no text survives. **One is live**: the NPC trace formatter `0x1028d990`.
+
+**The trace line.** `CBaseEntity::TraceMessage` is vtable slot 18 (`0x1009b2c0`, base format
+`"%-20s  %6.2f : %*s %s\n"` at `0x10554dbc`, `TraceMessageBase` `0x1009b1d0`); slots 17, 19, 20 are
+its siblings (`TraceMessageBare`). `CAI_BaseNPCTroika` overrides 17..20 (`0x1028de90`,
+`0x1028de10`, `0x1028dfb0`, `0x1028df30`); 17/18 format through `0x1028d990(msg, indent, buf,
+0x200)` and then either DevMsg or, under `ent_trace_buffer`, append to the ring. `0x1028d990`,
+unbuffered: `"%-20s  %6.2f : %*s %s\n%s%s %s%s %s\n\n"` (`0x105d8828`) with `GetDebugName`,
+`curtime`, `indent` spaces, the message, then
+
+- only while `ent_trace_conditions` answers `!IsCommand() && m_nValue > 0` (`0x1028d9fd`..`0x1028da17`):
+  `"CONDS:"`, `" %s"` (`0x105a3060`) per condition `i < slot 0x664` that `HasCondition(i)`, named by
+  slot `0x660`, then `"\n"`;
+- `m_afMemory` (`+0x5d8c`) as 32 letters of `"PIS__PF_T_L__TTEPLM________ICCCC"` (`0x105d88e0`), `.`
+  for a clear bit;
+- `m_bfAINPCFlags` (`+0x14b8`) as 30 letters of `"RSCPFCNFIPCDHVAEFSBDSLIAMFDPOIO_"` (`0x105d88b8`);
+- an always-empty `%s`, then `"NAV %s %s"` only when `GetNavType()` (`0x1027d990`) is 3 (`"CLIMB"`)
+  or 1 (`"JUMP"`).
+
+Buffered: `"%6.2f : %*s %s\n"` (`0x105d8854`), or with verbose `"%6.2f : %*s %s\n%s%s %s%s %s\n\n"`
+(`0x105d8868`). **No reachable caller** of slots 17..20 on an NPC exists in the image — the call
+sites were compiled out with the gates. `ent_trace`'s bit has three readers, none of them text:
+`CBaseAnimating::DispatchAnimEvents` (`0x10091880`), the stealth-vision probe `0x102b4760` (debug
+boxes) and `0x10260a50`.
+
+**The live schedule-chain prints** are `npc_task_text`'s, plain DevMsg, no NPC name:
+
+| Group | Site | Gate | Text | Operand |
+|---|---|---|---|---|
+| schedule change | `SetSchedule` `0x10280e50`, last statement | `+0x224 & 0x8000000` | `"Schedule: %s\n"` (`0x105cde18`) | `CAI_Schedule+0x40` name |
+| task start | `MaintainSchedule` `0x102817c0`, `0x10281d68`..`0x10281d83` (before slot 442) | `& 0x8000000` | `"Task: %s\n"` (`0x105cdf20`) | slot `0x704` task name |
+| interrupt | `IsScheduleValid` `0x10280ff0`, `0x1028121f`..`0x10281334` | `developer != 0` (`DAT_1070af4c`) and `& 0x8000000` | `"   Break condition -> %s\n"` / `"   Break condition -> !%s\n"` (`0x105cde28` / `0x105cde48`) | lowest fired ordinal `0..0xbf`, `!` when in the inverted set (`+0x5c8c` and not held); name via slot `0x728`, miss = `"ERROR: Unknown condition!"` |
+| task fail | `CAI_BaseNPC::TaskFail` `0x10273fc0`, `0x10273fc3`..`0x10274018` | `developer != 0` and `& 0x8000000` | `"   TaskFail -> %s\n"` (`0x105cc5e0`) | `0x10316fa0(code)` failure text |
+
+Under `developer` alone the interrupt and fail arms also write an overlay record (`+0x5f30` failure
+text, `+0x5f34` break-condition name, `+0x5f38`/`+0x5f3c`). Unconditional prints in the same chain,
+gated on no switch: `"ERROR: Missing or invalid schedule!\n"` (`0x1028226c`), `"Invalid State for
+SelectSchedule!\n"` and `"No suitable combat schedule!\n"` (`SelectSchedule` `0x1028a380`),
+`"Calling ForceScheduleChange on NPC '%s'\n"` (`0x102ae490`), and `CNPC_VWerewolf::TaskFail`'s
+DevWarning (`0x103ce750`). The selectors print **nothing**: every arm stamps `+0x1b2c` (selector
+id), `+0x1b30` (`__FILE__`) and `+0x1b34` (`__LINE__`), e.g. the occlusion ladder `0x102b8320`.
+Navigation / movement failures have no gated print (`ent_trace_nav` has no reader).
+
+**The port** (`Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseTrace.cpp`):
+`FElysiumNpcBase::IsAiDebugNpc` (the `DAT_10925444` test; `FElysiumNpc::IsHintDebugNpc` forwards to
+it); `NpcTraceMessage` = `0x1028d990`'s unbuffered line, prefixed with `DebugString()` instead of
+`GetDebugName`, on `LogElysiumNpcTrace`; the four `npc_task_text` prints at their port sites
+(`FElysiumNpcBase::DebugScheduleInstalled` from `ElysiumSchedule::Install`,
+`FElysiumNpc::DebugTaskStart`, `DebugScheduleBreak` from `ElysiumSchedule::Tick`'s interrupt test,
+`FElysiumNpcBase::TaskFail`), names printed `name (id)`. The verb sets `DAT_10925444` and both
+overlay bits on the chosen NPC. Named divergences, all debug output only: (1) the four prints go
+through the trace formatter (name, time, CONDS) rather than bare DevMsg; (2) the `developer` half of
+the interrupt/fail gate is dropped and the `+0x5f30..+0x5f3c` record is not kept; (3) for the 129
+dead gates the port prints, under `ent_trace` and `ent_trace_conditions > 0`, one
+`SetCondition` / `ClearCondition name (id)` line per condition `GatherConditions` changed
+(`FElysiumNpcBase::RunAI`); (4) the port's schedule rows (`RecordScheduleEvent`, which carries the
+selector stamps) join the trace under `npc_task_text`; (5) one ring of whole entries for the debug
+NPC, always on, read by `elysium.npc_trace_tail [n]` (default 60), in place of `ent_trace_buffer`'s
+per-NPC 16 KB rings. **Unrecovered:** the text of the 129 compiled-out condition traces and of every
+compiled-out `TraceMessage` call.
 
 ## The face-anim turn ladder — `0x10297a20` (2026-09-13)
 

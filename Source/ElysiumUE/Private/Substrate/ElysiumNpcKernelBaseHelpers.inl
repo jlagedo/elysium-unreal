@@ -32,10 +32,10 @@
 //
 // Each answers NOTHING and names the retail call it stands for. Nothing below invents a value.
 
-/** SEAM for `CAI_Hint` `+0x8c0`… no: `GetActiveWeapon()->+0x8c0`, the ACTIVE WEAPON's own maximum
- *  range in SOURCE units, which `0x10296c40`'s distance band uses as its upper bound alongside the
- *  hint's `m_flTargetDistMax`. No port weapon record carries a range, so this answers false and the
- *  weapon half of that `||` cannot be evaluated; the hint half still is, and the body says so. */
+/** `GetActiveWeapon()->+0x8c0` (`m_fMaxRange1`), the ACTIVE WEAPON's own maximum range in SOURCE
+ *  units (`ElysiumWeapons::ItemRangeWords`, 0018 story 8). Read by `0x10296c40`'s distance band,
+ *  slot 609's shoot-at radius, `GatherEnemyConditions`' too-far limit and the StartTask radius
+ *  arms. False only when there is no active weapon. */
 bool ActiveWeaponMaxRangeUnits(float& OutRangeUnits) const;
 
 /** The patrol node's record: the hint the network node `PatrolNode` holds
@@ -49,40 +49,48 @@ int32 PatrolNodeInterestRecord(int32 PatrolNode) const;
  *  for an index that names no live hint. */
 int32 PatrolNodeInterestPercent(int32 Record) const;
 
-/** SEAM for `0x102968f0`, the hint LOS check `0x10295ed0` tails into and `0x10296c40` runs under
- *  `m_bForceCoverLOSCheck`. Takes the hint being validated and the entity being covered from.
- *  Answers true, which is retail's PASS arm — the trace seam behind it reports a clear line. */
-bool HintLosCheck(int32 HintNode, const FElysiumEntity* Target) const;
+/** `0x102968f0`, the hint LOS check `0x10295ed0` tails into (target: the cover object) and
+ *  `0x10296c40` (`ValidateHintCoverRange`) runs under `m_bForceCoverLOSCheck`: a line FROM the
+ *  hint's position for this NPC (`0x102d1180`, raised by this NPC's collision maxs z) TO `Target`'s eye, mask `0x46804099`, no character blocking.
+ *  Either argument null → false; clear (`fraction >= 1`, neither solid flag) → true. Writes
+ *  nothing. With no embodiment or no collision world it answers the PASS arm. */
+bool HintLosCheck(int32 HintNode, const FElysiumEntity* LosTarget) const;
 
-/** SEAM for `DAT_10925444`, the `ai_debug_npc` handle every reason-string arm of `0x102961a0` and
- *  `0x10296c40` compares against `this` before formatting anything. Answers false, so the reason
- *  strings are never built — which is retail's own behaviour for every NPC but the one being
- *  debugged. The REASONS are still decided and returned (`FHintRejectReason` below), because the
- *  reason is what the walk recovered and a test has to be able to read it. */
+/** `DAT_10925444`, the `ai_debug_npc` handle every reason-string arm of `0x102961a0` and
+ *  `0x10296c40` (and slot 566's hint-group arm) compares against `this` before formatting anything:
+ *  the world's `AiDebugNpc` resolves (serial match, non-null slot) to THIS NPC. Set by the
+ *  `elysium.ai_debug_npc` verb; unset (retail's `-1`) for every NPC otherwise, so the strings are
+ *  never built. `0x102961a0`'s REASONS are decided and returned either way (`EHintRejectReason`
+ *  below), because the reason is what the walk recovered and a test has to be able to read it. */
 bool IsHintDebugNpc() const;
 
-// --- The rejection reasons the two verbose validators decide --------------------------------------
+/** `0x102d0ab0(hint, reason)` under the `ai_debug_npc` gate, the port's reading: retail copies the
+ *  reason into the hint's debug text (`CAI_Hint +0x478`); the port logs it (`LogElysiumNpcEnt`,
+ *  Display, prefixed with this NPC's `DebugString()` and the hint's index and name) and records it in
+ *  the world's `AiDebugHintProbe` beside the numbers already written there. An EMPTY reason is the
+ *  passing tail's `0x102d0b20` (the clear): recorded, not logged. Callers gate on `IsHintDebugNpc()`
+ *  themselves, so no string is formatted otherwise; this body re-checks and does nothing when unset. */
+void HintDebugNote(const FHintWords& Hint, const TCHAR* Validator, const FString& Reason) const;
+
+// --- The rejection reasons the verbose cover validator decides ------------------------------------
 //
-// `0x102961a0` and `0x10296c40` each end every failing arm by formatting a named string onto the
-// hint (`0x102d0ab0`) and a passing one by clearing it (`0x102d0b20`). The STRING is a debug
-// artefact gated on `ai_debug_npc`; the REASON is the recovered decision, so the bodies answer it
-// and the strings are reproduced verbatim beside each arm.
+// `0x102961a0` ends every failing arm that has a string by formatting it onto the hint
+// (`0x102d0ab0`); its pass arms return without a clear (`10296651`, re-read 0018 story 8 — it is
+// `0x10296c40` whose passing tail calls `0x102d0b20`). The STRING is a debug artefact
+// gated on `ai_debug_npc` and is formatted, verbatim with retail's operands, through
+// `HintDebugNote` only under `IsHintDebugNpc()`; the REASON is the recovered decision, so the body
+// answers it either way. (`0x10296c40`'s own reasons went with the duplicate this family carried;
+// family Hints' `ValidateHintCoverRange` answers a bool and formats its strings the same way.)
 enum class EHintRejectReason : uint8
 {
 	None = 0,            // the hint passed
-	NoHint,              // a null node, or the seam could not resolve it
-	Disabled,            // "Disabled"                          — m_iDisabled != 0
-	TargetNameMismatch,  // "Target name mismatch (%s)"         — 0x102961a0 only
-	NoCoverObject,       // "No cover object"                   — 0x102961a0 only
-	NoActiveWeapon,      // "No active weapon"                  — 0x10296c40 only
-	HeightDiff,          // "Height diff (%d) > %d"             — 0x10296c40 only
-	DistanceBelowMin,    // "Distance (%d) < %d"                — 0x10296c40
-	DistanceOutOfBand,   // "Distance (%d) < %d or > %d"        — 0x102961a0
-	DistanceAboveMax,    // "Distance (%d) > %d or %d"          — 0x10296c40
-	Projection,          // "Projection (%.2f) < 0.2"           — 0x10296c40 only
+	NoHint,              // a null node, or the seam could not resolve it (no string)
+	Disabled,            // m_iDisabled != 0 (no string)
+	TargetNameMismatch,  // "Target name mismatch (%s)"
+	NoCoverObject,       // "No cover object"
+	DistanceOutOfBand,   // "Distance (%d) < %d or > %d"
 	OutsideGoodRange,    // "Enemy outside of good range (%.2f) <= %.2f"
-	InsideBadRange,      // "Enemy inside of bad range (%.2f) >= %.2f"  — 0x10296c40 only
-	FailedLos,           // "Failed LOS check (%s)" / "Failed hint LOS"
+	FailedLos,           // "Failed LOS check (%s)"
 };
 
 // --- The bodies -----------------------------------------------------------------------------------
@@ -122,36 +130,28 @@ bool FUN_1029f650(int32 PatrolNode);
 int32 FUN_1029f730(int32 PatrolNode);
 
 /** `0x10295ed0` — is this cover hint still a valid place to stand relative to `m_hHintCoverObject`?
- *  The quiet twin of `0x102961a0`. Retail name UNRECOVERED. */
+ *  The quiet twin of `0x102961a0`: the rule below, then `0x102968f0` (`HintLosCheck`) with the
+ *  cover object as its target for every hint but the current one. Retail name UNRECOVERED.
+ *  (`0x10296c40`, the attack-position validator, is family Hints' `ValidateHintCoverRange`.) */
 bool FUN_10295ed0(int32 HintNode) const;
 
 /** The pure rule of `0x10295ed0` over a hint's words, so every threshold is assertable without a
  *  hint store. `CoverObjectCm` is where `m_hHintCoverObject` is standing, `bIsCurrentHint` is
- *  `hint == m_pHintNode`, `MyOriginCm` is `GetAbsOrigin()`. */
+ *  `hint == m_pHintNode`, `MyOriginCm` is `GetAbsOrigin()`. The facing is `0x102d12e0`'s — a
+ *  node-bound hint (`NodeId != -1`) is judged by its NETWORK NODE's yaw, read off this NPC's
+ *  world — through `0x101d2f40` in Source axes (the port's Y negated). */
 bool CoverHintStillValid(const FHintWords& Hint, const FVector& CoverObjectCm,
 	const FVector& MyOriginCm, bool bIsCurrentHint) const;
 
 /** `0x102961a0` — the verbose twin of `0x10295ed0`: the same band and projection over the cover
- *  object, with a `target_name` gate in front and its own inline LOS ray instead of `0x102968f0`,
- *  and a named reason on every rejection. Retail name UNRECOVERED. */
+ *  object, with a `target_name` gate in front and its own inline LOS ray (me, raised by my collision
+ *  maxs z, to `0x102d1180`; mask `0x46804099`) instead of `0x102968f0`, and a named reason on every
+ *  rejection. Retail name UNRECOVERED. */
 EHintRejectReason FUN_102961a0(int32 HintNode) const;
 
-/** The pure rule of `0x102961a0`, minus the LOS ray (which the trace seam answers). */
+/** The pure rule of `0x102961a0`, minus the LOS ray; the same facing frame as `CoverHintStillValid`. */
 EHintRejectReason CoverHintRejectReason(const FHintWords& Hint, const FVector& CoverObjectCm,
 	bool bIsCurrentHint) const;
-
-/** `0x10296c40` — is this hint a valid place to attack `Enemy` from, given my active weapon?
- *  Retail name UNRECOVERED. Family Hints stands `ValidateHintCoverRange` as a SEAM naming this
- *  address and deliberately left it refusing; this is the recovered body, and the two should be
- *  joined by the coordinator rather than by an edit to another family's file. */
-EHintRejectReason FUN_10296c40(int32 HintNode, const FElysiumEntity* Enemy, float GoodRangeDot,
-	float BadRangeDot) const;
-
-/** The pure rule of `0x10296c40`, minus the hint-LOS seam. `EnemyCm` is the enemy's origin,
- *  `MyOriginCm` mine, `bHasActiveWeapon` is `GetActiveWeapon() != NULL`. */
-EHintRejectReason AttackHintRejectReason(const FHintWords& Hint, const FVector& EnemyCm,
-	const FVector& MyOriginCm, bool bIsCurrentHint, bool bHasActiveWeapon, float GoodRangeDot,
-	float BadRangeDot) const;
 
 /** `0x10297a20` — pick a turn-in-place program from the motor's yaw delta and record the pick in
  *  `m_eFaceAnim` (`+0x63e4`) and `m_flFaceYawDiff` (`+0x63e8`). Retail name UNRECOVERED. A THIRD

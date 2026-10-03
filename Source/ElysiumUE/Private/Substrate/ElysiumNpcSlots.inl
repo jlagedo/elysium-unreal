@@ -6,7 +6,7 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 138 generated slot rows of `FElysiumNpc` (CAI_BaseNPCTroika): 33 it introduces and 105 it
+// 140 generated slot rows of `FElysiumNpc` (CAI_BaseNPCTroika): 33 it introduces and 107 it
 // overrides with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -122,6 +122,12 @@
 // overridden nowhere (0019/5 step 6)
 // slot 614 0x102c23f0 FElysiumNpc::ResetThinkTimers — the four think stamps, ported in story 21
 
+	// slot 17 0x1028de90 (walked) `void TraceMessage(const char*, int) const`
+	//   layer 12, story 29d
+	void TraceMessage(const TCHAR*, int32) const override;
+	// slot 18 0x1028de10 (walked) `void TraceMessage(const char*, int)`
+	//   layer 12, story 29d
+	void TraceMessage(const TCHAR*, int32) override;
 	// slot 21 0x1029f800 (walked) `void vfunc21(CBaseEntity*)`
 	//   layer 3, story 29c
 	void Slot21(FElysiumEntity*) override;
@@ -577,3 +583,4 @@
 	// The inherited overloads of an overridden name stay visible.
 	using FElysiumNpcBase::FInViewCone;
 	using FElysiumNpcBase::GetEnemy;
+	using FElysiumNpcBase::TraceMessage;

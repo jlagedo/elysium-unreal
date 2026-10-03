@@ -660,8 +660,10 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// of the NPC leaf and left them to the generated datamap walk, which changes the record in both
 	// directions at once. Every leaf gate below the floor is therefore unreachable-false by
 	// construction, which is what makes the list below a list of DEAD gates.
-	TestEqual(TEXT("the floor is the save-walk-split schema"),
-		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::NpcSaveWalkSplit);
+	// `NpcHintClaimOnHint` (0018/8) then took the two hint-claim stand-ins out of the middle of the
+	// base schedule host record, which moved the floor once more.
+	TestEqual(TEXT("the floor is the hint-claim-on-hint schema"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::NpcHintClaimOnHint);
 	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
 	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
 	// being refused, and the floor stays where the last breaking schema left it.
@@ -744,7 +746,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `m_hTargetEnt` to the END of the NPC leaf behind its own version. Additive: a `SeeUnknownSweep`
 	// payload restores a sweep due at once and no target, the spawn defaults.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcSaveWalkSplit);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcHintClaimOnHint);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),

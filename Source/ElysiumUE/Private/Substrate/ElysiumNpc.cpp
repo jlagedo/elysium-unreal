@@ -1450,6 +1450,7 @@ void FElysiumNpc::ClearPreservePath()
 
 void FElysiumNpc::DebugScheduleInstalled(int32 InstalledSchedule)
 {
+	FElysiumNpcBase::DebugScheduleInstalled(InstalledSchedule);   // `0x10280e50`'s "Schedule: %s"
 	ElysiumNpcDebugLogging::ScheduleInstalled(*this, InstalledSchedule);
 }
 
@@ -1829,13 +1830,15 @@ void FElysiumNpc::ScheduleDone()
 
 void FElysiumNpc::ClearScheduleHint(float ReuseDelay)
 {
-	// 0x10295ab0: a missing hint performs no writes, and another owner's hint is
-	// forgotten locally without imposing our cooldown on that owner.
+	// 0x10295ab0 `CAI_BaseNPCTroika::ClearHintNode`: a missing hint performs no writes. The release
+	// `0x102d1420(hint, delay)` (the live hint's `m_hHintOwner +0x5e0 = -1`, `m_flNextUseTime +0x5ec =
+	// curtime + delay`) runs only when `0x102d1450` says this NPC owns the hint, so another owner's
+	// hint is forgotten locally without imposing our cooldown on it (`shape.md` "The claim
+	// primitives"). The four clears below run either way.
 	if (BaseScheduleHost.HintNode == INDEX_NONE) return;
-	if (BaseScheduleHost.bOwnsHint)
+	if (OwnsHint(BaseScheduleHost.HintNode))                      // 0x102d1450
 	{
-		BaseScheduleHost.bOwnsHint = false;
-		BaseScheduleHost.HintReusableAt = (World ? World->NowSeconds() : 0.0) + ReuseDelay;
+		ReleaseHintNode(BaseScheduleHost.HintNode, ReuseDelay);   // 0x102d1420
 	}
 	BaseScheduleHost.HintNode = INDEX_NONE;
 	ScheduleHost.FailedCoverLosChecks = 0;

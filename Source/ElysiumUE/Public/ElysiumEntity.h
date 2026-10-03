@@ -776,9 +776,10 @@ public:
 	// navigator route, `0x10000` OVERLAY_NPC_ZAP (drop weapon and remove), `0x20000` enemy-memory
 	// labels, `0x200000` enemy/target lines, `0x400000` view cone.
 	//
-	// Nothing in this runtime SETS it yet — there is no `ent_text` console command here — so every
-	// arm is off until a test or a future debug surface writes it. That is the recovered default,
-	// not a gap: retail's word is zero on a freshly spawned entity too.
+	// `0x8000000` is `npc_task_text`'s (the schedule/task/break/fail prints) and `0x80000000`
+	// `ent_trace`'s; the port's `elysium.npc_trace` / `elysium.ai_debug_npc` verb sets both on the
+	// debug NPC (brief S7). Nothing else sets the word — there is no `ent_text` console command
+	// here — which is the recovered default: retail's word is zero on a freshly spawned entity too.
 	int32 DebugOverlays = 0;
 
 protected:

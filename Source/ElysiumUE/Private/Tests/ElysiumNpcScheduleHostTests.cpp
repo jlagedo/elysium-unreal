@@ -3,6 +3,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
+#include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumPhysProp.h"
 #include "ElysiumSaveArchive.h"
@@ -32,6 +33,17 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	PropDef.TargetName = TEXT("kick_barrel");
 	PropDef.Keys.Add(TEXT("npc_kickable"), TEXT("1"));
 	Defs.Defs.Add(MoveTemp(PropDef));
+	// Two live `ai_hint`s: the claim and the reuse time a `ClearHintNode` (`0x10295ab0`) release
+	// writes are the HINT's words (`m_hHintOwner +0x5e0`, `m_flNextUseTime +0x5ec`), 0018 story 8.
+	const TCHAR* const HintNames[] = { TEXT("held"), TEXT("theirs") };
+	for (const TCHAR* HintName : HintNames)
+	{
+		FElysiumEntityDef HintDef;
+		HintDef.Classname = TEXT("info_node_hint");
+		HintDef.TargetName = HintName;
+		HintDef.Keys.Add(TEXT("hinttype"), TEXT("10100"));
+		Defs.Defs.Add(MoveTemp(HintDef));
+	}
 	World.Load(MoveTemp(Defs));
 	World.Activate(0.0);
 	FElysiumEntity* Entity = World.FindByName(TEXT("victim"));
@@ -41,6 +53,13 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	FElysiumRecordingNpcMotor& Motor = *Services.NpcMotors[0];
 	FElysiumPhysProp* Prop = static_cast<FElysiumPhysProp*>(World.FindByName(TEXT("kick_barrel")));
 	if (!TestNotNull(TEXT("authored kick prop exists"), Prop)) return false;
+	FElysiumHint* HeldHint = FElysiumHint::Cast(World.FindByName(TEXT("held")));
+	FElysiumHint* TheirHint = FElysiumHint::Cast(World.FindByName(TEXT("theirs")));
+	if (!TestNotNull(TEXT("the held hint stood"), HeldHint)
+		|| !TestNotNull(TEXT("the other owner's hint stood"), TheirHint)) return false;
+	const int32 Held = HeldHint->Handle.Index;
+	const int32 Theirs = TheirHint->Handle.Index;
+	FElysiumNpcBase::FHintWords Words;
 	TestTrue(TEXT("npc_kickable is loaded from the authored key"), Prop->bNpcKickable);
 	Npc->ScheduleHost.KickProp = Prop->Handle;
 	Motor.Navigation.bActiveGoal = true;
@@ -76,8 +95,8 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	Npc->ScheduleHost.GoalToleranceCm = 25.f;
 	Npc->ScheduleHost.InsideInterruptDistanceSqr = 64.f;
 	Npc->ScheduleHost.OutsideInterruptDistanceSqr = 256.f;
-	Npc->BaseScheduleHost.HintNode = 5;
-	Npc->BaseScheduleHost.bOwnsHint = true;
+	Npc->BaseScheduleHost.HintNode = Held;
+	TestTrue(TEXT("the NPC claims the held hint"), Npc->ClaimHint(Held));
 	Npc->ScheduleHost.FailedCoverLosChecks = 3;
 	Npc->NpcFlags.Set(EElysiumNpcFlag::AT_COVER_HINT);
 	Npc->ScheduleHost.NextAI = Npc->ScheduleHost.NextNormal = Npc->ScheduleHost.NextMove = Npc->ScheduleHost.NextUpdate = 50.0;
@@ -93,7 +112,11 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	TestEqual(TEXT("goal tolerance reset"), Npc->ScheduleHost.GoalToleranceCm, 0.f);
 	TestEqual(TEXT("inside interrupt reset"), Npc->ScheduleHost.InsideInterruptDistanceSqr, 0.f);
 	TestEqual(TEXT("outside interrupt reset"), Npc->ScheduleHost.OutsideInterruptDistanceSqr, 0.f);
-	TestEqual(TEXT("hint released for five seconds"), Npc->BaseScheduleHost.HintReusableAt, 5.0);
+	TestTrue(TEXT("the held hint is still live"), Npc->HintWords(Held, Words));
+	TestFalse(TEXT("the owned hint is released: m_hHintOwner is -1"), Words.HintOwner.IsSet());
+	TestEqual(TEXT("hint released for five seconds: m_flNextUseTime = curtime + 5.0"),
+		Words.NextUseTime, World.NowSeconds() + 5.0, 1e-3);
+	TestEqual(TEXT("ClearHintNode forgets the hint"), Npc->BaseScheduleHost.HintNode, INDEX_NONE);
 	TestTrue(TEXT("sleep attack margin restored"), Npc->AttackExtentsCm.Equals(FVector(10,10,30)));
 	TestFalse(TEXT("TaskFail consumes the prop's kickable permission"), Prop->bNpcKickable);
 	TestFalse(TEXT("TaskFail drops the resolved kick prop handle"), Npc->ScheduleHost.KickProp.IsSet());
@@ -136,13 +159,19 @@ bool FElysiumNpcTaskFailureTest::RunTest(const FString&)
 	TestFalse(TEXT("StopMoving failure observes the ground transition"), Npc->NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH));
 	Npc->ReconnectToSquad();
 	TestEqual(TEXT("reconnect clamps a missing disconnect at zero"), Npc->BaseScheduleHost.SquadDisconnected, 0);
-	Npc->BaseScheduleHost.HintReusableAt = 77.0;
+	HeldHint->NextUseTime = 77.0f;
+	Npc->BaseScheduleHost.HintNode = INDEX_NONE;
 	Npc->ClearScheduleHint(5.f);
-	TestEqual(TEXT("a missing hint does not change a cooldown"), Npc->BaseScheduleHost.HintReusableAt, 77.0);
-	Npc->BaseScheduleHost.HintNode = 8;
-	Npc->BaseScheduleHost.bOwnsHint = false;
+	TestEqual(TEXT("a missing hint does not change a cooldown"), static_cast<double>(HeldHint->NextUseTime), 77.0);
+	// `0x102d1450` gates the release: a hint a live other entity owns is forgotten locally only.
+	TheirHint->HintOwner = Prop->Handle;
+	TheirHint->NextUseTime = 77.0f;
+	Npc->BaseScheduleHost.HintNode = Theirs;
 	Npc->ClearScheduleHint(5.f);
-	TestEqual(TEXT("another owner's hint is not put on cooldown"), Npc->BaseScheduleHost.HintReusableAt, 77.0);
+	TestTrue(TEXT("the other owner's hint is still live"), Npc->HintWords(Theirs, Words));
+	TestEqual(TEXT("another owner's hint is not put on cooldown"), Words.NextUseTime, 77.0);
+	TestTrue(TEXT("and its owner is not unlocked"), Words.HintOwner == Prop->Handle);
+	TestEqual(TEXT("but the NPC forgets it"), Npc->BaseScheduleHost.HintNode, INDEX_NONE);
 	Npc->NpcFlags.Set(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
 	Npc->ScheduleHost.SavedSleepExtents = FVector::ZeroVector;
 	Npc->TaskFail(0x0c);

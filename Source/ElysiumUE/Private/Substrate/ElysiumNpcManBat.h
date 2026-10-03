@@ -48,10 +48,10 @@ public:
 	FElysiumEntityHandle ManBatPhysicsAnimlink;   // +0x6690 m_hPhysicsAnimlink
 	bool bManBatPickupTargetBreakable = false;    // +0x6694 m_bPickupTargetBreakable
 	FElysiumEntityHandle ManBatFlyByTarget;       // +0x66ac m_hFlyByTarget
-	/** SEAM for `0x102d1af0` with `(20000, 0, 15000.0, 0, 0)` — the hint search `0x1038b370` runs while
-	 *  it has `m_iMoveGoalNodeMode` temporarily forced to 2. Family **Hints** owns `FindHintNear` over
-	 *  the same absent store; this is its `FElysiumEntity*`-answering form, because `0x1038b370` reads
-	 *  the found hint's ORIGIN. Answers null, which is the arm that zeroes the output velocity. */
+	/** `0x102d1af0` with `(20000, 0, 15000.0, 0, 0)` — the hint search `0x1038b370` runs while it has
+	 *  `m_iMoveGoalNodeMode` temporarily forced to 2. `FElysiumNpcBase::FindHintNear` over the world's
+	 *  hint list, answered as the hint ENTITY because `0x1038b370` reads the found hint's ORIGIN. A
+	 *  miss answers null, the arm that zeroes the output velocity. */
 	FElysiumEntity* ManBatFindMoveGoalHint(int32 HintType, float RadiusUnits);
 	TArray<FTeleportEmitterPlacement> TeleportEmitterPlacements;
 	void PlaceNamedEmitter(const TCHAR* Name, const FVector& PositionUnits);

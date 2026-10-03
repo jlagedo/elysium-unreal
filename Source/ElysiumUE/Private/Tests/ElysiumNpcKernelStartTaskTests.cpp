@@ -301,9 +301,10 @@ bool FElysiumNpcKernelStartTask19ToleranceArmsTest::RunTest(const FString&)
 	N.BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
 	const float HalfHull0 = N.StartTask19HullWidthUnits(0) * 0.5f;
 	F.Start(0x9f, 40.f);
-	// With a weapon the addend is `weapon+0x8c0 * data` (the range word answers 0.0); without, the
+	// With a weapon the addend is `weapon+0x8c0 * data` (its class word, 0018 story 8); without, the
 	// resolved distance (`0x102a43fe`).
-	const float MeleeAddend = N.ActiveWeaponEntity() != nullptr ? 0.f : Resolved;
+	const float MeleeAddend = N.ActiveWeaponEntity() != nullptr
+		? N.StartTask19WeaponRangeWord(0x8c0) * 40.f : Resolved;
 	TestEqual(TEXT("0x102a4376 / 0x102a43e2 hull(0)*0.5 + addend"), N.Navigator.GoalToleranceCm / ElysiumMove::U, HalfHull0 + MeleeAddend, 0.001f);
 	TestTrue(TEXT("0x9f completes"), F.Completed());
 

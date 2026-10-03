@@ -193,6 +193,7 @@ void AElysiumMapActor::BuildStageWorld()
 	PendingSpawnYaw = 0.0f;
 	PendingSpawnSpace = EElysiumPlayerPlacementSpace::CapsuleCenter;
 	bSpawnPending = true;
+	bStageMovementReleased = false;
 
 	// An empty entity world, not the absence of one. The green room reaches the map through the same
 	// IElysiumEmbodiment seam a map's own NPCs do, the substrate clock is what `SeekCinematicClip`
@@ -250,6 +251,180 @@ void AElysiumMapActor::BuildStageWorld()
 	const double TotalMs = (FPlatformTime::Seconds() - Start) * 1000.0;
 	LoadPhases.Add({ TEXT("Total"), TotalMs });
 	UE_LOG(LogElysium, Log, TEXT("built the green-room stage world in %.0f ms (no map)"), TotalMs);
+}
+
+bool AElysiumMapActor::RebuildStageWorld(FElysiumEntityDefs&& Defs, TArray<FElysiumPlaceRow>&& Rows,
+	const FElysiumStageSeat& Seat, FString& OutError)
+{
+	OutError.Reset();
+	if (!bStageOnly)
+	{
+		OutError = TEXT("not a stage world -- a map's entity world is replaced only by travel");
+		return false;
+	}
+	if (RuntimePhase != EElysiumMapRuntimePhase::Active)
+	{
+		OutError = FString::Printf(TEXT("the stage runtime is %s, not Active -- wait for the barrier"),
+			ElysiumMapRuntimePhaseName(RuntimePhase));
+		return false;
+	}
+	UGameInstance* GI = GetGameInstance();
+	UElysiumSessionSubsystem* GameState = GI ? GI->GetSubsystem<UElysiumSessionSubsystem>() : nullptr;
+	if (GameState == nullptr)
+	{
+		OutError = TEXT("no session subsystem to build an entity world against");
+		return false;
+	}
+
+	const double Start = FPlatformTime::Seconds();
+	LoadPhases.Reset();
+
+	// Out of Active first, so nothing this frame's remaining ticks run can reach the dying world:
+	// PreMoveTick / GameplayTick / PostMoveTick all stand down outside Active, and PostMoveTick takes
+	// the player's anim movement lock back on its own. The pause rule goes back to BeginPlay's (the
+	// lifecycle ticks poll through a hold) until ActivateRuntime restores it.
+	RuntimePhase = EElysiumMapRuntimePhase::Building;
+	bRuntimeConstructionComplete = false;
+	bSpawnDone = false;
+	bSpawnPlaced = false;
+	RuntimeFailureReason.Reset();
+	RuntimeWaitStartSeconds = Start;
+	RuntimeWaitDurationSeconds = 0.0;
+	PreMoveTickFunction.bTickEvenWhenPaused = true;
+	PrimaryActorTick.bTickEvenWhenPaused = true;
+	GameplayTickFunction.bTickEvenWhenPaused = true;
+
+	// The old world, torn down as EndPlay tears one down -- minus the two halves that belong to the
+	// actor dying: the motors stay real (each NPC destructor destroys its own through
+	// DestroyNpcMotor), and the map epoch stays open (the lab's own bodies and camera requests are
+	// keyed on it). The player driver's claims were the old player entity's; it is going, so they go
+	// first.
+	ReleaseAllPlayerAnimRequests();
+	TeardownEntityWorld();
+	if (UElysiumAudioSubsystem* Audio = GI->GetSubsystem<UElysiumAudioSubsystem>())
+	{
+		if (SchemeManager)
+		{
+			SchemeManager->StopAll(Audio);
+		}
+	}
+	bHasDeferredSchemeFadeIn = false;
+	DeferredSchemeRel.Reset();
+	NpcMotors.RemoveAll([](const TObjectPtr<AElysiumNpcBody>& Motor) { return !IsValid(Motor); });
+
+	// BuildStageWorld's scaffolding, with the seat the caller names in place of the world origin.
+	LoadedMap = MapName;
+	Bodies->SetMap(MapName);
+	PendingSpawnLoc = Seat.FeetCm;
+	PendingSpawnYaw = Seat.YawDeg;
+	PendingSpawnSpace = EElysiumPlayerPlacementSpace::Feet;
+	bSpawnPending = true;
+	bStageMovementReleased = Seat.bReleaseMovement;
+	bAnimationPreloadReady = false;
+	bNativeAnimationPreloadPending = false;
+	bNativeAnimationPreloadFailed = false;
+
+	SchemeManager = MakePimpl<FElysiumSoundSchemeManager>();
+	SchemeManager->SetMapEpoch(MapEpoch);
+	FElysiumWorldServices Services;
+	Services.Embodiment = this;
+	Services.Audio      = this;
+	Services.Travel     = this;
+	Services.Presenter  = UElysiumPresentationSubsystem::Get(GetWorld());
+	Services.Weather    = this;
+	Services.Camera     = LocalCameraService(this);
+	EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
+	// No payload: the stage's collision component stays Disabled, and the arena's solids are Unreal
+	// actors, not brush entities.
+	EntityWorld->SetCollisionPayload(nullptr);
+
+	// AdoptMapPlaces' order, with the rows in hand instead of `DA_<map>_Places`: pending while the
+	// set is read, then adopted, BEFORE `Load` -- whose `BeginMapSpawn` (`0x102f6690`) zeroes the
+	// node-row counter over this network. Pending is not cleared on success, as it is not there:
+	// `IsNodeGraphLoaded` answers from `IsAdopted` from here on (`DAT_1093408c`).
+	EntityWorld->SetPlaceSetPending(true);
+	const int32 NodeCount = Rows.Num();
+	EntityWorld->Places().AdoptRows(MoveTemp(Rows));
+
+	// LoadMap's model residency, over these defs: the native union (every `model` key plus the
+	// player's chargen body) made resident before `Load` constructs a body, then the prop / wield
+	// contexts -- the whole catalogue, as the lab's own build admits it.
+	if (auto* Native = GI->GetSubsystem<UElysiumNativeAnimationData>())
+	{
+		TArray<FString> Models;
+		TArray<FString> CinematicModels;
+		for (const FElysiumEntityDef& Def : Defs.Defs)
+		{
+			for (const auto& Key : Def.Keys)
+			{
+				if (Key.Key.Equals(TEXT("model"), ESearchCase::IgnoreCase))
+				{
+					Models.AddUnique(Key.Value);
+				}
+				else if (Key.Key.Equals(TEXT("BaseAnim"), ESearchCase::IgnoreCase)
+					|| Key.Key.Equals(TEXT("MaleAnim"), ESearchCase::IgnoreCase)
+					|| Key.Key.Equals(TEXT("FemaleAnim"), ESearchCase::IgnoreCase))
+				{
+					CinematicModels.AddUnique(Key.Value);
+				}
+			}
+		}
+		Models.AddUnique(EntityWorld->InitialPlayerModel());
+		FString Error;
+		auto Request = Native->PrepareMapModels(Models, Error, MapEpoch, CinematicModels);
+		if (!Error.IsEmpty())
+		{
+			bNativeAnimationPreloadFailed = true;
+			UE_LOG(LogElysium, Warning, TEXT("stage native model preparation: %s"), *Error);
+		}
+		else if (Request.IsValid())
+		{
+			Request->WaitUntilComplete();
+			bNativeAnimationPreloadFailed |= !UElysiumNativeAnimationData::FinishPreparation(Request, Error);
+			if (!Error.IsEmpty())
+			{
+				UE_LOG(LogElysium, Warning, TEXT("stage native model preparation: %s"), *Error);
+			}
+		}
+	}
+	FString ModelContextError;
+	if (!PreparePropAndWieldModels(Defs, ModelContextError, /*bAdmitWholeCatalogue=*/true))
+	{
+		bNativeAnimationPreloadFailed = true;
+		UE_LOG(LogElysium, Warning, TEXT("stage model contexts: %s"), *ModelContextError);
+	}
+
+	// `Defs.MapName` stays whatever the caller left it -- empty for the green room -- because
+	// Teardown freezes a snapshot into the session's visited-map set for any named world with a
+	// player, and a stage is nobody's map.
+	const int32 DefCount = Defs.Num();
+	EntityWorld->Load(MoveTemp(Defs));
+	PrepareExpressionTables();
+	EntityCount = DefCount;
+	BrushBodyCount = EntityWorld->NumBrushBodies();
+
+	// After the spawn pass and before the first tick, as LoadMap: `!player` resolves for anything
+	// the defs ignite at Activate. Hydrated from the record the old world's Teardown dehydrated into.
+	EntityWorld->SpawnPlayer();
+
+	// LoadMap's dormant animation walk over what this load stood.
+	EntityWorld->PreloadMapAnimations();
+	const int32 ResidentAnimations = FinishAnimationPreload();
+	bAnimationPreloadReady = true;
+
+	// Back through the barrier: PollRuntimeActivation places and freezes the pawn at the seat, then
+	// ActivateRuntime runs `EntityWorld->Activate(Now)`, the frozen-time think pass and `bSpawnDone`.
+	bRuntimeConstructionComplete = true;
+	RuntimePhase = EElysiumMapRuntimePhase::WaitingForPrerequisites;
+
+	const double TotalMs = (FPlatformTime::Seconds() - Start) * 1000.0;
+	LoadPhases.Add({ TEXT("Total"), TotalMs });
+	UE_LOG(LogElysium, Log,
+		TEXT("rebuilt the stage world in %.0f ms: %d def(s), %d node row(s), %d entities, ")
+		TEXT("%d animation(s) resident; %s"),
+		TotalMs, DefCount, NodeCount, EntityWorld->Entities().Num(), ResidentAnimations,
+		ElysiumMapRuntimePhaseName(RuntimePhase));
+	return true;
 }
 
 void AElysiumMapActor::PrepareExpressionTables()
@@ -671,13 +846,7 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// embodiment seam (interaction anchors, bodies and scripted cameras). Run that teardown while
 	// EndPlay still guarantees those objects have valid UObject indices; waiting for this actor's C++
 	// destructor is too late because world cleanup may already have reclaimed its components.
-	CancelCharacterModelAdmissions();
-	EntityWorld.Reset();
-	// The body-sound channel ledger keys on that world's entity handles; the voices themselves are
-	// the audio subsystem's and retire at the epoch boundary.
-	BodySoundVoices.Reset();
-	ReleasePropAndWieldModels();
-	ExpressionPreparation.Reset();
+	TeardownEntityWorld();
 	if (UGameInstance* GI=GetGameInstance())
 		if (auto* Native=GI->GetSubsystem<UElysiumNativeAnimationData>()) Native->ReleaseEpoch(MapEpoch);
 
@@ -704,6 +873,17 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		Maps->RetireMapEpoch(MapEpoch);
 	}
 	Super::EndPlay(EndPlayReason);
+}
+
+void AElysiumMapActor::TeardownEntityWorld()
+{
+	CancelCharacterModelAdmissions();
+	EntityWorld.Reset();
+	// The body-sound channel ledger keys on that world's entity handles; the voices themselves are
+	// the audio subsystem's and retire at the epoch boundary.
+	BodySoundVoices.Reset();
+	ReleasePropAndWieldModels();
+	ExpressionPreparation.Reset();
 }
 
 double AElysiumMapActor::GetRuntimeWaitSeconds() const
@@ -1041,7 +1221,9 @@ void AElysiumMapActor::ActivateRuntime()
 			// A stage world has no walkable surface at all, so releasing the pawn drops it out of the
 			// level for as long as the green room is open. It stays frozen where the spawn seated it;
 			// the view belongs to the camera shot stack, which does not consult the pawn's feet.
-			Body->SetMovementFrozen(bStageOnly);
+			// A rebuild that stood a floor under its seat (the arena) says so, and the pawn is released
+			// as any map's is.
+			Body->SetMovementFrozen(bStageOnly && !bStageMovementReleased);
 		}
 	}
 	PreMoveTickFunction.bTickEvenWhenPaused = false;

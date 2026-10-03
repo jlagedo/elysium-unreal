@@ -173,6 +173,14 @@ public:
 	// Read-only observability hook. The gameplay owner may attach a Visual Logger event after the
 	// schedule install; the default keeps engine-neutral test runners unchanged.
 	virtual void DebugScheduleInstalled(int32 GlobalScheduleId) { (void)GlobalScheduleId; }
+	// `IsScheduleValid` (`0x10280ff0`) found an interrupt: the fired bits of the normal mask and of
+	// the inverted mask, both in GLOBAL ordinals, for its `npc_task_text` "Break condition" print.
+	virtual void DebugScheduleBreak(const FElysiumNpcConditions& Firing,
+		const FElysiumNpcConditions& InvertedFiring)
+	{
+		(void)Firing;
+		(void)InvertedFiring;
+	}
 
 	// --- Slot 580's two translations, which is how an id reaches a program -----------------------
 	//

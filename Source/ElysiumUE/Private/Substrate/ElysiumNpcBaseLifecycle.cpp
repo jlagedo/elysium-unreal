@@ -247,9 +247,11 @@ void FElysiumNpcBase::HintSpawn(FHintWords& Hint)
 			? Hint.TargetAngleRange + GHintAngleRangeBias
 			: Hint.TargetAngleRange * GHintAngleRangeScale;
 		Hint.TargetAngleRangeDot = FMath::Cos(Hint.TargetAngleRange * GHintDegToRad);
-		// `+0x474`'s category bitmask, per type. `FHintWords` carries no such word — it is read by
-		// no ported body — so the bits are recorded here and nowhere else.
-		(void)Row->CategoryBits;
+		// `+0x474`, the class word per type: 1 for 100 / 101 / 0x27d8, 4 for 0x283c, 8 for 0x283d,
+		// 0x10 for 0x28a0. Read by the class-mask search `0x102d2980` (`FindHintByClassMask`),
+		// `(mask & hint+0x474) != 0`. A type outside the rows leaves the constructor's 0, which no
+		// mask admits. Session-only: not in `CAI_Hint`'s datamap, so never saved.
+		Hint.ClassMask = Row->CategoryBits;
 	}
 	// The group fold, which runs for EVERY hint including one with no default row: 1..32 becomes a
 	// single bit, anything else becomes -1 (every group). Note that `CAI_InterestingPlace::Spawn`
@@ -320,9 +322,8 @@ void FElysiumNpcBase::BaseNpcUpdateOnRemove()
 	}
 	if (BaseScheduleHost.HintNode != INDEX_NONE)
 	{
-		BaseScheduleHost.bOwnsHint = false;                                   // hint +0x5e0 = -1
-		BaseScheduleHost.HintReusableAt = World != nullptr ? World->NowSeconds() : 0.0;  // +0x5ec
-		BaseScheduleHost.HintNode = INDEX_NONE;                               // +0x5ddc = 0
+		ReleaseHintNode(BaseScheduleHost.HintNode, 0.0f);   // 0x102d1420: hint +0x5e0 = -1, +0x5ec = now
+		BaseScheduleHost.HintNode = INDEX_NONE;             // +0x5ddc = 0
 	}
 	// Slot 511 (`+0x7fc`) is a later story's; nothing routes to it yet.
 }

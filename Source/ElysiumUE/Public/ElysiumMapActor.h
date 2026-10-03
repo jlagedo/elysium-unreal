@@ -17,6 +17,7 @@ class FElysiumPreparedPropModels;
 class FElysiumPreparedWieldModels;
 class FElysiumPreparedOrnamentModels;
 struct FElysiumEntityDefs;
+struct FElysiumPlaceRow;
 struct FStreamableHandle;
 class FElysiumSoundSchemeManager;
 class UElysiumEntityBodies;
@@ -50,6 +51,17 @@ enum class EElysiumMapRuntimePhase : uint8
 	Activating,
 	Active,
 	Failed,
+};
+
+// Where a stage-world rebuild (`AElysiumMapActor::RebuildStageWorld`) seats the pawn. `FeetCm` is
+// the pending spawn in feet space, placed and frozen by the activation barrier exactly as a map's
+// `info_player_start` is. `bReleaseMovement` says the caller stood a floor under that seat (the
+// arena), so activation releases the pawn instead of the stage's floorless freeze.
+struct FElysiumStageSeat
+{
+	FVector FeetCm = FVector::ZeroVector;
+	float YawDeg = 0.0f;
+	bool bReleaseMovement = false;
 };
 
 enum class EElysiumMapReadinessResult : uint8
@@ -256,6 +268,16 @@ public:
 	bool bStageOnly = false;
 
 	bool IsStageOnly() const { return bStageOnly; }
+
+	// A stage world's scenario load (0018/8): replace the stage's entity world with one built from
+	// `Defs` through the sequence a map takes -- the AI network adopted (`Rows`), `Load` (node-row
+	// counter, all Spawn, all PostSpawn), the player entity, then back to `WaitingForPrerequisites`
+	// so the ordinary activation barrier places the pawn and runs `Activate`. The old world is torn
+	// down the way `EndPlay` tears one down (its destructor runs `FElysiumEntityWorld::Teardown`);
+	// the map epoch, the baked-less level and every Unreal actor (floor, NavMesh) survive.
+	// Refused off a stage world and outside `Active`. True when the new world is built and waiting.
+	bool RebuildStageWorld(FElysiumEntityDefs&& Defs, TArray<FElysiumPlaceRow>&& Rows,
+		const FElysiumStageSeat& Seat, FString& OutError);
 
 	// The three halves this actor is not.
 	// Never null after construction. Anything asking the map what it LOOKS like (the Lights and
@@ -876,6 +898,16 @@ private:
 	// No baked level, no collision, no sidecars, so the activation barrier's world-content inputs
 	// are satisfied by their own "intentionally absent" states rather than skipped.
 	void BuildStageWorld();
+	// EndPlay's entity-world half, shared with RebuildStageWorld: cancel the character model
+	// admissions, destroy the entity world (its destructor runs Teardown, which dehydrates the
+	// player), drop the body-sound ledger keyed on its handles, release the model contexts and the
+	// expression tables. The motor retirement before it and the epoch release after it are EndPlay's
+	// own: a rebuild on a surviving actor keeps its motors real, so each FElysiumNpc destructor
+	// destroys its own through DestroyNpcMotor.
+	void TeardownEntityWorld();
+	// FElysiumStageSeat::bReleaseMovement of the last rebuild; ActivateRuntime freezes a stage
+	// pawn only when this is false. Reset by BuildStageWorld.
+	bool bStageMovementReleased = false;
 	// If this load is a landmark transition (the map subsystem has a queued landmark spawn),
 	// override the info_player_start placement: resolve the destination `info_landmark` in the just-
 	// built entity world and seat the player at landmark origin + the carried offset. Fires the

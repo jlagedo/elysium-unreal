@@ -1,0 +1,128 @@
+file	lines	tests	fixture used	category	retail addresses cited (count)	port-only mechanisms pinned	seam-asserting tests	judgement
+ElysiumAiScriptedScheduleTests.cpp	916	7	NpcWorldFixture, raw EntityWorld, RecordingServices	d [b5 d5 e4 x1]	36 fn	EElysiumBodyOwner: MoveToGoal,AssignEnemy,Refusals,Precedence; Mind-arbiter: MoveToGoal,AssignEnemy,Refusals,Precedence; ElysiumStub-tally: NamedSchedule	-	Real think via Step(). MoveToGoal/Refusals/Precedence assert the ScriptedSchedule body owner (port-only arbiter). The program has no activity after the move. Keep the behaviour; rewrite the owner asserts when arbitration goes.
+ElysiumGeometryFixture.h	309	0	GeometryFixture (tutorial payload), UWorld (PlayerWorldFixture), RecordingServices, baked content/corpus	support	0 fn	-	-	Support. Authors sp_tutorial_1 collision into a live UWorld (editor only). Slow setup.
+ElysiumGeometryNavTests.cpp	134	1	baked content/corpus	x [x1]	0 fn	-	-	Content spike; SKIPs when the baked mesh carries no tiles.
+ElysiumGeometryServiceTests.cpp	431	6	NpcWorldFixture, GeometryFixture (tutorial payload)	x [b3 x3]	2 fn	-	-	Content tier, editor only. Loads the collision payload and runs CreatePhysicsMeshes per case. Slowest geometry cases.
+ElysiumHintContentTests.cpp	539	6	NpcWorldFixture, baked content/corpus	b [b5 x1]	16 fn + 1 data	-	-	Content half of HintSearch: the same hint-list/claim addresses on baked maps. Shares 10 addresses with HintSearch, by design.
+ElysiumHintSearchTests.cpp	900	13	NpcWorldFixture	b [b12 x1]	22 fn + 2 data	-	-	Synthetic half of the hint searches. Keep; pairs with HintContent.
+ElysiumHintTests.cpp	323	6	NpcWorldFixture	b [b4 e1 x1]	12 fn	-	-	ai_hint lifecycle and node-to-hint rules.
+ElysiumInfraActorsTests.cpp	538	8	UWorld (PlayerWorldFixture)	x [x8]	0 fn	-	-	Port infrastructure (bake/adoption). No retail address; not NPC AI.
+ElysiumInfraContentTests.cpp	259	3	baked content/corpus	x [x3]	0 fn	-	-	Content tier: baked-level parity. Slow.
+ElysiumMeleeMovementTests.cpp	847	1	none (pure)	x [x1]	0 fn	-	-	Player melee movement; not NPC AI.
+ElysiumMeleeStopTests.cpp	557	5	RecordingServices	x [x5]	0 fn	-	-	Player PostThink melee stop; not NPC AI.
+ElysiumMeleeTestHelpers.h	112	0	-	support	0 fn	-	-	Support.
+ElysiumMovementTests.cpp	2073	13	UWorld (PlayerWorldFixture)	x [b1 x12]	3 fn	-	-	Player movement math and gym; not NPC AI. Large TU (2073 lines).
+ElysiumMoverTests.cpp	1449	5 (1 complex = 9 cases)	raw EntityWorld, RecordingServices	x [b3 e1 x2]	10 fn	-	-	Doors. One complex test runs 9 cases, each on its own engine UWorld: slow.
+ElysiumNavAreaTests.cpp	272	3	baked content/corpus	x [b1 x2]	2 fn	-	-	Content tier: baked navmesh marks.
+ElysiumNavJumpLinkTests.cpp	305	5	UWorld (PlayerWorldFixture), baked content/corpus	x [b1 x4]	1 fn	-	-	Content and UWorld tier.
+ElysiumNpcBodyMoveFactsTests.cpp	358	6	UWorld (PlayerWorldFixture)	x [x6]	0 fn	-	-	Visual tier (UWorld + live body). Port-side body contract; no retail address.
+ElysiumNpcClipsTests.cpp	505	4	none (pure)	x [x4]	0 fn	-	-	Export-row parser contract. Pure.
+ElysiumNpcCombatTests.cpp	1943	16	NpcWorldFixture, RecordingServices	b [b13 c1 d2 x3]	68 fn + 1 data	EElysiumBodyOwner: Chase,Death; Mind-arbiter: Chase,Death	AttackConditions(2)	Legacy pre-kernel suite. Chase asserts the Schedule owner is claimed AND kept across the replacement schedule: the exact state behind the walk-then-animate defect. Drives ElysiumSchedule::Tick directly, never Think. Overlaps NpcEnemy and the 19-family files.
+ElysiumNpcComfortSweepTests.cpp	231	5	NpcWorldFixture	x [x5]	1 fn	-	-	Doc-cited rule (comfort sweep). Keep.
+ElysiumNpcCornerChainTests.cpp	441	7	NpcWorldFixture, RecordingServices	b [b7]	32 fn	-	-	Rule tests on quiet NPCs over a recording motor.
+ElysiumNpcCrosswalkTests.cpp	597	6	NpcWorldFixture, baked content/corpus	e [b5 e3 x1]	22 fn + 1 data	-	-	ThinkWaitsAtRed runs the real think over WALK_TO_INTERESTING_PLACE. It stops at the crosswalk and never reaches FACE_INTEREST or DO_INTEREST_ACTIVITY.
+ElysiumNpcDeadClasses.h	47	0	-	support	0 fn	-	-	Support (21 dead classes).
+ElysiumNpcDoorLinkTests.cpp	611	8	NpcWorldFixture	b [b8]	24 fn	-	-	Rule tests: the door transaction over a synthetic door.
+ElysiumNpcEnemyTests.cpp	1430	14	NpcWorldFixture, RecordingServices	b [b9 c1 d1 e1 x5]	60 fn + 2 data	Mind-arbiter: StateMachine	GatherOrder(1)	Legacy suite. Re-asserts GatherEnemyConditions, ChooseEnemy and SelectIdealState, which Conditions19/Misc19/State19 own. StateMachine pins mind state. Merge or retire.
+ElysiumNpcFootstepTests.cpp	774	8	RecordingServices	b [b8]	29 fn + 1 data	-	-	Anim-event footstep chain against the recording audio. Has one Content case.
+ElysiumNpcGeometryConsumerTests.cpp	357	4	NpcWorldFixture, RecordingServices	b [b3 x1]	14 fn	-	-	Kernel consumers of the geometry seam, over scripted doubles.
+ElysiumNpcInvestigateTests.cpp	175	2	NpcWorldFixture, RecordingServices	x [x2]	1 fn	-	-	Direct predicate. The header says the sound sweep now covers part of it.
+ElysiumNpcKernelAnim10Tests.cpp	1595	28	NpcWorldFixture, census readers	b [a1 a-xcheck1 b28 c1 d1]	41 fn + 3 data	Mind-arbiter: Slot359	Slot330(1)	One case per rule row. Slot359 reads the mind.
+ElysiumNpcKernelAnimTests.cpp	642	8	NpcWorldFixture, census readers	b [a-xcheck1 b7 c5]	27 fn	-	SceneEvents(1), TroikaSceneEvent(2), ActivityCommit(1), ResolveActivityToSequence(1), MiscBodies(2)	Rule tests. The activity commit and ResolveActivityToSequence run on the sequence seam (-1). Six seam cases.
+ElysiumNpcKernelBaseHelpersTests.cpp	837	9	NpcWorldFixture	b [b8 c2 x1]	52 fn + 11 data	-	ReactionSlots(1), PatrolInterestDraw(1)	One case per retail row, named for its address. Keep. 2 seam case(s) must flip when their seams land.
+ElysiumNpcKernelBaseSplitTests.cpp	221	4	NpcWorldFixture	b [a1 b2 x1]	7 fn	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelBindingsTests.cpp	515	3	NpcWorldFixture	a [a3 b1]	14 fn	-	-	Generated datamap counts, plus a save round trip.
+ElysiumNpcKernelBossTests.cpp	439	12	NpcWorldFixture	b [b12]	82 fn + 1 data	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelBossesTests.cpp	1248	18	NpcWorldFixture, census readers	b [a-xcheck1 b17 c2 x1]	36 fn + 6 data	-	PickupChain(2), MingXiaoAttackGate(2)	One case per retail row, named for its address. Keep. 2 seam case(s) must flip when their seams land.
+ElysiumNpcKernelChainSlotsTests.cpp	185	4	NpcWorldFixture	a [a4 b3 d2]	4 fn	ElysiumStub-tally: StubNamesItsOwner,EntityIntegrations	-	Census/stub shape. Pins ElysiumStub tallies, which flip as stubs are ported.
+ElysiumNpcKernelClassFactoryTests.cpp	610	6	NpcWorldFixture, bare NPC ctor, census readers	a [a6 b1]	2 fn	-	-	Census: factory map vs registry. Walks every classname.
+ElysiumNpcKernelClassTreeTests.cpp	159	2	NpcWorldFixture, census readers	a [a2 b1]	2 fn	-	-	Census: class tree vs census.
+ElysiumNpcKernelClosureTests.cpp	928	11	NpcWorldFixture, census readers	b [a1 b10 c1 x1]	35 fn + 3 data	-	CoverAndReloadActivity(2)	Case 1 is the dispatch census (41 slots); the rest are rule cases.
+ElysiumNpcKernelCombat10Tests.cpp	1535	23	NpcWorldFixture, RecordingServices, census readers	b [a-xcheck7 b22 c5 x1]	133 fn + 12 data	-	PrayerPulse(1), KnockbackVelocity(1), TroikaRanged(1), DodgeTest(1), AsianVampireRanged(1)	One case per retail row, named for its address. Keep. 5 seam case(s) must flip when their seams land.
+ElysiumNpcKernelConditions10Tests.cpp	1111	14	NpcWorldFixture, census readers	b [a-xcheck2 b13 c1]	108 fn + 1 data	-	ResetFakeReloadCount(2)	One case per retail row, named for its address. Keep. 1 seam case(s) must flip when their seams land.
+ElysiumNpcKernelConditions2Tests.cpp	1406	32	NpcWorldFixture	b [b32 c2]	236 fn	-	BetterWeapon1026fb40(1), InterruptDistancesAndTime(1)	One case per retail row, named for its address. Keep. 2 seam case(s) must flip when their seams land.
+ElysiumNpcKernelConditionsTests.cpp	917	15	NpcWorldFixture, census readers	b [a-xcheck2 b15 c3]	43 fn + 5 data	-	RefreshCombatConditions(1), AlternateAiDoor(2), Werewolf(1)	One case per retail row, named for its address. Keep. 3 seam case(s) must flip when their seams land.
+ElysiumNpcKernelDamage2Tests.cpp	1274	29	NpcWorldFixture, RecordingServices, MeleeTestHelpers	b [b29]	193 fn + 1 data	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelDamageTests.cpp	1523	23	NpcWorldFixture, census readers, MeleeTestHelpers	b [a-xcheck3 b21 c6 x2]	62 fn + 10 data	-	GiveAmmo(1), SpawnEnergyBall(1), CausePlayerAOEDamage(1), MingXiaoThrowChain(4), VGargoyleGibCleanup(1), Seams(5)	One case per retail row, named for its address. Keep. 6 seam case(s) must flip when their seams land.
+ElysiumNpcKernelDamagedTests.cpp	294	5	NpcWorldFixture, RecordingServices	b [b5]	25 fn	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelDialogueTests.cpp	737	9	NpcWorldFixture, census readers	b [a-xcheck3 b9]	30 fn + 1 data	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelDirectorTests.cpp	941	15	NpcWorldFixture, RecordingServices	b [b12 e4 x2]	41 fn	-	-	CCine directors. Shares 11 addresses with Script19 (same bodies).
+ElysiumNpcKernelEntityChainTests.cpp	1082	16	NpcWorldFixture, census readers	b [a-xcheck1 b16 c6]	46 fn + 8 data	-	DialogAndList(1), Law(1), Police(3), ClosestNpc(4), Autoaim(2), UseAndController(3)	One case per retail row, named for its address. Keep. 6 seam case(s) must flip when their seams land.
+ElysiumNpcKernelFacingTests.cpp	786	10	NpcWorldFixture, RecordingServices, census readers	b [a-xcheck2 b10 c2]	26 fn + 1 data	-	SetTurnActivity(1), PlayerFacing(1)	One case per retail row, named for its address. Keep. 2 seam case(s) must flip when their seams land.
+ElysiumNpcKernelGeometryTests.cpp	800	11	NpcWorldFixture, census readers	b [a-xcheck2 b10 c1 x1]	33 fn + 5 data	-	EyeOffset(1)	One case per retail row, named for its address. Keep. 1 seam case(s) must flip when their seams land.
+ElysiumNpcKernelHints10Tests.cpp	429	6	NpcWorldFixture	b [b6 c2]	35 fn + 1 data	-	ForwardHintForHint(1), IsValidTeleportHint(1)	One case per retail row, named for its address. Keep. 2 seam case(s) must flip when their seams land.
+ElysiumNpcKernelHintsTests.cpp	1375	10	NpcWorldFixture, census readers	b [a-xcheck2 b10 c1 d1]	76 fn + 5 data	ThinkAmbient/EAmbientPhase: Interest	Seams(1)	Rule and seam halves. Interest reads AmbientPhase (port-only ambient executor).
+ElysiumNpcKernelLifecycle2Tests.cpp	1312	34	NpcWorldFixture, census readers	b [a1 b31 c1 x3]	109 fn + 6 data	-	SpeciesWords(1)	One case per retail row, named for its address. Keep. 1 seam case(s) must flip when their seams land.
+ElysiumNpcKernelLifecycleTests.cpp	1083	21	NpcWorldFixture, census readers	b [a-xcheck1 b17 x4]	52 fn + 4 data	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelMaintainTests.cpp	648	6	NpcWorldFixture, RecordingServices	b [b6 d1]	73 fn	external-executor/ThinkAutonomous: MaintainSchedule	-	Rule tests. MaintainSchedule pins TakeExternalExecutorReturn (port-only bReturnToExternalExecutorAfterSchedule).
+ElysiumNpcKernelMisc2Tests.cpp	1169	31	NpcWorldFixture	b [b31]	191 fn	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelMiscTests.cpp	559	6	NpcWorldFixture, census readers	b [a-xcheck5 b6 c1]	23 fn + 2 data	-	CapabilitiesGet(1)	One case per retail row, named for its address. Keep. 1 seam case(s) must flip when their seams land.
+ElysiumNpcKernelMotor10Tests.cpp	475	5	NpcWorldFixture	b [b5 c3 d1]	22 fn + 4 data	ElysiumStub-tally: TestHullSpawn	GetShootTarget(1), OnObstructingDoor(1), TestHullSpawn(1)	One case per retail row, named for its address. Keep. 3 seam case(s) must flip when their seams land.
+ElysiumNpcKernelMotorTests.cpp	1366	17	NpcWorldFixture, RecordingServices, census readers	b [a-xcheck1 b16 c4 x1]	80 fn + 15 data	-	IgnoreCollision(1), Slots(3), JumpChain(2), SpeciesProbes(1)	One case per retail row, named for its address. Keep. 4 seam case(s) must flip when their seams land.
+ElysiumNpcKernelOverrideCensus.cpp	5210	0	census readers	support	568 fn	-	-	GENERATED census: 1050 rows, each with a TDeclaredOn<> template proof, over 55 substrate headers. Heaviest compile TU. No tests of its own.
+ElysiumNpcKernelOverrideCensus.h	42	0	census readers	support	0 fn	-	-	Support.
+ElysiumNpcKernelPlayerControllerTests.cpp	1106	21	NpcWorldFixture, raw EntityWorld, RecordingServices, census readers	b [a-xcheck1 b19 c2 x1]	75 fn	-	FrenzyShadowStartTask(1), FrenzyGrappleAndWolfSeams(1)	One case per retail row, named for its address. Keep. 2 seam case(s) must flip when their seams land.
+ElysiumNpcKernelPositionsTests.cpp	972	10	NpcWorldFixture, census readers	b [a-xcheck1 b10 c3]	44 fn + 14 data	-	PositionClearForTeleport(1), FloorHeights(1), ChasePosition(2)	One case per retail row, named for its address. Keep. 3 seam case(s) must flip when their seams land.
+ElysiumNpcKernelPrecache10Tests.cpp	666	8	NpcWorldFixture, census readers	b [a1 b7 x1]	12 fn	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelRunAiTests.cpp	1086	23	NpcWorldFixture	b [b23]	163 fn	-	-	RunAI arms driven directly on quiet NPCs.
+ElysiumNpcKernelRunTaskTests.cpp	1396	46	NpcWorldFixture	b [b46]	187 fn	-	-	Slot 444 arms driven directly. The sequence-wait arms are fed a hand-set bSequenceFinished, so the playback bridge is never exercised.
+ElysiumNpcKernelSaveRestore10Tests.cpp	627	8	NpcWorldFixture, census readers	b [a1 b8 c1]	35 fn + 1 data	-	BaseSave(1)	One case per retail row, named for its address. Keep. 1 seam case(s) must flip when their seams land.
+ElysiumNpcKernelScheduleTests.cpp	878	7	NpcWorldFixture, census readers	b [a-xcheck6 b7 c2 d1]	46 fn + 6 data	Mind-arbiter: TaskDistanceAndOrders	TaskSurface(1), SpeciesBuildScheduleTestBits(1)	Species schedule rows. TaskDistanceAndOrders reads the mind.
+ElysiumNpcKernelScriptTests.cpp	1134	23	NpcWorldFixture, RecordingServices	b [b23]	194 fn + 1 data	-	-	Script19 rule rows. Shares 11 addresses with Director.
+ElysiumNpcKernelSelectTests.cpp	1199	33	NpcWorldFixture, baked content/corpus	b [b33 d2]	219 fn	external-executor/ThinkAutonomous: Case1Idle,PatrolOutranksUseInteresting_0x102af6b6; EElysiumBodyOwner: PatrolOutranksUseInteresting_0x102af6b6; Mind-arbiter: PatrolOutranksUseInteresting_0x102af6b6	-	Rule tests. PatrolOutranksUseInteresting sets TaskIndex=6, skipping WALK_PATH..DO_PATROL_INTEREST_ACTIVITY, and pins the use_interesting executor exit (port-only).
+ElysiumNpcKernelSenses10Tests.cpp	1249	15	NpcWorldFixture, census readers	b [a-xcheck1 b15 c1]	169 fn + 10 data	-	UpdateEnemyMemory(1)	One case per retail row, named for its address. Keep. 1 seam case(s) must flip when their seams land.
+ElysiumNpcKernelSensesTests.cpp	795	8	NpcWorldFixture, census readers	b [a-xcheck2 b8 c2]	30 fn + 3 data	-	Cones(1), Door(1)	One case per retail row, named for its address. Keep. 2 seam case(s) must flip when their seams land.
+ElysiumNpcKernelShapeTests.cpp	755	6	NpcWorldFixture, census readers	a [a6 d2]	0 fn	Mind-arbiter: FieldOwners; ElysiumStub-tally: Defaults	-	Census/registry shape. Slots.Defaults counts stub tallies.
+ElysiumNpcKernelSocial10Tests.cpp	610	7	NpcWorldFixture	b [b7 c1]	67 fn + 3 data	-	CanTalk(3)	One case per retail row, named for its address. Keep. 1 seam case(s) must flip when their seams land.
+ElysiumNpcKernelSounds10Tests.cpp	586	20	NpcWorldFixture, census readers	b [b20]	44 fn + 5 data	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelSoundsTests.cpp	741	10	NpcWorldFixture, census readers	b [a-xcheck2 b10 c3]	55 fn	-	Emit(1), OkToMakeSound(1), BestSound(2)	One case per retail row, named for its address. Keep. 3 seam case(s) must flip when their seams land.
+ElysiumNpcKernelSpawnTests.cpp	1293	51	NpcWorldFixture, bare NPC ctor	b [b43 x8]	183 fn + 1 data	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelSpeciesBindingsTests.cpp	812	5	NpcWorldFixture, census readers	a [a5 b3]	29 fn	-	-	Generated species datamap rows, plus a save round trip and the tutorial rats.
+ElysiumNpcKernelSpeciesLifecycle10Tests.cpp	896	11	NpcWorldFixture, census readers	b [b10 x1]	40 fn + 4 data	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelSpeciesMisc10Tests.cpp	1375	25	NpcWorldFixture, census readers	b [b25 c1]	166 fn + 9 data	-	ChangSelectLedgeNode(1)	One case per retail row, named for its address. Keep. 1 seam case(s) must flip when their seams land.
+ElysiumNpcKernelSpeciesTests.cpp	2016	29	NpcWorldFixture, census readers	b [a2 a-xcheck6 b28 c3 d1 x1]	78 fn + 4 data	ElysiumStub-tally: WiredSlot488DeathSound	MeleeQuartet(3), TzimisceCarry(2), SmallBodies(1)	One case per retail row, named for its address. Keep. 3 seam case(s) must flip when their seams land.
+ElysiumNpcKernelSquadTests.cpp	524	8	NpcWorldFixture, census readers	b [a-xcheck2 b8]	22 fn + 1 data	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelStartTaskTests.cpp	728	11	NpcWorldFixture, RecordingServices	b [b11]	178 fn + 1 data	-	-	Slot 442 arms driven directly.
+ElysiumNpcKernelStartTaskTests_2.cpp	915	14	NpcWorldFixture	b [b14]	186 fn	-	-	Slot 442 Troika tail, driven directly.
+ElysiumNpcKernelStartTaskTests_3.cpp	878	15	NpcWorldFixture	b [b15]	107 fn	-	-	Base slot 442 on a headless guard. PLAY_SEQUENCE is asserted only as 'does not complete'.
+ElysiumNpcKernelStartTaskTests_4.cpp	2190	26	NpcWorldFixture	b [b26 c1 d1]	59 fn	external-executor/ThinkAutonomous: Animal_0x1035f650	Werewolf_0x103ccda0(1)	Species slot 442. Largest kernel TU (2190 lines).
+ElysiumNpcKernelStateTests.cpp	546	12	NpcWorldFixture	b [b11 x1]	32 fn + 2 data	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelTestHullTests.cpp	56	1	none (pure)	x [x1]	0 fn	-	-	Construction smoke.
+ElysiumNpcKernelThinkTests.cpp	996	23	NpcWorldFixture	b [b23 e1]	151 fn + 1 data	-	-	NPCThink/RunAI dispatch on a counting probe. The NPC stays quiet except in Zombie.
+ElysiumNpcKernelTranslateTests.cpp	239	6	NpcWorldFixture	b [b6]	26 fn	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcKernelTroikaHelpersTests.cpp	1009	13	NpcWorldFixture, census readers	b [a-xcheck2 b12 c4 x1]	61 fn + 4 data	-	EnterMelee(1), NotifySlots(1), DisciplineAndFire(1), TailSlots(2)	One case per retail row, named for its address. Keep. 4 seam case(s) must flip when their seams land.
+ElysiumNpcKernelTunablesTests.cpp	83	1	none (pure)	a [a1 b1]	4 fn	-	-	Generated tunables pin.
+ElysiumNpcKernelWerewolfTests.cpp	709	17	NpcWorldFixture	b [b17]	129 fn	-	-	One case per retail row, named for its address. Keep.
+ElysiumNpcMakerGeometryTests.cpp	154	2	NpcWorldFixture	x [x2]	2 fn + 2 data	-	-	Map-geometry helper (UE trace).
+ElysiumNpcMakerTests.cpp	302	5	NpcWorldFixture	b [b5 e1]	14 fn	-	-	Maker fold. WakeKeepsInstalledThink runs a real think.
+ElysiumNpcMindTests.cpp	146	3	none (pure)	d [d3]	0 fn	EElysiumBodyOwner: Admission,BodyOwner,Restore; Mind-arbiter: Admission,BodyOwner,Restore; Follower-owner: BodyOwner	-	Pins the PORT-ONLY K7 arbiter table: admission, Schedule/Ambient/Sequence/Dialogue suspension, Follower refused, restore. No retail counterpart. Delete or rewrite when arbitration is retired.
+ElysiumNpcMotorSeamTests.cpp	250	5	UWorld (PlayerWorldFixture)	x [x5]	0 fn + 1 data	-	-	Visual tier: the motor seam on a live body, plus the recording-motor defaults.
+ElysiumNpcNavigatorMoveStepTests.cpp	833	18	NpcWorldFixture	b [b16 x2]	33 fn	-	-	Navigator Move 0x102eff40, driven from scripted move facts.
+ElysiumNpcNavigatorTests.cpp	339	5	NpcWorldFixture, RecordingServices	b [b4 x1]	30 fn	-	-	Navigator getters, SetGoal and reset.
+ElysiumNpcScheduleHostTests.cpp	247	2	raw EntityWorld, RecordingServices	b [b1 x1]	10 fn	-	-	TaskFail/ClearHintNode transaction plus the flag masks. Raw world.
+ElysiumNpcSeeUnknownSweepTests.cpp	398	6	NpcWorldFixture	x [x6]	1 fn	-	-	Doc-cited sweep. Keep.
+ElysiumNpcSensesTests.cpp	1151	12	NpcWorldFixture, RecordingServices	x [b2 e1 x9]	7 fn	-	-	Legacy doc-cited sensory suite. Re-asserts GatherEnemyConditions (cited in 8 files).
+ElysiumNpcSightTraceTests.cpp	230	3	NpcWorldFixture	b [b2 x1]	3 fn	-	-	FVisible trace half.
+ElysiumNpcSoundSweepTests.cpp	679	4	NpcWorldFixture, RecordingServices	x [b2 x2]	4 fn	-	-	Doc-cited sweep. Keep.
+ElysiumNpcTestCensus.h	97	0	census readers	support	1 fn	-	-	Support (census readers).
+ElysiumNpcTestFixture.h	427	0	NpcWorldFixture, raw EntityWorld, RecordingServices, bare NPC ctor, census readers	support	6 fn + 1 data	-	-	Support. Every case stands a whole headless world.
+ElysiumNpcTestHooks.h	16	0	-	support	0 fn	-	-	Support.
+ElysiumNpcTests.cpp	1714	10	NpcWorldFixture, raw EntityWorld, RecordingServices, bare NPC ctor	e [b7 d2 e5 x3]	26 fn + 1 data	PlayActivity(dead path): ActivityResolve; ElysiumStub-tally: TeleportToEntity	-	Mixed legacy suite. ActivityResolve part 1 runs the patrol through real Think but stops mid-leg (t=1.0, never Reached). Part 2 calls FElysiumNpc::PlayActivity, which has NO production caller (dead path).
+ElysiumNpcThink19GateTests.cpp	286	6	NpcWorldFixture, raw EntityWorld, RecordingServices	b [b6]	19 fn + 3 data	-	-	The 0.8 s network gate. Real ticks.
+ElysiumNpcThinkCadenceTests.cpp	686	10	NpcWorldFixture, RecordingServices	x [b5 d1 e3 x5]	23 fn	EElysiumBodyOwner: ResetSites	-	Cadence arithmetic plus the live think. ResetSites reads the body owner.
+ElysiumNpcWitnessTests.cpp	1033	9	NpcWorldFixture, raw EntityWorld, RecordingServices	x [b4 x5]	30 fn	-	-	The brief calls this integration, but it drives TickSight/GatherConditions with the NPCs quiet: a lane test, not the think loop.
+ElysiumPlaceSeamTests.cpp	754	11	NpcWorldFixture, RecordingServices, baked content/corpus	b [b7 x4]	21 fn + 1 data	-	-	Node reads through the place set. The file name says 'seam'; most cases are rules.
+ElysiumPlaceSetTests.cpp	500	7	raw EntityWorld, baked content/corpus	x [b3 x4]	8 fn + 1 data	-	-	Place set: Substrate and Content halves.
+ElysiumReactionTests.cpp	555	7	none (pure)	x [x7]	0 fn	-	-	Social reaction calculator. Pure; not NPC-kernel.
+ElysiumRetailHullTests.cpp	202	4	NpcWorldFixture, census readers	x [a1 a-xcheck1 b1 x2]	1 fn	-	-	Hull table vs census.
+ElysiumRetailMaskRecipeTests.cpp	75	1	none (pure)	x [x1]	0 fn	-	-	Mask recipe table. Pure.
+ElysiumSceneTests.cpp	1503	5	raw EntityWorld, RecordingServices	e [b2 e3 x2]	11 fn	-	-	Choreo/.vcd scene player on a world loop; not NPC-kernel.
+ElysiumScheduleCorpusTests.cpp	482	6	baked content/corpus	x [x6]	1 fn	-	-	Corpus loader on a scratch corpus; 2 cases need the deployed corpus.
+ElysiumScheduleIdSpaceTests.cpp	197	5	none (pure)	x [b2 x3]	6 fn	-	-	Local id space. Pure.
+ElysiumScheduleIntegrationTests.cpp	172	4	NpcWorldFixture	x [b2 x2]	5 fn	-	-	Nearest walk-then-activity witness: CHASE_ENEMY_FAILED runs RUN_PATH..SET_ACTIVITY ACT_IDLE..WAIT, but on a quiet NPC through ElysiumSchedule::Tick, with no clip or owner assertion.
+ElysiumScheduleTests.cpp	778	8	NpcWorldFixture	b [b5 x3]	21 fn	-	-	Schedule interpreter over a recording runner. No NPC, no mind, no body.
+ElysiumScheduleTextTests.cpp	575	9	none (pure)	x [b2 x7]	7 fn + 3 data	-	-	Schedule-text parser. Pure.
+ElysiumSequenceTests.cpp	1658	10	raw EntityWorld, RecordingServices	e [b8 d1 e7 x2]	13 fn + 1 data	Mind-arbiter: ScriptedSequenceBodyClaim	-	Mixed: 3 sky/fog tests (not NPC) plus scripted_sequence on a world loop. BodyClaim pins Sequence-owner arbitration.
+ElysiumStanceTests.cpp	470	8	raw EntityWorld, RecordingServices	x [b2 e2 x6]	7 fn	-	-	Disposition stance machine; world loop.
+ElysiumStealthKillTests.cpp	542	13	NpcWorldFixture, RecordingServices	x [b2 x11]	4 fn	-	-	Player stealth-kill victim pick (0x101be1f0).
+ElysiumStealthTests.cpp	962	8	NpcWorldFixture, raw EntityWorld, RecordingServices	x [b2 x6]	2 fn	-	-	Stealth surface; one Content case.

@@ -127,9 +127,8 @@ int32 SelectCoverOrKickSchedule(const FScheduleHintSearchRequest& Request);
  *  two-second timer. Retail answers a `CBaseEntity*`; this has no prop sweep and answers null. */
 FElysiumEntity* FindKickPhysicsProp() const;
 
-/** SEAM for `0x102b7110`, the hint search `SelectCoverOrKickSchedule` runs with the four-bit mask
- *  above. Retail writes `m_pHintNode` (`+0x5ddc`) on a hit; this has no hint store and writes
- *  nothing. */
+/** `0x102b7110`, the hint search `SelectCoverOrKickSchedule` runs with the four-bit mask above:
+ *  forwards to `FindTacticalHintNode`, which writes `m_pHintNode` (`+0x5ddc`) on a hit (0018/8). */
 void SearchForCoverHint(uint32 SearchMask);
 
 /** SEAM for `0x102a11d0`, the gate `CNPC_VChangBros` / `CNPC_VTzimisceRunner` put in front of their

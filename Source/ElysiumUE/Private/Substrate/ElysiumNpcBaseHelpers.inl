@@ -77,10 +77,11 @@ int32 RetailPathingHull() const;
  *  (retail's NULL task). */
 bool CurrentRetailTaskNumber(int32& OutTaskNumber) const;
 
-/** SEAM for `0x102d1540` — "is this hint free, or already mine?". Retail: the hint's `m_hHintOwner`
- *  (`+0x5e0`) is me, or `curtime >= m_flNextUseTime` (`+0x5ec`) and the owner handle is dead. Family
- *  Hints ports the same three words as `IsHintUnusable` from the other side; this is the OWNER-only
- *  half `IsUnusableNode` (slot 527) negates, and it answers true (free) with no hint store. */
+/** `0x102d1540` — "is this hint free, or already mine?", on the live hint (0018 story 8). In order:
+ *  the owner resolves to me → true; `curtime < m_flNextUseTime` (`+0x5ec`, strict) → false; a live
+ *  owner → false; else true. `m_iDisabled` is NOT read here (that is `0x102d14c0`'s arm). This is the
+ *  OWNER-only half `IsUnusableNode` (slot 527) negates; an index that is not a hint answers true, a
+ *  named crash guard (retail would dereference NULL). */
 bool IsHintAvailableToMe(int32 HintNode) const;
 
 /** `CAI_BaseNPC::GetNavTargetEntity` (`0x102729d0`). NAMED: the SDK twin's two arms

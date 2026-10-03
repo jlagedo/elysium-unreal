@@ -1,0 +1,273 @@
+mechanism	files:lines	retail counterpart	changes state or event order?	consumers	tests pinning it	verdict
+[1] EElysiumBodyOwner + FElysiumBodyOwnerToken (7 owners, generation token)	Public/ElysiumNpcMindTypes.h:20-40	none: retail has no body-owner word. Ownership is m_NPCState +0x5cc0 == 4 with m_hCine +0x5d74 (script), m_hDialogPartner +0xfe8 / IsInDialog 0x102c1170 (dialogue), m_pSchedule +0x5c38 (program)	yes: every gate below reads it	38 production sites in 7 files (9 claims, 15 release calls, 9 owner gates, 5 through the script wrappers) + 8 debug reads	NpcMind.BodyOwner, NpcMind.Admission, NpcMind.Restore; AiScriptedSchedule.Precedence/.CombatPreemption/.Refusals; NpcCombat.Chase, NpcCombat.Death; NpcKernelSelect19.PatrolOutranksUseInteresting_0x102af6b6	retire
+[1] FElysiumNpcMind::Acquire / CanAcquire / IsAcquisitionAllowed precedence table	ElysiumNpcMind.cpp:167-211, 241-271	none: retail precedence is SelectSchedule by state (4 SCRIPT -> 0x2e SCHED_AISCRIPT, schedule-kernel.md "4 SCRIPT") and slot 482 CanPlaySequence 0x10278090, which the director asks inside FindEntity (authored-control.md, aiscripted_schedule)	yes: adds a refusal path retail does not have, at every claim site	4 Acquire sites + 1 CanAcquire	NpcMind.BodyOwner	retire
+[1] Parked owner (bSuspendCurrent, ParkedOwner, SuspendedOwner, ForgetSuspended)	ElysiumNpcMind.h:18-24, 35; ElysiumNpcMind.cpp:257, 283, 296-304	none	no: dead in production. All 4 Acquire sites pass false and ForgetSuspended has 0 callers. Comments at ElysiumNpc.cpp:546-555, 1477-1478, 1598-1599 and 2288-2291 still describe a patrol route parked there, which has been stale since story 8 wave 2	0 production (4 test calls)	NpcMind.BodyOwner	retire
+[1] RefreshStateFromOwner: an owner change writes m_NPCState	ElysiumNpcMind.cpp:213-239 (from Acquire :265, Release :290)	SetState 0x1026e340, written by CCineNPC PossessEntity 0x101a7880 (state 4) and by the scripted exits ExitScriptedSequence 0x1027d0a0 and FixScriptNPCSchedule 0x101a8840 (m_IdealNPCState = 1). A dialogue writes no state (IsInDialog 0x102c1170, TASK_RUN_DIALOG 0xb9)	yes: a Dialogue (or Follower) claim sets SCRIPT (4), and every Sequence or Dialogue release forces IDLE. NpcStateRetail() answers 4 during a conversation	every Acquire and Release	NpcMind.BodyOwner	retire
+[1] Sequence claim: AcquireSequenceBody <- ClaimScriptMove / ClaimScriptBody / ThinkScriptOwned retry	ElysiumNpc.cpp:544-558, 570-580, 596-627, 939-958; callers ElysiumScriptedCharacter.cpp:40, ElysiumScriptedSequence.cpp:1271	m_hCine +0x5d74, set by PossessEntity 0x101a7880 / CCineAI 0x101a9080 with SetState(4). Admission is CanPlaySequence 0x10278090 (shape.md, Slot 482). The body then runs 0x2e SCHED_AISCRIPT with m_scriptState +0x5d70	yes: before claiming, it ends the aiscripted order and releases the combat claim, where retail just reselects under state 4. It can also refuse and defer the beat	3 leaf + 2 external	AiScriptedSchedule.Precedence	retire (0003 stories 1-2 build SCHED_AISCRIPT)
+[1] Sequence release: ReleaseSequenceBody <- ReleaseScriptMove / ReleaseScriptBody	ElysiumNpc.cpp:560-594, 628-644; callers :873, :2283, ElysiumScriptedCharacter.cpp:132, :269, ElysiumScriptedSequence.cpp:858	CineCleanup 0x1027d170, CancelScript 0x101a8c30, ExitScriptedSequence 0x1027d0a0, PostIdleDone 0x101a8640 -> FixScriptNPCSchedule slot 586 -> ClearSchedule 0x10280d30 (authored-control.md, Story 8 Script19)	yes: the flip back to IDLE happens on the release, not on retail's exits	2 leaf + 5 external	AiScriptedSchedule.*	retire
+[1] Ambient claim/release: Mind.Acquire(Ambient) in ClaimAmbientSpot, Mind.Release in FinishAmbientUse	ElysiumNpc.cpp:1163-1172, 2111-2114	the place's own claim (Picked->Claim, which stays) and SelectSchedule case 1 0x102af6f3 -> the 0xff walk-to-place program. OnScheduleChange 0x102a0940 releases the place (0x102a09a0)	yes: a refused claim drops a pick the place had already granted, and ambient is refused whenever any other owner holds the body	1 claim + 1 release (FinishAmbientUse has 19 callers)	NpcKernelSelect19.PatrolOutranksUseInteresting_0x102af6b6	retire with ThinkAmbient
+[1] Schedule claim from the navigator: AcquireScheduleBody in SetGoal / SetRandomGoal / AdvancePath	ElysiumNpcBaseStartTask.cpp:2220-2226, 2525-2530; ElysiumNpcScript.cpp:632-638; ElysiumNpc.cpp:1459-1507	none: the running program (m_pSchedule +0x5c38) owns the navigator. SetGoal 0x102ecd20, SetRandomGoal 0x102ed430 and AdvancePath 0x102f0400 fail only on the route	yes: a refused claim returns false, so the task fails for a reason retail has no word for	3	NpcCombat.Chase, NpcCombat.ChaseInterrupt	retire
+[1] bScriptedOrderHolds bypass	ElysiumNpcBaseStartTask.cpp:2220-2221, 2525-2526; ElysiumNpcScript.cpp:632-633	none	yes: exists only to step around the row above	3	AiScriptedSchedule.MoveToGoal	retire with it
+[1] ReleaseProgramBody: Motor->Stop + ClearMoveIgnores on release	ElysiumNpc.cpp:1474-1498	OnScheduleChange 0x102a0940: navigator ClearGoal at 0x102a0992 under !PRESERVE_PATH and not on a jump/climb. This is already ported at ElysiumNpcMaintain.cpp:143-172	yes: a second navigator stop at the claim edge (beat, dialogue, aiscripted, death), mid-program and on a different gate	9 (ReleaseScheduleBody x7, ReleaseScriptedScheduleBody x2)	none found	retire
+[1] ScriptedSchedule claim: replay path + EndScriptedSchedule + OnScheduleChange pre-step	ElysiumNpc.cpp:1591-1612, 1647-1668; ElysiumNpcMaintain.cpp:128-136	0x102ae840 order push (m_eForcedState +0x65cc, m_bForceStateChange +0x1b28, CHOOSE_NEW_SCHEDULE) and executor 0x101a98c0 -> ScheduledMoveToGoalEntity 0x102800c0 / ScheduledFollowPath 0x102801e0 (schedule-kernel.md, 0x102ae840; authored-control.md, aiscripted_schedule)	yes: runs ClearSchedule + ReleaseScheduleBody before the push, and a refused claim resets the order and returns false. Retail never refuses once goalent resolves	1 claim + 2 release	AiScriptedSchedule.Precedence, .CombatPreemption, .Refusals	retire
+[1] Dialogue claim: BeginDialogueBodySession / EndDialogueBodySession	ElysiumNpc.cpp:2237-2311 (claim :2294); ElysiumEntityWorldDialogue.cpp:258-290; ElysiumNpcDialogue.cpp:24	m_hDialogPartner +0xfe8 / IsInDialog 0x102c1170 (m_bIsTalking +0x64c0, m_szDialogQue +0x64ec, +0x6554) and the TASK_RUN_DIALOG 0xb9 program. "COND_PROVOKED ends the program, not the conversation" (conditions-and-states.md, TASK_RUN_DIALOG)	yes: opening a conversation ends the aiscripted order and the running combat claim, and a refused claim refuses the conversation	1 claim + 1 release + 3 world callers	Dialogue, DialogueSave	retire
+[1] Follower owner	ElysiumNpcMindTypes.h:27; ElysiumNpcMind.cpp:224; ElysiumNpc.cpp:2921	m_hFollowerBoss +0x647c and slot 607 0x102b93c0 inside SelectSchedule case 1 (social.md, m_hFollowerBoss): a schedule, with no body claim	no: unreachable (nothing claims it, and IsAcquisitionAllowed has no case for it, so it defaults to false)	0	none	retire
+[1] PlaySequenceClip owner gate (labelled a "NAMED MODERNIZATION of playback only")	ElysiumNpcAnim.cpp:401-419 (SEAM :417)	none: ResetSequenceInfo 0x10090950 plays m_nSequence on every body, and a cine plays through the kernel's own slot 584 StartSequence 0x101a82d0	yes: under a Schedule, ScriptedSchedule, Ambient or Sequence owner the clip is not played. A row that has never played gets SequenceCycleRate 0 (ElysiumNpcBaseAnim.cpp:84-91), so m_bSequenceFinished is never raised and slot-251 waits hang. The Schedule owner is held for the rest of any program that has issued a move	1 (ResetSequenceInfo)	none	retire; re-class as a divergence now
+[1] SetDisposition stance-transition gate	ElysiumNpc.cpp:1328-1386	SetDisposition 0x102c0f70: the only gate is m_bDisableAI +0x6080. It always writes m_IdealActivity +0xff0 = 0xf1 and m_nIdealSequence +0x5ccc, then m_nSequence / m_flCycle / m_Activity / animtime + ResetSequenceInfo 0x10090950. The transition name comes from GetTransitionAnim 0x100ed150	yes: gates on the owner and on feeding, plays the clip outside the kernel, and writes none of the six words	1	Stance, Dialogue (disposition only)	retire (port 0x102c0f70)
+[1] SaveBlockReason (owner arm) + beat save refusal	ElysiumNpc.cpp:2914-2924; ElysiumScriptedSequence.cpp:1516-1518	none: retail saves m_NPCState, m_hCine and m_scriptState in the datamap, and OnRestore's DiscardScheduleState 0x1027be60 strips a SCRIPT state whose cine is dead (schedule-kernel.md, ClearSchedule callers)	yes: the player cannot save while any NPC holds Dialogue, Sequence or ScriptedSchedule. Whether retail refuses a save during a conversation is UNRECOVERED	1 (+ the world save gate)	DialogueSave, Dialogue, NpcKernelDirector, Interaction, Feeding, Inventory	retire the Sequence and ScriptedSchedule arms; recover the dialogue arm
+[1] SerializeMindBlock / RestoreMindState (owner byte)	ElysiumNpc.cpp:2837-2853, 2720-2745	m_NPCState +0x5cc0 / m_IdealNPCState +0x5cc4 (datamap); there is no owner word	yes: saves an owner byte and restores only None or Ambient	2	NpcMind.Restore, NpcCombat.DeathRestore	rename (keep the state words, drop the owner byte)
+[1] ReleaseAllBodyOwnership -> Mind.Invalidate	ElysiumNpc.cpp:2505-2530	Event_Killed 0x10265ad0 (CancelScript on m_hCine, SetState 7) and the dormancy path	yes: also closes the dialogue silently and clears the schedule, in an order the port chose	death, dormancy, teardown	NpcCombat.Death	keep; rename to the retail teardown it stands for
+[2] RouteScheduleMaintenance routing: TickScriptWatchdog -> ThinkInDialog -> ThinkScriptOwned -> ThinkSchedulePolicy -> ThinkAutonomous	ElysiumNpc.cpp:885-915	MaintainSchedule 0x102817c0 alone, as RunAI 0x1026f302 reaches it	yes: three owners run outside the interpreter, ahead of it, on every Troika think	every think	NpcThinkCadence	retire
+[2] ThinkAmbient + ClaimAmbientSpot + FailedSpotIndices	ElysiumNpc.cpp:1120-1172, 2127-2230; ElysiumNpc.h:625, 1181	SelectSchedule case 1 0x102af6f3 -> program 0xff (FIND_INTERESTING_PLACE; SET_PRESERVE_PATH 1; SET_SCHEDULE 0x100) and the interest loop 0x102aa210 (programs.md)	yes: the port does its own walk (24 cm tolerance, walk gait, partial path refused), keeps a port-only spot blacklist, and times the into/dwell/out phases on port timers. The hub crosswalk chain 0x100 -> 0x102 is unreachable while this owns every use_interesting body (conditions-and-states.md)	1 (ThinkAutonomous)	NpcKernelSelect19.PatrolOutranksUseInteresting_0x102af6b6, NpcThinkCadence	retire
+[2] ThinkAutonomous	ElysiumNpc.cpp:993-1006	SelectSchedule case 1: patrol 0x102af6b6 before interest 0x102af6f3	yes, but routing only; the order is retail's	1	NpcKernelSelect19.PatrolOutranksUseInteresting_0x102af6b6	retire
+[2] ThinkSchedulePolicy	ElysiumNpc.cpp:961-991	none: combat is the state's own SelectSchedule	yes: finishes an ambient visit whenever combat, a pushed order or any running program exists	1	NpcCombat.IdleAcquisition	retire
+[2] ThinkInDialog	ElysiumNpc.cpp:917-937	the m_hDialogPartner path: RunAI's gather skip 0x1026f1f0 and TASK_RUN_DIALOG 0xb9	yes: holds the body for a per-line VCD clip, and the stance think runs outside any program	1	Dialogue	retire
+[2] ThinkScriptOwned + TickScriptWatchdog	ElysiumNpc.cpp:848-883, 939-958	0x2e SCHED_AISCRIPT and the director's schedule arms	yes: the beat drives the body instead of the NPC's program	1	AiScriptedSchedule.*	retire (0003)
+[2] bReturnToExternalExecutorAfterSchedule / TakeExternalExecutorReturn	ElysiumNpc.cpp:1827-1828; ElysiumNpcMaintain.cpp:354, 456-461; ElysiumNpcMaintain.inl:45; ElysiumSchedule.cpp:297, 385, 421	none: MaintainSchedule reselects inside the same pass (0x10281be5, 0x10281c46)	yes: leaves the loop with Install(None) and returns false where retail installs the next program	3 exits	NpcKernelMaintain	retire
+[2] ThinkPatrol	absent (0 hits)	patrol has been the path object's program since story 8 wave 2	n/a	0	-	gone
+[2] bMoveIssued	ElysiumNpcBase.h:635 (36 lines in 12 files); readers ElysiumNpc.cpp:1890, ElysiumNpcBaseStartTask.cpp:2357, ElysiumNpcStartTask.cpp:1827, ElysiumNpcScript.cpp:627	navigator IsGoalActive, the head waypoint path+0x24, nav+0x14 (0x102f2ea0)	yes: TaskWalkRunPath 0x102a4b4e's activity choice and StartTaskCurWaypointPos read it, and a refused claim clears it	4 readers	none by name	rename onto FElysiumNpcNavigator
+[2] bWalkingAnimation	ElysiumNpcBase.h:664; writer ElysiumNpc.cpp:2160; 9 resets	none	no: written, never read	0	none	retire
+[2] ScheduleHost words with no offset: PendingFailureReason (port-only), GoalToleranceCm, DesiredMoveYaw, Inside/OutsideInterruptDistanceSqr, KickProp, FailedCoverLosChecks, SavedSleepExtents, bPatrolPathUseHint, bSavePositionWalk, bWaitFinishedSet, Unknown6300, Unknown659c, 8 think clocks (21 words)	ElysiumNpcScheduleHost.h:113-134	the Troika words that OnScheduleChange 0x102a09ce..0x102a0a93 and TaskFail 0x1029adb0 clear (layout.md)	no: names only	many	NpcKernelShape (shape map)	rename (offset + retail name)
+[5] STORY8-TWIN survivors, 3 (scripted beat, dialogue clip hold, interesting-place executor); 5 markers in 3 files	ElysiumNpc.cpp:893, 896, 899; pointers ElysiumNpc.h:386, ElysiumNpcBaseMaintain.cpp:53	see the [2] rows	yes	all live on every Troika think	-	retire (they are the [2] rows)
+[5] PostRun slot 258 DispatchAnimEvents -> FElysiumAnimatingOverlay stub; events are dispatched by a world pass instead	ElysiumNpcBaseMotor.cpp:596 -> ElysiumAnimatingOverlaySlots.cpp:114; world pass ElysiumEntityWorld.cpp:1889, 2049 -> ElysiumAnimatingImpl.cpp:309-375	CAI_BaseNPC::PostRun 0x1026c7c0 -> DispatchAnimEvents 0x10098c80 -> 0x10091880 -> HandleAnimEvent, on m_flCycle inside the think	yes: the stub fires on every NPC think, and HandleAnimEvent runs once per world frame on the Unreal clip phase, outside the think	every NPC think	AnimEvent, NpcKernelPlayerController	retire the world pass; port slot 258 on the kernel cycle
+[5] SetAttackExtentsForSequence slot 247 stub	ElysiumNpcBaseAnim.cpp:105 -> ElysiumAnimatingSlots.cpp:230	0x10090c80	yes: the attack extents never follow the sequence	every sequence change	none	port
+[5] GetIdealYawSpeed slot 242 stub	ElysiumNpcMotor.cpp:213 -> ElysiumAnimatingSlots.cpp:187	0x100916a0	yes: answers 0, so the turn rate floors at 1.0 for the three species under m_afMemory & 0x2000	conditional	none	port
+[5] GetVelocity slot 199 stub on animating owners	ElysiumNpcBaseStartTask.cpp:872 -> ElysiumAnimatingSlots.cpp:170	0x10095e50	yes: the owner's velocity reads as zero	1 task arm	none	port
+[5] BurnModel slot 243 stub	ElysiumNpcStartTask_2.cpp:1901 -> ElysiumAnimatingSlots.cpp:196	0x10090580	visual only: TASK_BURN_MODEL burns nothing	1	none	port (visual)
+[5] SetPoseParameter02 / GetGroundSpeedVelocity / AddExtraAnimationModels stubs	ElysiumCombatCharacterSlotBodies.cpp:164; ElysiumNpcBaseSpawn.cpp:70; ElysiumNpcPlayerController.cpp:150	0x10091fe0; 0x10094870; 0x1008e0a0	mostly no: a miss arm, a discarded result, and a player-controller-only path	3	none	port when reached
+[5] The other 36 FireAnimatingSlot / FireAnimatingOverlaySlot stubs (44 total: 36 + 8)	ElysiumAnimatingSlots.cpp, ElysiumAnimatingOverlaySlots.cpp	per row in the file	no: no production caller, or overridden lower in the hierarchy	0	NpcKernelSlots.Defaults	keep as census
+[5] ElysiumStub::Fired on live NPC paths: schedule registry miss -> IDLE_STAND stands in	ElysiumNpcMaintain.cpp:65, 373; ElysiumSchedule.cpp:153; ElysiumNpc.cpp:1719	GetScheduleOfType miss; the corpus program	yes: IDLE_STAND is installed for any unregistered id	any unregistered id	NpcKernelMaintain	keep (tally is the work list)
+[5] ElysiumStub::Fired on live NPC paths: kernel arms	ElysiumNpcSchedule.cpp:226 (ResolveTaskDistance 0x102702d0 sentinels), :491 (SelectCoverOrKick ranged-threat 0x6000); ElysiumNpcSpecies2.cpp:85 (zombie 0x102ae840 push); ElysiumNpcTzimisce.cpp:187; ElysiumNpcMingXiaoTentacle.cpp:157; ElysiumNpcDialogue.cpp:35 (dialog opener integer)	per row	yes (:491 fires on every cover selection against a ranged enemy)	6	n/s	keep
+[5] ElysiumStub::Fired: 27 lines in 22 substrate files in total; 7 slot-tier helpers (Entity 114, CombatCharacter 97, NpcBase 16, Flex 9, Npc 2, Animating 36, Overlay 8 stubs)	Elysium*Slots.cpp	per slot	liveness not surveyed for the 5 non-animating tiers: method-name collisions defeat grep, and the check needs the ledger's slot-dispatch join	-	NpcKernelSlots.Defaults	survey
+[6] IElysiumEmbodiment: 131 methods (~18 geometry/trace/PVS/light queries, ~40 NPC clip/sequence/cinematic, ~30 player body, the rest props, effects, camera)	Public/ElysiumWorldServices.h:761-1822	-	-	-	-	keep
+[6] IElysiumNpcMotor: 34 methods (8 geometry: ProjectToNavigable, QueryRoute, NavRaycast, SampleFloor, HasPath, CanReachLateralCover, FindNodeCover, SetHullSize)	Public/ElysiumWorldServices.h:379-648	-	-	-	-	keep
+[6] IElysiumAudio 17; IElysiumTravel 2; IElysiumPresenter 6; IElysiumWeather 6	Public/ElysiumWorldServices.h:1835-2106	-	-	-	-	keep
+[6] ElysiumNpcSight trace policy (a namespace over TraceRetail: CTraceFilterFVisible / SimpleTwoEnt, mask 0x2804091)	ElysiumNpcSightTrace.h:9-60	0x101075e0, 0x101ccd70	-	-	-	keep
+[6] Kernel-internal: IElysiumScheduleRunner 42; IElysiumIOSink 7; IElysiumCameraOverrideSource 9 / Resolver 2; IElysiumChoreoCallback 4	ElysiumSchedule.h:145; Public/ElysiumIOSink.h:16; ElysiumCameraOverride.h:89, 129; ElysiumScenePlayer.h:22	-	-	-	-	keep
+[6] DIRECT: platform clock in the MaintainSchedule pass budget	ElysiumSchedule.cpp:280, 514	0x10281907 / 0x10282179, budget 0x10923c68 (retail is wall-clock too)	yes: the pass count depends on host speed (nondeterministic), as retail's did	2	none	keep; move behind the clock seam
+[6] DIRECT: FElysiumAnimating::Visual (USkeletalMeshComponent*)	ElysiumAnimatingImpl.cpp:532, 558, 565, 579, 583, 618	none (presentation)	no: visual transform, attach, visibility, destroy	6	-	move behind IElysiumEmbodiment
+[6] DIRECT: global FMath RNG in the character idle	ElysiumCombatCharacter.cpp:977, 1020, 1021, 1031, 1035, 1037	retail RandomInt / RandomFloat on the shared stream	yes: draws outside ElysiumRng, but only for visual cadence (eye look, fidget)	6	-	route through ElysiumRng
+[6] DIRECT: entity tier bodies (attach, visibility, transform push, destroy)	ElysiumEntity.cpp:189, 191, 192, 195, 219, 224, 229, 264, 269, 284, 285, 300, 306, 363, 371, 384, 389; ElysiumEntityWorld.cpp:77, 79, 83, 95, 479, 510, 530, 531, 553, 970, 1064, 1072, 1085, 1100	none (presentation)	no (ElysiumEntity.cpp:284 reads the parent's world transform)	31	-	move behind IElysiumEmbodiment
+[6] DIRECT: props, items, movers, lockables, terminal, lights, feed, weapons, choreo (non-NPC)	ElysiumProp.cpp (28), ElysiumPhysProp.cpp (28), ElysiumMover.cpp (9), ElysiumLockable.cpp (8), ElysiumItemContainer.cpp (8), ElysiumFeed.cpp:206, 207, 211, 474, 475, 701, ElysiumTerminal.cpp (5), ElysiumLightClasses.cpp (5), ElysiumItemClasses.cpp (5), ElysiumChoreoScene.cpp:1320, 1328, 1398, 1452, ElysiumWeaponClasses.cpp:613, 627, 793, 854, headers (Prop.h 5, PhysProp.h 4, Terminal.h 2, Mover.h 2, Lockable.h 2, ItemContainer.h 2, ItemClasses.h 2, CameraAnimated.h 1), ElysiumButton.cpp:253, ElysiumAmbientGeneric.cpp:258, ElysiumIOSink.cpp:106	-	mostly no (ElysiumMover.cpp:205 sweep hit and :280, :316 origin reads; ElysiumButton.cpp:253 bounds)	130	-	out of the NPC kernel; review per family
+[6] DIRECT: console commands taking UWorld*	ElysiumAnimEvents.cpp:187; ElysiumChoreoScene.cpp:2263; ElysiumClassRegistry.cpp:295; ElysiumEntityDefs.cpp:259, 281	-	no	5	-	keep
+[6] DIRECT: UObject test loader in scope by glob	Public/ElysiumNpcSubsystem.h:7, 22-24, 52	-	no (debug)	-	-	keep
+[4] SEAM: NavArrivedWithinTolerance	ElysiumNpcRunTask.inl:37 (body answers false)	0x102f2ea0 navigator arrival within tolerance	yes: TASK_WAIT_FOR_MOVEMENT (armed 146 tut / 129 hub) completes on the mover's own arrival, not retail's tolerance	both maps	n/s	keep seam; fill
+[4] SEAM: RunDialogActivity	ElysiumNpcRunTask.inl:69; body ElysiumNpcRunTask.cpp:307-320	0x102c1400 (upkeep) and 0x102c0360 (m_OnDialogEnd fire, partner clear)	yes: only the IsInDialog arm runs (-1 outside a dialogue, m_Activity inside), and m_OnDialogEnd is never fired from the task. The declaration's comment is stale	both maps (TASK_RUN_DIALOG armed 3)	n/s	keep seam; fill
+[4] SEAM: StartTaskFindLosPos	ElysiumNpcBaseStartTask.inl:186	CAI_Navigator::FindLosPos 0x102edaa0	yes: every GET_PATH_TO_ENEMY_LOS / SAVEPOSITION_LOS task fails	both maps	n/s	keep seam; fill
+[4] SEAM: line-of-fire sweeps	ElysiumNpcStartTask.inl:140	0x102ed9c0 / 0x102ee300	yes: flank and directed paths always fail	both maps (FIND_FLANK_NODE_TO_ENEMY armed 4/3)	n/s	keep seam; fill
+[4] SEAM: hunt patrol pathfinder	ElysiumNpcStartTask.inl:165	CAI_Pathfinder 0x10306700 / 0x10306f60	yes: the hunt patrol never finds a target	both maps (armed 2)	n/s	keep seam; fill
+[4] SEAM: NearestNavigatorNode (flee node)	ElysiumNpcBaseSenses10.inl:148	0x102edae0	yes: backaway/flee node search always takes the failure branch	both maps	n/s	keep seam; fill
+[4] SEAM: rat flee node search	ElysiumNpcScurrying.h:55	0x103acba0	yes: rats never flee along nodes (march arm only)	both maps (CNPC_VRat 6/8)	n/s	keep seam; fill
+[4] SEAM: attack coordinator	ElysiumNpcTroikaHelpers.cpp:137	m_pAttackCoordinator +0x65e8; 0x1025db50 / db70 / dca0 / de90	yes: slot 602 always reads "no room" and leaves melee	both maps	n/s	keep seam; fill
+[4] SEAM: ActiveWeaponCapabilityWord	ElysiumNpcBaseMotor.inl:330	0x1014f930	yes: the ShouldMoveAndShoot gate stays closed (cops never move and shoot)	both maps	n/s	keep seam; fill
+[4] SEAM: WeaponFlagBlocksAttack	ElysiumNpcConditionsBodies.inl:122	weapon +0x5a0 bit 30	yes: COND_SHOULD_KICK never raised	both maps	n/s	keep seam; fill
+[4] SEAM: FindOrCreateSquad	ElysiumNpcBaseSquad.cpp:109	m_pSquad +0x5da4; FindSquad 0x10315790	yes: squad conditions never raise (37 hub cops act alone)	both maps	n/s	keep seam; fill
+[4] SEAM: RepointEnemyMemoryToSquad	ElysiumNpcBaseSquad.cpp:172	SetSquad 0x1029a930 / SetSquadEnemies 0x10273dd0	yes: no shared enemy memory	both maps	n/s	keep seam; fill
+[4] SEAM: Weapon_FindUsable	ElysiumNpcBaseConditions2.inl:99	in 0x1026fb40	yes: BETTER_WEAPON_AVAILABLE never raised	both maps	n/s	keep seam; fill
+[4] SEAM: pedestrian crime level	ElysiumNpcState.inl:48	weaponData +0x3c4 via 0x103a2e30 -> 0x1028ea60	yes: a fleeing witness never records the incident	both maps	n/s	keep seam; fill
+[4] SEAM: PromoteCriminalWindowNpcs	ElysiumNpcConditionsBodies.cpp:346	FUN_103705e0 -> 0x102ae840 (state 14)	yes: cop pursuit promotes nobody (no retail state 14)	hub	n/s	keep seam; fill
+[4] SEAM: StartTask19WeaponNextAttackTime	ElysiumNpcStartTask.inl:208	0x10252450 + 0x102c5730	yes: the attack wait ends at once (firing cadence)	both maps (WAIT_ATTACK_TIME1 armed 8)	n/s	keep seam; fill
+[4] SEAM: StartTask19WeaponMin/MaxBurst	ElysiumNpcStartTask.inl:186	weapon +0x3a4 / +0x3a8	yes: every ranged burst is one shot	both maps (RANGE_ATTACK1 armed 9)	n/s	keep seam; fill
+[4] SEAM: interest-loop body block	ElysiumNpcHints.inl:130	0x102db760 / 0x102dcc20 / 0x10279cc0 / 0x102e2020	yes: no occupancy marker or alignment on interesting places	both maps (0x102aa210)	n/s	keep seam; fill
+[4] SEAM: RequestClearSchedule	ElysiumNpc.h:470	ClearSchedule 0x10280d30 requested by a task body	yes: 0 callers, so scripted task bodies never clear the schedule	both maps	n/s	keep seam; fill (0003)
+[4] SEAM: PlaySequenceClip unknown-length row	ElysiumNpcAnim.cpp:417	ResetSequenceInfo 0x10090950	yes: the cycle does not advance under an owned body (see the [1] gate row)	both maps	none	retire with the gate
+[3] MOD: beat stand-in, a 0.05 s director think drives the task order instead of the NPC's scripted schedules	ElysiumScriptedSequence.h:24	sched 0x2e / 0xf2	yes: task and interrupt timing	-	n/s	retire (divergence)
+[3] MOD: beat phase words; a restored beat restarts its phase	ElysiumScriptedSequence.h:210	0x1027bf50	yes: retail resumes m_hCine and the schedule	-	n/s	retire (divergence)
+[3] MOD: Possess starts the beat stand-in	ElysiumScriptedSequence.cpp:426	0x101a7e84	yes	-	n/s	retire (divergence)
+[3] MOD: stand-in task position PostIdle	ElysiumScriptedSequence.cpp:1102	none	yes	-	n/s	retire (divergence)
+[3] MOD: stand-in PostIdleHeld phase	ElysiumScriptedSequence.cpp:1131	none	yes	-	n/s	retire (divergence)
+[3] MOD: section header for the stand-in bodies	ElysiumScriptedSequence.cpp:1261	none	yes	-	n/s	retire (divergence)
+[3] MOD: failed travel places the NPC on the mark	ElysiumScriptedSequence.cpp:1406	none	yes: retail's _FAILED schedule idles and retries forever	-	n/s	retire (divergence)
+[3] MOD: refuses saves mid-beat	ElysiumScriptedSequence.cpp:1518	none	yes: retail saves and resumes	-	NpcKernelDirector	retire (divergence)
+[3] MOD: no-save-mid-beat pointer; restore drops in-flight travel	ElysiumNpc.cpp:2696	none	yes	-	n/s	retire (divergence)
+[3] MOD: an overwritten cine ends the previous beat	ElysiumAiScriptedSequence.cpp:65	0x101a9170	yes: retail just reselects under the new m_hCine	-	n/s	retire (divergence)
+[3] MOD: beat stand-in replaces the SCHED_AISCRIPT 0x2e selection	ElysiumAiScriptedSequence.cpp:133	0x101a93f8	yes	-	n/s	retire (divergence)
+[3] MOD: playback gated on the arbiter owner	ElysiumNpcAnim.cpp:402	0x1026c5a0	yes: a never-played row on an owned body does not advance	-	none	retire (divergence)
+[3] MOD: slot 220 local origin answers the absolute origin	ElysiumEntitySlotBodies.cpp:877	0x100b3070	yes: differs for a parented entity	-	n/s	retire (divergence)
+[3] MOD: stale-link mark only on a held door link	ElysiumNpcBaseMotor.cpp:968	0x102f1fa0	yes: a re-route can pick the failed segment again	-	n/s	retire (divergence)
+[3] MOD: capped point pick replaces the AIN hop walk	ElysiumNpcBaseStartTask.cpp:2568	0x102ff3e0	yes: destination, RandomInt use, NavMesh route check	-	n/s	retire (divergence)
+[3] MOD: order 1.0 unit fails 0x18 under the capped pick	ElysiumNpcBaseStartTask.cpp:2727	0x102ed610	yes	-	n/s	retire (divergence)
+[3] MOD: capped point pick declaration	ElysiumNpcBaseStartTask.inl:193	0x102ed940	yes	-	n/s	retire (divergence)
+[3] MOD: radial probe is a NavMesh raycast	ElysiumNpcBaseStartTask.cpp:2758	0x102e4f50	yes: TestGroundMove's step and dz refusals lost	-	n/s	retire (divergence)
+[3] MOD: NavMesh route with spliced curbs replaces the pedestrian A* chain	ElysiumNpcCrosswalk.inl:36	0x102fcd00	yes: LastNodePassed and FACE_NEXT_NODE differ	-	NpcCrosswalk	retire (divergence)
+[3] MOD: pedestrian goal issues spliced curb legs	ElysiumNpcBaseStartTask.cpp:2198	0x102fcd00	yes	-	NpcCrosswalk	retire (divergence)
+[3] MOD: next waypoint after a curb is the far curb or goal	ElysiumNpcStartTask_2.cpp:339	0x102a9ee0	yes	-	NpcCrosswalk	retire (divergence)
+[3] MOD: a groundpoint miss declines the teleport	ElysiumNpcWerewolf.cpp:1017	none	yes: retail writes FLT_MAX into the origin	-	n/s	retire (divergence)
+[3] DIV: body moves on the actor tick, Origin synced every frame	ElysiumScriptedCharacter.h:65	none	yes: retail moves it inside NPCThink only	-	n/s	retire
+[3] DIV: SyncMovingNpcRecords every frame outside any think	ElysiumEntityWorld.cpp:1850	none	yes	-	n/s	retire
+[3] DIV: per-frame Origin refresh body	ElysiumEntityWorld.cpp:2055	none	yes	-	n/s	retire
+[3] DIV: PerformMovement delegate only recorded	ElysiumAnimatingSlotBodies.cpp:115	0x1026c120	yes: the motor moves on the actor tick	-	n/s	retire
+[3] DIV: navigator move pass samples what the body did	ElysiumNpcBaseMotor.inl:89	0x102f0169	yes	-	n/s	retire
+[3] DIV: slot-69 ignore asked every think as a set	ElysiumNpcBaseMotor.inl:183	0x1029b180	yes: up to one think late	-	n/s	retire
+[3] DIV: same per-think ignore-set registration	ElysiumNpcMotor.cpp:373	none	yes	-	n/s	retire
+[3] DIV: MoveLimit ground arm is a NavMesh raycast	ElysiumNpcBaseMotor10.cpp:79	0x102e4f50	yes: no 16-unit steps, no CanStandOn, no dz refusal	-	n/s	retire
+[3] DIV: ground arm on NavMesh, declaration	ElysiumNpcBaseMotor10.inl:101	0x102e6d70	yes	-	n/s	retire
+[3] DIV: yaw-sweep probe inherits the NavMesh ground arm	ElysiumNpcCombat10.cpp:560	0x102e6d70	yes	-	n/s	retire
+[3] DIV: door-link probe is a hull sweep without stepping	ElysiumNpcBaseMotor.cpp:1001	0x102e4f50	yes: stairs answer differently	-	n/s	retire
+[3] DIV: floor probe passes the NPC itself	ElysiumNpcBaseMotor.cpp:498	none	yes	-	n/s	retire
+[3] DIV: motor ideal yaw +0x34 is the body's yaw	ElysiumNpcBaseMotor.cpp:1554	none	yes: not the path's travel yaw	-	n/s	retire
+[3] DIV: OverrideMove ignores m_bJumping	ElysiumNpcBaseMotor.cpp:442	0x103c5fe0	yes	-	n/s	retire
+[3] DIV: node route is Unreal's, with no links; stand check is a seam	ElysiumNpcBaseStartTask.cpp:2069	0x102fd240	yes	-	n/s	retire
+[3] DIV: FindCoverPos ignores the minimum radius	ElysiumNpcBaseStartTask.inl:182	0x102edc80	yes	-	n/s	retire
+[3] DIV: LOS rays ignore CONTENTS_MONSTER	ElysiumNpcBaseConditions2.inl:141	0x102713c9	yes: condition answers differ	-	n/s	retire
+[3] DIV: no attack coordinator, so the slot-602 guard refuses	ElysiumNpcTroikaHelpers.cpp:532	0x10385d70	yes	-	n/s	retire
+[3] DIV: coordinator==0 refusal on both lines	ElysiumNpcTroikaHelpers.cpp:568	none	yes	-	n/s	retire
+[3] DIV: absent coordinator note	ElysiumNpcTroikaHelpers.inl:31	none	yes	-	n/s	retire
+[3] DIV: human line runs the Troika 602 body, guard included	ElysiumNpcHuman.cpp:88	0x10385d70	yes	-	n/s	retire
+[3] DIV: door obstruction with an enemy takes the _NE schedule	ElysiumNpc.cpp:2024	sched 0x90 / 0x94	yes: the enemy rows are unregistered	-	n/s	retire
+[3] DIV: restore restarts the program	ElysiumNpc.cpp:2667	none	yes: retail resumes the task index and timers	-	n/s	retire
+[3] DIV: +0x5b64 state flags derived from state	ElysiumNpcRunAiSpecies.cpp:155	0x1035e9ec	yes: retail's stale bits not kept	-	n/s	retire
+[3] DIV: hunter pursuit count clamped at 0	ElysiumNpcConditionsBodies.cpp:391	none	yes: the start edge fires again	-	n/s	retire
+[3] DIV: skill fixed at 1	ElysiumNpcEntityChain2.cpp:185	0x101286f0	yes	-	n/s	retire
+[3] DIV: ragdoll handed over at the end of the death program	ElysiumNpcBase.cpp:101	none	yes: retail does it inside Event_Killed, with impulse	-	n/s	retire
+[3] DIV: a non-Troika maker child is removed	ElysiumNpcMaker.cpp:443	0x10624f68	yes	-	n/s	retire
+[3] DIV: child removed during spawn gives null; RandomFloat(1,2) rearm	ElysiumNpcMaker.cpp:485	0x1034ba7a	yes (unreachable in shipped content)	-	n/s	retire
+[3] DIV: fleshpile orphan removal	ElysiumNpcMakerFleshpile.cpp:215	none	yes	-	n/s	retire
+[3] DIV: fleshpile null return, runner count not incremented	ElysiumNpcMakerFleshpile.cpp:260	none	yes	-	n/s	retire
+[3] DIV: terminal/keypad do not mute NPC steps; extra RandomInt draw	ElysiumFootsteps.h:155	0x1026d460	yes	-	n/s	retire
+[3] DIV: player-controller stand-in non-solid, removed same frame	ElysiumEntityWorld.cpp:863	0x101c0b10	yes	-	n/s	retire
+[3] DIV: control rotation pinned to the stand-in every frame	ElysiumEntityWorld.cpp:901	0x10178590	yes	-	n/s	retire
+[3] DIV: stand-in killed at the request, not SUB_Remove 0.01 s later	ElysiumEntityWorld.cpp:958	0x101c0b10	yes	-	n/s	retire
+[3] DIV: damage flinch after the commit, every packet	ElysiumCombatCharacter.cpp:1662	0x10266780	yes: retail flinches in TraceAttack before the commit	-	n/s	retire
+[3] DIV: grapple exit placement not done	ElysiumCombatCharacter.cpp:2333	none	yes	-	n/s	retire
+[3] DIV: unbuilt base_ stats read 0	ElysiumCombatCharacter.cpp:2471	none	yes	-	n/s	retire
+[3] DIV: supernatural and criminal expiries merged	ElysiumLaw.cpp:760	none	yes: different frame halves in retail	-	n/s	retire
+[3] DIV: merged law expiry pointer	ElysiumPlayerEntity.cpp:241	none	yes	-	n/s	retire
+[3] DIV: port-only GameOver state	ElysiumPlayerEntity.cpp:832	none	yes: retail loads sp_masquerade_1	-	n/s	retire
+[3] DIV: lockpick ground probe mask 0x1400b	ElysiumLockable.cpp:467	none	yes	-	n/s	retire
+[3] DIV: lockpick stand keeps the player's Z	ElysiumLockable.cpp:502	none	yes	-	n/s	retire
+[3] DIV: door reissue does not reach the linked partner	ElysiumMover.cpp:1081	none	yes	-	n/s	retire
+[3] DIV: partner driven by Toggle	ElysiumMover.cpp:1219	none	yes	-	n/s	retire
+[3] DIV: scenes write ScriptOwner (m_hCine)	ElysiumScriptedSequence.cpp:339	none	yes: a cine on a scene-held NPC queues nothing	-	n/s	retire
+[3] DIV: Leopold hunter route omitted from the popup	ElysiumChargen.cpp:651	none	yes	-	n/s	retire
+[3] DIV: hunter route omission, header	ElysiumChargen.h:226	none	yes	-	n/s	retire
+[3] DIV: ranged swing carries one victim, zero spread	ElysiumWeaponClasses.cpp:2178	none	yes: retail uses a per-ray hit set and a cone	-	n/s	retire
+[3] MOD: self-labelled "not a modernization" (listed as DIV above)	ElysiumCombatCharacter.cpp:1662	0x10266780	see DIV	-	n/s	-
+[3] MOD: sequence bridge numbers resolver clips	ElysiumAnimatingOverlaySlotBodies.cpp:127	0x10295460	no	-	n/s	keep
+[3] MOD: GUARD, dead mode-3 anchor gives a no-op	ElysiumCameraCinematic.cpp:679	none	no	-	n/s	keep
+[3] MOD: ornament same-path no-op	ElysiumCombatCharacter.cpp:2190	0x1032e40a	no	-	n/s	keep
+[3] MOD: member cache replaces the temp-vector ring	ElysiumEntitySlotBodies.cpp:146	0x100b4c30	no	-	n/s	keep
+[3] MOD: authored dialogue-camera profile ladder	ElysiumEntityWorldDialogue.cpp:636	0x1017cef0	no	-	n/s	keep
+[3] MOD: dialogPOV default when no source shot	ElysiumEntityWorldDialogue.cpp:798	0x1026b810	no	-	n/s	keep
+[3] MOD: body hold reproduces retail's freeze	ElysiumNpc.cpp:769	0x10292e6c	no	-	n/s	keep
+[3] MOD: sequence bridge, stable numbers	ElysiumNpc.h:75	none	no	-	n/s	keep
+[3] MOD: sequence bridge row table	ElysiumNpcAnim.cpp:315	none	no	-	n/s	keep
+[3] MOD: DEBUG schedule rows in npc_task_text	ElysiumNpcBase.cpp:320	none	no	-	n/s	keep
+[3] MOD: door probe checks the next door link's far end	ElysiumNpcBase.h:369	0x102f13d0	no	-	n/s	keep
+[3] MOD: DEBUG condition-delta trace	ElysiumNpcBase.h:599	none	no	-	n/s	keep
+[3] MOD: bridge play hook answers length and loop bit	ElysiumNpcBaseAnim.cpp:65	0x10090a14	no (the owner gate it feeds is S, row above)	-	n/s	keep
+[3] MOD: bridge play hook declaration	ElysiumNpcBaseAnim.inl:25	0x10260a50	no	-	n/s	keep
+[3] MOD: hint-group text compare	ElysiumNpcBaseHints.cpp:743	none	no	-	n/s	keep
+[3] MOD: root-motion extraction is Unreal's	ElysiumNpcBaseMotor.cpp:559	0x10280a50	no	-	n/s	keep
+[3] MOD: AutoMovement always false; callers discard	ElysiumNpcBaseMotor.cpp:580	0x102e0bd0	no	-	n/s	keep
+[3] MOD: blocker hold on Unreal's follower	ElysiumNpcBaseMotor.cpp:849	0x102ef3e0	no	-	n/s	keep
+[3] MOD: door probe point	ElysiumNpcBaseMotor.cpp:1360	0x102f13a0	no	-	n/s	keep
+[3] MOD: follower Success counts as waypoint reached	ElysiumNpcBaseMotor.cpp:1480	none	no	-	n/s	keep
+[3] MOD: crowd avoidance for the local steer	ElysiumNpcBaseMotor.cpp:1592	0x102de110	no	-	n/s	keep
+[3] MOD: paused path parks the body	ElysiumNpcBaseMotor.cpp:1632	0x102effab	no	-	n/s	keep
+[3] MOD: reissue declaration	ElysiumNpcBaseMotor.inl:159	none	no	-	n/s	keep
+[3] MOD: blocker-hold reissue counter	ElysiumNpcBaseMotor.inl:244	0x102ef49a	no	-	n/s	keep
+[3] MOD: AutoMovement gate kept	ElysiumNpcBaseMotor.inl:345	0x10280a50	no	-	n/s	keep
+[3] MOD: yaw step is Unreal's Face at retail's rate	ElysiumNpcBaseRunTask.cpp:200	0x102e1e20	no	-	n/s	keep
+[3] MOD: UpdateYaw step declaration	ElysiumNpcBaseRunTask.inl:64	0x102e1e20	no	-	n/s	keep
+[3] MOD: SafeDisc secure ints stored decoded	ElysiumNpcBosses.inl:37	0x1038b370	no	-	n/s	keep
+[3] MOD: swallowed step parks the body	ElysiumNpcCrosswalk.cpp:295	0x102a0bc0	no	-	n/s	keep
+[3] MOD: bNavBodyParked word	ElysiumNpcCrosswalk.inl:65	none	no	-	n/s	keep
+[3] MOD: HUD notice on a refused conversation	ElysiumNpcDialogue.cpp:254	none	no	-	n/s	keep
+[3] MOD: GUARD, out-of-bounds response index	ElysiumNpcDialogueBodies.cpp:250	none	no	-	n/s	keep
+[3] MOD: GUARD, empty response table	ElysiumNpcDialogueBodies.cpp:281	none	no	-	n/s	keep
+[3] MOD: DEBUG hint failure text to the log	ElysiumNpcKernelBaseHelpers.cpp:913	0x102d0ab0	no	-	n/s	keep
+[3] MOD: GUARD, re-finds Andrei	ElysiumNpcMakerFleshpile.h:53	0x1034c2d0	no	-	n/s	keep
+[3] MOD: NavMesh route for the local door route	ElysiumNpcMotor10.cpp:169	none	no	-	n/s	keep
+[3] MOD: blocker-hold probe words	ElysiumNpcNavigator.h:95	0x102ef3e0	no	-	n/s	keep
+[3] MOD: stand-in capsule ignores characters	ElysiumNpcPlayerController.h:93	0x103a4510	no	-	n/s	keep
+[3] MOD: stand-in set non-solid	ElysiumNpcPlayerController.cpp:109	0x103a4510	no	-	n/s	keep
+[3] MOD: section header	ElysiumNpcPlayerController.cpp:348	none	no	-	n/s	keep
+[3] MOD: SetIgnoreCharacterCollision forced true	ElysiumNpcPlayerController.cpp:352	none	no	-	n/s	keep
+[3] MOD: motor rebuild stays non-solid	ElysiumNpcPlayerController.cpp:360	none	no	-	n/s	keep
+[3] MOD: bridge clip key includes grapple rows	ElysiumRetailActivities.cpp:4532	none	no	-	n/s	keep
+[3] MOD: same, declaration	ElysiumRetailActivities.h:22	none	no	-	n/s	keep
+[3] MOD: hacking-camera exposure clamp	ElysiumTerminal.cpp:641	none	no	-	n/s	keep
+[3] DIV: jaw envelope source and smoothing	ElysiumChoreoScene.cpp:23	none	no	-	n/s	keep
+[3] DIV: jaw-from-line cvar	ElysiumChoreoScene.cpp:142	none	no	-	n/s	keep
+[3] DIV: jaw envelope from the per-line .vcd	ElysiumChoreoScene.cpp:1729	none	no	-	n/s	keep
+[3] DIV: jaw smoothing lag	ElysiumChoreoScene.cpp:1897	none	no	-	n/s	keep
+[3] DIV: GUARD null damage packet	ElysiumCombatCharacter.cpp:1287	none	no	-	n/s	keep
+[3] DIV: GUARD null damage packet	ElysiumCombatCharacter.cpp:1560	none	no	-	n/s	keep
+[3] DIV: bark gate cannot check LookupSpeechFile	ElysiumDialogueSession.h:286	none	no (agrees on shipped content)	-	n/s	keep
+[3] DIV: camera override channel reaped at zero blend	ElysiumEntityWorld.cpp:1756	none	no	-	n/s	keep
+[3] DIV: string wire parameter parsed as int	ElysiumLaw.cpp:110	none	no	-	n/s	keep
+[3] DIV: marshalling rule declaration	ElysiumLaw.h:151	none	no	-	n/s	keep
+[3] DIV: knob pick uses origins	ElysiumMover.cpp:519	none	no	-	n/s	keep
+[3] DIV: refused-door usermessage not sent	ElysiumMover.cpp:1068	none	no	-	n/s	keep
+[3] DIV: GUARD null teleport winner	ElysiumNpcAndreiBlood.cpp:260	none	no	-	n/s	keep
+[3] DIV: DEBUG TaskFail print ungated	ElysiumNpcBase.cpp:259	none	no	-	n/s	keep
+[3] DIV: GUARD null packet	ElysiumNpcBaseDamage2.cpp:143	0x103302e0	no	-	n/s	keep
+[3] DIV: GUARD null unreachable entity	ElysiumNpcBaseHelpers.cpp:153	none	no	-	n/s	keep
+[3] DIV: GUARD null squad	ElysiumNpcBaseHelpers.cpp:337	none	no	-	n/s	keep
+[3] DIV: global task id translated to local	ElysiumNpcBaseRunTask.cpp:327	0x101a6640	no	-	n/s	keep
+[3] DIV: global task id translated to local	ElysiumNpcBaseStartTask.cpp:265	0x101a6640	no	-	n/s	keep
+[3] DIV: DEBUG break-condition print	ElysiumNpcBaseTrace.cpp:173	none	no	-	n/s	keep
+[3] DIV: GUARD null winner	ElysiumNpcChangBros.cpp:602	none	no	-	n/s	keep
+[3] DIV: GUARD unresolved m_hLastSeeUnknown	ElysiumNpcConditions.cpp:465	0x1028e411	no	-	n/s	keep
+[3] DIV: GUARD null packet	ElysiumNpcDamage3.cpp:318	none	no	-	n/s	keep
+[3] DIV: relationship row for a null entity not written	ElysiumNpcDamage3Species.cpp:440	none	no	-	n/s	keep
+[3] DIV: GUARD null toucher	ElysiumNpcGhoulCroucher.cpp:135	0x1037bfe7	no	-	n/s	keep
+[3] DIV: GUARD null toucher	ElysiumNpcGhoulCroucher.cpp:157	0x1037bfe7	no	-	n/s	keep
+[3] DIV: GUARD null target	ElysiumNpcHengeyokai.cpp:376	none	no	-	n/s	keep
+[3] DIV: child m_bStartHidden stays 0	ElysiumNpcMaker.cpp:402	0x100aaf30	no	-	n/s	keep
+[3] DIV: GUARD null Andrei	ElysiumNpcMakerFleshpile.cpp:277	none	no	-	n/s	keep
+[3] DIV: GUARD null item	ElysiumNpcMakerZombie.cpp:148	none	no	-	n/s	keep
+[3] DIV: GUARD null goal	ElysiumNpcMotor10.cpp:292	none	no	-	n/s	keep
+[3] DIV: UB uninitialised aim point -> zero	ElysiumNpcRunTask.cpp:485	none	no	-	n/s	keep
+[3] DIV: UB uninitialised aim point -> zero	ElysiumNpcRunTask.cpp:1369	0x102ab8ec	no	-	n/s	keep
+[3] DIV: UB uninitialised aim point -> zero	ElysiumNpcRunTask.cpp:1522	none	no	-	n/s	keep
+[3] DIV: global task id translated to local	ElysiumNpcRunTaskSpecies.cpp:77	0x101a6640	no	-	n/s	keep
+[3] DIV: UB uninitialised aim point -> zero	ElysiumNpcRunTaskSpecies.cpp:430	none	no	-	n/s	keep
+[3] DIV: curtime replaces engine Time for a flex blend	ElysiumNpcRunTaskSpecies.cpp:1446	0x1039d8ed	no	-	n/s	keep
+[3] DIV: GUARD null emitter	ElysiumNpcSabbatLeader.cpp:468	0x100fbc90	no	-	n/s	keep
+[3] DIV: GUARD null m_pSchedule	ElysiumNpcScheduleHost.h:191	none	no	-	n/s	keep
+[3] DIV: GUARD null teleport node	ElysiumNpcSheriffMan.cpp:532	none	no	-	n/s	keep
+[3] DIV: GUARD Error() logs and clamps	ElysiumNpcSocial10.cpp:385	none	no	-	n/s	keep
+[3] DIV: GUARD counter	ElysiumNpcSocial10.inl:190	none	no	-	n/s	keep
+[3] DIV: GUARD null boss	ElysiumNpcSquad.cpp:201	0x102c44e0	no	-	n/s	keep
+[3] DIV: global task id translated to local	ElysiumNpcStartTask.cpp:688	0x101a6640	no	-	n/s	keep
+[3] DIV: global task id translated to local	ElysiumNpcStartTask_2.cpp:510	0x101a6640	no	-	n/s	keep
+[3] DIV: GUARD null goal	ElysiumNpcTroikaHelpers2.cpp:584	none	no	-	n/s	keep
+[3] DIV: GUARD emitter region bounds	ElysiumNpcVampireBoss.cpp:112	none	no	-	n/s	keep
+[3] DIV: node index 0 re-queried	ElysiumNpcWerewolf.cpp:1501	none	no	-	n/s	keep
+[3] DIV: engine frame number from the world clock	ElysiumNpcWerewolf.cpp:2263	none	no	-	n/s	keep
+[3] DIV: frame-number stand-in declaration	ElysiumNpcWerewolf.h:384	none	no	-	n/s	keep
+[3] DIV: GUARD Error not fatal	ElysiumNpcWerewolf2.cpp:53	0x102c4583	no	-	n/s	keep
+[3] DIV: UB uninitialised stack vector -> vec3_origin	ElysiumNpcWerewolf2Species.cpp:961	0x103cf7ea	no	-	n/s	keep
+[3] DIV: UB id==count read past the array	ElysiumPlaceSet.h:89	0x102f46d0	no	-	n/s	keep
+[3] DIV: UB same read-past-array for yaw	ElysiumPlaceSet.h:96	0x102f47b0	no	-	n/s	keep
+[3] DIV: schedule load order changed	ElysiumScheduleCorpus.h:14	none	no	-	n/s	keep
+[3] DIV: stores the global task id	ElysiumScheduleText.cpp:228	none	no	-	n/s	keep
+[3] DIV: global task id; comment says nothing translates (5 sites do)	ElysiumScheduleText.h:35	none	no	-	n/s	rename (stale comment)
+[3] DIV: CalcFeat on a trait name falls back to the value	ElysiumSheetMath.cpp:384	none	no	-	n/s	keep
+[3] DIV: unknown names interned instead of Error	ElysiumSymbolRegistry.h:9	none	no	-	n/s	keep
+[3] DIV: play-before-acquire order change	ElysiumWeaponClasses.cpp:1803	none	no (no RNG, no state read)	-	n/s	keep
+[3] DIV: same block as MOD 798 (gaze)	ElysiumEntityWorldDialogue.cpp:802	none	n/a	-	n/s	-
+[3] DIV: past divergence, fixed	ElysiumCameraCinematic.cpp:647	none	n/a	-	n/s	rename (stale comment)
+[3] DIV: warns AimFrom would diverge	ElysiumCameraOverride.h:102	none	n/a	-	n/s	keep
+[3] DIV: retail defect reproduced	ElysiumCombatCharacter.cpp:721	none	n/a	-	n/s	keep
+[3] DIV: mention inside a restore row-count guard	ElysiumEntityWorldPersistence.cpp:425	none	n/a	-	n/s	keep
+[3] DIV: group divergence named, now closed	ElysiumInterestingPlace.h:38	0x102dad60	n/a	-	n/s	rename (stale comment)
+[3] DIV: VtMB's own departure from the SDK	ElysiumLogicClasses.cpp:11	none	n/a	-	n/s	keep
+[3] DIV: closed divergence; the retail rule runs	ElysiumNpc.cpp:1231	0x102dad60	n/a	-	n/s	rename (stale comment)
+[3] DIV: retail's departure from the SDK, kept	ElysiumNpcBaseDamage.cpp:81	0x10266660	n/a	-	n/s	keep
+[3] DIV: per-NPC copy would diverge; not taken	ElysiumNpcBaseDamage.inl:52	0x1070ba40	n/a	-	n/s	keep
+[3] DIV: retail's departure from the SDK, kept	ElysiumNpcBaseMisc2.cpp:386	0x10275436	n/a	-	n/s	keep
+[3] DIV: file-static kept	ElysiumNpcBosses.inl:197	0x1038b370	n/a	-	n/s	keep
+[3] DIV: historical port error, fixed	ElysiumNpcChangBros.cpp:288	none	n/a	-	n/s	rename (stale comment)
+[3] DIV: reports a live S divergence in Visual/ElysiumNpcActivityTables.cpp (Cover_Troika row)	ElysiumNpcClosure.cpp:395	none	yes, out of scope (Visual/)	-	n/s	follow up
+[3] DIV: historical, corrected	ElysiumNpcMisc2.cpp:229	0x102b5c00	n/a	-	n/s	rename (stale comment)
+[3] DIV: suspected divergence was not one	ElysiumNpcPositions.inl:99	none	n/a	-	n/s	keep
+[3] DIV: says nothing re-arms the sweep; 6 writers now exist	ElysiumNpcSenses.h:204	none	n/a	-	n/s	rename (stale comment)
+[3] DIV: a global kept global	ElysiumNpcTroikaHelpers.inl:92	0x10937cf2	n/a	-	n/s	keep
+[3] DIV: retail species difference reproduced	ElysiumNpcTzimisceHeadClaw.cpp:108	0x102b57c0	n/a	-	n/s	keep
+[3] DIV: retail species difference reproduced	ElysiumNpcTzimisceRunner.cpp:285	none	n/a	-	n/s	keep
+[3] DIV: explains why it does not diverge	ElysiumPlayerEntity.cpp:1346	0x10090180	n/a	-	n/s	keep
+[3] DIV: demo_sequence is never read	ElysiumProp.cpp:355	none	n/a	-	n/s	keep
+[3] DIV: self-labelled "not a divergence"	ElysiumSwingContact.h:54	none	n/a	-	n/s	keep

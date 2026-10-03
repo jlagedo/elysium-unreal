@@ -164,6 +164,11 @@ FElysiumEntityHandle Spawn(FElysiumEntityWorld& World, const FSpawnRequest& Requ
 		ElysiumRelationships::LexToString(Request.PlayerReaction), Request.PlayerReactionPriority));
 	Def.Keys.Add(TEXT("npc_perception"), FString::FromInt(Request.Perception));
 	Def.Keys.Add(TEXT("allow_alert_lookaround"), Request.bAllowAlertLookaround ? TEXT("1") : TEXT("0"));
+	// Last, so an extra key replaces a fixed one of the same name (`TMap::Add` overwrites).
+	for (const TPair<FString, FString>& Extra : Request.ExtraKeys)
+	{
+		Def.Keys.Add(Extra.Key, Extra.Value);
+	}
 
 	const FString Name = Def.TargetName;
 	const FElysiumEntityHandle Handle = World.SpawnRuntimeEntity(MoveTemp(Def));
@@ -188,6 +193,42 @@ FElysiumEntityHandle Spawn(FElysiumEntityWorld& World, const FSpawnRequest& Requ
 		*Name, *Request.Model, *Request.Classname, *Request.Origin.ToCompactString(),
 		ElysiumRelationships::LexToString(Request.PlayerReaction), Request.PlayerReactionPriority,
 		Request.Weapon.IsEmpty() ? TEXT("(none)") : *Request.Weapon);
+	return Handle;
+}
+
+FElysiumEntityHandle SpawnAuthored(FElysiumEntityWorld& World, FElysiumEntityDef Def,
+	FString& OutError)
+{
+	const FString* Model = Def.Keys.Find(TEXT("model"));
+	if (Model != nullptr && !Model->IsEmpty() && !ElysiumNpcVisual::IsStemBaked(*Model))
+	{
+		OutError = FString::Printf(
+			TEXT("the mount carries no body for '%s' — export it before spawning it"), **Model);
+		return FElysiumEntityHandle::Invalid();
+	}
+	if (!World.IsActive())
+	{
+		OutError = TEXT("the entity world is not active yet — wait for the map to finish activating");
+		return FElysiumEntityHandle::Invalid();
+	}
+
+	const FString Name = Def.TargetName;
+	const FString Classname = Def.Classname;
+	const FElysiumEntityHandle Handle = World.SpawnRuntimeEntity(MoveTemp(Def));
+	if (!Handle.IsSet())
+	{
+		OutError = FString::Printf(TEXT("'%s' is not a registered classname"), *Classname);
+		return Handle;
+	}
+	if (ResolveNpc(World, Handle) == nullptr)
+	{
+		OutError = FString::Printf(
+			TEXT("'%s' spawned as a record with no AI leaf — pick an npc_V* combat class"), *Classname);
+		UE_LOG(LogElysiumArenaCast, Warning, TEXT("arena cast: %s"), *OutError);
+		return Handle;
+	}
+	UE_LOG(LogElysiumArenaCast, Log, TEXT("arena cast: %s as %s (authored row), entity %d"),
+		*Name, *Classname, Handle.Index);
 	return Handle;
 }
 
@@ -241,6 +282,25 @@ int32 ClearSpawned(FElysiumEntityWorld& World)
 	{
 		if (Entity && !Entity->IsDead()
 			&& Entity->TargetName.StartsWith(GeneratedPrefix, ESearchCase::IgnoreCase))
+		{
+			Entity->Kill();
+			++Killed;
+		}
+	}
+	return Killed;
+}
+
+int32 ClearNamed(FElysiumEntityWorld& World, const FString& TargetName)
+{
+	int32 Killed = 0;
+	if (TargetName.IsEmpty())
+	{
+		return Killed;
+	}
+	for (const TUniquePtr<FElysiumEntity>& Entity : World.Entities())
+	{
+		if (Entity && !Entity->IsDead()
+			&& Entity->TargetName.Equals(TargetName, ESearchCase::IgnoreCase))
 		{
 			Entity->Kill();
 			++Killed;

@@ -348,6 +348,9 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 				if (!Firing.IsEmpty() || !InvertedFiring.IsEmpty())
 				{
 					FElysiumNpcConditions TraceBits = Firing.ToGlobalOrdinals(Runner.ConditionIdSpace());
+					// `0x10281243`..`0x10281334`: the `npc_task_text` print names the lowest fired
+					// ordinal of the two sets (the runner holds the gate).
+					Runner.DebugScheduleBreak(TraceBits, InvertedFiring);
 					TraceBits |= InvertedFiring;
 					Runner.RecordScheduleEvent(FString::Printf(
 						TEXT("schedule %s interrupted by %s"),

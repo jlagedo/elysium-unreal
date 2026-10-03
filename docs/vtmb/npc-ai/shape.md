@@ -762,13 +762,19 @@ named seam), and keeps the list on `FElysiumEntityWorld::HintList`. A hint refer
 entity index: `FHintWords::HintIndex`, which the Werewolf's rows and end-entity walks compare where
 retail compares the `CAI_Hint*`. `m_nNodeID` is the node-row counter since 0018 story 4 (2026-09-29;
 `navigation-jump-links.md` § "The place set, landed"): -1 for a standalone hint, else the counter.
+Since 0018 story 8 (2026-09-30) the hint also carries its own claim (`m_hHintOwner`, `m_flNextUseTime`,
+SAVE words; the NPC-side `bOwnsHint` / `HintReusableAt` stand-ins are gone), the class word `+0x474`
+(`ClassMask`, re-derived on restore; whether retail's restore re-runs `Spawn` is RE-BACKLOG 49),
+`NpcKicked` for the kick-hide walk `0x102d0910`, and `hint_rating` replaced by a row of
+`NPC_Cover_Distance_Scalar`. The four searches, the claim primitives, the LOS check and the idle gate
+are `FElysiumNpcBase` members (`ElysiumNpcBaseHints.inl`), named divergences in the section below.
 
 **Caller audit of the live `HintWords`.** Every reader gets its hint index from one of these
-sources, so turning the words on made only the Werewolf's list walks answer:
+sources, so turning the words on first made only the Werewolf's list walks answer, and story 8 (2026-09-30) wired the searches:
 
 | Source of the index | Readers | Answers now? |
 |---|---|---|
-| The searches `0x102d1af0`, `0x102d24b0`, `0x102d2980`, `ClaimHintNode`, `NthHintOfType` — still seams (0018 story 8; `NavAllHintNodes` answers the live list since 0018/4, 2026-09-29, so `GatherHintNodes` now gathers) | `ScheduleHost.HintNode` / `ShootAtHintNode` readers: `IsHintUnusable`, the validators `0x10295ed0` / `0x102961a0` / `0x10296c40`, slot 566, `SelectScheduleForHint`, the cover validators `0x10297430` / `0x102974f0`, `PlayHintIdleActivity`, `TranslateSchedule` case 0x77, `ClosureHintTypeOf`, `SelectCoverOrKickSchedule`, `TeleportIn`, `CacheFloorHeights`, `EyeOffset`, `GatherHintNodes` | No: no index reaches them |
+| The searches `0x102d1af0`, `0x102d24b0`, `0x102d2980` / `0x102d2940`, `0x102d1760`, the claim primitives, `NthHintOfType` — **no longer seams (0018 story 8, 2026-09-30)**: they walk `HintList` with the cursor and count, and `NavAllHintNodes` answers the live list since 0018/4, so `GatherHintNodes` gathers | `ScheduleHost.HintNode` / `ShootAtHintNode` readers: `IsHintUnusable`, the validators `0x10295ed0` / `0x102961a0` / `0x10296c40`, slot 566, `SelectScheduleForHint`, the cover validators `0x10297430` / `0x102974f0`, `PlayHintIdleActivity`, `TranslateSchedule` case 0x77, `ClosureHintTypeOf`, `SelectCoverOrKickSchedule`, `TeleportIn`, `CacheFloorHeights`, `EyeOffset`, `GatherHintNodes` | Yes: the tactical, shoot-at, cower and kick searches reach them; only class mask 1 has candidates on the tutorial or the hub (`story8/census.md`) |
 | `SetMoveHint` / `SetTeleportHint` (`0x103d44e0` / `0x103d45c0`) | the Werewolf endpoint readers | No: their selectors are not wired |
 | `GlobalHintList()` | `InitializeHintData` (`0x103d7710`), `GetForwardHintForHint` (`0x103d7090`) | Yes — retail's own walks, Werewolf only (`sp_observatory_2`) |
 | `FindHintByName` (name lookup + `CAI_Hint` cast) | `FindHintEndEntity` (`0x103d6520`) | Yes — retail's |
@@ -781,8 +787,7 @@ and are not ported.
 
 _Recovered 2026-09-19 by two independent opencode walks and an adjudication pass. `0x102d1af0`,
 `0x102d24b0`, the unusable test, the claim and the release were re-read from the listing here;
-`0x102d2980` and `0x102d1760` stand on the two walks agreeing row for row. The port still carries
-these as seams (the caller audit above); this is the retail contract story 4 stands them against._
+`0x102d2980` and `0x102d1760` stand on the two walks agreeing row for row. The port ran these as seams until 0018 story 8 (2026-09-30) stood them (`FElysiumNpcBase` `ElysiumNpcBaseHints.inl`, over `FElysiumEntityWorld::HintList`); this is the retail contract they were stood against._
 
 **The list.** `DAT_10925450` is the head of a singly linked, NULL-terminated list through
 `hint+0x5d8`; `DAT_10925454` is a rotating search cursor; `DAT_10925458` counts live hints. The
@@ -894,8 +899,9 @@ None is in a datamap; none is saved. Every "`entity+0x9c != 0`" gate in the weap
 ladders is therefore "the hit entity is a combat character", and `+0x98` is "is a Troika NPC".
 
 **Unrecovered:**
-the clamp `Spawn` applies to `m_flHintRating` through the `NPC_Cover_Distance_Scalar` cvar helper
-`0x1006caa0`;
+`m_flHintRating` is REPLACED by `Spawn`, not clamped (0018 story 8, 2026-09-30): the port replaces
+the authored rating with a row of `NPC_Cover_Distance_Scalar` through `0x1006caa0` (8, 3.5, 3, 2.5,
+2, 1.5, 1; the authored 3 reads 2.5, seen live on tutorial row 465);
 `0x102d1fe0`, a fifth cursor writer with its own criteria compare, not walked; the list walkers
 `0x102d0910`, `0x102d31c0` and `0x103cb4b0`; whether any shipped schedule authors flags bit 2.
 
@@ -910,6 +916,115 @@ space `0x20` separates; a tab or comma ends nothing and `atoi` stops at it. Two 
 near-twin `0x10298910` (thunk `0x10014ff6`) fills `m_iInterestingPlaceGroups +0x62dc` — the one
 difference is that a NULL or empty string leaves **0**, no group, where the hint parser writes all
 ones (`1029892a JE` straight to the exit) — from the same two places — `Spawn` (`10299216`) and the key `IPGROUPS` (`0x105d94e0`, `1029ac28`).
+
+### The claim primitives, the hint LOS check and the idle gate (2026-09-30, 0018 story 8)
+
+_Read from the `vampire.dll` listings and decompiles, 2026-09-30 (brief R1; arm lists in
+`docs/specs/0018-world-ai-infrastructure/story8/findings-R1.md`). Closes three items of the
+Unrecovered list above (the `m_flHintRating` scalar, `0x102d1fe0`, the three list walkers) and
+the `0x102b5de0` item of § "`PlayHintIdleActivity`"._
+
+**The owner test `0x102d1450(hint, npc)`.** `m_hHintOwner == -1`, or its serial not matching the
+entity-list slot (`entry+8 != handle >> 13`): answers `npc == NULL`. Otherwise it answers
+`entry+4 == npc` — a pointer compare with no live test of its own, so a serial-matching empty slot
+answers `npc == NULL` too. Callers: `ClearHintNode 0x10295ab0` and `CAI_StandoffBehavior`
+`0x102c7530` pass the NPC; the two network walkers `0x10301720` / `0x10302320` pass `NULL` on a
+node's hint (`node+0xa0`), which makes the body "is this hint unowned".
+
+**`IsHintAvailableToMe` `0x102d1540(hint, npc)`**, in order: (1) resolve the owner by serial alone
+(a mismatch or `-1` resolves to `NULL`) and answer TRUE when it equals `npc` — including `NULL ==
+NULL`, so a null requester on an unowned hint skips the time test; (2) `curtime < m_flNextUseTime`
+(strict, an equal time passes) → FALSE; (3) the owner handle valid, serial matching AND the slot's
+pointer non-null → FALSE; (4) TRUE. `m_iDisabled` is NOT read — that is `0x102d14c0`'s arm, not
+this one's. Sole caller: `CAI_BaseNPCTroika` `0x10293e80`, on a network node's hint.
+
+**The hint LOS check `0x102968f0(hint, target)`** (`__thiscall` on the NPC, `RET 8`). Either
+argument NULL → FALSE. START is the hint's position for this NPC — `0x102d1180`: a standalone
+hint (`m_nNodeID == -1`) gives its `GetAbsOrigin` (slot 217); a node hint gives
+`CAI_Node::GetPosition(node, npc->+0x156c hull)` through `0x102f46d0`, which answers
+`vec3_origin` for an empty network, a null NPC, or an id outside `0..count` — the bound is `id <=
+count` (`0x102f46d0`), one past the `id < count` that `0x102d3e60` uses — raised in Z by the NPC's
+`m_Collision` (`+0x270`) slot 2, `m_vecMaxs`, so its `.z`. END is the target's `EyePosition` (slot
+193, `+0x304`). Mask `0x46804099`, filter `CTraceFilterHintLOS` (vtable `0x1049ae1c`, collision group
+0): `ShouldHitEntity` refuses an entity whose slot 91 `ShouldCollide(0, mask)` refuses, refuses
+every combat character (`entity+0x9c != 0` — so neither the NPC nor the target can block), and
+otherwise asks the game rules (`DAT_1070ba0c` slot 77) whether group 0 collides with the entity's
+`m_CollisionGroup` (`+0x368`); `GetTraceType` answers 0. PASS is `fraction >= 1.0`
+(`trace+0x2c` against `_DAT_104454c0` = 1.0, `TEST AH,5 / JNP` at `10296b57`) AND `!allsolid` (`trace+0x36`) AND
+`!startsolid` (`trace+0x37`). The only other code is debug: `r_visualizetraces` draws the line, and
+the ConVar `debug_hint_los` (object `0x10924cd8`) draws the hit entity's box and a 4-unit marker at
+the hit, only when `ai_debug_npc` (`DAT_10925444`) is unset or names this NPC. **It writes nothing**
+— in particular not `m_iFailedCoverLOSChecks` (`+0x6404`), whose every store in the corpus is a zero
+(`NPCInit`, `ClearHintNode`, `0x102b7110`); no incrementing store was found, so any reader of it
+sees 0. Callers: the cover-hint validator `0x10295ed0` with the target `m_hHintCoverObject`
+(`+0x6448`), last, after its distance and facing tests; `0x10296c40` with its target argument, only
+when `m_bForceCoverLOSCheck` (`+0x6408`, set and cleared by `0x102b7110`) is set; a failure there
+records the debug reason `"Failed hint LOS"`.
+
+**Slot 550 is `CoverRadius`.** `CAI_BaseNPC` `0x101a6c20` answers `_DAT_1045d650` = **1024.0** for
+75 classes; `CNPC_VPedestrian` `0x103a1de0` and `CNPC_VTzimisce` `0x103b6e30` answer
+`_DAT_104563b0` = **4096.0**. Constants, no field, no ConVar. It is the radius
+`0x102b7110` passes to `0x102d2980`.
+
+**The idle gate `0x102b5de0`** (`__fastcall` on the NPC). Two arms on `m_hShootTargetOverride`
+(`+0x5ba8`, `CAI_BaseNPC`):
+
+1. It names a live entity (serial matching AND non-null): trace from the NPC's slot 192
+   (`+0x300`, `WorldSpaceCenter`) to that entity's `GetAbsOrigin`, mask **`0x2000000`** (monsters
+   only), `CTraceFilterSimple(npc, 0)`. Clear (`fraction >= 1.0`, not allsolid, not startsolid) →
+   TRUE. Blocked → FALSE only when the hit entity is the world (`0x1023bd00` answers
+   `DAT_107532e8`, written by `CWorld::Precache`); any other hit, or none, → TRUE.
+2. Otherwise: `HasCondition(0x48)` → FALSE. Then `0x1028e870`: `m_flOccludedReportTimeE`
+   (`+0x62cc`) == 0 answers 0.0, else `m_flOccludedDelay (+0x62c8) + curtime −
+   m_flOccludedReportTimeE`; a value **above** `_DAT_10449258` = **3.0f** → FALSE (`AND EAX,0x4100
+   / JNZ` continues on ≤ and on unordered). No enemy (slot 168) → TRUE. Trace from slot 192 to the
+   enemy's slot 197 `BodyTarget(vec3_origin, 0)`, mask `0x2000000`, the same filter: clear → TRUE;
+   no hit entity → TRUE; else slot 404 `IRelationType(hit)` of 3 (`D_LI`) or 4 (`D_NU`) → FALSE,
+   anything else → TRUE.
+
+In schedule terms it is a friendly-fire gate: "nothing I like or ignore stands between me and my
+target". It writes nothing but debug lines. This corrects the port comment at
+`ElysiumNpcHints.cpp` `HintIdleActivityGate`, which reads arm 2's elapsed-occlusion time as a
+distance and fails it when UNDER 3.0, and describes arm 1 as a plain "not blocked".
+
+**`m_flHintRating`'s scalar.** Each typed arm of `CAI_Hint::Spawn` ends `FLD [+0x464]` / `CALL
+0x10431320` (`__ftol`, truncating) / `0x1006caa0(table, index)` / `FSTP [+0x464]`: the rating is
+REPLACED by a row of the rule table `NPC_Cover_Distance_Scalar`, looked up once by name
+(`0x1006cf30`, case-insensitive, over the registry `0x106c7c34`; id cached in `DAT_10925448` under
+guard bit `DAT_10925440 & 1`) and by id (`0x1006cff0`; a missing id yields the empty default table
+`0x106c7c0c`). `0x1006caa0`: with the table's clamp bit (`+0xc & 1`) an index below 0 reads row 0 and
+one at or past the count (`+0x10`) reads the last row; without it an out-of-range index reads
+`_DAT_1044e674` (value not read here). The retail table (`pack101.vpk`,
+`vdata/system/rules_tables.txt`) is `"Clamping" "1"` with rows 0–6 = **8.0, 3.5, 3.0, 2.5, 2.0,
+1.5, 1.0** ("Last resort" … "Superb"). So an authored `hint_rating` is a 0–6 quality grade, the
+unset default 3 becomes **2.5**, and the search's `sqrt(d²) × m_flHintRating` (flags bit 3) makes a
+better grade a shorter effective distance. Hints of any other type (the `LAB_102d100e` path) keep
+the authored float untouched.
+
+**The class word `+0x474`.** The table above is confirmed against the listing: `100`/`101`
+(`CMP 0x64 / JL`, `CMP 0x65 / JLE`) and `0x27d8` store `EBX` = 1, `0x283c` 4, `0x283d` 8, `0x28a0`
+`0x10`; every other type jumps to `102d100e` and stores nothing, leaving the constructor's 0.
+`CAI_Hint::Spawn` is the only writer in the corpus. The word is not in `CAI_Hint`'s datamap (the
+fields jump from `m_iGroupID +0x470` to `+0x4fc`) and `OnRestore` `0x102d3ec0` does not write it;
+whether the engine's restore path re-runs `Spawn` is not read here. The bytes after it are the
+hint's debug-reason buffer (`+0x478`, cleared by `0x102d0b20`, which also zeroes its expiry
+`+0x4f8`).
+
+**The walkers.** `0x102d1fe0` has no caller, direct, virtual or thunked: dead code, the Source
+`CHintCriteria` search (type `+4`, group string `+8`, include/exclude zone tests `+0x18`/`+0x2c`,
+slot 566, a flags-1 eye trace at mask `0x2400b`, scoring bits 2/8) that shipped unused.
+`0x102d0910` is live: `CAI_BaseNPCTroika::StartTask` tasks `0x10f` and `0x110` fire the hint's
+`m_OnNPCKicked` (`+0x5bc`), then `ScriptHide` (slot 77, which also sets `m_iDisabled`) either the
+hint alone (empty `m_strGroup`) or every listed hint whose `Group` matches case-insensitively
+(`_strcmpi`), itself included. `0x102d31c0` is the hint debug overlay (16 hints per call from its
+own cursor `DAT_1092545c`), reached only through the network overlay `0x102f7e60` ←
+`0x10119980`; `0x103cb4b0` is the Werewolf's `werewolf_draw_hints` overlay from `NPCThink`
+`0x103cb590`. Neither overlay writes game state beyond the debug buffer.
+
+**Unrecovered:** `_DAT_1044e674` (the unclamped out-of-range row, unreachable for this table);
+whether the save/restore path re-runs `CAI_Hint::Spawn` (if not, the mask search `0x102d2980` finds
+nothing after a load); `0x102d0910`'s output activator/caller order (`0x100cd660`'s stack argument);
+the content bits of `0x46804099` in VtMB's own contents layout.
 
 ## `FValidateHintType`'s species half — slot 566's ten decided bodies
 

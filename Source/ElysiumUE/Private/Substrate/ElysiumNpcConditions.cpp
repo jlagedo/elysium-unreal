@@ -971,25 +971,6 @@ namespace
 				static_cast<double>(ElysiumWeapons::MeleeConeHalfAngleDegrees)));
 		return FVector::DotProduct(Forward, To) >= ConeDot;
 	}
-
-	// Does the mode this press would use still have a round to spend, counting the reserve?
-	// `NO_PRIMARY_AMMO` is EMPTY MAGAZINE AND EMPTY RESERVE: a magazine that can be refilled is a
-	// reload, not an ammunition failure, and the two select different schedules.
-	bool NpcCondOutOfAmmo(const FElysiumNpcBase& Npc, const FElysiumWeapon& Weapon,
-		const FElysiumWeaponMode& Mode)
-	{
-		if (Mode.AmmoCost <= 0)
-		{
-			return false;   // a mode that spends nothing can never be out
-		}
-		if (Weapon.MagazineCount >= Mode.AmmoCost)
-		{
-			return false;
-		}
-		const FElysiumItemDef* Record = Weapon.Data();
-		const FString& AmmoType = Record != nullptr ? Record->AmmoType : Mode.AmmoType;
-		return Npc.Inventory.Reserve(AmmoType) < Mode.AmmoCost;
-	}
 }
 
 bool ElysiumNpcCond::WerewolfZoneSuppressesMelee(const FElysiumNpc& Npc, FElysiumNpcConditions& Out)
@@ -1064,8 +1045,6 @@ void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpcBase& Npc, double N
 	// driven by injection in `Elysium.Substrate.NpcCombat.MeleeSelectorOrder`.
 
 	const FElysiumWeapon* Weapon = NpcCondActiveWeapon(Npc);
-	const FElysiumWeaponMode* Mode = Weapon != nullptr
-		? Weapon->ModeFor(FElysiumWeapon::EIntent::Primary) : nullptr;
 
 	// `WAITING_ATTACK_TIME` (0x2f) — the recovery deadline the weapon controller owns. An unarmed
 	// NPC has no deadline to wait on, which is the honest answer rather than a permanent hold.
@@ -1099,48 +1078,41 @@ void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpcBase& Npc, double N
 		return;
 	}
 
-	// --- The ranged bands -------------------------------------------------------------------------
-	if (Weapon != nullptr && Mode != nullptr && NpcCondOutOfAmmo(Npc, *Weapon, *Mode))
+	// --- The ranged band: the active weapon's slot 365 (0018 story 8, findings R3) ----------------
+	// `0x1026dd10`'s weapon arm (`bits_CAP_WEAPON_RANGE_ATTACK1` 0x2000 with an active weapon) hands
+	// `(enemy, dot, d)` to `CBaseCombatWeapon 0x1024f670` (`CALL [EDX+0x5b4]` at `0x1026de87`) and
+	// raises the ONE condition it answers. The item text's `Range` key feeds none of it.
+	if (Weapon == nullptr)
 	{
-		Out.Set(EElysiumNpcCond::NoPrimaryAmmo);
+		return;
 	}
-
-	// The far edge is the mode's own authored `Range`. A mode that authors none cannot answer, so
-	// the NPC is never too far for it — inventing a default range would silently make every
-	// unranged mode a chase trigger.
-	const double RangeCm = Mode != nullptr
-		? static_cast<double>(Mode->Range) * ElysiumMove::U : 0.0;
-	if (RangeCm > 0.0 && DistanceCm > RangeCm)
+	// `d` is the gather's own second argument, `0x10270890` in `GatherEnemyConditions` (`10270ef2`):
+	// 3-D between the two origins with the vertical term replaced by the bounding-box gap. The port's
+	// gather measures it itself (see `FElysiumNpcBase::GatherAttackConditions`), through the same body.
+	const float DistanceUnits = Npc.Conditions19EnemyDistanceUnits(*Enemy);
+	// `dot` (`1026dd6c..1026ddfe`): `enemy.origin - my.origin` (slot 217 both), Z zeroed
+	// (`1026ddbf`), normalised by `0x10137220` (`v *= 1 / (|v| + FLT_EPSILON)`), dotted with slot
+	// 368 `BodyDirection2D` (`+0x5c0`). The two vectors share this runtime's frame, so the axis
+	// reflection cancels. A zero delta dots to 0 and fails the 0.5 facing test, as retail's does.
+	FVector ToEnemyUnits = (Enemy->GetAbsOrigin() - Npc.GetAbsOrigin()) / static_cast<double>(ElysiumMove::U);
+	ToEnemyUnits.Z = 0.0;
+	ToEnemyUnits *= 1.0 / (ToEnemyUnits.Size() + static_cast<double>(ElysiumNpcTunables::FloatEpsilon));
+	const float Dot = static_cast<float>(FVector::DotProduct(Npc.BodyDirection2D(), ToEnemyUnits));
+	const int32 Answer = Weapon->RangeAttack1Conditions(Enemy, Dot, DistanceUnits, Now);
+	if (Answer == static_cast<int32>(EElysiumNpcCond::CanRangeAttack1))
 	{
-		Out.Set(EElysiumNpcCond::TooFarToAttack);
+		// `1026ded9..1026df45`: 0x4f is kept only if slot 562 `WeaponLOSCondition` passes from the
+		// eye to the enemy's eye or to its body target, each with `bSetConditions = 1` — its weapon
+		// slot 364 (`0x1024f330`) raises `WEAPON_SIGHT_OCCLUDED` (0x66), or `WEAPON_BLOCKED_BY_FRIEND`
+		// (0x63) on a friendly hit; both failing raises no 0x4f. CHOSEN, NOT RECOVERED here: the two traces
+		// are stood in for by the eye's debounce latch (`+0x5b98` at its limit), so the pair agrees
+		// with `ENEMY_OCCLUDED` where retail's muzzle traces could disagree. See the
+		// `WEAPON_THROUGH_WALL` seam in this function's declaration.
+		Out.Set(bEnemyOccluded ? EElysiumNpcCond::WeaponSightOccluded : EElysiumNpcCond::CanRangeAttack1);
+		return;
 	}
-	// CHOSEN, NOT RECOVERED: the NEAR edge. `TOO_CLOSE_TO_ATTACK` (0x5f) is a decoded condition with
-	// no decoded threshold — the ranged selector tests it and no recovered body says what makes a
-	// shot too close. The melee reach is taken as that edge, because an enemy already inside this
-	// NPC's own swing distance is the case the condition's consumers (back off, run away) describe.
-	const bool bTooClose = DistanceCm < MeleeReachCm;
-	if (bTooClose)
-	{
-		Out.Set(EElysiumNpcCond::TooCloseToAttack);
-	}
-
-	// The line-of-FIRE occlusion arm, taken from the eye's own debounce latch — the same term
-	// `GatherCommittedEnemy` reports as `ENEMY_OCCLUDED`. CHOSEN, NOT RECOVERED: retail traces from
-	// the weapon, and this runtime has one visibility query and one latch, so the two conditions
-	// agree here where retail's could disagree. What is NOT done is the converse — see the
-	// `WEAPON_THROUGH_WALL` seam in this function's declaration.
-	if (bEnemyOccluded)
-	{
-		Out.Set(EElysiumNpcCond::WeaponSightOccluded);
-	}
-
-	const bool bHasAmmo = Weapon != nullptr && Mode != nullptr
-		&& (Mode->AmmoCost <= 0 || Weapon->MagazineCount >= Mode->AmmoCost);
-	if (bReady && bHasAmmo && !bTooClose && !bEnemyOccluded
-		&& !Out.Has(EElysiumNpcCond::TooFarToAttack))
-	{
-		Out.Set(EElysiumNpcCond::CanRangeAttack1);
-	}
+	// Every other answer, 0 included (`1026df61 PUSH EBP` — retail's `SetCondition(COND_NONE)`).
+	Out.Set(static_cast<EElysiumNpcCond>(Answer));
 }
 
 // --- The incoming-attack notice ---

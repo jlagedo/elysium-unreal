@@ -519,8 +519,7 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 		float MaxRange1 = 0.f;
 		const FElysiumNpc* const Troika = AsNpc();
 		// 1027118f GetActiveWeapon again for the read.
-		// SEAM: `+0x8c0` is only carried as `ActiveWeaponMaxRangeUnits`, which answers false (no
-		// weapon record carries a range); unanswered, the limit stays `m_flDistTooFar`.
+		// `+0x8c0` through `ActiveWeaponMaxRangeUnits` (the weapon's class word, 0018 story 8).
 		if (Troika != nullptr && Troika->ActiveWeaponMaxRangeUnits(MaxRange1))   // 1027116f / 10271174
 		{
 			// `FLD max1 / FCOMP limit / TEST AH,5 / JP`: only an ordered `max1 >= limit` takes max1.

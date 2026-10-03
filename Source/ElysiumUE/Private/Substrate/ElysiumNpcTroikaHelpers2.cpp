@@ -33,8 +33,10 @@ namespace
 	// switch on. Family **Schedule** reads the same `0x27d8` as `GScheduleHintTypeLean`.
 	constexpr int32 TroikaHintTypeLean = 0x27d8;
 
-	// `FindTacticalHintNode`'s hint type and `ApplyHintLeanOffset`'s lean constants.
-	constexpr int32 TroikaTacticalHintType = 8;
+	// `FindTacticalHintNode`'s search-flag byte (`102b7134 PUSH 0x8`, the FLAGS argument of
+	// `0x102d2980`: bit 3, score by distance x `m_flHintRating`) and `ApplyHintLeanOffset`'s lean
+	// constants.
+	constexpr uint8 TroikaTacticalHintSearchFlags = 8;
 	// `_DAT_1049949c` — the yaw offset the lean adds to or subtracts from the hint's own facing,
 	// 45 degrees (`102b6176 FSUB` / `102b61a5 FADD float ptr`).
 	constexpr float TroikaHintLeanYawOffset = ElysiumNpcTunables::FortyFive;
@@ -81,23 +83,15 @@ bool FElysiumNpc::HintStandPosition(int32 HintNode, FVector& InOutPointUnits) co
 
 bool FElysiumNpc::ClaimHintNode(int32 HintNode)
 {
-	// `thunk_FUN_102d1350(hint, this)` — the claim. **SEAM**: false, which is the arm that DROPS
-	// the node again, so a search that "found" something still ends with no hint.
-	(void)HintNode;
-	return false;
+	// `thunk_FUN_102d1350(hint, this)` — the claim: refused only when the live hint's `m_hHintOwner`
+	// (`+0x5e0`) resolves to another live entity, else it writes this NPC's handle there.
+	return ClaimHint(HintNode);
 }
 
 float FElysiumNpc::LeanScaleRecordField() const
 {
 	// Slot 214 (vtable `+0x358`) then the float at `+0x04`. The slot is unidentified in the census.
 	// **SEAM**, `0.0`.
-	return 0.0f;
-}
-
-float FElysiumNpc::IdealHintSearchRangeUnits() const
-{
-	// Slot 550 (vtable `+0x898`) — the ideal range `FindTacticalHintNode` searches at. **SEAM**,
-	// `0.0`.
 	return 0.0f;
 }
 
@@ -167,10 +161,10 @@ bool FElysiumNpc::FindTacticalHintNode(uint32 SearchType)
 {
 	// `0x102b7110`, arm by arm:
 	//     m_bForceCoverLOSCheck = 1;                                           // +0x6408
-	//     m_pHintNode = FindHintOfType(this, 8, searchType, IdealRange(), NULL, NULL);
+	//     m_pHintNode = 0x102d2980(this, flags 8, mask searchType, CoverRadius(), NULL, NULL);
 	//     m_bForceCoverLOSCheck = 0;
 	//     if (m_bStayEntrenched && m_pHintNode == NULL)                        // +0x6435
-	//         m_pHintNode = FindHintOfType(this, 8, searchType, IdealRange(), NULL, NULL);
+	//         m_pHintNode = 0x102d2980(this, flags 8, mask searchType, CoverRadius(), NULL, NULL);
 	//     if (m_pHintNode) {
 	//         m_iPeekOutCount = 0;                                             // +0x640c
 	//         m_iFailedCoverLOSChecks = 0;                                     // +0x6404
@@ -193,14 +187,20 @@ bool FElysiumNpc::FindTacticalHintNode(uint32 SearchType)
 	//
 	// The 29c walk reads the retry gate as "retries once if dialog-flagged"; `+0x6435` is
 	// `m_bStayEntrenched` (29b's name) and that is what this reads.
+	//
+	// Both searches are the CLASS-MASK search: `102b7133 PUSH EDI` (the whole argument dword,
+	// `102b712b MOV EDI,[ESP+0x30]`) is the mask, `102b7134 PUSH 0x8` the flags byte (bit 3, score
+	// by distance x rating), the radius slot 550 `CoverRadius` (`102b7125 CALL [EAX+0x898]`). The
+	// mask is passed WHOLE, not narrowed to a byte: retail pushes the full dword and `0x102d2980`
+	// ANDs it against the hint's full `+0x474` word.
 	ScheduleHost.bForceCoverLosCheck = true;
-	BaseScheduleHost.HintNode = FindHintNear(TroikaTacticalHintType,
-		static_cast<uint8>(SearchType & 0xffu), IdealHintSearchRangeUnits());
+	BaseScheduleHost.HintNode = FindHintByClassMask(TroikaTacticalHintSearchFlags,
+		static_cast<int32>(SearchType), CoverRadius());                    // 0x102b7137
 	ScheduleHost.bForceCoverLosCheck = false;
 	if (bStayEntrenched && BaseScheduleHost.HintNode == INDEX_NONE)
 	{
-		BaseScheduleHost.HintNode = FindHintNear(TroikaTacticalHintType,
-			static_cast<uint8>(SearchType & 0xffu), IdealHintSearchRangeUnits());
+		BaseScheduleHost.HintNode = FindHintByClassMask(TroikaTacticalHintSearchFlags,
+			static_cast<int32>(SearchType), CoverRadius());                // 0x102b716d
 	}
 
 	if (BaseScheduleHost.HintNode != INDEX_NONE)

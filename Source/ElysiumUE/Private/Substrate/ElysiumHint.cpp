@@ -2,10 +2,13 @@
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumSessionSubsystem.h"
 #include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumNodeEntity.h"
 #include "Substrate/ElysiumNpcKernelBindings.h"
 #include "Substrate/ElysiumPlaceSet.h"
+#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumRulebookSubsystem.h"
 
 FName FElysiumHint::ClassName()
 {
@@ -40,6 +43,7 @@ FElysiumNpcBase::FHintWords FElysiumHint::ToWords() const
 	Words.TargetName = InterestTargetName;
 	Words.IpPercent = IpPercent;
 	Words.GroupMask = GroupId;
+	Words.ClassMask = ClassMask;
 	Words.HintType = HintType;
 	Words.HintOwner = HintOwner;
 	Words.NodeId = NodeId;
@@ -53,7 +57,8 @@ FElysiumNpcBase::FHintWords FElysiumHint::ToWords() const
 
 void FElysiumHint::FromWords(const FElysiumNpcBase::FHintWords& Words)
 {
-	// The words a kernel body writes back: the Spawn fill and fold, the claim, the disabled word.
+	// The words a kernel body writes back: the Spawn fill, fold and class word, the claim, the
+	// disabled word.
 	// Identity (name, type, group, node, position) is the entity's and is never taken from a view.
 	TargetAngleRange = Words.TargetAngleRange;
 	TargetAngleRangeDot = Words.TargetAngleRangeDot;
@@ -61,6 +66,7 @@ void FElysiumHint::FromWords(const FElysiumNpcBase::FHintWords& Words)
 	TargetDistMax = Words.TargetDistMax;
 	HintRating = Words.HintRating;
 	GroupId = Words.GroupMask;
+	ClassMask = Words.ClassMask;   // `+0x474`, written by the Spawn fill (`HintSpawn`)
 	HintOwner = Words.HintOwner;
 	Disabled = Words.Disabled;
 	NextUseTime = static_cast<float>(Words.NextUseTime);
@@ -73,6 +79,70 @@ void FElysiumHint::Spawn()
 	FElysiumNpcBase::FHintWords Words = ToWords();
 	FElysiumNpcBase::HintSpawn(Words);
 	FromWords(Words);
+	// The rating scalar closes each TYPED arm; the class word is written on exactly those five arms
+	// and is non-zero on every one of them, so it names the arm taken. Every other type
+	// (`LAB_102d100e`) keeps the authored float. Its place after the group fold is order-free: the
+	// fold and the scalar touch different words.
+	if (ClassMask != 0)
+	{
+		ApplyCoverDistanceScalar();
+	}
+}
+
+void FElysiumHint::ApplyCoverDistanceScalar()
+{
+	// `0x1006cf30` finds the table by name (case-insensitive, id cached in `DAT_10925448`) and
+	// `0x1006caa0` reads the row. The rulebook is the port's rule-table registry.
+	UElysiumSessionSubsystem* GameState = World != nullptr ? World->GetGameState() : nullptr;
+	UElysiumRulebookSubsystem* Rules = GameState != nullptr ? GameState->Rulebook() : nullptr;
+	const FElysiumRuleTable* Table = Rules != nullptr
+		? Rules->Rules().Table(TEXT("NPC_Cover_Distance_Scalar")) : nullptr;
+	if (Table == nullptr)
+	{
+		// No rulebook (a headless test world) or no table: the authored float stays. Retail's missing
+		// id reads the empty default table `0x106c7c0c` instead; the port has no such table to read.
+		return;
+	}
+	// `__ftol` truncates toward zero; an unordered or out-of-range value is the x87 integer
+	// indefinite `0x80000000`, which the table's clamp sends to row 0.
+	const int32 Row = HintRating > -2147483648.0f && HintRating < 2147483648.0f
+		? static_cast<int32>(HintRating) : MIN_int32;
+	// `FElysiumRuleTable::Lookup`'s clamp takes the nearest authored key, which is retail's
+	// (index < 0 -> row 0, index >= count -> the last row) for the shipped rows 0..6. The unclamped
+	// miss reads `_DAT_1044e674` in retail (unrecovered, unreachable for this clamping table); the
+	// port's stand-in default is the authored float.
+	HintRating = Table->Lookup(Row, HintRating);
+}
+
+void FElysiumHint::NpcKicked(FElysiumEntityHandle Npc)
+{
+	// `0x102d0910`. `0x100cd660(&m_OnNPCKicked, hint, npc, 0)`: the output fires with the NPC as its
+	// activator here. **Unrecovered:** `0x100cd660`'s argument order -- the listing passes the hint
+	// before the NPC, which under Source's `FireOutput(activator, caller, delay)` would make the
+	// hint the activator.
+	FireOutput(FName(TEXT("OnNPCKicked")), Npc);
+	// `m_strGroup` NULL reads as `""` (`DAT_106b8540`). Empty: slot 77 on this hint alone.
+	if (Group.IsEmpty())
+	{
+		HintScriptHide();
+		return;
+	}
+	// Otherwise every hint on `DAT_10925450`, head first, whose `Group` `_strcmpi`-matches -- this
+	// one included, where the list puts it.
+	if (World == nullptr)
+	{
+		return;
+	}
+	const FString Match = Group;   // this hint's own group, read before any hide
+	for (const int32 Index : World->HintList())
+	{
+		FElysiumHint* Hint = World->Entities().IsValidIndex(Index)
+			? Cast(World->Entities()[Index].Get()) : nullptr;
+		if (Hint != nullptr && !Hint->IsDead() && Match.Equals(Hint->Group, ESearchCase::IgnoreCase))
+		{
+			Hint->HintScriptHide();
+		}
+	}
 }
 
 void FElysiumHint::HintScriptHide()
@@ -139,6 +209,17 @@ void FElysiumHint::OnPostRestore(FElysiumEntityWorld& InWorld)
 {
 	// `0x102d3ec0`: the base `CBaseEntity::OnRestore` first (slot 130, closed at the save walk 0019/6), then the relink.
 	FElysiumEntity::OnPostRestore(InWorld);
+	// The class word `+0x474` is not in `CAI_Hint`'s datamap, and `0x102d3ec0` does not write it.
+	// **Unrecovered:** whether retail's restore path re-runs `CAI_Hint::Spawn` (if it does not, the
+	// mask search `0x102d2980` finds nothing after a load). The port re-derives it here from the
+	// restored `m_nHintType`, through `HintSpawn`'s own type table on a scratch copy of the words (the
+	// rest of that fill is not re-applied), so a restored mask search still finds its hints.
+	{
+		FElysiumNpcBase::FHintWords Scratch = ToWords();
+		Scratch.ClassMask = 0;
+		FElysiumNpcBase::HintSpawn(Scratch);
+		ClassMask = Scratch.ClassMask;
+	}
 	const FElysiumNpcBase::FHintRestoreResult Restore =
 		FElysiumNpcBase::HintOnRestore(ToWords(), Handle, InWorld.Places());
 	if (Restore.bNodeFound && !Origin.Equals(Restore.NodeOriginCm, 0.0))

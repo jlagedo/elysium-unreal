@@ -4,6 +4,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumRng.h"
+#include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumHint.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -11,6 +12,7 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
+#include "Substrate/ElysiumPlaceSet.h"
 #include "Substrate/ElysiumSchedule.h"
 
 // Story 29c-1, family **Hints** — the hint nodes and the interesting places of `order.md` layers
@@ -52,10 +54,31 @@ namespace
 	// `ACT_IDLE`'s retail id, which is what both interest bodies substitute when the activity name
 	// does not resolve (`iVar3 = 1` after the DevWarning).
 	constexpr int32 GHintsActivityIdleFallback = 1;
+
+	// --- `0x10296c40`'s image constants (0018 story 8) -------------------------------------------
+	// `_DAT_1049ae28`, the height limit — a DOUBLE cell (`FCOMP double ptr`), 64.0.
+	constexpr double GHintsAttackHeightDiffUnits = ElysiumNpcTunables::SixtyFourDouble;
+	// `_DAT_104454c0` (1.0f) over `(x + _DAT_1046a51c)` (FLT_EPSILON): the normalise both the
+	// projection test and `0x10137220` use.
+	constexpr float GHintsOne = ElysiumNpcTunables::One;
+	constexpr float GHintsDistanceEpsilon = ElysiumNpcTunables::FloatEpsilon;
+	// `_DAT_10451ab4` — retail's own message gives it: `"Projection (%.2f) < 0.2"`.
+	constexpr float GHintsProjectionMin = ElysiumNpcTunables::Fifth;
+
+	// --- `0x102b5de0`'s image constants (0018 story 8) -------------------------------------------
+	// Both traces push `0x2000000` — MONSTER alone.
+	constexpr int32 GHintsIdleGateMask = 0x2000000;
+	// `_DAT_10449258` = 3.0f — the same cell the interest cubic reads; here the ceiling on
+	// `0x1028e870`'s time-since-occluded, in seconds.
+	constexpr float GHintsIdleGateOccludedSeconds = ElysiumNpcTunables::InterestCubicThree;
+	// `IRelationType` 3 (`D_LI`) and 4 (`D_NU`), the two dispositions that close the gate.
+	constexpr int32 GHintsRelationLike = 3;
+	constexpr int32 GHintsRelationNeutral = 4;
 }
 
 // -------------------------------------------------------------------------------------------------
-// The hint seam. Every entry answers nothing and names the retail call it stands for.
+// The hint lookups, the attack-position validator `0x10296c40`, the seams of the interest loop and
+// the idle gate `0x102b5de0`. A seam answers nothing and names the retail call it stands for.
 // -------------------------------------------------------------------------------------------------
 
 int32 FElysiumNpc::FindHintByName(const FString& HintName) const
@@ -72,22 +95,211 @@ int32 FElysiumNpc::FindHintByName(const FString& HintName) const
 	return Hint != nullptr ? Hint->Handle.Index : INDEX_NONE;
 }
 
-bool FElysiumNpc::ValidateHintCoverRange(const FHintWords& Hint, const FElysiumEntity* CoverObject,
-	float AngleRangeDot, float BadRangeLimit) const
+bool FElysiumNpc::ValidateHintCoverRange(const FHintWords& Hint, const FElysiumEntity* Enemy,
+	float GoodRange, float BadRange) const
 {
-	// SEAM for `0x10296c40`, the shared range/LOS/cover validator. It is `order.md` layer 11 and
-	// belongs to story 29d; reproducing it here would be a second copy that 29d then has to
-	// reconcile. Its recovered shape, for the record: a null or disabled hint fails; no active
-	// weapon fails; a height difference over `_DAT_1049ae28` fails; the enemy distance must lie in
-	// `[m_flTargetDistMin, min(weapon range, m_flTargetDistMax)]`; a hint that is not already
-	// `m_pHintNode` additionally needs a forward-projection of at least `_DAT_10451ab4`; then the
-	// normalised enemy direction is dotted with the hint's facing and must be `>= AngleRangeDot` and
-	// `< BadRangeLimit`; and with `m_bForceCoverLOSCheck` set, `0x102968f0` must pass.
-	(void)Hint;
-	(void)CoverObject;
-	(void)AngleRangeDot;
-	(void)BadRangeLimit;
-	return false;
+	// `0x10296c40` (1614 bytes, `RET 0x10`), arm for arm off the listing; `schedule-kernel.md`
+	// § "The three hint validators". Every failing arm formats a reason onto the hint (`0x102d0ab0`)
+	// and both pass arms clear it (`0x102d0b20`), all only when `ai_debug_npc` (`DAT_10925444`)
+	// names this NPC — `IsHintDebugNpc()`, so nothing is formatted otherwise. The strings are
+	// retail's, with the operands its listing pushes; `HintDebugNote` logs them. Every position
+	// is the entity's `GetAbsOrigin` (slot 217, `+0x364`): the hint's OWN origin, not `0x102d1180`.
+	// Retail works in Source units and Source axes; the port's world is centimetres with Y negated,
+	// so `Units` converts (only the facing projection can tell the axes apart).
+	auto Units = [](const FVector& Cm)
+	{
+		return FVector(Cm.X, -Cm.Y, Cm.Z) / static_cast<double>(ElysiumMove::U);
+	};
+
+	const TCHAR* const Validator = TEXT("0x10296c40");
+	const bool bDebug = IsHintDebugNpc();
+	if (bDebug)
+	{
+		FElysiumAiDebugHintProbe& Probe = World->AiDebugHintProbe();
+		Probe.Reset();
+		Probe.HintIndex = Hint.HintIndex;
+		Probe.Validator = Validator;
+		Probe.GoodRange = GoodRange;
+		Probe.bBadRange = true;
+		Probe.BadRange = BadRange;
+	}
+
+	// `10296c4f` / `10296c61`: a null hint, or `m_iDisabled` (`+0x5e8`) set, fails.   "Disabled"
+	// (`10297277`: the string pushed as is. Retail hands a NULL hint to `0x102d0ab0` too; the port
+	// logs it against the words' own index.)
+	if (!Hint.bValid || Hint.Disabled != 0)
+	{
+		if (bDebug)
+		{
+			HintDebugNote(Hint, Validator, TEXT("Disabled"));
+		}
+		return false;
+	}
+	// `10296c67`..`10296cb6`: a PASS, not a fail — my own hint (`m_pHintNode +0x5ddc`) while
+	// `m_bStayEntrenched` (`+0x6435`) stands, or a null enemy, accepts before any test.
+	const bool bMine = Hint.HintIndex == BaseScheduleHost.HintNode;
+	if ((bMine && bStayEntrenched) || Enemy == nullptr)
+	{
+		if (bDebug)
+		{
+			HintDebugNote(Hint, Validator, FString());   // `10297237`: `0x102d0b20`, the clear
+		}
+		return true;
+	}
+	// `10296cba`: `GetActiveWeapon()` (`0x10007e19`) null fails.                     "No active weapon"
+	if (ActiveWeaponEntity() == nullptr)
+	{
+		if (bDebug)
+		{
+			HintDebugNote(Hint, Validator, TEXT("No active weapon"));
+		}
+		return false;
+	}
+	const FVector HintUnits = Units(Hint.OriginCm);
+	const FVector MeUnits = Units(Origin);
+	const FVector EnemyUnits = Units(Enemy->Origin);
+	// `10296d25`: `|hint.z - me.z|` against the DOUBLE `_DAT_1049ae28` = 64.0; `AND EAX,0x4100 / JNZ`
+	// continues on `<=` and unordered, so only an ordered `>` fails.            "Height diff (%d) > %d"
+	const float HeightUnits = static_cast<float>(FMath::Abs(HintUnits.Z - MeUnits.Z));
+	if (static_cast<double>(HeightUnits) > GHintsAttackHeightDiffUnits)
+	{
+		// `10296d74`..`10296d9a`: `__ftol(|hint.z - me.z|)` and the pushed literal `0x40`.
+		if (bDebug)
+		{
+			HintDebugNote(Hint, Validator, FString::Printf(TEXT("Height diff (%d) > %d"),
+				static_cast<int32>(HeightUnits), 0x40));
+		}
+		return false;
+	}
+	// `10296dd1`: the 2-D length of `enemy - hint` (`[0x10579660]`, the sqrt), stored as a float.
+	const float DeltaX = static_cast<float>(EnemyUnits.X - HintUnits.X);
+	const float DeltaY = static_cast<float>(EnemyUnits.Y - HintUnits.Y);
+	const float Dist = FMath::Sqrt(DeltaY * DeltaY + DeltaX * DeltaX);
+	if (bDebug)
+	{
+		FElysiumAiDebugHintProbe& Probe = World->AiDebugHintProbe();
+		Probe.bDistance = true;
+		Probe.DistanceUnits = Dist;
+	}
+	// `10296e05`: `TEST AH,5 / JP` continues unless ordered `dist < m_flTargetDistMin` (`+0x45c`).
+	if (Dist < Hint.TargetDistMin)
+	{
+		// `10296e47`..`10296e5d`: `__ftol(dist)`, `__ftol(m_flTargetDistMin)`.
+		if (bDebug)
+		{
+			HintDebugNote(Hint, Validator, FString::Printf(TEXT("Distance (%d) < %d"),
+				static_cast<int32>(Dist), static_cast<int32>(Hint.TargetDistMin)));
+		}
+		return false;                                                          // "Distance (%d) < %d"
+	}
+	// `10296e7d`: unless entrenched, an ordered `dist >` EITHER the weapon's max range (`+0x8c0`,
+	// re-asked of `GetActiveWeapon()`) or `m_flTargetDistMax` (`+0x460`) fails.
+	if (!bStayEntrenched)
+	{
+		// The weapon's `+0x8c0` (0018 story 8): its class word, 1024 for every firearm. The null
+		// weapon already failed above, so the accessor answers here.
+		float WeaponRangeUnits = 0.f;
+		ActiveWeaponMaxRangeUnits(WeaponRangeUnits);
+		if (WeaponRangeUnits < Dist || Hint.TargetDistMax < Dist)
+		{
+			// `10296ef4`..`10296f14`: `__ftol` of `m_flTargetDistMax`, the weapon's range and the
+			// distance, pushed in that order — so the string reads distance, weapon range, max.
+			if (bDebug)
+			{
+				HintDebugNote(Hint, Validator, FString::Printf(TEXT("Distance (%d) > %d or %d"),
+					static_cast<int32>(Dist), static_cast<int32>(WeaponRangeUnits),
+					static_cast<int32>(Hint.TargetDistMax)));
+			}
+			return false;                                                // "Distance (%d) > %d or %d"
+		}
+	}
+	// `10296f34`: a hint that is not mine. Both vectors are normalised by `0x10137220` — a 3-D
+	// `v *= 1 / (|v| + _DAT_1046a51c)`, Z included — and dotted in X and Y only. `TEST AH,5 / JP`
+	// fails only an ordered `dot < _DAT_10451ab4` (0.2).                    "Projection (%.2f) < 0.2"
+	if (!bMine)
+	{
+		auto Normalise = [](const FVector& V)
+		{
+			const float Length = static_cast<float>(
+				FMath::Sqrt(V.Z * V.Z + V.Y * V.Y + V.X * V.X));
+			return V * static_cast<double>(GHintsOne / (GHintsDistanceEpsilon + Length));
+		};
+		const FVector ToMe = Normalise(MeUnits - EnemyUnits);
+		const FVector ToHint = Normalise(HintUnits - EnemyUnits);
+		const float Dot = static_cast<float>(ToHint.Y * ToMe.Y + ToHint.X * ToMe.X);
+		if (bDebug)
+		{
+			FElysiumAiDebugHintProbe& Probe = World->AiDebugHintProbe();
+			Probe.bEnemyProjection = true;
+			Probe.EnemyProjection = Dot;
+		}
+		if (Dot < GHintsProjectionMin)
+		{
+			// `10297044`: the dot as a double; the 0.2 is literal text in the format.
+			if (bDebug)
+			{
+				HintDebugNote(Hint, Validator, FString::Printf(TEXT("Projection (%.2f) < 0.2"),
+					static_cast<double>(Dot)));
+			}
+			return false;
+		}
+	}
+	// `10297072`: the `enemy - hint` delta scaled by `_DAT_104454c0 / (dist + _DAT_1046a51c)`,
+	// dotted with the hint's facing: `0x102d12e0` (a node hint's network yaw, a standalone hint's
+	// `GetAbsAngles().y` — `HintYaw`, restated over these words) through `0x101d2f40`'s
+	// `(cos, sin)`, a Source-frame yaw against Source-axis deltas.
+	const float Scale = GHintsOne / (Dist + GHintsDistanceEpsilon);
+	const float YawDegrees = Hint.NodeId != INDEX_NONE
+		? (World != nullptr ? World->Places().NetworkNodeYawSource(Hint.NodeId) : 0.0f)
+		: static_cast<float>(Hint.Angles.Y);
+	const float YawRadians = FMath::DegreesToRadians(YawDegrees);
+	const float FaceX = FMath::Cos(YawRadians);
+	const float FaceY = FMath::Sin(YawRadians);
+	const float Projection = FaceY * (DeltaY * Scale) + (DeltaX * Scale) * FaceX;
+	if (bDebug)
+	{
+		FElysiumAiDebugHintProbe& Probe = World->AiDebugHintProbe();
+		Probe.bFacing = true;
+		Probe.FacingProjection = Projection;
+	}
+	// The two bounds are NOT symmetric. `TEST AH,0x41 / JP` fails an ordered `<= GoodRange`;
+	// `AND EAX,0x100 / JNZ` fails an ordered `>= BadRange`. Unordered passes both.
+	if (Projection <= GoodRange)
+	{
+		// `10297104`..`10297115`: the projection first, the good range second, as doubles.
+		if (bDebug)
+		{
+			HintDebugNote(Hint, Validator,
+				FString::Printf(TEXT("Enemy outside of good range (%.2f) <= %.2f"),
+					static_cast<double>(Projection), static_cast<double>(GoodRange)));
+		}
+		return false;                              // "Enemy outside of good range (%.2f) <= %.2f"
+	}
+	if (BadRange <= Projection)
+	{
+		// `10297179`..`1029718a`: the projection first, the bad range second.
+		if (bDebug)
+		{
+			HintDebugNote(Hint, Validator,
+				FString::Printf(TEXT("Enemy inside of bad range (%.2f) >= %.2f"),
+					static_cast<double>(Projection), static_cast<double>(BadRange)));
+		}
+		return false;                              // "Enemy inside of bad range (%.2f) >= %.2f"
+	}
+	// `102971aa`: only under `m_bForceCoverLOSCheck` (`+0x6408`), `0x102968f0(hint, enemy)`.
+	if (ScheduleHost.bForceCoverLosCheck && !HintLosCheck(Hint.HintIndex, Enemy))
+	{
+		if (bDebug)
+		{
+			HintDebugNote(Hint, Validator, TEXT("Failed hint LOS"));   // `102971f5`, no format
+		}
+		return false;                                                          // "Failed hint LOS"
+	}
+	if (bDebug)
+	{
+		HintDebugNote(Hint, Validator, FString());   // `1029720c` -> `10297237`: `0x102d0b20`, the clear
+	}
+	return true;
 }
 
 FElysiumNpc* FElysiumNpc::InterestingPlaceMarkerOccupant(const FElysiumInterestingPlace* Place) const
@@ -112,16 +324,129 @@ void FElysiumNpc::MoveToBoneOriginAngles(const TCHAR* BoneName, bool bMoveOrigin
 
 bool FElysiumNpc::HintIdleActivityGate() const
 {
-	// SEAM for `0x102b5de0`, the gate `0x102aaa60` puts in front of each of its three hint types.
-	// Recovered shape: with a live `m_hShootAtTarget` (`+0x5ba8`), trace from the eye to its origin
-	// and answer "not blocked"; with none, `HasCondition(0x48 ENEMY_OCCLUDED)` fails it, a distance
-	// under `_DAT_10449258` fails it, and otherwise trace to the enemy's shoot position and accept
-	// unless the hit entity's relationship is 3 or 4.
+	// `0x102b5de0` (`__fastcall` on the NPC), the gate `0x102aaa60` puts in front of each of its
+	// three hint types — a friendly-fire gate: "nothing I like or ignore stands between me and my
+	// target". `docs/vtmb/npc-ai/shape.md` § "The claim primitives, the hint LOS check and the idle
+	// gate", checked against the listing. It writes nothing (the `0x10015df2` lines are debug).
 	//
-	// Answers TRUE — retail's "the gate passed" answer, which is the arm that restarts the hint
-	// activity. The alternative would make every hint-idle body silently do nothing, which is not
-	// the recovered behaviour of a body whose whole point is the activity.
-	return true;
+	// Both traces: `UTIL_TraceLine(WorldSpaceCenter() (slot 192, +0x300), end, 0x2000000,
+	// CTraceFilterSimple(this, 0))`. What one MEANS here, and what it can meet:
+	//   * the MONSTER-only mask reaches the seam's character list; the filter keeps a character by
+	//     `KernelTraceKeepsCharacter` (`CTraceFilterSimple::ShouldHitEntity 0x101d31c0`), and the
+	//     nearest kept one ahead of the world answer is `tr.m_pEnt`;
+	//   * the world half: retail meets NO brush under this mask (it carries no brush bit), so the
+	//     world entity is never `tr.m_pEnt` there. `ElysiumRetailMask::Recipe(0x2000000)` falls back
+	//     to `ECC_Pawn`, which DOES answer NPC-solid brushes, and it meets entity props (MONSTER),
+	//     whose hit answers the static world's Invalid handle. So in this port an Invalid-handle
+	//     block — a brush or an entity prop — reads as the world, which retail cannot produce.
+	//     Arm 1 is ported as written over it (a world block fails); arm 2 reads it as "no hit
+	//     entity" (the port stands no world entity to ask `IRelationType` of), which answers TRUE,
+	//     the answer retail's clear trace gives.
+	struct FGateTrace
+	{
+		bool bClear = true;
+		bool bWorld = false;                       // blocked, and `tr.m_pEnt` is the world
+		const FElysiumEntity* HitEntity = nullptr; // `tr.m_pEnt` when it is an entity the port names
+	};
+	auto GateTrace = [this](const FVector& EndCm)
+	{
+		FGateTrace Out;
+		IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+		if (Embodiment == nullptr)
+		{
+			return Out;   // headless: every kernel trace reads a missing collision world as clear
+		}
+		FElysiumRetailTrace Trace;
+		Trace.StartCm = const_cast<FElysiumNpc*>(this)->WorldSpaceCenter();   // slot 192
+		Trace.EndCm = EndCm;
+		Trace.RetailMask = GHintsIdleGateMask;
+		Trace.Ignore.Add(Handle);                                             // the pass entity
+		FElysiumRetailTraceResult Result;
+		if (!Embodiment->TraceRetail(Trace, Result))
+		{
+			return Out;
+		}
+		const FElysiumRetailTraceCharacter* Kept = nullptr;
+		for (const FElysiumRetailTraceCharacter& Character : Result.Characters)
+		{
+			if (KernelTraceKeepsCharacter(Character.Entity, GHintsIdleGateMask))
+			{
+				Kept = &Character;
+				break;
+			}
+		}
+		// `FLD [tr+0x2c] / FCOMP 1.0 / TEST AH,5 / JNP`: blocked on an ORDERED `fraction < 1.0`,
+		// else blocked on allsolid (`+0x36`) or startsolid (`+0x37`).
+		const bool bWorldBlocked =
+			Result.Fraction < 1.f || Result.bAllSolid || Result.bStartSolid;
+		const bool bCharacterFirst = Kept != nullptr
+			&& (Kept->bStartSolid || !bWorldBlocked || Kept->Fraction < Result.Fraction);
+		if (bCharacterFirst)
+		{
+			Out.bClear = false;
+			Out.HitEntity = World->Resolve(Kept->Entity);
+			return Out;
+		}
+		if (!bWorldBlocked)
+		{
+			return Out;
+		}
+		Out.bClear = false;
+		Out.HitEntity = Result.HitEntity.IsSet() ? World->Resolve(Result.HitEntity) : nullptr;
+		Out.bWorld = !Result.HitEntity.IsSet();   // `0x1000aa0b` GetWorldEntity; Invalid = the static world
+		return Out;
+	};
+
+	// Arm 1, `102b5dea`: `m_hShootTargetOverride` (`+0x5ba8`) names a live entity (serial matching
+	// AND a non-null slot) — trace to its `GetAbsOrigin` (slot 217).
+	const FElysiumEntity* Override = World != nullptr && ShootTargetOverride.IsSet()
+		? World->Resolve(ShootTargetOverride) : nullptr;
+	if (Override != nullptr)
+	{
+		const FGateTrace Trace = GateTrace(Override->Origin);
+		if (Trace.bClear)
+		{
+			return true;
+		}
+		// `102b5f1b`: `tr.m_pEnt == GetWorldEntity()` (`0x1000aa0b`) → false; anything else — an
+		// entity, or no entity at all — → true.
+		return !Trace.bWorld;
+	}
+
+	// Arm 2, `102b5f2b`: `HasCondition(0x48 ENEMY_OCCLUDED)` → false.
+	if (Cognition.Conditions.Has(EElysiumNpcCond::EnemyOccluded))
+	{
+		return false;
+	}
+	// `102b5f45`: `0x1028e870` — 0.0 while `m_flOccludedReportTimeE` (`+0x62cc`) is 0, else
+	// `m_flOccludedDelay (+0x62c8) + curtime - m_flOccludedReportTimeE`: the time since the enemy
+	// was occluded (the stamp is `delay + then`). `AND EAX,0x4100 / JNZ` continues on `<= 3.0` and
+	// on unordered, so only an ordered `> 3.0` fails.
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	const float SinceOccluded = OccludedReportTimeE == 0.0
+		? 0.0f
+		: static_cast<float>(static_cast<double>(OccludedDelay) + Now - OccludedReportTimeE);
+	if (SinceOccluded > GHintsIdleGateOccludedSeconds)
+	{
+		return false;
+	}
+	// `102b5f68`: slot 168 `GetEnemy()` (`+0x2a0`, the Troika line's mutable overload) null → true.
+	FElysiumEntity* const Enemy = const_cast<FElysiumNpc*>(this)->GetEnemy();
+	if (Enemy == nullptr)
+	{
+		return true;
+	}
+	// `102b5f88`: the enemy's slot 197 `BodyTarget(vec3_origin, false, false)` (`+0x314`). For a
+	// non-NPC enemy (the player) that slot is `CBaseEntity::BodyTarget 0x1009f2c0`, still a
+	// generated stub answering the zero vector — a missing body, not a rule of this gate.
+	const FGateTrace Trace = GateTrace(Enemy->BodyTarget(FVector::ZeroVector, false, false));
+	if (Trace.bClear || Trace.HitEntity == nullptr)
+	{
+		return true;                                        // clear, or `tr.m_pEnt` null (`102b603f`)
+	}
+	// `102b6046`: slot 404 `IRelationType(tr.m_pEnt)` (`+0x650`) of 3 or 4 → false.
+	const int32 Relation = IRelationTypeOf(Trace.HitEntity);
+	return Relation != GHintsRelationLike && Relation != GHintsRelationNeutral;
 }
 
 bool FElysiumNpc::PatrolNodeInterestRecordName(int32 Record, FString& OutName) const

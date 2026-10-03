@@ -61,8 +61,8 @@ bool FElysiumGreenRoomRun::BuildArena(FString& OutError)
 		return false;
 	}
 	UE_LOG(LogElysiumGreenRoom, Log,
-		TEXT("arena: room standing — %d solid(s), %d anchor(s), %d pad(s)%s"),
-		Arena.Solids.Num(), ArenaStanding.Anchors.Num(), Arena.Pads.Num(),
+		TEXT("arena: room standing — %d solid(s), %d anchor(s), %d cover node(s), %d pad(s)%s"),
+		Arena.Solids.Num(), ArenaStanding.Anchors.Num(), ArenaStanding.Nodes.Num(), Arena.Pads.Num(),
 		bGymMeshes ? TEXT("") : TEXT(" (hidden)"));
 	return true;
 }
@@ -79,12 +79,18 @@ void FElysiumGreenRoomRun::DestroyArena()
 	// the level and keeps thinking, which reads as an AI bug rather than as a torn-down arena.
 	if (EntityWorld != nullptr && ArenaStanding.IsValid())
 	{
-		const int32 Cleared = ElysiumArenaCast::ClearSpawned(*EntityWorld);
+		// The cover scenario's gunman carries an explicit name, which `ClearSpawned` deliberately
+		// does not match; the room names it (`ElysiumArena::CoverGunmanName`), so the room clears it.
+		const int32 Cleared = ElysiumArenaCast::ClearSpawned(*EntityWorld)
+			+ ElysiumArenaCast::ClearNamed(*EntityWorld, ElysiumArena::CoverGunmanName);
 		if (Cleared > 0)
 		{
 			UE_LOG(LogElysiumGreenRoom, Log,
 				TEXT("arena: cleared %d spawned character(s) with the room"), Cleared);
 		}
+		// The cover nodes by name — a console re-stand (`gr_scenario`) replaces the ones
+		// `ArenaStanding` holds — and the AI network back to the stage world's zero nodes.
+		ElysiumArena::ClearCoverNetwork(*EntityWorld, Arena);
 	}
 	ElysiumArena::Teardown(EntityWorld, ArenaStanding);
 #endif

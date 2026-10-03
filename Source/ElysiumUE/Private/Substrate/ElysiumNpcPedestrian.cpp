@@ -254,6 +254,14 @@ void FElysiumNpcPedestrian::BuildScheduleTestBits(FElysiumNpcConditions& InOutMa
 }
 
 // Slot 404: `0x103a2930`.
+// Slot 550: `0x103a1de0`, `FLD float ptr [0x104563b0]; RET` -- 4096.0 (the pooled cell the tunables
+// table names `FourThousandNinetySix`), where `CAI_BaseNPC 0x101a6c20` loads 1024.0. The radius
+// `FindTacticalHintNode` (`0x102b7110`) and the cover tasks search at.
+float FElysiumNpcPedestrian::CoverRadius()
+{
+	return ElysiumNpcTunables::FourThousandNinetySix;
+}
+
 /** `CNPC_VPedestrian::IRelationType` (`0x103a2930`), 58 bytes — a null candidate answers `D_ER`,
  *  a candidate whose NPC carries `D_INSANE` (`m_bfAINPCFlags2 & 0x20000`) answers `D_FR` WITHOUT
  *  consulting the relationship table at all, and everything else defers. Pedestrians fear the
