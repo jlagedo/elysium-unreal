@@ -407,7 +407,7 @@ numbers above.
 | three prefixes, one boot | ≤25 s | 12.0 s | not possible |
 | default `pytest` | ≤20 s wall | **19.7–26.0 s**; 0 failed | 384 s, 2 failing |
 | one `.cpp` edit rebuilt | ≤60 s | 9.3 s | — |
-| edit-mix p90 | ≤90 s | **164.5 s** (kernel header edits 154–183 s) | 198.5 s |
+| edit-mix p90 | ≤90 s | **108.0 s** after the pagefile fix (kernel header edits 94–121 s; 164.5 s before it) | 198.5 s |
 | arena suite | runs, ≤30 s | 25.6–27.1 s | — |
 | queries over 60 s | zero | zero (two calls over 60 s were an approval wait and an edit script) | 185+ |
 | polling loops | zero | **7 short sleep-waits, 99 s in all** (two agents waiting on a process or a log) | 696 loops, 18.9 h |
@@ -419,10 +419,26 @@ built-in tools 1,351 times against 88 shell calls; a tool was blocking for 33% o
 
 The misses, each explained: the combined `kernel --check` runs one ledger build and one shape
 build with no duplication, and only from an empty cache; `pytest`'s remainder is xdist's worker
-start on Windows (8, 12 and 16 workers measured alike); a kernel-header edit runs 3–6 compiles at
+start on Windows (8, 12 and 16 workers measured alike); a kernel-header edit ran 3–6 compiles at
 once instead of 10–11 because each commits ~2.6 GB against the editor's precompiled header and the
-machine's commit limit is 53 GB (RAM 32 GB + a 21 GB pagefile) — a machine setting, the owner's.
-T6 stays unticked until that row is re-measured. The sleep-waits: later briefs state that a
+machine's commit limit was 53 GB (RAM 32 GB + a 21 GB pagefile).
+
+**The machine fix (the owner, 2026-10-03):** a fixed 64 GB pagefile on `D:` (commit limit 99.9 GB).
+BitLocker sets `PagefileOnOsVolume = 1` (`HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory
+Management`), which makes Windows open only the system drive's pagefile at boot; with it at 0 the
+`D:` file is used. Re-measured with 14–15 parallel compiles (touch one file; s wall):
+
+| edit | before wave 3 | after wave 3 | after the pagefile |
+|---|---|---|---|
+| `ElysiumNpcConditions.cpp` | 9.4 | 9.3 | 9.2 |
+| `ElysiumNpcBase.h` | 193.6 | 156.8 | 102.4 |
+| `ElysiumNpc.h` | 187.8 | 154.2 | 93.8 |
+| `ElysiumEntityWorld.h` | 209.8 | 182.6 | 121.2 |
+| `ElysiumTestServices.h` | 93.4 | 72.1 | 37.9 |
+| p90 of the eight-edit mix | 198.5 | 164.5 | 108.0 |
+
+What is left of a kernel-header edit is its include fan-out (code, not the machine): T6 stays
+unticked at 108 s against 90 s, and the fan-out cut is an on-demand story. The sleep-waits: later briefs state that a
 background command is waited on by its completion notification, never by a sleep.
 
 ## Step 2 — the landed work, proven live
