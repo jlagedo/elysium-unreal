@@ -81,7 +81,7 @@ the tutorial's `thug_1`, every hub pedestrian and any input fired at such an NPC
 | N11 | the stealth-kill target test admits only an IDLE or ALERT victim (found by wave H's coder C, reading the query for the `stealthkill` tap) | none yet: `verbs_stealth_kill`'s mark is IDLE, where both arms agree. A record needs a victim in another live state with neither `HEAR_PLAYER` nor `SEE_PLAYER` (`NPC_STATE_SCRIPT` under a `scripted_sequence`, which N7 blocks until V3) | `IsValidStealthKillTarget 0x102c2300` term 4: `GetNPCState` IDLE/ALERT only when `debug_allow_non_idle_auto_sk` (`0x10924af8`, read at `DAT_10924afc`) is 0; the image's initialiser gives it `"1"`, so the shipping arm is "any state but DEAD (7)" (`docs/vtmb/stealth.md:405`, corrected 2026-09-29, `kernel_tunables.tsv` `DebugAllowNonIdleAutoSk`) | `ElysiumNpc.cpp:2360` tests `Idle`/`Alert`; its comment (`:2345`) calls the relaxed arm "a developer arm, not ported" — the corrected doc says it is the shipping one | **(a) V7 rider**, XS: the state term reads "not DEAD", the ConVar's `1` default named at the line; the record lands with V3's scripted possession (N7). Landed work (the stealth-kill verb): the fix is proposed to the owner with V7 |
 
 | N12 | `TASK_WALK_RUN_PATH` chooses walk or run off the port's own distance, not `nav+0x14` (found by V3a's coder A2; filed by V3a's integrator, 2026-10-04) | none: no record reaches the task. One retail program runs it, `cnpc_vwerewolf/sched_vwerewolf_run_to_teleport.sch` (after `TASK_GET_PATH_TO_RANDOM_NODE`); `rollcall_vwerewolf` asserts only a first schedule | `0x102a4b4e` arm: `0x102a4b5c..0x102a4b62 FLD [nav+0x14]`, read unconditionally; `d*d <= nav+0x14` runs, else the uninitialised local. The word's writers: the arrival test `0x102f2ea0` (store at `0x102f2f21`) and the goal-less install `0x102ed430` | `ElysiumNpcStartTask.cpp` `TaskWalkRunPath` (~:1825) reads `bMoveIssued ? \|MoveGoal - Origin\|² : 0`; `Navigator.EndpointDistanceSqrUnits` is written only by `InstallPathNoGoal` (`ElysiumNpcBaseStartTask.cpp:2549`), the arrival test's store is a seam (`ElysiumNpcRunTask.cpp:263`, `ElysiumNpcStartTask.inl:95`). A2 switched the reader to the word; V3a reverted it (a behaviour change on an unported writer, outside V3a's scope) and named both addresses at the line | **(a) R2**, where the arrival tolerance `0x102f2ea0` already sits: the store and the reader land together. **Not a planning bug**: no step-2 record's verdict depends on the walk-or-run choice of this task |
-| N13 | a patrol walks at ~0.44× retail's ground speed, with the walk clip playing (review doubt 1, settled by V3a: **not red 1**) | `patrol_sentry2_pingpong`, `patrol_monk_loop`, `input_clearpatrolpath` | `StudioFrameAdvance 0x1008f120` recomputes `m_flGroundSpeed +0x654` every tick (`0x1008f2fa` / `0x1008f306`) from `GetSequenceGroundSpeed 0x10091490`, weighted by the live `move_yaw` (`animation_and_movers.md` § the move_yaw fan); `move_yaw` is the angle between the facing queue's heading and the body's yaw, written by `0x102e19e0` (`shape.md:3003-3010`); `GetIdealSpeed 0x10091740` reads `+0x654` plainly (no playback rate); `MoveGroundStep 0x102e1760`. Retail `walk_0` 136.7 cm/s | V3a measured: the clip now plays (`walk rate=1`) and every leg time is unchanged to 0.1 s (`input_clearpatrolpath` 0.700 goal → 10.500 arrived, ~540 cm in 9.8 s on the flat arena floor, ≈ 0.55 m/s, before and after). The per-frame speed is `CommandedTravelSpeed()` (`ElysiumNpcBody.cpp:329-364`, written into `MaxWalkSpeed` each `AnimTick`, `:481`) = the walk fan read at the body's measured `move_yaw` (`ElysiumAnimationDriver.cpp:597-617`, `663-666`). 60.7 / 136.7 = 0.44 is the `walk_90` cell's ratio: the lead (not verified live) is a body walking ~90° off its path, its yaw turned to a facing target (`MotorHandFacingTarget`, `ElysiumNpcBaseFacing.cpp:170-187` → `ApplyFacingTarget`, `ElysiumNpcBody.cpp:1085-1087`) instead of retail's facing queue. Next step: a live read of `move_yaw` / ground speed on sentry2 (`ElysiumMcpTools.cpp:1281`) | **(a) V4**, facing (`GetIdealYawSpeed`, `FacingIdeal 0x10278c80`) and `StudioFrameAdvance`'s ground speed, both already V4's. **A plan correction, stated**: V3's plan (`stories/v3/README.md` §4) expected V3a to turn the three patrols green; they move to V4's acceptance list. Not a later-phase bug: V4 is the next story of step 2. Also seen, pre-existing and unchanged: `patrol_monk_loop` 33.033 `move fail 12` on the leg to pod_1, then a re-issued goal |
+| N13 | a patrol walks at ~0.44× retail's ground speed, with the walk clip playing (review doubt 1, settled by V3a: **not red 1**) | `patrol_sentry2_pingpong`, `patrol_monk_loop`, `input_clearpatrolpath` | `StudioFrameAdvance 0x1008f120` recomputes `m_flGroundSpeed +0x654` every tick (`0x1008f2fa` / `0x1008f306`) from `GetSequenceGroundSpeed 0x10091490`, weighted by the live `move_yaw` (`animation_and_movers.md` § the move_yaw fan); `move_yaw` is the angle between the facing queue's heading and the body's yaw, written by `0x102e19e0` (`shape.md:3003-3010`); `GetIdealSpeed 0x10091740` reads `+0x654` plainly (no playback rate); `MoveGroundStep 0x102e1760`. Retail `walk_0` 136.7 cm/s | V3a measured: the clip now plays (`walk rate=1`) and every leg time is unchanged to 0.1 s (`input_clearpatrolpath` 0.700 goal → 10.500 arrived, ~540 cm in 9.8 s on the flat arena floor, ≈ 0.55 m/s, before and after). The per-frame speed is `CommandedTravelSpeed()` (`ElysiumNpcBody.cpp:329-364`, written into `MaxWalkSpeed` each `AnimTick`, `:481`) = the walk fan read at the body's measured `move_yaw` (`ElysiumAnimationDriver.cpp:597-617`, `663-666`). 60.7 / 136.7 = 0.44 is the `walk_90` cell's ratio: the lead (not verified live) is a body walking ~90° off its path, its yaw turned to a facing target (`MotorHandFacingTarget`, `ElysiumNpcBaseFacing.cpp:170-187` → `ApplyFacingTarget`, `ElysiumNpcBody.cpp:1085-1087`) instead of retail's facing queue. Next step: a live read of `move_yaw` / ground speed on sentry2 (`ElysiumMcpTools.cpp:1281`) | **(a) V4**, facing (`GetIdealYawSpeed`, `FacingIdeal 0x10278c80`) and `StudioFrameAdvance`'s ground speed, both already V4's. **A plan correction, stated**: V3's plan (`stories/v3/README.md` §4) expected V3a to turn the three patrols green; they move to V4's acceptance list. Not a later-phase bug: V4 is the next story of step 2. Also seen, pre-existing and unchanged: `patrol_monk_loop` 33.033 `move fail 12` on the leg to pod_1, then a re-issued goal. **Measured 2026-10-04 (V4r reader R1, `stories/v4/packets-R1.md` § 4, lab on `input_clearpatrolpath`; the map record is refused by the lab): the lead is refuted** — mid-leg `move_yaw_vel` 0, the body faces its path, `speed2d` 101.278 cm/s, which is exactly the **female** bank's `walk_0` (sentry2's model; 136.7 is the male cell, so "0.44×" compared two bodies). The lost time is the arrival: the body reaches the node's last ~30 cm at 5.8 s and creeps exponentially for ~4.1 s (10.5 cm at 6.5 s, 1.4 cm at 9.8 s; `arrived` 10.428) — the crowd follower's slowdown at goal against a 1 cm acceptance radius (`Visual/ElysiumNpcBody.cpp` `ResolveFollowerRequest`, `ApplyCrowdState`; mechanism read in code, not toggled). Not baked data. The `known_red` texts' 136.7 is a record error for a female body |
 | N14 | a restored visitor always loses its place: the interesting place's marker table has no writer (found by V3b's coder B1; filed by V3b's integrator, 2026-10-04) | none: `save_restore_mid_path` is parked (H8) and stages no visit | `CAI_BaseNPCTroika::OnRestore` scans `0x102db5e0` (the LAST place whose marker table `+0x580` / `+0x588`, stride `0x1c`, names this NPC) into `+0x62ec`, then `0x10299a80` re-checks it (two `DevMsg` refusals); the occupant is written by `ClaimMarker 0x102da7c0` (from `0x102a9f40`). The release `0x102b53d0` runs the same `0x10299a80` first | `FElysiumInterestingPlace::FMarker::Occupant` has no writer (`ElysiumInterestingPlace.cpp:64` only zeroes it), so `FindInterestingPlaceHoldingMe` (`ElysiumNpcLifecycle2.cpp:203`) answers none and `ValidateRestoredInterestingPlace` (`:233`) rejects every restored place; `FinishAmbientUse` (`ElysiumNpc.cpp` ~:1924) ports only the first refusal of `0x10299a80`, its marker half named **Unrecovered** at the line | **(a) V6** (save / restore, resume at `+0x5c50`): `ClaimMarker`'s occupant write and the marker half of `0x10299a80` land with the restore they serve; V6 needs a visit-mid-save record. Not a planning bug: no step-2 record before V6 saves a visitor |
 | N15 | `ClaimAmbientSpot`'s eligibility carries port terms retail does not have (the place type and the visitor class) (found by V3b's coder B1; filed by V3b's integrator, 2026-10-04) | `places_thug_pt1`, `map_tutorial_sneak_past` (first half): `thug_1` is `npc_VVampire`; `pt1`'s type `Idle` lists only `npc_VBrujah`, `npc_VGangrel`, `npc_VPedestrian`; 0.533 `task_find_interesting_place`, `taskfail No interesting places were available to go to. (0x22)` | `0x102dad60` (read 2026-10-04): NPC non-null, `+0x57c` enabled, `+0x57d` clear, free capacity `+0x584 - +0x58c - +0x588 > 0`, `+0x574 & npc+0x62dc`, distance² ≤ `[0x1049d28c]`; **no term reads the place's type or the visitor's class**. The type parser `0x102dd0f0` stores `AcceptedClasses` at type `+0x1a0` / `+0x1a4`; its one lookup `0x102dd630` has no caller in the corpus (`vtmb_callers`, `vtmb_grep`), so retail never gates a visit on it | `ElysiumNpc.cpp` `ClaimAmbientSpot` (~:1088): `TypeRow == null`, `TypeRow->Activities.IsEmpty()`, `!TypeRow->Accepts(Classname, StatTemplate)` refuse a place retail admits (a type with no INTO/idle activity is retail's `"Can not find interest"` arm in `0x102a9f40`, not a refusal) | **(b) planning bug, stated to the owner**: it blocks V3b's own acceptance, so it cannot wait for R2. Proposed: a **V3b follow-up wave** (XS, one coder + the integrator, one build) — delete the `Accepts` term and the two type terms (a live place always has a type: `Spawn` removes one without), check that `IsAvailable` reads `+0x57d`; with it H16 and Q-V3b1. Landed work (the place selector, 0018/10), so the fix is proposed before it runs |
 | N16 | a pedestrian route never carries a crosswalk curb, so no pedestrian ever waits at a red crossing (Q-V3b1, settled 2026-10-04; § "V3b") | `hub_crosswalk_wait` (`known_red` N16 / V13) | the pedestrian chain `0x102fcd00` puts both curbs of a crossed pair on the route (`4 \| 0x20`, start node included); at the first curb `0x102f0400` → `0x102a0bc0` → `0x102a0b90` latches `AT_CROSSWALK`; `0x102a0d20` raises `CROSSWALK_DONTWALK`, which breaks `0x100`, and `SelectSchedule 0x102af660` answers `0x102` (`0x102af763..76c`) | the downstream chain is ported (`ElysiumNpcSelect.cpp:599-602`, `ElysiumNpcDialogueBodies.cpp:337-459`, `ElysiumNpcBaseAdvancePath.cpp:58-62`), but `NavLayPedestrianLegs` (`ElysiumNpcCrosswalk.cpp:101-194`, the named modernization of `0x102fcd00`) laid no curb on any of the hub's first routes, at least five of which cross the road between the pairs: every `MoveTo` goes straight to the place, no `waypoint passed`. Which test drops the pair (the 48-unit capture against the NavMesh `PointsCm`, the consecutive-pair rule, the start-node arm, the pedestrian filter's pricing of the crossing) is **undetermined**: it needs the route points logged against the six curb positions | **(a) V13 (new, proposed, awaiting the owner): "The pedestrian nav area in the hub's bake"** (re-placed by the V3b follow-up's integrator, 2026-10-04). The V3b follow-up's read settled the cause as **baked data, not the splice**: on `sm_hub_1`'s baked Recast meshes no roadway polygon carries `UElysiumNavArea_Pedestrian` (`NavAreaAt` answers `NavArea_Default` inside all 9 priced slabs), so the pedestrian filter's ×5–10 price applies to nothing, routes cut the road diagonally and the splice's 48-unit capture rightly finds no curb (§ "V3b follow-up"). A fault in landed work (0018/3's NavMesh bake, 0018/7's crosswalk) that needs pipeline work and a re-bake, outside V3. Not a planning bug: V13 is a step-2 story placed before the second V2 run. Caveat for the record: only first walks can cross (`TASK_WAIT_PVS` holds every pedestrian outside the player's PVS after its first visit, `0x102aad7e`, as retail). **Re-stated by the V13 wave (2026-10-04), the cause measured: the marks never reach Recast.** `UElysiumNavAreaComponent` (`ElysiumNavAreaActor.h:34`, a `USceneComponent` + `INavRelevantInterface`) never enters UE 5.8's navigation octree, so neither its pedestrian slabs nor its door cuts are ever offered to the generator; the floating-floor lead is not the cause (§ "V13 wave"). **Closed by the V13 final pass (2026-10-04)**, the chain measured: registration → the pedestrian area on the baked mesh → the ×8 route over curbs 258 then 259 → the wait (23.917 `0x102`) → the crossing (43.550 `break CROSSWALK_WALK`), § "V13 final pass" |
@@ -820,3 +820,298 @@ height (`RecastNavMeshGenerator.cpp:4885`, `OffsetZMin = ch + AgentHeight`) -- t
   map records unchanged. Stop: a new bridging error, a lost link, a doorway flipping from wall to
   walkable, or a moved record. **Closed by the V13 follow-up** (§ "V13 follow-up"): acceptance held,
   no stop rule fired.
+
+## Judge's rulings, V4 (2026-10-04, after packets R1 and R2; before V4a's seam)
+
+One read-only agent, no build, no run. Sources: `stories/v4/README.md`, `packets-R1.md`,
+`packets-R2.md`, the port and the pipeline as they stand. Marks: *(verified)* checked this session
+in code, the staged data or the listing; *(packet)* taken from R1/R2; *(inferred)*. Each item: the
+argument against the obvious recommendation, then the ruling, the cost and the proving record. No
+query ran over 10 s. Brief J's item 1 (the corpse fall) is withdrawn: V4d.
+
+### J1. N19 — a missed lookup plays the model's sequence 0: **implement now, V4a lane A2**
+
+- **Against doing it now.** It is a cross-layer interface change (a new `IElysiumEmbodiment` query,
+  `AElysiumMapActor`, the recording double) inside a lane already carrying the clock words under a
+  two-build cap; only one record witnesses it; and "no re-bake" rested on an unverified per-model
+  claim — `skeletal_stage/unit.py:226-229` drops empty-label, duplicate-label and
+  invalid-base-cell descriptors, so a model whose first descriptor is dropped would have no row 0.
+- **What the check found** *(verified)*. `rawIndex = sequenceBase + the descriptor's index in its
+  own .mdl` (`importers/body_data.py:83-89`), and `first_reference_bases` counts the RAW
+  declarations, dropped ones included (`:28-29`), the root first at base 0. Over the staged
+  character tree (`$ELYSIUM_WORK_ROOT/import/characters`, 1,430 body tables) **none lacks a
+  `rawIndex 0` row**. The runtime loads it (`Public/ElysiumBodyData.h:32`,
+  `Private/ElysiumBodyData.cpp:14` → `FElysiumNpcClip::RawIndex`, `Public/Visual/ElysiumNpcClips.h:68`).
+  So no pipeline change and no re-bake. Not checked: that every baked `DA_` is current with its
+  staged table (the importer's `body-data` fingerprint says so; not opened).
+- **Ruling.** Implement now in A2, with the row words: the embodiment accessor "this body's
+  `RawIndex 0` clip" (the double answers none), the bridge's row 0 resolved from it with the clip's
+  own `STUDIO_LOOPING`, rate 1.0 (`0x10090a23`), the trace naming `seq 0`. Where a body answers
+  none, row 0 stays today's and logs once per model. The stale comment at
+  `Visual/ElysiumAnimationResolve.cpp` ("the character export writes no raw index") is corrected by
+  the same lane. An old bug in landed work: fixed without waiting.
+- **Cost.** XS–S: `ElysiumNpcAnim.cpp`, `ElysiumNpcBaseAnim.cpp` (A2's already), plus the
+  embodiment interface, `ElysiumMapActor` and the recording double (added to A2's file list). No
+  build beyond V4a's two. **Proof:** `script_walk_to_mark` (`plays` `seq 0 rate=1`, then the
+  timing after it re-measured by the A integrator; `known_red` removed).
+
+### J2. Slot 247's bbox (README §8 Q4): **implement now — the bbox on the `UElysiumBodyData` row; the body in V4c lane C1**
+
+- **Against the README's "leave the named seam".** R2 shows the slot live on every Troika NPC
+  (`CAI_BaseNPCTroika::Spawn 0x10298d30` → `AddFlag2(4)`), so every `ResetSequenceInfo` rewrites
+  `m_vecAttackExtents +0x50` — a word the bytecode's host does read: the sleep arms save it through
+  slot 16 (`0x102a29fa`, `0x102a710e` → `+0x65d0`) and `TaskFail` / `OnScheduleChange` restore it,
+  and the attack partition (engine `CEnumRay`, per `ElysiumMapActor.cpp:1513-1518`) is the
+  collision box grown by it. The port's one live reader is the feed/use target box
+  (`ElysiumNpcAccess::AttackBounds`), which today stands on `TroikaNPCInit`'s `(-1,-1,-1)` for the
+  NPC's whole life where retail overwrites it at the first sequence change. "No record observes
+  it" is rule 2's "out of scope", not a reason. And the costly option is not needed *(verified)*:
+  `clip_data.py`'s `descriptor` drops the bbox, but `records.Seq` carries `bbmin`/`bbmax`
+  (`skeletal_stage/unit.py:234`) into the same `unit.sequences` that `body_data.project_body`
+  walks, and the importer stamps body data on its own fingerprint
+  (`pipeline/unreal/import_characters.py:478`, `fingerprint("body-data", …, bodyDataSha256)`),
+  separate from the animations' (`:227-229`, `payload` + `clipDataSha256`). A bbox on the body row
+  leaves `clipDataSha256` untouched: the animation packages are reused, only the `DA_` assets
+  re-author.
+- **Against doing it now** (did not carry). No step-2 record observes a hit the extents decide; the
+  body of `0x10090c80` is read only as far as README §1 (radial excess over the collision's maxs);
+  the import still walks 1,207 entries and its reuse-path wall time is unmeasured (the README's
+  "partial ~1,172 s" suggests about 20 minutes even when reused).
+- **Ruling.** Implement now. Pipeline: `bboxMinCm` / `bboxMaxCm` on each `body_data.py` row (the
+  `UE_` coordinate contract applies: centimetres, the Y reflection), `FElysiumBodySequence` and
+  `FElysiumNpcClip` carry them; C1 ports `0x10090c80` whole against a bridge accessor
+  `SequenceBounds(int32)` and fills slot 247. A body with no row answers "no descriptor" and the
+  slot writes nothing, as retail with no seqdesc. The C integrator runs the one import. **Stop
+  rule:** if the import reports any animation package rebuilt rather than reused, stop and file
+  the data half for V4d's bake window; the body then stands on the accessor answering none.
+- **Cost.** `body_data.py`, `ElysiumBodyData.{h,cpp}`, `ElysiumNpcClips.h`, `ElysiumNpcAnim.cpp`
+  (accessor), `ElysiumAnimatingSlots.cpp` (slot 247); one character import, body-data only
+  (~20 min, unmeasured; capped at one), inside V4c's one build. **Proof:** no existing step-2
+  record observes it — stated, not hidden. Arm test `Elysium.Arm.NpcKernelAnim.AttackExtents`
+  (`0x10090c80`), and A0 adds `attack_extents` to H19's `elysium_entity_get` so the C integrator
+  reads it live on `ranged_open_fire`'s shooter before and after a sequence change.
+  *Unrecovered:* retail's readers of slot 16 beyond the two sleep saves (the corpus lookup
+  resolved the address to `client.dll`; not pursued).
+
+### J3. The player's anim-event dispatch (K3): **implement now in V4a — the dispatch site and order (new lane A4); the player's own sequence clock is filed to the player story (0015, layer 0)**
+
+- **Against "it needs a player story".** The owner ruled the poll goes for every entity. What
+  retail's order needs is small and local *(verified)*: the world tick already has the point that
+  stands for `PostThink` — after `SyncFromBody` / `TickStepClock`, before `RunThinks`
+  (`ElysiumEntityWorld.cpp`, `AdvanceAnimEvents()` then `TickStealthKill()`), and the player is the
+  first entity simulated in retail's frame. A player-owned `PostThink` step there — dispatch (base,
+  then the layers: slot 258 is the overlay body), then the slot-312 stand-in (`TickStealthKill`,
+  the melee sweep) — is retail's order `0x1016be10`: advance → slot 258 → slot 312. The poll
+  already walks Base and UpperBody for the player (`ElysiumAnimatingImpl.cpp`
+  `GPolledEventChannels`), so the layer's 3031 is reachable today.
+- **Against doing it all now.** The player has no kernel sequence words (R2): its cycle is the pose
+  layer's phase. Giving it `m_nSequence` / `m_flCycle` / `StudioFrameAdvance` means `SetAnimation
+  0x10164240` and the action classifier on the kernel — a player story, not a seam. And the
+  retail window (0.1 s look-ahead, `+0x658`) moves every player shot's commit earlier: the weapon
+  tests and `CommitArrivesFromAnimEvent` (`ElysiumWeaponClasses.cpp:1259-1282`), the feed timeline
+  (`ElysiumFeed.cpp:1158-1164`) depend on the poll's cursor.
+- **Ruling.** Split. **Now (V4a):** A1 writes the base dispatcher `0x10091880` and the per-layer
+  body `0x10098cd0` as bodies over a small words struct (sequence, cycle, cycle rate × playback
+  rate, loops, last-event-check, finished, past-half) so one body serves the NPC, the player and
+  the camera; A1 deletes `FElysiumEntityWorld::AdvanceAnimEvents` and
+  `FElysiumAnimating::AdvanceAnimEvents` whole and leaves one call at the same place in the tick,
+  `FElysiumPlayer::PostThinkAnimation()`. **New lane A4** (files disjoint from A1's:
+  `ElysiumPlayerEntity.cpp`, `ElysiumGrapple.cpp`'s call site, `ElysiumCameraAnimated.cpp`) fills
+  it: the player's words per channel, the cycle **read from the pose layer's phase** — a named
+  seam, "stands for `m_flCycle` until the player's `StudioFrameAdvance` is ported (0015 layer 0)" —
+  the retail window and look-ahead, the handler gate of `0x10178a10`, then the slot-312 stand-in.
+  **Filed:** the player's kernel sequence clock, owner 0015 (the player entity's layer 0). The
+  cycle source is the existing K2-shaped residue, now named at its line; it is listed for the
+  owner, not adopted as new.
+- **Cost.** One more coder in V4a (6 agents; rule 8's cap is the coordinator's to check), no extra
+  build; a moved player-shot timing is triaged under README §8 Q5, never loosened. **Proof:**
+  `anim_player_footsteps` — `animevent` 2050 then 2051 `who: player` while walking (dispatched;
+  the handler swallows them, the sound stays the step clock's), `never animevent` standing; the
+  cycles from the PLAYER model's baked table (R2 cited the cast's banks: A0 reads the player's).
+  `anim_player_weapon_event` — two records: firearm, `animevent 3031` on the player before the
+  `damage` it causes; melee, **`never animevent` in 3000..0xfa2** with the `damage` still landing
+  (the sweep is slot 312's). 4050/4051 belong to the stealth-kill clips, not these records.
+
+### J4. Props and the camera: **the prop poll is deleted with nothing in its place (A1); the camera's dispatch is implemented now (lane A4)**
+
+- **Props — against a plain delete.** The owner asked for a record with an event that fires; a
+  `never` on a prop whose clips author nothing passes before and after and proves nothing. And
+  deleting the poll removes the only caller of the prop handler default (`ElysiumEntity.h`
+  `HandleAnimEvent`), so anything that was quietly riding it goes silent.
+- **Ruling.** Retail is the default: `CDynamicProp`'s think `0x10190850` advances and never
+  dispatches, and slot 258 has four call sites in the whole image, none a prop (R2, *(packet)*).
+  The port's poll for props is deleted, no replacement, no seam — there is no retail input to
+  stand for. **The record states the negative and must not be vacuous:** `anim_prop_event`, in the
+  Green Room, a hand-written `prop_dynamic` on the one non-character model whose clip table
+  authors an event — `models/items/walkie_talkie/walkie_talkie.mdl`, sequence
+  `Crooked_Cop_Walkie_Talkie_Into` (4100 @ 0.225) — started by `SetAnimation`; `expect` the
+  sequence plays (the prop animates), **`never animevent`** on it. With H21's tap on the poll it is
+  red today and green once the poll is gone. `about` cites `0x10190850` and says no retail map row
+  exists to copy (R2 (i)). If that model has no baked prop body, A0 says so and writes the record
+  on any animating scenery prop with `notes` stating it is vacuous by data (284 scenery, 19 gibs,
+  10 editor, 2 worldcraft and the cinematic lane author zero events).
+- **Camera — against doing it now.** It needs the camera's own cycle words, and its end moves 0.1 s
+  of clip time earlier (the look-ahead finish), which shifts `OnCameraComplete` on every cutscene.
+- **Ruling.** That shift is retail's (`0x10071840`: advance → dispatch → the finish test on
+  `m_bSequenceFinished`), and today's `Think` already says the advance and dispatch "are the
+  world's own animation pass" (`ElysiumCameraAnimated.cpp`, the comment above `IsSequenceFinished`)
+  — deleting the poll without this would leave the camera with no events at all. Lane A4, in
+  `FElysiumCameraAnimated::Think`: the words (cycle from the sequence's start and length), A1's
+  base dispatcher (no layers), handler `CBaseAnimating::HandleAnimEvent 0x10091da0` (2070, 2071,
+  4005), the finish from the dispatcher's flag replacing the time compare.
+- **Cost.** Inside A1 and A4; no build beyond V4a's. **Proof:** props — `anim_prop_event`. Camera —
+  arm test `Elysium.Arm.CameraAnimated.ThinkOrder` (`0x10071840`); no step-2 arena record stages
+  an animated camera (not searched beyond `Arena/scenarios` names) — the A integrator names one if
+  it exists.
+
+### J5. The move-and-shoot overlay `0x102e8560`: **stub now (A1's layer seam and the existing counter, named); a red record now; the overlay stack filed to 0015, the wire to 0002 step 3 (R3)**
+
+- **Against the stub.** It is reachable on step-2 paths: `cover`, `cover_armed`, `cover_reclaim`
+  and `range_bands` run a gunman to cover or to a line of fire, and with `COND 0x4f`, flags2
+  `0x400`, a `0x6000` weapon and `CAP_MOVE_SHOOT` slot 575 passes and retail fires from the
+  layer's 3031 while running. A shot lands damage and raises sound conditions on the player's
+  side: the bytecode can observe it. `cover` is green today against a port that never fires on
+  the move, so that green is not retail's. Rule 2: "0015's" is not a divergence.
+- **Against implementing now** (carried). The port's `RunTaskOverlay` is a counter
+  (`ElysiumNpcBaseMaintain.cpp`, `++MoveAndShootOverlay.UpdateCalls`) *(verified)*; the body needs
+  `AddGesture 0x100991b0`, the four `CAnimationLayer`s with their own cycle advance and weights,
+  `Weapon_SetActivity`, the `0x47`/`0x48` gestures and slot 575's whole gate — the NPC overlay
+  stack, which no V4 lane owns and which is M on its own. None of the four records asserts a shot
+  on the move (grep: no `animevent` expectation in any cover record) *(verified)*.
+- **Ruling.** Stub: A1's four-layer seam answers "no layer", named for `CAnimationLayer`
+  (`+0x734`, stride `0x30`) and for `0x102e8560` as its only step-2 pusher; the counter stays.
+  **Bug protocol step 2 now:** A0 writes `combat/cover_move_shoot.json`, red — the `cover_armed`
+  staging with the player in view during the run; `expect` `animevent 3031` on the gunman between
+  the move task's start and its `taskdone`; `known_red` "0015 (the NPC overlay stack); the wire
+  0002 R3". **Step 4:** this is a planning correction, stated to the owner here: step 2's `cover`
+  family cannot prove the run-and-gun; gate 2's claim for cover is re-cut to "reaches cover and
+  fires from it", and R3 (cover and the goal selectors) takes the overlay's wire with 0015's stack
+  as its dependency. *Unrecovered:* slot 273's 23 callers (R2).
+- **Cost now.** One record, no code beyond A1's seam comment. **Proof:** `cover_move_shoot` (red).
+
+### J6. `ContactEventCycle` on the NPC path: **implement now (remove), V4c lane C1 — for the bodies that were read; a named guard for the ones that were not**
+
+- **Against removing it.** R2 did not read the species weapon bodies (`0x103ed200`, the
+  flamethrower, thrown). A species whose attack clip authors no 3030..3044 and whose retail fire
+  comes from a body nobody read would go silent with no record to notice; three NPC bodies do call
+  a weapon's slot 326 directly (the Troika melee arm, `CNPC_VBach::StartTask 0x103645a0`,
+  `CNPC_VManBat::RunTask 0x1038d130`).
+- **Ruling.** Remove the estimate on the NPC path for `CWeaponRanged` (`0x10238160` →
+  `0x10238320` → `ModeDispatch(1)` → `Shot 0x102387b0`): no retail path fires a Troika human's
+  shot without the event *(packet, L)*. **The guard, three parts:** (a) the removal is keyed on
+  the operator body, not on "is an NPC" — an operator body not in R2's read set keeps today's
+  estimate behind a seam named for that body's address and "unread", so nothing read as retail
+  changes for it; (b) README §8 Q6's line, at Warning, once per (model, sequence): an NPC attack
+  clip with no fire event; (c) the C integrator lists, from the baked event tables, every NPC
+  class whose ranged attack activity has no 3030..3044 clip — that list is the reading owed, filed
+  to V5 (the ranged attack's story) with the three slot-326 callers. The player's use of the
+  estimate (`ElysiumWeaponClasses.cpp`, "its commit stays on the estimate") is not touched here:
+  it goes with the player's weapon events (J3's A4 proves 3031 arrives; removal is the player
+  story's).
+- **Cost.** C1's files as briefed; `Tests/ElysiumWeaponTests.cpp`'s estimate assertions on an NPC
+  wielder deleted (they pin a port mechanism). **Proof:** `ranged_open_fire` — `shot_event`
+  corrected to match `3031` (J7), plus `never` a `damage` on the player before it.
+
+### J7. Record errors found by the readers: **confirmed as record errors (bug protocol step 1); corrected by the seam agent A0, each with its retail source**
+
+- **Against.** A record corrected while its behaviour is red looks like moving the goalposts
+  (README §8 Q5: "never loosened"), and R1's speed is one body measured on one record.
+- **Ruling.** They are record errors: a record states what retail does, and these state something
+  retail does not do.
+  - `melee_swing` *(verified in the record)*: `hit_event` (`animevent`, `match ""`) and the
+    `about`'s "the clip's hit event reaches HandleAnimEvent" — no attack clip in the male
+    `baseball` bank authors an event (R2 3c); contact is `MeleeSwingUpdate 0x10346cd0` from slot
+    312. Replace `hit_event` with a `damage` on the player after `task_melee_attack1` (the kind
+    exists: `input_takedamage`), add `never animevent` on the brawler between swing and `taskdone`,
+    rewrite the `about` and the `known_red`'s tail ("the hit event rides the world-tick poll").
+    Still red on N3 (V11).
+  - `ranged_open_fire`: `shot_event` matches `""`; it must match `3031`.
+  - N13's four `known_red` texts (`patrol_sentry2_pingpong`, `patrol_monk_loop`,
+    `input_clearpatrolpath` *(verified: all three name 136.7 and "0.44×")*,
+    `places_pedestrian_visit`) and H18's acceptance: the speed is **each body's own `walk_0`** —
+    sentry2 (`vampire_hunter_chick`, the female bank) 101.278 cm/s; 136.683 is the male cell. The
+    cause text becomes R1's (the arrival, J9), marked inferred until toggled.
+  - **Limit on A0:** a deadline is changed only where it was computed from 136.7 for a body on
+    another bank, the arithmetic shown in `about`; `patrol_monk_loop`'s and the pedestrian's banks
+    are checked first (R1 did not). No other expectation moves.
+- **Cost.** Record edits only, in A0's commit. **Proof:** the records themselves parse and stay
+  `expected-fail` on their real causes.
+
+### J8. The doc conflicts: **each fixed by the lane that must code from it, before it codes**
+
+- **Against.** Coders touch only their brief's files; a doc rewritten on one fresh read can trade
+  one error for another.
+- `docs/vtmb/npc-ai/lifecycle.md` § "The ordered chain" steps 5–6 — **lane C2**. Partly checked
+  here *(verified)*: `CreateCorpse 0x1032c0e0` at `0x1032c404` pushes `(0x10009c9b, 0, 0)` into the
+  think setter and then takes `curtime + _DAT_1044e664` (10.0), so an arm of it does replace the
+  think; that it is *every* ordinary arm (the branch at `0x1032c400` skips it) was not walked. C2
+  owns the `ACT_DIERAGDOLL` seed, which lives on exactly the path in question (state 7's
+  `BecomeClientRagdoll(vec3_origin, -1, 0)`, `0x1028a8ec`): it walks the arms first, rewrites
+  steps 5–6 and § "A death sounds more than once" (its count depends on the second
+  `Event_Killed`), and ports the seed only as the arm retail reaches. If an ordinary kill never
+  reaches `SCHED_DIE`, the seed's arm test states who does reach it.
+- `docs/vtmb/player-entity.md` § "Recovered `PostThink` body" (`-> Weapon_FrameUpdate`, `:450`
+  *(verified)*; the call is slot 312 `UpdateCharacter`, `Weapon_FrameUpdate 0x1032aa40` has one
+  caller, `PostRun`) — **lane A4**, which codes that order.
+- README §1's `RunAnimation` gate (`m_Activity +0xfec == 1`; the pick on
+  `m_TranslatedActivity +0xff4`; and R2's other four corrections) — **the coordinator, before A0**:
+  the briefs quote README §1, and a coder must not find the correction only in a packet.
+  `shape.md` § "The activity commit" already holds it (R2).
+- **Cost.** Doc edits; no build.
+
+### J9. R1's arrival finding: **B1's change stands under K1 only as the whole retail stop; switching the slowdown off alone is a new divergence, recorded and not adopted. The toggle is measured first.**
+
+- **Against "it is just K1".** K1 keeps the motor on the body's tick *with retail's contract*.
+  Retail's contract for the stop is `0x102630b0`: ideal speed from slot 248 (50.0 when it answers
+  0), acceleration = ideal + `_DAT_104493c0`, each waypoint's speed `ideal × clamp(dot(in, out) +
+  _DAT_10449198, 0, 1)`, **the last waypoint's 0**, limited forward and backward by constant
+  acceleration; the step is the trapezoid `(|v| + new) × interval × 0.5`. Turning Detour's
+  slowdown off gives a body that arrives at full speed and stops dead — not the crawl, and not
+  retail either: the `arrived` instant, the footstep events of the last metre and the corner
+  speeds all differ. And the three constants are unread (R1), so the profile cannot be ported yet.
+  The cause itself is inferred from code, never toggled *(verified: no `SetCrowdSlowdownAtGoal`
+  call exists in `Source/`; `FollowerArrivalFloorCm = 1.0`, `Visual/ElysiumNpcBody.h`)*.
+- **Ruling.** (1) Not a new divergence **if** B1 ports the velocity script's profile as the body's
+  commanded speed (K1's "retail's input" extended from the cruise speed to the whole speed
+  curve) and the slowdown goes off because retail's deceleration replaces it. (2) Slowdown off
+  with no retail deceleration is a new divergence: recorded, not adopted. (3) Before B1 is final,
+  a short read (R1b, no build) recovers `_DAT_104493c0`, `_DAT_10449198`, `_DAT_10457f60` and the
+  retail arrival tolerance against the port's 1 cm follower floor (whether that floor is retail's
+  is unverified). (4) The B integrator's first build measures the toggle on
+  `input_clearpatrolpath` (R1's table: `arrived` at 10.428 against ~5.6 s of travel) before
+  anything else is trusted; if the creep survives the toggle, stop — the cause is unread again and
+  B1 does not land on a guess.
+- **The 13.4 s `task_face_enemy`.** R1 refuted README §2 M4's cause (the turn ladder is closed for
+  a human, `0x2000` is never tagged, the bound is 0.5 s) and left the port's cause unread. It must
+  be found **before B2 is final, by measurement, not by the next coder**: A0 writes
+  `face_enemy_turn` red and adds to H19 the three words that decide it (the `MaxYawSpeed` answer,
+  `m_afMemory`, `m_Activity` during the task), runs it on the seam build and reports the trace;
+  R1b names the arm that reaches the 1.0 floor from that trace. Note for A2: with `+0x560` real it
+  is still 0 on shipped data (`GetSequenceTurnYaw` answers 0, R1 §2), so V4a does not fix this by
+  itself, whatever README §4 says.
+- **Cost.** R1b: one reader, no build. B1/B2 unchanged in files. **Proof:** `input_clearpatrolpath`
+  and the three other N13 records (each on its body's own `walk_0`, J7); `face_enemy_turn`
+  (`taskdone` within 0.5 s).
+
+### Briefs to amend (the coordinator, before the lanes start)
+
+- **README §1 / §4 / §7**: R2's five corrections; K3's text (props never dispatch; the player and
+  camera on A4); V4a gains lane A4; the cut's agent count.
+- **A0**: `anim_prop_event` as a non-vacuous `never` (J4); the two player records as J3;
+  `cover_move_shoot` red (J5); `melee_swing`, `ranged_open_fire`, the N13 texts and H18's
+  acceptance (J7); H19 gains `attack_extents` (J2) and the three yaw words (J9); `packets.md` →
+  `packets-R1.md` / `packets-R2.md`.
+- **A1**: the dispatcher over a words struct shared by NPC, player and camera; the poll deleted
+  whole, one `PostThinkAnimation()` call left in the tick (J3, J4); the layer seam named for
+  `0x102e8560` (J5).
+- **A2**: N19's row 0 and the embodiment accessor, three files added (J1); `+0x560` is 0 on
+  shipped data (J9).
+- **A4 (new)**: the player's `PostThink` dispatch and slot-312 order, the camera's think,
+  `player-entity.md` (J3, J4, J8).
+- **B1**: the velocity script's profile, not the toggle alone; final after R1b and the measured
+  toggle (J9). **B2**: final after `face_enemy_turn`'s cause is named (J9).
+- **C1**: slot 247 whole against `SequenceBounds` (J2); the estimate removed per operator body
+  with the three-part guard (J6). **C2**: walk `CreateCorpse`'s arms and fix `lifecycle.md` before
+  the seed; `RunAnimation`'s gate as R2 read it (J8).
+- **C integrator**: the body-data import with its stop rule (J2); the silent-class list (J6).
+- **D**: none.

@@ -64,7 +64,7 @@ physics (its custom animation instance, the per-think collision switch, the atta
 Settle it cheaply: in a scratch state, give `regular_cop` Unreal's default physics asset (the
 editor's `CreatePhysicsAsset`), switch off only the movement capsule on the dead body, run
 `damage_lethal_death`, and read the pelvis height over time. Nothing from the spike is committed
-except its findings in `stories/v4/packets.md`. If the body does not fall and rest, stop: report
+except its findings in `stories/v4/packets-spike.md` (done: see § "After the spike"). If the body does not fall and rest, stop: report
 what holds it (the animation instance still driving the pose, a garment's attachment, the profile).
 
 ## Step 1 — the coder (files; re-locate by Grep)
@@ -119,3 +119,86 @@ As every V4 brief: coders never build; the integrator builds once and commits on
 branch, never pushes; the query budget (10 s warns, 60 s stops); text through Grep / Read / Glob;
 a build, a bake or a run waited on by blocking or by its completion notification, never a sleep or
 a polling loop.
+
+## After the spike (2026-10-04)
+
+Step 0 is done: `packets-spike.md` (read it whole; it is short). Where it and the text above
+disagree, this section wins. The spike's findings are in `packets-spike.md`, not in `packets.md`
+as Step 0 said — that file does not exist.
+
+**The verdict.** Handed to physics, the body **falls and comes to rest, headless** (`-nullrhi`,
+fixed step 60 Hz), with the project's animation instance still installed and unpaused and with a
+garment attached, and **with no change to the handoff**: `StartBodyRagdoll`'s existing order
+(`SetCollisionProfileName("Ragdoll")`, then `SetSimulatePhysics(true)`) creates the physics state
+and simulates once the component has a physics asset; the true branch ran for the first time and
+is sound; the animation instance does not fight physics. The builder can be written. The run is
+deterministic. Time to rest is about 2 s after the handoff.
+
+**Changes to Step 1.**
+
+- **Item 3 (the dead body's collision fix) is withdrawn: it is not needed for the fall.** The
+  drawn mesh is created with the **map actor** as its owner (`Visual/ElysiumEntityBodies.cpp`
+  ~:1741) and only *attached* to the motor (`Map/ElysiumMapActorEmbodiment.cpp` ~:107), so
+  `SetActorEnableCollision` on `AElysiumNpcBody` gates the capsule and that actor's own unused
+  mesh, not the ragdoll. With today's code unchanged the body collided with the floor and rested
+  exactly as with a capsule-only switch. **Leave `ApplyCollisionState` alone**; the coder does
+  not touch `Visual/ElysiumNpcBody.cpp`. README §8 Q3's "a ragdoll would fall through the floor"
+  and § "What exists, and what is missing" above ("a fix in the dead body's collision") are
+  wrong on this point. The ragdoll not colliding with pawns stays as briefed (inferred, named at
+  the line where the profile is set).
+- **Item 4's open read is settled.** `CreateCorpse 0x1032c0e0` replaces the think at `0x1032c404`
+  on every ordinary arm, so **an ordinary kill never reaches `SCHED_DIE`, rig or no rig** (the
+  state-7 fork `0x1028a8ec` is reached only by other state-7 writers; lane C2 walks the arms and
+  corrects `lifecycle.md`, J8). A model with no rig **keeps its last pose** — *inferred* (retail's
+  client has no ragdoll to build; nothing server-side poses it). Write item 4 on that: no read of
+  `SelectSchedule` is needed first.
+- **Item 2, an option the spike opened:** the asset can be set **per component**
+  (`SetPhysicsAsset(Asset, /*bForceReInit*/ true)`) without re-saving the mesh package. The bake
+  step may still attach it to the mesh as briefed; use the component path only if re-saving mesh
+  packages turns out to be a problem, and say which you chose.
+- Items 1 and 5 stand.
+
+**The rest test and the height bound (Step 2, and the `corpse_on_floor` probe the seam wrote).**
+
+- **At rest is a speed threshold, never the sleep state.** The body never sleeps:
+  `IsAnyRigidBodyAwake()` stayed true for the whole 11.8 s with a residual 0.3–0.7 cm/s on the
+  pelvis. The probe passes on **pelvis speed under ~5 cm/s** (above the jitter, below the last
+  settling sample of 3.6). Sleep thresholds and damping are free for Unreal under the ruling, so
+  the coder may tune the asset so it sleeps; the probe must not depend on it.
+- **The probe reads the `Bip01 Pelvis` bone of the drawn mesh** (`GetBoneLocation`; the simulated
+  pose reaches the component's bone transforms headless), never the component's location — the
+  component follows the root body and ends below the floor (Z 2.0 → −23.6).
+- **The height bound is per body and is measured with the real `.phy` asset.** "Within 24 cm" in
+  Step 2 above is not a constant: with Unreal's default capsule asset `regular_cop` rests at
+  **16.2 cm** and `bum_male` at **32.9 cm**. The retail `.phy` hulls will give other numbers. The
+  integrator, after the scoped bake, reads the measured rest height of **each record's body** on
+  the `.phy`-built asset (the lab, `elysium_entity_get` or the probe's own value in the trace),
+  and sets each record's bound from it with the measurement in `about`; a rig that rests propped
+  gets a wider bound or a named body, never a loosened rule.
+- **`on_ground` stays false on a corpse** (the motor's floor answer). The two death records turn
+  green only when their end probe is `corpse_on_floor` (the seam's edit) and `known_red` is
+  removed.
+
+**What keeps reading the motor.** The mesh component moves with the ragdoll (the pelvis ended
+59 cm from the death spot); the motor capsule stays put. So the **entity's origin and the use /
+feed / loot anchors keep being read from the motor** — the retail contract: frozen at the death
+spot — never from the visual component or a bone. The integrator's trace check ("the entity at
+the death spot") is that.
+
+**Untested by the spike — the integrator's to check, the coder's to keep in mind.**
+
+- **Rendering**: nothing was drawn. Whether knees and elbows bend the right way, and how a
+  garment (`UChaosClothComponent`, leader pose) and the hair dynamics look on a simulated body.
+  `regular_cop` wears no garment, so the briefed record does not exercise one; `bum_male` does
+  (it fell and rested; its look was not seen). The lab's visual check covers both bodies.
+- **Joint limits**: the default asset has ball-and-socket limits and no collision between its own
+  bodies; the `.phy` asset's hinges, self-collision and masses are untested.
+- **Save / load** of a ragdolled corpse (`RestoreDeathBodyState` runs the handoff again from the
+  spawn pose): not run. Save files are disposable, but a load must not throw or leave the body
+  standing: one manual check, noted in the report.
+- **A map floor**: only the arena floor (a static-world actor) was tested. `verbs_stealth_kill`'s
+  staging decides whether a map floor is exercised; if not, one lab kill on a witness map.
+
+The spike's scratch code is reverted; the editor binary on the spike's machine holds it until the
+next build. It needed the `PhysicsUtilities` module in the editor block of `ElysiumUE.Build.cs`
+for `FPhysicsAssetUtils`: the builder may need the same.

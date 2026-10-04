@@ -103,9 +103,19 @@ Wave 3 (build work, one agent):
   identical record by record; `kernel --check` clean.
 - [ ] **V4** — Fix: the animation chain under the kernel. M · Opus/high. Planned 2026-10-04
   (`0002-npc-ai/stories/v4/README.md`), not started:
-  - [ ] **V4r** — the two reading packets and the judge (N19). S–M.
-  - [ ] **V4a** — the seam, the speed words, the dispatcher for every animating entity, slot 363. M.
-  - [ ] **V4b** — the walk and the turn (N13). S–M.
+  - [x] **V4r** — the two reading packets and the judge (N19). S–M.
+  Order re-cut 2026-10-04 by the owner's "testable first" and "settle first" rules
+  (`0002-npc-ai/spec.md` § the bug protocol's end): settling packets S1–S3 → the seam → [V5a + A3]
+  → V4a → [V4b + V11] → V4o → V4c → V4d → V5b.
+  - [ ] **V4s** — settling packets S1–S3 (death and turn; weapons; overlay and coordinator). S.
+  - [ ] **V4a0** — the seam (A0). S.
+  - [ ] **V5a + A3** — the attack conditions whole, the wait (N2), the cover tail's weapon read
+    (N1), slot 363 (`0002-npc-ai/stories/v5a/`). S–M.
+  - [ ] **V4a** — the speed words, the dispatcher for every animating entity (A1, A2, A4). M.
+  - [ ] **V4b + V11** — the walk's arrival and the turn (N13); the attack coordinator (N3,
+    `0002-npc-ai/stories/v11/`). M.
+  - [ ] **V4o** — the NPC overlay stack and the move-and-shoot wire (pulled from 0015;
+    `0002-npc-ai/stories/v4o/`). M.
   - [ ] **V4c** — attack producers, the weighted pick, the death transaction. M.
   - [ ] **V4d** — the corpse falls: a physics asset from the `.phy`, Unreal's solve (the owner's
     ruling: a named modernization). M.
