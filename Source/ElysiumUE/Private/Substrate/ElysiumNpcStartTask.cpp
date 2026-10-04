@@ -574,10 +574,43 @@ bool FElysiumNpc::StartTask19KickWeaponCast() const
 	return false;   // SEAM for `__RTDynamicCast(weapon, 0, 0x1055f710, 0x105da324, 0)`.
 }
 
-double FElysiumNpc::StartTask19WeaponNextAttackTime(bool bSecondary) const
+double FElysiumNpc::StartTask19WeaponNextAttackTime(bool bSecondary)
 {
-	(void)bSecondary;   // SEAM for `0x10252450` + `0x102c5730`.
-	return StartTask19A::NowOf(*this);
+	// `TASK_WAIT_ATTACK_TIME1/2`'s deadline: `0x10252450(weapon, id == 0xb1)` (`0x102a33a2`) plus
+	// `0x102c5730(this, weapon)` (`0x102a33b0`). The arm has already tested `GetActiveWeapon()`.
+	FElysiumItem* Item = Inventory.Active(*this);
+	const FElysiumWeapon* Weapon = Item != nullptr ? Item->AsWeapon() : nullptr;
+	if (Weapon == nullptr)
+	{
+		// An active item no weapon controller stands behind: the port has neither word to read.
+		// Answering `curtime` is the arm's own `<= curtime` completion (`0x102a4e51`).
+		return StartTask19A::NowOf(*this);
+	}
+	// `0x10252450(weapon, i)` = `weapon[+0x730 + 4*i]`: `m_flNextPrimaryAttack` (`+0x730`) for
+	// `0xb0`, `m_flNextSecondaryAttack` (`+0x734`) for `0xb1`.
+	const double Stamp = bSecondary ? Weapon->NextSecondaryAttackTime : Weapon->NextPrimaryAttackTime;
+
+	// `0x102c5730`: `data = 0x102517e0(weapon)`, the weapon's CURRENT mode record (matched on weapon
+	// `+0x848`). The port's fire-mode state is `PrimaryModeIndex` (the primary mode in force, which
+	// `Toggle_Primary_Mode` swaps), so that record stands for it; retail asks for the same record
+	// whichever of the two tasks runs. With no mode record the delay is nothing.
+	const FElysiumWeaponMode* Mode = Weapon->ModeFor(FElysiumWeapon::EIntent::Primary);
+	if (Mode == nullptr)
+	{
+		return Stamp;
+	}
+	// `v = RandomFloat(data[+0x264], data[+0x268])` — `NPC_Attack_Rate_Min` / `_Max`. The draw is
+	// taken on every call, as retail's.
+	const float Value = StartTask19A::RandomFloat(Mode->NpcAttackRateMin, Mode->NpcAttackRateMax);
+	// `0x102c5570(this, data, v)`: `(v - data[+0x260]) * scale`, the scale off `data[+0x26c]`
+	// (`NPC_Attack_Rate_Base_Range`, Source units) and the distance to `m_hShootTargetOverride`
+	// (`+0x5ba8`), else to the enemy's last known position, else the no-target arm.
+	FVector DeltaCm = FVector::ZeroVector;
+	const bool bHasTarget = ShootTargetDelta(DeltaCm);
+	const float DistanceUnits = bHasTarget ? static_cast<float>(DeltaCm.Size() / ElysiumMove::U) : 0.f;
+	const float Delay = ScaleWeaponBurstPause(Value, Mode->AttackRate, Mode->NpcAttackRateBaseRange,
+		DistanceUnits, bHasTarget);
+	return Stamp + static_cast<double>(Delay);
 }
 
 FElysiumEntity* FElysiumNpc::StartTask19ClosestPlayer() const

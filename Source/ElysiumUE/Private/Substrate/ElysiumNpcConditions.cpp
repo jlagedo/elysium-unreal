@@ -16,6 +16,7 @@
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"      // the running program's interrupt mask, the sweep's gate
 #include "Substrate/ElysiumWeaponClasses.h"    // FElysiumWeapon — the reach, cone and deadlines
+#include "Visual/ElysiumNpcClips.h"            // FElysiumNpcClip — the melee band's sequence descriptors
 
 FElysiumNpcConditions FElysiumNpcConditions::ToGlobalOrdinals(const FElysiumLocalIdSpace* Space) const
 {
@@ -86,6 +87,13 @@ const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond)
 	if (Cond == static_cast<EElysiumNpcCond>(0x29))
 	{
 		return TEXT("HINT_INVALID");
+	}
+	if (Cond == static_cast<EElysiumNpcCond>(0x56))
+	{
+		// Its sibling, pushed by number at `0x10271092` (`Cond19EnemyFacingMe`); the base table's
+		// row `56 ENEMY_FACING_ME`. Unnamed until spec 0002 V5a: no gather raised it while the
+		// player's slot 363 was a stub.
+		return TEXT("ENEMY_FACING_ME");
 	}
 	if (Cond == static_cast<EElysiumNpcCond>(0x57))
 	{
@@ -983,29 +991,154 @@ ElysiumNpcCond::ECapability ElysiumNpcCond::WeaponCapability(const FElysiumComba
 
 namespace
 {
-	// The attack cone, as a dot product against the NPC's facing. This is the SWING's cone
-	// (`FindEntityFOV`'s 30-degree half-angle), deliberately not the observer's much wider
-	// perception cone — an NPC can see an enemy it is in no position to hit.
-	//
-	// The entity's `Angles.Y` is the NEGATED Unreal yaw the motor is driven with, the same frame
-	// `FElysiumNpcSenses::IsInViewCone` reads it in.
-	bool NpcCondFacesTarget(const FElysiumNpcBase& Npc, const FVector& TargetCm)
+	// The capability bits `GatherAttackConditions 0x1026dd10` tests on slot 513's word (`+0x804`).
+	constexpr int32 GGatherCapWeaponRange1 = 0x2000;    // 0x1026de3a TEST EBP,0x2000
+	constexpr int32 GGatherCapInnateRange1 = 0x20000;   // 0x1026de8f TEST EBP,0x20000
+	constexpr int32 GGatherCapWeaponMelee1 = 0x8000;    // 0x1026df6d TEST EBP,0x8000
+	constexpr int32 GGatherCapInnateMelee1 = 0x80000;   // 0x1026dfa5 TEST EBP,0x80000
+	// `CWeaponMelee`'s slot 367 `0x103eac30`: `0x103ea7e0(0x4b, enemy, dot, dist)`.
+	constexpr int32 GGatherActMeleeAttack1 = 0x4b;
+	// `0x7f7fffff`, the extended timer's idle sentinel (`0x1026dfdd`, `0x1026e02c`), carried as the
+	// double the port's stamp is (spawn writes the same value, `ElysiumNpcBaseLifecycle2.cpp`).
+	constexpr double GGatherFltMax = static_cast<double>(TNumericLimits<float>::Max());
+
+	// The five cells of `0x103ea7e0` (packet S4 item b). Every one is already a tunables row under
+	// the name of its first reader; the address is the same cell.
+	constexpr double GMeleeBandDotMin = ElysiumNpcTunables::MeleeDotMin;         // 0x104492d0 f64 0.7
+	constexpr float GMeleeBandEnvelopeHalf = ElysiumNpcTunables::Half;           // 0x104454d0 f32 0.5
+	constexpr float GMeleeBandFarScale = ElysiumNpcTunables::CoverLeanSetScale;  // 0x1049ae90 f32 1.2
+	constexpr float GMeleeBandFarFloorUnits = ElysiumNpcTunables::Melee1OuterBand;   // 0x1044ddb0 f32 256.0
+	constexpr double GMeleeBandCloseScale = ElysiumNpcTunables::QuarterDouble;   // 0x10449260 f64 0.25
+}
+
+int32 ElysiumNpcCond::MeleeWeaponBand(const FMeleeWeaponBandQuery& Query)
+{
+	// `0x103ea7e0`, read off the listing (the decompilation drops the `0x51` return at
+	// `0x103ea8e5`). `0x103ea7f0..0x103ea80a`: no owner, or an owner with no model, answers 0. The
+	// model test has no counterpart: a body with no clips hands an empty sequence list, which
+	// answers 0 below as well (but after the `0x51` arm, which retail would not reach).
+	if (Query.Owner == nullptr)                                                  // 0x103ea7f9
 	{
-		FVector To = TargetCm - Npc.Origin;
-		To.Z = 0.0;
-		if (To.IsNearlyZero())
-		{
-			// Standing on the target: there is no direction to be facing, and every cone contains it.
-			return true;
-		}
-		To.Normalize();
-		const double YawRadians = FMath::DegreesToRadians(-Npc.Angles.Y);
-		const FVector Forward(FMath::Cos(YawRadians), FMath::Sin(YawRadians), 0.0);
-		const double ConeDot =
-			FMath::Cos(FMath::DegreesToRadians(
-				static_cast<double>(ElysiumWeapons::MeleeConeHalfAngleDegrees)));
-		return FVector::DotProduct(Forward, To) >= ConeDot;
+		return 0;
 	}
+	// `0x103ea82f..0x103ea83e`: the target's `+0x9c`, non-null exactly for a combat character.
+	FElysiumCombatCharacter* const TargetCharacter =
+		Query.Target != nullptr ? Query.Target->AsCombatCharacter() : nullptr;
+
+	// `ready` (`0x103ea84e..0x103ea899`): the three stamps strictly behind `curtime` (`FLD stamp /
+	// FCOMP curtime / TEST AH,5 / JP not-ready`, so an equal stamp is NOT ready), then the target's
+	// slot 327 (`+0x51c`) when it is a combat character.
+	bool bReady = false;
+	if (Query.WeaponNextPrimaryAttackTime < Query.Now                            // 0x103ea84e +0x730
+		&& Query.WeaponNextSecondaryAttackTime < Query.Now                       // 0x103ea862 +0x734
+		&& Query.OwnerNextAttackTime < Query.Now)                                // 0x103ea876 owner +0x1564
+	{
+		bReady = true;                                                           // 0x103ea888
+		if (TargetCharacter != nullptr)
+		{
+			bReady = TargetCharacter->Slot327();                                 // 0x103ea893
+		}
+	}
+
+	// The `0x51` arm (`0x103ea89d..0x103ea8e8`): `dot > 0.7` (`AND 0x4100 / JNZ`, strict), a combat
+	// character target, `ready`, and the owner's slot 331 `ChooseMeleeAttackSequence 0x10347180`
+	// `(weapon, target, translated activity, &out)` true with `out >= 0` (`out` seeded -1,
+	// `0x103ea8cb`). The slot is CALLED and has no stand-in here: its port body is a counting stub
+	// answering false until lane V11-3 (`stories/v11/brief-V11-3-slot-331.md`), so the weapon arm
+	// raises no `0x51` before V11's wave. No record of V5a / V4a / V4b observes it (no NPC enters
+	// melee before V11, triage N3).
+	if (static_cast<double>(Query.Dot) > GMeleeBandDotMin && TargetCharacter != nullptr && bReady)
+	{
+		int32 OutSequence = INDEX_NONE;                                          // 0x103ea8cb
+		if (Query.Owner->ChooseMeleeAttackSequence(Query.Weapon, TargetCharacter,
+				Query.TranslatedActivity, &OutSequence)                          // 0x103ea8d3 slot 331 (+0x52c)
+			&& OutSequence >= 0)                                                 // 0x103ea8e1
+		{
+			return static_cast<int32>(EElysiumNpcCond::CanMeleeAttack1);         // 0x103ea8e8 0x51
+		}
+	}
+
+	// The band's three numbers over the activity's sequences (`0x103ea902..0x103ea9f7`). The baked
+	// values are CENTIMETRES and `dist` / 256.0 are SOURCE units: the CLIP side is converted, here.
+	const float CmPerUnit = static_cast<float>(ElysiumMove::U);
+	float Lo = 100000.0f;                                                        // 0x103ea904 0x47c35000
+	float Hi = -100000.0f;                                                       // 0x103ea90c 0xc7c35000
+	float MeanSum = 0.0f;                                                        // 0x103ea914
+	int32 EnvelopeCount = 0;                                                     // 0x103ea91c
+	for (const FElysiumNpcClip& Sequence : Query.Sequences)
+	{
+		// `(target CC || seqdesc+0x10 > 0) && seqdesc+0x2c4 > 0` (`0x103ea976..0x103ea989`): `+0x10`
+		// is the clip's weight, `+0x2c4` its swing-record count.
+		if ((TargetCharacter == nullptr && Sequence.Weight < 1) || Sequence.Swings.Num() < 1)
+		{
+			continue;
+		}
+		// `+0x2cc`. A descriptor that states no low edge is baked as -1 ("unstated"); the file's own
+		// word for those is taken as 0.0 here. DOUBTFUL, reported: the raw `+0x2cc` of an unstated
+		// descriptor is not re-read in the corpus.
+		const float LowReachUnits = (Sequence.HasLowReach() ? Sequence.LowReachCm : 0.0f) / CmPerUnit;
+		const float ReachUnits = Sequence.ReachCm / CmPerUnit;                   // +0x2d0
+		if (LowReachUnits < Lo)                                                  // 0x103ea98b..0x103ea9a2
+		{
+			Lo = LowReachUnits;
+		}
+		if (ReachUnits > Hi)                                                     // 0x103ea9a6..0x103ea9bf
+		{
+			Hi = ReachUnits;
+		}
+		// The `+0x2bc` records at `+0x2c0`, 24-byte stride: `(rec[0] + rec[3]) * 0.5`, the two
+		// corners' first (reach) axis (`0x103ea9db..0x103ea9f2`).
+		EnvelopeCount += Sequence.Envelopes.Num();                               // 0x103ea9d7
+		for (const FElysiumMeleeEnvelope& Envelope : Sequence.Envelopes)
+		{
+			MeanSum += static_cast<float>(Envelope.Max.X + Envelope.Min.X) / CmPerUnit
+				* GMeleeBandEnvelopeHalf;                                        // 0x103ea9e4
+		}
+	}
+	if (EnvelopeCount == 0)                                                      // 0x103eaa01 / 0x103eaa03
+	{
+		return 0;
+	}
+	// `mean`, clamped into `[lo, hi]`, the upper edge first (`0x103eaa09..0x103eaa3f`).
+	float Mean = MeanSum / static_cast<float>(EnvelopeCount);                    // 0x103eaa0d
+	if (Mean > Hi)                                                               // 0x103eaa15
+	{
+		Mean = Hi;
+	}
+	else if (Mean < Lo)                                                          // 0x103eaa30
+	{
+		Mean = Lo;
+	}
+	// The far limit, `max(hi * 1.2, 256.0)` (`0x103eaa43..0x103eaa60`).
+	float FarUnits = Hi * GMeleeBandFarScale;                                    // 0x103eaa47
+	if (GMeleeBandFarFloorUnits > FarUnits)                                      // 0x103eaa53
+	{
+		FarUnits = GMeleeBandFarFloorUnits;
+	}
+	if (Query.DistUnits > FarUnits)                                              // 0x103eaa66..0x103eaa76
+	{
+		return static_cast<int32>(EElysiumNpcCond::TooFarForMelee);              // 0x103eaa7b 9
+	}
+	if (Query.DistUnits > Hi)                                                    // 0x103eaa8a..0x103eaa9c
+	{
+		return static_cast<int32>(EElysiumNpcCond::TooFarToAttack);              // 0x103eaaa1 0x60
+	}
+	if (static_cast<double>(Query.Dot) < GMeleeBandDotMin)                       // 0x103eaab0..0x103eaac2
+	{
+		return static_cast<int32>(EElysiumNpcCond::NotFacingAttack);             // 0x103eaac7 0x61
+	}
+	if (Query.DistUnits < Lo)                                                    // 0x103eaad6..0x103eaae6
+	{
+		return static_cast<int32>(EElysiumNpcCond::TooCloseToAttack);            // 0x103eaaeb 0x5f
+	}
+	if (TargetCharacter != nullptr && bReady)                                    // 0x103eaafa / 0x103eab02
+	{
+		// `mean * 0.25 > dist` -> 0x5f, else 0x60 (`0x103eab06..0x103eab2a`).
+		return static_cast<double>(Mean) * GMeleeBandCloseScale > static_cast<double>(Query.DistUnits)
+			? static_cast<int32>(EElysiumNpcCond::TooCloseToAttack)              // 0x103eab20 0x5f
+			: static_cast<int32>(EElysiumNpcCond::TooFarToAttack);               // 0x103eab2a 0x60
+	}
+	return 0;                                                                    // 0x103eab39
 }
 
 bool ElysiumNpcCond::WerewolfZoneSuppressesMelee(const FElysiumNpc& Npc, FElysiumNpcConditions& Out)
@@ -1050,104 +1183,214 @@ bool ElysiumNpcCond::WerewolfZoneSuppressesMelee(const FElysiumNpc& Npc, FElysiu
 	return false;
 }
 
-void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpcBase& Npc, double Now,
-	FElysiumNpcConditions& Out)
+void ElysiumNpcCond::GatherAttackConditions(FElysiumNpcBase& Npc, double Now)
 {
 	const FElysiumEntityWorld* World = Npc.World;
-	// The weapon-sight occlusion is slot 481's LOS debounce (`+0x5b98`, `0x10270b20`) at its limit.
-	const bool bEnemyOccluded = Npc.BaseMemory.EnemyOccludedCheck >= ElysiumNpcSense::EnemyLosFailureLimit;
+	FElysiumNpcConditions& Out = Npc.Cognition.Conditions;
+	// A NULL guard only. Retail has no test here: its caller (`GatherEnemyConditions 0x10270b20`,
+	// `0x102711dc`) hands a live `GetEnemy()`, already past its own `IsAlive` return (`0x10270e5a`).
+	// The port's old "inert enemy" return went with V5a-1: a hidden, living enemy reaches retail's
+	// gather and gets the top clear, and the return skipped it.
 	if (World == nullptr || !Npc.BaseMemory.Enemy.IsSet())
 	{
 		return;
 	}
-	const FElysiumEntity* Enemy = ResolveEnemyHandle(*World, Npc.BaseMemory.Enemy);
-	if (Enemy == nullptr || Enemy->IsInert())
+	FElysiumEntity* const Enemy =
+		const_cast<FElysiumEntity*>(ResolveEnemyHandle(*World, Npc.BaseMemory.Enemy));
+	if (Enemy == nullptr)
 	{
-		// `ENEMY_DEAD` / `LOST_ENEMY` already describe this; range against a corpse is not a fact.
 		return;
 	}
 
 	// `CNPC_VWerewolf::GatherAttackConditions` (`0x103d02b0`, slot 561) is `FElysiumNpcWerewolf`'s
-	// override (story 5 step 3): `WerewolfZoneSuppressesMelee` below, ahead of a direct call here.
+	// override (story 5 step 3): `WerewolfZoneSuppressesMelee` above, ahead of a direct call here.
 
 	// SEAM (plumbed, never set): `SHOULD_DODGE` (0x0c), `SHOULD_BLOCK` (0x0d), `SHOULD_STEPBACK`
-	// (0x0e) and `SHOULD_KICK` (0x0f). The NOTICE that would feed them is real and lands below
-	// (`NoticeMeleeAttack` writes the attacker into memory with the recovered five-second life), but
-	// the policy turning a noticed incoming attack into ONE of these four is not decoded — nothing in
-	// the survey names the ratings, timers or randomisation that choose between dodging, blocking,
-	// kicking and stepping back. Raising any of them from the notice alone would make every NPC
-	// dodge, which is a behaviour, not a gap. The melee selector's four branches exist and are
-	// driven by injection in `Elysium.Substrate.NpcCombat.MeleeSelectorOrder`.
+	// (0x0e) and `SHOULD_KICK` (0x0f) are not this body's: `RefreshCombatConditions 0x102b2570`
+	// owns the last two, and the policy behind the first two is not decoded.
 
-	const FElysiumWeapon* Weapon = NpcCondActiveWeapon(Npc);
-
-	// `WAITING_ATTACK_TIME` (0x2f) — the recovery deadline the weapon controller owns. An unarmed
-	// NPC has no deadline to wait on, which is the honest answer rather than a permanent hold.
-	const bool bReady = Weapon == nullptr || Now >= Weapon->NextPrimaryAttackTime;
-	if (!bReady)
-	{
-		Out.Set(EElysiumNpcCond::WaitingAttackTime);
-	}
-
-	const double DistanceCm = FVector::Dist(Npc.EyePosition(), Enemy->EyePosition());
-	const double MeleeReachCm =
-		static_cast<double>(ElysiumWeapons::MeleeReachSourceUnits) * ElysiumMove::U;
-	const bool bFacing = NpcCondFacesTarget(Npc, Enemy->Origin);
-
-	const ECapability Capability = WeaponCapability(Npc);
-	if (Capability != ECapability::Ranged)
-	{
-		// --- The melee band -----------------------------------------------------------------------
-		if (DistanceCm > MeleeReachCm)
-		{
-			// CHOSEN, NOT RECOVERED: melee's own `TOO_FAR_TO_ATTACK` edge is the swing's reach. No
-			// decoded body states a separate melee band, and any other number would let the selector
-			// choose an attack the weapon's acquisition then refuses (or hold an NPC out of a swing
-			// it could land). Replace the constant, not the shape.
-			Out.Set(EElysiumNpcCond::TooFarToAttack);
-		}
-		else if (bFacing && bReady)
-		{
-			Out.Set(EElysiumNpcCond::CanMeleeAttack1);
-		}
-		return;
-	}
-
-	// --- The ranged band: the active weapon's slot 365 (0018 story 8, findings R3) ----------------
-	// `0x1026dd10`'s weapon arm (`bits_CAP_WEAPON_RANGE_ATTACK1` 0x2000 with an active weapon) hands
-	// `(enemy, dot, d)` to `CBaseCombatWeapon 0x1024f670` (`CALL [EDX+0x5b4]` at `0x1026de87`) and
-	// raises the ONE condition it answers. The item text's `Range` key feeds none of it.
-	if (Weapon == nullptr)
-	{
-		return;
-	}
-	// `d` is the gather's own second argument, `0x10270890` in `GatherEnemyConditions` (`10270ef2`):
-	// 3-D between the two origins with the vertical term replaced by the bounding-box gap. The port's
-	// gather measures it itself (see `FElysiumNpcBase::GatherAttackConditions`), through the same body.
-	const float DistanceUnits = Npc.Conditions19EnemyDistanceUnits(*Enemy);
 	// `dot` (`1026dd6c..1026ddfe`): `enemy.origin - my.origin` (slot 217 both), Z zeroed
 	// (`1026ddbf`), normalised by `0x10137220` (`v *= 1 / (|v| + FLT_EPSILON)`), dotted with slot
 	// 368 `BodyDirection2D` (`+0x5c0`). The two vectors share this runtime's frame, so the axis
-	// reflection cancels. A zero delta dots to 0 and fails the 0.5 facing test, as retail's does.
+	// reflection cancels. A zero delta dots to 0 and fails every facing test, as retail's does.
 	FVector ToEnemyUnits = (Enemy->GetAbsOrigin() - Npc.GetAbsOrigin()) / static_cast<double>(ElysiumMove::U);
 	ToEnemyUnits.Z = 0.0;
 	ToEnemyUnits *= 1.0 / (ToEnemyUnits.Size() + static_cast<double>(ElysiumNpcTunables::FloatEpsilon));
 	const float Dot = static_cast<float>(FVector::DotProduct(Npc.BodyDirection2D(), ToEnemyUnits));
-	const int32 Answer = Weapon->RangeAttack1Conditions(Enemy, Dot, DistanceUnits, Now);
-	if (Answer == static_cast<int32>(EElysiumNpcCond::CanRangeAttack1))
+	// `d` is the gather's own second argument, `0x10270890` in `GatherEnemyConditions` (`10270ef2`):
+	// 3-D between the two origins with the vertical term replaced by the bounding-box gap. The port's
+	// gather measures it itself (see `FElysiumNpcBase::GatherAttackConditions`), through the same body.
+	const float DistanceUnits = Npc.Conditions19EnemyDistanceUnits(*Enemy);
+
+	// --- The top clear ----------------------------------------------------------------------------
+	// `0x1026de02 CALL [EDX+0x8c0]`: slot 560 `ClearAttackConditions 0x1026dc80`, before anything is
+	// set. Its eleven words, never the band words 0x08 / 0x5f / 0x60 / 0x09.
+	Npc.ClearAttackConditions();                                                 // 0x1026de02
+
+	// `0x1026de0c`: slot 513 `CapabilitiesGet` (`+0x804`), kept for both arms. Retail's word is
+	// `m_afCapability | activeWeapon->slot360()`; the port's slot 360 is a seam answering 0
+	// (`ActiveWeaponCapabilityWord`), so the WEAPON's two bits are read through
+	// `WeaponCapability` (the item record's family) and OR-ed in at each test: `Ranged` stands for
+	// the weapon's `0x2000`, `Melee` for its `0x8000` (the melee class word is `0x40018000`).
+	const int32 Caps = Npc.CapabilitiesGet();                                    // 0x1026de0c
+	const ECapability Capability = WeaponCapability(Npc);
+	FElysiumWeapon* const Weapon = NpcCondActiveWeapon(Npc);                     // GetActiveWeapon 0x10007e19
+	const FElysiumNpc* const Troika = Npc.AsNpc();
+	// `m_flNextAttack (+0x1564)`, a combat-character word the port declares on the Troika leaf
+	// (`ElysiumNpcConditionsBodies.inl`); a base-only body has none and answers 0. No writer yet.
+	const double OwnerNextAttackTime = Troika != nullptr ? Troika->NextAttackTime : 0.0;
+
+	// --- The ranged arm, `0x1026de3a..0x1026ded7` ---------------------------------------------------
+	bool bRangedAnswered = false;
+	int32 RangedAnswer = 0;
+	if (((Caps & GGatherCapWeaponRange1) != 0 || Capability == ECapability::Ranged)   // 0x1026de3a caps & 0x2000
+		&& Weapon != nullptr)                                                    // 0x1026de44 / 0x1026de4b
 	{
-		// `1026ded9..1026df45`: 0x4f is kept only if slot 562 `WeaponLOSCondition` passes from the
-		// eye to the enemy's eye or to its body target, each with `bSetConditions = 1` — its weapon
-		// slot 364 (`0x1024f330`) raises `WEAPON_SIGHT_OCCLUDED` (0x66), or `WEAPON_BLOCKED_BY_FRIEND`
-		// (0x63) on a friendly hit; both failing raises no 0x4f. CHOSEN, NOT RECOVERED here: the two traces
-		// are stood in for by the eye's debounce latch (`+0x5b98` at its limit), so the pair agrees
-		// with `ENEMY_OCCLUDED` where retail's muzzle traces could disagree. See the
-		// `WEAPON_THROUGH_WALL` seam in this function's declaration.
-		Out.Set(bEnemyOccluded ? EElysiumNpcCond::WeaponSightOccluded : EElysiumNpcCond::CanRangeAttack1);
-		return;
+		// `0x10252410(weapon, 0)`: true when `curtime >= weapon[+0x730]`; false -> 0x2f.
+		if (!(Now >= Weapon->NextPrimaryAttackTime))                             // 0x1026de58 / 0x1026de5f
+		{
+			Out.Set(EElysiumNpcCond::WaitingAttackTime);                         // 0x1026de70 0x2f
+		}
+		// The weapon's slot 365 (`+0x5b4`, `CBaseCombatWeapon 0x1024f670`) `(enemy, dot, dist)`. The
+		// item text's `Range` key feeds none of it.
+		RangedAnswer = Weapon->RangeAttack1Conditions(Enemy, Dot, DistanceUnits, Now);   // 0x1026de87
+		bRangedAnswered = true;
 	}
-	// Every other answer, 0 included (`1026df61 PUSH EBP` — retail's `SetCondition(COND_NONE)`).
-	Out.Set(static_cast<EElysiumNpcCond>(Answer));
+	else if ((Caps & GGatherCapInnateRange1) != 0)                               // 0x1026de8f caps & 0x20000
+	{
+		if (Now < OwnerNextAttackTime)                                           // 0x1026dea1..0x1026deb1 +0x1564
+		{
+			Out.Set(EElysiumNpcCond::WaitingAttackTime);                         // 0x1026dec2 0x2f
+		}
+		RangedAnswer = Npc.RangeAttack1Conditions(Dot, DistanceUnits);           // 0x1026ded1 slot 553 (+0x8a4)
+		bRangedAnswered = true;
+	}
+	// Neither bit: no ranged answer, straight to the melee arm (`0x1026de95 JZ 0x1026df6d`).
+
+	if (bRangedAnswered)
+	{
+		if (RangedAnswer == static_cast<int32>(EElysiumNpcCond::CanRangeAttack1))   // 0x1026ded9 CMP EBP,0x4f
+		{
+			// `0x1026dede..0x1026df45`: slot 562 `WeaponLOSCondition` (`+0x8c8`) from the eye (slot
+			// 217 `(…, 1)`) to the enemy's slot 197 point, `bSetConditions = 1`; on failure slot 560
+			// AGAIN (`0x1026df00`) and a second test to the enemy's slot 193 `BodyTarget` (`+0x304`);
+			// either passing sets 0x4f, both failing sets nothing (`0x1026df45 JZ 0x1026df69`).
+			//
+			// STAND-IN, named (README v5a §2 P3), kept in retail's position: both traces are the
+			// eye's debounce latch (slot 481's `+0x5b98` at its limit), and a failing test raises
+			// `WEAPON_SIGHT_OCCLUDED` (0x66) where the weapon's slot 364 (`0x1024f330`) would. The
+			// second clear is retail's and wipes the first test's 0x66 (and 0x2f) before the second
+			// test raises it again.
+			const bool bEnemyOccluded =
+				Npc.BaseMemory.EnemyOccludedCheck >= ElysiumNpcSense::EnemyLosFailureLimit;
+			bool bWeaponLos = !bEnemyOccluded;                                   // 0x1026def2 slot 562, first test
+			if (!bWeaponLos)
+			{
+				Out.Set(EElysiumNpcCond::WeaponSightOccluded);                   // the first test's own raise
+				Npc.ClearAttackConditions();                                     // 0x1026df00 slot 560 again
+				bWeaponLos = !bEnemyOccluded;                                    // 0x1026df3d slot 562, to BodyTarget
+				if (!bWeaponLos)
+				{
+					Out.Set(EElysiumNpcCond::WeaponSightOccluded);               // the second test's own raise
+				}
+			}
+			if (bWeaponLos)
+			{
+				Out.Set(EElysiumNpcCond::CanRangeAttack1);                       // 0x1026df52 / 0x1026df64 0x4f
+			}
+		}
+		else
+		{
+			// Every other answer, 0 included (`0x1026df61 PUSH EBP`: `SetCondition(COND_NONE)`).
+			Out.Set(static_cast<EElysiumNpcCond>(RangedAnswer));                 // 0x1026df64
+		}
+	}
+
+	// --- The melee arm, `0x1026df6d..0x1026dfcb`: always run AFTER the ranged one -------------------
+	if (((Caps & GGatherCapWeaponMelee1) != 0 || Capability == ECapability::Melee)   // 0x1026df6d caps & 0x8000
+		&& Weapon != nullptr)                                                    // 0x1026df77 / 0x1026df7e
+	{
+		// The weapon's slot 367 (`+0x5bc`) `(enemy, dot, dist)`. Two bodies fill it: `CWeaponMelee
+		// 0x103eac30` -> `0x103ea7e0(0x4b, …)`, the band; and `CBaseCombatWeapon 0x1024f750`, whose
+		// whole body is `return 0` (every other weapon class). The item record's melee family
+		// stands for the `CWeaponMelee` line.
+		int32 MeleeAnswer = 0;                                                   // 0x1024f750
+		if (Capability == ECapability::Melee)
+		{
+			// `0x103ea950 GetSequencesForActivity(owner, translated activity, …)`: the wielder's
+			// sequences. OWED by `ElysiumNpcBaseAnim.inl` / `ElysiumNpcAnim.cpp` (V5a-1's report): the
+			// accessor translates the activity (weapon `+0x5a4`, owner `+0x5e0`) through the name-keyed
+			// resolver and hands every clip of the body's vocabulary carrying the result.
+			TArray<FElysiumNpcClip> Sequences;
+			Npc.MeleeSequencesForActivity(GGatherActMeleeAttack1, Sequences);
+			FMeleeWeaponBandQuery Query;
+			Query.Owner = &Npc;                                                  // 0x103ea7f0 the weapon's owner
+			Query.Weapon = Weapon;
+			Query.WeaponNextPrimaryAttackTime = Weapon->NextPrimaryAttackTime;       // +0x730
+			Query.WeaponNextSecondaryAttackTime = Weapon->NextSecondaryAttackTime;   // +0x734
+			Query.OwnerNextAttackTime = OwnerNextAttackTime;                     // owner +0x1564
+			Query.Target = Enemy;
+			// `0x103ea81c` weapon `+0x5a4`, then `0x103ea827` owner `+0x5e0` (slot 376
+			// `NPC_TranslateActivity`). SEAM: the weapon's half has no number-space body in this
+			// runtime (`TranslateActivityNumber`'s seam; the ladder is name-keyed and lives in the
+			// accessor above), so slot 331 is handed the owner's translation of the raw activity.
+			Query.TranslatedActivity = Npc.NPC_TranslateActivity(GGatherActMeleeAttack1);
+			Query.Dot = Dot;
+			Query.DistUnits = DistanceUnits;
+			Query.Now = Now;
+			Query.Sequences = Sequences;
+			MeleeAnswer = MeleeWeaponBand(Query);                                // 0x1026df9d -> 0x103eac30 -> 0x103ea7e0
+		}
+		Out.Set(static_cast<EElysiumNpcCond>(MeleeAnswer));                      // 0x1026dfcb
+	}
+	else if ((Caps & GGatherCapInnateMelee1) != 0)                               // 0x1026dfa5 caps & 0x80000
+	{
+		// Slot 555 `MeleeAttack1Conditions 0x1026d9a0` (`+0x8ac`) `(dot, dist)`.
+		Out.Set(static_cast<EElysiumNpcCond>(Npc.MeleeAttack1Conditions(Dot, DistanceUnits)));   // 0x1026dfc2 / 0x1026dfcb
+	}
+
+	// --- The blocked-by-friend timers, `0x1026dfd0..0x1026e062` ------------------------------------
+	if (Out.Has(EElysiumNpcCond::WeaponBlockedByFriend))                         // 0x1026dfd0 HasCondition(0x63)
+	{
+		if (Npc.ExtendedBlockedByFriendTimer == GGatherFltMax)                   // 0x1026dfdd +0x5b8c == FLT_MAX
+		{
+			Npc.ExtendedBlockedByFriendTimer =
+				Now + static_cast<double>(ElysiumNpcTunables::TwoAndHalf);       // 0x1026dff2 _DAT_104629ec 2.5
+		}
+		Npc.WeaponBlockedByFriendTimer =
+			Now + static_cast<double>(ElysiumNpcTunables::OneAndHalf);           // 0x1026e006 _DAT_1044f02c 1.5
+	}
+	else if (!(Now < Npc.WeaponBlockedByFriendTimer))                            // 0x1026e01a..0x1026e02a +0x5b88 <= curtime
+	{
+		Npc.ExtendedBlockedByFriendTimer = GGatherFltMax;                        // 0x1026e02c
+	}
+	if (Now > Npc.ExtendedBlockedByFriendTimer)                                  // 0x1026e03c..0x1026e04c +0x5b8c < curtime
+	{
+		Out.Set(EElysiumNpcCond::ExtendedBlockedByFriend);                       // 0x1026e05d 0x2e
+	}
+
+	// --- The tail, `0x1026e062..0x1026e107` ---------------------------------------------------------
+	if (Now < Npc.WeaponBlockedByFriendTimer)                                    // 0x1026e068..0x1026e076 the block still held
+	{
+		Out.Set(EElysiumNpcCond::WeaponBlockedByFriend);                         // 0x1026e087 0x63
+		Out.Clear(EElysiumNpcCond::CanRangeAttack2);                             // 0x1026e090 0x50
+		Out.Clear(EElysiumNpcCond::CanRangeAttack1);                             // 0x1026e099 0x4f
+		Out.Clear(EElysiumNpcCond::CanMeleeAttack2);                             // 0x1026e0a2 0x52
+		Out.Clear(EElysiumNpcCond::CanMeleeAttack1);                             // 0x1026e107 0x51
+	}
+	else if (Out.Has(EElysiumNpcCond::CanRangeAttack2)                           // 0x1026e0ab 0x50
+		|| Out.Has(EElysiumNpcCond::CanRangeAttack1)                             // 0x1026e0b8 0x4f
+		|| Out.Has(EElysiumNpcCond::CanMeleeAttack2)                             // 0x1026e0c5 0x52
+		|| Out.Has(EElysiumNpcCond::CanMeleeAttack1))                            // 0x1026e0d2 0x51
+	{
+		// An attack is open: the band words of this and of every earlier gather go.
+		Out.Clear(EElysiumNpcCond::TooCloseForRanged);                           // 0x1026e0e3 0x08
+		Out.Clear(EElysiumNpcCond::TooCloseToAttack);                            // 0x1026e0ec 0x5f
+		Out.Clear(EElysiumNpcCond::TooFarToAttack);                              // 0x1026e0f5 0x60
+		Out.Clear(EElysiumNpcCond::TooFarForMelee);                              // 0x1026e0fe 0x09
+		Out.Clear(EElysiumNpcCond::WeaponBlockedByFriend);                       // 0x1026e107 0x63
+	}
+	// None standing: nothing (`0x1026e0dd JZ 0x1026e10c`).
 }
 
 // --- The incoming-attack notice ---

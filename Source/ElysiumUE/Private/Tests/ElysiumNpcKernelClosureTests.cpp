@@ -274,12 +274,11 @@ bool FElysiumNpcKernelClosureDispatchTest::RunTest(const FString&)
 		{ 561, TEXT("0x1026dd10"), TEXT("GatherAttackConditions"),
 			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)
 			{
-				FElysiumNpcConditions Direct;
-				ElysiumNpcCond::GatherAttackConditions(*F.Guard, F.World.World.NowSeconds(),
-					Direct);
+				ElysiumNpcCond::GatherAttackConditions(*F.Guard, F.World.World.NowSeconds());
+				const int32 Direct = F.Guard->Cognition.Conditions.Num();
 				F.Guard->Cognition.Conditions.Reset();
 				F.Guard->GatherAttackConditions(nullptr, 0.f);
-				T.TestEqual(L, F.Guard->Cognition.Conditions.Num(), Direct.Num());
+				T.TestEqual(L, F.Guard->Cognition.Conditions.Num(), Direct);
 			} },
 		{ 569, TEXT("0x10297560"), TEXT("GetCoverActivity"),
 			[](FAutomationTestBase& T, FElysiumClosureFixture& F, const FString& L)

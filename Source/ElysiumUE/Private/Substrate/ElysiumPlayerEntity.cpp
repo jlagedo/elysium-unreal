@@ -160,6 +160,7 @@ void FElysiumPlayer::Spawn()
 	// The once-only latch on the death commit goes with it, for the same reason: a run that comes
 	// back through a load has not reported this player's death yet.
 	bDeathReported = false;
+	FieldOfView = 0.5f;   // `CBasePlayer::Spawn` `0x1016d260`: `m_flFieldOfView` (`+0x1574`) = 0.5
 	if (IElysiumEmbodiment* Bodily = World ? World->Embodiment() : nullptr)
 	{
 		// The port's living lens stays `default_fov` rather than retail's latched 60: that is the

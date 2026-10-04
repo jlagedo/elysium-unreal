@@ -78,7 +78,18 @@ struct FElysiumWeaponMode
 	// `Attack_Rate` — the ranged next-shot interval, in seconds. Melee recovery does NOT use it
 	// (it is the selected clip's duration over its playback rate), but a melee record authors it and
 	// the dry-fire path advances by it, so it is loaded for every mode.
-	float AttackRate = 0.0f;
+	// Mode record `+0x260`; the loader's default for a block that authors none is 1.0
+	// (`WeaponModeDataLoader 0x10259230`, `0x102593cd`; the client's `0x101a3eb0` is identical).
+	float AttackRate = 1.0f;
+
+	// The NPC's wait before a shot (`TASK_WAIT_ATTACK_TIME1/2`, `0x102a337d`), read by `0x102c5730`
+	// (`RandomFloat(Min, Max)`) and scaled by `0x102c5570` (`(v - Attack_Rate) * sqrt(dist /
+	// Base_Range)`). Same loader `0x10259230`. The member initialisers are the loader's answers for
+	// a block that authors nothing; a PARSED record computes the two rate defaults from
+	// `Attack_Rate` as just parsed (`ParseWeaponMode`).
+	float NpcAttackRateMin = 2.0f;         // `NPC_Attack_Rate_Min` `+0x264`, seconds; default `2 x Attack_Rate` (`0x102593e5`)
+	float NpcAttackRateMax = 3.0f;         // `NPC_Attack_Rate_Max` `+0x268`, seconds; default `3.0 x Attack_Rate` (`[0x10449258]`)
+	float NpcAttackRateBaseRange = 120.0f; // `NPC_Attack_Rate_Base_Range` `+0x26c`, Source units; default 120.0
 
 	FString AmmoType;                   // `Ammo_Type`
 	// The two counts retail keeps DISTINCT: rounds spent per scheduled shot, and rays/pellets placed

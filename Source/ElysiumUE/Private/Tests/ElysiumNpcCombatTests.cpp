@@ -509,7 +509,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatAttackConditionsTest,
 	"Elysium.Arm.NpcCombat.AttackConditions", GElysiumTestFlags)
 bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 {
-	// --- Melee: reach, facing and the recovery deadline -----------------------------------------
+	// --- Melee: the weapon's slot 367 is the band `0x103ea7e0`, not a reach constant ------------------
+	// Spec 0002 V5a-1 deleted this block's stand-in assertions (0x51 inside 64 units when faced,
+	// 0x60 past 64 units, 0x2f off the katana's deadline): they pinned the port's CHOSEN band and the
+	// exclusive melee/ranged split. The band is `Elysium.Arm.NpcKernelConditions.MeleeWeaponBand`.
 	{
 		FCombatFixture F(GKatana);
 		if (F.Fighter == nullptr || F.Target == nullptr)
@@ -518,44 +521,21 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 		}
 		F.RunAdmissionAndLoadout();
 		F.Fighter->BaseMemory.Enemy = F.Target->Handle;
-
-		// 100 cm is inside the recovered 64-Source-unit reach, and the fighter faces +X.
-		FElysiumNpcConditions Cond;
-		ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
-		TestTrue(TEXT("an enemy in reach, faced, with the deadline passed can attack"),
-			Cond.Has(ECond::CanMeleeAttack1));
-		TestFalse(TEXT("...and is not too far"), Cond.Has(ECond::TooFarToAttack));
-		TestFalse(TEXT("...nor waiting on its attack timer"), Cond.Has(ECond::WaitingAttackTime));
-
-		// Turned away: still in reach, no longer inside the swing's 30-degree half-angle.
-		F.Fighter->Angles.Y = 180.0;
-		Cond.Reset();
-		ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
-		TestFalse(TEXT("an enemy behind the NPC is not attackable"), Cond.Has(ECond::CanMeleeAttack1));
-		TestFalse(TEXT("...and turning away does not make it far away"),
-			Cond.Has(ECond::TooFarToAttack));
-		F.Fighter->Angles.Y = 0.0;
-
-		// Beyond the reach: the melee band's own `TOO_FAR_TO_ATTACK`.
-		F.Target->Origin = FVector(Cm(500.0), 0.0, 0.0);
-		Cond.Reset();
-		ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
-		TestTrue(TEXT("an enemy beyond the swing's reach is too far"), Cond.Has(ECond::TooFarToAttack));
-		TestFalse(TEXT("...and cannot be attacked"), Cond.Has(ECond::CanMeleeAttack1));
-		F.Target->Origin = FVector(100.0, 0.0, 0.0);
-
-		// The recovery deadline the weapon controller owns is what raises `WAITING_ATTACK_TIME`.
 		FElysiumWeapon* Weapon = F.ActiveWeapon(F.Fighter);
 		if (!TestNotNull(TEXT("the fighter holds its katana"), Weapon))
 		{
 			return false;
 		}
+		// `0x1026de3a`: 0x2f is the RANGED arm's (`caps & 0x2000` with a weapon, or `caps & 0x20000`).
+		// A melee weapon carries neither bit, so its unexpired deadline raises no 0x2f; it withholds
+		// 0x51 through the band's `ready` instead (`0x103ea84e`).
 		Weapon->HoldAttacksUntil(50.0);
+		FElysiumNpcConditions& Cond = F.Fighter->Cognition.Conditions;
 		Cond.Reset();
-		ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
-		TestTrue(TEXT("an unexpired next-attack deadline raises WAITING_ATTACK_TIME (0x2f)"),
+		ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0);
+		TestFalse(TEXT("0x1026de3a: a melee weapon's deadline raises no WAITING_ATTACK_TIME (0x2f)"),
 			Cond.Has(ECond::WaitingAttackTime));
-		TestFalse(TEXT("...and withholds CAN_MELEE_ATTACK1"), Cond.Has(ECond::CanMeleeAttack1));
+		TestFalse(TEXT("0x103ea84e: ...and withholds CAN_MELEE_ATTACK1"), Cond.Has(ECond::CanMeleeAttack1));
 	}
 
 	// --- Ranged: weapon slot 365 (`0x1024f670`), one answer, first match -------------------------
@@ -589,8 +569,11 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 		auto Gather = [this, &F, &Answers](double AtUnits, ECond Expected, const TCHAR* What)
 		{
 			F.Target->Origin = FVector(Cm(AtUnits), 0.0, 0.0);
-			FElysiumNpcConditions Cond;
-			ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
+			// The gather works on the NPC's own set (slot 560 clears it, `0x1026de02`); each case
+			// starts from an empty one so a band word of the previous case is not what is read.
+			F.Fighter->Cognition.Conditions.Reset();
+			ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0);
+			const FElysiumNpcConditions Cond = F.Fighter->Cognition.Conditions;
 			int32 Raised = 0;
 			for (const ECond Answer : Answers)
 			{
@@ -634,8 +617,9 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 		Weapon->HoldAttacksUntil(50.0);
 		{
 			F.Target->Origin = FVector(Cm(400.0), 0.0, 0.0);
-			FElysiumNpcConditions Cond;
-			ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0, Cond);
+			F.Fighter->Cognition.Conditions.Reset();
+			ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0);
+			const FElysiumNpcConditions Cond = F.Fighter->Cognition.Conditions;
 			TestTrue(TEXT("an unexpired deadline raises WAITING_ATTACK_TIME (0x2f)"),
 				Cond.Has(ECond::WaitingAttackTime));
 			for (const ECond Answer : Answers)
@@ -700,8 +684,9 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 			ElysiumNpcCond::HasDetectedAttack(*F.Target, 14.9));
 		TestFalse(TEXT("...and expires it"), ElysiumNpcCond::HasDetectedAttack(*F.Target, 15.1));
 
-		FElysiumNpcConditions Cond;
-		ElysiumNpcCond::GatherAttackConditions(*F.Target, 10.5, Cond);
+		F.Target->Cognition.Conditions.Reset();
+		ElysiumNpcCond::GatherAttackConditions(*F.Target, 10.5);
+		const FElysiumNpcConditions Cond = F.Target->Cognition.Conditions;
 		for (const ECond Response : { ECond::ShouldDodge, ECond::ShouldBlock, ECond::ShouldStepback,
 			ECond::ShouldKick })
 		{

@@ -257,6 +257,8 @@ public:
 	float ClipFadeSeconds(const FString& Stem, const FString& ClipName) const;
 	bool ResolveNpcActivityClip(const struct FElysiumActivityClipRequest& Request,
 		struct FElysiumActivityClip& Out);
+	void NpcActivitySequences(const struct FElysiumActivityClipRequest& Request,
+		TArray<struct FElysiumNpcClip>& Out);
 	bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
 		EElysiumAnimBodyKind BodyKind, FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
 	bool HasNpcClip(const FString& Stem, const FString& ClipName);

@@ -7,7 +7,7 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 136 generated slot bodies of `FElysiumCombatCharacter`: 19 carry the retail default story 29c
-// recovered, 19 are defined by hand in the substrate, and 97 are still stubs — 62 29c, 25 29d, 5
+// recovered, 20 are defined by hand in the substrate, and 96 are still stubs — 61 29c, 25 29d, 5
 // 29e, 5 unassigned. 1 are closed (0019/6) and answer the value-initialised default without
 // tallying.
 //
@@ -840,12 +840,8 @@ bool FElysiumCombatCharacter::Slot361()
 
 // slot 363 0x10326750 (walked) `bool FInViewCone(CBaseEntity*)`
 //   layer 7, story 29c
-bool FElysiumCombatCharacter::FInViewCone(FElysiumEntity*)
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::FInViewCone"), TEXT("0x10326750"),
-		TEXT("29c"), DebugString());
-	return {};
-}
+// verdict `present`: the body is `FElysiumCombatCharacter::FInViewCone`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 364 0x10326bd0 (walked) `bool FInAimCone(const Vector&)`
 //   layer 6, story 29c
@@ -1584,7 +1580,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, bool(const FVector&)>::Test(&FElysiumCombatCharacter::FInViewCone),
 				nullptr },
 			{ 363, TEXT("0x10326750"), TEXT("CBaseCombatCharacter"), TEXT("FInViewCone"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, bool(FElysiumEntity*)>::Test(&FElysiumCombatCharacter::FInViewCone),
 				nullptr },
 			{ 364, TEXT("0x10326bd0"), TEXT("CBaseCombatCharacter"), TEXT("FInAimCone"),

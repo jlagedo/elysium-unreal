@@ -11,6 +11,7 @@
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumRetailActivities.h"
 #include "ElysiumAnimationIntent.h"
+#include "Visual/ElysiumNpcClips.h"            // FElysiumNpcClip — `MeleeSequencesForActivity`'s list
 
 // Story 29c-1, family **Anim** — the animation layers, the flex/expression controllers and the
 // scene-event queue of `order.md` layers 0–9.
@@ -390,6 +391,28 @@ int32 FElysiumNpc::SequenceForActivity(int32 Activity)
 		: INDEX_NONE;   // the body authors no clip for it: retail's own -1
 	SequenceResolveCache.Add(Key, Row);
 	return Row;
+}
+
+void FElysiumNpc::MeleeSequencesForActivity(int32 Activity, TArray<FElysiumNpcClip>& OutSequences) const
+{
+	// `0x103ea950 GetSequencesForActivity` over the activity `0x103ea81c` (weapon `+0x5a4`) and
+	// `0x103ea827` (owner `+0x5e0`) translated. The translation is the name-keyed resolver's (the
+	// same request `SequenceForActivity` builds), so the list is every clip carrying the activity
+	// the resolver searched the vocabulary for. Not cached: the armed/alert state the request
+	// carries moves, and only a melee-armed NPC's gather asks.
+	OutSequences.Reset();
+	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	const TCHAR* Name = ElysiumRetailActivities::RegistrationNameOf(Activity);
+	if (Embodiment == nullptr || Visual == nullptr || Name == nullptr)
+	{
+		return;   // no model: `0x103ea800` answers 0, and so does an empty list
+	}
+	FElysiumActivityClipRequest Request;
+	FillActivityClipRequest(Request);
+	Request.Activity = Name;
+	Request.Variant = 0;
+	Request.BodyKind = EElysiumAnimBodyKind::Cast;
+	Embodiment->NpcActivitySequences(Request, OutSequences);
 }
 
 // --- The bridge row's descriptor accessors (spec 0002 V4a seam) --------------------------------

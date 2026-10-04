@@ -1304,3 +1304,11 @@ first, then the ruling, the cost, the proving record. No query ran over 10 s.
 - **A0 / harness**: the `removed` event kind if absent (J13).
 - **`spec.md`**: the four species rows on the "on demand" line (J11); the bbox import and the
   feed-box read filed with the acquire cone's owner (J2b).
+
+## V5a + A3 landed (integrator, 2026-10-04)
+
+- **N1 closed** — `cover_armed` green: the cover tail `0x102b78a2..0x102b78ee` reads the enemy's active weapon (`0xa3` against a pistol).
+- **N2 closed in the task, open in its input** — `TASK_WAIT_ATTACK_TIME1 0x102a337d` reads the stamp `0x10252450` + `0x102c5730`; `ranged_open_fire` stays red because the weapon's `m_flNextPrimaryAttack +0x730` has no NPC writer (no NPC shot runs through the weapon: the dispatcher is V4a lane A1, the event shot V4o lane O3). Game red, placed on A1 then O3 in the record's `known_red`.
+- **Known red 2 closed** — `range_bands` green: `GatherAttackConditions 0x1026dd10` whole (the top clear `0x1026de02`, both arms, the friend timers, the tail `0x1026e062..0x1026e107`).
+- **Known red 3, slot 363's part, closed** — `sense_enemy_facing_me` green; `ranged_open_fire` and `ranged_sustained_fire` raise no `BEHIND_ENEMY`. The trace named `0x56` `COND_?` (no name row); it is `ENEMY_FACING_ME` now (harness).
+- **Packet R2's "`m_flStealthVisionCone +0x63c8` has no writer" is wrong**: `0x1028fca5` (in `FUN_1028fc90`, the per-pass reset) stores 1.0 (`docs/vtmb/npc-ai/senses.md` § Cone, corrected).

@@ -54,8 +54,10 @@ namespace ElysiumNpcSense
 	// The `-1.0` sentinel `InitPerceptionDistances` reads on `vision` and `hearing`.
 	inline constexpr float DerivedSentinel = -1.0f;
 
-	// Troika's field-of-view member is 0.2 (`FInViewCone` 0x103264d0). The target's stealth cone
-	// scalar multiplies this cosine threshold inside the strict apex/cone test.
+	// Troika's field-of-view member is 0.2 (`0x10298de8`). The cone test itself (`0x103264d0`)
+	// reads the observer's own `m_flFieldOfView` (`FElysiumCombatCharacter::FieldOfView`), not this
+	// constant: it stays for the debug drawings and as the answer for an observer that is not a
+	// combat character.
 	inline constexpr float DefaultViewConeDot = 0.2f;
 
 	// `DAT_10924fb9` / `DAT_10924fba`. ConVars `npc_ignore_player` / `npc_ignore_senses`, default
@@ -387,7 +389,9 @@ public:
 
 	// Base `CBaseCombatCharacter::FInViewCone` / `FinViewCone3dNew` (`0x10326750` /
 	// `0x103264d0`). Strict 3-D apex test: Source pitch and inverse-Unreal yaw, reject a
-	// negative front-plane dot, then cosine × target cone scalar vs 0.2. Point-only callers
+	// front-plane dot at or below zero, then cosine × target cone scalar strictly above the
+	// OBSERVER's `m_flFieldOfView` (`+0x1574`, `FElysiumCombatCharacter::FieldOfView`: 0.2 on the
+	// Troika line, 0.5 on the player, the species' own on theirs). Point-only callers
 	// (the closest-player cache, witness origins, geometry tests) use this body because they
 	// are not slot-363 dispatches.
 	//

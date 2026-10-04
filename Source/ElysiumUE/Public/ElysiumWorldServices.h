@@ -859,6 +859,14 @@ public:
 		Out = FElysiumActivityClip();
 		return false;
 	}
+	// Every clip of the body's vocabulary carrying the activity ResolveNpcActivityClip's translation
+	// searches for, in the vocabulary's sequence order -- retail's `GetSequencesForActivity`
+	// (`0x103ea950`), which the melee band `0x103ea7e0` walks. Nothing when the body has no
+	// vocabulary or the translation lands on no activity.
+	virtual void NpcActivitySequences(const FElysiumActivityClipRequest& Request,
+		TArray<struct FElysiumNpcClip>& Out)
+	{
+	}
 	// The label-route sibling of ResolveNpcActivityClip, for a caller that already names an exact
 	// clip -- `m_iszCustomMove` and the like -- rather than an ACT_* to weigh-pick. OutAnimName is
 	// the concrete cell ClipName resolves to (itself, unless ClipName names a blend grid); the speed

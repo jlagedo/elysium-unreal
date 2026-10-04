@@ -4,7 +4,6 @@
   "stage": "arena",
   "seed": 1,
   "duration": 6.0,
-  "known_red": "V4a (lane A3, slot 363): BEHIND_ENEMY 0x57 is raised on every gather and ENEMY_FACING_ME never -- the player's slot 363 FInViewCone(entity) is a counting stub answering false",
   "player": { "at": [975.0, -238.0, 0.0], "face": -90.0 },
   "cast": [
     {

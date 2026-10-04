@@ -478,20 +478,30 @@ int32 FElysiumNpc::SelectCoverOrKickSchedule(const FScheduleHintSearchRequest& R
 		return 0x9b;
 	}
 
-	// "Does my enemy carry a ranged threat" — the enemy's own enemy's active weapon reporting
-	// `0x6000` in its capability word (slot 360). `bNoRangedThreat` is retail's `bVar1`.
+	// "Does my enemy carry a ranged threat" (`0x102b78a2..0x102b78ee`): the enemy's active weapon
+	// reporting `0x6000` in its capability word (slot 360, `+0x5a0`). `bNoRangedThreat` is retail's
+	// `bVar1`: it stays true for no enemy, an enemy that is no combat character, no active weapon,
+	// and a weapon whose word carries neither bit.
 	bool bNoRangedThreat = true;
 	if (const FElysiumEntity* Enemy = World != nullptr
-		? ElysiumNpcCond::ResolveEnemyHandle(*World, BaseMemory.Enemy) : nullptr)
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, BaseMemory.Enemy) : nullptr)   // 0x102b78a2 GetEnemy() (slot 167)
 	{
-		// SEAM: retail reads `enemy->+0x9c` — `CBaseCombatCharacter`'s cached downcast of ITSELF
-		// (`docs/vtmb/npc-ai/schedule-kernel.md` § "The three cached downcasts") — and asks that
-		// character's active weapon. This substrate has no cross-entity weapon-capability reader, so
-		// the threat is never seen and the `bVar1 == true` arm is the one taken.
-		ElysiumStub::Fired(TEXT("schedule"),
-			TEXT("SelectCoverOrKickSchedule enemy ranged-threat bits 0x6000"), DebugString(),
-			*Enemy->DebugString(), TEXT("0002/29c-1: no cross-entity weapon capability reader"));
-		(void)GScheduleRangedThreatWeaponBits;
+		// `enemy->+0x9c` — `CBaseCombatCharacter`'s cached downcast of ITSELF
+		// (`docs/vtmb/npc-ai/schedule-kernel.md` § "The three cached downcasts").
+		if (const FElysiumCombatCharacter* EnemyCharacter = Enemy->AsCombatCharacter())
+		{
+			// `GetActiveWeapon()` then weapon slot 360 `& 0x6000`. The port's reader answers the
+			// weapon's family and not the word, so `Ranged` stands for "either bit set".
+			// CHOSEN, NOT RECOVERED (the reader's own, `ElysiumNpcConditions.h`): `WeaponThrown`
+			// takes the ranged branch.
+			static_assert((static_cast<uint32>(ElysiumNpcCond::RangedCapabilityBits)
+				& GScheduleRangedThreatWeaponBits) != 0, "the ranged family's word is inside 0x6000");
+			if (ElysiumNpcCond::WeaponCapability(*EnemyCharacter)
+				== ElysiumNpcCond::ECapability::Ranged)
+			{
+				bNoRangedThreat = false;                                                // 0x102b78ee
+			}
+		}
 	}
 
 	if (ScheduleHost.ShootAtHintNode == 0)

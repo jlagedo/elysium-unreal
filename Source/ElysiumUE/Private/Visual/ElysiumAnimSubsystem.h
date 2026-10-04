@@ -354,6 +354,11 @@ public:
 	// assumed any would answer for a different body than the one being posed.
 	bool ResolveActivityClip(const FElysiumActivityClipRequest& Request, FElysiumActivityClip& Out);
 
+	// Every clip carrying the activity `ResolveActivityClip`'s translation searches the vocabulary
+	// for, in `FElysiumNpcClipSet::ByActivity`'s order: retail's `GetSequencesForActivity`
+	// (`0x103ea950`), which reads each sequence's own attack data rather than one pick's.
+	void ActivitySequences(const FElysiumActivityClipRequest& Request, TArray<FElysiumNpcClip>& Out);
+
 	// The one cell a body that cannot evaluate a fan collapses one onto: the grid resolved at
 	// `AxisValue` on the axis it binds, taken to the NEARER of the two cells the parameter sits
 	// between (`ElysiumBlendGrids::NearerCell`, which owns the arithmetic). Empty when the label names

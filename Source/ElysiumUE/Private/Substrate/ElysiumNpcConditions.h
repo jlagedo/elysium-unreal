@@ -15,6 +15,7 @@ class FElysiumNpcBase;
 struct FElysiumLocalIdSpace;
 struct FElysiumEntityHandle;
 struct FElysiumNpcBaseMemory;
+struct FElysiumNpcClip;
 struct FElysiumNpcMemory;
 
 // The AI condition bitset and the producers that fill it.
@@ -667,33 +668,60 @@ namespace ElysiumNpcCond
 	ECapability WeaponCapability(const FElysiumNpc& Npc);
 
 	// --- Attack conditions ------------------------------------------------------------------------
-	// CHOSEN, NOT RECOVERED: the melee reach and cone are the weapon controller's, reused rather than restated —
-	// `ElysiumWeapons::MeleeReachSourceUnits` (retail's own maximum custom sequence reach stands in
-	// at 64 Source units) and `MeleeConeHalfAngleDegrees` (`FindEntityFOV`'s recovered 30-degree
-	// half-angle). Using the swing's own numbers is what keeps `CAN_MELEE_ATTACK1` from promising a
-	// hit the weapon's acquisition would then refuse.
 
 	/**
-	 * The committed enemy's range/facing/readiness conditions, gathered as step 5's tail.
-	 *
-	 * Melee capability produces `CAN_MELEE_ATTACK1` (0x51), `TOO_FAR_TO_ATTACK` (0x60) and
-	 * `WAITING_ATTACK_TIME` (0x2f); ranged capability produces `WAITING_ATTACK_TIME` and then the
-	 * ONE answer of the weapon's slot 365 (`FElysiumWeapon::RangeAttack1Conditions`, `0x1024f670`):
-	 * `NO_PRIMARY_AMMO` (0x40), `TOO_CLOSE_FOR_RANGED` (0x08), `TOO_CLOSE_TO_ATTACK` (0x5f),
-	 * `TOO_FAR_TO_ATTACK` (0x60), `NOT_FACING_ATTACK` (0x61) or `CAN_RANGE_ATTACK1` (0x4f) — the
-	 * last replaced by `WEAPON_SIGHT_OCCLUDED` (0x66) when the line-of-fire stand-in fails.
-	 *
-	 * SEAM (comment only, never set): `WEAPON_THROUGH_WALL` (0x3c) and `WEAPON_BLOCKED_BY_FRIEND`
-	 * (0x63). Both are line-of-FIRE terms about the muzzle rather than the eye — one asks whether
-	 * the barrel is inside geometry, the other whether a friendly body is on the ray — and this
-	 * runtime has neither a muzzle transform nor a squad. Deriving either from the eye's occlusion
-	 * latch would raise a condition whose whole point is that it disagrees with that latch.
-	 *
-	 * SEAM (comment only, never set): `CAN_MELEE_ATTACK2` / `CAN_RANGE_ATTACK2` (0x52 / 0x50). The
-	 * secondary attack's own eligibility rule is not decoded, and a mode's authored `Secondary`
-	 * record does not by itself say when an NPC should use it.
+	 * The melee weapon's band, `0x103ea7e0(weapon; activity, target, dot, dist)` — the body behind
+	 * `CWeaponMelee`'s slot 367 (`0x103eac30`, activity `0x4b`) and of `0x103eac60` (activity
+	 * `0x4e`). Everything it reads, stated by the caller so a fixture can drive it:
 	 */
-	void GatherAttackConditions(const FElysiumNpcBase& Npc, double Now, FElysiumNpcConditions& Out);
+	struct FMeleeWeaponBandQuery
+	{
+		// `0x10252240(weapon)`, the weapon's owner (`0x103ea7f0`). Null answers 0 (`0x103ea7f9`).
+		FElysiumCombatCharacter* Owner = nullptr;
+		// The weapon itself, slot 331's first argument (`0x103ea8c8 PUSH ESI`).
+		FElysiumEntity* Weapon = nullptr;
+		// `weapon+0x730` / `+0x734` (`m_flNextPrimaryAttack` / `m_flNextSecondaryAttack`) and the
+		// owner's `m_flNextAttack (+0x1564)`: the three stamps of `ready` (`0x103ea84e..0x103ea884`).
+		double WeaponNextPrimaryAttackTime = 0.0;
+		double WeaponNextSecondaryAttackTime = 0.0;
+		double OwnerNextAttackTime = 0.0;
+		// Retail's second argument; its `+0x9c` is the combat-character cast (`0x103ea83e`).
+		FElysiumEntity* Target = nullptr;
+		// The weapon's slot `+0x5a4` then the owner's `+0x5e0` over the caller's activity
+		// (`0x103ea81c`, `0x103ea827`): slot 331's third argument (`0x103ea8c6 PUSH EBP`).
+		int32 TranslatedActivity = 0;
+		float Dot = 0.f;
+		float DistUnits = 0.f;       // SOURCE units, as retail's
+		double Now = 0.0;            // `curtime`
+		// `GetSequencesForActivity(owner, translated activity, …)` (`0x103ea950`): the wielder's
+		// sequences of that activity. Baked values, CENTIMETRES; the body converts them.
+		TConstArrayView<FElysiumNpcClip> Sequences;
+	};
+	/** Answers ONE condition number: `0x51`, `9`, `0x60`, `0x61`, `0x5f` or 0. */
+	int32 MeleeWeaponBand(const FMeleeWeaponBandQuery& Query);
+
+	/**
+	 * `CAI_BaseNPC::GatherAttackConditions` (`0x1026dd10`, slot 561), whole, on the NPC's own
+	 * condition set (`Cognition.Conditions`): slot 560's clear, the ranged arm (the weapon's slot
+	 * 365 or the innate slot 553, `0x2f` off the matching stamp, the `0x4f` LOS re-test with its
+	 * second clear), THEN the melee arm (the weapon's slot 367 or the innate slot 555), the
+	 * blocked-by-friend timers (`+0x5b88`, `+0x5b8c`, `0x2e`) and the tail (the friend block held:
+	 * `0x63` up and the four CAN_* down; else any CAN_* standing clears 0x08 / 0x5f / 0x60 / 0x09 /
+	 * 0x63).
+	 *
+	 * The NPC is not `const` (spec 0002 V5a-1): the body calls slot 560 twice and writes the two
+	 * timers.
+	 *
+	 * STAND-IN, named and kept (README v5a §2 P3): slot 562 `WeaponLOSCondition`'s two muzzle traces
+	 * are the eye's occlusion latch (`+0x5b98` at its limit), which raises `WEAPON_SIGHT_OCCLUDED`
+	 * (0x66) where retail's weapon slot 364 (`0x1024f330`) would, and never `WEAPON_BLOCKED_BY_FRIEND`
+	 * (0x63) or `WEAPON_THROUGH_WALL` (0x3c): this runtime has neither a muzzle transform nor a
+	 * squad. The timers and the tail are ported whole all the same; a test raises 0x63 by name.
+	 *
+	 * SEAM (never set): `CAN_MELEE_ATTACK2` / `CAN_RANGE_ATTACK2` (0x52 / 0x50) — retail's gather
+	 * calls no secondary producer either; the tail reads and clears them as retail does.
+	 */
+	void GatherAttackConditions(FElysiumNpcBase& Npc, double Now);
 	// `CNPC_VWerewolf::GatherAttackConditions` (`0x103d02b0`)'s own arm: the zone melee suppression.
 	// True when it cleared the melee pair, in which case the base gather does not run that pass.
 	bool WerewolfZoneSuppressesMelee(const FElysiumNpc& Npc, FElysiumNpcConditions& Out);

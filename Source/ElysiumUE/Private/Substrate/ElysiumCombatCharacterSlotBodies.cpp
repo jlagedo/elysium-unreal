@@ -173,6 +173,39 @@ bool FElysiumCombatCharacter::FInViewCone(const FVector& PointCm)
 	return FElysiumNpcSenses::IsInViewCone(*this, PointCm);
 }
 
+bool FElysiumCombatCharacter::FInViewCone(FElysiumEntity* Candidate)
+{
+	// Slot 363, `CBaseCombatCharacter::FInViewCone(CBaseEntity*)` `0x10326750`. Past the scope-trace
+	// push it is three reads and one call, the same on both arms of the ConVar:
+	//
+	//     point  = candidate->WorldSpaceCenter()        (candidate slot 192, vtable +0x300)
+	//     fov    = this->m_flFieldOfView                (+0x1574)
+	//     scalar = candidate->GetStealthVisionCone()    (candidate slot 29, vtable +0x74)
+	//     return FinViewCone3dNew(point, scalar, fov)   (`0x103264d0`)
+	//
+	// `debug_view_cone_2d3d` (`DAT_10936f74`) reading 2 takes `FinViewCone2d` (`0x103261f0`) with
+	// the same three inputs; it ships 3 and the 2-D body is unrecovered, so the 3-D body is the one
+	// arm this port stands (`FElysiumNpcSenses::IsInViewCone`, which reads `FieldOfView` off the
+	// observer itself).
+	//
+	// This is the body the PLAYER answers `GatherEnemyConditions` (`0x1027106c`) with: slot 363 on
+	// `CHL2_Player` is this base body. A Troika NPC answers its override `0x102b4540` instead.
+	if (Candidate == nullptr)
+	{
+		// Retail dereferences `*param_1` for the vtable and would fault; `GatherEnemyConditions`
+		// passes `this`. Refusing is this port's own guard and changes no reachable arm.
+		return false;
+	}
+	// Slot 192, `0x10027160` on NPC and player alike: the collision box centre in world space.
+	const FVector PointCm = Candidate->WorldSpaceCenter();
+	// Slot 29. A Troika NPC answers `0x101aa630` -> `m_flStealthVisionCone` (`+0x63c8`) through the
+	// virtual. `CHL2_Player` answers `0x1034f390` -> `m_flStealthVisionCone` (`+0x1c74`), which is
+	// `FElysiumStealthSurface::ConeScalar` (`FElysiumPlayer`'s slot-29 override).
+	const float ConeScalar = Candidate->GetStealthVisionCone();         // vtable +0x74
+	// `0x103264d0`, with `m_flFieldOfView` (`+0x1574`) read off this observer inside the body.
+	return FElysiumNpcSenses::IsInViewCone(*this, PointCm, ConeScalar);
+}
+
 // --- Moved from `ElysiumNpcBaseCombat10.cpp` (story 5 step 6) ---
 
 bool FElysiumCombatCharacter::HasTypedStatList(int32 ListType) const

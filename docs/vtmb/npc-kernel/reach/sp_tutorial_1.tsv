@@ -3506,7 +3506,7 @@ function	0x10325fa0	CBaseCombatCharacter::HasAlienGibs	CCineNPC#397, CNPCMaker#3
 function	0x10326040	CBaseCombatCharacter::CorpseFade	CCineNPC#395, CNPCMaker#395, CNPC_VHumanCombatant#395, CNPC_VPedestrian#395, CNPC_VRat#395, CNPC_VVampire#395		layer 6
 function	0x103261f0	CBaseCombatCharacter::FinViewCone2d	-		layer 6
 function	0x103264d0	CBaseCombatCharacter::FinViewCone3dNew	-		layer 5
-function	0x10326750	CBaseCombatCharacter::FInViewCone	-		layer 7
+function	0x10326750	CBaseCombatCharacter::FInViewCone	-	present	layer 7
 function	0x103268e0	FUN_103268e0	-		layer 7
 function	0x10326a20	CAI_BaseNPC::FUN_10326a20	CNPC_VHumanCombatant#362, CNPC_VPedestrian#362, CNPC_VRat#362, CNPC_VVampire#362	present	layer 8
 function	0x10326ae0	CAI_BaseNPC::FUN_10326ae0	CNPC_VHumanCombatant#365, CNPC_VPedestrian#365, CNPC_VRat#365, CNPC_VVampire#365	rule	layer 0

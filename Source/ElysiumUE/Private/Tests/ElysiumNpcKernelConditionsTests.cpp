@@ -6,6 +6,7 @@
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMoveSolve.h"                  // ElysiumMove::U
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumLaw.h"
@@ -22,6 +23,7 @@
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumNpcTestCensus.h"
+#include "Visual/ElysiumNpcClips.h"            // FElysiumNpcClip, the melee band's fixture sequences
 
 // Story 29c-1, family **Conditions**. Every assertion here comes off the decompiled C or off a
 // constant read out of retail `vampire.dll`'s `.rdata`; the addresses are cited beside each case so
@@ -903,6 +905,416 @@ bool FElysiumNpcKernelCondWerewolfTest::RunTest(const FString&)
 	TestTrue(TEXT("the zone word carries bit 0x4"), (Wolf->WerewolfHintFlags & 0x4u) != 0);
 	TestFalse(TEXT("bit 0x100 is the other admitted one"),
 		(Wolf->WerewolfHintFlags & 0x100u) != 0);
+	return true;
+}
+
+// =================================================================================================
+// Slot 561 — `GatherAttackConditions` (`0x1026dd10`), and the melee weapon's band (`0x103ea7e0`)
+// (spec 0002 V5a-1)
+// =================================================================================================
+
+namespace
+{
+	// A base-line body whose two innate producers (slots 553 / 555) and slot 331 answer what the case
+	// states, so each arm of the gather is driven without a weapon entity. `m_afCapability` selects
+	// the innate arms (`0x1026de8f` 0x20000, `0x1026dfa5` 0x80000).
+	class FGatherProbeNpc final : public FElysiumNpcBase
+	{
+	public:
+		int32 RangedAnswer = 0;
+		int32 MeleeAnswer = 0;
+		// Raised from INSIDE the ranged producer, after the top clear: where retail's slot 562 /
+		// weapon slot 364 raise them.
+		TArray<EElysiumNpcCond> RaiseInRangedArm;
+		TArray<FString> Calls;
+		bool bSlot327 = true;
+		bool bSlot331 = false;
+		int32 Slot331Out = INDEX_NONE;
+		int32 Slot331Calls = 0;
+		int32 Slot331Activity = 0;
+
+		// The probe is never registered with the world it borrows; it leaves it before the base
+		// destructors run.
+		virtual ~FGatherProbeNpc() override { World = nullptr; }
+
+		virtual int32 RangeAttack1Conditions(float, float) override
+		{
+			Calls.Add(TEXT("553"));
+			for (const EElysiumNpcCond Cond : RaiseInRangedArm)
+			{
+				Cognition.Conditions.Set(Cond);
+			}
+			return RangedAnswer;
+		}
+		virtual int32 MeleeAttack1Conditions(float, float) override
+		{
+			Calls.Add(TEXT("555"));
+			return MeleeAnswer;
+		}
+		virtual bool Slot327() override { return bSlot327; }
+		virtual bool ChooseMeleeAttackSequence(FElysiumEntity*, FElysiumEntity*, int32 Activity,
+			void* Out) override
+		{
+			++Slot331Calls;
+			Slot331Activity = Activity;
+			*static_cast<int32*>(Out) = Slot331Out;
+			return bSlot331;
+		}
+	};
+
+	constexpr int32 GGatherTestCapInnateRange1 = 0x20000;
+	constexpr int32 GGatherTestCapInnateMelee1 = 0x80000;
+	const double GGatherTestFltMax = static_cast<double>(TNumericLimits<float>::Max());
+
+	// The probe, committed to the fixture's subject as its enemy, the timers at their spawn values.
+	void ArmGatherProbe(FGatherProbeNpc& Probe, FNpcKernelCondFixture& F, int32 Capabilities)
+	{
+		Probe.World = &F.World.World;
+		Probe.BaseMemory.Enemy = F.Npc->Handle;
+		Probe.BaseMemory.EnemyOccludedCheck = 0;     // slot 481's latch: the enemy stated in sight
+		Probe.CapabilityWord = Capabilities;
+		Probe.WeaponBlockedByFriendTimer = 0.0;      // +0x5b88
+		Probe.ExtendedBlockedByFriendTimer = GGatherTestFltMax;   // +0x5b8c
+		F.Npc->Origin = FVector(400.0 * ElysiumMove::U, 0.0, 0.0);
+	}
+
+	// One sequence descriptor as `0x103ea7e0` reads it, stated in SOURCE units and baked to the
+	// clip's centimetres: `+0x10` weight, `+0x2c4` swing count, `+0x2cc` / `+0x2d0` the reach band,
+	// one `+0x2bc` envelope whose two corners' first axis are `EnvMin` / `EnvMax`.
+	struct FBandSequence
+	{
+		int32 Weight = 1;
+		int32 Swings = 1;
+		float LowUnits = 0.f;
+		float HighUnits = 0.f;
+		float EnvMinUnits = 0.f;
+		float EnvMaxUnits = 0.f;
+		bool bEnvelope = true;
+	};
+	FElysiumNpcClip BandClip(const FBandSequence& Spec)
+	{
+		const float Cm = static_cast<float>(ElysiumMove::U);
+		FElysiumNpcClip Clip;
+		Clip.Weight = Spec.Weight;
+		Clip.Swings.AddDefaulted(Spec.Swings);
+		Clip.LowReachCm = Spec.LowUnits * Cm;
+		Clip.ReachCm = Spec.HighUnits * Cm;
+		if (Spec.bEnvelope)
+		{
+			FElysiumMeleeEnvelope Envelope;
+			Envelope.Min = FVector(Spec.EnvMinUnits * Cm, -10.0, -10.0);
+			Envelope.Max = FVector(Spec.EnvMaxUnits * Cm, 10.0, 10.0);
+			Clip.Envelopes.Add(Envelope);
+		}
+		return Clip;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCondGatherAttackClearsTest,
+	"Elysium.Arm.NpcKernelConditions.GatherAttackClears", GNpcKernelCondFlags)
+bool FElysiumNpcKernelCondGatherAttackClearsTest::RunTest(const FString&)
+{
+	FNpcKernelCondFixture F;
+	if (!TestNotNull(TEXT("the subject spawned"), F.Npc)) { return false; }
+	const EElysiumNpcCond Bands[] = { EElysiumNpcCond::TooCloseForRanged, EElysiumNpcCond::TooCloseToAttack,
+		EElysiumNpcCond::TooFarToAttack, EElysiumNpcCond::TooFarForMelee };   // 0x08 0x5f 0x60 0x09
+
+	// --- `0x1026de02`: slot 560 at the top. A band word of the previous gather survives it, a
+	// CAN_* and 0x2f do not; and with no CAN_* standing afterwards the tail leaves the bands alone
+	// (`0x1026e0dd JZ 0x1026e10c`).
+	{
+		FGatherProbeNpc Probe;
+		ArmGatherProbe(Probe, F, GGatherTestCapInnateRange1);
+		Probe.RangedAnswer = CondNum(EElysiumNpcCond::NotFacingAttack);   // 0x61: no CAN_* this gather
+		FElysiumNpcConditions& C = Probe.Cognition.Conditions;
+		for (const EElysiumNpcCond Band : Bands) { C.Set(Band); }
+		C.Set(EElysiumNpcCond::CanRangeAttack1);
+		C.Set(EElysiumNpcCond::CanMeleeAttack1);
+		C.Set(EElysiumNpcCond::WaitingAttackTime);
+		ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+		TestFalse(TEXT("0x1026de02: the previous gather's CAN_RANGE_ATTACK1 (0x4f) is cleared"),
+			C.Has(EElysiumNpcCond::CanRangeAttack1));
+		TestFalse(TEXT("0x1026de02: the previous gather's CAN_MELEE_ATTACK1 (0x51) is cleared"),
+			C.Has(EElysiumNpcCond::CanMeleeAttack1));
+		TestFalse(TEXT("0x1026de02: the previous gather's WAITING_ATTACK_TIME (0x2f) is cleared"),
+			C.Has(EElysiumNpcCond::WaitingAttackTime));
+		TestTrue(TEXT("0x1026df64: the ranged answer 0x61 is set"), C.Has(EElysiumNpcCond::NotFacingAttack));
+		for (const EElysiumNpcCond Band : Bands)
+		{
+			TestTrue(FString::Printf(TEXT("0x1026e0dd: no CAN_* standing, band 0x%02x stays"), CondNum(Band)),
+				C.Has(Band));
+		}
+	}
+
+	// --- `0x1026e0df`: a CAN_* standing with `+0x5b88` lapsed clears 0x08 / 0x5f / 0x60 / 0x09.
+	{
+		FGatherProbeNpc Probe;
+		ArmGatherProbe(Probe, F, GGatherTestCapInnateRange1);
+		Probe.RangedAnswer = CondNum(EElysiumNpcCond::CanRangeAttack1);   // 0x4f, in sight
+		FElysiumNpcConditions& C = Probe.Cognition.Conditions;
+		for (const EElysiumNpcCond Band : Bands) { C.Set(Band); }
+		ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+		TestTrue(TEXT("0x1026df52: 0x4f stands"), C.Has(EElysiumNpcCond::CanRangeAttack1));
+		for (const EElysiumNpcCond Band : Bands)
+		{
+			TestFalse(FString::Printf(TEXT("0x1026e0df: a CAN_* standing clears band 0x%02x"), CondNum(Band)),
+				C.Has(Band));
+		}
+		TestFalse(TEXT("0x1026e107: ...and 0x63"), C.Has(EElysiumNpcCond::WeaponBlockedByFriend));
+	}
+
+	// --- `0x1026df00`: slot 560 again between the two LOS tests of a 0x4f answer. A word of the
+	// eleven raised inside the ranged arm survives a passing first test and not a failing one; both
+	// tests failing sets no 0x4f (`0x1026df45 JZ 0x1026df69`).
+	{
+		FGatherProbeNpc Probe;
+		ArmGatherProbe(Probe, F, GGatherTestCapInnateRange1);
+		Probe.RangedAnswer = CondNum(EElysiumNpcCond::CanRangeAttack1);
+		Probe.RaiseInRangedArm = { EElysiumNpcCond::WeaponHasLos };   // 0x62
+		FElysiumNpcConditions& C = Probe.Cognition.Conditions;
+		ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+		TestTrue(TEXT("0x1026defa: the first LOS test passing skips the second clear (0x62 stays)"),
+			C.Has(EElysiumNpcCond::WeaponHasLos));
+
+		Probe.BaseMemory.EnemyOccludedCheck = 10;   // the occlusion latch at its limit: both tests fail
+		ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+		TestFalse(TEXT("0x1026df00: the failing first test runs slot 560 again (0x62 cleared)"),
+			C.Has(EElysiumNpcCond::WeaponHasLos));
+		TestFalse(TEXT("0x1026df45: both tests failing sets no 0x4f"), C.Has(EElysiumNpcCond::CanRangeAttack1));
+		TestTrue(TEXT("the stand-in's failing test raises WEAPON_SIGHT_OCCLUDED (0x66)"),
+			C.Has(EElysiumNpcCond::WeaponSightOccluded));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCondGatherAttackFriendTimersTest,
+	"Elysium.Arm.NpcKernelConditions.GatherAttackFriendTimers", GNpcKernelCondFlags)
+bool FElysiumNpcKernelCondGatherAttackFriendTimersTest::RunTest(const FString&)
+{
+	FNpcKernelCondFixture F;
+	if (!TestNotNull(TEXT("the subject spawned"), F.Npc)) { return false; }
+	FGatherProbeNpc Probe;
+	ArmGatherProbe(Probe, F, GGatherTestCapInnateRange1);
+	FElysiumNpcConditions& C = Probe.Cognition.Conditions;
+
+	// 0x63 raised inside the ranged arm (retail: slot 562's weapon slot 364 on a friendly hit).
+	Probe.RangedAnswer = 0;
+	Probe.RaiseInRangedArm = { EElysiumNpcCond::WeaponBlockedByFriend };
+	ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+	TestEqual(TEXT("0x1026dff2: 0x63 with +0x5b8c at FLT_MAX arms it at curtime + 2.5"),
+		Probe.ExtendedBlockedByFriendTimer, 12.5);
+	TestEqual(TEXT("0x1026e006: 0x63 arms +0x5b88 at curtime + 1.5"), Probe.WeaponBlockedByFriendTimer, 11.5);
+	TestFalse(TEXT("0x1026e04c: the extended timer has not lapsed, no 0x2e"),
+		C.Has(EElysiumNpcCond::ExtendedBlockedByFriend));
+
+	ElysiumNpcCond::GatherAttackConditions(Probe, 11.0);
+	TestEqual(TEXT("0x1026dfe7: an armed +0x5b8c is not re-armed"), Probe.ExtendedBlockedByFriendTimer, 12.5);
+	TestEqual(TEXT("0x1026e006: +0x5b88 is re-armed every gather 0x63 stands"),
+		Probe.WeaponBlockedByFriendTimer, 12.5);
+
+	ElysiumNpcCond::GatherAttackConditions(Probe, 13.0);
+	TestTrue(TEXT("0x1026e05d: +0x5b8c < curtime raises EXTENDED_BLOCKED_BY_FRIEND (0x2e)"),
+		C.Has(EElysiumNpcCond::ExtendedBlockedByFriend));
+	TestEqual(TEXT("+0x5b88 is curtime + 1.5 again"), Probe.WeaponBlockedByFriendTimer, 14.5);
+
+	// The friend gone, a 0x4f answer, the block still held (`curtime < +0x5b88`).
+	Probe.RaiseInRangedArm.Reset();
+	Probe.RangedAnswer = CondNum(EElysiumNpcCond::CanRangeAttack1);
+	ElysiumNpcCond::GatherAttackConditions(Probe, 14.0);
+	TestTrue(TEXT("0x1026e087: while +0x5b88 holds, 0x63 is re-raised"),
+		C.Has(EElysiumNpcCond::WeaponBlockedByFriend));
+	TestFalse(TEXT("0x1026e099: ...and CAN_RANGE_ATTACK1 (0x4f) cleared"),
+		C.Has(EElysiumNpcCond::CanRangeAttack1));
+	TestEqual(TEXT("0x1026e02a: +0x5b88 still ahead, +0x5b8c is left alone"),
+		Probe.ExtendedBlockedByFriendTimer, 12.5);
+	TestTrue(TEXT("0x1026e05d: ...so 0x2e is raised again"), C.Has(EElysiumNpcCond::ExtendedBlockedByFriend));
+
+	// The melee CAN_* goes the same way under the hold.
+	Probe.CapabilityWord = GGatherTestCapInnateRange1 | GGatherTestCapInnateMelee1;
+	Probe.MeleeAnswer = CondNum(EElysiumNpcCond::CanMeleeAttack1);
+	ElysiumNpcCond::GatherAttackConditions(Probe, 14.25);
+	TestFalse(TEXT("0x1026e107: while +0x5b88 holds, CAN_MELEE_ATTACK1 (0x51) is cleared"),
+		C.Has(EElysiumNpcCond::CanMeleeAttack1));
+	Probe.CapabilityWord = GGatherTestCapInnateRange1;
+
+	// The hold lapsed (`+0x5b88 <= curtime`) without 0x63: the extended timer returns to FLT_MAX.
+	ElysiumNpcCond::GatherAttackConditions(Probe, 15.0);
+	TestEqual(TEXT("0x1026e02c: +0x5b88 <= curtime without 0x63 resets +0x5b8c to FLT_MAX"),
+		Probe.ExtendedBlockedByFriendTimer, GGatherTestFltMax);
+	TestFalse(TEXT("0x1026e04c: no 0x2e"), C.Has(EElysiumNpcCond::ExtendedBlockedByFriend));
+	TestTrue(TEXT("0x1026e076: the hold over, 0x4f stands"), C.Has(EElysiumNpcCond::CanRangeAttack1));
+	TestFalse(TEXT("0x1026e107: ...and 0x63 is down"), C.Has(EElysiumNpcCond::WeaponBlockedByFriend));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCondGatherAttackBothArmsTest,
+	"Elysium.Arm.NpcKernelConditions.GatherAttackBothArms", GNpcKernelCondFlags)
+bool FElysiumNpcKernelCondGatherAttackBothArmsTest::RunTest(const FString&)
+{
+	FNpcKernelCondFixture F;
+	if (!TestNotNull(TEXT("the subject spawned"), F.Npc)) { return false; }
+
+	// `0x1026df6d`: the melee arm runs AFTER a ranged answer, not instead of it.
+	{
+		FGatherProbeNpc Probe;
+		ArmGatherProbe(Probe, F, GGatherTestCapInnateRange1 | GGatherTestCapInnateMelee1);
+		Probe.RangedAnswer = CondNum(EElysiumNpcCond::NotFacingAttack);   // 0x61
+		Probe.MeleeAnswer = CondNum(EElysiumNpcCond::CanMeleeAttack1);    // 0x51
+		FElysiumNpcConditions& C = Probe.Cognition.Conditions;
+		ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+		if (TestEqual(TEXT("0x1026ded1 then 0x1026dfc2: both producers run"), Probe.Calls.Num(), 2))
+		{
+			TestEqual(TEXT("slot 553 first"), Probe.Calls[0], FString(TEXT("553")));
+			TestEqual(TEXT("slot 555 second"), Probe.Calls[1], FString(TEXT("555")));
+		}
+		TestTrue(TEXT("0x1026df64: the ranged answer is set"), C.Has(EElysiumNpcCond::NotFacingAttack));
+		TestTrue(TEXT("0x1026dfcb: the melee answer is set beside it"), C.Has(EElysiumNpcCond::CanMeleeAttack1));
+	}
+	// Each bit alone runs its own arm only (`0x1026de95 JZ 0x1026df6d`, `0x1026dfab JZ 0x1026dfd0`).
+	{
+		FGatherProbeNpc Probe;
+		ArmGatherProbe(Probe, F, GGatherTestCapInnateMelee1);
+		Probe.MeleeAnswer = CondNum(EElysiumNpcCond::TooFarForMelee);
+		ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+		TestEqual(TEXT("0x1026de95: no ranged bit, slot 553 is not called"), Probe.Calls.Num(), 1);
+		TestTrue(TEXT("0x1026dfcb: 0x09 from slot 555"),
+			Probe.Cognition.Conditions.Has(EElysiumNpcCond::TooFarForMelee));
+	}
+	{
+		FGatherProbeNpc Probe;
+		ArmGatherProbe(Probe, F, 0);
+		ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+		TestEqual(TEXT("0x1026dfab: neither bit, neither producer"), Probe.Calls.Num(), 0);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCondMeleeWeaponBandTest,
+	"Elysium.Arm.NpcKernelConditions.MeleeWeaponBand", GNpcKernelCondFlags)
+bool FElysiumNpcKernelCondMeleeWeaponBandTest::RunTest(const FString&)
+{
+	// `0x103ea7e0` on fixture clips. One sequence: reach band [20, 100], one envelope 40..80 (mean
+	// 60). `hi * 1.2 = 120 < 256`, so the far limit is the floor 256.
+	FGatherProbeNpc Owner;
+	FGatherProbeNpc Target;
+	FBandSequence Spec;
+	Spec.LowUnits = 20.f; Spec.HighUnits = 100.f; Spec.EnvMinUnits = 40.f; Spec.EnvMaxUnits = 80.f;
+	const TArray<FElysiumNpcClip> Band = { BandClip(Spec) };
+
+	auto Ask = [&Owner](FElysiumEntity* TargetEntity, TConstArrayView<FElysiumNpcClip> Sequences,
+		float Dot, float Dist, double NextPrimary = 0.0)
+	{
+		ElysiumNpcCond::FMeleeWeaponBandQuery Query;
+		Query.Owner = &Owner;
+		Query.Target = TargetEntity;
+		Query.TranslatedActivity = 0x4b;
+		Query.WeaponNextPrimaryAttackTime = NextPrimary;
+		Query.Dot = Dot;
+		Query.DistUnits = Dist;
+		Query.Now = 10.0;
+		Query.Sequences = Sequences;
+		return ElysiumNpcCond::MeleeWeaponBand(Query);
+	};
+
+	TestEqual(TEXT("0x103eaa7b: dist > max(1.2 * hi, 256) is 9"), Ask(&Target, Band, 0.9f, 300.f), 0x09);
+	TestEqual(TEXT("0x103eaaa1: hi < dist <= 256 is 0x60"), Ask(&Target, Band, 0.9f, 200.f), 0x60);
+	TestEqual(TEXT("0x103eaac7: dot < 0.7 inside hi is 0x61"), Ask(&Target, Band, 0.5f, 50.f), 0x61);
+	TestEqual(TEXT("0x103eaa7b: the far word comes before the facing one"), Ask(&Target, Band, 0.5f, 300.f), 0x09);
+	TestEqual(TEXT("0x103eaaeb: dist < lo is 0x5f"), Ask(&Target, Band, 0.9f, 10.f), 0x5f);
+	TestEqual(TEXT("0x103eab2a: in band, ready, slot 331 refusing: dist >= mean * 0.25 is 0x60"),
+		Ask(&Target, Band, 0.9f, 50.f), 0x60);
+	TestEqual(TEXT("0x103ea8d3: slot 331 was asked each time dot > 0.7 with a ready CC target"),
+		Owner.Slot331Calls, 4);
+	TestEqual(TEXT("0x103ea8c6: ...with the translated activity"), Owner.Slot331Activity, 0x4b);
+
+	// `mean * 0.25`: a band starting at the body (lo 0), mean 60 -> 15.
+	{
+		FBandSequence FromBody = Spec;
+		FromBody.LowUnits = 0.f;
+		const TArray<FElysiumNpcClip> Close = { BandClip(FromBody) };
+		TestEqual(TEXT("0x103eab20: dist < mean * 0.25 is 0x5f"), Ask(&Target, Close, 0.9f, 10.f), 0x5f);
+		TestEqual(TEXT("0x103eab2a: dist above it is 0x60"), Ask(&Target, Close, 0.9f, 20.f), 0x60);
+	}
+
+	// `hi * 1.2` above the floor: hi 300 -> 360.
+	{
+		FBandSequence Long = Spec;
+		Long.HighUnits = 300.f;
+		const TArray<FElysiumNpcClip> Far = { BandClip(Long) };
+		TestEqual(TEXT("0x103eaa47: hi < dist <= 1.2 * hi is 0x60"), Ask(&Target, Far, 0.9f, 350.f), 0x60);
+		TestEqual(TEXT("0x103eaa7b: dist > 1.2 * hi is 9"), Ask(&Target, Far, 0.9f, 370.f), 0x09);
+	}
+
+	// `ready` (`0x103ea84e..0x103ea899`): an unexpired stamp, or the target's slot 327 refusing,
+	// closes the 0x51 arm and the last arm; the band words still answer.
+	{
+		const int32 Before = Owner.Slot331Calls;
+		TestEqual(TEXT("0x103ea85c: +0x730 >= curtime is not ready: in band answers 0"),
+			Ask(&Target, Band, 0.9f, 50.f, 10.0), 0);
+		Target.bSlot327 = false;
+		TestEqual(TEXT("0x103ea893: the target's slot 327 refusing is not ready: 0"),
+			Ask(&Target, Band, 0.9f, 50.f), 0);
+		TestEqual(TEXT("...and the far word still answers"), Ask(&Target, Band, 0.9f, 300.f), 0x09);
+		Target.bSlot327 = true;
+		TestEqual(TEXT("0x103ea8bd: not ready never asks slot 331"), Owner.Slot331Calls, Before);
+	}
+
+	// The 0x51 arm (`0x103ea89d..0x103ea8e8`): dot > 0.7, a CC target, ready, slot 331 true with
+	// out >= 0. It answers before any band word.
+	{
+		Owner.bSlot331 = true;
+		Owner.Slot331Out = 3;
+		TestEqual(TEXT("0x103ea8e8: slot 331 answering with out >= 0 is 0x51"),
+			Ask(&Target, Band, 0.9f, 50.f), 0x51);
+		TestEqual(TEXT("0x103ea8e8: ...ahead of the far word"), Ask(&Target, Band, 0.9f, 300.f), 0x51);
+		const int32 Before = Owner.Slot331Calls;
+		// The cell is an f64 and the argument an f32: 0.7f widens to 0.69999998..., BELOW the cell.
+		TestEqual(TEXT("0x103ea8b1 / 0x103eaac2: the float 0.7 is under the f64 0.7: no 0x51, 0x61"),
+			Ask(&Target, Band, 0.7f, 50.f), 0x61);
+		TestEqual(TEXT("0x103ea8b5: no CC target, no 0x51"), Ask(nullptr, Band, 0.9f, 50.f), 0);
+		TestEqual(TEXT("...and slot 331 was asked for neither"), Owner.Slot331Calls, Before);
+		Owner.Slot331Out = INDEX_NONE;
+		TestEqual(TEXT("0x103ea8e3: slot 331 true with out < 0 is not 0x51"),
+			Ask(&Target, Band, 0.9f, 50.f), 0x60);
+		Owner.bSlot331 = false;
+	}
+
+	// Which sequences count (`0x103ea976..0x103ea989`), and none counted -> 0 (`0x103eaa03`).
+	{
+		TestEqual(TEXT("0x103ea95a: no sequence answers 0"),
+			Ask(&Target, TConstArrayView<FElysiumNpcClip>(), 0.9f, 300.f), 0);
+		FBandSequence NoSwing = Spec;
+		NoSwing.Swings = 0;
+		const TArray<FElysiumNpcClip> Unswung = { BandClip(NoSwing) };
+		TestEqual(TEXT("0x103ea989: a sequence with no swing record is not counted"),
+			Ask(&Target, Unswung, 0.9f, 300.f), 0);
+		FBandSequence Weightless = Spec;
+		Weightless.Weight = 0;
+		const TArray<FElysiumNpcClip> ZeroWeight = { BandClip(Weightless) };
+		TestEqual(TEXT("0x103ea97c: weight 0 is not counted without a CC target"),
+			Ask(nullptr, ZeroWeight, 0.9f, 300.f), 0);
+		TestEqual(TEXT("0x103ea978: ...and is counted with one"), Ask(&Target, ZeroWeight, 0.9f, 300.f), 0x09);
+		FBandSequence NoEnvelope = Spec;
+		NoEnvelope.bEnvelope = false;
+		const TArray<FElysiumNpcClip> Bare = { BandClip(NoEnvelope) };
+		TestEqual(TEXT("0x103eaa03: no envelope record counted answers 0"),
+			Ask(&Target, Bare, 0.9f, 300.f), 0);
+	}
+
+	// `lo` / `hi` are the minimum / maximum over the counted sequences (`0x103ea98b..0x103ea9bf`).
+	{
+		FBandSequence Short = Spec;
+		Short.LowUnits = 5.f; Short.HighUnits = 60.f;
+		const TArray<FElysiumNpcClip> Two = { BandClip(Spec), BandClip(Short) };
+		TestEqual(TEXT("one sequence, lo 20: dist 18 is under it (0x5f)"), Ask(&Target, Band, 0.9f, 18.f), 0x5f);
+		TestEqual(TEXT("0x103ea9a2: lo is the smallest +0x2cc (5): dist 18 is past it and past mean * 0.25"),
+			Ask(&Target, Two, 0.9f, 18.f), 0x60);
+		TestEqual(TEXT("0x103ea9bf: hi is the largest +0x2d0 (100): dist 90 is inside it"),
+			Ask(&Target, Two, 0.5f, 90.f), 0x61);
+	}
+
+	TestEqual(TEXT("0x103ea7f9: no owner answers 0"),
+		ElysiumNpcCond::MeleeWeaponBand(ElysiumNpcCond::FMeleeWeaponBandQuery()), 0);
 	return true;
 }
 

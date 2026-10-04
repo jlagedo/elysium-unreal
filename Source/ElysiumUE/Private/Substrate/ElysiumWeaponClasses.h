@@ -854,8 +854,10 @@ private:
 	void FireOnEmpty(int32 ModeIndex, const FElysiumWeaponMode& Mode);
 
 	// Resolve a logical activity to a concrete clip on the owner's body and start it. Returns the
-	// clip's duration; falls back to the mode's `Attack_Rate` (then `FallbackClipSeconds`) with one
-	// warning per weapon when no embodiment/body can answer. `OutOwnerStem` receives the bank the
+	// clip's duration; falls back to the mode's `Attack_Rate` with one warning per weapon when no
+	// embodiment/body can answer. A record that states no `Attack_Rate` parses retail's default 1.0
+	// (`0x10259230`, spec 0002 V5a-2), so `FallbackClipSeconds` is reached only by a mode that
+	// STATES a rate of 0 or below. `OutOwnerStem` receives the bank the
 	// include DAG named, which is the other half of the key a timeline is looked up by, and
 	// `OutMaxReachCm` the acquisition distance the TRANSLATED activity asks for — the maximum over
 	// every sequence answering it, which is the query distance and not the played clip's own.

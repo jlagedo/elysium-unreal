@@ -4,7 +4,6 @@
   "stage": "arena",
   "seed": 1,
   "duration": 60.0,
-  "known_red": "new: the cover tail never reads the enemy's weapon (ElysiumNpcSchedule.cpp:484-495, stub 'no cross-entity weapon capability reader'): 0xa4 VS_MELEE against a ranged player where retail answers 0xa3",
   "player": { "at": "cover_seat", "armed": "item_w_thirtyeight" },
   "cast": [
     {

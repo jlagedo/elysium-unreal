@@ -943,8 +943,8 @@ public:
 	// `FInViewCone 0x10326750` compares against. Moved here from the Troika line by V4a's seam; the
 	// declared 0.2 is the value that declaration carried, so no NPC changes. Writers: the Troika
 	// `Spawn` (`0x10298de8`, 0.2) and the species' own (Werewolf `cos(120 deg)`, Tzimisce / MingXiao
-	// -0.5, Yukie -1.0). The player's 0.5 (`CBasePlayer::Spawn 0x1016d260`) is not written yet: V4a
-	// lane A4; the cone that reads it on the player is lane A3's.
+	// -0.5, Yukie -1.0) and the player's 0.5 (`CBasePlayer::Spawn 0x1016d260`, `FElysiumPlayer::Spawn`).
+	// Read by `FElysiumNpcSenses::IsInViewCone` off the OBSERVER (`0x1032669c`), the player included.
 	float FieldOfView = 0.2f;
 	void AddToComfortList();
 	void RemoveFromComfortList();
@@ -2008,6 +2008,9 @@ public:
 	// `Private/Substrate/ElysiumStealth.h`; the recompute hangs off `Think` below, which is reached
 	// only through `FElysiumEntityWorld::RunPlayerThink`.
 	FElysiumStealthSurface Stealth;
+	// Slot 29 on `CHL2_Player`: the cone scalar an observer's slot 363 `FInViewCone 0x10326750`
+	// reads off its candidate.
+	float GetStealthVisionCone() override { return Stealth.ConeScalar; }   // 0x1034f390 +0x1c74
 	FElysiumStealthObserver Observer;
 	// The candidate the senses passes have offered since the last commit. Session state: it is
 	// rebuilt from the observers' own caches within one sight cadence, so it is not saved.

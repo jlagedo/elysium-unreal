@@ -34,6 +34,17 @@ virtual bool PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops
 	return false;
 }
 
+// `0x103ea950 GetSequencesForActivity(owner, translated activity, …)` as `CWeaponMelee`'s band
+// `0x103ea7e0` asks it (spec 0002 V5a-1): every sequence of the wielder's model carrying the
+// activity once the weapon (`+0x5a4`) and the owner (`+0x5e0`, slot 376) have translated it, in the
+// model's own sequence order. The base hands none (no model); `FElysiumNpc` answers through the
+// name-keyed resolver (`ElysiumNpcAnim.cpp`).
+virtual void MeleeSequencesForActivity(int32 Activity, TArray<struct FElysiumNpcClip>& OutSequences) const
+{
+	(void)Activity;
+	(void)OutSequences;
+}
+
 // `CAI_BaseNPC::RunAnimation` `0x1026c540`: slot 250 `StudioFrameAdvance(0)` (the sequence clock),
 // the `CAP_AIM_GUN` (`0x20000000`) arm into slot 538 `AimGun`, and the idle re-pick — a body outside
 // SCRIPT/DEAD whose `m_Activity` is `ACT_IDLE` (1) and whose sequence has finished picks the next

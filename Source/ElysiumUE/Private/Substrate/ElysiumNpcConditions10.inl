@@ -110,9 +110,9 @@ void NavigatorDoorCleanup();
 
 /** `0x102c5780` / `0x102c57c0` — the weapon-data words `m_flBurstShootPauseMin` and
  *  `m_flBurstShootPauseMax` take, `wpndata + 0x264` and `wpndata + 0x268`, each routed through
- *  `0x102c5570` with the weapon data resolved by `0x102517e0`. **SEAM**: story 29c-1's
- *  `ActiveWeaponEntity()` answers null and no weapon-data record is stood, so this answers false
- *  and slot 419 takes retail's own UNARMED arm — the two literals 0.3 and 0.5. */
+ *  `0x102c5570` with the weapon data resolved by `0x102517e0`: the item mode's
+ *  `NpcAttackRateMin` / `NpcAttackRateMax` (spec 0002 V5a). False with no active weapon, where
+ *  slot 419 takes retail's own UNARMED arm — the two literals 0.3 and 0.5. */
 bool ActiveWeaponBurstPauseWords(float& OutMin, float& OutMax) const;
 
 /** `0x102c5570`'s arithmetic as a pure function, so the recovered rule is exercised without a

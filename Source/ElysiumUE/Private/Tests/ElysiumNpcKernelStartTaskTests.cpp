@@ -39,6 +39,8 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumGameSound.h"
+#include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumLocalIdSpace.h"
 #include "Substrate/ElysiumScheduleId.h"
 #include "Substrate/ElysiumNpc.h"
@@ -49,6 +51,7 @@
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumScheduleCorpus.h"
+#include "Substrate/ElysiumWeaponClasses.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumNpcTestCensus.h"
 
@@ -649,12 +652,274 @@ bool FElysiumNpcKernelStartTask19AttackArmsTest::RunTest(const FString&)
 		F.Start(0x37);
 		TestTrue(TEXT("0x37 -> 0x1f"), F.FailedWith(0x1f));
 	}
-	// TASK_WAIT_ATTACK_TIME1/2 `0x102a337d`: no weapon is the break tail; a weapon's deadline answers
-	// curtime (the seam), which is `<= curtime` and completes too (`0x102a4e51`).
+	// TASK_WAIT_ATTACK_TIME1/2 `0x102a337d`: no active weapon is the break tail (`0x102a337f` ->
+	// `0x102a3388`). The armed arm is `WaitAttackTime_0x102a337d` below.
+	if (N.ActiveWeaponEntity() == nullptr)
+	{
+		F.Start(0xb0);
+		TestTrue(TEXT("0x102a3388 no weapon: 0xb0 completes"), F.Completed());
+		F.Start(0xb1);
+		TestTrue(TEXT("0x102a3388 no weapon: 0xb1 completes"), F.Completed());
+	}
+	return true;
+}
+
+namespace
+{
+	// Suite-local: `ElysiumItems::Install` registers a class once per process and never unregisters.
+	const TCHAR* const GStartTask19Pistol = TEXT("item_w_starttask19_pistol");
+
+	// The bare Troika guard of `FStartTask19Fixture`, with an item catalogue installed so it can hold
+	// a real weapon controller: the wait reads the weapon's stamps and its mode record.
+	struct FStartTask19ArmedFixture
+	{
+		FElysiumItemTable Items;
+		bool bInstalled = false;
+		FElysiumNpcWorldFixture World;
+		FElysiumNpc* Guard = nullptr;
+		FElysiumPlayer* Player = nullptr;
+		FElysiumWeapon* Weapon = nullptr;
+
+		static FElysiumItemTable MakeTable()
+		{
+			FElysiumItemTable Table;
+			FElysiumItemDef Pistol;
+			Pistol.Classname = GStartTask19Pistol;
+			Pistol.PrintName = TEXT("Pistol");
+			Pistol.Type = EElysiumItemType::WeaponFirearm;
+			Pistol.AmmoType = TEXT("StartTask19Round");
+			Pistol.MagazineSize = 6;
+			Pistol.DefaultAmmo = 6;
+			FElysiumWeaponMode Mode;
+			Mode.Tag = TEXT("Primary");
+			Mode.TypeName = TEXT("Attack");
+			Mode.Type = EElysiumWeaponModeType::Attack;
+			Mode.Dmg = TEXT("2 Lethal Ranged_Combat DMG_BULLET");
+			Mode.BaseLethality = 9;
+			Mode.AttackRate = 0.4f;                  // +0x260
+			Mode.NpcAttackRateMin = 1.0f;            // +0x264
+			Mode.NpcAttackRateMax = 1.0f;            // +0x268: equal bounds, so the draw is exactly 1.0
+			Mode.NpcAttackRateBaseRange = 120.0f;    // +0x26c
+			Mode.Range = 2000.f;
+			Mode.AmmoCost = 1;
+			Mode.AmmoFired = 1;
+			Pistol.Modes.Add(MoveTemp(Mode));
+			Table.Items.Add(MoveTemp(Pistol));
+			Table.Reindex();
+			return Table;
+		}
+
+		FStartTask19ArmedFixture()
+			: Items(MakeTable())
+			, World([]
+				{
+					FElysiumNpcWorldBuilder Builder(TEXT("starttask19_kernel_armed"), 1911);
+					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+					Builder.AddNpcOfClass(TEXT("guard"), FVector::ZeroVector, TEXT("CAI_BaseNPCTroika"))
+						.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+					return Builder;
+				}(),
+				[this](FElysiumRecordingServices& Services)
+				{
+					ElysiumItems::Install(Items);
+					bInstalled = true;
+					Services.bProvideNpcMotor = true;
+				})
+		{
+			Guard = World.Npc(TEXT("guard"));
+			Player = World.Player();
+			FElysiumNpcWorldFixture::Quiet({ Guard });
+			FElysiumNpcWorldFixture::PrepareForKernelDrive(Guard);
+			if (Guard != nullptr)
+			{
+				const FElysiumEntityHandle Handle =
+					Guard->Inventory.GiveNamedItem(*Guard, FString(GStartTask19Pistol));
+				FElysiumEntity* Entity = World.World.Resolve(Handle);
+				FElysiumItem* Item = Entity != nullptr ? Entity->AsItem() : nullptr;
+				if (Item != nullptr)
+				{
+					Guard->Inventory.SetActiveWeapon(*Guard, *Item);
+					Weapon = Item->AsWeapon();
+				}
+			}
+		}
+
+		~FStartTask19ArmedFixture()
+		{
+			if (bInstalled)
+			{
+				ElysiumItems::Uninstall(Items);
+			}
+		}
+
+		FStartTask19ArmedFixture(const FStartTask19ArmedFixture&) = delete;
+		FStartTask19ArmedFixture& operator=(const FStartTask19ArmedFixture&) = delete;
+
+		FElysiumWeaponMode& Mode() { return Items.Items[0].Modes[0]; }
+
+		void Start(int32 LocalTask)
+		{
+			Guard->Schedule.TaskStatus = EElysiumTaskStatus::New;
+			Guard->BaseScheduleHost.FailureReason = 0;
+			Guard->Cognition.Conditions.Clear(EElysiumNpcCond::TaskFailed);
+			const FElysiumLocalIdSpace* Space = Guard->IdSpace(EElysiumIdCategory::Task);
+			FElysiumScheduleStep Step;
+			Step.TaskId = Space != nullptr ? Space->LocalToGlobal(LocalTask) : LocalTask;
+			Guard->StartTaskSlot442(&Step);
+		}
+
+		bool Completed() const
+		{
+			return Guard->Schedule.TaskStatus == EElysiumTaskStatus::Complete
+				&& !Guard->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed);
+		}
+		bool Running() const
+		{
+			return Guard->Schedule.TaskStatus == EElysiumTaskStatus::New
+				&& !Guard->Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed);
+		}
+		double Now() const { return World.World.NowSeconds(); }
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19WaitAttackTimeTest,
+	"Elysium.Arm.NpcKernelStartTask19.WaitAttackTime_0x102a337d", GStartTask19Flags)
+bool FElysiumNpcKernelStartTask19WaitAttackTimeTest::RunTest(const FString&)
+{
+	FStartTask19ArmedFixture F;
+	if (!TestNotNull(TEXT("guard"), F.Guard) || !TestNotNull(TEXT("player"), F.Player)
+		|| !TestNotNull(TEXT("the guard holds a weapon controller"), F.Weapon))
+	{
+		return false;
+	}
+	FElysiumNpc& N = *F.Guard;
+	const double Now = F.Now();
+	auto Near = [](double A, double B) { return FMath::IsNearlyEqual(A, B, 1e-3); };
+
+	// The shoot target override 480 Source units away: `0x102c5570`'s scale is sqrt(480 / 120) = 2.
+	N.Origin = FVector::ZeroVector;
+	F.Player->Origin = FVector(480.0 * ElysiumMove::U, 0.0, 0.0);
+	N.ShootTargetOverride = F.Player->Handle;
+	N.BaseScheduleHost.HintNode = INDEX_NONE;
+	F.Weapon->NextPrimaryAttackTime = Now + 1.0;
+	F.Weapon->NextSecondaryAttackTime = Now + 5.0;
+
+	// `0xb0`: the primary stamp (`0x10252450(weapon, 0)`, `+0x730`) plus
+	// `(RandomFloat(1.0, 1.0) - Attack_Rate 0.4) * 2`.
+	N.IdealActivityNumber = 0;
 	F.Start(0xb0);
-	TestTrue(TEXT("0x102a3388 / 0x102a33cf completes"), F.Completed());
+	TestTrue(TEXT("0x102a33a2 + 0x102a33b0: m_flWaitFinished = +0x730 + (v - Attack_Rate) * sqrt(d / base)"),
+		Near(N.BaseScheduleHost.WaitFinished, Now + 1.0 + (1.0 - 0.4) * 2.0));
+	TestTrue(TEXT("0x102a33c7: a deadline past curtime keeps the task running"), F.Running());
+	TestEqual(TEXT("0x102a33e7: no hint node restarts activity 5"), N.IdealActivityNumber, 5);
+
+	// `0xb1`: index 1, the secondary stamp (`+0x734`).
 	F.Start(0xb1);
-	TestTrue(TEXT("0xb1 completes"), F.Completed());
+	TestTrue(TEXT("0x102a33a2: id 0xb1 reads index 1, +0x734"),
+		Near(N.BaseScheduleHost.WaitFinished, Now + 5.0 + (1.0 - 0.4) * 2.0));
+	TestTrue(TEXT("0xb1 runs"), F.Running());
+
+	// `m_pHintNode` (`+0x5ddc`) set: the wait stands, the activity restart does not happen.
+	N.BaseScheduleHost.HintNode = 1;
+	N.IdealActivityNumber = 0;
+	F.Start(0xb0);
+	TestTrue(TEXT("0x102a33d5: a hint node keeps the task running"), F.Running());
+	TestEqual(TEXT("0x102a33dd: a hint node suppresses the activity restart"), N.IdealActivityNumber, 0);
+	N.BaseScheduleHost.HintNode = INDEX_NONE;
+
+	// `<= curtime` completes (`0x102a4e51`): stamp + 1.2 at or below curtime.
+	F.Weapon->NextPrimaryAttackTime = Now - 10.0;
+	F.Start(0xb0);
+	TestTrue(TEXT("0x102a33c7 -> 0x102a4e51: m_flWaitFinished <= curtime completes"), F.Completed());
+	F.Weapon->NextPrimaryAttackTime = Now + 1.0;
+
+	// `0x102c5570`, `dist <= 0`: the multiplier is the distance itself, so the delay is nothing.
+	F.Player->Origin = FVector::ZeroVector;
+	F.Start(0xb0);
+	TestTrue(TEXT("0x102c5570: a zero distance multiplies by the distance"),
+		Near(N.BaseScheduleHost.WaitFinished, Now + 1.0));
+
+	// `0x102c5570`, no target (no override, no enemy): the scale is sqrt(1.0 / base).
+	N.ShootTargetOverride = FElysiumEntityHandle::Invalid();
+	N.BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
+	F.Start(0xb0);
+	TestTrue(TEXT("0x102c5570: no target scales by sqrt(1.0 / NPC_Attack_Rate_Base_Range)"),
+		Near(N.BaseScheduleHost.WaitFinished, Now + 1.0 + (1.0 - 0.4) * FMath::Sqrt(1.0 / 120.0)));
+
+	// `0x102c5570`, `Base_Range <= 0`: the scale stays 1.0 and no distance is measured.
+	F.Mode().NpcAttackRateBaseRange = 0.0f;
+	F.Start(0xb0);
+	TestTrue(TEXT("0x102c5570: Base_Range <= 0 leaves the scale at 1.0"),
+		Near(N.BaseScheduleHost.WaitFinished, Now + 1.0 + (1.0 - 0.4)));
+
+	// `0x102c5730`: the value is drawn between `+0x264` and `+0x268`.
+	F.Mode().NpcAttackRateMin = 1.0f;
+	F.Mode().NpcAttackRateMax = 2.0f;
+	F.Start(0xb0);
+	const double Delay = N.BaseScheduleHost.WaitFinished - (Now + 1.0);
+	TestTrue(TEXT("0x102c5730: v = RandomFloat(NPC_Attack_Rate_Min, NPC_Attack_Rate_Max)"),
+		Delay >= 0.6 - 1e-3 && Delay <= 1.6 + 1e-3);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelStartTask19AttackRateDefaultsTest,
+	"Elysium.Arm.NpcKernelStartTask19.AttackRateDefaults_0x10259230", GStartTask19Flags)
+bool FElysiumNpcKernelStartTask19AttackRateDefaultsTest::RunTest(const FString&)
+{
+	// `WeaponModeDataLoader 0x10259230`: the four words at `+0x260..+0x26c` of the mode record.
+	const FString Text = TEXT(R"(
+		WeaponData
+		{
+			"item_type"   "weapon_firearm"
+			Activation
+			{
+				"Tag" "Primary"
+				"Type" "Attack"
+			}
+			Activation
+			{
+				"Tag" "PrimaryMode2"
+				"Type" "Attack"
+				"Attack_Rate" "0.4"
+			}
+			Activation
+			{
+				"Tag" "Secondary"
+				"Type" "Attack"
+				"Attack_Rate" "0.5"
+				"NPC_Attack_Rate_Min" "0.7"
+				"NPC_Attack_Rate_Max" "0.9"
+				"NPC_Attack_Rate_Base_Range" "300"
+			}
+		}
+	)");
+	FElysiumItemDef Def;
+	FString Error;
+	if (!TestTrue(TEXT("the record parses"),
+			FElysiumItemTable::ParseText(TEXT("item_w_starttask19_probe"), Text, Def, Error))
+		|| !TestEqual(TEXT("three modes"), Def.Modes.Num(), 3))
+	{
+		return false;
+	}
+	auto Near = [](float A, float B) { return FMath::IsNearlyEqual(A, B, 1e-5f); };
+	// No keys.
+	TestTrue(TEXT("0x102593cd: Attack_Rate defaults to 1.0"), Near(Def.Modes[0].AttackRate, 1.0f));
+	TestTrue(TEXT("0x102593e5: NPC_Attack_Rate_Min defaults to 2 x Attack_Rate"),
+		Near(Def.Modes[0].NpcAttackRateMin, 2.0f));
+	TestTrue(TEXT("0x10259230 [0x10449258]: NPC_Attack_Rate_Max defaults to 3.0 x Attack_Rate"),
+		Near(Def.Modes[0].NpcAttackRateMax, 3.0f));
+	TestTrue(TEXT("0x10259230: NPC_Attack_Rate_Base_Range defaults to 120.0"),
+		Near(Def.Modes[0].NpcAttackRateBaseRange, 120.0f));
+	// `Attack_Rate` alone: the two rate defaults follow the value as just parsed.
+	TestTrue(TEXT("0x102593e5: Min follows the parsed Attack_Rate (0.8)"),
+		Near(Def.Modes[1].NpcAttackRateMin, 0.8f));
+	TestTrue(TEXT("0x10259230 [0x10449258]: Max follows the parsed Attack_Rate (1.2)"),
+		Near(Def.Modes[1].NpcAttackRateMax, 1.2f));
+	// Stated keys win.
+	TestTrue(TEXT("0x10259230: a stated NPC_Attack_Rate_Min wins"), Near(Def.Modes[2].NpcAttackRateMin, 0.7f));
+	TestTrue(TEXT("0x10259230: a stated NPC_Attack_Rate_Max wins"), Near(Def.Modes[2].NpcAttackRateMax, 0.9f));
+	TestTrue(TEXT("0x10259230: a stated NPC_Attack_Rate_Base_Range wins"),
+		Near(Def.Modes[2].NpcAttackRateBaseRange, 300.0f));
 	return true;
 }
 

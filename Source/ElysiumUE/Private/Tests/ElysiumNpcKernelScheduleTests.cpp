@@ -5,6 +5,10 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumEntityDefs.h"
+#include "ElysiumEntityWorld.h"
+#include "ElysiumNpcFlags.h"
+#include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcSabbatLeader.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -871,6 +875,161 @@ bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 			Guard->ScheduleHost.HintCoverObject.IsSet());
 	}
 
+	return true;
+}
+
+// -------------------------------------------------------------------------------------------------
+// `0x102b7690`'s cover tail — the enemy's weapon read, `0x102b78a2..0x102b78ee`.
+// -------------------------------------------------------------------------------------------------
+
+namespace
+{
+	// Suite-local: `ElysiumItems::Install` registers a class once per process and never unregisters.
+	const TCHAR* const GScheduleTestPistol = TEXT("item_w_kernelschedule_pistol");
+	const TCHAR* const GScheduleTestKatana = TEXT("item_w_kernelschedule_katana");
+
+	FElysiumItemTable MakeScheduleTestItemTable()
+	{
+		auto MakeMode = [](const TCHAR* Dmg)
+		{
+			FElysiumWeaponMode Mode;
+			Mode.Tag = TEXT("Primary");
+			Mode.TypeName = TEXT("Attack");
+			Mode.Type = EElysiumWeaponModeType::Attack;
+			Mode.Dmg = Dmg;
+			Mode.BaseLethality = 8;
+			Mode.AttackRate = 0.5f;
+			return Mode;
+		};
+		FElysiumItemTable Table;
+
+		FElysiumItemDef Pistol;
+		Pistol.Classname = GScheduleTestPistol;
+		Pistol.PrintName = TEXT("Pistol");
+		Pistol.Type = EElysiumItemType::WeaponFirearm;
+		Pistol.AmmoType = TEXT("KernelScheduleRound");
+		Pistol.MagazineSize = 6;
+		Pistol.DefaultAmmo = 6;
+		Pistol.Modes.Add(MakeMode(TEXT("2 Lethal Ranged_Combat DMG_BULLET")));
+		Table.Items.Add(MoveTemp(Pistol));
+
+		FElysiumItemDef Katana;
+		Katana.Classname = GScheduleTestKatana;
+		Katana.PrintName = TEXT("Katana");
+		Katana.Type = EElysiumItemType::WeaponMelee;
+		Katana.Modes.Add(MakeMode(TEXT("3 Lethal Close_Combat_Melee DMG_SLASH")));
+		Table.Items.Add(MoveTemp(Katana));
+
+		Table.Reindex();
+		return Table;
+	}
+
+	struct FScheduleCoverTailFixture
+	{
+		FElysiumItemTable Items;
+		bool bInstalled = false;
+		FElysiumNpcWorldFixture Fixture;
+		FElysiumNpc* Guard = nullptr;
+		FElysiumNpc* Foe = nullptr;
+		FElysiumEntity* Hint = nullptr;
+		FElysiumEntity* Worldspawn = nullptr;
+
+		FScheduleCoverTailFixture()
+			: Items(MakeScheduleTestItemTable())
+			, Fixture([]
+				{
+					FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_schedule_covertail"), 4109);
+					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+					Builder.AddNpc(TEXT("guard"));
+					Builder.AddNpc(TEXT("foe"), FVector(400.0, 0.0, 0.0));
+					// A cover-low hint by its TYPE (100): the selector's table reads `m_nHintType`.
+					Builder.AddEntity(TEXT("info_node_hint"), TEXT("cover"), FVector(0.0, 100.0, 0.0))
+						.Keys.Add(TEXT("hinttype"), TEXT("100"));
+					return Builder;
+				}(),
+				[this](FElysiumRecordingServices&)
+				{
+					ElysiumItems::Install(Items);
+					bInstalled = true;
+				})
+		{
+			Guard = Fixture.Npc(TEXT("guard"));
+			Foe = Fixture.Npc(TEXT("foe"));
+			Hint = Fixture.World.FindByName(TEXT("cover"));
+			Worldspawn = Fixture.World.FindByName(TEXT("world"));
+			FElysiumNpcWorldFixture::Quiet({ Guard, Foe });
+			FElysiumNpcWorldFixture::PrepareForKernelDrive(Guard);
+			if (Foe != nullptr)
+			{
+				// Empty-handed to begin with, whatever the loadout handed out.
+				Foe->Inventory.Holster(*Foe);
+			}
+		}
+
+		~FScheduleCoverTailFixture()
+		{
+			if (bInstalled)
+			{
+				ElysiumItems::Uninstall(Items);
+			}
+		}
+
+		FScheduleCoverTailFixture(const FScheduleCoverTailFixture&) = delete;
+		FScheduleCoverTailFixture& operator=(const FScheduleCoverTailFixture&) = delete;
+
+		bool ArmFoe(const TCHAR* Classname)
+		{
+			const FElysiumEntityHandle Handle = Foe->Inventory.GiveNamedItem(*Foe, FString(Classname));
+			FElysiumEntity* Entity = Fixture.World.Resolve(Handle);
+			FElysiumItem* Item = Entity != nullptr ? Entity->AsItem() : nullptr;
+			if (Item == nullptr)
+			{
+				return false;
+			}
+			Foe->Inventory.SetActiveWeapon(*Foe, *Item);
+			return true;
+		}
+
+		// The selector with the guard standing AT a cover hint, not already in `0x9e` and not in
+		// cover-vs-melee mode: the inner arm answers `0xa3` for a ranged threat and `0xa4` for none.
+		int32 Select(const FElysiumEntity* Enemy)
+		{
+			Guard->BaseMemory.Enemy = Enemy != nullptr ? Enemy->Handle : FElysiumEntityHandle::Invalid();
+			Guard->BaseScheduleHost.HintNode = Hint->Handle.Index;
+			Guard->NpcFlags.Set(EElysiumNpcFlag::AT_COVER_HINT);
+			Guard->NpcFlags.ClearRawWord2Bits(static_cast<uint32>(EElysiumNpcFlag2::COVER_VS_MELEE_MODE));
+			Guard->ScheduleHost.ShootAtHintNode = 0;
+			Guard->PeekOutCount = 0;
+			Guard->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyOccluded);
+			return Guard->SelectCoverOrKickSchedule(FElysiumNpc::FScheduleHintSearchRequest());
+		}
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScheduleCoverTailRangedThreatTest,
+	"Elysium.Arm.NpcKernelSchedule.CoverTailRangedThreat", GElysiumNpcKernelScheduleFlags)
+bool FElysiumNpcKernelScheduleCoverTailRangedThreatTest::RunTest(const FString&)
+{
+	FScheduleCoverTailFixture F;
+	if (!TestNotNull(TEXT("guard"), F.Guard) || !TestNotNull(TEXT("foe"), F.Foe)
+		|| !TestNotNull(TEXT("the cover hint"), F.Hint) || !TestNotNull(TEXT("worldspawn"), F.Worldspawn))
+	{
+		return false;
+	}
+
+	// `0x102b78a2..0x102b78ee`: GetEnemy() -> `+0x9c` -> GetActiveWeapon -> slot 360 `& 0x6000`.
+	TestEqual(TEXT("0x102b78a2: an unarmed enemy is no ranged threat -> 0xa4"), F.Select(F.Foe), 0xa4);
+	TestEqual(TEXT("0x102b78a2: an enemy that is no combat character (+0x9c null) -> 0xa4"),
+		F.Select(F.Worldspawn), 0xa4);
+	if (TestTrue(TEXT("the foe takes the katana"), F.ArmFoe(GScheduleTestKatana)))
+	{
+		TestEqual(TEXT("0x102b78ee: a melee weapon's word carries no 0x6000 bit -> 0xa4"),
+			F.Select(F.Foe), 0xa4);
+	}
+	if (TestTrue(TEXT("the foe takes the pistol"), F.ArmFoe(GScheduleTestPistol)))
+	{
+		TestEqual(TEXT("0x102b78ee: an enemy holding a 0x6000 weapon -> 0xa3"), F.Select(F.Foe), 0xa3);
+	}
 	return true;
 }
 #endif // ELYSIUM_WITH_ARM_TESTS

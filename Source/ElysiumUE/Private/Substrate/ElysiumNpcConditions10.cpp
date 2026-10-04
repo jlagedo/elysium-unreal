@@ -14,6 +14,7 @@
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Substrate/ElysiumWeaponClasses.h"
 #include "ElysiumWorldServices.h"
 
 // Story 29d, family **Conditions10** — the flag-word writers, slot 404 `IRelationType` and its
@@ -462,13 +463,35 @@ float FElysiumNpc::ScaleWeaponBurstPause(float Value, float Base, float Range, f
 
 bool FElysiumNpc::ActiveWeaponBurstPauseWords(float& OutMin, float& OutMax) const
 {
-	// **SEAM** for `0x102c5780` / `0x102c57c0` — `wpndata + 0x264` and `wpndata + 0x268` resolved
-	// through `0x102517e0` and scaled by `ScaleWeaponBurstPause` above. Story 29c-1's
-	// `ActiveWeaponEntity()` answers null and no weapon-data record is stood, so this answers false
-	// and slot 419 takes retail's own UNARMED arm.
+	// `0x102c5780` / `0x102c57c0`: `data = 0x102517e0(weapon)`, then `0x102c5570(this, data,
+	// data[+0x264])` and `(…, data[+0x268])` — `NPC_Attack_Rate_Min` / `_Max` (parser `0x10259230`),
+	// each less `Attack_Rate` (`+0x260`) and scaled on `NPC_Attack_Rate_Base_Range` (`+0x26c`) by
+	// the distance to the shoot target, exactly as the wait `0x102c5730` scales its draw (spec 0002
+	// V5a). The mode record is the weapon's current one, as `StartTask19WeaponNextAttackTime` reads.
 	OutMin = 0.f;
 	OutMax = 0.f;
-	return ActiveWeaponEntity() != nullptr;
+	if (ActiveWeaponEntity() == nullptr)                                 // 102c5504 / 102c550b
+	{
+		return false;
+	}
+	FElysiumItem* const Item = Inventory.Active(*this);
+	const FElysiumWeapon* const Weapon = Item != nullptr ? Item->AsWeapon() : nullptr;
+	const FElysiumWeaponMode* const Mode =
+		Weapon != nullptr ? Weapon->ModeFor(FElysiumWeapon::EIntent::Primary) : nullptr;
+	if (Mode == nullptr)
+	{
+		// An active weapon no mode record stands behind (retail's `0x102517e0` always answers one):
+		// the port has no words to read and answers 0 / 0, the value the seam answered.
+		return true;
+	}
+	FVector DeltaCm = FVector::ZeroVector;
+	const bool bHasTarget = ShootTargetDelta(DeltaCm);
+	const float DistanceUnits = bHasTarget ? static_cast<float>(DeltaCm.Size() / ElysiumMove::U) : 0.f;
+	OutMin = ScaleWeaponBurstPause(Mode->NpcAttackRateMin, Mode->AttackRate,          // 102c5780 +0x264
+		Mode->NpcAttackRateBaseRange, DistanceUnits, bHasTarget);
+	OutMax = ScaleWeaponBurstPause(Mode->NpcAttackRateMax, Mode->AttackRate,          // 102c57c0 +0x268
+		Mode->NpcAttackRateBaseRange, DistanceUnits, bHasTarget);
+	return true;
 }
 
 void FElysiumNpc::UpdateBurstShootPause()

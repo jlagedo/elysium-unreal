@@ -1000,6 +1000,29 @@ bool UElysiumAnimSubsystem::ResolveActivityClip(const FElysiumActivityClipReques
 	return true;
 }
 
+void UElysiumAnimSubsystem::ActivitySequences(const FElysiumActivityClipRequest& Request,
+	TArray<FElysiumNpcClip>& Out)
+{
+	Out.Reset();
+	// The same intent and the same resolver as `ResolveActivityClip`, so the activity the list is
+	// collected under is the one a play of this request would search for.
+	const FElysiumAnimationIntent Intent = ElysiumAnimResolve::ActivityIntentFor(Request);
+	const FElysiumAnimationCatalog Catalog = BuildCatalog(Request.Stem);
+	FElysiumAnimationSelection Selection;
+	ElysiumAnimResolve::Resolve(Intent, Catalog, Selection);
+	if (Catalog.Clips == nullptr || Selection.ResolvedActivity.IsEmpty())
+	{
+		return;
+	}
+	for (const FElysiumClipRef& Ref : Catalog.Clips->ByActivity(Selection.ResolvedActivity))
+	{
+		if (const FElysiumNpcClip* Clip = Catalog.Clips->Find(Ref))
+		{
+			Out.Add(*Clip);
+		}
+	}
+}
+
 FString UElysiumAnimSubsystem::ResolveNearestGridClip(const FString& OwnerStem, const FString& Label,
 	float AxisValue)
 {

@@ -142,18 +142,21 @@ bool FElysiumNpcBase::ShouldChooseNewEnemy()
 
 void FElysiumNpcBase::GatherAttackConditions(FElysiumEntity* Enemy, float DistanceUnits)
 {
-	// `CAI_BaseNPC::GatherAttackConditions`, the SDK body, in its recovered order: the
-	// `WAITING_ATTACK_TIME` (0x2f) raise off the weapon's `m_flNextAttack` deadline, the melee and
-	// ranged capability calls that answer a condition number each (`0x4f` gets the extra
-	// facing/body-target re-test), the blocked-by-friend pair (`m_flWeaponBlockedByFriendTimer`
-	// `+0x5b88` and `m_flExtendedBlockedByFriendTimer` `+0x5b8c`, `0x2e` raised once the extended
-	// one lapses), and finally the schedule-selection set — clear 8, 0x5f, 0x60, 9 and raise 99, or
-	// raise 99 and clear 0x50, 0x4f, 0x52, 0x51 — in that priority order.
+	// `CAI_BaseNPC::GatherAttackConditions` (`0x1026dd10`), in the listing's order: slot 560's clear
+	// (`0x1026de02`), the ranged arm (`0x2f` off the weapon's `+0x730` stamp or the innate
+	// `m_flNextAttack`, then slot 365 / slot 553's one answer; `0x4f` gets the two LOS tests with
+	// slot 560 again between them, `0x1026df00`), THEN the melee arm (`0x1026df6d`: the weapon's
+	// slot 367 or slot 555), the blocked-by-friend pair (`m_flWeaponBlockedByFriendTimer` `+0x5b88`
+	// and `m_flExtendedBlockedByFriendTimer` `+0x5b8c`, `0x2e` raised once the extended one lapses),
+	// and the tail (`0x1026e062`): while `+0x5b88` holds raise 99 and clear 0x50, 0x4f, 0x52, 0x51;
+	// else with any of those four standing clear 8, 0x5f, 0x60, 9 and 99.
 	//
-	// -> `ElysiumNpcCond::GatherAttackConditions(Npc, Now, Out)`
-	// (`Substrate/ElysiumNpcConditions.cpp`), which reproduces it, names its unbuilt melee-selector
-	// arms as seams in place, and additionally carries the ONE species override of this slot
-	// (`CNPC_VWerewolf`, `0x103d02b0`, a suppression of the melee pair).
+	// -> `ElysiumNpcCond::GatherAttackConditions(Npc, Now)` (`Substrate/ElysiumNpcConditions.cpp`),
+	// which is that body whole and works on this NPC's own `Cognition.Conditions`: it calls slot 560
+	// (virtual, both times) and writes the two timers, so it takes the NPC non-`const` (spec 0002
+	// V5a-1 chose the signature change over a clear staged here, because the second clear sits
+	// inside the body). The one species suppression of this slot (`CNPC_VWerewolf`, `0x103d02b0`)
+	// is `FElysiumNpcWerewolf`'s override.
 	//
 	// **The two arguments are the port's own state, not the port's input.** Retail is handed the
 	// enemy and its distance by `GatherEnemyConditions`; the port's gather reads the COMMITTED enemy
@@ -169,5 +172,5 @@ void FElysiumNpcBase::GatherAttackConditions(FElysiumEntity* Enemy, float Distan
 	// `curtime`. (The port's old gather staged its own clock here through `GatherPassNow`; that
 	// gather and the word went at story 8 wave 2.)
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	ElysiumNpcCond::GatherAttackConditions(*this, Now, Cognition.Conditions);
+	ElysiumNpcCond::GatherAttackConditions(*this, Now);
 }

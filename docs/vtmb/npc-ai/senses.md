@@ -66,10 +66,17 @@ UNRECOVERED: the body-offset term inside `0x103264d0` (register-garbled decompil
   centre, `mins + (maxs - mins) × 0.5` (`+0x274..+0x288`), carried to world space (rotated through
   the collision's angles when the box is not axis-aligned, else added to the origin). Not the eyes.
 - Slot 29 (`+0x74`): `CAI_BaseNPCTroika` → `0x101aa630`, `m_flStealthVisionCone` at `+0x63c8`;
-  `CHL2_Player` → `0x1034f390`, `+0x1c74`; everything else the `CBaseEntity` body `0x10026630`. The
-  NPC's word has **no writer in the image** — the getter is its only code reference — so an NPC
-  candidate hands the cone 0 (*inferred* from the zeroed allocation; the datamap could still carry a
-  key).
+  `CHL2_Player` → `0x1034f390`, `+0x1c74`; everything else the `CBaseEntity` body `0x10026630`.
+  **Correction (spec 0002 V5a integrator, 2026-10-04, listing read):** packet R2's "the NPC's word
+  has no writer in the image, so an NPC candidate hands the cone 0" is wrong. `FUN_1028fc90` — the
+  per-pass stealth reset `CAI_BaseNPCTroika::RunAI` `0x1028fcc0` runs — is three stores:
+  `0x1028fc95` `+0x63cc = 0`, `0x1028fc9f` `+0x63c4 = 1.0`, **`0x1028fca5` `MOV [ECX + 0x63c8],
+  EAX` with `EAX = 0x3f800000`**. An NPC candidate that has run one AI pass hands the cone **1.0**
+  (neutral); only one that never ran `RunAI` reads the zeroed allocation. The port writes the same
+  (`FElysiumNpc::RunAi19ResetStealthSurface`). Confirmed by packet S6 (2026-10-04): `0x1028fc90`
+  is the word's only writer and is reached through its thunk `0x1000ccd4` (hence "no direct
+  caller") from `RunAI` `0x1028fcc0`, `ProcessTweakParam` `0x1029aa10` (four sites) and the NPC
+  maker's spawn `0x1034b7b0`; the only reader is `0x101aa630`.
 - `m_flFieldOfView` writers, all at spawn: `CBasePlayer::Spawn` `0x1016d260` **0.5**;
   `CAI_BaseNPCTroika::Spawn` `0x10298d30` and `CNPC_VCamera::Spawn` `0x10368b70` 0.2;
   `CNPC_Bullseye` 0.5; `CNPC_Crow` −1.0; `CNPC_VMingXiao`, `CNPC_VTzimisce` −0.5; `CNPC_VWerewolf`
@@ -1478,6 +1485,22 @@ test in front of it), `CWindowPane::Spawn 0x1010f5f0`, `CBreakableSurface::Spawn
 `CBreakable` slot 103 `0x1000a10f` — the only four `SetCollisionGroup(4)` sites in the image. So
 every `func_breakable`, glass or crate, is transparent to a weapon's line of sight and opaque to
 the innate one. **Unrecovered:** nothing here.
+
+**The start point, the two targets and the "friend" (recovered 2026-10-04, spec 0002 packet S7).**
+Slot 389 `Weapon_ShootPosition 0x103338c0(out, origin)`: the active weapon's
+`GetAttachment01("muzzleflash")` (`0x10007680`, on the weapon, position only) when the wield model
+has one; else `AngleVectors` of slot 221 `GetAngles` (`m_angRotation +0x428`, the body's angles)
+and `((origin + forward · m_HackedGunPos.y) + right · m_HackedGunPos.x) + up · m_HackedGunPos.z`
+(`+0x157c`, `+0x1578`, `+0x1580`; `0x10333972..0x10333a2f`). No eye-position arm. The gather
+`0x1026dd10` fills the first target on **every** pass (`0x1026de30`):
+`enemy->slot 197(&target, owner->slot 217(), bNoisy = 1, 0)` — for a player enemy
+(`CBasePlayer 0x10174e60`) `GetOrigin + m_vecViewOffset × RandomFloat(0.5, 1.0)`, one draw; the
+second target is the enemy's slot 193 (`0x1026df0f`). Step 3's relation, for a Troika owner with no
+boss and an ordinary candidate, ends in `CBaseCombatCharacter::IRelationType 0x10333340`: the
+owner's flags2 `0x20000` / `0x10000` / `0x40000` and frenzy arms, then its entity rows, then its
+class rows against the candidate's `Classify`, then **4 (`D_NU`)** — so two `npc_VHumanCombatant`s
+(`Classify 0x103871a0` = 4, no class row installed on the human line) block each other's fire by
+default; there is no team word. **Unrecovered:** `0x10139610`'s right / up rows were not re-read.
 
 ### `GetShootEnemyDir` `0x10278900`
 

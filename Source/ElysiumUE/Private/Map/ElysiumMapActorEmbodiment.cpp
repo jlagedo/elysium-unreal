@@ -178,6 +178,12 @@ bool AElysiumMapActor::ResolveNpcActivityClip(const FElysiumActivityClipRequest&
 	return Bodies->ResolveNpcActivityClip(Request, Out);
 }
 
+void AElysiumMapActor::NpcActivitySequences(const FElysiumActivityClipRequest& Request,
+	TArray<FElysiumNpcClip>& Out)
+{
+	Bodies->NpcActivitySequences(Request, Out);
+}
+
 bool AElysiumMapActor::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	const FElysiumOneShotClipRequest& Request, float* OutSeconds)
 {

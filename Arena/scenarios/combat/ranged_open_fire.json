@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 40.0,
-  "known_red": "V4a (slot 363), then V5 (N2): BEHIND_ENEMY is set at 0.00 with the player facing the gunman (the player's slot 363 FInViewCone is a stub answering false); behind it, TASK_WAIT_ATTACK_TIME1 never waits (m_flWaitFinished is a seam answering curtime, ElysiumNpcStartTask.cpp; retail 0x102a337d reads the weapon's next-attack stamp 0x10252450 + 0x102c5730), so the gunman fires again 0.6 s after its first shot",
+  "known_red": "V4a lane A1 (the dispatcher), then V4o lane O3 (the event shot): game red. Slot 363 and the wait are in (V5a + A3: no BEHIND_ENEMY; TASK_WAIT_ATTACK_TIME1 0x102a337d reads the stamp 0x10252450 + 0x102c5730), but the weapon's m_flNextPrimaryAttack (+0x730) has no NPC writer: the 3031 in the trace is the world-tick poll's, CBaseAnimatingOverlay::DispatchAnimEvents 0x10098c80 is a counting stub, so CWeaponRanged's operator 0x10238160 -> Shot 0x102387b0 never runs for an NPC and the stamp stays at its draw-time value (0). The wait is then 0 + (RandomFloat(1.0, 2.5) - 0.8) * sqrt(387 / 120) against curtime: taskdone task_wait_attack_time1 at t=1.00, 0.48 s after the first 3031 (0.517)",
   "player": { "at": "cover_seat" },
   "cast": [
     {

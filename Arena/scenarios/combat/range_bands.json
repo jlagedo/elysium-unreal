@@ -4,7 +4,6 @@
   "stage": "arena",
   "seed": 1,
   "duration": 30.0,
-  "known_red": "2: the tail 0x1026dfd0..0x1026e107 is missing (ElysiumNpcConditions.cpp GatherAttackConditions): TOO_CLOSE_FOR_RANGED 0x08 stays set beside CAN_RANGE_ATTACK1 0x4f (cond+ 0x4f at 16.1 s, 0x08 never cleared by a gather) until the next program install wipes the set",
   "player": { "at": "cover_seat" },
   "cast": [
     {

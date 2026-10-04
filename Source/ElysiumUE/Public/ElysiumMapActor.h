@@ -412,6 +412,8 @@ public:
 		const FString& ClipName) override;
 	virtual bool ResolveNpcActivityClip(const FElysiumActivityClipRequest& Request,
 		FElysiumActivityClip& Out) override;
+	virtual void NpcActivitySequences(const FElysiumActivityClipRequest& Request,
+		TArray<struct FElysiumNpcClip>& Out) override;
 	virtual bool PlayNpcOneShot(USkeletalMeshComponent* Body,
 		const FElysiumOneShotClipRequest& Request, float* OutSeconds) override;
 	virtual void ReleaseNpcReaction(USkeletalMeshComponent* Body) override;

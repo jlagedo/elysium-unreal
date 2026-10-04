@@ -958,7 +958,14 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	// word -- the retail pass clears nothing it does not own -- and the Troika combat ladder answers
 	// its own NEW_ENEMY arm first. The next program install clears it; stated here.
 	F.Guard->Cognition.Conditions.Clear(EElysiumNpcCond::NewEnemy);
-	TestTrue(TEXT("a distant committed enemy raises TOO_FAR_TO_ATTACK"),
+	// Rewritten by spec 0002 V5a: this asserted TOO_FAR_TO_ATTACK, the answer of the port's old
+	// exclusive split (a body that was not `Ranged` took a stand-in melee band). Retail's
+	// `GatherAttackConditions 0x1026dd10` runs an arm only off a capability bit: the weapon arms
+	// (`0x1026de3a` caps & 0x2000, `0x1026df6d` caps & 0x8000) need an active weapon and the innate
+	// ones (`0x1026de8f` caps & 0x20000, `0x1026dfa5` caps & 0x80000) their bit. This guard holds
+	// no weapon and its capability word carries neither innate bit, so no arm runs and nothing
+	// answers TOO_FAR_TO_ATTACK 0x60.
+	TestFalse(TEXT("0x1026dd10: an unarmed guard's gather raises no TOO_FAR_TO_ATTACK"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::TooFarToAttack));
 	// The recovered slot-605 body's own answer, a loaded program.
 	const int32 Ranged605 = F.Guard->SelectScheduleRangedCombat(0);

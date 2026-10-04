@@ -380,14 +380,26 @@ bool FElysiumNpcSenses::IsInViewCone(const FElysiumEntity& Npc, const FVector& T
 {
 	// `FInViewCone` at 0x103264d0 is a strict 3-D apex test. `0x103268e0` would take the 2-D body
 	// when `debug_view_cone_2d3d` reads 2; it ships "3", so the 3-D body is the shipped one.
+	//
+	// The threshold is the OBSERVER's `m_flFieldOfView` (`+0x1574`, a `CBaseCombatCharacter` word),
+	// the last argument both callers push (`0x10326750`, `0x10326a20`): 0.2 on the Troika line
+	// (`0x10298de8`), 0.5 on the player (`CBasePlayer::Spawn 0x1016d260`), the species' own on
+	// theirs. The body is a `CBaseCombatCharacter` method, so retail has no non-character observer;
+	// one reaching this port's static form reads the Troika 0.2.
+	const FElysiumCombatCharacter* const Observer = Npc.AsCombatCharacter();
+	const float FieldOfView = Observer != nullptr
+		? Observer->FieldOfView : ElysiumNpcSense::DefaultViewConeDot;
 	const FVector Forward = ViewForward(Npc);
 	const FVector ToTarget = TargetCm - Npc.EyePosition();
-	// 0x103265af rejects strictly behind the original eye before shifting the apex.
-	if (FVector::DotProduct(Forward, ToTarget) < 0.0) return false;
+	// 0x103265af rejects behind the original eye before shifting the apex: `FCOMP 0.0`, `TEST
+	// AH,0x41`, `JP` continues only when the dot is strictly greater, so a dot of exactly zero is
+	// out too.
+	if (FVector::DotProduct(Forward, ToTarget) <= 0.0) return false;
 	const FVector FromApex = ToTarget + Forward * ViewConeBodyOffsetCm();
-	// 0x1032669c multiplies the COSINE by the target scalar, then compares to the FOV.
+	// 0x1032669c multiplies the COSINE by the target scalar, then 0x103266a0 compares it to the
+	// FOV with the same `TEST AH,0x41` / `JP`: strictly greater admits, equality refuses.
 	return FVector::DotProduct(Forward, FromApex.GetSafeNormal()) * TargetConeScalar
-		>= ElysiumNpcSense::DefaultViewConeDot;
+		> FieldOfView;
 }
 
 bool FElysiumNpcSenses::IsInViewCone(const FElysiumNpc& Npc, const FElysiumEntity& Target,

@@ -683,6 +683,7 @@ tests the green scenarios cover deleted.
   the timers of `GatherAttackConditions`; why `0xef`'s mask does not break (packet first),
   `HasInterruptCondition 0x10269d30`. *Scenario:* cover-and-fire with the player at 96 cm and
   10 m. *Size:* S. *Model:* Fable/medium.
+  *2026-10-04:* V5a landed (with V4a's lane A3): `range_bands`, `cover_armed`, `sense_enemy_facing_me` green; `ranged_open_fire` placed on A1 then O3.
 - [ ] **V6. Fix: session, clock and lifecycle.** (Was C4.) Per-level `curtime`; `map_load` tearing
   the entity world down first; `elysium.load <slot>`; resume at the task cursor `+0x5c50` with the
   animating words (the divergence closed); `ScriptUnhide`'s ground snap; `SetRelationship` into

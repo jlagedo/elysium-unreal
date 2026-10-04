@@ -189,7 +189,16 @@ namespace
 		Out.BaseLethality = Block.Int(TEXT("BaseLethality"), 0);
 		Out.SkillRequirement = Block.Int(TEXT("SkillRequirement"), 0);
 
-		Out.AttackRate = Block.Flt(TEXT("Attack_Rate"), 0.0f);
+		// `WeaponModeDataLoader 0x10259230` (server; the client's `0x101a3eb0` is identical), the
+		// four words at `+0x260..+0x26c`.
+		Out.AttackRate = Block.Flt(TEXT("Attack_Rate"), 1.0f);                      // +0x260, default 1.0 (0x102593cd)
+		// The two NPC rate defaults are computed from `Attack_Rate` AS JUST PARSED.
+		Out.NpcAttackRateMin =
+			Block.Flt(TEXT("NPC_Attack_Rate_Min"), 2.0f * Out.AttackRate);          // +0x264, default 2 x Attack_Rate (0x102593e5)
+		Out.NpcAttackRateMax =
+			Block.Flt(TEXT("NPC_Attack_Rate_Max"), 3.0f * Out.AttackRate);          // +0x268, default 3.0 x Attack_Rate ([0x10449258])
+		Out.NpcAttackRateBaseRange =
+			Block.Flt(TEXT("NPC_Attack_Rate_Base_Range"), 120.0f);                  // +0x26c, default 120.0, Source units
 
 		Out.AmmoType = Block.Str(TEXT("Ammo_Type"), FString());
 		Out.AmmoCost = Block.Int(TEXT("Ammo_Cost"), 0);

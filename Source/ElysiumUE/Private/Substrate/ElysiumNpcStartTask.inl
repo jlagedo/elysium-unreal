@@ -205,10 +205,15 @@ int32 StartTask19WeaponSwings = 0;
 bool StartTask19KickWeaponCast() const;
 int32 StartTask19KickDispatches = 0;
 
-/** SEAM for `0x10252450(weapon, bSecondary)` (the weapon's next-attack stamp) plus `0x102c5730(this,
- *  weapon)` (this NPC's own delay), `TASK_WAIT_ATTACK_TIME1/2`'s deadline. Neither word stands on
- *  `FElysiumWeapon`; answers `curtime`, so the arm's `m_flWaitFinished <= curtime` test completes. */
-double StartTask19WeaponNextAttackTime(bool bSecondary) const;
+/** `TASK_WAIT_ATTACK_TIME1/2`'s deadline (`0x102a33a2` + `0x102a33b0`): `0x10252450(weapon,
+ *  bSecondary)` — the active weapon's `m_flNextPrimaryAttack` (`+0x730`) or `m_flNextSecondaryAttack`
+ *  (`+0x734`) — plus `0x102c5730(this, weapon)`: `v = RandomFloat(NPC_Attack_Rate_Min (+0x264),
+ *  NPC_Attack_Rate_Max (+0x268))` of the weapon's current mode record (`0x102517e0`), then
+ *  `0x102c5570`'s `(v - Attack_Rate (+0x260)) * scale` (`ScaleWeaponBurstPause`, over
+ *  `ShootTargetDelta`'s distance and `NPC_Attack_Rate_Base_Range (+0x26c)`). Not `const`: it draws
+ *  on the `NpcSchedule` stream on every call. An active item with no weapon controller answers
+ *  `curtime`. */
+double StartTask19WeaponNextAttackTime(bool bSecondary);
 
 // --- Dialogue / player (`m_hClosestPlayer +0x628c`) ---
 

@@ -112,8 +112,11 @@ Wave 3 (build work, one agent):
     120 records: 85 pass / 33 expected-fail / 1 fail (H11) / 1 unexpected-pass (`hear_world_investigate`,
     N4's intermittent). 14 new records, 10 corrected; `face_enemy_turn` is green (the 13.4 s turn does
     not reproduce: `0002-npc-ai/stories/v4/packets-R1b-measurement.md`).
-  - [ ] **V5a + A3** — the attack conditions whole, the wait (N2), the cover tail's weapon read
-    (N1), slot 363 (`0002-npc-ai/stories/v5a/`). S–M.
+  - [x] **V5a + A3** — the attack conditions whole, the wait (N2), the cover tail's weapon read
+    (N1), slot 363 (`0002-npc-ai/stories/v5a/`). S–M. Done 2026-10-04: arena 120 records, 89 pass /
+    28 expected-fail / 1 fail (H11) / 2 unexpected-pass (N4's two intermittents); default 171 / 0, arm
+    1,549 / 0. `range_bands`, `cover_armed`, `sense_enemy_facing_me`, `ranged_sustained_fire` green;
+    `ranged_open_fire` red on the weapon's unwritten next-attack stamp (A1, then V4o O3).
   - [ ] **V4a** — the speed words, the dispatcher for every animating entity (A1, A2, A4). M.
   - [ ] **V4b + V11** — the walk's arrival and the turn (N13); the attack coordinator (N3,
     `0002-npc-ai/stories/v11/`). M.

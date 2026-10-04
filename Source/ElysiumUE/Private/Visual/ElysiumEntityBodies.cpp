@@ -1815,6 +1815,17 @@ bool UElysiumEntityBodies::ResolveNpcActivityClip(const FElysiumActivityClipRequ
 	return Anims->ResolveActivityClip(Request, Out);
 }
 
+void UElysiumEntityBodies::NpcActivitySequences(const FElysiumActivityClipRequest& Request,
+	TArray<FElysiumNpcClip>& Out)
+{
+	Out.Reset();
+	if (!RequireModelId(Request.Stem, TEXT("NpcActivitySequences"))) { return; }
+	if (UElysiumAnimSubsystem* Anims = GetAnims())
+	{
+		Anims->ActivitySequences(Request, Out);
+	}
+}
+
 bool UElysiumEntityBodies::ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
 	EElysiumAnimBodyKind BodyKind, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
 {

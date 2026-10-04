@@ -100,6 +100,12 @@ public:
 	 *  authors no clip for it (retail's own answer). */
 	int32 SequenceForActivity(int32 Activity);
 
+	/** `0x103ea950` for the melee band `0x103ea7e0`: every clip of this body's vocabulary carrying
+	 *  the activity the resolver translates the retail NUMBER to (weapon ladder, then the class
+	 *  body), in `FElysiumNpcClipSet::ByActivity`'s order (ascending sequence number). */
+	virtual void MeleeSequencesForActivity(int32 Activity,
+		TArray<struct FElysiumNpcClip>& OutSequences) const override;
+
 	virtual bool PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops) override;
 
 	// --- The bridge row's descriptor accessors (spec 0002 V4a seam) ---
