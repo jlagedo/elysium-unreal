@@ -45,6 +45,64 @@ virtual void MeleeSequencesForActivity(int32 Activity, TArray<struct FElysiumNpc
 	(void)OutSequences;
 }
 
+// --- The bridge row's descriptor facts (spec 0002 V4a, lane A2) ---------------------------------
+//
+// What the kernel reads off the studio sequence descriptor of a sequence NUMBER, cached per
+// sequence-bridge row (the index is the row's; `FElysiumNpc::SequenceRows`). Filled on first ask
+// from `IElysiumEmbodiment::GetNpcSequenceDescriptor` (the baked clip data); a body whose
+// embodiment answers nothing keeps the zero record. Session state, as the rows are.
+struct FSequenceDescriptorRow
+{
+	static constexpr int32 MaxFanCells = 9;   // FElysiumGaitSpeedTable::MaxCells
+	bool bAsked = false;            // the embodiment was asked (or a test wrote the record)
+	bool bKnown = false;            // it answered: the fields below are the baked descriptor's
+	bool bStudioLooping = false;    // mstudioseqdesc_t::flags & 1
+	float DurationSeconds = 0.f;    // SequenceDuration where the bake states it; 0 = the played length
+	float TurnYawDegrees = 0.f;     // GetSequenceTurnYaw 0x1008f8f0, a sequence with no grid
+	float GroundSpeedCm = 0.f;      // GetSequenceGroundSpeed 0x10091490, no grid, cm/s
+	int32 FanCells = 0;             // a one-axis fan's cell count; 0 = no grid
+	float FanAxisMin = 0.f;         // the fan's pose-parameter span, degrees
+	float FanAxisMax = 0.f;
+	float FanSpeedCm[MaxFanCells] = {};          // per-cell ground speed, cm/s
+	float FanTurnYawDegrees[MaxFanCells] = {};   // per-cell turn yaw, degrees
+	FString FanParameter;           // the pose parameter the axis binds (`move_yaw`)
+	const TArray<struct FElysiumAnimEvent>* Events = nullptr;   // the event table; null = none
+};
+mutable TArray<FSequenceDescriptorRow> SequenceDescriptorRows;   // filled by a const read
+
+// N19 (J1): the model's own sequence 0, which retail plays when a `LookupSequence` misses
+// (`StartSequence 0x101a82d0`: `m_nSequence := 0`, `0x101a833d`; `ResetSequenceInfo` then plays it
+// at rate 1.0, `0x10090a23`). The bridge's row 0 is this clip -- the body's `RawIndex 0` row
+// (`IElysiumEmbodiment::GetBodyClipByRawIndex`). Kept beside the row table rather than in row 0's
+// label so the trace keeps naming it `seq 0`. `bKnown` false: the body answered none and row 0
+// plays nothing, as before.
+struct FSequenceZeroClip
+{
+	bool bAsked = false;
+	bool bKnown = false;
+	FString Label;
+	FString OwnerStem;
+	bool bLoops = false;      // the clip's own STUDIO_LOOPING
+	float Seconds = 0.f;      // the length the clip player last reported
+};
+FSequenceZeroClip SequenceZero;
+
+// Asks the embodiment for the body's `RawIndex 0` clip once; answers whether row 0 has a clip.
+bool ResolveSequenceZeroClip();
+
+// The descriptor record of a bridge row, asked of the embodiment on first sight. Null for a number
+// that names no row.
+const FSequenceDescriptorRow* SequenceDescriptorRow(int32 Sequence) const;
+
+// `SequenceDuration(seq)` as `GetSequenceYawSpeed 0x10091310` divides by it: the bake's cycle
+// length where stated, else the length the clip player reported; 0 when neither is known.
+float SequenceDurationSeconds(int32 Sequence) const;
+
+// `m_flYawSpeed (+0x560) = GetSequenceYawSpeed(m_nSequence)` and `m_flGroundSpeed (+0x654) =
+// GetSequenceGroundSpeed(m_nSequence)`: the two writes `StudioFrameAdvance 0x1008f120`
+// (`0x1008f2e5`..`0x1008f306`) and `ResetSequenceInfo 0x10090950` both make.
+void WriteSequenceSpeedWords();
+
 // `CAI_BaseNPC::RunAnimation` `0x1026c540`: slot 250 `StudioFrameAdvance(0)` (the sequence clock),
 // the `CAP_AIM_GUN` (`0x20000000`) arm into slot 538 `AimGun`, and the idle re-pick — a body outside
 // SCRIPT/DEAD whose `m_Activity` is `ACT_IDLE` (1) and whose sequence has finished picks the next
@@ -101,7 +159,8 @@ bool ScriptOwnerIsLive() const;
 // `CBaseAnimating::LookupSequence(const char*)`: the sequence-bridge row of the clip the body's model
 // authors under that name (`HasNpcClip` / `NpcClipOwner`, then `FElysiumNpc::SequenceRowFor`), or -1
 // -- retail's own "this model authors no such sequence", the arm every caller branches on. The row's
-// loop bit is K2's residue (named at the definition): the cine's `m_iszPlay` once, every other loops.
+// loop bit is the clip's own baked `STUDIO_LOOPING`; where the embodiment answers no descriptor
+// (a headless world) K2's residue stands: the cine's `m_iszPlay` once, every other loops.
 int32 LookupSequenceByName(const TCHAR* Name) const;
 
 // `CBaseAnimating::GetSequenceActivity(int)`. **SEAM**, answering -1.

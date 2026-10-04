@@ -446,12 +446,20 @@ standing/duck collision bounds and controlled-use validation
 -> realized action classifier 0x1016bb50
 -> SetAnimation 0x10164240 when the action is non-negative
 -> invalid-sequence clamp
--> StudioFrameAdvance / DispatchAnimEvents / simulation time
--> Weapon_FrameUpdate
+-> slot 250 StudioFrameAdvance(0)
+-> 0x101600a0
+-> slot 258 DispatchAnimEvents(interval, this) / simulation time
+-> slot 312 UpdateCharacter
 -> UpdatePlayerSound
 -> forced-origin presentation state, when armed
 -> PostThinkVPhysics
 ```
+
+*(corrected 2026-10-04, packet R2, V4r.)* The call after the dispatch is **slot 312
+`UpdateCharacter`**, not `Weapon_FrameUpdate`: `CBaseCombatCharacter::Weapon_FrameUpdate`
+(`0x1032aa40`) has one caller, `CAI_BaseNPC::PostRun` (`0x1026c7c0`), and the player never calls it.
+Retail's order in `CBasePlayer::PostThink` `0x1016be10` is slot 250 `(0)` (the advance) →
+`0x101600a0` → slot 258 `(interval, this)` → slot 312.
 
 `ItemPostFrame` gives a controlling use entity first refusal; otherwise it dispatches the active
 weapon's busy-frame or ordinary post-frame virtual according to the next-attack deadline. The

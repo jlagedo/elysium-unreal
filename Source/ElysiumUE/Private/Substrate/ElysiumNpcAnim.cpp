@@ -11,7 +11,8 @@
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumRetailActivities.h"
 #include "ElysiumAnimationIntent.h"
-#include "Visual/ElysiumNpcClips.h"            // FElysiumNpcClip — `MeleeSequencesForActivity`'s list
+#include "ElysiumAnimEvent.h"                  // FElysiumAnimEvent — `SequenceEvents`' view
+#include "Visual/ElysiumNpcClips.h"           // FElysiumNpcClip — `MeleeSequencesForActivity`'s list
 
 // Story 29c-1, family **Anim** — the animation layers, the flex/expression controllers and the
 // scene-event queue of `order.md` layers 0–9.
@@ -324,7 +325,9 @@ int32 FElysiumNpc::SequenceRowFor(const FString& OwnerStem, const FString& Label
 {
 	if (SequenceRows.IsEmpty())
 	{
-		SequenceRows.AddDefaulted();   // row 0: retail's floor sequence, which plays nothing here
+		// Row 0: retail's floor sequence, the model's own sequence 0. Its clip is the body's
+		// `RawIndex 0` row, held in `SequenceZero` (N19); the row's label stays empty.
+		SequenceRows.AddDefaulted();
 	}
 	for (int32 Index = 1; Index < SequenceRows.Num(); ++Index)
 	{
@@ -415,42 +418,110 @@ void FElysiumNpc::MeleeSequencesForActivity(int32 Activity, TArray<FElysiumNpcCl
 	Embodiment->NpcActivitySequences(Request, OutSequences);
 }
 
-// --- The bridge row's descriptor accessors (spec 0002 V4a seam) --------------------------------
-// Each stands for one read of the studio sequence descriptor and answers nothing yet (the loop bit
-// answers what the row already holds); filled by lane A2 from the baked clip data.
+// --- The bridge row's descriptor accessors (spec 0002 V4a) -------------------------------------
+// Each is one read of the studio sequence descriptor, answered from the row's cached descriptor
+// record (`FElysiumNpcBase::SequenceDescriptorRow`: the baked clip data, asked of the embodiment
+// on first sight). A row the embodiment answers nothing for reads as a descriptor with no events,
+// no movement and the row's own loop bit.
+
+namespace
+{
+	// The kernel's live value of one pose parameter (`m_flPoseParameter +0x690`): the LAST write of
+	// that name in the port's name-keyed record; 0 when it was never written (retail's rest value).
+	float LivePoseParameter(TConstArrayView<FElysiumNpc::FPoseParameterWrite> PoseParameters,
+		const FString& Name)
+	{
+		for (int32 Index = PoseParameters.Num() - 1; Index >= 0; --Index)
+		{
+			if (PoseParameters[Index].Name.Equals(Name, ESearchCase::IgnoreCase))
+			{
+				return PoseParameters[Index].Value;
+			}
+		}
+		return 0.f;
+	}
+
+	// The pose-weighted sum over a one-axis fan's two corners (`Studio_SeqMovement 0x100c5d10`:
+	// `weight x motion` over the blend corners; a one-axis grid has two). The value is wrapped into
+	// the fan's span and the cells are the span's endpoints, as `FElysiumGaitSpeedTable::SpeedAt`
+	// reads the same table for the body.
+	float FanWeightedSum(const float* Cells, int32 Count, float AxisMin, float AxisMax, float Value)
+	{
+		const float Span = AxisMax - AxisMin;
+		if (Count < 2 || !(Span > 0.f) || !FMath::IsFinite(Value))
+		{
+			return 0.f;
+		}
+		const float Wrapped = AxisMin + FMath::Fmod(FMath::Fmod(Value - AxisMin, Span) + Span, Span);
+		const float Position = (Wrapped - AxisMin) / (Span / static_cast<float>(Count - 1));
+		const int32 Lower = FMath::Clamp(FMath::FloorToInt(Position), 0, Count - 2);
+		const float Fraction = FMath::Clamp(Position - static_cast<float>(Lower), 0.f, 1.f);
+		return Cells[Lower] * (1.f - Fraction) + Cells[Lower + 1] * Fraction;
+	}
+}
 
 TConstArrayView<FElysiumAnimEvent> FElysiumNpc::SequenceEvents(int32 Sequence) const
 {
-	// `mstudioseqdesc_t`'s event table (`numevents` / `eventindex`), which `0x10091880` walks.
-	// SEAM: the row carries no timeline yet; filled by lane A2 from the baked clip data.
-	(void)Sequence;
-	return TConstArrayView<FElysiumAnimEvent>();
+	// `mstudioseqdesc_t`'s event table (`numevents` / `eventindex`), which `0x10091880` walks: the
+	// row's clip's baked timeline, file order.
+	const FSequenceDescriptorRow* const Row = SequenceDescriptorRow(Sequence);
+	return (Row != nullptr && Row->Events != nullptr)
+		? TConstArrayView<FElysiumAnimEvent>(*Row->Events) : TConstArrayView<FElysiumAnimEvent>();
 }
 
 bool FElysiumNpc::SequenceLoops(int32 Sequence) const
 {
-	// `mstudioseqdesc_t::flags & 1` (`STUDIO_LOOPING`). Today the row's `bLoops`, the bridge's loop
-	// guess (`PlaySequenceClip` answers the same bit); lane A2 replaces it with the baked flag.
-	return Sequence > 0 && SequenceRows.IsValidIndex(Sequence) && SequenceRows[Sequence].bLoops;
+	// `mstudioseqdesc_t::flags & 1` (`STUDIO_LOOPING`): the baked flag where the descriptor is
+	// known, else the bit the row was numbered with (row 0: its clip's own bit).
+	const FSequenceDescriptorRow* const Row = SequenceDescriptorRow(Sequence);
+	if (Row != nullptr && Row->bKnown)
+	{
+		return Row->bStudioLooping;
+	}
+	if (Sequence == 0)
+	{
+		return SequenceZero.bKnown && SequenceZero.bLoops;
+	}
+	return SequenceRows.IsValidIndex(Sequence) && SequenceRows[Sequence].bLoops;
 }
 
 float FElysiumNpc::SequenceTurnYaw(int32 Sequence) const
 {
-	// `GetSequenceTurnYaw 0x1008f8f0` -> `FUN_10428690`'s `angles[1]`: the descriptor's movement
-	// records' angle. SEAM answering 0; filled by lane A2 from the baked clip data (`YawDegrees`).
-	(void)Sequence;
-	return 0.f;
+	// `GetSequenceTurnYaw 0x1008f8f0` -> `0x10428690`'s `angles[1]`: the pose-weighted sum, over the
+	// blend corners, of the last movement record's `angle` (the baked `YawDegrees`), at the live
+	// pose parameters. Degrees. 0.0 on every shipped record.
+	const FSequenceDescriptorRow* const Row = SequenceDescriptorRow(Sequence);
+	if (Row == nullptr)
+	{
+		return 0.f;
+	}
+	if (Row->FanCells >= 2)
+	{
+		return FanWeightedSum(Row->FanTurnYawDegrees, Row->FanCells, Row->FanAxisMin,
+			Row->FanAxisMax, LivePoseParameter(PoseParameterWrites, Row->FanParameter));
+	}
+	return Row->TurnYawDegrees;
 }
 
 float FElysiumNpc::SequenceGroundSpeedAt(int32 Sequence,
 	TConstArrayView<FPoseParameterWrite> PoseParameters) const
 {
-	// `GetSequenceGroundSpeed 0x10091490` = `GetSequenceMoveDist / SequenceDuration` over the
-	// descriptor's blend corners. SEAM answering 0 (today's `GroundSpeedCm()`); filled by lane A2
-	// from the baked clip data (`GroundSpeedCmPerSecond`, the fan's grid).
-	(void)Sequence;
-	(void)PoseParameters;
-	return 0.f;
+	// `GetSequenceGroundSpeed 0x10091490` = `GetSequenceMoveDist / SequenceDuration`, pose-weighted
+	// over the blend corners: a fan's speed at the kernel's own `move_yaw`, a plain clip's one
+	// number. Centimetres per second -- the bake's unit (it converts Source units); no conversion
+	// here. The pose value is retail's own (`m_flDesiredMoveYaw` -> `SetPoseParameter`), and the
+	// grid's axis is in the pose parameter's own degrees, unconverted by the bake.
+	const FSequenceDescriptorRow* const Row = SequenceDescriptorRow(Sequence);
+	if (Row == nullptr)
+	{
+		return 0.f;
+	}
+	if (Row->FanCells >= 2)
+	{
+		return FanWeightedSum(Row->FanSpeedCm, Row->FanCells, Row->FanAxisMin, Row->FanAxisMax,
+			LivePoseParameter(PoseParameters, Row->FanParameter));
+	}
+	return Row->GroundSpeedCm;
 }
 
 bool FElysiumNpc::PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops)
@@ -458,7 +529,7 @@ bool FElysiumNpc::PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOut
 	// The AI trace's `sequence` event (debug output only, behind its sink): the kernel's commit
 	// reaches the body here whether or not the body plays it, and `rate` is the rate the body
 	// actually plays it at -- `ResetSequenceInfo`'s `m_flPlaybackRate = 1.0` (`0x10090a23`) when the
-	// clip starts, 0 when nothing plays it (row 0, or a row whose clip the body does not author).
+	// clip starts, 0 when nothing plays it (a row whose clip the body does not author).
 	auto TraceSequence = [this, Sequence](float AppliedRate)
 	{
 		if (IsAiTraced())
@@ -467,10 +538,43 @@ bool FElysiumNpc::PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOut
 				FString::Printf(TEXT("%s rate=%g"), *TraceSequenceName(Sequence), AppliedRate));
 		}
 	};
-	if (!SequenceRows.IsValidIndex(Sequence) || Sequence == 0)
+	if (Sequence == 0)
+	{
+		// N19 (J1): the model's own sequence 0, which retail plays when a `LookupSequence` misses
+		// (`StartSequence 0x101a82d0`: `m_nSequence := 0`, `0x101a833d`) and when the activity
+		// ladder ends on its floor -- the body's `RawIndex 0` clip, with its own `STUDIO_LOOPING`
+		// (`0x10090a12`), at `m_flPlaybackRate = 1.0` (`0x10090a23`). The trace names it `seq 0`.
+		if (!ResolveSequenceZeroClip())
+		{
+			TraceSequence(0.f);
+			return false;   // the body answers no sequence 0: today's row 0, which plays nothing
+		}
+		bOutLoops = SequenceZero.bLoops;
+		float ZeroSeconds = 0.f;
+		if (PlayAnimClip(SequenceZero.Label, SequenceZero.bLoops, &ZeroSeconds))
+		{
+			SequenceZero.Seconds = ZeroSeconds;
+			if (!SequenceZero.OwnerStem.IsEmpty())
+			{
+				ScheduleIdealActivity =
+					FElysiumClipIdentity(SequenceZero.OwnerStem, SequenceZero.Label);
+			}
+			OutSeconds = ZeroSeconds;
+			TraceSequence(1.f);   // 0x10090a23 m_flPlaybackRate = 1.0
+			return true;
+		}
+		TraceSequence(0.f);
+		if (SequenceZero.Seconds > 0.f)
+		{
+			OutSeconds = SequenceZero.Seconds;
+			return true;
+		}
+		return false;
+	}
+	if (!SequenceRows.IsValidIndex(Sequence))
 	{
 		TraceSequence(0.f);
-		return false;   // row 0 and an unknown number play nothing
+		return false;   // an unknown number plays nothing
 	}
 	FSequenceRow& Row = SequenceRows[Sequence];
 	// `GetSequenceFlags(seq) & 1` (`STUDIO_LOOPING`, `0x10090a12` -> +0x65d) is the row's own bit,

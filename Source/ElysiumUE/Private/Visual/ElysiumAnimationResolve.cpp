@@ -290,9 +290,13 @@ namespace
 				}
 				return;
 			}
-			// The hard fallback. It cannot be named: exact identity is (owner, raw index) and the
-			// character export writes no raw index, so what the record can say is that retail would
-			// stand on sequence zero here and that we cannot name which clip that is.
+			// The hard fallback. This resolver does not name it: the record says that retail would
+			// stand on sequence zero here. The character export DOES carry the raw index
+			// (`rawIndex = sequenceBase + the descriptor's index in its own .mdl`,
+			// `importers/body_data.py`, loaded as `FElysiumNpcClip::RawIndex`), and the kernel's
+			// sequence bridge plays the body's `RawIndex 0` clip for its row 0
+			// (`IElysiumEmbodiment::GetBodyClipByRawIndex`, spec 0002 V4a); this route still
+			// answers no asset, and the detail string below predates that.
 			Out.AssetKind = EElysiumAnimAssetKind::None;
 			Out.RawSequenceIndex = 0;
 			Out.Outcome = EElysiumAnimOutcome::SequenceZero;

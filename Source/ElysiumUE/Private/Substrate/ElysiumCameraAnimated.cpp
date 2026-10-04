@@ -109,9 +109,12 @@ void FElysiumCameraAnimated::GetDebugState(TArray<TPair<FString, FString>>& Out)
 	Out.Emplace(TEXT("Camera"), CineCamera.IsSet() ? TEXT("live") : TEXT("<none>"));
 	Out.Emplace(TEXT("SequenceEnds"), SequenceEndTime >= 0.0
 		? FString::Printf(TEXT("%.3f"), SequenceEndTime) : TEXT("<not playing>"));
-	// `m_bSequenceLoops` is shown beside the deadline precisely because it does not move it.
-	Out.Emplace(TEXT("SequenceLoops"), bSequenceLoops ? TEXT("yes (ends on the first wrap)")
+	// `m_bSequenceLoops` is shown beside the deadline precisely because the think's exit never reads it.
+	Out.Emplace(TEXT("SequenceLoops"), bSequenceLoops ? TEXT("yes (ends on the first lap's look-ahead)")
 		: TEXT("no"));
+	// `m_flLastEventCheck` (`+0x658`) and `m_bSequenceFinished` (`+0x65c`), the dispatcher's words.
+	Out.Emplace(TEXT("LastEventCheck"), FString::Printf(TEXT("%.3f"), SequenceWords.LastEventCheck));
+	Out.Emplace(TEXT("SequenceFinished"), SequenceWords.bSequenceFinished ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("FreezePlayer"),
 		(SpawnFlags & ElysiumCineCam::SF_FreezePlayer) != 0 ? TEXT("yes") : TEXT("no"));
 }
@@ -231,12 +234,21 @@ void FElysiumCameraAnimated::PlayCameraAnimation()
 			TEXT("%s no sequence named:%s — the camera is stranded (retail FUN_10071770 seq < 0)"),
 			*DebugString(), *AnimName);
 		SequenceEndTime = -1.0;
+		SequenceStartTime = -1.0;
+		SequenceSeconds = 0.0f;
+		SequenceWords = FElysiumSequenceWords();
 		bSequenceLoops = false;
 		NextThink = ELYSIUM_NEVER_THINK;
 		return;
 	}
+	// `m_nSequence = seq; m_flCycle = 0; ResetSequenceInfo()` (`0x10090950`): the loop bit copied
+	// from the descriptor, `m_flLastEventCheck` (`+0x658`) zeroed, `m_bSequenceFinished` (`+0x65c`)
+	// cleared, the playback rate 1.0.
 	bSequenceLoops = bLoops;
-	SequenceEndTime = Now + FMath::Max(0.0f, Seconds);
+	SequenceStartTime = Now;
+	SequenceSeconds = FMath::Max(0.0f, Seconds);
+	SequenceWords = FElysiumSequenceWords();
+	SequenceEndTime = Now + SequenceSeconds;
 	FireOutput(FName(TEXT("OnCameraBegin")), FElysiumEntityHandle::Invalid());
 	NextThink = static_cast<float>(Now + ElysiumCameraAnimatedImpl::AnimatedThinkInterval);
 }
@@ -248,12 +260,74 @@ void FElysiumCameraAnimated::Think()
 	//   if (!m_bSequenceFinished) m_flNextThink = curtime + 0.1; else FUN_10071660(this);
 	//   this->+0x828 = camera_showdebug.IsCommand() ? 0 : (camera_showdebug.GetInt() != 0);
 	//
-	// The frame advance and the event dispatch are the world's own animation pass here
-	// (`FElysiumEntityWorld::AdvanceAnimEvents`), so what is left is the finished test — and that
-	// test is `m_bSequenceFinished` alone. No cycle compare, and no `m_bSequenceLoops` consultation:
-	// a looping clip ends the camera on its first wrap.
+	// Advance -> dispatch -> the finished test, in that order, and the test is `m_bSequenceFinished`
+	// (`+0x65c`, `param_1[0x197]`) alone: no cycle compare and no `m_bSequenceLoops` consultation in
+	// the think. The byte it reads is the one the dispatcher just wrote — cleared at entry, set when
+	// the 0.1 s look-ahead end reaches 1.0 — so the camera ends, and `OnCameraComplete` fires, one
+	// look-ahead before the pose's own end.
 	const double Now = World ? World->NowSeconds() : 0.0;
-	if (IsSequenceFinished(Now))
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+
+	// --- slot 250 `StudioFrameAdvance(0)` (`vt+1000`). ---
+	// `m_flCycle` from the sequence's start and length at playback rate 1.0 (`ResetSequenceInfo`'s):
+	// wrapped into `[0,1)` for a looping sequence, clamped to 1.0 for a one-shot (`0x1008f120`). A
+	// zero-length clip has no rate to advance at and stands at its end, so it finishes on the first
+	// think, as it did under the time compare this replaces.
+	FElysiumSequenceWords& Words = SequenceWords;
+	const float Elapsed = static_cast<float>(FMath::Max(0.0, Now - SequenceStartTime));
+	if (SequenceSeconds > 0.0f)
+	{
+		const float Raw = Elapsed / SequenceSeconds;
+		Words.Cycle = bSequenceLoops ? FMath::Frac(Raw) : FMath::Min(Raw, 1.0f);
+		Words.CycleRate = 1.0f / SequenceSeconds;   // GetSequenceCycleRate x m_flPlaybackRate (1.0)
+	}
+	else
+	{
+		Words.Cycle = 1.0f;
+		Words.CycleRate = 0.0f;
+	}
+	Words.Sequence = 0;   // the port's camera carries no sequence index; the census names the clip
+	Words.CensusOwner = AnimatedStem.IsEmpty() ? ModelStem() : AnimatedStem;
+	Words.CensusLabel = AnimName;
+	Words.AnimTime = static_cast<float>(Now);   // `m_flAnimTime`, stamped by the advance
+	// `m_bSequenceLoops` (`+0x65d`) is `ResetSequenceInfo`'s copy of `seqdesc.flags & 1`.
+	Words.bLoops = bSequenceLoops;
+	Words.bDescriptorLoops = bSequenceLoops;
+	Words.bHasDescriptor = true;
+
+	// The sequence's event table, under the bank and label the pose layer publishes for the rig's
+	// base channel. A body publishing no phase names no table: the window still advances and the
+	// finish is still written.
+	TConstArrayView<FElysiumAnimEvent> Events;
+	FElysiumClipPhase Phase;
+	if (Embodiment != nullptr && Visual != nullptr
+		&& Embodiment->GetBodyClipPhase(Visual, EElysiumAnimChannel::Base, Phase) && Phase.IsValid())
+	{
+		if (const TArray<FElysiumAnimEvent>* Timeline =
+			Embodiment->GetNpcEventTimeline(Phase.OwnerStem, Phase.Label, Phase.OwnerRoot))
+		{
+			Events = TConstArrayView<FElysiumAnimEvent>(*Timeline);
+		}
+	}
+
+	// --- slot 258 `DispatchAnimEvents(dt, this)` (`vt+0x408`). ---
+	// `CCameraAnimated` is a `CBaseAnimating`: the base dispatcher `0x10091880` only, no overlay
+	// layers, the camera as source and handler. Its slot 259 is `CBaseAnimating::HandleAnimEvent`
+	// `0x10091da0` (2070, 2071, 4005, anything else a `DevWarning`). The rising edge's
+	// `OnSequenceFinished` (`0x10091c80`) is an empty body.
+	// The words are this entity's own, written in place: `bSequenceFinished` goes in as the live
+	// `+0x65c` (retail's `cVar2`) and the dispatcher writes all three words before its event loop,
+	// so nothing is copied back afterwards.
+	ElysiumAnimEvents::DispatchBase(Words, Events, *this, *this);
+	if (SequenceEndTime < 0.0)
+	{
+		// A handler ended the camera inside the dispatch (`FUN_10071660` ran `ResetSequenceInfo` and
+		// cleared the think): the reset words stand, and there is nothing left to test or re-arm.
+		return;
+	}
+
+	// --- `if (!m_bSequenceFinished) m_flNextThink = curtime + 0.1; else FUN_10071660(this);` ---
+	if (IsSequenceFinished())
 	{
 		InputEndCamera();
 		return;
@@ -305,6 +379,9 @@ void FElysiumCameraAnimated::InputEndCamera()
 	// `m_nSequence = 0; m_flCycle = 0; ResetSequenceInfo()` — which is also the only reset of
 	// `m_bSequenceFinished` and of `m_bSequenceLoops`.
 	SequenceEndTime = -1.0;
+	SequenceStartTime = -1.0;
+	SequenceSeconds = 0.0f;
+	SequenceWords = FElysiumSequenceWords();
 	bSequenceLoops = false;
 	NextThink = ELYSIUM_NEVER_THINK;
 	ScriptHide();

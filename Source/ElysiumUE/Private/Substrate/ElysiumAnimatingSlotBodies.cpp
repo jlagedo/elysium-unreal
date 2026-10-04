@@ -196,3 +196,26 @@ bool FElysiumAnimating::BaseEntityKeyValue(const TCHAR* Key, const TCHAR* Value)
 	Acc->Set(*this, FElysiumVariant::String(FString(Value != nullptr ? Value : TEXT(""))));
 	return true;
 }
+
+// --- The speed words' readers (spec 0002 V4a, lane A2) ---
+
+// slot 242 `float GetIdealYawSpeed()` — 0x100916a0
+float FElysiumAnimating::GetIdealYawSpeed()
+{
+	// `0x100916a0`: `return m_flYawSpeed` (+0x560), a plain read. The word is kept on the NPC beside
+	// its sequence words (`FElysiumNpcBase::YawSpeed`, written by `StudioFrameAdvance 0x1008f120`
+	// and `ResetSequenceInfo 0x10090950`); an animating entity that is no NPC has no sequence clock
+	// in this port and answers 0.
+	const FElysiumNpcBase* const Npc = AsNpcBase();
+	return Npc != nullptr ? Npc->YawSpeed : 0.f;
+}
+
+// slot 248 `float GetIdealSpeed() const` — 0x10091740
+float FElysiumAnimating::GetIdealSpeed() const
+{
+	// `0x10091740`: `return m_flGroundSpeed` (+0x654), with no playback-rate term. The word is kept
+	// on the NPC (`FElysiumNpcBase::GroundSpeed`) in CENTIMETRES per second -- the bake's unit;
+	// retail's is Source units per second -- so this answers cm/s, as `GroundSpeedCm()` does.
+	const FElysiumNpcBase* const Npc = AsNpcBase();
+	return Npc != nullptr ? Npc->GroundSpeed : 0.f;
+}

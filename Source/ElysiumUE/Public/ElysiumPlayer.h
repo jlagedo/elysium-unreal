@@ -16,6 +16,9 @@
 // interface's definition is needed here. Same posture as the `Visual/` rigs several Public headers
 // already inherit from.
 #include "Substrate/ElysiumCameraOverride.h"
+// By value: `FElysiumPlayer` keeps one `FElysiumSequenceWords` per dispatched channel (the words
+// `CBaseAnimating::DispatchAnimEvents 0x10091880` reads and writes), same posture as the line above.
+#include "Substrate/ElysiumAnimEvents.h"
 
 struct FElysiumStatTable;      // Private/Substrate/ElysiumRulebook.h — the data half of the sheet
 struct FElysiumClanTemplate;
@@ -2116,10 +2119,34 @@ public:
 		int32 PositionHint, struct FElysiumStealthPairClips* OutClips = nullptr);
 	bool StartStealthKill(class FElysiumNpc& Victim, float MaxDistanceUnits);
 	void TickStealthKill();
-	// `CBasePlayer::PostThink 0x1016be10`'s animation step (slot 250 -> slot 258 `(interval, this)`
-	// -> slot 312); the call site is A1's, the body A4's. Declared and left empty by V4a's seam:
-	// called by nobody yet.
+	// `CBasePlayer::PostThink 0x1016be10`'s animation step, in retail's order: slot 250 (the
+	// advance) -> slot 258 `DispatchAnimEvents(interval, this)` -> slot 312 `UpdateCharacter`.
+	// Called once per world tick at the point that stands for `PostThink` (after `SyncFromBody` /
+	// `TickStepClock`, before `RunThinks`).
 	void PostThinkAnimation();
+
+	// The dispatch words of one channel the player's slot 258 walks. Slot 258 on the player is the
+	// overlay body `CBaseAnimatingOverlay::DispatchAnimEvents 0x10098c80`: the base sequence through
+	// `0x10091880`, then the overlay layers through `0x10098cd0`, each with its own
+	// `m_flLastEventCheck` (`+0x658`; a layer's is `layer+0x2c`). The words persist between ticks;
+	// the identity beside them is how the port sees retail's `ResetSequenceInfo 0x10090950` (which
+	// zeroes `+0x658` and clears `+0x65c`): the player has no `m_nSequence`, so "the sequence
+	// changed" is "the pose layer names another clip, or another play of it".
+	struct FPostThinkChannel
+	{
+		FElysiumSequenceWords Words;
+		FString OwnerStem;
+		FString OwnerRoot;
+		FString Label;
+		uint32 PlayId = 0;
+		bool bArmed = false;   // false: the channel stood on nothing at the last tick
+	};
+	// [0] the base sequence (`EElysiumAnimChannel::Base`), [1] overlay layer 0
+	// (`EElysiumAnimChannel::UpperBody`, where `SetAnimation`'s `*_attack_layer` clip and its 3031
+	// compose). Retail walks layers 0..3 (`+0x734`, stride `0x30`); the pose layer publishes a phase
+	// for one overlay slot only, so layers 1..3 are a seam answering "no layer".
+	static constexpr int32 NumPostThinkChannels = 2;
+	FPostThinkChannel PostThinkChannels[NumPostThinkChannels];
 	// Retail player +0x1c58/+0x1c60, written before StartGrappleAttack even on refusal.
 	FElysiumEntityHandle MeleeOpponent;
 	FElysiumEntityHandle LastOpponent;

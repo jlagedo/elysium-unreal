@@ -117,7 +117,13 @@ Wave 3 (build work, one agent):
     28 expected-fail / 1 fail (H11) / 2 unexpected-pass (N4's two intermittents); default 171 / 0, arm
     1,549 / 0. `range_bands`, `cover_armed`, `sense_enemy_facing_me`, `ranged_sustained_fire` green;
     `ranged_open_fire` red on the weapon's unwritten next-attack stamp (A1, then V4o O3).
-  - [ ] **V4a** — the speed words, the dispatcher for every animating entity (A1, A2, A4). M.
+  - [x] **V4a** — the speed words, the dispatcher for every animating entity (A1, A2, A4). M.
+    Done 2026-10-04: arena 120 records, 90 pass / 28 expected-fail / 1 fail (H11) / 1 unexpected-pass
+    (N4); default 170 / 0, arm 1,555 / 0. `script_walk_to_mark` green (N19); `ranged_open_fire` red on
+    V4o O3 alone (the 3031 reaches the weapon, no event shot). Open for the judge: the player's
+    frame-rate dispatch re-fires a looping clip's table across the 0.1 s look-ahead at each lap
+    (`0x10091880` as listed; `sense_cone_enter` 2052 5 → 23); the scripted walk and the feed victim's
+    clip play outside `m_nSequence` and dispatch nothing.
   - [ ] **V4b + V11** — the walk's arrival and the turn (N13); the attack coordinator (N3,
     `0002-npc-ai/stories/v11/`). M.
   - [ ] **V4o** — the NPC overlay stack and the move-and-shoot wire (pulled from 0015;

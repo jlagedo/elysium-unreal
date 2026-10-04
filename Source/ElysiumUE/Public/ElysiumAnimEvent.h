@@ -32,34 +32,3 @@ struct ELYSIUMUE_API FElysiumAnimEvent
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FString Options;
 };
-
-// One channel's place on one clip's timeline, carried across frames.
-//
-// It rides here with the record rather than with the rule that advances it
-// (`Private/Substrate/ElysiumAnimEvents.h`) because `FElysiumAnimating` owns one per polled
-// channel, and that class is declared in a public header.
-//
-// The identity is `(OwnerStem, Label, PlayId)`, and all three are needed: two banks can declare the
-// same label, and the same clip re-armed is a new play whose timeline fires again from zero.
-// `bArmed` is what separates "the cursor has never seen this play" from "the cursor sits at cycle 0
-// of it" — the first frame of a play is the interval `[0, Cycle)`, so a record authored at cycle 0
-// fires, and a second frame at the same phase fires nothing.
-struct FElysiumAnimEventCursor
-{
-	FString OwnerStem;
-	FString OwnerRoot;
-	FString Label;
-	uint32 PlayId = 0;
-	float LastCycle = 0.f;
-	bool bArmed = false;
-
-	void Reset()
-	{
-		OwnerStem.Reset();
-		OwnerRoot.Reset();
-		Label.Reset();
-		PlayId = 0;
-		LastCycle = 0.f;
-		bArmed = false;
-	}
-};

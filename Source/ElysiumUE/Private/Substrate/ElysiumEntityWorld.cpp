@@ -1920,24 +1920,16 @@ void FElysiumEntityWorld::Tick(double Now)
 		LastStepClockNow = Now;
 		PlayerEnt->TickStepClock(Now, StepDt);
 	}
-	// The sequence-event pass, immediately before the thinks. Retail dispatches a body's
-	// animation events out of the animating object's own frame advance, ahead of the AI, so the
-	// position in the frame is the recovered one.
+	// The player's `PostThink` step (`CBasePlayer::PostThink 0x1016be10`: slot 250 -> slot 258
+	// `DispatchAnimEvents(interval, this)` -> slot 312), then `TickStealthKill()` (SetAnimation's
+	// paired completion, per frame); both inside `PostThinkAnimation`.
 	//
-	// What that position guarantees is SAME-FRAME delivery, not pre-think application. A handler
-	// that acts directly — an attachment toggle, a bodygroup — is applied before the thinks read it.
-	// A handler that raises work instead enqueues it (producers enqueue, only queue service
-	// delivers), and a zero-delay input raised here is due at this frame's `Now`, so `ServiceEvents`
-	// below delivers it one phase later in this same tick. The weapon band's shot and melee commits
-	// are that second shape.
-	//
-	// The pose layer publishes the base channel's phase for every body it stands a clip on
-	// (`Visual/ElysiumBipedAnimInstance.cpp` → the base channel's phase clock), so this walk is live
-	// on any body whose animation host named the clip it armed. A body standing on a clip nobody
-	// named — a preview stand, a lab grid — publishes nothing, and its cursor stays unarmed.
-	AdvanceAnimEvents();
-	// SetAnimation's paired completion is per frame, not the player's 0.1-second rule heartbeat.
-	if (FElysiumPlayer* PlayerEnt = FindPlayer()) PlayerEnt->TickStealthKill();
+	// The world-tick sequence-event poll that stood here is deleted whole (spec 0002 V4a, K3).
+	// Retail's slot 258 has four call sites in the image -- `PostRun 0x1026c7c0`, `PostThink
+	// 0x1016be10`, the weapon's slot 369 `0x1024efa0`, `CCameraAnimated`'s think `0x10071840` --
+	// and each runs inside the entity's own think. None is a prop: `CDynamicProp`'s think
+	// `0x10190850` advances and never dispatches, so a prop gets nothing in the poll's place.
+	if (FElysiumPlayer* PlayerEnt = FindPlayer()) PlayerEnt->PostThinkAnimation();
 	RunNetworkManagerFirstThink();
 	RunThinks(Now);
 	ServiceEvents(Now);
@@ -2071,31 +2063,6 @@ void FElysiumEntityWorld::PublishWetness()
 		Value.StartTime = WeatherState.TransitionStart;
 		Value.Duration = WeatherState.TransitionDuration;
 		Service->ApplyWetness(Value);
-	}
-}
-
-void FElysiumEntityWorld::AdvanceAnimEvents()
-{
-	// A headless world has no pose layer to ask, so no entity in it can be standing on a clip. This
-	// is the ONE early-out the pass takes: an inert, hidden or dying body is still dispatched,
-	// because retail dispatches on all three and a death clip's footfalls are as real as a walk's.
-	if (Embodiment() == nullptr)
-	{
-		return;
-	}
-
-	// The same walk `RunThinks` makes, and deliberately so: an entity's timeline belongs to the same
-	// list its think does, in the same order. It differs in its two gates — a body rather than a due
-	// think, and no player skip, because the player's clips carry events too and there is no
-	// pre-move pass that already advanced them.
-	for (int32 Index = 0; Index < EntityList.Num(); ++Index)
-	{
-		const TUniquePtr<FElysiumEntity>& EntPtr = EntityList[Index];
-		if (!EntPtr || EntPtr->GetSkeletalBody() == nullptr)
-		{
-			continue;   // nothing without a skeletal body has a clip to advance
-		}
-		EntPtr->AdvanceAnimEvents();
 	}
 }
 

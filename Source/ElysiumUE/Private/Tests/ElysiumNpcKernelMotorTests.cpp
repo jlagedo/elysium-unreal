@@ -243,9 +243,20 @@ bool FElysiumNpcKernelMotorYawLaddersTest::RunTest(const FString&)
 	Guard->NpcFlags.Set(EElysiumNpcFlag::PLAYING_FACE_ANIM);
 	TestEqual(TEXT("a face anim answers 45 even on ACT_RUN"), Guard->MaxYawSpeed(), 45.0f);
 	Guard->NpcFlags.Clear(EElysiumNpcFlag::PLAYING_FACE_ANIM);
-	// The turning arm beats every activity; `GetIdealYawSpeed()` answers 0, so it lands on 1.0.
+	// The turning arm (`0x10297ce0`): `|GetIdealYawSpeed()| x cvar` (".15"), floored at 1.0, and
+	// ONLY under `m_afMemory & 0x2000`. Slot 242 (`0x100916a0`) reads `m_flYawSpeed` (+0x560).
+	Guard->YawSpeed = -200.f;
+	TestEqual(TEXT("slot 242 is a plain read of the word"), Guard->GetIdealYawSpeed(), -200.f);
+	TestEqual(TEXT("untagged, the yaw speed word is not read: ACT_RUN's 160"),
+		Guard->MaxYawSpeed(), 160.0f);
 	Guard->BaseScheduleHost.MemoryBits |= 0x2000;
-	TestEqual(TEXT("the turning arm's floor, 1.0"), Guard->MaxYawSpeed(), 1.0f);
+	TestEqual(TEXT("tagged, the turning arm beats the activity: |-200| x .15"),
+		Guard->MaxYawSpeed(), 30.0f, 0.001f);
+	Guard->YawSpeed = 2.f;
+	TestEqual(TEXT("and floors at 1.0"), Guard->MaxYawSpeed(), 1.0f);
+	Guard->YawSpeed = 0.f;
+	TestEqual(TEXT("a zero word (every shipped sequence) lands on the floor"),
+		Guard->MaxYawSpeed(), 1.0f);
 	Guard->BaseScheduleHost.MemoryBits &= ~0x2000u;
 
 	// `CNPC_VDog` `0x10374130`.

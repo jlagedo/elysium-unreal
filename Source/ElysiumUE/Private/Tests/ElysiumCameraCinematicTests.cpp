@@ -1509,7 +1509,10 @@ bool FElysiumCameraAnimatedTest::RunTest(const FString&)
 		}
 		World.Tick(1.4);
 		TestTrue(TEXT("the shot is live before the wrap"), World.HasScriptedCamera());
-		World.Tick(2.55);
+		// 2.45, inside the dispatcher's look-ahead: the finish flag is raised when `m_flCycle + 0.1 s
+		// x cycle rate` reaches 1 (`0x10091880`), i.e. from 1.4 s of this 1.5 s clip (started at 1.0).
+		// A tick past the wrap itself (2.55) lands on a cycle already wrapped, outside that window.
+		World.Tick(2.45);
 		TestFalse(TEXT("the first wrap ends the camera anyway"), World.HasScriptedCamera());
 		World.Tick(2.6);
 		TestEqual(TEXT("and OnCameraComplete fired on it"), CounterValue(Count), 101.0f);

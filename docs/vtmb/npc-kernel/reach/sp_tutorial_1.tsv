@@ -929,8 +929,8 @@ function	0x10091080	CBaseAnimating::SequenceDuration	-		layer 0
 function	0x10091230	CBaseAnimating::GetSequenceCycleRate	-		layer 0
 function	0x10091310	CBaseAnimating::GetSequenceYawSpeed	-		layer 0
 function	0x10091490	CBaseAnimating::GetSequenceGroundSpeed	-		layer 0
-function	0x100916a0	CBaseAnimating::GetIdealYawSpeed	CCineNPC#242, CNPCMaker#242, CNPC_VHumanCombatant#242, CNPC_VPedestrian#242, CNPC_VRat#242, CNPC_VVampire#242		layer 0
-function	0x10091740	CBaseAnimating::GetIdealSpeed	CCineNPC#248, CNPCMaker#248, CNPC_VHumanCombatant#248, CNPC_VPedestrian#248, CNPC_VRat#248, CNPC_VVampire#248		layer 0
+function	0x100916a0	CBaseAnimating::GetIdealYawSpeed	CCineNPC#242, CNPCMaker#242, CNPC_VHumanCombatant#242, CNPC_VPedestrian#242, CNPC_VRat#242, CNPC_VVampire#242	rule	layer 0
+function	0x10091740	CBaseAnimating::GetIdealSpeed	CCineNPC#248, CNPCMaker#248, CNPC_VHumanCombatant#248, CNPC_VPedestrian#248, CNPC_VRat#248, CNPC_VVampire#248	rule	layer 0
 function	0x100917e0	CBaseAnimating::GetIdealAccel	CCineNPC#249, CNPCMaker#249, CNPC_VHumanCombatant#249, CNPC_VPedestrian#249, CNPC_VRat#249, CNPC_VVampire#249		layer 0
 function	0x10091880	CBaseAnimating::DispatchAnimEvents	-		layer 0
 function	0x10091da0	CBaseAnimating::HandleAnimEvent	-		layer 0

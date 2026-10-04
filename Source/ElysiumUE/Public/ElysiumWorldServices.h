@@ -14,6 +14,7 @@
 #include "ElysiumComboChain.h"
 #include "ElysiumEntity.h"           // FElysiumFlexWrite (passed by view)
 #include "ElysiumEntityHandle.h"
+#include "ElysiumGaitSpeeds.h"       // FElysiumGaitSpeedTable (FElysiumSequenceDescriptor's fan, by value)
 #include "ElysiumCharacterModelAdmission.h"
 #include "ElysiumInteraction.h"
 #include "ElysiumLocomotionSample.h" // FElysiumLocomotionSample (returned by value)
@@ -758,6 +759,35 @@ struct FElysiumRetailTraceResult
 	TArray<FElysiumRetailTraceCharacter, TInlineAllocator<4>> Characters;
 };
 
+// What the kernel reads off one studio sequence descriptor (`mstudioseqdesc_t`) of a body's model,
+// as the baked clip data states it (`UElysiumClipData`, the owning bank's blend table). The sequence
+// bridge (`FElysiumNpc::SequenceRows`) caches one per row (spec 0002 V4a).
+struct FElysiumSequenceDescriptor
+{
+	// `flags & 1`, STUDIO_LOOPING: `ResetSequenceInfo 0x10090950` copies it to `m_bSequenceLoops`
+	// (`0x10090a14`) and `DispatchAnimEvents 0x10091880` reads it for the wrap clause.
+	bool bStudioLooping = false;
+	// `SequenceDuration`, seconds, where the bake states a movement cycle; 0 = not stated (the
+	// kernel then divides by the length the clip player reported).
+	float CycleSeconds = 0.f;
+	// `GetSequenceTurnYaw 0x1008f8f0` for a sequence with no grid: the last movement record's
+	// `angle` (the baked `YawDegrees`), degrees.
+	float TurnYawDegrees = 0.f;
+	// `GetSequenceGroundSpeed 0x10091490` for a sequence with no grid, centimetres per second
+	// (the bake converts Source units to centimetres).
+	float GroundSpeedCmPerSecond = 0.f;
+	// A gridded sequence: the per-cell ground speeds of its one-axis fan, cm/s, unsymmetrised
+	// (`ElysiumBlendGrids::SpeedFan`, the table the visual reads). `Count == 0`: no fan.
+	FElysiumGaitSpeedTable Fan;
+	// The same cells' turn yaw (each cell's last movement record's angle), degrees.
+	float FanTurnYawDegrees[FElysiumGaitSpeedTable::MaxCells] = {};
+	// The pose parameter the fan's axis binds (`move_yaw` on every shipped locomotion fan).
+	FString FanParameter;
+	// The descriptor's event table, file order; null = none. Aliases the animation subsystem's
+	// cached table (`GetNpcEventTimeline`'s contract): not retained across a map epoch.
+	const TArray<FElysiumAnimEvent>* Events = nullptr;
+};
+
 class IElysiumEmbodiment
 {
 public:
@@ -1055,6 +1085,26 @@ public:
 	virtual FString NpcClipOwner(const FString& Stem, const FString& ClipLabel)
 	{
 		return FString();
+	}
+	// The clip of a body's vocabulary whose `RawIndex` (its number in the model's flat sequence
+	// space, `FElysiumNpcClip::RawIndex`) is the argument, with its label. Retail plays the model's
+	// own sequence 0 when a `LookupSequence` misses (`StartSequence 0x101a82d0` writes
+	// `m_nSequence := 0` at `0x101a833d`); the sequence bridge's row 0 asks this for 0 (spec 0002
+	// V4a, J1). False -- the default -- when the body has no vocabulary or no such row.
+	virtual bool GetBodyClipByRawIndex(USkeletalMeshComponent* Body, const FString& Stem,
+		int32 RawIndex, FString& OutLabel, struct FElysiumNpcClip& OutClip)
+	{
+		OutLabel.Reset();
+		return false;
+	}
+	// The studio descriptor facts of one sequence of a body's vocabulary, by `(owner, label)` (an
+	// empty owner: the include tree's first definition). False -- the default -- when the body's
+	// vocabulary does not name the label; `Out` is cleared either way.
+	virtual bool GetNpcSequenceDescriptor(const FString& Stem, const FString& OwnerStem,
+		const FString& Label, FElysiumSequenceDescriptor& Out)
+	{
+		Out = FElysiumSequenceDescriptor();
+		return false;
 	}
 	// One model's disposition stance set: three idles, three fidgets and the 3x3 transition matrix
 	// for `AnimName`, with the precache fallbacks already applied. Resolved once per (stem,

@@ -432,6 +432,10 @@ public:
 	virtual const FElysiumComboChain* NpcClipCombo(const FString& Stem,
 		const FString& ClipLabel) override;
 	virtual FString NpcClipOwner(const FString& Stem, const FString& ClipLabel) override;
+	virtual bool GetBodyClipByRawIndex(USkeletalMeshComponent* Body, const FString& Stem,
+		int32 RawIndex, FString& OutLabel, struct FElysiumNpcClip& OutClip) override;
+	virtual bool GetNpcSequenceDescriptor(const FString& Stem, const FString& OwnerStem,
+		const FString& Label, FElysiumSequenceDescriptor& Out) override;
 	virtual bool GetBodyBoneTransform(USkeletalMeshComponent* Body, const FString& BoneName,
 		FTransform& OutWorld) const override;
 	virtual bool GetBodyAttachment(const FElysiumEntityHandle& OwnerHandle, FName Attachment,

@@ -3000,7 +3000,7 @@ namespace
 			TEXT(""), TEXT("") },
 		{ 242, TEXT(""), TEXT("GetIdealYawSpeed"), TEXT("float GetIdealYawSpeed()"),
 			TEXT("GetIdealYawSpeed"), ETier::Walked, TEXT("0x100916a0"), 0, TEXT("29c"), false,
-			TEXT(""), TEXT("") },
+			TEXT("rule"), TEXT("") },
 		{ 243, TEXT(""), TEXT("BurnModel"), TEXT("void BurnModel(const char*, bool)"),
 			TEXT("BurnModel"), ETier::Walked, TEXT("0x10090580"), 0, TEXT("29c"), false, TEXT(""),
 			TEXT("") },
@@ -3018,8 +3018,8 @@ namespace
 			TEXT("void SetAttackExtentsForSequence(int)"), TEXT("SetAttackExtentsForSequence"),
 			ETier::Walked, TEXT("0x10090c80"), 0, TEXT("29c"), false, TEXT(""), TEXT("") },
 		{ 248, TEXT(""), TEXT("GetIdealSpeed"), TEXT("float GetIdealSpeed() const"),
-			TEXT("GetIdealSpeed"), ETier::Sdk, TEXT("0x10091740"), 0, TEXT("29c"), false, TEXT(""),
-			TEXT("") },
+			TEXT("GetIdealSpeed"), ETier::Sdk, TEXT("0x10091740"), 0, TEXT("29c"), false,
+			TEXT("rule"), TEXT("") },
 		{ 249, TEXT(""), TEXT("GetIdealAccel"), TEXT("float GetIdealAccel() const"),
 			TEXT("GetIdealAccel"), ETier::Sdk, TEXT("0x100917e0"), 0, TEXT("29c"), false, TEXT(""),
 			TEXT("") },
@@ -8939,11 +8939,11 @@ const FElysiumNpcShapeCensus& Census()
 		/* Classes          */ 77,
 		/* Classnames       */ 74,
 		/* Overrides        */ 2344,
-		/* VerdictedSlots   */ 441,
+		/* VerdictedSlots   */ 443,
 		/* DefaultSlots     */ 82,
 		/* VerdictedOverrides */ 2302,
 		/* RegistryValues   */ 218,
-		/* RowDigest        */ 0x743f390b588cb54cull,
+		/* RowDigest        */ 0x1000778d09f8befcull,
 	};
 	return GCensus;
 }

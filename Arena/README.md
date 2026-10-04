@@ -158,7 +158,7 @@ Kinds the harness adds to or widens from `seam.md`'s table (spec 0002 V4a, H21 /
 
 | Kind | Emitted when | Text |
 |---|---|---|
-| `animevent` | an animation event below the server ceiling (id < 5000) is dispatched to ANY animating entity: an NPC, the player (`who: "player"`), a prop. Retail dispatches from four sites only (`PostRun 0x1026c7c0`, `CBasePlayer::PostThink 0x1016be10`, the weapon's slot 369 `0x1024efa0`, `CCameraAnimated`'s think `0x10071840`) and never for a prop; until V4a's lane A1 moves the tap into the dispatcher it rides the world-tick poll | `<event id> <options>` |
+| `animevent` | an animation event below the server ceiling (id < 5000) is dispatched to ANY animating entity: an NPC, the player (`who: "player"`), a prop. Retail dispatches from four sites only (`PostRun 0x1026c7c0`, `CBasePlayer::PostThink 0x1016be10`, the weapon's slot 369 `0x1024efa0`, `CCameraAnimated`'s think `0x10071840`) and never for a prop; the tap is inside the dispatcher (`ElysiumAnimEvents::DispatchBase` / `DispatchLayer`, `0x10091880` / `0x10098cd0`) since spec 0002 V4a, so a clip a body plays outside its entity's own sequence emits nothing | `<event id> <options>` |
 | `damage` | also at the PLAYER's damage commit (`CBasePlayer::OnTakeDamage 0x10163020`'s health apply), with `who: "player"` | `<applied damage> type=<bits> from=<attacker targetname or none>` |
 | `removed` | an entity left the entity world: `UTIL_Remove 0x101cd940`'s port (`FElysiumEntity::Kill`), after which it answers no name lookup and fires no output. The runner's own, read between frames (so its time is the frame's), one line per entity; `who` is the name it answered to. Usable in `expect` / `never` with `by` / `within` / `after` as any kind | the entity's handle, `#<index>` |
 
@@ -206,7 +206,7 @@ comparison: `equals`, `match` (string contains), `less`, `greater` (numbers).
 | `exists` | bool: a live (not removed) entity of that name is in the entity world. The one probe a missing entity answers | |
 | `speed2d` | number, cm/s: the body's horizontal speed (the motor's velocity) | |
 | `move_yaw` | number, degrees: the body's movement yaw relative to its facing (the motor's published sample, `MoveYawVelocity`) | |
-| `ground_speed` | number, cm/s: the kernel's `m_flGroundSpeed +0x654` (0 until V4a's lane A2 writes it) | an NPC only |
+| `ground_speed` | number, cm/s: the kernel's `m_flGroundSpeed +0x654` (written by `StudioFrameAdvance 0x1008f120` and `ResetSequenceInfo 0x10090950`, cm/s) | an NPC only |
 | `distance_to` | number, centimetres | `to`: a targetname, `player`, or a place |
 | `player_weapon` | string: the player's active item's classname (`Inventory.Active`, what `HasWeaponEquipped` compares), `none` | `who: "player"` only |
 | `player_crouched` | bool: `FL_DUCKING` (`IElysiumEmbodiment::IsPlayerDucking`: ducked or rising), what the stealth eligibility and the grapple admission read | `who: "player"` only |

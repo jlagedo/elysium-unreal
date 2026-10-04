@@ -21,6 +21,8 @@
 #include "Map/ElysiumMapLog.h"
 #include "Player/ElysiumCameraShots.h"   // FElysiumCameraDirector — the scripted-shot stack
 #include "Visual/ElysiumAnimSubsystem.h" // the cinematic bank index
+#include "Visual/ElysiumBlendGrids.h"    // the owning bank's table -- a sequence's fan and movement
+#include "Visual/ElysiumNpcClips.h"      // FElysiumNpcClip -- the body's raw-index row
 #include "Visual/ElysiumNativeAnimationData.h"
 #include "ElysiumBodyData.h"
 #include "Visual/ElysiumEntityBodies.h"  // the body factory every mesh forward lands on
@@ -274,6 +276,102 @@ const FElysiumComboChain* AElysiumMapActor::NpcClipCombo(const FString& Stem,
 FString AElysiumMapActor::NpcClipOwner(const FString& Stem, const FString& ClipLabel)
 {
 	return Bodies->NpcClipOwner(Stem, ClipLabel);
+}
+
+bool AElysiumMapActor::GetBodyClipByRawIndex(USkeletalMeshComponent* Body, const FString& Stem,
+	int32 RawIndex, FString& OutLabel, FElysiumNpcClip& OutClip)
+{
+	// The body's own flat sequence space: `rawIndex = sequenceBase + the descriptor's index in its
+	// own .mdl` (`importers/body_data.py`), loaded as `FElysiumNpcClip::RawIndex`. Row 0 of the
+	// kernel's sequence bridge asks for 0 -- retail's `m_nSequence := 0` on a `LookupSequence` miss
+	// (`StartSequence 0x101a82d0`, `0x101a833d`).
+	OutLabel.Reset();
+	const UGameInstance* Game = GetGameInstance();
+	UElysiumAnimSubsystem* Anims = Game ? Game->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	const FElysiumNpcClipSet* Set = (Anims && Body && RawIndex >= 0) ? Anims->GetClipSet(Stem) : nullptr;
+	if (!Set)
+	{
+		return false;
+	}
+	bool bFound = false;
+	Set->Clips.ForEachClip([&bFound, &OutLabel, &OutClip, RawIndex](const FString& Label,
+		const FElysiumNpcClip& Clip)
+	{
+		if (!bFound && Clip.RawIndex == RawIndex)
+		{
+			bFound = true;
+			OutLabel = Label;
+			OutClip = Clip;
+		}
+	});
+	return bFound;
+}
+
+bool AElysiumMapActor::GetNpcSequenceDescriptor(const FString& Stem, const FString& OwnerStem,
+	const FString& Label, FElysiumSequenceDescriptor& Out)
+{
+	Out = FElysiumSequenceDescriptor();
+	const UGameInstance* Game = GetGameInstance();
+	UElysiumAnimSubsystem* Anims = Game ? Game->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	const FElysiumNpcClipSet* Set = (Anims && !Label.IsEmpty()) ? Anims->GetClipSet(Stem) : nullptr;
+	const FElysiumNpcClip* Clip = Set ? Set->Find(Label, OwnerStem) : nullptr;
+	if (!Clip)
+	{
+		return false;   // the body's vocabulary does not name it: no descriptor
+	}
+	Out.bStudioLooping = Clip->IsLooping();   // mstudioseqdesc_t::flags & 1
+	Out.Events = GetNpcEventTimeline(Clip->Owner, Label);
+	// The owning bank's table -- the one the visual's gait fans are read from
+	// (`UElysiumAnimSubsystem::ResolveGaitSpeeds`): one speed pipeline, as retail has one
+	// (`GetSequenceGroundSpeed 0x10091490` for every sequence, gridded or not).
+	const TSharedPtr<const FElysiumBlendTable> Table = Anims->GetBlendTable(Clip->Owner);
+	if (!Table.IsValid())
+	{
+		return true;   // the bank states no movement and no grid: speed 0, turn yaw 0
+	}
+	// `GetSequenceTurnYaw 0x1008f8f0`: `angles[1]` = the last movement record's `angle`
+	// (`Studio_AnimPosition 0x100c57e0` at cycle 1, minus 0 at cycle 0).
+	auto TurnYawOf = [&Table](const FString& ClipLabel)
+	{
+		const FElysiumClipMovementPath* Path = Table->FindMovement(ClipLabel);
+		return (Path != nullptr && !Path->IsEmpty()) ? Path->Records.Last().YawDegrees : 0.f;
+	};
+	const FElysiumBlendGrid* Grid = Table->Find(Label);
+	if (Grid == nullptr)
+	{
+		// No grid: one corner at weight 1 (`0x100c1c60` answers fraction 0, index 0).
+		if (const FElysiumClipMotion* Motion = Table->FindMotion(Label))
+		{
+			Out.CycleSeconds = Motion->CycleSeconds;
+			Out.GroundSpeedCmPerSecond = Motion->IsUsable() ? Motion->GroundSpeedCmPerSecond : 0.f;
+		}
+		Out.TurnYawDegrees = TurnYawOf(Label);
+		return true;
+	}
+	// A grid: the per-cell speeds, scale 1 and NOT symmetrised (the kernel's word is retail's
+	// pose-weighted sum; the mirrored-pair average is the body's own named divergence). A grid
+	// `SpeedFan` refuses (two axes, a partial slice) carries no locomotion: speed 0.
+	if (ElysiumBlendGrids::SpeedFan(*Grid, *Table, 1.f, Out.Fan))
+	{
+		if (const FElysiumPoseParamDesc* Desc = Table->Param(Grid->ParamIndex[0]))
+		{
+			Out.FanParameter = Desc->Name;
+		}
+		for (int32 Cell = 0; Cell < Out.Fan.Count; ++Cell)
+		{
+			const FElysiumBlendCell* GridCell = Grid->CellAt(Cell, 0);
+			Out.FanTurnYawDegrees[Cell] = GridCell != nullptr ? TurnYawOf(GridCell->Clip) : 0.f;
+			if (GridCell != nullptr && Out.CycleSeconds <= 0.f)
+			{
+				Out.CycleSeconds = GridCell->Motion.CycleSeconds;
+			}
+		}
+	}
+	else
+	{
+		Out.Fan = FElysiumGaitSpeedTable();
+	}
+	return true;
 }
 
 bool AElysiumMapActor::GetBodyBoneTransform(USkeletalMeshComponent* Body, const FString& BoneName,

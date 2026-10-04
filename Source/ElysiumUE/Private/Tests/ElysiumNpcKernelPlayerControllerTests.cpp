@@ -871,14 +871,14 @@ bool FElysiumNpcKernelPlayerControllerPawnEventsTest::RunTest(const FString&)
 	Services.BodyClipPhase.bLooping = true;
 	Services.BodyClipPhase.PlayId = 1;
 
-	F.Player->AdvanceAnimEvents();
+	F.Player->PostThinkAnimation();
 	TestTrue(TEXT("a pawn on its own graph does not walk the stand-in's clip"),
 		Services.WornOrnament(F.Player->Visual).IsEmpty());
 
 	F.World.World.UpdatePlayerFromController();
 	TestTrue(TEXT("the pawn's body follows the stand-in's pose"),
 		F.Player->Visual->LeaderPoseComponent.Get() == F.Controller->Visual);
-	F.Player->AdvanceAnimEvents();
+	F.Player->PostThinkAnimation();
 	TestEqual(TEXT("the stand-in's clip event reaches the player's own handler"),
 		Services.WornOrnament(F.Player->Visual), Path);
 	TestEqual(TEXT("and lands on the player's slot"), F.Player->AnimFollowModel, Path);

@@ -1,27 +1,82 @@
 #include "Substrate/ElysiumAnimEvents.h"
 
+#include "ElysiumEntity.h"
+#include "ElysiumEntityWorld.h"
+
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAnimEvents, Log, All);
 
 namespace
 {
-	// One half-open interval of the timeline, walked in FILE order. The order is data: records that
-	// share a cycle fire in the order the model declares them, so this never sorts and never
-	// dedupes.
-	//
-	// `Lo <= cycle < Hi` is the recovered comparison verbatim. The exclusive upper bound is what
-	// makes a record authored at exactly 1.0 unreachable: a phase is normalized into `[0,1]`, so the
-	// widest interval any frame can present is `[x, 1)`. The parser permits such a record — the
-	// exporter writes what the model declares — and retail never fires it either.
-	void FireIn(const TArray<FElysiumAnimEvent>& Timeline, float Lo, float Hi,
-		TArray<const FElysiumAnimEvent*>& OutFired)
+	// `_DAT_104491b4`, the look-ahead both bodies multiply the cycle rate by (`0x10091880`,
+	// `0x10098cd0`): 0.1 s of clip time.
+	constexpr float GEventLookAheadSeconds = 0.1f;
+
+	// The event loop both bodies share (`0x10091880`'s and `0x10098cd0`'s are the same listing): one
+	// pass over the descriptor's table in FILE order. A record fires when its id is below 5000 and
+	// its cycle is in `[Start, End)`, or -- with `seqdesc.flags & 1` and `End >= 1` -- below
+	// `End - 1` (the wrap, swept once). Each goes to the HANDLER's slot 259 (`+0x40c`).
+	void FireWindow(const FElysiumSequenceWords& Words, TConstArrayView<FElysiumAnimEvent> Events,
+		float Start, float End, FElysiumEntity& Source, FElysiumEntity& Handler)
 	{
-		for (const FElysiumAnimEvent& Record : Timeline)
+		// Read once: a handler may reset the sequence under the caller, and retail's loop keeps
+		// walking the descriptor it started on with the rate it computed at entry (`fVar1`).
+		const float Cycle = Words.Cycle;
+		const float Rate = Words.CycleRate;
+		const float AnimTime = Words.AnimTime;
+		const bool bDescriptorLoops = Words.bDescriptorLoops;
+		const FString CensusOwner = Words.CensusOwner;
+		const FString CensusLabel = Words.CensusLabel.IsEmpty()
+			? FString::Printf(TEXT("seq %d"), Words.Sequence) : Words.CensusLabel;
+
+		for (int32 Index = 0; Index < Events.Num(); ++Index)
 		{
-			if (Record.Cycle >= Lo && Record.Cycle < Hi)
+			const FElysiumAnimEvent& Record = Events[Index];
+			// `local_64 <= cycle && cycle < local_68`, or `flags & 1 && 1.0 <= flEnd && cycle <
+			// flEnd - 1.0`.
+			const bool bInWindow = (Start <= Record.Cycle && Record.Cycle < End)
+				|| (bDescriptorLoops && End >= 1.f && Record.Cycle < End - 1.f);
+			if (!bInWindow)
 			{
-				OutFired.Add(&Record);
+				continue;
+			}
+			// `(int)pfVar6[1] < 5000`: an id at or above the ceiling is never offered to a handler.
+			// It is counted in the census (the port's work list, not a retail effect).
+			const bool bAboveBand = Record.Event >= ElysiumAnimEvents::ServerDispatchCeiling;
+			bool bClaimed = false;
+			if (!bAboveBand)
+			{
+				// `eventtime = (cycle - m_flCycle) / rate + m_flAnimTime` (a layer: the OWNER's
+				// `m_flAnimTime`, `param_3[0x5d]`). Retail computes it into the `animevent_t` it
+				// hands over; no recovered handler reads it and `FElysiumAnimEvent` has no word for
+				// it, so it is computed and dropped.
+				const float EventTime = (Record.Cycle - Cycle) / Rate + AnimTime;
+				(void)EventTime;
+				// The AI trace's `animevent` (`<id> <options>`; debug output only, behind its sink),
+				// emitted for the SOURCE: the one tap for the NPC, the player and the camera. It
+				// stands where retail's `DisplayAnimEvent` (`m_debugOverlays < 0`) stands.
+				if (Source.World != nullptr && Source.World->HasAiTraceSink())
+				{
+					Source.World->EmitAiTrace(Source, TEXT("animevent"),
+						FString::Printf(TEXT("%d %s"), Record.Event, *Record.Options));
+				}
+				bClaimed = Handler.HandleAnimEvent(Record);          // slot 259, `*param_2 + 0x40c`
+			}
+			if (bClaimed)
+			{
+				continue;   // claimed and acted on; the handler owns its own observability
+			}
+			// Unclaimed. The census IS the report: one Verbose line the first time each
+			// (id, owner, label) is seen, never one per occurrence.
+			if (ElysiumAnimEventCensus::Record(Record, CensusOwner, CensusLabel, bAboveBand))
+			{
+				UE_LOG(LogElysiumAnimEvents, Verbose,
+					TEXT("anim event %d on '%s'@'%s' is unclaimed%s%s"),
+					Record.Event, *CensusLabel, *CensusOwner,
+					bAboveBand ? TEXT(" (above the server dispatch band)") : TEXT(""),
+					Record.Options.IsEmpty()
+						? TEXT("") : *FString::Printf(TEXT(", options '%s'"), *Record.Options));
 			}
 		}
 	}
@@ -29,104 +84,89 @@ namespace
 
 namespace ElysiumAnimEvents
 {
-	// `0x10091880` / `0x10098cd0`; filled by V4a lane A1; called by A1 (the NPC) and A4 (the player,
-	// the camera). The seam's bodies dispatch nothing, write nothing, and report no finish edge, and
-	// nothing calls them yet: every event still fires from the world-tick poll (`Advance` below).
 	bool DispatchBase(FElysiumSequenceWords& Words, TConstArrayView<FElysiumAnimEvent> Events,
 		FElysiumEntity& Source, FElysiumEntity& Handler)
 	{
-		(void)Words;
-		(void)Events;
-		(void)Source;
-		(void)Handler;
-		return false;
+		// `CBaseAnimating::DispatchAnimEvents` `0x10091880`, in its order. The interval argument is
+		// unused by retail and is not an input here. `GetModelPtr() == 0` (nothing at all) is the
+		// caller's precondition.
+		const bool bWasFinished = Words.bSequenceFinished;       // `cVar2 = m_bSequenceFinished`, at entry
+		float Start = Words.LastEventCheck;                      // `local_64 = m_flLastEventCheck` +0x658
+		Words.bSequenceFinished = false;                         // `m_bSequenceFinished = 0` +0x65c
+		// `flEnd = GetSequenceCycleRate x m_flPlaybackRate x 0.1 (0x104491b4) + m_flCycle`.
+		float End = Words.CycleRate * GEventLookAheadSeconds + Words.Cycle;
+		if (!Words.bLoops)                                       // `m_bSequenceLoops == 0` +0x65d
+		{
+			// With no seqdesc on a non-looping sequence neither the finish nor past-half is written.
+			if (Words.bHasDescriptor)                            // `iVar3 != 0`
+			{
+				if (End >= 1.f || End < 0.f)                     // `0x104454c0 <= flEnd || flEnd < 0x1044fab0`
+				{
+					Words.bSequenceFinished = true;              // +0x65c = 1
+					End = 1.f;                                   // the clamp: `local_68 = 1.0`
+				}
+				else
+				{
+					Words.bSequencePastHalf = End > 0.5f;        // +0x568: `flEnd <= 0x104454d0` -> 0, else 1
+				}
+			}
+		}
+		else
+		{
+			// Looping: the same without the clamp and without the seqdesc test...
+			if (End >= 1.f || End < 0.f)
+			{
+				Words.bSequenceFinished = true;                  // +0x65c = 1, `flEnd` kept
+			}
+			else
+			{
+				Words.bSequencePastHalf = End > 0.5f;            // +0x568
+			}
+			// ...plus the start wrapped into `[0,1)` (`0x10449280`, one step each way).
+			if (Start >= 1.f)
+			{
+				Start -= 1.f;
+			}
+			if (Start < 0.f)
+			{
+				Start += 1.f;
+			}
+		}
+		Words.LastEventCheck = End;                              // `m_flLastEventCheck = flEnd` +0x658
+		// The three words are on retail's object before the first event; a caller whose handlers can
+		// reset the sequence takes them now.
+		if (Words.WordsWritten)
+		{
+			Words.WordsWritten(Words);
+		}
+		const bool bFinished = Words.bSequenceFinished;
+		if (Words.bHasDescriptor)                                // `iVar3 != 0 && 0 < numevents`
+		{
+			FireWindow(Words, Events, Start, End, Source, Handler);
+		}
+		// `m_bSequenceFinished != 0 && cVar2 == 0` -> `OnSequenceFinished` (`0x10091b9a` ->
+		// `0x10091c80`, a direct call): the caller's.
+		return bFinished && !bWasFinished;
 	}
 
 	void DispatchLayer(FElysiumSequenceWords& Layer, TConstArrayView<FElysiumAnimEvent> Events,
 		FElysiumEntity& Source, FElysiumEntity& Handler)
 	{
-		(void)Layer;
-		(void)Events;
-		(void)Source;
-		(void)Handler;
-	}
-
-	void Advance(const TArray<FElysiumAnimEvent>* Timeline, const FElysiumClipPhase& Phase,
-		FElysiumAnimEventCursor& InOut, TArray<const FElysiumAnimEvent*>& OutFired)
-	{
-		OutFired.Reset();
-
-		if (!Phase.IsValid())
+		// `0x10098cd0`, one `CAnimationLayer`, in its order: no "in use" test, no weight test, no
+		// loop test, no clamp, no start wrap, no past-half, and no `OnSequenceFinished`.
+		const float Start = Layer.LastEventCheck;                // `fVar2 = layer+0x2c`
+		Layer.bSequenceFinished = false;                         // `layer+4 = 0`, never set here
+		// `GetSequenceCycleRate(owner, layer+8) x layer+0x10 x 0.1 (0x104491b4) + layer+0xc`.
+		const float End = Layer.CycleRate * GEventLookAheadSeconds + Layer.Cycle;
+		Layer.LastEventCheck = End;                              // `layer+0x2c = flEnd`
+		if (Layer.WordsWritten)
 		{
-			// A channel standing on nothing. Not a failure — most bodies play on the base channel
-			// alone — but the cursor must forget where it was, or the next clip to arm on this
-			// channel would inherit a phase from a different timeline.
-			InOut.Reset();
-			return;
+			Layer.WordsWritten(Layer);
 		}
-
-		// The identity, all three parts. A label alone is not a clip (two banks can declare the same
-		// key) and a clip alone is not a play: the same sequence re-armed fires its timeline again
-		// from zero, and only `PlayId` can tell that from a loop.
-		const bool bSamePlay = InOut.bArmed
-			&& InOut.PlayId == Phase.PlayId
-			&& InOut.OwnerStem.Equals(Phase.OwnerStem, ESearchCase::IgnoreCase)
-			&& InOut.OwnerRoot.Equals(Phase.OwnerRoot, ESearchCase::IgnoreCase)
-			&& InOut.Label.Equals(Phase.Label, ESearchCase::IgnoreCase);
-
-		// A phase is normalized. Clamping here keeps the interval arithmetic total; a producer that
-		// hands over a phase outside the range is a defect its own seam reports, because this rule
-		// has no way to name which body it came from. A non-finite cycle is anchored at zero rather
-		// than clamped, because `FMath::Clamp` passes a NaN straight through: stored on the cursor it
-		// would fail every subsequent comparison and silently retire that clip's timeline for the
-		// rest of the play.
-		const float Cycle = FMath::IsFinite(Phase.Cycle)
-			? FMath::Clamp(Phase.Cycle, 0.0f, 1.0f)
-			: 0.0f;
-		// A play the cursor has not seen before is anchored where the PRODUCER says its timeline
-		// resumes from, which is zero for anything a play seam started — so its first frame is the
-		// interval `[0, Cycle)`, and a record authored at cycle 0 fires on the first advance rather
-		// than being stepped over. A producer that found its clip already running says so instead,
-		// and the first frame then walks only what the clip passed through since it was last
-		// dispatched (`FElysiumClipPhase::AnchorCycle`). Clamped and NaN-anchored exactly like the
-		// cycle above, and for the same reason: it is one end of the same interval.
-		const float Anchor = FMath::IsFinite(Phase.AnchorCycle)
-			? FMath::Clamp(Phase.AnchorCycle, 0.0f, 1.0f)
-			: 0.0f;
-		const float Last = bSamePlay ? InOut.LastCycle : Anchor;
-
-		InOut.OwnerStem = Phase.OwnerStem;
-		InOut.OwnerRoot = Phase.OwnerRoot;
-		InOut.Label = Phase.Label;
-		InOut.PlayId = Phase.PlayId;
-		InOut.LastCycle = Cycle;
-		InOut.bArmed = true;
-
-		if (Timeline == nullptr || Timeline->IsEmpty())
+		if (Layer.bHasDescriptor)                                // `iVar4 != 0 && 0 < numevents`
 		{
-			// Most sequences declare no timeline, which is an ordinary absence. The cursor still
-			// advanced above, so a clip whose timeline arrives later cannot fire a backlog.
-			return;
+			FireWindow(Layer, Events, Start, End, Source, Handler);
 		}
-
-		if (Cycle > Last)
-		{
-			FireIn(*Timeline, Last, Cycle, OutFired);
-			return;
-		}
-		if (Cycle < Last && Phase.bLooping)
-		{
-			// The wrap, visited exactly once: the tail of the lap that ended, then the head of the
-			// one that began. Two calls rather than one modular test, because the file order has to
-			// hold inside each half and a record in the tail precedes every record in the head.
-			FireIn(*Timeline, Last, 1.0f, OutFired);
-			FireIn(*Timeline, 0.0f, Cycle, OutFired);
-			return;
-		}
-		// What is left is a zero-delta frame (a paused or fully faded clip), or a backwards phase on
-		// a NON-looping clip — a seek. Neither fires anything: a seek re-anchors the cursor, which
-		// the write above already did, and replaying the skipped interval would fire a footstep for
-		// a step the body never took.
 	}
 }
 

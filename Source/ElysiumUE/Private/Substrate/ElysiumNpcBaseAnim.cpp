@@ -15,6 +15,7 @@
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumScriptedSequence.h"
+#include "Visual/ElysiumNpcClips.h"            // FElysiumNpcClip -- the body's `RawIndex 0` row (N19)
 
 // --- File-scope helpers moved with the base bodies (story 5 step 5) ---
 
@@ -62,14 +63,19 @@ int32 FElysiumNpcBase::LookupSequenceByName(const TCHAR* Name) const
 	// The bank the vocabulary names the label under: the owner half of the bridge row's key, which is
 	// what `PlaySequenceClip` hands to the clip player. Empty is a clip of the body's own model.
 	const FString OwnerStem = Embodiment->NpcClipOwner(Stem, Label);
-	// K2's residue (`stories/v3/README.md` § 7, named): the row's `STUDIO_LOOPING` bit
-	// (`GetSequenceFlags & 1`, which `ResetSequenceInfo` copies to `+0x65d` at `0x10090a14`) is the
-	// clip's own, and the bake carries it (`FElysiumNpcClip::IsLooping`), but no embodiment query
-	// answers it by label. Until one does, today's rule stands: the live cine's `m_iszPlay` (+0x5f48)
-	// runs once, every other name -- the pre-idle `m_iszIdle`, the post-idle `m_iszPostIdle`, a
-	// custom move, an arrival or scene-event sequence -- loops.
+	// The row's `STUDIO_LOOPING` bit (`GetSequenceFlags & 1`, which `ResetSequenceInfo` copies to
+	// `+0x65d` at `0x10090a14`) is the clip's own baked flag (`FElysiumNpcClip::IsLooping`), read
+	// through the descriptor query (spec 0002 V4a). Where the embodiment answers no descriptor (a
+	// headless world), K2's residue (`stories/v3/README.md` § 7, named) stands: the live cine's
+	// `m_iszPlay` (+0x5f48) runs once, every other name -- the pre-idle `m_iszIdle`, the post-idle
+	// `m_iszPostIdle`, a custom move, an arrival or scene-event sequence -- loops.
 	const FElysiumScriptedSequence* const Cine = ResolveCine();
-	const bool bLoops = !(Cine != nullptr && Cine->Play.Equals(Label, ESearchCase::IgnoreCase));
+	bool bLoops = !(Cine != nullptr && Cine->Play.Equals(Label, ESearchCase::IgnoreCase));
+	FElysiumSequenceDescriptor Descriptor;
+	if (Embodiment->GetNpcSequenceDescriptor(Stem, OwnerStem, Label, Descriptor))
+	{
+		bLoops = Descriptor.bStudioLooping;                            // 0x10090a12 flags & 1
+	}
 	// Retail's lookup is a read of the studio header; the bridge numbers a clip on first sight, which
 	// is the modernization's own session bookkeeping (`ResolveDispositionActivity`'s same const cast).
 	return const_cast<FElysiumNpc*>(Troika)->SequenceRowFor(OwnerStem, Label, bLoops);
@@ -90,13 +96,16 @@ void FElysiumNpcBase::ResetSequenceInfo()
 		SequenceNumber = 0;                                            // 0x100909c8
 	}
 	bGroundSpeedFromIntervalMovement = false;                          // 0x100909d8 +0x5ac
-	// `GetSequenceYawSpeed` -> `m_flYawSpeed` (+0x560) and `GetSequenceGroundSpeed` ->
-	// `m_flGroundSpeed` (+0x654): the clip player's speeds in this runtime (visual-only halves).
 	float Seconds = 0.f;
 	bool bLoops = false;
 	// The sequence bridge's play hook (a named modernization) answers the sequence's length and its
 	// `STUDIO_LOOPING` bit.
 	const bool bKnown = PlaySequenceClip(SequenceNumber, Seconds, bLoops);
+	// `GetSequenceYawSpeed` -> `m_flYawSpeed` (+0x560) and `GetSequenceGroundSpeed` ->
+	// `m_flGroundSpeed` (+0x654), the same two writes `StudioFrameAdvance` makes. Retail makes them
+	// before the loop bit; here they follow the play hook because the row's length (the yaw speed's
+	// divisor) is what the play answers. Nothing reads either word in between.
+	WriteSequenceSpeedWords();
 	bSequenceLoopedOnce = bLoops;                                      // 0x10090a14 +0x65d, unconditional
 	if (FElysiumNpc* const Troika = AsNpc())
 	{
@@ -106,11 +115,13 @@ void FElysiumNpcBase::ResetSequenceInfo()
 		Troika->EffectsWord |= 0x300u;
 	}
 	bSequenceFinished = false;                                         // 0x10090a37 +0x65c
-	// `+0x658 = 0` (`0x10090a3d`) has no port word; `+0x70c` -> `ResetClientsideFrame`
-	// (`0x10090a53`) is the client's.
+	LastEventCheck = 0.f;                                              // 0x10090a3d +0x658
+	// `+0x70c` -> `ResetClientsideFrame` (`0x10090a53`) is the client's.
 	// `GetSequenceCycleRate` for the frame advance: `1 / duration`, or 10.0 for a zero-length
-	// sequence (`0x100912c8`) -- which is what this runtime's row 0 is (it plays nothing, so it
-	// finishes on the first advance). A row whose length is unknown does not advance (the seam).
+	// sequence (`0x100912c8`). Row 0 is the model's own sequence 0 (N19, `0x101a833d`): its length
+	// is the body's `RawIndex 0` clip's; where the body answers none it plays nothing and is the
+	// zero-length case (it finishes on the first advance). Any other row whose length is unknown
+	// does not advance (the seam).
 	if (bKnown || SequenceNumber == 0)
 	{
 		SequenceCycleRate = (bKnown && Seconds > 0.f) ? 1.f / Seconds : GAnimZeroDurationCycleRate;
@@ -146,6 +157,140 @@ void FElysiumNpcBase::CommitForcedSequence(int32 Sequence)
 	// sequence bridge starts the clip.
 	SequenceNumber = Sequence;
 	ResetSequenceInfo();
+}
+
+bool FElysiumNpcBase::ResolveSequenceZeroClip()
+{
+	// N19 (J1). Retail's `StartSequence 0x101a82d0` writes `m_nSequence := 0` on a `LookupSequence`
+	// miss (`0x101a833d`) and `ResetSequenceInfo` plays the model's own sequence 0. The bridge's row
+	// 0 is the body's `RawIndex 0` clip, asked once.
+	if (SequenceZero.bAsked)
+	{
+		return SequenceZero.bKnown;
+	}
+	IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr || Visual == nullptr)
+	{
+		return false;   // no body to ask yet: row 0 plays nothing, and the question stays open
+	}
+	SequenceZero.bAsked = true;
+	const FString Stem = ModelStem();
+	FString Label;
+	FElysiumNpcClip Clip;
+	if (Embodiment->GetBodyClipByRawIndex(Visual, Stem, 0, Label, Clip) && !Label.IsEmpty())
+	{
+		SequenceZero.bKnown = true;
+		SequenceZero.Label = Label;
+		SequenceZero.OwnerStem = Clip.Owner;
+		SequenceZero.bLoops = Clip.IsLooping();                        // the clip's own flags & 1
+		return true;
+	}
+	// The body answers no `RawIndex 0` row: row 0 stays the floor that plays nothing. Once per model.
+	static TSet<FString> ReportedStems;
+	if (!ReportedStems.Contains(Stem))
+	{
+		ReportedStems.Add(Stem);
+		UE_LOG(LogElysiumNpcEnt, Log,
+			TEXT("%s: the body's vocabulary has no rawIndex 0 clip; sequence 0 plays nothing"), *Stem);
+	}
+	return false;
+}
+
+const FElysiumNpcBase::FSequenceDescriptorRow* FElysiumNpcBase::SequenceDescriptorRow(
+	int32 Sequence) const
+{
+	const FElysiumNpc* const Troika = AsNpc();
+	if (Troika == nullptr || Sequence < 0
+		|| (Sequence != 0 && !Troika->SequenceRows.IsValidIndex(Sequence)))
+	{
+		return nullptr;   // only the Troika line carries the bridge; no such row
+	}
+	if (SequenceDescriptorRows.Num() <= Sequence)
+	{
+		SequenceDescriptorRows.SetNum(Sequence + 1);
+	}
+	FSequenceDescriptorRow& Row = SequenceDescriptorRows[Sequence];
+	if (Row.bAsked)
+	{
+		return &Row;
+	}
+	// The row's clip: row 0 is the model's sequence 0 (unknown until it is resolved), any other the
+	// (owner, label) the bridge numbered.
+	if (Sequence == 0 && !SequenceZero.bKnown)
+	{
+		return &Row;
+	}
+	const FString& Label = Sequence == 0 ? SequenceZero.Label : Troika->SequenceRows[Sequence].Label;
+	const FString& OwnerStem =
+		Sequence == 0 ? SequenceZero.OwnerStem : Troika->SequenceRows[Sequence].OwnerStem;
+	IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr || Visual == nullptr || Label.IsEmpty())
+	{
+		return &Row;   // nobody to ask yet: the zero record, and the question stays open
+	}
+	Row.bAsked = true;
+	FElysiumSequenceDescriptor Descriptor;
+	if (Embodiment->GetNpcSequenceDescriptor(ModelStem(), OwnerStem, Label, Descriptor))
+	{
+		Row.bKnown = true;
+		Row.bStudioLooping = Descriptor.bStudioLooping;
+		Row.DurationSeconds = Descriptor.CycleSeconds;
+		Row.TurnYawDegrees = Descriptor.TurnYawDegrees;
+		Row.GroundSpeedCm = Descriptor.GroundSpeedCmPerSecond;
+		Row.Events = Descriptor.Events;
+		if (Descriptor.Fan.IsValid())
+		{
+			Row.FanCells = FMath::Min(Descriptor.Fan.Count, FSequenceDescriptorRow::MaxFanCells);
+			Row.FanAxisMin = Descriptor.Fan.AxisMin;
+			Row.FanAxisMax = Descriptor.Fan.AxisMax;
+			Row.FanParameter = Descriptor.FanParameter;
+			for (int32 Cell = 0; Cell < Row.FanCells; ++Cell)
+			{
+				Row.FanSpeedCm[Cell] = Descriptor.Fan.Cells[Cell] * Descriptor.Fan.Scale;
+				Row.FanTurnYawDegrees[Cell] = Descriptor.FanTurnYawDegrees[Cell];
+			}
+		}
+	}
+	return &Row;
+}
+
+float FElysiumNpcBase::SequenceDurationSeconds(int32 Sequence) const
+{
+	// `SequenceDuration(seq)`. The bake's cycle length where the descriptor states one; else the
+	// first-pass length the clip player reported for the row (the bridge's own number).
+	const FSequenceDescriptorRow* const Row = SequenceDescriptorRow(Sequence);
+	if (Row != nullptr && Row->DurationSeconds > 0.f)
+	{
+		return Row->DurationSeconds;
+	}
+	if (Sequence == 0)
+	{
+		return SequenceZero.Seconds;
+	}
+	const FElysiumNpc* const Troika = AsNpc();
+	return (Troika != nullptr && Troika->SequenceRows.IsValidIndex(Sequence))
+		? Troika->SequenceRows[Sequence].Seconds : 0.f;
+}
+
+void FElysiumNpcBase::WriteSequenceSpeedWords()
+{
+	const FElysiumNpc* const Troika = AsNpc();
+	if (Troika == nullptr)
+	{
+		// Only the Troika line carries the sequence bridge: a base-only NPC has no descriptor to read.
+		YawSpeed = 0.f;
+		GroundSpeed = 0.f;
+		return;
+	}
+	// `GetSequenceYawSpeed 0x10091310`: `SequenceDuration > 0 ? GetSequenceTurnYaw / duration : 0`.
+	// Degrees per second.
+	const float Duration = SequenceDurationSeconds(SequenceNumber);
+	YawSpeed = Duration > 0.f ? Troika->SequenceTurnYaw(SequenceNumber) / Duration : 0.f;   // +0x560
+	// `GetSequenceGroundSpeed 0x10091490` at the live pose parameters (`m_flPoseParameter +0x690`:
+	// the kernel's own record). No unit conversion here: the row's speed is baked in centimetres
+	// per second (the bake converts Source units) and the word is carried in cm/s
+	// (`GroundSpeedCm()`), where retail's is Source units per second.
+	GroundSpeed = Troika->SequenceGroundSpeedAt(SequenceNumber, PoseParameterWrites);       // +0x654
 }
 
 float FElysiumNpcBase::RunAnimation()
@@ -224,10 +369,17 @@ float FElysiumNpcBase::StudioFrameAdvance(float IntervalArg)
 		}
 		bSequenceFinished = true;                                         // 0x1008f2cf +0x65c
 	}
-	// Else `m_fSequencePastHalf` (+0x568) = cycle >= 0.5 (`0x1008f268..0x1008f280`): no port word
-	// (the Tzimisce's `Select19SequencePastHalf` seam stands for its one reader).
-	// `m_flYawSpeed` / `m_flGroundSpeed` from the sequence (`0x1008f2e5`, `0x1008f2fa`): the clip
-	// player's speeds. `OnSequenceFinished` on the rising edge (`0x1008f316`) is an empty body
+	else
+	{
+		// `m_fSequencePastHalf` (+0x568) = cycle >= 0.5, from the real cycle, only while it is
+		// inside [0,1) (`0x1008f268 FCOMP 0.5`, `0x1008f277` / `0x1008f280`).
+		SequencePastHalf = static_cast<double>(Cycle) >= 0.5;
+	}
+	// `m_flYawSpeed (+0x560) = GetSequenceYawSpeed(m_nSequence)` (`0x1008f2e5`, `0x1008f2f1 FSTP`)
+	// and `m_flGroundSpeed (+0x654) = GetSequenceGroundSpeed(m_nSequence)` (`0x1008f2fa`,
+	// `0x1008f306 FSTP`): every real advance; the early-out above writes neither.
+	WriteSequenceSpeedWords();
+	// `OnSequenceFinished` on the rising edge (`0x1008f316`) is an empty body
 	// (`0x10091c80`); the AI trace's `seqfinished` event is emitted on that same edge (debug output
 	// only, behind its sink).
 	if (!bWasFinished && bSequenceFinished && IsAiTraced())

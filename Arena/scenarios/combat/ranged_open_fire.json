@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 40.0,
-  "known_red": "V4a lane A1 (the dispatcher), then V4o lane O3 (the event shot): game red. Slot 363 and the wait are in (V5a + A3: no BEHIND_ENEMY; TASK_WAIT_ATTACK_TIME1 0x102a337d reads the stamp 0x10252450 + 0x102c5730), but the weapon's m_flNextPrimaryAttack (+0x730) has no NPC writer: the 3031 in the trace is the world-tick poll's, CBaseAnimatingOverlay::DispatchAnimEvents 0x10098c80 is a counting stub, so CWeaponRanged's operator 0x10238160 -> Shot 0x102387b0 never runs for an NPC and the stamp stays at its draw-time value (0). The wait is then 0 + (RandomFloat(1.0, 2.5) - 0.8) * sqrt(387 / 120) against curtime: taskdone task_wait_attack_time1 at t=1.00, 0.48 s after the first 3031 (0.517)",
+  "known_red": "V4o lane O3 (the event shot): game red. Since V4a the 3031 is the kernel dispatcher's (trace: 0.500 'sequence smith_attack rate=1', 0.500 'animevent 3031' inside task_range_attack1, through slot 258 0x10098c80 -> 0x10091880 -> slot 259 0x10274e30 -> Weapon_HandleAnimEvent 0x1032e210) and reaches the weapon, but FElysiumWeapon::CommitFromAnimEvent finds no staged transaction and commits nothing: CWeaponRanged's operator 0x10238160 -> 0x10238320 -> ModeDispatch(1) 0x102383b0 -> Shot 0x102387b0 (which stages nothing beforehand and advances m_flNextPrimaryAttack +0x730) is not ported for an NPC, so the stamp stays at its draw-time value (0) and TASK_WAIT_ATTACK_TIME1 0x102a337d completes at once: taskdone task_wait_attack_time1 at t=1.00, before 1.05",
   "player": { "at": "cover_seat" },
   "cast": [
     {

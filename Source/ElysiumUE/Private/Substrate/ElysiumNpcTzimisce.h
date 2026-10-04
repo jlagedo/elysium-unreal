@@ -35,8 +35,9 @@ public:
 	/** SEAM for slot 627 (`vtable +0x9cc`, `0x103b9e30`), the fidget-voice body only this class fills
 	 *  (`SPI_FIDGET` through the three `tzimisce_voice_*` ConVars when slot 486 allows). Counted. */
 	int32 Select19TzimisceFidgetCalls = 0;
-	/** SEAM for `CBaseAnimating::m_fSequencePastHalf` (`+0x568`), which `0x103bcc00` reads first. The
-	 *  animation layer carries no such byte; answers false (a sequence not yet past half). */
+	/** `CBaseAnimating::m_fSequencePastHalf` (`+0x568`), which `0x103bcc00` reads first: the kernel's
+	 *  word (`FElysiumNpcBase::SequencePastHalf`), written by `StudioFrameAdvance 0x1008f120` and
+	 *  `DispatchAnimEvents 0x10091880`. */
 	bool Select19SequencePastHalf() const;
 
 	// The constructor `0x103b6c60`: its hull store (`docs/vtmb/data/class_hulls.json`).

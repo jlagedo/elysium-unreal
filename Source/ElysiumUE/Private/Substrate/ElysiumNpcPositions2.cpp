@@ -81,9 +81,9 @@ FVector FElysiumNpc::EnemyChaseAnchor(const FElysiumEntity& Enemy)
 float FElysiumNpc::GroundSpeedCm() const
 {
 	// `m_flGroundSpeed` (+0x0654), the kernel's own word (`FElysiumNpcBase::GroundSpeed`, centimetres
-	// per second). Its retail writers (`StudioFrameAdvance 0x1008f120`, `ResetSequenceInfo
-	// 0x10090950`, `0x10264841`) are not ported yet -- V4a lane A2 -- so the word stands at 0 and the
-	// lead helpers below are handed zero, as before the seam.
+	// per second), written by `StudioFrameAdvance 0x1008f120` and `ResetSequenceInfo 0x10090950`
+	// from the sequence's baked ground speed at the kernel's pose parameters. `MoveGroundExecute`'s
+	// re-write after slot 18 (`0x10264841`) is not ported yet.
 	return GroundSpeed;
 }
 

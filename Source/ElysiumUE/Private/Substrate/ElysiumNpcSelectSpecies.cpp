@@ -1264,7 +1264,7 @@ bool FElysiumNpcTzimisce::Select19TzimiscePounceProbe()
 
 bool FElysiumNpcTzimisce::Select19SequencePastHalf() const
 {
-	return false;
+	return SequencePastHalf;   // 0x103bcc03 `m_fSequencePastHalf` (+0x568)
 }
 
 int32 FElysiumNpcTzimisce::Select19TzimisceFindBodySchedule()

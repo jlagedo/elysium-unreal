@@ -913,8 +913,10 @@ private:
 	// Whether the accepted transaction's commit will arrive from the playing clip's own timeline,
 	// which is what stands the `ContactEventCycle` estimate down. Three things have to hold: this
 	// weapon's operator body accepts a commit id at all, the clip's sequence declares that id, and
-	// the character publishes a phase for THAT clip on a channel the event pass polls — a timeline
-	// nothing walks would silently swallow the whole attack.
+	// the wielder's own slot 258 will walk it — a timeline nothing walks would silently swallow the
+	// whole attack. The player's dispatch (`0x1016be10`) walks the clip the pose layer's phase names,
+	// so the player is asked about THAT clip; an NPC's (`0x10098c80` from `PostRun 0x1026c7c0`)
+	// walks the kernel's `m_nSequence`, so an NPC is asked whether that sequence authors the id.
 	bool CommitArrivesFromAnimEvent(FElysiumCombatCharacter& Char, const FString& OwnerStem,
 		const FString& ClipLabel);
 

@@ -96,14 +96,6 @@ public:
 	// gameplay state, clock or animation-event cursor is changed by this preparation hook.
 	void RefreshPreparedExpressions() { RefreshDispositionExpression(); }
 
-	// The sequence-event pass, implemented once for every character.
-	//
-	// Pull each polled channel's phase off the body, walk its clip's own timeline that far, and
-	// dispatch what the interval contained: an id inside the server band is offered to
-	// `HandleAnimEvent`, and anything unclaimed is counted in the census. This is the only place the
-	// recovered dispatcher runs, because `Visual` is the only body a character has.
-	virtual void AdvanceAnimEvents() override;
-
 	// Whether the events of ONE named clip — `(OwnerStem, Label)`, the same identity the cursor is
 	// keyed by — can reach `HandleAnimEvent` on this body: true only when a channel the pass above
 	// polls is publishing a phase for that clip. A producer that would otherwise stand a scheduled
@@ -153,12 +145,6 @@ protected:
 private:
 	bool bDispositionTalking = false;
 	TMap<FString, float> DispositionFacialPose;
-
-	// One cursor per channel actually polled — the base channel alone, which is the only
-	// channel any producer publishes a phase for. It is an array rather than a fixed
-	// `ElysiumAnimIntent::NumChannels` block because a channel nothing polls owns no timeline
-	// position, and a slot standing at cycle 0 forever would read as a clip that never advances.
-	TArray<FElysiumAnimEventCursor> EventCursors;
 
 public:
 	// The generated slot surface and the hand-written slot bodies of this class's retail node

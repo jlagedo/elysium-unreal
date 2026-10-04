@@ -11,7 +11,9 @@
 //
 // R8 UPDATE. The paragraph below described the state before the character bake carried sequence
 // events. It now does — `UElysiumClipData::Events` rides every native `UAnimSequence` and
-// `IElysiumEmbodiment::GetNpcEventTimeline` hands it to `FElysiumAnimating::AdvanceAnimEvents` —
+// `IElysiumEmbodiment::GetNpcEventTimeline` hands it to the feeder's own slot 258 — the player's is
+// `FElysiumPlayer::PostThinkAnimation` (`CBasePlayer::PostThink 0x1016be10`), over
+// `ElysiumAnimEvents::DispatchBase` (`0x10091880`) —
 // so `FElysiumCombatCharacter::HandleAnimEvent` claims 4006/4007 for real, on retail's own guards
 // (`0x1032e330`: the paired partner at `+0x1538` valid, the paired role at `+0x153c` zero), and
 // calls `OnFeedAnimEvent` from the authored record. `FeedBoundaryArrivesFromAnimEvent` below is
@@ -1155,7 +1157,12 @@ bool FElysiumCombatCharacter::FeedBoundaryArrivesFromAnimEvent(int32 EventId) co
 		return false;
 	}
 	// The clip's OWNER, not this body's stem: the feed families live in the shared male/female
-	// banks, and `AdvanceAnimEvents` walks the timeline under the owner the phase publishes.
+	// banks, and the player's dispatch (`FElysiumPlayer::PostThinkAnimation`) walks the timeline
+	// under the owner the phase publishes. `HasLiveAnimEventDispatch` is that dispatch's own
+	// precondition — a channel it walks stands on this clip — and asks nothing of a cursor: the
+	// dispatcher's window opens at 0 on a new clip (`ResetSequenceInfo 0x10090950` zeroes `+0x658`)
+	// and reaches 0.1 s of clip time ahead of the pose (`0x10091880`), so the record arrives up to
+	// one look-ahead BEFORE the scheduled estimate it stands down, never after the clip has passed it.
 	const FString Owner = Embodiment->NpcClipOwner(ModelStem(), Label);
 	if (Owner.IsEmpty() || !HasLiveAnimEventDispatch(Owner, Label))
 	{

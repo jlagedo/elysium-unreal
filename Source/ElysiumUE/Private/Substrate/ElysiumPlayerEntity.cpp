@@ -600,10 +600,13 @@ bool FElysiumPlayer::HandleAnimEvent(const FElysiumAnimEvent& Event)
 	//
 	// `vfunc0x658` is `IsObserver()` (`FUN_1015ee60`, `m_bIsObserver` `+0x19f6`) — see the field's
 	// comment on `FElysiumPlayer`; it has no reachable writer in the shipped image, so the gate is a
-	// constant pass, and it is spelled out rather than dropped. `event->owner == this` is
-	// structural here: the port's dispatcher (`FElysiumAnimating::AdvanceAnimEvents`) hands a record
-	// to the entity whose clip carries it, so an event that reaches this function is always this
-	// player's.
+	// constant pass, and it is spelled out rather than dropped. `event->owner == this`
+	// (`param_1[4] == this`, the SOURCE the dispatcher stamps on the record) is structural here and
+	// takes no parameter: the only dispatch that reaches this function is the player's own slot 258
+	// (`PostThinkAnimation`, `CBasePlayer::PostThink 0x1016be10`), which passes the player as source
+	// and handler both. The port's player never receives a weapon model's events (retail's other
+	// source, the weapon's slot 369 `0x1024efa0`, is called by `Weapon_FrameUpdate 0x1032aa40`, which
+	// the player never calls), so no event with another source can arrive.
 	//
 	// A gated-out event reaches **no** handler at all, not even the combat-character base — so the
 	// gate wraps the fall-through too.
@@ -629,6 +632,24 @@ bool FElysiumPlayer::HandleAnimEvent(const FElysiumAnimEvent& Event)
 
 	switch (Event.Event)
 	{
+	case 2060:
+	{
+		// `0x80c` EVENT_EXPRESSION, the third id `0x10178a10` takes itself (`0x10178a93`..):
+		//
+		//     n = sscanf(options, "%s %f %f %f", name, &total, &in, &out);   // fades default 0.2
+		//     if (n <= 1 || total <= 0) return;                             // 0x10178aab, 0x10178ab8
+		//     if (in + out > total) { r = total / (in + out); in *= r; out *= r; }
+		//     hold = max(total - (in + out), 0);
+		//     SetExpression(name, 0.0, in, hold, out, 1.0);
+		//
+		// the same body as the Troika arm `0x1029b2b6`. Every path returns WITHOUT reaching
+		// `0x1032e330`, so the id is claimed here whatever the options say.
+		//
+		// SEAM: `CBaseCombatCharacter::SetExpression` `0x10106580` has no port body the player can
+		// call (the NPC's recorder is `FElysiumNpc::SetExpressionMisc19`), so the arm sets nothing.
+		// What it stands for is the scripted-expression envelope on the player's face.
+		return true;
+	}
 	case 4050:
 	{
 		// `0xfd2`. The `options` string is the shot **BASE NAME** — `FindBestShot` appends `_1`,
@@ -1129,11 +1150,122 @@ void FElysiumPlayer::PollTouchContacts(double Now)
 
 void FElysiumPlayer::PostThinkAnimation()
 {
-	// `CBasePlayer::PostThink 0x1016be10`'s animation step; the call site is A1's, the body A4's.
-	// Retail's order there: slot 250 `StudioFrameAdvance(0)` -> `0x101600a0` -> slot 258
-	// `DispatchAnimEvents(interval, this)` -> slot 312 `UpdateCharacter`. Declared by spec 0002 V4a's
-	// seam and left empty: nothing calls it yet, and the player's events still fire from the world
-	// tick's poll (`FElysiumEntityWorld::AdvanceAnimEvents`).
+	// `CBasePlayer::PostThink 0x1016be10`'s animation step, in retail's order: slot 250
+	// `StudioFrameAdvance(0)` -> `0x101600a0` -> slot 258 `DispatchAnimEvents(interval, this)` ->
+	// slot 312 `UpdateCharacter`. Called once per world tick at the point that stands for
+	// `PostThink`: after `SyncFromBody` / `TickStepClock`, before `RunThinks`.
+	//
+	// Retail's live body is skipped by game-over, `m_iPlayerLocked`, a non-live player and
+	// `IsObserver`; the port carries no gate here, as the world tick's poll it replaces carried none
+	// (`IsObserver` has no writer in the image; `TickStealthKill` tests `IsAlive` itself).
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	USkeletalMeshComponent* SkeletalBody = GetSkeletalBody();
+	// `GetModelPtr() != 0`, the dispatcher's own precondition: a bodiless player, a headless world
+	// or bodies off dispatches nothing and keeps its words.
+	if (Embodiment != nullptr && SkeletalBody != nullptr)
+	{
+		static constexpr EElysiumAnimChannel Channels[NumPostThinkChannels] = {
+			EElysiumAnimChannel::Base, EElysiumAnimChannel::UpperBody };
+		const float Now = static_cast<float>(World->NowSeconds());
+
+		// Slot 258 on the player is the overlay body `0x10098c80`: the base `0x10091880`, then the
+		// layers through `0x10098cd0`. Index 0 is the base sequence, index 1 overlay layer 0.
+		for (int32 Index = 0; Index < NumPostThinkChannels; ++Index)
+		{
+			FPostThinkChannel& Channel = PostThinkChannels[Index];
+
+			// --- slot 250, the advance: a NAMED SEAM. ---
+			// The player has no kernel sequence words (no `m_nSequence`, `m_flCycle`,
+			// `StudioFrameAdvance 0x1008f120`): its clock is the pose layer's phase, read here.
+			FElysiumClipPhase Phase;
+			if (!Embodiment->GetBodyClipPhase(SkeletalBody, Channels[Index], Phase) || !Phase.IsValid())
+			{
+				// The channel stands on nothing: no sequence, no window. The next clip to arm here
+				// is a new sequence and opens at 0.
+				Channel = FPostThinkChannel();
+				continue;
+			}
+
+			// `ResetSequenceInfo 0x10090950` zeroes `m_flLastEventCheck` (`+0x658`) and clears
+			// `m_bSequenceFinished` (`+0x65c`) whenever the sequence is set. The port sees that as
+			// the pose layer naming another clip, or another play of the same one.
+			const bool bSameSequence = Channel.bArmed
+				&& Channel.PlayId == Phase.PlayId
+				&& Channel.OwnerStem.Equals(Phase.OwnerStem, ESearchCase::IgnoreCase)
+				&& Channel.OwnerRoot.Equals(Phase.OwnerRoot, ESearchCase::IgnoreCase)
+				&& Channel.Label.Equals(Phase.Label, ESearchCase::IgnoreCase);
+			if (!bSameSequence)
+			{
+				Channel = FPostThinkChannel();
+				Channel.OwnerStem = Phase.OwnerStem;
+				Channel.OwnerRoot = Phase.OwnerRoot;
+				Channel.Label = Phase.Label;
+				Channel.PlayId = Phase.PlayId;
+				Channel.bArmed = true;
+				// Part of the same seam: the window opens where the pose layer says this play's
+				// timeline was last dispatched from (`FElysiumClipPhase::AnchorCycle`). That is 0 for
+				// a clip a play seam started -- `ResetSequenceInfo`'s own `+0x658 = 0` -- and the
+				// observed fraction for a clip the layer found already running (the locomotion
+				// stack) or one a higher-priority pose displaced and gave the channel back to:
+				// opening those at 0 would fire every record behind the playhead in one burst.
+				Channel.Words.LastEventCheck = FMath::IsFinite(Phase.AnchorCycle)
+					? FMath::Clamp(Phase.AnchorCycle, 0.0f, 1.0f) : 0.0f;
+			}
+
+			FElysiumSequenceWords& Words = Channel.Words;
+			// The player carries no `m_nSequence` (0015, layer 0); the census names the clip instead.
+			Words.Sequence = 0;
+			Words.CensusOwner = Phase.OwnerStem;
+			Words.CensusLabel = Phase.Label;
+			// Stands for `m_flCycle` until the player's `StudioFrameAdvance` is ported — the player's
+			// kernel sequence clock is filed to 0015, layer 0 (J3).
+			Words.Cycle = FMath::IsFinite(Phase.Cycle) ? FMath::Clamp(Phase.Cycle, 0.0f, 1.0f) : 0.0f;
+			// `GetSequenceCycleRate x m_flPlaybackRate`: the clip's own 1 / length, at the rate the
+			// host is playing it.
+			Words.CycleRate = Phase.Length > 0.0f ? Phase.PlayRate / Phase.Length : 0.0f;
+			// `m_flAnimTime` (`+0x174`), which `StudioFrameAdvance` stamps with curtime on the advance
+			// this read stands for; a layer's event time is taken from the OWNER's word (`0x10098cd0`).
+			Words.AnimTime = Now;
+			// `m_bSequenceLoops` (`+0x65d`) is `ResetSequenceInfo`'s copy of `seqdesc.flags & 1`
+			// (`STUDIO_LOOPING`): one bit, read twice by `0x10091880`.
+			Words.bLoops = Phase.bLooping;
+			Words.bDescriptorLoops = Phase.bLooping;
+			Words.bHasDescriptor = true;
+
+			// The sequence's own event table, the bank and label the pose layer publishes — a
+			// following pawn's is its leader's (`ElysiumNpcVisual::PoseHostOf`), so a controller
+			// scene's stand-in clip and the feed pair's clip are reached the same way.
+			const TArray<FElysiumAnimEvent>* Timeline =
+				Embodiment->GetNpcEventTimeline(Phase.OwnerStem, Phase.Label, Phase.OwnerRoot);
+			const TConstArrayView<FElysiumAnimEvent> Events = Timeline != nullptr
+				? TConstArrayView<FElysiumAnimEvent>(*Timeline) : TConstArrayView<FElysiumAnimEvent>();
+
+			// --- slot 258 `(interval, this)`: the source and the handler are both the player. ---
+			// The words are the channel's own, written in place: `bSequenceFinished` goes in as the
+			// live `+0x65c` (retail's `cVar2`, the rising edge's "before") and the dispatcher writes
+			// its words before the event loop, so nothing is copied back afterwards. No handler of
+			// the player's resets these words: a sequence change is seen at the next tick's read.
+			if (Index == 0)
+			{
+				// `0x10091880`: the window `[+0x658, m_flCycle + 0.1 x rate)`, the finish and
+				// past-half words. The rising edge's `OnSequenceFinished` (`0x10091b9a` ->
+				// `0x10091c80`) is an empty body on this chain: nothing to call.
+				ElysiumAnimEvents::DispatchBase(Words, Events, *this, *this);
+			}
+			else
+			{
+				// `0x10098cd0`: no clamp, no past-half, the finish word zeroed and never set. The
+				// firearm's 3031 is authored on the `*_attack_layer` clip that composes here.
+				ElysiumAnimEvents::DispatchLayer(Words, Events, *this, *this);
+			}
+		}
+	}
+
+	// --- slot 312 `UpdateCharacter`'s stand-in, last. ---
+	// The paired stealth action's completion (`0x10165d90` reads `m_bSequenceFinished`). The other
+	// half of slot 312 is the player's melee sweep (`MeleeSwingUpdate 0x10346cd0`): slot 312's sweep,
+	// still at the map actor's tick (`EntityWorld->AdvanceMeleeSwings`, `Map/ElysiumMapActor.cpp`).
+	TickStealthKill();
 }
 
 void FElysiumPlayer::SyncFromBody()

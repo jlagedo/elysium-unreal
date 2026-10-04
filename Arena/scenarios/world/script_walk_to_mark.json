@@ -1,10 +1,9 @@
 {
   "name": "script_walk_to_mark",
-  "about": "A scripted_sequence walks its NPC to the mark, plays, fires its outputs and lets it go (docs/specs/0003-scripted-sequence/spec.md \u00a7 Witness data, recovered 2026-09-12). sm_vamparena's sVamp_entrance (m_fMoveTo 1, m_iszPlay pre_fight_bow, no idle or post-idle, no spawnflags, OnBeginSequence -> AsianVamp.SetRelationship 'player D_HT 5') and its target AsianVamp (npc_VAsianVampire, D_NU 0, 281 cm off), verbatim. BeginSequence 0x101a7390 -> PossessEntity (CCineNPC 0x101a7880): m_scriptState +0x5d70 = 4, DelayStart(1), ideal state NPC_STATE_SCRIPT; SelectSchedule 0x1028a380 case 4 -> SCHED_AISCRIPT 0x2e, TranslateSchedule 0x102cc080 / 0x102b12f0 -> SCHED_TROIKA_SCRIPTED_WALK 0xf2 (cai_basenpctroika/sched_troika_scripted_walk.sch: SET_FAIL_SCHEDULE, SET_TOLERANCE_DISTANCE 2, WALK_TO_TARGET, WAIT_FOR_MOVEMENT, PLANT_ON_SCRIPT, FACE_SCRIPT, ENABLE_SCRIPT, WAIT_FOR_SCRIPT, PLAY_SCRIPT, PLAY_SCRIPT_POST_IDLE). OnBeginSequence fires from TASK_WAIT_FOR_SCRIPT's run arm when IsTimeToStart 0x101a7540 holds (on the mark, not at the input), then StartSequence(m_iszPlay); TASK_PLAY_SCRIPT waits m_bSequenceFinished -> SequenceDone 0x101a8460 -> Finish 0x101a8640 (no post-idle) and OnEndSequence fires unconditionally; CineCleanup 0x1027d170 sets the ideal state IDLE and FixScriptNPCSchedule 0x101a8840 clears the schedule, so the NPC selects again \u2014 here, hostile once OnBeginSequence's wire lands, a combat program. Corrected 2026-10-04 (V3c integrator, record errors): (1) m_iszPlay 'pre_fight_bow' is a content miss -- AsianVampire.mdl spells it 'prefight_bow' (docs/vtmb/entity_io.md:2471, animation_and_movers.md:2103-2107) -- so StartSequence 0x101a82d0 warns, writes m_nSequence := 0 (0x101a833d), m_flCycle := 0 and ResetSequenceInfo 0x10090950 plays the model's sequence 0 at rate 1.0; (2) the OnBeginSequence wire is authored 'AsianVamp,SetRelationship,player D_HT 5,3,-1' (sm_vamparena.bsp, Unofficial Patch and retail alike): a 3.0 s delay, so the input lands ~3 s after the output, after the scene has ended, and is expected last.",
+  "about": "A scripted_sequence walks its NPC to the mark, plays, fires its outputs and lets it go (docs/specs/0003-scripted-sequence/spec.md \u00a7 Witness data, recovered 2026-09-12). sm_vamparena's sVamp_entrance (m_fMoveTo 1, m_iszPlay pre_fight_bow, no idle or post-idle, no spawnflags, OnBeginSequence -> AsianVamp.SetRelationship 'player D_HT 5') and its target AsianVamp (npc_VAsianVampire, D_NU 0, 281 cm off), verbatim. BeginSequence 0x101a7390 -> PossessEntity (CCineNPC 0x101a7880): m_scriptState +0x5d70 = 4, DelayStart(1), ideal state NPC_STATE_SCRIPT; SelectSchedule 0x1028a380 case 4 -> SCHED_AISCRIPT 0x2e, TranslateSchedule 0x102cc080 / 0x102b12f0 -> SCHED_TROIKA_SCRIPTED_WALK 0xf2 (cai_basenpctroika/sched_troika_scripted_walk.sch: SET_FAIL_SCHEDULE, SET_TOLERANCE_DISTANCE 2, WALK_TO_TARGET, WAIT_FOR_MOVEMENT, PLANT_ON_SCRIPT, FACE_SCRIPT, ENABLE_SCRIPT, WAIT_FOR_SCRIPT, PLAY_SCRIPT, PLAY_SCRIPT_POST_IDLE). OnBeginSequence fires from TASK_WAIT_FOR_SCRIPT's run arm when IsTimeToStart 0x101a7540 holds (on the mark, not at the input), then StartSequence(m_iszPlay); TASK_PLAY_SCRIPT waits m_bSequenceFinished -> SequenceDone 0x101a8460 -> Finish 0x101a8640 (no post-idle) and OnEndSequence fires unconditionally; CineCleanup 0x1027d170 sets the ideal state IDLE and FixScriptNPCSchedule 0x101a8840 clears the schedule, so the NPC selects again \u2014 here, hostile once OnBeginSequence's wire lands, a combat program. Corrected 2026-10-04 (V3c integrator, record errors): (1) m_iszPlay 'pre_fight_bow' is a content miss -- AsianVampire.mdl spells it 'prefight_bow' (docs/vtmb/entity_io.md:2471, animation_and_movers.md:2103-2107) -- so StartSequence 0x101a82d0 warns, writes m_nSequence := 0 (0x101a833d), m_flCycle := 0 and ResetSequenceInfo 0x10090950 plays the model's sequence 0 at rate 1.0; (2) the OnBeginSequence wire is authored 'AsianVamp,SetRelationship,player D_HT 5,3,-1' (sm_vamparena.bsp, Unofficial Patch and retail alike): a 3.0 s delay, so the input lands ~3 s after the output, after the scene has ended, and is expected last. Corrected 2026-10-04 (V4a integrator, N19 / J1): row 0 is the body's RawIndex 0 clip, played at rate 1.0 with its own loop bit. On AsianVampire.mdl sequence 0 IS prefight_bow (98 frames at 30 fps, ~3.2 s), so the missed lookup lands on the very clip the mapper meant and the scene now lasts its length: the 3.0 s wire of (2) lands INSIDE the scene, one think before the finish flag (DispatchAnimEvents 0x10091880 raises m_bSequenceFinished once m_flCycle + 0.1 s x cycle rate reaches 1, i.e. ~3.1 s after the play), so `flips` is expected before `played`. Measured: OnBeginSequence and 'seq 0 rate=1' 7.317, SetRelationship 10.317 (= 7.317 + 3.0), seqfinished 10.367, OnEndSequence and the release 10.483 (TASK_PLAY_SCRIPT's next think).",
   "stage": "arena",
   "seed": 1,
   "duration": 40.0,
-  "known_red": "N19 (stories/v1/triage.md): the program is retail's whole (V3c, 2026-10-04: 2.033 'Idle -> Script', SCHED_TROIKA_SCRIPTED_WALK (0xf2), task_walk_to_target, 7.150 arrived, plant, face, enable, 7.900 task_wait_for_script done, OnBeginSequence on the mark), but the missed lookup's sequence 0 prints 'seq 0 rate=0': the sequence bridge's row 0 plays nothing and finishes on its first advance, where retail's m_nSequence 0 is the model's first sequence played at rate 1 for its length",
   "player": {
     "at": "start"
   },
@@ -84,11 +83,18 @@
       "regex": true
     },
     {
+      "label": "flips",
+      "who": "AsianVamp",
+      "kind": "input",
+      "match": "SetRelationship",
+      "within": 3.2
+    },
+    {
       "label": "played",
       "who": "AsianVamp",
       "kind": "seqfinished",
       "match": "seq 0",
-      "within": 15.0
+      "within": 0.5
     },
     {
       "label": "end_output",
@@ -112,13 +118,6 @@
       "match": "^(?!SCHED_TROIKA_SCRIPTED)",
       "regex": true,
       "within": 2.0
-    },
-    {
-      "label": "flips",
-      "who": "AsianVamp",
-      "kind": "input",
-      "match": "SetRelationship",
-      "within": 3.2
     }
   ],
   "never": [
@@ -131,7 +130,8 @@
     {
       "who": "AsianVamp",
       "kind": "taskfail",
-      "until": 12.0
+      "match": "^(?!No Target )",
+      "regex": true
     },
     {
       "who": "AsianVamp",
@@ -146,5 +146,5 @@
       "equals": true
     }
   ],
-  "notes": "The never on OnBeginSequence before 2.5 s pins retail's order (the output fires on the mark, not at the input; 0003 spec \u00a7 'The port today'). The taskfail never holds the scene only (until 12.0): after the release AsianVamp (is_bossmonster, hostile) selects SCHED_VASIANVAMPIRE_JUMP_UP (0x15a), whose task_vasianvampire_find_ledge_node fails 'No Target (0x1)' because the arena stages none of sm_vamparena's ledge nodes (seen 12.883 in a scratch copy, 2026-10-04) -- staging, not the scene."
+  "notes": "The never on OnBeginSequence before 2.5 s pins retail's order (the output fires on the mark, not at the input; 0003 spec \u00a7 'The port today'). The taskfail never excludes one text, 'No Target (0x1)': after the release AsianVamp (is_bossmonster) selects SCHED_VASIANVAMPIRE_JUMP_UP (0x15a), whose task_vasianvampire_find_ledge_node fails 'No Target (0x1)' because the arena stages none of sm_vamparena's ledge nodes (10.483, the release's own instant, since V4a) -- staging, not the scene; a window cannot close at a label, and a 'No Target' inside the scene would break the ordered expectations on its own. `played` is within 0.5 s of `flips`: 3.0 s (the wire) against ~3.1 s (the clip less the 0.1 s look-ahead, 0x10091880)."
 }

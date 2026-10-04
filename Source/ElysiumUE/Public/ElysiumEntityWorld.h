@@ -988,11 +988,6 @@ private:
 	// The queue.Add wrapper: assigns time/serial upstream, notifies OnQueued.
 	void AddEvent(FElysiumIOEvent&& Event);
 	void ServiceEvents(double Now);
-	// One frame of every bodied entity's sequence-event timelines, run before the thinks.
-	//
-	// It takes no clock: the dispatcher's whole rule is an interval over a NORMALIZED cycle the pose
-	// layer publishes, so nothing in the walk reads world time (`Substrate/ElysiumAnimEvents.h`).
-	void AdvanceAnimEvents();
 	// The per-frame NPC record sync -- a named divergence, documented at the definition.
 	void SyncMovingNpcRecords();
 	void RunThinks(double Now);

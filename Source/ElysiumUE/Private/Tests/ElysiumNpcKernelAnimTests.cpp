@@ -622,4 +622,206 @@ bool FElysiumNpcKernelAnimSpeciesTest::RunTest(const FString&)
 	return true;
 }
 
+// --- The sequence speed words (spec 0002 V4a) ---------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelAnimSpeedWordsTest,
+	"Elysium.Arm.NpcKernelAnim.SpeedWords", GElysiumNpcKernelAnimFlags)
+bool FElysiumNpcKernelAnimSpeedWordsTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_anim_speed_words"), 5131);
+	Builder.AddNpc(TEXT("guard"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	TestNotNull(TEXT("the guard spawned"), Guard);
+	if (Guard == nullptr)
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Guard });
+
+	// Two fixture rows of the sequence bridge, their descriptor facts written by hand (the record
+	// the embodiment fills from the baked clip data): a plain clip turning 90 degrees over 2 s at
+	// 50 cm/s, and a two-cell `move_yaw` fan (-180 and +180) of 100 and 200 cm/s.
+	const int32 Plain = Guard->SequenceRowFor(TEXT("bank"), TEXT("turn_left"), false);
+	const int32 Fan = Guard->SequenceRowFor(TEXT("bank"), TEXT("walk"), true);
+	const int32 Still = Guard->SequenceRowFor(TEXT("bank"), TEXT("still"), false);
+	Guard->SequenceRows[Plain].Seconds = 2.f;
+	Guard->SequenceRows[Fan].Seconds = 1.f;
+	Guard->SequenceDescriptorRows.SetNum(Guard->SequenceRows.Num());
+	{
+		FElysiumNpcBase::FSequenceDescriptorRow& Row = Guard->SequenceDescriptorRows[Plain];
+		Row.bAsked = true;
+		Row.bKnown = true;
+		Row.DurationSeconds = 2.f;
+		Row.TurnYawDegrees = 90.f;
+		Row.GroundSpeedCm = 50.f;
+	}
+	{
+		FElysiumNpcBase::FSequenceDescriptorRow& Row = Guard->SequenceDescriptorRows[Fan];
+		Row.bAsked = true;
+		Row.bKnown = true;
+		Row.bStudioLooping = true;
+		Row.DurationSeconds = 1.f;
+		Row.FanCells = 2;
+		Row.FanAxisMin = -180.f;
+		Row.FanAxisMax = 180.f;
+		Row.FanSpeedCm[0] = 100.f;
+		Row.FanSpeedCm[1] = 200.f;
+		Row.FanTurnYawDegrees[0] = 10.f;
+		Row.FanTurnYawDegrees[1] = 30.f;
+		Row.FanParameter = TEXT("move_yaw");
+	}
+	{
+		FElysiumNpcBase::FSequenceDescriptorRow& Row = Guard->SequenceDescriptorRows[Still];
+		Row.bAsked = true;
+		Row.bKnown = true;
+		Row.TurnYawDegrees = 90.f;   // a turn yaw over a zero duration
+	}
+
+	// `ResetSequenceInfo 0x10090950`: both words, playback rate 1.0, `m_flLastEventCheck = 0`.
+	Guard->LastEventCheck = 0.7f;
+	Guard->SequencePlaybackRate = 3.f;
+	Guard->CommitForcedSequence(Plain);
+	TestEqual(TEXT("ResetSequenceInfo writes +0x560 = turn yaw / duration (0x10091310)"),
+		Guard->YawSpeed, 45.f, 0.001f);
+	TestEqual(TEXT("and +0x654 = the sequence's ground speed (0x10091490), cm/s"),
+		Guard->GroundSpeed, 50.f, 0.001f);
+	TestEqual(TEXT("and the playback rate 1.0 (0x10090a23)"), Guard->SequencePlaybackRate, 1.f);
+	TestEqual(TEXT("and zeroes m_flLastEventCheck (0x10090a3d)"), Guard->LastEventCheck, 0.f);
+	// Slots 242 `0x100916a0` and 248 `0x10091740`: plain reads, no playback-rate term.
+	Guard->SequencePlaybackRate = 2.f;
+	TestEqual(TEXT("GetIdealYawSpeed is the word"), Guard->GetIdealYawSpeed(), Guard->YawSpeed);
+	TestEqual(TEXT("GetIdealSpeed is the word, with no playback term"), Guard->GetIdealSpeed(),
+		Guard->GroundSpeed);
+	TestEqual(TEXT("and GroundSpeedCm reads the same word"), Guard->GroundSpeedCm(),
+		Guard->GroundSpeed);
+	Guard->SequencePlaybackRate = 1.f;
+
+	// `GetSequenceYawSpeed 0x10091310`: a zero duration answers 0 (the row never played and its
+	// descriptor states no length).
+	Guard->SequenceNumber = Still;
+	Guard->WriteSequenceSpeedWords();
+	TestEqual(TEXT("a zero duration answers a zero yaw speed"), Guard->YawSpeed, 0.f);
+
+	// The fan: pose-weighted over its corners at the kernel's own `move_yaw`.
+	Guard->PoseParameterWrites.Add(FElysiumNpc::FPoseParameterWrite{ FString(TEXT("move_yaw")), 0.f });
+	Guard->CommitForcedSequence(Fan);
+	TestEqual(TEXT("the fan at move_yaw 0 is the corners' mean"), Guard->GroundSpeed, 150.f, 0.001f);
+	TestEqual(TEXT("and so is its turn yaw over its 1 s"), Guard->YawSpeed, 20.f, 0.001f);
+	TestTrue(TEXT("the row's loop bit is the descriptor's STUDIO_LOOPING"), Guard->SequenceLoops(Fan));
+	TestFalse(TEXT("and a non-looping descriptor answers false"), Guard->SequenceLoops(Plain));
+
+	// `StudioFrameAdvance 0x1008f120`: every real advance rewrites both words at the live pose
+	// (`0x1008f2e5`, `0x1008f2fa`) and writes past-half from the real cycle (`0x1008f268`).
+	Guard->PoseParameterWrites.Add(FElysiumNpc::FPoseParameterWrite{ FString(TEXT("move_yaw")), -90.f });
+	Guard->PrevAnimTime = 0.f;         // re-seeds the clock: the advance is 0.1 s
+	Guard->SequenceCycle = 0.55f;
+	Guard->SequencePastHalf = false;
+	const float Advance = Guard->StudioFrameAdvance(0.f);
+	TestEqual(TEXT("a real advance answers dt (0x1008f321)"), Advance, 0.1f, 0.0001f);
+	TestEqual(TEXT("and re-reads the fan at the new move_yaw"), Guard->GroundSpeed, 125.f, 0.001f);
+	TestEqual(TEXT("and the yaw speed with it"), Guard->YawSpeed, 15.f, 0.001f);
+	TestTrue(TEXT("and writes past-half from the real cycle"), Guard->SequencePastHalf);
+
+	// The early-out (`0x1008f1e9..0x1008f209`): a second advance in the same tick has `dt <= 0.001`,
+	// answers 0.0 and writes nothing -- neither speed word, not the cycle, not past-half.
+	Guard->PoseParameterWrites.Add(FElysiumNpc::FPoseParameterWrite{ FString(TEXT("move_yaw")), 0.f });
+	const float CycleBefore = Guard->SequenceCycle;
+	Guard->SequencePastHalf = false;
+	// The fixture's clock stands at 0.0, so the first advance left `m_flPrevAnimTime` (+0x170) at
+	// 0 and the first-call re-seed (`0x1008f192`: `prev == 0` -> both words = curtime) would take
+	// this call for a first one. At any curtime above 0 the word is non-zero after an advance;
+	// state it so.
+	Guard->PrevAnimTime = Guard->AnimTime;
+	const float Inert = Guard->StudioFrameAdvance(0.f);
+	TestEqual(TEXT("the inert advance answers 0.0"), Inert, 0.f);
+	TestEqual(TEXT("and leaves the ground speed word"), Guard->GroundSpeed, 125.f, 0.001f);
+	TestEqual(TEXT("and the yaw speed word"), Guard->YawSpeed, 15.f, 0.001f);
+	TestEqual(TEXT("and the cycle"), Guard->SequenceCycle, CycleBefore);
+	TestFalse(TEXT("and the past-half byte"), Guard->SequencePastHalf);
+	return true;
+}
+
+// --- N19: a missed lookup plays the model's sequence 0 (J1) -------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelAnimSequenceZeroTest,
+	"Elysium.Arm.NpcKernelAnim.SequenceZero", GElysiumNpcKernelAnimFlags)
+bool FElysiumNpcKernelAnimSequenceZeroTest::RunTest(const FString&)
+{
+	const TCHAR* const JackModel = TEXT("models/character/npc/unique/jack/Jack.mdl");
+
+	// A body whose embodiment answers a `RawIndex 0` clip: a looping 2 s clip.
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_anim_sequence_zero"), 5132);
+		Builder.AddNpc(TEXT("jack")).Keys.Add(TEXT("model"), JackModel);
+		FElysiumNpcWorldFixture Fixture(MoveTemp(Builder), [](FElysiumRecordingServices& Services)
+		{
+			FElysiumRecordingServices::FRawIndexClip Zero;
+			Zero.Label = TEXT("first_sequence");
+			Zero.Clip.Owner = TEXT("bank");
+			Zero.Clip.RawIndex = 0;
+			Zero.Clip.Flags = 1;   // STUDIO_LOOPING
+			Services.BodyClipsByRawIndex.Add(0, Zero);
+			Services.ClipSeconds = 2.f;
+		});
+		FElysiumNpc* Jack = Fixture.Npc(TEXT("jack"));
+		TestNotNull(TEXT("jack spawned"), Jack);
+		if (Jack == nullptr || !TestNotNull(TEXT("with a body"), Jack->GetSkeletalBody()))
+		{
+			return false;
+		}
+		FElysiumNpcWorldFixture::Quiet({ Jack });
+
+		// `StartSequence 0x101a82d0`'s miss: `m_nSequence := 0` (`0x101a833d`), then
+		// `ResetSequenceInfo 0x10090950`.
+		Jack->SequencePlaybackRate = 3.f;
+		Jack->CommitForcedSequence(0);
+		TestTrue(TEXT("row 0 plays the body's RawIndex 0 clip with the clip's own loop bit"),
+			Fixture.Services.Log().Contains(TEXT("first_sequence loop=1")));
+		TestEqual(TEXT("at playback rate 1.0 (0x10090a23)"), Jack->SequencePlaybackRate, 1.f);
+		TestTrue(TEXT("m_bSequenceLoops is the clip's STUDIO_LOOPING"), Jack->bSequenceLoopedOnce);
+		TestTrue(TEXT("and the row accessor answers the same bit"), Jack->SequenceLoops(0));
+		TestEqual(TEXT("the cycle rate is 1 / the clip's length"), Jack->SequenceCycleRate, 0.5f,
+			0.0001f);
+		TestEqual(TEXT("the trace still names it seq 0"), Jack->TraceSequenceName(0),
+			FString(TEXT("seq 0")));
+
+		// It finishes at its length: 0.1 s short of the end is not finished, the next advance is.
+		Jack->PrevAnimTime = 0.f;
+		Jack->SequenceCycle = 0.5f;
+		Jack->StudioFrameAdvance(0.f);
+		TestFalse(TEXT("mid-clip the sequence is not finished"), Jack->bSequenceFinished);
+		Jack->PrevAnimTime = 0.f;
+		Jack->SequenceCycle = 0.96f;
+		Jack->StudioFrameAdvance(0.f);
+		TestTrue(TEXT("StudioFrameAdvance raises the finish at the clip's length"),
+			Jack->bSequenceFinished);
+	}
+
+	// A body answering none keeps today's row 0: nothing plays, and the zero-length sequence
+	// finishes on the first advance (`GetSequenceCycleRate`'s 10.0, `0x100912c8`).
+	{
+		FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_anim_sequence_zero_none"), 5133);
+		Builder.AddNpc(TEXT("jack")).Keys.Add(TEXT("model"), JackModel);
+		FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+		FElysiumNpc* Jack = Fixture.Npc(TEXT("jack"));
+		TestNotNull(TEXT("the second jack spawned"), Jack);
+		if (Jack == nullptr)
+		{
+			return false;
+		}
+		FElysiumNpcWorldFixture::Quiet({ Jack });
+		Jack->CommitForcedSequence(0);
+		TestFalse(TEXT("a body answering no RawIndex 0 clip has no sequence-zero clip"),
+			Jack->SequenceZero.bKnown);
+		TestFalse(TEXT("so row 0 does not loop"), Jack->bSequenceLoopedOnce);
+		TestEqual(TEXT("and stays the zero-length sequence"), Jack->SequenceCycleRate, 10.f);
+		Jack->PrevAnimTime = 0.f;
+		Jack->SequenceCycle = 0.f;
+		Jack->StudioFrameAdvance(0.f);
+		TestTrue(TEXT("which finishes on the first advance"), Jack->bSequenceFinished);
+	}
+	return true;
+}
+
 #endif   // WITH_DEV_AUTOMATION_TESTS

@@ -32,6 +32,7 @@
 #include "Substrate/ElysiumDisposition.h"
 #include "Visual/ElysiumBodyAnimInstance.h"   // the live clip-phase forward below
 #include "Visual/ElysiumCharacterModel.h"
+#include "Visual/ElysiumNpcClips.h"           // FElysiumNpcClip: the raw-index rows a test seeds
 #include "Visual/ElysiumNpcVisual.h"          // RevealPosedBody: the real reveal rule
 
 #include "Components/PointLightComponent.h"
@@ -1101,6 +1102,30 @@ struct FElysiumRecordingServices final
 		Record(FString::Printf(TEXT("NpcClipOwner %s %s -> %s"), *StemOf(Stem), *ClipLabel,
 			Found != nullptr ? **Found : TEXT("-")));
 		return Found != nullptr ? *Found : FString();
+	}
+	// The body's flat sequence space a test seeds, keyed by raw index: the label and the clip row
+	// `GetBodyClipByRawIndex` answers. Empty by default, so every body answers "none" -- the
+	// sequence bridge's row 0 then plays nothing, as before N19. Not recorded: every bodied NPC asks
+	// once for index 0, and a line per body would bury the calls a suite is reading.
+	struct FRawIndexClip
+	{
+		FString Label;
+		FElysiumNpcClip Clip;
+	};
+	TMap<int32, FRawIndexClip> BodyClipsByRawIndex;
+	virtual bool GetBodyClipByRawIndex(USkeletalMeshComponent* Body, const FString& Stem,
+		int32 RawIndex, FString& OutLabel, FElysiumNpcClip& OutClip) override
+	{
+		(void)Stem;
+		OutLabel.Reset();
+		const FRawIndexClip* Found = Body != nullptr ? BodyClipsByRawIndex.Find(RawIndex) : nullptr;
+		if (Found == nullptr)
+		{
+			return false;
+		}
+		OutLabel = Found->Label;
+		OutClip = Found->Clip;
+		return true;
 	}
 	// The bone frames a test places, keyed by lower-cased bone name. A body whose bone is unseeded
 	// answers false, which is the missing-bone guard's own case.

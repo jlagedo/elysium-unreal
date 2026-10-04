@@ -1256,10 +1256,45 @@ bool FElysiumWeapon::CommitArrivesFromAnimEvent(FElysiumCombatCharacter& Char,
 		return false;
 	}
 
-	// The dispatcher's own precondition, asked about THIS clip. `FElysiumAnimating::AdvanceAnimEvents`
-	// walks the timeline of whatever clip a polled channel is standing on, so a body playing a
-	// different clip there never reaches this one's events — and the estimate standing down for it
-	// would swallow the whole transaction.
+	// **Who dispatches decides who is asked** (spec 0002 V4a: the world-tick poll is gone, each
+	// entity's own think runs slot 258).
+	//
+	// An NPC's slot 258 (`CBaseAnimatingOverlay::DispatchAnimEvents 0x10098c80`, from `PostRun
+	// 0x1026c7c0`) walks the event table of the KERNEL's `m_nSequence` (`0x10091880`) and, until the
+	// overlay stack lands (V4o lane O1), no layer. So an NPC's commit arrives from an event exactly
+	// when the sequence the kernel is playing authors a commit id for this operator body: the 3031
+	// then travels slot 258 -> slot 259 (`0x10274e30`) -> `Weapon_HandleAnimEvent 0x1032e210` -> this
+	// weapon. The clip `ResolveAndPlay` put on the body (`OwnerStem`, `ClipLabel`) is dispatched by
+	// nothing on an NPC, whatever phase the pose layer publishes for it, so it is not asked.
+	if (!IsPlayerSide(Char))
+	{
+		const FElysiumNpc* const Npc = Char.AsNpc();
+		if (Npc == nullptr)
+		{
+			return false;   // neither the player nor an NPC: no think dispatches this body's events
+		}
+		for (const FElysiumAnimEvent& Record : Npc->SequenceEvents(Npc->SequenceNumber))
+		{
+			if (ElysiumWeapons::IsCommitEvent(Record.Event, OpBody))
+			{
+				return true;
+			}
+		}
+		if (ShouldReportOnce(FString::Printf(TEXT("kernelseq:%s@%s"), *ClipLabel, *OwnerStem)))
+		{
+			UE_LOG(LogElysiumWeapon, Verbose,
+				TEXT("%s: the kernel's sequence %d authors no %s commit id, so the commit staged over "
+					"'%s'@'%s' keeps the ContactEventCycle estimate"),
+				*DebugString(), Npc->SequenceNumber, ElysiumWeapons::OperatorBodyName(OpBody),
+				*ClipLabel, *OwnerStem);
+		}
+		return false;
+	}
+
+	// The player's slot 258 (`FElysiumPlayer::PostThinkAnimation`, `CBasePlayer::PostThink
+	// 0x1016be10`) walks the timeline of whatever clip the base channel and overlay slot 0 are
+	// standing on, so a body playing a different clip there never reaches this one's events — and
+	// the estimate standing down for it would swallow the whole transaction.
 	if (!Char.HasLiveAnimEventDispatch(OwnerStem, ClipLabel))
 	{
 		// **Verbose, because this is an ordinary refusal rather than a gap.** A scene owns the base

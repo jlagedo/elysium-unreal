@@ -138,7 +138,8 @@ namespace
 			? Anim->FindMetaDataByClass<UElysiumAnimLayerMask>() : nullptr;
 		// The identity travels with the layer for the same reason it travels with a one-shot: the
 		// ranged families compose HERE, their clips carry the 3030-3044 commit ids, and
-		// `FElysiumAnimating::AdvanceAnimEvents` addresses a timeline by (bank, label). A layer armed
+		// the player's dispatch (`FElysiumPlayer::PostThinkAnimation`, `0x1016be10` -> `0x10098cd0`)
+		// addresses a timeline by the (bank, label) the layer's phase publishes. A layer armed
 		// without one plays and dispatches nothing.
 		// The clip's own declared layers, resolved HERE through the same helper the driver's publish
 		// uses — one frame of bare shot before the first publish is exactly the flash this closes.

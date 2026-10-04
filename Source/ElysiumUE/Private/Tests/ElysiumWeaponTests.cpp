@@ -3348,7 +3348,8 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		// The world's pass skips anything with no skeletal body, so the shooter needs one. The model
+		// The player's dispatch (`PostThinkAnimation`, `0x1016be10`) needs a skeletal body to read a
+		// clip phase from, so the shooter needs one. The model
 		// goes on through the ordinary runtime writer, which is the door `SetModel` uses.
 		OutPlayer->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
 		if (!TestNotNull(TEXT("the player carries a body the pass can walk"), OutPlayer->Visual))
@@ -3394,8 +3395,11 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 			Pistol->Swing.bAwaitingAnimEvent);
 
 		// Past the `ContactEventCycle` instant the estimate WOULD have used (0.5 of a 1.0s clip) and
-		// nothing has happened: the estimate stood down, and no event has fired yet.
-		Services.BodyClipPhase.Cycle = 0.2f;
+		// nothing has happened: the estimate stood down, and no event has fired yet. The cycle is
+		// 0.15, not 0.2: retail's dispatcher sweeps to `m_flCycle + 0.1 s x cycle rate` (`0x10091880`,
+		// the 0.1 s look-ahead), so on this 1.0 s clip 0.2 would put the window's open end exactly on
+		// the 0.30 commit record.
+		Services.BodyClipPhase.Cycle = 0.15f;
 		World.Tick(0.6);
 		TestEqual(TEXT("the suppressed estimate commits nothing at its own instant"),
 			DamageTaken(*Victim), 0);
@@ -3482,8 +3486,9 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 		TestTrue(TEXT("the overlay slot's own phase is what stands the estimate down"),
 			Pistol->Swing.bAwaitingAnimEvent);
 
-		// Past the instant the estimate would have used (0.5 of a 1.0s clip), short of the commit.
-		Services.BodyClipPhase.Cycle = 0.20f;
+		// Past the instant the estimate would have used (0.5 of a 1.0s clip), short of the commit:
+		// 0.15, so the 0.1 s look-ahead (`0x10091880`) ends at 0.25, before the 0.30 record.
+		Services.BodyClipPhase.Cycle = 0.15f;
 		World.Tick(0.6);
 		TestEqual(TEXT("the suppressed estimate commits nothing at its own instant"),
 			DamageTaken(*Victim), 0);
@@ -3569,9 +3574,13 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 					"act=ACT_RANGE_ATTACK1_LAYER ch=upper body"), GAttackLabel)));
 		TestEqual(TEXT("...and asks the cast body for exactly that one clip, on no other channel"),
 			Services.Count(TEXT("PlayNpcClip")), 1);
-		// And the layer's phase is what the cast's commit waits on, for the same reason the player's
-		// is: the shot clip composes there, so that is the channel whose timeline gets walked.
-		TestTrue(TEXT("...so the cast waits on the clip's own commit id rather than the estimate"),
+		// The layer's phase is NOT what the cast's commit waits on (spec 0002 V4a). An NPC's events
+		// are dispatched by its own slot 258 (`0x10098c80` from `PostRun 0x1026c7c0`) over the
+		// kernel's `m_nSequence`; the clip this transaction put on the overlay slot is walked by
+		// nothing (the world-tick poll that walked it is deleted, the NPC's overlay layers are a seam
+		// answering "no layer" until V4o). This body is no kernel NPC playing a fire sequence, so its
+		// commit keeps the estimate; standing it down would swallow the shot.
+		TestFalse(TEXT("...and its commit is not left waiting on a timeline no think dispatches"),
 			CastGun->Swing.bAwaitingAnimEvent);
 	}
 

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "ElysiumEntityHandle.h"
 #include "ElysiumPlayer.h"   // FElysiumAnimating — the animating base the class stands on
+#include "Substrate/ElysiumAnimEvents.h"   // FElysiumSequenceWords — the think's dispatch words
 
 // `camera_animated` — VtMB's `CCameraAnimated` (`vampire.dll`, registered by `FUN_10070a10`).
 //
@@ -37,21 +38,33 @@ public:
 	// `SetCineCamera(player, NULL)`.
 	FElysiumEntityHandle CineCamera;
 
-	// The sequence's deadline, and the port's producer of `m_bSequenceFinished` (`+0x65c`).
-	//
-	// Retail's think tests **that byte and nothing else** (RC15.3 §3.3): it never reads `m_flCycle`,
-	// never compares against 1.0, never calls `IsSequenceFinished()`. `StudioFrameAdvance` is the
-	// byte's sole producer and `ResetSequenceInfo` its sole reset, and `StudioFrameAdvance` raises it
-	// on the wrap **regardless of `m_bSequenceLoops`** — so a `STUDIO_LOOPING` sequence ends the
-	// camera on its first wrap. The port's bodies do not publish a per-tick wrap edge, so the edge is
-	// computed instead: the clip's own authored length at `ResetSequenceInfo`'s guaranteed
-	// `m_flPlaybackRate = 1.0` **is** the first wrap, for a one-shot and a looping clip alike. Unset
-	// (`< 0`) is "no sequence is running", which is also what the strand below leaves behind.
+	// The sequence's own clock: when `FUN_10071770` started it (`m_flCycle = 0; ResetSequenceInfo()`)
+	// and its authored length, at `ResetSequenceInfo`'s guaranteed `m_flPlaybackRate = 1.0`. The
+	// think's advance (slot 250) is computed from these two: `m_flCycle = elapsed / length`, wrapped
+	// for a looping sequence and clamped to 1.0 for a one-shot, as `StudioFrameAdvance 0x1008f120`
+	// leaves it.
+	double SequenceStartTime = -1.0;
+	float SequenceSeconds = 0.0f;
+
+	// The words `CBaseAnimating::DispatchAnimEvents 0x10091880` reads and writes for this entity's
+	// one sequence — the base dispatcher only, a camera has no overlay layers. `LastEventCheck` is
+	// `m_flLastEventCheck` (`+0x658`) and `bSequenceFinished` is `m_bSequenceFinished` (`+0x65c`),
+	// **the byte the think tests and nothing else** (RC15.3 §3.3): it never reads `m_flCycle`, never
+	// compares against 1.0. The think runs advance -> dispatch -> test (`0x10071840`), and the
+	// dispatcher clears the byte at entry and sets it when its 0.1 s look-ahead end reaches 1.0 — so
+	// the camera ends one look-ahead BEFORE the pose does, and with no `m_bSequenceLoops`
+	// consultation in the think a `STUDIO_LOOPING` sequence ends it on the first lap's look-ahead
+	// just the same. Reset where `ResetSequenceInfo` resets them (the start and `EndCamera`).
+	FElysiumSequenceWords SequenceWords;
+
+	// The wall-clock end of the first lap, kept for the debug row and as the "a sequence is
+	// running" marker (`< 0`: none, which is also what the strand below leaves behind). **It is not
+	// the exit**: the exit is `SequenceWords.bSequenceFinished`.
 	double SequenceEndTime = -1.0;
 
 	// `+0x65d` `m_bSequenceLoops`, written by `ResetSequenceInfo` from `GetSequenceFlags(seq) & 1`
-	// (`STUDIO_LOOPING`). Recovered, carried, and deliberately **not** consulted by the exit: see
-	// `SequenceEndTime`. Held so the debug row can show that a looping clip still ends the shot.
+	// (`STUDIO_LOOPING`). The think's exit does not consult it; the dispatcher does (the non-looping
+	// clamp, the wrap clause): see `SequenceWords`. Shown on the debug row beside the deadline.
 	bool bSequenceLoops = false;
 
 	// The `animated_props` stem this entity's `model` resolved to, empty when the body came up as a
@@ -80,11 +93,12 @@ public:
 	// `InputEndCamera` `0x10071470` -> `FUN_10071660`.
 	void InputEndCamera();
 
-	// Retail's `m_bSequenceFinished` read, expressed against the clock the deadline was armed on.
-	// False whenever no sequence is running, so the stranded entity never claims to have finished.
-	bool IsSequenceFinished(double Now) const
+	// Retail's `m_bSequenceFinished` read (`0x10071840`: `(char)param_1[0x197]`, `+0x65c`): the
+	// dispatcher's flag. False whenever no sequence is running, so the stranded entity never claims
+	// to have finished.
+	bool IsSequenceFinished() const
 	{
-		return SequenceEndTime >= 0.0 && Now >= SequenceEndTime;
+		return SequenceEndTime >= 0.0 && SequenceWords.bSequenceFinished;
 	}
 
 private:

@@ -6,25 +6,16 @@
 #include "ElysiumAnimEvent.h"
 #include "ElysiumAnimationIntent.h"
 
-// VtMB's sequence-event dispatcher, as a pure rule — the `ElysiumDice` shape beside the substrate's
-// other decision leaves. No world, no clock, no engine service, no UObject: a cursor and this
-// frame's phase in, the records that fired out.
+// VtMB's sequence-event dispatcher: `CBaseAnimating::DispatchAnimEvents` `0x10091880` and the
+// per-layer body `0x10098cd0`, as two bodies over one sequence's words, so the NPC (`PostRun
+// 0x1026c7c0`), the player (`CBasePlayer::PostThink 0x1016be10`) and the camera (`0x10071840`) run
+// the same listing. Recovered in `docs/vtmb/animation_events.md` § "Who calls the dispatcher, and
+// where against the frame advance" and `docs/specs/0002-npc-ai/stories/v4/packets-R2.md` item 1.
 //
-// The rule is `CBaseAnimating::DispatchAnimEvents` `0x10091880`, recovered in
-// `docs/vtmb/animation_and_movers.md` → "Sequence events and native dispatch". The engine stores
-// the last checked cycle on the animating object at `+0x658`, scans the sequence's 76-byte records
-// and fires every one whose cycle satisfies `last_cycle <= event.cycle < current_cycle`; a looping
-// sequence that passed 1.0 also visits the wrapped interval, exactly once. Records that share a
-// cycle fire in the order the file declares them, which is why `FElysiumBlendTable::Events` is an
-// array and is never sorted.
-//
-// What an id MEANS belongs to whoever claims it. Nothing here reads `Event`, parses `Options` or
-// filters on the server band: `Advance` answers which records the interval contained, and the
-// caller decides what to do with each.
-
-// `FElysiumAnimEventCursor`, the state this rule advances, is declared beside the record it walks
-// in `Public/ElysiumAnimEvent.h`: `FElysiumAnimating` owns one per polled channel, and that class
-// is declared in a public header.
+// The window is `[m_flLastEventCheck, m_flCycle + 0.1 x cycle rate)`: closed at the bottom, open at
+// the top, a 0.1 s look-ahead. Records fire in the order the descriptor declares them (one pass over
+// the table, never sorted), ids at or above 5000 are never offered to a handler, and what an id
+// MEANS belongs to the handler (slot 259) that claims it.
 
 class FElysiumEntity;
 
@@ -41,18 +32,35 @@ struct FElysiumSequenceWords
 	bool  bHasDescriptor = true;     // a seqdesc exists (none: no finish, no past-half)
 	bool  bDescriptorLoops = false;  // seqdesc.flags & 1 (the wrap clause)
 	float LastEventCheck = 0.f;      // in/out: m_flLastEventCheck +0x658 (a layer: layer+0x2c)
-	bool  bSequenceFinished = false; // out: m_bSequenceFinished +0x65c (a layer: layer+4, zeroed)
+	bool  bSequenceFinished = false; // IN/out: m_bSequenceFinished +0x65c (a layer: layer+4, zeroed).
+	                                 // The value at entry is retail's `cVar2`, the rising edge's "before".
 	bool  bSequencePastHalf = false; // out: m_fSequencePastHalf +0x568 (untouched for a layer)
+
+	// --- Added by V4a lane A1, last and defaulted (the seam's fields above are unchanged) ---
+
+	// Retail writes `+0x65c`, `+0x568` and `+0x658` on the object BEFORE the event loop
+	// (`0x10091880`), so a handler that resets the sequence (`ResetSequenceInfo 0x10090950` zeroes
+	// `+0x658` and clears `+0x65c`) is not overwritten afterwards. A caller whose handlers can do
+	// that sets this: it is called once, after the words are written and before the first event, and
+	// the caller then copies nothing back after the return. Unset: copy back after the return.
+	TFunction<void(const FElysiumSequenceWords&)> WordsWritten;
+	// The clip the census names an unclaimed id under (debug bookkeeping, not a retail word): the
+	// owning bank and the label. Empty: the census row reads `seq <Sequence>`.
+	FString CensusOwner;
+	FString CensusLabel;
 };
 
 namespace ElysiumAnimEvents
 {
-	// `0x10091880` / `0x10098cd0`; filled by V4a lane A1; called by A1 (the NPC) and A4 (the player,
-	// the camera). The seam's bodies fire nothing and write nothing.
+	// `0x10091880` / `0x10098cd0` (V4a lane A1); called by the NPC's slot 258
+	// (`ElysiumNpcBaseAnimEvents.cpp`) and by lane A4 (the player, the camera). The caller holds
+	// retail's `GetModelPtr() != 0` precondition: with no model retail's body touches nothing.
 
 	// 0x10091880. Fires each event on Handler.HandleAnimEvent (slot 259) in table order and
-	// emits the `animevent` trace for Source. Returns true on the finish flag's rising edge:
-	// the caller then makes its own OnSequenceFinished call (0x10091c80 is a direct call).
+	// emits the `animevent` trace for Source. Returns true on the finish flag's rising edge
+	// (finished now, `Words.bSequenceFinished` false at entry): the caller then makes its own
+	// OnSequenceFinished call (0x10091b9a -> 0x10091c80 is a direct call). A caller that set
+	// `WordsWritten` tests its own live word instead, as retail does after the loop.
 	bool DispatchBase(FElysiumSequenceWords& Words, TConstArrayView<FElysiumAnimEvent> Events,
 	                  FElysiumEntity& Source, FElysiumEntity& Handler);
 	// 0x10098cd0, one overlay layer: no clamp, no past-half, the finish word zeroed, never set.
@@ -118,17 +126,6 @@ namespace ElysiumAnimEvents
 			: FString::Printf(TEXT("%s.mdl"), *Trimmed);
 		return Formatted.Replace(TEXT("\\"), TEXT("/")).ToLower();
 	}
-
-	// Advance one cursor by one frame and collect what the interval contained, in file order.
-	//
-	// `Timeline` may be null or empty — most sequences declare no timeline at all, which is an
-	// absence rather than a fault. The cursor still advances, so a clip that gains a timeline
-	// mid-play cannot fire a backlog.
-	//
-	// `OutFired` is RESET before the walk. The pointers it carries alias `Timeline`'s storage and
-	// are valid only as long as the caller's timeline is.
-	void Advance(const TArray<FElysiumAnimEvent>* Timeline, const FElysiumClipPhase& Phase,
-		FElysiumAnimEventCursor& InOut, TArray<const FElysiumAnimEvent*>& OutFired);
 }
 
 // The census of event ids nothing has claimed yet.
@@ -145,7 +142,7 @@ namespace ElysiumAnimEvents
 // engine object inside a substrate rule the tests run with no world at all.
 //
 // **Game thread only, and unsynchronised**, like the stub tally for the same reason: every writer is
-// the world's own event pass and every reader is a console verb, a Cog frame or an automation case.
+// a dispatcher body above (run from an entity's own think) and every reader is a console verb, a Cog frame or an automation case.
 // A caller off the game thread needs its own funnel rather than a lock here.
 namespace ElysiumAnimEventCensus
 {

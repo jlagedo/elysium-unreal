@@ -7,7 +7,7 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 38 generated slot bodies of `FElysiumAnimating`: 0 carry the retail default story 29c recovered,
-// 2 are defined by hand in the substrate, and 36 are still stubs — 24 29c, 12 unassigned.
+// 4 are defined by hand in the substrate, and 34 are still stubs — 22 29c, 12 unassigned.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -182,12 +182,8 @@ void FElysiumAnimating::GetEventName(TCHAR*, void*)
 
 // slot 242 0x100916a0 (walked) `float GetIdealYawSpeed()`
 //   layer 0, story 29c
-float FElysiumAnimating::GetIdealYawSpeed()
-{
-	FireAnimatingSlot(TEXT("CBaseAnimating::GetIdealYawSpeed"), TEXT("0x100916a0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumAnimating::GetIdealYawSpeed`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 243 0x10090580 (walked) `void BurnModel(const char*, bool)`
 //   layer 0, story 29c
@@ -233,12 +229,8 @@ void FElysiumAnimating::SetAttackExtentsForSequence(int32)
 
 // slot 248 0x10091740 (sdk) `float GetIdealSpeed() const`
 //   layer 0, story 29c
-float FElysiumAnimating::GetIdealSpeed() const
-{
-	FireAnimatingSlot(TEXT("CBaseAnimating::GetIdealSpeed"), TEXT("0x10091740"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumAnimating::GetIdealSpeed`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 249 0x100917e0 (sdk) `float GetIdealAccel() const`
 //   layer 0, story 29c
@@ -445,7 +437,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, void(TCHAR*, void*)>::Test(&FElysiumAnimating::GetEventName),
 				nullptr },
 			{ 242, TEXT("0x100916a0"), TEXT("CBaseAnimating"), TEXT("GetIdealYawSpeed"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, float()>::Test(&FElysiumAnimating::GetIdealYawSpeed),
 				nullptr },
 			{ 243, TEXT("0x10090580"), TEXT("CBaseAnimating"), TEXT("BurnModel"),
@@ -469,7 +461,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, void(int32)>::Test(&FElysiumAnimating::SetAttackExtentsForSequence),
 				nullptr },
 			{ 248, TEXT("0x10091740"), TEXT("CBaseAnimating"), TEXT("GetIdealSpeed"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, float() const>::Test(&FElysiumAnimating::GetIdealSpeed),
 				nullptr },
 			{ 249, TEXT("0x100917e0"), TEXT("CBaseAnimating"), TEXT("GetIdealAccel"),

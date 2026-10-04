@@ -967,8 +967,8 @@ function	0x10091080	CBaseAnimating::SequenceDuration	-		layer 0
 function	0x10091230	CBaseAnimating::GetSequenceCycleRate	-		layer 0
 function	0x10091310	CBaseAnimating::GetSequenceYawSpeed	-		layer 0
 function	0x10091490	CBaseAnimating::GetSequenceGroundSpeed	-		layer 0
-function	0x100916a0	CBaseAnimating::GetIdealYawSpeed	CCineAI#242, CCineAISchedule#242, CCineNPC#242, CNPCMaker#242, CNPC_VCop#242, CNPC_VHuman#242, CNPC_VHumanCombatant#242, CNPC_VHunter#242, CNPC_VPedestrian#242, CNPC_VRat#242, CNPC_VTaxiDriver#242, CNPC_VVampire#242		layer 0
-function	0x10091740	CBaseAnimating::GetIdealSpeed	CCineAI#248, CCineAISchedule#248, CCineNPC#248, CNPCMaker#248, CNPC_VCop#248, CNPC_VHuman#248, CNPC_VHumanCombatant#248, CNPC_VHunter#248, CNPC_VPedestrian#248, CNPC_VRat#248, CNPC_VTaxiDriver#248, CNPC_VVampire#248		layer 0
+function	0x100916a0	CBaseAnimating::GetIdealYawSpeed	CCineAI#242, CCineAISchedule#242, CCineNPC#242, CNPCMaker#242, CNPC_VCop#242, CNPC_VHuman#242, CNPC_VHumanCombatant#242, CNPC_VHunter#242, CNPC_VPedestrian#242, CNPC_VRat#242, CNPC_VTaxiDriver#242, CNPC_VVampire#242	rule	layer 0
+function	0x10091740	CBaseAnimating::GetIdealSpeed	CCineAI#248, CCineAISchedule#248, CCineNPC#248, CNPCMaker#248, CNPC_VCop#248, CNPC_VHuman#248, CNPC_VHumanCombatant#248, CNPC_VHunter#248, CNPC_VPedestrian#248, CNPC_VRat#248, CNPC_VTaxiDriver#248, CNPC_VVampire#248	rule	layer 0
 function	0x100917e0	CBaseAnimating::GetIdealAccel	CCineAI#249, CCineAISchedule#249, CCineNPC#249, CNPCMaker#249, CNPC_VCop#249, CNPC_VHuman#249, CNPC_VHumanCombatant#249, CNPC_VHunter#249, CNPC_VPedestrian#249, CNPC_VRat#249, CNPC_VTaxiDriver#249, CNPC_VVampire#249		layer 0
 function	0x10091880	CBaseAnimating::DispatchAnimEvents	-		layer 0
 function	0x10091da0	CBaseAnimating::HandleAnimEvent	-		layer 0

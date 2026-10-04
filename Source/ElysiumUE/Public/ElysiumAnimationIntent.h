@@ -879,8 +879,10 @@ struct FElysiumAnimationSelection
 	// a bank; the concrete animation is downstream of it and does not identify anything.
 	FString SequenceLabel;
 	// Exact identity is (owner, raw index) because 1,430 of 1,484 label groups carry more than one
-	// owner/sequence identity. The character export writes no raw index, so this is set only on
-	// the prop route, where the sidecar carries declaration order. The identity this rung can prove
+	// owner/sequence identity. This record is set only on the prop route, where the sidecar carries
+	// declaration order; a character's raw index is on its body-data row instead
+	// (`FElysiumNpcClip::RawIndex`, which the kernel's row 0 reads through
+	// `IElysiumEmbodiment::GetBodyClipByRawIndex`, spec 0002 V4a). The identity this rung can prove
 	// is (OwnerStem, SequenceLabel), which is exactly what bank ownership needs.
 	int32 RawSequenceIndex = INDEX_NONE;
 	// The bank the include DAG named. **The whole point of the record**: the same label `run` reaches

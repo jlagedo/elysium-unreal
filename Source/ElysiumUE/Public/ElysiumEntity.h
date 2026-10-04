@@ -404,16 +404,10 @@ public:
 	virtual bool GetBodyAttachmentPoint(FName Attachment, FVector& OutWorld) const { return false; }
 
 	// --- The sequence-event chain ---
-	// Walk this entity's playing clips one frame further along their own timelines and dispatch
-	// whatever the interval contained. Called once per frame by the world's event pass, before the
-	// thinks; the base is a no-op because only an entity that owns a skeletal body has a clip to
-	// advance. Declared here for the same no-RTTI reason `GetSkeletalBody` is — the world's pass
-	// walks `FElysiumEntity`s and must not know which leaves carry bodies.
-	virtual void AdvanceAnimEvents() {}
-
 	// Retail's virtual `HandleAnimEvent` `+0x40c`: one fired record, offered to the entity whose
 	// clip declared it. True means this entity claimed the id and acted on it; false means it did
-	// not, and the caller counts the record in the census instead.
+	// not, and the dispatcher (`ElysiumAnimEvents::DispatchBase`, `0x10091880`) counts the record in
+	// the census instead.
 	//
 	// The base answers false for every id, which is exactly what retail's own empty handler bodies
 	// do — two of the twenty recovered bodies accept nothing at all, the combat-weapon body and the
