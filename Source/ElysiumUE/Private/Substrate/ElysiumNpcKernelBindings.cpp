@@ -687,6 +687,8 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x5ccc int
 		ElysiumAddClassField(D, TEXT("m_qaLastFacing"), &FElysiumNpcBase::LastFacing,
 			EElysiumField::Save);  // +0x5dc4 vector
+		ElysiumAddClassField(D, TEXT("m_scriptState"), &FElysiumNpcBase::ScriptState,
+			EElysiumField::Save);  // +0x5d70 int
 		ElysiumAddClassField(D, TEXT("m_vSavePosition"), &FElysiumNpcBase::SavePosition,
 			EElysiumField::Save);  // +0x5dd0 position
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_vecEnemyWentOccluded"),
@@ -751,8 +753,6 @@ namespace ElysiumNpcKernelBindings
 		// NOT SAVED +0x5cdc m_pSenses (embedded) — a FIELD_EMBEDDED row: retail's datamap points at
 		// a second `datamap_t` and recurses, and this port's matching member carries its own typed
 		// `Serialize`, which is the same shape
-		// NOT SAVED +0x5d70 m_scriptState (int) — the port carries this concern on the entity chain
-		// BELOW the NPC, and the class that owns the member is the class that persists it
 		// NOT SAVED +0x5d60 m_vDefaultEyeOffset (vector) — the port carries this concern on the
 		// entity chain BELOW the NPC, and the class that owns the member is the class that persists
 		// it
@@ -3011,7 +3011,7 @@ namespace ElysiumNpcKernelBindings
 			case EClass::CombatCharacter:
 				return {150, 8, 2, 25, 0};
 			case EClass::NpcBase:
-				return {4, 0, 16, 1, 55};
+				return {4, 0, 16, 1, 56};
 			case EClass::InterestingPlace:
 				return {8, 3, 10, 2, 0};
 			case EClass::Hint:

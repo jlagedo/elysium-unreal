@@ -382,8 +382,9 @@ public:
 
 	virtual void Think() override;
 
-	// The port's schedule-owner routing ahead of the interpreter, reached from `MaintainSchedule`
-	// (`0x102817c0`) on a Troika body; its STORY8-TWIN survivors are named at the definition.
+	// The port's scripted-beat and dialogue routing ahead of the interpreter, reached from
+	// `MaintainSchedule` (`0x102817c0`) on a Troika body; its STORY8-TWIN survivors (V3c/V3d) are
+	// named at the definition.
 	bool RouteScheduleMaintenance(double Now, bool bReduced);
 
 	// Retail's selector pair `0x1028a260` (`SelectNewScheduleRetail`): slot 437, then slot 438.
@@ -422,6 +423,9 @@ public:
 
 	const FElysiumInterestingPlaceType* AmbientType(const FElysiumInterestingPlace* Spot) const;
 
+	// `TASK_FIND_INTERESTING_PLACE`'s pick and claim: `PickRandomInterestingPlace 0x102db590`
+	// (`BuildCandidates 0x102db470`, eligibility `0x102dad60`), then the claim `PickSpotFor
+	// 0x102da0d0` takes. Writes `m_pInterestingPlace +0x62ec`; null when nothing is eligible.
 	FElysiumInterestingPlace* ClaimAmbientSpot();
 
 	// `0x102dad60`'s group gate: the place's own folded mask (`+0x0574`, `CAI_InterestingPlace::
@@ -444,9 +448,6 @@ public:
 	// an unparsed one.
 	void SetHintGroups(const FString& Groups);
 	void SetInterestingPlaceGroups(const FString& Groups);
-
-	bool PlayAmbientActivity(const TArray<FElysiumWeightedName>& Choices, bool bLoop,
-		double Now, double& OutEnd);
 
 	// --- the disposition stance machine ---------------------------------------------------------
 	// `docs/vtmb/animation_and_movers.md` -> "The disposition stance machine". The decision itself is
@@ -605,13 +606,11 @@ public:
 	 */
 	int32 SelectDoorObstructionSchedule();
 
-	void BeginAmbientUse(FElysiumInterestingPlace& Spot, double Now);
-
-	void BeginAmbientLeave(double Now);
-
-	void FinishAmbientUse(bool bFireLeft, bool bStopMovement = true);
-
-	void ThinkAmbient(double Now);
+	// `0x102b53d0`, the interesting-place release ("Leaving interesting place (...)"). `bFireLeft` is
+	// retail's flag argument: 1 from `OnScheduleChange 0x102a099c`, `TaskFail 0x1029adb9` and the
+	// RunTask wait-finished arm; 0 from `UpdateOnRemove 0x1028d6e0`, `Event_Killed` and
+	// `TASK_DIE_IF_PLAYER_CANT_SEE`. It stops no motor and touches no pose.
+	void FinishAmbientUse(bool bFireLeft);
 
 	// StartPlayerDialogRemote opens a dialog session: fire OnDialogBegin, then run the NPC's `.dlg`
 	// conversation. When the `dialogname` file is missing/unloadable the session falls back to the
@@ -1068,12 +1067,6 @@ protected:
 	// A scripted owner drives this body's pose; the think only lands a deferred beat claim.
 	bool ThinkScriptOwned(double Now);
 
-	// Schedule selection pre-empts an autonomous executor.
-	bool ThinkSchedulePolicy(double Now, bool bReduced);
-
-	// The autonomous executors: the patrol route, an interesting place, or the standing stance.
-	void ThinkAutonomous(double Now, bool bReduced);
-
 	// --- Serialize(), in exact archive order ---------------------------------------------------
 	//
 	// Words only. Retail's one hand block (`AIExtendedSaveHeader_t`) and, after it, the port state
@@ -1146,7 +1139,6 @@ protected:
 	bool bReportedNoStepSurface = false;
 	TSet<FName> ReportedStepSurfacesWithoutPool;
 
-	FElysiumBodyOwnerToken AmbientOwner;
 	FElysiumBodyOwnerToken ScriptedScheduleOwner;
 	FElysiumBodyOwnerToken SequenceOwner;
 	FElysiumBodyOwnerToken DialogueBodyOwner;
@@ -1157,13 +1149,16 @@ protected:
 	bool bScriptBodyHeld = false;
 	// `m_bDisableAI` (+0x6080). Session state, like retail's: not in the datamap's save block.
 	bool bDisableAi = false;
-	// The interesting-place visit's phase machine and the state riding on it.
-	enum class EAmbientPhase : uint8 { None, Moving, Into, Dwelling, Out };
+	// The interesting-place visit's retail words, driven by the programs (`0xff`/`0x100`/...), the
+	// wait `0x102a9f40` and the loop `0x102aa210`, and released by `0x102b53d0` alone.
+	// `m_eInterestingPlaceMode +0x6304`: 0 none, 1 into, 2 idle, 3 outof
+	// (`ElysiumNpcHints.cpp`'s four writes).
+	enum class EAmbientPhase : uint8 { None = 0, Into = 1, Dwelling = 2, Out = 3 };
 	EAmbientPhase AmbientPhase = EAmbientPhase::None;
+	// `m_pInterestingPlace +0x62ec`, as a place index (`INDEX_NONE` is retail's null).
 	int32 CurrentSpotIndex = INDEX_NONE;
-	double AmbientLeaveAt = 0.0;
+	// `+0x63d4`, the loop's activity-refresh stamp (`-1.0` = none pending).
 	double AmbientNextActivityAt = 0.0;
-	int32 AmbientActivityCycle = 0;
+	// `m_bInterestingPlaceArrived +0x62e8`.
 	bool bAmbientArrived = false;
-	TSet<int32> FailedSpotIndices;
 };

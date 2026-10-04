@@ -35,11 +35,9 @@ virtual bool			   IsAiStepMode() const override;
 virtual void			   AdvanceAiStepDebugIndex() override;
 virtual void			   FreezeForAiStep() override;
 virtual void			   NextScheduledTaskForMaintenance(FElysiumScheduleState& State) override;
-virtual bool			   TakeExternalExecutorReturn() override;
 
 bool ShouldSelectIdealStateForMaintenance();
 void CacheInterruptConditionsForMaintenance(double Now);
 
 // `m_nDebugCurIndex` (`+0x5f40`), used only by `ai_step`.
 int32 MaintainDebugTaskIndex = 0;
-bool  bReturnToExternalExecutorAfterSchedule = false;

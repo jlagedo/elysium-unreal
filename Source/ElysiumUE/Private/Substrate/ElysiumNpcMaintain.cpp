@@ -161,10 +161,15 @@ void FElysiumNpc::TroikaOnScheduleChange(int32 NewSchedule)
 				Motor->ClearNavigationGoal(); // 0x102a0992
 			}
 		}
+		// `0x102b53d0(this, 1, "Leaving interesting place (OnScheduleChange)")` (`0x102a0997..0x102a09a0`),
+		// only under `!PRESERVE_PATH`. Retail passes 1, so the left flag is `+0x62e8` arrived
+		// (`0x102b54e3..0x102b550d`). The place test sits inside retail's body (`0x102b53da`); the
+		// arrived byte is cleared place or no place (`0x102b55b5`).
 		if (CurrentAmbientSpot())
 		{
-			FinishAmbientUse(bAmbientArrived, false); // 0x102a09a0
+			FinishAmbientUse(/*bFireLeft=*/bAmbientArrived); // 0x102a09a0, argument 1
 		}
+		bAmbientArrived = false; // 0x102b55b5
 		ScheduleHost.Unknown6300 = 0; // 0x102a09b0
 		ScheduleHost.Unknown659c = 0; // 0x102a09b6
 		if (Motor != nullptr)
@@ -343,16 +348,9 @@ int32 FElysiumNpc::SelectScheduleForMaintenance(double Now,
 	{
 		GatherConditions(); // 0x102814d0 slot 433
 	}
+	// A `use_interesting` body is answered here like any other: Troika case 1 returns `0xff` /
+	// `0x100` / `0x102` / `0x105` / `0x106` (`0x102af6f3..0x102af7e0`).
 	const int32 Selected = SelectSchedule(); // 0x102814d0 slot 438
-	if (Selected == ElysiumScheduleId::None && bUseInteresting)
-	{
-		// Retail's interesting-place answer is a schedule. This runtime still represents that
-		// program as an external executor (the named survivor), so its slot-438 null adapter returns
-		// control at the selection edge rather than flowing into the missing-ID fallback below.
-		OutIdealScheduleRetail = 0;
-		bReturnToExternalExecutorAfterSchedule = true;
-		return ElysiumScheduleId::None;
-	}
 	// Today's selector surface is typed and therefore exposes only registered ids. Preserve its raw
 	// retail number in the int32 ideal word before slot 440 transforms the installed pointer. The
 	// later Select19 body owns returning local/-1/>=1e9 values; this adapter is already wide enough
@@ -451,18 +449,7 @@ void FElysiumNpc::FreezeForAiStep()
 void FElysiumNpc::NextScheduledTaskForMaintenance(FElysiumScheduleState& State)
 {
 	check(&State == &Schedule);
+	// `0x10280f40` writes `COND_SCHEDULE_DONE` itself when the program is exhausted; the loop then
+	// reselects in this same pass (`0x10281be5`, `0x10281c46`).
 	NextScheduledTask(); // 0x10281982
-	if (FElysiumNpcScheduleHost::IsTaskIndexCurrent(Schedule))
-	{
-		// NextScheduledTask writes COND_SCHEDULE_DONE directly; this port callback additionally
-		// latches the external-executor handoff on that exact edge.
-		ScheduleDone();
-	}
-}
-
-bool FElysiumNpc::TakeExternalExecutorReturn()
-{
-	const bool bReturn = bReturnToExternalExecutorAfterSchedule;
-	bReturnToExternalExecutorAfterSchedule = false;
-	return bReturn;
 }

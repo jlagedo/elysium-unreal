@@ -57,14 +57,14 @@ void FElysiumNpc::LeaveInterestingPlaceOnRemove()
 {
 	// `thunk_FUN_102b53d0(this, 0, "Leaving interesting place (UpdateOnRemove)")`. See the `.inl`
 	// for what the retail body does and why this is a call site rather than a second copy of it:
-	// `FinishAmbientUse` already IS this runtime's interesting-place release, and `bAmbientArrived`
-	// is `m_bInterestingPlaceArrived`, the flag retail hands `0x102da600`.
+	// `FinishAmbientUse` already IS this runtime's interesting-place release. The left flag retail
+	// hands `0x102da600` is the argument AND `m_bInterestingPlaceArrived` (`bAmbientArrived`).
 	//
-	// `bStopMovement=false` because retail's release does not stop the motor — this is a removal,
-	// and the body is about to stop existing.
+	// Retail passes 0 here (`0x1028d707 PUSH 0`; `Event_Killed` and `NPCInit 0x1029a18b` likewise),
+	// and `0x102b54e3` gates the left flag on that argument first: no left is fired, arrived or not.
 	if (CurrentAmbientSpot() != nullptr)
 	{
-		FinishAmbientUse(bAmbientArrived, /*bStopMovement=*/false);
+		FinishAmbientUse(/*bFireLeft=*/false); // 0x102b53d0, argument 0
 	}
 	// `*(undefined1 *)(param_1 + 0x18ba) = 0;` is OUTSIDE the `if`: retail clears
 	// `m_bInterestingPlaceArrived` whether or not a place was held.

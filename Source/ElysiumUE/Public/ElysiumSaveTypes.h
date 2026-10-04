@@ -101,6 +101,11 @@ struct FElysiumSaveVersion
 		// reuse time); the hint's own `m_hHintOwner` / `m_flNextUseTime` carry them. A mid-record
 		// change in the NPC leaf, so the floor moves.
 		NpcHintClaimOnHint = 40,
+		// 0002 V3b: the ambient executor deleted. The NPC's patrol block drops its two port timers
+		// (`AmbientLeaveAt`, `AmbientActivityCycle`) from the middle of the record and the phase byte
+		// carries retail's `m_eInterestingPlaceMode +0x6304` (0 none, 1 into, 2 idle, 3 outof). A
+		// mid-record change in the NPC leaf, so the floor moves.
+		NpcAmbientExecutorRetired = 41,
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -126,7 +131,10 @@ struct FElysiumSaveVersion
 	//
 	// `NpcHintClaimOnHint` removes two words from the middle of the NPC's base schedule host record;
 	// saves are disposable and the floor moves with it.
-	static constexpr int32 MinSupported = NpcHintClaimOnHint;
+	//
+	// `NpcAmbientExecutorRetired` removes two port timers from the middle of the NPC's patrol block;
+	// saves are disposable (no migration) and the floor moves with it.
+	static constexpr int32 MinSupported = NpcAmbientExecutorRetired;
 
 	static const FGuid GUID;
 };

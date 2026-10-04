@@ -1094,17 +1094,11 @@ int32 FElysiumNpc::RunTaskSlot444(void* Task)
 		// `0x102b53d0(this, 1, "Leaving interesting place (RunTask-WaitFinished)")`: the release,
 		// through the port's one release transaction (see `LeaveInterestingPlaceOnRemove`). Inside
 		// it, with the argument 1 and `+0x62e8` arrived, `0x102b54f1..0x102b5500` fire this NPC's
-		// `m_OnInterestingPlaceLeft` (`+0x5f8c`, activator the place `+0x62ec`) before
-		// `0x102da600(place, this, 1, fired)` -- the port's release did not fire it (L05
-		// integration). `0x102b53d0`'s other work (its two sounds, the `+0x14b8` / `+0x14bc` bit
-		// clears, `0x102ae310`) is not this family's row and stays with the port's release.
-		if (FElysiumInterestingPlace* Leaving = CurrentAmbientSpot())             // 0x102aba26
+		// `m_OnInterestingPlaceLeft` (`+0x5f8c`, activator the place `+0x62ec`) once, before
+		// `0x102da600(place, this, 1, fired)`: `FinishAmbientUse` fires it (V3b), so this arm does not.
+		if (CurrentAmbientSpot() != nullptr)                                       // 0x102aba26
 		{
-			if (bAmbientArrived)
-			{
-				FireOutput(FName(TEXT("OnInterestingPlaceLeft")), Leaving->Handle);  // 0x102b54f1 `0x100cd660`
-			}
-			FinishAmbientUse(bAmbientArrived, /*bStopMovement=*/false);   // `0x102b53d0` stops no motor
+			FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);   // `0x102b53d0`, argument 1: left = `+0x62e8`
 		}
 		bAmbientArrived = false;
 		++InterestingPlaceReleases;

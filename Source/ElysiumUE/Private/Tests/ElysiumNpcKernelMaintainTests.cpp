@@ -13,6 +13,7 @@
 #include "Substrate/ElysiumNpcSabbatLeader.h"
 #include "Substrate/ElysiumNpcHengeyokai.h"
 #include "Substrate/ElysiumNpcGargoyle.h"
+	#include "Substrate/ElysiumInterestingPlace.h"
 	#include "Substrate/ElysiumNpcConditions.h"
 	#include "ElysiumNpcFlags.h"
 	#include "Substrate/ElysiumSchedule.h"
@@ -77,7 +78,6 @@ namespace
 		bool				  bChooseNew = false;
 		bool				  bAiStep = false;
 		bool				  bContinuous = false;
-		bool				  bExternalReturn = false;
 		int32				  SelectCalls = 0;
 		int32				  PrepareCalls = 0;
 		int32				  CommitCalls = 0;
@@ -161,12 +161,6 @@ namespace
 		virtual bool IsAiStepMode() const override { return bAiStep; }
 		virtual void AdvanceAiStepDebugIndex() override { ++AiStepAdvances; }
 		virtual void FreezeForAiStep() override { ++AiStepFreezes; }
-		virtual bool TakeExternalExecutorReturn() override
-		{
-			const bool Result = bExternalReturn;
-			bExternalReturn = false;
-			return Result;
-		}
 	};
 
 	struct FEmptyTaskScope
@@ -564,22 +558,63 @@ bool FElysiumNpcKernelMaintain19LoopTest::RunTest(const FString&)
 	ElysiumSchedule::Tick(State, Runner, 7.0, &Runner.Conditions, true);
 	TestTrue(TEXT("102819ec state mismatch reaches selection"), Runner.SelectCalls > SelectBefore);
 	TestTrue(TEXT("10281b63 commits the ideal state before selection"), Runner.CommitCalls > 0);
+	return true;
+}
 
-	// The port represents retail patrol schedules as an existing external executor. A null
-	// slot-438 adapter therefore returns at the same 10281b89 selection edge and must not take
-	// 102cc229's missing-ID fallback.
-	Runner = FMaintainRunner();
-	ElysiumSchedule::Start(State, ElysiumSched::IDLE_STAND, Runner);
-	Runner.Selected = ElysiumScheduleId::None;
-	Runner.bStateMismatch = true;
-	Runner.bExternalReturn = true;
-	TestFalse(TEXT("10281b89 external schedule answer returns to the caller"),
-		ElysiumSchedule::Tick(State, Runner, 8.0, &Runner.Conditions, true));
-	TestEqual(TEXT("10281be5 adapter leaves no substitute program"), State.Current,
-		ElysiumScheduleId::None);
-	TestEqual(TEXT("10280e53 external handoff still dispatches slot 435"),
-		Runner.ScheduleChanges, 2);
-	TestEqual(TEXT("the executor answer does not reach the missing error"), Runner.MissingCalls, 0);
+namespace
+{
+	// `CurrentSpotIndex` (`+0x62ec`, `m_pInterestingPlace`) is `FElysiumNpc`'s protected word.
+	struct FMaintainPlaceSlot : FElysiumNpc
+	{
+		static int32 FElysiumNpc::* Member() { return &FMaintainPlaceSlot::CurrentSpotIndex; }
+	};
+} // namespace
+
+// `CAI_BaseNPCTroika::OnScheduleChange` (`0x102a0940`): the place release `0x102b53d0` at
+// `0x102a09a0` sits inside the `!PRESERVE_PATH` block (`0x102a094f NOT; 0x102a0965 TEST CL,0x8;
+// JZ 0x102a0a99`). With the bit set the visit survives the change -- `0xff`'s `SET_PRESERVE_PATH 1;
+// SET_SCHEDULE 0x100` and the crosswalk wait `0x100 -> 0x102 -> 0x100` depend on it.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMaintainPlaceReleaseTest,
+	"Elysium.Arm.NpcKernelMaintain.PlaceReleaseUnderPreservePath_0x102a0940", GMaintain19Flags)
+bool FElysiumNpcKernelMaintainPlaceReleaseTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldFixture F([] {
+		FElysiumNpcWorldBuilder Builder(TEXT("maintain_place_release"), 0x2a0940);
+		Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+		FElysiumEntityDef& Subject =
+			Builder.AddNpcOfClass(TEXT("subject"), FVector::ZeroVector, TEXT("CAI_BaseNPCTroika"));
+		Subject.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+		// Retail's own classname spelling.
+		Builder.AddEntity(TEXT("intersting_place"), TEXT("place"), FVector(400.f, 0.f, 0.f));
+		return Builder; }(), [](FElysiumRecordingServices& Services) {
+			Services.bProvideNpcMotor = true; });
+	FElysiumNpc* Npc = F.Npc(TEXT("subject"));
+	FElysiumEntity* PlaceEntity = F.World.FindByName(TEXT("place"));
+	if (!TestNotNull(TEXT("subject"), Npc) || !TestNotNull(TEXT("place"), PlaceEntity))
+		return false;
+	FElysiumNpcWorldFixture::Quiet({ Npc });
+	FElysiumNpc&			  N = *Npc;
+	FElysiumInterestingPlace& Place = *static_cast<FElysiumInterestingPlace*>(PlaceEntity);
+
+	// The visit `0xff`'s `FIND_INTERESTING_PLACE` (`0x102a1f23`) leaves: the place's claim
+	// (`PickSpotFor 0x102da0d0`, claim 1) and `+0x62ec`.
+	auto Visit = [&N, &Place]() {
+		N.*FMaintainPlaceSlot::Member() = Place.Handle.Index;
+		return Place.Claim(N.Handle);
+	};
+
+	if (!TestTrue(TEXT("the place takes the claim"), Visit()))
+		return false;
+	N.NpcFlags.Set(EElysiumNpcFlag::PRESERVE_PATH);
+	N.OnScheduleChange(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
+	TestTrue(TEXT("0x102a0965 PRESERVE_PATH set: +0x62ec survives the change"),
+		N.CurrentAmbientSpot() == &Place);
+	TestFalse(TEXT("...and the place's claim is still held"), Place.IsAvailable());
+
+	N.NpcFlags.Clear(EElysiumNpcFlag::PRESERVE_PATH);
+	N.OnScheduleChange(ElysiumScheduleGlobalId(ElysiumSched::IDLE_STAND));
+	TestNull(TEXT("0x102a09a0 PRESERVE_PATH clear: 0x102b53d0 clears +0x62ec"), N.CurrentAmbientSpot());
+	TestTrue(TEXT("...and 0x102da600 gives the place back"), Place.IsAvailable());
 	return true;
 }
 

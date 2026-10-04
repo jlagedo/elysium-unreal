@@ -648,7 +648,7 @@ bool FElysiumNpcKernelHintsInterestTest::RunTest(const FString&)
 	TestFalse(TEXT("no INTO activity means INTERESTING_INTO is NOT raised"),
 		Npc->NpcFlags.Has(EElysiumNpcFlag::INTERESTING_INTO));
 	TestEqual(TEXT("and the phase is the idle dwell (retail +0x6304 == 2)"),
-		Npc->GetAmbientPhaseForDebug(), 3);
+		Npc->GetAmbientPhaseForDebug(), 2);
 
 	// `RunInterestingPlaceLoop` (`0x102aa210`). With no INTO flag standing, reaching the deadline
 	// finishes the task outright rather than entering an OUTOF phase.
@@ -662,7 +662,7 @@ bool FElysiumNpcKernelHintsInterestTest::RunTest(const FString&)
 	TestFalse(TEXT("with INTERESTING_INTO the deadline does NOT finish the task"),
 		Npc->RunInterestingPlaceLoop(Spot, 110.0));
 	TestEqual(TEXT("it moves to the OUTOF phase (retail +0x6304 == 3)"),
-		Npc->GetAmbientPhaseForDebug(), 4);
+		Npc->GetAmbientPhaseForDebug(), 3);
 	// The OUTOF clip ends on the live `m_bSequenceFinished` (+0x65c, `0x102aa25b`) of a non-looping
 	// sequence (+0x65d clear, `0x102aa235`): the INTO flag is released and the wait ends now.
 	Npc->bSequenceLoopedOnce = false;

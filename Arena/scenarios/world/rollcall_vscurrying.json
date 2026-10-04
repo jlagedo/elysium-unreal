@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 10.0,
-  "known_red": "new: a StartHidden npc_VScurrying row gathers at 0 s but installs no schedule, before or after ScriptUnhide at 0.5 s",
+  "known_red": "5: the StartHidden row thinks while hidden (cond+ FLOATING_OFF_GROUND and schedule FALL_TO_GROUND (0x3e) at t=0.00, before the 0.5 s ScriptUnhide; retail PostSpawn 0x100aaf30 -> ScriptHide 0x100a8710 parks the think at FLT_MAX). Was N10 ('installs no schedule'): that was red 6 -- the row is use_interesting 1 and the port's ambient executor held it; V3b deleted the executor and the row now selects",
   "player": {
     "at": "start"
   },
@@ -36,6 +36,18 @@
   "never": [
     {
       "who": "CabbieSewer",
+      "kind": "schedule",
+      "match": "",
+      "until": 0.45
+    },
+    {
+      "who": "CabbieSewer",
+      "kind": "cond+",
+      "match": "",
+      "until": 0.45
+    },
+    {
+      "who": "CabbieSewer",
       "kind": "taskfail"
     },
     {
@@ -51,5 +63,5 @@
       "equals": true
     }
   ],
-  "notes": "Every standable row of npc_VScurrying is StartHidden; the record unhides it at 0.5 s, as its map's wire does."
+  "notes": "Every standable row of npc_VScurrying is StartHidden; the record unhides it at 0.5 s, as its map's wire does. V3b (2026-10-04), a record error corrected: the two nevers before 0.45 s that V2 gave the other hidden roll-call rows were missing here -- retail's CBaseEntity::PostSpawn 0x100aaf30 runs slot 77 ScriptHide 0x100a8710 for m_bStartHidden, so a hidden row senses and selects nothing until ScriptUnhide 0x100a8990; without them the record passed on the hidden think red 5 names."
 }

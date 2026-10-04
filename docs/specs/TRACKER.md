@@ -69,7 +69,14 @@ Wave 3 (build work, one agent):
     default 176 / 0 failed, arm 1550 / 0 failed; suite 66 pass / 37 expected-fail / 1 fail / 1
     unexpected-pass of 105, only `cover` moved (→ pass). Patrols re-triaged: N13 (V4); new red N12
     (R2); the ledger regeneration waits for V3b's build.
-  - [ ] **V3b** — places and patrols as programs; the ambient executor deleted. M.
+  - [ ] **V3b** — places and patrols as programs; the ambient executor deleted. M. Landed
+    2026-10-04, acceptance open: default 176 / 0 failed, arm 1551 / 0 failed; suite 70 pass / 33
+    expected-fail / 1 fail (`rollcall_vzombie`, H11) / 1 unexpected-pass (`hear_world_investigate`,
+    N4) of 105 (after the animal records' correction). Green: `input_useinteresting`,
+    `map_hub_idle`, `rollcall_vhuman`, `rollcall_vhumancombatpatrol`. Left for a V3b follow-up
+    wave: N15 (`places_thug_pt1`, the sneak-past's first half), H16 (`places_pedestrian_visit`),
+    Q-V3b1 (`hub_crosswalk_wait`). N10 was red 6, now red 5 (V6); N14 filed (V6). Ledger
+    regenerated, `kernel --check` clean.
   - [ ] **V3c** — the scene hold through `m_scriptState` and `SCHED_AISCRIPT`. M.
   - [ ] **V3d** — the dialogue hold as a program; the arbiter deleted whole. M–L.
 - [ ] **V4** — Fix: the animation chain under the kernel. M · Opus/high.

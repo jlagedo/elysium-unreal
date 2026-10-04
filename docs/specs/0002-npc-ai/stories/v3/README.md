@@ -54,6 +54,13 @@ From `packets.md` (read from the listing) and the seam commit `f767f9f8`:
   are not red 1 (review doubt 1 settled): the walk now plays at `rate=1` with every leg time
   unchanged; the slow body is N13 (`move_yaw`-weighted ground speed / facing), placed in V4. §4's
   "records turned green" for V3a is corrected to `cover` alone.
+- **After V3b (2026-10-04, `report-B.md`)**: the executor is gone and every `use_interesting` NPC
+  runs `0xff` → `0x100` → `0x103`. §4's V3b list is corrected: green are `input_useinteresting`,
+  `map_hub_idle` and the two roll calls; `places_thug_pt1` and the sneak-past's first half wait on
+  N15 (`ClaimAmbientSpot`'s `AcceptedClasses` / type terms, which `0x102dad60` lacks and no retail
+  code reads), `places_pedestrian_visit` on H16 (the arena's anchors are typed `Stand`, removed at
+  spawn), `hub_crosswalk_wait` on Q-V3b1 — one V3b follow-up wave, proposed to the owner. On removal
+  a place's `OnInterestingPlaceLeft` no longer fires (`0x1028d707 PUSH 0`: retail's).
 
 ## 1. What retail does: the contract
 

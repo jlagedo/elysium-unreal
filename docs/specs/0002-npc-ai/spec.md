@@ -539,6 +539,17 @@ tests the green scenarios cover deleted.
   - [ ] **V3b** — places and patrols as programs; the ambient executor deleted; the place released
     only by `0x102b53d0`'s retail callers. *Records:* the places, `map_hub_idle`,
     `hub_crosswalk_wait`, `rollcall_vhuman`, `rollcall_vhumancombatpatrol`. M.
+    *Landed 2026-10-04, acceptance open* (`stories/v3/report-B.md`): the executor, the blacklist,
+    the `Ambient` claim, `ThinkSchedulePolicy` / `ThinkAutonomous` and the external-executor return
+    deleted; `0x102b53d0` ported from the listing (fires `OnInterestingPlaceLeft` once, only with
+    argument 1); every `use_interesting` NPC selects `0xff` and runs `0xff` → `0x100` → `0x103`.
+    Default 176 / 0, arm 1551 / 0; suite 70 pass / 33 expected-fail / 1 fail (H11) / 1
+    unexpected-pass (N4). Green: `input_useinteresting`, `map_hub_idle`, both roll calls (record
+    errors corrected). **Plan correction, stated to the owner:** N15 (the port's `AcceptedClasses`
+    term, which retail never reads) blocks `places_thug_pt1` and the sneak-past's first half, so it is
+    pulled from R2 into a V3b follow-up wave with H16 (the arena's anchors are typed `Stand`, a type
+    the table lacks) and Q-V3b1 (`hub_crosswalk_wait`: no curb wait in 300 s). N10 was red 6, now red
+    5 (V6); N14 (a restored visitor loses its place) filed to V6.
   - [ ] **V3c** — the scene hold: the cine writes the NPC's words, `SCHED_AISCRIPT` runs the
     scene, `StartSequence` writes `m_nSequence`. *Record:* `script_walk_to_mark`. M.
   - [ ] **V3d** — the dialogue hold as a program (`SCHED_TROIKA_RUN_DIALOG 0x6a`, task
@@ -600,7 +611,8 @@ tests the green scenarios cover deleted.
 
 Order: V1 → V2 → H → V3 → V4 → V5 → V11 ‖ V6 → V7 → V10 → V12 → V2 again (full run) → V8 → V9.
 The new reds ride their stories: N1, N2 in V5; N5, N6 in V7; N7, N8 in V3; N9, N10 in V6; N13 in
-V4 (from V3a: the patrols' acceptance moves there); N12 in R2.
+V4 (from V3a: the patrols' acceptance moves there); N12 in R2; N14 in V6; N15 in V3b's follow-up
+wave (from V3b; N10 closed into red 5).
 
 ## Step 3 — the road to close the character AI
 

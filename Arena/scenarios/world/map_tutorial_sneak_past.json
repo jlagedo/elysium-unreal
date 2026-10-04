@@ -4,7 +4,7 @@
   "stage": "map:sp_tutorial_1",
   "seed": 1,
   "duration": 60.0,
-  "known_red": "V3b (the first half; the hearing half stays on V12/R1): 6: thug_1 (use_interesting 1) is owned by the port's ambient executor: no 0xff program, no gather",
+  "known_red": "V3b follow-up (the first half; the hearing half stays on V12/R1): N15: ClaimAmbientSpot refuses pt1 (type Idle) on the port-only AcceptedClasses term for npc_VVampire -- 0.633 SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (0xff), task_find_interesting_place, taskfail 0x22, 0.733 SCHED_TROIKA_IDLE_DISPOSITION (0x6b), again at 5.733; at_place unmet",
   "script": [
     {
       "t": 0.5,

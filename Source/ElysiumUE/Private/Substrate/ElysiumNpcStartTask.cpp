@@ -1536,9 +1536,10 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 	// ---------------------------------------------------------------------------------------------
 	case StartTask19A::TaskFindInterestingPlace:
 	{
-		// Arm `0x102a1f23` (index 0x30). `+0x62ec = PickRandomInterestingPlace(this)` (`0x102db590`);
-		// the port's picker is `ClaimAmbientSpot`, which also takes the claim `PickSpotFor`
-		// (`0x102da0d0`, `bClaim = 1`) makes and writes `CurrentSpotIndex` (the `+0x62ec` word).
+		// Arm `0x102a1f23` (index 0x30). `+0x62ec = PickRandomInterestingPlace(this)` (`0x102db590`,
+		// each candidate tested by the eligibility `0x102dad60`), then `PickSpotFor(place, this,
+		// &m_vecInterestingPlace, 1)` (`0x102da0d0`). `ClaimAmbientSpot` is the port of those three:
+		// the place's own visitor claim and the `CurrentSpotIndex` (`+0x62ec`) write, no other hold.
 		FElysiumInterestingPlace* Place = ClaimAmbientSpot();                // 0x102a1f24
 		if (Place == nullptr)                                                 // 0x102a1f34
 		{

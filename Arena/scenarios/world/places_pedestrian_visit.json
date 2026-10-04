@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 50.0,
-  "known_red": "V3b: 6: the port's ambient executor answers use_interesting instead of the 0xff program",
+  "known_red": "V3b follow-up: H16: the arena's eight anchor rows author type 'Stand', which interestingplacetypelist.txt does not carry, so CAI_InterestingPlace::Spawn 0x102d9c20 removes them ('Could not find InterestingPlaceType Stand') and TASK_FIND_INTERESTING_PLACE fails 0x22 at 0.000 -- the 0xff program itself runs (0.000 SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (0xff), task_find_interesting_place, taskfail 0x22)",
   "player": { "at": "start" },
   "from_map": {
     "map": "sm_hub_1",

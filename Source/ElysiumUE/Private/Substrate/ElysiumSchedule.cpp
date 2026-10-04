@@ -294,14 +294,8 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 				Runner.AdvanceAiStepDebugIndex();                              // 0x102821f5
 				return State.IsRunning();                                      // 0x10282269
 			}
-			if (Runner.TakeExternalExecutorReturn())
-			{
-				// The port's out-of-table executor resumes at the caller boundary. This is the old
-				// ScheduleDone handoff moved to the exact completion edge; ordinary schedules do not
-				// take it and continue through retail's reselect block below.
-				Install(State, ElysiumScheduleId::None, Runner);
-				return false;
-			}
+			// No return here: a completed program falls into `IsScheduleValid` (`0x102819d5`) and the
+			// reselect block below in this same pass (`0x10281be5`, `0x10281c46`).
 		}
 
 		const bool bTaskFailed = HasCondition(EElysiumNpcCond::TaskFailed);
@@ -382,14 +376,7 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 				// numbers, so the translate belongs here.
 				Runner.SetIdealScheduleForMaintenance(
 					Runner.ResolveScheduleId(IdealRetail));                        // 0x102814d0
-				if (Runner.TakeExternalExecutorReturn())
-				{
-					// Patrol and interesting-place schedules live outside this registry. Their selector
-					// answer is represented by the owning executor, so hand the null answer to the caller
-					// at the same selection edge instead of treating it as a registry miss.
-					Install(State, ElysiumScheduleId::None, Runner);                  // 0x10281be5 adapter
-					return false;
-				}
+				// `0x10281be5` calls `SetSchedule(pSchedule)` unconditionally, a null answer included.
 				if (Selected != ElysiumScheduleId::None)
 				{
 					Start(State, Selected, Runner);                               // 0x10281be5
@@ -418,12 +405,7 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 			const int32 Selected =
 				Runner.SelectScheduleForMaintenance(Now, IdealRetail);          // 0x10281c46
 			Runner.SetIdealScheduleForMaintenance(Runner.ResolveScheduleId(IdealRetail));
-			if (Runner.TakeExternalExecutorReturn())
-			{
-				Install(State, ElysiumScheduleId::None, Runner);                  // 0x10281ca6 adapter
-				return false;
-			}
-			if (Selected != ElysiumScheduleId::None)
+			if (Selected != ElysiumScheduleId::None)                            // 0x10281c9f
 			{
 				Start(State, Selected, Runner);                                 // 0x10281ca6
 			}

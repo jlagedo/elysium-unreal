@@ -212,12 +212,17 @@ into navigator `SetGoal` (`0x102ecd20`), and a refusal is `TaskFail(0x0c)` "Don'
 program's declared route is `SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_FAILED` (`0x105e6520`):
 `SET_ACTIVITY ACT_IDLE; WAIT 5; WAIT_RANDOM 5; SET_SCHEDULE SETUP` — with `TASK_WAIT_RANDOM`'s
 0.1 floor, **one route attempt every 5.1–10 s**, standing in `ACT_IDLE` between them. The pick
-(`0x102db590` / eligibility `0x102dad60`) keeps no memory of a failed place, so the same
-top-rated node is chosen again every time; nothing gives up and nothing excludes it. **Port
-divergence (owned by 0002/11, which retires the executor):** `FElysiumNpc::ThinkAmbient` has no
-`_FAILED` arm — a refused route puts the place in a port-only `FailedSpotIndices`, releases the
-claim, and the next think claims the next candidate; when every candidate has failed the list is
-cleared and the cycle restarts, **one refused route per think**. Witness on `sp_tutorial_1`
+(`0x102db590` → `BuildCandidates 0x102db470`, eligibility `0x102dad60`) keeps one memory: the
+last place released, `m_pLastInterestingPlace +0x62fc` (written by `0x102da600` inside the release
+`0x102b53d0`, visited or failed). Every rating pass skips it (`0x102db4b4 CMP ESI,[EBX+0x62fc]`);
+it is answered only when no other place is eligible at any rating (`0x102db4fb..0x102db520`). So
+the same node is chosen again every time **only for a one-place pool**; with two or more eligible
+places the pick alternates away from the last one. Nothing gives up. *(Corrected 2026-10-04, V3b,
+from the listing; the earlier text said the pick keeps no memory.)* **Port history:** until V3b
+`FElysiumNpc::ThinkAmbient` stood in for these programs, with a port-only `FailedSpotIndices`
+blacklist and one refused route per think; V3b deleted it and the port now runs the `0xff` /
+`0x100` / `_FAILED` programs (`ClaimAmbientSpot` ports `0x102db590` with the `+0x62fc` skip). The
+witness below is from the executor era. Witness on `sp_tutorial_1`
 (2026-09-12, with the body's `refused:` diagnostic below): `Jack` (`interesting_place_groups 32`
 → `ip_by_window`, `ip_lean_1`, both across the map) alternates the two at the 0.1 s cadence;
 `mercenary_upstairs` (`8` → `sentry3_ip_arms_crossed` one floor down, `ip_melee_guy` ×2 in the

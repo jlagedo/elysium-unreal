@@ -1,10 +1,9 @@
 {
   "name": "rollcall_vhumancombatpatrol",
-  "about": "Roll call: classname npc_VHumanCombatPatrol builds CNPC_VHumanCombatPatrol (factory 0x10387660, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from la_museum_1 (npc_guard_b1) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "about": "Roll call: classname npc_VHumanCombatPatrol builds CNPC_VHumanCombatPatrol (factory 0x10387660, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from la_museum_1 (npc_guard_b1) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think. Corrected 2026-10-04 (V3b, a record error): the row is use_interesting 1 (la_museum_1 npc_guard_b1, use_interesting 1 / groups 5), so CAI_BaseNPCTroika::SelectSchedule case 1 step 4 (0x102af6eb) answers 0xff SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP at once; the arena stands no place its groups admit (eligibility 0x102dad60: +0x574 & m_iInterestingPlaceGroups +0x62dc), so TASK_FIND_INTERESTING_PLACE fails at 0x102a1f34 with TaskFail(0x22) 'No interesting places were available to go to.' and the program's fail schedule runs (~5.1 s) before 0xff asks again. Retail fails that task at most twice in ten seconds, never every think.",
   "stage": "arena",
   "seed": 1,
   "duration": 10.0,
-  "known_red": "V3b: 6: a use_interesting row (la_museum_1 npc_guard_b1, use_interesting 1 / groups 5) is owned by the port's ambient executor: no gather and no schedule at all (retail selects 0xff at once)",
   "player": {
     "at": "start"
   },
@@ -21,14 +20,22 @@
       "label": "selects",
       "who": "npc_guard_b1",
       "kind": "schedule",
-      "match": "",
+      "match": "SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (",
       "by": 3.0
+    },
+    {
+      "label": "no_place",
+      "who": "npc_guard_b1",
+      "kind": "taskfail",
+      "match": "No interesting places were available to go to. (0x22)",
+      "within": 0.5
     }
   ],
   "never": [
     {
       "who": "npc_guard_b1",
-      "kind": "taskfail"
+      "kind": "taskfail",
+      "at_most": 2
     },
     {
       "who": "npc_guard_b1",

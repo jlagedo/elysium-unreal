@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 80.0,
-  "known_red": "V3b: 6: the port's ambient executor answers use_interesting instead of the 0xff program",
+  "known_red": "V3b follow-up: N15: ClaimAmbientSpot refuses pt1 on the port-only AcceptedClasses term (type Idle accepts npc_VBrujah/npc_VGangrel/npc_VPedestrian; thug_1 is npc_VVampire), which 0x102dad60 does not test and no retail code reads (the lookup 0x102dd630 has no caller) -- 0.533 SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (0xff), task_find_interesting_place, taskfail 'No interesting places were available to go to. (0x22)'",
   "player": { "at": "start" },
   "from_map": {
     "map": "sp_tutorial_1",

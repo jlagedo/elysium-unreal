@@ -49,13 +49,14 @@ void TroikaUpdateOnRemove();
  *  Retail: with a place held, re-check it (`0x10299a80`), emit two sounds through a
  *  `CPASAttenuationFilter` (channel 4, pitch `0x24`, volume 100), detach through `0x102da600` with
  *  a flag computed from `m_bInterestingPlaceArrived` and `0x100cd660`, clear the place and the
- *  mode, strip `m_bfAINPCFlags` bit `0x20000000` and `m_bfAINPCFlags2` bits `0x08000008`, call
- *  `0x102ae310`; and ALWAYS, place or no place, clear `m_bInterestingPlaceArrived` last.
+ *  mode, strip `m_bfAINPCFlags` bit `0x20000000` and `m_bfAINPCFlags2` bits `0x80000008`
+ *  (`0x102b5534 AND EDX,0x7ffffff7`), call `0x102ae310`; and ALWAYS, place or no place, clear
+ *  `m_bInterestingPlaceArrived` last.
  *
- *  This runtime already owns that transaction as `FinishAmbientUse(bFireLeft, bStopMovement)`, so
- *  this is the call site and not a second copy of the body — `bAmbientArrived` is
- *  `m_bInterestingPlaceArrived` and it is the `bFireLeft` argument, which is retail's own
- *  `0x100cd660` flag. */
+ *  This runtime already owns that transaction as `FinishAmbientUse(bFireLeft)`, so this is the call
+ *  site and not a second copy of the body. `bFireLeft` is retail's flag argument (tested at
+ *  `0x102b54e3`); this caller passes 0 (`0x1028d707 PUSH 0`), so no `OnInterestingPlaceLeft` fires
+ *  on removal, arrived or not. */
 void LeaveInterestingPlaceOnRemove();
 
 /** How many times the release above ran. The call is unconditional in retail — the place check is

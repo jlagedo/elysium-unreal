@@ -314,13 +314,12 @@ void FElysiumNpc::BecomeClientRagdoll()
 
 void FElysiumNpc::InputUseInteresting(const FElysiumInputArgs& Args)
 {
+	// `InputUseInteresting 0x102c2a70`, nine instructions: `m_bUseInteresting +0x63d9` := the
+	// variant's byte. Nothing else -- no release: a held place goes back only through `0x102b53d0`'s
+	// callers (the program that holds it ends, fails or is removed).
 	bUseInteresting = Args.Param.ToInt() != 0;
-	if (!bUseInteresting)
-	{
-		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
-	}
-	// No clock reset: the input is not a slot-614 site. The visit starts on the next cadence
-	// think, as an install from outside a think does in retail.
+	// No clock reset: the input is not a slot-614 site. `SelectSchedule` case 1 reads the byte on
+	// the next selection.
 }
 
 void FElysiumNpc::InputTeleportToEntity(const FElysiumInputArgs& Args)
@@ -564,7 +563,9 @@ void FElysiumNpc::ReleaseSequenceBody(const TCHAR* Reason)
 
 bool FElysiumNpc::ClaimScriptMove()
 {
-	FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+	// Pre-claim release, kept until V3c deletes the claim it precedes; V3c's path is the forced
+	// schedule's `OnScheduleChange 0x102a0940`, whose release passes 1 (`0x102a099c`).
+	FinishAmbientUse(/*bFireLeft=*/true);
 	if (!AcquireSequenceBody(TEXT("BeginScriptMove")))
 	{
 		return false;
@@ -592,11 +593,9 @@ bool FElysiumNpc::ClaimScriptBody(const TCHAR* Reason)
 	{
 		return true;
 	}
-	if (AmbientOwner.IsSet() || AmbientPhase != EAmbientPhase::None)
-	{
-		// An interesting-place visit is this NPC's own executor; the beat takes the body off it.
-		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
-	}
+	// Pre-claim release, kept until V3c deletes the claim it precedes (`OnScheduleChange
+	// 0x102a0940`'s release passes 1, `0x102a099c`). `0x102b53d0` tests the held place itself.
+	FinishAmbientUse(/*bFireLeft=*/true);
 	bScriptBodyHeld = AcquireSequenceBody(Reason);
 	// This leaf owns the arbiter, so it owns the one report of a claim it could not grant. The
 	// two outcomes are not the same event: an unadmitted mind is an ordinary race this NPC
@@ -878,31 +877,28 @@ bool FElysiumNpc::RouteScheduleMaintenance(double Now, bool bReduced)
 {
 	// `MaintainSchedule` (`0x102817c0`) as `RunAI` (`0x1026f302`) reaches it on a Troika body. Retail
 	// runs the schedule interpreter alone: a scripted beat is `SCHED_AISCRIPT`, a patrol is the patrol
-	// path's program (story 8 wave 2: it is, here too), an interesting place is its program. This
-	// runtime still drives three owners outside the interpreter, routed here ahead of it — each a
-	// named survivor of the story-8 rewire, with the reason it stays:
+	// path's program, an interesting place is its program (`SelectSchedule` case 1's `0xff` setup,
+	// `0x100`, the wait `0x102a9f40`, the loop `0x102aa210`, the release `0x102b53d0` -- V3b deleted
+	// the port's ambient executor). This runtime still drives two owners outside the interpreter,
+	// routed here ahead of it — each a named survivor of the story-8 rewire, with the reason it stays:
 	//
-	// STORY8-TWIN (survivor): the scripted-beat owner (`TickScriptWatchdog`, `ThinkScriptOwned`) is
-	// replaced by `SCHED_AISCRIPT` and the director's own schedule arms — spec 0003 stories 1-2 build
-	// them; until then the beat drives the body and the interpreter must not fight it.
-	// STORY8-TWIN (survivor): the dialogue clip hold (`ThinkInDialog`) is replaced by the dialogue
-	// family's `m_hDialogPartner` path (RunAI's gather skip is already retail's, `0x1026f1f0`); the
-	// per-line VCD body clip it protects has no retail schedule stand yet.
-	// STORY8-TWIN (survivor): the interesting-place executor (`ThinkAutonomous`'s ambient arm, and
-	// the hand-over in `ThinkSchedulePolicy` that also serves the pushed `aiscripted_schedule` order)
-	// is replaced by the interesting-place programs (`SelectSchedule` case 1's `0xff` walk-to-place
-	// setup and its `FIND/GET_PATH_TO_INTERESTING_PLACE` arms, ported). It stays because the visit's
-	// claim and its into/dwell/out activity phases are the executor's own state, which the retail
-	// arms read (`ClaimAmbientSpot`, `CurrentSpotIndex`) but do not yet drive end to end.
+	// STORY8-TWIN (survivor, V3c): the scripted-beat owner (`TickScriptWatchdog`, `ThinkScriptOwned`)
+	// is replaced by `SCHED_AISCRIPT` and the director's own schedule arms; until then the beat drives
+	// the body and the interpreter must not fight it.
+	// STORY8-TWIN (survivor, V3d): the dialogue clip hold (`ThinkInDialog`) is replaced by the
+	// dialogue family's `m_hDialogPartner` path (RunAI's gather skip is already retail's,
+	// `0x1026f1f0`); the per-line VCD body clip it protects has no retail schedule stand yet.
+	//
+	// Everything else is `MaintainScheduleRetail` through `ThinkStanceOrIdle`.
 	if (TickScriptWatchdog())
 	{
 		return Schedule.IsRunning();
 	}
-	if (ThinkInDialog(Now, bReduced) || ThinkScriptOwned(Now) || ThinkSchedulePolicy(Now, bReduced))
+	if (ThinkInDialog(Now, bReduced) || ThinkScriptOwned(Now))
 	{
 		return Schedule.IsRunning();
 	}
-	ThinkAutonomous(Now, bReduced);
+	ThinkStanceOrIdle(Now, bReduced);
 	return Schedule.IsRunning();
 }
 
@@ -948,54 +944,6 @@ bool FElysiumNpc::ThinkScriptOwned(double Now)
 	// A script-driven body is a `ShouldThinkFrequently` body, so the laws already hold it at their
 	// floor. Nothing to write here.
 	return true;
-}
-
-bool FElysiumNpc::ThinkSchedulePolicy(double Now, bool bReduced)
-{
-	// Schedule selection pre-empts an autonomous executor.
-	// A committed enemy or an authored director outranks this NPC's own patrol route and
-	// interesting-place visit: without this routing a patrolling guard that acquired an enemy
-	// would keep walking its route and never reach combat selection.
-	//
-	// The hand-over lives in the ROUTING and not in either executor: the arbiter already carries
-	// both shapes (patrol suspends and resumes, ambient owns a claimed place that has to be given
-	// back), and the combat programs are the registered ones.
-	const bool bScriptedPolicy = ScriptedScheduleOrder.IsSet() || ScriptedScheduleOwner.IsSet();
-	// A program that is ALREADY RUNNING pre-empts the executors too. Retail has no split to
-	// bridge here -- patrol is itself a schedule (`SelectSchedule` case 1 returns the patrol path's
-	// program at `+0x6590+4`), so a forced `SetSchedule` from a script's `ChangeSchedule`, a
-	// discipline's `AI_Schedule` or the feed's mesmerize install simply replaces it and
-	// `MaintainSchedule` runs the new program on the next think. This runtime keeps patrol and the
-	// ambient visit as executors outside the kernel, and only `ThinkStanceOrIdle` ticks a program:
-	// without this term a program installed by name on a patrolling NPC sat at task 0 forever while
-	// the route kept walking. A running program is the policy; which think installed it is not.
-	const bool bForcedProgram = Schedule.IsRunning();
-	if (!bScriptedPolicy && !bForcedProgram && Mind.State() != EElysiumNpcState::Combat)
-	{
-		return false;
-	}
-	if (AmbientOwner.IsSet() || AmbientPhase != EAmbientPhase::None)
-	{
-		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
-	}
-	ThinkStanceOrIdle(Now, bReduced);
-	return true;
-}
-
-void FElysiumNpc::ThinkAutonomous(double Now, bool bReduced)
-{
-	// The patrol arm (`0x102af6b6`/`0x102af6be` .. `0x102af743`) outranks the interest arm
-	// (`0x102af6f3`): a body holding a patrol path runs `MaintainScheduleRetail` through
-	// `ThinkStanceOrIdle`, whose selection returns the path's program (or releases a schedule-0 path
-	// at `0x102af6e6`, after which the next pass reaches the interest arm here).
-	if (bUseInteresting && PatrolPathCell.Path == nullptr)
-	{
-		ThinkAmbient(Now);
-	}
-	else
-	{
-		ThinkStanceOrIdle(Now, bReduced);
-	}
 }
 
 int32 FElysiumNpc::SelectSchedule()
@@ -1112,13 +1060,19 @@ FElysiumInterestingPlace* FElysiumNpc::ClaimAmbientSpot()
 		return nullptr;
 	}
 
-	// PickRandomInterestingPlace admits nodes within 10,000 Source units, but distance does not
-	// rank them. It walks rating 5 -> 0, stops at the first populated tier, and chooses uniformly
-	// within that tier. The NPC schedule stream makes the choice replayable across save/load.
+	// `PickRandomInterestingPlace 0x102db590` -> `BuildCandidates 0x102db470`: eligibility
+	// `0x102dad60` admits nodes within 10,000 Source units (`|place - npc|^2 <= 1.0e8`), but distance
+	// does not rank them. It walks rating 5 -> 0, stops at the first populated tier, and chooses
+	// uniformly within that tier. The NPC schedule stream makes the choice replayable across
+	// save/load. No blacklist and no body claim (V3b deleted both): the pick's one memory is
+	// `m_pLastInterestingPlace +0x62fc`, the last place released (visited or failed), skipped while
+	// any other is eligible -- so `programs.md`'s "the same node is chosen again every time" holds
+	// for a one-place pool only.
 	constexpr double FindRadiusCm = 10000.0 * ElysiumMove::U;
 	constexpr double FindRadiusSqCm = FindRadiusCm * FindRadiusCm;
 	TArray<FElysiumInterestingPlace*> Candidates;
 	TArray<int32> CandidateRatings;
+	FElysiumInterestingPlace* LastPlace = nullptr;
 	for (const TUniquePtr<FElysiumEntity>& Candidate : World->Entities())
 	{
 		if (!Candidate || !Candidate->Def
@@ -1128,7 +1082,9 @@ FElysiumInterestingPlace* FElysiumNpc::ClaimAmbientSpot()
 		}
 		FElysiumInterestingPlace* Spot = static_cast<FElysiumInterestingPlace*>(Candidate.Get());
 		const FElysiumInterestingPlaceType* TypeRow = AmbientType(Spot);
-		if (!Spot->IsAvailable() || FailedSpotIndices.Contains(Spot->Handle.Index)
+		// `0x102dad60`: enabled, capacity, `+0x574 & +0x62dc`. The type-row terms are the port's
+		// (no term of `0x102dad60` / `0x102da0d0` reads the type or `AcceptedClasses`); kept as found.
+		if (!Spot->IsAvailable()
 			|| !AcceptsAmbientGroup(Spot->GroupMask)
 			|| !TypeRow || TypeRow->Activities.IsEmpty()
 			|| !TypeRow->Accepts(Def->Classname, StatTemplate))
@@ -1139,22 +1095,35 @@ FElysiumInterestingPlace* FElysiumNpc::ClaimAmbientSpot()
 		{
 			continue;
 		}
+		// `0x102db470`: `this != npc->m_pLastInterestingPlace (+0x62fc)` in every rating pass; the
+		// last place (written by the release `0x102da600`) is answered only when no other place is
+		// eligible at any rating, after the rating-0 pass.
+		if (LastSpotIndex != 0 && Spot->Handle.Index == LastSpotIndex)
+		{
+			LastPlace = Spot;
+			continue;
+		}
 		Candidates.Add(Spot);
 		CandidateRatings.Add(Spot->Rating);
 	}
 
+	FRandomStream& PickStream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
 	const int32 PickedIndex = ElysiumInterestingPlaces::PickHighestRatedCandidate(
-		CandidateRatings, ElysiumRng::Stream(EElysiumRngStream::NpcSchedule));
-	FElysiumInterestingPlace* Picked = Candidates.IsValidIndex(PickedIndex)
-		? Candidates[PickedIndex] : nullptr;
+		CandidateRatings, PickStream);
+	FElysiumInterestingPlace* Picked = nullptr;
+	if (Candidates.IsValidIndex(PickedIndex))
+	{
+		Picked = Candidates[PickedIndex];
+	}
+	else if (LastPlace != nullptr)
+	{
+		// `0x102db590` draws `RandomInt(0, count - 1)` over the one-entry list too.
+		(void)PickStream.RandRange(0, 0);
+		Picked = LastPlace;
+	}
+	// `PickSpotFor 0x102da0d0`'s claim; `TASK_FIND_INTERESTING_PLACE` stores `+0x62ec`.
 	if (Picked && Picked->Claim(Handle))
 	{
-		if (!Mind.Acquire(EElysiumBodyOwner::Ambient, /*bSuspendCurrent=*/false,
-			AmbientOwner, TEXT("interesting-place claim")))
-		{
-			Picked->Release(Handle);
-			return nullptr;
-		}
 		CurrentSpotIndex = Picked->Handle.Index;
 		return Picked;
 	}
@@ -1217,61 +1186,6 @@ bool FElysiumNpc::AcceptsAmbientGroup(int32 PlaceGroupMask) const
 	// This replaces the port's own "an empty list admits every group" rule, which 29c left standing
 	// as a named divergence. It is closed: the walked retail rule is what runs.
 	return (static_cast<uint32>(PlaceGroupMask) & InterestingPlaceGroupMask) != 0;
-}
-
-bool FElysiumNpc::PlayAmbientActivity(const TArray<FElysiumWeightedName>& Choices, bool bLoop,
-	double Now, double& OutEnd)
-{
-	FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
-	const FElysiumInterestingPlaceType* TypeRow = AmbientType(Spot);
-	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	if (!TypeRow || !Embodiment || !Visual)
-	{
-		return false;
-	}
-	const uint32 Seed = HashCombineFast(static_cast<uint32>(FMath::Max(0, Handle.Index)),
-		static_cast<uint32>(AmbientActivityCycle++));
-	const FString Activity = TypeRow->PickActivity(Choices, Seed);
-	if (Activity.IsEmpty())
-	{
-		return false;
-	}
-	FElysiumActivityClipRequest Request;
-	FillActivityClipRequest(Request);
-	Request.Activity = Activity;
-	Request.Variant = AmbientActivityCycle;
-	Request.BodyKind = EElysiumAnimBodyKind::Cast;
-
-	FElysiumActivityClip Clip;
-	if (!Embodiment->ResolveNpcActivityClip(Request, Clip))
-	{
-		return false;
-	}
-	// The CLIP decides whether it loops, not the caller. VtMB reads `m_bSequenceLoops` off the
-	// sequence's own flags (RE35), so an authored loop keeps looping however it was asked for — and
-	// the ambient callers ask for every activity with bLoop false. Without this a body-language idle
-	// authored as a loop plays once and then stands on its last frame, which is what a held one-shot
-	// means: frozen, not resting.
-	//
-	// **One segment of the spot's montage-slot run** — enter, hold, leave — and the same mechanism a
-	// `scripted_sequence`'s idle/play/post-idle takes, differing only in band. It stays `Ambient`
-	// deliberately: an ambient stance holds against a standing body's every-tick publish and yields
-	// the moment the body travels, which is the one recovered relationship in the priority table. The
-	// claim is HELD so the gap between two of the spot's segments is not a frame the channel goes
-	// back; `FinishAmbientUse` is the one place it is given back.
-	FElysiumClipSegment Segment;
-	Segment.ClipName = Clip.Label;
-	Segment.bLoop = bLoop || Clip.bLooping;
-	Segment.Source = EElysiumAnimSource::Npc;
-	Segment.Priority = EElysiumAnimPriority::Ambient;
-	Segment.bHoldUntilReleased = true;
-	float Seconds = 0.0f;
-	if (!PlayAnimSegment(Segment, &Seconds))
-	{
-		return false;
-	}
-	OutEnd = Now + FMath::Max(0.25f, Seconds);
-	return true;
 }
 
 bool FElysiumNpc::EnsureStanceResolved()
@@ -1563,12 +1477,10 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		return bHasForcedState;
 	}
 
-	// An interesting-place visit gives its claimed place back before the director takes the body —
-	// ambient owns a place rather than a resumable route, so parking it would strand the claim.
-	if (AmbientOwner.IsSet() || AmbientPhase != EAmbientPhase::None)
-	{
-		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
-	}
+	// Pre-claim release, kept until V3d deletes the `ScriptedSchedule` claim it precedes. Retail's
+	// order installs its program through `SetSchedule`, whose `OnScheduleChange 0x102a0940` releases
+	// a visited place with 1 (`0x102a099c`) under `!PRESERVE_PATH`.
+	FinishAmbientUse(/*bFireLeft=*/true);
 	// The running program gives way to the director. It held no body claim: retail's program
 	// (`m_pSchedule +0x5c38`) owns the navigator and claims nothing.
 	ClearSchedule();
@@ -1738,7 +1650,9 @@ void FElysiumNpc::TaskFail(int32 Reason)
 	// Nine species classes override slot 448 on their C++ classes (story 5 step 3): eight run their
 	// own arm and then call this body directly (`0x1029adb0`); SabbatLeader's returns first on its
 	// route-flip arm.
-	if (CurrentAmbientSpot()) FinishAmbientUse(bAmbientArrived, false);
+	// Step 1: `0x102b53d0(this, 1, "Leaving interesting place (TaskFail)")` (`0x1029adb4..0x1029adbd`),
+	// unconditional -- the held-place test is inside the release.
+	FinishAmbientUse(/*bFireLeft=*/true);
 	const FElysiumNpcNavigationSample Nav = Motor ? Motor->SampleNavigation() : FElysiumNpcNavigationSample();
 	if (Nav.Type != EElysiumNpcNavType::Jump && Nav.Type != EElysiumNpcNavType::Climb)
 		NpcFlags.Clear(EElysiumNpcFlag::PRESERVE_PATH);
@@ -1788,17 +1702,8 @@ void FElysiumNpc::TaskFail(int32 Reason)
 void FElysiumNpc::ScheduleDone()
 {
 	Cognition.Conditions.Set(EElysiumNpcCond::ScheduleDone);
-	// Patrol, ambient use and pushed `aiscripted_schedule` orders are the three retail schedule
-	// families this runtime currently represents as executors outside the program registry. Their
-	// old handoff lived after Tick returned false; latch it at retail's actual completion edge so
-	// the single MaintainSchedule loop does not replace them with an idle program first.
-	//
-	// The interest arm is gated on "no patrol path held": `SelectSchedule` case 1 tests the patrol
-	// cell (`0x102af6b6`/`0x102af6be`, returning the path's program at `0x102af743`) BEFORE
-	// `m_bUseInteresting` (`0x102af6f3`), so a body holding a path never reaches the interest arm and
-	// must fall through to the reselect.
-	bReturnToExternalExecutorAfterSchedule = (bUseInteresting && PatrolPathCell.Path == nullptr)
-		|| ScriptedScheduleOrder.IsSet() || ScriptedScheduleOwner.IsSet();
+	// No external-executor return (V3b): `MaintainSchedule 0x102817c0` reselects in the same pass
+	// (`0x10281be5`, `0x10281c46`); a place and a patrol are programs `SelectSchedule` case 1 returns.
 }
 
 void FElysiumNpc::ClearScheduleHint(float ReuseDelay)
@@ -2008,204 +1913,58 @@ int32 FElysiumNpc::SelectDoorObstructionSchedule()
 		: ElysiumSched::SCHED_TROIKA_BACK_AWAY_FROM_DOOR_WAIT_NE;
 }
 
-void FElysiumNpc::BeginAmbientUse(FElysiumInterestingPlace& Spot, double Now)
+void FElysiumNpc::FinishAmbientUse(bool bFireLeft)
 {
-	bAmbientArrived = true;
-	bMoveIssued = false;
-	if (Motor)
+	// `0x102b53d0` (`docs/vtmb/npc-ai/lifecycle.md` § `UpdateOnRemove`; the flag arm at
+	// `schedule-kernel.md` § `RunTask` integration notes), read off the listing. `bFireLeft` is its
+	// flag argument (`[ESP+0x4c]`, tested at `0x102b54e3`). No motor stop, no pose: the body is the
+	// running program's.
+	if (CurrentSpotIndex != INDEX_NONE)                                     // +0x62ec != 0
 	{
-		Motor->Stop();
-		ClearMoveIgnores();
-		if (Spot.bMatchOrientation)
+		// `0x10299a80`, the re-check, then `if (+0x62ec == 0) return` -- an early return that SKIPS
+		// the `+0x62e8` clear below. Its first refusal (the place is no longer a live entity) is
+		// ported here. **Unrecovered in the substrate:** its second refusal (the place's marker table
+		// `+0x580` does not name this NPC) -- the port keeps the visitor record as the place's claimant
+		// set and `FMarker::Occupant` has no writer, so that test would refuse every visit.
+		FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
+		if (Spot == nullptr)
 		{
-			Motor->Teleport(Spot.Origin, -Spot.Angles.Y);
-			Origin = Spot.Origin;
-			Angles.Y = Spot.Angles.Y;
+			CurrentSpotIndex = INDEX_NONE;
+			return;
 		}
-	}
-	Spot.Arrived(Handle);
+		// **Unrecovered:** `0x102b5451..0x102b54e0`, two `EmitSound`s through a
+		// `CPASAttenuationFilter` (channel 4 then 2, pitch `0x24`, volume 100); the sample names come
+		// from the sound-emitter interface (`DAT_1070b22c +0x8c`) and are not read. Not emitted.
+		// (`0x1028a150` `GetCurTask` is called ahead of them; its answer is unused.)
 
-	const uint32 StaySeed = HashCombineFast(static_cast<uint32>(FMath::Max(0, Handle.Index)),
-		static_cast<uint32>(FMath::Max(0, Spot.Handle.Index)));
-	const float Unit = static_cast<float>(StaySeed) / static_cast<float>(MAX_uint32);
-	const float Lo = FMath::Max(0.0f, FMath::Min(Spot.MinTime, Spot.MaxTime));
-	const float Hi = FMath::Max(Lo, FMath::Max(Spot.MinTime, Spot.MaxTime));
-	AmbientLeaveAt = Now + FMath::Lerp(Lo, Hi, Unit);
-
-	const FElysiumInterestingPlaceType* TypeRow = AmbientType(&Spot);
-	if (TypeRow && PlayAmbientActivity(TypeRow->IntoActivities, /*bLoop=*/false,
-		Now, AmbientNextActivityAt))
-	{
-		AmbientPhase = EAmbientPhase::Into;
-	}
-	else
-	{
-		AmbientPhase = EAmbientPhase::Dwelling;
-		AmbientNextActivityAt = Now;
-	}
-}
-
-void FElysiumNpc::BeginAmbientLeave(double Now)
-{
-	FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
-	const FElysiumInterestingPlaceType* TypeRow = AmbientType(Spot);
-	if (TypeRow && PlayAmbientActivity(TypeRow->OutOfActivities, /*bLoop=*/false,
-		Now, AmbientNextActivityAt))
-	{
-		AmbientPhase = EAmbientPhase::Out;
-		return;
-	}
-	FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
-}
-
-void FElysiumNpc::FinishAmbientUse(bool bFireLeft, bool bStopMovement)
-{
-	// This is the single exit for an ambient claim, including UseInteresting(0), a disabled spot,
-	// dialogue, dormancy and a patrol taking ownership. Cancel a request before forgetting it so
-	// the native controller cannot keep walking an entity the substrate now considers idle.
-	if (bStopMovement && AmbientPhase == EAmbientPhase::Moving && bMoveIssued && Motor)
-	{
-		Motor->Stop();
-		ClearMoveIgnores();
-	}
-	if (FElysiumInterestingPlace* Spot = CurrentAmbientSpot())
-	{
-		if (bFireLeft)
+		// `0x102b54e3..0x102b5511`: with the flag set and `+0x62e8` arrived, fire this NPC's
+		// `m_OnInterestingPlaceLeft` (`+0x5f8c`, activator the place, caller this, `0x10010794`); the
+		// detach's own flag is "still arrived after that output".
+		bool bFired = false;
+		if (bFireLeft && bAmbientArrived)
+		{
+			FireOutput(FName(TEXT("OnInterestingPlaceLeft")), Spot->Handle);      // 0x102b5500
+			bFired = bAmbientArrived;                                              // 0x102b5505
+		}
+		// `0x102da600(place, this, 1, fired)` (`0x102b551d`): `npc +0x62fc := place` before its
+		// marker scan, then on the visitor match the place's `OnNPCLeft` (`+0x468`) when `fired`, and
+		// the visitor record removed.
+		LastSpotIndex = Spot->Handle.Index;                                         // +0x62fc
+		if (bFired)
 		{
 			Spot->Left(Handle);
 		}
 		Spot->Release(Handle);
+		CurrentSpotIndex = INDEX_NONE;                                              // 0x102b553c +0x62ec
+		AmbientPhase = EAmbientPhase::None;                                         // 0x102b5542 +0x6304
+		NpcFlags.Clear(EElysiumNpcFlag::INTERESTING_INTO);                          // +0x14b8 &= 0xdfffffff
+		// `+0x14bc &= 0x7ffffff7` (`0x102b5534`): `INTERESTING_LOST` (bit 3) and the unnamed bit 31.
+		NpcFlags.ClearRawWord2Bits(static_cast<uint32>(EElysiumNpcFlag2::INTERESTING_LOST)
+			| FElysiumNpcFlags::Word2UnnamedBit31);
+		// **Unported:** `0x102ae310` (`0x102b5554`), the Troika weapon holster policy -- no port body
+		// yet (`ElysiumNpcStartTask_2.cpp` counts its other call site).
 	}
-	CurrentSpotIndex = INDEX_NONE;
-	NpcFlags.Clear(EElysiumNpcFlag::INTERESTING_INTO);
-	NpcFlags.Clear(EElysiumNpcFlag2::INTERESTING_LOST);
-	AmbientPhase = EAmbientPhase::None;
-	bAmbientArrived = false;
-	bMoveIssued = false;
-	if (AmbientOwner.IsSet())
-	{
-		Mind.Release(AmbientOwner, TEXT("interesting-place release"));
-		AmbientOwner.Reset();
-	}
-	// The spot's run ends here, whichever way it ended — a natural leave, `UseInteresting(0)`, a
-	// disabled spot, dialogue, dormancy or a patrol taking ownership all funnel through this one
-	// exit. The claim goes back BEFORE the idle below, because the resting pose comes in on the same
-	// ambient band and a standing held claim would refuse it.
-	ReleaseAnimSegment();
-	if (ScriptPhase == EScriptPhase::None)
-	{
-		ResetAnimToIdle();   // a script that owns the body owns its pose too
-	}
-}
-
-void FElysiumNpc::ThinkAmbient(double Now)
-{
-	// No arm of this executor writes a cadence. Its old 0.05-1.0 s literals were the port's own
-	// polling rates; a visit is a schedule in retail (`SelectSchedule` case 1 re-selects it) and so
-	// runs on the AI clock like every other program. 11 retires the executor into that shape.
-	if (!Motor)
-	{
-		return;
-	}
-
-	FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
-	if (AmbientPhase == EAmbientPhase::None || !Spot)
-	{
-		Spot = ClaimAmbientSpot();
-		if (!Spot)
-		{
-			if (!FailedSpotIndices.IsEmpty())
-			{
-				FailedSpotIndices.Reset();
-			}
-			return;
-		}
-		AmbientPhase = EAmbientPhase::Moving;
-		MoveGoal = Spot->Origin;
-		FElysiumNpcMoveRequest SpotRequest;
-		SpotRequest.DestinationCm = Spot->Origin;
-		SpotRequest.AcceptanceToleranceCm = 24.0f;
-		SpotRequest.SpeedCmPerSecond = ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk);
-		SpotRequest.GaitKind = EElysiumNpcGaitKind::Walk;
-		SpotRequest.PartialPath = EElysiumNpcPartialPath::Refuse;
-		bMoveIssued = Motor->MoveTo(PrepareMoveRequest(SpotRequest));
-		if (bMoveIssued)
-		{
-			StartWalkingAnimation();   // the executor's pose until V3b deletes the executor
-		}
-		else
-		{
-			ClearMoveIgnores();   // the refused request registered for nothing
-			FailedSpotIndices.Add(Spot->Handle.Index);
-			FinishAmbientUse(/*bFireLeft=*/false);
-		}
-		return;
-	}
-
-	if (!Spot->IsEnabledFor(Handle))
-	{
-		if (!bAmbientArrived)
-		{
-			FinishAmbientUse(/*bFireLeft=*/false);
-			return;
-		}
-		if (AmbientPhase != EAmbientPhase::Out)
-		{
-			BeginAmbientLeave(Now);
-			return;
-		}
-		// An already-started out activity is allowed to finish below even though Disable made
-		// the place unavailable to new claimants.
-	}
-
-	if (AmbientPhase == EAmbientPhase::Moving)
-	{
-		const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
-		if (Status == EElysiumNpcMoveStatus::Reached || Status == EElysiumNpcMoveStatus::Failed
-			|| Status == EElysiumNpcMoveStatus::Unavailable)
-		{
-			ClearMoveIgnores();   // the leg `PrepareMoveRequest` registered for is over
-		}
-		if (Status == EElysiumNpcMoveStatus::Reached)
-		{
-			BeginAmbientUse(*Spot, Now);
-		}
-		else if (Status == EElysiumNpcMoveStatus::Failed
-			|| Status == EElysiumNpcMoveStatus::Unavailable)
-		{
-			FailedSpotIndices.Add(Spot->Handle.Index);
-			FinishAmbientUse(/*bFireLeft=*/false);
-		}
-		return;
-	}
-
-	if (AmbientPhase == EAmbientPhase::Out && Now >= AmbientNextActivityAt)
-	{
-		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
-		return;
-	}
-	if (AmbientPhase == EAmbientPhase::Into && Now >= AmbientNextActivityAt)
-	{
-		AmbientPhase = EAmbientPhase::Dwelling;
-		AmbientNextActivityAt = Now;
-	}
-	if (AmbientPhase == EAmbientPhase::Dwelling)
-	{
-		if (Now >= AmbientLeaveAt)
-		{
-			BeginAmbientLeave(Now);
-		}
-		else if (Now >= AmbientNextActivityAt)
-		{
-			const FElysiumInterestingPlaceType* TypeRow = AmbientType(Spot);
-			if (!TypeRow || !PlayAmbientActivity(TypeRow->Activities, /*bLoop=*/false,
-				Now, AmbientNextActivityAt))
-			{
-				ResetAnimToIdle();
-				AmbientNextActivityAt = FMath::Min(AmbientLeaveAt, Now + 2.0);
-			}
-		}
-	}
+	bAmbientArrived = false;                                                    // +0x62e8, always
 }
 
 FElysiumBodyOwnerToken FElysiumNpc::BeginDialogueBodySession()
@@ -2301,7 +2060,9 @@ void FElysiumNpc::EndDialogueBodySession(const FElysiumBodyOwnerToken& Token, bo
 
 bool FElysiumNpc::PrepareBodyForDialogue()
 {
-	FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+	// Pre-claim release, kept until V3d replaces it with the inputs' `ForceScheduleChange` ->
+	// `OnScheduleChange 0x102a0940` path, whose release passes 1 (`0x102a099c`).
+	FinishAmbientUse(/*bFireLeft=*/true);
 	return BeginDialogueBodySession().IsSet();
 }
 
@@ -2489,13 +2250,14 @@ void FElysiumNpc::ReleaseAllBodyOwnership(const TCHAR* Reason, bool bDeadMind)
 		}
 	}
 	EndScriptMove();
-	FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+	// Death and dormancy: retail's removal-side callers (`Event_Killed`, `UpdateOnRemove
+	// 0x1028d6e0`) pass 0 to `0x102b53d0`.
+	FinishAmbientUse(/*bFireLeft=*/false);
 	EndScriptedSchedule(Reason);
 	ClearSchedule();
 	const int32 TracedState = NpcStateRetail();   // read for the AI trace's `state` event only
 	Mind.Invalidate(Reason, bDeadMind);
 	TraceStateChange(TracedState, NpcStateRetail());
-	AmbientOwner.Reset();
 	SequenceOwner.Reset();
 	ScriptedScheduleOwner.Reset();
 	ScriptedScheduleOrder.Reset();
@@ -2671,7 +2433,10 @@ void FElysiumNpc::RestorePatrolAndAmbient()
 {
 	EndScriptMove();
 	bMoveIssued = false;
-	if (AmbientPhase != EAmbientPhase::None)
+	// A held place is the word `m_pInterestingPlace +0x62ec`, held from `TASK_FIND_INTERESTING_PLACE`
+	// on (mode `+0x6304` still 0 on the walk there). The place's visitor record is not in the save
+	// (`place +0x564` is unsaved, `docs/vtmb/entity_io.md`), so the claim is taken again here.
+	if (CurrentSpotIndex != INDEX_NONE)
 	{
 		FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
 		if (!Spot || !Spot->Claim(Handle))
@@ -2696,13 +2461,13 @@ void FElysiumNpc::RestoreMindState()
 	{
 		Owner = EElysiumBodyOwner::None;
 	}
-	if (Owner == EElysiumBodyOwner::Ambient && AmbientPhase == EAmbientPhase::None)
+	// A visit holds no body claim since V3b (its program holds it), so a saved `Ambient` owner
+	// restores as `None`. The owner byte itself goes in V3d.
+	if (Owner == EElysiumBodyOwner::Ambient)
 	{
 		Owner = EElysiumBodyOwner::None;
 	}
 	Mind.Restore(State, Owner);
-	AmbientOwner = Owner == EElysiumBodyOwner::Ambient
-		? Mind.CurrentToken() : FElysiumBodyOwnerToken();
 	// A restore never resumes `ScriptedSchedule` ownership. The order behind it is a live goal
 	// handle and a route resolved out of the previous map epoch, so it is session state (the
 	// reasoning is on `FElysiumScriptedScheduleOrder`); what the push durably changed is the mind
@@ -2781,12 +2546,12 @@ void FElysiumNpc::SerializePatrolBlock(FElysiumSaveArchive& Ar)
 			}
 		}
 	}
+	// The visit's retail words: `+0x6304` mode, `+0x62ec` place, `+0x63d4` refresh stamp, `+0x62e8`
+	// arrived (schema `NpcAmbientExecutorRetired`: the executor's two timers are gone).
 	uint8 SavedAmbientPhase = static_cast<uint8>(AmbientPhase);
 	Ar << SavedAmbientPhase;
 	Ar << CurrentSpotIndex;
-	Ar << AmbientLeaveAt;
 	Ar << AmbientNextActivityAt;
-	Ar << AmbientActivityCycle;
 	Ar << bAmbientArrived;
 	if (Ar.IsLoading())
 	{

@@ -4,7 +4,7 @@
   "stage": "map:sm_hub_1",
   "seed": 1,
   "duration": 300.0,
-  "known_red": "V3b: 6: every hub pedestrian moves through the port's ambient interesting-place executor, never retail's 0xff / 0x100 pedestrian goal, so nobody reaches a curb on a type-8 goal",
+  "known_red": "V3b follow-up: Q-V3b1: red 6 is gone (eight hub pedestrians ran 17 visits 0xff -> 0x100 -> 0x103 in 300 s, 0 taskfail) but no SCHED_TROIKA_WAIT_AT_CROSSWALK appeared; whether any visit's route crossed a red pair, or N13's slow walk (V4) cut the crossings, is not yet read from the routes",
   "expect": [
     { "label": "red", "who": "", "kind": "input", "match": "DontWalk", "by": 60.0 },
     { "label": "waits", "who": "", "kind": "schedule", "match": "SCHED_TROIKA_WAIT_AT_CROSSWALK (", "by": 280.0 },

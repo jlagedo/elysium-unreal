@@ -255,9 +255,6 @@ public:
 	virtual void AdvanceAiStepDebugIndex() {}
 	virtual void FreezeForAiStep() {}
 	virtual void NextScheduledTaskForMaintenance(FElysiumScheduleState& State);
-	// This port represents patrol, ambient use and pushed scripted orders as executors outside the
-	// retail schedule table. Their existing handoff consumes the completed program at ScheduleDone.
-	virtual bool TakeExternalExecutorReturn() { return false; }
 
 	// `ClearSchedule` (`0x10280d30`) asked for by a body the kernel is running. Retail executes it at
 	// the call site; here the body asks and the kernel honours the request at the next point it

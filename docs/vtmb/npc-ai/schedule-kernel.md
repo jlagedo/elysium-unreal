@@ -841,24 +841,20 @@ the cached inverse mask remains empty; the positive authored mask plus slot 453 
 longer stand as separate execution paths. Program blobs remain outside this family; every absent
 translated id still takes story 25's registry-miss path.
 
-The runtime already represents three retail schedule families outside the program registry:
-patrol, interesting-place use and pushed `aiscripted_schedule` orders. Their body-owner handoff
-used to run when the old tick returned an empty program. Maintain19 moves that existing handoff to
-`NextScheduledTask`'s `SCHEDULE_DONE` edge, before reselection, and only when one of those external
-executors is waiting. A state-changing interrupt can reach the same boundary through slot 438:
-the port's patrol/interesting selector adapter returns null because the executor already carries
-that program. Both paths install a null pointer through the ordinary `SetSchedule` substrate so
-slot 435 runs, gathered conditions clear, and discipline/oblivious flags release before the caller
-resumes the executor. An ordinary registered schedule continues through retail's same-call
-reselect. This is the one adapter required by the current external-executor representation, not a
-second interpreter and not a live-state exception.
+A completed program, a failed one and a state change all reselect inside the same `MaintainSchedule`
+pass (`0x10281be5`, `0x10281c46`): `NextScheduledTask 0x10280f40` writes `COND_SCHEDULE_DONE`
+and the loop falls into `IsScheduleValid` and the reselect block. Patrols and interesting places are
+programs `SelectSchedule` case 1 answers (the patrol path's program, `0xff` / `0x100` / `0x102` /
+`0x105` / `0x106`), so no family returns to an executor outside the interpreter. *(2026-10-04, V3b:
+the port's external-executor return — a `SCHEDULE_DONE` latch and a slot-438 null adapter for a
+`use_interesting` body that installed a null program and handed the body back to the ambient
+executor — is deleted with the executor.)*
 
 This port's `ThinkDead` reuses the same task interpreter only to finish its death clip, then performs
 the ragdoll/final-frame handoff outside `RunAI`. It supplies a task-only runner which has no schedule
 selector; completion therefore returns to that handoff without adding a DEAD-only exception to the
 retail Maintain/reselection body. `FElysiumNpc::SelectScheduleForMaintenance` preserves the
-ordinary live-selector zero as `GetScheduleOfType`'s literal-1 fallback; the external-executor
-adapter described above is the sole null answer that returns to its existing owner.
+ordinary live-selector zero as `GetScheduleOfType`'s literal-1 fallback.
 The caller boundary follows the recovered death order: `CAI_BaseNPC::Event_Killed 0x10265ad0`
 calls `CBaseCombatCharacter::Event_Killed 0x1032b9b0` at `0x10265cea`, whose first state write is
 `m_lifeState = LIFE_DYING`; only afterwards does the NPC body stamp ideal DEAD at `0x10265d06`,
@@ -866,9 +862,8 @@ run its death-sound/physics decision, stamp DEAD again at `0x10265db0`, and call
 `SetState(7)` at `0x10265dba`. The port's pre-existing `ThinkDead` owns that post-kill visual and
 physics/final-frame boundary. The task-only adapter changes none of its outputs or polling cadence;
 it only prevents that caller from pretending to be the live `RunAI` selector once the death clip's
-single task completes. Live `RunAI` selection still sends ordinary zero answers to the literal-1
-registry fallback; only the already-existing patrol/interesting executor adapter consumes its own
-null answer as described above.
+single task completes. Live `RunAI` selection sends ordinary zero answers to the literal-1
+registry fallback.
 
 **Unrecovered:** the identity and producer of the profiler's process-wide cycle records; only the
 observable 8 ms stop budget is needed by the port. The current program format has no input column

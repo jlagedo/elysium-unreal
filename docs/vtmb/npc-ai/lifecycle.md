@@ -1846,8 +1846,18 @@ Slot 180 for 61 classes, read off the listing. Six steps:
 re-checks it (`0x10299a80`), emits two sounds through a `CPASAttenuationFilter` (channel 4, pitch
 `0x24`, volume 100), detaches through `0x102da600` with a flag computed from
 `m_bInterestingPlaceArrived` and `0x100cd660`, clears the place and the mode, strips
-`m_bfAINPCFlags` bit `0x20000000` and `m_bfAINPCFlags2` bits `0x08000008`, and calls `0x102ae310` —
+`m_bfAINPCFlags` bit `0x20000000` and `m_bfAINPCFlags2` bits `0x80000008` (`0x102b5534 AND
+EDX,0x7ffffff7`; corrected 2026-10-04, V3b — the text said `0x08000008`), and calls `0x102ae310` —
 and **always**, place or none, clears `m_bInterestingPlaceArrived` last.
+
+The flag argument (`[ESP+0x4c]`, tested at `0x102b54e3`) gates the output: only with the argument
+set and `+0x62e8` arrived does it fire this NPC's `m_OnInterestingPlaceLeft` (`+0x5f8c`, activator
+the place, `0x102b5500`), once; `0x102da600(place, this, 1, fired)` (`0x102b551d`) gets "fired and
+still arrived". `OnScheduleChange` (`0x102a099c`), `TaskFail` (`0x1029adb9`) and `RunTask`'s
+wait-finished arm pass 1; this removal (`0x1028d707 PUSH 0`), `Event_Killed` and `NPCInit` pass
+0, so a removed or killed visitor fires no "Left". Ported as `FElysiumNpc::FinishAmbientUse` (V3b);
+the two sounds, `0x102ae310` and the marker half of the re-check `0x10299a80` are unrecovered
+there.
 
 Three species classes override slot 180. `CNPC_VCop` (`0x10371a90`) is read off the listing because
 the C mis-renders its two census bytes as `this+1`: `DL = m_bCountedAlive (+0x6671)`, decrement

@@ -454,9 +454,8 @@ bool FElysiumNpcKernelSelect19TroikaIdleTest::RunTest(const FString&)
 
 // `0x102af660` case 1 orders the patrol arm (`0x102af6b6` / `0x102af6be` .. `0x102af743`) BEFORE the
 // interest arm (`0x102af6f3`), so a `use_interesting` body that holds a patrol path gets the path's
-// program back when a pass ends; it never reaches interesting-place selection. Pins both port sites
-// that bypass the selector for a `use_interesting` body: the `ScheduleDone` latch and the
-// `ThinkAutonomous` route.
+// program back when a pass ends; it never reaches interesting-place selection. Pins both doors into
+// the selector: the completed program's reselect and the program-less pass.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSelect19PatrolOutranksUseInterestingTest,
 	"Elysium.Arm.NpcKernelSelect19.PatrolOutranksUseInteresting_0x102af6b6", GSelect19Flags)
 bool FElysiumNpcKernelSelect19PatrolOutranksUseInterestingTest::RunTest(const FString&)
@@ -510,7 +509,7 @@ bool FElysiumNpcKernelSelect19PatrolOutranksUseInterestingTest::RunTest(const FS
 	TestEqual(TEXT("the path did not move again"), N.PatrolPathCell.Path->Current, 1);
 	TestNull(TEXT("no interesting place is claimed (CurrentSpotIndex none)"), N.CurrentAmbientSpot());
 
-	// No program at all (the route's other door, `ThinkAutonomous`): a body holding a path still
+	// No program at all (the program-less pass): a body holding a path still
 	// goes to selection, which answers the path's program.
 	N.Schedule.Clear();
 	N.MaintainSchedule(Now, /*bReduced=*/true);
@@ -518,12 +517,16 @@ bool FElysiumNpcKernelSelect19PatrolOutranksUseInterestingTest::RunTest(const FS
 	TestNull(TEXT("still no interesting place"), N.CurrentAmbientSpot());
 
 	// The path gone (`0x1029f5d0`): only now does the body reach the interest door (`0x102af6f3`),
-	// which this runtime still serves with its executor (0002/11) -- it installs no program.
+	// which answers `0xff SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP` (`0x102af711`); the maintain
+	// pass installs it like any program (V3b retired the port's ambient executor).
 	N.ReleasePatrolPath(&N.PatrolPathCell);
 	N.Schedule.Clear();
+	TestEqual(TEXT("0x102af711 without a path the use_interesting body selects 0xff"),
+		N.TroikaSelectSchedule(), 0xff);
+	N.Schedule.Clear();
 	N.MaintainSchedule(Now, /*bReduced=*/true);
-	TestFalse(TEXT("0x102af6f3 without a path the use_interesting body leaves the interpreter"),
-		N.Schedule.IsRunning());
+	TestNotEqual(TEXT("0x10281be5 the maintain pass installs a program, no external executor"),
+		N.Schedule.Current, static_cast<int32>(ElysiumScheduleId::None));
 	FElysiumNpc::ResetPatrolPathPool();
 	return true;
 }
