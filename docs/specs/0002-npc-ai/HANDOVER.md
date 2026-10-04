@@ -129,18 +129,44 @@ clip's movement never moves the body), `corpse_pedestrian_stays`, `corpse_fades`
 
 ## Sub-agents run on Codex CLI (the owner's ruling, 2026-10-04)
 
-Agents are launched as Codex CLI runs (`gpt-6.1-sol`), from Bash, in the background, output
-redirected to a log under the job's tmp directory and the tail read on completion:
+Agents are Codex CLI runs (`gpt-6.1-sol`, CLI 0.160.0), launched from Bash in the background.
+**Opus-level work** (integrators, readers over the listing, planners, judges) runs at effort
+`high`; **Sonnet-level work** (single-lane coders, doc amendments, small reads) at `medium`.
 
-- **Opus-level work** (integrators, readers over the listing, planners, judges):
-  `codex exec -m gpt-6.1-sol -c model_reasoning_effort='"high"' --dangerously-bypass-approvals-and-sandbox "<brief>"`
-- **Sonnet-level work** (single-lane coders, doc amendments, small reads): the same with
-  `'"medium"'`.
+The launch, every time (T = the job's tmp directory, NAME = the agent's name):
 
-Verified by dry runs: it loads `AGENTS.md` (which carries the query budget), reaches the
-`vtmb-corpus` MCP (17 tools) and the `elysium` MCP, runs `uv run elysium …`, `rg` and `git`, and
-writes the repository and `E:\elysium-work`. The sandbox must be bypassed: under
-`workspace-write` it cannot execute `uv` nor write the work root. That flag gives full access to
-the machine with no prompts, so every brief keeps the guardrails: the files named per lane,
-coders never build, stage by explicit path, never push. The model cannot report its own id or
-effort; the session log under `~/.codex/sessions/` is the proof.
+```
+codex exec -m gpt-6.1-sol -c model_reasoning_effort='"high"' \
+  --dangerously-bypass-approvals-and-sandbox --color never --json \
+  -o "$T/NAME-last.txt" - < docs/specs/.../brief-NAME.md > "$T/NAME.jsonl" 2> "$T/NAME.err"
+```
+
+- **The brief is a file, piped on stdin with `-`.** A prompt given as an argument with stdin left
+  open makes a background `codex exec` wait forever on "Reading additional input from stdin..."
+  (it cost an hour once). For a one-line prompt as an argument, close stdin: `< /dev/null`.
+- **`-o FILE`** receives the agent's final message: read that, never the whole log.
+- **`--json`** writes one event per line. The first is `{"type":"thread.started","thread_id":…}`:
+  keep the id. `item.completed` lines show each tool call and message; `turn.completed` carries the
+  token usage. Progress = `wc -l` and the last `item.completed`, checked **within a minute of the
+  launch** and then on the completion notification, never by polling.
+- **Continue an agent** (the equivalent of a follow-up message) with
+  `codex exec resume <thread_id> -m gpt-6.1-sol --dangerously-bypass-approvals-and-sandbox -o … "<message>" < /dev/null`;
+  it keeps the whole conversation. Verified.
+- **The sandbox must be bypassed** on this machine: under `workspace-write` Codex cannot execute
+  `uv` (it lives under the user profile) nor write `E:\elysium-work`. `--add-dir` exists for extra
+  writable roots but was not tried against the `uv` block. The bypass gives full access with no
+  prompts, so every brief keeps the guardrails: the files named per lane, coders never build,
+  stage by explicit path, never push.
+- **Independent review before an integrator's first build:**
+  `codex exec review --uncommitted "<what to look for>"` (also `--commit <sha>`, `--base <branch>`):
+  use it to catch shadowed locals (C4458 / C4459), missing includes and double definitions, the
+  causes of every over-cap build so far.
+- **`--output-schema FILE`** forces the final message into a JSON schema (verdict tables).
+- **`--worktree`** exists (a managed git worktree per run) but this project works in one checkout:
+  not used.
+- **Cost of a turn:** about 20,000 input tokens before the brief (the global config's plugins and
+  MCP servers), mostly cached. `--ignore-user-config` would drop them but also the `elysium` MCP
+  launcher, which lives in the global config: not used.
+- It loads `AGENTS.md` by itself (which carries the query budget) and reaches the `vtmb-corpus`
+  MCP (17 tools) and the `elysium` MCP. The model cannot report its own id or effort: the
+  `--json` stream and `~/.codex/sessions/` are the proof. `codex doctor` diagnoses the install.
