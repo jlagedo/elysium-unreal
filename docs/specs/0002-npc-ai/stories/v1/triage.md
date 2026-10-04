@@ -709,6 +709,40 @@ for the verdict, the key unchanged).
 - **Open:** N21 (the judge). V13 ticked: `verify nav` clean on both witness maps,
   `Elysium.Content.NavArea.*` green but N21's two named assertions, `hub_crosswalk_wait` green.
 
+## V13 follow-up (2026-10-04): N21 -- every nav mark includes the agent height; closed
+
+The judge's ruling (§ "Judge's rulings … (continued)"), one agent. `UElysiumNavAreaComponent::
+GetNavigationData` (`ElysiumNavAreaActor.cpp`) now calls `SetIncludeAgentHeight(true)` on every
+modifier, door cuts as well as the roadway: Recast lowers each mesh's cut by that mesh's own agent
+height (`RecastNavMeshGenerator.cpp:4885`, `OffsetZMin = ch + AgentHeight`) -- the Human's
+182.88 cm, the Rat's 25.4 cm, each hull's `maxs.z`, so the hull-swept box in Z mesh by mesh.
+`NAV_AREA_ACTOR_SHAPE` 3 → 4 (`bake_map_v2.py`) re-authored both levels. The linked-door probe
+(`ElysiumNavAreaTests.cpp` `ProbeDoorCuts`) takes a list and asks tutorial door 339 beside 183.
+
+- **Build** 23.6 s (plain). **Bake** `sp_tutorial_1` + `sm_hub_1`, 147 s wall, one bake.
+- **Counts, before → after:** door-cut convexes tutorial 60 → 60, hub 54 → 54 (+ 9 pedestrian);
+  door smart links tutorial 8 → 8 (8 doors of 36, 2 partial), hub 1 → 1 (link 958).
+- **`verify nav`** clean on both, identical to the final pass: tutorial `bridging-hull-19` 5 bridges,
+  0 missing, 3 jump-only reported; hub 9 bridges, 3 jump-only reported, 2 pinned findings reproduced;
+  0 holes / walls on every ground-link check.
+- **`Elysium.Content.NavArea.`** (`reports/tests/20261004T113235.495782Z-…`) green whole, 3 / 3.
+  `Hub`: unlinked convex 2 (`junkyardgate` 1301) and convex 22 (`gasstationgate` 1676) **centre −1,
+  sides 63 / 63 -- walls (red → green)**; convex 26 (`tattoodoor`) a wall as before; door 2566 cut
+  (convex 52); road pedestrian, three gaps unpriced; ×8 route 1044 cm and ×1 control 920 cm, the
+  same corners as the final pass. `Tutorial`: door 183 cut (convex 7); **door 339 cut** (convex 39,
+  box z −79..196, probe at the link's z −101: nothing walkable); 19 unlinked doorways, all walls;
+  links and agents unchanged.
+- **Door 339, before:** the same probe run on the old bake after the build
+  (`reports/tests/20261004T112841.422104Z-…`) was already green -- nothing walkable within 100 cm
+  of the link's height at the cut's centre. The judge's lead (the mesh running under the closed leaf)
+  is **not borne out at the probe point**; the probe now pins it.
+- **Default tier** 171 / 0. **Arena** (`arena/20261004T113319.449343Z`): `hub_crosswalk_wait`
+  (crossing 43.550), `map_hub_idle`, `map_tutorial_idle`, `places_thug_pt1` pass;
+  `map_tutorial_sneak_past` expect[3] 8.633, `patrol_monk_loop` expect[10] 37.233,
+  `patrol_sentry2_pingpong` expect[10] 38.783, expected-fail -- every record unchanged.
+- `kernel --check` clean. **N21 closed.** Still filed to R2, at their next bake: the six other slab
+  maps and every other baked map's door cuts and slabs (they take this rule when they re-bake).
+
 ## The fix order — acceptance lists
 
 | story | records that must turn green |
@@ -721,7 +755,7 @@ for the verdict, the key unchanged).
 | V7 inputs + N5 + N6 | `input_disablethink`, `input_changeschedule_reselect` |
 | V10 (new) a sound's life | `hear_world_investigate` green in every boot (run it 3× in different boot orders) |
 | V12 the footstep producer | `map_tutorial_sneak_past`'s hearing half (Q-V3bf1 read first) |
-| V13 the hub's pedestrian nav area (ticked 2026-10-04, § "V13 final pass") | ~~`hub_crosswalk_wait` (N16), with `Elysium.Content.NavArea.Hub` (road probe, route)~~ (green; the Hub test red only on N21's two gates) |
+| V13 the hub's pedestrian nav area (ticked 2026-10-04, § "V13 final pass") | ~~`hub_crosswalk_wait` (N16), with `Elysium.Content.NavArea.Hub` (road probe, route)~~ (green; the Hub test red only on N21's two gates, green whole since the V13 follow-up) |
 
 ## Filed by the coordinator, 2026-10-04 (unattended run)
 
@@ -784,4 +818,5 @@ for the verdict, the key unchanged).
   Acceptance: both gate assertions and the 339 probe green; `verify nav` clean on both maps;
   door-cut convex counts 54 and 60, link counts 1 and 8, every other door probe unchanged; the six
   map records unchanged. Stop: a new bridging error, a lost link, a doorway flipping from wall to
-  walkable, or a moved record.
+  walkable, or a moved record. **Closed by the V13 follow-up** (§ "V13 follow-up"): acceptance held,
+  no stop rule fired.

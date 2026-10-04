@@ -126,6 +126,7 @@ Wave 3 (build work, one agent):
   Q-V13b, Q-V13c settled (test and record errors). Left: **N21** (the door cut floats 10–34 cm over
   the floor under two raised hub gates; one-line C++ + a build + two re-bakes, to the judge), the
   six slab maps and every other map's door cuts at their next bake (R2).
+  **Follow-up 2026-10-04, N21 closed:** every nav mark includes the agent height; both maps re-baked; both hub gates walls, `Elysium.Content.NavArea.*` green whole, counts, `verify nav` and the seven map records unchanged.
 - [ ] **V2 again** — the full run, every scenario green.
 - [ ] **V8** — `sp_tutorial_1` and `sm_hub_1`, live. S · Opus/high.
 - [ ] **V9** — The second cut: the arm tests the scenarios cover. S · Sonnet/medium.

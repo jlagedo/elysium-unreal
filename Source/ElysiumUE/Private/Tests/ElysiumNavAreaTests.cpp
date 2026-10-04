@@ -207,16 +207,17 @@ namespace
 	}
 
 	// V13 (N16): the door marks reach the baked Human mesh, the same question the hub's road probe
-	// asks of the roadway marks. Two doors per map:
-	//  - `LinkedDoor` (a lump ordinal a smart link names) stands with its link present, and the door
-	//    convex its span passes through is cut: nothing walkable at that convex's centre, at the
-	//    link's height. The link crosses the door (0018/7); the mesh must not.
+	// asks of the roadway marks:
+	//  - each of `LinkedDoors` (lump ordinals a smart link names) stands with its link present, and
+	//    the door convex its span passes through is cut: nothing walkable at that convex's centre, at
+	//    the link's height. The link crosses the door (0018/7); the mesh must not.
 	//  - every standing door leaf >= 300 cm from every link span -- a door no link crosses, a wall
 	//    to every agent (0018/7) -- that stands in a doorway the mesh reaches on both sides projects
 	//    nothing walkable inside its cut (below).
-	// Red until the marks are re-baked with `NAV_AREA_ACTOR_SHAPE` 3.
+	// Red until the marks are re-baked with `NAV_AREA_ACTOR_SHAPE` 3; a leaf hung above the floor
+	// (N21) needs 4, every mark including the agent height.
 	bool ProbeDoorCuts(FAutomationTestBase& Test, UWorld* World, AElysiumNavAreaActor* Marks,
-		int32 LinkedDoor)
+		const TArray<int32>& LinkedDoors)
 	{
 		ARecastNavMesh* Human = MeshFor(World, TEXT("Human"));
 		if (!Test.TestNotNull(TEXT("the level carries its Human mesh"), Human)) return false;
@@ -232,12 +233,16 @@ namespace
 			}
 		}
 
-		// The linked door.
+		// The linked doors.
 		int32 LinkCount = 0;
 		const TMap<int32, AElysiumNavDoorLink*> Links = DoorLinksOf(World, LinkCount);
-		AElysiumNavDoorLink* const* Link = Links.Find(LinkedDoor);
-		if (Test.TestNotNull(*FString::Printf(TEXT("door %d's link is present"), LinkedDoor), Link))
+		for (const int32 LinkedDoor : LinkedDoors)
 		{
+			AElysiumNavDoorLink* const* Link = Links.Find(LinkedDoor);
+			if (!Test.TestNotNull(*FString::Printf(TEXT("door %d's link is present"), LinkedDoor), Link))
+			{
+				continue;
+			}
 			const UNavLinkCustomComponent* Smart = (*Link)->GetSmartLinkComp();
 			const FVector Start = Smart->GetStartPoint();
 			const FVector End = Smart->GetEndPoint();
@@ -262,8 +267,9 @@ namespace
 			{
 				const FVector Centre = Cuts[Crossed].GetCenter();
 				const FVector Probe(Centre.X, Centre.Y, AtCm.Z);
-				Test.AddInfo(FString::Printf(TEXT("door %d: cut convex %d, probe (%.0f %.0f %.0f)"),
-					LinkedDoor, Crossed, Probe.X, Probe.Y, Probe.Z));
+				Test.AddInfo(FString::Printf(TEXT("door %d: cut convex %d, box (%.0f %.0f %.0f)..(%.0f %.0f %.0f), probe (%.0f %.0f %.0f)"),
+					LinkedDoor, Crossed, Cuts[Crossed].Min.X, Cuts[Crossed].Min.Y, Cuts[Crossed].Min.Z,
+					Cuts[Crossed].Max.X, Cuts[Crossed].Max.Y, Cuts[Crossed].Max.Z, Probe.X, Probe.Y, Probe.Z));
 				Test.TestEqual(*FString::Printf(TEXT("...and nothing walkable projects inside door %d's cut"),
 					LinkedDoor), PolyAreaAt(*Human, Probe), static_cast<int32>(INDEX_NONE));
 			}
@@ -358,7 +364,7 @@ bool FElysiumNavAreaHubTest::RunTest(const FString&)
 
 	// V13 (N16): the door marks reach the Human mesh -- `basic_smoke_door` (2566, on AIN link 958's
 	// door link above) cut under its link, and an unlinked door (27 of the hub's 29) cut as a wall.
-	ProbeDoorCuts(*this, Baked, Marks, 2566);
+	ProbeDoorCuts(*this, Baked, Marks, { 2566 });
 
 	// V13 (N16): the marks reach the baked Human mesh. Counting convexes says the bake laid them;
 	// only the mesh says Recast took them. The slabs are the staged hull rows of `sm_hub_1.hulls`
@@ -555,7 +561,11 @@ bool FElysiumNavAreaTutorialTest::RunTest(const FString&)
 
 	// V13 (N16): the door marks reach the Human mesh -- `tutwareportal03` (183, a link both hulls
 	// cross, above) cut under its link, and an unlinked door (28 of the tutorial's 36) cut as a wall.
-	ProbeDoorCuts(*this, Baked, Marks, 183);
+	// N21: door 339 (retail link 41, both hulls) too -- its cut's floor stands ~13 cm above the
+	// floor, where a cut keeping the brush's own floor could float and leave the mesh under the
+	// closed leaf, bypassing the link's hold. Measured green on the shape-3 bake and on shape 4
+	// (every mark includes the agent height); the probe pins it.
+	ProbeDoorCuts(*this, Baked, Marks, { 183, 339 });
 	return true;
 }
 

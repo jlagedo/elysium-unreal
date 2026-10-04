@@ -280,7 +280,8 @@ WATER_ACTOR_SHAPE = 2
 #: bump), so the level re-authors rather than keeping marks cut to the old rule.
 #: 2 (V13): the roadway marks include the agent height (`ElysiumNavAreaActor.cpp`).
 #: 3 (V13): the marks register with the navigation system.
-NAV_AREA_ACTOR_SHAPE = 3
+#: 4 (N21): every mark includes the agent height -- the door cuts as well as the roadway.
+NAV_AREA_ACTOR_SHAPE = 4
 
 #: The host script's namespace (`bake_map`'s `globals()`), bound once by it at import time. Wrapped
 #: so this module reads `HOST.Bake` rather than a dict subscript, and read lazily so binding does not

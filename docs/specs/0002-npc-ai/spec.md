@@ -732,6 +732,7 @@ tests the green scenarios cover deleted.
   cut sits 10–34 cm above the terrain under `junkyardgate` / `gasstationgate`; the fix is the door
   cut including the agent height, one C++ line + a build + both witness maps re-baked, to the judge),
   the six slab maps and every other baked map's door cuts at their next bake (R2).
+  *Follow-up 2026-10-04, **N21 closed*** (`stories/v1/triage.md` § "V13 follow-up"): every nav mark includes the agent height (`ElysiumNavAreaActor.cpp`, `NAV_AREA_ACTOR_SHAPE` 4); both witness maps re-baked; `junkyardgate` / `gasstationgate` walls, door 339 probed, `Elysium.Content.NavArea.*` green whole; counts, links, `verify nav` and the seven map records unchanged.
 
 Order: V1 → V2 → H → V3 (V3r, V3a, V3b, V13, V3c, V3d) → T6b → V4 → V5 → V11 ‖ V6 → V7 → V10 → V12 → V2 again (full run) → V8 → V9.
 **T6b, the header pass** (the owner, 2026-10-04; `stories/t6b/brief.md`): the kernel headers' include fan-out cut after V3d and before V4, one agent holding the build; it closes T6 (edit-mix p90 ≤ 90 s). Landed 2026-10-04: p90 104.1 → 81.7 s (kernel headers 100.9 / 97.7 → 74.0 / 72.5 s), verdicts unchanged; T6 ticked (§ T6, "T6b, measured").
