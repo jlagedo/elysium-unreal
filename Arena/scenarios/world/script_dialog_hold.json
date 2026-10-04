@@ -1,10 +1,10 @@
 {
   "name": "script_dialog_hold",
-  "about": "A dialogue holds an NPC. CAI_BaseNPCTroika::InputStartPlayerDialog 0x1029ef80 (datamap 0x105ce470): with the player present, the player's dialogue handle +0xfe8 empty and flags2 & 0x10000000 clear, FinishTalking, think reset, and a forced install of SCHED_TROIKA_START_PLAYER_DIALOG 0x6d (cai_basenpctroika/sched_troika_start_player_dialog.sch: SET_FAIL_SCHEDULE, STOP_MOVING, STORE_POSITION_IN_SAVEPOSITION, SET_TOLERANCE_DISTANCE DIST:DIALOG, GET_PATH_TO_PLAYER_FOR_DIALOG, SET_NPC_FLAG FORCE_RELAXED_ANIMS, WALK_RUN_PATH_FOR_DIALOG, WAIT_FOR_MOVEMENT, START_PLAYER_DIALOG, RUN_DIALOG; no interrupts); TASK_RUN_DIALOG 0x6a then holds the NPC (m_hDialogPartner) for as long as the dialogue stands: no other program is selected. sp_tutorial_1's Hunter1 (npc_VHumanCombatant, dialogname dlg/generic/hunter1.dlg, D_LI 0, use_interesting 0) verbatim; the wire is the corpus's own form (Zhao StartPlayerDialog '' on ch_zhaos_1).",
+  "about": "A dialogue holds an NPC, then releases it. CAI_BaseNPCTroika::InputStartPlayerDialog 0x1029ef80 (datamap 0x105ce470): with the player present, the player's dialogue handle +0xfe8 empty and flags2 & 0x10000000 clear, FinishTalking, think reset, and a forced install of SCHED_TROIKA_START_PLAYER_DIALOG 0x6d (cai_basenpctroika/sched_troika_start_player_dialog.sch: SET_FAIL_SCHEDULE, STOP_MOVING, STORE_POSITION_IN_SAVEPOSITION, SET_TOLERANCE_DISTANCE DIST:DIALOG, GET_PATH_TO_PLAYER_FOR_DIALOG, SET_NPC_FLAG FORCE_RELAXED_ANIMS, WALK_RUN_PATH_FOR_DIALOG, WAIT_FOR_MOVEMENT, START_PLAYER_DIALOG, RUN_DIALOG; no interrupts). TASK_START_PLAYER_DIALOG 0xda (0x102a4e7e) opens the conversation through player slot 414 FUN_10178280 (CDialog::Acquire, SetDialogPartner 0x10107050); TASK_RUN_DIALOG 0xb9 (start 0x102a496b, run 0x102ab303) then holds the NPC for as long as IsInDialog 0x102c1170 stands (m_hDialogPartner +0xfe8 among its four terms): no other program is selected. (0x6a is SCHED_TROIKA_RUN_DIALOG, the program PlayerUse pushes, not this task.) The release: the player's pick -1 (CDialog::Pick 0x100e4bd0) -> CDialog::Release 0x100e5240 flushes the pending script, clears the live state and calls the NPC's 0x102c0360, which fires m_OnDialogEnd +0x5f5c once and clears the partner; TASK_RUN_DIALOG's run arm sees IsInDialog clear and completes, the program ends, SelectSchedule picks again. sp_tutorial_1's Hunter1 (npc_VHumanCombatant, dialogname dlg/generic/hunter1.dlg, D_LI 0, use_interesting 0) verbatim; the wire is the corpus's own form (Zhao StartPlayerDialog '' on ch_zhaos_1).",
   "stage": "arena",
   "seed": 1,
-  "duration": 25.0,
-  "known_red": "new: StartPlayerDialog installs no SCHED_TROIKA_START_PLAYER_DIALOG; the dialogue opens at the input with OnDialogBegin",
+  "duration": 35.0,
+  "known_red": "V3d: StartPlayerDialog installs no SCHED_TROIKA_START_PLAYER_DIALOG; the dialogue opens at the input with OnDialogBegin (the port's dialogue body session, M12)",
   "player": {
     "at": "start"
   },
@@ -23,6 +23,12 @@
       "target": "Hunter1",
       "input": "StartPlayerDialog",
       "param": ""
+    },
+    {
+      "after": "holds",
+      "delay": 1.0,
+      "do": "dialog_choose",
+      "end": true
     }
   ],
   "expect": [
@@ -60,6 +66,35 @@
       "kind": "task",
       "match": "task_run_dialog (",
       "within": 1.0
+    },
+    {
+      "label": "released",
+      "who": "player",
+      "kind": "script",
+      "match": "dialog_choose end",
+      "within": 2.0
+    },
+    {
+      "label": "dialog_end",
+      "who": "Hunter1",
+      "kind": "output",
+      "match": "OnDialogEnd ->",
+      "within": 1.0
+    },
+    {
+      "label": "program_done",
+      "who": "Hunter1",
+      "kind": "taskdone",
+      "match": "^task_run_dialog$",
+      "regex": true,
+      "within": 2.0
+    },
+    {
+      "label": "reselects",
+      "who": "Hunter1",
+      "kind": "schedule",
+      "match": "",
+      "within": 2.0
     }
   ],
   "never": [
@@ -70,15 +105,14 @@
     {
       "who": "Hunter1",
       "kind": "death"
-    }
-  ],
-  "probes": [
+    },
     {
-      "at": "end",
       "who": "Hunter1",
-      "probe": "schedule",
-      "match": "SCHED_TROIKA_START_PLAYER_DIALOG"
+      "kind": "output",
+      "match": "OnDialogEnd ->",
+      "from": 2.0,
+      "at_most": 1
     }
   ],
-  "notes": "The release half (the dialogue closing, CDialog::Release, the NPC selecting again) is not expressed: the harness has no action that answers or closes a dialogue as the player does (EndDialog is a port-only seam with no retail datamap record). Harness gap, listed in triage-W.md."
+  "notes": "The release half (H12): `dialog_choose end` is retail's pick -1 through the port's Continue door. The schedule StartPlayerDialog forces is 0x6d in both docs (game_runtime.md and lifecycle.md disagree only on Remote). Packet R1 must confirm two things this record asserts: that 0x102c0360 fires OnDialogEnd once per conversation although both CDialog::Release and 0x102c1400 (TASK_RUN_DIALOG's helper, unrecovered, lifecycle.md:2095) reach it (spec Q7: the `never` at_most 1), and that the run arm completes the task on the think after the release (the order output -> taskdone). Hunter1 carries one OnDialogEnd wire (python `hunterQuests()`, delay 1.0), so one firing is one `OnDialogEnd -> <py-only>.Use` output event."
 }

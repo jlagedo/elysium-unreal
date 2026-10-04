@@ -178,8 +178,7 @@ namespace
 		"no stored view offset; the eye point is the chain's virtual EyePosition()"),
 	ELYSIUM_NPC_WORD_CHAIN(0x5d6c, "FElysiumCombatCharacter::NextEyeLookTime",
 		"the port keeps the gaze scan clock on the combat character"),
-	ELYSIUM_NPC_WORD_CHAIN(0x5d70, "FElysiumScriptedCharacter::ScriptPhase",
-		"the port spells retail's script state as the phase plus the entity's script owner"),
+	ELYSIUM_NPC_WORD(0x5d70, FElysiumNpcBase, ScriptState),
 	ELYSIUM_NPC_WORD_CHAIN(0x5d74, "FElysiumEntity::ScriptOwner", "m_hCine, on the entity chain"),
 	ELYSIUM_NPC_WORD_NOTED(0x5d78, FElysiumNpcBase, bCineScriptHidden,
 		"m_bCineScriptHidden is its OWN byte, not the entity's hidden flag: retail carries "

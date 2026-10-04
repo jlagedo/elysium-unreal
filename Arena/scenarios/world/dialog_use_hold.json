@@ -1,0 +1,114 @@
+{
+  "name": "dialog_use_hold",
+  "about": "+use on an NPC holds it in a dialogue program, then releases it. CBasePlayer::PlayerUse 0x10167850 resolves the use target, tests the NPC's WillTalk latch (virtual +0x49c), installs SCHED_TROIKA_RUN_DIALOG 0x6a on it (TASK_RUN_DIALOG 0; interrupt COND_PROVOKED) and calls player slot 414 FUN_10178280, the real StartDialog (CDialog::Acquire, SetDialogPartner 0x10107050) (game_runtime.md § Retail conversation chain, item 1; conditions-and-states.md:136). TASK_RUN_DIALOG 0xb9 (start 0x102a496b, run 0x102ab303) holds while IsInDialog 0x102c1170 stands. A dialogue writes no m_NPCState: the NPC stays Idle throughout. The release: the player's pick -1 -> CDialog::Release 0x100e5240 -> the NPC's 0x102c0360 fires m_OnDialogEnd +0x5f5c once and clears the partner; the run arm completes the task, the program ends and SelectSchedule picks again. sp_tutorial_1's Hunter1 (npc_VHumanCombatant, dialogname dlg/generic/hunter1.dlg, D_LI 0, use_interesting 0, one OnDialogEnd wire) verbatim on the north pad; the player ~95 cm south of it, facing it, inside PlayerUse's 80-unit reach.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 20.0,
+  "known_red": "V3d: +use pushes no SCHED_TROIKA_RUN_DIALOG program (the port opens a +use conversation synchronously through its dialogue body session, M12). Seen 2026-10-04: after +use / -use at 2.0 / 2.2 s Hunter1 shows nothing at all, no conversation opened either; untriaged whether the port's use focus refuses Hunter1 here or the press never reaches PlayerUse (bug protocol step 1, before V3d's coders)",
+  "player": {
+    "at": [880.0, 0.0, 0.0],
+    "face": 0.0
+  },
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "Hunter1"
+    ],
+    "anchor": "Hunter1",
+    "at": "north"
+  },
+  "script": [
+    {
+      "t": 2.0,
+      "do": "console",
+      "command": "elysium.cmd +use"
+    },
+    {
+      "t": 2.2,
+      "do": "console",
+      "command": "elysium.cmd -use"
+    },
+    {
+      "after": "holds",
+      "delay": 1.0,
+      "do": "dialog_choose",
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "label": "program",
+      "who": "Hunter1",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_RUN_DIALOG (0x6a)",
+      "by": 3.0
+    },
+    {
+      "label": "holds",
+      "who": "Hunter1",
+      "kind": "task",
+      "match": "task_run_dialog (",
+      "within": 1.0
+    },
+    {
+      "label": "released",
+      "who": "player",
+      "kind": "script",
+      "match": "dialog_choose end",
+      "within": 2.0
+    },
+    {
+      "label": "dialog_end",
+      "who": "Hunter1",
+      "kind": "output",
+      "match": "OnDialogEnd ->",
+      "within": 1.0
+    },
+    {
+      "label": "program_done",
+      "who": "Hunter1",
+      "kind": "taskdone",
+      "match": "^task_run_dialog$",
+      "regex": true,
+      "within": 2.0
+    },
+    {
+      "label": "reselects",
+      "who": "Hunter1",
+      "kind": "schedule",
+      "match": "",
+      "within": 2.0
+    }
+  ],
+  "never": [
+    {
+      "who": "Hunter1",
+      "kind": "taskfail"
+    },
+    {
+      "who": "Hunter1",
+      "kind": "death"
+    },
+    {
+      "who": "Hunter1",
+      "kind": "state",
+      "from": 1.5
+    },
+    {
+      "who": "Hunter1",
+      "kind": "output",
+      "match": "OnDialogEnd ->",
+      "from": 1.5,
+      "at_most": 1
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Hunter1",
+      "probe": "state",
+      "equals": "Idle"
+    }
+  ],
+  "notes": "Packet R2 must confirm PlayerUse's NPC arm in order (the brief and game_runtime.md item 1 say it clears the NPC schedule before pushing 0x6a; the V3r reader's draft reads a forced install through 0x102ae750 with no ClearSchedule 0x10280d30): the record asserts only what both readings share (0x6a installed, TASK_RUN_DIALOG, the release, the reselection), not the clear. Packet R1 must confirm the once-only OnDialogEnd (spec Q7) and the output -> taskdone order, as in script_dialog_hold. `dialog_choose end` is retail's pick -1 through the port's Continue door (H12)."
+}

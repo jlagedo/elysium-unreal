@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 10.0,
-  "known_red": "6: a use_interesting row (la_museum_1 npc_guard_b1, use_interesting 1 / groups 5) is owned by the port's ambient executor: no gather and no schedule at all (retail selects 0xff at once)",
+  "known_red": "V3b: 6: a use_interesting row (la_museum_1 npc_guard_b1, use_interesting 1 / groups 5) is owned by the port's ambient executor: no gather and no schedule at all (retail selects 0xff at once)",
   "player": {
     "at": "start"
   },

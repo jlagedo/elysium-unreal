@@ -89,6 +89,7 @@ enum class EElysiumArenaAction : uint8
 	Kill,
 	PlayerCrouch,
 	LightPin,
+	DialogChoose,
 };
 
 // One `script` entry: when (an absolute scenario time, or a delay after a labelled expectation's
@@ -113,6 +114,10 @@ struct FElysiumArenaAction
 	// light_pin: `value`, the normalized body light pinned in [0, 1]; `null` releases the pin.
 	bool bLightRelease = false;
 	double Light = 0.0;
+	// dialog_choose: `index`, the response row as the open turn lists it (0-based), or `end: true`,
+	// retail's pick -1 (`CDialog::Pick` -> `Release`). Exactly one of the two.
+	int32 ChoiceIndex = INDEX_NONE;
+	bool bDialogEnd = false;
 };
 
 // One `expect` or `never` entry: a matcher over trace events.

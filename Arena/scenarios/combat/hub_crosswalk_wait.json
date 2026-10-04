@@ -4,7 +4,7 @@
   "stage": "map:sm_hub_1",
   "seed": 1,
   "duration": 300.0,
-  "known_red": "6: every hub pedestrian moves through the port's ambient interesting-place executor, never retail's 0xff / 0x100 pedestrian goal, so nobody reaches a curb on a type-8 goal",
+  "known_red": "V3b: 6: every hub pedestrian moves through the port's ambient interesting-place executor, never retail's 0xff / 0x100 pedestrian goal, so nobody reaches a curb on a type-8 goal",
   "expect": [
     { "label": "red", "who": "", "kind": "input", "match": "DontWalk", "by": 60.0 },
     { "label": "waits", "who": "", "kind": "schedule", "match": "SCHED_TROIKA_WAIT_AT_CROSSWALK (", "by": 280.0 },

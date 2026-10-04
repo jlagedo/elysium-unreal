@@ -4,7 +4,7 @@
   "stage": "map:sp_tutorial_1",
   "seed": 1,
   "duration": 75.0,
-  "known_red": "1: the patrol walk plays 'walk rate=0' and the NPC covers ~0.65 m/s (retail walk_0 136.7 cm/s), so the 15.9 m leg to sentry2_3 misses its deadline",
+  "known_red": "V3a: 1: the patrol walk plays 'walk rate=0' and the NPC covers ~0.65 m/s (retail walk_0 136.7 cm/s), so the 15.9 m leg to sentry2_3 misses its deadline",
   "cast": [
     {
       "name": "sentry2"

@@ -1,0 +1,90 @@
+{
+  "name": "script_aischedule_walk",
+  "about": "An aiscripted_schedule pushes a walk order and nothing else. sm_hub_1's blue_blood_to_alley (m_iszEntity SMblueblood, m_flRadius 128, schedule 1, forcestate 0, goalent blue_blood_alley_target; authored-control.md § aiscripted_schedule, the 'Santa Monica hub, blueblood alley' row). StartSchedule 0x101a9b30 is ThinkSet(CineThink) at curtime; CineThink 0x101a8070 finds SMblueblood strictly inside the radius (FindEntity 0x101a7600) and possesses it (0x101a9790, then slot 586 on the target): the executor 0x101a98c0 resolves goalent, applies no forced state (forcestate 0), and for mode 1 calls ScheduledMoveToGoalEntity 0x102800c0: base schedule 2 IDLE_WALK through 0x10280de0, which slot 440 translates to SCHED_TROIKA_IDLE_PATROL 0x46 (TASK_PATROL_PATH 0; TASK_WAIT_FOR_MOVEMENT 0; TASK_WAIT_PVS 0; authored-control.md:313-319), m_pGoalEnt := the goal, and a type-4 navigator goal at the goal's origin, tolerance 128.0, activity ACT_WALK 9 (schedule-kernel.md § 0x102800c0). TASK_PATROL_PATH 0x105 (0x102a594d) sets the movement activity and completes; WAIT_FOR_MOVEMENT holds until the goal is reached; WAIT_PVS (Troika run arm 0x102aad7e) completes with the player in view; the program ends and SelectSchedule picks again. The order has no end of its own and no release (0x101a98c0 never resets). The three rows verbatim from sm_hub_1, SMblueblood (npc_VDialogPedestrian) anchored so the 25 m walk to the target crosses the arena clear of the cover block.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 45.0,
+  "known_red": "V3d: the order runs through the port's ScriptedSchedule body claim and its lifetime coupling (M14: BeginScriptedSchedule / EndScriptedSchedule, ElysiumNpc.cpp), where retail's executor 0x101a98c0 does SetState, the mover and nothing else. Seen 2026-10-04: 0x46 and the goal at 2.03 s as retail, then `taskdone task_patrol_path` with no `task` event (the task did not start through MaintainSchedule's start, ElysiumNpcMaintain.cpp:400-416) and `walk rate=0` (red 1, V3a)",
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sm_hub_1",
+    "names": [
+      "SMblueblood",
+      "blue_blood_to_alley",
+      "blue_blood_alley_target"
+    ],
+    "anchor": "SMblueblood",
+    "at": [1100.0, -1100.0, 0.0]
+  },
+  "script": [
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "blue_blood_to_alley",
+      "input": "StartSchedule"
+    }
+  ],
+  "expect": [
+    {
+      "label": "input",
+      "who": "blue_blood_to_alley",
+      "kind": "input",
+      "match": "StartSchedule",
+      "by": 2.5
+    },
+    {
+      "label": "order",
+      "who": "SMblueblood",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_IDLE_PATROL (0x46)",
+      "within": 1.0
+    },
+    {
+      "label": "goal",
+      "who": "SMblueblood",
+      "kind": "move",
+      "match": "goal ",
+      "within": 0.5
+    },
+    {
+      "label": "gait",
+      "who": "SMblueblood",
+      "kind": "task",
+      "match": "task_patrol_path (",
+      "within": 1.0
+    },
+    {
+      "label": "arrived",
+      "who": "SMblueblood",
+      "kind": "move",
+      "match": "arrived",
+      "within": 30.0
+    },
+    {
+      "label": "reselects",
+      "who": "SMblueblood",
+      "kind": "schedule",
+      "match": "",
+      "within": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "SMblueblood",
+      "kind": "taskfail"
+    },
+    {
+      "who": "SMblueblood",
+      "kind": "move",
+      "match": "fail"
+    },
+    {
+      "who": "SMblueblood",
+      "kind": "state",
+      "from": 1.5
+    }
+  ],
+  "notes": "Rows from $ELYSIUM_WORK_ROOT/exports_v2/_sidecars/sm_hub_1/sm_hub_1.ents: the director stands ~63 cm (25 units) from SMblueblood, inside its 128-unit radius; the target is (-1199.6, 2218.6) cm from SMblueblood. Nothing in the shipped game fires this director: SMblueblood's OnDialogEnd python bluebloodToAlley() carries the StartSchedule call commented out (santamonica.py:1833-1834) and no wire targets it. It is the corpus's only mode-1 (walk) row, so the record fires StartSchedule directly, as any wire could; it pins the executor's contract, not a hub defect. The schedule is installed before the goal (0x10280de0, then SetGoal), so OnScheduleChange's goal clear (0x102a0940) does not touch it."
+}

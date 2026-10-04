@@ -4,6 +4,7 @@
 
 #include "Debug/ElysiumArenaCast.h"          // `player.armed`: the cast harness's own grants
 #include "Debug/ElysiumGreenRoomShared.h"    // ResolveDriveBody: the player's pawn, mover and controller
+#include "ElysiumDlg.h"                      // `dialog_choose`: the open turn's response band
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -825,6 +826,21 @@ bool FElysiumArenaScenarioRunner::FireDueActions(double Now, FElysiumEntityWorld
 		FString Error;
 		if (!RunAction(Index, World, Error))
 		{
+			if (Record.bExpectFail)
+			{
+				// A harness self-test states an action the host must refuse (`_selftest/dialog_choose_none`):
+				// the refusal is the failure it expects, recorded as section `script` and then inverted.
+				// Every other record that cannot act ends `error`.
+				FFailure Failure;
+				Failure.bSet = true;
+				Failure.Time = Now;
+				Failure.Section = TEXT("script");
+				Failure.Index = Index;
+				Failure.Kind = ElysiumArenaScenario::ActionName(Action.Do);
+				Failure.Reason = Error;
+				Finish(Now, Failure);
+				return false;
+			}
 			Abort(FString::Printf(TEXT("script[%d] %s: %s"), Index, ElysiumArenaScenario::ActionName(Action.Do),
 				*Error));
 			return false;
@@ -874,6 +890,10 @@ void FElysiumArenaScenarioRunner::RecordAction(const FElysiumArenaAction& Action
 	case EElysiumArenaAction::LightPin:
 		Name = TEXT("player");
 		Text += Action.bLightRelease ? FString(TEXT(" release")) : FString::Printf(TEXT(" %g"), Action.Light);
+		break;
+	case EElysiumArenaAction::DialogChoose:
+		Name = TEXT("player");
+		Text += Action.bDialogEnd ? FString(TEXT(" end")) : FString::Printf(TEXT(" %d"), Action.ChoiceIndex);
 		break;
 	default:
 		break;
@@ -1013,6 +1033,49 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 		Knob->Set(Action.bLightRelease ? ElysiumArenaRunnerDetail::StealthLightOff
 			: static_cast<float>(Action.Light) * ElysiumArenaRunnerDetail::StealthLightScale, ECVF_SetByCode);
 		bLightPinned = !Action.bLightRelease;
+		return true;
+	}
+	case EElysiumArenaAction::DialogChoose:
+	{
+		// The conversation screen's own doors, never a teardown the player cannot reach: a row goes
+		// through `PlayerDialogChoose` (what `UElysiumPresentationSubsystem::DialogueChoose` calls; retail
+		// `CDialog::Pick` `0x100e4bd0`), and `end` -- retail's pick -1, which `Release`s
+		// (`game_runtime.md` § Retail conversation chain, item 4) -- through `PlayerDialogAdvance`, the
+		// Continue (`DialogueAdvance`), whose `AdvanceTerminal` closes the turn through
+		// `FElysiumDlgConversation::Close`, the port's `CDialog::Release` (`0x100e5240`).
+		const FElysiumDlgConversation* Open = World.GetOpenDialog();
+		if (Open == nullptr)
+		{
+			OutError = TEXT("no open dialogue session to answer");
+			return false;
+		}
+		const uint32 Serial = World.GetOpenDialogSerial();
+		const uint32 Revision = Open->Revision();
+		if (Action.bDialogEnd)
+		{
+			World.PlayerDialogAdvance();
+		}
+		else
+		{
+			if (!Open->VisibleChoices().IsValidIndex(Action.ChoiceIndex))
+			{
+				OutError = FString::Printf(TEXT("the open turn lists %d response row(s); there is no row %d"),
+					Open->VisibleChoices().Num(), Action.ChoiceIndex);
+				return false;
+			}
+			World.PlayerDialogChoose(Action.ChoiceIndex);
+		}
+		// `Open` may be gone now (the pick or the release closed the session): re-read it, and only
+		// while the same session is still the open one.
+		const FElysiumDlgConversation* Still = World.GetOpenDialogSerial() == Serial ? World.GetOpenDialog() : nullptr;
+		if (Still != nullptr && Still->Revision() == Revision)
+		{
+			OutError = Action.bDialogEnd
+				? FString(TEXT("the open turn refused the release (an automatic transition is pending)"))
+				: FString::Printf(TEXT("the open turn refused row %d (disabled, or an automatic transition is pending)"),
+					Action.ChoiceIndex);
+			return false;
+		}
 		return true;
 	}
 	default:

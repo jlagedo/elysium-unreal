@@ -106,14 +106,20 @@ Each action runs at `"t": <scenario seconds>` or `"after": "<expect label>"` plu
 | `spawn` | `row` | one more row through `SpawnRuntimeEntity` (arena only) |
 | `player_crouch` | `on` (bool, required) | one press of the duck key through the same replay door as `player_walk` (merged into the walk's command when both run), then a frame with the key up. The duck is retail's toggle on the press edge (`CGameMovement::Duck` `0x10126fd0`): no press when the body is already heading for `on` (ducked or lowering for `true`, standing or rising for `false`); a stand-up with no headroom is swallowed, as a player's is |
 | `light_pin` | `value` (required): a number in `[0, 1]`, or `null` | pins the player's normalized body light through retail's `debug_stealth_light` (`0x109384d8`; set to `value * 10`, so the light reads `value`); `null` sets it back to `-1`, off. The run's end releases a pin it set |
+| `dialog_choose` | `index` (a whole number ≥ 0, the response row as the open turn lists it) or `"end": true`, exactly one | the player answers the open conversation through the conversation screen's own doors: a row through `PlayerDialogChoose` (retail `CDialog::Pick` `0x100e4bd0`), `end` -- retail's pick -1, which releases (`docs/vtmb/game_runtime.md` § Retail conversation chain, item 4) -- through `PlayerDialogAdvance`, the Continue, whose close is the port's `CDialog::Release` (`0x100e5240`). Never a teardown the player cannot reach |
 
 An action that cannot run in this host (`player_walk` or `player_crouch` with no input router, an
-unresolvable target, `light_pin` with no `debug_stealth_light` registered) ends the run as `error`.
+unresolvable target, `light_pin` with no `debug_stealth_light` registered, a `dialog_choose` with no
+open conversation, an `index` past the turn's rows, or a pick or release the open turn refuses -- a
+disabled row, an automatic transition pending) ends the run as `error`. On an `expect_fail` record
+(a harness self-test) it fails the run instead, `first_unmet.section` `script`, so the self-test
+that states a refused action passes.
 
 Every action that runs is written to the trace first, as kind `script`: the entity column is its
 target (`player` for the player's actions and `light_pin`, the row's name for `spawn`, `-` for
 `console`), the text its `do` and arguments (`fire SetRelationship "player D_HT 5"`,
-`player_walk north`, `player_crouch on`, `light_pin 0.2`, `light_pin release`).
+`player_walk north`, `player_crouch on`, `light_pin 0.2`, `light_pin release`, `dialog_choose 0`,
+`dialog_choose end`; `player` is the entity column of the last two).
 
 ## `expect`
 
@@ -214,7 +220,8 @@ staged on a released stage and runs.
 `expect_fail: true` inverts pass and fail before `known_red` is applied.
 
 The headless host writes `<out>/index.json` (`seam.md` § "The launch contract"; each failure's
-`first_unmet` carries `section` — `expect`, `never` or `probe` — and a `reason`) and
+`first_unmet` carries `section` — `expect`, `never`, `probe`, or `script` on an `expect_fail`
+record — and a `reason`) and
 `<out>/<name>.trace.tsv`: every event of the run, `time name kind text`, time in scenario seconds.
 
 ## The records
@@ -227,5 +234,6 @@ The headless host writes `<out>/index.json` (`seam.md` § "The launch contract";
 | `_selftest/bound_trips` | a deadline is a deadline: a real event after it does not count |
 | `_selftest/never_at_most_holds`, `never_at_most_trips` | `at_most` tolerates its bound and fails the run at the match past it |
 | `_selftest/never_after_ignores` | a `never` opened `after` a label does not count a match before it |
+| `_selftest/dialog_choose_none` | a `dialog_choose` with no open conversation is reported as an action the harness could not run, never passed |
 | `_selftest/player_reset_a`, `player_reset_b` | the player's posture and wielded item do not leak into the next record of the boot (`player_crouch`, the player probes) |
 | `_selftest/stage_failed_a`, `stage_failed_b` | a stage that goes Failed (`a`, `error` by design, so parked as `.json.parked`: restore it to run the pair) does not stop the next record staging fresh and passing (`b`) |

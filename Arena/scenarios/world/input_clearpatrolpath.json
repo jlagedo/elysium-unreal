@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 40.0,
-  "known_red": "1: the patrol walk plays at rate 0 and the NPC covers ~0.66 m/s, so the 10 m leg after ClearPatrolPath misses its deadline",
+  "known_red": "V3a: 1: the patrol walk plays at rate 0 and the NPC covers ~0.66 m/s, so the 10 m leg after ClearPatrolPath misses its deadline",
   "player": {
     "at": "start"
   },

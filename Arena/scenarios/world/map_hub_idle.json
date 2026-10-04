@@ -4,7 +4,7 @@
   "stage": "map:sm_hub_1",
   "seed": 1,
   "duration": 60.0,
-  "known_red": "6: the port's ambient executor answers use_interesting instead of the 0xff program",
+  "known_red": "V3b: 6: the port's ambient executor answers use_interesting instead of the 0xff program",
   "cast": [ { "name": "patrol_cop" }, { "name": "patrol_cop_north" }, { "name": "pedestrian_female" } ],
   "expect": [
     { "label": "cop_arrives", "who": "patrol_cop", "kind": "move", "match": "arrived", "by": 30.0 },

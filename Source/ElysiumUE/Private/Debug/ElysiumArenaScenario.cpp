@@ -703,7 +703,7 @@ namespace ElysiumArenaScenarioParse
 		{
 			EElysiumArenaAction::PlayerTeleport, EElysiumArenaAction::PlayerWalk, EElysiumArenaAction::Fire,
 			EElysiumArenaAction::Console, EElysiumArenaAction::Spawn, EElysiumArenaAction::Kill,
-			EElysiumArenaAction::PlayerCrouch, EElysiumArenaAction::LightPin,
+			EElysiumArenaAction::PlayerCrouch, EElysiumArenaAction::LightPin, EElysiumArenaAction::DialogChoose,
 		};
 		TArray<FString> Names;
 		for (const EElysiumArenaAction Action : All)
@@ -725,7 +725,7 @@ namespace ElysiumArenaScenarioParse
 		Out = FElysiumArenaAction();
 		if (!CheckFields(R, Object, Path, { TEXT("t"), TEXT("after"), TEXT("delay"), TEXT("do"), TEXT("at"),
 				TEXT("face"), TEXT("target"), TEXT("input"), TEXT("param"), TEXT("command"), TEXT("row"),
-				TEXT("on"), TEXT("value") }))
+				TEXT("on"), TEXT("value"), TEXT("index"), TEXT("end") }))
 		{
 			return false;
 		}
@@ -756,6 +756,13 @@ namespace ElysiumArenaScenarioParse
 		if (Out.Do != EElysiumArenaAction::LightPin && bHasValue)
 		{
 			return R.Fail(Field(Path, TEXT("value")), TEXT("only `light_pin` takes `value`"));
+		}
+		for (const TCHAR* Key : { TEXT("index"), TEXT("end") })
+		{
+			if (Out.Do != EElysiumArenaAction::DialogChoose && FindValue(Object, Key) != nullptr)
+			{
+				return R.Fail(Field(Path, Key), FString::Printf(TEXT("only `dialog_choose` takes `%s`"), Key));
+			}
 		}
 
 		switch (Out.Do)
@@ -826,6 +833,33 @@ namespace ElysiumArenaScenarioParse
 				return R.Fail(Field(Path, TEXT("value")), TEXT("a normalized light in [0, 1], or null to release"));
 			}
 			Out.Light = (*Value)->AsNumber();
+			return true;
+		}
+		case EElysiumArenaAction::DialogChoose:
+		{
+			bool bHasIndex = false;
+			double Index = 0.0;
+			if (!ReadNumber(R, Object, TEXT("index"), Path, ENeed::Optional, Index, bHasIndex)
+				|| !ReadBool(R, Object, TEXT("end"), Path, Out.bDialogEnd))
+			{
+				return false;
+			}
+			if (FindValue(Object, TEXT("end")) != nullptr && !Out.bDialogEnd)
+			{
+				return R.Fail(Field(Path, TEXT("end")), TEXT("`end` is only ever true: give `index` to pick a row"));
+			}
+			if (bHasIndex == Out.bDialogEnd)
+			{
+				return R.Fail(Path, TEXT("`dialog_choose` takes `index` (a response row) or `end: true`, exactly one"));
+			}
+			if (bHasIndex)
+			{
+				if (FMath::Frac(Index) != 0.0 || Index > static_cast<double>(MAX_int32))
+				{
+					return R.Fail(Field(Path, TEXT("index")), TEXT("a whole number >= 0, the row as the turn lists it"));
+				}
+				Out.ChoiceIndex = static_cast<int32>(Index);
+			}
 			return true;
 		}
 		default:
@@ -1252,7 +1286,8 @@ const TCHAR* ActionName(EElysiumArenaAction Action)
 	case EElysiumArenaAction::Kill:           return TEXT("kill");
 	case EElysiumArenaAction::PlayerCrouch:   return TEXT("player_crouch");
 	case EElysiumArenaAction::LightPin:       return TEXT("light_pin");
-	default:                                  return TEXT("?");
+	case EElysiumArenaAction::DialogChoose:   return TEXT("dialog_choose");
+	default:                                 return TEXT("?");
 	}
 }
 

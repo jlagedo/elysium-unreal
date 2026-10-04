@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 80.0,
-  "known_red": "6: the port's ambient executor answers use_interesting instead of the 0xff program",
+  "known_red": "V3b: 6: the port's ambient executor answers use_interesting instead of the 0xff program",
   "player": { "at": "start" },
   "from_map": {
     "map": "sp_tutorial_1",

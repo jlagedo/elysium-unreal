@@ -4,7 +4,7 @@
   "stage": "map:sp_tutorial_1",
   "seed": 1,
   "duration": 60.0,
-  "known_red": "6: thug_1 (use_interesting 1) is owned by the port's ambient executor: no 0xff program, no gather",
+  "known_red": "V3b (the first half; the hearing half stays on V12/R1): 6: thug_1 (use_interesting 1) is owned by the port's ambient executor: no 0xff program, no gather",
   "script": [
     {
       "t": 0.5,

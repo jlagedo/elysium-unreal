@@ -223,6 +223,17 @@ public:
 	// +0x5d5c m_flCheckOnGroundTime (walked) — an absolute curtime deadline, carried as double
 	double CheckOnGroundTime = 0.0;
 
+	// +0x5d70 m_scriptState (datamap) -- the NPC's scripted-sequence state: 0 playing, 1 wait,
+	// 2 post-idle, 3 cleanup, 4 walk-to-mark, 5 run-to-mark, 6 custom-move-to-mark. Writers:
+	// `PossessEntity` `0x101a7880` (by `m_fMoveTo`), `StartTask` `0x102827f0` (`0x62` -> 0, `99`
+	// -> 2), `ScriptEntityCancel` `0x101a7170` (-> 3), `CineCleanup` `0x1027d170` (-> 0). Readers:
+	// `ShouldThinkFrequently` `0x102c2430`, `TaskMovementComplete` `0x10273f01`, the `0x60` / `0x66`
+	// task arms. SEAM (V3a): not written yet -- the cine holds the word as
+	// `FElysiumScriptedSequence::NpcScriptState` until V3c moves its writers here.
+	int32 ScriptState = 0;
+	int32 GetScriptState() const { return ScriptState; }
+	void SetScriptState(int32 State) { ScriptState = State; }
+
 	// +0x5d7c m_ScriptArrivalActivity (sdk-order) — an activity enum with no port counterpart, so
 	// the registered number
 	int32 ScriptArrivalActivity = 0;

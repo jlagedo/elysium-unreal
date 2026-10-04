@@ -991,6 +991,17 @@ public:
 
 	bool bWillTalk = false;       // WillTalk (79 calls) — this character will start a conversation
 
+	// `m_hDialogPartner` (`+0xfe8`, `CBaseCombatCharacter`, datamap EHANDLE): the character this one
+	// is in conversation with. Retail's one writer is `CBaseCombatCharacter::SetDialogPartner`
+	// (`0x10107050`), called by the real StartDialog `FUN_10178280`, `CDialog::Release`
+	// (`0x100e5240`) and the NPC's dialogue-end path `0x102c0360`.
+	// SEAM (V3a): invalid and never written yet. The port's readers still stand for it with "this
+	// character owns the open dialogue session" (`FElysiumNpc::HasLiveDialogPartner`); V3d turns them
+	// to this word once `SetDialogPartner` has a body.
+	FElysiumEntityHandle DialogPartner;
+	const FElysiumEntityHandle& GetDialogPartner() const { return DialogPartner; }
+	void SetDialogPartner(const FElysiumEntityHandle& Partner);
+
 	// `IsBusyWithDiscipline(npc)` — one of the four common guards `CBasePlayer::PlayerUse`
 	// (`0x10167850`) and the `StartPlayerDialog*` route through `CAI_BaseNPCTroika::StartTask`
 	// (`0x102a1910`) both apply before a conversation may open: a character in the middle of a

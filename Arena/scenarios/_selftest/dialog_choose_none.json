@@ -1,0 +1,14 @@
+{
+  "name": "dialog_choose_none",
+  "about": "Harness self-test: a `dialog_choose` with no open dialogue session is reported as an action the harness could not run, never passed silently. Nothing opens a conversation; the pick at t=1.0 finds none. Under `expect_fail` the refusal is the failure the record expects (section `script`), so the run passes; without `expect_fail` the same record ends `error`. Reported as `fail`, it means the action ran with no session and its own trace line then met the expectation.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 4.0,
+  "expect_fail": true,
+  "script": [
+    { "t": 1.0, "do": "dialog_choose", "index": 0 }
+  ],
+  "expect": [
+    { "label": "picked", "who": "player", "kind": "script", "match": "dialog_choose 0" }
+  ]
+}

@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 40.0,
-  "known_red": "new: BeginSequence possesses nothing the kernel sees: no NPC_STATE_SCRIPT and no SCHED_TROIKA_SCRIPTED_WALK (the director's beat stands in, divergence 18, V3)",
+  "known_red": "V3c: new: BeginSequence possesses nothing the kernel sees: no NPC_STATE_SCRIPT and no SCHED_TROIKA_SCRIPTED_WALK (the director's beat stands in, divergence 18, V3)",
   "player": {
     "at": "start"
   },

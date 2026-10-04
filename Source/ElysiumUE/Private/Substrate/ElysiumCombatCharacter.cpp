@@ -449,6 +449,13 @@ void FElysiumCombatCharacter::InputWillTalk(const FElysiumInputArgs& Args)
 	bWillTalk = Args.Param.ToInt() != 0;
 }
 
+void FElysiumCombatCharacter::SetDialogPartner(const FElysiumEntityHandle& Partner)
+{
+	// `CBaseCombatCharacter::SetDialogPartner` `0x10107050`: filled in V3d from packet R1. Until then
+	// nothing writes `m_hDialogPartner` (+0xfe8) and `DialogPartner` stays invalid.
+	(void)Partner;
+}
+
 void FElysiumCombatCharacter::InputInventoryRemove(const FElysiumInputArgs& Args)
 {
 	// The recovered field type is CLASSPTR, so the parameter is an entity and nothing else. A wire
