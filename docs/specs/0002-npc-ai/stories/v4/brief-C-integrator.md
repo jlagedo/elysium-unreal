@@ -61,6 +61,58 @@ V4o**. Where a step below and this block disagree, this block wins.
   `flamet_attack_layer`-family clips if a record reaches one (S12 a.1: the layer authors no 3031).
 - **K4's open point** goes to the owner as a ruling, not a recovery (S12 item c).
 
+**Added 2026-10-04 by the V5 planner, after V11's commit `88649932`** (two items; both read from
+the listing):
+
+- **`chase_melee` is C1's item 3b** (`brief-C1-attack-producers.md`): the swing as the NPC's own
+  `m_nSequence` (slot 331 → slot 311) and `AutoMovement 0x10280a50` moving the body by the
+  sequence's interval movement (`0x10094b70` → `MoveGroundStep 0x102e0bd0`). **Cross-lane lines,
+  added to step 1**: (e) the embodiment accessor C1 reports —
+  `IElysiumEmbodiment::GetBodySequenceIntervalMovement(Body, Stem, RawIndex, CycleFrom, CycleTo,
+  OutDeltaCm, OutYawDeltaDegrees)`, declared beside `GetBodySequenceMovement`
+  (`Public/ElysiumWorldServices.h` ~:1142, default zero / false), overridden in
+  `Public/ElysiumMapActor.h` ~:437 and `Map/ElysiumMapActorEmbodiment.cpp` ~:311 over the same
+  baked path (`ElysiumClipMovement::SampleDelta` with the two cycles), and in the test double
+  (`Tests/ElysiumTestServices.h`) if C1's arm test needs it; (f) if C1 reported that
+  `SetRuntimeOrigin` does not carry the capsule, the one line `Motor->Teleport(end, yaw)` at
+  `AutoMovement`'s apply. **Acceptance, replacing step 6's "`melee_swing`, `chase_melee`: green
+  before you start"**: `chase_melee` is `expected-fail` when you start and must turn green —
+  the end probe under 200 cm and a `damage` line on the player; `known_red` removed; its trace
+  shows the kernel's `sequence` line naming the swing clip at a non-zero rate during
+  `task_melee_attack1`. Still red → read whether the `sequence` line changed (site (i)) and
+  whether the brawler's distance fell during a swing (sites (ii) / (iii)), and place it.
+- **A new record, `Arena/scenarios/combat/melee_enemy_blocked.json`** — the exactly-in-line case
+  V11's integrator restaged `melee_ally_in_the_way` around. You write it, run it with step 5's
+  list, and it is expected **green on the tree as it stands** (V11 measured it: `cond+
+  ENEMY_BLOCKED` at 0.600, then `0xce`); red is triaged, not loosened.
+  - `about` (retail, read): slot 331 `ChooseMeleeAttackSequence 0x10347180`'s line gate — one
+    zero-extent trace between the two slot-192 centres (`0x1034727b`, `CALL 0x1000ae25`); a hit
+    (fraction below 1.0, or start-solid / all-solid) on an entity that is not the target, not
+    the entity of the target's handle `+0x1538`, and whose flag word `+0x4c` has bit 10 clear →
+    `SetCondition(0x3a COND_ENEMY_BLOCKED)` (`0x103472f2..0x103472f6`) and the body leaves
+    (`JMP 0x10347d97`): no sequence. The melee failure gate **`0x102b6fe0`**: `COND 0x48` first
+    (`0xe9` line `0x5a5f` with a usable ranged weapon, slot 308; else `0xcd`, `0x5a69`); then
+    `COND 0x3a` → slot 308 true → slot 601 when `m_bInMelee (+0x6078)`, `0xe9` (`0x5a77`); **else
+    `0xce` `SCHED_TROIKA_MELEE_ADVANCE_NR_LKP_NOSEE` (`0x5a81` = `AI_BaseNPCTroika.cpp:23169`)**;
+    neither condition → 0. `CNPC_VHuman::SelectScheduleMeleeCombat 0x10385e40` offers it first in
+    the out-of-melee arm and, in the common tail, right after `0x102b7370` — **before** the
+    condition ladder and before `0x102a11d0` (`shape.md` § "`CNPC_VHuman::SelectScheduleMeleeCombat`
+    — `0x10385e40`"), so an ally exactly on the line is answered by `0xce`, never by the circle.
+    (`melee_ally_in_the_way`'s `about` cites the raise at `0x103472e8`; the `PUSH 0x3a` is at
+    `0x103472f2`. Correct that one address there, nothing else.)
+  - Staging: `melee_ally_in_the_way`'s cast, seat, seed and keys, with **`arena_front` at
+    `[-775.0, 0.0, 0.0]`** — exactly on the line from `arena_rear` (`[-525.0, 0.0, 0.0]`) to the
+    player; `duration` 10.
+  - `expect`, on `arena_rear`, in order: `engages` (`schedule`, `SCHED_TROIKA_START_COMBAT (`,
+    `by 3.0`); `blocked` (`cond+`, `ENEMY_BLOCKED (0x3a)`, `within 2.0`); `advance_lkp`
+    (`schedule`, `\(0xce\)$`, regex, `within 1.0`).
+  - `never`: on `arena_rear`, `schedule` `\(0xe1\)$` and `\(0xcb\)$` with `until` set from the
+    first trace to the moment `arena_front` leaves the line (its first `move goal`; V11's run
+    puts `0xce` at about 0.6 s — start from `until: 1.5` and state the measured time in
+    `notes`); `death` on both; `damage` `from=arena_front` on `arena_rear` (D1, `0x1034394d`).
+  - `notes`: matched by class-local number, as `melee_ally_in_the_way` is; the two records are a
+    pair — on the line `0x3a` and `0xce`, 50 cm off it `0x102a11d0` and `0xe1`.
+
 1. **Apply the cross-lane lines** the coders reported, nothing more. Expected: C2's K4 line in
    `ElysiumWeaponClasses.cpp` (`FElysiumWeapon::BuildActivityClipRequest`'s `Variant`); a
    mismatch between C1's call and C2's body of `SequenceBounds` (README § "Shared names" is the

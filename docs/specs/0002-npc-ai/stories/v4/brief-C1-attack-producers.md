@@ -100,7 +100,10 @@ are exactly item 1.
 
 Runtime (`Source/ElysiumUE/Private/Substrate/` unless a path says otherwise):
 
-- `ElysiumNpcBaseMotor.cpp` (`PostRun`'s weapon line, `++PostRunWeaponUpdates` ~:597, only)
+- `ElysiumNpcBaseMotor.cpp` (`PostRun`'s weapon line, `++PostRunWeaponUpdates` ~:597; and, for
+  item 3b, `AutoMovement` ~:549 and `AnimIntervalMovement` ~:153 — these three only),
+  `ElysiumNpcBaseMotor.inl` (item 3b's two declaration comments),
+  `Tests/ElysiumNpcKernelMotorTests.cpp` (item 3b's `AutoMovement` case)
 - `ElysiumWeaponClasses.{h,cpp}` (the `ContactEventCycle` estimate ~`.h:303`, `.cpp:1263-1317,
   2166`; `OperatorHandleAnimEvent` ~:1349; `IsMeleeSwingTrigger` ~`.cpp:468`; the weapon's frame
   update; of the swing contact only `AdvanceSwingContact`'s entry, its sub-step loop and the
@@ -254,6 +257,111 @@ in C2's `ElysiumNpcAnim.cpp`; `CreateCorpse` and the pedestrian's override are C
        your report — a pose evaluator is then a judge item, not yours to build.
      Where the port has no word for `+0xaa1`, `+0xaa4` or the stored last pose, add them in
      `ElysiumWeaponClasses.h` or report the exact declaration if their home is a file not yours.
+3b. **The swing's own movement — `chase_melee`'s red, placed on you by V11's integrator**
+   (commit `88649932`: every expectation met, the end probe 305.8 cm against 200, no `damage` in
+   40 s; added 2026-10-04 by the V5 planner, the chain read from the listing this sitting).
+   **Retail, in order:**
+   - `CWeaponMelee::RequestActivity 0x103e9e00` (slot 372, from `PrimaryAttack 0x103eaca0`) for an
+     **NPC** owner: the target is the owner's `GetEnemy()` (owner `+0x98` → slot 167; no
+     `FindEntityFOV` — that arm is the player's); `act = owner slot 376(weapon slot 361(0x4b))`;
+     owner **slot 331** (`+0x52c`) `(weapon, target, act, &seq)` — refused or `seq < 0` and not
+     forced → return 0, nothing played; else owner **slot 311** (`+0x4dc`)
+     `ForcePreTranslatedSequenceAndActivity 0x10272400` — **the swing clip becomes the NPC's own
+     `m_nSequence`**, `m_Activity` / `m_IdealActivity = 0x4b`, cycle 0; then `m_flPlaybackRate =
+     speed scale × the rank factor`; `m_flNextAttack = max(self, curtime + SequenceDuration ÷
+     rate)`, and both weapon next-attack words raised to it.
+   - The start arm `0x102a45c6` then calls `AutoMovement`; **`RunTask`'s attack arm calls it on
+     every think** (`0x102891f6`, before `MoveStop`; the `_NOTURN` / `PLAY_SEQUENCE` arm at
+     `0x102891ca`).
+   - **`AutoMovement 0x10280a50`**: slot 250 `StudioFrameAdvance`; `GetIntervalMovement
+     0x10094b70(m_flAnimTime − m_flPrevAnimTime, …)`; then the gate (`GetMoveType() == 4`,
+     `FL_FROZEN 0x400` clear); then `CAI_Motor::MoveGroundStep 0x102e0bd0(newPos,
+     0x102729d0(this), newYaw, 0, 0, 0, 0)`, answering `== 1`.
+   - **`GetIntervalMovement 0x10094b70(interval)`**: no model → nothing. `to = cycleRate ×
+     m_flPlaybackRate × interval + m_flCycle`; a non-looping sequence with `to > 1.0` → `to =
+     1.0` and the finished byte out; `Studio_SeqMovement 0x100c5d10(model, m_nSequence,
+     m_flCycle, to, poseParameters, &dPos, &dAng)` (up to four animations weighted by the pose
+     parameters `0x100c5400`, each `0x100c5b00(anim, from, to)`); `dPos` rotated by the local yaw
+     (`0x1013a7e0`, slot 221's `[1]`); `newPos = local origin (slot 220) + dPos`; `newAngles =
+     (0, yaw + dAng.y, 0)`. It samples **from the cycle slot 250 just advanced to**, forward by
+     the interval just elapsed — reproduce it, do not "correct" it to the span just played.
+   - **`0x102729d0`** (the move target): the navigator's goal type (`0x102ee620(+0x5d34)`) 2 →
+     `m_hEnemy (+0x5ce0)`; 1 → `m_hTargetEnt (+0x5ce4)`; 7 → the Troika slot `+0x928` handle; else
+     none.
+   - **`MoveGroundStep 0x102e0bd0`** (`schedule-kernel.md` § "`CAI_Motor::MoveGroundExecute`
+     `0x102e14a0` and its walk `0x102e1560`", the S5 paragraph): `TestGroundMove 0x102e4f50(origin, newPos, 0x202400b, 100.0, flags 5)`;
+     blocked (`fStatus < 0`) and the obstruction is not the move target → **0, nothing moved**
+     (`bAsFarAsCan` is 0 here); else `origin = the trace's end`, `newYaw != −1` sets the local
+     yaw; answers 4 (stopped at the target) / 1 / 2 / 3.
+
+   **Where the port breaks it — three sites:**
+   - (i) `FElysiumWeapon::BeginMeleeSwing` → `ResolveAndPlay` → `Char->PlayAnimSegment(Segment)`
+     (`ElysiumWeaponClasses.cpp`, Grep both names): an NPC's swing is an embodiment clip on the
+     `Base` channel picked by `ResolveNpcActivityClip`, **not** slot 331's sequence committed
+     through slot 311. The kernel's row stays the idle / combat-move row at rate 0 — which is
+     also why `MeleeSwingUpdate` (item 3), which reads the owner's `m_nSequence` descriptor
+     (`+0x2c4`), `m_flCycle` and `m_flAnimTime`, has nothing to read.
+   - (ii) `FElysiumNpcBase::AnimIntervalMovement` (`ElysiumNpcBaseMotor.cpp` ~:153): a seam
+     answering false with a zero delta.
+   - (iii) `FElysiumNpcBase::AutoMovement` (`ElysiumNpcBaseMotor.cpp` ~:549): the gate is ported,
+     then the delta is discarded ("the apply is Unreal's") — and nothing extracts root motion
+     from a kernel sequence row, so no body moves.
+
+   **You:**
+   - (i) For a **non-player** owner, `BeginMeleeSwing` asks the owner's slot 331
+     (`ChooseMeleeAttackSequence`, V11-3, `ElysiumMeleeSequenceChoice.{h,cpp}` — call, do not
+     edit) with the enemy and the translated activity (`WeaponActivityOverride`, V11), and commits
+     its answer through the NPC's slot 311 `FElysiumNpcBase::ForcePreTranslatedSequenceAndActivity`
+     (`ElysiumNpcBaseAnim.cpp`, exists — call, do not edit); a refusal starts no swing. The
+     playback rate is written on the **kernel's** word after the commit (the listing's order); the
+     recovery is `SequenceDuration ÷ rate` of that sequence. No `PlayAnimSegment` for an NPC: the
+     sequence bridge plays `m_nSequence`. `Swing.ClipLabel` / `ClipOwnerStem` name the committed
+     sequence. The player's arm is untouched.
+   - (ii) `AnimIntervalMovement` becomes `GetIntervalMovement 0x10094b70`: the two cycles as
+     above, then **one embodiment question** for the span. The landed accessor
+     `IElysiumEmbodiment::GetBodySequenceMovement` is the whole sequence (`0x100c6020`); the
+     interval form is not there. Call — and write in your report, exact, for the integrator to
+     add beside it (`Public/ElysiumWorldServices.h`, `Public/ElysiumMapActor.h`,
+     `Map/ElysiumMapActorEmbodiment.cpp`: the same baked path,
+     `ElysiumClipMovement::SampleDelta(*Path, Path->LastFrame() + 1, CycleFrom, CycleTo, Out)`;
+     not your files) —
+     `virtual bool GetBodySequenceIntervalMovement(USkeletalMeshComponent* Body, const FString&
+     Stem, int32 RawIndex, float CycleFrom, float CycleTo, FVector& OutDeltaCm, float&
+     OutYawDeltaDegrees)` (default: zero and false, retail's `nummovements == 0`). The pose
+     parameters' blend (`0x100c5400`) is a named seam at your line (the baked path is the
+     sequence's first animation): a swing clip is not a blend grid. You rotate the delta by the
+     NPC's yaw and add the origin.
+   - (iii) `AutoMovement` applies it: after the gate, the ground test from the origin to `newPos`
+     — the kernel's landed stand-ins for `TestGroundMove`, `KernelHullTrace` with the standing
+     hull under `0x202400b` (the character rule finds the enemy) and `MotorMoveTraceSweep(0, …)`
+     (`ElysiumNpcBaseMotor10.cpp`, the NavMesh ground arm, a divergence already named there;
+     read, not edited) — blocked and the obstruction is not `0x102729d0`'s entity → return false,
+     nothing moved; else **`SetOrigin(end)`** and the yaw. **How the body is commanded (K1):**
+     through the entity's slot 62, `FElysiumEntity::SetOrigin` → `SetRuntimeOrigin`, "which
+     moves the body with it" — the door `MotorSetOriginToTraceEnd` already uses
+     (`ElysiumNpcBaseMotor10.cpp` ~:124): one placement per think, as retail's own origin write;
+     no `MoveTo` request and no speed command (the task has just called `MoveStop`). Read
+     `SetRuntimeOrigin`: if it does not carry the capsule (the per-frame record sync would then
+     write the old place back), report it — the integrator's line is `Motor->Teleport(end,
+     yaw)` — and do not invent a motor call. Return retail's `== 1`. `0x102729d0` is a small
+     helper beside it (the navigator's goal type is `NavGoalState()`).
+   - Files added to your list for this item: `ElysiumNpcBaseMotor.cpp` (`AutoMovement`,
+     `AnimIntervalMovement`), `ElysiumNpcBaseMotor.inl` (their two comments),
+     `ElysiumWeaponClasses.cpp` (`BeginMeleeSwing`'s NPC arm),
+     `Tests/ElysiumNpcKernelMotorTests.cpp` (the `AutoMovement` case ~:739). Neither is C2's.
+   - Tests: `Elysium.Arm.NpcKernelMotor.AutoMovement` rewritten (`0x10280a50`, `0x10094b70`,
+     `0x102e0bd0`): a sequence with a movement record moves the origin by the span's delta
+     rotated by the yaw; move type not 4, or `0x400` set → nothing; a blocked step whose
+     obstruction is not the move target → nothing and false; stopped at the enemy → the trace's
+     end; a non-looping sequence past its end → the span clamps at cycle 1.0. In
+     `ElysiumWeaponTests.cpp`: an NPC's swing start commits slot 331's sequence as the kernel's
+     row with cycle 0 and plays no `Base`-channel segment; slot 331 refusing starts nothing.
+   - **Proof**: `chase_melee` green (the end probe under 200 cm, a `damage` line on the player);
+     `melee_swing` and `melee_ally_in_the_way` stay green. Every task that calls `AutoMovement`
+     (`TASK_PLAY_SEQUENCE`, `TASK_RELOAD`, the species arms) now moves a body whose sequence
+     authors movement: retail's, and the full arena is its check — say in your report which
+     shipped clips on the two maps' bodies author a movement record, if a Grep of the staged
+     sidecars answers it inside the query budget.
 4. **Slot 247 `SetAttackExtentsForSequence 0x10090c80`, whole** (J2), called by
    `ResetSequenceInfo`: only when `Flags2 & 4` — `CAI_BaseNPCTroika::Spawn 0x10298d30` calls
    `AddFlag2(4)`, so it is live on every Troika NPC; `RemoveFlag2(4)`: `CPayphone`,
