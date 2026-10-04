@@ -618,7 +618,7 @@ tests the green scenarios cover deleted.
   fixes; the list's other producers and words stay in R1. *Scenario:*
   `map_tutorial_sneak_past`'s hearing half. *Size:* S. Reading packet first.
 - [ ] **V13. The pedestrian nav area in the hub's bake.** (New, from the V3b follow-up: N16;
-  **proposed, awaiting the owner**.) A fault in landed work (0018/3's NavMesh bake, 0018/7's
+  accepted 2026-10-04: the owner sent it to an adversarial judge, who ruled *implement now*, ahead of V3c — gate 2 and V8's hub clause need pedestrians to cross, one build and one ~4-minute bake of `sm_hub_1` settle the lead, and the bake rewrites only gitignored files. The fix: each area modifier includes the agent height (retail's `0x2000` test runs between node positions ~21 cm above the ground, `102fbbaa`; Recast tests the ground surface), named under 0018/6's NavMesh divergence; the hub content test extended to ask the baked mesh. Six other maps carry the same slabs and take the fix at their next bake (R2). It runs in one wave with the two senses bugs Q-H3 found: `OnLooked 0x1026a2c0` never clearing the SEE family, and the last-known position read from `+0x0` where retail reads `+0xc`.) A fault in landed work (0018/3's NavMesh bake, 0018/7's
   crosswalk): on `sm_hub_1`'s baked Recast meshes no roadway polygon carries
   `UElysiumNavArea_Pedestrian` (`NavAreaAt` answers `NavArea_Default` inside all 9 priced slabs), so
   the pedestrian filter's ×5–10 price applies to nothing, routes cut the road diagonally and the
@@ -631,7 +631,8 @@ tests the green scenarios cover deleted.
   258, then 259). *Scenario:* `hub_crosswalk_wait`. *Size:* S–M. Evidence: `stories/v1/triage.md`
   N16 and § "V3b follow-up".
 
-Order: V1 → V2 → H → V3 → V4 → V5 → V11 ‖ V6 → V7 → V10 → V12 → V13 → V2 again (full run) → V8 → V9.
+Order: V1 → V2 → H → V3 (V3r, V3a, V3b, V13, V3c, V3d) → T6b → V4 → V5 → V11 ‖ V6 → V7 → V10 → V12 → V2 again (full run) → V8 → V9.
+**T6b, the header pass** (the owner, 2026-10-04; `stories/t6b/brief.md`): the kernel headers' include fan-out cut after V3d and before V4, one agent holding the build; it closes T6 (edit-mix p90 ≤ 90 s).
 The new reds ride their stories: N1, N2 in V5; N5, N6 in V7; N7, N8 in V3; N9, N10 in V6; N13 in
 V4 (from V3a: the patrols' acceptance moves there); N12 in R2; N14 in V6; N15 in V3b's follow-up
 wave (from V3b; N10 closed into red 5); N16 in V13 and N17 in R2 (from the V3b follow-up).
@@ -714,9 +715,16 @@ A bug found is fixed: none is recorded and left. Each one goes through these ste
    the owner accepts it.
 6. **Done** when the record is green and its `known_red` removed.
 
+The owner's standing rulings (2026-10-04), for work that runs without him: an old bug in landed
+work is fixed, to retail's behaviour, without waiting; a bug that needs a later phase, the
+pipeline or a re-bake goes to an **adversarial judge** agent, which argues against doing it now
+and rules *implement now*, *leave a stub* or *file for later*, its reasons recorded in the
+triage; a new divergence is recorded and not adopted, and the work goes on around it; the
+default is always retail's behaviour.
+
 ## The sequence
 
-[T1 + T2 + T4] → [T3 + T5 + T2's C++] → T6 → **gate 1** → V1 → V2 → H → V3 → V4 → V5 → [V11 + V6] → V7 → V10 → V12 → V13 → V2 → V8 → V9 →
+[T1 + T2 + T4] → [T3 + T5 + T2's C++] → T6 → **gate 1** → V1 → V2 → H → V3r → V3a → V3b → V13 → V3c → V3d → T6b → V4 → V5 → [V11 + V6] → V7 → V10 → V12 → V2 → V8 → V9 →
 **gate 2** → R1 → R2 → R3 → R4 → [R5 + R6] → R7 → R8 → 0002 closes.
 
 Serial: one wave at a time in the one checkout. Brackets are stories whose coders share one wave

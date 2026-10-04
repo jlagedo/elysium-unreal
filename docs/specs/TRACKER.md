@@ -83,6 +83,8 @@ Wave 3 (build work, one agent):
     (V13, proposed); N17 filed (R2).
   - [ ] **V3c** — the scene hold through `m_scriptState` and `SCHED_AISCRIPT`. M.
   - [ ] **V3d** — the dialogue hold as a program; the arbiter deleted whole. M–L.
+- [ ] **T6b** — The header pass: the kernel headers' include fan-out, after V3d; closes T6
+  (`0002-npc-ai/stories/t6b/brief.md`). M · Opus/high.
 - [ ] **V4** — Fix: the animation chain under the kernel. M · Opus/high.
 - [ ] **V5** — Fix: the attack conditions and the combat interrupts. S · Fable/medium.
 - [ ] **V6** — Fix: session, clock and lifecycle. M · Opus/high.
@@ -91,7 +93,8 @@ Wave 3 (build work, one agent):
 - [ ] **V10** — A sound's life in `Listen` (new: the expiry race). S.
 - [ ] **V12** — The footstep sound producer (pulled from R1; the tutorial's hearing half). S.
 - [ ] **V13** — The pedestrian nav area in the hub's bake (new, from the V3b follow-up: N16;
-  `hub_crosswalk_wait`). S–M. **Proposed, awaiting the owner.**
+  `hub_crosswalk_wait`). S–M. Accepted 2026-10-04 (the judge: implement now, ahead of V3c); runs
+  with the two senses bugs from Q-H3 (the SEE clear in `OnLooked`, the last-known position's field).
 - [ ] **V2 again** — the full run, every scenario green.
 - [ ] **V8** — `sp_tutorial_1` and `sm_hub_1`, live. S · Opus/high.
 - [ ] **V9** — The second cut: the arm tests the scenarios cover. S · Sonnet/medium.
