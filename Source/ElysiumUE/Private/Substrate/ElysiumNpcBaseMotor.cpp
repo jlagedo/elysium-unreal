@@ -1796,3 +1796,10 @@ bool FElysiumNpcBase::IsJumpLegalGeometry(const FVector& StartUnits, const FVect
 		+ static_cast<float>((StartUnits.X - EndUnits.X) * (StartUnits.X - EndUnits.X)));
 	return !(MaxDistance + NpcKernelMotorShared::GJumpLegalSlack < Distance);
 }
+
+bool NpcKernelMotorShared::IsJumpLegalGeometry(const FVector& StartUnits, const FVector& ApexUnits,
+	const FVector& EndUnits, float MaxRise, float MaxDrop, float MaxDistance)
+{
+	return FElysiumNpcBase::IsJumpLegalGeometry(StartUnits, ApexUnits, EndUnits, MaxRise, MaxDrop,
+		MaxDistance);
+}

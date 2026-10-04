@@ -28,14 +28,18 @@
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumItemTable.h"
-#include "Substrate/ElysiumNpc.h"        // Cycle 11b — the AI_Schedule channel's receiver
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "Tests/ElysiumRulebookTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
+
+#if ELYSIUM_WITH_ARM_TESTS
+// Only the arm cases stand NPCs; a plain build leaves the kernel headers out of this file (T6b).
+#include "Substrate/ElysiumNpc.h"        // Cycle 11b — the AI_Schedule channel's receiver
 #include "Tests/ElysiumNpcTestFixture.h"
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 #include "Misc/ScopeExit.h"
 #include "Serialization/MemoryReader.h"

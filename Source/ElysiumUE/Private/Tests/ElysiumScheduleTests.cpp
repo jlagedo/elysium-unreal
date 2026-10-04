@@ -22,9 +22,13 @@
 
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumScheduleCorpus.h"
+#include "Tests/ElysiumTestServices.h"   // the recording motor TASK_MOVE_AWAY_PATH projects through
+
+#if ELYSIUM_WITH_ARM_TESTS
+// Only the arm cases stand NPCs; a plain build leaves the kernel headers out of this file (T6b).
 #include "Substrate/ElysiumNpc.h"          // the Troika slot-440 arm, asked on a stood-up leaf
 #include "Tests/ElysiumNpcTestFixture.h"   // the world that leaf stands in
-#include "Tests/ElysiumTestServices.h"   // the recording motor TASK_MOVE_AWAY_PATH projects through
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 static constexpr EAutomationTestFlags GElysiumScheduleTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;

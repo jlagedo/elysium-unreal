@@ -241,7 +241,7 @@ TArray<bool> UElysiumNavBakeLibrary::JumpLinkVerdicts(const TArray<FVector>& Sta
 		const FVector Start = NpcKernelMotorShared::SourceOf(StartsCm[Index]);
 		const FVector End = NpcKernelMotorShared::SourceOf(EndsCm[Index]);
 		// `0x102ff960`: IsJumpLegal(from, far, far) -- the apex argument is the far node.
-		Verdicts.Add(FElysiumNpcBase::IsJumpLegalGeometry(Start, End, End,
+		Verdicts.Add(NpcKernelMotorShared::IsJumpLegalGeometry(Start, End, End,
 			NpcKernelMotorShared::GJumpLegalRise, NpcKernelMotorShared::GJumpLegalDrop,
 			NpcKernelMotorShared::GJumpLegalDistance));
 	}

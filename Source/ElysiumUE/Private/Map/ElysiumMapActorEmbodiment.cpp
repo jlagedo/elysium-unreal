@@ -4,7 +4,6 @@
 // scheme forwards, and IElysiumTravel with the subsystem accessors behind all of them.
 
 #include "ElysiumMapActor.h"
-#include "Substrate/ElysiumNpc.h"
 
 #include "ElysiumAudioSubsystem.h"       // the GI-scoped voice mixer every audio forward reaches
 #include "ElysiumCameraComponent.h"      // the pawn camera the shot channel drives

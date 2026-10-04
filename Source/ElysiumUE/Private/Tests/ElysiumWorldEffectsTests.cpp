@@ -65,7 +65,10 @@
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "ElysiumLocomotionSample.h"         // the body sample's pure rules
+#if ELYSIUM_WITH_ARM_TESTS
+// Only the arm cases stand NPCs; a plain build leaves the kernel headers out of this file (T6b).
 #include "Substrate/ElysiumNpc.h"           // FElysiumNpc — the gaze cascade's NPC arms
+#endif // ELYSIUM_WITH_ARM_TESTS
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning

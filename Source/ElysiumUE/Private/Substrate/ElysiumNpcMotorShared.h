@@ -3,18 +3,14 @@
 // Story 5 step 4: the file-scope locals of `ElysiumNpcMotor.cpp` that its staying bodies share with
 // bodies moved to their species classes. Qualified at every use (`NpcKernelMotorShared::`) because a unity
 // build concatenates translation units and an anonymous namespace is not file-local there.
+//
+// Constants and one unit conversion only, so it includes what they read and nothing of the NPC: the
+// nav bake reads the jump-legal immediates from here, and a kernel header would put the editor's
+// bake blob in every NPC edit's rebuild (spec 0002 T6b).
 
-#include "Substrate/ElysiumNpc.h"
-#include "ElysiumEntityDefs.h"
-#include "ElysiumEntityWorld.h"
+#include "CoreMinimal.h"
 #include "ElysiumMoveSolve.h"
-#include "ElysiumPlayer.h"
-#include "ElysiumWorldServices.h"
-#include "Substrate/ElysiumNpcConditions.h"
-#include "ElysiumNpcFlags.h"
-#include "Substrate/ElysiumNpcKernelShape.h"
-#include "Substrate/ElysiumRetailHullTable.h"
-#include "Substrate/ElysiumSchedule.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 
 namespace NpcKernelMotorShared
 {
@@ -54,4 +50,10 @@ namespace NpcKernelMotorShared
 	inline constexpr float GJumpLegalRise = 80.0f;
 	inline constexpr float GJumpLegalDrop = 250.0f;
 	inline constexpr float GJumpLegalDistance = 160.0f;
+
+	// `FUN_10280790`, `FElysiumNpcBase::IsJumpLegalGeometry` itself (defined beside it in
+	// `ElysiumNpcBaseMotor.cpp`), named here for the nav bake, which judges jump links with it and
+	// has no NPC to include.
+	bool IsJumpLegalGeometry(const FVector& StartUnits, const FVector& ApexUnits,
+		const FVector& EndUnits, float MaxRise, float MaxDrop, float MaxDistance);
 }
