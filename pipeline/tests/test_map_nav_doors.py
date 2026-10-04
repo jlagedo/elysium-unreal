@@ -86,15 +86,69 @@ def test_hull_radius_is_the_tables_lateral_extent():
     assert doors.hull_radius_cm(19) == pytest.approx(15.24)
 
 
+def test_hull_box_is_the_tables_own_box_in_unreal_centimetres():
+    # The rat: (-6, -6, 0)..(6, 6, 10) units. Y is mirrored, so the low Y bound is -maxs.y.
+    mins, maxs = doors.hull_box_cm(19)
+    assert mins == pytest.approx([-15.24, -15.24, 0.0])
+    assert maxs == pytest.approx([15.24, 15.24, 25.4])
+    mins, maxs = doors.hull_box_cm(0)
+    assert mins == pytest.approx([-33.02, -33.02, 0.0])
+    assert maxs == pytest.approx([33.02, 33.02, 182.88])
+
+
+def _graph(z_units, hull=19):
+    """One ground link for `hull`, 200 units long along X, at `z_units` (Source units)."""
+    def node(index, x):
+        return {"index": index, "origin": {"source": [x, 0.0, z_units]},
+                "hullOffsets": [0.0] * doors.RETAIL_HULL_COUNT, "type": doors.NODE_GROUND}
+    fields = [0] * (doors.RETAIL_HULL_COUNT + 1)
+    fields[1 + hull] = 1
+    return {"header": {"usedHullBits": {"value": 1 << hull}},
+            "nodes": [node(0, -100.0), node(1, 100.0)],
+            "links": [{"index": 41, "src": 0, "dst": 1, "fields": fields}]}
+
+
+def _door(z_lo_cm, z_hi_cm):
+    """A 10 cm thick leaf across the link, standing from `z_lo_cm` to `z_hi_cm` (world cm)."""
+    hull = [-5.0, -60.0, z_lo_cm, 5.0, 60.0, z_hi_cm]
+    return [{"entityIndex": 339, "classname": "func_door_rotating", "hulls": [hull]}]
+
+
+def test_a_short_hull_passing_under_a_raised_door_crosses():
+    # N20, `sp_tutorial_1` door 339: retail link 41 runs the rat at z -101 cm under a leaf whose
+    # box starts at -84. The rat's own box is 10 units (25.4 cm) tall, so its walk sweeps up to
+    # -75.6 and meets the leaf: the graph built through it for the rat as well as the human. The
+    # old test grew the leaf's floor by the rat's 15.24 cm RADIUS (-99.24) and missed by 1.8 cm.
+    rows = doors.crossings(_graph(-101.0 / 2.54), _door(-84.0, 201.0), {}, doors.hull_radius_cm)
+    assert rows[0]["crossedByHulls"] == [19]
+    assert rows[0]["witnessLinks"] == {19: 41}
+    # The link is clipped laterally (the rat's radius off the leaf's faces), never refused.
+    assert rows[0]["linkStartCm"][0] == pytest.approx(-5.0 - 15.24)
+    assert rows[0]["linkEndCm"][0] == pytest.approx(5.0 + 15.24)
+    # What the radius growth answered: a miss, which cut the doorway out of the rat's mesh.
+    assert not doors.segment_hits_box(rows[0]["linkSegmentCm"][0], rows[0]["linkSegmentCm"][1],
+                                      [-5.0 - 15.24, -60.0 - 15.24, -84.0 - 15.24],
+                                      [5.0 + 15.24, 60.0 + 15.24, 201.0 + 15.24])
+
+
+def test_a_door_above_the_hulls_head_is_not_crossed():
+    # The same rat under a leaf raised past its 25.4 cm: it walks beneath, the graph's link does
+    # not run through the door.
+    rows = doors.crossings(_graph(-101.0 / 2.54), _door(-70.0, 201.0), {}, doors.hull_radius_cm)
+    assert rows[0]["crossedByHulls"] == []
+    assert rows[0]["traversable"] is False
+
+
 @pytest.mark.parametrize("map_name, total, traversable, partial", [
     # The designers' own choice of which encounters can reach the player. Derived here from the
     # PATCH's graph; the same figures were first measured by an out-of-repo census.
     #
     # `partial` is a door one agent's links cross and another's do not -- the rat hull is not a
-    # subset of the human one. On the tutorial 5 of the 8 are crossed by both, 1 by the human
-    # alone and 2 by the rat alone. A nav area is not per-agent, so story 7 cuts all of them from
-    # every mesh and lays a per-agent smart link through each of the 8.
-    ("sp_tutorial_1", 36, 8, 3),
+    # subset of the human one. On the tutorial 6 of the 8 are crossed by both, none by the human
+    # alone and 2 by the rat alone (339 joined "both" when the test took the hull's own box, N20).
+    # A nav area is not per-agent, so story 7 cuts all of them from every mesh and lays a
+    # per-agent smart link through each of the 8.
+    ("sp_tutorial_1", 36, 8, 2),
     ("sm_hub_1", 29, 2, 0),      # the smoke-shop pair, both agents
     # 0018 story 21-2's three, measured the first time they went through the lane. Every one is a
     # human-only map (`UsedHullBits` 0x1), so no door can be partial by agent: there is one agent.
@@ -169,8 +223,10 @@ def test_the_shipped_maps_door_answers(map_name, total, traversable, partial):
 
 @pytest.mark.parametrize("map_name, links", [
     # The tutorial's eight, by lump ordinal and the hulls that cross them (0018/7 findings § 2):
-    # five both, `339` human only, `yetanotherfuckingdoor` and `soc_int_locked_door` rat only.
-    ("sp_tutorial_1", {183: [0, 19], 331: [0, 19], 339: [0], 592: [0, 19], 851: [0, 19],
+    # six both, `yetanotherfuckingdoor` and `soc_int_locked_door` rat only. `339` was human only
+    # until N20: retail link 41 carries ground for both hulls through it (the rat's 10-unit box
+    # reaches the raised leaf its radius did not).
+    ("sp_tutorial_1", {183: [0, 19], 331: [0, 19], 339: [0, 19], 592: [0, 19], 851: [0, 19],
                        890: [19], 1545: [0, 19], 1546: [19]}),
     # The smoke-shop pair, both on link 958: `basic_smoke_door` (PUSE|LOCKED, the refusal test's
     # live door) and its hidden, inert partner `plus_smoke_door`.

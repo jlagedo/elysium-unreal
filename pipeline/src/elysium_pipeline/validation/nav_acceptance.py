@@ -29,6 +29,9 @@ MAX_LISTED = 25
 NO_PATH = -1.0
 OFF_MESH = -2.0
 
+#: `0x102ff960` reads a link's per-hull motion word; bit 0 is ground (`map_nav_acceptance`).
+MOVE_GROUND = 1
+
 #: Hulls whose NPC moves by FLIGHT, so its graph nodes stand in the air and its links are not
 #: claims about a walkable surface at all.
 #:
@@ -158,11 +161,23 @@ def bridging_errors(bridging: Sequence[dict[str, Any]], agent_lengths: Sequence[
     it reproduce the sparseness. So the base-mesh result is reported as reach that changed against
     retail, with its length, rather than failed -- which is what the spec asks for two paragraphs
     above: reach that changes is "seen, not discovered".
+
+    Only a bridge that carries GROUND for this hull must path (V13, N20). This reverses 0018/7's
+    decision (a) (`map_nav_acceptance.project`) for the verdict: a jump-only bridge stays in the
+    key, but retail's NPC never plans it -- `0x102ff960` step 2 ANDs the NPC's capabilities (slot
+    513) with the link's per-hull word and no NPC holds the jump bit 2 -- so retail's rat cannot
+    cross it either, and a rat mesh that does not walk it is retail's reach, not a defect. It is
+    reported (`jumpOnly`, with whether this agent's mesh paths it anyway), never failed. A row with
+    no `motion` (a key staged before the word rode along) is judged as ground, as before.
     """
 
-    missing, reach = [], []
+    missing, reach, jump_only = [], [], []
     for link, mine, theirs in zip(bridging, agent_lengths, base_lengths):
-        if mine < 0.0:
+        if not int(link.get("motion", MOVE_GROUND)) & MOVE_GROUND:
+            jump_only.append({"index": link["index"], "src": link["src"], "dst": link["dst"],
+                              "motion": int(link["motion"]),
+                              "pathCm": round(float(mine), 1) if mine >= 0.0 else None})
+        elif mine < 0.0:
             missing.append({"index": link["index"], "src": link["src"], "dst": link["dst"],
                             "reason": "does not path on its own agent's mesh"})
         if theirs >= 0.0:
@@ -170,7 +185,8 @@ def bridging_errors(bridging: Sequence[dict[str, Any]], agent_lengths: Sequence[
                           "pathCm": round(float(theirs), 1)})
     return _row(f"bridging-hull-{hull}", missing, hull=hull, baseHull=base_hull,
                 bridging=len(bridging), missing=len(missing),
-                alsoReachedByBase=len(reach), baseReach=reach[:MAX_LISTED])
+                alsoReachedByBase=len(reach), baseReach=reach[:MAX_LISTED],
+                jumpOnlyBridges=len(jump_only), jumpOnly=jump_only[:MAX_LISTED])
 
 
 def projection_errors(label: str, points: Sequence[Any], landed: Sequence[bool],

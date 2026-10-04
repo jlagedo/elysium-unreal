@@ -12,12 +12,16 @@ out of every agent's mesh, and a door WITH one keeps its opening so story 7 can 
 over it. Computing that here, in the lane that already stages the door hulls, is what keeps the
 answer from being a second opinion.
 
-The test is the one the oracle's own census used for the pedestrian volumes: the brush's AABB,
-grown by the agent's hull, against the link segment between its two node positions at that hull's
-Z offset. It is deliberately generous -- retail asks whether a WALK between two nodes succeeds,
-which is a swept hull, and an AABB test over-reports rather than under-reports. Over-reporting
-gives a door a link retail's graph may not have walked; under-reporting would wall off a door NPCs
-use, silently.
+The test: the brush's AABB, grown by the hull's own box (the Minkowski difference -- `lo -
+hull_maxs` .. `hi - hull_mins`, `hull_table.json`), against the link segment between its two node
+positions at that hull's Z offset. That is the box retail's walk sweeps from the node: a body
+standing at the node position occupies `mins..maxs` around it, so a rat (0..10 units tall) at
+z -101 cm reaches -75.6 cm and meets a door whose box starts at -84 (N20, `sp_tutorial_1` door
+339, retail link 41). Growing by the lateral radius on all three axes, as this did before, asked
+the wrong height and missed it by 1.8 cm. It is deliberately generous -- retail asks whether a
+WALK between two nodes succeeds, which is a swept hull, and an AABB test over-reports rather than
+under-reports. Over-reporting gives a door a link retail's graph may not have walked;
+under-reporting would wall off a door NPCs use, silently.
 
 Story 7 (0018/7) closes the door lane: every door is cut from every mesh, each traversable row
 carries `linkStartCm` / `linkEndCm` -- its largest crossing hull's witness link clipped to that
@@ -130,15 +134,43 @@ def clip_link(start: Sequence[float], end: Sequence[float],
     return at(enter), at(exit_)
 
 
-def crossings(block: dict, doors: Sequence[dict], origins: dict, hull_radius_cm) -> list[dict]:
+def hull_swept_box(lo: Sequence[float], hi: Sequence[float], mins_cm: Sequence[float],
+                   maxs_cm: Sequence[float]) -> tuple[list[float], list[float]]:
+    """The door box grown by a hull's own box: the node positions at which a body of that hull
+    (`mins_cm..maxs_cm` around its position) overlaps the door -- `lo - maxs` .. `hi - mins`."""
+
+    return ([float(lo[axis]) - float(maxs_cm[axis]) for axis in range(3)],
+            [float(hi[axis]) - float(mins_cm[axis]) for axis in range(3)])
+
+
+def link_box(lo: Sequence[float], hi: Sequence[float], radius_cm: float,
+             mins_cm: Sequence[float], maxs_cm: Sequence[float]) -> tuple[list[float], list[float]]:
+    """The box a smart link is clipped to: the door box grown LATERALLY by the agent's radius --
+    the mesh's erosion around the cut, so its X/Y faces are where the mesh ends either side of the
+    leaf -- and in Z by the hull's own box, the same vertical reach `crossings` tested. Recast
+    erodes no height, and a radius in Z would let a row the hull box crosses miss its own clip
+    box (a rat link passing just under a raised leaf, N20) and refuse the whole map's staging."""
+
+    swept_lo, swept_hi = hull_swept_box(lo, hi, mins_cm, maxs_cm)
+    return ([float(lo[0]) - radius_cm, float(lo[1]) - radius_cm, swept_lo[2]],
+            [float(hi[0]) + radius_cm, float(hi[1]) + radius_cm, swept_hi[2]])
+
+
+def crossings(block: dict, doors: Sequence[dict], origins: dict, hull_radius_cm,
+              hull_box=None) -> list[dict]:
     """Per door, which hulls have a graph link running through its closed box.
 
     `doors` are staged brush-entity rows -- `entityIndex`, `classname`, `hulls` -- and `origins`
     maps an entity index to its world origin in centimetres, which the hulls are stated relative
-    to. `hull_radius_cm` answers a hull's lateral radius, which the box is grown by so the test
-    asks "could a body of this size pass through here" rather than "does a line touch the brush".
+    to. `hull_box` answers a hull's own box `(mins, maxs)` in Unreal centimetres (default
+    `hull_box_cm`, the recovered table), which the door box is grown by (`hull_swept_box`) so the
+    test asks "does a body of this hull, standing on the link, meet the brush" rather than "does a
+    line touch the brush" (N20). `hull_radius_cm` answers a hull's lateral radius: it picks the
+    link hull and grows the box the link is clipped to, which is the agent's mesh erosion around
+    the cut and a different question.
     """
 
+    hull_box = hull_box or hull_box_cm
     header = block["header"]
     nodes = {int(node["index"]): node for node in block["nodes"]}
     used_bits = int(header["usedHullBits"]["value"])
@@ -155,9 +187,9 @@ def crossings(block: dict, doors: Sequence[dict], origins: dict, hull_radius_cm)
         witnesses: dict[int, int] = {}
         segments: dict[int, tuple] = {}
         for hull in hulls:
-            radius = float(hull_radius_cm(hull))
-            grown_lo = [lo[axis] - radius for axis in range(3)]
-            grown_hi = [hi[axis] + radius for axis in range(3)]
+            # The hull's own box, Z included: a 10-unit rat on the floor reaches 25.4 cm up, not
+            # its 15.24 cm radius (N20).
+            grown_lo, grown_hi = hull_swept_box(lo, hi, *hull_box(hull))
             for link in block["links"]:
                 fields = link["fields"]
                 if len(fields) != RETAIL_HULL_COUNT + 1 or int(fields[0]) & LINK_OFF:
@@ -190,8 +222,7 @@ def crossings(block: dict, doors: Sequence[dict], origins: dict, hull_radius_cm)
             link_hull = max(crossed, key=lambda hull: (float(hull_radius_cm(hull)), -hull))
             radius = float(hull_radius_cm(link_hull))
             start, end = segments[link_hull]
-            grown_lo = [lo[axis] - radius for axis in range(3)]
-            grown_hi = [hi[axis] + radius for axis in range(3)]
+            grown_lo, grown_hi = link_box(lo, hi, radius, *hull_box(link_hull))
             row["linkHull"] = link_hull
             row["linkWitness"] = witnesses[link_hull]
             row["linkSegmentCm"] = [start, end]
@@ -200,16 +231,18 @@ def crossings(block: dict, doors: Sequence[dict], origins: dict, hull_radius_cm)
     return rows
 
 
-def door_links(rows: Sequence[dict], hull_radius_cm) -> list[dict]:
+def door_links(rows: Sequence[dict], hull_radius_cm, hull_box=None) -> list[dict]:
     """One smart link per witness AIN link (0018/7 review): retail has ONE link through a doorway
     however many door entities stand in it (the hub's smoke-shop pair shares link 958), and the
     port's link holds a body while ANY of its doors is shut.
 
     The group's segment is its largest hull's; the endpoints are where that segment enters the
-    first of the doors' grown boxes and leaves the last (each door's box grown by that hull's
-    radius), so they lie outside every crossing hull's box of every door in the group.
+    first of the doors' grown boxes and leaves the last (each door's box grown laterally by that
+    hull's radius, `link_box`), so they lie outside every crossing hull's box of every door in the
+    group.
     """
 
+    hull_box = hull_box or hull_box_cm
     groups: dict[int, list[dict]] = {}
     for row in rows:
         if row.get("traversable"):
@@ -219,11 +252,11 @@ def door_links(rows: Sequence[dict], hull_radius_cm) -> list[dict]:
         base = max(members, key=lambda row: (float(hull_radius_cm(row["linkHull"])), -row["linkHull"]))
         radius = float(hull_radius_cm(base["linkHull"]))
         start, end = base["linkSegmentCm"]
+        mins_cm, maxs_cm = hull_box(base["linkHull"])
         enter, exit_ = 1.0, 0.0
         for row in members:
             lo, hi = row["boundsCm"]
-            span = segment_box_span(start, end, [lo[axis] - radius for axis in range(3)],
-                                    [hi[axis] + radius for axis in range(3)])
+            span = segment_box_span(start, end, *link_box(lo, hi, radius, mins_cm, maxs_cm))
             if span is None:
                 raise ValueError(f"door {row['entityIndex']} does not stand on its witness link {witness}")
             enter, exit_ = min(enter, span[0]), max(exit_, span[1])
@@ -249,17 +282,18 @@ def door_rows(brush_bodies: Sequence[dict]) -> list[dict]:
             if str(row.get("classname", "")).lower() in DOOR_CLASSNAMES]
 
 
-def stage(block: dict, brush_bodies: Sequence[dict], origins: dict, hull_radius_cm) -> dict:
+def stage(block: dict, brush_bodies: Sequence[dict], origins: dict, hull_radius_cm,
+          hull_box=None) -> dict:
     """`manifest["navDoors"]`: every door, and whether the graph runs through it."""
 
     doors = door_rows(brush_bodies)
-    rows = crossings(block, doors, origins, hull_radius_cm)
+    rows = crossings(block, doors, origins, hull_radius_cm, hull_box)
     traversable = [row for row in rows if row["traversable"]]
-    links = door_links(rows, hull_radius_cm)
+    links = door_links(rows, hull_radius_cm, hull_box)
 
     # A door can be traversable for ONE agent and not another -- the rat hull is not a subset of
-    # the human one, and on `sp_tutorial_1` 1 of the 8 linked doors is crossed only by the human
-    # and 2 only by the rat. A nav AREA is not per-agent (`FAreaNavModifier` marks every mesh
+    # the human one, and on `sp_tutorial_1` none of the 8 linked doors is crossed only by the
+    # human and 2 only by the rat (339 crosses for both since N20's hull-box test). A nav AREA is not per-agent (`FAreaNavModifier` marks every mesh
     # alike), so story 7 cuts EVERY door out of every mesh and lays a smart link through each
     # traversable one for exactly the agents that cross it (`bake_nav_door_links`): cut per mesh,
     # link per agent. `partialByAgent` still counts the doors that need the per-agent half.
@@ -288,6 +322,26 @@ def hull_radius_cm(hull: int) -> float:
     retail's own walk test between two nodes asks, rather than "does a line touch the brush".
     """
 
+    row = _hull_row(hull)
+    return max(abs(float(row["maxs"][0])), abs(float(row["mins"][0]))) * 2.54
+
+
+def hull_box_cm(hull: int) -> tuple[list[float], list[float]]:
+    """A hull's own box `(mins, maxs)` in Unreal centimetres, from the recovered table.
+
+    Source units to centimetres (x2.54) with Y mirrored, as `source_to_unreal` does: the
+    reflection swaps which Y bound is the low one, so Unreal's `mins.y` is `-maxs.y`.
+    """
+
+    row = _hull_row(hull)
+    mins = [float(value) for value in row["mins"]]
+    maxs = [float(value) for value in row["maxs"]]
+    a = source_to_unreal(*mins)
+    b = source_to_unreal(*maxs)
+    return [min(a[axis], b[axis]) for axis in range(3)], [max(a[axis], b[axis]) for axis in range(3)]
+
+
+def _hull_row(hull: int) -> dict:
     import json
 
     from elysium_pipeline.paths import repo_root
@@ -296,8 +350,7 @@ def hull_radius_cm(hull: int) -> float:
     if _HULL_ROWS is None:
         path = repo_root() / "docs" / "vtmb" / "data" / "hull_table.json"
         _HULL_ROWS = json.loads(path.read_text(encoding="utf-8"))["rows"]
-    row = _HULL_ROWS[hull]
-    return max(abs(float(row["maxs"][0])), abs(float(row["mins"][0]))) * 2.54
+    return _HULL_ROWS[hull]
 
 
 _HULL_ROWS = None

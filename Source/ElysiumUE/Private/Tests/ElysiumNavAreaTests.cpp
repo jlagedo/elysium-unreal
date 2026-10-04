@@ -407,12 +407,18 @@ bool FElysiumNavAreaHubTest::RunTest(const FString&)
 			Crossing.Pair), Area, PedestrianId);
 	}
 
-	// A x8 pedestrian route (retail draws one `RandomInt(5, 10)` per search, `0x102fe9f0`) from the
-	// north side, east of curb 258, to the south side: it must cross at 258-259, passing within the
-	// splice's 48-unit capture of curb 258 and then of 259 -- what `0x102fcd00` needs to lay both
-	// curbs on the route. The filter reads the area through the class table, so first do
-	// registration's own step on the loaded mesh: `OnNavAreaAdded` finds the saved row by name and
-	// restores only its transient class and map entry (`NavigationData.cpp:804`), the saved id kept.
+	// A x8 pedestrian route (retail draws one `RandomInt(5, 10)` per search, `0x102fe9f0`) from AIN
+	// node 240 (-2238, -1213) to node 230 (-2481, -327), across the road: it must cross at 258-259,
+	// passing within the splice's 48-unit capture of curb 258 and then of 259 -- what `0x102fcd00`
+	// needs to lay both curbs on the route. Retail's own route at x5..x10 is 240 -> 482 -> 258 ->
+	// 259 -> 230; at x1 it is 240 -> 259 -> 230, the diagonal, so the x1 control below proves the
+	// pricing is what puts 258 on it. (Q-V13b, settled: the earlier pair (-2294, -1071) ->
+	// (-776, 205) crossed at x ~ -920, a strip retail's own brushes leave unpriced -- links
+	// 481 -> 236 -> 480 carry no `0x2000` -- so retail's route crosses there too; the test's
+	// expectation was wrong, not the staging.) The filter reads the area through the class table,
+	// so first do registration's own step on the loaded mesh: `OnNavAreaAdded` finds the saved row
+	// by name and restores only its transient class and map entry (`NavigationData.cpp:804`), the
+	// saved id kept.
 	const int32 HumanIndex = AgentIndex(TEXT("Human"));
 	if (!TestNotEqual(TEXT("the project declares the Human agent"), HumanIndex,
 		static_cast<int32>(INDEX_NONE))) return false;
@@ -421,14 +427,17 @@ bool FElysiumNavAreaHubTest::RunTest(const FString&)
 	if (!TestEqual(TEXT("the class table answers the saved pedestrian id"),
 		Human->GetAreaID(UElysiumNavArea_Pedestrian::StaticClass()), PedestrianId)) return false;
 
+	// Nodes 240 and 230 at the road probes' height, as the gap probes above stand.
+	const FVector From240(-2238.0, -1213.0, -303.0);
+	const FVector To230(-2481.0, -327.0, -303.0);
 	FElysiumNpcRouteQuery Query;
-	Query.DestCm = FVector(-776.0, 205.0, -303.0);
+	Query.DestCm = To230;
 	Query.PedestrianCostMultiplier = 8;
 	FElysiumNpcRouteAnswer Route;
 	const bool bAsked = ElysiumWorldGeometry::Route(*Human, Human->GetConfig(),
 		ElysiumNavQueryFilterPedestrian::MakeFilter(*Human, nullptr, Query.PedestrianCostMultiplier),
-		FVector(-2294.0, -1071.0, -303.0), Query, Route);
-	if (!TestTrue(TEXT("the x8 route from (-2294, -1071) to (-776, 205) is found"),
+		From240, Query, Route);
+	if (!TestTrue(TEXT("the x8 route from node 240 (-2238, -1213) to node 230 (-2481, -327) is found"),
 		bAsked && Route.bReachable)) return false;
 	FString Corners;
 	for (const FVector& Point : Route.PointsCm)
@@ -453,6 +462,30 @@ bool FElysiumNavAreaHubTest::RunTest(const FString&)
 		Dist259 / ElysiumMove::U), Dist259 <= CaptureCm);
 	TestTrue(*FString::Printf(TEXT("...258 first, then 259 (at %.0f and %.0f cm along it)"),
 		Param258, Param259), Param258 < Param259);
+
+	// The x1 control: unpriced, retail's route is 240 -> 259 -> 230, the diagonal, which keeps
+	// ~88 u off curb 258. A x1 route that still passes within 48 u of 258 would mean the curb is
+	// on it for some reason other than the pricing, and the x8 assertions above prove nothing.
+	FElysiumNpcRouteQuery Unpriced;
+	Unpriced.DestCm = To230;
+	Unpriced.PedestrianCostMultiplier = 1;
+	FElysiumNpcRouteAnswer Diagonal;
+	const bool bAskedUnpriced = ElysiumWorldGeometry::Route(*Human, Human->GetConfig(),
+		ElysiumNavQueryFilterPedestrian::MakeFilter(*Human, nullptr, Unpriced.PedestrianCostMultiplier),
+		From240, Unpriced, Diagonal);
+	if (!TestTrue(TEXT("the x1 route from node 240 to node 230 is found"),
+		bAskedUnpriced && Diagonal.bReachable)) return false;
+	FString DiagonalCorners;
+	for (const FVector& Point : Diagonal.PointsCm)
+	{
+		DiagonalCorners += FString::Printf(TEXT(" (%.0f %.0f %.0f)"), Point.X, Point.Y, Point.Z);
+	}
+	AddInfo(FString::Printf(TEXT("x1 route, %.0f cm:%s"), Diagonal.LengthCm, *DiagonalCorners));
+	double DiagonalDist258 = 0.0;
+	double DiagonalParam258 = 0.0;
+	ClosestFlat(Diagonal.PointsCm, Curb258, DiagonalDist258, DiagonalParam258);
+	TestTrue(*FString::Printf(TEXT("the x1 route keeps more than 48 u off curb 258 (%.1f u)"),
+		DiagonalDist258 / ElysiumMove::U), DiagonalDist258 > CaptureCm);
 	return true;
 }
 
@@ -477,8 +510,11 @@ bool FElysiumNavAreaTutorialTest::RunTest(const FString&)
 	TestEqual(TEXT("the 36 cut doors are 44 + 16 convexes"),
 		ConvexesWearing(Marks, UElysiumNavArea_DoorCut::StaticClass()), 44 + 16);
 
-	// The eight links, per agent (findings § 2): five crossed by both hulls, `339` by the human
+	// The eight links, per agent (findings § 2): six crossed by both hulls, none by the human
 	// alone, `yetanotherfuckingdoor` (890) and `soc_int_locked_door` (1546) by the rat alone.
+	// `339` carries both since N20: retail's AIN link 41 (15 -> 48) carries ground for hull 0 AND
+	// hull 19 through it, and the staging's door test now sweeps the rat's own 10-unit box, which
+	// reaches the raised leaf its lateral radius missed by 1.8 cm (`map_nav_doors.crossings`).
 	const uint32 Human = AgentBit(TEXT("Human"));
 	const uint32 Rat = AgentBit(TEXT("Rat"));
 	if (!TestTrue(TEXT("the project declares the human and rat agents"), Human != 0 && Rat != 0)) return false;
@@ -489,7 +525,7 @@ bool FElysiumNavAreaTutorialTest::RunTest(const FString&)
 	const TMap<int32, uint32> Expected = {
 		{ 183, Human | Rat },   // tutwareportal03
 		{ 331, Human | Rat },   // frontgate
-		{ 339, Human },
+		{ 339, Human | Rat },   // N20: retail link 41, both hulls
 		{ 592, Human | Rat },   // tutwareportal05
 		{ 851, Human | Rat },   // activisionsucks
 		{ 890, Rat },           // yetanotherfuckingdoor
@@ -513,8 +549,8 @@ bool FElysiumNavAreaTutorialTest::RunTest(const FString&)
 		TestTrue(*FString::Printf(TEXT("door %d's link spans the doorway"), Row.Key),
 			FVector::Dist(Smart->GetStartPoint(), Smart->GetEndPoint()) > 20.0);
 	}
-	TestEqual(TEXT("5 links carry both agents"), BothCount, 5);
-	TestEqual(TEXT("1 link carries the human alone"), HumanOnly, 1);
+	TestEqual(TEXT("6 links carry both agents"), BothCount, 6);
+	TestEqual(TEXT("no link carries the human alone"), HumanOnly, 0);
 	TestEqual(TEXT("2 links carry the rat alone"), RatOnly, 2);
 
 	// V13 (N16): the door marks reach the Human mesh -- `tutwareportal03` (183, a link both hulls

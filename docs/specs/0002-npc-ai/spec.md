@@ -641,7 +641,7 @@ tests the green scenarios cover deleted.
   tutorial needs heard footsteps.) The player's footstep `CSound` producer into the list V10
   fixes; the list's other producers and words stay in R1. *Scenario:*
   `map_tutorial_sneak_past`'s hearing half. *Size:* S. Reading packet first.
-- [ ] **V13. The pedestrian nav area in the hub's bake.** (New, from the V3b follow-up: N16;
+- [x] **V13. The pedestrian nav area in the hub's bake.** (New, from the V3b follow-up: N16;
   accepted 2026-10-04: the owner sent it to an adversarial judge, who ruled *implement now*, ahead of V3c — gate 2 and V8's hub clause need pedestrians to cross, one build and one ~4-minute bake of `sm_hub_1` settle the lead, and the bake rewrites only gitignored files. The fix: each area modifier includes the agent height (retail's `0x2000` test runs between node positions ~21 cm above the ground, `102fbbaa`; Recast tests the ground surface), named under 0018/6's NavMesh divergence; the hub content test extended to ask the baked mesh. Six other maps carry the same slabs and take the fix at their next bake (R2). It runs in one wave with the two senses bugs Q-H3 found: `OnLooked 0x1026a2c0` never clearing the SEE family, and the last-known position read from `+0x0` where retail reads `+0xc`.) A fault in landed work (0018/3's NavMesh bake, 0018/7's
   crosswalk): on `sm_hub_1`'s baked Recast meshes no roadway polygon carries
   `UElysiumNavArea_Pedestrian` (`NavAreaAt` answers `NavArea_Default` inside all 9 priced slabs), so
@@ -671,6 +671,18 @@ tests the green scenarios cover deleted.
   and `gasstationgate`, no link, still walkable: lead, a raised leaf's cut floats over the floor),
   Q-V13b (the ×8 route crosses at row 17's east edge, not at curbs 258/259), Q-V13c
   (`hub_crosswalk_wait` reaches `0x102` at 23.917 but the next `Walk` raises no `CROSSWALK_WALK`).
+  *Final pass 2026-10-04, ticked* (`stories/v1/triage.md` § "V13 final pass"): the staging's door
+  test grows a door by the hull's own box (`map_nav_doors.hull_swept_box`), so tutorial door 339
+  carries retail link 41 for both hulls, and `verify nav` reports a jump-only bridge (`0x102ff960`
+  step 2: no NPC plans one) instead of failing it — **N20 closed**; the tutorial re-baked (66 s);
+  `verify nav` clean on `sp_tutorial_1` and `sm_hub_1`; `Elysium.Content.NavArea.*` green but the
+  two N21 assertions; the ×8 route 240 → 230 passes curb 258 (~25 u) then 259 (~25 u), its ×1
+  control ~97 u off 258 (**Q-V13b settled**: test error); `hub_crosswalk_wait` green in two boots,
+  the wait at 23.917 and `break CROSSWALK_WALK` at 43.550, 2.7 s after the green (**Q-V13c
+  settled**: record error, the 16 s out-of-PVS think cap); **N16 closed**. Left: **N21** (the door
+  cut sits 10–34 cm above the terrain under `junkyardgate` / `gasstationgate`; the fix is the door
+  cut including the agent height, one C++ line + a build + both witness maps re-baked, to the judge),
+  the six slab maps and every other baked map's door cuts at their next bake (R2).
 
 Order: V1 → V2 → H → V3 (V3r, V3a, V3b, V13, V3c, V3d) → T6b → V4 → V5 → V11 ‖ V6 → V7 → V10 → V12 → V2 again (full run) → V8 → V9.
 **T6b, the header pass** (the owner, 2026-10-04; `stories/t6b/brief.md`): the kernel headers' include fan-out cut after V3d and before V4, one agent holding the build; it closes T6 (edit-mix p90 ≤ 90 s).

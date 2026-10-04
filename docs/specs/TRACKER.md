@@ -103,7 +103,7 @@ Wave 3 (build work, one agent):
 - [ ] **V7** — The 19 inputs and the one-line items. S · Sonnet/medium.
 - [ ] **V10** — A sound's life in `Listen` (new: the expiry race). S.
 - [ ] **V12** — The footstep sound producer (pulled from R1; the tutorial's hearing half). S.
-- [ ] **V13** — The pedestrian nav area in the hub's bake (new, from the V3b follow-up: N16;
+- [x] **V13** — The pedestrian nav area in the hub's bake (new, from the V3b follow-up: N16;
   `hub_crosswalk_wait`). S–M. Accepted 2026-10-04 (the judge: implement now, ahead of V3c); runs
   with the two senses bugs from Q-H3 (the SEE clear in `OnLooked`, the last-known position's field).
   Wave 2026-10-04, not ticked: the senses bugs landed (Q-H3 closed); the floating-floor lead was
@@ -114,6 +114,13 @@ Wave 3 (build work, one agent):
   road reads pedestrian, linked doors are cut, the tutorial's unlinked doors are walls. Open: N20
   (tutorial Rat links, pipeline, with the judge), N21 (two hub gates still walkable), Q-V13b (the
   ×8 route's crossing), Q-V13c (no `CROSSWALK_WALK` after the green).
+  **Final pass 2026-10-04, ticked:** the door test by the hull's own box (N20 closed: tutorial door
+  339 crossed by both hulls; jump-only bridges reported, not failed), the tutorial re-baked,
+  `verify nav` clean on both maps, `Elysium.Content.NavArea.*` green but N21's two assertions,
+  `hub_crosswalk_wait` green in two boots (wait 23.917, crossing 43.550, 2.7 s after the green).
+  Q-V13b, Q-V13c settled (test and record errors). Left: **N21** (the door cut floats 10–34 cm over
+  the floor under two raised hub gates; one-line C++ + a build + two re-bakes, to the judge), the
+  six slab maps and every other map's door cuts at their next bake (R2).
 - [ ] **V2 again** — the full run, every scenario green.
 - [ ] **V8** — `sp_tutorial_1` and `sm_hub_1`, live. S · Opus/high.
 - [ ] **V9** — The second cut: the arm tests the scenarios cover. S · Sonnet/medium.

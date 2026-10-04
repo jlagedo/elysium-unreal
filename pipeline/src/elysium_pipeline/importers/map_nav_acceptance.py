@@ -140,6 +140,12 @@ def project(block: dict, map_name: str, *, base_hull: int = 0,
     #      Under retail reach -- no NPC takes a jump-only link, `0x102ff960` step 2 -- the hub's
     #      rat-only links 727, 1242, 1243 and 1244 join nodes the human joins only by a jump and
     #      would be bridging too (9 -> 13; the tutorial's 5 do not move).
+    #      REVERSED for the VERDICT (V13, N20): the key still lists every bridging row, union
+    #      included, but `nav_acceptance.bridging_errors` now fails only the rows that carry
+    #      GROUND for this hull and reports the jump-only ones -- retail's rat never plans one
+    #      (`0x102ff960` step 2 ANDs slot 513 with the link's per-hull word; no NPC holds bit 2),
+    #      so demanding the rat's mesh walk it asks for reach retail does not have. The tutorial's
+    #      rat link 105 (44 -> 69, `fields[20]=2`) is the row that made it a finding.
     #  (b) Only the HUMAN jump-only pairs get a record actor (`map_jump_links`, 25 tutorial / 117
     #      hub); the rat-only jump-only links (tutorial 19, hub 35) are counted in the staged
     #      summary and not recorded.
@@ -205,8 +211,11 @@ def project(block: dict, map_name: str, *, base_hull: int = 0,
             # positions up there finds nothing and compares a degenerate segment instead -- which
             # reads as "the base agent paths this in 0 cm" and indicts a mesh that is fine.
             # The two differ only by each hull's own Z offset at the same two nodes.
+            # `motion` rides along so the verdict can tell a jump-only bridge (no NPC plans it,
+            # `0x102ff960` step 2) from a ground one (`nav_acceptance.bridging_errors`).
             row = {
                 "index": int(link["index"]), "src": src, "dst": dst,
+                "motion": _motion(link, hull),
                 "startCm": _endpoint_cm(nodes[src], hull),
                 "endCm": _endpoint_cm(nodes[dst], hull),
                 "baseStartCm": _endpoint_cm(nodes[src], base_hull),

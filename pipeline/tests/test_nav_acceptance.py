@@ -124,6 +124,20 @@ def test_the_base_mesh_reaching_it_too_is_reported_not_failed():
     assert row["baseReach"][0]["pathCm"] == 80.9
 
 
+def test_a_jump_only_bridge_is_reported_and_a_ground_one_fails():
+    # V13, N20: retail's NPC never plans a jump-only link (`0x102ff960` step 2 ANDs slot 513 with
+    # the link's per-hull word; no NPC holds the jump bit 2), so the tutorial's rat link 105
+    # (motion 2) not pathing on the rat mesh is retail's reach. A ground-carrying bridge must path.
+    bridging = [{"index": 105, "src": 44, "dst": 69, "motion": 2},
+                {"index": 7, "src": 0, "dst": 1, "motion": 1}]
+    row = verdicts.bridging_errors(bridging, [verdicts.NO_PATH, verdicts.NO_PATH],
+                                   [verdicts.NO_PATH, verdicts.NO_PATH], hull=19, base_hull=0)
+    assert row["failed"] == 1
+    assert [failure["index"] for failure in row["failures"]] == [7]
+    assert row["jumpOnlyBridges"] == 1
+    assert row["jumpOnly"] == [{"index": 105, "src": 44, "dst": 69, "motion": 2, "pathCm": None}]
+
+
 def test_a_mesh_with_no_tiles_is_not_a_mesh():
     # An empty mesh saves, loads and reads as "already built" exactly like a full one.
     assert verdicts.mesh_errors(["Human"], ["Human=0"])["failed"] == 1

@@ -2445,7 +2445,7 @@ the 5 / 31 NPC-only brushes block NPCs and cut the mesh. The mesh is cut per ret
 (`UElysiumBrushComponent`) never affects the mesh. Story 3 cut every door that no link crosses
 (`UElysiumNavArea_DoorCut`, `bake_map_collision.py` `place_nav_areas`). Since 0018 story 7 EVERY
 door is cut, and each traversable door carries an `AElysiumNavDoorLink` (§ "Doors, landed" below):
-tutorial 8 links over 8 doors of 36 (3 partial by agent), 60 convexes; hub 1 link over the
+tutorial 8 links over 8 doors of 36 (2 partial by agent; 339 both since N20's hull-box test), 60 convexes; hub 1 link over the
 smoke-shop pair of 29, 63 convexes.
 
 **Nobody fills the nav-ignore set (2026-09-19).** It is the SDK's `CNavPropertyDatabase` (vtable
