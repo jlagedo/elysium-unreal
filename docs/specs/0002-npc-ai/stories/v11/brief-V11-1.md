@@ -15,6 +15,15 @@ with `social.md`'s table (item 1 is now a check); **`0x102a11d0` is yours** (ite
 `GetBestMeleeWeapon` is read (item 11); slot 331's doc section is read before you trust `0x51`
 (item 15). Where this brief and the README's older text disagree, this brief wins.
 
+**Amended after S5 (planner, 2026-10-04): the wave is [V11-1, V11-2, V11-3], after V4b — B1 and
+B2 are no longer in it.** V11-2 (`brief-V11-2-melee-contact.md`) holds
+`ElysiumWeaponClasses.{h,cpp}`, `ElysiumSwingContact.{h,cpp}`, `Public/ElysiumWorldServices.h`,
+`Public/ElysiumMapActor.h`, `Map/ElysiumMapActor.cpp`, `Tests/ElysiumTestServices.h` and its
+tests; V11-3 (`brief-V11-3-slot-331.md`) holds new `ElysiumMeleeSequenceChoice.{h,cpp}`,
+`ElysiumCombatCharacterSlots.cpp` (slot 331) and its test. None is yours. The rule of the wave
+check below is unchanged with V11-2 in B1's place: you **call** `TraceRetail`, you edit neither
+that header nor `Tests/ElysiumTestServices.h`.
+
 ## Files (only these)
 
 - `Source/ElysiumUE/Private/Substrate/ElysiumAttackCoordinator.h`, `.cpp` (new)
@@ -109,10 +118,12 @@ your report, exact, for the integrator). And if reader R1b names `ElysiumNpcBase
     Hidden`: types 1, 2, 3, 7 are the **Melee, Ranged, Thrown and Hidden sections, 32 slots
     each**, walked in that order. **Port it if the port's inventory has sections in an order**
     (Grep the inventory for a section index or the section names); the walk is then over the
-    port's sections in retail's type order. **The section order itself is data — the
-    inventory-section definition file — and is unrecovered; a reader settles it before this item
-    starts.** If it is still unread, or the port's inventory has no section order, **leave the
-    seam**, name `0x10336f20`, `0x10340180` and what is missing at the line, and report which
+    port's sections in retail's type order. **The section order is settled (`../v4/packets-S5.md` item 6):
+    `vdata\system\items.txt` § `InventorySections`, in file order — None, Weapon_Melee,
+    Weapon_Ranged, Weapon_Thrown, Armor, Generic, Powerups, Hidden — so the walk is weapon slots
+    `[0, n)` Melee, `[32, …)` Ranged, `[64, …)` Thrown, `[192, …)` Hidden, each `n` from owner
+    slot 298 of section number 0, 1, 2, 6.** If the port's inventory has no section order,
+    **leave the seam**, name `0x10336f20`, `0x10340180` and what is missing at the line, and report which
     (J14.5). It is behind `0xe3 SWITCH_TO_MELEE`, not on either record's path once slot 599
     admits.
 12. **Check, do not edit** (Grep): does the port's `Event_Killed` / `UpdateOnRemove` path dispatch
@@ -151,12 +162,11 @@ your report, exact, for the integrator). And if reader R1b names `ElysiumNpcBase
     integrator turns it).
 15. **Before you trust `0x51`** (J14.7): the in-reach arm of the melee band needs owner slot 331
     = `CBaseCombatCharacter::ChooseMeleeAttackSequence 0x10347180` to answer true with `out >=
-    0`. Its body (3,160 bytes) is not walked by the packets; read its doc section first (`uv run
-    elysium research section 0x10347180`: `combat-and-damage.md` § "The melee sequence selector
-    is two systems…", `animation_rig_resolution.md` § "The NPC melee selector") and say in your
-    report whether the port's stand-in for it can answer false for a bat on `regular_cop` — if
-    it can, `melee_swing` may stay on `0xc7` and that is the first thing the integrator reads.
-    You edit nothing for it (the band is V5a-1's).
+    0`. **Settled (`../v4/packets-S5.md` item 4): the body is walked, the port's slot is a
+    stub answering false, and lane V11-3 ports it in this wave** (`brief-V11-3-slot-331.md`).
+    Nothing to read and nothing to report for it; you edit nothing for it. V11-3 will report
+    one line for your `ElysiumNpcMingXiao.cpp` (`ChooseMeleeAttackSequenceSeam` ~:924): the
+    integrator applies it, not you.
 
 ## Not yours
 
@@ -166,8 +176,9 @@ melee band `0x103ea7e0` (**V5a-1 ports it**, J14.4; it is read whole — `../v4/
 4, constants in `../v4/packets-S4.md` item b — reads only sequence data the bake carries, and is
 no longer a judge item: out of reach beyond `max(1.2 × reach, 256)` the word is `9`, between
 reach and that `0x60`), slots 307 / 308
-(`ElysiumCombatCharacterSlots.cpp`), the swing start and the contact sweep
-(`ElysiumNpcStartTask.cpp`, `ElysiumWeaponClasses.*`, `ElysiumEntityWorldInteraction.cpp`: V4c
+(`ElysiumCombatCharacterSlots.cpp`), slot 331 (V11-3), the melee contact's hit test, filters
+and damage (`ElysiumWeaponClasses.*`, the swing query: V11-2), the swing start and where the
+sweep runs (`ElysiumNpcStartTask.cpp`, `ElysiumEntityWorldInteraction.cpp`: V4c
 C1), `ElysiumNpc.h`, the shape map, every file of B1 and B2 (`Visual/*`,
 `Public/ElysiumWorldServices.h`, the map actor's embodiment files, `Tests/ElysiumTestServices.h`,
 `ElysiumNpcMotor10.*`, `ElysiumNpcBaseFacing.cpp`, `ElysiumNpcBaseMotor.cpp`,

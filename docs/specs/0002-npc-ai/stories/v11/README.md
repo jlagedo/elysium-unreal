@@ -22,8 +22,20 @@ body read this session; *(doc)* `docs/vtmb/`, cited; *(triage)* not re-verified;
 
 | brief | who |
 |---|---|
-| `brief-V11-1.md` | the one coder |
-| `brief-V11-integrator-notes.md` | additions to `../v4/brief-B-integrator.md` when V11 shares V4b's wave |
+| `brief-V11-1.md` | coder 1: the coordinator |
+| `brief-V11-2-melee-contact.md` | coder 2: the melee contact to retail (S5 item 3: D1–D8, D10, D11) |
+| `brief-V11-3-slot-331.md` | coder 3: slot 331 `ChooseMeleeAttackSequence 0x10347180` (S5 item 4) |
+| `brief-V11-integrator-notes.md` | the wave's integrator |
+
+**Amended after S5 (planner, 2026-10-04): V11 is three lanes and its own wave, after V4b**
+(`[V4b: B1, B2]` → `[V11-1, V11-2, V11-3]`). The cap is three coders, and V11-2 edits the swing
+query in `Public/ElysiumWorldServices.h`, `Public/ElysiumMapActor.h` and
+`Tests/ElysiumTestServices.h` — B1's files — so V11 no longer shares V4b's wave. Why the two
+lanes are here ("testable first", the bug protocol): `0x51` needs slot 331's body, and
+`melee_swing`'s damage and `melee_ally_in_the_way`'s two brawlers observe the contact. Every
+"shares V4b's wave" below is superseded; §5's "V11 fixes none of it" now reads: V11-2 fixes the
+contact's hit test, filters and damage; **where** the sweep runs and over which cycles (slot 312,
+`MeleeSwingUpdate 0x10346cd0`, D9) stays C1's.
 
 ## 1. What retail does
 
@@ -248,6 +260,17 @@ B2's item 4 may be named a file of V11's by R1b (`ElysiumNpcBaseStartTask.cpp`,
 `TaskTailCoordinatorCircleSide` there, B2 owns no function in them and reports the line.
 V11 shares `ElysiumNpcSchedule.cpp` with V5a-2 and `ElysiumEntityWorld.cpp` with V4a's A1:
 **V11 must not share a wave with V5a or V4a**; after them it is clean.
+*(after S5.)* **Nor with V4b** (V11-2 holds B1's three interface files for the swing query).
+The wave's three lists, checked by listing — no file twice: **V11-1** as above; **V11-2**
+`ElysiumWeaponClasses.{h,cpp}`, `ElysiumSwingContact.{h,cpp}`, `Public/ElysiumWorldServices.h`,
+`Public/ElysiumMapActor.h`, `Private/Map/ElysiumMapActor.cpp`, `Tests/ElysiumTestServices.h`,
+`Tests/ElysiumSwingContactTests.cpp`, `Tests/ElysiumKnockbackTests.cpp`,
+`Tests/ElysiumMeleeTestHelpers.h`, new `Tests/ElysiumMeleeSwingStepTests.cpp`; **V11-3** new
+`ElysiumMeleeSequenceChoice.{h,cpp}`, `ElysiumCombatCharacterSlots.cpp` (slot 331 only), new
+`Tests/ElysiumMeleeSequenceChoiceTests.cpp`. By ownership: V11-1 calls `TraceRetail`
+(`ElysiumWorldServices.h`, now V11-2's file) and edits nothing there; `ElysiumNpcMingXiao.cpp`
+and `ElysiumNpcTzimisceRunner.cpp` stay V11-1's (V11-3's MingXiao line and V11-2's slot-329
+line reach the integrator).
 
 ## 5. Dependencies
 
@@ -322,9 +345,15 @@ counter); `ElysiumNpcKernelScheduleTests.cpp` ~:592-594's premise. The dispatch-
   retail's order; **the section order file is unrecovered** (V11-1 reports whether the port's
   inventory orders weapons that way; if not, P9 stays a named seam — it is behind `0xe3
   SWITCH_TO_MELEE`, not on either record's path once slot 599 admits).
-- **Slot 331 `ChooseMeleeAttackSequence 0x10347180`** (the `0x51` arm's gate) is not walked by
+- ~~**Slot 331 `ChooseMeleeAttackSequence 0x10347180`** (the `0x51` arm's gate) is not walked by
   the packets: V11-1 reads the doc section (`research section 0x10347180`) before it trusts
-  `0x51` (J14.7).
+  `0x51` (J14.7).~~ *(S5 item 4.)* **Walked; the port's slot is a stub answering false; lane
+  V11-3 ports it whole.** The bake carries every input (table in `brief-V11-3-slot-331.md`).
+- *(S5 item 3.)* **The contact's eleven differences**: D1–D8, D10, D11 are lane V11-2's
+  (`brief-V11-2-melee-contact.md`), D9 is C1's (V4c). Two operands stay unread (the roll →
+  `successes` conversion; the length compared to 20.0 in the wall contact): named at their lines.
+  D5 makes props and breakables hittable by any swing, the player's included — verdicts in the
+  full arena may move; that is retail.
 - **Slots 307 / 308 as inventory scans** (P11) are not in V11's files (`ElysiumCombatCharacterSlots.cpp`
   is A3's): recorded, proposed for V5 proper or R4.
 - ~~**The six coordinator bodies were not re-read** by the planner~~ *(S3 item 7: re-read; they

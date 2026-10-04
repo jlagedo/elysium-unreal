@@ -18,6 +18,11 @@ on the enemy" and § "Rules for every agent of V4", `../v4/packets-R2.md` items 
    (`ElysiumWeaponClasses.cpp`): decide per line whether the test is now dead or still guards an
    unparsed record, and say so in the commit message; and `ScaleWeaponBurstPause`'s arms if they
    differ from `0x102c5570` (no target → `sqrt(1 / BaseRange)`; `dist <= 0` → `× dist`).
+   *(planner, after S5 item 4.)* **Slot 331 `0x10347180` is not this wave's**: V5a-1 calls the
+   virtual, whose stub (`ElysiumCombatCharacterSlots.cpp`, A3's file — slot 363 only) still
+   answers false; do not write a body or a stand-in for it. The body is V11-3's
+   (`../v11/brief-V11-3-slot-331.md`). And A3 does not write the player's `FieldOfView`
+   (`ElysiumPlayerEntity.cpp` is A4's, V4a): a record red on that word alone is placed on A4.
    **Wave disjointness, by listing, before the build** ([V5a-1, V5a-2, A3]): no file in two
    lanes; neither S2 nor the second sitting added a file to any of the three.
 2. **Build once**: `uv run elysium build --arm`. Fix only integration breaks (compile, link, a

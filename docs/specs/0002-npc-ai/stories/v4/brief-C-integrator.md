@@ -97,7 +97,13 @@ rulings, V4 — second sitting"; Grep, read only it), the judge's rulings J6, J8
      verdict there is read against J14.1, not loosened.
    - `cover`, `ranged_open_fire`: the shot still comes from the event (`animevent 3031` inside
      `task_range_attack1`), no `damage` before it; `ranged_open_fire` still red only on N2 (V5).
-   - `melee_swing`, `chase_melee`: red only on N3 (V11) — or, if V11 landed first, green with
+   - *(planner, after S5.)* **V11 lands before V4c, as its own wave [V11-1, V11-2, V11-3]**:
+     the contact's D1–D8, D10, D11 are V11-2's and already retail; C1 owns only D9, the
+     sweep's place, the stamp and `Weapon_FrameUpdate`. C1's diff in `ElysiumWeaponClasses.cpp`
+     must show no hunk in the walk's filters, `MeleeContact` or `KnockbackContact`; run
+     `Elysium.Arm.MeleeSwingStep. Elysium.Arm.MeleeContact.` with the family tests. If C1
+     reported D9 as a seam (no bone-at-cycle accessor), file the accessor with the judge.
+   - `melee_swing`, `chase_melee`: green before you start (V11) and still green with
      the hit now landed by slot 315's sweep (C1): `…_MELEE_ATTACK1_NR (0xdd)` in reach,
      `…_MELEE_ADVANCE_NR (0xcb)` out of reach, one `MELEE_IDLE (0xc7)` first being retail;
      `melee_swing`'s trace shows no `animevent` on the brawler during a swing.

@@ -878,7 +878,16 @@ copy `0x10385ab0`, `0x103c19e0`, `0x103c3960`); `0x1025dca0` with `useDist = 0` 
 (`0x102b57c0`, `0x10385c30`, `0x103c1a60`, `0x103c39e0`) and with `useDist = 1` only from
 `0x1025db70`'s full arm; `0x1025ddd0` from slot 601 (`0x102b5880`, `0x10385cf0`, `0x103c1ad0`,
 `0x103c3a70`); `0x1025db50` and `0x1025de90` from slot 602 (`0x102b5900`, `0x10385d70`,
-`0x103c1b10`, `0x103c3ab0`). `0x10385ab0` calls `0x1025db70` TWICE: once before the
+`0x103c1b10`, `0x103c3ab0`). **Slot 600's other bodies never reach the coordinator**
+(2026-10-04, spec 0002 `stories/v4/packets-S5.md` item 7): `CNPC_VWerewolf 0x103cb7f0`,
+`CNPC_VFrenzyShadow 0x10376ba0`, `CNPC_VGargoyle 0x10379f20`, `CNPC_VHengeyokai 0x10381780`,
+`CNPC_VMingXiao 0x10395df0` and the tentacle `0x1039eab0` are `m_bInMelee (+0x6078) = 1; return
+true`. Slot 600's dispatch sites beyond slot 322: `CAI_BaseNPCTroika::OnTakeDamage 0x102beda0`
+(after `OnTakeDamage_Alive` answered non-zero and the interesting-death arm did not return:
+`0x1028e8b0(attacker, 5.0)` when there is an attacker, then slot 600 `(GetEnemy())`), its
+combatant twin `0x10385a50`, `CNPC_VDog`'s `0x10374e50` (from its slot 460 on condition `0x78` or
+`0x7e`: slot 596, `+0x5cc4 = 2`, slot 600 `(GetEnemy())`, then `SquadNewEnemy`), and the
+Werewolf's `NPCThink 0x103cb590` and `StartTask 0x103ccda0`. `0x10385ab0` calls `0x1025db70` TWICE: once before the
 `m_bfNPCFrenziedFlags & 0x1000` test with the result discarded (`0x10385b5d`), and again only when
 the bit is clear, whose result decides (`0x10385b7b`); the duplicate scan makes the second call a
 no-op on success.

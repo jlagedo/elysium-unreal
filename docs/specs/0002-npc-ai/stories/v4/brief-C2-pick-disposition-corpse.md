@@ -114,8 +114,10 @@ report**, exact, and the integrator applies it.
    - if the index changed: `seq = old == -1 ? slot 611 (0x102c12a0) : GetTransitionAnim
      0x100ed150` (`stance_trans_<old>_<n>_<new>_<n>`, then `_1_…_1`, then the new disposition's
      `idle[stance]` — its fallbacks stay; resolve names through `LookupSequenceByName`). *Slot
-     611's body is not walked in the packet: unrecovered; the coder reads it first
-     (`0x102c12a0`).*
+     611's body `0x102c12a0` is walked in `packets-S5.md` item 9 (the idle of the current stance
+     `+0x64c8`, or the alternate idle on a `RandomInt(1,100)` draw, or a stance change through
+     `0x102c1230` after the row's minimum time; −1 → `m_nSequence`): port it from there, draws in
+     that order.*
    - if `seq >= 0`: `m_IdealActivity = 0xf1`, `m_nIdealSequence = seq`;
    - and if `!m_bDisableAI (+0x6080)`: `m_nSequence = seq`, `m_flCycle = 0`, `m_Activity = 0xf1`,
      `m_flAnimTime = curtime`, `ResetSequenceInfo`.

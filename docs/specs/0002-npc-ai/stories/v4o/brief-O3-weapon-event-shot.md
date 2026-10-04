@@ -26,8 +26,8 @@ NPC's clip is never spent — item 3b**; record `ranged_sustained_fire`). Re-loc
    the mode record `0x102517e0` (the one whose `+0x104` equals `+0x848`; no match → a static
    default record with type 0); then on the record's **type `+0x108`**: **1 or 2 → slot 373
    `Shot`**; 3 → the zoom step (player only) and the next-attack times `= curtime +
-   GetFireRate`; 4 → the fire-mode toggle; 6 → the throw (`0x10239e70`; its launch `0x10239f30`
-   is unrecovered — not yours); any other → `+0x730 += GetFireRate`, `+0x734 =` the same,
+   GetFireRate`; 4 → the fire-mode toggle; 6 → the throw (`0x10239e70`; its "launch" `0x10239f30`
+   creates nothing, `../v4/packets-S5.md` item 5 — not yours); any other → `+0x730 += GetFireRate`, `+0x734 =` the same,
    **nothing fired**. `Shot 0x102387b0`, for an NPC, in order:
    1. Zoomed (weapon data `+0x4fe84 > 0 && +0x914 > 0`): the mode record is re-read as tag 2.
    2. **Owner** (`0x10252240`) null → return. `AddMiscFlag(0x200000)` on the owner.
@@ -66,9 +66,12 @@ NPC's clip is never spent — item 3b**; record `ranged_sustained_fire`). Re-loc
      `NO_PRIMARY_AMMO 0x40` cannot rise from firing.**
    - **`0x1033d940`** (the rate's scale): `0x101e3f50(&0x10739a4c, owner)` true → `rate × 2`;
      else `rate`. The test is a bit family on the owner's `+0xeb4` word (five levels of one
-     status); **which status is unrecovered** (its bit table is built at run time). Port it as
-     **a seam answering false**, named for `0x1033d940` / `0x101e3f50` — "the status that doubles
-     the attack rate; unrecovered" — so an NPC's slot 332 is `Attack_Rate` unscaled.
+     status). **The status is Presence — discipline id 10, the five level bits in
+     `m_iDisciplineFlags2`** (`../v4/packets-S5.md` item 5; the bit values are the run-time
+     table's). Port it as **a seam named for `0x1033d940` / `0x101e3f50` — "a Presence level bit
+     in `m_iDisciplineFlags2` doubles the attack rate"** — reading the port's Presence bits if
+     `DisciplineFlags2` carries them (Grep; say which), else answering false, so an NPC's slot
+     332 is `Attack_Rate` unscaled.
    - The mode record's key at `0x105402f8` is the string `Type`.
 2. **`FElysiumWeapon::ShotFromAnimEvent(const FElysiumAnimEvent&)`**: for a ranged operator body
    whose owner is an NPC and with **no transaction staged**, the commit event (3030..3044) stages
@@ -111,8 +114,10 @@ NPC's clip is never spent — item 3b**; record `ranged_sustained_fire`). Re-loc
      `StartFadeOut` in it; no V4o lane does): write the replacement comment in your report and
      the integrator applies it.
    Two other decrements exist in retail and are not on the two maps — leave them, named:
-   `CWeaponRanged_FlameThrower::Attack 0x103e2f30` (`+0x74c −= 1`; not walked for an NPC gate)
-   and mode type 6 (the throw).
+   `CWeaponRanged_FlameThrower::Attack 0x103e2f30` (`+0x74c −= 1`; **it has no NPC gate — an NPC's
+   flamethrower spends its clip**, `../v4/packets-S5.md` item 5) and mode type 6 (the throw:
+   `0x10239e70` spends one and drops the emptied weapon; its "launch" `0x10239f30` creates
+   nothing).
 4. **Tests** `Elysium.Arm.Weapon.ShotFromAnimEvent` (`0x10238160` → `0x10238320` →
    `0x102387b0`): an NPC wielder, nothing staged, 3031 → one shot committed against its enemy;
    **a second 3031 inside the cooldown (`m_flNextPrimaryAttack > curtime`) fires nothing** —

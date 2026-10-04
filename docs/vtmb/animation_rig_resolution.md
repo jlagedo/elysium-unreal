@@ -234,10 +234,18 @@ on any leave-phase key part, and `frida_probe` refuses a key whose phase the rec
 so a re-capture will settle it; until then the table shows that the selector *can* refuse and that
 its answers vary across a cast, and nothing more.
 
-**What is not established**: which candidate flag each bit of the preference order selects, and
-therefore which geometric condition produced any one of these answers. The flag word is built from
-the range test, the sweep and the box test; mapping bit to condition needs either the picker decoded
-or a capture that records the per-candidate flag array beside the enemy's relative position.
+**The flag bits, settled from the listing 2026-10-04** (spec 0002 `stories/v4/packets-S5.md` item
+4, the whole body arm by arm): **`8`** = the enemy's 2-D distance (to its box centre) lies in the
+sequence's `+0x2cc..+0x2d0`; **`4`** = the sequence's movement is not blocked (set first, cleared
+when the sweep is blocked by anything but an enemy within `debug_melee_npc_range`, default 128, of
+the end); **`1`** = the movement ran into the enemy and `m_bAllowsInterpenetratingAttacks (+0xfe0)`
+is set; **`2`** = one of the sequence's boxes (`+0x2bc` / `+0x2c0`) overlaps the enemy's box laid
+on the attacker's line at that distance; **`0x10`** = the sequence has no movement. On an NPC a
+sequence whose `+0x2d4 >= 0` has its flags zeroed after the sweep. The picker `0x10348100` takes
+the candidates whose flags contain the mask and draws by weight. The function answers **true only
+for the first pass's masks 7, 5 and 6** (with `| 8`): in range, clear to move, and reaching or
+closing on the enemy. An NPC whose centre-to-centre probe to the enemy is blocked by a third
+entity gets `SetCondition(0x3a)` and false before any candidate is read.
 
 ## Activity enums are per-process, not per-file
 

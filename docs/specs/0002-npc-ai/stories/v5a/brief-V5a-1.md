@@ -53,11 +53,20 @@ constants, and is yours to port** — item 4 below replaces "unread; do not inve
      curtime`, then (the target is a combat character) the target's slot 327.
    - `dot > 0.7` (f64 `0x104492d0`) `&& target CC && ready` and owner slot 331 `(weapon, target,
      activity, &out)` true with `out >= 0` → **`0x51`**. Slot 331 is
-     `CBaseCombatCharacter::ChooseMeleeAttackSequence 0x10347180` (3,160 bytes, not walked by the
-     packets): call the port's existing body for it (`research where 0x10347180`); if the port
-     has none, a seam named for the address answering what today's stand-in answers, reported —
-     **unrecovered as a listing walk; a reader settles it before this lane starts** if the port
-     has no body.
+     `CBaseCombatCharacter::ChooseMeleeAttackSequence 0x10347180` (**walked, `../v4/packets-S5.md`
+     item 4**): true with `out >= 0` means a candidate whose range `seq+0x2cc..+0x2d0` holds the
+     2-D distance to the enemy's box centre, whose sequence movement is not blocked, and that
+     either reaches the enemy with a swing box (`seq+0x2bc` / `+0x2c0`) or closes onto it; an NPC
+     whose line to the enemy is blocked by a third entity gets `SetCondition(0x3a)` and false.
+     **Its body is not yours** (planner, 2026-10-04): the port's slot 331 is a counting stub
+     answering false (`ElysiumCombatCharacterSlots.cpp` ~:628, A3's file in this wave), and its
+     body is lane **V11-3** (`../v11/brief-V11-3-slot-331.md`; the bake carries every input —
+     `+0x2bc..+0x2d4` and the sequence movement — checked, no pipeline change). **You call the
+     virtual** `ChooseMeleeAttackSequence(weapon, target, activity, &out)`
+     (`Public/ElysiumCombatCharacterSlots.inl` ~:257) exactly where retail does and keep no
+     stand-in for it. Until V11's wave the stub answers false, so the weapon arm raises no
+     `0x51`: no record of this wave or of V4a / V4b observes it (no NPC enters melee before V11,
+     N3); say so at the line. Your arm test overrides the slot on a fixture.
    - Then over `GetSequencesForActivity(owner, translated activity, …)`, each sequence counted
      when `(target CC || seqdesc+0x10 > 0) && seqdesc+0x2c4 > 0`: `lo = min(+0x2cc)` (seed
      100000.0), `hi = max(+0x2d0)` (seed −100000.0), `mean` = the average over the `+0x2bc`
@@ -99,7 +108,8 @@ constants, and is yours to port** — item 4 below replaces "unread; do not inve
 
 ## Not yours
 
-`GatherEnemyConditions` and its call site (`ElysiumNpcBaseConditions2.cpp`, already retail), slot
+Slot 331's body `0x10347180` (V11-3, in V11's wave; you call the slot), the melee contact
+(V11-2), `GatherEnemyConditions` and its call site (`ElysiumNpcBaseConditions2.cpp`, already retail), slot
 560 / 553 bodies (`ElysiumNpcBaseConditions.cpp`), the weapon classes, `RefreshCombatConditions
 0x102b2570`, slot 363 (A3), `StartTask`, `ElysiumNpcSchedule.cpp` (lane V5a-2). A line another
 file needs goes in your report, exact, with its place.

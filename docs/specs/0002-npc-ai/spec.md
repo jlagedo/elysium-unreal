@@ -762,7 +762,7 @@ tests the green scenarios cover deleted.
   the six slab maps and every other baked map's door cuts at their next bake (R2).
   *Follow-up 2026-10-04, **N21 closed*** (`stories/v1/triage.md` § "V13 follow-up"): every nav mark includes the agent height (`ElysiumNavAreaActor.cpp`, `NAV_AREA_ACTOR_SHAPE` 4); both witness maps re-baked; `junkyardgate` / `gasstationgate` walls, door 339 probed, `Elysium.Content.NavArea.*` green whole; counts, links, `verify nav` and the seven map records unchanged.
 
-Order: V1 → V2 → H → V3 (V3r, V3a, V3b, V13, V3c, V3d) → T6b → V4r → V4a0 (seam) → [V5a + V4a-A3] → V4a → [V4b + V11] → V4o → V4c → V4d → V5b → V6 → V7 → V10 → V12 → V2 again (full run) → V8 → V9.
+Order: V1 → V2 → H → V3 (V3r, V3a, V3b, V13, V3c, V3d) → T6b → V4r → V4a0 (seam) → [V5a + V4a-A3] → V4a → V4b → V11 → V4o → V4c → V4d → V5b → V6 → V7 → V10 → V12 → V2 again (full run) → V8 → V9.
 **T6b, the header pass** (the owner, 2026-10-04; `stories/t6b/brief.md`): the kernel headers' include fan-out cut after V3d and before V4, one agent holding the build; it closes T6 (edit-mix p90 ≤ 90 s). Landed 2026-10-04: p90 104.1 → 81.7 s (kernel headers 100.9 / 97.7 → 74.0 / 72.5 s), verdicts unchanged; T6 ticked (§ T6, "T6b, measured").
 The new reds ride their stories: N1, N2 in V5; N5, N6 in V7; N7, N8 in V3; N9, N10 in V6; N13 in
 V4 (from V3a: the patrols' acceptance moves there); N12 in R2; N14 in V6; N15 in V3b's follow-up
@@ -888,7 +888,7 @@ Two rules the owner added on 2026-10-04, ranking above the order of the plan:
 
 ## The sequence
 
-[T1 + T2 + T4] → [T3 + T5 + T2's C++] → T6 → **gate 1** → V1 → V2 → H → V3r → V3a → V3b → V13 → V3c → V3d → T6b → V4r → V4a0 (seam) → [V5a + V4a-A3] → V4a → [V4b + V11] → V4o → V4c → V4d → V5b → V6 → V7 → V10 → V12 → V2 → V8 → V9 →
+[T1 + T2 + T4] → [T3 + T5 + T2's C++] → T6 → **gate 1** → V1 → V2 → H → V3r → V3a → V3b → V13 → V3c → V3d → T6b → V4r → V4a0 (seam) → [V5a + V4a-A3] → V4a → V4b → V11 → V4o → V4c → V4d → V5b → V6 → V7 → V10 → V12 → V2 → V8 → V9 →
 **gate 2** → R1 → R2 → R3 → R4 → [R5 + R6] → R7 → R8 → 0002 closes.
 
 Serial: one wave at a time in the one checkout. Brackets are stories whose coders share one wave

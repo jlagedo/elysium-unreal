@@ -21,7 +21,9 @@ Runtime (`Source/ElysiumUE/Private/Substrate/` unless a path says otherwise):
 - `ElysiumNpcBaseMotor.cpp` (`PostRun`'s weapon line, `++PostRunWeaponUpdates` ~:597, only)
 - `ElysiumWeaponClasses.{h,cpp}` (the `ContactEventCycle` estimate ~`.h:303`, `.cpp:1263-1317,
   2166`; `OperatorHandleAnimEvent` ~:1349; `IsMeleeSwingTrigger` ~`.cpp:468`; the weapon's frame
-  update; the swing contact `AdvanceSwingContact` / `MeleeContact`). **Not** `BuildActivityClipRequest`'s `Variant` line
+  update; of the swing contact only `AdvanceSwingContact`'s entry, its sub-step loop and the
+  endpoint function (D9) — the walk's filters, the hit test, `MeleeContact` and
+  `KnockbackContact` were made retail by V11-2 and are not reopened). **Not** `BuildActivityClipRequest`'s `Variant` line
   (~:1077): that one line is K4's; C2 writes it in its report and the integrator applies it.
 - `ElysiumEntityWorldInteraction.cpp` (`AdvanceMeleeSwings` ~:299-326)
 - `ElysiumNpcStartTask.cpp` (the attack arms; the swing start ~:557, ~:852-862)
@@ -85,8 +87,10 @@ in C2's `ElysiumNpcAnim.cpp`; `CreateCorpse` and the pedestrian's override are C
      naming the model and the sequence.
    - Not walked, named at the line where you meet them: each species class's own
      `HandleAnimEvent` arm by arm (ported, `ElysiumNpcMisc2Species.cpp`; not your file), and
-     `0x10239f30` (the type-6 throw's launch; the decompilation is truncated) — **unrecovered; a
-     reader settles it before any lane ports the type-6 arm; you do not**.
+     `0x10239f30` (the type-6 throw's "launch") — **settled (`packets-S5.md` item 5): 40 bytes,
+     two virtual reads whose results are discarded; it launches nothing, and `0x10239e70` only
+     plays weapon activity `0xb9`, spends one of the clip and drops the emptied weapon. You do
+     not port the type-6 arm**.
    - (c) is the integrator's (the list of NPC classes whose ranged attack activity has no
      3030..3044 clip, from the baked event tables).
    - **The player's use of the estimate is not touched** ("its commit stays on the estimate",
@@ -133,10 +137,25 @@ in C2's `ElysiumNpcAnim.cpp`; `CreateCorpse` and the pedestrian's override are C
        from the stored last pose; `MeleeSwingStep(pos, ang, prev, c)`. The epilogue stamps time,
        position, angles.
      - The trace shape, the hit decision and the damage are `MeleeSwingStep 0x10343020` → the
-       weapon's traced-impact virtual `+0x438` `0x102579f0` — cited from the doc, **not re-read:
-       unrecovered as a listing walk; a reader settles it before this lane starts** if the
-       port's `AdvanceSwingContact` / `MeleeContact` is to be changed. You keep the port's
-       contact as it is and change only who calls it, when, and over which cycles.
+       weapon's traced-impact virtual `+0x438` `0x102579f0` — **walked (`packets-S5.md` item 3)
+       and already retail when you start: lane V11-2 (`../v11/brief-V11-2-melee-contact.md`,
+       V11's wave, before V4c) fixed D1–D8, D10 and D11** — the relation filter, the gates, the
+       per-sample rays, the non-character overlap hit, the wall contact, slot 270's dice,
+       dispatch, side effects and reaction. Do not rewrite them; a line of theirs your change
+       must move is reported. **What remains yours of the contact**: the sweep's place in the
+       think (slot 312 → slot 315, above), the stamp (`+0xaa1`, `+0xaa4`, the stored last
+       pose), the cycles each step is given, `Weapon_FrameUpdate` (item 1) — and:
+     - **D9 — the record's endpoints are posed at each sub-step's own cycle**
+       (`MeleeSwingStep 0x10343020` step 1: `CalcPose` at `cycle`, the bone's matrix built from
+       the sub-step's lerped `pos` / `ang`, `0x100c3600`). Today the segment is the live
+       bone's, lerped linearly between two batches in the attacker's frame
+       (`ElysiumWeaponClasses.cpp` ~:2786-2795). V11-2 left the endpoints behind **one
+       function taking the sub-step's cycle**: replace its body so each of your `N` steps asks
+       the bone's transform at `c` under the lerped `pos` / `ang`. Grep the embodiment for a
+       bone transform at a given sequence cycle (`Public/ElysiumWorldServices.h`, read not
+       edited); if none exists, keep the lerp behind that function as a **named seam** ("stands
+       for `CalcPose` at `cycle`, `0x10343020`") and write the accessor's exact signature in
+       your report — a pose evaluator is then a judge item, not yours to build.
      Where the port has no word for `+0xaa1`, `+0xaa4` or the stored last pose, add them in
      `ElysiumWeaponClasses.h` or report the exact declaration if their home is a file not yours.
 4. **Slot 247 `SetAttackExtentsForSequence 0x10090c80`, whole** (J2), called by
@@ -192,8 +211,11 @@ in C2's `ElysiumNpcAnim.cpp`; `CreateCorpse` and the pedestrian's override are C
    3046 do not); an NPC swing is swept from slot 315 and not by `AdvanceMeleeSwings`, over **its
    own stamp's `dt`** with **`N = ceil(dt × 100)`** steps (a 0.25 s gap → 25 steps; 0.101 s →
    11), `dt <= 0` → no step and no stamp, a sequence with no swing window → not live and no
-   stamp; `PostRun`'s order with `Weapon_FrameUpdate` last, if A1's `.PostRunOrder` does not
-   already cover it.
+   stamp; **D9**: each sub-step's endpoints are asked at that step's cycle (`0x10343020`), or
+   the seam's name is asserted if the accessor does not exist; `PostRun`'s order with
+   `Weapon_FrameUpdate` last, if A1's `.PostRunOrder` does not already cover it. V11-2's
+   `Elysium.Arm.MeleeSwingStep.*` / `Elysium.Arm.MeleeContact.*` (`ElysiumMeleeSwingStepTests.cpp`,
+   not your file) must still hold: a line of theirs your change breaks is reported, exact.
    `ElysiumNpcAttackExtentsTests.cpp`: `Elysium.Arm.NpcKernelAnim.AttackExtents` (`0x10090c80`):
    `Flags2 & 4` clear → nothing; a fixture bbox (through a test double of `SequenceBounds`, since
    the real one is the J2b seam answering false) → `max(|min|, max)` per axis, the radial x / y, the
@@ -203,7 +225,8 @@ in C2's `ElysiumNpcAnim.cpp`; `CreateCorpse` and the pedestrian's override are C
 ## Not yours
 
 The dispatcher (V4a), the attack conditions and `TASK_WAIT_ATTACK_TIME1` (V5, N2), the coordinator
-(V11, N3), the weighted pick, `SequenceBounds`'s body, death, `CreateCorpse` and the pedestrian's
+(V11, N3), the contact's D1–D8, D10, D11 (V11-2, landed) and slot 331 (V11-3, landed), the swing
+query (`Public/ElysiumWorldServices.h`, `Map/ElysiumMapActor.cpp`, `ElysiumSwingContact.*`), the weighted pick, `SequenceBounds`'s body, death, `CreateCorpse` and the pedestrian's
 override, the fade (C2), the bbox import (withdrawn by J2b, filed with the acquire cone's story),
 the species classes' own task and event bodies (`ElysiumNpcMisc2Species.cpp`; the four species
 with task-code fire paths — ChangBros, FrenzyShadow, Bach, ManBat — are absent from both witness

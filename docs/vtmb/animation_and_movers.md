@@ -4734,3 +4734,11 @@ whenever a claim ran out. `FElysiumAnimationDriver` now remembers the clip a bas
 and republishes it by name when the base is unowned in Idle on a cast body; travel states are
 unchanged, a body with no history falls through to the idle resolve, and the player is untouched.
 Proof: `Elysium.Substrate.BaseHold.UnownedCastIdle`.
+
+## The female `walk_0` is authored at 33.82 fps (bytes, 2026-10-04)
+
+Spec 0002 `stories/v4/packets-S5.md` item 8. `models/character/shared/female/move_and_ranged.mdl`
+in the retail `pack001.vpk`: animdesc `walk_0` at file offset `0x2f44`, `fps` (`+4`) = `AE 47 07
+42` = 33.82, 37 frames (`+12`). The male bank's `walk_0` (`0x2ffc`): `00 00 F0 41` = 30.0, 37
+frames. So the female walk cycle is 36 / 33.82 = 1.0645 s and 101.278 cm/s; it is the file's, not
+a decoder artefact.

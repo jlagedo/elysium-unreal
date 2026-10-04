@@ -2420,7 +2420,27 @@ inlined copy) described only the first:
 `CNPC_VMingXiao` and `CNPC_VSheriffMan` inline arm 1 and arm 2 only, which is why they are not calls
 to this body.
 
-**Unrecovered:** `DAT_10739a4c`'s discipline identity, as above.
+**Settled 2026-10-04 (spec 0002 `stories/v4/packets-S5.md` item 5): the discipline is Presence.**
+`0x101e3f50(&DAT_10739a4c, cc)` caches the OR of `record+0xc` over the manager's records whose
+`record+0x10 == 10` (`0x101e1610`) and the first such record's bit (`0x101e1520`), and answers true
+when `cc.m_iDisciplineFlags2 (+0xeb4)` carries one of the five level bits `first << 0..4`. Id 10 is
+`v_discipline_presence` in the datamap's array order at `CBaseCombatCharacter +0x12c4` (animalism
+0 … potence 9, presence 10, protean 11, thaumaturgy 12). The same test doubles the weapon's attack
+rate in `0x1033d940` (listing: `FADD ST0,ST0` when true). Who sets the bits on an NPC is unread.
+
+### Slot 611 `0x102c12a0` — the disposition's idle pick
+
+_Recovered 2026-10-04, spec 0002 `stories/v4/packets-S5.md` item 9._
+
+`rec = 0x100ecee0(&DAT_10924980, this, &minTime, &changeChance, &altChance)` — the row for
+`+0x64d4` × `+0x64e8`; the first two numbers come from the row's `+0x108` / `+0x10c` when `+0x64c0`
+is set, else `+0x110` / `+0x114`; `altChance` from `+0x118`. With `stance = +0x64c8`:
+`+0x64c0` set, or `+0x64e0` / `+0x64e1` set → `rec[+8 + stance×4]`, both bytes cleared. Else, when
+the alternate differs and `RandomInt(1,100) < altChance` → `rec[+0x14 + stance×4]`, `+0x64e0 = 1`.
+Else, `minTime < curtime − +0x64e4` and `RandomInt(1,100) < changeChance` → `0x102c1230` (a new
+stance `RandomInt(0,2)` redrawn until it differs; `0x100ecfc0(table, this, old, new)` answers the
+sequence; `+0x64c8 = new`; `+0x64e4 = curtime`), `+0x64e1 = 1`. Else the plain idle. −1 →
+`m_nSequence`.
 
 ### `FUN_102b7cf0` — the taunt-and-cover prologue
 

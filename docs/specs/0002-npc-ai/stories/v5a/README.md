@@ -113,7 +113,7 @@ exist, saved and shape-mapped. Lane 2 adds three plain fields to the item mode r
 |---|---|
 | **V5a-1** | `ElysiumNpcConditions.h`, `ElysiumNpcConditions.cpp`, `ElysiumNpcBaseClosure.cpp`, `Tests/ElysiumNpcKernelConditionsTests.cpp`, `Tests/ElysiumNpcCombatTests.cpp` (only the assertions that drive `GatherAttackConditions`, ~:520-705) |
 | **V5a-2** | `ElysiumNpcStartTask.cpp` (`StartTask19WeaponNextAttackTime` only), `ElysiumNpcStartTask.inl` (its declaration comment), `ElysiumItemTable.h`, `ElysiumItemTable.cpp`, `ElysiumNpcSchedule.cpp` (`SelectCoverOrKickSchedule`'s ranged-threat block only), `Tests/ElysiumNpcKernelStartTaskTests.cpp`, `Tests/ElysiumNpcKernelScheduleTests.cpp` |
-| **A3** (V4a) | `ElysiumCombatCharacterSlots.cpp`, `ElysiumCombatCharacterSlotBodies.cpp`, `ElysiumNpcSenses.h`, `ElysiumNpcSenses.cpp`, the player's spawn file (`ElysiumPlayerEntity.cpp`), `Tests/ElysiumCombatCharacterConeTests.cpp` |
+| **A3** (V4a) | `ElysiumCombatCharacterSlots.cpp`, `ElysiumCombatCharacterSlotBodies.cpp`, `ElysiumNpcSenses.h`, `ElysiumNpcSenses.cpp`, `Tests/ElysiumCombatCharacterConeTests.cpp` — **not** `ElysiumPlayerEntity.cpp`: A3's final brief gives the player's `FieldOfView = 0.5` write to A4 (V4a), so in this wave the player's word is whatever the seam left; if `sense_enemy_facing_me` or `ranged_open_fire` stays red on that word alone, it is a placed red on A4, not loosened |
 
 Checked by listing: no file appears twice. `ElysiumNpcBaseConditions2.cpp` (the slot-363 call
 site and the gather's caller) is nobody's: both are already retail.
@@ -160,6 +160,13 @@ expects `0xa4` because the stub fired. Each lane lists what it deleted.
   port body stands for it and ports it whole** (`brief-V5a-1.md` item 4); V11's `chase_melee`
   depends on it. The records' "slot 555 `0x1026d9a0`, d <= 64" text is wrong for a
   weapon-armed NPC (it is the innate arm, `caps & 0x80000`).
+- *(planner, after S5 item 4, 2026-10-04.)* **Slot 331 `ChooseMeleeAttackSequence 0x10347180`
+  — the `0x51` arm's gate — is not in this wave.** Walked (`../v4/packets-S5.md` item 4); the
+  bake carries every input (`LowReachCm` `+0x2cc`, `ReachCm` `+0x2d0`, `Envelopes`
+  `+0x2bc/+0x2c0`, `Combo.Mask` `+0x2d4`, the movement path for `0x100c6020`): no pipeline
+  change. Its stub is in `ElysiumCombatCharacterSlots.cpp` (A3's file here) and its only records
+  are V11's, so the body is lane **V11-3** (`../v11/brief-V11-3-slot-331.md`) in V11's wave.
+  V5a-1 calls the virtual and keeps no stand-in; the wave stays [V5a-1, V5a-2, A3].
 - **Verdicts will move.** With the top clear, CAN_* and 0x2f are rebuilt every gather, and with a
   real wait every gunman fires slower. `cover`, `cover_armed`, `control_sequence` and the map
   records are re-run by the integrator; a moved timing is triaged against retail, never loosened.

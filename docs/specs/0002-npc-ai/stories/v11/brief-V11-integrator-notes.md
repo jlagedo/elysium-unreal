@@ -3,6 +3,39 @@
 Additions to `../v4/brief-B-integrator.md`; its steps, order and rules stand. Read `README.md`
 here and `brief-V11-1.md`, and V11-1's report, beside B1's and B2's.
 
+**Amended after S5 (planner, 2026-10-04): V11 is its own wave of three lanes — [V11-1, V11-2,
+V11-3] — after V4b's commit, with its own integrator (you).** The last paragraph ("If V11 runs
+as its own wave instead") is now the rule; every "B1 / B2" sentence below applies to a landed
+V4b, not to a lane beside you. Read also `brief-V11-2-melee-contact.md`,
+`brief-V11-3-slot-331.md`, `../v4/packets-S5.md` items 3 and 4, and the three reports.
+
+- **Disjointness, by listing, before the build**: `README.md` §4's three lists; no file twice.
+  V11-1's diff has no hunk in `Public/ElysiumWorldServices.h` or `Tests/ElysiumTestServices.h`
+  (V11-2's here); V11-2's has none outside the swing query there, and none in
+  `ElysiumEnvBeam.cpp`; V11-3's hunk in `ElysiumCombatCharacterSlots.cpp` is slot 331 and its
+  row only.
+- **Cross-lane lines expected, added to the list below**: V11-3's replacement of
+  `FElysiumNpcMingXiao::ChooseMeleeAttackSequenceSeam` (V11-1's file) and the weapon's `+0x8b8`
+  / `+0x8c0` words if absent (V11-2's `ElysiumWeaponClasses.h`); V11-2's Tzimisce Runner slot
+  329 (`0x103c30c0`) and the slot-328 overrides (`0x1015dca0`, `0x103ca730`) if unported, and
+  the team word `+0x10b0` if it had no home; a test that pinned slot 331 as a stub.
+- **Records**: `melee_swing` must now be **green with the hit** — the contact is retail's
+  (V11-2: D2, D3, D4) and `0x51` comes from slot 331 (V11-3). If only the `health < 100` probe
+  fails, read the trace against S5 item 3 and place it on the lane whose arm it is; the one
+  residue that is still C1's is **where the sweep runs** (the world tick, not slot 312) and D9.
+  `melee_ally_in_the_way`: besides `0xe1`, the front brawler's swings never damage the rear one
+  (D1, `0x1034394d`). A second `MELEE_IDLE` with none of `0x51` / `0x60` / `9` standing is
+  V5a-1's band or V11-3's slot — both landed or in this wave: fix, do not place.
+- **Tests, added**: `Elysium.Arm.MeleeSwingStep. Elysium.Arm.MeleeContact.
+  Elysium.Arm.MeleeSequenceChoice.` and the families of V11-2's three rewritten test files.
+- **The full arena**: D5 lets any swing (the player's too) hit props and breakables, and D1
+  stops squad-mates hitting each other — each moved verdict gets its row; retail, not loosened.
+- **Commit**: `fix(npc): V11 -- the attack coordinator's list (N3); the melee contact to retail
+  (S5 D1-D8, D10, D11); slot 331 ChooseMeleeAttackSequence`. Tick V11 as below.
+- **Not editable here, for the coordinator**: `spec.md`'s sequence still reads `[V4b + V11]`
+  and `../v4/brief-B-integrator.md` / `brief-B1` / `brief-B2` still name V11-1 as a wave-mate —
+  a superset that costs them nothing; the order is `V4b → V11`.
+
 **Before the build.** Confirm by listing that no file appears in two lanes: V11's are in
 `README.md` §4. In particular B1's "embodiment interface header" must not be
 `ElysiumEntityWorld.h` (it is not: B1 names `Public/ElysiumWorldServices.h`), and nobody but B2

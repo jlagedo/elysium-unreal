@@ -996,6 +996,25 @@ literal port makes melee stop landing above 100 fps, a behaviour retail's clock 
 count and refuse to sweep through an engine discontinuity such as a teleport. Retail's server never
 hands its update either case, so neither stands in for a recovered rule.)
 
+**The step and the commit, walked 2026-10-04** (spec 0002 `stories/v4/packets-S5.md` item 3 holds
+both bodies arm by arm). `MeleeSwingStep 0x10343020`, per record: the two bone-local points through
+the bone's matrix; `n = ceil(length / 6)` samples (f32 `0x10488874`; under 2 → the midpoint alone);
+open iff live and `start <= cycle && end >= prevCycle`; the entities in the AABB over the segment's
+present and last endpoints. An **NPC attacker** hits only a character it hates or fears
+(`IRelationType` 1 or 2) and that is not on its team (`0x10323930`), unless `debug_allow_melee_ff`;
+the candidate must be solid, `m_bIsBCCTargetable`, not already in the record's list and not owned
+by the attacker. A **non-character, or a character whose slot 329 answers true** (the Tzimisce
+Runner), is hit on the box overlap alone and marked in every record; **any other character** is hit
+when a zero-extent ray from a sample's last position to its present one clips it (mask
+`0x200400b`), and is marked in every record whose window overlaps. Slot 328 true (the player and
+the Werewolf only) adds the wall contact: the attacker's blocked reaction off a near-vertical
+surface it faces, else one impact effect per swing. `0x102579F0(trace, record)`: a combat sound at
+the end point, then with no dice record the hit is unblocked with one success; a blocked hit plays
+the victim's slot 318 and the attacker's slot 319 and, when the damage did not go through, ends
+there; otherwise `DispatchTraceAttack`, `total = (modifier + dice) × multiplier × inflicted`
+(Potence floors `inflicted`), the apply, and — unblocked — the victim's plain hit (slot 321) or
+knockback (slot 320) by its slot 326(record) / slot 400.
+
 **Hit-once is per record, with a spread.** Each record carries its own victim hit list. A landed hit
 marks the victim in **every record whose window overlaps the hitting record's**, so a swing whose
 records share one window lands once; a record's list clears when its window closes, which is what

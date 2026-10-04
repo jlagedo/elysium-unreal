@@ -116,6 +116,19 @@ The 244 current definitions break down as follows after preserving their hidden 
 | Weapon_Thrown | 5 |
 | Bloodpack | 3 |
 
+### The section order is the file's, and the DLL indexes weapons by it
+
+_Recovered 2026-10-04, spec 0002 `stories/v4/packets-S5.md` item 6._
+
+`0x101ead30` reads `vdata\system\items.txt` § `InventorySections` and numbers each
+`InventorySection` child from 0 in file order: **None, Weapon_Melee, Weapon_Ranged, Weapon_Thrown,
+Armor, Generic, Powerups, Hidden** (the pack copy and the deployed copy agree).
+`CBaseCombatCharacter::CacheInventorySections 0x10340180` looks the eight names up and stores
+`0x10619d28[t] = index − 1` and `0x10937cd0[t] = (index − 1) × 32` (0 when not positive): Melee
+0 / slot 0, Ranged 1 / 32, Thrown 2 / 64, Hidden 6 / 192. `GetBestMeleeWeapon 0x10336f20` walks
+the type list `0x10619eb4 = {1, 2, 3, 7, −1}` — the Melee, Ranged, Thrown and Hidden sections in
+that order — and returns the first weapon whose slot 360 `& 0x18000`.
+
 ### The `ItemTypes` block joins each type to a section
 
 `ItemTypes` authors four columns per type, and the section join is **not** the type's own spelling —

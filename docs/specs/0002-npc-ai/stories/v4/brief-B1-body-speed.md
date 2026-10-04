@@ -107,8 +107,11 @@ in `Tests/ElysiumTestServices.h` reaches the integrator, not you.
    - The profile to expect, one straight leg from standing: accelerate at `ideal + 50` to
      `ideal`, cruise, brake at `ideal + 50` to 0 at the goal; braking distance `ideal² / (2·(ideal
      + 50))` — for the female `walk_0` (53.16 u/s) 13.7 units = 26.1 cm over 0.515 s.
-   No constant is left to read. Unrecovered and not needed by this item: `0x102e0bd0` (the
-   move call the step ends in; the body's own movement stands for it under K1).
+   No constant is left to read. Settled and not needed by this item (`packets-S5.md` item 2):
+   `0x102e0bd0` is `CAI_Motor::MoveGroundStep(newPos, pMoveTarget, newYaw, bAsFarAsCan, bTestZ,
+   pTraceResult, bNoTrace)` — answers 0 refused / 1 moved / 2 partial, NPC / 3 partial, world / 4
+   hit the target; a refused step zeroes the motor's velocity (motor slot 10 `0x102e1440`). The
+   body's own movement stands for it under K1.
 3. **The crowd follower's slowdown at goal goes off** (`SetCrowdSlowdownAtGoal(false)` in
    `ApplyCrowdState`, beside `SetCrowdSeparation`) **because item 2's deceleration replaces it** —
    in the same change, never alone. Comment at the line: retail's stop is the velocity script's
@@ -147,8 +150,11 @@ in `Tests/ElysiumTestServices.h` reaches the integrator, not you.
      `0x10262ea0(i, tOut)`), each with `yaw`, return 2; only `tIn >= 0.01` and `tIn <= 0.8 T` →
      **one** at `tIn`, return 1; `tIn < 0.01` and `tOut <= 0.8 T` → **one** at `T − tOut`,
      return 1; else 0. (`0x101d2c70` / `0x1013d580` as `VecToYaw` / `AngleDiff` are inferred
-     from their use; `0x10262ea0`'s insert is read only as "an entry at that time": if its body
-     matters to a line you write, read it — `vtmb_code 10262ea0` — and cite it.)
+     from their use; **`0x10262ea0(i, t)`, settled (`packets-S5.md` item 2)**: from entry `i`, the
+     first entry `k` with `t <= time[k]`: `a = t / time[k]`; `time[k] −= t`; a new entry at `k+1`
+     with `time = t`, elapsed and location lerped by `a` between `k` and the old `k+1`; returns
+     `k+1` (0 when it runs off the end). The two durations are swapped against the SDK — as read;
+     the lerp reads `k+1` before the shift, so guard the last entry and say so.)
    The accessor answers the turn script sampled at the tick's interval, as `MoveGroundExecute`
    reads the yaw "the same way" as the speed (item 2's read).
 6. **Tests**: `Elysium.Arm.NpcKernelMotor.VelocityScript` (`0x102630b0`) on fixture paths — a
@@ -179,5 +185,5 @@ lines in the report. The query budget (10 s warns, 60 s stops; never a file over
 Text through Grep / Read / Glob. Do not commit. Report ≤300 words: what you ported (addresses),
 the constants and the cell each came from, the accessors' exact signatures and header, tests
 (the turn script's insert rule among them: two entries, one at `tIn`, one at `T − tOut`, none),
-the arrival floor left for the judge, what stayed unrecovered (`0x102e0bd0`'s five trailing
-arguments; `0x10262ea0` if you did not need it).
+the arrival floor left for the judge, what stayed unrecovered (`0x102e0bd0` and `0x10262ea0`
+are settled, `packets-S5.md` item 2).

@@ -38,10 +38,10 @@ the walk" with its amendment; §2 M4–M6; § "Shared names"), `packets-R1.md` i
    blend return both. (This is the MOTOR's slot 15; the entity's slot 15, `SetAttackExtents
    0x1009af40`, is another table and V4c's.)
 2. **Slot 18 `0x102e19e0` = `CAI_Motor::MoveFacing`, on the kernel** (R1 item 1), in order:
-   - owner slot 526 (`+0x838`, `OverrideMoveFacing(move, m_flMoveInterval)`) true → return. *What
-     slot 526 answers on the Troika line is unrecovered; the coder reads it first* (`uv run
-     elysium research where "slot 526"`); if it stays unread, keep the port's existing answer
-     behind a seam named for it.
+   - owner slot 526 (`+0x838`, `OverrideMoveFacing(move, m_flMoveInterval)`) true → return. **Settled
+     (`packets-S5.md` item 1): slot 526 is `CAI_BaseNPC::OverrideMoveFacing 0x1027d9f0` on all 77
+     classes, no override, and it returns false** — the test is a constant false, cited at the
+     line; no seam. A port answer that can be true is not retail's: remove it.
    - `flMoveYaw = UTIL_VecToYaw(move.dir)` (`move+0x0c`).
    - the sequence has no `move_yaw` pose parameter (`0x102e2820`; the row's fan says so):
      `SetIdealYawAndUpdate(AngleMod(flMoveYaw), −1)` (`0x102e1c10`); the sequence-move-yaw read

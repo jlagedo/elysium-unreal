@@ -1768,8 +1768,31 @@ expected blocker (`+0x34`); a **zero** answer dispatches motor slot 10 (`+0x28`)
 anything else is returned verbatim. A step at or below the epsilon asks the LOCAL NAVIGATOR instead
 — `(*(motor+0x10))->slot 6 (+0x18)(goal)` — and folds its answer to `1` / `0`.
 
-**Unrecovered:** what motor slot 10 is, and what `0x102e0bd0`'s five trailing arguments mean past
-the two this body supplies.
+**Settled 2026-10-04 (spec 0002 `stories/v4/packets-S5.md` items 1 and 2).**
+
+- **Motor slot 10 is `0x102e1440`**: `m_vecVelocity = 0`, then `0x102ddc40(owner+0x5d38)` (not
+  walked). A refused step zeroes the motor's velocity.
+- **`0x102e0bd0` is `CAI_Motor::MoveGroundStep(newPos, pMoveTarget, newYaw, bAsFarAsCan, bTestZ,
+  pTraceResult, bNoTrace)`** (`RET 0x1c`). `flags = bTestZ ? 1 : 5`;
+  `CAI_MoveProbe::TestGroundMove 0x102e4f50(probe, GetOrigin(), newPos, 0x202400b, 100.0, flags,
+  &trace, bNoTrace, 0)` — flag 4 skips the final height test (status −2), and `bNoTrace` makes the
+  probe answer `newPos` untested. `bHitTarget = trace.pObstruction != 0 && == pMoveTarget`;
+  `bBlocked = trace.fStatus < 0`; `bBlocked && !bAsFarAsCan && !bHitTarget` → 0, nothing moved.
+  Else the origin is set to the trace's end, a step-up above 0.1 (`0x104491b4`) is handed to the
+  physics shadow controller clamped to the step height, `newYaw != −1` sets the local yaw; answer
+  4 (hit the target) / 1 (not blocked) / 2 (`fStatus == −3`) / 3.
+  Callers: slot 19 `0x10264680` `(…, move+0x34, −1, 1, 1, its 2nd arg, its 3rd arg)`; the walk
+  `0x102e1560` `(…, move+0x34, −1, 1, "the step was clamped to maxDist", its 4th, its 5th)`;
+  `AutoMovement 0x10280a50` `(delta, 0x102729d0(this), yaw, 0, 0, 0, 0)`.
+- **`CAI_Motor::MoveFacing 0x102e19e0`'s owner test, slot 526 (`+0x838`), is
+  `CAI_BaseNPC::OverrideMoveFacing 0x1027d9f0` on all 77 classes that fill the slot; it returns
+  false.** No class overrides it.
+- **The turn script's insert `0x10262ea0(i, t)`** (array `+0x6038`, count `+0x6044`): the first
+  entry `k >= i` with `t <= flTime[k]`: `a = t / flTime[k]`; `flTime[k] −= t`; a new entry at `k+1`
+  with `flTime = t`, `flElapsed (+4)` and `vecLocation (+0x2c)` lerped by `a` between `k` and the
+  old `k+1`; returns `k+1`, or 0 off the end. The durations are swapped against the SDK's
+  `BuildInsertNode`; the lerp reads `k+1` before the shift (one past the count on the last entry).
+  Its caller `0x10262c20` writes the new entry's yaw.
 
 ### `CAI_Motor::MoveGroundStep` `0x102e1760`
 
