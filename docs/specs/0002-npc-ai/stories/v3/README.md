@@ -299,22 +299,41 @@ bodiless case 0003/4 worried about.
   `Debug/ElysiumCastRun.cpp`, `Tests/ElysiumSequenceTests.cpp`,
   `Tests/ElysiumNpcKernelDirectorTests.cpp`, `Tests/ElysiumNpcKernelScriptTests.cpp`.
 
-**V3d — the dialogue hold, then the arbiter whole.** The inputs force their programs; `+use`
-clears and pushes `0x6a`; the conversation opens from `TASK_START_PLAYER_DIALOG`; `m_hDialogPartner`
-is a real handle; `TASK_RUN_DIALOG` holds through `0x102c1400` (packet R1) and releases through
-`0x102c0360`; `CDialog::Release` calls `0x102c0360` once (M12, M13). Then `ThinkInDialog` and
-`RouteScheduleMaintenance` deleted (Troika calls `MaintainScheduleRetail`), the `ScriptedSchedule`
-claim and the order coupling (M14: the executor does `SetState`), the mind's owner half, the enum,
-the tokens, `Follower`, `RefreshStateFromOwner` (M15), the save owner byte and the NPC's
-`SaveBlockReason` with a schema bump (M16), the debug reads.
+**V3d — the dialogue hold, then the arbiter whole.** The three inputs install their programs
+through `0x102ae750(id, 0)` (`0x6d`; `0x6e` for Remote) and `+use` installs `0x6a` the same way, with
+no `ClearSchedule` (R2); the conversation opens from `TASK_START_PLAYER_DIALOG` and the player's
+start-dialog, whose `CDialog::Acquire` calls `StartTalking 0x102c0270` (the NPC's `+0xfe8`,
+`OnDialogBegin`, the cine cancel); `m_hDialogPartner` is a real handle; `TASK_RUN_DIALOG` holds through
+`0x102c1400` (packet R1) and releases through `0x102c0360`; `CDialog::Release` calls `0x102c0360`
+once (M12, M13). Then `ThinkInDialog` and `RouteScheduleMaintenance` deleted (Troika calls
+`MaintainScheduleRetail`), the `ScriptedSchedule` claim and the order coupling (M14: the executor does
+`SetState`), the mind's owner half, the enum, the tokens, `Follower`, `RefreshStateFromOwner` (M15),
+the save owner byte and the NPC's `SaveBlockReason` with a schema bump (M16), the debug reads.
+
+*Re-cut 2026-10-04 after V3c (the tree with V3c integrated).* After V3a–V3c the arbiter is **51
+production sites in 10 files** (8 claims, 14 releases, 17 gates and token reads, 12 debug reads; the
+site table is in `brief-D2-npc-arbiter.md`); `RouteScheduleMaintenance` runs only `ThinkInDialog` then
+`ThinkStanceOrIdle`, and `IsScriptDriven` reads the NPC's `m_scriptState`. The lanes' files, disjoint
+(each brief states its own as "only these"):
 - D1: `ElysiumNpcDialogue.{h,cpp}`, `ElysiumEntityWorldDialogue.cpp`, `ElysiumDialogueSession.h`,
-  `ElysiumNpcRunTask.cpp`, `ElysiumNpcStartTask.cpp`, `ElysiumNpcTroikaHelpers2.cpp`,
-  `ElysiumCombatCharacter.cpp`, the dialogue tests.
-- D2: `ElysiumNpc.{h,cpp}`, `ElysiumNpcMaintain.cpp`, `ElysiumNpcBaseMaintain.cpp`,
-  `ElysiumNpcAnim.cpp` (`HasLiveDialogPartner`), `Public/ElysiumEntity.h`, `Public/ElysiumSaveTypes.h`.
+  `Public/ElysiumEntityWorld.h` (`OpenDialog`'s declaration `531-534` only — missing from D1's brief),
+  `ElysiumNpcRunTask.cpp` (`RunDialogActivity`), `ElysiumNpcStartTask.cpp` (`StartTask19PlayerStartDialog`),
+  `ElysiumNpcTroikaHelpers2.cpp` (`OnDialogRelease`), `ElysiumNpcSocial10.cpp` (`IsInDialog`),
+  `ElysiumCombatCharacter.cpp`, `ElysiumNpcPayphone.{h,cpp}`, `Public/ElysiumPlayer.h` (the
+  `DialogPartner` comment), `Map/ElysiumMapActor.cpp` (`QueryPlayerUse`, N18); tests
+  `ElysiumDialogueCameraTests.cpp`, `ElysiumDialogueTests.cpp`, `ElysiumDialogueEntryTests.cpp`,
+  `ElysiumNpcThinkCadenceTests.cpp` (`397-404`), `ElysiumNpcKernelRunTaskTests.cpp`,
+  `ElysiumNpcKernelTroikaHelpersTests.cpp`.
+- D2: `ElysiumNpc.{h,cpp}`, `ElysiumNpcMaintain.cpp` (`130-136`), `ElysiumNpcBaseMaintain.cpp`
+  (`50-61`), `ElysiumNpcAnim.cpp` (`HasLiveDialogPartner`), `ElysiumNpcBaseRunAi.inl` (comment),
+  `ElysiumNpcSpawn.cpp` (`80-87`), `ElysiumScriptedScheduleOrder.h`, `Public/ElysiumEntity.h`
+  (`451-471`), `Public/ElysiumSaveTypes.h`. No test file.
 - D3: `ElysiumNpcMind.{h,cpp}`, `Public/ElysiumNpcMindTypes.h`, `Debug/ElysiumCogWindow_Npc.cpp`,
-  `Debug/ElysiumNpcDebugData.{h,cpp}`, `Debug/ElysiumEntityDebugSubsystem.cpp`, the arbiter's tests
-  (§6).
+  `Debug/ElysiumNpcDebugData.{h,cpp}`, `Debug/ElysiumEntityDebugSubsystem.cpp` (`219`),
+  `Debug/ElysiumNpcGameplayDebugger.cpp` (`109-110`), `Visual/ElysiumNpcBody.cpp` (`552-553`); tests
+  `ElysiumNpcMindTests.cpp`, `ElysiumAiScriptedScheduleTests.cpp`.
+- No lane owns the 43 test calls of `BeginScriptedSchedule(…, true, State)` in nine test files: D2
+  keeps the signature, and the integrator classifies what `SetState`'s slot 463 moves.
 
 **What cannot go fully green until V4.** `cover`'s `fires` / `fired` are a ranged attack whose shot
 is an anim event (slot 258 `DispatchAnimEvents 0x10091880`, V4) and whose wait is N2 (V5). V3a's

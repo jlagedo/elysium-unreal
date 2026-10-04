@@ -4,6 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 10.0,
+  "known_red": "N4 (inferred; V13 second wave 2026-10-04, triage 'V13 second wave, closing'): the same staging as hear_world_investigate and the same miss in the same boot -- PlaySound at 2.017, no OnHearWorld / cond+ HEAR_WORLD by 3.517 (heard at 2.833 in every suite through 20261004T082753). Intermittent, as N4 is: missed in a solo boot (20261004T093022), heard at 2.417 when run second in a boot after hear_world_investigate (20261004T093237). The arena stage stands no nav-area mark, so the V13 registration fix cannot reach it; the idle cadence has moved since suite 20261004T082753 (idle01 seqfinished 1.933 -> 1.900; V3c's closing pass landed after it, the moving change not traced), and the port's Listen drops a sound at its authored expiry (ElysiumNpcSenses.cpp ExpireTime < Now) where retail's CanHearSound 0x1030f7b0 has no expiry test. Which Listen tick misses it needs H10's think event (V10)",
   "player": { "at": "start" },
   "rows": [
     {

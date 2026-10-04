@@ -645,6 +645,16 @@ tests the green scenarios cover deleted.
   navigation system), so neither the slabs nor the door cuts reach Recast. Fixing it re-cuts every
   map's doorways too: sent to the owner / the judge, with a re-bake of `sm_hub_1` and
   `sp_tutorial_1`.
+  *Second wave 2026-10-04, committed, not ticked* (`stories/v1/triage.md` § "V13 second wave" and
+  "… closing"): the marks register with the navigation system (`UElysiumNavAreaComponent::OnRegister`
+  / `OnUnregister`, `NAV_AREA_ACTOR_SHAPE` 3) and both maps are re-baked. **Proven:** the hub road
+  reads the pedestrian area, the three gaps stay unpriced, the linked doors' strips are cut (hub
+  2566, tutorial 183), the tutorial's 19 unlinked doorways and the hub's `tattoodoor` are walls;
+  default 171 / 0, arm 1550 / 0, no door / link-hold / slot-531 arena verdict moved. **Open:** N20
+  (`verify nav` on `sp_tutorial_1`: two Rat findings, pipeline, with the judge), N21 (`junkyardgate`
+  and `gasstationgate`, no link, still walkable: lead, a raised leaf's cut floats over the floor),
+  Q-V13b (the ×8 route crosses at row 17's east edge, not at curbs 258/259), Q-V13c
+  (`hub_crosswalk_wait` reaches `0x102` at 23.917 but the next `Walk` raises no `CROSSWALK_WALK`).
 
 Order: V1 → V2 → H → V3 (V3r, V3a, V3b, V13, V3c, V3d) → T6b → V4 → V5 → V11 ‖ V6 → V7 → V10 → V12 → V2 again (full run) → V8 → V9.
 **T6b, the header pass** (the owner, 2026-10-04; `stories/t6b/brief.md`): the kernel headers' include fan-out cut after V3d and before V4, one agent holding the build; it closes T6 (edit-mix p90 ≤ 90 s).

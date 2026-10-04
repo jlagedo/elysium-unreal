@@ -21,6 +21,26 @@ UElysiumNavAreaComponent::UElysiumNavAreaComponent()
 	bCanEverAffectNavigation = true;
 }
 
+// V13 (N16): `AddArea` registers each mark AFTER its actor has registered, and a plain scene
+// component tells the navigation system nothing when it registers -- primitives do it in their own
+// `OnRegister` (`PrimitiveComponent.cpp`), `UNavRelevantComponent` in its (`NavRelevantComponent.cpp`
+// :59/:66), and otherwise only the actor's `OnActorRegistered` adds its components
+// (`NavigationSystem.cpp` 4056-4072). So the marks never reached the octree and `Build()` cut the
+// road on Recast's default area. The same two calls the engine's nav-relevant component makes; a
+// mark registered with its actor during a level load is not added twice, because
+// `ShouldComponentWaitForActorToRegister` defers it until the actor's own pass.
+void UElysiumNavAreaComponent::OnRegister()
+{
+	Super::OnRegister();
+	FNavigationSystem::OnComponentRegistered(*this);
+}
+
+void UElysiumNavAreaComponent::OnUnregister()
+{
+	Super::OnUnregister();
+	FNavigationSystem::OnComponentUnregistered(*this);
+}
+
 void UElysiumNavAreaComponent::GetNavigationData(FNavigationRelevantData& Data) const
 {
 	if (AreaClass == nullptr)

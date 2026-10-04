@@ -103,6 +103,10 @@ Wave 3 (build work, one agent):
   refuted by the bake. N16's measured cause is that the nav-area marks never enter the navigation
   octree at bake time (slabs and door cuts alike); the registration fix and two re-bakes await the
   owner / the judge.
+  Second wave 2026-10-04, committed, not ticked: the marks register and both maps are re-baked; the
+  road reads pedestrian, linked doors are cut, the tutorial's unlinked doors are walls. Open: N20
+  (tutorial Rat links, pipeline, with the judge), N21 (two hub gates still walkable), Q-V13b (the
+  ×8 route's crossing), Q-V13c (no `CROSSWALK_WALK` after the green).
 - [ ] **V2 again** — the full run, every scenario green.
 - [ ] **V8** — `sp_tutorial_1` and `sm_hub_1`, live. S · Opus/high.
 - [ ] **V9** — The second cut: the arm tests the scenarios cover. S · Sonnet/medium.

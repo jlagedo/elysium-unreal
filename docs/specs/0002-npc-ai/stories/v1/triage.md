@@ -87,6 +87,7 @@ the tutorial's `thug_1`, every hub pedestrian and any input fired at such an NPC
 | N16 | a pedestrian route never carries a crosswalk curb, so no pedestrian ever waits at a red crossing (Q-V3b1, settled 2026-10-04; § "V3b") | `hub_crosswalk_wait` (`known_red` N16 / V13) | the pedestrian chain `0x102fcd00` puts both curbs of a crossed pair on the route (`4 \| 0x20`, start node included); at the first curb `0x102f0400` → `0x102a0bc0` → `0x102a0b90` latches `AT_CROSSWALK`; `0x102a0d20` raises `CROSSWALK_DONTWALK`, which breaks `0x100`, and `SelectSchedule 0x102af660` answers `0x102` (`0x102af763..76c`) | the downstream chain is ported (`ElysiumNpcSelect.cpp:599-602`, `ElysiumNpcDialogueBodies.cpp:337-459`, `ElysiumNpcBaseAdvancePath.cpp:58-62`), but `NavLayPedestrianLegs` (`ElysiumNpcCrosswalk.cpp:101-194`, the named modernization of `0x102fcd00`) laid no curb on any of the hub's first routes, at least five of which cross the road between the pairs: every `MoveTo` goes straight to the place, no `waypoint passed`. Which test drops the pair (the 48-unit capture against the NavMesh `PointsCm`, the consecutive-pair rule, the start-node arm, the pedestrian filter's pricing of the crossing) is **undetermined**: it needs the route points logged against the six curb positions | **(a) V13 (new, proposed, awaiting the owner): "The pedestrian nav area in the hub's bake"** (re-placed by the V3b follow-up's integrator, 2026-10-04). The V3b follow-up's read settled the cause as **baked data, not the splice**: on `sm_hub_1`'s baked Recast meshes no roadway polygon carries `UElysiumNavArea_Pedestrian` (`NavAreaAt` answers `NavArea_Default` inside all 9 priced slabs), so the pedestrian filter's ×5–10 price applies to nothing, routes cut the road diagonally and the splice's 48-unit capture rightly finds no curb (§ "V3b follow-up"). A fault in landed work (0018/3's NavMesh bake, 0018/7's crosswalk) that needs pipeline work and a re-bake, outside V3. Not a planning bug: V13 is a step-2 story placed before the second V2 run. Caveat for the record: only first walks can cross (`TASK_WAIT_PVS` holds every pedestrian outside the player's PVS after its first visit, `0x102aad7e`, as retail). **Re-stated by the V13 wave (2026-10-04), the cause measured: the marks never reach Recast.** `UElysiumNavAreaComponent` (`ElysiumNavAreaActor.h:34`, a `USceneComponent` + `INavRelevantInterface`) never enters UE 5.8's navigation octree, so neither its pedestrian slabs nor its door cuts are ever offered to the generator; the floating-floor lead is not the cause (§ "V13 wave") |
 | N17 | a place authoring `max_npcs 0` admits one visitor: the port floors the capacity at 1 (flagged by the V3b follow-up's coder F1; filed by its integrator, 2026-10-04) | none: no record stands such a place. The corpus (`exports_v2/maps/*.entities.glb`, 2026-10-04, 5.8 s): 1293 `intersting_place` rows on 22 maps, every one authors `max_npcs` (`population.md:794`); values 1 ×1009, 2 ×128, 4 ×91, 3 ×30, 5 ×13, **0 ×9** (`la_empire_2` 1, `la_skyline_1` 3, `sp_soc_2` 4, `sp_soc_3` 1), 50 ×6, 8 ×4, 6 ×2, 15 ×1; `sp_tutorial_1` 29 × 1; `sm_hub_1` 1 ×45, 2 ×22, 4 ×6, 6 ×2, 8 ×1 | `0x102dad60` `0x102dad8c..0x102dada4`: `m_iMarkersAllocated +0x584` (key `max_npcs`, datamap offset 1412) `− +0x58c − +0x588 > 0`, no floor: a 0 row is refused by every NPC | `ElysiumInterestingPlace.cpp:86` `IsAvailable`: `Claimants.Num() < FMath::Max(1, MaxNpcs)` (and the debug line `:122`); the member's default `MaxNpcs = 1` (`ElysiumInterestingPlace.h:17`). **Not changed** by the follow-up: nine shipped rows author 0, so the floor changes behaviour on four maps; first read retail's value for an absent key (the constructor `0x102d99d0`) and what the bake writes for an authored `0` (`ElysiumNpcKernelBindings.cpp:1250`, the infra actor's key rebuild, `ElysiumInfraActorsTests.cpp:251`) | **(a) R2** (places and patrols): delete the floor once both defaults are read, cite `0x102dad8c`. Not a planning bug: no step-2 record reaches a `max_npcs 0` row (the witness maps author none) |
 | N19 | a missed scene lookup's sequence 0 plays nothing and finishes on its first advance (found by the V3c integrator, 2026-10-04, once `StartSequence` writes `m_nSequence`) | `script_walk_to_mark` (7.900 `sequence seq 0 rate=0`, `seqfinished seq 0` in the same think); inferred, not traced: `Elysium.Substrate.ScriptedSequenceFlags` (a held 0x100 beat with no `m_iszPlay` fires `OnEndSequence` twice within 0.6 s: `TASK_PLAY_SCRIPT` sees the zero-length post-idle finish at once and runs `SequenceDone` again) and `Elysium.Substrate.Dialogue.BodyScene` (the fixture's model authors no `waveover01`, so the scene ends in one think) | `StartSequence 0x101a82d0`: lookup −1 → warning, `m_nSequence := 0` (`0x101a833d`), `m_flCycle := 0`, `ResetSequenceInfo 0x10090950`, which plays the model's own sequence 0 at `m_flPlaybackRate 1.0` (`0x10090a23`) and `StudioFrameAdvance 0x1008f120` raises `m_bSequenceFinished` only when that sequence's cycle reaches 1. Five shipped scene labels miss this way (`entity_io.md:2469-2476`, `animation_and_movers.md:2103-2107`: `pre_fight_bow`, three `ACT_COWER`, `ACT_DOORKNOCK`) | the sequence bridge's row 0 "plays nothing" (`ElysiumNpcBaseAnim.cpp` `ResetSequenceInfo` ~:111-117: cycle rate 10.0 for row 0, so it finishes on the first advance; the trace prints `rate=0`); the bridge numbers clips by name and has no notion of the model's first studio sequence | **Proposed (a) V4** (the animation chain: `ResetSequenceInfo` / `StudioFrameAdvance` are V4's), for the owner or the judge: row 0 must be the body's model's sequence 0 (its first `$sequence`), which needs the bake to carry the studio order (undetermined whether it does; if not, pipeline work, so the judge rules). Not a V3c regression: before V3c the cine played through the montage and never wrote `m_nSequence`. Event order differs only in time (retail's `OnEndSequence` waits sequence 0's length). **Ruled by V3c's closing integrator (2026-10-04): filed, on V4's judge list** (`stories/v4/brief-J-judge.md` item 4). The studio order IS baked: the body table's `rawIndex` is the global flat number (`sequenceBase` + the owner's position, `importers/body_data.py:83-89`), carried to `FElysiumNpcClip::RawIndex` (`ElysiumBodyData.cpp:14`), so no re-bake; what is missing is the embodiment query for the `RawIndex 0` clip, the bridge's row 0 from it and the trace's naming — a cross-layer change in V4a A2's files, not taken under the close's one-build cap. The tests seed the named clip instead (`ScriptedSequenceFlags`, `Dialogue.BodyScene`) |
+| N20 | with the door cuts reaching Recast, the Rat mesh loses door 339's doorway and one bridging route (found by V13's second wave, 2026-10-04: `verify nav` on `sp_tutorial_1`, 2 new findings) | none (bake gate): `ground-links-hull-19` link 41 (15 → 48) "both ends on the mesh, no path"; `bridging-hull-19` link 105 (44 → 69) "does not path on its own agent's mesh" | retail's AIN link 41 carries GROUND for hull 0 AND hull 19 (`fields[1]=1`, `fields[20]=1`), nodes (−1288, 213, −101) → (−1300, 917, −101), through door 339 (`func_door_rotating`, box (−1369, 739, −84)..(−1227, 752, 201)): the graph builds through a standing door (`0x2000b` has no `MOVEABLE`, `navigation-jump-links.md:2400-2406`), so the rat walks it. Link 105 is a hull-19-only link (`fields[20]=2`) joining node sets the human links keep apart; nodes (691, −142, 285) → (645, 526, −101); it crosses no door box | `map_nav_doors.crossings` (`pipeline/src/elysium_pipeline/importers/map_nav_doors.py:157-176`) grows the door box by the hull's lateral radius on all three axes, Z included: the rat segment at z −101 passes 1.8 cm under the rat-grown floor (−84 − 15.24 = −99.2), so 339 is staged "human alone" (`ElysiumNavAreaTests.cpp` pins it) and its smart link carries only the Human, while the cut (per mesh) removes the doorway from the Rat mesh too. Link 105: inferred, not measured — the Rat mesh's previous walk route from 44 to 69 ran through a door that is now cut; which door is not measured | **Proposed: a V13 follow-up fix story** (landed work, 0018/7's door staging; a pipeline change and a tutorial re-bake, so it goes to the judge): the crossing test sweeps the hull's own vertical extent from the node (retail's hull boxes, `docs/vtmb/data/hull_table.json`) rather than growing the door's floor by the lateral radius, re-stages 339 for both agents, and the pinned link-agent table in `Elysium.Content.NavArea.Tutorial` follows; then the bridging route is re-measured. Until then the baked `sp_tutorial_1` on disk (2026-10-04 09:07, gitignored) carries these two Rat findings |
 
 Every new red lands in step 2 except N3, the one planning bug among them, and N12, which stays in
 step 3's R2 because no step-2 record needs it. (V3b, 2026-10-04: N14 lands in V6; N15 is a planning
@@ -480,6 +481,95 @@ build, which the brief forbids: **the wave stopped uncommitted, V3c not ticked.*
   Maintain19 tests and `test arm`, then the commit, the V3c tick, divergence 18 and K1.** N19 ruled
   (row above): filed to V4's judge list. **Done (second authorized build, 12.7 s):** default 171 / 0,
   arm 1550 / 0; V3c committed and ticked, divergence 18 closed, K1 row 23.
+
+## V13 second wave (2026-10-04): the marks reach Recast; stopped on `verify nav` (not committed)
+
+Integrator only. The tree: `UElysiumNavAreaComponent::OnRegister` / `OnUnregister` call
+`FNavigationSystem::OnComponentRegistered` / `OnComponentUnregistered`, as `UNavRelevantComponent`
+does; `NAV_AREA_ACTOR_SHAPE` 3; door probes in `Elysium.Content.NavArea.Hub` / `.Tutorial`. Build
+27.8 s (`--arm`); one bake of `sp_tutorial_1` + `sm_hub_1`, 147 s: `sm_hub_1` verify clean,
+`sp_tutorial_1` **2 new findings (N20)** → stopped as the judge's rule says: no records, no suites,
+no commit, V13 not ticked. Two read-only measurements on the new bake (no build):
+
+- **`Elysium.Content.NavArea.`, old bake → new bake.** Road probe (−1700, −760, −303): area 63 →
+  **pedestrian (green)**. Three gap midpoints: unpriced → unpriced (green). Linked door cuts: hub
+  2566 (convex 52, probe (−5481, −1440, −284)) and tutorial 183 (convex 7, (−3263, −940, −508)):
+  area 63 → **nothing walkable (green)**. `Tutorial` green whole. ×8 route: still red, but changed —
+  `(-2294 -1071 -285) (-1976 -1121) (-1197 -1197) (-1083 -1197) (-1007 -1121) (-1007 -418)
+  (-1064 -266) (-1064 -171) (-988 -57) (-776 205)`, 2761 cm: it now keeps off the priced slab and
+  crosses the road at x ≈ −1007, along row 17's grown east edge (−1036.3 + 33.02), not at 258–259;
+  both curb distances (95.1 u, 259.7 u) are to its start point. **Q-V13b (open):** is that east-end
+  crossing unpriced road retail's volume leaves bare (the test's ×8 route then needs another
+  start/end pair, a test error), or a slab the staging misses? Not settled here.
+- **The unlinked-door probe chose hatches.** "Largest X·Y footprint" picked the flat
+  `func_door_rotating` 1990 (hub, 196 × 122 × 15) and 152 (tutorial, 173 × 193 × 5), and passed on
+  the OLD bake too, so it proves nothing. Rewritten, **unbuilt**: every standing leaf (≥ 150 cm tall,
+  ≤ 30 cm thick) ≥ 300 cm from every link, with the Human mesh on both sides 40 cm past its grown
+  cut, must project nothing walkable at its centre.
+- **`hub_crosswalk_wait`** (`20261004T091158.533635Z`, expected-fail; moved): 11.833
+  `crosswalk_south` `DontWalk`; **23.917 `male_asylum_patron` `break CROSSWALK_DONTWALK (0x13)`,
+  `SCHED_TROIKA_WAIT_AT_CROSSWALK (0x102)`**, `task_pause_moving`, `task_face_next_node` (no
+  `taskdone`); 40.833 `crosswalk_south` `Walk` (×4); no `break CROSSWALK_WALK` by 42.833, the
+  first unmet. No `Move: waypoint passed` and no `cond+ AT_CROSSWALK` line in the trace. **Q-V13c
+  (open):** why the green does not raise `CROSSWALK_WALK` (`0x102a0d20`) for the waiting walker
+  (`ElysiumHint.cpp:183-203` → `SetCrosswalkWalk`): which pair it waits at is not traced. Not N13.
+  `known_red` not changed (stopped).
+
+## V13 second wave, closing (2026-10-04): committed and measured; V13 not ticked
+
+Integrator only, no fix. One `build --arm`, 16.0 s (the rewritten door probe compiled clean); no
+bake (both maps as the second wave baked them). `kernel --check` clean (7 tools).
+
+- **`Elysium.Content.NavArea.`** (`reports/tests/20261004T091543.672196Z-…`): `PedestrianFilter`
+  green; `Tutorial` green whole: door 183's link present, its span crosses cut convex 7, nothing
+  walkable at (−3263, −940, −508); the rewritten unlinked-door probe finds **19 doorways with the
+  mesh on both sides, every centre unwalkable**. `Hub` red on 5 assertions, each for a stated cause:
+  door 2566's link present, its span crosses cut convex 52, nothing walkable at (−5481, −1440,
+  −284) (green); the road probe pedestrian, the three gaps unpriced (green); **3 unlinked doorways,
+  1 cut** — convex 26, `tattoodoor` (`func_door_rotating` 2105), green — and **2 still walkable
+  (N21, below)**; the ×8 route's three curb assertions (258 at 95.1 u, 259 at 259.7 u, the order)
+  red on **Q-V13b**, the same route as the second wave. The probe's selection rule stands: it picks
+  standing leaves only, and the tutorial's 19 and the tattoo door show a cut that reaches the mesh
+  answers it.
+- **N21 (new) — two hub gates with no link stay walkable under their cut.** Convex 2,
+  `junkyardgate` (`func_door_rotating` 1301, `*12`), box (−2418, −4829, −279)..(−2416, −4234, 63),
+  and convex 22, `gasstationgate` (`func_door` 1676, `*39`, lip 64), box (−3307, −5464,
+  −246)..(−2791, −5462, 64): the Human mesh area 63 on both sides and at the centre. No door link's
+  span within 300 cm of either (the probe's filter), so retail's rule makes both walls to every agent
+  (0018/7). Both are the hub's only unlinked leaves wider than 5 m, and both leaves stand above the
+  floor: the cut keeps the brush's own floor, lowered by one cell height only
+  (`RecastNavMeshGenerator.cpp:4885` `OffsetZMin = ch`; `ElysiumNavAreaActor.cpp` "The door cut is
+  not this rule"), and the floor near them reads lower (`info_node` 1537 at z −262, ~21 cm above
+  the ground, by the junkyard gate; `Caine` 2073 standing at z −264 by the gas-station gate, whose
+  leaf floor is −246). **Lead, not proven:** a raised leaf's cut floats over the floor it should
+  wall. Not measured: the floor's z under each leaf. Fix belongs with N20's door-staging work
+  (pipeline), not here.
+- **Default tier** 171 / 0 failed; **arm tier** 1550 / 0 failed. No test reads a broken bake.
+- **Arena by name** (`20261004T091805.466210Z`): `map_hub_idle`, `map_tutorial_idle` pass;
+  `hub_crosswalk_wait`, `map_tutorial_sneak_past` (V12), `patrol_monk_loop`,
+  `patrol_sentry2_pingpong` (N13) expected-fail — none moved. `hub_crosswalk_wait` reproduces the
+  second wave's trace line for line (11.833 DontWalk; 23.917 `break CROSSWALK_DONTWALK (0x13)`,
+  `0x102`; 40.833 `crosswalk_south` `Walk` ×4; no `break CROSSWALK_WALK` by 42.833): its
+  `known_red` now names **Q-V13c**, its expectations unchanged.
+- **Suite** `20261004T092238.744978Z`: 106 records (V3c's `verbs_stealth_kill_scripted` is new,
+  expected-fail on N11), **70 pass, 34 expected-fail, 2 fail** before the record change below. Moved:
+  `hear_world_investigate` unexpected-pass → expected-fail (N4, its own `known_red`: no HEAR_WORLD by
+  4.517); `interest_mode_never` pass → fail (no OnHearWorld / `cond+ HEAR_WORLD` by 3.517; heard at
+  2.833 in every suite through `082753`). **Intermittent, as N4 is:** a solo boot
+  (`20261004T093022`) and a three-record boot without the new record (`20261004T092952`) miss it the
+  same way; run second in a boot after `hear_world_investigate` (`20261004T093237`) it hears at
+  2.417 (`unexpected-pass` under the new `known_red`). **Not this wave:** the
+  arena stage stands no nav-area mark, so the registration fix cannot reach it, and the idle
+  cadence has moved since the baseline (`idle01` `seqfinished` 1.933 → 1.900, 2.033 → 2.017; V3c's
+  closing pass — two builds and a ledger regenerate, which rewrites generated C++ — landed after
+  suite `082753` and no suite ran on it; which change moved the cadence is not traced). Classified **N4 (inferred)**: the same staging and miss as `hear_world_investigate`;
+  `Listen` drops a sound at its authored expiry (`ElysiumNpcSenses.cpp`, `ExpireTime < Now`) where
+  retail's `CanHearSound 0x1030f7b0` has no expiry test, so a moved think tick can miss the window.
+  The record's `known_red` now names N4; its expectations unchanged. Which `Listen` tick misses it
+  needs H10's think event (V10). `rollcall_vzombie` fail (H11), as before. With the record change:
+  70 pass, 35 expected-fail, 1 fail. No door, link-hold, custom-link or slot-531 verdict moved; no
+  tutorial record moved on N20.
+- **Open:** N20 (with the judge), N21, Q-V13b, Q-V13c. V13 is not ticked.
 
 ## The fix order — acceptance lists
 

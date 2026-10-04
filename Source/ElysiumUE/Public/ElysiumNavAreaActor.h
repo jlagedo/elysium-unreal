@@ -48,6 +48,10 @@ public:
 	/** The union of every convex, which is what the navigation octree keys on. */
 	UPROPERTY() FBox AreaBounds = FBox(ForceInit);
 
+	// UActorComponent -- tell the navigation system, as `UNavRelevantComponent` does (V13 / N16).
+	virtual void OnRegister() override;
+	virtual void OnUnregister() override;
+
 	// INavRelevantInterface
 	virtual void GetNavigationData(FNavigationRelevantData& Data) const override;
 	virtual FBox GetNavigationBounds() const override;

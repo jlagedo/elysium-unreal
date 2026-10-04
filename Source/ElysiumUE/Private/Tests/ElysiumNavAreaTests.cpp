@@ -166,6 +166,152 @@ namespace
 		}
 		return true;
 	}
+
+	// The box of every convex the cut doors wear. The marks carry no door identity: `place_nav_areas`
+	// (`bake_map_collision.py`) pools every cut door's staged hulls into one `doorcut` component, so
+	// a door is found here by where it stands -- against the links, which do name their doors.
+	TArray<FBox> DoorCutBoxes(AElysiumNavAreaActor* Marks)
+	{
+		TArray<FBox> Boxes;
+		for (UElysiumNavAreaComponent* Component : Marks->Areas)
+		{
+			if (Component == nullptr || Component->AreaClass != UElysiumNavArea_DoorCut::StaticClass())
+			{
+				continue;
+			}
+			for (const FElysiumNavAreaConvex& Convex : Component->Convexes)
+			{
+				Boxes.Add(FBox(Convex.Points));
+			}
+		}
+		return Boxes;
+	}
+
+	FBox2D FlatBoxOf(const FBox& Box)
+	{
+		return FBox2D(FVector2D(Box.Min.X, Box.Min.Y), FVector2D(Box.Max.X, Box.Max.Y));
+	}
+
+	// The flat distance from a door convex's box to a link's span, and the span's point nearest the
+	// box's centre (its height interpolated along the span, so it stands on the link's floor).
+	double FlatToSpan(const FBox& Box, const FVector& Start, const FVector& End, FVector& OutNearCm)
+	{
+		const FVector2D S(Start.X, Start.Y);
+		const FVector2D E(End.X, End.Y);
+		const FVector Centre = Box.GetCenter();
+		const FVector2D Near = FMath::ClosestPointOnSegment2D(FVector2D(Centre.X, Centre.Y), S, E);
+		const double Span = FVector2D::Distance(S, E);
+		const double T = Span > 0.0 ? FVector2D::Distance(S, Near) / Span : 0.0;
+		OutNearCm = FMath::Lerp(Start, End, T);
+		return FMath::Sqrt(FlatBoxOf(Box).ComputeSquaredDistanceToPoint(Near));
+	}
+
+	// V13 (N16): the door marks reach the baked Human mesh, the same question the hub's road probe
+	// asks of the roadway marks. Two doors per map:
+	//  - `LinkedDoor` (a lump ordinal a smart link names) stands with its link present, and the door
+	//    convex its span passes through is cut: nothing walkable at that convex's centre, at the
+	//    link's height. The link crosses the door (0018/7); the mesh must not.
+	//  - every standing door leaf >= 300 cm from every link span -- a door no link crosses, a wall
+	//    to every agent (0018/7) -- that stands in a doorway the mesh reaches on both sides projects
+	//    nothing walkable inside its cut (below).
+	// Red until the marks are re-baked with `NAV_AREA_ACTOR_SHAPE` 3.
+	bool ProbeDoorCuts(FAutomationTestBase& Test, UWorld* World, AElysiumNavAreaActor* Marks,
+		int32 LinkedDoor)
+	{
+		ARecastNavMesh* Human = MeshFor(World, TEXT("Human"));
+		if (!Test.TestNotNull(TEXT("the level carries its Human mesh"), Human)) return false;
+		const TArray<FBox> Cuts = DoorCutBoxes(Marks);
+		if (!Test.TestTrue(TEXT("the level carries door cuts"), Cuts.Num() > 0)) return false;
+
+		TArray<const UNavLinkCustomComponent*> Spans;
+		for (TActorIterator<AElysiumNavDoorLink> It(World); It; ++It)
+		{
+			if (const UNavLinkCustomComponent* Smart = It->GetSmartLinkComp())
+			{
+				Spans.Add(Smart);
+			}
+		}
+
+		// The linked door.
+		int32 LinkCount = 0;
+		const TMap<int32, AElysiumNavDoorLink*> Links = DoorLinksOf(World, LinkCount);
+		AElysiumNavDoorLink* const* Link = Links.Find(LinkedDoor);
+		if (Test.TestNotNull(*FString::Printf(TEXT("door %d's link is present"), LinkedDoor), Link))
+		{
+			const UNavLinkCustomComponent* Smart = (*Link)->GetSmartLinkComp();
+			const FVector Start = Smart->GetStartPoint();
+			const FVector End = Smart->GetEndPoint();
+			int32 Crossed = INDEX_NONE;
+			double Best = TNumericLimits<double>::Max();
+			FVector AtCm = FVector::ZeroVector;
+			for (int32 Index = 0; Index < Cuts.Num(); ++Index)
+			{
+				FVector Near;
+				const double Dist = FlatToSpan(Cuts[Index], Start, End, Near);
+				if (Dist < Best)
+				{
+					Best = Dist;
+					Crossed = Index;
+					AtCm = Near;
+				}
+			}
+			// 33.02 cm: the Human radius Recast grows a cut by (`MarkDynamicArea`); a span passing
+			// that close is inside the cut it made.
+			if (Test.TestTrue(*FString::Printf(TEXT("door %d's link span crosses a door cut (%.1f cm)"),
+				LinkedDoor, Best), Crossed != INDEX_NONE && Best <= 33.0))
+			{
+				const FVector Centre = Cuts[Crossed].GetCenter();
+				const FVector Probe(Centre.X, Centre.Y, AtCm.Z);
+				Test.AddInfo(FString::Printf(TEXT("door %d: cut convex %d, probe (%.0f %.0f %.0f)"),
+					LinkedDoor, Crossed, Probe.X, Probe.Y, Probe.Z));
+				Test.TestEqual(*FString::Printf(TEXT("...and nothing walkable projects inside door %d's cut"),
+					LinkedDoor), PolyAreaAt(*Human, Probe), static_cast<int32>(INDEX_NONE));
+			}
+		}
+
+		// The unlinked doors. A standing leaf (>= 150 cm tall, <= 30 cm thick: the first wave's
+		// largest-footprint rule picked the hatches `func_door_rotating` 152 / 1990, 5-15 cm thick
+		// plates, and passed on the old bake) >= 300 cm from every link span, in a doorway: the Human
+		// mesh stands on BOTH sides of the leaf, 40 cm past its grown cut, at the leaf's foot. A door
+		// body never affects the mesh (`UElysiumBrushComponent`), so such a doorway is walkable unless
+		// the cut reached Recast: each one must project nothing walkable at its centre.
+		int32 Doorways = 0;
+		for (int32 Index = 0; Index < Cuts.Num(); ++Index)
+		{
+			bool bNearLink = false;
+			for (const UNavLinkCustomComponent* Smart : Spans)
+			{
+				FVector Near;
+				bNearLink |= FlatToSpan(Cuts[Index], Smart->GetStartPoint(), Smart->GetEndPoint(), Near) < 300.0;
+			}
+			const FBox& Cut = Cuts[Index];
+			const FVector Size = Cut.GetSize();
+			const double Thick = FMath::Min(Size.X, Size.Y);
+			if (bNearLink || Size.Z < 150.0 || Thick > 30.0)
+			{
+				continue;
+			}
+			const FVector Centre(Cut.GetCenter().X, Cut.GetCenter().Y, Cut.Min.Z);
+			const FVector Across = Size.X < Size.Y ? FVector::XAxisVector : FVector::YAxisVector;
+			const double Out = Thick * 0.5 + 33.02 + 40.0;
+			const int32 SideA = PolyAreaAt(*Human, Centre + Across * Out);
+			const int32 SideB = PolyAreaAt(*Human, Centre - Across * Out);
+			if (SideA == INDEX_NONE || SideB == INDEX_NONE)
+			{
+				continue;
+			}
+			++Doorways;
+			const int32 Inside = PolyAreaAt(*Human, Centre);
+			Test.AddInfo(FString::Printf(TEXT("unlinked doorway: cut convex %d, box (%.0f %.0f %.0f)..(%.0f %.0f %.0f), sides %d / %d, centre %d"),
+				Index, Cut.Min.X, Cut.Min.Y, Cut.Min.Z, Cut.Max.X, Cut.Max.Y, Cut.Max.Z, SideA, SideB, Inside));
+			Test.TestEqual(*FString::Printf(TEXT("...nothing walkable projects inside unlinked door convex %d's cut"),
+				Index), Inside, static_cast<int32>(INDEX_NONE));
+		}
+		Test.AddInfo(FString::Printf(TEXT("%d unlinked doorway(s) with the mesh on both sides"), Doorways));
+		Test.TestTrue(TEXT("an unlinked door stands in a doorway the Human mesh reaches on both sides"),
+			Doorways > 0);
+		return true;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNavAreaHubTest,
@@ -209,6 +355,10 @@ bool FElysiumNavAreaHubTest::RunTest(const FString&)
 		TestEqual(TEXT("...carrying human and rat"), static_cast<uint32>((*Basic)->SupportedAgentBits()), Both);
 		TestTrue(TEXT("...enabled"), (*Basic)->IsSmartLinkEnabled());
 	}
+
+	// V13 (N16): the door marks reach the Human mesh -- `basic_smoke_door` (2566, on AIN link 958's
+	// door link above) cut under its link, and an unlinked door (27 of the hub's 29) cut as a wall.
+	ProbeDoorCuts(*this, Baked, Marks, 2566);
 
 	// V13 (N16): the marks reach the baked Human mesh. Counting convexes says the bake laid them;
 	// only the mesh says Recast took them. The slabs are the staged hull rows of `sm_hub_1.hulls`
@@ -366,6 +516,10 @@ bool FElysiumNavAreaTutorialTest::RunTest(const FString&)
 	TestEqual(TEXT("5 links carry both agents"), BothCount, 5);
 	TestEqual(TEXT("1 link carries the human alone"), HumanOnly, 1);
 	TestEqual(TEXT("2 links carry the rat alone"), RatOnly, 2);
+
+	// V13 (N16): the door marks reach the Human mesh -- `tutwareportal03` (183, a link both hulls
+	// cross, above) cut under its link, and an unlinked door (28 of the tutorial's 36) cut as a wall.
+	ProbeDoorCuts(*this, Baked, Marks, 183);
 	return true;
 }
 

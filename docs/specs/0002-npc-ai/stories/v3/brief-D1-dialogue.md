@@ -9,6 +9,27 @@ again: re-locate every line below by Grep on the symbol before editing.** Read `
 branching" (line ~1296), § "Retail conversation chain", § "Dialogue close", `npc-ai/shape.md`
 § "The dialogue-release path `0x102c0360`". Runs beside D2 and D3. You never build.
 
+## Corrections after V3c (`fcd9f2d6`) — these override the text below
+
+- **One more file is yours:** `Source/ElysiumUE/Public/ElysiumEntityWorld.h`, the `OpenDialog`
+  declaration only (about lines 531-534). It is a hot header: change nothing else in it.
+- **Moved lines in `ElysiumNpc.cpp`:** 2072 → about 1919, 2103-2109 → about 1950-1956, 1335 →
+  about 1185. Re-locate by Grep on the symbol.
+- **Item 12 (tests) also cuts** the owner assertions at `Tests/ElysiumDialogueEntryTests.cpp:221-222`
+  and `:236-237`.
+- **You take over two effects of the deleted dialogue claim** (D2 deletes the claim itself): the
+  cine cancel a dialogue start performs (`CancelScriptedSequenceForDialogue`; retail: both
+  `StartTalking 0x102c0270` and `ForceScheduleChange` cancel a live cine, not only an
+  interruptable one), and the silent-close effects (teardown, replacement, death) — route each
+  close through `0x102c0360` once, as the packets say; `ResetThinkTimers` (D2 names its current
+  line) moves into your inputs.
+- **Open points, do not guess:** once `ThinkInDialog` goes nothing protects a line's body clip —
+  `Elysium.Substrate.Dialogue.BodyScene` (`ElysiumDialogueTests.cpp:1774-1775`) asserts that
+  protection: say in your report what retail does for a speaking NPC's clip under
+  `TASK_RUN_DIALOG` (`0x102c1400` answers `m_Activity`; slot 611 only when the sequence has
+  finished) and whether the assertion is retail's or the old claim's; whether an owner's death
+  mid-conversation runs `CDialog::Release` is unrecovered — leave the seam, named.
+
 ## Files (only these)
 
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcDialogue.h`, `ElysiumNpcDialogue.cpp`
