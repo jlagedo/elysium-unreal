@@ -987,12 +987,23 @@ ManBat animlink arm (`0x1038f430`) and stores its handle in `m_hPickupTarget` (`
 
 Four bodies 29c mapped onto one target name; they are four behaviours.
 
-`0x103937d0` (271 bytes) is the swing task: clear the navigator's path, resolve `m_hMeleeWeapon`'s
-owner (`+0xa0`), run `+0x610`, and **TaskFail `0x1f` when there is no active weapon**. Otherwise ask
-the weapon for the activity matching the requested one (`+0x5a4`), run `+0x5e0`, and choose a melee
-sequence through slot 331; a refusal or a negative activity fails the task and a success sets the
-activity through `+0x4dc`. Either way it then stamps `m_rflAttackTimers[t]` (`+0x66c4`) with
-`curtime + FUN_103983d0(...)`.
+`0x103937d0` (271 bytes) `(task, tentacle, activity)` is the swing task: clear the navigator's
+path, resolve `m_hMeleeWeapon`'s weapon (`+0xa0`), run slot 388 `+0x610` `(weapon, 0)`, and
+**TaskFail `0x1f` when there is no active weapon**. Otherwise (re-read from the listing 2026-10-04,
+spec 0002 V11; the decompile loses the arguments): `cc = GetEnemy() ? enemy+0x9c : 0`;
+`translated = this->slot 376 (+0x5e0)(active->slot 361 (+0x5a4)(activity))`; `out = -1`; slot 331
+`ChooseMeleeAttackSequence 0x10347180` `(active, cc, activity, &out)` -- handed the **untranslated**
+activity (`0x10393881 PUSH EBX`). True with `out >= 0` -> slot 311 `+0x4dc`
+`ForcePreTranslatedSequenceAndActivity(activity, translated, out)`; else **`RestartIdealActivity
+0x10289ee0(activity)`** (`0x103938b6`) -- a refusal does not fail the task (this paragraph said it
+did). Either way it then stamps `m_rflAttackTimers[t]` (`+0x66c4`) with `curtime +
+FUN_103983d0(...)`.
+
+`0x10398030`'s `param_2` tail (`0x10398295..0x103982f4`) is the same question asked of
+`m_hMeleeWeapon` itself: the handle unset, stale or with no `+0xa0` answers false; else
+`act = this->slot 376(weapon->slot 361(EBX))` with `EBX` the `0x112a`..`0x112d` the switch chose,
+and slot 331 `(weapon, cc, act, &out)` -- here the **translated** activity -- false or `out < 0`
+answers false.
 
 `0x10396bc0` (385 bytes) is the pickup search. It answers 0 while `m_hThrowObject` (`+0x6718`) is
 still LIVE, and while either of two curtime-gated cooldowns has not elapsed — `+0x66d8` is tested

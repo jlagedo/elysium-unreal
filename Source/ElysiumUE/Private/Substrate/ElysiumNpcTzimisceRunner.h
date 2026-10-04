@@ -31,6 +31,10 @@ public:
 	virtual bool HandleAnimEvent(const FElysiumAnimEvent& Event) override;
 	virtual bool AnimFormBit() const override;
 	virtual bool AllowsKnockbackBypass() override;
+	// Slot 329: `0x103c30c0`, `return 1;` (the base `0x1014f850` answers 0). `MeleeSwingStep
+	// 0x10343020` reads it on the VICTIM (`0x10343b00..0x10343b16`): a swing's box overlap is the
+	// hit on a runner, with no sample ray (spec 0002 V11-2, D7).
+	virtual bool Slot329() override { return true; }
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 

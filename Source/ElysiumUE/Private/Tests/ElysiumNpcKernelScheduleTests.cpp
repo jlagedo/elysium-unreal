@@ -6,7 +6,13 @@
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMoveSolve.h"
 #include "ElysiumNpcFlags.h"
+#include "ElysiumPlayer.h"
+#include "ElysiumWorldServices.h"
+#include "Misc/ScopeExit.h"
+#include "Substrate/ElysiumNpcEnemy.h"
+#include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumNpc.h"
@@ -560,6 +566,13 @@ bool FElysiumNpcKernelScheduleMeleeTest::RunTest(const FString&)
 	{
 		return false;
 	}
+	// This case walks the selectors' arms with the coordinator REFUSING. Since spec 0002 V11-1 the
+	// coordinator is an object and a spawned NPC binds "Normal"; index 0 (no object, retail's fault
+	// path) is the state in which slot 599 / 600 refuse and slot 602's Troika line declines. The
+	// admitting path is `Elysium.Arm.AttackCoordinator.*` and `NpcKernelTroikaHelpers.EnterMelee`.
+	Troika->AttackCoordinator = 0;
+	Leader->AttackCoordinator = 0;
+	Runner->AttackCoordinator = 0;
 
 	// --- `0x102b6fe0`, the gate, on its own ------------------------------------------------------
 	Troika->Cognition.Conditions.Reset();
@@ -594,8 +607,8 @@ bool FElysiumNpcKernelScheduleMeleeTest::RunTest(const FString&)
 		Troika->SelectScheduleMeleeCombat(0), 0xcd);
 
 	// In melee, slot 602 (`0x102b5900`, family TroikaHelpers) declines to leave — its third line
-	// refuses on a null `m_pAttackCoordinator`, and this substrate has no coordinator object — so
-	// the body falls through to the shared tail rather than taking the leave-melee branch.
+	// refuses on a null `m_pAttackCoordinator` (index 0, set above) — so the body falls through to
+	// the shared tail rather than taking the leave-melee branch.
 	Troika->Cognition.Conditions.Reset();
 	Troika->bInMelee = true;
 	Troika->Cognition.Conditions.Set(EElysiumNpcCond::CanMeleeAttack1);
@@ -709,16 +722,18 @@ bool FElysiumNpcKernelScheduleMiscTest::RunTest(const FString&)
 	Guard->FollowerDistanceBackAway = 11.f;
 	Guard->FollowerDistanceWalkTo = 22.f;
 	Guard->FollowerDistanceRunTo = 33.f;
-	TestEqual(TEXT("-1000008 answers m_flFollowerDistanceBackAway"),
-		Guard->ResolveTaskDistance(-1000008.f), 11.f);
-	TestEqual(TEXT("-1000007 answers m_flFollowerDistanceWalkTo"),
-		Guard->ResolveTaskDistance(-1000007.f), 22.f);
-	TestEqual(TEXT("-1000006 answers m_flFollowerDistanceRunTo"),
-		Guard->ResolveTaskDistance(-1000006.f), 33.f);
-	TestEqual(TEXT("-1000005 answers the fixed _DAT_1044e664 = 10.0"),
-		Guard->ResolveTaskDistance(-1000005.f), 10.f);
-	TestEqual(TEXT("an ordinary distance passes through truncated"),
-		Guard->ResolveTaskDistance(64.75f), 64.f);
+	// The jump table `0x102bf738`, dwords read from the image (`schedule-kernel.md` § "`0x102bf6e0`",
+	// corrected 2026-09-21): 0 -> `0x102bf71b`, 1 -> `0x102bf711`, 2 -> `0x102bf707`, 3 -> `0x102bf6fd`.
+	TestEqual(TEXT("-1000008 answers the fixed _DAT_1044e664 = 10.0 (0x102bf71b)"),
+		Guard->ResolveTaskDistance(-1000008.f), 10.f);
+	TestEqual(TEXT("-1000007 answers m_flFollowerDistanceRunTo +0x648c (0x102bf711)"),
+		Guard->ResolveTaskDistance(-1000007.f), 33.f);
+	TestEqual(TEXT("-1000006 answers m_flFollowerDistanceWalkTo +0x6488 (0x102bf707)"),
+		Guard->ResolveTaskDistance(-1000006.f), 22.f);
+	TestEqual(TEXT("-1000005 answers m_flFollowerDistanceBackAway +0x6484 (0x102bf6fd)"),
+		Guard->ResolveTaskDistance(-1000005.f), 11.f);
+	TestEqual(TEXT("an ordinary distance passes through AS PASSED (0x102702f1 FLD [ESP+8])"),
+		Guard->ResolveTaskDistance(64.75f), 64.75f);
 	// The two species sentinels, by census row — neither class has a registered classname here.
 	TestEqual(TEXT("CNPC_VMingXiao fills slot 418 with 0x10392a10"),
 		FString(ElysiumNpcTestCensus::BodyOf(
@@ -1029,6 +1044,134 @@ bool FElysiumNpcKernelScheduleCoverTailRangedThreatTest::RunTest(const FString&)
 	if (TestTrue(TEXT("the foe takes the pistol"), F.ArmFoe(GScheduleTestPistol)))
 	{
 		TestEqual(TEXT("0x102b78ee: an enemy holding a 0x6000 weapon -> 0xa3"), F.Select(F.Foe), 0xa3);
+	}
+	return true;
+}
+
+// -------------------------------------------------------------------------------------------------
+// `CAI_BaseNPC::ResolveTaskDistance 0x102702d0` -- the base body's three sentinels (spec 0002 V11-1).
+// -------------------------------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScheduleResolveTaskDistanceBaseTest,
+	"Elysium.Arm.NpcKernelSchedule.ResolveTaskDistanceBase", GElysiumNpcKernelScheduleFlags)
+bool FElysiumNpcKernelScheduleResolveTaskDistanceBaseTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_schedule_distance_base"), 4111);
+	Builder.AddNpc(TEXT("guard"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	FElysiumNpcWorldFixture::Quiet({ Guard });
+	if (Guard == nullptr)
+	{
+		return false;
+	}
+	Guard->SpecialDistanceAccum = 77.5f;
+	TestEqual(TEXT("-1000000 ACCUM answers m_flSpecialDistanceAccum +0x5bac (0x102702f9)"),
+		Guard->ResolveTaskDistance(-1000000.f), 77.5f);
+	TestEqual(TEXT("-1000002 DIALOG answers 160.0, 0x1047a3ac (0x10270303)"),
+		Guard->ResolveTaskDistance(-1000002.f), 160.f);
+	TestEqual(TEXT("-1000003 COMBATMOVE answers the melee-range ConVar DAT_10924a1c (0x1027030d)"),
+		Guard->ResolveTaskDistance(-1000003.f), FElysiumNpc::MeleeRangeUnits());
+	TestEqual(TEXT("shipped 100"), FElysiumNpc::MeleeRangeUnits(), 100.f);
+	TestEqual(TEXT("-1000001 is no base sentinel: it passes through"),
+		Guard->ResolveTaskDistance(-1000001.f), -1000001.f);
+	return true;
+}
+
+// -------------------------------------------------------------------------------------------------
+// `0x102a11d0` -- "an NPC I do not hate stands in the way" (spec 0002 V11-1, J10).
+// -------------------------------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelScheduleAllyInTheWayTest,
+	"Elysium.Arm.NpcKernelSchedule.AllyInTheWay", GElysiumNpcKernelScheduleFlags)
+bool FElysiumNpcKernelScheduleAllyInTheWayTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_schedule_ally_in_the_way"), 4112);
+	Builder.AddNpc(TEXT("rear"));
+	Builder.AddNpc(TEXT("front"), FVector(150.0, 0.0, 0.0));
+	Builder.AddNpc(TEXT("foe"), FVector(400.0, 0.0, 0.0));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Rear = Fixture.Npc(TEXT("rear"));
+	FElysiumNpc* Front = Fixture.Npc(TEXT("front"));
+	FElysiumNpc* Foe = Fixture.Npc(TEXT("foe"));
+	FElysiumNpcWorldFixture::Quiet({ Rear, Front, Foe });
+	if (Rear == nullptr || Front == nullptr || Foe == nullptr)
+	{
+		return false;
+	}
+
+	// No enemy: no point to sweep to.
+	TestFalse(TEXT("0x102a11d0: no enemy answers false"), Rear->ScheduleNonHatedNpcInTheWay());
+
+	ElysiumNpcEnemy::SetEnemy(*Rear, Foe->Handle);
+	if (!TestTrue(TEXT("precondition: the enemy is set"), Rear->GetEnemy() == Foe))
+	{
+		return false;
+	}
+	// No collision world behind the NPC (the double has not opted in): the fault path, false.
+	Fixture.Services.TraceRetailQuery = nullptr;
+	TestFalse(TEXT("0x102a11d0: no embodiment answer is false"), Rear->ScheduleNonHatedNpcInTheWay());
+
+	// The trace double: records the request, answers a clear world and whatever characters the case
+	// lists.
+	FElysiumRetailTrace Seen;
+	TArray<FElysiumRetailTraceCharacter> Met;
+	Fixture.Services.TraceRetailQuery = [&Seen, &Met](const FElysiumRetailTrace& Asking,
+		FElysiumRetailTraceResult& Out)
+	{
+		Seen = Asking;
+		for (const FElysiumRetailTraceCharacter& Character : Met)
+		{
+			Out.Characters.Add(Character);
+		}
+		Out.EndPosCm = Asking.EndCm;
+		return true;
+	};
+	ON_SCOPE_EXIT { Fixture.Services.TraceRetailQuery = nullptr; };
+
+	// Nothing on the line.
+	TestFalse(TEXT("0x102a11d0: a clear sweep answers false"), Rear->ScheduleNonHatedNpcInTheWay());
+	TestEqual(TEXT("mask 0x2000000 (CONTENTS_MONSTER)"), Seen.RetailMask, 0x2000000);
+	TestTrue(TEXT("CTraceFilterSimple(this, 0): this NPC is the pass entity"),
+		Seen.Ignore.Contains(Rear->Handle));
+	TestTrue(TEXT("from WorldSpaceCenter (slot 192)"),
+		Seen.StartCm.Equals(Rear->WorldSpaceCenter(), 0.01));
+	TestTrue(TEXT("to the enemy's WorldSpaceCenter (the callers' point)"),
+		Seen.EndCm.Equals(Foe->WorldSpaceCenter(), 0.01));
+	// The hull: the collision box doubled in X / Y, Z +-6, Source units -> cm by `ElysiumMove::U`.
+	FVector MinsUnits = FVector::ZeroVector;
+	FVector MaxsUnits = FVector::ZeroVector;
+	FElysiumNpcBase::RetailCollisionExtents(*Rear, MinsUnits, MaxsUnits);
+	const double CmPerUnit = ElysiumMove::U;
+	TestEqual(TEXT("hull mins.x = 2 x OBBMins.x"), Seen.MinsCm.X, 2.0 * MinsUnits.X * CmPerUnit, 0.01);
+	TestEqual(TEXT("hull maxs.x = 2 x OBBMaxs.x"), Seen.MaxsCm.X, 2.0 * MaxsUnits.X * CmPerUnit, 0.01);
+	TestEqual(TEXT("hull maxs.y - mins.y = 2 x the box's Y span"), Seen.MaxsCm.Y - Seen.MinsCm.Y,
+		2.0 * (MaxsUnits.Y - MinsUnits.Y) * CmPerUnit, 0.01);
+	TestEqual(TEXT("hull mins.z = -6 units"), Seen.MinsCm.Z, -6.0 * CmPerUnit, 0.01);
+	TestEqual(TEXT("hull maxs.z = +6 units"), Seen.MaxsCm.Z, 6.0 * CmPerUnit, 0.01);
+
+	// An NPC nearest on the line.
+	FElysiumRetailTraceCharacter Body;
+	Body.Entity = Front->Handle;
+	Body.Fraction = 0.4f;
+	Met.Add(Body);
+	Rear->Relationships.SetEntity(Front->Handle, EElysiumRelationship::Neutral, 5);
+	TestTrue(TEXT("0x102a11d0: an NPC I am neutral to (D_NU) in the way answers true"),
+		Rear->ScheduleNonHatedNpcInTheWay());
+	Rear->Relationships.SetEntity(Front->Handle, EElysiumRelationship::Like, 5);
+	TestTrue(TEXT("an NPC I like (D_LI) too"), Rear->ScheduleNonHatedNpcInTheWay());
+	Rear->Relationships.SetEntity(Front->Handle, EElysiumRelationship::Hate, 5);
+	TestFalse(TEXT("an NPC I hate (D_HT 1) answers false"), Rear->ScheduleNonHatedNpcInTheWay());
+
+	// The player's body nearest: no NPC pointer (`+0x94`), false whatever the relation.
+	if (FElysiumPlayer* Player = Fixture.Player())
+	{
+		Met.Reset();
+		Body.Entity = Player->Handle;
+		Met.Add(Body);
+		Rear->Relationships.SetEntity(Player->Handle, EElysiumRelationship::Neutral, 5);
+		TestFalse(TEXT("0x102a11d0: the player's body ends the trace and answers false"),
+			Rear->ScheduleNonHatedNpcInTheWay());
 	}
 	return true;
 }

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "ElysiumAnimationIntent.h"
+#include "ElysiumMoveSolve.h"   // ElysiumMove::U -- centimetres per Source unit
 #include "ElysiumWorldServices.h"
 #include "GameFramework/Character.h"
 #include "Templates/PimplPtr.h"
@@ -53,17 +54,18 @@ struct TStructOpsTypeTraits<FElysiumNpcAnimTickFunction>
 
 namespace ElysiumNpcBodyMove
 {
-// NOT RETAIL'S NUMBER: the smallest arrival radius Unreal's path follower is handed. Retail's
-// arrival test is navigator slot 16 `0x102ef510`: reached iff the distance to the head waypoint is
-// `<= 0.0625` units (f64 `0x10451f78`), 2-D on a ground move -- a constant, not the goal tolerance
-// and not a hull -- and the body lands on the waypoint because `MoveGroundExecute 0x10264680`
-// clamps its step to the remaining distance (`0x10264916`; `ElysiumNpcMoveScript::Step`).
-// 1.0 cm is the crowd follower's floor, a divergence under K1 (spec 0002 V4, README §7) that is
-// PENDING THE JUDGE: replaced by retail's 0.0625 units, or kept and named. Until that ruling the
-// value stands. It sizes only what the FOLLOWER is asked for: the request's own radius is kept
-// exactly, `RemainingDistance2DCm` is measured to the exact destination, and the substrate
-// applies retail's own completion arms from those.
-inline constexpr float FollowerArrivalFloorCm = 1.0f;
+// The smallest arrival radius Unreal's path follower is handed: RETAIL'S NUMBER. Retail's arrival
+// test is navigator slot 16 `0x102ef510`: reached iff the distance to the head waypoint is
+// `<= 0.0625` units (f64 `0x10451f78`), 2-D on a ground move -- one constant for every goal type
+// and every waypoint, not the goal tolerance and not a hull -- and the body lands on the waypoint
+// because `MoveGroundExecute 0x10264680` clamps its step to the remaining distance (`0x10264916`;
+// `ElysiumNpcMoveScript::Step`). Until spec 0002 V11 (packet S11 item 3) this was 1.0 cm, a crowd
+// follower's floor that ended each leg up to 0.39 units short. It sizes only what the FOLLOWER is
+// asked for: the request's own radius is kept exactly, `RemainingDistance2DCm` is measured to the
+// exact destination, and the substrate applies retail's own completion arms from those. Still a
+// named modernization under K1, whatever the radius: the follower's `Success` on a goal snapped
+// to the navmesh, or on its moved-too-far test, counts as arrival (S11 3.3).
+inline constexpr float FollowerArrivalFloorCm = static_cast<float>(0.0625 * ElysiumMove::U);
 }
 
 // What one `FElysiumNpcMoveRequest` becomes on the follower side. Pure: derived from the request

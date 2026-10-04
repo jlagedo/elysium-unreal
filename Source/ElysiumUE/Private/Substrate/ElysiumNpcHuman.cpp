@@ -83,13 +83,16 @@ int32 FElysiumNpcHuman::CanPlaySequence(bool bDisregardState, int32 InterruptLev
 	return CanPlaySequenceSpecies(bDisregardState, InterruptLevel);
 }
 
-// The melee quartet on the human line: 599 `0x10385ab0` and 600 `0x10385c30` are byte-identical
-// copies of the Troika bodies and 602 `0x10385d70` drops only the coordinator null test (a named
-// divergence family TroikaHelpers applies to both lines), so the port runs the one Troika body for
-// each; 601 `0x10385cf0` is family Bosses' own body.
+// The melee quartet on the human line. 599 `0x10385ab0` is the Troika body with one more
+// `0x1025db70`, called unconditionally before the `0x1000` test (`Slot599OnLine`); 600 `0x10385c30`
+// is a byte-identical copy of the Troika body; 602 `0x10385d70` drops only the coordinator null
+// test, a state no spawned NPC is in since every Troika NPC binds "Normal" at Precache (spec 0002
+// V11-1), so the port runs the Troika body, whose test stands for retail's fault; 601 `0x10385cf0`
+// is family Bosses' own body.
 bool FElysiumNpcHuman::Slot599(int32 Arg)
 {
-	return FElysiumNpc::Slot599(Arg);
+	(void)Arg;   // read by nothing in `0x10385ab0`
+	return Slot599OnLine(EMeleeSlotLine::AndreiBlood);
 }
 
 bool FElysiumNpcHuman::Slot600(FElysiumEntity* Enemy)
@@ -477,7 +480,7 @@ int32 FElysiumNpcHuman::SelectScheduleMeleeCombatHuman()
 		// `10386254`: the enemy's `WorldSpaceCenter` (slot 192) is read into a stack vector and
 		// DISCARDED, then `0x102a11d0` decides.
 		(void)ElysiumCameraShots::SurroundingBounds(*Enemy).GetCenter();   // slot 192
-		if (ScheduleMeleeReachGate())
+		if (ScheduleNonHatedNpcInTheWay())
 		{
 			if (NpcKernelAnim10_2Shared::Anim10_2HasRangedWeapon(*this))
 			{
@@ -537,10 +540,6 @@ void FElysiumNpcHuman::FUN_10385cf0()
 	// Troika body tests `m_pAttackCoordinator != 0` first. The unguarded forward is retail's, and on
 	// the Troika line the same call site is guarded — that asymmetry is the fact, not a slip.
 	//
-	// The `RandomFloat(5.0, 10.0)` draw is NOT taken here: this substrate's melee timer is owned by
-	// the Troika-line body 29d will land, the event and the release are seams, and a draw taken on
-	// a path whose consumer does not exist would walk the schedule stream off the map. The arm that
-	// WOULD draw is reproduced as the `bRangedArm` record below so the gate is measurable.
 	// Slot 308 `HasUsableRangedWeapon` (`0x10336d70`) is still a generated stub answering false, so
 	// the timer arm is not reached today; it is wired, not inlined, so the day the slot lands the
 	// arm opens without a change here.
@@ -548,10 +547,15 @@ void FElysiumNpcHuman::FUN_10385cf0()
 	bInMelee = false;
 	if (HasUsableRangedWeapon())
 	{
-		// `m_flMeleeCanEnterTimer = curtime + RandomFloat(5.0, 10.0)` (`0x40a00000`, `0x41200000`).
-		MeleeCanEnterTimer = (World != nullptr ? World->NowSeconds() : 0.0) + 5.0;
+		// `m_flMeleeCanEnterTimer = curtime + RandomFloat(5.0, 10.0)` (`0x40a00000`, `0x41200000`),
+		// on the `NpcSchedule` stream as the Troika line's `Slot601` (`0x102b5880`) draws it.
+		MeleeCanEnterTimer = (World != nullptr ? World->NowSeconds() : 0.0)
+			+ static_cast<double>(
+				ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(5.0f, 10.0f));
 	}
-	++MeleeCoordinatorReleases;
+	// `0x1025ddd0(m_pAttackCoordinator, this)`, UNGUARDED in retail: with `+0x65e8 == 0` retail
+	// faults; here index 0 names no object and the release is a no-op.
+	MeleeCoordinatorRelease();
 }
 
 // --- Moved from `ElysiumNpcCombat10_2.cpp` (story 5 step 4) ---

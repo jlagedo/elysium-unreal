@@ -844,11 +844,16 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 	// unconditionally. The melee ladder takes its approach from SEE_ENEMY regardless (below).
 	TestFalse(TEXT("0x102953a0 a melee body not in melee gathers no CAN_MELEE_ATTACK1"),
 		F.Fighter->Cognition.Conditions.Has(ECond::CanMeleeAttack1));
-	// The recovered slot-604/605 body's own answer. It used to be folded back to whichever of the
-	// port's 29 programs matched, and 0xe7 matched none -- so the CHOSEN fall-through stood in.
-	// Every number those bodies answer is a loaded program now.
-	TestEqual(TEXT("the melee selector takes the recovered approach"), F.Fighter->SelectSchedule(),
-		0xe7);
+	// The recovered slot-604 body's own answer (`CNPC_VHuman::SelectScheduleMeleeCombat
+	// 0x10385e40`). Corrected to retail by spec 0002 V11: this pinned `0xe7
+	// SCHED_TROIKA_WAIT_FOR_MELEE_ADVANCE`, the arm slot 599 `0x10385ab0` REFUSING takes, which it
+	// did only because the attack coordinator was a seam answering false. Every Troika NPC binds
+	// "Normal" at Precache (`0x10298ad0` -> slot 608), `0x1025db70` admits a lone NPC to its list,
+	// `m_bInMelee` is set, and with no band word gathered yet (above) the same selection answers
+	// `0xc7 SCHED_TROIKA_MELEE_IDLE` (line `0x6c1`): one MELEE_IDLE first is retail.
+	TestEqual(TEXT("0x10385e40: admitted by 0x1025db70, no band word yet -> MELEE_IDLE 0xc7"),
+		F.Fighter->SelectSchedule(), 0xc7);
+	TestTrue(TEXT("0x10385ab0: the admission set m_bInMelee"), F.Fighter->bInMelee);
 
 	// The swing's contact is the per-frame swept walk over the clip's own authored records, and
 	// retail runs it on the CHARACTER — so an NPC's swing reaches contact through exactly the pass

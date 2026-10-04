@@ -1018,7 +1018,19 @@ void UElysiumAnimSubsystem::ActivitySequences(const FElysiumActivityClipRequest&
 	{
 		if (const FElysiumNpcClip* Clip = Catalog.Clips->Find(Ref))
 		{
-			Out.Add(*Clip);
+			FElysiumNpcClip& Row = Out.Add_GetRef(*Clip);
+			// The vocabulary's rows are SELECTION rows (`FElysiumBodySequence::SelectionClip`: the
+			// activity, weight, flags, reach pair and combo mask) and state no swing record and no
+			// envelope. The band `0x103ea7e0` and slot 331 `0x10347180` read the descriptor's
+			// `+0x2c4` (the swing-record count) and `+0x2bc` / `+0x2c0` (the envelopes), which the
+			// bake keeps on the clip's own data (`UElysiumClipData::Descriptor`): joined here, or
+			// every candidate reads as a sequence with no swing and the band answers 0 for a bat
+			// in reach (measured, spec 0002 V11: `melee_swing` raised COND_NONE and held MELEE_IDLE).
+			if (const UElysiumClipData* Data = NativeClipData(Request.Stem, Ref.Label))
+			{
+				Row.Swings = Data->Descriptor.Swings;
+				Row.Envelopes = Data->Descriptor.Envelopes;
+			}
 		}
 	}
 }

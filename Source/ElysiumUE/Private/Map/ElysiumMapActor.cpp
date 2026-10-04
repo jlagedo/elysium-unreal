@@ -1763,6 +1763,111 @@ void AElysiumMapActor::QuerySwingContacts(const FElysiumSwingSweep& Sweep,
 	}
 }
 
+namespace
+{
+	// The collision volume `MeleeSwingStep 0x10343020`'s two queries measure an entity by, world
+	// centimetres. A character: its body's bounds, else the 32x32x72-unit standing hull (the same
+	// volume the aim, feed and beam queries above use). A non-character: its registered `+use`
+	// anchor (`GetUseBodyWorldBounds`, the one handle -> collision-box map this actor keeps), else
+	// its skeletal body. **False = no volume**: a prop or brush entity with neither is not in the
+	// box -- NAMED GAP, the body factory keeps no component -> entity map for those (the same
+	// boundary `QuerySwingContacts`' declaration names).
+	bool ElysiumSwingVolumeOf(const AElysiumMapActor& Map, const FElysiumEntity& Ent, FBox& OutBox)
+	{
+		const USkeletalMeshComponent* Body = Ent.GetSkeletalBody();
+		// A loot container registers on the combat-character base in this runtime and is a prop in
+		// retail (`+0x9c == 0`): it is measured as the non-character it is.
+		if (Ent.AsCombatCharacter() != nullptr && Ent.AsItemContainer() == nullptr)
+		{
+			OutBox = Body != nullptr ? Body->Bounds.GetBox() : ElysiumStandHullAt(Ent.Origin);
+			return true;
+		}
+		if (Map.GetUseBodyWorldBounds(Ent.Handle, OutBox))
+		{
+			return true;
+		}
+		if (Body != nullptr)
+		{
+			OutBox = Body->Bounds.GetBox();
+			return true;
+		}
+		return false;
+	}
+}
+
+void AElysiumMapActor::QuerySwingStepEntities(const FElysiumSwingSweep& Sweep,
+	TArray<FElysiumEntityHandle>& OutEntities) const
+{
+	// `0x101cca80(list, 100, &mins, &maxs, 0x22102080, 1)` from `MeleeSwingStep 0x10343020`: the
+	// entities in the AABB over `{A, B, lastA, lastB}`, at most 100. No gate is applied here -- the
+	// step's own (relation, solid, `+0xf4`, targetable, owner root) run in the substrate, in retail's
+	// order -- so the attacker and non-solid entities are listed like any other.
+	OutEntities.Reset();
+	if (!EntityWorld.IsValid())
+	{
+		return;
+	}
+	FBox Swept(ForceInit);
+	Swept += Sweep.CurA;
+	Swept += Sweep.CurB;
+	Swept += Sweep.PrevA;
+	Swept += Sweep.PrevB;
+
+	constexpr int32 MaxEntities = 100;   // the list's capacity, `PUSH 100`
+	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityWorld->Entities())
+	{
+		const FElysiumEntity* Ent = EntPtr.Get();
+		FBox Volume(ForceInit);
+		if (Ent == nullptr || !ElysiumSwingVolumeOf(*this, *Ent, Volume) || !Swept.Intersect(Volume))
+		{
+			continue;
+		}
+		OutEntities.Add(Ent->Handle);
+		if (OutEntities.Num() >= MaxEntities)
+		{
+			break;
+		}
+	}
+}
+
+bool AElysiumMapActor::ClipSwingRayToEntity(const FVector& FromCm, const FVector& ToCm,
+	const FElysiumEntityHandle& Entity, FElysiumSwingRayHit& Out) const
+{
+	// `0x101d2530(&ray, 0x200400b, e, &tr)`: the ray against that ONE entity's collision, nothing
+	// else. No world trace and no occlusion trace stands between the limb and the entity
+	// (`MeleeSwingStep 0x10343020`, step 3.9).
+	Out = FElysiumSwingRayHit();
+	Out.StartCm = FromCm;
+	Out.EndPosCm = ToCm;
+	const FElysiumEntity* Ent = EntityWorld.IsValid() ? EntityWorld->Resolve(Entity) : nullptr;
+	FBox Volume(ForceInit);
+	if (Ent == nullptr || !ElysiumSwingVolumeOf(*this, *Ent, Volume))
+	{
+		return false;
+	}
+	if (Volume.IsInsideOrOn(FromCm))
+	{
+		// `startsolid`; `allsolid` when the end is inside too (a zero-length ray included).
+		Out.bStartSolid = true;
+		Out.bAllSolid = Volume.IsInsideOrOn(ToCm);
+		Out.Fraction = 0.f;
+		Out.EndPosCm = FromCm;
+		return true;
+	}
+	FVector HitLocation = FVector::ZeroVector;
+	FVector HitNormal = FVector::ZeroVector;
+	float HitTime = 1.f;
+	// A zero-length ray outside the volume touches nothing (the sample did not move).
+	if (!FromCm.Equals(ToCm, 0.0) && FMath::LineExtentBoxIntersection(Volume, FromCm, ToCm, FVector::ZeroVector, HitLocation,
+		HitNormal, HitTime))
+	{
+		Out.Fraction = FMath::Clamp(HitTime, 0.f, 1.f);
+		Out.EndPosCm = HitLocation;
+		Out.Normal = HitNormal;
+	}
+	return true;
+}
+
 bool AElysiumMapActor::QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const
 {
 	UWorld* World = GetWorld();

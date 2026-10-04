@@ -2295,9 +2295,13 @@ _Recovered 2026-09-13, story 29c-1._
 
 Slots 599–602 are the Troika line's melee-slot acquire/release pair over the global attack
 coordinator `m_pAttackCoordinator` `+0x65e8`, and the `CNPC_VAndreiBlood` human line (38 classes)
-carries its own four. Three are **identical** to the Troika bodies and one is not:
+carries its own four. Two are **identical** to the Troika bodies and two are not (599's difference
+was missed until 2026-10-04, spec 0002 V11; `social.md` § "The melee entry and exit quartet" states
+it):
 
-- `0x10385ab0` (slot 599) is `CAI_BaseNPCTroika::0x102b5650` — the melee-entry decision from the
+- `0x10385ab0` (slot 599) is `CAI_BaseNPCTroika::0x102b5650` **plus one call**: `0x1025db70(coord,
+  this)` runs unconditionally, answer dropped, ahead of the `0x1000` test. The rest is the same
+  body — the melee-entry decision from the
   frenzy flag `+0x5b84 & 2`, slot 293 `GetFollowerBoss`, `m_flMeleeCanEnterTimer` `+0x6070`, the
   doubled `DAT_10924a1c` melee range against `m_flEnemyDist` `+0x6268`, `m_flEnemyHeightDiff`
   `+0x626c` against `_DAT_10451acc` (64.0), condition `0x59`, and the squad frenzy bit `0x1000`.

@@ -672,6 +672,26 @@ struct FElysiumSwingSweep
 	FVector CurB = FVector::ZeroVector;
 };
 
+// One sample ray of `MeleeSwingStep 0x10343020` clipped to ONE entity (`0x101d2530(&ray,
+// 0x200400b, e, &tr)`), as `ClipSwingRayToEntity` answers it: retail's `trace_t` words the step
+// reads. The defaults are a clear trace.
+struct FElysiumSwingRayHit
+{
+	// `tr.fraction`: 0 at the ray's start, 1 at its end.
+	float Fraction = 1.f;
+	// `tr.startsolid` / `tr.allsolid`: the ray starts inside the entity / lies wholly inside it.
+	bool bStartSolid = false;
+	bool bAllSolid = false;
+	// `tr.startpos` / `tr.endpos`, world centimetres.
+	FVector StartCm = FVector::ZeroVector;
+	FVector EndPosCm = FVector::ZeroVector;
+	FVector Normal = FVector::ZeroVector;
+
+	// Retail's hit test (`MeleeSwingStep 0x10343020`, step 3.9; the wall arm's is `0x103441f3`):
+	// `fraction < 1 || allsolid || startsolid`.
+	bool DidHit() const { return Fraction < 1.f || bAllSolid || bStartSolid; }
+};
+
 // --------------------------------------------------------------------------------------------
 // Embodiment — bodies, meshes, clips, skins, and the player's own body.
 //
@@ -1108,6 +1128,18 @@ public:
 		int32 RawIndex, FString& OutLabel, struct FElysiumNpcClip& OutClip)
 	{
 		OutLabel.Reset();
+		return false;
+	}
+	// The whole movement of one sequence of a body's flat sequence space (`RawIndex`), cycle 0 -> 1:
+	// retail's `Studio_SeqMovement 0x100c6020(model, seq, ..., &delta, &angles)` as slot 331
+	// `ChooseMeleeAttackSequence 0x10347180` asks it (`0x1034766d`). `OutDeltaCm` is the baked
+	// path's net displacement in the clip's own frame, centimetres, this runtime's axes (X forward,
+	// Y right, Z up). False -- the default -- when the body has no such sequence or the sequence
+	// authors no movement record (retail's own false: `nummovements == 0`); `OutDeltaCm` is zeroed.
+	virtual bool GetBodySequenceMovement(USkeletalMeshComponent* Body, const FString& Stem,
+		int32 RawIndex, FVector& OutDeltaCm)
+	{
+		OutDeltaCm = FVector::ZeroVector;
 		return false;
 	}
 	// The studio descriptor facts of one sequence of a body's vocabulary, by `(owner, label)` (an
@@ -1607,6 +1639,32 @@ public:
 		TArray<FElysiumEntityHandle>& OutHits) const
 	{
 		OutHits.Reset();
+	}
+
+	// `MeleeSwingStep 0x10343020`'s candidate list, `0x101cca80(list, 100, &mins, &maxs, 0x22102080,
+	// 1)`: every entity with a collision volume overlapping the AABB over the sweep's four points
+	// `{CurA, CurB, PrevA, PrevB}` (retail's `{A, B, lastA, lastB}`), **at most 100**, characters and
+	// non-characters alike (props, breakables, brush entities), the attacker included -- retail
+	// lists it and the step's owner-root gate (`0x1012c9c0`) drops it. Geometry only: every gate of
+	// the step (relation, solidity, `+0xf4`, `m_bIsBCCTargetable`, the hit lists, slot 329) is the
+	// substrate's. `QuerySwingContacts` above is NOT this query and keeps its answers (the beam,
+	// `ElysiumEnvBeam.cpp`). Headless default: nothing in the box.
+	virtual void QuerySwingStepEntities(const FElysiumSwingSweep& Sweep,
+		TArray<FElysiumEntityHandle>& OutEntities) const
+	{
+		OutEntities.Reset();
+	}
+
+	// One zero-extent ray clipped to `Entity` ALONE (`0x101d2530(&ray, 0x200400b, e, &tr)`): no
+	// world, no other entity, no occlusion. True when the entity has a collision volume to clip to
+	// (`Out` then holds the trace, hit or clear); false when it has none, `Out` left clear.
+	virtual bool ClipSwingRayToEntity(const FVector& FromCm, const FVector& ToCm,
+		const FElysiumEntityHandle& Entity, FElysiumSwingRayHit& Out) const
+	{
+		Out = FElysiumSwingRayHit();
+		Out.StartCm = FromCm;
+		Out.EndPosCm = ToCm;
+		return false;
 	}
 
 	// The NPC bodies the player's hull was in solid contact with since the last drain -- the

@@ -131,10 +131,14 @@ FElysiumEntity* FindKickPhysicsProp() const;
  *  forwards to `FindTacticalHintNode`, which writes `m_pHintNode` (`+0x5ddc`) on a hit (0018/8). */
 void SearchForCoverHint(uint32 SearchMask);
 
-/** SEAM for `0x102a11d0`, the gate `CNPC_VChangBros` / `CNPC_VTzimisceRunner` put in front of their
- *  0x15a / 0xe1 arm, after taking the enemy's `WorldSpaceCenter` (slot 192) and discarding it.
- *  Retail name unrecovered. Answers false, which is the arm that falls through. */
-bool ScheduleMeleeReachGate() const;
+/** `0x102a11d0` -- "an NPC I do not hate stands in the way": the gate the four
+ *  `SelectScheduleMeleeCombat` bodies put in front of their circle arm (0xe0 / 0xe1 / 0x15a). A hull
+ *  of this NPC's collision box doubled in X / Y and +-6 in Z, swept from `WorldSpaceCenter` (slot
+ *  192) to the enemy's, mask `0x2000000`, this NPC ignored; true when it is blocked by an entity
+ *  with an NPC pointer (`+0x94`) whose `IRelationType` (slot 404) is not `D_HT`. Not a reach test
+ *  (the old name `ScheduleMeleeReachGate` said so wrongly). False with no enemy, world or
+ *  embodiment. */
+bool ScheduleNonHatedNpcInTheWay() const;
 
 /** `0x1027d990`, `nav+0x18` `m_navType`: 0 ground, 1 jump, 2 fly, 3 climb (`NavGetType`). */
 int32 NavigatorNavType() const;

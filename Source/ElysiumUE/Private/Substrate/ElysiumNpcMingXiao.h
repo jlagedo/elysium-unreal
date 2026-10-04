@@ -123,11 +123,12 @@ public:
 	 *  (`0x112a`..`0x112d` for slots 0–3, none for 4 and 5). `bTestMelee` is retail's `param_2`, which
 	 *  adds the `m_hMeleeWeapon` / slot 331 `ChooseMeleeAttackSequence` test on top. */
 	bool FUN_10398030(int32 Slot, bool bTestMelee, int32& OutSchedule);
-	/** SEAM for `0x10398030`'s `param_2` tail: `m_hMeleeWeapon`'s owner (`+0xa0`), its activity through
-	 *  the weapon's `+0x5a4`, this NPC's slot 376 `NPC_TranslateActivity`, `GetEnemy()`'s `+0x9c`, and
-	 *  slot 331 `ChooseMeleeAttackSequence` — whose Troika body is story 29d's. Answers false, which is
-	 *  retail's REFUSAL arm, so the melee-tested form of the gate never opens. */
-	bool ChooseMeleeAttackSequenceSeam() const;
+	/** `0x10398030`'s `param_2` tail: `m_hMeleeWeapon` (`+0x667c`) resolved to its weapon (`+0xa0`),
+	 *  `Activity` through the weapon's slot 361 (`+0x5a4`) and this NPC's slot 376
+	 *  `NPC_TranslateActivity`, `GetEnemy()`'s `+0x9c`, and slot 331 `ChooseMeleeAttackSequence`
+	 *  `0x10347180` `(weapon, enemy, translated, &out)`; true when it answers true with `out >= 0`.
+	 *  An unset or stale handle is retail's refusal. */
+	bool MeleeWeaponChoosesSequence(int32 Activity);
 	/** `0x103983d0` — `CNPC_VMingXiao::RunTask`'s throw-force curve, selected by `m_eThrowingTentacle`
 	 *  (0..5). Recovered from the LISTING (`vtmb_asm 0x103983d0`): the decompiled C lost the jump table
 	 *  and the ST0 return. Slots 0–3 answer `max(Tuning[0x74] + Tuning[0x78] * (6 - count), 0) * Scale`
@@ -220,9 +221,10 @@ public:
 	 *  three methods. This one: reset the navigator's path (`thunk_FUN_102e0b40(m_pNavigator)`), resolve
 	 *  `m_hMeleeWeapon`'s owner (+0xa0), run the pre-attack hook (`+0x610`), and TaskFail `0x1f` when
 	 *  there is no active weapon. Otherwise ask the weapon for the activity that matches the requested
-	 *  one (`+0x5a4`), run `+0x5e0`, and choose a melee sequence through slot 331; a refusal or a
-	 *  negative activity fails the task (`thunk_FUN_10289ee0`) and a success sets the activity
-	 *  (`+0x4dc`). Either way it then stamps `m_rflAttackTimers[tentacle]` (+0x66c4) with
+	 *  one (`+0x5a4`), run `+0x5e0`, and choose a melee sequence through slot 331 (handed the
+	 *  untranslated activity); a refusal or a negative sequence restarts the ideal activity
+	 *  (`RestartIdealActivity 0x10289ee0`) and a success forces the sequence (slot 311, `+0x4dc`).
+	 *  Either way it then stamps `m_rflAttackTimers[tentacle]` (+0x66c4) with
 	 *  `curtime + FUN_103983d0(...)` — family Bosses owns both that array and that curve. */
 	void MingXiaoThrowAttack(int32 TaskId, int32 Tentacle, TFunctionRef<float(int32)> TuningField);
 	/** `0x10396bc0` — `CNPC_VMingXiao`'s pickup search, `SelectSchedule`'s grab arm. Answers 0 unless

@@ -4,7 +4,6 @@
   "stage": "arena",
   "seed": 1,
   "duration": 20.0,
-  "known_red": "V11 (N3): slot 599's attack-coordinator admission 0x1025db70 is a seam answering false (ElysiumNpcTroikaHelpers.cpp): SCHED_TROIKA_WAIT_FOR_MELEE 0xe4 with the player at 47 units, never MELEE_ATTACK1",
   "player": { "at": "start" },
   "cast": [
     {

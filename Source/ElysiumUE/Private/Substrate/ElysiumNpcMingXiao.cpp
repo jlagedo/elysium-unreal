@@ -363,7 +363,7 @@ int32 FElysiumNpcMingXiao::SelectScheduleMeleeCombat(int32 Unused)
 	if (Enemy != nullptr)
 	{
 		(void)ElysiumCameraShots::SurroundingBounds(*Enemy).GetCenter();   // slot 192
-		if (ScheduleMeleeReachGate())
+		if (ScheduleNonHatedNpcInTheWay())
 		{
 			if (NpcKernelAnim10_2Shared::Anim10_2HasRangedWeapon(*this))
 			{
@@ -921,11 +921,38 @@ float FElysiumNpcMingXiao::FUN_10397f70(TFunctionRef<float(int32)> TuningField) 
 	return Blend <= Bosses2Zero ? Bosses2Zero : Blend;
 }
 
-bool FElysiumNpcMingXiao::ChooseMeleeAttackSequenceSeam() const
+bool FElysiumNpcMingXiao::MeleeWeaponChoosesSequence(int32 Activity)
 {
-	// SEAM for `0x10398030`'s `param_2` tail. Slot 331's Troika body (`0x10347180`) is story 29d's
-	// and `m_hMeleeWeapon`'s owner chain has no counterpart here. False is retail's refusal.
-	return false;
+	// `0x10398030`'s `param_2` tail, `0x1039825..0x103982f4` (listing; the decompile drops the
+	// pushed activity):
+	//
+	//     weapon = m_hMeleeWeapon (+0x667c) resolved, then its `+0xa0`;   // unset / stale / 0 -> false
+	//     act = this->slot 376 (+0x5e0)(weapon->slot 361 (+0x5a4)(EBX));    // EBX = 0x112a..0x112d
+	//     enemy = GetEnemy() /* slot 167, +0x29c */;  cc = enemy ? enemy+0x9c : 0;
+	//     out = -1;
+	//     if (!this->slot 331 (+0x52c)(weapon, cc, act, &out) || out < 0) return false;
+	//     return true;
+	//
+	// `m_hMeleeWeapon` is written by `Spawn 0x103927a0` from `GetBestMeleeWeapon 0x10336f20`, whose
+	// port (`Spawn19BestMeleeWeapon`) is still a seam answering null: the handle is unset here, which
+	// is retail's own first refusal.
+	FElysiumEntity* const WeaponEntity =
+		(World != nullptr && MingXiaoMeleeWeapon.IsSet()) ? World->Resolve(MingXiaoMeleeWeapon) : nullptr;
+	FElysiumItem* const WeaponItem = WeaponEntity != nullptr ? WeaponEntity->AsItem() : nullptr;
+	if (WeaponItem == nullptr || WeaponItem->AsWeapon() == nullptr)   // 0x10398295's guards: `+0xa0 == 0`
+	{
+		return false;
+	}
+	// Weapon slot 361 `ActivityOverride 0x1024f210`. `_MingXiaoMelee` / `_MingXiaoTentacle` carry no
+	// row for these activities (`packets-S6.md` item 3), so the override is the identity; it is
+	// asked of the ACTIVE weapon's ladder, which is where this runtime's resolver reads the class.
+	const int32 Translated = NPC_TranslateActivity(WeaponActivityOverride(Activity));   // 0x1039829a / 0x103982a5
+	FElysiumEntity* const Enemy = GetEnemy();                                         // 0x103982b1 slot 167
+	FElysiumEntity* const EnemyCharacter =
+		Enemy != nullptr ? static_cast<FElysiumEntity*>(Enemy->AsCombatCharacter()) : nullptr;   // 0x103982bb +0x9c
+	int32 OutSequence = INDEX_NONE;                                                   // 0x103982cd
+	return ChooseMeleeAttackSequence(WeaponEntity, EnemyCharacter, Translated, &OutSequence)   // 0x103982d5 slot 331
+		&& OutSequence >= 0;                                                          // 0x103982e3
 }
 
 bool FElysiumNpcMingXiao::FUN_10398030(int32 Slot, bool bTestMelee, int32& OutSchedule)
@@ -1019,7 +1046,9 @@ bool FElysiumNpcMingXiao::FUN_10398030(int32 Slot, bool bTestMelee, int32& OutSc
 	}
 	if (bTestMelee && OutSchedule != INDEX_NONE)
 	{
-		if (!ChooseMeleeAttackSequenceSeam())
+		// The number the switch left in `EBX` (`0x112a`..`0x112d`) is the ACTIVITY the tail pushes
+		// to the weapon's slot 361 (`0x10398297 PUSH EBX`).
+		if (!MeleeWeaponChoosesSequence(OutSchedule))
 		{
 			return false;
 		}
@@ -1412,13 +1441,34 @@ void FElysiumNpcMingXiao::MingXiaoThrowAttack(int32 TaskId, int32 Tentacle,
 		TaskFail(MingXiaoNoWeaponFailure);
 		return;
 	}
-	// 4. The enemy's `+0x9c` (its own owner/target word) is read, then the weapon's activity
-	//    translation (`+0x5a4`) and `+0x5e0`, then slot 331 `ChooseMeleeAttackSequence`. A refusal
-	//    OR a negative activity fails the task; a success sets the activity through `+0x4dc`.
-	//    Slot 331 is family Bosses' `ChooseMeleeAttackSequenceSeam`, which answers FALSE.
-	if (!ChooseMeleeAttackSequenceSeam())
+	// 4. `0x10393848..0x103938b6`, re-read from the listing (spec 0002 V11; the decompile loses the
+	//    arguments). The activity is the caller's third argument (`0x112a`..`0x112d`, one per
+	//    tentacle 0..3):
+	//
+	//        cc = GetEnemy() ? enemy+0x9c : 0;                          // slot 167 (+0x29c)
+	//        translated = this->slot 376 (+0x5e0)(active->slot 361 (+0x5a4)(activity));
+	//        out = -1;
+	//        if (this->slot 331 (+0x52c)(active, cc, activity, &out) && out >= 0)   // the UNTRANSLATED activity
+	//            this->slot 311 (+0x4dc)(activity, translated, out);   // ForcePreTranslatedSequenceAndActivity
+	//        else
+	//            RestartIdealActivity(activity);                        // 0x10014524 -> 0x10289ee0
+	//
+	//    A refusal does NOT fail the task: only the missing active weapon above does (`0x1f`).
+	const int32 Activity = (Tentacle >= 0 && Tentacle < 4) ? MingXiaoTentacleSchedules[Tentacle] : 0;
+	FElysiumEntity* const ActiveWeapon = World != nullptr ? World->Resolve(Inventory.ActiveWeapon) : nullptr;
+	FElysiumEntity* const Enemy = GetEnemy();
+	FElysiumEntity* const EnemyCharacter =
+		Enemy != nullptr ? static_cast<FElysiumEntity*>(Enemy->AsCombatCharacter()) : nullptr;
+	const int32 Translated = NPC_TranslateActivity(WeaponActivityOverride(Activity));
+	int32 OutSequence = INDEX_NONE;
+	if (ChooseMeleeAttackSequence(ActiveWeapon, EnemyCharacter, Activity, &OutSequence)
+		&& OutSequence >= 0)
 	{
-		TaskFail(MingXiaoNoWeaponFailure);
+		ForcePreTranslatedSequenceAndActivity(Activity, Translated, OutSequence);
+	}
+	else
+	{
+		RestartIdealActivityId(Activity);
 	}
 	// 5. Either way the attack timer is stamped: `m_rflAttackTimers[t] = curtime + FUN_103983d0(..)`
 	//    — family Bosses owns both the array and the curve, and this body reuses them.

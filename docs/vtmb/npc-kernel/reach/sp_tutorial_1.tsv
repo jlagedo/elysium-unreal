@@ -3703,7 +3703,7 @@ function	0x10346760	CBaseCombatCharacter::ForceMeleeReset	-		layer 0
 function	0x10346910	CBaseCombatCharacter::MeleeRollAndSendNotice	-		layer 16
 function	0x10346ac0	CBaseCombatCharacter::SendIncomingSwingNotice	-		layer 17
 function	0x10346cd0	CBaseCombatCharacter::MeleeSwingUpdate	CCineNPC#315, CNPCMaker#315, CNPC_VHumanCombatant#315, CNPC_VPedestrian#315, CNPC_VRat#315, CNPC_VVampire#315		layer 18
-function	0x10347180	CBaseCombatCharacter::ChooseMeleeAttackSequence	CCineNPC#331, CNPCMaker#331, CNPC_VHumanCombatant#331, CNPC_VPedestrian#331, CNPC_VRat#331, CNPC_VVampire#331		layer 11
+function	0x10347180	CBaseCombatCharacter::ChooseMeleeAttackSequence	CCineNPC#331, CNPCMaker#331, CNPC_VHumanCombatant#331, CNPC_VPedestrian#331, CNPC_VRat#331, CNPC_VVampire#331	present	layer 11
 function	0x10348100	FUN_10348100	-		layer 1
 function	0x103482e0	CAI_BaseNPC::FUN_103482e0	CCineNPC#326	present	layer 13
 function	0x10348890	CBaseCombatCharacter::Restore	-		layer 8

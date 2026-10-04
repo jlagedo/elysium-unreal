@@ -21,6 +21,10 @@ public:
 	FElysiumNpcWerewolf();
 
 	virtual void NPCInit() override;
+	// Slot 328: `0x103ca730`, `return 1;` (the base `0x1014f830` answers 0). `MeleeSwingStep
+	// 0x10343020` reads it on the ATTACKER: only the player and the werewolf take the wall contact
+	// (`0x10343f96`; spec 0002 V11-2, D8).
+	virtual bool Slot328() override { return true; }
 	virtual void OnRestore(bool bFromLoad) override;
 	virtual void Precache() override;
 	virtual int32 SelectIdealStateRetail() override;

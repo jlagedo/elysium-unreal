@@ -528,6 +528,10 @@ public:
 		// the segments are carried by.
 		FVector PrevOrigin = FVector::ZeroVector;
 		FRotator PrevAngles = FRotator::ZeroRotator;
+		// The attacker's byte `+0xaa0`: the wall contact's impact effect has played for this swing
+		// (`MeleeSwingStep 0x10343020`, `0x10344384..0x103443ac`). Once per swing; it goes with the
+		// transaction (retail's clear is `ForceMeleeReset`'s, at the swing start).
+		bool bWallEffectSpent = false;
 
 		// Give up the walk's CURSOR — everything that describes where on a clip it was. Called
 		// whenever the play it was following changes or the clip stops being live, so a re-armed
@@ -620,6 +624,29 @@ public:
 	// accumulated rather than walked, and the batch that follows covers it. A swing whose clip
 	// declares no records is the other, and it never opens a contact window.
 	void AdvanceSwingContact(float DeltaSeconds);
+
+	// **SEAMS of the traced impact `0x102579f0` (slot 270) and the wall arm `0x10343f96`**, each
+	// called at its retail position and recorded, because nothing behind it is built here. Public so
+	// a case can read that the call was made, where, and how often.
+	struct FMeleeImpactSeams
+	{
+		// The weapon's own slot 339 (`+0x54c`), called with no argument as the impact's first
+		// statement (`0x102579f0`, before `InsertSound`). The body is unread: counted.
+		int32 WeaponSlot339Calls = 0;
+		// `CSoundEnt::InsertSound(0x10, &trace.endpos, [0x1072bc5c], 0.2, [0x1072bcb7], owner)` --
+		// type `0x10`, duration 0.2 s, at the trace's end, BEFORE the null-entity test. The volume
+		// and the last flag are globals whose values are unread; no AI-sound store takes a raw type
+		// (the same seam as `FElysiumNpcBase::InsertAiSound`).
+		int32 CombatSoundInserts = 0;
+		FVector LastCombatSoundCm = FVector::ZeroVector;
+		// `0x101cfef0(trace, 0x80, 1, weapon)`, the impact effect: the impact's tail on every path
+		// that passed the null-entity test, and the wall arm's once-per-swing effect.
+		int32 ImpactEffects = 0;
+		FVector LastImpactEffectCm = FVector::ZeroVector;
+		// The wall arm's blocked reactions: the attacker's slot 319 `(0, 0, 0)` at `0x103443c6`.
+		int32 WallBlockedReactions = 0;
+	};
+	FMeleeImpactSeams MeleeImpactSeams;
 
 	// Retail's virtual `Operator_HandleAnimEvent` `+0x5c8`: one sequence-event record the OPERATOR's
 	// clip declared, forwarded here by `FElysiumCombatCharacter::HandleAnimEvent` because it fell in
@@ -790,14 +817,36 @@ private:
 		// authored record has no candidate table and resolves its cell the way a ranged or discipline
 		// entry does.
 		int32 RecordIndex = INDEX_NONE;
+		// The `trace_t` the step hands slot 270: `startpos` / `endpos`, world centimetres. A ray hit
+		// carries the sample's own `Q -> P` trace; a box-overlap hit (a non-character, or a victim
+		// whose slot 329 is true) carries the attacker's origin and the entity's origin
+		// (`MeleeSwingStep 0x10343020`, `0x10343eb0`).
+		FVector TraceStartCm = FVector::ZeroVector;
+		FVector TraceEndCm = FVector::ZeroVector;
 	};
 
+	// The weapon's traced-impact virtual, slot 270 (`+0x438`) `0x102579f0(trace, record)`: the hit
+	// `MeleeSwingStep 0x10343020` hands it, on ANY entity -- a character or a prop.
+	//
 	// **The opposed record is CONSUMED here, never rolled here.** It was staged on the victim on the
 	// swing's first batched frame by `StageSwingOpposedRoll` below, which is where retail rolls it.
-	// A victim the sweep reached with no record of THIS swing's serial is an ordinary negative — the
-	// roll's own 60-unit query did not select them — and commits nothing.
-	void MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,
+	// A victim the sweep reached with no record of THIS swing's serial is retail's `rolls == 0`:
+	// unblocked, one success, and the damage is dispatched.
+	void MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumEntity& HitEntity,
 		const FSwingContact& Contact);
+
+	// The wall contact of one open record on one sub-step (`MeleeSwingStep 0x10343020`,
+	// `0x10343f96`), run only for an attacker whose slot 328 answers true. `Samples` is the record's
+	// sample count; the four points are the record's present and last endpoints.
+	struct FSwingWallStep
+	{
+		FVector A = FVector::ZeroVector;
+		FVector B = FVector::ZeroVector;
+		FVector LastA = FVector::ZeroVector;
+		FVector LastB = FVector::ZeroVector;
+		int32 Samples = 1;
+	};
+	void SwingWallContact(FElysiumCombatCharacter& Attacker, const FSwingWallStep& Step);
 
 	// The authored swing record `Contact.RecordIndex` names, or null.
 	//
@@ -831,12 +880,13 @@ private:
 	// not by the damage, so a miss marks the wall behind the target.
 	void TraceShotImpact(const FElysiumCombatCharacter& Attacker, const FElysiumWeaponMode& Mode);
 
-	// The grounded knockback branch of an UNBLOCKED melee contact the margin classified into the
-	// hit/knockback band: test the victim's eligibility, classify the away direction, snap the
-	// victim's facing so the authored cell reads true, and play that cell as a base-channel
-	// reaction. The rules are `Substrate/ElysiumReactions.h`; this is their producer half.
+	// The grounded knockback branch of an UNBLOCKED melee contact whose victim's slot 326(record) or
+	// slot 400 asked for it (`0x102579f0` step 7; the margin class no longer selects it): test the
+	// victim's eligibility, classify the away direction, snap the victim's facing so the authored
+	// cell reads true, and play that cell as a base-channel reaction. The rules are
+	// `Substrate/ElysiumReactions.h`; this is their producer half.
 	//
-	// **No authored per-weapon chance and no refractory window.** The margin band is the whole
+	// **No authored per-weapon chance and no refractory window.** Slot 326 / slot 400 are the whole
 	// admission — `knockback_chance` is parsed by retail and never read, and `KnockbackPreventTime`
 	// belongs to the player's view kick.
 	//

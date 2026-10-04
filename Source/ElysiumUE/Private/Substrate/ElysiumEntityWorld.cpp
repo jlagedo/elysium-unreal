@@ -12,6 +12,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumStub.h"
+#include "Substrate/ElysiumAttackCoordinator.h"
 #include "Substrate/ElysiumCameraCinematic.h"
 #include "Substrate/ElysiumDialogueSession.h"
 #include "Substrate/ElysiumEntityWorldShared.h"
@@ -111,6 +112,11 @@ FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumSessionSubsyst
 	Ring = RingSink.Get();
 	Sinks.Add(MoveTemp(RingSink));
 	Sinks.Add(MakeUnique<FElysiumLogSink>(*this));
+	// `0x1025d880`, the last statement of `CWorld`'s constructor: three coordinators, cap 2 each,
+	// "Normal" (`DAT_1090fbec`), "Player" (`DAT_1090fbf0`), "Boss" (`DAT_1090fbf4`).
+	AttackCoordinators[0] = MakeUnique<FElysiumAttackCoordinator>(*this, TEXT("Normal"), 2);
+	AttackCoordinators[1] = MakeUnique<FElysiumAttackCoordinator>(*this, TEXT("Player"), 2);
+	AttackCoordinators[2] = MakeUnique<FElysiumAttackCoordinator>(*this, TEXT("Boss"), 2);
 }
 
 FElysiumEntityWorld::~FElysiumEntityWorld()
@@ -1971,6 +1977,14 @@ ElysiumNpcWitness::FElysiumLawEventBus& FElysiumEntityWorld::LawEvents()
 	return *LawEventBus;
 }
 
+FElysiumAttackCoordinator* FElysiumEntityWorld::AttackCoordinator(int32 Index) const
+{
+	// 1..3 = `DAT_1090fbec` / `DAT_1090fbf0` / `DAT_1090fbf4`; 0 is retail's null pointer.
+	return Index >= 1 && Index <= static_cast<int32>(UE_ARRAY_COUNT(AttackCoordinators))
+		? AttackCoordinators[Index - 1].Get()
+		: nullptr;
+}
+
 void FElysiumEntityWorld::BindSoundVolumes()
 {
 	// Bind the authored table on the first emission rather than at construction: the rulebook loads
@@ -2877,6 +2891,17 @@ void FElysiumEntityWorld::Teardown()
 	// done with this world; its owner re-installs it on the rebuilt one.
 	AiTraceSink = nullptr;
 	AiTraceLastByKind.Reset();
+
+	// `0x1025d940`, the first statement of `CWorld`'s destructor: the three coordinators go before
+	// any entity does. The objects are kept and emptied (the next map's `0x1025d880` builds three
+	// empty ones); a slot 601 the teardown still dispatches releases from an empty list, a no-op.
+	for (const TUniquePtr<FElysiumAttackCoordinator>& Coordinator : AttackCoordinators)
+	{
+		if (Coordinator)
+		{
+			Coordinator->Reset();
+		}
+	}
 
 	// Dialogue cursors and scoped camera handles never enter a map snapshot. Release silently before
 	// the teardown freeze so travel cannot serialize a half-open scripted session.

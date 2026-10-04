@@ -133,7 +133,12 @@ Wave 3 (build work, one agent):
     from pod_1 (tolerance 51 cm) and the navigator fails 0xc -- present before V4b, read as the nav bake
     not reaching the node; for the judge, no V4 lane owns it. For the judge too: `FollowerArrivalFloorCm`
     1.0 cm against retail's 0.0625 units (`0x102ef510`).
-  - [ ] **V11** — the attack coordinator (N3, `0002-npc-ai/stories/v11/`). M.
+  - [x] **V11** — the attack coordinator (N3, `0002-npc-ai/stories/v11/`), with slot 331, the melee
+    contact as retail's swing step and the grapple's activity words. M. `melee_swing` and
+    `melee_ally_in_the_way` green; `chase_melee` meets every expectation and stays red on its end
+    probe alone (the brawler swings from 305.8 cm and the swing clip's movement never moves the
+    body) -- placed on V4c C1. `patrol_monk_loop` green: the red was the record's seat (S11 item 1).
+    `FollowerArrivalFloorCm` is retail's 0.0625 units (S11 item 3; the four walk records green).
   - [ ] **V4o** — the NPC overlay stack and the move-and-shoot wire (pulled from 0015;
     `0002-npc-ai/stories/v4o/`). M.
   - [ ] **V4c** — attack producers, the weighted pick, the death transaction. M.
@@ -141,7 +146,7 @@ Wave 3 (build work, one agent):
     ruling: a named modernization). M.
 - [ ] **V5** — Fix: the attack conditions and the combat interrupts. S · Fable/medium.
 - [ ] **V6** — Fix: session, clock and lifecycle. M · Opus/high.
-- [ ] **V11** — The attack coordinator's list (pulled from R4; melee never starts without it). S–M · Opus/high.
+- [x] **V11** — The attack coordinator's list (pulled from R4; melee never starts without it). S–M · Opus/high.
 - [ ] **V7** — The 19 inputs and the one-line items. S · Sonnet/medium.
 - [ ] **V10** — A sound's life in `Listen` (new: the expiry race). S.
 - [ ] **V12** — The footstep sound producer (pulled from R1; the tutorial's hearing half). S.

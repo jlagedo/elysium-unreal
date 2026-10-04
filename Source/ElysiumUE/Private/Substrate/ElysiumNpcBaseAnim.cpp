@@ -12,6 +12,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
+#include "Substrate/ElysiumRetailActivities.h"   // ValueOf -- the weapon ladder's target as a number
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumScriptedSequence.h"
@@ -525,6 +526,30 @@ void FElysiumNpcBase::ForcePreTranslatedSequenceAndActivity(int32 Activity, int3
 	CommitForcedSequence(Sequence);            // 0x10260a50
 	SequenceCycle = 0.f;                       // +0x06f8 m_flCycle
 	PrevAnimTime = 0.f;                        // +0x0170 m_flPrevAnimTime
+}
+
+int32 FElysiumNpcBase::WeaponActivityOverride(int32 Activity,
+	TArray<FElysiumNpcClip>* OutSequences) const
+{
+	// Weapon slot 361 `ActivityOverride 0x1024f210`: the ladder's first playable target, else the
+	// input. Every sequence the resolver hands carries the one activity it resolved to, so the
+	// first row's `Activity` names it; a name the shared registrations do not carry keeps the input.
+	TArray<FElysiumNpcClip> Sequences;
+	MeleeSequencesForActivity(Activity, Sequences);
+	int32 Translated = Activity;
+	if (Sequences.Num() > 0)
+	{
+		const int32 Value = ElysiumRetailActivities::ValueOf(Sequences[0].Activity);
+		if (Value >= 0)
+		{
+			Translated = Value;
+		}
+	}
+	if (OutSequences != nullptr)
+	{
+		*OutSequences = MoveTemp(Sequences);
+	}
+	return Translated;
 }
 
 int32 FElysiumNpcBase::TranslateActivityNumber(int32 Activity, int32& OutWeaponActivity) const

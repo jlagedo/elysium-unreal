@@ -20,16 +20,16 @@
 //
 // THE STANDING FACT OF THIS FAMILY: **the melee quartet 599/600/601/602 is one behaviour written
 // twice.** Retail fills each of the four slots with a `CAI_BaseNPCTroika` body for 18 classes and a
-// `CNPC_VAndreiBlood`-line copy for 38-40 more. 599 and 600 are byte-identical between the two
-// lines; 601 and 602 are NOT, and both differences are recovered and ported (see `MeleeSlotBody`).
+// `CNPC_VAndreiBlood`-line copy for 38-40 more. 600 is byte-identical between the two lines; 599,
+// 601 and 602 are NOT, and the three differences are recovered and ported (see `MeleeSlotBody`;
+// 599's is the human line's unconditional `0x1025db70`, `Slot599OnLine`, spec 0002 V11).
 // Since story 5 step 3 the human line's four are `FElysiumNpcHuman`'s overrides, which call these
 // bodies (and Bosses' `FUN_10385cf0` for 601) directly.
 //
-// THE SECOND STANDING FACT: **there is no attack coordinator here.** `m_pAttackCoordinator`
-// (`+0x65e8`) is an `int32` index of three globals with no object behind it (29b's shape map says
-// so), and every one of the coordinator's five entry points is a seam below. That is what makes the
-// 602 divergence observable rather than academic: the Troika line refuses on a null coordinator and
-// the `CNPC_VAndreiBlood` line does not.
+// THE SECOND STANDING FACT (spec 0002 V11-1): **the attack coordinator is three objects on the
+// entity world** (`FElysiumAttackCoordinator`, `FElysiumEntityWorld::AttackCoordinator(1..3)`).
+// `m_pAttackCoordinator` (`+0x65e8`) stays the `int32` index of one of them (0 = retail's null), and
+// the coordinator's entry points below are calls into it.
 
 // --- Words this family's bodies read that 29b did not declare -------------------------------------
 //
@@ -52,25 +52,27 @@ int32 DialogPartnerClears = 0;
 
 // --- The seams ------------------------------------------------------------------------------------
 
-/** The five entry points of `m_pAttackCoordinator` (`+0x65e8`), which is an INDEX here and not an
- *  object. Every one answers the value that makes its caller take retail's refusal arm, and each
- *  names the retail body it stands for:
+/** The object `m_pAttackCoordinator` (`+0x65e8`) names: the world's coordinator 1..3, null for index
+ *  0 (retail's null pointer) or a leaf with no world. */
+class FElysiumAttackCoordinator* MeleeCoordinator() const;
+
+/** The five entry points of `m_pAttackCoordinator` (`+0x65e8`), each a call into the object
+ *  (`Substrate/ElysiumAttackCoordinator.h`). With no object -- retail's fault path, every body
+ *  dereferences its `this` at once -- each answers its caller's refusal arm:
  *
- *   - `0x1025db50` — `coord[4] < coord[0]`: "the coordinator still has a free melee slot". Answers
- *     false, so slot 602's far arm reads "no room" and returns true.
- *   - `0x1025db70` — slot 599's admission test. Answers false.
- *   - `0x1025dca0` — slot 600's admission test, called with a literal `false` third argument.
- *     Answers false.
- *   - `0x1025ddd0` — the release slot 601 forwards to. Counted through family **Bosses**'
- *     `MeleeCoordinatorReleases`, which already stands for this exact call.
- *   - `0x1025de90` — a linear scan of the coordinator's handle array answering "this NPC is NOT
- *     registered". With an empty coordinator the honest answer is TRUE, which is retail's own
- *     answer for a coordinator that does not hold this NPC.
+ *   - `0x1025db50` — `coord[4] < coord[0]`: "the coordinator still has a free melee slot".
+ *   - `0x1025db70` — slot 599's admission: listed, or appended, or the evict path with the distance.
+ *   - `0x1025dca0` — slot 600's admission, called with a literal 0 third argument (no distance).
+ *   - `0x1025ddd0` — the release slot 601's bodies forward to (`MeleeCoordinatorRelease`), still
+ *     counted through family **Bosses**' `MeleeCoordinatorReleases`.
+ *   - `0x1025de90` — "this NPC is NOT registered"; `MeleeCoordinatorHoldsMe` is its negation and
+ *     slot 602 negates it back.
  */
 bool MeleeCoordinatorHasRoom() const;
-bool MeleeCoordinatorAdmits599() const;
-bool MeleeCoordinatorAdmits600() const;
+bool MeleeCoordinatorAdmits599();
+bool MeleeCoordinatorAdmits600();
 bool MeleeCoordinatorHoldsMe() const;
+void MeleeCoordinatorRelease();
 
 /** `DAT_10924a1c`'s melee range, read by retail as `IsCommand() ? _DAT_104454c4 (0.0) : +0x28`:
  *  the ConVar `debug_melee_advance_combatmove_dist`, shipped "100". SOURCE units. */
@@ -105,11 +107,11 @@ int32 LookupExpressionIndex(const TCHAR* ExpressionName) const;
 bool DispositionExpressionRow(FString& OutExpression, FString& OutNoDeformExpression,
 	float& OutBlendWeight) const;
 
-/** SEAM for `thunk_FUN_1025e120(ptr)` — the coordinator's NAME accessor slot 608 compares its
- *  argument against, twice per candidate. Answers the empty string, so no candidate ever matches
- *  and slot 608 answers false with `m_pAttackCoordinator` left alone. NOT `AttackCoordinatorName`:
- *  that name is the `+0x65ec` data member 29b declared, which slot 608 WRITES. */
-static FString AttackCoordinatorNameOf(int32 CoordinatorIndex);
+/** `thunk_FUN_1025e120(ptr)` — the coordinator's NAME accessor slot 608 compares its argument
+ *  against, twice per candidate: the world's object's name ("Normal", "Player", "Boss"), so slot 608
+ *  binds "Normal" at Precache. Empty with no world. NOT `AttackCoordinatorName`: that name is the
+ *  `+0x65ec` data member 29b declared, which slot 608 WRITES. */
+FString AttackCoordinatorNameOf(int32 CoordinatorIndex) const;
 
 /** `+0x10b8` — the expression BLEND WEIGHT slot 610 writes beside the two expression words
  *  (`+0x10b4`, family **Conditions**' `DefExpression`, and `+0x64d0`, 29b's `NoDeformExpression`).
@@ -153,6 +155,11 @@ enum class EMeleeSlotLine : uint8 { Troika, AndreiBlood, Species };
 
 /** The two body addresses, so a test can name them. */
 static const TCHAR* MeleeSlotBody(int32 Slot, EMeleeSlotLine Line);
+
+/** Slot 599's body on one of its two lines: `0x102b5650` (`Troika`) or `0x10385ab0`
+ *  (`AndreiBlood`), which calls `0x1025db70` once more, unconditionally and with its answer
+ *  dropped, before the `m_bfNPCFrenziedFlags & 0x1000` test. `Species` runs the Troika body. */
+bool Slot599OnLine(EMeleeSlotLine Line);
 
 // --- The bodies -----------------------------------------------------------------------------------
 //

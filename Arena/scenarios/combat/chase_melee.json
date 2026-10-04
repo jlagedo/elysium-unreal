@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 40.0,
-  "known_red": "V11 (N3): slot 599's attack-coordinator admission 0x1025db70 is a seam answering false (ElysiumNpcTroikaHelpers.cpp), so no NPC enters melee: SCHED_TROIKA_WAIT_FOR_MELEE_ADVANCE 0xe7 where retail admits a lone NPC (0x1025db70 adds it to the coordinator's list and answers true) and advances",
+  "known_red": "V4c C1 (game red; the attack producers and the swing's place): every expectation is met since V11 -- START_COMBAT, one MELEE_IDLE (0xc7), MELEE_ADVANCE_NR (0xcb) at 0.800, CAN_MELEE_ATTACK1 (0x51) at 2.600, MELEE_ATTACK1_NR (0xdd) -- and only the end probe fails: the brawler is 305.8 cm from the player, bound 200. It stops where slot 331 0x10347180 first admits a candidate (the bat's lunging clips state a far edge +0x2d0 past 120 units) and swings from there, swing after swing, with no `damage` line in 40 s: the swing's clip is played by the weapon transaction as a body segment, not committed as the NPC's m_nSequence (the kernel's `sequence` lines during the swings are baseballbat_idle / combatmove at rate 0), so the clip's authored movement -- the lunge TASK_MELEE_ATTACK1's AutoMovement carries the body through -- never moves it into contact",
   "player": { "at": "cover_seat" },
   "cast": [
     {

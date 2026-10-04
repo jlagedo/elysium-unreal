@@ -6,8 +6,10 @@
 
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumEntityWorld.h"
 #include "ElysiumRng.h"
 #include "ElysiumSwingRecord.h"
+#include "Substrate/ElysiumAttackCoordinator.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcZombie.h"
 #include "Substrate/ElysiumNpcTzimisceRunner.h"
@@ -1367,6 +1369,13 @@ bool FAnim10HumanMeleeSelectorTest::RunTest(const FString&)
 
 	// Out of melee with slot 599 refusing and the melee failure gate silent: the melee-range ConVar
 	// answers 0.0 (UNRECOVERED, family Schedule's stand-in) so `range + 200 < distance` decides.
+	//
+	// Setup corrected by spec 0002 V11: the refusal used to come for free from the coordinator seam
+	// answering false. The coordinator is real now (`0x1025db70` admits a lone NPC bound to "Normal"
+	// at Precache), so the refusal is stated through the body's own first refusing arm:
+	// `curtime < m_flMeleeCanEnterTimer (+0x6070)` (`0x10385ab0` / `0x102b5650`).
+	const double StillLockedOut = F.World.World.NowSeconds() + 1000.0;
+	N.MeleeCanEnterTimer = StillLockedOut;
 	N.Cognition.Conditions.Reset();
 	N.bInMelee = false;
 	N.ScheduleHost.EnemyDistUnits = 5000.f;
@@ -1377,8 +1386,15 @@ bool FAnim10HumanMeleeSelectorTest::RunTest(const FString&)
 	TestTrue(TEXT("0x10385e40: inside range + 200 the roll answers 0xe4 or 0xe5"),
 		Near == 0xe4 || Near == 0xe5);
 
-	// The common tail's condition ladder.
+	// The common tail's condition ladder. In melee is two facts in retail: `m_bInMelee` and a place
+	// in the coordinator's list (slot 599 `0x1025db70` writes both); slot 602 `0x10385d70` leaves
+	// melee for an NPC the list does not hold (`0x1025de90`). Setup corrected by spec 0002 V11: the
+	// hand-set latch is given its list entry.
 	N.bInMelee = true;
+	if (FElysiumAttackCoordinator* const Normal = F.World.World.AttackCoordinator(N.AttackCoordinator))
+	{
+		Normal->Add(&N);
+	}
 	N.Cognition.Conditions.Reset();
 	N.Cognition.Conditions.Set(EElysiumNpcCond::EnemyOccluded);
 	TestEqual(TEXT("0x10385e40: the melee failure gate pre-empts the ladder with 0xcd"),
@@ -1408,7 +1424,13 @@ bool FAnim10HumanMeleeSelectorTest::RunTest(const FString&)
 	TestEqual(TEXT("0x10385e40: ENEMY_UNREACHABLE without a ranged weapon answers 0x17"),
 		N.SelectScheduleMeleeCombat(0), 0x17);
 
+	// The `0x17` arm above left melee through slot 601 (`0x10385cf0`: the latch cleared, the list
+	// entry released by `0x1025ddd0`), so the latch and its list entry are stated again.
 	N.bInMelee = true;
+	if (FElysiumAttackCoordinator* const Normal = F.World.World.AttackCoordinator(N.AttackCoordinator))
+	{
+		Normal->Add(&N);
+	}
 	N.Cognition.Conditions.Reset();
 	TestEqual(TEXT("0x10385e40: neither TOO_FAR term answers 199"),
 		N.SelectScheduleMeleeCombat(0), 199);
@@ -1419,9 +1441,11 @@ bool FAnim10HumanMeleeSelectorTest::RunTest(const FString&)
 	TestEqual(TEXT("0x10385e40: the distance is NOT strictly below the bare cvar, so the far pair "
 		"0xcb answers"), N.SelectScheduleMeleeCombat(0), 0xcb);
 
-	// The bare Troika line takes the Troika body, which answers 0xe4 out of melee.
+	// The bare Troika line takes the Troika body, which answers 0xe4 out of melee (slot 599
+	// `0x102b5650` refusing on its can-enter timer, as above).
 	F.Cop->Cognition.Conditions.Reset();
 	F.Cop->bInMelee = false;
+	F.Cop->MeleeCanEnterTimer = StillLockedOut;
 	TestEqual(TEXT("the bare Troika line still takes the Troika body 0x102b6c30"),
 		F.Cop->SelectScheduleMeleeCombat(0), 0xe4);
 	return true;
@@ -1441,6 +1465,9 @@ bool FAnim10MingXiaoMeleeSelectorTest::RunTest(const FString&)
 
 	// DIFFERENCE 2: the distance is tested BEFORE anything else in the not-engaged arm, and the
 	// melee failure gate is not offered there at all — so an occluded enemy still answers 0xe7.
+	// Slot 599 refusing is stated through its can-enter timer (`curtime < +0x6070`): the coordinator
+	// behind `0x1025db70` is real since spec 0002 V11 and would admit a lone NPC.
+	N.MeleeCanEnterTimer = F.World.World.NowSeconds() + 1000.0;
 	N.Cognition.Conditions.Reset();
 	N.Cognition.Conditions.Set(EElysiumNpcCond::EnemyOccluded);
 	N.bInMelee = false;
@@ -1449,8 +1476,14 @@ bool FAnim10MingXiaoMeleeSelectorTest::RunTest(const FString&)
 		"where the human body would have offered the failure gate"),
 		N.SelectScheduleMeleeCombat(0), 0xe7);
 
-	// DIFFERENCE 4a: `COND 0x48 ENEMY_OCCLUDED` OPENS the common ladder.
+	// DIFFERENCE 4a: `COND 0x48 ENEMY_OCCLUDED` OPENS the common ladder. In melee is the latch and
+	// the coordinator's list entry (slot 602 leaves for an NPC `0x1025de90` does not find): setup
+	// corrected by spec 0002 V11.
 	N.bInMelee = true;
+	if (FElysiumAttackCoordinator* const Normal = F.World.World.AttackCoordinator(N.AttackCoordinator))
+	{
+		Normal->Add(&N);
+	}
 	N.Cognition.Conditions.Reset();
 	N.Cognition.Conditions.Set(EElysiumNpcCond::EnemyOccluded);
 	TestEqual(TEXT("0x10396050: ENEMY_OCCLUDED without a ranged weapon answers 0xcd"),
@@ -1510,9 +1543,15 @@ bool FAnim10BachMeleeSelectorTest::RunTest(const FString&)
 	TestEqual(TEXT("0x10364080: unarmed with 0x79 answers 0x159"),
 		N.SelectScheduleMeleeCombat(0), 0x159);
 
-	// The fall-through runs the human body and clears +0x6444 unless the state is 4 or 0xc.
+	// The fall-through runs the human body and clears +0x6444 unless the state is 4 or 0xc. In
+	// melee is the latch AND the coordinator's list entry (slot 602 `0x10385d70` leaves for an NPC
+	// `0x1025de90` does not find): setup corrected by spec 0002 V11.
 	N.Cognition.Conditions.Reset();
 	N.bInMelee = true;
+	if (FElysiumAttackCoordinator* const Normal = F.World.World.AttackCoordinator(N.AttackCoordinator))
+	{
+		Normal->Add(&N);
+	}
 	N.BachClearWord = 7;
 	N.BeginScriptedSchedule(FElysiumScriptedScheduleOrder(), true, EElysiumNpcState::Idle);
 	TestEqual(TEXT("0x10364080: with no discipline condition the human body answers"),

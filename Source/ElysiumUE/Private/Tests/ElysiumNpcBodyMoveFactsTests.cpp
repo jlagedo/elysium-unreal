@@ -111,8 +111,20 @@ bool FElysiumNpcBodyFollowerRequestTest::RunTest(const FString&)
 	FElysiumNpcFollowerRequest Follower = AElysiumNpcBody::ResolveFollowerRequest(Request);
 	TestEqual(TEXT("the request's tolerance is kept exactly for the body's own reach test"),
 		Follower.ExactToleranceCm, RetailToleranceCm);
-	TestEqual(TEXT("the follower is handed the named floor where the tolerance is finer than it lands"),
+	// The floor IS retail's arrival constant (navigator slot 16 `0x102ef510`, f64 `0x10451f78` =
+	// 0.0625 units), so a kernel leg's own tolerance reaches the follower unchanged (packet S11 item
+	// 3; this pinned a 1.0 cm crowd floor before spec 0002 V11).
+	TestEqual(TEXT("0x102ef510: the floor is 0.0625 units"),
+		ElysiumNpcBodyMove::FollowerArrivalFloorCm, RetailToleranceCm, 1e-6f);
+	TestEqual(TEXT("the follower is handed retail's arrival radius for a kernel leg"),
+		Follower.AcceptanceRadiusCm, RetailToleranceCm, 1e-6f);
+
+	Request.AcceptanceToleranceCm = 0.01f;
+	Follower = AElysiumNpcBody::ResolveFollowerRequest(Request);
+	TestEqual(TEXT("a tolerance finer than the constant is floored at it"),
 		Follower.AcceptanceRadiusCm, ElysiumNpcBodyMove::FollowerArrivalFloorCm);
+	TestEqual(TEXT("and the request's own tolerance is still kept exactly"),
+		Follower.ExactToleranceCm, 0.01f);
 
 	Request.AcceptanceToleranceCm = 30.f;
 	Follower = AElysiumNpcBody::ResolveFollowerRequest(Request);

@@ -104,7 +104,25 @@ namespace ElysiumFeed
 		return Out;
 	}
 
-	FClipPair ResolveClipPair(EElysiumFeedPhase Phase, EPartnerHeight VictimHeight, ESide Side)
+	int32 PhaseBaseActivity(EElysiumFeedPhase Phase)
+	{
+		// The mode 0 leaf `0x101655b0` (slot `+0x68c`): the base each of its arms hands
+		// `SetGrappleActivity 0x1032a100`. `StartGrappleAttack 0x10328df0` commits the first.
+		// NOT PORTED (D8, the player's side): the leaf's other releases, `0xf91`
+		// `ACT_FEEDING_RELEASE` (latch cleared at engage's end) and `0xf9a`
+		// `ACT_FEEDING_RELEASE_PC_FLYBACK` (the player's slot `+0x6a8`, `0x10165a00`, answers true).
+		switch (Phase)
+		{
+		case EElysiumFeedPhase::Engage:  return ActFeedingEngage;        // 0xf5b
+		case EElysiumFeedPhase::Bite:    return ActFeedingBite;          // 0xf76
+		case EElysiumFeedPhase::Loop:    return ActFeedingFeedLoop;      // 0xf7f
+		case EElysiumFeedPhase::Release: return ActFeedingFeedRelease;   // 0xf88
+		default:                         return 0;
+		}
+	}
+
+	FClipPair ResolveClipPair(EElysiumFeedPhase Phase, EPartnerHeight VictimSize,
+		EPartnerHeight AttackerSize, ESide Side)
 	{
 		FClipPair Out;
 		const TCHAR* Suffix = PhaseSuffix(Phase);
@@ -113,12 +131,23 @@ namespace ElysiumFeed
 			return Out;
 		}
 		const TCHAR* SideName = Side == ESide::Front ? TEXT("front") : TEXT("back");
-		const bool bVictimTaller = VictimHeight == EPartnerHeight::Taller;
+		// `TranslateBaseGrappleActivity 0x10328380`, once per body: the size term is the PARTNER's.
 		Out.Attacker = FString::Printf(TEXT("feeding_attacker_%s_%s_%s"),
-			bVictimTaller ? TEXT("tallvictim") : TEXT("shortvictim"), SideName, Suffix);
+			VictimSize == EPartnerHeight::Taller ? TEXT("tallvictim") : TEXT("shortvictim"),
+			SideName, Suffix);
 		Out.Victim = FString::Printf(TEXT("feeding_victim_%s_%s_%s"),
-			bVictimTaller ? TEXT("shortattacker") : TEXT("tallattacker"), SideName, Suffix);
+			AttackerSize == EPartnerHeight::Taller ? TEXT("tallattacker") : TEXT("shortattacker"),
+			SideName, Suffix);
 		return Out;
+	}
+
+	FClipPair ResolveClipPair(EElysiumFeedPhase Phase, EPartnerHeight VictimHeight, ESide Side)
+	{
+		// The complementary pair (a tall victim's attacker is the short one). Retail has no such
+		// coupling; kept for the callers that state one size only.
+		return ResolveClipPair(Phase, VictimHeight,
+			VictimHeight == EPartnerHeight::Taller ? EPartnerHeight::Shorter : EPartnerHeight::Taller,
+			Side);
 	}
 
 	FString AudioPath(bool bVictim, bool bMale, const TCHAR* Phase)
@@ -203,14 +232,17 @@ namespace
 
 	const FName GOnFedUponEnd(TEXT("OnFedUponEnd"));
 
-	float RenderedFeedHeightCm(const FElysiumCombatCharacter& Character)
+	// `GetGrappleSize 0x103282e0`: `IsMale(partner)` and nothing else. "Tall" is a male partner.
+	ElysiumFeed::EPartnerHeight GrappleSizeOf(const FElysiumCombatCharacter& Partner)
 	{
-		const USkeletalMeshComponent* Body = Character.GetSkeletalBody();
-		if (!Body || !FMath::IsFinite(Body->Bounds.BoxExtent.Z))
-		{
-			return 0.0f;
-		}
-		return FMath::Max(0.0f, Body->Bounds.BoxExtent.Z * 2.0f);
+		return Partner.Sheet.IsMale() ? ElysiumFeed::EPartnerHeight::Taller
+			: ElysiumFeed::EPartnerHeight::Shorter;
+	}
+
+	// `m_GrapplePosition (+0x1544)` as the clip catalog's side: 1 is the back.
+	ElysiumFeed::ESide GrappleSideOf(const FElysiumCombatCharacter& Character)
+	{
+		return Character.Grapple.Position == 1 ? ElysiumFeed::ESide::Back : ElysiumFeed::ESide::Front;
 	}
 }
 
@@ -380,7 +412,11 @@ void FElysiumCombatCharacter::StartFeedPair(FElysiumCombatCharacter& Victim, dou
 	// both parties — the feeder as the ATTACKER (role 0), the victim as the VICTIM (role 1). That is
 	// the state `stealth_kill.txt`'s `GrappleAttacker` / `GrappleVictim` anchors resolve out of, so
 	// it has to be written here rather than inferred from the feed block.
-	EnterGrapplePair(Victim, EElysiumGrappleType::Feed);
+	// The position is stated as 0 (front): `CheckAndTranslateGrapplePosition` (the chooser
+	// `StartGrappleAttack 0x10328df0` runs) is not built, and with `+0x1544 == -1`
+	// `TranslateBaseGrappleActivity 0x10328380` answers the base untranslated, which no model
+	// authors a sequence for.
+	EnterGrapplePair(Victim, EElysiumGrappleType::Feed, /*Position=*/0);
 
 	FeedState = FElysiumFeedState();
 	FeedState.Peer = Victim.Handle;
@@ -431,12 +467,19 @@ void FElysiumCombatCharacter::EndFeedVictimRole()
 	{
 		SetBodyFrozen(false);
 		FeedState.bFrozenByFeed = false;
-		// Hand the body back to its own behaviour: the standing idle its disposition selects. A
-		// bodiless character answers false and nothing happens, which is the ordinary headless case.
+		// An NPC: nothing more. `LeaveGrappleState` (`0x10329a70`, `CAI_BaseNPC 0x1026ce30`, Troika
+		// `0x102b5d90`) writes no `m_Activity`, `m_IdealActivity`, `m_nSequence`, `m_flCycle`, state
+		// or schedule: the body stands on the release clip's sequence until its next `RunAI`
+		// (`MaintainActivity 0x102727d0`, by then under the schedule `FeedInterrupt 0x1033a9e0`
+		// installed). The think timers are slot 614's (`FElysiumNpc::LeaveGrappleState`), not this
+		// function's.
+		if (AsNpc() != nullptr)
+		{
+			return;
+		}
+		// The player half (mode 8's victim): hand the body back to its standing idle and re-arm its
+		// think. A bodiless character answers false and nothing happens.
 		ResetAnimToIdle();
-		// RunThinks clears NextThink before entering Think(). A victim whose due NPC think was
-		// consumed while the pair owned its body therefore has no ambient/stance appointment left.
-		// Re-arm the ordinary scheduler at release; the leaf mind chooses its next owner and cadence.
 		if (!IsInert())
 		{
 			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
@@ -446,41 +489,34 @@ void FElysiumCombatCharacter::EndFeedVictimRole()
 
 uint8 FElysiumCombatCharacter::FeedVictimHeightCell() const
 {
-	const FElysiumCombatCharacter* Victim = ResolveFeedPeer();
-	const float AttackerHeight = RenderedFeedHeightCm(*this);
-	const float VictimHeight = Victim ? RenderedFeedHeightCm(*Victim) : 0.0f;
-	if (AttackerHeight <= KINDA_SMALL_NUMBER || VictimHeight <= KINDA_SMALL_NUMBER)
+	// The size of the pair's VICTIM, which is the attacker's cell (and so the attacker's clip
+	// timing): `GetGrappleSize 0x103282e0` is the partner's sex, never a measured height. Asked on
+	// either half; a pair with no live peer answers the short cell.
+	const FElysiumCombatCharacter* const Peer = ResolveFeedPeer();
+	const FElysiumCombatCharacter* const Victim = FeedState.bVictim ? this : Peer;
+	if (Victim == nullptr)
 	{
 		return static_cast<uint8>(ElysiumFeed::EPartnerHeight::Shorter);
 	}
-	return static_cast<uint8>(ElysiumFeed::VictimHeightFor(AttackerHeight, VictimHeight));
+	return static_cast<uint8>(GrappleSizeOf(*Victim));
 }
 
 namespace ElysiumFeedGrappleCommit
 {
-	// SEAM: the phase -> base grapple activity table (`feeding.md` § "Feed modes": `0xf5b`, `0xfa5`,
-	// `0x1027`, `0xfca` and their bite / loop / release continuations) and its paired translation
-	// (`TranslateBaseGrappleActivity` `0x10328380`, then slot 381 `+0x5f4`) are not recovered for the
-	// port: the feed resolves clip labels (`ElysiumFeed::ResolveClipPair`), not activity numbers.
-	// Until the table exists both of `0x1032a100`'s activity words take mode 0's initial base,
-	// `ACT_FEEDING_ENGAGE` (`0xf5b`), on every phase. What it stands for: a grapple activity that is
-	// not `ACT_IDLE` (1), so `RunAnimation`'s idle re-pick (`0x1026c5e5..0x1026c5fc`) stays off for
-	// the whole grapple, as retail's does.
-	constexpr int32 GrappleActivityStandIn = 0xf5b;
-
 	// One NPC half of `CBaseCombatCharacter::SetGrappleActivity` `0x1032a100`. False is retail's
 	// `SelectWeightedSequence < 0` miss: nothing is written.
-	bool CommitNpcHalf(FElysiumNpc& Npc, const FString& Label, float& InOutSeconds)
+	bool CommitNpcHalf(FElysiumNpc& Npc, const FNpcHalf& Half, float& InOutSeconds)
 	{
-		// `SelectWeightedSequence(translated activity)` through the sequence bridge: the row of the
-		// paired clip the label names (the named modernization: name-keyed clips for the studio table).
-		const int32 Sequence = Npc.LookupSequenceByName(*Label);
-		if (Sequence < 0)
+		const int32 Sequence = Half.Sequence;
+		if (Sequence < 0)                                   // 0x1032a2f2 (attacker) / 0x1032a355 (victim)
 		{
 			return false;
 		}
-		Npc.IdealActivityNumber = GrappleActivityStandIn;   // 0x1032a100 m_IdealActivity = the base activity
-		Npc.ActivityNumber = GrappleActivityStandIn;        // 0x1032a100 m_Activity = the translated activity
+		// The two words differ on each body and nothing reconciles them while grappled (`RunAI` is
+		// skipped): the ideal is the untranslated base, the same number on both bodies, which
+		// `RunAlternateAI 0x1028fd80` reads for the release `AutoMovement`; the activity is the cell.
+		Npc.IdealActivityNumber = Half.Base;                // 0x1032a100 m_IdealActivity (+0xff0) = base
+		Npc.ActivityNumber = Half.Translated;               // 0x1032a100 m_Activity (+0xfec) = the translated cell
 		Npc.CommitForcedSequence(Sequence);                 // 0x10260a50: m_nSequence = seq, ResetSequenceInfo 0x10090950
 		Npc.SequenceCycle = 0.f;                            // 0x1032a100 m_flCycle = 0
 		// The clip's length is the row's (`SequenceDuration`); an unknown length keeps the caller's.
@@ -491,6 +527,40 @@ namespace ElysiumFeedGrappleCommit
 		}
 		return true;
 	}
+
+	namespace
+	{
+		// `SelectWeightedSequence(body, translated, -1)` (`0x1032a2cc` attacker, `0x1032a2de`
+		// victim): the pick is by ACTIVITY NUMBER through the body's own activity -> sequence table.
+		// The kernel-side weighted draw (`SelectWeightedSequence 0x1008dc40`, lane C2's
+		// `FElysiumNpc::SelectWeightedSequence`) is not built yet; until C2 routes this line through
+		// it the pick is the kernel's existing sequence-for-activity lookup, `SequenceForActivity`
+		// (the cell's registered name through the clip resolver; the feed banks author one sequence
+		// per cell, so the weight draw has nothing to choose among).
+		//
+		// The named modernization's guard: `SequenceForActivity` walks the activity chain's fallback
+		// ladder, which `0x1032a100` does not (a bare `SelectWeightedSequence`), so an answer that is
+		// not the cell's own clip is a ladder substitution and is refused; and where the resolver
+		// answers nothing for the cell number the clip is found by the label the cell names
+		// (`LookupSequenceByName`: name-keyed clips for the studio table). -1 only when the body
+		// authors neither, which is retail's miss.
+		int32 SelectGrappleSequence(FElysiumNpc& Npc, int32 Translated, const FString& CellLabel)
+		{
+			const int32 ByActivity = Npc.SequenceForActivity(Translated);   // C2: SelectWeightedSequence 0x1008dc40
+			if (ByActivity > 0 && Npc.SequenceRows.IsValidIndex(ByActivity)
+				&& Npc.SequenceRows[ByActivity].Label.Equals(CellLabel, ESearchCase::IgnoreCase))
+			{
+				return ByActivity;
+			}
+			if (ByActivity > 0)
+			{
+				UE_LOG(LogElysiumFeed, Verbose,
+					TEXT("%s: activity 0x%x resolved off its cell ('%s' wanted); taking the label"),
+					*Npc.DebugString(), Translated, *CellLabel);
+			}
+			return Npc.LookupSequenceByName(*CellLabel);
+		}
+	}
 }
 
 float FElysiumCombatCharacter::PlayFeedPhaseClips(EElysiumFeedPhase Phase, double Now)
@@ -499,9 +569,12 @@ float FElysiumCombatCharacter::PlayFeedPhaseClips(EElysiumFeedPhase Phase, doubl
 	const ElysiumFeed::EPartnerHeight Height =
 		static_cast<ElysiumFeed::EPartnerHeight>(FeedVictimHeightCell());
 	const float MetadataSeconds = ElysiumFeed::PhaseSeconds(Phase, Height);
-	const ElysiumFeed::FClipPair Pair = ElysiumFeed::ResolveClipPair(
-		Phase, Height, ElysiumFeed::ESide::Front);
 	FElysiumCombatCharacter* Victim = ResolveFeedPeer();
+	// `TranslateBaseGrappleActivity 0x10328380` per body: each cell takes its PARTNER's size
+	// (`GetGrappleSize 0x103282e0` = `IsMale`) and the pair's position (`+0x1544`).
+	const ElysiumFeed::FClipPair Pair = Victim == nullptr ? ElysiumFeed::FClipPair()
+		: ElysiumFeed::ResolveClipPair(Phase, GrappleSizeOf(*Victim), GrappleSizeOf(*this),
+			GrappleSideOf(*this));
 	if (!Pair.IsComplete() || !Victim)
 	{
 		UE_LOG(LogElysiumFeed, Warning,
@@ -545,16 +618,38 @@ float FElysiumCombatCharacter::PlayFeedPhaseClips(EElysiumFeedPhase Phase, doubl
 	// clip's records -- the victim's 4007 / 4006 included, which `0x1032e330` then refuses on the
 	// role guard (`+0x153c != 0`). The player half has no kernel sequence words in this port and
 	// keeps the direct play; its records are walked by `PostThinkAnimation` (`0x1016be10`).
+	// D7 (the player's side, not ported): the player half's loop is forced by the phase; retail
+	// reads the descriptor's bit (`ResetSequenceInfo 0x10090950`). The NPC half takes the row's.
 	const bool bLoop = Phase == EElysiumFeedPhase::Loop;
 	float AttackerSeconds = MetadataSeconds;
 	float VictimSeconds = MetadataSeconds;
 	FElysiumNpc* const AttackerNpc = AsNpc();
 	FElysiumNpc* const VictimNpc = Victim->AsNpc();
+	// The base is the phase's (`0x101655b0`); each body's cell is `0x10328380`'s. Slot 381
+	// (`Weapon_TranslateActivity 0x10327ec0`, dispatched on the ATTACKER for both results,
+	// `0x1032a2ac` / `0x1032a2bd`) is the identity over every feed cell: no weapon's activity table
+	// (`ActivityOverride 0x1024f210` over `+0x5a8`) carries a feeding, seductive, rat or zombie feed
+	// row (`ElysiumWeaponActivityTables.cpp`; only the sneak-attack `_BACK` cells are translated),
+	// and modes 0 / 2 / 6 / 8 holster both parties on entry. So it is not dispatched here.
+	ElysiumFeed::FGrappleCell AttackerCell;
+	AttackerCell.bPartnerMale = Victim->Sheet.IsMale();       // 0x103282e0 on the victim
+	AttackerCell.bVictim = false;                             // role 0
+	AttackerCell.Position = Grapple.Position;                 // +0x1544
+	ElysiumFeed::FGrappleCell VictimCell;
+	VictimCell.bPartnerMale = Sheet.IsMale();                 // 0x103282e0 on the attacker
+	VictimCell.bVictim = true;                                // role 1
+	VictimCell.Position = Victim->Grapple.Position;           // +0x1544
+	const int32 Base = ElysiumFeed::PhaseBaseActivity(Phase);
 	bool bSequenceMissed = false;
 	bool bAttackerPlayed = false;
 	if (AttackerNpc != nullptr)
 	{
-		bAttackerPlayed = ElysiumFeedGrappleCommit::CommitNpcHalf(*AttackerNpc, Pair.Attacker, AttackerSeconds);
+		ElysiumFeedGrappleCommit::FNpcHalf Half;
+		Half.Base = Base;
+		Half.Translated = ElysiumFeed::TranslateBaseGrappleActivity(Base, AttackerCell);   // 0x1032a28e
+		Half.Sequence = ElysiumFeedGrappleCommit::SelectGrappleSequence(*AttackerNpc, Half.Translated,
+			Pair.Attacker);                                                                // 0x1032a2cc
+		bAttackerPlayed = ElysiumFeedGrappleCommit::CommitNpcHalf(*AttackerNpc, Half, AttackerSeconds);
 		if (!bAttackerPlayed)
 		{
 			// "Attacker could not find sequence ..." (`0x1061fd3c`), then `EndGrapple` `0x10329560`.
@@ -570,7 +665,12 @@ float FElysiumCombatCharacter::PlayFeedPhaseClips(EElysiumFeedPhase Phase, doubl
 	bool bVictimPlayed = false;
 	if (VictimNpc != nullptr)
 	{
-		bVictimPlayed = ElysiumFeedGrappleCommit::CommitNpcHalf(*VictimNpc, Pair.Victim, VictimSeconds);
+		ElysiumFeedGrappleCommit::FNpcHalf Half;
+		Half.Base = Base;
+		Half.Translated = ElysiumFeed::TranslateBaseGrappleActivity(Base, VictimCell);     // 0x1032a29e
+		Half.Sequence = ElysiumFeedGrappleCommit::SelectGrappleSequence(*VictimNpc, Half.Translated,
+			Pair.Victim);                                                                  // 0x1032a2de
+		bVictimPlayed = ElysiumFeedGrappleCommit::CommitNpcHalf(*VictimNpc, Half, VictimSeconds);
 		if (!bVictimPlayed)
 		{
 			// "Victim could not find sequence ..." (`0x1061fcfc`), then `EndGrapple` `0x10329560`.
@@ -1232,9 +1332,16 @@ bool FElysiumCombatCharacter::FeedBoundaryArrivesFromAnimEvent(int32 EventId) co
 	{
 		return false;
 	}
-	const ElysiumFeed::EPartnerHeight Height =
-		static_cast<ElysiumFeed::EPartnerHeight>(FeedVictimHeightCell());
-	const ElysiumFeed::FClipPair Pair = ElysiumFeed::ResolveClipPair(FeedState.Phase, Height);
+	// The same per-body cells `PlayFeedPhaseClips` committed (`0x10328380`: the partner's sex).
+	const FElysiumCombatCharacter* const Peer = ResolveFeedPeer();
+	if (Peer == nullptr)
+	{
+		return false;
+	}
+	const FElysiumCombatCharacter& AttackerHalf = FeedState.bVictim ? *Peer : *this;
+	const FElysiumCombatCharacter& VictimHalf = FeedState.bVictim ? *this : *Peer;
+	const ElysiumFeed::FClipPair Pair = ElysiumFeed::ResolveClipPair(FeedState.Phase,
+		GrappleSizeOf(VictimHalf), GrappleSizeOf(AttackerHalf), GrappleSideOf(*this));
 	const FString& Label = FeedState.bVictim ? Pair.Victim : Pair.Attacker;
 	if (Label.IsEmpty())
 	{

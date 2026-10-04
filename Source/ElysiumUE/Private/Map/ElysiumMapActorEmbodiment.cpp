@@ -7,6 +7,7 @@
 
 #include "ElysiumAudioSubsystem.h"       // the GI-scoped voice mixer every audio forward reaches
 #include "ElysiumCameraComponent.h"      // the pawn camera the shot channel drives
+#include "ElysiumClipMovement.h"         // ElysiumClipMovement::SampleDelta -- a sequence's whole movement
 #include "ElysiumContentPaths.h"         // FElysiumContentPaths::BakedParticleSystem — attached effects
 #include "ElysiumDecalSubsystem.h"       // R7.2: the shot's forward trace and its impact decal
 #include "ElysiumEntityDefs.h"           // FElysiumEntityDef — BodyScaleFor's sky-scope read
@@ -305,6 +306,31 @@ bool AElysiumMapActor::GetBodyClipByRawIndex(USkeletalMeshComponent* Body, const
 		}
 	});
 	return bFound;
+}
+
+bool AElysiumMapActor::GetBodySequenceMovement(USkeletalMeshComponent* Body, const FString& Stem,
+	int32 RawIndex, FVector& OutDeltaCm)
+{
+	// `Studio_SeqMovement 0x100c6020` over the whole sequence: the owning bank's baked movement path
+	// (`FElysiumBlendTable::FindMovement`, the table the gait fans and the turn yaw are read from),
+	// sampled cycle 0 -> 1. The cycle maps onto the path's own last frame.
+	OutDeltaCm = FVector::ZeroVector;
+	FString Label;
+	FElysiumNpcClip Clip;
+	if (!GetBodyClipByRawIndex(Body, Stem, RawIndex, Label, Clip) || Label.IsEmpty())
+	{
+		return false;
+	}
+	const UGameInstance* Game = GetGameInstance();
+	UElysiumAnimSubsystem* Anims = Game ? Game->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	const TSharedPtr<const FElysiumBlendTable> Table =
+		Anims ? Anims->GetBlendTable(Clip.Owner) : TSharedPtr<const FElysiumBlendTable>();
+	const FElysiumClipMovementPath* Path = Table.IsValid() ? Table->FindMovement(Label) : nullptr;
+	if (Path == nullptr)
+	{
+		return false;   // the bank states no record for it: `nummovements == 0`
+	}
+	return ElysiumClipMovement::SampleDelta(*Path, Path->LastFrame() + 1, 0.0f, 1.0f, OutDeltaCm);
 }
 
 bool AElysiumMapActor::GetNpcSequenceDescriptor(const FString& Stem, const FString& OwnerStem,

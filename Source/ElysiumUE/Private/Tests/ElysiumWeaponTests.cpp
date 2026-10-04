@@ -989,6 +989,11 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 
 		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
 		Victim->SetDeathReportedForRestore(true);   // it died before the contact window
+		// Setup corrected by spec 0002 V11-2 (D6): `MeleeSwingStep 0x10343020` does not ask whether
+		// the candidate is dead, it asks whether it is SOLID (`m_nSolidType (+0x2b0) != 0` and
+		// `!(+0x2b4 & 4)`). A dead character misses because its death made it non-solid
+		// (`CreateCorpse 0x1032c0e0`), so the fixture's hand-set death states that word too.
+		Victim->RetailSolidFlags |= 0x4u;           // FSOLID_NOT_SOLID
 		World.AdvanceMeleeSwings(0.02f);
 		Services.BodyClipPhase.Cycle = 0.40f;
 		World.AdvanceMeleeSwings(0.02f);
@@ -1142,8 +1147,12 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 
 		Services.BodyClipPhase.Cycle = 0.40f;
 		World.AdvanceMeleeSwings(0.02f);
-		TestEqual(TEXT("a sweep with no record of ITS OWN swing commits nothing"),
-			DamageTaken(*Victim), AfterFirst);
+		// Corrected to retail (spec 0002 V11-2, D2): this pinned "no record of its own swing, no
+		// contact". `0x102579f0` reads `rolls == 0` for a body the swing's roll query never selected
+		// as `blocked = 0`, successes 1, and DISPATCHES the damage (`0x10257b92..0x10257c1c`). The
+		// stale record of swing 1 is still not what it is judged on: the lookup is by serial.
+		TestTrue(TEXT("0x10257b92: a sweep with no record of its own swing is rolls == 0 -- one success, dispatched"),
+			DamageTaken(*Victim) > AfterFirst);
 	}
 
 	// --- Two disjoint record groups land twice; one group's records land once ----------------
@@ -1512,7 +1521,7 @@ bool FElysiumWeaponMeleeRollTest::RunTest(const FString&)
 		TestEqual(TEXT("...stamped with the accepted swing's serial"), Staged->SwingSerial,
 			Fists->Swing.Serial);
 		const int32 StagedMargin = Staged->Margin();
-		TestTrue(TEXT("...and the fixture's defence outweighs the fists, so no damage commit runs"),
+		TestTrue(TEXT("...and the fixture's defence outweighs the fists: a non-positive margin"),
 			StagedMargin <= 0);
 
 		// The contact. It CONSUMES the record; nothing here may reach the resolver again.
@@ -1527,8 +1536,13 @@ bool FElysiumWeaponMeleeRollTest::RunTest(const FString&)
 			Player->IsInCombatStance(World.NowSeconds()));
 		TestFalse(TEXT("...which the struck body never enters"),
 			Victim->IsInCombatStance(World.NowSeconds()));
-		TestEqual(TEXT("...with a non-positive margin committing no damage"),
-			DamageTaken(*Victim), 0);
+		// Corrected to retail (spec 0002 V11-2, D3): this pinned "margin <= 0 commits no damage".
+		// `0x102579f0` withholds the damage only when the contact is BLOCKED and did not go through
+		// (`0x10257cb3`); this victim blocks nothing (it holds no melee weapon, `WasMeleeBlocked
+		// 0x10345ab0`), so the contact dispatches with `successes = (int)(rolls[1] - rolls[2] -
+		// rolls[3])` floored at 1 (`0x10257ba1..0x10257bbf`).
+		TestTrue(TEXT("0x10257ba1: an unblocked contact with a non-positive margin dispatches one success"),
+			DamageTaken(*Victim) > 0);
 	}
 
 	// --- A swing that finds nobody: no roll at all --------------------------------------------

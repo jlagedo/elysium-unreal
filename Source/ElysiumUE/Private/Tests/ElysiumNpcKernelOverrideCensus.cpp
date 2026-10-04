@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 1050 live own bodies the port carries as overrides, of 1419 live (class, slot) own-body rows on
-// live classes; `kernel_shape --unported` lists the other 369.
+// 1052 live own bodies the port carries as overrides, of 1419 live (class, slot) own-body rows on
+// live classes; `kernel_shape --unported` lists the other 367.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -4417,6 +4417,11 @@ namespace
 			TEXT("PlayerKnockbackReaction"), &FElysiumNpcTzimisceRunner::StaticRetailClass,
 			TDeclaredOn<FElysiumNpcTzimisceRunner, bool(FElysiumEntity*, int32)>::Test(&FElysiumNpcTzimisceRunner::PlayerKnockbackReaction),
 			std::is_base_of_v<FElysiumNpcTzimisceRunner, FElysiumNpcTzimisceRunner> },
+		{ TEXT("CNPC_VTzimisceRunner"), 329, TEXT("0x103c30c0"), TEXT("rule"),
+			TEXT("FElysiumNpcTzimisceRunner"), TEXT("FElysiumNpcTzimisceRunner"), TEXT("Slot329"),
+			&FElysiumNpcTzimisceRunner::StaticRetailClass,
+			TDeclaredOn<FElysiumNpcTzimisceRunner, bool()>::Test(&FElysiumNpcTzimisceRunner::Slot329),
+			std::is_base_of_v<FElysiumNpcTzimisceRunner, FElysiumNpcTzimisceRunner> },
 		{ TEXT("CNPC_VTzimisceRunner"), 330, TEXT("0x103c43b0"), TEXT("rule"),
 			TEXT("FElysiumNpcTzimisceRunner"), TEXT("FElysiumNpcTzimisceRunner"), TEXT("Slot330"),
 			&FElysiumNpcTzimisceRunner::StaticRetailClass,
@@ -4706,6 +4711,11 @@ namespace
 			TEXT("FElysiumNpcWerewolf"), TEXT("FElysiumNpcWerewolf"),
 			TEXT("RemoveBaseFightingItems"), &FElysiumNpcWerewolf::StaticRetailClass,
 			TDeclaredOn<FElysiumNpcWerewolf, void()>::Test(&FElysiumNpcWerewolf::RemoveBaseFightingItems),
+			std::is_base_of_v<FElysiumNpcWerewolf, FElysiumNpcWerewolf> },
+		{ TEXT("CNPC_VWerewolf"), 328, TEXT("0x103ca730"), TEXT("rule"),
+			TEXT("FElysiumNpcWerewolf"), TEXT("FElysiumNpcWerewolf"), TEXT("Slot328"),
+			&FElysiumNpcWerewolf::StaticRetailClass,
+			TDeclaredOn<FElysiumNpcWerewolf, bool()>::Test(&FElysiumNpcWerewolf::Slot328),
 			std::is_base_of_v<FElysiumNpcWerewolf, FElysiumNpcWerewolf> },
 		{ TEXT("CNPC_VWerewolf"), 337, TEXT("0x103cab50"), TEXT("mechanism"),
 			TEXT("FElysiumNpcWerewolf"), TEXT("FElysiumNpcWerewolf"), TEXT("GetUsedHullBits"),

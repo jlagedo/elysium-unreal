@@ -781,8 +781,16 @@ _Recovered 2026-09-13, story 29c-1._
 
 Slots 599–602 are one behaviour written twice. `CAI_BaseNPCTroika` fills all four for 18 classes and
 a `CNPC_VAndreiBlood`-line copy fills them for 38–40 more; six species replace each slot outright.
-599 and 600 are byte-identical between the two lines, and their copies are `0x10385ab0` and
-`0x10385c30`.
+600 is byte-identical between the two lines (`0x10385c30`). **599 is not** (corrected 2026-10-04,
+spec 0002 V11; this paragraph said both were): the human line's `0x10385ab0` ends
+
+    (0x1025db70(coord, this), (m_bfNPCFrenziedFlags & 0x1000) == 0x1000 || 0x1025db70(coord, this))
+
+so the coordinator's add runs once UNCONDITIONALLY, its answer dropped, before the `0x1000` test,
+and again when the bit is clear (the second call finds the NPC listed and answers 1 with no
+insert). A human carrying `0x1000` is therefore registered in the list; a Troika-line NPC carrying
+it is not (`0x102b5650` short-circuits). Both evaluate the term only after the height and range
+terms hold.
 
 Slot 599 decides melee ENTRY from an enemy already committed. `m_bfNPCFrenziedFlags & 2` or a live
 `GetFollowerBoss()` (slot 293) enters outright and sets `m_bInMelee`. Otherwise `curtime <

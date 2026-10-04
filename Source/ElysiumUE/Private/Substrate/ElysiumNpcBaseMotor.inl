@@ -137,6 +137,11 @@ FNavStepFacts NavSampleStep();
  *  completion `0x102ef760`). */
 ENavMoveResult NavMoveNormalPass(const FNavStepFacts& Step);
 
+/** Trace only (never saved, read by no rule): which arm of the last `NavMoveNormalPass` answered a
+ *  negative result, for the Verbose line `NavigatorMoveStep`'s failure tail prints beside its
+ *  `0x0c` (packet S11 item 1.4). */
+const TCHAR* NavFailArm = TEXT("none");
+
 /** `0x102ef3e0` -- the NPC-blocker hold (R3 "The -3 arm as settled"): arm when the blocker is not the
  *  remembered one or the 3.0 s window has run (`curtime - nav+0x60 > -0.001`), hold while `curtime -
  *  nav+0x58 <= -0.001`; otherwise answer `nav+0x51`. True = hold (no fail this pass). `CurTime` is the

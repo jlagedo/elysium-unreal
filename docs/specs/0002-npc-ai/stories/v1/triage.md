@@ -269,6 +269,7 @@ failed; arm 1551 / 0 failed; suite `20261004T063241.669369Z`: 105 records, 71 pa
 expected-fail, 1 fail (`rollcall_vzombie`, H11), 1 unexpected-pass (`hear_world_investigate`, N4),
 both as before the wave. The one verdict that moved: `places_thug_pt1`, expected-fail → pass.
 
+- **N3 closed** (V11, 2026-10-04). The coordinator is three objects on the entity world (`0x1025d880`); `melee_swing` is green and `chase_melee` meets every expectation (its end probe alone is red, placed on V4c C1: the swing clip's movement never moves the body).
 - **N15 closed.** `ClaimAmbientSpot` (`ElysiumNpc.cpp` ~:1056) makes only retail's tests in
   retail's order: `0x102db470` (rating 5 → 0, `m_iRating +0x578`, not the last place `+0x62fc`,
   under 0x100 candidates per rating), then `0x102dad60` (enabled `+0x57c`, `+0x57d` clear,

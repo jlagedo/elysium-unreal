@@ -1319,12 +1319,13 @@ void ElysiumNpcCond::GatherAttackConditions(FElysiumNpcBase& Npc, double Now)
 		int32 MeleeAnswer = 0;                                                   // 0x1024f750
 		if (Capability == ECapability::Melee)
 		{
-			// `0x103ea950 GetSequencesForActivity(owner, translated activity, …)`: the wielder's
-			// sequences. OWED by `ElysiumNpcBaseAnim.inl` / `ElysiumNpcAnim.cpp` (V5a-1's report): the
-			// accessor translates the activity (weapon `+0x5a4`, owner `+0x5e0`) through the name-keyed
-			// resolver and hands every clip of the body's vocabulary carrying the result.
+			// `0x103ea81c` weapon slot 361 (`+0x5a4`) `ActivityOverride 0x1024f210(0x4b)`: the first
+			// row of the weapon's ladder the owner can play (the bat's `ACT_MELEE_ATTACK_BASEBALLBAT`,
+			// the knife's `_KNIFE`, the katana's `_KATANA`, the fists' `_FISTS`; `packets-S6.md` item
+			// 3), else `0x4b` unchanged. `Sequences` is `0x103ea950 GetSequencesForActivity(owner,
+			// translated activity, …)`: every clip of the wielder's vocabulary carrying the result.
 			TArray<FElysiumNpcClip> Sequences;
-			Npc.MeleeSequencesForActivity(GGatherActMeleeAttack1, Sequences);
+			const int32 WeaponActivity = Npc.WeaponActivityOverride(GGatherActMeleeAttack1, &Sequences);
 			FMeleeWeaponBandQuery Query;
 			Query.Owner = &Npc;                                                  // 0x103ea7f0 the weapon's owner
 			Query.Weapon = Weapon;
@@ -1332,11 +1333,10 @@ void ElysiumNpcCond::GatherAttackConditions(FElysiumNpcBase& Npc, double Now)
 			Query.WeaponNextSecondaryAttackTime = Weapon->NextSecondaryAttackTime;   // +0x734
 			Query.OwnerNextAttackTime = OwnerNextAttackTime;                     // owner +0x1564
 			Query.Target = Enemy;
-			// `0x103ea81c` weapon `+0x5a4`, then `0x103ea827` owner `+0x5e0` (slot 376
-			// `NPC_TranslateActivity`). SEAM: the weapon's half has no number-space body in this
-			// runtime (`TranslateActivityNumber`'s seam; the ladder is name-keyed and lives in the
-			// accessor above), so slot 331 is handed the owner's translation of the raw activity.
-			Query.TranslatedActivity = Npc.NPC_TranslateActivity(GGatherActMeleeAttack1);
+			// `0x103ea827` owner `+0x5e0` (slot 376 `NPC_TranslateActivity`) over the weapon's
+			// answer: the identity for every melee activity on the Troika line (`0x10295710`). This
+			// is what slot 331 receives (`0x103ea8d3`).
+			Query.TranslatedActivity = Npc.NPC_TranslateActivity(WeaponActivity);
 			Query.Dot = Dot;
 			Query.DistUnits = DistanceUnits;
 			Query.Now = Now;

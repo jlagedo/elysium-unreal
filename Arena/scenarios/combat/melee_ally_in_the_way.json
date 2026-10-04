@@ -1,23 +1,96 @@
 {
   "name": "melee_ally_in_the_way",
-  "about": "A melee NPC whose way to the enemy is blocked by an ally circles instead of advancing through it. Two bat-only TutorialThug humans (npc_VHumanCombatant, item_w_baseball_bat, D_HT 5 to the player, no relationship to each other: neutral) stand in one line with the player: arena_front 200 cm in front of the player, arena_rear 250 cm behind arena_front, both facing the player. CNPC_VHuman::SelectScheduleMeleeCombat 0x10385e40 (slot 604; bat-only, so the _NR forms: slot 308 HasUsableRangedWeapon 0x10336d70 is false) asks 0x102a11d0 before it advances: a swept slab (the hull's mins/maxs doubled in X/Y, Z +-6, mask 0x2000000) from WorldSpaceCenter to the enemy, true when the nearest body met is an NPC this one does not hate (IRelationType != D_HT). With arena_front between, arena_rear's answer is the circle pair, 0xe1 SCHED_TROIKA_MELEE_CIRCLE_ADVANCE_NR, never 0xcb SCHED_TROIKA_MELEE_ADVANCE_NR (stories/v4/packets-S2.md, 0x102a11d0; packets-S3.md item 8; stories/v1/triage.md, Judge's rulings, V4 -- second sitting, J10).",
+  "about": "A melee NPC whose way to the enemy is blocked by an ally circles instead of advancing through it. Two bat-only TutorialThug humans (npc_VHumanCombatant, item_w_baseball_bat, D_HT 5 to the player, no relationship to each other: neutral) stand before the player: arena_front 200 cm in front of the player and 50 cm to the side of the line, arena_rear on the line 250 cm behind it, both facing the player. CNPC_VHuman::SelectScheduleMeleeCombat 0x10385e40 (slot 604; bat-only, so the _NR forms: slot 308 HasUsableRangedWeapon 0x10336d70 is false) asks 0x102a11d0 before it advances: a swept slab (the hull's mins/maxs doubled in X/Y, Z +-6, mask 0x2000000) from WorldSpaceCenter to the enemy, true when the nearest body met is an NPC this one does not hate (IRelationType != D_HT). The 50 cm is the statement (a record error corrected by the V11 integrator, measured): with arena_front exactly ON the line, slot 331 ChooseMeleeAttackSequence 0x10347180's line gate (a zero-extent trace between the two slot-192 centres, 0x1034727b) hits it and raises COND_ENEMY_BLOCKED 0x3a (0x103472e8), and the selector's failure gate 0x102b6fe0 answers 0xce SCHED_TROIKA_MELEE_ADVANCE_NR_LKP_NOSEE (AI_BaseNPCTroika.cpp:23169) BEFORE 0x102a11d0 is asked -- retail's own order (trace: cond+ ENEMY_BLOCKED at 0.600, schedule 0xce). 0x102a11d0 decides for an ally the centre line misses and the doubled hull meets: the HUMAN_HULL is 13 units (33 cm) to a side, so at 50 cm the line passes 17 cm clear of arena_front's box and the 26-unit (66 cm) slab overlaps it. With arena_front between, arena_rear's answer is the circle pair, 0xe1 SCHED_TROIKA_MELEE_CIRCLE_ADVANCE_NR, never 0xcb SCHED_TROIKA_MELEE_ADVANCE_NR And arena_front's swings never reach arena_rear: MeleeSwingStep 0x10343020's relation filter (0x1034394d) skips a character the NPC attacker neither hates nor fears. (stories/v4/packets-S2.md, 0x102a11d0; packets-S3.md item 8; stories/v1/triage.md, Judge's rulings, V4 -- second sitting, J10).",
   "stage": "arena",
   "seed": 1,
   "duration": 15.0,
-  "known_red": "V11 (N3: no NPC enters melee), then V11-1 (J10): ScheduleMeleeReachGate is a seam answering false",
-  "player": {"at": "start"},
+  "player": {
+    "at": "start"
+  },
   "cast": [
-    {"name": "arena_front", "classname": "npc_VHumanCombatant", "at": [-775.0, 0.0, 0.0], "face": "player", "body": "regular_cop", "keys": {"stattemplate": "TutorialThug", "npc_perception": "3", "spawnflags": "4", "StartHidden": "0", "additionalequipment": "item_w_baseball_bat", "player_reaction": "D_HT 5", "stay_entrenched": "0", "allow_kick_hint_use": "0", "squadname": ""}},
-    {"name": "arena_rear", "classname": "npc_VHumanCombatant", "at": [-525.0, 0.0, 0.0], "face": "player", "body": "regular_cop", "keys": {"stattemplate": "TutorialThug", "npc_perception": "3", "spawnflags": "4", "StartHidden": "0", "additionalequipment": "item_w_baseball_bat", "player_reaction": "D_HT 5", "stay_entrenched": "0", "allow_kick_hint_use": "0", "squadname": ""}}
+    {
+      "name": "arena_front",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        -775.0,
+        50.0,
+        0.0
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "npc_perception": "3",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "additionalequipment": "item_w_baseball_bat",
+        "player_reaction": "D_HT 5",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": ""
+      }
+    },
+    {
+      "name": "arena_rear",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        -525.0,
+        0.0,
+        0.0
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "npc_perception": "3",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "additionalequipment": "item_w_baseball_bat",
+        "player_reaction": "D_HT 5",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": ""
+      }
+    }
   ],
   "expect": [
-    {"label": "engages", "who": "arena_rear", "kind": "schedule", "match": "SCHED_TROIKA_START_COMBAT (", "by": 3.0},
-    {"label": "circles", "who": "arena_rear", "kind": "schedule", "match": "\\(0xe1\\)$", "regex": true, "within": 5.0}
+    {
+      "label": "engages",
+      "who": "arena_rear",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_START_COMBAT (",
+      "by": 3.0
+    },
+    {
+      "label": "circles",
+      "who": "arena_rear",
+      "kind": "schedule",
+      "match": "\\(0xe1\\)$",
+      "regex": true,
+      "within": 5.0
+    }
   ],
   "never": [
-    {"who": "arena_rear", "kind": "schedule", "match": "\\(0xcb\\)$", "regex": true, "until": 8.0},
-    {"who": "arena_rear", "kind": "death"},
-    {"who": "arena_front", "kind": "death"}
+    {
+      "who": "arena_rear",
+      "kind": "schedule",
+      "match": "\\(0xcb\\)$",
+      "regex": true,
+      "until": 8.0
+    },
+    {
+      "who": "arena_rear",
+      "kind": "death"
+    },
+    {
+      "who": "arena_front",
+      "kind": "death"
+    },
+    {
+      "who": "arena_rear",
+      "kind": "damage",
+      "match": "from=arena_front"
+    }
   ],
   "notes": "The schedules are matched by their class-local number (0xe1, 0xcb), not by name: if the trace prints another name for either, the number still decides (brief A0 item 7). The `never` on 0xcb closes at 8 s: arena_front is 200 cm (79 units) from the player and advances to swing, after which it no longer stands between and a plain advance by arena_rear is retail."
 }

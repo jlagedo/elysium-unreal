@@ -668,6 +668,20 @@ authored**. So masked clips are the player's and unmasked clips are the cast's, 
 authored without masks — the whole `2COMBO` set — is reachable by NPCs and by nothing the player
 does.
 
+**The cast arm's line gate and `m_edtDerivedType` bit 10** (2026-10-04, spec 0002 V11). Before any
+candidate is scored, an NPC with an enemy traces a line between the two slot-192 points
+(`0x1034727b` -> `0x102e37b0`, mask `0x202400b`); a hit on an entity that is not the enemy, not
+the entity of the enemy's `m_GrapplePartner` (`+0x1538`), and whose `m_edtDerivedType` (`+0x4c`)
+has **bit 10 clear** (`0x103472dc`) raises `COND 0x3a` and answers false with `*out = -1`. Bit 10
+(`0x400`) has one writer in the image: the `CNPC_VPlaceholder` constructor `0x103a40c0`
+(`this[0x13] |= 0x400` after the Troika constructor `0x1028d230`). A placeholder NPC on the line
+does not block a swing. The port reads the bit off the class (it stands no derived-type word).
+
+**Each candidate's whole movement** is `Studio_SeqMovement 0x100c6020(model, seq, …, &delta,
+&angles)` (`0x1034766d`), cycle 0 to 1; false (no movement record) sets bit `0x10` and skips the
+hull sweep. The bake carries the path (the bank's movement table); the port samples it through
+`IElysiumEmbodiment::GetBodySequenceMovement`.
+
 #### The cast arm: a scored flag word, then a ranked search with a weighted draw
 
 `ChooseMeleeAttackSequence` scores every candidate into a four-bit flag word, then searches for a
@@ -1014,6 +1028,25 @@ the victim's slot 318 and the attacker's slot 319 and, when the damage did not g
 there; otherwise `DispatchTraceAttack`, `total = (modifier + dice) × multiplier × inflicted`
 (Potence floors `inflicted`), the apply, and — unblocked — the victim's plain hit (slot 321) or
 knockback (slot 320) by its slot 326(record) / slot 400.
+
+**The two operands S5 left unread, read from the listing 2026-10-04 (spec 0002 V11-2).**
+(1) *Roll → successes*, `0x10257ba1..0x10257bbf`: `MOV EDX,[ESI+4]; SUB EDX,[ESI+8]; SUB
+EDX,[ESI+0xc]; FILD; CALL __ftol` — `successes = (int)(rolls[1] − rolls[2] − rolls[3])`, the signed
+margin (lethality − defense − soak), the same value `DamageWentThrough 0x10349650` tests `> 0`;
+then `successes < 1 → 1`. (2) *The wall contact's 20.0*, `0x1034433f..0x10344382`: the attacker's
+slot 217 `GetAbsOrigin` (`CALL [EDX+0x364]`) subtracted, x and y only, from the trace's hit point
+`Q + (P − Q) × fraction` (built at `0x103441bf..0x103441ec`), `sqrt(dx² + dy²)` (`CALL
+[0x10579660]`) `< 20.0` (`0x1049e040`) — **the 2-D distance from the attacker's origin to the wall
+hit**. The arm's order: hit (`fraction < 1` or `allsolid` or `startsolid`), else next sample;
+normal non-zero and `|normal.z| < 0.3`, else next sample with **no** effect; flattened forward
+length² `> 1e-12`, `|dot| > 0.7071` and the distance `< 20` → slot 319 `(0, 0, 0)` and the loop
+ends; any of those three failing → the once-per-swing impact effect. The wall ray's mask is
+`0x400b` (`PUSH 0x400b`, `0x10344180`), not the entity ray's `0x200400b`.
+**The impact's tail** (`0x10258019..0x1025804b`): the impact effect, then `ent` slot 21 **with the
+owner** (`PUSH EBP`), then the owner's slot 24 `(ent)`. Slot 21 on the Troika line is `0x1029f800`,
+the hit-buildup counter's one increment — so the raise comes **after** step 7's slot-326 test and
+also on a blocked contact; that no slot-21 dispatch hides inside the `DispatchTraceAttack` chain is
+not walked ("Who may be knocked back" below states the earlier reading, raise-before-read).
 
 **Hit-once is per record, with a spread.** Each record carries its own victim hit list. A landed hit
 marks the victim in **every record whose window overlaps the hitting record's**, so a swing whose

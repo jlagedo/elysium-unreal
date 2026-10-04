@@ -26,6 +26,7 @@ struct FElysiumTerminalView;
 class FElysiumDlgConversation;
 struct FElysiumDialogueSession;
 class FElysiumGameSoundBus;
+class FElysiumAttackCoordinator;
 class FElysiumLineService;
 class FElysiumPlaceSet;
 // The law-record store's own type, forward-declared through its namespace so this
@@ -725,6 +726,12 @@ public:
 	const ElysiumNpcWitness::FElysiumLawEventBus& LawEvents() const;
 	ElysiumNpcWitness::FElysiumLawEventBus& LawEvents();
 
+	// --- The three attack coordinators (spec 0002 V11-1) ---
+	// Retail's `DAT_1090fbec` "Normal", `DAT_1090fbf0` "Player", `DAT_1090fbf4` "Boss" (`0x1025d880`,
+	// cap 2 each), by the index an NPC's `m_pAttackCoordinator (+0x65e8)` holds: 1..3. Index 0 is
+	// retail's null pointer and answers null, as does any other index. Never saved.
+	FElysiumAttackCoordinator* AttackCoordinator(int32 Index) const;
+
 	const FElysiumWeatherState& GetWeatherState() const { return WeatherState; }
 	void FadeGlobalWetness(float Target);
 	FElysiumLineService* Lines() const { return LineService.Get(); }
@@ -1042,6 +1049,9 @@ private:
 	TUniquePtr<FElysiumGameSoundBus> GameSoundBus;
 	// The law-record store, held the same way and for the same reason.
 	TUniquePtr<ElysiumNpcWitness::FElysiumLawEventBus> LawEventBus;
+	// The three attack coordinators (`0x1025d880`), held by pointer for the same reason; emptied by
+	// `Teardown` (`0x1025d940`).
+	TUniquePtr<FElysiumAttackCoordinator> AttackCoordinators[3];
 	// When the player's step clock last ran, substrate seconds. Negative until the first tick, which
 	// is what makes that tick's delta zero rather than "everything since the epoch". Held here
 	// rather than on the player entity because it measures THIS world's tick cadence, and a player

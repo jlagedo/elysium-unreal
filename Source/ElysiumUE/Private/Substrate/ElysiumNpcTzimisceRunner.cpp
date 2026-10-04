@@ -116,7 +116,7 @@ void FElysiumNpcTzimisceRunner::Slot601(FElysiumEntity* Enemy)
 	++MeleeEventFires;
 	RunnerPotentialEnemy = FElysiumEntityHandle();
 	bInMelee = false;
-	++MeleeCoordinatorReleases;
+	MeleeCoordinatorRelease();   // `thunk_FUN_1025ddd0(m_pAttackCoordinator, this)`, 0x1025ddd0, unguarded
 }
 
 bool FElysiumNpcTzimisceRunner::Slot602()

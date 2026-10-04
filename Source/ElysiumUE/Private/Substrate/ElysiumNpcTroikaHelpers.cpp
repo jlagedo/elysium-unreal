@@ -7,6 +7,7 @@
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
+#include "Substrate/ElysiumAttackCoordinator.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -128,37 +129,62 @@ namespace
 }
 
 // -------------------------------------------------------------------------------------------------
-// The attack-coordinator seams — `0x1025db50`, `0x1025db70`, `0x1025dca0`, `0x1025de90`.
+// The attack coordinator's entry points — `0x1025db50`, `0x1025db70`, `0x1025dca0`, `0x1025ddd0`,
+// `0x1025de90` — over the world's three objects (`FElysiumAttackCoordinator`, spec 0002 V11-1).
 // -------------------------------------------------------------------------------------------------
+
+FElysiumAttackCoordinator* FElysiumNpc::MeleeCoordinator() const
+{
+	// `m_pAttackCoordinator` (`+0x65e8`): the index 1..3 of one of the world's three objects. Index
+	// 0 is retail's null pointer, and a leaf with no world has no object either: null, the state
+	// every retail entry point FAULTS on (each dereferences its `this` at once).
+	return World != nullptr ? World->AttackCoordinator(AttackCoordinator) : nullptr;
+}
 
 bool FElysiumNpc::MeleeCoordinatorHasRoom() const
 {
 	// `0x1025db50`: `coord[4] < coord[0]` — the live melee count against the coordinator's cap.
-	// **SEAM**: `m_pAttackCoordinator` (+0x65e8) is an index of three globals with no object behind
-	// it. False is "no room", which is the arm slot 602 reads as "leave melee".
-	return false;
+	// Retail's fault path (a null coordinator) answers false, "no room".
+	const FElysiumAttackCoordinator* const Coordinator = MeleeCoordinator();
+	return Coordinator != nullptr && Coordinator->HasRoom();
 }
 
-bool FElysiumNpc::MeleeCoordinatorAdmits599() const
+bool FElysiumNpc::MeleeCoordinatorAdmits599()
 {
-	// `0x1025db70(m_pAttackCoordinator, this)` — slot 599's admission test. **SEAM**, false.
-	return false;
+	// `0x1025db70(m_pAttackCoordinator, this)` — slot 599's admission. Retail's fault path (a null
+	// coordinator) answers false.
+	FElysiumAttackCoordinator* const Coordinator = MeleeCoordinator();
+	return Coordinator != nullptr && Coordinator->Add(this);
 }
 
-bool FElysiumNpc::MeleeCoordinatorAdmits600() const
+bool FElysiumNpc::MeleeCoordinatorAdmits600()
 {
-	// `0x1025dca0(m_pAttackCoordinator, this, false)` — slot 600's, with retail's literal third
-	// argument. **SEAM**, false.
-	return false;
+	// `0x1025dca0(m_pAttackCoordinator, this, 0)` — slot 600's, with retail's literal third
+	// argument: no distance, so the threshold starts at 0.0. Retail's fault path answers false.
+	FElysiumAttackCoordinator* const Coordinator = MeleeCoordinator();
+	return Coordinator != nullptr
+		&& Coordinator->AddOrEvict(this, EElysiumCoordinatorEvict::FarthestMember);
 }
 
 bool FElysiumNpc::MeleeCoordinatorHoldsMe() const
 {
-	// `0x1025de90(m_pAttackCoordinator, this)` — a linear scan of the coordinator's handle array
-	// that answers TRUE when this NPC is NOT in it (and true for a null argument). **SEAM**: an
-	// absent coordinator holds nobody, so the honest answer is "not held" — false here, and slot
-	// 602 negates it into retail's `true`.
-	return false;
+	// The NEGATION of `0x1025de90(m_pAttackCoordinator, this)`, which answers TRUE when this NPC is
+	// NOT in the list; slot 602 negates this back into retail's answer. Retail's fault path (a null
+	// coordinator) holds nobody: false.
+	const FElysiumAttackCoordinator* const Coordinator = MeleeCoordinator();
+	return Coordinator != nullptr && !Coordinator->IsAbsent(this);
+}
+
+void FElysiumNpc::MeleeCoordinatorRelease()
+{
+	// `0x1025ddd0(m_pAttackCoordinator, this)` — the release slot 601's four bodies forward to. The
+	// counter is family Bosses' (`MeleeCoordinatorReleases`, read by the retained call-order tests).
+	// With no coordinator object (index 0, or no world) retail's unguarded sites fault; a no-op here.
+	++MeleeCoordinatorReleases;
+	if (FElysiumAttackCoordinator* const Coordinator = MeleeCoordinator())
+	{
+		Coordinator->Release(this);
+	}
 }
 
 float FElysiumNpc::MeleeRangeUnits()
@@ -201,13 +227,14 @@ bool FElysiumNpc::DispositionExpressionRow(FString& OutExpression, FString& OutN
 	return false;
 }
 
-FString FElysiumNpc::AttackCoordinatorNameOf(int32 CoordinatorIndex)
+FString FElysiumNpc::AttackCoordinatorNameOf(int32 CoordinatorIndex) const
 {
-	// `thunk_FUN_1025e120(coordinator)` — the coordinator's name. **SEAM**: no coordinator object.
-	// The empty string never matches a non-empty argument, so slot 608 refuses every candidate and
-	// leaves `m_pAttackCoordinator` alone.
-	(void)CoordinatorIndex;
-	return FString();
+	// `thunk_FUN_1025e120(coordinator)` — the coordinator's name (`this + 0x18`): "Normal",
+	// "Player", "Boss". A leaf with no world has no object: the empty string, which never matches a
+	// non-empty argument (slot 608 skips a null global the same way).
+	const FElysiumAttackCoordinator* const Coordinator =
+		World != nullptr ? World->AttackCoordinator(CoordinatorIndex) : nullptr;
+	return Coordinator != nullptr ? Coordinator->Name() : FString();
 }
 
 const int32* FElysiumNpc::AttackCoordinatorIndices(int32& OutCount)
@@ -344,6 +371,11 @@ void FElysiumNpc::Slot597(FElysiumEntity* Other, int32 Priority)
 
 bool FElysiumNpc::Slot599(int32)
 {
+	return Slot599OnLine(EMeleeSlotLine::Troika);
+}
+
+bool FElysiumNpc::Slot599OnLine(EMeleeSlotLine Line)
+{
 	// Five classes replace this slot outright on their C++ classes — `CNPC_VGargoyle` `0x10379ef0`,
 	// `CNPC_VTzimisceHeadClaw` `0x103c19e0`, `CNPC_VTzimisceRunner` `0x103c3960` and `CNPC_VYukie`
 	// (story 5 step 3), and `CNPC_VFrenzyShadow` `0x10376b70` (fold A2).
@@ -356,9 +388,17 @@ bool FElysiumNpc::Slot599(int32)
 	// retail's argument and is what the species arm is handed. `+0x29c` is slot **167**, the CONST
 	// overload (`0x101a67e0`, a plain `m_hEnemy` resolve), not the Troika line's mutable 168 with
 	// its last-enemy fallback — so the const one is the one called here.
-	// `0x102b5650`. The `CNPC_VAndreiBlood`-line copy `0x10385ab0` is BYTE-IDENTICAL (family Bosses
-	// read it and this family re-read it), so `FElysiumNpcHuman::Slot599` calls this body. The
-	// argument is read by nothing in the body.
+	// `0x102b5650`. The `CNPC_VAndreiBlood`-line copy `0x10385ab0` differs in ONE call (re-read from
+	// the decompile, spec 0002 V11): its last term is
+	//
+	//     (Coordinator599(coord, this), (m_bfNPCFrenziedFlags & 0x1000) == 0x1000
+	//         || Coordinator599(coord, this))
+	//
+	// -- `0x1025db70` is called UNCONDITIONALLY, answer dropped, before the `0x1000` test, so a human
+	// carrying the bit is still registered in the coordinator's list (the Troika line's short
+	// circuit never registers it). `FElysiumNpcHuman::Slot599` runs this body on that line. The
+	// second call finds the NPC listed and answers 1 with no insert. The argument is read by nothing
+	// in either body.
 	//
 	//     if ((m_bfNPCFrenziedFlags & 2) == 2 || GetFollowerBoss()) { m_bInMelee = 1; return true; }
 	//     if (curtime < m_flMeleeCanEnterTimer) { m_bInMelee = 0; return false; }
@@ -401,8 +441,18 @@ bool FElysiumNpc::Slot599(int32)
 	const bool bHeightOk = ScheduleHost.EnemyHeightDiffUnits <= MeleeHeightDiffLimitUnits()
 		|| !Cognition.Conditions.Has(EElysiumNpcCond::EnemyUnreachable);
 
-	const bool bCoordinatorOk = HasFrenzied(TroikaFrenziedBitSkipsCoordinator)
-		|| MeleeCoordinatorAdmits599();
+	// The coordinator term is evaluated only when the height and range terms hold (`&&`, in retail's
+	// order): a refused height or range registers nobody on either line.
+	bool bCoordinatorOk = false;
+	if (bHeightOk && bRangeOk)
+	{
+		if (Line == EMeleeSlotLine::AndreiBlood)
+		{
+			(void)MeleeCoordinatorAdmits599();   // 0x10385ab0: the unconditional `0x1025db70`, answer dropped
+		}
+		bCoordinatorOk = HasFrenzied(TroikaFrenziedBitSkipsCoordinator)
+			|| MeleeCoordinatorAdmits599();
+	}
 
 	if (bHeightOk && bRangeOk && bCoordinatorOk)
 	{
@@ -448,12 +498,10 @@ bool FElysiumNpc::Slot600(FElysiumEntity* Enemy)
 	//
 	// An NPC ALREADY in melee falls straight out with false and writes nothing — the `m_bInMelee`
 	// test is on the way IN, not a re-entry guard around the write.
-	const FElysiumEntity* Weapon = (World != nullptr && Inventory.ActiveWeapon.IsSet())
-		? World->Resolve(Inventory.ActiveWeapon)
-		: nullptr;
-	// `ActiveWeaponCapabilityWord()` is family **Motor**'s read of the same weapon vtable `+0x5a0`
-	// (slot 360, retail body `0x1014f930`); it is a SEAM answering 0, so the gate is closed today.
-	const uint32 Capability = Weapon != nullptr ? ActiveWeaponCapabilityWord() : 0u;
+	// The active weapon's slot 360 (`+0x5a0`) word, 0 with no active weapon: `SelectActiveWeaponWord`
+	// (the real word). Family **Motor**'s `ActiveWeaponCapabilityWord()` is a seam answering 0 for
+	// the same read and is not asked here (spec 0002 V11-1).
+	const uint32 Capability = SelectActiveWeaponWord();
 	if ((Capability & TroikaMeleeWeaponCapabilityBits) != 0 && !bInMelee)
 	{
 		if (MeleeCoordinatorAdmits600())
@@ -505,7 +553,7 @@ void FElysiumNpc::Slot601(FElysiumEntity* Enemy)
 	}
 	if (AttackCoordinator != 0)
 	{
-		++MeleeCoordinatorReleases;
+		MeleeCoordinatorRelease();   // 0x1025ddd0, behind the Troika line's own null guard
 	}
 }
 
@@ -532,10 +580,11 @@ bool FElysiumNpc::Slot602()
 	// else. Family Bosses flagged the divergence and left the slot undefined; this family read both
 	// bodies and confirms it: the two are otherwise instruction-for-instruction the same.
 	//
-	// ONE method carries both: `FElysiumNpcHuman::Slot602` calls this body (story 5 step 3), because
-	// the one difference is applied to both lines (below).
+	// ONE method carries both: `FElysiumNpcHuman::Slot602` calls this body (story 5 step 3), so the
+	// human line still runs the Troika line's third test. With no coordinator (`+0x65e8 == 0`) the
+	// `0x10385d70` copy faults inside `0x1025db50` / `0x1025de90`; here it answers false.
 	//
-	// **The divergence is NOT observable in retail, and the reachability argument is why.** Every
+	// **The difference is NOT observable in retail, and the reachability argument is why.** Every
 	// one of the coordinator's five entry points dereferences its `this` immediately —
 	// `0x1025db50` reads `coord[4]` and `coord[0]`, `0x1025db70` / `0x1025dca0` / `0x1025de90` read
 	// `coord+0x04` and `coord+0x10` — so a null `m_pAttackCoordinator` FAULTS in all of them. The
@@ -543,15 +592,8 @@ bool FElysiumNpc::Slot602()
 	// they set it, except slot 599's first arm — whose two conditions (`m_bfNPCFrenziedFlags & 2`
 	// and a live `GetFollowerBoss()`) are exactly the two gates this body refuses on. So a body that
 	// reaches the third line at all already has a coordinator, and the Troika line's test is dead
-	// defensive code that the `CNPC_VAndreiBlood` copy simply did not carry over.
-	//
-	// **NAMED DIVERGENCE**: this substrate has no coordinator object, so `m_pAttackCoordinator` is
-	// 0 on every NPC — a state retail cannot be in without having already crashed. The guard is
-	// therefore applied on BOTH lines here. A crash is not a behaviour the port reproduces (family
-	// **Squad**'s `SetFollowerBossName` took the same refusal for the same reason), and answering
-	// the seams' "an empty coordinator holds nobody" on a state retail cannot reach would hand
-	// family **Schedule**'s six melee arms a leave-melee decision that no shipped program ever saw.
-	// The recovered difference itself is recorded here and in `MeleeSlotBody`.
+	// defensive code that the `CNPC_VAndreiBlood` copy simply did not carry over. Every Troika NPC
+	// binds "Normal" at Precache (`0x10298ad0` -> slot 608), so the test is false on a spawned NPC.
 	//
 	// Retail's `(a < b) != (a == b)` on the distance is the FPU flag pair for `a <= b`.
 	if (HasFrenzied(TroikaFrenziedBitForcesMelee))
@@ -564,8 +606,8 @@ bool FElysiumNpc::Slot602()
 	}
 	if (AttackCoordinator == 0)
 	{
-		// The Troika line's own third test; on the `CNPC_VAndreiBlood` line it is the named
-		// divergence above (`MeleeSlotBody(602, ...)` names the two bodies).
+		// The Troika line's own third test (`0x102b5900`); on the `CNPC_VAndreiBlood` line
+		// (`0x10385d70`) it stands for the fault (`MeleeSlotBody(602, ...)` names the two bodies).
 		return false;
 	}
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;

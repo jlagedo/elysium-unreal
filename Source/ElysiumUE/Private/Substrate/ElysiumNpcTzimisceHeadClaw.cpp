@@ -143,7 +143,7 @@ void FElysiumNpcTzimisceHeadClaw::Slot601(FElysiumEntity* Enemy)
 	(void)Enemy;
 	++MeleeEventFires;
 	bInMelee = false;
-	++MeleeCoordinatorReleases;   // `thunk_FUN_1025ddd0(m_pAttackCoordinator, this)`
+	MeleeCoordinatorRelease();   // `thunk_FUN_1025ddd0(m_pAttackCoordinator, this)`, 0x1025ddd0
 }
 
 bool FElysiumNpcTzimisceHeadClaw::Slot602()

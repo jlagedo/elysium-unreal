@@ -5,7 +5,9 @@
 #if WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS
 
 #include "ElysiumEntityDefs.h"
+#include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
+#include "Substrate/ElysiumAttackCoordinator.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "ElysiumNpcFlags.h"
@@ -162,20 +164,22 @@ bool FElysiumNpcKernelTroikaHelpersEnterMeleeTest::RunTest(const FString&)
 	TestFalse(TEXT("a live can-enter timer refuses"), Thug->Slot599(0));
 	TestFalse(TEXT("and clears m_bInMelee"), Thug->bInMelee);
 
-	// Arm 3: past the timer, with the coordinator seam refusing and the frenzy bypass clear, the
-	// whole gate closes on the coordinator. The height term is decided by `ENEMY_UNREACHABLE` (the
-	// limit is `_DAT_10451acc` = 64 and the enemy is 5000 units above it) and the
-	// range term passes because slot 308 is a stub answering false.
+	// Arm 3: past the timer, the height term is decided by `ENEMY_UNREACHABLE` (the limit is
+	// `_DAT_10451acc` = 64 and the enemy is 5000 units above it); the range term passes because
+	// slot 308 is a stub answering false.
 	Thug->MeleeCanEnterTimer = 0.0;
 	Thug->ScheduleHost.EnemyHeightDiffUnits = 5000.f;
 	Thug->Cognition.Conditions.Set(EElysiumNpcCond::EnemyUnreachable);
 	TestFalse(TEXT("an unreachable enemy above the height limit refuses"), Thug->Slot599(0));
 	Thug->Cognition.Conditions.Clear(EElysiumNpcCond::EnemyUnreachable);
-	(void)Thug->Slot599(0);
 
-	// Arm 4: frenzy bit 0x1000 bypasses the coordinator entirely, which is the one way this
-	// substrate can reach the entry write — and it arms the must-leave timer from
-	// `RandomFloat(7.5, 15.0)`, NOT `RandomFloat(4, 15)` as 29c's walk reads.
+	// The coordinator term with NO object (`m_pAttackCoordinator` 0, retail's fault path): refused.
+	Thug->AttackCoordinator = 0;
+	TestFalse(TEXT("with no coordinator object 0x1025db70 refuses"), Thug->Slot599(0));
+	TestFalse(TEXT("and m_bInMelee is cleared"), Thug->bInMelee);
+
+	// Arm 4: frenzy bit 0x1000 bypasses the coordinator entirely — and the accepting arm arms the
+	// must-leave timer from `RandomFloat(7.5, 15.0)`, NOT `RandomFloat(4, 15)` as 29c's walk reads.
 	const int32 EventsBefore = Thug->MeleeEventFires;
 	Thug->SetFrenziedWord(0x1000);
 	const double Now = Thug->World->NowSeconds();
@@ -188,11 +192,30 @@ bool FElysiumNpcKernelTroikaHelpersEnterMeleeTest::RunTest(const FString&)
 		EventsBefore + 1);
 	Thug->SetFrenziedWord(0);
 
-	// Slot 600: the weapon capability word is family Motor's seam answering 0, so `0x18000` is
-	// never present and the body writes NOTHING — not even the `m_bInMelee = 0` inside the gate.
+	// The coordinator term WITH the object (spec 0002 V11-1): `0x1025db70` appends this NPC to
+	// "Normal" and the same accepting arm runs.
+	FElysiumAttackCoordinator* const Normal = Thug->World->AttackCoordinator(1);
+	if (Normal == nullptr)
+	{
+		AddError(TEXT("the world stands no coordinator 1"));
+		return false;
+	}
+	Normal->Reset();
+	Thug->AttackCoordinator = 1;
+	Thug->bInMelee = false;
+	TestTrue(TEXT("an empty coordinator admits (0x1025db70)"), Thug->Slot599(0));
+	TestTrue(TEXT("m_bInMelee is set"), Thug->bInMelee);
+	TestFalse(TEXT("and the NPC is in the list"), Normal->IsAbsent(Thug));
+	TestEqual(TEXT("once"), Normal->Num(), 1);
+	TestTrue(TEXT("a second slot 599 finds it listed and answers true with no insert"), Thug->Slot599(0));
+	TestEqual(TEXT("still once"), Normal->Num(), 1);
+	Normal->Reset();
+
+	// Slot 600 (`0x102b57c0`): the `m_bInMelee == 0` test is on the way IN, so a body already in
+	// melee falls straight out and writes NOTHING — not even the `m_bInMelee = 0` inside the gate.
 	Thug->bInMelee = true;
 	const int32 EventsBeforeSlot600 = Thug->MeleeEventFires;
-	TestFalse(TEXT("slot 600 refuses with no capability bits"), Thug->Slot600(nullptr));
+	TestFalse(TEXT("slot 600 refuses a body already in melee"), Thug->Slot600(nullptr));
 	TestTrue(TEXT("and leaves m_bInMelee alone, because the write is INSIDE the gate"),
 		Thug->bInMelee);
 	TestEqual(TEXT("and fires no event"), Thug->MeleeEventFires, EventsBeforeSlot600);
@@ -260,17 +283,14 @@ bool FElysiumNpcKernelTroikaHelpersLeaveMeleeTest::RunTest(const FString&)
 			? ElysiumNpcTestCensus::BodyOf(BloodNpc->RetailClass(), 602) : FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::Troika)),
 		FString(FElysiumNpc::MeleeSlotBody(602, FElysiumNpc::EMeleeSlotLine::AndreiBlood)));
 
-	// **NAMED DIVERGENCE**, and the reachability argument behind it: every coordinator entry point
-	// dereferences its `this` at once, so a null `m_pAttackCoordinator` faults in retail — and the
-	// only paths that set `m_bInMelee` without touching the coordinator are exactly the two gates
-	// this body refuses on. So retail cannot reach the tail with a null coordinator, and BOTH lines
-	// refuse here rather than one of them answering on a state no shipped program ever saw.
+	// A null `m_pAttackCoordinator`: the Troika line's own third test refuses; the AndreiBlood copy
+	// has no such test and FAULTS in retail (every coordinator entry point dereferences its `this`
+	// at once), a state no spawned NPC is in (Precache binds "Normal"). The port answers false there.
 	TroikaNpc->AttackCoordinator = 0;
 	BloodNpc->AttackCoordinator = 0;
 	TestFalse(TEXT("602 on the Troika line refuses on its own null-coordinator test"),
 		TroikaNpc->Slot602());
-	TestFalse(TEXT("602 on the AndreiBlood line refuses too — the named divergence, because retail "
-			  "would have faulted rather than answered"),
+	TestFalse(TEXT("602 on the AndreiBlood line answers false where retail faults"),
 		BloodNpc->Slot602());
 
 	// Both lines share the two gates in front of it, and both are tested BEFORE the coordinator.
@@ -279,17 +299,41 @@ bool FElysiumNpcKernelTroikaHelpersLeaveMeleeTest::RunTest(const FString&)
 	TestFalse(TEXT("frenzy bit 0x2 refuses on both lines"), BloodNpc->Slot602());
 	BloodNpc->SetFrenziedWord(0);
 
-	// With a coordinator index in hand the tail runs and the two lines agree, which is retail's own
+	// With a coordinator in hand the tail runs and the two lines agree, which is retail's own
 	// state. The must-leave arm is unreachable while slot 308 is a stub answering false, so the far
-	// arm is what runs: `MeleeRange` is `debug_melee_advance_combatmove_dist`'s 100 and
-	// `EnemyDistUnits` sits at its no-enemy 5000, `2 * 100 <= 5000` holds, and the "has room" seam
-	// answers false.
-	BloodNpc->ScheduleHost.EnemyDistUnits = 5000.f;
-	TestTrue(TEXT("the far arm answers true: no room in the coordinator"), BloodNpc->Slot602());
+	// arm is what runs: `MeleeRange` is `debug_melee_advance_combatmove_dist`'s 100, so the doubled
+	// range is 200.
+	FElysiumAttackCoordinator* const Player = BloodNpc->World->AttackCoordinator(2);
+	if (Player == nullptr)
+	{
+		AddError(TEXT("the world stands no coordinator 2"));
+		return false;
+	}
+	Player->Reset();
 	TroikaNpc->AttackCoordinator = 2;
+	BloodNpc->ScheduleHost.EnemyDistUnits = 5000.f;
 	TroikaNpc->ScheduleHost.EnemyDistUnits = 5000.f;
+	// Not listed: there is room (0x1025db50), so the far arm passes and 0x1025de90 answers "absent".
+	TestTrue(TEXT("an NPC the coordinator does not hold leaves (0x1025de90)"), BloodNpc->Slot602());
 	TestTrue(TEXT("and the Troika line answers the same once its guard passes"),
 		TroikaNpc->Slot602());
+	// Listed, with room left: far or near, it stays.
+	Player->Add(BloodNpc);
+	TestFalse(TEXT("a held NPC stays while the coordinator has room"), BloodNpc->Slot602());
+	// Listed and FULL: beyond twice the range it leaves, inside it stays.
+	Player->Add(TroikaNpc);
+	TestTrue(TEXT("held, full and at or beyond 2 x range: leave (0x1025db50 false)"),
+		BloodNpc->Slot602());
+	TestTrue(TEXT("the Troika line too"), TroikaNpc->Slot602());
+	BloodNpc->ScheduleHost.EnemyDistUnits = 100.f;
+	TestFalse(TEXT("held, full and inside 2 x range: stay"), BloodNpc->Slot602());
+
+	// Slot 601 with the object behind the index: the release takes the NPC out (0x1025ddd0).
+	BloodNpc->Slot601(nullptr);
+	TestTrue(TEXT("601 on the AndreiBlood line released the slot"), Player->IsAbsent(BloodNpc));
+	TroikaNpc->Slot601(nullptr);
+	TestTrue(TEXT("601 on the Troika line released it behind its guard"), Player->IsAbsent(TroikaNpc));
+	TestEqual(TEXT("the list is empty"), Player->Num(), 0);
 	return true;
 }
 
@@ -544,6 +588,44 @@ bool FElysiumNpcKernelTroikaHelpersFollowerTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
+// Slot 608 `0x102c48b0` over the world's three coordinators (spec 0002 V11-1).
+// -------------------------------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelTroikaHelpersBindNormalTest,
+	"Elysium.Arm.NpcKernelTroikaHelpers.BindNormal", GTroikaHelpersTestFlags)
+bool FElysiumNpcKernelTroikaHelpersBindNormalTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("troika_bindnormal"), 0x29c17031);
+	Builder.AddNpc(TEXT("npc"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Npc = Fixture.Npc(TEXT("npc"));
+	FElysiumNpcWorldFixture::Quiet({ Npc });
+	if (Npc == nullptr)
+	{
+		AddError(TEXT("fixture did not stand the NPC"));
+		return false;
+	}
+
+	// `0x1025e120` through the world's objects: the three names of `0x1025d880`, in its order.
+	TestEqual(TEXT("coordinator 1 is DAT_1090fbec"), Npc->AttackCoordinatorNameOf(1), FString(TEXT("Normal")));
+	TestEqual(TEXT("coordinator 2 is DAT_1090fbf0"), Npc->AttackCoordinatorNameOf(2), FString(TEXT("Player")));
+	TestEqual(TEXT("coordinator 3 is DAT_1090fbf4"), Npc->AttackCoordinatorNameOf(3), FString(TEXT("Boss")));
+	TestTrue(TEXT("index 0 is retail's null: no name"), Npc->AttackCoordinatorNameOf(0).IsEmpty());
+
+	// `0x102c48b0`: the first name match writes `+0x65e8` and `+0x65ec`.
+	Npc->AttackCoordinator = 0;
+	Npc->AttackCoordinatorName.Reset();
+	TestTrue(TEXT("608 binds \"Normal\" (Precache 0x10298ad0's literal)"), Npc->Slot608(TEXT("Normal")));
+	TestEqual(TEXT("m_pAttackCoordinator names the first global"), Npc->AttackCoordinator, 1);
+	TestEqual(TEXT("m_sAttackCoordinatorName is its name"), Npc->AttackCoordinatorName, FString(TEXT("Normal")));
+	TestTrue(TEXT("608 binds \"Boss\" too"), Npc->Slot608(TEXT("Boss")));
+	TestEqual(TEXT("the third global"), Npc->AttackCoordinator, 3);
+	TestFalse(TEXT("an unknown name binds nothing"), Npc->Slot608(TEXT("melee_north")));
+	TestEqual(TEXT("and leaves the last binding"), Npc->AttackCoordinator, 3);
+	return true;
+}
+
+// -------------------------------------------------------------------------------------------------
 // Slots 608, 609, 610, 611, 612.
 // -------------------------------------------------------------------------------------------------
 
@@ -562,8 +644,8 @@ bool FElysiumNpcKernelTroikaHelpersTailSlotsTest::RunTest(const FString&)
 		return false;
 	}
 
-	// Slot 608 `0x102c48b0`. The two guards first, then the walk over the three globals — whose
-	// names are a seam, so nothing can match.
+	// Slot 608 `0x102c48b0`. The two guards first, then the walk over the three globals; a name
+	// none of them carries binds nothing (`BindNormal` below asserts the three that match).
 	TestFalse(TEXT("608 refuses a null name"), Npc->Slot608(nullptr));
 	TestFalse(TEXT("608 refuses an empty name"), Npc->Slot608(TEXT("")));
 	Npc->AttackCoordinator = 0;

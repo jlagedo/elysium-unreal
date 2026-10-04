@@ -285,9 +285,55 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 			FString(TEXT("feeding_attacker_shortvictim_back_feed_loop")));
 		TestEqual(TEXT("...and stays complementary on the victim"), Reverse.Victim,
 			FString(TEXT("feeding_victim_tallattacker_back_feed_loop")));
-		TestEqual(TEXT("an equal-height tie has one deterministic attacker cell"),
-			static_cast<int32>(ElysiumFeed::VictimHeightFor(180.0f, 180.0f)),
-			static_cast<int32>(Height::Shorter));
+
+		// Retail sizes each body by its PARTNER's sex (`GetGrappleSize 0x103282e0`), once per body
+		// (`TranslateBaseGrappleActivity 0x10328380`), so the two cells are independent: a male
+		// attacker on a male victim is tall on both.
+		const ElysiumFeed::FClipPair BothMale = ElysiumFeed::ResolveClipPair(
+			EElysiumFeedPhase::Engage, Height::Taller, Height::Taller, Side::Front);
+		TestEqual(TEXT("a male victim gives the attacker the tall-victim cell"), BothMale.Attacker,
+			FString(TEXT("feeding_attacker_tallvictim_front_engage")));
+		TestEqual(TEXT("...and a male attacker gives the victim the tall-attacker cell"),
+			BothMale.Victim, FString(TEXT("feeding_victim_tallattacker_front_engage")));
+	}
+
+	// --- The grapple activity numbers, pure (`SetGrappleActivity 0x1032a100`) -------------------
+	{
+		// The phase -> base table of the mode 0 leaf `0x101655b0`: what `m_IdealActivity` holds.
+		TestEqual(TEXT("engage commits ACT_FEEDING_ENGAGE"),
+			ElysiumFeed::PhaseBaseActivity(EElysiumFeedPhase::Engage), 0xf5b);
+		TestEqual(TEXT("bite commits ACT_FEEDING_BITE"),
+			ElysiumFeed::PhaseBaseActivity(EElysiumFeedPhase::Bite), 0xf76);
+		TestEqual(TEXT("loop commits ACT_FEEDING_FEED_LOOP"),
+			ElysiumFeed::PhaseBaseActivity(EElysiumFeedPhase::Loop), 0xf7f);
+		TestEqual(TEXT("release commits ACT_FEEDING_FEED_RELEASE"),
+			ElysiumFeed::PhaseBaseActivity(EElysiumFeedPhase::Release), 0xf88);
+		TestEqual(TEXT("the release tail commits nothing"),
+			ElysiumFeed::PhaseBaseActivity(EElysiumFeedPhase::ReleaseTail), 0);
+
+		// `0x10328380`: base + (partner male ? 2 : 1) + (victim ? 2 : 0) + (back ? 4 : 0).
+		ElysiumFeed::FGrappleCell Victim;
+		Victim.bPartnerMale = true;
+		Victim.bVictim = true;
+		Victim.Position = 0;
+		TestEqual(TEXT("a victim of a male attacker, front, engages on 0xf5f"),
+			ElysiumFeed::TranslateBaseGrappleActivity(0xf5b, Victim), 0xf5f);
+		TestEqual(TEXT("...and releases on 0xf8c"),
+			ElysiumFeed::TranslateBaseGrappleActivity(0xf88, Victim), 0xf8c);
+		ElysiumFeed::FGrappleCell Attacker;
+		Attacker.bPartnerMale = false;
+		Attacker.Position = 0;
+		TestEqual(TEXT("the attacker of a female victim, front, engages on 0xf5c"),
+			ElysiumFeed::TranslateBaseGrappleActivity(0xf5b, Attacker), 0xf5c);
+		Victim.Position = 1;
+		TestEqual(TEXT("the back cell is four further: _VICTIM_TALLATTACKER_BACK"),
+			ElysiumFeed::TranslateBaseGrappleActivity(0xf5b, Victim), 0xf63);
+		Victim.Position = -1;
+		TestEqual(TEXT("no position leaves the base untranslated"),
+			ElysiumFeed::TranslateBaseGrappleActivity(0xf5b, Victim), 0xf5b);
+		TestEqual(TEXT("the stealth kill's victim cell rides the same formula"),
+			ElysiumFeed::TranslateBaseGrappleActivity(ElysiumFeed::ActSneakAttackSuccess, Attacker),
+			0x1016);
 	}
 
 	// --- Paired input keeps look and the toggle, not body/combat intent -----------------------
@@ -505,15 +551,21 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 			SaveTestCounterValue(World.FindByName(TEXT("endcount"))), 1.0f);
 		TestEqual(TEXT("event 4006 releases the camera before the pose tail"),
 			Camera.ReleaseCount, 1);
+		// The attacker's release cell is the victim's size, which is its sex (`0x103282e0`).
+		const ElysiumFeed::EPartnerHeight VictimSize = Victim->Sheet.IsMale()
+			? ElysiumFeed::EPartnerHeight::Taller : ElysiumFeed::EPartnerHeight::Shorter;
 		TestEqual(TEXT("the release tail stays anchored to the authored event time"),
 			Player->FeedState.PhaseDeadline,
-			ReleaseEventDeadline + ElysiumFeed::ShortVictimReleaseSeconds
-				* (1.0f - ElysiumFeed::ShortVictimReleaseEventCycle), 1e-4f);
+			ReleaseEventDeadline
+				+ ElysiumFeed::PhaseSeconds(EElysiumFeedPhase::Release, VictimSize)
+				* (1.0f - ElysiumFeed::EventCycle(EElysiumFeedPhase::Release, VictimSize)), 1e-4f);
 		Advance(static_cast<double>(Player->FeedState.PhaseDeadline) + 0.01);
 		TestFalse(TEXT("the authored release tail finally hands both bodies back"),
 			Player->IsFeedPaired());
 		TestEqual(TEXT("body-tail completion does not release the camera twice"),
 			Camera.ReleaseCount, 1);
+		// The re-arm is the leave's own (`CAI_BaseNPCTroika::LeaveGrappleState 0x102b5d90` -> slot
+		// 614, the think timers := now); `EndFeedVictimRole` writes no think word on an NPC.
 		TestTrue(TEXT("a surviving victim is re-armed for its ordinary NPC think"),
 			Victim->NextThink != ELYSIUM_NEVER_THINK);
 	}

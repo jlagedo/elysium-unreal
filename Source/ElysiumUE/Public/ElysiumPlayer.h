@@ -2426,6 +2426,11 @@ public:
 	// the damage modifiers and the health commit, on ANY accepted damage rather than on death.
 	virtual void OnDamageEntered() override;
 
+	// Slot 328: `CBasePlayer 0x1015dca0`, `return 1;` (the base `0x1014f830` answers 0).
+	// `MeleeSwingStep 0x10343020` reads it on the ATTACKER: the player's swing takes the wall
+	// contact (`0x10343f96`), the blocked reaction off a near-vertical wall within 20 units.
+	virtual bool Slot328() override { return true; }
+
 	virtual void Spawn() override;
 
 	// The player's own think, run PRE-move by `FElysiumEntityWorld::RunPlayerThink` — which is

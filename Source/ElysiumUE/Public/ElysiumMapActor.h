@@ -434,6 +434,8 @@ public:
 	virtual FString NpcClipOwner(const FString& Stem, const FString& ClipLabel) override;
 	virtual bool GetBodyClipByRawIndex(USkeletalMeshComponent* Body, const FString& Stem,
 		int32 RawIndex, FString& OutLabel, struct FElysiumNpcClip& OutClip) override;
+	virtual bool GetBodySequenceMovement(USkeletalMeshComponent* Body, const FString& Stem,
+		int32 RawIndex, FVector& OutDeltaCm) override;
 	virtual bool GetNpcSequenceDescriptor(const FString& Stem, const FString& OwnerStem,
 		const FString& Label, FElysiumSequenceDescriptor& Out) override;
 	virtual bool GetBodyBoneTransform(USkeletalMeshComponent* Body, const FString& BoneName,
@@ -444,6 +446,10 @@ public:
 		FBox& OutWorld) const override;
 	virtual void QuerySwingContacts(const FElysiumSwingSweep& Sweep,
 		TArray<FElysiumEntityHandle>& OutHits) const override;
+	virtual void QuerySwingStepEntities(const FElysiumSwingSweep& Sweep,
+		TArray<FElysiumEntityHandle>& OutEntities) const override;
+	virtual bool ClipSwingRayToEntity(const FVector& FromCm, const FVector& ToCm,
+		const FElysiumEntityHandle& Entity, FElysiumSwingRayHit& Out) const override;
 	virtual void DrainPlayerTouchContacts(TArray<FElysiumEntityHandle>& Out) override;
 	virtual bool GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
 		FElysiumClipPhase& Out) override;

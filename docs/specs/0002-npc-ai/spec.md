@@ -708,7 +708,7 @@ tests the green scenarios cover deleted.
   a sound at its expiry plus a grace. The port drops it in `Listen` at its expiry
   (`ElysiumNpcSenses.cpp:713`), so hearing is a race. *Scenario:* `hear_world_investigate` green in
   three boots. *Size:* S.
-- [ ] **V11. The attack coordinator's list.** (Pulled forward from R4: a planning bug, N3 — no
+- [x] **V11. The attack coordinator's list.** (Pulled forward from R4: a planning bug, N3 — no
   melee scenario can go green without it.) The object behind `m_pAttackCoordinator +0x65e8`, its
   cap and the four bodies `0x1025db50` / `0x1025db70` / `0x1025dca0` / `0x1025de90`, all four stubs
   answering false today (`ElysiumNpcTroikaHelpers.cpp:134-160`), so slot 599 `0x102b5650` never

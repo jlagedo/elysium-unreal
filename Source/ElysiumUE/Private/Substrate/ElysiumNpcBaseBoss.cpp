@@ -166,13 +166,14 @@ bool FElysiumNpcBaseBoss::FUN_103c1b10()
 	// `range + range` is the DOUBLED melee range, the same doubling the Troika line uses.
 	// `MeleeRangeUnits()` (family TroikaHelpers) reads the same ConVar,
 	// `debug_melee_advance_combatmove_dist` "100", so the doubled range is 200 units;
-	// `MeleeCoordinatorHasRoom()` answers false, so past 200 units that arm returns true.
+	// `MeleeCoordinatorHasRoom()` is `0x1025db50` on the world's coordinator (spec 0002 V11-1), so
+	// past 200 units that arm returns true only when the list is full.
 	//
 	// The last line negates `MeleeCoordinatorHoldsMe()` because that seam is spelled "is this NPC IN
 	// the array" while `0x1025de90` answers "is it NOT" — family TroikaHelpers' own `Slot602` writes
-	// the same `!`, and this body calls the seam the same way so the two cannot disagree. With an
-	// absent coordinator the seam answers false, so this answers TRUE: nothing holds this NPC, so
-	// nothing stops it leaving melee.
+	// the same `!`, and this body calls it the same way so the two cannot disagree. An NPC the
+	// coordinator's list does not hold answers TRUE: nothing holds it, so nothing stops it leaving
+	// melee.
 	const float DoubledRange = MeleeRangeUnits() + MeleeRangeUnits();
 	if (DoubledRange < ScheduleHost.EnemyDistUnits && !MeleeCoordinatorHasRoom())
 	{

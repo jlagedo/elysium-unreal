@@ -450,6 +450,14 @@ bool FElysiumStealthKillCommitTest::RunTest(const FString&)
 	TestFalse(TEXT("pre-commit detected observer is cleared"), F.Player->Observer.IsSet());
 	TestTrue(TEXT("attacker owns mode 3"), F.Player->Grapple.Type == EElysiumGrappleType::StealthKill);
 	TestTrue(TEXT("victim points to attacker driver"), F.Guard->Grapple.AnimDriver == F.Player->Handle);
+	// `StartGrappleAttack 0x10328df0` commits mode 3 through `SetGrappleActivity 0x1032a100` with the
+	// base `0x1015` `ACT_SNEAKATTACK_SUCCESS`: the NPC victim's `m_IdealActivity (+0xff0)` is the
+	// untranslated base and its clip is its own kernel sequence (`0x10260a50`), cycle 0 -- not a
+	// segment played on its body from outside (packet S10, D9).
+	TestEqual(TEXT("0x1032a100: the victim's m_IdealActivity is the base 0x1015"),
+		F.Guard->IdealActivityNumber, 0x1015);
+	TestTrue(TEXT("0x10260a50: the victim's clip is its kernel sequence"), F.Guard->SequenceNumber >= 0);
+	TestEqual(TEXT("0x1032a100: m_flCycle = 0"), F.Guard->SequenceCycle, 0.f);
 	TestTrue(TEXT("opponent handles written"), F.Player->MeleeOpponent == F.Guard->Handle
 		&& F.Player->LastOpponent == F.Guard->Handle);
 	TestFalse(TEXT("no death on commitment"), F.Guard->HasReportedDeath());

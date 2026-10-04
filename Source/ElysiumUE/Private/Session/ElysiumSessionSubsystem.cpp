@@ -16,6 +16,8 @@
 
 #include "Engine/GameInstance.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumState, Log, All);
 
@@ -74,6 +76,19 @@ const FElysiumStatTable* UElysiumSessionSubsystem::Stats() const
 
 void UElysiumSessionSubsystem::NotifyPlayerKilled()
 {
+	// HARNESS DOOR (spec 0002 V11): the headless arena host (`-ElysiumArena`) has no game-over screen
+	// to answer, and the transition pauses the substrate clock the scenario runner advances on -- the
+	// host then printed nothing for 300 s and was killed, taking every later record of the boot with
+	// it (measured: `melee_ally_in_the_way`, the first record in which an NPC's swing kills the
+	// player). The death itself is untouched: the player's death sequence has run and the world goes
+	// on with the player dead, which is retail's own state (a death sign over a running world). The
+	// next record's stage is built with a fresh player.
+	if (FParse::Param(FCommandLine::Get(), TEXT("ElysiumArena")))
+	{
+		UE_LOG(LogElysiumState, Display,
+			TEXT("the player died — arena host: the run is not ended, the record goes on"));
+		return;
+	}
 	UE_LOG(LogElysiumState, Display, TEXT("the player died — ending the run"));
 	if (UGameInstance* GI = GetGameInstance())
 	{

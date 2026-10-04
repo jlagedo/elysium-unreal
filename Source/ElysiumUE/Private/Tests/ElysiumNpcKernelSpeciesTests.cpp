@@ -12,6 +12,7 @@
 #include "ElysiumStub.h"
 #include "Misc/ScopeExit.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
+#include "Substrate/ElysiumAttackCoordinator.h"
 #include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcAndreiBlood.h"
@@ -481,9 +482,12 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	TestTrue(TEXT("and a body already in melee still accepts"), Fixture.Gargoyle->Slot600(Enemy));
 
 	// --- `CNPC_VTzimisceHeadClaw` 599: the coordinator alone ------------------------------------
-	// `MeleeCoordinatorAdmits599` is family TroikaHelpers' seam and answers false with no
-	// coordinator object, so the body takes its refusal arm — which is retail's own answer for a
-	// coordinator with no free slot.
+	// `MeleeCoordinatorAdmits599` is `0x1025db70` over the world's coordinator object (spec 0002
+	// V11-1). With `m_pAttackCoordinator` 0 there is no object (retail's fault path) and it answers
+	// false, so the body takes its refusal arm — retail's own answer for a full coordinator whose
+	// members are all nearer.
+	Claw->AttackCoordinator = 0;
+	Runner->AttackCoordinator = 0;
 	Claw->bInMelee = true;
 	Claw->MeleeEventFires = 0;
 	(void)Claw->FUN_103c19e0(Enemy);
@@ -553,14 +557,15 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 
 	// --- slot 602: the far arm only ---------------------------------------------------------------
 	// `MeleeRangeUnits()` answers `debug_melee_advance_combatmove_dist`'s 100, so the doubled range
-	// is 200, and `MeleeCoordinatorHasRoom()` answers false — so past 200 units the first arm wins.
+	// is 200, and `MeleeCoordinatorHasRoom()` answers false with no coordinator object (index 0, set
+	// above) — so past 200 units the first arm wins.
 	Claw->ScheduleHost.EnemyDistUnits = 500.f;
 	Runner->ScheduleHost.EnemyDistUnits = 500.f;
 	TestTrue(TEXT("0x103c1b10 leaves melee when out of double range and the coordinator is full"),
 		Claw->FUN_103c1b10());
 	TestTrue(TEXT("0x103c3ab0 is the byte-identical twin"), Runner->Slot602());
 	// At zero distance the first arm's `0 < 0` fails and the body falls through to
-	// `MeleeCoordinatorHoldsMe()`, which answers true for a coordinator that holds nobody.
+	// `0x1025de90`, which answers true ("absent") when nothing holds this NPC.
 	Claw->ScheduleHost.EnemyDistUnits = 0.f;
 	TestTrue(TEXT("and at zero distance it falls through to 'the coordinator does not hold me'"),
 		Claw->FUN_103c1b10());
@@ -1711,6 +1716,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot599Test::RunTest(const FString&)
 	// `0x103c3960` drops EVERY gate the Troika body has — frenzy, the can-enter timer, the range and
 	// height terms — and goes straight to the coordinator, which refuses. The frenzy bit is the
 	// discriminator: the Troika arm enters melee outright on it, the runner's arm never reads it.
+	Runner->AttackCoordinator = 0;   // no coordinator object: `0x1025db70` refuses (the fault path)
 	Runner->SetFrenziedWord(0x2);
 	Runner->bInMelee = true;
 	TestFalse(TEXT("a runner's slot 599 refuses on the coordinator, frenzy bit and all"),
@@ -1756,7 +1762,9 @@ bool FElysiumNpcKernelSpeciesWiredSlot600Test::RunTest(const FString&)
 	}
 
 	// `0x103c39e0` fires the global melee event FIRST and unconditionally; the Troika body fires it
-	// only inside the accepting arm, which the weapon-capability seam (answering 0) never reaches.
+	// only inside the accepting arm, which an NPC with no coordinator object (index 0) never reaches.
+	Runner->AttackCoordinator = 0;
+	Cop->AttackCoordinator = 0;
 	const int32 RunnerEvents = Runner->MeleeEventFires;
 	Runner->RunnerPotentialEnemy = FElysiumEntityHandle();
 	TestFalse(TEXT("a runner's slot 600 still refuses on the coordinator"), Runner->Slot600(Cop));
@@ -1766,7 +1774,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot600Test::RunTest(const FString&)
 		Runner->RunnerPotentialEnemy, Cop->Handle);
 
 	const int32 CopEvents = Cop->MeleeEventFires;
-	TestFalse(TEXT("a plain Troika NPC's slot 600 refuses with no capability bits"),
+	TestFalse(TEXT("a plain Troika NPC's slot 600 refuses with no capability bits or no coordinator"),
 		Cop->Slot600(Runner));
 	TestEqual(TEXT("and fires no event, because the fire is INSIDE the accepting arm"),
 		Cop->MeleeEventFires, CopEvents);
@@ -1787,8 +1795,8 @@ bool FElysiumNpcKernelSpeciesWiredSlot601Test::RunTest(const FString&)
 	}
 
 	// `0x103c3a70` releases the coordinator slot UNGUARDED and clears `m_hPotentialEnemy`; the
-	// Troika body guards the release on `m_pAttackCoordinator != 0`. With no coordinator object in
-	// this substrate that guard is closed, so the release count is the discriminator.
+	// Troika body guards the release on `m_pAttackCoordinator != 0`. With index 0 that guard is
+	// closed, so the release count is the discriminator.
 	Runner->AttackCoordinator = 0;
 	Runner->bInMelee = true;
 	Runner->RunnerPotentialEnemy = Cop->Handle;
@@ -1807,6 +1815,23 @@ bool FElysiumNpcKernelSpeciesWiredSlot601Test::RunTest(const FString&)
 	TestFalse(TEXT("a plain Troika NPC's slot 601 leaves melee too"), Cop->bInMelee);
 	TestEqual(TEXT("but releases nothing, because its release is GUARDED"),
 		Cop->MeleeCoordinatorReleases, CopReleases);
+
+	// With the object behind the index (spec 0002 V11-1): slot 600 `0x103c39e0` registers the runner
+	// in "Normal" (`0x1025dca0`), slot 601 takes it out again (`0x1025ddd0`).
+	FElysiumAttackCoordinator* const Normal = Runner->World->AttackCoordinator(1);
+	if (Normal == nullptr)
+	{
+		AddError(TEXT("the world stands no coordinator 1"));
+		return false;
+	}
+	Normal->Reset();
+	Runner->AttackCoordinator = 1;
+	Runner->bInMelee = false;
+	TestTrue(TEXT("a runner's slot 600 is admitted by an empty coordinator"), Runner->Slot600(Cop));
+	TestFalse(TEXT("0x1025dca0 listed it"), Normal->IsAbsent(Runner));
+	Runner->Slot601(Cop);
+	TestTrue(TEXT("and slot 601's 0x1025ddd0 took it out"), Normal->IsAbsent(Runner));
+	TestEqual(TEXT("leaving the list empty"), Normal->Num(), 0);
 	return true;
 }
 
@@ -1824,8 +1849,7 @@ bool FElysiumNpcKernelSpeciesWiredSlot602Test::RunTest(const FString&)
 	}
 
 	// `0x103c3ab0` keeps only the FAR arm: out of double melee range with a full coordinator. The
-	// Troika body refuses first on its own null-coordinator test, which is the state this substrate
-	// is always in (the named divergence family TroikaHelpers records).
+	// Troika body refuses first on its own null-coordinator test (`0x102b5900`'s third line).
 	Runner->AttackCoordinator = 0;
 	Runner->ScheduleHost.EnemyDistUnits = 500.f;
 	TestTrue(TEXT("a runner's slot 602 leaves melee on the far arm"), Runner->Slot602());

@@ -4,7 +4,8 @@
 //
 // **What this exists to remove.** The melee reaction bands come out of `rules.txt`'s
 // `Melee_Reactions` block, and without them `ClassifyDefender` answers `Unclassified` — which is
-// deliberately not a band, so no blocked reaction and no knockback is ever produced. Re-calling
+// deliberately not a band, so no blocked reaction is ever produced (the knockback is not the
+// margin's to select: `0x102579f0` step 7 asks the victim's slot 326 / slot 400). Re-calling
 // the same functions in the same order as `FElysiumWeapon::MeleeContact` proves a copy of the
 // producer, not the producer.
 //

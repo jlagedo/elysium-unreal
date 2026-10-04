@@ -27,14 +27,14 @@
 // The `SMALL` family and the two `LOW_BACK` cells are **reachable**, and asserted so: which cell a
 // direction answers is a property of the record that was swung, not of the classifier.
 //
-// **How a content-free world reaches the knockback branch at all.** It is taken on the hit/knockback
-// classification, which needs `rules.txt`'s `Melee_Reactions` block — and `ElysiumMeleeTest::
-// FRulesFixture` binds a fabricated one as the process-wide fallback every combat leaf already reads
-// when no rulebook subsystem is in reach. So `.Producer` drives real contacts through
-// `MeleeContact`, and the cases split three ways:
+// **How a content-free world reaches the knockback branch.** It is taken on an UNBLOCKED contact
+// whose victim's slot 326(record) or slot 400 asks for it (`0x102579f0` step 7) — not on the margin
+// class. `ElysiumMeleeTest::FRulesFixture` binds a fabricated `Melee_Reactions` block as the
+// process-wide fallback every combat leaf already reads, which is what lets a case be BLOCKED. So
+// `.Producer` drives real contacts through `MeleeContact`, and the cases split three ways:
 //
-//  1. WITHOUT the fixture, the fail-safe: an unclassified record names no band, so it knocks nobody
-//     back and the shared health commit's ordinary flinch is the only reaction produced.
+//  1. WITHOUT the fixture: an unclassified record blocks nothing, so the contact is unblocked and
+//     slot 326 alone decides between the knockback and the plain hit.
 //  2. WITH it, the whole path: press, sweep, classify, select off the record's table, snap, play.
 //  3. A handful of composition cases still make the producer's calls directly, where what is being
 //     asserted is one rule's arithmetic rather than the transaction around it.
@@ -341,6 +341,19 @@ namespace
 			// Whom the sweep reaches. Geometry is the seam's answer; eligibility, the opposed record
 			// and every reaction behind it stay in the substrate.
 			Services.SwingContacts = { Victim->Handle };
+			// `MeleeSwingStep 0x10343020`'s relation filter (`0x1034394d..0x103439a7`): an NPC's swing
+			// lands only on a character its slot 404 `IRelationType` answers hate or fear for. The two
+			// fight each other, so each hates the other.
+			if (FElysiumNpc* AttackerNpc = Attacker->AsNpc())
+			{
+				AttackerNpc->Relationships.AddEntityRelationship(Victim->Handle,
+					EElysiumRelationship::Hate, 10);
+			}
+			if (FElysiumNpc* VictimNpc = Victim->AsNpc())
+			{
+				VictimNpc->Relationships.AddEntityRelationship(Attacker->Handle,
+					EElysiumRelationship::Hate, 10);
+			}
 			Services.Calls.Reset();
 			return true;
 		}
@@ -1093,27 +1106,51 @@ bool FElysiumKnockbackProducerTest::RunTest(const FString&)
 		TestEqual(TEXT("...and plays nothing"), CountCalls(F.Services, TEXT("PlayNpcOneShot")), 0);
 	}
 
-	// --- The fail-safe, driven end to end through a real contact -------------------------------------
+	// --- No margin table: the knockback is not the margin's to select --------------------------------
 	//
-	// A content-free world has no `rules.txt`, so the margin classifier answers `Unclassified` — which
-	// names no band. A knockback must NOT be produced from it, exactly as no block reaction is: an
-	// absent margin table is a reported failure, never an invented outcome.
+	// `0x102579f0` step 7: an UNBLOCKED contact on a character asks the victim's slot 326(record) and
+	// slot 400, not the margin class. A content-free world has no `rules.txt`, so the classifier
+	// answers `Unclassified` — which blocks nothing — and the victim, eligible and under its buildup
+	// bound, is knocked back off the record. (Rewritten by spec 0002 V11-2, D11: this case pinned
+	// "an unclassified record knocks nobody back", the margin-class selector.)
 	{
 		FKnockbackFixture F;
 		if (!F.Stand(*this))
 		{
 			return false;
 		}
+		F.Swing(GHammer);
+
+		TestTrue(TEXT("the swing landed (0x102579f0: unblocked, the damage is dispatched)"),
+			DamageTaken(*F.Victim) > 0);
+		TestTrue(TEXT("0x102579f0 step 7: slot 326 admits, so the victim is knocked back"),
+			Saw(F.Services, TEXT("ResolveNpcActivityClip"), TEXT("ACT_KNOCKBACK")));
+	}
+
+	// --- Slot 326 refusing sends the contact to the plain hit (slot 321) ------------------------------
+	//
+	// `(record == 0 || !victim slot 326(record)) && !victim slot 400()` -> slot 321, whose base
+	// `0x1014f7b0` is `return 0`: no knockback cell is asked for. The template byte is slot 326's
+	// base arm (`0x103482e0`).
+	{
+		FKnockbackFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		FElysiumNpc* Npc = F.Victim->AsNpc();
+		if (!TestNotNull(TEXT("the victim is an NPC"), Npc))
+		{
+			return false;
+		}
+		Npc->bDisallowKnockbacks = true;
 		const float FacingBefore = F.VictimUnrealYaw();
 		F.Swing(GHammer);
 
-		TestTrue(TEXT("the swing landed"), DamageTaken(*F.Victim) > 0);
-		TestFalse(TEXT("an unclassified record knocks nobody back"),
+		TestTrue(TEXT("the swing still lands its damage"), DamageTaken(*F.Victim) > 0);
+		TestFalse(TEXT("0x102579f0 step 7: slot 326 false and slot 400 false -> the plain hit"),
 			Saw(F.Services, TEXT("ResolveNpcActivityClip"), TEXT("ACT_KNOCKBACK")));
-		TestEqual(TEXT("...and turns nobody"), F.VictimUnrealYaw(), FacingBefore, 1e-3f);
-		// The generic flinch is the reaction it DOES produce, from the shared health commit.
-		TestTrue(TEXT("...while the ordinary damage flinch still plays"),
-			Saw(F.Services, TEXT("ResolveNpcActivityClip"), TEXT("ACT_HIT_")));
+		TestEqual(TEXT("...and nobody is turned"), F.VictimUnrealYaw(), FacingBefore, 1e-3f);
 	}
 
 	// --- A REAL contact, classified, knocking back off the record's own table ------------------------
@@ -1199,9 +1236,10 @@ bool FElysiumKnockbackProducerTest::RunTest(const FString&)
 		};
 		TestEqual(TEXT("the counter starts at zero"), F.Victim->HitBuildupCount, 0);
 
-		// Two admitted hits. The raise runs before the read — recovered from the melee impact body's
-		// own order, named at the producer — so a default of `2` admits at counts 1 and 2 and
-		// refuses at 3. Thrown twice, then it stands its ground.
+		// Three admitted hits. The raise is entity slot 21 (`0x1029f800`), dispatched in the impact's
+		// TAIL (`0x1025803f`) — after step 7's slot-326 read — so a default of `2` admits at counts
+		// 0, 1 and 2 and refuses at 3. (Rewritten by spec 0002 V11-2, D10: this pinned two, from a
+		// raise the walk made before the contact.)
 		int32 Admitted = 0;
 		for (int32 Hit = 0; Hit < 5; ++Hit)
 		{
@@ -1212,7 +1250,8 @@ bool FElysiumKnockbackProducerTest::RunTest(const FString&)
 				++Admitted;
 			}
 		}
-		TestEqual(TEXT("the counter admits exactly two hits"), Admitted, 2);
+		TestEqual(TEXT("0x1029fec0 over a tail raise (0x1025803f): the counter admits exactly three hits"),
+			Admitted, 3);
 		TestTrue(TEXT("...and has risen past the admission bound"),
 			F.Victim->HitBuildupCount > FElysiumCombatCharacter::HitBuildupAdmitAtOrBelow);
 

@@ -35,6 +35,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumAttackCoordinator.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumHint.h"
@@ -396,9 +397,11 @@ FElysiumEntity* FElysiumNpc::TaskTailEnemy167() const
 
 int32 FElysiumNpc::TaskTailCoordinatorCircleSide(const FElysiumEntity* Enemy) const
 {
-	// SEAM for `0x1025df40`.
-	(void)Enemy;
-	return 0;
+	// `0x1025df40(m_pAttackCoordinator, this, enemy)`: the side that opens the angle to the nearest
+	// other member of the coordinator's list, -1 or 1; 0 (fewer than two members, no enemy) keeps
+	// the caller's random side. With no coordinator object retail faults; 0 here.
+	const FElysiumAttackCoordinator* const Coordinator = MeleeCoordinator();
+	return Coordinator != nullptr ? Coordinator->CircleSide(this, Enemy) : 0;
 }
 
 bool FElysiumNpc::TaskTailWeaponMinRangeUnits(float& OutRangeUnits) const

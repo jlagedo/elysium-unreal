@@ -7,7 +7,7 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 136 generated slot bodies of `FElysiumCombatCharacter`: 19 carry the retail default story 29c
-// recovered, 21 are defined by hand in the substrate, and 95 are still stubs — 60 29c, 25 29d, 5
+// recovered, 22 are defined by hand in the substrate, and 94 are still stubs — 60 29c, 24 29d, 5
 // 29e, 5 unassigned. 1 are closed (0019/6) and answer the value-initialised default without
 // tallying.
 //
@@ -625,13 +625,8 @@ void FElysiumCombatCharacter::Slot330(float, void*)
 // Activity, int*)`
 //   takes `int*`
 //   layer 11, story 29d
-bool FElysiumCombatCharacter::ChooseMeleeAttackSequence(FElysiumEntity*, FElysiumEntity*, int32,
-	void*)
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::ChooseMeleeAttackSequence"),
-		TEXT("0x10347180"), TEXT("29d"), DebugString());
-	return {};
-}
+// verdict `present`: the body is `FElysiumCombatCharacter::ChooseMeleeAttackSequence`, written by
+// hand in the substrate. Declared here, defined there.
 
 // slot 332 0x1014f890 (walked) `void vfunc332(CBaseEntity*)`
 //   layer 0, story 29c
@@ -1456,7 +1451,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void(float, void*)>::Test(&FElysiumCombatCharacter::Slot330),
 				[](FElysiumCombatCharacter& Receiver) -> int64 { float Arg0{}; void* Arg1{}; Receiver.Slot330(Arg0, Arg1); return 0; } },
 			{ 331, TEXT("0x10347180"), TEXT("CBaseCombatCharacter"),
-				TEXT("ChooseMeleeAttackSequence"), EElysiumNpcSlotBody::Stub, TEXT(""), 0, false,
+				TEXT("ChooseMeleeAttackSequence"), EElysiumNpcSlotBody::Hand, TEXT(""), 0, false,
 				false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, bool(FElysiumEntity*, FElysiumEntity*, int32, void*)>::Test(&FElysiumCombatCharacter::ChooseMeleeAttackSequence),
 				nullptr },

@@ -45,6 +45,16 @@ virtual void MeleeSequencesForActivity(int32 Activity, TArray<struct FElysiumNpc
 	(void)OutSequences;
 }
 
+// The held weapon's slot 361 (`+0x5a4`) `CBaseCombatWeapon::ActivityOverride 0x1024f210`, in the
+// kernel's NUMBER space: the first row of the weapon class's ladder whose target the owner can play
+// (the bat: `ACT_MELEE_ATTACK` -> `_BASEBALLBAT`, `_MELEESHARED_ONEHAND`, `_KATANA`; the knife ->
+// `_KNIFE`; the katana -> `_KATANA`; fists -> `_FISTS`; `packets-S6.md` item 3), else the input
+// unchanged (no weapon, no row, or no playable target). The ladder itself is the name-keyed
+// resolver's (`ElysiumActionTables::Translate`), asked through `MeleeSequencesForActivity`: the
+// activity its answer's sequences carry IS the row's target. `OutSequences`, when given, receives
+// that list (`GetSequencesForActivity` over the result).
+int32 WeaponActivityOverride(int32 Activity, TArray<struct FElysiumNpcClip>* OutSequences = nullptr) const;
+
 // --- The bridge row's descriptor facts (spec 0002 V4a, lane A2) ---------------------------------
 //
 // What the kernel reads off the studio sequence descriptor of a sequence NUMBER, cached per

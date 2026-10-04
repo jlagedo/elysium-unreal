@@ -586,7 +586,28 @@ bool FElysiumNpc::PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOut
 	// clip is the sequence bridge above (the named modernization: name-keyed clips for the studio
 	// sequence table).
 	float Seconds = 0.f;
-	if (PlayAnimClip(Row.Label, Row.bLoops, &Seconds))   // 0x10090950 ResetSequenceInfo
+	FElysiumClipSegment Segment;
+	Segment.ClipName = Row.Label;
+	Segment.bLoop = Row.bLoops;
+	if (!Row.bLoops && Grapple.Type == EElysiumGrappleType::StealthKill
+		&& Grapple.Role != EElysiumGrappleRole::None)
+	{
+		// The stealth kill's paired clip, committed as this body's own sequence by `SetGrappleActivity
+		// 0x1032a100` (packet S10, D9). Retail's finished non-looping `m_nSequence` stays on its last
+		// frame (`m_flCycle` clamps at 1, `m_bSequenceFinished`) until the next `ResetSequenceInfo`,
+		// and `BecomeClientRagdoll 0x10090180` takes that pose; the bridge's plain one-shot would
+		// hand the base channel back to the body's own classifier when the clip ends -- the victim
+		// stood up between its clip's end and the attacker's (measured, `verbs_stealth_kill`: pelvis
+		// 99.4 cm at the end). So the row plays under the paired clip's own presentation, the one
+		// the attacker's half states (`FElysiumPlayer::StartStealthKill`): held at cycle 1, on the
+		// scripted band, until `LeaveGrappleState` releases it. NAMED, scoped to mode 3: the general
+		// rule (every finished non-looping row holds its last frame) is owed by the bridge.
+		Segment.Source = EElysiumAnimSource::Interaction;
+		Segment.Priority = EElysiumAnimPriority::Scripted;
+		Segment.bHoldUntilReleased = true;
+		Segment.bHoldFinalPose = true;
+	}
+	if (PlayAnimSegment(Segment, &Seconds))   // 0x10090950 ResetSequenceInfo
 	{
 		Row.Seconds = Seconds;
 		if (!Row.OwnerStem.IsEmpty())

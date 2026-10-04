@@ -1596,12 +1596,18 @@ FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavSte
 		ENavMoveResult PreSinkResult = ENavMoveResult::Ok;
 		if (NavObstructionPreSink(Step, NavStepDistClearUnits(Step), PreSinkResult))
 		{
+			NavFailArm = TEXT("S1 0x102eefb0, the obstruction's own arms ahead of the sink");
 			return PreSinkResult;
 		}
 	}
-	if (FElysiumNpc* Troika = AsNpc(); Troika && Step.Blocker.IsSet() && Troika->MovementSinkObstructed(Step)) return MoveSinkResult;
+	if (FElysiumNpc* Troika = AsNpc(); Troika && Step.Blocker.IsSet() && Troika->MovementSinkObstructed(Step))
+	{
+		NavFailArm = TEXT("the Troika movement sink's slot 1 0x10298340");
+		return MoveSinkResult;
+	}
 	if (AsNpc() == nullptr && Step.Blocker.IsSet() && NavMoveSinkDoorStep(Step))
 	{
+		NavFailArm = TEXT("the base movement sink's door arm 0x1027dc10");
 		return MoveSinkResult;
 	}
 
@@ -1645,6 +1651,11 @@ FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavSte
 	{
 		return ENavMoveResult::Ok;
 	}
+	NavFailArm = Result == ENavMoveResult::BlockedNpc
+		? TEXT("the body gave the request up on an NPC (motor code 2), the hold 0x102ef3e0 refused, "
+			"outside 0x102ef760's goal tolerance")
+		: TEXT("the body gave the request up on the world or an unnamed blocker (motor code 3), "
+			"outside 0x102ef760's goal tolerance");
 	return Result;
 }
 
@@ -1730,8 +1741,10 @@ void FElysiumNpcBase::NavigatorMoveStep()
 	// The loop (`102f00e9..102f0165`): result seeded 1, `nav+0x1c = 0`, pass counter 0.
 	Navigator.bNavFailed = false;
 	NavMoveStep.Passes = 0;
+	NavFailArm = TEXT("none");
 	ENavMoveResult Result = ENavMoveResult::ChangeType;
 	FElysiumEntityHandle LastBlocker;
+	FNavStepFacts LastStep;
 	bool bBudgetSpent = false;
 	for (;;)
 	{
@@ -1746,6 +1759,7 @@ void FElysiumNpcBase::NavigatorMoveStep()
 		}
 		const FNavStepFacts Step = NavSampleStep();
 		LastBlocker = Step.Blocker;
+		LastStep = Step;
 		Result = NavMoveNormalPass(Step);
 		// `INC EBP; CMP EBP,0x10; JG`: the 17th dispatch fails whatever it answered.
 		if (++NavMoveStep.Passes > GMoveStepMaxPasses)
@@ -1770,6 +1784,21 @@ void FElysiumNpcBase::NavigatorMoveStep()
 	}
 	NavLogMoveStep(Result == ENavMoveResult::BlockedNpc ? TEXT("blocked by an NPC (-3), failed")
 		: TEXT("blocked, failed"), GMoveStepFailNoRoute);
+	// Which arm of the pass answered the negative result this tail turns into `0x0c` (packet S11
+	// item 1.4): the arm, the step's facts and the goal tolerance the blocked-step arms compare
+	// (`path+0x28`, `0x102eefb0` / `0x102ef760`).
+	if (UE_LOG_ACTIVE(LogElysiumNpcEnt, Verbose))
+	{
+		const FElysiumEntity* const BlockerEntity =
+			(World != nullptr && LastStep.Blocker.IsSet()) ? World->Resolve(LastStep.Blocker) : nullptr;
+		UE_LOG(LogElysiumNpcEnt, Verbose,
+			TEXT("%s Move: 0x0c raised by %s (result %d): blocker %s, body gave up %d, %.2f units "
+				"left, goal tolerance %.2f cm"),
+			*DebugString(), NavFailArm, static_cast<int32>(Result),
+			BlockerEntity != nullptr ? *BlockerEntity->DebugString()
+				: (LastStep.Blocker.IsSet() ? TEXT("an unresolved handle") : TEXT("none (the world)")),
+			LastStep.bGaveUp ? 1 : 0, LastStep.RemainingUnits, Navigator.GetGoalTolerance());
+	}
 	NavOnNavFailed(GMoveStepFailNoRoute);                                    // 102f0180 nav slot 10
 	if (Result == ENavMoveResult::BlockedNpc)
 	{

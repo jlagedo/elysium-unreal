@@ -6,6 +6,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumFeed.h"             // the shared `SetGrappleActivity 0x1032a100` NPC half
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumPlayerLog.h"
@@ -151,8 +152,33 @@ bool FElysiumPlayer::StartStealthKill(FElysiumNpc& Victim, float MaxDistanceUnit
 		Character.Grapple.ClipOwner = Clip.OwnerStem;
 		return Character.PlayAnimSegment(Segment, &Character.Grapple.ClipSeconds);
 	};
-	if (!Play(*this, Pair.Attacker, Pair.AttackerActivity) || !Play(Victim, Pair.Victim, Pair.VictimActivity))
+	// `StartGrappleAttack 0x10328df0` commits mode 3 through the same `SetGrappleActivity
+	// 0x1032a100` as the feed, base `0x1015` `ACT_SNEAKATTACK_SUCCESS`: the NPC victim takes the
+	// clip as its own kernel sequence, on its own clock. The player half has no kernel sequence
+	// words in this port and keeps the direct play.
+	ElysiumFeed::FGrappleCell VictimCell;
+	VictimCell.bPartnerMale = Sheet.IsMale();                 // GetGrappleSize 0x103282e0 on the attacker
+	VictimCell.bVictim = true;                                // role 1 (+0x153c)
+	VictimCell.Position = Pair.Position;                      // +0x1544
+	ElysiumFeedGrappleCommit::FNpcHalf VictimHalf;
+	VictimHalf.Base = ElysiumFeed::ActSneakAttackSuccess;     // m_IdealActivity (+0xff0)
+	// `TranslateBaseGrappleActivity 0x10328380` (`0x1032a29e`). SEAM: slot 381 on the ATTACKER
+	// (`0x1032a2bd`, `Weapon_TranslateActivity 0x10327ec0` -> the weapon's `ActivityOverride
+	// 0x1024f210`) renumbers the sneak-attack `_BACK` cells per weapon; `ResolvePair` applied that
+	// translation by name to choose the clip, and `FElysiumActivityClip` does not hand the translated
+	// activity back, so `m_Activity` carries the untranslated cell.
+	VictimHalf.Translated = ElysiumFeed::TranslateBaseGrappleActivity(VictimHalf.Base, VictimCell);
+	// `SelectWeightedSequence(victim, translated, -1)` (`0x1032a2de`): the bridge row of the clip
+	// `ResolvePair` drew for the victim's model under the attacker's weapon translation.
+	VictimHalf.Sequence = Victim.SequenceRowFor(Pair.Victim.OwnerStem, Pair.Victim.Label,
+		Pair.Victim.bLooping);
+	const bool bAttackerPlayed = Play(*this, Pair.Attacker, Pair.AttackerActivity);
+	const bool bVictimCommitted = ElysiumFeedGrappleCommit::CommitNpcHalf(Victim, VictimHalf,
+		Victim.Grapple.ClipSeconds);
+	if (!bAttackerPlayed || !bVictimCommitted)
 	{
+		// `0x1032a100`'s miss arms: "Attacker / Victim could not find sequence ..." and
+		// `EndGrapple 0x10329560`.
 		UE_LOG(LogElysiumPlayer, Warning, TEXT("stealth pair %s -> %s could not start both clips"),
 			*DebugString(), *Victim.DebugString());
 		LeaveGrapplePair();
@@ -186,9 +212,12 @@ void FElysiumPlayer::TickStealthKill()
 	}
 	if (!Grapple.ClipPlayId) Grapple.ClipPlayId = Phase.PlayId;
 	if (Grapple.ClipPlayId != Phase.PlayId) { LeaveGrapplePair(); return; }
-	// The victim follows the attacker's normalized cycle, even when authored lengths differ.
-	if (!Bodies->SyncGrappleClip(Victim->GetSkeletalBody(), Phase.Cycle * Victim->Grapple.ClipSeconds,
-		Phase.Cycle >= 1.f))
+	// An NPC victim runs its clip as its own kernel sequence (`0x1032a100` -> `0x10260a50`), each
+	// body on its own clock: nothing slaves its cycle to the attacker's. Only a victim with no
+	// kernel sequence words is still driven from the attacker's normalized cycle.
+	if (Victim->AsNpc() == nullptr
+		&& !Bodies->SyncGrappleClip(Victim->GetSkeletalBody(), Phase.Cycle * Victim->Grapple.ClipSeconds,
+			Phase.Cycle >= 1.f))
 	{
 		UE_LOG(LogElysiumPlayer, Warning, TEXT("%s stealth action lost its victim playback"), *DebugString());
 		LeaveGrapplePair();

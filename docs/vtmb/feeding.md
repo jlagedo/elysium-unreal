@@ -178,8 +178,69 @@ find sequence ...") and calls `EndGrapple`. Consequences: the victim's own slot 
 clip's records (its 4007 / 4006 arrive and are refused by the role guard below), and its
 `m_Activity` is the grapple activity, so `RunAnimation`'s idle re-pick (`m_Activity == ACT_IDLE`)
 is off for the whole grapple. The port commits an NPC half through the same words
-(`PlayFeedPhaseClips`); the phase → activity table for the continuations is not recovered, so both
-activity words carry `ACT_FEEDING_ENGAGE` (`0xf5b`) as a named stand-in on every phase.
+(`PlayFeedPhaseClips` → `ElysiumFeedGrappleCommit::CommitNpcHalf`).
+
+*(2026-10-04, packet S10.)* **The two activity words differ.** `m_IdealActivity (+0xff0)` is the
+untranslated base, the same number on both bodies; `m_Activity (+0xfec)` is the body's cell.
+`TranslateBaseGrappleActivity` `0x10328380`:
+`base + (GetGrappleSize(partner) ? 2 : 1) + (role == 1 ? 2 : 0) + (position == 1 ? 4 : 0)`, the
+base untranslated when the position (`+0x1544`) is `-1`. `GetGrappleSize` `0x103282e0` is
+`IsMale(partner)` and nothing else: no height is measured, and the two bodies' size terms are
+independent. Each family is nine consecutive numbers (base, then `_ATTACKER_SHORTVICTIM_FRONT`,
+`_ATTACKER_TALLVICTIM_FRONT`, `_VICTIM_SHORTATTACKER_FRONT`, `_VICTIM_TALLATTACKER_FRONT`, and the
+same four `_BACK`).
+
+Mode 0 / 1 bases, advanced by the player's leaf `0x101655b0` (slot `+0x68c`) on the attacker's
+`m_bSequenceFinished`:
+
+| current base | next |
+|---|---|
+| `0xf5b` `ACT_FEEDING_ENGAGE`, `0xf64` `ACT_FEEDING_IDLE` | latch → `0xf76` `ACT_FEEDING_BITE`; else slot `+0x6a8` ? `0xf9a` `ACT_FEEDING_RELEASE_PC_FLYBACK` : `0xf91` `ACT_FEEDING_RELEASE` |
+| `0xf76`, `0xf7f` `ACT_FEEDING_FEED_LOOP` | latch and `CanFeed` → `0xf7f`; else slot `+0x6a8` ? `0xf9a` : `0xf88` `ACT_FEEDING_FEED_RELEASE` |
+| `0xf88`, `0xf91`, `0xf9a` | the leaf answers true → `EndGrapple` |
+
+The port's phases commit `0xf5b` / `0xf76` / `0xf7f` / `0xf88` (`ElysiumFeed::PhaseBaseActivity`);
+`0xf91` and `0xf9a` are the player's side and not ported. The other modes' tables are in
+`docs/specs/0002-npc-ai/stories/v4/packets-S10.md` § 1.
+
+**The flyback predicate.** Slots `+0x6a8` (426) and `+0x6ac` (427) are dispatched on the player
+only: `CBasePlayer` `0x10165a00` and `0x10165a70`, two identical bodies (the NPC classes hold
+unrelated virtuals at those indices, `CreateMoveProbe` `0x1027cef0` / `CreateMotor` `0x1027cec0`).
+Each resolves the grapple partner (`+0x1538`, role not `-1`) and calls `0x10165790(this, partner)`:
+a `UTIL_TraceHull` of the **partner's** own hull (its collision mins / maxs), from the partner's
+origin to `origin − forward(partner angles) × [0x10450564]`, mask `0x202400b`, filtered on the pair;
+it answers 0 when the trace is clear (fraction `>= [0x104454c0]`, not all-solid, not start-solid)
+and 1 otherwise. So the flyback release is taken when the victim has no room behind it. The two
+float constants' values were not read.
+
+**The weapon translate.** Slot 381 (`Weapon_TranslateActivity` `0x10327ec0`) is dispatched on the
+attacker for both bodies' cells and reaches the active weapon's `ActivityOverride` `0x1024f210`
+(`+0x5a4`) unless the weapon's `+0x19c & 0x40` is set. `ActivityOverride` walks the weapon's table
+(`+0x5a8`, count `+0x5ac`, three words a row) for a row keyed on the activity and returns the
+row's second word when the owner's model (or its first include) has a sequence for it
+(`SelectHeaviestSequence`), else the input. No weapon table carries a feeding, seductive, rat or
+zombie-feed activity (the port's recovered tables, `ElysiumWeaponActivityTables.cpp`), so over
+every feed cell it is the identity; the only grapple rows any weapon carries are the sneak-attack
+`_BACK` cells (`ACT_SNEAKATTACK_SUCCESS_*_BACK`, `ACT_SNEAKATTACK_FAILURE_*_BACK`).
+
+**The end writes no animation word.** `LeaveGrappleState` (`0x10329a70`, `CAI_BaseNPC`
+`0x1026ce30`, Troika `0x102b5d90`) writes no `m_Activity`, `m_IdealActivity`, `m_nSequence`,
+`m_flCycle`, NPC state or schedule; the released victim stands on the release clip until its next
+`RunAI`. `EndGrapple` `0x10329560`'s two callers packet S10 left unread: `0x100db5c0` is a
+command-client handler with no static caller (the command client's player: `EndGrapple`, clear
+bit 1 of `m_iVFlags +0x1d60`, restore move type 3 when slot `+0x178` answers 0); `0x10170090` is
+the player teardown, also with no static caller (`EndGrapple(this)` when the role is not `-1` and
+the partner is live, then the camera / frenzy / weapon cleanup). Neither is NPC code.
+
+**The port's resolver and the cell numbers.** `FElysiumNpc::SequenceForActivity`
+(`ElysiumNpcAnim.cpp`) names a number through `ElysiumRetailActivities::RegistrationNameOf`, which
+names all eight cells of every family (`ACT_FEEDING_ENGAGE_VICTIM_TALLATTACKER_FRONT` = 3935 =
+`0xf5f`), and asks the clip resolver for that name; `MeleeSequencesForActivity` and the
+embodiment's `NpcActivitySequences` take the same request. The lookup walks the activity chain's
+fallback ladder, which `0x1032a100`'s bare `SelectWeightedSequence` does not, so the feed commit
+accepts its answer only when it is the cell's own clip and otherwise finds the clip by the cell's
+label (a named modernization). The kernel-side weighted draw (`SelectWeightedSequence`
+`0x1008dc40`) is not built.
 
 The compact player action `PLAYER_FEED` (code 6) has no recovered producer. Live ordinary feeding
 is represented by `PLAYER_GRAPPLE` and its paired mode, so a remake must not use the dormant

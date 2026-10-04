@@ -1,5 +1,7 @@
 #include "Substrate/ElysiumSwingContact.h"
 
+#include "ElysiumMoveSolve.h"   // ElysiumMove::U -- centimetres per Source unit
+
 namespace ElysiumSwing
 {
 	int32 SubStepCount(float SpanSeconds)
@@ -111,5 +113,63 @@ namespace ElysiumSwing
 				InOutHits[Index].Reset();
 			}
 		}
+	}
+
+	int32 SampleCount(const FVector& ACm, const FVector& BCm)
+	{
+		// `MeleeSwingStep 0x10343020`: `n = ceil(|B - A| * [0x10488874])`, `n < 2` -> 1.
+		// The product is taken in double, as the x87 stack takes it (the length times the f32
+		// constant, never rounded back to f32 before `_ceil`): the constant is a hair ABOVE 1/6, so
+		// a segment of exactly 6 units answers 2, of exactly 12 answers 3.
+		const double LengthUnits = FVector::Dist(ACm, BCm) / static_cast<double>(ElysiumMove::U);
+		if (!FMath::IsFinite(LengthUnits))
+		{
+			return 1;   // crash guard (named): a non-finite segment has no length to sample
+		}
+		const int32 Samples = FMath::CeilToInt32(LengthUnits * static_cast<double>(SamplesPerUnit));
+		return Samples < 2 ? 1 : Samples;
+	}
+
+	float SampleFraction(int32 SampleIndex, int32 Samples)
+	{
+		// `0x10343fc4`: `n > 1 ? 1.0 - i / (n - 1) : 0.0` (`[0x104454c0]` = 1.0, `[0x104454c4]` = 0.0).
+		return Samples > 1
+			? 1.0f - static_cast<float>(SampleIndex) / static_cast<float>(Samples - 1)
+			: 0.0f;
+	}
+
+	bool WallPlaneQualifies(const FVector& PlaneNormal)
+	{
+		// `0x10344221..0x1034425c`: `normal . normal > 0`; `0x10344262..0x1034428a`: `|normal.z| <
+		// 0.3`.
+		return PlaneNormal.SizeSquared() > 0.0
+			&& FMath::Abs(PlaneNormal.Z) < static_cast<double>(WallMaxNormalZ);
+	}
+
+	bool WallBlocksSwing(const FVector& PlaneNormal, const FVector& ForwardWorld,
+		const FVector& HitPointCm, const FVector& AttackerOriginCm)
+	{
+		if (!WallPlaneQualifies(PlaneNormal))
+		{
+			return false;
+		}
+		// `0x103442ac..0x103442eb`: forward.z = 0; its 2-D length^2 must exceed `[0x1049e038]^2`.
+		FVector Forward(ForwardWorld.X, ForwardWorld.Y, 0.0);
+		if (!(Forward.SizeSquared() > static_cast<double>(WallMinForwardLenSq)))
+		{
+			return false;
+		}
+		Forward.Normalize();   // `0x103442f8`
+		// `0x10344300..0x1034433d`: `|dot(forward, normal)| > 0.7071`.
+		if (!(FMath::Abs(FVector::DotProduct(Forward, PlaneNormal))
+			> static_cast<double>(WallMinFacingDot)))
+		{
+			return false;
+		}
+		// `0x1034433f..0x10344382`: `sqrt(dx^2 + dy^2) < 20.0`, hit point against `GetAbsOrigin()`.
+		const double Dx = HitPointCm.X - AttackerOriginCm.X;
+		const double Dy = HitPointCm.Y - AttackerOriginCm.Y;
+		return FMath::Sqrt(Dx * Dx + Dy * Dy)
+			< static_cast<double>(WallMaxDistanceUnits * ElysiumMove::U);
 	}
 }

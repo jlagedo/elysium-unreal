@@ -2443,6 +2443,77 @@ namespace
 		Out.Blend(From, To, Alpha);
 		return Out;
 	}
+
+	// **Where one record's two endpoints are at a sub-step, world centimetres -- the ONE function
+	// the walk asks.** Retail poses the sequence at the sub-step's own cycle (`CalcPose` at `cycle`,
+	// `MeleeSwingStep 0x10343020` step 1) and transforms the record's bone-local points by that
+	// pose; this body is today's stand-in, the live bone's segment lerped linearly between two
+	// batches in the attacker's interpolated frame (difference D9, spec 0002 `packets-S5.md` item 3).
+	// `Cycle` is the sub-step's cycle and is unread by this body: lane C1 (V4c) replaces the body
+	// with the posed one and touches nothing of the walk.
+	struct FElysiumSwingEndpointQuery
+	{
+		const FTransform& PrevFrame;
+		const FTransform& NowFrame;
+		const TPair<FVector, FVector>& FromLocal;
+		const TPair<FVector, FVector>& ToLocal;
+		float Alpha = 0.0f;   // 0 = the last batch, 1 = this one
+		float Cycle = 0.0f;   // the sub-step's cycle (D9's operand)
+	};
+	void ElysiumSwingEndpointsAt(const FElysiumSwingEndpointQuery& Query, FVector& OutA, FVector& OutB)
+	{
+		const FTransform Frame = ElysiumSwingFrameAt(Query.PrevFrame, Query.NowFrame, Query.Alpha);
+		OutA = Frame.TransformPosition(FMath::Lerp(Query.FromLocal.Key, Query.ToLocal.Key, Query.Alpha));
+		OutB = Frame.TransformPosition(
+			FMath::Lerp(Query.FromLocal.Value, Query.ToLocal.Value, Query.Alpha));
+	}
+
+	// `debug_allow_melee_ff` (ConVar object `0x10936ee0`), read by `MeleeSwingStep 0x10343020` at
+	// `0x1034394d..`: non-zero lets an NPC's swing hit characters it does not hate. Shipped 0; this
+	// runtime keeps no console variable per recovered ConVar, so the shipped value is the answer.
+	bool ElysiumMeleeFriendlyFireAllowed()
+	{
+		return false;
+	}
+
+	// SEAM for `0x10323930(npc, victim)`: both characters carry the same 16-bit team symbol at
+	// `m_TeamSymbol` (`+0x10b0`) and neither is `0xffff`. The team registry `AddToTeam`
+	// (`0x103239a0`) fills is not carried (`Spawn19AddToTeam` is a counted seam; the same word is a
+	// file-local constant in `ElysiumCombatCharacter.cpp`, `CombatTeamSymbolOf`), so every character
+	// answers the constructor's `0xffff`, "no team", and this answers false.
+	bool ElysiumSwingSameTeam(const FElysiumCombatCharacter& /*Attacker*/,
+		const FElysiumCombatCharacter& /*Victim*/)
+	{
+		return false;
+	}
+
+	// `0x1012c9c0(e)`: the root of `e`'s owner chain (`+0x25c`, the owner handle slot 97
+	// `GetOwnerEntity` answers), `e` itself when it has no owner. Bounded: a chain that loops back
+	// is a defect retail would spin on; here it ends after 16 links (named crash guard).
+	const FElysiumEntity* ElysiumSwingOwnerRoot(const FElysiumEntityWorld& World,
+		const FElysiumEntity& Entity)
+	{
+		const FElysiumEntity* Root = &Entity;
+		for (int32 Link = 0; Link < 16; ++Link)
+		{
+			const FElysiumEntityHandle Owner = Root->GetOwnerEntity();
+			const FElysiumEntity* Next = Owner.IsSet() ? World.Resolve(Owner) : nullptr;
+			if (Next == nullptr)
+			{
+				break;
+			}
+			Root = Next;
+		}
+		return Root;
+	}
+
+	// `e+0x9c`, the combat-character self-pointer. A loot container registers on the
+	// combat-character base in this runtime (it owns the same inventory) and is a prop in retail,
+	// so it answers null here and is hit as the non-character it is.
+	FElysiumCombatCharacter* ElysiumSwingVictimCharacter(FElysiumEntity& Entity)
+	{
+		return Entity.AsItemContainer() != nullptr ? nullptr : Entity.AsCombatCharacter();
+	}
 }
 
 void FElysiumWeapon::StageSwingOpposedRoll(FElysiumCombatCharacter& Attacker,
@@ -2786,85 +2857,219 @@ void FElysiumWeapon::AdvanceSwingContact(float DeltaSeconds)
 		? FTransform(Swing.PrevAngles, Swing.PrevOrigin)
 		: NowFrame;
 
-	// A record whose window is closed over everything this batch covered forgets whom it has hit, so
-	// a later group of the same swing — a `2COMBO`'s second half — lands again.
+	// `MeleeSwingStep 0x10343020`, step 1: `count = min(seqdesc+0x2c4, 20)`.
+	const int32 Count = FMath::Min(Records->Num(), ElysiumSwing::MaxRecords);
 	if (Swing.RecordHits.Num() != Records->Num())
 	{
 		Swing.RecordHits.SetNum(Records->Num());
 	}
-	ElysiumSwing::ClearClosedRecords(*Records, PrevCycle, Phase.Cycle, Swing.RecordHits);
 
 	TArray<ElysiumSwing::FInterval> Intervals;
 	ElysiumSwing::SubStepIntervals(PrevCycle, Phase.Cycle, SubSteps, Intervals);
 
-	TArray<FElysiumEntityHandle> Contacts;
+	// `this+0x94`, the attacker's NPC self-pointer: the relation filter below is the NPC's alone.
+	const bool bAttackerIsNpc = Attacker->AsNpc() != nullptr;
+
+	// One pass of `MeleeSwingStep(pos, ang, prevCycle, cycle)` per sub-step, as `MeleeSwingUpdate
+	// 0x10346cd0` calls it (who calls the sweep and over which cycles is lane C1's).
+	TArray<FElysiumEntityHandle> BoxEntities;
 	for (int32 Step = 0; Step < Intervals.Num() && Swing.bActive; ++Step)
 	{
 		const float U0 = static_cast<float>(Step) / static_cast<float>(SubSteps);
 		const float U1 = static_cast<float>(Step + 1) / static_cast<float>(SubSteps);
-		const FTransform FrameAt0 = ElysiumSwingFrameAt(PrevFrame, NowFrame, U0);
-		const FTransform FrameAt1 = ElysiumSwingFrameAt(PrevFrame, NowFrame, U1);
 
-		for (int32 Index = 0; Index < Records->Num() && Swing.bActive; ++Index)
+		// Step 2, per record.
+		for (int32 Index = 0; Index < Count && Swing.bActive; ++Index)
 		{
 			if (!HasSegment[Index])
 			{
+				// The bone index is negative (`0x100c77d0(model, sequence, rec+8) < 0`): the record is
+				// skipped whole, nothing stored and nothing cleared.
 				continue;
 			}
 			const FElysiumSwingRecord& Record = (*Records)[Index];
-			if (!ElysiumSwing::WindowOverlaps(Record.Start, Record.End,
-				Intervals[Step].Start, Intervals[Step].End))
-			{
-				continue;
-			}
-
 			const TPair<FVector, FVector>& From = bPrimed
 				? Swing.PrevSegmentsLocal[Index] : NowSegments[Index];
 			const TPair<FVector, FVector>& To = NowSegments[Index];
 
+			// `A`, `B`: the record's two points at this pass. `lastA`, `lastB` (`+0xac0 + r * 0x18`):
+			// the same two points as the previous pass stored them at its end, window open or closed
+			// -- here the same function asked at the previous sub-step, which is that store.
+			FVector A, B, LastA, LastB;
+			ElysiumSwingEndpointsAt(FElysiumSwingEndpointQuery{ PrevFrame, NowFrame, From, To, U1,
+				Intervals[Step].End }, A, B);
+			ElysiumSwingEndpointsAt(FElysiumSwingEndpointQuery{ PrevFrame, NowFrame, From, To, U0,
+				Intervals[Step].Start }, LastA, LastB);
+
+			// `n = ceil(|B - A| * 0.1666667)` (f32 `0x10488874`); `n < 2` -> 1 and `A = B =` the
+			// midpoint. The stored last endpoints are the collapsed ones too (the store at
+			// `0x103443ed` writes the `A` / `B` the samples used), and the segment's length is the
+			// record's own, so the previous pass collapsed on the same `n`.
+			const int32 Samples = ElysiumSwing::SampleCount(A, B);
+			if (Samples < 2)
+			{
+				A = B = (A + B) * 0.5;
+				LastA = LastB = (LastA + LastB) * 0.5;
+			}
+
+			// The window: open iff `m_bMeleeSwingIsLive (+0xaa1)` (true here: the clip is live and
+			// declares records) and `start <= cycle && end >= prevCycle`, inclusive at both ends.
+			// Closed -> this record's hit-list count (`+0xcac + r * 0x14`) = 0, on THIS pass.
+			if (!ElysiumSwing::StepWindowOpen(Record, Intervals[Step].Start, Intervals[Step].End))
+			{
+				Swing.RecordHits[Index].Reset();
+				continue;
+			}
+
+			// The entities in the AABB over `{A, B, lastA, lastB}`: `0x101cca80(list, 100, &mins,
+			// &maxs, 0x22102080, 1)` -- every entity, not combat characters only (D5).
 			FElysiumSwingSweep Sweep;
 			Sweep.Attacker = Attacker->Handle;
-			Sweep.PrevA = FrameAt0.TransformPosition(FMath::Lerp(From.Key, To.Key, U0));
-			Sweep.PrevB = FrameAt0.TransformPosition(FMath::Lerp(From.Value, To.Value, U0));
-			Sweep.CurA = FrameAt1.TransformPosition(FMath::Lerp(From.Key, To.Key, U1));
-			Sweep.CurB = FrameAt1.TransformPosition(FMath::Lerp(From.Value, To.Value, U1));
+			Sweep.PrevA = LastA;
+			Sweep.PrevB = LastB;
+			Sweep.CurA = A;
+			Sweep.CurB = B;
+			Embodiment->QuerySwingStepEntities(Sweep, BoxEntities);
+			if (BoxEntities.Num() > ElysiumSwing::MaxBoxEntities)
+			{
+				BoxEntities.SetNum(ElysiumSwing::MaxBoxEntities);   // the list's capacity, `PUSH 100`
+			}
 
-			Embodiment->QuerySwingContacts(Sweep, Contacts);
-			for (const FElysiumEntityHandle& Hit : Contacts)
+			// Step 3, per entity `e` in the box, in retail's order.
+			for (const FElysiumEntityHandle& Hit : BoxEntities)
 			{
 				if (!Swing.bActive)
 				{
-					// The same guard the two loops above carry, and this is where it has to hold: the
-					// hit list is the transaction's own storage, so a commit that retired the swing
-					// leaves nothing to index.
+					// A commit can retire the transaction, and the hit lists are its own storage.
 					break;
 				}
+				FElysiumEntity* Ent = World ? World->Resolve(Hit) : nullptr;
+				if (Ent == nullptr)
+				{
+					continue;   // a handle the world no longer holds is no entity in the box
+				}
+				FElysiumCombatCharacter* VictimCC = ElysiumSwingVictimCharacter(*Ent);   // `e+0x9c`
+
+				// 3.1 -- the NPC attacker's relation filter, `0x1034394d..0x103439a7` (D1): an NPC
+				// (`this+0x94`), `debug_allow_melee_ff` (`0x10936ee0`) 0, a combat character other
+				// than the attacker -> slot 404 `IRelationType` must be 1 or 2 (hate, fear) AND
+				// `0x10323930(npc, victim)` (same team) false; else skipped. A player attacker has no
+				// relation filter.
+				if (bAttackerIsNpc && !ElysiumMeleeFriendlyFireAllowed() && VictimCC != nullptr
+					&& VictimCC != Attacker)
+				{
+					const int32 Relation = Attacker->IRelationType(Ent);
+					if ((Relation != 1 && Relation != 2) || ElysiumSwingSameTeam(*Attacker, *VictimCC))
+					{
+						continue;
+					}
+				}
+				// 3.2 -- `e` solid: `m_nSolidType (+0x2b0) != 0` and `!(+0x2b4 & 4)` (D6). The port's
+				// record of those two words is `IsRetailNotSolid` (an entity that never recorded a
+				// `SetSolid` is not read as `SOLID_NONE`, its stated rule). This is the gate the
+				// removed "reported dead" exclusion stood for: a ragdoll carries `FSOLID_NOT_SOLID`.
+				if (Ent->IsRetailNotSolid())
+				{
+					continue;
+				}
+				// 3.3 -- the ATTACKER not `FSOLID_NOT_SOLID` (`this+0x2b4 & 4`), else nothing is hit.
+				if ((Attacker->RetailSolidFlags & 0x4u) != 0)
+				{
+					continue;
+				}
+				// 3.4 -- the candidate's byte `+0xf4` (`0x100b5190`, `m_bScriptHidden`) zero. This
+				// port carries the word as `FElysiumEntity::bHidden`.
+				if (Ent->IsHidden())
+				{
+					continue;
+				}
+				// 3.5 -- `victimCC == 0` or `m_bIsBCCTargetable (+0x1480) != 0`.
+				if (VictimCC != nullptr && !FElysiumNpcBase::IsBccTargetable(*Ent))
+				{
+					continue;
+				}
+				// 3.6 -- already in THIS record's hit list.
 				if (ElysiumSwing::IsMarked(Swing.RecordHits[Index], Hit))
 				{
-					continue;   // hit-once: this record, or one sharing its window, already landed
+					continue;
 				}
-				FElysiumEntity* VictimEnt = World ? World->Resolve(Hit) : nullptr;
-				FElysiumCombatCharacter* Victim = VictimEnt ? VictimEnt->AsCombatCharacter() : nullptr;
-				if (!Victim || !IsAliveForCombat(*Victim))
+				// 3.7 -- the root of `e`'s owner chain (`0x1012c9c0`) is the attacker: `e` is added to
+				// this record's list only, no hit (the attacker itself, its weapon, its attachments).
+				if (ElysiumSwingOwnerRoot(*World, *Ent) == Attacker)
 				{
-					continue;   // an ordinary negative: the query answers geometry, not eligibility
+					Swing.RecordHits[Index].Add(Hit);
+					continue;
 				}
-				// The mark goes down BEFORE the commit, and across every record sharing this one's
-				// window: a contact that kills its victim must still count as this swing's one hit.
-				ElysiumSwing::MarkHit(*Records, Index, Hit, Swing.RecordHits);
-				// The victim's hit-buildup counter, raised by ANY attacker's landed hit — this is the
-				// site retail calls on the victim with the attacker passed and never read. It sits
-				// here rather than inside the contact because retail raises it on the hit landing,
-				// not on the reaction it selects: a hit that is blocked still counts.
-				Victim->RaiseHitBuildup();
-				// WHICH record reached this body, stamped per contact rather than per swing: the
-				// knockback the victim answers with is authored on the record, so a contact that
-				// could not name its own would have no candidate table to read. The mark above is
-				// spread across every record sharing the window, but the one that LANDED is this
-				// one, and it is the one whose table applies.
+
+				// WHICH record reached this entity, stamped per contact: the knockback the victim
+				// answers with is authored on the record (slot 270's second argument).
 				Contact.RecordIndex = Index;
-				MeleeContact(*Attacker, *Victim, Contact);
+
+				// 3.8 -- `victimCC == 0`, or the victim's slot 329 (`+0x524`) true
+				// (`0x10343b00..0x10343b16` -> `0x10343eb0`; base `0x1014f850` false,
+				// `CNPC_VTzimisceRunner 0x103c30c0` true): the box overlap IS the hit, no ray (D5, D7).
+				// The trace is the attacker's origin to `e`'s origin; `e` is added to the hit list of
+				// EVERY record of the sequence, no window test; then slot 270.
+				if (VictimCC == nullptr || VictimCC->Slot329())
+				{
+					for (int32 Other = 0; Other < Count; ++Other)
+					{
+						Swing.RecordHits[Other].AddUnique(Hit);
+					}
+					Contact.TraceStartCm = Attacker->Origin;
+					Contact.TraceEndCm = Ent->Origin;
+					MeleeContact(*Attacker, *Ent, Contact);
+					continue;
+				}
+
+				// 3.9 -- a character, slot 329 false: the ray (D4). For `i = 0 .. n-1`: `f = n > 1 ?
+				// 1 - i/(n-1) : 0`; `P = A + (B - A) * f`; `Q = lastA + (lastB - lastA) * f`; a
+				// zero-extent ray from `Q` to `P` clipped to `e` ALONE (`0x101d2530(&ray, 0x200400b,
+				// e, &tr)`). No world or occlusion trace stands between the limb and the entity.
+				for (int32 Sample = 0; Sample < Samples; ++Sample)
+				{
+					const float F = ElysiumSwing::SampleFraction(Sample, Samples);
+					const FVector P = A + (B - A) * F;
+					const FVector Q = LastA + (LastB - LastA) * F;
+					FElysiumSwingRayHit Trace;
+					Embodiment->ClipSwingRayToEntity(Q, P, Hit, Trace);
+					if (!Trace.DidHit())
+					{
+						continue;   // `fraction >= 1`, not `allsolid`, not `startsolid`: next `i`
+					}
+					// The first sample that hits is the hit: `e` is added to the list of every record
+					// whose window overlaps this one's (`start_r <= end_k && start_k <= end_r`,
+					// `0x10343e37..0x10343e84`), BEFORE the commit; then slot 270 `(&tr, record)`.
+					ElysiumSwing::MarkHit(*Records, Index, Hit, Swing.RecordHits);
+					Contact.TraceStartCm = Q;
+					Contact.TraceEndCm = Trace.EndPosCm;
+					MeleeContact(*Attacker, *Ent, Contact);
+					break;
+				}
 			}
+
+			// Step 4 -- the wall contact (`0x10343f96`), only when the ATTACKER's slot 328 (`+0x520`)
+			// is true: `CBasePlayer 0x1015dca0` and `CNPC_VWerewolf 0x103ca730` answer 1, the base
+			// `0x1014f830` 0, so no other NPC ever takes it (D8).
+			if (Swing.bActive && Attacker->Slot328())
+			{
+				FSwingWallStep Wall;
+				Wall.A = A;
+				Wall.B = B;
+				Wall.LastA = LastA;
+				Wall.LastB = LastB;
+				Wall.Samples = Samples;
+				SwingWallContact(*Attacker, Wall);
+			}
+		}
+	}
+
+	// Step 5 -- after the record loop, records `count..19` have their hit-list counts zeroed.
+	if (Swing.bActive)
+	{
+		for (int32 Index = Count; Index < Swing.RecordHits.Num(); ++Index)
+		{
+			Swing.RecordHits[Index].Reset();
 		}
 	}
 
@@ -2874,71 +3079,90 @@ void FElysiumWeapon::AdvanceSwingContact(float DeltaSeconds)
 	Swing.PrevAngles = FRotator(Attacker->Angles.X, Attacker->Angles.Y, Attacker->Angles.Z);
 }
 
-void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,
+void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumEntity& HitEntity,
 	const FSwingContact& Contact)
 {
+	// The weapon's slot 270 (`+0x438`), `0x102579f0(this weapon, trace*, record)`, step for step
+	// (spec 0002 `stories/v4/packets-S5.md` item 3). Step 1: `owner = 0x10252240(this)` is the
+	// caller's `Attacker`; `ent = trace+0x4c` is `HitEntity`; `victimCC = ent ? ent+0x9c : 0`.
+	FElysiumCombatCharacter* const VictimCC = ElysiumSwingVictimCharacter(HitEntity);
+
+	// Step 2 -- weapon slot 339 (`+0x54c`) with no argument, then `CSoundEnt::InsertSound(0x10,
+	// &trace.endpos, [0x1072bc5c], 0.2, [0x1072bcb7], owner)`, both BEFORE the null-entity test
+	// (D10). Seams: recorded (`FMeleeImpactSeams`). The null-entity return has no reader here: the
+	// walk hands this body an entity on every path.
+	++MeleeImpactSeams.WeaponSlot339Calls;
+	++MeleeImpactSeams.CombatSoundInserts;
+	MeleeImpactSeams.LastCombatSoundCm = Contact.TraceEndCm;
+
+	// Step 3 -- `dir = normalize(trace.endpos - trace.startpos)`. The player's HUD line
+	// (`"MeleeHit %s with %s"`, the mode record's `+0x3c4 > 0`) is a debug print and is not carried.
+
 	const int32 ModeIndex = Contact.ModeIndex;
-	const FElysiumWeaponContext Context = FElysiumWeaponContext::FromCharacter(Victim);
+	const FElysiumWeaponContext Context =
+		FElysiumWeaponContext::FromCharacter(VictimCC != nullptr ? *VictimCC : Attacker);
 	const FElysiumDmg& ModeDmg = DamageForMode(ModeIndex);
 
-	// The opposed record, CONSUMED from the defender.
-	// It was staged on this victim on the swing's first batched frame, before any contact test, by
-	// `StageSwingOpposedRoll` — which is where retail rolls it. Nothing is rolled here.
+	// Step 5 -- `blocked = WasMeleeBlocked(owner, victimCC)`; `rolls = GetMeleeDiceRolls(owner,
+	// victimCC)`.
 	//
-	// The lookup is scoped to THIS SWING's serial, which is what makes the sentence above true. A
-	// sweep can reach a body the swing's own 60-unit roll query never selected; without the scope it
-	// would be judged on whatever margin an earlier swing rolled against it, which is a hit nobody
-	// rolled for. Retail closes the same hole from the attacker's end, by clearing its record array
-	// at every swing start. Either way the answer here is: no record of this swing, no contact —
-	// and inventing one would put the dice back on the path they were taken off.
-	const FElysiumMeleeRoll* Staged = Victim.FindMeleeRoll(Attacker.Handle, Contact.Serial);
-	if (Staged == nullptr)
-	{
-		UE_LOG(LogElysiumWeapon, Verbose,
-			TEXT("%s -> %s: swing #%d swept this body and staged no opposed record against it — "
-				"no contact"),
-			*Attacker.DebugString(), *Victim.DebugString(), Contact.Serial);
-		return;
-	}
-	const FElysiumMeleeRoll Roll = *Staged;
+	// The opposed record is CONSUMED from the defender: it was staged on the swing's first batched
+	// frame, before any contact test, by `StageSwingOpposedRoll` -- which is where retail rolls it.
+	// Nothing is rolled here. The lookup is scoped to THIS swing's serial (retail clears the
+	// attacker's record array at every swing start, `ForceMeleeReset`), so a body the swing's own
+	// 60-unit roll query never selected has no record: that is retail's `rolls == 0`.
+	const FElysiumMeleeRoll* Staged =
+		VictimCC != nullptr ? VictimCC->FindMeleeRoll(Attacker.Handle, Contact.Serial) : nullptr;
+	const bool bRolled = Staged != nullptr;
+	const FElysiumMeleeRoll Roll = bRolled ? *Staged : FElysiumMeleeRoll();
 
-	// The `rules.txt` margin classifier.
+	// The `rules.txt` margin classifier (the defender's own answer inside `WasMeleeBlocked`).
 	const int32 Margin = Roll.Margin();
 	const EElysiumMeleeAttackerReaction AttackerReaction =
 		ElysiumWeapons::ClassifyAttacker(Context.Margins, Margin);
 	const EElysiumMeleeDefenderReaction DefenderReaction =
 		ElysiumWeapons::ClassifyDefender(Context.Margins, Margin);
-	if (!Context.Margins.bValid && ShouldReportOnce(TEXT("margins")))
+	if (bRolled && !Context.Margins.bValid && ShouldReportOnce(TEXT("margins")))
 	{
 		UE_LOG(LogElysiumWeapon, Warning,
 			TEXT("rules.txt Melee_Reactions is unavailable — the melee reaction margin cannot be "
-				"classified; damage still resolves and no reaction is selected"));
+				"classified; damage still resolves and no blocked reaction is selected"));
 	}
+
+	// **`rolls == 0` -> `blocked = 0`, successes 1, and the damage goes on** (`0x10257b92..
+	// 0x10257c1c`; D2). Else `through = DamageWentThrough(rolls)` (`0x10349650`: `0 < rolls[1] -
+	// rolls[3] - rolls[2]`, lethality less soak less defense) and **`successes = (int)(rolls[1] -
+	// rolls[2] - rolls[3])`** -- `0x10257ba1..0x10257bbf`: `MOV EDX,[ESI+4]; SUB EDX,[ESI+8]; SUB
+	// EDX,[ESI+0xc]; FILD; CALL __ftol`. The operand the packet S5 had as lost is the same signed
+	// margin, read from the listing 2026-10-04 (spec 0002 V11-2). `dmg+0x38 = rolls[3]` (the soak
+	// word copied into the packet) has no field on `FElysiumDmg`: not carried, named here.
+	const bool bBlocked = bRolled && VictimCC != nullptr
+		&& WasMeleeBlocked(Attacker, *VictimCC, DefenderReaction);
+	const bool bThrough = Margin > 0;
+	int32 Successes = bRolled ? Margin : 1;
+
 	// SEAM — the blocked-contact `Dexterity` bonus soak re-roll at `0x10160BC0` and the knockback
 	// impulse still belong to a later cycle. The re-roll is a SOAK rule, not a reaction one: it adds
 	// bonus soak dice from attribute slot 2 and re-classifies, so it changes the NUMBER the block
-	// family then reacts to. It lands with the soak work rather than here, which owns the pose and
-	// not the number (`docs/vtmb/combat-and-damage.md:485-488`).
+	// family then reacts to (`docs/vtmb/combat-and-damage.md:485-488`).
 	//
 	// The attacker's own classification stays on this line rather than branching the reaction below:
 	// retail gives the attacker ONE blocked-reaction source — the activity its swing sequence stores
 	// — and no blocked/blocked-major split over it. The band is diagnosis, not a fork.
 	UE_LOG(LogElysiumWeapon, Verbose,
-		TEXT("%s -> %s melee margin %d (lethality %d - defense %d - soak %d): attacker %s, defender %s"),
-		*Attacker.DebugString(), *Victim.DebugString(), Margin, Roll.Lethality, Roll.Defense,
-		Roll.Soak, ElysiumWeapons::AttackerReactionName(AttackerReaction),
-		ElysiumWeapons::DefenderReactionName(DefenderReaction));
+		TEXT("%s -> %s melee %s margin %d (lethality %d - defense %d - soak %d): attacker %s, "
+			"defender %s, %s"),
+		*Attacker.DebugString(), *HitEntity.DebugString(),
+		bRolled ? TEXT("rolled") : TEXT("unrolled (rolls == 0)"), Margin, Roll.Lethality,
+		Roll.Defense, Roll.Soak, ElysiumWeapons::AttackerReactionName(AttackerReaction),
+		ElysiumWeapons::DefenderReactionName(DefenderReaction),
+		bBlocked ? TEXT("blocked") : TEXT("unblocked"));
 
-	// The two block reactions.
-	// Both callbacks fire on a blocked contact, and both run BEFORE the damage test below: retail's
-	// blocked path plays its reactions and only then asks whether positive damage remains
-	// (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").
-	// Armed by the knockback branch below and spent past the health commit — see there for why
-	// the two halves of this contact sit on opposite sides of it.
-	bool bKnockbackPending = false;
-
-	if (WasMeleeBlocked(Attacker, Victim, DefenderReaction))
+	// The two blocked reactions -- the victim's slot 318 (`+0x4f8`) and the owner's slot 319
+	// (`+0x4fc`, `(victim, rolls, &dir, ...)`) -- BEFORE the damage (`0x10257bcb..`).
+	if (bBlocked)
 	{
+		FElysiumCombatCharacter& Victim = *VictimCC;
 		const double Now = World->NowSeconds();
 
 		// The defender (`0x10160BC0`). Class 3 is the block-stagger band and plays `ACT_BLOCK_HEAVY`;
@@ -3004,91 +3228,173 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 			Attacker.HoldBaseForMeleeReaction(Now + static_cast<double>(AttackerHeld));
 		}
 	}
-	else if (DefenderReaction == EElysiumMeleeDefenderReaction::HitKnockback)
+
+	// **The dispatch condition** (`0x10257cb3..`; D3): `!through && blocked` -> the tail, no damage
+	// and no reaction. Every other contact -- unrolled, unblocked with a non-positive margin, or
+	// blocked with the damage through -- dispatches, with `successes < 1 -> 1`.
+	const bool bDispatch = !(bRolled && !bThrough && bBlocked);
+	if (bDispatch)
 	{
-		// The grounded knockback.
-		// "A stronger unblocked result takes the separate normal-hit or knockback callbacks"
-		// (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions"), so this is the sibling
-		// branch of the blocked callbacks above — but it does NOT sit at the same point in the
-		// contact order, and the difference is recovered rather than chosen.
+		if (Successes < 1)
+		{
+			Successes = 1;
+		}
+
+		// Step 6 -- `m_iToHitSuccesses = successes`; `AddFlags(8)`; `DispatchTraceAttack(ent, info,
+		// dir, trace)`; `inflicted` = the accumulator's damage. **Kept, and named**: this port takes
+		// `inflicted` as the success count itself (the accumulator's read-back after `TraceAttack`
+		// is not walked), now floored at 1 with it.
+		int32 DamageInflicted = Successes;
+		// Potence: the owner's type-3 stat list `GetValue(9) > inflicted` -> `inflicted =` it.
+		DamageInflicted = FMath::Max(DamageInflicted, ElysiumWeapons::ActivePotenceRank(Attacker));
+
+		// `total = (modifier + m_iDiceAmt) x mult x inflicted`. `modifier` is `0x10204900(
+		// dmg.m_vtModifierDependency, owner)`: the ATTACKER's rating for the descriptor's close-combat
+		// attack feat — `Close_Combat_Brawl` for fists, `Close_Combat_Melee` for an armed weapon — a
+		// rating rather than a roll (K5). `mult` is `0x101c2a70(info)`, the trace envelope's, the one
+		// half RE40 does not decompose for melee. NOT carried: the owner's misc flag `0x100000` arm
+		// (`total *= 0x101e8f20(&0x10739d08, owner) * 0.01`, flag removed) and the force
+		// `0x103455a0(owner, victimCC, record, &force)`.
+		const int32 DamageModifier = FeatRating(Attacker, ModeDmg.AttackFeat, Context);
+		const int32 Total = ElysiumWeapons::MeleeDamageTotal(DamageInflicted, ModeDmg.BaseDamage,
+			DamageModifier, ElysiumWeapons::DefaultMeleeMultiplier);
+
+		FElysiumDmg Dmg = ModeDmg;
+		Dmg.Source = Attacker.Handle;
+		// CBaseCombatWeapon::102579f0 writes packet+0x28 from weapon `this` after 101c2770 seeds
+		// the attacker. Identity is valid even while the held-weapon spatial seam has not supplied a
+		// packet position; `0x10265ed0` reads the inflictor's origin (the held weapon's is its owner's).
+		Dmg.Inflictor = Handle;
+		// The direct-damage route: the value above IS the damage-success count, so the resolver's damage
+		// roll is bypassed. Its soak test still runs.
+		Dmg.Flags |= ElysiumDamage::FlagDirectInput;
+		Dmg.ExtraInput = Total;
+
+		UE_LOG(LogElysiumWeapon, Verbose,
+			TEXT("%s -> %s melee inflicted %d x (base %d + modifier %d) x multiplier %.3f = %d"),
+			*Attacker.DebugString(), *HitEntity.DebugString(), DamageInflicted, ModeDmg.BaseDamage,
+			DamageModifier, ElysiumWeapons::DefaultMeleeMultiplier, Total);
+
+		const FElysiumItemDef* Record = Data();
+		const bool bDisallowFirearmsToBashing = Record && Record->bDisallowFirearmsToBashing;
+		if (VictimCC != nullptr)
+		{
+			VictimCC->TakeDamage(Dmg, &Attacker, bDisallowFirearmsToBashing);
+		}
+		else
+		{
+			// A non-character (a prop, a breakable, a loot container): `DispatchTraceAttack(ent, ...)`
+			// and the apply `0x101c2a10(&DAT_1072cb10, -1)` end in the entity's own slot 142
+			// `OnTakeDamage` (D5). The packet is the kernel's (`FElysiumTakeDamageInfo`).
+			FElysiumNpcBase::FElysiumTakeDamageInfo Info;
+			Info.Dmg = &Dmg;
+			Info.Attacker = Attacker.Handle;
+			Info.Damage = static_cast<float>(Total);
+			Info.DamageBits = Dmg.DmgMask;
+			Info.bDisallowFirearmsToBashing = bDisallowFirearmsToBashing;
+			HitEntity.OnTakeDamage(&Info);
+		}
+		// Weapon slot 269 (`+0x434`) `(ent, dir.x, dir.y)` closes step 6: unread, not carried.
+
+		// Step 7 -- `!blocked && victimCC` (D11), asked AFTER the damage (the commit above may have
+		// killed this victim, which is why a killing blow is never knocked back: slot 326's base
+		// `0x103482e0` then refuses): `(record == 0 || record == -0x28 || !victim slot 326
+		// (+0x518)(record)) && !victim slot 400 (+0x640)()` -> victim slot 321 (`+0x504`), the plain
+		// hit reaction; else `GetKnockbackActivity(victim, trace, owner, record)` (-1 -> a Warning)
+		// and victim slot 320 (`+0x500`) `(owner)` -- `KnockbackContact`, which selects the cell off
+		// the record's own table and plays it.
 		//
-		// **The blocked callbacks run before the health commit; the knockback runs after it.**
-		// `CBaseCombatWeapon::FUN_102579F0` puts its two blocked slots ahead of
-		// `DispatchTraceAttack` and its knockback slots behind it. That ordering is load-bearing:
-		// it is the whole of why a killing blow is never knocked back — the health commit has
-		// already run and the victim reads dead by the time eligibility is asked. So the branch is
-		// only ARMED here, and the call is made past the commit below.
-		//
-		// **SEAM — grounded cells only.** The nine-activity flying chain is the other half of this
-		// outcome. Its contract is recovered whole — a two-stage velocity assignment with a
-		// one-think delay, and a land/wall terminator — and reproducing it needs a motor verb that
-		// carries a ballistic body, which this seam does not have yet. Nothing here moves the
-		// victim; the pose and the facing snap it needs are what is reproduced.
-		//
-		// `Unclassified` is deliberately NOT a knockback: a margin table that never loaded names no
-		// band, and the classifier's own warning above already reported it.
-		//
-		bKnockbackPending = true;
+		// **SEAM — grounded cells only.** The nine-activity flying chain is the other half of the
+		// knockback: a two-stage velocity assignment with a one-think delay and a land/wall
+		// terminator, which needs a motor verb this seam does not have yet.
+		if (!bBlocked && VictimCC != nullptr)
+		{
+			const FElysiumSwingRecord* SwingRecord = ResolveSwingRecord(Attacker, Contact);
+			const bool bRecordAdmits = SwingRecord != nullptr
+				&& VictimCC->Slot326(const_cast<FElysiumSwingRecord*>(SwingRecord), &Attacker);
+			if (!bRecordAdmits && !VictimCC->AllowsKnockbackBypass())
+			{
+				VictimCC->Slot321(&Attacker);
+			}
+			else
+			{
+				KnockbackContact(Attacker, *VictimCC, SwingRecord);
+			}
+		}
 	}
 
-	// A record that is not damaging commits no damage. Blocked does NOT mean zero damage: what
-	// decides is the margin, and a positive one carries on even when a block reaction played.
+	// Step 8 -- the tail, on EVERY path past the null-entity test (`0x10258019..0x1025804b`; D10):
+	// `0x101cfef0(trace, 0x80, 1, this)` the impact effect (seam: recorded), then `ent` slot 21
+	// (`+0x54`) with the OWNER (`PUSH EBP` at `0x1025803e`), then the owner's slot 24 (`+0x60`)
+	// `OnVictimHitByMe(ent)` (`PUSH EDI` at `0x10258045`).
 	//
-	// It is a BRANCH rather than an early return, because the knockback below is not gated on the
-	// damage: retail's knockback block runs on any unblocked contact, and only the health commit
-	// stands between them.
-	if (Margin > 0)
+	// Slot 21 on the Troika line (`0x1029f800`) is the hit-buildup counter's one increment, so the
+	// raise runs HERE -- after step 7's slot-326 test read the counter, and on a blocked contact
+	// too. The walk no longer raises it itself.
+	++MeleeImpactSeams.ImpactEffects;
+	MeleeImpactSeams.LastImpactEffectCm = Contact.TraceEndCm;
+	HitEntity.Slot21(&Attacker);
+	Attacker.OnVictimHitByMe(&HitEntity);
+}
+
+void FElysiumWeapon::SwingWallContact(FElysiumCombatCharacter& Attacker, const FSwingWallStep& Step)
+{
+	// `MeleeSwingStep 0x10343020`, `0x10343f96..0x103443d6`: per sample the same `Q -> P` ray
+	// through the engine trace (`[0x1070b254]` slot 4, mask `PUSH 0x400b`) with a simple filter on
+	// the attacker (`0x101d3190(this, 0)`).
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr)
 	{
-	// The damage commit.
-	int32 DamageInflicted = Margin;
-	// Potence guarantees a minimum on what the formula multiplies: the remaining lethality is floored
-	// up to the active rank when Potence is higher.
-	DamageInflicted = FMath::Max(DamageInflicted, ElysiumWeapons::ActivePotenceRank(Attacker));
-
-	// `Total = DamageInflicted * (BaseDamage + DamageModifier) * Multiplier`, retail's own diagnostic
-	// string. `DamageModifier` is the ATTACKER's rating for the descriptor's close-combat attack feat
-	// — `Close_Combat_Brawl` for fists, `Close_Combat_Melee` for an armed weapon — which is the same
-	// rating the swing's playback rate reads, and a rating rather than a roll (K5). The multiplier is
-	// the trace envelope's and is the one half RE40 does not decompose for melee.
-	const int32 DamageModifier = FeatRating(Attacker, ModeDmg.AttackFeat, Context);
-	const int32 Total = ElysiumWeapons::MeleeDamageTotal(DamageInflicted, ModeDmg.BaseDamage,
-		DamageModifier, ElysiumWeapons::DefaultMeleeMultiplier);
-
-	FElysiumDmg Dmg = ModeDmg;
-	Dmg.Source = Attacker.Handle;
-	// CBaseCombatWeapon::102579f0 writes packet+0x28 from weapon `this` after 101c2770 seeds
-	// the attacker. Identity is valid even while the held-weapon spatial seam has not supplied a
-	// packet position; `0x10265ed0` reads the inflictor's origin (the held weapon's is its owner's).
-	Dmg.Inflictor = Handle;
-	// The direct-damage route: the value above IS the damage-success count, so the resolver's damage
-	// roll is bypassed. Its soak test still runs.
-	Dmg.Flags |= ElysiumDamage::FlagDirectInput;
-	Dmg.ExtraInput = Total;
-
-	UE_LOG(LogElysiumWeapon, Verbose,
-		TEXT("%s -> %s melee inflicted %d x (base %d + modifier %d) x multiplier %.3f = %d"),
-		*Attacker.DebugString(), *Victim.DebugString(), DamageInflicted, ModeDmg.BaseDamage,
-		DamageModifier, ElysiumWeapons::DefaultMeleeMultiplier, Total);
-
-	const FElysiumItemDef* Record = Data();
-	Victim.TakeDamage(Dmg, &Attacker, Record && Record->bDisallowFirearmsToBashing);
+		return;
 	}
+	// `AngleVectors(slot 221 (+0x374)(), &forward, 0, 0)` at `0x10344290..0x103442a7`.
+	const FVector Forward = ElysiumSkeletalBasis::FromSourceAngles(Attacker.Angles).Vector();
 
-	// The knockback, AFTER the health commit.
-	// Retail's own order, and the reason a killing blow is not thrown: the commit above may have
-	// killed this victim, and `IsKnockbackAllowed`'s alive term then refuses. A body killed by a
-	// swing dies where it stands and hands off to the corpse path.
-	//
-	// The consequence for the reaction channel is retail's too. The commit's own `DamageFlinch` has
-	// already played by now, so the knockback TAKES the base channel from it rather than the flinch
-	// yielding to a knockback already on screen — which is what `TASK_MELEE_KNOCKBACK` does when it
-	// clears the three flinch slots before restarting the ideal activity.
-	//
-	// The authored record that landed this contact rides in, because the cell the victim answers
-	// with is stated ON it rather than derived from the direction alone.
-	if (bKnockbackPending)
+	for (int32 Sample = 0; Sample < Step.Samples; ++Sample)
 	{
-		KnockbackContact(Attacker, Victim, ResolveSwingRecord(Attacker, Contact));
+		const float F = ElysiumSwing::SampleFraction(Sample, Step.Samples);   // `0x10343fc4`
+		const FVector Q = Step.LastA + (Step.LastB - Step.LastA) * F;
+		const FVector P = Step.A + (Step.B - Step.A) * F;
+
+		FElysiumRetailTrace Trace;
+		Trace.StartCm = Q;
+		Trace.EndCm = P;
+		Trace.RetailMask = 0x400b;
+		Trace.Ignore.Add(Attacker.Handle);
+		FElysiumRetailTraceResult Result;
+		Embodiment->TraceRetail(Trace, Result);
+
+		// `0x103441f3..0x1034421b`: `fraction < 1.0 || allsolid || startsolid`, else the next sample.
+		if (!(Result.Fraction < 1.f || Result.bAllSolid || Result.bStartSolid))
+		{
+			continue;
+		}
+		// `0x10344221..0x1034428a`: the plane normal non-zero with `|normal.z| < 0.3` (f32
+		// `0x10451ab8`), else the next sample -- no reaction and no effect.
+		if (!ElysiumSwing::WallPlaneQualifies(Result.Normal))
+		{
+			continue;
+		}
+		// `0x103441bf..0x103441ec`: the hit point, `Q + (P - Q) * fraction` (x and y are all the
+		// distance test reads).
+		const FVector HitPoint = Q + (P - Q) * Result.Fraction;
+		if (ElysiumSwing::WallBlocksSwing(Result.Normal, Forward, HitPoint, Attacker.Origin))
+		{
+			// `0x103443c6`: the attacker's slot 319 (`+0x4fc`) `(0, 0, 0)`, the blocked reaction; the
+			// sample loop ends.
+			++MeleeImpactSeams.WallBlockedReactions;
+			Attacker.PlayerAttackerBlockedReaction(nullptr, nullptr, nullptr);
+			return;
+		}
+		// `0x10344384..0x103443ac`: otherwise, once per swing (`+0xaa0` clear), the impact effect
+		// `0x101cfef0(&tr, 0x80, 1, weapon)` when there is a weapon (there is: this one), and
+		// `+0xaa0 = 1` either way.
+		if (!Swing.bWallEffectSpent)
+		{
+			++MeleeImpactSeams.ImpactEffects;
+			MeleeImpactSeams.LastImpactEffectCm = HitPoint;
+			Swing.bWallEffectSpent = true;
+		}
 	}
 }
 
@@ -3135,13 +3441,14 @@ void FElysiumWeapon::KnockbackContact(FElysiumCombatCharacter& Attacker,
 	// different places on purpose: the counter is a property of the VICTIM and the marker one of the
 	// ATTACK, so they are resolved here and handed to the rule as one answer.
 	//
-	// **RECOVERED — the raise happens before this read.** `CBaseCombatWeapon::FUN_102579F0` is the
-	// one body that both commits a melee blow and tests this counter, and its order is settled:
-	// `DispatchTraceAttack` — the damage commit, and the chain the only increment site
-	// (`0x1029F800`) hangs off — runs well before the slot-326 buildup test near its tail, and no
-	// increment appears anywhere in that function. So the counter a blow tests already carries that
-	// blow. With the default of `2` a victim is thrown on two hits and stands its ground on the
-	// third, which is the widely reported "about two hits and then the NPC stops flying".
+	// **The raise happens AFTER this read** (re-read from the listing 2026-10-04, spec 0002 V11-2;
+	// an earlier note here had it before). The one increment site `0x1029F800` is the Troika body of
+	// entity slot 21, and `CBaseCombatWeapon::FUN_102579F0` dispatches slot 21 on the hit entity in
+	// its TAIL (`0x1025803e..0x1025803f`: `PUSH owner; CALL [vtable + 0x54]`), past the slot-326
+	// test at step 7; no other slot-21 dispatch on an entity pointer exists in that body. So the
+	// counter a blow tests does not yet carry that blow: with the default of `2` a victim is
+	// admitted at counts 0, 1 and 2. UNVERIFIED: that nothing inside the `DispatchTraceAttack` chain
+	// dispatches slot 21 as well (the chain is not walked).
 	const bool bUnconditional = Record != nullptr
 		&& Record->Ba == ElysiumReactions::KnockbackUnconditionalMarker;
 	const bool bBuildupAdmits = bUnconditional

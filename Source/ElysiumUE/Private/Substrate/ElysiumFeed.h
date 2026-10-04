@@ -18,6 +18,7 @@
 
 struct FElysiumRollResult;
 struct FElysiumUserCmd;
+class FElysiumNpc;
 enum class EElysiumFeedPhase : uint8;   // Public/ElysiumPlayer.h
 
 namespace ElysiumFeed
@@ -118,16 +119,54 @@ namespace ElysiumFeed
 		bool IsComplete() const { return !Attacker.IsEmpty() && !Victim.IsEmpty(); }
 	};
 
-	// The source pair has no equal-height cell. A tie takes the short-victim cell on the attacker
-	// and therefore the complementary tall-attacker cell on the victim — the two roles are always
-	// opposites; a tie must not pick short for both.
-	inline EPartnerHeight VictimHeightFor(float AttackerHeightCm, float VictimHeightCm)
-	{
-		return VictimHeightCm > AttackerHeightCm ? EPartnerHeight::Taller : EPartnerHeight::Shorter;
-	}
+	// "Taller" is retail's size cell and measures nothing: `GetGrappleSize 0x103282e0` is
+	// `IsMale(partner)`. A male partner is the tall cell, a female one the short.
 
 	FClipPair ResolveClipPair(EElysiumFeedPhase Phase, EPartnerHeight VictimHeight,
 		ESide Side = ESide::Front);
+
+	// The pair as retail sizes it: each body's cell takes its PARTNER's size, and the two are
+	// independent (`TranslateBaseGrappleActivity 0x10328380` runs once per body). The attacker's
+	// clip is keyed by the victim's size, the victim's by the attacker's.
+	FClipPair ResolveClipPair(EElysiumFeedPhase Phase, EPartnerHeight VictimSize,
+		EPartnerHeight AttackerSize, ESide Side);
+
+	// --- The grapple activity numbers (`docs/specs/0002-npc-ai/stories/v4/packets-S10.md` § 1) --
+	// Mode 0's bases, the argument `SetGrappleActivity 0x1032a100` is handed and the number
+	// `m_IdealActivity (+0xff0)` holds on both bodies. Each is the head of nine consecutive
+	// registrations: the base and its eight role / size / side cells.
+	inline constexpr int32 ActFeedingEngage      = 0xf5b;   // ACT_FEEDING_ENGAGE
+	inline constexpr int32 ActFeedingBite        = 0xf76;   // ACT_FEEDING_BITE
+	inline constexpr int32 ActFeedingFeedLoop    = 0xf7f;   // ACT_FEEDING_FEED_LOOP
+	inline constexpr int32 ActFeedingFeedRelease = 0xf88;   // ACT_FEEDING_FEED_RELEASE
+	// Mode 3's one base, committed once by `StartGrappleAttack 0x10328df0`.
+	inline constexpr int32 ActSneakAttackSuccess = 0x1015;  // ACT_SNEAKATTACK_SUCCESS
+
+	// The base each port phase commits (the mode 0 leaf `0x101655b0`'s own numbers). 0 for a phase
+	// that commits nothing (`None`, `ReleaseTail`).
+	int32 PhaseBaseActivity(EElysiumFeedPhase Phase);
+
+	// What one body's `TranslateBaseGrappleActivity 0x10328380` reads: its own role (`+0x153c`),
+	// its partner's size (`GetGrappleSize 0x103282e0`, which is `IsMale(partner)` and nothing
+	// else) and the pair's position (`+0x1544`; -1 = none chosen).
+	struct FGrappleCell
+	{
+		bool bPartnerMale = false;
+		bool bVictim = false;      // role == 1
+		int32 Position = -1;       // 0 front, 1 back
+	};
+
+	// `0x10328380`: `base + (partner male ? 2 : 1) + (role == 1 ? 2 : 0) + (position == 1 ? 4 : 0)`;
+	// position -1 answers the base untranslated.
+	inline int32 TranslateBaseGrappleActivity(int32 Base, const FGrappleCell& Cell)
+	{
+		if (Cell.Position == -1)
+		{
+			return Base;
+		}
+		return Base + (Cell.bPartnerMale ? 2 : 1) + (Cell.bVictim ? 2 : 0)
+			+ (Cell.Position == 1 ? 4 : 0);
+	}
 
 	// Character SoundScheme activities resolve to these patch-first audio mirror paths. Kept pure so
 	// sex/role selection can be asserted without an audio device.
@@ -159,4 +198,21 @@ namespace ElysiumFeed
 	inline constexpr int32 EventFeedBegin      = 4007;
 	inline constexpr int32 EventFeedTeardown   = 4006;
 	inline constexpr int32 EventFeedEmitter    = 5116;   // repeating presentation-only mouth burst
+}
+
+// One NPC half of `CBaseCombatCharacter::SetGrappleActivity` `0x1032a100`, shared by the feed
+// (`ElysiumFeed.cpp`) and the stealth kill (`ElysiumGrapple.cpp`): retail reaches the same function
+// from both (`StartGrappleAttack 0x10328df0` and the mode leaves).
+namespace ElysiumFeedGrappleCommit
+{
+	struct FNpcHalf
+	{
+		int32 Base = 0;                 // the argument: `m_IdealActivity (+0xff0)`
+		int32 Translated = 0;           // the cell after slot 381: `m_Activity (+0xfec)`
+		int32 Sequence = INDEX_NONE;    // `SelectWeightedSequence(Translated)`'s answer
+	};
+
+	// Steps 5-6 of `0x1032a100` on one body. False is the `seq < 0` miss: nothing is written.
+	// `InOutSeconds` takes the sequence's length when the row knows it.
+	bool CommitNpcHalf(FElysiumNpc& Npc,const FNpcHalf& Half, float& InOutSeconds);
 }

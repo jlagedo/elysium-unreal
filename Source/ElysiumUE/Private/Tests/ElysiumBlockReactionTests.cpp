@@ -38,6 +38,7 @@
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumItemTable.h"
+#include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumReactions.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "Tests/ElysiumTestServices.h"
@@ -293,6 +294,14 @@ namespace
 			}
 			SeedHealth(*Player, 100);
 			SeedHealth(*Attacker, 100);
+			// `MeleeSwingStep 0x10343020`'s relation filter (`0x1034394d..0x103439a7`): an NPC's swing
+			// lands only on a character its slot 404 `IRelationType` answers hate (1) or fear (2) for.
+			// The attacker is fighting the player, so it hates the player (spec 0002 V11-2, D1).
+			if (FElysiumNpc* AttackerNpc = Attacker->AsNpc())
+			{
+				AttackerNpc->Relationships.AddEntityRelationship(Player->Handle,
+					EElysiumRelationship::Hate, 10);
+			}
 			Player->Origin = FVector::ZeroVector;
 			Player->Angles = FVector(0.0f, PlayerYawDegrees, 0.0f);
 			// Written directly, as `PlaceFacing` does in the weapon suite: going through

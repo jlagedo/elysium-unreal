@@ -1268,6 +1268,93 @@ struct FElysiumRecordingServices final
 		// geometry to answer with, so this reports every geometric reach — which is the permissive
 		// direction: a case can prove a contact landed, never that a wall stopped one.
 	}
+
+	// `MeleeSwingStep 0x10343020`'s candidate box (`0x101cca80`), the walk's own query. With no
+	// placed body it answers the standing list `SwingContacts` verbatim (the cases that ask about
+	// the WALK); with one, the AABB over the sweep's four points against every placed box -- the
+	// attacker's too, as retail lists it (the step's owner-root gate `0x1012c9c0` drops it).
+	virtual void QuerySwingStepEntities(const FElysiumSwingSweep& Sweep,
+		TArray<FElysiumEntityHandle>& OutEntities) const override
+	{
+		SwingContactSweeps.Add(Sweep);
+		if (SwingBodies.IsEmpty())
+		{
+			OutEntities = SwingContacts;
+			return;
+		}
+		FBox Swept(ForceInit);
+		Swept += Sweep.CurA;
+		Swept += Sweep.CurB;
+		Swept += Sweep.PrevA;
+		Swept += Sweep.PrevB;
+		OutEntities.Reset();
+		for (const TPair<FElysiumEntityHandle, FBox>& Body : SwingBodies)
+		{
+			if (Swept.Intersect(Body.Value) && OutEntities.Num() < 100)
+			{
+				OutEntities.Add(Body.Key);
+			}
+		}
+	}
+
+	// The sample rays the walk clipped (`0x101d2530`), `Q -> P` each, so a case can assert the
+	// sample count and where each ray ran. Not `Record`ed, for `SwingContactSweeps`' reason.
+	struct FSwingRay
+	{
+		FElysiumEntityHandle Entity;
+		FVector FromCm = FVector::ZeroVector;
+		FVector ToCm = FVector::ZeroVector;
+	};
+	mutable TArray<FSwingRay> SwingRays;
+
+	// `0x101d2530(&ray, 0x200400b, e, &tr)`: the ray against that entity's placed box alone. With
+	// no placed body, an entity on the standing list is hit at the ray's start (`startsolid`), which
+	// is what "the sweep reaches this body" means to a case that places nothing.
+	virtual bool ClipSwingRayToEntity(const FVector& FromCm, const FVector& ToCm,
+		const FElysiumEntityHandle& Entity, FElysiumSwingRayHit& Out) const override
+	{
+		FSwingRay Ray;
+		Ray.Entity = Entity;
+		Ray.FromCm = FromCm;
+		Ray.ToCm = ToCm;
+		SwingRays.Add(Ray);
+
+		Out = FElysiumSwingRayHit();
+		Out.StartCm = FromCm;
+		Out.EndPosCm = ToCm;
+		const FBox* Box = SwingBodies.Find(Entity);
+		if (Box == nullptr)
+		{
+			if (SwingBodies.IsEmpty() && SwingContacts.Contains(Entity))
+			{
+				Out.bStartSolid = true;
+				Out.bAllSolid = true;
+				Out.Fraction = 0.f;
+				Out.EndPosCm = FromCm;
+				return true;
+			}
+			return false;
+		}
+		if (Box->IsInsideOrOn(FromCm))
+		{
+			Out.bStartSolid = true;
+			Out.bAllSolid = Box->IsInsideOrOn(ToCm);
+			Out.Fraction = 0.f;
+			Out.EndPosCm = FromCm;
+			return true;
+		}
+		FVector HitLocation = FVector::ZeroVector;
+		FVector HitNormal = FVector::ZeroVector;
+		float HitTime = 1.f;
+		if (!FromCm.Equals(ToCm, 0.0) && FMath::LineExtentBoxIntersection(*Box, FromCm, ToCm,
+			FVector::ZeroVector, HitLocation, HitNormal, HitTime))
+		{
+			Out.Fraction = FMath::Clamp(HitTime, 0.f, 1.f);
+			Out.EndPosCm = HitLocation;
+			Out.Normal = HitNormal;
+		}
+		return true;
+	}
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override

@@ -3,6 +3,7 @@
 
 #include "ElysiumEntity.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "ElysiumStub.h"
@@ -204,29 +205,40 @@ float FElysiumNpc::ResolveTaskDistance(float Distance)
 	// C++ classes (story 5 step 3): each tests its own sentinel and only then calls this body.
 	const int32 Truncated = static_cast<int32>(Distance);   // retail's `__ftol`
 
-	// 0x102bf6e0, the Troika line: a four-entry jump table on `(int)param + 1000008`.
+	// 0x102bf6e0, the Troika line: a four-entry jump table on `(int)param + 1000008` (`0x102bf738`).
+	// The table's dwords, read from the image (`schedule-kernel.md` § "`0x102bf6e0`", corrected
+	// 2026-09-21): index 0 -> `0x102bf71b`, 1 -> `0x102bf711`, 2 -> `0x102bf707`, 3 -> `0x102bf6fd`.
+	// The port carried the four rows reversed until spec 0002 V11-1.
 	switch (Truncated + 1000008)
 	{
-	case 0:   // -1000008
-		return FollowerDistanceBackAway;
-	case 1:   // -1000007
-		return FollowerDistanceWalkTo;
-	case 2:   // -1000006
-		return FollowerDistanceRunTo;
-	case 3:   // -1000005
+	case 0:   // -1000008 `DIST:` OVERLAP: 0x102bf71b `FLD [0x1044e664]` (10.0)
 		return GScheduleFollowerOverlap;
+	case 1:   // -1000007 RUNTO: 0x102bf711 `FLD [ESI + 0x648c]`
+		return FollowerDistanceRunTo;
+	case 2:   // -1000006 WALKTO: 0x102bf707 `FLD [ESI + 0x6488]`
+		return FollowerDistanceWalkTo;
+	case 3:   // -1000005 BACKAWAY: 0x102bf6fd `FLD [ESI + 0x6484]`
+		return FollowerDistanceBackAway;
 	default:
 		break;
 	}
-	// `CAI_BaseNPC::ResolveTaskDistance` (`0x102702d0`), layer 0 and NOT one of this story's rows:
-	// it splits -1000003 (through a global's slot 1), -1000002 and -1000000 and otherwise answers
-	// the truncated value. Only the pass-through arm is reproduced; the three sentinels are named.
-	if (Truncated == -1000003 || Truncated == -1000002 || Truncated == -1000000)
+	// `CAI_BaseNPC::ResolveTaskDistance` (`0x102702d0`), reached by `0x102bf72c`: three sentinels on
+	// the same `__ftol`, else the argument AS PASSED (`0x102702f1 FLD [ESP + 0x8]` -- not truncated).
+	if (Truncated == -1000003)
 	{
-		ElysiumStub::Fired(TEXT("schedule"), TEXT("CAI_BaseNPC::ResolveTaskDistance 0x102702d0"),
-			DebugString(), FString::FromInt(Truncated), TEXT("0002/29c: the base sentinel arms"));
+		// 0x1027030d COMBATMOVE: the melee-range ConVar `DAT_10924a1c` -- 0.0 (`0x104454c4`) when
+		// its slot 1 answers true, else its `+0x28` (shipped 100). `MeleeRangeUnits` is that read.
+		return MeleeRangeUnits();
 	}
-	return static_cast<float>(Truncated);
+	if (Truncated == -1000002)
+	{
+		return 160.0f;   // 0x10270303 DIALOG: `FLD [0x1047a3ac]`
+	}
+	if (Truncated == -1000000)
+	{
+		return SpecialDistanceAccum;   // 0x102702f9 ACCUM: `m_flSpecialDistanceAccum (+0x5bac)`
+	}
+	return Distance;   // 0x102702f1
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -385,7 +397,7 @@ int32 FElysiumNpc::SelectScheduleMeleeCombatChangLine(bool bChang)
 	}
 	// `GetEnemy()` twice, then the enemy's `WorldSpaceCenter` (slot 192) into a discarded
 	// stack vector, then `0x102a11d0`.
-	if (Enemy != nullptr && ScheduleMeleeReachGate())
+	if (Enemy != nullptr && ScheduleNonHatedNpcInTheWay())
 	{
 		return bChang ? 0x15a : 0xe1;
 	}
@@ -590,11 +602,62 @@ void FElysiumNpc::SearchForCoverHint(uint32 SearchMask)
 	(void)FindTacticalHintNode(SearchMask);
 }
 
-bool FElysiumNpc::ScheduleMeleeReachGate() const
+bool FElysiumNpc::ScheduleNonHatedNpcInTheWay() const
 {
-	// SEAM for `0x102a11d0`. Retail name unrecovered; four direct callers, reads `+0x300` (the
-	// enemy's `WorldSpaceCenter`) and `+0x650`.
-	return false;
+	// `0x102a11d0` (`__thiscall (this; const Vector& point)`), "an NPC I do not hate stands between
+	// me and the point" -- the gate the four `SelectScheduleMeleeCombat` bodies (`CNPC_VHuman
+	// 0x10385e40`, `CNPC_VChangBros 0x1036d800`, `CNPC_VMingXiao 0x10396050`, `CNPC_VTzimisceRunner
+	// 0x103c4430`) put in front of their circle arm. Every caller passes the enemy's slot 192
+	// `WorldSpaceCenter` (the stack vector the call sites read just before), so the point is taken
+	// from `GetEnemy()` here and the port's signature carries no argument.
+	//
+	//     mins = OBBMins(); maxs = OBBMaxs();              // m_Collision (+0x270) slots 1 / 2
+	//     mins = (2 * mins.x, 2 * mins.y, -6.0); maxs = (2 * maxs.x, 2 * maxs.y, +6.0);
+	//     ray.Init(WorldSpaceCenter() /* slot 192 */, point, mins, maxs);          // 0x1006dec0
+	//     CTraceFilterSimple filter(this, 0);                                      // 0x101d3190
+	//     enginetrace->TraceRay(ray, 0x2000000 /* CONTENTS_MONSTER */, &filter, &tr);
+	//     if ((tr.fraction < 1.0 || tr.allsolid || tr.startsolid)
+	//         && tr.m_pEnt != NULL && tr.m_pEnt->m_pBaseNPC (+0x94) != NULL
+	//         && IRelationType(tr.m_pEnt) /* slot 404, +0x650 */ != 1 /* D_HT */) return true;
+	//     return false;
+	FElysiumEntity* const Enemy = const_cast<FElysiumNpc*>(this)->GetEnemy();
+	if (Enemy == nullptr)
+	{
+		return false;   // every retail caller holds a live enemy; no point, no trace
+	}
+	FVector MinsUnits = FVector::ZeroVector;
+	FVector MaxsUnits = FVector::ZeroVector;
+	RetailCollisionExtents(*this, MinsUnits, MaxsUnits);
+	const FVector HullMins(2.0 * MinsUnits.X, 2.0 * MinsUnits.Y, -6.0);
+	const FVector HullMaxs(2.0 * MaxsUnits.X, 2.0 * MaxsUnits.Y, 6.0);
+	// Source units -> cm is `ElysiumMove::U`: the port's positions are centimetres, and
+	// `KernelHullTrace` takes SOURCE units in the port's axes (`Cm / U`) and converts back at the
+	// seam (`IElysiumEmbodiment::TraceRetail`), the box included.
+	const FVector StartUnits = const_cast<FElysiumNpc*>(this)->WorldSpaceCenter() / ElysiumMove::U;
+	const FVector EndUnits = Enemy->WorldSpaceCenter() / ElysiumMove::U;
+	// The MONSTER-alone mask (`ElysiumRetailMask::Recipe(0x2000000)`, the idle gate `0x102b5de0`'s);
+	// the kernel trace ignores this NPC (the filter's pass entity) and folds the nearest character
+	// `CTraceFilterSimple` keeps. No world or no embodiment: the fault path, false.
+	constexpr int32 GInTheWayMask = 0x2000000;
+	FKernelHullTrace Trace;
+	if (!KernelHullTrace(StartUnits, EndUnits, HullMins, HullMaxs, GInTheWayMask, Trace))
+	{
+		return false;
+	}
+	// `FLD [tr+0x2c] / FCOMP 1.0`: blocked on `fraction < 1.0`, else on allsolid or startsolid.
+	if (!(Trace.Fraction < 1.0f || Trace.bAllSolid || Trace.bStartSolid))
+	{
+		return false;
+	}
+	// `tr.m_pEnt` and its `+0x94 m_pBaseNPC` (`AsNpcBase()`): the player's body, a prop or the
+	// world ends the trace and answers false.
+	const FElysiumEntity* const Hit = Trace.HitEntity.IsSet() ? World->Resolve(Trace.HitEntity) : nullptr;
+	if (Hit == nullptr || Hit->AsNpcBase() == nullptr)
+	{
+		return false;
+	}
+	constexpr int32 GRelationHate = 1;   // D_HT
+	return IRelationTypeOf(Hit) != GRelationHate;
 }
 
 int32 FElysiumNpc::NavigatorNavType() const

@@ -131,4 +131,60 @@ namespace ElysiumSwing
 	// empty list, which is what makes a `2COMBO`'s second group land again.
 	void ClearClosedRecords(const TArray<FElysiumSwingRecord>& Records, float BatchStart,
 		float BatchEnd, TArray<TArray<FElysiumEntityHandle>>& InOutHits);
+
+	// --- `MeleeSwingStep 0x10343020`: the per-record hit test ------------------------------------
+
+	// `count = min(seqdesc+0x2c4, 20)`: the step walks at most 20 records of a sequence, and zeroes
+	// the hit lists of records `count..19` after the record loop.
+	inline constexpr int32 MaxRecords = 20;
+
+	// The capacity of the candidate list `0x101cca80` fills (`PUSH 100`).
+	inline constexpr int32 MaxBoxEntities = 100;
+
+	// f32 `0x10488874` = 0.1666667: one sample per 6 Source units of segment.
+	inline constexpr float SamplesPerUnit = 0.1666667f;
+
+	// `n = ceil(|B - A| * 0.1666667)` over the segment's length in SOURCE units (the endpoints are
+	// world centimetres here); `n < 2` answers 1, and the caller then collapses the segment to its
+	// midpoint (`A = B = (A + B) / 2`).
+	int32 SampleCount(const FVector& ACm, const FVector& BCm);
+
+	// `f = n > 1 ? 1 - i / (n - 1) : 0` (`0x10343fc4..0x10343fe0` in the wall arm, the same
+	// expression in the entity arm): sample 0 is the segment's B end, the last its A end.
+	float SampleFraction(int32 SampleIndex, int32 Samples);
+
+	// The window test of the step itself: open iff `start <= cycle && end >= prevCycle`, both
+	// inclusive. `WindowOverlaps` above is the same comparison; this names retail's operands.
+	inline bool StepWindowOpen(const FElysiumSwingRecord& Record, float PrevCycle, float Cycle)
+	{
+		return WindowOverlaps(Record.Start, Record.End, PrevCycle, Cycle);
+	}
+
+	// --- The wall contact (`0x10343f96`), the attacker's slot 328 arm -----------------------------
+
+	// f32 `0x10451ab8`: the plane must be near-vertical, `|normal.z| < 0.3`.
+	inline constexpr float WallMaxNormalZ = 0.3f;
+	// f32 `0x1049e038`, squared at `0x103442d8`: the flattened forward's 2-D length^2 must exceed it.
+	inline constexpr float WallMinForwardLenSq = 1e-12f;
+	// f32 `0x1049e03c`: `|dot(normal, flattened forward)| > 0.7071`.
+	inline constexpr float WallMinFacingDot = 0.7071f;
+	// f32 `0x1049e040`: 20.0 Source units.
+	inline constexpr float WallMaxDistanceUnits = 20.0f;
+
+	// The first two tests of the wall arm, which a hit must pass to count at all
+	// (`0x10344221..0x1034428a`): the plane normal non-zero and `|normal.z| < 0.3`. A hit failing
+	// either goes to the next sample with no reaction AND no impact effect.
+	bool WallPlaneQualifies(const FVector& PlaneNormal);
+
+	// Does a world hit of the sample ray send the attacker into its blocked reaction (slot 319)?
+	// `0x10344221..0x10344382`, in the listing's order: the plane normal non-zero, `|normal.z| <
+	// 0.3`, the attacker's forward (`AngleVectors` of slot 221's angles) flattened with a 2-D
+	// length^2 above 1e-12 and normalised, `|dot(normal, forward)| > 0.7071`, and **the 2-D distance
+	// from the attacker's origin (slot 217 `GetAbsOrigin`, `0x10344343`) to the trace's hit point
+	// (`Q + (P - Q) * fraction`, `0x103441bf..0x103441ec`) below 20.0 units** (`0x1034435d..
+	// 0x10344374`: `sqrt(dx*dx + dy*dy)` against `0x1049e040`). The fourth operand was read from the
+	// listing 2026-10-04 (spec 0002 V11-2); the packet S5 had it as lost.
+	// Everything is in world centimetres; `ForwardWorld` need not be normalised.
+	bool WallBlocksSwing(const FVector& PlaneNormal, const FVector& ForwardWorld,
+		const FVector& HitPointCm, const FVector& AttackerOriginCm);
 }

@@ -28,6 +28,8 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumGameSound.h"
+#include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcEngineRandom.h"
 #include "Substrate/ElysiumNpcGait.h"
@@ -2920,7 +2922,60 @@ FElysiumEntity* FElysiumNpcBase::StartTaskWeaponFindUsable(const FVector& Extent
 
 bool FElysiumNpcBase::StartTaskChooseBestMeleeWeapon()
 {
-	return false;
+	// `CBaseCombatCharacter::ChooseBestMeleeWeapon 0x10337230`: `GetBestMeleeWeapon 0x10336f20`; a
+	// weapon -> owner slot 388 (`+0x610`) `Weapon_Switch(weapon, 0)` and true; none -> false.
+	//
+	// `GetBestMeleeWeapon`: the type list `0x10619eb4` = `{1, 2, 3, 7, -1}`; for a type whose section
+	// number `0x10619d28[type]` is `>= 0`, weapon slots `[0x10937cd0[type], + owner slot 298
+	// (+0x4a8)(section))`, the first `GetWeapon(i)` whose slot 360 (`+0x5a0`) `& 0x18000` wins. The
+	// two tables are the inventory sections of `vdata\system\items.txt` § `InventorySections`
+	// (`CacheInventorySections 0x10340180`, packet S5 item 6): types 1, 2, 3, 7 are `Weapon_Melee`,
+	// `Weapon_Ranged`, `Weapon_Thrown`, `Hidden`, 32 slots each from 0, 32, 64, 192.
+	//
+	// The port's inventory is ONE compact list (`FElysiumInventory::Slots`), not eight 32-slot
+	// sections: an item's section is its record's type (`ElysiumSectionForItemType`), and its place
+	// inside the section is its place in the list. The walk is therefore the four sections in
+	// retail's type order, each over the list in position order. UNVERIFIED: that the list's order
+	// inside one section equals retail's section-slot order (both are acquisition order as far as
+	// the port's `Inventory_Add` goes).
+	static const EElysiumInvSection GBestMeleeSections[] = {
+		EElysiumInvSection::WeaponMelee,    // type 1, section 0, slots [0, n)
+		EElysiumInvSection::WeaponRanged,   // type 2, section 1, slots [32, 32 + n)
+		EElysiumInvSection::WeaponThrown,   // type 3, section 2, slots [64, 64 + n)
+		EElysiumInvSection::Hidden,         // type 7, section 6, slots [192, 192 + n)
+	};
+	FElysiumItem* Best = nullptr;
+	for (const EElysiumInvSection Section : GBestMeleeSections)
+	{
+		for (int32 Position = 0; Position < Inventory.Num() && Best == nullptr; ++Position)
+		{
+			FElysiumItem* const Item = Inventory.At(*this, Position);
+			const FElysiumWeapon* const Weapon = Item != nullptr ? Item->AsWeapon() : nullptr;
+			const FElysiumItemDef* const Record = Weapon != nullptr ? Weapon->Data() : nullptr;
+			if (Record == nullptr || ElysiumSectionForItemType(Record->Type) != Section)
+			{
+				continue;
+			}
+			// Slot 360 `& 0x18000`: the port's melee capability is a controllable weapon whose
+			// record is the melee family (`ElysiumNpcCond::WeaponCapability`'s own test).
+			if (Record->IsControllableWeapon() && Record->Type == EElysiumItemType::WeaponMelee)
+			{
+				Best = Item;
+			}
+		}
+		if (Best != nullptr)
+		{
+			break;
+		}
+	}
+	if (Best == nullptr)
+	{
+		return false;   // 0x10337230: no weapon -> 0 -> FAIL_NO_WEAPON_TO_CHOOSE
+	}
+	// Slot 388 `Weapon_Switch(weapon, 0)` (`0x1032dde0`) is still a generated stub; the port's
+	// active-weapon switch is the inventory's. Retail answers true whatever the switch answers.
+	(void)Inventory.SetActiveWeapon(*this, *Best);
+	return true;
 }
 
 bool FElysiumNpcBase::StartTaskChooseBestRangedWeapon()

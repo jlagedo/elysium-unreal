@@ -1012,8 +1012,13 @@ paragraph had the four rows reversed**; the table's dwords, read from the image,
 `+0x6488` (`…_WALKTO`), -1000005 -> `m_flFollowerDistanceBackAway` (`+0x6484`, `…_BACKAWAY`) —
 which is the order the parser's `DIST:` name table gives them (§ "The schedule-text parser
 `0x1030d850`, walked"). Anything else falls to
-`CAI_BaseNPC::ResolveTaskDistance` (`0x102702d0`), which splits -1000003 (through a global's
-slot 1), -1000002 and -1000000 and otherwise answers the truncated value.
+`CAI_BaseNPC::ResolveTaskDistance` (`0x102702d0`), which tests the `__ftol` of its argument:
+-1000003 (`0x1027030d`, `DIST:COMBATMOVE`) -> the melee-range ConVar `DAT_10924a1c` (0.0 when its
+slot 1 answers true, else its `+0x28`, shipped 100); -1000002 (`0x10270303`, `DIALOG`) -> the fixed
+`0x1047a3ac` (160.0); -1000000 (`0x102702f9`, `ACCUM`) -> `m_flSpecialDistanceAccum` (`+0x5bac`);
+anything else -> **the argument as passed** (`0x102702f1 FLD [ESP+0x8]`, the float itself: only the
+comparison uses the truncation). **Corrected 2026-10-04 (spec 0002 V11)**: this paragraph said the
+pass-through answered "the truncated value".
 
 Two species overrides sit in front of it and only then delegate: `CNPC_VMingXiao` (`0x10392a10`)
 answers `m_flIdealRange` (`+0x6748`) for -1000004, `CNPC_VTzimisce` (`0x103b9120`) answers

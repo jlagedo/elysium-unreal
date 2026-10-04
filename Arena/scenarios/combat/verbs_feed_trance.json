@@ -30,14 +30,17 @@
   ],
   "expect": [
     { "label": "idles", "who": "arena_vessel", "kind": "schedule", "match": "SCHED_TROIKA_IDLE_DISPOSITION (", "by": 1.5 },
+    { "label": "grapples", "who": "arena_vessel", "kind": "output", "match": "OnGrappleBegin", "by": 2.5 },
     { "label": "entranced", "who": "arena_vessel", "kind": "schedule", "match": "SCHED_TROIKA_MESMERIZED (0xfb)", "by": 8.0 },
     { "label": "oblivious", "who": "arena_vessel", "kind": "task", "match": "task_make_oblivious (", "within": 5.0 },
     { "label": "holds", "who": "arena_vessel", "kind": "task", "match": "task_wait (", "within": 2.0 }
   ],
   "never": [
+    { "who": "arena_vessel", "kind": "sequence", "match": "(?i)idle", "regex": true, "after": "grapples", "until": 5.6 },
     { "who": "arena_vessel", "kind": "death" },
     { "who": "arena_vessel", "kind": "taskdone", "match": "^task_wait$", "regex": true }
   ],
+  "notes": "V11 (packets-S10, the grapple's activity words): `grapples` and the idle-sequence never were added. SetGrappleActivity 0x1032a100 makes each feed clip the victim's own sequence with m_Activity a grapple cell, so RunAnimation 0x1026c540's idle re-pick is off for the whole grapple, and LeaveGrappleState 0x10329a70 writes no animation word: no idle row may be committed between OnGrappleBegin and the leave. `until` takes seconds, not a label: 5.6 s stands for the leave (OnGrappleEnd measured 5.667 at seed 1).",
   "probes": [
     { "at": "end", "who": "arena_vessel", "probe": "schedule", "equals": "SCHED_TROIKA_MESMERIZED" },
     { "at": "end", "who": "arena_vessel", "probe": "alive", "equals": true }
