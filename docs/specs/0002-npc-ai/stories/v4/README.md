@@ -296,11 +296,19 @@ player's FOV and the NPC's scalar); `Elysium.Arm.NpcKernelMotor.MoveYaw` (`0x102
   table**, and events come from the baked table, never from Unreal notifies. V4 narrows it: the
   kernel's sequence rows carry the baked flags, weights, events and speeds, so only the asset
   lookup remains a divergence.
-- **K3 (new, recorded only, not adopted): the world poll stays for non-NPC entities** (the player's
-  4050/4051 camera band, props, the camera) reading the visual phase. Retail runs their dispatchers
-  in their own think; V4 removes it only for NPCs. Recorded for the player's / props' owners.
-- **K4 (new, recorded only): the visual side's `PickWeighted` hash seed**
-  (`ElysiumAnimationResolve.cpp:723`) for non-kernel picks; the kernel draws on `NpcSchedule` (C2).
+- **K3 — NOT a divergence (the owner, 2026-10-04): the world poll goes for every entity, not only
+  NPCs.** Retail can be followed here, so rule 2 does not allow keeping it: retail's dispatcher is
+  `CBaseAnimating::DispatchAnimEvents` (slot 258, `0x10091880`), run from each entity's own think,
+  for the player (the 4050/4051 camera band), props and the camera alike. Packet R2 recovers where
+  each of those entities calls it and in what order against its frame advance; lane A1 then moves
+  them onto the same dispatcher as the NPC and the world-tick poll is deleted whole. If R2 shows
+  one of them needs substrate another spec owns, that part alone goes to the judge.
+- **K4 — NOT a divergence (the owner, 2026-10-04): the visual side's `PickWeighted` hash seed**
+  (`ElysiumAnimationResolve.cpp:723`). Retail's pick is `SelectWeightedSequence` on
+  `CBaseAnimating`, drawn on the game's random stream, for every animating entity. Packet R2
+  recovers which retail body makes each pick the visual layer makes today and which stream it
+  draws on; lane C2 then routes them through the same weighted draw as the kernel's. A pick with no
+  retail counterpart (a purely Unreal-side blend choice) is listed by name for the owner.
 - **K5 (new, recorded only, for the judge): the rigless corpse.** Until 0014's physics asset exists,
   `HoldBodyFinalPose` holds the `ACT_DIERAGDOLL` seed pose (C2) instead of falling. Retail cannot be
   followed without a rig: no `UPhysicsAsset` is baked (`pipeline/.../physics_data.py:5`).

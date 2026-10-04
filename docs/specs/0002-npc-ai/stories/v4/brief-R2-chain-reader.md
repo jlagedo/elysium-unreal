@@ -69,3 +69,24 @@ write them into `docs/vtmb/`. No C++, no Python, no record, no run. Runs in para
 `packets.md` § R2: the eight items as numbered findings with addresses and the doc section each
 went into. The report: what you settled, the answers C1 and the judge need (items 3 and 5 first),
 what stays unrecovered, every query over 10 s.
+
+## Added by the owner's ruling, 2026-10-04 — K3 and K4 are fixed in V4, not kept
+
+Two more items for this packet (README § 7, K3 and K4):
+
+1. **Anim events for non-NPC entities.** Where the player, a prop (`prop_dynamic` and the other
+   animating props the two witness maps place) and the camera entity call
+   `CBaseAnimating::DispatchAnimEvents` (slot 258, `0x10091880`): the caller's address, which think
+   it sits in, and its order against that entity's `StudioFrameAdvance`. Which event numbers each
+   handles (the player's 4050/4051 camera band; weapon events) and through which `HandleAnimEvent`
+   override. Then the port: every consumer of the world-tick poll (`ElysiumEntityWorld.cpp`, near
+   the poll at ~:1889) with file:line, and what each would need to run from its own think instead.
+   State whether any NPC-observable event (one an NPC schedule or condition reacts to) comes from
+   a non-NPC entity's animation.
+2. **The weighted pick outside the kernel.** Every call of the visual layer's `PickWeighted`
+   (`ElysiumAnimationResolve.cpp:723`) and what asks for it; for each, the retail body that makes
+   that pick (`SelectWeightedSequence` and its callers) and the random stream it draws on. List
+   any pick with no retail counterpart by name.
+
+Lanes A1 (the dispatcher) and C2 (the pick) take these on once the packet lands; their briefs are
+extended from it before those waves start.
