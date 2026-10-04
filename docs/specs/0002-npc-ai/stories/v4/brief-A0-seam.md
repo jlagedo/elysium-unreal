@@ -78,3 +78,29 @@ Glob. Wait on a build or a run by its completion notification, never a sleep or 
 
 The commit hash, the build's wall time, the verdicts of the records you ran, the default tier's
 totals, where the FOV word lived and where it went, and anything you could not do.
+
+## Added by the owner's ruling, 2026-10-04 — records for the player's and props' anim events
+
+K3 is fixed in V4 (README § 7), so its acceptance is a record, not only the test tiers. The seam
+writes these, red, and adds what the harness lacks to state them:
+
+- **Harness (H21):** the `animevent` trace kind emitted for every animating entity, not only NPCs
+  (the tap sits in the dispatcher lane A1 ports; until then it taps the world-tick poll for the
+  non-NPC entities so the records have a "before"), and `who: "player"` accepted in `expect` /
+  `never` for that kind. Check first what the tap covers today (`stories/wave2/seam.md`) and say
+  so in your report.
+- **`anim_player_footsteps`** (arena): the player walks (`player_walk`) across the room; expect
+  the footstep events retail's walk sequence authors, in order, at the cadence the clip's baked
+  event table gives; `never` an event while standing still.
+- **`anim_player_weapon_event`** (arena): the player armed with one melee item and one firearm
+  (`"armed": "<classname>"`, two records if one stage cannot hold both), `+attack`: expect the
+  weapon's anim event (packet R2 names the numbers and the 4050/4051 camera band) before the
+  damage it causes.
+- **`anim_prop_event`** (map stage, or arena if a baked animating prop row can stand there by
+  `from_map`): one `prop_dynamic` whose sequence authors an event, started by its input: expect
+  the event and what it fires. Packet R2 names a row from the two witness maps; if neither map
+  has one, say so and leave this record out.
+
+Each record states retail's order (the event from the entity's own think, after its frame
+advance), cited from packet R2; where R2 has not landed when you write them, write the record as
+far as the baked event tables settle it and put what R2 must confirm in `notes`.
