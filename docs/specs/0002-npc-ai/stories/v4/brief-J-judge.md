@@ -12,15 +12,9 @@ V13" (the form of a ruling).
 
 ## The questions
 
-1. **Q3, the corpse fall.** `damage_lethal_death` and `verbs_stealth_kill` assert a corpse on the
-   floor; the port has no character `UPhysicsAsset` (0014/3, L), no calibrations (0014/1–2, M + M),
-   no handoff (0014/5, XS). Options: (a) pull 0014/1–3 + 5 forward as V4d — pipeline physics-asset
-   builder from the decoded `.phy`, the calibrations, a full character re-import (~1,434 s recorded,
-   `$ELYSIUM_WORK_ROOT/logs/20260928T205853.840641Z-import-characters.json`), one build, the ragdoll's
-   own collision at the handoff (the dead actor's collision is off today); (b) re-cut the two records
-   to the death transaction step 2 owns (`death`, `OnDeath`, `corpse ragdoll`, the `ACT_DIERAGDOLL`
-   seed `sequence`, nothing after death) and move `corpse_on_floor` to 0014's witness. Argue against
-   each; rule.
+1. **Q3, the corpse fall — withdrawn (the owner ruled, 2026-10-04).** It is story V4d, size M:
+   a physics asset built from the `.phy` data, Unreal's solve, the retail contract on what game
+   logic observes (`brief-D-ragdoll.md`). Nothing to rule.
 2. **Q4, slot 247's bbox** — only if R2 item 5 shows `Flags2 & 4` set on an NPC class a step-2
    record or map reaches. Options: the bbox on the `UElysiumBodyData` row (re-authors `DA_` assets;
    whether the animation packages re-cook is unverified — check `pipeline/.../import_characters.py`

@@ -55,3 +55,13 @@ The row's baked data (V4a), the body's speed (V4b), attack producers (C1), the f
 README § "Rules for every agent of V4": no build, no editor, no suite; only your files; cross-lane
 lines in the report. The query budget (10 s warns, 60 s stops). Text through Grep / Read / Glob. Do
 not commit. Report ≤300 words.
+
+## Changed by the owner's ruling, 2026-10-04 — the corpse
+
+The corpse's fall is story V4d (`brief-D-ragdoll.md`), not yours. Do not write the "hold the
+`ACT_DIERAGDOLL` seed pose" stand-in this brief describes: that seed runs only for bone -1
+(`0x1009021a`) and `CreateCorpse 0x1032c0e0` always passes a real bone. Your death item is the
+transaction only — slot 144 → `CreateCorpse`, `BecomeClientRagdoll(force, bone, 0)` with the hit
+bone or `LookupBone("Bip01 Spine2")`, the force latched only for |F| > 0 and bone > 0, the entity
+made not solid with its think cleared, the +10 s `SUB_PVSRemove` — leaving `StartBodyRagdoll`'s
+answer as it is until V4d gives the mesh a physics asset.

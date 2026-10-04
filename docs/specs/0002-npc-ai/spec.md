@@ -651,6 +651,34 @@ tests the green scenarios cover deleted.
   on the combat character; the weighted sequence pick from the `.mdl` `activityweight` the bake
   carries. Detail: draft § C2. *Scenarios:* melee-and-die, damage-and-death. *Size:* M.
   *Model:* Opus/high.
+  *Planned 2026-10-04 (`stories/v4/README.md`; the plan only, not started):*
+  - [ ] **V4r** — two reading packets (the walk and N13's cause; the chain: the dispatcher, the
+    attack producers, slot 363, and — the owner's ruling — where the player, props and the camera
+    dispatch their anim events and which retail body makes each visual clip pick), then the judge
+    (N19; slot 247's bbox and N13-in-the-bake only if the packets raise them). S–M.
+  - [ ] **V4a** — the seam, the clock's speed words, the dispatcher in `PostRun` for every animating
+    entity (the world-tick poll deleted whole), slot 363. *Records:* `sense_enemy_facing_me`,
+    `anim_player_footsteps`, `anim_player_weapon_event`, `anim_prop_event` (the Green Room, a prop
+    from anywhere in the corpus). M.
+  - [ ] **V4b** — the walk and the turn (N13). *Records:* the three patrols,
+    `places_pedestrian_visit`, `face_enemy_turn`. S–M.
+  - [ ] **V4c** — the attack producers, the weighted sequence pick for every animating entity,
+    `SetDisposition`, the death transaction. M.
+  - [ ] **V4d** — the corpse falls (`stories/v4/brief-D-ragdoll.md`): a spike, then a physics asset
+    built from the game's `.phy` data and Unreal's solve. *Records:* `damage_lethal_death`,
+    `verbs_stealth_kill` with `corpse_on_floor`. M.
+
+  The owner's rulings on V4 (2026-10-04): **the world-tick event poll and the visual side's
+  hash-seeded pick are not divergences** — retail can be followed (both bodies sit on
+  `CBaseAnimating`), so V4 fixes them for the player, props and the camera too, proven by arena
+  records. **The corpse's fall is a named modernization**: Unreal (Chaos) solves it with no
+  calibration against VtMB's simulation; the bodies, masses and joint limits come from the game's
+  `.phy`; what game logic observes (`OnDeath` on the kill tick, the `corpse` event, the entity
+  frozen at the death spot, its removal) stays retail's — retail's own ragdoll is client-side and
+  nothing the bytecode reads depends on where the drawn body rests. Re-validated by three agents:
+  size M, not 0014's M + M + L + XS with a 24-minute re-import (the `.phy` is decoded and already
+  baked as data; the handoff exists; the bake step re-imports nothing). The death impulse,
+  `prop_ragdoll`, joint friction and the full-corpus rollout stay in 0014.
 - [ ] **V5. Fix: the attack conditions and the combat interrupts.** (Was C3.) The two clears and
   the timers of `GatherAttackConditions`; why `0xef`'s mask does not break (packet first),
   `HasInterruptCondition 0x10269d30`. *Scenario:* cover-and-fire with the player at 96 cm and

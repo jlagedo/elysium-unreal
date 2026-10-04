@@ -101,7 +101,14 @@ Wave 3 (build work, one agent):
   `ElysiumNpc.h` 97.7 → 72.5 s (42 → 36), `ElysiumEntityWorld.h` 111.7 → 99.6 s (47 → 46).
   Default 171 / 0, arm 1,541 / 0, arena 75 pass / 30 expected-fail / 1 fail (H11) of 106 — each
   identical record by record; `kernel --check` clean.
-- [ ] **V4** — Fix: the animation chain under the kernel. M · Opus/high.
+- [ ] **V4** — Fix: the animation chain under the kernel. M · Opus/high. Planned 2026-10-04
+  (`0002-npc-ai/stories/v4/README.md`), not started:
+  - [ ] **V4r** — the two reading packets and the judge (N19). S–M.
+  - [ ] **V4a** — the seam, the speed words, the dispatcher for every animating entity, slot 363. M.
+  - [ ] **V4b** — the walk and the turn (N13). S–M.
+  - [ ] **V4c** — attack producers, the weighted pick, the death transaction. M.
+  - [ ] **V4d** — the corpse falls: a physics asset from the `.phy`, Unreal's solve (the owner's
+    ruling: a named modernization). M.
 - [ ] **V5** — Fix: the attack conditions and the combat interrupts. S · Fable/medium.
 - [ ] **V6** — Fix: session, clock and lifecycle. M · Opus/high.
 - [ ] **V11** — The attack coordinator's list (pulled from R4; melee never starts without it). S–M · Opus/high.

@@ -195,9 +195,10 @@ clock's ground speed; then attack and death, which need the events:
 | **V4r** reading | S–M | R1, R2 readers (+ the judge, one agent, after R2) = 3 | 0 (R1 runs one lab session on the existing build) | — (packets into `docs/vtmb/`) | — |
 | **V4a** seam; the clock's speed words; the dispatcher in `PostRun`; slot 363 | M | seam agent, A1, A2, A3, integrator = 5 | 2 (2) | `sense_enemy_facing_me`; `anim_footsteps_walk` (guard); `cover`, `control_sequence` stay green | `ranged_open_fire` → V5 (N2) once its `shot_event` is met |
 | **V4b** the walk and the turn (N13) | S–M | B1, B2, integrator = 3 | 1 (2) | `patrol_sentry2_pingpong`, `patrol_monk_loop`, `input_clearpatrolpath`, `places_pedestrian_visit`, `face_enemy_turn` | — if R1 finds the cause in baked fan data: judge (§8 Q2) |
-| **V4c** attack producers, weapon frame; weighted pick, disposition, the corpse seed | M | C1, C2, integrator = 3 | 1 (2) | `damage_lethal_death`, `verbs_stealth_kill` **only if the judge re-cuts the fall to 0014** (§8 Q3) | `melee_swing` → V11 (N3); `chase_melee` → V5/V11; the fall → 0014 |
+| **V4c** attack producers, weapon frame; weighted pick, disposition | M | C1, C2, integrator = 3 | 1 (2) | the death transaction of `damage_lethal_death`, `verbs_stealth_kill` (their `corpse_on_floor` waits on V4d) | `melee_swing` → V11 (N3); `chase_melee` → V5/V11 |
+| **V4d** the corpse falls: a physics asset from the `.phy`, Unreal's solve (the owner, 2026-10-04) | M | spike, coder, integrator = 3 | 1–2 (2), plus 2–3 scoped bakes | `damage_lethal_death`, `verbs_stealth_kill` (`corpse_on_floor`) | the death impulse, `prop_ragdoll`, the full corpus → 0014 |
 
-Order V4r → V4a → V4b → V4c. 14 agents; 4 builds planned, 6 allowed. V4b and V4c could swap (V4c
+Order V4r → V4a → V4b → V4c, with V4d any time after V4a. 17 agents; 5–6 builds planned, 8 allowed. V4b and V4c could swap (V4c
 needs only V4a); the walk goes first because four records and V8's hub wait on it.
 
 **V4a — the frame.** A1: the base dispatcher `0x10091880` and the overlay wrapper `0x10098c80` as
@@ -309,9 +310,15 @@ player's FOV and the NPC's scalar); `Elysium.Arm.NpcKernelMotor.MoveYaw` (`0x102
   recovers which retail body makes each pick the visual layer makes today and which stream it
   draws on; lane C2 then routes them through the same weighted draw as the kernel's. A pick with no
   retail counterpart (a purely Unreal-side blend choice) is listed by name for the owner.
-- **K5 (new, recorded only, for the judge): the rigless corpse.** Until 0014's physics asset exists,
-  `HoldBodyFinalPose` holds the `ACT_DIERAGDOLL` seed pose (C2) instead of falling. Retail cannot be
-  followed without a rig: no `UPhysicsAsset` is baked (`pipeline/.../physics_data.py:5`).
+- **K5 — a named modernization (the owner, 2026-10-04): the corpse's fall is Unreal's.** The fall
+  is solved by Chaos with no calibration against VtMB's simulation; the bodies, masses and joint
+  limits come from the game's `.phy` data; what game logic observes (`OnDeath` on the kill tick,
+  the `corpse` event, the entity frozen at the death spot, its removal) stays retail's. Retail's
+  own ragdoll is client-side and nothing the bytecode reads depends on where the drawn body rests.
+  Story **V4d**, `brief-D-ragdoll.md`. The first text's "rigless corpse holding the
+  `ACT_DIERAGDOLL` seed pose" is withdrawn: that seed runs only for bone -1 (`0x1009021a`) and
+  `CreateCorpse 0x1032c0e0` always passes a real bone, so an ordinary corpse ragdolls from the pose
+  it holds.
 - Not V4's, named: anim-event sounds (`EmitSoundScriptMisc19` appends to a list,
   `ElysiumNpcBaseMisc2.cpp:198-202`), the 2042–2044 weapon-model counters (`:390-411`), the 2020
   bone controller — audio and weapon-model stories; the four overlay layers (a seam, A1).
@@ -325,17 +332,15 @@ player's FOV and the NPC's scalar); `Elysium.Arm.NpcKernelMotor.MoveYaw` (`0x102
   character import 1,434 s (1,207 entries, ~17.7k assets,
   `$ELYSIUM_WORK_ROOT/logs/20260928T205853.840641Z-import-characters.json`), a partial ~1,172 s.
   *Recommend*: if the fan is wrong, implement now (four records and V8's hub depend on the walk).
-- **Q3. The corpse fall needs 0014 (stories 1–3 calibrations and the physics-asset bake, 5 the
-  handoff: M + M + L + XS).** This is a planning bug by the bug protocol: `damage_lethal_death` and
-  `verbs_stealth_kill` (and V8's stealth kill) assert a corpse on the floor that step 2 cannot
-  produce. **For the adversarial judge.** Options: (a) pull 0014/1–3 + 5 forward as V4d — pipeline
-  work (the `.phy` is decoded, `model_glb/physics.py`; no `UPhysicsAsset` builder exists), two
-  calibrations, a full character re-import (~24 min), one build, and the ragdoll's own collision at
-  the death handoff; (b) re-cut the two records to what step 2 owns — the transaction (`death`,
-  `OnDeath`, `corpse ragdoll`, the `ACT_DIERAGDOLL` seed `sequence`, nothing after death) — and move
-  `corpse_on_floor` to 0014's witness. *Recommend (b)*: the fall is the visual half ("VtMB owns the
-  rules, Chaos owns the solve", 0014 § Witness); nothing the bytecode observes depends on where the
-  drawn body rests (retail's entity stays at the death spot). Stated to the owner either way.
+- **Q3. The corpse fall — settled by the owner, 2026-10-04: story V4d, size M** (`brief-D-ragdoll.md`).
+  The first estimate (0014/1–3 + 5: M + M + L + XS and a 24-minute re-import) was re-validated by
+  three agents and was too large: the `.phy` is decoded and already baked as one data asset per
+  model (621, read by nothing); the handoff exists and only lacks a physics asset; the two
+  calibrations are not needed under the owner's ruling; the bake step has its own fingerprint, so
+  no mesh or animation is re-imported. What it missed: a dead body switches its whole actor's
+  collision off every think (`ElysiumNpcBody.cpp:1313`), so a ragdoll would fall through the floor.
+  `damage_lethal_death` and `verbs_stealth_kill` keep `corpse_on_floor` and go green in V4d. Not
+  for the judge any more.
 - **Q4. Slot 247 needs the sequence bbox**, which the bake drops (`clip_data.py:13-25`). If R2 shows
   `Flags2 & 4` set on any NPC class, **for the judge**: the bbox on the `UElysiumBodyData` row
   (re-authors the `DA_` assets; unverified whether that avoids re-cooking the animation packages) or
