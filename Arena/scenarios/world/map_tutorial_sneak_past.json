@@ -4,7 +4,7 @@
   "stage": "map:sp_tutorial_1",
   "seed": 1,
   "duration": 60.0,
-  "known_red": "V3b follow-up (the first half; the hearing half stays on V12/R1): N15: ClaimAmbientSpot refuses pt1 (type Idle) on the port-only AcceptedClasses term for npc_VVampire -- 0.633 SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (0xff), task_find_interesting_place, taskfail 0x22, 0.733 SCHED_TROIKA_IDLE_DISPOSITION (0x6b), again at 5.733; at_place unmet",
+  "known_red": "V12 (the hearing half; the first half is green since the V3b follow-up: 0.633 0xff -> 0x100 goal -1288 213 -102 -> 3.733 arrived -> 3.933 SCHED_TROIKA_DO_INTEREST_ACTIVITY (0x103)). After the walk starts (6.933) thug_1 hears the player at 7.633 (OnHearPlayer, cond+ HEAR_PLAYER, break INVESTIGATE_SOUND, Idle -> Alert) and runs 0x4c SCHED_TROIKA_ALERT_TURN_TO_SOUND, not an INVESTIGATE program, within 1.0 s: retail's alert ladder FUN_102b8980 answers 0x4c at m_eAlertLevel 0 unless m_bFullInvestigate +0x6340 is set (docs/vtmb/npc-ai/programs.md:396-399). Whether investigate_mode 4 sets +0x6340, i.e. whether the INVESTIGATE match is a record error, is open for V12's reader (Q-V3bf1)",
   "script": [
     {
       "t": 0.5,

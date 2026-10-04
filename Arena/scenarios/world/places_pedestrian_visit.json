@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 50.0,
-  "known_red": "V3b follow-up: H16: the arena's eight anchor rows author type 'Stand', which interestingplacetypelist.txt does not carry, so CAI_InterestingPlace::Spawn 0x102d9c20 removes them ('Could not find InterestingPlaceType Stand') and TASK_FIND_INTERESTING_PLACE fails 0x22 at 0.000 -- the 0xff program itself runs (0.000 SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (0xff), task_find_interesting_place, taskfail 0x22)",
+  "known_red": "N13 (V4): the program is retail's and only the walk is slow -- 0.000 SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (0xff), taskdone task_find_interesting_place, 0x100, move goal 0 305 0 (cover_east, ~1350 cm around the block from the west pad), walk rate=1, no 'arrived' by the 20 s bound. With the bound lifted in a scratch copy (run 20261004T063102.216778Z, copy deleted) every later step holds: 0.350 goal 305 0 0 (cover_north, ~1020 cm) -> 14.800 arrived (~0.7 m/s against retail's 1.367), 15.300 SCHED_TROIKA_DO_INTEREST_ACTIVITY (0x103), 23.300 OnInterestingPlaceLeft, 0xff again, goal 0 305 0 -> 33.700 arrived, no taskfail. At retail's ground speed the 20 s bound holds",
   "player": { "at": "start" },
   "from_map": {
     "map": "sm_hub_1",

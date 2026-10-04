@@ -69,14 +69,18 @@ Wave 3 (build work, one agent):
     default 176 / 0 failed, arm 1550 / 0 failed; suite 66 pass / 37 expected-fail / 1 fail / 1
     unexpected-pass of 105, only `cover` moved (→ pass). Patrols re-triaged: N13 (V4); new red N12
     (R2); the ledger regeneration waits for V3b's build.
-  - [ ] **V3b** — places and patrols as programs; the ambient executor deleted. M. Landed
+  - [x] **V3b** — places and patrols as programs; the ambient executor deleted. M. Landed
     2026-10-04, acceptance open: default 176 / 0 failed, arm 1551 / 0 failed; suite 70 pass / 33
     expected-fail / 1 fail (`rollcall_vzombie`, H11) / 1 unexpected-pass (`hear_world_investigate`,
     N4) of 105 (after the animal records' correction). Green: `input_useinteresting`,
     `map_hub_idle`, `rollcall_vhuman`, `rollcall_vhumancombatpatrol`. Left for a V3b follow-up
     wave: N15 (`places_thug_pt1`, the sneak-past's first half), H16 (`places_pedestrian_visit`),
     Q-V3b1 (`hub_crosswalk_wait`). N10 was red 6, now red 5 (V6); N14 filed (V6). Ledger
-    regenerated, `kernel --check` clean.
+    regenerated, `kernel --check` clean. Follow-up wave 2026-10-04, ticked: N15 and H16 closed;
+    default 176 / 0, arm 1551 / 0; suite 71 pass / 32 expected-fail / 1 fail (H11) / 1
+    unexpected-pass (N4) of 105; `places_thug_pt1` green, the sneak-past's first half green
+    (hearing half V12), `places_pedestrian_visit` red on N13 (V4), `hub_crosswalk_wait` on N16
+    (V13, proposed); N17 filed (R2).
   - [ ] **V3c** — the scene hold through `m_scriptState` and `SCHED_AISCRIPT`. M.
   - [ ] **V3d** — the dialogue hold as a program; the arbiter deleted whole. M–L.
 - [ ] **V4** — Fix: the animation chain under the kernel. M · Opus/high.
@@ -86,6 +90,8 @@ Wave 3 (build work, one agent):
 - [ ] **V7** — The 19 inputs and the one-line items. S · Sonnet/medium.
 - [ ] **V10** — A sound's life in `Listen` (new: the expiry race). S.
 - [ ] **V12** — The footstep sound producer (pulled from R1; the tutorial's hearing half). S.
+- [ ] **V13** — The pedestrian nav area in the hub's bake (new, from the V3b follow-up: N16;
+  `hub_crosswalk_wait`). S–M. **Proposed, awaiting the owner.**
 - [ ] **V2 again** — the full run, every scenario green.
 - [ ] **V8** — `sp_tutorial_1` and `sm_hub_1`, live. S · Opus/high.
 - [ ] **V9** — The second cut: the arm tests the scenarios cover. S · Sonnet/medium.

@@ -536,7 +536,7 @@ tests the green scenarios cover deleted.
     settled) — N13, a ground speed ~0.44× retail's, placed in V4. New red N12
     (`TASK_WALK_RUN_PATH`'s `nav+0x14`, R2). Ledger step not run: `kernel --check` is stale since
     the seam (the `+0x5d70` binding regenerates C++ and needs a build; V3b's integrator).
-  - [ ] **V3b** — places and patrols as programs; the ambient executor deleted; the place released
+  - [x] **V3b** — places and patrols as programs; the ambient executor deleted; the place released
     only by `0x102b53d0`'s retail callers. *Records:* the places, `map_hub_idle`,
     `hub_crosswalk_wait`, `rollcall_vhuman`, `rollcall_vhumancombatpatrol`. M.
     *Landed 2026-10-04, acceptance open* (`stories/v3/report-B.md`): the executor, the blacklist,
@@ -550,6 +550,15 @@ tests the green scenarios cover deleted.
     pulled from R2 into a V3b follow-up wave with H16 (the arena's anchors are typed `Stand`, a type
     the table lacks) and Q-V3b1 (`hub_crosswalk_wait`: no curb wait in 300 s). N10 was red 6, now red
     5 (V6); N14 (a restored visitor loses its place) filed to V6.
+    *Follow-up wave landed 2026-10-04, ticked* (`stories/v3/brief-B-followup.md`; the integrator's
+    report is the commit's message; `stories/v1/triage.md` § "V3b follow-up"): N15 closed (the
+    place pick makes only `0x102db470` / `0x102dad60`'s tests, the type and `AcceptedClasses`
+    terms deleted), H16 closed (the arena's anchors typed `Idle`, copied from `pt1`). Default
+    176 / 0, arm 1551 / 0; suite 71 pass / 32 expected-fail / 1 fail (H11) / 1 unexpected-pass
+    (N4) of 105. `places_thug_pt1` green; `map_tutorial_sneak_past`'s first half green (its
+    hearing half on V12, Q-V3bf1); `places_pedestrian_visit` runs the whole program and is red on
+    N13 only (V4); `hub_crosswalk_wait` red on N16, baked data, re-placed onto the new V13. N17
+    (the `max_npcs` floor, 9 shipped rows author 0) filed to R2.
   - [ ] **V3c** — the scene hold: the cine writes the NPC's words, `SCHED_AISCRIPT` runs the
     scene, `StartSequence` writes `m_nSequence`. *Record:* `script_walk_to_mark`. M.
   - [ ] **V3d** — the dialogue hold as a program (`SCHED_TROIKA_RUN_DIALOG 0x6a`, task
@@ -608,11 +617,24 @@ tests the green scenarios cover deleted.
   tutorial needs heard footsteps.) The player's footstep `CSound` producer into the list V10
   fixes; the list's other producers and words stay in R1. *Scenario:*
   `map_tutorial_sneak_past`'s hearing half. *Size:* S. Reading packet first.
+- [ ] **V13. The pedestrian nav area in the hub's bake.** (New, from the V3b follow-up: N16;
+  **proposed, awaiting the owner**.) A fault in landed work (0018/3's NavMesh bake, 0018/7's
+  crosswalk): on `sm_hub_1`'s baked Recast meshes no roadway polygon carries
+  `UElysiumNavArea_Pedestrian` (`NavAreaAt` answers `NavArea_Default` inside all 9 priced slabs), so
+  the pedestrian filter's ×5–10 price applies to nothing, routes cut the road diagonally and the
+  crosswalk splice finds no curb within its 48-unit capture. Lead (measured, not proven): each slab
+  convex spans z −298..−39 while the road surface is at z −303, so the convex floats 5 units above
+  the road. Job: the convex's floor against the road surface in the mark staging
+  (`pipeline/.../importers/map_collision.py`, `ElysiumNavAreaActor.cpp`), a re-bake of `sm_hub_1`,
+  two content tests (`Elysium.Content.NavArea.Hub`: the Human mesh answers the pedestrian area at
+  (−1700, −760, −303); a ×8 route from (−2294, −1071) to (−776, 205) passes within 48 units of curb
+  258, then 259). *Scenario:* `hub_crosswalk_wait`. *Size:* S–M. Evidence: `stories/v1/triage.md`
+  N16 and § "V3b follow-up".
 
-Order: V1 → V2 → H → V3 → V4 → V5 → V11 ‖ V6 → V7 → V10 → V12 → V2 again (full run) → V8 → V9.
+Order: V1 → V2 → H → V3 → V4 → V5 → V11 ‖ V6 → V7 → V10 → V12 → V13 → V2 again (full run) → V8 → V9.
 The new reds ride their stories: N1, N2 in V5; N5, N6 in V7; N7, N8 in V3; N9, N10 in V6; N13 in
 V4 (from V3a: the patrols' acceptance moves there); N12 in R2; N14 in V6; N15 in V3b's follow-up
-wave (from V3b; N10 closed into red 5).
+wave (from V3b; N10 closed into red 5); N16 in V13 and N17 in R2 (from the V3b follow-up).
 
 ## Step 3 — the road to close the character AI
 
@@ -694,7 +716,7 @@ A bug found is fixed: none is recorded and left. Each one goes through these ste
 
 ## The sequence
 
-[T1 + T2 + T4] → [T3 + T5 + T2's C++] → T6 → **gate 1** → V1 → V2 → H → V3 → V4 → V5 → [V11 + V6] → V7 → V10 → V12 → V2 → V8 → V9 →
+[T1 + T2 + T4] → [T3 + T5 + T2's C++] → T6 → **gate 1** → V1 → V2 → H → V3 → V4 → V5 → [V11 + V6] → V7 → V10 → V12 → V13 → V2 → V8 → V9 →
 **gate 2** → R1 → R2 → R3 → R4 → [R5 + R6] → R7 → R8 → 0002 closes.
 
 Serial: one wave at a time in the one checkout. Brackets are stories whose coders share one wave

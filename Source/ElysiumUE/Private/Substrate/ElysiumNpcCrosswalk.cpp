@@ -29,6 +29,7 @@
 #include "ElysiumNpcFlags.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumPlaceSet.h"
 
 namespace
@@ -116,8 +117,20 @@ bool FElysiumNpc::NavLayPedestrianLegs(const FElysiumNpcMoveRequest& Request)
 		Query.DestCm = Request.DestinationCm;
 		Query.PedestrianCostMultiplier = Request.PedestrianCostMultiplier;   // the multiplier the leg walks
 		FElysiumNpcRouteAnswer Answer;
-		if (!(StartNode != INDEX_NONE && StartNode == GoalNode)
-			&& Motor->QueryRoute(Query, Answer) && Answer.bReachable)
+		// The splice's read, one line per pedestrian route (debug output only): the two nodes, the
+		// route's corners, every walkable curb's closest 2-D approach against the capture, and the
+		// curbs laid -- what N16's diagnosis had to reconstruct from sampled origins (2026-10-04).
+		const bool bLogSplice = UE_LOG_ACTIVE(LogElysiumNpcEnt, Verbose);
+		FString CurbReads;
+		const bool bSameNode = StartNode != INDEX_NONE && StartNode == GoalNode;
+		const bool bRouted = !bSameNode && Motor->QueryRoute(Query, Answer) && Answer.bReachable;
+		if (!bRouted && bLogSplice)
+		{
+			UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s pedestrian route: start node %d, goal node %d, x%d: %s; no curb"),
+				*DebugString(), StartNode, GoalNode, Query.PedestrianCostMultiplier,
+				bSameNode ? TEXT("one node at both ends, no chain") : TEXT("the motor answered no reachable route"));
+		}
+		if (bRouted)
 		{
 			// Every end of a walkable pair the route passes, in route order. The start node, when it
 			// is a curb, is where the chain begins whatever the NavMesh route does near it.
@@ -141,14 +154,26 @@ bool FElysiumNpc::NavLayPedestrianLegs(const FElysiumNpcMoveRequest& Request)
 					if (Node == StartNode)
 					{
 						Candidates.Add(FXwCurb{ GXwStartNodeParam, Node });
+						if (bLogSplice)
+						{
+							CurbReads += FString::Printf(TEXT(" %d:start"), Node);
+						}
 						continue;
 					}
 					double DistCm = 0.0;
 					double ParamCm = 0.0;
-					if (XwClosestOnRoute(Answer.PointsCm, Places->NetworkNodePositionCm(Node, Hull), DistCm, ParamCm)
-						&& DistCm <= GXwCaptureUnits * ElysiumMove::U)
+					const bool bOnRoute = XwClosestOnRoute(Answer.PointsCm,
+						Places->NetworkNodePositionCm(Node, Hull), DistCm, ParamCm);
+					const bool bCaptured = bOnRoute && DistCm <= GXwCaptureUnits * ElysiumMove::U;
+					if (bCaptured)
 					{
 						Candidates.Add(FXwCurb{ ParamCm, Node });
+					}
+					if (bLogSplice)
+					{
+						CurbReads += bOnRoute
+							? FString::Printf(TEXT(" %d:%.0fu%s"), Node, DistCm / ElysiumMove::U, bCaptured ? TEXT("*") : TEXT(""))
+							: FString::Printf(TEXT(" %d:-"), Node);
 					}
 				}
 			}
@@ -173,6 +198,24 @@ bool FElysiumNpc::NavLayPedestrianLegs(const FElysiumNpcMoveRequest& Request)
 					Curbs.Add(From);
 				}
 				Curbs.Add(To);
+			}
+			if (bLogSplice)
+			{
+				FString Corners;
+				for (const FVector& Point : Answer.PointsCm)
+				{
+					Corners += FString::Printf(TEXT(" (%.0f,%.0f,%.0f)"), Point.X, Point.Y, Point.Z);
+				}
+				FString Laid;
+				for (const int32 Node : Curbs)
+				{
+					Laid += FString::Printf(TEXT(" %d"), Node);
+				}
+				UE_LOG(LogElysiumNpcEnt, Verbose,
+					TEXT("%s pedestrian route: start node %d, goal node %d, x%d, %d corner(s)%s; walkable curbs ")
+					TEXT("(closest 2-D approach, * within %.0f u):%s; curbs laid:%s"),
+					*DebugString(), StartNode, GoalNode, Query.PedestrianCostMultiplier, Answer.PointsCm.Num(),
+					*Corners, GXwCaptureUnits, *CurbReads, Laid.IsEmpty() ? TEXT(" none") : *Laid);
 			}
 		}
 	}

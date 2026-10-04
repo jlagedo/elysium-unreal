@@ -37,11 +37,12 @@ namespace
 		return FString::Printf(TEXT("arena_%s"), *SpecName.ToString());
 	}
 
-	// The `type` an arena anchor wears. `interestingplacetypelist.txt` is the table
-	// `FElysiumNpc::AmbientType` keys into, and a type it does not carry resolves to no row — which
-	// makes the anchor unclaimable rather than broken. `Stand` is the plainest row the shipped table
-	// authors, and it is what a body in cover should be doing.
-	const TCHAR* AnchorType = TEXT("Stand");
+	// The `type` an arena anchor wears, copied from a retail row: `sp_tutorial_1`'s `pt1` (entity
+	// row 419, `type Idle`, `testflags 4`, `max_npcs 1`, bounds `-16 -16 0`..`16 16 72`;
+	// `docs/vtmb/npc-ai/programs.md:1485-1489`), the tutorial's plain stand-and-wait place. A type
+	// `interestingplacetypelist.txt` does not carry makes `CAI_InterestingPlace::Spawn 0x102d9c20`
+	// remove the row (H16: the old `Stand` was such a type).
+	const TCHAR* AnchorType = TEXT("Idle");
 
 	// What a baked solid, opaque world brush answers to the four retail masks: blocks the player,
 	// an NPC and sight, no pedestrian volume. The displacement terrain wears the same
@@ -362,13 +363,17 @@ FElysiumEntityDef AnchorRow(const FAnchor& Anchor, const FVector& Origin)
 	Def.Keys.Add(TEXT("type"), AnchorType);
 	Def.Keys.Add(TEXT("enabled"), TEXT("1"));
 	Def.Keys.Add(TEXT("max_npcs"), TEXT("1"));
-	// Group 0 is what an NPC with no `interesting_place_groups` allowlist accepts, which is
-	// every character the arena spawns unless one is authored otherwise.
+	// Group 0 is out of 1..32, so `0x102d9c20` folds it to the literal mask 1 (group 1): an NPC
+	// whose `interesting_place_groups` names 1 visits the anchors (`0x102dad60`'s `+0x574 & +0x62dc`).
 	Def.Keys.Add(TEXT("group_id"), TEXT("0"));
 	Def.Keys.Add(TEXT("rating"), FString::FromInt(Anchor.Rating));
 	Def.Keys.Add(TEXT("match_orientation"), TEXT("1"));
 	Def.Keys.Add(TEXT("min_time"), TEXT("4"));
 	Def.Keys.Add(TEXT("max_time"), TEXT("12"));
+	// The keys every retail place row carries (1293 of 1293: `testflags 4`; `pt1`'s bounds).
+	Def.Keys.Add(TEXT("testflags"), TEXT("4"));
+	Def.Keys.Add(TEXT("min_bounds"), TEXT("-16 -16 0"));
+	Def.Keys.Add(TEXT("max_bounds"), TEXT("16 16 72"));
 	Def.Keys.Add(TEXT("angles"), FString::Printf(TEXT("0 %.1f 0"), Anchor.Yaw));
 	return Def;
 }

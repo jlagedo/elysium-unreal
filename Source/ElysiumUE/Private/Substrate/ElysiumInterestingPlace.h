@@ -38,7 +38,8 @@ public:
 	// divergence; nothing else about the fold changes.
 	int32 GroupMask = 0;
 
-	// +0x0578 `m_iMarkersAllocated` and +0x0580 `m_pMarkers`: a zeroed table of
+	// +0x0584 `m_iMarkersAllocated` (key `max_npcs`; the datamap replay, offset 1412 -- +0x0578 is
+	// `m_iRating`, offset 1400) and +0x0580 `m_pMarkers`: a zeroed table of
 	// `m_iMarkersAllocated` records of stride `0x1c`, whose first dword is the occupant handle.
 	// Over 20 of them makes retail `DevMsg` "Warning: Possible speed issues w...".
 	int32 MarkersAllocated = 0;

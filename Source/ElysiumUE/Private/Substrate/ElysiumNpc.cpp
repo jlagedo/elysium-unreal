@@ -1055,21 +1055,60 @@ const FElysiumInterestingPlaceType* FElysiumNpc::AmbientType(const FElysiumInter
 
 FElysiumInterestingPlace* FElysiumNpc::ClaimAmbientSpot()
 {
-	if (!World || !Def || !ElysiumInterestingPlaces::Types())
+	// `PickRandomInterestingPlace 0x102db590` -> `BuildCandidates 0x102db470` -> the per-place test
+	// `0x102dad60`. `0x102db590`'s own guards are `npc != null` and `0 < DAT_10927198` (the live
+	// place count, raised by the constructor `0x102d99d0`): an empty list finds nothing below. No
+	// term anywhere in the chain reads the place's type or the visitor's class (N15: the port's
+	// `TypeRow` / `Activities` / `AcceptedClasses` terms are deleted -- the type parser `0x102dd0f0`
+	// stores `AcceptedClasses`, but its one lookup `0x102dd630` has no caller in retail). A type
+	// with no INTO or idle activity is `0x102a9f40`'s "Can not find interest" arm at arrival, not a
+	// refusal here. `0x102db470` opens with two calls on the NPC's collision property (`+0x270`
+	// slots 1 and 2, its mins/maxs) whose answers it discards: no test.
+	if (!World)
 	{
 		return nullptr;
 	}
 
-	// `PickRandomInterestingPlace 0x102db590` -> `BuildCandidates 0x102db470`: eligibility
-	// `0x102dad60` admits nodes within 10,000 Source units (`|place - npc|^2 <= 1.0e8`), but distance
-	// does not rank them. It walks rating 5 -> 0, stops at the first populated tier, and chooses
-	// uniformly within that tier. The NPC schedule stream makes the choice replayable across
-	// save/load. No blacklist and no body claim (V3b deleted both): the pick's one memory is
-	// `m_pLastInterestingPlace +0x62fc`, the last place released (visited or failed), skipped while
-	// any other is eligible -- so `programs.md`'s "the same node is chosen again every time" holds
-	// for a one-place pool only.
-	constexpr double FindRadiusCm = 10000.0 * ElysiumMove::U;
-	constexpr double FindRadiusSqCm = FindRadiusCm * FindRadiusCm;
+	// `0x102dad60`, the per-place test, in retail's order. `npc != null` (`0x102dad68`) is `this`.
+	const auto IsEligible = [this](const FElysiumInterestingPlace& Spot)
+	{
+		constexpr double FindRadiusCm = 10000.0 * ElysiumMove::U;
+		constexpr double FindRadiusSqCm = FindRadiusCm * FindRadiusCm;
+		// `0x102dad70` `m_bEnabled +0x57c`, `0x102dad7e` `+0x57d == 0`, `0x102dad8c..0x102dada4`
+		// `m_iMarkersAllocated +0x584 (max_npcs) - m_iMarkersFailedAttempts +0x58c - in-use +0x588
+		// > 0`: `IsAvailable` answers the three in that order. `+0x57d` has no writer but the
+		// constructor (`0x102d99d0`, 0); the port's `!IsInert()` there stands for the place's
+		// removal from the list (the destructor `0x102d9b10` unlinks it). The port carries no
+		// `+0x58c` word: only `PickSpotFor 0x102da0d0` raises it, on a failed spot sample, and only
+		// the constructor zeroes it; the port's claim takes the place's own origin and never fails a
+		// sample, so the word would answer 0.
+		if (!Spot.IsAvailable())
+		{
+			return false;
+		}
+		// `0x102dada6..0x102dadb4`: `place->m_iGroupID +0x574 & npc->m_iInterestingPlaceGroups +0x62dc`.
+		if (!AcceptsAmbientGroup(Spot.GroupMask))
+		{
+			return false;
+		}
+		// `0x102dadb6..0x102dae13`: slot 220 `CBaseEntity::GetOrigin 0x100b3070` on both, the
+		// straight-line `|place - npc|^2 <= [0x1049d28c]` (1.0e8: 10,000 units). Distance does not rank.
+		return FVector::DistSquared(Origin, Spot.Origin) <= FindRadiusSqCm;
+	};
+
+	// `0x102db470`'s walk of the global list (head `DAT_10927194`, next `+0x540`). Retail walks rating
+	// 5 -> 0 and stops at the first rating that yields any candidate; the port gathers every rating
+	// in one pass and `PickHighestRatedCandidate` makes the same choice. Per place, in retail's order:
+	// `m_iRating +0x578 == rating` (`0x102db4aa`; `Spawn 0x102d9c20` clamps it to 0..5, and a rating
+	// outside that range matches no pass), `place != npc->m_pLastInterestingPlace +0x62fc`
+	// (`0x102db4b4`), fewer than 0x100 candidates at that rating (`0x102db4bc`), then `0x102dad60`.
+	// The last place (written by the release `0x102da600`) is tested by `0x102dad60` alone, with no
+	// rating and no cap, only once no other place is eligible at any rating (`0x102db4fb..0x102db520`).
+	// The NPC schedule stream makes the choice replayable across save/load. No blacklist and no body
+	// claim (V3b deleted both).
+	constexpr int32 MaxRating = 5;
+	constexpr int32 MaxCandidatesPerRating = 0x100;   // 0x102db4bc CMP EDI,0x100
+	int32 CandidatesAtRating[MaxRating + 1] = {};
 	TArray<FElysiumInterestingPlace*> Candidates;
 	TArray<int32> CandidateRatings;
 	FElysiumInterestingPlace* LastPlace = nullptr;
@@ -1081,30 +1120,33 @@ FElysiumInterestingPlace* FElysiumNpc::ClaimAmbientSpot()
 			continue;
 		}
 		FElysiumInterestingPlace* Spot = static_cast<FElysiumInterestingPlace*>(Candidate.Get());
-		const FElysiumInterestingPlaceType* TypeRow = AmbientType(Spot);
-		// `0x102dad60`: enabled, capacity, `+0x574 & +0x62dc`. The type-row terms are the port's
-		// (no term of `0x102dad60` / `0x102da0d0` reads the type or `AcceptedClasses`); kept as found.
-		if (!Spot->IsAvailable()
-			|| !AcceptsAmbientGroup(Spot->GroupMask)
-			|| !TypeRow || TypeRow->Activities.IsEmpty()
-			|| !TypeRow->Accepts(Def->Classname, StatTemplate))
-		{
-			continue;
-		}
-		if (FVector::DistSquared(Origin, Spot->Origin) > FindRadiusSqCm)
-		{
-			continue;
-		}
-		// `0x102db470`: `this != npc->m_pLastInterestingPlace (+0x62fc)` in every rating pass; the
-		// last place (written by the release `0x102da600`) is answered only when no other place is
-		// eligible at any rating, after the rating-0 pass.
 		if (LastSpotIndex != 0 && Spot->Handle.Index == LastSpotIndex)
 		{
-			LastPlace = Spot;
+			LastPlace = Spot;   // `+0x62fc`, which the fallback `0x102db4fb` reads directly
+		}
+		if (Spot->Rating < 0 || Spot->Rating > MaxRating)                // 0x102db4aa
+		{
 			continue;
 		}
+		if (Spot == LastPlace)                                           // 0x102db4b4
+		{
+			continue;
+		}
+		if (CandidatesAtRating[Spot->Rating] >= MaxCandidatesPerRating)  // 0x102db4bc
+		{
+			continue;
+		}
+		if (!IsEligible(*Spot))                                          // 0x102db4d1
+		{
+			continue;
+		}
+		++CandidatesAtRating[Spot->Rating];
 		Candidates.Add(Spot);
 		CandidateRatings.Add(Spot->Rating);
+	}
+	if (Candidates.IsEmpty() && LastPlace != nullptr && !IsEligible(*LastPlace))   // 0x102db510
+	{
+		LastPlace = nullptr;
 	}
 
 	FRandomStream& PickStream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);

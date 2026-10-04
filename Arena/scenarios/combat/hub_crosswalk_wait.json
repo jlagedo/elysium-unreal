@@ -4,7 +4,7 @@
   "stage": "map:sm_hub_1",
   "seed": 1,
   "duration": 300.0,
-  "known_red": "V3b follow-up: Q-V3b1: red 6 is gone (eight hub pedestrians ran 17 visits 0xff -> 0x100 -> 0x103 in 300 s, 0 taskfail) but no SCHED_TROIKA_WAIT_AT_CROSSWALK appeared; whether any visit's route crossed a red pair, or N13's slow walk (V4) cut the crossings, is not yet read from the routes",
+  "known_red": "N16 / V13 (the pedestrian nav area in the hub's bake; proposed, awaiting the owner): sm_hub_1's baked Recast meshes carry no UElysiumNavArea_Pedestrian on the roadway (NavAreaAt answers NavArea_Default inside all 9 priced slabs), so the pedestrian filter's x5-x10 price applies to nothing, routes cut the road diagonally and NavLayPedestrianLegs' 48-unit capture rightly finds no curb: every route is issued straight to the place (no 'waypoint passed'), 0x102a0bc0 never sees a node waypoint and 0x102 is never selected. Only first routes can cross: after its first visit a pedestrian outside the player's PVS holds in 0x103's TASK_WAIT_PVS (0x102aad7e), as retail",
   "expect": [
     { "label": "red", "who": "", "kind": "input", "match": "DontWalk", "by": 60.0 },
     { "label": "waits", "who": "", "kind": "schedule", "match": "SCHED_TROIKA_WAIT_AT_CROSSWALK (", "by": 280.0 },
