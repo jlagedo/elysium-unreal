@@ -155,28 +155,44 @@ H1–H5 landed (the integrator's report: `spec.md` § Step 2, H). Full run `2026
 35 expected-fail, 5 fail, 1 unexpected-pass, 1 error (the designed `stage_failed_a`, since parked).
 After the by-name re-run (`20261004T031612.315382Z`; 102 records, 62 pass, 36 expected-fail, 3 fail,
 1 unexpected-pass `hear_world_investigate`, N4) the fails are `cover_reclaim`,
-`memory_occluded_kept`, `rollcall_vzombie` (H11, not this wave's). Two records are open questions,
-classified neither harness nor game yet; each owes a reading before V3 runs `cover`:
+`memory_occluded_kept`, `rollcall_vzombie` (H11, not this wave's). The two open questions were
+settled 2026-10-04 against the listing: both are **record errors**, corrected and green in the
+by-name run `20261004T033433.394856Z` (2 pass).
 
-- **Q-H1 `cover_reclaim`: pass → fail, with walls opaque to sight.** The opening is unchanged in
-  shape but the first claim moved from `cover_corner_nw` (node 3) to `cover_corner_ne` (node 2); after
-  the two corner hints are killed (4.217) and `HINT_INVALID` breaks the program (4.300), the next
-  selection is `SCHED_TROIKA_RANGE_ATTACK1 (0xed)` with `SEE_ENEMY`/`CAN_RANGE_ATTACK1` standing:
-  no `hint+ cover_low_north`. V2's pass rested on transparent solids. Owed: which gate of the cover
-  search (`0x102b7110`, the hint test `CAI_Hint::ObjectCaps 0x102d2ee0`, the in-cover arm
-  `0x102b5de0`) refuses `cover_low_north` against the occluding block, and whether retail answers
-  `0xed` there (record error: the staging assumed sight through the block) or the port's gate
-  diverges (game red). Same shift in `cover` (red 1's `smith_lean_left_into rate=0` now at 3.3 on
-  `cover_corner_ne`, was 7.4 on `_nw`); `cover`'s verdict is unchanged.
-- **Q-H2 `memory_occluded_kept`: fail → fail, a new reason.** Sight now fails behind the block (H2):
-  `cond- HAVE_ENEMY_LOS`, `OnLostPlayerLOS`, `OnLostEnemyLOS` at 2.000 (the tenth miss after the 1.0
-  teleport), but `cond+ ENEMY_OCCLUDED` only at 2.500. Retail sets `0x48` and fires both outputs in
-  the same pass at the tenth miss (`GatherEnemyConditions 0x10270b20`, `0x10270bfc..0x10270c5d`,
-  `conditions-and-states.md:2790`); the port's arm reads the same
-  (`ElysiumNpcBaseConditions2.cpp:448-465`), and the `cond±` tap diffs the whole gather
-  (`ElysiumNpcBaseRunAi.cpp:75`). So the 2.0 gather set `0x48` and the trace did not show it, or a
-  second path ran the enemy gather outside `RunAI`: harness (the tap) or game, undetermined. The
-  record's other halves hold so far (no `LOST_ENEMY`, still Combat at 2.7 when it stopped).
+- **Q-H1 `cover_reclaim`: record error (verified).** `0x102b7110` brackets its search with
+  `m_bForceCoverLOSCheck +0x6408`; `0x102d2980` admits a cover node through slot 566 `0x10295c20` →
+  `0x10297430` / `0x102974f0` → `0x10296c40`, whose last arm under `+0x6408` is the hint LOS
+  `0x102968f0` (hint position + hull `maxs.z` to the enemy's eye, mask `0x46804099`, fraction 1),
+  "Failed hint LOS" otherwise. With flags 8 (bit 0 clear) the first admitted node in list order wins
+  (head = `cover_corner_nw`). From `cover_seat` the lines from `_nw` and `cover_low_north` cross the
+  96-unit block, so with the block opaque both are refused: `_ne` is claimed first, and once both
+  corners are killed nothing is admitted, `0x102b7690` answers 0 (no `m_pHintNode`) and the gunman
+  fires (`0xed`). Port: `FindTacticalHintNode` (`ElysiumNpcTroikaHelpers2.cpp:196-199`),
+  `ValidateHintCoverRange` (`ElysiumNpcHints.cpp:289-296`), `HintLosCheck`
+  (`ElysiumNpcKernelBaseHelpers.cpp:833-899`) follow it; `cover_low_north` can never pass the hint
+  LOS in this room (every direction in its facing band crosses the block). Also corrected in the
+  record: `Kill` on a hint is ScriptHide (`0x102d08c0` → slot 77), not the destructor; the release
+  is NPCThink's slot-566 validation (`0x102930db`) → `ClearHintNode(5.0)` (`0x10293149`) +
+  `SetCondition(0x29)` (`0x10293160`), ported at `ElysiumNpcThink.cpp:231-238`. Re-staged: the
+  player at (-17.2, 308.1) Source units, where both corners pass (nw dot 0.513, line 16.9 units north
+  of the block's corner; ne dot 0.589) and both low nodes fail their facing band; kill `_nw` only;
+  the re-claim is `cover_corner_ne` in the same think as the break (8.750). The shift also explains
+  `cover`'s move to `_ne` (its verdict unchanged).
+- **Q-H2 `memory_occluded_kept`: record error (verified).** Retail has the gap. `GatherConditions
+  0x1026ec30` runs slot 481 (`1026ee5b`: at the tenth miss `SetCondition(0x48)` and the two outputs)
+  and then, in the same gather, the Troika half `0x1028e790` (`1026efa4`) →
+  `0x1028e700(0x48, +0x62cc)`: the first pass with 0x48 standing arms the stamp at curtime +
+  `m_flOccludedDelay` (`+0x62c8` = `m_flOccludedDelayNormal` without a hint, NPCThink `0x1029316b`;
+  `rules.txt` `Npc_Combat_Info/OccludedDelayNormal` 0.50) and **clears** 0x48 while curtime < stamp.
+  So the outputs fire at 2.0 and 0x48 is first reported at 2.5, exactly as traced. Port:
+  `ElysiumNpcBaseConditions2.cpp:448-465`, then `Conditions19OcclusionReportUpkeep`
+  (`ElysiumNpcConditions2.cpp:42-53`) → `RefreshOccludedCondition`
+  (`ElysiumNpcConditionsBodies.cpp:501-521`); the tap (`ElysiumNpcBaseRunAi.cpp:75`) is right.
+  Re-stated: outputs first (`by` 5.0, then `within` 0.1), `cond+ ENEMY_OCCLUDED` `within` 0.6.
+  **Q-H3**, a lead, not settled: the guard's `task_get_path_to_enemy_lkp` goal (2.7) is the hidden player's
+  real spot, not the last-seen (40, 250), and no `cond- SEE_ENEMY` appears after the teleport; it
+  re-sees him at 4.6 by walking there. Needs a read of who wrote the LKP after 1.0 (slot 544 runs
+  only with `+0x5b98 == 0`) and of OnLooked's SEE_* clear in the port.
 
 Unchanged by wave H, stated for the next wave: the roll call's `never taskfail` stays at `at_most` 0
 (the per-class bound needs each class's first program, `review.md`'s V1 follow-up); the churn

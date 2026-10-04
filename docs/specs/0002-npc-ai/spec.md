@@ -489,7 +489,7 @@ tests the green scenarios cover deleted.
   schedule; the ambient executor replaces selection**); 4, 7–11 have no record yet. Ten new reds
   N1–N10, each placed (`triage.md` § "New reds"); two planning bugs, corrected below as V11 and
   V12; fifteen harness gaps H1–H15, the first five as wave H.
-- [ ] **H. The harness wave** (the bug protocol's tool class; `stories/hwave/`). H1 a model-less
+- [x] **H. The harness wave** (the bug protocol's tool class; `stories/hwave/`). H1 a model-less
   row no longer kills the stage, and a failed stage does not error the boot's later records; H2
   arena solids block NPC sight; H3 `never` with a start and a count; H4 the player's state reset
   per record; H5 player probes, the stealth-kill trace event, crouch and light-pin actions.
@@ -501,6 +501,12 @@ tests the green scenarios cover deleted.
   62 / 36 / 3 / 1 / 0 of 102. Cameras and `sense_cone_enter` green, `verbs_stealth_kill` classified
   (red 3), N11 filed; default tier 176 / 0 failed. Unticked: `memory_occluded_kept` (Q-H2) and
   `cover_reclaim` (Q-H1, pass → fail with opaque walls) are open questions (`triage.md` § "Wave H").
+  *Closed 2026-10-04:* both were record errors, verified against the listing — the port matches
+  retail in each. Q-H1: the cover search's hint line-of-sight test `0x102968f0` refuses the hints
+  the opaque block hides, and firing when no hint qualifies is retail's answer; re-staged, the
+  re-claim is green. Q-H2: retail itself clears `ENEMY_OCCLUDED` for `OccludedDelayNormal` 0.50 s
+  after the outputs (`0x1028e700`); re-stated, green. Ticked. One lead left for a reader
+  (Q-H3, `triage.md`): the guard walks to the player's actual hiding spot, not the last-seen one.
 - [ ] **V3. Fix: the arbiter retired; scenes, dialogue and places as retail runs them.** (Was C1;
   absorbs 0003/1–2's kernel half, old 0002/11's executor retirement, 16a's `Follower` owner, the
   four `STORY8-TWIN` survivors.) Retail: `m_scriptState +0x5d70`, `SelectSchedule 0x1028a380` case 4

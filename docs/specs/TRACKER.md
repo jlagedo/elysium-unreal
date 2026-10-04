@@ -55,11 +55,12 @@ Wave 3 (build work, one agent):
 - [x] **V2** — The first full run and the triage. S · Opus/high. Landed 2026-10-03: 54 pass, 35
   expected-fail, 4 fail, 1 unexpected-pass, 2 error; ten new reds placed, two planning bugs
   (V11, V12), fifteen harness gaps (`stories/v1/triage.md`).
-- [ ] **H** — The harness wave: H1–H5 (the model-less row, sight through arena solids, `never`
+- [x] **H** — The harness wave: H1–H5 (the model-less row, sight through arena solids, `never`
   with a start and a count, the player's state per record, player probes and actions). S–M.
   Landed 2026-10-04, acceptance open: 62 pass / 36 expected-fail / 3 fail / 1 unexpected-pass of
   102; cameras and `sense_cone_enter` green, `verbs_stealth_kill` red 3; open Q-H1 `cover_reclaim`,
-  Q-H2 `memory_occluded_kept` (`stories/v1/triage.md` § "Wave H").
+  Q-H2 `memory_occluded_kept` (`stories/v1/triage.md` § "Wave H"). Closed 2026-10-04: both
+  record errors (the port matches retail), re-stated and green; ticked.
 - [ ] **V3** — Fix: the arbiter retired; scenes, dialogue and places as retail runs them. L · Opus/high.
 - [ ] **V4** — Fix: the animation chain under the kernel. M · Opus/high.
 - [ ] **V5** — Fix: the attack conditions and the combat interrupts. S · Fable/medium.

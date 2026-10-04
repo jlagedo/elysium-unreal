@@ -1,10 +1,10 @@
 {
   "name": "cover_reclaim",
-  "about": "Claim -> release -> re-claim (spec 0002 V1 'Cover', the 2026-09-30 run 6 as a record). The cover record's opening (SCHED_TROIKA_TAKE_COVER_HINT 0x9b, a corner hint claimed through 0x102b7110 / reserve 0x102d1350), then both corner hints are destroyed by their retail Kill input. The hint's destructor 0x102d3040 resolves its owner (hint +0x5e0 -> entity +0x98), SetCondition(COND_HINT_INVALID 0x29) and ClearHintNode(0.0) (0x10295ab0: the claim released, AT_COVER_HINT cleared). COND_HINT_INVALID is in the running cover program's interrupt list (sched_troika_take_cover_hint_vs_melee*.sch / _attack.sch), so the program breaks; the next combat selection runs the cover chooser 0x102b7690 again (no m_pHintNode) and its search 0x102b7110 claims the next valid cover hint after the cursor: cover_low_north, whose facing (0.950) and projection gates are authored for the cover seat (docs/harness/green-room-arena.md section 1). Then 0x9b again on the new hint. (The +5.0 path-failure release, TaskFail's ClearHintNode(5.0), needs a cover hint the mesh cannot reach: no arena node is one; a harness gap.)",
+  "about": "Claim -> release -> re-claim (spec 0002 V1 'Cover', the 2026-09-30 run 6 as a record; re-staged 2026-10-04, Q-H1, for opaque arena solids). The tactical search 0x102b7110 (m_bForceCoverLOSCheck +0x6408 set around it) runs 0x102d2980 (flags 8, mask from 0x102b7690, slot 550 radius 1024): with flags bit 0 clear it returns the FIRST admitted node in hint-list order (head = the last-spawned node, cover_corner_nw); a corner (0x27d8) is admitted through FValidateHintType 0x10295c20 -> 0x10297430 -> 0x10296c40 (min 256, facing dot in (0.50, 0.731), projection >= 0.2, then under +0x6408 the hint LOS 0x102968f0: hint position + hull maxs.z to the enemy's eye, mask 0x46804099, fraction 1). The player stands at (-17.2, 308.1) Source units: from cover_corner_nw the line to him passes north of the block (y 112.9 at x = 96), facing dot 0.513, projection 0.62; from cover_corner_ne facing dot 0.589, line clear, projection 0.33 from nw. Both low nodes are refused by their facing band (0.81 and 0.75 < 0.87), and the low_north line crosses the 96-unit block anyway. So nw is claimed first (reserve 0x102d1350). Kill on a hint is ScriptHide (slot 119 0x102d08c0 -> slot 77 0x102d0860, m_iDisabled = 1), not the destructor; the next NPCThink validates m_pHintNode through slot 566 (0x102930db), the disabled hint fails (0x10296c40's first arm), and NPCThink runs ClearHintNode(5.0) (0x10293149, the release with a 5 s reuse delay) and SetCondition(COND_HINT_INVALID 0x29) (0x10293160). 0x29 is in the cover program's interrupts, the program breaks, and the next search starts after the cursor (nw) and claims cover_corner_ne; then 0x9b again on it. (The old staging on cover_seat passed only while the block was transparent: against an opaque block nw's and low_north's hint LOS fail, ne is claimed first, and with both corners killed no hint is admitted, so 0x102b7690 answers 0 and the gunman fires, SCHED_TROIKA_RANGE_ATTACK1 0xed.)",
   "stage": "arena",
   "seed": 1,
   "duration": 50.0,
-  "player": { "at": "cover_seat" },
+  "player": { "at": [-43.7, 782.6, 0.0], "face": -7.8 },
   "cast": [
     {
       "name": "arena_gunman",
@@ -33,16 +33,15 @@
     }
   ],
   "script": [
-    { "after": "at_cover", "delay": 1.0, "do": "kill", "target": "cover_corner_nw" },
-    { "after": "at_cover", "delay": 1.0, "do": "kill", "target": "cover_corner_ne" }
+    { "after": "at_cover", "delay": 1.0, "do": "kill", "target": "cover_corner_nw" }
   ],
   "expect": [
     { "label": "covers", "who": "arena_gunman", "kind": "schedule", "match": "SCHED_TROIKA_TAKE_COVER_HINT (", "by": 8.0 },
-    { "label": "claims", "who": "arena_gunman", "kind": "hint+", "match": "cover_corner", "within": 2.0 },
+    { "label": "claims", "who": "arena_gunman", "kind": "hint+", "match": "cover_corner_nw", "within": 2.0 },
     { "label": "at_cover", "who": "arena_gunman", "kind": "taskdone", "match": "^task_snap_to_hint$", "regex": true, "within": 25.0 },
-    { "label": "released", "who": "arena_gunman", "kind": "hint-", "match": "cover_corner", "within": 3.0 },
+    { "label": "released", "who": "arena_gunman", "kind": "hint-", "match": "cover_corner_nw", "within": 3.0 },
     { "label": "breaks", "who": "arena_gunman", "kind": "break", "match": "HINT_INVALID (0x29)", "within": 1.0 },
-    { "label": "reclaims", "who": "arena_gunman", "kind": "hint+", "match": "cover_low_north", "within": 3.0 },
+    { "label": "reclaims", "who": "arena_gunman", "kind": "hint+", "match": "cover_corner_ne", "within": 3.0 },
     { "label": "covers_again", "who": "arena_gunman", "kind": "schedule", "match": "SCHED_TROIKA_TAKE_COVER_HINT (", "within": 1.0 },
     { "label": "at_cover_again", "who": "arena_gunman", "kind": "taskdone", "match": "^task_snap_to_hint$", "regex": true, "within": 25.0 }
   ],
@@ -50,7 +49,7 @@
     { "who": "arena_gunman", "kind": "death" }
   ],
   "probes": [
-    { "at": "end", "who": "arena_gunman", "probe": "hint", "equals": "cover_low_north" },
+    { "at": "end", "who": "arena_gunman", "probe": "hint", "equals": "cover_corner_ne" },
     { "at": "end", "who": "arena_gunman", "probe": "alive", "equals": true }
   ]
 }
