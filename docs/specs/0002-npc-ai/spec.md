@@ -518,6 +518,27 @@ tests the green scenarios cover deleted.
   (38 arbiter sites in 7 files, `RouteScheduleMaintenance`'s five pre-steps, the ambient executor,
   `bMoveIssued`, the save owner word). *Scenarios:* cover-and-fire, scripted-walk, place-visit,
   crosswalk. *Size:* L. *Model:* Opus/high, one Fable review of the seam commit.
+  *Planned 2026-10-04 (`stories/v3/README.md`, accepted by the owner):* the arbiter is 53 sites in
+  10 files today. Cut into five stories, each closing on its own records:
+  - [ ] **V3r** — two reading packets: the dialogue upkeep `0x102c1400`, the three
+    `StartPlayerDialog` inputs and `PlayerUse`'s NPC arm. S.
+  - [ ] **V3a** — the seam (`m_scriptState +0x5d70` on the NPC, `m_hDialogPartner +0xfe8`, the
+    `dialog_choose` harness action), then the body plays the kernel's sequence on every NPC and
+    the program claims go. *Records:* the three patrols; `cover` through its cover-out clip. M.
+  - [ ] **V3b** — places and patrols as programs; the ambient executor deleted; the place released
+    only by `0x102b53d0`'s retail callers. *Records:* the places, `map_hub_idle`,
+    `hub_crosswalk_wait`, `rollcall_vhuman`, `rollcall_vhumancombatpatrol`. M.
+  - [ ] **V3c** — the scene hold: the cine writes the NPC's words, `SCHED_AISCRIPT` runs the
+    scene, `StartSequence` writes `m_nSequence`. *Record:* `script_walk_to_mark`. M.
+  - [ ] **V3d** — the dialogue hold as a program (`SCHED_TROIKA_RUN_DIALOG 0x6a`, task
+    `TASK_RUN_DIALOG 0xb9`), then the arbiter, the owner enum and the save owner byte deleted
+    whole. *Records:* the dialogue records, `script_aischedule_walk`. M–L.
+
+  Rulings: a cine keeps refusing a save while it possesses an NPC, a named divergence V6 removes
+  with the restart (K1); scene clips play through `m_nSequence`, the draft's montage-slot
+  divergence dropped (K2); the admission barrier is V6's and `UpdateIdealState` with its tests
+  V9's. `cover`'s shot stays red on V4 (anim events) and V5 (N2). (The text above says
+  "`0x6a RUN_DIALOG`": `0x6a` is the schedule; the task is `0xb9`.)
 - [ ] **V4. Fix: the animation chain under the kernel.** (Was C2.) `PostRun 0x1026c8c4`:
   `StudioFrameAdvance` (slot 250), `DispatchAnimEvents` (slot 258, `0x10091880`) over the clip's
   baked event table (the world-tick poll retired for NPCs), `HandleAnimEvent 0x10274e30`,

@@ -62,6 +62,12 @@ Wave 3 (build work, one agent):
   Q-H2 `memory_occluded_kept` (`stories/v1/triage.md` § "Wave H"). Closed 2026-10-04: both
   record errors (the port matches retail), re-stated and green; ticked.
 - [ ] **V3** — Fix: the arbiter retired; scenes, dialogue and places as retail runs them. L · Opus/high.
+  Cut 2026-10-04 (`0002-npc-ai/stories/v3/README.md`):
+  - [ ] **V3r** — the two reading packets (dialogue upkeep `0x102c1400`; the dialogue inputs). S.
+  - [ ] **V3a** — the seam, then the kernel's sequence plays on every body. M.
+  - [ ] **V3b** — places and patrols as programs; the ambient executor deleted. M.
+  - [ ] **V3c** — the scene hold through `m_scriptState` and `SCHED_AISCRIPT`. M.
+  - [ ] **V3d** — the dialogue hold as a program; the arbiter deleted whole. M–L.
 - [ ] **V4** — Fix: the animation chain under the kernel. M · Opus/high.
 - [ ] **V5** — Fix: the attack conditions and the combat interrupts. S · Fable/medium.
 - [ ] **V6** — Fix: session, clock and lifecycle. M · Opus/high.
