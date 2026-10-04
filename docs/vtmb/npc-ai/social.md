@@ -794,7 +794,10 @@ the coordinator or `0x1025db70` admits this NPC. On entry it sets `m_bInMelee`, 
 `m_flMeleeMustLeaveTimer` (`+0x6074`) with `curtime + RandomFloat(7.5, 15.0)` — the immediates are
 `0x40f00000` and `0x41700000` — and fires the global melee event `(*DAT_10924edc)->vfunc1()`.
 
-Slot 600 is the attacker-side entry, reached from slot 322 (`0x102a0910`) when this NPC swings. It
+Slot 600 is the attacker-side entry, reached from slot 322 (`0x102a0910`) when this NPC swings
+(its other `CALL [reg+0x960]` sites, listed 2026-10-04 and not walked: `0x1029f8f0`, the
+`OnTakeDamage` bodies `0x102beda0` / `0x10385a50`, `0x10374e50`, and the Werewolf's think and
+`StartTask`). It
 requires the active weapon's capability word (slot 360, `+0x5a0`) to carry `0x18000` and
 `m_bInMelee` to be clear; then `0x1025dca0` admits or refuses. The entry write is the same triple as
 599's, with the same 7.5–15.0 draw.

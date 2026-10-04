@@ -1723,6 +1723,24 @@ inside either**. `m_flGroundSpeedScalar` (`+0x564`) does not participate in this
 `GetIdealSpeed` (`0x10091740`) is confirmed a plain read of `+0x654` with no other term — no
 scalar, no playback rate.
 
+_How the motor consumes it, and the turn yaw (read 2026-10-04, 0002 V4r packet R1)._ The reader of
+`GetIdealSpeed` on a ground move is the velocity script `0x102630b0` (from `0x10262590`, called by
+`CAI_HumanoidMotor::MoveGroundExecute 0x10264680`): owner slot 248 (`+0x3e0`) is the ideal velocity
+(**50.0 when it answers 0**), the acceleration is that plus `_DAT_104493c0`, each waypoint's speed is
+the ideal scaled by the clamped dot of its in and out directions, and **the last waypoint's speed is
+0** — retail decelerates at a constant rate into the goal and stops in finite time. The step is
+`(|m_vecVelocity| + scriptSpeed) * m_flMoveInterval * 0.5`. `GetSequenceTurnYaw` (`0x1008f8f0`)
+returns `angles[1]` of `0x10428690` → `Studio_SeqMovement 0x100c5d10(seq, 0.0, 1.0, poseParams)`:
+the pose-weighted sum over the blend corners of `Studio_AnimMovement 0x100c5b00`'s yaw delta, which
+`0x100c57e0` reads from the movement record's `angle` (`+0x10`) — the baked `YawDegrees`. The walk
+fan differs by bank: `walk_0` is 136.7 cm/s on the male `move_and_ranged` and **101.3 cm/s on the
+female** (`walk_90` 60.7 / 62.3). `_DAT_104493c0` is the double **50.0** (`102630f1 FADD double
+ptr`) and the dot's bias `_DAT_10449198` the double **0.2** (`1026329e`), read from the image
+2026-10-04 (0002 V4 packet S1); the script's passes are walked in `npc-ai/shape.md` § "CAI_Motor's
+unnamed bodies …". The female `walk_0`'s odd 1.0645 s cycle is data: 37 frames at **33.82 fps**
+(every other walk cell, and the male `walk_0`, is at 30.0), per the staged
+`character/shared/female/move_and_ranged.clips.json`.
+
 **Why the same call answers both shapes.** The mover (`0x100c5d10`) resolves four bilinear corners
 through `0x100c5400` and accumulates `weight * motion` over them. The per-axis fraction and index
 come from `0x100c1c60`, which opens with
@@ -1907,6 +1925,29 @@ A **cross-disposition** transition is a different name form, built live by
 `CDispositionTable::GetTransitionAnim` (`0x100ed150`) when `SetDisposition` (`0x102c0f70`) changes
 the index: `stance_trans_<oldAnim>_<stance+1>_<newAnim>_<stance+1>`, falling back to
 `stance_trans_<oldAnim>_1_<newAnim>_1` and then to the new disposition's `idle[stance]`.
+
+**`SetDisposition(name, level)` `0x102c0f70`, arm by arm** (387 bytes; read 2026-10-04, spec 0002
+V4r packet R2). In listing order:
+
+1. `old = m_nCurrDisposition` (`+0x64d4`); `m_nCurrDisposition = CDispositionTable::Find(name,
+   level)` (`0x100ec530`). A miss (`-1`) loops: `DevMsg("Could not find disposition for …")`, then
+   the lookup again as `("Neutral", 1)`, re-reading `old` from the word it just wrote — so after a
+   miss `old` is `-1`.
+2. The record's tuning, unconditionally, changed or not: `0x100ecd30` → `m_flMinBlink` /
+   `m_flMaxBlink` (`+0x64d8`; the listing passes the same address for both outs),
+   `m_flMinEyeFidget` / `m_flMaxEyeFidget` (`+0x6584` / `+0x6588`); `0x100eccf0` →
+   `m_RelativeEyeTarget` (`+0x5b94`); `0x100ecdf0` → `m_flEyeIntegRate` (`+0xe3c`); `0x100ec360` →
+   `m_idxDefExpression` (`+0x10b4`); `0x100ec2e0` → `+0x64d0`; `0x100ec3d0` →
+   `m_flDefExpressionIntensity` (`+0x10b8`).
+3. Only when the index changed: `seq = (old == -1) ? slot 611 (+0x98c, 0x102c12a0, the stance
+   picker below) : GetTransitionAnim(old, new)` (`0x100ed150`).
+4. Only when `seq >= 0`: `m_IdealActivity (+0xff0) = 0xf1`, `m_nIdealSequence (+0x5ccc) = seq`.
+5. Inside 4, and only when `m_bDisableAI` (`+0x6080`) is **clear**: the immediate commit — `m_nSequence (+0x6f0) =
+   seq`, `m_flCycle (+0x6f8) = 0`, `m_Activity (+0xfec) = 0xf1`, `m_flAnimTime (+0x174) = curtime`,
+   `ResetSequenceInfo` (`0x10090950`), in that order.
+
+So the gate on `m_bDisableAI` covers the commit alone: a body with its AI disabled still gets the
+ideal pair and the tuning. No `SetActivity`, no `OnChangeActivity`, no translated-activity write.
 
 **The algorithm.** Virtual `+0x98c` = `0x102c12a0` for 63 classes. `0x100ecee0` supplies the record
 and the three tuning numbers, selecting the Talking or Standing pair on `m_bIsTalking(+0x64c0)`:
@@ -4010,9 +4051,17 @@ fields, and touches no cycle.
 `RestartGesture` (slot 273, `0x10099570`) finds the layer and rewinds `m_flCycle` to 0, keeping the
 weight and the envelope; when nothing holds it AND `addifmissing` is set it calls `AddGesture`
 (`0x100991b0`), which re-tests `HasLayer`, draws `SelectWeightedSequence(activity)` and treats a
-result of **1 or less** as the refusal — not just `-1` — then allocates, calls `SetLayer` and writes
+result **below 1** as the refusal (`TEST EAX,EAX / JG` at `0x100991dd`: sequence 0 and `-1` refuse,
+sequence 1 is accepted; corrected 2026-10-04, packet S3 — this line said "1 or less") — then
+allocates, calls `SetLayer` and writes
 the owner activity into `+0x758` a second time. The decompiler binds the `addifmissing` test to the
 activity argument; the listing (`MOV AL, [ESP+0x10]`) shows it is the second parameter.
+**Nothing in the image calls it** (packet S3): the body pops three words (`RET 0xc`), its thunk
+`0x10008233` has no caller, and of the 23 `CALL [reg+0x444]` sites none passes three: eleven are a
+weapon's own slot 273 (`0x10251de0`, in `Precache` / `Deploy`), three more are a weapon's `this`
+(`0x102395c0`, `0x10252ea0`, `0x10258440`), the doors' (`0x100f0340`, `0x100f26b0`, `0x100eef50`)
+pass none to a lock or doorknob, `0x100dac20` passes two to an `RTDynamicCast` receiver (the
+terminal's `AcceptCmd`), and `0x10189780` passes none and reads a pointer back.
 
 `AddFlinchGesture` (slot 265, `0x10099690`) refuses on `!IsAlive()` (slot 158) and then on
 `m_bNoFlinch` (`+0x0730`), scans records 1 and 2 against a running best that starts at 0 and takes a

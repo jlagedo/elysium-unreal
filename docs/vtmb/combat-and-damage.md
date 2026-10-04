@@ -975,7 +975,8 @@ runs **every frame** from `UpdateCharacter` (`0x103246D0`) — reached for the p
 > record.** The two writers of `m_bMeleeSwingIsLive` (`+0xAA1`) are the only ones in the image, and
 > both derive it from that count. The records *are* the window.
 
-Each frame the update sub-steps the elapsed time: `N = floor(dt * 100)` against a constant `100.0`
+Each frame the update sub-steps the elapsed time: `N = ceil(dt * 100)` (the call is `_ceil`, read
+2026-10-04; `dt` is `curtime` minus the update's own stamp `+0xAA4`) against a constant `100.0`
 at `0x10450564`, producing `N` **contiguous** cycle intervals covering everything the clip advanced
 through. `MeleeSwingStep` (`0x10343020`) then, for each record and each sub-interval, tests the
 record's authored `[start, end]` window against that sub-interval, and where they overlap sweeps
@@ -1018,7 +1019,7 @@ Compiled constants of the walk:
 
 | Constant | Value | Role |
 |---|---:|---|
-| sub-step rate | `100.0` Hz | `N = floor(dt * 100)` |
+| sub-step rate | `100.0` Hz | `N = ceil(dt * 100)` |
 | segment subdivision | `1/6` unit | how finely the swept segment is subdivided |
 | `melee_swish_sound_time_offset` | `-0.1` s | the whoosh **leads** the contact window |
 | `melee_swing_completion_percent` | `0.8` | at this cycle the victim's hit-buildup counter is cleared |
@@ -1044,6 +1045,109 @@ tail calls `PrimaryAttack` **only when operator `+0xA8 == 0`**, the `CBasePlayer
 
 `WEAPON_MELEE_BEGIN_SWING` / `WEAPON_MELEE_END_SWING` (3200 / 3201) are **vestigial**: no consumer
 in the image, and no authored clip. A remake must not build a melee window out of them.
+
+#### The NPC attack producers, start to commit
+
+_Read 2026-10-04 (spec 0002 V4r, packet R2)._
+
+**The weapon frame.** `CBaseCombatCharacter::Weapon_FrameUpdate` (`0x1032aa40`) has one caller,
+`CAI_BaseNPC::PostRun` (`0x1026c7c0`), after the NPC's own event dispatch. It resolves
+`m_hActiveWeapon` and calls the weapon's slot 369 (`+0x5c4`) with the wielder; every weapon class
+fills that slot with `CBaseCombatWeapon` `0x1024efa0`: the weapon's own `StudioFrameAdvance(0)`, a
+`SelectWeightedSequence(m_Activity)` re-pick when its sequence finished and loops, then the weapon's
+own `DispatchAnimEvents(interval, wielder)`. **It is the world-model weapon's animation clock and
+nothing else**: no fire, no sweep, no timer. The player never calls it.
+
+**The NPC shot is the event and only the event.** `TASK_RANGE_ATTACK1` (0x34): the Troika start arm
+`0x102a4505` only rolls `m_iBurstFireCount`; the run arm `0x102ab0a9` waits on the weapon's
+next-attack time, then decrements and calls `0x102aaa60`, which stamps `m_flLastAttackTime` and
+`RestartIdealActivity`s `0x19` (`ACT_RANGE_ATTACK1`), or on a hint of type 100 / 0x65 / 0x27d8 the
+cover-shot activities `0x1114` / `0x110f` / `0x1120` / `0x111f` — unless `COND 99` is set, when it
+restarts nothing. No weapon virtual is called on that path. The clip the activity resolves to
+carries 3031 on its base timeline; `CAI_BaseNPC::HandleAnimEvent` forwards 3000..4002 to the weapon's
+slot 370; `CWeaponRanged` `0x10238160` takes 3030..3044 into `0x10238320` (or `0x10238380` for a
+player in secondary mode), `ModeDispatch(1)` `0x102383b0`, slot 373 `Shot` `0x102387b0`. The other
+route into `ModeDispatch` is slot 326 `PrimaryAttack` `0x102382f0` with mode 0, which is the START
+(slot 372 `Attack` `0x10238580`), never the shot, and the only NPC code that calls a weapon's slot
+326 is the melee arm below and two species bodies (`CNPC_VBach::StartTask` `0x103645a0`,
+`CNPC_VManBat::RunTask` `0x1038d130`). **A Troika human whose attack clip authors no 3030..3044
+record does not fire**; there is no timer, no cycle estimate and no fallback. The move-and-shoot
+overlay (`0x102e8560`) is the same rule on a layer: it pushes the `*_attack_layer` gesture and the
+layer's own 3031 fires the shot (`animation_events.md` § "Overlay layers…").
+
+**The NPC swing starts from the task, not from an event.** `TASK_MELEE_ATTACK1/2` (0x36/0x37), the
+Troika start arm `0x102a45c6`: with a weapon whose slot `+0x5a0` carries `0x18000`,
+`m_flLastAttackTime = curtime`, then the weapon's slot 326 `PrimaryAttack` (`+0x518`; `+0x51c` for
+0x37), then `AutoMovement`. `CWeaponMelee::PrimaryAttack` (`0x103eaca0`) on an owner with no player
+pointer skips the stealth-kill and combo tries and calls slot 372 `RequestActivity(0x4b, 1, 1)`
+(`0x103e9e00`): target from the NPC's `GetEnemy`, the swing sequence committed on the owner through
+slot 311 (`+0x4dc`), `m_flPlaybackRate` from the attack-speed rank, `m_flNextAttack` and the
+weapon's two next-attack times pushed to the clip's end. The task completes on the activity
+(`0x102ab2b2`). 3047 would re-enter `PrimaryAttack` for an NPC operator and nothing authors it.
+
+**The NPC contact is the same per-frame sweep as the player's**, from
+`CBaseCombatCharacter::UpdateCharacter` (`0x103246d0`) → `MeleeSwingUpdate` (`0x10346cd0`), which
+the Troika think reaches in its tail: slot 312 `UpdateCharacter(updateInterval)` (`0x10298070` at
+`0x1029365b`), **after** `RunAI`, `PostRun` and `PerformMovement`, and only on a think where the
+update clock is due (`IsThinkDue(m_flNextUpdateThink)`). `Weapon_FrameUpdate` and `ItemPostFrame`
+are not on the path. The male `baseball` bank's attack clips author **no event at all** (its only
+records are 4050/4051/5118 on the four stealth-kill clips), so a bat swing produces contact and
+damage with no anim event in between.
+
+#### Weapon operator bodies, the shot's gates and the attack data (S2)
+
+_Read 2026-10-04 (spec 0002 V4r, packet S2: `docs/specs/0002-npc-ai/stories/v4/packets-S2.md`)._
+
+**Slot 370 has eight bodies.** `0x1024f030` (base: warns; thrown, unarmed, discipline, armor),
+`0x103f4470` (items: swallows 3014 / 3200), `0x10238160` (`CWeaponRanged` and all 16 subclasses,
+flamethrower, Ming Xiao's spit and the Tzimisce head included), `0x103ea5b0` (melee),
+`0x103ec460` / `0x103eca20` (Ming Xiao's two melee classes: the melee body), `0x103e8be0`
+(`CWeaponMelee_TzimisceMelee`: 3045 / 3046 → `0x103e8c50` / `0x103e8c90`, NPC operator only,
+weapon `+0x910 = 1 / 2` around slot 372 `RequestActivity(0x4b, 1, 0)`). `0x103ed200` is the
+player's grenade release, not a species body. No weapon class fires an NPC's shot from a timer;
+species projectiles are their class's task code (`CNPC_VChangBros::RunTask` `0x1036bfc0` →
+`SpawnEnergyBall` `0x1036dd20`, `CNPC_VFrenzyShadow::StartTask` `0x10375f50`).
+
+**`ModeDispatch` `0x102383b0`** switches on the mode record's type `+0x108`: 1 / 2 → slot 373
+`Shot` (event) or slot 372 (start); 3 zoom (player); 4 fire-mode toggle; 6 the throw
+`0x10239e70`; anything else only advances the next-attack times.
+
+**`Shot` `0x102387b0` for an NPC**: returns on no owner or no NPC pointer (`owner+0x94`); the
+cooldown is a count — `next = max(+0x730[slot], curtime − frametime)`, one bullet set per
+`GetFireRate` step until `next > curtime`, so an event inside the cooldown fires nothing; the clip
+(`+0x74c[Ammo_Type index]`) caps the sets at `clip / Ammo_Cost` and is **not decremented for an
+NPC**; there is no line-of-fire test. It writes the owner's misc flag `0x200000`, the weapon
+activity (slot 333, 6), the muzzle effect bit, `FireBullets` per set, a `SOUND_COMBAT` entry of
+0.2 s, the kick, and the next-attack time. Unrecovered: who fills an NPC weapon's clip.
+
+**The attack-rate words** (server `0x10259230`, client `0x101a3eb0`, identical): `Attack_Rate`
+`+0x260` default 1.0; `NPC_Attack_Rate_Min` `+0x264` default `2 × Attack_Rate`;
+`NPC_Attack_Rate_Max` `+0x268` default `3 × Attack_Rate`; `NPC_Attack_Rate_Base_Range` `+0x26c`
+default 120. The NPC's wait reads them in `0x102c5730` (`RandomFloat(Min, Max)`) →
+`0x102c5570`: `(v − Attack_Rate) × sqrt(dist / BaseRange)`, with `× 1` when `BaseRange <= 0`,
+`sqrt(1 / BaseRange)` with no target and `× dist` when `dist <= 0`.
+
+**The melee band `0x103ea7e0`** reads only the owner's sequence descriptors for the attack
+activity: `+0x10` (weight), `+0x2c4` (swing-record count), `+0x2cc` / `+0x2d0` (near and far
+reach), the `+0x2bc` envelope records at `+0x2c0`. It answers `0x51`, 9, `0x60`, `0x61`, `0x5f` or
+0 (packet S2 §4 for the order). The staged clip tables carry every one of those inputs.
+
+**`0x102a11d0`** (the four `SelectScheduleMeleeCombat` bodies' gate) sweeps a slab — the NPC's
+box doubled in x and y, 12 units tall — from `WorldSpaceCenter` to a point against
+`CONTENTS_MONSTER` and answers true when it is blocked by an NPC the caller does not hate
+(`IRelationType != D_HT`).
+
+**Attack extents.** Slot 247 `0x10090c80`: `e[i] = max(|bbmin[i]|, bbmax[i])`, `e.x = e.y =
+hypot(e.x, e.y)`, each reduced by the collision maxs and floored at 0. `SetAttackExtents`
+`0x1009af40` stores them at `+0x50` and in the engine partition element (`0x20040fc0`). The field
+is only ever saved and restored (`0x102a1910`, `0x102b7110`); the engine copy grows the element's
+box in `CEnumBox` `0x200426e0` / `CEnumRay` `0x20042b70` for flagged queries only, and the flagged
+queries in `vampire.dll` are the player's acquire cone (`0x1040f550`, `0x1040f080`).
+
+**`GetBestMeleeWeapon` `0x10336f20`** walks a type list (`0x10619eb4`), each type's inventory
+range (`0x10619d28`, `0x10937cd0`, owner slot 298), and returns the first weapon whose slot 360
+carries `0x18000`; `ChooseBestMeleeWeapon` `0x10337230` switches to it (callers
+`CAI_BaseNPC::StartTask` `0x102827f0`, `CNPC_VSheriffMan::StartTask` `0x103aec70`).
 
 ### Opposed record and reaction margin
 
@@ -1848,7 +1952,9 @@ fresh corpse is still solid and still takes damage.
 - false → `CSoundEnt::InsertSound(SOUND_CARCASS 0x20, GetAbsOrigin(), volume 384, duration 30.0)`;
 - true → `SUB_StartFadeOut` (`0x102695d0`): set render mode 2 with alpha 255 **only when the render
   mode was 0**, `AddSolidFlags(FSOLID_NOT_SOLID 0x4)`, zero local angular velocity, relink, and
-  arm the fade think at `curtime + 0.0`.
+  arm the fade think (`SUB_FadeOut 0x100152b2`) at `curtime + 10.0` (`1026968d FADD double ptr
+  [0x1044fac0]`; an earlier reading took the double's low dword for `0.0`; corrected 2026-10-04,
+  0002 V4 packet S1). It runs AFTER `CreateCorpse`, so it replaces the corpse think below.
 
 **`CreateCorpse` (`0x1032c0e0`)** then builds the body:
 
@@ -1860,8 +1966,27 @@ fresh corpse is still solid and still takes damage.
 - otherwise `BecomeClientRagdoll(force, bone, 0)`, where `bone` is the hitbox index carried by
   `info`, or the bone looked up as `Bip01 Spine2` when that index is negative.
 
+_The tail, the overrides and the other ways in (read 2026-10-04, 0002 V4 packet S1)._ When the
+corpse exists, `CreateCorpse` ends by replacing its main think: `SUB_PVSRemove 0x102696f0` at
+`curtime + 10.0` (`0x1032c404`), or for a burning death `BurnModel(GetSkeletonModelName(), 1)`
+(slots 243 / 244: render fx `0x1b`, per-bone `DMGFX_vampire_death`, a skeleton `dynamic_prop`
+following the corpse and removed at `+3.5 s`) with `SUB_Remove 0x101c0b10` at `+10.0`
+(`0x1032c32f`); the `0x80000` arm also puts `SUB_Remove` at `+0.5` on the NPC. `SUB_PVSRemove`
+keeps the corpse another 10 s while any player has it in the view cone (slot 363), in the PVS
+(`0x101d1a90`) and visible (slot 201, mask `0x2804091`); else `UTIL_Remove`. So the NPC think never
+runs again after an ordinary kill. `CNPC_VPedestrian::CreateCorpse` (`0x103a38c0`) saves the hull,
+runs the base, then `ThinkSet(NULL)` and `SetSolid(SOLID_NONE)`: a pedestrian's corpse is never
+removed by this chain. **Gibbing:** `OnTakeDamage` (`0x1032ef60`) always calls `Event_Killed` first;
+then slot 399 (`0x1014fa30`, false on every NPC) or damage bits `0x2000 && !0x1000` →
+slot 402 (`0x102658f0`: `CorpseGib`, else `CorpseFade`), otherwise slot 403 `Event_Dying` (empty).
+An explosion is `DMG_BLAST` and takes the ordinary corpse. **Feeding** kills through `Die`
+(`0x103392c0`) from `FeedInterrupt` (`0x1033a9e0`, victim's blood `< 1`, not Kindred) and
+`DecBloodPool` (`0x10338df0`, blood 0, `IsKine`): the ordinary `Event_Killed`; Kindred go to
+`TorporBegin` instead.
+
 **`CBaseAnimating::BecomeClientRagdoll` (`0x10090180`)** returns **false** when the model carries no
-ragdoll collide, and in that case only zeroes velocity — that false is what drives the death
+ragdoll collide, and in that case only zeroes the collision bounds (`0x101cf390`; no solid flag, no
+move type, no think change) — that false is what drives the death
 schedule choice recorded in
 [npc-ai/README.md](npc-ai/README.md). On success:
 

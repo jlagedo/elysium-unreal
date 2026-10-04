@@ -1,9 +1,12 @@
 # Brief B2 — V4b: the kernel's move facing (`0x102e2180`, `0x102e19e0`) and the turn (coder; no build)
 
-**Final in items 1–3 (amended after V4r, 2026-10-04 — R1 and J9); item 4, the slow turn, is final
-once reader R1b has named its cause** (`packets-R1b.md` § "For B2"). Do not start before
-`packets-R1b.md` exists. Read `README.md` here (§1 "Turning and the walk" with its amendment; §2
-M4–M6; § "Shared names"), `packets-R1.md` items 1 and 3, `packets-R1b.md`,
+**Final in items 1–3 (amended after V4r and settling packet S1, 2026-10-04 — R1, J9, S1 item 5);
+item 4's retail side is now read whole (below); what is still unknown is only why the PORT's turn
+took 13.4 s, which reader R1b names** (`packets-R1b.md` § "For B2"). Items 1–3 and 5 do not wait
+on R1b; item 4's fix does. Where this brief and `packets-R1.md` item 3 or the README disagree on
+`RunTask` 0x2e, this brief wins (`packets-S1.md` item 5). Read `README.md` here (§1 "Turning and
+the walk" with its amendment; §2 M4–M6; § "Shared names"), `packets-R1.md` items 1 and 3,
+`packets-S1.md` item 5, `packets-R1b.md` when it exists,
 `docs/vtmb/npc-ai/shape.md` :419-500, :1460-1500 and § "CAI_Motor's unnamed bodies …" (the
 2026-10-04 addendum: slot 15, slot 18, `MoveGroundExecute`). After V4a's commit. Re-locate by Grep.
 
@@ -21,8 +24,11 @@ M4–M6; § "Shared names"), `packets-R1.md` items 1 and 3, `packets-R1b.md`,
 - for item 4 only: the one file `packets-R1b.md` names as holding the slow turn's cause, if it is
   none of the above **and not one of B1's** (`Visual/ElysiumNpcBody.{h,cpp}`,
   `Visual/ElysiumNpcMoveScript.{h,cpp}`, `Public/ElysiumWorldServices.h`, the map actor's
-  embodiment files, `Tests/ElysiumTestServices.h`); if it is B1's, write the exact line in your
-  report for the integrator
+  embodiment files, `Tests/ElysiumTestServices.h`) **nor one of V11-1's when V11 shares the wave**
+  (`../v11/README.md` §4 — among them `ElysiumNpcBaseStartTask.cpp` and `ElysiumNpcStartTask_2.cpp`,
+  where a `TASK_FACE_ENEMY` arm may live: V11-1 owns `StartTaskChooseBestMeleeWeapon` and
+  `TaskTailCoordinatorCircleSide` there, you own no function in them); if it is B1's or V11-1's,
+  write the exact line in your report for the integrator
 
 ## The job
 
@@ -67,13 +73,41 @@ M4–M6; § "Shared names"), `packets-R1.md` items 1 and 3, `packets-R1b.md`,
    body's yaw into the kernel's ideal yaw during a move): replaced by slot 18's
    `SetIdealYawAndUpdate` — that is where retail writes it (R1 item 1). If removing the copy
    leaves a caller that still needs the body's yaw, say which and why, and leave that one read.
-4. **The slow turn — from `packets-R1b.md` § "For B2".** Known and fixed for you: retail's bound
-   is 0.5 s (`MaxYawSpeed 0x10297ce0` answers 90 untagged in combat with `m_Activity` 1 or 5,
-   else 45; `RunTask` 0x2e `0x102889b5` sets `m_flLastYawTime = −1` each call, so `UpdateYaw
-   0x102e1e20` integrates 0.1 s: 90° per call); the turn ladder `0x10297640` is closed for a
-   Troika human and **`0x2000` is never tagged** — do not port a "turn rung" for humans, and do
-   not rely on V4a's `YawSpeed` (it is 0 on shipped data). Restore the one divergence R1b names,
-   at the address it cites. **If `packets-R1b.md` says "not determined", you do not fix the turn
+4. **The slow turn.** Retail, read whole (`packets-S1.md` item 5) — check the port's
+   `TASK_FACE_ENEMY` against it arm by arm before reading R1b's cause:
+   - **`StartTask`, Troika arm `0x102a4417`**: point = `m_hShootTargetOverride (+0x5ba8)`'s
+     `GetAbsOrigin` when it resolves, else the enemy's last known position
+     (`GetEnemies()->0x102dfed0(enemy)`). Slot 364 `FInAimCone(point)` true → complete. False →
+     **the turn tail `0x102a44d1`**: `0x102e0b40(motor)` (`m_flLastYawTime motor+0x2c = −1.0`);
+     `0x102e2020(motor, &point, 0)` — the ideal yaw to the point (`± 180` when `motor+0x28`,
+     clamped to `motor+0x18 ± motor+0x1c` unless `motor+0x1c == 180.0`), **no update**; slot 572
+     `SetTurnActivity`; RUNNING.
+   - **`RunTask`, Troika arm `0x102aae61`** (index 4 of table `0x102ac760`) — **not the base
+     `0x102889b5`**: `m_afMemory (+0x5d8c) & 0x2000` clear → slot 572 `SetTurnActivity`, **every
+     call**; the same point; `0x102e20b0(motor, &point, −1.0)` = `SetIdealYawAndUpdate(yaw, −1)`:
+     the ideal yaw as above, then because the speed is `−1.0`, `0x102e1cf0` **re-reads
+     `MaxYawSpeed` into `motor+0x38` every call**, then `UpdateYaw(−1)`; `FacingIdeal 0x10278c80`
+     (`|DeltaIdealYaw| <= 0.006`, double `0x10499568`) → `TaskComplete`, else running. **It does
+     not call `0x102e0b40`: the yaw clock is reset only by `StartTask`'s turn tail.**
+   - **`UpdateYaw 0x102e1e20(speed)`**: `−1` → `(int) motor+0x38`. `current` = the owner's local
+     yaw, `ideal = motor+0x34`, each quantised (`× 182.0444`, `& 0xffff`, `×
+     0.0054931640625`). `m_flLastYawTime < 0` → `= curtime − 0.1`. `new = AI_ClampYaw(speed ×
+     10.0, current, ideal, curtime − m_flLastYawTime)`; `m_flLastYawTime = curtime`; `new !=
+     current` → `SetLocalAngles`. So the first `RunTask` integrates 0.1 s and later calls **the
+     real time between thinks**.
+   - **`AI_ClampYaw 0x102e1d10(rate, current, target, dt)`** (in `vampire.dll`): equal → target;
+     `step = rate × dt`; `move = target − current`; `target > current`: `move >= 180` → `− 360`;
+     else `move <= −180` → `+ 360`; `move > 0`: `min(move, step)`; else `max(move, −step)`;
+     return `current + move` quantised.
+   - `MaxYawSpeed 0x10297ce0` answers 90 untagged in combat with `m_Activity` 1 or 5, else 45: at
+     90 that is 900°/s, 135° in two calls. **The 0.5 s bound stands.** The turn ladder
+     `0x10297640` is closed for a Troika human and **`0x2000` is never tagged** — do not port a
+     "turn rung" for humans, and do not rely on V4a's `YawSpeed` (it is 0 on shipped data).
+   An arm above that the port lacks or does differently is a divergence: restore it at its line
+   with the address when the line is in your files, else write the exact line in your report for
+   the integrator. **Why the port's `task_face_enemy` ran 13.4 s is unrecovered; reader R1b settles
+   it before item 4 starts** (`brief-R1b-slow-turn-reader.md`, from A0's measurement): restore the
+   one divergence R1b names, at the address it cites. **If `packets-R1b.md` says "not determined", you do not fix the turn
    on a guess**: leave item 4 undone and say so; `face_enemy_turn` then stays red with its
    `known_red` naming the unread cause.
 5. **Tests**: `Elysium.Arm.NpcKernelMotor.MoveYaw` (`0x102e19e0`): a one-entry queue with

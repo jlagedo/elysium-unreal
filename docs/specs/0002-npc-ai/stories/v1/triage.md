@@ -1115,3 +1115,192 @@ query ran over 10 s. Brief J's item 1 (the corpse fall) is withdrawn: V4d.
   the seed; `RunAnimation`'s gate as R2 read it (J8).
 - **C integrator**: the body-data import with its stop rule (J2); the silent-class list (J6).
 - **D**: none.
+
+## Judge's rulings, V4 — second sitting (2026-10-04, after packets S1–S3; under "testable first" and "settle first")
+
+One read-only agent, no build, no run. The reads are in `stories/v4/packets-S4.md` (items a–f);
+marks as there: *(verified)* this session in the listing, the DLL's bytes, the staged manifest or
+the port; *(packet)* S1–S3; *(inferred)*. Each item: the strongest argument against the ruling
+first, then the ruling, the cost, the proving record. No query ran over 10 s.
+
+### J2b. Slot 247's bbox, re-ruled: **the body now (C1), on a named seam; the data half and its import filed with the story that ports the player's acquire cone. J2's import is withdrawn.**
+
+- **Against (for keeping J2).** Rule 2 is strict: retail rewrites `m_vecAttackExtents +0x50` at
+  every sequence change on every Troika NPC, the port leaves `TroikaNPCInit`'s `(−1, −1, −1)` for
+  the NPC's life, retail *can* be followed (the bbox is in `records.Seq`), and the price is one
+  ~20-minute import. "Nobody reads it" is the argument J2 already refused.
+- **What changed** *(verified / packet)*. J2 rested on the engine's `CEnumRay` growing the box for
+  the attack partition. S2 item 7 and S4 item c close the list: the engine copy is read only by
+  queries carrying Troika's flag, and those are the player's acquire cone (`0x1040f550`,
+  `0x1040f080`: the pick-up cone of `physics-interaction.md` § "The acquire chain") — two sites;
+  `0x102fb4e0` passes 0. Game code reads `+0x50` only to save and restore it (three sites). **The
+  acquire cone is not ported**: no line under `Source/` cites either address, and no `spec.md`
+  names that document. So there is no observer in the port: no record, no arm test on real data,
+  no live read can tell a right value from a wrong one. "Testable first" then decides: work that
+  cannot close on a real test does not run now, and the thing that would make it testable (the
+  acquire cone) is the player's, not pullable into V4.
+- **Ruling.** Split. **Now, C1**: slot 247's body `0x10090c80` whole, against `SequenceBounds`,
+  which stays a **named seam** answering "no descriptor" — "stands for the seqdesc bbox
+  `+0x1c..+0x30`; filled when the acquire cone is ported". With no descriptor the slot writes
+  nothing, as retail with no seqdesc. This is CLAUDE.md's seam for an input with no source, not a
+  divergence. **Filed**: `bboxMinCm` / `bboxMaxCm` on the body row, the runtime fields and the one
+  import — owner: the story that ports `0x1040f550` / `0x1040f080`. No spec owns it today; the
+  coordinator names one (0015 is the player's nearest). **Also filed, same owner**: the port's
+  feed-target box grows by the extents citing `CEnumRay` (`ElysiumMapActor.cpp:1513-1518`), which
+  retail does only for a flagged query *(inferred: `FindEntityFOV 0x10341c30` is not one of the
+  two)*; with the seam it moves the box by one unit. Not changed now.
+- **Cost.** None beyond C1's code item; no pipeline run in V4c. **Proof:** arm test
+  `Elysium.Arm.NpcKernelAnim.AttackExtents` on the `SequenceBounds` double. No arena record, and
+  that is stated: retail gives the bytecode nothing to observe here.
+
+### J10. `0x102a11d0`, "a non-hated NPC blocks the swept slab": **implement now, V11 lane V11-1**
+
+- **Against.** V11-1's brief lists it as "not yours (R3 / R4)"; it touches the selectors of four
+  species; the seam's `false` is the right answer in every record that stages one brawler, so
+  nothing red asks for it; and the packet said it "needs an entity sweep against NPC bodies".
+- **What the check found** *(verified)*. The sweep exists: `IElysiumEmbodiment::TraceRetail` takes
+  a box, a retail mask and an ignore list and returns the character bodies it met, nearest first,
+  when the mask carries `MONSTER 0x2000000` (`ElysiumWorldServices.h:703-759`); the MONSTER-alone
+  recipe is already there for the idle gate `0x102b5de0` (`ElysiumRetailMaskRecipe.cpp:33-38`). The
+  seam is one function returning `false` (`ElysiumNpcSchedule.cpp:583-588`), three call sites. And
+  it is on a witness map: the tutorial warehouse stands `thug_2` (bat) and `thug_3` in one squad,
+  and V11 is the coordinator's story — with two attackers this gate is what sends the second one
+  to circle (`0xe1`) instead of advancing (`0xcb`).
+- **Ruling.** Implement now in V11-1, as S2 item 6 states it: hull `(2·mins.x, 2·mins.y, −6)` /
+  `(2·maxs.x, 2·maxs.y, +6)`, from `WorldSpaceCenter` to the point, mask `0x2000000`, ignoring
+  self; true when the nearest body met is an NPC and `IRelationType(it) != D_HT`. The player's
+  body ends the trace and answers false (no NPC pointer). Renamed (it is not a reach test).
+- **Cost.** S: `ElysiumNpcSchedule.cpp` (that function; V11-1's list has the file for another
+  function), `ElysiumNpcSchedule.inl`, the three call sites' name (`ElysiumNpcHuman.cpp:480`,
+  `ElysiumNpcMingXiao.cpp:366`, `ElysiumNpcSchedule.cpp:388`); inside V11's build. **Proof:** new
+  record `melee_ally_in_the_way` — two bat-only combatants hostile to the player and neutral to
+  each other, in line; the rear one `expect` `0xe1`, `never` `0xcb` while the front one stands
+  between; plus an arm test on the trace double.
+
+### J11. The four species with task-code fire paths: **verified absent from both maps; each filed on the spec's "on demand" line, no stub needed**
+
+- **Against filing.** "No unknown is left for later", and J6 removes the estimate for every NPC
+  wielder: a species whose port body leaned on it goes silent with no record to notice.
+- **What the check found** *(verified)*. No `npc_VChangBros`, `npc_VFrenzyShadow`, `npc_VBach` or
+  `npc_VManBat` row in the staged entity data of `sp_tutorial_1` or `sm_hub_1`, no maker names one
+  (`NPCType` is `npc_VCop`, `npc_VHuman`, `npc_VRat`, `npc_VVampire`), and the reach tables carry
+  no such `class` row. These are not unknowns: S2 item 1 read where each fires.
+- **Ruling.** Filed, owner the spec's "on demand, not in the sequence" line ("the species outside
+  the six maps' reach"), one row each, to run when a map that reaches the class enters scope:
+  ChangBros — `RunTask 0x1036bfc0` → `SpawnEnergyBall 0x1036dd20`; FrenzyShadow — `StartTask
+  0x10375f50`; Bach — `StartTask 0x103645a0` (weapon slot 326), the camper pass `0x10365a90`
+  already ported; ManBat — `RunTask 0x1038d130` (slot 326). Each row's first step: show the port's
+  task body calls the weapon's fire and not the estimate. J6's Warning line (an NPC attack clip
+  with no fire event, once per model and sequence) stays as the tripwire.
+- **Cost.** Four lines in the spec. **Proof:** none in step 2; each row names its record when run.
+
+### J12. The NPC clip: **an old bug in landed work — implement now, V4o lane O3 (no spend, no refusal); the reload finish stays a seam, its text corrected, owner V5b**
+
+- **Against.** The spend sits in the commit the player shares; touching it risks the player's
+  ammunition and the weapon tests; "NPCs never run dry" reads like a cheat; and a gunman reloading
+  is something players remember.
+- **What the read found** *(verified, S4 item a)*. Retail fills the NPC's clip once, at equip
+  (`Inventory_Insert 0x10334e70`: `max(Default_Size, 1)`), and `Shot 0x102387b0` subtracts only in
+  the player block. The port subtracts `Ammo_Cost` for every wielder and refuses the shot when the
+  magazine does not cover it (`ElysiumWeaponClasses.cpp:2313-2323`), and its `TASK_RELOAD` finish
+  fills nothing while clearing `0x40` (`ElysiumNpcBaseRunTask.cpp:259-264`, `:598`). A port gunman
+  with the .38 (`Size 6`) fires six times, raises `NO_PRIMARY_AMMO`, reloads to no effect and
+  loops; retail's keeps firing. That is on step-2 paths (`ranged_open_fire`'s shooter, `cover_armed`,
+  the tutorial's `thug_3`), and it changes which programs run: the bytecode observes it.
+- **Ruling.** Implement now in O3, which ports the NPC's `Shot`: for a non-player wielder the sets
+  are capped by the clip (`sets = clip / Ammo_Cost` when short) and the clip is not written; the
+  player's branch is untouched. Equip: the NPC's clip is `max(Default_Size, 1)`. **The reload**:
+  `WeaponFinishReload` stays a seam (unreachable once the spend is gone), its comment replaced by
+  the body read — `m_bInReload = 1`; slot 322 `0x10255050`; single-round weapons: player only;
+  bulk: `clip += min(Size − clip, owner's reserve)`, reserve untouched, both next-attack words
+  `= curtime` — owner V5b. Any V5 record that expects a reload after emptying a gun is a record
+  error.
+- **Cost.** XS in O3's file; weapon tests that pin an NPC wielder's spend are deleted (they pin a
+  port mechanism). **Proof:** new record `ranged_sustained_fire` — the `ranged_open_fire` staging,
+  `expect` eight `animevent 3031` on the shooter (two more than `Size`), `never` `cond+
+  NO_PRIMARY_AMMO (0x40)`, `never` `task_reload`.
+
+### J13. The corpse's removal, by body: **all four clocks are state, so all four are settled inside V4 — C2 the thinks, D the body that must survive them; only the burn's look is filed**
+
+- **Against.** V4d is the visual half of a modernization; removal timing is lifecycle (V6); the
+  Kindred, pedestrian and fade arms multiply V4d's trace checks by four for bodies its spike never
+  staged.
+- **Ruling.** An entity that is gone answers no name lookup and fires no output: the bytecode
+  observes it, so it is not V4d's to modernize and not V6's to wait for.
+  - **Ordinary mortal** — `SUB_PVSRemove`, re-armed every 10 s while the player's cone, PVS and
+    `FVisible` all pass. Ported *(verified, `ElysiumNpc.cpp:597-611`)*. Record now (C integrator):
+    `corpse_removed_unseen` — the `damage_lethal_death` staging with the player turned away;
+    the entity is gone at +10 s; a second run facing the corpse, still there at +12 s.
+  - **Kindred or `Has_Burning_Death`** — `SUB_Remove` at +10 s, seen or not. The think is ported
+    *(verified, `ElysiumCombatCharacter.cpp:1518-1527`)*. Record now: `corpse_kindred_burns` — a
+    tutorial `npc_VVampire` row by `from_map`; gone at +10 s while watched. **V4d lane D**: a
+    simulating body removed at +10 s must not ensure, and the burning-death sound is emitted (one
+    call). **Filed to 0014**: `BurnModel`'s look (render fx `0x1b`, the per-bone particles, the
+    skeleton `dynamic_prop` for 3.5 s) — a named seam at the burn arm; nothing reads it.
+  - **Pedestrian** — no think at all, `SOLID_NONE` (S4 item e). **V4c lane C2, item 9, now**, with
+    one addition: the port's `Think` runs `SUB_PVSRemove` on any committed death whatever the
+    think name (`ElysiumNpc.cpp:645`), so wiring slot 301 alone changes nothing — the cleared think
+    must win there (`ElysiumNpc.cpp` joins C2's files for that test only). Record:
+    `corpse_pedestrian_stays` — a hub pedestrian by `from_map`, the player turned away; still
+    present at +25 s.
+  - **Fade** — see J14.1: implemented now in C2. Record: `corpse_fades` — a child of the tutorial's
+    `stealth_victim_maker` by `from_map`; present at +13 s, gone by +14.5 s, watched.
+  - If the arena has no event kind for an entity's removal, A0's harness adds one (`removed`); the
+    fallback is H19's `elysium_entity_get` answering none.
+- **Cost.** Four small records and one harness kind; C2 grows by the fade (J14.1); D gains two
+  lines of contract. No extra build.
+
+### J14. Plan-shape changes found by the reads
+
+1. **Fade corpses are on both witness maps — a new game bug in landed work; implement now, V4c
+   lane C2.** *(verified in the manifest, the docs and the port)* 25 of the 62 makers
+   (`Flag_InfChild 1` on 22, `Flag_Fade 1` on 3) set `m_bFade`, and `MakeNPC 0x1034b7b0` then
+   gives the child spawnflags `0x204`; the tutorial's stealth victim and guard are two of them.
+   `Event_Killed` calls `SUB_StartFadeOut 0x102695d0` after slot 301 for such a body; the port's
+   `StartFadeOut` is a counted seam reached only from `TASK_DIE`. **Against:** it is a lifecycle
+   body in a lane already carrying five items. **Ruling:** now — `verbs_stealth_kill` kills
+   exactly such a child, and J13's fourth clock cannot be tested without it. C2 ports the call in
+   the port's `Event_Killed` (after `CreateCorpse`), `SUB_StartFadeOut` and `SUB_FadeOut
+   0x10269960` (−7 alpha per 0.1 s, then `SUB_Remove` after 0.2 s), and checks that the maker
+   passes `0x204`; if it does not, that one line is pulled from R6 into C2. A Kindred child both
+   burns (look and sound at death) and fades (removal at about +13.8 s, not +10 s): the later
+   think wins. Cost S. Proof: `corpse_fades`.
+2. **`NO_PRIMARY_AMMO` cannot rise from firing** (J12). `SCHED_TROIKA_TAKE_COVER_NO_AMMO` drops
+   out of V4o's list of live `0x400` writers; V5b loses any "empties the gun, then reloads"
+   expectation.
+3. **Who can run-and-gun** (S4 item d): nine placed rows on the tutorial, none on the hub with a
+   ranged primary. V8's hub clause cannot witness the overlay; `cover_move_shoot` and the tutorial
+   are the proofs. No order change.
+4. **The melee band is settled and uncited in the port.** Constants 0.7 / 0.5 / 1.2 / 256.0 /
+   0.25; the far word is `9` beyond `max(1.2 × reach, 256)` and `0x60` between. No line under
+   `Private/Substrate` cites `0x103ea7e0`. **V5a-1** (it rewrites the attack gather) states which
+   port body stands for the melee weapon's band and ports it whole if none does; V11's
+   `chase_melee` expectations (`0xcb` / `0xd2` on `9` or `0x60`) depend on it.
+5. **V11 item 11** is answerable from data: the three tables are the inventory sections (Melee,
+   Ranged, Thrown, Hidden; 32 slots each). The seam stays only if the port's inventory has no
+   section order; V11-1 reports which.
+6. **V4b B1** takes the turn script's two helpers from S4 f.1 (`UTIL_ApproachAngle(target, value,
+   speed)`; the 0.01 s / 0.8 insert rule of `0x10262c20`).
+7. **Still open, each with its owner** (S4 f.2): slot 331's walk (V11-1 reads the doc section
+   first); the status that doubles the attack rate (O3: a seam answering false); the section
+   order file (V11-1).
+
+### Briefs to amend (the coordinator, before the lanes start)
+
+- **C1**: item 5 is closed, not pending — the body on the `SequenceBounds` seam, no pipeline, no
+  import (J2b). **C integrator**: the body-data import is struck; four corpse records (J13).
+- **C2**: the fade and the maker's `0x204` (J14.1); item 9 with the `Think` gate, `ElysiumNpc.cpp`
+  added for it (J13).
+- **D**: the contract row becomes four removal clocks; survive a +10 s removal; the burn sound;
+  `BurnModel`'s look filed to 0014 (J13).
+- **O3**: no spend and no refusal on the NPC's clip, equip gives `max(Default_Size, 1)`, the
+  doubled-rate seam; record `ranged_sustained_fire` (J12). **`v4o/README.md`**: two live `0x400`
+  writers, not three; the nine tutorial rows (J14.2, J14.3).
+- **V11-1**: `0x102a11d0` is yours, with its files and the record `melee_ally_in_the_way` (J10);
+  item 11 from the inventory sections; slot 331's doc read before `0x51` (J14.5, J14.7).
+- **V5a-1**: the melee band's body and constants (J14.4). **V5b**: the reload finish as read; no
+  empty-gun reload record (J12).
+- **B1**: the turn script's helpers (J14.6).
+- **A0 / harness**: the `removed` event kind if absent (J13).
+- **`spec.md`**: the four species rows on the "on demand" line (J11); the bbox import and the
+  feed-box read filed with the acquire cone's owner (J2b).

@@ -58,6 +58,26 @@ non-players only at `D_HT`/`D_FR`; rejected by `DAT_10924fba` (`npc_ignore_sense
 total, for every VtMB humanoid. Player 0.5; `CNPC_Crow` −1.0; `CNPC_VMingXiao`/`VTzimisce` −0.5.
 UNRECOVERED: the body-offset term inside `0x103264d0` (register-garbled decompile).
 
+**The base cone's three inputs, per class (read 2026-10-04, spec 0002 V4r packet R2).**
+`0x10326750` passes `FinViewCone3dNew` the candidate's slot 192 point, **the observer's**
+`m_flFieldOfView` (`+0x1574`) and the candidate's slot 29 scalar:
+
+- Slot 192 (`+0x300`) is `0x10027160` on the player and on every NPC alike: the collision box's
+  centre, `mins + (maxs - mins) × 0.5` (`+0x274..+0x288`), carried to world space (rotated through
+  the collision's angles when the box is not axis-aligned, else added to the origin). Not the eyes.
+- Slot 29 (`+0x74`): `CAI_BaseNPCTroika` → `0x101aa630`, `m_flStealthVisionCone` at `+0x63c8`;
+  `CHL2_Player` → `0x1034f390`, `+0x1c74`; everything else the `CBaseEntity` body `0x10026630`. The
+  NPC's word has **no writer in the image** — the getter is its only code reference — so an NPC
+  candidate hands the cone 0 (*inferred* from the zeroed allocation; the datamap could still carry a
+  key).
+- `m_flFieldOfView` writers, all at spawn: `CBasePlayer::Spawn` `0x1016d260` **0.5**;
+  `CAI_BaseNPCTroika::Spawn` `0x10298d30` and `CNPC_VCamera::Spawn` `0x10368b70` 0.2;
+  `CNPC_Bullseye` 0.5; `CNPC_Crow` −1.0; `CNPC_VMingXiao`, `CNPC_VTzimisce` −0.5; `CNPC_VWerewolf`
+  a computed value in `NPCInit` `0x103caef0`.
+
+So `GatherEnemyConditions`' question to a player enemy (`0x1027106c`) is the base body on the
+player: the NPC's box centre against the player's 0.5 cone, bump 0.
+
 **The Troika cone override `0x102b4540` (slot 363), walked.** Every sight admission and the
 sound sweep's `SEE_SOUND_SOURCE` stranger arm dispatch the cone test virtually, so on a VtMB NPC
 the function that actually runs is this override, not the base:

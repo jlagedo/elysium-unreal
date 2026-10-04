@@ -149,10 +149,16 @@ expects `0xa4` because the stub fired. Each lane lists what it deleted.
 
 ## 7. Risks, unrecovered, for the judge
 
-- **The melee weapon's band `0x103ea7e0` is unread** and reads per-sequence attack data (seqdesc
+- ~~**The melee weapon's band `0x103ea7e0` is unread** and reads per-sequence attack data (seqdesc
   `+0x2bc..+0x2d0`) the bake may not carry. Lane 1 keeps the port's stand-in numbers in retail's
   position and records the divergence; a reading packet, then **the judge** (pipeline / re-bake?)
-  before V4c or V11's close. The records' "slot 555 `0x1026d9a0`, d <= 64" text is wrong for a
+  before V4c or V11's close.~~ *(amended after S2 item 4, S4 item b and the judge's second
+  sitting J14.4, 2026-10-04.)* **Read whole; the judge item is withdrawn.** Every input is
+  sequence data the bake already carries (`weight`, `swings`, `LowReachCm`, `ReachCm`,
+  `Envelopes`): no pipeline change, no re-bake. Constants 0.7 / 0.5 / 1.2 / 256.0 / 0.25; the
+  far word is `9` beyond `max(1.2 × reach, 256)` and `0x60` between. **Lane V5a-1 states which
+  port body stands for it and ports it whole** (`brief-V5a-1.md` item 4); V11's `chase_melee`
+  depends on it. The records' "slot 555 `0x1026d9a0`, d <= 64" text is wrong for a
   weapon-armed NPC (it is the innate arm, `caps & 0x80000`).
 - **Verdicts will move.** With the top clear, CAN_* and 0x2f are rebuilt every gather, and with a
   real wait every gunman fires slower. `cover`, `cover_armed`, `control_sequence` and the map
@@ -161,9 +167,20 @@ expects `0xa4` because the stub fired. Each lane lists what it deleted.
   `m_flNextAttack` has no writer in the port (named at its declaration): unchanged.
 - **Slot 562's two muzzle traces** stay stood in by the occlusion latch (P3): a named, existing
   divergence, not adopted anew.
-- **`+0x260` = `Attack_Rate` and the three key offsets are inferred** from the item text's comment
-  and the client parser; the server parser is unread. If coder 2's read of `client.dll 0x101a3eb0`
-  contradicts it, it stops and reports.
+- ~~**`+0x260` = `Attack_Rate` and the three key offsets are inferred** from the item text's
+  comment and the client parser; the server parser is unread. If coder 2's read of `client.dll
+  0x101a3eb0` contradicts it, it stops and reports.~~ *(amended after S2 item 3.)* **Verified in
+  both parsers** (server `0x10259230`, client `0x101a3eb0`, identical): the mapping stands, no
+  stop. Defaults: `Attack_Rate` **1.0** (the port parses 0.0 — an old bug, fixed in V5a-2), Min
+  `2 × Attack_Rate`, Max `3 × Attack_Rate`, Base_Range 120.0. The reader is `0x102c5730` →
+  `0x102c5570`.
+- *(J12.)* **No "empties the gun, then reloads" expectation, here or in V5b**: retail never
+  lowers an NPC's clip (`../v4/packets-S4.md` item a), so `NO_PRIMARY_AMMO 0x40` cannot rise from
+  firing. **V5b**: the reload finish as read — `TASK_RELOAD` at activity finished: `m_bInReload =
+  1`, weapon slot 322 `0x10255050` (single-round weapons: player only; bulk, slot 323
+  `0x102552c0`: `clip += min(Size − clip, owner's reserve)`, reserve untouched, both next-attack
+  words `= curtime`), clear `0x40` / `0x41`; `WeaponFinishReload` stays a seam until then. A
+  record that expects a reload after emptying a gun is a record error.
 - **`UpdateBurstShootPause 0x102c5500`'s words** (`ActiveWeaponBurstPauseWords`,
   `ElysiumNpcConditions10.cpp:463`) are the same `+0x264` / `+0x268` through `0x102c5780` /
   `0x102c57c0`; still a seam answering 0 / 0. Not in V5a (no record observes it): V5.

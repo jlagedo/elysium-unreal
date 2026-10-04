@@ -2683,8 +2683,51 @@ is `0xb9` (retail returns `EAX & 0xffffff00`, i.e. false), answers true on `m_bF
 is `!(GetState() == 4 && m_Activity != 2)` — only a `NPC_STATE_SCRIPT` body on some other activity
 gives its activity up.
 
+**`RunAnimation`'s idle re-pick — `0x1026c540`** _(read 2026-10-04, spec 0002 V4r packet R2)._
+`PostRun` (`0x1026c7c0`) opens with it. In listing order: slot 250 `StudioFrameAdvance(0)`
+(`CBaseAnimatingOverlay` `0x10098bb0`: the base `0x1008f120`, then the four layers), whose return is
+the interval `PostRun` forwards to slot 258 and `Weapon_FrameUpdate`; `DAT_1092053c & 2` (a debug
+flag) with no navigator goal (`0x102ee6a0(m_pNavigator)`) zeroes that interval; slot `+0x804`
+`CapabilitiesGet() & 0x20000000` → slot `+0x868` (`AimGun`); then the pick, gated on
+`m_NPCState (+0x5cc0) != 4`, `!= 7`, **`m_Activity (+0xfec) == 1`** (`ACT_IDLE`; the listing reads
+`param_1[0x3fb]`, the current activity, not `m_IdealActivity +0xff0`) and slot 251
+`IsActivityFinished`:
+
+```c
+seq = m_bSequenceLoops /*+0x65d*/ ? SelectWeightedSequence(m_TranslatedActivity /*+0xff4*/)   // 0x1008dc40
+                                  : SelectHeaviestSequence(m_TranslatedActivity);             // 0x1008dd30
+if (seq != -1) 0x10260a50(this, seq);          // the sequence commit ForcePreTranslated… also uses
+```
+
+The argument is the word at `+0xff4` (`param_1[0x3fd]`), the TRANSLATED activity, not `m_Activity`
+`+0xfec`. A looping idle that wrapped re-draws on the weights; a one-shot idle that ended takes the
+heaviest. The draw is `0x10427fc0` on the engine's shared uniform stream (`*0x1070b244` slot 2,
+`RandomInt(0, total-1)`; the roll is also left in `DAT_106ac398`).
+
+**Which finish value a task reads.** `m_bSequenceFinished` (`+0x65c`) has three writers on an NPC:
+`ResetSequenceInfo 0x10090950` clears it; `StudioFrameAdvance 0x1008f120` only ever SETS it (when the
+advanced cycle leaves `[0,1)`); the dispatcher `0x10091880` clears it and sets it again when
+`m_flCycle + 0.1 × cycleRate × m_flPlaybackRate >= 1.0` (`animation_events.md` § "The server
+dispatcher"). One think runs tasks first (`RunAI`), then `PostRun` (advance, then dispatch), so the
+word a `RunTask` arm reads through slot 251 is **the dispatcher's look-ahead value left by the
+previous think's `PostRun`** — true one look-ahead (0.1 s of clip time) before the pose reaches the
+end — unless a sequence change reset it since. An arm that calls `AutoMovement` (`0x10280a50`) first
+runs `StudioFrameAdvance` itself before its own finish test; that can only add a true (the cycle
+really crossed 1.0 this think), never take the look-ahead's true away.
+
+**`AutoMovement`'s `StudioFrameAdvance` is retail, and the second advance of a think is inert.**
+`0x10280a50` calls slot 250 with no argument gate before anything else. `0x1008f120` turns a zero
+interval into 0.1 and computes `dt = (interval + curtime) - m_flAnimTime`; it advances only when
+`dt > *0x1044f020`, and then stamps `m_flAnimTime += dt`. So the first caller in a tick (a task's
+`AutoMovement`, or the Troika think's own under `m_bfAINPCFlags & 0x4000`) does the advance and
+`RunAnimation`'s call later in the same think finds `dt = 0` and returns without touching the cycle,
+the finish flag or the two speed words.
+
 **Unrecovered:** what activity `2` is in `0x10272790`'s test, and the retail names behind schedule
-`0xb9` and activity `0x61` — the registry numbers are the only handles the corpus offers.
+`0xb9` and activity `0x61` — the registry numbers are the only handles the corpus offers. The value
+of the float at `0x1044f020` (`StudioFrameAdvance`'s minimum `dt`; stock Source uses 0.001) and what
+`StudioFrameAdvance` returns on that early-out path (the interval `PostRun` then forwards) were not
+read from the listing.
 
 ## `IdleSequenceGate` and the species animation odds and ends — `0x102b8a10`, `0x10398800`, `0x1032fb80`, `0x10279060`, `0x102b51e0`, `0x102b5220`, `0x102b5260`, `0x103a49c0`, `0x103a4a60`, `0x1025e4e0`, `0x10368ec0`
 
@@ -3009,7 +3052,51 @@ between that heading and the owner's own yaw (`UTIL_AngleDiff`, `0x1013d580`) is
 either to the owning NPC's `m_flDesiredMoveYaw` (`+0x63ec`) when `owner->field_0x98` resolves, or
 through `0x102e27d0` as the `"move_yaw"` pose parameter when it does not.
 
-**Unrecovered:** `_DAT_10450564` (= **100.0f**, float32; read 2026-09-21, `rdata-cells.md`), `_DAT_10450aa4` (= **0.0099999998f**, float32; read 2026-09-21, `rdata-cells.md`), `_DAT_1044e658` (= **0.01**, float64; read 2026-09-21, `rdata-cells.md`) and `_DAT_1044ffdc` (= **0.0054931640625f**, float32; read 2026-09-21, `rdata-cells.md`); what slots
+_Slots 15 and 18 re-read from the listing 2026-10-04 (0002 V4r, packet R1)._ Slot 15 also **returns
+a float**: the total interest `1 - prod(1 - w)` (`102e22de`..`102e22f5`, loaded at `102e2318`). An
+**empty queue answers the zero vector and 0.0**. Slot 18 is the SDK's `MoveFacing`: `flMoveYaw =
+UTIL_VecToYaw(move+0x0c)`; on the `move_yaw` arm the heading is `normalize(facingDir * w +
+move.facing (move+0x18) * (1 - w))` (`102e1a83`..`102e1ae6`) — so with an empty queue it is
+`move.facing` whole — and the value written negated is `UTIL_AngleDiff(flMoveYaw, GetAngles().y)`
+(`102e1b4c`, `FCHS 102e1b5d`): the MOVE direction against the body's yaw, not the heading. On the
+no-`move_yaw` arm the ideal yaw is `AngleMod(flMoveYaw)`; `0x102e2790`'s answer is discarded.
+Its one caller is `CAI_HumanoidMotor` vfunc 19 `0x10264680` (`MoveGroundExecute`): it rebuilds the
+move script (`0x10262590`: velocity `0x102630b0`, turn `0x102627e0`), reads the speed and the yaw
+off it at `m_flMoveInterval` (`owner+0x6024`/`+0x6030` and `+0x6038`/`+0x6044`, stride `0x38`;
+with one entry or none, `|m_vecVelocity|` and `GetLocalAngles().y`), copies the move, sets the
+copy's `facing` to `UTIL_YawToVector(yaw)` (`0x101d2f40`) and calls slot 18 on the copy
+(`1026482f`), then rewrites `m_flGroundSpeed +0x654 = GetSequenceGroundSpeed(m_nSequence)`
+(`10264841`/`10264846`) and steps `(|m_vecVelocity| + speed) * interval * 0.5`. The turn script is
+the waypoint-to-waypoint direction, rate-limited: a walker with no facing target faces its path.
+`m_flDesiredMoveYaw`'s one reader is `0x102bf310` (`SetPoseParameter("move_yaw", +0x63ec, 0)`).
+
+_The velocity script `0x102630b0`, pass by pass (read 2026-10-04, 0002 V4 packet S1)._ Rebuilt on
+every `MoveGroundExecute` (`0x10262590` zeroes both script counts first). Entry (`0x38` bytes):
+`+0x00` time, `+0x04` elapsed, `+0x08` dist, `+0x0c` max velocity, `+0x10` yaw, `+0x20` waypoint,
+`+0x2c` location. `ideal` = slot 248 (50.0 on 0); `accel = ideal + 50.0` (double `0x104493c0`).
+Entry 0 = `GetAbsOrigin`, the local yaw, `|m_vecVelocity|`. Per path waypoint (`nav+0x30 → +0x24`,
+next `+0x30`): no next → speed **0**; else `ideal × clamp(dot(next − this, this − previous entry)
++ 0.2, 0, 1)` on z-flattened unit vectors (`0.2` the double `0x10449198`). (1) `dist[i]` = 3-D
+length; `< 0.01` and `i != 0` → drop entry `i`. (2) forward: `dv = v[i+1] − v[i] > 0`, `t = dv /
+accel`, `v[i]·t + ½·accel·t² > dist[i]` and `SolveQuadratic(½·accel, v[i], −dist[i])` (`0x1013a6f0`)
+→ `v[i+1] = v[i] + r1·accel`. (3) backward, `i = n−1..1`: `dv = v[i] − v[i−1] > 0` (the same sign,
+not the SDK's `< 0`), the same test against `dist[i]` → `v[i−1] = v[i] − r1·accel`; it does not
+clamp a deceleration. (4) per segment: `t1 = (ideal − v[i]) / accel`, `d1 = v[i]·t1 + ½·accel·t1²`,
+`t2`, `d2` likewise from `v[i+1]`; `d1 + d2 < dist[i]` → insert `lerp(d1 / dist)` and
+`lerp((dist − d2) / dist)` at speed `ideal`, unguarded; else when `|DeltaV 0x102e1470| < accel`:
+`r = (accel + v[i]) / (accel + v[i+1])`, `SolveQuadratic((½·r² + ½)·accel, r·v[i+1] + v[i],
+−dist[i])` → `t`, `peak = v[i] + t·accel`, and `peak < ideal` inserts one point at
+`dA / (dA + dB)` (`dA = v[i]·t + ½·accel·t²`, `dB = t·r·v[i+1] + ½·accel·(t·r)²`) at speed `peak`.
+(5) `elapsed[0] = 0`; `time[i] = dist[i] / (½·(v[i] + v[i+1]))`, or `1.0` when both are 0; `dist`
+or `time` `< 0.01` drops entry `i+1`; `elapsed[i+1] = elapsed[i] + time[i]`. The reader
+(`0x102646c0`): the first `i >= 1` with `elapsed[i] > m_flMoveInterval`; `a = interval /
+elapsed[i]`; `speed = (1 − a)·v[i−1] + a·v[i]`; none → the current speed. The step is clamped to
+`move.maxDist` (`0x10264916`), which is what lands the body on the waypoint. The turn script
+`0x102627e0`: an entry per waypoint whose in / out yaws differ by more than `0.1`, at
+`0x1013d450(out, in, |diff| × 0.8)` (double `0x104491a8`), then a backward limit of
+`time[i−1] × 150.0` degrees (float `0x10457f60`), then `0x10262c20`.
+
+**Unrecovered:** `0x10262c20`, `0x1013d450`'s argument order; `_DAT_10450564` (= **100.0f**, float32; read 2026-09-21, `rdata-cells.md`), `_DAT_10450aa4` (= **0.0099999998f**, float32; read 2026-09-21, `rdata-cells.md`), `_DAT_1044e658` (= **0.01**, float64; read 2026-09-21, `rdata-cells.md`) and `_DAT_1044ffdc` (= **0.0054931640625f**, float32; read 2026-09-21, `rdata-cells.md`); what slots
 220, 208 (`+0x340`), 62 (`+0xf8`) and 526 (`+0x838`) are; and the facing-queue entry's own layout
 beyond a target and a weight.
 

@@ -17,7 +17,48 @@ rests.
 
 | from the game (`.phy`) | free for Unreal | retail contract, unchanged |
 |---|---|---|
-| which bones get a body; the convex hull per solid; the mass per solid; one joint per `ragdollconstraint` with its per-axis min/max | damping, solver iterations, sleep thresholds, the collision profile, the impulse scale, how the body looks as it falls and rests | `OnDeath` on the kill tick; the `corpse` event; the corpse is the same NPC entity, frozen at the death spot, with its use / feed / loot anchor there; its removal (`SUB_PVSRemove`, re-checked every 10 s while a player sees it); whether the model has a ragdoll at all |
+| which bones get a body; the convex hull per solid; the mass per solid; one joint per `ragdollconstraint` with its per-axis min/max | damping, solver iterations, sleep thresholds, the collision profile, the impulse scale, how the body looks as it falls and rests | `OnDeath` on the kill tick; the `corpse` event; the corpse is the same NPC entity, frozen at the death spot, with its use / feed / loot anchor there; its removal — **four clocks, not one** (§ "The removal, per body" below): an ordinary mortal, unseen, at a 10 s poll (`SUB_PVSRemove`); Kindred or `Has_Burning_Death` at +10 s, seen or not; a fade corpse at about +13.8 s, seen or not; a pedestrian never; whether the model has a ragdoll at all |
+
+## The removal, per body (settling packets S1 and S4, the judge's second sitting J13 / J14.1, 2026-10-04)
+
+`CreateCorpse 0x1032c0e0`'s tail, and the two bodies that run after it and replace the think
+again (`packets-S1.md` item 1, `packets-S4.md` items e and f.1). **All four clocks are state — an
+entity that is gone answers no name lookup and fires no output — so none of them is V4d's to
+modernize.** The thinks are V4c lane C2's (the pedestrian's wiring and `Think` gate, the fade);
+**yours is the body that must survive them**: the drawn ragdoll's lifetime follows the entity's.
+The records are `corpse_removed_unseen`, `corpse_kindred_burns`, `corpse_pedestrian_stays`,
+`corpse_fades` (written red by the seam agent A0, turned by the C integrator); your integrator
+re-runs all four with the `.phy`-built asset on the body.
+
+| body | think after death | what removes the corpse |
+|---|---|---|
+| **ordinary mortal** (`burn` false) | `SUB_PVSRemove 0x102696f0` (thunk `0x10009c9b`) at `curtime + 10.0` (`0x1032c404`) | re-armed every 10 s while **any player passes all three**: the player's view cone on the corpse (slot 363), the PVS test (`0x101d1a90`), and `FVisible(corpse, mask 0x2804091)` (slot 201); no player passes → `UTIL_Remove` |
+| **Kindred, or `Has_Burning_Death`** (`burn = 0x10207df0`: `template[+0x98]`, or `IsKindred && !template[+0x9d] Disallow_Kindred_Death`) — a `CNPC_VVampire` on both witness maps (3 / 16) | `SUB_Remove 0x101c0b10` at `curtime + 10.0` (`0x1032c32f`), **unconditionally** | `BurnModel 0x10090580` first: `m_nRenderFX = 0x1b`, effects `\| 0xa0`, `m_flEffectStartTime = curtime`, one `DMGFX_vampire_death` particle per hitbox bone, a `dynamic_prop` of the skeleton (`models/character/npc/common/skel…`, male or female) following the corpse (`SetAimEnt`, move type `0xb`) and itself removed at `curtime + 0.5 + 3.0`; `EmitSound("character/vampire burning death.wav")` at 0.8. **The ragdoll burns and goes at +10 s, seen or not** |
+| **pedestrian** (`CNPC_VPedestrian::CreateCorpse 0x103a38c0`; 28 / 3 on the witness maps) | **none**: after the base, `ThinkSet(this, NULL)` and `SetSolid(SOLID_NONE)` | **nothing: this chain never removes it.** (Wired to slot 301 by V4c lane C2; until C2 lands the port gives a pedestrian `SUB_PVSRemove`.) |
+| **fade corpse** (slot 552 `ShouldFadeOnDeath`, spawnflag bit 9; `Event_Killed` step 14, after `CreateCorpse`) | `SUB_FadeOut 0x100152b2` at `curtime + 10.0` (`SUB_StartFadeOut 0x102695d0`; the cell `0x1044fac0` is the double 10.0, not 0.0) | render mode 2 / alpha 255 when the mode was 0, `AddSolidFlags(4)`, zero angular velocity; then `SUB_FadeOut` (thunk `0x100152b2` → **`0x10269960`**): alpha `> 7` → `−= 7`, next think +0.1 s; else alpha 0, +0.2 s, `ThinkSet(SUB_Remove)`. From 255: 36 steps, then 0, then removal — **gone about 13.8 s after the death, seen or not**. **25 of the 62 makers on the two maps make such children** (`Flag_InfChild` 22, `Flag_Fade` 3; the tutorial's `stealth_victim_maker` and `guard_maker` among them): `verbs_stealth_kill`'s victim is one. A Kindred child both burns (look and sound at death) and fades: the later think wins, removal at about +13.8 s. Ported by C2 (J14.1) |
+| `MiscFlag 0x80000` `No_Ragdoll_Death` | the NPC: `SUB_Remove` at +0.5 s, hidden; the static corpse copy then takes the row above that fits (`burn` or not) | not in V4d (the static-corpse arms) |
+
+What V4d does with it (J13 — two lines of contract added to Step 1):
+
+- **Survive the removal.** The fall is the same for all four bodies; the ragdoll's removal is
+  the entity's. **A body that is still simulating when its entity is removed — a Kindred at
+  +10 s, a fade corpse at about +13.8 s, an unseen mortal at a 10 s poll — must be torn down
+  cleanly: no ensure, no crash, no drawn body left lying.** The coder finds by Grep where the
+  drawn mesh is released on the entity's removal and makes that path stop the simulation and
+  release the physics state first; the first test of the ragdoll-true branch (Step 1 item 5)
+  includes "removed while simulating". A pedestrian's body is never removed: it must simply
+  keep lying (and may sleep).
+- **The burning-death sound is emitted** — one call at the burn arm:
+  `EmitSound("character/vampire burning death.wav")` at attenuation 0.8, volume 1.0, pitch 100
+  (`CreateCorpse`'s `burn` tail). The burn arm's think is ported
+  (`ElysiumCombatCharacter.cpp:~1518-1527`); check by Grep that the sound is emitted there, and
+  if it is not, **write the exact line in your report** — that file is C2's in V4c, so it is
+  yours to edit only if V4c has landed (say which).
+- **Filed to 0014, not yours: `BurnModel`'s look** (`0x10090580`: render fx `0x1b`, the
+  per-bone `DMGFX_vampire_death` particles, the skeleton `dynamic_prop` for 3.5 s). A named
+  seam at the burn arm ("`BurnModel 0x10090580`'s look; 0014"); nothing the bytecode reads
+  depends on it. The fade's alpha on the drawn body is likewise the visual side's: if C2 left
+  a visual seam for it, the ragdoll simply stays opaque until removed — say so.
 
 ## What retail does (read from the listing, 2026-10-04)
 
@@ -28,11 +69,16 @@ rests.
 the player → `SpawnStaticCorpse`; `MiscFlag 0x80000` → `SpawnStaticCorpse` (an unsimulated copy of
 the pose), `Hide`, the NPC removed at +0.5 s; otherwise `BecomeClientRagdoll(force, bone, 0)` with
 `bone` the hit bone or `LookupBone("Bip01 Spine2")`, its return discarded (`0x1032c2a1`). Tail: the
-corpse (slot 137, `this`) gets `ThinkSet(SUB_PVSRemove)` at +10 s (`0x1032c404`).
+corpse (slot 137, `this`) gets `ThinkSet(SUB_PVSRemove)` at +10 s (`0x1032c404`) **when it is an
+ordinary mortal; a Kindred, a pedestrian and a fade corpse differ — § "The removal, per body"**.
+A feed death (`Die 0x103392c0` from `FeedInterrupt 0x1033a9e0` / `DecBloodPool 0x10338df0`) and an
+explosion death (`DMG_BLAST 0x40`) are this same ordinary chain (`packets-S1.md` item 4).
 `BecomeClientRagdoll 0x10090180` → `TriggerClientRagdoll 0x1008b800` latches `m_vecForce` /
 `m_nForceBone` (only for |F| > 0 and bone > 0), sets `m_nRenderFX = 0x17`, makes the NPC not solid,
-move type none, zero bounds, the think cleared. The server simulates nothing; the client builds
-the ragdoll from the `.phy`.
+move type none, zero bounds, the think cleared (then replaced by `CreateCorpse`'s tail). **A model
+with no rig**: `BecomeClientRagdoll` zeroes the collision bounds and returns false — **not** made
+non-solid, no move type change, no think change of its own; the think is still replaced by
+`CreateCorpse`'s tail. The server simulates nothing; the client builds the ragdoll from the `.phy`.
 
 **Corrections to README § 1 and § 7 K5:** the `ACT_DIERAGDOLL` seed runs only when the bone is −1
 (`0x1009021a`), and `CreateCorpse` always passes a real bone: an ordinary corpse ragdolls from the
@@ -100,14 +146,27 @@ Not in V4d (0014 keeps them, no rework): the death impulse (the arena's scalar `
 zero force in retail, `docs/vtmb/` `combat-and-damage.md:1832-1835`, so step 2's records need
 none), `prop_ragdoll`, joint friction and surface properties, the full-corpus rollout (a reuse run,
 ~12–18 min inferred), the calibrations (0014/1–2: a visual check replaces them), the static-corpse
-arms (`MiscFlag 0x80000`, the player), feed and explosion deaths (unread).
+arms (`MiscFlag 0x80000`, the player), the burn's look (`BurnModel 0x10090580`: a named seam,
+filed to 0014 by J13), the thinks themselves (the pedestrian's and the fade are V4c lane C2's). Feed and explosion deaths are **read** (`packets-S1.md` item
+4): both are the ordinary chain — a feed death has no hit bone (→ `Bip01 Spine2`) and its death
+sound is silenced while the grapple partner is live; an explosion's packet is `DMG_BLAST`, never
+the gib bit `0x2000` — so nothing is added to V4d for them. *Unrecovered: whether any shipped
+damage source sets bit `0x2000` (the gib route, slot 402 `0x102658f0`); no V4d record depends on
+it.*
 
 ## Step 2 — the integrator
 
 One build; two or three scoped bakes (minutes each); `damage_lethal_death` and `verbs_stealth_kill`
 with the `corpse_on_floor` probe (the pelvis within 24 cm of the floor and at rest by the record's
 deadline) green; the retail contract unchanged in the traces (`OnDeath` on the kill tick, `corpse`,
-the entity at the death spot, no `move` / `task` / `schedule` after death); the default and arm
+the entity at the death spot, no `move` / `task` / `schedule` after death); **the four removal
+clocks with the ragdoll on the body** (§ "The removal, per body"): run `corpse_removed_unseen`,
+`corpse_kindred_burns`, `corpse_pedestrian_stays`, `corpse_fades` beside the two death records —
+each keeps the verdict V4c left it, **and the log shows no ensure when a simulating body is
+removed** (the Kindred at +10 s, the fade at about +13.8 s); `verbs_stealth_kill`'s victim is a
+fade child: its `corpse_on_floor` probe must be read before about +13.8 s after the death or
+the record's timing is corrected with that source; if V4c has not landed, say which of the four
+are red on C2's cause; the default and arm
 tiers green; the full suite with every other verdict unchanged. A visual check in the lab
 (`uv run elysium gr --arena`, `elysium.gr_scenario damage_lethal_death`): knees and elbows bend the
 right way, nothing folds or explodes — a screenshot in the report. A sign or frame mistake is fixed
@@ -148,10 +207,12 @@ deterministic. Time to rest is about 2 s after the handoff.
   the line where the profile is set).
 - **Item 4's open read is settled.** `CreateCorpse 0x1032c0e0` replaces the think at `0x1032c404`
   on every ordinary arm, so **an ordinary kill never reaches `SCHED_DIE`, rig or no rig** (the
-  state-7 fork `0x1028a8ec` is reached only by other state-7 writers; lane C2 walks the arms and
-  corrects `lifecycle.md`, J8). A model with no rig **keeps its last pose** — *inferred* (retail's
-  client has no ragdoll to build; nothing server-side poses it). Write item 4 on that: no read of
-  `SelectSchedule` is needed first.
+  state-7 fork `0x1028a8ec` is reached only by other state-7 writers; **confirmed as written by
+  S1**, `packets-S1.md` items 1 and 3, which also rewrote `lifecycle.md`'s chain). A model with
+  no rig: `BecomeClientRagdoll` **zeroes the bounds, does not make it non-solid**, and the think
+  is replaced by `CreateCorpse`'s tail all the same; it **keeps animating its last sequence** —
+  *inferred* (nothing writes `m_flPlaybackRate`; retail's client has no ragdoll to build). Write
+  item 4 on that: no read of `SelectSchedule` is needed first.
 - **Item 2, an option the spike opened:** the asset can be set **per component**
   (`SetPhysicsAsset(Asset, /*bForceReInit*/ true)`) without re-saving the mesh package. The bake
   step may still attach it to the mesh as briefed; use the component path only if re-saving mesh

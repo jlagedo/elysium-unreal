@@ -89,6 +89,35 @@ Other properties worth stating:
   it has a **second writer in `StudioFrameAdvance`** using the non-look-ahead cycle, so the two can
   disagree within one tick.
 
+### Who calls the dispatcher, and where against the frame advance
+
+_Read 2026-10-04 (spec 0002 V4r, packet R2)._ Slot 258 (`+0x408`) has **five call sites in four
+functions** in the whole image (every `+0x408` dispatch in the decompilation; the `CSceneEntity`
+hits are another class's slot), and each one sits directly after that entity's own slot 250
+`StudioFrameAdvance(0)`:
+
+| entity | caller | think | order |
+|---|---|---|---|
+| every NPC | `CAI_BaseNPC::PostRun` `0x1026c7c0` | `NPCThink`, after `RunAI`'s tasks, before `PerformMovement` | `RunAnimation 0x1026c540` (the advance) → slot 258 `(interval, this)` → `Weapon_FrameUpdate` |
+| the player | `CBasePlayer::PostThink` `0x1016be10` (two sites: the live body, and the Protean beast-form model swap, which returns after its own triple) | `PostThink`, per player command, after `ItemPostFrame` and `SetAnimation` | slot 250 `(0)` → `0x101600a0(interval × m_flSpeedScale)` → slot 258 `(interval, this)` → slot 312 `UpdateCharacter(interval)` (`0x103246d0`, the melee sweep's caller) |
+| an NPC's active weapon | `CBaseCombatWeapon` slot 369 `0x1024efa0`, from `CBaseCombatCharacter::Weapon_FrameUpdate` `0x1032aa40`, whose only caller is `PostRun` | the wielder's `NPCThink` | the WEAPON's slot 250 `(0)`; when it finished and loops, `SelectWeightedSequence(m_Activity +0x8a8)` + `ResetSequenceInfo`; then the weapon's slot 258 with **the wielder as the handler**, so a world-model weapon clip's events reach the wielder's `HandleAnimEvent` |
+| `CCameraAnimated` | its think `0x10071840` | 10 Hz (`m_flNextThink = curtime + 0.1`) | slot 250 `(0)` → slot 258 `(interval, this)` → `m_bSequenceFinished` true ends the camera (`0x10071660`) |
+
+**No prop dispatches.** `CDynamicProp`'s think `0x10190850` calls slot 250 and reads
+`m_bSequenceFinished` / `m_bSequenceLoops` for its outputs, and never calls slot 258; neither does
+`0x1018e330` (`CActivityCopyProp`) nor any other prop think. A sub-5000 record on a prop's sequence
+is never delivered by the server, and a prop's finish flag is `StudioFrameAdvance`'s (the real
+cycle), not the look-ahead. The player does not call `Weapon_FrameUpdate` at all, so a player's
+world-model weapon is not advanced or dispatched by this path.
+
+Because the dispatcher re-derives `m_bSequenceFinished` from the look-ahead on every call, the three
+callers above that test the flag afterwards (an NPC task on its next think, the camera in the same
+think) see the finish **0.1 s of clip time early**; `npc-ai/shape.md` § "The activity commit" states
+what a task reads.
+
+`OnSequenceFinished` is a direct call (`0x10091b9a` → `0x10091c80`), not a virtual, made on the
+rising edge only (`0x10091b85`..`0x10091b96`: the flag now set and the entry value clear).
+
 ## Overlay layers dispatch their own timelines; autolayers never do
 
 `CBaseAnimatingOverlay::DispatchAnimEvents` (`0x10098c80`) runs the base sequence, then all four
@@ -96,6 +125,115 @@ layers through a per-layer body at `0x10098cd0` — same 76-byte scan, same `< 5
 window rule, but reading the **layer's own** `m_nSequence`, `m_flCycle`, `m_flPlaybackRate` and its
 **own `m_flLastEventCheck` at `layer + 0x2c`**. It does not clamp to 1.0 and does not call
 `OnSequenceFinished`. There is **no weight gate** — a layer at weight 0 still dispatches.
+
+The per-layer body, read 2026-10-04 (packet R2): the order is the base, then layers 0, 1, 2, 3 at a
+`0x30` stride from `m_AnimOverlay[0]` (`+0x734`). Per layer it zeroes `m_fSequenceFinished`
+(`layer+4`) and never sets it (the layer's finish is `CAnimationLayer::StudioFrameAdvance
+0x10098830`'s), writes no past-half word, stores `layer.m_flCycle + 0.1 × cycleRate ×
+layer.m_flPlaybackRate` at `layer+0x2c`, and stamps `eventtime` from the OWNER's `m_flAnimTime`
+(`+0x174`). There is no "layer in use" test either: an idle slot scans whatever sequence number it
+still holds, from a window that no longer moves.
+
+**Who pushes a layer on an NPC.** `AddGesture 0x100991b0` (direct callers: `0x10099250`,
+`RestartGesture` slot 273 `0x10099570`, `0x102e8560`, `0x10397930`) and `AddGestureSequence
+0x100990f0` / `0x10099140` (the scene entity, `0x10081510`):
+
+- **the move-and-shoot overlay** `0x102e8560`, run by `RunTaskOverlay 0x10289c90` on every
+  continuous-move task once `StartTaskOverlay 0x10288710` armed it (slot 575 `ShouldMoveAndShoot`:
+  an enemy, `m_bfAINPCFlags2 & 0x400`, a weapon with `+0x5a0 & 0x6000`, `CAP_MOVE_SHOOT`). With
+  `COND 0x4f` and the burst clock due it pushes `TranslateActivity(0x1a)` — the `*_attack_layer`
+  clip, which carries the 3031 — as a gesture, stamps `m_flLastAttackTime`, and
+  `Weapon_SetActivity(weapon, 0x19)`. **This is the one NPC shot that fires from a layer's
+  timeline** (through `0x10098cd0`), not the base sequence's. The same body pushes
+  `TranslateActivity(0x47)` / `(0x48)` on a 5-in-N roll under a cvar when `move_yaw` is off-axis.
+- `TASK 0xe4` ADD_GESTURE (`0x102a5046` → `0x10099250(act, 2.45, 0)`); the discipline hit applier
+  `0x101de660`; `CNPC_VMingXiao`'s tentacle sever `0x10397930`; choreographed scene gestures.
+
+A gunman standing still (`TASK_RANGE_ATTACK1`) pushes none: its 3031 is on the base sequence.
+
+**The move-and-shoot overlay, arm by arm** (read 2026-10-04 for story V4o; `CAI_MoveAndShootOverlay`
+is embedded at `+0x5cf4`: `m_pOuter +4`, `m_bMovingAndShooting +0x10`, `m_nMoveShots +0x14`,
+`m_flNextMoveShootTime +0x18`, `m_minBurst +0x1c`, `m_maxBurst +0x20`, `m_minPause +0x24`,
+`m_maxPause +0x28`, `m_initialDelay +0x2c`, zeroed by `0x1027c300`).
+
+- *Arm* — `StartTaskOverlay 0x10288710` (slot 445, every task start): slot 529 false → nothing;
+  slot 575 false → `0x102e8250` (`+0x18 = FLT_MAX`); else slot 419 `UpdateBurstShootPause`, then
+  `0x102e8270(pauseMin +0x5bbc, pauseMax +0x5bc0)`: state 4, no active weapon, or
+  `SelectHeaviestSequence(TranslateActivity(0x11))` / `(0x15)` below 0 → the disable; else
+  `m_minBurst` / `m_maxBurst` from the weapon data (`0x102517e0(weapon) +0x3a4` / `+0x3a8`), the
+  pause pair, `m_nMoveShots = RandomInt(min, max)`, `+0x18 = curtime + m_initialDelay`.
+- *Run* — `RunTaskOverlay 0x10289c90` (slot 529 true → `0x102e8560`), in this order:
+  1. `+0x18 == FLT_MAX` → return.
+  2. No enemy, or the enemy's slot 158 (`IsAlive`) false: slot 478 `BestEnemy`; none → slot 560
+     `ClearAttackConditions`; else `SetCondition(0x54)`, `SetEnemy`, `SetState(2)` (`0x1026e340`).
+  3. No enemy, or `IsGoalActive 0x102ee6a0` false → return.
+  4. `bCan = 0x102e83e0`: when the byte at NPC `+0x5ca4` is clear, slot 481 (`+0x784`) with the
+     enemy first; then `COND 0x4f` → true; else true only when none of `0x58`, `0x60`, `0x55`,
+     `0x48`, `0x40` holds. (`+0x5ca4` is `m_bConditionsGathered`, cleared by `RunAI 0x1026f110`
+     and set by `GatherConditions 0x1026ec30`; slot 481 is `CAI_BaseNPC::GatherEnemyConditions
+     0x10270b20` on every NPC class but `CNPC_Crow`: a think that has not gathered yet gathers
+     the enemy conditions, attack conditions included, before the overlay reads `0x4f`.)
+  5. `0x102e84a0(bCan)`: the navigator's movement activity (`0x102ee3f0`): can → `9 → 0x11`,
+     `0x13 → 0x15`; cannot → `0x11 → 9`, `0x15 → 0x13`; any other activity → return with nothing
+     written. On a swap, `+0x18 = max(+0x18, curtime + 0.3)` (the double at `0x1047b868`) and the
+     setter `0x102ee250`.
+  6. `!bCan`: if `m_bMovingAndShooting`, clear it and call slot 558 (`+0x8b8`, an empty body on
+     every class — the ledger's "no dispatch site" for 557 / 558 is wrong, this body is it). Return.
+  7. The `0x47` / `0x48` gesture arm: behind the object at `0x10923cf4` (its vfunc 1 false and its
+     int at `+0x2c` non-zero), with `|GetPoseParameter("move_yaw")|` above the double at
+     `0x1044e668`: `RandomInt(0, ftol((0x1049d910 − |yaw|) × 0x10449260)) < 5` →
+     `TranslateActivity(0x47)` and `(0x48)`, both found and neither playing (slot 270): the dot of
+     (goal position − slot 217 origin) with a body axis picks `0x48` (≤ 0) or `0x47`,
+     `AddGesture(act, 1)`. Settled 2026-10-04 (packet S3, read from the image): the object is the
+     ConVar **`debug_allow_mf_turn`**, default `"0"`, flags 0, help "If this is on, NPCs will turn
+     to look behind them periodically when they run for cover." (static constructor `0x1028c7b0`:
+     `PUSH help 0x105d81c8; PUSH 0; PUSH "0" 0x105399a0; PUSH name 0x105d81ac; MOV ECX,
+     0x10923cf0`; `0x10923cf4` is its parent pointer, the int value at `+0x2c`). The doubles:
+     `0x1044e668` = **90.0** (the arm needs `|move_yaw| > 90`, strict), `0x1049d910` = **190.0**,
+     `0x10449260` = **0.25**, so the draw is `RandomInt(0, ftol((190 − |yaw|) × 0.25)) < 5`; the
+     side test compares against the float `0.0` at `0x104454c4`. **Shipped, the gate is closed:
+     no gesture and no `RandomInt` draw is taken.** No loose cfg in the install sets the cvar.
+  8. `COND 0x4f` and `+0x18 <= curtime`: if not already `m_bMovingAndShooting`, slot 557 (`+0x8b4`,
+     `return 1` on every class) false → the tail. `m_bMovingAndShooting = 1`;
+     `act = TranslateActivity(0x1a)`; `--m_nMoveShots < 0` → `m_nMoveShots = RandomInt(minBurst,
+     maxBurst)`, `+0x18 = curtime + RandomFloat(minPause, maxPause)`, `m_bMovingAndShooting = 0`,
+     slot 558, the tail. Else (slot 270 true only prints "the attack layer … lasts longer than the
+     fire rate"): `m_flLastAttackTime = curtime`; `AddGesture(act, autokill 1)`;
+     `Weapon_SetActivity(slot 381 Weapon_TranslateActivity(0x19), 0)` (`0x1032a910` → the weapon's
+     `+0x548`); `+0x18 = curtime + weapon slot 332 (0x10254410, the fire rate) − 0.1`.
+  9. The tail: `0x10279bb0` (the enemy memory's last-known position, `0x102dfed0`) → slot 517
+     `AddFacingTarget(enemy, lkp, 1.0, 0.8, 0)`.
+- *The layer's life.* `AddGesture 0x100991b0` → slot 272 → slot 268 `SetLayer(i, −1, seq, autokill)`
+  → `m_nActivity (+0x24) = act`. `CBaseAnimatingOverlay::StudioFrameAdvance 0x10098bb0` (slot 250)
+  runs the base `0x1008f120` and hands **its returned interval** to
+  `CAnimationLayer::StudioFrameAdvance 0x10098830` for every layer whose weight is not 0 (so a
+  second advance in one think moves no layer): `cycle += cycleRate(seq) × playbackRate × dt`;
+  below 0 → 0 (looping: minus its integer part); at or above 1 → `m_fSequenceFinished = 1` and 1.0
+  (looping: minus its integer part); `weight = 1`; when `blendIn < 0.95` or `blendOut < 0.95`
+  (the float at `0x1045001c`, both `FCOMP float`; `SetLayer`'s 0.2 and the snap's 0 both pass):
+  `blendIn != 0 && cycle < blendIn` → `cycle / blendIn`, then `blendOut != 0 && cycle > 1 −
+  blendOut` → `(1 − cycle) / blendOut` (the later write wins), then `3w² − 2w³`; clamped down to
+  `m_flWeightMax`. The body returns its interval argument. **A zero interval still runs the
+  envelope**: the base returns `0.0` when its `dt <= 0.001` (double `0x1044f020`, `0x1008f1e9`),
+  the owner hands that to every occupied layer, and a layer still at cycle 0 with a non-zero
+  blend-in gets `weight = 0` — it frees itself before it ever advanced (its dispatch still runs:
+  `0x10098cd0` has no weight test). Back in the owner:
+  finished and `m_bAutoKillWhenFinished` → `weight = 0`, slot 112 `(i, m_nActivity)` (empty on the
+  NPC line). The sequence and the activity stay; the slot is free because its weight is 0.
+- *The shot.* `PostRun` → slot 258 → `0x10098cd0` on the layer → slot 259 → `0x1032e330` → the
+  weapon's `+0x5c8` → `CWeaponRanged 0x10238160` → `0x10238320` → `ModeDispatch(1)` → `Shot
+  0x102387b0`. Every shipped `*_attack_layer` (male `move_and_ranged`: 13 clips, the .38's is
+  `smith_attack_layer`, 0.4667 s) authors 3031 at cycle 0.0, so the shot leaves in the `PostRun` of
+  the think that pushed the layer.
+- *Who reaches it.* Slot 529 is tasks `0x6e` `TASK_WAIT_FOR_MOVEMENT`, `0x0b`, `0x72` (or no
+  task). `m_bfAINPCFlags2 & 0x400` is set by `TASK_SET_NPC_FLAG MOVE_FACE_ENEMY` in three shipped
+  programs — `SCHED_TROIKA_TAKE_COVER_HINT`, `SCHED_TROIKA_RUN_AWAY_FROM_ENEMY`,
+  `SCHED_TROIKA_TAKE_COVER_NO_AMMO` — and cleared after the move. Native writers, settled
+  2026-10-04 (packet S3: the field ledger's 85 accessors, the decompilation's or-masks and a
+  byte scan of `.text` for `OR [reg+0x14bc], imm`): **one**, `CNPC_VMingXiao::NPCThink`
+  `0x10394b0b` (`|= 0x80000400`); the generic setter `0x102a9800` has the task arm of
+  `StartTask 0x102a1910` as its only caller. No shipped script names the flag. `CAP_MOVE_SHOOT` is `CNPC_VHumanCombatant::Spawn
+  0x10387110` and `CNPC_VVampire::Spawn 0x103c4ef0`.
 
 **87 of 300 classes** take that path (`CBaseAnimatingOverlay`, `CBaseFlex`, `CBasePlayer`, the
 `CAI_BaseNPC` family, `CCineNPC`/`CCineAI`, `CPayphone`, …); the other 213 — props, ragdolls, gibs,

@@ -6,6 +6,11 @@ Read `README.md` here (§1 first block, §2 P1–P3, §6, §7), `CLAUDE.md`, `sp
 `vtmb_asm 1026dd10` from `0x1026de02` to `0x1026e10c` (one page), `vtmb_code 1026dd10`.
 **Re-locate every site by Grep on the function name**; cited lines are hints.
 
+**Amended after settling packets S2 and S4 and the judge's second sitting, 2026-10-04** (J14.4,
+`stories/v1/triage.md` § "Judge's rulings, V4 — second sitting"; `../v4/packets-S2.md` item 4,
+`../v4/packets-S4.md` item b): **the melee band `0x103ea7e0` is read whole, with its five
+constants, and is yours to port** — item 4 below replaces "unread; do not invent its bands".
+
 ## Files (only these)
 
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp` (`ElysiumNpcCond::GatherAttackConditions`, ~:1053-1151)
@@ -35,9 +40,43 @@ Read `README.md` here (§1 first block, §2 P1–P3, §6, §7), `CLAUDE.md`, `sp
    `SetCondition(answer)`.
 4. **The melee arm runs after the ranged arm, not instead of it** (`0x1026df6d`): `caps & 0x8000`
    with an active weapon → the weapon's slot 367; else `caps & 0x80000` → slot 555. Remove the
-   early `return` that makes the two exclusive. The band numbers stay today's stand-in (retail's
-   `CWeaponMelee 0x103eac30` → `0x103ea7e0` is unread: name both addresses at the line as
-   **unrecovered**, do not invent its bands).
+   early `return` that makes the two exclusive.
+   **The melee weapon's band — settle which port body stands for it, and port it whole if none
+   does** (J14.4). No line under `Private/Substrate` cites `0x103ea7e0`, `0x103eac30` or
+   `0x103eac60`; today's band in this body (~:1098-1114) is "CHOSEN, NOT RECOVERED" (0x60 past
+   `MeleeReachSourceUnits`, 0x51 when facing and ready). First say in your report which port
+   body the weapon's slot 367 reaches (Grep `MeleeAttack1Conditions`, `MeleeReach`, the weapon's
+   condition readers); then replace the stand-in with retail's body, **as read**:
+   `0x103ea7e0(weapon; activity, target, dot, dist)`, callers `0x103eac30` (activity `0x4b`, the
+   weapon's slot 367 — this arm) and `0x103eac60` (`0x4e`).
+   - `ready` = `+0x730 < curtime && +0x734 < curtime && owner m_flNextAttack (+0x1564) <
+     curtime`, then (the target is a combat character) the target's slot 327.
+   - `dot > 0.7` (f64 `0x104492d0`) `&& target CC && ready` and owner slot 331 `(weapon, target,
+     activity, &out)` true with `out >= 0` → **`0x51`**. Slot 331 is
+     `CBaseCombatCharacter::ChooseMeleeAttackSequence 0x10347180` (3,160 bytes, not walked by the
+     packets): call the port's existing body for it (`research where 0x10347180`); if the port
+     has none, a seam named for the address answering what today's stand-in answers, reported —
+     **unrecovered as a listing walk; a reader settles it before this lane starts** if the port
+     has no body.
+   - Then over `GetSequencesForActivity(owner, translated activity, …)`, each sequence counted
+     when `(target CC || seqdesc+0x10 > 0) && seqdesc+0x2c4 > 0`: `lo = min(+0x2cc)` (seed
+     100000.0), `hi = max(+0x2d0)` (seed −100000.0), `mean` = the average over the `+0x2bc`
+     records at `+0x2c0` (24-byte stride) of `(rec[0] + rec[3]) × 0.5` (f32 `0x104454d0`). No
+     record counted → answer 0. `mean` clamped into `[lo, hi]`.
+   - Then, in this order: `dist > max(hi × 1.2, 256.0)` (f32 `0x1049ae90`, `0x1044ddb0`) →
+     **`9`**; `dist > hi` → **`0x60`**; `dot < 0.7` → **`0x61`**; `dist < lo` → **`0x5f`**;
+     target CC and `ready`: `dist < mean × 0.25` (f64 `0x10449260`) → `0x5f`, else `0x60`; else
+     0.
+   **Every input is the model's sequence descriptor and the bake carries all of them** — no
+   pipeline change: `+0x10` → the clip's `weight`, `+0x2c4` → the `swings` count, `+0x2cc` →
+   `LowReachCm`, `+0x2d0` → `ReachCm`, `+0x2bc/+0x2c0` → `Envelopes` (min corner + max corner)
+   on `FElysiumNpcClip`. Units: the baked values are centimetres, `dist` and 256.0 are Source
+   units — convert at the line and say which side you converted. If reading the wielder's
+   sequences for an activity needs an accessor that lives outside your files (the kernel's
+   sequence table: `ElysiumNpcAnim.cpp` is not yours), write its exact signature in your report
+   and call it; the integrator adds it. The five constants are not in `kernel_tunables.tsv`
+   (generated header, never hand-edited): write the five rows in your report for the
+   integrator, and cite each cell's address at its line meanwhile.
 5. **The timers, `0x1026dfd0..0x1026e062`**, on `WeaponBlockedByFriendTimer (+0x5b88)` and
    `ExtendedBlockedByFriendTimer (+0x5b8c)`: with 0x63 standing — extended `== FLT_MAX` →
    `curtime + 2.5` (`_DAT_104629ec`, `ElysiumNpcTunables::TwoAndHalf`); `+0x5b88 = curtime + 1.5`
@@ -50,7 +89,11 @@ Read `README.md` here (§1 first block, §2 P1–P3, §6, §7), `CLAUDE.md`, `sp
    live `GetEnemy()`. Keep a null guard (say so at the line); check whether the inert return can
    skip the top clear on a path retail would clear, and report it.
 8. **Tests** (`Elysium.Arm.NpcKernelConditions.GatherAttackClears`, `.GatherAttackFriendTimers`,
-   `.GatherAttackBothArms`, README §6), each assertion naming its address. In
+   `.GatherAttackBothArms`, README §6), each assertion naming its address; and
+   `.MeleeWeaponBand` (`0x103ea7e0`) on fixture clips: `9` beyond `max(1.2 × hi, 256)`, `0x60`
+   between `hi` and that, `0x61` under dot 0.7, `0x5f` under `lo` and under `mean × 0.25`,
+   `0x51` only with dot above 0.7, a combat-character target, `ready` and slot 331 answering; no
+   counted sequence → 0. Delete an assertion that pins the stand-in's numbers; list it. In
    `ElysiumNpcCombatTests.cpp` rewrite or delete only assertions that pin the stacking or the
    exclusive split; list them.
 
@@ -60,6 +103,14 @@ Read `README.md` here (§1 first block, §2 P1–P3, §6, §7), `CLAUDE.md`, `sp
 560 / 553 bodies (`ElysiumNpcBaseConditions.cpp`), the weapon classes, `RefreshCombatConditions
 0x102b2570`, slot 363 (A3), `StartTask`, `ElysiumNpcSchedule.cpp` (lane V5a-2). A line another
 file needs goes in your report, exact, with its place.
+
+Wave check ([V5a-1, V5a-2, A3], re-checked after the second sitting): the band is ported inside
+`ElysiumNpcConditions.{h,cpp}`, already yours; the second sitting adds no file to this lane. None
+of your files is V5a-2's (`ElysiumNpcStartTask.{cpp,inl}`, `ElysiumItemTable.{h,cpp}`,
+`ElysiumNpcSchedule.cpp`, its two tests) or A3's (`ElysiumCombatCharacterSlots.cpp`,
+`ElysiumCombatCharacterSlotBodies.cpp`, `ElysiumNpcSenses.{h,cpp}`, `ElysiumPlayerEntity.cpp`,
+its test). `ElysiumNpcAnim.cpp`, `ElysiumWeaponClasses.*` and the tunables table are in no lane
+of the wave: lines for them go to the integrator.
 
 ## Rules
 

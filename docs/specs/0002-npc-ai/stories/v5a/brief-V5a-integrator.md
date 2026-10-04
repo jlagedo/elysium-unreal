@@ -6,7 +6,20 @@ on the enemy" and § "Rules for every agent of V4", `../v4/packets-R2.md` items 
 `stories/v1/triage.md` rows N1, N2 and § "The known reds" 2 and 3 (Grep; never the file whole),
 `Arena/README.md`.
 
-1. **Apply the cross-lane lines** the coders reported, nothing more.
+1. **Apply the cross-lane lines** the coders reported, nothing more. *(amended after settling
+   packets S2 / S4 and the judge's second sitting, 2026-10-04.)* Expected: from **V5a-1** (it
+   now ports the melee weapon's band `0x103ea7e0` whole, J14.4) — an accessor over the wielder's
+   sequences for an activity if it lives outside its files (`ElysiumNpcAnim.cpp`), and five
+   rows for `research/tooling/ghidra/driver/kernel_tunables.tsv` (`0x104492d0` f64 0.7,
+   `0x104454d0` f32 0.5, `0x1049ae90` f32 1.2, `0x1044ddb0` f32 256.0, `0x10449260` f64 0.25 —
+   skip a cell the table already holds), then `uv run elysium research gen_kernel_tunables`
+   once before the build; from **V5a-2** (it now fixes `Attack_Rate`'s default to retail's 1.0,
+   an old port bug) — each reader of the mode record's `AttackRate` that tests 0 as "absent"
+   (`ElysiumWeaponClasses.cpp`): decide per line whether the test is now dead or still guards an
+   unparsed record, and say so in the commit message; and `ScaleWeaponBurstPause`'s arms if they
+   differ from `0x102c5570` (no target → `sqrt(1 / BaseRange)`; `dist <= 0` → `× dist`).
+   **Wave disjointness, by listing, before the build** ([V5a-1, V5a-2, A3]): no file in two
+   lanes; neither S2 nor the second sitting added a file to any of the three.
 2. **Build once**: `uv run elysium build --arm`. Fix only integration breaks (compile, link, a
    wrong call across two lanes' files). A second build only for a break of your own fix; a third
    means stop and report.
@@ -34,7 +47,11 @@ on the enemy" and § "Rules for every agent of V4", `../v4/packets-R2.md` items 
 7. **Triage and spec**: mark N1, N2 and known red 2 closed in `stories/v1/triage.md` (one line
    each with the record); slot 363's part of red 3 closed. Tick nothing in `spec.md` (V5 ticks
    with its other half; V4a with its own wave); add one dated line under the V5 box: "V5a landed".
-   File README §7's melee-band item (`0x103ea7e0`) on the judge's list.
+   ~~File README §7's melee-band item (`0x103ea7e0`) on the judge's list.~~ **Withdrawn**: the
+   band is read whole and reads only sequence data the bake carries; V5a-1 ported it (J14.4) —
+   record in the commit message which port body stood for it before. A gunman now waits
+   retail's time between shots **and**, once V4o's O3 lands, never runs dry (J12): no record
+   of this wave may expect a reload after emptying a gun.
 8. **Commit once**, staging by explicit path (never `git add -A` / `.`), on
    `spec-0002/step-2`, never push: `fix(npc): V5a + A3 -- GatherAttackConditions' clears, timers
    and tail; the wait before the shot (N2); the cover tail reads the enemy's weapon (N1); slot

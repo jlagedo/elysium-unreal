@@ -2748,12 +2748,35 @@ negative, not a gap.
    `ShouldFadeOnDeath` `0x1027a400` (spawnflag bit 9) choosing `SUB_StartFadeOut` `0x102695d0` or
    `SOUND_CARCASS 0x20` at volume 384 for 30 s through `0x101babc0`; finally `SetState(7)`
    `0x1026e340`.
-5. Next think: `CAI_BaseNPC::SelectSchedule` `0x1028a380` (slot 438), state 7, at
-   `0x1028a8ec-0x1028a92b`: `BecomeClientRagdoll(vec3_origin, -1, 0) ? 0x2c : 0x2b`.
-   `CAI_BaseNPCTroika::SelectSchedule` `0x102af660` has **no** state-7 case and falls through to the
-   base, so this decision is authoritative.
-6. The program runs, and `TASK_DIE` commits by calling `Die` -- which re-enters step 2. It is that
-   **second** `Event_Killed` whose `CreateCorpse` makes the corpse on the non-ragdoll path.
+5. **There is no next NPC think** (_corrected 2026-10-04, 0002 V4 packet S1; steps 5–6 as first
+   written had every death pass through `SelectSchedule`_). `CreateCorpse` replaces the NPC's main
+   think on every NPC arm, rig or no rig: `ThinkSet(SUB_PVSRemove 0x102696f0)` at `curtime + 10.0`
+   (`0x1032c404`); for a burning death (`0x10207df0`) `ThinkSet(SUB_Remove 0x101c0b10)` at `+10.0`
+   (`0x1032c32f`); for `MiscFlag 0x80000` `SUB_Remove` at `+0.5` on the NPC and the tail think on
+   the static corpse. Two bodies replace it again afterwards: `SUB_StartFadeOut` `0x102695d0`
+   (`ShouldFadeOnDeath`, spawnflag bit 9; `SUB_FadeOut` at `curtime + 10.0`, a double) and
+   `CNPC_VPedestrian::CreateCorpse` `0x103a38c0` (`ThinkSet(NULL)`: a pedestrian's corpse has no
+   think and this chain never removes it). The only skips are a NULL corpse and a player corpse.
+   So step 4's `SetState(7)` is written and never read by a schedule: **an ordinary kill plays the
+   death sound once, runs no `DIE` program and never reaches the `ACT_DIERAGDOLL` seed** (the
+   corpse ragdolls from the pose it holds; `CreateCorpse` always passes a real bone).
+6. **The state-7 fork** `0x1028a8ec-0x1028a92b` in `CAI_BaseNPC::SelectSchedule` `0x1028a380`
+   (`BecomeClientRagdoll(vec3_origin, -1, 0) ? 0x2c : 0x2b`; `CAI_BaseNPCTroika::SelectSchedule`
+   `0x102af660` has no state-7 case) is reached only by an NPC that is in state 7 **with its think
+   intact**. The writers of 7 other than `Event_Killed`: `CineCleanup` `0x1027d170` with
+   `m_iHealth < 1` (line `0x2b22`: ideal 7 and `COND 0x4c` — the resume of a kill `Event_Killed`
+   deferred under a started script); `0x1027d0a0` from `SelectIdealState` case 4 (`0x1026f660`,
+   `0x102ad660`) when `m_lifeState == 1`; `CNPC_VWerewolf::SelectIdealState` `0x103d0820` (dead or
+   `COND 0x7a`); the tentacle `0x1039e310` and base case 7, which only sustain it; and
+   `CNPC_VZombie::CreateCorpse`'s collapse arm, which keeps the NPC think. (`CineCleanup`'s
+   `m_lifeState == 1` arm also sets 7 but fades the body or clears its think.) On that route a
+   rigged model takes the `ACT_DIERAGDOLL` seed and loses its think inside `BecomeClientRagdoll`
+   (no `OnDeath`, no removal think); a rig-less one runs `DIE`, whose `TASK_DIE` commits through
+   `Die` -- re-entering step 2 -- and it is that `Event_Killed` whose `CreateCorpse` makes the
+   corpse. Neither witness map (`sm_hub_1`, `sp_tutorial_1`) carries a Werewolf, tentacle or
+   zombie; both carry `CCineNPC`, so the deferred script death is the one reacher there. The other
+   two `BecomeClientRagdoll(…, -1, …)` callers in the image are not NPC paths (`0x1012b370`, the
+   `raggib` entity; `0x102b5bb0`, no static caller).
 
 ### A death sounds more than once
 
@@ -2764,6 +2787,10 @@ third time. Troika's hook `0x10293ec0` caches the vdata sound-table entry named 
 (`0x105d8c30`) once in `DAT_10924d64` under the guard byte `DAT_10923f0d`, then plays it as sound
 type 2 at volume `1.0` (`0x3f800000`) and pitch `1.25` (`0x3fa00000`) -- unconditionally, every
 call. This is retail's behaviour and is reproduced.
+
+_2026-10-04 (0002 V4 packet S1):_ the count above is the state-7 fork route's only ("The ordered
+chain" steps 5–6). An ordinary kill has no `TASK_SOUND_DIE` and no second `Event_Killed`: its death
+sound plays **once**.
 
 ### What the port does not have
 

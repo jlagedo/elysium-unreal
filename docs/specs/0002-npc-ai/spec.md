@@ -801,6 +801,25 @@ On demand, not in the sequence: 0018/12 the flying mover; 0018/19 the debugger v
 the controller's solidity); 0018/6's leftovers; `hw_warrens_4`'s `iris_clip` door; the ~280
 `unported.tsv` rows outside both reach lists; `BeginNavigationJump`'s launch direction.
 
+Filed on this line by the judge's second sitting (`stories/v1/triage.md` § "Judge's rulings, V4 —
+second sitting", 2026-10-04):
+
+- **J11 — four species whose fire is task code** (absent from `sp_tutorial_1` and `sm_hub_1`; no
+  maker names one). Each runs when a map that reaches the class enters scope; its first step is
+  to show the port's task body calls the weapon's fire and not the estimate; it names its record
+  when run.
+  - `CNPC_VChangBros` — `RunTask 0x1036bfc0` → `SpawnEnergyBall 0x1036dd20`.
+  - `CNPC_VFrenzyShadow` — `StartTask 0x10375f50`.
+  - `CNPC_VBach` — `StartTask 0x103645a0` (weapon slot 326); the camper pass `0x10365a90` is
+    already ported.
+  - `CNPC_VManBat` — `RunTask 0x1038d130` (weapon slot 326).
+- **J2b — the attack extents' data half**, owner: the story that ports the player's acquire cone
+  (`0x1040f550`, `0x1040f080`; `physics-interaction.md` § "The acquire chain"; no spec owns it
+  today — 0015 is the player's nearest): `bboxMinCm` / `bboxMaxCm` on the body-data row, the
+  runtime fields and the one body-data import, filling the `SequenceBounds` seam that slot 247
+  `0x10090c80` reads; and, same owner, the port's feed-target box growing by the extents
+  (`ElysiumMapActor.cpp:1513-1518`), which retail does only for a flagged query.
+
 ## The method per story
 
 1. **Seam first.** The first commit declares the interface or the named stubs (retail address,

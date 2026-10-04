@@ -51,6 +51,20 @@ read). A cell's reader having no recovered caller (several helpers above have no
 
 The paragraphs that named these cells now carry the value inline, marked `read 2026-09-21`.
 
+**Read 2026-10-04 (0002 V4 packet S1; bytes of the pinned `vampire.dll`, not yet rows of
+`kernel_tunables.tsv`).**
+
+| Cell | Type, and the instruction that proves it | Value | Readers | What it bounds |
+|---|---|---:|---|---|
+| `0x104493c0` | float64; `0x102630f1 FADD double ptr [0x104493c0]` | `50.0` | velocity script `0x102630b0` | Acceleration = ideal speed + 50 |
+| `0x10449198` | float64; `0x1026329e FADD double ptr [0x10449198]` | `0.2` | `0x102630b0` | Corner-speed dot bias |
+| `0x10457f60` | float32 (the float64 reading is a denormal; instruction not re-read) | `150.0f` | turn script `0x102627e0` | Yaw change per second of segment time |
+| `0x104491a8` | float64 (the float32 reading is a denormal; instruction not re-read) | `0.8` | `0x102627e0` | Corner yaw approach fraction |
+| `0x104493d0` | float64; `0x102e1ea9 FSUB double ptr [0x104493d0]` | `0.1` | `UpdateYaw 0x102e1e20`, `0x102627e0` | First yaw integration interval; corner yaw threshold |
+| `0x1044fac0` | float64; `0x102e1ed2 FMUL double ptr [0x1044fac0]`, `0x1026968d FADD double ptr` | `10.0` | `UpdateYaw`, `SUB_StartFadeOut 0x102695d0` | Yaw speed per second; fade-think delay |
+| `0x10450aa0` | float32 (instruction not re-read) | `4.0f` | `SolveQuadratic 0x1013a6f0` | Discriminant factor |
+| `0x1044f020` | float64 (the float32 reading is −5.2e11; instruction not re-read) | `0.001` | `StudioFrameAdvance 0x1008f120` | Minimum advance interval |
+
 **Held by the tunables table since 0019/4 (2026-09-22).** 31 of the 32 rows (all but the CRC-32
 table) are rows of `research/tooling/ghidra/driver/kernel_tunables.tsv`, re-read out of the
 image at their stated width by `uv run elysium research gen_kernel_tunables --check`, and the

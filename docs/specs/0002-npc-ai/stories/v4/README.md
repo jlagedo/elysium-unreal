@@ -10,6 +10,7 @@ Paths are relative to `Source/ElysiumUE/Private/Substrate/` unless they say othe
 | story | briefs |
 |---|---|
 | V4r (**done**, 2026-10-04) | `brief-R1-walk-reader.md`, `brief-R2-chain-reader.md`; `brief-J-judge.md` (the adversarial judge, after R2). Outputs: `packets-R1.md`, `packets-R2.md`, `packets-spike.md` (V4d's step 0), and `stories/v1/triage.md` § "Judge's rulings, V4" (J1–J9) |
+| V4r settling (**done**, 2026-10-04) | no brief here. Outputs: `packets-S1.md` (death and corpse; walk and turn), `packets-S2.md` (weapons and attack data), `packets-S3.md` (the overlay, the move-and-shoot gates, the attack coordinator), `packets-S4.md` (the settling reads of the judge's second sitting: the NPC clip, the melee band's constants, the fade, the pedestrian's corpse, the turn script's helpers), and `stories/v1/triage.md` § "Judge's rulings, V4 — second sitting" (J2b, J10–J14). Each packet ends with § "Changes to the plan"; every change is written into the briefs of `v4/`, `../v4o/`, `../v5a/`, `../v11/` |
 | V4a | `brief-A0-seam.md`, `brief-A1-dispatcher.md`, `brief-A2-clock-words.md`, `brief-A3-view-cone.md`, `brief-A4-player-camera-dispatch.md`, `brief-A-integrator.md` |
 | V4b | `brief-R1b-slow-turn-reader.md` (one short read, J9, before B1/B2 start), `brief-B1-body-speed.md`, `brief-B2-move-yaw-facing.md`, `brief-B-integrator.md` |
 | V4c | `brief-C1-attack-producers.md`, `brief-C2-pick-disposition-corpse.md`, `brief-C-integrator.md` |
@@ -23,6 +24,18 @@ the same mark. Two parts of V4b still wait on reader R1b (three constants and th
 cause): they are marked in `brief-B1` and `brief-B2`, with the stop rule that applies. Two more
 packets will be written into this directory: `packets-R1b-measurement.md` (the seam agent's
 measured turn) and `packets-R1b.md` (R1b's read).
+
+**(amended after the settling packets S1–S4 and the judge's second sitting, 2026-10-04)** Four
+settling reads and a second sitting of the judge landed after V4r and their changes are written
+into the briefs; **where a brief and this document disagree, the brief wins**, and the
+paragraphs below that they corrected carry this mark. In short:
+
+| packet | what it settled | what it changed here |
+|---|---|---|
+| `packets-S1.md` | `CreateCorpse 0x1032c0e0` arm by arm, the two `Event_Killed` bodies, the state-7 writers, feed and explosion deaths; `TASK_FACE_ENEMY` 0x2e whole (Troika `RunTask` **`0x102aae61`**, `AI_ClampYaw 0x102e1d10`); the velocity script `0x102630b0`'s five passes, its constants (50.0, 0.2, 150.0) and the arrival tolerance (0.0625 units, 2-D); the female `walk_0` (37 frames at 33.82 fps) | **B1 no longer waits on R1b**; R1b is narrowed to why the port's `task_face_enemy` ran 13.4 s; `damage_lethal_death` expects no schedule after death; `lifecycle.md`'s chain is already rewritten; no record reaches the `ACT_DIERAGDOLL` seed or `SCHED_DIE`; the pedestrian's `CreateCorpse` override `0x103a38c0` is wired by C2; the corpse's removal differs per body (`brief-D-ragdoll.md`) |
+| `packets-S2.md` | all eight weapon operator bodies (slot 370); `ModeDispatch(1)` and `Shot`'s gates; the attack-rate keys; the melee band `0x103ea7e0`; `GetBestMeleeWeapon`; `0x102a11d0`; who reads the attack extents; `MeleeSwingUpdate 0x10346cd0` | **no "unread operator" seam** — `ContactEventCycle` is removed for every NPC wielder; the sweep integrates its own stamp `+0xaa4` in `N = ceil(dt × 100)` steps; the melee operator's trigger set; J2 went back to the judge — **re-ruled J2b (row below): the bbox import is withdrawn, slot 247's body stays in C1 on a named seam** |
+| `packets-S3.md` | the `0x47` / `0x48` gesture gate and its cvar; slot 481; the writers of flags2 `0x400`; condition `0x4f`; slot 273's callers; the layer walk; the six coordinator bodies; the bat-only melee chain | `cover_move_shoot`'s red is **the slot-575 seam** (`ActiveWeaponCapabilityWord` answers 0), fixed in V4o lane O2, not V5; the two melee records take `0xdd` in reach and `0xcb` out of reach, one `MELEE_IDLE 0xc7` first being retail; V4o runs after V4b |
+| `packets-S4.md` and **the judge's second sitting** (`stories/v1/triage.md` § "Judge's rulings, V4 — second sitting": J2b, J10–J14) | who fills an NPC's clip (`Inventory_Insert 0x10334e70`; `Shot` never lowers it); the melee band's five constants; `0x102fb4e0`'s flag (0); who can carry flags2 `0x400` on the two maps; `CNPC_VPedestrian::CreateCorpse 0x103a38c0` whole; `SUB_FadeOut 0x10269960` and who has the fade bit (25 of 62 makers); the turn script's two helpers; `0x1033d940`; the `GetBestMeleeWeapon` tables | **J2b**: the bbox import withdrawn and filed with the acquire cone's story (C1 keeps slot 247 on the `SequenceBounds` seam). **J10**: `0x102a11d0` implemented now in V11-1 (`melee_ally_in_the_way`). **J11**: ChangBros, FrenzyShadow, Bach, ManBat filed on `spec.md`'s on-demand line. **J12**: the port's NPC clip spend and refusal is an old bug, fixed in V4o O3 (`ranged_sustained_fire`); the reload finish stays a seam for V5b. **J13 / J14.1**: four corpse-removal clocks — C2 the thinks (the pedestrian's `Think` gate, the fade), D the body that survives them; records `corpse_removed_unseen`, `corpse_kindred_burns`, `corpse_pedestrian_stays`, `corpse_fades`; `BurnModel`'s look filed to 0014. **A0** gains the `removed` event kind (H22) and writes the six new records red. **J14.4**: V5a-1 ports the melee band. **J14.6**: B1 takes the turn script's helpers |
 
 **Line numbers are today's and will move.** V3c is being integrated now, V3d deletes the arbiter,
 the owner enum, `ThinkInDialog` and `RouteScheduleMaintenance` (hundreds of lines out of
@@ -144,6 +157,16 @@ anim event**: it is `UpdateCharacter 0x103246d0` → `MeleeSwingUpdate 0x10346cd
 Troika think's tail `0x1029365b` — the NPC's own slot 312, after `PostRun` and `PerformMovement`,
 on the update clock, not every think. *Not read:* the species weapon bodies (`0x103ed200`, the
 flamethrower, thrown).
+*(amended after S2, 2026-10-04 — `packets-S2.md` items 1 and 9; this replaces "Not read" above.)*
+**Every operator body is read**: slot 370 has eight bodies in the image. The ranged body
+`0x10238160` serves `CWeaponRanged` and all 16 subclasses, the flamethrower and the other species
+classes included — the event and only the event; the base body `0x1024f030` (thrown, unarmed,
+discipline) takes no event and has no weapon-side timer, the species' own task bodies being the
+retail path; `0x103ed200` is the player's grenade release, not a species body. The melee operator
+`0x103ea5b0` sends 3001, 3030..3037, 3039..3044 and 3047 to the weapon's `PrimaryAttack` when the
+operator is not a player. The sweep `MeleeSwingUpdate 0x10346cd0` integrates **its own stamp**
+(`m_flLastMeleeSwingUpdate +0xaa4`), not the caller's interval (slot 315 takes no argument), in
+**`N = ceil(dt × 100)`** steps, so it covers the whole gap between due thinks.
 
 **The attack extents.** Slot 247 `SetAttackExtentsForSequence 0x10090c80` *(read)*, called by
 `ResetSequenceInfo`: only when `Flags2 & 4`; reads the sequence descriptor's bbox (`+0x1c..+0x30`),
@@ -158,6 +181,16 @@ NPC**: each `ResetSequenceInfo` re-derives the attack extents from the sequence 
 sleep arms save `+0x50` through slot 16 (`0x102a29fa`, `0x102a710e` → `+0x65d0`) and `TaskFail` /
 `OnScheduleChange` restore it. *Unrecovered:* slot 16's other readers; the body of `0x10090c80`
 beyond the radial excess read here.
+*(amended after S2, 2026-10-04 — `packets-S2.md` item 7; both "unrecovered" are settled.)* The
+body, whole: `e[i] = max(|bbmin[i]|, bbmax[i])`; `e.x = e.y = sqrt(e.x² + e.y²)`; `e[i] = e[i] >
+collision maxs[i] ? e[i] − maxs[i] : 0`; entity slot 15. Slot 16's readers are **saves only**
+(`0x102a1910` twice, `0x102b7110`). The engine copy (the spatial partition element, `+0x28`)
+widens an element's box only in a query carrying Troika's flag, and the only flagged queries are
+the player's acquire cone (`0x1040f550`, `0x1040f080`). **So nothing in NPC AI reads the extents**:
+not melee reach, not the sweep, not a condition. J2 went back to the judge on that and is
+**re-ruled, J2b** (the second sitting): the import is withdrawn and filed with the story that
+ports the acquire cone; slot 247's body stays in C1 on the named `SequenceBounds` seam and lands
+writing nothing, proven by its arm test only (§8 Q4).
 
 **Turning and the walk.** The facing-target queue (`shape.md` :419-457) and the yaw ladders (`shape.md`
 :1473-1500) *(doc)*: `CAI_BaseNPCTroika::MaxYawSpeed 0x10297ce0` answers `|GetIdealYawSpeed()| ×
@@ -213,6 +246,26 @@ to the owner's `m_flDesiredMoveYaw +0x63ec` (Troika) or as the `move_yaw` pose p
 - *Unrecovered (reader R1b, `brief-R1b-slow-turn-reader.md`):* `_DAT_104493c0`, `_DAT_10449198`,
   `_DAT_10457f60`; the retail arrival tolerance. *Unrecovered, no owner yet:* `0x102e0bd0`; what
   slot 526 answers on the Troika line; `StartTask` 0x2e's "turn tail"; `AI_ClampYaw` (engine).
+- *(amended after S1, 2026-10-04 — `packets-S1.md` items 5–7; this replaces the two bullets on
+  the turn and the "Unrecovered" above where they differ.)* **`RunTask` 0x2e on a Troika NPC is
+  `0x102aae61`, not the base `0x102889b5`.** It does not reset the yaw clock: `StartTask`'s turn
+  tail `0x102a44d1` does (`m_flLastYawTime = −1`), once. `RunTask` calls `SetTurnActivity` every
+  call unless `m_afMemory & 0x2000`, re-reads `MaxYawSpeed` every call, and `UpdateYaw
+  0x102e1e20` integrates 0.1 s on the first call and the real time between thinks after it, at
+  `speed × 10` through `AI_ClampYaw 0x102e1d10` (in `vampire.dll`). The 0.5 s bound stands.
+  **The constants**: `0x104493c0` = 50.0 (acceleration = ideal + 50), `0x10449198` = 0.2 (the
+  corner bias), `0x10457f60` = 150.0 (the turn script's degrees per second of segment time).
+  **The velocity script is five passes** (prune, forward, backward with the same `dv > 0` test,
+  cruise points with no guards, times), rebuilt every `MoveGroundExecute` from the body's current
+  position and speed and **sampled at time `m_flMoveInterval`, not at the body's place on the
+  path** — `brief-B1-body-speed.md` item 2 has it whole. **The arrival tolerance** is 0.0625
+  units (0.119 cm), 2-D, a constant (`0x102ef510`); the body lands on the waypoint by clamping
+  the step. The female `walk_0` is 37 frames at 33.82 fps: 101.278 cm/s stands. The turn
+  script's two helpers are read (`packets-S4.md` f.1): `0x1013d450` is
+  `UTIL_ApproachAngle(target, value, speed)` and `0x10262c20` the 0.01 s / 0.8 insert rule —
+  `brief-B1-body-speed.md` item 5 has both. *Still unrecovered:* `0x102e0bd0`'s five trailing
+  arguments; slot 526 on the Troika line (B2 reads it first); why the port's turn took 13.4 s
+  (R1b).
 
 **Slot 363 on the enemy.** `GatherEnemyConditions 0x10270b20` asks the enemy's combat character
 `FInViewCone(this)` (`0x1027106c`): true → `ENEMY_FACING_ME 0x56`, else `BEHIND_ENEMY 0x57`
@@ -260,6 +313,19 @@ replaces the think at `0x1032c404` (`SUB_PVSRemove`, `curtime + 10.0`) on every 
 `ACT_DIERAGDOLL`, is reached only by other state-7 writers (unrecovered which; lane C2 reads them
 first). `lifecycle.md` § "The ordered chain" steps 5–6 and § "A death sounds more than once" say
 otherwise and are corrected by lane C2 before it codes.
+*(amended after S1, 2026-10-04 — `packets-S1.md` items 1–4.)* The walk is done and confirmed, and
+**S1 already rewrote `lifecycle.md` § "The ordered chain" steps 5–6** and listed the state-7
+writers there; C2 keeps only § "A death sounds more than once" (once on an ordinary kill; three
+times only on the rig-less fork route). The fork is the only **NPC** caller with bone −1
+(`0x1012b370` and `0x102b5bb0` are not NPC paths); its retail reachers are the deferred script
+death (`CineCleanup :0x2b22`), `0x1027d0a0`, the Werewolf and the zombie's collapse. **No step-2
+record reaches the fork: step 2 needs neither the `ACT_DIERAGDOLL` seed nor `SCHED_DIE`**; both
+stay ported arms reached by arm tests. The think after death differs per body — ordinary mortal
+`SUB_PVSRemove` (view cone and PVS and `FVisible`), Kindred or `Has_Burning_Death` `BurnModel`
+and `SUB_Remove` at +10 s, a pedestrian none (`CNPC_VPedestrian::CreateCorpse 0x103a38c0`,
+**unwired in the port; C2 wires it**), spawnflag bit 9 `SUB_StartFadeOut` at +10 s. A rig-less
+model has its bounds zeroed and is not made non-solid. Feed and explosion deaths are the ordinary
+chain.
 
 ## 2. What the port does instead
 
@@ -354,6 +420,19 @@ Records the seam writes or corrects (the integrator owns `Arena/` edits after th
   body's own `walk_0`; the cause is the arrival, marked inferred until toggled). A deadline moves
   only where it was computed from 136.7 for a body on another bank. `script_walk_to_mark`
   (N19) is the A integrator's to re-measure, not the seam's.
+- **(amended after S1–S3, 2026-10-04; `brief-A0-seam.md` has each in full.)**
+  `damage_lethal_death` expects **no schedule after the death** (its `never` drops `DIE (` /
+  `SCHED_DIE_RAGDOLL (` and forbids any `schedule` after `dies`). `face_enemy_turn` cites
+  `RunTask` `0x102aae61`. `cover_move_shoot`'s `known_red` names the slot-575 seam ("V4o O2 …
+  then V4o O1"), replacing "0015 …; the wire 0002 R3" above. `melee_swing` and **`chase_melee`**
+  (added to the seam's corrected records) take the `_NR` schedules — `0xdd` in reach, `0xcb` out
+  of reach (`0xd2` inside 100 units without `0x51`) — with one `MELEE_IDLE 0xc7` first being
+  retail; `melee_swing`'s `hit_event` → `damage` as above.
+- **(added by the judge's second sitting, 2026-10-04 — J10, J12, J13.)** Harness **H22**: the
+  `removed` trace event kind (an entity leaving the entity world), if no such kind exists. Six
+  new records written red, each `known_red` naming its lane: `corpse_removed_unseen`,
+  `corpse_kindred_burns`, `corpse_pedestrian_stays` (C2), `corpse_fades` (C2),
+  `ranged_sustained_fire` (V4o O3), `melee_ally_in_the_way` (V11-1). `brief-A0-seam.md` item 7b.
 
 ## 4. The cut
 
@@ -366,7 +445,7 @@ clock's ground speed; then attack and death, which need the events:
 | **V4r** reading — **done 2026-10-04** | S–M | R1, R2 readers (+ the judge, one agent, after R2) = 3 | 0 (R1 ran one lab session on the existing build) | — (`packets-R1.md`, `packets-R2.md`, into `docs/vtmb/`; the rulings J1–J9) | — |
 | **V4a** seam; the clock's speed words and row 0 (N19); the dispatcher in `PostRun`; slot 363; **the player's and the camera's dispatch (lane A4)** | M | seam agent, A1, A2, A3, **A4**, integrator = **6** | 2 (2) | `sense_enemy_facing_me`; `anim_footsteps_walk` (guard); `anim_player_footsteps`; `anim_player_weapon_event` (both); `anim_prop_event`; `script_walk_to_mark` (N19, re-measured); `cover`, `control_sequence` stay green | `ranged_open_fire` → V5 (N2) once its `shot_event` is met; `cover_move_shoot` → 0015 / R3 (J5) |
 | **V4b** the walk's arrival and the turn (N13) | S–M | **reader R1b**, B1, B2, integrator = **4** | 1 (2) | `patrol_sentry2_pingpong`, `patrol_monk_loop`, `input_clearpatrolpath`, `places_pedestrian_visit`, `face_enemy_turn` | stop rule (J9): if the creep survives the measured toggle, the cause is unread again and B1 does not land |
-| **V4c** attack producers, weapon frame, slot 247 with its bbox; weighted pick, disposition | M | C1, C2, integrator = 3 | 1 (2), plus one body-data character import (J2; its own stop rule) | the death transaction of `damage_lethal_death`, `verbs_stealth_kill` (their `corpse_on_floor` waits on V4d) | `melee_swing` → V11 (N3); `chase_melee` → V5/V11 |
+| **V4c** attack producers, weapon frame, slot 247 with its bbox; weighted pick, disposition | M | C1, C2, integrator = 3 | 1 (2); the body-data character import (J2) is **withdrawn by J2b** (§8 Q4) | the death transaction of `damage_lethal_death`, `verbs_stealth_kill` (their `corpse_on_floor` waits on V4d) | `melee_swing` → V11 (N3); `chase_melee` → V5/V11 |
 | **V4d** the corpse falls: a physics asset from the `.phy`, Unreal's solve (the owner, 2026-10-04) | M | spike, coder, integrator = 3 | 1–2 (2), plus 2–3 scoped bakes | `damage_lethal_death`, `verbs_stealth_kill` (`corpse_on_floor`) | the death impulse, `prop_ragdoll`, the full corpus → 0014 |
 
 Order V4r → V4a → V4b → V4c, with V4d any time after V4a. **19 agents** (V4r 3, V4a 6, V4b 4,
@@ -430,7 +509,10 @@ it; the toggle alone is a new divergence and is not adopted. No fan change. B2: 
 `MoveGroundExecute`'s yaw (the path direction, else the current yaw), `m_flDesiredMoveYaw =
 −AngleDiff(moveYaw, yaw)`; and the slow turn's fix, final once R1b names its cause. The B
 integrator's first act on its build is the measured toggle on `input_clearpatrolpath` (J9's stop
-rule).
+rule). *(amended after S1, 2026-10-04.)* **R1b is narrowed to the port's slow turn only; B1 does
+not wait on it** — its constants, the five passes and the tolerance are in its brief. B2's
+citation for the turn is the Troika arm `0x102aae61`. Whether `FollowerArrivalFloorCm` 1.0 cm
+gives way to retail's 0.119 cm is a judge item, filed by the B integrator.
 - B1: `Visual/ElysiumNpcBody.{h,cpp}`, new `Visual/ElysiumNpcMoveScript.{h,cpp}` (the velocity
   script as a plain function), `Public/ElysiumWorldServices.h` with its implementers
   `Public/ElysiumMapActor.h`, `Private/Map/ElysiumMapActorEmbodiment.cpp`,
@@ -440,7 +522,8 @@ rule).
 - B2: `ElysiumNpcMotor10.{cpp,inl}`, `ElysiumNpcBaseFacing.cpp`, `ElysiumNpcBaseMotor.cpp` (the
   move's ideal-yaw copy, `:1560-1563`), `ElysiumNpcThink.cpp` (the `move_yaw` write, `:343-344`),
   `Tests/ElysiumNpcKernelFacingTests.cpp`, `Tests/ElysiumNpcKernelMotorTests.cpp`, plus the one
-  file R1b names for the slow turn if it is none of these and not B1's.
+  file R1b names for the slow turn if it is none of these and not B1's (nor V11-1's, when V11
+  shares the wave: `../v11/README.md` §4).
 
 **V4c — attack, the pick, death** *(amended after V4r, 2026-10-04 — J2, J6, J8, R2).* C1:
 `Weapon_FrameUpdate` in `PostRun` as R2 read it (the weapon model's clock and its slot 258 to the
@@ -455,6 +538,21 @@ drawn on the `NpcSchedule` stream, with the include-shadowing rule; `RunAnimatio
 R2's gate; `StartTaskSlot442`'s draw; `SetDisposition 0x102c0f70` arm by arm as R2 read it; K4's
 visual-side picks routed through the same draw as R2's table maps them; `BecomeClientRagdoll`'s
 `ACT_DIERAGDOLL` seed only on the bone −1 arm. The fall is V4d's.
+*(amended after S1 and S2, 2026-10-04; the two briefs have it whole.)* C1: **no "unread operator"
+seam** — the estimate is removed for every NPC wielder; the melee operator's retail trigger set;
+the sweep on its own stamp `+0xaa4` with `N = ceil(dt × 100)`; slot 247's body stays, **the bbox
+import (the pipeline half, the runtime fields, the C integrator's import run) is withdrawn by
+J2b** — C1's pipeline and body-data files below are in no lane. C2: `lifecycle.md`'s chain is
+already rewritten (it keeps one section); the seed is arm-tested only, no record reaches it;
+`SequenceBounds` is a named seam answering false (J2b); **new: the pedestrian's `CreateCorpse`
+override `0x103a38c0` wired to slot 301, with `Think`'s committed-death gate (J13), and the death
+fade — `SUB_StartFadeOut 0x102695d0` after slot 301, `SUB_FadeOut 0x10269960` (J14.1)** — C2's
+files gain `ElysiumCombatCharacter.cpp`'s `CreateCorpse` (beside `PlayReactionActivity`),
+`ElysiumNpcPedestrian.{h,cpp}`, `Tests/ElysiumNpcKernelSpeciesMisc10Tests.cpp`,
+`ElysiumNpc.cpp`'s `Think` gate, `ElysiumNpcBaseRunTask.{cpp,inl}` (`StartFadeOut`) and the
+`Event_Killed` fade step's file (`ElysiumNpcBaseSpawn.cpp`); none is C1's. The C integrator
+turns four corpse records (`corpse_removed_unseen`, `corpse_kindred_burns`,
+`corpse_pedestrian_stays`, `corpse_fades`) that the seam writes red.
 - C1: `ElysiumNpcBaseMotor.cpp` (`PostRun`'s weapon line), `ElysiumWeaponClasses.{h,cpp}`,
   `ElysiumEntityWorldInteraction.cpp`, `ElysiumNpcStartTask.cpp` (the attack arms),
   `ElysiumNpcThink.{cpp,inl}` (`UpdateCharacterRetail`, the slot-312 seam),
@@ -494,6 +592,10 @@ one more short read, **R1b** (`brief-R1b-slow-turn-reader.md`, J9), before B1/B2
 | packet | what must be recovered | size | feeds |
 |---|---|---|---|
 | **R1b** the slow turn and the stop | (1) from A0's measured `face_enemy_turn` trace and H19 words, the arm that makes the port's `task_face_enemy` take 13.4 s. (2) `_DAT_104493c0`, `_DAT_10449198`, `_DAT_10457f60`. (3) The retail arrival tolerance against the port's 1 cm follower floor | < 1 KB of listing, no build, no run | B1, B2 |
+
+*(amended after S1, 2026-10-04.)* R1b's (2) and (3) are settled by `packets-S1.md` (50.0, 0.2,
+150.0; 0.0625 units 2-D) and so is retail's side of (1). **R1b now reads only the port's side of
+(1)** and feeds B2 item 4 alone.
 
 ## 6. Tests
 
@@ -536,7 +638,10 @@ on `m_TranslatedActivity`); `.DieRagdollSeed` states who reaches the bone −1 a
   `0x102630b0` as the body's commanded speed, and Detour's slowdown at goal goes off because
   retail's deceleration replaces it. **Slowdown off with no retail deceleration is a new
   divergence: recorded here, not adopted.** Whether the port's 1 cm follower floor is retail's
-  arrival tolerance is unverified (R1b).
+  arrival tolerance is unverified (R1b). *(amended after S1, 2026-10-04.)* It is **not**:
+  retail's is 0.0625 units (0.119 cm), 2-D (`0x102ef510`), and the body lands on the waypoint by
+  the clamped step. Keeping 1.0 cm as a named divergence of the crowd follower or replacing it
+  is **for the judge**; B1 leaves the value and states it at the line.
 - **K2 (existing, kept, named modernization): the clip resolver stands for the studio sequence
   table**, and events come from the baked table, never from Unreal notifies. V4 narrows it: the
   kernel's sequence rows carry the baked flags, weights, events and speeds, so only the asset
@@ -583,6 +688,10 @@ on `m_TranslatedActivity`); `.DieRagdollSeed` states who reaches the bone −1 a
   record `cover_move_shoot` holds the debt; the NPC overlay stack is filed to 0015 and the wire to
   0002 step 3 (R3). Stated to the owner: step 2's `cover` family cannot prove the run-and-gun, and
   gate 2's claim for cover is re-cut to "reaches cover and fires from it".
+  *(amended after S3, 2026-10-04.)* The debt is taken by story **V4o** (`../v4o/README.md`),
+  after V4b. The record's first cause is not the missing layers: the port's slot 575
+  (`FElysiumNpc::ShouldMoveAndShoot`) reads `ActiveWeaponCapabilityWord()`, a seam answering 0,
+  so the overlay never arms (`packets-S3.md` item 4.1; V4o lane O2). Not V5.
 - **K5 — a named modernization (the owner, 2026-10-04): the corpse's fall is Unreal's.** The fall
   is solved by Chaos with no calibration against VtMB's simulation; the bodies, masses and joint
   limits come from the game's `.phy` data; what game logic observes (`OnDeath` on the kill tick,
@@ -635,6 +744,18 @@ on `m_TranslatedActivity`); `.DieRagdollSeed` states who reaches the bone −1 a
   for V4d's bake window; the body then stands on the accessor answering none. No step-2 record
   observes the extents — stated, not hidden: the proof is the arm test and a live read of
   `attack_extents` on `ranged_open_fire`'s shooter.
+  **(amended after S2, S4 and the judge's second sitting, 2026-10-04) Re-ruled, J2b: J2's import
+  is withdrawn.** `packets-S2.md` item 7 and `packets-S4.md` item c close the reader list: the
+  extents are only saved and restored in game code, and the engine copy widens only the
+  player's acquire cone (`0x1040f550`, `0x1040f080`) — which is not ported, so the port has no
+  observer: no record, no arm test on real data and no live read can tell a right value from a
+  wrong one. **Now, C1**: slot 247's body `0x10090c80` whole, against `SequenceBounds`, a
+  **named seam** answering "no descriptor" ("stands for the seqdesc bbox `+0x1c..+0x30`; filled
+  when the acquire cone is ported"); the slot writes nothing, as retail with no seqdesc. Proof:
+  the arm test `Elysium.Arm.NpcKernelAnim.AttackExtents` on a double; no arena record, stated.
+  **Filed with the story that ports the acquire cone** (`spec.md` carries the line): the two
+  row fields, the runtime fields, the one import, and the port's feed-target box growing by
+  the extents (`ElysiumMapActor.cpp:~1513-1518`), not changed now. No pipeline run in V4c.
 - **Q5. The finish moves one look-ahead earlier.** With the dispatcher writing `m_bSequenceFinished`,
   every activity-waiting task completes ~0.1 s × rate earlier — retail's timing. Records with tight
   windows may move. *Recommend*: the V4a integrator runs the whole arena at close; a moved verdict is
@@ -649,6 +770,25 @@ on `m_TranslatedActivity`); `.DieRagdollSeed` states who reaches the bone −1 a
   Warning; the C integrator lists every NPC class whose ranged attack activity has no 3030..3044
   clip — the reading owed, filed to V5 with the three NPC bodies that call a weapon's slot 326
   directly. The player's use of the estimate is not touched in V4.
+  **(amended after S2, 2026-10-04) The "unread body" seam is dropped: there is none.** All eight
+  operator bodies are read (`packets-S2.md` item 1); `0x103ed200` is the player's grenade
+  release; the flamethrower and the other species ranged classes use `CWeaponRanged`'s body and
+  `Shot`; thrown and unarmed weapons take no event and have no weapon-side timer. The estimate
+  is removed for **every** NPC wielder, `UsesUnreadOperatorEstimate()` is not written, and the
+  silent-class list's first half is empty. The Warning and the integrator's list stand.
+  **(J11, the second sitting.)** The four species whose fire is task code — ChangBros,
+  FrenzyShadow, Bach, ManBat — are verified absent from both witness maps and filed on
+  `spec.md`'s "on demand, not in the sequence" line, one row each; the Warning is their tripwire.
+- **Q11 (added by the judge's second sitting, J12). The NPC's clip.** Retail fills it once at
+  equip (`max(Default_Size, 1)`) and never lowers it; the port spends and refuses for every
+  wielder — an old bug in landed work, fixed in V4o lane O3. Every gunman then fires without
+  running dry: `NO_PRIMARY_AMMO` cannot rise from firing, and a record that expects a reload
+  after emptying a gun is a record error. The reload finish stays a seam (V5b).
+- **Q12 (added by the second sitting, J13 / J14.1). The corpse's removal is four clocks**, all
+  state: unseen mortal at a 10 s poll, Kindred at +10 s, fade at about +13.8 s (25 of the 62
+  makers on the two maps make fade children — `verbs_stealth_kill`'s victim is one), pedestrian
+  never. C2 ports the missing thinks, D keeps the simulating body alive through a removal; four
+  records prove them.
 - **Q7. `melee_swing`'s `hit_event`** may be a record error (no authored melee commit, §1). R2
   settles; the V4c integrator corrects the record with the retail source if so. The record stays red
   on N3 (V11) regardless; the spec's "melee-and-die" scenario cannot close in V4.

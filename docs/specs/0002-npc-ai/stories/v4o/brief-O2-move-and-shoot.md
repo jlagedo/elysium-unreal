@@ -4,7 +4,9 @@ Read `README.md` here (§1 "The wire", §2 P5, §4 "Shared names", §6, §7),
 `docs/vtmb/animation_events.md` → "The move-and-shoot overlay, arm by arm"
 (`uv run elysium research section 0x10098cd0`), `docs/vtmb/npc-ai/senses.md` § "`StartTaskOverlay`
 `0x10288710`", `docs/vtmb/npc-ai/shape.md` § "`OverrideMove`, `ShouldMoveAndShoot`…". After V4a's
-commit. Re-locate every site by Grep on the function name.
+commit **and V4b's** (amended after settling packet S3, 2026-10-04: `../v4/packets-S3.md` items
+1, 2 and 4 are the reads behind items 0, 3 and 4 below; where this brief and the README's older
+text disagree, this brief wins). Re-locate every site by Grep on the function name.
 
 ## Files (only these)
 
@@ -13,6 +15,18 @@ commit. Re-locate every site by Grep on the function name.
   (`FMoveAndShootOverlay`, `ArmMoveAndShootOverlay`, `DisableMoveAndShootOverlay`, the new
   declarations)
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMoveAndShoot.cpp` (new: the three bodies)
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcMotor.cpp` (`FElysiumNpc::ShouldMoveAndShoot`
+  only — item 0)
+
+**Not** `ElysiumNpcKernelTunables.h`: it is generated from
+`research/tooling/ghidra/driver/kernel_tunables.tsv` ("Do not hand-edit"). The row item 4 needs is
+a **cross-lane line**: write it exactly in your report and code against the name
+`EConVar::DebugAllowMfTurn`; the integrator adds the row and regenerates before the build.
+**Not** `ElysiumNpcBaseMotor.cpp` (the `ActiveWeaponCapabilityWord` seam's home; V4b lane B2's
+file, and V4c C1's).
+
+Wave check (O1 / O2 / O3, re-checked after S3): `ElysiumNpcMotor.cpp` is in neither O1's list nor
+O3's; no file of yours is.
 - `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp` (the slot-445 block only)
 - `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMoveAndShootTests.cpp` (new)
 
@@ -21,6 +35,16 @@ commit. Re-locate every site by Grep on the function name.
 Read the four bodies in the listing first (`vtmb_code 102e8270`, `102e83e0`, `102e84a0`,
 `102e8560`; `vtmb_asm` where a constant is folded). Then:
 
+0. **Slot 575 — the fix without which nothing below ever runs** (S3 item 4.1). Retail slot 575
+   `0x102bf4a0` tests the active weapon's slot 360 capability word `& 0x6000`. The port's
+   `FElysiumNpc::ShouldMoveAndShoot` (`ElysiumNpcMotor.cpp`) tests
+   `ActiveWeaponCapabilityWord() & 0x6000`, and that function (`ElysiumNpcBaseMotor.cpp`) is **a
+   seam returning 0**: `StartTaskOverlay` always takes the disable (`+0x18 = FLT_MAX`) and
+   `0x102e8560` returns at step 1 — the overlay can never arm. **Read the word through
+   `FElysiumNpc::SelectActiveWeaponWord()`** (`ElysiumNpcSelect.cpp`, the real word; the read V11
+   prescribes for `Slot600`). **Do not change the seam**: answering there moves Combat10's reload
+   pre-pass, and its file is not yours. Cite `0x102bf4a0` at the line and say in your report
+   that the seam still answers 0 for its other callers.
 1. **The words**: `FMoveAndShootOverlay` gains `bMovingAndShooting` (`+0x10`), `MoveShots`
    (`+0x14`), `MinBurst` / `MaxBurst` (`+0x1c` / `+0x20`), `InitialDelay` (`+0x2c`, 0 from
    `0x1027c300`); `UpdateCalls`, `Arms`, `Disables` go with their assertions.
@@ -32,7 +56,16 @@ Read the four bodies in the listing first (`vtmb_code 102e8270`, `102e83e0`, `10
    `NextShotTime = curtime + InitialDelay`.
 3. **`RunMoveAndShootOverlay()`** = `0x102e8560`, the nine steps of the doc section in their order,
    with `CanAimAtEnemy` = `0x102e83e0` and `UpdateMoveShootActivity(bool)` = `0x102e84a0` as their
-   own functions. Every slot it calls exists in the port — find each by address
+   own functions. **`CanAimAtEnemy`'s first test** (S3 item 2): `m_bConditionsGathered +0x5ca4`
+   clear (cleared by `RunAI 0x1026f110`, set by `GatherConditions 0x1026ec30`) → slot 481 =
+   **`CAI_BaseNPC::GatherEnemyConditions 0x10270b20`** — the overlay gathers the enemy
+   conditions itself (the LOS debounce, `SEE_ENEMY`, `ENEMY_TOO_FAR`, and through slots 564 /
+   561 the attack conditions) when the think has not gathered yet, **before** it reads `0x4f`.
+   The slot answers nothing; its effect is the condition set. The port binds that byte to
+   `Cognition.GatheredAt`: read it as `ElysiumNpcMaintain.cpp` does (Grep `GatheredAt` there).
+   `0x4f` itself is read with plain `HasCondition` (`0x10269b30` is a forwarder), not the
+   interrupt-masked read `0x10269d30`; the port already raises it
+   (`ElysiumNpcCond::GatherAttackConditions`) — nothing of V5 is needed. Every slot it calls exists in the port — find each by address
    (`uv run elysium research where "slot 478" "slot 560" "slot 481" "slot 517" "slot 381"
    0x102ee3f0 0x102ee250 0x102dfed0`): `BestEnemy`, `ClearAttackConditions`, `SetEnemy`,
    `SetState(2)`, `NavIsGoalActive`, the navigator's movement activity getter and setter,
@@ -41,22 +74,38 @@ Read the four bodies in the listing first (`vtmb_code 102e8270`, `102e83e0`, `10
    class: call the existing slots. The fire rate is the weapon's slot 332 (`0x10254410`: the weapon
    data's `+0x260` through the owner's scale `0x1033d940`); the constants are 0.3 (`0x1047b868`)
    and 0.1 (`0x104493d0`).
-4. **The `0x47` / `0x48` gesture arm** (step 7): recover the object at `0x10923cf4` (`vtmb_asm
-   102e8560` from `0x102e8600`; `vtmb_globals`), its default, and the doubles `0x1044e668`,
-   `0x1049d910`, `0x10449260`. Recovered → port it, the `RandomInt` on the `NpcSchedule` stream,
-   and record the values in `docs/vtmb/animation_events.md` by one targeted Edit of that step.
-   Not recovered within the budget → a seam answering "gate closed", named for `0x10923cf4`, and
-   say so first in your report: it decides whether a draw is taken.
+4. **The `0x47` / `0x48` gesture arm** (step 7) — **settled (S3 item 1); port the gate, no
+   seam.** The cvar is **`debug_allow_mf_turn`**, default `"0"`, flags 0, object `0x10923cf0`
+   (`0x10923cf4` is its parent pointer; help: "If this is on, NPCs will turn to look behind them
+   periodically when they run for cover."). The gate, in order (`0x102e8626..0x102e86a1`):
+   `IsCommand()` false; the int value (`+0x2c`) non-zero; the Troika self-cast `+0x98` non-null;
+   `|GetPoseParameter("move_yaw")| > 90.0` (double `0x1044e668`, strict); `RandomInt(0,
+   ftol((190.0 − |yaw|) × 0.25)) < 5` (doubles `0x1049d910` = 190.0, `0x10449260` = 0.25) on the
+   `NpcSchedule` stream. The side pick compares the dot with float `0.0` (`0x104454c4`): `<= 0`
+   → `0x48`, else `0x47`. Read the cvar through a new tunables row **`DebugAllowMfTurn`** —
+   `debug_allow_mf_turn` "0", object `0x10923cf0`, the shape of `DebugAllowMoveFacing`'s row —
+   which you write in your report (see Files). **With the shipped default the gate is closed: no
+   gesture is pushed and no `RandomInt` draw is taken** — the draw sits behind the cvar test,
+   exactly there, and the arm test says so. S3 already recorded the values in
+   `docs/vtmb/animation_events.md`; you edit no doc.
 5. **`RunTaskOverlay`** `0x10289c90`: slot 529 true → `RunMoveAndShootOverlay()`.
-6. **Tests** `Elysium.Arm.NpcKernelMoveAndShoot.Arm`, `.CanAim`, `.MoveActivity`, `.Run` (README
-   §6). In `ElysiumNpcKernelSenses10Tests.cpp` delete only the assertions that pin the counters or
+6. **Tests** `Elysium.Arm.NpcKernelMoveAndShoot.Arm`, `.CanAim` (ungathered → slot 481 runs
+   before `0x4f` is read; gathered → it does not), `.MoveActivity`, `.Run` (README §6; the
+   gesture arm with `debug_allow_mf_turn` 0: no gesture, **no draw** — the stream's next value
+   is unchanged), `.Slot575` (`0x102bf4a0`: a `0x6000` active weapon passes through
+   `SelectActiveWeaponWord()`; no weapon or a melee word does not). In `ElysiumNpcKernelSenses10Tests.cpp` delete only the assertions that pin the counters or
    the arm taken without the sequence test; list them.
 
 ## Not yours
 
-The layer table, its advance and dispatch (O1); the weapon's handler (O3); `StartTaskOverlay`,
-slot 575 and slot 529 (retail already — do not rewrite); the attack conditions (V5); the
-navigator's activity → sequence commit beyond the existing setter.
+The layer table, its advance and dispatch (O1); the weapon's handler (O3); `StartTaskOverlay`
+and slot 529 (retail already — do not rewrite; **slot 575 is not: item 0**); the
+`ActiveWeaponCapabilityWord` seam (`ElysiumNpcBaseMotor.cpp`); the attack conditions (already
+raising `0x4f`; V5a-1 rewrites that body); the burst-pause words (`ActiveWeaponBurstPauseWords`,
+`ElysiumNpcConditions10.cpp`, a seam answering 0 / 0 — the re-arm draws `RandomFloat(0, 0)`, so
+bursts follow each other with no pause; in nobody's lane, name it in your report); the body's
+turn toward the facing target while running (V4b B2, `0x102e1a83`); the navigator's activity →
+sequence commit beyond the existing setter.
 
 ## Rules
 

@@ -3879,7 +3879,15 @@ index 0x38 and every out-of-range id tail-call `CAI_BaseNPC::RunTask`. Arms by i
   the four `+0x6254..+0x6260` stamps = curtime, complete.
 - **0x03** `0x102aae43` (0x2b, 0x31): `SetTurnActivity` unless `m_afMemory & 0x2000`, then the base.
 - **0x04** `0x102aae61` (0x2e): the turn test; aim at the override or the enemy's LKP (-1.0); complete
-  on `FacingIdeal`.
+  on `FacingIdeal`. _Walked 2026-10-04 (0002 V4 packet S1):_ `m_afMemory & 0x2000` clear → slot 572
+  `SetTurnActivity` every call; `0x102e20b0(point, -1.0)` = `SetIdealYawAndUpdate`, whose `-1.0`
+  re-reads `MaxYawSpeed` (`0x102e1cf0`) before `UpdateYaw(-1)`. **Unlike the base arm `0x102889b5`
+  it does not call `0x102e0b40`**, so the yaw clock (`motor+0x2c`) is reset only by `StartTask`'s
+  turn tail `0x102a44d1` and `UpdateYaw` `0x102e1e20` integrates the real time since the last call
+  (0.1 s, double `0x104493d0`, on the first). `AI_ClampYaw` is `0x102e1d10(rate = speed × 10.0,
+  current, target, dt)`: `step = rate × dt`; `move = target − current` wrapped into ±180
+  (`>= 180` → `− 360` when `target > current`, `<= −180` → `+ 360` otherwise); clamp to `± step`;
+  the sum quantised to 16 bits.
 - **0x05** `0x102ab0a9` (0x34): `AutoMovement`, aim (-2.0). With `m_iBurstFireCount > 0`: no weapon →
   complete (and retail then reads the null weapon); next attack time `0x10252450` still ahead →
   running; else decrement, `0x102aaa60` (the hint idle re-arm; stamps `m_flLastAttackTime`) true →
