@@ -27,6 +27,20 @@ void UElysiumNavAreaComponent::GetNavigationData(FNavigationRelevantData& Data) 
 	{
 		return;
 	}
+	// The roadway's vertical frame -- under 0018/6's NavMesh divergence (Source's node graph and
+	// link stream become a Recast mesh), the frame difference with retail's `0x2000` test
+	// `102fbbaa`. Retail asks the brush's contents between two NODE positions, about 21 cm above
+	// the ground (`sm_hub_1`: slabs z -118..-16 u, nodes z ~-111 u; `navigation-jump-links.md`
+	// § "The `0x2000`-only brushes"), so a slab whose floor floats over the road still meets every
+	// link across it. Recast asks the GROUND surface, the walkable span's top, and lowers a
+	// convex's floor by one cell height only (`FRecastTileGenerator::MarkDynamicArea`,
+	// `OffsetZMin = ch + (ShouldIncludeAgentHeight() ? AgentHeight : 0)`); the hub's slabs stand at
+	// z -298.5 cm over a road at -304.8 cm. Including the agent height reaches the surface the agent
+	// stands on under the volume -- what the engine's own convex marks do (`NavCollision.cpp`
+	// `SetIncludeAgentHeight(true)`) -- and adds no margin of ours: the staged hull stays the brush.
+	// The door cut is not this rule (a door is solid to every probe at its own height, 0018/7) and
+	// keeps the brush's own floor.
+	const bool bReachGroundUnder = AreaClass->IsChildOf(UElysiumNavArea_Pedestrian::StaticClass());
 	// The points are already world centimetres -- the pipeline stages them in the same frame the
 	// collision hulls are staged in -- so the transform handed to the modifier is identity rather
 	// than this component's. Passing the component transform would apply the actor's placement a
@@ -37,8 +51,11 @@ void UElysiumNavAreaComponent::GetNavigationData(FNavigationRelevantData& Data) 
 		{
 			continue;
 		}
-		Data.Modifiers.Add(FAreaNavModifier(Convex.Points, ENavigationCoordSystem::Unreal,
-			FTransform::Identity, AreaClass));
+		FAreaNavModifier Area(Convex.Points, ENavigationCoordSystem::Unreal, FTransform::Identity,
+			AreaClass);
+		// Set before `Add`: the composite reads the flag as the area is added (`bAdjustHeight`).
+		Area.SetIncludeAgentHeight(bReachGroundUnder);
+		Data.Modifiers.Add(Area);
 	}
 }
 

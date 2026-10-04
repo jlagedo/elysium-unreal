@@ -443,8 +443,25 @@ bool FElysiumNpcKernelSenses10BaseOnLookedTest::RunTest(const FString&)
 	TestTrue(TEXT("...and the D_HT priority arms still raise SEE_HATE"),
 		Out.Has(EElysiumNpcCond::SeeHate));
 
+	// `1026a2c6..1026a2cf`: the body's first call clears the SEE family (`0x105c979c`, 6:
+	// `43 45 46 44 5b 5a`) on every pass. The same conditions, NOT reset: the enemy turned D_NU, so
+	// this pass raises none of them, and what the previous pass raised does not survive it.
+	// Priority 5, the hate row's own: `SetEntity` refuses a lower one and would leave D_HT standing.
+	F.Guard->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Neutral, 5);
+	Out.Set(EElysiumNpcCond::SeeDislike);
+	Out.Set(EElysiumNpcCond::SeeFear);
+	Out.Set(EElysiumNpcCond::SeeNemesis);
+	ElysiumNpcCond::GatherSight(*F.Guard, 11.0, Out);
+	TestFalse(TEXT("0x1026a2cf a standing SEE_ENEMY is cleared at the head of the pass"),
+		Out.Has(EElysiumNpcCond::SeeEnemy));
+	TestFalse(TEXT("0x1026a2cf ...SEE_HATE"), Out.Has(EElysiumNpcCond::SeeHate));
+	TestFalse(TEXT("0x1026a2cf ...SEE_DISLIKE"), Out.Has(EElysiumNpcCond::SeeDislike));
+	TestFalse(TEXT("0x1026a2cf ...SEE_FEAR"), Out.Has(EElysiumNpcCond::SeeFear));
+	TestFalse(TEXT("0x1026a2cf ...SEE_NEMESIS"), Out.Has(EElysiumNpcCond::SeeNemesis));
+
 	// (The port's `GatherCommittedEnemy`, whose SEE_ENEMY this case also pinned as absent, went with
-	// its twin gather at story 8 wave 2: slot 481 `0x10270b20` never writes 0x46 either.)
+	// its twin gather at story 8 wave 2. Slot 481 `0x10270b20` raises 0x46 on its own terms --
+	// `10270cfb`, below the occlusion limit with the cone and `QuerySeeEntity` -- not off the seen set.)
 	return true;
 }
 

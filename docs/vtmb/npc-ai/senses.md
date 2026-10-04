@@ -171,8 +171,8 @@ Record (list head **`mem+0xc`**, stride from `0x102df130`):
 
 | off | meaning |
 |---|---|
-| `+0x00` | last known position |
-| `+0x0c` | anchor position (re-latched when moved further than `[0x10497c80]` = 0.0 — always) |
+| `+0x00` | the **tracked** position: latched with `+0x0c` by `UpdateMemory`, then re-copied from the target's live origin by `RefreshMemories` while `curtime < lastSeen + m_flFreeKnowledgeDuration`. No gameplay reader: its one getter, `0x102e0470`, has no caller |
+| `+0x0c` | the **last known position** — where the target was last sensed: written only by `UpdateMemory` (on create, and on a refresh when the new position is further than `[0x10497c80]` = 0.0 from it — always). Every LKP read returns it: `GetLastKnownPosition` `0x102dfed0`, `0x102e0290` (with `+0x18`), and the removal notify in `RefreshMemories` |
 | `+0x18` | last known velocity |
 | `+0x24` | **actor EHANDLE** (`-1` for a position-only record) |
 | `+0x28` | last-seen `curtime` |
@@ -1225,7 +1225,14 @@ The `CAI_BaseNPC` base body beneath the Troika override that owns slot 469 — a
 function, which is why it carries its own name in the port (`FElysiumNpc::BaseOnLooked`, whose body
 is `ElysiumNpcCond::GatherSight`).
 
-`ClearCondition` over the six-entry table at `0x105c979c`; the entity to **skip** resolved from the
+`ClearConditions(0x105c979c, 6)` (`0x10269bd0`, `1026a2c6..1026a2cf`) is the body's first call, on
+every pass, before the skip entity and the walk over the kept list. The table, read out of
+`.rdata`: `43 45 46 44 5b 5a` — `SEE_HATE`, `SEE_DISLIKE`, `SEE_ENEMY`, `SEE_FEAR`, `SEE_NEMESIS`,
+`SEE_PLAYER`. In the same gather each is raised again only by this body (`0x5a` `1026a392`, `0x46`
+`1026a3de`, `0x45`/`0x5b`/`0x43` `1026a474`, `0x44` `1026a4e5`) and, for `SEE_ENEMY` alone, by slot
+481 `GatherEnemyConditions` (`10270cfb`: below the occlusion limit, in the cone, `QuerySeeEntity`).
+So a sighting drops on the first pass whose kept list no longer holds it. Then the entity to
+**skip** resolved from the
 senses object at `+0x98` — slot `0x928` normally, or the handle at `+0x608c` when `m_bfAINPCFlags2`
 bit `0x400000` is set — and skipped before any arm. Then per entity off the senses iterator
 (`0x1030fc90` / `0x1030fd20`): slot `0x650` `IRelationType`; a player (`+0xa8` non-null) raises COND
@@ -1245,6 +1252,14 @@ origin. `D_FR` (2) writes `m_hLastSeenFearEnt`, makes the same `0x880` call and 
 `relation != D_NU` gate, and `SEE_ENEMY`, which the port raised unconditionally in
 `GatherCommittedEnemy` off the seen set rather than inside this loop behind the skip exclusion and
 that gate.
+
+**CORRECTION to the port (2026-10-04, Q-H3, story V13).** The six-entry clear was named in the
+port's comments but never run: `GatherSight` only set, so a SEE_* condition stood until a schedule
+change, slot 477 (off-PVS) or the enemy-dead clears took it — `memory_occluded_kept` showed no
+`cond- SEE_ENEMY` after the player hid. The clear now heads `ElysiumNpcCond::GatherSight`, after the port's oblivious gate
+(retail never reaches `OnLooked` under `m_iIsOblivious`, `0x1026e4f0`). In the same story
+`Conditions19LastKnownPosition` (`0x102dfed0`) was corrected from the record's `+0x00` to `+0x0c`
+(table above), so the LKP no longer follows free knowledge.
 
 **Unrecovered:** retail's `D_ER` arm is unreachable through this port —
 `FElysiumRelationships::Resolve` never answers `D_ER` — so the `DevWarning` is recorded rather than

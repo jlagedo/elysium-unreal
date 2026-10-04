@@ -411,7 +411,9 @@ bool FElysiumNpc::StartTask19EnemyLkp(const FElysiumEntity& Enemy, FVector& OutL
 	{
 		return false;
 	}
-	OutLkpUnits = StartTask19A::UnitsOf(Record->LastPosition);
+	OutLkpUnits = StartTask19A::UnitsOf(Record->Anchor);              // `0x102e032a..33a` record `+0xc`
+	// FLAGGED (Q-H3, story V13), not changed: retail's second out is the record's `+0x18`, the last
+	// known velocity (`senses.md` § The enemy memory); the port hands the position again.
 	OutSeenUnits = OutLkpUnits;
 	return true;
 }

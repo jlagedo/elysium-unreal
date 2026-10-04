@@ -71,7 +71,8 @@ bool FElysiumNpcBase::InnateWeaponLosTrace(const FVector& StartCm, const FVector
 void FElysiumNpcBase::BaseOnLooked()
 {
 	// `CAI_BaseNPC::OnLooked` (`0x1026a2c0`). The body is `ElysiumNpcCond::GatherSight`, which
-	// carries every arm in retail's order: the six-entry `ClearCondition` table at `0x105c979c`, the
+	// carries every arm in retail's order: the six-entry `ClearConditions` table at `0x105c979c`
+	// (`1026a2cf`, at `GatherSight`'s head; it was named here and never run until Q-H3, story V13), the
 	// skip entity resolved off `m_bfAINPCFlags2 & 0x400000`, `SEE_PLAYER` with the `0x1017ff40`
 	// per-relation stamp, the `relation != D_NU` gate, `SEE_ENEMY` for the committed enemy, the
 	// D_CALM divert and the three `IRelationPriority` thresholds, and the slot-544

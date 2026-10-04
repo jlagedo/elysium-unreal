@@ -320,12 +320,16 @@ double FElysiumNpcBase::Conditions19LastTimeSeen(const FElysiumEntity* Enemy) co
 
 FVector FElysiumNpcBase::Conditions19LastKnownPosition(const FElysiumEntity* Enemy) const
 {
-	// `0x102dfed0`.
+	// `0x102dfed0`. Every arm copies the record's `+0xc` (`Anchor`), never `+0x0` (`LastPosition`):
+	// `CAI_Memory::UpdateMemory` (`0x102df700`) latches both on a sighting, but
+	// `RefreshMemories` (`0x102df320`) re-copies only `+0x0` from the target's live origin while
+	// `curtime < lastSeen + m_flFreeKnowledgeDuration`, so the last known position is where the
+	// enemy was last SEEN, not where free knowledge followed him. Q-H3, story V13.
 	if (Enemy != nullptr)
 	{
 		if (const FElysiumNpcEnemyMemoryRecord* const Record = EnemyMemory.Find(Enemy->Handle))
 		{
-			return Record->LastPosition;                                 // record `+0xc`
+			return Record->Anchor;                                       // record `+0xc`
 		}
 	}
 	const FElysiumNpcEnemyMemoryRecord* PositionOnly = nullptr;
@@ -342,7 +346,7 @@ FVector FElysiumNpcBase::Conditions19LastKnownPosition(const FElysiumEntity* Ene
 		UE_LOG(LogElysiumNpcEnt, Verbose,
 			TEXT("%s Asking LastKnownPosition for enemy (%s) that's not in my memory (using danger pos)!!"),
 			*DebugString(), *EnemyName);                                 // `1060e248`
-		return PositionOnly->LastPosition;
+		return PositionOnly->Anchor;                                     // record `+0xc`
 	}
 	UE_LOG(LogElysiumNpcEnt, Verbose,
 		TEXT("%s Asking LastKnownPosition for enemy (%s) that's not in my memory!!"),

@@ -84,7 +84,7 @@ the tutorial's `thug_1`, every hub pedestrian and any input fired at such an NPC
 | N13 | a patrol walks at ~0.44× retail's ground speed, with the walk clip playing (review doubt 1, settled by V3a: **not red 1**) | `patrol_sentry2_pingpong`, `patrol_monk_loop`, `input_clearpatrolpath` | `StudioFrameAdvance 0x1008f120` recomputes `m_flGroundSpeed +0x654` every tick (`0x1008f2fa` / `0x1008f306`) from `GetSequenceGroundSpeed 0x10091490`, weighted by the live `move_yaw` (`animation_and_movers.md` § the move_yaw fan); `move_yaw` is the angle between the facing queue's heading and the body's yaw, written by `0x102e19e0` (`shape.md:3003-3010`); `GetIdealSpeed 0x10091740` reads `+0x654` plainly (no playback rate); `MoveGroundStep 0x102e1760`. Retail `walk_0` 136.7 cm/s | V3a measured: the clip now plays (`walk rate=1`) and every leg time is unchanged to 0.1 s (`input_clearpatrolpath` 0.700 goal → 10.500 arrived, ~540 cm in 9.8 s on the flat arena floor, ≈ 0.55 m/s, before and after). The per-frame speed is `CommandedTravelSpeed()` (`ElysiumNpcBody.cpp:329-364`, written into `MaxWalkSpeed` each `AnimTick`, `:481`) = the walk fan read at the body's measured `move_yaw` (`ElysiumAnimationDriver.cpp:597-617`, `663-666`). 60.7 / 136.7 = 0.44 is the `walk_90` cell's ratio: the lead (not verified live) is a body walking ~90° off its path, its yaw turned to a facing target (`MotorHandFacingTarget`, `ElysiumNpcBaseFacing.cpp:170-187` → `ApplyFacingTarget`, `ElysiumNpcBody.cpp:1085-1087`) instead of retail's facing queue. Next step: a live read of `move_yaw` / ground speed on sentry2 (`ElysiumMcpTools.cpp:1281`) | **(a) V4**, facing (`GetIdealYawSpeed`, `FacingIdeal 0x10278c80`) and `StudioFrameAdvance`'s ground speed, both already V4's. **A plan correction, stated**: V3's plan (`stories/v3/README.md` §4) expected V3a to turn the three patrols green; they move to V4's acceptance list. Not a later-phase bug: V4 is the next story of step 2. Also seen, pre-existing and unchanged: `patrol_monk_loop` 33.033 `move fail 12` on the leg to pod_1, then a re-issued goal |
 | N14 | a restored visitor always loses its place: the interesting place's marker table has no writer (found by V3b's coder B1; filed by V3b's integrator, 2026-10-04) | none: `save_restore_mid_path` is parked (H8) and stages no visit | `CAI_BaseNPCTroika::OnRestore` scans `0x102db5e0` (the LAST place whose marker table `+0x580` / `+0x588`, stride `0x1c`, names this NPC) into `+0x62ec`, then `0x10299a80` re-checks it (two `DevMsg` refusals); the occupant is written by `ClaimMarker 0x102da7c0` (from `0x102a9f40`). The release `0x102b53d0` runs the same `0x10299a80` first | `FElysiumInterestingPlace::FMarker::Occupant` has no writer (`ElysiumInterestingPlace.cpp:64` only zeroes it), so `FindInterestingPlaceHoldingMe` (`ElysiumNpcLifecycle2.cpp:203`) answers none and `ValidateRestoredInterestingPlace` (`:233`) rejects every restored place; `FinishAmbientUse` (`ElysiumNpc.cpp` ~:1924) ports only the first refusal of `0x10299a80`, its marker half named **Unrecovered** at the line | **(a) V6** (save / restore, resume at `+0x5c50`): `ClaimMarker`'s occupant write and the marker half of `0x10299a80` land with the restore they serve; V6 needs a visit-mid-save record. Not a planning bug: no step-2 record before V6 saves a visitor |
 | N15 | `ClaimAmbientSpot`'s eligibility carries port terms retail does not have (the place type and the visitor class) (found by V3b's coder B1; filed by V3b's integrator, 2026-10-04) | `places_thug_pt1`, `map_tutorial_sneak_past` (first half): `thug_1` is `npc_VVampire`; `pt1`'s type `Idle` lists only `npc_VBrujah`, `npc_VGangrel`, `npc_VPedestrian`; 0.533 `task_find_interesting_place`, `taskfail No interesting places were available to go to. (0x22)` | `0x102dad60` (read 2026-10-04): NPC non-null, `+0x57c` enabled, `+0x57d` clear, free capacity `+0x584 - +0x58c - +0x588 > 0`, `+0x574 & npc+0x62dc`, distance² ≤ `[0x1049d28c]`; **no term reads the place's type or the visitor's class**. The type parser `0x102dd0f0` stores `AcceptedClasses` at type `+0x1a0` / `+0x1a4`; its one lookup `0x102dd630` has no caller in the corpus (`vtmb_callers`, `vtmb_grep`), so retail never gates a visit on it | `ElysiumNpc.cpp` `ClaimAmbientSpot` (~:1088): `TypeRow == null`, `TypeRow->Activities.IsEmpty()`, `!TypeRow->Accepts(Classname, StatTemplate)` refuse a place retail admits (a type with no INTO/idle activity is retail's `"Can not find interest"` arm in `0x102a9f40`, not a refusal) | **(b) planning bug, stated to the owner**: it blocks V3b's own acceptance, so it cannot wait for R2. Proposed: a **V3b follow-up wave** (XS, one coder + the integrator, one build) — delete the `Accepts` term and the two type terms (a live place always has a type: `Spawn` removes one without), check that `IsAvailable` reads `+0x57d`; with it H16 and Q-V3b1. Landed work (the place selector, 0018/10), so the fix is proposed before it runs |
-| N16 | a pedestrian route never carries a crosswalk curb, so no pedestrian ever waits at a red crossing (Q-V3b1, settled 2026-10-04; § "V3b") | `hub_crosswalk_wait` (`known_red` N16 / V13) | the pedestrian chain `0x102fcd00` puts both curbs of a crossed pair on the route (`4 \| 0x20`, start node included); at the first curb `0x102f0400` → `0x102a0bc0` → `0x102a0b90` latches `AT_CROSSWALK`; `0x102a0d20` raises `CROSSWALK_DONTWALK`, which breaks `0x100`, and `SelectSchedule 0x102af660` answers `0x102` (`0x102af763..76c`) | the downstream chain is ported (`ElysiumNpcSelect.cpp:599-602`, `ElysiumNpcDialogueBodies.cpp:337-459`, `ElysiumNpcBaseAdvancePath.cpp:58-62`), but `NavLayPedestrianLegs` (`ElysiumNpcCrosswalk.cpp:101-194`, the named modernization of `0x102fcd00`) laid no curb on any of the hub's first routes, at least five of which cross the road between the pairs: every `MoveTo` goes straight to the place, no `waypoint passed`. Which test drops the pair (the 48-unit capture against the NavMesh `PointsCm`, the consecutive-pair rule, the start-node arm, the pedestrian filter's pricing of the crossing) is **undetermined**: it needs the route points logged against the six curb positions | **(a) V13 (new, proposed, awaiting the owner): "The pedestrian nav area in the hub's bake"** (re-placed by the V3b follow-up's integrator, 2026-10-04). The V3b follow-up's read settled the cause as **baked data, not the splice**: on `sm_hub_1`'s baked Recast meshes no roadway polygon carries `UElysiumNavArea_Pedestrian` (`NavAreaAt` answers `NavArea_Default` inside all 9 priced slabs), so the pedestrian filter's ×5–10 price applies to nothing, routes cut the road diagonally and the splice's 48-unit capture rightly finds no curb (§ "V3b follow-up"). A fault in landed work (0018/3's NavMesh bake, 0018/7's crosswalk) that needs pipeline work and a re-bake, outside V3. Not a planning bug: V13 is a step-2 story placed before the second V2 run. Caveat for the record: only first walks can cross (`TASK_WAIT_PVS` holds every pedestrian outside the player's PVS after its first visit, `0x102aad7e`, as retail) |
+| N16 | a pedestrian route never carries a crosswalk curb, so no pedestrian ever waits at a red crossing (Q-V3b1, settled 2026-10-04; § "V3b") | `hub_crosswalk_wait` (`known_red` N16 / V13) | the pedestrian chain `0x102fcd00` puts both curbs of a crossed pair on the route (`4 \| 0x20`, start node included); at the first curb `0x102f0400` → `0x102a0bc0` → `0x102a0b90` latches `AT_CROSSWALK`; `0x102a0d20` raises `CROSSWALK_DONTWALK`, which breaks `0x100`, and `SelectSchedule 0x102af660` answers `0x102` (`0x102af763..76c`) | the downstream chain is ported (`ElysiumNpcSelect.cpp:599-602`, `ElysiumNpcDialogueBodies.cpp:337-459`, `ElysiumNpcBaseAdvancePath.cpp:58-62`), but `NavLayPedestrianLegs` (`ElysiumNpcCrosswalk.cpp:101-194`, the named modernization of `0x102fcd00`) laid no curb on any of the hub's first routes, at least five of which cross the road between the pairs: every `MoveTo` goes straight to the place, no `waypoint passed`. Which test drops the pair (the 48-unit capture against the NavMesh `PointsCm`, the consecutive-pair rule, the start-node arm, the pedestrian filter's pricing of the crossing) is **undetermined**: it needs the route points logged against the six curb positions | **(a) V13 (new, proposed, awaiting the owner): "The pedestrian nav area in the hub's bake"** (re-placed by the V3b follow-up's integrator, 2026-10-04). The V3b follow-up's read settled the cause as **baked data, not the splice**: on `sm_hub_1`'s baked Recast meshes no roadway polygon carries `UElysiumNavArea_Pedestrian` (`NavAreaAt` answers `NavArea_Default` inside all 9 priced slabs), so the pedestrian filter's ×5–10 price applies to nothing, routes cut the road diagonally and the splice's 48-unit capture rightly finds no curb (§ "V3b follow-up"). A fault in landed work (0018/3's NavMesh bake, 0018/7's crosswalk) that needs pipeline work and a re-bake, outside V3. Not a planning bug: V13 is a step-2 story placed before the second V2 run. Caveat for the record: only first walks can cross (`TASK_WAIT_PVS` holds every pedestrian outside the player's PVS after its first visit, `0x102aad7e`, as retail). **Re-stated by the V13 wave (2026-10-04), the cause measured: the marks never reach Recast.** `UElysiumNavAreaComponent` (`ElysiumNavAreaActor.h:34`, a `USceneComponent` + `INavRelevantInterface`) never enters UE 5.8's navigation octree, so neither its pedestrian slabs nor its door cuts are ever offered to the generator; the floating-floor lead is not the cause (§ "V13 wave") |
 | N17 | a place authoring `max_npcs 0` admits one visitor: the port floors the capacity at 1 (flagged by the V3b follow-up's coder F1; filed by its integrator, 2026-10-04) | none: no record stands such a place. The corpus (`exports_v2/maps/*.entities.glb`, 2026-10-04, 5.8 s): 1293 `intersting_place` rows on 22 maps, every one authors `max_npcs` (`population.md:794`); values 1 ×1009, 2 ×128, 4 ×91, 3 ×30, 5 ×13, **0 ×9** (`la_empire_2` 1, `la_skyline_1` 3, `sp_soc_2` 4, `sp_soc_3` 1), 50 ×6, 8 ×4, 6 ×2, 15 ×1; `sp_tutorial_1` 29 × 1; `sm_hub_1` 1 ×45, 2 ×22, 4 ×6, 6 ×2, 8 ×1 | `0x102dad60` `0x102dad8c..0x102dada4`: `m_iMarkersAllocated +0x584` (key `max_npcs`, datamap offset 1412) `− +0x58c − +0x588 > 0`, no floor: a 0 row is refused by every NPC | `ElysiumInterestingPlace.cpp:86` `IsAvailable`: `Claimants.Num() < FMath::Max(1, MaxNpcs)` (and the debug line `:122`); the member's default `MaxNpcs = 1` (`ElysiumInterestingPlace.h:17`). **Not changed** by the follow-up: nine shipped rows author 0, so the floor changes behaviour on four maps; first read retail's value for an absent key (the constructor `0x102d99d0`) and what the bake writes for an authored `0` (`ElysiumNpcKernelBindings.cpp:1250`, the infra actor's key rebuild, `ElysiumInfraActorsTests.cpp:251`) | **(a) R2** (places and patrols): delete the floor once both defaults are read, cite `0x102dad8c`. Not a planning bug: no step-2 record reaches a `max_npcs 0` row (the witness maps author none) |
 
 Every new red lands in step 2 except N3, the one planning bug among them, and N12, which stays in
@@ -314,6 +314,82 @@ both as before the wave. The one verdict that moved: `places_thug_pt1`, expected
   (`programs.md:396-399`): whether `investigate_mode 4` sets it decides whether the match is a
   record error. Stays on V12.
 
+## V13 wave (2026-10-04): the senses bugs landed, V13 not established
+
+Two lanes and an integrator (`stories/v13/brief.md`). One build (1m47s), one bake of `sm_hub_1`
+(1m35s, `NAV_AREA_ACTOR_SHAPE` 1 → 2, `verify nav` clean). Default 176 / 0; arm 1551 / 0 (one
+lane test fixed, below). Suite `20261004T071616.934975Z`: 105 records, 70 pass, 32 expected-fail,
+2 fail (`rollcall_vzombie` H11, as before; `map_tutorial_idle`, below), 1 unexpected-pass
+(`hear_world_investigate`, N4, as before). Every other record passed or failed at the same point
+as the V3b follow-up's suite; `memory_occluded_kept` passes with its two new SEE drops.
+
+- **Q-V13a `map_tutorial_idle` is boot-dependent (not this wave).** The one verdict that moved
+  (pass → fail). sentry2 (`use_interesting`) selects `0xff` at its first think, before its patrol
+  wires (2.0), and the record's `never` forbids any `taskfail` until 1.8. On this one binary, four
+  boots: first think 0.300 and 0.217 drew places at (−4341, −1189, −508) and (−4333, −843, −508),
+  `move fail 12`, `Don't have a route (0xc)` → fail; first think 0.083 and 0.167 drew
+  (−19370, −8057, 17432), the place the previous suite's pass drew → pass. The seed does not fix the
+  map host's first-think time or the place draw (`0x102db590`), so the verdict is a draw. Open, for
+  the harness / V2: why the first think moves per boot under `seed 1`, and whether retail refuses
+  those two places (`programs.md` § "The failed walk": a refused interesting-place route is
+  retail's), which would make the 1.8 s `never` a record error. Not loosened here.
+
+- **Q-H3 closed.** The LKP is retail's (above, "Filed by the coordinator"); the two old bugs the
+  read found are fixed. `GatherSight` (`ElysiumNpcConditions.cpp:329-347`) clears the six SEE
+  conditions at its head as `OnLooked 0x1026a2c0` does (`ClearConditions(0x105c979c, 6)`,
+  `1026a2cf`: `43 45 46 44 5b 5a`); `Conditions19LastKnownPosition` returns the record's `+0xc`
+  (`Anchor`) as `GetLastKnownPosition 0x102dfed0` does (`102dff66..7f`), and so do the four other
+  `0x102dfed0` / `0x102e0290` readers (`ElysiumNpcSelect.cpp:1193`, `ElysiumNpcSelectSpecies.cpp:856`,
+  `:1312`, `ElysiumNpcAnim10.cpp:392`, `ElysiumNpcStartTask.cpp:414`; `0x102e0290` copies `+0xc` at
+  `102e032a..3a`). `memory_occluded_kept` re-stated with retail's cadence (record § `about`):
+  SEE_HATE and SEE_PLAYER fall at 1.200 (teleport 1.000; worst case 1.0 + the 0.15 s kept-list
+  rescan + one 0.1 s think = 1.25, deadline 1.3), SEE_ENEMY with `OnLostPlayerLOS` at 2.000 (the
+  tenth miss, deadline 2.1), the LKP hunt's `goal -447 -152 0` at 3.000 (the hidden spot, written
+  by the pass after the teleport). The lane's arm test staged its D_NU turn at priority 0, which
+  `SetEntity` refuses under the D_HT 5 row (a staging error, corrected to 5).
+- **Two readers flagged, not changed.** `ElysiumNpcStartTask.cpp:414-417`: `0x102e0290`'s second
+  out is the record's `+0x18` (last known velocity, `senses.md` § The enemy memory); the port hands
+  the position again. `ElysiumNpcBoss.cpp:130`: `0x102dfc10`'s two vectors to owner slot 56 are
+  UNRECOVERED at the line. Both filed to **R2** (the enemy memory's remaining words); no step-2
+  record reads either.
+- **V13 not established; N16 re-stated with the measured cause.** `Elysium.Content.NavArea.Hub`
+  on the OLD bake: the pedestrian area is listed (id 2); the road probe (−1700, −760, −303) lands on
+  area 63 (`RECAST_DEFAULT_AREA`) — red; the three crosswalk-gap midpoints are unpriced — green; the
+  ×8 route is `(-2294 -1071 -291) (-1976 -988 -298) (-1368 -494 -298) (-776 205 -278)`, 95.1 u from
+  curb 258 and 259.7 u from 259 — red. After the bake with `SetIncludeAgentHeight(true)` on the
+  slabs (convex floor lowered by the Human agent height, ~1.8 m below the road): **identical**,
+  assertion by assertion and corner by corner. So the floating floor is not the cause, and G1's
+  doubt 2 does not apply to this test (it reads the raw polygon id and the saved area row by name,
+  not `NavAreaAt`'s class fallback). The cause, read in the engine (UE 5.8): the marks never enter
+  the navigation octree at bake time. `UElysiumNavAreaComponent` is a `USceneComponent` +
+  `INavRelevantInterface`; in 5.8 actors and components reach the octree only through the
+  `UNavigationObjectRepository` (`NavigationSystem.cpp:5052-5057`, `AddLevelToOctree` adds BSP
+  only), fed by `FNavigationSystem::OnComponentRegistered`. A plain scene component calls that only
+  from `HandleCanEverAffectNavigationChange` (`ActorComponent.cpp:3274-3296`; the engine's own
+  `UNavRelevantComponent::OnRegister` calls it, `NavRelevantComponent.cpp:59`); otherwise only
+  `OnActorRegistered` notifies an actor's registered components (`NavigationSystem.cpp:4056-4072`,
+  `ComponentShouldWaitForActorToRegister` true). The bake spawns the marks actor (registered with
+  only its root) and `AElysiumNavAreaActor::AddArea` then creates and registers each component
+  (`ElysiumNavAreaActor.cpp:93-138`): nothing notifies the navigation system, so `Nav->Build()`
+  (`ElysiumNavBakeLibrary.cpp:424`) gathers no modifier from them (`RecastNavMeshGenerator.cpp:2138`,
+  `AppendModifier :2522`). A level LOAD would register them (the actor registers with its saved
+  components), which is why nothing looked wrong at runtime. **Inferred by the same path, not
+  measured:** the door cuts (0018/7; hub 54 convexes, tutorial 60) are in the same components and
+  have never cut a baked mesh either. `hub_crosswalk_wait` (expected-fail, unchanged): 11.833
+  `crosswalk_south` `DontWalk`; in 280 s no `Move: waypoint passed`, no `AT_CROSSWALK`, no
+  `SCHED_TROIKA_WAIT_AT_CROSSWALK`. Stopped as the brief says: no second bake, the fix not widened.
+  **For the owner / the judge** (a bake and a behaviour change on every map's doors): register the
+  components with the navigation system as they are added (what `UNavRelevantComponent::OnRegister`
+  does), then re-bake `sm_hub_1` and `sp_tutorial_1` and re-run `Elysium.Content.NavArea.` and the
+  tutorial records (doorways the graph has no link through become walls in the mesh). G1's
+  `SetIncludeAgentHeight(true)` and its test extension are kept: its own question (whether the
+  slab's floor needs it, `RecastNavMeshGenerator.cpp:4885` vs the cell rounding of the road's span,
+  `dtMarkConvexArea` `DetourTileCacheBuilder.cpp:2583-2610`) can only be answered once the marks
+  reach Recast. `Elysium.Content.NavArea.Hub` stays red on N16 until then.
+- **The six other maps' slabs filed to R2** (`hw_hub_1` 13, `la_hub_1` 16, `ch_hub_1` 6,
+  `hw_asphole_1`, `la_parkinggarage_1`, `sp_theatre` 1 each): they take the registration fix and
+  `NAV_AREA_ACTOR_SHAPE` 2 at their next bake.
+
 ## The fix order — acceptance lists
 
 | story | records that must turn green |
@@ -326,7 +402,7 @@ both as before the wave. The one verdict that moved: `places_thug_pt1`, expected
 | V7 inputs + N5 + N6 | `input_disablethink`, `input_changeschedule_reselect` |
 | V10 (new) a sound's life | `hear_world_investigate` green in every boot (run it 3× in different boot orders) |
 | V12 the footstep producer | `map_tutorial_sneak_past`'s hearing half (Q-V3bf1 read first) |
-| V13 (new, proposed) the hub's pedestrian nav area | `hub_crosswalk_wait` (N16), with `Elysium.Content.NavArea.Hub` |
+| V13 the hub's pedestrian nav area (not established, 2026-10-04: the marks' registration, § "V13 wave") | `hub_crosswalk_wait` (N16), with `Elysium.Content.NavArea.Hub` (road probe, route) |
 
 ## Filed by the coordinator, 2026-10-04 (unattended run)
 
@@ -340,7 +416,7 @@ both as before the wave. The one verdict that moved: `places_thug_pt1`, expected
   dialogue and passes `CanTalk`; 37 units, facing) and the harness delivers `+use`
   (`verbs_stealth_kill`). Not a planning bug: V3d's own record needs it and V3d's lane owns the
   dialogue open.
-- **Q-H3 settled — the last-known position is retail's.** `OnLooked 0x1026a2c0` walks the player
+- **Q-H3 settled — the last-known position is retail's** (closed by the V13 wave, § "V13 wave" above). `OnLooked 0x1026a2c0` walks the player
   list `LookForPlayers 0x1030fff0` kept from its last 0.15 s scan and writes the entity's current
   origin through slot 544 → `UpdateMemory 0x102df700` (`+0x0` and `+0xc`), so one pass after the
   teleport still writes the hidden spot. Two old bugs found by the read, fixed in the V13 wave

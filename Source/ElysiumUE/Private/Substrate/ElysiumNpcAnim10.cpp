@@ -389,7 +389,7 @@ void FElysiumNpc::TroikaSetActivity(int32 Activity)
 				// retail reads the last known position and its own origin into stack vectors and
 				// DISCARDS both. The reads are reproduced because they are dispatches a program can
 				// observe; the values go nowhere in retail either.
-				const FVector LastKnown = Record->LastPosition;
+				const FVector LastKnown = Record->Anchor;   // `0x102dfed0` copies `+0xc`
 				(void)LastKnown;
 				(void)Origin;   // slot 217 GetAbsOrigin, read and discarded
 				SecondBound = 0x18;

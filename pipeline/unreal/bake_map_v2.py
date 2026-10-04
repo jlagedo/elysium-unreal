@@ -278,7 +278,8 @@ WATER_ACTOR_SHAPE = 2
 #: area classes and which staged rows reach each. Bumped when that changes for the same staged
 #: rows (story 7 gives the doors that DO carry a link their own per-agent cut, which is the next
 #: bump), so the level re-authors rather than keeping marks cut to the old rule.
-NAV_AREA_ACTOR_SHAPE = 1
+#: 2 (V13): the roadway marks include the agent height (`ElysiumNavAreaActor.cpp`).
+NAV_AREA_ACTOR_SHAPE = 2
 
 #: The host script's namespace (`bake_map`'s `globals()`), bound once by it at import time. Wrapped
 #: so this module reads `HOST.Bake` rather than a dict subscript, and read lazily so binding does not

@@ -630,6 +630,13 @@ tests the green scenarios cover deleted.
   (−1700, −760, −303); a ×8 route from (−2294, −1071) to (−776, 205) passes within 48 units of curb
   258, then 259). *Scenario:* `hub_crosswalk_wait`. *Size:* S–M. Evidence: `stories/v1/triage.md`
   N16 and § "V3b follow-up".
+  *Wave run 2026-10-04, not ticked* (`stories/v1/triage.md` § "V13 wave"): the senses bugs landed
+  (Q-H3 closed). The lead was refuted: the bake with the agent height changed nothing, and the
+  measured cause is that the marks never enter UE 5.8's navigation octree at bake time
+  (`AddArea` registers each component after its actor registered; nothing notifies the
+  navigation system), so neither the slabs nor the door cuts reach Recast. Fixing it re-cuts every
+  map's doorways too: sent to the owner / the judge, with a re-bake of `sm_hub_1` and
+  `sp_tutorial_1`.
 
 Order: V1 → V2 → H → V3 (V3r, V3a, V3b, V13, V3c, V3d) → T6b → V4 → V5 → V11 ‖ V6 → V7 → V10 → V12 → V2 again (full run) → V8 → V9.
 **T6b, the header pass** (the owner, 2026-10-04; `stories/t6b/brief.md`): the kernel headers' include fan-out cut after V3d and before V4, one agent holding the build; it closes T6 (edit-mix p90 ≤ 90 s).

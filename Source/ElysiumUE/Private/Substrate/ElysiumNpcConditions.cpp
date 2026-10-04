@@ -326,6 +326,26 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 		return;
 	}
 
+	// `1026a2c6..1026a2cf`: `OnLooked`'s FIRST call, `ClearConditions(0x105c979c, 6)` (`0x10269bd0`),
+	// on every pass -- before the skip entity is resolved and before the kept list is walked, so a
+	// sighting that is no longer in the list drops on this pass. The table, read out of retail's
+	// `.rdata`: `43 45 46 44 5b 5a`. In the same gather each is raised again only by this loop
+	// (SEE_PLAYER `1026a392`, SEE_ENEMY `1026a3de`, SEE_DISLIKE / SEE_NEMESIS / SEE_HATE `1026a474`,
+	// SEE_FEAR `1026a4e5`) and, for SEE_ENEMY alone, by slot 481 `GatherEnemyConditions` (`10270cfb`:
+	// below the occlusion limit, in the cone and passing `QuerySeeEntity`). Q-H3, story V13.
+	static const EElysiumNpcCond SeeTable[] = {
+		EElysiumNpcCond::SeeHate,     // 0x43
+		EElysiumNpcCond::SeeDislike,  // 0x45
+		EElysiumNpcCond::SeeEnemy,    // 0x46
+		EElysiumNpcCond::SeeFear,     // 0x44
+		EElysiumNpcCond::SeeNemesis,  // 0x5b
+		EElysiumNpcCond::SeePlayer,   // 0x5a
+	};
+	for (const EElysiumNpcCond Cond : SeeTable)
+	{
+		Out.Clear(Cond);
+	}
+
 	TArray<FElysiumEntityHandle> Seen;
 	NpcCondBuildSeenSet(Npc, Seen);
 

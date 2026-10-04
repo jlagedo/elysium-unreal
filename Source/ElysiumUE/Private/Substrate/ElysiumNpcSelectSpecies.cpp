@@ -853,7 +853,7 @@ int32 FElysiumNpcHengeyokai::Select19HengeyokaiFindFishSchedule()
 			// enemy. A missing record takes `0x102dfed0`'s fallbacks: the last `+0x34`-flagged record
 			// (no port word; unrecovered) else `vec3_origin` (`DAT_1070d1b0`), which is used here.
 			const FElysiumNpcEnemyMemoryRecord* const Record = EnemyMemory.Find(Enemy->Handle);
-			const FVector LastKnownCm = Record != nullptr ? Record->LastPosition : FVector::ZeroVector;
+			const FVector LastKnownCm = Record != nullptr ? Record->Anchor : FVector::ZeroVector;   // `0x102dfed0` copies `+0xc`
 			// 0x10382e9b FCOMPP / AND 0x4100: `|lkp - self|^2 <= |fish - self|^2` (or unordered) →
 			// the enemy is no farther than the fish: drop the pickup and answer 0 with no `+0x6678`
 			// / `+0x667c` write.
@@ -1309,7 +1309,7 @@ int32 FElysiumNpcTzimisce::Select19TzimisceFindBodySchedule()
 		// A missing record leaves retail's stack vector unwritten (its DevWarning arm); the enemy's
 		// origin stands in there (crash guard).
 		const FElysiumNpcEnemyMemoryRecord* const Record = EnemyMemory.Find(Enemy->Handle);   // 0x103bc62a / 0x103bc632
-		const FVector Lkp = Record != nullptr ? Record->LastPosition : Enemy->Origin;
+		const FVector Lkp = Record != nullptr ? Record->Anchor : Enemy->Origin;   // `0x102dfed0` copies `+0xc`
 		const FVector LkpDelta = Lkp - Origin;                     // 0x103bc63b slot 220 / 0x103bc641..0x103bc66d
 		const float LkpDistSqr = DistSqrUnits(Lkp, Origin);        // 0x103bc671..0x103bc695
 		bAccept = false;

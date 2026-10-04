@@ -1190,7 +1190,7 @@ int32 FElysiumNpc::SelectSoundSourceSchedule(int32 HatedAnswer, int32 FearedAnsw
 					// `source->GetEnemies()` (`+0x874`) `0x102dfa20` has-memory / `0x102dfed0` LKP.
 					if (const FElysiumNpcEnemyMemoryRecord* Record = SourceNpc->EnemyMemory.Find(Enemy->Handle))   // 0x102b8dfc / 0x102b8e03
 					{
-						SavePosition = Record->LastPosition;       // 0x102b8e1f..0x102b8e31
+						SavePosition = Record->Anchor;             // 0x102b8e1f..0x102b8e31 (`0x102dfed0` copies `+0xc`)
 						return HatedAnswer;                        // 0x102b8e37 MOV EAX,[ESP+0x28]
 					}
 				}

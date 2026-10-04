@@ -12,12 +12,15 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumMoveSolve.h"
 #include "ElysiumNavAreaActor.h"
 #include "ElysiumNavAreas.h"
 #include "ElysiumNavBakeLibrary.h"
+#include "ElysiumWorldServices.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Map/ElysiumNavQueryFilter_Pedestrian.h"
+#include "Map/ElysiumWorldGeometry.h"
 #include "NavAreas/NavArea_Default.h"
 #include "NavMesh/RecastNavMesh.h"
 #include "NavigationSystem.h"
@@ -69,13 +72,99 @@ namespace
 		return Links;
 	}
 
-	// The supported-agents bit of a project agent, by name (`SupportedAgents` order).
-	uint32 AgentBit(const TCHAR* Name)
+	// A project agent's index, by name (`SupportedAgents` order), or INDEX_NONE.
+	int32 AgentIndex(const TCHAR* Name)
 	{
 		const TArray<FNavDataConfig>& Agents = GetDefault<UNavigationSystemV1>()->GetSupportedAgents();
-		const int32 Index = Agents.IndexOfByPredicate(
+		return Agents.IndexOfByPredicate(
 			[Name](const FNavDataConfig& Agent) { return Agent.Name == FName(Name); });
+	}
+
+	// The supported-agents bit of a project agent, by name.
+	uint32 AgentBit(const TCHAR* Name)
+	{
+		const int32 Index = AgentIndex(Name);
 		return Index == INDEX_NONE ? 0u : (1u << Index);
+	}
+
+	// The level's mesh cut for the named agent, found by name and never by index: a map builds only
+	// the agents its own graph names.
+	ARecastNavMesh* MeshFor(UWorld* World, const TCHAR* Agent)
+	{
+		for (TActorIterator<ARecastNavMesh> It(World); It; ++It)
+		{
+			if (It->GetConfig().Name == FName(Agent))
+			{
+				return *It;
+			}
+		}
+		return nullptr;
+	}
+
+	// The id the bake saved for `Area` on `Mesh`, read off the saved class NAME; INDEX_NONE when the
+	// mesh lists no such area. A package-loaded mesh is registered with no navigation system, and
+	// the class half of each saved row is transient (`FSupportedAreaData::AreaClass`, engine
+	// `NavigationData.h:39`), so `GetAreaClass` answers null for every polygon until a registration
+	// fills it -- which is why `UElysiumNavBakeLibrary::NavAreaAt`'s "NavArea_Default" fallback
+	// cannot be asked of a level loaded this way.
+	int32 BakedAreaId(const ARecastNavMesh& Mesh, const UClass* Area)
+	{
+		TArray<FSupportedAreaData> Rows;
+		Mesh.GetSupportedAreas(Rows);
+		for (const FSupportedAreaData& Row : Rows)
+		{
+			if (Row.AreaClassName == Area->GetName())
+			{
+				return Row.AreaID;
+			}
+		}
+		return INDEX_NONE;
+	}
+
+	// The area id of the polygon `PointCm` lands on, INDEX_NONE where nothing walkable projects. The
+	// box is narrow across (every probe below stands >= 50 cm inside the polygon it asks about) and
+	// a metre tall, so a point stated at the road's height lands on the surface Recast cut there.
+	int32 PolyAreaAt(const ARecastNavMesh& Mesh, const FVector& PointCm)
+	{
+		FNavLocation Landed;
+		if (!Mesh.ProjectPoint(PointCm, Landed, FVector(10.0, 10.0, 100.0)))
+		{
+			return INDEX_NONE;
+		}
+		return static_cast<int32>(Mesh.GetPolyAreaID(Landed.NodeRef));
+	}
+
+	// The route's closest approach to `AtCm`, measured flat, and the flat route length walked to it
+	// -- the crosswalk splice's own measure (`ElysiumNpcCrosswalk.cpp` `XwClosestOnRoute`), so the
+	// test asks what `NavLayPedestrianLegs` asks. False for a route with no point.
+	bool ClosestFlat(const TArray<FVector>& Points, const FVector& AtCm, double& OutDistCm,
+		double& OutParamCm)
+	{
+		if (Points.Num() == 0)
+		{
+			return false;
+		}
+		const FVector P(AtCm.X, AtCm.Y, 0.0);
+		OutDistCm = FVector::Dist(FVector(Points[0].X, Points[0].Y, 0.0), P);
+		OutParamCm = 0.0;
+		double Walked = 0.0;
+		for (int32 Index = 0; Index + 1 < Points.Num(); ++Index)
+		{
+			const FVector A(Points[Index].X, Points[Index].Y, 0.0);
+			const FVector B(Points[Index + 1].X, Points[Index + 1].Y, 0.0);
+			const FVector AB = B - A;
+			const double Length = AB.Size();
+			const double T = Length > 0.0
+				? FMath::Clamp(FVector::DotProduct(P - A, AB) / (Length * Length), 0.0, 1.0) : 0.0;
+			const double Dist = FVector::Dist(A + AB * T, P);
+			if (Dist < OutDistCm)
+			{
+				OutDistCm = Dist;
+				OutParamCm = Walked + Length * T;
+			}
+			Walked += Length;
+		}
+		return true;
 	}
 }
 
@@ -120,6 +209,100 @@ bool FElysiumNavAreaHubTest::RunTest(const FString&)
 		TestEqual(TEXT("...carrying human and rat"), static_cast<uint32>((*Basic)->SupportedAgentBits()), Both);
 		TestTrue(TEXT("...enabled"), (*Basic)->IsSmartLinkEnabled());
 	}
+
+	// V13 (N16): the marks reach the baked Human mesh. Counting convexes says the bake laid them;
+	// only the mesh says Recast took them. The slabs are the staged hull rows of `sm_hub_1.hulls`
+	// with contents `0x08002000` (no clip bit), axis-aligned boxes, z -298.5..-39.4 cm, over a road
+	// whose solid tops out at z -304.8 cm (the world brushes under every probe below). Row 17 is
+	// x -2428.2..-1036.3, y -1087.1..-447.0; row 18 x -3291.8..-2672.1, y -1077.0..-467.4; row 19
+	// x ..-3515.4, y -1097.3..-467.4; row 20 x -3302.1..-2707.6, y ..-1352.7. Recast grows each by
+	// the Human radius, 33.02 cm (`DefaultEngine.ini` `SupportedAgents`, HUMAN_HULL), before
+	// marking (`MarkDynamicArea`, `GrowConvexHull(AgentRadius)`).
+	ARecastNavMesh* Human = MeshFor(Baked, TEXT("Human"));
+	if (!TestNotNull(TEXT("the hub carries its Human mesh"), Human)) return false;
+	const int32 PedestrianId = BakedAreaId(*Human, UElysiumNavArea_Pedestrian::StaticClass());
+	if (!TestNotEqual(TEXT("the Human mesh lists the pedestrian area"), PedestrianId,
+		static_cast<int32>(INDEX_NONE))) return false;
+
+	// Mid-road on row 17, >= 300 cm inside every edge of it.
+	const int32 RoadArea = PolyAreaAt(*Human, FVector(-1700.0, -760.0, -303.0));
+	TestNotEqual(TEXT("(-1700, -760, -303), mid-road on slab row 17, lands on the Human mesh"),
+		RoadArea, static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("...on the pedestrian area"), RoadArea, PedestrianId);
+
+	// The crosswalk gaps stay unpriced: retail's pairs cross the road where no slab stands
+	// (`navigation-jump-links.md` § "The hub's 8 pairs"; none of the six `info_node_crosswalk`
+	// origins lies inside a slab), and the radius growth must not close them. Each probe is the
+	// midpoint of the pair's two curbs -- `info_node_crosswalk` rows 1613..1618 of the hub's
+	// entities (nodes 258..263, `seam_map_map.md`) -- at the road's height:
+	//   258-259 (-2538.5, -766.6): rows 17 and 18 grown leave x -2639.1..-2461.2 open, 77 cm margin;
+	//   260-261 (-3430.0, -772.1): rows 18 and 19 grown leave x -3482.4..-3324.8 open, 52 cm margin;
+	//   262-263 (-2988.8, -1238.5): rows 18 and 20 grown leave y -1319.7..-1110.0 open, 81 cm margin.
+	struct FCrossing
+	{
+		const TCHAR* Pair;
+		FVector MidCm;
+	};
+	const FCrossing Crossings[] = {
+		{ TEXT("258-259"), FVector(-2538.5, -766.6, -303.0) },
+		{ TEXT("260-261"), FVector(-3430.0, -772.1, -303.0) },
+		{ TEXT("262-263"), FVector(-2988.8, -1238.5, -303.0) },
+	};
+	for (const FCrossing& Crossing : Crossings)
+	{
+		const int32 Area = PolyAreaAt(*Human, Crossing.MidCm);
+		TestNotEqual(*FString::Printf(TEXT("the %s crossing's midpoint lands on the Human mesh"),
+			Crossing.Pair), Area, static_cast<int32>(INDEX_NONE));
+		TestNotEqual(*FString::Printf(TEXT("...and is not priced: the %s gap stays open"),
+			Crossing.Pair), Area, PedestrianId);
+	}
+
+	// A x8 pedestrian route (retail draws one `RandomInt(5, 10)` per search, `0x102fe9f0`) from the
+	// north side, east of curb 258, to the south side: it must cross at 258-259, passing within the
+	// splice's 48-unit capture of curb 258 and then of 259 -- what `0x102fcd00` needs to lay both
+	// curbs on the route. The filter reads the area through the class table, so first do
+	// registration's own step on the loaded mesh: `OnNavAreaAdded` finds the saved row by name and
+	// restores only its transient class and map entry (`NavigationData.cpp:804`), the saved id kept.
+	const int32 HumanIndex = AgentIndex(TEXT("Human"));
+	if (!TestNotEqual(TEXT("the project declares the Human agent"), HumanIndex,
+		static_cast<int32>(INDEX_NONE))) return false;
+	Human->OnNavAreaAdded(UNavArea_Default::StaticClass(), HumanIndex);
+	Human->OnNavAreaAdded(UElysiumNavArea_Pedestrian::StaticClass(), HumanIndex);
+	if (!TestEqual(TEXT("the class table answers the saved pedestrian id"),
+		Human->GetAreaID(UElysiumNavArea_Pedestrian::StaticClass()), PedestrianId)) return false;
+
+	FElysiumNpcRouteQuery Query;
+	Query.DestCm = FVector(-776.0, 205.0, -303.0);
+	Query.PedestrianCostMultiplier = 8;
+	FElysiumNpcRouteAnswer Route;
+	const bool bAsked = ElysiumWorldGeometry::Route(*Human, Human->GetConfig(),
+		ElysiumNavQueryFilterPedestrian::MakeFilter(*Human, nullptr, Query.PedestrianCostMultiplier),
+		FVector(-2294.0, -1071.0, -303.0), Query, Route);
+	if (!TestTrue(TEXT("the x8 route from (-2294, -1071) to (-776, 205) is found"),
+		bAsked && Route.bReachable)) return false;
+	FString Corners;
+	for (const FVector& Point : Route.PointsCm)
+	{
+		Corners += FString::Printf(TEXT(" (%.0f %.0f %.0f)"), Point.X, Point.Y, Point.Z);
+	}
+	AddInfo(FString::Printf(TEXT("x8 route, %.0f cm:%s"), Route.LengthCm, *Corners));
+
+	// Curbs 258 and 259, `info_node_crosswalk` rows 1613 and 1614 (`crosswalk_south`), Unreal cm.
+	const FVector Curb258(-2535.5, -1073.6, -272.9);
+	const FVector Curb259(-2541.6, -459.7, -281.9);
+	const double CaptureCm = 48.0 * ElysiumMove::U;   // `ElysiumNpcCrosswalk.cpp` GXwCaptureUnits
+	double Dist258 = 0.0;
+	double Param258 = 0.0;
+	double Dist259 = 0.0;
+	double Param259 = 0.0;
+	ClosestFlat(Route.PointsCm, Curb258, Dist258, Param258);
+	ClosestFlat(Route.PointsCm, Curb259, Dist259, Param259);
+	TestTrue(*FString::Printf(TEXT("the route passes within 48 u of curb 258 (%.1f u)"),
+		Dist258 / ElysiumMove::U), Dist258 <= CaptureCm);
+	TestTrue(*FString::Printf(TEXT("the route passes within 48 u of curb 259 (%.1f u)"),
+		Dist259 / ElysiumMove::U), Dist259 <= CaptureCm);
+	TestTrue(*FString::Printf(TEXT("...258 first, then 259 (at %.0f and %.0f cm along it)"),
+		Param258, Param259), Param258 < Param259);
 	return true;
 }
 

@@ -95,6 +95,10 @@ Wave 3 (build work, one agent):
 - [ ] **V13** — The pedestrian nav area in the hub's bake (new, from the V3b follow-up: N16;
   `hub_crosswalk_wait`). S–M. Accepted 2026-10-04 (the judge: implement now, ahead of V3c); runs
   with the two senses bugs from Q-H3 (the SEE clear in `OnLooked`, the last-known position's field).
+  Wave 2026-10-04, not ticked: the senses bugs landed (Q-H3 closed); the floating-floor lead was
+  refuted by the bake. N16's measured cause is that the nav-area marks never enter the navigation
+  octree at bake time (slabs and door cuts alike); the registration fix and two re-bakes await the
+  owner / the judge.
 - [ ] **V2 again** — the full run, every scenario green.
 - [ ] **V8** — `sp_tutorial_1` and `sm_hub_1`, live. S · Opus/high.
 - [ ] **V9** — The second cut: the arm tests the scenarios cover. S · Sonnet/medium.

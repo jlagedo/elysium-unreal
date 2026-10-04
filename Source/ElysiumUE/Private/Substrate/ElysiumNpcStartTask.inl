@@ -105,11 +105,11 @@ bool StartTask19NavArrived();
 bool StartTask19TeleportProbe(FVector& InOutUnits, bool& bOutLandedOnNonNpc);
 
 /** `CAI_Enemies` `0x102e0290(enemy, &lkp, &second)` (thunk `0x1000366b`, on slot 541 `GetEnemies()`):
- *  walk the memory for the enemy's record and copy its `+0xc` (the last known position) and `+0x18`
- *  (the second vector, the last SEEN position in the SDK record's layout) out; false with the
+ *  walk the memory for the enemy's record and copy its `+0xc` (the last known position, the port's
+ *  `Anchor`) and `+0x18` (the last known velocity, `senses.md` § The enemy memory) out; false with the
  *  `"Asking LastKnownPosition for enemy..."` DevWarning when there is none. The port's
- *  `FElysiumNpcEnemyMemory` IS `CAI_Enemies`: the record's `LastPosition` answers both (the port's
- *  record keeps one position). The retail fallback to a record flagged `+0x34` has no port flag. */
+ *  `FElysiumNpcEnemyMemory` IS `CAI_Enemies`. The second out still repeats the position (flagged,
+ *  Q-H3 / story V13). The retail fallback to a record flagged `+0x34` has no port flag. */
 bool StartTask19EnemyLkp(const FElysiumEntity& Enemy, FVector& OutLkpUnits, FVector& OutSeenUnits) const;
 
 /** The navigator's two tolerance words the tolerance tails write: `0x102ee1c0(nav, tol)` (the path's
