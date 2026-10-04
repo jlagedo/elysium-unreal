@@ -96,10 +96,16 @@ writes these, red, and adds what the harness lacks to state them:
   (`"armed": "<classname>"`, two records if one stage cannot hold both), `+attack`: expect the
   weapon's anim event (packet R2 names the numbers and the 4050/4051 camera band) before the
   damage it causes.
-- **`anim_prop_event`** (map stage, or arena if a baked animating prop row can stand there by
-  `from_map`): one `prop_dynamic` whose sequence authors an event, started by its input: expect
-  the event and what it fires. Packet R2 names a row from the two witness maps; if neither map
-  has one, say so and leave this record out.
+- **`anim_prop_event`** (arena — the Green Room, not a map stage): one animating prop whose
+  sequence authors an event, started by its input (`SetAnimation` or the row's own keys): expect
+  the event and what it fires. The prop does not have to come from the two witness maps: take a
+  retail row verbatim by `from_map` from any baked map that places such a prop, or, if no baked
+  map row serves, stand a hand-written `prop_dynamic` row in the arena with a model whose baked
+  clip table authors an event (the record states every key a retail row of that class carries,
+  and cites the retail map row it copies them from). Packet R2 names the model, the sequence and
+  the event number from the baked event tables across the whole corpus. The record is left out
+  only if no prop model in the corpus authors an animation event at all — then say so with the
+  count of prop models checked.
 
 Each record states retail's order (the event from the entity's own think, after its frame
 advance), cited from packet R2; where R2 has not landed when you write them, write the record as
