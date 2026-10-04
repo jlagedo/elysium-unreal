@@ -21,12 +21,12 @@
 #include "ElysiumMoveSolve.h"        // ElysiumMove::U -- the Source unit the trace depth is in
 #include "ElysiumPawn.h"             // the player's hull, the one toucher `NotifyHit` records
 #include "ElysiumPlayer.h"
+#include "Substrate/ElysiumNpcAccess.h"   // the hull words and the snapshot's DebugString()
 #include "Substrate/ElysiumNpcGait.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumNavDoorLink.h"
 #if ENABLE_VISUAL_LOG
-#include "Substrate/ElysiumNpc.h"    // the snapshot's DebugString()
 #include "VisualLogger/VisualLoggerTypes.h"
 #if !UE_BUILD_SHIPPING && WITH_GAMEPLAY_DEBUGGER
 #include "Debug/ElysiumNpcDebugData.h"
@@ -255,8 +255,8 @@ void AElysiumNpcBody::ApplyRetailHull()
 	{
 		return;   // not bound yet; the caller re-applies once it is
 	}
-	const ElysiumRetailHulls::FRow* Stand = ElysiumRetailHulls::Find(Npc->HullKind);
-	const ElysiumRetailHulls::FRow* Path = ElysiumRetailHulls::Find(Npc->PathingHullKind);
+	const ElysiumRetailHulls::FRow* Stand = ElysiumRetailHulls::Find(ElysiumNpcAccess::HullKind(*Npc));
+	const ElysiumRetailHulls::FRow* Path = ElysiumRetailHulls::Find(ElysiumNpcAccess::PathingHullKind(*Npc));
 	if (Stand == nullptr || Path == nullptr)
 	{
 		return;
@@ -283,7 +283,7 @@ void AElysiumNpcBody::ApplyRetailHull()
 	// The crowd limit for a non-human agent is NOT applied here: the controller that owns the
 	// follower is spawned lazily by the first accepted MoveTo, so there is nothing to disable yet
 	// and `ApplyCrowdState` would re-enable it afterwards regardless. It is decided there instead.
-	CachedPathingHull = Npc->PathingHullKind;
+	CachedPathingHull = ElysiumNpcAccess::PathingHullKind(*Npc);
 }
 
 int32 AElysiumNpcBody::PathingHullKind() const
@@ -543,7 +543,7 @@ void AElysiumNpcBody::GrabDebugSnapshot(FVisualLogEntry* Snapshot) const
 		return;
 	}
 
-	Status.Add(TEXT("Entity"), Npc->DebugString());
+	Status.Add(TEXT("Entity"), ElysiumNpcAccess::AsEntity(*Npc).DebugString());
 	Status.Add(TEXT("Epoch"), FString::FromInt(static_cast<int32>(EntityWorld->GetEpoch())));
 #if !UE_BUILD_SHIPPING && WITH_GAMEPLAY_DEBUGGER
 	// The snapshot is grabbed once per Visual Logger entry, so the row arrays stay out of it.

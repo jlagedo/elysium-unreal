@@ -6,7 +6,7 @@
 #include "NavigationSystem.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Substrate/ElysiumMover.h"
-#include "Substrate/ElysiumNpcBase.h"
+#include "Substrate/ElysiumNpcAccess.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Visual/ElysiumNpcBody.h"
 
@@ -155,8 +155,8 @@ bool AElysiumNavDoorLink::IsUsableFor(const UObject* Querier) const
 		if (NpcBase != nullptr)
 		{
 			// `0x102ff960` / `0x102fce80` on the querier's own pathfinder.
-			if (!NpcBase->DoorLinkPathfindingAllowed(*Door, GetSmartLinkComp()->GetStartPoint(),
-				GetSmartLinkComp()->GetEndPoint()))
+			if (!ElysiumNpcAccess::DoorLinkPathfindingAllowed(*NpcBase, *Door,
+				GetSmartLinkComp()->GetStartPoint(), GetSmartLinkComp()->GetEndPoint()))
 			{
 				return false;
 			}

@@ -1,5 +1,5 @@
 #include "ElysiumMapActor.h"
-#include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcAccess.h"   // the feed probe's two NPC reads, without the NPC class
 
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumBrushComponent.h"
@@ -1502,7 +1502,7 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 		// `FindEntityFOV` (`0x10341c30`) enumerates non-solid entities too; `EntityUnselectable`
 		// (`0x100a52a0`) rejects a clear `m_bIsBCCTargetable` (`+0x1480`), which a director stores.
 		if (!Ent || Ent->IsInert() || Ent->Handle == PlayerHandle || !Ent->AsCombatCharacter()
-			|| !FElysiumNpcBase::IsBccTargetable(*Ent))
+			|| !ElysiumNpcAccess::IsBccTargetable(*Ent))
 		{
 			continue;
 		}
@@ -1515,7 +1515,7 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 			// locomotion capsule or a visual mesh's changing animation bounds.
 			if (!GetUseBodyWorldBounds(Ent->Handle, Candidate))
 				Candidate = ElysiumStandHullAt(Ent->Origin);
-			Candidate = Npc->AttackBounds(Candidate);
+			Candidate = ElysiumNpcAccess::AttackBounds(*Npc, Candidate);
 		}
 		else if (CandidateBody)
 		{
@@ -1839,8 +1839,8 @@ bool AElysiumMapActor::TracePlayerSolid(const FVector& FromCm, const FVector& To
 	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityWorld->Entities())
 	{
 		FElysiumEntity* Ent = EntPtr.Get();
-		FElysiumNpc* Npc = Ent ? Ent->AsNpc() : nullptr;
-		if (!Npc || Npc->IsInert() || Npc->Handle == Ignore || ElysiumIsRetailNotSolid(*Npc))
+		if (!Ent || Ent->AsNpc() == nullptr || Ent->IsInert() || Ent->Handle == Ignore
+			|| ElysiumIsRetailNotSolid(*Ent))
 		{
 			continue;
 		}
@@ -1884,7 +1884,9 @@ bool AElysiumMapActor::CanStandForGrapple(const FVector& FeetCm,
 	const FBox Standing(Center - Extent, Center + Extent);
 	for (const TUniquePtr<FElysiumEntity>& Entry : EntityWorld->Entities())
 	{
-		const FElysiumNpc* Npc = Entry ? Entry->AsNpc() : nullptr;
+		// An NPC, read through its combat-character face (what `AsCombatCharacter` answers for one).
+		const FElysiumCombatCharacter* Npc =
+			Entry && Entry->AsNpc() != nullptr ? Entry->AsCombatCharacter() : nullptr;
 		if (Npc && !Npc->IsInert() && !Npc->HasReportedDeath() && Npc->Handle != Ignore
 			&& !ElysiumIsRetailNotSolid(*Npc)
 			&& Standing.Intersect(ElysiumStandHullAt(Npc->Origin))) return false;
