@@ -2706,7 +2706,9 @@ heaviest. The draw is `0x10427fc0` on the engine's shared uniform stream (`*0x10
 
 **Which finish value a task reads.** `m_bSequenceFinished` (`+0x65c`) has three writers on an NPC:
 `ResetSequenceInfo 0x10090950` clears it; `StudioFrameAdvance 0x1008f120` only ever SETS it (when the
-advanced cycle leaves `[0,1)`); the dispatcher `0x10091880` clears it and sets it again when
+advanced cycle leaves `[0,1)`; an advance of `dt <= 0.001` (`0x1008f1e9`, double `0x1044f020`)
+returns 0.0 having written nothing but the first-advance stamp initialisation, and a real advance
+returns `dt` — packet S6, 2026-10-04); the dispatcher `0x10091880` clears it and sets it again when
 `m_flCycle + 0.1 × cycleRate × m_flPlaybackRate >= 1.0` (`animation_events.md` § "The server
 dispatcher"). One think runs tasks first (`RunAI`), then `PostRun` (advance, then dispatch), so the
 word a `RunTask` arm reads through slot 251 is **the dispatcher's look-ahead value left by the

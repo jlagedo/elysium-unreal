@@ -14,6 +14,18 @@ authority beside the listings `vtmb_asm 10343020` from `0x1034394d` to `0x10343f
 protocol", `../v4/README.md` § "Rules for every agent of V4", `docs/vtmb/combat-and-damage.md`
 (by `research section 0x10343020`). **Re-locate every site by Grep on the function name.**
 
+**Amended after S6 (planner, 2026-10-04; `../v4/packets-S6.md` items 2, 3, 5).** The swing's
+activity is the **already-translated** one: `weapon.ActivityOverride 0x1024f210(0x4b)` (slot 361,
+the class's ladder — bat → `ACT_MELEE_ATTACK_BASEBALLBAT`, …; a species weapon with no row keeps
+`ACT_MELEE_ATTACK`), then owner slot 376 (identity on the Troika line). Where your walk or a test
+fixture names the swing's activity or collects its sequences, use the existing ladder resolver
+(`Visual/ElysiumWeaponActivityTables.cpp`, called, not edited) — never the raw `0x4b` for a held
+weapon. `GetSequencesForActivity`'s fifth argument, if a line of yours carries it, is the owner's
+attack-feat rank (`0x10204900`, = `GetRawAttackValue 0x10346070`) and filters nothing on shipped
+data (`seq+0x2b8` is −1): pass it unfiltered with that comment. **Never wait on `0x63`** in a test
+or a note: it is a ranged condition (slot 562, on `0x4f` only); a friend in a melee swing's way is
+D1's relation filter here, `0x102a11d0` (V11-1) and slot 331's `0x3a` (V11-3).
+
 ## Files (only these)
 
 - `Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h`, `.cpp` — `AdvanceSwingContact`'s

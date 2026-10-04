@@ -24,6 +24,19 @@ tests; V11-3 (`brief-V11-3-slot-331.md`) holds new `ElysiumMeleeSequenceChoice.{
 check below is unchanged with V11-2 in B1's place: you **call** `TraceRetail`, you edit neither
 that header nor `Tests/ElysiumTestServices.h`.
 
+**Amended after S6 (planner, 2026-10-04; `../v4/packets-S6.md` items 3 and 5).** (a) **Never wait
+on `0x63` for melee**: `WEAPON_BLOCKED_BY_FRIEND` is raised only through slot 562 `0x1026fbe0`,
+asked only on a ranged `0x4f`; `melee_ally_in_the_way` is decided by your gate `0x102a11d0` (item
+14) and slot 331's `0x3a` (V11-3), and no test or expectation of yours names `0x63`. (Slot 562 is
+lane V5a-3, in V4b's wave, already landed when you run.) (b) **The melee activity is translated
+before anyone uses it** (`0x103ea810..0x103ea82d`): `weapon.ActivityOverride 0x1024f210(0x4b)`
+(slot 361: the class's ladder, first playable row — a bat gives `ACT_MELEE_ATTACK_BASEBALLBAT`, a
+species weapon with no row keeps `ACT_MELEE_ATTACK`), then owner slot 376 (the identity here on
+the whole Troika line: no seam). Where a line of yours names the swing's activity, it is that
+translated one, through the existing ladder resolver (`Visual/ElysiumWeaponActivityTables.cpp`,
+read and called, not edited); the band is not yours — if you see it collecting sequences under the
+untranslated `0x4b`, report the line.
+
 ## Files (only these)
 
 - `Source/ElysiumUE/Private/Substrate/ElysiumAttackCoordinator.h`, `.cpp` (new)

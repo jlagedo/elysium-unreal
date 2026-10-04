@@ -1151,6 +1151,28 @@ activity: `+0x10` (weight), `+0x2c4` (swing-record count), `+0x2cc` / `+0x2d0` (
 reach), the `+0x2bc` envelope records at `+0x2c0`. It answers `0x51`, 9, `0x60`, `0x61`, `0x5f` or
 0 (packet S2 §4 for the order). The staged clip tables carry every one of those inputs.
 
+_Read 2026-10-04 (packet S6: `docs/specs/0002-npc-ai/stories/v4/packets-S6.md`)._ The band asks
+for `owner.slot376(weapon.ActivityOverride(activity))` (`0x103ea810..0x103ea82d`) and hands that
+translated activity to slot 331, which translates nothing itself; slot 376 is the identity for
+`0x4b` and its weapon-suffixed targets on the whole Troika line (`0x10295710`, `0x103858b0`,
+`0x10394690`). `GetSequencesForActivity`'s fifth argument is `0x10204900(weapon + 0x7a0 +
+rec[0]*0x44, owner)` — the mode's `CVDmg_t` source (`weapon+0x77c` is `CVDmg_t[3]`, size `0x44`,
+source at `+0x24`) evaluated on the owner, the same integer as `GetRawAttackValue`; it gates on
+`seq+0x2b8`, which is −1 on every shipped attack sequence (`mdl_v2531.md`), so it filters nothing.
+The low edge `+0x2cc` is compared raw, with no sentinel test, here and in `0x10347180`: an
+unstated one is `FLT_MIN` (`0x00800000`) and an unstated far edge `FLT_MAX`, and slot 331 folds
+both raw into the weapon's `+0x8b8` / `+0x8c0`.
+
+**Which mode record `0x102517e0` answers.** The row whose id (`row+0x104`) equals `weapon+0x848`
+`m_iItemCurActivateMode`; no match → row 0 copied to a static with type 0. Writers of `+0x848`:
+the constructor `0x10250ac0` (0; `m_iItemActivationModes +0x84c = {0, 2}`), `ModeDispatch` (`=
+m_iItemActivationModes[DAT_1088aee4]`, the global the four wrappers `0x102382f0` / `0x10238320`
+(0) and `0x10238350` / `0x10238380` (1) set), `Shot` (2 around one call, restored); the toggle
+`0x10239270` flips `m_iItemActivationModes[0]`. No melee body writes it. An NPC operator's event
+always takes `0x10238320` (`0x10238160` needs a player for the other), so an NPC's record is the
+primary mode in force; `TASK_WAIT_ATTACK_TIME2` reads the secondary *stamp* (`+0x734`) but the
+same record.
+
 **`0x102a11d0`** (the four `SelectScheduleMeleeCombat` bodies' gate) sweeps a slab — the NPC's
 box doubled in x and y, 12 units tall — from `WorldSpaceCenter` to a point against
 `CONTENTS_MONSTER` and answers true when it is blocked by an NPC the caller does not hate
@@ -1998,7 +2020,10 @@ runs the base, then `ThinkSet(NULL)` and `SetSolid(SOLID_NONE)`: a pedestrian's 
 removed by this chain. **Gibbing:** `OnTakeDamage` (`0x1032ef60`) always calls `Event_Killed` first;
 then slot 399 (`0x1014fa30`, false on every NPC) or damage bits `0x2000 && !0x1000` →
 slot 402 (`0x102658f0`: `CorpseGib`, else `CorpseFade`), otherwise slot 403 `Event_Dying` (empty).
-An explosion is `DMG_BLAST` and takes the ordinary corpse. **Feeding** kills through `Die`
+An explosion is `DMG_BLAST` and takes the ordinary corpse. No authored data sets `0x2000` (packet
+S6, 2026-10-04): `CVDmg_t::StrToDMGFlags` `0x101fab10` cannot produce the bit from an item's `Dmg`
+line, and no `damagetype` keyvalue on the 108 staged maps carries it; a literal in code was not
+swept. **Feeding** kills through `Die`
 (`0x103392c0`) from `FeedInterrupt` (`0x1033a9e0`, victim's blood `< 1`, not Kindred) and
 `DecBloodPool` (`0x10338df0`, blood 0, `IsKine`): the ordinary `Event_Killed`; Kindred go to
 `TorporBegin` instead.

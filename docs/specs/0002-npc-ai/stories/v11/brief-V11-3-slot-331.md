@@ -39,6 +39,29 @@ All centimetres, Unreal axes (the movement's Y is already reflected: do not nega
 line and say which side. Unstated edges: use retail's own markers so the arithmetic is retail's
 (`+0x2cc` unstated = `FLT_MIN`, `+0x2d0` unstated = `FLT_MAX`).
 
+**Amended after S6 (planner, 2026-10-04; `../v4/packets-S6.md` items 2–5):**
+
+- **The activity arrives translated; slot 331 translates nothing** (`0x103ea810..0x103ea82d`,
+  `0x103ea8c6 PUSH EBP`). The caller (the band) has already run the `ActivityOverride 0x1024f210`
+  ladder (weapon slot 361: first playable row of the class's list — bat →
+  `ACT_MELEE_ATTACK_BASEBALLBAT`, else `_MELEESHARED_ONEHAND`, else `_KATANA`; a species weapon
+  with no row keeps `0x4b`) and owner slot 376 (identity on the Troika line). Use the third
+  argument as given: no ladder call, no fallback to `0x4b` inside the body. Your fixtures hand it
+  a translated activity; if the landed band passes the untranslated `0x4b`, report the line (the
+  V5a integrator's to fix), do not compensate.
+- **Unset edges compare raw** (`0x10347180`, no sign or sentinel test): the bake's `LowReachCm ==
+  −1` is `FLT_MIN` (1.1754944e−38, raw `0x00800000`) and `ReachCm == 0` is `FLT_MAX` — markers,
+  never numbers to compare and never a reason to skip a candidate. So bit 8 is `FLT_MIN <= dist2D`
+  on an unstated low edge (false only at `dist2D == 0` exactly) and **true at any distance on an
+  unstated far edge**; and the weapon's running pair is folded with the raw values — an unstated
+  low edge drags `+0x8b8` to `FLT_MIN`, an unstated far edge drags `+0x8c0` to `FLT_MAX`. Convert
+  cm → units only for stated edges; `.Unstated` pins all four statements.
+- **The fifth argument** of `GetSequencesForActivity` is the owner's attack-feat rank
+  (`0x10204900`, = `GetRawAttackValue 0x10346070`); `seq+0x2b8` is −1 on every shipped attack
+  sequence, so it filters nothing: carry it named so, unfiltered, or not at all.
+- **Never wait on `0x63`** for melee: this body's friend arm is `0x3a` (step 2); `0x63` belongs to
+  slot 562 on a ranged `0x4f`.
+
 ## The job, in retail's order (S5 item 4's step numbers)
 
 1. `*out = −1`; no model → false (step 1).
@@ -52,7 +75,8 @@ line and say which side. Unstated edges: use retail's own markers so the arithme
    enemy's box in the attacker's line frame (step 3).
 4. `step` = NPC slot 522 (`+0x828`), else 4.0. `weapon == 0` → false; weapon slot 360 `& 0x18000
    == 0` → false (steps 4–5).
-5. `GetSequencesForActivity(this, activity, …)` with the mode's modifier (`0x10204900`); `dir`,
+5. `GetSequencesForActivity(this, activity, …)` — `activity` is the argument, already translated
+   (S6 amendment above) — with the mode's modifier (`0x10204900`); `dir`,
    `right` (step 6). Use the accessor V5a-1's wave added for the band; candidates in ascending
    `RawIndex`.
 6. **Per candidate, the flag word** (step 7), each bit citing its address:

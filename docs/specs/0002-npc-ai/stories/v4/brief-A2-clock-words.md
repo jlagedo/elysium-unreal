@@ -46,8 +46,15 @@ items 1 and 8, the ruling J1 (`stories/v1/triage.md` § "Judge's rulings, V4"; G
    advance is retail** (R2 item 8: `0x10280a50` calls slot 250 first, unconditionally; a second
    advance in one tick is inert because `dt = 0` fails `dt > *0x1044f020`) — nothing to change;
    if the port's second advance in one tick is not inert, report it with the line. *`0x1044f020` is the
-   f64 **0.001** (`packets-S5.md` item 9). Unrecovered: the early-out's return; if your port of
-   the guard needs it, the coder reads it first.*
+   f64 **0.001** (`packets-S5.md` item 9).* **The early-out is read (`packets-S6.md` item 7,
+   `0x1008f1e9..0x1008f209`):** `dt = interval + curtime − m_flAnimTime (+0x174)` (`interval ==
+   0.0` replaced by 0.1 first); **`dt <= 0.001` returns 0.0 and skips everything** — the
+   `+0x170 = +0x174` copy, the cycle and `m_flAnimTime` advance, the finish flag, the past-half
+   byte, `YawSpeed`, `GroundSpeed`, `OnSequenceFinished`. The one write made on both paths, before
+   the test: `m_flPrevAnimTime (+0x170) == 0` → `+0x170 = +0x174 = curtime`
+   (`0x1008f1a5..b3`). The normal path returns `dt` (`0x1008f321`). If the port's
+   `StudioFrameAdvance` returns the interval, or writes either speed word, on the early-out, make
+   it retail's (return 0.0, write nothing) and pin it in `SpeedWords`.
 3. **The reads.** Slot 242 `GetIdealYawSpeed 0x100916a0` returns `YawSpeed`; slot 248 `GetIdealSpeed
    0x10091740` returns `GroundSpeed`, no playback term. `GroundSpeedCm()` keeps reading the word.
    **Note (J9):** every shipped movement record's angle is 0.0, so `YawSpeed` is real and still 0

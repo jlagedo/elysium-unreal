@@ -1652,7 +1652,11 @@ the probe index walks the OBB), mask `0x2804091`; ten consecutive failures of `m
 `0x46004003`, owner ignored (`0x1024f3d0`): clear or hitting the enemy passes, a hated character
 is shot through, a friendly one sets `WEAPON_BLOCKED_BY_FRIEND 0x63`, anything else
 `WEAPON_SIGHT_OCCLUDED 0x66` (collision-group-4 breakables are skipped and re-traced). Unarmed:
-`0x1026fcf0`, from `origin + m_vecViewOffset`. `WEAPON_THROUGH_WALL 0x3c` is neither: Troika
+`0x1026fcf0`, from `origin + m_vecViewOffset`. Those two bodies are the **only sources of `0x63`**
+(packet S6, 2026-10-04; `GatherAttackConditions`' tail at `0x1026e087` only holds it while
+`+0x5b88` runs), and slot 562 `0x1026fbe0` — which also raises `0x42` (no weapon, no capability
+`0x20000`) and `0x64` (capability `0x10000000`, `0x10266b10(…, 0.92)`) — is dispatched from two
+sites only, both in `0x1026dd10` on a ranged `0x4f`. `WEAPON_THROUGH_WALL 0x3c` is neither: Troika
 `GatherConditions` casts a RAY (zero extents, `m_IsRay` at `102b2ef7`) 32 units along `m_vecForward`
 from `EyePosition` at mask `0x2000b` every 3.0 s — not a hull from the origin, as this item first
 said (corrected 2026-09-27, 0019 story 8 lane L07; § "Story 8, family Conditions19").

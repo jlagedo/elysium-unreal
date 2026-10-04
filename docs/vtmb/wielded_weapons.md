@@ -474,7 +474,9 @@ events `5001/5003/5011/5013/5021/5023/5031/5033` take `GetAttachment(slot + 1)`,
 nothing ever fires them. The only by-name lookups on a held weapon are
 `CBaseCombatCharacter::Weapon_ShootPosition` (`0x103338c0`) and `DrawMuzzleOverlay` (`0x1033e7e0`),
 both asking for `"muzzleflash"` — which is why only those 8 models get a geometric shot origin and
-the other 25 armed models fall back to `m_HackedGunPos` rotated by the character's eye angles.
+the other 25 armed models fall back to `m_HackedGunPos` rotated by the character's **body**
+angles (slot 221 `GetAngles 0x100b3110`, `m_angRotation +0x428` — not the eye angles; corrected
+2026-10-04, walked in `npc-ai/senses.md` § "`WeaponLOSCondition` `0x1026fbe0`").
 
 `w_f_m37` and both dragonbreaths name their slots `'0'` and `'1'`, on `pump handle` — so the
 `hands box` branch exists to position two attachment points that no shipped code path can reach.

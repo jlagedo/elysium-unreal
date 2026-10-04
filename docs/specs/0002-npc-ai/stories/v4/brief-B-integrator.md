@@ -62,6 +62,41 @@ port's `task_face_enemy` ran 13.4 s, for B2 item 4). Read
 7. **Commit once**: `fix(npc): V4b -- the body's speed is retail's velocity script and its stop;
    slot 15's influence and slot 18's move facing; the turn; N13`. Tick nothing. Do not push.
 
+## V5a-3 shares this wave
+
+Planner, 2026-10-04 (`packets-S6.md` item 5; "testable first"). The wave is **[B1, B2, V5a-3]**:
+lane V5a-3 (`../v5a/brief-V5a-3-slot-562.md`) wires slot 562 `WeaponLOSCondition 0x1026fbe0` into
+`GatherAttackConditions 0x1026dd10` and ports the weapon's line of fire (`0x1024f330` →
+`0x1024f3d0`) and slot 389 `0x103338c0`. Its files are disjoint from B1's and B2's; it calls
+`KernelHullTrace` (B2's file) and `TraceRetail` (B1's header) without editing them. Additionally:
+
+- **Before the lanes report, write the record** `Arena/scenarios/combat/ranged_friend_in_line_of_fire.json`
+  from the brief's § "The arena record" (staging, script, expect, never, each cited), with
+  `known_red` naming V5a-3, and its row in `Arena/README.md`. Run it once on the pre-lane build:
+  it must be **red for the stated reason** (no `0x63`, a 3031 inside 1.4 s). Green before the lane
+  means the staging does not put the friend on the line: fix the staging, not the expectation.
+- **Apply** (step 1) V5a-3's cross-lane lines: the `kernel_verdicts.tsv` rows for `0x1024f330`,
+  `0x1024f3d0`, `0x103338c0`; a line for the `TraceRetail` double in `Tests/ElysiumTestServices.h`;
+  the muzzle-attachment accessor only if the lane reports one **and** it is a declaration with a
+  default answering "none" — a body in the map actor is filed for the judge, the seam stays.
+- **Run** (step 4), beside B's list: `uv run elysium arena ranged_friend_in_line_of_fire
+  ranged_open_fire ranged_sustained_fire cover_armed`, and `uv run elysium test
+  Elysium.Arm.NpcKernelSenses10. Elysium.Arm.NpcKernelConditions.`.
+- **Expect** (step 5): `ranged_friend_in_line_of_fire` green, `known_red` removed. The three other
+  ranged records keep their verdicts: their shooters' lines are clear, so slot 562 answers true
+  where the latch did. A record that moves is read first against slot 389's point (the ray now
+  starts at the gun, `m_HackedGunPos`, not at the eye's latch) and against `0x66` raised by a
+  world hit the latch did not see (retail's; the two-pass latch is gone from the gather) — triaged
+  under the bug protocol, never loosened. `AimGun` and the other slot-389 callers now receive a
+  real point: a moved aim is reported with its record.
+- **Stop rule**: B's J9 stop (the creep survives) reverts B1's items only; V5a-3 lands or fails on
+  its own record. If V5a-3's record stays red for an unread cause, its edits stay out of the
+  commit and the lane goes to V5b's wave with the trace.
+- **Report and commit**: `report-b.md` gains V5a-3's verdicts and what it left seamed (the muzzle
+  attachment, slot 360's word); the commit message adds `; slot 562's line of fire (0x1024f3d0),
+  slot 389`. Correct `../v5a/README.md` §2 P3 and §7 ("slot 562's two muzzle traces stay stood
+  in") to "ported in V4b's wave, V5a-3" in the same commit.
+
 Rules: wait for a build or run by its completion notification, never a sleep or polling loop. The
 query budget (10 s warns, 60 s stops; never a file over ~200 KB whole). Text through Grep / Read /
 Glob. Report ≤300 words: the build's wall time, the measured toggle, verdicts before and after,

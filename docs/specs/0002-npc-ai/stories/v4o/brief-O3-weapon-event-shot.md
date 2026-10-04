@@ -73,6 +73,15 @@ NPC's clip is never spent — item 3b**; record `ranged_sustained_fire`). Re-loc
      `DisciplineFlags2` carries them (Grep; say which), else answering false, so an NPC's slot
      332 is `Attack_Rate` unscaled.
    - The mode record's key at `0x105402f8` is the string `Type`.
+   - **No secondary NPC shot; the mode record is the primary mode in force** (`stories/v4/packets-S6.md`
+     item 1). `0x10238160` takes the secondary wrapper only when `DAT_1088aee4 != 0 && operator+0xa8
+     != 0` (a player); an NPC operator always goes through `0x10238320` (global = 0), so
+     `ModeDispatch` writes `weapon+0x848 (m_iItemCurActivateMode) = m_iItemActivationModes[0]
+     (+0x84c)` and `0x102517e0(weapon)` returns the row whose id `+0x104` equals it — row id 0 (or
+     1 after the toggle `0x10239270`, which no NPC path reaches). In the port that is
+     `Weapon->ModeFor(EIntent::Primary)`, for `0xb0` and `0xb1` alike (`0xb1` differs only in the
+     stamp it reads, `+0x734`). Do not port a secondary NPC shot, a secondary dispatch or a
+     "secondary mode in force"; cite `0x102517e0` / `+0x848` at the mode read.
 2. **`FElysiumWeapon::ShotFromAnimEvent(const FElysiumAnimEvent&)`**: for a ranged operator body
    whose owner is an NPC and with **no transaction staged**, the commit event (3030..3044) stages
    the shot's transaction and queues its commit in the same call — the mode, the victim (the
