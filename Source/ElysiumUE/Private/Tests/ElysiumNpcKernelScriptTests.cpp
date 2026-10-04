@@ -7,8 +7,8 @@
 // Test names carry `Elysium.Substrate.NpcKernelScript19.` and the retail address. Every assertion is
 // read off the listing of the body its name cites (`E:/elysium-work/research/npc-kernel-checklist/
 // families-19-29/Script19-READING.md` and `vtmb_asm`). Bodies are driven directly; a director's
-// ownership is stood by hand (`m_hCine` + `m_hTargetEnt`) where a case must not start the beat
-// stand-in's think.
+// ownership is stood by hand (`m_hCine` + `m_hTargetEnt`) where a case must not run the possession
+// body itself. `m_scriptState` (+0x5d70) is read off the NPC (`GetScriptState`).
 //
 // Owns (Script19's `rule` rows): 0x101a8c30 FUN_101a8c30, 0x101a7140 CCineNPC::UpdateOnRemove,
 // 0x101a8640 FUN_101a8640, 0x1027d0a0 FUN_1027d0a0, 0x1029f460 FUN_1029f460, 0x1038b1a0
@@ -68,7 +68,7 @@ namespace
 		return Def;
 	}
 
-	// `m_hCine` on the NPC and `m_hTargetEnt` on the director: a possession without the beat think.
+	// `m_hCine` on the NPC and `m_hTargetEnt` on the director: a possession without `PossessEntity`.
 	void Script19Own(FElysiumScriptedSequence& Cine, FElysiumNpc& Npc)
 	{
 		Npc.ScriptOwner = Cine.Handle;
@@ -223,7 +223,7 @@ bool FElysiumNpcKernelScript19FinishHoldTest::RunTest(const FString&)
 	S1->Finish(*Jack);
 	TestTrue(TEXT("0x101a86d5 'Post Idle %s finished' with the OWNING cine's post-idle"),
 		Script19Printed(*S1, TEXT("Post Idle idle_hold finished")));
-	TestEqual(TEXT("0x101a86e7 npc m_scriptState := 2"), FElysiumScriptedSequence::ScriptStateOf(*Jack), 2);
+	TestEqual(TEXT("0x101a86e7 npc m_scriptState := 2"), Jack->GetScriptState(), 2);
 	TestTrue(TEXT("0x101a8708 returns BEFORE cleanup: the NPC stays possessed"), Jack->ScriptOwner == S1->Handle);
 	TestTrue(TEXT("and no SUB_Remove is armed"), S1->ThinkFunction == EThink::None);
 
@@ -363,7 +363,7 @@ bool FElysiumNpcKernelScript19PossessTest::RunTest(const FString&)
 	TestEqual(TEXT("0x101a7cdd m_saved_troika_flags holds the word BEFORE the OR"),
 		static_cast<uint32>(S1->SavedTroikaFlags), FlagsBefore);
 	TestTrue(TEXT("0x101a7cf6 spawnflag 0x1000 ORs NAV_IGNORE_NPC (0x40)"), (Jack->NpcFlags.RawWord1() & 0x40u) != 0);
-	TestEqual(TEXT("0x101a7d33 m_fMoveTo 1: m_scriptState 4"), FElysiumScriptedSequence::ScriptStateOf(*Jack), 4);
+	TestEqual(TEXT("0x101a7d33 m_fMoveTo 1: m_scriptState 4"), Jack->GetScriptState(), 4);
 	TestEqual(TEXT("0x101a7d3d DelayStart(1) counts this literal scripted_sequence"), S1->Delay, 1);
 	TestEqual(TEXT("0x101a7e98 m_IdealNPCState := 4 SCRIPT"), Jack->IdealStateRetail(), 4);
 
@@ -399,7 +399,7 @@ bool FElysiumNpcKernelScript19PossessTeleportTest::RunTest(const FString&)
 	TestEqual(TEXT("0x101a7e6b only the YAW becomes this cine's"), static_cast<float>(Jack->Angles.Y), 135.f);
 	TestEqual(TEXT("...the pitch is the NPC's own"), static_cast<float>(Jack->Angles.X), 10.f);
 	TestEqual(TEXT("0x101a7e04 the motor's ideal yaw (no +0x28 flip)"), Jack->MotorIdealYaw, 135.f);
-	TestEqual(TEXT("0x101a7e7a case 4 FALLS THROUGH into script state 1"), FElysiumScriptedSequence::ScriptStateOf(*Jack), 1);
+	TestEqual(TEXT("0x101a7e7a case 4 FALLS THROUGH into script state 1"), Jack->GetScriptState(), 1);
 	TestEqual(TEXT("and runs no DelayStart"), S1->Delay, 0);
 	return true;
 }
@@ -426,7 +426,7 @@ bool FElysiumNpcKernelScript19SequenceDoneTest::RunTest(const FString&)
 	S1->PostIdle = TEXT("idle_after");
 	S1->SpawnFlags = 0x4;
 	S1->SequenceDone(*Jack);
-	TestEqual(TEXT("0x101a8554 npc m_scriptState := 2"), FElysiumScriptedSequence::ScriptStateOf(*Jack), 2);
+	TestEqual(TEXT("0x101a8554 npc m_scriptState := 2"), Jack->GetScriptState(), 2);
 	TestTrue(TEXT("0x101a856c slot 584 marks the sequence started"), S1->bSequenceStarted);
 	TestTrue(TEXT("and the NPC stays possessed"), Jack->ScriptOwner == S1->Handle);
 	F.Advance(F.World.NowSeconds() + 0.1);
@@ -574,7 +574,7 @@ bool FElysiumNpcKernelScript19AiPossessTest::RunTest(const FString&)
 	TestTrue(TEXT("0x101a9180 no queue arm: the NPC is taken from the standing cine"), Jack->ScriptOwner == A1->Handle);
 	TestFalse(TEXT("and nothing is queued on it"), S2->NextCine.IsSet());
 	TestTrue(TEXT("no m_hNextCine clear on CCineAI"), A1->NextCine == S2->Handle);
-	TestEqual(TEXT("0x101a925d m_fMoveTo 1: state 4"), FElysiumScriptedSequence::ScriptStateOf(*Jack), 4);
+	TestEqual(TEXT("0x101a925d m_fMoveTo 1: state 4"), Jack->GetScriptState(), 4);
 	TestEqual(TEXT("and no DelayStart"), A1->Delay, 0);
 	TestTrue(TEXT("0x101a93c1 '\"jack\" found and used'"), Script19Printed(*A1, TEXT("\"jack\" found and used")));
 	TestEqual(TEXT("0x101a93e7 ideal SCRIPT"), Jack->IdealStateRetail(), 4);
@@ -583,7 +583,7 @@ bool FElysiumNpcKernelScript19AiPossessTest::RunTest(const FString&)
 	Jack->Flags |= 0x1;
 	A1->MoveTo = 4;
 	A1->PossessEntity();
-	TestEqual(TEXT("0x101a9391 case 4 writes state 1"), FElysiumScriptedSequence::ScriptStateOf(*Jack), 1);
+	TestEqual(TEXT("0x101a9391 case 4 writes state 1"), Jack->GetScriptState(), 1);
 	TestEqual(TEXT("0x101a939b RemoveFlag(FL_ONGROUND)"), Jack->Flags & 0x1, 0);
 	TestTrue(TEXT("0x101a92b2 teleported to the cine"), Jack->Origin.Equals(A1->Origin, 0.01));
 

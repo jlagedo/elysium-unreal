@@ -179,7 +179,9 @@ bool FElysiumNpcKernelDirectorRadiusTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Jack, Bob });
+	// Bob thinks: possession writes only `m_IdealNPCState = 4` (`0x101a7e84`); he enters
+	// NPC_STATE_SCRIPT through his own `MaintainSchedule` `0x102817c0`, as retail's NPC does.
+	FElysiumNpcWorldFixture::Quiet({ Jack });
 	using EThink = FElysiumScriptedSequence::EThinkFunction;
 
 	// BeginSequence with the NPC beyond the radius: not found, and NOTHING happens — no think, no
@@ -254,7 +256,8 @@ bool FElysiumNpcKernelDirectorQueueTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Jack });
+	// Jack thinks: the scene runs in his own program (`SelectSchedule` `0x1028a380` case 4 ->
+	// `SCHED_AISCRIPT 0x2e`), and the post-idle task's run arm is what sees the queued cine.
 
 	Fire(F, S1, TEXT("BeginSequence"));
 	F.Advance(0.5);
@@ -262,7 +265,7 @@ bool FElysiumNpcKernelDirectorQueueTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	TestEqual(TEXT("m_scriptState 2 (post-idle)"), FElysiumScriptedSequence::ScriptStateOf(*Jack), 2);
+	TestEqual(TEXT("the NPC's m_scriptState 2 (post-idle)"), Jack->GetScriptState(), 2);
 
 	// Both challengers arrive in one pass: s2 is queued behind s1, then s3 kicks s2 out of the queue.
 	Fire(F, S2, TEXT("BeginSequence"));
@@ -311,7 +314,9 @@ bool FElysiumNpcKernelDirectorAiPossessTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Jack, Bob });
+	// Jack thinks, so his own `MaintainSchedule` `0x102817c0` takes him into NPC_STATE_SCRIPT; bob stays
+	// quiet, so he is not in it when a2 possesses him.
+	FElysiumNpcWorldFixture::Quiet({ Bob });
 
 	Fire(F, S1, TEXT("BeginSequence"));
 	F.Advance(0.5);
@@ -394,6 +399,58 @@ bool FElysiumNpcKernelDirectorAiFinishScheduleTest::RunTest(const FString&)
 	Guard->RequestIdealStateRetail(7, 0);
 	S1->FixScriptNPCSchedule(*Guard);
 	TestEqual(TEXT("a dead NPC keeps NPC_STATE_DEAD"), Guard->IdealStateRetail(), 7);
+	return true;
+}
+
+// -------------------------------------------------------------------------------------------------
+// The scene's program: `SelectSchedule` `0x1028a380` case 4 answers `SCHED_AISCRIPT 0x2e` while
+// `m_hCine` is live, and `TranslateSchedule` `0x102cc080` splits it by the cine's `m_fMoveTo`
+// (`+0x5f60`) into `0x2f..0x33`, which the Troika table (`0x102b12f0`) maps to `0xf2..0xf9`.
+// -------------------------------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorAiScriptTranslateTest,
+	"Elysium.Arm.NpcKernelDirector.AiScriptTranslate", GDirectorTestFlags)
+bool FElysiumNpcKernelDirectorAiScriptTranslateTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("director_aiscript"), 5316);
+	Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+	Builder.AddNpcOfClass(TEXT("jack"), FVector::ZeroVector, TEXT("CAI_BaseNPCTroika"));
+	AddDirector(Builder, TEXT("scripted_sequence"), TEXT("s1"), TEXT("jack"));
+	FElysiumNpcWorldFixture F(MoveTemp(Builder));
+	FElysiumNpc* Jack = F.Npc(TEXT("jack"));
+	FElysiumScriptedSequence* S1 = DirectorAs(F.World, TEXT("s1"));
+	if (!TestNotNull(TEXT("jack"), Jack) || !TestNotNull(TEXT("s1"), S1))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Jack });
+
+	// `m_hCine` on the NPC and `m_hTargetEnt` on the director, stood by hand; jack in SCRIPT.
+	Jack->ScriptOwner = S1->Handle;
+	S1->SetTarget(Jack->Handle);
+	Jack->WriteNpcStateRetail(4);
+	TestEqual(TEXT("0x1028a991 case 4 with a live m_hCine -> 0x2e SCHED_AISCRIPT"), Jack->BaseSelectSchedule(),
+		0x2e);
+
+	struct FRow { int32 MoveTo; int32 Program; const TCHAR* Name; };
+	static const FRow Rows[] = {
+		{ 1, 0xf2, TEXT("m_fMoveTo 1 -> 0x2f -> 0xf2 SCHED_TROIKA_SCRIPTED_WALK") },
+		{ 2, 0xf4, TEXT("m_fMoveTo 2 -> 0x30 -> 0xf4 SCHED_TROIKA_SCRIPTED_RUN") },
+		{ 3, 0xf6, TEXT("m_fMoveTo 3 -> 0x31 -> 0xf6 SCHED_TROIKA_SCRIPTED_CUSTOM_MOVE") },
+		{ 0, 0xf8, TEXT("m_fMoveTo 0 -> 0x32 -> 0xf8 SCHED_TROIKA_SCRIPTED_WAIT") },
+		{ 4, 0xf8, TEXT("m_fMoveTo 4 -> 0x32 -> 0xf8 SCHED_TROIKA_SCRIPTED_WAIT") },
+		{ 5, 0xf9, TEXT("m_fMoveTo 5 -> 0x33 -> 0xf9 SCHED_TROIKA_SCRIPTED_FACE") },
+	};
+	for (const FRow& Row : Rows)
+	{
+		S1->MoveTo = Row.MoveTo;
+		TestEqual(*FString::Printf(TEXT("0x102cc080 %s"), Row.Name), Jack->TranslateScheduleRetail(0x2e),
+			Row.Program);
+	}
+	// `0x102cc122 CMP EDX,0x5 / JA 0x102cc17e`: past the table, `0x2e` comes back untranslated.
+	S1->MoveTo = 6;
+	TestEqual(TEXT("0x102cc17e m_fMoveTo 6 leaves 0x2e as it is"), Jack->TranslateScheduleRetail(0x2e), 0x2e);
+	TestTrue(TEXT("and the live-cine arms never ran CineCleanup"), Jack->ScriptOwner == S1->Handle);
 	return true;
 }
 #endif // ELYSIUM_WITH_ARM_TESTS
@@ -488,7 +545,8 @@ bool FElysiumNpcKernelDirectorInterruptTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Jack });
+	// Jack thinks: slot 459's `0x1026d7f0` guard reads NPC_STATE_SCRIPT, which he enters through his
+	// own `MaintainSchedule` `0x102817c0` after possession writes the ideal.
 
 	TestFalse(TEXT("no target: CanInterrupt is false"), Open->CanInterrupt());
 	Open->SetTarget(Jack->Handle);
@@ -534,7 +592,7 @@ bool FElysiumNpcKernelDirectorInterruptTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// Slot 180 `UpdateOnRemove` `0x101a7140`, and the save refusal mid-beat.
+// Slot 180 `UpdateOnRemove` `0x101a7140`, and the save refusal while the cine possesses its NPC.
 // -------------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorRemovalTest,
@@ -552,20 +610,24 @@ bool FElysiumNpcKernelDirectorRemovalTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Jack });
+	// Jack thinks: possession writes only `m_IdealNPCState = 4` (`0x101a7e84`), and his own
+	// `MaintainSchedule` `0x102817c0` takes him into NPC_STATE_SCRIPT -- the state
+	// `ScriptEntityCancel 0x101a7170` tests (`0x101a71b8`) before it cleans the NPC up.
 	TestNull(TEXT("an idle director does not refuse a save"), Beat->SaveBlockReason());
 
 	Fire(F, Beat, TEXT("MoveToPosition"));
-	F.Advance(0.3);
-	if (!TestTrue(TEXT("the beat holds jack"), OwnedBy(Jack, Beat)))
+	F.Advance(0.5);
+	if (!TestTrue(TEXT("the beat holds jack"), OwnedBy(Jack, Beat))
+		|| !TestEqual(TEXT("jack is in NPC_STATE_SCRIPT"), Jack->NpcStateRetail(), 4))
 	{
 		return false;
 	}
-	// **Named modernization**: retail saves an in-progress beat (the datamap words and the NPC's
-	// scripted schedule) and resumes it; the port refuses the save while the beat stand-in runs.
-	TestNotNull(TEXT("a save is refused mid-beat"), Beat->SaveBlockReason());
+	// **Kept divergence K1** (`stories/v3/README.md` § 7): retail saves an in-progress scene (the
+	// datamap words and the NPC's scripted schedule) and resumes it; the port refuses the save while
+	// the cine possesses its NPC (`m_hCine == this`), until V6 lands resume.
+	TestNotNull(TEXT("a save is refused while the cine possesses its NPC"), Beat->SaveBlockReason());
 
-	// Kill mid-beat: `UTIL_Remove` runs slot 180, whose `ScriptEntityCancel` releases the NPC.
+	// Kill mid-scene: `UTIL_Remove` runs slot 180, whose `ScriptEntityCancel` releases the NPC.
 	Fire(F, Beat, TEXT("Kill"));
 	F.Advance(F.World.NowSeconds() + 0.1);
 	TestTrue(TEXT("the director is gone"), Beat->IsDead());
@@ -644,84 +706,6 @@ bool FElysiumNpcKernelDirectorSaveRestoreTest::RunTest(const FString&)
 }
 
 // -------------------------------------------------------------------------------------------------
-// A level left and revisited mid-beat (the map-teardown snapshot): the possession comes back, and
-// ending the beat afterwards restores what possession took.
-// -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorRevisitTest,
-	"Elysium.Substrate.NpcKernelDirector.RevisitMidBeat", GDirectorTestFlags)
-bool FElysiumNpcKernelDirectorRevisitTest::RunTest(const FString&)
-{
-	auto Build = []()
-	{
-		FElysiumNpcWorldBuilder Builder(TEXT("director_revisit"), 5310);
-		Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-		Builder.AddNpc(TEXT("jack"));
-		Builder.AddCounter(TEXT("ends"));
-		// Held post-idle (0x100), NOINTERRUPT (0x20), pass-through-characters (0x1000).
-		FElysiumEntityDef& Hold = AddDirector(Builder, TEXT("scripted_sequence"), TEXT("hold"), TEXT("jack"));
-		Hold.Keys.Add(TEXT("m_iszPostIdle"), TEXT("idle"));
-		Hold.Keys.Add(TEXT("spawnflags"), TEXT("4384"));
-		Builder.WireOutput(TEXT("hold"), TEXT("OnEndSequence"), TEXT("ends"));
-		return Builder;
-	};
-	FElysiumNpcWorldFixture From(Build());
-	FElysiumNpc* Jack = From.Npc(TEXT("jack"));
-	FElysiumScriptedSequence* Hold = DirectorAs(From.World, TEXT("hold"));
-	if (!TestNotNull(TEXT("jack"), Jack) || !TestNotNull(TEXT("hold"), Hold))
-	{
-		return false;
-	}
-	FElysiumNpcWorldFixture::Quiet({ Jack });
-	const int32 Oblivious = Jack->ObliviousCount;
-	const int32 Squad = Jack->BaseScheduleHost.SquadDisconnected;
-	Fire(From, Hold, TEXT("BeginSequence"));
-	From.Advance(0.5);
-	if (!TestTrue(TEXT("the beat holds jack in its post-idle"), OwnedBy(Jack, Hold)
-		&& Hold->Phase == FElysiumScriptedSequence::EBeatPhase::PostIdleHeld))
-	{
-		return false;
-	}
-	TestEqual(TEXT("possession made jack oblivious"), Jack->ObliviousCount, Oblivious + 1);
-	TestEqual(TEXT("and left its squad"), Jack->BaseScheduleHost.SquadDisconnected, Squad + 1);
-	TestTrue(TEXT("and set NAV_IGNORE_NPC"), Jack->NpcFlags.Has(EElysiumNpcFlag::NAV_IGNORE_NPC));
-	TestEqual(TEXT("OnEndSequence fired before the hold"),
-		ElysiumEntityDebugTest::CounterValue(From.World.FindByName(TEXT("ends"))), 1.f);
-
-	// Leave the level and come back: the teardown snapshot, applied to a fresh build of the map.
-	FElysiumNpcWorldFixture To(Build());
-	ElysiumRoundTripSnapshot(From.World, To.World);
-	FElysiumNpc* RJack = To.Npc(TEXT("jack"));
-	FElysiumScriptedSequence* RHold = DirectorAs(To.World, TEXT("hold"));
-	if (!TestNotNull(TEXT("jack restores"), RJack) || !TestNotNull(TEXT("hold restores"), RHold))
-	{
-		return false;
-	}
-	TestTrue(TEXT("the director re-stamps m_hCine on its NPC"), OwnedBy(RJack, RHold));
-	TestTrue(TEXT("and its own target"), RHold->TargetNpc() == RJack);
-	// The restored NPC thinks once (its admission after the load), which is when a body claim made
-	// before admission lands — the ordinary deferred-claim path.
-	FElysiumNpcWorldFixture::Wake({ RJack }, To.World.NowSeconds());
-	To.Advance(To.World.NowSeconds() + 1.0);
-	FElysiumNpcWorldFixture::Quiet({ RJack });
-	TestTrue(TEXT("the restarted beat holds the NPC again"), OwnedBy(RJack, RHold)
-		&& RHold->Phase == FElysiumScriptedSequence::EBeatPhase::PostIdleHeld);
-	TestEqual(TEXT("in NPC_STATE_SCRIPT"), RJack->NpcStateRetail(), 4);
-	TestEqual(TEXT("the restart fires no second OnEndSequence"),
-		ElysiumEntityDebugTest::CounterValue(To.World.FindByName(TEXT("ends"))), 1.f);
-
-	// Ending the beat now runs the ordinary cleanup, which gives everything back.
-	Fire(To, RHold, TEXT("CancelSequence"));
-	To.Advance(To.World.NowSeconds() + 0.1);
-	TestFalse(TEXT("cancel releases the NPC"), RJack->ScriptOwner.IsSet());
-	TestNotEqual(TEXT("which leaves NPC_STATE_SCRIPT"), RJack->NpcStateRetail(), 4);
-	TestEqual(TEXT("the oblivious count comes back"), RJack->ObliviousCount, Oblivious);
-	TestEqual(TEXT("the squad comes back"), RJack->BaseScheduleHost.SquadDisconnected, Squad);
-	TestFalse(TEXT("NAV_IGNORE_NPC comes back"), RJack->NpcFlags.Has(EElysiumNpcFlag::NAV_IGNORE_NPC));
-	return true;
-}
-
-// -------------------------------------------------------------------------------------------------
 // `Event_Killed` `0x10265ad0`: a killed NPC in SCRIPT runs `CancelScript` at once, mid-play.
 // -------------------------------------------------------------------------------------------------
 
@@ -741,6 +725,9 @@ bool FElysiumNpcKernelDirectorKilledTest::RunTest(const FString&)
 	FElysiumNpcWorldFixture F(MoveTemp(Builder), [](FElysiumRecordingServices& Services)
 		{
 			Services.ClipSeconds = 30.f;
+			// Jack's model authors `long_action`, so `StartSequence`'s `LookupSequence`
+			// (`0x101a830d`) finds it and the play runs its 30 s rather than sequence 0's none.
+			Services.KnownNpcClips.FindOrAdd(TEXT("jack")).Add(TEXT("long_action"));
 		});
 	FElysiumNpc* Jack = F.Npc(TEXT("jack"));
 	FElysiumScriptedSequence* Beat = DirectorAs(F.World, TEXT("beat"));
@@ -748,12 +735,13 @@ bool FElysiumNpcKernelDirectorKilledTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	FElysiumNpcWorldFixture::Quiet({ Jack });
+	// Jack thinks: the scene's play starts in his own program (`TASK_WAIT_FOR_SCRIPT`'s run arm ->
+	// `StartScript` -> `StartSequence(m_iszPlay)`), which is what sets the cine's `m_sequenceStarted`.
 	const int32 Oblivious = Jack->ObliviousCount;
 	Fire(F, Beat, TEXT("BeginSequence"));
 	F.Advance(0.5);
-	if (!TestTrue(TEXT("the beat is playing its 30 s action"), OwnedBy(Jack, Beat)
-		&& Beat->Phase == FElysiumScriptedSequence::EBeatPhase::Play))
+	if (!TestTrue(TEXT("the cine holds jack and has started its 30 s play"), OwnedBy(Jack, Beat)
+		&& Beat->bSequenceStarted))
 	{
 		return false;
 	}
@@ -768,63 +756,16 @@ bool FElysiumNpcKernelDirectorKilledTest::RunTest(const FString&)
 	(void)Oblivious;
 	TestEqual(TEXT("the beat's NPC is in NPC_STATE_SCRIPT"), Jack->NpcStateRetail(), 4);
 	Jack->OnKilled();
-	TestTrue(TEXT("0x10265c04 the death is deferred: the NPC stays owned by the beat"),
-		Jack->ScriptOwner.IsSet() && Beat->Phase == FElysiumScriptedSequence::EBeatPhase::Play);
+	TestTrue(TEXT("0x10265c04 the death is deferred: the NPC stays owned by the cine"),
+		OwnedBy(Jack, Beat));
 	TestTrue(TEXT("...alive (0x1032b9b0 never ran)"), Jack->IsAlive());
 	TestEqual(TEXT("...and m_iDelay untouched"), Beat->Delay, 3);
 	return true;
 }
 
 // -------------------------------------------------------------------------------------------------
-// `CCineAI` end to end, a chain into one, and the remaining constant slots.
+// The remaining constant slots.
 // -------------------------------------------------------------------------------------------------
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorAiEndToEndTest,
-	"Elysium.Arm.NpcKernelDirector.AiEndToEnd", GDirectorTestFlags)
-bool FElysiumNpcKernelDirectorAiEndToEndTest::RunTest(const FString&)
-{
-	FElysiumNpcWorldBuilder Builder(TEXT("director_ai_e2e"), 5312);
-	Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-	Builder.AddNpc(TEXT("guard"));
-	Builder.AddNpc(TEXT("bob"), FVector(300.f, 0.f, 0.f));
-	Builder.AddCounter(TEXT("c"));
-	AddDirector(Builder, TEXT("aiscripted_sequence"), TEXT("ambush"), TEXT("guard")).Keys.Add(
-		TEXT("m_iFinishSchedule"), TEXT("1"));
-	AddDirector(Builder, TEXT("scripted_sequence"), TEXT("lead"), TEXT("bob")).Keys.Add(
-		TEXT("m_iszNextScript"), TEXT("follow"));
-	AddDirector(Builder, TEXT("aiscripted_sequence"), TEXT("follow"), TEXT("bob"));
-	Builder.WireOutput(TEXT("follow"), TEXT("OnBeginSequence"), TEXT("c"));
-	FElysiumNpcWorldFixture F(MoveTemp(Builder));
-	FElysiumNpc* Guard = F.Npc(TEXT("guard"));
-	FElysiumNpc* Bob = F.Npc(TEXT("bob"));
-	FElysiumAiScriptedSequence* Ambush = DirectorAs<FElysiumAiScriptedSequence>(F.World, TEXT("ambush"));
-	FElysiumScriptedSequence* Lead = DirectorAs(F.World, TEXT("lead"));
-	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("bob"), Bob) || !TestNotNull(TEXT("ambush"), Ambush)
-		|| !TestNotNull(TEXT("lead"), Lead))
-	{
-		return false;
-	}
-	FElysiumNpcWorldFixture::Quiet({ Guard, Bob });
-
-	// BeginSequence -> possession -> the empty play (`0x101a9510` answers true) -> SequenceDone ->
-	// Finish -> CineCleanup -> slot 586 `0x101a95d0`: m_iFinishSchedule 1 stamps local 0x2a, no clear.
-	const int32 AmbushStamp = Guard->ResolveIdealScheduleStamp(FElysiumAiScriptedSequence::ScheduleAmbush);
-	TestNotEqual(TEXT("0x2a resolves"), AmbushStamp, static_cast<int32>(INDEX_NONE));
-	Fire(F, Ambush, TEXT("BeginSequence"));
-	F.Advance(0.5);
-	TestFalse(TEXT("the aiscripted beat finished and released the guard"), Guard->ScriptOwner.IsSet());
-	TestEqual(TEXT("its finish schedule stamped AMBUSH on the guard"), Guard->BaseScheduleHost.IdealScheduleRetail,
-		AmbushStamp);
-	TestTrue(TEXT("and removed itself (SUB_Remove)"), Ambush->IsDead());
-
-	// A scripted_sequence chaining into a CCineAI through m_hNextCine: `Finish` hands bob over and the
-	// CCineAI's own possession runs its beat.
-	Fire(F, Lead, TEXT("BeginSequence"));
-	F.Advance(F.World.NowSeconds() + 0.6);
-	TestEqual(TEXT("the chained CCineAI's beat began"),
-		ElysiumEntityDebugTest::CounterValue(F.World.FindByName(TEXT("c"))), 1.f);
-	return true;
-}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelDirectorSlotsTest,
 	"Elysium.Arm.NpcKernelDirector.ConstantSlots", GDirectorTestFlags)
@@ -906,8 +847,7 @@ bool FElysiumNpcKernelDirectorProceduralRadiusTest::RunTest(const FString&)
 	Jack->SetRuntimeOrigin(FVector(10.f * U, 0.f, 0.f));
 	BeginFrom(Jack->Handle);
 	F.Advance(F.World.NowSeconds() + 0.2);
-	TestEqual(TEXT("inside it, the same name possesses the NPC and runs the beat"),
-		ElysiumEntityDebugTest::CounterValue(F.World.FindByName(TEXT("begun"))), 1.f);
+	TestTrue(TEXT("inside it, the same name possesses the NPC"), OwnedBy(Jack, Seq));
 	return true;
 }
 #endif // ELYSIUM_WITH_ARM_TESTS

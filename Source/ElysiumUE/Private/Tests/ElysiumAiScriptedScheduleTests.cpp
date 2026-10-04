@@ -783,33 +783,9 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 			|| Motor->RequestedFeet.Equals(FVector(0.0, -400.0, 0.0)));
 	}
 
-	// A scripted sequence displaces the director.
-	{
-		FAiScheduleFixture::FSetup Setup;
-		Setup.Mode = 2;
-		FAiScheduleFixture F(Setup);
-		if (F.Guard == nullptr)
-		{
-			return false;
-		}
-		F.FireStartSchedule();
-		TestTrue(TEXT("the director holds the body"),
-			F.Guard->GetMind().Owner() == EElysiumBodyOwner::ScriptedSchedule);
-
-		TestTrue(TEXT("a beat takes it outright"),
-			F.Guard->ClaimScriptBody(TEXT("test beat")));
-		TestTrue(TEXT("...and the arbiter says so"),
-			F.Guard->GetMind().Owner() == EElysiumBodyOwner::Sequence);
-		// A director's order is DROPPED rather than parked: `aiscripted_schedule` has no resume.
-		TestTrue(TEXT("the pushed order leaves with the body"),
-			!F.Guard->ScriptedScheduleOrder.IsSet());
-		TestEqual(TEXT("...and so does the program it was running"),
-			F.Guard->Schedule.Current, ElysiumScheduleId::None);
-
-		F.Guard->ReleaseScriptBody(TEXT("test beat ended"));
-		TestTrue(TEXT("the beat's release restores an unowned body"),
-			F.Guard->GetMind().Owner() == EElysiumBodyOwner::None);
-	}
+	// (Deleted with the beat stand-in, V3c: "a scripted sequence displaces the director" asserted the
+	// arbiter's `Sequence` claim taking the body from the `ScriptedSchedule` claim. Retail's cine claims
+	// nothing: `PossessEntity 0x101a7880` writes the NPC's words and its own program runs the scene.)
 
 	// (Deleted with the patrol executor, story 8 wave 2: "three deep — a beat over a combat claim over
 	// a patrol route" asserted the arbiter's one parked slot holding the route's token. Retail's patrol

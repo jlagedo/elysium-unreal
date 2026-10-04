@@ -1700,8 +1700,11 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	Services.DispositionRows.Add(TEXT("neutral|1"), Neutral);
 	Services.DispositionRows.Add(TEXT("joy|1"), Joy);
 	// This model authors the Neutral<->Joy cross-disposition transition; HasNpcClip gates
-	// SetDisposition's PlayNpcClip attempt on it (B4).
-	Services.KnownNpcClips.Add(TEXT("smiling_jack"), { TEXT("Stance_Trans_Neutral_1_Joy_1") });
+	// SetDisposition's PlayNpcClip attempt on it (B4). It also authors `waveover01`, so the scene's
+	// `StartSequence` finds it through `LookupSequence` (`0x101a830d`) and plays it for its length;
+	// a miss would play the model's sequence 0, which the sequence bridge cannot yet name (N19).
+	Services.KnownNpcClips.Add(TEXT("smiling_jack"),
+		{ TEXT("Stance_Trans_Neutral_1_Joy_1"), TEXT("waveover01") });
 
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	FElysiumEntityDefs Defs;
@@ -1741,9 +1744,11 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	// The play starts once the possessed NPC's start gate opens (`IsTimeToStart` `0x101a7540`,
 	// `m_startTime = input + 0.05`), on its next think.
 	World.Tick(0.1);
-	TestEqual(TEXT("beat two starts Jack's authored waveover"),
+	// `StartSequence 0x101a82d0` writes `m_nSequence` from the lookup and `ResetSequenceInfo
+	// 0x10090950` plays it once (`m_iszPlay`); the cine stays the NPC's `m_hCine` while it plays.
+	TestEqual(TEXT("the scene plays Jack's authored waveover once"),
 		Services.Count(TEXT("PlayNpcClip smiling_jack waveover01 loop=0")), 1);
-	TestTrue(TEXT("the waveover beat claims Jack until dialogue interrupts it"),
+	TestTrue(TEXT("the playing scene is Jack's m_hCine until dialogue cancels it"),
 		JackEntity->ScriptOwner == WaveoverEntity->Handle);
 
 	TSharedRef<FElysiumDlgConversation> Conversation = MakeShared<FElysiumDlgConversation>(

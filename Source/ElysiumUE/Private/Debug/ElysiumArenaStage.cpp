@@ -549,7 +549,11 @@ bool Stage(const FElysiumArenaScenario& Record, const FHost& Host, FString& OutS
 				return false;
 			}
 		}
-		// The map's own Activate ran long before; the seed starts this record's draws instead.
+		// The map's own Activate ran long before, from the boot's seed: the launcher passes the boot's
+		// first record's `seed` as `-ArenaSeed`, which New Game took in place of the clock (H17,
+		// `FElysiumArenaRun::LaunchSeed`). Re-seeding here puts every record's run at a known random
+		// position at its zero; a later record of a shared boot still inherits the map the earlier
+		// records left, so it replays only as part of that same boot.
 		ElysiumRng::SeedAll(Record.Seed);
 		FMath::RandInit(Record.Seed);
 		FMath::SRandInit(Record.Seed);

@@ -1564,7 +1564,7 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 			}
 			return 0;
 		}
-		if (FElysiumScriptedSequence::ScriptStateOf(*this) != ScriptStateCustomMove) // 0x102869bd  +0x5d70 0x102869c4
+		if (GetScriptState() != ScriptStateCustomMove)                   // 0x102869bd  +0x5d70 0x102869c4
 		{
 			SetIdealActivity(ACT_IDLE);                                  // 0x102869ce
 		}
@@ -1606,18 +1606,13 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 
 	case TASK_PLAY_SCRIPT:                                               // arm 0x52, 0x10286adb 0x10286add 0x10286ae5
 		// `HasMovement(GetSequence())` (`0x10288610` -> `0x10094eb0`), result discarded; then the
-		// empty `0x1027f270(0)`; then `m_scriptState = 0`, which this runtime keeps on the director.
-		if (FElysiumScriptedSequence* Cine = ResolveCine())
-		{
-			Cine->NpcScriptState = ScriptStatePlaying;                   // 0x10286af3  +0x5d70 = 0 0x10286aee
-		}
+		// empty `0x1027f270(0)`; then the NPC's own `m_scriptState = 0` -- no cine is read.
+		SetScriptState(ScriptStatePlaying);                              // 0x10286af3  +0x5d70 = 0 0x10286aee
 		return 0;
 
 	case TASK_PLAY_SCRIPT_POST_IDLE:                                     // arm 0x53, 0x10286b0a 0x10286b0e
-		if (FElysiumScriptedSequence* Cine = ResolveCine())              // 0x1027f270(2) is empty
-		{
-			Cine->NpcScriptState = ScriptStatePostIdle;                  // 0x10286b13  +0x5d70 = 2
-		}
+		// The empty `0x1027f270(2)`, then the NPC's own `m_scriptState = 2` -- no cine is read.
+		SetScriptState(ScriptStatePostIdle);                             // 0x10286b13  +0x5d70 = 2
 		return 0;
 
 	case TASK_ENABLE_SCRIPT:                                             // arm 0x54, 0x10286b2a
@@ -1649,7 +1644,7 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 			// `0x10288670`.
 			StartTaskMotorSetIdealYaw(StartTaskAngleMod(static_cast<float>(Tgt->Angles.Y))); // 0x10286bc0..0x10286bda 0x10286bc9 0x10286bd3
 		}
-		if (FElysiumScriptedSequence::ScriptStateOf(*this) != ScriptStateCustomMove) // 0x10286bdf
+		if (GetScriptState() != ScriptStateCustomMove)                   // 0x10286bdf  +0x5d70
 		{
 			SetTurnActivity();                                           // 0x10286bec 0x10286be6
 		}

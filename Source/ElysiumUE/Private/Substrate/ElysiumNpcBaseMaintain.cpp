@@ -31,7 +31,7 @@ void FElysiumNpcBase::TaskMovementComplete()
 		case EElysiumTaskStatus::Complete:
 			break;
 	}
-	if (!IsScriptDriven()) // 0x10273f01..0x10273f14
+	if (!IsScriptDriven()) // 0x10273f01..0x10273f14: `m_scriptState +0x5d70` not 6 / 4 / 5
 	{
 		SetIdealActivity(ResolveLinkActivity()); // 0x10273f20
 	}
@@ -49,9 +49,10 @@ void FElysiumNpcBase::TaskMovementComplete()
 
 bool FElysiumNpcBase::MaintainSchedule(double Now, bool bReduced)
 {
-	// `0x102817c0`, as `RunAI` (`0x1026f302`) calls it. A Troika body goes through the port's owner
-	// routing first (`FElysiumNpc::RouteScheduleMaintenance`, its STORY8-TWIN survivors named there),
-	// which reaches the interpreter below for every body the schedule owns.
+	// `0x102817c0`, as `RunAI` (`0x1026f302`) calls it. A Troika body goes through the port's
+	// dialogue routing first (`FElysiumNpc::RouteScheduleMaintenance`, its one STORY8-TWIN survivor,
+	// V3d's, named there), which reaches the interpreter below for every body not in a per-line clip
+	// hold. A scene is the interpreter's own (`SCHED_AISCRIPT 0x2e`, V3c).
 	if (FElysiumNpc* const Troika = AsNpc())
 	{
 		return Troika->RouteScheduleMaintenance(Now, bReduced);

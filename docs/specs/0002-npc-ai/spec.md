@@ -559,8 +559,16 @@ tests the green scenarios cover deleted.
     hearing half on V12, Q-V3bf1); `places_pedestrian_visit` runs the whole program and is red on
     N13 only (V4); `hub_crosswalk_wait` red on N16, baked data, re-placed onto the new V13. N17
     (the `max_npcs` floor, 9 shipped rows author 0) filed to R2.
-  - [ ] **V3c** — the scene hold: the cine writes the NPC's words, `SCHED_AISCRIPT` runs the
-    scene, `StartSequence` writes `m_nSequence`. *Record:* `script_walk_to_mark`. M.
+  - [x] **V3c** — the scene hold: the cine writes the NPC's words, `SCHED_AISCRIPT` runs the
+    scene, `StartSequence` writes `m_nSequence`. *Record:* `script_walk_to_mark`. M. Landed
+    2026-10-04 with H17 (the map host seeded at boot from `-ArenaSeed=`; Q-V13a settled: harness +
+    record error). `script_walk_to_mark` runs retail's program: 2.033 `Idle -> Script`, `0xf2`,
+    `task_walk_to_target`, 7.150 arrived, plant, face, enable, 7.900 `task_wait_for_script` done,
+    `OnBeginSequence`, the play, `OnEndSequence`, `Script -> Idle`, `0x6b`; red only on N19 (the
+    missed lookup's sequence 0 prints `seq 0 rate=0` and finishes in one think; filed to V4's judge,
+    the bake already carries the flat index). Default 171 / 0, arm 1550 / 0; suite 71 pass / 32
+    expected-fail / 1 fail (H11) / 1 unexpected-pass (N4) of 105, `map_tutorial_idle` fail → pass.
+    Divergence 18 closed, K1 kept (row 23). N7 closed; N11's record staged (`expected-fail`).
   - [ ] **V3d** — the dialogue hold as a program (`SCHED_TROIKA_RUN_DIALOG 0x6a`, task
     `TASK_RUN_DIALOG 0xb9`), then the arbiter, the owner enum and the save owner byte deleted
     whole. *Records:* the dialogue records, `script_aischedule_walk`. M–L.

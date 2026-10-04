@@ -228,8 +228,7 @@ public:
 	// `PossessEntity` `0x101a7880` (by `m_fMoveTo`), `StartTask` `0x102827f0` (`0x62` -> 0, `99`
 	// -> 2), `ScriptEntityCancel` `0x101a7170` (-> 3), `CineCleanup` `0x1027d170` (-> 0). Readers:
 	// `ShouldThinkFrequently` `0x102c2430`, `TaskMovementComplete` `0x10273f01`, the `0x60` / `0x66`
-	// task arms. SEAM (V3a): not written yet -- the cine holds the word as
-	// `FElysiumScriptedSequence::NpcScriptState` until V3c moves its writers here.
+	// task arms. The NPC's own word since V3c (the cine's `NpcScriptState` deleted, M10).
 	int32 ScriptState = 0;
 	int32 GetScriptState() const { return ScriptState; }
 	void SetScriptState(int32 State) { ScriptState = State; }
@@ -466,13 +465,13 @@ public:
 	// never lands above the double frame it names.
 	void ArmThinkAt(double Stamp);
 
-	// `m_scriptState in {4,5,6}`, the third term of `ShouldThinkFrequently()` (`0x102c2430`) --
-	// the aiscripted states in which a beat is actively driving this body. Mapped rather than
-	// transcribed: this runtime spells the same fact as a scripted owner holding the body or a
-	// scripted move in flight.
+	// `m_scriptState +0x5d70 in {4,5,6}` (walk / run / custom-move to the mark), read from the NPC
+	// word. Both retail readers test the same set: `ShouldThinkFrequently 0x102c2430`'s second term
+	// (`3 < s && s < 7`) and `TaskMovementComplete`'s `0x10273f01..0x10273f14` (`CMP 6 / 4 / 5`,
+	// any hit skips the `SetIdealActivity` at `0x10273f20`), so one helper serves both.
 	bool IsScriptDriven() const
 	{
-		return ScriptOwner.IsSet() || ScriptPhase != EScriptPhase::None;
+		return ScriptState == 4 || ScriptState == 5 || ScriptState == 6;
 	}
 
 	// `m_bfNPCStateFlags`, the per-state capability byte `0x1026e3e0` writes on every state

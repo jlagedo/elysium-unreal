@@ -661,15 +661,16 @@ bool FElysiumCastRun::IsCourseArmed() const
 		return false;
 	}
 	// Whether the order took. A patrol is the path object's own program since story 8 wave 2: the
-	// path stands and a program is running (the route's own, or whatever replaced it). A beat answers
-	// through the mind's account of who drives the body. Both inputs return quietly when they cannot
+	// path stands and a program is running (the route's own, or whatever replaced it). A scene answers
+	// through the NPC's `m_hCine` (+0x5d74) resolving to a director: `PossessEntity` (`0x101a7880`)
+	// wrote it, and only `CineCleanup` (`0x1027d170`) clears it. Both inputs return quietly when they cannot
 	// — which is the failure this window exists to catch, because the recording that follows is a
 	// body standing still while its record says a course ran.
 	if (Course.Order == ElysiumCastCourses::EOrder::Patrol)
 	{
 		return Npc->IsPatrolActiveForDebug() && Npc->Schedule.IsRunning();
 	}
-	return Npc->GetMind().Owner() == EElysiumBodyOwner::Sequence;
+	return Npc->ResolveCine() != nullptr;
 }
 
 bool FElysiumCastRun::Sample()

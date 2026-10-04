@@ -44,6 +44,13 @@ class FElysiumArenaRun
 public:
 	static bool IsRequested();
 
+	// **The harness seed door** (spec 0002 H17). The launcher's `-ArenaSeed=<n>` on an `-ElysiumArena`
+	// boot: the map host's record seed, which `UElysiumSessionSubsystem::BeginNewGame` takes in place
+	// of the clock so the map's whole activation (every NPC's first-think draw, every logic timer)
+	// replays for the record's seed. False, `OutSeed` untouched, without both switches -- the game's
+	// own New Game then seeds from the clock as it always has.
+	static bool LaunchSeed(int32& OutSeed);
+
 	explicit FElysiumArenaRun(UElysiumMapSubsystem* InSubsystem);
 	~FElysiumArenaRun();
 

@@ -1,10 +1,11 @@
 """`uv run elysium arena` -- the Green Room arena scenarios as one suite (spec 0002 step 1, T5).
 
 A scenario is a tracked JSON record under `<project>/Arena/scenarios/**/*.json` (its schema is
-`Arena/README.md`). This module reads only three of its words -- `name`, `stage`, `expect_fail` --
-plus `shares_map`, groups the requested records by stage and boots the headless arena run once per
-group, arena first. The launch contract (the switches, the per-host `index.json`, the exit code)
-is `docs/specs/0002-npc-ai/stories/wave2/seam.md` § "The launch contract".
+`Arena/README.md`). This module reads only five of its words -- `name`, `stage`, `expect_fail`,
+`shares_map` and `seed` -- groups the requested records by stage and boots the headless arena run
+once per group, arena first. A map boot carries its first record's `seed` as `-ArenaSeed`, which
+the host's New Game seeds from in place of the clock, so the map's activation replays (H17).
+The launch contract (the switches, the per-host `index.json`, the exit code) is `docs/specs/0002-npc-ai/stories/wave2/seam.md` § "The launch contract".
 
 One run writes `$ELYSIUM_WORK_ROOT/reports/arena/<timestamp>/`: a directory per boot holding that
 host's own `index.json` and trace files, and one merged `index.json` beside them. The verdict is
@@ -30,6 +31,9 @@ SCENARIO_DIR = Path("Arena") / "scenarios"
 #: The arena host's stage word; a map host's is `map:<map>`.
 ARENA_STAGE = "arena"
 MAP_STAGE_PREFIX = "map:"
+#: A record's `seed` range: the host stores it as an `int32` (`ElysiumArenaScenario.cpp`), and the
+#: schema (`Arena/README.md`) says "whole number >= 0". Absent = 0, the host's default.
+SEED_MAX = 2**31 - 1
 #: The fixed step the run is driven at, unless `--hz` says otherwise (`-ArenaHz` and `-FPS`).
 DEFAULT_HZ = 60
 #: One boot's bounds. The arena host's whole suite is budgeted at 30 s wall; these only catch a
@@ -68,6 +72,7 @@ class ScenarioRecord:
     expect_fail: bool
     shares_map: bool
     path: Path
+    seed: int = 0
 
     @property
     def map_name(self) -> str | None:
@@ -85,6 +90,18 @@ class Boot:
     @property
     def map_name(self) -> str | None:
         return self.stage[len(MAP_STAGE_PREFIX):] if self.stage.startswith(MAP_STAGE_PREFIX) else None
+
+    @property
+    def seed(self) -> int:
+        """The boot's seed: its first record's (H17).
+
+        A map host activates the map once, at boot, before any record starts, so the boot is seeded
+        by New Game from this value and every record re-seeds from its own `seed` at its start, as
+        the host has always done. A record booted alone therefore replays whole for its seed; a
+        later record of a shared boot runs on the map the earlier records left, and replays only as
+        part of that same boot, in that order.
+        """
+        return self.records[0].seed if self.records else 0
 
     @property
     def names(self) -> list[str]:
@@ -118,8 +135,15 @@ def _read_record(path: Path, root: Path) -> ScenarioRecord:
     for key, value in (("expect_fail", expect_fail), ("shares_map", shares_map)):
         if not isinstance(value, bool):
             raise ArenaError(f"scenario record {where}: `{key}` must be true or false")
+    seed = data.get("seed", 0)
+    if isinstance(seed, float) and seed.is_integer():
+        seed = int(seed)
+    if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= SEED_MAX:
+        raise ArenaError(
+            f"scenario record {where}: `seed` must be a whole number from 0 to {SEED_MAX}, "
+            f"not {seed!r}")
     return ScenarioRecord(name=name.strip(), stage=stage, expect_fail=expect_fail,
-                          shares_map=shares_map, path=path)
+                          shares_map=shares_map, path=path, seed=seed)
 
 
 def discover_records(project_dir: Path) -> list[ScenarioRecord]:
@@ -212,6 +236,11 @@ def boot_arguments(common: Sequence[str], boot: Boot, out_dir: Path, hz: int) ->
     ]
     if boot.map_name:
         arguments.append(f"-ElysiumMap={boot.map_name}")
+        # The map is activated once, at boot, before the first record's own re-seed: the boot's
+        # seed must reach New Game, or the activation draws (every NPC's first think, every logic
+        # timer) come from the clock and the record passes or fails by boot (H17). The arena host
+        # rebuilds its stage per record, after re-seeding, so it is not passed one.
+        arguments.append(f"-ArenaSeed={boot.seed}")
     return arguments
 
 

@@ -86,6 +86,7 @@ the tutorial's `thug_1`, every hub pedestrian and any input fired at such an NPC
 | N15 | `ClaimAmbientSpot`'s eligibility carries port terms retail does not have (the place type and the visitor class) (found by V3b's coder B1; filed by V3b's integrator, 2026-10-04) | `places_thug_pt1`, `map_tutorial_sneak_past` (first half): `thug_1` is `npc_VVampire`; `pt1`'s type `Idle` lists only `npc_VBrujah`, `npc_VGangrel`, `npc_VPedestrian`; 0.533 `task_find_interesting_place`, `taskfail No interesting places were available to go to. (0x22)` | `0x102dad60` (read 2026-10-04): NPC non-null, `+0x57c` enabled, `+0x57d` clear, free capacity `+0x584 - +0x58c - +0x588 > 0`, `+0x574 & npc+0x62dc`, distance² ≤ `[0x1049d28c]`; **no term reads the place's type or the visitor's class**. The type parser `0x102dd0f0` stores `AcceptedClasses` at type `+0x1a0` / `+0x1a4`; its one lookup `0x102dd630` has no caller in the corpus (`vtmb_callers`, `vtmb_grep`), so retail never gates a visit on it | `ElysiumNpc.cpp` `ClaimAmbientSpot` (~:1088): `TypeRow == null`, `TypeRow->Activities.IsEmpty()`, `!TypeRow->Accepts(Classname, StatTemplate)` refuse a place retail admits (a type with no INTO/idle activity is retail's `"Can not find interest"` arm in `0x102a9f40`, not a refusal) | **(b) planning bug, stated to the owner**: it blocks V3b's own acceptance, so it cannot wait for R2. Proposed: a **V3b follow-up wave** (XS, one coder + the integrator, one build) — delete the `Accepts` term and the two type terms (a live place always has a type: `Spawn` removes one without), check that `IsAvailable` reads `+0x57d`; with it H16 and Q-V3b1. Landed work (the place selector, 0018/10), so the fix is proposed before it runs |
 | N16 | a pedestrian route never carries a crosswalk curb, so no pedestrian ever waits at a red crossing (Q-V3b1, settled 2026-10-04; § "V3b") | `hub_crosswalk_wait` (`known_red` N16 / V13) | the pedestrian chain `0x102fcd00` puts both curbs of a crossed pair on the route (`4 \| 0x20`, start node included); at the first curb `0x102f0400` → `0x102a0bc0` → `0x102a0b90` latches `AT_CROSSWALK`; `0x102a0d20` raises `CROSSWALK_DONTWALK`, which breaks `0x100`, and `SelectSchedule 0x102af660` answers `0x102` (`0x102af763..76c`) | the downstream chain is ported (`ElysiumNpcSelect.cpp:599-602`, `ElysiumNpcDialogueBodies.cpp:337-459`, `ElysiumNpcBaseAdvancePath.cpp:58-62`), but `NavLayPedestrianLegs` (`ElysiumNpcCrosswalk.cpp:101-194`, the named modernization of `0x102fcd00`) laid no curb on any of the hub's first routes, at least five of which cross the road between the pairs: every `MoveTo` goes straight to the place, no `waypoint passed`. Which test drops the pair (the 48-unit capture against the NavMesh `PointsCm`, the consecutive-pair rule, the start-node arm, the pedestrian filter's pricing of the crossing) is **undetermined**: it needs the route points logged against the six curb positions | **(a) V13 (new, proposed, awaiting the owner): "The pedestrian nav area in the hub's bake"** (re-placed by the V3b follow-up's integrator, 2026-10-04). The V3b follow-up's read settled the cause as **baked data, not the splice**: on `sm_hub_1`'s baked Recast meshes no roadway polygon carries `UElysiumNavArea_Pedestrian` (`NavAreaAt` answers `NavArea_Default` inside all 9 priced slabs), so the pedestrian filter's ×5–10 price applies to nothing, routes cut the road diagonally and the splice's 48-unit capture rightly finds no curb (§ "V3b follow-up"). A fault in landed work (0018/3's NavMesh bake, 0018/7's crosswalk) that needs pipeline work and a re-bake, outside V3. Not a planning bug: V13 is a step-2 story placed before the second V2 run. Caveat for the record: only first walks can cross (`TASK_WAIT_PVS` holds every pedestrian outside the player's PVS after its first visit, `0x102aad7e`, as retail). **Re-stated by the V13 wave (2026-10-04), the cause measured: the marks never reach Recast.** `UElysiumNavAreaComponent` (`ElysiumNavAreaActor.h:34`, a `USceneComponent` + `INavRelevantInterface`) never enters UE 5.8's navigation octree, so neither its pedestrian slabs nor its door cuts are ever offered to the generator; the floating-floor lead is not the cause (§ "V13 wave") |
 | N17 | a place authoring `max_npcs 0` admits one visitor: the port floors the capacity at 1 (flagged by the V3b follow-up's coder F1; filed by its integrator, 2026-10-04) | none: no record stands such a place. The corpus (`exports_v2/maps/*.entities.glb`, 2026-10-04, 5.8 s): 1293 `intersting_place` rows on 22 maps, every one authors `max_npcs` (`population.md:794`); values 1 ×1009, 2 ×128, 4 ×91, 3 ×30, 5 ×13, **0 ×9** (`la_empire_2` 1, `la_skyline_1` 3, `sp_soc_2` 4, `sp_soc_3` 1), 50 ×6, 8 ×4, 6 ×2, 15 ×1; `sp_tutorial_1` 29 × 1; `sm_hub_1` 1 ×45, 2 ×22, 4 ×6, 6 ×2, 8 ×1 | `0x102dad60` `0x102dad8c..0x102dada4`: `m_iMarkersAllocated +0x584` (key `max_npcs`, datamap offset 1412) `− +0x58c − +0x588 > 0`, no floor: a 0 row is refused by every NPC | `ElysiumInterestingPlace.cpp:86` `IsAvailable`: `Claimants.Num() < FMath::Max(1, MaxNpcs)` (and the debug line `:122`); the member's default `MaxNpcs = 1` (`ElysiumInterestingPlace.h:17`). **Not changed** by the follow-up: nine shipped rows author 0, so the floor changes behaviour on four maps; first read retail's value for an absent key (the constructor `0x102d99d0`) and what the bake writes for an authored `0` (`ElysiumNpcKernelBindings.cpp:1250`, the infra actor's key rebuild, `ElysiumInfraActorsTests.cpp:251`) | **(a) R2** (places and patrols): delete the floor once both defaults are read, cite `0x102dad8c`. Not a planning bug: no step-2 record reaches a `max_npcs 0` row (the witness maps author none) |
+| N19 | a missed scene lookup's sequence 0 plays nothing and finishes on its first advance (found by the V3c integrator, 2026-10-04, once `StartSequence` writes `m_nSequence`) | `script_walk_to_mark` (7.900 `sequence seq 0 rate=0`, `seqfinished seq 0` in the same think); inferred, not traced: `Elysium.Substrate.ScriptedSequenceFlags` (a held 0x100 beat with no `m_iszPlay` fires `OnEndSequence` twice within 0.6 s: `TASK_PLAY_SCRIPT` sees the zero-length post-idle finish at once and runs `SequenceDone` again) and `Elysium.Substrate.Dialogue.BodyScene` (the fixture's model authors no `waveover01`, so the scene ends in one think) | `StartSequence 0x101a82d0`: lookup −1 → warning, `m_nSequence := 0` (`0x101a833d`), `m_flCycle := 0`, `ResetSequenceInfo 0x10090950`, which plays the model's own sequence 0 at `m_flPlaybackRate 1.0` (`0x10090a23`) and `StudioFrameAdvance 0x1008f120` raises `m_bSequenceFinished` only when that sequence's cycle reaches 1. Five shipped scene labels miss this way (`entity_io.md:2469-2476`, `animation_and_movers.md:2103-2107`: `pre_fight_bow`, three `ACT_COWER`, `ACT_DOORKNOCK`) | the sequence bridge's row 0 "plays nothing" (`ElysiumNpcBaseAnim.cpp` `ResetSequenceInfo` ~:111-117: cycle rate 10.0 for row 0, so it finishes on the first advance; the trace prints `rate=0`); the bridge numbers clips by name and has no notion of the model's first studio sequence | **Proposed (a) V4** (the animation chain: `ResetSequenceInfo` / `StudioFrameAdvance` are V4's), for the owner or the judge: row 0 must be the body's model's sequence 0 (its first `$sequence`), which needs the bake to carry the studio order (undetermined whether it does; if not, pipeline work, so the judge rules). Not a V3c regression: before V3c the cine played through the montage and never wrote `m_nSequence`. Event order differs only in time (retail's `OnEndSequence` waits sequence 0's length). **Ruled by V3c's closing integrator (2026-10-04): filed, on V4's judge list** (`stories/v4/brief-J-judge.md` item 4). The studio order IS baked: the body table's `rawIndex` is the global flat number (`sequenceBase` + the owner's position, `importers/body_data.py:83-89`), carried to `FElysiumNpcClip::RawIndex` (`ElysiumBodyData.cpp:14`), so no re-bake; what is missing is the embodiment query for the `RawIndex 0` clip, the bridge's row 0 from it and the trace's naming — a cross-layer change in V4a A2's files, not taken under the close's one-build cap. The tests seed the named clip instead (`ScriptedSequenceFlags`, `Dialogue.BodyScene`) |
 
 Every new red lands in step 2 except N3, the one planning bug among them, and N12, which stays in
 step 3's R2 because no step-2 record needs it. (V3b, 2026-10-04: N14 lands in V6; N15 is a planning
@@ -333,6 +334,7 @@ as the V3b follow-up's suite; `memory_occluded_kept` passes with its two new SEE
   the harness / V2: why the first think moves per boot under `seed 1`, and whether retail refuses
   those two places (`programs.md` § "The failed walk": a refused interesting-place route is
   retail's), which would make the 1.8 s `never` a record error. Not loosened here.
+  **Settled by V3c's integrator: harness (H17) + record error** (§ "V3c integration").
 
 - **Q-H3 closed.** The LKP is retail's (above, "Filed by the coordinator"); the two old bugs the
   read found are fixed. `GatherSight` (`ElysiumNpcConditions.cpp:329-347`) clears the six SEE
@@ -390,12 +392,101 @@ as the V3b follow-up's suite; `memory_occluded_kept` passes with its two new SEE
   `hw_asphole_1`, `la_parkinggarage_1`, `sp_theatre` 1 each): they take the registration fix and
   `NAV_AREA_ACTOR_SHAPE` 2 at their next bake.
 
+## V3c integration (2026-10-04): the scene runs as retail's program; not committed (build budget)
+
+C1, C2, C3 and H17 (the map-host seed) integrated; cross-lane lines applied (the deleted
+`ClaimScriptBody` block in `ElysiumAiScriptedScheduleTests.cpp`; `ElysiumNpcGait.h`'s `Script*`
+constants and `TravelCapSeconds`, no readers). Ledger regenerated, `kernel --check` clean. Build 1
+(2m00s) green; build 2 was the arm tier's own compile (`test` switches it on and builds: the
+integrator should have used `build --arm` for build 1), so the four test fixes below need a third
+build, which the brief forbids: **the wave stopped uncommitted, V3c not ticked.**
+
+- **Default tier 167 / 4 failed of 171; families 94 / 4 failed of 98** (the scene, cine, choreo,
+  dialogue-body, translate, anim, `AiScriptedSchedule`, `BaseHold` prefixes; `ChoreoScene`, every
+  `Scene*`, `NpcKernelScript19.*`, `NpcKernelTranslate`, the new `AiScriptTranslate` green). Each
+  failure classified, none a game regression of V3c:
+  - `Elysium.Arm.NpcKernelDirector.Removal` (`:631`) — **test staging**: jack stays `Quiet`, so he
+    never enters `NPC_STATE_SCRIPT`, and `ScriptEntityCancel` cleans up only a state-4 NPC
+    (`0x101a71b8`). Fix: wake jack as C3 woke five others.
+  - `Elysium.Substrate.ScriptedSequence` (`:441-464`) — **test staging** (inferred from the code):
+    the fixture stands no services, so no motor; `TASK_FACE_SCRIPT`'s run arm completes only on
+    `FacingIdeal 0x10278c80`, and `MotorUpdateYaw` turns nothing without a motor
+    (`ElysiumNpcBaseRunTask.cpp:206`), so the 90° mark never completes. Fix: a motor reporting
+    `Reached`, or delete (`script_walk_to_mark` is the live proof).
+  - `Elysium.Substrate.ScriptedSequenceFlags` (`:647, :655`) and `Elysium.Substrate.Dialogue.BodyScene`
+    (`:1744-1749`) — **N19** (above, inferred): a missed lookup's row 0 is zero-length. BodyScene's
+    `PlayNpcClip … waveover01` and the `ScriptOwner` line also assert the beat's montage and claim
+    (README §6 gives lines 1747-1756 to V3d's D1): re-stage with `waveover01` in `KnownNpcClips` and
+    assert the bridge, not the montage.
+  - `Elysium.Substrate.Npc.TravelSpeed` (`ElysiumNpcTests.cpp:1148-1255`) — **port mechanism**: its two
+    scripted halves pin the deleted scripted-move seam's speed (M11). No lane owned the file; delete
+    the two blocks.
+- **`script_walk_to_mark`: the program is retail's** (by-name run `20261004T082341.856046Z`): 2.033
+  `Idle -> Script`, `SCHED_TROIKA_SCRIPTED_WALK (0xf2)`, `task_walk_to_target`, `goal 279 -947 0`,
+  7.150 `arrived`, `task_plant_on_script`, `task_face_script`, `task_enable_script`, 7.900
+  `taskdone task_wait_for_script`, `OnBeginSequence` (never before 2.5 s), `sequence seq 0 rate=0`,
+  `seqfinished seq 0`, `OnEndSequence`, `Script -> Idle`, `SCHED_TROIKA_IDLE_DISPOSITION (0x6b)`;
+  a scratch copy (deleted) showed `input SetRelationship player D_HT 5` at 10.883. **Two record
+  errors corrected**: `pre_fight_bow` is a content miss (the model spells `prefight_bow`,
+  `entity_io.md:2471`), so retail plays sequence 0 (`0x101a833d`); the `OnBeginSequence` wire carries
+  a 3.0 s delay (`AsianVamp,SetRelationship,player D_HT 5,3,-1`, the Unofficial Patch's
+  `sm_vamparena.bsp` and retail's alike), so `flips` moved last with `within 3.2`. The `taskfail`
+  `never` is bounded to 12.0 s: after the scene the boss selects `SCHED_VASIANVAMPIRE_JUMP_UP (0x15a)`
+  and `task_vasianvampire_find_ledge_node` fails `No Target (0x1)` at 12.883, because the arena stages
+  no ledge nodes. Now `expected-fail` on **N19** (`plays` expects `seq 0 rate=1`). **N7 is fixed in
+  the tree** and closes with the V3c commit.
+- **N11's record staged**: `combat/verbs_stealth_kill_scripted.json`, `expected-fail` (0.533
+  `Idle -> Script`, `0xf8`, 0.917 `arena_mark refuse gate=valid_target`).
+- **Suite** `20261004T082753.975867Z`: 105 records, 71 pass, 32 expected-fail, 1 fail
+  (`rollcall_vzombie`, H11), 1 unexpected-pass (`hear_world_investigate`, N4). Moved:
+  `map_tutorial_idle` fail → pass (below). The dialogue records and `script_aischedule_walk` stay
+  red on V3d; the patrols and `places_pedestrian_visit` on N13; `cover` and `control_sequence` green.
+- **Q-V13a — verdict: harness (H17) + record error.** H17 seeds `ElysiumRng::SeedAll`,
+  `FMath::RandInit` and `SRandInit` from `-ArenaSeed=` at New Game (arena boots only). Three separate
+  boots of `map_tutorial_idle` produced **identical traces, all 886 lines** (first think 0.283).
+  The seed-1 draw is the refused place: 0.283 `move fail 12`, `taskfail Don't have a route (0xc)`
+  (printed twice in the same instant). The record error: sentry2 and `mercenary_upstairs` compete for the
+  same places, the loser draws one with no graph node in reach (`navigation-jump-links.md:157`), and
+  retail answers `TaskFail(0x0c)` once, then waits 5.1–10 s (`programs.md:207-220`). Both
+  `map_tutorial_idle` and `patrol_sentry2_pingpong` keep the pre-wire `never` (its `until`) but
+  exclude that one failure (`^(?!Don't have a route \(0xc\))`, regex), with the caveat in `notes`
+  that the docs do not confirm the exported graph is the one retail loads. pytest
+  `test_arena_suite.py`: 30 passed with `NO_COLOR`; in a colour terminal
+  `test_the_cli_registers_the_arena_command` fails because colour codes split the help text (not this
+  wave's, left).
+- **For the next integrator (one build)**: the four test fixes above, then the default tier, the arm
+  tier and the families, then commit; also the brief's divergence-18 close and the K1 row
+  (`stories/v1/divergences.md`), not written while uncommitted.
+- **Closing pass (2026-10-04): the four fixed, two more found, still uncommitted.** Build
+  `build --arm` 58 s, green. Default tier **171 / 0**. The four, each test staging:
+  `NpcKernelDirector.Removal` (jack now thinks into SCRIPT; asserts state 4 before the kill);
+  `ScriptedSequence` (the mover stands a model, a recording motor whose walks arrive and whose body
+  settles a commanded turn, `FElysiumRecordingNpcMotor::bSettlesFacing`; the face task still waits on
+  `FacingIdeal 0x10278c80`); `ScriptedSequenceFlags` and `Dialogue.BodyScene` (the named clips seeded:
+  `Converse_Normal_Talk_A` on damsel, `waveover01` on smiling_jack; both BodyScene assertions kept, they
+  read the bridge's play and `m_hCine`); `Npc.TravelSpeed` (only its two scripted-move blocks deleted;
+  the patrol / fan / classifier halves pass and stay for V4 B1 to judge). **Arm tier 1548 / 2 failed**,
+  both V3c staging, neither in the families the first pass ran: `NpcKernelMaintain19.SetSchedule`
+  (`:273`, `:285`: the quiet subject is possessed but never enters SCRIPT, so `ForceScheduleChange`'s
+  `CancelScript` → `ScriptEntityCancel 0x101a71b8` rightly cleans nothing) and
+  `NpcKernelMaintain19.TaskMovementComplete` (`:421`: stages `ScriptOwner`, but `0x10273f01..14` read the
+  NPC's `m_scriptState` ∈ {4,5,6}, `IsScriptDriven`). **Fixes written, NOT built** (no build left):
+  `N.SetState(4)` before each `ForceScheduleChange`; `N.SetScriptState(4)` / `(0)` around the
+  `TaskMovementComplete` call. Arena by name (`20261004T085623.382491Z`): `cover`, `control_sequence`,
+  `map_tutorial_idle` pass; `script_walk_to_mark` (N19), `script_aischedule_walk`, `script_dialog_hold`,
+  `dialog_use_hold` (V3d), `verbs_stealth_kill_scripted` (N11), `patrol_sentry2_pingpong` (N13)
+  expected-fail. No runtime code changed, so the first pass's suite stands. `kernel --check` clean
+  after a regenerate; pytest `test_arena_suite.py` 30 passed (`NO_COLOR=1`). **Next: one build, the two
+  Maintain19 tests and `test arm`, then the commit, the V3c tick, divergence 18 and K1.** N19 ruled
+  (row above): filed to V4's judge list. **Done (second authorized build, 12.7 s):** default 171 / 0,
+  arm 1550 / 0; V3c committed and ticked, divergence 18 closed, K1 row 23.
+
 ## The fix order — acceptance lists
 
 | story | records that must turn green |
 |---|---|
 | H wave (H1–H5 first) | `rollcall_vcamera`, `rollcall_vcamerasecurity`, `sense_cone_enter`, `memory_occluded_kept`, `rollcall_vzombie`; classifies `verbs_stealth_kill`; re-check `cover*` and `sense_bodies_transparent` |
-| V3 arbiter, scenes, dialogue, places | ~~`cover`~~ (green at V3a), ~~the patrols ×3~~ (doubt 1 settled by V3a: not red 1 but N13, moved to V4), ~~`places_pedestrian_visit`~~ (H16 closed by the V3b follow-up; now N13, V4), ~~`places_thug_pt1`~~ (green at the V3b follow-up), ~~`input_useinteresting`~~, ~~`map_hub_idle`~~ (green at V3b), ~~`hub_crosswalk_wait`~~ (N16, moved to V13), ~~`rollcall_vhuman`, `rollcall_vhumancombatpatrol`~~ (green at V3b, record errors corrected), `script_walk_to_mark`, `script_dialog_hold`, `input_startplayerdialogremote`; ~~`map_tutorial_sneak_past`'s first half~~ (green at the V3b follow-up; the hearing half on V12) |
+| V3 arbiter, scenes, dialogue, places | ~~`cover`~~ (green at V3a), ~~the patrols ×3~~ (doubt 1 settled by V3a: not red 1 but N13, moved to V4), ~~`places_pedestrian_visit`~~ (H16 closed by the V3b follow-up; now N13, V4), ~~`places_thug_pt1`~~ (green at the V3b follow-up), ~~`input_useinteresting`~~, ~~`map_hub_idle`~~ (green at V3b), ~~`hub_crosswalk_wait`~~ (N16, moved to V13), ~~`rollcall_vhuman`, `rollcall_vhumancombatpatrol`~~ (green at V3b, record errors corrected), `script_walk_to_mark` (program retail's since V3c's tree; red on N19, the row-0 sequence), `script_dialog_hold`, `input_startplayerdialogremote`; ~~`map_tutorial_sneak_past`'s first half~~ (green at the V3b follow-up; the hearing half on V12) |
 | V4 animation chain, slot 363 | `sense_enemy_facing_me`, `damage_lethal_death`, `ranged_open_fire` (with N2), `melee_swing` (with N3); N13: `patrol_sentry2_pingpong`, `patrol_monk_loop`, `input_clearpatrolpath`, `places_pedestrian_visit` |
 | V5 attack conditions + N1 + N2 (+ N3 if pulled here) | `range_bands`, `cover_armed`, `ranged_open_fire`, `chase_melee`, `melee_swing`; red 4 needs a record first |
 | V6 lifecycle + N9 + N10 (red 5 since V3b) + N14 | `lifecycle_unhide_fights`, `rollcall_vmanbat`, `_vmercurio`, `_vsabbatleader`, `_vvampireboss`, `_vpedestrian`, `_vwerewolf`, `_vanimal`, `_vdog`, `_vscurrying`, `maker_respawn`; `save_restore_mid_path` after H8 |

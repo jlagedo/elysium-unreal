@@ -3,23 +3,17 @@
 #include "CoreMinimal.h"
 
 #include "ElysiumPlayer.h"
-#include "Substrate/ElysiumNpcGait.h"   // the travel speeds and the scripted-move bounds
+#include "Substrate/ElysiumNpcGait.h"   // the travel speeds
 
-// The one movement-only owner shared by ordinary NPCs and the scene-owned player duplicate. Unreal
-// owns path following through IElysiumNpcMotor; this class owns the authored scripted_sequence
-// gait, arrival/facing order and failure bounds.
+// The movement body shared by ordinary NPCs and the scene-owned player duplicate: the motor Unreal
+// path following stands behind (IElysiumNpcMotor), which the kernel's navigator drives. A scene's
+// travel is the NPC's own program (`SCHED_AISCRIPT 0x2e`, tasks 8/9/10's navigator goal); V3c
+// deleted the scripted-move seam that used to live here (M11).
 
 class FElysiumScriptedCharacter : public FElysiumCombatCharacter
 {
 public:
 	virtual ~FElysiumScriptedCharacter() override;
-
-	virtual bool BeginScriptMove(const FVector& Mark, const FVector& MarkAngles,
-		EElysiumScriptGait Gait, const FString& CustomClip) override;
-
-	virtual EElysiumScriptMove AdvanceScriptMove() override;
-
-	virtual void EndScriptMove() override;
 
 	virtual void SetBodyFrozen(bool bFrozen) override;
 
@@ -28,8 +22,6 @@ public:
 	virtual void OnRuntimeTransformChanged() override;
 
 protected:
-	enum class EScriptPhase : uint8 { None, Travel, Facing };
-
 	void BuildMotor();
 
 	void DestroyMotor();
@@ -40,21 +32,14 @@ protected:
 	// Async completion restores only the disposable movement body, not script movement/state.
 	virtual void OnPreparedVisualAttached() override { BuildOwnMotor(); }
 
-	// A runtime model swap under the leaf's bodies gate. The swap destroys the motor a beat may
-	// be steering, so the scripted hold is released first — the beat reads Unsupported next tick
-	// and finishes on the placement fallback — then the animating node rebuilds the body and the
-	// motor is stood back up. Gated off, the swap leaves a bodiless record and nothing to rebuild.
+	// A runtime model swap under the leaf's bodies gate: the animating node rebuilds the body and
+	// the motor is stood back up. Gated off, the swap leaves a bodiless record and nothing to
+	// rebuild.
 	void RebuildForModelChange(bool bBodiesEnabled);
 
-	virtual bool ClaimScriptMove() { return true; }
-	virtual void ReleaseScriptMove(const TCHAR*) {}
 	// The kernel NPC's move-ignore set (`FElysiumNpcBase::ClearMoveIgnores`), dropped at every
-	// `Motor->Stop()` here: a stopped move keeps no slot-69 answers registered. Nothing below the NPC.
+	// `Motor->Stop()` the kernel issues. Nothing below the NPC.
 	virtual void ClearMoveIgnores() {}
-
-	bool StartScriptWalkingAnimation(bool bRunning);
-
-	EElysiumScriptMove BeginScriptFacing(double Now);
 
 	// One motor sample written back into the entity. The motor is the physical authority while it
 	// holds a request: its feet/yaw land straight on Origin/Angles rather than through
@@ -77,12 +62,4 @@ public:
 protected:
 
 	IElysiumNpcMotor* Motor = nullptr;
-	EScriptPhase ScriptPhase = EScriptPhase::None;
-	FVector ScriptMark = FVector::ZeroVector;
-	FVector ScriptMarkAngles = FVector::ZeroVector;
-	float ScriptBestDistance = 0.0f;
-	double ScriptProgressAt = 0.0;
-	double ScriptDeadline = 0.0;
-	double ScriptWatchdogAt = 0.0;
-	bool bScriptMoveClaimed = false;
 };

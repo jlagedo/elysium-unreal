@@ -50,6 +50,19 @@ bool FElysiumArenaRun::IsRequested()
 	return FParse::Param(FCommandLine::Get(), TEXT("ElysiumArena"));
 }
 
+bool FElysiumArenaRun::LaunchSeed(int32& OutSeed)
+{
+	// HARNESS DOOR (spec 0002 H17): read only under `-ElysiumArena`, so no other launch -- the game,
+	// the lab, the other headless runs -- can reach the override.
+	int32 Seed = 0;
+	if (!IsRequested() || !FParse::Value(FCommandLine::Get(), TEXT("ArenaSeed="), Seed))
+	{
+		return false;
+	}
+	OutSeed = Seed;
+	return true;
+}
+
 FElysiumArenaRun::FElysiumArenaRun(UElysiumMapSubsystem* InSubsystem)
 	: Subsystem(InSubsystem)
 {
@@ -85,6 +98,12 @@ FElysiumArenaRun::FElysiumArenaRun(UElysiumMapSubsystem* InSubsystem)
 
 	UE_LOG(LogElysiumArenaRun, Log, TEXT("headless arena run armed: host %s, %d Hz, %d record(s), report %s"),
 		*HostName(), Hz, Records.Num(), *OutDir);
+	int32 BootSeed = 0;
+	if (LaunchSeed(BootSeed))
+	{
+		UE_LOG(LogElysiumArenaRun, Log, TEXT("boot seed %d (-ArenaSeed): New Game seeds every stream from it"),
+			BootSeed);
+	}
 	PhaseStartWall = FPlatformTime::Seconds();
 	TickHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FElysiumArenaRun::Tick));
 }

@@ -37,10 +37,42 @@ namespace
 
 int32 FElysiumNpcBase::LookupSequenceByName(const TCHAR* Name) const
 {
-	// `CBaseAnimating::LookupSequence(const char*)`. **SEAM**, answering -1 — retail's own "this
-	// model authors no such sequence", which every caller here already branches on.
-	(void)Name;
-	return INDEX_NONE;
+	// `CBaseAnimating::LookupSequence(const char*)` (`StartSequence 0x101a82d0` calls it at
+	// `0x101a830d`): the index of the sequence the body's model authors under that name
+	// (case-insensitive, as the vocabulary's `FString` key is), or -1 -- retail's own "unknown
+	// scripted sequence", which every caller branches on. Through the sequence bridge (the named
+	// modernization: the studio sequence table swapped for the name-keyed clip vocabulary), the index
+	// is the bridge row of the clip the vocabulary names. Only the Troika line carries the bridge
+	// (`ResetSequenceInfo` plays through it the same way), so a base-only NPC authors nothing.
+	const FElysiumNpc* const Troika = AsNpc();
+	IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Troika == nullptr || Embodiment == nullptr || Visual == nullptr || Name == nullptr
+		|| *Name == TEXT('\0'))
+	{
+		// No body, or retail's null name (`StartSequence`'s `0x101a830d` passes `""`): no sequence --
+		// `SequenceForActivity`'s same guard.
+		return INDEX_NONE;
+	}
+	const FString Label(Name);
+	const FString Stem = ModelStem();
+	if (!Embodiment->HasNpcClip(Stem, Label))
+	{
+		return INDEX_NONE;   // the model authors no such sequence: retail's -1
+	}
+	// The bank the vocabulary names the label under: the owner half of the bridge row's key, which is
+	// what `PlaySequenceClip` hands to the clip player. Empty is a clip of the body's own model.
+	const FString OwnerStem = Embodiment->NpcClipOwner(Stem, Label);
+	// K2's residue (`stories/v3/README.md` § 7, named): the row's `STUDIO_LOOPING` bit
+	// (`GetSequenceFlags & 1`, which `ResetSequenceInfo` copies to `+0x65d` at `0x10090a14`) is the
+	// clip's own, and the bake carries it (`FElysiumNpcClip::IsLooping`), but no embodiment query
+	// answers it by label. Until one does, today's rule stands: the live cine's `m_iszPlay` (+0x5f48)
+	// runs once, every other name -- the pre-idle `m_iszIdle`, the post-idle `m_iszPostIdle`, a
+	// custom move, an arrival or scene-event sequence -- loops.
+	const FElysiumScriptedSequence* const Cine = ResolveCine();
+	const bool bLoops = !(Cine != nullptr && Cine->Play.Equals(Label, ESearchCase::IgnoreCase));
+	// Retail's lookup is a read of the studio header; the bridge numbers a clip on first sight, which
+	// is the modernization's own session bookkeeping (`ResolveDispositionActivity`'s same const cast).
+	return const_cast<FElysiumNpc*>(Troika)->SequenceRowFor(OwnerStem, Label, bLoops);
 }
 
 int32 FElysiumNpcBase::SequenceActivityOf(int32 Sequence) const

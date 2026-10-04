@@ -358,33 +358,14 @@ public:
 
 	bool StartWalkingAnimation(bool bRunning = false);
 
-	// The ordinary NPC adds body arbitration around the shared scripted motor. The scene-owned
-	// player duplicate deliberately takes the default no-mind claim on the same movement rules.
-	//
-	// This is the one door to `EElysiumBodyOwner::Sequence`. The owning beat and its movement motor
-	// both come through it, and the mind is idempotent for the owner it already holds, so the two
-	// share the one token in `SequenceOwner` rather than competing for it.
-	bool AcquireSequenceBody(const TCHAR* Reason);
-
-	// Give the token back. Only called once neither the beat nor the motor is still holding it.
-	void ReleaseSequenceBody(const TCHAR* Reason);
-
-	virtual bool ClaimScriptMove() override;
-
-	virtual void ReleaseScriptMove(const TCHAR* Reason) override;
-
-	virtual bool ClaimScriptBody(const TCHAR* Reason) override;
-
-	virtual void ReleaseScriptBody(const TCHAR* Reason) override;
-
 	// An open conversation owns this body as surely as a beat does, so it refuses a feed.
 	virtual bool IsFeedBusy() const override;
 
 	virtual void Think() override;
 
-	// The port's scripted-beat and dialogue routing ahead of the interpreter, reached from
-	// `MaintainSchedule` (`0x102817c0`) on a Troika body; its STORY8-TWIN survivors (V3c/V3d) are
-	// named at the definition.
+	// The port's dialogue routing ahead of the interpreter, reached from `MaintainSchedule`
+	// (`0x102817c0`) on a Troika body; its one STORY8-TWIN survivor (V3d) is named at the
+	// definition.
 	bool RouteScheduleMaintenance(double Now, bool bReduced);
 
 	// Retail's selector pair `0x1028a260` (`SelectNewScheduleRetail`): slot 437, then slot 438.
@@ -1055,17 +1036,10 @@ protected:
 	// A director's push that fired before this NPC's first think replays here.
 	void ReplayDeferredScriptedOrder();
 
-	// Watches a beat that stopped advancing its own move and releases the body rather than
-	// freezing it.
-	bool TickScriptWatchdog();
-
 	// An open conversation: the per-line clip hold, else the stance machine's talking branch. The
 	// clip hold needs no cadence of its own -- an NPC in dialogue is a `ShouldThinkFrequently`
 	// body, pinned to the normal law's 0.01 s floor.
 	bool ThinkInDialog(double Now, bool bReduced);
-
-	// A scripted owner drives this body's pose; the think only lands a deferred beat claim.
-	bool ThinkScriptOwned(double Now);
 
 	// --- Serialize(), in exact archive order ---------------------------------------------------
 	//
@@ -1098,8 +1072,8 @@ protected:
 	void ReleaseProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
 		const TCHAR* Reason);
 
-	// Everything this NPC holds over its own body, given back at once: an open conversation, a
-	// scripted move, an interesting place, a pushed director's order, the running program, and every
+	// Everything this NPC holds over its own body, given back at once: an open conversation, an
+	// interesting place, a pushed director's order, the running program, and every
 	// arbiter token behind them. Two callers — dormancy (`Kill`/`ScriptHide`) and death — because
 	// both mean "this NPC stops driving its body", and the difference between them is only whether
 	// the mind ends up dead.
@@ -1140,13 +1114,7 @@ protected:
 	TSet<FName> ReportedStepSurfacesWithoutPool;
 
 	FElysiumBodyOwnerToken ScriptedScheduleOwner;
-	FElysiumBodyOwnerToken SequenceOwner;
 	FElysiumBodyOwnerToken DialogueBodyOwner;
-	// A scripted beat has taken this NPC and has not given it back, and whether the arbiter claim
-	// behind that request is in hand. The two differ only while a claim is deferred: the beat-queue
-	// lock is stamped synchronously, the arbiter claim can arrive a think later.
-	bool bScriptBodyRequested = false;
-	bool bScriptBodyHeld = false;
 	// `m_bDisableAI` (+0x6080). Session state, like retail's: not in the datamap's save block.
 	bool bDisableAi = false;
 	// The interesting-place visit's retail words, driven by the programs (`0xff`/`0x100`/...), the

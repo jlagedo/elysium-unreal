@@ -81,7 +81,11 @@ Wave 3 (build work, one agent):
     unexpected-pass (N4) of 105; `places_thug_pt1` green, the sneak-past's first half green
     (hearing half V12), `places_pedestrian_visit` red on N13 (V4), `hub_crosswalk_wait` on N16
     (V13, proposed); N17 filed (R2).
-  - [ ] **V3c** — the scene hold through `m_scriptState` and `SCHED_AISCRIPT`. M.
+  - [x] **V3c** — the scene hold through `m_scriptState` and `SCHED_AISCRIPT`. M. Landed
+    2026-10-04 with H17 (the map host seeded at boot). `script_walk_to_mark` runs retail's program
+    (SCRIPT, `0xf2`, walk, plant, face, enable, wait, `OnBeginSequence`, play, `OnEndSequence`,
+    idle), red only on N19 (sequence 0; V4's judge). Default 171 / 0, arm 1550 / 0; suite 71 pass /
+    32 expected-fail / 1 fail (H11) / 1 unexpected-pass (N4); divergence 18 closed, K1 kept.
   - [ ] **V3d** — the dialogue hold as a program; the arbiter deleted whole. M–L.
 - [ ] **T6b** — The header pass: the kernel headers' include fan-out, after V3d; closes T6
   (`0002-npc-ai/stories/t6b/brief.md`). M · Opus/high.

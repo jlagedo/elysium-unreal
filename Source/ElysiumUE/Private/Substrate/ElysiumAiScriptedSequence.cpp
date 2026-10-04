@@ -61,12 +61,8 @@ void FElysiumAiScriptedSequence::PossessEntity()
 	{
 		MakeNpcOblivious(*Npc);           // 0x101a916b 0x1026d130
 	}
-	// A standing cine is OVERWRITTEN. The port's stand-in of the previous cine's scripted schedule
-	// stops with it (retail's NPC simply reselects under the new `m_hCine`) — modernization bookkeeping.
-	if (FElysiumScriptedSequence* Previous = Npc->ResolveCine(); Previous != nullptr && Previous != this)
-	{
-		Previous->EndBeat();
-	}
+	// A standing cine is OVERWRITTEN: no queue test, the NPC's program simply runs on under the new
+	// `m_hCine`.
 	Npc->BaseScheduleHost.GoalEnt = Handle;   // 0x101a9170 npc m_pGoalEnt +0x5de8
 	Npc->ScriptOwner = Handle;                // 0x101a917a..0x101a9180 npc m_hCine +0x5d74
 	Npc->SetTarget(Handle);                   // 0x101a9188 SetTarget(npc, this)
@@ -85,6 +81,9 @@ void FElysiumAiScriptedSequence::PossessEntity()
 		if ((SpawnFlags & GAiSfIgnoreNpcCollision) != 0)                           // 0x101a91f9 / 0x101a9202
 		{
 			Troika->NpcFlags.AssignAiFlagsWord(Troika->NpcFlags.RawWord1() | GAiNavIgnoreNpc); // 0x101a920c
+			// The collision view of `NAV_IGNORE_NPC` (`IsIgnoreCollisionEntity` reads the bit): the
+			// Unreal motor ignores characters. `CineCleanup`'s restore of `+0x5f8c` undoes it.
+			Npc->SetIgnoreCharacterCollision(true);
 		}
 	}
 	// 0x101a9212..0x101a9220: npc m_fEffects |= this director's `m_fEffects` (+0x19c). SEAM (spec 0003):
@@ -93,16 +92,16 @@ void FElysiumAiScriptedSequence::PossessEntity()
 	{
 	case 0:
 	case 5:
-		NpcScriptState = GAiScriptWait;               // 0x101a923c..0x101a9245 state 1; 0x101a9240 0x1027f270(1) is empty
+		Npc->SetScriptState(GAiScriptWait);           // 0x101a923c..0x101a9245 npc +0x5d70 := 1; 0x101a9240 0x1027f270(1) is empty
 		break;
 	case 1:
-		NpcScriptState = GAiScriptWalkToMark;         // 0x101a9254..0x101a925d state 4, NO DelayStart; 0x101a9258 0x1027f270(4) empty
+		Npc->SetScriptState(GAiScriptWalkToMark);     // 0x101a9254..0x101a925d npc +0x5d70 := 4, NO DelayStart; 0x101a9258 0x1027f270(4) empty
 		break;
 	case 2:
-		NpcScriptState = GAiScriptRunToMark;          // 0x101a926c..0x101a9275 state 5; 0x101a9270 0x1027f270(5) empty
+		Npc->SetScriptState(GAiScriptRunToMark);      // 0x101a926c..0x101a9275 npc +0x5d70 := 5; 0x101a9270 0x1027f270(5) empty
 		break;
 	case 3:
-		NpcScriptState = GAiScriptCustomMoveToMark;   // 0x101a9284..0x101a928d state 6; 0x101a9288 0x1027f270(6) empty
+		Npc->SetScriptState(GAiScriptCustomMoveToMark); // 0x101a9284..0x101a928d npc +0x5d70 := 6; 0x101a9288 0x1027f270(6) empty
 		break;
 	case 4:
 		// `CCineNPC`'s teleport instruction for instruction (`0x101a7d89..0x101a7e6b`), so the shared
@@ -113,7 +112,7 @@ void FElysiumAiScriptedSequence::PossessEntity()
 		// SetLocalAngularVelocity(vec3_angle); 0x101a933f..0x101a9344 EF_NOINTERP; 0x101a934a slot 221
 		// on the NPC, 0x101a9368 slot 221 our yaw, 0x101a937e slot 64 SetAngles.
 		TeleportToMark(*Npc);                         // 0x101a929c..0x101a937e
-		NpcScriptState = GAiScriptWait;               // 0x101a9388 0x1027f270(1) empty / 0x101a9391 state 1
+		Npc->SetScriptState(GAiScriptWait);           // 0x101a9388 0x1027f270(1) empty / 0x101a9391 npc +0x5d70 := 1
 		Npc->Flags &= ~GAiFlagOnGround;               // 0x101a939b RemoveFlag(FL_ONGROUND)
 		break;
 	default:
@@ -130,8 +129,6 @@ void FElysiumAiScriptedSequence::PossessEntity()
 	{
 		Npc->ChangeSchedule(ScheduleAiScript);                          // 0x101a93f8 0x10280de0(0x2e)
 	}
-	// Named modernization: the stand-in for the scripted schedule `0x2e` selects.
-	BeginBeat(*Npc);
 }
 
 // Slot 584: `0x101a9510` (`CCineAI::vfunc584`), 139 bytes. `0x101a82d0`'s shape with two differences:
@@ -145,18 +142,19 @@ bool FElysiumAiScriptedSequence::StartSequence(FElysiumNpcBase& Npc, const FStri
 		SequenceDone(Npc);                              // 0x101a952d SequenceDone 0x101a8460
 		return true;                                    // 0x101a9532 AL = 1 (`CCineNPC`'s answers 0)
 	}
-	// `LookupSequence` (`0x101a9549`) into `m_nSequence` (`0x101a9551`); -1 -> the warning
-	// (`0x101a9570`) and sequence 0 (`0x101a9579`); `m_flCycle = 0` (`0x101a9585`);
-	// `ResetSequenceInfo` (`0x101a958f`). The clip plays through the body, as `CCineNPC`'s does.
-	const float Seconds = PlayBeatClip(Npc, SequenceName, /*bLoop=*/!bCompleteOnEmpty);
-	if (Seconds < 0.f)                                  // 0x101a9557
+	// A null name with `bCompleteOnEmpty` clear is looked up as "" (`0x101a953c`).
+	Npc.SequenceNumber = Npc.LookupSequenceByName(*SequenceName); // 0x101a9549 LookupSequence -> 0x101a9551 npc m_nSequence (+0x6f0)
+	if (Npc.SequenceNumber == INDEX_NONE)               // 0x101a954e / 0x101a9557
 	{
 		// `Warning("%s: unknown aiscripted sequence \"%s\"\n")` through `0x109f362c` (`0x101a9570`).
 		// 0x101a955b JNZ: a null name prints as "" (`0x106b8540`); 0x101a9565 GetDebugName(npc).
 		UE_LOG(LogElysiumAiSeq, Log, TEXT("%s: unknown aiscripted sequence \"%s\""), *AiDebugName(Npc),
 			*SequenceName);
+		Npc.SequenceNumber = 0;                         // 0x101a9579 m_nSequence := 0
 	}
-	BeatClipEndsAt = (World != nullptr ? World->NowSeconds() : 0.0) + FMath::Max(0.f, Seconds);
+	Npc.SequenceCycle = 0.f;                            // 0x101a9585 m_flCycle (+0x6f8) := 0
+	// `ResetSequenceInfo` `0x10090950` (thunk `0x100117b1`), where the sequence bridge starts the clip.
+	Npc.ResetSequenceInfo();                            // 0x101a958f
 	return true;                                        // 0x101a9595 AL = 1
 }
 

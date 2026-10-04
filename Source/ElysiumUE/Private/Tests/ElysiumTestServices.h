@@ -259,11 +259,22 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	}
 	// The rate the last `Face` stated (0 = keep the body's); a move's rate is on `LastMoveRequest`.
 	float RequestedYawSpeedDegPerS = 0.f;
+	// Whether the body completes a commanded turn by its next sample. Off by default: a substrate
+	// case asserts the request contract, and the stub then stands at the yaw it was placed at. A case
+	// whose program waits on `FacingIdeal 0x10278c80` (the face tasks' run arm, `0x10288b5b`) sets it,
+	// because a spawned NPC's body turns: the task still runs `UpdateYaw` and still waits for the
+	// body's yaw to read the ideal one, the stub only turns within a frame.
+	bool bSettlesFacing = false;
 	virtual void Face(float YawDegrees, float YawSpeedDegPerS = 0.f) override
 	{
 		RequestedYaw = YawDegrees;
 		RequestedYawSpeedDegPerS = YawSpeedDegPerS;
 		bFacing = bEnabled;
+		if (bEnabled && bSettlesFacing)
+		{
+			Yaw = YawDegrees;
+			bFacing = false;
+		}
 		Record(FString::Printf(TEXT("NpcMotor Face yaw=%.1f"), YawDegrees));
 	}
 	virtual void Stop() override

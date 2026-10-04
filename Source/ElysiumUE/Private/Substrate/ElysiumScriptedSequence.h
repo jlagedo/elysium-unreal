@@ -13,7 +13,7 @@ struct FElysiumClassDesc;
 // `+0x94`, joins the AI list and `PostConstructor` builds its components, senses included. It never
 // runs `NPCInit` or `NPCThink`: its `Spawn` (`0x101a6f10`) replaces the base's and chains to nothing,
 // so it has no schedule, no motor use and no sense pass. What it runs is its own installed think,
-// `CineThink` (`0x101a8070`), and `SUB_Remove` after a non-repeatable beat finishes.
+// `CineThink` (`0x101a8070`), and `SUB_Remove` after a non-repeatable scene finishes.
 //
 // Twenty own vtable slots (the vtable diff against `CAI_BaseNPC`, `0x104995c4`); slot 5 is the
 // deleting destructor, the C++ destructor's. Slots 583–586 are the branch's OWN virtuals past
@@ -21,14 +21,15 @@ struct FElysiumClassDesc;
 // `FixScriptNPCSchedule`, `docs/vtmb/npc-kernel/signatures.md`), unrelated to the Troika's virtuals at
 // the same indices; no C++ name is shared, because the two branches never meet in one class.
 //
-// **The beat's body half is a named modernization.** Retail hands the possessed NPC to its own
-// scripted schedules (`SCHED_AISCRIPT 0x2e` -> `SCHED_TROIKA_SCRIPTED_WALK 0xf2` …, the tasks
-// `TASK_WALK_TO_TARGET` .. `TASK_PLAY_SCRIPT_POST_IDLE`; spec 0003 stories 1–2), which the port has
-// not built. Until it does, the director drives the equivalent task order itself on a 0.05 s beat
-// think (`TickBeat`): travel (8/9/10, the port's motor), plant/face, `TASK_ENABLE_SCRIPT`
-// (`DelayStart(0)`), `TASK_WAIT_FOR_SCRIPT` (pre-idle, `IsTimeToStart`, `StartScript`),
-// `TASK_PLAY_SCRIPT` (`SequenceDone`) and `TASK_PLAY_SCRIPT_POST_IDLE` (`Finish`). Every retail
-// director body those tasks call is the retail body; only the task driver is the port's.
+// **The NPC's own scripted schedules run the scene; the director drives nothing.** `PossessEntity`
+// writes the NPC's words (`m_hCine +0x5d74`, `m_scriptState +0x5d70` by `m_fMoveTo`, ideal state
+// SCRIPT) and returns. The NPC's `MaintainSchedule` `0x102817c0` changes state and reselects:
+// `SelectSchedule` `0x1028a380` case 4 -> `SCHED_AISCRIPT 0x2e` -> `TranslateSchedule` `0x102cc080`
+// by `m_fMoveTo` -> `SCHED_TROIKA_SCRIPTED_WALK 0xf2` / `_RUN 0xf4` / `_CUSTOM_MOVE 0xf6` / `_WAIT
+// 0xf8` / `_FACE 0xf9`, whose tasks (`TASK_WALK_TO_TARGET` .. `TASK_PLAY_SCRIPT_POST_IDLE`) call this
+// class's retail bodies: `DelayStart`, `IsTimeToStart`, `StartScript`, slot 584 `StartSequence`
+// (which writes the NPC's `m_nSequence`), `SequenceDone`, `Finish`. The director's only think is
+// its installed one (`CineThink` while its target cannot be found, `SUB_Remove` after a finish).
 class FElysiumScriptedSequence : public FElysiumNpcBase
 {
 public:
@@ -56,7 +57,7 @@ public:
 	// Slots 370/371 `0x101a6d40` / `0x101a6d70` — tail calls through slots 368/369 `BodyDirection*`.
 	virtual FVector HeadDirection2D() override;
 	virtual FVector HeadDirection3D() override;
-	// Slot 459 `0x101a89a0` — the conditions a non-interruptible beat strips off its NPC.
+	// Slot 459 `0x101a89a0` — the conditions a non-interruptible scene strips off its NPC.
 	virtual void RemoveIgnoredConditions() override;
 
 	// Slots 583–586, this branch's own virtuals (`CCineNPC` bodies; `CCineAI` and `CCineAISchedule`
@@ -105,8 +106,8 @@ public:
 	void FireScriptEvent(int32 Index);
 
 	// `CineCleanup` `0x1027d170` — a `CAI_BaseNPC` body on the NPC, which reads the NPC's `m_hCine`.
-	// Ported here beside the only callers the port has (`ScriptEntityCancel`, `Finish`, slot 440's
-	// "Script failed" arm) because every word it restores is the cine's.
+	// Ported here beside its callers (`ScriptEntityCancel`, `Finish`, `SelectSchedule`'s "Script
+	// failed" arm) because every word it restores is the cine's.
 	static void CineCleanup(FElysiumNpcBase& Npc);
 	// `0x1026d130`: `SetEnemy(NULL)`, `DisconnectFromSquad`, `++m_iIsOblivious` — no output, no
 	// bookkeeping bit (unlike `TASK_MAKE_OBLIVIOUS`).
@@ -126,10 +127,6 @@ public:
 	// `+0x1c == 180.0` direct write), `SetLocalAngularVelocity(vec3_angle)`, `EF_NOINTERP`, and the
 	// NPC's angles with only the YAW replaced by this cine's.
 	void TeleportToMark(FElysiumNpcBase& Npc) const;
-	// `npc->m_scriptState (+0x5d70) := State`, written through the director that owns `Npc` (the
-	// port holds the word there, `NpcScriptState`). An NPC no director owns has nowhere to hold it;
-	// every retail writer runs with `m_hCine` resolved, so that arm is not reached from a body.
-	static void SetScriptStateOf(FElysiumNpcBase& Npc, int32 State);
 
 	// The NPC `m_hTargetEnt` (`+0x5ce4`) resolves to through its `+0x94`, or null.
 	FElysiumNpcBase* TargetNpc() const;
@@ -176,21 +173,12 @@ public:
 	// `0x101a7760` under spawnflag `0x400`.
 	FElysiumEntityHandle LastFoundEntity;
 
-
-	// `m_scriptState` (`+0x5d70`) — an NPC word, held here on the director that owns the NPC
-	// (`m_hCine`). It has no meaning without one: `CineCleanup` zeroes it in the same pass that clears
-	// `m_hCine`, and every reader resolves `m_hCine` first. 0 playing, 1 wait, 2 post-idle, 3 cleanup,
-	// 4/5/6 walk/run/custom to the mark.
-	int32 NpcScriptState = 0;
-	// `m_scriptState` of `Npc`: its owning director's word, or 0 when nothing owns it.
-	static int32 ScriptStateOf(const FElysiumNpcBase& Npc);
-
 	// --- The installed think (`m_pfnThink` / `m_flNextThink`) -------------------------------------
 	enum class EThinkFunction : uint8 { None, CineThink, SubRemove };
 	EThinkFunction ThinkFunction = EThinkFunction::None;
 	// Retail's `m_flNextThink` for the installed function; `ELYSIUM_NEVER_THINK` when none is armed.
-	// Separate from `FElysiumEntity::NextThink`, which also carries the beat stand-in's cadence: the
-	// `BeginSequence` "before it had a chance to think" test reads THIS word.
+	// `FElysiumEntity::NextThink` mirrors it (`RescheduleThink`); the `BeginSequence` "before it had
+	// a chance to think" test reads THIS word.
 	double CineThinkAt = ELYSIUM_NEVER_THINK;
 	// `ThinkSet(fn); m_flNextThink = At`.
 	void ArmCineThink(EThinkFunction Function, double At);
@@ -207,26 +195,11 @@ public:
 	// `+0x10c` / `+0x110`. An unknown name warns "Invalid entity search name" and answers null.
 	FElysiumEntity* ResolveProceduralName(const FString& Name);
 
-	// --- The port's stand-in for the possessed NPC's scripted schedules (named modernization) ------
-	enum class EBeatPhase : uint8 { None, Travel, WaitForScript, Play, PostIdle, PostIdleHeld };
-	EBeatPhase Phase = EBeatPhase::None;
-	double BeatThinkAt = ELYSIUM_NEVER_THINK;
-	double BeatClipEndsAt = 0.0;
-	bool bTravelled = false;
-	bool bResumeTravel = false;
-	bool bPreIdleStarted = false;
-	// A beat restored from a map snapshot (a level left and revisited mid-beat): `m_hCine` is
-	// re-stamped on the NPC at `OnPostRestore` and the beat RESTARTS its current phase on its first
-	// think — the port's "restart, not resume" rule for restored programs
-	// (`FElysiumNpc::RestartRestoredSchedule`). Retail saves `m_hCine` and the NPC's scripted
-	// schedule and resumes both (`CAI_BaseNPC::OnRestore` `0x1027bf50`).
-	bool bRestartBeat = false;
+	// A possession restored from a map snapshot (a level left and revisited mid-scene): the NPC this
+	// director held, re-stamped at `OnPostRestore` (`m_hCine` and `m_pGoalEnt` on the NPC,
+	// `m_hTargetEnt` here), because the NPC's base snapshot does not carry `m_hCine`. Retail saves
+	// `m_hCine` in the NPC's datamap (`CAI_BaseNPC::OnRestore` `0x1027bf50`).
 	int32 RestoredNpcIndex = INDEX_NONE;
-	// Starts the task order for the NPC `PossessEntity` just took.
-	void BeginBeat(FElysiumNpcBase& Npc);
-	// Stops it without an output (cleanup, cancel, a later possession, removal).
-	void EndBeat();
-	void TickBeat(double Now);
 
 	virtual void ThinkAt(double Now) override;
 	virtual const TCHAR* SaveBlockReason() const override;
@@ -259,18 +232,7 @@ protected:
 	// within `RadiusUnits` of `CenterCm` (`0x100f7c30` / `0x100f7e30`), and the pair `0x100f7f70`.
 	FElysiumEntity* FindGenericWithin(FElysiumEntity* Start, const FString& Name, const FVector& CenterCm,
 		float RadiusUnits);
-	// The NPC the beat stand-in drives: the target, while it is still this director's.
-	FElysiumNpcBase* BeatNpc() const;
 	void RescheduleThink();
-	// Travel helpers of the stand-in (the port's motor seam, `FElysiumEntity::BeginScriptMove`).
-	bool StartTravel(FElysiumNpcBase& Npc);
-	void PlaceOnMark(FElysiumNpcBase& Npc) const;
-	void Arrive(FElysiumNpcBase& Npc, double Now);
-	// The `m_iszPlay` / post-idle clip on `Npc`; answers its length (0 when none resolves).
-	float PlayBeatClip(FElysiumNpcBase& Npc, const FString& Clip, bool bLoop);
-	// Presentation claim the port adds on top of `m_hCine` (the body arbiter, the collision view of
-	// `NAV_IGNORE_NPC`), taken at possession and given back by `CineCleanup`.
-	void ClaimBody(FElysiumNpcBase& Npc);
 	// The retail diagnostics this class prints, kept for the inspector and tests.
 	TArray<FString> Diagnostics;
 	void Diagnostic(const FString& Line);

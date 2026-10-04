@@ -540,99 +540,11 @@ bool FElysiumNpc::StartWalkingAnimation(bool bRunning)
 	return PlayAnimClip(bRunning ? TEXT("run") : TEXT("walk"), /*bLoop=*/true);
 }
 
-bool FElysiumNpc::AcquireSequenceBody(const TCHAR* Reason)
-{
-	// A pushed scripted order is DROPPED rather than parked, for the same reason dialogue drops it:
-	// the arbiter's one parked slot belongs to the patrol route, and `aiscripted_schedule` is a
-	// one-shot push with no resume. A beat that takes this body ends whatever a director had asked
-	// for, which is also the recovered precedence — a sequence claims the body outright.
-	EndScriptedSchedule(Reason);
-	return Mind.Acquire(EElysiumBodyOwner::Sequence, /*bSuspendCurrent=*/false,
-		SequenceOwner, Reason);
-}
-
-void FElysiumNpc::ReleaseSequenceBody(const TCHAR* Reason)
-{
-	if (!SequenceOwner.IsSet())
-	{
-		return;
-	}
-	Mind.Release(SequenceOwner, Reason);
-	SequenceOwner.Reset();
-}
-
-bool FElysiumNpc::ClaimScriptMove()
-{
-	// Pre-claim release, kept until V3c deletes the claim it precedes; V3c's path is the forced
-	// schedule's `OnScheduleChange 0x102a0940`, whose release passes 1 (`0x102a099c`).
-	FinishAmbientUse(/*bFireLeft=*/true);
-	if (!AcquireSequenceBody(TEXT("BeginScriptMove")))
-	{
-		return false;
-	}
-	bMoveIssued = false;
-	return true;
-}
-
-void FElysiumNpc::ReleaseScriptMove(const TCHAR* Reason)
-{
-	bMoveIssued = false;
-	if (bScriptBodyHeld)
-	{
-		// The beat outlives its travel: `m_iszPlay` and the post-idle still play on this body,
-		// so arrival hands the motor back without giving up the claim under them.
-		return;
-	}
-	ReleaseSequenceBody(Reason);
-}
-
-bool FElysiumNpc::ClaimScriptBody(const TCHAR* Reason)
-{
-	bScriptBodyRequested = true;
-	if (bScriptBodyHeld)
-	{
-		return true;
-	}
-	// Pre-claim release, kept until V3c deletes the claim it precedes (`OnScheduleChange
-	// 0x102a0940`'s release passes 1, `0x102a099c`). `0x102b53d0` tests the held place itself.
-	FinishAmbientUse(/*bFireLeft=*/true);
-	bScriptBodyHeld = AcquireSequenceBody(Reason);
-	// This leaf owns the arbiter, so it owns the one report of a claim it could not grant. The
-	// two outcomes are not the same event: an unadmitted mind is an ordinary race this NPC
-	// resolves itself on its next think, while an admitted mind that still refuses means another
-	// owner holds a body a beat is entitled to.
-	if (!bScriptBodyHeld && !Mind.IsAdmitted())
-	{
-		UE_LOG(LogElysiumNpcEnt, Log,
-			TEXT("%s defers a scripted beat's body claim until admission has run"),
-			*DebugString());
-	}
-	else if (!bScriptBodyHeld)
-	{
-		UE_LOG(LogElysiumNpcEnt, Warning,
-			TEXT("%s refused a scripted beat the body: %s owns it. The beat runs on its queue "
-				 "lock and the claim is retried when the arbitration allows it"),
-			*DebugString(), LexToString(Mind.Owner()));
-	}
-	return bScriptBodyHeld;
-}
-
-void FElysiumNpc::ReleaseScriptBody(const TCHAR* Reason)
-{
-	bScriptBodyRequested = false;
-	if (!bScriptBodyHeld)
-	{
-		return;
-	}
-	bScriptBodyHeld = false;
-	if (bScriptMoveClaimed)
-	{
-		// Cancelled mid-travel: the motor is still on the same token and EndScriptMove, which
-		// the beat runs next, is what gives it back.
-		return;
-	}
-	ReleaseSequenceBody(Reason);
-}
+// V3c: the `Sequence` claim (`AcquireSequenceBody`, `ClaimScriptMove`, `ClaimScriptBody` and their
+// releases, with their pre-claim `FinishAmbientUse` calls) is deleted. Retail's cine claims no body:
+// `PossessEntity 0x101a7880` writes `m_hCine`, `m_scriptState` and `m_IdealNPCState = 4`, and the
+// NPC's own `MaintainSchedule 0x102817c0` changes state and reselects (`SCHED_AISCRIPT 0x2e`). A
+// visited place is released by `0x102b53d0`'s own callers only.
 
 bool FElysiumNpc::IsFeedBusy() const
 {
@@ -836,65 +748,25 @@ bool FElysiumNpc::OnBumped(double Now)
 	return true;
 }
 
-bool FElysiumNpc::TickScriptWatchdog()
-{
-	if (ScriptPhase == EScriptPhase::None)
-	{
-		return false;
-	}
-	// The owning beat advances the move; this think only watches for a beat that stopped
-	// doing so (killed or hidden mid-travel) and releases the body rather than freezing it.
-	const double Now = World ? World->NowSeconds() : 0.0;
-	if (Now < ScriptWatchdogAt)
-	{
-		// No deadline is pushed: a script-driven body is a `ShouldThinkFrequently` body, so the
-		// cadence laws already hold it at their 0.01 s floor.
-		return true;
-	}
-	UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s released an abandoned scripted move"),
-		*DebugString());
-	// Everything the beat holds leaves together: a beat that stopped advancing its own move will not
-	// run its teardown either, and half a claim would leave this body suppressed and unowned for the
-	// rest of the map. While the owning director still resolves, that teardown IS `CineCleanup`
-	// (`0x1027d170`): the saved movetype/flags, the oblivious count and the squad come back with it.
-	if (ResolveCine() != nullptr)
-	{
-		FElysiumScriptedSequence::CineCleanup(*this);
-	}
-	ReleaseScriptBody(TEXT("abandoned scripted move"));
-	EndScriptMove();
-	ScriptOwner = FElysiumEntityHandle::Invalid();
-	// The beat's montage-slot run claim goes with the rest of what it held. Nothing else can give it
-	// back — the beat that took it is the thing that stopped answering — and it has no duration, so a
-	// claim left standing here would refuse the idle below at the ambient band and park this body's
-	// base channel in its travel cycle for the rest of the map.
-	ReleaseAnimSegment();
-	ResetAnimToIdle();
-	return true;
-}
-
 bool FElysiumNpc::RouteScheduleMaintenance(double Now, bool bReduced)
 {
 	// `MaintainSchedule` (`0x102817c0`) as `RunAI` (`0x1026f302`) reaches it on a Troika body. Retail
-	// runs the schedule interpreter alone: a scripted beat is `SCHED_AISCRIPT`, a patrol is the patrol
-	// path's program, an interesting place is its program (`SelectSchedule` case 1's `0xff` setup,
-	// `0x100`, the wait `0x102a9f40`, the loop `0x102aa210`, the release `0x102b53d0` -- V3b deleted
-	// the port's ambient executor). This runtime still drives two owners outside the interpreter,
-	// routed here ahead of it — each a named survivor of the story-8 rewire, with the reason it stays:
+	// runs the schedule interpreter alone: a scene is `SCHED_AISCRIPT 0x2e` (`PossessEntity
+	// 0x101a7880`'s ideal state 4 → `MaintainSchedule`'s state change and reselect → `SelectSchedule
+	// 0x1028a380` case 4 → `TranslateSchedule 0x102cc080` → `0xf2..0xf9`; its exits, "Script failed"
+	// and the cine's death, are the select's and the task arms' -- V3c deleted the port's beat owner
+	// and its watchdog), a patrol is the patrol path's program, an interesting place is its program
+	// (`SelectSchedule` case 1's `0xff` setup, `0x100`, the wait `0x102a9f40`, the loop `0x102aa210`,
+	// the release `0x102b53d0` -- V3b deleted the port's ambient executor). This runtime still drives
+	// one owner outside the interpreter, routed here ahead of it — a named survivor of the story-8
+	// rewire, with the reason it stays:
 	//
-	// STORY8-TWIN (survivor, V3c): the scripted-beat owner (`TickScriptWatchdog`, `ThinkScriptOwned`)
-	// is replaced by `SCHED_AISCRIPT` and the director's own schedule arms; until then the beat drives
-	// the body and the interpreter must not fight it.
 	// STORY8-TWIN (survivor, V3d): the dialogue clip hold (`ThinkInDialog`) is replaced by the
 	// dialogue family's `m_hDialogPartner` path (RunAI's gather skip is already retail's,
 	// `0x1026f1f0`); the per-line VCD body clip it protects has no retail schedule stand yet.
 	//
 	// Everything else is `MaintainScheduleRetail` through `ThinkStanceOrIdle`.
-	if (TickScriptWatchdog())
-	{
-		return Schedule.IsRunning();
-	}
-	if (ThinkInDialog(Now, bReduced) || ThinkScriptOwned(Now))
+	if (ThinkInDialog(Now, bReduced))
 	{
 		return Schedule.IsRunning();
 	}
@@ -921,28 +793,6 @@ bool FElysiumNpc::ThinkInDialog(double Now, bool bReduced)
 	// current idle rather than fidgeting through a line, so the reschedule is what keeps it
 	// posed rather than what makes it move.
 	ThinkStanceOrIdle(Now, bReduced);
-	return true;
-}
-
-bool FElysiumNpc::ThinkScriptOwned(double Now)
-{
-	if (!ScriptOwner.IsSet())
-	{
-		return false;
-	}
-	// A scripted owner — a `scripted_sequence` beat or a choreographed scene's cast — is
-	// driving this body's pose. Script ownership suppresses the ordinary condition-gathering
-	// path (`docs/vtmb/npc-ai/README.md`), so nothing after this phase may select a
-	// schedule whose idle would replace the clip the owner put on the body.
-	if (bScriptBodyRequested && !bScriptBodyHeld
-		&& Mind.CanAcquire(EElysiumBodyOwner::Sequence))
-	{
-		// The beat asked before this NPC's admission think had run. Admission has happened
-		// by now, so the claim it is entitled to lands here.
-		bScriptBodyHeld = AcquireSequenceBody(TEXT("scripted beat claim after admission"));
-	}
-	// A script-driven body is a `ShouldThinkFrequently` body, so the laws already hold it at their
-	// floor. Nothing to write here.
 	return true;
 }
 
@@ -2053,10 +1903,7 @@ FElysiumBodyOwnerToken FElysiumNpc::BeginDialogueBodySession()
 			UE_LOG(LogElysiumNpcEnt, Warning,
 				TEXT("%s cleared stale scripted owner %s while opening dialogue"),
 				*DebugString(), *PreviousOwner.ToString());
-			// Nothing is left to run the beat's own teardown, so its body claim is dropped here
-			// too -- otherwise the arbiter would still read Sequence and refuse the dialogue.
-			ReleaseScriptBody(TEXT("stale scripted owner cleared for dialogue"));
-			EndScriptMove();
+			// (V3c: the cine holds no body claim and no scripted move to drop here.)
 			ScriptOwner = FElysiumEntityHandle::Invalid();
 		}
 	}
@@ -2291,7 +2138,6 @@ void FElysiumNpc::ReleaseAllBodyOwnership(const TCHAR* Reason, bool bDeadMind)
 			EndDialogueBodySession(DialogueBodyOwner, /*bSilent=*/true);
 		}
 	}
-	EndScriptMove();
 	// Death and dormancy: retail's removal-side callers (`Event_Killed`, `UpdateOnRemove
 	// 0x1028d6e0`) pass 0 to `0x102b53d0`.
 	FinishAmbientUse(/*bFireLeft=*/false);
@@ -2300,14 +2146,9 @@ void FElysiumNpc::ReleaseAllBodyOwnership(const TCHAR* Reason, bool bDeadMind)
 	const int32 TracedState = NpcStateRetail();   // read for the AI trace's `state` event only
 	Mind.Invalidate(Reason, bDeadMind);
 	TraceStateChange(TracedState, NpcStateRetail());
-	SequenceOwner.Reset();
 	ScriptedScheduleOwner.Reset();
 	ScriptedScheduleOrder.Reset();
 	DialogueBodyOwner.Reset();
-	// The beat's own ReleaseNpc still runs; it must find nothing left to give back rather
-	// than releasing a token this invalidation already retired.
-	bScriptBodyRequested = false;
-	bScriptBodyHeld = false;
 }
 
 bool FElysiumNpc::IsTransmitted() const
@@ -2473,7 +2314,6 @@ void FElysiumNpc::RestartRestoredSchedule()
 // `TroikaOnRestore` validates them (`0x1029f610`).
 void FElysiumNpc::RestorePatrolAndAmbient()
 {
-	EndScriptMove();
 	bMoveIssued = false;
 	// A held place is the word `m_pInterestingPlace +0x62ec`, held from `TASK_FIND_INTERESTING_PLACE`
 	// on (mode `+0x6304` still 0 on the walk there). The place's visitor record is not in the save
@@ -2516,11 +2356,6 @@ void FElysiumNpc::RestoreMindState()
 	// state restored just above and, for mode 3, the committed enemy the senses record carries.
 	ScriptedScheduleOwner.Reset();
 	ScriptedScheduleOrder.Reset();
-	// A restore never resumes `Sequence` ownership, so any token from before the load is retired
-	// with it. The request survives: whichever order the two entities restore in, a beat that
-	// re-stamps its queue lock has its claim taken again on the next think.
-	SequenceOwner.Reset();
-	bScriptBodyHeld = false;
 }
 
 void FElysiumNpc::RestoreDeathBodyState()
@@ -2766,11 +2601,8 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		? TEXT("searching")
 		: FString::Printf(TEXT("#%d phase=%d"), CurrentSpotIndex,
 			static_cast<int32>(AmbientPhase)));
-	Out.Emplace(TEXT("Scripted move"), ScriptPhase == EScriptPhase::None
-		? TEXT("(free)")
-		: FString::Printf(TEXT("%s to %s, %.0fcm out"),
-			ScriptPhase == EScriptPhase::Travel ? TEXT("travelling") : TEXT("facing"),
-			*ScriptMark.ToString(), FVector::Dist2D(Origin, ScriptMark)));
+	// `m_scriptState +0x5d70` (V3c: the NPC's word; the scripted-move row went with the seam).
+	Out.Emplace(TEXT("Script state"), FString::Printf(TEXT("%d"), GetScriptState()));
 
 	// --- Sensory transaction ---
 	Out.Emplace(TEXT("Perception"), FString::Printf(

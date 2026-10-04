@@ -83,7 +83,7 @@ bool ElysiumNpcThink::ShouldThinkFrequently(const FElysiumNpc& Npc)
 	{
 		return true;
 	}
-	if (Npc.IsScriptDriven())   // `m_scriptState in {4,5,6}`
+	if (Npc.IsScriptDriven())   // 0x102c2430: `3 < m_scriptState && m_scriptState < 7`, the NPC word
 	{
 		return true;
 	}

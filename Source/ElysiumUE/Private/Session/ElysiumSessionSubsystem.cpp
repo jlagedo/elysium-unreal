@@ -1,5 +1,6 @@
 #include "ElysiumSessionSubsystem.h"
 
+#include "Debug/ElysiumArenaRun.h"   // the H17 harness seed door in BeginNewGame (non-shipping)
 #include "ElysiumEntityWorld.h"
 #include "ElysiumExpr.h"
 #include "ElysiumGameFlowSubsystem.h"
@@ -122,7 +123,25 @@ void UElysiumSessionSubsystem::BeginNewGame(int32 Clan, bool bMale)
 
 	// Every game-visible draw comes from an owned, seeded stream whose state is in the save.
 	// A run takes one session seed; the five streams derive from it.
-	ElysiumRng::SeedAll(static_cast<int32>(FPlatformTime::Cycles()));
+	bool bHarnessSeeded = false;
+#if !UE_BUILD_SHIPPING
+	// HARNESS DOOR (spec 0002 H17): an arena map host's boot (`-ElysiumArena -ArenaSeed=<n>`) seeds
+	// from its record's seed, so the map's activation replays; the engine's generator too, as the
+	// arena host seeds both before a stage's `Load` (`ElysiumArenaStage::Stage`). Any other launch
+	// finds no override and takes the clock below, unchanged.
+	int32 HarnessSeed = 0;
+	if (FElysiumArenaRun::LaunchSeed(HarnessSeed))
+	{
+		bHarnessSeeded = true;
+		ElysiumRng::SeedAll(HarnessSeed);
+		FMath::RandInit(HarnessSeed);
+		FMath::SRandInit(HarnessSeed);
+	}
+#endif
+	if (!bHarnessSeeded)
+	{
+		ElysiumRng::SeedAll(static_cast<int32>(FPlatformTime::Cycles()));
+	}
 
 	Record.Reset();
 	// The sheet starts from `stats.txt`'s authored defaults, then takes the two identity slots the

@@ -60,8 +60,8 @@ tap and which wait for a body.
 ## The launch contract (lane A's headless run, lane B's `uv run elysium arena`)
 
 Scenario records live at `<ProjectDir>/Arena/scenarios/**/*.json` (tracked text; the schema is
-`Arena/README.md`, written by lane A). Lane B's launcher reads each record's `name`, `stage` and
-`expect_fail` only.
+`Arena/README.md`, written by lane A). Lane B's launcher reads each record's `name`, `stage`,
+`expect_fail`, `shares_map` and `seed` only.
 
 Command line of the headless run (lane A parses, lane B passes), modelled on the `cast` harness's
 launch in `unreal.py` (`-nullrhi -unattended -UseFixedTimeStep -FPS=<hz> -nosplash -nosound -stdout
@@ -74,9 +74,11 @@ launch in `unreal.py` (`-nullrhi -unattended -UseFixedTimeStep -FPS=<hz> -nospla
 | `-ArenaOut=<absolute dir>` | where the report goes; absent = `Saved/Elysium/_arena/` |
 | `-ArenaHz=<n>` | the fixed step (default 60; the launcher passes the same value as `-FPS=`) |
 | `-ElysiumMap=<map>` | the map host: only records with `"stage": "map:<map>"` run; absent = the arena host, records with `"stage": "arena"` |
+| `-ArenaSeed=<n>` | map boots only: the boot's first record's `seed` (default 0). Read only under `-ElysiumArena` (`FElysiumArenaRun::LaunchSeed`, the H17 harness door); New Game (`UElysiumSessionSubsystem::BeginNewGame`) seeds every `ElysiumRng` stream and `FMath::Rand`/`SRand` from it instead of the clock, so the map's activation replays. Absent = the clock, as the game does |
 
 One boot runs one host. The launcher groups the requested records by stage and boots once per
-stage, arena first.
+stage, arena first; a map record boots alone unless it sets `shares_map`, and a shared boot is
+seeded by its first record (each record still re-seeds from its own `seed` at its start).
 
 Exit code: 0 when no scenario's result is `fail`, `unexpected-pass` or `error`; 1 otherwise or on a
 harness error (no record matched, the stage never became ready).

@@ -22,9 +22,9 @@ def _write_record(root: Path, relative: str, **fields) -> Path:
 
 
 def _record(name: str, stage: str = "arena", *, shares_map: bool = False,
-            expect_fail: bool = False) -> ScenarioRecord:
+            expect_fail: bool = False, seed: int = 0) -> ScenarioRecord:
     return ScenarioRecord(name=name, stage=stage, expect_fail=expect_fail, shares_map=shares_map,
-                          path=Path(f"{name}.json"))
+                          path=Path(f"{name}.json"), seed=seed)
 
 
 def _config(tmp_path: Path) -> SimpleNamespace:
@@ -71,6 +71,11 @@ def test_discovery_refuses_a_duplicate_name(tmp_path: Path) -> None:
     ({"name": "x", "stage": "lab"}, "`stage`"),
     ({"name": "x", "stage": "map:"}, "`stage`"),
     ({"name": "x", "stage": "arena", "expect_fail": "yes"}, "`expect_fail`"),
+    ({"name": "x", "stage": "arena", "seed": -1}, "`seed`"),
+    ({"name": "x", "stage": "arena", "seed": 1.5}, "`seed`"),
+    ({"name": "x", "stage": "arena", "seed": "4"}, "`seed`"),
+    ({"name": "x", "stage": "arena", "seed": True}, "`seed`"),
+    ({"name": "x", "stage": "arena", "seed": 2**31}, "`seed`"),
 ])
 def test_discovery_names_the_file_and_the_field_of_a_bad_record(tmp_path: Path, fields: dict,
                                                                 field: str) -> None:
@@ -137,6 +142,42 @@ def test_a_map_boot_names_its_map(tmp_path: Path) -> None:
     argv = arena_suite.boot_arguments(["p", "-game"], boot, tmp_path, 60)
     assert "-ElysiumMap=sp_tutorial_1" in argv
     assert "-ArenaScenarios=door" in argv
+
+
+def test_discovery_reads_the_seed_and_defaults_it_to_zero(tmp_path: Path) -> None:
+    _write_record(tmp_path, "a.json", name="a", stage="map:sp_tutorial_1", seed=4)
+    _write_record(tmp_path, "b.json", name="b", stage="map:sp_tutorial_1", seed=7.0)
+    _write_record(tmp_path, "c.json", name="c", stage="map:sp_tutorial_1")
+    assert [record.seed for record in arena_suite.discover_records(tmp_path)] == [4, 7, 0]
+
+
+def test_a_map_boot_seeds_new_game_with_its_record_seed(tmp_path: Path) -> None:
+    # H17: the map activates at boot, before the record's own re-seed, so the seed rides the launch.
+    boot = Boot(stage="map:sp_tutorial_1", records=(_record("idle", "map:sp_tutorial_1", seed=4),),
+                slug="map-sp_tutorial_1-idle")
+    argv = arena_suite.boot_arguments(["p", "-game"], boot, tmp_path, 60)
+    assert "-ArenaSeed=4" in argv
+    unseeded = Boot(stage="map:sp_tutorial_1", records=(_record("door", "map:sp_tutorial_1"),),
+                    slug="map-sp_tutorial_1-door")
+    assert "-ArenaSeed=0" in arena_suite.boot_arguments(["p"], unseeded, tmp_path, 60)
+
+
+def test_a_shared_map_boot_is_seeded_by_its_first_record(tmp_path: Path) -> None:
+    records = [
+        _record("walk", "map:sp_tutorial_1", shares_map=True, seed=9),
+        _record("talk", "map:sp_tutorial_1", shares_map=True, seed=2),
+    ]
+    (boot,) = arena_suite.plan_boots(records)
+    assert boot.seed == 9
+    argv = arena_suite.boot_arguments(["p"], boot, tmp_path, 60)
+    assert [arg for arg in argv if arg.startswith("-ArenaSeed=")] == ["-ArenaSeed=9"]
+
+
+def test_the_arena_boot_carries_no_launch_seed(tmp_path: Path) -> None:
+    # The arena host re-seeds before each record's own `Load`; nothing it runs is drawn at boot.
+    boot = Boot(stage="arena", records=(_record("cover", seed=1),), slug="arena")
+    argv = arena_suite.boot_arguments(["p"], boot, tmp_path, 60)
+    assert not any(arg.startswith("-ArenaSeed") for arg in argv)
 
 
 # --- the merge and the verdict ----------------------------------------------------------------
@@ -231,6 +272,8 @@ def test_a_run_boots_each_host_and_writes_the_merged_index(tmp_path: Path) -> No
     assert len(launches) == 2
     assert "-ArenaScenarios=must_fail,cover" in launches[0]
     assert "-ElysiumMap=sp_tutorial_1" in launches[1]
+    assert "-ArenaSeed=0" in launches[1]
+    assert not any(arg.startswith("-ArenaSeed") for arg in launches[0])
     written = tmp_path / "work" / "reports" / "arena" / "20261003T000000.000000Z" / "index.json"
     assert json.loads(written.read_text(encoding="utf-8"))["counts"]["pass"] == 3
     assert arena_suite.verdict(merged) == 0

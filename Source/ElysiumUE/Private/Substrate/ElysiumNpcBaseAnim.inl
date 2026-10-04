@@ -87,8 +87,10 @@ void AddSceneEventBase(const struct FElysiumSceneData* Scene, const struct FElys
 // `FElysiumEntity::ScriptOwner`, which is what the shape map binds the offset to. Not a seam.
 bool ScriptOwnerIsLive() const;
 
-// `CBaseAnimating::LookupSequence(const char*)`. **SEAM**, answering -1 — retail's own "this model
-// authors no such sequence" value, which is the arm every caller below already has a branch for.
+// `CBaseAnimating::LookupSequence(const char*)`: the sequence-bridge row of the clip the body's model
+// authors under that name (`HasNpcClip` / `NpcClipOwner`, then `FElysiumNpc::SequenceRowFor`), or -1
+// -- retail's own "this model authors no such sequence", the arm every caller branches on. The row's
+// loop bit is K2's residue (named at the definition): the cine's `m_iszPlay` once, every other loops.
 int32 LookupSequenceByName(const TCHAR* Name) const;
 
 // `CBaseAnimating::GetSequenceActivity(int)`. **SEAM**, answering -1.

@@ -6,7 +6,7 @@ needs no build. Read by `Source/ElysiumUE/Private/Debug/ElysiumArenaScenario.cpp
 
 | Host | How | What |
 |---|---|---|
-| headless | `uv run elysium arena [names…]` (`-ElysiumArena`, `-nullrhi`, fixed step) | every record, one boot per stage, report under `$ELYSIUM_WORK_ROOT/reports/arena/<timestamp>/` |
+| headless | `uv run elysium arena [names…]` (`-ElysiumArena`, `-nullrhi`, fixed step) | every record, one boot per stage (a map record alone unless `shares_map`), report under `$ELYSIUM_WORK_ROOT/reports/arena/<timestamp>/`. A map boot is seeded at New Game by `-ArenaSeed=<its first record's seed>`; the arena host re-seeds before each record's `Load` |
 | lab | `elysium.gr_scenario <name>` in `uv run elysium gr --arena` | one arena record, rendered, real time; each expectation logged as met or missed; trace in `Saved/Elysium/_arena/lab/` |
 
 The reader is strict: an unknown field, a misspelled kind or probe, a `after` naming no label, a field
@@ -20,7 +20,7 @@ the entry's `do` or `probe` does not take is a parse error naming the file and t
 | `name` | string, required | `[A-Za-z0-9_-]+`, unique across all records; names the trace file and is what the launcher selects |
 | `about` | string, required | the retail behaviour it proves, with its address or schedule text |
 | `stage` | string | `arena` (default) or `map:<map>` |
-| `seed` | whole number ≥ 0 | `ElysiumRng::SeedAll(seed)` (every stream, `NpcSchedule` included) and the engine's `FMath::Rand`/`SRand`, immediately before the stage's `Load` (arena) or the run (map) |
+| `seed` | whole number ≥ 0 (default 0) | `ElysiumRng::SeedAll(seed)` (every stream, `NpcSchedule` included) and the engine's `FMath::Rand`/`SRand`, immediately before the stage's `Load` (arena) or the run (map). A map host activates its map once, at boot, before any record runs, so the launcher also passes the boot's **first** record's seed as `-ArenaSeed`, and the boot's New Game seeds from it instead of the clock: a map record booted alone replays whole for its seed (every NPC's first think, every logic timer drawn at activation). In a `shares_map` boot each later record re-seeds at its start but runs on the map the earlier ones left, so it replays only as part of that boot, in that order |
 | `duration` | seconds, required | the run ends here at the latest |
 | `known_red` | string | a red this record is expected to show: its failure reports `expected-fail`, its pass `unexpected-pass` (the red is fixed: remove the field) |
 | `expect_fail` | bool | inverts pass and fail (the harness's own self-tests) |

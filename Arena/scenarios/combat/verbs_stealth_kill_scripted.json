@@ -1,0 +1,63 @@
+{
+  "name": "verbs_stealth_kill_scripted",
+  "about": "N11's record (stories/v1/triage.md N11): the stealth kill admits a victim held by a scripted_sequence in NPC_STATE_SCRIPT. verbs_stealth_kill's staging (an idle neutral Troika human on the east pad, the player 85 cm straight behind it, crouched, a knife wielded, unseen and unheard), plus a scripted_sequence on the mark's own spot (m_fMoveTo 0, spawnflags 256 with a post-idle, no m_iszPlay) fired at 0.5 s: PossessEntity 0x101a7880 writes m_scriptState 1 and the ideal state SCRIPT, the mark's MaintainSchedule 0x102817c0 enters NPC_STATE_SCRIPT (4) and runs SCHED_TROIKA_SCRIPTED_WAIT (0xf8); the empty m_iszPlay completes at once (StartSequence 0x101a82d0 -> SequenceDone 0x101a8460) and Finish 0x101a8640's hold arm (post-idle set, spawnflag 0x100, no next cine) keeps it possessed in its post-idle, never cleaned up. +use at 2 s: PlayerUse 0x10167850 -> PlayerTryStealthKill 0x10167370 -> FindVictim 0x101be1f0; IsValidStealthKillTarget 0x102c2300 term 4 tests the state against IDLE/ALERT only when debug_allow_non_idle_auto_sk (0x10924af8) is 0, and the image's initialiser gives it '1', so the shipping arm admits any state but DEAD (7) (docs/vtmb/stealth.md:405, kernel_tunables.tsv DebugAllowNonIdleAutoSk): the query admits the mark in SCRIPT (`arena_mark admit gate=can_grapple`), and the synchronized death follows as in verbs_stealth_kill.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 20.0,
+  "known_red": "N11 (V7): the port's IsValidStealthKillTarget state term admits only Idle/Alert (ElysiumNpc.cpp, its comment calls the relaxed arm a developer arm); retail's shipping arm (debug_allow_non_idle_auto_sk '1') admits a victim in NPC_STATE_SCRIPT",
+  "player": { "at": [0.0, 1060.0, 0.0], "face": "east", "armed": "item_w_knife" },
+  "rows": [
+    {
+      "name": "mark_hold",
+      "classname": "scripted_sequence",
+      "at": "east",
+      "keys": {
+        "m_iszEntity": "arena_mark",
+        "m_fMoveTo": "0",
+        "m_iszPostIdle": "Converse_Normal_Talk_A",
+        "m_flRadius": "512",
+        "spawnflags": "256"
+      }
+    }
+  ],
+  "cast": [
+    {
+      "name": "arena_mark",
+      "classname": "npc_VHumanCombatant",
+      "at": "east",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    { "t": 0.2, "do": "console", "command": "elysium.cmd slot2" },
+    { "t": 0.5, "do": "fire", "target": "mark_hold", "input": "BeginSequence" },
+    { "t": 0.5, "do": "player_crouch", "on": true },
+    { "t": 2.0, "do": "console", "command": "elysium.cmd +use" },
+    { "t": 2.1, "do": "console", "command": "elysium.cmd -use" }
+  ],
+  "expect": [
+    { "label": "scripted", "who": "arena_mark", "kind": "state", "match": "-> Script", "by": 1.5 },
+    { "label": "held", "who": "arena_mark", "kind": "schedule", "match": "SCHED_TROIKA_SCRIPTED_WAIT (", "within": 0.5 },
+    { "label": "admits", "who": "arena_mark", "kind": "stealthkill", "match": "arena_mark admit gate=can_grapple", "by": 2.5 },
+    { "label": "dies", "who": "arena_mark", "kind": "death", "match": "", "by": 12.0 }
+  ],
+  "never": [
+    { "who": "arena_mark", "kind": "cond+", "match": "SEE_PLAYER (0x5a)" },
+    { "who": "arena_mark", "kind": "state", "match": "^Script\\w* -> ", "regex": true, "until": 2.5 }
+  ],
+  "probes": [
+    { "at": 1.5, "who": "player", "probe": "player_crouched", "equals": true },
+    { "at": 1.5, "who": "player", "probe": "player_weapon", "equals": "item_w_knife" },
+    { "at": "end", "who": "arena_mark", "probe": "alive", "equals": false }
+  ],
+  "notes": "Staged red by the V3c integrator (2026-10-04, brief-C-integrator.md step 4); it turns green with V7's N11 rider. The post-idle label is sp_theatre's held-beat clip (ElysiumSequenceTests' Flags fixture); if regular_cop does not author it, StartSequence plays sequence 0, which changes the pose, not the hold. The end probe 'on_ground' is left out: red 3 (verbs_stealth_kill's) would mask N11."
+}

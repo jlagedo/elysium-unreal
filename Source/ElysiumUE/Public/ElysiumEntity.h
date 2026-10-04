@@ -38,27 +38,6 @@ namespace ElysiumEntityCaps
 	// that recorded it and no runtime path read).
 }
 
-// How a `scripted_sequence` sends its NPC to the mark — `m_fMoveTo`'s travelling values. 0 ("No")
-// and 4 ("Instantaneous") never reach the seam: the first touches nothing, the second is a
-// placement.
-enum class EElysiumScriptGait : uint8
-{
-	Face,     // 5 "No - Turn to Face" — take the mark's angles without travelling
-	Walk,     // 1
-	Run,      // 2
-	Custom,   // 3 — travel playing `m_iszCustomMove`'s own cycle instead of the gait activity
-};
-
-// Where an accepted scripted move stands. `Unsupported` is what an entity that never accepted one
-// answers, and what a released move reads as.
-enum class EElysiumScriptMove : uint8
-{
-	Unsupported,
-	Moving,
-	Arrived,
-	Failed,
-};
-
 // Why an owned entity left its owner's live set. `npc_maker` is the first user: a dead child
 // consumes its finite slot and fires OnNPCDied, while removing a still-live child refunds it.
 enum class EElysiumOwnedEntityTermination : uint8
@@ -469,34 +448,10 @@ public:
 	// idles it, and the stance idle is the closest thing this runtime has to that. Base answers false.
 	virtual bool ResetAnimToIdle() { return false; }
 
-	// --- The scripted-move seam ---
-	// Send this entity to a beat's mark under the script's ownership, travelling at `Gait`. Only a
-	// character standing on a movement motor can travel, so the base answers false and the caller
-	// places it on the mark instead — the supported path for the player stand-in, a bodiless
-	// record, a disabled navigation graph and every headless test. `CustomClip` is
-	// `m_iszCustomMove`, the travel cycle `EElysiumScriptGait::Custom` plays. Kept on the base for
-	// the same no-RTTI reason `GetAttachBody` is.
-	virtual bool BeginScriptMove(const FVector& Mark, const FVector& MarkAngles,
-		EElysiumScriptGait Gait, const FString& CustomClip) { return false; }
-
-	// Advance an accepted move by one beat tick, sampling the moved body back into this entity's
-	// origin/angles. The owning beat calls this until it stops answering `Moving`; the pose is the
-	// beat's business, so nothing here touches the animation.
-	virtual EElysiumScriptMove AdvanceScriptMove() { return EElysiumScriptMove::Unsupported; }
-
-	// Release the script's ownership: stop the motor and hand the body back to its own behaviour
-	// (a parked patrol route or interesting-place search resumes). Leaves the pose alone.
-	virtual void EndScriptMove() {}
-
-	// The beat's claim on the body arbiter, held for the whole beat — from a successful
-	// BeginSequence through travel, `m_iszPlay` and a held post-idle, to EndSequence, CancelSequence
-	// or teardown. `BeginScriptMove`'s own claim nests inside this one and shares its token, so the
-	// arrival that ends the travel does not hand the body back mid-beat. Base answers true: an entity
-	// with no arbiter — the `!playercontroller` stand-in, a bodiless record — has nothing to take,
-	// which is a claim that succeeded. A refused claim never refuses the beat; the caller logs it and
-	// runs on.
-	virtual bool ClaimScriptBody(const TCHAR* Reason) { return true; }
-	virtual void ReleaseScriptBody(const TCHAR* Reason) {}
+	// --- Scripted-sequence hooks ---
+	// (V3c deleted the scripted-move seam and the beat's body claim, M11: a scene's travel is the
+	// NPC's own `SCHED_AISCRIPT 0x2e` program and tasks 8/9/10's navigator goal; the cine claims
+	// nothing, `PossessEntity 0x101a7880` writes the NPC's words.)
 	// Dialogue supersedes a `scripted_sequence` that still owns this body. The NPC calls this on
 	// its ScriptOwner before acquiring the dialogue token; only the owning sequence accepts the
 	// matching body handle. Base false also covers choreographed-scene claims, which have their own

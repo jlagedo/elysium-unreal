@@ -134,8 +134,9 @@ int32 FElysiumNpc::ChangeStanceForReaction()
 	//     return seq;                                     // left in EAX and read by the caller
 	//
 	// `ElysiumStance::ChangeStance` is that body in this runtime and is cited there; it answers by
-	// CLIP NAME, so the transition sequence is resolved back through `LookupSequence`, which is a
-	// seam and therefore -1 — the arm on which the whole reaction is dropped.
+	// CLIP NAME, so the transition sequence is resolved back through `LookupSequence` (the bridge row
+	// of the clip the model authors under that name; -1, the arm on which the whole reaction is
+	// dropped, when it authors none).
 	if (!EnsureStanceResolved())
 	{
 		return INDEX_NONE;
@@ -313,8 +314,9 @@ void FElysiumNpc::ResolveDispositionActivity(int32& OutSequence, int32& OutTrans
 // --- The sequence bridge (story 8 wave 2, L13) ------------------------------------------------
 //
 // A named modernization: the studio sequence table is swapped for the name-keyed clip resolver.
-// Every clip the resolver (or the stance machine) answered for this body gets a stable number the
-// kernel's sequence words carry; `ResetSequence` plays it.
+// Every clip the resolver, the stance machine or `LookupSequence` by name (`LookupSequenceByName`,
+// `ElysiumNpcBaseAnim.cpp`) answered for this body gets a stable number the kernel's sequence words
+// carry; `ResetSequence` plays it.
 
 int32 FElysiumNpc::SequenceRowFor(const FString& OwnerStem, const FString& Label, bool bLoops)
 {

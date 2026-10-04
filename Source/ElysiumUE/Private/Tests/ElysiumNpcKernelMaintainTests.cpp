@@ -269,6 +269,10 @@ bool FElysiumNpcKernelMaintain19SetScheduleTest::RunTest(const FString&)
 			FElysiumVariant::Void(), 0.0, FElysiumEntityHandle::Invalid(), Open->Handle);
 		F.World.World.Tick(0.0);
 		TestTrue(TEXT("102ae546 resolves the live cine owner"), N.ScriptOwner == Open->Handle);
+		// Possession writes only `m_IdealNPCState = 4` (`0x101a7e84`); the quiet subject is stood in
+		// NPC_STATE_SCRIPT as its own `MaintainSchedule 0x102817c0` would, because `CancelScript`'s
+		// `ScriptEntityCancel 0x101a7170` cleans up only a state-4 NPC (`0x101a71b8`).
+		N.SetState(4);
 		N.ForceScheduleChange(ElysiumSched::IDLE_STAND, false);
 		TestFalse(TEXT("102ae654 cancels the interruptable cine"), N.ScriptOwner.IsSet());
 	}
@@ -281,6 +285,7 @@ bool FElysiumNpcKernelMaintain19SetScheduleTest::RunTest(const FString&)
 		F.World.World.Tick(0.1);
 		TestFalse(TEXT("102ae5ad reads the locked cine's +0x5f90"),
 			Locked->IsScriptedSequenceInterruptable());
+		N.SetState(4);   // as above: the state `0x101a71b8` tests
 		N.ForceScheduleChange(ElysiumSched::IDLE_STAND, false);
 		TestFalse(TEXT("102ae60e warning is non-refusing and cancellation still runs"),
 			N.ScriptOwner.IsSet());
@@ -411,17 +416,16 @@ bool FElysiumNpcKernelMaintain19TaskMovementCompleteTest::RunTest(const FString&
 	N.TaskMovementComplete();
 	TestEqual(TEXT("10273f20 chooses GetStoppedActivity"), N.IdealActivityNumber, 1);
 	TestFalse(TEXT("10273f3a/10273f46 stop then clear the goal"), Motor->Navigation.bActiveGoal);
-	FElysiumEntity* Script = F.World.World.FindByName(TEXT("open_sequence"));
-	if (TestNotNull(TEXT("script"), Script))
-	{
-		N.ScriptOwner = Script->Handle;
-		N.IdealActivityNumber = 77;
-		N.Schedule.TaskStatus = EElysiumTaskStatus::Complete;
-		N.TaskMovementComplete();
-		TestEqual(TEXT("10273f0a script state skips the stopped activity"),
-			N.IdealActivityNumber, 77);
-		N.ScriptOwner = FElysiumEntityHandle::Invalid();
-	}
+	// `0x10273f01..0x10273f14` read the NPC's own `m_scriptState +0x5d70` (4 / 5 / 6, the walk, run
+	// and custom move to the mark), not the cine handle: the walk-to-mark state skips the stopped
+	// activity.
+	N.SetScriptState(4);
+	N.IdealActivityNumber = 77;
+	N.Schedule.TaskStatus = EElysiumTaskStatus::Complete;
+	N.TaskMovementComplete();
+	TestEqual(TEXT("10273f0a m_scriptState 4 (walk to the mark) skips the stopped activity"),
+		N.IdealActivityNumber, 77);
+	N.SetScriptState(0);
 	return true;
 }
 
