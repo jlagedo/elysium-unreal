@@ -1,6 +1,6 @@
 # Brief V5b-3 — slot 360's word behind the Motor seam; the interrupt mask pinned (coder; no build)
 
-Read `README.md` here (§1.1, §1.4, §2 P6 and its last row, §6, §7), `CLAUDE.md`, `spec.md`
+Read `README.md` here (§1.1, §1.4, §2 P6 and its last row, §6, §7), `AGENTS.md`, `spec.md`
 § "Standing rules" and § "The known reds" item 4, `docs/vtmb/npc-ai/conditions-and-states.md`
 § "`GetSchedule` `0x102ae920` runs ahead of `SelectSchedule`" (`uv run elysium research section
 0x10269d30`). **Re-locate every site by Grep on the function name**; cited lines are hints.

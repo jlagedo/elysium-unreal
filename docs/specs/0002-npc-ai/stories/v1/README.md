@@ -20,7 +20,7 @@ A record is never tuned to what the port does today: that is the failure this st
 
 ## Rules every author follows
 
-- Read `CLAUDE.md`, `docs/specs/0002-npc-ai/spec.md` (§ standing rules, § the known reds, § Step 2),
+- Read `AGENTS.md`, `docs/specs/0002-npc-ai/spec.md` (§ standing rules, § the known reds, § Step 2),
   `Arena/README.md`, `stories/wave2/seam.md`, `Arena/scenarios/cover.json` (the model record) and
   your brief.
 - **Retail first.** Before writing a record, read the behaviour's retail source: the schedule text

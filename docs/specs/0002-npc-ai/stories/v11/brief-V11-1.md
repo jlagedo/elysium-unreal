@@ -1,6 +1,6 @@
 # Brief V11-1 — the attack coordinator's list and what stands behind it (coder; no build)
 
-Read `README.md` here (all of it), `CLAUDE.md`, `spec.md` § Standing rules, `../v4/README.md`
+Read `README.md` here (all of it), `AGENTS.md`, `spec.md` § Standing rules, `../v4/README.md`
 § "Rules for every agent of V4" (they apply to you), `docs/vtmb/npc-ai/social.md` § "The melee
 coordinator" (:776-897: `uv run elysium research section 0x1025db70`), triage row N3 (Grep
 `| N3 |` in `stories/v1/triage.md`; never the file whole), the records

@@ -13,7 +13,7 @@ Three coders on disjoint files in the one checkout (spec rule 8), then one integ
 
 ## Rules every coder in this wave follows
 
-- Read `CLAUDE.md`, `.claude/rules/cpp.md`, `docs/specs/0002-npc-ai/spec.md` (§ standing rules, § Step 1),
+- Read `AGENTS.md`, `.claude/rules/cpp.md`, `docs/specs/0002-npc-ai/spec.md` (§ standing rules, § Step 1),
   `docs/harness/green-room-arena.md`, `seam.md` and your brief.
 - **You do not build, launch the editor or the game, or run a suite.** Nothing in this wave is
   compiled until the integrator builds, so write to compile: include what you use, check every
@@ -21,7 +21,7 @@ Three coders on disjoint files in the one checkout (spec rule 8), then one integ
   Python test file of a Python module it changed.
 - **The query budget:** every query command under a 60 s timeout; past 10 s note it; at 60 s stop
   and make it faster. Look an address up with `uv run elysium research where <address>` (also
-  `section`, `verdict`, `cited`, `rows`; see `CLAUDE.md`) instead of searching `docs/vtmb`.
+  `section`, `verdict`, `cited`, `rows`; see `AGENTS.md`) instead of searching `docs/vtmb`.
 - **No polling, no shell for text:** search and read with the built-in Grep / Read / Glob tools.
 - **Own only your files** (listed in your brief). A change you need in another lane's file goes in
   your report, not in the file. Two lanes edit `pipeline/src/elysium_pipeline/cli.py` (B appends

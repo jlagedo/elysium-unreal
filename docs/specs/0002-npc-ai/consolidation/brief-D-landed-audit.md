@@ -15,7 +15,7 @@ since (RE-BACKLOG row / findings file) | risk H/M/L) and `findings-D-landed.md` 
 
 1. The stories whose live check was recorded as unobservable, deferred, or not done, and why.
 2. Every "named modernization" across the three specs, with your judgement: visual-only (allowed)
-   or state/event-order changing (not a modernization by `CLAUDE.md`'s rule; must be re-classed).
+   or state/event-order changing (not a modernization by `AGENTS.md`'s rule; must be re-classed).
    The known case: the body arbiter (`EElysiumBodyOwner`) kept under the sequence bridge in 0019/8
    wave 2 ("a named modernization of playback only") gates the kernel's own activity commits.
 3. Hand-off chains: items handed from one story to another that no open row now owns (walk each

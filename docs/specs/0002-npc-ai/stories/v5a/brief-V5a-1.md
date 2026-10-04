@@ -1,6 +1,6 @@
 # Brief V5a-1 — `GatherAttackConditions 0x1026dd10`, whole (coder; no build)
 
-Read `README.md` here (§1 first block, §2 P1–P3, §6, §7), `CLAUDE.md`, `spec.md` § Standing rules,
+Read `README.md` here (§1 first block, §2 P1–P3, §6, §7), `AGENTS.md`, `spec.md` § Standing rules,
 `../v4/README.md` § "Rules for every agent of V4" (they apply to you), the record
 `Arena/scenarios/combat/range_bands.json` (`about`, `known_red`). The listing is the authority:
 `vtmb_asm 1026dd10` from `0x1026de02` to `0x1026e10c` (one page), `vtmb_code 1026dd10`.

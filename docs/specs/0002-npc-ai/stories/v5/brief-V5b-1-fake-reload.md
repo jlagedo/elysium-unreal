@@ -1,6 +1,6 @@
 # Brief V5b-1 — the ranged pre-pass's reload arms and the template's count (coder; no build)
 
-Read `README.md` here (§1.2, §1.3 slot 280, §2 P1, P2, P4, P7, §3, §6), `CLAUDE.md`, `spec.md`
+Read `README.md` here (§1.2, §1.3 slot 280, §2 P1, P2, P4, P7, §3, §6), `AGENTS.md`, `spec.md`
 § "Standing rules", `docs/vtmb/npc-ai/conditions-and-states.md` § "`FUN_102b8620` — the ranged
 weapon pre-pass" (`uv run elysium research section 0x102b8620`). **Re-locate every site by Grep on
 the function name**; cited lines are hints. Retail was read for you: `0x102b8620`, `0x102c54c0`,

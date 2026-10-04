@@ -1,6 +1,6 @@
 # Brief T6 — the incremental build (wave 3, one agent, you hold the build)
 
-Read `CLAUDE.md`, `.claude/rules/cpp.md`, `docs/specs/0002-npc-ai/spec.md` (§ standing rules, § T6)
+Read `AGENTS.md`, `.claude/rules/cpp.md`, `docs/specs/0002-npc-ai/spec.md` (§ standing rules, § T6)
 first. You are the only agent in this wave: you build, measure, change and build again. Rules that
 bind you: no polling loops (`uv run elysium build` blocks and ends with a verdict; give the call a
 long enough timeout or run it in the background and wait for its notification); text through the

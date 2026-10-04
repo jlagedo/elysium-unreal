@@ -12,7 +12,7 @@ the harness is fixed, no record is weakened.
 
 ## Rules for every coder
 
-- Read `CLAUDE.md`, `docs/specs/0002-npc-ai/spec.md` § Standing rules and § The bug protocol,
+- Read `AGENTS.md`, `docs/specs/0002-npc-ai/spec.md` § Standing rules and § The bug protocol,
   `Arena/README.md`, `stories/wave2/seam.md`, and `stories/v1/triage.md` § "The harness wave" and
   § "Records whose verdict depends on occlusion".
 - **You never build**, never launch the editor, never run `uv run elysium arena` or a test suite.

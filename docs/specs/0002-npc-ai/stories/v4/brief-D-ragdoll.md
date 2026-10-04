@@ -32,7 +32,7 @@ unbounded sweep, owner 0014, and a gibbed NPC is removed, not ragdolled.
 The death animation's look and the ragdoll's fall are Unreal's problem, not retail's. **The fall
 is solved by Unreal (Chaos); no calibration against VtMB's simulation is required. The bodies, the
 masses and the joint limits are taken from the game's own `.phy` data. What game logic observes
-stays retail's.** This is the visual-only half of a modernization (`CLAUDE.md` § Project rules):
+stays retail's.** This is the visual-only half of a modernization (`AGENTS.md` § Project rules):
 retail's ragdoll is client-side and nothing the bytecode reads depends on where the drawn body
 rests.
 

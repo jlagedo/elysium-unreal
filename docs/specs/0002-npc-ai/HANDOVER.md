@@ -6,12 +6,12 @@ what it points at. It replaces the conversation that produced it.
 ## The tree
 
 V4o is closed (`64895278`): the integrator resumed after the session limit and finished. The only
-uncommitted files are `.codex/config.toml`, `AGENTS.md` and `CLAUDE.md`, which the coordinator did
+uncommitted files are `.codex/config.toml`, `AGENTS.md` and `AGENTS.md`, which the coordinator did
 **not** edit (the owner's Codex CLI setup; see the end): his to commit.
 
 ## Read, in this order
 
-1. `CLAUDE.md` (repo root) and the owner's global `~/.claude/CLAUDE.md` (the query budget).
+1. `AGENTS.md` (repo root) and the owner's global `~/.claude/CLAUDE.md` (the query budget).
 2. `docs/specs/0002-npc-ai/spec.md` — § Standing rules, § Step 2, § The bug protocol and, after it,
    the owner's standing rulings and his two rules of 2026-10-04 (**Testable first**, **Settle
    first**), § The sequence.

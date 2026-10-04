@@ -1,6 +1,6 @@
 # Brief V5b-2 — the weapon side: slots 280 / 322 / 323, the count per set, the Presence seam's text (coder; no build)
 
-Read `README.md` here (§1.2 "The count-down", §1.3, §1.5, §2 P3, P5, P7, §3, §6), `CLAUDE.md`,
+Read `README.md` here (§1.2 "The count-down", §1.3, §1.5, §2 P3, P5, P7, §3, §6), `AGENTS.md`,
 `spec.md` § "Standing rules", `../v4/packets-S4.md` item a (who fills an NPC's clip; J12),
 `docs/vtmb/combat-and-damage.md` § "Reload and dry fire" (`uv run elysium research section
 0x102552c0`). **Re-locate every site by Grep on the function name**; cited lines are hints.

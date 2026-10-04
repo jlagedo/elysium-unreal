@@ -45,14 +45,14 @@ Read `README.md` here first, then spec § "The test budget" and § T3, and
    the data) or declare the message expected in the fixture's scope; a message that carries signal
    in the live game keeps its verbosity. State per message what you did. "Passed with warnings"
    must be rare enough to read.
-7. **The pointers**: `CLAUDE.md`'s `uv run elysium test` lines describe the tiers; pipeline tests
+7. **The pointers**: `AGENTS.md`'s `uv run elysium test` lines describe the tiers; pipeline tests
    that name C++ tests follow the renames. Old records under `docs/` are history: leave them.
 
 ## Files you own
 
 `Source/ElysiumUE/Private/Tests/**` (not the generated ones' generators), the `test` command in
 `pipeline/src/elysium_pipeline/cli.py`, the test launcher and report code in `unreal.py`, their
-pipeline tests, the test lines of `CLAUDE.md`. Not `Debug/**`, `Substrate/**`, `Public/**`, `Map/**`
+pipeline tests, the test lines of `AGENTS.md`. Not `Debug/**`, `Substrate/**`, `Public/**`, `Map/**`
 (lanes A and B, and nothing in this wave changes behaviour), not the `arena` command (lane B).
 
 ## Report

@@ -11,7 +11,7 @@ Three coders, disjoint files, one checkout (spec rule 8), then one integrator.
 
 ## Rules every coder in this wave follows
 
-- Read `CLAUDE.md`, `pipeline/CLAUDE.md`, `docs/specs/0002-npc-ai/spec.md` (§ standing rules and
+- Read `AGENTS.md`, `pipeline/CLAUDE.md`, `docs/specs/0002-npc-ai/spec.md` (§ standing rules and
   § Step 1) and your brief. Your numbers come from `consolidation/findings-C-tooling.md`,
   `findings-E-time.md` and `findings-F-tests.md`.
 - **The query budget:** run every query command with a 60 s timeout; past 10 s note it; at 60 s

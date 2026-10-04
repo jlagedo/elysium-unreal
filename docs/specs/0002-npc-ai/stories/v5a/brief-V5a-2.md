@@ -1,6 +1,6 @@
 # Brief V5a-2 — the wait before the shot (N2) and the cover tail's weapon read (N1) (coder; no build)
 
-Read `README.md` here (§1 second and third blocks, §2 P4–P6, §6, §7), `CLAUDE.md`, `spec.md`
+Read `README.md` here (§1 second and third blocks, §2 P4–P6, §6, §7), `AGENTS.md`, `spec.md`
 § Standing rules, `../v4/README.md` § "Rules for every agent of V4" (they apply to you),
 `stories/v1/triage.md` rows N1 and N2 (Grep `| N1 |`, `| N2 |`; do not read the file whole), the
 records `Arena/scenarios/combat/ranged_open_fire.json` and `cover_armed.json`.

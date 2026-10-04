@@ -8,7 +8,7 @@ because its only records are V11's (`melee_swing`, `chase_melee`) and its stub s
 is A3's in V5a's wave.
 
 Read `../v4/packets-S5.md` item 4 (the body, arm by arm — the authority beside the listing
-`vtmb_asm 10347180`), `README.md` here §1, `CLAUDE.md`, `spec.md` § Standing rules,
+`vtmb_asm 10347180`), `README.md` here §1, `AGENTS.md`, `spec.md` § Standing rules,
 `../v4/README.md` § "Rules for every agent of V4", `uv run elysium research section 0x10347180`
 (`animation_rig_resolution.md` § "The NPC melee selector"; where it and S5 disagree, S5 wins and
 you write the doc's corrected line in your report). **Re-locate every site by Grep.**

@@ -11,7 +11,7 @@ C++ and belong to wave 2, not to you.
 - The text tree is where queries cost: 1,851 agent-written Python scripts over `docs` / TSV took
   3.9 h, 53 over 30 s; 4,566 shell searches over `docs` 1.8 h. The scripts and their shapes are
   in the transcripts; findings-E's scratch (`E:\elysium-work\scratch\findings-e\`) has the
-  extraction scripts. `CLAUDE.md` points at an `npc-ai` index file that does not exist, so agents
+  extraction scripts. `AGENTS.md` points at an `npc-ai` index file that does not exist, so agents
   search where they should look up; `functions.md` is 1.4 MB, the checklists 0.7–0.9 MB.
 
 ## Job
@@ -38,7 +38,7 @@ C++ and belong to wave 2, not to you.
 5. **Standing query verbs.** From the transcripts, classify the 1,851 one-off docs/TSV scripts by
    the question they answered; implement the top recurring questions (aim for the 3–6 that cover
    most of the time) as `research` verbs over the index, each under 1 s.
-6. **The pointer.** Replace `CLAUDE.md`'s line naming the missing `npc-ai` index file with how to
+6. **The pointer.** Replace `AGENTS.md`'s line naming the missing `npc-ai` index file with how to
    use `research where` / `vtmb_where`.
 
 ## Acceptance
@@ -51,4 +51,4 @@ deadline (a forced slow query times out cleanly), the caps and the index.
 
 `research/tooling/ghidra/driver/corpus_mcp.py`, `corpus.py`, the new index / verb scripts under
 `research/tooling/`, their new tests under `pipeline/tests/` (new files only), and the one line in
-`CLAUDE.md`. Not the `kernel_*` modules (T1), not `cli.py` / `pyproject.toml` / `conftest.py` (T4).
+`AGENTS.md`. Not the `kernel_*` modules (T1), not `cli.py` / `pyproject.toml` / `conftest.py` (T4).

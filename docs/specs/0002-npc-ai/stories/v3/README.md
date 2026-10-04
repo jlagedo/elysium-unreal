@@ -457,7 +457,7 @@ deletes.
 
 ## Rules for every agent of V3
 
-- Read `CLAUDE.md`, `spec.md` § Standing rules, § The method per story, § The bug protocol, this
+- Read `AGENTS.md`, `spec.md` § Standing rules, § The method per story, § The bug protocol, this
   README, and your brief. `Arena/README.md` if you touch records or the runner.
 - **Query budget**: 10 s warns (log to `$ELYSIUM_WORK_ROOT/logs/slow-queries.tsv`), 60 s stops
   (never retried as-is or widened). Never read a file over ~200 KB whole. Look an address up with

@@ -21,7 +21,7 @@ and `0x66` arms. Three things are missing, and they are the lane:
 3. owner slot 389 `Weapon_ShootPosition 0x103338c0`, the weapon arm's start point, is a generated
    stub answering the zero vector (`ElysiumCombatCharacterSlots.cpp` ~:1021-1028).
 
-Read `../v4/packets-S6.md` item 5, `README.md` here §1 step 5 and §2 P3, `CLAUDE.md`, `spec.md`
+Read `../v4/packets-S6.md` item 5, `README.md` here §1 step 5 and §2 P3, `AGENTS.md`, `spec.md`
 § Standing rules, `../v4/README.md` § "Rules for every agent of V4". The listings are the
 authority: `vtmb_asm 1024f3d0` (whole, 170 lines), `vtmb_code 1024f330`, `vtmb_code 1026fbe0`,
 `vtmb_asm 1026dd10` from `0x1026ded9` to `0x1026df69`, `vtmb_code 103338c0`.

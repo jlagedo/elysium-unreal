@@ -1,7 +1,7 @@
 # Brief — V3d's integrator (V3's close)
 
 Rewritten 2026-10-04 after V3c's integration. Runs after D1, D2 and D3 report, on the tree with V3c
-committed. Read `CLAUDE.md`; `spec.md` § Standing rules, § The bug protocol (and the owner's standing
+committed. Read `AGENTS.md`; `spec.md` § Standing rules, § The bug protocol (and the owner's standing
 rulings); `README.md` here (the "Corrections" block, §4 V3d, §6, §7, §8); `packets.md`; the three
 briefs (`brief-D1-dialogue.md`, `brief-D2-npc-arbiter.md`, `brief-D3-mind-tests.md`) and their
 reports; `stories/v1/triage.md` — N8, N13, N16, N18, N19, § "V3c integration" and its "Closing pass"

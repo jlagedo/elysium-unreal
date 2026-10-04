@@ -835,7 +835,7 @@ on `m_TranslatedActivity`); `.DieRagdollSeed` states who reaches the bone −1 a
 
 ## Rules for every agent of V4
 
-- Read `CLAUDE.md`, `spec.md` § Standing rules, § The method per story, § The bug protocol and the
+- Read `AGENTS.md`, `spec.md` § Standing rules, § The method per story, § The bug protocol and the
   owner's rulings, this README, and your brief. `Arena/README.md` if you touch records or the runner.
 - **Re-locate every cited site by Grep on its function name**: V3c, V3d and T6b move lines.
 - **Query budget**: 10 s warns (log to `$ELYSIUM_WORK_ROOT/logs/slow-queries.tsv`), 60 s stops (never

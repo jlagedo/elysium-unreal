@@ -18,7 +18,7 @@ The tally is 11 yes, 6 partial, 2 unobservable, 27 none and 8 n/a. That leaves 2
 
 ## 2. Named modernizations: 42 named, 22 of them change state or event order
 
-`CLAUDE.md` says "Nothing that changes event order or state is a modernization." Under that rule these 22 must be re-classed as named divergences, each with an owner.
+`AGENTS.md` says "Nothing that changes event order or state is a modernization." Under that rule these 22 must be re-classed as named divergences, each with an owner.
 
 **The worst three:**
 

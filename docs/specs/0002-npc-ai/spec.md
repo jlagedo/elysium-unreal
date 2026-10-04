@@ -171,7 +171,7 @@ report.
   `console_exec max_lines=200`, `entity_list` / `log_tail limit=25` + `grep=`. **The address
   index:** one generated lookup from a retail address (or name) to its `docs/vtmb` section(s), its
   ledger rows and the port's `file:line`s, answered in under a second by a `research` verb and an
-  MCP tool, so nobody greps 1.4 MB `functions.md` or reads a checklist whole; `CLAUDE.md`'s pointer
+  MCP tool, so nobody greps 1.4 MB `functions.md` or reads a checklist whole; `AGENTS.md`'s pointer
   at the `npc-ai` index file, which does not exist, replaced by it. **Standing queries as verbs:**
   the questions the 1,851 one-off scripts kept asking (read their shapes from the transcripts)
   become `research` verbs over the same index. *Acceptance:* a fixed probe set (every

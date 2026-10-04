@@ -10,7 +10,7 @@ sub-step clock `MeleeSwingUpdate 0x10346cd0` supplies, which C1 ports in V4c).
 
 Read `../v4/packets-S5.md` item 3 whole (both bodies arm by arm and the table D1–D11 — the
 authority beside the listings `vtmb_asm 10343020` from `0x1034394d` to `0x10343f96`, and
-`vtmb_code 102579f0`), `README.md` here §5, `CLAUDE.md`, `spec.md` § Standing rules and § "The bug
+`vtmb_code 102579f0`), `README.md` here §5, `AGENTS.md`, `spec.md` § Standing rules and § "The bug
 protocol", `../v4/README.md` § "Rules for every agent of V4", `docs/vtmb/combat-and-damage.md`
 (by `research section 0x10343020`). **Re-locate every site by Grep on the function name.**
 
