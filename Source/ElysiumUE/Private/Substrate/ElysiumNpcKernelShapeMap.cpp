@@ -34,6 +34,25 @@ namespace
 	ELYSIUM_NPC_WORD_CHAIN(0x0224, "FElysiumEntity::DebugOverlays",
 		"m_debugOverlays, the ent_text bit set every slot-123/124/620 body gates on; family Debug "
 		"(29c-1) declared it on the chain because it is a CBaseEntity word, not an NPC one"),
+	// Spec 0002 V4a's seam: the four `CBaseAnimating` sequence speed and event words the kernel's
+	// animation clock reads and writes, and the combat character's view-cone word. The four are
+	// kept on `FElysiumNpcBase` beside the sequence words this port already keeps there (`+0x65c`,
+	// `+0x6f0`, `+0x6f8`); each note says so.
+	ELYSIUM_NPC_WORD_NOTED(0x0560, FElysiumNpcBase, YawSpeed,
+		"m_flYawSpeed, a CBaseAnimating word kept on the NPC beside its sequence words; unwritten "
+			"until V4a lane A2 (StudioFrameAdvance 0x1008f120, ResetSequenceInfo 0x10090950)"),
+	ELYSIUM_NPC_WORD_NOTED(0x0568, FElysiumNpcBase, SequencePastHalf,
+		"m_fSequencePastHalf, a CBaseAnimating word kept on the NPC beside its sequence words; "
+			"unwritten until V4a lanes A1/A2 (0x10091880, 0x1008f120)"),
+	ELYSIUM_NPC_WORD_NOTED(0x0654, FElysiumNpcBase, GroundSpeed,
+		"m_flGroundSpeed, a CBaseAnimating word kept on the NPC beside its sequence words, in "
+			"centimetres per second; unwritten until V4a lane A2 (0x1008f120, 0x10090950, 0x10264841)"),
+	ELYSIUM_NPC_WORD_NOTED(0x0658, FElysiumNpcBase, LastEventCheck,
+		"m_flLastEventCheck, a CBaseAnimating word kept on the NPC beside its sequence words; "
+			"unwritten until V4a lanes A1/A2 (0x10091880, 0x10090950)"),
+	ELYSIUM_NPC_WORD_NOTED(0x1574, FElysiumCombatCharacter, FieldOfView,
+		"m_flFieldOfView, the view-cone cosine slot 363 FInViewCone 0x10326750 compares against; "
+			"moved from the Troika line by V4a's seam"),
 	ELYSIUM_NPC_WORD(0x1a40, FElysiumNpcBaseScheduleHost, bShouldMove),
 	ELYSIUM_NPC_WORD(0x1a44, FElysiumNpcBase, CollisionMask),
 	ELYSIUM_NPC_WORD_NOTED(0x1a48, FElysiumNpcBase, DeferredDeathInfo,

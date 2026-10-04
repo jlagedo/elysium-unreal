@@ -124,7 +124,7 @@ void FElysiumNpc::TroikaSpawnBody()
 	Spawn19SetModel(Model);                                                              // 0x10298dc4 / 0x10298dcb null default / 0x10298dd4 slot 105
 
 	BloodColorWord = Spawn19BloodColor;                                                  // 0x10298dde
-	FieldOfViewDot = Spawn19TroikaFieldOfView;                                           // 0x10298de8
+	FieldOfView = Spawn19TroikaFieldOfView;                                           // 0x10298de8
 	CapabilityWord |= Spawn19TroikaCapA;                                                 // 0x10298df2 CapabilitiesAdd(1)
 	CapabilityWord |= Spawn19TroikaCapB;                                                 // 0x10298dfe CapabilitiesAdd(0x800000)
 	CapabilityWord |= Spawn19TroikaCapC;                                                 // 0x10298e07 CapabilitiesAdd(8)

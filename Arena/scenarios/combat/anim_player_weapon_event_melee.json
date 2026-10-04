@@ -1,0 +1,27 @@
+{
+  "name": "anim_player_weapon_event_melee",
+  "about": "The player's melee contact has NO animation event: the swing lands through the sweep. The player, a knife in hand (player.armed, wielded by the melee verb slot2), standing, faces an idle neutral thug 85 cm ahead that faces the player (so no stealth kill is offered) and presses +attack at 2 s. Retail's order (stories/v4/packets-R2.md extension 1): an animation event fires from the entity's OWN think, after its frame advance -- for the player CBasePlayer::PostThink 0x1016be10: slot 250 StudioFrameAdvance(0) -> 0x101600a0 -> slot 258 DispatchAnimEvents(interval, this) (the overlay body 0x10098c80: the base 0x10091880, then the layers through 0x10098cd0) -> slot 312 UpdateCharacter. No attack clip of the melee banks authors a commit event (the only melee commit in the corpus is the dog's bite on 3001; 3047 is authored nowhere: combat-and-damage.md, 'NPC attack producers'); the contact is slot 312 UpdateCharacter 0x103246d0 -> MeleeSwingUpdate 0x10346cd0, right after the dispatch, integrating its own stamp (m_flLastMeleeSwingUpdate +0xaa4) in N = ceil(dt x 100) steps (stories/v4/packets-S2.md items 1, 9). So a damage on the target from the player, and never an animevent in the weapon band 3000..0xfa2 (4002) on the player. 4050 / 4051 are the stealth-kill clips' camera pair and belong to neither weapon record.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 8.0,
+  "player": {"at": "start", "armed": "item_w_knife"},
+  "cast": [
+    {"name": "arena_target", "classname": "npc_VHumanCombatant", "at": [-890.0, 0.0, 0.0], "face": "player", "body": "regular_cop", "keys": {"stattemplate": "TutorialThug", "npc_perception": "3", "spawnflags": "4", "StartHidden": "0", "player_reaction": "D_NU 5", "use_interesting": "0", "allow_alert_lookaround": "0"}}
+  ],
+  "script": [
+    {"t": 0.2, "do": "console", "command": "elysium.cmd slot2"},
+    {"t": 2.0, "do": "console", "command": "elysium.cmd +attack"},
+    {"t": 2.1, "do": "console", "command": "elysium.cmd -attack"}
+  ],
+  "expect": [
+    {"label": "hit", "who": "arena_target", "kind": "damage", "match": "", "by": 5.0}
+  ],
+  "never": [
+    {"who": "player", "kind": "animevent", "match": "^(3[0-9]{3}|400[0-2])( |$)", "regex": true},
+    {"who": "arena_target", "kind": "damage", "until": 1.9}
+  ],
+  "probes": [
+    {"at": 1.5, "who": "player", "probe": "player_weapon", "equals": "item_w_knife"}
+  ],
+  "notes": "The target is an idle neutral TutorialThug (damage_lethal_death's row), so nothing but the player acts on it. A GUARD, green on the V4a seam's build: the 3031 and the damage are observed through the world-tick poll (H21); it must still pass once lanes A1 and A4 move the dispatch into the player's PostThink step."
+}

@@ -18,7 +18,7 @@ public:
 
 	// --- Moved from the kernel families (story 5 step 4) ---------------------------------
 
-	static FMotionTrailPick SabbatGunmanMotionTrail(float GroundSpeed, float SpeedThreshold,
+	static FMotionTrailPick SabbatGunmanMotionTrail(float InGroundSpeed, float SpeedThreshold,
 		int32 TrailId, float TrailScalar);
 
 	// --- 0019/8 shape: forwarding overrides (replace the body, keep the declaration) ---

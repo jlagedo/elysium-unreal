@@ -368,9 +368,13 @@ void FElysiumAnimating::AdvanceAnimEvents()
 			// The server band, exactly as `DispatchAnimEvents` applies it: an id at or above the
 			// ceiling is never offered to a handler at all.
 			const bool bAboveBand = Record->Event >= ElysiumAnimEvents::ServerDispatchCeiling;
-			// The AI trace's `animevent`: an event dispatched to an NPC (debug output only, behind its
-			// sink).
-			if (!bAboveBand && World->HasAiTraceSink() && AsNpc() != nullptr)
+			// The AI trace's `animevent` (debug output only, behind its sink), for EVERY animating
+			// entity since V4a's seam (H21): the NPC, the player, a prop. Retail dispatches from four
+			// sites only (`PostRun 0x1026c7c0`, `CBasePlayer::PostThink 0x1016be10`, the weapon's slot
+			// 369 `0x1024efa0`, `CCameraAnimated`'s think `0x10071840`) and never for a prop
+			// (`CDynamicProp`'s think `0x10190850`); until lane A1 moves this tap into the dispatcher
+			// it rides this poll, so the records have a "before".
+			if (!bAboveBand && World->HasAiTraceSink())
 			{
 				World->EmitAiTrace(*this, TEXT("animevent"),
 					FString::Printf(TEXT("%d %s"), Record->Event, *Record->Options));

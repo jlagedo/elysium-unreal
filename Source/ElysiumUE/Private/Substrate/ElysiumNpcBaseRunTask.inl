@@ -40,7 +40,7 @@ void MotorMoveStop();
  *  `+0x1c == 180.0` immediate-assign arm is taken (no port motor carries a clamped max-yaw word,
  *  `0x102e0a80`); a speed of `-1.0` runs `0x102e1cf0` (`MotorStoreMaxYawSpeed`) and any other
  *  speed but `-2.0` is stored at `+0x38`; both arms end in `UpdateYaw(-1)`. */
-void MotorSetIdealYawAndUpdate(float YawDegrees, float YawSpeed);
+void MotorSetIdealYawAndUpdate(float YawDegrees, float InYawSpeed);
 
 /** `FUN_102e1cf0` `0x102e1cf0` -- motor `+0x38` := the outer's slot 516 `MaxYawSpeed()` (the SDK's
  *  `RecalculateYawSpeed`). Reached from `0x102e1c10`'s `-1.0` arm and from the tail of
@@ -58,14 +58,14 @@ static float MotorYawRateDegPerS(float RetailYawSpeed);
 
 /** `FUN_102e20b0` `0x102e20b0` -- `0x102e2750` (the yaw from this body to `TargetCm`) then
  *  `0x102e1c10(yaw, speed)`. */
-void MotorSetIdealYawToTargetAndUpdate(const FVector& TargetCm, float YawSpeed);
+void MotorSetIdealYawToTargetAndUpdate(const FVector& TargetCm, float InYawSpeed);
 
 /** `FUN_102e1e20` `0x102e1e20` -- `UpdateYaw(speed)`: step the body's yaw toward `motor+0x34` and
  *  stamp the yaw clock. **Named modernization**: the step itself is Unreal's (`IElysiumNpcMotor::Face`
  *  turns the capsule at the rate it is handed), so the substrate writes the clock and hands the mover
  *  the ideal yaw and retail's rate (`-1` = the stored `+0x38`, as `UpdateYaw(-1)` reads it);
  *  `_DAT_1044fac0` and `0x102e1d10`'s clamp are not run. */
-void MotorUpdateYaw(int32 YawSpeed);
+void MotorUpdateYaw(int32 InYawSpeed);
 
 // --- `CAI_Navigator` (`m_pNavigator`, `+0x5d34`) ------------------------------------------------------
 

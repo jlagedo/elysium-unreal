@@ -1,0 +1,27 @@
+{
+  "name": "corpse_removed_unseen",
+  "about": "An ordinary mortal's corpse nobody sees is removed ten seconds after the death. The damage_lethal_death staging (an idle TutorialThug on the east pad, TakeDamage 10000 at 3 s) with the player turned away: the player stands at the start facing yaw -135, the east pad 180 degrees behind the view. CBaseCombatCharacter::CreateCorpse 0x1032c0e0's tail arms SUB_PVSRemove 0x102696f0 at curtime + 10.0 (0x1032c404) on an ordinary mortal's corpse; the think re-arms itself every 10 s while any player passes all three of the view cone (slot 363 FInViewCone), the PVS test (0x101d1a90) and FVisible(corpse, mask 0x2804091) (slot 201), and otherwise calls UTIL_Remove 0x101cd940 (stories/v4/packets-S1.md item 1; stories/v1/triage.md, Judge's rulings, V4 -- second sitting, J13). Unseen at the first think, the corpse is removed at death + 10 s: one `removed` event on arena_victim, none before death + 9.5 s.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 16.0,
+  "player": {"at": "start", "face": -135.0},
+  "cast": [
+    {"name": "arena_victim", "classname": "npc_VHumanCombatant", "at": "east", "face": "player", "body": "regular_cop", "keys": {"stattemplate": "TutorialThug", "npc_perception": "3", "spawnflags": "4", "StartHidden": "0", "player_reaction": "D_NU 5", "use_interesting": "0", "allow_alert_lookaround": "0"}}
+  ],
+  "script": [
+    {"t": 3.0, "do": "fire", "target": "arena_victim", "input": "TakeDamage", "param": 10000}
+  ],
+  "expect": [
+    {"label": "hit", "who": "arena_victim", "kind": "input", "match": "TakeDamage", "by": 3.5},
+    {"label": "dies", "who": "arena_victim", "kind": "death", "match": "", "within": 0.5},
+    {"label": "corpse", "who": "arena_victim", "kind": "corpse", "match": "", "within": 1.0},
+    {"label": "gone", "who": "arena_victim", "kind": "removed", "match": "", "by": 13.6}
+  ],
+  "never": [
+    {"who": "arena_victim", "kind": "removed", "until": 12.4}
+  ],
+  "probes": [
+    {"at": "end", "who": "arena_victim", "probe": "exists", "equals": false}
+  ],
+  "notes": "The death is at 3.0-3.1 s (the queued input lands the frame after the script's 3.0), so death + 10.5 s is 13.6 and death + 9.5 s is 12.4. The watched half is corpse_kept_seen. GREEN on the V4a seam's build (the think is ported: ElysiumNpc.cpp, the dead think's SUB_PVSRemove), so it carries no known_red; it is the first consumer of the `removed` kind (H22), and V4c's C integrator and V4d (the simulating body removed) must keep it green."
+}

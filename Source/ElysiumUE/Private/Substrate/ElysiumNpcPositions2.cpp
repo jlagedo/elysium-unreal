@@ -80,9 +80,11 @@ FVector FElysiumNpc::EnemyChaseAnchor(const FElysiumEntity& Enemy)
 
 float FElysiumNpc::GroundSpeedCm() const
 {
-	// `m_flGroundSpeed` (+0x0654). **SEAM**: `IElysiumNpcMotor` publishes no realized ground speed
-	// to the kernel, so the lead helpers below are handed zero.
-	return 0.f;
+	// `m_flGroundSpeed` (+0x0654), the kernel's own word (`FElysiumNpcBase::GroundSpeed`, centimetres
+	// per second). Its retail writers (`StudioFrameAdvance 0x1008f120`, `ResetSequenceInfo
+	// 0x10090950`, `0x10264841`) are not ported yet -- V4a lane A2 -- so the word stands at 0 and the
+	// lead helpers below are handed zero, as before the seam.
+	return GroundSpeed;
 }
 
 FVector FElysiumNpc::LocalVelocityCm() const
@@ -112,14 +114,14 @@ void FElysiumNpc::ChaseLeadTolerance(FElysiumEntity* Enemy, const FVector& Chase
 }
 
 void FElysiumNpc::ChaseLeadPosition(FElysiumEntity* Enemy, const FVector& VelocityCm,
-	float GroundSpeed, const FVector& ChasePositionCm, FVector& OutPositionCm) const
+	float InGroundSpeed, const FVector& ChasePositionCm, FVector& OutPositionCm) const
 {
 	// `thunk_FUN_102c36d0(this, GetLocalVelocity() (by value), pEnemy, m_flGroundSpeed, &chasePos,
 	// &out)` — the second helper, which is what actually moves the chase point ahead of a running
 	// enemy. **SEAM**: answers the position unchanged.
 	(void)Enemy;
 	(void)VelocityCm;
-	(void)GroundSpeed;
+	(void)InGroundSpeed;
 	OutPositionCm = ChasePositionCm;
 }
 

@@ -1,0 +1,25 @@
+{
+  "name": "anim_footsteps_walk",
+  "about": "A walking NPC's footstep events are dispatched from its own think, and only the server band. sp_tutorial_1's sentry2 on its patrol (the patrol_sentry2_pingpong staging: SetupPatrolType '999 2 FOLLOW_PATROL_PATH_WALK' then FollowPatrolPath 'sentry2_1 sentry2_2 sentry2_3', the player set down 1.5 m off to wake it). The walk it plays is the female bank's `walk` fan (models/character/shared/female/move_and_ranged, which vampire_hunter_chick includes through npc_allsequences), whose baked event table authors 2050 at cycle 0.222 and 2051 at cycle 0.644 (animation_events.md 'NPC footsteps'; the staged table: import/characters/character/shared/female/move_and_ranged.body.json events.walk). Retail: CAI_BaseNPC::PostRun 0x1026c7c0 -> RunAnimation 0x1026c540 (slot 250 StudioFrameAdvance) -> slot 258 CBaseAnimatingOverlay::DispatchAnimEvents 0x10098c80 -> the base 0x10091880, which sweeps [m_flLastEventCheck +0x658, m_flCycle + 0.1 x cycle rate) and hands each event with an id below 5000 to slot 259 HandleAnimEvent (ids at or above 5000 are client-side and skipped). So during the first leg the trace carries animevent 2050 and then 2051 on sentry2, and never an id of 5000 or more. A GUARD (spec 0002 V4a): it passes today through the world-tick poll and must still pass once lane A1 moves the dispatch into PostRun and retires the poll for NPCs.",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 20.0,
+  "cast": [
+    {"name": "sentry2"}
+  ],
+  "script": [
+    {"t": 0.1, "do": "player_teleport", "at": [-18343.88, -7632.56, 17440.0], "face": -90.0}
+  ],
+  "expect": [
+    {"label": "setup", "who": "sentry2", "kind": "input", "match": "SetupPatrolType", "by": 3.0},
+    {"label": "follow", "who": "sentry2", "kind": "input", "match": "FollowPatrolPath", "within": 1.0},
+    {"label": "goal_1", "who": "sentry2", "kind": "move", "match": "^goal -?[0-9.]+ -79[0-9][0-9]", "regex": true, "within": 1.5},
+    {"label": "left_foot", "who": "sentry2", "kind": "animevent", "match": "^2050( |$)", "regex": true, "within": 6.0},
+    {"label": "right_foot", "who": "sentry2", "kind": "animevent", "match": "^2051( |$)", "regex": true, "within": 2.0}
+  ],
+  "never": [
+    {"who": "sentry2", "kind": "animevent", "match": "^[5-9][0-9]{3,}( |$)", "regex": true},
+    {"who": "sentry2", "kind": "death"}
+  ],
+  "notes": "The staging and the first three expectations are patrol_sentry2_pingpong's (its notes explain the wires and the pre-wire TaskFail). The record ends when the two footsteps are met; its `never`s run to the duration, so it also watches ~15 s of the walk for a client-band id reaching the trace."
+}

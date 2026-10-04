@@ -29,6 +29,28 @@ namespace
 
 namespace ElysiumAnimEvents
 {
+	// `0x10091880` / `0x10098cd0`; filled by V4a lane A1; called by A1 (the NPC) and A4 (the player,
+	// the camera). The seam's bodies dispatch nothing, write nothing, and report no finish edge, and
+	// nothing calls them yet: every event still fires from the world-tick poll (`Advance` below).
+	bool DispatchBase(FElysiumSequenceWords& Words, TConstArrayView<FElysiumAnimEvent> Events,
+		FElysiumEntity& Source, FElysiumEntity& Handler)
+	{
+		(void)Words;
+		(void)Events;
+		(void)Source;
+		(void)Handler;
+		return false;
+	}
+
+	void DispatchLayer(FElysiumSequenceWords& Layer, TConstArrayView<FElysiumAnimEvent> Events,
+		FElysiumEntity& Source, FElysiumEntity& Handler)
+	{
+		(void)Layer;
+		(void)Events;
+		(void)Source;
+		(void)Handler;
+	}
+
 	void Advance(const TArray<FElysiumAnimEvent>* Timeline, const FElysiumClipPhase& Phase,
 		FElysiumAnimEventCursor& InOut, TArray<const FElysiumAnimEvent*>& OutFired)
 	{

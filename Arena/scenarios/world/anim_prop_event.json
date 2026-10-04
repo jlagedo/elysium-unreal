@@ -1,0 +1,21 @@
+{
+  "name": "anim_prop_event",
+  "about": "A prop animates and dispatches NO animation event. A hand-written prop_dynamic on models/scenery/structural/doorknoba/drknobantique.mdl (sm_hub_1's apartment_doorknob_right_2 is the retail row of this model) is sent SetAnimation 'handle_unlocked' at 2 s, the input and the sequence that row's own wire sends. Retail: CDynamicProp's think 0x10190850 advances the sequence (StudioFrameAdvance) and never dispatches; slot 258 has four call sites in the whole image -- CAI_BaseNPC::PostRun 0x1026c7c0, CBasePlayer::PostThink 0x1016be10, the weapon's slot 369 0x1024efa0, CCameraAnimated's think 0x10071840 -- and none is a prop's (stories/v4/packets-R2.md extension 1; stories/v1/triage.md, Judge's rulings, V4, J4). So the prop takes the input and plays, and the trace never carries an animevent on it.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 8.0,
+  "player": {"at": "start"},
+  "rows": [
+    {"name": "arena_knob", "classname": "prop_dynamic", "at": [-775.0, 0.0, 100.0], "body": "models/scenery/structural/doorknoba/drknobantique.mdl", "keys": {"solid": "0", "spawnflags": "0", "StartHidden": "0"}}
+  ],
+  "script": [
+    {"t": 2.0, "do": "fire", "target": "arena_knob", "input": "SetAnimation", "param": "handle_unlocked"}
+  ],
+  "expect": [
+    {"label": "plays", "who": "arena_knob", "kind": "input", "match": "SetAnimation handle_unlocked", "by": 2.5}
+  ],
+  "never": [
+    {"who": "arena_knob", "kind": "animevent"}
+  ],
+  "notes": "VACUOUS BY DATA, and said so (J4 asked for a non-vacuous `never`): the brief's prop, models/items/walkie_talkie/walkie_talkie.mdl (Crooked_Cop_Walkie_Talkie_Into authors 4100 at cycle 0.225), has no baked PROP body -- it is baked as a skeletal item (Plugins/ElysiumBaked/Content/Models/items/walkie_talkie) but has no placed-catalogue row, so a prop_dynamic on it stands as a static representation and SetAnimation does not resolve ('model has no placed catalogue row', 'did not resolve on static representation'). No placed prop's sequence authors a server-band event: scenery 284, gibs 19, editor 10, worldcraft 2 and the cinematic lane author zero. So this record passes before and after the world-tick poll is deleted (lane A1); it guards only that no prop event is ever invented."
+}

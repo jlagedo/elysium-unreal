@@ -25,6 +25,7 @@
 #include "Substrate/ElysiumSchedule.h"
 #include "Visual/ElysiumNpcBody.h"           // `on_ground`: the motor's floor answer
 
+#include "CollisionQueryParams.h"            // `corpse_on_floor`: the floor under the pelvis
 #include "Components/SkeletalMeshComponent.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -50,6 +51,21 @@ namespace ElysiumArenaRunnerDetail
 	// The radius a `player_walk` calls its destination reached, centimetres -- the one
 	// `FElysiumGreenRoomRun::TickArenaWalkPlayer` uses for `gr_walk`.
 	constexpr float WalkAcceptanceCm = 32.0f;
+
+	// H20 `corpse_on_floor` (spec 0002 V4a seam; `stories/v4/packets-spike.md` findings 4, 5, 7). The
+	// bone the probe reads, how far below it the floor is looked for, and the speed under which the
+	// body is "at rest": a ragdoll here never sleeps (a residual 0.3-0.7 cm/s on the pelvis), and its
+	// last settling sample measured 3.6 cm/s.
+	const TCHAR* const CorpsePelvisBone = TEXT("Bip01 Pelvis");
+	constexpr double CorpseFloorReachCm = 500.0;
+	constexpr double CorpseRestSpeedCmPerSecond = 5.0;
+
+	// H22: the runner's second own kind, one event per entity that left the entity world.
+	FName RemovedKind()
+	{
+		static const FName Kind(TEXT("removed"));
+		return Kind;
+	}
 
 	// Two numbers a probe reads are equal within this (a health is whole; a distance is not compared
 	// for equality by any sensible record).
@@ -229,6 +245,7 @@ FElysiumArenaScenarioRunner::FElysiumArenaScenarioRunner(const FElysiumArenaScen
 	NeverCounts.Init(0, Record.Never.Num());
 	ActionFired.Init(false, Record.Script.Num());
 	ProbeRead.Init(false, Record.Probes.Num());
+	PelvisSamples.SetNum(Record.Probes.Num());
 }
 
 FElysiumArenaScenarioRunner::~FElysiumArenaScenarioRunner()
@@ -383,7 +400,15 @@ bool FElysiumArenaScenarioRunner::Matches(const FMatcher& Matcher, const FEvent&
 	}
 	if (!Spec.Who.IsEmpty() && !Event.Name.Equals(Spec.Who, ESearchCase::IgnoreCase))
 	{
-		return false;
+		// H21: `who: "player"` is the player ENTITY, whatever targetname it answers to (a tap names an
+		// event by targetname and the player's is not `player`); the runner's own `script` events
+		// carry that name already and matched above.
+		const FElysiumEntityWorld* World = Spec.Who.Equals(TEXT("player"), ESearchCase::IgnoreCase)
+			? LiveWorld() : nullptr;
+		if (World == nullptr || !Event.Entity.IsSet() || !(Event.Entity == World->PlayerHandle()))
+		{
+			return false;
+		}
 	}
 	if (Spec.Match.IsEmpty())
 	{
@@ -608,6 +633,16 @@ bool FElysiumArenaScenarioRunner::ReadProbe(const FElysiumArenaProbeSpec& Probe,
 		return false;
 	}
 	FElysiumEntity* Entity = ElysiumArenaRunnerDetail::FindEntity(*World, Probe.Who);
+	if (Probe.Probe == EElysiumArenaProbe::Exists)
+	{
+		// The one probe a missing entity answers: a removed entity (`FElysiumEntity::Kill`, the port's
+		// `UTIL_Remove 0x101cd940`) answers no name lookup from then on, reaped or not.
+		FElysiumArenaValue Exists;
+		Exists.Type = FElysiumArenaValue::EType::Bool;
+		Exists.bBool = Entity != nullptr && !Entity->IsDead();
+		OutRead = Exists.Describe();
+		return ElysiumArenaRunnerDetail::Compare(Exists, Probe);
+	}
 	if (Entity == nullptr)
 	{
 		OutError = FString::Printf(TEXT("no entity named '%s'"), *Probe.Who);
@@ -615,7 +650,8 @@ bool FElysiumArenaScenarioRunner::ReadProbe(const FElysiumArenaProbeSpec& Probe,
 	}
 	FElysiumNpc* Npc = Entity->AsNpc();
 	const bool bNeedsNpc = Probe.Probe == EElysiumArenaProbe::Schedule || Probe.Probe == EElysiumArenaProbe::State
-		|| Probe.Probe == EElysiumArenaProbe::Hint || Probe.Probe == EElysiumArenaProbe::HasCondition;
+		|| Probe.Probe == EElysiumArenaProbe::Hint || Probe.Probe == EElysiumArenaProbe::HasCondition
+		|| Probe.Probe == EElysiumArenaProbe::GroundSpeed;
 	if (bNeedsNpc && Npc == nullptr)
 	{
 		OutError = FString::Printf(TEXT("'%s' is not an NPC"), *Probe.Who);
@@ -678,6 +714,82 @@ bool FElysiumArenaScenarioRunner::ReadProbe(const FElysiumArenaProbeSpec& Probe,
 		Answer.Type = FElysiumArenaValue::EType::Bool;
 		Answer.bBool = Floor.bOnGround;
 		break;
+	}
+	case EElysiumArenaProbe::Speed2d:
+	case EElysiumArenaProbe::MoveYaw:
+	{
+		// H18. The BODY's own: the motor's velocity and the sample it publishes to its driver (the
+		// record `elysium_entity_get`'s `locomotion` prints), never the kernel's words.
+		const USkeletalMeshComponent* Skeletal = Entity->GetSkeletalBody();
+		const AElysiumNpcBody* Motor = Skeletal != nullptr
+			? Cast<AElysiumNpcBody>(Skeletal->GetAttachParentActor()) : nullptr;
+		if (Motor == nullptr)
+		{
+			OutError = FString::Printf(TEXT("'%s' has no motor to read a velocity from"), *Probe.Who);
+			return false;
+		}
+		Answer.Type = FElysiumArenaValue::EType::Number;
+		Answer.Number = Probe.Probe == EElysiumArenaProbe::Speed2d
+			? Motor->GetVelocity().Size2D()
+			: static_cast<double>(Motor->GetAnimSample().MoveYawVelocity);
+		break;
+	}
+	case EElysiumArenaProbe::GroundSpeed:
+		// H18. The kernel's `m_flGroundSpeed +0x654` through the accessor its readers use; 0 until
+		// V4a lane A2 writes the word.
+		Answer.Type = FElysiumArenaValue::EType::Number;
+		Answer.Number = Npc->GroundSpeedCm();
+		break;
+	case EElysiumArenaProbe::CorpseOnFloor:
+	{
+		// H20. The drawn mesh's pelvis BONE: the component's own location is below the floor once the
+		// body lies, and the motor capsule stays at the death spot (`on_ground` is its answer).
+		const FName PelvisBone(ElysiumArenaRunnerDetail::CorpsePelvisBone);
+		const USkeletalMeshComponent* Skeletal = Entity->GetSkeletalBody();
+		const FPelvisSample* Sample = nullptr;
+		for (int32 Index = 0; Index < Record.Probes.Num(); ++Index)
+		{
+			if (&Record.Probes[Index] == &Probe)
+			{
+				Sample = &PelvisSamples[Index];
+				break;
+			}
+		}
+		const UWorld* EngineWorld = Host.GetWorld();
+		if (Skeletal == nullptr || EngineWorld == nullptr || Skeletal->GetBoneIndex(PelvisBone) == INDEX_NONE)
+		{
+			OutError = FString::Printf(TEXT("'%s' has no drawn mesh with a `%s` bone"), *Probe.Who,
+				ElysiumArenaRunnerDetail::CorpsePelvisBone);
+			return false;
+		}
+		if (Sample == nullptr || !Sample->bSpeedKnown)
+		{
+			OutError = FString::Printf(TEXT("'%s': the pelvis was not read twice, so it has no speed"), *Probe.Who);
+			return false;
+		}
+		const FVector Pelvis = Skeletal->GetBoneLocation(PelvisBone);
+		// The floor is world geometry: an object-type query, so neither the ragdoll's own bodies nor
+		// another character's capsule under the pelvis answers for it.
+		FCollisionObjectQueryParams Objects;
+		Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(ElysiumArenaCorpseFloor), /*bTraceComplex=*/false);
+		Params.AddIgnoredComponent(Skeletal);
+		FHitResult Hit;
+		if (!EngineWorld->LineTraceSingleByObjectType(Hit, Pelvis,
+			Pelvis - FVector(0.0, 0.0, ElysiumArenaRunnerDetail::CorpseFloorReachCm), Objects, Params))
+		{
+			OutError = FString::Printf(TEXT("'%s': no floor within %.0f cm under the pelvis"), *Probe.Who,
+				ElysiumArenaRunnerDetail::CorpseFloorReachCm);
+			return false;
+		}
+		const double Height = Pelvis.Z - Hit.ImpactPoint.Z;
+		Answer.Type = FElysiumArenaValue::EType::Bool;
+		Answer.bBool = Height <= Probe.MaxHeightCm
+			&& Sample->SpeedCmPerSecond < ElysiumArenaRunnerDetail::CorpseRestSpeedCmPerSecond;
+		OutRead = FString::Printf(TEXT("%s (pelvis %.1f cm over the floor, bound %.1f; %.1f cm/s, at rest under %.1f)"),
+			*Answer.Describe(), Height, Probe.MaxHeightCm, Sample->SpeedCmPerSecond,
+			ElysiumArenaRunnerDetail::CorpseRestSpeedCmPerSecond);
+		return ElysiumArenaRunnerDetail::Compare(Answer, Probe);
 	}
 	case EElysiumArenaProbe::DistanceTo:
 	{
@@ -1170,6 +1282,72 @@ void FElysiumArenaScenarioRunner::TickPlayerInput()
 	}
 }
 
+void FElysiumArenaScenarioRunner::TraceRemovals(FElysiumEntityWorld& World)
+{
+	// Mark every live entity with this tick, then sweep: one tracked on an earlier tick and not marked
+	// now was removed in between (killed, and possibly reaped already). Debug output only: nothing
+	// here writes a word the world reads. The runner ticks between frames, so the removal's time is
+	// this frame's -- at or after every event a tap has emitted so far.
+	++RemovalTick;
+	for (const TUniquePtr<FElysiumEntity>& Entity : World.Entities())
+	{
+		if (!Entity.IsValid() || Entity->IsDead())
+		{
+			continue;
+		}
+		FTrackedEntity& Tracked = TrackedEntities.FindOrAdd(Entity->Handle);
+		Tracked.Name = Entity->TargetName;
+		Tracked.SeenTick = RemovalTick;
+	}
+	for (TMap<FElysiumEntityHandle, FTrackedEntity>::TIterator It(TrackedEntities); It; ++It)
+	{
+		if (It->Value.SeenTick == RemovalTick)
+		{
+			continue;
+		}
+		FEvent& Recorded = Events.AddDefaulted_GetRef();
+		Recorded.Time = World.NowSeconds();
+		Recorded.Entity = It->Key;
+		Recorded.Name = It->Value.Name;
+		Recorded.Kind = ElysiumArenaRunnerDetail::RemovedKind();
+		Recorded.Text = It->Key.ToString();
+		It.RemoveCurrent();
+	}
+}
+
+void FElysiumArenaScenarioRunner::SampleCorpsePelvises(FElysiumEntityWorld& World)
+{
+	const FName PelvisBone(ElysiumArenaRunnerDetail::CorpsePelvisBone);
+	for (int32 Index = 0; Index < Record.Probes.Num(); ++Index)
+	{
+		const FElysiumArenaProbeSpec& Probe = Record.Probes[Index];
+		if (Probe.Probe != EElysiumArenaProbe::CorpseOnFloor)
+		{
+			continue;
+		}
+		const FElysiumEntity* Entity = ElysiumArenaRunnerDetail::FindEntity(World, Probe.Who);
+		const USkeletalMeshComponent* Skeletal = Entity != nullptr ? Entity->GetSkeletalBody() : nullptr;
+		if (Skeletal == nullptr || Skeletal->GetBoneIndex(PelvisBone) == INDEX_NONE)
+		{
+			continue;
+		}
+		FPelvisSample& Sample = PelvisSamples[Index];
+		const FVector Location = Skeletal->GetBoneLocation(PelvisBone);
+		const double Now = World.NowSeconds();
+		if (Sample.bRead && Now > Sample.Time)
+		{
+			Sample.SpeedCmPerSecond = FVector::Dist(Location, Sample.LocationCm) / (Now - Sample.Time);
+			Sample.bSpeedKnown = true;
+		}
+		if (!Sample.bRead || Now > Sample.Time)
+		{
+			Sample.bRead = true;
+			Sample.LocationCm = Location;
+			Sample.Time = Now;
+		}
+	}
+}
+
 bool FElysiumArenaScenarioRunner::IsComplete(double Now) const
 {
 	if (NextExpect < Record.Expect.Num())
@@ -1243,6 +1421,9 @@ bool FElysiumArenaScenarioRunner::Tick()
 			return false;
 		}
 	}
+
+	TraceRemovals(*World);
+	SampleCorpsePelvises(*World);
 
 	// What has happened so far, judged in time order: the earliest of a `never` that appeared, an
 	// expectation whose deadline passed, and a timed probe that did not hold is the failure.

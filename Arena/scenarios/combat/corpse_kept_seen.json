@@ -1,0 +1,26 @@
+{
+  "name": "corpse_kept_seen",
+  "about": "An ordinary mortal's corpse the player is looking at is not removed. The damage_lethal_death staging (an idle TutorialThug on the east pad, TakeDamage 10000 at 3 s), the player at the start facing the east pad. CBaseCombatCharacter::CreateCorpse 0x1032c0e0's tail arms SUB_PVSRemove 0x102696f0 at curtime + 10.0 (0x1032c404) on an ordinary mortal's corpse; the think re-arms itself every 10 s while any player passes all three of the view cone (slot 363 FInViewCone), the PVS test (0x101d1a90) and FVisible(corpse, mask 0x2804091) (slot 201), and otherwise calls UTIL_Remove 0x101cd940 (stories/v4/packets-S1.md item 1; stories/v1/triage.md, Judge's rulings, V4 -- second sitting, J13). Seen at the think of death + 10 s, the corpse re-arms and stays: no `removed` event through death + 12 s, and the entity still answers its name.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 15.5,
+  "player": {"at": "start", "face": "east"},
+  "cast": [
+    {"name": "arena_victim", "classname": "npc_VHumanCombatant", "at": "east", "face": "player", "body": "regular_cop", "keys": {"stattemplate": "TutorialThug", "npc_perception": "3", "spawnflags": "4", "StartHidden": "0", "player_reaction": "D_NU 5", "use_interesting": "0", "allow_alert_lookaround": "0"}}
+  ],
+  "script": [
+    {"t": 3.0, "do": "fire", "target": "arena_victim", "input": "TakeDamage", "param": 10000}
+  ],
+  "expect": [
+    {"label": "hit", "who": "arena_victim", "kind": "input", "match": "TakeDamage", "by": 3.5},
+    {"label": "dies", "who": "arena_victim", "kind": "death", "match": "", "within": 0.5},
+    {"label": "corpse", "who": "arena_victim", "kind": "corpse", "match": "", "within": 1.0}
+  ],
+  "never": [
+    {"who": "arena_victim", "kind": "removed"}
+  ],
+  "probes": [
+    {"at": 15.2, "who": "arena_victim", "probe": "exists", "equals": true}
+  ],
+  "notes": "The second half of corpse_removed_unseen (brief A0 item 7b: 'a second record ... facing the corpse'). Death at 3.0-3.1 s; the record runs through death + 12 s. GREEN on the V4a seam's build: the corpse think reads the player's view through the embodiment, not slot 363."
+}

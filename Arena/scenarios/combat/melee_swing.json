@@ -1,10 +1,10 @@
 {
   "name": "melee_swing",
-  "about": "Melee: a hostile bat-armed Troika human starts 120 cm (47 units) in front of the player, facing it. After SCHED_TROIKA_START_COMBAT 0xea the weapon split takes slot 604 0x10385e40; slot 599 admits melee; with the player inside melee range and in the 0.7 cone (slot 555 0x1026d9a0: d <= 64 -> CAN_MELEE_ATTACK1 0x51) and no SHOULD_DODGE / SHOULD_BLOCK / SHOULD_KICK / SHOULD_STEPBACK, the tail answers 0xdc SCHED_TROIKA_MELEE_ATTACK1 (0xdd only with a ranged weapon, slot 308). sched_troika_melee_attack1.sch: SET_FAIL_SCHEDULE MELEE_IDLE, FACE_ENEMY, STOP_MOVING, SET_SCHEDULE SCHED_TROIKA_MELEE_ATTACK1_SWING; _swing: ANNOUNCE_ATTACK 1, TASK_MELEE_ATTACK1, no interrupts. TASK_MELEE_ATTACK1 plays the weapon's melee activity; the clip's hit event reaches HandleAnimEvent 0x10274e30 through DispatchAnimEvents 0x10091880 (slot 258) under PostRun 0x1026c8c4, the swing's trace lands damage on the player (CBasePlayer::OnTakeDamage 0x10163020), and the task completes on IsActivityFinished.",
+  "about": "Melee: a hostile bat-armed Troika human starts 120 cm (47 units) in front of the player, facing it. After SCHED_TROIKA_START_COMBAT 0xea the weapon split takes slot 604 0x10385e40; slot 599 admits melee; with the player inside melee range and in the cone and no SHOULD_DODGE / SHOULD_BLOCK / SHOULD_KICK / SHOULD_STEPBACK, the tail answers the in-reach attack. The NPC is bat-only, so slot 308 HasUsableRangedWeapon 0x10336d70 is false and the selector answers the _NR forms (CNPC_VHumanCombatant::SelectSchedule 0x103872d0 -> slot 604 CNPC_VHuman::SelectScheduleMeleeCombat 0x10385e40; stories/v4/packets-S3.md item 8): in reach (CAN_MELEE_ATTACK1 0x51) 0xdd SCHED_TROIKA_MELEE_ATTACK1_NR (line 0x65d) -> MELEE_ATTACK1_SWING 0xde -> TASK_MELEE_ATTACK1; out of reach (0x09 / 0x60) 0xcb SCHED_TROIKA_MELEE_ADVANCE_NR (line 0x6b0), 0xd2 the approach inside 100 units without 0x51 (line 0x6bb), 0xe1 the circle. 0xdc / 0xca / 0xe0 are the forms of an NPC that also carries a usable ranged weapon. One SCHED_TROIKA_MELEE_IDLE (0xc7) first is retail: the selection that admits the NPC to melee has gathered no band word yet, so no `never` here forbids a single MELEE_IDLE after START_COMBAT. The melee band is the weapon's slot 367 (0x103eac30 -> 0x103ea7e0, walked in stories/v4/packets-S2.md item 4), not the NPC's slot 555. sched_troika_melee_attack1(_nr).sch: SET_FAIL_SCHEDULE MELEE_IDLE, FACE_ENEMY, STOP_MOVING, SET_SCHEDULE SCHED_TROIKA_MELEE_ATTACK1_SWING; _swing: ANNOUNCE_ATTACK 1, TASK_MELEE_ATTACK1, no interrupts. TASK_MELEE_ATTACK1's start arm 0x102a45c6 (weapon +0x5a0 & 0x18000) writes m_flLastAttackTime and calls the weapon's slot 326 PrimaryAttack (CWeaponMelee 0x103eaca0 -> slot 372 RequestActivity(0x4b, 1, 1) 0x103e9e00: the swing sequence on the owner). The contact has NO animation event: no attack clip in the male `baseball` bank authors one (stories/v4/packets-R2.md item 3c); it is the NPC's own slot 312 UpdateCharacter 0x103246d0 -> MeleeSwingUpdate 0x10346cd0, reached from the Troika think's tail 0x1029365b after PostRun and PerformMovement. The sweep lands damage on the player (CBasePlayer::OnTakeDamage 0x10163020), and the task completes on IsActivityFinished.",
   "stage": "arena",
   "seed": 1,
   "duration": 20.0,
-  "known_red": "new: slot 599's attack-coordinator admission 0x1025db70 is a seam answering false (ElysiumNpcTroikaHelpers.cpp:142-146): SCHED_TROIKA_WAIT_FOR_MELEE 0xe4 with the player at 47 units, never MELEE_ATTACK1 (then 3: the hit event rides the world-tick poll)",
+  "known_red": "V11 (N3): slot 599's attack-coordinator admission 0x1025db70 is a seam answering false (ElysiumNpcTroikaHelpers.cpp): SCHED_TROIKA_WAIT_FOR_MELEE 0xe4 with the player at 47 units, never MELEE_ATTACK1",
   "player": { "at": "start" },
   "cast": [
     {
@@ -28,17 +28,19 @@
   ],
   "expect": [
     { "label": "engages", "who": "arena_brawler", "kind": "schedule", "match": "SCHED_TROIKA_START_COMBAT (", "by": 3.0 },
-    { "label": "attack_program", "who": "arena_brawler", "kind": "schedule", "match": "SCHED_TROIKA_MELEE_ATTACK1 (", "within": 4.0 },
+    { "label": "attack_program", "who": "arena_brawler", "kind": "schedule", "match": "^SCHED_TROIKA_MELEE_ATTACK1(_NR)? \\(", "regex": true, "within": 4.0 },
     { "label": "swing_program", "who": "arena_brawler", "kind": "schedule", "match": "SCHED_TROIKA_MELEE_ATTACK1_SWING (", "within": 2.0 },
     { "label": "swing", "who": "arena_brawler", "kind": "task", "match": "task_melee_attack1 (", "within": 1.0 },
-    { "label": "hit_event", "who": "arena_brawler", "kind": "animevent", "match": "", "within": 3.0 },
+    { "label": "hit", "who": "player", "kind": "damage", "match": "from=arena_brawler", "within": 3.0 },
     { "label": "swung", "who": "arena_brawler", "kind": "taskdone", "match": "^task_melee_attack1$", "regex": true, "within": 4.0 }
   ],
   "never": [
-    { "who": "arena_brawler", "kind": "death" }
+    { "who": "arena_brawler", "kind": "death" },
+    { "who": "arena_brawler", "kind": "animevent", "match": "^(3[0-9]{3}|400[0-2])( |$)", "regex": true, "after": "swing" }
   ],
   "probes": [
     { "at": "end", "who": "player", "probe": "health", "less": 100 },
     { "at": "end", "who": "arena_brawler", "probe": "alive", "equals": true }
-  ]
+  ],
+  "notes": "Corrected by the V4a seam (record errors, J7): `hit_event` (an animevent, match '') is replaced by `hit`, a damage on the player from the brawler after TASK_MELEE_ATTACK1 starts -- retail's contact is the sweep, not an event; the schedule matches take the _NR forms. The `never` on the brawler forbids a WEAPON-BAND animevent (3000..0xfa2) from the swing on: the schema has no window that closes at a label, so it runs from `swing` to the record's end rather than to the swing's taskdone, and it is narrowed to the weapon band so the footsteps of a later advance (2050..2053) are not counted. A bat-only NPC dispatches no weapon-band event at all in retail, so the wider window states nothing retail does not."
 }

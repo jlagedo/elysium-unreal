@@ -1,0 +1,33 @@
+{
+  "name": "ranged_sustained_fire",
+  "about": "An NPC's clip never runs down: it fires an eighth shot from a six-round weapon. The ranged_open_fire staging (a hostile TutorialThug gunman with item_w_thirtyeight, Size 6, fighting from the open at ~387 units), run long enough for eight shots. Retail fills an NPC's clip once, at equip (Inventory_Insert 0x10334e70: max(Default_Size, 1)), and CWeaponRanged's Shot 0x102387b0 subtracts Ammo_Cost only inside its player block (0x10238a15): an NPC wielder's clip never drops, so NO_PRIMARY_AMMO (0x40) cannot rise from firing and no reload is ever scheduled by it (stories/v4/packets-S4.md item a; stories/v1/triage.md, Judge's rulings, V4 -- second sitting, J12). Each shot is the attack clip's 3031 event (smith_attack authors 3031 at cycle 0, male move_and_ranged) through CWeaponRanged's operator 0x10238160. Eight animevent 3031 on the shooter, never cond+ NO_PRIMARY_AMMO, never TASK_RELOAD.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 60.0,
+  "known_red": "V4a (slot 363), then V5a-2 (N2, the wait), then V4o lane O3 (J12): the port spends Ammo_Cost for every wielder and refuses the seventh shot (ElysiumWeaponClasses.cpp, the NPC shot's clip spend)",
+  "player": {"at": "cover_seat"},
+  "cast": [
+    {"name": "arena_shooter", "classname": "npc_VHumanCombatant", "at": "far_ne", "face": "player", "body": "regular_cop", "keys": {"stattemplate": "TutorialThug", "npc_perception": "3", "spawnflags": "4", "StartHidden": "0", "additionalequipment": "item_w_thirtyeight", "player_reaction": "D_HT 5", "hint_groups": "2", "stay_entrenched": "0", "allow_kick_hint_use": "0", "squadname": ""}}
+  ],
+  "expect": [
+    {"label": "engages", "who": "arena_shooter", "kind": "schedule", "match": "SCHED_TROIKA_START_COMBAT (", "by": 3.0},
+    {"label": "shot_1", "who": "arena_shooter", "kind": "animevent", "match": "^3031( |$)", "regex": true, "within": 6.0},
+    {"label": "shot_2", "who": "arena_shooter", "kind": "animevent", "match": "^3031( |$)", "regex": true, "within": 8.0},
+    {"label": "shot_3", "who": "arena_shooter", "kind": "animevent", "match": "^3031( |$)", "regex": true, "within": 8.0},
+    {"label": "shot_4", "who": "arena_shooter", "kind": "animevent", "match": "^3031( |$)", "regex": true, "within": 8.0},
+    {"label": "shot_5", "who": "arena_shooter", "kind": "animevent", "match": "^3031( |$)", "regex": true, "within": 8.0},
+    {"label": "shot_6", "who": "arena_shooter", "kind": "animevent", "match": "^3031( |$)", "regex": true, "within": 8.0},
+    {"label": "shot_7", "who": "arena_shooter", "kind": "animevent", "match": "^3031( |$)", "regex": true, "within": 8.0},
+    {"label": "shot_8", "who": "arena_shooter", "kind": "animevent", "match": "^3031( |$)", "regex": true, "within": 8.0}
+  ],
+  "never": [
+    {"who": "arena_shooter", "kind": "cond+", "match": "NO_PRIMARY_AMMO (0x40)"},
+    {"who": "arena_shooter", "kind": "task", "match": "task_reload"},
+    {"who": "arena_shooter", "kind": "cond+", "match": "BEHIND_ENEMY (0x57)"},
+    {"who": "arena_shooter", "kind": "death"}
+  ],
+  "probes": [
+    {"at": "end", "who": "arena_shooter", "probe": "alive", "equals": true}
+  ],
+  "notes": "The BEHIND_ENEMY never is ranged_open_fire's (the player faces the gunman): it is why the record's first red is V4a's slot 363. The 8 s between shots admits TASK_WAIT_ATTACK_TIME1's longest wait at this range (NPC_Attack_Rate_Max 2.5 scaled up with range) plus the attack clip."
+}

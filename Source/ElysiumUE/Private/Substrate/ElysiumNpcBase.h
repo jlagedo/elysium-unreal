@@ -264,6 +264,45 @@ public:
 
 	bool bIsUsingSmallHull = false;  // +0x5f2d m_fIsUsingSmallHull (sdk-order)
 
+	// --- The sequence speed and event words (spec 0002 V4a seam) ---------------------------------
+	//
+	// Four `CBaseAnimating` words, kept on the NPC beside the sequence words this port already keeps
+	// here (`ElysiumNpcBaseAnim.inl`: `+0x65c`, `+0x6f0`, `+0x6f8`). Declared by the seam, each at
+	// today's answer; **not written yet: V4a lane A1/A2.**
+
+	// +0x658 m_flLastEventCheck -- the cycle the event dispatcher last swept up to. Writers:
+	// `CBaseAnimating::DispatchAnimEvents 0x10091880` (stores its look-ahead end, `m_flCycle + 0.1 x
+	// cycle rate`), `ResetSequenceInfo 0x10090950` (zeroes it, `0x10090a3d`). Reader: `0x10091880`
+	// (the window's start). Stands for the play-id cursor of the world-tick poll. Not written yet:
+	// V4a lane A1 (the dispatcher), A2 (the reset).
+	float LastEventCheck = 0.f;
+
+	// +0x560 m_flYawSpeed -- `GetSequenceYawSpeed(m_nSequence)` (`0x10091310`: the sequence's turn
+	// yaw over its duration). Writers: `StudioFrameAdvance 0x1008f120` (every advance),
+	// `ResetSequenceInfo 0x10090950`. Reader: slot 242 `GetIdealYawSpeed 0x100916a0`. 0 on shipped
+	// data even when written (every movement record's angle is 0.0). Not written yet: V4a lane A2.
+	float YawSpeed = 0.f;
+
+	// +0x654 m_flGroundSpeed -- `GetSequenceGroundSpeed(m_nSequence)` (`0x10091490`: move distance
+	// over duration, pose-weighted over a blend fan). Writers: `StudioFrameAdvance 0x1008f120` (every
+	// advance), `ResetSequenceInfo 0x10090950`, `MoveGroundExecute`'s re-write after slot 18
+	// (`0x10264841`). Reader: slot 248 `GetIdealSpeed 0x10091740` (no playback-rate term). Carried
+	// in CENTIMETRES per second, as `GroundSpeedCm()` answers it (retail's word is Source units per
+	// second; the writer states the conversion). Not written yet: V4a lane A2.
+	float GroundSpeed = 0.f;
+
+	// +0x568 m_fSequencePastHalf -- the cycle is past 0.5. Writers: `StudioFrameAdvance 0x1008f120`
+	// (from the real cycle, `0x1008f268..0x1008f280`), `DispatchAnimEvents 0x10091880` (from its
+	// look-ahead end). Reader: `CNPC_VTzimisce`'s `0x103bcc00` (which reads its own seam today,
+	// `ElysiumNpcTzimisce.h`). Not written yet: V4a lane A1/A2.
+	bool SequencePastHalf = false;
+
+	// Slot 258 on the NPC chain: `CBaseAnimatingOverlay::DispatchAnimEvents 0x10098c80` (the base
+	// `0x10091880`, then the four overlay layers through `0x10098cd0`), called by `PostRun
+	// 0x1026c7c0` with `(interval, this)`. Declared by the seam, forwarding to the overlay's counting
+	// stub; filled by V4a lane A1. The body is in `ElysiumNpcBaseAnimEvents.cpp`.
+	virtual void DispatchAnimEvents(float Interval, FElysiumEntity* Handler) override;
+
 	// --- The retail vtable surface, base layer (story 5 step 5) ---------------------------------
 	//
 	// One `virtual` per generated slot the `CAI_BaseNPC` table holds, with the body that table holds

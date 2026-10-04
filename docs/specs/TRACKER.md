@@ -108,7 +108,10 @@ Wave 3 (build work, one agent):
   (`0002-npc-ai/spec.md` § the bug protocol's end): settling packets S1–S3 → the seam → [V5a + A3]
   → V4a → [V4b + V11] → V4o → V4c → V4d → V5b.
   - [ ] **V4s** — settling packets S1–S3 (death and turn; weapons; overlay and coordinator). S.
-  - [ ] **V4a0** — the seam (A0). S.
+  - [x] **V4a0** — the seam (A0). S. Done 2026-10-04: one build (2m22s), default 171 / 0, arena
+    120 records: 85 pass / 33 expected-fail / 1 fail (H11) / 1 unexpected-pass (`hear_world_investigate`,
+    N4's intermittent). 14 new records, 10 corrected; `face_enemy_turn` is green (the 13.4 s turn does
+    not reproduce: `0002-npc-ai/stories/v4/packets-R1b-measurement.md`).
   - [ ] **V5a + A3** — the attack conditions whole, the wait (N2), the cover tail's weapon read
     (N1), slot 363 (`0002-npc-ai/stories/v5a/`). S–M.
   - [ ] **V4a** — the speed words, the dispatcher for every animating entity (A1, A2, A4). M.

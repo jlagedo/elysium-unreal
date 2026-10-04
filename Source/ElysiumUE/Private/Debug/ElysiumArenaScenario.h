@@ -161,12 +161,20 @@ enum class EElysiumArenaProbe : uint8
 	Enemy,           // string: the committed enemy's targetname, `none`
 	Hint,            // string: the claimed hint's targetname (`m_pHintNode`), `none`
 	HasCondition,    // bool: `condition` is set in the gathered conditions
-	OnGround,        // bool: the body's motor reports a floor under it
+	OnGround,        // bool: the motor CAPSULE's floor answer (false on every corpse: use CorpseOnFloor)
 	DistanceTo,      // number, centimetres: to `to` (a targetname, `player`, or a place)
 	// `who: "player"` only.
 	PlayerWeapon,    // string: the active item's classname, `none`
 	PlayerCrouched,  // bool: `FL_DUCKING`, as every game reader of the posture sees it
 	PlayerGrappling, // bool: paired in a grapple (feed, stealth kill) whose partner still resolves
+	// H18 (spec 0002 V4a seam): the walk's direct acceptance.
+	Speed2d,         // number, cm/s: the body's horizontal speed (the motor's velocity)
+	MoveYaw,         // number, degrees: the body's movement yaw relative to its facing (the motor's sample)
+	GroundSpeed,     // number, cm/s: the kernel's `m_flGroundSpeed +0x654`
+	// H20: the drawn mesh's `Bip01 Pelvis` bone within `max_height` cm of the floor under it and at rest.
+	CorpseOnFloor,   // bool
+	// H22's companion: a live (not removed) entity of that name is in the entity world.
+	Exists,          // bool
 };
 
 enum class EElysiumArenaCompare : uint8
@@ -186,6 +194,9 @@ struct FElysiumArenaProbeSpec
 	int32 Condition = INDEX_NONE;  // has_condition: the condition's retail number
 	FString ConditionName;
 	FElysiumArenaAt To;            // distance_to
+	// corpse_on_floor: `max_height`, the pelvis bone's height bound over the floor under it,
+	// centimetres -- per the record's body, measured (`stories/v4/packets-spike.md` finding 5).
+	double MaxHeightCm = 0.0;
 	EElysiumArenaCompare Compare = EElysiumArenaCompare::Equals;
 	FElysiumArenaValue Value;
 };

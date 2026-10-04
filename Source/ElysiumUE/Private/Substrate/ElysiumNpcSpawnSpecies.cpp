@@ -264,7 +264,7 @@ void FElysiumNpcYukie::Spawn()
 {
 	CapabilityWord |= GSpawn19CapGuard;                                                  // 0x103dd628
 	FElysiumNpcHumanCombatant::Spawn();                                                  // 0x103dd62f -> 0x10387110
-	FieldOfViewDot = GSpawn19FovMinusOne;                                                // 0x103dd634 -- 360-degree cone, AFTER the base
+	FieldOfView = GSpawn19FovMinusOne;                                                // 0x103dd634 -- 360-degree cone, AFTER the base
 }
 
 // 0x10371a20 CNPC_VCop::Spawn
@@ -490,7 +490,7 @@ void FElysiumNpcWerewolf::Spawn()
 void FElysiumNpcTzimisce::Spawn()
 {
 	FElysiumNpc::Spawn();                                                                // 0x103b9066 -> 0x10298d30
-	FieldOfViewDot = GSpawn19FovMinusHalf;                                               // 0x103b9071 +0x1574
+	FieldOfView = GSpawn19FovMinusHalf;                                               // 0x103b9071 +0x1574
 	// The head-forward basis rotated 90 degrees in place: (x, y, z) -> (-y, x, z).
 	const FVector Old = HeadLocalForward;                                                // 0x103b907d..0x103b9092
 	HeadLocalForward = FVector(-Old.Y, Old.X, Old.Z);                                    // 0x103b9095 / 0x103b909d / 0x103b90a9
@@ -564,7 +564,7 @@ void FElysiumNpcMingXiao::Spawn()
 	CapabilityWord |= GSpawn19CapUseWeapons;                                             // 0x103927ba
 	FElysiumNpc::Spawn();                                                                // 0x103927c1 -> 0x10298d30
 	MiscFlags |= GSpawn19MiscFlagMingXiao;                                               // 0x103927cd AddMiscFlag(0x80000)
-	FieldOfViewDot = GSpawn19FovMinusHalf;                                               // 0x103927d5
+	FieldOfView = GSpawn19FovMinusHalf;                                               // 0x103927d5
 	MingXiaoParentMingZhao = FElysiumEntityHandle::Invalid();                            // 0x103927e1 +0x6670
 	MingXiaoTentacleId = INDEX_NONE;                                                     // 0x103927e9 +0x6674
 	bMingXiaoHasTransformed = false;                                                     // 0x103927ef +0x6678
@@ -617,7 +617,7 @@ void FElysiumNpcCamera::Spawn()
 	BloodColorWord = Spawn19BloodColor;                                                  // 0x10368bb1 +0x1570
 	EffectsWord = 0u;                                                                    // 0x10368bbb m_fEffects = 0
 	Health = 1;                                                                          // 0x10368bc1 +0x210
-	FieldOfViewDot = Spawn19TroikaFieldOfView;                                           // 0x10368bcb +0x1574
+	FieldOfView = Spawn19TroikaFieldOfView;                                           // 0x10368bcb +0x1574
 	WriteNpcStateRetail(0);                                                              // 0x10368bd5 m_NPCState = 0
 	HackedGunPosUnits = FVector::ZeroVector;                                             // 0x10368bdb..0x10368be7
 	Senses.ResetListenClock();                                                           // 0x10368bf3 m_flNextListenTime = 0

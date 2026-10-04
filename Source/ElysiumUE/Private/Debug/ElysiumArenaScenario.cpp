@@ -27,6 +27,7 @@ namespace ElysiumArenaScenarioParse
 		TEXT("cond+"), TEXT("cond-"), TEXT("state"), TEXT("sequence"), TEXT("seqfinished"),
 		TEXT("animevent"), TEXT("move"), TEXT("damage"), TEXT("death"), TEXT("corpse"),
 		TEXT("hint+"), TEXT("hint-"), TEXT("output"), TEXT("input"), TEXT("stealthkill"),
+		TEXT("removed"),
 		TEXT("script"),
 	};
 
@@ -513,7 +514,8 @@ namespace ElysiumArenaScenarioParse
 			EElysiumArenaProbe::Health, EElysiumArenaProbe::Enemy, EElysiumArenaProbe::Hint,
 			EElysiumArenaProbe::HasCondition, EElysiumArenaProbe::OnGround, EElysiumArenaProbe::DistanceTo,
 			EElysiumArenaProbe::PlayerWeapon, EElysiumArenaProbe::PlayerCrouched,
-			EElysiumArenaProbe::PlayerGrappling,
+			EElysiumArenaProbe::PlayerGrappling, EElysiumArenaProbe::Speed2d, EElysiumArenaProbe::MoveYaw,
+			EElysiumArenaProbe::GroundSpeed, EElysiumArenaProbe::CorpseOnFloor, EElysiumArenaProbe::Exists,
 		};
 		TArray<FString> Names;
 		for (const EElysiumArenaProbe Probe : All)
@@ -566,7 +568,8 @@ namespace ElysiumArenaScenarioParse
 	{
 		Out = FElysiumArenaProbeSpec();
 		if (!CheckFields(R, Object, Path, { TEXT("at"), TEXT("who"), TEXT("probe"), TEXT("equals"),
-				TEXT("match"), TEXT("less"), TEXT("greater"), TEXT("condition"), TEXT("to") }))
+				TEXT("match"), TEXT("less"), TEXT("greater"), TEXT("condition"), TEXT("to"),
+				TEXT("max_height") }))
 		{
 			return false;
 		}
@@ -644,10 +647,15 @@ namespace ElysiumArenaScenarioParse
 		case EElysiumArenaProbe::OnGround:
 		case EElysiumArenaProbe::PlayerCrouched:
 		case EElysiumArenaProbe::PlayerGrappling:
+		case EElysiumArenaProbe::CorpseOnFloor:
+		case EElysiumArenaProbe::Exists:
 			Answer = FElysiumArenaValue::EType::Bool;
 			break;
 		case EElysiumArenaProbe::Health:
 		case EElysiumArenaProbe::DistanceTo:
+		case EElysiumArenaProbe::Speed2d:
+		case EElysiumArenaProbe::MoveYaw:
+		case EElysiumArenaProbe::GroundSpeed:
 			Answer = FElysiumArenaValue::EType::Number;
 			break;
 		default:
@@ -693,6 +701,21 @@ namespace ElysiumArenaScenarioParse
 		else if (FindValue(Object, TEXT("to")) != nullptr)
 		{
 			return R.Fail(Field(Path, TEXT("to")), TEXT("only `distance_to` takes `to`"));
+		}
+		if (Out.Probe == EElysiumArenaProbe::CorpseOnFloor)
+		{
+			// The bound is the record's, per its body: no one number serves every rig.
+			const TSharedPtr<FJsonValue>* Height = FindValue(Object, TEXT("max_height"));
+			if (Height == nullptr || (*Height)->Type != EJson::Number || (*Height)->AsNumber() <= 0.0)
+			{
+				return R.Fail(Field(Path, TEXT("max_height")),
+					TEXT("required: the pelvis bone's height bound over the floor, centimetres (> 0)"));
+			}
+			Out.MaxHeightCm = (*Height)->AsNumber();
+		}
+		else if (FindValue(Object, TEXT("max_height")) != nullptr)
+		{
+			return R.Fail(Field(Path, TEXT("max_height")), TEXT("only `corpse_on_floor` takes `max_height`"));
 		}
 		return true;
 	}
@@ -1307,6 +1330,11 @@ const TCHAR* ProbeName(EElysiumArenaProbe Probe)
 	case EElysiumArenaProbe::PlayerWeapon:    return TEXT("player_weapon");
 	case EElysiumArenaProbe::PlayerCrouched:  return TEXT("player_crouched");
 	case EElysiumArenaProbe::PlayerGrappling: return TEXT("player_grappling");
+	case EElysiumArenaProbe::Speed2d:         return TEXT("speed2d");
+	case EElysiumArenaProbe::MoveYaw:         return TEXT("move_yaw");
+	case EElysiumArenaProbe::GroundSpeed:     return TEXT("ground_speed");
+	case EElysiumArenaProbe::CorpseOnFloor:   return TEXT("corpse_on_floor");
+	case EElysiumArenaProbe::Exists:          return TEXT("exists");
 	default:                                  return TEXT("?");
 	}
 }

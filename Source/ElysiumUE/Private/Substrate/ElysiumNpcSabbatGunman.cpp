@@ -26,13 +26,13 @@ void FElysiumNpcSabbatGunman::OnChangeActivity(int32 Activity)
 
 // --- Moved from `ElysiumNpcFacing.cpp` (story 5 step 4) ---
 
-FElysiumNpc::FMotionTrailPick FElysiumNpcSabbatGunman::SabbatGunmanMotionTrail(float GroundSpeed,
+FElysiumNpc::FMotionTrailPick FElysiumNpcSabbatGunman::SabbatGunmanMotionTrail(float InGroundSpeed,
 	float SpeedThreshold, int32 TrailId, float TrailScalar)
 {
 	// `CNPC_VSabbatGunman::OnChangeActivity` `0x103a56f0`: at or below the threshold the trail is
 	// cleared and the playback scalar is -1.0 — retail's "no scalar" literal, not a speed; above it
 	// both come from the other two convars.
-	if (GroundSpeed <= SpeedThreshold)
+	if (InGroundSpeed <= SpeedThreshold)
 	{
 		return FMotionTrailPick{ 0, -1.0f };
 	}

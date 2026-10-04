@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 40.0,
-  "known_red": "V4: N13 (stories/v1/triage.md): the walk plays (0.800 'walk rate=1', since V3a) but the body covers ~0.55 m/s (0.700 goal -> 10.500 arrived, ~540 cm; retail walk_0 136.7 cm/s; StudioFrameAdvance 0x1008f120 weights m_flGroundSpeed by move_yaw), so the 10 m leg after ClearPatrolPath misses its deadline",
+  "known_red": "V4b (N13): the cruise speed is this body's own `walk_0` (101.278 cm/s, the female bank) and is right; the time is lost at arrival -- the body creeps the last ~30 cm for ~4 s before the kernel sees `arrived` (inferred from code until the B integrator toggles it; `packets-R1.md` item 4). The body is sentry2's (vampire_hunter_chick, shared/female/npc_allsequences); measured on this record by reader R1: speed2d 101.278 mid-leg, the leg covered in ~5.6 s, `arrived` at 10.428 s. No deadline moved",
   "player": {
     "at": "start"
   },

@@ -199,7 +199,7 @@ void FElysiumNpcWerewolf::NPCInit()
 	AuthoredVision = WerewolfSeekDistBaseUnits;
 	AuthoredHearing = WerewolfHearingScalarBase;
 	DistTooFar = FarSightDistTooFar;
-	FieldOfViewDot = static_cast<float>(FMath::Cos(WerewolfFieldOfViewRadians));
+	FieldOfView = static_cast<float>(FMath::Cos(WerewolfFieldOfViewRadians));
 	SetDistLook(FarSightDistLookUnits * ElysiumMove::U);
 	Senses.ResolveTuning(*this);                                         // 1028fb70
 	InvestigateMode = 3;

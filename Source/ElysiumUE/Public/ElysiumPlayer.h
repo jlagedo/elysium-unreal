@@ -939,6 +939,13 @@ public:
 	int32 ComfortingCount = 0;
 	// `m_flNextComfortCheckTime` (+0xe90), the comfort sweep's re-arm (`ElysiumNpcCond::GatherComfort`).
 	double NextComfortCheckTime = 0.0;
+	// `m_flFieldOfView` (`+0x1574`, `CBaseCombatCharacter`): the cone half-angle cosine slot 363
+	// `FInViewCone 0x10326750` compares against. Moved here from the Troika line by V4a's seam; the
+	// declared 0.2 is the value that declaration carried, so no NPC changes. Writers: the Troika
+	// `Spawn` (`0x10298de8`, 0.2) and the species' own (Werewolf `cos(120 deg)`, Tzimisce / MingXiao
+	// -0.5, Yukie -1.0). The player's 0.5 (`CBasePlayer::Spawn 0x1016d260`) is not written yet: V4a
+	// lane A4; the cone that reads it on the player is lane A3's.
+	float FieldOfView = 0.2f;
 	void AddToComfortList();
 	void RemoveFromComfortList();
 	void SerializeDisciplineFlags(FElysiumSaveArchive& Ar);
@@ -2106,6 +2113,10 @@ public:
 		int32 PositionHint, struct FElysiumStealthPairClips* OutClips = nullptr);
 	bool StartStealthKill(class FElysiumNpc& Victim, float MaxDistanceUnits);
 	void TickStealthKill();
+	// `CBasePlayer::PostThink 0x1016be10`'s animation step (slot 250 -> slot 258 `(interval, this)`
+	// -> slot 312); the call site is A1's, the body A4's. Declared and left empty by V4a's seam:
+	// called by nobody yet.
+	void PostThinkAnimation();
 	// Retail player +0x1c58/+0x1c60, written before StartGrappleAttack even on refusal.
 	FElysiumEntityHandle MeleeOpponent;
 	FElysiumEntityHandle LastOpponent;

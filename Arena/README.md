@@ -130,7 +130,8 @@ target (`player` for the player's actions and `light_pin`, the row's name for `s
 - `kind`: one of the trace kinds of `docs/specs/0002-npc-ai/stories/wave2/seam.md` (`schedule`,
   `task`, `taskdone`, `taskfail`, `break`, `cond+`, `cond-`, `state`, `sequence`, `seqfinished`,
   `animevent`, `move`, `damage`, `death`, `corpse`, `hint+`, `hint-`, `output`, `input`,
-  `stealthkill`), with the text its table states, or `script`, the runner's own (above). Read the
+  `stealthkill`), with the text its table states, or one of the runner's own two: `script` (above)
+  and `removed` (below). Read the
   event texts there before matching them: a schedule is `NAME (0x<n>)`, the class-local id in lower-case
   hex with no padding (`SCHED_IDLE_STAND (0x1)`; `NAME (<n>)`, the global id in decimal, when the
   class has no local one), a stealth-kill query `<victim or none> <admit|refuse> gate=<gate>` (`ray`,
@@ -138,7 +139,8 @@ target (`player` for the player's actions and `light_pin`, the row's name for `s
   lower case (`task_range_attack1`), as the "Task: %s" print names it --, a sequence
   `<label> rate=<n>` (`rate=0` when nothing plays it), a finished sequence its label (`seq 0` for
   row 0, which plays nothing and finishes on its first advance).
-- `who`: a targetname (case-insensitive); empty matches any entity.
+- `who`: a targetname (case-insensitive); empty matches any entity. `player` is the player entity,
+  whatever targetname it answers to (its events are named `!player` in the trace file).
 - `match`: a case-sensitive substring of the text; empty matches any text. `"regex": true` makes it
   an ICU regular expression (`^task_range_attack1$`, `^(?!seq 0$)`).
 - **Ordered.** Expectation `k` is met by the first event not already consumed, at or after
@@ -151,6 +153,14 @@ target (`player` for the player's actions and `light_pin`, the row's name for `s
 
 Two kinds need care: `state` does not cover the body arbiter's own flips inside the mind, and
 `damage` is emitted even when no damage was committed. Do not make a verdict depend on either.
+
+Kinds the harness adds to or widens from `seam.md`'s table (spec 0002 V4a, H21 / H22):
+
+| Kind | Emitted when | Text |
+|---|---|---|
+| `animevent` | an animation event below the server ceiling (id < 5000) is dispatched to ANY animating entity: an NPC, the player (`who: "player"`), a prop. Retail dispatches from four sites only (`PostRun 0x1026c7c0`, `CBasePlayer::PostThink 0x1016be10`, the weapon's slot 369 `0x1024efa0`, `CCameraAnimated`'s think `0x10071840`) and never for a prop; until V4a's lane A1 moves the tap into the dispatcher it rides the world-tick poll | `<event id> <options>` |
+| `damage` | also at the PLAYER's damage commit (`CBasePlayer::OnTakeDamage 0x10163020`'s health apply), with `who: "player"` | `<applied damage> type=<bits> from=<attacker targetname or none>` |
+| `removed` | an entity left the entity world: `UTIL_Remove 0x101cd940`'s port (`FElysiumEntity::Kill`), after which it answers no name lookup and fires no output. The runner's own, read between frames (so its time is the frame's), one line per entity; `who` is the name it answered to. Usable in `expect` / `never` with `by` / `within` / `after` as any kind | the entity's handle, `#<index>` |
 
 ## `never`
 
@@ -191,14 +201,20 @@ comparison: `equals`, `match` (string contains), `less`, `greater` (numbers).
 | `enemy` | string: the committed enemy's targetname, `none` | |
 | `hint` | string: the claimed hint's targetname (`m_pHintNode`), `none` | |
 | `has_condition` | bool | `condition`: a table name (`SEE_ENEMY` or `COND_SEE_ENEMY`) or number |
-| `on_ground` | bool: the body's motor reports a floor | |
+| `on_ground` | bool: the MOTOR CAPSULE's floor answer (`AElysiumNpcBody::SampleFloor`). A dead body's motor is frozen at the death spot with its collision off, so this reads **false on every corpse**: ask `corpse_on_floor` there | |
+| `corpse_on_floor` | bool: the drawn mesh's `Bip01 Pelvis` BONE (never the component's location, which is below the floor once the body lies, and never the capsule) is within `max_height` of the floor under it (a downward trace against world geometry) **and at rest**: the pelvis moved under 5 cm/s between the runner's last two reads. Never the physics sleep state, which a ragdoll here does not reach | `max_height`: centimetres, required, per the record's body and measured (with Unreal's default capsule asset `regular_cop` rests at 16.2 cm and `bum_male` at 32.9 cm) |
+| `exists` | bool: a live (not removed) entity of that name is in the entity world. The one probe a missing entity answers | |
+| `speed2d` | number, cm/s: the body's horizontal speed (the motor's velocity) | |
+| `move_yaw` | number, degrees: the body's movement yaw relative to its facing (the motor's published sample, `MoveYawVelocity`) | |
+| `ground_speed` | number, cm/s: the kernel's `m_flGroundSpeed +0x654` (0 until V4a's lane A2 writes it) | an NPC only |
 | `distance_to` | number, centimetres | `to`: a targetname, `player`, or a place |
 | `player_weapon` | string: the player's active item's classname (`Inventory.Active`, what `HasWeaponEquipped` compares), `none` | `who: "player"` only |
 | `player_crouched` | bool: `FL_DUCKING` (`IElysiumEmbodiment::IsPlayerDucking`: ducked or rising), what the stealth eligibility and the grapple admission read | `who: "player"` only |
 | `player_grappling` | bool: paired in a grapple (feed, stealth kill) whose partner still resolves (`IsGrappling`) | `who: "player"` only |
 
 An unknown probe, a comparison the answer's type cannot take, or a probe that cannot be read (no
-such entity, not an NPC) fails.
+such entity, not an NPC, no motor, no drawn mesh with the bone, a pelvis read fewer than twice, no
+floor under it) fails.
 
 ## The run and its verdict
 
@@ -230,6 +246,8 @@ record — and a `reason`) and
 |---|---|
 | `cover` | the tactical cover program through the shot (green since V3a) |
 | `control_sequence` | the headless host animates: a path-free program's finite activity finishes |
+| `world/anim_footsteps_walk`, `world/anim_player_footsteps`, `combat/anim_player_weapon_event_firearm`, `_melee`, `world/anim_prop_event` | the animation events of an NPC, the player and a prop: who dispatches what (guards across spec 0002 V4a's move of the dispatch into each entity's own think) |
+| `combat/corpse_removed_unseen`, `corpse_kept_seen`, `corpse_kindred_burns`, `corpse_pedestrian_stays`, `corpse_fades` | the four corpse-removal clocks (`removed`) |
 | `_selftest/must_fail` | an expectation nothing meets fails the run |
 | `_selftest/bound_trips` | a deadline is a deadline: a real event after it does not count |
 | `_selftest/never_at_most_holds`, `never_at_most_trips` | `at_most` tolerates its bound and fails the run at the match past it |

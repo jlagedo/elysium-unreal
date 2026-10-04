@@ -1,0 +1,28 @@
+{
+  "name": "face_enemy_turn",
+  "about": "TASK_FACE_ENEMY (0x2e) turns a Troika human 135 degrees inside half a second. A hostile gunman on far_ne faces the player on the open seat and fights from the open (ranged_open_fire's staging); at 6 s the player is set down 4 m off, ~135 degrees behind the gunman's facing (player_teleport: the gunman faces yaw 180, the new seat lies at yaw -45 from it). The gunman is in combat with a committed enemy; the next TASK_FACE_ENEMY (the attack program's) must have it facing the player again. Retail (stories/v4/packets-S1.md item 5, which corrects packets-R1.md item 3's address): StartTask's turn tail 0x102a44d1 resets the yaw clock (m_flLastYawTime = -1) once; RunTask 0x2e on a Troika NPC is 0x102aae61 (not the base 0x102889b5), which re-reads MaxYawSpeed every call and does not reset the clock; CAI_BaseNPCTroika::MaxYawSpeed 0x10297ce0 answers 90 untagged in combat (m_afMemory & 0x2000 is never set on a shipped human: the turn ladder 0x10297640 is closed); UpdateYaw 0x102e1e20 integrates 0.1 s on the first call and the real time between thinks after it, at rate x 10 = 900 degrees a second through AI_ClampYaw 0x102e1d10. 135 degrees completes on the second RunTask call, <= 0.2 s; the bound here is 0.5 s. Facing again, the gunman sees its enemy (SEE_ENEMY 0x46) at the next gather.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 12.0,
+  "player": {"at": "cover_seat"},
+  "cast": [
+    {"name": "arena_turner", "classname": "npc_VHumanCombatant", "at": "far_ne", "face": "player", "body": "regular_cop", "keys": {"stattemplate": "TutorialThug", "npc_perception": "3", "spawnflags": "4", "StartHidden": "0", "additionalequipment": "item_w_thirtyeight", "player_reaction": "D_HT 5", "hint_groups": "2", "stay_entrenched": "0", "allow_kick_hint_use": "0", "squadname": ""}}
+  ],
+  "script": [
+    {"t": 6.0, "do": "player_teleport", "at": [966.0, 400.0, 0.0], "face": 135.0}
+  ],
+  "expect": [
+    {"label": "engages", "who": "arena_turner", "kind": "schedule", "match": "SCHED_TROIKA_START_COMBAT (", "by": 3.0},
+    {"label": "behind", "who": "player", "kind": "script", "match": "player_teleport", "by": 6.1},
+    {"label": "turns", "who": "arena_turner", "kind": "task", "match": "task_face_enemy (", "within": 3.0},
+    {"label": "faces", "who": "arena_turner", "kind": "taskdone", "match": "^task_face_enemy$", "regex": true, "within": 0.5},
+    {"label": "sees_again", "who": "arena_turner", "kind": "cond+", "match": "SEE_ENEMY (0x46)", "within": 1.0}
+  ],
+  "never": [
+    {"who": "arena_turner", "kind": "death"}
+  ],
+  "probes": [
+    {"at": "end", "who": "arena_turner", "probe": "alive", "equals": true}
+  ],
+  "notes": "far_ne is (682.8, 682.8) cm and the open seat (-300, 682.8), so the gunman's facing is yaw 180; the new seat (966, 400) is 400 cm away at yaw -45 from the gunman: 135 degrees off its facing. hint_groups 2 admits no arena hint, so the gunman fights from the open and stays on the spot. GREEN on the V4a seam's build, so it carries no known_red (brief A0 wrote it for V4b as 'the port's turn takes 13.4 s'): the turn does not reproduce -- 135 degrees in ~0.3 s, and TASK_FACE_ENEMY starts and completes in one think, the body already facing (stories/v4/packets-R1b-measurement.md, the seam agent's measurement for reader R1b). It stands as V4b's guard on the turn."
+}

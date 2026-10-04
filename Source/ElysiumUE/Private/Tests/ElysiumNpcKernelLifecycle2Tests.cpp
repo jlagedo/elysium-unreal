@@ -837,13 +837,13 @@ bool FElysiumNpcKernelLifecycle19WerewolfTest::RunTest(const FString&)
 	// fixture's authored template, the member default, the base body's 1024, mode 0), so only the
 	// werewolf body's writes pass.
 	Werewolf->StatTemplate = TEXT("Thug");
-	Werewolf->FieldOfViewDot = 0.2f;
+	Werewolf->FieldOfView = 0.2f;
 	Werewolf->DistTooFar = 1024.f;
 	Werewolf->InvestigateMode = 0;
 	Werewolf->NPCInit();                                                    // 0x103caef0
 	TestEqual(TEXT("stat template Werewolf"), Werewolf->StatTemplate, FString(TEXT("Werewolf")));
 	TestTrue(TEXT("FOV cos(120)= -0.5"),
-		FMath::IsNearlyEqual(Werewolf->FieldOfViewDot, -0.5f, 1.e-4f));
+		FMath::IsNearlyEqual(Werewolf->FieldOfView, -0.5f, 1.e-4f));
 	TestEqual(TEXT("DistTooFar 1e9"), Werewolf->DistTooFar, 1.0e9f);
 	TestEqual(TEXT("investigate AnyPlayer"), Werewolf->InvestigateMode, 3);
 	const float FloorAfterInit = F.As<FElysiumNpcWerewolf>()->WerewolfTeleportDistanceB;

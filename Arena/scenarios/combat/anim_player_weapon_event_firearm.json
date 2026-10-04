@@ -1,0 +1,27 @@
+{
+  "name": "anim_player_weapon_event_firearm",
+  "about": "The player's shot is the attack clip's 3031 event, dispatched from the player's own think, before the damage it causes. The player, a .38 in hand (player.armed, wielded by the ranged verb slot3), faces an idle neutral thug 120 cm ahead and holds +attack from 2 s to 5 s (a shot can miss: the to-hit roll is the weapon's). Retail's order (stories/v4/packets-R2.md extension 1): an animation event fires from the entity's OWN think, after its frame advance -- for the player CBasePlayer::PostThink 0x1016be10: slot 250 StudioFrameAdvance(0) -> 0x101600a0 -> slot 258 DispatchAnimEvents(interval, this) (the overlay body 0x10098c80: the base 0x10091880, then the layers through 0x10098cd0) -> slot 312 UpdateCharacter. The firearm's `*_attack_layer` clip plays in an overlay layer (smith_attack_layer authors 3031 at cycle 0: import/characters/character/shared/male/move_and_ranged.body.json), so its event is dispatched by the per-layer body 0x10098cd0 -> CBasePlayer::HandleAnimEvent 0x10178a10 (which passes the weapon band on) -> CBaseCombatCharacter::HandleAnimEvent 0x1032e330 (3000..0xfa2 -> Weapon_HandleAnimEvent) -> CWeaponRanged's operator 0x10238160 -> ModeDispatch(1) 0x102383b0 -> slot 373 Shot 0x102387b0. So: animevent 3031 on the player, THEN a damage on the target from the player.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 8.0,
+  "player": {"at": "start", "armed": "item_w_thirtyeight"},
+  "cast": [
+    {"name": "arena_target", "classname": "npc_VHumanCombatant", "at": [-855.0, 0.0, 0.0], "face": "player", "body": "regular_cop", "keys": {"stattemplate": "TutorialThug", "npc_perception": "3", "spawnflags": "4", "StartHidden": "0", "player_reaction": "D_NU 5", "use_interesting": "0", "allow_alert_lookaround": "0"}}
+  ],
+  "script": [
+    {"t": 0.2, "do": "console", "command": "elysium.cmd slot3"},
+    {"t": 2.0, "do": "console", "command": "elysium.cmd +attack"},
+    {"t": 5.0, "do": "console", "command": "elysium.cmd -attack"}
+  ],
+  "expect": [
+    {"label": "shot_event", "who": "player", "kind": "animevent", "match": "^3031( |$)", "regex": true, "by": 4.0},
+    {"label": "hit", "who": "arena_target", "kind": "damage", "match": "from=!player", "within": 3.5}
+  ],
+  "never": [
+    {"who": "arena_target", "kind": "damage", "until": 1.9}
+  ],
+  "probes": [
+    {"at": 1.5, "who": "player", "probe": "player_weapon", "equals": "item_w_thirtyeight"}
+  ],
+  "notes": "The target is an idle neutral TutorialThug (damage_lethal_death's row), so nothing but the player acts on it. A GUARD, green on the V4a seam's build: the 3031 and the damage are observed through the world-tick poll (H21); it must still pass once lanes A1 and A4 move the dispatch into the player's PostThink step."
+}

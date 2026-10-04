@@ -593,8 +593,24 @@ bool FElysiumNpcKernelFieldOwnersTest::RunTest(const FString&)
 		return nullptr;
 	};
 
-	// No word is stored away from its owner any more: `m_pSenses` (`+0x5cdc`), the last transitional
-	// home, moved to `FElysiumNpcBase` in story 5 fold A3.
+	// `m_pSenses` (`+0x5cdc`), the last transitional home of story 5, moved to `FElysiumNpcBase` in
+	// fold A3. Spec 0002 V4a's seam names four more, each stated on its shape-map row: the
+	// `CBaseAnimating` sequence speed and event words (`m_flYawSpeed`, `m_fSequencePastHalf`,
+	// `m_flGroundSpeed`, `m_flLastEventCheck`) are kept on `FElysiumNpcBase` beside the sequence words
+	// the port already keeps there (`+0x65c`, `+0x6f0`, `+0x6f8`), until the animating clock is
+	// re-homed on `FElysiumAnimating` with them.
+	static const int32 KeptOnNpc[] = { 0x0560, 0x0568, 0x0654, 0x0658 };
+	auto IsKeptOnNpc = [](int32 Offset)
+	{
+		for (const int32 Kept : KeptOnNpc)
+		{
+			if (Kept == Offset)
+			{
+				return true;
+			}
+		}
+		return false;
+	};
 
 	// The shape map: each word the NPC stores is a member of the port class of its declaring retail
 	// class (or of a component that class holds). A `Chain` row is a word the port carries beside
@@ -616,7 +632,14 @@ bool FElysiumNpcKernelFieldOwnersTest::RunTest(const FString&)
 		FString(Row.PortPath).Split(TEXT("::"), &Type, &Member);
 		const TCHAR* Holder = HolderOf(Type);
 		const TCHAR* Expected = PortClassOf(Word->Layer);
-		if (Row.Home == EElysiumNpcWordHome::Member)
+		if (Row.Home == EElysiumNpcWordHome::Member && IsKeptOnNpc(Row.Offset))
+		{
+			++Members;
+			TestTrue(FString::Printf(TEXT("+0x%04x %s (%s) is kept on FElysiumNpcBase beside the sequence words"),
+				Row.Offset, Word->Member, Word->Layer),
+				Holder != nullptr && FCString::Strcmp(Holder, TEXT("FElysiumNpcBase")) == 0);
+		}
+		else if (Row.Home == EElysiumNpcWordHome::Member)
 		{
 			++Members;
 			TestTrue(FString::Printf(TEXT("+0x%04x %s (%s) is stored on %s, not %s"), Row.Offset, Word->Member,

@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 40.0,
-  "known_red": "3: BEHIND_ENEMY set at 0.00 with the player facing the gunman (slot 363 FInViewCone stub); behind it, new: TASK_WAIT_ATTACK_TIME1 never waits (m_flWaitFinished is a seam answering curtime, ElysiumNpcStartTask.cpp:575-579; retail 0x102a337d reads the weapon's next-attack stamp 0x10252450 + 0x102c5730), so the gunman fires again 0.6 s after its first shot",
+  "known_red": "V4a (slot 363), then V5 (N2): BEHIND_ENEMY is set at 0.00 with the player facing the gunman (the player's slot 363 FInViewCone is a stub answering false); behind it, TASK_WAIT_ATTACK_TIME1 never waits (m_flWaitFinished is a seam answering curtime, ElysiumNpcStartTask.cpp; retail 0x102a337d reads the weapon's next-attack stamp 0x10252450 + 0x102c5730), so the gunman fires again 0.6 s after its first shot",
   "player": { "at": "cover_seat" },
   "cast": [
     {
@@ -31,7 +31,7 @@
     { "label": "engages", "who": "arena_shooter", "kind": "schedule", "match": "SCHED_TROIKA_START_COMBAT (", "by": 3.0 },
     { "label": "attack_program", "who": "arena_shooter", "kind": "schedule", "match": "^SCHED_TROIKA_(STEP_BACK_)?RANGE_ATTACK1 \\(", "regex": true, "within": 3.0 },
     { "label": "fires", "who": "arena_shooter", "kind": "task", "match": "task_range_attack1 (", "within": 3.0 },
-    { "label": "shot_event", "who": "arena_shooter", "kind": "animevent", "match": "", "within": 3.0 },
+    { "label": "shot_event", "who": "arena_shooter", "kind": "animevent", "match": "^3031( |$)", "regex": true, "within": 3.0 },
     { "label": "fired", "who": "arena_shooter", "kind": "taskdone", "match": "^task_range_attack1$", "regex": true, "within": 5.0 },
     { "label": "waits", "who": "arena_shooter", "kind": "task", "match": "task_wait_attack_time1 (", "within": 4.0 },
     { "label": "fires_again", "who": "arena_shooter", "kind": "task", "match": "task_range_attack1 (", "within": 12.0 },
@@ -39,6 +39,7 @@
   ],
   "never": [
     { "who": "arena_shooter", "kind": "taskdone", "match": "^task_wait_attack_time1$", "regex": true, "until": 1.05 },
+    { "who": "player", "kind": "damage", "until": 0.3 },
     { "who": "arena_shooter", "kind": "cond+", "match": "BEHIND_ENEMY (0x57)" },
     { "who": "arena_shooter", "kind": "death" },
     { "who": "arena_shooter", "kind": "hint+" },
@@ -47,5 +48,6 @@
   "probes": [
     { "at": "end", "who": "arena_shooter", "probe": "alive", "equals": true },
     { "at": "end", "who": "arena_shooter", "probe": "state", "equals": "Combat" }
-  ]
+  ],
+  "notes": "Corrected by the V4a seam (J7, J6): `shot_event` matched any animevent; it is the attack clip's 3031 (smith_attack authors 3031 at cycle 0), through CWeaponRanged's operator 0x10238160 -> 0x10238320 -> ModeDispatch(1) 0x102383b0 -> slot 373 Shot 0x102387b0: no retail path fires a Troika human's shot without the event. The `never` damage on the player states that no shot lands before the event: the schema has no window that closes at a label, so it closes at 0.3 s, the earliest instant retail's first shot event can fall (START_COMBAT's TASK_WAIT_FACE_ENEMY 0.2 s, then a selection and the attack program's first think)."
 }

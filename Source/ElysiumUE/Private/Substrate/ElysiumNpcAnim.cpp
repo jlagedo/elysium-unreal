@@ -392,6 +392,44 @@ int32 FElysiumNpc::SequenceForActivity(int32 Activity)
 	return Row;
 }
 
+// --- The bridge row's descriptor accessors (spec 0002 V4a seam) --------------------------------
+// Each stands for one read of the studio sequence descriptor and answers nothing yet (the loop bit
+// answers what the row already holds); filled by lane A2 from the baked clip data.
+
+TConstArrayView<FElysiumAnimEvent> FElysiumNpc::SequenceEvents(int32 Sequence) const
+{
+	// `mstudioseqdesc_t`'s event table (`numevents` / `eventindex`), which `0x10091880` walks.
+	// SEAM: the row carries no timeline yet; filled by lane A2 from the baked clip data.
+	(void)Sequence;
+	return TConstArrayView<FElysiumAnimEvent>();
+}
+
+bool FElysiumNpc::SequenceLoops(int32 Sequence) const
+{
+	// `mstudioseqdesc_t::flags & 1` (`STUDIO_LOOPING`). Today the row's `bLoops`, the bridge's loop
+	// guess (`PlaySequenceClip` answers the same bit); lane A2 replaces it with the baked flag.
+	return Sequence > 0 && SequenceRows.IsValidIndex(Sequence) && SequenceRows[Sequence].bLoops;
+}
+
+float FElysiumNpc::SequenceTurnYaw(int32 Sequence) const
+{
+	// `GetSequenceTurnYaw 0x1008f8f0` -> `FUN_10428690`'s `angles[1]`: the descriptor's movement
+	// records' angle. SEAM answering 0; filled by lane A2 from the baked clip data (`YawDegrees`).
+	(void)Sequence;
+	return 0.f;
+}
+
+float FElysiumNpc::SequenceGroundSpeedAt(int32 Sequence,
+	TConstArrayView<FPoseParameterWrite> PoseParameters) const
+{
+	// `GetSequenceGroundSpeed 0x10091490` = `GetSequenceMoveDist / SequenceDuration` over the
+	// descriptor's blend corners. SEAM answering 0 (today's `GroundSpeedCm()`); filled by lane A2
+	// from the baked clip data (`GroundSpeedCmPerSecond`, the fan's grid).
+	(void)Sequence;
+	(void)PoseParameters;
+	return 0.f;
+}
+
 bool FElysiumNpc::PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops)
 {
 	// The AI trace's `sequence` event (debug output only, behind its sink): the kernel's commit

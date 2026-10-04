@@ -1,0 +1,26 @@
+{
+  "name": "corpse_kindred_burns",
+  "about": "A Kindred's corpse burns and is removed ten seconds after the death, seen or not. sp_tutorial_1's sabbat_redshirt_1 (npc_VVampire, stattemplate TutorialShovelhead, spawnflags 4: a placed row, not a maker child, so it carries neither Flag_InfChild nor Flag_Fade) verbatim on the east pad, unhidden at 0.5 s (the row is StartHidden 1), the player at the start WATCHING it; TakeDamage 10000 at 2 s. CreateCorpse 0x1032c0e0's burn arm: burn = 0x10207df0 (the template's Has_Burning_Death, or Kindred without Disallow_Kindred_Death) -> BurnModel 0x10090580 and SUB_Remove 0x101c0b10 armed at curtime + 10.0 (0x1032c32f), unconditionally: no view cone, no PVS, no FVisible (stories/v4/packets-S1.md item 1; stories/v1/triage.md, Judge's rulings, V4 -- second sitting, J13). So one `removed` on the corpse at death + 10 s (by death + 10.5 s), none before death + 9.5 s.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 15.0,
+  "player": {"at": "start", "face": "east"},
+  "from_map": {"map": "sp_tutorial_1", "names": ["sabbat_redshirt_1"], "anchor": "sabbat_redshirt_1", "at": "east"},
+  "script": [
+    {"t": 0.5, "do": "fire", "target": "sabbat_redshirt_1", "input": "ScriptUnhide"},
+    {"t": 2.0, "do": "fire", "target": "sabbat_redshirt_1", "input": "TakeDamage", "param": 10000}
+  ],
+  "expect": [
+    {"label": "hit", "who": "sabbat_redshirt_1", "kind": "input", "match": "TakeDamage", "by": 2.5},
+    {"label": "dies", "who": "sabbat_redshirt_1", "kind": "death", "match": "", "within": 0.5},
+    {"label": "corpse", "who": "sabbat_redshirt_1", "kind": "corpse", "match": "", "within": 1.0},
+    {"label": "gone", "who": "sabbat_redshirt_1", "kind": "removed", "match": "", "by": 12.6}
+  ],
+  "never": [
+    {"who": "sabbat_redshirt_1", "kind": "removed", "until": 11.4}
+  ],
+  "probes": [
+    {"at": "end", "who": "sabbat_redshirt_1", "probe": "exists", "equals": false}
+  ],
+  "notes": "Death at 2.0-2.1 s: death + 10.5 s is 12.6, death + 9.5 s is 11.4. BurnModel's look (the burn overlay, the ash) is filed to 0014; this record states the clock only. GREEN on the V4a seam's build (removed at death + 10.0 s while watched), so it carries no known_red; V4c's C integrator and V4d lane D (a simulating body removed at + 10 s must not ensure) must keep it green."
+}

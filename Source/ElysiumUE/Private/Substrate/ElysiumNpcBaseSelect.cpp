@@ -67,7 +67,7 @@ namespace
 	// view-cone arm answers this word from the sense layer's default cone, which is the same question.
 	float RetailFieldOfViewDot(const FElysiumNpc& Npc)
 	{
-		return Npc.FieldOfViewDot;
+		return Npc.FieldOfView;
 	}
 
 }
@@ -241,7 +241,7 @@ int32 FElysiumNpcBase::BaseSelectSchedule()
 			Cognition.bCondTookDamage = false;              // 0x1028a5b7
 			// 0x1028a5be `0x102e1f90(m_pMotor)` DeltaIdealYaw, made absolute, against
 			// `(1.0 - m_flFieldOfView) * 60.0` (`0x1028a5c5`..`0x1028a5d1`); strict less-than.
-			// `m_flFieldOfView` (`+0x1574`) is carried on the Troika line (`FieldOfViewDot`); a
+			// `m_flFieldOfView` (`+0x1574`) is carried on the combat character (`FieldOfView`); a
 			// base-only NPC stands no such word and never enters ALERT (CAI_TestHull and the cine
 			// directors), so it reads 0 — a crash guard, not a rule.
 			const FElysiumNpc* const Troika = AsNpc();

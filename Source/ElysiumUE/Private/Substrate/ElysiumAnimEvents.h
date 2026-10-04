@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+#include "Containers/ArrayView.h"
 #include "ElysiumAnimEvent.h"
 #include "ElysiumAnimationIntent.h"
 
@@ -25,8 +26,39 @@
 // in `Public/ElysiumAnimEvent.h`: `FElysiumAnimating` owns one per polled channel, and that class
 // is declared in a public header.
 
+class FElysiumEntity;
+
+// One sequence's words, as `CBaseAnimating::DispatchAnimEvents 0x10091880` reads and writes them.
+// Declared by spec 0002 V4a's seam (`stories/v4/README.md` § "Shared names"); the dispatcher over it
+// is owned and filled by lane A1, and called by A1 (the NPC) and A4 (the player, the camera).
+struct FElysiumSequenceWords
+{
+	int32 Sequence = 0;              // m_nSequence (the trace and the census name it)
+	float Cycle = 0.f;               // m_flCycle, [0,1)
+	float CycleRate = 0.f;           // GetSequenceCycleRate × m_flPlaybackRate, per second
+	float AnimTime = 0.f;            // m_flAnimTime (a layer: the OWNER's)
+	bool  bLoops = false;            // m_bSequenceLoops +0x65d
+	bool  bHasDescriptor = true;     // a seqdesc exists (none: no finish, no past-half)
+	bool  bDescriptorLoops = false;  // seqdesc.flags & 1 (the wrap clause)
+	float LastEventCheck = 0.f;      // in/out: m_flLastEventCheck +0x658 (a layer: layer+0x2c)
+	bool  bSequenceFinished = false; // out: m_bSequenceFinished +0x65c (a layer: layer+4, zeroed)
+	bool  bSequencePastHalf = false; // out: m_fSequencePastHalf +0x568 (untouched for a layer)
+};
+
 namespace ElysiumAnimEvents
 {
+	// `0x10091880` / `0x10098cd0`; filled by V4a lane A1; called by A1 (the NPC) and A4 (the player,
+	// the camera). The seam's bodies fire nothing and write nothing.
+
+	// 0x10091880. Fires each event on Handler.HandleAnimEvent (slot 259) in table order and
+	// emits the `animevent` trace for Source. Returns true on the finish flag's rising edge:
+	// the caller then makes its own OnSequenceFinished call (0x10091c80 is a direct call).
+	bool DispatchBase(FElysiumSequenceWords& Words, TConstArrayView<FElysiumAnimEvent> Events,
+	                  FElysiumEntity& Source, FElysiumEntity& Handler);
+	// 0x10098cd0, one overlay layer: no clamp, no past-half, the finish word zeroed, never set.
+	void DispatchLayer(FElysiumSequenceWords& Layer, TConstArrayView<FElysiumAnimEvent> Events,
+	                   FElysiumEntity& Source, FElysiumEntity& Handler);
+
 	// The server dispatch band. `DispatchAnimEvents` hands `HandleAnimEvent` only ids BELOW this;
 	// everything at or above it is a client-side id the server dispatcher never routes.
 	inline constexpr int32 ServerDispatchCeiling = 5000;

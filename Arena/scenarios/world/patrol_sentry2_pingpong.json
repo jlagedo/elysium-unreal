@@ -4,7 +4,7 @@
   "stage": "map:sp_tutorial_1",
   "seed": 1,
   "duration": 75.0,
-  "known_red": "V4: N13 (stories/v1/triage.md): the walk plays (3.650 'walk rate=1', since V3a) but the body covers ~0.44x retail's ground speed (walk_0 136.7 cm/s; StudioFrameAdvance 0x1008f120 weights m_flGroundSpeed by move_yaw), leg times unchanged by V3a, so the 15.9 m leg to sentry2_3 misses its deadline",
+  "known_red": "V4b (N13): the cruise speed is this body's own `walk_0` (101.278 cm/s, the female bank) and is right; the time is lost at arrival -- the body creeps the last ~30 cm for ~4 s before the kernel sees `arrived` (inferred from code until the B integrator toggles it; `packets-R1.md` item 4). sentry2 is vampire_hunter_chick, which includes shared/female/npc_allsequences: the female `walk_0` is 37 frames at 33.82 fps (1.0645 s over 107.807 cm; `packets-S1.md` item 7), the male's 37 frames at 30.0 (136.683 cm/s). No deadline moved: none is shown computed from 136.7",
   "cast": [
     {
       "name": "sentry2"

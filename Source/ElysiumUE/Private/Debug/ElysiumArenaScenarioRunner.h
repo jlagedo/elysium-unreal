@@ -161,6 +161,11 @@ private:
 	void ReadDueProbes(double Now, FFailure& Out);
 	bool ReadProbe(const FElysiumArenaProbeSpec& Probe, FString& OutRead, FString& OutError) const;
 	bool IsComplete(double Now) const;
+	// H22: one `removed` event per entity that left the entity world since the last tick (the port's
+	// `UTIL_Remove 0x101cd940` is `FElysiumEntity::Kill`, after which the world reaps the slot).
+	void TraceRemovals(FElysiumEntityWorld& World);
+	// H20: one read of each `corpse_on_floor` probe's pelvis bone, so the probe has a speed to judge.
+	void SampleCorpsePelvises(FElysiumEntityWorld& World);
 
 	// The verdict. `Failure` unset is a pass.
 	void Finish(double Now, const FFailure& Failure);
@@ -199,6 +204,26 @@ private:
 
 	TArray<bool> ActionFired;
 	TArray<bool> ProbeRead;
+
+	// H22: the live entities as of the last tick, by handle, with the name each answered to.
+	struct FTrackedEntity
+	{
+		FString Name;
+		uint32 SeenTick = 0;
+	};
+	TMap<FElysiumEntityHandle, FTrackedEntity> TrackedEntities;
+	uint32 RemovalTick = 0;
+
+	// H20: per probe index, the last two reads of the drawn mesh's `Bip01 Pelvis` bone.
+	struct FPelvisSample
+	{
+		bool bRead = false;          // the bone was read at least once
+		bool bSpeedKnown = false;    // two reads at different times: `SpeedCmPerSecond` is real
+		FVector LocationCm = FVector::ZeroVector;
+		double Time = 0.0;
+		double SpeedCmPerSecond = 0.0;
+	};
+	TArray<FPelvisSample> PelvisSamples;
 
 	// `player_walk`: the destination the input replay is steering the player toward.
 	bool bWalking = false;

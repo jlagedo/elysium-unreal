@@ -1,10 +1,10 @@
 {
   "name": "damage_lethal_death",
-  "about": "Lethal damage on a live idle Troika human (lifecycle.md 'The death chain, kill to corpse'). The scalar TakeDamage input past the NPC's health: CBaseCombatCharacter::OnTakeDamage 0x1032ef60 dispatches slot 144 at the threshold. CAI_BaseNPCTroika::Event_Killed 0x102bf340 -> CAI_BaseNPC::Event_Killed 0x10265ad0: DeathSound (slot 488), m_OnDeath fired (0x10265a90, activator the attacker), BecomeDead, then CBaseCombatCharacter::Event_Killed 0x1032b9b0 -> slot 301 CreateCorpse 0x1032c0e0 (BecomeClientRagdoll 0x10090180 for an ordinary NPC: the dying NPC itself becomes the corpse, seeded from its pose and handed to physics; SUB_PVSRemove at +10 s), m_IdealNPCState = 7, SetState(7). The corpse lies on the floor. After it the only programs base SelectSchedule 0x1028a380 can answer in state 7 are 0x2c SCHED_DIE_RAGDOLL / 0x2b DIE (0x1028a8ec); no Troika program is ever installed again.",
+  "about": "Lethal damage on a live idle Troika human (lifecycle.md 'The death chain, kill to corpse'; stories/v4/brief-D-ragdoll.md § 'What retail does'). The scalar TakeDamage input past the NPC's health: CBaseCombatCharacter::OnTakeDamage 0x1032ef60 dispatches slot 144 at the threshold. CAI_BaseNPCTroika::Event_Killed 0x102bf340 -> CAI_BaseNPC::Event_Killed 0x10265ad0: DeathSound (slot 488), m_OnDeath fired (0x10265a90, activator the attacker), BecomeDead, then CBaseCombatCharacter::Event_Killed 0x1032b9b0 -> slot 301 CreateCorpse 0x1032c0e0: BecomeClientRagdoll 0x10090180 with a real bone (so the pose it holds is handed to physics as it is; the ACT_DIERAGDOLL seed runs only for bone -1, 0x1009021a), the NPC made non-solid, and the think REPLACED at 0x1032c404 by SUB_PVSRemove 0x102696f0 at curtime + 10.0; m_IdealNPCState = 7, SetState(7). The dying NPC itself is the corpse: the drawn body falls and lies on the floor, the entity stays at the death spot. On this kill CreateCorpse replaces the think, so no schedule, task or state line follows the death: an ordinary kill never reaches SCHED_DIE (0x2b) or SCHED_DIE_RAGDOLL (0x2c), rig or no rig (stories/v4/packets-S1.md items 1-3: the state-7 fork 0x1028a8ec is reached only by the deferred script death, 0x1027d0a0, the Werewolf and the zombie's collapse).",
   "stage": "arena",
   "seed": 1,
   "duration": 15.0,
-  "known_red": "3: a dead NPC stays standing (the corpse is not landed)",
+  "known_red": "V4d (no character physics asset)",
   "player": { "at": "start" },
   "cast": [
     {
@@ -32,15 +32,17 @@
     { "label": "hit", "who": "arena_victim", "kind": "input", "match": "TakeDamage", "by": 3.5 },
     { "label": "dies", "who": "arena_victim", "kind": "death", "match": "", "within": 0.5 },
     { "label": "on_death", "who": "arena_victim", "kind": "output", "match": "OnDeath", "within": 0.5 },
-    { "label": "corpse", "who": "arena_victim", "kind": "corpse", "match": "", "within": 1.0 }
+    { "label": "corpse", "who": "arena_victim", "kind": "corpse", "match": "ragdoll", "within": 1.0 }
   ],
   "never": [
-    { "who": "arena_victim", "kind": "schedule", "match": "^(?!SCHED_TROIKA_IDLE_DISPOSITION \\(|DIE \\(|SCHED_DIE_RAGDOLL \\()", "regex": true },
+    { "who": "arena_victim", "kind": "schedule", "match": "^(?!SCHED_TROIKA_IDLE_DISPOSITION \\()", "regex": true },
+    { "who": "arena_victim", "kind": "schedule", "match": "", "after": "dies" },
     { "who": "arena_victim", "kind": "task", "match": "task_range_attack1 (" }
   ],
   "probes": [
     { "at": "end", "who": "arena_victim", "probe": "alive", "equals": false },
     { "at": "end", "who": "arena_victim", "probe": "state", "equals": "Dead" },
-    { "at": "end", "who": "arena_victim", "probe": "on_ground", "equals": true }
-  ]
+    { "at": "end", "who": "arena_victim", "probe": "corpse_on_floor", "equals": true, "max_height": 24.0 }
+  ],
+  "notes": "The body is regular_cop. corpse_on_floor (H20) reads the drawn mesh's `Bip01 Pelvis` bone: within max_height of the floor under it and at rest (under 5 cm/s). 24 cm is PROVISIONAL: with Unreal's default capsule asset regular_cop rests at 16.2 cm (stories/v4/packets-spike.md finding 5); V4d's integrator measures the rest height on the retail .phy asset and sets the bound from it. Corrected by the V4a seam (record errors, each with its retail source): the end probe was on_ground, the motor capsule's floor answer, false on every corpse by construction; the never admitted DIE / SCHED_DIE_RAGDOLL after the death and the about said base SelectSchedule could answer them in state 7 -- CreateCorpse replaces the think on this kill (stories/v4/packets-S1.md item 3), so the never now forbids any schedule after `dies`."
 }

@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 
+#include "Containers/ArrayView.h"
+#include "ElysiumAnimEvent.h"
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumStanceTypes.h"
@@ -99,6 +101,28 @@ public:
 	int32 SequenceForActivity(int32 Activity);
 
 	virtual bool PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops) override;
+
+	// --- The bridge row's descriptor accessors (spec 0002 V4a seam) ---
+	// What the kernel asks the studio sequence descriptor of a sequence NUMBER, answered from the
+	// bridge row. Declared by the seam answering nothing (the loop bit excepted); filled by V4a lane
+	// A2 from the baked clip data the row's clip resolves to.
+
+	/** The descriptor's event table (`mstudioevent_t`, file order), which `DispatchAnimEvents
+	 *  0x10091880` walks. Empty until lane A2 hands the row its clip's `UElysiumClipData::Events`. */
+	TConstArrayView<FElysiumAnimEvent> SequenceEvents(int32 Sequence) const;
+	/** `GetSequenceFlags(seq) & 1` (`STUDIO_LOOPING`, the wrap clause of `0x10091880` and
+	 *  `m_bSequenceLoops +0x65d`): today the row's `bLoops` (the bridge's loop guess); lane A2
+	 *  replaces the guess with the baked flag. False for row 0 and an unknown number. */
+	bool SequenceLoops(int32 Sequence) const;
+	/** `GetSequenceTurnYaw 0x1008f8f0`, degrees: the pose-weighted sum of the last movement record's
+	 *  angle (the baked `YawDegrees`). 0 until lane A2 fills it (and 0 on shipped data after). */
+	float SequenceTurnYaw(int32 Sequence) const;
+	/** `GetSequenceGroundSpeed 0x10091490` at the given pose parameters, centimetres per second: the
+	 *  sequence's move distance over its duration, pose-weighted over a blend fan (so a fan's speed
+	 *  tracks `move_yaw`). `PoseParameters` is the kernel's own pose-parameter record
+	 *  (`m_flPoseParameter +0x690`; the port's name-keyed `PoseParameterWrites`). 0 until lane A2
+	 *  fills it from the clip's ground speed and the blend grid. */
+	float SequenceGroundSpeedAt(int32 Sequence, TConstArrayView<FPoseParameterWrite> PoseParameters) const;
 
 	// --- The authored director's pushed order ---
 	// Not an order the NPC runs: `0x101a98c0` keeps nothing. It holds a push the admission barrier

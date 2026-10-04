@@ -4,7 +4,7 @@
   "stage": "map:sp_tutorial_1",
   "seed": 1,
   "duration": 90.0,
-  "known_red": "V4: N13 (stories/v1/triage.md): the walk plays (0.350 'walk rate=1', since V3a) but the body covers ~0.44x retail's ground speed (walk_0 136.7 cm/s; StudioFrameAdvance 0x1008f120 weights m_flGroundSpeed by move_yaw), leg times unchanged by V3a, so the leg to pod_1 misses its deadline (unmet at 37.33)",
+  "known_red": "V4b (N13): the cruise speed is this body's own `walk_0` (136.683 cm/s, the male bank) and is right; the time is lost at arrival -- the body creeps the last ~30 cm for ~4 s before the kernel sees `arrived` (inferred from code until the B integrator toggles it; `packets-R1.md` item 4). monk_upstairs_podium is Elite_Hunter.mdl, which includes shared/male/npc_allsequences (the seam agent checked the model's include list; R1 did not run this record). No deadline moved",
   "cast": [
     {
       "name": "monk_upstairs_podium"

@@ -1126,6 +1126,15 @@ void FElysiumPlayer::PollTouchContacts(double Now)
 	}
 }
 
+void FElysiumPlayer::PostThinkAnimation()
+{
+	// `CBasePlayer::PostThink 0x1016be10`'s animation step; the call site is A1's, the body A4's.
+	// Retail's order there: slot 250 `StudioFrameAdvance(0)` -> `0x101600a0` -> slot 258
+	// `DispatchAnimEvents(interval, this)` -> slot 312 `UpdateCharacter`. Declared by spec 0002 V4a's
+	// seam and left empty: nothing calls it yet, and the player's events still fire from the world
+	// tick's poll (`FElysiumEntityWorld::AdvanceAnimEvents`).
+}
+
 void FElysiumPlayer::SyncFromBody()
 {
 	const IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
@@ -1583,6 +1592,17 @@ void FElysiumPlayer::OnDamageCommitted(const FElysiumDmg& Dmg)
 	// The one producer of `+0x1d1c` this runtime has. It sits on the COMMIT, not on the entry, so a
 	// refused or fully-absorbed hit does not lock the player out of a conversation.
 	StampDialogCombatRefusal(World ? World->NowSeconds() : 0.0);
+	// The AI trace's `damage` event for the player (debug output only, behind its sink; spec 0002
+	// V4a seam): the NPC's tap is in its own slot 390 (`ElysiumNpcBaseDamage2.cpp`), which the player
+	// never runs, so a record could not state "the swing lands on the player". Same text, at the
+	// player's commit (`CBasePlayer::OnTakeDamage 0x10163020`'s health apply): the applied damage,
+	// the `DMG_*` bits, the attacker.
+	if (World != nullptr && World->HasAiTraceSink())
+	{
+		World->EmitAiTrace(*this, TEXT("damage"), FString::Printf(TEXT("%d type=0x%x from=%s"),
+			Dmg.AppliedDamage, Dmg.DmgMask,
+			*FElysiumEntityWorld::AiTraceName(Dmg.Source.IsSet() ? World->Resolve(Dmg.Source) : nullptr)));
+	}
 }
 
 bool FElysiumPlayer::HolsterForDialog()

@@ -143,7 +143,7 @@ void FElysiumNpcBase::MotorMoveStop()
 	MotorYawClock = -1.0f;
 }
 
-void FElysiumNpcBase::MotorSetIdealYawAndUpdate(float YawDegrees, float YawSpeed)
+void FElysiumNpcBase::MotorSetIdealYawAndUpdate(float YawDegrees, float InYawSpeed)
 {
 	// `0x102e1c10`. The `+0x28` animation-movement latch turns the yaw half a turn.
 	float Ideal = YawDegrees;
@@ -158,12 +158,12 @@ void FElysiumNpcBase::MotorSetIdealYawAndUpdate(float YawDegrees, float YawSpeed
 	// The seam recorder family BaseHelpers already stands over this call.
 	++TroikaMotor.MoveReissues;
 	TroikaMotor.LastReissueYaw = Ideal;
-	TroikaMotor.LastReissueSpeed = YawSpeed;
-	if (YawSpeed != -1.0f)
+	TroikaMotor.LastReissueSpeed = InYawSpeed;
+	if (InYawSpeed != -1.0f)
 	{
-		if (YawSpeed != -2.0f)
+		if (InYawSpeed != -2.0f)
 		{
-			MotorYawSpeedWord = YawSpeed;   // `+0x38` (`0x102e1ca8`)
+			MotorYawSpeedWord = InYawSpeed;   // `+0x38` (`0x102e1ca8`)
 		}
 	}
 	else
@@ -186,20 +186,20 @@ float FElysiumNpcBase::MotorYawRateDegPerS(float RetailYawSpeed)
 	return static_cast<float>(static_cast<int32>(RetailYawSpeed)) * 10.0f;
 }
 
-void FElysiumNpcBase::MotorSetIdealYawToTargetAndUpdate(const FVector& TargetCm, float YawSpeed)
+void FElysiumNpcBase::MotorSetIdealYawToTargetAndUpdate(const FVector& TargetCm, float InYawSpeed)
 {
 	// `0x102e20b0`: `0x102e2750` -- `JMP [outer vtbl+0x80c]`, slot 515 `CalcIdealYaw` (`0x10274b30`,
 	// `VecToYaw` of the delta; 0 for a zero one) -- then `0x102e1c10`.
 	const float Yaw = CalcIdealYaw(TargetCm);
-	MotorSetIdealYawAndUpdate(Yaw, YawSpeed);
+	MotorSetIdealYawAndUpdate(Yaw, InYawSpeed);
 }
 
-void FElysiumNpcBase::MotorUpdateYaw(int32 YawSpeed)
+void FElysiumNpcBase::MotorUpdateYaw(int32 InYawSpeed)
 {
 	// `0x102e1e20`. The clock restart below `0.0` and the stamp are retail's; the step is Unreal's
 	// (named modernization, see the declaration), at retail's rate: `-1` reads the stored `+0x38`.
 	// `Face` takes this world's (negated) yaw.
-	const float RetailYawSpeed = YawSpeed == -1 ? MotorYawSpeedWord : static_cast<float>(YawSpeed);
+	const float RetailYawSpeed = InYawSpeed == -1 ? MotorYawSpeedWord : static_cast<float>(InYawSpeed);
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	++MotorUpdateYawCalls;
 	MotorYawClock = static_cast<float>(Now);

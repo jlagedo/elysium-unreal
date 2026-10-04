@@ -1,10 +1,9 @@
 {
   "name": "verbs_stealth_kill",
-  "about": "The stealth kill (stealth.md 'Stealth-kill transaction (RE50)'). An idle neutral Troika human on the east pad faces the room's middle; the player stands 85 cm (33 units) straight behind it, crouched, a knife wielded (granted by player.armed and wielded by the melee-category verb slot2; item_w_fists is 'weapon_melee hidden' and is not offered by the selector), unseen and unheard. +use at 2 s (and, as the second door, +attack at 4 s: the melee primary 0x103eaca0 calls the stealth thunk at 0x103ead0b before its own swing): PlayerUse 0x10167850 -> PlayerTryStealthKill 0x10167370 -> CStealthKillRules::FindVictim 0x101be1f0: the posture (FL_DUCKING), the melee weapon byte (CWeaponMelee 0x103e9ac0 writes +0x872 = 1), the forward MASK_PLAYERSOLID trace over StealthKillDistMax (70) hits the victim, IsValidStealthKillTarget 0x102c2300 passes (not hidden, no dialogname, not invincible, not dead under debug_allow_non_idle_auto_sk '1', neither HEAR_PLAYER 0x6f nor SEE_PLAYER 0x5a, alive), InDeafArc 0x101be500 passes (dot 1.0 behind), CanStartGrappleAttack(type 3) passes: the query admits the mark (trace kind stealthkill, `arena_mark admit gate=can_grapple`); the probes at 1.5 s read the posture and the wielded knife it needs. StartGrappleAttack 0x10328df0 locks both into grapple mode 3 (the NPC's grapple entry 0x1026cdc0 -> 0x1026d130 clears its enemy and raises m_iIsOblivious, so it senses nothing more); the attacker's paired clip finishing enters 0x10165d90, which copies Max_Health into the damage-taken stat and calls Event_Killed directly (slot 144): the synchronized death, OnDeath, the corpse.",
+  "about": "The stealth kill (stealth.md 'Stealth-kill transaction (RE50)'). An idle neutral Troika human on the east pad faces the room's middle; the player stands 85 cm (33 units) straight behind it, crouched, a knife wielded (granted by player.armed and wielded by the melee-category verb slot2; item_w_fists is 'weapon_melee hidden' and is not offered by the selector), unseen and unheard. +use at 2 s (and, as the second door, +attack at 4 s: the melee primary 0x103eaca0 calls the stealth thunk at 0x103ead0b before its own swing): PlayerUse 0x10167850 -> PlayerTryStealthKill 0x10167370 -> CStealthKillRules::FindVictim 0x101be1f0: the posture (FL_DUCKING), the melee weapon byte (CWeaponMelee 0x103e9ac0 writes +0x872 = 1), the forward MASK_PLAYERSOLID trace over StealthKillDistMax (70) hits the victim, IsValidStealthKillTarget 0x102c2300 passes (not hidden, no dialogname, not invincible, not dead under debug_allow_non_idle_auto_sk '1', neither HEAR_PLAYER 0x6f nor SEE_PLAYER 0x5a, alive), InDeafArc 0x101be500 passes (dot 1.0 behind), CanStartGrappleAttack(type 3) passes: the query admits the mark (trace kind stealthkill, `arena_mark admit gate=can_grapple`); the probes at 1.5 s read the posture and the wielded knife it needs. StartGrappleAttack 0x10328df0 locks both into grapple mode 3 (the NPC's grapple entry 0x1026cdc0 -> 0x1026d130 clears its enemy and raises m_iIsOblivious, so it senses nothing more); the attacker's paired clip finishing enters 0x10165d90, which copies Max_Health into the damage-taken stat and calls Event_Killed directly (slot 144): the synchronized death, OnDeath, the corpse -- the same chain as an ordinary kill from slot 144 on (CBaseCombatCharacter::Event_Killed 0x1032b9b0 -> slot 301 CreateCorpse 0x1032c0e0 -> BecomeClientRagdoll 0x10090180: the pose handed to physics, the drawn body on the floor; stories/v4/brief-D-ragdoll.md § 'What retail does').",
   "stage": "arena",
   "seed": 1,
   "duration": 20.0,
-  "known_red": "3: a dead NPC stays standing (the corpse is not landed): after the synchronized death at 5.37 s the end probe on_ground reads false, as damage_lethal_death's",
   "player": { "at": [0.0, 1060.0, 0.0], "face": "east", "armed": "item_w_knife" },
   "cast": [
     {
@@ -36,7 +35,7 @@
     { "label": "admits", "who": "arena_mark", "kind": "stealthkill", "match": "arena_mark admit gate=can_grapple", "by": 2.5 },
     { "label": "dies", "who": "arena_mark", "kind": "death", "match": "", "by": 12.0 },
     { "label": "on_death", "who": "arena_mark", "kind": "output", "match": "OnDeath", "within": 0.5 },
-    { "label": "corpse", "who": "arena_mark", "kind": "corpse", "match": "", "within": 1.0 }
+    { "label": "corpse", "who": "arena_mark", "kind": "corpse", "match": "ragdoll", "within": 1.0 }
   ],
   "never": [
     { "who": "arena_mark", "kind": "cond+", "match": "SEE_PLAYER (0x5a)" },
@@ -47,6 +46,7 @@
     { "at": 1.5, "who": "player", "probe": "player_weapon", "equals": "item_w_knife" },
     { "at": 1.5, "who": "player", "probe": "player_grappling", "equals": false },
     { "at": "end", "who": "arena_mark", "probe": "alive", "equals": false },
-    { "at": "end", "who": "arena_mark", "probe": "on_ground", "equals": true }
-  ]
+    { "at": "end", "who": "arena_mark", "probe": "corpse_on_floor", "equals": true, "max_height": 24.0 }
+  ],
+  "notes": "The body is regular_cop. corpse_on_floor (H20) reads the drawn mesh's `Bip01 Pelvis` bone: within max_height of the floor under it and at rest (under 5 cm/s). 24 cm is PROVISIONAL: with Unreal's default capsule asset regular_cop rests at 16.2 cm (stories/v4/packets-spike.md finding 5); V4d's integrator measures the rest height on the retail .phy asset and sets the bound from it. The end probe was on_ground, the motor capsule's floor answer, false on every corpse by construction (a record error, corrected by the V4a seam). GREEN on the seam's build, so it carries no known_red (brief A0 wrote 'V4d (no character physics asset)'): the victim's paired stealth-kill clip ends lying and the body HOLDS that pose (no physics asset, so no ragdoll), which is within the bound and at rest. The probe cannot tell a held lying pose from a body that fell; V4d's ragdoll must keep it green."
 }

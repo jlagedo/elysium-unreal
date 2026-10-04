@@ -162,7 +162,7 @@ static FVector EnemyChaseAnchor(const FElysiumEntity& Enemy);
  *  family's rows and neither has a port counterpart. **SEAM**: both leave their outputs alone. */
 void ChaseLeadTolerance(FElysiumEntity* Enemy, const FVector& ChasePositionCm,
 	float& InOutTolerance) const;
-void ChaseLeadPosition(FElysiumEntity* Enemy, const FVector& VelocityCm, float GroundSpeed,
+void ChaseLeadPosition(FElysiumEntity* Enemy, const FVector& VelocityCm, float InGroundSpeed,
 	const FVector& ChasePositionCm, FVector& OutPositionCm) const;
 
 /** `m_flGroundSpeed` (+0x0654) and `GetLocalVelocity()` (slot 220, vtable `+0x370`), the two inputs

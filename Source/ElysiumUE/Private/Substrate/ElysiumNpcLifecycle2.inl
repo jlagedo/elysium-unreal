@@ -115,9 +115,9 @@ int32 DisciplinePreFlags2 = 0;    // +0x0ebc `m_iDisciplinePreFlags2`
  *  different object; this is the kernel word. */
 float NpcSpeedScale = 1.f;
 
-/** `m_flFieldOfView` (`+0x1574`), the cone half-angle cosine. Default `0.2` is Troika's; Werewolf
- *  `NPCInit` writes `cos(120°) = −0.5`. */
-float FieldOfViewDot = 0.2f;
+/** `m_flFieldOfView` (`+0x1574`), the cone half-angle cosine, is `FElysiumCombatCharacter::
+ *  FieldOfView` since V4a's seam (a `CBaseCombatCharacter` word; `Public/ElysiumPlayer.h`). Default
+ *  `0.2` is Troika's; Werewolf `NPCInit` writes `cos(120°) = −0.5`. Not redeclared here. */
 
 /** `CNPC_VGuard1::m_fHatesPlayer` (`+0x6660`) is family SpeciesMisc10's `bGuard1HatesPlayer` — a
  *  THIRD species' word at that offset, and the one `CNPC_VGuard1::NPCInit` (`1037e24a`) clears

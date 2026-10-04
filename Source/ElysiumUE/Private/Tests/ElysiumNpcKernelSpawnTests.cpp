@@ -670,7 +670,7 @@ bool FElysiumNpcKernelSpawn19TroikaSpawnTest::RunTest(const FString&)
 	F.Npc->TroikaSpawnBody();
 	TestTrue(TEXT("capabilities 1, 0x800000, 8"), Spawn19HasCaps(*F.Npc, 0x800009));
 	TestEqual(TEXT("m_bloodColor = 0xf7"), F.Npc->BloodColorWord, 0xf7);
-	TestEqual(TEXT("m_flFieldOfView = 0.2"), F.Npc->FieldOfViewDot, 0.2f);
+	TestEqual(TEXT("m_flFieldOfView = 0.2"), F.Npc->FieldOfView, 0.2f);
 	TestEqual(TEXT("m_HackedGunPos.z = 55"), F.Npc->HackedGunPosUnits.Z, 55.0);
 	TestEqual(TEXT("SetSolid(SOLID_BBOX)"), F.Npc->RetailSolidType, 2);
 	TestTrue(TEXT("solid flags 1 and 0x40"), (F.Npc->RetailSolidFlags & 0x41u) == 0x41u);
@@ -826,9 +826,9 @@ bool FElysiumNpcKernelSpawn19YukieSpawnTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	Yukie->FieldOfViewDot = 0.5f;
+	Yukie->FieldOfView = 0.5f;
 	Yukie->Spawn();
-	TestEqual(TEXT("m_flFieldOfView = -1.0 LAST (0x103dd634)"), Yukie->FieldOfViewDot, -1.f);
+	TestEqual(TEXT("m_flFieldOfView = -1.0 LAST (0x103dd634)"), Yukie->FieldOfView, -1.f);
 	return true;
 }
 
@@ -1111,7 +1111,7 @@ bool FElysiumNpcKernelSpawn19TzimisceSpawnTest::RunTest(const FString&)
 	Tzimisce->Spawn();
 	TestEqual(TEXT("(x, y, z) -> (-y, x, z) (0x103b9095..0x103b90a9)"), Tzimisce->HeadLocalForward,
 		FVector(-2.f, 1.f, 3.f));
-	TestEqual(TEXT("m_flFieldOfView = -0.5"), Tzimisce->FieldOfViewDot, -0.5f);
+	TestEqual(TEXT("m_flFieldOfView = -0.5"), Tzimisce->FieldOfView, -0.5f);
 	TestTrue(TEXT("m_bInMelee = 1 (0x103b90d8)"), Tzimisce->bInMelee);
 	return true;
 }
@@ -1177,7 +1177,7 @@ bool FElysiumNpcKernelSpawn19MingXiaoSpawnTest::RunTest(const FString&)
 	TestEqual(TEXT("m_rflRegrowTimers[0] = FLT_MAX (0x10392842)"), Ming->MingXiaoRegrowTimers[0],
 		static_cast<double>(TNumericLimits<float>::Max()));
 	TestTrue(TEXT("m_bNeverMeleeOpponent = 1 (0x1039291c)"), Ming->bNeverMeleeOpponent);
-	TestEqual(TEXT("m_flFieldOfView = -0.5"), Ming->FieldOfViewDot, -0.5f);
+	TestEqual(TEXT("m_flFieldOfView = -0.5"), Ming->FieldOfView, -0.5f);
 	TestTrue(TEXT("AddMiscFlag(0x80000)"), (Ming->MiscFlags & 0x80000u) != 0u);
 	// `0x10392830..0x1039283f`: each limb's hit points = the tuning record's `+0x0` TentacleHPInitial.
 	Ming->MingXiaoHitPoints[3] = -1.f;

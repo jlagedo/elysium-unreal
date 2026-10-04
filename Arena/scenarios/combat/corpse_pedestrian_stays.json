@@ -1,0 +1,25 @@
+{
+  "name": "corpse_pedestrian_stays",
+  "about": "A pedestrian's corpse is never removed by its own think, seen or not. sm_hub_1's pedestrian_female (npc_VPedestrian) verbatim on the east pad, the player at the start TURNED AWAY (yaw -135); TakeDamage 10000 at 2 s. CNPC_VPedestrian::CreateCorpse 0x103a38c0 (slot 301's override on the pedestrian): the pre-death bounds snapshot, the base CreateCorpse 0x1032c0e0, then ThinkSet(this, NULL) and SetSolid(SOLID_NONE) -- the base's SUB_PVSRemove arm is replaced by no think at all, so this chain never removes the corpse (stories/v4/packets-S4.md; stories/v1/triage.md, Judge's rulings, V4 -- second sitting, J13). No `removed` event through death + 25 s, and the entity still answers its name at the end.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 28.0,
+  "known_red": "V4c lane C2 (item 8): the override is not wired to slot 301, and the port's Think runs SUB_PVSRemove on any committed death (ElysiumNpc.cpp, the dead think)",
+  "player": {"at": "start", "face": -135.0},
+  "from_map": {"map": "sm_hub_1", "names": ["pedestrian_female"], "anchor": "pedestrian_female", "at": "east"},
+  "script": [
+    {"t": 2.0, "do": "fire", "target": "pedestrian_female", "input": "TakeDamage", "param": 10000}
+  ],
+  "expect": [
+    {"label": "hit", "who": "pedestrian_female", "kind": "input", "match": "TakeDamage", "by": 2.5},
+    {"label": "dies", "who": "pedestrian_female", "kind": "death", "match": "", "within": 0.5},
+    {"label": "corpse", "who": "pedestrian_female", "kind": "corpse", "match": "", "within": 1.0}
+  ],
+  "never": [
+    {"who": "pedestrian_female", "kind": "removed"}
+  ],
+  "probes": [
+    {"at": 27.5, "who": "pedestrian_female", "probe": "exists", "equals": true}
+  ],
+  "notes": "Death at 2.0-2.1 s; the record runs through death + 25 s. The pedestrian walks its interesting places for the first 2 s (places_pedestrian_visit's row); where it dies does not matter to the clock."
+}

@@ -17,6 +17,7 @@
 #include "ElysiumMapActor.h"
 #include "Visual/ElysiumMapVisuals.h"
 #include "Visual/ElysiumNpcBody.h"
+#include "Substrate/ElysiumNpc.h"            // H19: the NPC's facing, turning and speed words
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPlayer.h"
@@ -34,6 +35,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Sound/SoundWave.h"
 #include "HAL/PlatformMisc.h"
@@ -901,6 +903,60 @@ namespace ElysiumMcpImpl
 		return Out;
 	}
 
+	// H19 (spec 0002 V4a seam): an NPC's facing, turning and speed words, kernel and body side by
+	// side -- what the walk's and the turn's diagnosis read (`stories/v4/packets-R1.md`). Read-only;
+	// a field reads 0 where its kernel word has no writer yet.
+	TSharedRef<FJsonObject> NpcMotionJson(FElysiumNpc& Npc)
+	{
+		TSharedRef<FJsonObject> Out = Obj();
+		// The kernel's side.
+		Out->SetNumberField(TEXT("yaw"), Npc.Angles.Y);                         // GetAbsAngles().y
+		Out->SetNumberField(TEXT("ideal_yaw"), Npc.MotorIdealYaw);              // CAI_Motor::m_IdealYaw, motor+0x34
+		// What the port's `MaxYawSpeed` (Troika `0x10297ce0`, a species' own) answers NOW.
+		Out->SetNumberField(TEXT("max_yaw_speed"), Npc.MaxYawSpeed());
+		Out->SetStringField(TEXT("m_afMemory"),
+			FString::Printf(TEXT("0x%x"), Npc.BaseScheduleHost.MemoryBits));    // +0x5d8c
+		Out->SetNumberField(TEXT("m_Activity"), Npc.ActivityNumber);            // +0xfec
+		Out->SetNumberField(TEXT("m_flYawSpeed"), Npc.YawSpeed);                // +0x560
+		Out->SetNumberField(TEXT("m_flGroundSpeed"), Npc.GroundSpeed);          // +0x654, cm/s
+		Out->SetNumberField(TEXT("m_flDesiredMoveYaw"), Npc.ScheduleHost.DesiredMoveYaw);   // +0x63ec
+		// The kernel's `move_yaw` pose parameter: the last value written under that name on the
+		// port's pose-parameter record (`PoseParameterWrites`), absent when none was.
+		for (int32 Index = Npc.PoseParameterWrites.Num() - 1; Index >= 0; --Index)
+		{
+			if (Npc.PoseParameterWrites[Index].Name.Equals(TEXT("move_yaw"), ESearchCase::IgnoreCase))
+			{
+				Out->SetNumberField(TEXT("move_yaw_pose"), Npc.PoseParameterWrites[Index].Value);
+				break;
+			}
+		}
+		Out->SetObjectField(TEXT("attack_extents"), Vec(Npc.AttackExtentsCm));  // m_vecAttackExtents +0x50, cm
+		// `CAI_Motor::m_facingQueue` (motor+0x54): how many entries, and the point last handed to the body.
+		Out->SetNumberField(TEXT("facing_queue_count"), Npc.FacingQueue.Num());
+		if (Npc.FacingTargetHanded.IsSet())
+		{
+			Out->SetObjectField(TEXT("facing_target"), Vec(Npc.FacingTargetHanded.GetValue()));
+		}
+		// The body's side: the motor the drawn mesh is attached to.
+		const USkeletalMeshComponent* SkeletalBody = Npc.GetSkeletalBody();
+		const AElysiumNpcBody* Motor = SkeletalBody != nullptr
+			? Cast<AElysiumNpcBody>(SkeletalBody->GetAttachParentActor()) : nullptr;
+		if (Motor != nullptr)
+		{
+			Out->SetNumberField(TEXT("body_yaw"), Motor->GetActorRotation().Yaw);
+			Out->SetNumberField(TEXT("speed2d"), Motor->GetVelocity().Size2D());
+			if (const UCharacterMovementComponent* Movement = Motor->GetCharacterMovement())
+			{
+				Out->SetBoolField(TEXT("orient_to_movement"), Movement->bOrientRotationToMovement);
+				Out->SetNumberField(TEXT("max_walk_speed"), Movement->MaxWalkSpeed);
+			}
+			// The driver's LIVE movement yaw. `animation` / `next_animation` / `axis_fraction` in the
+			// full readout are written only by a resolve and go stale during a continuous walk.
+			Out->SetNumberField(TEXT("selection_move_yaw"), Motor->GetAnimSelection().MoveYaw);
+		}
+		return Out;
+	}
+
 	// Status.
 
 	void AddStatusTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
@@ -1576,7 +1632,7 @@ namespace ElysiumMcpImpl
 				.Add(TEXT("brief"), TEXT("boolean"), TEXT("The 10-line elysium.npc_brief readout. What an NPC answers anyway; set it to have the readout for any entity. Default false."))
 				.Add(TEXT("full"), TEXT("boolean"), TEXT("Every field, for an NPC too: raw .ents keyvalues, the class chain with every live value, inputs, outputs, leaf state -- tens of KB for an NPC. Default false."));
 			Out.Add(MakeTool(TEXT("elysium_entity_get"),
-				TEXT("Detail for one or more entities. An NPC answers its 10-line npc_brief readout unless `full` (every field) or `fields` (named values) is set; any other entity answers every field: raw .ents keyvalues, the resolved class chain with every live field value, the inputs the class accepts, all 7-field outputs with their remaining `times` counts, and leaf-class runtime state. This is the read half of a QA loop — pair it with elysium_entity_fire."),
+				TEXT("Detail for one or more entities. An NPC answers its 10-line npc_brief readout unless `full` (every field) or `fields` (named values) is set; any other entity answers every field: raw .ents keyvalues, the resolved class chain with every live field value, the inputs the class accepts, all 7-field outputs with their remaining `times` counts, and leaf-class runtime state. This is the read half of a QA loop — pair it with elysium_entity_fire. Every NPC answer also carries `motion`: the kernel's yaw, ideal_yaw, max_yaw_speed (what MaxYawSpeed answers now), m_afMemory (hex), m_Activity, m_flYawSpeed, m_flGroundSpeed (cm/s), m_flDesiredMoveYaw, move_yaw_pose, attack_extents, facing_queue_count and facing_target, and the body's body_yaw, speed2d, orient_to_movement, max_walk_speed and selection_move_yaw (the driver's live move yaw). A kernel word reads 0 where nothing writes it yet. In the full readout `animation` / `next_animation` / `axis_fraction` are written only by a resolve and go stale during a continuous walk: read `selection_move_yaw` for the live value."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{
@@ -1621,6 +1677,15 @@ namespace ElysiumMcpImpl
 					const bool bBrief = ParamBool(Params, TEXT("brief"), false);
 					const bool bFull = ParamBool(Params, TEXT("full"), false);
 					TArray<TSharedPtr<FJsonValue>> Details;
+					// H19: an NPC's `motion` object rides every answer it gives (brief, fields, full).
+					auto AddMotion = [](const TSharedRef<FJsonObject>& Detail, FElysiumEntity& Entity)
+					{
+						if (FElysiumNpc* Npc = Entity.AsNpc())
+						{
+							Detail->SetObjectField(TEXT("motion"), NpcMotionJson(*Npc));
+						}
+						return Detail;
+					};
 					// An NPC's every-field detail is ~80 KB; its default answer is the brief, and every
 					// field only on an explicit `full`. The reply then says how to get the rest.
 					int32 BriefByDefault = 0;
@@ -1637,15 +1702,17 @@ namespace ElysiumMcpImpl
 								Lines.Add(MakeShared<FJsonValueString>(Line));
 							}
 							Brief->SetArrayField(TEXT("brief"), Lines);
-							Details.Add(MakeShared<FJsonValueObject>(Brief));
+							Details.Add(MakeShared<FJsonValueObject>(AddMotion(Brief, *Found[i])));
 						}
 						else if (FieldNames.Num() > 0)
 						{
-							Details.Add(MakeShared<FJsonValueObject>(EntityFields(*Found[i], FieldNames)));
+							Details.Add(MakeShared<FJsonValueObject>(
+								AddMotion(EntityFields(*Found[i], FieldNames), *Found[i])));
 						}
 						else
 						{
-							Details.Add(MakeShared<FJsonValueObject>(EntityDetail(*World, *Found[i])));
+							Details.Add(MakeShared<FJsonValueObject>(
+								AddMotion(EntityDetail(*World, *Found[i]), *Found[i])));
 						}
 					}
 

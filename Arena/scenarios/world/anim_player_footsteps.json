@@ -1,0 +1,20 @@
+{
+  "name": "anim_player_footsteps",
+  "about": "The player's own footstep events are dispatched to the player while it moves, and none while it stands. The player stands 3 s at the start, then walks ~7 m along the south wall (player_walk, the input replay). Retail's order (stories/v4/packets-R2.md extension 1): an animation event fires from the entity's OWN think, after its frame advance -- for the player CBasePlayer::PostThink 0x1016be10: slot 250 StudioFrameAdvance(0) -> 0x101600a0 -> slot 258 DispatchAnimEvents(interval, this) (the overlay body 0x10098c80: the base 0x10091880, then the layers through 0x10098cd0) -> slot 312 UpdateCharacter. The handler CBasePlayer::HandleAnimEvent 0x10178a10 (gated on !IsObserver and source == this) swallows 2050..2053: the footstep SOUND is the step clock's (CBasePlayer's step timer), not the event's, so the events are dispatched and do nothing. The cycles are the PLAYER model's: the PC body includes run<clan>_pcidles_allsequences -> pcidles_allsequences -> allsequences, whose locomotion is the bank's move_and_ranged table (the staged table: import/characters/character/shared/male/move_and_ranged.body.json events.walk = 2050 at cycle 0.222, 2051 at 0.644; the clan run bank's events.run = 2052 at 0.333, 2053 at 0.889, shared/male/runbrujah_pcidles_allsequences.body.json). The replayed command is full forward, which this body answers with its run, so the pair observed is the run's (2052 then 2053); a walk-speed command gives 2050 then 2051. The record admits either gait's pair, left foot first.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 12.0,
+  "player": {"at": "start"},
+  "script": [
+    {"t": 3.0, "do": "player_walk", "at": [-975.0, -700.0, 0.0]}
+  ],
+  "expect": [
+    {"label": "walks", "who": "player", "kind": "script", "match": "player_walk", "by": 3.2},
+    {"label": "left_foot", "who": "player", "kind": "animevent", "match": "^205[02]( |$)", "regex": true, "within": 2.0},
+    {"label": "right_foot", "who": "player", "kind": "animevent", "match": "^205[13]( |$)", "regex": true, "within": 1.0}
+  ],
+  "never": [
+    {"who": "player", "kind": "animevent", "until": 2.9}
+  ],
+  "notes": "A GUARD, green on the V4a seam's build: with the `animevent` trace on every animating entity (H21) the pair is observed through the world-tick poll (2052 then 2053, the run's). It must still pass once lane A1 replaces the poll by FElysiumPlayer::PostThinkAnimation and lane A4 fills it; what changes then is the instant inside the frame, which the trace's times do not resolve."
+}
