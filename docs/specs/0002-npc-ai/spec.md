@@ -292,7 +292,7 @@ report.
   a build (miss); the four records take 2.4 s, the stage world's boot build 14.7 s warm / 22.5 s cold
   (item catalogue, the player's chargen body, the native model contexts). The map host is not
   exercised: no map record exists yet.
-- [ ] **T6. The incremental build.** *Measured:* builds are the largest single wait, 20.5
+- [x] **T6. The incremental build.** *Measured:* builds are the largest single wait, 20.5
   agent-hours in 12 days: 667 real builds, median 46 s, p90 280 s, max 1,456 s. Known compile
   costs: `ElysiumTestServices.h` (2,504 lines, included by 102 of 120 test files, pulling
   skeletal-mesh, light and anim headers into kernel tests) and the generated
@@ -386,6 +386,55 @@ report.
   (proposed to the owner), a narrower kernel header (a refactor across hundreds of includers), and
   the default-tier cases gathered into fewer files so test blobs leave a kernel header's reach. Not
   ticked.
+
+  *T6b, measured (2026-10-04; `stories/t6b/brief.md`, one agent holding the build; ticked on it).*
+  Baseline re-measured on V3d's HEAD (`c0135cef`), arm tier off, 13 parallel compiles. **Where the
+  time went:** a kernel-header edit compiled 42–43 unity blobs, but the kernel's own blobs (the
+  ~200 `ElysiumNpc*.cpp`, contiguous by name) cost 7–10 s each; the wall was the blobs holding one to
+  four includers beside heavy unrelated files — the editor bake blob (45 s, through a constants
+  header), the map actor (33 s), the door link (36 s), the NPC body (33 s), the dialogue tests
+  (42 s), the Debug harness blobs (35–45 s). UBT packs a blob by sorted path and source bytes, so
+  the cut is blob eviction: a blob leaves an edit's rebuild only when none of its files reaches the
+  header. Of the direct `.cpp` includers of `ElysiumNpc.h` (203, arm off): 73 define its members, 86
+  read members, 7 name the type only, 37 name nothing of it (kernel files reaching Troika state
+  through `AsNpc()`); `ElysiumNpcBase.h` (64): 50 define, 3 read, 11 name nothing.
+
+  | step (commit) | what | `ElysiumNpcBase.h` | `ElysiumNpc.h` |
+  |---|---|---|---|
+  | baseline | — | 100.9 / 43 / 1,158 | 97.7 / 42 / 1,141 |
+  | 2 (`8d1469b5`) | narrower includes: `ElysiumNpcMotorShared.h` includes what its constants read (the nav bake judges jump links through a free `NpcKernelMotorShared::IsJumpLegalGeometry`); an unused include in `ElysiumMapActorEmbodiment.cpp`; three test files' kernel includes inside their arm guard | 89.6 / 42 / 1,107 | 89.6 / 41 / 1,037 |
+  | 3 (`59124d6b`) | a light type header: `NpcInitThinkDelay` is `ElysiumNpcThink::InitThinkDelay` (`ElysiumNpcThinkCadence.h`); the dialogue and sequence tests leave the kernel | 86.5 / 41 / 1,075 | 83.5 / 40 / 1,010 |
+  | 4 (`81684da8`) | member calls out of the header: `Substrate/ElysiumNpcAccess.h` declares the five members the map actor, the door link and the NPC body name (each the member, called as is); new files repack the unity layout | 73.1 / 36 / 848 | 74.3 / 36 / 819 |
+
+  (s wall / TUs / compile CPU s.) The ledger cites port lines, so each step regenerated it
+  (`4dff8d30`, and in step 4); `kernel --check` clean. Not needed and not done: step 5 (the
+  default-tier cases gathered into fewer files: 13 test blobs still reach the kernel headers), the
+  Debug harness reads (arena, cast course, Cog windows: blobs 2–5, 35–45 s each; `CogWindow_Npc` and
+  `NpcDebugData` need the class whole), the `FHintWords` split out of `FElysiumNpcBase`, a module
+  split.
+
+  | edit (touch, `uv run elysium build`) | before T6b | after T6b |
+  |---|---|---|
+  | nothing (null build) | 1.8 / 0 | 1.7 / 0 |
+  | `Substrate/ElysiumNpcConditions.cpp` | 9.2 / 1 / 7 | 9.8 / 1 / 8 |
+  | `Substrate/ElysiumNpcBase.h` | 100.9 / 43 / 1,158 | **74.0 / 36 / 851** |
+  | `Substrate/ElysiumNpc.h` | 97.7 / 42 / 1,141 | **72.5 / 36 / 836** |
+  | `Public/ElysiumEntityWorld.h` | 111.7 / 47 / 1,340 | **99.6 / 46 / 1,284** |
+  | an arm test (`ElysiumNpcKernelSpawnTests.cpp`) | 11.4 / 1 / 15 | 11.5 / 1 / 15 |
+  | `Tests/ElysiumTestServices.h` | 39.4 / 18 / 460 | 40.1 / 18 / 474 |
+  | the census, alone | 7.9 / 1 / 4 | 7.7 / 1 / 3 |
+  | median / p90 of the eight | 25.4 / 104.1 | **25.8 / 81.7** |
+
+  Includers (`.cpp` reaching the header / of them tests / direct), arm off → after:
+  `ElysiumNpcBase.h` 280 / 46 / 64 → 270 / 40 / 63; `ElysiumNpc.h` 269 / 46 / 203 → 260 / 40 / 195;
+  `ElysiumEntityWorld.h` 380 / 76 / 361 → 379 / 76 / 361. With the arm tier compiled in: 348 → 341,
+  335 → 329, 461 → 460. `ElysiumEntityWorld.h` was not cut (361 direct includers, 46 of 52 blobs);
+  its row fell with the bake blob and the repack. **Verdicts, record by record, before and after:**
+  default 171 / 0 failed, identical; arm 1,541 / 0 failed, identical; arena 106 records — 75 pass,
+  30 expected-fail, 1 fail (`rollcall_vzombie`, H11) — identical, `interest_mode_never` and
+  `hear_world_investigate` expected-fail in both runs. **Met: p90 81.7 s ≤ 90 s.** What a
+  kernel-header edit still costs is the 36 blobs: the kernel's own (~11 at 7–10 s), the kernel's
+  layer neighbours (slot bodies, scenes, feeding, weapons), four Debug blobs and 13 test blobs.
 
 Waves: **wave 1 (Python)** — three coders on disjoint files: T1; T2's Python half; T4 with T3's
 `pytest` half (markers, xdist, the import hazard, the two failing tests). Then the integrator:
@@ -685,7 +734,7 @@ tests the green scenarios cover deleted.
   the six slab maps and every other baked map's door cuts at their next bake (R2).
 
 Order: V1 → V2 → H → V3 (V3r, V3a, V3b, V13, V3c, V3d) → T6b → V4 → V5 → V11 ‖ V6 → V7 → V10 → V12 → V2 again (full run) → V8 → V9.
-**T6b, the header pass** (the owner, 2026-10-04; `stories/t6b/brief.md`): the kernel headers' include fan-out cut after V3d and before V4, one agent holding the build; it closes T6 (edit-mix p90 ≤ 90 s).
+**T6b, the header pass** (the owner, 2026-10-04; `stories/t6b/brief.md`): the kernel headers' include fan-out cut after V3d and before V4, one agent holding the build; it closes T6 (edit-mix p90 ≤ 90 s). Landed 2026-10-04: p90 104.1 → 81.7 s (kernel headers 100.9 / 97.7 → 74.0 / 72.5 s), verdicts unchanged; T6 ticked (§ T6, "T6b, measured").
 The new reds ride their stories: N1, N2 in V5; N5, N6 in V7; N7, N8 in V3; N9, N10 in V6; N13 in
 V4 (from V3a: the patrols' acceptance moves there); N12 in R2; N14 in V6; N15 in V3b's follow-up
 wave (from V3b; N10 closed into red 5); N16 in V13 and N17 in R2 (from the V3b follow-up).

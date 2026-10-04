@@ -32,7 +32,7 @@ Wave 2 (C++; T2's and T3's C++ halves):
   (`seqfinished` after `smith_lean_left_into rate=0`); 28.6 s warm, 37.1 s cold (miss).
 
 Wave 3 (build work, one agent):
-- [ ] **T6** — The incremental build (today median 46 s, p90 280 s). M · Opus/high. Landed wave 3:
+- [x] **T6** — The incremental build (today median 46 s, p90 280 s). M · Opus/high. Landed wave 3:
   the boot cut (Zen kept running, `Automation Now`, the uncontrolled-changelist tracker off headless,
   the arena's forced exit): default tier 22.1–22.5 s warm (35.5–45.7 with a slow Zen start) → 15.6–19.6,
   arena 28.6–37.1 → 25.6–27.1. Plain unity (a wave's commit 226 s → 1.9 s, nothing compiled) and the
@@ -40,7 +40,8 @@ Wave 3 (build work, one agent):
   longer forces a full rebuild (202 s → 1.6 s). Edit mix, s: null 1.9 → 1.9, `.cpp` 9.4 → 9.3, `ElysiumNpcBase.h` 193.6 → 156.8,
   `ElysiumNpc.h` 187.8 → 154.2, `ElysiumEntityWorld.h` 209.8 → 182.6, arm test 13.6 → 11.9,
   `ElysiumTestServices.h` 93.4 → 72.1, census 11.6 → 8.1. **Miss: p90 164.5 s (target 90)** — the
-  kernel headers' fan-out, compiled 3–6 at a time under the machine's commit limit.
+  kernel headers' fan-out, compiled 3–6 at a time under the machine's commit limit. Closed by T6b
+  (2026-10-04): p90 104.1 → 81.7 s; ticked.
 - [x] **Gate 1** — zero queries over 60 s; every `kernel_*` command and corpus probe under 10 s;
   default C++ ≤25 s wall (today 122 s) and `pytest` ≤20 s (today 384 s), zero failures; three
   prefixes in one boot under 25 s; a one-`.cpp` edit rebuilt in ≤60 s; no polling loop or lease
@@ -94,8 +95,12 @@ Wave 3 (build work, one agent):
     `dialog_use_hold`, `script_aischedule_walk` (record error corrected). The arbiter's names: 0
     uses. Default 171 / 0, arm 1541 / 0; suite 74 pass / 30 expected-fail / 1 fail (H11) / 1
     unexpected-pass (`hub_crosswalk_wait`, the V13 wave's restated record) of 106.
-- [ ] **T6b** — The header pass: the kernel headers' include fan-out, after V3d; closes T6
-  (`0002-npc-ai/stories/t6b/brief.md`). M · Opus/high.
+- [x] **T6b** — The header pass: the kernel headers' include fan-out, after V3d; closes T6
+  (`0002-npc-ai/stories/t6b/brief.md`). M · Opus/high. Landed 2026-10-04 (steps 2–4; step 5 not
+  needed): edit-mix p90 104.1 → 81.7 s; `ElysiumNpcBase.h` 100.9 → 74.0 s (43 → 36 blobs),
+  `ElysiumNpc.h` 97.7 → 72.5 s (42 → 36), `ElysiumEntityWorld.h` 111.7 → 99.6 s (47 → 46).
+  Default 171 / 0, arm 1,541 / 0, arena 75 pass / 30 expected-fail / 1 fail (H11) of 106 — each
+  identical record by record; `kernel --check` clean.
 - [ ] **V4** — Fix: the animation chain under the kernel. M · Opus/high.
 - [ ] **V5** — Fix: the attack conditions and the combat interrupts. S · Fable/medium.
 - [ ] **V6** — Fix: session, clock and lifecycle. M · Opus/high.
