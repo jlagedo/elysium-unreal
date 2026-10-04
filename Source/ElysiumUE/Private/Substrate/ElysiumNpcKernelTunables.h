@@ -5,7 +5,7 @@
 // of the pinned `Vampire/dlls/vampire.dll` (image base `0x10000000`) at the width its type states,
 // and `--check` reads it again. A body reads the NAME; the address and its evidence are here, once.
 //
-// 273 cells and immediates, 77 ConVars; image sha256 `c546f4de2003624d…`.
+// 273 cells and immediates, 78 ConVars; image sha256 `c546f4de2003624d…`.
 
 #pragma once
 
@@ -1510,6 +1510,7 @@ namespace ElysiumNpcTunables
 		TzimisceVoiceAttn, // `tzimisce_voice_attn` "65", object `0x1093cfd8`
 		TzimisceVoiceVolume, // `tzimisce_voice_volume` "1", object `0x1093ceb8`
 		DebugAllowMoveFacing, // `debug_allow_move_facing` "1", object `0x10924f70`
+		DebugAllowMfTurn, // `debug_allow_mf_turn` "0", object `0x10923cf0`
 		DebugTurning, // `debug_turning` "0", object `0x109247e8`
 		SabbatGunmanSpeedThreshold, // `sabbat_gunman_speed_threshold` "0.1", object `0x1093c100`
 		SabbatGunmanSpeedTrails, // `sabbat_gunman_speed_trails` "3", object `0x1093c148`

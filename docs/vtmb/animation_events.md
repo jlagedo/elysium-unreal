@@ -231,6 +231,27 @@ is embedded at `+0x5cf4`: `m_pOuter +4`, `m_bMovingAndShooting +0x10`, `m_nMoveS
      `+0x548`); `+0x18 = curtime + weapon slot 332 (0x10254410, the fire rate) − 0.1`.
   9. The tail: `0x10279bb0` (the enemy memory's last-known position, `0x102dfed0`) → slot 517
      `AddFacingTarget(enemy, lkp, 1.0, 0.8, 0)`.
+- *Four listing reads behind the port (V4o integration, 2026-10-04).*
+  **`AddGesture`'s arguments** (`0x100991b0`, listing): `[ESP+0xc]` is the activity (kept in `EDI`,
+  pushed to slots 270 / 271 and to `SelectWeightedSequence`), `[ESP+0x10]` the autokill flag; the
+  call of `0x100990f0` at `0x10099206` is `PUSH ECX` (autokill, `0x100991fe MOV ECX,[ESP+0x10]`)
+  then `PUSH EAX` (the sequence), so slot 268 receives `(i, −1, seq, autokill)` and the activity is
+  stored after, at `0x10099216` (`+0x758`). The decompiler prints the activity in the autokill
+  position; the listing does not.
+  **`GetSequenceCycleRate 0x10091230`**: `SequenceDuration(seq)` compared with 0.0 (`0x100912a3
+  FCOM [0x104454c4]`); above 0 → `1.0 / duration` (`0x100912ba FDIVR [0x104454c0]`), otherwise the
+  float **10.0** (`0x100912c8 FLD [0x1044e664]`). A layer whose sequence has no length advances at
+  10 cycles a second; it does not stand still.
+  **Slot 381 `Weapon_TranslateActivity 0x10327ec0`**: a valid `m_hActiveWeapon (+0x19a4)` whose
+  `m_fEffects (+0x19c)` has `0x40` clear → the weapon's slot 361 (`+0x5a4`, `ActivityOverride
+  0x1024f210`) of the activity; no weapon or a hidden one → the activity unchanged. Never 0.
+  **The burst pair** (`WeaponModeDataLoader 0x10259230`): `BurstMin` and `BurstMax` both default to
+  1 (`0x10259658`, `0x1025966c`: `PUSH 1`), stored at `+0x3a4` / `+0x3a8`; `BurstMin > BurstMax`
+  lowers **`BurstMin`** to `BurstMax` (`0x102596e2 MOV [EBP+0x3a4],ECX`). They are live words: the
+  overlay's `m_nMoveShots` and `TASK_RANGE_ATTACK1`'s `m_iBurstFireCount` are drawn from them.
+  **The NPC's clip** (`Inventory_Insert 0x10334e70`, first block): an owner with `+0x98` non-null
+  taking an item whose data `+0x24d0` is 0..2 (`0x102585c0`) gets `clip (+0x74c) = max(Default_Size
+  (+0x2670), 1)`, or — `Size (+0x2668) == −1` — `n` rounds through its own slot 374 (`+0x5d8`).
 - *The layer's life.* `AddGesture 0x100991b0` → slot 272 → slot 268 `SetLayer(i, −1, seq, autokill)`
   → `m_nActivity (+0x24) = act`. `CBaseAnimatingOverlay::StudioFrameAdvance 0x10098bb0` (slot 250)
   runs the base `0x1008f120` and hands **its returned interval** to

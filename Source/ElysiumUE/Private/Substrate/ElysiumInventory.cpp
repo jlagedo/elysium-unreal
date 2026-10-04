@@ -122,6 +122,22 @@ bool FElysiumInventory::Add(FElysiumCombatCharacter& Char, FElysiumItem& Item)
 	}
 	const int32 ReceivedQuantity = FMath::Max(1, Item.ItemCount);
 
+	// `CBaseCombatCharacter::Inventory_Insert 0x10334e70`, its first block: an owner on the Troika NPC
+	// line (`+0x98` non-null) taking an item of the three wielded types (`0x102585c0`: weapon data
+	// `+0x24d0` in 0..2) has its clip set to `n = max(Default_Size (+0x2670), 1)` (`weapon[0x1d3]`,
+	// `+0x74c`). `Shot 0x102387b0` never lowers an NPC's clip, so this is its value to death (J12).
+	// SEAM: `Size (+0x2668) == -1` gives the OWNER `n` rounds instead (slot 374, `+0x5d8`); the port's
+	// NPC keeps no ammunition reserve, so that arm writes nothing.
+	if (Char.AsNpc() != nullptr)
+	{
+		const FElysiumItemDef* const InsertRecord = Item.Data();
+		if (InsertRecord != nullptr && InsertRecord->IsControllableWeapon()
+			&& InsertRecord->MagazineSize != -1)
+		{
+			Item.MagazineCount = FMath::Max(InsertRecord->DefaultAmmo, 1);
+		}
+	}
+
 	// Stacking is the item data's call, never the classname's. A stackable classname already
 	// carried merges into that stack; the incoming entity is left unowned for the caller to
 	// dispose of, because a merge produces no second carried entity.

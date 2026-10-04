@@ -172,8 +172,9 @@ namespace
 			"selection reads"),
 	ELYSIUM_NPC_WORD(0x5cf0, FElysiumNpcBaseScheduleHost, MoveWaitFinished),
 	ELYSIUM_NPC_WORD_ABSENT(0x5cf4,
-		"CAI_MoveAndShootOverlay has no counterpart; this runtime's motor carries no "
-			"move-and-shoot overlay"),
+		"CAI_MoveAndShootOverlay is FElysiumNpcBase::MoveAndShootOverlay (spec 0002 V4o: armed by "
+			"slot 445 0x102e8270, run by 0x102e8560); kept off the member rows until its save walk "
+			"lands (V6), because a member row makes the bindings generator emit a save field"),
 	ELYSIUM_NPC_WORD(0x5d24, FElysiumNpcBase, OpeningDoor),
 	ELYSIUM_NPC_WORD(0x5d28, FElysiumNpcBase, BlockedDoor),
 	ELYSIUM_NPC_WORD(0x5d2c, FElysiumNpcBase, CondHitByDoor),

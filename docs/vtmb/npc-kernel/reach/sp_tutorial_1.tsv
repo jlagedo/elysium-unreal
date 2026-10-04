@@ -3515,7 +3515,7 @@ function	0x10326d40	CBaseCombatCharacter::HandleInteraction	CCineNPC#366, CNPCMa
 function	0x10327790	CBaseCombatCharacter::UpdateOnRemove	-		layer 5
 function	0x10327a90	CBaseCombatCharacter::CorpseGib	CCineNPC#394, CNPCMaker#394, CNPC_VHumanCombatant#394, CNPC_VPedestrian#394, CNPC_VRat#394, CNPC_VVampire#394		layer 14
 function	0x10327e20	CBaseCombatCharacter::GetDeathActivity	CCineNPC#393, CNPCMaker#393, CNPC_VHumanCombatant#393, CNPC_VPedestrian#393, CNPC_VRat#393, CNPC_VVampire#393		layer 0
-function	0x10327ec0	CBaseCombatCharacter::Weapon_TranslateActivity	CCineNPC#381, CNPCMaker#381, CNPC_VHumanCombatant#381, CNPC_VPedestrian#381, CNPC_VRat#381, CNPC_VVampire#381		layer 0
+function	0x10327ec0	CBaseCombatCharacter::Weapon_TranslateActivity	CCineNPC#381, CNPCMaker#381, CNPC_VHumanCombatant#381, CNPC_VPedestrian#381, CNPC_VRat#381, CNPC_VVampire#381	rule	layer 0
 function	0x10328030	CBaseCombatCharacter::NPC_EarlyTranslateActivity	-		layer 14
 function	0x10328110	CBaseCombatCharacter::NPC_TranslateActivity	-		layer 0
 function	0x103281b0	CBaseCombatCharacter::MoveToBoneOriginAngles	-		layer 2

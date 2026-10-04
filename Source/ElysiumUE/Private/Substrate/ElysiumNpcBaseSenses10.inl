@@ -17,25 +17,25 @@ struct FVPhysicsShadowBuild
 };
 
 
-/** `CAI_MoveAndShootOverlay+0x18`, the re-arm stamp slot 445 writes. `0x102e8250` disables the
- *  overlay by storing `FLT_MAX` (`0x7f7fffff`) into it; `0x102e8270` re-arms it to
- *  `curtime + overlay+0x2c` after re-deriving the shot counts from the active weapon.
- *
- *  **SEAM**: this runtime stands no `CAI_MoveAndShootOverlay`. The stamp, the two pause bounds and
- *  the disable/arm decision ARE what slot 445 decides, so they are recorded; the overlay's own
- *  weapon-data re-derivation (`+0x3a4`/`+0x3a8`) is the overlay's story. `0x102e8270`'s own fallback
- *  — state 4, no weapon, or neither the `0x11` nor the `0x15` activity sequence — lands on the same
- *  disable, and this runtime has no activity-sequence table, so the fallback is named and the arm
- *  is taken. */
+/** `CAI_MoveAndShootOverlay`, embedded at `+0x5cf4` (`m_pOuter +4` is this NPC), zeroed by the
+ *  constructor `0x1027c300`. `0x102e8250` disables it by storing `FLT_MAX` (`0x7f7fffff`) into
+ *  `+0x18`; `0x102e8270` (`ArmMoveAndShootOverlay`) re-arms it at each task start of a
+ *  continuous-move task; `0x102e8560` (`RunMoveAndShootOverlay`) runs it every `RunTask` of one
+ *  (`docs/vtmb/animation_events.md` "The move-and-shoot overlay, arm by arm"). Bodies:
+ *  `ElysiumNpcBaseSenses10.cpp` (the disable and the arm) and `ElysiumNpcBaseMoveAndShoot.cpp`. */
 struct FMoveAndShootOverlay
 {
-	// +0x18. `FLT_MAX` is retail's own "disabled" value, and it is the shipping default.
+	bool bMovingAndShooting = false;   // +0x10 m_bMovingAndShooting
+	int32 MoveShots = 0;               // +0x14 m_nMoveShots, the shots left in this burst
+	// +0x18 m_flNextMoveShootTime. `FLT_MAX` is retail's own "disabled" value. The constructor
+	// leaves 0 and every continuous-move task start writes it (slot 445) before `0x102e8560` can
+	// read it; the port starts it disabled, which no retail read can tell apart.
 	float NextShotTime = MAX_flt;
-	float PauseMin = 0.f;    // +0x24, from m_flBurstShootPauseMin (+0x5bbc)
-	float PauseMax = 0.f;    // +0x28, from m_flBurstShootPauseMax (+0x5bc0)
-	int32 Disables = 0;      // how many times 0x102e8250 ran
-	int32 Arms = 0;          // how many times 0x102e8270 ran
-	int32 UpdateCalls = 0;   // 0x102e8560, reached by RunTaskOverlay 0x10289c90
+	int32 MinBurst = 0;                // +0x1c m_minBurst, weapon data +0x3a4 (`BurstMin`)
+	int32 MaxBurst = 0;                // +0x20 m_maxBurst, weapon data +0x3a8 (`BurstMax`)
+	float PauseMin = 0.f;              // +0x24 m_minPause, from m_flBurstShootPauseMin (+0x5bbc)
+	float PauseMax = 0.f;              // +0x28 m_maxPause, from m_flBurstShootPauseMax (+0x5bc0)
+	float InitialDelay = 0.f;          // +0x2c m_initialDelay, 0 from `0x1027c300`; no other writer
 };
 
 FMoveAndShootOverlay MoveAndShootOverlay;
@@ -216,6 +216,42 @@ bool PlayerInLineOfFire(const FVector& OwnerPosCm, const FVector& TargetPosCm) c
 void DisableMoveAndShootOverlay();                       // 0x102e8250
 
 void ArmMoveAndShootOverlay(float PauseMin, float PauseMax);  // 0x102e8270
+
+/** `0x102e8560` — the overlay's run, entered by `RunTaskOverlay 0x10289c90` on every `RunTask` of a
+ *  continuous-move task (slot 529). Nine steps, in the listing's order: the disabled test; the
+ *  enemy refresh (slots 478 / 560, `SetEnemy`, `SetState(2)`); the goal test; `CanAimAtEnemy`;
+ *  `UpdateMoveShootActivity`; the cannot-aim exit (slot 558); the `0x47` / `0x48` gesture arm
+ *  behind `debug_allow_mf_turn`; the shot (`COND 0x4f` and the clock due: the burst countdown, the
+ *  re-arm draws, `AddGesture(TranslateActivity(0x1a), 1)`, `Weapon_SetActivity`, the next-shot
+ *  clock); the tail `AddFacingTarget(enemy, lkp, 1.0, 0.8, 0)` (slot 517). */
+void RunMoveAndShootOverlay();
+
+/** `0x102e83e0`. With `m_bConditionsGathered (+0x5ca4)` clear (`Cognition.GatheredAt < 0`), slot 481
+ *  `GatherEnemyConditions(GetEnemy())` first; then `COND 0x4f` -> true; else true only when none
+ *  of `0x58`, `0x60`, `0x55`, `0x48`, `0x40` holds. Plain `HasCondition`, never the masked read. */
+bool CanAimAtEnemy();
+
+/** `0x102e84a0`. The navigator's movement activity (`0x102ee3f0`): can aim `9 -> 0x11`,
+ *  `0x13 -> 0x15`; cannot `0x11 -> 9`, `0x15 -> 0x13`; any other activity returns with nothing
+ *  written. On a swap `+0x18 = max(+0x18, curtime + 0.3)` (`0x1047b868`), then the setter
+ *  `0x102ee250`. */
+void UpdateMoveShootActivity(bool bCanAim);
+
+/** `0x102517e0(GetActiveWeapon())` words `+0x3a4` / `+0x3a8`: the current mode record's `BurstMin`
+ *  / `BurstMax` (`WeaponModeDataLoader 0x10259230`, `0x10259664` / `0x10259678`). False with no
+ *  active weapon. **SEAM**: an active item no mode record stands behind answers 0 / 0, named for
+ *  the two offsets (retail's `0x102517e0` always answers a record). */
+bool ActiveWeaponBurstWords(int32& OutMin, int32& OutMax) const;
+
+/** The active weapon's slot 332 (`0x10254410`, vtable `+0x530`): the mode record's `Attack_Rate`
+ *  (`+0x260`) through the owner's scale `0x1033d940`. **SEAM**: `0x1033d940` doubles the rate
+ *  under a Presence level bit of the owner's `m_iDisciplineFlags2` (`0x101e3f50`); no such bit is
+ *  read here, so the rate is unscaled. 0 with no weapon or no mode record. Seconds. */
+float ActiveWeaponFireRate() const;
+
+/** `CBaseAnimating::GetPoseParameter("move_yaw")` (`0x1000108c`), degrees: the last write of that
+ *  name in the kernel's pose-parameter record (`PoseParameterWrites`); 0 when never written. */
+float MoveYawPoseParameter() const;
 
 /** SEAM for `UTIL_Remove(this)` (`0x101cd940`), slot 402's no-explosive-gibs arm. `FElysiumEntity`
  *  has `Remove`-shaped lifetime elsewhere in this substrate; this counts the call and names it so

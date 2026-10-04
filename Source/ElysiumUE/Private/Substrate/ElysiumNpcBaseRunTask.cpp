@@ -258,7 +258,12 @@ void FElysiumNpcBase::StartFadeOut()
 
 void FElysiumNpcBase::WeaponFinishReload(FElysiumEntity& Weapon)
 {
-	// `weapon+0x898 = 1` then weapon slot 322 -- SEAM (declaration).
+	// `TASK_RELOAD` at activity finished: `weapon+0x898 (m_bInReload) = 1`, then weapon slot 322
+	// `0x10255050` -- a single-round weapon reloads for the player only; a bulk one goes on to slot 323
+	// `0x102552c0`: `clip += min(Size - clip, the owner's reserve)`, the reserve untouched, both
+	// next-attack words `= curtime`. **SEAM** (owner: V5b), counted and writing nothing. Not reachable
+	// from firing: an NPC's clip is `max(Default_Size, 1)` from `Inventory_Insert 0x10334e70` to death
+	// (`Shot 0x102387b0` never lowers it), so `NO_PRIMARY_AMMO 0x40` cannot rise from a shot (J12).
 	(void)Weapon;
 	++WeaponFinishReloadCalls;
 }

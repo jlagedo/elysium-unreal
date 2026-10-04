@@ -13,6 +13,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
+#include "Substrate/ElysiumNpcEngineRandom.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcSenses10Shared.h"
@@ -836,29 +837,43 @@ void FElysiumNpcBase::DisableMoveAndShootOverlay()
 {
 	// `0x102e8250`: `overlay+0x18 = FLT_MAX` (`0x7f7fffff`).
 	MoveAndShootOverlay.NextShotTime = MAX_flt;
-	++MoveAndShootOverlay.Disables;
 }
 
 void FElysiumNpcBase::ArmMoveAndShootOverlay(float PauseMin, float PauseMax)
 {
-	// `0x102e8270`: re-derive the shot counts from the active weapon's data (`+0x3a4`/`+0x3a8`),
-	// store the pause pair at `overlay+0x24`/`+0x28` and re-arm `overlay+0x18 = curtime +
-	// overlay+0x2c`. The same body falls back to `0x102e8250` when the NPC is in state 4, has no
-	// weapon, or lacks either the `0x11` or the `0x15` activity sequence.
-	//
-	// SEAM: this runtime has no activity-sequence table, so the sequence half of that fallback is
-	// never satisfiable; the two halves it CAN answer — state 4 and "no weapon" — are run, and the
-	// sequence term is named rather than guessed.
-	const bool bStateFour = GetMind().State() == EElysiumNpcState::Scripted;   // retail state 4
-	if (bStateFour || !Inventory.ActiveWeapon.IsSet())
+	// `0x102e8270`, whole. Four refusals land on the disable `0x102e8250` (`102e83c4`), in this
+	// order: slot 464 (`+0x740`) answering state 4; no active weapon; no sequence for the
+	// translated `0x11` (the walk's aim twin); none for the translated `0x15` (the run's).
+	// `SelectHeaviestSequence(…, -1)` passes at `>= 0` (`-1 < seq`). The `(*DAT_10924ab4)->vfunc1()`
+	// calls on both exits are the profiler's and have no port line.
+	const bool bStateFour = GetMind().State() == EElysiumNpcState::Scripted;   // 102e8270 slot 464 == 4
+	if (bStateFour || ActiveWeaponEntity() == nullptr)                         // GetActiveWeapon
 	{
-		DisableMoveAndShootOverlay();
+		DisableMoveAndShootOverlay();                                          // 0x102e8250
 		return;
 	}
-	MoveAndShootOverlay.PauseMin = PauseMin;
-	MoveAndShootOverlay.PauseMax = PauseMax;
-	MoveAndShootOverlay.NextShotTime = static_cast<float>(NpcKernelSenses10Shared::NowOf(*this));
-	++MoveAndShootOverlay.Arms;
+	int32 WeaponActivity = 0;
+	if (SelectHeaviestSequence(TranslateActivityNumber(0x11, WeaponActivity), INDEX_NONE) < 0      // TranslateActivity(0x11) 0x10271ff0
+		|| SelectHeaviestSequence(TranslateActivityNumber(0x15, WeaponActivity), INDEX_NONE) < 0)  // TranslateActivity(0x15)
+	{
+		DisableMoveAndShootOverlay();                                          // 0x102e8250
+		return;
+	}
+	// `0x102517e0(GetActiveWeapon())`: `m_minBurst (+0x1c) = data[+0x3a4]`, `m_maxBurst (+0x20) =
+	// data[+0x3a8]`, then the pause pair (`+0x24` / `+0x28`) from the two arguments.
+	int32 MinBurst = 0;
+	int32 MaxBurst = 0;
+	ActiveWeaponBurstWords(MinBurst, MaxBurst);
+	MoveAndShootOverlay.MinBurst = MinBurst;                                   // +0x1c
+	MoveAndShootOverlay.MaxBurst = MaxBurst;                                   // +0x20
+	MoveAndShootOverlay.PauseMin = PauseMin;                                   // +0x24
+	MoveAndShootOverlay.PauseMax = PauseMax;                                   // +0x28
+	// `m_nMoveShots (+0x14) = RandomInt(data[+0x3a4], data[+0x3a8])` — the weapon words re-read, one
+	// draw on the engine stream (`(*DAT_1070b244)->vfunc2`).
+	MoveAndShootOverlay.MoveShots = ElysiumNpcEngineRandom::RandomInt(MinBurst, MaxBurst);
+	// `+0x18 = curtime + m_initialDelay (+0x2c)`.
+	MoveAndShootOverlay.NextShotTime = static_cast<float>(NpcKernelSenses10Shared::NowOf(*this))
+		+ MoveAndShootOverlay.InitialDelay;
 }
 
 // --- Moved from `ElysiumNpcSenses10.cpp` (story 5 step 5) ---

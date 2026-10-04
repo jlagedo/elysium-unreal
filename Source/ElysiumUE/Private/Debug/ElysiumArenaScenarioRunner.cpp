@@ -524,9 +524,12 @@ void FElysiumArenaScenarioRunner::FindNeverViolation(FFailure& Out)
 		{
 			continue;
 		}
+		// `until` is absolute; `within` is relative to where the window opened (its label's match plus
+		// `delay`); neither: the run's duration.
+		const double Closes = Spec.bUntil ? Spec.Until
+			: Spec.bWithin ? FMath::Min(Opens + Spec.Within, Record.Duration) : Record.Duration;
 		// Nothing before scenario zero counts, whatever the window says.
 		Opens = FMath::Max(Opens, 0.0);
-		const double Closes = Spec.bUntil ? Spec.Until : Record.Duration;
 		int32& Scan = NeverScans[Index];
 		for (; Scan < Events.Num(); ++Scan)
 		{
@@ -1364,6 +1367,16 @@ bool FElysiumArenaScenarioRunner::IsComplete(double Now) const
 	// A `never` holds for its window; with no `until`, that is the whole run, so it runs to duration.
 	for (const FElysiumArenaMatch& Never : Record.Never)
 	{
+		if (Never.bWithin)
+		{
+			// A relative window: closed `within` seconds after its label's match plus `delay`.
+			double WindowOpens = 0.0;
+			if (!NeverWindowStart(Never, WindowOpens) || Now < WindowOpens + Never.Within)
+			{
+				return false;
+			}
+			continue;
+		}
 		if (!Never.bUntil || Now < Never.Until)
 		{
 			return false;

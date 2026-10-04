@@ -411,9 +411,11 @@ bool FElysiumWeaponRulesTest::RunTest(const FString&)
 			TestEqual(TEXT("Ammo_Cost is the rounds spent"), Def.Modes[0].AmmoCost, 1);
 			TestEqual(TEXT("an unauthored Ammo_Fired is ONE ray, not zero"),
 				Def.Modes[0].AmmoFired, 1);
-			TestEqual(TEXT("the loader forces BurstMin <= BurstMax on the dead burst pair"),
-				Def.Modes[0].BurstMax, 5);
-			TestEqual(TEXT("...keeping the authored minimum as written"), Def.Modes[0].BurstMin, 5);
+			// `WeaponModeDataLoader 0x10259230`: `BurstMin (5) > BurstMax (3)` -> "Setting BurstMin to
+			// %d", `0x102596e2 MOV [EBP+0x3a4], ECX` with ECX the maximum. The maximum is not written.
+			TestEqual(TEXT("0x102596e2: the loader lowers BurstMin to BurstMax"),
+				Def.Modes[0].BurstMin, 3);
+			TestEqual(TEXT("...keeping the authored maximum as written"), Def.Modes[0].BurstMax, 3);
 			TestFalse(TEXT("allow_autofire defaults clear"), Def.Modes[0].bAllowAutofire);
 
 			TestTrue(TEXT("a second primary record sets allow_autofire"),
@@ -3588,14 +3590,6 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 					"act=ACT_RANGE_ATTACK1_LAYER ch=upper body"), GAttackLabel)));
 		TestEqual(TEXT("...and asks the cast body for exactly that one clip, on no other channel"),
 			Services.Count(TEXT("PlayNpcClip")), 1);
-		// The layer's phase is NOT what the cast's commit waits on (spec 0002 V4a). An NPC's events
-		// are dispatched by its own slot 258 (`0x10098c80` from `PostRun 0x1026c7c0`) over the
-		// kernel's `m_nSequence`; the clip this transaction put on the overlay slot is walked by
-		// nothing (the world-tick poll that walked it is deleted, the NPC's overlay layers are a seam
-		// answering "no layer" until V4o). This body is no kernel NPC playing a fire sequence, so its
-		// commit keeps the estimate; standing it down would swallow the shot.
-		TestFalse(TEXT("...and its commit is not left waiting on a timeline no think dispatches"),
-			CastGun->Swing.bAwaitingAnimEvent);
 	}
 
 	// --- 3047 is CLAIMED and commits nothing; the swallow set is claimed and does nothing ---------
@@ -3920,6 +3914,399 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 	ElysiumAnimEventCensus::Clear();
 	return true;
 }
+
+// =====================================================================================
+// An NPC's commit event is the shot (spec 0002 V4o lane O3).
+//
+// `CWeaponRanged::Operator_HandleAnimEvent 0x10238160` -> `0x10238320` -> `ModeDispatch(1)
+// 0x102383b0` -> `Shot 0x102387b0`: nothing is staged before the event. The cooldown is a
+// count (`0x1023891b`), the clip caps it and is never lowered for an NPC
+// (`Inventory_Insert 0x10334e70` fills it once), and the player's branch still spends.
+// =====================================================================================
+
+#if ELYSIUM_WITH_ARM_TESTS
+namespace
+{
+	// A ranged record whose `Attack_Rate` is BELOW the frame time, the only way retail's cooldown
+	// loop fires two sets on one event, and a record carrying a mode of a type other than 1 / 2.
+	const TCHAR* const GFastGun = TEXT("item_w_test_fastgun");
+	const TCHAR* const GOddGun  = TEXT("item_w_test_oddgun");
+	const TCHAR* const GLooseGunName = TEXT("loose_gun");
+
+	FElysiumItemTable MakeEventShotTable()
+	{
+		FElysiumItemTable Table = MakeWeaponTable();
+
+		FElysiumItemDef Fast = MakeDef(GFastGun, EElysiumItemType::WeaponFirearm);
+		Fast.Bucket = 1; Fast.BucketPosition = 11;
+		Fast.AmmoType = TEXT("TestRound");
+		Fast.MagazineSize = 6;
+		Fast.DefaultAmmo = 6;
+		Fast.Modes.Add(MakeMode(TEXT("Primary"), TEXT("Attack"),
+			TEXT("2 Lethal Ranged_Combat DMG_BULLET"), 9, /*Attack_Rate*/ 0.06f, /*Ammo_Cost*/ 1, 1));
+		Table.Items.Add(MoveTemp(Fast));
+
+		FElysiumItemDef Odd = MakeDef(GOddGun, EElysiumItemType::WeaponFirearm);
+		Odd.Bucket = 1; Odd.BucketPosition = 12;
+		Odd.AmmoType = TEXT("TestRound");
+		Odd.MagazineSize = 6;
+		Odd.DefaultAmmo = 6;
+		Odd.Modes.Add(MakeMode(TEXT("Primary"), TEXT("Attack"),
+			TEXT("2 Lethal Ranged_Combat DMG_BULLET"), 9, 0.5f, 1, 1));
+		// Mode record type neither 1 nor 2 (`ModeDispatch 0x102383b0`'s "any other" arm).
+		FElysiumWeaponMode Other = MakeMode(TEXT("Alt"), TEXT("Throw"), TEXT(""), 0, 0.7f);
+		Other.Type = EElysiumWeaponModeType::Other;
+		Odd.Modes.Add(MoveTemp(Other));
+		Table.Items.Add(MoveTemp(Odd));
+
+		Table.Reindex();
+		return Table;
+	}
+
+	// Two NPCs (the shooter `mid`, its enemy `far`) and a loose pistol nobody owns.
+	FElysiumEntityDefs MakeEventShotDefs()
+	{
+		FElysiumEntityDefs Defs = MakeReachTestDefs();
+		Defs.MapName = TEXT("__weapon_event_shot_test__");
+		FElysiumEntityDef Loose;
+		Loose.Classname = GPistol;
+		Loose.TargetName = GLooseGunName;
+		Defs.Defs.Add(MoveTemp(Loose));
+		return Defs;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponShotFromAnimEventTest,
+	"Elysium.Arm.Weapon.ShotFromAnimEvent", GElysiumTestFlags)
+bool FElysiumWeaponShotFromAnimEventTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeEventShotTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	ElysiumRng::SeedAll(4242);
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MakeEventShotDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+
+	FElysiumPlayer* Player = World.FindPlayer();
+	FElysiumCombatCharacter* Gunman = FindCharacter(World, TEXT("mid"));
+	FElysiumCombatCharacter* Enemy = FindCharacter(World, TEXT("far"));
+	if (!TestNotNull(TEXT("the player exists"), Player)
+		|| !TestNotNull(TEXT("the shooter exists"), Gunman)
+		|| !TestNotNull(TEXT("its enemy exists"), Enemy))
+	{
+		return false;
+	}
+	FElysiumNpc* Npc = Gunman->AsNpc();
+	if (!TestNotNull(TEXT("the shooter carries the NPC pointer (+0x94)"), Npc))
+	{
+		return false;
+	}
+	SeedHealth(*Enemy, 100000);
+	// The victim is a live `npc_VPedestrian` and this case shoots it ten times and more: left to its
+	// own AI it thinks between the ticks, and after four hits its fifth kills it whatever its health
+	// (it died carrying 18 damage of 100000 -- the knocked-out body's ONE_HIT_KILL, `TASK_KNOCKOUT
+	// 0x102a3339`, is the one writer of a kill that reads no health). The victim's mind is not what
+	// this case is about: it is switched off.
+	if (FElysiumNpc* const Victim = Enemy->AsNpc())
+	{
+		Victim->SetDisableAi(true);
+	}
+
+	FElysiumWeapon* Gun = GiveWeapon(*Gunman, GPistol);
+	if (!TestNotNull(TEXT("the shooter is armed"), Gun))
+	{
+		return false;
+	}
+	TestTrue(TEXT("...with its active weapon"), Gun->IsActiveWeapon());
+	const FElysiumWeaponMode* PistolMode = Gun->ModeFor(FElysiumWeapon::EIntent::Primary);
+	if (!TestNotNull(TEXT("0x102517e0: the primary mode in force"), PistolMode))
+	{
+		return false;
+	}
+	const double PistolRate = static_cast<double>(PistolMode->AttackRate);
+	const int32 ClipAtEquip = Gun->MagazineCount;
+
+	const FElysiumAnimEvent Shot3031 = WeaponEv(0.0f, 3031);
+
+	// The event as slot 259 hands it, with the owner's enemy standing (`m_hEnemy +0x5ce0`). The enemy
+	// is written for the call alone, so no think between two cases selects a schedule against it.
+	const auto Fire = [Npc, Gunman, Enemy, &Shot3031](FElysiumWeapon& Weapon)
+	{
+		Npc->BaseMemory.Enemy = Enemy->Handle;
+		const bool bClaimed = Weapon.OperatorHandleAnimEvent(*Gunman, Shot3031);
+		Npc->BaseMemory.Enemy = FElysiumEntityHandle::Invalid();
+		return bClaimed;
+	};
+	// The queued commit, delivered as queue service delivers it (`!self`, the staged serial).
+	const auto Commit = [](FElysiumWeapon& Weapon)
+	{
+		if (Weapon.Swing.bActive)
+		{
+			Weapon.CommitQueuedAttack(Weapon.Swing.Serial);
+		}
+	};
+
+	// --- 0x1033d940 / 0x101e3f50: the doubled-rate seam answers false ------------------------------
+	TestFalse(TEXT("0x101e3f50: no Presence level bit stands, so 0x1033d940 does not double the rate"),
+		FElysiumWeapon::PresenceDoublesAttackRate(Gunman));
+	TestEqual(TEXT("0x10254410: slot 332 is Attack_Rate unscaled"),
+		Gun->ShotAttackRate(*PistolMode), PistolMode->AttackRate);
+
+	// --- nothing staged, 3031 -> one shot against the enemy; the stamp (0x1023891b) ----------------
+	World.Tick(10.0);
+	const double Frame = World.FrameSeconds();
+	Gun->NextPrimaryAttackTime = 0.0;
+	Gun->NextSecondaryAttackTime = 0.0;
+	TestFalse(TEXT("no transaction is staged before the event"), Gun->Swing.bActive);
+	const int32 QueuedBefore = World.Queue().Num();
+	TestTrue(TEXT("0x10238160: the ranged body claims 3031"), Fire(*Gun));
+	TestTrue(TEXT("0x102387b0 step 2: AddMiscFlag(0x200000) on the owner"),
+		(Gunman->MiscFlags & 0x200000u) != 0);
+	TestEqual(TEXT("0x102387b0 step 3: the weapon activity, slot 333 (6, ...)"),
+		Gun->ShotSeams.LastWeaponActivity, 6);
+	TestEqual(TEXT("...played once"), Gun->ShotSeams.WeaponActivityCalls, 1);
+	TestEqual(TEXT("0x102387b0 step 9: InsertSound once"), Gun->ShotSeams.CombatSoundInserts, 1);
+	// An event that arrives seconds late (the stamp is 0, curtime 10) still fires ONE set: the floor
+	// `curtime - frametime` caps the catch-up.
+	TestEqual(TEXT("0x1023891b: one set, however late the event"), Gun->ShotSeams.LastCooldownSets, 1);
+	TestTrue(TEXT("0x1023891b: m_flNextPrimaryAttack = curtime - frametime + rate"),
+		NearlyEqual(Gun->NextPrimaryAttackTime, 10.0 - Frame + PistolRate));
+	TestEqual(TEXT("0x1023891b: m_flNextSecondaryAttack (+0x734) is not touched"),
+		Gun->NextSecondaryAttackTime, 0.0);
+	TestTrue(TEXT("0x102387b0: the event staged the shot"), Gun->Swing.bActive);
+	TestEqual(TEXT("...of one set"), Gun->Swing.BulletSets, 1);
+	TestEqual(TEXT("...against the owner's enemy"), Gun->Swing.Opponent, Enemy->Handle);
+	TestEqual(TEXT("...and queued its commit in the same call"), World.Queue().Num(), QueuedBefore + 1);
+	Commit(*Gun);
+	const int32 OneSet = DamageTaken(*Enemy);
+	TestTrue(TEXT("0x102387b0: the shot is committed against the enemy"), OneSet > 0);
+	TestEqual(TEXT("0x10238a15: an NPC's clip is not lowered by Shot"), Gun->MagazineCount, ClipAtEquip);
+
+	// --- a second 3031 inside the cooldown fires nothing -------------------------------------------
+	const double StampInside = Gun->NextPrimaryAttackTime;
+	TestTrue(TEXT("the second event is still claimed"), Fire(*Gun));
+	TestEqual(TEXT("0x1023891b: zero sets while m_flNextPrimaryAttack > curtime"),
+		Gun->ShotSeams.LastSets, 0);
+	TestFalse(TEXT("...so nothing is staged"), Gun->Swing.bActive);
+	TestTrue(TEXT("0x1023891b: the stamp is unchanged bit for bit, never moved back"),
+		Gun->NextPrimaryAttackTime == StampInside);
+	TestEqual(TEXT("0x1023891b: +0x734 still untouched"), Gun->NextSecondaryAttackTime, 0.0);
+	TestEqual(TEXT("0x102387b0 step 3: the weapon activity still plays at zero sets"),
+		Gun->ShotSeams.WeaponActivityCalls, 2);
+	TestEqual(TEXT("0x102387b0 step 9: the sound is still inserted at zero sets"),
+		Gun->ShotSeams.CombatSoundInserts, 2);
+	Commit(*Gun);
+	TestEqual(TEXT("...and no bullet leaves"), DamageTaken(*Enemy), OneSet);
+
+	// --- a second 3031 once m_flNextPrimaryAttack <= curtime -> a second shot ----------------------
+	World.Tick(11.0);
+	TestTrue(TEXT("the cooldown has passed"), Gun->NextPrimaryAttackTime <= World.NowSeconds());
+	Fire(*Gun);
+	TestTrue(TEXT("0x1023891b: the event past the cooldown stages a shot"), Gun->Swing.bActive);
+	TestTrue(TEXT("0x1023891b: the stamp advances from curtime - frametime"),
+		NearlyEqual(Gun->NextPrimaryAttackTime, 11.0 - World.FrameSeconds() + PistolRate));
+	Commit(*Gun);
+	TestEqual(TEXT("...and a second set lands"), DamageTaken(*Enemy), 2 * OneSet);
+
+	// --- J12: Size + 2 shots across cooldowns, the clip unchanged, never refused --------------------
+	{
+		// The damage is cleared before every shot and the sets counted, so no sum is carried.
+		const int32 Shots = ClipAtEquip + 2;
+		int32 Landed = 0;
+		for (int32 Index = 0; Index < Shots; ++Index)
+		{
+			SeedHealth(*Enemy, 100000);
+			World.Tick(12.0 + static_cast<double>(Index));
+			Fire(*Gun);
+			TestTrue(FString::Printf(TEXT("0x102387b0: shot %d of Size + 2 is staged"), Index + 1),
+				Gun->Swing.bActive);
+			Commit(*Gun);
+			Landed += DamageTaken(*Enemy) == OneSet ? 1 : 0;
+			TestEqual(TEXT("0x10334e70: the NPC's clip is what Inventory_Insert left"),
+				Gun->MagazineCount, ClipAtEquip);
+		}
+		TestEqual(TEXT("0x10238a15: every one of the Size + 2 shots fired"), Landed, Shots);
+	}
+
+	// --- an empty clip gives zero sets, and is not a refusal of the event --------------------------
+	{
+		World.Tick(30.0);
+		SeedHealth(*Enemy, 100000);   // the damage cleared: each block reads its own sum
+		const int32 Before = DamageTaken(*Enemy);
+		const int32 Sounds = Gun->ShotSeams.CombatSoundInserts;
+		Gun->MagazineCount = 0;
+		Fire(*Gun);
+		TestEqual(TEXT("0x1023891b: the cooldown still counts one set"),
+			Gun->ShotSeams.LastCooldownSets, 1);
+		TestEqual(TEXT("0x102387b0 step 7: an empty clip caps it to zero"), Gun->ShotSeams.LastSets, 0);
+		TestFalse(TEXT("...nothing staged"), Gun->Swing.bActive);
+		TestTrue(TEXT("0x1023891b: the stamp is written when the clip caps the sets to 0"),
+			NearlyEqual(Gun->NextPrimaryAttackTime, 30.0 - World.FrameSeconds() + PistolRate));
+		TestEqual(TEXT("0x102387b0 step 9: the sound is inserted all the same"),
+			Gun->ShotSeams.CombatSoundInserts, Sounds + 1);
+		TestEqual(TEXT("0x102387b0 step 7: the clip is not written"), Gun->MagazineCount, 0);
+		TestEqual(TEXT("...and no bullet leaves"), DamageTaken(*Enemy), Before);
+		Gun->MagazineCount = ClipAtEquip;
+	}
+
+	// --- a transaction already staged: the 3031 commits THAT transaction, once ---------------------
+	{
+		World.Tick(40.0);
+		Gun->NextPrimaryAttackTime = 0.0;
+		SeedHealth(*Enemy, 100000);   // the damage cleared: each block reads its own sum
+		const int32 Before = DamageTaken(*Enemy);
+		const int32 Activities = Gun->ShotSeams.WeaponActivityCalls;
+		TestEqual(TEXT("the standing shot is staged"),
+			Gun->AttackIntent(FElysiumWeapon::EIntent::Primary, Enemy->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		const int32 Staged = Gun->Swing.Serial;
+		Fire(*Gun);
+		TestEqual(TEXT("the event stages no second transaction over the staged one"),
+			Gun->Swing.Serial, Staged);
+		TestEqual(TEXT("...and does not run Shot's unstaged entry"),
+			Gun->ShotSeams.WeaponActivityCalls, Activities);
+		Gun->CommitQueuedAttack(Staged);
+		TestEqual(TEXT("the staged transaction commits"), DamageTaken(*Enemy), Before + OneSet);
+		Gun->CommitQueuedAttack(Staged);
+		TestEqual(TEXT("...once"), DamageTaken(*Enemy), Before + OneSet);
+		TestEqual(TEXT("0x10238a15: the staged NPC shot does not lower the clip either"),
+			Gun->MagazineCount, ClipAtEquip);
+	}
+
+	// --- only a rate below the frame time fires two sets; a clip below the cost caps them ----------
+	{
+		FElysiumWeapon* Fast = GiveWeapon(*Gunman, GFastGun);
+		if (!TestNotNull(TEXT("the fast gun is granted"), Fast))
+		{
+			return false;
+		}
+		TestTrue(TEXT("...and is the active weapon"), Fast->IsActiveWeapon());
+		World.Tick(50.0);
+		// Attack_Rate 0.06 against the clamped 0.1 s frame: floor + 0.06 <= curtime, + 0.06 > curtime.
+		TestTrue(TEXT("the fixture's rate is below the frame time and above half of it"),
+			World.FrameSeconds() > 0.06 && World.FrameSeconds() < 0.12);
+		SeedHealth(*Enemy, 100000);   // the damage cleared: each block reads its own sum
+		const int32 Before = DamageTaken(*Enemy);
+		Fast->NextPrimaryAttackTime = 0.0;
+		Fast->MagazineCount = 1;
+		Fire(*Fast);
+		TestEqual(TEXT("0x1023891b: a rate below the frame time counts two sets"),
+			Fast->ShotSeams.LastCooldownSets, 2);
+		TestEqual(TEXT("0x102387b0 step 7: a clip of 1 against 2 x Ammo_Cost caps them to clip / cost"),
+			Fast->ShotSeams.LastSets, 1);
+		TestEqual(TEXT("...staged as one set"), Fast->Swing.BulletSets, 1);
+		Commit(*Fast);
+		const int32 FastSet = DamageTaken(*Enemy) - Before;
+		TestTrue(TEXT("...which lands"), FastSet > 0);
+		TestEqual(TEXT("0x102387b0 step 7: the cap does not write the clip"), Fast->MagazineCount, 1);
+
+		World.Tick(51.0);
+		Fast->NextPrimaryAttackTime = 0.0;
+		Fast->MagazineCount = 6;
+		Fire(*Fast);
+		TestEqual(TEXT("0x1023891b: two sets with a clip that covers them"),
+			Fast->Swing.BulletSets, 2);
+		Commit(*Fast);
+		TestEqual(TEXT("0x102387b0 step 9: FireBullets once per set"),
+			DamageTaken(*Enemy), Before + 3 * FastSet);
+		TestEqual(TEXT("0x10238a15: two sets leave the NPC's clip alone"), Fast->MagazineCount, 6);
+	}
+
+	// --- a mode of type other than 1 / 2 fires nothing and advances the two clocks ------------------
+	{
+		FElysiumWeapon* Odd = GiveWeapon(*Gunman, GOddGun);
+		if (!TestNotNull(TEXT("the odd gun is granted"), Odd))
+		{
+			return false;
+		}
+		World.Tick(60.0);
+		SeedHealth(*Enemy, 100000);   // the damage cleared: each block reads its own sum
+		const int32 Before = DamageTaken(*Enemy);
+		Odd->PrimaryModeIndex = 1;   // `weapon +0x848` names the type-other record
+		Odd->NextPrimaryAttackTime = 2.0;
+		Odd->NextSecondaryAttackTime = 0.0;
+		const FElysiumWeaponMode* OddMode = Odd->ModeFor(FElysiumWeapon::EIntent::Primary);
+		if (!TestNotNull(TEXT("the type-other record is the mode in force"), OddMode))
+		{
+			return false;
+		}
+		TestTrue(TEXT("0x10238160: the id is still claimed"), Fire(*Odd));
+		TestTrue(TEXT("0x102383b0: any other type -> +0x730 += rate"),
+			NearlyEqual(Odd->NextPrimaryAttackTime, 2.0 + static_cast<double>(OddMode->AttackRate)));
+		TestTrue(TEXT("0x102383b0: ...and +0x734 = the same word"),
+			Odd->NextSecondaryAttackTime == Odd->NextPrimaryAttackTime);
+		TestFalse(TEXT("0x102383b0: Shot is not reached, nothing staged"), Odd->Swing.bActive);
+		TestEqual(TEXT("...no weapon activity"), Odd->ShotSeams.WeaponActivityCalls, 0);
+		TestEqual(TEXT("...no sound"), Odd->ShotSeams.CombatSoundInserts, 0);
+		TestEqual(TEXT("...no bullet"), DamageTaken(*Enemy), Before);
+	}
+
+	// --- no owner -> nothing at all ------------------------------------------------------------------
+	{
+		FElysiumEntity* LooseEnt = World.FindByName(GLooseGunName);
+		FElysiumItem* LooseItem = LooseEnt ? LooseEnt->AsItem() : nullptr;
+		FElysiumWeapon* Loose = LooseItem ? LooseItem->AsWeapon() : nullptr;
+		if (!TestNotNull(TEXT("the loose pistol exists"), Loose))
+		{
+			return false;
+		}
+		TestNull(TEXT("...and has no owner (0x10252240)"), Loose->OwnerCharacter());
+		const double Stamp = Loose->NextPrimaryAttackTime;
+		TestTrue(TEXT("the id is the body's"), Loose->ShotFromAnimEvent(Shot3031));
+		TestFalse(TEXT("0x102387b0 step 2: no owner, nothing staged"), Loose->Swing.bActive);
+		TestTrue(TEXT("...no stamp written"), Loose->NextPrimaryAttackTime == Stamp);
+		TestEqual(TEXT("...no weapon activity"), Loose->ShotSeams.WeaponActivityCalls, 0);
+		TestEqual(TEXT("...no sound"), Loose->ShotSeams.CombatSoundInserts, 0);
+	}
+
+	// --- the player: nothing staged commits nothing; its branch still spends and still refuses -----
+	{
+		FElysiumWeapon* Pistol = GiveWeapon(*Player, GPistol);
+		if (!TestNotNull(TEXT("the player is armed"), Pistol))
+		{
+			return false;
+		}
+		World.Tick(70.0);
+		SeedHealth(*Enemy, 100000);   // the damage cleared: each block reads its own sum
+		const int32 Before = DamageTaken(*Enemy);
+		Pistol->NextPrimaryAttackTime = 0.0;
+		TestTrue(TEXT("the player's unstaged event is claimed"),
+			Pistol->OperatorHandleAnimEvent(*Player, Shot3031));
+		TestFalse(TEXT("...and stages nothing"), Pistol->Swing.bActive);
+		TestEqual(TEXT("...and writes no stamp"), Pistol->NextPrimaryAttackTime, 0.0);
+		TestEqual(TEXT("...and runs none of Shot's NPC steps"),
+			Pistol->ShotSeams.WeaponActivityCalls, 0);
+
+		const int32 Clip = Pistol->MagazineCount;
+		TestEqual(TEXT("the player's press is accepted"),
+			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, Enemy->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		Commit(*Pistol);
+		TestEqual(TEXT("0x10238a4b: the player's shot spends Ammo_Cost"),
+			Pistol->MagazineCount, Clip - 1);
+		const int32 AfterOne = DamageTaken(*Enemy);
+		TestTrue(TEXT("...and lands"), AfterOne > Before);
+
+		World.Tick(71.0);
+		Pistol->NextPrimaryAttackTime = 0.0;
+		TestEqual(TEXT("a second press is accepted"),
+			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, Enemy->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		Pistol->MagazineCount = 0;   // emptied between the accept and the commit
+		Commit(*Pistol);
+		TestEqual(TEXT("the player's commit is refused on an empty magazine"),
+			DamageTaken(*Enemy), AfterOne);
+		TestEqual(TEXT("...and writes nothing"), Pistol->MagazineCount, 0);
+	}
+
+	return true;
+}
+#endif // ELYSIUM_WITH_ARM_TESTS
 
 // =====================================================================================
 // The leaf blob's schema.

@@ -498,6 +498,15 @@ FString ResetPlayerState(UWorld* World, FElysiumEntityWorld* EntityWorld)
 		}
 		ElysiumDisciplines::ClearAll(*Player);   // idempotent; the one teardown `vdiscipline_endall` shares
 
+		// The unkillable latch (`events_player`'s `MakePlayerUnkillable`, the `god` command) rides the
+		// session record across the rebuild too: a record that staged it would leave the next
+		// record's player unkillable, and `god` -- a toggle -- would then turn it OFF.
+		if (Player->IsUnkillable())
+		{
+			Player->SetUnkillable(false);
+			Undone.Add(TEXT("unkillable latch"));
+		}
+
 		// `Health` on the sheet counts damage TAKEN and rides the session record across the rebuild.
 		const int32 Healed = Player->HealDamage(MAX_int32);
 		if (Healed > 0)

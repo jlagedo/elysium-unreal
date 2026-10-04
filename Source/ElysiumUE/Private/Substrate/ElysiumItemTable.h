@@ -100,12 +100,13 @@ struct FElysiumWeaponMode
 	// `allow_autofire` — clear means held attack intent is lost after the press edge.
 	bool bAllowAutofire = false;
 
-	// `BurstMin`/`BurstMax`, loaded with the loader's own `BurstMin <= BurstMax` clamp. Both are DEAD
-	// FIELDS — parsed by the mode loader and unreferenced by runtime combat logic on either the
-	// player or the NPC side (§ RE40 -> Burst Fields) — so they are stored for audit and no burst
-	// queue exists to build from them.
-	int32 BurstMin = 0;
-	int32 BurstMax = 0;
+	// `BurstMin`/`BurstMax` (mode record `+0x3a4` / `+0x3a8`), each defaulting to 1 (`0x10259658` /
+	// `0x1025966c`) and loaded with the loader's own clamp `BurstMin = min(BurstMin, BurstMax)`
+	// (`0x102596e2`). Read by the NPC's move-and-shoot overlay: `0x102e8270` seeds `m_minBurst` /
+	// `m_maxBurst` and draws `m_nMoveShots = RandomInt(min, max)` from them, and `0x102e8560` re-draws
+	// at each burst's end (spec 0002 V4o). The player side reads neither.
+	int32 BurstMin = 1;
+	int32 BurstMax = 1;
 
 	float Range = 0.0f;                 // `Range`
 	FString BotchTable;                 // `Botch_Table`

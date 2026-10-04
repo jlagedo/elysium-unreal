@@ -341,6 +341,17 @@ int32 FElysiumNpc::SequenceRowFor(const FString& OwnerStem, const FString& Label
 	Row.OwnerStem = OwnerStem;
 	Row.Label = Label;
 	Row.bLoops = bLoops;
+	// The row's `seqdesc.flags & 2` (`STUDIO_SNAP`, read by `SetLayer 0x10099020` at `0x100990a4`),
+	// taken here so every way a row is numbered -- by activity, by name (`LookupSequenceByName`), the
+	// stance set, the melee and grapple picks -- carries it. A world with no embodiment has no
+	// descriptor to read: false.
+	IElysiumEmbodiment* const DescriptorSource = World != nullptr ? World->Embodiment() : nullptr;
+	FElysiumSequenceDescriptor Descriptor;
+	if (DescriptorSource != nullptr && Visual != nullptr
+		&& DescriptorSource->GetNpcSequenceDescriptor(ModelStem(), OwnerStem, Label, Descriptor))
+	{
+		Row.bSnap = Descriptor.bStudioSnap;
+	}
 	return SequenceRows.Num() - 1;
 }
 
@@ -392,6 +403,12 @@ int32 FElysiumNpc::SequenceForActivity(int32 Activity)
 	const int32 Row = Embodiment->ResolveNpcActivityClip(Request, Clip)
 		? SequenceRowFor(Clip.OwnerStem, Clip.Label, Clip.bLooping)
 		: INDEX_NONE;   // the body authors no clip for it: retail's own -1
+	if (Row != INDEX_NONE)
+	{
+		// The row's `seqdesc.flags & 2` (`STUDIO_SNAP`), which `SetLayer 0x10099020` reads at
+		// `0x100990a4`: the resolved clip's own baked bit, on the row (`SequenceSnaps`).
+		SequenceRows[Row].bSnap = Clip.bSnap;
+	}
 	SequenceResolveCache.Add(Key, Row);
 	return Row;
 }
@@ -483,6 +500,78 @@ bool FElysiumNpc::SequenceLoops(int32 Sequence) const
 		return SequenceZero.bKnown && SequenceZero.bLoops;
 	}
 	return SequenceRows.IsValidIndex(Sequence) && SequenceRows[Sequence].bLoops;
+}
+
+// --- The bridge row's words for an overlay layer (spec 0002 V4o, lane O1) ----------------------
+
+bool FElysiumNpc::SequenceSnaps(int32 Sequence) const
+{
+	// `mstudioseqdesc_t::flags & 2` (`STUDIO_SNAP`), `SetLayer 0x10099020`'s test at `0x100990a4`:
+	// the bit the resolver's clip carried when the row was answered.
+	return Sequence >= 1 && SequenceRows.IsValidIndex(Sequence) && SequenceRows[Sequence].bSnap;
+}
+
+float FElysiumNpc::SequenceCycleRateOf(int32 Sequence) const
+{
+	// `GetSequenceCycleRate 0x10091230`: `1 / SequenceDuration(seq)`, per second.
+	const float RowSeconds = SequenceDurationSeconds(Sequence);
+	if (RowSeconds > 0.f)
+	{
+		return 1.f / RowSeconds;
+	}
+	// `SequenceDuration` answered nothing above 0 (`0x100912a3 FCOM 0.0` at `0x104454c4`): retail's
+	// other arm, the float 10.0 at `0x1044e664` (`0x100912c8 FLD`). In the port that is also a row no
+	// baked cycle length and no play or draw has answered yet, so it is said once per (model, clip);
+	// row 0 (a never-set record's sequence) is the base's own case and says nothing here.
+	if (Sequence >= 1 && SequenceRows.IsValidIndex(Sequence))
+	{
+		static TSet<FString> ReportedRows;
+		const FString Key = FString::Printf(TEXT("%s|%s|%s"), *ModelStem(),
+			*SequenceRows[Sequence].OwnerStem, *SequenceRows[Sequence].Label);
+		if (!ReportedRows.Contains(Key))
+		{
+			ReportedRows.Add(Key);
+			UE_LOG(LogElysiumNpcEnt, Warning,
+				TEXT("%s: layer clip '%s'@'%s' has no length; its cycle rate is retail's 10.0"),
+				*ModelStem(), *SequenceRows[Sequence].Label, *SequenceRows[Sequence].OwnerStem);
+		}
+	}
+	return ElysiumNpcTunables::Ten;                                           // 0x1044e664
+}
+
+void FElysiumNpc::OnOverlayLayerSet(int32 LayerIndex)
+{
+	// The draw of the layer slot 268 `SetLayer 0x10099020` just seeded (visual-only: the client's
+	// layer blend, through the existing `UpperBody` door). Row 0 names no layer clip (`AddGesture
+	// 0x100991b0` refuses a sequence `< 1`), and an unknown number draws nothing.
+	if (LayerIndex < 0 || LayerIndex >= ElysiumOverlay::NumSlots)
+	{
+		return;
+	}
+	const int32 LayerSequence = AnimOverlay[LayerIndex].Sequence;
+	if (LayerSequence < 1 || !SequenceRows.IsValidIndex(LayerSequence))
+	{
+		return;
+	}
+	FSequenceRow& Row = SequenceRows[LayerSequence];
+	FElysiumClipSegment Segment;
+	Segment.ClipName = Row.Label;
+	Segment.bLoop = false;
+	Segment.Channel = EElysiumAnimChannel::UpperBody;
+	Segment.bSnap = SequenceSnaps(LayerSequence);
+	// The layer's owner activity by its registration name, where it has one (`AddGesture` seeds
+	// -1 and writes the owner after: no name then).
+	if (const TCHAR* const ActivityName =
+			AnimOverlay[LayerIndex].Activity >= 0
+			? ElysiumRetailActivities::RegistrationNameOf(AnimOverlay[LayerIndex].Activity) : nullptr)
+	{
+		Segment.Activity = ActivityName;
+	}
+	float DrawnSeconds = 0.f;
+	if (PlayAnimSegment(Segment, &DrawnSeconds) && DrawnSeconds > 0.f)
+	{
+		Row.Seconds = DrawnSeconds;   // the one thing the kernel reads back: the row's length
+	}
 }
 
 float FElysiumNpc::SequenceTurnYaw(int32 Sequence) const

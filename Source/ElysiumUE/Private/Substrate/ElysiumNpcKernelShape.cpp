@@ -3411,7 +3411,7 @@ namespace
 			TEXT("29d"), true, TEXT("present"), TEXT("") },
 		{ 381, TEXT(""), TEXT("Weapon_TranslateActivity"),
 			TEXT("Activity Weapon_TranslateActivity(Activity)"), TEXT("Weapon_TranslateActivity"),
-			ETier::Walked, TEXT("0x10327ec0"), 0, TEXT("29c"), false, TEXT(""), TEXT("") },
+			ETier::Walked, TEXT("0x10327ec0"), 0, TEXT("29c"), false, TEXT("rule"), TEXT("") },
 		{ 382, TEXT(""), TEXT("Weapon_CanUse"), TEXT("bool Weapon_CanUse(CBaseCombatWeapon*)"),
 			TEXT("Weapon_CanUse"), ETier::Sdk, TEXT("0x1032d9b0"), 1, TEXT("29c"), false, TEXT(""),
 			TEXT("") },
@@ -8939,11 +8939,11 @@ const FElysiumNpcShapeCensus& Census()
 		/* Classes          */ 77,
 		/* Classnames       */ 74,
 		/* Overrides        */ 2344,
-		/* VerdictedSlots   */ 445,
+		/* VerdictedSlots   */ 446,
 		/* DefaultSlots     */ 82,
 		/* VerdictedOverrides */ 2302,
 		/* RegistryValues   */ 218,
-		/* RowDigest        */ 0x9737e11088030147ull,
+		/* RowDigest        */ 0xadbdf5474fbbe081ull,
 	};
 	return GCensus;
 }

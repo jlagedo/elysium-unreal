@@ -5,6 +5,7 @@
 #include "Substrate/ElysiumNpcBase.h"
 
 #include "ElysiumAnimEvent.h"
+#include "ElysiumAnimatingOverlay.h"           // FAnimOverlayLayer -- the four records of `+0x734`
 #include "ElysiumOverlayStack.h"
 #include "Substrate/ElysiumAnimEvents.h"
 #include "Substrate/ElysiumNpc.h"
@@ -14,22 +15,35 @@ namespace
 	// One of the four `CAnimationLayer` records `0x10098c80` hands to `0x10098cd0` (`+0x734`, stride
 	// `0x30`: sequence `+8`, cycle `+0xc`, playback rate `+0x10`, `m_flLastEventCheck` `+0x2c`).
 	//
-	// **SEAM answering "no layer"** (spec 0002 V4, J5 / K6): the NPC's overlay stack is spec 0015's.
-	// Retail's body has no "in use" test -- it runs on all four records every think -- and an empty
-	// record dispatches nothing (rate 0, window `[0, 0)`), which is what this answer stands for. On
-	// step-2 paths the only pusher is the move-and-shoot overlay `0x102e8560` (`RunTaskOverlay
-	// 0x10289c90`: `AddGesture(TranslateActivity(0x1a))`, whose LAYER's 3031 fires the shot on the
-	// move); the port keeps it a counter (`ElysiumNpcBaseMaintain.cpp`,
-	// `++MoveAndShootOverlay.UpdateCalls`), and **this seam is correct only while that overlay stays
-	// a counter** -- the red record is `cover_move_shoot`, the wire is 0002 R3's (story V4o). The
-	// other pushers (`AddGesture 0x100991b0` from TASK 0xe4 and the discipline applier, slot 273,
-	// the scene entity's `AddGestureSequence`) are off step 2's paths.
+	// Answers true for all four records, every think (spec 0002 V4o): retail's body has no "in use"
+	// test, no weight test and no skip of a freed slot. A never-set record holds sequence 0 at
+	// playback rate 0, so its window is `[0, 0)`; a freed non-looping layer rests at cycle 1.0 and
+	// from its second resting think its window is empty too -- by arithmetic, not by a skip.
 	bool OverlayLayerWords(const FElysiumNpcBase& Npc, int32 LayerIndex, FElysiumSequenceWords& OutLayer)
 	{
-		(void)Npc;
-		(void)LayerIndex;
-		(void)OutLayer;
-		return false;
+		const FElysiumAnimatingOverlay::FAnimOverlayLayer& Record = Npc.AnimOverlay[LayerIndex];
+		const FElysiumNpc* const Troika = Npc.AsNpc();
+		OutLayer.Sequence = Record.Sequence;                                      // layer+8
+		OutLayer.Cycle = Record.Cycle;                                            // layer+0xc
+		// `GetSequenceCycleRate(owner, layer+8) x layer+0x10` (`0x10098cd0`).
+		OutLayer.CycleRate = Npc.OverlaySequenceCycleRate(Record.Sequence) * Record.PlaybackRate;
+		// The row's own `seqdesc.flags & 1`: the wrap clause. (The layer body reads no loop word.)
+		const bool bRowLoops = Troika != nullptr && Troika->SequenceLoops(Record.Sequence);
+		OutLayer.bLoops = bRowLoops;
+		OutLayer.bDescriptorLoops = bRowLoops;
+		// `GetSeqDesc(layer+8) != 0`: the bridge row exists (row 0 is the model's own sequence 0).
+		OutLayer.bHasDescriptor = Troika != nullptr
+			&& (Record.Sequence == 0 || Troika->SequenceRows.IsValidIndex(Record.Sequence));
+		OutLayer.LastEventCheck = Record.LastEventCheck;                          // layer+0x2c
+		OutLayer.bSequenceFinished = Record.SequenceFinished != 0;                // layer+4
+		if (Troika != nullptr && Troika->SequenceRows.IsValidIndex(Record.Sequence))
+		{
+			// The census's name for an unclaimed id (debug bookkeeping), as the base fills it.
+			const FElysiumNpc::FSequenceRow& Row = Troika->SequenceRows[Record.Sequence];
+			OutLayer.CensusOwner = Row.OwnerStem.IsEmpty() ? Npc.ModelStem() : Row.OwnerStem;
+			OutLayer.CensusLabel = Row.Label;
+		}
+		return true;
 	}
 }
 
@@ -89,7 +103,7 @@ void FElysiumNpcBase::DispatchAnimEvents(float Interval, FElysiumEntity* Handler
 	}
 
 	// Layers 0..3 through `0x10098cd0`, each on its own cursor, `eventtime` from the owner's
-	// `m_flAnimTime`. The seam answers "no layer" for all four (see `OverlayLayerWords`).
+	// `m_flAnimTime`. All four records, every think, in order (see `OverlayLayerWords`).
 	for (int32 LayerIndex = 0; LayerIndex < ElysiumOverlay::NumSlots; ++LayerIndex)
 	{
 		FElysiumSequenceWords Layer;
@@ -98,6 +112,13 @@ void FElysiumNpcBase::DispatchAnimEvents(float Interval, FElysiumEntity* Handler
 			continue;
 		}
 		Layer.AnimTime = AnimTime;                                                // `param_3[0x5d]`, the owner's
+		// Retail writes `layer+4 = 0` and `layer+0x2c = flEnd` on the record BEFORE its event loop,
+		// so a handler that re-seeds the slot (`SetLayer 0x10099020` zeroes both) keeps what it wrote.
+		Layer.WordsWritten = [this, LayerIndex](const FElysiumSequenceWords& Written)
+		{
+			AnimOverlay[LayerIndex].SequenceFinished = Written.bSequenceFinished ? 1 : 0;   // layer+4
+			AnimOverlay[LayerIndex].LastEventCheck = Written.LastEventCheck;                // layer+0x2c
+		};
 		const TConstArrayView<FElysiumAnimEvent> LayerEvents = Troika != nullptr
 			? Troika->SequenceEvents(Layer.Sequence) : TConstArrayView<FElysiumAnimEvent>();
 		ElysiumAnimEvents::DispatchLayer(Layer, LayerEvents, *this, EventHandler);      // 0x10098cd0

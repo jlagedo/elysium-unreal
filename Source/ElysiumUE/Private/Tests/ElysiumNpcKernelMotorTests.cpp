@@ -725,8 +725,9 @@ bool FElysiumNpcKernelMotorSlotsTest::RunTest(const FString&)
 	TestFalse(TEXT("slot 153 answers false with no motor"), Guard->IsMoving());
 
 	// Slot 575 `0x102bf4a0`. The gate needs an enemy, `MOVE_FACE_ENEMY`, an active weapon AND the
-	// weapon's `0x6000` capability bits — the last of which is a SEAM answering 0, so the Troika
-	// gate closes before the base rung is ever reached.
+	// weapon's `0x6000` capability bits (slot 360, read through `SelectActiveWeaponWord()`). This
+	// fixture holds no weapon, so the Troika gate closes before the base rung is ever reached; the
+	// passing arm is `Elysium.Arm.NpcKernelMoveAndShoot.Slot575`'s.
 	TestFalse(TEXT("slot 575 declines with no enemy"), Guard->ShouldMoveAndShoot());
 	Guard->BaseMemory.Enemy = Other->Handle;
 	Guard->NpcFlags.Set(EElysiumNpcFlag2::MOVE_FACE_ENEMY);

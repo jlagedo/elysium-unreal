@@ -332,9 +332,10 @@ float FElysiumNpcBase::RunAnimation()
 float FElysiumNpcBase::StudioFrameAdvance(float IntervalArg)
 {
 	// `CBaseAnimatingOverlay::StudioFrameAdvance` `0x10098bb0` runs `CBaseAnimating`'s body
-	// (`0x1008f120`) and then the four overlay layers (`CAnimationLayer::StudioFrameAdvance` per
-	// live layer, slot 112 on a finished auto-kill layer); the layers are not carried by this port's
-	// NPC (named gap). `0x1008f120`, in its order:
+	// (`0x1008f120`) and then the four overlay layers (`CAnimationLayer::StudioFrameAdvance
+	// 0x10098830` per live layer, slot 112 on a finished auto-kill layer) with the interval the base
+	// returned, on both of its return paths: `AdvanceOverlayLayers` (spec 0002 V4o).
+	// `0x1008f120`, in its order:
 	const float Now = World != nullptr ? static_cast<float>(World->NowSeconds()) : 0.f;
 	const bool bWasFinished = bSequenceFinished;                          // 0x1008f18c
 	if (PrevAnimTime == 0.f)                                              // 0x1008f192..0x1008f1a3
@@ -350,6 +351,9 @@ float FElysiumNpcBase::StudioFrameAdvance(float IntervalArg)
 	Interval = (Interval + Now) - AnimTime;                               // 0x1008f1d8..0x1008f1e5
 	if (!(static_cast<double>(Interval) > GAnimMinFrameInterval))         // 0x1008f1e9 FCOMP 0.001 / 0x1008f1f4
 	{
+		// The base answers 0.0 (`0x1008f1fc`) and the owner still runs the layer body with it
+		// (`0x10098bb0`): no cycle moves, each live layer's weight is recomputed.
+		AdvanceOverlayLayers(0.f);
 		return 0.f;                                                       // 0x1008f1fc
 	}
 	PrevAnimTime = AnimTime;                                              // 0x1008f21b
@@ -387,6 +391,8 @@ float FElysiumNpcBase::StudioFrameAdvance(float IntervalArg)
 	{
 		EmitAiTrace(TEXT("seqfinished"), TraceSequenceName(SequenceNumber));
 	}
+	// `0x10098bb0`: the layers, on the interval the base returned (`0x1008f321`).
+	AdvanceOverlayLayers(Interval);
 	return Interval;                                                      // 0x1008f321
 }
 
@@ -558,6 +564,26 @@ int32 FElysiumNpcBase::TranslateActivityNumber(int32 Activity, int32& OutWeaponA
 	// per-weapon translation is `Visual/ElysiumAnimationResolve.cpp`'s and is keyed on activity
 	// NAMES, so there is no retail-numbered table at this tier. Answering the activity unchanged is
 	// what retail's own EMPTY translation table gives, which is the unarmed body's case.
+	//
+	// One rewrite of retail's chain is made here, because the name-keyed resolver cannot make it: the
+	// AIM GAITS the move-and-shoot overlay installs (`0x102e84a0`: `9 -> 0x11`, `0x13 -> 0x15`).
+	// Retail's `TranslateActivity` opens with slot 375 (`+0x5dc`), and on the human line
+	// (`CNPC_VHuman::NPC_EarlyTranslateActivity 0x103854f0`, step 1) capability `0x40` -- the same
+	// `CAP_MOVE_SHOOT` slot 575 requires -- turns `ACT_WALK_AIM 0x11` back into `ACT_WALK 9` and
+	// `ACT_RUN_AIM 0x15` into `ACT_RUN 0x13`: the body keeps its gait and the shot is the layer over
+	// it. The class's own slot 375 decides (a body it leaves aiming keeps the aim activity); only the
+	// de-aimed gait is taken from it, the armed / relaxed branch staying the resolver's as for every
+	// other gait request (spec 0002 V4o).
+	if (Activity == 0x11 || Activity == 0x15)
+	{
+		FElysiumNpcBase* const MutableThis = const_cast<FElysiumNpcBase*>(this);
+		if (MutableThis->NPC_EarlyTranslateActivity(Activity) != Activity)   // slot 375 +0x5dc
+		{
+			const int32 Gait = Activity == 0x11 ? 9 : 0x13;
+			OutWeaponActivity = Gait;
+			return Gait;
+		}
+	}
 	OutWeaponActivity = Activity;
 	return Activity;
 }

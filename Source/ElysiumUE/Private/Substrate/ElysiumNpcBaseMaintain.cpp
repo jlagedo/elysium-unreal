@@ -97,11 +97,10 @@ void FElysiumNpcBase::RefreshIdealStateForMaintenance()
 
 void FElysiumNpcBase::RunTaskOverlay()
 {
-	// `RunTaskOverlay 0x10289c90` re-tests slot 529 before entering the already stood
-	// `CAI_MoveAndShootOverlay` seam. The overlay's full weapon/pose controller is outside this
-	// family; its existing state records the live call instead of silently dropping it.
-	if (IsCurTaskContinuousMove()) // 0x10289c90
+	// `RunTaskOverlay 0x10289c90`: slot 529 `IsCurTaskContinuousMove` true -> the overlay's run
+	// `0x102e8560` on `m_MoveAndShootOverlay (+0x5cf4)`; false -> nothing.
+	if (IsCurTaskContinuousMove()) // 0x10289c90 slot 529
 	{
-		++MoveAndShootOverlay.UpdateCalls; // 0x10289c9e -> 0x102e8560
+		RunMoveAndShootOverlay(); // 0x10289c9e -> 0x102e8560
 	}
 }

@@ -1,0 +1,51 @@
+{
+  "name": "never_within_trips",
+  "about": "Harness self-test: a `never` with `within` counts a match inside its relative window. The mark's Trigger at t=1.0 meets `mark` and opens a 1.5 s window, [1.0, 2.5]; the relay's Trigger at t=2.0 falls inside it and fails the run (`expect_fail`: that failure is this record's pass). Reported as `fail`, it means the relative window did not count an event inside it.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 4.0,
+  "expect_fail": true,
+  "rows": [
+    {
+      "classname": "logic_relay",
+      "name": "selftest_relay",
+      "at": "start"
+    },
+    {
+      "classname": "logic_relay",
+      "name": "selftest_mark",
+      "at": "start"
+    }
+  ],
+  "script": [
+    {
+      "t": 1.0,
+      "do": "fire",
+      "target": "selftest_mark",
+      "input": "Trigger"
+    },
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "selftest_relay",
+      "input": "Trigger"
+    }
+  ],
+  "expect": [
+    {
+      "label": "mark",
+      "who": "selftest_mark",
+      "kind": "input",
+      "match": "Trigger"
+    }
+  ],
+  "never": [
+    {
+      "who": "selftest_relay",
+      "kind": "input",
+      "match": "Trigger",
+      "after": "mark",
+      "within": 1.5
+    }
+  ]
+}

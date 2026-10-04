@@ -26,7 +26,11 @@
       }
     }
   ],
+  "rows": [
+    { "classname": "events_player", "name": "arena_player_events", "at": "start" }
+  ],
   "script": [
+    { "t": 0.05, "do": "fire", "target": "arena_player_events", "input": "MakePlayerUnkillable" },
     { "t": 6.0, "do": "player_teleport", "at": [587.0, 683.0, 0.0], "face": "far_ne" },
     { "t": 16.0, "do": "player_teleport", "at": [-317.0, 683.0, 0.0], "face": "far_ne" }
   ],
@@ -52,5 +56,6 @@
     { "at": 18.0, "who": "arena_shooter", "probe": "has_condition", "condition": "CAN_RANGE_ATTACK1", "equals": true },
     { "at": 18.0, "who": "arena_shooter", "probe": "has_condition", "condition": "TOO_CLOSE_FOR_RANGED", "equals": false },
     { "at": "end", "who": "arena_shooter", "probe": "alive", "equals": true }
-  ]
+  ],
+  "notes": "Staging (V4o): since the event shot (CWeaponRanged 0x10238160 -> Shot 0x102387b0) an NPC's 3031 commits its bullets, 15 a set from the .38 here, and a 100-health player dies at the seventh; the record is about the gunman, so the player is held by retail's own unkillable latch, an events_player row's MakePlayerUnkillable input, from t=0.05."
 }

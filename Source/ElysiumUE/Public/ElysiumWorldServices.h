@@ -800,6 +800,9 @@ struct FElysiumSequenceDescriptor
 	// `flags & 1`, STUDIO_LOOPING: `ResetSequenceInfo 0x10090950` copies it to `m_bSequenceLoops`
 	// (`0x10090a14`) and `DispatchAnimEvents 0x10091880` reads it for the wrap clause.
 	bool bStudioLooping = false;
+	// `flags & 2`, STUDIO_SNAP: slot 268 `SetLayer 0x10099020` zeroes a layer's two blends for it
+	// (`0x100990a4`).
+	bool bStudioSnap = false;
 	// `SequenceDuration`, seconds, where the bake states a movement cycle; 0 = not stated (the
 	// kernel then divides by the length the clip player reported).
 	float CycleSeconds = 0.f;

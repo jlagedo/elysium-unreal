@@ -1,6 +1,6 @@
 {
   "name": "cover_reclaim",
-  "about": "Claim -> release -> re-claim (spec 0002 V1 'Cover', the 2026-09-30 run 6 as a record; re-staged 2026-10-04, Q-H1, for opaque arena solids). The tactical search 0x102b7110 (m_bForceCoverLOSCheck +0x6408 set around it) runs 0x102d2980 (flags 8, mask from 0x102b7690, slot 550 radius 1024): with flags bit 0 clear it returns the FIRST admitted node in hint-list order (head = the last-spawned node, cover_corner_nw); a corner (0x27d8) is admitted through FValidateHintType 0x10295c20 -> 0x10297430 -> 0x10296c40 (min 256, facing dot in (0.50, 0.731), projection >= 0.2, then under +0x6408 the hint LOS 0x102968f0: hint position + hull maxs.z to the enemy's eye, mask 0x46804099, fraction 1). The player stands at (-17.2, 308.1) Source units: from cover_corner_nw the line to him passes north of the block (y 112.9 at x = 96), facing dot 0.513, projection 0.62; from cover_corner_ne facing dot 0.589, line clear, projection 0.33 from nw. Both low nodes are refused by their facing band (0.81 and 0.75 < 0.87), and the low_north line crosses the 96-unit block anyway. So nw is claimed first (reserve 0x102d1350). Kill on a hint is ScriptHide (slot 119 0x102d08c0 -> slot 77 0x102d0860, m_iDisabled = 1), not the destructor; the next NPCThink validates m_pHintNode through slot 566 (0x102930db), the disabled hint fails (0x10296c40's first arm), and NPCThink runs ClearHintNode(5.0) (0x10293149, the release with a 5 s reuse delay) and SetCondition(COND_HINT_INVALID 0x29) (0x10293160). 0x29 is in the cover program's interrupts, the program breaks, and the next search starts after the cursor (nw) and claims cover_corner_ne; then 0x9b again on it. (The old staging on cover_seat passed only while the block was transparent: against an opaque block nw's and low_north's hint LOS fail, ne is claimed first, and with both corners killed no hint is admitted, so 0x102b7690 answers 0 and the gunman fires, SCHED_TROIKA_RANGE_ATTACK1 0xed.)",
+  "about": "Claim -> release -> re-claim (spec 0002 V1 'Cover', the 2026-09-30 run 6 as a record; re-staged 2026-10-04, Q-H1, for opaque arena solids). The tactical search 0x102b7110 (m_bForceCoverLOSCheck +0x6408 set around it) runs 0x102d2980 (flags 8, mask from 0x102b7690, slot 550 radius 1024): with flags bit 0 clear it returns the FIRST admitted node in hint-list order (head = the last-spawned node, cover_corner_nw); a corner (0x27d8) is admitted through FValidateHintType 0x10295c20 -> 0x10297430 -> 0x10296c40 (min 256, facing dot in (0.50, 0.731), projection >= 0.2, then under +0x6408 the hint LOS 0x102968f0: hint position + hull maxs.z to the enemy's eye, mask 0x46804099, fraction 1). The player stands at (-17.2, 308.1) Source units: from cover_corner_nw the line to him passes north of the block (y 112.9 at x = 96), facing dot 0.513, projection 0.62; from cover_corner_ne facing dot 0.589, line clear, projection 0.33 from nw. Both low nodes are refused by their facing band (0.81 and 0.75 < 0.87), and the low_north line crosses the 96-unit block anyway. So nw is claimed first (reserve 0x102d1350). Kill on a hint is ScriptHide (slot 119 0x102d08c0 -> slot 77 0x102d0860, m_iDisabled = 1), not the destructor; the next NPCThink validates m_pHintNode through slot 566 (0x102930db), the disabled hint fails (0x10296c40's first arm), and NPCThink runs ClearHintNode(5.0) (0x10293149, the release with a 5 s reuse delay) and SetCondition(COND_HINT_INVALID 0x29) (0x10293160). 0x29 is in the cover program's interrupts, the program breaks, and the next search starts after the cursor (nw) and claims cover_corner_ne; then 0x9b again on it. (The old staging on cover_seat passed only while the block was transparent: against an opaque block nw's and low_north's hint LOS fail, ne is claimed first, and with both corners killed no hint is admitted, so 0x102b7690 answers 0 and the gunman fires, SCHED_TROIKA_RANGE_ATTACK1 0xed.) The run to cover fires on the move (V4o, `cover_move_shoot`).",
   "stage": "arena",
   "seed": 1,
   "duration": 50.0,
@@ -32,7 +32,11 @@
       }
     }
   ],
+  "rows": [
+    { "classname": "events_player", "name": "arena_player_events", "at": "start" }
+  ],
   "script": [
+    { "t": 0.05, "do": "fire", "target": "arena_player_events", "input": "MakePlayerUnkillable" },
     { "after": "at_cover", "delay": 1.0, "do": "kill", "target": "cover_corner_nw" }
   ],
   "expect": [
@@ -51,5 +55,6 @@
   "probes": [
     { "at": "end", "who": "arena_gunman", "probe": "hint", "equals": "cover_corner_ne" },
     { "at": "end", "who": "arena_gunman", "probe": "alive", "equals": true }
-  ]
+  ],
+  "notes": "Staging (V4o): since the event shot (CWeaponRanged 0x10238160 -> Shot 0x102387b0) an NPC's 3031 commits its bullets, 15 a set from the .38 here, and a 100-health player dies at the seventh; the record is about the gunman, so the player is held by retail's own unkillable latch, an events_player row's MakePlayerUnkillable input, from t=0.05."
 }

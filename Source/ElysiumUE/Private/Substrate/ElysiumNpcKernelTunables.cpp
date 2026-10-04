@@ -5,7 +5,7 @@
 // of the pinned `Vampire/dlls/vampire.dll` (image base `0x10000000`) at the width its type states,
 // and `--check` reads it again. A body reads the NAME; the address and its evidence are here, once.
 //
-// 273 cells and immediates, 77 ConVars; image sha256 `c546f4de2003624d…`.
+// 273 cells and immediates, 78 ConVars; image sha256 `c546f4de2003624d…`.
 
 #include "Substrate/ElysiumNpcKernelTunables.h"
 
@@ -31,6 +31,7 @@ namespace
 		{ TEXT("tzimisce_voice_attn"), 0x1093cfd8u, TEXT("65"), 65.0f, 65 },
 		{ TEXT("tzimisce_voice_volume"), 0x1093ceb8u, TEXT("1"), 1.0f, 1 },
 		{ TEXT("debug_allow_move_facing"), 0x10924f70u, TEXT("1"), 1.0f, 1 },
+		{ TEXT("debug_allow_mf_turn"), 0x10923cf0u, TEXT("0"), 0.0f, 0 },
 		{ TEXT("debug_turning"), 0x109247e8u, TEXT("0"), 0.0f, 0 },
 		{ TEXT("sabbat_gunman_speed_threshold"), 0x1093c100u, TEXT("0.1"), 0.1f, 0 },
 		{ TEXT("sabbat_gunman_speed_trails"), 0x1093c148u, TEXT("3"), 3.0f, 3 },

@@ -492,6 +492,12 @@ public:
 		// `OperatorHandleAnimEvent` and no estimate was queued. A transaction whose clip is cut short
 		// before its event then commits nothing, which is retail's own shape: the shot simply misses.
 		bool bAwaitingAnimEvent = false;
+		// RANGED ONLY. `bulletSetsToFire` (`weapon +0x918`), the count `CWeaponRanged::Shot
+		// 0x102387b0`'s cooldown loop (`0x1023891b..0x1023895d`) answered for the event that staged
+		// this transaction: the commit fires this many sets. 1 for every transaction a press or a
+		// schedule task staged (`BeginRangedShot`); `ShotFromAnimEvent` writes the loop's own count.
+		// Transient and unsaved: its commit is queued at delay 0.0 by the event that wrote it.
+		int32 BulletSets = 1;
 
 		// The melee contact walk's state (see `AdvanceSwingContact`).
 		// All of it is TRANSIENT mid-swing state and none of it is saved, for the same reason
@@ -658,6 +664,61 @@ public:
 	// fact, and it is a work list rather than a fault.
 	bool OperatorHandleAnimEvent(FElysiumCombatCharacter& Operator, const FElysiumAnimEvent& Event);
 
+	// **An NPC's commit event with nothing staged IS the shot** (spec 0002 V4o lane O3).
+	// `CWeaponRanged::Operator_HandleAnimEvent 0x10238160` (3030..3044) -> `0x10238320`
+	// (`DAT_1088aee4 = 0`) -> `ModeDispatch(1) 0x102383b0` -> slot 373 `Shot 0x102387b0`: retail
+	// stages no attack before the event. Reached from `CommitFromAnimEvent` when no transaction is
+	// staged and the owner is not the player; the ranged operator body is the only one whose commit
+	// ids reach it (`0x10238160` serves `CWeaponRanged` and all 16 subclasses).
+	//
+	// In `Shot`'s order: the mode record in force (`0x102517e0`, `weapon +0x848`) must be type 1 or 2
+	// -- any other type fires nothing and only advances the two clocks; owner, then the NPC pointer;
+	// the weapon activity and the combat sound EVEN AT ZERO SETS; the count from the cooldown
+	// (`0x1023891b`), capped by the clip, never lowering it; no line-of-fire gate. The sets that
+	// remain are staged as one transaction against the owner's enemy and their commit queued at delay
+	// 0.0 (`BeginRangedShot`'s spine and queue discipline, with no clip play and no estimate).
+	//
+	// The PLAYER's unstaged event stays what it was (claimed, nothing committed): the player's `Shot`
+	// is the press transaction `AttackIntent` stages. Always answers true: the id is this body's.
+	bool ShotFromAnimEvent(const FElysiumAnimEvent& Event);
+
+	// **SEAMS of `Shot 0x102387b0` on the NPC path**, each recorded at its retail position because
+	// nothing behind it is built here. Public so a case can read that the call was made and how often.
+	struct FShotSeams
+	{
+		// Step 3: the weapon's own slot 333 `(6, 1, 0, 0, 0, 0)` -- the weapon activity an NPC's shot
+		// plays (the player's is `(1, 1, ...)`). Played on every event that passed the owner and
+		// NPC-pointer tests, zero sets included. No weapon-model activity word stands here: counted.
+		int32 WeaponActivityCalls = 0;
+		int32 LastWeaponActivity = 0;
+		// Step 5: owner slot 389 `Weapon_ShootPosition 0x103338c0`, then the NPC's slot 574
+		// `GetShootEnemyDir 0x10278900 (&out, &shootPos, 1, 0)`. Both are called; the transaction
+		// carries a victim handle rather than a ray (`BeginRangedShot`'s stated divergence), so the
+		// two answers are kept here and feed nothing yet.
+		FVector LastShootPositionCm = FVector::ZeroVector;
+		FVector LastShootDirection = FVector::ZeroVector;
+		// Step 6: `bulletSetsToFire (+0x918)` as the cooldown loop left it, BEFORE the clip cap.
+		int32 LastCooldownSets = 0;
+		// Step 7: the same count after the clip cap -- what was staged.
+		int32 LastSets = 0;
+		// Step 9: `CSoundEnt::InsertSound(1, owner origin, [0x1072bc40], 0.2)`, reached on every event
+		// that passed step 3, zero sets included.
+		int32 CombatSoundInserts = 0;
+	};
+	FShotSeams ShotSeams;
+
+	// The weapon's slot 332 `0x10254410`: the mode record's `Attack_Rate (+0x260)` through the
+	// owner's `0x1033d940`, which doubles it under `PresenceDoublesAttackRate`. Seconds.
+	float ShotAttackRate(const FElysiumWeaponMode& Mode) const;
+
+	// SEAM for `0x1033d940`'s test `0x101e3f50(&DAT_10739a4c, owner)`: a Presence level bit
+	// (discipline id 10, five level bits) in the owner's `m_iDisciplineFlags2 (+0xeb4)` doubles the
+	// attack rate. Nothing in this runtime writes a Presence bit into `FElysiumNpc::DisciplineFlags2`
+	// (its one writer is the reset `0x1029a58f`), and the bit values are the run-time table's, so
+	// this answers false: an NPC's slot 332 is `Attack_Rate` unscaled. The same seam as
+	// `FElysiumNpc::RangedDisciplineGate`.
+	static bool PresenceDoublesAttackRate(const FElysiumCombatCharacter* Owner);
+
 	// Every write to the two deadlines goes through here: a MAXIMUM operation, never a shortening
 	// write. Public because a discipline, a scripted beat, or an AI schedule holds a weapon the
 	// same way, and must not reach the fields directly.
@@ -785,6 +846,30 @@ private:
 
 	EVerdict BeginRangedShot(EIntent Intent, int32 ModeIndex, const FElysiumWeaponMode& Mode,
 		const FElysiumEntityHandle& Victim);
+
+	// What a ranged transaction is staged with: the half `BeginRangedShot` (a press, a schedule task)
+	// and `ShotFromAnimEvent` (an NPC's event) share. Everything that differs between the two is a
+	// field here; `StageRangedShot` writes the transaction and nothing else -- it plays no clip,
+	// touches no deadline and queues nothing.
+	struct FRangedStage
+	{
+		int32 ModeIndex = INDEX_NONE;
+		FElysiumEntityHandle Victim;
+		FString ClipLabel;
+		FString ClipOwnerStem;
+		float PlaybackRate = 1.0f;
+		float ClipSeconds = 0.0f;
+		double CommitTime = 0.0;
+		double RecoveryDeadline = 0.0;
+		bool bAwaitingAnimEvent = false;
+		int32 BulletSets = 1;
+	};
+	void StageRangedShot(const FRangedStage& Stage);
+
+	// `Shot 0x102387b0` step 7, the clip CAP: `n = sets * Ammo_Cost (+0x110)`; `n > 0` and
+	// `clip (+0x74c) < n` -> `sets = clip / Ammo_Cost`. Never a refusal and never a write.
+	int32 CapBulletSetsByClip(int32 Sets, const FElysiumWeaponMode& Mode) const;
+
 	// The accepted swing's own identity, copied out of the transaction before the first contact
 	// commits. A contact can retire the transaction, so the walk must not read the live one back
 	// through a reference into it — and the values are one thing, not a parameter list.
@@ -971,8 +1056,9 @@ private:
 		const FString& ClipLabel);
 
 	// Queue the staged transaction's commit for this frame's queue service, from the sequence event
-	// that named the instant. Claimed even with nothing staged — an idle or aim clip carrying a shot
-	// id is retail's own case, and its mode dispatch finds no attack to commit either.
+	// that named the instant. With nothing staged the event is still claimed: a non-player owner's
+	// is the shot itself (`ShotFromAnimEvent`, `0x10238320` -> `ModeDispatch(1)` -> `Shot`), the
+	// player's commits nothing (its `Shot` is the press transaction).
 	bool CommitFromAnimEvent(const FElysiumAnimEvent& Event);
 
 	// `FindEntityFOV` reduced to what the substrate owns: the nearest live combat character inside

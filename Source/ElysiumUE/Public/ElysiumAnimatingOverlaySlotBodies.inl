@@ -50,13 +50,37 @@ FFlinchRecord Flinch[NumFlinchRecords];   // +0x07f4, stride 0x1c
 
 // `FindGestureLayerByOwner` is `CBaseAnimatingOverlay::FindGestureLayer` `0x100994c0`, the scan
 // slot 271 answers through (a stub answering 0 for "not found" would port the opposite of retail's
-// search). Its siblings `SetLayer` and `AllocateLayer` closed at 0015.
+// search). Its siblings `SetLayer` (slot 268 `0x10099020`), `RemoveLayer` (269 `0x10099660`),
+// `HasLayer` (270 `0x10099540`) and `AllocateLayer` (272 `0x10099470`) are hand-written beside it
+// (spec 0002 V4o), under their generated slot declarations.
 int32 FindGestureLayerByOwner(int32 Activity) const;
 
-// `CBaseAnimating::GetSequenceFlags(int)`. **SEAM**, answering 0. Bit 0 is the "looping" flag the
-// gesture arm of `AddSceneEvent` warns about; bit 1 is the SNAP bit `SetLayer` zeroes an envelope
-// for (`ElysiumOverlay::BlendFor`).
+// `CBaseAnimatingOverlay::AddGesture` `0x100991b0`, with `0x100990f0` as its two slot calls: the
+// layer already held for the activity answers its index (slots 270 / 271); else
+// `SelectWeightedSequence(Activity)`, a sequence `< 1` refused; slot 272 `AllocateLayer`; slot 268
+// `SetLayer(i, -1, seq, bAutoKill)`; then `m_nActivity = Activity`. The layer index, or -1.
+int32 AddGesture(int32 Activity, bool bAutoKill);
+
+// The layer half of slot 250 `CBaseAnimatingOverlay::StudioFrameAdvance` `0x10098bb0`: for each
+// layer whose weight is not 0, `CAnimationLayer::StudioFrameAdvance` `0x10098830` with the interval
+// the base body (`0x1008f120`) returned -- 0 included: the cycle then stays and the weight is still
+// recomputed -- and on a finished auto-kill layer `m_flWeight = 0` and slot 112 `(i, m_nActivity)`.
+void AdvanceOverlayLayers(float Interval);
+
+// Not retail's: the body's notice that slot 268 `SetLayer` seeded layer `Layer`, where the DRAW of
+// the layer's clip starts (visual-only; the kernel's cycle, events and finish are the record above).
+// The base draws nothing; `FElysiumNpc` plays the row's clip on the `UpperBody` channel.
+virtual void OnOverlayLayerSet(int32 Layer) { (void)Layer; }
+
+// `CBaseAnimating::GetSequenceFlags(int)` / `GetSeqDesc(seq)->flags`, from the sequence bridge's
+// row: bit 0 `STUDIO_LOOPING` (the gesture arm of `AddSceneEvent` warns about it; the layer
+// advance's wrap), bit 1 the SNAP bit `SetLayer` zeroes an envelope for
+// (`ElysiumOverlay::BlendFor`). 0 on a body with no bridge.
 int32 SequenceFlagsOf(int32 Sequence) const;
+
+// `CBaseAnimating::GetSequenceCycleRate(int)` `0x10091230` as the layer bodies read it for a
+// layer's sequence: the bridge row's (`FElysiumNpc::SequenceCycleRateOf`). 0 on a body with no bridge.
+float OverlaySequenceCycleRate(int32 Sequence) const;
 
 // `CBaseAnimating::LookupPoseParameter(const char*)`. **SEAM**, answering -1.
 int32 LookupPoseParameter(const TCHAR* Name) const;

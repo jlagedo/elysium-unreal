@@ -53,6 +53,7 @@
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Substrate/ElysiumWeaponClasses.h"       // FElysiumWeapon::IsHidden -- slot 381
 #include "Visual/ElysiumActionTables.h"
 #include "Visual/ElysiumEyeRig.h"
 
@@ -724,6 +725,32 @@ FElysiumEntity* FElysiumCombatCharacter::ActiveWeaponEntity() const
 	// pre-pass (`0x102b8620`) and `CNPC_VBach::SelectScheduleRangedCombat` (`0x103642f0`) all begin
 	// with this call, so a null answer would have made four recovered bodies no-ops.
 	return Inventory.Active(*this);
+}
+
+int32 FElysiumCombatCharacter::Weapon_TranslateActivity(int32 Activity)
+{
+	// `CBaseCombatCharacter::Weapon_TranslateActivity` `0x10327ec0`, slot 381 (`+0x5f4`): a valid
+	// `m_hActiveWeapon (+0x19a4)` whose `m_fEffects (+0x19c)` has `EF_NODRAW 0x40` clear answers the
+	// weapon's slot 361 `ActivityOverride 0x1024f210` (`+0x5a4`) of the activity; no weapon, or a
+	// hidden one, answers the activity unchanged.
+	FElysiumItem* const ActiveItem = Inventory.Active(*this);
+	if (ActiveItem == nullptr)
+	{
+		return Activity;
+	}
+	const FElysiumWeapon* const ActiveWeapon = ActiveItem->AsWeapon();
+	if (ActiveWeapon != nullptr && ActiveWeapon->IsHidden())                 // +0x19c & 0x40
+	{
+		return Activity;
+	}
+	// Weapon slot 361 over this body's vocabulary: the NPC line's `WeaponActivityOverride`.
+	// SEAM for a wielder off the NPC line (the player): its weapon ladder is the animation
+	// resolver's, keyed on names, so `ActivityOverride 0x1024f210` answers the activity unchanged.
+	if (const FElysiumNpcBase* const NpcBase = AsNpcBase())
+	{
+		return NpcBase->WeaponActivityOverride(Activity);                    // weapon +0x5a4
+	}
+	return Activity;
 }
 
 // --- Moved from `ElysiumNpcBaseEntityChain.cpp` (story 5 step 6) ---

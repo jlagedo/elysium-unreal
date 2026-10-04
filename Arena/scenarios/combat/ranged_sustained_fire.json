@@ -8,6 +8,12 @@
   "cast": [
     {"name": "arena_shooter", "classname": "npc_VHumanCombatant", "at": "far_ne", "face": "player", "body": "regular_cop", "keys": {"stattemplate": "TutorialThug", "npc_perception": "3", "spawnflags": "4", "StartHidden": "0", "additionalequipment": "item_w_thirtyeight", "player_reaction": "D_HT 5", "hint_groups": "2", "stay_entrenched": "0", "allow_kick_hint_use": "0", "squadname": ""}}
   ],
+  "rows": [
+    { "classname": "events_player", "name": "arena_player_events", "at": "start" }
+  ],
+  "script": [
+    { "t": 0.05, "do": "fire", "target": "arena_player_events", "input": "MakePlayerUnkillable" }
+  ],
   "expect": [
     {"label": "engages", "who": "arena_shooter", "kind": "schedule", "match": "SCHED_TROIKA_START_COMBAT (", "by": 3.0},
     {"label": "shot_1", "who": "arena_shooter", "kind": "animevent", "match": "^3031( |$)", "regex": true, "within": 6.0},
@@ -28,5 +34,5 @@
   "probes": [
     {"at": "end", "who": "arena_shooter", "probe": "alive", "equals": true}
   ],
-  "notes": "Green since V5a + A3 (slot 363: no BEHIND_ENEMY). Its 3031s are still the world-tick poll's: no NPC shot runs through the weapon yet (V4a lane A1, V4o lane O3), so no clip is spent. When O3 lands the event shot it must keep this green (J12: an NPC's clip never drops, Shot 0x102387b0's spend is inside its player block 0x10238a15). The BEHIND_ENEMY never is ranged_open_fire's (the player faces the gunman): it is why the record's first red is V4a's slot 363. The 8 s between shots admits TASK_WAIT_ATTACK_TIME1's longest wait at this range (NPC_Attack_Rate_Max 2.5 scaled up with range) plus the attack clip."
+  "notes": "Staging (V4o): since the event shot (CWeaponRanged 0x10238160 -> Shot 0x102387b0) an NPC's 3031 commits its bullets, 15 a set from the .38 here, and a 100-health player dies at the seventh; the record is about the gunman, so the player is held by retail's own unkillable latch, an events_player row's MakePlayerUnkillable input, from t=0.05. Green since V5a + A3 (slot 363: no BEHIND_ENEMY). Its 3031s are still the world-tick poll's: no NPC shot runs through the weapon yet (V4a lane A1, V4o lane O3), so no clip is spent. When O3 lands the event shot it must keep this green (J12: an NPC's clip never drops, Shot 0x102387b0's spend is inside its player block 0x10238a15). The BEHIND_ENEMY never is ranged_open_fire's (the player faces the gunman): it is why the record's first red is V4a's slot 363. The 8 s between shots admits TASK_WAIT_ATTACK_TIME1's longest wait at this range (NPC_Attack_Rate_Max 2.5 scaled up with range) plus the attack clip."
 }

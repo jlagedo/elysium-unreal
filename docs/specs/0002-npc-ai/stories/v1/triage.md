@@ -967,6 +967,8 @@ query ran over 10 s. Brief J's item 1 (the corpse fall) is withdrawn: V4d.
 
 ### J5. The move-and-shoot overlay `0x102e8560`: **stub now (A1's layer seam and the existing counter, named); a red record now; the overlay stack filed to 0015, the wire to 0002 step 3 (R3)**
 
+*V4o ported it (2026-10-04): the overlay `0x102e8560`, the four layers and the event shot are landed; `cover_move_shoot` is the record.*
+
 - **Against the stub.** It is reachable on step-2 paths: `cover`, `cover_armed`, `cover_reclaim`
   and `range_bands` run a gunman to cover or to a line of fire, and with `COND 0x4f`, flags2
   `0x400`, a `0x6000` weapon and `CAP_MOVE_SHOOT` slot 575 passes and retail fires from the

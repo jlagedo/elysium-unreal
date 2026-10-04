@@ -730,21 +730,22 @@ bool FElysiumNpcKernelSenses10BodyGatesTest::RunTest(const FString&)
 	F.Guard->MoveAndShootOverlay = FElysiumNpcBase::FMoveAndShootOverlay();
 	if (!F.Guard->IsCurTaskContinuousMove())
 	{
+		F.Guard->MoveAndShootOverlay.NextShotTime = 12.f;
 		F.Guard->StartTaskOverlay();
 		TestEqual(TEXT("0x10288721 a non-continuous task leaves the overlay untouched"),
-			F.Guard->MoveAndShootOverlay.Disables, 0);
-		TestEqual(TEXT("...and arms nothing"), F.Guard->MoveAndShootOverlay.Arms, 0);
+			F.Guard->MoveAndShootOverlay.NextShotTime, 12.f);
 	}
 	// `0x102e8250` is the disable, and `FLT_MAX` is retail's own disabled value.
+	F.Guard->MoveAndShootOverlay.NextShotTime = 12.f;
 	F.Guard->DisableMoveAndShootOverlay();
 	TestEqual(TEXT("0x102e8250 stores FLT_MAX into overlay+0x18"),
 		F.Guard->MoveAndShootOverlay.NextShotTime, MAX_flt);
-	TestEqual(TEXT("...and counts one disable"), F.Guard->MoveAndShootOverlay.Disables, 1);
-	// `0x102e8270` falls back to that same disable for a body with no weapon.
+	// `0x102e8270`'s refusals (state 4, no weapon, no `0x11` / `0x15` sequence) land on that same
+	// disable; the arm itself is `Elysium.Arm.NpcKernelMoveAndShoot.Arm`'s.
+	F.Guard->MoveAndShootOverlay.NextShotTime = 12.f;
 	F.Guard->ArmMoveAndShootOverlay(1.f, 2.f);
-	TestEqual(TEXT("0x102e8270 falls back to the disable with no active weapon"),
-		F.Guard->MoveAndShootOverlay.Disables, 2);
-	TestEqual(TEXT("...and arms nothing"), F.Guard->MoveAndShootOverlay.Arms, 0);
+	TestEqual(TEXT("0x102e8270 falls back to the disable on a body that cannot run-and-gun"),
+		F.Guard->MoveAndShootOverlay.NextShotTime, MAX_flt);
 
 	// --- `0x1026ab50` `HeadProbe` -----------------------------------------------------------------
 	// Gated on BOTH `+0x5f2d` and `+0x5f2c`; with the hull never shrunk it does nothing, which is

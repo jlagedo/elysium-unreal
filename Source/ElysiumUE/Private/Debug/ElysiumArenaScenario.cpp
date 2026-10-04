@@ -447,6 +447,20 @@ namespace ElysiumArenaScenarioParse
 		{
 			return R.Fail(Field(Path, TEXT("delay")), TEXT("`delay` counts from an `after` label's match"));
 		}
+		// `within`: the window closes that many seconds after it opens at its label (match + `delay`).
+		if (Out.bWithin && Out.After.IsEmpty())
+		{
+			return R.Fail(Field(Path, TEXT("within")),
+				TEXT("`within` closes the window relative to an `after` label's match"));
+		}
+		if (Out.bWithin && Out.bUntil)
+		{
+			return R.Fail(Path, TEXT("the window closes `until` a time or `within` seconds of its label, not both"));
+		}
+		if (Out.bWithin && Out.Within < 0.0)
+		{
+			return R.Fail(Field(Path, TEXT("within")), TEXT("must be >= 0"));
+		}
 		if (Out.bFrom && Out.bUntil && Out.From > Out.Until)
 		{
 			return R.Fail(Field(Path, TEXT("from")), FString::Printf(
@@ -471,7 +485,7 @@ namespace ElysiumArenaScenarioParse
 			? CheckFields(R, Object, Path, { TEXT("label"), TEXT("who"), TEXT("kind"), TEXT("match"),
 				TEXT("regex"), TEXT("by"), TEXT("within") })
 			: CheckFields(R, Object, Path, { TEXT("who"), TEXT("kind"), TEXT("match"), TEXT("regex"),
-				TEXT("until"), TEXT("from"), TEXT("after"), TEXT("delay"), TEXT("at_most") });
+				TEXT("until"), TEXT("from"), TEXT("after"), TEXT("delay"), TEXT("within"), TEXT("at_most") });
 		if (!bFields)
 		{
 			return false;

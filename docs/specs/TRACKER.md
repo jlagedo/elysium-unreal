@@ -139,8 +139,13 @@ Wave 3 (build work, one agent):
     probe alone (the brawler swings from 305.8 cm and the swing clip's movement never moves the
     body) -- placed on V4c C1. `patrol_monk_loop` green: the red was the record's seat (S11 item 1).
     `FollowerArrivalFloorCm` is retail's 0.0625 units (S11 item 3; the four walk records green).
-  - [ ] **V4o** — the NPC overlay stack and the move-and-shoot wire (pulled from 0015;
-    `0002-npc-ai/stories/v4o/`). M.
+  - [x] **V4o** — the NPC overlay stack and the move-and-shoot wire (pulled from 0015;
+    `0002-npc-ai/stories/v4o/`). M. `cover_move_shoot` and `ranged_open_fire` green (the layer's
+    3031 at 0.3 s after the aim swap; every `TASK_WAIT_ATTACK_TIME1` holds on the shot's own stamp);
+    arena 124: 102 pass / 19 expected-fail / 1 fail (`rollcall_vzombie`, H11) / 2 unexpected-pass
+    (the N4 intermittents); default 170 / 0, arm 1,594 / 0. An NPC's bullets now land: three records
+    stage retail's unkillable latch on the player. Open: a dead enemy is not dropped (the gunman
+    re-selects `START_COMBAT` on `ENEMY_DEAD` every think) -- V4c C2.
   - [ ] **V4c** — attack producers, the weighted pick, the death transaction. M.
   - [ ] **V4d** — the corpse falls: a physics asset from the `.phy`, Unreal's solve (the owner's
     ruling: a named modernization). M.

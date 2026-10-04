@@ -208,10 +208,10 @@ namespace
 
 		Out.bAllowAutofire = Block.Bool(TEXT("allow_autofire"), false);
 
-		Out.BurstMin = Block.Int(TEXT("BurstMin"), 0);
-		Out.BurstMax = Block.Int(TEXT("BurstMax"), 0);
-		// The loader's own clamp — retail forces `BurstMin <= BurstMax`.
-		Out.BurstMax = FMath::Max(Out.BurstMin, Out.BurstMax);
+		Out.BurstMin = Block.Int(TEXT("BurstMin"), 1);                             // +0x3a4, default 1 (`0x10259658 PUSH 1`)
+		Out.BurstMax = Block.Int(TEXT("BurstMax"), 1);                             // +0x3a8, default 1 (`0x1025966c PUSH 1`)
+		// The loader's own clamp (`0x102596e2`): `BurstMin` is lowered to `BurstMax`.
+		Out.BurstMin = FMath::Min(Out.BurstMin, Out.BurstMax);
 
 		Out.Range = Block.Flt(TEXT("Range"), 0.0f);
 		Out.BotchTable = Block.Str(TEXT("Botch_Table"), FString());

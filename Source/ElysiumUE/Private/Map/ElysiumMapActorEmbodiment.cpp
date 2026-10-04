@@ -346,6 +346,7 @@ bool AElysiumMapActor::GetNpcSequenceDescriptor(const FString& Stem, const FStri
 		return false;   // the body's vocabulary does not name it: no descriptor
 	}
 	Out.bStudioLooping = Clip->IsLooping();   // mstudioseqdesc_t::flags & 1
+	Out.bStudioSnap = Clip->IsSnap();         // mstudioseqdesc_t::flags & 2
 	Out.Events = GetNpcEventTimeline(Clip->Owner, Label);
 	// The owning bank's table -- the one the visual's gait fans are read from
 	// (`UElysiumAnimSubsystem::ResolveGaitSpeeds`): one speed pipeline, as retail has one

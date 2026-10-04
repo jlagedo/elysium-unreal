@@ -136,7 +136,9 @@ struct FElysiumArenaMatch
 	bool bWithin = false;
 	double Within = 0.0;
 
-	// never only: the window closes here (absent: the whole run).
+	// never only: the window closes here (absent: the whole run). A `never` may instead carry
+	// `Within` (the field above): the window closes that many seconds after it opens at its `After`
+	// label (the match plus `Delay`); `Until` and `Within` exclude each other.
 	bool bUntil = false;
 	double Until = 0.0;
 

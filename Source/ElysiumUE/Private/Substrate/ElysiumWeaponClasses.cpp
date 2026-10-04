@@ -28,6 +28,7 @@
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumItemTable.h"
+#include "Substrate/ElysiumMiscFlags.h"       // `AddMiscFlag 0x1033c6b0`, `Shot 0x102387b0` step 2
 #include "Substrate/ElysiumNpc.h"             // the NPC leaf the incoming-swing notice is sent to
 #include "Substrate/ElysiumNpcConditions.h"   // ElysiumNpcCond::WeaponCapability — the `0x18000` mask
 #include "Substrate/ElysiumReactions.h"       // the block and knockback families' pure rules
@@ -1260,8 +1261,11 @@ bool FElysiumWeapon::CommitArrivesFromAnimEvent(FElysiumCombatCharacter& Char,
 	// entity's own think runs slot 258).
 	//
 	// An NPC's slot 258 (`CBaseAnimatingOverlay::DispatchAnimEvents 0x10098c80`, from `PostRun
-	// 0x1026c7c0`) walks the event table of the KERNEL's `m_nSequence` (`0x10091880`) and, until the
-	// overlay stack lands (V4o lane O1), no layer. So an NPC's commit arrives from an event exactly
+	// 0x1026c7c0`) walks the event table of the KERNEL's `m_nSequence` (`0x10091880`) and of its four
+	// layers (`0x10098cd0`, V4o). No NPC task arm stages a ranged shot any more -- the event is the
+	// shot (`ShotFromAnimEvent`) -- so this arm is reached only by a transaction something else staged
+	// for a non-player wielder (a test, or the melee task's `AttackIntent` on a non-melee record); its
+	// removal with the estimate is V4c lane C1's. An NPC's commit arrives from an event exactly
 	// when the sequence the kernel is playing authors a commit id for this operator body: the 3031
 	// then travels slot 258 -> slot 259 (`0x10274e30`) -> `Weapon_HandleAnimEvent 0x1032e210` -> this
 	// weapon. The clip `ResolveAndPlay` put on the body (`OwnerStem`, `ClipLabel`) is dispatched by
@@ -1359,9 +1363,18 @@ bool FElysiumWeapon::CommitFromAnimEvent(const FElysiumAnimEvent& Event)
 {
 	if (!Swing.bActive)
 	{
-		// The id fired with nothing staged. Retail's ranged body still accepts it and re-enters mode
-		// dispatch, which finds no attack in flight; an aim or idle clip carrying a shot id lands
-		// here. Claimed, and an ordinary negative rather than a fault.
+		// The id fired with nothing staged. Retail stages nothing before the event at all:
+		// `0x10238160` -> `0x10238320` -> `ModeDispatch(1) 0x102383b0` -> `Shot 0x102387b0`, so for
+		// an NPC operator the event IS the shot (spec 0002 V4o). The only ids that reach here are the
+		// ranged body's 3030..3044, because `IsCommitEvent` answers for that body alone.
+		const FElysiumCombatCharacter* const Operator = OwnerCharacter();
+		if (Operator == nullptr || !IsPlayerSide(*Operator))
+		{
+			return ShotFromAnimEvent(Event);
+		}
+		// The player's `Shot` is the press transaction `AttackIntent` stages, so its unstaged event --
+		// an aim or idle clip carrying a shot id -- finds no attack to commit. Claimed, and an
+		// ordinary negative rather than a fault.
 		UE_LOG(LogElysiumWeapon, Verbose,
 			TEXT("%s took anim event %d with no transaction staged — nothing to commit"),
 			*DebugString(), Event.Event);
@@ -1378,6 +1391,208 @@ bool FElysiumWeapon::CommitFromAnimEvent(const FElysiumAnimEvent& Event)
 	UE_LOG(LogElysiumWeapon, Verbose,
 		TEXT("%s anim event %d commits shot #%d from clip '%s' at cycle %.3f"), *DebugString(),
 		Event.Event, Swing.Serial, *Swing.ClipLabel, Event.Cycle);
+	return true;
+}
+
+bool FElysiumWeapon::PresenceDoublesAttackRate(const FElysiumCombatCharacter* /*Owner*/)
+{
+	// SEAM for `0x101e3f50(&DAT_10739a4c, owner)`, the test inside `0x1033d940`: one of the five
+	// Presence level bits (discipline id 10) in the owner's `m_iDisciplineFlags2 (+0xeb4)`. The port
+	// carries the word (`FElysiumNpc::DisciplineFlags2`) but nothing writes a Presence bit into it and
+	// the bit values are the run-time table's, so this answers false.
+	return false;
+}
+
+float FElysiumWeapon::ShotAttackRate(const FElysiumWeaponMode& Mode) const
+{
+	// Slot 332 `0x10254410`: the mode record's `Attack_Rate (+0x260)` handed to the owner's
+	// `0x1033d940`, which answers `rate * 2` under the Presence test and `rate` otherwise.
+	const float Rate = Mode.AttackRate;                                          // 0x10254410 +0x260
+	return PresenceDoublesAttackRate(OwnerCharacter()) ? Rate * 2.0f : Rate;     // 0x1033d940
+}
+
+int32 FElysiumWeapon::CapBulletSetsByClip(int32 Sets, const FElysiumWeaponMode& Mode) const
+{
+	// `Shot 0x102387b0` step 7: `n = sets * Ammo_Cost (+0x110)`; `n > 0` and
+	// `m_iMagazineCurAmts[ammo index] (+0x74c) < n` -> `sets = clip / Ammo_Cost`. An empty clip gives
+	// zero sets; a mode that costs nothing is never capped.
+	const int32 Needed = Sets * Mode.AmmoCost;
+	if (Needed > 0 && MagazineCount < Needed)
+	{
+		return MagazineCount / Mode.AmmoCost;
+	}
+	return Sets;
+}
+
+bool FElysiumWeapon::ShotFromAnimEvent(const FElysiumAnimEvent& Event)
+{
+	// `CWeaponRanged::Operator_HandleAnimEvent 0x10238160` (events 3030..3044) -> `0x10238320`
+	// (`DAT_1088aee4 = 0`: an NPC operator never takes the secondary wrapper) -> `ModeDispatch(1)
+	// 0x102383b0` -> slot 373 `Shot 0x102387b0`. No attack is staged before the event on this path.
+	if (World == nullptr)
+	{
+		return true;   // a worldless probe entity: no clock to read (`curtime`), nothing to fire
+	}
+	FElysiumCombatCharacter* const Char = OwnerCharacter();                      // 0x10252240
+	if (Char != nullptr && IsPlayerSide(*Char))
+	{
+		// The player's `Shot` is the press transaction (`AttackIntent` -> `BeginRangedShot`); its
+		// unstaged event commits nothing here, as before this entry existed.
+		return true;
+	}
+	const double Now = World->NowSeconds();                                      // curtime
+
+	// --- `ModeDispatch 0x102383b0` ---------------------------------------------------------------
+	// `weapon +0x848 (m_iItemCurActivateMode) = m_iItemActivationModes[0] (+0x84c)`, then the mode
+	// record `0x102517e0(weapon)` whose id `+0x104` equals it: the PRIMARY mode in force, for an NPC
+	// always (the toggle `0x10239270` is reached by no NPC path). No secondary NPC shot exists.
+	const int32 ModeIndex = PrimaryModeIndex;                                    // +0x848
+	const FElysiumWeaponMode* const Mode = ModeAt(ModeIndex);                    // 0x102517e0
+	if (Mode == nullptr)
+	{
+		// Retail answers a static default record of type 0 here and takes the "any other type" arm
+		// with that record's rate. The default record's `Attack_Rate` is unread, so nothing is
+		// written: a weapon with no mode in force advances no clock.
+		UE_LOG(LogElysiumWeapon, Verbose,
+			TEXT("%s took anim event %d with no primary mode in force — nothing fired"),
+			*DebugString(), Event.Event);
+		return true;
+	}
+	// On the record's type `+0x108`.
+	switch (Mode->Type)
+	{
+	case EElysiumWeaponModeType::Attack:              // type 1
+	case EElysiumWeaponModeType::SecondaryAttack:     // type 2
+		break;                                        // -> slot 373 `Shot`
+	case EElysiumWeaponModeType::ZoomLoop:
+	{
+		// Type 3: the zoom step is the player's alone; both next-attack times `= curtime + rate`.
+		const double ZoomRate = static_cast<double>(ShotAttackRate(*Mode));
+		NextPrimaryAttackTime = Now + ZoomRate;                                  // +0x730
+		NextSecondaryAttackTime = Now + ZoomRate;                                // +0x734
+		return true;
+	}
+	case EElysiumWeaponModeType::TogglePrimaryMode:
+		// Type 4: the fire-mode toggle `0x10239270`. SEAM: its body is unread on the NPC path and no
+		// NPC's mode in force is a toggle record (`weapon +0x848` is row 0), so nothing is written.
+		UE_LOG(LogElysiumWeapon, Verbose,
+			TEXT("%s took anim event %d on a toggle mode in force — the toggle 0x10239270 is not "
+				"ported on the NPC path"), *DebugString(), Event.Event);
+		return true;
+	default:
+	{
+		// Any other type (6, the throw `0x10239e70`, is not carried apart from the rest by the item
+		// table): `+0x730 += rate`, `+0x734 =` the same word; nothing fired.
+		NextPrimaryAttackTime += static_cast<double>(ShotAttackRate(*Mode));     // +0x730
+		NextSecondaryAttackTime = NextPrimaryAttackTime;                         // +0x734
+		return true;
+	}
+	}
+
+	// --- `Shot 0x102387b0`, for an NPC, in its order -----------------------------------------------
+	// 1. Zoomed (weapon data `+0x4fe84 > 0 && +0x914 > 0`): the mode record is re-read as tag 2.
+	//    SEAM: no scope state stands in this runtime (`AttackIntent`'s `ZoomLoop` arm), so `+0x914`
+	//    answers 0 and the record stays the one read above.
+
+	// 2. Owner null -> return. `AddMiscFlag(0x200000)` on the owner.
+	if (Char == nullptr)
+	{
+		return true;
+	}
+	ElysiumMiscFlags::Set(Char->MiscFlags, 0x200000u);                           // 0x1033c6b0
+
+	// 3. Not a player and the owner's NPC pointer (`+0x94`) null -> return.
+	FElysiumNpc* const Npc = Char->AsNpc();
+	if (Npc == nullptr)
+	{
+		return true;
+	}
+	//    The weapon activity: the weapon's slot 333 `(6, 1, 0, 0, 0, 0)`. Played before the count,
+	//    so an event inside the cooldown still plays it.
+	++ShotSeams.WeaponActivityCalls;
+	ShotSeams.LastWeaponActivity = 6;
+
+	// 4. Weapon data `+0x50170` -> the owner's `m_fEffects |= 2`. SEAM: the item table carries no
+	//    field for the weapon-data word at `+0x50170`, so it answers 0 and the bit is not written.
+
+	// 5. The shoot position: owner slot 389; the direction: the NPC's slot 574 `(&out, &shootPos,
+	//    1, 0)`.
+	const FVector ShootPositionCm = Char->Weapon_ShootPosition(Char->Origin);    // slot 389 0x103338c0
+	ShotSeams.LastShootPositionCm = ShootPositionCm;
+	ShotSeams.LastShootDirection = Npc->GetShootEnemyDir(ShootPositionCm, 1, 0); // slot 574 0x10278900
+
+	// 6. The cooldown is a COUNT, not a refusal (`0x1023891b..0x1023895d`; the slot index is
+	//    `DAT_1088aee4`, 0 for an NPC, so the word is `m_flNextPrimaryAttack +0x730` and `+0x734` is
+	//    never touched). Written also when the count ends 0: the `max` is then a no-op and the loop
+	//    does not run, so the stamp is unchanged and never moved back. `m_iAtkMode +0x86c != 0`
+	//    re-reads slot 332 each step; the rate cannot change inside the loop here, so one read stands.
+	int32 Sets = 0;                                                              // +0x918 bulletSetsToFire
+	const double Rate = static_cast<double>(ShotAttackRate(*Mode));              // slot 332 0x10254410
+	double Next = FMath::Max(NextPrimaryAttackTime, Now - World->FrameSeconds()); // curtime - frametime
+	if (Rate > 0.0)
+	{
+		while (Next <= Now)                                                      // 0x1023891b
+		{
+			Next += Rate;
+			++Sets;
+		}
+	}
+	else if (Next <= Now)
+	{
+		// CRASH GUARD: retail's loop does not end for a rate of 0 or below. No shipped record states
+		// one (`0x10259230` defaults `Attack_Rate` to 1.0); a fixture that does fires nothing.
+		UE_LOG(LogElysiumWeapon, Warning,
+			TEXT("%s: mode '%s' states Attack_Rate %.3f — the event shot's cooldown loop cannot "
+				"advance, nothing fired"), *DebugString(), *Mode->Tag, Mode->AttackRate);
+	}
+	NextPrimaryAttackTime = Next;                                                // +0x730[0]
+	ShotSeams.LastCooldownSets = Sets;
+
+	// 7. The clip caps, never refuses outright, and an NPC's clip is NOT decremented (the
+	//    subtraction is inside the player-only block `0x10238a15`..`0x10238a4b`): the clip is
+	//    `max(Default_Size, 1)` from `Inventory_Insert 0x10334e70` to death.
+	Sets = CapBulletSetsByClip(Sets, *Mode);
+	ShotSeams.LastSets = Sets;
+
+	// 8. No line-of-fire gate: the one trace (2 048 units, mask `0x46004003`) feeds a debug overlay
+	//    and a discarded `GetFlags`.
+
+	// 9. Per set, owner slot 185 `FireBullets`; `CSoundEnt::InsertSound(1, owner origin,
+	//    [0x1072bc40], 0.2)`; slot 339 `Kick` when the owner's slot 220 answered non-null (SEAM: Kick
+	//    has no recovered producer here, RE-A5 -- not called); `+0x730[slot]` advanced (above).
+	++ShotSeams.CombatSoundInserts;
+	if (Sets <= 0)
+	{
+		// Zero sets: an event inside the cooldown, or a clip that covers no set. Nothing is staged;
+		// the sound is still inserted (the staged path's is the commit's own, below in
+		// `CommitQueuedAttack`).
+		World->EmitGameSound(Char->Origin, ElysiumGameSounds::Gunshot(),
+			/*RadiusCm, table-resolved*/ -1.f, Char->Handle,
+			ElysiumStealth::HearingReductionCmFor(Char), ElysiumGameSounds::Combat,
+			/*InsertSound's duration*/ 0.2);
+		UE_LOG(LogElysiumWeapon, Verbose,
+			TEXT("%s anim event %d fires zero sets (next attack %.3f, now %.3f, clip %d)"),
+			*DebugString(), Event.Event, NextPrimaryAttackTime, Now, MagazineCount);
+		return true;
+	}
+
+	// The sets are one transaction: the mode, the victim, the damage spine and the queue discipline
+	// are `BeginRangedShot`'s, with no clip play (the kernel pushed the layer or the sequence that
+	// raised this event), no estimate and no `HasLiveAnimEventDispatch` question. The victim is the
+	// owner's enemy (`m_hEnemy +0x5ce0`), the handle that stands for `FireBullets`' ray here.
+	FRangedStage Stage;
+	Stage.ModeIndex = ModeIndex;
+	Stage.Victim = Npc->BaseMemory.Enemy;
+	Stage.CommitTime = Now;
+	Stage.RecoveryDeadline = NextPrimaryAttackTime;
+	Stage.BulletSets = Sets;
+	StageRangedShot(Stage);
+	QueueSelfInput(ElysiumWeaponCommitInput(), Swing.Serial, 0.0);
+
+	UE_LOG(LogElysiumWeapon, Verbose,
+		TEXT("%s anim event %d is shot #%d: %d set(s) (mode '%s'), next attack %.3f, victim %s"),
+		*DebugString(), Event.Event, Swing.Serial, Sets, *Mode->Tag, NextPrimaryAttackTime,
+		Stage.Victim.IsSet() ? *World->DescribeHandle(Stage.Victim) : TEXT("(none)"));
 	return true;
 }
 
@@ -2200,18 +2415,50 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginRangedShot(EIntent Intent, int32 M
 	const double Recovery = Now + static_cast<double>(Mode.AttackRate) / Scale;
 	const double Commit = Now + static_cast<double>(Seconds * ElysiumWeapons::ContactEventCycle) / Scale;
 
+	FRangedStage Stage;
+	Stage.ModeIndex = ModeIndex;
+	Stage.Victim = Victim;
+	Stage.ClipLabel = ClipLabel;
+	Stage.ClipOwnerStem = ClipOwnerStem;
+	Stage.PlaybackRate = Scale;
+	Stage.ClipSeconds = Seconds;
+	Stage.CommitTime = Commit;
+	Stage.RecoveryDeadline = Recovery;
+	Stage.bAwaitingAnimEvent = bEventCommit;
+	StageRangedShot(Stage);
+
+	HoldAttacksUntil(Recovery);
+	if (!bEventCommit)
+	{
+		QueueSelfInput(ElysiumWeaponCommitInput(), Swing.Serial, Commit - Now);
+	}
+
+	UE_LOG(LogElysiumWeapon, Verbose,
+		TEXT("%s shot #%d %s (mode '%s' intent %d) -> commit %s recover %.3f victim %s"),
+		*DebugString(), Swing.Serial, *Swing.Activity, *Mode.Tag, (int32)Intent,
+		bEventCommit ? TEXT("on the clip's own 3030..3044")
+			: *FString::Printf(TEXT("%.3f (estimated)"), Commit),
+		Recovery, Victim.IsSet() ? *World->DescribeHandle(Victim) : TEXT("(none)"));
+	return EVerdict::Accepted;
+}
+
+void FElysiumWeapon::StageRangedShot(const FRangedStage& Stage)
+{
+	// The transaction a ranged commit completes, as `BeginRangedShot` has always written it; shared
+	// with `ShotFromAnimEvent` (`Shot 0x102387b0` on an NPC's event), which stages the same record
+	// with no clip and the cooldown loop's own set count.
 	ClearSwing();
 	Swing.bActive = true;
 	Swing.Serial = ++SwingSerialCounter;
-	Swing.ModeIndex = ModeIndex;
+	Swing.ModeIndex = Stage.ModeIndex;
 	Swing.bMelee = false;
 	Swing.Activity = GActRangeAttackLayer;
-	Swing.ClipLabel = ClipLabel;
-	Swing.ClipOwnerStem = ClipOwnerStem;
+	Swing.ClipLabel = Stage.ClipLabel;
+	Swing.ClipOwnerStem = Stage.ClipOwnerStem;
 	// The victim is the caller's: the player frame gets it from the embodiment's aim query, an AI
 	// cycle from its own enemy selection, and a test states it. One handle rather than a per-ray
 	// hit set is what the transaction carries, and that is the whole of the divergence below.
-	Swing.Opponent = Victim;
+	Swing.Opponent = Stage.Victim;
 	// The shot leaves with no dispersion at all — the degenerate zero-spread member of retail's cone
 	// family rather than the cone itself. `SpreadAngle`/`SpreadAngleMax` are authored, but the live
 	// ranged-accuracy value that interpolates between them is unrecovered (RE-A3), so
@@ -2232,25 +2479,12 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginRangedShot(EIntent Intent, int32 M
 				"interpolation input is unrecovered (RE-A3), so the shot takes the cone's "
 				"zero-spread case"), *DebugString());
 	}
-	Swing.PlaybackRate = Scale;
-	Swing.ClipSeconds = Seconds;
-	Swing.CommitTime = Commit;
-	Swing.RecoveryDeadline = Recovery;
-	Swing.bAwaitingAnimEvent = bEventCommit;
-
-	HoldAttacksUntil(Recovery);
-	if (!bEventCommit)
-	{
-		QueueSelfInput(ElysiumWeaponCommitInput(), Swing.Serial, Commit - Now);
-	}
-
-	UE_LOG(LogElysiumWeapon, Verbose,
-		TEXT("%s shot #%d %s (mode '%s' intent %d) -> commit %s recover %.3f victim %s"),
-		*DebugString(), Swing.Serial, *Swing.Activity, *Mode.Tag, (int32)Intent,
-		bEventCommit ? TEXT("on the clip's own 3030..3044")
-			: *FString::Printf(TEXT("%.3f (estimated)"), Commit),
-		Recovery, Victim.IsSet() ? *World->DescribeHandle(Victim) : TEXT("(none)"));
-	return EVerdict::Accepted;
+	Swing.PlaybackRate = Stage.PlaybackRate;
+	Swing.ClipSeconds = Stage.ClipSeconds;
+	Swing.CommitTime = Stage.CommitTime;
+	Swing.RecoveryDeadline = Stage.RecoveryDeadline;
+	Swing.bAwaitingAnimEvent = Stage.bAwaitingAnimEvent;
+	Swing.BulletSets = Stage.BulletSets;
 }
 
 void FElysiumWeapon::FireOnEmpty(int32 ModeIndex, const FElysiumWeaponMode& Mode)
@@ -2317,6 +2551,7 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 
 	const int32 ModeIndex = Swing.ModeIndex;
 	const FElysiumEntityHandle OpponentHandle = Swing.Opponent;
+	const int32 StagedSets = Swing.BulletSets;
 	ClearSwing();
 
 	FElysiumCombatCharacter* Attacker = OwnerCharacter();
@@ -2345,16 +2580,30 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 	// The magazine is spent HERE, at the authoritative boundary — the animation event chooses the
 	// instant, the weapon logic does the spending. `Ammo_Cost` is rounds; `Ammo_Fired` is rays, and
 	// the two never substitute for one another.
-	if (Mode->AmmoCost > 0)
+	//
+	// **The spend and the refusal are the PLAYER's alone** (`Shot 0x102387b0`: the subtraction sits
+	// inside the player block, `0x10238a15 TEST EAX,EAX / JZ` on the player pointer, then
+	// `0x10238a4b SUB`). A non-player wielder's clip is `max(Default_Size, 1)` from
+	// `Inventory_Insert 0x10334e70` to death: it CAPS the sets (step 7) and is never written, so
+	// `NO_PRIMARY_AMMO 0x40` cannot rise from firing (spec 0002 J12).
+	int32 Sets = 1;
+	if (IsPlayerSide(*Attacker))
 	{
-		if (MagazineCount < Mode->AmmoCost)
+		if (Mode->AmmoCost > 0)
 		{
-			UE_LOG(LogElysiumWeapon, Verbose,
-				TEXT("%s commit #%d missed: the magazine no longer covers Ammo_Cost %d"),
-				*DebugString(), Serial, Mode->AmmoCost);
-			return;
+			if (MagazineCount < Mode->AmmoCost)
+			{
+				UE_LOG(LogElysiumWeapon, Verbose,
+					TEXT("%s commit #%d missed: the magazine no longer covers Ammo_Cost %d"),
+					*DebugString(), Serial, Mode->AmmoCost);
+				return;
+			}
+			MagazineCount -= Mode->AmmoCost;
 		}
-		MagazineCount -= Mode->AmmoCost;
+	}
+	else
+	{
+		Sets = CapBulletSetsByClip(StagedSets, *Mode);                           // 0x102387b0 step 7
 	}
 
 	// The gunshot stimulus, from its real producer: the shot has been paid for, so it is heard
@@ -2371,13 +2620,29 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 			/*GetSoundDuration is unavailable for the weapon row; one second is its recovered floor*/ 1.0);
 	}
 
+	if (Sets <= 0)
+	{
+		// A non-player wielder whose clip covers no set: the cap, not a refusal. The sound above is
+		// `Shot`'s own (`InsertSound`, step 9, runs at zero sets); no bullets leave.
+		UE_LOG(LogElysiumWeapon, Verbose,
+			TEXT("%s commit #%d fires zero sets: the clip (%d) covers no Ammo_Cost %d"),
+			*DebugString(), Serial, MagazineCount, Mode->AmmoCost);
+		return;
+	}
+
 	// SEAM (R7.2, closed) — retail traces forward first and accepts a valid obstruction hit.
 	// The paid-for shot leaves a mark on whatever the ray actually met, resolved a hit or a miss:
 	// `C_TEGunshotDecal` is emitted by the shot itself, not by the damage. The substrate owns the
 	// instant and the variation roll (a decal variation is an effects-side pick, so it draws on
 	// that stream); the trace, the hit's surface character and the decal are engine questions and
 	// live behind `IElysiumEmbodiment::LayShotImpactDecal` (`docs/vtmb/effects.md` §3.5).
-	TraceShotImpact(*Attacker, *Mode);
+	//
+	// One trace per set: `Shot` calls owner slot 185 `FireBullets` once per set (step 9). A press or a
+	// task stages one set, so this is one trace for every transaction but an event shot's catch-up.
+	for (int32 Set = 0; Set < Sets; ++Set)
+	{
+		TraceShotImpact(*Attacker, *Mode);
+	}
 
 	FElysiumEntity* VictimEnt = OpponentHandle.IsSet() && World ? World->Resolve(OpponentHandle) : nullptr;
 	FElysiumCombatCharacter* Victim = VictimEnt ? VictimEnt->AsCombatCharacter() : nullptr;
@@ -2390,7 +2655,15 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 		return;
 	}
 
-	RangedImpact(*Attacker, *Victim, ModeIndex);
+	for (int32 Set = 0; Set < Sets; ++Set)
+	{
+		// A victim the earlier set killed takes no further set (the alive-path prefilter above).
+		if (Set > 0 && !IsAliveForCombat(*Victim))
+		{
+			break;
+		}
+		RangedImpact(*Attacker, *Victim, ModeIndex);
+	}
 }
 
 void FElysiumWeapon::TraceShotImpact(const FElysiumCombatCharacter& Attacker,

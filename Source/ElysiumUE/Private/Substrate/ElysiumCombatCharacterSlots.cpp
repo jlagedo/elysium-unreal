@@ -7,7 +7,7 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 136 generated slot bodies of `FElysiumCombatCharacter`: 19 carry the retail default story 29c
-// recovered, 22 are defined by hand in the substrate, and 94 are still stubs — 60 29c, 24 29d, 5
+// recovered, 23 are defined by hand in the substrate, and 93 are still stubs — 59 29c, 24 29d, 5
 // 29e, 5 unassigned. 1 are closed (0019/6) and answer the value-initialised default without
 // tallying.
 //
@@ -953,12 +953,8 @@ bool FElysiumCombatCharacter::Slot378(FElysiumEntity*, int32)
 
 // slot 381 0x10327ec0 (walked) `Activity Weapon_TranslateActivity(Activity)`
 //   layer 0, story 29c
-int32 FElysiumCombatCharacter::Weapon_TranslateActivity(int32)
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::Weapon_TranslateActivity"),
-		TEXT("0x10327ec0"), TEXT("29c"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumCombatCharacter::Weapon_TranslateActivity`, written by hand
+// in the substrate. Declared here, defined there.
 
 // slot 382 0x1032d9b0 (sdk) `bool Weapon_CanUse(CBaseCombatWeapon*)`
 //   layer 1, story 29c
@@ -1632,7 +1628,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, bool(FElysiumEntity*, int32)>::Test(&FElysiumCombatCharacter::Slot378),
 				[](FElysiumCombatCharacter& Receiver) -> int64 { FElysiumEntity* Arg0{}; int32 Arg1{}; return Receiver.Slot378(Arg0, Arg1) ? 1 : 0; } },
 			{ 381, TEXT("0x10327ec0"), TEXT("CBaseCombatCharacter"),
-				TEXT("Weapon_TranslateActivity"), EElysiumNpcSlotBody::Stub, TEXT(""), 0, false,
+				TEXT("Weapon_TranslateActivity"), EElysiumNpcSlotBody::Hand, TEXT(""), 0, false,
 				false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, int32(int32)>::Test(&FElysiumCombatCharacter::Weapon_TranslateActivity),
 				nullptr },

@@ -50,6 +50,8 @@ model / effort tier recommended for it.
   Size: M. Effort: Opus / high.
 - [ ] **3. Events** (G3, G7).
   Job: the event look-ahead; overlay per-layer event dispatch.
+  The NPC's per-layer dispatch (`0x10098cd0` over the kernel's four `CAnimationLayer` records)
+  landed in spec 0002 V4o; the player's layers and their events remain here.
   Oracle: `animation_events.md`.
   Size: S. Effort: Sonnet / high.
 - [ ] **4. The stamps and the arithmetic** (G2, G4, G5, G6, G8, G10).

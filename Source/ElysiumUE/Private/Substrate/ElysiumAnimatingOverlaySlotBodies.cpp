@@ -24,14 +24,195 @@
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumSchedule.h"
 
+namespace
+{
+	// `CAnimationLayer::StudioFrameAdvance` `0x10098830`'s envelope gate: the FLOAT 0.95 at
+	// `0x1045001c` (`FCOMP float ptr`, `0x100988d6` / `0x100988ed`).
+	constexpr float GOverlayEnvelopeGate = 0.95f;
+}
+
 // --- Moved from `ElysiumNpcBaseAnim.cpp` (story 5 step 6) ---
 
 int32 FElysiumAnimatingOverlay::SequenceFlagsOf(int32 Sequence) const
 {
-	// `CBaseAnimating::GetSequenceFlags(int)` / `GetSeqDesc(seq)->flags` (studio `+0x8`). **SEAM**,
-	// answering 0: no LOOPING bit (so `AddSceneEvent`'s gesture arm raises no vcd warning).
-	(void)Sequence;
+	// `CBaseAnimating::GetSequenceFlags(int)` / `GetSeqDesc(seq)->flags` (studio `+0x8`), from the
+	// sequence bridge's row (spec 0002 V4o): bit 0 the row's own `STUDIO_LOOPING`, bit 1 its baked
+	// SNAP bit. A body with no bridge has no descriptor to read: 0.
+	if (const FElysiumNpc* const Npc = AsNpc())
+	{
+		return (Npc->SequenceLoops(Sequence) ? 0x1 : 0) | (Npc->SequenceSnaps(Sequence) ? 0x2 : 0);
+	}
 	return 0;
+}
+
+float FElysiumAnimatingOverlay::OverlaySequenceCycleRate(int32 Sequence) const
+{
+	// `GetSequenceCycleRate(owner, layer+8)` (`0x1009883e` -> `0x10091230`): the bridge row's.
+	if (const FElysiumNpc* const Npc = AsNpc())
+	{
+		return Npc->SequenceCycleRateOf(Sequence);
+	}
+	return 0.f;
+}
+
+// --- The gesture layers' own bodies (spec 0002 V4o, lane O1) -----------------------------------
+
+int32 FElysiumAnimatingOverlay::AllocateLayer()
+{
+	// `0x10099470`, slot 272: from slot 267 `GetFirstGestureLayer()` (`+0x42c`), the lowest slot
+	// whose `m_flWeight` (`+0x748`) equals 0.0 (`_DAT_104454c4`); -1 when none, or when the first
+	// gesture layer is 4 or more.
+	for (int32 Index = GetFirstGestureLayer(); Index < ElysiumOverlay::NumSlots; ++Index)
+	{
+		if (Index >= 0 && AnimOverlay[Index].Weight == 0.f)
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
+}
+
+void FElysiumAnimatingOverlay::SetLayer(int32 Index, int32 Activity, int32 Sequence, bool bAutoKill)
+{
+	// `0x10099020`, slot 268, the eleven writes in the listing's order. Retail indexes the table
+	// unchecked; every caller hands an index `AllocateLayer` or `FindGestureLayer` answered.
+	if (Index < 0 || Index >= ElysiumOverlay::NumSlots)
+	{
+		return;
+	}
+	FAnimOverlayLayer& Layer = AnimOverlay[Index];
+	Layer.Activity = Activity;                          // 0x10099042 +0x758 m_nActivity
+	Layer.Cycle = 0.f;                                  // 0x1009904f +0x740 m_flCycle
+	Layer.PlaybackRate = 1.f;                           // 0x10099055 +0x744 m_flPlaybackRate = 1.0
+	Layer.Sequence = Sequence;                          // 0x1009905f +0x73c m_nSequence
+	Layer.BlendIn = ElysiumOverlay::DefaultBlendFraction;    // 0x10099065 +0x750 m_flBlendIn = 0.2
+	Layer.BlendOut = ElysiumOverlay::DefaultBlendFraction;   // 0x1009906b +0x754 m_flBlendOut = 0.2
+	Layer.Weight = ElysiumOverlay::SeedWeight;          // 0x10099075 +0x748 m_flWeight = 0.1
+	Layer.WeightMax = 1.f;                              // 0x1009907f +0x74c m_flWeightMax = 1.0
+	Layer.bAutoKillWhenFinished = bAutoKill;            // 0x10099089 +0x75c
+	Layer.SequenceFinished = 0;                         // 0x1009908f +0x738 m_fSequenceFinished
+	Layer.LastEventCheck = 0.f;                         // 0x10099095 +0x760 m_flLastEventCheck
+	// `GetSeqDesc(seq)` (`0x1009909b`) non-null with `flags & 2` (`0x100990a4`): a SNAP sequence
+	// takes no envelope. `m_fFlags` (+0x734) is not written.
+	if ((SequenceFlagsOf(Sequence) & 0x2) != 0)
+	{
+		Layer.BlendIn = 0.f;                            // 0x100990aa
+		Layer.BlendOut = 0.f;                           // 0x100990ac
+	}
+	// Not retail's: the body starts drawing the layer's clip (visual-only).
+	OnOverlayLayerSet(Index);
+}
+
+void FElysiumAnimatingOverlay::RemoveLayer(int32 Index)
+{
+	// `0x10099660`, slot 269: `m_flWeight = 0`, then `m_nSequence = 0`; nothing else.
+	if (Index < 0 || Index >= ElysiumOverlay::NumSlots)
+	{
+		return;
+	}
+	AnimOverlay[Index].Weight = 0.f;                    // +0x748
+	AnimOverlay[Index].Sequence = 0;                    // +0x73c
+}
+
+bool FElysiumAnimatingOverlay::HasLayer(int32 Activity)
+{
+	// `0x10099540`, slot 270: slot 271 `FindGestureLayer` (`+0x43c`) `!= -1`.
+	return FindLayerByOwner(Activity) != INDEX_NONE;
+}
+
+int32 FElysiumAnimatingOverlay::AddGesture(int32 Activity, bool bAutoKill)
+{
+	// `0x100991b0`, in its order.
+	if (HasLayer(Activity))                                         // slot 270 `+0x438`
+	{
+		return FindLayerByOwner(Activity);                          // slot 271 `+0x43c`
+	}
+	const int32 Sequence = SelectWeightedSequenceForActivity(Activity);   // 0x1008dc40 (act, -1)
+	if (Sequence < 1)                                               // `TEST EAX,EAX / JG`: `< 1` refuses
+	{
+		// Retail: `DevMsg("CBaseAnimatingOverlay::AddGesture: ... %s", activity name)`.
+		UE_LOG(LogElysiumNpcEnt, Verbose,
+			TEXT("CBaseAnimatingOverlay::AddGesture: model has no sequence for act %d"), Activity);
+		return INDEX_NONE;
+	}
+	// `0x100990f0(seq, autokill)`: slot 272, then slot 268 `(i, -1, seq, autokill)`.
+	const int32 Index = AllocateLayer();                            // slot 272 `+0x440`
+	if (Index != INDEX_NONE)
+	{
+		SetLayer(Index, -1, Sequence, bAutoKill);                   // slot 268 `+0x430`
+		AnimOverlay[Index].Activity = Activity;                     // `+0x758 = act`, after
+	}
+	return Index;
+}
+
+void FElysiumAnimatingOverlay::AdvanceOverlayLayers(float LayerInterval)
+{
+	// `CBaseAnimatingOverlay::StudioFrameAdvance` `0x10098bb0` past its call of the base body: the
+	// four records in order, each on the interval the base returned (0.0 on its early-out).
+	for (int32 Index = 0; Index < ElysiumOverlay::NumSlots; ++Index)
+	{
+		FAnimOverlayLayer& Layer = AnimOverlay[Index];
+		if (Layer.Weight == 0.f)                                    // `m_flWeight != _DAT_104454c4`
+		{
+			continue;
+		}
+		// --- `CAnimationLayer::StudioFrameAdvance` `0x10098830` ---
+		// `GetSequenceCycleRate(owner, seq) x m_flPlaybackRate x interval + m_flCycle`
+		// (`0x1009883e..0x1009884a`), stored (`0x10098853`).
+		const double AdvancedCycle = static_cast<double>(OverlaySequenceCycleRate(Layer.Sequence))
+			* static_cast<double>(Layer.PlaybackRate) * static_cast<double>(LayerInterval)
+			+ static_cast<double>(Layer.Cycle);
+		Layer.Cycle = static_cast<float>(AdvancedCycle);
+		if (AdvancedCycle < 0.0)                                        // 0x1009884d FCOM 0.0 (0x1044fab0)
+		{
+			// Below 0: no finish flag. `GetSequenceFlags(seq) & 1` (`0x10098865`) drops the integer
+			// part (`0x1009886e..0x10098881`), else 0 (`0x10098886`).
+			Layer.Cycle = (SequenceFlagsOf(Layer.Sequence) & 0x1) != 0
+				? Layer.Cycle - static_cast<float>(static_cast<int32>(Layer.Cycle))
+				: 0.f;
+		}
+		else if (!(AdvancedCycle < 1.0))                               // 0x1009888f FCOMP 1.0 (0x10449280)
+		{
+			Layer.SequenceFinished = 1;                             // 0x100988a4 layer+4
+			// Looping drops the integer part (`0x100988b4..0x100988c7`), else 1.0 (`0x100988cc`).
+			Layer.Cycle = (SequenceFlagsOf(Layer.Sequence) & 0x1) != 0
+				? Layer.Cycle - static_cast<float>(static_cast<int32>(Layer.Cycle))
+				: 1.f;
+		}
+		// The weight: 1.0 (`0x100988dc`), and the envelope only when a blend is under the FLOAT
+		// 0.95 at `0x1045001c` (`0x100988d6` / `0x100988ed`).
+		Layer.Weight = 1.f;
+		if (Layer.BlendIn < GOverlayEnvelopeGate || Layer.BlendOut < GOverlayEnvelopeGate)
+		{
+			if (Layer.BlendIn != 0.f && Layer.Cycle < Layer.BlendIn)            // 0x100988fa / 0x1009890a
+			{
+				Layer.Weight = Layer.Cycle / Layer.BlendIn;                     // 0x10098917
+			}
+			// `1.0 - blendOut < cycle` (`0x10098930..0x1009893c`); the later write wins.
+			if (Layer.BlendOut != 0.f
+				&& 1.0 - static_cast<double>(Layer.BlendOut) < static_cast<double>(Layer.Cycle))
+			{
+				Layer.Weight = static_cast<float>(
+					(1.0 - static_cast<double>(Layer.Cycle)) / static_cast<double>(Layer.BlendOut));   // 0x10098945
+			}
+			// `3w^2 - 2w^3` (`0x10098954..0x1009896c`, the double 3.0 at `0x10450010`).
+			const double RawWeight = static_cast<double>(Layer.Weight);
+			const double RawSquared = RawWeight * RawWeight;
+			Layer.Weight = static_cast<float>(
+				3.0 * RawSquared - (RawWeight * RawSquared + RawWeight * RawSquared));
+		}
+		if (Layer.WeightMax < Layer.Weight)                         // 0x10098971 the clamp
+		{
+			Layer.Weight = Layer.WeightMax;                         // 0x10098982
+		}
+		// --- back in `0x10098bb0` ---
+		if (Layer.SequenceFinished != 0 && Layer.bAutoKillWhenFinished)
+		{
+			// The weight and nothing else: the sequence, the activity, the cycle and the cursor stay.
+			Layer.Weight = 0.f;                                     // `piVar2[4] = 0`
+			Slot112(Index, Layer.Activity);                         // `+0x1c0` slot 112 (empty on the NPC line)
+		}
+	}
 }
 
 int32 FElysiumAnimatingOverlay::FindGestureLayerByOwner(int32 Activity) const

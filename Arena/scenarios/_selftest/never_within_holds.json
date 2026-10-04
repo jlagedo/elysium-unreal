@@ -1,0 +1,57 @@
+{
+  "name": "never_within_holds",
+  "about": "Harness self-test: a `never` with `within` closes that many seconds after its `after` label's match. The mark's Trigger at t=1.0 meets `mark` and opens a 0.5 s window, [1.0, 1.5]; the relay's Trigger fires at t=2.0, after it closed, so the run passes -- and ends once the window has closed, not at its duration. Reported as `fail`, it means the window stayed open past `within`.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 4.0,
+  "rows": [
+    {
+      "classname": "logic_relay",
+      "name": "selftest_relay",
+      "at": "start"
+    },
+    {
+      "classname": "logic_relay",
+      "name": "selftest_mark",
+      "at": "start"
+    }
+  ],
+  "script": [
+    {
+      "t": 1.0,
+      "do": "fire",
+      "target": "selftest_mark",
+      "input": "Trigger"
+    },
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "selftest_relay",
+      "input": "Trigger"
+    }
+  ],
+  "expect": [
+    {
+      "label": "mark",
+      "who": "selftest_mark",
+      "kind": "input",
+      "match": "Trigger"
+    },
+    {
+      "label": "late",
+      "who": "selftest_relay",
+      "kind": "input",
+      "match": "Trigger",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "selftest_relay",
+      "kind": "input",
+      "match": "Trigger",
+      "after": "mark",
+      "within": 0.5
+    }
+  ]
+}

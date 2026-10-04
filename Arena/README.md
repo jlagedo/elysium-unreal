@@ -177,10 +177,11 @@ window and fails the run at match number `at_most + 1`, at that event's time.
 | `after` | an `expect` label: the window opens at that expectation's match, plus `delay`. A label that is never met never opens the window (the unmet expectation fails the run on its own); an event before the match is not counted |
 | `delay` | seconds after `after`'s match; only with `after` |
 | `until` | scenario seconds: the window closes here (absent: the run's duration) |
+| `within` | seconds: the window closes this long after it opens at its `after` label (the label's match plus `delay`), never past `duration`. Only with `after`; `within` and `until` exclude each other. A label matched more than once is its FIRST match, as everywhere, so one entry pins one occurrence (the first wait after `waits`; label the second one to pin it too). The run may end once the window has closed |
 | `at_most` | a whole number ≥ 0, the matches the window tolerates (absent: 0, the first match fails) |
 
 `from` and `after` exclude each other; neither opens the window at zero. The failure's `reason` in
-`index.json` states the count and the bound (`appeared at t=4.20: match 2 where at most 1 may appear
+`index.json` states the count and the resolved bounds (`appeared at t=4.20: match 2 where at most 1 may appear
 in [1.50, 30.00]: ...`). A record with an open `never` runs to its duration.
 
 ## `probes`
@@ -254,6 +255,9 @@ record — and a `reason`) and
 | `_selftest/bound_trips` | a deadline is a deadline: a real event after it does not count |
 | `_selftest/never_at_most_holds`, `never_at_most_trips` | `at_most` tolerates its bound and fails the run at the match past it |
 | `_selftest/never_after_ignores` | a `never` opened `after` a label does not count a match before it |
+| `_selftest/never_within_holds`, `never_within_trips` | a `never` closed `within` seconds of its label ignores a match after the window and fails the run on one inside it |
+| `combat/cover_move_shoot` | the run-and-gun: a gunman running to cover fires from an overlay layer's own 3031 (`0x102e8560` -> `AddGesture 0x100991b0` -> `0x10098cd0` -> `Shot 0x102387b0`; spec 0002 V4o) |
+| `combat/ranged_open_fire`, `ranged_sustained_fire` | the standing shot is the attack sequence's 3031, the weapon's next-attack stamp is the shot's own write (`0x1023891b`), and an NPC's clip is never spent |
 | `_selftest/dialog_choose_none` | a `dialog_choose` with no open conversation is reported as an action the harness could not run, never passed |
 | `_selftest/player_reset_a`, `player_reset_b` | the player's posture and wielded item do not leak into the next record of the boot (`player_crouch`, the player probes) |
 | `_selftest/stage_failed_a`, `stage_failed_b` | a stage that goes Failed (`a`, `error` by design, so parked as `.json.parked`: restore it to run the pair) does not stop the next record staging fresh and passing (`b`) |

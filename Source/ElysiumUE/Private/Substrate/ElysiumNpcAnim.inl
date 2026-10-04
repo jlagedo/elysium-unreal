@@ -98,6 +98,26 @@ bool SceneEntityForcesCutsceneLod(const void* SceneEntity) const;
 
 // --- The animating-tier mechanisms every activity body ends in ----------------------------------
 
+// --- The bridge row's words for an overlay layer (spec 0002 V4o, lane O1) -----------------------
+
+// `GetSeqDesc(seq)->flags & 2` (`STUDIO_SNAP`), which slot 268 `SetLayer` `0x10099020` zeroes both
+// blends for (`0x100990a4`): the clip's baked bit (`FElysiumNpcClip::IsSnap()`), on the bridge row
+// (`FSequenceRow::bSnap`), taken when the row is numbered (`SequenceRowFor`: by activity, by name,
+// the stance set). False for row 0 and for an unknown number.
+bool SequenceSnaps(int32 Sequence) const;
+
+// `GetSequenceCycleRate(seq)` `0x10091230` as the layer bodies `0x10098830` / `0x10098cd0` read
+// it: 1 / the row's length (`SequenceDurationSeconds`: the baked cycle length, else the length the
+// last play or the layer's draw reported) when that is above 0, else retail's other arm, the float
+// 10.0 at `0x1044e664` (`0x100912c8`) -- with one Warning per (model, clip), because in the port
+// a row with no length is also one nothing has played yet.
+float SequenceCycleRateOf(int32 Sequence) const;
+
+// The layer's draw (visual-only): the row's clip through `PlayAnimSegment` on the `UpperBody`
+// channel, one-shot, with the row's snap bit; the answered length is stored on the row. The
+// kernel's layer words read nothing back from the body but that length.
+virtual void OnOverlayLayerSet(int32 Layer) override;
+
 // --- The rows that fill no slot -----------------------------------------------------------------
 
 // `CBaseAnimating::AddExtraAnimationModels` / `RemoveExtraAnimationModels` (`0x1008e0a0` /

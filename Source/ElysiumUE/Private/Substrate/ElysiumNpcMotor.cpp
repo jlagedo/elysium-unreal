@@ -413,7 +413,11 @@ bool FElysiumNpc::ShouldMoveAndShoot()
 		const FElysiumEntity* Weapon = Inventory.ActiveWeapon.IsSet() && World != nullptr
 			? World->Resolve(Inventory.ActiveWeapon)
 			: nullptr;
-		if (Weapon != nullptr && (ActiveWeaponCapabilityWord() & GWeaponMoveShootMask) != 0)
+		// `0x102bf4a0`: the active weapon's slot 360 (`+0x5a0`) capability word `& 0x6000`, read
+		// through `SelectActiveWeaponWord()` (the real word). Family Motor's
+		// `ActiveWeaponCapabilityWord` is a seam answering 0 — with it this gate never passed and
+		// the overlay could never arm; the seam is left as it is for its other callers.
+		if (Weapon != nullptr && (SelectActiveWeaponWord() & GWeaponMoveShootMask) != 0)
 		{
 			// `CAI_BaseNPC::FUN_10278c60` `0x10278c60`: `CapabilitiesGet() >> 6 & 1`, and
 			// `CapabilitiesGet` (`0x1026db30`) is `m_afCapability` (+0x5cec) verbatim.

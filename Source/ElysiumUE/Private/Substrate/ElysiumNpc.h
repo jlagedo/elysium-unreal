@@ -85,6 +85,9 @@ public:
 		FString OwnerStem;    // empty: a clip of this body's own model (the stance set)
 		FString Label;
 		bool bLoops = false;
+		// `mstudioseqdesc_t::flags & 2` (`STUDIO_SNAP`), which slot 268 `SetLayer 0x10099020` zeroes
+		// both blends for (`0x100990a4`): the clip's baked bit, taken when the row is numbered.
+		bool bSnap = false;
 		float Seconds = 0.f;  // the first-pass length the clip player last reported; 0 = not yet played
 	};
 	TArray<FSequenceRow> SequenceRows;

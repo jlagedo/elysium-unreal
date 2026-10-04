@@ -526,12 +526,23 @@ uint32 FElysiumNpc::StartTask19WeaponCapabilityWord() const
 
 int32 FElysiumNpc::StartTask19WeaponMinBurst() const
 {
-	return 1;   // SEAM for weapon `+0x3a4`.
+	// `0x102517e0(weapon)[+0x3a4]`, the current mode record's `BurstMin` (default 1, `0x10259658`).
+	// An active item no mode record stands behind keeps the loader's default, 1.
+	FElysiumItem* const Item = Inventory.Active(*this);
+	const FElysiumWeapon* const Weapon = Item != nullptr ? Item->AsWeapon() : nullptr;
+	const FElysiumWeaponMode* const Mode =
+		Weapon != nullptr ? Weapon->ModeFor(FElysiumWeapon::EIntent::Primary) : nullptr;
+	return Mode != nullptr ? Mode->BurstMin : 1;
 }
 
 int32 FElysiumNpc::StartTask19WeaponMaxBurst() const
 {
-	return 1;   // SEAM for weapon `+0x3a8`.
+	// `0x102517e0(weapon)[+0x3a8]`, the current mode record's `BurstMax` (default 1, `0x1025966c`).
+	FElysiumItem* const Item = Inventory.Active(*this);
+	const FElysiumWeapon* const Weapon = Item != nullptr ? Item->AsWeapon() : nullptr;
+	const FElysiumWeaponMode* const Mode =
+		Weapon != nullptr ? Weapon->ModeFor(FElysiumWeapon::EIntent::Primary) : nullptr;
+	return Mode != nullptr ? Mode->BurstMax : 1;
 }
 
 float FElysiumNpc::StartTask19WeaponRangeWord(int32 Offset) const
