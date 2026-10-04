@@ -138,10 +138,8 @@ session's skill listing; read the file. What follows is only what this project a
   doc amendments, small reads). Always pass both, on a resume too (neither carries over).
   The skill's benchmark found multi-function walks incomplete at `high` on a smaller model: a
   reader's packet is a lead, verified before it reaches code (as every packet has been).
-- **Sandbox:** `-s danger-full-access` (the skill's default). Sandboxed runs execute as the
-  `CodexSandboxOffline` user, which cannot run `uv` nor write `E:\elysium-work`. This machine's
-  config has `sandbox_mode = "workspace-write"`, so a `resume` pins
-  `-c sandbox_mode='"danger-full-access"'`.
+- **No sandbox, ever (the owner): a sandboxed run errors.** Every `codex exec`, `resume` and
+  `review` carries `--dangerously-bypass-approvals-and-sandbox`; no `-s`, no `sandbox_mode`.
 - **Where a run lives:** `E:\elysium-work\codex\<slug>\` — `brief.md` (a copy of the brief; the
   tracked brief stays under `docs/specs/…/stories/`), `events.jsonl`, `last.md`, `stderr.log`.
 - **Launch in the background, the brief on stdin** (`- < brief.md`). A positional prompt with
