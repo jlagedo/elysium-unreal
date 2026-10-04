@@ -1,383 +1,259 @@
-# Brief C2 — V4c: the death chain's doc, the weighted pick, `SetDisposition`, the `ACT_DIERAGDOLL` seed, the pedestrian's `CreateCorpse` (coder; no build)
+# Brief C2 — V4c: shared picks, disposition, corpse clocks and enemy memory (coder; no build)
 
-**Final (amended after V4r, settling packets S1 and S4 and the judge's second sitting, 2026-10-04
-— R2, J8, K4, S1 items 1–4; J2b, J13, J14.1, S4 items e and f.1).** The second sitting gives you
-the pedestrian's `Think` gate (item 8) and **the death fade** (item 10), and closes
-`SequenceBounds` as a named seam (item 7); read its section (`stories/v1/triage.md` § "Judge's
-rulings, V4 — second sitting"; Grep, read only it). Where
-this brief and the README disagree on death, this brief wins. Read `packets-S1.md` items 1–3 (the
-listing walk of `CreateCorpse`, the two `Event_Killed` bodies, the state-7 writers). Read `README.md` here (§1 "The frame"
-with R2's gate, "The weighted pick", "The disposition change" and "Death" with their amendments;
-§2 M8, M9, M12; §7 K4, K5; § "Shared names"), `packets-R2.md` item 7 and extension 2, the ruling
-J8 (`stories/v1/triage.md` § "Judge's rulings, V4"; Grep, read only it), `brief-D-ragdoll.md`
-§ "What retail does", `docs/vtmb/activity_enum.md` :294-337, `docs/vtmb/npc-ai/shape.md` § "The
-activity commit", `docs/vtmb/npc-ai/lifecycle.md` § "The death chain, kill to corpse" (~:2642;
-§ "The ordered chain" ~:2730, § "A death sounds more than once" ~:2758),
-`stories/v1/divergences.md` row 4. After V4b's commit. V3c filled `LookupSequenceByName` — use it.
-Re-locate by Grep.
+Final, 2026-10-04, against V11/V4o. Read `AGENTS.md` first, `HANDOVER.md`, README § "Rules for
+every agent of V4" / "Shared names", packets S1/S4 (death), R2 extension 2 (pick sites), S5
+item 9 (stance), S10, S11, S12, and **S13 §§1/3/5 / Changes to the plan**. Owner has ruled:
+**NPC and non-NPC animation picks draw on one shared stream**; team registry is C3's in V4c;
+real reload is V5's. No owner question remains about the pick stream. Re-locate by function name.
 
-**Final for the code as landed (2026-10-04, after V5a, V4a, V4b, V11 and V4o; `packets-S8.md`
-items 3 and 6, `packets-S10.md`, `packets-S12.md` items b, c and d.1).** Where an item below and
-this block disagree, this block wins. Line numbers below predate four waves: re-locate by name.
-
-**Already landed — check, do not redo:**
-
-- **`RunAnimation`'s gate is R2's** (`FElysiumNpcBase::RunAnimation`, `ElysiumNpcBaseAnim.cpp`
-  :297-328): states 4 / 7 out, `ActivityNumber == 1`, slot 251, the loop-bit fork over
-  `TranslatedActivity`, the commit through `CommitForcedSequence` (`0x10260a50`). Item 3 is
-  reduced to **its two calls drawing through your pick** — `SelectHeaviestSequence`
-  (`FElysiumNpcBase`, `ElysiumNpcBaseHelpers2.cpp` :79) and `SelectWeightedSequenceForActivity`
-  (`FElysiumAnimatingOverlay`, `ElysiumAnimatingOverlaySlotBodies.cpp` :124), neither file yours:
-  read both; if they already forward to the bridge (`SequenceForActivity` / the new pick) nothing
-  moves, else write the exact line in your report. **Do not zero the cycle at the re-pick**: a
-  finished one-shot idle is re-picked every think and rests at cycle 1.0 with its whole table
-  re-fired each think — retail's (`0x10260a50` writes no cycle; S12 b). `.RunAnimationPick`
-  asserts it.
-- **`BecomeClientRagdoll` sets `RetailSolidFlags |= 4`** (`ElysiumNpc.cpp` :305, `0x10090180`,
-  landed by V4b's integrator; the four `IsRetailNotSolid` sweeps were re-read then). Keep it; the
-  pedestrian's `SetSolid(SOLID_NONE)` (item 8) and the fade's `AddSolidFlags(4)` (item 10) are
-  further writes of the same word, not replacements.
-- **The grapple commits through the kernel** (S9 / S10, landed): `ElysiumFeedGrappleCommit::
-  CommitNpcHalf` writes `m_IdealActivity` = the base and `m_Activity` = the cell, and
-  `LeaveGrappleState` writes no animation word. `SetDisposition`'s `IsFeedBusy()` term goes
-  (item 4) with nothing to replace it: a grappled NPC's `RunAI` is skipped, so no disposition
-  commit runs mid-grapple in retail either.
-- **Slot 331** (V11-3, `ElysiumMeleeSequenceChoice.cpp` :504-506) already draws on
-  `EElysiumRngStream::NpcSchedule`.
-
-**The sites that wait for your pick** (each names C2 or `0x1008dc40` in the tree today):
-
-| site | today | with your pick |
-|---|---|---|
-| `SelectGrappleSequence(FElysiumNpc&, int32 Translated, const FString& CellLabel)` (`ElysiumFeed.cpp` :547-562; called :650, :671) | `SequenceForActivity(Translated)`, refused when the resolver's fallback ladder answered another clip, then `LookupSequenceByName(CellLabel)` | `Npc.SelectWeightedSequence(Translated)` and nothing else: the bare pick walks no ladder (`0x1032a2cc` / `0x1032a2de`), and **every feed clip authors its own cell activity, one sequence per cell** (S12 d.1 item 6), so the label fallback and the ladder guard go; −1 is retail's miss (the warning and `EndGrapple`). **`ElysiumFeed.cpp` is added to your files for this one function** |
-| `FElysiumNpc::MeleeSequencesForActivity` (`ElysiumNpcAnim.cpp` :399-419, yours) → `IElysiumEmbodiment::NpcActivitySequences` | every clip of the translated activity, `ByActivity` order | the **same candidate list your pick gathers** — one gatherer, two callers (slot 331's band `0x103ea950` and the pick), so the melee band and the draw can never disagree on the set |
-| slot 331's picker stream | `NpcSchedule` | unchanged; your pick draws on the same stream, so a swing's two draws (the sequence choice, then any activity pick) stay in retail's order on one stream |
-| `SequenceForActivity` (:372-397) | `Request.Variant = 0`, one clip per activity, cached | item 2 |
-
-**New for you — the player's `PostThink` gates and the player's sweep line** (S8 item 3, S12
-d.1 item 2). `FElysiumPlayer::PostThinkAnimation` (`ElysiumPlayerEntity.cpp` :1176-1349) carries
-no gate today and says so (:1183-1185). Retail `CBasePlayer::PostThink 0x1016be10` jumps past the
-whole live body — slot 250, `0x101600a0`, slot 258, slot 312 — on **four gates, in this order**
-(`0x1016bede..0x1016bf17`): (1) the game-over byte `DAT_1070ba2c`; (2) `m_iPlayerLocked
-(+0x2304)`; (3) **slot 158 `IsAlive` false (`m_lifeState != 0`, `0x1016befc`)**; (4) slot 406
-(`+0x19f6`, the observer byte). Port:
-
-- gate 3 **for real**, ahead of the body test: a dying or dead player advances nothing,
-  dispatches nothing, runs no slot 312 (no `TickStealthKill`, no sweep) and **keeps its channel
-  words** (do not reset `PostThinkChannels`);
-- gates 1, 2 and 4 as **three named seams answering "open"**, in retail's order, each with its
-  address and "no writer in the image" (`g_fGameOver`; `m_iPlayerLocked`; `+0x19f6`);
-- **no** frozen, immobilized, cinematic or controller gate — retail has none (S8);
-- **the tail, slot 312's stand-in**: after `TickStealthKill()`, call the player's slot 315
-  `MeleeSwingUpdate()` — C1's body (`ElysiumCombatCharacterSlots.cpp`); C1 deletes the world
-  tick's sweep (`AdvanceMeleeSwings`). Replace the comment at :1344-1347. That one call is the
-  only thing of C1's you write;
-- tests in `Source/ElysiumUE/Private/Tests/ElysiumPlayerPostThinkTests.cpp`:
-  `…PostThink.AliveGate` (`0x1016befc`: a dead player dispatches no event, its `LastEventCheck`
-  unchanged; alive again, the window resumes from the kept cursor) and `.Slot312Order` (slot 258
-  before slot 315).
-
-**Corpse clocks, re-stated against the records on disk** (`Arena/scenarios/combat/`:
-`corpse_removed_unseen`, `corpse_kept_seen`, `corpse_kindred_burns`, `corpse_pedestrian_stays`,
-`corpse_fades` — five, A0 split the mortal's two halves): the mortal's 10 s poll and the
-Kindred's unconditional +10 s are ported (`ElysiumNpc.cpp`'s removal thinks ~:590-660,
-`ElysiumCombatCharacter.cpp` `CreateCorpse` :1455); yours are the pedestrian override with
-`Think`'s gate (:646, item 8, J13) and the fade (item 10, J14.1); S1 and S4 items e / f.1 are
-the reads. Slot 552 `ShouldFadeOnDeath` is ported (`ElysiumNpcBaseLifecycle.cpp` :105, spawnflag
-bit 9) and `Event_Killed`'s step already asks it (`ElysiumNpcBaseSpawn.cpp` :133 →
-`Spawn19StartFadeOut`, the seam you fill). **The maker's `0x204` was not found by name** (no
-`m_bFade` / `Flag_InfChild` / `Flag_Fade` under `Substrate/`): the maker's port is
-`AiInfra/ElysiumNpcMakerActor.h` and `Map/ElysiumMapActor.cpp` (Grep `MakeNPC` / `0x1034b7b0`) —
-read where the child's spawnflags are set and write the exact line for the integrator if bit 9
-is not passed; `corpse_fades` cannot turn green without it.
+RunAnimation's gate, solid flag on ragdoll, grapple word commits, both enemy selectors and
+ChooseEnemy/SetEnemy are landed. Preserve their order. Your dead-enemy fix is the one proved
+candidate-liveness divergence plus the separate memory fidelity work, not a new selector.
 
 ## Files (only these)
 
-**Added by the block above**: `ElysiumPlayerEntity.cpp` (`PostThinkAnimation` only),
-`Tests/ElysiumPlayerPostThinkTests.cpp` (the two new cases), `ElysiumFeed.cpp`
-(`SelectGrappleSequence` only).
+Prefix `Source/ElysiumUE/Private/Substrate/` unless stated; braces expand to separate files.
 
-`Source/ElysiumUE/Private/Substrate/` unless a path says otherwise:
+- `ElysiumNpcAnim.cpp`, `ElysiumNpc.h` — candidate rows/picks/SequenceBounds/stance declarations.
+- `ElysiumNpcBaseAnim.cpp` — RunAnimation callers/resolver lookup only.
+- `ElysiumNpcBaseStartTask.cpp` — StartTaskSlot442's pick only.
+- `ElysiumNpc.cpp` — disposition, ragdoll seed, PlayActivity, StartWalkingAnimation, corpse Think.
+- `ElysiumNpcBaseRunTask.{cpp,inl}` — StartFadeOut and fade state only.
+- `ElysiumNpcBaseSpawn.{cpp,inl}` — Event_Killed fade step and C3's real spawn registration hooks.
+- `ElysiumCombatCharacter.cpp` — CreateCorpse, PlayReactionActivity, team damage predicate only.
+- `ElysiumNpcPedestrian.{h,cpp}` — PedestrianCreateCorpse and its wiring/state only.
+- `ElysiumPlayerEntity.cpp` — PostThinkAnimation, Spawn/Hydrate team joins only.
+- `ElysiumFeed.cpp` — SelectGrappleSequence only.
+- `ElysiumNpcBaseSenses10.cpp` — BestEnemy liveness and selected-store walk only.
+- `ElysiumNpcBaseSenses.cpp` — GetEnemies/RemoveMemory ownership plumbing only.
+- `ElysiumNpcEnemyMemory.{h,cpp}` — Refresh, owner context and notify/store access only.
+- `ElysiumNpcBaseConditions2.cpp` — GatherConditions refresh and its memory reads only.
+- `Source/ElysiumUE/Private/Visual/ElysiumAnimationResolve.cpp` — TryActivity/PickWeighted only.
+- New `Source/ElysiumUE/Private/Visual/ElysiumAnimationPick.{h,cpp}` — one common weighted/
+  heaviest selection body, with the shared stream (C1's weapon-model caller also uses it).
+- `Source/ElysiumUE/Private/Player/ElysiumAnimationIntent.cpp` — locomotion pick request only.
+- `ElysiumProp.cpp` — random animator's pick only.
+- `Source/ElysiumUE/Private/Tests/ElysiumPlayerPostThinkTests.cpp`.
+- `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesMisc10Tests.cpp` — corpse assertions only.
+- `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp`.
+- `Source/ElysiumUE/Private/Tests/ElysiumNpcCombatTests.cpp` — death assertions only.
+- `Source/ElysiumUE/Private/Tests/ElysiumNpcEnemyTests.cpp`.
+- `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp` — BestEnemy arms only.
+- `docs/vtmb/npc-ai/lifecycle.md` — death sound/seed and S13 maker/fade correction.
+- `docs/vtmb/npc-ai/senses.md` — S13 memory/selection correction.
+- `docs/vtmb/feeding.md` — released first-task maintenance/fallback correction.
 
-- `docs/vtmb/npc-ai/lifecycle.md` (§ "A death sounds more than once" only — § "The ordered chain"
-  steps 5–6 and the state-7 writers are **already rewritten by S1**; do not rewrite them)
-- `ElysiumNpcAnim.cpp` (`SequenceForActivity` ~:375-391, the row cache, and `SequenceBounds`'s
-  body) and `ElysiumNpc.h` (the declarations)
-- `ElysiumNpcBaseAnim.cpp` (`RunAnimation`'s idle re-pick ~:168-182 only)
-- `ElysiumNpcBaseStartTask.cpp` (`StartTaskSlot442`'s `SelectWeightedSequence` ~:399-400 only)
-- `ElysiumNpc.cpp` (`FElysiumNpc::SetDisposition` ~:1107-1177, `BecomeClientRagdoll` ~:285-311,
-  `PlayActivity`'s variant ~:1124, `StartWalkingAnimation`'s variant ~:529, and — item 8, J13 —
-  `Think`'s committed-death gate ~:645 with the removal thinks beside it ~:574-660 — these only)
-- item 10 (the fade): `ElysiumNpcBaseRunTask.cpp`, `ElysiumNpcBaseRunTask.inl` (`StartFadeOut`
-  and its seam words only), and the one file that holds the port's `Event_Killed` step after
-  `CreateCorpse` (Grep `0x10265d72` / `Spawn19StartFadeOut`: today `ElysiumNpcBaseSpawn.cpp`
-  ~:135, ~:204 — that call and that function only)
-- K4: `Source/ElysiumUE/Private/Visual/ElysiumAnimationResolve.cpp` (`PickWeighted` ~:703-748,
-  `TryActivity` ~:187), `ElysiumCombatCharacter.cpp` (`PlayReactionActivity` ~:2025, and — item 8 —
-  `FElysiumCombatCharacter::CreateCorpse` ~:1455, the chain's home; these two only),
-  `Source/ElysiumUE/Private/Player/ElysiumAnimationIntent.cpp` (the pick's variant ~:538 only),
-  `ElysiumProp.cpp` (the random animator's pick ~:136 only)
-- item 8: `ElysiumNpcPedestrian.h`, `ElysiumNpcPedestrian.cpp` (`PedestrianCreateCorpse` and its
-  seam words only), `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesMisc10Tests.cpp` (the
-  assertions on `PedestrianCreateCorpse` only)
-- `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp`,
-  `Source/ElysiumUE/Private/Tests/ElysiumNpcCombatTests.cpp` (`NpcCombat.Death` ~:1629-1661)
-
-Wave check, re-done against the tree after V11 (S12): still no shared file. The three files the
-final block adds — `ElysiumPlayerEntity.cpp`, `ElysiumPlayerPostThinkTests.cpp`, `ElysiumFeed.cpp`
-— are in no C1 list (C1 was told not to touch the player's file: the player's slot-315 call is
-your line). `ElysiumMeleeSequenceChoice.{h,cpp}` and `ElysiumGrapple.cpp` are in neither lane.
-Wave check (C2 against C1, by function): no file is shared. `ElysiumCombatCharacter.cpp` is not
-in C1's list (C1's slot 315 is in `ElysiumCombatCharacterSlots.cpp`, another file, and not
-yours); `ElysiumNpc.cpp`, `ElysiumNpcAnim.cpp`, `ElysiumNpcBaseStartTask.cpp` are not C1's
-(C1's start arms are in `ElysiumNpcStartTask.cpp`). Re-checked after the second sitting: the
-files it adds to you — `ElysiumNpcBaseRunTask.{cpp,inl}`, `ElysiumNpcBaseSpawn.cpp` — are not
-C1's either (C1's `PostRun` line is in `ElysiumNpcBaseMotor.cpp`), and C1 lost the bbox files to
-no lane (J2b).
-
-**Not** `ElysiumWeaponClasses.cpp` (C1's whole): K4's line there
-(`FElysiumWeapon::BuildActivityClipRequest` ~:1077, `Variant = Handle.Index`) you write **in your
-report**, exact, and the integrator applies it.
+C1 ∩ C2 = C2 ∩ C3 = ∅. C1 owns ElysiumWeaponClasses.cpp; give K4's exact request patch to
+C1 as its job (or integrator after reports). C3 owns combat-character declarations in
+Public/ElysiumPlayer.h and the new team implementations. You own the existing spawn/player/
+damage functions that call them. Generated bindings, world lifecycle/restore hooks and any
+other-file declarations are explicit serial integration patches; no concurrent second writer.
 
 ## The job
 
-1. **The death chain's doc — the walk is done and confirmed (S1); one section is left** (J8).
-   `lifecycle.md` § "The ordered chain" steps 5–6 are **already rewritten by S1** and the state-7
-   writers are listed there; you do not walk `CreateCorpse` again and you do not rewrite those
-   steps. What S1 verified in the listing, for you to port against (`packets-S1.md` items 1–3):
-   - `CreateCorpse 0x1032c0e0` **always passes a real bone** (the hit box's bone, or
-     `LookupBone("Bip01 Spine2")`), and **every NPC arm ends with the NPC's think replaced**:
-     the ordinary arm (`BecomeClientRagdoll(force, bone, 0)`, answer discarded; corpse = slot
-     137 = `this`), the `MiscFlag 0x80000` arm (`SpawnStaticCorpse`, `Hide`, `SUB_Remove` at
-     +0.5 s), then the tail when the corpse is non-null: not burning → `SUB_PVSRemove` at +10 s
-     (`0x1032c404`); `burn` (`0x10207df0`: `Has_Burning_Death`, or Kindred without
-     `Disallow_Kindred_Death`) → `BurnModel` and `SUB_Remove` at +10 s. The replacement is
-     `CreateCorpse`'s, not `BecomeClientRagdoll`'s. So **an ordinary kill never returns to
-     `NPCThink` and never reaches `SCHED_DIE`, rig or no rig**.
-   - `BecomeClientRagdoll 0x10090180` with no rig **zeroes the collision bounds and returns
-     false** — nothing else (no solid flag, no move type, no think change; not "zeroes
-     velocity").
-   - The state-7 fork's `BecomeClientRagdoll(vec3_origin, −1, 0)` at `0x1028a8ec` is **the only
-     NPC caller that passes bone −1** (two non-NPC callers exist: `0x1012b370`, the `raggib`
-     entity's setup, and `0x102b5bb0`, 17 bytes with no static caller) and so the only NPC path
-     to the `ACT_DIERAGDOLL` seed (`0x1009021a`). Retail's reachers of the fork: **the deferred
-     script death** (`CineCleanup 0x1027d170`, the `m_iHealth < 1` arm, `:0x2b22`), its sibling
-     `0x1027d0a0` (from `SelectIdealState` case 4), `CNPC_VWerewolf::SelectIdealState
-     0x103d0820`, and the zombie's collapse (`CNPC_VZombie::CreateCorpse 0x103dfbb0`'s
-     non-ragdoll arm, when schedule `0x162` ends). **No step-2 arena record reaches it**, and
-     step 2 needs neither the seed nor `SCHED_DIE` for a green record.
-   Your doc edit: rewrite § "A death sounds more than once", dated, "V4c lane C2": the death
-   sound plays **once** on an ordinary kill (`Event_Killed 0x10265ad0` step 3); **three times
-   only on the rig-less fork route** (`DIE 0x2b` → `TASK_SOUND_DIE`, then `TASK_DIE` → `Die
-   0x103392c0` → a full `Event_Killed`). If you read a listing and it contradicts S1 on any
-   point, the listing wins: write what you read and say so at the top of your report.
-2. **`SelectWeightedSequence 0x1008dc40` on the kernel** (`FElysiumNpc::SelectWeightedSequence(int32
-   Activity)`): gather the body's sequences whose baked activity matches (the sequence table behind
-   `UElysiumBodyData::Sequences` / `FElysiumNpcClipSet`, with the include-shadowing rule
-   `activity_enum.md` :328-337 as far as the table carries the include groups — say what it does not
-   carry), then the draw: none → −1, one → it, `RandomInt(0, total−1)` on the **`NpcSchedule`** stream
-   walked by `weights[i] <= r`, all-zero → uniform on the same stream. `SelectHeaviestSequence
-   0x1008dd30`: strict max, first wins. The answer is a **row** the bridge plays (`m_nSequence`), so
-   every candidate becomes a row; the one-clip-per-activity cache goes. Close divergence row 4 at
-   its line.
-3. **The callers**: `SequenceForActivity` draws through it; `StartTaskSlot442` (its
-   `SelectWeightedSequence(act, -1)`); and **`RunAnimation 0x1026c540`'s re-pick as R2 read it**:
-   outside states 4 and 7, **`m_Activity (+0xfec) == 1`** (not `m_IdealActivity`) and slot 251
-   true → `m_bSequenceLoops` false → `SelectHeaviestSequence(m_TranslatedActivity +0xff4)`, true
-   → `SelectWeightedSequence(m_TranslatedActivity +0xff4)` (not `m_Activity`); commit through the
-   port of `0x10260a50` when not −1. Slot 251 inside `PostRun` reads `StudioFrameAdvance`'s finish
-   OR'd onto the previous think's look-ahead (R2 item 1 (a)) — nothing for you to add, do not
-   re-clear the flag.
-4. **`SetDisposition 0x102c0f70`, arm by arm as R2 item 7 read it** — it is **not** "gated on
-   `m_bDisableAI`"; the flag gates the immediate commit only:
-   - `old = +0x64d4`; the lookup `0x100ec530`; a miss → `("Neutral", 1)` with `old = -1`;
-   - the tuning writes, always: `+0x64d8`, `+0x6584/8`, `+0x5b94`, `+0xe3c`, `+0x10b4`, `+0x64d0`,
-     `+0x10b8` (keep `CommitDisposition`, the table row, as the port's home for them; report a
-     word the port lacks, named by its offset);
-   - if the index changed: `seq = old == -1 ? slot 611 (0x102c12a0) : GetTransitionAnim
-     0x100ed150` (`stance_trans_<old>_<n>_<new>_<n>`, then `_1_…_1`, then the new disposition's
-     `idle[stance]` — its fallbacks stay; resolve names through `LookupSequenceByName`). *Slot
-     611's body `0x102c12a0` is walked in `packets-S5.md` item 9 (the idle of the current stance
-     `+0x64c8`, or the alternate idle on a `RandomInt(1,100)` draw, or a stance change through
-     `0x102c1230` after the row's minimum time; −1 → `m_nSequence`): port it from there, draws in
-     that order.*
-   - if `seq >= 0`: `m_IdealActivity = 0xf1`, `m_nIdealSequence = seq`;
-   - and if `!m_bDisableAI (+0x6080)`: `m_nSequence = seq`, `m_flCycle = 0`, `m_Activity = 0xf1`,
-     `m_flAnimTime = curtime`, `ResetSequenceInfo`.
-   No direct `PlayNpcClip`, no `ResetAnimToIdle`. The port's `IsFeedBusy()` term is not in the
-   listing as R2 read it: remove it and say so.
-5. **`BecomeClientRagdoll 0x10090180`'s seed — only on the arm retail reaches** (J8; the owner's
-   ruling of 2026-10-04 below stands). The seed — `SelectWeightedSequence(ACT_DIERAGDOLL 0x21)`
-   → `m_nSequence`, `m_flCycle = 0`, `ResetSequenceInfo` — runs **only for bone −1**
-   (`0x1009021a`). `CreateCorpse` always passes a real bone, so an ordinary corpse ragdolls from
-   the pose it holds: **no seed, and no "hold the seed pose" stand-in**. Port the seed inside the
-   bone −1 arm, with −1 from the pick → no seed (a model with no `ACT_DIERAGDOLL` sequence), and
-   keep the death transaction as it is: slot 144 → `CreateCorpse`, `BecomeClientRagdoll(force,
-   bone, 0)` with the hit bone or `LookupBone("Bip01 Spine2")`, the force latched only for |F| >
-   0 and bone > 0, the entity made not solid with its think cleared, the +10 s `SUB_PVSRemove` —
-   leaving `StartBodyRagdoll`'s answer as it is until V4d gives the mesh a physics asset.
-   **Plainly: no step-2 record reaches the seed.** `damage_lethal_death` kills an idle NPC and
-   `verbs_stealth_kill` does not defer (`EnterGrappleState 0x102b5c00` cancels a live `m_hCine`
-   before the kill); neither the seed nor `SCHED_DIE` is needed for a green record. The seed is
-   a **ported-but-arm-tested** item: the port's fork is `ElysiumNpcBaseSelect.cpp:~273` (not
-   your file — if it does not pass bone −1, report the exact line), and the arm test is its
-   only reacher in step 2. The test's text names retail's reachers (item 1: the deferred script
-   death `CineCleanup :0x2b22`, `0x1027d0a0`, the Werewolf, the zombie's collapse).
-6. **K4 — the visual side's picks through the same draw, as R2's table maps them**
-   (`packets-R2.md` § "Extension 2"; README §7 K4). `PickWeighted` has one production call
-   (`TryActivity`); what differs is who sets `Variant`. Replace the hash seed in `PickWeighted`
-   with retail's draw (`RandomInt(0, total−1)` walked by `weights[i] <= r`; all-zero → uniform;
-   the same function the kernel's pick uses — one body, two callers), and route each site:
+1. **Direct picks `0x1008dc40`, heaviest `0x1008dd30`.** In
+   `ElysiumNpcAnim.cpp::FElysiumNpc::SequenceForActivity` / `MeleeSequencesForActivity`, gather
+   the body's matching sequence rows once for both the weighted pick and slot-331 band. Remove
+   one-clip-per-activity caching; each candidate has a kernel row. Respect include-shadowing
+   insofar as the baked groups carry it (activity_enum.md); report absent group metadata to the
+   pipeline owner rather than inventing it. No candidates → −1; one → that row; positive total
+   → RandomInt(0,total−1), subtract weights in table order (`weight <= r`); all zero → uniform.
+   Heaviest: strict max, first tie wins, no random draw. Put this one selection body in new
+   Visual/ElysiumAnimationPick.{h,cpp}, used by kernel and visual callers. A bare activity lookup
+   reports a miss; fallback belongs to the retail resolver, not this gatherer.
+2. **K4 shared stream — retail `*0x1070b244` slot 2.** Use the existing
+   **`ElysiumRng::Stream(EElysiumRngStream::NpcSchedule)`** as V4c's common animation-pick stream.
+   NPC and non-NPC animation selections share its advancing state; no per-entity seeds, hash,
+   new stream, Reaction-stream sequence draw or speculative Variant draw followed by a second
+   weighted draw. No draw for a miss, singleton or heaviest pick. Record this resolved ruling
+   beside the pick recovery, and inventory the following sites with retail counterparts:
 
-   | port site | today's variant | retail body | route |
-   |---|---|---|---|
-   | `FElysiumNpc::PlayActivity` (`ElysiumNpc.cpp`) | `ScheduleActivityCycle++` | `ResolveActivityToSequence 0x10272130` | the kernel's `SelectWeightedSequence` |
-   | `FElysiumNpc::SequenceForActivity` (`ElysiumNpcAnim.cpp`) | 0 | the same, and `RunAnimation 0x1026c540` | item 2 / item 3 |
-   | `FElysiumNpc::StartWalkingAnimation` (`ElysiumNpc.cpp`) | `Handle.Index` | the navigator's movement activity → `0x10272130`; the motor's own draw `0x10264680` | the kernel's `SelectWeightedSequence` |
-   | `FElysiumCombatCharacter::PlayReactionActivity` | the `Reaction` stream | `AddFlinchGesture 0x10099690`, `PlayerKnockbackReaction 0x101606e0` | the shared draw; it already draws on a stream — keep the stream, drop the hash |
-   | `FElysiumWeapon::BuildActivityClipRequest` (C1's file) | `Handle.Index` | player `0x101644f0` / layer `0x1015fbb0`; NPC `0x10272130`; the weapon model `0x10253390`, `0x1024efa0` | **your report's line**; an NPC wielder through the kernel's pick |
-   | the locomotion intent (`ElysiumAnimationIntent.cpp`) | the caller's | player: **Heaviest** (`0x101644f0`), no draw; cast: `0x10272130` | the player takes `SelectHeaviestSequence`'s rule (strict max, first wins), no draw |
-   | the prop random animator (`ElysiumProp.cpp`) | — | `0x10190850` `SelectWeightedSequence(ACT_IDLE)`; `CBaseProp::Spawn 0x1018df70` | the shared draw |
+   | port file/function | retail | job |
+   |---|---|---|
+   | ElysiumNpcAnim.cpp::SequenceForActivity / SelectWeightedSequence | `0x1008dc40`, `0x10272130` | direct shared pick |
+   | ElysiumNpc.cpp::PlayActivity / StartWalkingAnimation | `0x10272130`, motor `0x10264680` | remove ScheduleActivityCycle++ / Handle.Index variants; kernel picks |
+   | ElysiumNpcBaseStartTask.cpp::StartTaskSlot442 | `0x102827f0` | same direct pick |
+   | ElysiumNpcBaseAnim.cpp::RunAnimation | `0x1026c540` | shared weighted or strict heaviest, item 3 |
+   | ElysiumNpcAnim.cpp::ChangeStanceForReaction / stance idle path | `0x102c1230`, slot 611 `0x102c12a0` | retain order on NpcSchedule, item 4 |
+   | ElysiumFeed.cpp::ElysiumFeedGrappleCommit::SelectGrappleSequence | `0x1032a2cc`, `0x1032a2de` | direct cell picks, attacker before victim |
+   | ElysiumMeleeSequenceChoice.cpp::ChooseMeleeAttackSequence | `0x10347180` / picker `0x10348100` | already NpcSchedule, no edit; preserve interleaving |
+   | Visual/ElysiumAnimationResolve.cpp::TryActivity / PickWeighted | `0x1008dc40` | replace hash with common body/stream |
+   | ElysiumCombatCharacter.cpp::PlayReactionActivity | `0x10099690`, `0x101606e0` | remove Reaction Variant draw, shared sequence draw at actual lookup |
+   | ElysiumWeaponClasses.cpp::BuildActivityClipRequest (C1) | player `0x101644f0` / layer `0x1015fbb0`; NPC `0x10272130`; weapon model `0x10253390` / `0x1024efa0` | exact patch to C1: no Handle.Index seed; correct weighted/heaviest caller on shared helper |
+   | Player/ElysiumAnimationIntent.cpp::BuildLocomotionIntent | player `0x101644f0`; cast `0x10272130` | player locomotion heaviest, no draw; cast kernel pick |
+   | ElysiumProp.cpp::StandRestPose / PlayRandomAnimation | `0x10190850`, Spawn `0x1018df70` | shared weighted ACT_IDLE pick at each retail call |
 
-   Pass-throughs, not picks — leave them: `ElysiumAnimationDriver.cpp:~498` (a cache key),
-   `ElysiumAnimSubsystem.cpp:~826`, `ElysiumAnimationResolve.cpp:~801, ~851`;
-   `ElysiumGrapple.cpp:~40` is Heaviest already. R2 found **no pick without a retail
-   counterpart**; if you find one, list it by name for the owner and leave it.
-   **Which port stream stands for retail's one shared engine stream (`*0x1070b244` slot 2) at
-   the non-NPC sites (the player's layer, the weapon model, the prop) is an owner's ruling, not
-   a recovery** (S12 item c: retail has one stream for every draw; the listing cannot name a
-   port stream) — it blocks nothing and is asked at V4c's close. NPC sites
-   draw on `NpcSchedule` (README § "Shared names"). For the others: keep the stream a site
-   already draws on; where a site has none (it used the hash), propose one in your report and
-   wire the draw behind a single named function so the owner's answer is a one-line change — do
-   not invent a new stream. The driver's variant-keyed cache is port-only: report whether it
-   still has a meaning once the variant is gone, do not delete it on a guess.
-7. **`SequenceBounds`** (README § "Shared names"; yours because `ElysiumNpcAnim.cpp` is):
-   `bool FElysiumNpc::SequenceBounds(int32 Seq, FVector& OutMinCm, FVector& OutMaxCm) const`.
-   **J2b is ruled: the bbox import is withdrawn and filed with the story that ports the
-   player's acquire cone** (`0x1040f550` / `0x1040f080`); C1 adds no `BboxMinCm` / `BboxMaxCm`.
-   So the body is **a named seam answering false ("no descriptor") for every sequence**, its
-   comment exactly: "stands for the seqdesc bbox `+0x1c..+0x30`, read by slot 247 `0x10090c80`;
-   filled when the acquire cone is ported (J2b)". C1's slot 247 calls it and writes nothing, as
-   retail with no seqdesc. Make it virtual or otherwise replaceable by a test double only if
-   C1's arm test needs that and the declaration is yours (`ElysiumNpc.h`); say which.
-8. **The pedestrian's `CreateCorpse` override, wired** (new from S1; in nobody's files before).
-   `CNPC_VPedestrian::CreateCorpse 0x103a38c0` (slot 301's species body) is recovered in the port
-   as `PedestrianCreateCorpse` (`ElysiumNpcPedestrian.{h,cpp}`) but **not wired to slot 301**: a
-   pedestrian's corpse today takes the base's `SUB_PVSRemove`, and retail's takes **no think at
-   all — the chain never removes it**. Both witness maps carry pedestrians (28 / 3). Retail, in
-   order: snapshot the collision mins / maxs into `+0x6660` / `+0x666c`; the base
-   `CBaseCombatCharacter::CreateCorpse 0x1032c0e0` (all of it, its tail's think included); then
-   **`ThinkSet(this, NULL)`** and **`SetSolid(SOLID_NONE)`**. Wire it so a pedestrian's slot 301
-   runs that body around the real base (`FElysiumCombatCharacter::CreateCorpse`,
-   `ElysiumCombatCharacter.cpp`, the chain's home — as the zombie's override already chains,
-   `FElysiumNpcZombie::CreateCorpse`, `ElysiumNpcSpawnSpecies.cpp`, read not edited), replace the
-   counted seam (`PedestrianCreateCorpseCalls`, `bPedestrianCorpseThinkStopped`,
-   `PedestrianCorpseSolid`) with the real calls where the port has the words, and delete the
-   header's "NOT WIRED TO SLOT 301" paragraph. If the dispatch needs a line outside your files
-   (a generated slot binding, a `kernel_verdicts.tsv` row for `0x1032c0e0`, a virtual's
-   declaration on the combat character's header), write the exact line in your report for the
-   integrator.
-   **As read whole** (`packets-S4.md` item e) — straight-line, no branch: (1)
-   `m_vecPreDeathMins (+0x6660) =` the collision's `OBBMins`, `m_vecPreDeathMaxs (+0x666c) =`
-   `OBBMaxs`, taken **before** the base, which zeroes the bounds; (2) the whole base body — the
-   `OnDeath` latch, the bone, the three arms and the tail, so `SUB_PVSRemove` (or `BurnModel` +
-   `SUB_Remove`) is armed here; (3) `ThinkSet(this, NULL, 0.0, NULL)` — the think the tail just
-   armed is dropped (on the static-corpse arm this also drops the hidden NPC's `SUB_Remove` at
-   +0.5 s); (4) `SetSolid(SOLID_NONE)` (`0x100dc480(&m_Collision, 0)`).
-   **The `Think` gate — without it the wiring changes nothing** (J13). The port's
-   `FElysiumNpc::Think` (`ElysiumNpc.cpp` ~:645) is `if (bDeathCommitted || ThinkFunctionName ==
-   NpcSubPvsRemoveThinkName())`: it runs `SUB_PVSRemove` on **any** committed death, whatever
-   the think name (its comment: a corpse whose think name was not carried, a load). So a
-   pedestrian whose think was cleared is still removed. **The cleared think must win there**:
-   a committed death whose think was explicitly cleared by slot 301's species body runs no
-   removal think. Keep the load case the comment names working (a corpse restored without its
-   think name) — distinguish "cleared" from "not carried" with a word the pedestrian's body
-   sets, named for `0x103a38c0`'s `ThinkSet(NULL)`, and say at the line which retail state each
-   branch stands for.
-   **Order with the fade**: `Event_Killed`'s fade step runs after slot 301 (item 10), so **a
-   pedestrian with spawnflag bit 9 still fades** — the later think wins (inferred from the
-   order; no placed pedestrian on the two maps has the bit).
-   Proving record: `corpse_pedestrian_stays` (written red by A0; the C integrator turns it).
-10. **The death fade — new, J14.1; a game bug in landed work.** 25 of the 62 makers on the two
-   witness maps (`Flag_InfChild 1` on 22, `Flag_Fade 1` on 3 — among them the tutorial's
-   `stealth_victim_maker` and `guard_maker`) set `m_bFade`, and `CNPCMaker::MakeNPC 0x1034b7b0`
-   then gives the child spawnflags **`| 0x204`** (else `| 4`). For such a body
-   `CAI_BaseNPC::Event_Killed 0x10265ad0`, **after slot 301 `CreateCorpse`** (its step 14), asks
-   slot 552 `ShouldFadeOnDeath` (spawnflag bit 9, `0x200`) and on true calls
-   **`SUB_StartFadeOut 0x102695d0`**; the port's `StartFadeOut` (`ElysiumNpcBaseRunTask.cpp`
-   ~:253) is a counted seam reached only from `TASK_DIE`'s arm (~:682), and the port's
-   `Event_Killed` never fades. Port:
-   - **the call** in the port's `Event_Killed`, after `CreateCorpse`, behind slot 552 — locate it
-     by Grep on `0x10265d72` (the listing's call site; `Spawn19StartFadeOut` in
-     `ElysiumNpcBaseSpawn.cpp` is today's stand-in for it): make that step reach the real body.
-     If the port's `Event_Killed` step lives in a file that is not in your list, write the exact
-     line in your report for the integrator and port the two bodies below all the same;
-   - **`SUB_StartFadeOut 0x102695d0`**: render mode 2 / alpha 255 when the mode was 0;
-     `AddSolidFlags(4)`; zero angular velocity; relink; `m_flNextThink = curtime + 10.0` (the
-     f64 cell `0x1044fac0` — 10.0, not 0.0); `ThinkSet(SUB_FadeOut)` (thunk `0x100152b2`);
-   - **`SUB_FadeOut 0x10269960`**: render alpha (`m_clrRender` byte 3) `> 7` → `alpha −= 7`,
-     `m_flNextThink = curtime + 0.1` (f64 `0x104493d0`); else `alpha = 0`, `m_flNextThink =
-     curtime + 0.2` (f64 `0x10449198`), `ThinkSet(SUB_Remove 0x101c0b10)`. From alpha 255: 36
-     steps to 3, then 0, then the removal — **the entity is gone about 13.8 s after the death,
-     seen or not**;
-   - **the think's dispatch**: the port's `Think` (item 8's gate) must run the fade think by
-     its name and not `SUB_PVSRemove`; **the later think wins** — a Kindred maker child both
-     burns at death (the look and the sound) and fades, removed at about +13.8 s, not +10 s;
-   - where the port has no render-alpha word on the entity for the drawn body to follow, keep
-     the alpha as the kernel's word and name the visual seam at the line (the look is the
-     visual side's; the clock and the removal are state);
-   - **check, do not edit, that the maker passes `0x204`** (Grep the port's `MakeNPC`
-     / `m_bFade` / `Flag_InfChild` / `Flag_Fade` in the maker's file): if it does not, write
-     the exact line in your report — that one line is pulled from R6 into this wave and applied
-     by the integrator.
-   `verbs_stealth_kill` kills exactly such a child. Proving record: `corpse_fades` (A0 writes
-   it red). `TASK_DIE`'s existing call keeps working through the same body.
-9. **Tests**: `.PedestrianCorpse` (`0x103a38c0`: the snapshot before the base, the base called,
-   the think cleared and the body `SOLID_NONE` after it — no `SUB_PVSRemove` left armed, and
-   `Think` on that committed death removes nothing), in
-   `ElysiumNpcKernelSpeciesMisc10Tests.cpp` beside the assertions it replaces;
-   `Elysium.Arm.NpcKernelAnim.DeathFade` (in `ElysiumNpcCombatTests.cpp` or
-   `ElysiumNpcKernelAnimTests.cpp`, say which): `0x102695d0` — the first think at +10.0, the
-   solid flag; `0x10269960` — −7 per 0.1 s, 36 steps from 255, alpha 0 then `SUB_Remove` after
-   0.2 s; spawnflag bit 9 clear → no fade; `Event_Killed` calls it after `CreateCorpse` and the
-   fade think replaces `SUB_PVSRemove` / `SUB_Remove`; delete the assertions that pin
-   `StartFadeOutCalls` as a counter and list them; and
-   `Elysium.Arm.NpcKernelAnim.WeightedPick`, `.HeaviestPick`, `.RunAnimationPick` (R2's
-   gate: `m_Activity == 1`, the pick on `m_TranslatedActivity`, the loop-bit fork),
-   `.SetDisposition` (each arm of item 4, including "`m_bDisableAI` set: the ideal words written,
-   the commit not"), `.DieRagdollSeed` (`0x10090180`: bone −1 → the seed; a real bone → no seed;
-   the test's text states who reaches bone −1 in retail), each naming its address. Delete
-   `NpcCombat.Death`'s port-only assertions (`StartBodyRagdoll → 0`, `HoldBodyFinalPose`, "no
-   `PlayNpcClip`") and any test pinning one clip per activity or the hash seed (Grep); list them.
+   StandRestPose is reached from Spawn; PlayRandomAnimation from Think. Pass-through cache keys in
+   AnimationDriver/AnimSubsystem/Resolve are not extra pick sites. ElysiumGrapple's heaviest
+   pick stays deterministic. Report whether the driver's Variant cache remains meaningful;
+   do not let it suppress a retail draw. Non-selection flinch direction/jitter and unrelated
+   subsystem draws are outside this ruling; do not casually move all Reaction draws.
+   **Landed prop adapter, located by name:** StandRestPose and PlayRandomAnimation call
+   `AElysiumMapActor::AnimatedPropRestClip` (Map/ElysiumMapActorEmbodiment.cpp), which forwards
+   to `UElysiumEntityBodies::AnimatedPropRestClip` (Visual/ElysiumEntityBodiesProps.cpp), then
+   `FElysiumCataloguePlacedModel::SelectRest` (Private/ElysiumModelCatalogues.cpp). The latter
+   uses RestSeed and floors weights to 1. Owe integrator a dedicated
+   `PickAnimatedPropRestClip(const FString& Stem)` interface/map/body adapter using the common
+   picker over Clips/RestCandidates **with raw weights**; change your two actual retail pick
+   calls to it. Keep BuildBody's capability check and BuildAnimatedPropVisualWithStaticStem's
+   initial presentation lookup draw-free; they are not extra retail selection transactions.
+   The deterministic SelectRest preview must no longer supply either live retail pick. This
+   needs interface/body source wiring, not a catalogue asset re-bake (weights are already baked).
+3. **RunAnimation `0x1026c540`, commit `0x10260a50`.** Preserve landed
+   `ElysiumNpcBaseAnim.cpp::RunAnimation`: state not 4/7, ActivityNumber==1, slot 251; nonlooping
+   → heaviest TranslatedActivity, looping → weighted TranslatedActivity. Commit only a valid
+   row, **without zeroing cycle**. A finished one-shot idle re-picks every think at cycle 1 and
+   re-fires its table after reset (S12 b), retail's bug. Read
+   `ElysiumNpcBaseHelpers2.cpp::SelectHeaviestSequence` and
+   `ElysiumAnimatingOverlaySlotBodies.cpp::SelectWeightedSequenceForActivity`. The first
+   currently forwards to the weighted selector: **owe the integrator its replacement with
+   the true heaviest body (`0x1008dd30`)**, no draw. The second already forwards NPCs to
+   SequenceForActivity, which must become the direct common pick; keep non-NPC model-less −1
+   behavior until a real sequence table supplies that input. Report exact function patches.
+4. **Disposition `0x102c0f70`, slot 611 `0x102c12a0`, stance `0x102c1230`.** In
+   `ElysiumNpc.cpp::SetDisposition` / `ElysiumNpcAnim.cpp` stance functions: lookup miss→Neutral,1
+   and old=−1; always write tuning +0x64d8/+0x6584/8/+0x5b94/+0xe3c/+0x10b4/+0x64d0/+0x10b8
+   via CommitDisposition. On index change, old=−1 takes slot 611, otherwise transition
+   `0x100ed150`: named transition, _1_..._1, new stance idle. Slot 611 follows S5 item 9's
+   current/alternate idle draw then minimum-time stance change; preserve draw order; −1 keeps
+   current sequence. Valid sequence always writes ideal activity 0xf1/ideal sequence; only
+   !DisableAI commits sequence, cycle 0, activity 0xf1, animTime=now and ResetSequenceInfo.
+   Remove IsFeedBusy gate; no direct PlayNpcClip/ResetAnimToIdle. Report missing tuning words.
+5. **Death transaction/seed `0x1032c0e0`, `0x10090180`, seed `0x1009021a`.** In
+   `ElysiumNpc.cpp::BecomeClientRagdoll`, weighted ACT_DIERAGDOLL 0x21 seed only for bone −1;
+   miss → no seed; real bone → retain current pose. Ordinary CreateCorpse always passes the
+   hit bone or Bip01 Spine2; no seed/hold-pose stand-in for ordinary kills. Preserve landed
+   RetailSolidFlags|=4 on the rig branch; no-rig retail zeroes bounds and returns false, with
+   no additional writes. CreateCorpse owns the think replacement on every NPC arm: static
+   corpse/hide +0.5 removal, mortal +10 PVS poll, Kindred/burning +10 SUB_Remove. Ordinary kill
+   never returns to NPCThink/SCHED_DIE. In lifecycle.md correct the death-sound section:
+   once on ordinary kill `0x10265ad0`; three only on rig-less state-7 fork → SOUND_DIE → DIE →
+   `Die 0x103392c0` → Event_Killed. The seed is arm-tested only: retail reachers are deferred
+   CineCleanup `0x1027d170`'s health<1 arm, sibling `0x1027d0a0`, Werewolf `0x103d0820`, zombie
+   collapse `0x103dfbb0`; neither death arena record reaches it. Owe fork bone−1 correction in
+   ElysiumNpcBaseSelect.cpp if needed. `0x102b5bb0` is dead code (S12), no reading owed.
+6. **Pedestrian corpse `0x103a38c0`.** Wire
+   `ElysiumNpcPedestrian.cpp::PedestrianCreateCorpse` around the **real**
+   `ElysiumCombatCharacter.cpp::CreateCorpse` at slot 301: snapshot mins/maxs +0x6660/+0x666c
+   before base zeroes bounds; call entire base; ThinkSet(NULL); SOLID_NONE. Replace counted
+   seam and stale header warning. In `ElysiumNpc.cpp::Think`, explicit cleared think must
+   stay cleared; distinguish it from a missing restored name. Committed death alone must not
+   force SUB_PVSRemove. Mortal seen/unseen and Kindred controls keep their own installed thinks.
+   Report virtual declarations/generated-dispatch/verdict lines outside your files.
+7. **Fade child and death-time install — S13 §1, `0x1034b7b0`, `0x10265d66/0x10265d72`,
+   `0x1027a400`, `0x102695d0`, `0x10269960`.** Read-only check
+   `ElysiumNpcMaker.cpp::MakeNPC` / Spawn: ordinary maker **assigns** 4 or 0x204 (not OR),
+   m_bFade/Flag_Fade; Flag_InfChild forces fade at `0x1034afe0`. Fleshpile `0x1034c2d0` ORs
+   4/0x204; Spawn `0x1034c020` has same implication; zombie `0x1034d140` calls ordinary maker,
+   Spawn `0x1034cc60` forces fade. These landed implementations already match; no maker patch
+   is owed. Correct assignment-vs-OR prose in lifecycle.md.
+   `ElysiumNpcBaseSpawn.cpp::Event_Killed` **already** asks ShouldFadeOnDeath (child bit 9,
+   0x200) after slot 301 and calls Spawn19StartFadeOut; fill its counted body, do not duplicate
+   the install. Route it and `ElysiumNpcBaseRunTask.cpp::StartFadeOut` (TASK_DIE) to one body.
+   Start: mode 0→2/alpha255 (other modes keep alpha), solid flag 4, angular velocity 0, relink,
+   next think now+10, install SUB_FadeOut thunk `0x100152b2`. Each fade think alpha>7→−7 and
+   next +0.1; else alpha=0, next +0.2, install SUB_Remove `0x101c0b10`. Dispatch the installed
+   think in ElysiumNpc.cpp::Think. **Later fade wins** over Kindred +10 removal and pedestrian
+   clear, visibility irrelevant. 255→36 decrements, zero at ~death+13.6, removal ~+13.8.
+   Missing render-alpha presentation is a named visual seam, never a missing kernel clock.
+   `corpse_fades`: tutorial stealth_victim_maker, Spawn, named child, alpha255/mode0, watching
+   player; expect 0x204/death/corpse, never removed through death+13, removed by +14.5.
+8. **Dead enemy — S13 §3, `0x102743c0` gate `0x10274475`, IsAlive `0x100b4dc0`.** In
+   `ElysiumNpcBaseSenses10.cpp::BestEnemy`, replace candidate IsInert with **!IsAlive**. A
+   nonhidden resolvable corpse must be rejected. This is the single proved divergence in the
+   already-ported selection transaction: preserve
+   `ElysiumNpcEnemy.cpp::ChooseEnemy/SetEnemy` (`0x10279dd0/0x10279a50`),
+   `ElysiumNpcBaseConditions2.cpp::GatherEnemyConditions` (`0x10270b20`, death arm
+   `0x10270e5a..0x10270e89`), base SelectSchedule `0x1028a380`, Troika `0x102af660` death arm
+   `0x102afc24..0x102afca7`, PreSelectSchedule `0x102ae920` and SelectIdealState `0x1026f660`.
+   No START_COMBAT suppression, eager handle clear or ENEMY_DEAD→idle shortcut. Quiet normal
+   Troika exit is ALERT/0x4b; NoAlertState is IDLE/0x6b; replacement enemy permits START_COMBAT.
+9. **Memory fidelity — `0x102df320`, cursor `0x102df50e..0x102df518`, slot 541
+   `0x10273e10`.** In `ElysiumNpcEnemyMemory.cpp::Refresh` / header owner context,
+   `ElysiumNpcBaseConditions2.cpp::GatherConditions` refresh and
+   `ElysiumNpcBaseSenses10.cpp::BestEnemy`, use the **actual selected GetEnemies store**, not
+   unconditional member EnemyMemory. Preserve `ElysiumNpcBaseSenses.cpp::GetEnemies`' connected
+   (<1), disconnected/shared-store seam; bind owner context at creation/redirection, never
+   infer owner from the victim or arbitrary caller.
+   Unresolvable handle removes unconditionally. Resolvable dead-entry candidate requires NPC
+   self-cast +0x94 and state slot 464==7, then owner slot 54 OR squad AND-of-members
+   `0x103167f0` permission. Base slot54 `0x10026910` refuses; landed
+   `ElysiumNpcTroikaHelpers.cpp::Slot54` (`0x102b50b0`) vetoes current enemy if schedule exists
+   without LOST_ENEMY. Vetoed entries may remain indefinitely; player corpse is no NPC-state-7
+   candidate, but still unselectable. Kept entries refresh tracked +0x00 only while
+   now<lastSeen+freeKnowledge; no age expiry or LKP+0x0c refresh. Unlink **before** owner slot56
+   (or squad fanout `0x103169a0`) receives target, LKP+0x0c, vector+0x18 and function tag.
+   Landed Troika Slot56 `0x102b5120` clears last enemy only if nonalive/matching. Preserve
+   removal's successor-next quirk: skip immediate successor this pass, including multiple dead
+   entries; no RemoveAll(!IsAlive). Update senses.md's abbreviated memory account; give C1
+   the exact matching combat-and-damage.md correction (its file).
+   **First step for owner/squad plumbing:** read `0x102df320`, `0x103167f0`, `0x103169a0` from
+   the listing before writing; record call arguments/owner storage in senses.md. A squad object
+   absent from substrate gets a named null hook for that retail field, not a fabricated veto
+   or squad service; report the exact later squad-owner work and any declarations owed.
+10. **Released feed fallback — S13 §5, `0x1033a9e0`, `0x1032a100`, `0x10281eee`,
+    `0x102727d0`, `0x10272130`, `0x10295a80`.** In
+    `ElysiumFeed.cpp::SelectGrappleSequence`, use bare Npc.SelectWeightedSequence(cell);
+    remove label fallback/ladder guard (S12: one authored sequence per cell). A true miss
+    warns/EndGrapple; preserve attacker then victim. Preserve release ideal/base 0xf88 versus
+    activity/cell 0xf8c, LeaveGrappleState's no-animation writes
+    (`0x10329a70/0x1026ce30/0x102b5d90`, slot614 tail `0x102b5d9d`), first MAKE_OBLIVIOUS task
+    `0x102a72e3..0x102a7315`, then MaintainActivity before later SET_ACTIVITY `0x102a1c0f`.
+    Released translation `0x10328030/0x10328380` leaves bare 0xf88; direct lookup **misses**,
+    retail resolver retries disposition 0xf1/slot611 and commits an idle sequence while
+    requested activity remains 0xf88; eventual mesmerized ideal/activity is 0x104e. No reset
+    on leave, maintenance reorder, cycle-zero at RunAnimation or blanket released no-idle gate.
+    RunAnimation's activity==1 gate excludes this intermediate row. Correct feeding.md's
+    "next sequence is the trance task's" claim. Idle variant 3 is not guaranteed.
+11. **Player PostThink `0x1016be10`, gates `0x1016bede..0x1016bf17`, tail `0x1016c316`.** In
+    `ElysiumPlayerEntity.cpp::PostThinkAnimation`, retain order: game-over, locked, !IsAlive,
+    observer. Implement actual liveness gate before body test; dead player advances/dispatches
+    nothing and keeps channel/cursor words. Other three unavailable inputs are named open
+    seams, no invented frozen/cinematic/controller gates. After TickStealthKill call C1's
+    MeleeSwingUpdate() (slot312/315), after slot258; C1 removes all world-tick sweeping.
+12. **C3-owned team calls in your files — `0x10323a90`, `0x10298d30`, `0x10348890`,
+    `0x1016d260`, `0x1016ebd0`, damage `0x1032ef60`.** In
+    ElysiumNpcBaseSpawn.cpp::Spawn19TeamName return combat-character TeamName; Spawn19AddToTeam
+    calls C3's AddToTeam, replacing counted-only seam; update .inl comments. Both existing base
+    Spawn and ElysiumNpcSpawn.cpp::TroikaSpawnBody call these hooks already; do not reorder.
+    In ElysiumPlayerEntity.cpp::Spawn / Hydrate join literal player at retail-equivalent spawn/
+    restored-state point. Integrator re-registers restored NPC names after ApplyEntityRecord;
+    no numeric symbols persist across levels. In ElysiumCombatCharacter.cpp::OnTakeDamage,
+    replace CombatTeamSymbolOf/CombatSameTeam constants with C3's common IsSameTeam; refuse a
+    different teammate's packet **before** discipline notification/life-state dispatch, admit
+    self-damage through this predicate. C3 supplies exact calls; no same-team exemption based
+    on relationship, and no attackerless scalar packet as proof.
+13. **Arm tests, write only.** Listed files pin weighted/heaviest/miss/singleton/zero-total
+    and interleaved NPC+reaction+weapon+prop stream order; RunAnimation gates and kept cycle;
+    disposition disableAI ideal-vs-commit arms; real-bone/no-seed versus bone−1/seed;
+    pedestrian snapshot/base/clear/solid and explicit-clear-vs-missing-restored name; fade
+    modes, solid/angular/relink, +10/−7/0.1/+0.2 and late install over burn/clear; BestEnemy dead
+    corpse/player rejection; memory owner veto, unresolved removal, NPC-state7/player distinction,
+    notify-after-unlink vectors, free-knowledge boundary/no LKP change, successor skip and selected
+    disconnected store; feed first-task fallback/0xf88→0x104e; PostThink AliveGate/Slot312Order.
+    Cite each retail address in the test. Remove tests pinning hash/single clip/count-only fade
+    or HoldBodyFinalPose; list them. Reports owe other-file declarations/forwarding explicitly.
 
 ## Not yours
 
-The row's baked data (V4a), the body's speed (V4b), attack producers and slot 247 (C1), the
-bbox's data (withdrawn by J2b; filed with the acquire cone's story), the fall, whether a model
-has a rig, the drawn body surviving its entity's removal and the burning-death sound (V4d lane
-D), `BurnModel`'s look (filed to 0014), the maker (`MakeNPC`: checked, not edited; R6), the four
-corpse records (A0 writes them, the C integrator turns them), `ElysiumWeaponClasses.cpp`,
-`ElysiumCombatCharacterSlots.cpp`.
-
-Settled by S4, nothing to port: `0x1010e530` (`CreateCorpse`'s first call) fills a vector with
-three C-runtime `rand()` draws scaled into `[lo, hi]` and `CreateCorpse` discards it — not the
-engine's stream. Settled by S12 item c: `0x102b5bb0` (`BecomeClientRagdoll(vec3_origin, −1, 1)`)
-is reached from nothing — no direct caller, no vtable, no data reference: dead code. The state-7
-fork stays the only NPC reacher of bone −1.
+C1 attack/contact/extents and combat doc; C3 registry/keyfield implementation; generated files
+and world restore hooks are integrator's. SequenceBounds stays a named false seam for seqdesc
+bbox +0x1c..+0x30 / slot247 `0x10090c80` (J2b), replaceable by C1's test double as needed.
+No bbox import/re-bake in V4c. Corpse fall/physics: V4d; burn look: 0014; real reload: V5;
+wider Presence: discipline owner; broader squads remain their owner behind the named null seam.
 
 ## Rules
 
-README § "Rules for every agent of V4": no build, no editor, no suite; only your files; cross-lane
-lines in the report. The query budget (10 s warns, 60 s stops; never a file over ~200 KB whole —
-`lifecycle.md` is large: read its sections by line range). Text through Grep / Read / Glob. Do not
-commit. Report ≤300 words.
-
-## The owner's ruling, 2026-10-04 — the corpse (stands; folded into item 5)
-
-The corpse's fall is story V4d (`brief-D-ragdoll.md`), not yours. The "hold the `ACT_DIERAGDOLL`
-seed pose" stand-in an earlier text of this brief described is withdrawn: the seed runs only for
-bone −1 (`0x1009021a`) and `CreateCorpse 0x1032c0e0` always passes a real bone. Your death items
-are the doc (item 1: one section), the seed on its one arm (arm-tested only; no record reaches
-it), the pedestrian's override wired with `Think`'s gate (item 8), the death fade (item 10), and
-the transaction otherwise left as it is.
+- Touch only the listed files; lines owed by other files go in your report with file/function
+  and exact patch. Generated `*Slots.cpp` and bindings are never hand-edited: hand bodies go
+  in matching `*SlotBodies.cpp`; the integrator owns verdict rows and regeneration.
+- Never build, run tests, the arena, editor or game, or commit/push. No `Arena/` edits.
+- Retail first: look up each address before searching docs, read the listing when required,
+  and cite the retail address at every ported line. A missing input gets a named seam answering
+  nothing. A new divergence is recorded in the report, not adopted.
+- Shadowed locals are compile errors here (C4458/C4459); check includes and double definitions.
+- Every query has a 60 s timeout; >10 s warns and is logged. At 60 s stop and optimize before
+  retrying; never widen/retry as-is. Never read a file over ~200 KB whole. Wait by completion
+  notification, never a polling loop.
+- Report ≤300 words: addresses/behaviour, tests added/deleted, remaining reads/seams, and exact
+  lines owed by other files. Deliver it in the worker response, never a file named `report*.md`.

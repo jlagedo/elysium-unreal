@@ -1,254 +1,168 @@
-# Brief — V4c's integrator (and V4's close)
+# Brief — V4c integrator: C1, C2, C3 (one commit; never push)
 
-**Final (amended after V4r, settling packets S1–S4 and the judge's second sitting, 2026-10-04 —
-J6, J8; J2b, J11, J13, J14).** **The body-data import (step 3) is struck: J2b withdrew J2's import
-and filed it with the acquire cone's story. The slot-247 body stays in C1**, on the named
-`SequenceBounds` seam, and lands writing nothing — proven by its arm test only. **You gain four
-corpse records** (J13). Runs after C1 and C2 report. Read
-`README.md` here, both briefs, `packets-R2.md`, `packets-S1.md` items 1–4, `packets-S2.md` items
-1, 7, 9, `packets-S4.md` items a, e, f.1, the second sitting (`stories/v1/triage.md` § "Judge's
-rulings, V4 — second sitting"; Grep, read only it), the judge's rulings J6, J8
-(`stories/v1/triage.md` § "Judge's rulings, V4"; Grep, read only it), `Arena/README.md`.
+Final, 2026-10-04. Run only after **C1, C2 and C3** report. Read AGENTS.md first, HANDOVER.md,
+the three final briefs, README's shared names/rules, Arena/README.md and S5 item 3, S10, S11,
+S12, **S13 / Changes to the plan**. Read git log and messages 64895278/88649932: event shots
+are landed/green; shot estimate deletion and dead-enemy reselection remain V4c; chase_melee's
+swing row does not move the body yet. Owner rulings are settled: one animation-pick stream
+**NpcSchedule**, registry built now, real reload in V5. No question to re-ask.
 
-**Final for the code as landed (2026-10-04; `packets-S12.md`).** V4c runs **after V11 and after
-V4o**. Where a step below and this block disagree, this block wins.
+No file named `report*.md` is created. Use worker responses/scratch outside repo for reports;
+landed recovery belongs in the named docs and verdict table goes in the single commit message.
 
-- **Cross-lane lines, added to step 1**: (a) the world tick's sweep goes — delete the call
-  `EntityWorld->AdvanceMeleeSwings(DeltaSeconds)` (`Map/ElysiumMapActor.cpp` ~:2630) and the
-  declaration (`Public/ElysiumEntityWorld.h` ~:432), and correct the comment in
-  `Visual/ElysiumMeleeTrail.h` ~:19; C1 deleted the definition. (b) Check that **both halves of
-  the player's sweep landed**: C1's slot 315 body and C2's one call at the tail of
-  `FElysiumPlayer::PostThinkAnimation`; with only one, the player's swing hits nothing. (c) If
-  C2 reported that `SelectHeaviestSequence` (`ElysiumNpcBaseHelpers2.cpp`) or
-  `SelectWeightedSequenceForActivity` (`ElysiumAnimatingOverlaySlotBodies.cpp`) does not forward
-  to the new pick, its line. (d) The maker's spawnflag bit 9 (`MakeNPC 0x1034b7b0`,
-  `AiInfra/ElysiumNpcMakerActor.h` / `Map/ElysiumMapActor.cpp`) if C2 found it missing.
-- **Before the build — the generated slots** (as V4a did for 242 / 248 and V4b for 389): C1
-  wrote slot 315 in `ElysiumCombatCharacterSlotBodies.cpp` and slot 247 in
-  `ElysiumAnimatingSlotBodies.cpp`. In `research/tooling/ghidra/driver/kernel_verdicts.tsv`
-  retarget rows `10346cd0` and `10090c80` to `hand:FElysiumCombatCharacter::MeleeSwingUpdate` /
-  `hand:FElysiumAnimating::SetAttackExtentsForSequence` (look each up with `uv run elysium
-  research rows kernel_verdicts.tsv address=<addr>`; the shape is row `103338c0`), then
-  `uv run elysium research gen_kernel_shape` once. Neither generated `*Slots.cpp` is hand-edited;
-  where step 1 below names `ElysiumCombatCharacterSlots.cpp` as C1's, read the `…SlotBodies.cpp`.
-- **Disjointness, by listing, as amended**: C2 gained `ElysiumPlayerEntity.cpp`
-  (`PostThinkAnimation` only), `Tests/ElysiumPlayerPostThinkTests.cpp` and `ElysiumFeed.cpp`
-  (`SelectGrappleSequence` only); C1 touches none of them. C1's diff in
-  `ElysiumWeaponClasses.cpp` shows hunks only in the estimate (`CommitArrivesFromAnimEvent`, the
-  commit time, `BeginRangedShot`'s NPC arm), `IsMeleeSwingTrigger` / `OperatorHandleAnimEvent`,
-  `AdvanceSwingContact`'s entry and sub-step loop, and `ElysiumSwingEndpointsAt`'s body — none in
-  `ShotFromAnimEvent`, `CommitQueuedAttack`'s magazine block (O3's), `MeleeContact`,
-  `SwingWallContact`, `KnockbackContact` or the walk's filters (V11-2's).
-- **Records, corrected against the tree**: the corpse records on disk are **five** —
-  `corpse_removed_unseen`, `corpse_kept_seen`, `corpse_kindred_burns`, `corpse_pedestrian_stays`,
-  `corpse_fades`; run all five. **`cover_move_shoot` is green since V4o** and must stay green
-  (step 6's "still red on its `known_red`" is void). **`ranged_open_fire` is green since O3's
-  stamp** with its bound at 1.6 s and the two relative `never` windows; "red only on N2 (V5)" is
-  void. `ranged_sustained_fire` stays green. Add to step 5's run:
-  `corpse_kept_seen anim_player_weapon_event_melee anim_player_weapon_event_firearm
-  verbs_feed_victim_dispatch melee_ally_in_the_way ranged_sustained_fire`; and to the family
-  filters the player's post-think tests (C2's `AliveGate`, `Slot312Order`) and
-  `Elysium.Arm.MeleeSequenceChoice.`.
-- **Acceptance, added**: `anim_player_weapon_event_melee` green — the player's swing is swept
-  from `PostThinkAnimation`'s slot 312 stand-in, after slot 258 (`0x1016c316`), not from the
-  world tick; `verbs_feed_trance` / `verbs_feed_victim_dispatch` green with the grapple cells
-  picked by activity number (S12 d.1 item 6: one sequence per cell; a miss is `EndGrapple`); a
-  dead player dispatches no `animevent` (S8 gate 3).
-- **The silent-class list (step 7), corrected**: "each species class's `HandleAnimEvent` arm by
-  arm" is **not owed** — the bodies are walked and ported (S12 item c). `0x10239f30` is settled
-  (S5 item 5). What stays on the list: the Tzimisce melee's 3045 / 3046 if C1 left the seam, and
-  every (model, sequence) C1's Warning named — expect at least a flamethrower wielder's
-  `flamet_attack_layer`-family clips if a record reaches one (S12 a.1: the layer authors no 3031).
-- **K4's open point** goes to the owner as a ruling, not a recovery (S12 item c).
+## Files and ownership
 
-**Added 2026-10-04 by the V5 planner, after V11's commit `88649932`** (two items; both read from
-the listing):
+C1/C2/C3 have the exact file manifests in their briefs; braces expand before comparing them.
+**All three pairwise intersections are empty.** C1 owns weapon/contact and combat doc; C2 owns
+main combat-character/damage/spawn/player/animation/memory and lifecycle/senses/feed docs;
+C3 owns Public/ElysiumPlayer.h's team declarations, new registry/team bodies/tests and teams.md.
+No file has two coder writers. Patch another lane's file only after reports, serially.
 
-- **`chase_melee` is C1's item 3b** (`brief-C1-attack-producers.md`): the swing as the NPC's own
-  `m_nSequence` (slot 331 → slot 311) and `AutoMovement 0x10280a50` moving the body by the
-  sequence's interval movement (`0x10094b70` → `MoveGroundStep 0x102e0bd0`). **Cross-lane lines,
-  added to step 1**: (e) the embodiment accessor C1 reports —
-  `IElysiumEmbodiment::GetBodySequenceIntervalMovement(Body, Stem, RawIndex, CycleFrom, CycleTo,
-  OutDeltaCm, OutYawDeltaDegrees)`, declared beside `GetBodySequenceMovement`
-  (`Public/ElysiumWorldServices.h` ~:1142, default zero / false), overridden in
-  `Public/ElysiumMapActor.h` ~:437 and `Map/ElysiumMapActorEmbodiment.cpp` ~:311 over the same
-  baked path (`ElysiumClipMovement::SampleDelta` with the two cycles), and in the test double
-  (`Tests/ElysiumTestServices.h`) if C1's arm test needs it; (f) if C1 reported that
-  `SetRuntimeOrigin` does not carry the capsule, the one line `Motor->Teleport(end, yaw)` at
-  `AutoMovement`'s apply. **Acceptance, replacing step 6's "`melee_swing`, `chase_melee`: green
-  before you start"**: `chase_melee` is `expected-fail` when you start and must turn green —
-  the end probe under 200 cm and a `damage` line on the player; `known_red` removed; its trace
-  shows the kernel's `sequence` line naming the swing clip at a non-zero rate during
-  `task_melee_attack1`. Still red → read whether the `sequence` line changed (site (i)) and
-  whether the brawler's distance fell during a swing (sites (ii) / (iii)), and place it.
-- **A new record, `Arena/scenarios/combat/melee_enemy_blocked.json`** — the exactly-in-line case
-  V11's integrator restaged `melee_ally_in_the_way` around. You write it, run it with step 5's
-  list, and it is expected **green on the tree as it stands** (V11 measured it: `cond+
-  ENEMY_BLOCKED` at 0.600, then `0xce`); red is triaged, not loosened.
-  - `about` (retail, read): slot 331 `ChooseMeleeAttackSequence 0x10347180`'s line gate — one
-    zero-extent trace between the two slot-192 centres (`0x1034727b`, `CALL 0x1000ae25`); a hit
-    (fraction below 1.0, or start-solid / all-solid) on an entity that is not the target, not
-    the entity of the target's handle `+0x1538`, and whose flag word `+0x4c` has bit 10 clear →
-    `SetCondition(0x3a COND_ENEMY_BLOCKED)` (`0x103472f2..0x103472f6`) and the body leaves
-    (`JMP 0x10347d97`): no sequence. The melee failure gate **`0x102b6fe0`**: `COND 0x48` first
-    (`0xe9` line `0x5a5f` with a usable ranged weapon, slot 308; else `0xcd`, `0x5a69`); then
-    `COND 0x3a` → slot 308 true → slot 601 when `m_bInMelee (+0x6078)`, `0xe9` (`0x5a77`); **else
-    `0xce` `SCHED_TROIKA_MELEE_ADVANCE_NR_LKP_NOSEE` (`0x5a81` = `AI_BaseNPCTroika.cpp:23169`)**;
-    neither condition → 0. `CNPC_VHuman::SelectScheduleMeleeCombat 0x10385e40` offers it first in
-    the out-of-melee arm and, in the common tail, right after `0x102b7370` — **before** the
-    condition ladder and before `0x102a11d0` (`shape.md` § "`CNPC_VHuman::SelectScheduleMeleeCombat`
-    — `0x10385e40`"), so an ally exactly on the line is answered by `0xce`, never by the circle.
-    (`melee_ally_in_the_way`'s `about` cites the raise at `0x103472e8`; the `PUSH 0x3a` is at
-    `0x103472f2`. Correct that one address there, nothing else.)
-  - Staging: `melee_ally_in_the_way`'s cast, seat, seed and keys, with **`arena_front` at
-    `[-775.0, 0.0, 0.0]`** — exactly on the line from `arena_rear` (`[-525.0, 0.0, 0.0]`) to the
-    player; `duration` 10.
-  - `expect`, on `arena_rear`, in order: `engages` (`schedule`, `SCHED_TROIKA_START_COMBAT (`,
-    `by 3.0`); `blocked` (`cond+`, `ENEMY_BLOCKED (0x3a)`, `within 2.0`); `advance_lkp`
-    (`schedule`, `\(0xce\)$`, regex, `within 1.0`).
-  - `never`: on `arena_rear`, `schedule` `\(0xe1\)$` and `\(0xcb\)$` with `until` set from the
-    first trace to the moment `arena_front` leaves the line (its first `move goal`; V11's run
-    puts `0xce` at about 0.6 s — start from `until: 1.5` and state the measured time in
-    `notes`); `death` on both; `damage` `from=arena_front` on `arena_rear` (D1, `0x1034394d`).
-  - `notes`: matched by class-local number, as `melee_ally_in_the_way` is; the two records are a
-    pair — on the line `0x3a` and `0xce`, 50 cm off it `0x102a11d0` and `0xe1`.
+Your additional integration paths (Source/ElysiumUE prefix unless stated):
 
-1. **Apply the cross-lane lines** the coders reported, nothing more. Expected: C2's K4 line in
-   `ElysiumWeaponClasses.cpp` (`FElysiumWeapon::BuildActivityClipRequest`'s `Variant`); a
-   mismatch between C1's call and C2's body of `SequenceBounds` (README § "Shared names" is the
-   authority); a `RemoveFlag2(4)` writer or a `m_flDesiredMoveYaw`-style word a lane found
-   missing outside its files; **C2's wiring of the pedestrian's `CreateCorpse` (`0x103a38c0`) to
-   slot 301** where it needs a line outside C2's files (a generated slot binding, a
-   `kernel_verdicts.tsv` row for `0x1032c0e0`, a virtual's declaration); the state-7 fork's
-   bone −1 (`ElysiumNpcBaseSelect.cpp:~273`) if C2 reported it; a word for the sweep's stamp
-   (`m_flLastMeleeSwingUpdate +0xaa4`, `m_bMeleeSwingIsLive +0xaa1`) if C1 reported its home is
-   not its file.
-   **Wave disjointness, checked by listing before the build**: C1 and C2 share no file. By
-   function: `ElysiumCombatCharacter.cpp` is C2's (`PlayReactionActivity`, `CreateCorpse`);
-   `ElysiumCombatCharacterSlots.cpp` is C1's (slot 315); `ElysiumNpcAnim.cpp` is C2's
-   (`SequenceBounds`, called by C1); `ElysiumWeaponClasses.{h,cpp}` is C1's (C2's K4 line is
-   yours to apply); `ElysiumNpcPedestrian.{h,cpp}` and `ElysiumNpcKernelSpeciesMisc10Tests.cpp`
-   are C2's, as is `ElysiumNpc.cpp` (C2's functions, now with `Think`'s committed-death gate)
-   and `ElysiumNpcBaseRunTask.cpp` (`StartFadeOut` only); the bbox files (`ElysiumBodyData.*`,
-   `ElysiumNpcClips.h`, `body_data.py`) are in **no** lane (J2b) and must show no hunk.
-2. **Build once** (`uv run elysium build`). Fix only integration breaks; a third build means stop.
-3. **STRUCK (J2b).** No import, no pipeline change, no live `attack_extents` read. The acquire
-   cone (`0x1040f550`, `0x1040f080`) is not ported, so the port has no observer of the extents;
-   the data half is filed with the story that ports it. In `report-c.md` write one line — "slot
-   247's body landed on the `SequenceBounds` seam and writes nothing; proof: the arm test
-   `Elysium.Arm.NpcKernelAnim.AttackExtents`; no arena record, stated (J2b)". The text below is
-   the filed item's description only; do none of it.
-   ~~**The one body-data import** (J2)~~, after the build is green: one character import
-   (`uv run elysium import <the character lane>`; body data only changes — about 20 minutes,
-   unmeasured; **capped at one**; wait on its completion notification, and time it). It is a
-   bake, not a query, but log its wall time in the report. **Stop rule: if the import reports any
-   animation package rebuilt rather than reused, stop** — the body data's fingerprint
-   (`pipeline/unreal/import_characters.py`, `fingerprint("body-data", …, bodyDataSha256)`) was
-   meant to leave `clipDataSha256` and the animation packages untouched. Then: revert nothing in
-   code, file the data half for V4d's bake window in `stories/v4/report-c.md`, and the slot
-   stands on `SequenceBounds` answering false (it writes nothing, as retail with no seqdesc)
-   until that bake. If the import reuses every animation package, read the result live: lab
-   (`uv run elysium gr --arena --headless`, `elysium.gr_scenario ranged_open_fire`),
-   `elysium_entity_get` on the shooter — `attack_extents` **before and after a sequence change**;
-   the two values and the sequences go in the report. No step-2 record observes the extents:
-   say so, do not hide it.
-4. **Records** (you own `Arena/` edits): `melee_swing`, `chase_melee` and `ranged_open_fire` were
-   corrected by the seam (J7; S3 item 8: the `_NR` schedule forms, one `MELEE_IDLE 0xc7` first is
-   retail, `hit_event` → `damage`), and `damage_lethal_death` expects no schedule after the
-   death (S1) — check they still say so, change nothing else. Remove a `known_red` only where
-   the acceptance below turns its record green.
-   **The four corpse records (J13)** were written red by the seam agent A0
-   (`brief-A0-seam.md` item 7b, with the `removed` event kind, H22); if A0's commit lacks one,
-   write it from that item. You run them and turn each green — `known_red` removed — where C2's
-   work makes it so; a red one is read against its clock and placed, never loosened.
-5. **Run, by name**: `uv run elysium arena damage_lethal_death verbs_stealth_kill ranged_open_fire
-   cover range_bands melee_swing chase_melee control_sequence verbs_feed_trance cover_move_shoot
-   corpse_removed_unseen corpse_kindred_burns corpse_pedestrian_stays corpse_fades`.
-   Then the family filters once: `uv run elysium test Elysium.Arm.NpcKernelAnim.
-   Elysium.Arm.NpcKernelAnimEvents. Elysium.Substrate.NpcCombat. Elysium.Arm.NpcKernelRunTask19.
-   Elysium.Weapon` (use the weapon tests' actual prefix).
-6. **Acceptance** (README §4, V4c):
-   - `damage_lethal_death`, `verbs_stealth_kill`: the death transaction green in the trace
-     (`death`, `OnDeath` on the kill tick, `corpse ragdoll`, no `move` / `task` / `schedule` after
-     death — an ordinary kill never reaches `SCHED_DIE`: `CreateCorpse 0x1032c0e0` replaces the
-     think on every NPC arm, and no step-2 record reaches the state-7 fork or the
-     `ACT_DIERAGDOLL` seed, which is arm-tested only); the records themselves stay
-     `expected-fail` on `corpse_on_floor` with `known_red` "V4d" until V4d lands (if V4d landed
-     first, they are green). The death sound: **once** per kill in the trace.
-   - **The four removal clocks (J13)** — an entity that is gone answers no name lookup and fires
-     no output, so each is state the bytecode observes:
-     - `corpse_removed_unseen` (ordinary mortal, `SUB_PVSRemove 0x102696f0`): with the player
-       turned away, `removed` at death + 10 s; facing the corpse, still there at + 12 s. Green
-       (the think is ported, `ElysiumNpc.cpp:~597-611`).
-     - `corpse_kindred_burns` (Kindred or `Has_Burning_Death`, `SUB_Remove` at + 10 s
-       unconditionally, `0x1032c32f`): a tutorial `npc_VVampire` by `from_map`, watched, gone at
-       + 10 s. Green (the think is ported, `ElysiumCombatCharacter.cpp:~1518-1527`); the burn's
-       look is a named seam filed to 0014, the burning-death sound is emitted. A maker child
-       with the fade bit goes at about + 13.8 s instead (the later think wins): the record's
-       row must not be one.
-     - `corpse_pedestrian_stays` (`CNPC_VPedestrian::CreateCorpse 0x103a38c0`; C2 item 8): a
-       hub pedestrian by `from_map`, the player turned away, still present at + 25 s. Green
-       only with both halves of C2's item — the slot-301 wiring **and** `Think`'s gate
-       (`ElysiumNpc.cpp:~645`: the cleared think must win over the committed-death
-       `SUB_PVSRemove`).
-     - `corpse_fades` (C2 item 10; `SUB_StartFadeOut 0x102695d0` → `SUB_FadeOut 0x10269960`): a
-       child of the tutorial's `stealth_victim_maker`, watched, present at + 13 s and gone by
-       + 14.5 s. Red with the corpse never removed → the maker does not pass spawnflags `0x204`
-       (`MakeNPC 0x1034b7b0`): C2 reported that line; it is pulled from R6 and applied here if
-       it is one line, else placed.
-     `verbs_stealth_kill` kills exactly such a maker child: its corpse now fades — a moved
-     verdict there is read against J14.1, not loosened.
-   - `cover`, `ranged_open_fire`: the shot still comes from the event (`animevent 3031` inside
-     `task_range_attack1`), no `damage` before it; `ranged_open_fire` still red only on N2 (V5).
-   - *(planner, after S5.)* **V11 lands before V4c, as its own wave [V11-1, V11-2, V11-3]**:
-     the contact's D1–D8, D10, D11 are V11-2's and already retail; C1 owns only D9, the
-     sweep's place, the stamp and `Weapon_FrameUpdate`. C1's diff in `ElysiumWeaponClasses.cpp`
-     must show no hunk in the walk's filters, `MeleeContact` or `KnockbackContact`; run
-     `Elysium.Arm.MeleeSwingStep. Elysium.Arm.MeleeContact.` with the family tests. If C1
-     reported D9 as a seam (no bone-at-cycle accessor), file the accessor with the judge.
-   - `melee_swing`, `chase_melee`: green before you start (V11) and still green with
-     the hit now landed by slot 315's sweep (C1): `…_MELEE_ATTACK1_NR (0xdd)` in reach,
-     `…_MELEE_ADVANCE_NR (0xcb)` out of reach, one `MELEE_IDLE (0xc7)` first being retail;
-     `melee_swing`'s trace shows no `animevent` on the brawler during a swing.
-   - `cover_move_shoot`: still red on its `known_red` — the slot-575 seam
-     (`ActiveWeaponCapabilityWord` answers 0; V4o lane O2), then the NPC's missing overlay layers
-     (V4o O1). Not V5.
-   - `verbs_feed_trance`, `control_sequence`: green (a moved verdict is triaged).
-7. **The silent-class list** (J6, part (c)): from the baked event tables, list every NPC class
-   whose ranged attack activity has **no clip with an event in 3030..3044** — query the staged
-   clip sidecars by event id (a lookup per bank; never read a sidecar over ~200 KB whole; 60 s
-   stops). **There is no "unread operator body" list to add** (`packets-S2.md` item 1: all eight
-   slot-370 bodies are read; the estimate is removed for every NPC wielder; the list's first
-   half is empty — if C1 reports a class it left on the estimate, that is a stop, not a list
-   entry). Add the NPC bodies that fire outside a weapon's event, each already a task body in
-   its class file: the Troika melee arm `0x102a1910`, `CNPC_VBach::StartTask 0x103645a0`,
-   `CNPC_VManBat::RunTask 0x1038d130` (slot 326); `CNPC_VChangBros::RunTask 0x1036bfc0` →
-   `SpawnEnergyBall 0x1036dd20`, `CNPC_VFrenzyShadow::StartTask 0x10375f50`, the Chang ghost
-   `0x103f03e0` (slot 372 on a spawned projectile weapon). **J11**: ChangBros, FrenzyShadow,
-   Bach and ManBat are verified absent from both witness maps and are filed on `spec.md`'s "on
-   demand, not in the sequence" line, one row each — check the four rows are there (the
-   coordinator adds them), add nothing to V5 for them; C1's Warning is their tripwire. Still
-   owed and named in the list:
-   each species class's `HandleAnimEvent` arm by arm, `0x10239f30` (the type-6 throw's launch),
-   the Tzimisce melee's 3045 / 3046 if C1 left it a seam. Write it as § "The reading owed" in
-   `stories/v4/report-c.md` and file it to V5 (a line under V5 in `stories/v1/triage.md` § "The
-   fix order"). Check the run's log for C1's Warning ("an NPC attack clip with no fire event"):
-   each (model, sequence) it named goes in the list.
-8. **V4's close**: the arm tier once (`uv run elysium test arm`), the whole arena once, the default
-   tier once; the ledger step (`kernel --check`, the override census, `unported.tsv`; the verdict
-   row for `0x102e19e0` if V4b left it); `divergences.md` row 4 marked closed with the commit;
-   `spec.md` V4c ticked (V4 itself only when V4d has also landed) with a short landed note in the
-   V3 style (sub-stories, records turned green, what moved where); `stories/v1/triage.md` § "The
-   fix order" V4 row struck through as V3's is. Moved verdicts in `stories/v4/report-c.md`, with
-   K4's open point for the owner (which port stream stands for the shared engine stream at the
-   non-NPC pick sites) and the driver's variant-keyed cache.
-9. **Commit once**: `fix(npc): V4c -- the NPC shot from its event, Weapon_FrameUpdate, the melee
-   sweep in slot 312, slot 247's body, the weighted pick, SetDisposition, the die-ragdoll seed,
-   the pedestrian's CreateCorpse, the death fade`. Do not push.
+- `Public/ElysiumEntityWorld.h`, `Private/Substrate/ElysiumEntityWorld.cpp`,
+  `Private/Substrate/ElysiumEntityWorldPersistence.cpp` — team ownership accessor, level hooks,
+  restored registration, removed world sweep declaration.
+- `Public/ElysiumSessionSubsystem.h`, `Private/Session/ElysiumSessionSubsystem.cpp` — game-system
+  registry ownership/access/lifecycle.
+- `Private/Map/ElysiumMapActor.cpp`, `Private/Visual/ElysiumMeleeTrail.h` — remove world sweep
+  call, correct trail comment; named read-only contact observations if needed.
+- `Public/ElysiumWorldServices.h`, `Public/ElysiumMapActor.h`,
+  `Private/Map/ElysiumMapActorEmbodiment.cpp`, `Private/Tests/ElysiumTestServices.h` — movement
+  interval accessor and exact reported pose/query/test-double lines.
+- `Private/Substrate/ElysiumNpcBaseHelpers2.cpp`,
+  `Private/Substrate/ElysiumAnimatingOverlaySlotBodies.cpp` — common picker forwarding if owed.
+- `Private/Visual/ElysiumEntityBodies.h`,
+  `Private/Visual/ElysiumEntityBodiesProps.cpp` — C2's dedicated live prop-pick adapter; existing
+  capability/construction previews stay draw-free. Interface/map paths are already listed above.
+- `Private/Substrate/ElysiumNpcBaseSelect.cpp` — state-7 bone−1 line only if owed.
+- `research/tooling/gen_kernel_bindings.py` — C3's owning generation-source team field row.
+- `research/tooling/ghidra/driver/kernel_verdicts.tsv`, kernel shape/member-map sources only
+  for exact reported declarations/verdicts; generated outputs only via their generators.
+- `Arena/scenarios/combat/` — named records below; probe/runner files only for exact missing
+  read-only observations, discovered by name and reported before implementation.
+- `docs/specs/0002-npc-ai/spec.md`, `stories/v1/divergences.md`, `stories/v1/triage.md`,
+  `docs/specs/TRACKER.md` — V4c close only; V4 itself waits for V4d. Coder recovery docs are
+  corrected by their owners/your serial integration, without rewriting settled packets.
 
-Rules: wait for a build or a run by its completion notification, never a sleep or
-polling loop. The query budget (10 s warns, 60 s stops; never a file over ~200 KB whole). Text
-through Grep / Read / Glob. Report ≤300 words: the build's wall time, slot 247 on its seam with
-no import (J2b), verdicts before and after, totals, the silent-class list's
-size, the four corpse records' verdicts and measured removal times, what is left red and where
-it is placed.
+Read nested AGENTS.md before touching research/pipeline-owned tooling. A necessary extra-file
+line is declared by file/function/address before applying it; no broad follow-up refactor.
+
+## The job
+
+1. **Integrate owed lines first, before a build.** Read every lane report and verify each exact
+   patch against its owner. C1: remove MapActor's AdvanceMeleeSwings call/declaration/comment;
+   slot315 body plus C2 PostThink tail must both land (player sweep after slot258,
+   `0x1016c316`). Add interval movement API beside GetBodySequenceMovement in the interface,
+   map declaration/implementation/test double over SampleDelta(from,to); default zero/false.
+   Check capsule propagation at SetRuntimeOrigin and apply reported Teleport only if required.
+   Resolve D9's pose-at-cycle accessor or retain named input seam and file judge work explicitly.
+   C2: forwarding of weighted/heaviest callers, shared helper on NpcSchedule, C1-owned
+   BuildActivityClipRequest patch (check C1 already applied it), any corpse virtual/slot301
+   dispatch, death-fork bone−1/declarations and selected-memory owner/squad-hook lines.
+   SelectHeaviestSequence currently calls the weighted selector: replace that forwarding with
+   the strict heaviest rule, no draw. Implement C2's PickAnimatedPropRestClip interface/map/
+   entity-bodies adapter over raw baked Clips/RestCandidates via the common picker; actual
+   StandRestPose/PlayRandomAnimation calls use it, capability/model construction do not draw.
+   AnimatedPropRestClip→SelectRest's hash/floored weights remain only a draw-free preview,
+   never the actual retail spawn/random-animate pick (`0x1018df70` / `0x10190850`).
+   C3: one game-system registry, World access, pre-clear before Load creates/spawns entities
+   (`0x10230820`), post-clear after Teardown removes entities (`0x10230860`). Restore joins
+   names after ApplyEntityRecord fields before post-restore consumers (`0x10348890`); player
+   Spawn/Hydrate joins literal player (`0x1016d260/0x1016ebd0`). Do not clear mid-level between
+   restored entities or persist numeric symbols. Verify C1 contact and C2 damage use the same
+   accessor; no no-team constants survive as live predicates. Maker flags already match S13:
+   **no maker patch** or re-bake is owed. Any code divergence newly found is reported/placed,
+   not silently adopted.
+2. **Generation before compile.** Retarget kernel_verdicts.tsv rows `10346cd0` and `10090c80`
+   to `hand:FElysiumCombatCharacter::MeleeSwingUpdate` and
+   `hand:FElysiumAnimating::SetAttackExtentsForSequence` (shape of existing hand row 103338c0).
+   Add/retarget any reported team/pedestrian verdict rows, including verified team addresses
+   and level hooks, based on lookup rather than guessed slot fills. Hand bodies stay in matching
+   **SlotBodies.cpp**, generated Slots.cpp are never hand-edited; leaving both gives double
+   definitions. In gen_kernel_bindings.py CHAIN_MEMBER_MAPS add CBaseCombatCharacter 0x10ac →
+   FElysiumCombatCharacter::TeamName, remove CHAIN_UNBOUND's stale reason, preserve replay flags.
+   Run `uv run elysium research gen_kernel_bindings` and `uv run elysium research gen_kernel_shape`
+   once after inputs are final, then `uv run elysium research kernel --check`. Time these query
+   paths with 60 s hard timeouts; >10 s is logged; stop/optimize at timeout. No asset import.
+3. **Read every diff before build 1.** Inspect all implementation **and test** diffs for shadowed
+   locals (C4458/C4459 are errors), missing includes, wrong declarations/signatures, incomplete
+   types, double definitions and generated-stub/hand-body collisions. Include Public/ElysiumPlayer.h
+   and the new picker/registry bodies. HANDOVER's required uncommitted Codex review uses the
+   codex-cli skill/method; read it before that review and request these same checks. Apply all
+   review fixes before the first build. Verify the three file manifests' intersections and
+   scope, and that no pipeline/body-data/bbox hunk or report*.md is present.
+4. **One `uv run elysium build --arm`; maximum two builds total.** Build with arm tests included
+   so the later arm run does not trigger a hidden compilation. A second `build --arm` is only
+   for integration breaks, after another complete diff review. A third build means stop and
+   report placement. Wait on completion, no polling. Do not run the full arena until the last
+   build is complete; final acceptance below uses that binary.
+5. **Write/correct the records below before their named run.** Each about/notes cites addresses
+   and distinguishes packet acceptance predictions from measured outcomes. Follow current
+   Arena format; use relative never windows (`after`, `within`) where specified. Remove
+   known_red only when the expected outcome is proved; never loosen retail expectations to
+   obtain green. Records and read-only probes are your work, never a coder's Arena edit.
+
+   | record | staging | expect / never and citations |
+   |---|---|---|
+   | **chase_melee** (correct existing) | existing brawler/player chase; retain retail melee schedules | kernel sequence names swing at nonzero rate; end distance <200 cm and player damage. No direct Base-channel NPC swing/empty root movement. `0x103e9e00`→slot331 `0x10347180`→slot311 `0x10272400`; AutoMovement `0x10280a50`→`0x10094b70`→`0x102e0bd0`; V11 commit 88649932's measured red |
+   | **melee_enemy_blocked** (new) | melee_ally_in_the_way cast/seed/seat/keys; front `[-775,0,0]`, rear `[-525,0,0]`, player on centre line; duration 10 | rear START_COMBAT by3, then ENEMY_BLOCKED 0x3a within2, then local schedule 0xce within1. Never 0xe1/0xcb while front blocks line (start until1.5, pin from first trace to its move goal), death on either, or damage from front on rear. Slot331 line trace `0x1034727b`, PUSH `0x103472f2` / call `0x103472f6`, exit `0x10347d97`; failure ladder `0x102b6fe0`, human selector `0x10385e40` before `0x102a11d0`. Correct ally record's stale raise cite 0x103472e8 to 0x103472f2; otherwise keep its 50 cm off-line relation-control staging |
+   | **corpse_fades** (correct existing) | tutorial stealth_victim_maker, Spawn, kill named Kindred child; mode0/alpha255, player watching | child flags0x204, death/corpse, removal by death+14.5; never removal within13 after dies. Burn allowed, +10 removal forbidden. Ordinary maker assigns `0x1034b7b0` with infinite-child Spawn `0x1034afe0`; post-corpse `0x10265d72`→StartFade `0x102695d0`→Fade `0x10269960`; S13 §1 |
+   | **corpse_pedestrian_stays** (correct existing) | hub pedestrian from_map, bit9 clear, player turned away | corpse remains through death+25; never automatic removal. Snapshot/base/ThinkSet(NULL)/SOLID_NONE `0x103a38c0`; explicit-clear dispatch wins. S13 §1; no substitute unseen-removal think |
+   | **melee_same_team** (new) | hated bystander, priority below player, no squad, FF off; attacker !Arena_Melee, bystander arena_melee; overlap swing off slot331 centre ray; different-team control otherwise identical | equal valid symbols and admitted swing; control takes positive damage. Never matching bystander damage, contact impact/knockback or Swing.RecordHits insertion. Read-only hit-list observation required; outer damage gate alone is insufficient. S13 §2; `0x1034394d..0x103439a7` / SameTeam `0x10323930`, impact `0x102579f0` |
+   | **team_damage_gate** (new) | named gunman's real weapon packet, attacker handle intact, explicitly hated teammate; identical different-team control | teammate no damage, control positive damage; self-damage predicate admitted. Never attackerless scalar input offered as proof. S13 §2; OnTakeDamage `0x1032ef60` before discipline/life dispatch |
+   | **ranged_enemy_dead** (new) | gunman hates exactly one NPC; player neutral, quiet, no hints/incidents/sounds, NoAlertState false; victim AI off, kill after acquisition; retain nonhidden visible/resolvable corpse | committed enemy→none, ALERT/0x4b TROIKA_ALERT_WAIT; never subsequent START_COMBAT or ranged hit on corpse. S13 §3; BestEnemy `0x10274475` / IsAlive `0x100b4dc0`, ChooseEnemy `0x10279dd0`, GatherEnemyConditions `0x10270e5a..0x10270e89`, Troika `0x102afc24..0x102afca7` / PreSelect `0x102ae920` |
+   | **ranged_enemy_dead_retarget** (new) | same death staging, remember second live hostile (and a dead control if needed); player neutral | live replacement becomes enemy; allow one fresh START_COMBAT. Never choose a dead body. Same S13 §3 selection addresses; no eager memory purge. Include arm memory check where schedule vetoes LOST_ENEMY: entry retained indefinitely but unselectable (`0x102df320`, slot54 `0x102b50b0`) |
+   | **damage_knockout_one_hit** (new) | high-health neutral victim; retail Faint, wait for TASK_KNOCKOUT flag write; zero packet, then positive18 | zero never kills; positive kills with wounds below cap. Faint `0x1029f250`, task `0x102a3339/0x102a3344`, kill `0x102beea4`; S13 §4 |
+   | **damage_cower_one_hit** (new) | damage-responsive pedestrian, no usable flee nodes; wait for COWER_SIMPLE(_NOSEE)'s ONE_HIT_KILL task, then positive18 | death below cap; never require knockout as sole cause. FLEE `0x103a2e30/0x103a34a3`, selector `0x102b0250`, flag task `0x102a585d..0x102a5874`, cower blobs `0x105e5788/0x105e5590/0x105e5398`; S13 §4 |
+   | **damage_high_health_control** (new) | effective cap100000, no interest-death place, AI off, flag clear; five separately recorded positive18 commits | 90 wounds, never death; audit current cap/flags/death caller if false. `0x1032ef60` sheet0x0f/0x11, `0x102beda0` / alternative `0x102bef13`; S13 §4. No retrospective claim about historical fifth hit |
+   | **verbs_feed_victim_dispatch** (correct existing) | neutral surviving front-feed victim, retained release 0xf88/0xf8c | MESMERIZED install before OnGrappleEnd; first released MAKE_OBLIVIOUS, disposition fallback row before SET_ACTIVITY, eventual0x104e. Never idle while paired or death; **allow released first-pass idle**, no variant3 pin. Keep existing until5.6 boundary excluding released pass. S13 §5: `0x1033a9e0`, `0x10281eee`, `0x102727d0`, `0x10272130`, `0x10295a80`, `0x102a1c0f` |
+
+   Keep **corpse_removed_unseen** (ordinary mortal, bit9 clear, player away: +10 PVS removal),
+   **corpse_kept_seen** (same kind, watching: retained/rearm), **corpse_kindred_burns** (watched
+   non-fade Kindred: unconditional +10), citing `0x1032c0e0` / `0x102696f0`; do not stage a fade
+   maker child as Kindred's clear-bit control. Keep verbs_feed_trance's no-idle window paired
+   only. Damage_lethal_death / verbs_stealth_kill have death/OnDeath/corpse once on kill tick,
+   no NPC schedule/task after ordinary death; corpse_on_floor remains V4d's known_red.
+6. **Validation after the last build, in this order.** Run the named records once on that
+   binary, then default tier, arm tier, then **one full arena run**:
+
+   ```text
+   uv run elysium arena chase_melee melee_enemy_blocked melee_same_team team_damage_gate ranged_enemy_dead ranged_enemy_dead_retarget damage_knockout_one_hit damage_cower_one_hit damage_high_health_control corpse_fades corpse_pedestrian_stays corpse_removed_unseen corpse_kept_seen corpse_kindred_burns melee_swing melee_ally_in_the_way ranged_open_fire ranged_sustained_fire cover cover_move_shoot range_bands damage_lethal_death verbs_stealth_kill verbs_feed_victim_dispatch verbs_feed_trance control_sequence anim_player_weapon_event_melee anim_player_weapon_event_firearm
+   uv run elysium test
+   uv run elysium test arm
+   uv run elysium arena
+   ```
+
+   No extra arm-family boot is necessary after complete default/arm tiers. A moved verdict is
+   triaged by address, never loosened. If validation forces build2, repeat required final
+   checks on its binary and reserve the sole full arena for after it; no third build/full run.
+   Keep V4o ranged/overlay records green and PostThink dead-player tests green. Record actual
+   totals and times rather than HANDOVER's baseline; distinguish remaining N4 intermittents,
+   H11 rollcall red and V4d physics from failures of this wave.
+7. **Recovery/close.** Verify C1 combat-and-damage, C2 lifecycle/senses/feeding, C3 teams.md
+   record the settled behavior and addresses. Correct memory shorthand in C1's doc by C2's
+   owed line. Close divergences row4 with commit; tick V4c in spec/tracker and place remaining
+   work in triage. Do not close V4 until V4d. Slot247 is arm-tested on SequenceBounds's false
+   seam, writes nothing live; no arena extents proof/import. Real reload (slots322/323) stays
+   V5 with arm tests and a flamethrower record. Wider Presence, held-model attachments and
+   player weapon clock remain their owners. Bbox pipeline/re-bake waits on acquire cone.
+   D9 missing pose query and pose-parameter blend seam remain named; no new divergence adopted.
+8. **Silent-class inventory, bounded lookup.** All operator/species event bodies and type-6
+   launch are settled; no stale reading-owed list. From indexed/staged event tables record
+   every NPC ranged activity lacking3030..3044, plus warnings by model/sequence; S12's
+   flamet_attack_layer has no3031, a fact. ChangBros/FrenzyShadow/Bach/ManBat task fire is
+   already placed on demand (absent both witness maps), not new V5 work. Report Tzimisce
+   3045/3046 only if the named seam remains. Time one bank lookup before planning an inventory;
+   query timeout means stop/optimize, no broad scan/retry. Historical fifth-hit attribution is
+   still unverified: any cause-dependent work first reads S13 §4's task/damage addresses and
+   captures flag/schedule/effective-cap/packet/death-caller evidence before changing math.
+9. **Commit once, by explicit path; never push.** Review git diff --check/status, stage an
+   explicit list of the actual approved lane/integration/record/recovery/generated files
+   (`git add -- <path> ...`), never git add . or -A, never unrelated owner files. One commit
+   describes final V4c behavior including teams/dead-enemy memory. Message includes a verdict
+   table **record | before | after | remaining owner** for every written/corrected record,
+   default/arm totals, full arena totals, build count/times and kernel check. No report*.md
+   path or second commit. Final response ≤300 words gives those results and exact remaining
+   owner work. Query rules: 10 s warns/log, every query 60 s hard stop, optimize before retry,
+   no whole read over~200 KB; wait by completion notification, never polling.

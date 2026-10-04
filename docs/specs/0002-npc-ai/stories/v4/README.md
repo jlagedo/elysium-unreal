@@ -445,7 +445,7 @@ clock's ground speed; then attack and death, which need the events:
 | **V4r** reading — **done 2026-10-04** | S–M | R1, R2 readers (+ the judge, one agent, after R2) = 3 | 0 (R1 ran one lab session on the existing build) | — (`packets-R1.md`, `packets-R2.md`, into `docs/vtmb/`; the rulings J1–J9) | — |
 | **V4a** seam; the clock's speed words and row 0 (N19); the dispatcher in `PostRun`; slot 363; **the player's and the camera's dispatch (lane A4)** | M | seam agent, A1, A2, A3, **A4**, integrator = **6** | 2 (2) | `sense_enemy_facing_me`; `anim_footsteps_walk` (guard); `anim_player_footsteps`; `anim_player_weapon_event` (both); `anim_prop_event`; `script_walk_to_mark` (N19, re-measured); `cover`, `control_sequence` stay green | `ranged_open_fire` → V5 (N2) once its `shot_event` is met; `cover_move_shoot` → 0015 / R3 (J5) |
 | **V4b** the walk's arrival and the turn (N13) | S–M | **reader R1b**, B1, B2, integrator = **4** | 1 (2) | `patrol_sentry2_pingpong`, `patrol_monk_loop`, `input_clearpatrolpath`, `places_pedestrian_visit`, `face_enemy_turn` | stop rule (J9): if the creep survives the measured toggle, the cause is unread again and B1 does not land |
-| **V4c** attack producers, weapon frame, slot 247 with its bbox; weighted pick, disposition | M | C1, C2, integrator = 3 | 1 (2); the body-data character import (J2) is **withdrawn by J2b** (§8 Q4) | the death transaction of `damage_lethal_death`, `verbs_stealth_kill` (their `corpse_on_floor` waits on V4d) | `melee_swing` → V11 (N3); `chase_melee` → V5/V11 |
+| **V4c** attack producers and swing movement; slot 247 on its seam; shared animation pick, disposition, corpse clocks, enemy memory and team registry | M | C1, C2, C3, integrator = 4 | one `build --arm` (2 maximum); no import (J2b) | `chase_melee`, `melee_enemy_blocked`, `corpse_fades`, `corpse_pedestrian_stays`, `melee_same_team`, `team_damage_gate`, `ranged_enemy_dead` and its retarget control; S13's damage controls; the death transaction | `damage_lethal_death`, `verbs_stealth_kill`: `corpse_on_floor` → V4d; real reload → V5 |
 | **V4d** the corpse falls: a physics asset from the `.phy`, Unreal's solve (the owner, 2026-10-04) | M | spike, coder, integrator = 3 | 1–2 (2), plus 2–3 scoped bakes | `damage_lethal_death`, `verbs_stealth_kill` (`corpse_on_floor`) | the death impulse, `prop_ragdoll`, the full corpus → 0014 |
 
 Order V4r → V4a → V4b → V4c, with V4d any time after V4a. **19 agents** (V4r 3, V4a 6, V4b 4,
@@ -525,54 +525,80 @@ gives way to retail's 0.119 cm is a judge item, filed by the B integrator.
   file R1b names for the slow turn if it is none of these and not B1's (nor V11-1's, when V11
   shares the wave: `../v11/README.md` §4).
 
-**V4c — attack, the pick, death** *(amended after V4r, 2026-10-04 — J2, J6, J8, R2).* C1:
-`Weapon_FrameUpdate` in `PostRun` as R2 read it (the weapon model's clock and its slot 258 to the
-wielder's handler); the NPC shot only from the 3030..3044 event — `ContactEventCycle` removed for
-`CWeaponRanged`, kept behind a named seam for operator bodies R2 did not read, with the Warning
-line and the silent-class list (J6); the NPC melee contact swept from the NPC's own slot 312 in
-the think's tail (`0x1029365b`), not the world interaction tick; **slot 247 whole**
-(`0x10090c80`) with the sequence bbox on the `UElysiumBodyData` row — the pipeline half is C1's
-(J2). C2: first walks `CreateCorpse`'s arms and corrects `lifecycle.md` (J8); then
-`SelectWeightedSequence` / `SelectHeaviestSequence` on the kernel over the body's sequence table,
-drawn on the `NpcSchedule` stream, with the include-shadowing rule; `RunAnimation`'s re-pick with
-R2's gate; `StartTaskSlot442`'s draw; `SetDisposition 0x102c0f70` arm by arm as R2 read it; K4's
-visual-side picks routed through the same draw as R2's table maps them; `BecomeClientRagdoll`'s
-`ACT_DIERAGDOLL` seed only on the bone −1 arm. The fall is V4d's.
-*(amended after S1 and S2, 2026-10-04; the two briefs have it whole.)* C1: **no "unread operator"
-seam** — the estimate is removed for every NPC wielder; the melee operator's retail trigger set;
-the sweep on its own stamp `+0xaa4` with `N = ceil(dt × 100)`; slot 247's body stays, **the bbox
-import (the pipeline half, the runtime fields, the C integrator's import run) is withdrawn by
-J2b** — C1's pipeline and body-data files below are in no lane. C2: `lifecycle.md`'s chain is
-already rewritten (it keeps one section); the seed is arm-tested only, no record reaches it;
-`SequenceBounds` is a named seam answering false (J2b); **new: the pedestrian's `CreateCorpse`
-override `0x103a38c0` wired to slot 301, with `Think`'s committed-death gate (J13), and the death
-fade — `SUB_StartFadeOut 0x102695d0` after slot 301, `SUB_FadeOut 0x10269960` (J14.1)** — C2's
-files gain `ElysiumCombatCharacter.cpp`'s `CreateCorpse` (beside `PlayReactionActivity`),
-`ElysiumNpcPedestrian.{h,cpp}`, `Tests/ElysiumNpcKernelSpeciesMisc10Tests.cpp`,
-`ElysiumNpc.cpp`'s `Think` gate, `ElysiumNpcBaseRunTask.{cpp,inl}` (`StartFadeOut`) and the
-`Event_Killed` fade step's file (`ElysiumNpcBaseSpawn.cpp`); none is C1's. The C integrator
-turns four corpse records (`corpse_removed_unseen`, `corpse_kindred_burns`,
-`corpse_pedestrian_stays`, `corpse_fades`) that the seam writes red.
-- C1: `ElysiumNpcBaseMotor.cpp` (`PostRun`'s weapon line), `ElysiumWeaponClasses.{h,cpp}`,
-  `ElysiumEntityWorldInteraction.cpp`, `ElysiumNpcStartTask.cpp` (the attack arms),
-  `ElysiumNpcThink.{cpp,inl}` (`UpdateCharacterRetail`, the slot-312 seam),
-  `ElysiumCombatCharacterSlots.cpp` (slot 315 `MeleeSwingUpdate` only),
-  `ElysiumAnimatingSlots.cpp` (slot 247 only), `pipeline/src/elysium_pipeline/importers/
-  body_data.py`, `pipeline/tests/test_body_data.py`, `docs/contracts/seam_map_model.md` (the body
-  row's two fields), `Public/ElysiumBodyData.h`, `Private/ElysiumBodyData.cpp`,
-  `Public/Visual/ElysiumNpcClips.h`, `Tests/ElysiumWeaponTests.cpp`, new
-  `Tests/ElysiumNpcAttackExtentsTests.cpp`.
-- C2: `ElysiumNpcAnim.cpp` (the picks, and the `SequenceBounds` accessor's body — it is C2's file),
-  `ElysiumNpc.h`, `ElysiumNpcBaseAnim.cpp` (`RunAnimation`), `ElysiumNpcBaseStartTask.cpp` (the
-  slot-442 draw), `ElysiumNpc.cpp` (`SetDisposition`, `BecomeClientRagdoll`, `PlayActivity`,
-  `StartWalkingAnimation`), `Visual/ElysiumAnimationResolve.cpp` (`PickWeighted`, `TryActivity`),
-  `ElysiumCombatCharacter.cpp` (`PlayReactionActivity` only), `Player/ElysiumAnimationIntent.cpp`
-  (the pick's variant only), `ElysiumProp.cpp` (the random animator's pick only),
-  `docs/vtmb/npc-ai/lifecycle.md`, `Tests/ElysiumNpcKernelAnimTests.cpp`,
-  `Tests/ElysiumNpcCombatTests.cpp` (`NpcCombat.Death`'s port assertions).
-- One shared file, by ownership: `ElysiumWeaponClasses.cpp` is C1's whole; K4's one line in it
-  (`FElysiumWeapon::BuildActivityClipRequest`, the `Variant`) is written by C2 **in its report**
-  and applied by the C integrator.
+**V4c — C1, C2, C3, then one integrator** *(final after S13 and the owner's rulings,
+2026-10-04; V11 and V4o are landed).* C1: event-only NPC attack producers, weapon frame,
+swing as the kernel row with interval movement (`chase_melee`), own-clock slot315 sweep, D9
+endpoints, same-team contact and slot247's arm-tested body on the false SequenceBounds seam.
+C2: one weighted/heaviest candidate body, NPC and non-NPC animation picks on **NpcSchedule**,
+disposition, corpse seed/pedestrian/fade thinks, BestEnemy liveness and memory fidelity, released
+feed fallback and player PostThink/registration/damage hooks. C3: combat-character TeamName and
+uint16 symbol, normalized registry cleared at both level boundaries, spawn/restore registration,
+getter/SameTeam/TeamFilter and four-reader recovery. Real reload stays V5; corpse physics stays
+V4d; bbox import/re-bake is withdrawn here (J2b). These briefs supersede the older shared-name
+notes where amended.
+
+The following are the **whole, disjoint coder manifests** (braces expand); function scopes are
+in the linked briefs. Prefix is `Source/ElysiumUE/Private/Substrate/` unless stated.
+
+- **C1** ([brief-C1-attack-producers.md](brief-C1-attack-producers.md)):
+  `ElysiumNpcBaseMotor.{cpp,inl}`;
+  `ElysiumWeaponClasses.{h,cpp}`;
+  `ElysiumEntityWorldInteraction.cpp`;
+  `ElysiumNpcStartTask.cpp`;
+  `ElysiumNpcThink.{cpp,inl}`;
+  `ElysiumCombatCharacterSlotBodies.cpp`;
+  `ElysiumAnimatingSlotBodies.cpp`;
+  `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelMotorTests.cpp`;
+  `Source/ElysiumUE/Private/Tests/ElysiumWeaponTests.cpp`;
+  `Source/ElysiumUE/Private/Tests/ElysiumNpcAttackExtentsTests.cpp`;
+  `docs/vtmb/combat-and-damage.md`.
+
+- **C2** ([brief-C2-pick-disposition-corpse.md](brief-C2-pick-disposition-corpse.md)):
+  `ElysiumNpcAnim.cpp`;
+  `ElysiumNpc.h`;
+  `ElysiumNpcBaseAnim.cpp`;
+  `ElysiumNpcBaseStartTask.cpp`;
+  `ElysiumNpc.cpp`;
+  `ElysiumNpcBaseRunTask.{cpp,inl}`;
+  `ElysiumNpcBaseSpawn.{cpp,inl}`;
+  `ElysiumCombatCharacter.cpp`;
+  `ElysiumNpcPedestrian.{h,cpp}`;
+  `ElysiumPlayerEntity.cpp`;
+  `ElysiumFeed.cpp`;
+  `ElysiumNpcBaseSenses10.cpp`;
+  `ElysiumNpcBaseSenses.cpp`;
+  `ElysiumNpcEnemyMemory.{h,cpp}`;
+  `ElysiumNpcBaseConditions2.cpp`;
+  `Source/ElysiumUE/Private/Visual/ElysiumAnimationResolve.cpp`;
+  `Source/ElysiumUE/Private/Visual/ElysiumAnimationPick.{h,cpp}`;
+  `Source/ElysiumUE/Private/Player/ElysiumAnimationIntent.cpp`;
+  `ElysiumProp.cpp`;
+  `Source/ElysiumUE/Private/Tests/ElysiumPlayerPostThinkTests.cpp`;
+  `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSpeciesMisc10Tests.cpp`;
+  `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp`;
+  `Source/ElysiumUE/Private/Tests/ElysiumNpcCombatTests.cpp`;
+  `Source/ElysiumUE/Private/Tests/ElysiumNpcEnemyTests.cpp`;
+  `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelSenses10Tests.cpp`;
+  `docs/vtmb/npc-ai/lifecycle.md`;
+  `docs/vtmb/npc-ai/senses.md`;
+  `docs/vtmb/feeding.md`.
+
+- **C3** ([brief-C3-team-registry.md](brief-C3-team-registry.md)):
+  `Source/ElysiumUE/Public/ElysiumPlayer.h`;
+  `Source/ElysiumUE/Private/Substrate/ElysiumTeamRegistry.{h,cpp}`;
+  `Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacterTeam.cpp`;
+  `Source/ElysiumUE/Private/Tests/ElysiumTeamRegistryTests.cpp`;
+  `docs/vtmb/npc-ai/teams.md`.
+
+**Disjointness:** C1 ∩ C2 = C1 ∩ C3 = C2 ∩ C3 = ∅. No shared coder file. C1 owns
+ElysiumWeaponClasses.cpp: C2 supplies K4's exact patch and C1 applies it. C2 owns
+ElysiumCombatCharacter.cpp / ElysiumNpcBaseSpawn.{cpp,inl} / ElysiumPlayerEntity.cpp: it applies
+C3's damage/spawn/player hooks. C3 owns Public/ElysiumPlayer.h's team declarations. The integrator
+applies reported world/restore/embodiment/generation lines serially after all three reports;
+retargets kernel_verdicts.tsv and regenerates, never hand-edits generated Slots.cpp/bindings;
+writes the S13 records; reviews all diffs for C4458/C4459, includes and double definitions;
+builds once with --arm (two maximum), runs named records, default, arm, full arena once after
+the last build, then one explicitly staged commit with verdict table, never pushes. No report*.md.
 
 ## 5. Reading packets (method step 4) — V4r, before any coder
 
