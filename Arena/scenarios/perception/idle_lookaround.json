@@ -1,0 +1,41 @@
+{
+  "name": "idle_lookaround",
+  "about": "A neutral Troika human with allow_alert_lookaround idles by retail's chance roll, its random waits elapse and the selector runs again; nothing fails (15, 25). CAI_BaseNPCTroika::SelectSchedule 0x102af660 case 1 (conditions-and-states.md 'The idle branch, decided'): no discipline/scene, no follower, no patrol, use_interesting 0, then step 5: m_bAllowAlertLookaround (+0x6434) and RandomInt(0, 99) < min(30, (m_iEnemySightings + 2) x 5) = 10 -> SCHED_TROIKA_ALERT_LOOK_AROUND_NI 0x4f (cai_basenpctroika/sched_troika_alert_look_around_ni.sch: SET_ACTIVITY ACT_ALERT_FIDGET_LOOKAROUND, WAIT 3, WAIT_RANDOM 3, SET_ACTIVITY ACT_IDLE, WAIT_RANDOM 2), else 0x6b IDLE_DISPOSITION. Seed 4 makes the activation select's draw land under 10 (read off the run: seeds 1-3 and 5-12 except 9 drew the disposition). When the program's last task completes, NextScheduledTask 0x10280f40 raises SCHEDULE_DONE and the same think re-selects through the same idle case: the look-around again or the disposition. No condition, no state change, no TaskFail.",
+  "stage": "arena",
+  "seed": 4,
+  "duration": 14.0,
+  "player": { "at": "start" },
+  "cast": [
+    {
+      "name": "idle_walker",
+      "classname": "npc_VHumanCombatant",
+      "at": "north",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "investigate_mode": "4",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "1",
+        "stay_entrenched": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "expect": [
+    { "label": "looks", "who": "idle_walker", "kind": "schedule", "match": "SCHED_TROIKA_ALERT_LOOK_AROUND_NI (0x4f)", "by": 0.5 },
+    { "label": "waits", "who": "idle_walker", "kind": "taskdone", "match": "^task_wait$", "regex": true, "within": 3.5 },
+    { "label": "random_1", "who": "idle_walker", "kind": "taskdone", "match": "^task_wait_random$", "regex": true, "within": 3.5 },
+    { "label": "random_2", "who": "idle_walker", "kind": "taskdone", "match": "^task_wait_random$", "regex": true, "within": 2.5 },
+    { "label": "reselects", "who": "idle_walker", "kind": "schedule", "match": "^SCHED_TROIKA_(IDLE_DISPOSITION \\(0x6b\\)|ALERT_LOOK_AROUND_NI \\(0x4f\\))$", "regex": true, "within": 0.5 }
+  ],
+  "never": [
+    { "who": "idle_walker", "kind": "taskfail" },
+    { "who": "idle_walker", "kind": "state" }
+  ],
+  "probes": [
+    { "at": "end", "who": "idle_walker", "probe": "state", "equals": "Idle" }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "name": "rollcall_vfrenzyshadow",
+  "about": "Roll call: classname npc_VFrenzyShadow builds CNPC_VFrenzyShadow (factory 0x10375050, research/tooling/ghidra/driver/kernel_factories.tsv). No map, maker or script authors a row of it (docs/vtmb/npc-ai/population.md \u00a7 NPC classes with no instance / placed by code); a hand-written row stands it; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "cast": [
+    {
+      "name": "playercontroller",
+      "classname": "npc_VFrenzyShadow",
+      "at": "far_ne",
+      "face": "player",
+      "keys": {
+        "model": "models/character/npc/common/Cop_Variant/regular_cop/Regular_Cop.mdl",
+        "spawnflags": "4"
+      }
+    }
+  ],
+  "expect": [
+    {
+      "label": "selects",
+      "who": "playercontroller",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "playercontroller",
+      "kind": "taskfail"
+    },
+    {
+      "who": "playercontroller",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "playercontroller",
+      "probe": "alive",
+      "equals": true
+    }
+  ],
+  "notes": "The cast row is named playercontroller: the controller line's spawn renames the entity to it (the first run's trace carried every event under that name). Hand-written row: no authored row exists; the model is the record's choice, not retail's."
+}

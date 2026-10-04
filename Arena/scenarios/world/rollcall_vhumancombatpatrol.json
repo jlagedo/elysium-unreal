@@ -1,0 +1,46 @@
+{
+  "name": "rollcall_vhumancombatpatrol",
+  "about": "Roll call: classname npc_VHumanCombatPatrol builds CNPC_VHumanCombatPatrol (factory 0x10387660, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from la_museum_1 (npc_guard_b1) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "known_red": "6: a use_interesting row (la_museum_1 npc_guard_b1, use_interesting 1 / groups 5) is owned by the port's ambient executor: no gather and no schedule at all (retail selects 0xff at once)",
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "la_museum_1",
+    "names": [
+      "npc_guard_b1"
+    ],
+    "anchor": "npc_guard_b1",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "npc_guard_b1",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "npc_guard_b1",
+      "kind": "taskfail"
+    },
+    {
+      "who": "npc_guard_b1",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "npc_guard_b1",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

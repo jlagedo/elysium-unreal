@@ -1,0 +1,75 @@
+{
+  "name": "input_tweakparam_vision",
+  "about": "TweakParam 'VISION 0' blinds an NPC. CAI_BaseNPCTroika::InputTweakParam 0x1029ea40 -> slot 585 ProcessTweakParam writes the named perception tunable; with VISION 0 the sense pass admits nothing (docs/vtmb/npc-ai/senses.md), so no SEE_* condition is set afterwards. The param is verbatim from ch_temple_1 (guard_east_quarters_Sleeping1 'VISION 0'). sp_tutorial_1's Hunter1 (npc_VHumanCombatant, D_LI 0, use_interesting 0, dialogname dlg/generic/hunter1.dlg) verbatim; the player 300 units in front of it at arena (975, 762) cm (the stage turns the row's Source yaw 270 into Unreal yaw 90, ElysiumArenaStage.cpp AuthoredYaw; corrected 2026-10-04 by V2: at 'start' the player stood 90 degrees off Hunter1's own yaw 270, outside its 0.2 cone, so the record passed with Hunter1 blind for the wrong reason -- now it must see him before the tweak); SetRelationship 'player D_HT 5' after the tweak makes the player hated, and still he is not seen.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 12.0,
+  "player": {
+    "at": [975.0, 762.0, 0.0],
+    "face": -90.0
+  },
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "Hunter1"
+    ],
+    "anchor": "Hunter1",
+    "at": "north"
+  },
+  "script": [
+    {
+      "t": 1.0,
+      "do": "fire",
+      "target": "Hunter1",
+      "input": "TweakParam",
+      "param": "VISION 0"
+    },
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "Hunter1",
+      "input": "SetRelationship",
+      "param": "player D_HT 5"
+    }
+  ],
+  "expect": [
+    {
+      "label": "sees_first",
+      "who": "Hunter1",
+      "kind": "cond+",
+      "match": "SEE_PLAYER",
+      "by": 0.9
+    },
+    {
+      "label": "tweak",
+      "who": "Hunter1",
+      "kind": "input",
+      "match": "TweakParam",
+      "by": 1.5
+    },
+    {
+      "label": "hated",
+      "who": "Hunter1",
+      "kind": "input",
+      "match": "SetRelationship",
+      "by": 2.5
+    }
+  ],
+  "never": [
+    {
+      "who": "Hunter1",
+      "kind": "output",
+      "match": "OnFoundPlayer"
+    },
+    {
+      "who": "Hunter1",
+      "kind": "state",
+      "match": "-> Combat"
+    },
+    {
+      "who": "Hunter1",
+      "kind": "death"
+    }
+  ],
+  "notes": "SEE_PLAYER before the tweak (t < 1 s) is retail too, so the never is on what a sight produces with a hated player: OnFoundPlayer and the move to COMBAT."
+}

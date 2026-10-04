@@ -1,6 +1,6 @@
 {
   "name": "cover",
-  "about": "A hostile ranged Troika human whose enemy is in the open takes the tactical cover search (0x102b7110 -> FindHintByClassMask(8, 1, radius)) into SCHED_TROIKA_TAKE_COVER_HINT (cai_basenpctroika/sched_troika_take_cover_hint.sch: TASK_GET_PATH_TO_HINTNODE, TASK_RUN_PATH, TASK_WAIT_FOR_MOVEMENT, TASK_SNAP_TO_HINT, TASK_FACE_ENEMY, TASK_PLAY_COVER_IDLE, TASK_REMEMBER MEMORY:INCOVER, TASK_SET_NPC_FLAG AT_COVER_HINT) with a cover hint claimed (0x102d1350); from cover, SCHED_TROIKA_TAKE_COVER_HINT_ATTACK (sched_troika_take_cover_hint_attack.sch) plays TASK_PLAY_COVER_OUTOF to its end (RunTask 0x102ab834 completes on IsActivityFinished, m_bSequenceFinished raised by StudioFrameAdvance 0x1008f120) and fires TASK_RANGE_ATTACK1. The 2026-09-30 lab run (docs/harness/green-room-arena.md): the gunman on far_ne, the player at the cover seat.",
+  "about": "A hostile ranged Troika human whose enemy (the UNARMED player) is in the open takes the tactical cover search (0x102b7110 -> FindHintByClassMask(8, 1, radius)) into SCHED_TROIKA_TAKE_COVER_HINT 0x9b (cai_basenpctroika/sched_troika_take_cover_hint.sch: TASK_GET_PATH_TO_HINTNODE, TASK_RUN_PATH, TASK_WAIT_FOR_MOVEMENT, TASK_SNAP_TO_HINT, TASK_FACE_ENEMY, TASK_PLAY_COVER_IDLE, TASK_REMEMBER MEMORY:INCOVER, TASK_SET_NPC_FLAG AT_COVER_HINT) with a cover hint claimed (0x102d1350). From cover, the cover chooser 0x102b7690's cover tail (AT_COVER_HINT set) computes the enemy's ranged threat from the ENEMY's active weapon's slot-360 capability word & 0x6000 (weapon slot 360 answers 0, 0x2000 ranged or 0x40018000 melee: conditions-and-states.md 'CapabilitiesGet'); an unarmed player carries no 0x6000, so bVar1 (melee threat) stays true and, with 0x102b5de0 passing and COVER_VS_MELEE_MODE clear, the answer is 0xa4 SCHED_TROIKA_TAKE_COVER_HINT_VS_MELEE (line 0x5cc3), never 0xa3 _ATTACK (that is the ranged-threat arm: combat/cover_armed). sched_troika_take_cover_hint_vs_melee.sch: SET_NPC_FLAG TASKS_FACE_ENEMY, SNAP_TO_HINT, RESOLVE_BOTCH_IN_COVER, PLAY_COVER_OUTOF (RunTask 0x102ab834 completes on IsActivityFinished, m_bSequenceFinished raised by StudioFrameAdvance 0x1008f120), SET_NPC_FLAG COVER_VS_MELEE_MODE, PLAY_COVER_AIM, SET_SCHEDULE _VS_MELEE_ATK; sched_troika_take_cover_hint_vs_melee_atk.sch: SNAP_TO_HINT, WAIT_RANDOM 0.5, ANNOUNCE_ATTACK 1, TASK_RANGE_ATTACK1. Corrected 2026-10-04 (V1 lane K): the record expected _ATTACK against an unarmed player, a record error. The gunman on far_ne, the player at the cover seat.",
   "stage": "arena",
   "seed": 1,
   "duration": 60.0,
@@ -37,12 +37,17 @@
     { "label": "covers", "who": "arena_gunman", "kind": "schedule", "match": "SCHED_TROIKA_TAKE_COVER_HINT (", "by": 8.0 },
     { "label": "claims", "who": "arena_gunman", "kind": "hint+", "match": "cover_corner", "within": 2.0 },
     { "label": "at_cover", "who": "arena_gunman", "kind": "taskdone", "match": "^task_snap_to_hint$", "regex": true, "within": 25.0 },
-    { "label": "cover_clip_ends", "who": "arena_gunman", "kind": "seqfinished", "match": "^(?!seq 0$)", "regex": true, "within": 20.0 },
-    { "label": "fires", "who": "arena_gunman", "kind": "task", "match": "task_range_attack1 (", "within": 15.0 },
+    { "label": "vs_melee", "who": "arena_gunman", "kind": "schedule", "match": "SCHED_TROIKA_TAKE_COVER_HINT_VS_MELEE (", "within": 3.0 },
+    { "label": "outof", "who": "arena_gunman", "kind": "task", "match": "task_play_cover_outof (", "within": 3.0 },
+    { "label": "cover_clip_ends", "who": "arena_gunman", "kind": "seqfinished", "match": "^(?!seq 0$)", "regex": true, "within": 10.0 },
+    { "label": "outof_done", "who": "arena_gunman", "kind": "taskdone", "match": "^task_play_cover_outof$", "regex": true, "within": 1.0 },
+    { "label": "atk", "who": "arena_gunman", "kind": "schedule", "match": "SCHED_TROIKA_TAKE_COVER_HINT_VS_MELEE_ATK (", "within": 10.0 },
+    { "label": "fires", "who": "arena_gunman", "kind": "task", "match": "task_range_attack1 (", "within": 5.0 },
     { "label": "fired", "who": "arena_gunman", "kind": "taskdone", "match": "^task_range_attack1$", "regex": true, "within": 10.0 }
   ],
   "never": [
-    { "who": "arena_gunman", "kind": "death" }
+    { "who": "arena_gunman", "kind": "death" },
+    { "who": "arena_gunman", "kind": "schedule", "match": "SCHED_TROIKA_TAKE_COVER_HINT_ATTACK (" }
   ],
   "probes": [
     { "at": "end", "who": "arena_gunman", "probe": "alive", "equals": true }

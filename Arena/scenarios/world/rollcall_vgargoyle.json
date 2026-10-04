@@ -1,0 +1,45 @@
+{
+  "name": "rollcall_vgargoyle",
+  "about": "Roll call: classname npc_VGargoyle builds CNPC_VGargoyle (factory 0x103779f0, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from hw_chinese_1 (Gargoyle) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "hw_chinese_1",
+    "names": [
+      "Gargoyle"
+    ],
+    "anchor": "Gargoyle",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "Gargoyle",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "Gargoyle",
+      "kind": "taskfail"
+    },
+    {
+      "who": "Gargoyle",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Gargoyle",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

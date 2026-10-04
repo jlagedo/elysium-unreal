@@ -1,0 +1,45 @@
+{
+  "name": "rollcall_vrat",
+  "about": "Roll call: classname npc_VRat builds CNPC_VRat (factory 0x103ad710, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from la_malkavian_3 (Kyle) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "la_malkavian_3",
+    "names": [
+      "Kyle"
+    ],
+    "anchor": "Kyle",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "Kyle",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "Kyle",
+      "kind": "taskfail"
+    },
+    {
+      "who": "Kyle",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Kyle",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

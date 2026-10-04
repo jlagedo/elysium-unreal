@@ -1,0 +1,45 @@
+{
+  "name": "rollcall_vtzimisceheadclaw",
+  "about": "Roll call: classname npc_VTzimisceHeadClaw builds CNPC_VTzimisceHeadClaw (factory 0x103c11b0, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from hw_warrens_3 (first_guy) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "hw_warrens_3",
+    "names": [
+      "first_guy"
+    ],
+    "anchor": "first_guy",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "first_guy",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "first_guy",
+      "kind": "taskfail"
+    },
+    {
+      "who": "first_guy",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "first_guy",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

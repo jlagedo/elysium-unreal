@@ -1,0 +1,57 @@
+{
+  "name": "rollcall_vvampireboss",
+  "about": "Roll call: classname npc_VVampireBoss builds CNPC_VVampireBoss (factory 0x103c4fa0, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from la_hub_1 (MingXiao2) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "known_red": "5: the StartHidden row thinks while hidden (cond+ FLOATING_OFF_GROUND at t=0.00, before the 0.5 s ScriptUnhide; retail PostSpawn 0x100aaf30 -> ScriptHide 0x100a8710 parks the think at FLT_MAX)",
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "la_hub_1",
+    "names": [
+      "MingXiao2"
+    ],
+    "anchor": "MingXiao2",
+    "at": "far_ne"
+  },
+  "script": [
+    {
+      "t": 0.5,
+      "do": "fire",
+      "target": "MingXiao2",
+      "input": "ScriptUnhide"
+    }
+  ],
+  "expect": [
+    {
+      "label": "selects",
+      "who": "MingXiao2",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    { "who": "MingXiao2", "kind": "schedule", "match": "", "until": 0.45 },
+    { "who": "MingXiao2", "kind": "cond+", "match": "", "until": 0.45 },
+    {
+      "who": "MingXiao2",
+      "kind": "taskfail"
+    },
+    {
+      "who": "MingXiao2",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "MingXiao2",
+      "probe": "alive",
+      "equals": true
+    }
+  ],
+  "notes": "Every standable row of npc_VVampireBoss is StartHidden; the record unhides it at 0.5 s, as its map's wire does. V2 (2026-10-04): the two nevers before 0.45 s are retail -- CBaseEntity::PostSpawn 0x100aaf30 runs slot 77 ScriptHide 0x100a8710 for m_bStartHidden, which saves m_pfnThink, installs NULL and parks m_flNextThink at FLT_MAX until ScriptUnhide 0x100a8990: a hidden row senses and selects nothing; without them the roll call passed on known red 5 (FALL_TO_GROUND selected while hidden)."
+}

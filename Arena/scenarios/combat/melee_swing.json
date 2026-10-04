@@ -1,0 +1,44 @@
+{
+  "name": "melee_swing",
+  "about": "Melee: a hostile bat-armed Troika human starts 120 cm (47 units) in front of the player, facing it. After SCHED_TROIKA_START_COMBAT 0xea the weapon split takes slot 604 0x10385e40; slot 599 admits melee; with the player inside melee range and in the 0.7 cone (slot 555 0x1026d9a0: d <= 64 -> CAN_MELEE_ATTACK1 0x51) and no SHOULD_DODGE / SHOULD_BLOCK / SHOULD_KICK / SHOULD_STEPBACK, the tail answers 0xdc SCHED_TROIKA_MELEE_ATTACK1 (0xdd only with a ranged weapon, slot 308). sched_troika_melee_attack1.sch: SET_FAIL_SCHEDULE MELEE_IDLE, FACE_ENEMY, STOP_MOVING, SET_SCHEDULE SCHED_TROIKA_MELEE_ATTACK1_SWING; _swing: ANNOUNCE_ATTACK 1, TASK_MELEE_ATTACK1, no interrupts. TASK_MELEE_ATTACK1 plays the weapon's melee activity; the clip's hit event reaches HandleAnimEvent 0x10274e30 through DispatchAnimEvents 0x10091880 (slot 258) under PostRun 0x1026c8c4, the swing's trace lands damage on the player (CBasePlayer::OnTakeDamage 0x10163020), and the task completes on IsActivityFinished.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 20.0,
+  "known_red": "new: slot 599's attack-coordinator admission 0x1025db70 is a seam answering false (ElysiumNpcTroikaHelpers.cpp:142-146): SCHED_TROIKA_WAIT_FOR_MELEE 0xe4 with the player at 47 units, never MELEE_ATTACK1 (then 3: the hit event rides the world-tick poll)",
+  "player": { "at": "start" },
+  "cast": [
+    {
+      "name": "arena_brawler",
+      "classname": "npc_VHumanCombatant",
+      "at": [-855.0, 0.0, 0.0],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_baseball_bat",
+        "player_reaction": "D_HT 5",
+        "npc_perception": "3",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "expect": [
+    { "label": "engages", "who": "arena_brawler", "kind": "schedule", "match": "SCHED_TROIKA_START_COMBAT (", "by": 3.0 },
+    { "label": "attack_program", "who": "arena_brawler", "kind": "schedule", "match": "SCHED_TROIKA_MELEE_ATTACK1 (", "within": 4.0 },
+    { "label": "swing_program", "who": "arena_brawler", "kind": "schedule", "match": "SCHED_TROIKA_MELEE_ATTACK1_SWING (", "within": 2.0 },
+    { "label": "swing", "who": "arena_brawler", "kind": "task", "match": "task_melee_attack1 (", "within": 1.0 },
+    { "label": "hit_event", "who": "arena_brawler", "kind": "animevent", "match": "", "within": 3.0 },
+    { "label": "swung", "who": "arena_brawler", "kind": "taskdone", "match": "^task_melee_attack1$", "regex": true, "within": 4.0 }
+  ],
+  "never": [
+    { "who": "arena_brawler", "kind": "death" }
+  ],
+  "probes": [
+    { "at": "end", "who": "player", "probe": "health", "less": 100 },
+    { "at": "end", "who": "arena_brawler", "probe": "alive", "equals": true }
+  ]
+}

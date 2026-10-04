@@ -1,0 +1,73 @@
+{
+  "name": "hear_world_investigate",
+  "about": "An ambient_generic sound_event heard, investigated and walked back from (10a, 10e, 10k, 8). PlaySound -> CAmbientGeneric::InputPlaySound 0x101ad3e0 -> 0x101ad470 USE_ON: sound_event 2 (WORLD) with owner !player resolved by 0x101ad9a0 -> InsertSound(2, owner origin, VolumeLevels[3] = 1200, max(1, duration), not occludable, owner), once (senses.md 'ambient_generic as an AI sound source'). The neutral listener (D_NU 5, npc_perception 1 -> Inspection_Hearing_Scalars[1] = 0.71, Inspection_Vision_Distances[1] = 290) on north (384, 0) Source units hears it at 768 units (radius 0.71 x 1200 = 852; CanHearSound 0x1030f7b0); OnListened 0x1026a5e0 queues HEAR_WORLD 0x6e with RandomFloat(0.2, 0.9) and fires OnHearWorld with it. The sound sweep 0x102b1cd0 arm 1: HEAR_WORLD && ShouldInvestigate 0x102b3270 (investigate_mode 3: any player; the owner is the player) -> INVESTIGATE_SOUND 0x25, which IDLE_DISPOSITION interrupts on; SelectIdealState 0x102ad660 case 1 -> ALERT; SelectSchedule ALERT 0x102af8fa -> 0x102b9060: INVESTIGATE_SOUND + HEAR_WORLD -> SCHED_TROIKA_INVESTIGATE_SOUND (cai_basenpctroika/sched_troika_investigate_sound.sch: STOP_MOVING, STORE_LASTPOSITION, REMEMBER INVESTIGATING, ALERT_LOOK_AT_BEST_SOUND, WAIT_RANDOM 0.5, PLAY_SOUND, WAIT_RANDOM 1.5, SET_TOLERANCE_DISTANCE 20, GET_PATH_TO_BESTSOUND, SET_NPC_FLAG IGNORE_DOOR_FAILURE, SET_FAIL_SCHEDULE, WALK_RUN_PATH_COMBAT_SOUND, WAIT_FOR_MOVEMENT, SET_SCHEDULE SCHED_TROIKA_ALERT_LOOK_AROUND), then sched_troika_alert_look_around.sch (... WAIT 5 ... GET_PATH_TO_LASTPOSITION, WALK_PATH, WAIT_FOR_MOVEMENT, FACE_LASTANGLE, CLEAR_LASTPOSITION, FORGET INVESTIGATING): back to the stored spot. The sound sits where the player stood at t = 2 (-384, 0); the player is then moved to corner_ne (384, 384), at least 384 units from every point of the listener's route, out of its 290-unit sight, so no SEE_PLAYER / SEE_SOUND_SOURCE interrupts the walk.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 75.0,
+  "known_red": "new: the sound is sometimes never heard -- no HEAR_WORLD in the 2.5 s after PlaySound in 3 boots of this record (an identical twin and two sibling records heard it at +0.45 s); the port's Listen drops a sound at its authored expiry (ElysiumNpcSenses.cpp:713, ExpireTime < Now) where retail's pool keeps it 4 s longer (CSoundEnt think 0x101ba890) and listens within ~0.3 s at 768 units",
+  "player": { "at": "start" },
+  "rows": [
+    {
+      "name": "arena_noise",
+      "classname": "ambient_generic",
+      "at": [0.0, 0.0, 0.0],
+      "keys": {
+        "message": "impact/physics/metal/hit_hard1.wav",
+        "health": "10",
+        "radius": "1250",
+        "spawnflags": "48",
+        "sound_event": "2",
+        "sound_event_level": "3",
+        "sound_event_owner": "!player"
+      }
+    }
+  ],
+  "cast": [
+    {
+      "name": "arena_listener",
+      "classname": "npc_VHumanCombatant",
+      "at": "north",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "1",
+        "investigate_mode": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    { "t": 2.0, "do": "fire", "target": "arena_noise", "input": "PlaySound", "param": "" },
+    { "t": 2.5, "do": "player_teleport", "at": "corner_ne" }
+  ],
+  "expect": [
+    { "label": "idles", "who": "arena_listener", "kind": "schedule", "match": "SCHED_TROIKA_IDLE_DISPOSITION (0x6b)", "by": 1.0 },
+    { "label": "played", "who": "arena_noise", "kind": "input", "match": "PlaySound", "by": 2.5 },
+    { "label": "hears", "who": "arena_listener", "kind": "cond+", "match": "HEAR_WORLD (0x6e)", "within": 2.5 },
+    { "label": "hear_output", "who": "arena_listener", "kind": "output", "match": "OnHearWorld", "within": 1.0 },
+    { "label": "breaks", "who": "arena_listener", "kind": "break", "match": "INVESTIGATE_SOUND (0x25)", "within": 1.0 },
+    { "label": "alert", "who": "arena_listener", "kind": "state", "match": "Idle -> Alert", "within": 0.2 },
+    { "label": "investigates", "who": "arena_listener", "kind": "schedule", "match": "SCHED_TROIKA_INVESTIGATE_SOUND (", "within": 0.2 },
+    { "label": "path_to_sound", "who": "arena_listener", "kind": "taskdone", "match": "^task_get_path_to_bestsound$", "regex": true, "within": 6.0 },
+    { "label": "flag_word", "who": "arena_listener", "kind": "taskdone", "match": "^task_set_npc_flag$", "regex": true, "within": 0.5 },
+    { "label": "at_sound", "who": "arena_listener", "kind": "move", "match": "arrived", "within": 25.0 },
+    { "label": "looks_around", "who": "arena_listener", "kind": "schedule", "match": "SCHED_TROIKA_ALERT_LOOK_AROUND (", "within": 1.0 },
+    { "label": "look_wait", "who": "arena_listener", "kind": "taskdone", "match": "^task_wait$", "regex": true, "within": 12.0 },
+    { "label": "path_back", "who": "arena_listener", "kind": "taskdone", "match": "^task_get_path_to_lastposition$", "regex": true, "within": 8.0 },
+    { "label": "back_home", "who": "arena_listener", "kind": "move", "match": "arrived", "within": 25.0 },
+    { "label": "forgets", "who": "arena_listener", "kind": "taskdone", "match": "^task_forget$", "regex": true, "within": 5.0 }
+  ],
+  "never": [
+    { "who": "arena_listener", "kind": "taskfail" },
+    { "who": "arena_listener", "kind": "cond+", "match": "SEE_PLAYER (0x5a)" }
+  ],
+  "probes": [
+    { "at": "end", "who": "arena_listener", "probe": "distance_to", "to": "north", "less": 60.0 },
+    { "at": "end", "who": "arena_listener", "probe": "alive", "equals": true }
+  ]
+}

@@ -7,9 +7,8 @@ things in that section can change shipped content without changing any other tes
 is inside out) and the **placement mapping** (which record field becomes collision, which becomes a
 skin, which becomes a cull distance).
 
-The first two cases pin those against arithmetic. The last two pin the reader against the legacy
-exporter's own output on the real corpus -- the only witness that "the producer changed" and "the
-geometry changed" are separable -- and skip, loudly, when that corpus is not on this machine.
+The first two cases pin those against arithmetic. The parity cases that pinned the reader against
+the legacy exporter's own output are gone with the BSP decoder that produced it.
 """
 from __future__ import annotations
 
@@ -88,82 +87,6 @@ def test_placement_reads_solid_skin_and_fade_off_the_record_not_the_model():
     assert placement(flags=0x1, fade_max_cm=0.0).fades is False
     assert placement(flags=0x10, fade_max_cm=6350.0).fades is False
     assert MG.source_inches_to_unreal(2500.0) == pytest.approx(6350.0)
-
-
-@pytest.mark.parametrize("map_name", WORKING_MAPS)
-def test_reader_reproduces_the_legacy_scene_split_on_the_working_corpus(map_name):
-    unit = MG.sidecars.unit_paths(map_name)["root"]
-    legacy = paths.export_root() / map_name
-    world_obj = legacy / f"{map_name}.obj"
-    if not unit.is_file():
-        pytest.skip(f"no exported map root unit at {unit}")
-    if not world_obj.is_file():
-        pytest.skip(f"no legacy scene at {world_obj}")
-
-    geometry = MG.read_geometry(map_name)
-
-    for scene, obj_path in ((geometry.world, world_obj),
-                            (geometry.sky, legacy / f"{map_name}_sky.obj")):
-        if not obj_path.is_file():
-            assert scene.tri_count == 0
-            continue
-        vertices, groups = _read_obj_groups(obj_path)
-        assert len(scene.positions) == vertices
-        # R7.4 splits a face group further on two per-face facts the legacy OBJ had nowhere to put
-        # -- `#underside` and `#style<n>` (`MG.section_key`). Folded back, the split is exactly the
-        # legacy one: same faces, same triangles, same material per triangle, only more sections.
-        merged: dict[str, int] = {}
-        for key, indices in scene.groups.items():
-            base, _underside, _style = MG.split_section_key(key)
-            merged[base] = merged.get(base, 0) + len(indices) // 3
-        assert merged == groups
-
-    # The `WorldVertexTransition` blend channel is the one per-vertex value the OBJ itself does not
-    # carry: the unit publishes a `DISP_VERT` alpha as the lump's own 0..255 byte and the bake's
-    # vertex COLOR.r is 0..1, so a missing normalization would tint every sculpted surface hard onto
-    # tex2 without changing a single triangle count above.
-    blend_path = legacy / f"{map_name}.blend"
-    if blend_path.is_file():
-        legacy_blend = [float(value) for value in blend_path.read_text().split()]
-        assert len(geometry.world.blend) == len(legacy_blend)
-        # The sidecar prints four decimals, so 1/255 quantisation shows at 5e-5.
-        assert geometry.world.blend == pytest.approx(legacy_blend, abs=1e-4)
-    else:
-        assert not any(geometry.world.blend)
-
-    brush_dir = legacy / "brushes"
-    if brush_dir.is_dir():
-        assert sorted(geometry.brush_stems().values()) == sorted(
-            path.stem for path in brush_dir.glob("brush_*.obj"))
-
-
-@pytest.mark.parametrize("map_name", WORKING_MAPS)
-def test_reader_reproduces_every_legacy_props_row_on_the_working_corpus(map_name):
-    unit = MG.sidecars.unit_paths(map_name)["root"]
-    props_path = paths.export_root() / map_name / f"{map_name}.props"
-    if not unit.is_file():
-        pytest.skip(f"no exported map root unit at {unit}")
-    if not props_path.is_file():
-        pytest.skip(f"no legacy placements at {props_path}")
-
-    placements = MG.read_geometry(map_name).placements
-    rows = [line.split() for line in props_path.read_text(
-        encoding="utf-8", errors="replace").splitlines() if line.split()]
-    assert len(placements) == len(rows)
-
-    for placement, row in zip(placements, rows):
-        # `.props` fields: stem, origin (cm), quaternion, solid, skin, sky, model path.
-        assert placement.stem == row[0]
-        assert placement.stem == shared_corpus.static_stem(placement.model_path)
-        assert placement.position == pytest.approx(
-            tuple(float(value) for value in row[1:4]), abs=0.01)
-        legacy_quat = tuple(float(value) for value in row[4:8])
-        assert (placement.rotation == pytest.approx(legacy_quat, abs=2e-4)
-                or placement.rotation == pytest.approx(
-                    tuple(-value for value in legacy_quat), abs=2e-4))
-        assert placement.solid == int(row[8])
-        assert placement.skin == int(row[9])
-        assert placement.sky is bool(int(row[10]))
 
 
 # --- R6.3: detail props -----------------------------------------------------------------------------
@@ -267,25 +190,6 @@ def test_reader_places_every_detail_record_of_the_root_unit(map_name):
     # Every staged row carries the eleven columns the editor half reads positionally.
     assert all(len(MG.detail_record_row(d)) == len(MG.DETAIL_RECORD_FIELDS)
                for d in geometry.details)
-
-
-def _read_obj_groups(path):
-    """`(vertex count, {material: triangle count})` for one exported OBJ."""
-    groups: dict[str, int] = {}
-    vertices = 0
-    current = None
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        token = line.split()
-        if not token:
-            continue
-        if token[0] == "v":
-            vertices += 1
-        elif token[0] == "usemtl":
-            current = token[1]
-            groups.setdefault(current, 0)
-        elif token[0] == "f":
-            groups[current] = groups.get(current, 0) + 1
-    return vertices, {key: value for key, value in groups.items() if value}
 
 
 # --- R5.4: the materials table ---------------------------------------------------------------------

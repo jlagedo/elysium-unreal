@@ -1,0 +1,152 @@
+{
+  "name": "patrol_sentry2_pingpong",
+  "about": "sp_tutorial_1's sentry2 walks its patrol under 0x67 (docs/vtmb/npc-ai/programs.md \u00a7 'Patrol paths, walked (2026-09-12, story 10g)'). The map's logic_auto sends SetupPatrolType '999 2 FOLLOW_PATROL_PATH_WALK' (t+2.0) then FollowPatrolPath 'sentry2_1 sentry2_2 sentry2_3' (t+2.1); a map record's time zero precedes those delays, so the install is observed. The player is set down 1.5 m from sentry2 at 0.1 s: the Society hub is far from the map's start, out of the player's PVS, where retail's normal think law stretches to 16 s (docs/vtmb/npc-ai/lifecycle.md \u00a7 'The interval laws'); CBasePlayer::Teleport 0x101606a0 wakes every NPC within 2048 units (0x1028d820 -> slot 583). InputSetupPatrolType 0x1029eb30 -> 0x1029f460(reinit): type 2, repeat 999, schedule SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK installed at once (0x102ae750); InputFollowPatrolPath 0x1029ed90 resolves each token on the hint Group (0x102d2840) and appends the nodes, reset (0x10307b60) and installs the schedule again. The program (cai_basenpctroika/sched_troika_follow_patrol_path_walk.sch: SET_TOLERANCE_DISTANCE 20, GET_PATH_TO_PATROL_POINT, WALK_PATH, WAIT_FOR_MOVEMENT, FACE_PATROL_INTEREST, DO_PATROL_INTEREST_ACTIVITY, NEXT_PATROL_POINT) issues one type-4 goal per point; NextPoint 0x10307b80 on type 2 steps +1 to the end, then (repeat--) turns to type 3 at first(3) = min(count-1, 0x7fff) = the LAST point again, so the far end is goaled twice in a row before the walk back: sentry2_1, sentry2_2, sentry2_3, sentry2_3, sentry2_2. Points by map Y (cm): sentry2_1 -7917, sentry2_2 -8090, sentry2_3 -9675. sentry2_3's interest record names sentry2_ip_whistle, which no entity carries, so both interest tasks complete at once.",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 75.0,
+  "known_red": "1: the patrol walk plays 'walk rate=0' and the NPC covers ~0.65 m/s (retail walk_0 136.7 cm/s), so the 15.9 m leg to sentry2_3 misses its deadline",
+  "cast": [
+    {
+      "name": "sentry2"
+    }
+  ],
+  "script": [
+    {
+      "t": 0.1,
+      "do": "player_teleport",
+      "at": [
+        -18343.88,
+        -7632.56,
+        17440.0
+      ],
+      "face": -90.0
+    }
+  ],
+  "expect": [
+    {
+      "label": "setup",
+      "who": "sentry2",
+      "kind": "input",
+      "match": "SetupPatrolType",
+      "by": 3.0
+    },
+    {
+      "label": "installed",
+      "who": "sentry2",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK (",
+      "within": 0.2
+    },
+    {
+      "label": "follow",
+      "who": "sentry2",
+      "kind": "input",
+      "match": "FollowPatrolPath",
+      "within": 0.5
+    },
+    {
+      "label": "reinstalled",
+      "who": "sentry2",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK (",
+      "within": 0.2
+    },
+    {
+      "label": "goal_1",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "^goal -?[0-9.]+ -79[0-9][0-9]",
+      "regex": true,
+      "within": 1.0
+    },
+    {
+      "label": "at_1",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "arrived",
+      "within": 15.0
+    },
+    {
+      "label": "next_1",
+      "who": "sentry2",
+      "kind": "taskdone",
+      "match": "^task_next_patrol_point$",
+      "regex": true,
+      "within": 3.0
+    },
+    {
+      "label": "goal_2",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "^goal -?[0-9.]+ -8[01][0-9][0-9]",
+      "regex": true,
+      "within": 1.0
+    },
+    {
+      "label": "at_2",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "arrived",
+      "within": 10.0
+    },
+    {
+      "label": "goal_3",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "^goal -?[0-9.]+ -9[67][0-9][0-9]",
+      "regex": true,
+      "within": 3.0
+    },
+    {
+      "label": "at_3",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "arrived",
+      "within": 20.0
+    },
+    {
+      "label": "goal_3_again",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "^goal -?[0-9.]+ -9[67][0-9][0-9]",
+      "regex": true,
+      "within": 3.0
+    },
+    {
+      "label": "goal_2_back",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "^goal -?[0-9.]+ -8[01][0-9][0-9]",
+      "regex": true,
+      "within": 5.0
+    },
+    {
+      "label": "at_2_back",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "arrived",
+      "within": 20.0
+    }
+  ],
+  "never": [
+    {
+      "who": "sentry2",
+      "kind": "death"
+    },
+    {
+      "who": "sentry2",
+      "kind": "taskfail",
+      "match": "",
+      "until": 1.5
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "sentry2",
+      "probe": "schedule",
+      "match": "FOLLOW_PATROL_PATH_WALK"
+    }
+  ],
+  "notes": "No never on taskfail after the wires (1.83 / 1.93 s): retail's own Setup-then-Follow order installs the program on an empty path for 0.1 s, and a think in that window fails TASK_GET_PATH_TO_PATROL_POINT with 0x1d (current node -1) before the nodes arrive; whether a think falls there is cadence, not a contract. The goal texts are matched on the map Y the node's hull position carries (one sign and two digits), not on a pinned coordinate."
+}

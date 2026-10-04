@@ -1,0 +1,45 @@
+{
+  "name": "chase_melee",
+  "about": "Chase: a hostile melee Troika human (a baseball bat, no firearm) with the player in sight ~983 cm away. After SCHED_TROIKA_START_COMBAT 0xea, CNPC_VHumanCombatant's weapon split (0x103872d0: the active weapon's word & 0x18000) takes slot 604 CNPC_VHuman::SelectScheduleMeleeCombat 0x10385e40 (shape.md). Slot 599 0x102b5650 admits melee (the can-enter timer past, no ranged weapon, height diff <= 64, the attack coordinator granting) and sets m_bInMelee; the in-melee tail with the player far (TOO_FAR_FOR_MELEE 0x09: d > 256, slot 555 0x1026d9a0) reaches 0x102a11d0 -> 0xe0 SCHED_TROIKA_MELEE_CIRCLE_ADVANCE, or the last pair 0xca SCHED_TROIKA_MELEE_ADVANCE (distance not below the melee range). sched_troika_melee_advance.sch: SET_FAIL_SCHEDULE MELEE_IDLE, SET_SPECIAL_DISTANCE_ACCUM DIST:COMBATMOVE, ADD_SPECIAL_DISTANCE_ACCUM_RND -64, SET_TOLERANCE_DISTANCE DIST:ACCUM, TASK_GET_PATH_TO_ENEMY, SET_INTERRUPT_TIME 2, ADD_RANDOM_INTERRUPT_TIME 1, RUN_PATH, WAIT_FOR_MOVEMENT; interrupts include CAN_MELEE_ATTACK1 and INTERRUPT_TIME, so the approach is re-selected every 2-3 s until the player is inside melee range (slot 555: d <= 64, dot >= 0.7 -> CAN_MELEE_ATTACK1 0x51) and the tail answers 0xdc SCHED_TROIKA_MELEE_ATTACK1. The spine: a path goal toward the player, the NPC arriving inside melee range, MELEE_ATTACK1 selected.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 40.0,
+  "known_red": "new: slot 599's attack-coordinator admission 0x1025db70 is a seam answering false (ElysiumNpcTroikaHelpers.cpp:142-146), so no NPC enters melee: SCHED_TROIKA_WAIT_FOR_MELEE_ADVANCE 0xe7 where retail admits a lone NPC (0x1025db70 adds it to the coordinator's list and answers true) and advances",
+  "player": { "at": "cover_seat" },
+  "cast": [
+    {
+      "name": "arena_brawler",
+      "classname": "npc_VHumanCombatant",
+      "at": "far_ne",
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_baseball_bat",
+        "player_reaction": "D_HT 5",
+        "npc_perception": "3",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "expect": [
+    { "label": "engages", "who": "arena_brawler", "kind": "schedule", "match": "SCHED_TROIKA_START_COMBAT (", "by": 3.0 },
+    { "label": "advances", "who": "arena_brawler", "kind": "schedule", "match": "^SCHED_TROIKA_MELEE_(CIRCLE_)?ADVANCE \\(", "regex": true, "within": 3.0 },
+    { "label": "paths", "who": "arena_brawler", "kind": "task", "match": "task_get_path_to_enemy (", "within": 1.0 },
+    { "label": "goal", "who": "arena_brawler", "kind": "move", "match": "goal ", "within": 1.0 },
+    { "label": "in_reach", "who": "arena_brawler", "kind": "cond+", "match": "CAN_MELEE_ATTACK1 (0x51)", "within": 20.0 },
+    { "label": "swings", "who": "arena_brawler", "kind": "schedule", "match": "SCHED_TROIKA_MELEE_ATTACK1 (", "within": 2.0 }
+  ],
+  "never": [
+    { "who": "arena_brawler", "kind": "death" },
+    { "who": "arena_brawler", "kind": "schedule", "match": "^SCHED_TROIKA_(RANGE_ATTACK1|TAKE_COVER_HINT) \\(", "regex": true }
+  ],
+  "probes": [
+    { "at": "end", "who": "arena_brawler", "probe": "distance_to", "to": "player", "less": 200.0 },
+    { "at": "end", "who": "arena_brawler", "probe": "alive", "equals": true }
+  ]
+}

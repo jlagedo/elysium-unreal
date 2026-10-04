@@ -1,0 +1,38 @@
+{
+  "name": "places_thug_pt1",
+  "about": "The tutorial's sneak-past thug at his place (docs/specs/0002-npc-ai/record-2026-09-30.md § Witness data; docs/vtmb/npc-ai/programs.md § 'Interesting places: the selector, the programs, the wait'). sp_tutorial_1's thug_maker (npc_maker, NPCType npc_VVampire, NPCTargetname thug_1, use_interesting 1, interesting_place_groups 2, vision 540) and the three places pt1 (group_id 2, enabled 1, min_time 30, max_time 60), pt2 and pt3 (group_id 2, enabled 0), verbatim. Spawn makes thug_1 on the maker's origin; his pool is pt1 alone (eligibility 0x102dad60: m_bEnabled +0x57c and the group mask), 63 cm away. CAI_BaseNPCTroika::SelectSchedule case 1 step 4 -> 0xff SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP -> 0x100 WALK_TO_INTERESTING_PLACE -> SCHED_TROIKA_DO_INTEREST_ACTIVITY, whose wait is RandomFloat(30, 60) (0x102a9f40, m_flWaitFinished +0x5db4); the run arm releases the visit (0x102da600) and the next selection is 0xff again, back to pt1. The player stands at the arena's start, ~1800 cm off and outside 540 units: no enemy, nothing breaks the program.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 80.0,
+  "known_red": "6: the port's ambient executor answers use_interesting instead of the 0xff program",
+  "player": { "at": "start" },
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": ["thug_maker", "pt1", "pt2", "pt3"],
+    "anchor": "thug_maker",
+    "at": "far_ne"
+  },
+  "script": [
+    { "t": 0.5, "do": "fire", "target": "thug_maker", "input": "Spawn" }
+  ],
+  "expect": [
+    { "label": "setup", "who": "thug_1", "kind": "schedule", "match": "SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (", "by": 3.0 },
+    { "label": "walk_program", "who": "thug_1", "kind": "schedule", "match": "SCHED_TROIKA_WALK_TO_INTERESTING_PLACE (", "within": 1.0 },
+    { "label": "arrives", "who": "thug_1", "kind": "move", "match": "arrived", "within": 8.0 },
+    { "label": "activity_program", "who": "thug_1", "kind": "schedule", "match": "SCHED_TROIKA_DO_INTEREST_ACTIVITY (", "within": 5.0 },
+    { "label": "uses", "who": "thug_1", "kind": "task", "match": "task_do_interest_activity (", "within": 0.5 },
+    { "label": "used", "who": "thug_1", "kind": "taskdone", "match": "^task_do_interest_activity$", "regex": true, "within": 66.0 },
+    { "label": "again", "who": "thug_1", "kind": "schedule", "match": "SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (", "within": 3.0 }
+  ],
+  "never": [
+    { "who": "thug_1", "kind": "taskdone", "match": "^task_do_interest_activity$", "regex": true, "until": 30.0 },
+    { "who": "thug_1", "kind": "output", "match": "OnFoundPlayer" },
+    { "who": "thug_1", "kind": "taskfail" },
+    { "who": "thug_1", "kind": "death" }
+  ],
+  "probes": [
+    { "at": 20.0, "who": "thug_1", "probe": "distance_to", "to": "pt1", "less": 100 },
+    { "at": "end", "who": "thug_1", "probe": "alive", "equals": true }
+  ],
+  "notes": "The never on task_do_interest_activity before 30 s pins pt1's min_time (the earliest the visit can end is ~31 s: spawn 0.5 s + walk + 30 s). pt2/pt3 are stood to prove they stay out of the pool (enabled 0): the distance probe at 20 s says he is at pt1."
+}

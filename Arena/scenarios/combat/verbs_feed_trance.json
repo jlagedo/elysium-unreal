@@ -1,0 +1,45 @@
+{
+  "name": "verbs_feed_trance",
+  "about": "The feed and the post-feed trance (feeding.md; spec 0002/20). The player stands 70 cm in front of an idle neutral Troika human and presses +feed (client kbutton -> usercmd bit 0x00400000 -> 0x101728f0 -> CBasePlayer::Replenish 0x10168320): the victim search 0x101690b0 (hull trace toward (32, 0, -32)), AttemptFeed 0x10168910 (automatic acceptance in the dispositions it lists, or a template whose ResistsFeeding is false, or the Close_Combat_Brawl vs Hacking roll), StartGrappleAttack with paired mode 0. A second +feed 1.3 s later requests the release: with the pulse cadence 0.30 + (B + 1) * 0.15 s from FedUponBegin (feeding.md 'Blood-transfer timing'), at most one blood point has been drawn, so a victim with BloodPool >= 2 is left alive (the first run released at 5 s and drained the victim to death: the record's timing, not a red). FeedInterrupt 0x1033a9e0 ends the transaction and, for a victim left alive, is the only SetSchedule(0xfb) site in the image: SCHED_TROIKA_MESMERIZED (cai_basenpctroika/sched_troika_mesmerized.sch: TASK_MAKE_OBLIVIOUS TRUE, SET_NPC_FLAG D_IS_BUSY / DONT_INVESTIGATE / NO_DIALOG, SET_ACTIVITY ACT_DISPOSITION_MESMERIZED, WAIT 30, WAIT_RANDOM 120; interrupts LIGHT/HEAVY/REPEATED_DAMAGE; Flags DELAY_INTERRUPTS). FeedInterrupt dispatches slot 614 (0x102c23f0, the think timers := curtime) so the program's first task starts on the victim's next AI pass once the paired release lets it think (the deadline allows the release clip). The victim lives and stays entranced past the end of the run.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 25.0,
+  "player": { "at": [0.0, 905.0, 0.0], "face": "east" },
+  "cast": [
+    {
+      "name": "arena_vessel",
+      "classname": "npc_VHumanCombatant",
+      "at": "east",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    { "t": 2.0, "do": "console", "command": "elysium.cmd +feed" },
+    { "t": 2.1, "do": "console", "command": "elysium.cmd -feed" },
+    { "t": 3.3, "do": "console", "command": "elysium.cmd +feed" },
+    { "t": 3.4, "do": "console", "command": "elysium.cmd -feed" }
+  ],
+  "expect": [
+    { "label": "idles", "who": "arena_vessel", "kind": "schedule", "match": "SCHED_TROIKA_IDLE_DISPOSITION (", "by": 1.5 },
+    { "label": "entranced", "who": "arena_vessel", "kind": "schedule", "match": "SCHED_TROIKA_MESMERIZED (0xfb)", "by": 8.0 },
+    { "label": "oblivious", "who": "arena_vessel", "kind": "task", "match": "task_make_oblivious (", "within": 5.0 },
+    { "label": "holds", "who": "arena_vessel", "kind": "task", "match": "task_wait (", "within": 2.0 }
+  ],
+  "never": [
+    { "who": "arena_vessel", "kind": "death" },
+    { "who": "arena_vessel", "kind": "taskdone", "match": "^task_wait$", "regex": true }
+  ],
+  "probes": [
+    { "at": "end", "who": "arena_vessel", "probe": "schedule", "equals": "SCHED_TROIKA_MESMERIZED" },
+    { "at": "end", "who": "arena_vessel", "probe": "alive", "equals": true }
+  ]
+}

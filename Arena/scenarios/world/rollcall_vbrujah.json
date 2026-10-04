@@ -1,0 +1,45 @@
+{
+  "name": "rollcall_vbrujah",
+  "about": "Roll call: classname npc_VBrujah builds CNPC_VBrujah (factory 0x103677c0, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from sm_oceanhouse_2 (Eugene3) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sm_oceanhouse_2",
+    "names": [
+      "Eugene3"
+    ],
+    "anchor": "Eugene3",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "Eugene3",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "Eugene3",
+      "kind": "taskfail"
+    },
+    {
+      "who": "Eugene3",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Eugene3",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

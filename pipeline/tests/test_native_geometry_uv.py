@@ -1,7 +1,4 @@
 import hashlib
-import json
-import os
-from pathlib import Path
 import struct
 
 import numpy as np
@@ -91,35 +88,3 @@ def test_uv_census_distinguishes_finite_half_range_and_rounding_overflow(geometr
     assert result["roundedHalfNonfiniteComponents"] == 4
     assert result["sourceFinite"] and result["affectedVertices"] == 3
     assert result["examples"][0]["component"] == "V"
-
-
-@pytest.mark.skipif(os.environ.get("ELYSIUM_R8_UV_CENSUS") != "1", reason="explicit read-only staged UV census")
-def test_staged_uv_precision_census():
-    stage = Path("E:/elysium-work/import/characters")
-    data = (stage / "manifest.json").read_bytes()
-    manifest = json.loads(data)
-    selected = set(manifest["selectedUnits"])
-    products, failures, vertices, components, meshes = [], [], 0, 0, 0
-    for entry in manifest["assets"]:
-        if entry["assetId"] not in selected or not entry["meshAsset"]:
-            continue
-        meshes += 1
-        try:
-            payload = (stage / entry["payload"]).read_bytes()
-            assert hashlib.sha256(payload).hexdigest() == entry["recipe"]["payloadSha256"]
-            row = uv_precision_inventory(payload)
-            vertices += row["vertices"]
-            components += row["components"]
-            if row["outsideFiniteHalfRangeComponents"]:
-                products.append({"assetId": entry["assetId"], "payloadSha256": entry["recipe"]["payloadSha256"], **row})
-        except (ValueError, KeyError, AssertionError) as exc:
-            failures.append({"assetId": entry["assetId"], "reason": str(exc)})
-    assert (stage / "manifest.json").read_bytes() == data, "manifest changed during UV census"
-    result = {"scope": "read-only-staged-UV-precision-census; no native snapshot reads or changes",
-              "manifestSha256": hashlib.sha256(data).hexdigest(), "meshes": meshes, "vertices": vertices,
-              "components": components, "affectedMeshes": len(products),
-              "outsideFiniteHalfRangeComponents": sum(p["outsideFiniteHalfRangeComponents"] for p in products),
-              "roundedHalfNonfiniteComponents": sum(p["roundedHalfNonfiniteComponents"] for p in products),
-              "failures": failures, "products": products, "passed": not failures}
-    Path("E:/elysium-work/_r8_explore/agents/geometry/stage_uv_precision_census.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
-    assert not failures, failures[:4]

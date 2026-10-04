@@ -1,0 +1,55 @@
+{
+  "name": "sense_bodies_transparent",
+  "about": "An NPC standing between does not block sight (0018/6). NPCInit (0x10273394) makes every NPC m_bNPCTransparent (+0xfc) and CTraceFilterFVisible::ShouldHitEntity 0x10107630 skips those, so FVisible slot 201 (0x102b4630, mask 0x2804091) sees through a body; only the player and solid props block (StandardFilterRules 0x101d3080; conditions-and-states.md 'CAI_BaseNPC::GatherEnemyConditions -- 0x10270b20', recovered 2026-09-29). Guard at (384, -393.7) Source units facing +Y, D_HT 5, npc_perception 3 (440 units); a neutral bystander stands on the line at 150 units, the standing player behind it at 300 units: the guard sees the player at once -- SEE_PLAYER 0x5a, SEE_HATE 0x43, NEW_ENEMY 0x54 -- and goes to COMBAT (0x102ad660 case 1). The block's half is sense_cone_enter (the block hides the player until he clears its corner).",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 8.0,
+  "player": { "at": [975.0, -238.0, 0.0], "face": -90.0 },
+  "cast": [
+    {
+      "name": "sight_guard",
+      "classname": "npc_VHumanCombatant",
+      "at": [975.0, -1000.0, 0.0],
+      "face": 90.0,
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_HT 5",
+        "npc_perception": "3",
+        "investigate_mode": "4",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    },
+    {
+      "name": "sight_screen",
+      "classname": "npc_VHumanCombatant",
+      "at": [975.0, -619.0, 0.0],
+      "face": 90.0,
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "investigate_mode": "4",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "expect": [
+    { "label": "sees_player", "who": "sight_guard", "kind": "cond+", "match": "SEE_PLAYER (0x5a)", "by": 2.0 },
+    { "label": "hates", "who": "sight_guard", "kind": "cond+", "match": "SEE_HATE (0x43)", "within": 0.5 },
+    { "label": "commits", "who": "sight_guard", "kind": "cond+", "match": "NEW_ENEMY (0x54)", "within": 0.5 },
+    { "label": "combat", "who": "sight_guard", "kind": "state", "match": "Idle -> Combat", "within": 0.5 }
+  ],
+  "probes": [
+    { "at": "end", "who": "sight_guard", "probe": "enemy", "equals": "!player" }
+  ]
+}

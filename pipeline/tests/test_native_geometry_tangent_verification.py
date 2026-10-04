@@ -1,17 +1,13 @@
 from copy import deepcopy
 import hashlib
-import json
-import os
-from pathlib import Path
 import struct
 
 import numpy as np
 import pytest
 
-from elysium_pipeline.validation.native_geometry import read_stage, reference_skin, accessor, verify_native_geometry
+from elysium_pipeline.validation.native_geometry import reference_skin, verify_native_geometry
 from elysium_pipeline.validation.native_geometry_equivalence import audit_vertex_equivalence
 from elysium_pipeline.validation.skeletal_diff import sections
-from elysium_pipeline.formats.unit_contract.container import decode_glb
 from pipeline.tests.test_native_geometry import fixture as geometry_fixture, container, glb, two_bone_geometry  # noqa: F401
 from pipeline.tests.test_native_geometry_equivalence import aliases  # noqa: F401
 from pipeline.tests.test_native_geometry_stage import stage_case as capture_stage, snapshot, publish, verify  # noqa: F401
@@ -159,38 +155,3 @@ def test_stage_report_full_channel_booleans_stay_false_on_any_tangent_failure(ca
     result = verify(capture_stage)
     assert not result["passed"] and not result["tangentsVerified"] and not result["fullSourceGeometryPreservationVerified"]
     assert result["unverifiedChannels"] == ["TANGENT"]
-
-
-@pytest.mark.skipif(os.environ.get("ELYSIUM_R8_OLD_TANGENT_ALIASES") != "1", reason="explicit pinned old-alias rejection audit")
-def test_actual_old_aliases_are_rejected_with_source_tangents():
-    base = Path("E:/elysium-work/_r8_explore/agents/geometry")
-    pinned = json.loads((base / "performance/inputs.json").read_bytes())
-    products = []
-    for entry in pinned["products"]:
-        inputs = {kind: (base / "performance" / name).read_bytes() for kind, name in entry["files"].items()}
-        for kind, data in inputs.items():
-            assert hashlib.sha256(data).hexdigest() == entry["sha256"][kind]
-        body, envelope = json.loads(inputs["body"]), json.loads(inputs["snapshot"])
-        document, binary = decode_glb(inputs["glb"])
-        geometry = read_stage(inputs["payload"])
-        root = document["extensions"]["ELYSIUM_vtmb_model"]
-        lod = next(r for r in root["vtx"]["lods"] if r["index"] == 0)
-        primitives = {tuple(p["extensions"]["ELYSIUM_vtmb_model"][k] for k in ("bodyPart", "model", "mesh")): p
-                      for p in document["meshes"][lod["mesh"]]["primitives"]}
-        tangent = np.zeros((len(geometry.positions), 4))
-        seen = set()
-        for join in body["renderVertexMap"]:
-            primitive = primitives[tuple(join[k] for k in ("bodyPart", "model", "mesh"))]
-            source = primitive["extensions"]["ELYSIUM_vtmb_model"]
-            lookup = {v: i for i, v in enumerate(source["sourceVertices"])}
-            values = accessor(document, binary, primitive["attributes"]["TANGENT"])
-            for original, staged in join["vertices"]:
-                x, y, z, sign = values[lookup[original]]
-                tangent[staged] = [x, z, y, -sign]
-                seen.add(staged)
-        assert len(seen) == len(tangent)
-        geometry.tangents = tangent  # Independent source expectation; no pinned bytes are rewritten.
-        _, proof = audit_vertex_equivalence(geometry, envelope["native"]["render"])
-        assert not proof["passed"] and proof["unprovenSourceIds"] > 0
-        products.append({"assetId": entry["assetId"], "snapshotSha256": entry["sha256"]["snapshot"], **proof})
-    (base / "old_aliases_with_tangents_rejected.json").write_text(json.dumps(products, indent=2), encoding="utf-8")

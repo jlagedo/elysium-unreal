@@ -1,0 +1,87 @@
+{
+  "name": "map_tutorial_idle",
+  "about": "sp_tutorial_1 at idle for sixty seconds, nothing scripted: the named NPCs run the programs their rows and the map's load wires give them. sentry2 (SetupPatrolType '999 2 FOLLOW_PATROL_PATH_WALK' + FollowPatrolPath at t+2.0/2.1) and monk_upstairs_podium ('999 1 ...' + 'pod_1..pod_5' at t0/t+0.1) walk SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK (cai_basenpctroika/sched_troika_follow_patrol_path_walk.sch), one type-4 goal per point, arriving and stepping with TASK_NEXT_PATROL_POINT (0x102aa9e0 -> NextPoint 0x10307b80) \u2014 docs/vtmb/npc-ai/programs.md \u00a7 'Patrol paths, walked'. The patrollers' program has nothing on it that can fail with its nodes bound (0018 story 4: positional AIN binding), so neither fails a task. 0019/8's map smoke: 0 ensure / assert (not observable in the trace; the launcher's log summary carries them). The Society hub is out of the start's PVS: retail's normal and update laws stretch to 16 s there (lifecycle.md \u00a7 'The interval laws': !PVS x10 cap 16), so a patrol step can wait 16 s for its think; the deadlines carry that.",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 60.0,
+  "cast": [
+    {
+      "name": "sentry2"
+    },
+    {
+      "name": "monk_upstairs_podium"
+    }
+  ],
+  "expect": [
+    {
+      "label": "sentry_installed",
+      "who": "sentry2",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK (",
+      "by": 3.0
+    },
+    {
+      "label": "sentry_goal",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "goal",
+      "within": 17.0
+    },
+    {
+      "label": "sentry_arrives",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "arrived",
+      "within": 20.0
+    },
+    {
+      "label": "sentry_steps",
+      "who": "sentry2",
+      "kind": "taskdone",
+      "match": "^task_next_patrol_point$",
+      "regex": true,
+      "within": 17.0
+    },
+    {
+      "label": "sentry_next_goal",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "goal",
+      "within": 17.0
+    }
+  ],
+  "never": [
+    {
+      "who": "sentry2",
+      "kind": "taskfail",
+      "until": 1.8
+    },
+    {
+      "who": "monk_upstairs_podium",
+      "kind": "taskfail"
+    },
+    {
+      "who": "sentry2",
+      "kind": "death"
+    },
+    {
+      "who": "monk_upstairs_podium",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "sentry2",
+      "probe": "schedule",
+      "match": "FOLLOW_PATROL_PATH_WALK"
+    },
+    {
+      "at": "end",
+      "who": "monk_upstairs_podium",
+      "probe": "schedule",
+      "match": "FOLLOW_PATROL_PATH"
+    }
+  ],
+  "notes": "The expectations are ordered, so the monk's arrivals are carried by patrol_monk_loop rather than interleaved here; the end probes and the nevers hold both patrollers. Other NPCs of the map are not held to 'no taskfail': retail's own interesting-place routes are refused and retried every 5.1-10 s (programs.md \u00a7 'The failed walk'), and the trace's never takes no count to tell that from a storm (harness gap). sentry2's taskfail is held only before its map wires (1.8 s): retail's Setup-then-Follow leaves the path empty for 0.1 s, and a think in that window fails TASK_GET_PATH_TO_PATROL_POINT with 0x1d."
+}

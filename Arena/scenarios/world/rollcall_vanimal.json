@@ -1,0 +1,55 @@
+{
+  "name": "rollcall_vanimal",
+  "about": "Roll call: classname npc_VAnimal builds CNPC_VAnimal (factory 0x1035eaa0, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from hw_609_1 (plus_cat) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "known_red": "new: a StartHidden npc_VAnimal row gathers at 0 s but installs no schedule, before or after ScriptUnhide at 0.5 s",
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "hw_609_1",
+    "names": [
+      "plus_cat"
+    ],
+    "anchor": "plus_cat",
+    "at": "far_ne"
+  },
+  "script": [
+    {
+      "t": 0.5,
+      "do": "fire",
+      "target": "plus_cat",
+      "input": "ScriptUnhide"
+    }
+  ],
+  "expect": [
+    {
+      "label": "selects",
+      "who": "plus_cat",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "plus_cat",
+      "kind": "taskfail"
+    },
+    {
+      "who": "plus_cat",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "plus_cat",
+      "probe": "alive",
+      "equals": true
+    }
+  ],
+  "notes": "Every standable row of npc_VAnimal is StartHidden; the record unhides it at 0.5 s, as its map's wire does."
+}

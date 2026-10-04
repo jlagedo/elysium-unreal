@@ -1,13 +1,9 @@
 from copy import deepcopy
-import hashlib
-import json
-import os
-from pathlib import Path
 
 import numpy as np
 import pytest
 
-from elysium_pipeline.validation.native_geometry import read_stage, reference_skin, check_render, verify_native_geometry
+from elysium_pipeline.validation.native_geometry import read_stage, check_render
 from elysium_pipeline.validation.native_geometry_equivalence import audit_vertex_equivalence
 from pipeline.tests.test_native_geometry import fixture as geometry_fixture  # noqa: F401
 
@@ -65,37 +61,3 @@ def test_exact_attributes_do_not_excuse_different_triangles(aliases, mode):
         render["sections"][0]["material"] = 1
     _, proof = audit_vertex_equivalence(geometry, render)
     assert not proof["passed"] and proof["missingEquivalentTriangles"] > 0
-
-
-@pytest.mark.skipif(os.environ.get("ELYSIUM_R8_GEOMETRY_PILOTS") != "1", reason="explicit read-only pilot snapshot audit")
-def test_pilot_snapshot_alias_evidence():
-    stage = Path("E:/elysium-work/import/characters")
-    report = json.loads((stage / "native_verify_report.json").read_bytes())
-    manifest_bytes = (stage / "manifest.json").read_bytes()
-    assert hashlib.sha256(manifest_bytes).hexdigest() == report["manifestSha256"]
-    manifest = json.loads(manifest_bytes)
-    assets = {e["assetId"]: e for e in manifest["assets"]}
-    results = []
-    numeric = []
-    for receipt in report["geometrySnapshots"]:
-        data = (stage / receipt["file"]).read_bytes()
-        assert hashlib.sha256(data).hexdigest() == receipt["sha256"]
-        envelope = json.loads(data)
-        entry = assets[receipt["assetId"]]
-        payload = (stage / entry["payload"]).read_bytes()
-        body_data = (stage / entry["body"]).read_bytes()
-        assert hashlib.sha256(payload).hexdigest() == entry["recipe"]["payloadSha256"] == envelope["payloadSha256"]
-        assert hashlib.sha256(body_data).hexdigest() == entry["recipe"]["bodySha256"] == envelope["bodySha256"]
-        body = json.loads(body_data)
-        geometry = reference_skin(read_stage(payload), body["wield"]["referencePose"] if body.get("wield") else None)
-        _, proof = audit_vertex_equivalence(geometry, envelope["native"]["render"])
-        results.append({"assetId": entry["assetId"], "snapshotSha256": receipt["sha256"], **proof})
-        source = (Path("E:/elysium-work/exports_v2") / entry["unitGlb"]).read_bytes()
-        result = verify_native_geometry(payload, envelope["native"], body=body, source_glb=source,
-                                        expected_source_sha256=entry["recipe"]["unitSha256"], material_paths=envelope["materialPaths"])
-        numeric.append({"assetId": entry["assetId"], "passed": result["passed"], "differences": result["differences"],
-                        "sourceInventoryPassed": result["sourceInventory"]["passed"], "authoringPassed": result["authoring"]["passed"]})
-    output = Path("E:/elysium-work/_r8_explore/agents/geometry/pilot_vertex_equivalence.json")
-    output.write_text(json.dumps({"scope": "exact source equivalence investigation", "products": results}, indent=2), encoding="utf-8")
-    output.with_name("pilot_numeric_after_equivalence.json").write_text(json.dumps(numeric, indent=2), encoding="utf-8")
-    assert len(results) == 2

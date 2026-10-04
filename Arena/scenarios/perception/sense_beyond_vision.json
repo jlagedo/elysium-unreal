@@ -1,0 +1,47 @@
+{
+  "name": "sense_beyond_vision",
+  "about": "The vision distance of the row's npc_perception is a hard edge. npc_perception 3 with no vision key -> InitPerceptionDistances 0x1028fb70 takes Inspection_Vision_Distances[3] = 440 units (vdata/system/feats.txt) into m_flSeekDistInspection +0x63b8; the admission body 0x102b4760 (slot 594) rejects a candidate whose eye-to-eye distance is > radius = stealth sight scalar (1.0 for a standing player, stealth.md) x 440, strictly, while the NPC is not in COMBAT (the 3072 prefilter is the only bound in combat). Guard at (384, -393.7) Source units facing +Y, D_HT 5; the standing player in the open straight ahead at 480 units for 8 s: nothing. Teleported to 400 units on the same line (inside 440, in the 0.7 band, so 0x102b3e00 also sets ATTACK_UNKNOWN for the plainly visible player -- no condition): OnLooked 0x1026a2c0 SEE_PLAYER 0x5a + SEE_HATE 0x43, ChooseEnemy NEW_ENEMY 0x54, SelectIdealState 0x102ad660 case 1 -> COMBAT; the pre-selector GetSchedule 0x102ae920 step 5 (state 2) consumes ATTACK_UNKNOWN (flags1 0x800000) before NEW_ENEMY and answers 0x5b SCHED_TROIKA_INVESTIGATE_UNKNOWN_ATTACK.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 14.0,
+  "player": { "at": [975.0, 219.0, 0.0], "face": -90.0 },
+  "cast": [
+    {
+      "name": "sight_guard",
+      "classname": "npc_VHumanCombatant",
+      "at": [975.0, -1000.0, 0.0],
+      "face": 90.0,
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_HT 5",
+        "npc_perception": "3",
+        "investigate_mode": "4",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    { "t": 8.0, "do": "player_teleport", "at": [975.0, 16.0, 0.0], "face": -90.0 }
+  ],
+  "expect": [
+    { "label": "idles", "who": "sight_guard", "kind": "schedule", "match": "SCHED_TROIKA_IDLE_DISPOSITION (0x6b)", "by": 1.0 },
+    { "label": "sees_player", "who": "sight_guard", "kind": "cond+", "match": "SEE_PLAYER (0x5a)", "by": 10.0 },
+    { "label": "hates", "who": "sight_guard", "kind": "cond+", "match": "SEE_HATE (0x43)", "within": 0.5 },
+    { "label": "commits", "who": "sight_guard", "kind": "cond+", "match": "NEW_ENEMY (0x54)", "within": 0.5 },
+    { "label": "combat", "who": "sight_guard", "kind": "state", "match": "Idle -> Combat", "within": 0.5 },
+    { "label": "attacks_unknown", "who": "sight_guard", "kind": "schedule", "match": "SCHED_TROIKA_INVESTIGATE_UNKNOWN_ATTACK (0x5b)", "within": 0.5 }
+  ],
+  "never": [
+    { "who": "sight_guard", "kind": "cond+", "match": "SEE_PLAYER (0x5a)", "until": 8.0 },
+    { "who": "sight_guard", "kind": "cond+", "match": "SEE_HATE (0x43)", "until": 8.0 },
+    { "who": "sight_guard", "kind": "state", "until": 8.0 }
+  ],
+  "probes": [
+    { "at": 7.5, "who": "sight_guard", "probe": "enemy", "equals": "none" }
+  ]
+}

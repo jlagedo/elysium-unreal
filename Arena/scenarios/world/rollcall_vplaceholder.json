@@ -1,0 +1,50 @@
+{
+  "name": "rollcall_vplaceholder",
+  "about": "Roll call: classname npc_VPlaceholder builds CNPC_VPlaceholder (factory 0x103a3a20, research/tooling/ghidra/driver/kernel_factories.tsv). No map, maker or script authors a row of it (docs/vtmb/npc-ai/population.md \u00a7 NPC classes with no instance / placed by code); a hand-written row stands it; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "cast": [
+    {
+      "name": "rollcall_vplaceholder",
+      "classname": "npc_VPlaceholder",
+      "at": "far_ne",
+      "face": "player",
+      "keys": {
+        "model": "models/character/npc/common/Cop_Variant/regular_cop/Regular_Cop.mdl",
+        "spawnflags": "4"
+      }
+    }
+  ],
+  "expect": [
+    {
+      "label": "selects",
+      "who": "rollcall_vplaceholder",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "rollcall_vplaceholder",
+      "kind": "taskfail"
+    },
+    {
+      "who": "rollcall_vplaceholder",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "rollcall_vplaceholder",
+      "probe": "alive",
+      "equals": true
+    }
+  ],
+  "notes": "Hand-written row: no authored row exists; the model is the record's choice, not retail's."
+}

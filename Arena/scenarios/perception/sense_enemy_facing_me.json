@@ -1,0 +1,39 @@
+{
+  "name": "sense_enemy_facing_me",
+  "about": "Whether the enemy faces the NPC is the enemy's own cone (6b, 0019/4). GatherEnemyConditions 0x10270b20 step 7 (conditions-and-states.md): under SEE_ENEMY it asks the enemy's combat character (+0x9c) slot 363 FInViewCone on this NPC -- true sets ENEMY_FACING_ME 0x56 and clears BEHIND_ENEMY 0x57, false the reverse; both are cleared at the top of every gather. The player is a CBaseCombatCharacter whose slot 363 is the base 0x10326750 -> FinViewCone3dNew 0x103264d0 with the player's m_flFieldOfView 0.5 (senses.md 'Cone'). Guard at (384, -393.7) Source units facing +Y, D_HT 5, npc_perception 3; the standing player 300 units straight ahead, facing the guard (dot 1.0 > 0.5): every gather that sees him raises ENEMY_FACING_ME and never BEHIND_ENEMY.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 6.0,
+  "known_red": "3: BEHIND_ENEMY 0x57 is raised on every gather and ENEMY_FACING_ME never -- the player's slot 363 FInViewCone(entity) answers false",
+  "player": { "at": [975.0, -238.0, 0.0], "face": -90.0 },
+  "cast": [
+    {
+      "name": "sight_guard",
+      "classname": "npc_VHumanCombatant",
+      "at": [975.0, -1000.0, 0.0],
+      "face": 90.0,
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_HT 5",
+        "npc_perception": "3",
+        "investigate_mode": "4",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "expect": [
+    { "label": "sees_enemy", "who": "sight_guard", "kind": "cond+", "match": "SEE_ENEMY (0x46)", "by": 2.0 },
+    { "label": "faced", "who": "sight_guard", "kind": "cond+", "match": "ENEMY_FACING_ME (0x56)", "within": 0.2 }
+  ],
+  "never": [
+    { "who": "sight_guard", "kind": "cond+", "match": "BEHIND_ENEMY (0x57)", "until": 3.0 }
+  ],
+  "probes": [
+    { "at": "end", "who": "sight_guard", "probe": "alive", "equals": true }
+  ]
+}

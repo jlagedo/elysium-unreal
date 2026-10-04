@@ -1,0 +1,45 @@
+{
+  "name": "rollcall_vbach",
+  "about": "Roll call: classname npc_VBach builds CNPC_VBach (factory 0x10362ba0, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from sp_soc_4 (Bach) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sp_soc_4",
+    "names": [
+      "Bach"
+    ],
+    "anchor": "Bach",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "Bach",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "Bach",
+      "kind": "taskfail"
+    },
+    {
+      "who": "Bach",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Bach",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

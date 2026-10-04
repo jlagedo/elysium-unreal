@@ -1,0 +1,31 @@
+{
+  "name": "rollcall_vmingxiaotentacle",
+  "about": "Roll call: classname npc_VMingXiaoTentacle builds CNPC_VMingXiaoTentacle (factory 0x1039af30, research/tooling/ghidra/driver/kernel_factories.tsv). No map places it directly; ch_temple_4's TentacleGenerator (npc_maker, NPCType npc_VMingXiaoTentacle, NPCTargetname Tentacle, Flag_StartDisabled 1) stands verbatim and its Spawn input makes one child through CNPCMaker (0x1034aae0); the child then runs NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: SelectSchedule picks a program and SetSchedule 0x10280e50 installs it, and the program runs for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "ch_temple_4",
+    "names": [
+      "TentacleGenerator"
+    ],
+    "anchor": "TentacleGenerator",
+    "at": "far_ne"
+  },
+  "script": [
+    { "t": 0.5, "do": "fire", "target": "TentacleGenerator", "input": "Spawn" }
+  ],
+  "expect": [
+    { "label": "selects", "who": "Tentacle", "kind": "schedule", "match": "", "by": 3.5 }
+  ],
+  "never": [
+    { "who": "Tentacle", "kind": "taskfail" },
+    { "who": "Tentacle", "kind": "death" }
+  ],
+  "probes": [
+    { "at": "end", "who": "Tentacle", "probe": "alive", "equals": true }
+  ]
+}

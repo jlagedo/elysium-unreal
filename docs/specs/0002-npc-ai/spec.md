@@ -396,7 +396,11 @@ build, the default run, the arm tier once, the arena suite. **Wave 3** — T6
 alone, one agent holding the build. Gate 1 is the integrator's report after wave 3 against the
 numbers above.
 
-### Gate 1, measured 2026-10-03 (waves 1–3: `327beebf`, `ae3eba85`, `809404ba`) — awaiting the owner's ruling
+### Gate 1, measured 2026-10-03 (waves 1–3: `327beebf`, `ae3eba85`, `809404ba`) — accepted by the owner, 2026-10-03
+
+**The ruling:** the gate is passed with its four misses accepted as measured (`kernel --check` cold
+10.5 s, default `pytest` 19.7–26 s, the edit mix's p90 108 s, seven short sleep-waits). T6 stays
+unticked: the kernel headers' include fan-out is an on-demand story. Step 2 is open.
 
 | Clause | Target | Measured | Before |
 |---|---|---|---|
@@ -447,7 +451,7 @@ background command is waited on by its completion notification, never by a sleep
 and `sm_hub_1` played live with 0 ensure / assert and every difference from retail filed; the arm
 tests the green scenarios cover deleted.
 
-- [ ] **V1. The inventory.** Every landed runtime behaviour (the 46 stories of
+- [x] **V1. The inventory.** Every landed runtime behaviour (the 46 stories of
   `findings-D-landed.tsv`, the old 0002 rows "done, record only": 25b, 25c, 26, 10e, 10j, 10k, 13b,
   21b, 27) mapped to the scenario that proves it, and the 22 state-changing "modernizations"
   re-classed at their lines as named divergences, each with the scenario or story that owns it.
@@ -477,6 +481,20 @@ tests the green scenarios cover deleted.
 - [ ] **V2. The first full run and the triage.** All scenarios run once; each red gets its retail
   chain read (a reading packet under the query budget, never a guess) and lands on a fix story
   below, or a new one. *Size:* S. *Model:* Opus/high.
+  *V1 and V2 landed (2026-10-03; `stories/v1/`):* 96 records (perception 12, combat 15 and
+  `cover`, world 67, one save/restore record parked), `inventory.md`, `divergences.md` (22 rows),
+  `review.md`, `triage.md`. Latest verdict per record: 54 pass, 35 expected-fail, 4 fail, 1
+  unexpected-pass, 2 error. Known reds shown: 1, 2, 3, 5 (the hidden half; **the `SetRelationship`
+  flip works once the NPC sees the player**), 6 (**wider: a `use_interesting 1` NPC never runs a
+  schedule; the ambient executor replaces selection**); 4, 7–11 have no record yet. Ten new reds
+  N1–N10, each placed (`triage.md` § "New reds"); two planning bugs, corrected below as V11 and
+  V12; fifteen harness gaps H1–H15, the first five as wave H.
+- [ ] **H. The harness wave** (the bug protocol's tool class; `stories/hwave/`). H1 a model-less
+  row no longer kills the stage, and a failed stage does not error the boot's later records; H2
+  arena solids block NPC sight; H3 `never` with a start and a count; H4 the player's state reset
+  per record; H5 player probes, the stealth-kill trace event, crouch and light-pin actions.
+  H6–H15 on demand, by the story that needs each. *Acceptance:* `triage.md` § "The fix order",
+  row H. *Size:* S–M, three coders and the integrator.
 - [ ] **V3. Fix: the arbiter retired; scenes, dialogue and places as retail runs them.** (Was C1;
   absorbs 0003/1–2's kernel half, old 0002/11's executor retirement, 16a's `Follower` owner, the
   four `STORY8-TWIN` survivors.) Retail: `m_scriptState +0x5d70`, `SelectSchedule 0x1028a380` case 4
@@ -519,7 +537,25 @@ tests the green scenarios cover deleted.
   `ScheduleIntegration` and `NpcWitness` retired in favour of the scenarios. *Size:* S.
   *Model:* Sonnet/medium.
 
-Order: V1 → V2 → V3 → V4 → V5 ‖ V6 → V7 → V2 again (full run) → V8 → V9.
+- [ ] **V10. A sound's life in `Listen`.** (New, from V2: N4.) `CanHearSound 0x1030f7b0` tests
+  only "inserted after `m_LastListenTime`" and the radius; `CSoundEnt`'s think `0x101ba890` prunes
+  a sound at its expiry plus a grace. The port drops it in `Listen` at its expiry
+  (`ElysiumNpcSenses.cpp:713`), so hearing is a race. *Scenario:* `hear_world_investigate` green in
+  three boots. *Size:* S.
+- [ ] **V11. The attack coordinator's list.** (Pulled forward from R4: a planning bug, N3 — no
+  melee scenario can go green without it.) The object behind `m_pAttackCoordinator +0x65e8`, its
+  cap and the four bodies `0x1025db50` / `0x1025db70` / `0x1025dca0` / `0x1025de90`, all four stubs
+  answering false today (`ElysiumNpcTroikaHelpers.cpp:134-160`), so slot 599 `0x102b5650` never
+  admits melee; behind it `DIST:COMBATMOVE` resolving to the sentinel and
+  `task_choose_best_melee_weapon` failing. Squads and followers stay in R4. *Scenarios:*
+  `chase_melee`, `melee_swing`. *Size:* S–M. *Model:* Opus/high.
+- [ ] **V12. The footstep sound producer.** (Pulled forward from R1: a planning bug — V8's
+  tutorial needs heard footsteps.) The player's footstep `CSound` producer into the list V10
+  fixes; the list's other producers and words stay in R1. *Scenario:*
+  `map_tutorial_sneak_past`'s hearing half. *Size:* S. Reading packet first.
+
+Order: V1 → V2 → H → V3 → V4 → V5 → V11 ‖ V6 → V7 → V10 → V12 → V2 again (full run) → V8 → V9.
+The new reds ride their stories: N1, N2 in V5; N5, N6 in V7; N7, N8 in V3; N9, N10 in V6.
 
 ## Step 3 — the road to close the character AI
 
@@ -572,9 +608,36 @@ the controller's solidity); 0018/6's leftovers; `hw_warrens_4`'s `iris_clip` doo
 6. **Ledger last.** `kernel --check`, the override census and `unported.tsv` regenerated once, at
    close.
 
+## The bug protocol (the owner, 2026-10-03)
+
+A bug found is fixed: none is recorded and left. Each one goes through these steps, in order.
+
+1. **Classify.** *Tool or harness bug* (the runner, a tap, a tool answers wrong): fixed in the
+   harness, the record untouched. *Record error* (retail or the schema misread): the record is
+   fixed, with its retail source. *Game bug*: the port diverges from retail; the steps below.
+2. **Reproduce as a record.** A game bug is an arena record first, stating what retail does, red,
+   with `known_red`.
+3. **Recover the retail chain** (address, schedule text, map), under the query budget; file it in
+   the triage with the port's `file:line`.
+4. **Place it.**
+   - *It sits in a closed story or task* (landed work that is wrong): the fix is assessed — what
+     retail does, what the port does, the files, the size — and proposed to the owner, then run
+     as a fix story of the current step.
+   - *It can only be fixed by a story of a later phase*: that is a bug in the spec's planning, not
+     a red to park. Every phase must be testable on its own: the plan is corrected (the needed
+     story or its seam pulled forward, or the phase's gate re-cut to what it can prove) and the
+     correction is stated to the owner before the work goes on.
+5. **Fix it the project's way.** The code follows retail's behaviour (the listing). The data —
+   maps, map scripts, entity rows — is the installed corpus as it stands, Unofficial Patch
+   included: the patch mostly corrects map behaviour, so a record or a fix reads the installed
+   map and nobody fetches or loads an unpatched retail map to compare. Where retail cannot be
+   followed, the fix is a divergence: named at its line and in its story, and it stands only once
+   the owner accepts it.
+6. **Done** when the record is green and its `known_red` removed.
+
 ## The sequence
 
-[T1 + T2 + T4] → [T3 + T5 + T2's C++] → T6 → **gate 1** → V1 → V2 → V3 → V4 → [V5 + V6] → V7 → V2 → V8 → V9 →
+[T1 + T2 + T4] → [T3 + T5 + T2's C++] → T6 → **gate 1** → V1 → V2 → H → V3 → V4 → V5 → [V11 + V6] → V7 → V10 → V12 → V2 → V8 → V9 →
 **gate 2** → R1 → R2 → R3 → R4 → [R5 + R6] → R7 → R8 → 0002 closes.
 
 Serial: one wave at a time in the one checkout. Brackets are stories whose coders share one wave
@@ -595,6 +658,10 @@ Settled by the owner, 2026-10-03:
 - Work is serialized in one checkout, no worktrees; each wave fans out coders and ends with one
   integrator that builds and tests (rule 8). Q2's editor cap is moot: one wave builds at a time.
 - The integrator commits once per wave, after its build and tests are green.
+- The bug protocol (§ above): a bug found is fixed; a bug in closed work gets an assessed, proposed
+  fix; a bug that needs a later phase's story is a planning bug and the plan is corrected so each
+  phase is testable; fixes follow retail's code over the installed (Unofficial Patch) maps, never
+  an unpatched retail map, and anything else is a divergence the owner accepts.
 
 Carried from the 2026-09-30 draft, unchanged: the arbiter goes whole (V3); port-only tests are
 deleted, not converted; resume, not restart (V6); the five port-only think steps go with the

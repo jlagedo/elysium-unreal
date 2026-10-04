@@ -1,0 +1,168 @@
+{
+  "name": "patrol_monk_loop",
+  "about": "sp_tutorial_1's monk_upstairs_podium loops its five nodes backward and stands at the podium (docs/vtmb/npc-ai/programs.md \u00a7 'Patrol paths, walked (2026-09-12, story 10g)'). The map's logic_auto sends SetupPatrolType '999 1 FOLLOW_PATROL_PATH_WALK' (t0) then FollowPatrolPath 'pod_1 pod_2 pod_3 pod_4 pod_5' (t+0.1); its logic_auto fires before a map record's time zero, so the record re-sends both verbatim. The player is set down 1.6 m from the monk at 0.1 s (the Society hub is out of the start's PVS, where retail's normal think law stretches to 16 s; the teleport wakes every NPC within 2048 units, 0x1028d820). Type 1 (table 0x1049df20: first index = last, step -1, next type 1) loops backward from pod_5: pod_5, pod_4, pod_3, pod_2, pod_1, then pod_5 again. pod_1's keys carry target_name 'upstairs podium' and ip_percent 100, so the interest roll 0x1029f650 always wins there: TASK_FACE_PATROL_INTEREST 0xb3 turns to the place (match_orientation 1) and TASK_DO_PATROL_INTEREST_ACTIVITY 0xb5 claims it through 0x102a9f40 and waits RandomFloat(10, 15) (the place's min_time/max_time), then its run arm releases it (0x102da600) and fires OnInterestingPlaceLeft; the other pods carry no record and both interest tasks complete at once. Points by map Y (cm): pod_5 -9307, pod_4 -8504, pod_3 -8424, pod_2 -8966, pod_1 -9510.",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 90.0,
+  "known_red": "1: the patrol walk plays 'walk rate=0' and the NPC covers ~0.6 m/s (retail walk_0 136.7 cm/s), so the legs run past their deadlines",
+  "cast": [
+    {
+      "name": "monk_upstairs_podium"
+    }
+  ],
+  "script": [
+    {
+      "t": 0.1,
+      "do": "player_teleport",
+      "at": [
+        -18760.0,
+        -9481.82,
+        17925.0
+      ],
+      "face": 180.0
+    },
+    {
+      "t": 0.5,
+      "do": "fire",
+      "target": "monk_upstairs_podium",
+      "input": "SetupPatrolType",
+      "param": "999 1 FOLLOW_PATROL_PATH_WALK"
+    },
+    {
+      "t": 0.6,
+      "do": "fire",
+      "target": "monk_upstairs_podium",
+      "input": "FollowPatrolPath",
+      "param": "pod_1 pod_2 pod_3 pod_4 pod_5"
+    }
+  ],
+  "expect": [
+    {
+      "label": "reinstalled",
+      "who": "monk_upstairs_podium",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK (",
+      "by": 1.0
+    },
+    {
+      "label": "goal_5",
+      "who": "monk_upstairs_podium",
+      "kind": "move",
+      "match": "^goal -?[0-9.]+ -93[0-9][0-9]",
+      "regex": true,
+      "by": 2.0
+    },
+    {
+      "label": "at_5",
+      "who": "monk_upstairs_podium",
+      "kind": "move",
+      "match": "arrived",
+      "within": 10.0
+    },
+    {
+      "label": "goal_4",
+      "who": "monk_upstairs_podium",
+      "kind": "move",
+      "match": "^goal -?[0-9.]+ -85[0-9][0-9]",
+      "regex": true,
+      "within": 3.0
+    },
+    {
+      "label": "at_4",
+      "who": "monk_upstairs_podium",
+      "kind": "move",
+      "match": "arrived",
+      "within": 15.0
+    },
+    {
+      "label": "goal_3",
+      "who": "monk_upstairs_podium",
+      "kind": "move",
+      "match": "^goal -?[0-9.]+ -84[0-9][0-9]",
+      "regex": true,
+      "within": 3.0
+    },
+    {
+      "label": "at_3",
+      "who": "monk_upstairs_podium",
+      "kind": "move",
+      "match": "arrived",
+      "within": 10.0
+    },
+    {
+      "label": "goal_2",
+      "who": "monk_upstairs_podium",
+      "kind": "move",
+      "match": "^goal -?[0-9.]+ -89[0-9][0-9]",
+      "regex": true,
+      "within": 3.0
+    },
+    {
+      "label": "at_2",
+      "who": "monk_upstairs_podium",
+      "kind": "move",
+      "match": "arrived",
+      "within": 10.0
+    },
+    {
+      "label": "goal_1",
+      "who": "monk_upstairs_podium",
+      "kind": "move",
+      "match": "^goal -?[0-9.]+ -95[0-9][0-9]",
+      "regex": true,
+      "within": 3.0
+    },
+    {
+      "label": "at_1",
+      "who": "monk_upstairs_podium",
+      "kind": "move",
+      "match": "arrived",
+      "within": 10.0
+    },
+    {
+      "label": "podium",
+      "who": "monk_upstairs_podium",
+      "kind": "task",
+      "match": "task_do_patrol_interest_activity (",
+      "within": 5.0
+    },
+    {
+      "label": "podium_done",
+      "who": "monk_upstairs_podium",
+      "kind": "taskdone",
+      "match": "^task_do_patrol_interest_activity$",
+      "regex": true,
+      "within": 18.0
+    },
+    {
+      "label": "left",
+      "who": "monk_upstairs_podium",
+      "kind": "output",
+      "match": "OnInterestingPlaceLeft",
+      "within": 0.5
+    },
+    {
+      "label": "goal_5_again",
+      "who": "monk_upstairs_podium",
+      "kind": "move",
+      "match": "^goal -?[0-9.]+ -93[0-9][0-9]",
+      "regex": true,
+      "within": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "monk_upstairs_podium",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "monk_upstairs_podium",
+      "probe": "schedule",
+      "match": "FOLLOW_PATROL_PATH_WALK"
+    }
+  ],
+  "notes": "taskdone of the podium activity cannot come before 10 s after it starts (min_time 10); the window is not pinned with a never because the trace's never takes no relative window (harness gap)."
+}

@@ -1,0 +1,14 @@
+{
+  "name": "hub_crosswalk_wait",
+  "about": "The crosswalk wait on sm_hub_1, live (0018/7; navigation-jump-links.md 'The crosswalk wait, walked' and 'The crosswalk walk'). The hub's logic_timer flips its two crosswalk hints (crosswalk_south, crosswalk_east_west: CAI_Hint::InputWalk 0x102d0a50 / InputDontWalk 0x102d0a80 -> 0x102f97c0 sets or clears a pair link's whole 0xf0 nibble) every 40 s. A use_interesting pedestrian going to a place across a road runs 0xff -> 0x100 SCHED_TROIKA_WALK_TO_INTERESTING_PLACE with a pedestrian goal (type 8); the pedestrian route 0x102fcd00 marks both curbs of a crossed pair (waypoint flags 0x24 / 0x20); arriving at the first curb while the link is red, 0x102a0bc0 (waypoint flag 4 AND goal type 8) sends it to the wait 0x102a0b90: AT_CROSSWALK and 0x102 SCHED_TROIKA_WAIT_AT_CROSSWALK (sched_troika_wait_at_crosswalk.sch: SET_FAIL_SCHEDULE IDLE_STAND, PAUSE_MOVING, FACE_NEXT_NODE, WAIT_INDEFINITE; interrupt COND_CROSSWALK_WALK), held until the next Walk raises COND_CROSSWALK_WALK and it walks on. The spine over five minutes of the hub at idle: a DontWalk, some pedestrian waiting at a curb, the program broken by CROSSWALK_WALK on the next Walk.",
+  "stage": "map:sm_hub_1",
+  "seed": 1,
+  "duration": 300.0,
+  "known_red": "6: every hub pedestrian moves through the port's ambient interesting-place executor, never retail's 0xff / 0x100 pedestrian goal, so nobody reaches a curb on a type-8 goal",
+  "expect": [
+    { "label": "red", "who": "", "kind": "input", "match": "DontWalk", "by": 60.0 },
+    { "label": "waits", "who": "", "kind": "schedule", "match": "SCHED_TROIKA_WAIT_AT_CROSSWALK (", "by": 280.0 },
+    { "label": "green", "who": "", "kind": "input", "match": "^Walk( |$)", "regex": true, "within": 45.0 },
+    { "label": "crosses", "who": "", "kind": "break", "match": "CROSSWALK_WALK (", "within": 2.0 }
+  ]
+}

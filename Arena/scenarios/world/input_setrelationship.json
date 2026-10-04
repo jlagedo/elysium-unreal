@@ -1,0 +1,92 @@
+{
+  "name": "input_setrelationship",
+  "about": "SetRelationship turns a neutral NPC hostile. CAI_BaseNPC::InputSetRelationship 0x10273790 (the one NPC input on CAI_BaseNPC's own datamap) writes the relationship rows and nothing else: no condition, no forced reselect, no output. 'player' names the player's class row. The next sense pass (PerformSensing 0x10310710 / Look) then sees a hated player in view: SEE_HATE and SEE_ENEMY are set, the enemy record is new, NEW_ENEMY breaks the idle program and SelectIdealState takes the NPC to COMBAT, where a combat program is selected; GatherEnemyConditions 0x10270b20 fires OnFoundPlayer on the new sighting. Param verbatim from hw_tawni_1 (npc_tawni_boyfriend 'player D_HT 5'). sp_tutorial_1's Hunter1 (npc_VHumanCombatant, D_LI 0, use_interesting 0, dialogname dlg/generic/hunter1.dlg) verbatim. Corrected 2026-10-04 (V2): Hunter1's row faces Source yaw 270 (angles '0 270 0'), so from north the player at 'start' stood 90 degrees off its facing, outside m_flFieldOfView 0.2 (FInViewCone slot 363), and was never seen at all (no SEE_PLAYER in any Hunter1 trace); the player now stands 300 units in front of it (arena (975, 762) cm: the stage turns the row's Source yaw 270 into Unreal yaw 90, ElysiumArenaStage.cpp AuthoredYaw), inside its vision 900, facing it.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 15.0,
+  "player": {
+    "at": [975.0, 762.0, 0.0],
+    "face": -90.0
+  },
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "Hunter1"
+    ],
+    "anchor": "Hunter1",
+    "at": "north"
+  },
+  "script": [
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "Hunter1",
+      "input": "SetRelationship",
+      "param": "player D_HT 5"
+    }
+  ],
+  "expect": [
+    {
+      "label": "input",
+      "who": "Hunter1",
+      "kind": "input",
+      "match": "SetRelationship",
+      "by": 2.5
+    },
+    {
+      "label": "hates",
+      "who": "Hunter1",
+      "kind": "cond+",
+      "match": "SEE_HATE",
+      "within": 1.0
+    },
+    {
+      "label": "found",
+      "who": "Hunter1",
+      "kind": "output",
+      "match": "OnFoundPlayer",
+      "within": 1.0
+    },
+    {
+      "label": "commits",
+      "who": "Hunter1",
+      "kind": "state",
+      "match": "-> Combat",
+      "within": 1.0
+    },
+    {
+      "label": "fights",
+      "who": "Hunter1",
+      "kind": "schedule",
+      "match": "",
+      "within": 1.0
+    }
+  ],
+  "never": [
+    {
+      "who": "Hunter1",
+      "kind": "cond+",
+      "match": "SEE_HATE",
+      "until": 2.0
+    },
+    {
+      "who": "Hunter1",
+      "kind": "output",
+      "match": "OnFoundPlayer",
+      "until": 2.0
+    },
+    {
+      "who": "Hunter1",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Hunter1",
+      "probe": "enemy",
+      "equals": "!player"
+    }
+  ],
+  "notes": "The end probe names the committed enemy; the player answers '!player' in this runtime (as sense_bodies_transparent's passing probe reads it; corrected 2026-10-04 by V2 from 'player')."
+}

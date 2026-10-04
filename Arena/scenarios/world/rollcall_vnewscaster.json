@@ -1,0 +1,45 @@
+{
+  "name": "rollcall_vnewscaster",
+  "about": "Roll call: classname npc_VNewscaster builds CNPC_VNewscaster (factory 0x1039fef0, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from hw_tawni_1 (newscaster) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "hw_tawni_1",
+    "names": [
+      "newscaster"
+    ],
+    "anchor": "newscaster",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "newscaster",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "newscaster",
+      "kind": "taskfail"
+    },
+    {
+      "who": "newscaster",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "newscaster",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

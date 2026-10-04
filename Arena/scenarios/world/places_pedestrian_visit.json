@@ -1,0 +1,34 @@
+{
+  "name": "places_pedestrian_visit",
+  "about": "A use_interesting pedestrian visits an interesting place and comes back for the next (docs/vtmb/npc-ai/programs.md § 'Interesting places: the selector, the programs, the wait'). sm_hub_1's pedestrian_female (npc_VPedestrian, use_interesting 1, interesting_place_groups '1 31') verbatim; the places are the arena's eight intersting_place anchor rows (group_id 0, which CAI_InterestingPlace::Spawn 0x102d9c20 turns into group 1, enabled, max_npcs 1, min_time 4, max_time 12). CAI_BaseNPCTroika::SelectSchedule case 1 step 4 (0x102af6eb..0x102af7f3): use_interesting and no held place -> 0xff SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (FIND_INTERESTING_PLACE: eligibility 0x102dad60, pick 0x102db590; SET_PRESERVE_PATH 1; SET_SCHEDULE) -> 0x100 SCHED_TROIKA_WALK_TO_INTERESTING_PLACE (GET_PATH_TO_INTERESTING_PLACE, WALK_PATH, WAIT_FOR_MOVEMENT, STOP_MOVING, FACE_INTEREST, SET_SCHEDULE) -> SCHED_TROIKA_DO_INTEREST_ACTIVITY (SET_PRESERVE_PATH 0, DO_INTEREST_ACTIVITY: ClaimMarker 0x102da7c0 and m_flWaitFinished = curtime + RandomFloat(min_time, max_time) in 0x102a9f40; its run arm 0x102aa210 ends the INTO-IDLE-OUTOF loop, fires OnInterestingPlaceLeft and releases 0x102da600; WAIT_PVS). With the visit released the next selection is 0xff again. No task fails: every place is on the arena floor.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 50.0,
+  "known_red": "6: the port's ambient executor answers use_interesting instead of the 0xff program",
+  "player": { "at": "start" },
+  "from_map": {
+    "map": "sm_hub_1",
+    "names": ["pedestrian_female"],
+    "anchor": "pedestrian_female",
+    "at": "west"
+  },
+  "expect": [
+    { "label": "setup", "who": "pedestrian_female", "kind": "schedule", "match": "SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (", "by": 3.0 },
+    { "label": "finds", "who": "pedestrian_female", "kind": "taskdone", "match": "^task_find_interesting_place$", "regex": true, "within": 1.0 },
+    { "label": "walk_program", "who": "pedestrian_female", "kind": "schedule", "match": "SCHED_TROIKA_WALK_TO_INTERESTING_PLACE (", "within": 1.0 },
+    { "label": "walks", "who": "pedestrian_female", "kind": "move", "match": "goal", "within": 1.0 },
+    { "label": "arrives", "who": "pedestrian_female", "kind": "move", "match": "arrived", "within": 20.0 },
+    { "label": "activity_program", "who": "pedestrian_female", "kind": "schedule", "match": "SCHED_TROIKA_DO_INTEREST_ACTIVITY (", "within": 5.0 },
+    { "label": "uses", "who": "pedestrian_female", "kind": "task", "match": "task_do_interest_activity (", "within": 0.5 },
+    { "label": "used", "who": "pedestrian_female", "kind": "taskdone", "match": "^task_do_interest_activity$", "regex": true, "within": 16.0 },
+    { "label": "left", "who": "pedestrian_female", "kind": "output", "match": "OnInterestingPlaceLeft", "within": 0.5 },
+    { "label": "next_visit", "who": "pedestrian_female", "kind": "schedule", "match": "SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (", "within": 3.0 }
+  ],
+  "never": [
+    { "who": "pedestrian_female", "kind": "taskfail" },
+    { "who": "pedestrian_female", "kind": "death" }
+  ],
+  "probes": [
+    { "at": "end", "who": "pedestrian_female", "probe": "alive", "equals": true }
+  ]
+}

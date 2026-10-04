@@ -1,0 +1,47 @@
+{
+  "name": "verbs_stealth_kill",
+  "about": "The stealth kill (stealth.md 'Stealth-kill transaction (RE50)'). An idle neutral Troika human on the east pad faces the room's middle; the player stands 85 cm (33 units) straight behind it, crouched, a knife wielded (granted by player.armed and wielded by the melee-category verb slot2; item_w_fists is 'weapon_melee hidden' and is not offered by the selector), unseen and unheard. +use at 2 s (and, as the second door, +attack at 4 s: the melee primary 0x103eaca0 calls the stealth thunk at 0x103ead0b before its own swing): PlayerUse 0x10167850 -> PlayerTryStealthKill 0x10167370 -> CStealthKillRules::FindVictim 0x101be1f0: the posture (FL_DUCKING), the melee weapon byte (CWeaponMelee 0x103e9ac0 writes +0x872 = 1), the forward MASK_PLAYERSOLID trace over StealthKillDistMax (70) hits the victim, IsValidStealthKillTarget 0x102c2300 passes (not hidden, no dialogname, not invincible, not dead under debug_allow_non_idle_auto_sk '1', neither HEAR_PLAYER 0x6f nor SEE_PLAYER 0x5a, alive), InDeafArc 0x101be500 passes (dot 1.0 behind), CanStartGrappleAttack(type 3) passes. StartGrappleAttack 0x10328df0 locks both into grapple mode 3 (the NPC's grapple entry 0x1026cdc0 -> 0x1026d130 clears its enemy and raises m_iIsOblivious, so it senses nothing more); the attacker's paired clip finishing enters 0x10165d90, which copies Max_Health into the damage-taken stat and calls Event_Killed directly (slot 144): the synchronized death, OnDeath, the corpse.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 20.0,
+  "player": { "at": [0.0, 1060.0, 0.0], "face": "east", "armed": "item_w_knife" },
+  "cast": [
+    {
+      "name": "arena_mark",
+      "classname": "npc_VHumanCombatant",
+      "at": "east",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    { "t": 0.2, "do": "console", "command": "elysium.cmd slot2" },
+    { "t": 0.5, "do": "console", "command": "elysium.cmd +duck" },
+    { "t": 2.0, "do": "console", "command": "elysium.cmd +use" },
+    { "t": 2.1, "do": "console", "command": "elysium.cmd -use" },
+    { "t": 4.0, "do": "console", "command": "elysium.cmd +attack" },
+    { "t": 4.1, "do": "console", "command": "elysium.cmd -attack" }
+  ],
+  "expect": [
+    { "label": "idles", "who": "arena_mark", "kind": "schedule", "match": "SCHED_TROIKA_IDLE_DISPOSITION (", "by": 1.5 },
+    { "label": "dies", "who": "arena_mark", "kind": "death", "match": "", "by": 12.0 },
+    { "label": "on_death", "who": "arena_mark", "kind": "output", "match": "OnDeath", "within": 0.5 },
+    { "label": "corpse", "who": "arena_mark", "kind": "corpse", "match": "", "within": 1.0 }
+  ],
+  "never": [
+    { "who": "arena_mark", "kind": "cond+", "match": "SEE_PLAYER (0x5a)" },
+    { "who": "arena_mark", "kind": "schedule", "match": "SCHED_TROIKA_START_COMBAT (" }
+  ],
+  "probes": [
+    { "at": "end", "who": "arena_mark", "probe": "alive", "equals": false },
+    { "at": "end", "who": "arena_mark", "probe": "on_ground", "equals": true }
+  ]
+}

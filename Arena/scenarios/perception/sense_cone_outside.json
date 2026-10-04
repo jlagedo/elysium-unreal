@@ -1,0 +1,40 @@
+{
+  "name": "sense_cone_outside",
+  "about": "Outside the cone at sight distance a hostile Troika human sees nothing. Same guard as sense_cone_enter (behind_cover (156, 0) Source units facing -X, D_HT 5, npc_perception 3 -> 440 units); the standing player stands in the open at (220, -295), 302 units from the eye -- inside 440 and inside 0.7 x 440, unoccluded -- but off to the side: from the cone apex 40 units behind the eye (debug_viewcone_back_dist 40, FinViewCone3dNew 0x103264d0) the normalized dot against the facing is -0.08, below m_flFieldOfView 0.2 (0x10298d30; the target cone scalar is 1.0 for a standing player). Look's per-candidate test (0x1030ffa0) refuses him at FInViewCone slot 363 (0x102b4540 -> 0x10326750), so OnLooked 0x1026a2c0 raises nothing, no enemy is committed and the NPC stays idle. SetPlayerLOS 0x10291610 (no cone term, 'in PVS within 512 -> LOS true') is a think-cadence input, not a sighting (stealth.md 'Closest-player cone and LOS cache').",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 15.0,
+  "player": { "at": [559.0, -749.0, 0.0], "face": 90.0 },
+  "cast": [
+    {
+      "name": "sight_guard",
+      "classname": "npc_VHumanCombatant",
+      "at": "behind_cover",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_HT 5",
+        "npc_perception": "3",
+        "investigate_mode": "4",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "expect": [
+    { "label": "idles", "who": "sight_guard", "kind": "schedule", "match": "SCHED_TROIKA_IDLE_DISPOSITION (0x6b)", "by": 1.0 }
+  ],
+  "never": [
+    { "who": "sight_guard", "kind": "cond+", "match": "SEE_PLAYER (0x5a)" },
+    { "who": "sight_guard", "kind": "cond+", "match": "SEE_HATE (0x43)" },
+    { "who": "sight_guard", "kind": "cond+", "match": "NEW_ENEMY (0x54)" },
+    { "who": "sight_guard", "kind": "state" }
+  ],
+  "probes": [
+    { "at": "end", "who": "sight_guard", "probe": "enemy", "equals": "none" },
+    { "at": "end", "who": "sight_guard", "probe": "state", "equals": "Idle" }
+  ]
+}

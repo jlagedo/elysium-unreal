@@ -1,0 +1,46 @@
+{
+  "name": "lifecycle_unhide_fights",
+  "about": "StartHidden 1, then ScriptUnhide by script: the NPC lands, sees, fights. A hidden NPC (StartHidden '1', born hidden as the bake does) does not think while hidden (CBaseEntity::ScriptHide 0x100a8710 saves m_pfnThink into +0xe4, installs NULL and parks m_flNextThink at FLT_MAX: lifecycle.md 'A hidden maker'), so it senses nothing; it is unhidden at 2 s by the ScriptUnhide input (0x100a8990 re-installs the saved think). Retail's think then runs the pre-selector's base step (0x1028a2a0, conditions-and-states.md 'GetSchedule 0x102ae920 runs ahead of SelectSchedule' step 8): FLOATING_OFF_GROUND 0x73 -> gravity and 0x3e FALL_TO_GROUND only while the NPC is off the floor; an NPC standing on the floor is not floating, so it senses (GatherSight: SEE_ENEMY 0x46, NEW_ENEMY 0x54 for the hated player in view), goes COMBAT and takes SCHED_TROIKA_START_COMBAT 0xea, then its ranged combat program. The spine: unhidden, on the ground, sees, START_COMBAT, a range attack task.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 20.0,
+  "known_red": "5: the StartHidden NPC thinks while hidden (SEE_ENEMY and FALL_TO_GROUND at t=0; retail ScriptHide 0x100a8710 installs a NULL think at FLT_MAX until ScriptUnhide 0x100a8990)",
+  "player": { "at": "cover_seat" },
+  "cast": [
+    {
+      "name": "arena_hidden",
+      "classname": "npc_VHumanCombatant",
+      "at": "far_ne",
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_thirtyeight",
+        "player_reaction": "D_HT 5",
+        "hint_groups": "2",
+        "npc_perception": "3",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "1"
+      }
+    }
+  ],
+  "script": [
+    { "t": 2.0, "do": "fire", "target": "arena_hidden", "input": "ScriptUnhide" }
+  ],
+  "expect": [
+    { "label": "unhidden", "who": "arena_hidden", "kind": "input", "match": "ScriptUnhide", "by": 2.5 },
+    { "label": "sees", "who": "arena_hidden", "kind": "cond+", "match": "SEE_ENEMY (0x46)", "within": 3.0 },
+    { "label": "fights", "who": "arena_hidden", "kind": "schedule", "match": "SCHED_TROIKA_START_COMBAT (", "within": 2.0 },
+    { "label": "fires", "who": "arena_hidden", "kind": "task", "match": "task_range_attack1 (", "within": 6.0 }
+  ],
+  "never": [
+    { "who": "arena_hidden", "kind": "cond+", "match": "SEE_ENEMY (0x46)", "until": 1.9 },
+    { "who": "arena_hidden", "kind": "death" }
+  ],
+  "probes": [
+    { "at": 3.0, "who": "arena_hidden", "probe": "on_ground", "equals": true },
+    { "at": "end", "who": "arena_hidden", "probe": "state", "equals": "Combat" },
+    { "at": "end", "who": "arena_hidden", "probe": "enemy", "match": "player" }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "name": "input_changeschedule_reselect",
+  "about": "ChangeSchedule '-' forces a reselection. CAI_BaseNPCTroika::InputChangeSchedule 0x102c33f0 (docs/vtmb/npc-ai/authored-control.md \u00a7 'Direct schedule changes'): a name other than '-' is written to the forced-schedule word +0x65c8; in every case flags2 |= 0x82000000 (CHOOSE_NEW), so at the next think PreSelect drops the running program and a schedule is selected again. Param verbatim from hw_sinbin_1 (Kerri '-'). sp_tutorial_1's Hunter1 (npc_VHumanCombatant, D_LI 0, use_interesting 0, dialogname dlg/generic/hunter1.dlg) verbatim, the player at the start, in its view.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 8.0,
+  "known_red": "new: ChangeSchedule '-' forces no reselection (retail sets CHOOSE_NEW 0x82000000 in flags2 on every call, 0x102c33f0)",
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "Hunter1"
+    ],
+    "anchor": "Hunter1",
+    "at": "north"
+  },
+  "script": [
+    {
+      "t": 3.0,
+      "do": "fire",
+      "target": "Hunter1",
+      "input": "ChangeSchedule",
+      "param": "-"
+    }
+  ],
+  "expect": [
+    {
+      "label": "idles",
+      "who": "Hunter1",
+      "kind": "schedule",
+      "match": "",
+      "by": 2.0
+    },
+    {
+      "label": "input",
+      "who": "Hunter1",
+      "kind": "input",
+      "match": "ChangeSchedule",
+      "by": 3.5
+    },
+    {
+      "label": "reselects",
+      "who": "Hunter1",
+      "kind": "schedule",
+      "match": "",
+      "within": 0.5
+    }
+  ],
+  "never": [
+    {
+      "who": "Hunter1",
+      "kind": "death"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "name": "rollcall_vsabbatgunman",
+  "about": "Roll call: classname npc_VSabbatGunman builds CNPC_VSabbatGunman (factory 0x103a4ff0, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from hw_warrens_4 (scene_nos) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "hw_warrens_4",
+    "names": [
+      "scene_nos"
+    ],
+    "anchor": "scene_nos",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "scene_nos",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "scene_nos",
+      "kind": "taskfail"
+    },
+    {
+      "who": "scene_nos",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "scene_nos",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

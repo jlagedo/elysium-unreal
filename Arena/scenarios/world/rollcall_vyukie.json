@@ -1,0 +1,45 @@
+{
+  "name": "rollcall_vyukie",
+  "about": "Roll call: classname npc_VYukie builds CNPC_VYukie (factory 0x103dcf90, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from ch_fishmarket_1 (Yukie) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "ch_fishmarket_1",
+    "names": [
+      "Yukie"
+    ],
+    "anchor": "Yukie",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "Yukie",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "Yukie",
+      "kind": "taskfail"
+    },
+    {
+      "who": "Yukie",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Yukie",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

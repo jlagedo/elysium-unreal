@@ -2,7 +2,6 @@
 from copy import deepcopy
 import importlib.util
 import json
-import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -181,22 +180,3 @@ def test_job_does_not_report_cook_ready_until_rules_pass(worker, monkeypatch, tm
     inside = source / "job.json"; inside.write_text(job.read_text())
     with pytest.raises(RuntimeError, match="outside producer"):
         worker.run(inside)
-
-
-@pytest.mark.skipif(not os.environ.get("ELYSIUM_COOK_ROOT_INVENTORY"), reason="explicit read-only manifest/disk inventory")
-def test_current_disk_inventory_is_audit_only():
-    base = Path(r"E:\elysium-work\import")
-    manifests = {"characters": base / "characters/manifest.json", "models": base / "models/manifest.json",
-                 "expressions": base / "expression-tables/manifest.json"}
-    if (base / "model-catalogues/manifest.json").is_file(): manifests["catalogues"] = base / "model-catalogues/manifest.json"
-    source = roots.read_declarations(manifests)
-    rows = roots.scan_package_files(Path(r"E:\dev\elysium-unreal\Plugins\ElysiumBaked\Content"))
-    source = roots.reconcile_declarations(source, rows)
-    plan = roots.plan_roots(source, rows, metadata_verified=False)
-    roots.verify_inputs(source)
-    assert not plan["readyToPublish"]  # File presence is not a registry/cook result.
-    output = Path(r"E:\elysium-work\_r8_explore\agents\physics\cook_roots_inventory.json")
-    output.write_text(json.dumps(plan, indent=2), encoding="utf-8")
-    print(json.dumps({"counts": plan["counts"], "missing": len(plan["missingPackages"]),
-        "extraPublished": len(plan["extraPublishedPackages"]), "catalogues": source["catalogueManifestSupplied"],
-        "firstIssues": plan["issues"][:8]}))

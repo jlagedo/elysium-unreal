@@ -1,0 +1,57 @@
+{
+  "name": "cover_armed",
+  "about": "The cover record against an ARMED player: the player holds a firearm (item_w_thirtyeight, weapon slot 360 answers 0x2000, conditions-and-states.md 'CapabilitiesGet 0x1026db30'). The cover chooser 0x102b7690's cover tail reads GetEnemy()->+0x9c (the combat-character self-downcast) -> GetActiveWeapon -> vtable +0x5a0 & 0x6000 != 0, so bVar1 = false (a ranged threat); with 0x102b5de0 passing, the gunman not already in 0x9e and COVER_VS_MELEE_MODE clear it answers 0xa3 SCHED_TROIKA_TAKE_COVER_HINT_ATTACK (line 0x5cd9), never 0xa4 _VS_MELEE. sched_troika_take_cover_hint_attack.sch: SET_FAIL_SCHEDULE TAKE_COVER_HINT, SET_NPC_FLAG TASKS_FACE_ENEMY, SNAP_TO_HINT, RESOLVE_BOTCH_IN_COVER, PLAY_COVER_OUTOF, PLAY_COVER_AIM, WAIT_RANDOM 0.5, ANNOUNCE_ATTACK 1, TASK_RANGE_ATTACK1, PLAY_COVER_INTO, PLAY_COVER_IDLE, RESOLVE_BOTCH_IN_COVER, WAIT_ATTACK_TIME1, WAIT_RANDOM 2.0. The pistol is granted by player.armed and wielded by the ranged-category verb (slot3 through the command bus, ElysiumInventorySelect.cpp's Commit -> SetActiveWeapon).",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 60.0,
+  "known_red": "new: the cover tail never reads the enemy's weapon (ElysiumNpcSchedule.cpp:484-495, stub 'no cross-entity weapon capability reader'): 0xa4 VS_MELEE against a ranged player where retail answers 0xa3",
+  "player": { "at": "cover_seat", "armed": "item_w_thirtyeight" },
+  "cast": [
+    {
+      "name": "arena_gunman",
+      "classname": "npc_VHumanCombatant",
+      "at": "far_ne",
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_thirtyeight",
+        "alternateequipment": "item_w_knife",
+        "player_reaction": "D_HT 5",
+        "hint_groups": "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32",
+        "npc_perception": "3",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "1",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "percent_occluded_wait": "0",
+        "percent_occluded_cover": "100",
+        "percent_occluded_walk": "0",
+        "percent_occluded_flank": "0",
+        "percent_occluded_chase": "0"
+      }
+    }
+  ],
+  "script": [
+    { "t": 0.05, "do": "console", "command": "elysium.cmd slot3" }
+  ],
+  "expect": [
+    { "label": "covers", "who": "arena_gunman", "kind": "schedule", "match": "SCHED_TROIKA_TAKE_COVER_HINT (", "by": 8.0 },
+    { "label": "claims", "who": "arena_gunman", "kind": "hint+", "match": "cover_corner", "within": 2.0 },
+    { "label": "at_cover", "who": "arena_gunman", "kind": "taskdone", "match": "^task_snap_to_hint$", "regex": true, "within": 25.0 },
+    { "label": "attack_from_cover", "who": "arena_gunman", "kind": "schedule", "match": "SCHED_TROIKA_TAKE_COVER_HINT_ATTACK (", "within": 3.0 },
+    { "label": "outof", "who": "arena_gunman", "kind": "task", "match": "task_play_cover_outof (", "within": 3.0 },
+    { "label": "outof_done", "who": "arena_gunman", "kind": "taskdone", "match": "^task_play_cover_outof$", "regex": true, "within": 10.0 },
+    { "label": "fires", "who": "arena_gunman", "kind": "task", "match": "task_range_attack1 (", "within": 8.0 },
+    { "label": "fired", "who": "arena_gunman", "kind": "taskdone", "match": "^task_range_attack1$", "regex": true, "within": 10.0 },
+    { "label": "back_into", "who": "arena_gunman", "kind": "task", "match": "task_play_cover_into (", "within": 3.0 }
+  ],
+  "never": [
+    { "who": "arena_gunman", "kind": "death" },
+    { "who": "arena_gunman", "kind": "schedule", "match": "SCHED_TROIKA_TAKE_COVER_HINT_VS_MELEE" }
+  ],
+  "probes": [
+    { "at": "end", "who": "arena_gunman", "probe": "alive", "equals": true }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "rollcall_vhunter",
+  "about": "Roll call: classname npc_VHunter builds CNPC_VHunter (factory 0x10387f60, research/tooling/ghidra/driver/kernel_factories.tsv). No map places it directly; makers name it in NPCType (12 rows). sm_hub_1's hunter_maker_1 (NPCType npc_VHunter, NPCTargetname hunter_1) stands verbatim and its Spawn input makes the child through CNPCMaker (0x1034aae0); the child then runs NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: SelectSchedule picks a program and SetSchedule 0x10280e50 installs it, and the program runs for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sm_hub_1",
+    "names": [
+      "hunter_maker_1"
+    ],
+    "anchor": "hunter_maker_1",
+    "at": "far_ne"
+  },
+  "script": [
+    { "t": 0.5, "do": "fire", "target": "hunter_maker_1", "input": "Spawn" }
+  ],
+  "expect": [
+    { "label": "spawned", "who": "hunter_maker_1", "kind": "output", "match": "OnSpawnNPC", "by": 1.5 },
+    { "label": "selects", "who": "hunter_1", "kind": "schedule", "match": "", "within": 3.0 }
+  ],
+  "never": [
+    { "who": "hunter_1", "kind": "taskfail" },
+    { "who": "hunter_1", "kind": "death" }
+  ],
+  "probes": [
+    { "at": "end", "who": "hunter_1", "probe": "alive", "equals": true }
+  ],
+  "notes": "The maker carries OnSpawnNPC -> hunter_stalk_enable_relay.Trigger; the relay is not stood, so the output's target is absent (the output event still fires)."
+}

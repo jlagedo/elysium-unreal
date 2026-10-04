@@ -1,0 +1,45 @@
+{
+  "name": "rollcall_vcop",
+  "about": "Roll call: classname npc_VCop builds CNPC_VCop (factory 0x103704f0, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from sm_hub_1 (patrol_cop) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sm_hub_1",
+    "names": [
+      "patrol_cop"
+    ],
+    "anchor": "patrol_cop",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "patrol_cop",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "patrol_cop",
+      "kind": "taskfail"
+    },
+    {
+      "who": "patrol_cop",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "patrol_cop",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

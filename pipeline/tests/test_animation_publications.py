@@ -1,8 +1,6 @@
 """Bounded publication/retention gates; no animation sample evaluation or Unreal."""
 import hashlib
 import json
-import os
-from pathlib import Path
 import struct
 
 import pytest
@@ -110,38 +108,3 @@ def test_cook_reconciliation_keeps_raw_required_and_already_published_intermedia
     (tmp_path / "bank.skel").write_bytes(b"changed")
     with pytest.raises(roots.CookRootError, match="stale"):
         roots.verify_inputs(cooked)
-
-
-@pytest.mark.skipif(not os.environ.get("ELYSIUM_ANIMATION_PUBLICATION_AUDIT"), reason="explicit two-bank read-only retention audit")
-def test_current_224_declarations_are_intermediates_with_source_and_native_coverage():
-    from elysium_pipeline.formats.unit_contract.container import read_document
-    lane = Path(r"E:\elysium-work\_r8_explore\agents\physics")
-    manifest_path = Path(r"E:\elysium-work\import\characters\manifest.json")
-    raw = manifest_path.read_bytes()
-    sha = hashlib.sha256(raw).hexdigest()
-    manifest = json.loads(raw)
-    baseline = json.loads((lane / "animation_publication_missing_packages.json").read_bytes())
-    # This frozen inventory records the reported 224; never replace it with this audit.
-    candidates = [p for p in baseline["missingPackages"] if p.rsplit("/", 1)[-1].startswith("A_")]
-    assert len(candidates) == 224
-    report = publications.audit_missing(manifest_path, sha, candidates)
-    assert len(report["nonProducts"]) == 224 and not report["unresolvedPackages"]
-    assert len(report["owners"]) == 2 and len(report["requiredPackages"]) == 110
-    for package_path in report["requiredPackages"]:
-        file = Path(r"E:\dev\elysium-unreal\Plugins\ElysiumBaked\Content") / (package_path.removeprefix("/ElysiumBaked/") + ".uasset")
-        assert file.is_file(), package_path
-    verification = json.loads((manifest_path.parent / "native_verify_report.json").read_bytes())
-    assert verification["manifestSha256"] == sha and not verification["failed"]
-    for owner in report["owners"]:
-        assert owner["assetId"] in manifest["selectedUnits"]
-        glb = Path(r"E:\elysium-work\exports_v2") / owner["unitGlb"]
-        with glb.open("rb") as stream:
-            assert hashlib.file_digest(stream, "sha256").hexdigest() == owner["unitSha256"]
-        mdl = read_document(glb)["extensions"]["ELYSIUM_vtmb_model"]["mdl"]
-        source = json.loads((manifest_path.parent / owner["body"]).read_bytes())
-        assert mdl == source["sourceSemantics"]["mdl"]
-    report["nativeVerification"] = {"manifestSha256": sha, "failed": [], "selectedBodyDataCount": verification["bodyData"],
-                                    "scope": "two affected owners included in fresh selected BodyData verification"}
-    report["sourceVerification"] = "both complete GLB MDL tables equal hash-checked staged sourceSemantics.mdl"
-    (lane / "animation_publication_audit.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(f"224 false declarations; 110 raw assets present; 2 complete source tables retained; manifest {sha}")

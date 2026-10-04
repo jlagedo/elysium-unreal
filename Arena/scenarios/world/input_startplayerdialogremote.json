@@ -1,0 +1,70 @@
+{
+  "name": "input_startplayerdialogremote",
+  "about": "StartPlayerDialogRemote opens a dialogue without walking up. CAI_BaseNPCTroika::InputStartPlayerDialogRemote 0x1029f060: the same gates as StartPlayerDialog 0x1029ef80 (player present, the player's dialogue handle +0xfe8 empty, not busy with a discipline, flags2 & 0x10000000 clear), FinishTalking, think reset, forced install of SCHED_TROIKA_START_PLAYER_DIALOG_REMOTE (0x6e; cai_basenpctroika/sched_troika_start_player_dialog_remote.sch); the param is ignored. Wire form verbatim from hw_luckystar_1 (Nines ''). sp_tutorial_1's Hunter1 (npc_VHumanCombatant, D_LI 0, use_interesting 0, dialogname dlg/generic/hunter1.dlg) verbatim, the player at the start, in its view.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 12.0,
+  "known_red": "new: StartPlayerDialogRemote installs no schedule; OnDialogBegin fires at the input (retail: forced SCHED 0x6e, the dialogue opens from its tasks)",
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "Hunter1"
+    ],
+    "anchor": "Hunter1",
+    "at": "north"
+  },
+  "script": [
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "Hunter1",
+      "input": "StartPlayerDialogRemote",
+      "param": ""
+    }
+  ],
+  "expect": [
+    {
+      "label": "input",
+      "who": "Hunter1",
+      "kind": "input",
+      "match": "StartPlayerDialogRemote",
+      "by": 2.5
+    },
+    {
+      "label": "program",
+      "who": "Hunter1",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_START_PLAYER_DIALOG_REMOTE (",
+      "within": 0.5
+    },
+    {
+      "label": "holds",
+      "who": "Hunter1",
+      "kind": "task",
+      "match": "task_run_dialog (",
+      "within": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "Hunter1",
+      "kind": "taskfail"
+    },
+    {
+      "who": "Hunter1",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Hunter1",
+      "probe": "schedule",
+      "match": "START_PLAYER_DIALOG_REMOTE"
+    }
+  ],
+  "notes": "The schedule name of id 0x6e is read from the schedule text file's name; the walk that reported 0x6e did not confirm the registration's name."
+}

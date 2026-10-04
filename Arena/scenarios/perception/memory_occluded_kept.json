@@ -1,0 +1,46 @@
+{
+  "name": "memory_occluded_kept",
+  "about": "Seen, then hidden behind the block: the enemy goes occluded and stays committed. CAI_BaseNPC::GatherEnemyConditions 0x10270b20 (conditions-and-states.md, slot 481): every gather FVisible slot 201 misses the enemy and m_eEnemyOccludedCheck +0x5b98 counts up, saturating at 10; at 10 it sets ENEMY_OCCLUDED 0x48 and, with m_afMemory 0x20000 standing, fires m_OnLostPlayerLOS (player enemy) then m_OnLostEnemyLOS. Nothing forgets him: CAI_Memory has no time-based expiry (senses.md 'The enemy memory -- CAI_Memory', RefreshMemories 0x102df320), and LOST_ENEMY 0x47 has one setter, ChooseEnemy 0x10279dd0, only when BestEnemy answers null after the enemy was marked eluded (MarkAsEluded 0x102dfd90). GatherEnemyConditions' eluded tail runs only once curtime - LastTimeSeen > 8.0 (_DAT_1045597c); on a Troika NPC it then needs DONE_EXTRAPOLATING (m_bfAINPCFlags 0x8000) or ENEMY_UNREACHABLE 0x59 with a blocked ray to the last known position; TASK_SET_ENEMY_ELUDED appears only in the Tzimisce and Hengeyokai chase programs. So no LOST_ENEMY can appear within 8 s of the last sighting, and the committed enemy keeps the NPC in COMBAT (GetSchedule 0x102ae920 step 5: GetEnemy() == NULL is the only way back to ALERT/IDLE). Guard on behind_cover (156, 0) Source units facing -X, D_HT 5, npc_perception 3, no weapon; the player in view at (40, 250) from t = 0, teleported behind the block to (-176, -60) at t = 1.0 (both the guard's spot and the last-known position (40, 250) see that spot only through the block).",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 9.5,
+  "player": { "at": [102.0, 635.0, 0.0], "face": 0.0 },
+  "cast": [
+    {
+      "name": "memory_guard",
+      "classname": "npc_VHumanCombatant",
+      "at": "behind_cover",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_HT 5",
+        "npc_perception": "3",
+        "investigate_mode": "4",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    { "t": 1.0, "do": "player_teleport", "at": [-447.0, -152.0, 0.0], "face": 0.0 }
+  ],
+  "expect": [
+    { "label": "sees_enemy", "who": "memory_guard", "kind": "cond+", "match": "SEE_ENEMY (0x46)", "by": 0.9 },
+    { "label": "combat", "who": "memory_guard", "kind": "state", "match": "Idle -> Combat", "within": 0.9 },
+    { "label": "occluded", "who": "memory_guard", "kind": "cond+", "match": "ENEMY_OCCLUDED (0x48)", "by": 5.0 },
+    { "label": "lost_player_los", "who": "memory_guard", "kind": "output", "match": "OnLostPlayerLOS", "within": 0.2 },
+    { "label": "lost_enemy_los", "who": "memory_guard", "kind": "output", "match": "OnLostEnemyLOS", "within": 0.2 }
+  ],
+  "never": [
+    { "who": "memory_guard", "kind": "cond+", "match": "LOST_ENEMY (0x47)", "until": 9.0 },
+    { "who": "memory_guard", "kind": "output", "match": "OnLostPlayer ", "until": 9.0 },
+    { "who": "memory_guard", "kind": "state", "match": "Combat -> ", "until": 9.0 }
+  ],
+  "probes": [
+    { "at": 9.0, "who": "memory_guard", "probe": "enemy", "equals": "!player" },
+    { "at": 9.0, "who": "memory_guard", "probe": "state", "equals": "Combat" }
+  ]
+}

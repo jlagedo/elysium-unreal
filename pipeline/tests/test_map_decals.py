@@ -189,11 +189,26 @@ PLACED_PINS = {
 }
 
 
+@pytest.fixture(scope="module")
+def staged_decals():
+    """`decals.stage_map` once per map for the module, on first use: the two cases below only read
+    the payload, and a stage is 1-12 s of unit reads."""
+
+    cache = {}
+
+    def stage(map_name):
+        if map_name not in cache:
+            _export_root()
+            cache[map_name] = decals.stage_map(map_name)
+        return cache[map_name]
+
+    return stage
+
+
 @pytest.mark.parametrize("map_name", sorted(PLACED_PINS))
 @pytest.mark.corpus
-def test_each_map_places_the_decals_the_decoder_placed(map_name):
-    _export_root()
-    payload = decals.stage_map(map_name)
+def test_each_map_places_the_decals_the_decoder_placed(map_name, staged_decals):
+    payload = staged_decals(map_name)
     assert payload["counts"]["placed"] == PLACED_PINS[map_name]
     # Not one decal on these six is lost to a material the units cannot size: every published
     # decal material resolves an albedo with dimensions, so `unmatched` can only be a decal that
@@ -203,9 +218,9 @@ def test_each_map_places_the_decals_the_decoder_placed(map_name):
 
 @pytest.mark.parametrize("map_name", sorted(PLACED_PINS))
 @pytest.mark.corpus
-def test_every_row_names_an_importable_material_and_a_real_quad(map_name):
+def test_every_row_names_an_importable_material_and_a_real_quad(map_name, staged_decals):
     root = _export_root()
-    for row in decals.stage_map(map_name)["rows"]:
+    for row in staged_decals(map_name)["rows"]:
         key = row["materialId"][len("vtmb:material:"):]
         assert (root / "materials" / f"{key}.glb").is_file()
         assert row["halfWCm"] > 0.0 and row["halfHCm"] > 0.0

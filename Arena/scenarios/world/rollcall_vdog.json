@@ -1,0 +1,55 @@
+{
+  "name": "rollcall_vdog",
+  "about": "Roll call: classname npc_VDog builds CNPC_VDog (factory 0x10373480, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from hw_warrens_1 (plus_crowd) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "known_red": "new: a StartHidden npc_VDog row gathers at 0 s (SEE_PLAYER, DOG_IDLE_FROM_ALERT) but installs no schedule, before or after ScriptUnhide at 0.5 s",
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "hw_warrens_1",
+    "names": [
+      "plus_crowd"
+    ],
+    "anchor": "plus_crowd",
+    "at": "far_ne"
+  },
+  "script": [
+    {
+      "t": 0.5,
+      "do": "fire",
+      "target": "plus_crowd",
+      "input": "ScriptUnhide"
+    }
+  ],
+  "expect": [
+    {
+      "label": "selects",
+      "who": "plus_crowd",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "plus_crowd",
+      "kind": "taskfail"
+    },
+    {
+      "who": "plus_crowd",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "plus_crowd",
+      "probe": "alive",
+      "equals": true
+    }
+  ],
+  "notes": "Every standable row of npc_VDog is StartHidden; the record unhides it at 0.5 s, as its map's wire does."
+}

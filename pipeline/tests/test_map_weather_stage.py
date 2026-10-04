@@ -48,6 +48,15 @@ def _export_root():
     return root
 
 
+@pytest.fixture(scope="module")
+def rain_payload():
+    """`stage_map(RAIN_MAP)` once for the module: the stage is a pure read of the units (21 s), and
+    the three cases below only read the payload."""
+
+    _export_root()
+    return weather_lane.stage_map(RAIN_MAP)
+
+
 def test_a_model_path_resolves_to_its_published_unit():
     """A `staticProps` placement names `models/<path>.mdl`; the unit lives at `models/<path>.glb`
     below the export_v2 root. The fold is the model seam's own `normalize_model_key`, so this lane
@@ -94,9 +103,8 @@ def test_only_the_rain_map_stages_a_payload():
 
 
 @pytest.mark.corpus
-def test_the_rain_map_reproduces_the_decoder_s_cover_set():
-    _export_root()
-    payload = weather_lane.stage_map(RAIN_MAP)
+def test_the_rain_map_reproduces_the_decoder_s_cover_set(rain_payload):
+    payload = rain_payload
     assert payload is not None
     assert payload["counts"] == COVER_PINS
     assert payload["document"]["schema"] == "elysium.map-weather"
@@ -106,16 +114,15 @@ def test_the_rain_map_reproduces_the_decoder_s_cover_set():
 
 
 @pytest.mark.corpus
-def test_the_footprint_the_bake_pins_survives_the_port():
-    _export_root()
-    bounds = weather_lane.stage_map(RAIN_MAP)["document"]["world_bounds_cm"]
+def test_the_footprint_the_bake_pins_survives_the_port(rain_payload):
+    bounds = rain_payload["document"]["world_bounds_cm"]
     footprint = (bounds["max"][0] - bounds["min"][0], bounds["max"][1] - bounds["min"][1])
     assert footprint[0] == pytest.approx(FOOTPRINT_CM[0], abs=0.01)
     assert footprint[1] == pytest.approx(FOOTPRINT_CM[1], abs=0.01)
 
 
 @pytest.mark.corpus
-def test_the_bounds_are_the_world_scene_s_and_no_prop_widens_them():
+def test_the_bounds_are_the_world_scene_s_and_no_prop_widens_them(rain_payload):
     """The decoder took its AABB over the world vertices BEFORE appending prop cover, so a prop
     hanging outside the world's extent cannot stretch the raster. Measured: the hub's prop cover
     does reach past the world on every axis, so this is a live rule, not a formality."""
@@ -124,7 +131,7 @@ def test_the_bounds_are_the_world_scene_s_and_no_prop_widens_them():
     from elysium_pipeline.importers import map_geometry
 
     geometry = map_geometry.read_geometry(RAIN_MAP)
-    bounds = weather_lane.stage_map(RAIN_MAP)["document"]["world_bounds_cm"]
+    bounds = rain_payload["document"]["world_bounds_cm"]
     world = np.asarray(geometry.world.positions, dtype=np.float64)
     assert bounds["min"] == pytest.approx(world.min(axis=0).tolist(), abs=1e-6)
     assert bounds["max"] == pytest.approx(world.max(axis=0).tolist(), abs=1e-6)

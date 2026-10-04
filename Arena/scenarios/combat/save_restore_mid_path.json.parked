@@ -1,0 +1,56 @@
+{
+  "name": "save_restore_mid_path",
+  "about": "PARKED (the runner has no save / load action; V6 adds elysium.load). Save and restore mid-program (0019/2 the generated save walk, 0019/6 OnPostRestore; spec 0002 known red 8). The cover gunman is running SCHED_TROIKA_TAKE_COVER_HINT at TASK_WAIT_FOR_MOVEMENT (the cover record's opening: hint claimed, path to the corner under way) when the game is saved at 3 s and the save is loaded at 4 s. Retail saves the schedule, the task cursor m_iScheduleCurrentTask +0x5c50, the task status and the animating words, and the held hint (m_pHintNode +0x5ddc) through the datamap; after the restore the program RESUMES at the cursor: no SetSchedule (no schedule event), no TASK_GET_PATH_TO_HINTNODE re-run, no second claim; the navigator goal is rebuilt and the walk completes, then SNAP_TO_HINT. The record is written against two actions the runner needs: { \"do\": \"save\", \"slot\": \"<name>\" } and { \"do\": \"load\", \"slot\": \"<name>\" }, the load rebuilding the stage world from the save and re-installing the trace sink with scenario time continuing. Rename to .json when the actions exist.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 40.0,
+  "known_red": "8: restart, not resume (slot 435 releases twelve saved rows)",
+  "player": { "at": "cover_seat" },
+  "cast": [
+    {
+      "name": "arena_gunman",
+      "classname": "npc_VHumanCombatant",
+      "at": "far_ne",
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_thirtyeight",
+        "alternateequipment": "item_w_knife",
+        "player_reaction": "D_HT 5",
+        "hint_groups": "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32",
+        "npc_perception": "3",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "1",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "percent_occluded_wait": "0",
+        "percent_occluded_cover": "100",
+        "percent_occluded_walk": "0",
+        "percent_occluded_flank": "0",
+        "percent_occluded_chase": "0"
+      }
+    }
+  ],
+  "script": [
+    { "after": "walking", "delay": 2.0, "do": "save", "slot": "arena_mid_path" },
+    { "after": "walking", "delay": 3.0, "do": "load", "slot": "arena_mid_path" }
+  ],
+  "expect": [
+    { "label": "covers", "who": "arena_gunman", "kind": "schedule", "match": "SCHED_TROIKA_TAKE_COVER_HINT (", "by": 8.0 },
+    { "label": "claims", "who": "arena_gunman", "kind": "hint+", "match": "cover_corner", "within": 2.0 },
+    { "label": "walking", "who": "arena_gunman", "kind": "task", "match": "task_wait_for_movement (", "within": 1.0 },
+    { "label": "arrives", "who": "arena_gunman", "kind": "move", "match": "arrived", "within": 25.0 },
+    { "label": "walked", "who": "arena_gunman", "kind": "taskdone", "match": "^task_wait_for_movement$", "regex": true, "within": 1.0 },
+    { "label": "snaps", "who": "arena_gunman", "kind": "taskdone", "match": "^task_snap_to_hint$", "regex": true, "within": 1.0 }
+  ],
+  "never": [
+    { "who": "arena_gunman", "kind": "hint-" },
+    { "who": "arena_gunman", "kind": "death" }
+  ],
+  "probes": [
+    { "at": "end", "who": "arena_gunman", "probe": "hint", "match": "cover_corner" }
+  ],
+  "notes": "Gaps besides save/load: a never cannot be anchored after a label, so 'no second SetSchedule / no second TASK_GET_PATH_TO_HINTNODE after the load' is expressed only through 'no hint- ever' (a restart releases and re-claims the hint)."
+}

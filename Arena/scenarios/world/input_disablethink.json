@@ -1,0 +1,78 @@
+{
+  "name": "input_disablethink",
+  "about": "DisableThink stops and restarts the NPC's AI. CAI_BaseNPCTroika::InputDisableThink 0x1029f2a0 -> SetDisableAI 0x1029f300: the bool is m_bDisableAI +0x6080, which NPCThink 0x10292de0 tests at its top and returns, so while it is 1 no task runs, completes or fails and no schedule is selected; on the 1 -> 0 edge the think timers are reset (slot 614 ResetThinkTimers 0x102c23f0) and the running program resumes where it stood. sp_tutorial_1's Hunter1 runs SCHED_TROIKA_IDLE_DISPOSITION from ~0 s (TASK_SPECIAL_IDLE_ACTIVITY 5, ~5 s): disabled at 2 s, the task cannot end before the enable at 9 s, and on the first think after it, already past its end, it completes. Param form verbatim from sp_giovanni_3 (Zombie_Spawned '0').",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 14.0,
+  "known_red": "new: DisableThink with the wire's string param '1' disables nothing (ElysiumNpc.cpp:1387 takes only a Bool variant; retail converts the wire string to FIELD_BOOLEAN): task_special_idle_activity completes at 5.3 s",
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "Hunter1"
+    ],
+    "anchor": "Hunter1",
+    "at": "north"
+  },
+  "script": [
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "Hunter1",
+      "input": "DisableThink",
+      "param": "1"
+    },
+    {
+      "t": 9.0,
+      "do": "fire",
+      "target": "Hunter1",
+      "input": "DisableThink",
+      "param": "0"
+    }
+  ],
+  "expect": [
+    {
+      "label": "idles",
+      "who": "Hunter1",
+      "kind": "task",
+      "match": "task_special_idle_activity (",
+      "by": 1.0
+    },
+    {
+      "label": "off",
+      "who": "Hunter1",
+      "kind": "input",
+      "match": "DisableThink 1",
+      "by": 2.5
+    },
+    {
+      "label": "on",
+      "who": "Hunter1",
+      "kind": "input",
+      "match": "DisableThink 0",
+      "by": 9.5
+    },
+    {
+      "label": "resumes",
+      "who": "Hunter1",
+      "kind": "taskdone",
+      "match": "^task_special_idle_activity$",
+      "regex": true,
+      "within": 0.5
+    }
+  ],
+  "never": [
+    {
+      "who": "Hunter1",
+      "kind": "taskdone",
+      "until": 9.0
+    },
+    {
+      "who": "Hunter1",
+      "kind": "death"
+    }
+  ],
+  "notes": "The never on taskdone before 9 s holds both halves: nothing completes before 2 s because the idle activity runs ~5 s from 0, and nothing after 2 s because the AI is off. A first run expected a reselection at the 0 edge (record error: SetDisableAI resets timers, it forces nothing)."
+}

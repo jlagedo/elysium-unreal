@@ -1,0 +1,177 @@
+{
+  "name": "input_clearpatrolpath",
+  "about": "ClearPatrolPath frees the patrol and lets the running program end. CAI_BaseNPCTroika::InputClearPatrolPath 0x1029ef60 frees m_sppPatrolPath (0x1029f5d0) and changes no schedule; the running SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK walks on to its current point, and its TASK_NEXT_PATROL_POINT (0x102aa9e0) finds no object and fails with 0x1d; the reselection then has no patrol to return (SelectSchedule case 1 step 3, 0x102af660) and picks another program (docs/vtmb/npc-ai/programs.md \u00a7 'Patrol paths, walked'). sp_tutorial_1's sentry2 verbatim with its three points (info_node_patrol_point, keys verbatim from sentry2_1..3 but nodeid, placed in the arena by the record), and its map's two wires; ClearPatrolPath '' is ch_hub_1's form (patrol_cop_*).",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 40.0,
+  "known_red": "1: the patrol walk plays at rate 0 and the NPC covers ~0.66 m/s, so the 10 m leg after ClearPatrolPath misses its deadline",
+  "player": {
+    "at": "start"
+  },
+  "rows": [
+    {
+      "name": "w_patrol_point_1",
+      "classname": "info_node_patrol_point",
+      "at": [
+        -500.0,
+        600.0,
+        0.0
+      ],
+      "keys": {
+        "hinttype": "10000",
+        "StartHintDisabled": "0",
+        "ip_percent": "100",
+        "group_id": "1",
+        "hint_rating": "3",
+        "target_angle_range": "60",
+        "target_dist_min": "256",
+        "target_dist_max": "32000",
+        "Group": "sentry2_1"
+      }
+    },
+    {
+      "name": "w_patrol_point_2",
+      "classname": "info_node_patrol_point",
+      "at": [
+        500.0,
+        600.0,
+        0.0
+      ],
+      "keys": {
+        "hinttype": "10000",
+        "StartHintDisabled": "0",
+        "ip_percent": "100",
+        "group_id": "1",
+        "hint_rating": "3",
+        "target_angle_range": "60",
+        "target_dist_min": "256",
+        "target_dist_max": "32000",
+        "Group": "sentry2_2"
+      }
+    },
+    {
+      "name": "w_patrol_point_3",
+      "classname": "info_node_patrol_point",
+      "at": [
+        500.0,
+        -600.0,
+        0.0
+      ],
+      "keys": {
+        "hinttype": "10000",
+        "StartHintDisabled": "0",
+        "ip_percent": "100",
+        "group_id": "1",
+        "hint_rating": "3",
+        "target_angle_range": "60",
+        "target_dist_min": "256",
+        "target_dist_max": "32000",
+        "Group": "sentry2_3",
+        "target_name": "sentry2_ip_whistle"
+      }
+    }
+  ],
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "sentry2"
+    ],
+    "anchor": "sentry2",
+    "at": [
+      0.0,
+      850.0,
+      0.0
+    ]
+  },
+  "script": [
+    {
+      "t": 0.5,
+      "do": "fire",
+      "target": "sentry2",
+      "input": "SetupPatrolType",
+      "param": "999 2 FOLLOW_PATROL_PATH_WALK"
+    },
+    {
+      "t": 0.6,
+      "do": "fire",
+      "target": "sentry2",
+      "input": "FollowPatrolPath",
+      "param": "sentry2_1 sentry2_2 sentry2_3"
+    },
+    {
+      "after": "walks_to_2",
+      "delay": 0.5,
+      "do": "fire",
+      "target": "sentry2",
+      "input": "ClearPatrolPath",
+      "param": ""
+    }
+  ],
+  "expect": [
+    {
+      "label": "patrols",
+      "who": "sentry2",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK (",
+      "by": 1.0
+    },
+    {
+      "label": "at_1",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "arrived",
+      "within": 15.0
+    },
+    {
+      "label": "walks_to_2",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "goal",
+      "within": 3.0
+    },
+    {
+      "label": "cleared",
+      "who": "sentry2",
+      "kind": "input",
+      "match": "ClearPatrolPath",
+      "within": 1.0
+    },
+    {
+      "label": "at_2",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "arrived",
+      "within": 12.0
+    },
+    {
+      "label": "no_path",
+      "who": "sentry2",
+      "kind": "taskfail",
+      "match": "",
+      "within": 3.0
+    },
+    {
+      "label": "off_patrol",
+      "who": "sentry2",
+      "kind": "schedule",
+      "match": "^(?!SCHED_TROIKA_FOLLOW_PATROL)",
+      "regex": true,
+      "within": 1.0
+    }
+  ],
+  "never": [
+    {
+      "who": "sentry2",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "sentry2",
+      "probe": "schedule",
+      "match": "SCHED"
+    }
+  ],
+  "notes": "The points are placed by the record (the map's are 6-19 m apart and unnamed, so from_map cannot carry them); their keys are the map's. The taskfail between Setup and Follow (an empty path for 0.1 s) is retail's and is not asserted either way."
+}

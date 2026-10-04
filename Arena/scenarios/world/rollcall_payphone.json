@@ -1,0 +1,27 @@
+{
+  "name": "rollcall_payphone",
+  "about": "Roll call: classname npc_payphone builds CPayphone (factory 0x101aa550, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from sm_diner_1 (SMphone). CPayphone::NPCThink (slot 431, 0x101aabf0; docs/vtmb/npc-ai/lifecycle.md) never calls CAI_BaseNPCTroika::NPCThink: a payphone runs no schedule, no senses and no motor; with no dialogue partner it sets ACT_IDLE and rethinks every 0.25 s. So retail installs no program at all: no schedule, no task, no failure, for the whole ten seconds.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sm_diner_1",
+    "names": [
+      "SMphone"
+    ],
+    "anchor": "SMphone",
+    "at": "far_ne"
+  },
+  "never": [
+    { "who": "SMphone", "kind": "schedule" },
+    { "who": "SMphone", "kind": "task" },
+    { "who": "SMphone", "kind": "taskfail" },
+    { "who": "SMphone", "kind": "death" }
+  ],
+  "probes": [
+    { "at": "end", "who": "SMphone", "probe": "alive", "equals": true }
+  ]
+}

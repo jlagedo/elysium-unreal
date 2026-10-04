@@ -1,0 +1,119 @@
+{
+  "name": "map_tutorial_sneak_past",
+  "about": "The tutorial's sneak-past lesson on thug_1 (docs/specs/0002-npc-ai/record-2026-09-30.md \u00a7 Witness and \u00a7 Witness data; docs/vtmb/sp_tutorial_1-event-surface.md). The map's trig_dialog_feed_on_rats fires thug_maker.Spawn; the record fires the same input. thug_1 (npc_VVampire, vision 540, hearing 1.00, investigate_mode 4, D_HT 5, use_interesting 1 / groups 2) takes pt1 (enabled 1, 30-60 s; pt2/pt3 enabled 0): 0xff -> 0x100 -> SCHED_TROIKA_DO_INTEREST_ACTIVITY. The player's footsteps behind him (180/240 units) are heard 0.2-0.9 s late as conditions only, never an enemy record; COND_INVESTIGATE_SOUND is on the interest programs' interrupt list (cai_basenpctroika/sched_troika_do_interest_activity.sch), so the program breaks and an INVESTIGATE program runs (turn, step, walk to the sound). Sight admits the player only inside 540 x the light scalar and the 157 deg cone with an eye-to-eye trace (0x10310710 PerformSensing); a pass writes SEE_PLAYER and the enemy record, NEW_ENEMY breaks the program, and the committed-enemy LOS edge in GatherEnemyConditions 0x10270b20 fires OnFoundPlayer (-> logic_failed_thug.Trigger 0.5 s).",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 60.0,
+  "known_red": "6: thug_1 (use_interesting 1) is owned by the port's ambient executor: no 0xff program, no gather",
+  "script": [
+    {
+      "t": 0.5,
+      "do": "fire",
+      "target": "thug_maker",
+      "input": "Spawn"
+    },
+    {
+      "t": 0.5,
+      "do": "player_teleport",
+      "at": [
+        -1280.0,
+        760.0,
+        -96.0
+      ],
+      "face": -90.0
+    },
+    {
+      "after": "at_place",
+      "delay": 3.0,
+      "do": "player_walk",
+      "at": [
+        -1280.0,
+        420.0,
+        -96.0
+      ]
+    },
+    {
+      "after": "investigates",
+      "delay": 4.0,
+      "do": "player_teleport",
+      "at": [
+        -1316.0,
+        66.0,
+        -96.0
+      ],
+      "face": 90.0
+    }
+  ],
+  "expect": [
+    {
+      "label": "setup",
+      "who": "thug_1",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (",
+      "by": 3.0
+    },
+    {
+      "label": "at_place",
+      "who": "thug_1",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_DO_INTEREST_ACTIVITY (",
+      "within": 10.0
+    },
+    {
+      "label": "hears",
+      "who": "thug_1",
+      "kind": "break",
+      "match": "INVESTIGATE_SOUND",
+      "within": 12.0
+    },
+    {
+      "label": "investigates",
+      "who": "thug_1",
+      "kind": "schedule",
+      "match": "INVESTIGATE",
+      "within": 1.0
+    },
+    {
+      "label": "sees",
+      "who": "thug_1",
+      "kind": "cond+",
+      "match": "SEE_PLAYER",
+      "within": 8.0
+    },
+    {
+      "label": "commits",
+      "who": "thug_1",
+      "kind": "break",
+      "match": "NEW_ENEMY",
+      "within": 1.0
+    },
+    {
+      "label": "found",
+      "who": "thug_1",
+      "kind": "output",
+      "match": "OnFoundPlayer",
+      "within": 1.0
+    }
+  ],
+  "never": [
+    {
+      "who": "thug_1",
+      "kind": "output",
+      "match": "OnFoundPlayer",
+      "until": 8.0
+    },
+    {
+      "who": "thug_1",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "thug_1",
+      "probe": "alive",
+      "equals": true
+    }
+  ],
+  "notes": "Player places are map coordinates (cm) around pt1 (-1287.8, 213.4, -101.6) and thug_maker (-1287.8, 276.9): the footsteps start ~4.8 m behind him (+Y) and walk to ~1.4 m; the sight seat is 1.5 m in front along pt1's facing (Source yaw 101). They were chosen from the entity rows without a view of the geometry: an unwalkable seat is a record error to fix, not a red. The hearing half depends on the footstep sound producer (R1's CSound list) and may be red for that reason."
+}

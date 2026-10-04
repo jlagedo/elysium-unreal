@@ -1,0 +1,85 @@
+{
+  "name": "input_useinteresting",
+  "about": "UseInteresting switches the interesting-place programs on. CAI_BaseNPCTroika::InputUseInteresting 0x102c2a70 writes the byte m_bUseInteresting +0x63d9 and nothing else; when the running program ends, SelectSchedule case 1 step 4 (0x102af6eb) answers 0xff SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP. Param verbatim from hw_netcafe_1 (BobInTheRafters '1'). sm_hub_1's bum_female (npc_VPedestrian, use_interesting 0, groups '4 31') verbatim; the arena's anchors are group 1, which her groups do not list, so the record stands one intersting_place of group 4 beside her.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 25.0,
+  "known_red": "6: the port's ambient executor answers use_interesting instead of the 0xff program",
+  "player": {
+    "at": "start"
+  },
+  "rows": [
+    {
+      "name": "w_bum_spot",
+      "classname": "intersting_place",
+      "at": "east",
+      "keys": {
+        "type": "bum_rest",
+        "min_bounds": "-16 -16 0",
+        "max_bounds": "16  16 72",
+        "min_time": "20.0",
+        "max_time": "300.0",
+        "max_npcs": "1",
+        "match_orientation": "1",
+        "group_id": "4",
+        "testflags": "4",
+        "enabled": "1",
+        "rating": "3"
+      }
+    }
+  ],
+  "from_map": {
+    "map": "sm_hub_1",
+    "names": [
+      "bum_female"
+    ],
+    "anchor": "bum_female",
+    "at": "north"
+  },
+  "script": [
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "bum_female",
+      "input": "UseInteresting",
+      "param": "1"
+    }
+  ],
+  "expect": [
+    {
+      "label": "idles",
+      "who": "bum_female",
+      "kind": "schedule",
+      "match": "^(?!SCHED_TROIKA_WALK_TO_INTERESTING)",
+      "regex": true,
+      "by": 2.0
+    },
+    {
+      "label": "input",
+      "who": "bum_female",
+      "kind": "input",
+      "match": "UseInteresting",
+      "by": 2.5
+    },
+    {
+      "label": "setup",
+      "who": "bum_female",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (",
+      "within": 15.0
+    }
+  ],
+  "never": [
+    {
+      "who": "bum_female",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (",
+      "until": 2.0
+    },
+    {
+      "who": "bum_female",
+      "kind": "death"
+    }
+  ],
+  "notes": "w_bum_spot carries sm_hub_1's bum_huddle keys (group_id 4) verbatim, so the switched-on pedestrian has a place in reach; the arena's own anchors are group 1."
+}

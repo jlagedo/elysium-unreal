@@ -1,0 +1,148 @@
+{
+  "name": "script_walk_to_mark",
+  "about": "A scripted_sequence walks its NPC to the mark, plays, fires its outputs and lets it go (docs/specs/0003-scripted-sequence/spec.md \u00a7 Witness data, recovered 2026-09-12). sm_vamparena's sVamp_entrance (m_fMoveTo 1, m_iszPlay pre_fight_bow, no idle or post-idle, no spawnflags, OnBeginSequence -> AsianVamp.SetRelationship 'player D_HT 5') and its target AsianVamp (npc_VAsianVampire, D_NU 0, 281 cm off), verbatim. BeginSequence 0x101a7390 -> PossessEntity (CCineNPC 0x101a7880): m_scriptState +0x5d70 = 4, DelayStart(1), ideal state NPC_STATE_SCRIPT; SelectSchedule 0x1028a380 case 4 -> SCHED_AISCRIPT 0x2e, TranslateSchedule 0x102cc080 / 0x102b12f0 -> SCHED_TROIKA_SCRIPTED_WALK 0xf2 (cai_basenpctroika/sched_troika_scripted_walk.sch: SET_FAIL_SCHEDULE, SET_TOLERANCE_DISTANCE 2, WALK_TO_TARGET, WAIT_FOR_MOVEMENT, PLANT_ON_SCRIPT, FACE_SCRIPT, ENABLE_SCRIPT, WAIT_FOR_SCRIPT, PLAY_SCRIPT, PLAY_SCRIPT_POST_IDLE). OnBeginSequence fires from TASK_WAIT_FOR_SCRIPT's run arm when IsTimeToStart 0x101a7540 holds (on the mark, not at the input), then StartSequence(m_iszPlay); TASK_PLAY_SCRIPT waits m_bSequenceFinished -> SequenceDone 0x101a8460 -> Finish 0x101a8640 (no post-idle) and OnEndSequence fires unconditionally; CineCleanup 0x1027d170 sets the ideal state IDLE and FixScriptNPCSchedule 0x101a8840 clears the schedule, so the NPC selects again \u2014 here, hostile since OnBeginSequence, a combat program.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 40.0,
+  "known_red": "new: BeginSequence possesses nothing the kernel sees: no NPC_STATE_SCRIPT and no SCHED_TROIKA_SCRIPTED_WALK (the director's beat stands in, divergence 18, V3)",
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sm_vamparena",
+    "names": [
+      "AsianVamp",
+      "sVamp_entrance"
+    ],
+    "anchor": "AsianVamp",
+    "at": "west"
+  },
+  "script": [
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "sVamp_entrance",
+      "input": "BeginSequence"
+    }
+  ],
+  "expect": [
+    {
+      "label": "begin_input",
+      "who": "sVamp_entrance",
+      "kind": "input",
+      "match": "BeginSequence",
+      "by": 2.5
+    },
+    {
+      "label": "scripted",
+      "who": "AsianVamp",
+      "kind": "state",
+      "match": "-> Script",
+      "within": 1.0
+    },
+    {
+      "label": "walk_program",
+      "who": "AsianVamp",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_SCRIPTED_WALK (",
+      "within": 1.0
+    },
+    {
+      "label": "walks",
+      "who": "AsianVamp",
+      "kind": "task",
+      "match": "task_walk_to_target (",
+      "within": 0.5
+    },
+    {
+      "label": "arrives",
+      "who": "AsianVamp",
+      "kind": "move",
+      "match": "arrived",
+      "within": 15.0
+    },
+    {
+      "label": "waits",
+      "who": "AsianVamp",
+      "kind": "task",
+      "match": "task_wait_for_script (",
+      "within": 5.0
+    },
+    {
+      "label": "begin_output",
+      "who": "sVamp_entrance",
+      "kind": "output",
+      "match": "OnBeginSequence",
+      "within": 1.0
+    },
+    {
+      "label": "flips",
+      "who": "AsianVamp",
+      "kind": "input",
+      "match": "SetRelationship",
+      "within": 0.2
+    },
+    {
+      "label": "plays",
+      "who": "AsianVamp",
+      "kind": "sequence",
+      "match": "pre_fight_bow",
+      "within": 0.5
+    },
+    {
+      "label": "played",
+      "who": "AsianVamp",
+      "kind": "seqfinished",
+      "match": "pre_fight_bow",
+      "within": 15.0
+    },
+    {
+      "label": "end_output",
+      "who": "sVamp_entrance",
+      "kind": "output",
+      "match": "OnEndSequence",
+      "within": 0.5
+    },
+    {
+      "label": "released",
+      "who": "AsianVamp",
+      "kind": "state",
+      "match": "^Script\\w* -> ",
+      "regex": true,
+      "within": 1.0
+    },
+    {
+      "label": "selects_again",
+      "who": "AsianVamp",
+      "kind": "schedule",
+      "match": "^(?!SCHED_TROIKA_SCRIPTED)",
+      "regex": true,
+      "within": 2.0
+    }
+  ],
+  "never": [
+    {
+      "who": "sVamp_entrance",
+      "kind": "output",
+      "match": "OnBeginSequence",
+      "until": 2.5
+    },
+    {
+      "who": "AsianVamp",
+      "kind": "taskfail"
+    },
+    {
+      "who": "AsianVamp",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "AsianVamp",
+      "probe": "alive",
+      "equals": true
+    }
+  ],
+  "notes": "The never on OnBeginSequence before 2.5 s pins retail's order (the output fires on the mark, not at the input; 0003 spec \u00a7 'The port today')."
+}

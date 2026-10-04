@@ -41,20 +41,30 @@ Wave 3 (build work, one agent):
   `ElysiumNpc.h` 187.8 → 154.2, `ElysiumEntityWorld.h` 209.8 → 182.6, arm test 13.6 → 11.9,
   `ElysiumTestServices.h` 93.4 → 72.1, census 11.6 → 8.1. **Miss: p90 164.5 s (target 90)** — the
   kernel headers' fan-out, compiled 3–6 at a time under the machine's commit limit.
-- [ ] **Gate 1** — zero queries over 60 s; every `kernel_*` command and corpus probe under 10 s;
+- [x] **Gate 1** — zero queries over 60 s; every `kernel_*` command and corpus probe under 10 s;
   default C++ ≤25 s wall (today 122 s) and `pytest` ≤20 s (today 384 s), zero failures; three
   prefixes in one boot under 25 s; a one-`.cpp` edit rebuilt in ≤60 s; no polling loop or lease
-  refusal; the arena suite runs.
+  refusal; the arena suite runs. Accepted by the owner 2026-10-03 with four misses as measured
+  (`kernel --check` cold 10.5 s, `pytest` 19.7–26 s, edit-mix p90 108 s, seven sleep-waits); T6
+  stays open as an on-demand story (the kernel headers' fan-out).
 
 ## Step 2 — the landed work, proven live
 
-- [ ] **V1** — The inventory: every landed behaviour → its scenario; the 22 re-classed divergences. S.
-- [ ] **V2** — The first full run and the triage. S · Opus/high.
+- [x] **V1** — The inventory: every landed behaviour → its scenario; the 22 re-classed divergences. S.
+  Landed 2026-10-03: 96 records, `stories/v1/inventory.md`, `divergences.md`.
+- [x] **V2** — The first full run and the triage. S · Opus/high. Landed 2026-10-03: 54 pass, 35
+  expected-fail, 4 fail, 1 unexpected-pass, 2 error; ten new reds placed, two planning bugs
+  (V11, V12), fifteen harness gaps (`stories/v1/triage.md`).
+- [ ] **H** — The harness wave: H1–H5 (the model-less row, sight through arena solids, `never`
+  with a start and a count, the player's state per record, player probes and actions). S–M.
 - [ ] **V3** — Fix: the arbiter retired; scenes, dialogue and places as retail runs them. L · Opus/high.
 - [ ] **V4** — Fix: the animation chain under the kernel. M · Opus/high.
 - [ ] **V5** — Fix: the attack conditions and the combat interrupts. S · Fable/medium.
 - [ ] **V6** — Fix: session, clock and lifecycle. M · Opus/high.
+- [ ] **V11** — The attack coordinator's list (pulled from R4; melee never starts without it). S–M · Opus/high.
 - [ ] **V7** — The 19 inputs and the one-line items. S · Sonnet/medium.
+- [ ] **V10** — A sound's life in `Listen` (new: the expiry race). S.
+- [ ] **V12** — The footstep sound producer (pulled from R1; the tutorial's hearing half). S.
 - [ ] **V2 again** — the full run, every scenario green.
 - [ ] **V8** — `sp_tutorial_1` and `sm_hub_1`, live. S · Opus/high.
 - [ ] **V9** — The second cut: the arm tests the scenarios cover. S · Sonnet/medium.

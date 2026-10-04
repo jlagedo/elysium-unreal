@@ -1,0 +1,59 @@
+{
+  "name": "interest_mode_never",
+  "about": "The interest predicate decides whether a heard sound is investigated (9, 10a). Same staging as hear_world_investigate (level 3, heard at 768 of 852 units) but investigate_mode 0: ShouldInvestigate 0x102b3270 answers false for mode 0 ('never'; conditions-and-states.md 'The interest predicate'), and the sweep 0x102b1cd0's HEAR_WORLD arm needs that predicate or a running program that already interrupts on HEAR_WORLD -- IDLE_DISPOSITION does not (cai_basenpctroika/sched_troika_idle_disposition.sch), nor does the Troika overlay BuildScheduleTestBits 0x102ad140 add it. So HEAR_WORLD 0x6e is raised and OnHearWorld fires (OnListened 0x1026a5e0), but INVESTIGATE_SOUND 0x25 never is; and SelectIdealState 0x102ad660 case 1 promotes on HEAR_WORLD only through HasInterruptCondition, which IDLE_DISPOSITION's mask refuses, so the NPC stays IDLE in its idle program.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": { "at": "start" },
+  "rows": [
+    {
+      "name": "arena_noise",
+      "classname": "ambient_generic",
+      "at": [0.0, 0.0, 0.0],
+      "keys": {
+        "message": "impact/physics/metal/hit_hard1.wav",
+        "health": "10",
+        "radius": "1250",
+        "spawnflags": "48",
+        "sound_event": "2",
+        "sound_event_level": "3",
+        "sound_event_owner": "!player"
+      }
+    }
+  ],
+  "cast": [
+    {
+      "name": "arena_listener",
+      "classname": "npc_VHumanCombatant",
+      "at": "north",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "1",
+        "investigate_mode": "0",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    { "t": 2.0, "do": "fire", "target": "arena_noise", "input": "PlaySound", "param": "" }
+  ],
+  "expect": [
+    { "label": "idles", "who": "arena_listener", "kind": "schedule", "match": "SCHED_TROIKA_IDLE_DISPOSITION (0x6b)", "by": 1.0 },
+    { "label": "played", "who": "arena_noise", "kind": "input", "match": "PlaySound", "by": 2.5 },
+    { "label": "hears", "who": "arena_listener", "kind": "cond+", "match": "HEAR_WORLD (0x6e)", "within": 1.5 }
+  ],
+  "never": [
+    { "who": "arena_listener", "kind": "cond+", "match": "INVESTIGATE_SOUND (0x25)" },
+    { "who": "arena_listener", "kind": "schedule", "match": "SCHED_TROIKA_INVESTIGATE_SOUND (" },
+    { "who": "arena_listener", "kind": "state" }
+  ],
+  "probes": [
+    { "at": "end", "who": "arena_listener", "probe": "state", "equals": "Idle" }
+  ]
+}

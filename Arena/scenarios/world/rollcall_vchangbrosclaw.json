@@ -1,0 +1,45 @@
+{
+  "name": "rollcall_vchangbrosclaw",
+  "about": "Roll call: classname npc_VChangBrosClaw builds CNPC_VChangBrosClaw (factory 0x1036f190, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from sp_giovanni_5 (Chang_basic) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sp_giovanni_5",
+    "names": [
+      "Chang_basic"
+    ],
+    "anchor": "Chang_basic",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "Chang_basic",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "Chang_basic",
+      "kind": "taskfail"
+    },
+    {
+      "who": "Chang_basic",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Chang_basic",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

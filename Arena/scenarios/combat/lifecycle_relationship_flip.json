@@ -1,0 +1,48 @@
+{
+  "name": "lifecycle_relationship_flip",
+  "about": "A neutral NPC turned hostile by SetRelationship: the gunman starts D_NU toward the player (player_reaction 'D_NU 5') and idles with the player in view (SCHED_TROIKA_IDLE_DISPOSITION 0x6b, as control_sequence). At 3 s the retail entity input SetRelationship 'player D_HT 5' (maps fire it this way, e.g. the tutorial's thug turn) makes the player hated; the next GatherSight finds a seen hated character, so SEE_HATE 0x43 / SEE_ENEMY 0x46 / NEW_ENEMY 0x54 rise, NEW_ENEMY breaks the idle program, the ideal state goes COMBAT and the pre-selector 0x102ae920 step 5 answers 0xea SCHED_TROIKA_START_COMBAT; then the ranged combat program fires.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 20.0,
+  "player": { "at": "cover_seat" },
+  "cast": [
+    {
+      "name": "arena_turncoat",
+      "classname": "npc_VHumanCombatant",
+      "at": "far_ne",
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_thirtyeight",
+        "player_reaction": "D_NU 5",
+        "hint_groups": "2",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    { "t": 3.0, "do": "fire", "target": "arena_turncoat", "input": "SetRelationship", "param": "player D_HT 5" }
+  ],
+  "expect": [
+    { "label": "idles", "who": "arena_turncoat", "kind": "schedule", "match": "SCHED_TROIKA_IDLE_DISPOSITION (", "by": 2.0 },
+    { "label": "flipped", "who": "arena_turncoat", "kind": "input", "match": "SetRelationship", "by": 3.5 },
+    { "label": "new_enemy", "who": "arena_turncoat", "kind": "cond+", "match": "NEW_ENEMY (0x54)", "within": 2.0 },
+    { "label": "breaks", "who": "arena_turncoat", "kind": "break", "match": "NEW_ENEMY (0x54)", "within": 1.0 },
+    { "label": "fights", "who": "arena_turncoat", "kind": "schedule", "match": "SCHED_TROIKA_START_COMBAT (", "within": 1.0 },
+    { "label": "fires", "who": "arena_turncoat", "kind": "task", "match": "task_range_attack1 (", "within": 6.0 }
+  ],
+  "never": [
+    { "who": "arena_turncoat", "kind": "cond+", "match": "SEE_ENEMY (0x46)", "until": 2.9 },
+    { "who": "arena_turncoat", "kind": "death" }
+  ],
+  "probes": [
+    { "at": "end", "who": "arena_turncoat", "probe": "state", "equals": "Combat" },
+    { "at": "end", "who": "arena_turncoat", "probe": "enemy", "match": "player" }
+  ]
+}

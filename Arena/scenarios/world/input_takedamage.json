@@ -1,0 +1,79 @@
+{
+  "name": "input_takedamage",
+  "about": "TakeDamage applies damage and, when lethal, kills. CAI_BaseNPCTroika's TakeDamage input 0x102c29a0 (FIELD_INTEGER) applies the amount with the wire's activator as attacker: OnTakeDamage_Alive 0x10265ed0 fires OnDamaged (+0x5e0c) and OnHalfHealth; a lethal amount runs Event_Killed 0x10265ad0, which fires OnDeath (+0x5e24). Param verbatim from hw_cemetery_1 (ss_zombie_1 '500'). sp_tutorial_1's Hunter1 (npc_VHumanCombatant, D_LI 0, use_interesting 0, dialogname dlg/generic/hunter1.dlg) verbatim, the player at the start, in its view.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "Hunter1"
+    ],
+    "anchor": "Hunter1",
+    "at": "north"
+  },
+  "script": [
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "Hunter1",
+      "input": "TakeDamage",
+      "param": 500
+    }
+  ],
+  "expect": [
+    {
+      "label": "input",
+      "who": "Hunter1",
+      "kind": "input",
+      "match": "TakeDamage",
+      "by": 2.5
+    },
+    {
+      "label": "hurt",
+      "who": "Hunter1",
+      "kind": "damage",
+      "match": "500",
+      "within": 0.2
+    },
+    {
+      "label": "damaged",
+      "who": "Hunter1",
+      "kind": "output",
+      "match": "OnDamaged",
+      "within": 0.2
+    },
+    {
+      "label": "dies",
+      "who": "Hunter1",
+      "kind": "death",
+      "match": "",
+      "within": 0.5
+    },
+    {
+      "label": "on_death",
+      "who": "Hunter1",
+      "kind": "output",
+      "match": "OnDeath",
+      "within": 0.5
+    }
+  ],
+  "never": [
+    {
+      "who": "Hunter1",
+      "kind": "death",
+      "until": 1.9
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Hunter1",
+      "probe": "alive",
+      "equals": false
+    }
+  ]
+}

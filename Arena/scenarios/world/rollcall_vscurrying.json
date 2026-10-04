@@ -1,0 +1,55 @@
+{
+  "name": "rollcall_vscurrying",
+  "about": "Roll call: classname npc_VScurrying builds CNPC_VScurrying (factory 0x103aba00, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from la_hub_1 (CabbieSewer) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "known_red": "new: a StartHidden npc_VScurrying row gathers at 0 s but installs no schedule, before or after ScriptUnhide at 0.5 s",
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "la_hub_1",
+    "names": [
+      "CabbieSewer"
+    ],
+    "anchor": "CabbieSewer",
+    "at": "far_ne"
+  },
+  "script": [
+    {
+      "t": 0.5,
+      "do": "fire",
+      "target": "CabbieSewer",
+      "input": "ScriptUnhide"
+    }
+  ],
+  "expect": [
+    {
+      "label": "selects",
+      "who": "CabbieSewer",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "CabbieSewer",
+      "kind": "taskfail"
+    },
+    {
+      "who": "CabbieSewer",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "CabbieSewer",
+      "probe": "alive",
+      "equals": true
+    }
+  ],
+  "notes": "Every standable row of npc_VScurrying is StartHidden; the record unhides it at 0.5 s, as its map's wire does."
+}

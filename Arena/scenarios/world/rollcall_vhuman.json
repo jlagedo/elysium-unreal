@@ -1,0 +1,46 @@
+{
+  "name": "rollcall_vhuman",
+  "about": "Roll call: classname npc_VHuman builds CNPC_VHuman (factory 0x10383fa0, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from sm_asylum_1 (Cal) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "known_red": "6: a use_interesting row (sm_asylum_1 Cal, use_interesting 1 / groups 13) is owned by the port's ambient executor: no gather and no schedule at all (retail selects 0xff at once)",
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sm_asylum_1",
+    "names": [
+      "Cal"
+    ],
+    "anchor": "Cal",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "Cal",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "Cal",
+      "kind": "taskfail"
+    },
+    {
+      "who": "Cal",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Cal",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

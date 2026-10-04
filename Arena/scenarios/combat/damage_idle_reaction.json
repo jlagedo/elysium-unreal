@@ -1,0 +1,43 @@
+{
+  "name": "damage_idle_reaction",
+  "about": "Non-lethal damage on a live idle Troika human from an attacker it cannot see. The NPC stands 75 cm in front of the player with its back to it; at 3 s the player, standing (not crouched, so no stealth kill), swings a knife into its back (the melee primary; the first try with a .38 at 275 cm missed: a ranged hit is a roll). The NPC carries the Tutorial_Jack stat template (npctemplate_tutorial.txt Max_Health 819; TutorialThug's 20 died to the 40-point back-stab, and invincible 1 is a total refusal, combat-and-damage.md '`invincible` is a total refusal'), so it survives while every damage response below runs. CAI_BaseNPC::OnTakeDamageAlive 0x10265ed0 (combat-and-damage.md 'NPC damage response'; port ElysiumNpcBaseDamage2.cpp walks it): an attacker that is a client (FL_CLIENT) and not seen (slot 363 FInViewCone false) takes the unknown-attacker memory route, records m_vecLastDamageAttackPos, sets m_bCondTookDamage and the light predicate (damage > 0) sets COND_LIGHT_DAMAGE 0x4c. (Step 6 refuses a NULL attacker before any condition: the scalar TakeDamage input with no activator raises no LIGHT_DAMAGE, which is why the attacker here is the player.) LIGHT_DAMAGE is in SCHED_TROIKA_IDLE_DISPOSITION's interrupt list and breaks it; the idle NPC with no enemy goes ALERT, and CAI_BaseNPCTroika::SelectSchedule 0x102af660's state-3 case runs 0x102b8a60 (0) then the took-damage arm 0x102b8c40 (LIGHT or HEAVY damage: clear m_bCondTookDamage, the attack position into m_vSavePosition, answer 0x8a) -> SCHED_TROIKA_SHOT_BY_UNKNOWN (sched_troika_shot_by_unknown.sch: SET_NPC_FLAG DONT_INVESTIGATE, SET_TOLERANCE_DISTANCE 12, TASK_FIND_COVER_FROM_SAVEPOSITION, ...). The NPC lives. Not asserted: whether TASK_FIND_COVER_FROM_SAVEPOSITION finds a position in this room (the port fails it 'Couldn't find cover (0x8)' and the program falls to FAIL 0x43, then ALERT_WAIT and back to idle; SHOT_BY_UNKNOWN sets no fail schedule, so that fall is retail's own if retail's cover search also finds nothing here, and that search was not read for this room).",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 15.0,
+  "player": { "at": "start", "armed": "item_w_knife" },
+  "cast": [
+    {
+      "name": "arena_victim",
+      "classname": "npc_VHumanCombatant",
+      "at": [-900.0, 0.0, 0.0],
+      "face": 0.0,
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "Tutorial_Jack",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    { "t": 0.05, "do": "console", "command": "elysium.cmd slot2" },
+    { "t": 3.0, "do": "console", "command": "elysium.cmd +attack" },
+    { "t": 3.1, "do": "console", "command": "elysium.cmd -attack" }
+  ],
+  "expect": [
+    { "label": "idles", "who": "arena_victim", "kind": "schedule", "match": "SCHED_TROIKA_IDLE_DISPOSITION (", "by": 2.0 },
+    { "label": "hurt", "who": "arena_victim", "kind": "break", "match": "LIGHT_DAMAGE (0x4c)", "by": 4.5 },
+    { "label": "reacts", "who": "arena_victim", "kind": "schedule", "match": "SCHED_TROIKA_SHOT_BY_UNKNOWN (0x8a)", "within": 0.5 },
+    { "label": "seeks_cover", "who": "arena_victim", "kind": "task", "match": "task_find_cover_from_saveposition (", "within": 0.5 }
+  ],
+  "never": [
+    { "who": "arena_victim", "kind": "death" }
+  ],
+  "probes": [
+    { "at": "end", "who": "arena_victim", "probe": "alive", "equals": true }
+  ]
+}

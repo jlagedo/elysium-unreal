@@ -1,0 +1,45 @@
+{
+  "name": "rollcall_vlasombra",
+  "about": "Roll call: classname npc_VLasombra builds CNPC_VLasombra (factory 0x10388d30, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from la_library_1 (Priest) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "la_library_1",
+    "names": [
+      "Priest"
+    ],
+    "anchor": "Priest",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "Priest",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "Priest",
+      "kind": "taskfail"
+    },
+    {
+      "who": "Priest",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Priest",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

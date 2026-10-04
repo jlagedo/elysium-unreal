@@ -1,0 +1,71 @@
+{
+  "name": "input_teleporttoentity",
+  "about": "TeleportToEntity moves the NPC onto the named entity. CAI_BaseNPCTroika::InputTeleportToEntity 0x102c24a0 (FIELD_EHANDLE; docs/vtmb/entity_io.md): origin and angles of the target, Relink, think reset, ForceTransmit; no schedule change and no output. The wire's form is the corpus's (ch_hub_1: hunter_1 'hunter_1_spot_1'); the target here is a hand-written info_teleport_destination row, w_teleport_spot, on the arena's corner_sw. sp_tutorial_1's Hunter1 (npc_VHumanCombatant, D_LI 0, use_interesting 0, dialogname dlg/generic/hunter1.dlg) verbatim, the player at the start, in its view.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 6.0,
+  "player": {
+    "at": "start"
+  },
+  "rows": [
+    {
+      "name": "w_teleport_spot",
+      "classname": "info_teleport_destination",
+      "at": "corner_sw"
+    }
+  ],
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "Hunter1"
+    ],
+    "anchor": "Hunter1",
+    "at": "north"
+  },
+  "script": [
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "Hunter1",
+      "input": "TeleportToEntity",
+      "param": "w_teleport_spot"
+    }
+  ],
+  "expect": [
+    {
+      "label": "input",
+      "who": "Hunter1",
+      "kind": "input",
+      "match": "TeleportToEntity",
+      "by": 2.5
+    }
+  ],
+  "never": [
+    {
+      "who": "Hunter1",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": 1.5,
+      "who": "Hunter1",
+      "probe": "distance_to",
+      "to": "w_teleport_spot",
+      "greater": 300
+    },
+    {
+      "at": 2.5,
+      "who": "Hunter1",
+      "probe": "distance_to",
+      "to": "w_teleport_spot",
+      "less": 20
+    },
+    {
+      "at": "end",
+      "who": "Hunter1",
+      "probe": "on_ground",
+      "equals": true
+    }
+  ]
+}

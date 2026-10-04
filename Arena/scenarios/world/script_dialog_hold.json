@@ -1,0 +1,84 @@
+{
+  "name": "script_dialog_hold",
+  "about": "A dialogue holds an NPC. CAI_BaseNPCTroika::InputStartPlayerDialog 0x1029ef80 (datamap 0x105ce470): with the player present, the player's dialogue handle +0xfe8 empty and flags2 & 0x10000000 clear, FinishTalking, think reset, and a forced install of SCHED_TROIKA_START_PLAYER_DIALOG 0x6d (cai_basenpctroika/sched_troika_start_player_dialog.sch: SET_FAIL_SCHEDULE, STOP_MOVING, STORE_POSITION_IN_SAVEPOSITION, SET_TOLERANCE_DISTANCE DIST:DIALOG, GET_PATH_TO_PLAYER_FOR_DIALOG, SET_NPC_FLAG FORCE_RELAXED_ANIMS, WALK_RUN_PATH_FOR_DIALOG, WAIT_FOR_MOVEMENT, START_PLAYER_DIALOG, RUN_DIALOG; no interrupts); TASK_RUN_DIALOG 0x6a then holds the NPC (m_hDialogPartner) for as long as the dialogue stands: no other program is selected. sp_tutorial_1's Hunter1 (npc_VHumanCombatant, dialogname dlg/generic/hunter1.dlg, D_LI 0, use_interesting 0) verbatim; the wire is the corpus's own form (Zhao StartPlayerDialog '' on ch_zhaos_1).",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 25.0,
+  "known_red": "new: StartPlayerDialog installs no SCHED_TROIKA_START_PLAYER_DIALOG; the dialogue opens at the input with OnDialogBegin",
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "Hunter1"
+    ],
+    "anchor": "Hunter1",
+    "at": "north"
+  },
+  "script": [
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "Hunter1",
+      "input": "StartPlayerDialog",
+      "param": ""
+    }
+  ],
+  "expect": [
+    {
+      "label": "input",
+      "who": "Hunter1",
+      "kind": "input",
+      "match": "StartPlayerDialog",
+      "by": 2.5
+    },
+    {
+      "label": "program",
+      "who": "Hunter1",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_START_PLAYER_DIALOG (",
+      "within": 0.5
+    },
+    {
+      "label": "walks_up",
+      "who": "Hunter1",
+      "kind": "task",
+      "match": "task_get_path_to_player_for_dialog (",
+      "within": 1.0
+    },
+    {
+      "label": "starts",
+      "who": "Hunter1",
+      "kind": "task",
+      "match": "task_start_player_dialog (",
+      "within": 20.0
+    },
+    {
+      "label": "holds",
+      "who": "Hunter1",
+      "kind": "task",
+      "match": "task_run_dialog (",
+      "within": 1.0
+    }
+  ],
+  "never": [
+    {
+      "who": "Hunter1",
+      "kind": "taskfail"
+    },
+    {
+      "who": "Hunter1",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Hunter1",
+      "probe": "schedule",
+      "match": "SCHED_TROIKA_START_PLAYER_DIALOG"
+    }
+  ],
+  "notes": "The release half (the dialogue closing, CDialog::Release, the NPC selecting again) is not expressed: the harness has no action that answers or closes a dialogue as the player does (EndDialog is a port-only seam with no retail datamap record). Harness gap, listed in triage-W.md."
+}

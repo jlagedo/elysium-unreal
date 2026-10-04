@@ -1,0 +1,63 @@
+{
+  "name": "fail_route_unreachable_sound",
+  "about": "A goal nothing can reach takes the kernel's failure route once (13, 14, 25). The sound is made where the player stands, on top of the block (96 units tall, no way up). hear_world_investigate's chain installs SCHED_TROIKA_INVESTIGATE_SOUND; TASK_GET_PATH_TO_BESTSOUND (base StartTask arm 0x10285df8) hands the sound's origin to SetGoal and no route exists, so the task fails (TaskFail, Troika 0x1029adb0 -> base 0x10273fc0: the reason to +0x5c50, COND_TASK_FAILED 0x5c). The failure comes BEFORE the program's own TASK_SET_FAIL_SCHEDULE, so m_failSchedule is 0 and the route at the top of the next MaintainSchedule 0x102817c0 runs GetFailSchedule 0x10281730 -> 0x1028abe0 -> 0x43 FAIL (no Troika translation, 0x102b12f0): TASK_STOP_MOVING, TASK_SET_ACTIVITY ACT_IDLE, TASK_WAIT 1, TASK_WAIT_PVS (schedule-kernel.md 'The kernel's failure route and the base programs, walked'). Then the program completes and the selector runs again; the inserted sound is not re-heard (CanHearSound 0x1030f7b0 rejects a sound not inserted since the last Listen) and the HEAR_WORLD arm never armed m_flNextInvestigateSoundTime, so nothing re-selects the investigation: one failure, no storm. Listener on north (384, 0) Source units, D_NU 5, npc_perception 1 (290 units sight, so the player on the block at 384 units is never seen), investigate_mode 3.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 20.0,
+  "player": { "at": "start" },
+  "rows": [
+    {
+      "name": "arena_noise",
+      "classname": "ambient_generic",
+      "at": [0.0, 0.0, 0.0],
+      "keys": {
+        "message": "impact/physics/metal/hit_hard1.wav",
+        "health": "10",
+        "radius": "1250",
+        "spawnflags": "48",
+        "sound_event": "2",
+        "sound_event_level": "3",
+        "sound_event_owner": "!player"
+      }
+    }
+  ],
+  "cast": [
+    {
+      "name": "arena_listener",
+      "classname": "npc_VHumanCombatant",
+      "at": "north",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "1",
+        "investigate_mode": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    { "t": 0.5, "do": "player_teleport", "at": [0.0, 0.0, 244.0], "face": 0.0 },
+    { "t": 2.0, "do": "fire", "target": "arena_noise", "input": "PlaySound", "param": "" }
+  ],
+  "expect": [
+    { "label": "hears", "who": "arena_listener", "kind": "cond+", "match": "HEAR_WORLD (0x6e)", "by": 4.0 },
+    { "label": "investigates", "who": "arena_listener", "kind": "schedule", "match": "SCHED_TROIKA_INVESTIGATE_SOUND (", "within": 1.5 },
+    { "label": "asks_path", "who": "arena_listener", "kind": "task", "match": "task_get_path_to_bestsound (", "within": 6.0 },
+    { "label": "fails", "who": "arena_listener", "kind": "taskfail", "match": "", "within": 0.5 },
+    { "label": "fail_program", "who": "arena_listener", "kind": "schedule", "match": "FAIL (0x43)", "within": 0.5 },
+    { "label": "fail_wait", "who": "arena_listener", "kind": "taskdone", "match": "^task_wait$", "regex": true, "within": 2.0 },
+    { "label": "reselects", "who": "arena_listener", "kind": "schedule", "match": "^(?!.*FAIL \\(0x43\\))", "regex": true, "within": 1.0 }
+  ],
+  "never": [
+    { "who": "arena_listener", "kind": "move", "match": "arrived" },
+    { "who": "arena_listener", "kind": "cond+", "match": "SEE_PLAYER (0x5a)" }
+  ],
+  "probes": [
+    { "at": "end", "who": "arena_listener", "probe": "alive", "equals": true }
+  ]
+}

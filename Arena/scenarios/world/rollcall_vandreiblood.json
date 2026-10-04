@@ -1,0 +1,45 @@
+{
+  "name": "rollcall_vandreiblood",
+  "about": "Roll call: classname npc_VAndreiBlood builds CNPC_VAndreiBlood (factory 0x1035c080, research/tooling/ghidra/driver/kernel_factories.tsv). One row taken verbatim from hw_609_1 (Andrei) stands in the arena; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "hw_609_1",
+    "names": [
+      "Andrei"
+    ],
+    "anchor": "Andrei",
+    "at": "far_ne"
+  },
+  "expect": [
+    {
+      "label": "selects",
+      "who": "Andrei",
+      "kind": "schedule",
+      "match": "",
+      "by": 3.0
+    }
+  ],
+  "never": [
+    {
+      "who": "Andrei",
+      "kind": "taskfail"
+    },
+    {
+      "who": "Andrei",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "Andrei",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
+}

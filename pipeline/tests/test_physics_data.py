@@ -2,7 +2,6 @@
 from copy import deepcopy
 import importlib.util
 import json
-import os
 import re
 from pathlib import Path
 import struct
@@ -196,31 +195,3 @@ def test_worker_repair_and_save_failure_are_reported(worker):
     with pytest.raises(RuntimeError, match="save failed"):
         worker._publish(unreal, bl, Data, {"assetPath": "/unit"}, "recipe")
     assert calls == ["verify", "warning", "apply", "verify", "stamp"]
-
-
-@pytest.mark.skipif(not os.environ.get("ELYSIUM_PHYSICS_DATA_CASES"), reason="explicit bounded read-only GLB/staged-body cases")
-def test_bounded_real_physics_projection():
-    exports, stage = Path(r"E:\elysium-work\exports_v2"), Path(r"E:\elysium-work\import\characters")
-    manifest = json.loads((stage / "manifest.json").read_text(encoding="utf-8"))
-    keys = ["character/npc/unique/downtown/lacroix/lacroix",
-            "character/npc/common/blueblood/male/newscaster_male",
-            "character/npc/common/security_guard/security_guard",
-            "character/pc/male/malkavian/armor3/malkavian_male_armor_3"]
-    entries = {e["key"]: e for e in manifest["assets"]}
-    report = []
-    for key in keys:
-        projection = project_selected_entry(entries[key], manifest["selectedUnits"], exports, stage)
-        evidence = json.loads(projection["sourceEvidenceJson"])
-        assert len(projection["solids"]) == len(evidence["physics"]["solids"])
-        assert len(projection["constraints"]) == len(evidence["physics"]["constraints"])
-        report.append({"assetId": projection["assetId"], "assetPath": projection["assetPath"],
-                       "sourceGlbSha256": projection["sourceGlbSha256"], "stagedBodySha256": projection["stagedBodySha256"],
-                       "solids": len(projection["solids"]), "constraints": len(projection["constraints"]),
-                       "hulls": sum(len(s["hulls"]) for s in projection["solids"]),
-                       "vertices": sum(len(h["vertices"]) for s in projection["solids"] for h in s["hulls"]),
-                       "indices": sum(len(h["indices"]) for s in projection["solids"] for h in s["hulls"]),
-                       "gaps": projection["gaps"], "cookedEvidenceBytes": len(projection["sourceEvidenceJson"].encode())})
-    assert len(report[1]["gaps"]) >= 4
-    output = Path(r"E:\elysium-work\_r8_explore\agents\physics\physics_data_cases.json")
-    output.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(json.dumps(report, indent=2))
