@@ -356,14 +356,21 @@ levels 1, 3, 4, 5 (`:844`, `:1339`, `:1896`, `:2544`) and `Hit_Supernatural_Mesm
 D_MESMERIZE`.
 
 **`TASK_RUN_DIALOG 0xb9`** (start `0x102a496b`, run `0x102ab303`; program `0x105fabd0`:
-`TASK_RUN_DIALOG 0`, interrupt `COND_PROVOKED`). Both arms call `0x102c1400`: while `IsInDialog`
-(`0x102c1170`: `m_bIsTalking +0x64c0`, a non-empty `m_szDialogQue +0x64ec`, a live
-`m_hDialogPartner +0xfe8`, or the word at `+0x6554`) it answers the disposition activity (slot
-611), which the arm commits through `SetActivity` (slot 310) and then resets the motor's yaw
-command; once all four are clear it runs `0x102c0360` — fires `m_OnDialogEnd (+0x5f5c)`, clears
-the partner — and answers `-1`, on which the arm calls `TaskComplete` (the run arm also clears
-`COND_HEAR_PLAYER 0x6f`). No `TaskFail`; it never faces the partner and never stops a route
-itself. **`COND_PROVOKED` ends the program, not the conversation**: `OnScheduleChange 0x102a0940`
+`TASK_RUN_DIALOG 0`, interrupt `COND_PROVOKED`). Both arms call `0x102c1400` (walked at the end
+of this section) and act on its answer *(read 2026-10-04: `0x102a496d`, `0x102ab305`)*: `-1` →
+`TaskComplete` (`0x1000ac68(0)`; the run arm then clears `COND_HEAR_PLAYER 0x6f`, `0x102ab318`);
+any other value → `SetActivity` (slot 310, `+0x4d8`) with it, then the motor (`+0x5d44`) call
+(`0x10009980` in the start arm, `0x1000e6e7(-1)` in the run arm) that resets the yaw command. The
+helper answers `m_Activity +0xfec` unchanged on most ticks; only when `m_bSequenceFinished +0x65c`
+is set does it ask slot 611 for a disposition **sequence**, commit it itself and answer `0xf1` (or
+`1` when the lookup fails). It answers `-1` only when all four `IsInDialog` terms (`0x102c1170`:
+`m_bIsTalking +0x64c0`, a non-empty `m_szDialogQue +0x64ec`, a live `m_hDialogPartner +0xfe8`, a
+live `+0x6554`) are clear, after calling `0x102c0360` — which **fires nothing from here**: it
+fires `m_OnDialogEnd (+0x5f5c)` only for a live partner, and a live partner is one of the four
+terms. **[corrected 2026-10-04, V3r]** this paragraph used to say the helper answers "the
+disposition activity (slot 611)" while in a dialogue and that its `0x102c0360` call fires
+`m_OnDialogEnd` and clears the partner; the listing shows neither. No `TaskFail`; it never faces
+the partner and never stops a route itself. **`COND_PROVOKED` ends the program, not the conversation**: `OnScheduleChange 0x102a0940`
 touches none of the dialogue words, so the dialogue outlives the schedule that was running it.
 `CNPC_VTaxiDriver` overrides both arms (`0x103b36d0` activity `0x114e`, `0x103b38a0` back to 1).
 
@@ -392,7 +399,66 @@ therefore unreachable by content — a verdict row for 0019 story 1, not a behav
 `"Knockback"`, stretches it by the chosen knockback clip's duration, and queues it as a scripted
 expression. It is a face, not an animation event.
 
-**Unrecovered:** the name of the fourth dialogue word `+0x6554`.
+**Unrecovered:** the name of the fourth dialogue word `+0x6554` (not in the datamap;
+`npc-kernel/layout.md` calls it `m_hDialogScene`, the `scripted_scene` a voiced `.vcd` line plays
+through, `game_runtime.md` § Retail conversation chain item 6).
+
+#### `0x102c1400` — the dialogue upkeep `TASK_RUN_DIALOG` runs each tick, walked (2026-10-04, V3r)
+
+_Read from the listing (`vtmb_asm 0x102c1400`, 506 bytes, `__fastcall`, `ESI` = the NPC). It is in
+no vtable. Callers: the two `TASK_RUN_DIALOG` arms above and `CPayphone::NPCThink 0x101aabf0`
+(`lifecycle.md` § `CPayphone::NPCThink`). Every step below is *read* unless marked._
+
+1. **Out of a dialogue** (`0x102c1404`–`0x102c1419`): `IsInDialog 0x102c1170` false →
+   `0x102c0360(this)`, answer **`-1`**; nothing else runs. `IsInDialog`'s terms, in its order:
+   `m_bIsTalking +0x64c0`; `m_szDialogQue[0] +0x64ec`; `m_hDialogPartner +0xfe8` resolves live;
+   `+0x6554` resolves live (the handle only, not its `+0x498` byte).
+2. **The scene release** (`0x102c141a`–`0x102c14b7`): when `+0x6554` resolves live and the scene's
+   byte `+0x498` is 0, `UTIL_Remove(scene)` (`0x10014614` → `0x101cd940`) and `+0x6554 = -1`.
+   (`0x102c0aa0` reads the same byte as "still speaking", so 0 is a finished scene.)
+3. **`FinishTalking`** (`0x102c14c1`–`0x102c14d6`): when `m_bIsTalking` and `0x102c0aa0` answers
+   false — no live scene with `+0x498` set, and `m_flTalkTime +0x64cc <= curtime` (`FCOMP`, `AND
+   0x4100`) — `FinishTalking 0x102c0ca0(this)` (`0x102c0aa0` leaves `ECX` = this).
+4. **The queued line** (`0x102c14db`–`0x102c150b`): when `m_szDialogQue[0] != 0`,
+   `m_bInDispositionFidget +0x64e0 == 0` and `m_bIsTalking == 0` (re-read after step 3), the
+   spoken-line player `0x102c0520(this, m_szDialogQue, 0, 0)`, then `m_szDialogQue[0] = 0`.
+5. **The answer** (`0x102c150f`–`0x102c155b`): `answer = m_Activity +0xfec`, loaded first. When
+   `m_bSequenceFinished +0x65c != 0`: `seq = slot 611 (+0x98c)()`. `seq > -1` →
+   `ResetSequence 0x10260a50(this, seq)` (`m_nSequence`, `ResetSequenceInfo`), `m_flCycle +0x6f8 =
+   0`, answer **`0xf1`**; else `DevMsg("%s could not look up disposition sequence!!!\n")`
+   (`0x1060104c`), answer **`1`**. With the sequence not finished, slot 611 is not called.
+6. **The player's choices** (`0x102c1560`–`0x102c15ed`): when `m_hDialogPartner` resolves live and
+   the partner's word `+0xa8` is non-null: `bShow = !(+0x6554 live) && !m_bIsTalking &&
+   m_szDialogQue[0] == 0`, then `CDialog::ShowPlayerChoices(0x10178120([partner+0xa8]), bShow)`.
+   `0x10178120` returns its argument's `+0x1d24`, the accessor `FUN_10178280` uses on the player to
+   reach its `CDialog`, and `CDialog::Acquire 0x100e05f0` stores the same `[player+0xa8]` as the
+   dialog's player handle — so the target is the player's dialog *(inferred from those two uses;
+   `+0xa8` is unnamed)*. `ShowPlayerChoices` (`0x100e13d0`) sends the player a reliable user
+   message 7 carrying the byte — every tick, changed or not.
+7. Return the answer.
+
+**Words it writes:** `+0x6554` (step 2), `m_szDialogQue[0]` (step 4), `m_nSequence` /
+`m_flCycle` (step 5, through `0x10260a50`), plus what `FinishTalking` and `0x102c0520` write. It
+never writes `+0xfe8`, `m_NPCState`, a schedule, a condition, the navigator or an output.
+
+**The partner `+0xfe8`, every writer.** `CBaseCombatCharacter::SetDialogPartner 0x10107050` is
+the only body that stores the word (`vtmb_grep` `m_hDialogPartner = | 0xfe8) = `: it and its thunk);
+NULL stores `-1`, else the argument's handle. Its callers (9 grep hits): on the NPC, set by
+`CAI_BaseNPCTroika::StartTalking 0x102c0270` (only caller `CDialog::Acquire 0x100e05f0`) and
+cleared only by `0x102c0360` (only callers `CDialog::Release 0x100e5240` and `0x102c1400`); on the
+player, set and cleared by `FUN_10178280` (slot 414) and cleared by `EndPlayerDialog 0x10178400`
+(slot 415, from `Release`). `FUN_10178280` does not write the NPC's word. Writes through a
+constructor or a restore were not searched.
+
+**One `OnDialogEnd` per conversation.** `0x102c0360` fires `m_OnDialogEnd` only when the partner
+resolves live, and clears the partner in the same block, so a second call fires nothing; and
+`0x102c1400` calls it only when the partner does not resolve, so its call never fires. The
+output fires once, from `CDialog::Release`. One close, in order: `Release` flushes the pending
+script, hides the window, calls `0x102c0360` (`m_bCutsceneForceLOD +0x1590 = 0`, fire
+`OnDialogEnd`, clear the NPC's partner), then the player's `EndPlayerDialog`; on the NPC's next
+`TASK_RUN_DIALOG` tick `0x102c1400` keeps answering (steps 2–6) while a line is still spoken, a
+scene is live or a line is queued, and answers `-1` once all four terms are clear. The program
+then completes (`0x6d`/`0x6e`/`0x6a` all end with this task) and the NPC reselects.
 
 ## `m_bReturnToInitialPos` is a one-shot armed only by alert or combat
 

@@ -229,9 +229,13 @@ frame. Grouped by owner, with the receiver:
   ragdolling, and a weighted sequence exists for activity `0x21` → `SetSchedule(0x162, true)`,
   `ThinkSet`, reset.
 - *Entity inputs* (receiver `this`; all the same recipe — reset, stamp `AI_BaseNPCTroika.cpp`,
-  `SetSchedule`). `InputStartPlayerDialog` `0x1029ef80` (line `0x2677`),
-  `InputStartPlayerDialogRemote` `0x1029f060`, `InputStartPlayerDialogUnforced` `0x1029f120`:
-  `FinishTalking`, reset, `m_bForceDialogStart = 1`, `SetSchedule(0x6d)`. `InputFleeAndDie`
+  `SetSchedule`). `InputStartPlayerDialog` `0x1029ef80` (line `0x2677`): `FinishTalking`, reset,
+  `m_bForceDialogStart = 1`, `0x102ae750(0x6d, 0)`. `InputStartPlayerDialogRemote` `0x1029f060`
+  (line `0x268e`): the same with `0x102ae750(0x6e, 0)` (`PUSH 0x6e` at `0x1029f0c7`).
+  `InputStartPlayerDialogUnforced` `0x1029f120` (line `0x26a7`): `m_bForceDialogStart = 0`,
+  `0x102ae750(0x6d, 0)`. **[corrected 2026-10-04, V3r]** this item said all three set
+  `m_bForceDialogStart = 1` and install `0x6d`; the listing shows Remote installs `0x6e` and
+  Unforced clears the byte. The full walk is `game_runtime.md` § Runtime / branching. `InputFleeAndDie`
   `0x1029f210` (line `0x26b5`) → `SetSchedule(0x6f)`. `InputFaint` `0x1029f250` (line `0x26c2`) →
   `SetSchedule(0xfa)`. `InputTeleportToEntity` `0x102c24a0`: origin and angles from the target,
   `Relink`, reset, `ForceTransmit`.

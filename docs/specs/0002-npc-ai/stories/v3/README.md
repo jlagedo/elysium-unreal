@@ -21,6 +21,35 @@ them (a wave's deletions shift `ElysiumNpc.cpp` by hundreds of lines).
 `findings-B-port-only.md` and was not re-verified. *(record)* means it comes from an arena record's
 `about` text and was not re-verified.
 
+## Corrections after V3r and the seam (2026-10-04) — these override §1 and §7 below
+
+From `packets.md` (read from the listing) and the seam commit `f767f9f8`:
+
+- **The dialogue inputs and `+use` do not force their schedule.** All four install through
+  `0x102ae750(id, 0)` → `ForceScheduleChange` (cancels a live cine, clears `PRESERVE_PATH`, runs
+  `OnScheduleChange`, so a visited place is released by that path). `StartPlayerDialog 0x1029ef80`
+  and `…Unforced 0x1029f120` install `0x6d`; `…Remote 0x1029f060` installs `0x6e`. Unforced sets
+  `+0x6495 = 0`. The `+0x5bac` store is a float (task `0xd9`'s walk-or-run threshold); Remote never
+  writes it.
+- **`PlayerUse 0x10167850` does not call `ClearSchedule`.** It checks `CanTalk` (false returns with
+  no ordinary use), resets the think timers, installs `0x6a`, then calls slot 414.
+- **The NPC's `+0xfe8` is written only by `StartTalking 0x102c0270`** (inside `CDialog::Acquire`),
+  which also fires `m_OnDialogBegin +0x5f44`; only `0x102c0360` clears it. `FUN_10178280` writes
+  the player's word only. (The seam's comment at `ElysiumPlayer.h:994` lists the old writers: D1
+  corrects it.)
+- **`OnDialogEnd` fires exactly once**, from `CDialog::Release`: `0x102c0360` fires only for a
+  live partner and `0x102c1400` reaches it only once the partner is gone. Q7 is settled.
+- **`0x102c1400`** is walked in `packets.md`: its usual answer is `m_Activity +0xfec`; slot 611 is
+  asked only when `m_bSequenceFinished` is set, and it then commits that sequence itself
+  (`0x10260a50`, `m_flCycle = 0`) and answers `0xf1`, or `1` when the lookup fails.
+- **V3d**: the port's place-release lines ahead of the dialogue claims are replaced by the
+  `ForceScheduleChange` → `OnScheduleChange` path, not dropped. `FElysiumNpcPayphone` has its own
+  `DialogPartner` member (`ElysiumNpcPayphone.h:57`) hiding the base word: V3d deletes it.
+- **Open before V3d**: `dialog_use_hold` is untriaged (after `+use` Hunter1 shows nothing and no
+  conversation opens: the use focus refuses it, or the press never reaches `PlayerUse`); bug
+  protocol step 1 first. `brief-D1-dialogue.md` is re-written from `packets.md` before V3d starts.
+- The owner's rulings: K1 accepted, K2 accepted (the `m_nSequence` path), Q5 → V6, Q8 → V9.
+
 ## 1. What retail does: the contract
 
 **Who decides what the body plays.** No arbiter exists. `ResetSequenceInfo 0x10090950` plays

@@ -1305,12 +1305,48 @@ text columns (unfilled except Ventrue's col 11), not a reserved/unused block.
 
    | Input | Distinct server behavior |
    |---|---|
-   | `StartPlayerDialog` (`0x1029ef80`) | Common player/partner and NPC-state guards; an integer input is stored at NPC `+0x5bac`; forced byte `+0x6495` is set; schedule/activity `0x6d`. |
-   | `StartPlayerDialogRemote` (`0x1029f060`) | Common guards; the input variant is **not read**; forced byte is set; distinct schedule/activity `0x6e`. |
-   | `StartPlayerDialogUnforced` (`0x1029f120`) | Common guards plus a player-side refusal predicate; an integer is stored at `+0x5bac`; forced byte is cleared; schedule/activity `0x6d`. |
+   | `StartPlayerDialog` (`0x1029ef80`) | Common guards; a **float** stored at NPC `+0x5bac` `m_flSpecialDistanceAccum`; `FinishTalking`; slot 614; `m_bForceDialogStart +0x6495 = 1`; stamp line `0x2677`; schedule `0x6d` through `0x102ae750(0x6d, 0)`. |
+   | `StartPlayerDialogRemote` (`0x1029f060`) | Common guards; the input variant is **not read** and `+0x5bac` is not written; `FinishTalking`; slot 614; `+0x6495 = 1`; line `0x268e`; schedule **`0x6e`** through `0x102ae750(0x6e, 0)` (`PUSH 0x6e`, `0x1029f0c7`). |
+   | `StartPlayerDialogUnforced` (`0x1029f120`) | Common guards, then the player-side refusal predicate `!0x10178170(player)`; float at `+0x5bac`; `FinishTalking`; slot 614; `+0x6495 = 0`; line `0x26a7`; schedule `0x6d`. |
 
-   Therefore the tutorial's authored `StartPlayerDialogRemote 256` does not decode into flags in
-   this handler. The purpose of the integer stored by the other forms remains open. None of the
+   **Walked from the listing 2026-10-04 (V3r, *read*).** The common guards, in order, each a silent
+   return: `UTIL_PlayerByIndex(1)` (`0x101cd9e0`) is non-null; the player's own `m_hDialogPartner
+   +0xfe8` does not resolve live; `IsBusyWithDiscipline(npc)` (`0x1000caae`) is false;
+   `m_bfAINPCFlags2 +0x14bc & 0x10000000` is clear. Then, in this order: the `+0x5bac` store
+   (`FLD [variant+8]` when the variant's type `+0x18 == 1`, `FIELD_FLOAT`, else `FLD [0x104454c4]`,
+   an unwritten `.rdata` float with 1,331 readers — its value not read here; `FSTP [ESI+0x5bac]`,
+   `0x1029efed`), `FinishTalking 0x102c0ca0`, slot 614 `ResetThinkTimers` (`+0x998`), the byte
+   `+0x6495`, the debug stamp `+0x1b30` = `"E:\Vampire\main\dlls\AI_BaseNPCTroika.cpp"`, `+0x1b34` =
+   line, then `0x102ae750(id, 0)`. `0x102ae750` is `0x102cc1f0` (slot 440 translate +
+   `GetScheduleOfType`) then `0x102ae780(sched, bForce = 0)`, which refuses without a write when
+   `m_NPCState +0x5cc0` or `m_IdealNPCState +0x5cc4` is 7, or when slot 158 `IsAlive` (`+0x278`)
+   answers false; otherwise `ForceScheduleChange 0x102ae490` (a live `m_hCine +0x5d74` →
+   `CancelScript 0x101a8c30` and `SetState(ideal)` when they differ; unless `GetNavType 0x1027d990`
+   is 1 or 3, clear `+0x14b8 & 0x8` — `PRESERVE_PATH`; slot 435 `OnScheduleChange 0x102a0940`, which
+   releases an interesting place under `!PRESERVE_PATH`) and `SetSchedule 0x10280e50`. So the
+   program **replaces the running one** but is installed with `bForce = 0` — not the forced
+   `SetSchedule(id, true)` entry. Schedule ids are pinned by the registration table `0x102b9810`:
+   `0x6a` `SCHED_TROIKA_RUN_DIALOG` (`0x102ba28c`), `0x6d` `SCHED_TROIKA_START_PLAYER_DIALOG`
+   (`0x102ba352`), `0x6e` `SCHED_TROIKA_START_PLAYER_DIALOG_REMOTE` (`0x102ba39c`). Program texts
+   (`0x105fa6a0`, `0x105fa5a0`, `0x105fabd0`; byte-identical to
+   `Content/ElysiumCorpus/ai/schedules/cai_basenpctroika/*.sch`):
+
+   - `0x6d`: `TASK_SET_FAIL_SCHEDULE SCHEDULE:SCHED_TROIKA_START_PLAYER_DIALOG`, `TASK_STOP_MOVING 0`,
+     `TASK_STORE_POSITION_IN_SAVEPOSITION 0`, `TASK_SET_TOLERANCE_DISTANCE DIST:DIALOG`,
+     `TASK_GET_PATH_TO_PLAYER_FOR_DIALOG 0`, `TASK_SET_NPC_FLAG NPCFlag:FORCE_RELAXED_ANIMS`,
+     `TASK_WALK_RUN_PATH_FOR_DIALOG 0`, `TASK_WAIT_FOR_MOVEMENT 0`, `TASK_START_PLAYER_DIALOG 0`,
+     `TASK_RUN_DIALOG 0`; **no interrupts**.
+   - `0x6e`: `TASK_SET_FAIL_SCHEDULE SCHEDULE:SCHED_TROIKA_START_PLAYER_DIALOG_REMOTE`,
+     `TASK_START_PLAYER_DIALOG 0`, `TASK_RUN_DIALOG 0`; **no interrupts** (no walk: the NPC opens
+     from where it stands).
+   - `0x6a`: `TASK_RUN_DIALOG 0`; interrupt `COND_PROVOKED`.
+
+   The float at `+0x5bac` is the walk-or-run threshold of `TASK_WALK_RUN_PATH_FOR_DIALOG 0xd9`
+   (`schedule-kernel.md` § The arms: `dist >= +0x5bac` → `ACT_RUN`), a task only `0x6d` runs — which
+   is why Remote, whose program has no walk, does not read its variant. So the tutorial's authored
+   `StartPlayerDialogRemote 256` is ignored by the handler. **[corrected 2026-10-04, V3r]** this
+   table said "an integer input" (the store is `FLD`/`FSTP`, a float), "schedule/activity" (it is a
+   schedule id only) and left the purpose of the stored value open. None of the
    three complete input bodies writes player/NPC origin, angles, velocity, camera pose, or input
    state. They schedule downstream dialogue work; physical placement, facing, or controller
    transfer must not be inferred from their final presentation. The gated comparison capture is
@@ -1364,9 +1400,13 @@ passing valid link.
 
 `DialogPostProcess()` is downstream of opener selection and remains required. On close,
 `CDialog::Release` (`0x100e5240`) flushes the pending dialogue event script and
-`CDialog::CallPendingNPCEventScript` (`0x100e5c70`), clears the live dialogue state, then calls
-the owning NPC's dialogue-end path (`0x102c0360`) **[VtMB]**. That path fires the NPC's
-`m_OnDialogEnd` output at `+0x5f5c`. Jack's authored `OnDialogEnd` Python payload calls the level
+`CDialog::CallPendingNPCEventScript` (`0x100e5c70`), hides the dialogue window, then calls
+the owning NPC's dialogue-end path (`0x102c0360`), then the player's `EndPlayerDialog`
+(`0x10178400`), and only then clears its live byte `+0x30e8` **[VtMB]** (order *read* 2026-10-04,
+§ Retail conversation chain item 7). That path fires the NPC's
+`m_OnDialogEnd` output at `+0x5f5c` — only while the NPC's `m_hDialogPartner` still resolves; it
+is the one place the output fires (its other caller, `0x102c1400`, reaches it only with the
+partner already gone: `npc-ai/conditions-and-states.md` § `0x102c1400`). Jack's authored `OnDialogEnd` Python payload calls the level
 script's `DialogPostProcess()` **[data/script]**.
 
 The selected line and choices write authoritative `G` values before this output fires.
@@ -1490,11 +1530,20 @@ Recovered from `vampire.dll` / `client.dll` (D0). The eight
 arms below are either reproduced or named as a modernization; nothing is silently
 dropped.
 
-1. **Entry.** `CBasePlayer::PlayerUse` (`0x10167850`) resolves the use target, tests the
-   character's `WillTalk` latch (virtual `+0x49c`, set by `InputWillTalk` `0x103418f0`), clears
-   the NPC schedule and pushes AI schedule `0x6a`, then calls player vtable slot 414
-   (`FUN_10178280`, the real StartDialog). The `StartPlayerDialog*` inputs land on the same slot
-   through `CAI_BaseNPCTroika::StartTask` (`0x102a1910`) with schedules `0x6d`/`0x6e`. Common
+1. **Entry.** `CBasePlayer::PlayerUse` (`0x10167850`) resolves the use target, and when the
+   target's `+0x98` NPC pointer is non-null (`0x10167a6d`) asks slot 295 `CanTalk(player)`
+   (`+0x49c`, `0x102c21c0`, whose terms include the `m_bWillTalk` latch set by `InputWillTalk`
+   `0x103418f0`). False → `PlayerUse` returns: no ordinary use. True → slot 614
+   `ResetThinkTimers` (`0x10167a9a`), debug stamp `"player.cpp"` line `0x1508`,
+   `0x102ae750(npc, 0x6a, 0)` (`0x10167aba`: the same `bForce = 0` install as the inputs, through
+   `ForceScheduleChange` — **no `ClearSchedule 0x10280d30` is called**), then player slot 414
+   `+0x678` (`FUN_10178280`, the real StartDialog) on the use entity (`0x10167ac4`). The program
+   is installed before the conversation opens. **[corrected 2026-10-04, V3r]** this item said
+   `PlayerUse` "tests the `WillTalk` latch (virtual `+0x49c`)" and "clears the NPC schedule and
+   pushes `0x6a`": the slot is `CanTalk`, and the listing's callees hold no `ClearSchedule`.
+   The `StartPlayerDialog*` inputs land on the same slot
+   through `CAI_BaseNPCTroika::StartTask` (`0x102a1910`, `TASK_START_PLAYER_DIALOG 0xda`) from
+   schedules `0x6d`/`0x6e` (§ Runtime / branching). Common
    guards: a player exists, the player has no live partner (`player+0xfe8`),
    `IsBusyWithDiscipline(npc)` false, `m_bfAINPCFlags2 & 0x10000000` clear. `Unforced` adds the
    player-side refusal predicate `0x10178170`: a set of combat timers on the player
@@ -1504,7 +1553,16 @@ dropped.
    `FUN_10178280` refuses when `m_bForceDialogStart` (`npc+0x6495`) is clear and the predicate
    holds; otherwise `CDialog::Acquire`, `SetDialogPartner`, input lock, remember whether the
    active weapon was drawable (`player+0x1e01`) and switch to `item_w_unarmed`, then build the
-   `camera_cinematic` from `default_camera`.
+   `camera_cinematic` from `default_camera`. **The two partner words (2026-10-04, V3r, *read*).**
+   `FUN_10178280` writes only the PLAYER's `+0xfe8` (set after `Acquire` answers true; cleared on
+   the bark refusal and when `Acquire` answers false). The NPC's is written earlier, inside
+   `Acquire 0x100e05f0`, by `CAI_BaseNPCTroika::StartTalking 0x102c0270` (`Acquire` is its only
+   caller): `m_bForceDialogStart +0x6495 = 0`, `m_bCutsceneForceLOD +0x1590 = 1`, `m_nTimesTalked
+   +0x64bc += 1`, `FinishTalking`, `SetDialogPartner(this, [player+0xa8])`, slot 306 (`+0x4c8`)
+   `(partner, 0)` unless `+0x204` bit 3, `CancelScript 0x101a8c30` on a live `m_hCine +0x5d74`, then
+   fires **`m_OnDialogBegin +0x5f44`** (activator the partner, caller the NPC). `Acquire` returns 0
+   (so the player's partner is cleared) when the dialog failed to load or when `+0x30e9` sent the
+   one line and released at once.
 2. **Dependency.** `CDialogDependency::Parse` (`0x100e8fc0`) turns col-4 into a struct: trait
    class (`+0x04`: 0/1 attribute-or-ability, 2 discipline, 4 feat), trait id (`+0x08`), inversion
    flag (`+0x0c`, a negative threshold selects `<` instead of `>=`), threshold (`+0x14`), sex gate
@@ -1548,9 +1606,14 @@ dropped.
    no letters resolves to `sound/character/dlg/ellipses.<ext>` (`0x100df0b0`). A `.vcd` hit plays
    through a `scripted_scene` (handle `npc+0x6554`, carries `.lip` and gestures); otherwise
    `CHAN_STREAM` at `m_flSpeechVol`. PC lines are never voiced (`message_send` `0x100e58e0`).
-7. **Close.** `CDialog::Release` (`0x100e5240`) flushes the pending scripts, fires
-   `OnDialogEnd` (`npc+0x5f5c`), clears the partner, destroys the camera, unlocks input and
-   restores the holstered weapon (`FUN_10178400`).
+7. **Close.** `CDialog::Release` (`0x100e5240`), in order: an engine call (`+0x1c` on
+   `0x1070b22c`), the "Releasing dialog file" log, when `+0x30e9` the flush (`0x100e4ef0`,
+   `CallPendingNPCEventScript 0x100e5c70`), `SetDialogWindowActive(0)`, then — if the dialog's
+   NPC handle (`CDialog+0`) resolves — the NPC's `0x102c0360` (`m_bCutsceneForceLOD = 0`, fire
+   `OnDialogEnd` `npc+0x5f5c`, `SetDialogPartner(NULL)`), then the player handle's (`CDialog+4`)
+   slot 415 `+0x67c` = `EndPlayerDialog` `FUN_10178400` (destroys the camera, unlocks input,
+   restores the holstered weapon, clears the player's partner), then `CDialog+0x30e8 = 0` and
+   `unload` *(read 2026-10-04, V3r)*.
 8. **Data.** Rows are 13 dwords, stride `0x34`: id, male, female, link, dependency, event
    script, then **seven clan text columns** in `clan_offset` order Brujah, Gangrel, Nosferatu,
    Toreador, Tremere, Ventrue, Malkavian (`0x100e65d0`, `read_line_data` `0x100e61d0`). Shipped
