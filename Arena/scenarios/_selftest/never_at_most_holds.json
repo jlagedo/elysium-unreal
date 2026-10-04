@@ -1,0 +1,16 @@
+{
+  "name": "never_at_most_holds",
+  "about": "Harness self-test: a `never` with `at_most: 1` tolerates one match. The script fires the relay's Trigger once, at t=1.0; the window counts that one input and the run passes. Reported as `fail`, it means `at_most` failed the run on a match it allowed.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 4.0,
+  "rows": [
+    { "classname": "logic_relay", "name": "selftest_relay", "at": "start" }
+  ],
+  "script": [
+    { "t": 1.0, "do": "fire", "target": "selftest_relay", "input": "Trigger" }
+  ],
+  "never": [
+    { "who": "selftest_relay", "kind": "input", "match": "Trigger", "at_most": 1 }
+  ]
+}

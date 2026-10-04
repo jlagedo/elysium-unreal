@@ -89,6 +89,9 @@ public:
 	// One step. False once the run is over (`GetResult` is then final).
 	bool Tick();
 	bool IsDone() const { return bDone; }
+	// Whether scenario time zero was seen: false for a run that ended because its stage failed or never
+	// activated, whose host must hand the next record a released stage.
+	bool HasStageActivated() const { return bZeroKnown; }
 	// End the run as a harness error.
 	void Abort(const FString& Error);
 
@@ -143,11 +146,17 @@ private:
 
 	bool ApplyPlayerAtZero(FElysiumEntityWorld& World);
 	void MatchExpectations();
+	// Where a `never`'s window opens, scenario seconds; false while it waits on an unmet `after` label.
+	bool NeverWindowStart(const FElysiumArenaMatch& Spec, double& OutStart) const;
 	void FindNeverViolation(FFailure& Out);
 	void FindExpectMiss(double Now, FFailure& Out) const;
 	bool FireDueActions(double Now, FElysiumEntityWorld& World);
+	// The `script` trace event of one action: what the harness did, to whom, at the world's now.
+	void RecordAction(const FElysiumArenaAction& Action, const FElysiumEntityWorld& World);
 	bool RunAction(int32 Index, FElysiumEntityWorld& World, FString& OutError);
-	void TickPlayerWalk();
+	// The player's replayed command for this frame: the walk's step and the crouch's press, one
+	// command through the input router's replay door.
+	void TickPlayerInput();
 	bool CurrentPlayerFeet(FVector& OutFeet) const;
 	void ReadDueProbes(double Now, FFailure& Out);
 	bool ReadProbe(const FElysiumArenaProbeSpec& Probe, FString& OutRead, FString& OutError) const;
@@ -183,7 +192,10 @@ private:
 	double PrevMatchTime = 0.0;
 	TArray<double> MatchTimes;      // per expectation; negative while unmet
 	TSet<int32> Consumed;
-	int32 NeverScan = 0;
+	// Per `never`: the next event to judge (held while its window waits on a label) and the matches
+	// counted inside its window.
+	TArray<int32> NeverScans;
+	TArray<int32> NeverCounts;
 
 	TArray<bool> ActionFired;
 	TArray<bool> ProbeRead;
@@ -191,6 +203,15 @@ private:
 	// `player_walk`: the destination the input replay is steering the player toward.
 	bool bWalking = false;
 	FVector WalkFeet = FVector::ZeroVector;
+	// `player_crouch`: one press of the duck key (retail's toggle, keyed on the press edge), then the
+	// frame that lets it up again.
+	enum class ECrouchStep : uint8 { None, Press, Release };
+	ECrouchStep CrouchStep = ECrouchStep::None;
+	bool bCrouchWanted = false;
+	// The runner replayed a command last frame; with nothing to send this frame it stops the replay.
+	bool bDrivingInput = false;
+	// `light_pin` set `debug_stealth_light`; the run's end releases it.
+	bool bLightPinned = false;
 
 	FElysiumArenaScenarioResult Result;
 };

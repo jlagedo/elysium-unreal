@@ -1,0 +1,19 @@
+{
+  "name": "player_reset_a",
+  "about": "Harness self-test, the first of a pair (records run in path order within a boot): the player is given a knife, wields it through the melee verb slot (slot2) and crouches through `player_crouch`, and the probes at 2.5 s read both (timed, not `end`: a run whose expectations and timed probes are all met ends there, so end-only probes would read at zero, before any action). `player_reset_b`, the next record of the boot, then reads a player at rest. Reported as `fail`, a probe or an action did not take: the pair proves nothing until it does.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 3.0,
+  "player": { "at": "start", "armed": "item_w_knife" },
+  "rows": [
+    { "classname": "logic_relay", "name": "selftest_relay", "at": "start" }
+  ],
+  "script": [
+    { "t": 0.2, "do": "console", "command": "elysium.cmd slot2" },
+    { "t": 0.5, "do": "player_crouch", "on": true }
+  ],
+  "probes": [
+    { "at": 2.5, "who": "player", "probe": "player_crouched", "equals": true },
+    { "at": 2.5, "who": "player", "probe": "player_weapon", "equals": "item_w_knife" }
+  ]
+}

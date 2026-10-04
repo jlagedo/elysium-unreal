@@ -71,8 +71,14 @@
     },
     {
       "who": "Hunter1",
+      "kind": "schedule",
+      "after": "off",
+      "until": 9.0
+    },
+    {
+      "who": "Hunter1",
       "kind": "death"
     }
   ],
-  "notes": "The never on taskdone before 9 s holds both halves: nothing completes before 2 s because the idle activity runs ~5 s from 0, and nothing after 2 s because the AI is off. A first run expected a reselection at the 0 edge (record error: SetDisableAI resets timers, it forces nothing)."
+  "notes": "The never on taskdone before 9 s holds both halves: nothing completes before 2 s because the idle activity runs ~5 s from 0, and nothing after 2 s because the AI is off. The never on schedule, opened after the off input and closed at the enable, is 'no schedule is selected' while the AI is off. A first run expected a reselection at the 0 edge (record error: SetDisableAI resets timers, it forces nothing)."
 }

@@ -87,6 +87,8 @@ enum class EElysiumArenaAction : uint8
 	Console,
 	Spawn,
 	Kill,
+	PlayerCrouch,
+	LightPin,
 };
 
 // One `script` entry: when (an absolute scenario time, or a delay after a labelled expectation's
@@ -107,6 +109,10 @@ struct FElysiumArenaAction
 	FElysiumArenaValue Param;      // fire; None is a void parameter
 	FString Command;               // console
 	FElysiumArenaRow Row;          // spawn
+	bool bOn = false;              // player_crouch: `on`, the posture the press heads for
+	// light_pin: `value`, the normalized body light pinned in [0, 1]; `null` releases the pin.
+	bool bLightRelease = false;
+	double Light = 0.0;
 };
 
 // One `expect` or `never` entry: a matcher over trace events.
@@ -128,6 +134,17 @@ struct FElysiumArenaMatch
 	// never only: the window closes here (absent: the whole run).
 	bool bUntil = false;
 	double Until = 0.0;
+
+	// never only: where the window opens. `From` scenario seconds, or `Delay` seconds after the
+	// expectation labelled `After` (`AfterIndex` into `Expect`) is met -- never, if it is not. Neither:
+	// zero.
+	bool bFrom = false;
+	double From = 0.0;
+	FString After;
+	int32 AfterIndex = INDEX_NONE;
+	double Delay = 0.0;
+	// never only: the matches the window tolerates. Match number `AtMost + 1` fails the run.
+	int32 AtMost = 0;
 };
 
 enum class EElysiumArenaProbe : uint8
@@ -141,6 +158,10 @@ enum class EElysiumArenaProbe : uint8
 	HasCondition,    // bool: `condition` is set in the gathered conditions
 	OnGround,        // bool: the body's motor reports a floor under it
 	DistanceTo,      // number, centimetres: to `to` (a targetname, `player`, or a place)
+	// `who: "player"` only.
+	PlayerWeapon,    // string: the active item's classname, `none`
+	PlayerCrouched,  // bool: `FL_DUCKING`, as every game reader of the posture sees it
+	PlayerGrappling, // bool: paired in a grapple (feed, stealth kill) whose partner still resolves
 };
 
 enum class EElysiumArenaCompare : uint8
@@ -203,7 +224,8 @@ namespace ElysiumArenaScenario
 	// `<ProjectDir>/Arena/scenarios`.
 	FString ScenarioRoot();
 
-	// The trace kinds a matcher may name, as `seam.md` lists them.
+	// The trace kinds a matcher may name: `seam.md`'s, then `script`, the runner's own record of each
+	// action it ran.
 	TArrayView<const TCHAR* const> TraceKinds();
 
 	// Parse one record. False with `OutError` naming the file and the field.

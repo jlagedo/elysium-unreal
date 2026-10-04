@@ -9,9 +9,9 @@ needs no build. Read by `Source/ElysiumUE/Private/Debug/ElysiumArenaScenario.cpp
 | headless | `uv run elysium arena [names…]` (`-ElysiumArena`, `-nullrhi`, fixed step) | every record, one boot per stage, report under `$ELYSIUM_WORK_ROOT/reports/arena/<timestamp>/` |
 | lab | `elysium.gr_scenario <name>` in `uv run elysium gr --arena` | one arena record, rendered, real time; each expectation logged as met or missed; trace in `Saved/Elysium/_arena/lab/` |
 
-The reader is strict: an unknown field, a misspelled kind or probe, a `after` naming no label is a
-parse error naming the file and the field (`cover.json: expect[2].kind: ...`). A record that does
-not parse is reported, never run.
+The reader is strict: an unknown field, a misspelled kind or probe, a `after` naming no label, a field
+the entry's `do` or `probe` does not take is a parse error naming the file and the field
+(`cover.json: expect[2].kind: ...`). A record that does not parse is reported, never run.
 
 ## Top level
 
@@ -104,9 +104,16 @@ Each action runs at `"t": <scenario seconds>` or `"after": "<expect label>"` plu
 | `kill` | `target` | `fire` with `Kill` |
 | `console` | `command` | any console command |
 | `spawn` | `row` | one more row through `SpawnRuntimeEntity` (arena only) |
+| `player_crouch` | `on` (bool, required) | one press of the duck key through the same replay door as `player_walk` (merged into the walk's command when both run), then a frame with the key up. The duck is retail's toggle on the press edge (`CGameMovement::Duck` `0x10126fd0`): no press when the body is already heading for `on` (ducked or lowering for `true`, standing or rising for `false`); a stand-up with no headroom is swallowed, as a player's is |
+| `light_pin` | `value` (required): a number in `[0, 1]`, or `null` | pins the player's normalized body light through retail's `debug_stealth_light` (`0x109384d8`; set to `value * 10`, so the light reads `value`); `null` sets it back to `-1`, off. The run's end releases a pin it set |
 
-An action that cannot run in this host (`player_walk` with no input router, an unresolvable target)
-ends the run as `error`.
+An action that cannot run in this host (`player_walk` or `player_crouch` with no input router, an
+unresolvable target, `light_pin` with no `debug_stealth_light` registered) ends the run as `error`.
+
+Every action that runs is written to the trace first, as kind `script`: the entity column is its
+target (`player` for the player's actions and `light_pin`, the row's name for `spawn`, `-` for
+`console`), the text its `do` and arguments (`fire SetRelationship "player D_HT 5"`,
+`player_walk north`, `player_crouch on`, `light_pin 0.2`, `light_pin release`).
 
 ## `expect`
 
@@ -116,9 +123,12 @@ ends the run as `error`.
 
 - `kind`: one of the trace kinds of `docs/specs/0002-npc-ai/stories/wave2/seam.md` (`schedule`,
   `task`, `taskdone`, `taskfail`, `break`, `cond+`, `cond-`, `state`, `sequence`, `seqfinished`,
-  `animevent`, `move`, `damage`, `death`, `corpse`, `hint+`, `hint-`, `output`, `input`), with the text
-  its table states. Read the event texts there before matching them: a schedule is
-  `NAME (0xNN)`, a task `name (id) operand` and a finished task its bare name -- in the corpus's
+  `animevent`, `move`, `damage`, `death`, `corpse`, `hint+`, `hint-`, `output`, `input`,
+  `stealthkill`), with the text its table states, or `script`, the runner's own (above). Read the
+  event texts there before matching them: a schedule is `NAME (0x<n>)`, the class-local id in lower-case
+  hex with no padding (`SCHED_IDLE_STAND (0x1)`; `NAME (<n>)`, the global id in decimal, when the
+  class has no local one), a stealth-kill query `<victim or none> <admit|refuse> gate=<gate>` (`ray`,
+  `valid_target`, `deaf_arc`, `can_grapple`), a task `name (id) operand` and a finished task its bare name -- in the corpus's
   lower case (`task_range_attack1`), as the "Task: %s" print names it --, a sequence
   `<label> rate=<n>` (`rate=0` when nothing plays it), a finished sequence its label (`seq 0` for
   row 0, which plays nothing and finishes on its first advance).
@@ -138,9 +148,24 @@ Two kinds need care: `state` does not cover the body arbiter's own flips inside 
 
 ## `never`
 
-`{ "who": "arena_gunman", "kind": "death", "match": "", "until": 30.0 }`: fails the run whenever such
-an event appears in `[0, until]` (`until` absent: the whole run). A record with an open `never` runs to
-its duration.
+```json
+{ "who": "arena_gunman", "kind": "taskfail", "match": "", "after": "chases", "delay": 0.5, "until": 30.0, "at_most": 1 }
+```
+
+`who`, `kind`, `match` and `regex` as an `expect`'s. The entry counts the matching events inside its
+window and fails the run at match number `at_most + 1`, at that event's time.
+
+| Field | Meaning |
+|---|---|
+| `from` | scenario seconds: the window opens here. Not past `duration` or `until` |
+| `after` | an `expect` label: the window opens at that expectation's match, plus `delay`. A label that is never met never opens the window (the unmet expectation fails the run on its own); an event before the match is not counted |
+| `delay` | seconds after `after`'s match; only with `after` |
+| `until` | scenario seconds: the window closes here (absent: the run's duration) |
+| `at_most` | a whole number ≥ 0, the matches the window tolerates (absent: 0, the first match fails) |
+
+`from` and `after` exclude each other; neither opens the window at zero. The failure's `reason` in
+`index.json` states the count and the bound (`appeared at t=4.20: match 2 where at most 1 may appear
+in [1.50, 30.00]: ...`). A record with an open `never` runs to its duration.
 
 ## `probes`
 
@@ -162,6 +187,9 @@ comparison: `equals`, `match` (string contains), `less`, `greater` (numbers).
 | `has_condition` | bool | `condition`: a table name (`SEE_ENEMY` or `COND_SEE_ENEMY`) or number |
 | `on_ground` | bool: the body's motor reports a floor | |
 | `distance_to` | number, centimetres | `to`: a targetname, `player`, or a place |
+| `player_weapon` | string: the player's active item's classname (`Inventory.Active`, what `HasWeaponEquipped` compares), `none` | `who: "player"` only |
+| `player_crouched` | bool: `FL_DUCKING` (`IElysiumEmbodiment::IsPlayerDucking`: ducked or rising), what the stealth eligibility and the grapple admission read | `who: "player"` only |
+| `player_grappling` | bool: paired in a grapple (feed, stealth kill) whose partner still resolves (`IsGrappling`) | `who: "player"` only |
 
 An unknown probe, a comparison the answer's type cannot take, or a probe that cannot be read (no
 such entity, not an NPC) fails.
@@ -178,7 +206,10 @@ timed probe, every `never` window closed), or at `duration`; the end probes are 
 | `fail` | something did not |
 | `expected-fail` | a fail on a record with `known_red` |
 | `unexpected-pass` | a pass on a record with `known_red` |
-| `error` | the harness could not run it (staging refused, an action unsupported, the stage never activated) |
+| `error` | the harness could not run it (staging refused, an action unsupported, the stage failed or did not activate within 60 s wall) |
+
+A record that ends `error` before its stage activated does not end the boot: the next record is
+staged on a released stage and runs.
 
 `expect_fail: true` inverts pass and fail before `known_red` is applied.
 
@@ -194,3 +225,7 @@ The headless host writes `<out>/index.json` (`seam.md` § "The launch contract";
 | `control_sequence` | the headless host animates: a path-free program's finite activity finishes |
 | `_selftest/must_fail` | an expectation nothing meets fails the run |
 | `_selftest/bound_trips` | a deadline is a deadline: a real event after it does not count |
+| `_selftest/never_at_most_holds`, `never_at_most_trips` | `at_most` tolerates its bound and fails the run at the match past it |
+| `_selftest/never_after_ignores` | a `never` opened `after` a label does not count a match before it |
+| `_selftest/player_reset_a`, `player_reset_b` | the player's posture and wielded item do not leak into the next record of the boot (`player_crouch`, the player probes) |
+| `_selftest/stage_failed_a`, `stage_failed_b` | a stage that goes Failed (`a`, `error` by design, so parked as `.json.parked`: restore it to run the pair) does not stop the next record staging fresh and passing (`b`) |

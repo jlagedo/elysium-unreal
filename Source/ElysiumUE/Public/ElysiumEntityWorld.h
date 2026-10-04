@@ -844,6 +844,11 @@ public:
 	bool HasAiTraceSink() const { return static_cast<bool>(AiTraceSink); }
 	// No-op without a sink. `Entity` may be any entity; the event carries its handle and targetname.
 	void EmitAiTrace(const FElysiumEntity& Entity, FName Kind, FString Text);
+	// `EmitAiTrace` for a tap whose producer runs every frame (`stealthkill`: the HUD asks the query
+	// each frame): emits only when this kind's entity or text differs from the last event it emitted
+	// for the kind. The memory belongs to the sink and is cleared with it, so each recorded run opens
+	// on a fresh answer. No-op without a sink.
+	void EmitAiTraceOnChange(const FElysiumEntity& Entity, FName Kind, FString Text);
 	// How a trace event's text names another entity (an attacker, a killer, an activator): its
 	// targetname, `DebugString()` when it has none, `none` for no entity.
 	static FString AiTraceName(const FElysiumEntity* Entity);
@@ -1074,6 +1079,7 @@ private:
 	TArray<FString> AiDebugTraceRing;                 // AppendAiDebugTrace; debug, never saved
 	int32 AiDebugTraceHead = 0;                       // oldest entry once the ring is full
 	FElysiumAiTraceSink AiTraceSink;                  // SetAiTraceSink; debug, never saved, cleared on teardown
+	TMap<FName, FString> AiTraceLastByKind;           // EmitAiTraceOnChange's memory; cleared with the sink
 	// The place set (`Places`). Held by pointer so the substrate header stays out of this public one.
 	TUniquePtr<FElysiumPlaceSet> PlaceSet;
 	// `BuildStampSeconds`: the map build's `curtime`. Not saved: a restore re-stamps it.

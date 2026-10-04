@@ -10,12 +10,21 @@
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumStealthTables.h"
 #include "Substrate/ElysiumNpc.h"
+#include "HAL/IConsoleManager.h"       // debug_stealth_light
 
 // The pure rule's input triplet is spelled as a literal 3 so the header stays free of the storage
 // type. This is what holds the two in step: a surface that grew a fourth sample would copy three
 // and read a stale one, silently.
 static_assert(FElysiumStealthSurface::NumSamples == 3,
 	"ElysiumStealth::FRecomputeInputs::Samples must match FElysiumStealthSurface::NumSamples");
+
+// Retail's `debug_stealth_light` (`0x109384d8`): default -1, off; 0..10 pins the normalized body
+// light at value * 0.1 (`ElysiumStealth::FRecomputeInputs::DebugLight`). Not saved.
+static TAutoConsoleVariable<float> CVarDebugStealthLight(
+	TEXT("debug_stealth_light"),
+	ElysiumStealth::DebugLightOff,
+	TEXT("Override the player's stealth light level (-1 = off, 0..10 = light * 10)"),
+	ECVF_Default);
 
 namespace ElysiumStealth
 {
@@ -73,6 +82,12 @@ FRecomputeResult Recompute(const FElysiumStealthTables& Tables, const FRecompute
 		? 1.f
 		: NormalizeBodyLight(In.Samples[0], In.Samples[1], In.Samples[2],
 			In.WorldLightMin, In.WorldLightMax);
+	// 0x10351b3e: `debug_stealth_light` above -1 (its int value, `-1 < m_nValue`) replaces the light,
+	// torch included, with its float value times 0.1.
+	if (FMath::TruncToInt(In.DebugLight) > -1)
+	{
+		Out.LightOnMe = In.DebugLight * DebugLightScale;
+	}
 
 	// 6. The light row, equality entering the next darker one.
 	Out.LightRow = SelectLightRow(Tables, Out.LightOnMe);
@@ -171,6 +186,8 @@ void TickPlayerSurface(FElysiumPlayer& Player, double Now)
 	In.bEligible = IsEligible(Player, Embodiment->IsPlayerDucking(), Now);
 	In.bTorchEquipped = IsTorchEquipped(Player);
 	In.Sneaking = ResolveSneaking(Player);
+	// A ConVar clamps on set to its declared range; a console variable here does not, so the read does.
+	In.DebugLight = FMath::Clamp(CVarDebugStealthLight.GetValueOnGameThread(), DebugLightOff, DebugLightMax);
 
 	// ONE point per pass, index advancing. The other two retained samples participate unchanged, so
 	// a step from light into shadow takes ~0.3 s to be fully believed.

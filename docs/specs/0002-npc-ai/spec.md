@@ -495,6 +495,12 @@ tests the green scenarios cover deleted.
   per record; H5 player probes, the stealth-kill trace event, crouch and light-pin actions.
   H6–H15 on demand, by the story that needs each. *Acceptance:* `triage.md` § "The fix order",
   row H. *Size:* S–M, three coders and the integrator.
+  *Landed 2026-10-04, acceptance open:* H1–H5 in; the camera hang fixed at its root (a geometryless
+  model admits, `RequestCharacterModel`); `debug_stealth_light` ported. Suite 103 records: 61 pass,
+  35 expected-fail, 5 fail, 1 unexpected-pass, 1 error (designed, parked); after the by-name re-run
+  62 / 36 / 3 / 1 / 0 of 102. Cameras and `sense_cone_enter` green, `verbs_stealth_kill` classified
+  (red 3), N11 filed; default tier 176 / 0 failed. Unticked: `memory_occluded_kept` (Q-H2) and
+  `cover_reclaim` (Q-H1, pass → fail with opaque walls) are open questions (`triage.md` § "Wave H").
 - [ ] **V3. Fix: the arbiter retired; scenes, dialogue and places as retail runs them.** (Was C1;
   absorbs 0003/1–2's kernel half, old 0002/11's executor retirement, 16a's `Follower` owner, the
   four `STORY8-TWIN` survivors.) Retail: `m_scriptState +0x5d70`, `SelectSchedule 0x1028a380` case 4

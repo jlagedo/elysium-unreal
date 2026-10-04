@@ -51,6 +51,7 @@ uses (`ElysiumScheduleLabel`, `TraceCondLabel`).
 | `hint+` / `hint-` | a hint is claimed / released by this NPC | `<hint targetname> node=<id>` |
 | `output` | any entity fires an output | `<OutputName> -> <target>.<Input> <param>` |
 | `input` | any entity receives an input | `<InputName> <param> from=<activator targetname or none>` |
+| `stealthkill` | the player's stealth-kill query (`CStealthKillRules::FindVictim 0x101be1f0`, `FElysiumStealthKillRules::FindVictim`) computes a result that differs (victim, verdict or gate) from the last `stealthkill` event emitted since the sink was installed (`FElysiumEntityWorld::EmitAiTraceOnChange`: the HUD asks every frame, so a steady answer is one event), only when the player's eligibility (`0x10167320`) and `StealthKillDistMax > 0` pass. The event's entity is the victim candidate, the player when the ray found none | `<victim targetname or none> <admit\|refuse> gate=<gate>`; the gate is the first that refuses, or the last (`can_grapple`) on `admit`: `ray` (the forward `MASK_PLAYERSOLID` trace found no NPC), `valid_target` (`IsValidStealthKillTarget 0x102c2300`), `deaf_arc` (`InDeafArc 0x101be500` and not oblivious), `can_grapple` (`CanStartGrappleAttack(3) 0x103285a0`) |
 
 An event whose producer does not exist yet in the port (a stub, an unbuilt chain) is simply never
 emitted; the tap is added when the body lands. Lane B lists in its report which kinds have a live

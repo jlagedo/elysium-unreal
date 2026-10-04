@@ -154,6 +154,23 @@ bool FElysiumEntityWorld::IsNodeGraphLoaded() const
 void FElysiumEntityWorld::SetAiTraceSink(FElysiumAiTraceSink Sink)
 {
 	AiTraceSink = MoveTemp(Sink);
+	AiTraceLastByKind.Reset();
+}
+
+void FElysiumEntityWorld::EmitAiTraceOnChange(const FElysiumEntity& Entity, FName Kind, FString Text)
+{
+	if (!AiTraceSink)
+	{
+		return;
+	}
+	const FString Answer = FString::Printf(TEXT("%d:%u %s"), Entity.Handle.Index, Entity.Handle.Epoch, *Text);
+	FString& Last = AiTraceLastByKind.FindOrAdd(Kind);
+	if (Last == Answer)
+	{
+		return;
+	}
+	Last = Answer;
+	EmitAiTrace(Entity, Kind, MoveTemp(Text));
 }
 
 void FElysiumEntityWorld::EmitAiTrace(const FElysiumEntity& Entity, FName Kind, FString Text)
@@ -2892,6 +2909,7 @@ void FElysiumEntityWorld::Teardown()
 	// The AI trace sink goes first, so nothing the teardown itself fires reaches a harness that is
 	// done with this world; its owner re-installs it on the rebuilt one.
 	AiTraceSink = nullptr;
+	AiTraceLastByKind.Reset();
 
 	// Dialogue cursors and scoped camera handles never enter a map snapshot. Release silently before
 	// the teardown freeze so travel cannot serialize a half-open scripted session.

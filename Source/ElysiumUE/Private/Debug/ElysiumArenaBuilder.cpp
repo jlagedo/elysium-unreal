@@ -2,6 +2,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "ElysiumContentsSignature.h"   // the profile a baked world solid wears
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -42,6 +43,12 @@ namespace
 	// authors, and it is what a body in cover should be doing.
 	const TCHAR* AnchorType = TEXT("Stand");
 
+	// What a baked solid, opaque world brush answers to the four retail masks: blocks the player,
+	// an NPC and sight, no pedestrian volume. The displacement terrain wears the same
+	// (`AElysiumWorldCollisionActor::AuthorFromPayload`).
+	constexpr EElysiumContentsSignature ArenaSolidSignature = EElysiumContentsSignature::Player
+		| EElysiumContentsSignature::Npc | EElysiumContentsSignature::Sight;
+
 	AActor* SpawnSolids(UWorld* World, const FSpec& Spec, const FVector& Origin, bool bWithMeshes)
 	{
 		AActor* Actor = World->SpawnActor<AActor>();
@@ -76,9 +83,12 @@ namespace
 			Box->SetupAttachment(Root);
 			Box->SetBoxExtent(S.Extent, /*bUpdateOverlaps=*/false);
 			Box->SetRelativeLocation(S.Center);
-			// The same profile the map's own brush bodies use, so neither the mover nor an NPC
-			// capsule can tell an arena solid from a `.hulls` collider.
-			Box->SetCollisionProfileName(TEXT("BlockAll"));
+			// The profile a baked solid, opaque world brush wears (`PNS-`: the player hull, an NPC
+			// capsule and sight all stop at it), from the table the map bake reads
+			// (`UElysiumWorldCollisionComponent::ApplySignature`), so no channel can tell an arena
+			// solid from a `.hulls` collider. `BlockAll` names no custom channel: it fell to
+			// `ElysiumSight`'s Ignore default and NPC sight passed through every solid.
+			Box->SetCollisionProfileName(ElysiumContents::ProfileName(ArenaSolidSignature));
 			Box->SetGenerateOverlapEvents(false);
 			// **The one line that separates this from the gym.** Recast reads the shapes that opt
 			// in; without it the room has no navigable surface and the whole cast stands still.

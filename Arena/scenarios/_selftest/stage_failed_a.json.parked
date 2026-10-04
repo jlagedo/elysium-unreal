@@ -1,0 +1,13 @@
+{
+  "name": "stage_failed_a",
+  "about": "Harness self-test, the first of a pair: a stage that cannot activate. The one character's `model` key names `models/error.mdl`, a model the install lacks (`docs/vtmb/wielded_weapons.md` 'Two models the install lacks'), so its character admission fails and the stage world goes Failed. This record ends `error` by design; what it proves is `stage_failed_b`, the next record of the boot, staging fresh and passing (H1).",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 2.0,
+  "cast": [
+    { "name": "selftest_bodiless", "classname": "npc_VHuman", "at": "north", "keys": { "model": "models/error.mdl" } }
+  ],
+  "probes": [
+    { "at": "end", "who": "selftest_bodiless", "probe": "alive", "equals": true }
+  ]
+}

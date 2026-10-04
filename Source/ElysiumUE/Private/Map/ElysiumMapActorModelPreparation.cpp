@@ -50,6 +50,19 @@ namespace
 		return true;
 	}
 
+	// A model the catalogues carry with nothing to load: a geometryless unit (zero bones, zero
+	// vertices -- `models/null.mdl`, both `w_null.mdl` spellings, `docs/vtmb/mdl_v2531.md`), published
+	// as a skin row with no representation or a placed row recorded `bSourceAbsent`. "Empty here" is
+	// exactly "nothing to wait on" for every admission path. The rule and its retail source
+	// (`UTIL_SetModel 0x101cf4a0`) are `AElysiumMapActor::EnsurePlacedModelAdmitted`'s.
+	bool IsGeometrylessModel(const FElysiumPreparedPropModels* Context, const FString& Id)
+	{
+		if (Context == nullptr || Id.IsEmpty() || !Context->Knows(Id)) return false;
+		TSet<FSoftObjectPath> Inventory; FString GatherError;
+		return GatherPlacedModelPaths(Context->PlacedCatalogue(), Context->SkinCatalogue(), {Id}, Inventory, GatherError)
+			&& Inventory.IsEmpty();
+	}
+
 	bool AssetsCompiling(const TArray<UObject*>& Assets)
 	{
 #if WITH_EDITOR
@@ -269,9 +282,7 @@ bool AElysiumMapActor::EnsurePlacedModelAdmitted(const FString& ModelPath)
 	// `bSourceAbsent`. Failing them was a port artifact with no retail counterpart, and it made
 	// `ItemGroundModelState` answer `Unavailable` — a failed asset load — for the authored empty
 	// body that `Geometryless` exists to name.
-	TSet<FSoftObjectPath> Inventory; FString GatherError;
-	if (GatherPlacedModelPaths(PropModelPreparation->PlacedCatalogue(), PropModelPreparation->SkinCatalogue(),
-		{Id}, Inventory, GatherError) && Inventory.IsEmpty())
+	if (IsGeometrylessModel(PropModelPreparation.Get(), Id))
 	{
 		FString Error;
 		if (!PropModelPreparation->Admit({Id}, {}, Error))
@@ -453,6 +464,13 @@ EElysiumCharacterModelAdmission AElysiumMapActor::RequestCharacterModel(
 	if (!Native->OwnsPreparationEpoch(MapEpoch))
 	{ OutError = TEXT("native model preparation belongs to a different map epoch"); return EElysiumCharacterModelAdmission::Rejected; }
 	if (Native->IsModelReady(ModelId)) return EElysiumCharacterModelAdmission::Ready;
+	// A geometryless model is ready as it stands: nothing to make resident, so no admission opens and
+	// the barrier has nothing to wait on. `CNPC_VCamera::Precache` (`0x103689c0`) writes
+	// `models/null.mdl` into a camera that authors no model, and retail's `UTIL_SetModel` precaches it
+	// and carries on with a zero-extent box; the body built for it is none (no cast entry, no mesh).
+	// A model the cast carries is never this, whatever the prop catalogue holds.
+	if (!Native->KnowsModel(ModelId) && IsGeometrylessModel(PropModelPreparation.Get(), ModelId))
+		return EElysiumCharacterModelAdmission::Ready;
 	const auto Ticket = CharacterModelRequests.Begin(Entity, ModelId, Generation);
 	const TWeakObjectPtr<AElysiumMapActor> WeakThis(this);
 	const uint64 RequestId = Native->AdmitModelAsync(ModelId, MapEpoch,

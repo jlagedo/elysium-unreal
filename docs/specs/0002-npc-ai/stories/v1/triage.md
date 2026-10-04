@@ -78,13 +78,22 @@ the tutorial's `thug_1`, every hub pedestrian and any input fired at such an NPC
 | N8 | `StartPlayerDialog` / `…Remote` install no program; the dialogue opens at the input | `script_dialog_hold`, `input_startplayerdialogremote` | `0x1029ef80` forced `0x6d`, `0x1029f060` forced `0x6e`; `OnDialogBegin` from their tasks | `ElysiumNpcDialogue.cpp:66`, `:79` open synchronously | **(a) V3** (the dialogue hold as `0x6a RUN_DIALOG`) |
 | N9 | the maker makes no second child after the first dies | `maker_respawn` (OnNPCDied 4.05, nothing by 9.55) | `MakerThink 0x1034bbf0` re-arms at `SpawnFrequency`; `DeathNotice 0x1034bc90` drops the live count | `MakerThink`/`DeathNotice` read retail-faithful (`ElysiumNpcMaker.cpp:557-571`, `:205-234`); the refusal must be `CanMakeNPC` (`:303-360`) — doubt 4 | **(a) V6 rider**, S, read first (the refusal arm, logged at Verbose `:387`). The maker is landed work; R6 keeps templates and hidden makers |
 | N10 | hidden animals select nothing, before or after the unhide | `rollcall_vanimal`, `_vdog`, `_vscurrying` | red 5's chain, then the Animal line's select (`0x1035fb50`) | `ElysiumNpcSelectSpecies.cpp:266-302`; not walked | **(a) V6** with red 5, plus a read of the Animal select (doubt 2) |
+| N11 | the stealth-kill target test admits only an IDLE or ALERT victim (found by wave H's coder C, reading the query for the `stealthkill` tap) | none yet: `verbs_stealth_kill`'s mark is IDLE, where both arms agree. A record needs a victim in another live state with neither `HEAR_PLAYER` nor `SEE_PLAYER` (`NPC_STATE_SCRIPT` under a `scripted_sequence`, which N7 blocks until V3) | `IsValidStealthKillTarget 0x102c2300` term 4: `GetNPCState` IDLE/ALERT only when `debug_allow_non_idle_auto_sk` (`0x10924af8`, read at `DAT_10924afc`) is 0; the image's initialiser gives it `"1"`, so the shipping arm is "any state but DEAD (7)" (`docs/vtmb/stealth.md:405`, corrected 2026-09-29, `kernel_tunables.tsv` `DebugAllowNonIdleAutoSk`) | `ElysiumNpc.cpp:2360` tests `Idle`/`Alert`; its comment (`:2345`) calls the relaxed arm "a developer arm, not ported" — the corrected doc says it is the shipping one | **(a) V7 rider**, XS: the state term reads "not DEAD", the ConVar's `1` default named at the line; the record lands with V3's scripted possession (N7). Landed work (the stealth-kill verb): the fix is proposed to the owner with V7 |
 
 Every new red lands in step 2 except N3, the one planning bug among them. A second planning bug,
 not a red yet: **V8's tutorial check needs heard footsteps** (`map_tutorial_sneak_past`'s hearing
 half; the record's own note), and the footstep producers are R1's. Either pull R1's footstep
 `CSound` producer forward into step 2 (with N4's story), or re-cut V8's tutorial clause to sight only.
 
-**Unclassified — `verbs_stealth_kill`.** First unmet `death` by 12.0; `+use` (2.0) and `+attack`
+**`verbs_stealth_kill` — classified by wave H: red 3.** With the `stealthkill` event, `player_crouch`
+and the player probes (wave H, 2026-10-04): crouched and knife wielded at 1.5 s; `FindVictim` admits
+the mark at 0.917 (`arena_mark admit gate=can_grapple`), `+use` at 2.0 opens the type-3 grapple
+(`OnGrappleBegin` 2.017), the synchronized death, `OnDeath` and the corpse land at 5.367. Every
+expectation is met; only the end probe `on_ground` reads false — red 3's corpse, as
+`damage_lethal_death`. `known_red` red 3; the record is `expected-fail`. The V2 failure was the
+harness's (the typed `+duck` latch; H4). The paragraph below is V2's reading, kept for the record.
+
+*V2's reading (superseded).* First unmet `death` by 12.0; `+use` (2.0) and `+attack`
 (4.0) produce nothing but `HEAR_PLAYER` from 4.8. What the sources allow: the crouch took (the same
 `elysium.cmd +duck` crouched the player for every later record of the boot, H4), and `slot2` wields
 the knife (`damage_idle_reaction`'s 40-point hit in the same boot). Left: whether `elysium.cmd +use`
@@ -96,6 +105,11 @@ answer and the refusing gate.
 
 **Harness, not game**: `sense_cone_enter`, `memory_occluded_kept` (H2), `rollcall_vcamera`,
 `rollcall_vcamerasecurity` (H1), `rollcall_vzombie` (H11), `unknown_crouched_band`'s light (H5).
+Wave H closed H1, H2, H5's halves for these: `sense_cone_enter`, both cameras and the light now pass;
+`memory_occluded_kept` moved to a new question (§ "Wave H", below). H1's camera half was a game
+defect, fixed at its root: `CNPC_VCamera::Precache 0x103689c0` gives a model-less camera
+`models/null.mdl`, and the character admission refused the geometryless model, so the barrier
+waited forever (a real map with a camera, `ch_zhaos_1`, would hang the same way).
 
 ## Records whose verdict depends on occlusion (H2)
 
@@ -134,6 +148,42 @@ baked `ElysiumPropSolid` profile, `:49`, blocks it; the arena does not use it).
 | H13 | ensure / assert counts and the script's actions in the index / trace | the map smokes' "0 ensure / assert" (V8) | `ElysiumArenaScenarioRunner.cpp` |
 | H14 | `taskdone task_get_path_to_patrol_point` emitted twice per goal; README says `(0xNN)`, the trace prints `(0xN)` | — | the taskdone tap; `Arena/README.md` |
 | H15 | the maker's refusal reason only at `Verbose` | `maker_respawn`'s diagnosis | the arena host's log verbosity for `LogElysiumNpcEnt` |
+
+## Wave H (2026-10-04): what moved, and the two questions it opened
+
+H1–H5 landed (the integrator's report: `spec.md` § Step 2, H). Full run `20261004T030430.860212Z`: 103 records, 61 pass,
+35 expected-fail, 5 fail, 1 unexpected-pass, 1 error (the designed `stage_failed_a`, since parked).
+After the by-name re-run (`20261004T031612.315382Z`; 102 records, 62 pass, 36 expected-fail, 3 fail,
+1 unexpected-pass `hear_world_investigate`, N4) the fails are `cover_reclaim`,
+`memory_occluded_kept`, `rollcall_vzombie` (H11, not this wave's). Two records are open questions,
+classified neither harness nor game yet; each owes a reading before V3 runs `cover`:
+
+- **Q-H1 `cover_reclaim`: pass → fail, with walls opaque to sight.** The opening is unchanged in
+  shape but the first claim moved from `cover_corner_nw` (node 3) to `cover_corner_ne` (node 2); after
+  the two corner hints are killed (4.217) and `HINT_INVALID` breaks the program (4.300), the next
+  selection is `SCHED_TROIKA_RANGE_ATTACK1 (0xed)` with `SEE_ENEMY`/`CAN_RANGE_ATTACK1` standing:
+  no `hint+ cover_low_north`. V2's pass rested on transparent solids. Owed: which gate of the cover
+  search (`0x102b7110`, the hint test `CAI_Hint::ObjectCaps 0x102d2ee0`, the in-cover arm
+  `0x102b5de0`) refuses `cover_low_north` against the occluding block, and whether retail answers
+  `0xed` there (record error: the staging assumed sight through the block) or the port's gate
+  diverges (game red). Same shift in `cover` (red 1's `smith_lean_left_into rate=0` now at 3.3 on
+  `cover_corner_ne`, was 7.4 on `_nw`); `cover`'s verdict is unchanged.
+- **Q-H2 `memory_occluded_kept`: fail → fail, a new reason.** Sight now fails behind the block (H2):
+  `cond- HAVE_ENEMY_LOS`, `OnLostPlayerLOS`, `OnLostEnemyLOS` at 2.000 (the tenth miss after the 1.0
+  teleport), but `cond+ ENEMY_OCCLUDED` only at 2.500. Retail sets `0x48` and fires both outputs in
+  the same pass at the tenth miss (`GatherEnemyConditions 0x10270b20`, `0x10270bfc..0x10270c5d`,
+  `conditions-and-states.md:2790`); the port's arm reads the same
+  (`ElysiumNpcBaseConditions2.cpp:448-465`), and the `cond±` tap diffs the whole gather
+  (`ElysiumNpcBaseRunAi.cpp:75`). So the 2.0 gather set `0x48` and the trace did not show it, or a
+  second path ran the enemy gather outside `RunAI`: harness (the tap) or game, undetermined. The
+  record's other halves hold so far (no `LOST_ENEMY`, still Combat at 2.7 when it stopped).
+
+Unchanged by wave H, stated for the next wave: the roll call's `never taskfail` stays at `at_most` 0
+(the per-class bound needs each class's first program, `review.md`'s V1 follow-up); the churn
+(`rollcall_vtaxidriver` 455 `IDLE_DISPOSITION` installs, `rollcall_vrat` 47 `LOITER`) is not stated
+for the same reason; `maker_respawn`'s "no second spawn while the first child lives" needs a window
+that closes at a label (`never` closes only at `until` seconds); "nothing after death" is not stated
+(retail's dead NPC still runs `SCHED_DIE`, so the event set to forbid needs a read).
 
 ## The fix order — acceptance lists
 

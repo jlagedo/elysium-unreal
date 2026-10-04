@@ -52,6 +52,7 @@
     { "who": "arena_gunman", "kind": "schedule", "match": "SCHED_TROIKA_TAKE_COVER_HINT_VS_MELEE" }
   ],
   "probes": [
+    { "at": 1.0, "who": "player", "probe": "player_weapon", "equals": "item_w_thirtyeight" },
     { "at": "end", "who": "arena_gunman", "probe": "alive", "equals": true }
   ]
 }

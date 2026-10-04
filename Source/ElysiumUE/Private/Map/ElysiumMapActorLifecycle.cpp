@@ -264,9 +264,12 @@ bool AElysiumMapActor::RebuildStageWorld(FElysiumEntityDefs&& Defs, TArray<FElys
 		OutError = TEXT("not a stage world -- a map's entity world is replaced only by travel");
 		return false;
 	}
-	if (RuntimePhase != EElysiumMapRuntimePhase::Active)
+	// Active, or Failed: a stage whose barrier gave up is rebuilt over (the teardown below replaces the
+	// failed flag, the half-built entity world and the model preparations), so one record that failed
+	// to stage does not refuse every record after it. Any other phase is mid-build.
+	if (RuntimePhase != EElysiumMapRuntimePhase::Active && RuntimePhase != EElysiumMapRuntimePhase::Failed)
 	{
-		OutError = FString::Printf(TEXT("the stage runtime is %s, not Active -- wait for the barrier"),
+		OutError = FString::Printf(TEXT("the stage runtime is %s, not Active or Failed -- wait for the barrier"),
 			ElysiumMapRuntimePhaseName(RuntimePhase));
 		return false;
 	}

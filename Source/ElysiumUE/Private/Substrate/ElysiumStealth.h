@@ -57,12 +57,14 @@ namespace ElysiumStealth
 	// torch. Compared against the item entity's own registered classname.
 	inline const TCHAR* TorchWeaponClass = TEXT("item_w_torch");
 
-	// SEAM: retail's `debug_stealth_light` replaces the normalized aggregate with `value * 0.1` when
-	// enabled. It is a retail developer console variable, and this project's debug surface is Cog
-	// rather than a cvar — but the surface has no Cog window of its own yet, and adding one to carry
-	// a single override is not wired here. Nothing here reads an override; the recompute is a
-	// pure function over explicit inputs, so the override lands as one more input on
-	// `FRecomputeInputs` whenever a stealth Cog tab exists to drive it.
+	// Retail's developer ConVar `debug_stealth_light` (`0x109384d8`, default `-1`, range `-1..10`),
+	// ported under its retail name as `npc_ignore_player` is. `0x10351b3e`: when its int value is above
+	// -1 the normalized light is replaced by its float value times 0.1 -- after the torch arm, so it
+	// overrides the torch too, and before the row walk; the ineligible arm still overwrites it with
+	// the sentinel afterwards. `-1`, the default, changes nothing.
+	inline constexpr float DebugLightOff = -1.0f;
+	inline constexpr float DebugLightMax = 10.0f;
+	inline constexpr float DebugLightScale = 0.1f;   // `_DAT_104491b4`
 
 	// How long a pending observer offer defends its distance before the next pass may replace it
 	// with a further one. CHOSEN: twice `ElysiumNpcSense::PlayerLosCadenceSeconds`, so an observer
@@ -99,6 +101,9 @@ namespace ElysiumStealth
 
 		float WorldLightMin = DefaultWorldLightMin;
 		float WorldLightMax = DefaultWorldLightMax;
+
+		// Step 5's developer override: `debug_stealth_light`'s value, `DebugLightOff` when unset.
+		float DebugLight = DebugLightOff;
 	};
 
 	struct FRecomputeResult

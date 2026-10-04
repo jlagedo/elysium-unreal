@@ -1,6 +1,6 @@
 {
   "name": "fail_route_unreachable_sound",
-  "about": "A goal nothing can reach takes the kernel's failure route once (13, 14, 25). The sound is made where the player stands, on top of the block (96 units tall, no way up). hear_world_investigate's chain installs SCHED_TROIKA_INVESTIGATE_SOUND; TASK_GET_PATH_TO_BESTSOUND (base StartTask arm 0x10285df8) hands the sound's origin to SetGoal and no route exists, so the task fails (TaskFail, Troika 0x1029adb0 -> base 0x10273fc0: the reason to +0x5c50, COND_TASK_FAILED 0x5c). The failure comes BEFORE the program's own TASK_SET_FAIL_SCHEDULE, so m_failSchedule is 0 and the route at the top of the next MaintainSchedule 0x102817c0 runs GetFailSchedule 0x10281730 -> 0x1028abe0 -> 0x43 FAIL (no Troika translation, 0x102b12f0): TASK_STOP_MOVING, TASK_SET_ACTIVITY ACT_IDLE, TASK_WAIT 1, TASK_WAIT_PVS (schedule-kernel.md 'The kernel's failure route and the base programs, walked'). Then the program completes and the selector runs again; the inserted sound is not re-heard (CanHearSound 0x1030f7b0 rejects a sound not inserted since the last Listen) and the HEAR_WORLD arm never armed m_flNextInvestigateSoundTime, so nothing re-selects the investigation: one failure, no storm. Listener on north (384, 0) Source units, D_NU 5, npc_perception 1 (290 units sight, so the player on the block at 384 units is never seen), investigate_mode 3.",
+  "about": "A goal nothing can reach takes the kernel's failure route once (13, 14, 25). The sound is made where the player stands, on top of the block (96 units tall, no way up). hear_world_investigate's chain installs SCHED_TROIKA_INVESTIGATE_SOUND; TASK_GET_PATH_TO_BESTSOUND (base StartTask arm 0x10285df8) hands the sound's origin to SetGoal and no route exists, so the task fails (TaskFail, Troika 0x1029adb0 -> base 0x10273fc0: the reason to +0x5c50, COND_TASK_FAILED 0x5c). The failure comes BEFORE the program's own TASK_SET_FAIL_SCHEDULE, so m_failSchedule is 0 and the route at the top of the next MaintainSchedule 0x102817c0 runs GetFailSchedule 0x10281730 -> 0x1028abe0 -> 0x43 FAIL (no Troika translation, 0x102b12f0): TASK_STOP_MOVING, TASK_SET_ACTIVITY ACT_IDLE, TASK_WAIT 1, TASK_WAIT_PVS (schedule-kernel.md 'The kernel's failure route and the base programs, walked'). Then the program completes and the selector runs again; the inserted sound is not re-heard (CanHearSound 0x1030f7b0 rejects a sound not inserted since the last Listen) and the HEAR_WORLD arm never armed m_flNextInvestigateSoundTime, so nothing re-selects the investigation: one failure, no storm (the window `after` fails counts the failure itself, so `at_most` 1 is that one failure and no other; from the reselection on, no investigation program). Listener on north (384, 0) Source units, D_NU 5, npc_perception 1 (290 units sight, so the player on the block at 384 units is never seen), investigate_mode 3.",
   "stage": "arena",
   "seed": 1,
   "duration": 20.0,
@@ -55,7 +55,9 @@
   ],
   "never": [
     { "who": "arena_listener", "kind": "move", "match": "arrived" },
-    { "who": "arena_listener", "kind": "cond+", "match": "SEE_PLAYER (0x5a)" }
+    { "who": "arena_listener", "kind": "cond+", "match": "SEE_PLAYER (0x5a)" },
+    { "who": "arena_listener", "kind": "taskfail", "match": "", "after": "fails", "at_most": 1 },
+    { "who": "arena_listener", "kind": "schedule", "match": "SCHED_TROIKA_INVESTIGATE_SOUND (", "after": "reselects" }
   ],
   "probes": [
     { "at": "end", "who": "arena_listener", "probe": "alive", "equals": true }

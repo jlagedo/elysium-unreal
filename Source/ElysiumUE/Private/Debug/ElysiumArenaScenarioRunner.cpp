@@ -9,6 +9,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumInputRouter.h"              // `player_walk`: the input replay door `gr_walk` drives
 #include "ElysiumMapActor.h"
+#include "ElysiumMovementComponent.h"        // `player_crouch`: the duck's heading, read off the mover
 #include "ElysiumNpcMindTypes.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumPlayerBody.h"
@@ -16,6 +17,8 @@
 #include "ElysiumSessionSubsystem.h"
 #include "ElysiumUserCmd.h"
 #include "ElysiumVariant.h"
+#include "ElysiumWorldServices.h"            // `player_crouched`: `IElysiumEmbodiment::IsPlayerDucking`
+#include "Substrate/ElysiumItemClasses.h"    // `player_weapon`: the active item's classname
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumSchedule.h"
@@ -29,6 +32,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/IConsoleManager.h"             // `light_pin`: retail's `debug_stealth_light` knob
 #include "HAL/PlatformTime.h"
 #include "Misc/FileHelper.h"
 
@@ -49,6 +53,19 @@ namespace ElysiumArenaRunnerDetail
 	// Two numbers a probe reads are equal within this (a health is whole; a distance is not compared
 	// for equality by any sensible record).
 	constexpr double ProbeEpsilon = 1e-3;
+
+	// Retail's `debug_stealth_light` (`0x109384d8`, default -1, range -1..10; `docs/vtmb/stealth.md`):
+	// at 0..10 the normalized body light is replaced by `value * 0.1`, at -1 it is off.
+	const TCHAR* const StealthLightKnob = TEXT("debug_stealth_light");
+	constexpr float StealthLightOff = -1.0f;
+	constexpr float StealthLightScale = 10.0f;   // a record's [0, 1] light as the knob's 0..10
+
+	// The runner's own trace kind: one event per script action it runs.
+	FName ScriptKind()
+	{
+		static const FName Kind(TEXT("script"));
+		return Kind;
+	}
 
 	FElysiumVariant ToVariant(const FElysiumArenaValue& Value)
 	{
@@ -207,6 +224,8 @@ FElysiumArenaScenarioRunner::FElysiumArenaScenarioRunner(const FElysiumArenaScen
 	Result.KnownRed = Record.KnownRed;
 	Result.Trace = FString::Printf(TEXT("%s.trace.tsv"), *Record.Name);
 	MatchTimes.Init(-1.0, Record.Expect.Num());
+	NeverScans.Init(0, Record.Never.Num());
+	NeverCounts.Init(0, Record.Never.Num());
 	ActionFired.Init(false, Record.Script.Num());
 	ProbeRead.Init(false, Record.Probes.Num());
 }
@@ -328,9 +347,20 @@ void FElysiumArenaScenarioRunner::Detach()
 		}
 		ReadyHandle.Reset();
 	}
-	if (bWalking)
+	if (bLightPinned)
+	{
+		bLightPinned = false;
+		if (IConsoleVariable* Knob = IConsoleManager::Get().FindConsoleVariable(
+			ElysiumArenaRunnerDetail::StealthLightKnob))
+		{
+			Knob->Set(ElysiumArenaRunnerDetail::StealthLightOff, ECVF_SetByCode);
+		}
+	}
+	CrouchStep = ECrouchStep::None;
+	if (bWalking || bDrivingInput)
 	{
 		bWalking = false;
+		bDrivingInput = false;
 		const ElysiumGreenRoom::FDriveRefs Refs = ElysiumGreenRoom::ResolveDriveBody(Host.GetWorld());
 		const AElysiumPlayerController* PC = Refs ? Cast<AElysiumPlayerController>(Refs.PC) : nullptr;
 		if (UElysiumInputRouter* Router = PC != nullptr ? PC->GetInputRouter() : nullptr)
@@ -437,21 +467,51 @@ void FElysiumArenaScenarioRunner::MatchExpectations()
 	}
 }
 
+bool FElysiumArenaScenarioRunner::NeverWindowStart(const FElysiumArenaMatch& Spec, double& OutStart) const
+{
+	if (Spec.AfterIndex != INDEX_NONE)
+	{
+		// A label never met never opens the window; the unmet expectation fails the run on its own.
+		const double Met = MatchTimes.IsValidIndex(Spec.AfterIndex) ? MatchTimes[Spec.AfterIndex] : -1.0;
+		if (Met < 0.0)
+		{
+			return false;
+		}
+		OutStart = Met + Spec.Delay;
+		return true;
+	}
+	OutStart = Spec.bFrom ? Spec.From : 0.0;
+	return true;
+}
+
 void FElysiumArenaScenarioRunner::FindNeverViolation(FFailure& Out)
 {
-	for (; NeverScan < Events.Num(); ++NeverScan)
+	// Each `never` judges the events on its own cursor, so one waiting on a label holds its place
+	// rather than letting events go by unjudged: once the label is met, the events from its match on
+	// are still there to count. Expectations are matched first in the same tick, so a label met by
+	// an event already recorded is known before any event after it is judged here.
+	for (int32 Index = 0; Index < NeverMatchers.Num(); ++Index)
 	{
-		const FEvent& Event = Events[NeverScan];
-		const double Time = ScenarioTime(Event);
-		if (Time < 0.0)
+		const FElysiumArenaMatch& Spec = *NeverMatchers[Index].Spec;
+		double Opens = 0.0;
+		if (!NeverWindowStart(Spec, Opens))
 		{
 			continue;
 		}
-		for (int32 Index = 0; Index < NeverMatchers.Num(); ++Index)
+		// Nothing before scenario zero counts, whatever the window says.
+		Opens = FMath::Max(Opens, 0.0);
+		const double Closes = Spec.bUntil ? Spec.Until : Record.Duration;
+		int32& Scan = NeverScans[Index];
+		for (; Scan < Events.Num(); ++Scan)
 		{
-			const FElysiumArenaMatch& Spec = *NeverMatchers[Index].Spec;
-			const double Until = Spec.bUntil ? Spec.Until : Record.Duration;
-			if (Time > Until || !Matches(NeverMatchers[Index], Event))
+			const FEvent& Event = Events[Scan];
+			const double Time = ScenarioTime(Event);
+			if (Time < Opens || Time > Closes || !Matches(NeverMatchers[Index], Event))
+			{
+				continue;
+			}
+			const int32 Count = ++NeverCounts[Index];
+			if (Count <= Spec.AtMost)
 			{
 				continue;
 			}
@@ -464,10 +524,12 @@ void FElysiumArenaScenarioRunner::FindNeverViolation(FFailure& Out)
 				Out.Who = Spec.Who;
 				Out.Kind = Spec.Kind.ToString();
 				Out.Match = Spec.Match;
-				Out.Reason = FString::Printf(TEXT("appeared at t=%.2f: %s %s"), Time,
-					Event.Name.IsEmpty() ? TEXT("-") : *Event.Name, *Event.Text);
+				Out.Reason = FString::Printf(
+					TEXT("appeared at t=%.2f: match %d where at most %d may appear in [%.2f, %.2f]: %s %s"), Time,
+					Count, Spec.AtMost, Opens, Closes, Event.Name.IsEmpty() ? TEXT("-") : *Event.Name, *Event.Text);
 			}
-			return;
+			++Scan;
+			break;
 		}
 	}
 }
@@ -639,6 +701,43 @@ bool FElysiumArenaScenarioRunner::ReadProbe(const FElysiumArenaProbeSpec& Probe,
 		Answer.Number = FVector::Dist(Entity->Origin, Target);
 		break;
 	}
+	case EElysiumArenaProbe::PlayerWeapon:
+	case EElysiumArenaProbe::PlayerCrouched:
+	case EElysiumArenaProbe::PlayerGrappling:
+	{
+		// Read through what the game's own readers read; the reader refuses any `who` but `player`.
+		const FElysiumPlayer* Player = World->FindPlayer();
+		if (Player == nullptr)
+		{
+			OutError = TEXT("no player entity to read");
+			return false;
+		}
+		if (Probe.Probe == EElysiumArenaProbe::PlayerWeapon)
+		{
+			// `HasWeaponEquipped`'s read: the inventory's active item and its classname.
+			const FElysiumItem* Active = Player->Inventory.Active(*Player);
+			Answer.Type = FElysiumArenaValue::EType::String;
+			Answer.String = Active != nullptr ? Active->ClassName() : FString(TEXT("none"));
+		}
+		else if (Probe.Probe == EElysiumArenaProbe::PlayerCrouched)
+		{
+			// `FL_DUCKING` as the stealth eligibility, the grapple admission and the footsteps read it.
+			const IElysiumEmbodiment* Embodiment = World->Embodiment();
+			if (Embodiment == nullptr)
+			{
+				OutError = TEXT("no embodiment to read the player's posture from");
+				return false;
+			}
+			Answer.Type = FElysiumArenaValue::EType::Bool;
+			Answer.bBool = Embodiment->IsPlayerDucking();
+		}
+		else
+		{
+			Answer.Type = FElysiumArenaValue::EType::Bool;
+			Answer.bBool = Player->IsGrappling();
+		}
+		break;
+	}
 	default:
 		OutError = TEXT("unhandled probe");
 		return false;
@@ -721,6 +820,8 @@ bool FElysiumArenaScenarioRunner::FireDueActions(double Now, FElysiumEntityWorld
 			continue;
 		}
 		ActionFired[Index] = true;
+		// Traced before it runs, so a trace shows the action an `error` ended on as well.
+		RecordAction(Action, World);
 		FString Error;
 		if (!RunAction(Index, World, Error))
 		{
@@ -735,6 +836,55 @@ bool FElysiumArenaScenarioRunner::FireDueActions(double Now, FElysiumEntityWorld
 		}
 	}
 	return true;
+}
+
+void FElysiumArenaScenarioRunner::RecordAction(const FElysiumArenaAction& Action, const FElysiumEntityWorld& World)
+{
+	auto PlaceText = [](const FElysiumArenaAt& At)
+	{
+		return At.bCoordinates ? At.Coordinates.ToCompactString() : At.Name;
+	};
+	FString Name;
+	FString Text = ElysiumArenaScenario::ActionName(Action.Do);
+	switch (Action.Do)
+	{
+	case EElysiumArenaAction::PlayerTeleport:
+	case EElysiumArenaAction::PlayerWalk:
+		Name = TEXT("player");
+		Text += FString::Printf(TEXT(" %s"), *PlaceText(Action.At));
+		break;
+	case EElysiumArenaAction::Fire:
+		Name = Action.Target;
+		Text += FString::Printf(TEXT(" %s %s"), *Action.Input, *Action.Param.Describe());
+		break;
+	case EElysiumArenaAction::Kill:
+		Name = Action.Target;
+		break;
+	case EElysiumArenaAction::Console:
+		Text += FString::Printf(TEXT(" %s"), *Action.Command);
+		break;
+	case EElysiumArenaAction::Spawn:
+		Name = Action.Row.Name;
+		Text += FString::Printf(TEXT(" %s %s"), *Action.Row.Classname, *PlaceText(Action.Row.At));
+		break;
+	case EElysiumArenaAction::PlayerCrouch:
+		Name = TEXT("player");
+		Text += Action.bOn ? TEXT(" on") : TEXT(" off");
+		break;
+	case EElysiumArenaAction::LightPin:
+		Name = TEXT("player");
+		Text += Action.bLightRelease ? FString(TEXT(" release")) : FString::Printf(TEXT(" %g"), Action.Light);
+		break;
+	default:
+		break;
+	}
+	// Into the run's own event list, in time order: the runner ticks between frames, so every event a
+	// tap has emitted so far is at or before the world's now.
+	FEvent& Recorded = Events.AddDefaulted_GetRef();
+	Recorded.Time = World.NowSeconds();
+	Recorded.Name = Name;
+	Recorded.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+	Recorded.Text = Text;
 }
 
 bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& World, FString& OutError)
@@ -837,50 +987,124 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 		}
 		return true;
 	}
+	case EElysiumArenaAction::PlayerCrouch:
+	{
+		// The door `player_walk` takes: the router's replay, never a console `+duck` string.
+		const ElysiumGreenRoom::FDriveRefs Refs = ElysiumGreenRoom::ResolveDriveBody(Host.GetWorld());
+		const AElysiumPlayerController* PC = Refs ? Cast<AElysiumPlayerController>(Refs.PC) : nullptr;
+		if (PC == nullptr || PC->GetInputRouter() == nullptr)
+		{
+			OutError = TEXT("unsupported in this host: no player controller input router to replay a press through");
+			return false;
+		}
+		CrouchStep = ECrouchStep::Press;
+		bCrouchWanted = Action.bOn;
+		return true;
+	}
+	case EElysiumArenaAction::LightPin:
+	{
+		IConsoleVariable* Knob = IConsoleManager::Get().FindConsoleVariable(ElysiumArenaRunnerDetail::StealthLightKnob);
+		if (Knob == nullptr)
+		{
+			OutError = TEXT("unsupported in this host: `debug_stealth_light` is not registered (the override is ")
+				TEXT("the seam at Substrate/ElysiumStealth.h:60)");
+			return false;
+		}
+		Knob->Set(Action.bLightRelease ? ElysiumArenaRunnerDetail::StealthLightOff
+			: static_cast<float>(Action.Light) * ElysiumArenaRunnerDetail::StealthLightScale, ECVF_SetByCode);
+		bLightPinned = !Action.bLightRelease;
+		return true;
+	}
 	default:
 		OutError = TEXT("unhandled action");
 		return false;
 	}
 }
 
-void FElysiumArenaScenarioRunner::TickPlayerWalk()
+void FElysiumArenaScenarioRunner::TickPlayerInput()
 {
-	if (!bWalking)
+	if (!bWalking && CrouchStep == ECrouchStep::None && !bDrivingInput)
 	{
 		return;
 	}
-	// `FElysiumGreenRoomRun::TickArenaWalkPlayer`, the lab's `gr_walk` player arm, over the same
-	// door: one command replayed per frame through the player controller's input router, turning
-	// and walking toward the destination read fresh from the live position.
 	const ElysiumGreenRoom::FDriveRefs Refs = ElysiumGreenRoom::ResolveDriveBody(Host.GetWorld());
 	const AElysiumPlayerController* PC = Refs ? Cast<AElysiumPlayerController>(Refs.PC) : nullptr;
 	UElysiumInputRouter* Router = PC != nullptr ? PC->GetInputRouter() : nullptr;
 	if (!Refs || Router == nullptr)
 	{
 		bWalking = false;
+		CrouchStep = ECrouchStep::None;
+		bDrivingInput = false;
 		return;
 	}
-	const FVector Feet = Refs.Pawn->GetActorLocation() - FVector(0.0f, 0.0f, Refs.Body->GetBodyHalfHeight());
-	FVector Delta = WalkFeet - Feet;
-	Delta.Z = 0.0f;
-	if (Delta.Size() <= ElysiumArenaRunnerDetail::WalkAcceptanceCm)
+
+	FElysiumUserCmd Cmd;
+	bool bSend = false;
+	if (bWalking)
 	{
-		bWalking = false;
+		// `FElysiumGreenRoomRun::TickArenaWalkPlayer`, the lab's `gr_walk` player arm, over the same
+		// door: one command replayed per frame through the player controller's input router, turning
+		// and walking toward the destination read fresh from the live position.
+		const FVector Feet = Refs.Pawn->GetActorLocation() - FVector(0.0f, 0.0f, Refs.Body->GetBodyHalfHeight());
+		FVector Delta = WalkFeet - Feet;
+		Delta.Z = 0.0f;
+		if (Delta.Size() <= ElysiumArenaRunnerDetail::WalkAcceptanceCm)
+		{
+			bWalking = false;
+		}
+		else
+		{
+			const float TargetYaw = static_cast<float>(Delta.Rotation().Yaw);
+			const float CurrentYaw = static_cast<float>(Refs.PC->GetControlRotation().Yaw);
+			Cmd.LookDelta = FVector2D(FMath::FindDeltaAngleDegrees(CurrentYaw, TargetYaw), 0.0f);
+			Cmd.Move = FVector2D(1.0f, 0.0f);
+			Cmd.Buttons |= static_cast<uint64>(EElysiumButton::Forward);
+			bSend = true;
+		}
+	}
+
+	if (CrouchStep == ECrouchStep::Press)
+	{
+		// The duck is a toggle keyed on the press edge (`CGameMovement::Duck` `0x10126fd0`,
+		// `UElysiumMovementComponent`'s duck): a press while standing starts the lowering, a press
+		// while ducked starts the stand-up when there is headroom. Settled ducked or lowering heads
+		// for the crouch; standing or rising heads for standing. One press, and only when the body is
+		// not already heading where the record wants it: what that press then does (a stand-up with no
+		// headroom is swallowed) is the mover's, as it is a player's.
+		const bool bHeadingDucked = Refs.Move->IsDucked() != Refs.Move->IsDucking();
+		if (bHeadingDucked != bCrouchWanted)
+		{
+			Cmd.Buttons |= static_cast<uint64>(EElysiumButton::Duck);
+			bSend = true;
+			CrouchStep = ECrouchStep::Release;
+		}
+		else
+		{
+			CrouchStep = ECrouchStep::None;
+		}
+	}
+	else if (CrouchStep == ECrouchStep::Release)
+	{
+		// This frame's command (the walk's, or the router's own once the replay stops) carries no duck
+		// bit: the key is up, so a later press is an edge again.
+		CrouchStep = ECrouchStep::None;
+	}
+
+	if (bSend)
+	{
+		FElysiumUserCmdStream OneShot;
+		OneShot.Record(Cmd);
+		Router->StartReplay(OneShot);
+		bDrivingInput = true;
+	}
+	else if (bDrivingInput)
+	{
+		bDrivingInput = false;
 		if (Router->IsReplaying())
 		{
 			Router->StopReplay();
 		}
-		return;
 	}
-	const float TargetYaw = static_cast<float>(Delta.Rotation().Yaw);
-	const float CurrentYaw = static_cast<float>(Refs.PC->GetControlRotation().Yaw);
-	FElysiumUserCmd Cmd;
-	Cmd.LookDelta = FVector2D(FMath::FindDeltaAngleDegrees(CurrentYaw, TargetYaw), 0.0f);
-	Cmd.Move = FVector2D(1.0f, 0.0f);
-	Cmd.Buttons = static_cast<uint64>(EElysiumButton::Forward);
-	FElysiumUserCmdStream OneShot;
-	OneShot.Record(Cmd);
-	Router->StartReplay(OneShot);
 }
 
 bool FElysiumArenaScenarioRunner::IsComplete(double Now) const
@@ -925,6 +1149,15 @@ bool FElysiumArenaScenarioRunner::Tick()
 	}
 	if (!bZeroKnown)
 	{
+		// A stage whose activation failed outright ends the record now rather than at the bound: the
+		// record is `error`, and the host stages the next record on a released stage.
+		const AElysiumMapActor* FailedMap = Host.GetMap();
+		if (FailedMap != nullptr && FailedMap->GetRuntimePhase() == EElysiumMapRuntimePhase::Failed)
+		{
+			Abort(FString::Printf(TEXT("the stage failed before it activated: %s (waiting on: %s)"),
+				*FailedMap->GetRuntimeFailureReason(), *FailedMap->GetMissingRuntimePrerequisites()));
+			return false;
+		}
 		if (FPlatformTime::Seconds() - StartWall > ElysiumArenaRunnerDetail::ActivationWaitSeconds)
 		{
 			const AElysiumMapActor* Map = Host.GetMap();
@@ -965,7 +1198,7 @@ bool FElysiumArenaScenarioRunner::Tick()
 	{
 		return false;
 	}
-	TickPlayerWalk();
+	TickPlayerInput();
 
 	if (IsComplete(Now) || Now >= Record.Duration)
 	{

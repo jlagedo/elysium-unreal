@@ -82,7 +82,23 @@ namespace ElysiumArenaStage
 	// yaw, a camera reseed -- `FElysiumGreenRoomRun::ArenaSeatPlayer`'s four steps at any feet.
 	bool SeatPlayerAt(UWorld* World, const FVector& FeetWorld, float YawDeg, FString& OutError);
 
+	// Return the player to what a new game's player has, at a record's seating: standing (the mover's
+	// `ResetState`, the duck and its retained request), no `+duck` / `+attack` / `+use` latch held in the
+	// input router and no replay running, no feed, grapple or stealth kill in progress, nothing wielded,
+	// the damage counter healed, no discipline active -- each through the game's own door, never a field
+	// write. `EntityWorld` is the world the player entity lives in (null: the pawn half only). The arena
+	// host's rebuild already stands a new player entity; this is what its pawn and the session record
+	// carry across, and the whole job on a map host, which is not rebuilt. Not part of `SeatPlayerAt`:
+	// the runner's `player_teleport` seats mid-record and must not stand the player up. Returns what it
+	// found to undo ("held buttons 0x1000, ducked"), empty when the player was already at rest. The
+	// light pin, retail's `debug_stealth_light` (`0x109384d8`), goes back to `-1`, off.
+	FString ResetPlayerState(UWorld* World, FElysiumEntityWorld* EntityWorld);
+
 	// Stage `Record` on `Host` (see the header comment). `OutSummary` is one line for the log.
+	//
+	// A stage that failed to activate (`RuntimePhase` Failed: the barrier's wait ended) is not a dead
+	// end: the next `Stage` rebuilds over it -- its pending character admissions cancelled, the failed
+	// flag and the half-built entity world replaced -- so one bad record never errors the ones behind it.
 	bool Stage(const FElysiumArenaScenario& Record, const FHost& Host, FString& OutSummary,
 		FString& OutError);
 }

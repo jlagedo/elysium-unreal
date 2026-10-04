@@ -19,13 +19,15 @@
 // Qualified namespace rather than an anonymous one: a unity build concatenates translation units.
 namespace ElysiumArenaScenarioParse
 {
-	// The kinds of `seam.md` § "Kinds and their text", in its order.
+	// The kinds of `seam.md` § "Kinds and their text", in its order, then `script`: no tap emits it,
+	// the runner writes one per action it runs (`FElysiumArenaScenarioRunner::FireDueActions`).
 	const TCHAR* const GTraceKinds[] =
 	{
 		TEXT("schedule"), TEXT("task"), TEXT("taskdone"), TEXT("taskfail"), TEXT("break"),
 		TEXT("cond+"), TEXT("cond-"), TEXT("state"), TEXT("sequence"), TEXT("seqfinished"),
 		TEXT("animevent"), TEXT("move"), TEXT("damage"), TEXT("death"), TEXT("corpse"),
-		TEXT("hint+"), TEXT("hint-"), TEXT("output"), TEXT("input"),
+		TEXT("hint+"), TEXT("hint-"), TEXT("output"), TEXT("input"), TEXT("stealthkill"),
+		TEXT("script"),
 	};
 
 	enum class ENeed : uint8 { Optional, Required };
@@ -418,6 +420,48 @@ namespace ElysiumArenaScenarioParse
 
 	enum class EMatchKind : uint8 { Expect, Never };
 
+	// A `never`'s window start (`from` or `after` plus `delay`) and its count (`at_most`). The label
+	// `after` names is resolved by `ReadRecord`, which has the expectations.
+	bool ReadNeverWindow(FReader& R, const FJsonObject& Object, const FString& Path, FElysiumArenaMatch& Out)
+	{
+		bool bDelay = false;
+		bool bAtMost = false;
+		double AtMost = 0.0;
+		if (!ReadNumber(R, Object, TEXT("from"), Path, ENeed::Optional, Out.From, Out.bFrom)
+			|| !ReadString(R, Object, TEXT("after"), Path, ENeed::Optional, Out.After)
+			|| !ReadNumber(R, Object, TEXT("delay"), Path, ENeed::Optional, Out.Delay, bDelay)
+			|| !ReadNumber(R, Object, TEXT("at_most"), Path, ENeed::Optional, AtMost, bAtMost))
+		{
+			return false;
+		}
+		if (Out.After.IsEmpty() && FindValue(Object, TEXT("after")) != nullptr)
+		{
+			return R.Fail(Field(Path, TEXT("after")), TEXT("an empty label names no expectation"));
+		}
+		if (Out.bFrom && !Out.After.IsEmpty())
+		{
+			return R.Fail(Path, TEXT("the window opens `from` a time or `after` a label, not both"));
+		}
+		if (bDelay && Out.After.IsEmpty())
+		{
+			return R.Fail(Field(Path, TEXT("delay")), TEXT("`delay` counts from an `after` label's match"));
+		}
+		if (Out.bFrom && Out.bUntil && Out.From > Out.Until)
+		{
+			return R.Fail(Field(Path, TEXT("from")), FString::Printf(
+				TEXT("%.2f is past `until` %.2f: the window would be empty"), Out.From, Out.Until));
+		}
+		if (bAtMost)
+		{
+			if (AtMost != FMath::RoundToDouble(AtMost) || AtMost > static_cast<double>(MAX_int32))
+			{
+				return R.Fail(Field(Path, TEXT("at_most")), TEXT("must be a whole number >= 0"));
+			}
+			Out.AtMost = static_cast<int32>(AtMost);
+		}
+		return true;
+	}
+
 	bool ReadMatch(FReader& R, const FJsonObject& Object, const FString& Path, EMatchKind Kind,
 		FElysiumArenaMatch& Out)
 	{
@@ -426,7 +470,7 @@ namespace ElysiumArenaScenarioParse
 			? CheckFields(R, Object, Path, { TEXT("label"), TEXT("who"), TEXT("kind"), TEXT("match"),
 				TEXT("regex"), TEXT("by"), TEXT("within") })
 			: CheckFields(R, Object, Path, { TEXT("who"), TEXT("kind"), TEXT("match"), TEXT("regex"),
-				TEXT("until") });
+				TEXT("until"), TEXT("from"), TEXT("after"), TEXT("delay"), TEXT("at_most") });
 		if (!bFields)
 		{
 			return false;
@@ -458,7 +502,7 @@ namespace ElysiumArenaScenarioParse
 		{
 			return R.Fail(Field(Path, TEXT("match")), TEXT("`regex` needs a pattern"));
 		}
-		return true;
+		return Kind == EMatchKind::Expect || ReadNeverWindow(R, Object, Path, Out);
 	}
 
 	bool ReadProbeName(FReader& R, const FString& Text, const FString& Path, EElysiumArenaProbe& Out)
@@ -468,6 +512,8 @@ namespace ElysiumArenaScenarioParse
 			EElysiumArenaProbe::Alive, EElysiumArenaProbe::Schedule, EElysiumArenaProbe::State,
 			EElysiumArenaProbe::Health, EElysiumArenaProbe::Enemy, EElysiumArenaProbe::Hint,
 			EElysiumArenaProbe::HasCondition, EElysiumArenaProbe::OnGround, EElysiumArenaProbe::DistanceTo,
+			EElysiumArenaProbe::PlayerWeapon, EElysiumArenaProbe::PlayerCrouched,
+			EElysiumArenaProbe::PlayerGrappling,
 		};
 		TArray<FString> Names;
 		for (const EElysiumArenaProbe Probe : All)
@@ -556,6 +602,13 @@ namespace ElysiumArenaScenarioParse
 		{
 			return false;
 		}
+		const bool bPlayerProbe = Out.Probe == EElysiumArenaProbe::PlayerWeapon
+			|| Out.Probe == EElysiumArenaProbe::PlayerCrouched || Out.Probe == EElysiumArenaProbe::PlayerGrappling;
+		if (bPlayerProbe && !Out.Who.Equals(TEXT("player"), ESearchCase::IgnoreCase))
+		{
+			return R.Fail(Field(Path, TEXT("who")), FString::Printf(TEXT("`%s` reads the player: `who` is `player`"),
+				ElysiumArenaScenario::ProbeName(Out.Probe)));
+		}
 
 		// Exactly one comparison.
 		const TCHAR* const Compares[] = { TEXT("equals"), TEXT("match"), TEXT("less"), TEXT("greater") };
@@ -589,6 +642,8 @@ namespace ElysiumArenaScenarioParse
 		case EElysiumArenaProbe::Alive:
 		case EElysiumArenaProbe::HasCondition:
 		case EElysiumArenaProbe::OnGround:
+		case EElysiumArenaProbe::PlayerCrouched:
+		case EElysiumArenaProbe::PlayerGrappling:
 			Answer = FElysiumArenaValue::EType::Bool;
 			break;
 		case EElysiumArenaProbe::Health:
@@ -648,6 +703,7 @@ namespace ElysiumArenaScenarioParse
 		{
 			EElysiumArenaAction::PlayerTeleport, EElysiumArenaAction::PlayerWalk, EElysiumArenaAction::Fire,
 			EElysiumArenaAction::Console, EElysiumArenaAction::Spawn, EElysiumArenaAction::Kill,
+			EElysiumArenaAction::PlayerCrouch, EElysiumArenaAction::LightPin,
 		};
 		TArray<FString> Names;
 		for (const EElysiumArenaAction Action : All)
@@ -668,7 +724,8 @@ namespace ElysiumArenaScenarioParse
 	{
 		Out = FElysiumArenaAction();
 		if (!CheckFields(R, Object, Path, { TEXT("t"), TEXT("after"), TEXT("delay"), TEXT("do"), TEXT("at"),
-				TEXT("face"), TEXT("target"), TEXT("input"), TEXT("param"), TEXT("command"), TEXT("row") }))
+				TEXT("face"), TEXT("target"), TEXT("input"), TEXT("param"), TEXT("command"), TEXT("row"),
+				TEXT("on"), TEXT("value") }))
 		{
 			return false;
 		}
@@ -689,6 +746,16 @@ namespace ElysiumArenaScenarioParse
 		if (bDelay && Out.After.IsEmpty())
 		{
 			return R.Fail(Field(Path, TEXT("delay")), TEXT("`delay` counts from an `after` label's match"));
+		}
+		// `value` may be a JSON null (the release), so its presence is read off the object itself.
+		const bool bHasValue = Object.Values.Contains(TEXT("value"));
+		if (Out.Do != EElysiumArenaAction::PlayerCrouch && FindValue(Object, TEXT("on")) != nullptr)
+		{
+			return R.Fail(Field(Path, TEXT("on")), TEXT("only `player_crouch` takes `on`"));
+		}
+		if (Out.Do != EElysiumArenaAction::LightPin && bHasValue)
+		{
+			return R.Fail(Field(Path, TEXT("value")), TEXT("only `light_pin` takes `value`"));
 		}
 
 		switch (Out.Do)
@@ -734,6 +801,32 @@ namespace ElysiumArenaScenarioParse
 				return R.Fail(Field(Path, TEXT("row")), TEXT("required: the row to spawn"));
 			}
 			return ReadRow(R, *Row, Field(Path, TEXT("row")), ERowKind::ArenaRow, Out.Row);
+		}
+		case EElysiumArenaAction::PlayerCrouch:
+			if (FindValue(Object, TEXT("on")) == nullptr)
+			{
+				return R.Fail(Field(Path, TEXT("on")), TEXT("required: true to crouch, false to stand"));
+			}
+			return ReadBool(R, Object, TEXT("on"), Path, Out.bOn);
+		case EElysiumArenaAction::LightPin:
+		{
+			if (!bHasValue)
+			{
+				return R.Fail(Field(Path, TEXT("value")), TEXT("required: the light in [0, 1], or null to release"));
+			}
+			const TSharedPtr<FJsonValue>* Value = FindValue(Object, TEXT("value"));
+			if (Value == nullptr)
+			{
+				Out.bLightRelease = true;
+				return true;
+			}
+			if ((*Value)->Type != EJson::Number || !FMath::IsFinite((*Value)->AsNumber())
+				|| (*Value)->AsNumber() < 0.0 || (*Value)->AsNumber() > 1.0)
+			{
+				return R.Fail(Field(Path, TEXT("value")), TEXT("a normalized light in [0, 1], or null to release"));
+			}
+			Out.Light = (*Value)->AsNumber();
+			return true;
 		}
 		default:
 			return R.Fail(Field(Path, TEXT("do")), TEXT("unhandled action"));
@@ -1000,6 +1093,23 @@ namespace ElysiumArenaScenarioParse
 			{
 				return false;
 			}
+			FElysiumArenaMatch& Never = Out.Never.Last();
+			if (Never.bFrom && Never.From > Out.Duration)
+			{
+				return R.Fail(Field(Path, TEXT("from")), FString::Printf(
+					TEXT("%.2f is past the record's duration %.2f; the window would never open"),
+					Never.From, Out.Duration));
+			}
+			if (!Never.After.IsEmpty())
+			{
+				Never.AfterIndex = Out.Expect.IndexOfByPredicate([&Never](const FElysiumArenaMatch& M)
+					{ return M.Label.Equals(Never.After, ESearchCase::CaseSensitive); });
+				if (Never.AfterIndex == INDEX_NONE)
+				{
+					return R.Fail(Field(Path, TEXT("after")), FString::Printf(
+						TEXT("'%s' labels no expectation"), *Never.After));
+				}
+			}
 		}
 
 		if (!ReadArray(R, Root, TEXT("probes"), FString(), Items))
@@ -1140,6 +1250,8 @@ const TCHAR* ActionName(EElysiumArenaAction Action)
 	case EElysiumArenaAction::Console:        return TEXT("console");
 	case EElysiumArenaAction::Spawn:          return TEXT("spawn");
 	case EElysiumArenaAction::Kill:           return TEXT("kill");
+	case EElysiumArenaAction::PlayerCrouch:   return TEXT("player_crouch");
+	case EElysiumArenaAction::LightPin:       return TEXT("light_pin");
 	default:                                  return TEXT("?");
 	}
 }
@@ -1148,16 +1260,19 @@ const TCHAR* ProbeName(EElysiumArenaProbe Probe)
 {
 	switch (Probe)
 	{
-	case EElysiumArenaProbe::Alive:        return TEXT("alive");
-	case EElysiumArenaProbe::Schedule:     return TEXT("schedule");
-	case EElysiumArenaProbe::State:        return TEXT("state");
-	case EElysiumArenaProbe::Health:       return TEXT("health");
-	case EElysiumArenaProbe::Enemy:        return TEXT("enemy");
-	case EElysiumArenaProbe::Hint:         return TEXT("hint");
-	case EElysiumArenaProbe::HasCondition: return TEXT("has_condition");
-	case EElysiumArenaProbe::OnGround:     return TEXT("on_ground");
-	case EElysiumArenaProbe::DistanceTo:   return TEXT("distance_to");
-	default:                               return TEXT("?");
+	case EElysiumArenaProbe::Alive:           return TEXT("alive");
+	case EElysiumArenaProbe::Schedule:        return TEXT("schedule");
+	case EElysiumArenaProbe::State:           return TEXT("state");
+	case EElysiumArenaProbe::Health:          return TEXT("health");
+	case EElysiumArenaProbe::Enemy:           return TEXT("enemy");
+	case EElysiumArenaProbe::Hint:            return TEXT("hint");
+	case EElysiumArenaProbe::HasCondition:    return TEXT("has_condition");
+	case EElysiumArenaProbe::OnGround:        return TEXT("on_ground");
+	case EElysiumArenaProbe::DistanceTo:      return TEXT("distance_to");
+	case EElysiumArenaProbe::PlayerWeapon:    return TEXT("player_weapon");
+	case EElysiumArenaProbe::PlayerCrouched:  return TEXT("player_crouched");
+	case EElysiumArenaProbe::PlayerGrappling: return TEXT("player_grappling");
+	default:                                  return TEXT("?");
 	}
 }
 

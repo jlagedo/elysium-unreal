@@ -1,0 +1,16 @@
+{
+  "name": "stage_failed_b",
+  "about": "Harness self-test, the second of a pair: run after `stage_failed_a` in the same boot (path order), whose stage world went Failed. This record must stage over it, activate and pass: the relay's Trigger, fired at t=0.5, is seen. Reported as `error`, a failed stage still poisons the records behind it (H1). `stage_failed_a` ends `error` by design, so it is parked (`stage_failed_a.json.parked`) to keep the suite's self-tests green: restore the `.json` to run the pair (`uv run elysium arena stage_failed_a stage_failed_b`; wave H ran it 2026-10-04: a error, b pass).",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 2.0,
+  "rows": [
+    { "classname": "logic_relay", "name": "selftest_relay", "at": "start" }
+  ],
+  "script": [
+    { "t": 0.5, "do": "fire", "target": "selftest_relay", "input": "Trigger" }
+  ],
+  "expect": [
+    { "who": "selftest_relay", "kind": "input", "match": "Trigger", "by": 1.5 }
+  ]
+}

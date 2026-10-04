@@ -124,6 +124,22 @@ namespace
 		}
 		return Best;
 	}
+
+	// The `stealthkill` trace event (`stories/wave2/seam.md`): the query's answer, `admit` or `refuse`,
+	// and the gate that gave it. A tap only: behind the sink, reading nothing the query decides on, and
+	// through `EmitAiTraceOnChange`, so the HUD's every-frame query writes one event per change of
+	// answer. The entity is the victim candidate, the player when the ray found none.
+	void TraceStealthKill(FElysiumEntityWorld& World, const FElysiumPlayer& Player, const FElysiumNpc* Victim,
+		const TCHAR* Verdict, const TCHAR* Gate)
+	{
+		if (!World.HasAiTraceSink())
+		{
+			return;
+		}
+		const FElysiumEntity* Subject = Victim != nullptr ? static_cast<const FElysiumEntity*>(Victim) : &Player;
+		World.EmitAiTraceOnChange(*Subject, TEXT("stealthkill"), FString::Printf(TEXT("%s %s gate=%s"),
+			*FElysiumEntityWorld::AiTraceName(Victim), Verdict, Gate));
+	}
 }
 
 FElysiumNpc* FElysiumStealthKillRules::FindVictim(FElysiumPlayer& Player) const
@@ -159,20 +175,29 @@ FElysiumNpc* FElysiumStealthKillRules::FindVictim(FElysiumPlayer& Player) const
 	{
 		Victim = TraceNpcHulls(*World, From, To, Player.Handle);
 	}
-	if (!Victim || !Victim->IsValidStealthKillTarget(Player))
+	if (!Victim)
 	{
+		TraceStealthKill(*World, Player, nullptr, TEXT("refuse"), TEXT("ray"));
+		return nullptr;
+	}
+	if (!Victim->IsValidStealthKillTarget(Player))
+	{
+		TraceStealthKill(*World, Player, Victim, TEXT("refuse"), TEXT("valid_target"));
 		return nullptr;
 	}
 	if (!InDeafArc(Player, *Victim) && !Victim->IsOblivious())
 	{
+		TraceStealthKill(*World, Player, Victim, TEXT("refuse"), TEXT("deaf_arc"));
 		return nullptr;
 	}
 	// FindVictim passes literal position hint 1, before StartGrappleAttack derives its own hint.
 	if (!Player.CanStartStealthKill(*Victim, DistanceMaxUnits, 1))
 	{
+		TraceStealthKill(*World, Player, Victim, TEXT("refuse"), TEXT("can_grapple"));
 		return nullptr;
 	}
 
+	TraceStealthKill(*World, Player, Victim, TEXT("admit"), TEXT("can_grapple"));
 	CachedVictim = Victim->Handle;
 	return Victim;
 }

@@ -11,6 +11,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGymSpec.h"                 // SeatOrigin, the one feet-to-centre conversion
+#include "ElysiumInputRouter.h"             // ResetPlayerState: the router's held-button latches
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEntities.h"             // from_map: the baked DA_<map>_Entities reader
 #include "ElysiumMapPlaces.h"               // FElysiumPlaceRow, the network handed to the rebuild
@@ -18,7 +19,11 @@
 #include "ElysiumMovementComponent.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumPlayerBody.h"
+#include "ElysiumPlayerController.h"
 #include "ElysiumRng.h"
+#include "ElysiumUserCmd.h"
+#include "Substrate/ElysiumDisciplines.h"   // ClearAll: the one discipline teardown
+#include "HAL/IConsoleManager.h"            // ResetPlayerState: the `debug_stealth_light` pin
 #include "Substrate/ElysiumNodeEntity.h"    // which record rows take an AI-network node
 #include "Substrate/ElysiumPlaceSet.h"
 #include "Visual/ElysiumCharacterModel.h"   // IdFromSource, the model key's canonical reading
@@ -424,6 +429,97 @@ bool SeatPlayerAt(UWorld* World, const FVector& FeetWorld, float YawDeg, FString
 	return true;
 }
 
+FString ResetPlayerState(UWorld* World, FElysiumEntityWorld* EntityWorld)
+{
+	TArray<FString> Undone;
+
+	// The pawn half: what one record's input leaves in the router and the mover.
+	const ElysiumGreenRoom::FDriveRefs Refs = ElysiumGreenRoom::ResolveDriveBody(World);
+	if (Refs)
+	{
+		const AElysiumPlayerController* Controller = Cast<AElysiumPlayerController>(Refs.PC);
+		if (UElysiumInputRouter* Router = Controller != nullptr ? Controller->GetInputRouter() : nullptr)
+		{
+			if (Router->IsReplaying())
+			{
+				Router->StopReplay();
+				Undone.Add(TEXT("input replay"));
+			}
+			// A typed `+duck` latches until a typed `-duck` (`docs/vtmb/controls.md`), and nothing types
+			// the `-`: the latch outlives the record and re-raises the duck on the next frame no matter
+			// what the mover was reset to. `ClearButtons` is the router's own "input was taken away".
+			const uint64 Held = Router->Builder().ButtonBits();
+			if (Held != 0)
+			{
+				Undone.Add(FString::Printf(TEXT("held buttons 0x%llx"), Held));
+			}
+			Router->Builder().ClearButtons();
+		}
+		if (Refs.Move->IsDucked() || Refs.Move->IsDucking())
+		{
+			Undone.Add(TEXT("ducked"));
+		}
+		// Drops the duck and its retained request, the carried motion and the anim movement lock.
+		Refs.Move->ResetState();
+	}
+
+	// The entity half: the player's own transactions, through the doors world teardown and the
+	// respawn paths use.
+	FElysiumPlayer* Player = EntityWorld != nullptr ? EntityWorld->FindPlayer() : nullptr;
+	if (Player != nullptr)
+	{
+		if (Player->IsFeedPaired())
+		{
+			Player->BreakFeed();   // either role; the attacker's `FeedInterrupt`, idempotent
+			Undone.Add(TEXT("feed"));
+		}
+		if (Player->Grapple.IsPaired() || Player->Grapple.bOwnsStealthAction)
+		{
+			// A stealth kill is a type-3 grapple pair (`FElysiumPlayer::StartStealthKill`); the one
+			// leave also ends its action ownership, as `FElysiumEntityWorld::Teardown` does.
+			Undone.Add(Player->Grapple.bOwnsStealthAction ? TEXT("stealth kill") : TEXT("grapple"));
+			Player->LeaveGrapplePair();
+		}
+		if (Player->Inventory.Active(*Player) != nullptr)
+		{
+			Undone.Add(TEXT("wielded item"));
+		}
+		// `Weapon_Switch(NULL)`: nothing in hand. A record that is `armed` is armed by the runner at
+		// zero, after Activate, through `GivePlayerItem` / `ArmPlayerWithArsenal`.
+		Player->Inventory.Holster(*Player);
+
+		for (int32 Slot = 0; Slot < FElysiumDisciplineState::SlotCount; ++Slot)
+		{
+			if (Player->Disciplines.IsActive(Slot))
+			{
+				Undone.Add(TEXT("discipline active"));
+				break;
+			}
+		}
+		ElysiumDisciplines::ClearAll(*Player);   // idempotent; the one teardown `vdiscipline_endall` shares
+
+		// `Health` on the sheet counts damage TAKEN and rides the session record across the rebuild.
+		const int32 Healed = Player->HealDamage(MAX_int32);
+		if (Healed > 0)
+		{
+			Undone.Add(FString::Printf(TEXT("%d damage"), Healed));
+		}
+	}
+	// The light pin: retail's `debug_stealth_light` (`0x109384d8`) back to its default `-1`, off. A
+	// record's `light_pin` releases its own at the run's end; this also covers a `console` action's.
+	if (IConsoleVariable* LightPin = IConsoleManager::Get().FindConsoleVariable(TEXT("debug_stealth_light")))
+	{
+		if (LightPin->GetFloat() != -1.0f)
+		{
+			Undone.Add(FString::Printf(TEXT("debug_stealth_light %g"), LightPin->GetFloat()));
+			LightPin->Set(-1.0f, ECVF_SetByCode);
+		}
+	}
+	// NOT RESET, no door: the law/police block (`FElysiumPlayerRecord::Police`) crosses a rebuild
+	// unscoped by design (session clock) and has no door that clears it short of a new game.
+	return FString::Join(Undone, TEXT(", "));
+}
+
 bool Stage(const FElysiumArenaScenario& Record, const FHost& Host, FString& OutSummary, FString& OutError)
 {
 	OutSummary.Reset();
@@ -457,6 +553,12 @@ bool Stage(const FElysiumArenaScenario& Record, const FHost& Host, FString& OutS
 		ElysiumRng::SeedAll(Record.Seed);
 		FMath::RandInit(Record.Seed);
 		FMath::SRandInit(Record.Seed);
+		// The map is not rebuilt, so the previous record's player is still the player: stand it at rest.
+		const FString Released = ResetPlayerState(World, EntityWorld);
+		if (!Released.IsEmpty())
+		{
+			UE_LOG(LogElysiumArenaStage, Log, TEXT("%s: player reset, undid: %s"), *Record.Name, *Released);
+		}
 		FPlace Seat;
 		FString SeatError;
 		if (PlayerPlace(Host, Record, Seat, SeatError))
@@ -540,6 +642,16 @@ bool Stage(const FElysiumArenaScenario& Record, const FHost& Host, FString& OutS
 	FMath::RandInit(Record.Seed);
 	FMath::SRandInit(Record.Seed);
 
+	// A stage the last record left Failed (the barrier's wait ended) is rebuilt over, not refused: its
+	// pending character admissions are released here, and the rebuild replaces the failed flag, the
+	// half-built entity world and the model preparations (`RebuildStageWorld` -> `TeardownEntityWorld`).
+	if (Map->GetRuntimePhase() == EElysiumMapRuntimePhase::Failed)
+	{
+		UE_LOG(LogElysiumArenaStage, Warning, TEXT("%s: rebuilding over a Failed stage (%s)"), *Record.Name,
+			*Map->GetRuntimeFailureReason());
+		Map->CancelCharacterModelAdmissions();
+	}
+
 	FElysiumStageSeat StageSeat;
 	StageSeat.FeetCm = Seat.FeetCm;
 	StageSeat.YawDeg = Seat.YawDeg;
@@ -548,8 +660,14 @@ bool Stage(const FElysiumArenaScenario& Record, const FHost& Host, FString& OutS
 	{
 		return false;
 	}
-	// The mover reset and camera reseed now; the barrier re-places the pawn on the same feet and
-	// freezes it until `Activate`.
+	// The new world's player starts at rest; what the pawn and the session record carried over from the
+	// last record is undone before the seat, whose mover reset and camera reseed come next. The barrier
+	// re-places the pawn on the same feet and freezes it until `Activate`.
+	const FString Released = ResetPlayerState(World, Map->GetEntityWorld());
+	if (!Released.IsEmpty())
+	{
+		UE_LOG(LogElysiumArenaStage, Log, TEXT("%s: player reset, undid: %s"), *Record.Name, *Released);
+	}
 	FString SeatError;
 	if (!SeatPlayerAt(World, Seat.FeetCm, Seat.YawDeg, SeatError))
 	{

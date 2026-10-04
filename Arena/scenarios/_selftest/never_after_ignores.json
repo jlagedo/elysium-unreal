@@ -1,0 +1,21 @@
+{
+  "name": "never_after_ignores",
+  "about": "Harness self-test: a `never` opened `after` a label does not count a match before the label's match. The relay's Trigger fires at t=1.0, before the window; the mark's Trigger at t=2.0 meets the `mark` expectation and opens it; nothing matches after it, so the run passes. Reported as `fail`, it means the window counted an event from before it opened.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 4.0,
+  "rows": [
+    { "classname": "logic_relay", "name": "selftest_relay", "at": "start" },
+    { "classname": "logic_relay", "name": "selftest_mark", "at": "start" }
+  ],
+  "script": [
+    { "t": 1.0, "do": "fire", "target": "selftest_relay", "input": "Trigger" },
+    { "t": 2.0, "do": "fire", "target": "selftest_mark", "input": "Trigger" }
+  ],
+  "expect": [
+    { "label": "mark", "who": "selftest_mark", "kind": "input", "match": "Trigger" }
+  ],
+  "never": [
+    { "who": "selftest_relay", "kind": "input", "match": "Trigger", "after": "mark" }
+  ]
+}

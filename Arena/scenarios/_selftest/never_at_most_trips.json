@@ -1,0 +1,18 @@
+{
+  "name": "never_at_most_trips",
+  "about": "Harness self-test: a `never` with `at_most: 1` fails the run at the second match. The script fires the relay's Trigger at t=1.0 and t=2.0; the second input is match 2 where at most 1 may appear, and expect_fail turns that failure into a pass. Reported as `fail`, it means `at_most` let a match past its bound.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 4.0,
+  "expect_fail": true,
+  "rows": [
+    { "classname": "logic_relay", "name": "selftest_relay", "at": "start" }
+  ],
+  "script": [
+    { "t": 1.0, "do": "fire", "target": "selftest_relay", "input": "Trigger" },
+    { "t": 2.0, "do": "fire", "target": "selftest_relay", "input": "Trigger" }
+  ],
+  "never": [
+    { "who": "selftest_relay", "kind": "input", "match": "Trigger", "at_most": 1 }
+  ]
+}

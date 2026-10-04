@@ -1,0 +1,16 @@
+{
+  "name": "player_reset_b",
+  "about": "Harness self-test, the second of a pair: run after `player_reset_a` in the same boot (path order), whose player ended crouched with a knife in hand. A record that is not `armed` and does nothing must find the player as a new game's: standing, nothing wielded, no grapple. Reported as `fail`, the player's state leaked across the records (H4).",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 2.0,
+  "player": { "at": "start" },
+  "rows": [
+    { "classname": "logic_relay", "name": "selftest_relay", "at": "start" }
+  ],
+  "probes": [
+    { "at": 0.5, "who": "player", "probe": "player_crouched", "equals": false },
+    { "at": 0.5, "who": "player", "probe": "player_weapon", "equals": "none" },
+    { "at": 0.5, "who": "player", "probe": "player_grappling", "equals": false }
+  ]
+}
