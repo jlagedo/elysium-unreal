@@ -394,7 +394,7 @@ bool FElysiumNpc::PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOut
 	// The AI trace's `sequence` event (debug output only, behind its sink): the kernel's commit
 	// reaches the body here whether or not the body plays it, and `rate` is the rate the body
 	// actually plays it at -- `ResetSequenceInfo`'s `m_flPlaybackRate = 1.0` (`0x10090a23`) when the
-	// clip starts, 0 when nothing plays it (row 0, a row with no clip, the arbiter's refusal).
+	// clip starts, 0 when nothing plays it (row 0, or a row whose clip the body does not author).
 	auto TraceSequence = [this, Sequence](float AppliedRate)
 	{
 		if (IsAiTraced())
@@ -412,28 +412,25 @@ bool FElysiumNpc::PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOut
 	// `GetSequenceFlags(seq) & 1` (`STUDIO_LOOPING`, `0x10090a12` -> +0x65d) is the row's own bit,
 	// known whoever holds the body.
 	bOutLoops = Row.bLoops;
-	// The body-claim arbitration (a NAMED MODERNIZATION of playback only): a body a scene, a scripted
-	// beat or a pairing owns is animated by that owner, so the kernel's commit does not overwrite the
-	// owner's clip on it. The kernel's SEQUENCE still runs -- retail's `StudioFrameAdvance` (slot 250,
-	// `0x1026c5a0`) advances `m_flCycle` and raises `m_bSequenceFinished` on every body -- so the
-	// sequence's length is answered either way: from this play, or from the length the clip player
-	// reported the last time this body played the row.
-	const EElysiumBodyOwner BodyOwner = Mind.Owner();
-	if (BodyOwner == EElysiumBodyOwner::None || BodyOwner == EElysiumBodyOwner::Dialogue)
+	// `ResetSequenceInfo 0x10090950` plays `m_nSequence` on every body, whoever runs it; there is no
+	// owner to ask. `StudioFrameAdvance` (slot 250, `0x1008f120`) then advances `m_flCycle` and raises
+	// `m_bSequenceFinished` from the length this play answers. The only thing between the row and the
+	// clip is the sequence bridge above (the named modernization: name-keyed clips for the studio
+	// sequence table).
+	float Seconds = 0.f;
+	if (PlayAnimClip(Row.Label, Row.bLoops, &Seconds))   // 0x10090950 ResetSequenceInfo
 	{
-		float Seconds = 0.f;
-		if (PlayAnimClip(Row.Label, Row.bLoops, &Seconds))
+		Row.Seconds = Seconds;
+		if (!Row.OwnerStem.IsEmpty())
 		{
-			Row.Seconds = Seconds;
-			if (!Row.OwnerStem.IsEmpty())
-			{
-				ScheduleIdealActivity = FElysiumClipIdentity(Row.OwnerStem, Row.Label);
-			}
-			OutSeconds = Seconds;
-			TraceSequence(1.f);
-			return true;
+			ScheduleIdealActivity = FElysiumClipIdentity(Row.OwnerStem, Row.Label);
 		}
+		OutSeconds = Seconds;
+		TraceSequence(1.f);   // 0x10090a23 m_flPlaybackRate = 1.0
+		return true;
 	}
+	// The clip player refused the row (the body authors no such clip): nothing plays, so the trace
+	// says rate 0; a length an earlier play on this body reported still answers the cycle.
 	TraceSequence(0.f);
 	if (Row.Seconds > 0.f)
 	{

@@ -228,7 +228,7 @@ record — and a `reason`) and
 
 | Record | Proves |
 |---|---|
-| `cover` | the tactical cover program, red at known red 1 |
+| `cover` | the tactical cover program through the shot (green since V3a) |
 | `control_sequence` | the headless host animates: a path-free program's finite activity finishes |
 | `_selftest/must_fail` | an expectation nothing meets fails the run |
 | `_selftest/bound_trips` | a deadline is a deadline: a real event after it does not count |

@@ -2177,9 +2177,8 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm)
 {
 	using namespace ElysiumStartTask19Base;
 
-	// `0x102f1dc0`. The build itself (`0x102f2330`) is the port's mover: `IElysiumNpcMotor::MoveTo`,
-	// under the Troika line's body arbitration (`AcquireScheduleBody`, port-only). A refused claim is
-	// not a route failure -- no route was attempted and no retail word moves.
+	// `0x102f1dc0`. The build itself (`0x102f2330`) is the port's mover: `IElysiumNpcMotor::MoveTo`.
+	// `SetGoal 0x102ecd20` fails only on the route: the running program owns the navigator.
 	FElysiumNpc* Troika = AsNpc();
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	auto Build = [this, Troika, bHaveDest, &DestCm]() -> bool
@@ -2220,16 +2219,6 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm)
 		}
 		return bMoveIssued;
 	};
-	// A pushed `aiscripted_schedule` order already holds the body for its own program (modes 1/2 set
-	// their goal through this very call, `ScheduledMoveToGoalEntity` `0x102800c0`), so the build runs
-	// under that claim rather than asking for an ordinary schedule one the director outranks.
-	const bool bScriptedOrderHolds = Troika != nullptr && Troika->ScriptedScheduleOrder.IsSet()
-		&& Troika->GetMind().Owner() == EElysiumBodyOwner::ScriptedSchedule;
-	if (Troika != nullptr && bHaveDest && Motor != nullptr && !bScriptedOrderHolds
-		&& !Troika->AcquireScheduleBody(TEXT("SetGoal 0x102ecd20")))
-	{
-		return false;
-	}
 	// `0x102f1de4` `0x10319ee0(path+0x24)`, `path+0x44 := -1`: the path's waypoint list is emptied at
 	// every entry, so a search that finds nothing leaves no head (`Navigator.bHasHeadWaypoint`).
 	Navigator.bHasHeadWaypoint = false;
@@ -2359,8 +2348,10 @@ void FElysiumNpcBase::StartTaskSetArrivalDirectionAngles(const FVector& ArrivalA
 
 FVector FElysiumNpcBase::StartTaskCurWaypointPos() const
 {
+	// `0x102ee5e0` -> `0x10012805(path)`: the head waypoint (`path+0x24`) when one stands -- the navigator
+	// word `IsGoalActive 0x102ee6a0` reads -- else the static origin waypoint (`DAT_10936afc`).
 	const FElysiumNpc* Troika = AsNpc();
-	if (bMoveIssued && Troika != nullptr)
+	if (NavIsGoalActive() && Troika != nullptr)
 	{
 		return Troika->MoveGoal;
 	}
@@ -2519,10 +2510,9 @@ bool FElysiumNpcBase::InstallPathNoGoal(const FVector& DestCm)
 	//     nav->+0x14 = |from - path goal|^2;       // 0x1000f89e(path), SOURCE units squared
 	//
 	// So no `AI_NavGoal_t`, no goal type, no tolerance (`path+0x28` keeps the reset's value), no
-	// movement or arrival activity. The port's route is the mover's: the move is issued here under the
-	// same body arbitration `NavBuildRoute` runs (port-only), as the same navigator request (the path's
-	// movement activity picks the gait, the waypoint arrival radius is retail's constant), and nothing of
-	// `StartTaskSetGoal`'s runs.
+	// movement or arrival activity. The port's route is the mover's: the move is issued here as the same
+	// navigator request `NavBuildRoute` issues (the path's movement activity picks the gait, the waypoint
+	// arrival radius is retail's constant), and nothing of `StartTaskSetGoal`'s runs.
 	FElysiumNpc* Troika = AsNpc();
 	if (Motor == nullptr)
 	{
@@ -2533,12 +2523,7 @@ bool FElysiumNpcBase::InstallPathNoGoal(const FVector& DestCm)
 	{
 		EmitAiTrace(TEXT("move"), FString::Printf(TEXT("goal %.0f %.0f %.0f"), DestCm.X, DestCm.Y, DestCm.Z));
 	}
-	const bool bScriptedOrderHolds = Troika != nullptr && Troika->ScriptedScheduleOrder.IsSet()
-		&& Troika->GetMind().Owner() == EElysiumBodyOwner::ScriptedSchedule;
-	if (Troika != nullptr && !bScriptedOrderHolds && !Troika->AcquireScheduleBody(TEXT("SetRandomGoal 0x102ed430")))
-	{
-		return false;
-	}
+	// `SetRandomGoal 0x102ed430` fails only on the route (no node, no pick): no body claim.
 	if (Troika != nullptr)
 	{
 		Troika->MoveGoal = DestCm;

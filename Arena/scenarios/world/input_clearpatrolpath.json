@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 40.0,
-  "known_red": "V3a: 1: the patrol walk plays at rate 0 and the NPC covers ~0.66 m/s, so the 10 m leg after ClearPatrolPath misses its deadline",
+  "known_red": "V4: N13 (stories/v1/triage.md): the walk plays (0.800 'walk rate=1', since V3a) but the body covers ~0.55 m/s (0.700 goal -> 10.500 arrived, ~540 cm; retail walk_0 136.7 cm/s; StudioFrameAdvance 0x1008f120 weights m_flGroundSpeed by move_yaw), so the 10 m leg after ClearPatrolPath misses its deadline",
   "player": {
     "at": "start"
   },

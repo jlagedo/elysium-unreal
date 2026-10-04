@@ -173,7 +173,6 @@ void FElysiumNpc::TroikaOnScheduleChange(int32 NewSchedule)
 		}
 		BaseScheduleHost.bShouldMove = false; // 0x102a09c8
 		bMoveIssued = false;
-		bWalkingAnimation = false;
 		ScheduleHost.GoalToleranceCm = 0.f;								// 0x102a09ce
 		ScheduleHost.InsideInterruptDistanceSqr = 0.f;					// 0x102a09d4
 		ScheduleHost.OutsideInterruptDistanceSqr = 0.f;					// 0x102a09da

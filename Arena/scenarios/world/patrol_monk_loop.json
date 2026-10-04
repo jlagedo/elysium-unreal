@@ -4,7 +4,7 @@
   "stage": "map:sp_tutorial_1",
   "seed": 1,
   "duration": 90.0,
-  "known_red": "V3a: 1: the patrol walk plays 'walk rate=0' and the NPC covers ~0.6 m/s (retail walk_0 136.7 cm/s), so the legs run past their deadlines",
+  "known_red": "V4: N13 (stories/v1/triage.md): the walk plays (0.350 'walk rate=1', since V3a) but the body covers ~0.44x retail's ground speed (walk_0 136.7 cm/s; StudioFrameAdvance 0x1008f120 weights m_flGroundSpeed by move_yaw), leg times unchanged by V3a, so the leg to pod_1 misses its deadline (unmet at 37.33)",
   "cast": [
     {
       "name": "monk_upstairs_podium"

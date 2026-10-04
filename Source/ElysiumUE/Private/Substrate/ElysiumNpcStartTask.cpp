@@ -1824,6 +1824,10 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 		const float Distance = ResolveTaskDistance(TaskData);                // 0x102a4b56 slot 418
 		// `nav+0x14`, the planar distance squared to the goal the navigator's arrival test
 		// (`0x102f2ea0`) last wrote: the port measures it off `MoveGoal`.
+		// Retail reads `0x102a4b5c..0x102a4b62 FLD [nav+0x14]` unconditionally; that word's writer, the
+		// arrival test `0x102f2ea0` (store at `0x102f2f21`), is not ported (red N12, `stories/v1/triage.md`),
+		// so `Navigator.EndpointDistanceSqrUnits` would read 0 here. Until the writer lands this reader
+		// stays the port's measurement; `bMoveIssued` is motor bookkeeping standing in for the word.
 		const double RemainingSq = bMoveIssued ? (MoveGoal - Origin).SizeSquared2D()
 			/ (static_cast<double>(ElysiumMove::U) * ElysiumMove::U) : 0.0;
 		int32 WeaponActivity = 0;

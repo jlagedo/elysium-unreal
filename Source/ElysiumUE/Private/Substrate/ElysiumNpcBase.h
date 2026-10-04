@@ -660,6 +660,10 @@ protected:
 	// `m_hTargetEnt` (`+0x5ce4`); see `SetTarget`.
 	FElysiumEntityHandle TargetEnt;
 
+	// The motor's own bookkeeping: a leg was issued to `IElysiumNpcMotor` and not since dropped (written
+	// by `NavIssueLeg` and the route builders, read by the corner chain's re-issue dedupe). No retail
+	// word: NOT to be read for a retail decision. Whether a route stands is `IsGoalActive 0x102ee6a0`
+	// (`NavIsGoalActive()`, the head waypoint `path+0x24`).
 	bool bMoveIssued = false;
 
 	// Whether the death handoff has already run. Session state, not save state: it is derivable from
@@ -686,9 +690,5 @@ protected:
 	// NOT here: it is re-asserted on every terminal dead think, because a corpse's body can be handed
 	// back to it by something that took it before the kill.
 	void CompleteDeathHandoff();
-
-	// --- Moved from `FElysiumNpc`'s protected section (story 5 step 5) ---
-
-	bool bWalkingAnimation = false;
 
 };

@@ -520,11 +520,22 @@ tests the green scenarios cover deleted.
   crosswalk. *Size:* L. *Model:* Opus/high, one Fable review of the seam commit.
   *Planned 2026-10-04 (`stories/v3/README.md`, accepted by the owner):* the arbiter is 53 sites in
   10 files today. Cut into five stories, each closing on its own records:
-  - [ ] **V3r** — two reading packets: the dialogue upkeep `0x102c1400`, the three
-    `StartPlayerDialog` inputs and `PlayerUse`'s NPC arm. S.
-  - [ ] **V3a** — the seam (`m_scriptState +0x5d70` on the NPC, `m_hDialogPartner +0xfe8`, the
+  - [x] **V3r** — two reading packets: the dialogue upkeep `0x102c1400`, the three
+    `StartPlayerDialog` inputs and `PlayerUse`'s NPC arm. S. *Landed 2026-10-04* (`a156e746`,
+    `stories/v3/packets.md`; three docs corrected).
+  - [x] **V3a** — the seam (`m_scriptState +0x5d70` on the NPC, `m_hDialogPartner +0xfe8`, the
     `dialog_choose` harness action), then the body plays the kernel's sequence on every NPC and
     the program claims go. *Records:* the three patrols; `cover` through its cover-out clip. M.
+    *Landed 2026-10-04* (seam `f767f9f8`; the integrator's report is the V3a commit's message):
+    `PlaySequenceClip` plays on
+    every body, the stance gate's owner term, the `Schedule` claim, `ReleaseProgramBody`'s stop and
+    `bWalkingAnimation` gone. Default tier 176 / 0 failed; arm tier 1550 / 0 failed; suite 105
+    records: 66 pass, 37 expected-fail, 1 fail (`rollcall_vzombie`, H11), 1 unexpected-pass
+    (`hear_world_investigate`, N4) — the one verdict that moved is `cover`, expected-fail → pass
+    (through the shot). The patrols play their walk at `rate=1` but stay red: not red 1 (doubt 1
+    settled) — N13, a ground speed ~0.44× retail's, placed in V4. New red N12
+    (`TASK_WALK_RUN_PATH`'s `nav+0x14`, R2). Ledger step not run: `kernel --check` is stale since
+    the seam (the `+0x5d70` binding regenerates C++ and needs a build; V3b's integrator).
   - [ ] **V3b** — places and patrols as programs; the ambient executor deleted; the place released
     only by `0x102b53d0`'s retail callers. *Records:* the places, `map_hub_idle`,
     `hub_crosswalk_wait`, `rollcall_vhuman`, `rollcall_vhumancombatpatrol`. M.
@@ -588,7 +599,8 @@ tests the green scenarios cover deleted.
   `map_tutorial_sneak_past`'s hearing half. *Size:* S. Reading packet first.
 
 Order: V1 → V2 → H → V3 → V4 → V5 → V11 ‖ V6 → V7 → V10 → V12 → V2 again (full run) → V8 → V9.
-The new reds ride their stories: N1, N2 in V5; N5, N6 in V7; N7, N8 in V3; N9, N10 in V6.
+The new reds ride their stories: N1, N2 in V5; N5, N6 in V7; N7, N8 in V3; N9, N10 in V6; N13 in
+V4 (from V3a: the patrols' acceptance moves there); N12 in R2.
 
 ## Step 3 — the road to close the character AI
 

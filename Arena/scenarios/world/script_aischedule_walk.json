@@ -4,7 +4,7 @@
   "stage": "arena",
   "seed": 1,
   "duration": 45.0,
-  "known_red": "V3d: the order runs through the port's ScriptedSchedule body claim and its lifetime coupling (M14: BeginScriptedSchedule / EndScriptedSchedule, ElysiumNpc.cpp), where retail's executor 0x101a98c0 does SetState, the mover and nothing else. Seen 2026-10-04: 0x46 and the goal at 2.03 s as retail, then `taskdone task_patrol_path` with no `task` event (the task did not start through MaintainSchedule's start, ElysiumNpcMaintain.cpp:400-416) and `walk rate=0` (red 1, V3a)",
+  "known_red": "V3d: the order runs through the port's ScriptedSchedule body claim and its lifetime coupling (M14: BeginScriptedSchedule / EndScriptedSchedule, ElysiumNpc.cpp), where retail's executor 0x101a98c0 does SetState, the mover and nothing else. Seen 2026-10-04: 0x46 and the goal at 2.03 s as retail, then `taskdone task_patrol_path` with no `task` event (the task did not start through MaintainSchedule's start, ElysiumNpcMaintain.cpp:400-416). Since V3a the walk plays (2.267 `walk rate=1`; red 1 gone)",
   "player": {
     "at": "start"
   },

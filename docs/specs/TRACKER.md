@@ -63,8 +63,12 @@ Wave 3 (build work, one agent):
   record errors (the port matches retail), re-stated and green; ticked.
 - [ ] **V3** — Fix: the arbiter retired; scenes, dialogue and places as retail runs them. L · Opus/high.
   Cut 2026-10-04 (`0002-npc-ai/stories/v3/README.md`):
-  - [ ] **V3r** — the two reading packets (dialogue upkeep `0x102c1400`; the dialogue inputs). S.
-  - [ ] **V3a** — the seam, then the kernel's sequence plays on every body. M.
+  - [x] **V3r** — the two reading packets (dialogue upkeep `0x102c1400`; the dialogue inputs). S.
+    Landed 2026-10-04 (`a156e746`).
+  - [x] **V3a** — the seam, then the kernel's sequence plays on every body. M. Landed 2026-10-04:
+    default 176 / 0 failed, arm 1550 / 0 failed; suite 66 pass / 37 expected-fail / 1 fail / 1
+    unexpected-pass of 105, only `cover` moved (→ pass). Patrols re-triaged: N13 (V4); new red N12
+    (R2); the ledger regeneration waits for V3b's build.
   - [ ] **V3b** — places and patrols as programs; the ambient executor deleted. M.
   - [ ] **V3c** — the scene hold through `m_scriptState` and `SCHED_AISCRIPT`. M.
   - [ ] **V3d** — the dialogue hold as a program; the arbiter deleted whole. M–L.

@@ -487,9 +487,8 @@ public:
 	virtual void DebugScheduleInstalled(int32 InstalledSchedule) override;
 
 	// --- The combat task bodies -----------------------------------------------------------------
-	// Every one that drives the body claims `EElysiumBodyOwner::Schedule` through the arbiter first
-	// and answers false when the claim is refused, which fails its task by name. The token is given
-	// back once, where the program ends (`ReleaseScheduleBody`).
+	// No task claims the body: the running program (`m_pSchedule +0x5c38`) owns the navigator, and a
+	// schedule change clears its goal in `OnScheduleChange 0x102a0940` (`0x102a0992`).
 
 	virtual void TaskStarting() override { BaseScheduleHost.FailureReason = ScheduleHost.PendingFailureReason = 0; }
 	virtual void SetGoalTolerance(float Units);
@@ -589,18 +588,8 @@ public:
 		EElysiumGrappleType Type, int32 Position = INDEX_NONE, bool bHolster = true) override;
 	virtual void LeaveGrappleState() override;
 
-	// The combat schedules' movement claim. Idempotent for a token already held, and refused while
-	// another owner has the body — which is what a task turns into its own named failure. A patrol
-	// route in progress is SUSPENDED by the claim rather than lost, so the release below resumes it.
-	bool AcquireScheduleBody(const TCHAR* Reason);
-
-	// Hand it back and stop whatever the program had the body doing. Called wherever a schedule
-	// stops running: the end of a tick that ended the program, a state change that discarded it,
-	// dormancy, and a restore.
-	void ReleaseScheduleBody(const TCHAR* Reason);
-
-	// The scripted director's movement claim, and its release. Same shape as the pair above, one
-	// rank higher in the arbiter.
+	// The scripted director's movement claim, and its release (port-only, until V3d: retail's
+	// `0x101a98c0` claims nothing).
 	bool AcquireScriptedScheduleBody(const TCHAR* Reason);
 
 	void ReleaseScriptedScheduleBody(const TCHAR* Reason);
@@ -758,9 +747,9 @@ public:
 	virtual bool GazeNavigationGoal(FVector& OutPoint) const override;
 	virtual bool GazeHeardSound(FVector& OutPoint) const override;
 
-	// `m_pNavigator`'s goal position: the feet destination the move in flight was issued for.
-	// Written beside every `Motor->MoveTo`, read by the gaze arm above and nothing else — the
-	// motor owns the route, this is only what the character asked it for.
+	// The feet destination the move in flight was issued for (motor bookkeeping, no retail word).
+	// Written beside every `Motor->MoveTo`; the gaze arm above reads the navigator itself
+	// (`IsGoalActive 0x102ee6a0`, `GetGoalPos 0x102ee140`), not this.
 	FVector MoveGoal = FVector::ZeroVector;
 
 	// Requirement 23: the debugger may show the authored place this NPC currently owns, but it
@@ -1108,10 +1097,9 @@ protected:
 
 	// ---------------------------------------------------------------------------------------------
 
-	// The two program claims (`Schedule` and `ScriptedSchedule`) share one arbitration shape:
-	// idempotent for a token already held, the patrol route parked rather than taken, and the
-	// release stops whatever the program had the body doing. `Token` is the leaf's member for
-	// `Owner`; the public pairs below are thin wrappers over these two.
+	// The `ScriptedSchedule` claim's arbitration (port-only, until V3d): idempotent for a token
+	// already held; the release gives the token back and stops nothing (the navigator's goal is
+	// cleared by `OnScheduleChange 0x102a0940` only). `Token` is the leaf's member for `Owner`.
 	bool AcquireProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
 		const TCHAR* Reason);
 	void ReleaseProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
@@ -1159,7 +1147,6 @@ protected:
 	TSet<FName> ReportedStepSurfacesWithoutPool;
 
 	FElysiumBodyOwnerToken AmbientOwner;
-	FElysiumBodyOwnerToken ScheduleOwner;
 	FElysiumBodyOwnerToken ScriptedScheduleOwner;
 	FElysiumBodyOwnerToken SequenceOwner;
 	FElysiumBodyOwnerToken DialogueBodyOwner;

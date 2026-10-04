@@ -4,7 +4,6 @@
   "stage": "arena",
   "seed": 1,
   "duration": 60.0,
-  "known_red": "V3a: 1: the body arbiter refuses the kernel's sequence (ElysiumNpcAnim.cpp:402-431); V3a closes the record through outof_done, and the shot past it waits on V4 (anim events, slot 258) and V5 (N2)",
   "player": { "at": "cover_seat" },
   "cast": [
     {

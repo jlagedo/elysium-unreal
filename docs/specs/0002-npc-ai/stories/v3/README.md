@@ -49,6 +49,11 @@ From `packets.md` (read from the listing) and the seam commit `f767f9f8`:
   conversation opens: the use focus refuses it, or the press never reaches `PlayerUse`); bug
   protocol step 1 first. `brief-D1-dialogue.md` is re-written from `packets.md` before V3d starts.
 - The owner's rulings: K1 accepted, K2 accepted (the `m_nSequence` path), Q5 → V6, Q8 → V9.
+- **After V3a (2026-10-04, the integrator's report in the V3a commit message)**: `cover` is green
+  through the shot. The three patrols
+  are not red 1 (review doubt 1 settled): the walk now plays at `rate=1` with every leg time
+  unchanged; the slow body is N13 (`move_yaw`-weighted ground speed / facing), placed in V4. §4's
+  "records turned green" for V3a is corrected to `cover` alone.
 
 ## 1. What retail does: the contract
 

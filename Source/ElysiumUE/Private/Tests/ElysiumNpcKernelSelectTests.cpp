@@ -509,7 +509,6 @@ bool FElysiumNpcKernelSelect19PatrolOutranksUseInterestingTest::RunTest(const FS
 	TestTrue(TEXT("and it is running"), N.Schedule.IsRunning());
 	TestEqual(TEXT("the path did not move again"), N.PatrolPathCell.Path->Current, 1);
 	TestNull(TEXT("no interesting place is claimed (CurrentSpotIndex none)"), N.CurrentAmbientSpot());
-	TestNotEqual(TEXT("and the body has no Ambient owner"), N.GetMind().Owner(), EElysiumBodyOwner::Ambient);
 
 	// No program at all (the route's other door, `ThinkAutonomous`): a body holding a path still
 	// goes to selection, which answers the path's program.
@@ -517,7 +516,6 @@ bool FElysiumNpcKernelSelect19PatrolOutranksUseInterestingTest::RunTest(const FS
 	N.MaintainSchedule(Now, /*bReduced=*/true);
 	TestEqual(TEXT("0x102af6b6 with no program the patrol arm still wins"), N.Schedule.Current, Patrol);
 	TestNull(TEXT("still no interesting place"), N.CurrentAmbientSpot());
-	TestNotEqual(TEXT("still no Ambient owner"), N.GetMind().Owner(), EElysiumBodyOwner::Ambient);
 
 	// The path gone (`0x1029f5d0`): only now does the body reach the interest door (`0x102af6f3`),
 	// which this runtime still serves with its executor (0002/11) -- it installs no program.

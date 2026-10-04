@@ -341,5 +341,4 @@ void FElysiumNpcBase::StopMoving()
 		ClearMoveIgnores();
 	}
 	bMoveIssued = false;
-	bWalkingAnimation = false;
 }

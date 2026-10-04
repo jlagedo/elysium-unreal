@@ -784,109 +784,6 @@ bool FElysiumNpcCombatSelectorCompositionTest::RunTest(const FString&)
 }
 
 
-// The chase end to end: the schedule owner, the motor requests, arrival, and release.
-
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatChaseTest,
-	"Elysium.Arm.NpcCombat.Chase", GElysiumTestFlags)
-bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
-{
-	FCombatFixture F(GPistol);
-	if (F.Fighter == nullptr || F.Target == nullptr)
-	{
-		return false;
-	}
-	F.RunAdmissionAndLoadout();
-	FElysiumRecordingNpcMotor* Motor = F.MotorFor(F.Fighter);
-	if (!TestNotNull(TEXT("the fighter owns a recording motor"), Motor))
-	{
-		return false;
-	}
-
-	// The world's clock past the map's first moment: `TASK_WAIT_FOR_MOVEMENT`'s Troika start arm runs
-	// its teleport rescue while `curtime <= m_flTeleportMoveTimer` (+0x65dc, `0x102a1e6a`), and a
-	// clock at zero reads a never-armed timer as live.
-	F.World.Tick(10.0);
-	// Well beyond the pistol's authored range.
-	F.Target->Origin = FVector(Cm(GPistolRangeUnits + 2000.0), 0.0, 0.0);
-	F.CommitToTarget(10.0);
-	FElysiumNpcWorldFixture::GatherConditionsAt(*F.Fighter, 10.0);
-	// Story 8 wave 2 (the retail pass, slot 433 -> slot 481 `0x10270b20`): past `m_flDistTooFar`
-	// slot 481 raises ENEMY_TOO_FAR (`0x102711be`), `FCanCheckAttacks` (`0x10270840`) refuses on it,
-	// and slot 560 clears the attack set -- so no TOO_FAR_TO_ATTACK is raised at this range; the port's
-	// old gather ran the attack conditions unconditionally.
-	TestTrue(TEXT("0x102711be a distant enemy raises ENEMY_TOO_FAR"),
-		F.Fighter->Cognition.Conditions.Has(ECond::EnemyTooFar));
-	TestFalse(TEXT("0x102711fa ...and the attack set is cleared, TOO_FAR_TO_ATTACK included"),
-		F.Fighter->Cognition.Conditions.Has(ECond::TooFarToAttack));
-	// The Troika ranged ladder then falls through to HAVE_ENEMY_LOS with a ranged weapon.
-	TestEqual(TEXT("0x102b00ee ...and the ranged selector answers FORCED_RANGE_ATTACK1 0xf0"),
-		F.Fighter->SelectSchedule(), 0xf0);
-
-	TestTrue(TEXT("the chase starts"),
-		ElysiumSchedule::Start(F.Fighter->Schedule, ElysiumSched::SCHED_TROIKA_CHASE_ENEMY, *F.Fighter));
-
-	TestTrue(TEXT("the first think reaches the movement watch"),
-		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0,
-			&F.Fighter->Cognition.Conditions));
-
-	// The body-owner arbiter: the `Schedule` owner is live for the first time.
-	TestTrue(TEXT("combat movement claims the Schedule body owner"),
-		F.Fighter->GetMind().Owner() == EElysiumBodyOwner::Schedule);
-	TestTrue(TEXT("the path was issued at the enemy's feet"),
-		Motor->RequestedFeet.Equals(F.Target->Origin));
-	// Story 8 wave 2: the chase runs through the retail arms. `TASK_RUN_PATH` (base `0x102863f1`)
-	// writes the path's movement activity (`0x102ee250`): ACT_RUN when the body has a run sequence
-	// (`SelectWeightedSequence(ACT_RUN)` at `0x102863f9`), else ACT_WALK -- that probe is the
-	// kernel's SEAM answering -1, so this fixture's chase walks. The tolerance and gait words the old
-	// op verbs pinned here are the StartTask19 suite's (EnemyGoalArms / ToleranceArms).
-	TestTrue(TEXT("0x1028640e RUN_PATH wrote the path's movement activity"),
-		F.Fighter->Navigator.MovementActivity != 1);   // 1 is the path constructor's and the reset's value
-
-	// Still travelling: the watch holds the task rather than advancing it.
-	TestTrue(TEXT("an in-flight path keeps the schedule open"),
-		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.1,
-			&F.Fighter->Cognition.Conditions));
-
-	// Fixture correction from retail `MaintainSchedule`: arrival completes the last task, then
-	// `10281980` raises SCHEDULE_DONE and the same loop reaches `10281b89` selection. The target is
-	// still too far, so the replacement is another chase rather than a caller-visible empty gap.
-	Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
-	// The think's `PerformMovement` (`0x1026c120`) -> `CAI_Navigator::Move`: the route's end runs
-	// `OnNavComplete` and `TaskMovementComplete` (`0x10273ec0`).
-	F.Fighter->NavigatorMoveStep();
-	TestTrue(TEXT("arrival completes and reselects in the same retail loop"),
-		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.2,
-			&F.Fighter->Cognition.Conditions));
-	TestTrue(TEXT("10281be5 installed the replacement selected after completion"),
-		F.Fighter->Schedule.IsRunning());
-	TestEqual(TEXT("102814d0 recorded that replacement as m_IdealSchedule"),
-		F.Fighter->BaseScheduleHost.IdealScheduleRetail,
-		F.Fighter->Schedule.Current);
-	TestTrue(TEXT("the replacement keeps the schedule body owner"),
-		F.Fighter->GetMind().Owner() == EElysiumBodyOwner::Schedule);
-
-	// Back in the band, the attack window opens.
-	F.Target->Origin = FVector(Cm(400.0), 0.0, 0.0);
-	if (FElysiumRecordingNpcMotor* TargetMotor = F.MotorFor(F.Target))
-	{
-		TargetMotor->Feet = F.Target->Origin;   // the world's per-frame sync reads the body
-	}
-	F.Fighter->BaseMemory.Enemy = F.Target->Handle;
-	// A later pass: `Look` (inside slot 433's `PerformSensing`) runs on its own cadence, so the
-	// clock moves on for the sighting that raises SEE_ENEMY (slot 481 `0x10270cfb`).
-	FElysiumNpcWorldFixture::GatherConditionsTickedTo(*F.Fighter, F.World.NowSeconds() + 0.5);
-	TestTrue(TEXT("an enemy back inside the band is shootable"),
-		F.Fighter->Cognition.Conditions.Has(ECond::CanRangeAttack1));
-	// The shot itself is slot 605's arm and is asserted there; what this case owns is that the
-	// reselection happens at all and lands on a loaded program.
-	const int32 Reselected = F.Fighter->SelectSchedule();
-	TestTrue(TEXT("...and reselection answers a loaded program"),
-		ElysiumScheduleFor(ElysiumScheduleGlobalId(Reselected)) != nullptr);
-	return true;
-}
-
-
 // The swing program: the notice, the weapon press, the damage that lands through the
 // cycle-1 commit, and the recovered empty mask that owns the NPC while it runs.
 
@@ -1738,8 +1635,6 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	TestTrue(TEXT("the mind is dead, current (0x10265dba SetState(7)) and ideal (0x10265d06) both"),
 		F.Fighter->GetMind().State() == EElysiumNpcState::Dead
 			&& F.Fighter->GetMind().IdealState() == EElysiumNpcState::Dead);
-	TestTrue(TEXT("...and it owns nothing"),
-		F.Fighter->GetMind().Owner() == EElysiumBodyOwner::None);
 	TestTrue(TEXT("the body is frozen where it stands"), Motor->bFrozen);
 	TestTrue(TEXT("...and stops answering the character channel"),
 		Motor->bIgnoreCharacterCollision);

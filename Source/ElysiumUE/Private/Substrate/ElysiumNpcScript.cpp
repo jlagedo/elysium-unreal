@@ -629,13 +629,8 @@ bool FElysiumNpc::NavFindPathCorners()
 		Navigator.bHasHeadWaypoint = true;
 		return true;
 	}
-	const bool bScriptedOrderHolds = ScriptedScheduleOrder.IsSet()
-		&& GetMind().Owner() == EElysiumBodyOwner::ScriptedSchedule;
-	if (!bScriptedOrderHolds && !AcquireScheduleBody(TEXT("AdvancePath 0x102f0400")))
-	{
-		bMoveIssued = false;                    // a refused claim is not a route failure: nothing was attempted
-		return false;
-	}
+	// `AdvancePath 0x102f0400` / `DoFindPath 0x102f2330` fail only on the route: the program owns the
+	// navigator, so no body claim stands between the chain and its leg.
 	MoveGoal = HeadCm;
 	const int32 Activity = Navigator.GetMovementActivity();
 	const EElysiumNpcGaitKind Gait = Activity == GScript19ActRun ? EElysiumNpcGaitKind::Run
