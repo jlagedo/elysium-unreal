@@ -1,4 +1,9 @@
 # Project-level Codex config, layered over ~/.codex/config.toml when this repo is trusted.
+# Approve the project's live Elysium tools in headless sessions too.
+# The server launcher is inherited from ~/.codex/config.toml.
+[mcp_servers.elysium]
+default_tools_approval_mode = "approve"
+
 # The corpus tools are read-only queries; without this a headless `codex exec` refuses every
 # MCP call ("requires approval, but approval policy is never").
 [mcp_servers.vtmb-corpus]

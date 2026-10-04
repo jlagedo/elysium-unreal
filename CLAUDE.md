@@ -25,6 +25,24 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 - The running game takes no content argument and opens no file outside the project: what it
   reads is baked package content plus the deployed `Content/ElysiumCorpus/`.
 
+## Query budget: 10 s warning, 60 s hard stop
+
+A query is anything that answers a question from data: a search or read over text files (md, tsv,
+json, logs), a database or corpus lookup, an MCP read tool, or a script or project tool (a ledger,
+census, gate or check) that reads data and reports. Builds, test runs, bakes and agent runs are not
+queries.
+
+- **10 s is the warning.** A query that takes longer is slow: note it (the project's slow-query log
+  if it has one, else in the answer) and treat it as an optimization candidate.
+- **60 s is the hard stop.** Run every query command with a 60 s timeout. When one hits it, stop: do
+  not retry it as-is and do not widen it. The task in hand waits while the query path is optimized
+  (an index, a cache, a narrower parameter, a precomputed table, a faster script), then resumes.
+- **Optimize before scheduling.** A planned process that depends on a query is timed first; if it
+  breaks the budget it is optimized before the process runs.
+- Never read a large data file whole (over ~200 KB) to find one thing: look it up, then read the
+  section.
+- Briefs for subagents and external workers carry this rule.
+
 ## Project layout
 
 - `Source/ElysiumUE/` — C++ runtime
