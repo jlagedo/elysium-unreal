@@ -752,3 +752,36 @@ for the verdict, the key unchanged).
   unproven and it is bake work outside the kernel — one bake proves or refutes it, capped at two.
   Six other maps carry the same slabs (`hw_hub_1` 13, `la_hub_1` 16, `ch_hub_1` 6, `hw_asphole_1`,
   `la_parkinggarage_1`, `sp_theatre` 1 each): R2, at their next bake.
+
+## Judge's rulings filed by the coordinator, 2026-10-04 (unattended run, continued)
+
+- **The nav marks' registration (N16's true cause): implement now** — every mark, pedestrian slabs
+  and door cuts. For: an old bug in landed work (the marks landed 09-20 and were probably lost when
+  the imports were folded into one bake session; 0018/7 was accepted on convex counts that never
+  asked the mesh); 27 hub doors and 28 tutorial doors that retail treats as walls were walkable,
+  which changes routes; gate 2 and V8 play these two maps. Against (did not carry): doorway routes
+  run through the door links and slot 531 for the first time on a baked mesh — V8 needs that
+  machinery anyway and only six records stand on the baked meshes. Landed `d75a980c`, `faaa3880`.
+- **N20 (the tutorial's two Rat findings): implement now.** The door test grew the door box by the
+  agent's lateral radius where retail's walk sweeps the hull's own box; replayed offline the fix
+  moves one row (tutorial door 339, `[0]` → `[0, 19]`). Link 105 is jump-only for the rat and
+  `0x102ff960` step 2 refuses jump links to every NPC: `verify nav` now reports jump-only bridges
+  and fails only ground-carrying ones (reversing 0018/7 decision (a)). Against (did not carry): no
+  step-2 record uses a tutorial rat. Landed `faaa3880`.
+- **N21 (two unlinked hub gates still walkable): implement now, as a V13 follow-up first after
+  T6b and before V4.** The fix is the engine flag on door cuts (`SetIncludeAgentHeight(true)` for
+  every area in `ElysiumNavAreaActor.cpp`), not a pipeline change: the flag lowers each mesh's cut
+  by that mesh's own agent height, which is the hull's `maxs.z` per agent — `hull_swept_box` in Z,
+  mesh by mesh — while one staged convex would give one height to every agent. Measured over all
+  65 doors of both maps: no cut reaches another storey; the newly reached surfaces lie under a
+  floating leaf or beside a raised threshold. A lead, not measured: tutorial linked door 339's
+  cut floor is ~13 cm above the floor, so the mesh may run under the closed leaf and bypass its
+  link's hold — the follow-up adds 339 to the linked-door probe. Who reaches the gates: no graph
+  node, place, patrol point or maker stands beyond either; nothing in the step-2 records or V8's
+  idle is shown to cross one. Against (did not carry): nothing observable breaks before R2 — but
+  the fix is one line, V4's acceptance runs patrol and place records on these meshes so a later
+  re-bake would reopen them, and the same flaw probably sits under door 339 on the map V8 plays.
+  Acceptance: both gate assertions and the 339 probe green; `verify nav` clean on both maps;
+  door-cut convex counts 54 and 60, link counts 1 and 8, every other door probe unchanged; the six
+  map records unchanged. Stop: a new bridging error, a lost link, a doorway flipping from wall to
+  walkable, or a moved record.
