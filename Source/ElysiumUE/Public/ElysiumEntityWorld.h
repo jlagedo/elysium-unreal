@@ -524,14 +524,14 @@ public:
 	float GetOpenSignFadeIn() const { return OpenSignFadeIn; }
 
 	// --- Open dialogue (`.dlg` conversation) ---
-	// The one conversation currently on screen, driven by an NPC's StartPlayerDialogRemote and drawn
-	// by the visual-novel Slate box off the published view state (same held-on-the-world
-	// lifetime as the sign/fade). The owning NPC's OnDialogEnd fires when it closes (the beat
-	// machine's hinge — DialogPostProcess reads the `G` flags the dialogue's field-5 actions wrote).
+	// The one conversation currently on screen (`CDialog::Acquire 0x100e05f0`: it runs the owning
+	// NPC's `StartTalking 0x102c0270`, then the starting line), drawn by the visual-novel Slate box
+	// off the published view state (same held-on-the-world lifetime as the sign/fade). The owning
+	// NPC's OnDialogEnd fires from `0x102c0360` when it closes (the beat machine's hinge —
+	// DialogPostProcess reads the `G` flags the dialogue's field-5 actions wrote).
 	void OpenDialog(const FElysiumEntityHandle& Owner, TSharedRef<FElysiumDlgConversation> Conversation,
 		EElysiumDialogOpenerKind Opener = EElysiumDialogOpenerKind::Remote,
-		int32 RawFlags = 0, const FString& DefaultCamera = FString(),
-		const FElysiumBodyOwnerToken& BodyOwner = FElysiumBodyOwnerToken());
+		int32 RawFlags = 0, const FString& DefaultCamera = FString());
 	// The live conversation, or null when none is open. What the dialogue box renders.
 	FElysiumDlgConversation* GetOpenDialog() const;
 	// The NPC the open conversation belongs to (Invalid when none is open).

@@ -353,9 +353,9 @@ bool FElysiumNpcKernelDialoguePayphoneCanTalkTest::RunTest(const FString&)
 	F.Phone->NpcFlags.Clear(EElysiumNpcFlag2::NO_DIALOG_PERSISTENT);
 
 	// Arm 7 — `IsInDialog` (`0x102c1170`): the body's answer IS its negation.
-	F.Phone->Dialogue.bInDialog = true;
-	TestFalse(TEXT("arm 7: an open session refuses"), F.Phone->CanTalk(F.Other));
-	F.Phone->Dialogue.bInDialog = false;
+	F.Phone->Dialogue.DialogQue = TEXT("q");   // IsInDialog's term `m_szDialogQue +0x64ec`
+	TestFalse(TEXT("arm 7: a body in dialogue refuses"), F.Phone->CanTalk(F.Other));
+	F.Phone->Dialogue.DialogQue.Reset();
 
 	// Arm 5 — `m_bfNPCStateFlags` (+0x5b64) bit 2, the per-state busy bit. The word is not stored:
 	// it is a pure function of `m_NPCState` (`0x1026e3e0`, whose whole table the port carries), so

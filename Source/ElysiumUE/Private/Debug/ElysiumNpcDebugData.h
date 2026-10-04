@@ -50,9 +50,11 @@ struct FElysiumNpcDebugData
 	FString Admission;
 	FString State;
 	FString IdealState;
-	FString BodyOwner;
-	FString SuspendedOwner;
-	uint32 OwnerGeneration = 0;
+	// Who holds the body, in retail's words: `m_hCine` (`+0x5d74`, `ScriptOwner`) resolved,
+	// `m_scriptState` (`+0x5d70`) and `m_hDialogPartner` (`+0xfe8`) resolved.
+	FString Cine;
+	int32 ScriptState = 0;
+	FString DialogPartner;
 	FString LastTransition;
 	TArray<FString> Trace;
 

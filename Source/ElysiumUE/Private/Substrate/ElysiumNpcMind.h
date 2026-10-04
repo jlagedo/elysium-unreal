@@ -3,69 +3,61 @@
 #include "CoreMinimal.h"
 #include "ElysiumNpcMindTypes.h"
 
-// The bounded first NPC mind: deterministic admission plus K7 body arbitration. It deliberately
-// contains no navigation, animation, actor or UObject access. Schedule, ambient and sequence remain
-// executors on FElysiumNpc and may act only while holding the token this class issued.
+// The NPC's two state words, `m_NPCState` (`+0x5cc0`) and `m_IdealNPCState` (`+0x5cc4`), with the
+// port's admission barrier and the transition trace. It holds no body owner: retail has none. Who
+// holds a body is retail's own words on the NPC — `m_hCine` (`+0x5d74`, `FElysiumEntity::
+// ScriptOwner`), `m_scriptState` (`+0x5d70`) and `m_hDialogPartner` (`+0xfe8`) — and the program it
+// runs. Retail's writers reach `m_NPCState` through `SetState 0x1026e340` (`WriteNpcStateRetail` /
+// `WriteIdealStateRetail`); the only other writes are the port's lifecycle ones below (admission,
+// restore, invalidation), each named at its line. No navigation, animation, actor or UObject
+// access.
 class FElysiumNpcMind
 {
 public:
 	enum class EAdmission : uint8 { Spawned, Armed, Admitted };
 
+	// The admission barrier: port-only, V6's (lifecycle `NPCInitThink 0x10273aa0`; story V3
+	// README Q5). It stays until V6 retires it.
 	void ArmAdmission();
 	bool Admit();
-	bool RequestState(EElysiumNpcState NewState, const TCHAR* Reason);
 
-	bool Acquire(EElysiumBodyOwner Requested, bool bSuspendCurrent,
-		FElysiumBodyOwnerToken& OutToken, const TCHAR* Reason);
-	// Would `Requested` be granted right now? A caller that retries a refused claim asks first, so a
-	// claim the arbitration cannot grant yet does not record a refusal on every think.
-	bool CanAcquire(EElysiumBodyOwner Requested) const { return IsAcquisitionAllowed(Requested); }
-	bool Release(const FElysiumBodyOwnerToken& Token, const TCHAR* Reason);
-	void ForgetSuspended(EElysiumBodyOwner Owner, const TCHAR* Reason);
+	// Death (`bDead`, state Dead) or dormancy (state Idle). The dormancy write has no retail writer
+	// named in `docs/vtmb/` yet; the caller names it at its line.
 	void Invalidate(const TCHAR* Reason, bool bDead);
 
-	// Restore only resumable autonomous ownership. Session tokens/generations never serialize.
-	void Restore(EElysiumNpcState SavedState, EElysiumBodyOwner SavedOwner);
+	// A saved state, admitted. `Scripted` restores as `Idle`: a cine refuses a save while it
+	// possesses an NPC (K1, a named divergence) and the restart that would re-possess it is V6's, so
+	// a saved `Scripted` has no scene to return to. Both go together in V6.
+	void Restore(EElysiumNpcState SavedState);
 
 	EAdmission Admission() const { return AdmissionPhase; }
 	bool IsAdmitted() const { return AdmissionPhase == EAdmission::Admitted; }
 	EElysiumNpcState State() const { return CurrentState; }
 	EElysiumNpcState IdealState() const { return DesiredState; }
-	EElysiumBodyOwner Owner() const { return CurrentOwner; }
-	EElysiumBodyOwner SuspendedOwner() const { return ParkedOwner; }
-	uint32 Generation() const { return OwnerGeneration; }
-	FElysiumBodyOwnerToken CurrentToken() const
-	{
-		return CurrentOwner == EElysiumBodyOwner::None
-			? FElysiumBodyOwnerToken() : FElysiumBodyOwnerToken{ CurrentOwner, OwnerGeneration };
-	}
 	const FString& LastTransition() const { return Last; }
 	const TArray<FString>& Trace() const { return Transitions; }
 
 	// One row from a system outside the mind — the schedule runner's selections and refusals share
-	// the mind's trace so a single read shows stimulus, state, owner and schedule in order.
+	// the mind's trace so a single read shows stimulus, state and schedule in order.
 	void RecordExternal(const FString& Row) { Record(Row); }
 
 	// --- Story 29c-1, family Schedule: `m_bForceStateChange` (`+0x1b28`) --------------------------
 	//
 	// `0x102ae840`, the scripted-schedule order push, stamps this word directly beside the order id
-	// and the `CHOOSE_NEW_SCHEDULE` flag. It is not a transition request — nothing is arbitrated —
-	// so it is a plain set/consume pair rather than a `RequestState` call. NOT CONSUMED yet: the
-	// state machine that reads it is story 29e's.
+	// and the `CHOOSE_NEW_SCHEDULE` flag. It is not a transition request — it is a plain store — so
+	// it is a set/consume pair. NOT CONSUMED yet: the state machine that reads it is story 29e's.
 	void ForceStateChange() { bForceStateChange = true; }
 	void ClearForceStateChange() { bForceStateChange = false; }
 	bool IsStateChangeForced() const { return bForceStateChange; }
 
 	static bool IsSupportedState(EElysiumNpcState State);
-	static bool IsResumableOwner(EElysiumBodyOwner Owner);
 
 	// --- Story 29c-1, family Conditions: `RequestDesiredState` -----------------------------------
 	//
 	// `FUN_102ad260` and `FUN_102ad2d0`, the two identical flee arms `PreSelectIdealState` (slot 460,
 	// `0x102ad340`) calls, write `m_IdealNPCState` (`+0x5cc4`) DIRECTLY — not through `SetState` and
-	// not through any admission or support test. This is the write side of that, and it is separate
-	// from `RequestState` for exactly that reason: `RequestState` is this runtime's arbitrated
-	// transition and would refuse where retail simply stores.
+	// not through any admission or support test. This is the write side of that, a plain store with
+	// no support test.
 	//
 	// `RetailIdealState` is retail's RAW `NPC_STATE` id (`0x1026e3e0`'s cases: 1 idle, 2 combat,
 	// 3 alert, 4 script, 7 dead, **8 flee**, 0xb hunt). Both callers pass 8.
@@ -97,21 +89,16 @@ public:
 	double GetLastStateChangeTime() const { return LastStateChangeTime; }
 
 private:
-	bool IsAcquisitionAllowed(EElysiumBodyOwner Requested) const;
 	void Record(const FString& Row);
 	// `m_NPCState` and `m_IdealNPCState` have ONE source of truth each. The typed word is it; the
 	// raw overlay below exists only for the retail ids `EElysiumNpcState` cannot spell (8 FLEE,
 	// 0xb HUNT, 0xe), and any typed write retires the overlay so the two can never disagree.
 	void SetCurrentStateTyped(EElysiumNpcState NewState);
 	void SetDesiredStateTyped(EElysiumNpcState NewState);
-	void RefreshStateFromOwner();
 
 	EAdmission AdmissionPhase = EAdmission::Spawned;
 	EElysiumNpcState CurrentState = EElysiumNpcState::Idle;
 	EElysiumNpcState DesiredState = EElysiumNpcState::Idle;
-	EElysiumBodyOwner CurrentOwner = EElysiumBodyOwner::None;
-	EElysiumBodyOwner ParkedOwner = EElysiumBodyOwner::None;
-	uint32 OwnerGeneration = 0;
 	FString Last;
 	TArray<FString> Transitions;
 	static constexpr int32 MaxTraceRows = 16;

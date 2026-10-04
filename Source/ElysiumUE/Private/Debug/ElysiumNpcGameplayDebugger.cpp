@@ -106,8 +106,10 @@ void FElysiumNpcGameplayDebuggerCategory::DrawData(APlayerController*,
 
 	CanvasContext.Print(FColor::White, FString::Printf(TEXT("{yellow}%s{white}  %s  %s"),
 		*DataPack.TargetName, *DataPack.ClassName, *DataPack.Model));
-	CanvasContext.Print(FColor::White, FString::Printf(TEXT("Mind: {yellow}%s{white} state=%s ideal=%s owner=%s"),
-		*DataPack.Admission, *DataPack.State, *DataPack.IdealState, *DataPack.BodyOwner));
+	CanvasContext.Print(FColor::White, FString::Printf(
+		TEXT("Mind: {yellow}%s{white} state=%s ideal=%s cine=%s script_state=%d dialog_partner=%s"),
+		*DataPack.Admission, *DataPack.State, *DataPack.IdealState, *DataPack.Cine,
+		DataPack.ScriptState, *DataPack.DialogPartner));
 	CanvasContext.Print(FColor::White, FString::Printf(TEXT("Schedule: {yellow}%s{white} task %d/%d %s (%s)"),
 		*DataPack.ScheduleName, DataPack.TaskIndex + 1, DataPack.TaskCount,
 		*DataPack.CurrentTask, *DataPack.CurrentTaskOperand));

@@ -11,9 +11,10 @@
 // Owns (RunAi19's `rule` rows): 0x1026f110 CAI_BaseNPC::RunAI.
 
 /** `m_hDialogPartner` (`+0x0fe8`) resolving to a live entity -- the gate `RunAI` (`0x1026f1f0` ..
- *  `0x1026f219`) skips `GatherConditions` on. The word is `CBaseCombatCharacter`'s; this runtime
- *  carries the partner as the Troika NPC's open dialogue session (`FElysiumNpc::HasLiveDialogPartner`,
- *  family Anim), so a base-only NPC -- which has no session -- reads retail's invalid-handle arm. */
+ *  `0x1026f219`) skips `GatherConditions` on. The word is `CBaseCombatCharacter`'s
+ *  (`GetDialogPartner()`, written by `SetDialogPartner 0x10107050`), resolved by
+ *  `FElysiumNpc::HasLiveDialogPartner` (family Anim). On an NPC only `StartTalking 0x102c0270` sets
+ *  it, so a base-only NPC -- never a conversation's owner -- reads retail's invalid-handle arm. */
 bool RunAi19DialogPartnerLive() const;
 
 /** SEAM for `CBaseEntity::AddTimedOverlay` (`0x1009f3c0`), the debug-overlay text `RunAI` pushes at

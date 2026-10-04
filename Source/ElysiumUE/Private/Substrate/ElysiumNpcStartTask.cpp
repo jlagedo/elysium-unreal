@@ -587,8 +587,9 @@ FElysiumEntity* FElysiumNpc::StartTask19ClosestPlayer() const
 
 void FElysiumNpc::StartTask19PlayerStartDialog(FElysiumEntity& Player)
 {
-	// `player->vtable[0x678](this)`: the player starts talking to this NPC.
-	(void)OpenConversation(Player.Handle, EElysiumDialogOpenerKind::Forced);
+	// `player->vtable[0x678](this)` (slot 414, `FUN_10178280`): the player's start-dialog, with the
+	// opener the installing input stored on this NPC (`StartPlayerDialog*`, R2).
+	Dialogue.PlayerStartDialog(*this, Player.Handle);
 }
 
 TConstArrayView<FElysiumNpc::FStartTask19ArmRow> FElysiumNpc::StartTask19ArmRows()

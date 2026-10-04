@@ -93,10 +93,8 @@ namespace
 	// One bodied pedestrian to step, one BODILESS pedestrian to open a conversation on, and one
 	// Tzimisce runner — the only species row in the table whose classname this port registers.
 	//
-	// The talker carries no model on purpose. A bodied NPC's `BeginDialogueBodySession` is refused
-	// until its mind has been admitted by a think, and this fixture never thinks; a bodiless one has
-	// no body to arbitrate over and opens the session directly. The gate under test is the PLAYER's
-	// (`+0x19b4`), so who owns the conversation is immaterial to it.
+	// The talker carries no model (a conversation takes no body since V3d). The gate under test is
+	// the PLAYER's (`+0x19b4`), so who owns the conversation is immaterial to it.
 	FElysiumEntityDefs MakeFootstepDefs()
 	{
 		FElysiumEntityDefs Defs;
@@ -155,9 +153,7 @@ namespace
 			World->Load(MakeFootstepDefs());
 			World->Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 			// One deterministic think, no executor action: `Activate` only ARMS the mind's admission
-			// barrier, and an unadmitted NPC refuses `BeginDialogueBodySession`, which the muted case
-			// needs in order to open a conversation at all. Same line, same reason, as
-			// `ElysiumDialogueCameraTests`. The map is activated a tenth of a second before this
+			// barrier. Same line as `ElysiumDialogueCameraTests`. The map is activated a tenth of a second before this
 			// zero because `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms that think at
 			// `curtime + 0.1` (`_DAT_104493d0`), so it falls on this frame.
 			World->Tick(0.0);

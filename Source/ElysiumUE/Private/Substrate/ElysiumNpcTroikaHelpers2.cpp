@@ -354,26 +354,26 @@ void FElysiumNpc::OnDialogRelease()
 	//     }
 	//     if (cvar DAT_109241fc) { <the entity_debug_stats hook> }
 	//
-	// `docs/vtmb/game_runtime.md` names this the owning NPC's dialogue-end path, called from
-	// `CDialog::Release`. `FElysiumNpcDialogue::End` fires the same output through a DIFFERENT,
-	// input-driven trigger; this is the engine-side one, and the `+0x1590` clear is the half neither
-	// path carried before.
+	// Its two callers (packet R1 item 4): `CDialog::Release 0x100e5240` (the port's
+	// `FElysiumEntityWorld::EndDialogSession`, after the flush and the window) and the dialogue upkeep
+	// `0x102c1400` (`RunDialogActivity`), which reaches it only with the partner already gone, so it
+	// fires nothing. `OnDialogEnd` therefore fires exactly once per conversation, from the close.
 	//
 	// The tail is a DEBUG hook — `thunk_FUN_10245660("entity_debug_stats")` and a `+0x10` dispatch,
 	// behind `DAT_109241fc`, the `dialog_facial_debug` ConVar (shipped "0", so as shipped the hook
 	// never runs). It reaches no game state and is named rather than ported.
-	if (!HasLiveDialogPartner())
+	const FElysiumEntity* Partner =
+		(World != nullptr && GetDialogPartner().IsSet()) ? World->Resolve(GetDialogPartner()) : nullptr;
+	if (Partner != nullptr)
 	{
-		return;
+		bCutsceneForceLOD = false;                                           // +0x1590
+		static const FName OnDialogEndOutput(TEXT("OnDialogEnd"));
+		FireOutput(OnDialogEndOutput, Partner->Handle);                      // +0x5f5c, activator the partner
+		SetDialogPartner(FElysiumEntityHandle::Invalid());                   // 0x10107050(this, NULL)
+		++DialogPartnerClears;
 	}
-	bCutsceneForceLOD = false;
-	static const FName OnDialogEndOutput(TEXT("OnDialogEnd"));
-	// Retail's activator is the PARTNER (`FireOutput(&m_OnDialogEnd, partner, this, 0)`). This
-	// runtime carries the partner as the world's open session and holds no handle for it on the NPC,
-	// so the activator is this NPC's own handle and the gap is named rather than papered over: the
-	// day `m_hDialogPartner` (+0x0fe8) has a producer, the handle replaces `Handle` here.
-	FireOutput(OnDialogEndOutput, Handle);
-	++DialogPartnerClears;
+	// Port bookkeeping, no retail word: the conversation this NPC opened in `StartTalking` is over.
+	Dialogue.bInDialog = false;
 }
 
 // -------------------------------------------------------------------------------------------------

@@ -186,7 +186,7 @@ bool FElysiumNpcKernelRunAi19BaseRunAiDialogPartnerTest::RunTest(const FString&)
 	FElysiumNpc& N = *F.Npc;
 	RunAi19InstallQuietProgram(N);
 	RunAi19SetOnePassConditions(N);
-	N.Dialogue.bInDialog = true;
+	N.SetDialogPartner(F.Player->Handle);   // m_hDialogPartner +0xfe8, SetDialogPartner 0x10107050
 	TestTrue(TEXT("the partner reads live"), N.RunAi19DialogPartnerLive());
 	N.FElysiumNpcBase::RunAI(false);
 	TestTrue(TEXT("1026f219 live partner: no gather, the byte stays clear"),

@@ -395,13 +395,16 @@ bool FElysiumThinkResetSitesTest::RunTest(const FString&)
 	TestTrue(TEXT("leaving a grapple is slot 614"), NextStampsAt(*Guard, Now));
 
 	// Dialogue START: the three `StartPlayerDialog*` inputs and `PlayerUse` all re-base before
-	// installing; the port's one door is the dialogue body session.
+	// installing (`0x1029f060`: `FinishTalking`, slot 614, `+0x6495`, `0x102ae750(0x6e, 0)`).
 	Prime(*Guard, Now);
-	const FElysiumBodyOwnerToken Token = Guard->BeginDialogueBodySession();
-	TestTrue(TEXT("a dialogue session begins with slot 614"), NextStampsAt(*Guard, Now));
+	FElysiumInputArgs RemoteArgs;
+	RemoteArgs.Param = FElysiumVariant::Int(256);
+	Guard->InputStartPlayerDialogRemote(RemoteArgs);
+	TestTrue(TEXT("a dialogue start is slot 614"), NextStampsAt(*Guard, Now));
+	// The close's NPC half, `0x102c0360`, re-bases nothing: retail resets only at the start.
 	Prime(*Guard, Now);
-	Guard->EndDialogueBodySession(Token, /*bSilent=*/true);
-	TestTrue(TEXT("...and ends with no reset at all"), Untouched(*Guard, Now));
+	Guard->OnDialogRelease();
+	TestTrue(TEXT("...and the close resets nothing"), Untouched(*Guard, Now));
 
 	// `InputDisableThink` `0x1029f2a0`: a bool variant through, anything else means false.
 	Guard->SetDisableAi(false);

@@ -44,26 +44,17 @@ public:
 	bool PayphonePassesFindEntityFovTrace(const FElysiumEntity& Other) const;
 
 	// From `ElysiumNpcSpeciesLifecycle10.inl`.
-	/** `m_hDialogPartner` (`+0x0fe8`), as an ENTITY HANDLE.
-	 *
-	 *  **SEAM, and it answers nothing.** This runtime carries the dialogue partner as the open session
-	 *  (`FElysiumNpcDialogue::bInDialog` plus the talk-end stamp), which is the reading family Anim's
-	 *  `HasLiveDialogPartner()` and family Sounds' `IsInDialog` both already made — a boolean, not a
-	 *  handle. `CPayphone::NPCThink` is the first body in the kernel that needs the partner as an
-	 *  entity, because it reads two of the partner's own animation words off it, so the handle is
-	 *  declared here at its retail offset with no writer. Nothing in this runtime assigns it, so a
-	 *  payphone takes retail's own no-partner arm — which is the admitting arm: a payphone standing
-	 *  alone idles and re-thinks on the 0.25 s clock, exactly as retail's does. */
-	FElysiumEntityHandle DialogPartner;   // +0x0fe8 m_hDialogPartner (SEAM: no writer)
-	/** The partner resolved live, or null. Retail's test is the three-part EHANDLE validity check
-	 *  (`index & 0x1fff`, serial `>> 0xd`, non-null record) at `101aac0b`..`101aac2c`. */
+	/** `m_hDialogPartner` (`+0x0fe8`) — the combat character's own word (`GetDialogPartner()`),
+	 *  written by `StartTalking 0x102c0270` when the payphone's conversation opens and cleared by
+	 *  `0x102c0360` when it closes (V3d deleted the copy this class used to hide it with), resolved
+	 *  live, or null. Retail's test is the three-part EHANDLE validity check (`index & 0x1fff`,
+	 *  serial `>> 0xd`, non-null record) at `101aac0b`..`101aac2c`. */
 	FElysiumEntity* ResolveDialogPartner() const;
-	/** SEAM for `FUN_102c1400` (`0x102c1400`), the dialogue upkeep tick both payphone arms run. It is a
-	 *  237-instruction body of its own — the scene-entity release, `FinishTalking` when the talk
-	 *  finished, the queued-line pump, the disposition switch to schedule `0xf1` and
-	 *  `CDialog::ShowPlayerChoices` — and it is **not one of this family's rows**. Counted here so the
-	 *  payphone's call ORDER (tick before the activity mirror, tick before the idle) is assertable, and
-	 *  named so the day it is walked the call site is already correct. */
+	/** `FUN_102c1400` (`0x102c1400`), the dialogue upkeep tick both payphone arms run — the
+	 *  scene-entity release, `FinishTalking` when the talk finished, the queued-line pump, the
+	 *  disposition sequence answering `0xf1` and `CDialog::ShowPlayerChoices` — ported as
+	 *  `FElysiumNpc::RunDialogActivity` (V3d). Counted here so the payphone's call ORDER (tick before
+	 *  the activity mirror, tick before the idle) is assertable. */
 	int32 DialogUpkeepTicks = 0;
 	void DialogUpkeepTick();
 	/** How many payphone passes took the mirror arm and how many took the idle arm. */

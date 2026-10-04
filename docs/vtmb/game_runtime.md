@@ -1314,7 +1314,8 @@ text columns (unfilled except Ventrue's col 11), not a reserved/unused block.
    +0xfe8` does not resolve live; `IsBusyWithDiscipline(npc)` (`0x1000caae`) is false;
    `m_bfAINPCFlags2 +0x14bc & 0x10000000` is clear. Then, in this order: the `+0x5bac` store
    (`FLD [variant+8]` when the variant's type `+0x18 == 1`, `FIELD_FLOAT`, else `FLD [0x104454c4]`,
-   an unwritten `.rdata` float with 1,331 readers — its value not read here; `FSTP [ESI+0x5bac]`,
+   an unwritten `.rdata` float with 1,331 readers — **0.0f**: its four bytes at file offset
+   `0x4454c4` of the pinned `vampire.dll` are `00 00 00 00`, read 2026-10-04 by V3d's D1; `FSTP [ESI+0x5bac]`,
    `0x1029efed`), `FinishTalking 0x102c0ca0`, slot 614 `ResetThinkTimers` (`+0x998`), the byte
    `+0x6495`, the debug stamp `+0x1b30` = `"E:\Vampire\main\dlls\AI_BaseNPCTroika.cpp"`, `+0x1b34` =
    line, then `0x102ae750(id, 0)`. `0x102ae750` is `0x102cc1f0` (slot 440 translate +
@@ -1560,7 +1561,13 @@ dropped.
    caller): `m_bForceDialogStart +0x6495 = 0`, `m_bCutsceneForceLOD +0x1590 = 1`, `m_nTimesTalked
    +0x64bc += 1`, `FinishTalking`, `SetDialogPartner(this, [player+0xa8])`, slot 306 (`+0x4c8`)
    `(partner, 0)` unless `+0x204` bit 3, `CancelScript 0x101a8c30` on a live `m_hCine +0x5d74`, then
-   fires **`m_OnDialogBegin +0x5f44`** (activator the partner, caller the NPC). `Acquire` returns 0
+   fires **`m_OnDialogBegin +0x5f44`** (activator the partner, caller the NPC). **The call site and
+   slot 306 (2026-10-04, V3d's D1, from the decompile):** `Acquire` calls `StartTalking` once the
+   `.dlg` has loaded and the window is up, and before `GetStartingLine 0x100e0b10` / `fill_packet` /
+   the first `message_send`, so `OnDialogBegin` fires ahead of the opening line's col-4 action; the
+   call instruction's own address is not recorded (`vtmb_callers` lists no static or virtual caller
+   of `0x102c0270`). Slot 306 is `CBaseCombatCharacter::LookAtEntity(CBaseEntity*, bool)`
+   (`0x1033e370`, walked), called `(partner, false)`. `Acquire` returns 0
    (so the player's partner is cleared) when the dialog failed to load or when `+0x30e9` sent the
    one line and released at once.
 2. **Dependency.** `CDialogDependency::Parse` (`0x100e8fc0`) turns col-4 into a struct: trait

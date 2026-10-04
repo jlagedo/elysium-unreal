@@ -45,23 +45,24 @@ namespace ElysiumAiScriptedSchedule
     void BuildRoute(FElysiumEntityWorld& World, const FElysiumEntity& Goal, TArray<FVector>& OutRoute);
 }
 /**
- * The order one `aiscripted_schedule` pushed onto one NPC, and the whole of what the two moving
- * programs read.
+ * What one `aiscripted_schedule` hands its NPC: the arguments of the executor `0x101a98c0`'s NPC
+ * half (`FElysiumNpc::BeginScriptedSchedule`), which keeps none of them. Retail's executor has no
+ * order, no end and no release: it applies `forcestate` through `SetState 0x1026e340`, calls the
+ * mode's mover, and the program it installs is an ordinary one (V3d deleted the port's
+ * `ScriptedSchedule` body claim, the order's lifetime coupling to its program, and the NPC's save
+ * refusal this comment used to cite).
  *
- * SESSION STATE, NOT SAVE STATE. It carries a live goal handle and a route resolved out of the
- * current map epoch; the two things a push durably changes — the mind's state and, for mode 3, the
- * committed enemy — are already carried by the `NpcMind` and `NpcSenses` save blocks. A save cannot
- * normally be taken while an order is in flight either, because `FElysiumNpc::SaveBlockReason`
- * refuses one while the `ScriptedSchedule` owner holds the body.
+ * The NPC holds a copy only while the admission barrier defers the push (`bPending`, V6's) and
+ * for the retail word `0x102ae840` stamps (`RetailOrderId`, `+0x65cc`). SESSION STATE, NOT SAVE
+ * STATE: what a push durably changes — the state and, for mode 3, the committed enemy — is carried
+ * by the `NpcMind` and `NpcSenses` save blocks.
  */
 struct FElysiumScriptedScheduleOrder
 {
 	int32 Mode = 0;
 	FElysiumEntityHandle Source;   // the `aiscripted_schedule` that pushed it, for diagnostics
 	FElysiumEntityHandle Goal;
-	TArray<FVector> Route;
-	int32 Leg = 0;
-	int32 Program = 0; // Installed GLOBAL id; ordinary corpus programs can also run without an order.
+	TArray<FVector> Route;         // the director's type-3 chain (`BuildRoute`); diagnostics only
 	bool bRun = false;
 	bool bSuppressRouteWarning = false;
 
@@ -72,9 +73,6 @@ struct FElysiumScriptedScheduleOrder
 	// The whole push is waiting for this NPC's first think. `sm_medical_1` fires `guard_to_nurse`
 	// from an `npc_maker`'s `OnSpawnNPC`, so a director can reach an NPC that has never thought.
 	bool bPending = false;
-	// One route-failure report per pushed order. A body that cannot take its first leg will not take
-	// the next one either, and this is a director's mistake rather than a per-think event.
-	bool bWarnedRoute = false;
 
 	// Story 29c-1, family Schedule. `0x102ae840` writes a bare `int` into `+0x65cc` — the offset
 	// the shape map binds to THIS struct ("the forced state travels with the pushed order") — beside

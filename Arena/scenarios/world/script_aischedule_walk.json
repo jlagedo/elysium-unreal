@@ -1,10 +1,9 @@
 {
   "name": "script_aischedule_walk",
-  "about": "An aiscripted_schedule pushes a walk order and nothing else. sm_hub_1's blue_blood_to_alley (m_iszEntity SMblueblood, m_flRadius 128, schedule 1, forcestate 0, goalent blue_blood_alley_target; authored-control.md § aiscripted_schedule, the 'Santa Monica hub, blueblood alley' row). StartSchedule 0x101a9b30 is ThinkSet(CineThink) at curtime; CineThink 0x101a8070 finds SMblueblood strictly inside the radius (FindEntity 0x101a7600) and possesses it (0x101a9790, then slot 586 on the target): the executor 0x101a98c0 resolves goalent, applies no forced state (forcestate 0), and for mode 1 calls ScheduledMoveToGoalEntity 0x102800c0: base schedule 2 IDLE_WALK through 0x10280de0, which slot 440 translates to SCHED_TROIKA_IDLE_PATROL 0x46 (TASK_PATROL_PATH 0; TASK_WAIT_FOR_MOVEMENT 0; TASK_WAIT_PVS 0; authored-control.md:313-319), m_pGoalEnt := the goal, and a type-4 navigator goal at the goal's origin, tolerance 128.0, activity ACT_WALK 9 (schedule-kernel.md § 0x102800c0). TASK_PATROL_PATH 0x105 (0x102a594d) sets the movement activity and completes; WAIT_FOR_MOVEMENT holds until the goal is reached; WAIT_PVS (Troika run arm 0x102aad7e) completes with the player in view; the program ends and SelectSchedule picks again. The order has no end of its own and no release (0x101a98c0 never resets). The three rows verbatim from sm_hub_1, SMblueblood (npc_VDialogPedestrian) anchored so the 25 m walk to the target crosses the arena clear of the cover block.",
+  "about": "An aiscripted_schedule pushes a walk order and nothing else. sm_hub_1's blue_blood_to_alley (m_iszEntity SMblueblood, m_flRadius 128, schedule 1, forcestate 0, goalent blue_blood_alley_target; authored-control.md § aiscripted_schedule, the 'Santa Monica hub, blueblood alley' row). StartSchedule 0x101a9b30 is ThinkSet(CineThink) at curtime; CineThink 0x101a8070 finds SMblueblood strictly inside the radius (FindEntity 0x101a7600) and possesses it (0x101a9790, then slot 586 on the target): the executor 0x101a98c0 resolves goalent, applies no forced state (forcestate 0), and for mode 1 calls ScheduledMoveToGoalEntity 0x102800c0: base schedule 2 IDLE_WALK through 0x10280de0, which slot 440 translates to SCHED_TROIKA_IDLE_PATROL 0x46 (TASK_PATROL_PATH 0; TASK_WAIT_FOR_MOVEMENT 0; TASK_WAIT_PVS 0; authored-control.md:313-319), m_pGoalEnt := the goal, and a type-4 navigator goal at the goal's origin, tolerance 128.0, activity ACT_WALK 9 (schedule-kernel.md § 0x102800c0). That SetGoal 0x102ecd20 builds the route and, the current task (TASK_PATROL_PATH 0x105, status new) not being a continuous move (slot 529: only 0x6e, 0x0b, 0x72), completes it through the navigator's slot 2 (0x102f1e2c..0x102f1e38 -> 0x102623c0 -> TaskComplete 0x10273e80): TASK_PATROL_PATH never starts (its start arm 0x102a594d does not run), so the trace shows its taskdone with no task event; MaintainSchedule then starts WAIT_FOR_MOVEMENT, which holds until the goal is reached; WAIT_PVS (Troika run arm 0x102aad7e) completes with the player in view; the program ends and SelectSchedule picks again. The order has no end of its own and no release (0x101a98c0 never resets). The three rows verbatim from sm_hub_1, SMblueblood (npc_VDialogPedestrian) anchored so the 25 m walk to the target crosses the arena clear of the cover block.",
   "stage": "arena",
   "seed": 1,
   "duration": 45.0,
-  "known_red": "V3d: the order runs through the port's ScriptedSchedule body claim and its lifetime coupling (M14: BeginScriptedSchedule / EndScriptedSchedule, ElysiumNpc.cpp), where retail's executor 0x101a98c0 does SetState, the mover and nothing else. Seen 2026-10-04: 0x46 and the goal at 2.03 s as retail, then `taskdone task_patrol_path` with no `task` event (the task did not start through MaintainSchedule's start, ElysiumNpcMaintain.cpp:400-416). Since V3a the walk plays (2.267 `walk rate=1`; red 1 gone)",
   "player": {
     "at": "start"
   },
@@ -51,8 +50,16 @@
     {
       "label": "gait",
       "who": "SMblueblood",
+      "kind": "taskdone",
+      "match": "^task_patrol_path$",
+      "regex": true,
+      "within": 0.5
+    },
+    {
+      "label": "waits",
+      "who": "SMblueblood",
       "kind": "task",
-      "match": "task_patrol_path (",
+      "match": "task_wait_for_movement (",
       "within": 1.0
     },
     {

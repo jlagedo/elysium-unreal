@@ -549,8 +549,9 @@ void AElysiumNpcBody::GrabDebugSnapshot(FVisualLogEntry* Snapshot) const
 	// The snapshot is grabbed once per Visual Logger entry, so the row arrays stay out of it.
 	FElysiumNpcDebugData Data;
 	Data.Build(*Npc, *EntityWorld, EElysiumNpcDebugRows::SummaryOnly);
-	Status.Add(TEXT("Mind"), FString::Printf(TEXT("%s / %s / %s"),
-		*Data.State, *Data.IdealState, *Data.BodyOwner));
+	Status.Add(TEXT("Mind"), FString::Printf(TEXT("%s / %s"), *Data.State, *Data.IdealState));
+	Status.Add(TEXT("Cine"), FString::Printf(TEXT("%s script_state=%d"), *Data.Cine, Data.ScriptState));
+	Status.Add(TEXT("Dialog partner"), Data.DialogPartner);
 	Status.Add(TEXT("Schedule"), FString::Printf(TEXT("%s task %d/%d %s"),
 		*Data.ScheduleName, Data.TaskIndex + 1, Data.TaskCount, *Data.CurrentTask));
 	Status.Add(TEXT("Conditions"), Data.Conditions);

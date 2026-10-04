@@ -390,18 +390,23 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 			static_cast<int32>(Player->EvaluateFeedAcceptance(*Victim)),
 			static_cast<int32>(EElysiumFeedVerdict::RefusedOpposedCheck));
 
-		// 4. Body ownership outranks all of it: an open conversation refuses the grapple even for a
-		//    victim that would otherwise accept automatically.
+		// 4. A conversation outranks all of it: a victim in dialogue refuses the grapple even when it
+		//    would otherwise accept automatically.
+		//    The conversation is opened at the NPC's own door, `StartTalking 0x102c0270` (what
+		//    `CDialog::Acquire 0x100e05f0` calls), and closed at `0x102c0360`: the victim authors no
+		//    `dialogname`, so the `StartPlayerDialog*` inputs (V3d: they install `0x6d`/`0x6e`) would
+		//    reach an `Acquire` that answers 0 and open nothing, as retail's.
 		Victim->Disposition = TEXT("cower");
-		World.EnqueueInput(TEXT("victim"), FName(TEXT("StartPlayerDialogRemote")),
-			FElysiumVariant::Int(256), 0.0, FElysiumEntityHandle::Invalid(), Victim->Handle);
-		World.Tick(0.0);
+		FElysiumNpc* VictimNpc = Victim->AsNpc();
+		if (!TestNotNull(TEXT("the victim is an NPC"), VictimNpc))
+		{
+			return false;
+		}
+		VictimNpc->Dialogue.StartTalking(*VictimNpc, Player->Handle);
 		TestEqual(TEXT("a victim in dialogue refuses"),
 			static_cast<int32>(Player->EvaluateFeedAcceptance(*Victim)),
 			static_cast<int32>(EElysiumFeedVerdict::RefusedBusy));
-		World.EnqueueInput(TEXT("victim"), FName(TEXT("EndDialog")), FElysiumVariant::Void(), 0.0,
-			FElysiumEntityHandle::Invalid(), Victim->Handle);
-		World.Tick(0.0);
+		VictimNpc->OnDialogRelease();
 
 		// A refused attempt leaves no partial transaction behind.
 		Victim->Disposition = TEXT("normal");

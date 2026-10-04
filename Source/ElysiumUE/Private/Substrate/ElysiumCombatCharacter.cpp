@@ -451,9 +451,9 @@ void FElysiumCombatCharacter::InputWillTalk(const FElysiumInputArgs& Args)
 
 void FElysiumCombatCharacter::SetDialogPartner(const FElysiumEntityHandle& Partner)
 {
-	// `CBaseCombatCharacter::SetDialogPartner` `0x10107050`: filled in V3d from packet R1. Until then
-	// nothing writes `m_hDialogPartner` (+0xfe8) and `DialogPartner` stays invalid.
-	(void)Partner;
+	// `CBaseCombatCharacter::SetDialogPartner` `0x10107050`, the one store of `m_hDialogPartner`
+	// (+0xfe8): NULL stores -1, anything else its handle. An invalid handle is the port's NULL.
+	DialogPartner = Partner.IsSet() ? Partner : FElysiumEntityHandle::Invalid();
 }
 
 void FElysiumCombatCharacter::InputInventoryRemove(const FElysiumInputArgs& Args)
@@ -845,15 +845,14 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 	//    the whole arm when it is null (`JZ 0x1026b8d9`). An NPC talking to another NPC therefore
 	//    gets no dialogue arm at all and falls straight through to the target-entity arm.
 	//
-	//    Seam: this runtime's dialogue session carries one owner and its partner is always the
-	//    player, so `m_hDialogPartner` is stood for by "this character owns the open session". A
-	//    session between two NPCs cannot be expressed here yet; when it can, this is the test that
-	//    has to keep answering nothing.
+	//    The partner's `+0xA8` is unnamed (packet R1 item 5); the port reads it as "the partner is
+	//    the player", which is what every caller of `StartTalking 0x102c0270` stores.
 	if (World != nullptr)
 	{
-		const FElysiumEntityHandle DialogOwner = World->GetOpenDialogOwner();
-		const FElysiumEntity* Partner = (DialogOwner.IsSet() && DialogOwner.Index == Handle.Index)
-			? World->FindPlayer() : nullptr;
+		const FElysiumEntity* PartnerEntity =
+			DialogPartner.IsSet() ? World->Resolve(DialogPartner) : nullptr;
+		const FElysiumEntity* Partner = (PartnerEntity != nullptr
+			&& PartnerEntity->Handle == World->PlayerHandle()) ? PartnerEntity : nullptr;
 		if (Partner != nullptr && Partner != this)
 		{
 			// **The idle scan is suppressed for the whole conversation** (RC5). Every shipped

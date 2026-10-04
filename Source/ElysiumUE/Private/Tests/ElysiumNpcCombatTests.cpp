@@ -1184,7 +1184,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	// The next decision pass, in the order `ThinkStanceOrIdle` runs it: the packet that started the
+	// The next decision pass, in the order `MaintainSchedule 0x102817c0` runs it: the packet that started the
 	// fight is no longer new, so the approach's own `LIGHT_DAMAGE` interrupt no longer fires and the
 	// program reaches its terminal swing. Re-gathering rather than reusing the selection pass's
 	// conditions is what makes that sequencing part of the assertion. The first pass ends as RunAI's

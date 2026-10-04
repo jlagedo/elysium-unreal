@@ -106,6 +106,10 @@ struct FElysiumSaveVersion
 		// carries retail's `m_eInterestingPlaceMode +0x6304` (0 none, 1 into, 2 idle, 3 outof). A
 		// mid-record change in the NPC leaf, so the floor moves.
 		NpcAmbientExecutorRetired = 41,
+		// 0002 V3d: the arbiter deleted. The NPC's mind block drops the body-owner byte after the state
+		// byte (retail saves `m_NPCState`, no owner). A mid-record change in the NPC leaf, so the floor
+		// moves.
+		NpcMindOwnerRetired = 42,
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -134,7 +138,10 @@ struct FElysiumSaveVersion
 	//
 	// `NpcAmbientExecutorRetired` removes two port timers from the middle of the NPC's patrol block;
 	// saves are disposable (no migration) and the floor moves with it.
-	static constexpr int32 MinSupported = NpcAmbientExecutorRetired;
+	//
+	// `NpcMindOwnerRetired` removes the body-owner byte from the NPC's mind block; saves are
+	// disposable (no migration) and the floor moves with it.
+	static constexpr int32 MinSupported = NpcMindOwnerRetired;
 
 	static const FGuid GUID;
 };

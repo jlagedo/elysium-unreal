@@ -61,8 +61,9 @@ Wave 3 (build work, one agent):
   102; cameras and `sense_cone_enter` green, `verbs_stealth_kill` red 3; open Q-H1 `cover_reclaim`,
   Q-H2 `memory_occluded_kept` (`stories/v1/triage.md` § "Wave H"). Closed 2026-10-04: both
   record errors (the port matches retail), re-stated and green; ticked.
-- [ ] **V3** — Fix: the arbiter retired; scenes, dialogue and places as retail runs them. L · Opus/high.
-  Cut 2026-10-04 (`0002-npc-ai/stories/v3/README.md`):
+- [x] **V3** — Fix: the arbiter retired; scenes, dialogue and places as retail runs them. L · Opus/high.
+  Cut 2026-10-04 (`0002-npc-ai/stories/v3/README.md`); closed with V3d 2026-10-04 (divergence 1
+  closed; residual reds on N13/N19 → V4, N11 → V7, V12, H11, N4):
   - [x] **V3r** — the two reading packets (dialogue upkeep `0x102c1400`; the dialogue inputs). S.
     Landed 2026-10-04 (`a156e746`).
   - [x] **V3a** — the seam, then the kernel's sequence plays on every body. M. Landed 2026-10-04:
@@ -86,7 +87,13 @@ Wave 3 (build work, one agent):
     (SCRIPT, `0xf2`, walk, plant, face, enable, wait, `OnBeginSequence`, play, `OnEndSequence`,
     idle), red only on N19 (sequence 0; V4's judge). Default 171 / 0, arm 1550 / 0; suite 71 pass /
     32 expected-fail / 1 fail (H11) / 1 unexpected-pass (N4); divergence 18 closed, K1 kept.
-  - [ ] **V3d** — the dialogue hold as a program; the arbiter deleted whole. M–L.
+  - [x] **V3d** — the dialogue hold as a program; the arbiter deleted whole. M–L. Landed
+    2026-10-04: `StartPlayerDialog*` install `0x6d`/`0x6e`, `+use` installs `0x6a` (no
+    `ClearSchedule`), `OnDialogBegin` from `StartTalking 0x102c0270`, one `OnDialogEnd`
+    (`0x102c0360`); N8 and N18 closed. Green: `script_dialog_hold`, `input_startplayerdialogremote`,
+    `dialog_use_hold`, `script_aischedule_walk` (record error corrected). The arbiter's names: 0
+    uses. Default 171 / 0, arm 1541 / 0; suite 74 pass / 30 expected-fail / 1 fail (H11) / 1
+    unexpected-pass (`hub_crosswalk_wait`, the V13 wave's restated record) of 106.
 - [ ] **T6b** — The header pass: the kernel headers' include fan-out, after V3d; closes T6
   (`0002-npc-ai/stories/t6b/brief.md`). M · Opus/high.
 - [ ] **V4** — Fix: the animation chain under the kernel. M · Opus/high.

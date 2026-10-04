@@ -215,9 +215,10 @@ namespace
 			*BriefHintNode(EW, *Npc), *EW.DescribeHandle(Npc->ScheduleHost.HintCoverObject),
 			Npc->NpcFlags.Has(EElysiumNpcFlag::AT_COVER_HINT) ? 1 : 0,
 			*EW.DescribeHandle(Npc->ShootTargetOverride));
-		UE_LOG(LogElysiumEnt, Display, TEXT("  body: %s | %s on_ground=%s flags=%s"),
-			*BriefRow(Rows, TEXT("Body")), *BriefRow(Rows, TEXT("Body owner")), BriefOnGround(Entity),
-			*Npc->NpcFlags.Describe());
+		// `script_state` is `m_scriptState` (`+0x5d70`) and `cine` is `m_hCine` (`+0x5d74`) resolved.
+		UE_LOG(LogElysiumEnt, Display, TEXT("  body: %s | script_state=%s cine=%s on_ground=%s flags=%s"),
+			*BriefRow(Rows, TEXT("Body")), *BriefRow(Rows, TEXT("Script state")),
+			*BriefRow(Rows, TEXT("Cine")), BriefOnGround(Entity), *Npc->NpcFlags.Describe());
 		// `vision` is `Senses.Perception.VisionDistanceCm` and `in_range` is `Senses.Memory.bPlayerInRange`,
 		// the two words `FElysiumNpcSenses::TickSight` compares (it scales the radius by the player's
 		// stealth vision scalar before the test). Every distance on the line is centimetres, and says so

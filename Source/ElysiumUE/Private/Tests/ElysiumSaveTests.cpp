@@ -666,9 +666,10 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `NpcHintClaimOnHint` (0018/8) then took the two hint-claim stand-ins out of the middle of the
 	// base schedule host record, which moved the floor once more.
 	// `NpcAmbientExecutorRetired` (0002 V3b) took the ambient executor's two timers out of the middle
-	// of the NPC's patrol block, which moved it again.
-	TestEqual(TEXT("the floor is the ambient-executor-retired schema"),
-		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::NpcAmbientExecutorRetired);
+	// of the NPC's patrol block, which moved it again. `NpcMindOwnerRetired` (0002 V3d) took the
+	// body-owner byte out of the NPC's mind block, which moved it once more.
+	TestEqual(TEXT("the floor is the mind-owner-retired schema"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::NpcMindOwnerRetired);
 	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
 	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
 	// being refused, and the floor stays where the last breaking schema left it.
@@ -751,7 +752,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `m_hTargetEnt` to the END of the NPC leaf behind its own version. Additive: a `SeeUnknownSweep`
 	// payload restores a sweep due at once and no target, the spawn defaults.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcAmbientExecutorRetired);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcMindOwnerRetired);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),

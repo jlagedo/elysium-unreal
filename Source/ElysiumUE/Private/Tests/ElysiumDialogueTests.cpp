@@ -1756,7 +1756,9 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	Conversation->Start();
 	Services.Calls.Reset();
 	World.OpenDialog(JackEntity->Handle, Conversation);
-	TestFalse(TEXT("dialogue cancels the older waveover body claim"), JackEntity->ScriptOwner.IsSet());
+	// `StartTalking 0x102c0270` (inside `CDialog::Acquire`) cancels a live `m_hCine` (`CancelScript
+	// 0x101a8c30`), interruptable or not.
+	TestFalse(TEXT("StartTalking cancels the waveover: m_hCine is clear"), JackEntity->ScriptOwner.IsSet());
 	TestTrue(TEXT("the cancelled waveover has no delayed action deadline"),
 		WaveoverEntity->SaveBlockReason() == nullptr);
 	TestTrue(TEXT("line 11 owns Jack's body immediately"),
@@ -1771,8 +1773,11 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 		World.HasActiveDialogueBodyClip(JackEntity->Handle));
 
 	World.Tick(3.1);
-	TestEqual(TEXT("the dialogue stance think cannot overwrite a live line clip"),
-		Services.Count(TEXT("PlayNpcClip smiling_jack Stance_Neutral_Idle_1")), 0);
+	// V3d cut the old assertion that the stance think cannot replace a live line clip: it pinned
+	// the deleted dialogue think's hold (port-only, "no retail schedule stand yet"). Retail holds no base during
+	// a dialogue: `0x102c1400` answers `m_Activity +0xfec` and, once `m_bSequenceFinished`, commits the
+	// slot-611 disposition sequence itself (packet R1 item 1). How the line's gesture composes over
+	// that base is the body's question (triage Q-V3d1, V4).
 	TestTrue(TEXT("the instanced scene seeks the body on its own clock"),
 		Services.Saw(TEXT("SeekCinematicClip 0.100")));
 
@@ -1790,9 +1795,9 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	TestEqual(TEXT("a closed line scene receives no stale body tick"),
 		Services.Count(TEXT("SeekCinematicClip")), SeeksAtClose);
 
-	// The dialogue owner is intentionally accepted by SetDisposition. IsFeedBusy() also includes
-	// bInDialog for feed refusal, so the transition gate must ask the combat-character feed state
-	// directly rather than rejecting every open conversation.
+	// SetDisposition (`0x102c0f70`) is gated on `m_bDisableAI` only, so an open conversation does not
+	// refuse it. IsFeedBusy() also includes bInDialog for feed refusal, so the transition gate must
+	// ask the combat-character feed state directly rather than rejecting every open conversation.
 	TSharedRef<FElysiumDlgFile> DispositionFile = MakeShared<FElysiumDlgFile>();
 	TestTrue(TEXT("disposition dialogue fixture parses"), FElysiumDlgFile::ParseBytes(ElysiumDlgBytes({
 		ElysiumDlgRow(101, TEXT("No body event."), TEXT("#"), TEXT(""), TEXT("")),
@@ -1809,7 +1814,7 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	DispositionConversation->Start();
 	World.OpenDialog(JackEntity->Handle, DispositionConversation);
 	Services.Calls.Reset();
-	TestTrue(TEXT("SetDisposition succeeds while dialogue owns the body"),
+	TestTrue(TEXT("SetDisposition succeeds while a conversation is open"),
 		static_cast<FElysiumAnimating*>(JackEntity)->SetDisposition(TEXT("Joy"), 1));
 	TestEqual(TEXT("dialogue no longer makes the authored disposition transition unreachable"),
 		Services.Count(TEXT("PlayNpcClip smiling_jack Stance_Trans_Neutral_1_Joy_1 loop=0")), 1);

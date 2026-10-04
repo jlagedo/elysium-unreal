@@ -797,7 +797,7 @@ bool FElysiumNpcKernelClosureEyeDirectionTest::RunTest(const FString&)
 	N.MaintainEyeDirection(0.1f);
 	TestEqual(TEXT("with no partner the re-scan stamp is untouched"), N.NextEyeLookTime, -1.f);
 
-	N.Dialogue.bInDialog = true;
+	N.SetDialogPartner(F.Player->Handle);   // m_hDialogPartner +0xfe8, SetDialogPartner 0x10107050
 	N.MaintainEyeDirection(0.1f);
 	TestEqual(TEXT("a live partner pushes the re-scan stamp to curtime + 2.0"), N.NextEyeLookTime,
 		Now + 2.0f);
@@ -805,7 +805,7 @@ bool FElysiumNpcKernelClosureEyeDirectionTest::RunTest(const FString&)
 	N.NextEyeLookTime = 0.f;
 	N.MaintainEyeDirection(0.1f);
 	TestEqual(TEXT("...on every think, not once"), N.NextEyeLookTime, Now + 2.0f);
-	N.Dialogue.bInDialog = false;
+	N.SetDialogPartner(FElysiumEntityHandle::Invalid());
 
 	// Arm 1's GATE is reachable here even though its countdown is not: retail wraps the whole blink
 	// cadence in `m_flPlayerDist < _DAT_10483aac` (`+0x6264`, the port's

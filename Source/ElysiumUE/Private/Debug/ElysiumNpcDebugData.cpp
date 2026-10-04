@@ -84,9 +84,9 @@ void FElysiumNpcDebugData::Build(const FElysiumNpc& Npc, const FElysiumEntityWor
 	Admission = AdmissionName(Mind.Admission());
 	State = LexToString(Mind.State());
 	IdealState = LexToString(Mind.IdealState());
-	BodyOwner = LexToString(Mind.Owner());
-	SuspendedOwner = LexToString(Mind.SuspendedOwner());
-	OwnerGeneration = Mind.Generation();
+	Cine = HandleLabel(World, Npc.ScriptOwner);              // m_hCine +0x5d74
+	ScriptState = Npc.GetScriptState();                      // m_scriptState +0x5d70
+	DialogPartner = HandleLabel(World, Npc.GetDialogPartner());   // m_hDialogPartner +0xfe8
 	LastTransition = Mind.LastTransition();
 	Trace = Mind.Trace();
 	if (Trace.Num() > MaxTraceRows)
@@ -243,7 +243,7 @@ namespace
 void FElysiumNpcDebugData::Serialize(FArchive& Ar)
 {
 	Ar << bValid << Error << Epoch << HandleIndex << TargetName << ClassName << Model;
-	Ar << Admission << State << IdealState << BodyOwner << SuspendedOwner << OwnerGeneration;
+	Ar << Admission << State << IdealState << Cine << ScriptState << DialogPartner;
 	Ar << LastTransition;
 	if (!SerializeRows(Ar, Trace, MaxTraceRows, &SerializeString))
 	{

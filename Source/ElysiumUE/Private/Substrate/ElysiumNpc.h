@@ -101,8 +101,9 @@ public:
 	virtual bool PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops) override;
 
 	// --- The authored director's pushed order ---
-	// What an `aiscripted_schedule` last pushed onto this NPC, live for exactly as long as the
-	// program it started. Session state, not save state — the reasoning is on the struct.
+	// Not an order the NPC runs: `0x101a98c0` keeps nothing. It holds a push the admission barrier
+	// deferred (`bPending`, V6's) and the retail word `+0x65cc m_eForcedState` (`RetailOrderId`,
+	// `0x102ae840`'s). Session state, not save state — the reasoning is on the struct.
 	FElysiumScriptedScheduleOrder ScriptedScheduleOrder;
 
 	// --- Combat loadout ---
@@ -332,19 +333,16 @@ public:
 	bool StartScheduleId(int32 Id, const FString& Surface, const FString& Detail);
 
 	/**
-	 * The one door an `aiscripted_schedule` pushes through.
+	 * The one door an `aiscripted_schedule` pushes through: the executor `0x101a98c0`'s NPC half.
 	 *
-	 * Order of operations is the recovered entity's: the forced state is the policy and is applied
-	 * first, then the mode decides what else happens — mode 3 commits the goal as this NPC's enemy
-	 * through the ordinary `SetEnemy` transaction, and the four movement modes start their program
-	 * under the `ScriptedSchedule` body owner. Returns whether anything was pushed.
+	 * Order of operations is the recovered entity's: `forcestate` through `SetState 0x1026e340`
+	 * first, then the mode — mode 3 commits the goal as this NPC's enemy through the ordinary
+	 * `SetEnemy` transaction, modes 1/2 and 4/5 call `ScheduledMoveToGoalEntity 0x102800c0` /
+	 * `ScheduledFollowPath 0x102801e0`. Nothing is claimed and nothing is kept: the program is an
+	 * ordinary one and ends as every program does. Returns whether anything was pushed.
 	 */
 	bool BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Order, bool bHasForcedState,
 		EElysiumNpcState ForcedState);
-
-	// Drop a pushed order and give its body back. Reached from program completion, program failure,
-	// dormancy and death; idempotent, so every one of those may call it.
-	void EndScriptedSchedule(const TCHAR* Reason);
 
 	// `CAI_BaseNPCTroika::InputSetupPatrolType` `0x1029eb30`: `"<repeat> <type> <schedule>"` into
 	// `BuildPatrolPath(&m_sppPatrolPath, repeat, type, schedule, NULL, replace)`.
@@ -362,11 +360,6 @@ public:
 	virtual bool IsFeedBusy() const override;
 
 	virtual void Think() override;
-
-	// The port's dialogue routing ahead of the interpreter, reached from `MaintainSchedule`
-	// (`0x102817c0`) on a Troika body; its one STORY8-TWIN survivor (V3d) is named at the
-	// definition.
-	bool RouteScheduleMaintenance(double Now, bool bReduced);
 
 	// Retail's selector pair `0x1028a260` (`SelectNewScheduleRetail`): slot 437, then slot 438.
 	int32 SelectSchedule();
@@ -396,9 +389,6 @@ public:
 	//
 	// Fired on the state EDGE by `SetState` (`0x1026e340`) itself; the port's polled pump
 	// (`PumpStateChange`) went with the old loop at story 8 wave 2.
-
-	// The standing-pose arm, reached from both the idle fall-through and the dialogue arm.
-	void ThinkStanceOrIdle(double Now, bool bReduced);
 
 	FElysiumInterestingPlace* CurrentAmbientSpot() const;
 
@@ -570,12 +560,6 @@ public:
 		EElysiumGrappleType Type, int32 Position = INDEX_NONE, bool bHolster = true) override;
 	virtual void LeaveGrappleState() override;
 
-	// The scripted director's movement claim, and its release (port-only, until V3d: retail's
-	// `0x101a98c0` claims nothing).
-	bool AcquireScriptedScheduleBody(const TCHAR* Reason);
-
-	void ReleaseScriptedScheduleBody(const TCHAR* Reason);
-
 	/**
 	 * `CAI_BaseNPCTroika::SelectDoorObstructionSchedule` (`0x102b7370`), transcribed.
 	 *
@@ -592,28 +576,6 @@ public:
 	// RunTask wait-finished arm; 0 from `UpdateOnRemove 0x1028d6e0`, `Event_Killed` and
 	// `TASK_DIE_IF_PLAYER_CANT_SEE`. It stops no motor and touches no pose.
 	void FinishAmbientUse(bool bFireLeft);
-
-	// StartPlayerDialogRemote opens a dialog session: fire OnDialogBegin, then run the NPC's `.dlg`
-	// conversation. When the `dialogname` file is missing/unloadable the session falls back to the
-	// manual seam — it waits for EndDialog (ent_fire), so the beat is still driveable by hand.
-	virtual FElysiumBodyOwnerToken BeginDialogueBodySession() override;
-
-	virtual void EndDialogueBodySession(const FElysiumBodyOwnerToken& Token, bool bSilent) override;
-
-	// Read-only reach into the dialogue body claim for `FElysiumNpcDialogue`, which cannot reach
-	// the private token directly (no friend is added for a plain-C++ value member).
-	const FElysiumBodyOwnerToken& GetDialogueBodyOwner() const { return DialogueBodyOwner; }
-
-	// The three operations `BeginDialog` ran before opening a session, split out because they
-	// touch private leaf state (`FinishAmbientUse`, `Motor`) that `FElysiumNpcDialogue` cannot
-	// reach: end the ambient visit, stop an active patrol move, then take the Dialogue body claim.
-	bool PrepareBodyForDialogue();
-
-	// `FElysiumNpcDialogue::Begin`.
-	void BeginDialog(EElysiumDialogOpenerKind Opener, int32 RawFlags, const FElysiumInputArgs& Args)
-	{
-		Dialogue.Begin(*this, Opener, RawFlags, Args);
-	}
 
 	// --- Use-to-talk (`CBasePlayer::PlayerUse`, `0x10167850`) — `Substrate/ElysiumNpcDialogue.h` ---
 
@@ -712,8 +674,6 @@ public:
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 
 	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override;
-
-	virtual const TCHAR* SaveBlockReason() const override;
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
@@ -1036,11 +996,6 @@ protected:
 	// A director's push that fired before this NPC's first think replays here.
 	void ReplayDeferredScriptedOrder();
 
-	// An open conversation: the per-line clip hold, else the stance machine's talking branch. The
-	// clip hold needs no cadence of its own -- an NPC in dialogue is a `ShouldThinkFrequently`
-	// body, pinned to the normal law's 0.01 s floor.
-	bool ThinkInDialog(double Now, bool bReduced);
-
 	// --- Serialize(), in exact archive order ---------------------------------------------------
 	//
 	// Words only. Retail's one hand block (`AIExtendedSaveHeader_t`) and, after it, the port state
@@ -1060,24 +1015,14 @@ protected:
 	// The mind's saved words, held between the record and `RestoreMindState`, which validates them
 	// against the patrol and ambient state the same hook has just settled.
 	uint8 RestoredMindState = 0;
-	uint8 RestoredMindOwner = 0;
 
 	// ---------------------------------------------------------------------------------------------
 
-	// The `ScriptedSchedule` claim's arbitration (port-only, until V3d): idempotent for a token
-	// already held; the release gives the token back and stops nothing (the navigator's goal is
-	// cleared by `OnScheduleChange 0x102a0940` only). `Token` is the leaf's member for `Owner`.
-	bool AcquireProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
-		const TCHAR* Reason);
-	void ReleaseProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
-		const TCHAR* Reason);
-
-	// Everything this NPC holds over its own body, given back at once: an open conversation, an
-	// interesting place, a pushed director's order, the running program, and every
-	// arbiter token behind them. Two callers — dormancy (`Kill`/`ScriptHide`) and death — because
-	// both mean "this NPC stops driving its body", and the difference between them is only whether
-	// the mind ends up dead.
-	void ReleaseAllBodyOwnership(const TCHAR* Reason, bool bDeadMind);
+	// What retail's death and dormancy paths do to this NPC's own words, at once: `0x102b53d0(this,
+	// 0)` (the visited place, `Event_Killed` / `UpdateOnRemove 0x1028d6e0`), the open conversation's
+	// close when this NPC owns it, and the mind's state (dead or idle). Two callers — dormancy
+	// (`Kill`/`ScriptHide`) and death — the difference being only whether the mind ends up dead.
+	void ReleaseOnDeathOrDormancy(const TCHAR* Reason, bool bDeadMind);
 
 	// The death transaction's body half, re-applied after a restore. A load rebuilds the motor, so
 	// frozen / non-solid-to-characters / held-pose all have to be stated again on it — and a corpse's
@@ -1113,8 +1058,6 @@ protected:
 	bool bReportedNoStepSurface = false;
 	TSet<FName> ReportedStepSurfacesWithoutPool;
 
-	FElysiumBodyOwnerToken ScriptedScheduleOwner;
-	FElysiumBodyOwnerToken DialogueBodyOwner;
 	// `m_bDisableAI` (+0x6080). Session state, like retail's: not in the datamap's save block.
 	bool bDisableAi = false;
 	// The interesting-place visit's retail words, driven by the programs (`0xff`/`0x100`/...), the

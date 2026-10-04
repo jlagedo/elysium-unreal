@@ -248,47 +248,35 @@ void FElysiumEntityWorld::UpdateDialogueAutomatic()
 
 void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 	TSharedRef<FElysiumDlgConversation> Conversation, EElysiumDialogOpenerKind Opener,
-	int32 RawFlags, const FString& DefaultCamera, const FElysiumBodyOwnerToken& SuppliedBodyOwner)
+	int32 RawFlags, const FString& DefaultCamera)
 {
 	if (ActiveUse.IsSet())
 	{
 		EndActiveUse(EElysiumUseEndReason::Cancelled);
 	}
-	FElysiumEntity* OwnerEntity = Resolve(NewOwner);
-	FElysiumBodyOwnerToken BodyOwner = SuppliedBodyOwner;
-	// A different NPC can acquire before the old session is displaced, making replacement atomic:
-	// refusal leaves the old conversation untouched. The same NPC must release its existing token
-	// first; that path is already live and can only fail after owner loss, when retaining the old
-	// conversation would be invalid too.
-	const bool bSameOwnerReplacement = DialogueSession && DialogueSession->Owner == NewOwner;
-	if (!BodyOwner.IsSet() && OwnerEntity && !bSameOwnerReplacement)
+	// A conversation takes no body (V3d: the dialogue body claim is gone; the NPC is held by its
+	// program's `TASK_RUN_DIALOG 0xb9` and its `m_hDialogPartner`). An owner that does not resolve
+	// leaves the running conversation untouched.
+	if (Resolve(NewOwner) == nullptr)
 	{
-		BodyOwner = OwnerEntity->BeginDialogueBodySession();
-	}
-	if (!OwnerEntity || (!BodyOwner.IsSet() && !bSameOwnerReplacement))
-	{
-		UE_LOG(LogElysiumWorld, Warning, TEXT("dialogue body acquisition refused for %s"),
+		UE_LOG(LogElysiumWorld, Warning, TEXT("dialogue owner %s does not resolve"),
 			*DescribeHandle(NewOwner));
 		return;
 	}
-	// Any accepted second acquisition replaces the running session silently. Release its camera
-	// before selecting the new request so one conversation never owns two handles.
+	// Any accepted second acquisition replaces the running session silently, the same owner's
+	// included. Release its camera before selecting the new request so one conversation never owns
+	// two handles. (A port path: retail's `CDialog::Acquire` on a loaded dialog returns at once.)
 	if (DialogueSession)
 	{
 		EndDialogSession(/*bSilent*/ true);
 	}
-	if (bSameOwnerReplacement)
+	// The silent close ran the old turn's parked col-5, which may have removed the new owner.
+	FElysiumEntity* OwnerEntity = Resolve(NewOwner);
+	if (OwnerEntity == nullptr)
 	{
-		OwnerEntity = Resolve(NewOwner);
-		BodyOwner = OwnerEntity ? OwnerEntity->BeginDialogueBodySession()
-			: FElysiumBodyOwnerToken();
-		if (!BodyOwner.IsSet())
-		{
-			UE_LOG(LogElysiumWorld, Warning,
-				TEXT("same-owner dialogue replacement lost body ownership for %s"),
-				*DescribeHandle(NewOwner));
-			return;
-		}
+		UE_LOG(LogElysiumWorld, Warning, TEXT("dialogue owner %s went away during the replacement"),
+			*DescribeHandle(NewOwner));
+		return;
 	}
 	DialogueSession = MakeUnique<FElysiumDialogueSession>();
 	DialogueSession->Serial = ++NextDialogSerial;
@@ -312,11 +300,23 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 			DialogueSession->DefaultCamera = OwnerNpc->DefaultCamera;
 		}
 	}
-	DialogueSession->BodyOwner = BodyOwner;
 	DialogueSession->NormalizedCamera =
 		ElysiumCameraShots::NormalizeKey(DialogueSession->DefaultCamera);
 	DialogueSession->ScreenSide = (NewOwner.Index & 1) == 0 ? 1.0f : -1.0f;
 	const uint32 OpeningSerial = DialogueSession->Serial;
+
+	// `CDialog::Acquire` (`0x100e05f0`) calls the NPC's `StartTalking 0x102c0270` once the `.dlg` has
+	// loaded and the window is up, and BEFORE `GetStartingLine` / `fill_packet` / `message_send`:
+	// the partner, the count, the cine cancel and `OnDialogBegin`, with the dialog's player
+	// (`[player+0xa8]`) as the partner. Only a Troika NPC has the body; a non-NPC owner has none.
+	if (FElysiumNpc* OwnerNpc = OwnerEntity->AsNpc())
+	{
+		OwnerNpc->Dialogue.StartTalking(*OwnerNpc, DialogueSession->Listener);
+	}
+	if (!DialogueSession || DialogueSession->Serial != OpeningSerial)
+	{
+		return;
+	}
 
 	// The opening NPC line's col-4 is an ACTION (`process_npc_line` `0x100e8100`), and retail runs
 	// it from inside `CDialog::Acquire` — with the dialog object already installed as the player's
@@ -339,7 +339,7 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 	// What follows is the opener's own tail, in retail's order:
 	//
 	//     FUN_10167fd0(player);                        // release whatever is being used
-	//     SetDialogPartner(player, npc);               // player+0xFE8  == this session
+	//     SetDialogPartner(player, npc);               // player+0xFE8 = the NPC (0x10107050)
 	//     FUN_1015ef40(player);                        // SetImmobilized(true)
 	//     player->+0x1e01 = active weapon is drawable; // the latch
 	//     player->vfunc0x724("item_w_unarmed", 0);     // holster
@@ -519,40 +519,40 @@ void FElysiumEntityWorld::StartPlayerDialogTail()
 	const FElysiumDlgLine* Automatic = Conversation.PendingAutomatic();
 	DialogueSession->bOneShot = Conversation.IsAwaitingAutomatic()
 		&& Automatic != nullptr && Automatic->IsAutoEnd();
+	FElysiumPlayer* PlayerEnt = FindPlayer();
 	if (DialogueSession->bOneShot)
 	{
 		// **`SetDialogPartner(this, NULL)` is what retail returns through here.** `0x10178280`'s
-		// bark path (`FUN_10178170` true => `FUN_101cebc0`) and its `Acquire`-refused path both
-		// fall out of the `if` and hit `CBaseCombatCharacter::SetDialogPartner(this, NULL)` on the
-		// way to the `return` — the partner field is cleared, not left holding the NPC.
-		//
-		// The port has no `m_hDialogPartner` field: it models the partner as "a session is open and
-		// this entity owns it" (`GetOpenDialogOwner()`), so the equivalence is the session's own
-		// lifetime — the write retail makes here is the port never *promoting* the bark into a
-		// conversation. `bOneShot` is that statement: no camera (`SelectDialogueCamera`'s first
-		// arm), no immobilize, no holster, and the session closes with the automatic line.
-		//
-		// **Residual, stated rather than hidden:** retail clears the field on this instruction, so
-		// its window is zero, while the port's stand-in answers the owner for as long as the bark's
-		// line is playing. One live reader can tell — `TickGaze`'s dialogue arm
-		// (`ElysiumCombatCharacter.cpp`, the `+0xFE8` stand-in) — which means a barking NPC holds
-		// the player in its gaze for the length of the bark where retail's would fall through to
-		// the ordinary chain. Closing that needs the partner to become a field of its own rather
-		// than a query over the session, because the session is also what the HUD, the `dlg`
-		// console and the presentation layer read to name the speaker.
+		// bark path (`Acquire` answering false after `+0x30e9` sent the line) falls out of the `if`
+		// and hits `CBaseCombatCharacter::SetDialogPartner(this, NULL)` on the way to the `return`:
+		// the PLAYER's `+0xfe8` is cleared, and nothing of the tail runs — no camera
+		// (`SelectDialogueCamera`'s first arm), no immobilize, no holster.
+		if (PlayerEnt)
+		{
+			PlayerEnt->SetDialogPartner(FElysiumEntityHandle::Invalid());   // 0x10107050(player, NULL)
+		}
+		// **Residual, named:** inside that `Acquire` retail has already run the NPC's `StartTalking`
+		// and then `Release` (`0x100e5240` -> `0x102c0360`), so the NPC's partner is set and cleared
+		// and `OnDialogEnd` fires at the open. The port keeps the session alive for the line and
+		// closes it with the automatic row, so the NPC's partner (and `TickGaze`'s dialogue arm)
+		// lasts the bark and `OnDialogEnd` fires at the line's end.
 		UE_LOG(LogElysiumWorld, Verbose,
 			TEXT("dialogue %s is a one-shot (CDialog +0x30e9): the line is sent, no camera, ")
-			TEXT("no immobilize, no holster; retail's SetDialogPartner(NULL) is this session ")
-			TEXT("never becoming a conversation"), *DescribeHandle(DialogueSession->Owner));
+			TEXT("no immobilize, no holster; the player's partner is cleared"),
+			*DescribeHandle(DialogueSession->Owner));
 		return;
 	}
 
-	FElysiumPlayer* PlayerEnt = FindPlayer();
 	if (!PlayerEnt)
 	{
 		return;   // retail's very first guard is that a player exists
 	}
 	DialogueSession->bOpenerApplied = true;
+
+	// `SetDialogPartner(player, npc)` (`0x10107050`) — the player's `+0xfe8`, written only once
+	// `Acquire` answered true. (`FUN_10167fd0(player)`, the release of whatever is being used, is
+	// `OpenDialog`'s `EndActiveUse`.)
+	PlayerEnt->SetDialogPartner(DialogueSession->Owner);
 
 	// `FUN_1015ef40(player)` — `SetImmobilized(true)`: movement, jump, duck and weapon use frozen
 	// for the whole conversation. It changes no view state.
@@ -728,6 +728,8 @@ void FElysiumEntityWorld::EndPlayerDialogTail(FElysiumDialogueSession& Closed)
 		// The `+0x1e01` re-draw. `RestoreDialogHolster` is one-shot and answers "nothing was
 		// latched" by leaving the hands alone, which is retail's `if (player->+0x1e01)`.
 		PlayerEnt->RestoreDialogHolster();
+		// `SetDialogPartner(player, NULL)` (`0x10107050`): the player's `+0xfe8`.
+		PlayerEnt->SetDialogPartner(FElysiumEntityHandle::Invalid());
 		// The payphone conversation's grapple ends with the conversation. `LeaveGrappleState` on the
 		// player runs `SetCineCamera(NULL)` (RC13) — already done above, and idempotent.
 		if (PlayerEnt->Grapple.Type == EElysiumGrappleType::Payphone)
@@ -1130,8 +1132,6 @@ void FElysiumEntityWorld::GetDialogueDebugState(
 	Out.Emplace(TEXT("Profile"), DialogueSession->CameraRequest.SelectedProfile);
 	Out.Emplace(TEXT("Fallback"), DialogueSession->FallbackReason);
 	Out.Emplace(TEXT("Candidate rejects"), DialogueSession->CandidateRejections);
-	Out.Emplace(TEXT("Body owner"), FString::Printf(TEXT("%s gen=%u"),
-		LexToString(DialogueSession->BodyOwner.Owner), DialogueSession->BodyOwner.Generation));
 	if (const FElysiumEntity* Speaker = Resolve(DialogueSession->Owner))
 	{
 		const float RenderedYaw = ElysiumSkeletalBasis::FromSourceAngles(Speaker->Angles).Yaw;
@@ -1329,9 +1329,9 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 		return;
 	}
 	const FElysiumEntityHandle Closing = Closed->Owner;
-	const FElysiumBodyOwnerToken ClosingBodyOwner = Closed->BodyOwner;
-	const uint32 ClosingSerial = Closed->Serial;
 	Closed->LineScene.Stop();
+	// `CDialog::Release` (`0x100e5240`), in retail's order (packet R1 item 4): the flush, the window
+	// off, the NPC's `0x102c0360`, the player's `EndPlayerDialog 0x10178400`, then the unload.
 	// The flush retail owes every teardown. `Close()` runs the turn's parked col-5 exactly once (it
 	// clears the buffer before calling, so a re-entrant close cannot run it twice) and is a no-op on
 	// a conversation that is already over — the ordinary path, where the pick or the terminal
@@ -1361,24 +1361,8 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 		}
 	}
 
-	if (Camera())
-	{
-		// The port's authored-profile channel. `UElysiumCameraService::ReleaseCamera` collapses a
-		// Dialogue-kind winner's weight on the frame it fires, so this is a cut like retail's, not a
-		// blend-out over a player who already has input (M1).
-		Camera()->ReleaseCamera(Closed->CameraHandle);
-	}
-	// `CBasePlayer::EndPlayerDialog` `0x10178400`: the unconditional camera remove, the mobilize and
-	// the weapon restore, all on this frame.
-	EndPlayerDialogTail(*Closed);
-	if (FElysiumEntity* OwnerEntity = Resolve(Closing))
-	{
-		// The token is generation-stamped, so a replacement session that already re-acquired the
-		// body carries a newer one and this release cannot take the new claim away.
-		OwnerEntity->EndDialogueBodySession(ClosingBodyOwner, bSilent);
-	}
-	Closed.Reset();
-
+	// `SetDialogWindowActive(0)`. A col-5 flushed above that opened the next conversation owns the
+	// panel from here, so the window is left to it.
 	if (!bReplaced)
 	{
 		if (IElysiumPresenter* P = Presenter())
@@ -1387,17 +1371,43 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 		}
 	}
 
-	if (!bSilent && Closing.IsSet())
+	// The NPC's half, `0x102c0360` (`FElysiumNpc::OnDialogRelease`), when the dialog's NPC handle
+	// resolves: `m_bCutsceneForceLOD = 0`, `OnDialogEnd` (activator the partner) — the one place the
+	// output fires — and the partner cleared. A session the flushed col-5 re-opened on the SAME NPC
+	// owns that NPC's words now (a port path: retail's `Acquire` on a loaded dialog returns at once),
+	// so it is left alone.
+	const bool bOwnerReopened = bReplaced && DialogueSession && DialogueSession->Owner == Closing;
+	FElysiumNpc* ClosingNpc = nullptr;
+	if (FElysiumEntity* OwnerEntity = Resolve(Closing))
 	{
-		// Route EndDialog to exactly the owning NPC (its FElysiumNpcDialogue::End clears bInDialog and
-		// fires OnDialogEnd -> DialogPostProcess). Queued through chokepoint 2 like every other input, with
-		// the owner as `!self` so no name lookup can hit a same-named entity. The param carries the
-		// closed session's serial so the NPC can tell this bookkeeping close from a script-fired
-		// `EndDialog` (which must reach the world's teardown itself) and from a stale close arriving
-		// after the flushed col-5 re-opened the same NPC.
-		static const FName EndDialogInput(TEXT("EndDialog"));
-		EnqueueInput(ElysiumEntityWorldShared::GSelfTarget, EndDialogInput,
-			FElysiumVariant::Int(static_cast<int32>(ClosingSerial)), 0.0,
-			FElysiumEntityHandle(), Closing);
+		ClosingNpc = OwnerEntity->AsNpc();
 	}
+	if (ClosingNpc != nullptr && !bOwnerReopened)
+	{
+		if (!bSilent)
+		{
+			ClosingNpc->OnDialogRelease();                                      // 0x102c0360
+		}
+		else
+		{
+			// A replacement, a map teardown, the owner's death or dormancy. Whether retail reaches
+			// `Release` -> `0x102c0360` on these paths is UNRECOVERED; the words are cleared without
+			// the output (`FElysiumNpcDialogue::ReleaseWithoutOutput`), named there.
+			ClosingNpc->Dialogue.ReleaseWithoutOutput(*ClosingNpc);
+		}
+	}
+
+	if (Camera())
+	{
+		// The port's authored-profile channel. `UElysiumCameraService::ReleaseCamera` collapses a
+		// Dialogue-kind winner's weight on the frame it fires, so this is a cut like retail's, not a
+		// blend-out over a player who already has input (M1).
+		Camera()->ReleaseCamera(Closed->CameraHandle);
+	}
+	// `CBasePlayer::EndPlayerDialog` `0x10178400` (player slot 415): the unconditional camera remove,
+	// the mobilize, the weapon restore and the player's partner clear, all on this frame.
+	EndPlayerDialogTail(*Closed);
+	// `+0x30e8 = 0` and `unload`. The NPC's program completes on its next `TASK_RUN_DIALOG` tick on
+	// which `0x102c1400` finds all four `IsInDialog` terms clear; nothing is queued from here.
+	Closed.Reset();
 }

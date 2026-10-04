@@ -1,7 +1,7 @@
 #pragma once
 
 // Shared scraper for `FElysiumEntity::GetDebugState`'s "Key Value" rows — a math_counter's
-// "Value", a func_rotating's "Angle", an NPC's "Body owner". The class that actually populates a
+// "Value", a func_rotating's "Angle", an NPC's "Script state". The class that actually populates a
 // given row is file-local to its own .cpp (`ElysiumLogicClasses.cpp`, `ElysiumFuncRotating.cpp`,
 // `ElysiumNpcMind.cpp`, ...), so this base virtual plus a named key is the one seam every
 // Substrate suite reads a live entity's derived state back through instead of reaching for a

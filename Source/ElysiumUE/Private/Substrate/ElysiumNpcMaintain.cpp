@@ -127,13 +127,9 @@ void FElysiumNpc::ForceScheduleChange(int32 NewSchedule, bool bForce)
 
 void FElysiumNpc::OnScheduleChange(int32 NewSchedule)
 {
-	// The director runs an ordinary corpus program, so its authored interrupts can replace it.
-	// Drop only the port's body claim here; recursively clearing the schedule would reorder slot 435.
-	if (ScriptedScheduleOrder.Program != 0 && NewSchedule != ScriptedScheduleOrder.Program)
-	{
-		ScriptedScheduleOrder.Reset();
-		ReleaseScriptedScheduleBody(TEXT("directed schedule replaced"));
-	}
+	// Slot 435 `0x102a0940` and nothing ahead of it: an `aiscripted_schedule`'s program is an
+	// ordinary one (`0x101a98c0` installs base 2 and keeps no order, no end and no release), so a
+	// schedule change has no order to drop (V3d deleted the port's pre-step and its body claim).
 	// `CNPC_VGargoyle`, `CNPC_VHengeyokai`, `CNPC_VTzimisce` and `CNPC_VWerewolf` override this
 	// method on their C++ classes (story 5 step 3); each calls this body (the Troika `0x102a0940`)
 	// directly, first, then runs its own tail.

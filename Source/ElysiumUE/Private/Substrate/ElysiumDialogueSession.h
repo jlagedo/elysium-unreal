@@ -319,6 +319,5 @@ struct FElysiumDialogueSession
 	double SelectedAt = 0.0;
 	float MinimumHoldSeconds = 0.0f;
 	float ScreenSide = 1.0f;
-	FElysiumBodyOwnerToken BodyOwner;
 	FElysiumDialogueLineScene LineScene;
 };

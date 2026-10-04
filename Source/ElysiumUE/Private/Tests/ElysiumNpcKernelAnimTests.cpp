@@ -238,11 +238,12 @@ bool FElysiumNpcKernelAnimTroikaSceneEventTest::RunTest(const FString&)
 	TestEqual(TEXT("so the Silence arm writes nothing and never reaches the queue"),
 		Guard->SceneEvents.Num(), 0);
 	// With a partner it reaches the disposition table, which refuses — the recovered refusal.
-	Guard->Dialogue.bInDialog = true;
-	TestTrue(TEXT("an open session IS the dialogue partner here"), Guard->HasLiveDialogPartner());
+	// `m_hDialogPartner +0xfe8` through its one store, `SetDialogPartner 0x10107050`.
+	Guard->SetDialogPartner(Fixture.Player()->Handle);
+	TestTrue(TEXT("a live m_hDialogPartner is the dialogue partner"), Guard->HasLiveDialogPartner());
 	Guard->AddSceneEvent(&Scene, &Silence);
 	TestEqual(TEXT("so the reaction is dropped at the table"), Guard->SceneEvents.Num(), 0);
-	Guard->Dialogue.bInDialog = false;
+	Guard->SetDialogPartner(FElysiumEntityHandle::Invalid());
 
 	// Type 0xe (Loud) — gated on `m_flLoudExpressionTime` (+0x6574) having passed. A cooldown in
 	// the future refuses before the table is asked; a passed one reaches the seam, which refuses.

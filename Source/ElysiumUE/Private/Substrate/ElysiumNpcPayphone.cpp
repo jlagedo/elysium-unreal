@@ -133,11 +133,8 @@ bool FElysiumNpcPayphone::CanTalk(FElysiumEntity* Activator)
 	{
 		return false;
 	}
-	// Arm 7 — `CAI_BaseNPCTroika::IsInDialog` (`0x102c1170`). This runtime carries one session bit
-	// plus a talk-end stamp for its four terms, the reading `ElysiumNpcThinkCadence.cpp` and family
-	// Sounds both already took; repeated here rather than re-derived.
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	return !(Dialogue.bInDialog || IsTalking(Now));
+	// Arm 7 — `CAI_BaseNPCTroika::IsInDialog` (`0x102c1170`), its four terms (V3d).
+	return !IsInDialog();
 }
 
 // Slot 431: `0x101aabf0` replaces the Troika line's `NPCThink` (`0x10292de0`), which the port's
@@ -243,18 +240,17 @@ FElysiumEntity* FElysiumNpcPayphone::ResolveDialogPartner() const
 {
 	// `101aac0b`..`101aac2c`: the EHANDLE validity triple — index `& 0x1fff`, serial `>> 0xd` against
 	// the slot's, and a non-null record. `FElysiumEntityWorld::Resolve` is that triple.
-	if (!DialogPartner.IsSet() || World == nullptr)
+	if (!GetDialogPartner().IsSet() || World == nullptr)
 	{
 		return nullptr;
 	}
-	return const_cast<FElysiumEntityWorld*>(World)->Resolve(DialogPartner);
+	return const_cast<FElysiumEntityWorld*>(World)->Resolve(GetDialogPartner());
 }
 
 void FElysiumNpcPayphone::DialogUpkeepTick()
 {
-	// SEAM for `FUN_102c1400`. Counted; see the `.inl` for what the real body does and why it is not
-	// one of this family's rows. The one stand-in for the address is RunTask19's
-	// `RunDialogActivity` (story 8 L05 integration folded the two); the payphone ignores its answer.
+	// `FUN_102c1400`, ported whole as RunTask19's `RunDialogActivity` (V3d, packet R1). Counted so the
+	// payphone's call order stays assertable; `CPayphone::NPCThink` discards the answer.
 	++DialogUpkeepTicks;
 	(void)RunDialogActivity();
 }
@@ -270,11 +266,11 @@ bool FElysiumNpcPayphone::PayphoneThink()
 	// three onto the first normal-due think — see `FElysiumNpc::Think`, which calls them "the
 	// port's own one-shot lifecycle". They are bookkeeping this runtime owes every NPC, not
 	// statements of `0x10292de0`, so a species body that replaces the think must still run them or
-	// the entity is never admitted and can never own its own body.
+	// the entity is never admitted.
 	//
-	// It is not theoretical: without this, `FElysiumNpcMind::IsAcquisitionAllowed` refuses every
-	// claim on an unadmitted mind, so `BeginDialogueBodySession` refuses and **a payphone cannot be
-	// talked to at all** — which is what `Elysium.Substrate.DialogueCamera.RetailChain` caught.
+	// (Before V3d an unadmitted mind refused the port's dialogue body claim, so a payphone could not
+	// be talked to at all; the claim is gone — a conversation takes no body, `StartTalking 0x102c0270`
+	// only writes the payphone's words — and admission stays here for the loadout and the order.)
 	// All three are guarded one-shots, so calling them on every payphone pass is free.
 	RunAdmissionBarrier();
 	ResolveLoadout();

@@ -4,7 +4,6 @@
   "stage": "arena",
   "seed": 1,
   "duration": 20.0,
-  "known_red": "V3d: +use pushes no SCHED_TROIKA_RUN_DIALOG program (the port opens a +use conversation synchronously through its dialogue body session, M12). Triaged 2026-10-04 (bug protocol step 1): game red in the port's use focus, not the record or the harness -- the +use edge reaches FElysiumEntityWorld::UpdatePlayerInteraction (verbs_stealth_kill's OnGrappleBegin 17 ms after the same console press), but no FElysiumNpcDialogue::Begin runs (no 'OnDialogBegin -> none' output, no 'opened dialogue' log); AElysiumMapActor::QueryPlayerUse accepts only a registered use-anchor proxy and counts Hunter1's own Pawn capsule (which blocks ElysiumUse, the visual and its proxy hang below it) as an occluder, where retail's FindEntityFOV 0x10341c30 hit IS the NPC. Fix placed in V3d (triage row)",
   "player": {
     "at": [880.0, 0.0, 0.0],
     "face": 0.0

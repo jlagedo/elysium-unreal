@@ -4,7 +4,6 @@
   "stage": "arena",
   "seed": 1,
   "duration": 12.0,
-  "known_red": "V3d: new: StartPlayerDialogRemote installs no schedule; OnDialogBegin fires at the input (retail: forced SCHED 0x6e, the dialogue opens from its tasks)",
   "player": {
     "at": "start"
   },

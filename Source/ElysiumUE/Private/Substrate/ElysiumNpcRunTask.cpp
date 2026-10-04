@@ -27,6 +27,7 @@
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpcFacingShared.h"
+#include "Substrate/ElysiumNpcLog.h"            // RunDialogActivity's DevMsg (0x102c1400 step 5)
 #include "Substrate/ElysiumNpcMotor2Shared.h"
 #include "Substrate/ElysiumNpcThinkCadence.h"
 #include "Substrate/ElysiumScheduleText.h"
@@ -306,18 +307,67 @@ void FElysiumNpc::JumpCommit()
 
 int32 FElysiumNpc::RunDialogActivity()
 {
-	// `0x102c1400` -- SEAM (declaration). Retail answers -1 (after `0x102c0360`) only when
-	// `IsInDialog()` (`0x102c1170`) is false; inside a dialogue it runs the upkeep (the `+0x6554`
-	// handle release, `FinishTalking`, `0x102c0520`, the `+0x65c` disposition lookup through slot
-	// 611 answering 0xf1 or 1, `CDialog::ShowPlayerChoices`) and answers `m_Activity` (`+0xfec`) or
-	// that 0xf1 / 1. The dialogue family owns that body. Its FIRST arm is evaluated (StartTask19
-	// integration: folded from L04's `TaxiDialogUpkeep`): not in a dialogue answers -1; inside one the
-	// unported upkeep answers `m_Activity`, what the body returns when neither disposition arm fires.
-	if (!IsInDialog())
+	// `0x102c1400`, the dialogue upkeep `TASK_RUN_DIALOG`'s two arms and `CPayphone::NPCThink` run
+	// each tick, whole (packet R1 item 1; `conditions-and-states.md` § `0x102c1400`). It writes no
+	// `+0xfe8`, no `m_NPCState`, no schedule, condition, navigator or output.
+	//
+	// 1. Out of a dialogue (`0x102c1404`..`0x102c1419`): `0x102c0360`, answer -1. The partner is one
+	//    of `IsInDialog`'s terms, so this call fires nothing; it only finishes the bookkeeping.
+	if (!IsInDialog())                                                         // 0x102c1170
 	{
+		OnDialogRelease();                                                     // 0x102c0360
 		return INDEX_NONE;
 	}
-	return ActivityNumber;
+	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
+	// 2. The scene release (`0x102c141a`..`0x102c14b7`): a live `+0x6554` whose `+0x498` byte is 0 is
+	//    `UTIL_Remove`d and the handle set to -1. SEAM: the byte has no port word
+	//    (`FElysiumNpcDialogue::DialogSceneReportsDone` answers false for "unknown", not for "0"), so
+	//    this step removes nothing rather than read an unknown byte as a finished scene.
+	// 3. `FinishTalking` (`0x102c14c1`..`0x102c14d6`) once the talk is over (`0x102c0aa0` false).
+	if (bIsTalking && !Dialogue.IsTalking(*this, Now))                         // +0x64c0, 0x102c0aa0
+	{
+		FinishTalking();                                                       // 0x102c0ca0
+	}
+	// 4. The queued line (`0x102c14db`..`0x102c150b`): queue non-empty, `m_bInDispositionFidget`
+	//    (+0x64e0) clear, not talking (re-read after step 3) -> `0x102c0520(this, que, 0, 0)`, then
+	//    `m_szDialogQue[0] = 0`. The port's `0x102c0520` is its talking half only
+	//    (`OnDialogFilePlayed`: `m_bIsTalking`, the end stamp, slot 614); the line's sound emit and its
+	//    `scripted_scene` (`+0x6554` for a `.vcd`) are not carried. Named, not faked.
+	if (!Dialogue.DialogQue.IsEmpty() && !Stance.bInFidget && !bIsTalking)
+	{
+		OnDialogFilePlayed(0.0);                                               // 0x102c0520(this, que, 0, 0)
+		Dialogue.DialogQue.Reset();                                            // +0x64ec[0] = 0
+	}
+	// 5. The answer (`0x102c150f`..`0x102c155b`): `m_Activity`, unless the sequence has finished, when
+	//    slot 611 picks a disposition sequence and this body commits it itself.
+	int32 Answer = ActivityNumber;                                             // +0x0fec
+	if (bSequenceFinished)                                                     // +0x065c
+	{
+		const int32 Sequence = Slot611();                                      // +0x98c
+		if (Sequence > INDEX_NONE)
+		{
+			CommitForcedSequence(Sequence);                                    // 0x10260a50 ResetSequence
+			SequenceCycle = 0.f;                                               // +0x06f8 m_flCycle
+			Answer = 0xf1;
+		}
+		else
+		{
+			UE_LOG(LogElysiumNpcEnt, Log, TEXT("%s could not look up disposition sequence!!!"),
+				*DebugString());                                               // DevMsg 0x1060104c
+			Answer = 1;
+		}
+	}
+	// 6. The player's choices (`0x102c1560`..`0x102c15ed`), every tick, changed or not: a live partner
+	//    whose `+0xa8` is non-null (unnamed; inferred the player, packet R1 item 5).
+	const FElysiumEntity* Partner =
+		(World != nullptr && GetDialogPartner().IsSet()) ? World->Resolve(GetDialogPartner()) : nullptr;
+	if (Partner != nullptr && Partner->Handle == World->PlayerHandle())
+	{
+		const bool bShow = !(Dialogue.DialogScene.IsSet() && World->Resolve(Dialogue.DialogScene) != nullptr)
+			&& !bIsTalking && Dialogue.DialogQue.IsEmpty();
+		Dialogue.ShowPlayerChoices(*this, bShow);                              // 0x100e13d0
+	}
+	return Answer;
 }
 
 void FElysiumNpc::BloodExplode()

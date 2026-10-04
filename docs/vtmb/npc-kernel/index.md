@@ -1712,6 +1712,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1033d410` | FUN_1033d410 | docs/vtmb/animation_events.md § 4020 and the foreign-source clause |
 | `0x1033df80` | CBaseCombatCharacter::ApplyDisciplineSpawnFlags | docs/vtmb/npc-ai/lifecycle.md § `0x10298d30` `CAI_BaseNPCTroika::Spawn` (slot 103, 1336 bytes) |
 | `0x1033e2b0` | CBaseCombatCharacter::IsBusyWithDiscipline | docs/vtmb/npc-ai/conditions-and-states.md § The comfort sweep `0x102b1a20`, walked, docs/vtmb/npc-ai/conditions-and-states.md § The idle branch, decided, docs/vtmb/npc-ai/schedule-kernel.md § `TASK_SET_NPC_FLAG` and the 62-name flag vocabulary, docs/vtmb/npc-ai/social.md § `CAI_BaseNPCTroika::CanTalk` `0x102c21c0` |
+| `0x1033e370` | CBaseCombatCharacter::LookAtEntity | docs/vtmb/game_runtime.md § Retail conversation chain (recovered 2026-09-06) |
 | `0x1033e7e0` | CBaseCombatCharacter::DrawMuzzleOverlay | docs/vtmb/wielded_weapons.md § The attachment tables, and why they are dead |
 | `0x1033f6d0` | FUN_1033f6d0 | docs/vtmb/entity_io.md § `!playercontroller` — the cinematic relationship entity, docs/vtmb/npc-ai/lifecycle.md § The player controller — `CNPC_VPlayerController`, `CNPC_VFrenzyShadow`, `CNPC_VWolfMorph` (0019 story 5 fold A2), docs/vtmb/player-entity.md § Recovered `PostThink` body |
 | `0x103407b0` | CBaseCombatCharacter::ShouldTransmit | docs/vtmb/entity_visuals.md § 8. Render and shadow keyfields (`CBaseEntity`) [VtMB — decompiled], docs/vtmb/npc-ai/lifecycle.md § The player controller — `CNPC_VPlayerController`, `CNPC_VFrenzyShadow`, `CNPC_VWolfMorph` (0019 story 5 fold A2) |
@@ -3258,7 +3259,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x106eb5d8` | docs/vtmb/entity_io.md:1968, docs/vtmb/navigation-jump-links.md:1851, docs/vtmb/navigation-jump-links.md:1876 |
 | `0x107091bc` | docs/vtmb/facial_animation.md:1079 |
 | `0x10709200` | docs/vtmb/facial_animation.md:1079 |
-| `0x1070b22c` | docs/vtmb/footsteps.md:148, docs/vtmb/game_runtime.md:1610, docs/vtmb/stealth.md:674 |
+| `0x1070b22c` | docs/vtmb/footsteps.md:148, docs/vtmb/game_runtime.md:1617, docs/vtmb/stealth.md:674 |
 | `0x1070b244` | docs/vtmb/activity_enum.md:318, docs/vtmb/footsteps.md:153, docs/vtmb/navigation-jump-links.md:3016, +3 more |
 | `0x1070b248` | docs/vtmb/entity_io.md:2208 |
 | `0x1070b250` | docs/vtmb/npc-ai/lifecycle.md:2716 |

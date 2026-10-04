@@ -80,11 +80,12 @@ bool FElysiumNpc::OwnerIsThePlayer() const
 
 bool FElysiumNpc::HasLiveDialogPartner() const
 {
-	// `m_hDialogPartner` (+0x0fe8) resolving to a live entity. This runtime carries the partner as
-	// the open dialogue SESSION, which is the reading `ElysiumNpcSounds.cpp` made for
-	// `CAI_BaseNPCTroika::IsInDialog` and is repeated rather than re-derived.
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	return Dialogue.bInDialog || IsTalking(Now);
+	// `m_hDialogPartner` (+0x0fe8) resolving to a live entity -- the EHANDLE read RunAI's gather skip
+	// makes (`0x1026f1f0`). The word is written by `SetDialogPartner 0x10107050`: on an NPC set only
+	// by `StartTalking 0x102c0270` and cleared only by `0x102c0360` (V3d; the session bit and the
+	// talking term this used to read are gone).
+	const FElysiumEntityHandle& Partner = GetDialogPartner();
+	return World != nullptr && Partner.IsSet() && World->Resolve(Partner) != nullptr;
 }
 
 bool FElysiumNpc::DispositionStanceReaction(float& OutThreshold, float& OutChancePercent) const

@@ -121,10 +121,11 @@ bool FElysiumNpcKernelSocial10CanTalkTest::RunTest(const FString&)
 	F.Npc->NpcFlags.Clear(EElysiumNpcFlag::D_IS_BUSY);
 
 	// 10. `102c2245` — `IsInDialog()` (`0x102c1170`).
-	F.Npc->Dialogue.bInDialog = true;
-	TestTrue(TEXT("IsInDialog reads the open session"), F.Npc->IsInDialog());
+	//     Raised through its second term, a queued line `m_szDialogQue +0x64ec`.
+	F.Npc->Dialogue.DialogQue = TEXT("q");
+	TestTrue(TEXT("IsInDialog reads the queued line"), F.Npc->IsInDialog());
 	TestFalse(TEXT("a body already in dialog refuses"), F.Npc->CanTalk(F.Player));
-	F.Npc->Dialogue.bInDialog = false;
+	F.Npc->Dialogue.DialogQue.Reset();
 
 	// The three seams, each asserted to answer the value that does NOT refuse, so nothing is
 	// silently blocked.

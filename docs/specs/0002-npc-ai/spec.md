@@ -507,7 +507,7 @@ tests the green scenarios cover deleted.
   re-claim is green. Q-H2: retail itself clears `ENEMY_OCCLUDED` for `OccludedDelayNormal` 0.50 s
   after the outputs (`0x1028e700`); re-stated, green. Ticked. One lead left for a reader
   (Q-H3, `triage.md`): the guard walks to the player's actual hiding spot, not the last-seen one.
-- [ ] **V3. Fix: the arbiter retired; scenes, dialogue and places as retail runs them.** (Was C1;
+- [x] **V3. Fix: the arbiter retired; scenes, dialogue and places as retail runs them.** (Was C1;
   absorbs 0003/1–2's kernel half, old 0002/11's executor retirement, 16a's `Follower` owner, the
   four `STORY8-TWIN` survivors.) Retail: `m_scriptState +0x5d70`, `SelectSchedule 0x1028a380` case 4
   → `SCHED_SCRIPTED_*`, the scripted tasks (`0x60`, `0x62`, `99`, `0x65`, `0x66`, `100`),
@@ -569,9 +569,25 @@ tests the green scenarios cover deleted.
     the bake already carries the flat index). Default 171 / 0, arm 1550 / 0; suite 71 pass / 32
     expected-fail / 1 fail (H11) / 1 unexpected-pass (N4) of 105, `map_tutorial_idle` fail → pass.
     Divergence 18 closed, K1 kept (row 23). N7 closed; N11's record staged (`expected-fail`).
-  - [ ] **V3d** — the dialogue hold as a program (`SCHED_TROIKA_RUN_DIALOG 0x6a`, task
+  - [x] **V3d** — the dialogue hold as a program (`SCHED_TROIKA_RUN_DIALOG 0x6a`, task
     `TASK_RUN_DIALOG 0xb9`), then the arbiter, the owner enum and the save owner byte deleted
     whole. *Records:* the dialogue records, `script_aischedule_walk`. M–L.
+    *Landed 2026-10-04* (the integrator's report is the V3d commit's message; `stories/v1/triage.md`
+    § "V3d integration"). The inputs install `0x6d` / `0x6e` through `0x102ae750(id, 0)` and open
+    nothing; `+use` → `CanTalk` → `0x102ae750(0x6a, 0)` (no `ClearSchedule`) → `FUN_10178280`;
+    `StartTalking 0x102c0270` runs inside the open (partner, `OnDialogBegin`); `TASK_RUN_DIALOG`
+    holds through `0x102c1400` and the close fires one `OnDialogEnd` (`0x102c0360`). Measured
+    (suite `20261004T100815`): `script_dialog_hold` 2.017 `0x6d`, walk-up, 6.867
+    `task_start_player_dialog` + `OnDialogBegin`, `task_run_dialog`, 7.867 `dialog_choose end` →
+    `OnDialogEnd` → 7.883 `taskdone`; `input_startplayerdialogremote` 2.017 `0x6e` → 2.033
+    `task_run_dialog`; `dialog_use_hold` 2.017 `0x6a` + `OnDialogBegin`, 3.033 one `OnDialogEnd`,
+    3.050 `taskdone`, 3.150 reselect (N18 closed, N8 closed); `script_aischedule_walk` green (record
+    error corrected: the mover's `SetGoal` completes `TASK_PATROL_PATH` before it starts,
+    `0x102f1e38` → `0x102623c0`). The arbiter's vocabulary has 0 uses in `Source/`. Default 171 / 0,
+    arm 1541 / 0 (9 port-only tests deleted); suite 106: 74 pass, 30 expected-fail, 1 fail
+    (`rollcall_vzombie`, H11), 1 unexpected-pass (`hub_crosswalk_wait`, the V13 wave's restated
+    record, its own pass). Divergence 1 closed. **V3 closed**: residual reds placed — N13 and N19
+    (V4), N11 (V7), the sneak-past's hearing half (V12), N4 (V10).
 
   Rulings: a cine keeps refusing a save while it possesses an NPC, a named divergence V6 removes
   with the restart (K1); scene clips play through `m_nSequence`, the draft's montage-slot

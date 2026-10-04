@@ -88,9 +88,27 @@ int32 FElysiumNpc::DialogMenuBlockWord() const
 
 bool FElysiumNpc::IsInDialog() const
 {
-	// `CAI_BaseNPCTroika::IsInDialog` (`0x102c1170`).
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	return Dialogue.bInDialog || IsTalking(Now);
+	// `CAI_BaseNPCTroika::IsInDialog` (`0x102c1170`), the four terms in retail's order (packet R1;
+	// `conditions-and-states.md` § `0x102c1400` step 1). `Dialogue.bInDialog` is port bookkeeping and
+	// answers none of them.
+	if (bIsTalking)                                                          // +0x64c0 m_bIsTalking
+	{
+		return true;
+	}
+	if (!Dialogue.DialogQue.IsEmpty())                                       // +0x64ec m_szDialogQue[0]
+	{
+		return true;
+	}
+	if (World == nullptr)
+	{
+		return false;
+	}
+	if (GetDialogPartner().IsSet() && World->Resolve(GetDialogPartner()) != nullptr)   // +0xfe8
+	{
+		return true;
+	}
+	// `+0x6554` (`m_hDialogScene`): the handle resolving, not its `+0x498` byte.
+	return Dialogue.DialogScene.IsSet() && World->Resolve(Dialogue.DialogScene) != nullptr;
 }
 
 bool FElysiumNpc::CanTalk(FElysiumEntity* Activator)

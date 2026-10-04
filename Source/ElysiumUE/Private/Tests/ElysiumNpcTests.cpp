@@ -943,12 +943,11 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		AddError(TEXT("the first Blueblood disappeared after a rejected second Spawn"));
 	}
 
-	// WillTalk latch + StartPlayerDialogRemote fires OnDialogBegin.
+	// WillTalk latch + StartPlayerDialogRemote, which installs `0x6e` and opens nothing itself.
 	//
-	// Jack has to have THOUGHT before a conversation can take his body: `CAI_BaseNPCTroika::NPCInit`
-	// (`0x1029a0b0`) arms his first think at `curtime + 0.1` (`_DAT_104493d0`), and until it runs the
-	// mind's admission barrier refuses every claim. The maker half above is deliberately measured on
-	// the map's own zero, so the clock is advanced to that think here rather than at Activate.
+	// `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms Jack's first think at `curtime + 0.1`
+	// (`_DAT_104493d0`). The maker half above is deliberately measured on the map's own zero, so the
+	// clock is advanced to that think here rather than at Activate.
 	World.Tick(FElysiumNpcBase::NpcInitThinkDelay);
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("WillTalk")), FElysiumVariant::Int(1), 0.0,
 		FElysiumEntityHandle::Invalid(), JackHandle);
@@ -989,8 +988,11 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		JackNpc && JackNpc->Relationships.ResolvePriority(World.PlayerHandle(), TEXT("player")) == 5);
 
 	TestTrue(TEXT("WillTalk latched"), JackNpc && JackNpc->bWillTalk);
-	TestEqual(TEXT("OnDialogBegin fired once (counter=1)"),
-		FCString::Atof(*DebugRow(World.FindByName(TEXT("dlgcount")), TEXT("Value"))), 1.0f);
+	// V3d (packets R1/R2): the input installs `0x6e` and opens nothing; `OnDialogBegin +0x5f44` fires
+	// only from `StartTalking 0x102c0270`, inside `CDialog::Acquire 0x100e05f0`. Jack authors no
+	// `dialogname`, so `Acquire` answers 0 before `StartTalking` and nothing fires.
+	TestEqual(TEXT("no dialogue to load: OnDialogBegin does not fire (counter=0)"),
+		FCString::Atof(*DebugRow(World.FindByName(TEXT("dlgcount")), TEXT("Value"))), 0.0f);
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("EndDialog")), FElysiumVariant::Void(), 0.0,
 		FElysiumEntityHandle::Invalid(), JackHandle);
 	World.Tick(0.0);

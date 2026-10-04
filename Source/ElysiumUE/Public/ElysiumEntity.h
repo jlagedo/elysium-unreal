@@ -452,23 +452,19 @@ public:
 	// (V3c deleted the scripted-move seam and the beat's body claim, M11: a scene's travel is the
 	// NPC's own `SCHED_AISCRIPT 0x2e` program and tasks 8/9/10's navigator goal; the cine claims
 	// nothing, `PossessEntity 0x101a7880` writes the NPC's words.)
-	// Dialogue supersedes a `scripted_sequence` that still owns this body. The NPC calls this on
-	// its ScriptOwner before acquiring the dialogue token; only the owning sequence accepts the
-	// matching body handle. Base false also covers choreographed-scene claims, which have their own
-	// cast lifetime rather than CCineNPC's CancelSequence transition.
+	// The live cine's cancel, called on the NPC's `m_hCine` (`ScriptOwner`, `+0x5d74`) by retail's
+	// two callers: `ForceScheduleChange 0x102ae490` (`0x102ae654`, every `0x102ae750(id, 0)` install,
+	// `ElysiumNpcMaintain.cpp`) and `StartTalking 0x102c0270` (inside `CDialog::Acquire`, the NPC's
+	// dialogue door). Only the possessing sequence accepts the matching NPC handle. Base false also
+	// covers choreographed-scene claims, which have their own cast lifetime rather than CCineNPC's
+	// CancelSequence transition.
 	virtual bool CancelScriptedSequenceForDialogue(const FElysiumEntityHandle& NpcHandle) { return false; }
 	// `CCineNPC::m_interruptable` (`+0x5f90`). The scripted-sequence leaf derives the same immutable
 	// spawnflag word; NPC schedule changes ask through this narrow accessor before cancelling it.
 	virtual bool IsScriptedSequenceInterruptable() const { return false; }
 
-	// --- Dialogue body ownership ---
-	// The open world session holds this token beside its camera handle. Only the NPC leaf backs
-	// these calls; keeping the seam on the base avoids RTTI and lets replacement/teardown release
-	// exactly the resolved owner. A null token means acquisition was refused.
-	virtual FElysiumBodyOwnerToken BeginDialogueBodySession() { return FElysiumBodyOwnerToken(); }
-	// Silent release also clears the NPC's dialogue latch. Normal release leaves it for the queued
-	// EndDialog input, preserving OnDialogEnd ordering through the one event transport.
-	virtual void EndDialogueBodySession(const FElysiumBodyOwnerToken& Token, bool bSilent) {}
+	// (V3d deleted the dialogue body session: a conversation claims no body, writes no
+	// `m_NPCState`, and holds the NPC through `m_hDialogPartner +0xfe8` and `TASK_RUN_DIALOG 0xb9`.)
 
 	// --- Body state a cutscene borrows (entity_io.md, choreographed_scenes.md) ---
 	// A choreographed scene with `position_start 1` places its cast once and then immobilises it:

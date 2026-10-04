@@ -1285,8 +1285,9 @@ FElysiumUseQueryResult AElysiumMapActor::QueryPlayerUse(
 	const FElysiumEntityHandle& /*CurrentFocus*/) const
 {
 	// vampire.dll 0x10167470 → FindEntityFOV 0x10341c30. Eye + look (the boom is view-only).
-	// 80u look-ray wins if the hit is a use anchor; else an 80u sphere ranked by view-dot with
-	// AABB-closest-to-eye rescue against cos(player_use_arc=30°); else a 160u fallback ray.
+	// 80u look-ray wins if the hit is a use anchor (or its owner's own body, N18); else an 80u
+	// sphere ranked by view-dot with AABB-closest-to-eye rescue against cos(player_use_arc=30°);
+	// else a 160u fallback ray.
 	// Solvers are Unreal's: LineTraceSingleByChannel, OverlapMultiByObjectType, GetClosestPointTo.
 	constexpr float UseReachCm = 80.0f * ElysiumMove::U;
 	constexpr float FallbackReachCm = 160.0f * ElysiumMove::U;
@@ -1311,9 +1312,28 @@ FElysiumUseQueryResult AElysiumMapActor::QueryPlayerUse(
 
 	auto FindAnchor = [this](const UPrimitiveComponent* Component) -> const FUseAnchorRecord*
 	{
+		const FUseAnchorRecord* Exact = UseAnchors.FindByPredicate(
+			[Component](const FUseAnchorRecord& Record)
+			{
+				return Record.bEnabled && Record.Component.Get() == Component;
+			});
+		if (Exact || !Component || !Cast<const APawn>(Component->GetOwner()))
+		{
+			return Exact;
+		}
+		// N18 (V3d): a hit on the anchor owner's OWN body is that owner. Retail's `0x10167470` ->
+		// `FindEntityFOV 0x10341c30` answers the entity it reaches, and a character's collision hull
+		// IS the entity. Here an NPC's blocking Pawn capsule (`ElysiumNpcBody.cpp`, the `Pawn` profile,
+		// which blocks `ElysiumUse`) wraps the visual the anchor proxy hangs from, so every ray reaches
+		// the capsule first; read as an occluder it refused `+use` on every NPC before
+		// `CBasePlayer::PlayerUse 0x10167850` was reached. The identity test is the feed query's
+		// (`ElysiumFeedTargeting::HitBelongsToCandidate`): the hit component is the visual or an
+		// ancestor it is attached to. Only a pawn's component qualifies, so a brush a prop rides on
+		// (an elevator) stays an occluder.
 		return UseAnchors.FindByPredicate([Component](const FUseAnchorRecord& Record)
 		{
-			return Record.bEnabled && Record.Component.Get() == Component;
+			return Record.bEnabled
+				&& ElysiumFeedTargeting::HitBelongsToCandidate(Component, Record.Visual.Get());
 		});
 	};
 

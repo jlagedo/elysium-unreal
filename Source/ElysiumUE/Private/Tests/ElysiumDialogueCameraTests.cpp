@@ -167,7 +167,11 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 	// CAI_BaseNPCTroika +0x64c4 m_sDefaultCamera: SAVE|KEY, no INPUT (0x8).
 	TestTrue(TEXT("default_camera is saved and not script-writable"),
 		DefaultCamera && !DefaultCamera->bKeyable && DefaultCamera->bSave);
-	auto ProbeOpener = [](FName Input, int32 Argument)
+	// The `+0x5bac` store (packet R2 item 1, `0x1029efed`): `StartPlayerDialog` stores the variant's
+	// float when its type is FIELD_FLOAT, else the `.rdata 0x104454c4` float (0.0f); `…Remote` never
+	// reads its variant nor writes the word. -1 stands for "the probe did not run".
+	const float Untouched = 7.0f;
+	auto ProbeOpener = [Untouched](FName Input, const FElysiumVariant& Argument) -> float
 	{
 		FElysiumEntityWorld Probe(nullptr, nullptr);
 		ElysiumStandSpawnClock(Probe, -FElysiumNpcBase::NpcInitThinkDelay);
@@ -176,27 +180,22 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 		Probe.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		Probe.Tick(0.0);
 		FElysiumEntity* ProbeSpeaker = Probe.FindByName(TEXT("speaker"));
-		if (!ProbeSpeaker)
+		FElysiumNpc* ProbeNpc = ProbeSpeaker ? ProbeSpeaker->AsNpc() : nullptr;
+		if (!ProbeNpc)
 		{
-			return FString();
+			return -1.0f;
 		}
-		Probe.AcceptInput(ProbeSpeaker->Handle, Input, FElysiumVariant::Int(Argument),
+		ProbeNpc->SpecialDistanceAccum = Untouched;
+		Probe.AcceptInput(ProbeSpeaker->Handle, Input, Argument,
 			FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
-		TArray<TPair<FString, FString>> Rows;
-		ProbeSpeaker->GetDebugState(Rows);
-		for (const TPair<FString, FString>& Row : Rows)
-		{
-			if (Row.Key == TEXT("In dialog"))
-			{
-				return Row.Value;
-			}
-		}
-		return FString();
+		return ProbeNpc->SpecialDistanceAccum;
 	};
-	TestTrue(TEXT("Remote discards the authored 256 variant before session decode"),
-		ProbeOpener(TEXT("StartPlayerDialogRemote"), 256).Contains(TEXT("raw=0")));
-	TestTrue(TEXT("ordinary opener preserves its unresolved integer without decoding bits"),
-		ProbeOpener(TEXT("StartPlayerDialog"), 256).Contains(TEXT("raw=256 decoded=0")));
+	TestEqual(TEXT("Remote never reads its variant nor writes +0x5bac (0x1029f060)"),
+		ProbeOpener(TEXT("StartPlayerDialogRemote"), FElysiumVariant::Float(256.0f)), Untouched);
+	TestEqual(TEXT("StartPlayerDialog stores a float variant at +0x5bac (0x1029efed)"),
+		ProbeOpener(TEXT("StartPlayerDialog"), FElysiumVariant::Float(256.0f)), 256.0f);
+	TestEqual(TEXT("a non-float variant stores the .rdata 0x104454c4 float"),
+		ProbeOpener(TEXT("StartPlayerDialog"), FElysiumVariant::Int(256)), 0.0f);
 
 	FDialogueCameraRecordingService Camera;
 	FElysiumWorldServices Services;
@@ -351,63 +350,6 @@ bool FElysiumDialogueCameraRegistryTest::RunTest(const FString&)
 	TestFalse(TEXT("map teardown retires all epoch handles"), Service->IsCameraLive(Second));
 	TestFalse(TEXT("a stale epoch handle cannot update"), Service->UpdateCamera(Second, Sequence));
 	TestFalse(TEXT("a stale epoch handle cannot release"), Service->ReleaseCamera(Second));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueBodyOwnerLifecycleTest,
-	"Elysium.Arm.DialogueCamera.BodyOwnerLifecycle", GElysiumDialogueCameraTestFlags)
-
-bool FElysiumDialogueBodyOwnerLifecycleTest::RunTest(const FString&)
-{
-	ElysiumFixtureNoise::Declare();
-	FElysiumEntityWorld World(nullptr, nullptr);
-	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
-	World.Load(MakeDialogueWorldDefs());
-	World.SpawnPlayer();
-	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
-	World.Tick(0.0);
-	FElysiumEntity* First = World.FindByName(TEXT("speaker"));
-	FElysiumEntity* Second = World.FindByName(TEXT("speaker2"));
-	if (!TestNotNull(TEXT("first speaker"), First)
-		|| !TestNotNull(TEXT("replacement speaker"), Second))
-	{
-		return false;
-	}
-	auto DebugValue = [](const FElysiumEntity& Entity, const TCHAR* Key)
-	{
-		TArray<TPair<FString, FString>> Rows;
-		Entity.GetDebugState(Rows);
-		for (const TPair<FString, FString>& Row : Rows)
-		{
-			if (Row.Key == Key)
-			{
-				return Row.Value;
-			}
-		}
-		return FString();
-	};
-
-	World.OpenDialog(First->Handle, MakeOneLineConversation());
-	TestTrue(TEXT("open session owns the first NPC body"),
-		DebugValue(*First, TEXT("Body owner")).StartsWith(TEXT("Dialogue")));
-	World.OpenDialog(Second->Handle, MakeOneLineConversation());
-	TestEqual(TEXT("silent replacement clears displaced NPC latch"),
-		DebugValue(*First, TEXT("In dialog")), FString(TEXT("no")));
-	TestEqual(TEXT("silent replacement does not count a completed conversation"),
-		DebugValue(*First, TEXT("Times talked")), FString(TEXT("0")));
-	TestTrue(TEXT("replacement owns the second NPC body"),
-		DebugValue(*Second, TEXT("Body owner")).StartsWith(TEXT("Dialogue")));
-
-	World.CloseDialog(/*bSilent=*/false);
-	TestTrue(TEXT("normal close leaves latch until queued EndDialog"),
-		DebugValue(*Second, TEXT("In dialog")).StartsWith(TEXT("YES")));
-	World.Tick(0.0);
-	TestEqual(TEXT("queued EndDialog clears the latch"),
-		DebugValue(*Second, TEXT("In dialog")), FString(TEXT("no")));
-	TestEqual(TEXT("normal close counts exactly once"),
-		DebugValue(*Second, TEXT("Times talked")), FString(TEXT("1")));
-	TestTrue(TEXT("normal close restores no autonomous owner"),
-		DebugValue(*Second, TEXT("Body owner")).StartsWith(TEXT("None")));
 	return true;
 }
 

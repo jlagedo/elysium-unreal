@@ -75,7 +75,7 @@ the tutorial's `thug_1`, every hub pedestrian and any input fired at such an NPC
 | N5 | `DisableThink` with the wire's string `'1'` disables nothing | `input_disablethink` (5.07 `taskdone` while disabled) | `0x1029f2a0`: the variant (converted by `AcceptInput` to the datamap type) of type 5 → `SetDisableAI 0x1029f300(value)`, any other type → 0 | `ElysiumNpc.cpp:1387` accepts only a Bool variant | **(a) V7** (inputs), XS |
 | N6 | `ChangeSchedule '-'` forces no reselection | `input_changeschedule_reselect` | `0x102c33f0`: a name other than `-` → `0x102ae7f0`; **every** call `flags2 |= 0x82000000` | `ElysiumNpc.cpp:1672` → `StartNamedSchedule` (`-` is no name) | **(a) V7**, XS |
 | N7 | `BeginSequence` possesses nothing the kernel sees: no `NPC_STATE_SCRIPT`, no `0xf2` | `script_walk_to_mark` | `PossessEntity 0x101a7880` → state SCRIPT; `0x1028a380` case 4 → `SCHED_AISCRIPT 0x2e` → `0xf2` | the director's 0.05 s beat, `ElysiumScriptedSequence.h:24-31` (divergence 18) | **(a) V3** (its stated scope) |
-| N8 | `StartPlayerDialog` / `…Remote` install no program; the dialogue opens at the input | `script_dialog_hold`, `input_startplayerdialogremote` | `0x1029ef80` forced `0x6d`, `0x1029f060` forced `0x6e`; `OnDialogBegin` from their tasks | `ElysiumNpcDialogue.cpp:66`, `:79` open synchronously | **(a) V3** (the dialogue hold as `0x6a RUN_DIALOG`) |
+| N8 | `StartPlayerDialog` / `…Remote` install no program; the dialogue opens at the input | `script_dialog_hold`, `input_startplayerdialogremote` | `0x1029ef80` forced `0x6d`, `0x1029f060` forced `0x6e`; `OnDialogBegin` from their tasks | `ElysiumNpcDialogue.cpp:66`, `:79` open synchronously | **(a) V3** (the dialogue hold as `0x6a RUN_DIALOG`). **Closed by V3d (2026-10-04)**: the inputs install `0x6d` / `0x6e` through `0x102ae750(id, 0)` (packet R2: not forced) and open nothing; `OnDialogBegin` fires from `StartTalking 0x102c0270` inside the open; both records green (§ "V3d integration") |
 | N9 | the maker makes no second child after the first dies | `maker_respawn` (OnNPCDied 4.05, nothing by 9.55) | `MakerThink 0x1034bbf0` re-arms at `SpawnFrequency`; `DeathNotice 0x1034bc90` drops the live count | `MakerThink`/`DeathNotice` read retail-faithful (`ElysiumNpcMaker.cpp:557-571`, `:205-234`); the refusal must be `CanMakeNPC` (`:303-360`) — doubt 4 | **(a) V6 rider**, S, read first (the refusal arm, logged at Verbose `:387`). The maker is landed work; R6 keeps templates and hidden makers |
 | N10 | hidden animals select nothing, before or after the unhide | `rollcall_vanimal`, `_vdog`, `_vscurrying` | red 5's chain, then the Animal line's select (`0x1035fb50`) | `ElysiumNpcSelectSpecies.cpp:266-302`; not walked | **(a) V6** with red 5, plus a read of the Animal select (doubt 2). **Re-read by V3b (2026-10-04): N10 was red 6.** The three rows are `use_interesting 1` (`plus_cat`: groups 6), so the ambient executor held them; with it deleted they select `FALL_TO_GROUND (0x3e)` at 0.000 while hidden, which is red 5's hidden half (the records gained the hidden-row nevers V2 gave the others; `known_red` red 5). N10 is closed into red 5; doubt 2's read is not needed for it |
 | N11 | the stealth-kill target test admits only an IDLE or ALERT victim (found by wave H's coder C, reading the query for the `stealthkill` tap) | none yet: `verbs_stealth_kill`'s mark is IDLE, where both arms agree. A record needs a victim in another live state with neither `HEAR_PLAYER` nor `SEE_PLAYER` (`NPC_STATE_SCRIPT` under a `scripted_sequence`, which N7 blocks until V3) | `IsValidStealthKillTarget 0x102c2300` term 4: `GetNPCState` IDLE/ALERT only when `debug_allow_non_idle_auto_sk` (`0x10924af8`, read at `DAT_10924afc`) is 0; the image's initialiser gives it `"1"`, so the shipping arm is "any state but DEAD (7)" (`docs/vtmb/stealth.md:405`, corrected 2026-09-29, `kernel_tunables.tsv` `DebugAllowNonIdleAutoSk`) | `ElysiumNpc.cpp:2360` tests `Idle`/`Alert`; its comment (`:2345`) calls the relaxed arm "a developer arm, not ported" — the corrected doc says it is the shipping one | **(a) V7 rider**, XS: the state term reads "not DEAD", the ConVar's `1` default named at the line; the record lands with V3's scripted possession (N7). Landed work (the stealth-kill verb): the fix is proposed to the owner with V7 |
@@ -571,12 +571,80 @@ bake (both maps as the second wave baked them). `kernel --check` clean (7 tools)
   tutorial record moved on N20.
 - **Open:** N20 (with the judge), N21, Q-V13b, Q-V13c. V13 is not ticked.
 
+## V3d integration (2026-10-04): dialogue as a program; the arbiter deleted whole; committed
+
+D1, D2, D3 integrated. Cross-lane lines applied: the `bInDialog` raisers in tests that meant an
+`IsInDialog 0x102c1170` term now raise `m_szDialogQue +0x64ec` (`Social10`, `Dialogue` payphone arm 7,
+`Damage2`, `SpeciesLifecycle10`'s no-partner arm) or `m_hDialogPartner +0xfe8` through
+`SetDialogPartner 0x10107050` (`Anim`'s Silence arm, `RunAi19.BaseRunAI.DialogPartner`,
+`Closure.MaintainEyeDirection`, `SpeciesLifecycle10`'s partner arm, whose `N.DialogPartner` named the
+payphone's deleted member); `SaveTests` → `NpcMindOwnerRetired`; comments in `CogWindow_Npc.h`,
+`EntityDebugStateTestHelpers.h`, `Motor10Tests`, `FeedingTests`, `NpcCombatTests`, `DialogueUITests`,
+`NpcFootstepTests`. Ledger regenerated before build 1 (docs only, no C++), `kernel --check` clean.
+Build 1 (`--arm`) 2m12s green; build 2 (test fixes) 25.1 s.
+
+- **Tests.** Default first pass 168 / 3 failed, arm 1541 / 0. The three, each in a file no lane owned
+  or in D1's: `Substrate.Dialogue.BodyScene` `:1776` — **port-only pin**, cut: it asserted the old
+  dialogue think's hold on a line clip; packet R1 item 1 settles that `0x102c1400` holds no base
+  (`m_Activity`, or the slot-611 sequence it commits itself once `m_bSequenceFinished`).
+  `Substrate.Npc.Classes` `:992` — **corrected to retail**: Jack authors no `dialogname`, so
+  `CDialog::Acquire 0x100e05f0` answers 0 before `StartTalking 0x102c0270` and `OnDialogBegin` does
+  not fire (the old assertion pinned the open at the input). `Substrate.Feeding` `:402` — **test
+  staging**: the same no-`dialogname` victim; the conversation is now opened at the NPC's own door
+  (`StartTalking`) and closed at `0x102c0360`. After build 2: default 171 / 0, arm 1541 / 0 (the 9
+  deleted: D3's 8, D1's `DialogueCamera.BodyOwnerLifecycle`). The 43 `BeginScriptedSchedule` test
+  calls running the real `SetState 0x1026e340` moved nothing.
+- **Arena.** By name (`20261004T100202`): the three dialogue records pass (unexpected-pass);
+  `script_aischedule_walk` red at `gait`. **Record error, corrected**: the executor's
+  `ScheduledMoveToGoalEntity 0x102800c0` installs `0x46` and calls `SetGoal 0x102ecd20`, whose route
+  build completes the current task when it is not a continuous move (slot 529: `0x6e`, `0x0b`,
+  `0x72` only) through the navigator's slot 2 (`0x102f1e2c..0x102f1e38` → `0x102623c0` →
+  `TaskComplete 0x10273e80`), so `TASK_PATROL_PATH` never starts in retail either: the trace's
+  `taskdone task_patrol_path` with no `task` is retail's. `gait` now expects that `taskdone`, then
+  `task_wait_for_movement`; green (arrived 23.27, reselects). All four lose `known_red`. Suite
+  `20261004T100815`: 106 records, 74 pass, 30 expected-fail, 1 fail (`rollcall_vzombie`, H11), 1
+  unexpected-pass. Moved: the four (expected-fail → pass); `hub_crosswalk_wait` expected-fail →
+  unexpected-pass (43.550 `break CROSSWALK_WALK` 2.7 s after the green, inside the V13 third wave's
+  restated `within 17.0`: that record is the nav wave's, left uncommitted for its own pass);
+  `interest_mode_never` fail → expected-fail (its N4 `known_red`, added by V13's closing pass). Every
+  other red fails where it did (N13 ×4, N19, N11, V12, the V4/V5/V6/V7 rows).
+- **The arbiter's names** (`EElysiumBodyOwner`, `FElysiumBodyOwnerToken`, `Mind.Owner`,
+  `SuspendedOwner`, `AcquireSequenceBody`, `BeginDialogueBodySession`, `RouteScheduleMaintenance`,
+  `ThinkInDialog`, `EndScriptedSchedule`, `"Body owner"`, and the brief's longer list): 0 uses in
+  `Source/`; one V3c comment (`ElysiumNpc.cpp:544`) names the deleted `Sequence` claim beside what
+  retail does instead.
+- **Stand-ins left, compiling and answering** (they read the world's open session where retail reads
+  the PLAYER's `+0xfe8`, which the start-dialog tail now writes at the same instants):
+  `ElysiumNpcZombie.cpp:135-140`, `ElysiumNpcSounds.cpp:235`, `ElysiumNpcBaseSounds.cpp:207, 229`,
+  `ElysiumCameraShots.cpp:604-616`. Production readers of `Dialogue.bInDialog || IsTalking` as
+  `IsInDialog` remain (`ElysiumNpcConditions10.cpp:78`, `ElysiumNpcSounds.cpp:77`,
+  `ElysiumNpcSaveRestore10.cpp:47`, `ElysiumNpcThinkCadence.cpp:82`, `ElysiumNpcZombie.cpp:113`,
+  `ElysiumNpcNewscaster.cpp:237`, `ElysiumChoreoScene.cpp:687`): two of the four retail terms; not
+  V3d's lanes, filed for the reader of each family (V7's inputs pass is the natural owner).
+- **Unrecovered, named at their lines (filed, D1):** the scene's `+0x498` byte (`0x102c1400` step 2
+  removes nothing, `DialogSceneReportsDone`); `CDialog::ShowPlayerChoices 0x100e13d0` (a seam
+  answering nothing); `+0xa8` on the partner (inferred the player); the silent close
+  (`ReleaseWithoutOutput`: replacement, teardown, death clear the partner without `OnDialogEnd` —
+  whether retail reaches `CDialog::Release` there is unread); `0x102c0520`'s line sound and
+  `scripted_scene` (only its talking half, `OnDialogFilePlayed`, is ported); the bark's early
+  `OnDialogEnd` (`+0x30e9`: `Acquire` sends one line and releases); constructor / restore writes of
+  `+0xfe8` (not searched). **(D2):** dormancy's state write (`Mind.Invalidate`, Idle — no retail
+  writer named); `CDialog::Release` on the owner's death (`ReleaseOnDeathOrDormancy`, keyed on
+  `GetOpenDialogOwner() == Handle`). Recorded in `docs/vtmb/game_runtime.md`: `0x104454c4` = 0.0f,
+  `StartTalking`'s place in `Acquire` (call instruction not located: `vtmb_callers` lists none), slot
+  306 = `LookAtEntity 0x1033e370`.
+- **Q-V3d1 (open, V4):** with the dialogue think's hold gone, a speaking NPC's base sequence
+  (`m_Activity`, the slot-611 commit) plays under the line's VCD gesture. Whether the port's body
+  composes the gesture as a layer over that base (Source's choreo gesture is an overlay layer) or the
+  base's clip replaces it is the animation chain's question; `BodyScene` shows the stance clip
+  submitted twice during a live line (`PlayNpcClip … Stance_Neutral_Idle_1`). Not measured live.
+
 ## The fix order — acceptance lists
 
 | story | records that must turn green |
 |---|---|
 | H wave (H1–H5 first) | `rollcall_vcamera`, `rollcall_vcamerasecurity`, `sense_cone_enter`, `memory_occluded_kept`, `rollcall_vzombie`; classifies `verbs_stealth_kill`; re-check `cover*` and `sense_bodies_transparent` |
-| V3 arbiter, scenes, dialogue, places | ~~`cover`~~ (green at V3a), ~~the patrols ×3~~ (doubt 1 settled by V3a: not red 1 but N13, moved to V4), ~~`places_pedestrian_visit`~~ (H16 closed by the V3b follow-up; now N13, V4), ~~`places_thug_pt1`~~ (green at the V3b follow-up), ~~`input_useinteresting`~~, ~~`map_hub_idle`~~ (green at V3b), ~~`hub_crosswalk_wait`~~ (N16, moved to V13), ~~`rollcall_vhuman`, `rollcall_vhumancombatpatrol`~~ (green at V3b, record errors corrected), `script_walk_to_mark` (program retail's since V3c's tree; red on N19, the row-0 sequence), `script_dialog_hold`, `input_startplayerdialogremote`; ~~`map_tutorial_sneak_past`'s first half~~ (green at the V3b follow-up; the hearing half on V12) |
+| V3 arbiter, scenes, dialogue, places | ~~`cover`~~ (green at V3a), ~~the patrols ×3~~ (doubt 1 settled by V3a: not red 1 but N13, moved to V4), ~~`places_pedestrian_visit`~~ (H16 closed by the V3b follow-up; now N13, V4), ~~`places_thug_pt1`~~ (green at the V3b follow-up), ~~`input_useinteresting`~~, ~~`map_hub_idle`~~ (green at V3b), ~~`hub_crosswalk_wait`~~ (N16, moved to V13), ~~`rollcall_vhuman`, `rollcall_vhumancombatpatrol`~~ (green at V3b, record errors corrected), `script_walk_to_mark` (program retail's since V3c's tree; red on N19, the row-0 sequence), ~~`script_dialog_hold`, `input_startplayerdialogremote`, `dialog_use_hold`, `script_aischedule_walk`~~ (green at V3d); ~~`map_tutorial_sneak_past`'s first half~~ (green at the V3b follow-up; the hearing half on V12) |
 | V4 animation chain, slot 363 | `sense_enemy_facing_me`, `damage_lethal_death`, `ranged_open_fire` (with N2), `melee_swing` (with N3); N13: `patrol_sentry2_pingpong`, `patrol_monk_loop`, `input_clearpatrolpath`, `places_pedestrian_visit` |
 | V5 attack conditions + N1 + N2 (+ N3 if pulled here) | `range_bands`, `cover_armed`, `ranged_open_fire`, `chase_melee`, `melee_swing`; red 4 needs a record first |
 | V6 lifecycle + N9 + N10 (red 5 since V3b) + N14 | `lifecycle_unhide_fights`, `rollcall_vmanbat`, `_vmercurio`, `_vsabbatleader`, `_vvampireboss`, `_vpedestrian`, `_vwerewolf`, `_vanimal`, `_vdog`, `_vscurrying`, `maker_respawn`; `save_restore_mid_path` after H8 |
@@ -588,7 +656,9 @@ bake (both maps as the second wave baked them). `kernel --check` clean (7 tools)
 ## Filed by the coordinator, 2026-10-04 (unattended run)
 
 - **N18 `dialog_use_hold` — game red, the use focus (old bug in landed work; fixed in V3d, lane
-  D1 item 10).** Retail `PlayerUse 0x10167850` → `0x10167470` / `FindEntityFOV 0x10341c30` resolves
+  D1 item 10). Closed by V3d (2026-10-04)**: `FindAnchor` counts a hit on a pawn component the
+  anchor's visual hangs from as that anchor's owner; `+use` reaches `PlayerUse`'s NPC arm and the
+  record is green (§ "V3d integration"). Retail `PlayerUse 0x10167850` → `0x10167470` / `FindEntityFOV 0x10341c30` resolves
   the NPC itself. The port's `AElysiumMapActor::QueryPlayerUse` (`ElysiumMapActor.cpp:1312-1361,
   1429-1437`) counts any non-anchor hit as a blocker, and the NPC's own Pawn capsule
   (`ElysiumNpcBody.cpp:94-99`) blocks the use channel, so the press is refused before the

@@ -36,6 +36,7 @@
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpcCombatSchedules.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumNpcConditionsBodiesShared.h"   // CondRetailStateId, the typed -> raw NPC_STATE table
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcLoadout.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -748,54 +749,6 @@ bool FElysiumNpc::OnBumped(double Now)
 	return true;
 }
 
-bool FElysiumNpc::RouteScheduleMaintenance(double Now, bool bReduced)
-{
-	// `MaintainSchedule` (`0x102817c0`) as `RunAI` (`0x1026f302`) reaches it on a Troika body. Retail
-	// runs the schedule interpreter alone: a scene is `SCHED_AISCRIPT 0x2e` (`PossessEntity
-	// 0x101a7880`'s ideal state 4 → `MaintainSchedule`'s state change and reselect → `SelectSchedule
-	// 0x1028a380` case 4 → `TranslateSchedule 0x102cc080` → `0xf2..0xf9`; its exits, "Script failed"
-	// and the cine's death, are the select's and the task arms' -- V3c deleted the port's beat owner
-	// and its watchdog), a patrol is the patrol path's program, an interesting place is its program
-	// (`SelectSchedule` case 1's `0xff` setup, `0x100`, the wait `0x102a9f40`, the loop `0x102aa210`,
-	// the release `0x102b53d0` -- V3b deleted the port's ambient executor). This runtime still drives
-	// one owner outside the interpreter, routed here ahead of it — a named survivor of the story-8
-	// rewire, with the reason it stays:
-	//
-	// STORY8-TWIN (survivor, V3d): the dialogue clip hold (`ThinkInDialog`) is replaced by the
-	// dialogue family's `m_hDialogPartner` path (RunAI's gather skip is already retail's,
-	// `0x1026f1f0`); the per-line VCD body clip it protects has no retail schedule stand yet.
-	//
-	// Everything else is `MaintainScheduleRetail` through `ThinkStanceOrIdle`.
-	if (ThinkInDialog(Now, bReduced))
-	{
-		return Schedule.IsRunning();
-	}
-	ThinkStanceOrIdle(Now, bReduced);
-	return Schedule.IsRunning();
-}
-
-bool FElysiumNpc::ThinkInDialog(double Now, bool bReduced)
-{
-	if (!Dialogue.bInDialog)
-	{
-		return false;
-	}
-	// A per-line VCD owns the body while its sequence/gesture event is live. The ordinary
-	// dialogue stance think must not replace that one-shot with a disposition idle. It needs no
-	// cadence of its own: an NPC in dialogue answers `ShouldThinkFrequently` (`0x102c2430`), which
-	// pins the normal law to 0.01 s and the update law to 0.03 s.
-	if (World && World->HasActiveDialogueBodyClip(Handle))
-	{
-		return true;
-	}
-	// A character in conversation still runs its stance machine -- retail's Talking
-	// threshold/chance pair exists precisely for this case. The selector settles it onto its
-	// current idle rather than fidgeting through a line, so the reschedule is what keeps it
-	// posed rather than what makes it move.
-	ThinkStanceOrIdle(Now, bReduced);
-	return true;
-}
-
 int32 FElysiumNpc::SelectSchedule()
 {
 	// Story 8 Select19: retail's selector pair `0x1028a260` (`SelectNewScheduleRetail`): `+0x1b2c = 0`,
@@ -839,49 +792,10 @@ void FElysiumNpc::UpdateIdealState(double Now)
 	{
 		ElysiumNpcWitness::OnEnteredAlertState(*this, Now);
 	}
-	// An authored director outranks the state change it may itself have caused. `forcestate 3` puts
-	// an NPC in combat with no enemy, whose recovered fallback is a drop back to alert on the very
-	// next pass — and discarding the program here would cancel the walk the same director pushed
-	// half a think earlier. The pushed program ends where every other program ends: on its own
-	// completion or failure, in `ThinkStanceOrIdle`.
-	if (ScriptedScheduleOwner.IsSet() || ScriptedScheduleOrder.IsSet())
-	{
-		return;
-	}
 	// A state change reselects. The running program was chosen by the state that has just been left
 	// — an idle stance under an NPC that just acquired an enemy — so it ends here rather than
 	// finishing on behalf of a state that no longer holds.
 	ClearSchedule();
-}
-
-void FElysiumNpc::ThinkStanceOrIdle(double Now, bool bReduced)
-{
-	if (MaintainScheduleRetail(Now, bReduced))
-	{
-		return;
-	}
-
-	// The program ended — completed, interrupted, or cleared by `ClearSchedule`; a failure never
-	// ends one, it routes into the next program on the following pass. The program held no body
-	// claim: retail's running program (`m_pSchedule +0x5c38`) owns the navigator, and a schedule
-	// change clears the goal in `OnScheduleChange 0x102a0940` (`0x102a0992`, `!PRESERVE_PATH`).
-
-	// A pushed scripted order lives exactly as long as the program it started. Arrival, a refused
-	// route and a failed leg all land here, and this is what returns the NPC to ordinary selection
-	// and hands a suspended patrol route back. The forced state deliberately does NOT come back with
-	// it: `forcestate` was a state push, not a hold.
-	if (ScriptedScheduleOrder.IsSet() || ScriptedScheduleOwner.IsSet())
-	{
-		EndScriptedSchedule(TEXT("scripted schedule ended"));
-		// Hand back to `Think`'s routing rather than selecting from inside the branch the director
-		// sent this NPC down: a suspended patrol route has just been restored, and resuming it is
-		// that executor's turn, not schedule selection's. It resumes on the next normal think.
-		return;
-	}
-
-	// `MaintainSchedule` already selected, installed and ran the replacement inside its one loop.
-	// A false answer here is the retail missing-schedule exit or a selector that deliberately
-	// returned none; the ordinary cadence asks again.
 }
 
 FElysiumInterestingPlace* FElysiumNpc::CurrentAmbientSpot() const
@@ -1249,52 +1163,6 @@ void FElysiumNpc::DebugScheduleInstalled(int32 InstalledSchedule)
 	ElysiumNpcDebugLogging::ScheduleInstalled(*this, InstalledSchedule);
 }
 
-// --- Combat task bodies ---
-
-bool FElysiumNpc::AcquireProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
-	const TCHAR* Reason)
-{
-	if (Token.IsSet() && Mind.Owner() == Owner && Mind.Generation() == Token.Generation)
-	{
-		return true;
-	}
-	// A token from a claim that was displaced (a scripted beat took the body mid-chase) is retired
-	// here rather than carried: the arbiter would refuse a release against it anyway.
-	Token.Reset();
-	// Nothing is parked: an interesting-place visit owns a claimed place, so `Think`'s hand-over
-	// finishes it first, and the patrol claims no body since it became the path object's program.
-	// The one caller left is the `ScriptedSchedule` claim (until V3d); the kernel's own programs
-	// claim nothing (`m_pSchedule +0x5c38` owns the navigator).
-	return Mind.Acquire(Owner, /*bSuspendCurrent=*/false, Token, Reason);
-}
-
-void FElysiumNpc::ReleaseProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
-	const TCHAR* Reason)
-{
-	if (!Token.IsSet())
-	{
-		return;
-	}
-	const bool bLive = Mind.Owner() == Owner && Mind.Generation() == Token.Generation;
-	if (bLive)
-	{
-		// No navigator stop here: the running program owns the navigator, and a schedule change
-		// clears its goal in `OnScheduleChange 0x102a0940` (`0x102a0992`, `!PRESERVE_PATH`) only.
-		Mind.Release(Token, Reason);
-	}
-	Token.Reset();
-}
-
-bool FElysiumNpc::AcquireScriptedScheduleBody(const TCHAR* Reason)
-{
-	return AcquireProgramBody(EElysiumBodyOwner::ScriptedSchedule, ScriptedScheduleOwner, Reason);
-}
-
-void FElysiumNpc::ReleaseScriptedScheduleBody(const TCHAR* Reason)
-{
-	ReleaseProgramBody(EElysiumBodyOwner::ScriptedSchedule, ScriptedScheduleOwner, Reason);
-}
-
 // --- The authored director ---
 
 bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Order,
@@ -1315,7 +1183,7 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		// an NPC that has never thought — and admission establishes idle on that first think, so a
 		// forced state applied ahead of it would be wiped by the barrier it was racing. The order
 		// carries its own forced state for exactly this window and `Think` replays it once admission
-		// has run, the same shape a scripted beat's deferred body claim already takes.
+		// has run (the admission barrier, V6's).
 		ScriptedScheduleOrder = Order;
 		ScriptedScheduleOrder.bHasForcedState = bHasForcedState;
 		ScriptedScheduleOrder.ForcedState = ForcedState;
@@ -1323,18 +1191,20 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		return true;
 	}
 	// No clock reset anywhere in this function. `CCineAISchedule::vfunc586` (`0x101a98c0`) goes
-	// through `SetIdealState`, `ScheduledMoveToGoalEntity` / `ScheduledFollowPath` and
+	// through `SetState`, `ScheduledMoveToGoalEntity` / `ScheduledFollowPath` and
 	// `SetSchedule` (`0x10280e50`), none of which writes a think stamp: an `aiscripted_schedule`
 	// takes effect on the NPC's next cadence think, up to the normal law's out-of-PVS ceiling.
 
-	// The policy, first and unconditionally. It is a STATE push and not a hold: nothing here parks
-	// the state to restore later, because the recovered entity has no end and no release — it fires
-	// once and the NPC carries what it was given.
+	// The executor `0x101a98c0`'s NPC half, in its order: the goal was resolved by the director
+	// (`ElysiumAiScriptedSchedule.cpp`, the "Can't find goal entity" return ahead of everything
+	// here); then `forcestate` through `SetState 0x1026e340`, which traces the edge and fires slot
+	// 463 itself; then the mode's call. It is a STATE push and not a hold: the recovered entity
+	// keeps no order, has no end and no release -- it fires once and the NPC carries what it was
+	// given. The authored->native table (0/1->1, 2->3, 3->2) is the director's
+	// (`ElysiumAiScriptedSchedule::ForcedState`); the typed state maps back to the raw id here.
 	if (bHasForcedState)
 	{
-		const int32 TracedState = NpcStateRetail();   // read for the AI trace's `state` event only
-		Mind.RequestState(ForcedState, TEXT("aiscripted_schedule forcestate"));
-		TraceStateChange(TracedState, NpcStateRetail());
+		SetState(NpcKernelConditionsShared::CondRetailStateId(ForcedState));   // 0x101a98c0 -> 0x1026e340
 	}
 
 	if (static_cast<EMode>(Order.Mode) == EMode::AssignEnemy)
@@ -1369,24 +1239,10 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		return bHasForcedState;
 	}
 
-	// Pre-claim release, kept until V3d deletes the `ScriptedSchedule` claim it precedes. Retail's
-	// order installs its program through `SetSchedule`, whose `OnScheduleChange 0x102a0940` releases
-	// a visited place with 1 (`0x102a099c`) under `!PRESERVE_PATH`.
-	FinishAmbientUse(/*bFireLeft=*/true);
-	// The running program gives way to the director. It held no body claim: retail's program
-	// (`m_pSchedule +0x5c38`) owns the navigator and claims nothing.
-	ClearSchedule();
-
-	ScriptedScheduleOrder = Order;
-	ScriptedScheduleOrder.bPending = false;   // this IS the replay; nothing is waiting any more
-	if (!AcquireScriptedScheduleBody(TEXT("aiscripted_schedule")))
-	{
-		UE_LOG(LogElysiumNpcEnt, Warning,
-			TEXT("%s refused a scripted schedule the body: %s owns it"),
-			*DebugString(), LexToString(Mind.Owner()));
-		ScriptedScheduleOrder.Reset();
-		return false;
-	}
+	// No `ClearSchedule`, no place release and no claim ahead of the mover (`schedule-kernel.md:663`):
+	// the movers install base 2 through `0x10280de0` -> `SetSchedule 0x10280e50`, whose slot 435
+	// `OnScheduleChange 0x102a0940` releases a visited place (`0x102a09a0`) under `!PRESERVE_PATH`,
+	// and the NPC keeps no order (V3d deleted the port's `ScriptedSchedule` claim and its end).
 	// Modes 1/2 and 4/5 are retail's own movers (`0x101a9960..0x101a99cc`, `0x101a99dc..0x101a9a14`): the
 	// activity is `(-(mode != 1 | 4) & 10) + 9` -- ACT_WALK 9 for the lower mode of each pair, ACT_RUN 0x13
 	// for the upper -- replaced by ACT_FLY 0x22 when slot 94 `GetMoveType` (+0x178, asked twice) answers 5
@@ -1406,7 +1262,6 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 	const bool bGoalSet = bFollowPath
 		? ScheduledFollowPath(ElysiumSched::IDLE_WALK, Goal, Activity)                       // 0x101a9a0c
 		: ScheduledMoveToGoalEntity(ElysiumSched::IDLE_WALK, Goal, Activity);                // 0x101a998f
-	ScriptedScheduleOrder.Program = Schedule.Current;
 	if (!bGoalSet && !Order.bSuppressRouteWarning)                                          // 0x101a9996 / 0x101a99a5 spawnflags & 0x800
 	{
 		// `DevMsg(1, ...)` in retail; a Warning here, as the goal-miss line is, because it fires on
@@ -1422,26 +1277,6 @@ bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Ord
 		Order.Mode, ElysiumAiScriptedSchedule::ModeName(Order.Mode), Activity,
 		World ? *World->DescribeHandle(Order.Goal) : TEXT("(no world)")));
 	return bGoalSet;
-}
-
-void FElysiumNpc::EndScriptedSchedule(const TCHAR* Reason)
-{
-	// `bPending` is tested beside the other two because a state-only push carries mode 0, which is
-	// not `IsSet()` — a deferred one still has to be droppable by death, dormancy and a beat.
-	if (!ScriptedScheduleOrder.IsSet() && !ScriptedScheduleOrder.bPending
-		&& !ScriptedScheduleOwner.IsSet())
-	{
-		return;
-	}
-	const int32 PushedProgram = ScriptedScheduleOrder.Program;
-	ScriptedScheduleOrder.Reset();
-	if (PushedProgram != 0 && Schedule.Current == PushedProgram)
-	{
-		// The program and the order are one thing. A scripted program left running with no order
-		// behind it would fail its next leg by name for a reason no reader could act on.
-		ClearSchedule();
-	}
-	ReleaseScriptedScheduleBody(Reason);
 }
 
 void FElysiumNpc::InputNamedSchedule(const FElysiumInputArgs& Args)
@@ -1859,102 +1694,6 @@ void FElysiumNpc::FinishAmbientUse(bool bFireLeft)
 	bAmbientArrived = false;                                                    // +0x62e8, always
 }
 
-FElysiumBodyOwnerToken FElysiumNpc::BeginDialogueBodySession()
-{
-	if (IsInert())
-	{
-		// Every other refusal below says why; this one did not, and a silent refusal here reads at
-		// the call site as "the body arbiter said no" when the truth is that the entity is dead or
-		// hidden. Story 29d spent a bisection on exactly that.
-		UE_LOG(LogElysiumNpcEnt, Warning,
-			TEXT("%s refused a dialogue body session: the entity is inert (dead=%d hidden=%d)"),
-			*DebugString(), bDead ? 1 : 0, bHidden ? 1 : 0);
-		return FElysiumBodyOwnerToken();
-	}
-	if (DialogueBodyOwner.IsSet())
-	{
-		return DialogueBodyOwner;
-	}
-	// Slot 614 at dialogue START. Every retail entry into a player dialogue re-bases the NPC's
-	// clock before installing its program: the three `StartPlayerDialog*` inputs (`0x1029ef80`,
-	// `0x1029f060`, `0x1029f120`: `FinishTalking`, reset, `m_bForceDialogStart`, `SetSchedule
-	// (0x6d)`) and the `+use` path (`CBasePlayer::PlayerUse` `0x10167850`: `CanTalk()`, reset,
-	// `SetSchedule(0x6a)`). This session is the port's one door for all four.
-	ResetThinkTimers(World ? World->NowSeconds() : 0.0);
-	// Dialogue is the authored interruption of CCineNPC ownership. Cancel through the sequence
-	// itself before asking the mind for Dialogue so travel, action, collision flags and the
-	// sequence's delayed completion all leave through the one CancelSequence teardown. This is
-	// what prevents an older action deadline from resetting a newer dialogue line to idle.
-	if (ScriptOwner.IsSet() && World)
-	{
-		const FElysiumEntityHandle PreviousOwner = ScriptOwner;
-		if (FElysiumEntity* Owner = World->Resolve(PreviousOwner))
-		{
-			if (Owner->CancelScriptedSequenceForDialogue(Handle) && ScriptOwner.IsSet())
-			{
-				UE_LOG(LogElysiumNpcEnt, Warning,
-					TEXT("%s dialogue cancelled scripted owner %s but the body claim remained"),
-					*DebugString(), *PreviousOwner.ToString());
-				return FElysiumBodyOwnerToken();
-			}
-		}
-		else
-		{
-			UE_LOG(LogElysiumNpcEnt, Warning,
-				TEXT("%s cleared stale scripted owner %s while opening dialogue"),
-				*DebugString(), *PreviousOwner.ToString());
-			// (V3c: the cine holds no body claim and no scripted move to drop here.)
-			ScriptOwner = FElysiumEntityHandle::Invalid();
-		}
-	}
-	// A pushed scripted order is DROPPED rather than parked. The arbiter's one parked slot is spoken
-	// for by the patrol route, and `aiscripted_schedule` has no resume: it is a one-shot push with no
-	// end and no release, so a conversation ends the order it interrupted.
-	EndScriptedSchedule(TEXT("dialogue opened"));
-	if (!Mind.Acquire(EElysiumBodyOwner::Dialogue, /*bSuspendCurrent=*/false,
-		DialogueBodyOwner, TEXT("dialogue open")))
-	{
-		return FElysiumBodyOwnerToken();
-	}
-	Dialogue.bInDialog = true;
-	return DialogueBodyOwner;
-}
-
-void FElysiumNpc::EndDialogueBodySession(const FElysiumBodyOwnerToken& Token, bool bSilent)
-{
-	if (DialogueBodyOwner.IsSet() && Token.Owner == DialogueBodyOwner.Owner
-		&& Token.Generation == DialogueBodyOwner.Generation)
-	{
-		Mind.Release(DialogueBodyOwner, bSilent ? TEXT("dialogue silent close")
-			: TEXT("dialogue normal close"));
-		DialogueBodyOwner.Reset();
-	}
-	if (bSilent)
-	{
-		Dialogue.bInDialog = false;
-		Dialogue.bForceDialogStart = false;
-		// A silent close (the owner died, the world tore down, a second conversation replaced this
-		// one) never routes `EndDialog`, so the holster's other door is here. Retail restores the
-		// weapon from `CDialog::Release` (`FUN_10178400`), which runs on every teardown path.
-		// `RestoreDialogHolster` is one-shot, so the ordinary close is unaffected.
-		if (FElysiumPlayer* DialoguePlayer = World ? World->FindPlayer() : nullptr)
-		{
-			DialoguePlayer->RestoreDialogHolster();
-		}
-	}
-	// No clock reset on the way OUT: retail re-bases at dialogue START (`InputStartPlayerDialog`
-	// `0x1029ef80` and its two siblings, `CBasePlayer::PlayerUse` `0x10167850`), never at the end.
-	// A patrol or a visit resumes on the next cadence think.
-}
-
-bool FElysiumNpc::PrepareBodyForDialogue()
-{
-	// Pre-claim release, kept until V3d replaces it with the inputs' `ForceScheduleChange` ->
-	// `OnScheduleChange 0x102a0940` path, whose release passes 1 (`0x102a099c`).
-	FinishAmbientUse(/*bFireLeft=*/true);
-	return BeginDialogueBodySession().IsSet();
-}
-
 bool FElysiumNpc::IsValidStealthKillTarget(const FElysiumPlayer& /*Attacker*/) const
 {
 	// `CAI_BaseNPCTroika` `0x102c2300`. `CNPC_VGhoulCroucher` `0x1037bbc0` short-circuits when
@@ -2125,30 +1864,27 @@ void FElysiumNpc::OnRuntimeModelChanged()
 	RebuildForModelChange(CVarNpcBodies.GetValueOnGameThread() != 0);
 }
 
-void FElysiumNpc::ReleaseAllBodyOwnership(const TCHAR* Reason, bool bDeadMind)
+void FElysiumNpc::ReleaseOnDeathOrDormancy(const TCHAR* Reason, bool bDeadMind)
 {
-	if (DialogueBodyOwner.IsSet())
+	// The open conversation, closed when this NPC owns it -- keyed on the world's one dialogue
+	// (`CDialog`'s owner), not on a token (V3d deleted the dialogue body claim). The close runs
+	// `CDialog::Release 0x100e5240` -> `0x102c0360` (D1's door). UNRECOVERED: whether retail runs
+	// `CDialog::Release` on the NPC's death or removal at all, or leaves it to `0x102c1400`'s
+	// partner-gone arm (D1's open item); the port closes here, as it did before V3d.
+	if (World && World->GetOpenDialogOwner() == Handle)
 	{
-		if (World && World->GetOpenDialogOwner() == Handle)
-		{
-			World->CloseDialog(/*bSilent=*/true);
-		}
-		else
-		{
-			EndDialogueBodySession(DialogueBodyOwner, /*bSilent=*/true);
-		}
+		World->CloseDialog(/*bSilent=*/true);
 	}
 	// Death and dormancy: retail's removal-side callers (`Event_Killed`, `UpdateOnRemove
 	// 0x1028d6e0`) pass 0 to `0x102b53d0`.
 	FinishAmbientUse(/*bFireLeft=*/false);
-	EndScriptedSchedule(Reason);
 	ClearSchedule();
 	const int32 TracedState = NpcStateRetail();   // read for the AI trace's `state` event only
+	// Death's `SetState(7)` (`Event_Killed 0x10265ad0`). The dormancy arm's write (state Idle) has
+	// no retail writer named in `docs/vtmb/` (seam: `m_NPCState +0x5cc0`'s writer on `ScriptHide` /
+	// `Kill` is unrecovered); it is kept as the port wrote it.
 	Mind.Invalidate(Reason, bDeadMind);
 	TraceStateChange(TracedState, NpcStateRetail());
-	ScriptedScheduleOwner.Reset();
-	ScriptedScheduleOrder.Reset();
-	DialogueBodyOwner.Reset();
 }
 
 bool FElysiumNpc::IsTransmitted() const
@@ -2166,7 +1902,7 @@ void FElysiumNpc::OnDormancyChanged()
 	FElysiumCombatCharacter::OnDormancyChanged();
 	if (IsInert())
 	{
-		ReleaseAllBodyOwnership(bDead ? TEXT("death") : TEXT("dormancy"), bDead);
+		ReleaseOnDeathOrDormancy(bDead ? TEXT("death") : TEXT("dormancy"), bDead);
 		// A hidden body is off screen and off its route anyway; the hold must not outlive the
 		// silence that placed it, or the unhide would wake a body that cannot move.
 		SetBodyHeld(false);
@@ -2333,29 +2069,13 @@ void FElysiumNpc::RestorePatrolAndAmbient()
 	// its stamps the same way and resets nothing on a load.
 }
 
-// The mind's state and its body owner, validated against the patrol and ambient state the step
-// above has just settled -- which is why it runs after it rather than inside the decode.
+// The mind's state (`m_NPCState +0x5cc0`, a datamap word), after the patrol and ambient state the
+// step above has just settled. Retail saves no body owner (V3d deleted the port's owner byte); an
+// `aiscripted_schedule` keeps nothing on the NPC to restore (`0x101a98c0`), and what its push
+// durably changed is this state and, for mode 3, the committed enemy the senses record carries.
 void FElysiumNpc::RestoreMindState()
 {
-	const EElysiumNpcState State = static_cast<EElysiumNpcState>(RestoredMindState);
-	EElysiumBodyOwner Owner = static_cast<EElysiumBodyOwner>(RestoredMindOwner);
-	if (!FElysiumNpcMind::IsSupportedState(State) || !FElysiumNpcMind::IsResumableOwner(Owner))
-	{
-		Owner = EElysiumBodyOwner::None;
-	}
-	// A visit holds no body claim since V3b (its program holds it), so a saved `Ambient` owner
-	// restores as `None`. The owner byte itself goes in V3d.
-	if (Owner == EElysiumBodyOwner::Ambient)
-	{
-		Owner = EElysiumBodyOwner::None;
-	}
-	Mind.Restore(State, Owner);
-	// A restore never resumes `ScriptedSchedule` ownership. The order behind it is a live goal
-	// handle and a route resolved out of the previous map epoch, so it is session state (the
-	// reasoning is on `FElysiumScriptedScheduleOrder`); what the push durably changed is the mind
-	// state restored just above and, for mode 3, the committed enemy the senses record carries.
-	ScriptedScheduleOwner.Reset();
-	ScriptedScheduleOrder.Reset();
+	Mind.Restore(static_cast<EElysiumNpcState>(RestoredMindState));
 }
 
 void FElysiumNpc::RestoreDeathBodyState()
@@ -2444,23 +2164,17 @@ void FElysiumNpc::SerializeMakerBlock(FElysiumSaveArchive& Ar)
 	Ar << bOwnerTerminationNotified;
 }
 
-// `m_NPCState` and the body owner, as raw words. The shape map records the state pair as `PRIVATE`,
-// so no compiled path reaches it and the walk cannot carry it. Validation is `RestoreMindState`.
+// `m_NPCState` (`+0x5cc0`, a datamap word), as a raw word. The shape map records the state pair as
+// `PRIVATE`, so no compiled path reaches it and the walk cannot carry it. Validation is
+// `RestoreMindState`. Retail saves no body owner: the port's owner byte went in V3d
+// (`FElysiumSaveVersion::NpcMindOwnerRetired`).
 void FElysiumNpc::SerializeMindBlock(FElysiumSaveArchive& Ar)
 {
 	uint8 SavedState = static_cast<uint8>(Mind.State());
-	EElysiumBodyOwner ResumableOwner = Mind.Owner();
-	if (!FElysiumNpcMind::IsResumableOwner(ResumableOwner))
-	{
-		ResumableOwner = EElysiumBodyOwner::None;
-	}
-	uint8 SavedOwner = static_cast<uint8>(ResumableOwner);
 	Ar << SavedState;
-	Ar << SavedOwner;
 	if (Ar.IsLoading())
 	{
 		RestoredMindState = SavedState;
-		RestoredMindOwner = SavedOwner;
 	}
 }
 
@@ -2521,18 +2235,6 @@ void FElysiumNpc::RestoreDisciplineState(FElysiumEntityWorld& InWorld)
 	// as it would have in retail.
 }
 
-const TCHAR* FElysiumNpc::SaveBlockReason() const
-{
-	switch (Mind.Owner())
-	{
-	case EElysiumBodyOwner::Dialogue:          return TEXT("a conversation is open");
-	case EElysiumBodyOwner::Sequence:          return TEXT("a scripted sequence is active");
-	case EElysiumBodyOwner::ScriptedSchedule:  return TEXT("a scripted schedule is active");
-	case EElysiumBodyOwner::Follower:          return TEXT("a follower session is active");
-	default:                                   return nullptr;
-	}
-}
-
 void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 {
 	FElysiumCombatCharacter::GetDebugState(Out);
@@ -2541,9 +2243,7 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("Interesting groups"), InterestingPlaceGroups.IsEmpty()
 		? TEXT("(none)") : InterestingPlaceGroups);
 	Out.Emplace(TEXT("In dialog"), Dialogue.bInDialog
-		? FString::Printf(TEXT("YES (%s raw=%d decoded=%d)"),
-			ElysiumDialogueCamera::LexToString(Dialogue.DialogOpener), Dialogue.DialogFlags,
-			Dialogue.DecodedDialogFlags)
+		? FString::Printf(TEXT("YES (%s)"), ElysiumDialogueCamera::LexToString(Dialogue.DialogOpener))
 		: TEXT("no"));
 	Out.Emplace(TEXT("default_camera"), DefaultCamera.IsEmpty() ? TEXT("(none)") : DefaultCamera);
 	Out.Emplace(TEXT("Times talked"), FString::FromInt(TimesTalked));
@@ -2581,15 +2281,21 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 			? TEXT("armed") : TEXT("admitted"));
 	Out.Emplace(TEXT("Mind"), FString::Printf(TEXT("%s current=%s ideal=%s"), Admission,
 		LexToString(Mind.State()), LexToString(Mind.IdealState())));
-	Out.Emplace(TEXT("Body owner"), FString::Printf(TEXT("%s gen=%u parked=%s"),
-		LexToString(Mind.Owner()), Mind.Generation(), LexToString(Mind.SuspendedOwner())));
+	// Retail's words where the arbiter's owner row stood (V3d): `m_hCine +0x5d74` and
+	// `m_hDialogPartner +0xfe8`, each resolved live.
+	const bool bCineLive = World != nullptr && ScriptOwner.IsSet() && World->Resolve(ScriptOwner) != nullptr;
+	Out.Emplace(TEXT("Cine"), bCineLive ? World->DescribeHandle(ScriptOwner) : FString(TEXT("(none)")));
+	const FElysiumEntityHandle& Partner = GetDialogPartner();
+	const bool bPartnerLive = World != nullptr && Partner.IsSet() && World->Resolve(Partner) != nullptr;
+	Out.Emplace(TEXT("Dialog partner"), bPartnerLive ? World->DescribeHandle(Partner) : FString(TEXT("(none)")));
 	Out.Emplace(TEXT("Mind transition"), Mind.LastTransition().IsEmpty()
 		? TEXT("(none)") : Mind.LastTransition());
-	Out.Emplace(TEXT("Scripted schedule"), ScriptedScheduleOrder.IsSet()
-		? FString::Printf(TEXT("mode %d (%s, %s) leg %d/%d goal %s"), ScriptedScheduleOrder.Mode,
+	// An `aiscripted_schedule` keeps nothing on the NPC (`0x101a98c0`); the only order held here is
+	// one the admission barrier deferred (V6's), waiting for this NPC's first think.
+	Out.Emplace(TEXT("Scripted schedule"), ScriptedScheduleOrder.bPending
+		? FString::Printf(TEXT("deferred mode %d (%s, %s) route %d goal %s"), ScriptedScheduleOrder.Mode,
 			ElysiumAiScriptedSchedule::ModeName(ScriptedScheduleOrder.Mode),
-			ScriptedScheduleOrder.bRun ? TEXT("run") : TEXT("walk"),
-			ScriptedScheduleOrder.Leg, ScriptedScheduleOrder.Route.Num(),
+			ScriptedScheduleOrder.bRun ? TEXT("run") : TEXT("walk"), ScriptedScheduleOrder.Route.Num(),
 			World ? *World->DescribeHandle(ScriptedScheduleOrder.Goal) : TEXT("(no world)"))
 		: TEXT("(none)"));
 	Out.Emplace(TEXT("Patrol"), PatrolPathCell.Path != nullptr

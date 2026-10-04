@@ -438,9 +438,9 @@ bool FElysiumNpcKernelSpeciesLifecycle10PayphoneThinkTest::RunTest(const FString
 	const int32 IdleBefore = N.PayphoneIdlePasses;
 	const int32 MirrorBefore = N.PayphoneMirrorPasses;
 
-	// --- Arm 3: no partner. This is the arm the `m_hDialogPartner` seam answers today. ------------
-	N.DialogPartner = FElysiumEntityHandle();
-	N.Dialogue.bInDialog = false;
+	// --- Arm 3: no partner (`m_hDialogPartner +0xfe8` clear). ---------------------------------------
+	N.SetDialogPartner(FElysiumEntityHandle::Invalid());
+	N.Dialogue.DialogQue.Reset();
 	N.DialogUpkeepTicks = 0;
 	N.IdealActivityNumber = 0x40;
 	N.NextThink = 0.f;
@@ -452,18 +452,20 @@ bool FElysiumNpcKernelSpeciesLifecycle10PayphoneThinkTest::RunTest(const FString
 		static_cast<double>(N.NextThink), Now + 0.25, 1e-4);
 	TestEqual(TEXT("the idle pass is counted"), N.PayphoneIdlePasses, IdleBefore + 1);
 
-	// The same arm with a dialogue open: only the tick changes.
-	N.Dialogue.bInDialog = true;
+	// The same arm in a dialogue with no partner (IsInDialog's queued-line term `+0x64ec`): only the
+	// tick changes.
+	N.Dialogue.DialogQue = TEXT("q");
 	N.DialogUpkeepTicks = 0;
 	N.PayphoneThink();
 	TestEqual(TEXT("IsInDialog true: the tick runs on the no-partner arm too"),
 		N.DialogUpkeepTicks, 1);
-	N.Dialogue.bInDialog = false;
+	N.Dialogue.DialogQue.Reset();
+	N.bIsTalking = false;   // the tick's `0x102c0520` raised it; this arm's assertions are done
 
-	// --- Arm 2: a live partner. Driven through the seam's handle, which nothing else writes. -----
+	// --- Arm 2: a live partner, through the one store `SetDialogPartner 0x10107050`. -------------
 	Partner->IdealActivityNumber = 0x21;
 	Partner->SequenceCycle = 0.375f;
-	N.DialogPartner = Partner->Handle;
+	N.SetDialogPartner(Partner->Handle);
 	N.IdealActivityNumber = 0x11;
 	N.SequenceCycle = 0.f;
 	N.DialogUpkeepTicks = 0;

@@ -4,7 +4,6 @@
   "stage": "arena",
   "seed": 1,
   "duration": 35.0,
-  "known_red": "V3d: StartPlayerDialog installs no SCHED_TROIKA_START_PLAYER_DIALOG; the dialogue opens at the input with OnDialogBegin (the port's dialogue body session, M12)",
   "player": {
     "at": "start"
   },
@@ -114,5 +113,5 @@
       "at_most": 1
     }
   ],
-  "notes": "The release half (H12): `dialog_choose end` is retail's pick -1 through the port's Continue door. The schedule StartPlayerDialog forces is 0x6d in both docs (game_runtime.md and lifecycle.md disagree only on Remote). Packet R1 must confirm two things this record asserts: that 0x102c0360 fires OnDialogEnd once per conversation although both CDialog::Release and 0x102c1400 (TASK_RUN_DIALOG's helper, unrecovered, lifecycle.md:2095) reach it (spec Q7: the `never` at_most 1), and that the run arm completes the task on the think after the release (the order output -> taskdone). Hunter1 carries one OnDialogEnd wire (python `hunterQuests()`, delay 1.0), so one firing is one `OnDialogEnd -> <py-only>.Use` output event."
+  "notes": "The release half (H12): `dialog_choose end` is retail's pick -1 through the port's Continue door. Packet R2 settled the install: 0x102ae750(0x6d, 0), not forced (the `about`'s 'forced install' means it replaces the running program). Packet R1 settled the two things this record asserts: 0x102c0360 fires OnDialogEnd once per conversation (it fires only for a live partner; 0x102c1400 reaches it only once the partner is gone: the `never` at_most 1), and the run arm completes the task on the first tick after the release on which IsInDialog's four terms are clear (output -> taskdone). Green since V3d (2026-10-04). Hunter1 carries one OnDialogEnd wire (python `hunterQuests()`, delay 1.0), so one firing is one `OnDialogEnd -> <py-only>.Use` output event."
 }

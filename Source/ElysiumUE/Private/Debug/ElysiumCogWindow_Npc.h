@@ -60,9 +60,9 @@ private:
 	void RenderPlayerLoadout(FElysiumEntityWorld& World);
 	void RenderRoster(FElysiumEntityWorld& World, const TArray<FElysiumNpc*>& Npcs);
 
-	// Admission, state vs ideal state, the body-owner arbiter and its generation, and the mind's own
-	// 16-row transition trace — which the schedule runner also writes into, so one read shows
-	// stimulus, state, owner and program in order.
+	// Admission, state vs ideal state, retail's holding words (`m_hCine +0x5d74`, `m_scriptState
+	// +0x5d70`, `m_hDialogPartner +0xfe8`), and the mind's own 16-row transition trace — which the
+	// schedule runner also writes into, so one read shows stimulus, state and program in order.
 	void RenderMind(FElysiumNpc& Npc);
 	// Resolved perception tuning and everything the NPC remembers: the committed enemy, last-seen by
 	// relation category, the last heard stimulus, the last damage packet and the occlusion debounce.

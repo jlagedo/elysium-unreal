@@ -77,13 +77,13 @@ void FElysiumNpc::Event_Killed(void* InInfo)
 		}
 	}
 
-	// Port bookkeeping, after retail's whole body (so `SetState(7)`'s slot-463 dispatch at
-	// `0x10265dba` runs exactly as retail orders it): a body `CreateCorpse` took out of the world
-	// vacates the port's arbiter — every body-owner token, the running program, a pushed order, an
-	// open conversation — and its mind refuses every later acquisition.
+	// After retail's whole body (so `SetState(7)`'s slot-463 dispatch at `0x10265dba` runs exactly
+	// as retail orders it): a body `CreateCorpse` took out of the world gives back its visited place
+	// (`0x102b53d0(this, 0)`), the conversation it owns and its running program, and its mind
+	// reads dead (V3d deleted the arbiter's tokens this used to vacate).
 	if (bDeathCommitted)
 	{
-		ReleaseAllBodyOwnership(TEXT("killed"), /*bDeadMind=*/true);
+		ReleaseOnDeathOrDormancy(TEXT("killed"), /*bDeadMind=*/true);
 	}
 }
 

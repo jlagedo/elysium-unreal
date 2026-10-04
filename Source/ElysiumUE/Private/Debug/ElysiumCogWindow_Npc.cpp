@@ -147,6 +147,26 @@ namespace
 		return ImGui::BeginTable(Id, 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg);
 	}
 
+	// Who holds the body, in retail's own words: `m_hCine` (`+0x5d74`, `ScriptOwner`, written by
+	// `PossessEntity 0x101a7880`, cleared by `CineCleanup 0x1027d170`) with `m_scriptState`
+	// (`+0x5d70`, meaningful only under a cine), and `m_hDialogPartner` (`+0xfe8`, written by
+	// `StartTalking 0x102c0270`, cleared by `0x102c0360`). Empty when neither is set.
+	FString HoldOf(const FElysiumEntityWorld& World, const FElysiumNpc& Npc)
+	{
+		FString Hold;
+		if (Npc.ScriptOwner.IsSet())
+		{
+			Hold = FString::Printf(TEXT("cine %s (script %d)"), *NameOf(World, Npc.ScriptOwner),
+				Npc.GetScriptState());
+		}
+		if (Npc.GetDialogPartner().IsSet())
+		{
+			Hold += FString::Printf(TEXT("%stalk %s"), Hold.IsEmpty() ? TEXT("") : TEXT("  "),
+				*NameOf(World, Npc.GetDialogPartner()));
+		}
+		return Hold;
+	}
+
 	const ImVec4& StateColour(EElysiumNpcState State)
 	{
 		switch (State)
@@ -175,7 +195,8 @@ void FElysiumCogWindow_Npc::RenderHelp()
 		"the player with every controllable weapon in vdata/items and a reserve of every ammo type "
 		"any of them names.\n\n"
 		"The other tabs read one link each of the decision chain, live: Mind (admission, state vs "
-		"ideal state, the body-owner arbiter, the transition trace), Senses (perception tuning and "
+		"ideal state, who holds the body in retail's words -- m_hCine, m_scriptState, "
+		"m_hDialogPartner -- the transition trace), Senses (perception tuning and "
 		"everything remembered), Conditions (this pass's gathered bits beside the running "
 		"schedule's interrupt mask -- the pairing that decides whether a program is re-selected), "
 		"Schedule (the task program and where in it the NPC is), Combat (health, the weapon "
@@ -712,7 +733,7 @@ void FElysiumCogWindow_Npc::RenderRoster(FElysiumEntityWorld& World,
 	ImGui::TableSetupColumn("Body");
 	ImGui::TableSetupColumn("HP", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 62.0f);
 	ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 90.0f);
-	ImGui::TableSetupColumn("Owner", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 96.0f);
+	ImGui::TableSetupColumn("Held by");
 	ImGui::TableSetupColumn("Schedule");
 	ImGui::TableSetupColumn("Enemy");
 	ImGui::TableHeadersRow();
@@ -756,7 +777,8 @@ void FElysiumCogWindow_Npc::RenderRoster(FElysiumEntityWorld& World,
 				COG_TCHAR_TO_CHAR(LexToString(Mind.IdealState())));
 		}
 		ImGui::TableNextColumn();
-		ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(LexToString(Mind.Owner())));
+		const FString Hold = HoldOf(World, *Npc);
+		ImGui::TextUnformatted(Hold.IsEmpty() ? "—" : COG_TCHAR_TO_CHAR(*Hold));
 		ImGui::TableNextColumn();
 		ImGui::TextUnformatted(Npc->Schedule.IsRunning()
 			? COG_TCHAR_TO_CHAR(ElysiumScheduleName(Npc->Schedule.Current)) : "—");
@@ -818,16 +840,21 @@ void FElysiumCogWindow_Npc::RenderMind(FElysiumNpc& Npc)
 		// readable intermediate rather than a glitch.
 		Row(TEXT("ideal state"), LexToString(Mind.IdealState()),
 			Mind.IdealState() == Mind.State() ? &ElysiumCogStyle::ColDim : &ElysiumCogStyle::ColWarn);
-		Row(TEXT("body owner"), FString::Printf(TEXT("%s  (generation %u)"),
-			LexToString(Mind.Owner()), Mind.Generation()));
-		Row(TEXT("suspended owner"), LexToString(Mind.SuspendedOwner()));
+		// Who holds the body is retail's words on the NPC, not the mind's: `m_hCine` (`+0x5d74`),
+		// `m_scriptState` (`+0x5d70`), `m_hDialogPartner` (`+0xfe8`).
+		if (const FElysiumEntityWorld* World = GetEntityWorld())
+		{
+			Row(TEXT("cine (m_hCine)"), NameOf(*World, Npc.ScriptOwner));
+			Row(TEXT("m_scriptState"), FString::FromInt(Npc.GetScriptState()));
+			Row(TEXT("dialog partner"), NameOf(*World, Npc.GetDialogPartner()));
+		}
 		Row(TEXT("last transition"), Mind.LastTransition().IsEmpty()
 			? FString(TEXT("(none)")) : Mind.LastTransition());
 		ImGui::EndTable();
 	}
 
 	// The trace carries the schedule runner's rows as well as the mind's own, which is the point:
-	// one read shows stimulus, state change, body claim and program selection in the order they
+	// one read shows stimulus, state change and program selection in the order they
 	// happened, rather than three logs that have to be interleaved by hand.
 	ImGui::SeparatorText("Transition trace (newest last, 16 rows)");
 	const TArray<FString>& Trace = Mind.Trace();
@@ -1205,14 +1232,16 @@ void FElysiumCogWindow_Npc::DrawWorldOverlay() const
 			: FColor(170, 180, 190);
 
 		// Head height rather than the entity origin, which is at the feet. One line, three facts:
-		// what state it is in, who owns its body, and what program it is running — the three that
-		// together answer "why is it doing that".
+		// what state it is in, who holds its body in retail's words (its cine and `m_scriptState`, its
+		// dialog partner), and what program it is running — together they answer "why is it doing
+		// that".
 		const FVector Head = Npc->Origin + FVector(0.0f, 0.0f, 195.0f);
 		FString Line = FString::Printf(TEXT("%s  %s"),
 			Npc->TargetName.IsEmpty() ? TEXT("(noname)") : *Npc->TargetName, LexToString(State));
-		if (Mind.Owner() != EElysiumBodyOwner::None)
+		const FString Hold = HoldOf(*World, *Npc);
+		if (!Hold.IsEmpty())
 		{
-			Line += FString::Printf(TEXT("  [%s]"), LexToString(Mind.Owner()));
+			Line += FString::Printf(TEXT("  [%s]"), *Hold);
 		}
 		if (Npc->Schedule.IsRunning())
 		{

@@ -1,9 +1,10 @@
 // D3 — use-to-talk entry, the player-side dialogue refusal predicate and the dialogue holster.
 //
 // Retail chain (`docs/vtmb/game_runtime.md` §5):
-// `CBasePlayer::PlayerUse` (`0x10167850`) resolves the use target, tests the character's `WillTalk`
-// latch (virtual `+0x49c`, `InputWillTalk` `0x103418f0`), clears the schedule and calls player
-// vtable slot 414 (`FUN_10178280`). That function refuses when `m_bForceDialogStart` (`npc+0x6495`)
+// `CBasePlayer::PlayerUse` (`0x10167850`) resolves the use target, asks slot 295 `CanTalk` (whose
+// terms include the `WillTalk` latch), resets the think timers, installs `0x6a` through
+// `0x102ae750(npc, 0x6a, 0)` (no `ClearSchedule`) and calls player vtable slot 414
+// (`FUN_10178280`; packet R2 item 5). That function refuses when `m_bForceDialogStart` (`npc+0x6495`)
 // is clear and the player-side predicate `0x10178170` holds, and otherwise acquires the dialog,
 // locks input and holsters the active weapon to `item_w_unarmed`. `CDialog::Release`
 // (`0x100e5240`) restores the weapon (`FUN_10178400`).
@@ -64,8 +65,7 @@ namespace
 		Npc.TargetName = GTalker;
 		Npc.Origin = FVector(200.0f, 0.0f, 0.0f);
 		// The one keyfield `IsUsable()` turns on. Unless a caller points it at a real file, the
-		// file never loads in a content-free world -- the documented "manual seam" case: the
-		// session still latches `bInDialog` and waits for a hand-fired `EndDialog`.
+		// file never loads in a content-free world, and `CDialog::Acquire` then opens nothing.
 		Npc.Keys.Add(TEXT("dialogname"), DialogName);
 		{
 			FElysiumOutputDef Begin;
@@ -116,20 +116,6 @@ namespace
 		return Defs;
 	}
 
-	FString DebugRow(const FElysiumEntity& Ent, const TCHAR* Key)
-	{
-		TArray<TPair<FString, FString>> Rows;
-		Ent.GetDebugState(Rows);
-		for (const TPair<FString, FString>& Row : Rows)
-		{
-			if (Row.Key == Key)
-			{
-				return Row.Value;
-			}
-		}
-		return FString();
-	}
-
 	float CounterValue(FElysiumEntityWorld& World, const TCHAR* Name)
 	{
 		TArray<TPair<FString, FString>> Rows;
@@ -160,6 +146,20 @@ namespace
 	{
 		return World.BeginPlayerUseSession(Npc.Handle, World.PlayerHandle());
 	}
+
+	// A one-line `.dlg` under the installed scratch corpus root, so `CDialog::Acquire` really loads:
+	// a conversation that fails to load opens nothing (no `StartTalking 0x102c0270`, no partner, no
+	// `OnDialogBegin`), which is retail's and is asserted on its own NPC in `DialogHolster`.
+	const TCHAR* const GLoadableDialog = TEXT("dlg/test/entry.dlg");
+	bool WriteLoadableDialog(const FElysiumScratchCorpusRoot& Scratch, const FString& DialogName)
+	{
+		using ElysiumDialogueTestHelpers::ElysiumDlgRow;
+		const FString DlgPath = FElysiumContentPaths::DlgFromDialogname(DialogName);
+		const FString Joined = ElysiumDlgRow(1, TEXT("A word with you."), TEXT("#"),
+			FString(), FString()) + TEXT("\r\n");
+		IFileManager::Get().MakeDirectory(*FPaths::GetPath(DlgPath), /*Tree*/ true);
+		return Scratch.IsInstalled() && FFileHelper::SaveStringToFile(Joined, *DlgPath);
+	}
 }
 
 // --- Elysium.Arm.NpcUseStartsDialog ----------------------------------------------------
@@ -167,11 +167,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcUseStartsDialogTest,
 	"Elysium.Arm.NpcUseStartsDialog", GEntryTestFlags)
 bool FElysiumNpcUseStartsDialogTest::RunTest(const FString&)
 {
+	const FElysiumScratchCorpusRoot Scratch(TEXT("NpcUseStartsDialog"));
+	if (!TestTrue(TEXT("the entry conversation writes"), WriteLoadableDialog(Scratch, GLoadableDialog)))
+	{
+		return false;
+	}
 	FElysiumRecordingServices Services;
 	Services.bHasPlayer = true;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
-	World.Load(MakeEntryDefs());
+	World.Load(MakeEntryDefs(GLoadableDialog));
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	World.Tick(0.0);
@@ -200,7 +205,7 @@ bool FElysiumNpcUseStartsDialogTest::RunTest(const FString&)
 	TestFalse(TEXT("WillTalk 0 refuses the focus"), Npc->CanPlayerFocus(Context));
 	TestEqual(TEXT("...and pressing use on it does nothing"),
 		PressUse(World, *Npc).Outcome, EElysiumUseOutcome::Unavailable);
-	TestFalse(TEXT("...leaving no session open"), Npc->Dialogue.bInDialog);
+	TestNull(TEXT("...leaving no session open"), World.GetOpenDialog());
 
 	World.AcceptInput(Npc->Handle, FName(TEXT("WillTalk")), FElysiumVariant::Int(1),
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
@@ -209,32 +214,44 @@ bool FElysiumNpcUseStartsDialogTest::RunTest(const FString&)
 	const int32 Icon = Npc->ResolveUseIcon(World.PlayerHandle());
 	TestTrue(TEXT("a focusable talker draws the talk glyph"), Icon == 14 || Icon == 15);
 
-	// --- The transaction --------------------------------------------------------------------
+	// --- The transaction (`CBasePlayer::PlayerUse 0x10167850`, packet R2 item 5) ----------------
+	const int32 InstallsBefore = Npc->SetScheduleRetailCalls;
 	const FElysiumUseBeginResult Opened = PressUse(World, *Npc);
 	TestEqual(TEXT("use completes rather than opening a lingering use session"),
 		Opened.Outcome, EElysiumUseOutcome::Completed);
 	TestEqual(TEXT("...and starts no captured session kind"),
 		Opened.SessionKind, EElysiumUseSessionKind::None);
-	TestTrue(TEXT("the conversation is open"), Npc->Dialogue.bInDialog);
+	TestEqual(TEXT("+use installs one program (0x10167aba)"),
+		Npc->SetScheduleRetailCalls, InstallsBefore + 1);
+	TestEqual(TEXT("...SCHED_TROIKA_RUN_DIALOG 0x6a"), Npc->LastSetScheduleRetail, 0x6a);
+	TestFalse(TEXT("...through 0x102ae750(npc, 0x6a, 0), not a forced install"),
+		Npc->bLastSetScheduleForce);
+	TestNotNull(TEXT("the conversation is open"), World.GetOpenDialog());
+	TestTrue(TEXT("StartTalking 0x102c0270 set the NPC's partner to the player"),
+		Npc->GetDialogPartner() == World.PlayerHandle());
+	FElysiumPlayer* Player = World.FindPlayer();
+	TestTrue(TEXT("FUN_10178280 set the player's partner to the NPC"),
+		Player != nullptr && Player->GetDialogPartner() == Npc->Handle);
+	TestTrue(TEXT("IsInDialog 0x102c1170 reads the live partner"), Npc->IsInDialog());
 	TestEqual(TEXT("the opener is recorded as PlayerUse"), Npc->Dialogue.DialogOpener,
 		EElysiumDialogOpenerKind::Use);
-	TestTrue(TEXT("dialogue holds the body through its own owner token"),
-		DebugRow(*Npc, TEXT("Body owner")).Contains(TEXT("Dialogue")));
 	TestFalse(TEXT("+use does not set m_bForceDialogStart"), Npc->Dialogue.bForceDialogStart);
+	TestEqual(TEXT("StartTalking counts the conversation at the open (+0x64bc)"), Npc->TimesTalked, 1);
 	World.Tick(0.0);
 	TestEqual(TEXT("OnDialogBegin fired exactly once"), CounterValue(World, GBeginCounter), 1.0f);
 	TestFalse(TEXT("an NPC already in dialogue is no longer focusable"),
 		Npc->CanPlayerFocus(Context));
 
-	// --- The close ---------------------------------------------------------------------------
+	// --- The close (`CDialog::Release 0x100e5240` -> `0x102c0360`) ---------------------------
 	World.AcceptInput(Npc->Handle, FName(TEXT("EndDialog")), FElysiumVariant::Void(),
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
 	World.Tick(0.0);
-	TestFalse(TEXT("EndDialog closes the session"), Npc->Dialogue.bInDialog);
+	TestNull(TEXT("EndDialog closes the session"), World.GetOpenDialog());
+	TestFalse(TEXT("0x102c0360 cleared the NPC's partner"), Npc->GetDialogPartner().IsSet());
+	TestTrue(TEXT("EndPlayerDialog 0x10178400 cleared the player's"),
+		Player != nullptr && !Player->GetDialogPartner().IsSet());
 	TestEqual(TEXT("OnDialogEnd fired exactly once"), CounterValue(World, GEndCounter), 1.0f);
-	TestEqual(TEXT("times_talked counted the conversation"), Npc->TimesTalked, 1);
-	TestFalse(TEXT("the body claim is released"),
-		DebugRow(*Npc, TEXT("Body owner")).Contains(TEXT("Dialogue")));
+	TestEqual(TEXT("the close counts nothing more"), Npc->TimesTalked, 1);
 	TestTrue(TEXT("the character is focusable again"), Npc->CanPlayerFocus(Context));
 
 	// An inert character is never a talk target, whatever its latches say.
@@ -248,11 +265,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogRefusalPredicateTest,
 	"Elysium.Arm.DialogRefusalPredicate", GEntryTestFlags)
 bool FElysiumDialogRefusalPredicateTest::RunTest(const FString&)
 {
+	const FElysiumScratchCorpusRoot Scratch(TEXT("DialogRefusalPredicate"));
+	if (!TestTrue(TEXT("the entry conversation writes"), WriteLoadableDialog(Scratch, GLoadableDialog)))
+	{
+		return false;
+	}
 	FElysiumRecordingServices Services;
 	Services.bHasPlayer = true;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
-	World.Load(MakeEntryDefs());
+	World.Load(MakeEntryDefs(GLoadableDialog));
 	World.SpawnPlayer();
 	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 	World.Tick(0.0);
@@ -280,12 +302,16 @@ bool FElysiumDialogRefusalPredicateTest::RunTest(const FString&)
 		Player->DialogRefusalReason() != nullptr);
 
 	// --- A refused +use posts the M-REFUSE notification and opens nothing -------------------
+	// `PlayerUse 0x10167850` has already installed `0x6a` when slot 414 refuses inside
+	// `FUN_10178280`; the refusal is the start-dialog's, so the use itself completes.
 	Services.Notifications.Reset();
 	const FElysiumUseBeginResult Refused =
 		World.BeginPlayerUseSession(Npc->Handle, World.PlayerHandle());
-	TestEqual(TEXT("a refused use reports Unavailable"), Refused.Outcome,
-		EElysiumUseOutcome::Unavailable);
-	TestFalse(TEXT("...and no conversation opened"), Npc->Dialogue.bInDialog);
+	TestEqual(TEXT("the use completes: CanTalk passed and 0x6a is installed"), Refused.Outcome,
+		EElysiumUseOutcome::Completed);
+	TestEqual(TEXT("...SCHED_TROIKA_RUN_DIALOG"), Npc->LastSetScheduleRetail, 0x6a);
+	TestNull(TEXT("...and no conversation opened"), World.GetOpenDialog());
+	TestFalse(TEXT("...and the NPC has no partner"), Npc->GetDialogPartner().IsSet());
 	TestEqual(TEXT("M-REFUSE posts exactly one HUD notification"),
 		Services.Notifications.Num(), 1);
 	if (Services.Notifications.IsValidIndex(0))
@@ -295,21 +321,32 @@ bool FElysiumDialogRefusalPredicateTest::RunTest(const FString&)
 	}
 
 	// --- The scripted unforced opener refuses SILENTLY, as retail does ----------------------
+	// `0x1029f120`'s guard `!0x10178170(player)`: a silent return before anything is written.
 	Services.Notifications.Reset();
+	const int32 InstallsBeforeUnforced = Npc->SetScheduleRetailCalls;
 	World.AcceptInput(Npc->Handle, FName(TEXT("StartPlayerDialogUnforced")),
 		FElysiumVariant::Int(0), FElysiumEntityHandle::Invalid(),
 		FElysiumEntityHandle::Invalid());
-	TestFalse(TEXT("StartPlayerDialogUnforced honours the predicate"), Npc->Dialogue.bInDialog);
+	TestEqual(TEXT("StartPlayerDialogUnforced honours the predicate: no program"),
+		Npc->SetScheduleRetailCalls, InstallsBeforeUnforced);
 	TestEqual(TEXT("...and says nothing on the HUD"), Services.Notifications.Num(), 0);
 
-	// --- A forced opener sets `m_bForceDialogStart` and bypasses the predicate --------------
+	// --- A forced opener sets `m_bForceDialogStart`, installs `0x6d`, and opens nothing ------
 	World.AcceptInput(Npc->Handle, FName(TEXT("StartPlayerDialog")), FElysiumVariant::Int(0),
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
-	TestTrue(TEXT("a forced start opens through a standing refusal"), Npc->Dialogue.bInDialog);
-	TestTrue(TEXT("...because it set the force byte"), Npc->Dialogue.bForceDialogStart);
+	TestTrue(TEXT("a forced start sets the force byte (+0x6495 = 1)"), Npc->Dialogue.bForceDialogStart);
+	TestEqual(TEXT("...and installs SCHED_TROIKA_START_PLAYER_DIALOG 0x6d"),
+		Npc->LastSetScheduleRetail, 0x6d);
+	TestFalse(TEXT("...not forced (0x102ae750(id, 0))"), Npc->bLastSetScheduleForce);
+	TestNull(TEXT("...and the input itself opens nothing"), World.GetOpenDialog());
+	// `TASK_START_PLAYER_DIALOG 0xda`'s call (`0x102a4eab`, player slot 414) opens through the
+	// standing refusal because the byte is set; `StartTalking 0x102c0270` clears it.
+	Npc->StartTask19PlayerStartDialog(*Player);
+	TestNotNull(TEXT("the start-dialog opens through a standing refusal"), World.GetOpenDialog());
+	TestFalse(TEXT("StartTalking clears the force byte"), Npc->Dialogue.bForceDialogStart);
 	World.AcceptInput(Npc->Handle, FName(TEXT("EndDialog")), FElysiumVariant::Void(),
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
-	TestFalse(TEXT("the close clears the force byte"), Npc->Dialogue.bForceDialogStart);
+	TestNull(TEXT("EndDialog closes it"), World.GetOpenDialog());
 
 	// --- `ClearDialogCombatTimers` reaches the player ---------------------------------------
 	// Fired at the map's `events_player` bus, which is how `pcevents` fires it off Jack's
@@ -326,7 +363,7 @@ bool FElysiumDialogRefusalPredicateTest::RunTest(const FString&)
 		World.BeginPlayerUseSession(Npc->Handle, World.PlayerHandle());
 	TestEqual(TEXT("use is admitted once the timers are cleared"), Admitted.Outcome,
 		EElysiumUseOutcome::Completed);
-	TestTrue(TEXT("...and the conversation opened"), Npc->Dialogue.bInDialog);
+	TestNotNull(TEXT("...and the conversation opened"), World.GetOpenDialog());
 	TestEqual(TEXT("...with nothing posted to the HUD"), Services.Notifications.Num(), 0);
 
 	// --- The seam arms are read, not dropped -------------------------------------------------
@@ -489,9 +526,9 @@ bool FElysiumDialogHolsterTest::RunTest(const FString&)
 	// --- An open that FAILS must not disarm the player --------------------------------------
 	// `CDialog::Acquire` is what `FUN_10178280` runs before it touches the weapon, and
 	// `OpenConversation` fails exactly where `Acquire` does: no `dialogname`, or a `.dlg` that
-	// will not load. Both leave `bInDialog` latched on the manual `EndDialog` seam with no
-	// conversation to close them, so a holster taken on the way in would only come back if a
-	// script happened to fire `EndDialog` by hand.
+	// will not load. Retail then falls through to `SetDialogPartner(player, NULL)`: nothing opens,
+	// nothing is holstered. The input only installs its program (`0x6e`); the start-dialog is
+	// driven here directly, as `TASK_START_PLAYER_DIALOG 0xda` would call it.
 	if (FElysiumEntity* IronEnt = World.Resolve(Iron))
 	{
 		if (FElysiumItem* IronItem = IronEnt->AsItem())
@@ -511,11 +548,14 @@ bool FElysiumDialogHolsterTest::RunTest(const FString&)
 	World.AcceptInput(Silent->Handle, FName(TEXT("StartPlayerDialogRemote")),
 		FElysiumVariant::Int(256), FElysiumEntityHandle::Invalid(),
 		FElysiumEntityHandle::Invalid());
+	Silent->Dialogue.PlayerStartDialog(*Silent, World.PlayerHandle());
 	TestEqual(TEXT("a remote start with no dialogname leaves the weapon drawn"),
 		Player->Inventory.ActiveWeapon, Iron);
 	TestFalse(TEXT("...and nothing is remembered as holstered"),
 		Player->bDialogWeaponHolstered);
 	TestNull(TEXT("...and no conversation opened"), World.GetOpenDialog());
+	TestFalse(TEXT("...and neither partner word is written"),
+		Silent->GetDialogPartner().IsSet() || Player->GetDialogPartner().IsSet());
 
 	// The same for a `dialogname` naming a file that is not there.
 	if (FElysiumEntity* MissingEnt = World.FindByName(GMissingDlg))
@@ -524,6 +564,10 @@ bool FElysiumDialogHolsterTest::RunTest(const FString&)
 		World.AcceptInput(MissingEnt->Handle, FName(TEXT("StartPlayerDialogRemote")),
 			FElysiumVariant::Int(0), FElysiumEntityHandle::Invalid(),
 			FElysiumEntityHandle::Invalid());
+		if (FElysiumNpc* Missing = MissingEnt->AsNpc())
+		{
+			Missing->Dialogue.PlayerStartDialog(*Missing, World.PlayerHandle());
+		}
 		TestEqual(TEXT("an unloadable .dlg leaves the weapon drawn too"),
 			Player->Inventory.ActiveWeapon, Iron);
 		TestFalse(TEXT("...with nothing remembered"), Player->bDialogWeaponHolstered);

@@ -699,10 +699,10 @@ bool FElysiumNpcKernelDamage19Slot320Test::RunTest(const FString&)
 	// In dialogue: refused, nothing written.
 	N.KnockbackType = 77;
 	const int32 Before = N.SetScheduleRetailCalls;
-	N.Dialogue.bInDialog = true;
+	N.Dialogue.DialogQue = TEXT("q");   // IsInDialog's term `m_szDialogQue +0x64ec`
 	TestFalse(TEXT("102a01ca IsInDialog refuses"), N.PlayerKnockbackReaction(F.Other, 0x8b));
 	TestEqual(TEXT("...m_knockbackType untouched"), N.KnockbackType, 77);
-	N.Dialogue.bInDialog = false;
+	N.Dialogue.DialogQue.Reset();
 
 	// `SelectHeaviestSequence` answers < 0 headless (the kernel's seam): refused, nothing written.
 	int32 WeaponActivity = 0;

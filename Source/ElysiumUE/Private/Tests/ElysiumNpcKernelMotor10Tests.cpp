@@ -282,8 +282,8 @@ bool FElysiumNpcKernelMotor10ObstructingDoorTest::RunTest(const FString&)
 	// Arm 3: a SCRIPTED body (slot 464 `GetState() == 4`) whose capabilities do NOT carry the full
 	// `0xd00`. The spawn chain now runs (`CNPC_VHuman::Spawn` `0x10384690` adds `0xc200d00`), so the
 	// case clears the three bits to open the arm (integrator correction, story 8 L08). The state is
-	// pushed through the one public writer this leaf has — an `aiscripted_schedule`'s `forcestate`,
-	// which is `Mind.RequestState` and admits `Scripted`.
+	// pushed through an `aiscripted_schedule`'s `forcestate`, which is `SetState 0x1026e340`
+	// (the executor `0x101a98c0`).
 	F.Npc->OpeningDoor = FElysiumEntityHandle();
 	F.Npc->CapabilityWord &= ~0xd00;
 	FElysiumScriptedScheduleOrder Order;

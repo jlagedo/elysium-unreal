@@ -11,29 +11,31 @@ struct FElysiumInputArgs;
 struct FElysiumUseBeginResult;
 struct FElysiumUseContext;
 
-// --- Use-to-talk (`CBasePlayer::PlayerUse`, `0x10167850`) ---------------------------------
+// --- How a dialogue holds an NPC (V3d; packets R1, R2) ----------------------------------------
 //
-// Retail resolves the use target, tests the character's `WillTalk` latch (virtual `+0x49c`,
-// set by `InputWillTalk` `0x103418f0`), clears the schedule, pushes AI schedule `0x6a` and
-// calls player vtable slot 414. Here the eligibility half is `CanPlayerFocus` (so the reticle
-// and the prompt agree with what pressing use will do) and the transaction half is
-// `BeginPlayerUse`, which routes into the same `BeginDialog` primitive the inputs use.
+// No body claim and no state change. The three `StartPlayerDialog*` inputs and `+use`
+// (`CBasePlayer::PlayerUse 0x10167850`) INSTALL A PROGRAM on the NPC through `0x102ae750(id, 0)`
+// (`0x6d` / `0x6e` / `0x6a`); the conversation opens inside the player's start-dialog
+// (`FUN_10178280`, player slot 414) -> `CDialog::Acquire 0x100e05f0` -> the NPC's `StartTalking
+// 0x102c0270`; `TASK_RUN_DIALOG 0xb9` holds through `0x102c1400`; the close is `CDialog::Release
+// 0x100e5240` -> the NPC's `0x102c0360`, which fires `OnDialogEnd` once.
 
 // The dialogue and use-to-talk half of `FElysiumNpc`. Owned by value on the leaf, the
 // `FElysiumNpcSenses` / `FElysiumNpcWitness` posture: every entry point takes the owning NPC so
 // the object holds no back pointer to rebind across a save.
 struct FElysiumNpcDialogue
 {
-	bool  bInDialog = false;          // a dialog session is open (OnDialogBegin fired, OnDialogEnd pending)
-	int32 DialogFlags = 0;            // raw arg on ordinary/unforced; Remote ignores its variant
-	int32 DecodedDialogFlags = 0;     // no bit is named until RE46 closes it
+	// Port bookkeeping, no retail word: set by `StartTalking`, cleared by `0x102c0360` and the silent
+	// close. It answers none of `IsInDialog`'s four terms (`0x102c1170`).
+	bool bInDialog = false;
+	// Which entry asked for the conversation. Port bookkeeping for the start-dialog's two port
+	// behaviours (M-REFUSE's notice on `+use`, the session's debug opener); retail carries none.
 	EElysiumDialogOpenerKind DialogOpener = EElysiumDialogOpenerKind::Remote;
 
 	// `m_bForceDialogStart` (`npc+0x6495`). `FUN_10178280` refuses a conversation when this is
 	// CLEAR and the player-side refusal predicate holds; a set byte opens regardless. The forced
 	// openers (`StartPlayerDialog`, `StartPlayerDialogRemote`) set it, `StartPlayerDialogUnforced`
-	// clears it, and `+use` never touches it — so use and unforced are the two gated entries.
-	// Session state: retail's byte is not in the datamap's save block either.
+	// clears it, `+use` never touches it, and `StartTalking 0x102c0270` clears it at the open.
 	bool bForceDialogStart = false;
 
 	// --- The retail words, declared and unwritten ------------------------------------------------
@@ -93,21 +95,46 @@ struct FElysiumNpcDialogue
 	// non-empty) or a fixed fallback, then raises bit 0 of `+0x1cac`.
 	void PlayWhisper(FElysiumNpc& Npc, const FString& SoundName);
 
-	void Begin(FElysiumNpc& Npc, EElysiumDialogOpenerKind Opener, int32 RawFlags,
-		const FElysiumInputArgs& Args);
+	// `CBasePlayer::FUN_10178280` (player slot 414), the player's start-dialog, reached from
+	// `TASK_START_PLAYER_DIALOG 0xda` (`0x102a4eab`) and from `+use` (`0x10167ac4`). With
+	// `m_bForceDialogStart` clear and the player-side predicate `0x10178170` holding it refuses
+	// (`0x101cebc0`) and clears the player's partner; otherwise `CDialog::Acquire` (`OpenConversation`
+	// -> `FElysiumEntityWorld::OpenDialog`, which runs `StartTalking` and the player's tail), and a
+	// failed acquire clears the player's partner too. The opener is `DialogOpener`.
+	void PlayerStartDialog(FElysiumNpc& Npc, const FElysiumEntityHandle& Player);
 
-	// K1: each Tier-1 name enters through its own handler. Only after that handler has applied the
-	// recovered parameter posture does it join the shared dialogue-session primitive above.
+	// `CAI_BaseNPCTroika::StartTalking` (`0x102c0270`), called once from inside the open
+	// (`CDialog::Acquire 0x100e05f0`, after the `.dlg` loads and before the starting line). In the
+	// listing's order: `m_bForceDialogStart = 0`, `m_bCutsceneForceLOD = 1`, `m_nTimesTalked += 1`,
+	// `FinishTalking`, `SetDialogPartner(player)` (the only writer of the NPC's `+0xfe8`), slot 306
+	// `LookAtEntity(player, false)` unless spawnflag 8, `CancelScript` on a live `m_hCine`, then
+	// `m_OnDialogBegin` (activator the player, caller the NPC).
+	void StartTalking(FElysiumNpc& Npc, const FElysiumEntityHandle& Player);
+
+	// The silent close (a replacement, a map teardown, the owner's death or dormancy). Whether retail
+	// reaches `CDialog::Release` -> `0x102c0360` on those paths is UNRECOVERED (packets R1/R2); the
+	// port clears what `0x102c0360` clears (`m_bCutsceneForceLOD`, the partner) WITHOUT firing
+	// `OnDialogEnd`, which is the old silent close's posture, named here rather than guessed.
+	void ReleaseWithoutOutput(FElysiumNpc& Npc);
+
+	// `CDialog::ShowPlayerChoices` (`0x100e13d0`), sent by `0x102c1400` step 6 every tick: a reliable
+	// user message 7 carrying the byte. SEAM, answering nothing: the port's dialogue box decides its
+	// own choice visibility off the world's session, and no door from the kernel into it exists.
+	void ShowPlayerChoices(const FElysiumNpc& Npc, bool bShow) const;
+
+	// The three `StartPlayerDialog*` inputs (`0x1029ef80`, `0x1029f060`, `0x1029f120`; packet R2
+	// items 1-3). Each a distinct body: the common guards, then the `+0x5bac` float (Forced and
+	// Unforced), `FinishTalking`, slot 614, `m_bForceDialogStart` (1 / 1 / 0), and the program
+	// installed through `0x102ae750(id, 0)` — `0x6d` / `0x6e` / `0x6d`. They open nothing.
 	void StartForced(FElysiumNpc& Npc, const FElysiumInputArgs& Args);
 
 	void StartRemote(FElysiumNpc& Npc, const FElysiumInputArgs& Args);
 
 	void StartUnforced(FElysiumNpc& Npc, const FElysiumInputArgs& Args);
 
-	// The dialog session ends: increment times_talked and fire OnDialogEnd. Reached both by the runner
-	// (World::EndDialogSession routes EndDialog to `!self` when the conversation closes) and by a manual
-	// ent_fire. Jack's OnDialogEnd wires DialogPostProcess(), which reads the `G` flags the dialogue's
-	// field-5 actions wrote and warps the player.
+	// The `EndDialog` input: a bare script close. When this NPC owns the open conversation it is
+	// `CDialog::Release` (`FElysiumEntityWorld::CloseDialog`), which runs `0x102c0360` once; nothing
+	// else. Whether `EndDialog` is a retail input at all is V7's question.
 	void End(FElysiumNpc& Npc, const FElysiumInputArgs& Args);
 
 	// The authored `dialogname`. Empty when this NPC carries no conversation.
@@ -120,21 +147,28 @@ struct FElysiumNpcDialogue
 	// `bWillTalk && !bInDialog && !IsInert() && !IsBusyWithDiscipline()` and the AINPCFlags2 bit.
 	bool CanPlayerFocus(const FElysiumNpc& Npc, const FElysiumUseContext& Context) const;
 
-	// The whole `FUN_10178280` refusal test from this NPC's side: nullptr when the conversation may
-	// open, otherwise the reason. `bForceDialogStart` short-circuits it, as retail's byte does.
+	// The `FUN_10178280` refusal test: nullptr when the conversation may open, otherwise the reason.
+	// `bForceDialogStart` short-circuits it, as retail's byte does; otherwise it is the player-side
+	// predicate `0x10178170` alone (the NPC-side guards are the inputs' and `CanTalk`'s).
 	const TCHAR* EntryRefusalReason(const FElysiumNpc& Npc) const;
 
-	// Open the conversation, or refuse with the M-REFUSE notification. Always returns a terminal
-	// result: dialogue owns the body through its own token, so no +use session may linger.
+	// `CBasePlayer::PlayerUse 0x10167850`'s NPC arm (packet R2 item 5): slot 295 `CanTalk` (false
+	// returns with no ordinary use and no notice), slot 614, `0x102ae750(npc, 0x6a, 0)` — no
+	// `ClearSchedule` — then the player's start-dialog. Always a terminal result: a conversation is
+	// held by the program and the partner word, so no +use session may linger.
 	FElysiumUseBeginResult BeginPlayerUse(FElysiumNpc& Npc, const FElysiumUseContext& Context);
 
 	// The talk glyph (`hud/Context_Icons/Talk_Male` / `Talk_Female`, use_icon 15 / 14) when the
 	// definition authored no `use_icon` of its own.
 	int32 ResolveUseIcon(const FElysiumNpc& Npc, const FElysiumEntityHandle& Activator) const;
 
-	// Load this NPC's `dialogname` `.dlg`, open a branch conversation bound to the installed script host,
-	// and hand it to the world (the visual-novel box renders it; the runner fires EndDialog on close).
-	// Returns false when there is no dialogue to run, leaving bInDialog latched for the manual seam.
+	// `CDialog::Acquire`'s load half: this NPC's `dialogname` `.dlg`, a branch conversation bound to
+	// the installed script host, handed to the world (`OpenDialog` runs `StartTalking` and the rest of
+	// `Acquire`). Returns false when there is no dialogue to run — `Acquire` answering 0, before
+	// `StartTalking`, so the NPC's words are untouched.
 	bool OpenConversation(FElysiumNpc& Npc, const FElysiumEntityHandle& Activator,
 		EElysiumDialogOpenerKind Opener);
+
+	// The inputs' shared body, keyed by which of the three it is (R2 items 1-3).
+	void StartFromInput(FElysiumNpc& Npc, const FElysiumInputArgs& Args, EElysiumDialogOpenerKind Opener);
 };

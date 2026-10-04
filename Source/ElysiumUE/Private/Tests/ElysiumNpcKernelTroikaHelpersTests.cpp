@@ -700,6 +700,15 @@ bool FElysiumNpcKernelTroikaHelpersFreeBodiesTest::RunTest(const FString&)
 	Npc->OnDialogRelease();
 	TestTrue(TEXT("no dialog partner leaves m_bCutsceneForceLOD alone"), Npc->bCutsceneForceLOD);
 	TestEqual(TEXT("and clears no partner"), Npc->DialogPartnerClears, ClearsBefore);
+	// With a live `m_hDialogPartner` (+0xfe8; any live entity resolves): `+0x1590 = 0`, the output,
+	// then `SetDialogPartner(this, NULL)` — so a second call finds no partner and does nothing.
+	Npc->SetDialogPartner(Npc->Handle);
+	Npc->OnDialogRelease();
+	TestFalse(TEXT("a live partner clears m_bCutsceneForceLOD"), Npc->bCutsceneForceLOD);
+	TestFalse(TEXT("...and the partner (0x10107050(this, NULL))"), Npc->GetDialogPartner().IsSet());
+	TestEqual(TEXT("...once"), Npc->DialogPartnerClears, ClearsBefore + 1);
+	Npc->OnDialogRelease();
+	TestEqual(TEXT("a second call finds no partner"), Npc->DialogPartnerClears, ClearsBefore + 1);
 
 	// `0x102aa9e0` — the fail arm. A null cell (`0x102aa9e8`) and a cell with no path
 	// (`0x102aa9f1`) both raise `TaskFail(0x1d)` through slot 448 (`0x102aaa1c` / `0x102aaa34`); the
