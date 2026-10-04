@@ -15,7 +15,7 @@
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraRig.h"
 #include "ElysiumCameraSolve.h"
-#include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcThinkCadence.h"   // the spawn clock's first-think delay
 #include "Substrate/ElysiumCameraTrack.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumCommands.h"
@@ -1332,10 +1332,10 @@ bool FElysiumDlgAutomaticTest::RunTest(const FString&)
 	Jack.TargetName = TEXT("Jack");
 	Jack.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
 	Defs.Defs.Add(MoveTemp(Jack));
-	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+	ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
-	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+	World.Activate(-ElysiumNpcThink::InitThinkDelay);
 	World.Tick(0.0); // admit the NPC mind/body before dialogue acquires it
 	FElysiumEntity* JackEntity = World.FindByName(TEXT("Jack"));
 	if (!TestNotNull(TEXT("world fixture has Jack"), JackEntity))
@@ -1439,10 +1439,10 @@ bool FElysiumDialogueSessionIdentityTest::RunTest(const FString&)
 		Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
 		Defs.Defs.Add(MoveTemp(Npc));
 	}
-	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+	ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
-	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+	World.Activate(-ElysiumNpcThink::InitThinkDelay);
 	World.Tick(0.0);   // admit the NPC minds/bodies before dialogue acquires them
 	FElysiumEntity* Jack = World.FindByName(TEXT("Jack"));
 	FElysiumEntity* Nines = World.FindByName(TEXT("Nines"));
@@ -1726,10 +1726,10 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	Waveover.Keys.Add(TEXT("m_iszPlay"), TEXT("waveover01"));
 	Waveover.Keys.Add(TEXT("m_fMoveTo"), TEXT("0"));
 	Defs.Defs.Add(MoveTemp(Waveover));
-	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+	ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
-	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+	World.Activate(-ElysiumNpcThink::InitThinkDelay);
 	World.Tick(0.0); // admit the NPC mind before dialogue acquires the body
 	FElysiumEntity* JackEntity = World.FindByName(TEXT("Jack"));
 	FElysiumEntity* WaveoverEntity = World.FindByName(TEXT("sJack_waveover"));

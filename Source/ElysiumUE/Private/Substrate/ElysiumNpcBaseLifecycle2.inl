@@ -4,7 +4,7 @@
 
 static constexpr double MapFirstSecond = ElysiumNpcTunables::OneDouble;
 
-static constexpr double NpcInitThinkDelay = ElysiumNpcTunables::TenthDouble;
+static constexpr double NpcInitThinkDelay = ElysiumNpcThink::InitThinkDelay;
 
 static constexpr float MotorYawHalfTurn = ElysiumNpcTunables::OneEighty;
 

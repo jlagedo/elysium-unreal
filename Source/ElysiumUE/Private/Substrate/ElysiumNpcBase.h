@@ -13,6 +13,7 @@
 #include "Substrate/ElysiumNpcNavigator.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcSenses.h"
+#include "Substrate/ElysiumNpcThinkCadence.h"   // `NpcInitThinkDelay` is `ElysiumNpcThink::InitThinkDelay`
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumScheduleCorpus.h"

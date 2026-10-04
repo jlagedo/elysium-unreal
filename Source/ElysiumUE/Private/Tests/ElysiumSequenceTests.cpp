@@ -15,7 +15,7 @@
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraRig.h"
 #include "ElysiumCameraSolve.h"
-#include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcThinkCadence.h"   // the spawn clock's first-think delay
 #include "Substrate/ElysiumCameraTrack.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumCommands.h"
@@ -401,9 +401,9 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 	FElysiumRecordingServices Services;
 	Services.bProvideNpcMotor = true;
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
-	ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+	ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 	World.Load(MoveTemp(Defs));
-	World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+	World.Activate(-ElysiumNpcThink::InitThinkDelay);
 	// The first think — and the mind admission every body claim needs — falls at
 	// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
 	// there on the map's first second (`_DAT_104493d0`).
@@ -485,9 +485,9 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 	PlayerDefs.Defs.Add(MoveTemp(Counter2));
 
 	FElysiumEntityWorld World2(nullptr, nullptr);
-	ElysiumStandSpawnClock(World2, -FElysiumNpcBase::NpcInitThinkDelay);
+	ElysiumStandSpawnClock(World2, -ElysiumNpcThink::InitThinkDelay);
 	World2.Load(MoveTemp(PlayerDefs));
-	World2.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+	World2.Activate(-ElysiumNpcThink::InitThinkDelay);
 	// The first think — and the mind admission every body claim needs — falls at
 	// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
 	// there on the map's first second (`_DAT_104493d0`).
@@ -594,9 +594,9 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 		FElysiumRecordingServices Services;
 		Services.bProvideNpcMotor = true;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 		World.Load(MoveTemp(Defs));
-		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+		World.Activate(-ElysiumNpcThink::InitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at
 		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
 		// there on the map's first second (`_DAT_104493d0`).
@@ -638,9 +638,9 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 		Services.ClipSeconds = 30.f;
 		Services.KnownNpcClips.FindOrAdd(TEXT("damsel")).Add(TEXT("Converse_Normal_Talk_A"));
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 		World.Load(MoveTemp(Defs));
-		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+		World.Activate(-ElysiumNpcThink::InitThinkDelay);
 		// The first think — and the mind admission every body claim needs — falls at
 		// `curtime + 0.1`: `CAI_BaseNPCTroika::NPCInit` (`0x1029a0b0`) arms `m_flNextThink`
 		// there on the map's first second (`_DAT_104493d0`).
@@ -705,9 +705,9 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 		FElysiumRecordingServices Services;
 		Services.bProvideNpcMotor = true;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 		World.Load(MoveTemp(Defs));
-		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+		World.Activate(-ElysiumNpcThink::InitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* First = World.FindByName(TEXT("beat_a"));

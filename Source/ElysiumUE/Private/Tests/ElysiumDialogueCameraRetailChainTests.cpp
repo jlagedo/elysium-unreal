@@ -31,7 +31,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumCameraService.h"
-#include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcThinkCadence.h"   // the spawn clock's first-think delay
 #include "ElysiumContentPaths.h"
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumDlg.h"
@@ -257,10 +257,10 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+		World.Activate(-ElysiumNpcThink::InitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumPlayer* Player = World.FindPlayer();
@@ -319,10 +319,10 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+		World.Activate(-ElysiumNpcThink::InitThinkDelay);
 		World.Tick(0.0);   // the NPC mind admits its body on its first think
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
@@ -383,10 +383,10 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+		World.Activate(-ElysiumNpcThink::InitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
@@ -416,10 +416,10 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+		World.Activate(-ElysiumNpcThink::InitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
@@ -459,10 +459,10 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+		World.Activate(-ElysiumNpcThink::InitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* PhoneEnt = World.FindByName(GPhone);
@@ -519,10 +519,10 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+		World.Activate(-ElysiumNpcThink::InitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
@@ -587,10 +587,10 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+		World.Activate(-ElysiumNpcThink::InitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
@@ -676,10 +676,10 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+		World.Activate(-ElysiumNpcThink::InitThinkDelay);
 		World.Tick(0.0);
 
 		// The opener's camera is in the slot; the per-line `SetCamera` re-shots that same entity.
@@ -735,10 +735,10 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumWorldServices Bundle = Services.Bundle();
 		Bundle.Camera = &Ladder;
 		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+		World.Activate(-ElysiumNpcThink::InitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
@@ -790,10 +790,10 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		FElysiumRecordingServices Services;
 		Services.bHasPlayer = true;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, -ElysiumNpcThink::InitThinkDelay);
 		World.Load(MakeDefs());
 		World.SpawnPlayer();
-		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
+		World.Activate(-ElysiumNpcThink::InitThinkDelay);
 		World.Tick(0.0);
 
 		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);

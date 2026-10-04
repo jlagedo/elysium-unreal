@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 
 class FElysiumNpc;
 struct FElysiumNpcScheduleHost;
@@ -26,6 +27,11 @@ struct FElysiumNpcScheduleHost;
 // Oracle: `docs/vtmb/npc-ai/lifecycle.md` -> "The think cadence, decoded".
 namespace ElysiumNpcThink
 {
+	// The first think's delay after a spawn in the map's first second (`ArmThinkAt(Now + 0.1)` in
+	// the `CAI_BaseNPC` init tail, `FElysiumNpcBase::NpcInitThinkDelay`, which is this). Here so a
+	// caller that stands a world on the spawn clock needs no NPC class (spec 0002 T6b).
+	inline constexpr double InitThinkDelay = ElysiumNpcTunables::TenthDouble;
+
 	// `IsThinkDue` `0x10290660`. Equality IS due: the compare is `FCOMP` + `TEST AH,0x41`.
 	inline bool IsDue(double Stamp, double Now, double FrameSeconds)
 	{
