@@ -8,6 +8,63 @@ sitting, 2026-10-04** (`stories/v4/packets-S2.md` items 1 and 2: `ModeDispatch` 
 read, item 1 below is their answer written out; `stories/v4/packets-S4.md` item a and J12: **the
 NPC's clip is never spent — item 3b**; record `ranged_sustained_fire`). Re-locate every site by Grep on the function name.
 
+**Final for the code as landed (2026-10-04, after V5a, V4a, V4b and V11; `../v4/packets-S11.md`
+item 2, `../v4/packets-S12.md`).** Where an item below and this block disagree, this block wins.
+
+- **The file moved under you: V11-2 rewrote the melee contact in `ElysiumWeaponClasses.cpp`**
+  (now ~3,800 lines). Every line number below is stale; today: `CommitArrivesFromAnimEvent`
+  :1238, `CommitFromAnimEvent` :1358, `OperatorHandleAnimEvent` :1384, `HoldAttacksUntil` :1039
+  (`NextPrimaryAttackTime = FMath::Max(…, Deadline)` :1042), the estimate's commit time :2201,
+  `CommitQueuedAttack` :2292 with the magazine block **:2345-2358**. Touch nothing of
+  `AdvanceSwingContact`, `MeleeContact`, `SwingWallContact`, `KnockbackContact`,
+  `ElysiumSwingEndpointsAt` (V11-2's, then C1's).
+- **Who delivers the event today** (V4a): an NPC's 3031 comes from its own slot 258 over the
+  kernel's `m_nSequence` (`FElysiumNpcBase::DispatchAnimEvents` → `ElysiumAnimEvents::DispatchBase`)
+  and, once O1 lands, from a layer (`DispatchLayer`); it reaches you through slot 259 →
+  `Weapon_HandleAnimEvent 0x1032e210` → `OperatorHandleAnimEvent` → `CommitFromAnimEvent`, where
+  `!Swing.bActive` today logs "nothing to commit" and returns (:1360-1369). That branch is your
+  entry (item 3). No world-tick poll exists any more.
+- **The next-attack stamp — exactly this, on every commit event that reaches `Shot`**
+  (`0x1023891b..0x1023895d`, S11 item 2.3; `slot` = `DAT_1088aee4` = 0 for an NPC):
+
+  ```
+  Sets  = 0
+  Rate  = primary mode's AttackRate through the 0x1033d940 seam     // slot 332 0x10254410
+  Next  = max(NextPrimaryAttackTime, Now − FrameSeconds)            // +0x730, curtime − frametime
+  while (Next <= Now) { Next += Rate; ++Sets; }
+  NextPrimaryAttackTime = Next
+  ```
+
+  Written **also when `Sets` ends 0** (an event inside the cooldown: the `max` is then a no-op and
+  the loop does not run — the stamp is unchanged, never moved back) and when the clip caps the
+  sets to 0. **`NextSecondaryAttackTime` (`+0x734`) is not touched** by an NPC's shot. **Never
+  through `HoldAttacksUntil` / `FMath::Max(…, Deadline)`** (:1042): that form cannot express the
+  count. `FrameSeconds` is the world's frame time (Grep the world's accessor beside
+  `NowSeconds()`; if none exists, write the exact accessor you need in your report and use the
+  think interval the event's dispatch ran under, named at the line).
+  Consequence, for your arm test and the record: a shot at `T` leaves the stamp at `T −
+  frametime + 0.8` for the .38; `TASK_WAIT_ATTACK_TIME1` (`StartTask19WeaponNextAttackTime`,
+  `ElysiumNpcStartTask.cpp`, V5a-2 — the reader, unchanged) then ends between **1.14 s and
+  3.84 s** after its shot, and `TASK_RANGE_ATTACK1`'s burst arm (`ElysiumNpcRunTask.cpp`,
+  `NextAttack <= Now`) reads the same word.
+- **No NPC clip spend, no refusal** (item 3b, J12) — unchanged, and now measured as needed:
+  `ranged_sustained_fire` is **green today** (V5a) and **must stay green** through your change.
+- **The test to delete, by name**: in `ElysiumWeaponTests.cpp` (`Weapons.AnimEvent`, ~:3577-3584)
+  the assertion `"...and its commit is not left waiting on a timeline no think dispatches"`
+  (`TestFalse(CastGun->Swing.bAwaitingAnimEvent)`) with its comment "its commit keeps the
+  estimate" — V4a's integrator inverted it to keep the build green. It pins a port mechanism (an
+  NPC wielder on the estimate). Delete it; list it. The lines above it in that block (the
+  `PlayNpcClip … ch=upper body` call) pin `AttackIntent`'s play and are C1's to remove with the
+  estimate, not yours.
+- **Slot 389** (`Shot` step 5) is landed (V5a-3, `ElysiumCombatCharacterSlotBodies.cpp`): call
+  it. Its `muzzleflash` arm is a named port seam (S12 d.1 item 4); do not fill it.
+- **For the integrator, in your report** (you edit no `Arena/` file): `ranged_open_fire`'s
+  `never taskdone ^task_wait_attack_time1$` bound rises from `until: 1.05` to **`until: 1.6`** —
+  retail's earliest completion is the first shot's earliest (0.5 s) + 1.14 s = **1.64 s**
+  (`Shot 0x102387b0`'s stamp, `0x102c5730`'s draw at ~387 units: `sqrt(387/120) × (1.0 − 0.8)` =
+  0.36 s over `Attack_Rate 0.8` less one frame; S11 items 2.3, 2.4) — and its `known_red` goes
+  when it is green on your stamp, not on the first-wait accident.
+
 ## Files (only these)
 
 - `Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h`, `ElysiumWeaponClasses.cpp`
@@ -136,6 +193,11 @@ NPC's clip is never spent — item 3b**; record `ranged_sustained_fire`). Re-loc
    mode of type other than 1 / 2 fires nothing and advances the clocks; no owner, or a
    non-player owner with no NPC pointer → nothing at all; a 3031 with a transaction staged
    commits that transaction once; a player wielder with nothing staged still commits nothing.
+   **The stamp (S11)**: after a shot at `Now` with `NextPrimaryAttackTime = 0`, the word is
+   `Now − FrameSeconds + Rate` and one set fired; an event that arrives seconds late still fires
+   **one** set (the floor `Now − FrameSeconds` caps the catch-up), and only a fixture rate below
+   the frame time (`Rate = FrameSeconds / 2`) fires two; an event inside the cooldown leaves the word
+   bit-for-bit unchanged; `NextSecondaryAttackTime` never moves. Each names `0x1023891b`.
    **J12**: an NPC wielder fires `Size + 2` shots across cooldowns with its clip unchanged and
    is never refused; a player wielder still spends `Ammo_Cost` per shot and is refused on an
    empty magazine; the doubled-rate seam answers false (the rate is `Attack_Rate`). **Delete the
@@ -154,7 +216,8 @@ its own operator body or its own `Shot` (S2 item 1). The base body (thrown, unar
 and the melee bodies never reach your entry. (An earlier text spoke of "species weapon bodies R2
 did not read": there are none.)
 
-Wave check (O1 / O2 / O3, re-checked after S3 and the second sitting): `ElysiumWeaponClasses.{h,cpp}`
+Wave check (O1 / O2 / O3, re-checked after S3, the second sitting and — against the tree after
+V11 — S12: still disjoint): `ElysiumWeaponClasses.{h,cpp}`
 and `ElysiumWeaponTests.cpp` are in neither O1's list nor O2's (which gained
 `ElysiumNpcMotor.cpp`). J12 adds no file to you: the magazine block is in your
 `ElysiumWeaponClasses.cpp`; `ElysiumItemClasses.cpp` and `ElysiumNpcBaseRunTask.cpp` are in no

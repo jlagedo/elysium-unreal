@@ -6,6 +6,67 @@ toward the enemy, V4b lane B2's). Read `README.md` here, the three
 briefs, `stories/v4/packets-S3.md` item 4, `stories/v1/triage.md` § "Judge's rulings, V4" J5,
 `Arena/README.md`.
 
+**Final for the code as landed (2026-10-04, after V5a, V4a, V4b and V11;
+`../v4/packets-S11.md` item 2, `../v4/packets-S12.md`).** Where a step below and this block
+disagree, this block wins. Read both packets.
+
+- **Order**: V4o starts only after **V11's commit** (it rewrote the melee contact in O3's
+  `ElysiumWeaponClasses.cpp`). V4a's names exist as landed: `ElysiumAnimEvents::DispatchBase` /
+  `DispatchLayer`, `FElysiumSequenceWords`, `FElysiumNpcBase::DispatchAnimEvents` with the
+  `OverlayLayerWords` seam; there is no `DispatchOverlayLayerEvents` to look for (O1 fills the
+  seam).
+- **Your own lane, before the one build — the relative `never` window** (S11 item 2.4, judge
+  item 2b: implement it; the same build). The harness has `never` with `from` / `after` (+
+  `delay`) / `until` / `at_most` and **no window that closes relative to its label**
+  (`Arena/README.md` § `never`). Add **`within`** to a `never` entry: only with `after`; the
+  window closes `within` seconds after it opens (the label's match + `delay`); `within` and
+  `until` exclude each other; the failure's `reason` prints the resolved bounds. Files (yours,
+  in no coder's list): `Source/ElysiumUE/Private/Debug/ElysiumArenaScenario.{h,cpp}` (the reader:
+  the `never` field list ~:472-474 and its checks ~:432-460),
+  `Source/ElysiumUE/Private/Debug/ElysiumArenaScenarioRunner.{h,cpp}` (the window's close),
+  `Arena/README.md` (the table row), and two self-tests `Arena/scenarios/_selftest/
+  never_within_holds.json` / `never_within_trips.json` in the shape of `never_after_ignores`.
+  A `never` whose `after` label matches more than once keeps the first match, as today — so one
+  entry pins one wait; say so in the README row.
+- **Tunables row** (step 1, unchanged): `DebugAllowMfTurn` — `debug_allow_mf_turn` "0", object
+  `0x10923cf0`, the shape of row `10924f70 DebugAllowMoveFacing convar_i32 1` in
+  `research/tooling/ghidra/driver/kernel_tunables.tsv` (value `0`; ctor `0x1028c7b0`; reader
+  `0x102e8560` through `0x10923cf4`, `+0x2c` int) — then regenerate, before the build.
+- **`cover_move_shoot`** (step 4): **the record on disk is the record.** A0 landed it with
+  measured bounds and the nine tutorial rows in its `about` (labels `covers`, `moves`,
+  `shoots_moving` within 2.6 s, `arrives`); do **not** overwrite it with README §5's JSON. Remove
+  `known_red` when green; add README §5's end probe `player health less 100` only if a first run
+  shows the player at 100 before the shot (O3's proof beyond the event). Staging stands for
+  `thug_3` (S4 item d: nine `sp_tutorial_1` rows — `thug_3` .38; `Hunter1`, `sentry3`,
+  `sabbat_redshirt_1`, `_2`, `_5`, `sabbat_redshirt_2_proxy` MAC-10; `mercenary_upstairs`
+  Ithaca; `condotierre_upstairs` Steyr; none on the hub).
+- **`ranged_open_fire`** (O3's stamp): raise `never taskdone ^task_wait_attack_time1$` from
+  `until: 1.05` to **`until: 1.6`** — retail's earliest completion is 0.5 + 1.14 = **1.64 s**
+  (`Shot 0x102387b0` `0x1023891b..0x1023895d` writes `+0x730 = max(old, now − frametime) + n ×
+  rate`; `0x102c5730`'s draw at ~387 units is at least 0.36 s; S11 items 2.3, 2.4), the citation
+  in `about`. Then pin the later waits with the new window: label the second wait (`waits_again`,
+  a `task` expectation after `fired_again`) and add `{ kind: taskdone, match:
+  ^task_wait_attack_time1$, after: waits, within: 0.5 }` and the same after `waits_again`.
+  Remove `known_red` only when the record is green **with those entries** — today's
+  unexpected-pass is the first-wait accident (S11 item 2.2).
+- **`ranged_sustained_fire`**: green since V5a and **must stay green** — eight 3031, no `0x40`,
+  no `task_reload`. A red here after O3 is O3's (the spend put back, or the stamp starving the
+  shooter): fixed, not placed.
+- **Acceptance, corrected**: "the burst pause is 0 (a seam)" is void — V5a landed
+  `ActiveWeaponBurstPauseWords` with real values, so bursts on the move pause for
+  `RandomFloat(PauseMin, PauseMax)`; back-to-back bursts would now be a defect. The first unmet
+  order for `shot_on_the_move` / `shoots_moving` stands (slot 575, then `0x61`, then staging);
+  B2's turn is landed (`MotorMoveFacing`), so `0x61` on the move is read against O2's step 9
+  (the facing target not added) before it is placed anywhere.
+- **Records to run** (step 5), by name: `cover_move_shoot cover cover_armed cover_reclaim
+  range_bands ranged_open_fire ranged_sustained_fire ranged_friend_in_line_of_fire
+  anim_footsteps_walk melee_swing chase_melee anim_player_weapon_event_firearm` and the
+  `_selftest` family (the two new ones trip and hold). `melee_swing` / `chase_melee` are there
+  because O3 edits V11-2's file: unchanged verdicts, or a break in O3's diff.
+- **Arm prefixes**, added to step 5: `Elysium.Arm.MeleeSwingStep. Elysium.Arm.MeleeContact.`
+  (V11-2's, must hold) beside `Elysium.Arm.Weapon.`; the weapon family's default-tier
+  `Weapons.AnimEvent` is where O3 deleted the inverted estimate assertion.
+
 0. **Before the coders start** (a check, no edit): V4a's names exist — README §4 "From V4a" —
    and V4b's commit has landed. A missing one is reported to the coordinator; the coders do not
    start around it. **File lists, by listing**: O1 — the two overlay slot-body files,

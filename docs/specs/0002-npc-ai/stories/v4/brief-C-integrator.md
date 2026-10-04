@@ -10,6 +10,57 @@ corpse records** (J13). Runs after C1 and C2 report. Read
 rulings, V4 — second sitting"; Grep, read only it), the judge's rulings J6, J8
 (`stories/v1/triage.md` § "Judge's rulings, V4"; Grep, read only it), `Arena/README.md`.
 
+**Final for the code as landed (2026-10-04; `packets-S12.md`).** V4c runs **after V11 and after
+V4o**. Where a step below and this block disagree, this block wins.
+
+- **Cross-lane lines, added to step 1**: (a) the world tick's sweep goes — delete the call
+  `EntityWorld->AdvanceMeleeSwings(DeltaSeconds)` (`Map/ElysiumMapActor.cpp` ~:2630) and the
+  declaration (`Public/ElysiumEntityWorld.h` ~:432), and correct the comment in
+  `Visual/ElysiumMeleeTrail.h` ~:19; C1 deleted the definition. (b) Check that **both halves of
+  the player's sweep landed**: C1's slot 315 body and C2's one call at the tail of
+  `FElysiumPlayer::PostThinkAnimation`; with only one, the player's swing hits nothing. (c) If
+  C2 reported that `SelectHeaviestSequence` (`ElysiumNpcBaseHelpers2.cpp`) or
+  `SelectWeightedSequenceForActivity` (`ElysiumAnimatingOverlaySlotBodies.cpp`) does not forward
+  to the new pick, its line. (d) The maker's spawnflag bit 9 (`MakeNPC 0x1034b7b0`,
+  `AiInfra/ElysiumNpcMakerActor.h` / `Map/ElysiumMapActor.cpp`) if C2 found it missing.
+- **Before the build — the generated slots** (as V4a did for 242 / 248 and V4b for 389): C1
+  wrote slot 315 in `ElysiumCombatCharacterSlotBodies.cpp` and slot 247 in
+  `ElysiumAnimatingSlotBodies.cpp`. In `research/tooling/ghidra/driver/kernel_verdicts.tsv`
+  retarget rows `10346cd0` and `10090c80` to `hand:FElysiumCombatCharacter::MeleeSwingUpdate` /
+  `hand:FElysiumAnimating::SetAttackExtentsForSequence` (look each up with `uv run elysium
+  research rows kernel_verdicts.tsv address=<addr>`; the shape is row `103338c0`), then
+  `uv run elysium research gen_kernel_shape` once. Neither generated `*Slots.cpp` is hand-edited;
+  where step 1 below names `ElysiumCombatCharacterSlots.cpp` as C1's, read the `…SlotBodies.cpp`.
+- **Disjointness, by listing, as amended**: C2 gained `ElysiumPlayerEntity.cpp`
+  (`PostThinkAnimation` only), `Tests/ElysiumPlayerPostThinkTests.cpp` and `ElysiumFeed.cpp`
+  (`SelectGrappleSequence` only); C1 touches none of them. C1's diff in
+  `ElysiumWeaponClasses.cpp` shows hunks only in the estimate (`CommitArrivesFromAnimEvent`, the
+  commit time, `BeginRangedShot`'s NPC arm), `IsMeleeSwingTrigger` / `OperatorHandleAnimEvent`,
+  `AdvanceSwingContact`'s entry and sub-step loop, and `ElysiumSwingEndpointsAt`'s body — none in
+  `ShotFromAnimEvent`, `CommitQueuedAttack`'s magazine block (O3's), `MeleeContact`,
+  `SwingWallContact`, `KnockbackContact` or the walk's filters (V11-2's).
+- **Records, corrected against the tree**: the corpse records on disk are **five** —
+  `corpse_removed_unseen`, `corpse_kept_seen`, `corpse_kindred_burns`, `corpse_pedestrian_stays`,
+  `corpse_fades`; run all five. **`cover_move_shoot` is green since V4o** and must stay green
+  (step 6's "still red on its `known_red`" is void). **`ranged_open_fire` is green since O3's
+  stamp** with its bound at 1.6 s and the two relative `never` windows; "red only on N2 (V5)" is
+  void. `ranged_sustained_fire` stays green. Add to step 5's run:
+  `corpse_kept_seen anim_player_weapon_event_melee anim_player_weapon_event_firearm
+  verbs_feed_victim_dispatch melee_ally_in_the_way ranged_sustained_fire`; and to the family
+  filters the player's post-think tests (C2's `AliveGate`, `Slot312Order`) and
+  `Elysium.Arm.MeleeSequenceChoice.`.
+- **Acceptance, added**: `anim_player_weapon_event_melee` green — the player's swing is swept
+  from `PostThinkAnimation`'s slot 312 stand-in, after slot 258 (`0x1016c316`), not from the
+  world tick; `verbs_feed_trance` / `verbs_feed_victim_dispatch` green with the grapple cells
+  picked by activity number (S12 d.1 item 6: one sequence per cell; a miss is `EndGrapple`); a
+  dead player dispatches no `animevent` (S8 gate 3).
+- **The silent-class list (step 7), corrected**: "each species class's `HandleAnimEvent` arm by
+  arm" is **not owed** — the bodies are walked and ported (S12 item c). `0x10239f30` is settled
+  (S5 item 5). What stays on the list: the Tzimisce melee's 3045 / 3046 if C1 left the seam, and
+  every (model, sequence) C1's Warning named — expect at least a flamethrower wielder's
+  `flamet_attack_layer`-family clips if a record reaches one (S12 a.1: the layer authors no 3031).
+- **K4's open point** goes to the owner as a ruling, not a recovery (S12 item c).
+
 1. **Apply the cross-lane lines** the coders reported, nothing more. Expected: C2's K4 line in
    `ElysiumWeaponClasses.cpp` (`FElysiumWeapon::BuildActivityClipRequest`'s `Variant`); a
    mismatch between C1's call and C2's body of `SequenceBounds` (README § "Shared names" is the

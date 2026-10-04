@@ -8,6 +8,55 @@ commit **and V4b's** (amended after settling packet S3, 2026-10-04: `../v4/packe
 1, 2 and 4 are the reads behind items 0, 3 and 4 below; where this brief and the README's older
 text disagree, this brief wins). Re-locate every site by Grep on the function name.
 
+**Final for the code as landed (2026-10-04, after V5a, V4a, V4b and V11; `../v4/packets-S12.md`).**
+Where an item below and this block disagree, this block wins.
+
+- **Slot 575 is still the seam bug** (item 0 stands): `FElysiumNpc::ShouldMoveAndShoot`
+  (`ElysiumNpcMotor.cpp` :397-424) tests `ActiveWeaponCapabilityWord() & GWeaponMoveShootMask`,
+  and `FElysiumNpcBase::ActiveWeaponCapabilityWord` (`ElysiumNpcBaseMotor.cpp` :361) still
+  answers 0. Replace that one read with `SelectActiveWeaponWord()` (`ElysiumNpcSelect.cpp` :230).
+  The rest of the body (the enemy, `MOVE_FACE_ENEMY`, `CapabilityWord >> 6 & 1` for
+  `0x10278c60`) is retail already.
+- **The body's turn while it runs has landed (V4b B2)** — nothing for you to build:
+  `FElysiumNpc::MotorMoveFacing(const FMotorMoveFacingGoal&)` (`ElysiumNpcMotor10.cpp` :483, slot
+  18 `0x102e19e0`) blends the move direction with the facing queue through
+  `FElysiumNpcBase::MotorFacingQueueBlend(float& OutInfluence, double& OutRangeCm)`
+  (`ElysiumNpcBaseFacing.cpp` :131). Your step 9 feeds that queue with the existing slot 517
+  `AddFacingTarget(FElysiumEntity*, const FVector&, float, float, float)` — `(enemy, lkp, 1.0,
+  0.8, 0)` — and that is the whole wire: with it the running body turns toward the enemy and
+  `0x61` clears. Do not call the motor yourself.
+- **The activity swap reaches the body through the landed commit**: `NavMoveNormalPass`
+  (`ElysiumNpcBaseMotor.cpp`) runs slot 310 `SetActivity(Navigator.GetMovementActivity())` every
+  move step (`0x102efb80`). `UpdateMoveShootActivity` only writes the navigator's word
+  (`0x102ee250`); the next step commits the aim twin. `MoveNormal`'s restore arm
+  (`0x102efc11`, read whole in S12 d.1 item 5) undoes a commit only for a body that stood on a
+  zero-speed sequence and did not move: it never undoes your swap on a running body, and it is
+  not yours to port.
+- **The burst pause is no longer a seam** (V5a): `FElysiumNpc::ActiveWeaponBurstPauseWords`
+  (`ElysiumNpcConditions10.cpp` :464) reads `NPC_Attack_Rate_Min` / `_Max` through `0x102c5570`,
+  and slot 419 `UpdateBurstShootPause` writes `BurstShootPauseMin` / `Max`, which
+  `StartTaskOverlay` (`ElysiumNpcBaseSenses10.cpp` :706) already hands to
+  `ArmMoveAndShootOverlay(PauseMin, PauseMax)`. The re-arm draws `RandomFloat(PauseMin,
+  PauseMax)` on real numbers: bursts pause. The "Not yours" sentence below that says 0 / 0 is void.
+- **`0x4f` is V5a-1's now** (`GatherAttackConditions 0x1026dd10` whole, with slot 562 twice and
+  the friend-in-the-line timers, V5a-3). `CanAimAtEnemy`'s ungathered arm calls the landed
+  `GatherEnemyConditions`; you add nothing to the gather.
+- **Staging — who this is for** (S4 item d): on the two witness maps the overlay is reachable
+  only on `sp_tutorial_1`, by **nine placed rows**: `thug_3` (`item_w_thirtyeight`); `Hunter1`,
+  `sentry3`, `sabbat_redshirt_1`, `_2`, `_5`, `sabbat_redshirt_2_proxy` (`item_w_mac_10`);
+  `mercenary_upstairs` (`item_w_ithaca_m_37`); `condotierre_upstairs` (`item_w_steyr_aug`). The
+  hub has none with a ranged primary. `cover_move_shoot`'s `arena_gunman` stands for `thug_3`
+  (same class `npc_VHumanCombatant`, same weapon, `stattemplate TutorialThug`). So the burst pair
+  (item 2, `+0x3a4` / `+0x3a8`) must be right for **those four weapon records** — the .38, the
+  MAC-10, the Ithaca, the Steyr: look each up in the weapon record the port parses and state the
+  four pairs in your report; a record with no such key is the named seam answering 0 (then
+  `RandomInt(0, 0)`: one shot per burst).
+- **The layer you push** (S12 a.1): `TranslateActivity(0x1a)` resolves to the weapon's
+  `*_attack_layer` — a snap, non-looping clip with 3031 at cycle 0.0 (the .38's is 0.4667 s,
+  shorter than its 0.8 s rate, so slot 270 `HasLayer` is false again by the next shot).
+  `flamet_attack_layer` authors no 3031: a flamethrower's overlay pushes and fires nothing —
+  retail's, no arm of yours.
+
 ## Files (only these)
 
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseMaintain.cpp` (`FElysiumNpcBase::RunTaskOverlay` only)
@@ -101,11 +150,11 @@ Read the four bodies in the listing first (`vtmb_code 102e8270`, `102e83e0`, `10
 The layer table, its advance and dispatch (O1); the weapon's handler (O3); `StartTaskOverlay`
 and slot 529 (retail already — do not rewrite; **slot 575 is not: item 0**); the
 `ActiveWeaponCapabilityWord` seam (`ElysiumNpcBaseMotor.cpp`); the attack conditions (already
-raising `0x4f`; V5a-1 rewrites that body); the burst-pause words (`ActiveWeaponBurstPauseWords`,
-`ElysiumNpcConditions10.cpp`, a seam answering 0 / 0 — the re-arm draws `RandomFloat(0, 0)`, so
-bursts follow each other with no pause; in nobody's lane, name it in your report); the body's
-turn toward the facing target while running (V4b B2, `0x102e1a83`); the navigator's activity →
-sequence commit beyond the existing setter.
+raising `0x4f`; V5a-1 rewrote that body, landed); the burst-pause words
+(`ActiveWeaponBurstPauseWords`, `ElysiumNpcConditions10.cpp` — landed by V5a, real values; read,
+not edited); the body's turn toward the facing target while running (V4b B2, landed:
+`MotorMoveFacing`, `0x102e1a83`); the navigator's activity → sequence commit (landed:
+`NavMoveNormalPass`'s slot 310) and `MoveNormal`'s restore arm (`0x102efc11`, V13).
 
 ## Rules
 

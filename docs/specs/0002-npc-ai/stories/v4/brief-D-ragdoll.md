@@ -6,6 +6,27 @@ listing; the port and pipeline inventoried; an independent sizing). It replaces 
 spike, then one coder and one integrator. Runs after V4a (it uses the `corpse_on_floor` probe the
 seam adds); it does not depend on V4b or V4c.
 
+**Re-checked against the code as landed (2026-10-04, after V5a, V4a, V4b and V11;
+`packets-S12.md` item c). Nothing in the plan changes.** V4d runs last (V4o → V4c → V4d), so the
+thinks it must survive are C2's landed ones. The file list, confirmed on disk (line numbers have
+drifted; re-locate by name): the handoff `UElysiumEntityBodies::StartBodyRagdoll`
+(`Visual/ElysiumEntityBodies.cpp`) behind `AElysiumMapActor::StartBodyRagdoll`
+(`Map/ElysiumMapActorEmbodiment.cpp` :235), called from `ElysiumNpcBase.cpp` :107; the builder's
+precedent `BuildPhysicsAsset` (`Editor/ElysiumClothBuildLibrary.cpp` :256); the bake's `_PHYS`
+products and `PRODUCER_VERSION` (`pipeline/unreal/import_characters.py` :17, :295-320);
+`pipeline/unreal/import_physics_data.py`, `importers/physics_data.py`,
+`formats/model_glb/physics.py`; the rig stub `FElysiumNpcBase::SelectBecomeClientRagdoll`
+(`ElysiumNpcBaseSelect.cpp` :75); the test double's `bBodiesRagdoll`
+(`Tests/ElysiumTestServices.h` :922-934); `NpcCombat.Death` (`Tests/ElysiumNpcCombatTests.cpp`
+~:1686-1749, whose `StartBodyRagdoll -> 0` assertions C2 deletes — the ragdoll-true test is
+yours). The burn arm's sound is at `ElysiumCombatCharacter.cpp` ~:1522. Two facts landed since
+this brief was written: **`BecomeClientRagdoll` sets `RetailSolidFlags |= 4`** (V4b,
+`ElysiumNpc.cpp` :305, `0x10090180`) — so "the ragdoll does not collide with the player" (Step 1
+item 3) is **the contract, not an inference**: the corpse is `FSOLID_NOT_SOLID` on the server
+and the ragdoll is the client's object (S12 item c); and the corpse records are **five**
+(`corpse_kept_seen` beside the four below). The gib bit `0x2000`'s producers stay unread — an
+unbounded sweep, owner 0014, and a gibbed NPC is removed, not ragdolled.
+
 ## The ruling: a named modernization
 
 The death animation's look and the ragdoll's fall are Unreal's problem, not retail's. **The fall

@@ -16,7 +16,86 @@ activity commit", `docs/vtmb/npc-ai/lifecycle.md` § "The death chain, kill to c
 `stories/v1/divergences.md` row 4. After V4b's commit. V3c filled `LookupSequenceByName` — use it.
 Re-locate by Grep.
 
+**Final for the code as landed (2026-10-04, after V5a, V4a, V4b, V11 and V4o; `packets-S8.md`
+items 3 and 6, `packets-S10.md`, `packets-S12.md` items b, c and d.1).** Where an item below and
+this block disagree, this block wins. Line numbers below predate four waves: re-locate by name.
+
+**Already landed — check, do not redo:**
+
+- **`RunAnimation`'s gate is R2's** (`FElysiumNpcBase::RunAnimation`, `ElysiumNpcBaseAnim.cpp`
+  :297-328): states 4 / 7 out, `ActivityNumber == 1`, slot 251, the loop-bit fork over
+  `TranslatedActivity`, the commit through `CommitForcedSequence` (`0x10260a50`). Item 3 is
+  reduced to **its two calls drawing through your pick** — `SelectHeaviestSequence`
+  (`FElysiumNpcBase`, `ElysiumNpcBaseHelpers2.cpp` :79) and `SelectWeightedSequenceForActivity`
+  (`FElysiumAnimatingOverlay`, `ElysiumAnimatingOverlaySlotBodies.cpp` :124), neither file yours:
+  read both; if they already forward to the bridge (`SequenceForActivity` / the new pick) nothing
+  moves, else write the exact line in your report. **Do not zero the cycle at the re-pick**: a
+  finished one-shot idle is re-picked every think and rests at cycle 1.0 with its whole table
+  re-fired each think — retail's (`0x10260a50` writes no cycle; S12 b). `.RunAnimationPick`
+  asserts it.
+- **`BecomeClientRagdoll` sets `RetailSolidFlags |= 4`** (`ElysiumNpc.cpp` :305, `0x10090180`,
+  landed by V4b's integrator; the four `IsRetailNotSolid` sweeps were re-read then). Keep it; the
+  pedestrian's `SetSolid(SOLID_NONE)` (item 8) and the fade's `AddSolidFlags(4)` (item 10) are
+  further writes of the same word, not replacements.
+- **The grapple commits through the kernel** (S9 / S10, landed): `ElysiumFeedGrappleCommit::
+  CommitNpcHalf` writes `m_IdealActivity` = the base and `m_Activity` = the cell, and
+  `LeaveGrappleState` writes no animation word. `SetDisposition`'s `IsFeedBusy()` term goes
+  (item 4) with nothing to replace it: a grappled NPC's `RunAI` is skipped, so no disposition
+  commit runs mid-grapple in retail either.
+- **Slot 331** (V11-3, `ElysiumMeleeSequenceChoice.cpp` :504-506) already draws on
+  `EElysiumRngStream::NpcSchedule`.
+
+**The sites that wait for your pick** (each names C2 or `0x1008dc40` in the tree today):
+
+| site | today | with your pick |
+|---|---|---|
+| `SelectGrappleSequence(FElysiumNpc&, int32 Translated, const FString& CellLabel)` (`ElysiumFeed.cpp` :547-562; called :650, :671) | `SequenceForActivity(Translated)`, refused when the resolver's fallback ladder answered another clip, then `LookupSequenceByName(CellLabel)` | `Npc.SelectWeightedSequence(Translated)` and nothing else: the bare pick walks no ladder (`0x1032a2cc` / `0x1032a2de`), and **every feed clip authors its own cell activity, one sequence per cell** (S12 d.1 item 6), so the label fallback and the ladder guard go; −1 is retail's miss (the warning and `EndGrapple`). **`ElysiumFeed.cpp` is added to your files for this one function** |
+| `FElysiumNpc::MeleeSequencesForActivity` (`ElysiumNpcAnim.cpp` :399-419, yours) → `IElysiumEmbodiment::NpcActivitySequences` | every clip of the translated activity, `ByActivity` order | the **same candidate list your pick gathers** — one gatherer, two callers (slot 331's band `0x103ea950` and the pick), so the melee band and the draw can never disagree on the set |
+| slot 331's picker stream | `NpcSchedule` | unchanged; your pick draws on the same stream, so a swing's two draws (the sequence choice, then any activity pick) stay in retail's order on one stream |
+| `SequenceForActivity` (:372-397) | `Request.Variant = 0`, one clip per activity, cached | item 2 |
+
+**New for you — the player's `PostThink` gates and the player's sweep line** (S8 item 3, S12
+d.1 item 2). `FElysiumPlayer::PostThinkAnimation` (`ElysiumPlayerEntity.cpp` :1176-1349) carries
+no gate today and says so (:1183-1185). Retail `CBasePlayer::PostThink 0x1016be10` jumps past the
+whole live body — slot 250, `0x101600a0`, slot 258, slot 312 — on **four gates, in this order**
+(`0x1016bede..0x1016bf17`): (1) the game-over byte `DAT_1070ba2c`; (2) `m_iPlayerLocked
+(+0x2304)`; (3) **slot 158 `IsAlive` false (`m_lifeState != 0`, `0x1016befc`)**; (4) slot 406
+(`+0x19f6`, the observer byte). Port:
+
+- gate 3 **for real**, ahead of the body test: a dying or dead player advances nothing,
+  dispatches nothing, runs no slot 312 (no `TickStealthKill`, no sweep) and **keeps its channel
+  words** (do not reset `PostThinkChannels`);
+- gates 1, 2 and 4 as **three named seams answering "open"**, in retail's order, each with its
+  address and "no writer in the image" (`g_fGameOver`; `m_iPlayerLocked`; `+0x19f6`);
+- **no** frozen, immobilized, cinematic or controller gate — retail has none (S8);
+- **the tail, slot 312's stand-in**: after `TickStealthKill()`, call the player's slot 315
+  `MeleeSwingUpdate()` — C1's body (`ElysiumCombatCharacterSlots.cpp`); C1 deletes the world
+  tick's sweep (`AdvanceMeleeSwings`). Replace the comment at :1344-1347. That one call is the
+  only thing of C1's you write;
+- tests in `Source/ElysiumUE/Private/Tests/ElysiumPlayerPostThinkTests.cpp`:
+  `…PostThink.AliveGate` (`0x1016befc`: a dead player dispatches no event, its `LastEventCheck`
+  unchanged; alive again, the window resumes from the kept cursor) and `.Slot312Order` (slot 258
+  before slot 315).
+
+**Corpse clocks, re-stated against the records on disk** (`Arena/scenarios/combat/`:
+`corpse_removed_unseen`, `corpse_kept_seen`, `corpse_kindred_burns`, `corpse_pedestrian_stays`,
+`corpse_fades` — five, A0 split the mortal's two halves): the mortal's 10 s poll and the
+Kindred's unconditional +10 s are ported (`ElysiumNpc.cpp`'s removal thinks ~:590-660,
+`ElysiumCombatCharacter.cpp` `CreateCorpse` :1455); yours are the pedestrian override with
+`Think`'s gate (:646, item 8, J13) and the fade (item 10, J14.1); S1 and S4 items e / f.1 are
+the reads. Slot 552 `ShouldFadeOnDeath` is ported (`ElysiumNpcBaseLifecycle.cpp` :105, spawnflag
+bit 9) and `Event_Killed`'s step already asks it (`ElysiumNpcBaseSpawn.cpp` :133 →
+`Spawn19StartFadeOut`, the seam you fill). **The maker's `0x204` was not found by name** (no
+`m_bFade` / `Flag_InfChild` / `Flag_Fade` under `Substrate/`): the maker's port is
+`AiInfra/ElysiumNpcMakerActor.h` and `Map/ElysiumMapActor.cpp` (Grep `MakeNPC` / `0x1034b7b0`) —
+read where the child's spawnflags are set and write the exact line for the integrator if bit 9
+is not passed; `corpse_fades` cannot turn green without it.
+
 ## Files (only these)
+
+**Added by the block above**: `ElysiumPlayerEntity.cpp` (`PostThinkAnimation` only),
+`Tests/ElysiumPlayerPostThinkTests.cpp` (the two new cases), `ElysiumFeed.cpp`
+(`SelectGrappleSequence` only).
 
 `Source/ElysiumUE/Private/Substrate/` unless a path says otherwise:
 
@@ -44,6 +123,10 @@ Re-locate by Grep.
 - `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelAnimTests.cpp`,
   `Source/ElysiumUE/Private/Tests/ElysiumNpcCombatTests.cpp` (`NpcCombat.Death` ~:1629-1661)
 
+Wave check, re-done against the tree after V11 (S12): still no shared file. The three files the
+final block adds — `ElysiumPlayerEntity.cpp`, `ElysiumPlayerPostThinkTests.cpp`, `ElysiumFeed.cpp`
+— are in no C1 list (C1 was told not to touch the player's file: the player's slot-315 call is
+your line). `ElysiumMeleeSequenceChoice.{h,cpp}` and `ElysiumGrapple.cpp` are in neither lane.
 Wave check (C2 against C1, by function): no file is shared. `ElysiumCombatCharacter.cpp` is not
 in C1's list (C1's slot 315 is in `ElysiumCombatCharacterSlots.cpp`, another file, and not
 yours); `ElysiumNpc.cpp`, `ElysiumNpcAnim.cpp`, `ElysiumNpcBaseStartTask.cpp` are not C1's
@@ -161,7 +244,9 @@ report**, exact, and the integrator applies it.
    `ElysiumGrapple.cpp:~40` is Heaviest already. R2 found **no pick without a retail
    counterpart**; if you find one, list it by name for the owner and leave it.
    **Which port stream stands for retail's one shared engine stream (`*0x1070b244` slot 2) at
-   the non-NPC sites (the player's layer, the weapon model, the prop) is not ruled.** NPC sites
+   the non-NPC sites (the player's layer, the weapon model, the prop) is an owner's ruling, not
+   a recovery** (S12 item c: retail has one stream for every draw; the listing cannot name a
+   port stream) — it blocks nothing and is asked at V4c's close. NPC sites
    draw on `NpcSchedule` (README § "Shared names"). For the others: keep the stream a site
    already draws on; where a site has none (it used the hash), propose one in your report and
    wire the draw behind a single named function so the owner's answer is a one-line change — do
@@ -277,8 +362,9 @@ corpse records (A0 writes them, the C integrator turns them), `ElysiumWeaponClas
 
 Settled by S4, nothing to port: `0x1010e530` (`CreateCorpse`'s first call) fills a vector with
 three C-runtime `rand()` draws scaled into `[lo, hi]` and `CreateCorpse` discards it — not the
-engine's stream. Unrecovered, not blocking you: what `0x102b5bb0` is reached from (no static
-caller, no vtable).
+engine's stream. Settled by S12 item c: `0x102b5bb0` (`BecomeClientRagdoll(vec3_origin, −1, 1)`)
+is reached from nothing — no direct caller, no vtable, no data reference: dead code. The state-7
+fork stays the only NPC reacher of bone −1.
 
 ## Rules
 

@@ -248,11 +248,22 @@ is embedded at `+0x5cf4`: `m_pOuter +4`, `m_bMovingAndShooting +0x10`, `m_nMoveS
   `0x10098cd0` has no weight test). Back in the owner:
   finished and `m_bAutoKillWhenFinished` → `weight = 0`, slot 112 `(i, m_nActivity)` (empty on the
   NPC line). The sequence and the activity stay; the slot is free because its weight is 0.
+  Settled 2026-10-04 (packet S12 a, listing and the staged clip rows): a finished non-looping
+  layer rests at **cycle 1.0** (`0x10098830` writes the literal) with `m_fSequenceFinished = 1`,
+  which `0x10098cd0` zeroes later in the same think; that body frees nothing and sets no weight.
+  From the second resting think its window is `[1.0 + 0.1r, 1.0 + 0.1r)` — empty — and the wrap
+  clause is off, so **a dead non-looping layer dispatches nothing** until `SetLayer` re-seeds the
+  slot. Every shipped `*_attack_layer` row has `flags = 2`: `STUDIO_SNAP`, not `STUDIO_LOOPING`.
+  A snap clip gets both blends 0 from `SetLayer`, so its weight is 1.0 from the first advance to
+  the autokill and the zero-interval rule above cannot free it; that rule bites only blended
+  layers (`lookback_left_layer` / `lookback_right_layer`, flags 0).
 - *The shot.* `PostRun` → slot 258 → `0x10098cd0` on the layer → slot 259 → `0x1032e330` → the
   weapon's `+0x5c8` → `CWeaponRanged 0x10238160` → `0x10238320` → `ModeDispatch(1)` → `Shot
   0x102387b0`. Every shipped `*_attack_layer` (male `move_and_ranged`: 13 clips, the .38's is
   `smith_attack_layer`, 0.4667 s) authors 3031 at cycle 0.0, so the shot leaves in the `PostRun` of
-  the think that pushed the layer.
+  the think that pushed the layer. **One exception, read from the staged rows (packet S12 a):
+  `flamet_attack_layer` authors no event at all** — 12 of the 13 carry the 3031 — so an NPC running
+  with a flamethrower pushes the layer and fires nothing from it.
 - *Who reaches it.* Slot 529 is tasks `0x6e` `TASK_WAIT_FOR_MOVEMENT`, `0x0b`, `0x72` (or no
   task). `m_bfAINPCFlags2 & 0x400` is set by `TASK_SET_NPC_FLAG MOVE_FACE_ENEMY` in three shipped
   programs — `SCHED_TROIKA_TAKE_COVER_HINT`, `SCHED_TROIKA_RUN_AWAY_FROM_ENEMY`,

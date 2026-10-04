@@ -14,6 +14,88 @@ rulings J2 and J6
 operator bodies, the shot's gates and the attack data (S2)". After V4b's commit
 (or V4a's, if V4c runs first). Re-locate by Grep.
 
+**Final for the code as landed (2026-10-04, after V5a, V4a, V4b, V11 and — before you start —
+V4o; `packets-S11.md` item 2, `packets-S12.md` items c and d.1).** Where an item below and this
+block disagree, this block wins. Every `~:line` below predates V11-2's rewrite of
+`ElysiumWeaponClasses.cpp` (now ~3,800 lines): re-locate by name.
+
+**What is already landed in your files — do not redo it** (read-only check of the tree, S12):
+
+- **V11-2 took the contact.** In `ElysiumWeaponClasses.cpp`: the walk of `AdvanceSwingContact`
+  (:2609) is `MeleeSwingStep 0x10343020` per sub-step — the relation filter and
+  `debug_allow_melee_ff`, the per-sample rays, the non-character overlap hit (D5), the window test
+  (`ElysiumSwing::StepWindowOpen`, `ElysiumSwingContact.{h,cpp}`), `MeleeContact` (:3082),
+  `SwingWallContact` (:3340), `KnockbackContact` (:3421), `StageSwingOpposedRoll` (:2519).
+  **V11-3 took slot 331** (`ElysiumMeleeSequenceChoice.{h,cpp}`, the `NpcSchedule` stream).
+  **V5a took** `RangeAttack1Conditions` (:900), the melee band and the wait's reader.
+- **D9's function exists with your operand**: `ElysiumSwingEndpointsAt(const
+  FElysiumSwingEndpointQuery&, FVector& OutA, FVector& OutB)` (:2463), the query carrying
+  `PrevFrame`, `NowFrame`, `FromLocal`, `ToLocal`, `Alpha` and **`Cycle` (the sub-step's cycle,
+  unread today)**. You replace **that body** and nothing of the walk.
+- **O3 (V4o) took the event shot**: `FElysiumWeapon::ShotFromAnimEvent` is `Shot 0x102387b0` for
+  an NPC with nothing staged — the gates, the count, the stamp `+0x730` (S11 item 2.3), no clip
+  spend (J12) — and `CommitFromAnimEvent` (:1358) routes `!Swing.bActive` to it. O3's report
+  says what you can now delete; item 2 below is that deletion.
+- **What is still the old shape, and yours**: `AdvanceSwingContact(float DeltaSeconds)`'s entry
+  still takes the caller's delta and its liveness from the pose layer's clip phase
+  (`GetLiveClipPhase`), and is still driven by the world tick
+  (`FElysiumEntityWorld::AdvanceMeleeSwings`, `ElysiumEntityWorldInteraction.cpp` :299-326, called
+  from `Map/ElysiumMapActor.cpp` :2630) for **every** wielder, the player included; slot 315
+  (`ElysiumCombatCharacterSlots.cpp` :490-495) and slot 247 (`ElysiumAnimatingSlots.cpp`
+  :222-227) are counting stubs; `PostRun`'s weapon line is a counter (`ElysiumNpcBaseMotor.cpp`
+  :597); the base `UpdateCharacter 0x103246d0` is the counting seam
+  `FElysiumNpc::Think19CombatCharacterUpdateCharacter` (`ElysiumNpcThink.cpp` :122-127), reached
+  from `UpdateCharacterRetail` (:132) at the think's tail (:396); `IsMeleeSwingTrigger` (:468)
+  claims 3047 only and `OperatorHandleAnimEvent` (:1384) gives it no consumer (:1408-1424); the
+  estimate is `ContactEventCycle` (`.h` :303; the commit time :2201; `CommitArrivesFromAnimEvent`
+  :1238 with its NPC branch :1269-1292).
+
+**The sweep's place, for the NPC and the player** (S12 d.1 item 2, the listing read whole):
+
+- `CBaseCombatCharacter::UpdateCharacter 0x103246d0` is slot 312 on `CAI_BaseNPC` **and on
+  `CBasePlayer`** (no player override); it calls **slot 315 `MeleeSwingUpdate` with no
+  argument** (`+0x4ec`) after slots 313 / 314 and the expression and eye arms. NPC: from the
+  Troika think's tail `0x1029365b`. **Player: from `PostThink 0x1016be10` at `0x1016c316`,
+  after slot 258, behind the four gates.**
+- You: inside `Think19CombatCharacterUpdateCharacter` call slot 315 `MeleeSwingUpdate()` at its
+  place and **name what stays unported in that body at the line** (`UpdateDisciplineVisuals`,
+  slot 313, `UpdateVampHeal_HOT`, `UpdateExpressions`, slot 333 / `MaintainScriptedEyeDirection`,
+  slot 314, the render-fx expiries `0x1a` / `0x25` — owners 0006 / 0015; the counter stays for
+  them). Slot 315's body is the sweep for **whoever the character is**: it reads no "is NPC"
+  except the two NPC-only arms of the listing.
+- **`AdvanceMeleeSwings` sweeps nobody**: delete its body's walk. The player's call is **one line
+  in `FElysiumPlayer::PostThinkAnimation`'s tail — C2's file and C2's line** (C2 owns that
+  function for the alive gate; it calls your slot 315). Write in your report, exact, for the
+  integrator: delete the call at `Map/ElysiumMapActor.cpp` :2630 and the declaration at
+  `Public/ElysiumEntityWorld.h` :432 (and the comment in `Visual/ElysiumMeleeTrail.h` :19); you
+  delete the definition. Until C2's line is in, the player's swing is swept by nothing: the
+  integrator checks both landed (`anim_player_weapon_event_melee`).
+- **Three species sites already call slot 315** (`ElysiumNpcRunTaskSpecies.cpp` :2117, :2128,
+  :2152, retail `0x103ce43c` / `0x103ce538`; not your file): with the stub gone they become real
+  sweeps, as in retail. Nothing to edit; say so in your report.
+- **The stamp**: the sweep's `dt` is `curtime − m_flLastMeleeSwingUpdate (+0xaa4)`, its own word
+  (`ElysiumNpcKernelShape.cpp` :451 already names the offset), not `DeltaSeconds`; `N = ceil(dt ×
+  100)` — **`0x10450564` is the float 100.0, bytes read** (S12 d.1 item 1). The stored last pose
+  the walk needs is today `Swing.PrevOrigin` / `PrevAngles` / `PrevSegmentsLocal` on the weapon.
+
+**The two slot files are generated — the bodies go beside them** (the convention V4a and V4b
+landed). `ElysiumCombatCharacterSlots.cpp` and `ElysiumAnimatingSlots.cpp` carry "Generated by
+`gen_kernel_shape`. Do not hand-edit": you do **not** edit them, whatever the Files list below
+says. Write slot 315 `FElysiumCombatCharacter::MeleeSwingUpdate()` in
+**`ElysiumCombatCharacterSlotBodies.cpp`** (where slot 389's hand body is) and slot 247
+`FElysiumAnimating::SetAttackExtentsForSequence(int32)` in **`ElysiumAnimatingSlotBodies.cpp`**
+(where slots 242 / 248 are); these two files replace the two generated ones in your list. In your
+report, for the integrator: the two `kernel_verdicts.tsv` rows `10346cd0` and `10090c80` become
+`rule … hand:FElysiumCombatCharacter::MeleeSwingUpdate` / `hand:FElysiumAnimating::
+SetAttackExtentsForSequence` (the shape of row `103338c0`), then `gen_kernel_shape` before the
+build — until then your bodies and the generated stubs are duplicate definitions.
+
+**Settled, so not "owed"** (S12 item c): the species classes' own `HandleAnimEvent` bodies are
+walked and ported (`ElysiumNpcMisc2Species.cpp` :192-496, `ElysiumNpcTzimisceRunner.cpp` :243);
+the sentence in item 2 that calls them "not walked" is void — they are simply not your file.
+`Weapon_FrameUpdate 0x1032aa40` and slot 369 `0x1024efa0` are re-read whole (S12 d.1 item 3) and
+are exactly item 1.
+
 ## Files (only these)
 
 Runtime (`Source/ElysiumUE/Private/Substrate/` unless a path says otherwise):
@@ -39,6 +121,10 @@ Runtime (`Source/ElysiumUE/Private/Substrate/` unless a path says otherwise):
 `pipeline/src/elysium_pipeline/importers/body_data.py`, `pipeline/tests/test_body_data.py`,
 `docs/contracts/seam_map_model.md`. You edit no pipeline file and run no Python test.
 
+Wave check, re-done against the tree after V11 (S12): C1 and C2 share no file. **You do not
+touch `ElysiumPlayerEntity.cpp`** (C2's, for `PostThinkAnimation`), `ElysiumSwingContact.{h,cpp}`,
+`ElysiumMeleeSequenceChoice.{h,cpp}`, `ElysiumNpcRunTaskSpecies.cpp`, `Map/ElysiumMapActor.cpp` or
+`Public/ElysiumEntityWorld.h` (integrator's lines).
 Wave check (C1 against C2, by function): the two lanes share no file. `SequenceBounds`'s body is
 in C2's `ElysiumNpcAnim.cpp`; `CreateCorpse` and the pedestrian's override are C2's
 (`ElysiumCombatCharacter.cpp`, `ElysiumNpcPedestrian.{h,cpp}`); K4's line in your
@@ -57,7 +143,15 @@ in C2's `ElysiumNpcAnim.cpp`; `CreateCorpse` and the pedestrian's override are C
    clock — say what exists. `MotorSeams.PostRunWeaponUpdates` stays, tallied beside the real call:
    three test files read it as `PostRun`'s witness and are not yours.
 2. **The NPC shot only from its event — `ContactEventCycle` removed for every NPC wielder** (J6,
-   as `packets-S2.md` item 1 settled it). Retail: the event 3030..3044 → `CWeaponRanged
+   as `packets-S2.md` item 1 settled it). **O3 owns the event shot and it is landed**
+   (`ShotFromAnimEvent`): what is left for you is the removal — an NPC wielder's standing shot
+   (`AttackIntent` → `BeginRangedShot`) stages nothing, plays nothing on the `UpperBody` channel
+   and queues no estimate; `CommitArrivesFromAnimEvent`'s NPC branch and the estimate's commit
+   time are the player's only; the Warning (b) replaces the Verbose `kernelseq:` line. In
+   `ElysiumWeaponTests.cpp` (`Weapons.AnimEvent`, the cast-gunman block) the `PlayNpcClip … ch=upper
+   body` assertions for an NPC wielder go with it (O3 already deleted the inverted "keeps the
+   estimate" line). `ranged_open_fire`, `ranged_sustained_fire` and `cover` must not move: their
+   shots are the kernel sequence's 3031 through O3's entry. Retail: the event 3030..3044 → `CWeaponRanged
    0x10238160` → `0x10238320` → `ModeDispatch(1) 0x102383b0` → slot 373 `Shot 0x102387b0`; no
    retail path fires a Troika human's shot without the event (R2 item 3a). Slot 370 (the
    operator) has **eight bodies in the whole image and all are read**:
@@ -95,8 +189,9 @@ in C2's `ElysiumNpcAnim.cpp`; `CreateCorpse` and the pedestrian's override are C
      3030..3044 clip, from the baked event tables).
    - **The player's use of the estimate is not touched** ("its commit stays on the estimate",
      `ElysiumWeaponClasses.cpp`): it goes with the player's weapon story.
-   - The move-and-shoot overlay `0x102e8560` is a second retail producer (a layer's 3031); it
-     stays a counter in V4 (J5) — write nothing for it.
+   - The move-and-shoot overlay `0x102e8560` is the second retail producer (a layer's 3031):
+     **landed by V4o** (O1 the layers, O2 the overlay, O3 the shot) — write nothing for it, and
+     break nothing of it: `cover_move_shoot` stays green.
 3. **The NPC melee, where R2 item 3b places it.**
    - The start arm `0x102a45c6`: weapon `+0x5a0 & 0x18000` → `m_flLastAttackTime`, the weapon's
      slot 326 `PrimaryAttack`, then `AutoMovement`. `CWeaponMelee::PrimaryAttack 0x103eaca0`:
@@ -119,8 +214,9 @@ in C2's `ElysiumNpcAnim.cpp`; `CreateCorpse` and the pedestrian's override are C
      due. `UpdateCharacter(interval)` calls **slot 315 with no argument**. So: an NPC's swing is
      swept from `UpdateCharacterRetail` → slot 315 `MeleeSwingUpdate` (replace its counting stub
      with the sweep, calling the existing `AdvanceSwingContact` / `MeleeContact`), and
-     `AdvanceMeleeSwings` (the world interaction tick) **stops sweeping NPC wielders** — it keeps
-     the player's swings (the player's slot 312 site is the player story's; A4 named it).
+     `AdvanceMeleeSwings` (the world interaction tick) **stops sweeping every wielder** — the
+     player's sweep is the same slot 315, called from `PostThinkAnimation`'s tail by C2's line
+     (the block at the top; an earlier text kept the player on the world tick).
    - **`MeleeSwingUpdate 0x10346cd0`, as read** (`packets-S2.md` item 9) — port it arm for arm:
      - **Window**: no seqdesc or `seqdesc+0x2c4 < 1` (the baked `swings` count) →
        `m_bMeleeSwingIsLive (+0xaa1) = 0`, return, **nothing stamped**. Not yet live →
