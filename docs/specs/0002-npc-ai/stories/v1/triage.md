@@ -327,3 +327,31 @@ both as before the wave. The one verdict that moved: `places_thug_pt1`, expected
 | V10 (new) a sound's life | `hear_world_investigate` green in every boot (run it 3× in different boot orders) |
 | V12 the footstep producer | `map_tutorial_sneak_past`'s hearing half (Q-V3bf1 read first) |
 | V13 (new, proposed) the hub's pedestrian nav area | `hub_crosswalk_wait` (N16), with `Elysium.Content.NavArea.Hub` |
+
+## Filed by the coordinator, 2026-10-04 (unattended run)
+
+- **N18 `dialog_use_hold` — game red, the use focus (old bug in landed work; fixed in V3d, lane
+  D1 item 10).** Retail `PlayerUse 0x10167850` → `0x10167470` / `FindEntityFOV 0x10341c30` resolves
+  the NPC itself. The port's `AElysiumMapActor::QueryPlayerUse` (`ElysiumMapActor.cpp:1312-1361,
+  1429-1437`) counts any non-anchor hit as a blocker, and the NPC's own Pawn capsule
+  (`ElysiumNpcBody.cpp:94-99`) blocks the use channel, so the press is refused before the
+  conversation opens (inferred: no verbose log confirms which hit; the feed query already handles
+  the case with `HitBelongsToCandidate`). The staging is valid against retail (Hunter1 has a
+  dialogue and passes `CanTalk`; 37 units, facing) and the harness delivers `+use`
+  (`verbs_stealth_kill`). Not a planning bug: V3d's own record needs it and V3d's lane owns the
+  dialogue open.
+- **Q-H3 settled — the last-known position is retail's.** `OnLooked 0x1026a2c0` walks the player
+  list `LookForPlayers 0x1030fff0` kept from its last 0.15 s scan and writes the entity's current
+  origin through slot 544 → `UpdateMemory 0x102df700` (`+0x0` and `+0xc`), so one pass after the
+  teleport still writes the hidden spot. Two old bugs found by the read, fixed in the V13 wave
+  (lane G2): `OnLooked` never clears the SEE family (`0x105c979c`, 6), and
+  `GetLastKnownPosition 0x102dfed0` reads `+0xc` where the port returned `+0x0`
+  (`ElysiumNpcBaseConditions2.cpp:328, 345`).
+- **Judge's ruling, V13 (N16): implement now**, ahead of V3c. For: gate 2 and V8's hub clause
+  need pedestrians to cross; `hub_crosswalk_wait` is the only live proof of `0x102a0bc0` →
+  `0x102`; the content test counted convexes and never asked the baked mesh; one build and one
+  ~4-minute bake of `sm_hub_1` settle the lead, rewriting gitignored files only; N13's slow walk
+  still reaches the curb inside the red window (inferred). Against (did not carry): the cause is
+  unproven and it is bake work outside the kernel — one bake proves or refutes it, capped at two.
+  Six other maps carry the same slabs (`hw_hub_1` 13, `la_hub_1` 16, `ch_hub_1` 6, `hw_asphole_1`,
+  `la_parkinggarage_1`, `sp_theatre` 1 each): R2, at their next bake.
