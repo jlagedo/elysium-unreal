@@ -88,11 +88,15 @@ clip's movement never moves the body), `corpse_pedestrian_stays`, `corpse_fades`
   `CommitArrivesFromAnimEvent`) is still in the code, unreached by any NPC task → C1 deletes it.
   NPC bullets now land: three ranged records hold the player unkillable through `events_player`.
 
-- **Owner's ruling wanted:** which port random stream stands for retail's single shared engine
-  stream at the non-NPC pick sites (K4). C2 routes them to one stream; the choice is the port's.
-- **For a judge (V5 plan):** the real `TASK_RELOAD` cannot be tested end to end (only the
-  flamethrower lowers an NPC clip; on neither map) — arm tests only, or leave the seam. Presence's
-  rate-doubling is filed with 0006.
+- **The owner's rulings of 2026-10-04 (evening), do not re-ask:**
+  - K4: NPC and non-NPC animation picks draw on **one shared stream**, as retail's single engine
+    stream (V4c C2 routes them).
+  - The real `TASK_RELOAD` (slots 322 / 323) is **ported in V5** with arm tests, plus a Green Room
+    record with a flamethrower NPC so it gets a real run.
+  - The melee contact's same-team test (`+0x10b0`): the team registry is **built in V4c** (read
+    the field's writers first; a Green Room record of two same-team NPCs). One more V4c lane.
+  - `main` was fast-forwarded to the work branch and pushed.
+- Presence's rate-doubling is filed with 0006.
 - **Seams left, named:** the same-team test of the melee contact (`+0x10b0`; no team registry);
   Ming Xiao's `GetBestMeleeWeapon`; slot 389's `muzzleflash` attachment; the turn script's arrival
   direction (`path+0x64`); `MoveNormal`'s restore arm (`0x102efc11`); the crowd corridor has no
