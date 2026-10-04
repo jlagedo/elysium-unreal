@@ -3,31 +3,11 @@
 You are the coordinator for spec 0002 in `E:\dev\elysium-unreal`. Load this file first, then read
 what it points at. It replaces the conversation that produced it.
 
-## FIRST: the tree is not clean
+## The tree
 
-The V4o wave (the NPC overlay stack, move-and-shoot, the event shot) was **interrupted during
-integration** (the integrator hit the session limit). `git status` shows ~65 modified and 5 new
-files, **uncommitted, not verified by a full run**: three coders' work (O1, O2, O3), the
-integrator's owed lines, a relative `never` window in the arena harness (two `_selftest` records),
-record edits (`cover*`, `ranged_open_fire`, `ranged_sustained_fire`, `range_bands`,
-`patrol_monk_loop`), regenerated kernel ledger files, tunables and verdict rows. Its last words:
-"Now switch the three records to the non-toggling `events_player` input." How many builds it made
-and whether the last one passed is unknown.
-
-`.codex/config.toml`, `AGENTS.md` and `CLAUDE.md` are also modified and were **not** edited by the
-coordinator: ask the owner before staging them (he was setting up Codex CLI; see the end).
-
-To resume V4o: launch one integrator with `stories/v4o/brief-O-integrator.md`, tell it the tree
-already holds the wave plus a previous integrator's partial work (read `git diff --stat` and each
-diff first; do not redo), then: `uv run elysium build --arm`, the `cover*` and `ranged_*` records by
-name, default and arm tiers, the full arena once, one commit staged by explicit path. The launch
-prompt used last time is in the session transcript; the points it carried are in
-`stories/v4o/README.md`, `brief-O-integrator.md`, `stories/v4/packets-S11.md` item 2 and
-`packets-S12.md`, plus: `BurstMin` / `BurstMax` default 1 (`0x10259658`, `0x1025966c`; the port
-parsed 0 and the overlay never fired); the NPC clip floor at equip (`0x10334e70`); two shot paths
-must not both commit one NPC shot (the estimate's NPC arm goes); slot 381; four `kernel_verdicts`
-rows for O1's layer bodies; two packet-vs-listing reads (`AddGesture 0x100991b0`'s autokill
-argument, `0x10091230`'s rate for a row with no length).
+V4o is closed (`64895278`): the integrator resumed after the session limit and finished. The only
+uncommitted files are `.codex/config.toml`, `AGENTS.md` and `CLAUDE.md`, which the coordinator did
+**not** edit (the owner's Codex CLI setup; see the end): his to commit.
 
 ## Read, in this order
 
@@ -35,7 +15,7 @@ argument, `0x10091230`'s rate for a row with no length).
 2. `docs/specs/0002-npc-ai/spec.md` — § Standing rules, § Step 2, § The bug protocol and, after it,
    the owner's standing rulings and his two rules of 2026-10-04 (**Testable first**, **Settle
    first**), § The sequence.
-3. `docs/specs/TRACKER.md` — what is ticked. Next unticked: **V4o**, then V4c, V4d.
+3. `docs/specs/TRACKER.md` — what is ticked. Next unticked: **V4c**, then V4d.
 4. `docs/specs/0002-npc-ai/stories/v4/README.md` and the packets beside it: `packets-R1.md`,
    `-R2`, `-spike`, `-R1b-measurement`, `-S1` … `-S12`. Briefs: `stories/v4o/` (O1–O3, integrator),
    `stories/v4/brief-C1…`, `brief-C2…`, `brief-C-integrator.md`, `brief-D-ragdoll.md`,
@@ -44,13 +24,12 @@ argument, `0x10091230`'s rate for a row with no length).
    "Judge's rulings, V4 — second sitting" at its end.
 6. `Arena/README.md`; `git log --oneline -20`.
 
-## State (last verified at V11's commit `88649932`)
+## State (verified at V4o's commit `64895278`)
 
-- **Branch `spec-0002/step-2`**, HEAD `ed91e53a` plus this file's commit; nothing pushed.
-- **Arena:** 122 records — 98 pass / 20 expected-fail / 1 fail (`rollcall_vzombie`, H11) / 3
-  unexpected-pass (`ranged_open_fire` kept red on V4o O3; `hear_world_investigate`,
-  `interest_mode_never` intermittent on N4).
-- **Tests:** default 170 / 0; arm 1,585 / 0; `kernel --check` 7/7.
+- **Branch `spec-0002/step-2`**, HEAD `64895278` plus this file's commit; nothing pushed.
+- **Arena:** 124 records — 102 pass / 19 expected-fail / 1 fail (`rollcall_vzombie`, H11) / 2
+  unexpected-pass (`hear_world_investigate`, `interest_mode_never`, intermittent on N4).
+- **Tests:** default 170 / 0; arm 1,594 / 0; `kernel --check` 7/7.
 
 | step | state | commit |
 |---|---|---|
@@ -62,11 +41,11 @@ argument, `0x10091230`'s rate for a row with no length).
 | V4b + slot 562: retail's arrival script, the facing; N13 fixed | closed | `1442fdc2` |
 | V11 (pulled forward): the coordinator, slot 331, the melee contact, the grapple words | closed | `88649932` |
 | the V5 plan (V5b) | written | `ed91e53a` |
-| **V4o** (pulled from 0015): layers, move-and-shoot, the event shot | **interrupted in integration, uncommitted** | — |
+| V4o (pulled from 0015): layers, move-and-shoot, the event shot | closed | `64895278` |
 | **V4c**: attack producers, the weighted pick, the death transaction, the corpse clocks | not started; briefs final | — |
 | **V4d**: the ragdoll from the `.phy` | not started; spike done, brief final | — |
 
-Order left: **V4o (resume) → V4c → V4d → V5b → V6 → V7 → V10 → V12 → V2 (full run) → V8 → V9 →
+Order left: **V4c → V4d → V5b → V6 → V7 → V10 → V12 → V2 (full run) → V8 → V9 →
 gate 2.**
 
 ## What moved green this session
@@ -78,7 +57,9 @@ gate 2.**
 `ranged_friend_in_line_of_fire`, `verbs_feed_victim_dispatch`, the player / prop anim-event
 guards, `corpse_removed_unseen`, `corpse_kindred_burns`, `corpse_kept_seen`.
 
-Still red, with owner: `ranged_open_fire`, `cover_move_shoot` → V4o; `chase_melee` (the swing
+`cover_move_shoot` and `ranged_open_fire` went green in V4o.
+
+Still red, with owner: `chase_melee` (the swing
 clip's movement never moves the body), `corpse_pedestrian_stays`, `corpse_fades` → V4c;
 `damage_lethal_death` → V4d; `rollcall_vzombie` → H11.
 
@@ -97,10 +78,15 @@ clip's movement never moves the body), `corpse_pedestrian_stays`, `corpse_fades`
 | J9 | the arrival | only retail's whole velocity script counts: done, V4b; the arrival floor is retail's 0.0625 units (V11) |
 | J10 | `0x102a11d0`, a non-hated NPC blocks the swing | done, V11 |
 | J11 | four species with task-code fire (ChangBros, FrenzyShadow, Bach, ManBat) | filed; on neither witness map |
-| J12 | the NPC clip is never lowered by a shot | in V4o O3 (uncommitted); the reload is V5b's |
+| J12 | the NPC clip is never lowered by a shot | done, V4o; the reload is V5b's |
 | J13 / J14 | corpse removal by kind; the fade (25 makers on both maps) | V4c C2 and V4d, four records; the burn's look to 0014 |
 
 ## Open, for the next session or the owner
+
+- **New from V4o, for V4c:** a gunman does not drop a dead enemy (it re-selects `START_COMBAT` on
+  `ENEMY_DEAD` every think) → C2. The shot-timer estimate (`BeginRangedShot`, the NPC arm of
+  `CommitArrivesFromAnimEvent`) is still in the code, unreached by any NPC task → C1 deletes it.
+  NPC bullets now land: three ranged records hold the player unkillable through `events_player`.
 
 - **Owner's ruling wanted:** which port random stream stands for retail's single shared engine
   stream at the non-NPC pick sites (K4). C2 routes them to one stream; the choice is the port's.

@@ -1331,9 +1331,31 @@ is the content: `float dt = 0x1026c540(this)`, then `vtable[0x408/4 = 258](dt, t
 (`DispatchAnimEvents`, `0x10098c80`), then `CBaseCombatCharacter::Weapon_FrameUpdate(dt)` **with the
 same number**. The weapon's frame update is downstream of the anim-event dispatch, not beside it.
 
-**Unrecovered:** what `0x102729d0` contributes to `AutoMovement`'s motor call (it is read into the
-call's second argument and nothing else in this pack reaches it), and what `0x1026c540` measures
-beyond "the elapsed animation interval".
+**Unrecovered:** what `0x1026c540` measures beyond "the elapsed animation interval".
+
+**Settled 2026-10-04 (spec 0002 `stories/v4/brief-C1-attack-producers.md` item 3b, read from the
+listing).**
+
+- **`0x102729d0` is the move target** `MoveGroundStep 0x102e0bd0` may stop against: the
+  navigator's goal type (`0x102ee620(m_pNavigator +0x5d34)`) 2 → `m_hEnemy (+0x5ce0)`; 1 →
+  `m_hTargetEnt (+0x5ce4)`; 7 → the handle the Troika slot `+0x928` answers; any other type, or a
+  stale handle → none.
+- **`CBaseAnimating::GetIntervalMovement 0x10094b70(interval, &finished, &newPos, &newAngles)`**:
+  no model → nothing. `to = GetSequenceCycleRate(m_nSequence) × m_flPlaybackRate × interval +
+  m_flCycle`; a non-looping sequence (`m_bSequenceLoops` clear) with `to > 1.0` → `to = 1.0`,
+  `finished = 1`, else 0. `Studio_SeqMovement 0x100c5d10(model, m_nSequence, m_flCycle, to,
+  m_flPoseParameter, &dPos, &dAng)` — up to four animations weighted by the pose parameters
+  (`0x100c5400`), each `0x100c5b00(anim, from, to, &pos, &ang)`, summed by weight. `dPos` is
+  rotated by the local yaw (`0x1013a7e0` with slot 221's `[1]`); `newPos = local origin (slot
+  220) + dPos`; `newAngles = (0, local yaw + dAng.y, 0)`. `AutoMovement` hands it the interval
+  `m_flAnimTime − m_flPrevAnimTime` **after** its own slot 250 call, so the span sampled starts
+  at the cycle just advanced to. The motor call is `(newPos, 0x102729d0(this), newAngles.y, 0,
+  0, 0, 0)`: not as-far-as-can, flags 5, traced.
+- **An attack's sequence is the NPC's own `m_nSequence`**, which is what makes the above move a
+  swinging body: `CWeaponMelee::RequestActivity 0x103e9e00` asks the owner's slot 331 and, on
+  success, the owner's slot 311 `ForcePreTranslatedSequenceAndActivity` (`+0x4dc`) before it
+  writes `m_flPlaybackRate` and `m_flNextAttack`; for an NPC owner the target is `GetEnemy()`
+  (owner `+0x98` → slot 167), with no `FindEntityFOV`.
 
 ## `CheckOnGround`, `CanStandAt` and `GetGroundpoint` — `0x1026e5e0`, `0x102a0ed0`, `0x103d6a40`
 

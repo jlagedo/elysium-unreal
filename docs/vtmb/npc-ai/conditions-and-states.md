@@ -2404,7 +2404,38 @@ order:
 Named 2026-09-21 (`convars.md`): `DAT_10923d3c` is `debug_allow_fake_reload`, default **1**, and
 `DAT_10924a1c` is `debug_melee_advance_combatmove_dist`, default **100** — a plain ConVar read as a
 float, not a "melee-range singleton". **Unrecovered:** the
-identity of the weapon vtable slots `+0x5a0`, `+0x460` and `+0x450`.
+identity of the weapon vtable slot `+0x450`.
+
+**Settled 2026-10-04 (spec 0002 `stories/v5/README.md` §1.2–§1.4, read from the listing).**
+
+- **`+0x5a0` is slot 360, the weapon's capability word**: `0x1014f930` (the character line) and
+  `CBaseCombatWeapon 0x10149e80` answer 0; the subclasses answer `0x6000` (ranged) or the melee
+  word. Slot 513 `CapabilitiesGet` is `m_afCapability | activeWeapon->slot360()`.
+- **`+0x460` is slot 280, `CBaseCombatWeapon 0x10253ab0(i)`**: `m_iAmmoTypes[i] (+0x744) < 0`
+  (`0x10253b40` false) → 1; slot 277 (`+0x454`, uses a clip) and `m_iMagazineCurAmts[i] (+0x74c)
+  > 0` → 1; an owner whose `GetAmmoCount(type)` (`0x103346c0`) `> 0` → 1; else 0.
+- **Arm 1 is the reload an NPC actually performs.** `0x102c54c0` is `m_iFakeReloadCount (+0x65f0)
+  = RandomInt(tpl[+0x34], tpl[+0x38])` over `0x10207c40` (`GetCharTemplate` through the manager
+  `0x101d5e80`). The template loader `0x101d3f10` fills the pair from the `General` block:
+  `+0x34 = ftol(GetFloat("NpcFakeReloadCountMin", 8.0))`, `+0x38 =
+  ftol(GetFloat("NpcFakeReloadCountMax", (float)that Min))`. 20 shipped `npctemplate*.txt` author
+  Min (1 to 20; `TutorialThug` 6); none authors Max. The count drops in `FireBullets 0x10268900`
+  (slot 185), its first statement: `0x10268919 DEC [m_pBaseNPCTroika + 0x65f0]`, once per call —
+  once per bullet set of `Shot 0x102387b0`. `0xc4` is `SCHED_TROIKA_HIDE_AND_FAKE_RELOAD1`
+  (find cover, run, then `SET_SCHEDULE …_FAKE_RELOAD2`, which is also its fail schedule), `0xc5`
+  `…_FAKE_RELOAD2` (`FACE_ENEMY`, `PLAY_SEQUENCE ACT_RELOAD_FAST`), `0xc6` `…_FAKE_RELOAD_COVER`
+  (the `PLAY_SEQUENCE` alone); `0xc2` / `0xc3` are `…_HIDE_AND_RELOAD1` / `2`. No fake program
+  carries `TASK_RELOAD`: the clip is not touched.
+- **The ranged programs' interrupt lists** (the installed `.sch` texts): `0xef`
+  `SCHED_TROIKA_STEP_BACK_RANGE_ATTACK1` — `NEW_ENEMY ENEMY_DEAD LIGHT_DAMAGE HEAVY_DAMAGE
+  ENEMY_OCCLUDED NO_PRIMARY_AMMO`; `SCHED_TROIKA_RANGE_ATTACK1` — the same plus
+  `TOO_CLOSE_TO_ATTACK`; `0xf0` `…_FORCED_RANGE_ATTACK1` — `ENEMY_DEAD`. Slot 453 (`0x102ad140`,
+  `0x10387520`) adds none of `0x61`, `0x3c`, `0x08`, `0x5f`. So `0xef` is not broken by
+  `NOT_FACING_ATTACK` or `WEAPON_THROUGH_WALL`: it runs to its last task. (Spec 0002's known red
+  4, "`0xef` is a sink", was `TASK_RANGE_ATTACK1` not finishing, not the mask.)
+- **`CacheInterruptConditions 0x1026a0f0`'s tail** is three statements: slot 453 (`0x1026a211`),
+  slot 411 (`0x1026a21b`; `0x10280fd0`, an empty body on the whole NPC line),
+  `SetScheduleTestBits(0x75)` (`0x1026a225`); the function ends at `0x1026a232`.
 
 ### `FUN_102b7f40` — the dodge test
 
@@ -2430,7 +2461,17 @@ to this body.
 when `cc.m_iDisciplineFlags2 (+0xeb4)` carries one of the five level bits `first << 0..4`. Id 10 is
 `v_discipline_presence` in the datamap's array order at `CBaseCombatCharacter +0x12c4` (animalism
 0 … potence 9, presence 10, protean 11, thaumaturgy 12). The same test doubles the weapon's attack
-rate in `0x1033d940` (listing: `FADD ST0,ST0` when true). Who sets the bits on an NPC is unread.
+rate in `0x1033d940` (listing: `FADD ST0,ST0` when true).
+
+**Who sets the bits — read 2026-10-04 (spec 0002 `stories/v5/README.md` §1.5).**
+`m_iDisciplineFlags2` is zeroed by `CAI_BaseNPCTroika::NPCInit 0x1029a0b0` and `0x10326de0`,
+cleared by `RemoveDiscFlag 0x1033d190`, and set only by `CBaseCombatCharacter::AddDiscFlag
+0x1033cfb0`. Its callers are the discipline manager's status apply `0x101e3560(manager, cc, bit)`
+— when `HasStatusEffect(cc, bit)` is false: `AddDiscFlag(cc, bit, 0.1, cc, −1)`, the record's
+effect `0x101dd090(record + 0xa4, cc, bit)`, `AddMiscFlag(0x200000)`, an AI sound when the
+record's `+0x35` is set — and `0x101dfc20`. `0x101e3560` is called from `0x101e2f50`,
+`0x101e3380`, `0x101e33c0` and `0x101f8620` (the discipline activation bodies, not walked). An NPC
+therefore carries a Presence bit only while a Presence effect cast on it is applied.
 
 ### Slot 611 `0x102c12a0` — the disposition's idle pick
 

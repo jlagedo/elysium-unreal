@@ -502,6 +502,22 @@ request/activity selection → common reload frame → `0x102552C0` reserve-to-m
 `reload_single`, the frame returns to the per-round reload state after each commit. A magazine or
 shell event on either client viewmodel cannot advance that transaction.
 
+**The NPC's reload (read 2026-10-04, spec 0002 `stories/v5/README.md` §1.2–§1.3).** An NPC never
+takes the request path. `CAI_BaseNPC::RunTask 0x10288780`'s `TASK_RELOAD` arm, at activity
+finished: `weapon +0x898 m_bInReload = 1` (`0x1028918d`), weapon slot 322 (`+0x508`,
+`0x1028919d`), clear `NO_PRIMARY_AMMO 0x40` and `0x41`. Slot 322 `0x10255050`, not
+`m_bReloadsSingly`: an owner with a combat pointer, `m_bInReload`, and owner `m_flNextAttack
+(+0x1564) <= curtime` → slot 323 (`+0x50c`), then both next-attack words (`+0x730`, `+0x734`) `=
+curtime`; with `m_bReloadsSingly` every arm needs the owner's player pointer, so an NPC gets
+nothing. Slot 323 `0x102552c0`, not single: per magazine that uses a clip (slot 277), `clip +=
+min(slot 275(i) − clip, GetAmmoCount(type))`, `RemoveAmmo` only for a player owner under the cvar
+`DAT_1088aef4`; then `m_bInReload`, `m_bIsJammed`, `m_bInterruptReload` cleared. Because nothing
+lowers an NPC's clip (`Shot`'s spend is in its player block), this path is reached only by a
+weapon that spends on its own (the flamethrower's `Attack 0x103e2f30`). **What a gunman does
+instead is the fake reload**: `m_iFakeReloadCount`, counted down per `FireBullets` and re-rolled
+from the NPC template's `NpcFakeReloadCountMin` / `Max` — `npc-ai/conditions-and-states.md`
+§ "`FUN_102b8620` — the ranged weapon pre-pass".
+
 ### Damage and reaction boundary
 
 The per-victim ranged body (`0x10268330`) is reached by a volley path that groups traces by
