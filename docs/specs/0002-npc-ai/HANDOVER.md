@@ -127,10 +127,20 @@ clip's movement never moves the body), `corpse_pedestrian_stays`, `corpse_fades`
   build; stage by explicit path; the verdict table in the commit message (a hook refuses
   `report*.md`); never push.
 
-## Codex CLI dry run (the owner asked, 2026-10-04)
+## Sub-agents run on Codex CLI (the owner's ruling, 2026-10-04)
 
-`codex exec -m gpt-6.1-sol -c model_reasoning_effort='"high"'` runs here (CLI 0.160.0; model and
-effort confirmed in its session log), loads `AGENTS.md` and reaches the `vtmb-corpus` MCP (17
-tools, callable headless). Gaps found: `uv` is not on the PATH of Codex's shell (no
-`uv run elysium …`); the `elysium` MCP has no `default_tools_approval_mode` (every call refused
-headless); the query budget is not in `AGENTS.md`. The coordinator applied none of these.
+Agents are launched as Codex CLI runs (`gpt-6.1-sol`), from Bash, in the background, output
+redirected to a log under the job's tmp directory and the tail read on completion:
+
+- **Opus-level work** (integrators, readers over the listing, planners, judges):
+  `codex exec -m gpt-6.1-sol -c model_reasoning_effort='"high"' --dangerously-bypass-approvals-and-sandbox "<brief>"`
+- **Sonnet-level work** (single-lane coders, doc amendments, small reads): the same with
+  `'"medium"'`.
+
+Verified by dry runs: it loads `AGENTS.md` (which carries the query budget), reaches the
+`vtmb-corpus` MCP (17 tools) and the `elysium` MCP, runs `uv run elysium …`, `rg` and `git`, and
+writes the repository and `E:\elysium-work`. The sandbox must be bypassed: under
+`workspace-write` it cannot execute `uv` nor write the work root. That flag gives full access to
+the machine with no prompts, so every brief keeps the guardrails: the files named per lane,
+coders never build, stage by explicit path, never push. The model cannot report its own id or
+effort; the session log under `~/.codex/sessions/` is the proof.
