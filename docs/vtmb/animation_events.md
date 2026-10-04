@@ -89,6 +89,26 @@ Other properties worth stating:
   it has a **second writer in `StudioFrameAdvance`** using the non-look-ahead cycle, so the two can
   disagree within one tick.
 
+_Corrected 2026-10-04 (spec 0002, packet S9 items 1-2), from the listing._ "Covered exactly once"
+and "never fires twice" hold only for a caller whose period **equals** the look-ahead (an NPC's
+0.1 s think). The stored word is the **raw** end (`0x10091a66..0x10091a6c`: `+0x658 = flEnd`, e.g.
+1.05; there is no "end − 1" store) and the reduction is the *next* call's start wrap
+(`0x100919b8..0x100919f4`, one step). So:
+
+- **A caller faster than the look-ahead bursts at each lap of a looping clip.** While `m_flCycle` is
+  inside the last `0.1 × rate` of the lap every dispatch has `flEnd >= 1.0`; after the first of
+  them `flStart = prevEnd − 1` (≈ 0.02) and the first clause is `0.02 <= cycle < 1.0x`: the whole
+  table from there up, once per dispatch, for 0.1 s of real time per lap. The player
+  (`PostThink 0x1016be10`, per command) is such a caller; its 2050..2053 fall out of
+  `CBasePlayer::HandleAnimEvent 0x10178a10` with no call, so nothing sounds. Any unswallowed
+  sub-5000 id on a looping player base clip fires up to `0.1 s × fps` times per lap in retail.
+  (Inferred, not measured: that the player's command rate is finer than 0.1 s.)
+- **A caller slower than the look-ahead loses events at the lap wrap.** The wrap clause needs
+  `flEnd >= 1.0`; a think that jumps from cycle 0.7 to 0.3 has `flStart = 0.8`, `flEnd = 0.4`, an
+  empty first clause and the wrap clause off, so `[0.8, 1.0)` and `[0, 0.4)` never fire. Without a
+  wrap nothing is lost at any interval: the window sweeps from the stored cursor, and the interval
+  argument is never read (`0x10091bac RET 8`, `[ESP+0x80]` unread).
+
 ### Who calls the dispatcher, and where against the frame advance
 
 _Read 2026-10-04 (spec 0002 V4r, packet R2)._ Slot 258 (`+0x408`) has **five call sites in four
@@ -117,6 +137,14 @@ what a task reads.
 
 `OnSequenceFinished` is a direct call (`0x10091b9a` → `0x10091c80`), not a virtual, made on the
 rising edge only (`0x10091b85`..`0x10091b96`: the flag now set and the entry value clear).
+
+**The camera's handler is its own** (packet S9 item 5). `CCameraAnimated::HandleAnimEvent`
+`0x10071900` (slot 259): an id other than 1003 (`0x10071907 CMP [event],0x3eb`) goes to
+`CBaseAnimating::HandleAnimEvent` `0x10091da0`; for 1003, `n = atoi(options)` (`0x1007191f`) and,
+when `0 <= n − 1 < 8` (`0x10071927`..`0x1007192d`), `FireOutput(this + 0x730 + (n − 1) × 0x18)`
+with activator **and** caller the camera, delay 0 (`0x10071932`..`0x1007193d`). The eight outputs
+are `OnScriptEvent01`..`OnScriptEvent08`. An out-of-range 1003 fires nothing and does not reach
+the base.
 
 ## Overlay layers dispatch their own timelines; autolayers never do
 

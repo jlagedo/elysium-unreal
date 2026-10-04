@@ -66,8 +66,10 @@ float MotorFacingEntryInterest(const FFacingQueueEntry& Entry, double Now) const
 FVector MotorFacingEntryPosition(FFacingQueueEntry& Entry);
 /** `CAI_Motor` slot 15 `0x102e2180` (the SDK's `GetFacingDirection`): compact the queue, then blend
  *  the survivors into a unit direction. Answers zero for an empty queue or a zero total weight.
+ *  `OutInfluence` is the slot's second answer (ST0): the total interest `1 - prod(1 - w)`
+ *  (`102e22de..102e22f5`), 0.0 for an empty queue; motor slot 18 `0x102e19e0` blends by it.
  *  `OutRangeCm` is the port's presentation: the farthest contributing entry's distance. */
-FVector MotorFacingQueueBlend(double& OutRangeCm);
+FVector MotorFacingQueueBlend(float& OutInfluence, double& OutRangeCm);
 /** Hand slot 15's blend to the body as a point (`IElysiumNpcMotor::SetFacingTarget`), every think
  *  from `MotorThinkUpkeep`; unset when the queue blends to nothing. The body only faces it. */
 void MotorHandFacingTarget();

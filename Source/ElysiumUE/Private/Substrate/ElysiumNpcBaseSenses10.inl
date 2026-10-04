@@ -113,12 +113,48 @@ uint32 SquadWord() const;       // +0x5da4
  *  `INDEX_NONE`. Answers true when the target gained its FIRST record, which is retail's answer. */
 bool UpdateCaiMemory(FElysiumEntity* Enemy, const FVector& PositionCm);
 
-/** SEAM for the `0x46004003` segment trace slot 573 runs, whose HIT ENTITY is what its three arms
- *  branch on. `IElysiumEmbodiment::QueryLineOfSight` answers a bool and names no blocker, and the
- *  kernel hull trace (family Motor's `KernelHullTrace`) answers no hit either, so this reports a
- *  CLEAR trace with no blocker — which is retail's `fraction == 1.0` arm and slot 573's `true`. */
+/** The `0x46004003` segment trace slot 573 runs (`0x1026fcf0`), whose HIT ENTITY is what its three
+ *  arms branch on: family Motor's `KernelHullTrace` with a zero box (a ray), which answers
+ *  `IElysiumEmbodiment::TraceRetail` with this NPC ignored and the characters folded by
+ *  `KernelTraceKeepsCharacter`. True = clear (`fraction == 1.0`); false = blocked, with
+ *  `OutBlocker` the hit entity (null for the static world). With no world or no embodiment the
+ *  trace is CLEAR -- the fault path of a headless run, not a rule. Centimetres in, converted to
+ *  Source units at the call. */
 bool InnateWeaponLosTrace(const FVector& StartCm, const FVector& EndCm,
 	FElysiumEntity*& OutBlocker) const;
+
+/** What one ray of the weapon's line of fire (`0x1024f3d0`) reads off its `trace_t`. */
+struct FWeaponLosRay
+{
+	float Fraction = 1.f;                  // trace_t +0x2c (`[ESP+0x5c]`)
+	FElysiumEntity* Hit = nullptr;         // trace_t::m_pEnt (`[ESP+0x7c]`); null = the static world
+};
+
+/** `Ray_t::Init(start, end)` (`0x10015929`, a line), `CTraceFilterSimple(ignore, 0)` (`0x1000bd7f`),
+ *  `enginetrace->TraceRay(ray, 0x46004003, &filter, &tr)` (`0x1024f424..0x1024f42a`). One
+ *  `IElysiumEmbodiment::TraceRetail` with `Ignore` as the pass entity and the character list folded
+ *  by `KernelTraceKeepsCharacter` (`CTraceFilterSimple::ShouldHitEntity 0x101d31c0`), nearest kept
+ *  first; a character recorded `FSOLID_NOT_SOLID` (`FElysiumEntity::IsRetailNotSolid`, a corpse
+ *  after `BecomeClientRagdoll 0x10090180`) is never met, as the engine never hands one to the
+ *  filter. Centimetres. With no world or no embodiment the ray is clear (the headless fault path). */
+FWeaponLosRay WeaponLosRay(const FVector& StartCm, const FVector& EndCm,
+	const FElysiumEntityHandle& Ignore) const;
+
+/** The weapon's line of fire: weapon slot 364 `0x1024f330` (`+0x5b0`) hands owner slot 389's point
+ *  to its vtable `+0x470` = `0x1024f3d0(owner, ignore, &start, &end, bSet)`. The port stands no
+ *  weapon vtable (one body fills both slots for every weapon class), so the body is the owner's.
+ *
+ *  `0x1024f3d0`, in the listing's order: clear (`fraction == 1.0`) -> true; the hit is the owner's
+ *  `GetEnemy()` -> true; a hit combat character (`+0x9c`): `IRelationType == D_HT` -> true (shot
+ *  through), else `0x63` under `bSetConditions` and false; no combat character: `m_CollisionGroup
+ *  (+0x368) == 4` and `fraction > 0` -> the same body again from the hit point with the HIT ENTITY
+ *  as the filter's pass entity (not the owner), else `0x66` under `bSetConditions` and false.
+ *  Unlike slot 573 it never writes `m_hEnemyOccluder`.
+ *
+ *  `Depth` is the port's recursion guard (retail's is unbounded): past `GWeaponLineOfFireMaxDepth`
+ *  re-traces the body takes the `0x66` arm. Centimetres. */
+bool WeaponLineOfFire(const FVector& ShootPosCm, const FVector& TargetCm,
+	const FElysiumEntityHandle& Ignore, bool bSetConditions, int32 Depth = 0);
 
 /** `0x1026ab50` — the shrunk-hull head probe `RunAI` (`0x1026f110`) runs between `GatherConditions`
  *  and `PrescheduleThink`. It is UNPORTED as a behaviour and this is why: its whole body is gated on

@@ -7,7 +7,7 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 136 generated slot bodies of `FElysiumCombatCharacter`: 19 carry the retail default story 29c
-// recovered, 20 are defined by hand in the substrate, and 96 are still stubs — 61 29c, 25 29d, 5
+// recovered, 21 are defined by hand in the substrate, and 95 are still stubs — 60 29c, 25 29d, 5
 // 29e, 5 unassigned. 1 are closed (0019/6) and answer the value-initialised default without
 // tallying.
 //
@@ -1020,12 +1020,8 @@ bool FElysiumCombatCharacter::Weapon_Switch(FElysiumEntity*, int32)
 
 // slot 389 0x103338c0 (walked) `Vector Weapon_ShootPosition(const Vector&)`
 //   layer 1, story 29c
-FVector FElysiumCombatCharacter::Weapon_ShootPosition(const FVector&)
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::Weapon_ShootPosition"), TEXT("0x103338c0"),
-		TEXT("29c"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumCombatCharacter::Weapon_ShootPosition`, written by hand in
+// the substrate. Declared here, defined there.
 
 // slot 390 0x103302e0 (walked) `int OnTakeDamage_Alive(const CTakeDamageInfo&)`
 //   takes `const CTakeDamageInfo&`
@@ -1674,7 +1670,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, bool(FElysiumEntity*, int32)>::Test(&FElysiumCombatCharacter::Weapon_Switch),
 				nullptr },
 			{ 389, TEXT("0x103338c0"), TEXT("CBaseCombatCharacter"), TEXT("Weapon_ShootPosition"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, FVector(const FVector&)>::Test(&FElysiumCombatCharacter::Weapon_ShootPosition),
 				nullptr },
 			{ 390, TEXT("0x103302e0"), TEXT("CBaseCombatCharacter"), TEXT("OnTakeDamage_Alive"),

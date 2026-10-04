@@ -1,0 +1,42 @@
+{
+  "name": "verbs_feed_victim_dispatch",
+  "about": "The feed victim's paired clip is its own kernel sequence, so its own think dispatches the clip's records (stories/v4/packets-S9.md item 3). CBaseCombatCharacter::SetGrappleActivity 0x1032a100 commits the attacker and the victim alike: m_IdealActivity / m_Activity are the grapple activity, 0x10260a50(seq) writes m_nSequence and runs ResetSequenceInfo 0x10090950, m_flCycle = 0. The victim's PostRun 0x1026c7c0 then walks that row through slot 258 (DispatchAnimEvents 0x10091880), so its 4007 is dispatched from its own think -- and refused by CBaseCombatCharacter::HandleAnimEvent 0x1032e330 on the paired-role guard (+0x153c != 0), the attacker's 4007 being the one that opens the transaction. With m_Activity no longer ACT_IDLE, RunAnimation 0x1026c540's idle re-pick stays off for the whole grapple: no idle row is committed over the feed clip. Staging and keys are verbs_feed_trance's; the second +feed at 3.3 s requests the release.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 8.0,
+  "player": { "at": [0.0, 905.0, 0.0], "face": "east" },
+  "cast": [
+    {
+      "name": "arena_vessel",
+      "classname": "npc_VHumanCombatant",
+      "at": "east",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    { "t": 2.0, "do": "console", "command": "elysium.cmd +feed" },
+    { "t": 2.1, "do": "console", "command": "elysium.cmd -feed" },
+    { "t": 3.3, "do": "console", "command": "elysium.cmd +feed" },
+    { "t": 3.4, "do": "console", "command": "elysium.cmd -feed" }
+  ],
+  "expect": [
+    { "label": "grapples", "who": "arena_vessel", "kind": "output", "match": "OnGrappleBegin", "by": 2.5 },
+    { "label": "engage_row", "who": "arena_vessel", "kind": "sequence", "match": "^(?!.*(?i:idle))", "regex": true, "within": 0.2 },
+    { "label": "fed_upon", "who": "arena_vessel", "kind": "output", "match": "OnFedUponBegin", "within": 1.0 },
+    { "label": "victim_event", "who": "arena_vessel", "kind": "animevent", "match": "^4007( |$)", "regex": true, "within": 0.5 }
+  ],
+  "never": [
+    { "who": "arena_vessel", "kind": "sequence", "match": "(?i)idle", "regex": true, "after": "grapples", "until": 3.3 },
+    { "who": "arena_vessel", "kind": "death" }
+  ],
+  "notes": "Order corrected by the V4b integrator (a record error in packets-S9's draft, which put the victim's 4007 before OnFedUponBegin): the output is fired by the ATTACKER's 4007, dispatched from the player's PostThink 0x1016be10 on the frame the bite clip is committed (measured 2.517), while the victim's own 4007 waits for the victim's next think (PostRun 0x1026c7c0, 0.1 s cadence; measured 2.600) and is refused by the role guard. Both are asserted; the victim's follows within one think and a frame."
+}

@@ -206,6 +206,51 @@ bool FElysiumCombatCharacter::FInViewCone(FElysiumEntity* Candidate)
 	return FElysiumNpcSenses::IsInViewCone(*this, PointCm, ConeScalar);
 }
 
+FVector FElysiumCombatCharacter::Weapon_ShootPosition(const FVector& OriginCm)
+{
+	// Slot 389, `CBaseCombatCharacter::Weapon_ShootPosition` `0x103338c0` (spec 0002 V5a-3):
+	// `(Vector* out, const Vector& origin)`, `RET 8`; centimetres in and out.
+	//
+	// `0x1033392c..0x1033394d`: `GetActiveWeapon 0x10007e19`; a weapon ->
+	// `weapon->GetAttachment01("muzzleflash" 0x105cba6c, &pos, &angles)` (`0x10007680`, by name, on
+	// the WEAPON entity); true -> `out = pos` (`0x10333a33`), `origin` unread.
+	// SEAM: `GetAttachment01("muzzleflash")` on the active weapon. The port's attachment accessors
+	// (`IElysiumEmbodiment::GetBodyAttachment(Owner, FName, FTransform&)`,
+	// `FElysiumEntity::GetBodyAttachmentPoint(FName, FVector&)`) reach placed bodies registered as
+	// use anchors, not a held wield model, so this answers "no attachment" and every body takes the
+	// arm below -- retail's own arm for every weapon but the 8 `muzzleflash` wield models.
+
+	// `0x10333953..0x1033396d`: `AngleVectors 0x10139610(this->slot 221 (+0x374)(), &forward, &right,
+	// &up)`. Slot 221 is `CBaseEntity::GetAngles 0x100b3110` = `&m_angRotation (+0x428)`, the BODY's
+	// angles (`FElysiumEntity::Angles`, Source degrees), not the eye angles.
+	constexpr double DegToRad = 0.01745329238474369;                             // _DAT_1044eb08
+	const double SP = FMath::Sin(Angles.X * DegToRad);
+	const double CP = FMath::Cos(Angles.X * DegToRad);
+	const double SY = FMath::Sin(Angles.Y * DegToRad);
+	const double CY = FMath::Cos(Angles.Y * DegToRad);
+	const double SR = FMath::Sin(Angles.Z * DegToRad);
+	const double CR = FMath::Cos(Angles.Z * DegToRad);
+	// `0x10139610`'s three rows, read from the listing (`_DAT_104492dc` = -1.0):
+	//   forward = (cp*cy, cp*sy, -sp)
+	//   right   = (cr*sy - sr*sp*cy, -(cr*cy + sr*sp*sy), -(sr*cp))
+	//   up      = (sr*sy + cr*sp*cy, cr*sp*sy - sr*cy, cr*cp)
+	// each with its Y reflected into this runtime's position space (as `StartTaskAngleVectors`).
+	const FVector Forward(CP * CY, -(CP * SY), -SP);
+	const FVector Right(CR * SY - SR * SP * CY, CR * CY + SR * SP * SY, -(SR * CP));
+	const FVector Up(SR * SY + CR * SP * CY, -(CR * SP * SY - SR * CY), CR * CP);
+	// `m_HackedGunPos (+0x1578..+0x1580)`, Source units. The port declares the word on the Troika
+	// leaf (`FElysiumNpc::HackedGunPosUnits`, `(0, 0, 55)` from `0x10298e0c..18`); any other combat
+	// character has no port word and answers the zero vector. (The player never reaches this body
+	// in retail: `CBasePlayer` fills slot 389 with `0x10162260`, unported.)
+	const FElysiumNpc* const Troika = AsNpc();
+	const FVector GunCm = (Troika != nullptr ? Troika->HackedGunPosUnits : FVector::ZeroVector)
+		* static_cast<double>(ElysiumMove::U);
+	// `0x103339d9..0x10333a2f`, per component and in this float order:
+	// `((origin + forward * gun.y) + right * gun.x) + up * gun.z`
+	// (`+0x157c` x forward `0x103339b9`, `+0x1578` x right `0x10333999`, `+0x1580` x up `0x10333972`).
+	return ((OriginCm + Forward * GunCm.Y) + Right * GunCm.X) + Up * GunCm.Z;    // 0x10333a33
+}
+
 // --- Moved from `ElysiumNpcBaseCombat10.cpp` (story 5 step 6) ---
 
 bool FElysiumCombatCharacter::HasTypedStatList(int32 ListType) const

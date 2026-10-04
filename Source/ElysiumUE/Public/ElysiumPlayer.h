@@ -2014,6 +2014,12 @@ public:
 	// Slot 29 on `CHL2_Player`: the cone scalar an observer's slot 363 `FInViewCone 0x10326750`
 	// reads off its candidate.
 	float GetStealthVisionCone() override { return Stealth.ConeScalar; }   // 0x1034f390 +0x1c74
+	// Slot 197 on `CBasePlayer` (`0x10174e60`): where an attacker aims. Noisy: `GetOrigin (slot 220) +
+	// m_vecViewOffset * RandomFloat(0.5, 1.0)`, one draw scaling all three components; not noisy with
+	// the third bool set: `GetOrigin + m_vecViewOffset`; neither: slot 192 `WorldSpaceCenter()`.
+	// `posSrc` is never read. `GatherAttackConditions 0x1026dd10` asks it noisy every pass
+	// (`0x1026de30`). Spec 0002 V5a-3.
+	virtual FVector BodyTarget(const FVector& PosSrc, bool bNoisy, bool bAimAtEyeExactly) override;
 	FElysiumStealthObserver Observer;
 	// The candidate the senses passes have offered since the last commit. Session state: it is
 	// rebuilt from the observers' own caches within one sight cadence, so it is not saved.
@@ -2140,6 +2146,23 @@ public:
 		FString Label;
 		uint32 PlayId = 0;
 		bool bArmed = false;   // false: the channel stood on nothing at the last tick
+
+		// The play this channel was dispatching before the current one, with the two words it had
+		// when it was displaced. Retail has no counterpart: a displaced clip that comes back is a new
+		// commit (`0x101644f0` + `ResetSequenceInfo 0x10090950`, the window at 0). The pose layer
+		// resumes such a play mid-clip instead, so the play that returns takes these words back
+		// rather than re-firing every record behind its playhead (`PostThinkAnimation`, rule 2).
+		struct FDisplacedPlay
+		{
+			FString OwnerStem;
+			FString OwnerRoot;
+			FString Label;
+			uint32 PlayId = 0;
+			float LastEventCheck = 0.0f;       // `+0x658` as the displaced play left it
+			bool bSequenceFinished = false;    // `+0x65c` as the displaced play left it
+			bool bValid = false;
+		};
+		FDisplacedPlay Displaced;
 	};
 	// [0] the base sequence (`EElysiumAnimChannel::Base`), [1] overlay layer 0
 	// (`EElysiumAnimChannel::UpperBody`, where `SetAnimation`'s `*_attack_layer` clip and its 3031

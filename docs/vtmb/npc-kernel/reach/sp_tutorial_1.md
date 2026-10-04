@@ -38,9 +38,9 @@ Made by makers: `npc_VPedestrian` 3, `npc_VRat` 3, `npc_VVampire` 8.
 
 | Band | Reached core | `rule` | `mechanism` | `present` | `dead` | `unsettled` | No verdict |
 |---|---|---|---|---|---|---|---|
-| 0–4 | 671 | 293 | 123 | 88 | 164 | 3 | 0 |
+| 0–4 | 671 | 294 | 122 | 88 | 164 | 3 | 0 |
 | 5–9 | 120 | 53 | 35 | 26 | 6 | 0 | 0 |
-| 10–18 | 139 | 84 | 28 | 7 | 20 | 0 | 0 |
+| 10–18 | 139 | 84 | 27 | 8 | 20 | 0 | 0 |
 | 19–29 | 132 | 109 | 9 | 2 | 11 | 0 | 1 |
 
 ## Schedule slots

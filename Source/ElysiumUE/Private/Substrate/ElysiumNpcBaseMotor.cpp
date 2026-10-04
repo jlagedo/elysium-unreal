@@ -1176,8 +1176,10 @@ FElysiumNpcMoveRequest FElysiumNpcBase::PrepareMoveRequest(const FElysiumNpcMove
 	{
 		// The stored `+0x38`, as `UpdateYaw(-1)` `0x102e1e20` reads it -- not a fresh slot 516: a
 		// task-stated speed (`0x102e1ca8`, Andrei's `AndreiFacePlayerYawSpeed`) stands until a writer
-		// replaces it. Whether `MoveFacing` (motor slot 18, closed at CMC) re-stores it each step through
-		// `0x102e1c10(yaw, -1.0)` (the SDK's `SetIdealYawAndUpdate` default) is **unrecovered**.
+		// replaces it. `MoveFacing` (motor slot 18 `0x102e19e0`) IS such a writer: every move step it
+		// issues `0x102e1c10(yaw, -1.0)` (`102e1a6a`, `102e1b2d`), whose `-1.0` re-reads slot 516
+		// `MaxYawSpeed` into `+0x38` (`0x102e1cf0`) -- `FElysiumNpc::MotorMoveReissueYaw`, spec 0002
+		// V4b; `MotorThinkUpkeep` hands the changed word to the travelling body.
 		Out.YawSpeedDegPerS = MotorYawRateDegPerS(MotorYawSpeedWord);
 	}
 	bKernelMoveLive = true;
@@ -1552,15 +1554,24 @@ FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavSte
 		return ENavMoveResult::Ok;
 	}
 
-	// Not reached: `MoveNormal` reads the ideal speed and sets the path's activity (slot 310) before
-	// building the step. The port's landed form of that write is the ideal activity from
-	// `ResolveLinkActivity` (`0x1027a6c0`: the path's movement activity while a head stands), which
-	// is what walks the body in its WALK/RUN clip.
-	SetIdealActivity(ResolveLinkActivity());
-	// Retail's `MoveExecute` keeps the motor's ideal yaw (`+0x34`) at the travel yaw while it walks;
-	// this runtime's body orients to its movement, so the travel yaw is the body's own yaw, taken
-	// through `UTIL_AngleMod` as the motor stores it (named divergence: the mover's, not the path's).
-	MotorIdealYaw = StartTaskAngleMod(static_cast<float>(Angles.Y));
+	// Not reached (`MoveNormal 0x102efaa0`, past slot 16): `102efb44` owner slot 248 `GetIdealSpeed`
+	// is saved, then `m_Activity` (`+0xfec`), `m_nSequence` (`+0x6f0`) and `GetAbsOrigin`; `102efb80`
+	// reads the path's movement activity (`0x102ee3f0`, `path+0x2c`) and `102efb88` pushes it through
+	// owner slot 310 `SetActivity` -- the COMMIT (`m_Activity`, the sequence, `ResetSequenceInfo`), not
+	// `SetIdealActivity`: the kernel plays the WALK/RUN row from the first move step, so its events
+	// and its `+0x654` are the walk's.
+	SetActivity(Navigator.GetMovementActivity());                            // 102efb80 / 102efb88
+	// `102efb93..102efbb0`: `GetIdealSpeed() <= 0.0` (`0x104454c4`, `<=`) with `m_Activity == 2`
+	// (`ACT_TRANSITION`, which slot 310 refuses to leave) -> `*result = 0`, no step this pass.
+	if (GetIdealSpeed() <= 0.f && ActivityNumber == 2)
+	{
+		return ENavMoveResult::Ok;
+	}
+	// NOT PORTED, named: the restore after an `AIMR_OK` step (`102efc11`..): when the ideal speed
+	// saved BEFORE the `SetActivity` is under 0.01 (double `0x1044e658`) and the body moved under 0.01
+	// units in the step, `m_nSequence` is written back and the saved activity re-issued through slot
+	// 310. The step is the body's own tick here (K1), so the distance moved inside this call has no
+	// source.
 
 	// Motor code 4 (`0x102e0bd0`, checked first): the obstruction is the move goal's own target
 	// (`goal+0x34`) -> S7 `0x102ef6d0` runs `OnNavComplete`, `*result = 0`. The probe's own
@@ -1602,6 +1613,18 @@ FElysiumNpcBase::ENavMoveResult FElysiumNpcBase::NavMoveNormalPass(const FNavSte
 		// `PrependLocalAvoidance 0x102ede30` (result 1, the detour walked). Retail's order is kept
 		// (steer and detour first; the 0.25 s hold only once they fail, i.e. once the follower gives
 		// the request up) and so is the outcome: keep walking, nothing fails, no hold is armed.
+		//
+		// The step's facing: `CAI_HumanoidMotor` vfunc 19 `0x10264680` (`MoveGroundExecute`) calls
+		// motor slot 18 `MoveFacing 0x102e19e0` on its copy of the move (`1026482f`), which is where
+		// retail writes the motor's ideal yaw (`+0x34`, `SetIdealYawAndUpdate 0x102e1c10`) and
+		// `m_flDesiredMoveYaw` (`+0x63ec`) during a move, then re-writes `+0x654` (`0x10264841/46`).
+		// It replaces the old copy of the body's yaw into the ideal yaw (a named divergence, gone).
+		// Only the Troika line carries the sequence bridge and `+0x63ec`; a base-only NPC (the hull
+		// probe) has no row to read and its ideal yaw is left as its tasks wrote it.
+		if (FElysiumNpc* const Troika = AsNpc())
+		{
+			Troika->MotorMoveGroundExecuteFacing();
+		}
 		return ENavMoveResult::Ok;
 	}
 

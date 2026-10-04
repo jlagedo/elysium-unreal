@@ -106,3 +106,39 @@ bool SplicePathWaypoint(int32 Waypoint);
 
 // --- The two `CAI_Motor` step bodies and `CAI_Navigator#12` ------------------------------------------
 
+// --- `CAI_Motor` slot 18 `MoveFacing` `0x102e19e0` and its caller's facing step (0002 V4b) -----------
+
+/** The two `AILocalMoveGoal_t` words slot 18 reads: `dir` (`move+0x0c`, the unit direction the step
+ *  travels) and `facing` (`move+0x18`, written by `MoveGroundExecute 0x10264680` on its copy of the
+ *  move as `UTIL_YawToVector(yaw)`). THIS world's axes (Y negated), as slot 15's blend is; the yaw
+ *  helpers read them back into retail's frame. */
+struct FMotorMoveFacingGoal
+{
+	FVector Dir = FVector::ZeroVector;      // move+0x0c
+	FVector Facing = FVector::ZeroVector;   // move+0x18
+};
+
+/** `0x102e2820(motor, m_nSequence, "move_yaw")`: does the playing sequence carry the `move_yaw` pose
+ *  parameter? The bridge row's fan binds it (`FSequenceDescriptorRow::FanParameter`); a row with no
+ *  fan, or none at all, answers false. */
+bool MotorSequenceHasMoveYaw() const;
+
+/** `0x102e1c10(yaw, -1.0)` as slot 18 issues it, the kernel's words: the ideal yaw (`motor+0x34`,
+ *  through the `+0x28` half-turn latch), `MaxYawSpeed` re-read into `motor+0x38` (`0x102e1cf0`) and
+ *  the yaw clock's stamp (`motor+0x2c`, `UpdateYaw 0x102e1e20`). The turn itself is the travelling
+ *  body's (K1): it is not asked to `Face` while its move request is live. */
+void MotorMoveReissueYaw(float YawDegrees);
+
+/** `CAI_Motor` slot 18 `0x102e19e0`, the SDK's `MoveFacing`. Without `move_yaw` on the sequence the
+ *  ideal yaw is `AngleMod(VecToYaw(move.dir))`. With it, the heading is `normalize(facingDir * w +
+ *  move.facing * (1 - w))` (`facingDir`, `w` from slot 15 `0x102e2180`), the ideal yaw its quantised
+ *  yaw, and `m_flDesiredMoveYaw (+0x63ec) = -UTIL_AngleDiff(VecToYaw(move.dir), GetAngles().y)`. */
+void MotorMoveFacing(const FMotorMoveFacingGoal& Move);
+
+/** The facing step of `CAI_HumanoidMotor` vfunc 19 `0x10264680` (`MoveGroundExecute`), slot 18's one
+ *  caller: `move.facing = UTIL_YawToVector(yaw)` with `yaw` the turn script's answer (the body's,
+ *  `IElysiumNpcMotor::GetNpcMoveFacingYaw`) or the current yaw, `AngleMod`-quantised; slot 18; then
+ *  `m_flGroundSpeed (+0x654) = GetSequenceGroundSpeed(m_nSequence)` (`0x10264841/46`). The step
+ *  itself (the velocity script, `MoveGroundStep 0x102e0bd0`) is the body's (K1). */
+void MotorMoveGroundExecuteFacing();
+

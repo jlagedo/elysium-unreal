@@ -461,6 +461,19 @@ standing/duck collision bounds and controlled-use validation
 Retail's order in `CBasePlayer::PostThink` `0x1016be10` is slot 250 `(0)` (the advance) →
 `0x101600a0` → slot 258 `(interval, this)` → slot 312.
 
+*(2026-10-04, packet S9 item 1.)* **Where a sequence's event window opens.** Every sequence set
+runs `ResetSequenceInfo` `0x10090950`, which zeroes `m_flLastEventCheck` (`+0x658`, `0x10090a3d`)
+and clears `m_bSequenceFinished` (`+0x65c`, `0x10090a37`) and never touches `m_flCycle`. The
+player's commit `0x101644f0` zeroes the cycle except for the five locomotion activities, where it
+is carried, so a locomotion clip's first window is `[0, cycle + 0.1 × rate)`. Retail has **no
+resume**: a clip that was displaced and comes back is a new commit. The port's player has no
+kernel sequence words and reads the pose layer's phase, so `FElysiumPlayer::PostThinkAnimation`
+keeps two rules: a play the channel has not dispatched before opens at 0 with the phase's cycle
+(retail's rule); a play that was displaced and returns with the same play id keeps the cursor it
+had, because the pose layer resumed it mid-clip where retail would have restarted it at 0 (no
+retail counterpart; on the player it changes only the count of swallowed 2050..2053). The pose
+layer's published anchor is not read.
+
 `ItemPostFrame` gives a controlling use entity first refusal; otherwise it dispatches the active
 weapon's busy-frame or ordinary post-frame virtual according to the next-attack deadline. The
 action classifier consumes the movement that just completed, so animation is a result of the

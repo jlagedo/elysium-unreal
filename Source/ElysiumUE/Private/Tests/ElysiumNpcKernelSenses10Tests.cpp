@@ -841,6 +841,299 @@ bool FElysiumNpcKernelSenses10WeaponLosTest::RunTest(const FString&)
 }
 
 // =================================================================================================
+// Spec 0002 V5a-3 — the weapon's line of fire (`0x1024f330` -> `0x1024f3d0`), owner slot 389
+// `Weapon_ShootPosition` (`0x103338c0`) and slot 562's weapon arm (`0x1026fc76`).
+// =================================================================================================
+
+namespace
+{
+	// The stated world of one line-of-fire case: the world answer of each ray in order, the
+	// characters each ray lists, and every request the body made.
+	struct FSenses10LosWorld
+	{
+		struct FRayAnswer
+		{
+			float WorldFraction = 1.f;
+			FElysiumEntityHandle WorldHit;
+			TArray<FElysiumRetailTraceCharacter> Characters;
+		};
+		TArray<FRayAnswer> Rays;                 // ray N answers Rays[N]; past the end, clear
+		TArray<FElysiumRetailTrace> Asked;
+
+		void Install(FSenses10Fixture& F)
+		{
+			F.World.Services.TraceRetailQuery = [this](const FElysiumRetailTrace& Asking,
+				FElysiumRetailTraceResult& Out)
+			{
+				const int32 Index = Asked.Num();
+				Asked.Add(Asking);
+				if (Rays.IsValidIndex(Index))
+				{
+					Out.Fraction = Rays[Index].WorldFraction;
+					Out.HitEntity = Rays[Index].WorldHit;
+					for (const FElysiumRetailTraceCharacter& Character : Rays[Index].Characters)
+					{
+						Out.Characters.Add(Character);
+					}
+				}
+				Out.EndPosCm = Asking.StartCm + (Asking.EndCm - Asking.StartCm) * Out.Fraction;
+				return true;
+			};
+		}
+		void Reset()
+		{
+			Rays.Reset();
+			Asked.Reset();
+		}
+		static FRayAnswer Character(const FElysiumEntityHandle& Who, float Fraction)
+		{
+			FRayAnswer Answer;
+			FElysiumRetailTraceCharacter Met;
+			Met.Entity = Who;
+			Met.Fraction = Fraction;
+			Answer.Characters.Add(Met);
+			return Answer;
+		}
+		static FRayAnswer WorldAt(const FElysiumEntityHandle& Who, float Fraction)
+		{
+			FRayAnswer Answer;
+			Answer.WorldFraction = Fraction;
+			Answer.WorldHit = Who;
+			return Answer;
+		}
+	};
+
+	constexpr EElysiumNpcCond GSenses10BlockedByFriend = static_cast<EElysiumNpcCond>(0x63);
+	constexpr EElysiumNpcCond GSenses10SightOccluded = static_cast<EElysiumNpcCond>(0x66);
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10WeaponLineOfFireTest,
+	"Elysium.Arm.NpcKernelSenses10.WeaponLineOfFire", GElysiumNpcKernelSenses10Flags)
+bool FElysiumNpcKernelSenses10WeaponLineOfFireTest::RunTest(const FString&)
+{
+	FSenses10Fixture F;
+	FElysiumEntity* const Prop = F.World.World.FindByName(TEXT("unknowns"));
+	if (F.Guard == nullptr || F.Other == nullptr || F.Player == nullptr || Prop == nullptr)
+	{
+		AddError(TEXT("no fixture"));
+		return false;
+	}
+	FSenses10LosWorld Los;
+	Los.Install(F);
+	FElysiumNpcConditions& C = F.Guard->Cognition.Conditions;
+	const FVector StartCm(0.0, 0.0, Senses10Cm(55.f));
+	const FVector TargetCm(Senses10Cm(1000.f), 0.0, Senses10Cm(40.f));
+	const FElysiumEntityHandle NoOccluder = F.Guard->BaseMemory.EnemyOccluder;
+	auto Fire = [&F, &Los, &C, &StartCm, &TargetCm](bool bSet)
+	{
+		Los.Asked.Reset();
+		C.Clear(GSenses10BlockedByFriend);
+		C.Clear(GSenses10SightOccluded);
+		return F.Guard->WeaponLineOfFire(StartCm, TargetCm, F.Guard->Handle, bSet);
+	};
+	F.Guard->BaseMemory.Enemy = F.Player->Handle;
+
+	// `0x1024f46e`: `fraction == 1.0` answers true and raises nothing.
+	TestTrue(TEXT("0x1024f46e a clear ray answers true"), Fire(true));
+	TestFalse(TEXT("...with no 0x63"), C.Has(GSenses10BlockedByFriend));
+	TestFalse(TEXT("...and no 0x66"), C.Has(GSenses10SightOccluded));
+	if (TestEqual(TEXT("0x1024f42a one ray"), Los.Asked.Num(), 1))
+	{
+		TestEqual(TEXT("0x1024f424 mask 0x46004003"), Los.Asked[0].RetailMask, 0x46004003);
+		TestTrue(TEXT("0x10015929 the ray starts at the caller's start"), Los.Asked[0].StartCm.Equals(StartCm, 1e-6));
+		TestTrue(TEXT("...ends at the target"), Los.Asked[0].EndCm.Equals(TargetCm, 1e-6));
+		TestTrue(TEXT("...a line, no extents"), Los.Asked[0].MinsCm.IsZero() && Los.Asked[0].MaxsCm.IsZero());
+		TestTrue(TEXT("0x1000bd7f the filter passes the caller's ignore (the owner)"),
+			Los.Asked[0].Ignore.Num() == 1 && Los.Asked[0].Ignore[0] == F.Guard->Handle);
+	}
+
+	// `0x1024f4ae`: the hit entity is the owner's `GetEnemy()` -> true.
+	Los.Rays = { FSenses10LosWorld::Character(F.Player->Handle, 0.9f) };
+	TestTrue(TEXT("0x1024f4ae the enemy hit answers true"), Fire(true));
+	TestFalse(TEXT("...and raises no 0x63"), C.Has(GSenses10BlockedByFriend));
+
+	// `0x1024f4d4`: a hit combat character the owner hates (`IRelationType == D_HT`) is shot through.
+	F.Guard->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Hate, 5);
+	Los.Rays = { FSenses10LosWorld::Character(F.Other->Handle, 0.5f) };
+	TestTrue(TEXT("0x1024f4d4 a hated character in the way answers true"), Fire(true));
+	TestFalse(TEXT("...and raises no 0x63"), C.Has(GSenses10BlockedByFriend));
+
+	// `0x1024f502`: any other relation is a friend in the line of fire: false, and 0x63 under bSet.
+	F.Guard->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Neutral, 5);
+	TestFalse(TEXT("0x1024f5d3 a non-hated character in the way answers false"), Fire(true));
+	TestTrue(TEXT("0x1024f502 ...and raises WEAPON_BLOCKED_BY_FRIEND (0x63)"), C.Has(GSenses10BlockedByFriend));
+	TestFalse(TEXT("...and no 0x66"), C.Has(GSenses10SightOccluded));
+	TestFalse(TEXT("0x1024f4f1 without bSet it answers false"), Fire(false));
+	TestFalse(TEXT("...and raises nothing"), C.Has(GSenses10BlockedByFriend));
+
+	// The engine never hands the filter a not-solid body: a corpse (`BecomeClientRagdoll 0x10090180`,
+	// `AddSolidFlags(w | 4)`) stops blocking at once.
+	const uint32 SolidFlagsBefore = F.Other->RetailSolidFlags;
+	F.Other->RetailSolidFlags |= 0x4u;
+	TestTrue(TEXT("0x10090180 a FSOLID_NOT_SOLID body is not met by the ray"), Fire(true));
+	TestFalse(TEXT("...and raises no 0x63"), C.Has(GSenses10BlockedByFriend));
+	F.Other->RetailSolidFlags = SolidFlagsBefore;
+
+	// `0x1024f5c7`: a world hit (no combat character, not group 4): false, 0x66 under bSet, and --
+	// unlike slot 573 (`0x1026fe73`) -- `m_hEnemyOccluder` unwritten.
+	Los.Rays = { FSenses10LosWorld::WorldAt(FElysiumEntityHandle::Invalid(), 0.4f) };
+	TestFalse(TEXT("0x1024f5d3 a world hit answers false"), Fire(true));
+	TestTrue(TEXT("0x1024f5c7 ...and raises WEAPON_SIGHT_OCCLUDED (0x66)"), C.Has(GSenses10SightOccluded));
+	TestFalse(TEXT("...and no 0x63"), C.Has(GSenses10BlockedByFriend));
+	TestTrue(TEXT("0x1024f3d0 never writes m_hEnemyOccluder (+0x5d90)"),
+		F.Guard->BaseMemory.EnemyOccluder == NoOccluder);
+	TestFalse(TEXT("0x1024f5ba without bSet a world hit answers false"), Fire(false));
+	TestFalse(TEXT("...and raises nothing"), C.Has(GSenses10SightOccluded));
+
+	// `0x1024f509..0x1024f59e`: a non-character hit of collision group 4 at `fraction > 0` -> the same
+	// body again from the hit point, the filter passing the HIT ENTITY.
+	const int32 GroupBefore = Prop->CollisionGroup;
+	Prop->CollisionGroup = 4;
+	const FVector HitPointCm = StartCm + (TargetCm - StartCm) * 0.25;
+	Los.Rays = { FSenses10LosWorld::WorldAt(Prop->Handle, 0.25f) };   // then a clear second ray
+	TestTrue(TEXT("0x1024f59e a group-4 hit re-traces, and a clear second ray answers true"), Fire(true));
+	if (TestEqual(TEXT("0x1024f59e two rays"), Los.Asked.Num(), 2))
+	{
+		TestTrue(TEXT("0x1024f52d the second ray starts at start + (end - start) * fraction"),
+			Los.Asked[1].StartCm.Equals(HitPointCm, 1e-3));
+		TestTrue(TEXT("0x1024f598 ...ends at the same target"), Los.Asked[1].EndCm.Equals(TargetCm, 1e-6));
+		TestTrue(TEXT("0x1024f59a ...and its filter passes the hit entity, not the owner"),
+			Los.Asked[1].Ignore.Num() == 1 && Los.Asked[1].Ignore[0] == Prop->Handle);
+	}
+	// Each outcome behind it.
+	Los.Rays = { FSenses10LosWorld::WorldAt(Prop->Handle, 0.25f), FSenses10LosWorld::Character(F.Other->Handle, 0.5f) };
+	TestFalse(TEXT("a friend behind the group-4 entity answers false"), Fire(true));
+	TestTrue(TEXT("0x1024f502 ...with 0x63, raised by the second pass"), C.Has(GSenses10BlockedByFriend));
+	Los.Rays = { FSenses10LosWorld::WorldAt(Prop->Handle, 0.25f), FSenses10LosWorld::Character(F.Player->Handle, 0.5f) };
+	TestTrue(TEXT("0x1024f4ae the enemy behind the group-4 entity answers true"), Fire(true));
+	Los.Rays = { FSenses10LosWorld::WorldAt(Prop->Handle, 0.25f),
+		FSenses10LosWorld::WorldAt(FElysiumEntityHandle::Invalid(), 0.5f) };
+	TestFalse(TEXT("a wall behind the group-4 entity answers false"), Fire(true));
+	TestTrue(TEXT("0x1024f5c7 ...with 0x66"), C.Has(GSenses10SightOccluded));
+
+	// `0x1024f516..0x1024f527`: `fraction > 0.0` is strict; a group-4 hit at fraction 0 is the 0x66 arm.
+	Los.Rays = { FSenses10LosWorld::WorldAt(Prop->Handle, 0.f) };
+	TestFalse(TEXT("0x1024f527 a group-4 hit at fraction 0 does not re-trace"), Fire(true));
+	TestEqual(TEXT("...one ray"), Los.Asked.Num(), 1);
+	TestTrue(TEXT("0x1024f5c7 ...and raises 0x66"), C.Has(GSenses10SightOccluded));
+
+	// `0x1024f510`: any other group is the 0x66 arm.
+	Prop->CollisionGroup = GroupBefore;
+	Los.Rays = { FSenses10LosWorld::WorldAt(Prop->Handle, 0.25f) };
+	TestFalse(TEXT("0x1024f510 a hit of another collision group does not re-trace"), Fire(true));
+	TestEqual(TEXT("...one ray"), Los.Asked.Num(), 1);
+
+	// The port's guard (retail's recursion is unbounded): an endless run of group-4 hits ends on 0x66.
+	Prop->CollisionGroup = 4;
+	Los.Reset();
+	for (int32 Index = 0; Index < 32; ++Index)
+	{
+		Los.Rays.Add(FSenses10LosWorld::WorldAt(Prop->Handle, 0.25f));
+	}
+	TestFalse(TEXT("the recursion guard answers false"), Fire(true));
+	TestTrue(TEXT("...finitely"), Los.Asked.Num() < 32);
+	TestTrue(TEXT("...on the 0x66 arm"), C.Has(GSenses10SightOccluded));
+	Prop->CollisionGroup = GroupBefore;
+
+	// --- Weapon slot 364 `0x1024f330` through slot 562's weapon arm (`0x1026fc76`): the ray starts
+	// at owner slot 389's point, not at `ownerPos`.
+	Los.Reset();
+	const FElysiumEntityHandle WeaponBefore = F.Guard->Inventory.ActiveWeapon;
+	F.Guard->Inventory.ActiveWeapon = Prop->Handle;      // slot 562 tests only that a weapon is held
+	F.Guard->Angles = FVector::ZeroVector;
+	F.Guard->HackedGunPosUnits = FVector(0.0, 0.0, 55.0);   // 0x10298e0c..18
+	const FVector OwnerCm = F.Guard->Origin;
+	Los.Rays = { FSenses10LosWorld::Character(F.Other->Handle, 0.5f) };
+	C.Clear(GSenses10BlockedByFriend);
+	TestFalse(TEXT("0x1026fc76 an armed body is answered by the weapon's line of fire (no longer `true` unasked)"),
+		F.Guard->WeaponLOSCondition(OwnerCm, TargetCm, true));
+	TestTrue(TEXT("0x1024f502 ...which raises 0x63"), C.Has(GSenses10BlockedByFriend));
+	if (TestEqual(TEXT("0x1024f330 one ray"), Los.Asked.Num(), 1))
+	{
+		TestTrue(TEXT("0x1024f330 the ray starts at slot 389's point (origin + 55 units up)"),
+			Los.Asked[0].StartCm.Equals(OwnerCm + FVector(0.0, 0.0, Senses10Cm(55.f)), 1e-3));
+		TestFalse(TEXT("...not at ownerPos"), Los.Asked[0].StartCm.Equals(OwnerCm, 1e-3));
+	}
+	// `0x1026fc8b`: the `0x10000000` cone still runs after the weapon and overrides its yes with 0x64.
+	Los.Reset();
+	const int32 CapsBefore = F.Guard->CapabilityWord;
+	F.Guard->CapabilityWord = CapsBefore | 0x10000000;
+	F.Player->Origin = OwnerCm + (TargetCm - OwnerCm) * 0.5;
+	C.Clear(static_cast<EElysiumNpcCond>(100));
+	TestFalse(TEXT("0x1026fcb5 the 0.92 cone overrides a weapon yes"),
+		F.Guard->WeaponLOSCondition(OwnerCm, TargetCm, true));
+	TestTrue(TEXT("0x1026fcc9 ...with COND 0x64"), C.Has(static_cast<EElysiumNpcCond>(100)));
+	F.Guard->CapabilityWord = CapsBefore;
+	F.Guard->Inventory.ActiveWeapon = WeaponBefore;
+
+	// Unarmed with `0x20000`: slot 573 (`0x1026fc3c`), which DOES record the occluder on a world hit.
+	if (!F.Guard->Inventory.ActiveWeapon.IsSet())
+	{
+		F.Guard->CapabilityWord = CapsBefore | 0x20000;
+		Los.Reset();
+		Los.Rays = { FSenses10LosWorld::WorldAt(Prop->Handle, 0.5f) };
+		C.Clear(GSenses10SightOccluded);
+		TestFalse(TEXT("0x1026fc3c unarmed with 0x20000 reaches slot 573"),
+			F.Guard->WeaponLOSCondition(OwnerCm, TargetCm, true));
+		TestTrue(TEXT("0x1026fe67 ...whose world hit raises 0x66"), C.Has(GSenses10SightOccluded));
+		TestTrue(TEXT("0x1026fe73 ...and records m_hEnemyOccluder"),
+			F.Guard->BaseMemory.EnemyOccluder == Prop->Handle);
+		F.Guard->CapabilityWord = CapsBefore;
+	}
+	F.World.Services.TraceRetailQuery = nullptr;
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSenses10ShootPositionTest,
+	"Elysium.Arm.NpcKernelSenses10.ShootPosition", GElysiumNpcKernelSenses10Flags)
+bool FElysiumNpcKernelSenses10ShootPositionTest::RunTest(const FString&)
+{
+	FSenses10Fixture F;
+	if (F.Guard == nullptr)
+	{
+		AddError(TEXT("no fixture"));
+		return false;
+	}
+	// `0x10298e0c..18`: the Troika line's `m_HackedGunPos` is `(0, 0, 55)`.
+	TestTrue(TEXT("0x10298e0c m_HackedGunPos spawns (0, 0, 55)"),
+		F.Guard->HackedGunPosUnits.Equals(FVector(0.0, 0.0, 55.0), 1e-6));
+	const FVector OriginCm(Senses10Cm(100.f), Senses10Cm(200.f), Senses10Cm(8.f));
+	F.Guard->Angles = FVector::ZeroVector;
+	TestTrue(TEXT("0x10333a33 an upright body's point is origin + (0, 0, 55) units"),
+		F.Guard->Weapon_ShootPosition(OriginCm).Equals(OriginCm + FVector(0.0, 0.0, Senses10Cm(55.f)), 1e-3));
+
+	// The three components on a turned body: `((origin + forward * gun.y) + right * gun.x) + up * gun.z`
+	// (`0x103339b9`, `0x10333999`, `0x10333972`), the basis `AngleVectors 0x10139610` of slot 221's
+	// BODY angles. Source yaw 90: forward (0, 1, 0), right (1, 0, 0), up (0, 0, 1) in Source axes; the
+	// port's position space reflects Y.
+	F.Guard->HackedGunPosUnits = FVector(3.0, 5.0, 55.0);
+	F.Guard->Angles = FVector(0.0, 90.0, 0.0);
+	const FVector Turned = F.Guard->Weapon_ShootPosition(OriginCm);
+	TestTrue(TEXT("0x10333999 gun.x rides RIGHT (+0x1578)"),
+		FMath::IsNearlyEqual(Turned.X - OriginCm.X, static_cast<double>(Senses10Cm(3.f)), 1e-3));
+	TestTrue(TEXT("0x103339b9 gun.y rides FORWARD (+0x157c)"),
+		FMath::IsNearlyEqual(Turned.Y - OriginCm.Y, -static_cast<double>(Senses10Cm(5.f)), 1e-3));
+	TestTrue(TEXT("0x10333972 gun.z rides UP (+0x1580)"),
+		FMath::IsNearlyEqual(Turned.Z - OriginCm.Z, static_cast<double>(Senses10Cm(55.f)), 1e-3));
+
+	// Roll 90 at yaw 0: Source right (0, 0, -1), up (0, -1, 0) -- the rows `_DAT_104492dc` (-1.0) signs.
+	F.Guard->Angles = FVector(0.0, 0.0, 90.0);
+	const FVector Rolled = F.Guard->Weapon_ShootPosition(OriginCm);
+	TestTrue(TEXT("0x10139610 forward is unchanged by roll"),
+		FMath::IsNearlyEqual(Rolled.X - OriginCm.X, static_cast<double>(Senses10Cm(5.f)), 1e-3));
+	TestTrue(TEXT("0x10139610 up's Y row (cr*sp*sy - sr*cy), reflected"),
+		FMath::IsNearlyEqual(Rolled.Y - OriginCm.Y, static_cast<double>(Senses10Cm(55.f)), 1e-3));
+	TestTrue(TEXT("0x10139610 right's Z row (-sr*cp)"),
+		FMath::IsNearlyEqual(Rolled.Z - OriginCm.Z, -static_cast<double>(Senses10Cm(3.f)), 1e-3));
+
+	// The eye is not consulted: there is no eye-position fallback in `0x103338c0`.
+	F.Guard->HackedGunPosUnits = FVector::ZeroVector;
+	TestTrue(TEXT("0x103338c0 a zero m_HackedGunPos answers the caller's origin, not the eye"),
+		F.Guard->Weapon_ShootPosition(OriginCm).Equals(OriginCm, 1e-6));
+	return true;
+}
+
+// =================================================================================================
 // The species arms of slots 201, 363, 472, 478 and 574.
 // =================================================================================================
 

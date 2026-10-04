@@ -247,6 +247,8 @@ record — and a `reason`) and
 | `cover` | the tactical cover program through the shot (green since V3a) |
 | `control_sequence` | the headless host animates: a path-free program's finite activity finishes |
 | `world/anim_footsteps_walk`, `world/anim_player_footsteps`, `combat/anim_player_weapon_event_firearm`, `_melee`, `world/anim_prop_event` | the animation events of an NPC, the player and a prop: who dispatches what (guards across spec 0002 V4a's move of the dispatch into each entity's own think) |
+| `combat/ranged_friend_in_line_of_fire` | slot 562's line of fire: a gunman with a non-hated body between him and his enemy raises `WEAPON_BLOCKED_BY_FRIEND` (`0x1024f3d0`) and holds his fire until 1.5 s after the last raise (`+0x5b88`) (spec 0002 V5a-3) |
+| `combat/verbs_feed_victim_dispatch` | the feed victim's paired clip is its kernel sequence (`SetGrappleActivity 0x1032a100`): its own think dispatches the clip's 4007 and no idle row is re-picked over it |
 | `combat/corpse_removed_unseen`, `corpse_kept_seen`, `corpse_kindred_burns`, `corpse_pedestrian_stays`, `corpse_fades` | the four corpse-removal clocks (`removed`) |
 | `_selftest/must_fail` | an expectation nothing meets fails the run |
 | `_selftest/bound_trips` | a deadline is a deadline: a real event after it does not count |

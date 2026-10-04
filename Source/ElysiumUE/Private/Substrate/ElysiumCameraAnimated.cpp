@@ -312,9 +312,10 @@ void FElysiumCameraAnimated::Think()
 
 	// --- slot 258 `DispatchAnimEvents(dt, this)` (`vt+0x408`). ---
 	// `CCameraAnimated` is a `CBaseAnimating`: the base dispatcher `0x10091880` only, no overlay
-	// layers, the camera as source and handler. Its slot 259 is `CBaseAnimating::HandleAnimEvent`
-	// `0x10091da0` (2070, 2071, 4005, anything else a `DevWarning`). The rising edge's
-	// `OnSequenceFinished` (`0x10091c80`) is an empty body.
+	// layers, the camera as source and handler. Its slot 259 is `CCameraAnimated::HandleAnimEvent`
+	// `0x10071900` (`HandleAnimEvent` below): 1003 fires `OnScriptEvent01..08`, and every other id
+	// falls to `CBaseAnimating::HandleAnimEvent` `0x10091da0` (2070, 2071, 4005, anything else a
+	// `DevWarning`). The rising edge's `OnSequenceFinished` (`0x10091c80`) is an empty body.
 	// The words are this entity's own, written in place: `bSequenceFinished` goes in as the live
 	// `+0x65c` (retail's `cVar2`) and the dispatcher writes all three words before its event loop,
 	// so nothing is copied back afterwards.
@@ -333,6 +334,22 @@ void FElysiumCameraAnimated::Think()
 		return;
 	}
 	NextThink = static_cast<float>(Now + ElysiumCameraAnimatedImpl::AnimatedThinkInterval);
+}
+
+bool FElysiumCameraAnimated::HandleAnimEvent(const FElysiumAnimEvent& Event)
+{
+	// `CCameraAnimated::HandleAnimEvent` `0x10071900`, slot 259.
+	if (Event.Event != 1003)                                    // 0x10071907 CMP [event],0x3eb
+	{
+		return FElysiumAnimating::HandleAnimEvent(Event);       // 0x10071912 -> 0x10091da0
+	}
+	const int32 Index = FCString::Atoi(*Event.Options) - 1;     // 0x1007191f atoi / 0x10071927 DEC
+	if (Index >= 0 && Index < 8)                                // 0x10071928 JS / 0x1007192d JGE
+	{
+		// `FireOutput(this + 0x730 + Index * 0x18, activator this, caller this, delay 0)` 0x1007193d
+		FireOutput(FName(*FString::Printf(TEXT("OnScriptEvent%02d"), Index + 1)), Handle);
+	}
+	return true;   // claimed: an out-of-range 1003 fires nothing and does not reach the base
 }
 
 void FElysiumCameraAnimated::InputEndCamera()

@@ -89,7 +89,7 @@ slot 360 (`+0x5a0`) `& 0x6000`; non-zero → `bVar1 = false` (a ranged threat) �
 |---|---|---|
 | P1 | `FElysiumNpcBase::GatherAttackConditions` `ElysiumNpcBaseClosure.cpp:143-173` → `ElysiumNpcCond::GatherAttackConditions` `ElysiumNpcConditions.cpp:1053-1151` | no slot-560 call at the top (the comment at `:145-151` describes retail; the body does not do it), so every band word and CAN_* stacks from gather to gather; no second clear; **the two arms are exclusive** (`Capability != Ranged` → melee band and `return`; else ranged) where retail runs ranged then melee off the capability bits; no timers (`+0x5b88`, `+0x5b8c` have no writer but spawn: `ElysiumNpcBaseLifecycle2.cpp:265-266`); no 0x2e; no tail. An inert or unresolvable enemy returns before anything (retail has no such test: the caller holds a live enemy) |
 | P2 | the same body's melee band `:1098-1114` | "CHOSEN, NOT RECOVERED": 0x60 past `MeleeReachSourceUnits`, 0x51 when facing and ready. Retail's weapon slot 367 is `CWeaponMelee 0x103eac30` → `0x103ea7e0(0x4b, enemy, dot, dist)`, which derives the bands from the swing sequences' attack data and answers 9 / 0x60 / 0x61 / 0x5f / (0x51). **Not read** (decompile damaged at `0x103ea8e5`): §7 |
-| P3 | the 0x4f LOS re-test `:1137-1147` | stood in by the eye's occlusion latch (named at the line); kept, in retail's position |
+| P3 | the 0x4f LOS re-test `:1137-1147` | ~~stood in by the eye's occlusion latch (named at the line); kept, in retail's position~~ ported in V4b's wave, V5a-3: slot 562 asked twice, the weapon's line of fire `0x1024f3d0` |
 | P4 | `FElysiumNpc::StartTask19WeaponNextAttackTime` `ElysiumNpcStartTask.cpp:577-581` | a seam answering `curtime`: the wait completes on the frame it starts (N2). The arm around it (`:1664-1686`) is retail |
 | P5 | `ElysiumItemTable.cpp:192` | parses `Attack_Rate` only; the three `NPC_Attack_Rate_*` keys are not read |
 | P6 | `FElysiumNpc::SelectCoverOrKickSchedule` `ElysiumNpcSchedule.cpp:481-495` | `bNoRangedThreat` is never cleared: a stub fires "no cross-entity weapon capability reader" (N1). The reader exists: `ElysiumNpcCond::WeaponCapability(const FElysiumCombatCharacter&)` (`ElysiumNpcConditions.h:662`) |
@@ -172,8 +172,9 @@ expects `0xa4` because the stub fired. Each lane lists what it deleted.
   records are re-run by the integrator; a moved timing is triaged against retail, never loosened.
 - **0x2f's ranged test** in retail is the weapon's stamp; the port's matches. The innate arm's
   `m_flNextAttack` has no writer in the port (named at its declaration): unchanged.
-- **Slot 562's two muzzle traces** stay stood in by the occlusion latch (P3): a named, existing
-  divergence, not adopted anew.
+- **Slot 562's two muzzle traces**: ported in V4b's wave, V5a-3 (`brief-V5a-3-slot-562.md`) — the
+  gather asks `WeaponLOSCondition 0x1026fbe0`, the weapon's line of fire is `0x1024f330` →
+  `0x1024f3d0` from slot 389 `0x103338c0`. The occlusion-latch stand-in (P3) is gone from the gather.
 - ~~**`+0x260` = `Attack_Rate` and the three key offsets are inferred** from the item text's
   comment and the client parser; the server parser is unread. If coder 2's read of `client.dll
   0x101a3eb0` contradicts it, it stops and reports.~~ *(amended after S2 item 3.)* **Verified in

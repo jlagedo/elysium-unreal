@@ -44,9 +44,9 @@ Made by makers: `npc_VCop` 33, `npc_VHuman` 4, `npc_VHunter` 3, `npc_VRat` 8.
 
 | Band | Reached core | `rule` | `mechanism` | `present` | `dead` | `unsettled` | No verdict |
 |---|---|---|---|---|---|---|---|
-| 0–4 | 704 | 309 | 128 | 88 | 176 | 3 | 0 |
+| 0–4 | 704 | 310 | 127 | 88 | 176 | 3 | 0 |
 | 5–9 | 131 | 60 | 37 | 28 | 6 | 0 | 0 |
-| 10–18 | 151 | 91 | 32 | 7 | 21 | 0 | 0 |
+| 10–18 | 151 | 91 | 31 | 8 | 21 | 0 | 0 |
 | 19–29 | 159 | 129 | 9 | 2 | 18 | 0 | 1 |
 
 ## Schedule slots

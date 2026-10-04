@@ -1076,13 +1076,184 @@ bool FElysiumNpcKernelCondGatherAttackClearsTest::RunTest(const FString&)
 		TestTrue(TEXT("0x1026defa: the first LOS test passing skips the second clear (0x62 stays)"),
 			C.Has(EElysiumNpcCond::WeaponHasLos));
 
-		Probe.BaseMemory.EnemyOccludedCheck = 10;   // the occlusion latch at its limit: both tests fail
+		// A wall on both lines: slot 562 (here the innate slot 573, `0x1026fcf0`) fails twice. The eye's
+		// occlusion latch (`+0x5b98`) is no longer what this body reads (spec 0002 V5a-3): it stays 0.
+		F.World.Services.TraceRetailQuery = [](const FElysiumRetailTrace& Asking, FElysiumRetailTraceResult& Out)
+		{
+			Out.Fraction = 0.5f;
+			Out.EndPosCm = Asking.StartCm + (Asking.EndCm - Asking.StartCm) * 0.5;
+			return true;
+		};
 		ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+		F.World.Services.TraceRetailQuery = nullptr;
 		TestFalse(TEXT("0x1026df00: the failing first test runs slot 560 again (0x62 cleared)"),
 			C.Has(EElysiumNpcCond::WeaponHasLos));
 		TestFalse(TEXT("0x1026df45: both tests failing sets no 0x4f"), C.Has(EElysiumNpcCond::CanRangeAttack1));
-		TestTrue(TEXT("the stand-in's failing test raises WEAPON_SIGHT_OCCLUDED (0x66)"),
+		TestTrue(TEXT("0x1026fe67: slot 573's own raise, WEAPON_SIGHT_OCCLUDED (0x66), from the second test"),
 			C.Has(EElysiumNpcCond::WeaponSightOccluded));
+
+		// ...and the latch alone fails nothing any more.
+		Probe.BaseMemory.EnemyOccludedCheck = 10;
+		ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+		TestTrue(TEXT("0x1026def2: the eye's occlusion latch is not slot 562 (a clear line sets 0x4f)"),
+			C.Has(EElysiumNpcCond::CanRangeAttack1));
+	}
+	return true;
+}
+
+namespace
+{
+	// The gather probe with slot 562 recorded and scripted: what `0x1026dee4..0x1026df3d` hands it.
+	class FGatherLosProbeNpc final : public FElysiumNpcBase
+	{
+	public:
+		struct FAsk
+		{
+			FVector OwnerPosCm = FVector::ZeroVector;
+			FVector TargetCm = FVector::ZeroVector;
+			bool bSet = false;
+			bool bHadWeaponHasLos = false;     // 0x62 standing when the ask was made
+		};
+		int32 RangedAnswer = 0;
+		TArray<bool> Answers;                  // per ask; past the end, false
+		TArray<FAsk> Asks;
+
+		virtual ~FGatherLosProbeNpc() override { World = nullptr; }
+
+		virtual int32 RangeAttack1Conditions(float, float) override
+		{
+			Cognition.Conditions.Set(EElysiumNpcCond::WeaponHasLos);   // one of slot 560's eleven
+			return RangedAnswer;
+		}
+		virtual bool WeaponLOSCondition(const FVector& OwnerPosCm, const FVector& TargetCm, bool bSet) override
+		{
+			FAsk Ask;
+			Ask.OwnerPosCm = OwnerPosCm;
+			Ask.TargetCm = TargetCm;
+			Ask.bSet = bSet;
+			Ask.bHadWeaponHasLos = Cognition.Conditions.Has(EElysiumNpcCond::WeaponHasLos);
+			const int32 Index = Asks.Add(Ask);
+			return Answers.IsValidIndex(Index) && Answers[Index];
+		}
+	};
+}
+
+// Spec 0002 V5a-3: slot 562's two dispatch sites in the gather, `0x1026dede..0x1026df52`.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCondGatherAttackWeaponLosTest,
+	"Elysium.Arm.NpcKernelConditions.GatherAttackWeaponLos", GNpcKernelCondFlags)
+bool FElysiumNpcKernelCondGatherAttackWeaponLosTest::RunTest(const FString&)
+{
+	FNpcKernelCondFixture F;
+	if (!TestNotNull(TEXT("the subject spawned"), F.Npc)) { return false; }
+	auto Arm = [&F](FGatherLosProbeNpc& Probe)
+	{
+		Probe.World = &F.World.World;
+		Probe.BaseMemory.Enemy = F.Npc->Handle;
+		Probe.CapabilityWord = GGatherTestCapInnateRange1;
+		Probe.WeaponBlockedByFriendTimer = 0.0;                      // +0x5b88
+		Probe.ExtendedBlockedByFriendTimer = GGatherTestFltMax;      // +0x5b8c
+		Probe.Origin = FVector(0.0, 0.0, 12.0);
+		F.Npc->Origin = FVector(400.0 * ElysiumMove::U, 0.0, 0.0);
+	};
+	// --- First test true: one ask, to slot 197's point, from slot 217, bSet = 1; 0x4f set.
+	{
+		FGatherLosProbeNpc Probe;
+		Arm(Probe);
+		Probe.RangedAnswer = CondNum(EElysiumNpcCond::CanRangeAttack1);
+		Probe.Answers = { true };
+		// The enemy's slot 197 point is noisy (`0x102789c0` draws twice): the same seed, drawn once
+		// here and once by the gather, whose first draw of the pass it is (`0x1026de30`).
+		ElysiumRng::SeedAll(5623);
+		const FVector BodyTargetCm = F.Npc->BodyTarget(Probe.Origin, true, false);
+		ElysiumRng::SeedAll(5623);
+		ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+		if (TestEqual(TEXT("0x1026defa: a passing first test asks slot 562 once"), Probe.Asks.Num(), 1))
+		{
+			TestTrue(TEXT("0x1026dee4: ownerPos is the owner's slot 217 (GetAbsOrigin)"),
+				Probe.Asks[0].OwnerPosCm.Equals(Probe.Origin, 1e-6));
+			TestTrue(TEXT("0x1026deed: bSetConditions is 1"), Probe.Asks[0].bSet);
+			TestTrue(TEXT("0x1026de30: the target is the enemy's slot 197 BodyTarget(origin, noisy) point"),
+				Probe.Asks[0].TargetCm.Equals(BodyTargetCm, 1e-3));
+		}
+		TestTrue(TEXT("0x1026df52: 0x4f is set"), Probe.Cognition.Conditions.Has(EElysiumNpcCond::CanRangeAttack1));
+	}
+
+	// --- First false, second true: slot 560 between them, then the enemy's slot 193 point; 0x4f set.
+	{
+		FGatherLosProbeNpc Probe;
+		Arm(Probe);
+		Probe.RangedAnswer = CondNum(EElysiumNpcCond::CanRangeAttack1);
+		Probe.Answers = { false, true };
+		ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+		if (TestEqual(TEXT("0x1026df3d: a failing first test asks slot 562 again"), Probe.Asks.Num(), 2))
+		{
+			TestTrue(TEXT("0x1026dee4: the first ask still sees the ranged arm's 0x62"), Probe.Asks[0].bHadWeaponHasLos);
+			TestFalse(TEXT("0x1026df00: slot 560 ran before the second ask (0x62 gone)"), Probe.Asks[1].bHadWeaponHasLos);
+			TestTrue(TEXT("0x1026df0f: the second target is the enemy's slot 193 EyePosition"),
+				Probe.Asks[1].TargetCm.Equals(F.Npc->EyePosition(), 1e-6));   // read AFTER `Arm` moved the enemy (setup corrected, V4b integrator)
+			TestTrue(TEXT("0x1026df2f: from the owner's slot 217 again"), Probe.Asks[1].OwnerPosCm.Equals(Probe.Origin, 1e-6));
+			TestTrue(TEXT("0x1026df36: bSetConditions is 1"), Probe.Asks[1].bSet);
+		}
+		TestTrue(TEXT("0x1026df52: 0x4f is set by the second test"),
+			Probe.Cognition.Conditions.Has(EElysiumNpcCond::CanRangeAttack1));
+	}
+
+	// --- Both false: no 0x4f (`0x1026df45 JZ 0x1026df69`), and the gather sets nothing in its place.
+	{
+		FGatherLosProbeNpc Probe;
+		Arm(Probe);
+		Probe.RangedAnswer = CondNum(EElysiumNpcCond::CanRangeAttack1);
+		ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+		TestEqual(TEXT("0x1026df3d: two asks"), Probe.Asks.Num(), 2);
+		TestFalse(TEXT("0x1026df45: both failing sets no 0x4f"),
+			Probe.Cognition.Conditions.Has(EElysiumNpcCond::CanRangeAttack1));
+		TestFalse(TEXT("...and the gather raises no 0x66 of its own"),
+			Probe.Cognition.Conditions.Has(EElysiumNpcCond::WeaponSightOccluded));
+	}
+
+	// --- `0x1026ded9`: any other ranged answer never asks slot 562.
+	{
+		FGatherLosProbeNpc Probe;
+		Arm(Probe);
+		Probe.RangedAnswer = CondNum(EElysiumNpcCond::TooFarToAttack);
+		ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+		TestEqual(TEXT("0x1026ded9: a non-0x4f answer never asks slot 562"), Probe.Asks.Num(), 0);
+		TestTrue(TEXT("0x1026df64: ...and is set as answered"),
+			Probe.Cognition.Conditions.Has(EElysiumNpcCond::TooFarToAttack));
+	}
+
+	// --- A friend on the line, by the gather's OWN path (no hook): the real slot 562 -> slot 573
+	// (`0x1026fe25`; the weapon's `0x1024f502` is driven on an armed body in
+	// `Elysium.Substrate.NpcCombat`'s gather case) raises 0x63, the timers arm and the tail clears 0x4f.
+	{
+		FGatherProbeNpc Probe;
+		ArmGatherProbe(Probe, F, GGatherTestCapInnateRange1);
+		Probe.RangedAnswer = CondNum(EElysiumNpcCond::CanRangeAttack1);
+		FElysiumPlayer* const Player = F.World.Player();
+		if (TestNotNull(TEXT("the player stands"), Player))
+		{
+			Probe.Relationships.SetEntity(Player->Handle, EElysiumRelationship::Neutral, 5);
+			const FElysiumEntityHandle Friend = Player->Handle;
+			F.World.Services.TraceRetailQuery = [Friend](const FElysiumRetailTrace& Asking,
+				FElysiumRetailTraceResult& Out)
+			{
+				FElysiumRetailTraceCharacter Met;
+				Met.Entity = Friend;
+				Met.Fraction = 0.5f;
+				Out.Characters.Add(Met);
+				Out.EndPosCm = Asking.EndCm;
+				return true;
+			};
+			ElysiumNpcCond::GatherAttackConditions(Probe, 10.0);
+			F.World.Services.TraceRetailQuery = nullptr;
+			const FElysiumNpcConditions& C = Probe.Cognition.Conditions;
+			TestTrue(TEXT("0x1026def2: slot 562's own raise, WEAPON_BLOCKED_BY_FRIEND (0x63)"),
+				C.Has(EElysiumNpcCond::WeaponBlockedByFriend));
+			TestEqual(TEXT("0x1026e006: +0x5b88 = curtime + 1.5"), Probe.WeaponBlockedByFriendTimer, 11.5);
+			TestEqual(TEXT("0x1026dfe7: +0x5b8c = curtime + 2.5"), Probe.ExtendedBlockedByFriendTimer, 12.5);
+			TestFalse(TEXT("0x1026e099: the tail clears 0x4f"), C.Has(EElysiumNpcCond::CanRangeAttack1));
+			TestFalse(TEXT("0x1026e03c: no 0x2e yet"), C.Has(EElysiumNpcCond::ExtendedBlockedByFriend));
+		}
 	}
 	return true;
 }

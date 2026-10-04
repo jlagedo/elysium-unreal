@@ -3434,7 +3434,7 @@ namespace
 			TEXT("rule"), TEXT("") },
 		{ 389, TEXT(""), TEXT("Weapon_ShootPosition"),
 			TEXT("Vector Weapon_ShootPosition(const Vector&)"), TEXT("Weapon_ShootPosition"),
-			ETier::Walked, TEXT("0x103338c0"), 1, TEXT("29c"), false, TEXT(""), TEXT("") },
+			ETier::Walked, TEXT("0x103338c0"), 1, TEXT("29c"), false, TEXT("rule"), TEXT("") },
 		{ 390, TEXT(""), TEXT("OnTakeDamage_Alive"),
 			TEXT("int OnTakeDamage_Alive(const CTakeDamageInfo&)"), TEXT("OnTakeDamage_Alive"),
 			ETier::Walked, TEXT("0x102beda0"), 24, TEXT("29e"), false, TEXT("rule"), TEXT("") },
@@ -8939,11 +8939,11 @@ const FElysiumNpcShapeCensus& Census()
 		/* Classes          */ 77,
 		/* Classnames       */ 74,
 		/* Overrides        */ 2344,
-		/* VerdictedSlots   */ 443,
+		/* VerdictedSlots   */ 444,
 		/* DefaultSlots     */ 82,
 		/* VerdictedOverrides */ 2302,
 		/* RegistryValues   */ 218,
-		/* RowDigest        */ 0x1000778d09f8befcull,
+		/* RowDigest        */ 0x2949a3713238915eull,
 	};
 	return GCensus;
 }

@@ -712,11 +712,17 @@ namespace ElysiumNpcCond
 	 * The NPC is not `const` (spec 0002 V5a-1): the body calls slot 560 twice and writes the two
 	 * timers.
 	 *
-	 * STAND-IN, named and kept (README v5a §2 P3): slot 562 `WeaponLOSCondition`'s two muzzle traces
-	 * are the eye's occlusion latch (`+0x5b98` at its limit), which raises `WEAPON_SIGHT_OCCLUDED`
-	 * (0x66) where retail's weapon slot 364 (`0x1024f330`) would, and never `WEAPON_BLOCKED_BY_FRIEND`
-	 * (0x63) or `WEAPON_THROUGH_WALL` (0x3c): this runtime has neither a muzzle transform nor a
-	 * squad. The timers and the tail are ported whole all the same; a test raises 0x63 by name.
+	 * Slot 562 (spec 0002 V5a-3, replacing README v5a §2 P3's occlusion-latch stand-in): every pass
+	 * takes the enemy's slot 197 `BodyTarget(owner origin, noisy)` (`0x1026de30`); on a `0x4f` ranged
+	 * answer the body asks `FElysiumNpcBase::WeaponLOSCondition` (`0x1026fbe0`) to that point, then
+	 * -- after slot 560 -- to the enemy's slot 193 `EyePosition`. The slot's bodies raise 0x66 /
+	 * 0x63 / 0x42 / 0x64 themselves: the weapon's line of fire (`0x1024f330` -> `0x1024f3d0`, from
+	 * owner slot 389 `Weapon_ShootPosition 0x103338c0`) or the innate slot 573 (`0x1026fcf0`).
+	 *
+	 * SEAMS still standing on that path: the held weapon's `muzzleflash` attachment arm of slot 389
+	 * (answers "no attachment": every body takes the `m_HackedGunPos` arm); the weapon's slot 360
+	 * capability word (`WeaponCapability` stands for its two bits). `WEAPON_THROUGH_WALL` (0x3c) has
+	 * no producer in slot 562, slot 573 or `0x1024f3d0`; nothing here sets it.
 	 *
 	 * SEAM (never set): `CAN_MELEE_ATTACK2` / `CAN_RANGE_ATTACK2` (0x52 / 0x50) — retail's gather
 	 * calls no secondary producer either; the tail reads and clears them as retail does.

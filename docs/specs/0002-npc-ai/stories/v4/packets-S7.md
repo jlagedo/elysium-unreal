@@ -109,12 +109,59 @@ reason. `vampire.dll` throughout.
 
 ## Not answered
 
+*(The first two are settled in "S7 addendum" below.)*
+
 - `AngleVectors 0x10139610`'s right / up rows were not read (the SDK's are assumed; with
   `m_HackedGunPos = (0, 0, 55)` only `up` is used).
 - Whether the killed friend stops blocking at once (when a dying NPC leaves the `0x46004003`
   trace) — outside items 1–4; it bounds `unblocked`, not `blocked`.
 - Whether the port registers a held weapon's body anywhere an attachment lookup can reach — not
   swept beyond the two accessors above.
+
+## S7 addendum — the two unknowns above, settled (coder V5a-3, 2026-10-04) (L)
+
+**A. `AngleVectors 0x10139610`'s right / up rows — read; they are the SDK's.** With
+`a[0]` pitch, `a[1]` yaw, `a[2]` roll, each × `_DAT_1044eb08` (0.017453292, read from the image),
+and `_DAT_104492dc` = **−1.0** (read from the image):
+
+- forward = `(cp·cy, cp·sy, −sp)`
+- right = `(cr·sy − sr·sp·cy, −(cr·cy + sr·sp·sy), −(sr·cp))`
+- up = `(sr·sy + cr·sp·cy, cr·sp·sy − sr·cy, cr·cp)`
+
+Each out-pointer is null-tested. Slot 389's order stands (item 1): forward·`gun.y`, right·`gun.x`,
+up·`gun.z`. The port writes the three rows beside slot 389's body with Y reflected into its
+position space (as `StartTaskAngleVectors` does).
+
+**B. A killed friend leaves the `0x46004003` trace on the frame it is killed.** The filter
+(`CTraceFilterSimple::ShouldHitEntity 0x101d31c0` → `StandardFilterRules 0x101d3080`,
+`PassServerEntityFilter 0x101d2fc0`, the candidate's slot 91 `ShouldCollide 0x100b4de0`,
+`m_bIsBCCTargetable +0x1480`, script-hidden `0x100b5190`, the game rules' group pair) reads **no
+life state**: nothing in it or in `0x1024f3d0` / `0x10333340` drops a dying character. What drops
+it is solidity. The kill is synchronous: `CAI_BaseNPC::Event_Killed 0x10265ad0` →
+`CBaseCombatCharacter::Event_Killed 0x1032b9b0` (`m_lifeState = 1`) → slot 301 `CreateCorpse
+0x1032c0e0` → `BecomeClientRagdoll 0x10090180(force, bone, 0)` (`0x1032c298 PUSH 0` … `0x1032c29c`),
+whose third argument 0 runs, for a model with a ragdoll rig (`modelinfo` slot 18 non-zero — the
+human line): `AddSolidFlags(m_usSolidFlags | 4)` (`FSOLID_NOT_SOLID`), `SetMoveType(0, 0)`,
+`UTIL_SetSize(vec3_origin, vec3_origin)`, `ThinkSet(NULL)`. A not-solid entity is not handed to
+the filter *(I: the engine's side, `engine.dll`, not in this read; the SDK's `IsSolid` cull)*; a
+rig-less model only collapses its bounds to a point (`0x101cf390`), which a ray cannot meet. So
+the shooter's first gather after the kill traces clear.
+
+**What that does to the record.** Nothing moves `blocked` or the `never` rows. `unblocked`
+(`cond-` 0x63) is not the kill: the tail re-raises `0x63` while `curtime < +0x5b88`
+(`0x1026e068..0x1026e087`), and `+0x5b88` = last trace-raise + 1.5. With the kill at 0.8 the last
+raise is at or before 0.8, so `unblocked` lands at the first gather at or after `last + 1.5`:
+**2.2–2.3 s plus one think**, and `fires` after it. `0x2e` stays unraised: the first gather past
+the hold resets `+0x5b8c` to `FLT_MAX` (`0x1026e02c`) before `first + 2.5`.
+
+**The port (P).** `FElysiumNpc::BecomeClientRagdoll` (`ElysiumNpc.cpp`) freezes the body
+(`SetBodyFrozen`) and does **not** write `RetailSolidFlags |= 4`; whether a frozen capsule still
+answers `TraceRetail`'s character list is the embodiment's (not read). V5a-3's ray drops a
+character that `IsRetailNotSolid()`, so the one line owed is the flag write in
+`BecomeClientRagdoll` (`0x10090180`'s `AddSolidFlags(w | 4)`).
+
+**C. Slot 389 on the player.** `CBasePlayer` fills slot 389 with `0x10162260`, not `0x103338c0`
+(`vtmb_slot 389`); unported and unread — no NPC path of this lane reaches it.
 
 ## Budget
 

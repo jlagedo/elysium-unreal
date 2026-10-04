@@ -124,8 +124,16 @@ Wave 3 (build work, one agent):
     frame-rate dispatch re-fires a looping clip's table across the 0.1 s look-ahead at each lap
     (`0x10091880` as listed; `sense_cone_enter` 2052 5 → 23); the scripted walk and the feed victim's
     clip play outside `m_nSequence` and dispatch nothing.
-  - [ ] **V4b + V11** — the walk's arrival and the turn (N13); the attack coordinator (N3,
-    `0002-npc-ai/stories/v11/`). M.
+  - [x] **V4b** — the walk's arrival and the turn (N13), with V5a-3 (slot 562) and the S9 fix lane. M.
+    Done 2026-10-04: two builds; arena 122 records, 95 pass / 23 expected-fail / 1 fail (H11) / 3
+    unexpected-pass (N4's two, and `ranged_open_fire`: its first wait now holds, the later ones do not --
+    still V4o O3); default 170 / 0, arm 1,563 / 0. The creep is gone (`input_clearpatrolpath` `arrived`
+    10.428 → 6.600 s); `patrol_sentry2_pingpong`, `input_clearpatrolpath`, `places_pedestrian_visit` green
+    with a mid-leg `speed2d` probe. `patrol_monk_loop` stays red on another cause: the body stops 87 cm
+    from pod_1 (tolerance 51 cm) and the navigator fails 0xc -- present before V4b, read as the nav bake
+    not reaching the node; for the judge, no V4 lane owns it. For the judge too: `FollowerArrivalFloorCm`
+    1.0 cm against retail's 0.0625 units (`0x102ef510`).
+  - [ ] **V11** — the attack coordinator (N3, `0002-npc-ai/stories/v11/`). M.
   - [ ] **V4o** — the NPC overlay stack and the move-and-shoot wire (pulled from 0015;
     `0002-npc-ai/stories/v4o/`). M.
   - [ ] **V4c** — attack producers, the weighted pick, the death transaction. M.

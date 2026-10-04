@@ -456,6 +456,43 @@ uint8 FElysiumCombatCharacter::FeedVictimHeightCell() const
 	return static_cast<uint8>(ElysiumFeed::VictimHeightFor(AttackerHeight, VictimHeight));
 }
 
+namespace ElysiumFeedGrappleCommit
+{
+	// SEAM: the phase -> base grapple activity table (`feeding.md` § "Feed modes": `0xf5b`, `0xfa5`,
+	// `0x1027`, `0xfca` and their bite / loop / release continuations) and its paired translation
+	// (`TranslateBaseGrappleActivity` `0x10328380`, then slot 381 `+0x5f4`) are not recovered for the
+	// port: the feed resolves clip labels (`ElysiumFeed::ResolveClipPair`), not activity numbers.
+	// Until the table exists both of `0x1032a100`'s activity words take mode 0's initial base,
+	// `ACT_FEEDING_ENGAGE` (`0xf5b`), on every phase. What it stands for: a grapple activity that is
+	// not `ACT_IDLE` (1), so `RunAnimation`'s idle re-pick (`0x1026c5e5..0x1026c5fc`) stays off for
+	// the whole grapple, as retail's does.
+	constexpr int32 GrappleActivityStandIn = 0xf5b;
+
+	// One NPC half of `CBaseCombatCharacter::SetGrappleActivity` `0x1032a100`. False is retail's
+	// `SelectWeightedSequence < 0` miss: nothing is written.
+	bool CommitNpcHalf(FElysiumNpc& Npc, const FString& Label, float& InOutSeconds)
+	{
+		// `SelectWeightedSequence(translated activity)` through the sequence bridge: the row of the
+		// paired clip the label names (the named modernization: name-keyed clips for the studio table).
+		const int32 Sequence = Npc.LookupSequenceByName(*Label);
+		if (Sequence < 0)
+		{
+			return false;
+		}
+		Npc.IdealActivityNumber = GrappleActivityStandIn;   // 0x1032a100 m_IdealActivity = the base activity
+		Npc.ActivityNumber = GrappleActivityStandIn;        // 0x1032a100 m_Activity = the translated activity
+		Npc.CommitForcedSequence(Sequence);                 // 0x10260a50: m_nSequence = seq, ResetSequenceInfo 0x10090950
+		Npc.SequenceCycle = 0.f;                            // 0x1032a100 m_flCycle = 0
+		// The clip's length is the row's (`SequenceDuration`); an unknown length keeps the caller's.
+		const float Seconds = Npc.SequenceDurationSeconds(Sequence);
+		if (Seconds > 0.f)
+		{
+			InOutSeconds = Seconds;
+		}
+		return true;
+	}
+}
+
 float FElysiumCombatCharacter::PlayFeedPhaseClips(EElysiumFeedPhase Phase, double Now)
 {
 	(void)Now;
@@ -501,11 +538,58 @@ float FElysiumCombatCharacter::PlayFeedPhaseClips(EElysiumFeedPhase Phase, doubl
 		return MetadataSeconds;
 	}
 
+	// `CBaseCombatCharacter::SetGrappleActivity` `0x1032a100` commits BOTH halves the same way, the
+	// attacker first and then the victim: `m_IdealActivity` / `m_Activity`, `0x10260a50(seq)`,
+	// `m_flCycle = 0`. A half that is an NPC (the victim in modes 0 / 2, the attacker in mode 8)
+	// therefore takes its paired clip as its kernel sequence, and its own slot 258 dispatches the
+	// clip's records -- the victim's 4007 / 4006 included, which `0x1032e330` then refuses on the
+	// role guard (`+0x153c != 0`). The player half has no kernel sequence words in this port and
+	// keeps the direct play; its records are walked by `PostThinkAnimation` (`0x1016be10`).
 	const bool bLoop = Phase == EElysiumFeedPhase::Loop;
 	float AttackerSeconds = MetadataSeconds;
 	float VictimSeconds = MetadataSeconds;
-	const bool bAttackerPlayed = PlayAnimClip(Pair.Attacker, bLoop, &AttackerSeconds);
-	const bool bVictimPlayed = Victim->PlayAnimClip(Pair.Victim, bLoop, &VictimSeconds);
+	FElysiumNpc* const AttackerNpc = AsNpc();
+	FElysiumNpc* const VictimNpc = Victim->AsNpc();
+	bool bSequenceMissed = false;
+	bool bAttackerPlayed = false;
+	if (AttackerNpc != nullptr)
+	{
+		bAttackerPlayed = ElysiumFeedGrappleCommit::CommitNpcHalf(*AttackerNpc, Pair.Attacker, AttackerSeconds);
+		if (!bAttackerPlayed)
+		{
+			// "Attacker could not find sequence ..." (`0x1061fd3c`), then `EndGrapple` `0x10329560`.
+			UE_LOG(LogElysiumFeed, Warning,
+				TEXT("Attacker could not find sequence for '%s' (%s)"), *Pair.Attacker, *DebugString());
+			bSequenceMissed = true;
+		}
+	}
+	else
+	{
+		bAttackerPlayed = PlayAnimClip(Pair.Attacker, bLoop, &AttackerSeconds);
+	}
+	bool bVictimPlayed = false;
+	if (VictimNpc != nullptr)
+	{
+		bVictimPlayed = ElysiumFeedGrappleCommit::CommitNpcHalf(*VictimNpc, Pair.Victim, VictimSeconds);
+		if (!bVictimPlayed)
+		{
+			// "Victim could not find sequence ..." (`0x1061fcfc`), then `EndGrapple` `0x10329560`.
+			UE_LOG(LogElysiumFeed, Warning,
+				TEXT("Victim could not find sequence for '%s' (%s)"), *Pair.Victim, *Victim->DebugString());
+			bSequenceMissed = true;
+		}
+	}
+	else
+	{
+		bVictimPlayed = Victim->PlayAnimClip(Pair.Victim, bLoop, &VictimSeconds);
+	}
+	if (bSequenceMissed)
+	{
+		// `0x1032a100`'s miss arm: the warning above and `EndGrapple(attacker)`. The other half's
+		// commit, where it succeeded, has already been made, as retail's is.
+		EndFeedGrapple();
+		return MetadataSeconds;
+	}
 	if (!bAttackerPlayed || !bVictimPlayed)
 	{
 		UE_LOG(LogElysiumFeed, Warning,

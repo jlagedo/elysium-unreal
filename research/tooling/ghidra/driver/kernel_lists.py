@@ -87,6 +87,12 @@ DEPRECATION_NOTE_RE = re.compile(r"^\s*(//|/?\*).*\b(dead|deleted|removed|retire
 # 102d72b0 (`CAI_TestHull::Spawn`, closed at 0018/3): cited by the bake's `ElysiumRetailHullTable.h`
 # and `ElysiumContentsSignature.h` as the PROVENANCE of the test hull's 40-unit step -- a data
 # comment, not a port body (added 0019/6 wave 3).
+# 102ef510 (navigator slot 16, the arrival test, closed at `UPathFollowingComponent`): cited by
+# `ElysiumNpcBody.h` and `ElysiumNpcMoveScript.h` as the PROVENANCE of the 0.0625-unit arrival
+# tolerance the follower's 1.0 cm floor diverges from (K1, pending the judge) -- a data comment.
+# 1027d9f0 (slot 526 `OverrideMoveFacing`, dead at `-`): cited by `MotorMoveFacing` (0x102e19e0)
+# and its test as the REASON the port asks nothing at `102e19f9` -- a constant false, no body.
+# (both added spec 0002 V4b.)
 CITED_WHEN_CLOSED = frozenset("""
     101ab060 101ab0e0 1025e510 1025e780 1025e8e0 1025ea00 1025f1a0 10260540 10260670 10260750
     10260f40 10262430 102624b0 1027efb0 102d77d0 10312cd0 1034d6e0 1034ddf0 1034e070 1034e320
@@ -94,7 +100,7 @@ CITED_WHEN_CLOSED = frozenset("""
     10358330 103587b0 10358c60 10358f90 1035a090 1035a810 1035ae80 1035b080 1035b700 1035be80
     10360160 103673b0 103675e0 10367610 10367740 1036fb10 10376f20 10376f50 10377070 10385a10
     10399c70 103a0270 103a4870 103b2360 103b2590 103b25c0 103b26f0 103b4ff0 103dcf20
-    102d72b0
+    102d72b0 102ef510 1027d9f0
 """.split())
 GENERATOR_SPELLINGS = ("hand:", "default:", "registry:")
 PACK_DIR = "npc-kernel-verdict-pass"

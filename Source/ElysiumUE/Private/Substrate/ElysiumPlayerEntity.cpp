@@ -52,6 +52,31 @@ bool FElysiumPlayer::IsInStealthPosture() const
 		|| (Embodiment && Embodiment->IsPlayerDucking() && !WasRecentlyObservedByHostile(World->NowSeconds()));
 }
 
+FVector FElysiumPlayer::BodyTarget(const FVector& /*PosSrc*/, bool bNoisy, bool bAimAtEyeExactly)
+{
+	// `CBasePlayer 0x10174e60`, slot 197 (`+0x314`): `(Vector* out, const Vector& posSrc, bool bNoisy,
+	// bool)`. `posSrc` reaches no instruction. `m_vecViewOffset (+0x184)` is the port's
+	// `EyePosition() - Origin` (`EyePosition` is `GetAbsOrigin + m_vecViewOffset`).
+	const FVector ViewOffsetCm = EyePosition() - Origin;
+	if (!bNoisy)
+	{
+		if (!bAimAtEyeExactly)
+		{
+			// Neither bool: slot 192 `WorldSpaceCenter()` (`+0x300`), whole.
+			return WorldSpaceCenter();
+		}
+		// Not noisy, the third bool set: slot 220 `GetOrigin()` (`+0x370`) plus the view offset --
+		// the eye.
+		return Origin + ViewOffsetCm;
+	}
+	// Noisy: ONE `RandomFloat(0.5, 1.0)` (`(*DAT_1070b244 + 4)(0x3f000000, 0x3f800000)`), drawn before
+	// slot 220 is read, scaling all three components of the view offset: a point on the segment from
+	// half the view height to the eye, above the origin. The NPC attack gather draws it every pass
+	// (`0x1026de30`), on the stream the NPC body's own slot 197 (`0x102789c0`) draws from.
+	const float Scale = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(0.5f, 1.0f);
+	return Origin + ViewOffsetCm * static_cast<double>(Scale);
+}
+
 bool FElysiumPlayer::ControllerNpcBusy() const
 {
 	// `0x10175180`, 116 bytes: `h = m_hControllerNPC (+0x1db0); if (h == -1 || stale) return false;
@@ -1181,8 +1206,21 @@ void FElysiumPlayer::PostThinkAnimation()
 			if (!Embodiment->GetBodyClipPhase(SkeletalBody, Channels[Index], Phase) || !Phase.IsValid())
 			{
 				// The channel stands on nothing: no sequence, no window. The next clip to arm here
-				// is a new sequence and opens at 0.
+				// is a new sequence and opens at 0 -- unless it is the play that just left (the
+				// displaced record below), which keeps its cursor.
+				FPostThinkChannel::FDisplacedPlay Kept = Channel.Displaced;
+				if (Channel.bArmed)
+				{
+					Kept.OwnerStem = Channel.OwnerStem;
+					Kept.OwnerRoot = Channel.OwnerRoot;
+					Kept.Label = Channel.Label;
+					Kept.PlayId = Channel.PlayId;
+					Kept.LastEventCheck = Channel.Words.LastEventCheck;
+					Kept.bSequenceFinished = Channel.Words.bSequenceFinished;
+					Kept.bValid = true;
+				}
 				Channel = FPostThinkChannel();
+				Channel.Displaced = MoveTemp(Kept);
 				continue;
 			}
 
@@ -1196,20 +1234,62 @@ void FElysiumPlayer::PostThinkAnimation()
 				&& Channel.Label.Equals(Phase.Label, ESearchCase::IgnoreCase);
 			if (!bSameSequence)
 			{
+				// The play this channel was dispatching until now, and the one it displaced before.
+				FPostThinkChannel::FDisplacedPlay Leaving;
+				if (Channel.bArmed)
+				{
+					Leaving.OwnerStem = Channel.OwnerStem;
+					Leaving.OwnerRoot = Channel.OwnerRoot;
+					Leaving.Label = Channel.Label;
+					Leaving.PlayId = Channel.PlayId;
+					Leaving.LastEventCheck = Channel.Words.LastEventCheck;
+					Leaving.bSequenceFinished = Channel.Words.bSequenceFinished;
+					Leaving.bValid = true;
+				}
+				const FPostThinkChannel::FDisplacedPlay Returning = Channel.Displaced;
+				const bool bReturns = Returning.bValid
+					&& Returning.PlayId == Phase.PlayId
+					&& Returning.OwnerStem.Equals(Phase.OwnerStem, ESearchCase::IgnoreCase)
+					&& Returning.OwnerRoot.Equals(Phase.OwnerRoot, ESearchCase::IgnoreCase)
+					&& Returning.Label.Equals(Phase.Label, ESearchCase::IgnoreCase);
+
 				Channel = FPostThinkChannel();
 				Channel.OwnerStem = Phase.OwnerStem;
 				Channel.OwnerRoot = Phase.OwnerRoot;
 				Channel.Label = Phase.Label;
 				Channel.PlayId = Phase.PlayId;
 				Channel.bArmed = true;
-				// Part of the same seam: the window opens where the pose layer says this play's
-				// timeline was last dispatched from (`FElysiumClipPhase::AnchorCycle`). That is 0 for
-				// a clip a play seam started -- `ResetSequenceInfo`'s own `+0x658 = 0` -- and the
-				// observed fraction for a clip the layer found already running (the locomotion
-				// stack) or one a higher-priority pose displaced and gave the channel back to:
-				// opening those at 0 would fire every record behind the playhead in one burst.
-				Channel.Words.LastEventCheck = FMath::IsFinite(Phase.AnchorCycle)
-					? FMath::Clamp(Phase.AnchorCycle, 0.0f, 1.0f) : 0.0f;
+				// 1. A play this channel has not dispatched before (a new `PlayId`, or another clip)
+				//    stands for the player's commit `0x101644f0` + `ResetSequenceInfo 0x10090950`:
+				//    `+0x658 = 0` (`0x10090a3d`), `+0x65c = 0` (`0x10090a37`), and the cycle is never
+				//    touched by the reset. `0x101644f0` zeroes the cycle except for the five
+				//    locomotion activities, where it is carried: a locomotion clip found already
+				//    running therefore opens `[0, cycle + 0.1 x rate)`, retail's carried-cycle window.
+				// 2. A play that was displaced and comes back (the same `PlayId` and identity as the
+				//    play dispatched before the one leaving now) has no retail counterpart -- retail
+				//    has no resume, coming back is a new commit at cycle 0. The pose layer resumed it
+				//    mid-clip, so it keeps the cursor it had when displaced: opening it at 0 would
+				//    fire every record behind the playhead in one dispatch, which retail never does.
+				if (bReturns)
+				{
+					Channel.Words.LastEventCheck = Returning.LastEventCheck;
+					Channel.Words.bSequenceFinished = Returning.bSequenceFinished;
+				}
+				else
+				{
+					Channel.Words.LastEventCheck = 0.0f;       // 0x10090a3d +0x658
+					Channel.Words.bSequenceFinished = false;   // 0x10090a37 +0x65c
+				}
+				// The play leaving is the displaced one from here on. A channel that armed from
+				// nothing keeps the record it had, unless that record is the play now current.
+				if (Leaving.bValid)
+				{
+					Channel.Displaced = Leaving;
+				}
+				else if (!bReturns)
+				{
+					Channel.Displaced = Returning;
+				}
 			}
 
 			FElysiumSequenceWords& Words = Channel.Words;

@@ -605,13 +605,66 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 		Gather(125.0, ECond::NoPrimaryAmmo, TEXT("...with a reserve, and ahead of every range arm"));
 		Weapon->MagazineCount = 6;
 
-		// The occlusion stand-in replaces 0x4f only: it is slot 562's re-test of the 0x4f answer.
-		F.Fighter->BaseMemory.EnemyOccludedCheck = 10;   // slot 481's `+0x5b98` at its limit
-		const FElysiumNpcConditions Occluded = Gather(400.0, ECond::WeaponSightOccluded,
-			TEXT("an occluded 0x4f raises WEAPON_SIGHT_OCCLUDED"));
-		TestFalse(TEXT("...nor does WEAPON_BLOCKED_BY_FRIEND"), Occluded.Has(ECond::WeaponBlockedByFriend));
-		Gather(1500.0, ECond::TooFarToAttack, TEXT("an occluded enemy past 1024 is only TOO_FAR_TO_ATTACK"));
+		// Slot 562's re-test of the 0x4f answer (spec 0002 V5a-3): the pistol's own line of fire,
+		// weapon slot 364 `0x1024f330` -> `0x1024f3d0`, from owner slot 389's point. The eye's
+		// occlusion latch (`+0x5b98`) is not what the gather reads any more.
+		F.Fighter->BaseMemory.EnemyOccludedCheck = 10;
+		Gather(400.0, ECond::CanRangeAttack1, TEXT("the eye's latch at its limit does not fail slot 562 (0x1026def2)"));
 		F.Fighter->BaseMemory.EnemyOccludedCheck = 0;
+
+		// A wall on both lines: `0x1024f5c7` raises WEAPON_SIGHT_OCCLUDED and no 0x4f is set.
+		F.Services.TraceRetailQuery = [](const FElysiumRetailTrace& Asking, FElysiumRetailTraceResult& Out)
+		{
+			Out.Fraction = 0.5f;
+			Out.EndPosCm = Asking.StartCm + (Asking.EndCm - Asking.StartCm) * 0.5;
+			return true;
+		};
+		const FElysiumNpcConditions Occluded = Gather(400.0, ECond::WeaponSightOccluded,
+			TEXT("a walled 0x4f raises WEAPON_SIGHT_OCCLUDED (0x1024f5c7)"));
+		TestFalse(TEXT("...nor does WEAPON_BLOCKED_BY_FRIEND"), Occluded.Has(ECond::WeaponBlockedByFriend));
+		Gather(1500.0, ECond::TooFarToAttack, TEXT("a walled enemy past 1024 is only TOO_FAR_TO_ATTACK (0x1026ded9)"));
+
+		// A friend on both lines: `0x1024f502` raises WEAPON_BLOCKED_BY_FRIEND by the gather's own
+		// path; the timers arm (`0x1026e006`, `0x1026dfe7`) and the tail clears 0x4f (`0x1026e099`).
+		if (F.Player != nullptr)
+		{
+			const double BlockedBefore = F.Fighter->WeaponBlockedByFriendTimer;
+			const double ExtendedBefore = F.Fighter->ExtendedBlockedByFriendTimer;
+			F.Fighter->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Neutral, 5);
+			const FElysiumEntityHandle Friend = F.Player->Handle;
+			FVector FirstRayStartCm = FVector::ZeroVector;
+			int32 Rays = 0;
+			F.Services.TraceRetailQuery = [Friend, &FirstRayStartCm, &Rays](const FElysiumRetailTrace& Asking,
+				FElysiumRetailTraceResult& Out)
+			{
+				if (Rays++ == 0)
+				{
+					FirstRayStartCm = Asking.StartCm;
+				}
+				FElysiumRetailTraceCharacter Met;
+				Met.Entity = Friend;
+				Met.Fraction = 0.5f;
+				Out.Characters.Add(Met);
+				Out.EndPosCm = Asking.EndCm;
+				return true;
+			};
+			F.Target->Origin = FVector(Cm(400.0), 0.0, 0.0);
+			F.Fighter->Cognition.Conditions.Reset();
+			ElysiumNpcCond::GatherAttackConditions(*F.Fighter, 10.0);
+			const FElysiumNpcConditions Blocked = F.Fighter->Cognition.Conditions;
+			TestTrue(TEXT("0x1024f502: a non-hated character on the line raises WEAPON_BLOCKED_BY_FRIEND (0x63)"),
+				Blocked.Has(ECond::WeaponBlockedByFriend));
+			TestFalse(TEXT("0x1026e099: ...and no CAN_RANGE_ATTACK1"), Blocked.Has(ECond::CanRangeAttack1));
+			TestEqual(TEXT("0x1026df3d: both tests ran (two rays)"), Rays, 2);
+			TestTrue(TEXT("0x1024f330: the ray leaves from slot 389's point, origin + (0, 0, 55) units"),
+				FirstRayStartCm.Equals(F.Fighter->Origin + FVector(0.0, 0.0, Cm(55.0)), 1e-2));
+			TestEqual(TEXT("0x1026e006: +0x5b88 = curtime + 1.5"), F.Fighter->WeaponBlockedByFriendTimer, 11.5);
+			TestEqual(TEXT("0x1026dfe7: +0x5b8c = curtime + 2.5"), F.Fighter->ExtendedBlockedByFriendTimer, 12.5);
+			// The cases below start from the spawn timers again.
+			F.Fighter->WeaponBlockedByFriendTimer = BlockedBefore;
+			F.Fighter->ExtendedBlockedByFriendTimer = ExtendedBefore;
+		}
+		F.Services.TraceRetailQuery = nullptr;
 
 		// The `+0x730` timer is the LAST arm: unexpired, slot 365 answers 0 (COND_NONE).
 		Weapon->HoldAttacksUntil(50.0);

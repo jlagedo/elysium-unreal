@@ -8,6 +8,7 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSessionSubsystem.h"
+#include "ElysiumWorldServices.h"            // IElysiumEmbodiment::TraceRetail, the weapon line of fire's ray
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
@@ -25,6 +26,14 @@ namespace
 {
 	constexpr float GHalf = 0.5f;
 	constexpr float GOne = 1.0f;
+
+	// `0x1024f424 PUSH 0x46004003`: the weapon line of fire's contents mask (slot 573's as well).
+	constexpr int32 GWeaponLineOfFireMask = 0x46004003;
+	// `0x1024f509 CMP [ECX+0x368],4`: the collision group a shot passes through and re-traces behind.
+	constexpr int32 GWeaponLineOfFirePassGroup = 4;
+	// NOT RETAIL: `0x1024f3d0` re-enters itself with no bound. The port stops after this many
+	// re-traces and takes the `0x66` arm (a crash guard, named).
+	constexpr int32 GWeaponLineOfFireMaxDepth = 8;
 }
 
 // --- Moved from `ElysiumNpcSenses10.cpp` (story 5 step 5) ---
@@ -51,8 +60,10 @@ bool FElysiumNpcBase::InnateWeaponLosTrace(const FVector& StartCm, const FVector
 	FElysiumEntity*& OutBlocker) const
 {
 	OutBlocker = nullptr;
-	// SEAM: mask `0x46004003` with the self filter `0x101d3190(this, 0)`. Family Motor's hull trace
-	// is the nearest seam this substrate has and it reports no hit, which is a clear trace.
+	// Mask `0x46004003` with the self filter `0x101d3190(this, 0)`: `KernelHullTrace` with a zero
+	// box, which answers `IElysiumEmbodiment::TraceRetail` (this NPC ignored, characters folded by
+	// `KernelTraceKeepsCharacter`). It takes SOURCE units; the slot's vectors are centimetres and
+	// are converted here. False from it = no world / no embodiment: clear, the headless fault path.
 	FKernelHullTrace Trace;
 	const FVector StartUnits = StartCm / ElysiumMove::U;
 	const FVector EndUnits = EndCm / ElysiumMove::U;
@@ -454,10 +465,14 @@ bool FElysiumNpcBase::WeaponLOSCondition(const FVector& OwnerPosCm, const FVecto
 	// `1026fbf1`: `GetActiveWeapon()`.
 	if (Inventory.ActiveWeapon.IsSet())
 	{
-		// `1026fc76`: the weapon's own slot `+0x5b0`. SEAM: this runtime stands no
-		// `CBaseCombatWeapon` vtable; the weapon's answer is ADMITTING (`true`), so the 0.92 test
-		// below is what a weapon-carrying body is decided by.
-		bAnswer = true;
+		// `1026fc76`: the weapon's own slot 364 (`+0x5b0`), `CBaseCombatWeapon 0x1024f330`
+		// `(ownerPos, target, bSet)`: the owner is the weapon's `m_hOwner (+0x88c)` NPC pointer
+		// (`+0x94`, no null guard) -- this body; `shootPos = owner slot 389 (+0x614)(ownerPos)`
+		// (`0x1024f330`'s first call); then the weapon's vtable `+0x470` = `0x1024f3d0(owner,
+		// ignore = owner, &shootPos, target, bSet)`. This runtime stands no `CBaseCombatWeapon`
+		// vtable, so both are the owner's `WeaponLineOfFire`.
+		const FVector ShootPosCm = Weapon_ShootPosition(OwnerPosCm);                 // 0x1024f330 slot 389 (+0x614)
+		bAnswer = WeaponLineOfFire(ShootPosCm, TargetPosCm, Handle, bSetConditions); // 0x1024f330 CALL [+0x470] -> 0x1024f3d0
 	}
 	else
 	{
@@ -492,6 +507,133 @@ bool FElysiumNpcBase::WeaponLOSCondition(const FVector& OwnerPosCm, const FVecto
 		}
 	}
 	return bAnswer;
+}
+
+FElysiumNpcBase::FWeaponLosRay FElysiumNpcBase::WeaponLosRay(const FVector& StartCm,
+	const FVector& EndCm, const FElysiumEntityHandle& Ignore) const
+{
+	FWeaponLosRay Ray;
+	IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr)
+	{
+		// No world or no embodiment: nothing is traced and the ray is clear. The headless fault
+		// path, not a rule.
+		return Ray;
+	}
+	// `0x10015929 Ray_t::Init(start, end)`: a line, no extents. `TraceRetail` takes centimetres, the
+	// slot's own unit -- no conversion on this side (unlike `KernelHullTrace`, which takes Source
+	// units and is not used here because its filter's pass entity is always this NPC).
+	FElysiumRetailTrace Trace;
+	Trace.StartCm = StartCm;
+	Trace.EndCm = EndCm;
+	Trace.RetailMask = GWeaponLineOfFireMask;                                    // 0x1024f424 PUSH 0x46004003
+	// `0x1000bd7f CTraceFilterSimple(ignore, 0)`: the pass entity is the CALLER's `ignore` -- the
+	// owner on the first ray, the hit entity on a re-trace (`0x1024f59a PUSH ECX`).
+	if (Ignore.IsSet())
+	{
+		Trace.Ignore.Add(Ignore);
+	}
+	FElysiumRetailTraceResult Result;
+	if (!Embodiment->TraceRetail(Trace, Result))                                 // 0x1024f42a CALL [EDX+0x10]
+	{
+		return Ray;
+	}
+	Ray.Fraction = Result.Fraction;
+	Ray.Hit = Result.HitEntity.IsSet() ? World->Resolve(Result.HitEntity) : nullptr;
+	// The characters, nearest first, as `KernelHullTrace` folds them: the first one the filter keeps
+	// (`CTraceFilterSimple::ShouldHitEntity 0x101d31c0`, `KernelTraceKeepsCharacter`) is the only one
+	// that can stop the ray. `KernelTraceKeepsCharacter` drops this NPC itself whatever `Ignore` is:
+	// on a re-trace retail's filter no longer passes the owner, but the ray starts at the hit point,
+	// beyond the owner's own body.
+	for (const FElysiumRetailTraceCharacter& Character : Result.Characters)
+	{
+		if (Character.Entity == Ignore)
+		{
+			continue;   // the filter's pass entity (`PassServerEntityFilter 0x101d2fc0`)
+		}
+		FElysiumEntity* const MetBody = World->Resolve(Character.Entity);
+		// A body recorded `FSOLID_NOT_SOLID` is not in the engine's solid partition and never reaches
+		// the filter: a corpse (`BecomeClientRagdoll 0x10090180`: `AddSolidFlags(w | 4)`) stops
+		// blocking on the frame it is killed.
+		if (MetBody == nullptr || MetBody->IsRetailNotSolid())
+		{
+			continue;
+		}
+		if (!KernelTraceKeepsCharacter(Character.Entity, GWeaponLineOfFireMask))
+		{
+			continue;
+		}
+		const bool bNearer = Character.Fraction < Ray.Fraction;
+		const bool bSolidFirst = Character.bStartSolid && !Result.bStartSolid;
+		if (bNearer || bSolidFirst)
+		{
+			Ray.Fraction = Character.bStartSolid ? 0.f : Character.Fraction;
+			Ray.Hit = MetBody;
+		}
+		break;
+	}
+	return Ray;
+}
+
+bool FElysiumNpcBase::WeaponLineOfFire(const FVector& ShootPosCm, const FVector& TargetCm,
+	const FElysiumEntityHandle& Ignore, bool bSetConditions, int32 Depth)
+{
+	// `0x1024f3d0(owner EBX, ignore, start* ESI, end* EDI, bSet)`, `RET 0x14`.
+	// `0x1024f3f3..0x1024f42a`: one ray `start -> end`, filter `(ignore, group 0)`, mask `0x46004003`.
+	const FWeaponLosRay Ray = WeaponLosRay(ShootPosCm, TargetCm, Ignore);
+	// `0x1024f42d..0x1024f45a`: the debug overlay line under the cvar at `0x10738960`. NOT PORTED
+	// (a debug draw; no state).
+
+	// `0x1024f45d..0x1024f46e`: `fraction == _DAT_10449280` (a DOUBLE 1.0; `TEST AH,0x44 / JP`) -> true.
+	if (Ray.Fraction == 1.f)
+	{
+		return true;                                                             // 0x1024f471 MOV AL,1
+	}
+	// `0x1024f4a4..0x1024f4b0`: the hit entity is owner slot 167 `GetEnemy()` (`+0x29c`) -> true.
+	// The port's null hit is the static world (retail's `worldspawn`, never a null `m_pEnt`), so it
+	// is never the enemy, whatever `GetEnemy()` answers.
+	if (Ray.Hit != nullptr && Ray.Hit == GetEnemy())                             // 0x1024f4ae CMP ECX,EAX
+	{
+		return true;                                                             // 0x1024f4b5
+	}
+	// `0x1024f4c1..0x1024f4c7`: the hit's combat-character cast (`hit+0x9c`, taken at `0x1024f48f`).
+	if (Ray.Hit != nullptr && Ray.Hit->AsCombatCharacter() != nullptr)
+	{
+		// `0x1024f4ce`: owner slot 404 `IRelationType(hit)` (`+0x650`) `== 1` (`D_HT`) -> true: a
+		// hated body in the way is shot through (`0x1024f4dc MOV AL,AL`, the relation's low byte).
+		if (IRelationType(Ray.Hit) == NpcKernelSenses10Shared::GD_HT)            // 0x1024f4d4 CMP EAX,1
+		{
+			return true;
+		}
+		// `0x1024f4e8..0x1024f504`: anyone else is a friend in the line of fire.
+		if (bSetConditions)                                                      // 0x1024f4ef TEST AL,AL
+		{
+			Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(0x63));        // 0x1024f502 / 0x1024f5cb
+		}
+		return false;                                                            // 0x1024f5d3 XOR AL,AL
+	}
+	// `0x1024f509`: `CMP [hit+0x368],4`. Retail reads the word off a NULL `m_pEnt` here and faults
+	// (a blocked ray always names an entity there: the static world is `worldspawn`, group 0). The
+	// port's static world is a null hit: it takes the `0x66` arm, which is `worldspawn`'s.
+	if (Ray.Hit != nullptr
+		&& Ray.Hit->CollisionGroup == GWeaponLineOfFirePassGroup                 // 0x1024f509 m_CollisionGroup (+0x368) == 4
+		&& Ray.Fraction > 0.f                                                    // 0x1024f516..0x1024f527 f32 0x104454c4 (0.0); AND 0x4100 / JNZ skips on <=
+		&& Depth < GWeaponLineOfFireMaxDepth)                                    // the port's guard: retail's recursion is unbounded
+	{
+		// `0x1024f52d..0x1024f588`: the hit point, `start + (end - start) * fraction`.
+		const FVector HitPointCm = ShootPosCm + (TargetCm - ShootPosCm) * static_cast<double>(Ray.Fraction);
+		// `0x1024f58c..0x1024f59e`: the same body again `(owner, ignore = the hit entity, &hitPoint,
+		// end, bSet)` -- the new filter passes the HIT ENTITY, not the owner -- and its answer is
+		// this one's (`0x1024f5a4`, straight to the epilogue).
+		return WeaponLineOfFire(HitPointCm, TargetCm, Ray.Hit->Handle, bSetConditions, Depth + 1);
+	}
+	// `0x1024f5b1..0x1024f5cb`: the world (or anything not group 4, or a group-4 hit at fraction 0).
+	// Unlike slot 573 (`0x1026fe73`) this body does NOT record `m_hEnemyOccluder`.
+	if (bSetConditions)                                                          // 0x1024f5b8 TEST AL,AL
+	{
+		Cognition.Conditions.Set(static_cast<EElysiumNpcCond>(0x66));            // 0x1024f5c7 / 0x1024f5cb
+	}
+	return false;                                                                // 0x1024f5d3 XOR AL,AL
 }
 
 bool FElysiumNpcBase::InnateWeaponLOSCondition(const FVector& OwnerPosCm, const FVector& TargetPosCm,

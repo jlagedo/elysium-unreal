@@ -259,8 +259,9 @@ bool FElysiumNpcKernelFacingQueueTest::RunTest(const FString&)
 	Guard->AddFacingTarget(A, 1.0f, 10.0f, 0.0f);
 	Guard->AddFacingTarget(B, 0.5f, 1.0f, 0.0f);
 	TestEqual(TEXT("two entries queued"), Guard->FacingQueue.Num(), 2);
+	float Influence = 0.f;
 	double RangeCm = 0.0;
-	const FVector Blend = Guard->MotorFacingQueueBlend(RangeCm);
+	const FVector Blend = Guard->MotorFacingQueueBlend(Influence, RangeCm);
 	const FVector Expected = FVector(0.5, 0.5 * 1000.0 / ElysiumMove::U, 0.0).GetSafeNormal();
 	TestTrue(TEXT("the blend is retail's raw-delta average"), Blend.Equals(Expected, Tol));
 	TestTrue(TEXT("not the normalised-delta average"), Blend.Y > Blend.X * 2.0);
@@ -280,7 +281,7 @@ bool FElysiumNpcKernelFacingQueueTest::RunTest(const FString&)
 
 	// Expiry: past B's end stamp slot 15's compaction drops it and A alone is faced.
 	Fixture.Advance(Guard->World->NowSeconds() + 2.0);
-	const FVector AfterExpiry = Guard->MotorFacingQueueBlend(RangeCm);
+	const FVector AfterExpiry = Guard->MotorFacingQueueBlend(Influence, RangeCm);
 	TestEqual(TEXT("the expired entry is compacted away"), Guard->FacingQueue.Num(), 1);
 	TestTrue(TEXT("and the survivor is faced alone"), AfterExpiry.Equals(FVector(1.0, 0.0, 0.0), Tol));
 
@@ -292,11 +293,11 @@ bool FElysiumNpcKernelFacingQueueTest::RunTest(const FString&)
 	Follow.Importance = 1.0f;
 	Follow.Duration = 10.0f;
 	Guard->MotorAddFacingTarget(Follow);
-	const FVector Before = Guard->MotorFacingQueueBlend(RangeCm);
+	const FVector Before = Guard->MotorFacingQueueBlend(Influence, RangeCm);
 	TestTrue(TEXT("faces the entity where it stands"),
 		Before.Equals((Subject->EyePosition() - G).GetSafeNormal(), Tol));
 	Subject->Origin = G + FVector(0.0, 800.0, 0.0);
-	const FVector After = Guard->MotorFacingQueueBlend(RangeCm);
+	const FVector After = Guard->MotorFacingQueueBlend(Influence, RangeCm);
 	TestTrue(TEXT("and where it moved to, on the next blend"),
 		After.Equals((Subject->EyePosition() - G).GetSafeNormal(), Tol));
 	TestTrue(TEXT("the bearing changed"), !After.Equals(Before, Tol));
@@ -305,6 +306,48 @@ bool FElysiumNpcKernelFacingQueueTest::RunTest(const FString&)
 	Guard->FacingQueue.Reset();
 	Guard->MotorHandFacingTarget();
 	TestFalse(TEXT("an empty queue hands no point"), Guard->FacingTargetHanded.IsSet());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelFacingInfluenceTest,
+	"Elysium.Arm.NpcKernelFacing.Influence", GElysiumNpcKernelFacingFlags)
+bool FElysiumNpcKernelFacingInfluenceTest::RunTest(const FString&)
+{
+	// Motor slot 15 `0x102e2180` answers the total interest beside the vector: `1 - prod(1 - w)`
+	// (`102e22de..102e22f5`, loaded at `102e2318`).
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_facing_influence"), 4214);
+	Builder.AddNpc(TEXT("guard"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	if (!TestNotNull(TEXT("the guard spawned"), Guard))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Guard });
+	const FVector G = Guard->Origin;
+
+	// An empty queue: neither loop runs -- the zero vector and influence 0.0.
+	Guard->FacingQueue.Reset();
+	float Influence = 7.f;
+	double RangeCm = 0.0;
+	const FVector Empty = Guard->MotorFacingQueueBlend(Influence, RangeCm);
+	TestTrue(TEXT("an empty queue answers the zero vector"), Empty.IsZero());
+	TestEqual(TEXT("and influence 0.0"), Influence, 0.f);
+
+	// One entry, no ramp: `w` is its importance, and so is the total.
+	Guard->AddFacingTarget(G + FVector(1000.0, 0.0, 0.0), 0.25f, 10.0f, 0.0f);
+	(void)Guard->MotorFacingQueueBlend(Influence, RangeCm);
+	TestEqual(TEXT("one entry: the influence is its weight"), Influence, 0.25f, 1e-5f);
+
+	// Two entries, 0.25 and 0.5: `1 - (1 - 0.25) * (1 - 0.5)` = 0.625.
+	Guard->AddFacingTarget(G + FVector(0.0, 1000.0, 0.0), 0.5f, 10.0f, 0.0f);
+	(void)Guard->MotorFacingQueueBlend(Influence, RangeCm);
+	TestEqual(TEXT("two entries: 1 - prod(1 - w)"), Influence, 0.625f, 1e-5f);
+
+	// A full-weight entry saturates the total whatever else is queued.
+	Guard->AddFacingTarget(G + FVector(-1000.0, 0.0, 0.0), 1.0f, 10.0f, 0.0f);
+	(void)Guard->MotorFacingQueueBlend(Influence, RangeCm);
+	TestEqual(TEXT("a weight of 1 saturates the influence"), Influence, 1.f, 1e-5f);
 	return true;
 }
 

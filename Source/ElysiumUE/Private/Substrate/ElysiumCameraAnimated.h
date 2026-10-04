@@ -86,6 +86,10 @@ public:
 	// arguments pushed) and removes itself.
 	virtual void Spawn() override;
 	virtual void Think() override;
+	// `CCameraAnimated::HandleAnimEvent` `0x10071900`, slot 259: event 1003 with `atoi(options)` in
+	// 1..8 fires `OnScriptEvent01`..`08` (`+0x730`, stride `0x18`), activator and caller the camera;
+	// every other id falls to `CBaseAnimating::HandleAnimEvent` `0x10091da0`.
+	virtual bool HandleAnimEvent(const FElysiumAnimEvent& Event) override;
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
 	// `InputStartCamera` `0x10071440` -> `FUN_10071550`.

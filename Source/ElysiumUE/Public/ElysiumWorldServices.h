@@ -583,6 +583,19 @@ public:
 	// gate on. **False is the default**: no follower, no route.
 	virtual bool HasPath() const { return false; }
 
+	// The yaw the move in flight faces along its path now, degrees: retail's turn script
+	// (`0x102627e0`, rebuilt by `0x10262590` on every `MoveGroundExecute 0x10264680`) read at the
+	// move interval -- the direction from each waypoint to the next, eased through corners at 150
+	// degrees per second of segment time. It is what `MoveGroundExecute` writes into the copied
+	// move's `facing` (`+0x18`) before it calls motor slot 18 `0x102e19e0`.
+	// FRAME: Unreal-native yaw (the frame `Face` takes; the body builds the script over its own
+	// world-space waypoints and actor yaw). The kernel negates it into retail's
+	// (`FElysiumNpc::MotorMoveGroundExecuteFacing`).
+	// **False is the default and means no move is under way** (or no motor behind this double);
+	// `OutYawDegrees` is untouched and the caller takes the current yaw, retail's other arm
+	// (`GetLocalAngles().y`).
+	virtual bool GetNpcMoveFacingYaw(float& OutYawDegrees) const { return false; }
+
 	// TestLateralCover 0x10278220: stand at the candidate, then MoveLimit with MASK_NPCSOLID
 	// (0x202400b). Geometry only; candidate order and the sight/hint tests belong to the NPC.
 	virtual bool CanReachLateralCover(const FVector& FeetDestination) const { return false; }

@@ -196,6 +196,107 @@ bool FElysiumCameraAnimatedThinkOrderTest::RunTest(const FString&)
 	return true;
 }
 
+// `CCameraAnimated::HandleAnimEvent` `0x10071900`, the camera's own slot 259 (packet S9 item 5):
+// event 1003 with `atoi(options)` in 1..8 fires `OnScriptEvent01..08`, activator and caller the
+// camera; every other id falls to `CBaseAnimating::HandleAnimEvent` `0x10091da0`.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraAnimatedScriptEventTest,
+	"Elysium.Arm.CameraAnimated.ScriptEvent", GFlags)
+bool FElysiumCameraAnimatedScriptEventTest::RunTest(const FString&)
+{
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	Services.ClipSeconds = 2.0f;
+	Services.AnimatedPropModels.Add(RigModel, RigStem);
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__camera_animated_script_event__");
+		FElysiumEntityDef Camera;
+		Camera.Classname = TEXT("camera_animated");
+		Camera.TargetName = TEXT("animcam");
+		Camera.Keys.Add(TEXT("model"), RigModel);
+		Camera.Keys.Add(TEXT("animname"), RigClip);
+		Camera.Keys.Add(TEXT("spawnflags"), TEXT("0"));
+		// All eight outputs are wired, so an index that strayed outside 1..8 onto a neighbour shows.
+		for (int32 N = 1; N <= 8; ++N)
+		{
+			FElysiumOutputDef Wire;
+			Wire.Name = FString::Printf(TEXT("OnScriptEvent%02d"), N);
+			Wire.Target = TEXT("counter1");
+			Wire.Input = TEXT("Add");
+			Wire.Param = FString::FromInt(N);
+			Camera.Outputs.Add(Wire);
+		}
+		Defs.Defs.Add(MoveTemp(Camera));
+		FElysiumEntityDef Counter;
+		Counter.Classname = TEXT("math_counter");
+		Counter.TargetName = TEXT("counter1");
+		Defs.Defs.Add(MoveTemp(Counter));
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+	}
+
+	FElysiumEntity* Ent = World.FindByName(TEXT("animcam"));
+	if (!TestTrue(TEXT("camera_animated resolves as its own leaf"), Ent != nullptr
+		&& Ent->Class != nullptr && !Ent->Class->bStub
+		&& Ent->Class->ClassName == FName(TEXT("camera_animated"))))
+	{
+		return false;
+	}
+	FElysiumCameraAnimated* Cam = static_cast<FElysiumCameraAnimated*>(Ent);
+
+	TUniquePtr<FElysiumOrderedIOSink> OwnedSink = MakeUnique<FElysiumOrderedIOSink>();
+	FElysiumOrderedIOSink* Sink = OwnedSink.Get();
+	World.AddSink(MoveTemp(OwnedSink));
+	World.Tick(1.0);
+	Sink->Reset();
+
+	auto Script = [](int32 Id, const TCHAR* Options)
+	{
+		FElysiumAnimEvent Event;
+		Event.Event = Id;
+		Event.Options = Options;
+		return Event;
+	};
+
+	// Options "3": `atoi` 3, index 2, the output at `+0x730 + 2 * 0x18`.
+	TestTrue(TEXT("0x10071907: 1003 is the camera's own arm"), Cam->HandleAnimEvent(Script(1003, TEXT("3"))));
+	TestEqual(TEXT("0x1007193d: one FireOutput"), Sink->OfKind(TEXT("fire")).Num(), 1);
+	TestEqual(TEXT("0x10071936: the output is OnScriptEvent03"),
+		Sink->CountOf(TEXT("fire"), TEXT("animcam.OnScriptEvent03 ")), 1);
+	const FString Provenance = FString::Printf(TEXT("act=%s cal=%s"),
+		*Cam->Handle.ToString(), *Cam->Handle.ToString());
+	TestTrue(TEXT("0x10071932: PUSH ESI twice -- the activator and the caller are the camera"),
+		Sink->FirstLine(TEXT("queue"), TEXT("counter1.Add(3)")).Contains(Provenance));
+
+	// `atoi` 0 (index -1), 9 (index 8) and the empty string (0) fire nothing.
+	Sink->Reset();
+	Cam->HandleAnimEvent(Script(1003, TEXT("0")));
+	TestEqual(TEXT("0x10071928 JS: options \"0\" fires nothing"), Sink->OfKind(TEXT("fire")).Num(), 0);
+	Cam->HandleAnimEvent(Script(1003, TEXT("9")));
+	TestEqual(TEXT("0x1007192d JGE: options \"9\" fires nothing"), Sink->OfKind(TEXT("fire")).Num(), 0);
+	Cam->HandleAnimEvent(Script(1003, TEXT("")));
+	TestEqual(TEXT("0x1007191f atoi: empty options fire nothing"), Sink->OfKind(TEXT("fire")).Num(), 0);
+
+	// The bounds themselves: 1 and 8 are inside.
+	Cam->HandleAnimEvent(Script(1003, TEXT("1")));
+	Cam->HandleAnimEvent(Script(1003, TEXT("8")));
+	TestEqual(TEXT("0x10071927 DEC: options \"1\" is index 0, OnScriptEvent01"),
+		Sink->CountOf(TEXT("fire"), TEXT("animcam.OnScriptEvent01 ")), 1);
+	TestEqual(TEXT("0x1007192a CMP EAX,8: options \"8\" is index 7, OnScriptEvent08"),
+		Sink->CountOf(TEXT("fire"), TEXT("animcam.OnScriptEvent08 ")), 1);
+
+	// Any other id is the base's: `0x10071912` -> `0x10091da0`.
+	Sink->Reset();
+	const FElysiumAnimEvent Other = Script(1004, TEXT("3"));
+	TestEqual(TEXT("0x10071912: id 1004 gets the base handler's answer"),
+		Cam->HandleAnimEvent(Other), Cam->FElysiumAnimating::HandleAnimEvent(Other));
+	TestEqual(TEXT("0x10071912: and fires no script output"), Sink->OfKind(TEXT("fire")).Num(), 0);
+	return true;
+}
+
 }   // namespace ElysiumCameraAnimatedThinkTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS

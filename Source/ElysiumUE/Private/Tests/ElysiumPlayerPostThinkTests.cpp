@@ -192,6 +192,25 @@ bool FElysiumPlayerPostThinkOrderTest::RunTest(const FString&)
 		Seen.Num(), SeenBeforeRun + 2);
 	TestEqual(TEXT("0x10091880: m_flLastEventCheck (+0x658) after the replay's first window"),
 		Player->PostThinkChannels[0].Words.LastEventCheck, 0.12f, 1.e-4f);
+
+	// A clip found already running (the locomotion stack: `0x101644f0` carries the cycle for the five
+	// locomotion activities) is still a sequence set: `ResetSequenceInfo` zeroes `+0x658`
+	// (`0x10090a3d`) and never touches the cycle, so the first window is [0, cycle + 0.1 x rate) and
+	// the record behind the playhead fires. Whatever the pose layer publishes as the play's anchor is
+	// not the window's start.
+	const int32 SeenBeforeCarried = Seen.Num();
+	StandOn(Services, EElysiumAnimChannel::Base, Bank, TEXT("walk"), 5, 0.60f);
+	Services.BodyClipPhase.AnchorCycle = 0.60f;
+	Player->PostThinkAnimation();
+	if (TestEqual(TEXT("0x10090a3d: a carried cycle opens [0, 0.70), so the 2050 at 0.25 fires"),
+		Seen.Num(), SeenBeforeCarried + 1))
+	{
+		TestTrue(TEXT("0x10090950: the carried clip's 2050"), Seen.Last().Text.StartsWith(TEXT("2050")));
+	}
+	TestEqual(TEXT("0x10091880: m_flLastEventCheck (+0x658) = the carried cycle + 0.1 x cycle rate"),
+		Player->PostThinkChannels[0].Words.LastEventCheck, 0.70f, 1.e-4f);
+	TestFalse(TEXT("0x10090a37: m_bSequenceFinished (+0x65c) starts clear"),
+		Player->PostThinkChannels[0].Words.bSequenceFinished);
 	return true;
 }
 

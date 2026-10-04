@@ -3163,7 +3163,7 @@ function	0x102e1440	CAI_Motor::vfunc10	-	mechanism	layer 1
 function	0x102e14a0	CAI_Motor::vfunc19	-	mechanism	layer 10
 function	0x102e1560	FUN_102e1560	-		layer 9
 function	0x102e1760	CAI_Motor::FUN_102e1760	-	mechanism	layer 10
-function	0x102e19e0	CAI_Motor::FUN_102e19e0	-	mechanism	layer 4
+function	0x102e19e0	CAI_Motor::FUN_102e19e0	-	rule	layer 4
 function	0x102e1c10	FUN_102e1c10	-		layer 3
 function	0x102e1cf0	FUN_102e1cf0	-		layer 0
 function	0x102e1d10	FUN_102e1d10	-		layer 1
@@ -3279,7 +3279,7 @@ function	0x102eece0	CAI_Navigator::MoveJump	-	mechanism	layer 23
 function	0x102eee40	CAI_Navigator::FUN_102eee40	-	mechanism	layer 4
 function	0x102ef510	CAI_Navigator::FUN_102ef510	-	mechanism	layer 23
 function	0x102ef870	CAI_Navigator::MoveEnact	-	mechanism	layer 1
-function	0x102efaa0	CAI_Navigator::MoveNormal	-	mechanism	layer 18
+function	0x102efaa0	CAI_Navigator::MoveNormal	-	present	layer 18
 function	0x102efd50	FUN_102efd50	-		layer 17
 function	0x102eff40	CAI_Navigator::Move	-	mechanism	layer 24
 function	0x102f0400	FUN_102f0400	-		layer 19
@@ -3585,7 +3585,7 @@ function	0x10332fc0	CBaseCombatCharacter::GetDialogReactionModifier	-		layer 0
 function	0x103330f0	CBaseCombatCharacter::SetDialogReactionModifier	-		layer 14
 function	0x10333340	CBaseCombatCharacter::IRelationType	CCineNPC#404		layer 13
 function	0x10333700	CBaseCombatCharacter::IRelationPriority	CCineNPC#405, CNPCMaker#405, CNPC_VHumanCombatant#405, CNPC_VPedestrian#405, CNPC_VRat#405, CNPC_VVampire#405		layer 0
-function	0x103338c0	CBaseCombatCharacter::Weapon_ShootPosition	CCineNPC#389, CNPCMaker#389, CNPC_VHumanCombatant#389, CNPC_VPedestrian#389, CNPC_VRat#389, CNPC_VVampire#389		layer 1
+function	0x103338c0	CBaseCombatCharacter::Weapon_ShootPosition	CCineNPC#389, CNPCMaker#389, CNPC_VHumanCombatant#389, CNPC_VPedestrian#389, CNPC_VRat#389, CNPC_VVampire#389	rule	layer 1
 function	0x10333ad0	CBaseCombatCharacter::Weapon_FindUsable	-		layer 8
 function	0x10334180	CAI_BaseNPC::FUN_10334180	CCineNPC#374, CNPCMaker#374, CNPC_VHumanCombatant#374, CNPC_VPedestrian#374, CNPC_VRat#374, CNPC_VVampire#374	rule	layer 4
 function	0x103346c0	FUN_103346c0	-		layer 0

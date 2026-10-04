@@ -301,6 +301,26 @@ bool FElysiumFeedBoundaryAnimEventTest::RunTest(const FString&)
 	Victim->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, 3);
 	Victim->RecomputeSheet();
 
+	// Setup corrected by the spec 0002 V4b integrator: an NPC half of the pair takes its paired clip
+	// as its KERNEL sequence (`SetGrappleActivity 0x1032a100` -> `LookupSequenceByName` ->
+	// `0x10260a50`), and a model that does not author the clip is retail's miss (the warning, then
+	// `EndGrapple`). The two bodies' model therefore authors the feed family, as the shipped
+	// `male_citizen` does through the shared bank; before V4b the direct clip play asked nothing.
+	{
+		TSet<FString>& FeedClips = Services.KnownNpcClips.FindOrAdd(TEXT("male_citizen"));
+		for (const EElysiumFeedPhase FeedPhase : { EElysiumFeedPhase::Engage, EElysiumFeedPhase::Bite,
+			EElysiumFeedPhase::Loop, EElysiumFeedPhase::Release })
+		{
+			for (const ElysiumFeed::EPartnerHeight FeedHeight : { ElysiumFeed::EPartnerHeight::Shorter,
+				ElysiumFeed::EPartnerHeight::Taller })
+			{
+				const ElysiumFeed::FClipPair FeedPair = ElysiumFeed::ResolveClipPair(FeedPhase, FeedHeight);
+				FeedClips.Add(FeedPair.Attacker);
+				FeedClips.Add(FeedPair.Victim);
+			}
+		}
+	}
+
 	// --- Unpaired: the guard fails, and the record is SWALLOWED -----------------------------------
 	{
 		// `1032e5b0` and `1032e630` jump to the epilogue, not to `CBaseAnimating::HandleAnimEvent`.

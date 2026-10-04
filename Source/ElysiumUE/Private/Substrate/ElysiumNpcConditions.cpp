@@ -1233,6 +1233,12 @@ void ElysiumNpcCond::GatherAttackConditions(FElysiumNpcBase& Npc, double Now)
 	// `WeaponCapability` (the item record's family) and OR-ed in at each test: `Ranged` stands for
 	// the weapon's `0x2000`, `Melee` for its `0x8000` (the melee class word is `0x40018000`).
 	const int32 Caps = Npc.CapabilitiesGet();                                    // 0x1026de0c
+	// `0x1026de18..0x1026de30`: the enemy's slot 197 `BodyTarget` (`+0x314`) `(&target [ESP+0x28],
+	// owner slot 217 (+0x364)(), bNoisy = 1, 0)`, EVERY pass and unconditionally -- before the
+	// capability test `0x1026de3a`, whether or not any arm reads the point. Being noisy it draws every
+	// gather: an NPC enemy (`0x102789c0`) two `RandomFloat(0, 0.5)`, the player (`0x10174e60`) one
+	// `RandomFloat(0.5, 1.0)`. Kept for slot 562's first test below.
+	FVector WeaponLosTargetCm = Enemy->BodyTarget(Npc.GetAbsOrigin(), true, false);   // 0x1026de30
 	const ECapability Capability = WeaponCapability(Npc);
 	FElysiumWeapon* const Weapon = NpcCondActiveWeapon(Npc);                     // GetActiveWeapon 0x10007e19
 	const FElysiumNpc* const Troika = Npc.AsNpc();
@@ -1271,28 +1277,24 @@ void ElysiumNpcCond::GatherAttackConditions(FElysiumNpcBase& Npc, double Now)
 	{
 		if (RangedAnswer == static_cast<int32>(EElysiumNpcCond::CanRangeAttack1))   // 0x1026ded9 CMP EBP,0x4f
 		{
-			// `0x1026dede..0x1026df45`: slot 562 `WeaponLOSCondition` (`+0x8c8`) from the eye (slot
-			// 217 `(…, 1)`) to the enemy's slot 197 point, `bSetConditions = 1`; on failure slot 560
-			// AGAIN (`0x1026df00`) and a second test to the enemy's slot 193 `BodyTarget` (`+0x304`);
-			// either passing sets 0x4f, both failing sets nothing (`0x1026df45 JZ 0x1026df69`).
+			// `0x1026dede..0x1026df45`: slot 562 `WeaponLOSCondition` (`+0x8c8`) `(owner slot 217
+			// (+0x364)(), &target, bSetConditions = 1)`, first to the enemy's slot 197 `BodyTarget`
+			// point taken above (`0x1026de30`); on failure slot 560 AGAIN (`0x1026df00`) and a second
+			// test to the enemy's slot 193 `EyePosition` (`+0x304`, `0x1026df0f`); either passing sets
+			// 0x4f, both failing sets nothing (`0x1026df45 JZ 0x1026df69`).
 			//
-			// STAND-IN, named (README v5a §2 P3), kept in retail's position: both traces are the
-			// eye's debounce latch (slot 481's `+0x5b98` at its limit), and a failing test raises
-			// `WEAPON_SIGHT_OCCLUDED` (0x66) where the weapon's slot 364 (`0x1024f330`) would. The
-			// second clear is retail's and wipes the first test's 0x66 (and 0x2f) before the second
-			// test raises it again.
-			const bool bEnemyOccluded =
-				Npc.BaseMemory.EnemyOccludedCheck >= ElysiumNpcSense::EnemyLosFailureLimit;
-			bool bWeaponLos = !bEnemyOccluded;                                   // 0x1026def2 slot 562, first test
+			// The slot's own bodies raise 0x66 / 0x63 / 0x42 / 0x64 on `Cognition.Conditions`, which is
+			// `Out` (spec 0002 V5a-3; the eye's occlusion latch `+0x5b98` stood here before and is no
+			// longer read by this body). The second clear is retail's and wipes whatever the first
+			// test raised (0x63 and 0x2f included) before the second test raises its own.
+			bool bWeaponLos =
+				Npc.WeaponLOSCondition(Npc.GetAbsOrigin(), WeaponLosTargetCm, true);   // 0x1026dee4..0x1026def2 slot 562, first test
 			if (!bWeaponLos)
 			{
-				Out.Set(EElysiumNpcCond::WeaponSightOccluded);                   // the first test's own raise
 				Npc.ClearAttackConditions();                                     // 0x1026df00 slot 560 again
-				bWeaponLos = !bEnemyOccluded;                                    // 0x1026df3d slot 562, to BodyTarget
-				if (!bWeaponLos)
-				{
-					Out.Set(EElysiumNpcCond::WeaponSightOccluded);               // the second test's own raise
-				}
+				WeaponLosTargetCm = Enemy->EyePosition();                        // 0x1026df0f slot 193 (+0x304) -> [ESP+0x28]
+				bWeaponLos =
+					Npc.WeaponLOSCondition(Npc.GetAbsOrigin(), WeaponLosTargetCm, true);   // 0x1026df3d slot 562, second test
 			}
 			if (bWeaponLos)
 			{

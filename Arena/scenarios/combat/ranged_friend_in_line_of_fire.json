@@ -1,0 +1,64 @@
+{
+  "name": "ranged_friend_in_line_of_fire",
+  "about": "A gunman does not fire through a friend standing in his line of fire (spec 0002 V5a-3; stories/v4/packets-S6.md item 5, packets-S7.md items 1-4). ranged_open_fire's cast plus arena_friend, a second npc_VHumanCombatant, unarmed, standing at the midpoint of the segment shooter -> player. No relation is staged: two npc_VHumanCombatants with no relationship row are D_NU (4) to each other -- CBaseCombatCharacter::IRelationType 0x10333340's default, the friend's Classify 0x103871a0 (4) matching no class row, player_reaction being an entity row for the player only -- and anything but D_HT blocks. GatherAttackConditions 0x1026dd10 takes the enemy's slot 197 BodyTarget every pass (0x1026de30; the player's is CBasePlayer 0x10174e60: origin + view offset x RandomFloat(0.5, 1.0)); on a ranged 0x4f answer it asks slot 562 WeaponLOSCondition 0x1026fbe0 to that point (0x1026def2) and, after slot 560, to the enemy's slot 193 EyePosition (0x1026df3d). An armed body is answered by the weapon: slot 364 0x1024f330 takes owner slot 389 Weapon_ShootPosition 0x103338c0 (origin + m_HackedGunPos, 55 units up) and runs 0x1024f3d0, one ray on mask 0x46004003: a hit combat character the owner does not hate raises WEAPON_BLOCKED_BY_FRIEND 0x63 (0x1024f502) and answers false. Both lines cross the friend, so no 0x4f is set; the gather's tail arms +0x5b88 = curtime + 1.5 (0x1026e006) on every raise and, while it runs, holds 0x63 and clears 0x4f (0x1026e068..0x1026e087). The friend is removed at 0.8 s: the last raise is the gather before it, 0x63 stands until that + 1.5 s (2.2-2.3 s), is dropped by the next gather, and only then does 0x4f stand and SCHED_TROIKA_RANGE_ATTACK1's TASK_RANGE_ATTACK1 start, its clip's 3031 after it. +0x5b8c = first raise + 2.5 (0x1026dfe7) never lapses first -- the block lasts under 2.5 s from its first raise and 0x1026e02c resets it to FLT_MAX -- so EXTENDED_BLOCKED_BY_FRIEND 0x2e is never raised.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 12.0,
+  "player": { "at": "cover_seat" },
+  "cast": [
+    {
+      "name": "arena_shooter",
+      "classname": "npc_VHumanCombatant",
+      "at": "far_ne",
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_thirtyeight",
+        "player_reaction": "D_HT 5",
+        "hint_groups": "2",
+        "npc_perception": "3",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    },
+    {
+      "name": "arena_friend",
+      "classname": "npc_VHumanCombatant",
+      "at": [191.4, 682.75, 0.0],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    { "t": 0.8, "do": "kill", "target": "arena_friend" }
+  ],
+  "expect": [
+    { "label": "blocked", "who": "arena_shooter", "kind": "cond+", "match": "WEAPON_BLOCKED_BY_FRIEND (0x63)", "by": 0.7 },
+    { "label": "unblocked", "who": "arena_shooter", "kind": "cond-", "match": "WEAPON_BLOCKED_BY_FRIEND (0x63)", "by": 2.5 },
+    { "label": "fires", "who": "arena_shooter", "kind": "task", "match": "task_range_attack1 (", "within": 3.0 },
+    { "label": "shot_event", "who": "arena_shooter", "kind": "animevent", "match": "^3031( |$)", "regex": true, "within": 3.0 },
+    { "label": "fired", "who": "arena_shooter", "kind": "taskdone", "match": "^task_range_attack1$", "regex": true, "within": 5.0 }
+  ],
+  "never": [
+    { "who": "arena_shooter", "kind": "animevent", "match": "^3031( |$)", "regex": true, "until": 1.4 },
+    { "who": "player", "kind": "damage", "until": 1.4 },
+    { "who": "arena_friend", "kind": "damage" },
+    { "who": "arena_shooter", "kind": "cond+", "match": "EXTENDED_BLOCKED_BY_FRIEND (0x2e)" },
+    { "who": "arena_shooter", "kind": "death" }
+  ],
+  "notes": "The friend's place is the midpoint of far_ne (682.75, 682.75) and cover_seat (-300, 682.75), centimetres: 491 cm from the muzzle. The two `never` windows that close at 1.4 s are the brief's worst case: the first raise cannot precede 0.0 and +0x5b88 holds 0x63 and clears 0x4f for 1.5 s after every raise. `unblocked` is by 2.5: the last raise is at most the gather at 0.8, + 1.5 s, + one think. The shot itself (CWeaponRanged Shot 0x102387b0 through the 3031) is V4o lane O3's; this record asks only for the task, its event and its end, in retail's order after the block."
+}

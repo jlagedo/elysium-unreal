@@ -1,10 +1,9 @@
 {
   "name": "input_clearpatrolpath",
-  "about": "ClearPatrolPath frees the patrol and lets the running program end. CAI_BaseNPCTroika::InputClearPatrolPath 0x1029ef60 frees m_sppPatrolPath (0x1029f5d0) and changes no schedule; the running SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK walks on to its current point, and its TASK_NEXT_PATROL_POINT (0x102aa9e0) finds no object and fails with 0x1d; the reselection then has no patrol to return (SelectSchedule case 1 step 3, 0x102af660) and picks another program (docs/vtmb/npc-ai/programs.md \u00a7 'Patrol paths, walked'). sp_tutorial_1's sentry2 verbatim with its three points (info_node_patrol_point, keys verbatim from sentry2_1..3 but nodeid, placed in the arena by the record), and its map's two wires; ClearPatrolPath '' is ch_hub_1's form (patrol_cop_*).",
+  "about": "ClearPatrolPath frees the patrol and lets the running program end. CAI_BaseNPCTroika::InputClearPatrolPath 0x1029ef60 frees m_sppPatrolPath (0x1029f5d0) and changes no schedule; the running SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK walks on to its current point, and its TASK_NEXT_PATROL_POINT (0x102aa9e0) finds no object and fails with 0x1d; the reselection then has no patrol to return (SelectSchedule case 1 step 3, 0x102af660) and picks another program (docs/vtmb/npc-ai/programs.md \u00a7 'Patrol paths, walked'). sp_tutorial_1's sentry2 verbatim with its three points (info_node_patrol_point, keys verbatim from sentry2_1..3 but nodeid, placed in the arena by the record), and its map's two wires; ClearPatrolPath '' is ch_hub_1's form (patrol_cop_*). V4b (N13, 2026-10-04): the body is commanded retail's velocity script (0x102630b0, rebuilt every move tick by MoveGroundExecute 0x10264680) at the kernel's GetIdealSpeed 0x10091740, and stops by the script's own deceleration and the step clamp 0x10264916; the measured toggle (J9) took input_clearpatrolpath's first `arrived` from 10.428 s to 6.600 s -- the arrival creep is gone. The speed2d probe guards the cruise mid-way along the longest straight leg, within 10 % of this body's own walk_0: the female bank (shared/female/npc_allsequences), 101.278 cm/s -> 91.2..111.4; measured 101.278 at 3.5 s (leg 0.7 -> 6.6 s) and at 11.5 s (leg 6.7 -> 17.1 s).",
   "stage": "arena",
   "seed": 1,
   "duration": 40.0,
-  "known_red": "V4b (N13): the cruise speed is this body's own `walk_0` (101.278 cm/s, the female bank) and is right; the time is lost at arrival -- the body creeps the last ~30 cm for ~4 s before the kernel sees `arrived` (inferred from code until the B integrator toggles it; `packets-R1.md` item 4). The body is sentry2's (vampire_hunter_chick, shared/female/npc_allsequences); measured on this record by reader R1: speed2d 101.278 mid-leg, the leg covered in ~5.6 s, `arrived` at 10.428 s. No deadline moved",
   "player": {
     "at": "start"
   },
@@ -166,6 +165,8 @@
     }
   ],
   "probes": [
+    {"at": 3.5, "who": "sentry2", "probe": "speed2d", "greater": 91.2},
+    {"at": 3.5, "who": "sentry2", "probe": "speed2d", "less": 111.4},
     {
       "at": "end",
       "who": "sentry2",

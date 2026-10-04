@@ -198,6 +198,18 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	{
 		return HasPathOverride.IsSet() ? HasPathOverride.GetValue() : bMoving;
 	}
+	// The move's turn-script yaw (`GetNpcMoveFacingYaw`, `0x102627e0`): a case states it; unset is
+	// "no move under way", the interface's default.
+	TOptional<float> MoveFacingYawDegrees;
+	virtual bool GetNpcMoveFacingYaw(float& OutYawDegrees) const override
+	{
+		if (!MoveFacingYawDegrees.IsSet())
+		{
+			return false;
+		}
+		OutYawDegrees = MoveFacingYawDegrees.GetValue();
+		return true;
+	}
 	virtual bool CanReachLateralCover(const FVector& Point) const override
 	{
 		return LateralCoverQuery ? LateralCoverQuery(Point) : bLateralCoverReachable;

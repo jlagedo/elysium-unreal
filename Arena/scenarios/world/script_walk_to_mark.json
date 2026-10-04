@@ -53,6 +53,8 @@
       "match": "task_walk_to_target (",
       "within": 0.5
     },
+    { "label": "walk_row", "who": "AsianVamp", "kind": "sequence", "match": "(?i)walk", "regex": true, "within": 0.3 },
+    { "label": "footfall", "who": "AsianVamp", "kind": "animevent", "match": "^205[0-3]( |$)", "regex": true, "within": 1.5 },
     {
       "label": "arrives",
       "who": "AsianVamp",

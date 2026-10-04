@@ -302,6 +302,7 @@ void FElysiumNpc::BecomeClientRagdoll()
 	// `SetIgnoreCharacterCollision` is stated beside it because the two are separate switches with
 	// separate lifetimes: whatever later un-freezes a body must not make a corpse block the player.
 	SetBodyFrozen(true);
+	RetailSolidFlags |= 0x4u;   // 0x10090180 AddSolidFlags(w | 4): FSOLID_NOT_SOLID, on the kill frame
 	SetIgnoreCharacterCollision(true);
 	SetBodyHeld(false);
 	SetBodyAnimationHeld(false);

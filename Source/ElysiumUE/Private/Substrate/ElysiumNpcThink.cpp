@@ -340,7 +340,12 @@ bool FElysiumNpc::Think19NormalSet2(double Now, float NormalInterval)
 	{
 		Think19TrackUnderGround(NormalInterval);                            // 0x10293344 0x102bfe10
 	}
-	// `0x102bf310`: slot 345 `SetPoseParameter("move_yaw", m_flDesiredMoveYaw (+0x63ec), 0)`.
+	// `0x102bf310`: slot 345 `SetPoseParameter("move_yaw", m_flDesiredMoveYaw (+0x63ec), 0)` -- the
+	// word's ONE reader and the kernel's one writer of the `move_yaw` pose parameter on the Troika
+	// line. The word is motor slot 18's (`MoveFacing 0x102e19e0`, `102e1b6c`:
+	// `FElysiumNpc::MotorMoveFacing`, `-UTIL_AngleDiff(move yaw, body yaw)`) and `0x102a9940`'s;
+	// slot 18 writes the pose parameter itself only on a base-only NPC (`0x102e27d0`), which this
+	// class is not. `StudioFrameAdvance` and `MoveGroundExecute` read the fan's speed at this value.
 	SetPoseParameter(TEXT("move_yaw"), ScheduleHost.DesiredMoveYaw, false); // 0x1029334c
 	if (NpcFlags.Has(EElysiumNpcFlag2::DISAPPEAR))                          // 0x10293351 / 0x1029335b
 	{

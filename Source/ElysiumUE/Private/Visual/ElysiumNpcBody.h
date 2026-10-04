@@ -53,14 +53,16 @@ struct TStructOpsTypeTraits<FElysiumNpcAnimTickFunction>
 
 namespace ElysiumNpcBodyMove
 {
-// A NAMED MODERNIZATION, not a retail number: the smallest arrival radius Unreal's path follower is
-// handed. Retail lands on the point (its motor clamps the step onto the waypoint; its arrival
-// test is 0.0625 units) and Unreal's acceleration-driven follower does not, so a request stated at
-// 0.16 cm is given to the follower as this instead. It sizes only what the FOLLOWER is asked for:
-// the request's own radius is kept exactly, `RemainingDistance2DCm` is measured to the exact
-// destination, and the substrate applies retail's own completion arms from those.
-// Unmeasured: 1 cm is the radius this follower was already commissioned with (the clamp this
-// constant replaces), not a number found by running the follower at a smaller one.
+// NOT RETAIL'S NUMBER: the smallest arrival radius Unreal's path follower is handed. Retail's
+// arrival test is navigator slot 16 `0x102ef510`: reached iff the distance to the head waypoint is
+// `<= 0.0625` units (f64 `0x10451f78`), 2-D on a ground move -- a constant, not the goal tolerance
+// and not a hull -- and the body lands on the waypoint because `MoveGroundExecute 0x10264680`
+// clamps its step to the remaining distance (`0x10264916`; `ElysiumNpcMoveScript::Step`).
+// 1.0 cm is the crowd follower's floor, a divergence under K1 (spec 0002 V4, README §7) that is
+// PENDING THE JUDGE: replaced by retail's 0.0625 units, or kept and named. Until that ruling the
+// value stands. It sizes only what the FOLLOWER is asked for: the request's own radius is kept
+// exactly, `RemainingDistance2DCm` is measured to the exact destination, and the substrate
+// applies retail's own completion arms from those.
 inline constexpr float FollowerArrivalFloorCm = 1.0f;
 }
 
@@ -206,6 +208,8 @@ public:
 	virtual bool SampleFloor(FElysiumNpcFloorFacts& Out) const override;
 	virtual void SetMoveIgnore(const FElysiumEntityHandle& Entity, bool bIgnore) override;
 	virtual bool HasPath() const override;
+	// The turn script (`0x102627e0`) of the move in flight, read at this body's last move interval.
+	virtual bool GetNpcMoveFacingYaw(float& OutYawDegrees) const override;
 	// The hull resize and the facing-while-moving target (`ElysiumNpcBody.cpp`).
 	virtual void SetHullSize(const FVector& MinsCm, const FVector& MaxsCm) override;
 	virtual void SetFacingTarget(const TOptional<FVector>& TargetCm) override;
@@ -304,6 +308,31 @@ private:
 	// no gait at all — the opening frames of a leg, before the body has left its idle — does the
 	// order's own kind answer, because there is no published cell yet to command.
 	float CommandedTravelSpeed() const;
+
+	// --- spec 0002 V4b: the motor's speed is retail's (K1: the motor on the body's tick) ---
+	// ITEM 1. The kernel's `GetIdealSpeed 0x10091740` (`m_flGroundSpeed +0x654`), cm/s, as it
+	// answers -- 0 included. The call runs body -> kernel: this body resolves its own entity and
+	// asks slot 248. NEGATIVE means no live kernel behind this body (its entity is gone or is no
+	// NPC), and the caller keeps `CommandedTravelSpeed`.
+	float KernelIdealSpeedCm() const;
+	// ITEMS 2-4. The remaining waypoints of the move in flight, SOURCE units, from the one being
+	// walked to. False when the follower is not moving along a path.
+	bool GatherMoveWaypointsUnits(TArray<FVector>& OutUnits, FVector& OutOriginUnits) const;
+	// ITEMS 2-4. The velocity script `0x102630b0` built from this body now and read at
+	// `IntervalSeconds`, with `MoveGroundExecute`'s clamped trapezoid step: the speed the mover is
+	// commanded, cm/s. False when no script can be built; `OutCmPerSecond` is untouched.
+	bool ScriptedMoveSpeedCm(float IdealCmPerSecond, float IntervalSeconds, float& OutCmPerSecond) const;
+	// The interval of this body's last move tick (retail `m_flMoveInterval`, motor `+0x30`; under
+	// K1 the body's own tick), which `GetNpcMoveFacingYaw` reads the turn script at.
+	float LastMoveIntervalSeconds = 0.0f;
+	// The cruise speed the leg in flight is ordered at (the script's ideal), cm/s; 0 when the
+	// script is not driving this body. What `SampleLocomotion` publishes as the commanded speed.
+	float ScriptIdealSpeedCm = 0.0f;
+	// The speed the velocity script commanded on this body's last move tick, cm/s: retail's
+	// `|m_vecVelocity|` (motor `+0x3c`) as `MoveGroundExecute 0x10264680` wrote it, which is entry 0
+	// of the next tick's script. Negative when the last tick ran no move step.
+	float ScriptVelocityCm = -1.0f;
+
 	FVector RequestedFeet = FVector::ZeroVector;
 	float RequestedAcceptanceCm = 20.0f;
 	float RequestedYaw = 0.0f;

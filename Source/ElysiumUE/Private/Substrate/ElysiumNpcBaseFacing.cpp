@@ -128,11 +128,16 @@ FVector FElysiumNpcBase::MotorFacingEntryPosition(FFacingQueueEntry& Entry)
 	return Entry.PositionCm;
 }
 
-FVector FElysiumNpcBase::MotorFacingQueueBlend(double& OutRangeCm)
+FVector FElysiumNpcBase::MotorFacingQueueBlend(float& OutInfluence, double& OutRangeCm)
 {
 	// `CAI_Motor` slot 15 `0x102e2180` (shape.md "CAI_Motor's unnamed bodies"). First the queue is
 	// compacted in place: an expired entry (`0x102d8b50` through `0x102e2b10`) is removed WITHOUT
 	// advancing the cursor, so two adjacent dead entries both go.
+	//
+	// It answers TWO things (re-read 2026-10-04, 0002 V4 packet R1): the out vector, zeroed at entry,
+	// and in ST0 the total interest `1 - prod(1 - w)` (`102e22de..102e22f5`, loaded at `102e2318`).
+	// An empty queue runs neither loop: the zero vector and influence 0.0.
+	OutInfluence = ElysiumNpcTunables::Zero;
 	OutRangeCm = 0.0;
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	for (int32 Index = 0; Index < FacingQueue.Num();)
@@ -158,6 +163,9 @@ FVector FElysiumNpcBase::MotorFacingQueueBlend(double& OutRangeCm)
 		const FVector Point = MotorFacingEntryPosition(Entry);
 		const FVector DeltaUnits = (Point - Origin) / ElysiumMove::U;
 		Acc = DeltaUnits * W + Acc * (ElysiumNpcTunables::One - W);
+		// `102e22de FLD 1.0; FSUB total; 102e22eb FMUL (1 - w); 102e22ef FSUBR 1.0; 102e22f5 FSTP total`.
+		OutInfluence = ElysiumNpcTunables::One
+			- (ElysiumNpcTunables::One - OutInfluence) * (ElysiumNpcTunables::One - W);
 		Acc = Acc.GetSafeNormal();                                       // VectorNormalize: zero stays zero
 		if (W != ElysiumNpcTunables::Zero)
 		{
@@ -169,12 +177,16 @@ FVector FElysiumNpcBase::MotorFacingQueueBlend(double& OutRangeCm)
 
 void FElysiumNpcBase::MotorHandFacingTarget()
 {
-	// Retail's consumer is `MoveFacing` (motor slot 18, closed at CMC), which takes slot 15's heading
-	// while the sequence carries `move_yaw`. The port's body faces a point, so the blend is handed as
-	// one: the NPC's origin along the blended bearing, at the farthest contributing entry's range (a
-	// single entry lands on its own point). Port presentation only; the bearing is retail's.
+	// Retail's consumer is `MoveFacing` (motor slot 18 `0x102e19e0`, the kernel's:
+	// `FElysiumNpc::MotorMoveFacing`), which blends slot 15's heading with the move's own facing by
+	// slot 15's influence while the sequence carries `move_yaw`, and writes the ideal yaw and
+	// `m_flDesiredMoveYaw`. The BODY moves (K1) and faces a point, so the queue's bearing is also
+	// handed as one: the NPC's origin along the blended bearing, at the farthest contributing entry's
+	// range (a single entry lands on its own point). Port presentation only; the bearing is retail's.
+	// The influence is slot 18's and is not read here.
+	float Influence = 0.f;
 	double RangeCm = 0.0;
-	const FVector Dir = MotorFacingQueueBlend(RangeCm);
+	const FVector Dir = MotorFacingQueueBlend(Influence, RangeCm);
 	TOptional<FVector> Point;
 	if (!Dir.IsZero())
 	{

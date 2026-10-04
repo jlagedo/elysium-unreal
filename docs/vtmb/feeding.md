@@ -168,6 +168,19 @@ engage, loop and release. Seductive feeding uses engage, loop, ordinary release 
 `ACT_SEDUCTIVE_RELEASE_TO_MEZ`. Zombie feeding has the analogous engage/idle, bite, loop and
 release families. `[VtMB]`
 
+*(2026-10-04, packet S9 item 3.)* **Both halves take the paired clip as their own sequence.**
+`CBaseCombatCharacter::SetGrappleActivity` `0x1032a100` resolves the attacker and the victim from
+`+0x1538` / `+0x153c`, then for each: `TranslateBaseGrappleActivity`, the slot 381 (`+0x5f4`)
+translation, `SelectWeightedSequence`; on a hit `m_IdealActivity = the base activity`,
+`m_Activity = the translated one`, `0x10260a50(seq)` (`m_nSequence = seq`, `ResetSequenceInfo`
+`0x10090950`) and `m_flCycle = 0`, the attacker first. A miss warns ("Attacker / Victim could not
+find sequence ...") and calls `EndGrapple`. Consequences: the victim's own slot 258 dispatches its
+clip's records (its 4007 / 4006 arrive and are refused by the role guard below), and its
+`m_Activity` is the grapple activity, so `RunAnimation`'s idle re-pick (`m_Activity == ACT_IDLE`)
+is off for the whole grapple. The port commits an NPC half through the same words
+(`PlayFeedPhaseClips`); the phase → activity table for the continuations is not recovered, so both
+activity words carry `ACT_FEEDING_ENGAGE` (`0xf5b`) as a named stand-in on every phase.
+
 The compact player action `PLAYER_FEED` (code 6) has no recovered producer. Live ordinary feeding
 is represented by `PLAYER_GRAPPLE` and its paired mode, so a remake must not use the dormant
 compact code as the transaction owner.

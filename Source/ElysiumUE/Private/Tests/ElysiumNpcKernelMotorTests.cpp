@@ -310,6 +310,126 @@ namespace
 	}
 }
 
+// --- Motor slot 18 `MoveFacing` `0x102e19e0` (spec 0002 V4b) ----------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorMoveYawTest,
+	"Elysium.Arm.NpcKernelMotor.MoveYaw", GElysiumNpcKernelMotorFlags)
+bool FElysiumNpcKernelMotorMoveYawTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_move_yaw"), 4304);
+	Builder.AddNpc(TEXT("guard"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	if (!TestNotNull(TEXT("guard"), Guard))
+	{
+		return false;
+	}
+	FElysiumNpcWorldFixture::Quiet({ Guard });
+	const FVector G = Guard->Origin;
+
+	// Two bridge rows, their descriptors written by hand: a plain clip (no pose parameter) and a
+	// two-cell `move_yaw` fan (-180 and +180) of 100 and 200 cm/s.
+	const int32 Plain = Guard->SequenceRowFor(TEXT("bank"), TEXT("turn_left"), false);
+	const int32 Fan = Guard->SequenceRowFor(TEXT("bank"), TEXT("walk"), true);
+	Guard->SequenceDescriptorRows.SetNum(Guard->SequenceRows.Num());
+	{
+		FElysiumNpcBase::FSequenceDescriptorRow& Row = Guard->SequenceDescriptorRows[Plain];
+		Row.bAsked = true;
+		Row.bKnown = true;
+		Row.GroundSpeedCm = 50.f;
+	}
+	{
+		FElysiumNpcBase::FSequenceDescriptorRow& Row = Guard->SequenceDescriptorRows[Fan];
+		Row.bAsked = true;
+		Row.bKnown = true;
+		Row.bStudioLooping = true;
+		Row.FanCells = 2;
+		Row.FanAxisMin = -180.f;
+		Row.FanAxisMax = 180.f;
+		Row.FanSpeedCm[0] = 100.f;
+		Row.FanSpeedCm[1] = 200.f;
+		Row.FanParameter = TEXT("move_yaw");
+	}
+	// A direction of retail yaw `Deg`, in this world's axes (Y negated).
+	auto PortDirOfRetailYaw = [](double Deg)
+	{
+		const double Rad = FMath::DegreesToRadians(Deg);
+		return FVector(FMath::Cos(Rad), -FMath::Sin(Rad), 0.0);
+	};
+	Guard->Angles.Y = 30.0;
+	Guard->FacingQueue.Reset();
+
+	// `0x102e2820`: the plain row carries no `move_yaw`, the fan does.
+	Guard->SequenceNumber = Plain;
+	TestFalse(TEXT("0x102e2820: a plain sequence has no move_yaw"), Guard->MotorSequenceHasMoveYaw());
+
+	// No `move_yaw` on the sequence (`102e1a3d..102e1a6a`): the reissue at `AngleMod(flMoveYaw)`,
+	// speed -1, and nothing else -- `+0x63ec` is not written.
+	FElysiumNpc::FMotorMoveFacingGoal Move;
+	Move.Dir = PortDirOfRetailYaw(90.0);
+	Move.Facing = PortDirOfRetailYaw(45.0);
+	Guard->ScheduleHost.DesiredMoveYaw = 5.f;
+	Guard->MotorYawSpeedWord = 0.f;
+	Guard->ActivityNumber = 0x13;
+	int32 Reissues = Guard->TroikaMotor.MoveReissues;
+	Guard->MotorMoveFacing(Move);
+	TestEqual(TEXT("no move_yaw: one reissue"), Guard->TroikaMotor.MoveReissues, Reissues + 1);
+	TestEqual(TEXT("at AngleMod(VecToYaw(move.dir))"), Guard->MotorIdealYaw,
+		FElysiumNpcBase::StartTaskAngleMod(90.f), 0.01f);
+	TestEqual(TEXT("with speed -1"), Guard->TroikaMotor.LastReissueSpeed, -1.f);
+	TestEqual(TEXT("so 0x102e1cf0 re-read MaxYawSpeed into +0x38 (ACT_RUN's 160)"),
+		Guard->MotorYawSpeedWord, 160.f);
+	TestEqual(TEXT("and m_flDesiredMoveYaw is untouched"), Guard->ScheduleHost.DesiredMoveYaw, 5.f);
+
+	// With `move_yaw` and an EMPTY queue (slot 15: zero vector, influence 0): the heading is
+	// `move.facing`, whole; `+0x63ec = -UTIL_AngleDiff(flMoveYaw, GetAngles().y)` = -(90 - 30).
+	Guard->SequenceNumber = Fan;
+	TestTrue(TEXT("0x102e2820: the fan carries move_yaw"), Guard->MotorSequenceHasMoveYaw());
+	Reissues = Guard->TroikaMotor.MoveReissues;
+	Guard->MotorMoveFacing(Move);
+	TestEqual(TEXT("empty queue: one reissue"), Guard->TroikaMotor.MoveReissues, Reissues + 1);
+	TestEqual(TEXT("the heading is move.facing whole (102e1a83..102e1ae6)"), Guard->MotorIdealYaw,
+		FElysiumNpcBase::StartTaskAngleMod(45.f), 0.01f);
+	TestEqual(TEXT("+0x63ec = -AngleDiff(move yaw, body yaw) (102e1b4c, FCHS 102e1b5d)"),
+		Guard->ScheduleHost.DesiredMoveYaw, -60.f, 0.001f);
+
+	// A one-entry queue of influence 0.5 facing retail yaw 0, the move facing retail yaw 90: the
+	// heading is `normalize(facingDir * 0.5 + move.facing * 0.5)`, yaw 45. The move travels retail
+	// yaw 0 against a body at 30: `+0x63ec = -(0 - 30)` = 30 -- the MOVE direction, not the heading.
+	Guard->AddFacingTarget(G + FVector(1000.0, 0.0, 0.0), 0.5f, 10.0f, 0.0f);
+	Move.Dir = PortDirOfRetailYaw(0.0);
+	Move.Facing = PortDirOfRetailYaw(90.0);
+	Guard->MotorMoveFacing(Move);
+	TestEqual(TEXT("the heading blends the queue with move.facing by slot 15's influence"),
+		Guard->MotorIdealYaw, FElysiumNpcBase::StartTaskAngleMod(45.f), 0.01f);
+	TestEqual(TEXT("and +0x63ec is the negated move-against-body difference"),
+		Guard->ScheduleHost.DesiredMoveYaw, 30.f, 0.001f);
+
+	// A full-weight entry takes the heading whole; `move.facing` contributes nothing.
+	Guard->FacingQueue.Reset();
+	Guard->AddFacingTarget(G + FVector(1000.0, 0.0, 0.0), 1.0f, 10.0f, 0.0f);
+	Guard->MotorMoveFacing(Move);
+	TestEqual(TEXT("influence 1: the heading is the queue's"), Guard->MotorIdealYaw, 0.f, 0.01f);
+	Guard->FacingQueue.Reset();
+
+	// Slot 526 (`OverrideMoveFacing 0x1027d9f0`) answers false on all 77 classes (packet S5 item 1):
+	// there is no "true -> nothing written" arm to reach.
+
+	// `MoveGroundExecute 0x10264680`'s facing step with no turn script (this fixture wears no motor):
+	// `move.facing` is the current yaw, `AngleMod`-quantised, so with an empty queue the ideal yaw is
+	// the body's own; then `+0x654` is re-read from the sequence at the live pose (`0x10264841/46`).
+	Guard->Angles.Y = 120.0;
+	Guard->PoseParameterWrites.Add(FElysiumNpc::FPoseParameterWrite{ FString(TEXT("move_yaw")), 0.f });
+	Guard->GroundSpeed = 0.f;
+	Guard->YawSpeed = 9.f;
+	Guard->MotorMoveGroundExecuteFacing();
+	TestEqual(TEXT("no turn script: move.facing is the current yaw"), Guard->MotorIdealYaw,
+		FElysiumNpcBase::StartTaskAngleMod(120.f), 0.01f);
+	TestEqual(TEXT("0x10264846 rewrites +0x654 at the live move_yaw"), Guard->GroundSpeed, 150.f, 0.001f);
+	TestEqual(TEXT("and leaves +0x560 alone"), Guard->YawSpeed, 9.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorRequestSeamsTest,
 	"Elysium.Arm.NpcKernelMotor.RequestSeams", GElysiumNpcKernelMotorFlags)
 bool FElysiumNpcKernelMotorRequestSeamsTest::RunTest(const FString&)

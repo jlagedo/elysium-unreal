@@ -43,6 +43,7 @@
 
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcMotor10Shared.h"
+#include "Substrate/ElysiumNpcFacingShared.h"
 #include "Substrate/ElysiumMover.h"
 
 #include "ElysiumEntityDefs.h"
@@ -437,4 +438,134 @@ bool FElysiumNpc::OnObstructingDoor(void* MoveGoalBlock, FElysiumEntity* Door, f
 	OpeningDoor = FElysiumEntityHandle();                    // +0x5d24 = 0xffffffff
 	ClearDoorBlockFlags(*Door);
 	return false;
+}
+
+// =================================================================================================
+// `0x102e19e0` — `CAI_Motor` slot 18, the SDK's `MoveFacing`; and the facing step of its one caller,
+// `CAI_HumanoidMotor` vfunc 19 `0x10264680` (`MoveGroundExecute`). Spec 0002 V4b, packet R1 item 1.
+// =================================================================================================
+
+bool FElysiumNpc::MotorSequenceHasMoveYaw() const
+{
+	// `0x102e2820(motor, m_nSequence (+0x6f0), "move_yaw")` (`102e1a33`). The studio header's pose
+	// parameter table is the bridge row's fan here: the one pose parameter a baked sequence binds.
+	const FSequenceDescriptorRow* const Row = SequenceDescriptorRow(SequenceNumber);
+	return Row != nullptr && Row->FanCells >= 2
+		&& Row->FanParameter.Equals(TEXT("move_yaw"), ESearchCase::IgnoreCase);
+}
+
+void FElysiumNpc::MotorMoveReissueYaw(float YawDegrees)
+{
+	// `0x102e1c10(yaw, -1.0)` (`102e1a6a`, `102e1b2d`; the speed is the pushed `0xbf800000`). The
+	// same words `MotorSetIdealYawAndUpdate` writes for a task: the `+0x28` animation-movement latch
+	// turns the yaw half a turn, the `+0x1c == 180.0` arm stores it directly (the clamped arm
+	// `0x102e0a80` needs a max-yaw word the port motor does not carry).
+	float Ideal = YawDegrees;
+	if (BaseScheduleHost.bMotorAnimationMovement)
+	{
+		Ideal = Ideal < ElysiumNpcTunables::OneEighty ? Ideal + ElysiumNpcTunables::OneEighty
+			: Ideal - ElysiumNpcTunables::OneEighty;
+	}
+	MotorIdealYaw = Ideal;                                                   // motor+0x34
+	++TroikaMotor.MoveReissues;
+	TroikaMotor.LastReissueYaw = Ideal;
+	TroikaMotor.LastReissueSpeed = -1.0f;
+	// The speed is `-1.0`: `0x102e1cf0` re-reads slot 516 `MaxYawSpeed` into `motor+0x38`, every
+	// step. `MotorThinkUpkeep` hands a changed word to the travelling body (`SetYawSpeed`).
+	MotorStoreMaxYawSpeed();                                                 // 0x102e1cf0
+	// `UpdateYaw(-1)` `0x102e1e20`: `m_flLastYawTime (motor+0x2c) = curtime`. Its `SetLocalAngles`
+	// is the body's own turn while it travels (K1: the kernel computes the words, the body moves --
+	// it orients along its path, or to the facing point `MotorHandFacingTarget` hands it, at the
+	// `+0x38` rate). `Face` is the turn-in-place request and is not issued under a live move.
+	MotorYawClock = static_cast<float>(World != nullptr ? World->NowSeconds() : 0.0);
+}
+
+void FElysiumNpc::MotorMoveFacing(const FMotorMoveFacingGoal& Move)
+{
+	// `102e19f9`: owner slot 526 (`+0x838`) `OverrideMoveFacing(move, m_flMoveInterval (motor+0x30))`
+	// true -> return. Slot 526 is `CAI_BaseNPC::OverrideMoveFacing 0x1027d9f0` on all 77 classes that
+	// fill it, no override, and its body returns false (packet S5 item 1): a constant false, so the
+	// test never returns early and nothing is asked here.
+
+	// `102e1a0c`: `flMoveYaw = UTIL_VecToYaw(move.dir)` (`0x101d2c70` over `move+0x0c`).
+	const float MoveYaw = NpcKernelFacingShared::RetailVecToYaw(Move.Dir);
+	// `102e1a24`: `0x102e2790(motor, m_nSequence)`, the sequence's own move yaw -- discarded
+	// (`102e1a31 FSTP ST0`).
+	if (!MotorSequenceHasMoveYaw())                                          // 102e1a33 0x102e2820
+	{
+		// `102e1a3d..102e1a6a`: `SetIdealYawAndUpdate(AngleMod(flMoveYaw), -1)`. `AngleMod` is the
+		// 16-bit quantisation (`x 0x1044ffe0`, `& 0xffff`, `x 0x1044ffdc`). Done.
+		MotorMoveReissueYaw(StartTaskAngleMod(MoveYaw));
+		return;
+	}
+	// `102e1a80`: the motor's own slot 15 (`+0x3c`, `0x102e2180`): the facing queue's direction and,
+	// in ST0, its influence `w`. An empty queue answers the zero vector and 0.0.
+	float Influence = 0.f;
+	double RangeCm = 0.0;
+	const FVector FacingDir = MotorFacingQueueBlend(Influence, RangeCm);
+	// `102e1a83..102e1ae6`: `dir = facingDir * w + move.facing (move+0x18) * (1 - w)` (the 1.0 is
+	// the float `0x104454c0`); `102e1aea` `VectorNormalize`. With an empty queue it is `move.facing`,
+	// whole.
+	FVector Dir = FacingDir * Influence + Move.Facing * (ElysiumNpcTunables::One - Influence);
+	Dir = Dir.GetSafeNormal();                                               // zero stays zero
+	// `102e1af7..102e1b2d`: `SetIdealYawAndUpdate(AngleMod(UTIL_VecToYaw(dir)), -1)`.
+	MotorMoveReissueYaw(StartTaskAngleMod(NpcKernelFacingShared::RetailVecToYaw(Dir)));
+	// `102e1b37` owner slot 221 `GetAngles().y`; `102e1b4c` `UTIL_AngleDiff(flMoveYaw, yaw)`
+	// (`0x1013d580`); `102e1b5d FCHS`: the MOVE direction against the body's yaw, negated -- not the
+	// heading.
+	const float Diff = NpcKernelFacingShared::FacingRetailAngleDiff(MoveYaw, static_cast<float>(Angles.Y));
+	// `102e1b57`: `owner+0x98`, the Troika self-cast, resolves on every `FElysiumNpc` (this class):
+	// `102e1b6c` `m_flDesiredMoveYaw (+0x63ec) = -diff`. Its one reader is `0x102bf310`
+	// (`Think19NormalSet2`), which writes the `move_yaw` pose parameter from it. The other arm
+	// (`102e1b85`, `0x102e27d0` `SetPoseParameter("move_yaw")` on a base-only NPC) has no class here.
+	ScheduleHost.DesiredMoveYaw = -Diff;
+}
+
+void FElysiumNpc::MotorMoveGroundExecuteFacing()
+{
+	// `CAI_HumanoidMotor` vfunc 19 `0x10264680` copies the move (0x1f dwords), overwrites the copy's
+	// `facing` (`+0x18`) with `UTIL_YawToVector(yaw)` (`0x101d2f40`) and calls slot 18 on the copy
+	// (`1026482f CALL [EDX+0x48]`).
+	FMotorMoveFacingGoal Move;
+
+	// `move.dir` (`move+0x0c`): the unit direction the step travels. The body moves (K1), so the
+	// step's direction is the body's own velocity; a body that has not started moving yet travels
+	// toward the waypoint it was sent to (the next path corner where the follower names one, else the
+	// head leg's destination).
+	if (Motor != nullptr)
+	{
+		const FVector BodyVelocity = Motor->SampleNavigation().VelocityCmPerSecond;
+		Move.Dir = FVector(BodyVelocity.X, BodyVelocity.Y, 0.0).GetSafeNormal();
+	}
+	if (Move.Dir.IsZero())
+	{
+		const FVector TargetCm = (bNavLastFactsValid && NavLastFacts.bHasNextCorner)
+			? NavLastFacts.NextCornerCm
+			: (Navigator.bHeadLegRequestSet ? Navigator.HeadLegRequest.DestinationCm : Navigator.GetGoalPos());
+		Move.Dir = (TargetCm - Origin).GetSafeNormal();
+	}
+
+	// The yaw: the turn script (`owner+0x6038`, count `+0x6044`; `0x102627e0`: the direction from
+	// each waypoint to the next, eased through corners) interpolated at `m_flMoveInterval`, or with
+	// one entry or none the current yaw (`GetLocalAngles().y`, owner `+0x36c`); `AngleMod`-quantised.
+	// The path is the body's (K1), so the script's answer is asked of it; the seam's yaw is THIS
+	// world's (the frame `IElysiumNpcMotor::Face` takes), negated back into retail's.
+	float Yaw = static_cast<float>(Angles.Y);
+	float BodyYaw = 0.f;
+	if (Motor != nullptr && Motor->GetNpcMoveFacingYaw(BodyYaw))
+	{
+		Yaw = -BodyYaw;
+	}
+	Yaw = StartTaskAngleMod(Yaw);
+	// `UTIL_YawToVector` `0x101d2f40`: `(cos, sin, 0)` in Source's axes; Y reflected into this
+	// world's.
+	const double YawRad = FMath::DegreesToRadians(static_cast<double>(Yaw));
+	Move.Facing = FVector(FMath::Cos(YawRad), -FMath::Sin(YawRad), 0.0);
+
+	MotorMoveFacing(Move);                                                   // 1026482f slot 18
+
+	// `10264841 CALL GetSequenceGroundSpeed(m_nSequence)` / `10264846 FSTP [ESI+0x654]`: the second
+	// `m_flGroundSpeed` write, right after slot 18 -- the same pose-weighted read `StudioFrameAdvance`
+	// makes (only this word; `+0x560` is not rewritten here).
+	GroundSpeed = SequenceGroundSpeedAt(SequenceNumber, PoseParameterWrites);
 }

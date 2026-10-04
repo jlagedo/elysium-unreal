@@ -26,6 +26,7 @@
 #include "Substrate/ElysiumNpcLog.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumNavDoorLink.h"
+#include "Visual/ElysiumNpcMoveScript.h"   // retail's velocity and turn scripts (spec 0002 V4b)
 #if ENABLE_VISUAL_LOG
 #include "VisualLogger/VisualLoggerTypes.h"
 #if !UE_BUILD_SHIPPING && WITH_GAMEPLAY_DEBUGGER
@@ -364,6 +365,158 @@ float AElysiumNpcBody::CommandedTravelSpeed() const
 	return ElysiumNpcGait::TravelSpeed(this, *RequestedGaitKind, Sel.MoveYaw);
 }
 
+float AElysiumNpcBody::KernelIdealSpeedCm() const
+{
+	// ITEM 1. Owner slot 248 `GetIdealSpeed 0x10091740` = `m_flGroundSpeed +0x654`, no
+	// playback-rate term. The kernel keeps the word in cm/s (`FElysiumNpcBase::GroundSpeed`), so
+	// nothing is converted here. Only an NPC has the word: any other entity is "no live kernel".
+	const AElysiumMapActor* Map = OwningMap.Get();
+	FElysiumEntityWorld* Entities = Map ? Map->GetEntityWorld() : nullptr;
+	FElysiumEntity* OwnerEntity = Entities ? Entities->Resolve(OwningEntity) : nullptr;
+	if (OwnerEntity == nullptr || OwnerEntity->AsNpcBase() == nullptr)
+	{
+		return -1.0f;
+	}
+	const FElysiumCombatCharacter* Character = OwnerEntity->AsCombatCharacter();
+	return Character != nullptr ? FMath::Max(0.0f, Character->GetIdealSpeed()) : -1.0f;
+}
+
+bool AElysiumNpcBody::GatherMoveWaypointsUnits(TArray<FVector>& OutUnits, FVector& OutOriginUnits) const
+{
+	OutUnits.Reset();
+	const UCharacterMovementComponent* Movement = GetCharacterMovement();
+	const AAIController* AI = Cast<AAIController>(GetController());
+	const UPathFollowingComponent* Following = AI ? AI->GetPathFollowingComponent() : nullptr;
+	// A ground move the follower is walking now. Waiting and Paused run no move step; a jump is
+	// not `MoveGroundExecute`'s.
+	if (!bMoveRequested || bHeld || bNavigationJumpInProgress || Movement == nullptr
+		|| !Movement->IsMovingOnGround() || Following == nullptr
+		|| Following->GetStatus() != EPathFollowingStatus::Moving)
+	{
+		return false;
+	}
+	const FNavPathSharedPtr Path = Following->GetPath();
+	if (!Path.IsValid() || Path->GetPathPoints().Num() == 0)
+	{
+		return false;
+	}
+	// Retail walks the path from its current waypoint (`nav+0x30 -> +0x24`, next at
+	// `waypoint+0x30`). Here that is the follower's path from its next point on -- when the path
+	// HAS corners. The crowd follower asks Recast to skip string pulling, so its path is start ->
+	// end and the Detour corridor's corners are not readable (`SampleMoveFacts` says why): such a
+	// body states one waypoint, the goal. SEAM: the corridor's corners have no source, so a crowd
+	// agent's script slows for no corner.
+	const double CmPerUnit = ElysiumMove::U;   // the one conversion: cm -> Source units
+	const TArray<FNavPathPoint>& Points = Path->GetPathPoints();
+	const FNavMeshPath* MeshPath = Path->CastPath<FNavMeshPath>();
+	const int32 NextIndex = static_cast<int32>(Following->GetNextPathIndex());
+	if ((MeshPath == nullptr || MeshPath->IsStringPulled()) && Points.IsValidIndex(NextIndex))
+	{
+		for (int32 Index = NextIndex; Index < Points.Num(); ++Index)
+		{
+			OutUnits.Add(Points[Index].Location / CmPerUnit);
+		}
+	}
+	else
+	{
+		OutUnits.Add(Points.Last().Location / CmPerUnit);
+	}
+
+	// Slot 217 `GetAbsOrigin`: the feet. Retail's origin and its waypoints lie on one floor; this
+	// capsule floats a contact offset above its floor and a navmesh point sits a cell off it, so a
+	// height difference inside one step is taken as none -- else the last centimetres would be
+	// measured against a distance that never reaches zero.
+	FVector FeetCm = FeetLocation();
+	const double FirstZCm = OutUnits[0].Z * CmPerUnit;
+	if (FMath::Abs(FeetCm.Z - FirstZCm) <= Movement->MaxStepHeight)
+	{
+		FeetCm.Z = FirstZCm;
+	}
+	OutOriginUnits = FeetCm / CmPerUnit;
+	return true;
+}
+
+bool AElysiumNpcBody::ScriptedMoveSpeedCm(float IdealCmPerSecond, float IntervalSeconds,
+	float& OutCmPerSecond) const
+{
+	TArray<FVector> Waypoints;
+	ElysiumNpcMoveScript::FInput Input;
+	if (IntervalSeconds <= 0.0f || !GatherMoveWaypointsUnits(Waypoints, Input.Origin))
+	{
+		return false;
+	}
+	// cm -> Source units and cm/s -> units/s, here and nowhere else; back at the return.
+	const float CmPerUnit = ElysiumMove::U;
+	Input.Yaw = static_cast<float>(GetActorRotation().Yaw);            // `GetLocalAngles().y`
+	// `|m_vecVelocity|` (motor `+0x3c`), 3-D: the word `MoveGroundExecute` itself wrote on the last
+	// step (`m_vecVelocity = move.dir * speed`), NOT what the hull realised. So it is the speed this
+	// script commanded last tick (`ScriptVelocityCm`); the mover's realised speed stands in only on
+	// the first tick of a leg. Fed back from the realised speed instead, any loss the mover takes
+	// (a slide along a wall, the crowd's steering) compounds each tick and the ramp collapses
+	// (measured, V4b integrator: 20 cm/s along the arena block where the cruise is 101).
+	Input.Speed = (ScriptVelocityCm >= 0.0f ? ScriptVelocityCm
+		: static_cast<float>(GetCharacterMovement()->Velocity.Size())) / CmPerUnit;
+	Input.IdealSpeed = IdealCmPerSecond / CmPerUnit;                   // slot 248, 0 -> 50.0 inside
+	Input.Waypoints = Waypoints;
+
+	// `0x10262590` -> `0x102630b0`: rebuilt every move tick from the body's current place and
+	// speed, never kept between ticks.
+	TArray<ElysiumNpcMoveScript::FEntry> Script;
+	ElysiumNpcMoveScript::BuildVelocityScript(Input, Script);
+	// `0x102646c0`: read at TIME `m_flMoveInterval` -- under K1, this tick's interval.
+	const float NewSpeed = ElysiumNpcMoveScript::SampleSpeed(Script, IntervalSeconds, Input.Speed);
+
+	// The trapezoid step and its clamp to `move.maxDist` (`0x10264916`), the navigator's distance
+	// to the head waypoint (2-D on a ground move). `m_vecVelocity = move.dir * speed` is what the
+	// mover is commanded; where the step is cut, the command is the cut distance over the
+	// interval, which is what lands the body ON the waypoint. Cut only at the LAST waypoint: in
+	// retail the unused interval re-enters the navigator's loop and is walked along the next
+	// segment in the same think; under K1 Unreal's follower carries the body round a corner within
+	// its own tick, and at the goal the body's next tick takes what is left.
+	float SpeedUnits = NewSpeed;
+	if (Waypoints.Num() == 1)
+	{
+		const float MaxDist = static_cast<float>(FVector::Dist2D(Input.Origin, Waypoints[0]));
+		const ElysiumNpcMoveScript::FStep Step =
+			ElysiumNpcMoveScript::Step(Input.Speed, NewSpeed, IntervalSeconds, MaxDist);
+		if (Step.bClamped)
+		{
+			SpeedUnits = Step.Distance / IntervalSeconds;
+		}
+	}
+	OutCmPerSecond = SpeedUnits * CmPerUnit;
+	return true;
+}
+
+bool AElysiumNpcBody::GetNpcMoveFacingYaw(float& OutYawDegrees) const
+{
+	// `MoveGroundExecute 0x10264680`: the yaw is `GetLocalAngles().y` or, with a turn script of
+	// more than one entry, that script read at `m_flMoveInterval` and quantised. Both scripts are
+	// rebuilt for the read, as `0x10262590` rebuilds them (`0x102630b0`, then `0x102627e0`).
+	TArray<FVector> Waypoints;
+	ElysiumNpcMoveScript::FInput Input;
+	if (!GatherMoveWaypointsUnits(Waypoints, Input.Origin))
+	{
+		return false;   // no move under way: the caller takes the current yaw
+	}
+	const float CmPerUnit = ElysiumMove::U;
+	const float KernelIdeal = KernelIdealSpeedCm();
+	Input.Yaw = static_cast<float>(GetActorRotation().Yaw);
+	Input.Speed = (ScriptVelocityCm >= 0.0f ? ScriptVelocityCm
+		: static_cast<float>(GetCharacterMovement()->Velocity.Size())) / CmPerUnit;   // motor `+0x3c`
+	Input.IdealSpeed = FMath::Max(0.0f, KernelIdeal) / CmPerUnit;
+	Input.Waypoints = Waypoints;
+	// `Input.ArrivalDirection` stays unset: the path's arrival direction (`path+0x64`,
+	// `0x102ee5b0` -> `0x1030b6b0`) is the kernel's and nothing states it to the body yet.
+
+	TArray<ElysiumNpcMoveScript::FEntry> Velocity;
+	TArray<ElysiumNpcMoveScript::FEntry> Turn;
+	ElysiumNpcMoveScript::BuildVelocityScript(Input, Velocity);
+	ElysiumNpcMoveScript::BuildTurnScript(Input, Velocity, Turn);
+	OutYawDegrees = ElysiumNpcMoveScript::SampleYaw(Turn, LastMoveIntervalSeconds, Input.Yaw);
+	return true;
+}
+
 const FElysiumLocomotionSample& AElysiumNpcBody::GetAnimSample() const
 {
 	static const FElysiumLocomotionSample Empty;
@@ -472,14 +625,50 @@ void AElysiumNpcBody::AnimTick(float DeltaSeconds)
 	// Only a leg whose speed came FROM a fan is re-derived — a caller-authored speed (the scripted
 	// Walk/Custom gaits) keeps exactly the number it was handed, which is the trap this must not
 	// fall into.
-	if (bMoveRequested && RequestedGaitKind.IsSet())
+	//
+	// **spec 0002 V4b, under K1 (the motor on the body's tick).** A body with a live kernel is
+	// commanded retail's speed instead:
+	// - ITEM 1: the ideal speed is the kernel's `GetIdealSpeed 0x10091740` (`m_flGroundSpeed
+	//   +0x654`, which `StudioFrameAdvance 0x1008f120` writes every advance at the kernel's pose
+	//   parameters), not this body's own fan read at its own measured `move_yaw`.
+	// - ITEMS 2-4: shaped by the velocity script `0x102630b0`, rebuilt here every tick as
+	//   `MoveGroundExecute 0x10264680` rebuilds it. Were those items not to land (J9's stop rule),
+	//   the one line below that calls `ScriptedMoveSpeedCm` becomes `Commanded = KernelIdeal`.
+	// A held body runs no move tick (retail's `PerformMovement` is inside the think), and a body
+	// with no live kernel keeps the path above.
+	LastMoveIntervalSeconds = DeltaSeconds;
+	ScriptIdealSpeedCm = 0.0f;
+	bool bScriptDrove = false;
+	if (bMoveRequested)
 	{
 		if (UCharacterMovementComponent* Movement = GetCharacterMovement())
 		{
-			// The same floor `MoveTo` applies: the motor treats zero as a stall, so a fan that
-			// resolves nothing must not be able to park a body mid-leg.
-			Movement->MaxWalkSpeed = FMath::Max(1.0f, CommandedTravelSpeed());
+			const float KernelIdeal = bHeld ? -1.0f : KernelIdealSpeedCm();   // item 1
+			float Commanded = 0.0f;
+			if (KernelIdeal >= 0.0f)
+			{
+				if (ScriptedMoveSpeedCm(KernelIdeal, DeltaSeconds, Commanded))   // items 2-4
+				{
+					// 50.0 units/s when slot 248 answers 0 (`0x102630b0`); converted at this line.
+					ScriptIdealSpeedCm = KernelIdeal > 0.0f ? KernelIdeal
+						: ElysiumNpcMoveScript::DefaultIdealSpeed * ElysiumMove::U;
+					// The floor `MoveTo` applies: the mover treats zero as a stall.
+					Movement->MaxWalkSpeed = FMath::Max(1.0f, Commanded);
+					ScriptVelocityCm = Commanded;   // `m_vecVelocity = move.dir * speed`, motor `+0x3c`
+					bScriptDrove = true;
+				}
+			}
+			else if (RequestedGaitKind.IsSet())
+			{
+				// The same floor `MoveTo` applies: the motor treats zero as a stall, so a fan that
+				// resolves nothing must not be able to park a body mid-leg.
+				Movement->MaxWalkSpeed = FMath::Max(1.0f, CommandedTravelSpeed());
+			}
 		}
+	}
+	if (!bScriptDrove)
+	{
+		ScriptVelocityCm = -1.0f;   // no move step this tick: the next leg starts from the mover's speed
 	}
 
 	// Hand the settled record to this body's own graph, the same push `AElysiumMapActor` makes for
@@ -1145,6 +1334,7 @@ void AElysiumNpcBody::Stop()
 	bFaceRequested = false;
 	// The leg is over; there is nothing left to re-derive against a later fan change.
 	RequestedGaitKind.Reset();
+	ScriptIdealSpeedCm = 0.0f;
 	// `GroundSurface` is deliberately NOT cleared here. Retail's `+0x5b90` survives an arrival, a
 	// freeze and a teleport — it is cleared only by `NPCInit 0x10273390` and `OnRestore 0x1027bf50`
 	// (`InitializeAtFeet`) and rewritten by the next move step — so a footfall record landing on a
@@ -1291,6 +1481,13 @@ void AElysiumNpcBody::ApplyCrowdState()
 		return;
 	}
 	Crowd->SetCrowdSeparation(!bIgnoreCharacterCollision);
+	// ITEM 3 (spec 0002 V4b, J9) -- never without items 2 and 4. Retail's stop is the velocity
+	// script's constant deceleration to the last waypoint (`0x102630b0`: the last waypoint's speed
+	// is 0, braking at ideal + 50), which `ScriptedMoveSpeedCm` now commands. Detour's slowdown
+	// scales the speed by the distance to the goal: not retail's, and what made N13's creep over
+	// the last ~30 cm (inferred from code until the B integrator's measured toggle). Off because
+	// retail's deceleration replaces it; off alone it would be a new divergence.
+	Crowd->SetCrowdSlowdownAtGoal(false);
 	Crowd->SetCrowdCollisionQueryRange(bIgnoreCharacterCollision ? 0.0f : 200.0f);
 	// A frozen body is SOLID_NONE — a character walks through it — so it must not steer other
 	// agents around it either. Detour avoidance is a separate register from collision, and an
@@ -1432,8 +1629,12 @@ FElysiumLocomotionSample AElysiumNpcBody::SampleLocomotion() const
 	// travelling would have the driver classify it as moving and publish a gait over the idle the
 	// refused think just asked for.
 	const UCharacterMovementComponent* Movement = GetCharacterMovement();
+	//
+	// Under the velocity script (spec 0002 V4b) `MaxWalkSpeed` is the instant's speed on the
+	// script's ramp, not the order: the order is the script's ideal, so that is what is published
+	// and a body ordered to run still classifies as running while it accelerates and brakes.
 	Out.CommandedSpeed = (bMoveRequested && !bHeld && Movement != nullptr)
-		? Movement->MaxWalkSpeed : 0.0f;
+		? (ScriptIdealSpeedCm > 0.0f ? ScriptIdealSpeedCm : Movement->MaxWalkSpeed) : 0.0f;
 
 	// **The cache, not a trace.** `FromCharacterMovement` cannot fill this — the engine's floor
 	// sweeps run without `bReturnPhysicalMaterial` — and this call is a getter that a think and an

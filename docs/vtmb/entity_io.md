@@ -2456,6 +2456,11 @@ Each is a deliberate call, recorded beside the behaviour it departs from:
   rebuilt from a payload.
 - **`OnScriptEvent01..08` do not fire** — the `.mdl` event record and ID-1003 dispatch are decoded,
   but the current character export/bake does not yet carry the event timeline into playback.
+  *(2026-10-04, packet S9 item 5: for `camera_animated` they do. `CCameraAnimated::HandleAnimEvent`
+  `0x10071900` is ported as `FElysiumCameraAnimated::HandleAnimEvent`: event 1003 with
+  `atoi(options)` in 1..8 fires `OnScriptEvent01..08` with the camera as activator and caller,
+  from the camera's own slot 258 in its think `0x10071840`; see `animation_events.md` § "Who calls
+  the dispatcher".)*
 
 **Demand across the 22 exported maps:** 182 `scripted_sequence` + 6 `aiscripted_sequence`;
 146 `BeginSequence` and 22 `CancelSequence` I/O wires. The exported Python/dialogue corpus adds
