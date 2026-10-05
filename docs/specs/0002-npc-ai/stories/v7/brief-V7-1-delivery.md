@@ -1,7 +1,12 @@
 # Brief V7-1 — typed delivery and NPC input adapters
 
+**Start after V5b and V6 commit.** V6 shares ElysiumNpc.cpp/.h, ElysiumEntity.cpp,
+ElysiumEntityWorld.cpp and ElysiumClassRegistry.h/.cpp with this lane. Relocate functions
+by name on V6's committed code. Fresh arenas/maps use1.0 before Load/initialization;
+keep seed/reset order, shared draws, predicates and original behavioral bounds.
+
 Read AGENTS.md, [README.md](README.md), [packets-V7.md](packets-V7.md) and Arena/README.md.
-Work after V4d/V5b landing in the coordinator-named worktree; main is read-only.
+Work after V5b/V6 landing in the coordinator-named worktree; main is read-only.
 Faint already exists; GhoulCroucher disturbed source already exists. Neither is a blank job.
 
 ## Files — exhaustive ownership
@@ -13,6 +18,14 @@ Faint already exists; GhoulCroucher disturbed source already exists. Neither is 
 - `Source/ElysiumUE/Private/Substrate/ElysiumEntity.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle2.inl`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcPlaceholder.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawnSpecies.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpc.h`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcGhoulCroucher.cpp`
@@ -70,7 +83,7 @@ raw-handler fallback and sequencing. Do not replace authoritative fields with ne
    (0x102ae920); keep NPC StartSchedule K1 alias immediate without claiming a retail caller.
 
 4. **InputAllowAlertLookaround**, **0x102c2b90**: write existing bAllowAlertLookaround.
-5. **InputAllowKickHintUse**, **0x102c2c10**: write existing ScheduleHost.AllowKickHintUse.
+5. **InputAllowKickHintUse**, **0x102c2c10**: write existing ScheduleHost.bAllowKickHintUse.
 6. **InputAllowOpenDoors**, **0x102c3540**: call CapabilitiesAdd/Remove(0xd00).
 7. **BuildNpcClass Faint thunk**, **0x1029f250 / 0x102ae780**:
    retain single landed reset614→cause0x26c2→SetSchedule(0xfa,false) implementation;
@@ -78,13 +91,18 @@ raw-handler fallback and sequencing. Do not replace authoritative fields with ne
 8. **InputFleeAndDie**, **0x1029f210 / 0x102ae750**:
    reset614→cause0x26b5→SetSchedule(0x6f,false), preserving dead/ideal-dead/life refusal.
 9. **InputMakeInvincible**, **0x102c2a30**: write existing bInvincible.
-10. **InputSetBloodShieldDiscipline**, **0x102c32d0**:
-    bind typed Bool to a named direct-status bridge/accessor with this retail identity.
-    **No discipline implementation belongs to this lane.** If the prerequisite service is absent,
-    the bridge answers nothing/reports unavailable with its named fields and spec0006 boundary;
-    report exact owed API/registration lines. Never call generic ElysiumDisciplines::Use,
-    deduct blood, or call EndBloodshield as an unproved RemoveEffect equivalent.
-    Judge-held input_bloodshield_v7 effect is not delivered by a passing registration tally.
+10. **InputSetBloodShieldDiscipline**, Npc.cpp/.h and NpcClasses::BuildNpcClass,
+    **0x102c32d0 -> 0x101e1590 / 0x101e3380 / 0x101e1870 / 0x101e3af0**:
+    bind typed Bool to the integrator's bounded direct self-status/self-target service,
+    proposed ElysiumDisciplines::SetBloodshieldDirect(FElysiumCombatCharacter&, bool).
+    True resolves the named record and executes status BEFORE target; false removes the
+    high-bit target effect with interrupted=false. Reuse actual status/modifier/hit/teardown
+    state. No generic Use, learned/cost/world-area/ordinary-Use gates, or EndBloodshield shortcut.
+    Integrator supplies the service after lane integration; no unavailable-hook fallback can close.
+    **Proof: input_bloodshield_v7**, on/repeated-on/off/clean-off, buffer/modifier/status and
+    observed sound/replacement/removal ordering; packet §8 includes human vs BloodGuardian arms.
+    Service implementation is integrator-owned; return the exact API binding/declaration.
+
 11. **InputSetBossMonster**, **0x102c3500**: write existing bIsBossMonster.
 12. **InputSetDefaultDialogCamera**, **0x102c2910**:
     native trim/buffer260/nonempty write only; preserve previous value on whitespace/empty.
@@ -157,6 +175,41 @@ raw-handler fallback and sequencing. Do not replace authoritative fields with ne
     Name new unit family Elysium.Arm.NpcInputsV7.; no stale false “developer-only” comments.
     Restore live ConVar after each arm. Do not test by changing global Python coercion.
 
+25. **V7.4 initialization and BOOL SAVE**, NpcLifecycle2.cpp::TroikaNPCInit and
+    Npc.cpp::Activate, NpcBaseLifecycle2.inl::bIsBccTargetable,
+    NpcClasses.cpp::BuildNpcBaseClass/BuildNpcClass, **0x1029a0b0 / 0x1029a4a2**:
+    use the existing latch; nonempty StatTemplate sets true, empty does NOT force false.
+    Preserve construction/default policy verified by integrator §0 job1 and dispatch order.
+    Bind native m_bIsBCCTargetable +0x1480 as **BOOL SAVE**, count1, no external/input name
+    (raw CBaseCombatCharacter datamap0x1061664c, flags2). Inspect V6's inherited registration
+    first; ensure one effective SAVE binding, never a shadow flag or hand edit of generated
+    bindings. Use the owned hand registration site for an absent binding, or report an exact
+    generator-owned correction for serial integration.
+    Preserve/repair only this word's initialization writers at ScriptedSequence.cpp::Spawn
+    **0x101a6f10** (false), NpcCamera.cpp::NPCInit **0x103692c0** (false after platform
+    refusal), NpcNewscaster.cpp::NPCInit **0x103a0420** (false),
+    NpcPlayerController.cpp::NPCInit **0x103a4580** (false),
+    NpcPayphone.cpp::NPCInit **0x101aab90** (true after Troika),
+    NpcPlaceholder.cpp::NPCInit **0x103a4350** (true after Troika), and
+    NpcSpawnSpecies.cpp::FElysiumNpcWerewolf::Spawn **0x103caa30** / VampireBoss::TransformationStart
+    **0x103c60a0, write0x103c6218** (true). Preserve already landed bodies; no species rewrite.
+    Add accessor declarations needed by lane2 to Npc.h, with retail address.
+    **Proof:** comfort_idle_weight ordinary initialized donor and empty-template/cine/camera
+    refusals; npc_inputs_v7_dispatch latch provenance; NpcInputsV7 arm includes true/false
+    actual codec/applier roundtrip (integrator executes). Packet §8 records writer/SAVE evidence.
+
+26. **V7.3 filed mechanism seams**, Npc.cpp setters, NpcSquad.cpp::SetFollowerType,
+    Rulebook.cpp::Load, **0x102c2c10 / 0x102c3540 / 0x102c4430 / 0x102c4680**:
+    leave typed setters and named real SelectCoverOrKickSchedule/OnObstructingDoor and
+    GetFollowerBoss/type reader seams. Label KickHintMechanism, DoorInputMechanism,
+    CoverMechanism, FollowerLocomotion and IncapacitationRecovery at these boundaries;
+    absent execution/locomotion answers unavailable, never invented success.
+    **Proof:** input_allowkickhintuse, input_allowopendoors, input_follower_type and
+    map_hub_follower_boss_v7 prove conversion/state/landed readers only. README §6 files full
+    kick/door/cover to R3 and squad/follower locomotion to R4; live mechanism records remain
+    absent. Faint/Flee still prove real schedules, with additional recovery programs under R5.
+    Follower row loading remains required V7 work.
+
 ## Dependencies / exact owed lines
 
 Lane2 supplies shared scalar methods (Animating.h), removes NPC playback declaration itself,
@@ -164,8 +217,8 @@ and fixes ShouldInvestigate. Lane3 adds the strict arena cases and observation s
 Return the exact Npc.h removals needed by25a (RequestClearSchedule, TakeClearScheduleRequest,
 private latch) and Npc.cpp::TakeClearScheduleRequest deletion to the integrator:
 lane1 owns these files, but apply at integration after lane2 drops polling.
-Likewise report declaration of the unavailable Bloodshield hook in Public/ElysiumPlayer.h or
-another unowned service header; do not implement it there.
+Report the direct Bloodshield binding signature to the integrator; its service lives in
+ElysiumDisciplines.h/.cpp with affected Public/ElysiumPlayer.h declarations/state only.
 Report any newly needed voice owner/harness observer declaration outside your manifest.
 Integrator records recovery in authored-control/social/stealth oracle sections.
 

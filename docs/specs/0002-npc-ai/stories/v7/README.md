@@ -1,10 +1,13 @@
 # V7 — retail inputs, then testable consumers
 
-Planner final, 2026-10-05. Docs only. Baseline **V4c d0f79574**, main planning read
-HEAD eb6d9f94 plus live V4d edits. Read AGENTS.md, spec.md § "V7. The inputs", TRACKER.md's
-V7 box, triage N5/N6/N11 and Arena/README.md. Settling evidence is [packets-V7.md](packets-V7.md).
-The old word “19 unregistered” is stale: **Faint is already registered**, but all19 stay
-in the acceptance set. V7 remains unchecked until measured acceptance and judge disposition.
+Planner rulings applied, 2026-10-05. Docs only. The integration baseline is the latest
+commit of the work branch when integration starts; today's reference is **a5b58f37 (V4d)**:
+arena **114 pass / 1 fail rollcall_vzombie / 15 expected-fail / 2 unexpected-pass**,
+default **169 / 0**, arm **1,625 / 0**. V5b lands before V7; **V6 must commit before V7 starts**.
+Read AGENTS.md, spec.md V7, TRACKER.md, triage N5/N6/N11 and Arena/README.md.
+Evidence is [packets-V7.md](packets-V7.md); final authority is
+[the third sitting](../v1/judge-third-sitting.md). Faint is already registered;
+all19 remain the acceptance set. V7 remains unchecked until measured acceptance.
 
 These briefs were written only under E:/elysium-work/worktrees/coord/docs/specs/0002-npc-ai/stories/v7/.
 No planner source edits, build, tests, arena, bake or commit. No subagents were launched.
@@ -12,17 +15,30 @@ Coordinator names the implementation worktrees; do not create/remove/switch them
 
 ## 1. Dependency order and scope
 
-Land V4d and V5b first; retain any V6 lifecycle work that lands before V7. Re-read actual
-prerequisite diffs, not whole older files. Existing compiled assets need no V7 bake.
-V4c recorded default169/0, arm1624/0, arena113 pass/1 fail/16 expected-fail/2 unexpected-pass
-of132; these are historical commit results, not an installed-binary claim.
+Land V5b and V6 before any V7 coder writes. Relocate functions **by name on V6's
+committed code**, preserving its codec/applier and lifecycle changes rather than copying
+old file versions. Fresh maps and freshly rebuilt arenas start at **1.0 before entity
+initialization/Load**; revisit uses frozen map time and explicit load saved time.
+Retain seed/reset order, retail predicates, shared draw order and original behavioral bounds.
+Re-measure every formerly zero-tuned record alone and after another record. Only proved
+staging/epoch assumptions may change, with per-record evidence; no old RNG draws or widened
+windows. Unexplained reds block closure.
 
-1. Lane3 writes strict observations/staging and records first against the packet; all three
-   coders can prepare disjoint diffs, but integration takes harness support before evaluating records.
-2. Lane1 adds typed delivery and missing adapters, N5/N6/N11, runtime follower row read and voice gain.
-3. Lane2 ports the consumers and shared scalar; retains all predecessor behavior.
-4. Integrator applies owed declarations/docs/verdict rows, compiles FIRST, then runs acceptance.
-   No coder build/run/commit. Coder rules are at the end of each brief.
+1. Integrator first completes §0 job1's read-only targetability/default/species kickoff audit.
+   V7-1, V7-2 and V7-3 can then start together **after V6 commits**, on disjoint files.
+   V7-3 prepares observations/records first; integrate harness support before evaluating records.
+2. V7-1 adds delivery/adapters and targetability initialization/SAVE wiring; V7-2 supplies
+   consumers, shared scalars and named unavailable source accessors.
+3. After all three diffs are integrated, the integrator serially applies exact owed lines,
+   completes the bounded Bloodshield service, then admits required content before acceptance.
+4. Compile first and run the brief's acceptance sequence. Coders never build/run/commit.
+
+The pulled-forward service fits a **serialized integrator step**, exactly as V7.1 orders;
+there is no fourth coder and no second round. The integrator owns
+`Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.h`,
+`Source/ElysiumUE/Private/Substrate/ElysiumDisciplines.cpp` and affected
+`Source/ElysiumUE/Public/ElysiumPlayer.h` combat-character declarations/state only for
+that service. Lane1 binds it; lane3 proves it.
 
 Scope includes every arm of the predicate this wave repairs. 12a therefore includes its
 friendly-sound/type and third-party-combat proximity arms, not just two early refusals.
@@ -46,6 +62,14 @@ A coder's report is returned to the coordinator, not saved as report*.md.
 - `Source/ElysiumUE/Private/Substrate/ElysiumEntity.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumChoreoScene.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcClasses.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcLifecycle2.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseLifecycle2.inl`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcCamera.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumScriptedSequence.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcNewscaster.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcPlayerController.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcPlaceholder.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcSpawnSpecies.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpc.h`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcGhoulCroucher.cpp`
@@ -74,6 +98,7 @@ A coder's report is returned to the coordinator, not saved as report*.md.
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAnim.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAnim.inl`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp`
@@ -137,17 +162,29 @@ A coder's report is returned to the coordinator, not saved as report*.md.
 - `Arena/scenarios/maps/map_hub_follower_boss_v7.json`
 
 **Proof:** comparing the literal paths gives L1∩L2=∅, L1∩L3=∅, L2∩L3=∅.
-Lane counts: L1=26, L2=21, L3=43.
+Lane counts: **L1=34, L2=22, L3=43**. The same literal lists appear in each coder brief.
+The serialized integrator service files are in none of these coder lists; owed-line edits
+to coder-owned files occur only after the owning diffs are integrated.
 In particular Npc.h belongs only to1; NpcEntityChain.inl and Animating.h only to2;
 Arena reader/runner and all JSON only to3. No generated *Slots.cpp belongs to a coder.
 
 ### Files shared with incoming waves
 
+**V7 runs after V6 commits.** V7-1 overlaps V6 at ElysiumNpc.cpp/.h,
+ElysiumEntity.cpp, ElysiumEntityWorld.cpp and ElysiumClassRegistry.h/.cpp;
+V7-2 overlaps at ElysiumSchedule.cpp/.h, ElysiumNpcSenses.cpp and
+ElysiumNpcBaseAnim.cpp. V7-3 shares ElysiumArenaScenario.cpp/.h and
+ElysiumArenaScenarioRunner.cpp/.h with V6-3. Relocate every function by name
+against V6's committed code before editing. These collisions forbid concurrent V6/V7 writes.
+
+
 V4d D3 overlaps **Npc.cpp, Npc.h, Entity.cpp** (lane1); its integrator also owns
 **docs/vtmb/combat-and-damage.md, docs/vtmb/npc-ai/lifecycle.md** and the generated ledger,
-which V7's integrator may update. V4d's live BaseAnim.inl change is also a predecessor
+which V7's integrator may update. V4d's committed BaseAnim.inl change is also a predecessor
 collision with lane2; preserve ragdoll/sequence-zero behavior there.
-V7 deliberately owns neither Visual/EntityBodies nor Physics Asset/pipeline files.
+V7 coders own neither Visual/EntityBodies nor Physics Asset/pipeline files.
+V7.2 permits only a diagnosed required missing-payload repair as a serialized acceptance
+prerequisite, with exact paths/provenance recorded before repair; no speculative pipeline lane.
 V4d's changes to damage_lethal_death / verbs_stealth_kill are acceptance dependencies, not lane3 files.
 
 V5b's coders have no intersection with these V7 coder manifests. Its **integrator**
@@ -206,7 +243,7 @@ synthetic in about/notes. It invokes the REAL body and records its result, not a
 | input_faint_v7 | live human and dead/ideal-dead controls, pending think deadlines | reset614 before schedule0xfa, source0x26c2, knockout flag/event; dead refusal retains schedule; never bypass death guard;0x1029f250/102ae780. Faint thunk already landed. |
 | input_fleeanddie | human on navigable pad with an escape node; live/dead controls | reset→source0x26b5→schedule0x6f, subsequent authored tasks; never immediate death or undead schedule installation;0x1029f210/102ae750. |
 | input_makeinvincible | fixed damage packet before/after toggle, Bool and wire String | +63d8 gates damage; off admits it, never wounds while invincible;0x102c2a30, existing damage guard. |
-| input_bloodshield_v7 | Bool on, repeat on, off and clean-off; existing target record/rules | status/effect buffer + trait/modifier/remove chain, no blood/cost activation gate; never generic Use side effects;0x102c32d0→101e3380. **Judge-held effect proof**, not a green thunk-count substitute. |
+| input_bloodshield_v7 | Bool on, repeat on, off and clean-off; real ordinary human and BloodGuardian donors plus explicit player-service fixtures; admitted deployed record/rules | status/effect buffer + trait/modifier/remove chain, no blood/cost activation gate; never generic Use side effects;0x102c32d0→101e3380. Required live effect proof, including status duplicate gate, target replacement, sound and removal order; a missing service blocks V7. |
 | input_setbossmonster | active human, true/false/repeated, normal registry state | +6496 writes and existing UpdateCharacter registry adds/removes once; never duplicate boss entries;0x102c3500/10298070. |
 | input_default_dialog_camera | " Dynamic3 ", whitespace, empty, 260-byte overflow and failed Bool conversion; open dialogue afterward | trimmed nonempty write, empties preserve, native buffer limit, next camera reads it; never empty overwrite;0x102c2910. |
 | input_dontface_datamap_bug | initial spawnflags8 then normal string"1"/"0"; separate raw-handler fixture Bool and failed Bool wire | wire clears8, Bool wire refused/preserves; raw handler Bool sets then StartTalking skips306; never claim wire Bool sets it;PE105d0d18/102c34b0/102c0270. |
@@ -229,7 +266,7 @@ synthetic in about/notes. It invokes the REAL body and records its result, not a
 | investigate_v7_priority | named fixture matrix flags/stay/null/boss/enemy, all7 modes, friendly source/type1,0x10,other, third-party combat | exact ordered answers including <=256XY/<=80Z boundary, candidate and enemy distance OR; never boss/enemy admission before guards or missing suppression;0x102b3270/102b8cd0. |
 | sound_commit_v7_mirror | cached seven sound records with distinct source/type/position/time/radius/serial; multi-condition and no-condition calls | priority winner full copy→source→InvestigateSound; no-condition retains winner yet rewrites source/mirror; never partial copy or V10 expiry dependency;0x102b4090/102b3d90. |
 | relationship_composition_v7 | NPCs with boss/reverse relation/insane/source; real sight and post-feed consumer, HUD projection separate | virtual404 composition at all gameplay sites; const/mutable enemy differences, own bossLIKE/reverse candidate answer; never flat table overriding composition;0x10299da0/1026a2c0/1033a9e0. |
-| comfort_idle_weight | real installed0x12f comfort on eligible NPC; explicit targetability seam fixture; float hook eligible; normal-program control | actual local0x12f, inclusive0..20 draw and no float call; normal0..999 or float; never Local=-1 or certainty assertion;0x1027a420. Capture actual draw bounds/calls rather than probabilistic pass threshold. |
+| comfort_idle_weight | real installed0x12f comfort on an ordinary initialized nonempty-statTemplate NPC, no positive latch fixture; empty-template/cine/camera refusals; float hook and normal-program controls | actual local0x12f, inclusive0..20 draw and no float call; normal0..999 or float; never Local=-1 or certainty assertion;0x1027a420. Capture actual draw bounds/calls rather than probabilistic pass threshold. |
 | clear_schedule_v7 | real scripted NPC direct ClearSchedule during start/run fixture, preserve path set | six zeros in order, preserve clear and slot435zero; same-loop start vs next-think run; never request latch/delayed extra-clear;0x10280d30. |
 | script_walk_to_mark | retain existing Green Room cine record | cleanup's direct clear/reselect, preserve original event windows; never leftover request;0x10280d30 and existing cine cleanup citations. |
 | feed_auto_accept_ideal | real AttemptFeed fixture mismatch current vs ideal; four numeric ids and adjacent COWER2/3/INTO controls | exactly ideal104e/1068/1069/1098 autoaccept BEFORE resistance/RNG; others existing roll, never disposition/schedule substitute;0x10168910. |
@@ -241,34 +278,44 @@ each mutation, isolated fresh rows per case, strict parser; direct predicate cal
 cannot assert a synthetic result. A read-only probe of the runtime result does not call RNG again.
 Input delivery snapshots observe real post-handler words (and rejection); no fake dispatch events.
 
-All new records must run alone AND after another record. Hub runs alone and after another named
+All new records must run alone AND after another record at V6's fresh epoch1.0.
+Epoch restaging needs measured proof and retains original behavioral bounds. Hub runs alone and after another named
 map record in a fresh non-sharing boot; do not claim this checks persistent shares_map state.
 New Green Room records run after control_sequence in the same stage-group boot with real reset.
 Existing N5/N6/N11 red removal belongs to V7; a record this wave writes or breaks is this wave's.
 
-## 5. For the judge
+## 5. Judge's rulings applied
 
-1. **Bloodshield direct status service**: retail0x102c32d0→101e3380→101e3560/101e3730 and
-   high-bit RemoveEffect are recovered. Existing Use imposes extra gates, EndBloodshield only
-   tears down a modifier group. Spec0006's completed joins do not expose the required direct
-   status API. Alternatives: spec0006 owner provides this narrow service and its record, or judge
-   explicitly amends V7 ownership for that service. Until then expose only a named unavailable
-   hook/binding, keep input_bloodshield_v7's effect target outstanding with evidence/owner;
-   do not tick whole V7 from thunk availability. No discipline implementation lane here.
-2. **Content failure encountered during verification**: exact class/model/sequence/voice and
-   baked provenance must be filed. Alternatives: use an already cooked body/voice proving the
-   same runtime arm, or content owner repairs/rebakes. Do not schedule pipeline/bake work in V7,
-   invent a silent asset or claim a timer proves real audio. None was measured by the planner.
-3. **Later substrates**: V10 CSound lifetime and R1 producers/VSound; R3 real kick/door/cover
-   mechanisms; R4 squad/follower locomotion; R5 additional incapacitation programs remain there.
-   V7 proves setter and landed consumer contracts with real bodies/explicit fixtures; no claim
-   those later systems are complete. Follower-type runtime row read needs no pipeline and is V7.
-4. **Unrecovered input sources**: BCCTargetable producer/default, non-NPC victim ideal activity
-   +0xff0, and player's unrelated+647c
-   slot404 read. Keep named accessors answering nothing, test known arms through explicit debug
-   fixtures. Alternatives: retail live measurement/recovery by integrator if readily available,
-   or named later owner; never fill in invented values. HUD composed relation change is an
-   explicitly INFERRED consistency repair of existing visual modernization, no new gameplay rule.
+The [third sitting](../v1/judge-third-sitting.md) is final. No V7 row was refused;
+the inherited Clock ruling also applies.
 
-The judge list is bounded: no blanket “all19 need pipeline”, no moving wave-owned record failures
-to a later spec. Retail mismatch DontFace, N5, N6, N11, mirror and movement are settled now.
+| item | ruling | where it landed |
+|---|---|---|
+| V7.1 Bloodshield direct status service | pull forward | Integrator §0 job2: bounded ElysiumDisciplines.h/.cpp service and affected combat-character declarations/state; V7-1 job10 binds it; V7-3 job5 and input_bloodshield_v7 prove the full effect; packet §8. No unavailable-hook or binding-only close. |
+| V7.2 content failure in verification | do now | Integrator §0 job3 admission/provenance and bounded required-payload repair; V7-1 job20 real voice gain wire; V7-3 jobs6/9 retain hub Python/dialogue and real same-handle speech, including pending decode; packet §8. |
+| V7.3 later sound/mechanism/social substrates | file | V7-1 job26 and V7-2 job10 leave typed setters/real-reader seams; README §6 names V10/R1/R3/R4/R5 and absent live records; integrator §4 close job4 names each handoff. Follower-row loading, full sound mirror and every ShouldInvestigate arm remain V7. |
+| V7.4 input source correction | do now | Integrator §0 job1 records/default/species audit; V7-1 job25 initialization and BOOL SAVE sites; V7-2 jobs6/7/11 latch and named +0xff0/+0x647c accessors; V7-3 job10 ordinary initialized comfort donor and refusal/consumer controls; packet §8. Genuine unavailable sources filed below. |
+| Clock standing question, inherited from V6 | do now | Dependency order and top of every brief; V7-3 job12 epoch observation/restaging; integrator §0 job4 re-measures zero-tuned records at1.0, alone/after, preserving draws/predicates/bounds; packet §8 cites engine epoch/load sites. |
+
+## 6. Filed seams and later owners
+
+These are explicit handoffs, not wave-owned failures. Setters still perform conversion,
+exact state writes and every already landed consumer; a fixture never credits a missing system.
+
+| seam left by V7 / real reader | later owner | live record remains absent |
+|---|---|---|
+| Committed sound record/mirror via CommitBestSound and ShouldInvestigate; named **SoundLifetime** handoff | 0002/V10 lifetime | lifetime witnesses belong V10, not V7's cached-record proof |
+| Existing EmitGameSound receipt and typed producer door; named **OtherSoundProducers/VSoundSource** handoff, no fabricated result | 0002/R1 other sound producers and VSound | unproduced-sound witnesses |
+| AllowKickHintUse, capability mask0xd00 and real SelectCoverOrKickSchedule / OnObstructingDoor readers; named **KickHintMechanism / DoorInputMechanism / CoverMechanism** handoffs report unavailable where absent | 0002/R3 complete kick/door/cover | kick_hint_mechanism_live, door_input_mechanism_live (full cover coverage remains R3) |
+| SetFollowerBossName/SetFollowerType, real boss relation reader and ordered authored distances; named **FollowerLocomotion** handoff unavailable where absent | 0002/R4 squad/follower locomotion | follower_locomotion_live |
+| Faint/FleeAndDie and existing schedule consumers; named **IncapacitationRecovery** handoff unavailable where absent | 0002/R5 additional incapacitation programs | incapacitation_recovery_live |
+| FeedIdealActivityNumber non-NPC +0xff0 -> INDEX_NONE; no disposition/schedule substitute | 0005/3 feeding-source follow-up | feed_auto_accept_non_npc_live |
+| CandidatePlayerRelationHandle647c player accessor -> invalid/nothing; NPC uses actual FollowerBoss, no invented player handle | 0002/R4 player relation-source follow-up | relationship_player_647c_live |
+
+These bold handoff names label the seam at the named real setter/reader; they are not
+new shipping inputs or asserted implemented methods. V7-1 job26 / V7-2 job10 name
+them in the existing sites' comments/accessors, using unavailable/nothing where absent.
+
+Integrator's close names all seven seams, their owners and absent records, distinguishes
+consumer fixture coverage from live-source coverage, and keeps HUD changes presentation-only.
+Targetability is recovered V7 work and is **not** a filed unavailable source.

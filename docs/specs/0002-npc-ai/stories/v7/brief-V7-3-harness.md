@@ -1,5 +1,10 @@
 # Brief V7-3 — arena observations, explicit fixtures and records
 
+**Start after V5b and V6 commit.** V6-3 shares ElysiumArenaScenario.cpp/.h and
+ElysiumArenaScenarioRunner.cpp/.h with this lane. Relocate functions by name on V6's
+committed code and retain its arena reset to1.0 before Load. Keep seed/reset order,
+shared draws, predicates and original behavioral bounds; job12 owns proved epoch restaging.
+
 Read AGENTS.md, [README.md](README.md)§4, [packets-V7.md](packets-V7.md), Arena/README.md.
 **Testable first:** prepare records/support before the implementation is integrated.
 The planner supplies names/stages/staging/expect/never; your job includes missing harness support.
@@ -53,7 +58,8 @@ Never hand-stage success in place of a real runtime operation.
 
 README proves pairwise disjointness. V4c's Scenario reader/runner probes and clock reset are
 prerequisites to preserve. ArenaStage.cpp and runtime files are outside this lane.
-No pipeline, cooked content, source corpus or generated Slots edits.
+No coder pipeline, cooked content, source corpus or generated Slots edits.
+V7.2's diagnosed required-payload repair is a serialized integrator prerequisite.
 
 ## Numbered jobs
 
@@ -125,12 +131,20 @@ No pipeline, cooked content, source corpus or generated Slots edits.
    not silently asserted green. Invincible's damage test checks wounds/applied state, not damage
    trace alone. Boss registry repeated-call control cannot inherit state from prior records.
 
-5. **input_bloodshield_v7.json**, **0x102c32d0 / 0x101e3380 / 0x101e1870**:
-   stage the real required Bool on/repeat/off effect sequence and observe actual status/buffer/
-   modifier removal. It is judge-held, not fulfilled by registration or generic Use.
-   If no direct service lands before integration, state exact seam/owner in known_red ONLY by
-   integrator's judge disposition; never weaken expects into “hook was called.”
-   No Bloodshield service, later spec or content work is yours.
+5. **input_bloodshield_v7.json**, ArenaV7Support.cpp::ObserveInputDelivery/ReadNpcWords,
+   **0x102c32d0 / 0x101e3380 / 0x101e3560 / 0x101e3730 / 0x101e3af0**:
+   Bool on/repeated-on/off/clean-off must execute the real direct service supplied by the
+   integrator, status before target; duplicate status is suppressed while target replacement
+   still runs (old target teardown interrupted=true; input false interrupted=false).
+   Observe buffer/modifiers/status, source COMBAT0x1 and target FLINCH0x10 sound order,
+   removal callbacks and final ownership, including no-effect clean-off.
+   Use real admitted BloodGuardian for inherited buffer300 and ordinary human for
+   Hit_Human -> Use_Spell invocation/filter-refusal; explicit real-player direct-service fixtures cover buffer80 and
+   player mappings without claiming the NPC input is a player registration. Packet §8 pins
+   these deployed row differences; never force a player HitTable on a human.
+   A missing reachable helper/modifier/hit/teardown arm blocks V7 until completed in the
+   bounded integrator step. Binding-only, generic Use or an unavailable hook cannot pass.
+   No later-spec expansion or service implementation belongs to this lane.
 
 6. **map_hub_follower_boss_v7.json**, **0x10195510 / 0x1019643c / 0x102c3350**:
    stage **map:sm_hub_1**, existing prostitute_1 only, no rows/spawn/from_map there.
@@ -172,7 +186,10 @@ No pipeline, cooked content, source corpus or generated Slots edits.
    Speech record covers dialogue/direct/choreo current voice, silent and decode-pending:
    clamped store AND actual gain on same handle/cursor/deadline; no media restart or outputs.
    Lab audible/rate observations are integrator measurements, not guessed ratios from a changing clip.
-   If an asset is absent file class/model/path for judge, never replace it with a timer-only pass.
+   V7.2: record exact class/model/native sequence/voice asset/recipe and admission failure.
+   Integrator diagnoses and repairs only that required payload or admits an equivalent cooked
+   controlled donor. Observe a real voice handle/gain and unchanged cursor/deadline, including
+   pending decode; a silent stand-in/timer cannot pass. Preserve the authored hub witness.
 
 10. **investigate_v7_priority / sound_commit_v7_mirror / relationship_composition_v7 /
     comfort_idle_weight / clear_schedule_v7 / feed_auto_accept_ideal**,
@@ -180,7 +197,11 @@ No pipeline, cooked content, source corpus or generated Slots edits.
     implement full matrices in README/packet, especially guard priority, sound-type suppression,
     equality at256XY/80Z, both third-party distances, reverse relation, mirror NO CONDITION,
     actual comfort draw bounds/float bypass, direct clear timing, IDEAL versus current mismatch.
-    These synthetic fixture records call real bodies. Do not wait for V10 sound-life,
+    Comfort also has an ordinary initialized nonempty-statTemplate donor whose targetability
+    is written by real NPCInit, never a fixture. Add empty-template/cine/camera and all other
+    refusal controls; packet §8 and lane1 job25 identify producer/SAVE sites. Observe actual
+    latch, local0x12f, draw bounds and float skip without re-executing the predicate.
+    Other synthetic fixture records call real bodies. Do not wait for V10 sound-life,
     disposition producer/R5, R4 squad mechanics or pipeline just to stage an observable.
     Existing script_walk_to_mark and verbs_feed_trance remain program/verb evidence;
     add second real feeding after first's post-feed ideal activity is installed, not immediately
@@ -192,6 +213,20 @@ No pipeline, cooked content, source corpus or generated Slots edits.
     multi-record no-leak coverage and pending-schedule post-delivery/prethink observation order.
     Test meaningful harness guarantees, not copies of production expected formulas.
     Family `Elysium.Arm.ArenaV7.`; add no new production test tiers or command surface.
+
+12. **Inherited Clock ruling**, ScenarioRunner.cpp::FireDueActions/ReadDueProbes and
+    affected records in the43 owned paths, engine **0x200f5bb4..0x200f5bc4 /
+    0x200975f0**, NPC **0x10273390 / 0x10273ad0**:
+    observe V6's pre-Load/pre-entity epoch1.0 through the existing reset fence
+    (ArenaStage.cpp remains integrator-owned). Re-measure every zero-tuned record alone and
+    after control_sequence/another named map record. State time conventions explicitly:
+    corrected absolute-vs-relative staging needs measured before/after retail-chain evidence,
+    with original behavioral bounds unchanged. Keep seed/reset order, shared draws and <=1
+    initialization arms; no RNG replay, mid-record clock change or interval enlargement.
+    Unexplained reds block closure.
+    **Proof:** all35 named records, especially input_disablethink,
+    input_changeschedule_reselect, script_walk_to_mark and comfort_idle_weight; report actual
+    pre-entity epoch and dispatch/probe stamps for each restaged record.
 
 ## Dependencies / exact owed lines
 

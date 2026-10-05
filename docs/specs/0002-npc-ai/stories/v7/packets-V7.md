@@ -1,12 +1,15 @@
 # V7 settling packet — inputs and their consumers
 
-Planner read on 2026-10-05. All retail addresses below are **vampire.dll**, image base
-0x10000000. VERIFIED means a corpus decompilation/listing or pinned PE read made in this
+Planner read on 2026-10-05. Retail addresses below are **vampire.dll**, image base
+0x10000000, except the explicitly identified **engine.dll** epoch/load sites in §8. VERIFIED means a corpus decompilation/listing or pinned PE read made in this
 planning session; INFERRED means a port mapping or authored reachability conclusion.
 No runtime measurement, source edit, build, test, arena, bake or commit was performed.
-Read AGENTS.md first. `uv run elysium research kernel --check` returned 7/7 current
-before the ledger lookups. Main HEAD was eb6d9f94 (documentation after V4c d0f79574);
-its working tree contains V4d edits. Function names, not historical line numbers, locate sites.
+Read AGENTS.md first. The original planner's ledger check was historical; this ruling
+fold-in's read-only kernel check reports stale ledger/list/shape tables (exit1 wrapper).
+The ledger/index is navigation only; direct listings and current source supply evidence.
+No regeneration was performed. Integration starts from the latest work-branch commit:
+today's reference a5b58f37 (V4d), with V5b and committed V6 required before V7.
+Relocate functions by name on V6's committed code, not historical line numbers.
 
 ## 1. Verdicts on the supplied leads
 
@@ -22,7 +25,7 @@ its working tree contains V4d edits. Function names, not historical line numbers
 | scout's 10d must wait for V10 | REFUTED for this wave's mirror proof. The seven cached sound records can be staged in a debug fixture and the real CommitBestSound called. V10 owns sound-life/expiry, not these copies. |
 | scout's DontFace/FallToGround consumers absent | REFUTED. NpcDialogue::StartTalking reads spawnflags bit 8; NpcThink::Think19NormalSet2 reads DONT_FALL_TO_GROUND. Retail's latter callee is empty. A further DATAMAP/HANDLER mismatch for DontFace is verified below. |
 | “one-line” scope of 12a | UNDERSTATED. Full comparison found friendly-sound suppression and combat proximity arms missing too. All are this predicate's behavior; do not repair just StayEntrenched. |
-| 10i | runtime branch already correct (local 0x12f, weight 20, bypass FloatSound); comments and arm fixture are stale. |
+| 10i | local0x12f, weight20 and FloatSound bypass already match; V7.4 also requires the missing real +0x1480 latch read. Producer/SAVE evidence is §8; positive comfort proof uses ordinary initialization. |
 | 25a | dead NPC latch is verified by whole-Source search: declaration, implementation and generic runner reads, no producer. Delete the latch mechanism; retain direct ClearSchedule callers and their timing. |
 | 16b / 21c | VERIFIED flat-table gameplay readers and disposition/schedule auto-accept substitute. Stealth HUD counterpart is not established; it is presentation and requires separate treatment below. |
 
@@ -72,12 +75,12 @@ All names below need a record; the plan maps each to one.
 | name | declared type; retail address | verified behavior / existing port site |
 |---|---|---|
 | AllowAlertLookaround | Bool; 0x102c2b90 | Bool byte to +0x6434, other raw-handler type false; Npc::bAllowAlertLookaround, selector reader exists. |
-| AllowKickHintUse | Bool; 0x102c2c10 | Bool byte +0x6436; ScheduleHost.AllowKickHintUse and existing hint/kick readers. |
+| AllowKickHintUse | Bool; 0x102c2c10 | Bool byte +0x6436; ScheduleHost.bAllowKickHintUse and existing hint/kick readers. |
 | AllowOpenDoors | Bool; 0x102c3540 | true CapabilitiesAdd(0xd00), otherwise CapabilitiesRemove(0xd00); preserve other bits. |
 | Faint | Void; 0x1029f250 | slot614 reset → cause/source +0x1b30/+0x1b34 line0x26c2 → SetSchedule(0xfa,false). Existing BuildNpcClass thunk does this. |
 | FleeAndDie | Void; 0x1029f210 | same order, source line0x26b5, schedule0x6f,false. |
 | MakeInvincible | Bool; 0x102c2a30 | byte +0x63d8; existing damage/stealth guards read it. |
-| SetBloodShieldDiscipline | Bool; 0x102c32d0 | resolve Thaumaturgy_Bloodshield via0x101e1590; true0x101e3380(self,self,id); false0x101e1870 sets high id bit then RemoveEffect(false). See judge dependency, not generic Use. |
+| SetBloodShieldDiscipline | Bool; 0x102c32d0 | resolve Thaumaturgy_Bloodshield via0x101e1590; true0x101e3380(self,self,id); false0x101e1870 sets high id bit then RemoveEffect(false). See §8 and integrator's bounded direct service; never generic Use. |
 | SetBossMonster | Bool; 0x102c3500 | byte +0x6496; UpdateCharacterRetail's registry reader exists. |
 | SetDefaultDialogCamera | String; 0x102c2910 | string/null/fallback → Q_trimspace buffer260 → only nonempty intern/write +0x64c4. Empty/whitespace preserves previous camera. |
 | SetDontFacePlayerInDialog | **String**; 0x102c34b0 | handler Bool true OR8, every other raw type AND~8; ordinary wire behavior as §2. StartTalking0x102c0270 reads bit3 and skips slot306 when set. Reader already exists. |
@@ -114,8 +117,10 @@ Bloodshield true was followed to **0x101e3380 → 0x101e3560 then 0x101e3730**:
 status gate/AddDiscFlag, modifiers/misc/possible COMBAT sound; target-effect replacement,
 tier evaluation, hitgroup apply and timed/direct removal. The existing
 ElysiumDisciplines::Use has learned/cost/eligibility gates absent from this input.
-EndBloodshield alone is not the false RemoveEffect path. This service boundary is the judge's,
-not a V7 discipline lane; registration may expose a named unavailable hook only.
+EndBloodshield alone is not the false RemoveEffect path. Final V7.1 pulls the bounded direct
+service into a serialized integrator step in ElysiumDisciplines.h/.cpp plus affected
+combat-character declarations/state; lane1 binds it and lane3 proves it. §8 records the
+additional direct status/replacement/removal and deployed-hit evidence. No unavailable-hook close.
 
 ## 4. N5, N6, N11 and shared movement
 
@@ -185,8 +190,9 @@ The archived old25a cut names dead
 busy discipline) → schedule local0x12f gives weight20 and SKIPS FloatSound → other programs
 call slot510, true invokes507 then returns false → otherwise inclusive RandomInt(0,weight)==0.
 Do not turn “weight20” into an unconditional success. Port runtime has local0x12f;
-remove obsolete “all subspaces9999, Local=-1” comment/fixture. BCCTargetable source remains
-an existing unrecovered seam: add/name its accessor, no fabricated always-true fact.
+remove obsolete “all subspaces9999, Local=-1” comment/fixture. V7.4 requires the actual
+bIsBccTargetable +0x1480 gate and its initialization/SAVE chain (§8), not an always-true
+stand-in or a supposedly unrecovered input source.
 
 **12a0x102b3270**, plus helper **0x102b8cd0** (relation neither D_HT1 nor D_FR2):
 flags1 mask0x4000080 → StayEntrenched → null → resolved follower boss → current
@@ -256,7 +262,7 @@ Twelve others no active method-call hit. Absence is bounded corpus evidence, not
 against native/console calls. These18 are Green Room records, stage "arena".
 Existing N5/N6/N11 are synthetic Green Room witnesses even where they copy retail map rows.
 
-## 7. Remaining measurements and judge boundary
+## 7. Remaining measurements after the final rulings
 
 - No live hub dialogue path, response index, affordable player money/quest condition, or resetHos
   path was measured. Integrator inspects the authored choices and performs them on the fresh map,
@@ -272,13 +278,173 @@ Existing N5/N6/N11 are synthetic Green Room witnesses even where they copy retai
 - The player's unrelated+0x647c word in slot404 remains unrecovered: code0x10299da0 and
   matching oracle explicitly expose the blind read; no live retail instance was inspected.
   Preserve/name the existing absent accessor and measure retail before extending player behavior.
-- Bloodshield's status/target service cannot be equated to generic Use from the listing/port.
-  The required behavior is recovered, but port service ownership is a judge decision.
-  Binding availability is NOT a green effect verdict. See README For the judge.
-- BCCTargetable's native writers/default were not recovered here; code0x1027a420 shows the gate,
-  port names no producer. Preserve explicit input seam and isolate the comfort-weight test.
+- Bloodshield's direct service is required integrator work by V7.1. Measure real on/repeated-on/
+  off/clean-off effects, status duplicate vs target replacement, both sound categories and removal
+  order; no generic Use or binding-only green. §8 pins the native bodies and deployed arm differences.
+- Targetability writers and BOOL SAVE are recovered in §8. Integrator first completes the
+  default/construction and species audit on V6's committed code before changing any default;
+  lane1 wires/preserves producers/SAVE, lane2 reads the actual latch and lane3 measures ordinary
+  initialized comfort plus refusal controls. A fixture cannot prove the live producer.
 - No headless Ghidra needed. Read driver README; used corpus listing and PE reads in memory.
   The first PE datamap-header read found zero runtime-initialized table/count; builder0x1028cd70
   supplied table0x105ce4b4, whose static row settled the mismatch. No scratch project or PE dump
   was written. Module::address spelling was rejected by tools; bare queries were checked for
   vampire.dll sections (100d05d0/10168910 also returned client.dll, ignored).
+
+
+## 8. Third-sitting ruling evidence and ownership
+
+[The third sitting](../v1/judge-third-sitting.md) is final. The following listing reads were
+made for this fold-in, checked for vampire.dll identity (client.dll matches ignored).
+The prior packet is amended here; no live execution or acceptance is claimed.
+
+### V7.1 — direct Bloodshield, now an integrator prerequisite
+
+**VERIFIED direct chain**, read whole: InputSetBloodShieldDiscipline **0x102c32d0**
+uses Bool else false, resolves InternalName Thaumaturgy_Bloodshield through **0x101e1590**
+(case-insensitive name search, no name -> id0). True calls **0x101e3380(self,self,id)**,
+which calls **0x101e3560** before **0x101e3730(self,self,id,-1)**.
+False ORs **0x80000000 at0x101e1870** and calls **RemoveEffect0x101e3af0(self,id,false)**.
+The direct path contains no learned/blood/cost/world-area/recovery/ordinary-Use admission gates.
+
+Status **0x101e3560** resolves the record by id; if it exists and HasStatusEffect is false:
+AddDiscFlag(id,0.1,self,-1), source-instant modifier body **0x101dd090(record+0xa4)**,
+manager+0x20=0, AddMiscFlag0x200000, then conditional TriggerAISound ->
+CSoundEnt::InsertSound(**COMBAT1**, self origin, native global radius/sensitivity, duration0.2).
+The player-recipient notification follows only when that recipient/message exists.
+A duplicate status skips this whole arm. The source status and target effect are distinct.
+
+Target **0x101e3730** independently resolves the record; if the high-bit target status is
+already present, **RemoveEffect(high-bit,true)** runs first. It evaluates the self pair through
+**0x101dbc10** (filter failure -> -1), selects the hitgroup through **0x101e0410**
+(out-of-range/-1 -> native empty default), runs target instant modifiers
+**0x101dfb80 -> 0x101dd090(hitgroup+0x64)**, then timed delivery if
+**0x101dd4f0(record+0x68)** says projectile id !=-1, otherwise direct hit **0x101e3850**.
+The direct hit runs source-hit modifiers **0x101dd090(record+0xc0)** then
+**0x101dfc20**. That body resolves duration, adds the high-bit DiscFlag with caster/hitgroup,
+conditionally emits **FLINCH0x10**, duration0.2, then applies **0x101de660** hit channels,
+possession/frenzy where authored, and the duration/removal continuation.
+Do not collapse source COMBAT and target FLINCH into one sound or suppress target replacement
+because source status was duplicate-gated.
+
+RemoveEffect **0x101e3af0** first checks actual status and record existence; clean-off is a
+no-op. Low-bit status removes source instant/hit modifiers. High-bit target status resolves
+the stored hitgroup via **0x1033d410**, calls **0x101dfe80**, then RemoveDiscFlag and clears
+the manager's current record pointer. **0x101dfe80** removes the trait effect, applies the
+original hit's reset body **0x101def10**, then chooses OnInterrupt when true or OnEnd when
+false and applies **0x101de660**. Input false removes only the high-bit target; it does not
+invent a source-status or persistent-misc clear.
+
+**VERIFIED deployed record**, `Content/ElysiumCorpus/vdata/system/disciplinetgt_004.txt`,
+Bloodshield block lines1359–1584, helper Use_Spell from line3119:
+TriggerAISound=1, source Activate.wav, and ordered self mappings:
+player human -> Hit_Player_Human; player supernatural -> inherited Hit_Player_Supernatural;
+human -> Hit_Human; BloodGuardian -> Hit_Supernatural_BloodGuardian; other supernatural
+No_Boss and Boss -> Hit_Human. Player hit has buffer80, block50%, infinite duration,
+Discipline (Thaumaturgy-Bloodshield), ongoing sound and OnEnd Health_Buffer=-1.
+BloodGuardian inherits that hit with buffer300 and Forced_BloodShield misc.
+Hit_Human has no buffer; its Trigger_Casting calls Use_Spell with Source Target/Affects Self.
+The helper's authored filters, including No_Self, are not waived by a direct self call:
+**0x101ddcd0** resolves the helper name, chooses source/receiver, retrieves original effect
+context via **0x1033d460**, then **0x101e33c0** orders helper status before helper target.
+Keep actual **0x101dbc10** filter success/refusal and empty-hit fallback; do not force a
+player hit or invent a successful helper gesture. This is a reachable arm even when refused.
+
+**Port mapping (INFERRED API, verified current sites):** integrator owns new
+ElysiumDisciplines::SetBloodshieldDirect in Private/Substrate/ElysiumDisciplines.h/.cpp
+plus affected Public/ElysiumPlayer.h FElysiumDisciplineState/active-effect declarations.
+Reuse ResolveRules, SourceActivationEnd/HasDisciplineStatus, ResolveHitTable/ApplyHit,
+RunTriggerCasting and RemoveTargetEffect only where equal to the listing; finish reachable
+missing arms before acceptance. Lane1 Npc.cpp::InputSetBloodShieldDiscipline binds the service.
+**Proof:** existing input_bloodshield_v7 on/repeated-on/off/clean-off on real admitted human
+and BloodGuardian donors, with bounded player direct-service fixtures for player mappings;
+buffer/modifiers/status and actual sound/replacement/removal order, no binding-only close.
+
+### V7.4 — targetability writers, persistence and genuine source gaps
+
+**VERIFIED native writes**, read from the listings. The offset reader index misses derived/
+untyped writes; the vampire.dll named-field/raw-offset search is navigation, each writer's
+body is evidence. Native default/construction must not be inferred from an empty-template
+branch. Integrator §0 job1 finishes that audit before lane1 changes initialization defaults.
+
+| retail function/address | exact +0x1480 behavior | current port writer/storage; lane1 ownership |
+|---|---|---|
+| CAI_BaseNPCTroika::NPCInit0x1029a0b0, write0x1029a4a2 | nonempty statTemplate sets1; empty preserves prior byte | ElysiumNpcLifecycle2.cpp::TroikaNPCInit; ElysiumNpc.cpp::Activate dispatch |
+| Duplicate Troika NPCInit0x10366270 | same guarded template write (not a new default/species rule) | same Troika body; preserve forwarding |
+| CCineNPC::Spawn0x101a6f10 | clear before scheduling; liveness separately clear | ElysiumScriptedSequence.cpp::Spawn |
+| CNPC_VCamera::NPCInit0x103692c0 | platform refusal removes/returns first; surviving camera clear | ElysiumNpcCamera.cpp::NPCInit |
+| CNPC_VNewscaster::NPCInit0x103a0420 | Troika first, then clear | ElysiumNpcNewscaster.cpp::NPCInit |
+| CNPC_VPlayerController::NPCInit0x103a4580 | Troika first, then clear | ElysiumNpcPlayerController.cpp::NPCInit |
+| CPayphone::NPCInit0x101aab90 | Troika first, then set1 | ElysiumNpcPayphone.cpp::NPCInit |
+| CNPC_VPlaceholder::NPCInit0x103a4350 | clear place before Troika, then set1 before ThinkSet(NULL) | ElysiumNpcPlaceholder.cpp::NPCInit |
+| CNPC_VWerewolf::Spawn0x103caa30 | guarded template before Troika Spawn, then set1 | ElysiumNpcSpawnSpecies.cpp::FElysiumNpcWerewolf::Spawn |
+| CNPC_VVampireBoss::TransformationStart0x103c60a0, write0x103c6218 | transformed child set1 after its spawn/state writes | ElysiumNpcSpawnSpecies.cpp::TransformationStart |
+
+Current storage is **ElysiumNpcBaseLifecycle2.inl::bIsBccTargetable=false** (port construction
+value, not proof of the native allocation default). All listed writers already have port sites;
+V7 preserves them and repairs only a verified wire gap on committed V6 code.
+The raw datamap replay at
+`$ELYSIUM_WORK_ROOT/research/ghidra/types/datamap_records-vampire.dll.json`,
+CBaseCombatCharacter datamap **0x1061664c**, states m_bIsBCCTargetable offset5248/+0x1480,
+type5 BOOL, count1, flags2 SAVE, external=null. Corpus vtmb_fields' fieldType0 is insufficient
+to settle SAVE/type; this raw row is the evidence. Lane1's owned NpcClasses.cpp class
+registration must expose one effective BOOL SAVE binding; inspect inherited/generated
+binding first, no duplication or generated-output hand edit. Any generator correction is
+exact authored-input/output work owed to serial integration.
+
+**Reader0x1027a420**, read whole, refuses in order: state outside1/3, gag bit2,
+targetability clear, resolved dialogue partner, busy discipline. Comfort local0x12f selects
+inclusive weight20 and skips FloatSound; normal path calls slot510, possible507 then
+inclusive weight999 roll. Current ElysiumNpcBaseSounds.cpp::ShouldPlayIdleSound skips
+the third refusal and falsely calls +0x7ec unavailable. Lane2 job6 reads the actual latch at
+that exact priority. **Proof:** comfort_idle_weight positive uses ordinary nonempty-template
+initialization without a fixture latch; empty-template/cine/camera and other refusals, actual
+draw bounds/float bypass, and true/false production codec/applier roundtrips prove the wire.
+
+**Feed source chain0x10168910**, vampire section read whole: after null-target/handle and
+virtual CanBeFedUponBy admission, reads victim[0x3fc] = ideal+0xff0 and recognizes exactly
+104e/1068/1069/1098 BEFORE resistance/opposed RNG. The typed field ledger states the same
+ideal member on combat-character/player/NPC classes; this is no schedule/disposition read.
+ElysiumFeed.cpp::IsFeedAutoAcceptState currently substitutes those proxies. Lane2's
+FeedIdealActivityNumber reads actual NPC IdealActivityNumber; absent non-NPC carrier returns
+INDEX_NONE with the named +0xff0 comment. Public/ElysiumPlayer.h declaration is integrator-owed.
+**Proof:** feed_auto_accept_ideal/verbs_feed_trance for real NPC consumer/transaction;
+feed_auto_accept_non_npc_live remains absent under **0005/3 feeding-source follow-up**.
+
+**Relation chain0x10299da0**, read whole: candidate+0x98 combat-character pointer is
+followed by a raw +0x647c handle read, identity resolution, own virtual404 and mutable168;
+it is not a typed NPC GetFollowerBoss dispatch. The NPC writer is SetFollowerBoss0x102c44e0;
+the raw-offset search establishes no equivalent player producer/value, and the current
+Conditions10.cpp::TroikaIRelationType exposes the non-NPC fallback. Lane2 names
+CandidatePlayerRelationHandle647c returning invalid/nothing for that genuinely absent player
+source; candidate NPC still reads real FollowerBoss. Lane1 owns the Npc.h declaration.
+**Proof:** relationship_composition_v7 fixtures prove consumers only;
+relationship_player_647c_live remains absent under **0002/R4 player relation-source follow-up**.
+HUD consistency remains the previously named presentation-only INFERRED repair.
+
+### V7.2 / V7.3 / inherited Clock — acceptance and handoff evidence
+
+V7.2's settled native speech update **0x102c2680 / 0x102c278d..27a2** changes current
+channel5 gain with flags4 while talking; no restart/cursor/deadline change. Real
+LineService::PlayDirect/PlayDialogueTurn and direct/choreo/dialogue owner routes are its
+port seam. Integrator admission records exact class/model/native sequence/asset/recipe and
+body/voice admission. Equivalent existing cooked content is permitted only for the identical
+controlled arm; hub prostitute_1's authored dialogue/Python remains required. Repair only
+a measured required missing payload, repeat admission, then prove input_speech_volume on a
+real voice handle including pending decode. No missing payload was measured by this planner.
+
+V7.3 files **0002/V10 lifetime**, **R1 other producers/VSound**, **R3 kick/door/cover**,
+**R4 squad/follower locomotion**, **R5 additional incapacitation programs**. README §6
+names the typed setters/real-reader/unavailable execution seams and absent live records;
+integrator's close repeats those exact owners. These filings exclude neither follower-row
+loading nor the full ShouldInvestigate0x102b3270 / CommitBestSound0x102b4090 contracts.
+No fake live mechanism or unproduced sound receipt is allowed.
+
+Inherited Clock: the final ruling pins **engine.dll0x200f5bb4..0x200f5bc4** fresh double/
+float1.0 and **engine.dll0x200975f0** saved-header time; NPCInit0x10273390 /
+StartNPC0x10273ad0 have <=1 arms. These engine sites are cited from the final ruling,
+not claimed as independently re-read here. V6's committed Stage/BeginNewGame handoff owns
+the implementation. V7 measures fresh1.0 before Load/initialization, frozen revisit time,
+saved explicit-load time and every zero-tuned record alone/after on the final binary.
+Only proved staging/epoch assumptions may change, with per-record evidence; keep shared
+draw order, predicates and original behavioral bounds. Unexplained reds block closure.

@@ -1,5 +1,10 @@
 # Brief V7-2 — shared scalars and retail behavior consumers
 
+**Start after V5b and V6 commit.** V6 shares ElysiumSchedule.cpp/.h,
+ElysiumNpcSenses.cpp and ElysiumNpcBaseAnim.cpp with this lane. Relocate functions
+by name on V6's committed code. Fresh arenas/maps use1.0 before Load/initialization;
+keep seed/reset order, shared draws, predicates and original behavioral bounds.
+
 Read AGENTS.md, [README.md](README.md), [packets-V7.md](packets-V7.md), especially§4/5,
 and Arena/README.md. Main reads only; worktree named by coordinator after predecessors land.
 
@@ -11,6 +16,7 @@ and Arena/README.md. Main reads only; worktree named by coordinator after predec
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAnim.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseAnim.inl`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions.h`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcSenses.cpp`
 - `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseSounds.cpp`
@@ -94,16 +100,17 @@ Npc.cpp/.h belong to lane1; declaration/caller lines there are integrator-owed.
    projection: provider0x10299da0 is verified, retail HUD reader is NOT.
    Label this INFERRED consistency repair of the already-named presentation modernization;
    report any game-state consequence instead of adopting it. Player+647c blind read is a
-   pre-existing unavailable source; don't fabricate it.
+   named unavailable source handled by job11; don't fabricate it.
 
 6. **NpcBaseSounds.cpp::ShouldPlayIdleSound**, **0x1027a420 / 0x1027a4a9 / 0x1027a4b0**:
    runtime already tests local0x12f and inclusive weight20, bypasses float. Preserve it.
    Remove stale sentinel-only schedule-space commentary and update corresponding arm fixture.
    Keep the five refusals, normal float-before-roll and shared RNG.
-   BCCTargetable+0x1480 remains explicitly unrecovered: name the absent source/accessor in
-   documentation and owed declaration if needed; don't silently claim targetability true or
-   broaden this comment/test repair into a new gameplay default. Packet/README judge item
-   owns any live source/default recovery. Comfort fixture explicitly supplies eligibility.
+   Read actual bIsBccTargetable +0x1480 at the third refusal, after state/gag and before
+   dialog/busy. Remove incorrect +0x7ec/no-member seam wording; initialization is lane1
+   job25, not a synthetic default. Preserve local0x12f/weight20 and shared RNG.
+   **Proof:** comfort_idle_weight ordinary initialized nonempty-template donor without
+   fixture-writing the latch, plus empty-template/cine/camera and other refusal controls.
    Do not use a statistical “many successes” check instead of the actual weight/call evidence.
 
 7. **Feed.cpp::FElysiumCombatCharacter::IsFeedAutoAcceptState / AttemptFeed**,
@@ -143,6 +150,30 @@ Npc.cpp/.h belong to lane1; declaration/caller lines there are integrator-owed.
    Leave tests of predecessor capability/reload/cache files to their owners; any cross-file
    repair is exact owed lines, not a manifest expansion.
 
+10. **V7.3 filed consumers and seams**, Senses.cpp::CommitBestSound,
+    Conditions.cpp::ShouldInvestigate, **0x102b4090 / 0x102b3270**:
+    retain complete cached records and real-source/virtual-enemy/origin accessors for EVERY
+    recovered arm now. Sound lifetime is 0002/V10; other producers/VSound are R1.
+    Name SoundLifetime and OtherSoundProducers/VSoundSource at the existing stimulus
+    receipt/lifetime boundary, without producing fake sounds. These are handoff labels,
+    not new shipping inputs or implemented producer claims.
+    **Proof:** sound_commit_v7_mirror and investigate_v7_priority exercise every landed
+    consumer and conversion/state snapshot; unproduced-sound live witnesses remain absent.
+    Full kick/door/cover, squad/follower locomotion and extra incapacitation programs stay
+    R3/R4/R5 as README §6; no fixture claims those mechanisms executed.
+
+11. **V7.4 source-accessor boundary**, Conditions10.cpp::TroikaIRelationType and new
+    CandidatePlayerRelationHandle647c, **0x10299da0 / 0x10299eaa**:
+    replace the anonymous player blind-read fallback with a named accessor returning invalid/
+    nothing for the genuinely absent player +0x647c source; candidate NPC still resolves actual
+    FollowerBoss. Npc.h declaration is lane1-owned/owed; no invented handle or layout.
+    Job7's Feed.cpp::FeedIdealActivityNumber returns INDEX_NONE only for absent non-NPC
+    +0xff0; the actual NPC ideal word is required. Packet §8 records the source chains before
+    either behavior is extended.
+    **Proof:** relationship_composition_v7 and feed_auto_accept_ideal fixtures prove real
+    consumer arms only. relationship_player_647c_live is absent under 0002/R4;
+    feed_auto_accept_non_npc_live is absent under 0005/3. HUD stays presentation-only.
+
 ## Dependencies / owed lines
 
 Lane1 supplies adapters, source type metadata and virtual stealth query. Its multiplier calls
@@ -150,7 +181,8 @@ your shared setter. Lane3 supplies finite debug fixture/call probes for the reco
 Owe Public/ElysiumPlayer.h::FeedIdealActivityNumber declaration (definition in Feed.cpp);
 Npc.cpp/.h latch deletion; NpcSelect.cpp::TroikaSelectSchedule redundant HearWorld-only mirror
 review; NpcSenses.h stale “unwritten” InvestigateSound comment.
-Any targetability accessor declaration or scalar caller outside your files is explicitly owed.
+Npc.h::CandidatePlayerRelationHandle647c declaration is lane1-owned/owed.
+Any scalar caller outside your files is explicitly owed; targetability is the real landed latch.
 Integrator alone writes matching oracle/verdict recovery; no generated Slots edit.
 
 ## Coder rules
