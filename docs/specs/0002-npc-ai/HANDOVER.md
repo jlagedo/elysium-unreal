@@ -1,240 +1,101 @@
-# Handover — spec 0002 (the character AI), coordinator's state on 2026-10-04 (evening)
+# Handover — spec 0002 (the character AI), 2026-10-05 11:10
 
-You are the coordinator for spec 0002 in `E:\dev\elysium-unreal`. Load this file first, then read
-what it points at. It replaces the conversation that produced it.
+A temporary note for the session that picks this up after a restart. You are the coordinator, in
+`E:\dev\elysium-unreal`, branch `spec-0002/step-2`. Read `AGENTS.md`, then this, then load the
+`codex-cli` skill (`~/.claude/skills/codex-cli/SKILL.md`).
 
-## Where things stand (2026-10-04, 23:20) — read this first
+## The goal (the owner's, verbatim in intent)
 
-**Wave V4c is in integration and the tree is NOT clean.** About 71 modified and 8 new files are
-uncommitted: the three coders' lanes (C1 attack producers, C2 pick / corpse / dead enemy, C3 the
-team registry) plus whatever the integrator has applied. HEAD is `b430dc37` plus this file's
-commit; nothing pushed since `2ac33a53` (`origin/main`).
+Work alone, every sub-agent on Codex (`gpt-6.1-sol`, unsandboxed; `high` for readers, planners,
+judges, integrators; `medium` for coders and compile gates). Run V4c, V4d, V5b, V6, V7, V10, V12 and
+the second full run in order, each closing green; settle unread retail first; pull forward what a
+record needs; anything needing a later spec, the pipeline or a re-bake goes to an adversarial judge;
+commit once per green wave; never push. **Stop before V8** (the owner live), then one summary: what
+closed, what moved, every judge ruling, what is broken.
 
-Two Codex runs were alive when this was written. Their folders are under `E:\elysium-work\codex\`
-(`brief.md`, `events.jsonl`, `last.md`, `stderr.log`); a run is over when `last.md` exists and
-`events.jsonl` ends with `turn.completed` (or `turn.failed`: then read `stderr.log`).
+## State
 
-| run | what | thread id (for `codex exec resume`) |
+| wave | state | commit |
 |---|---|---|
-| `C-int` | V4c's integrator (`gpt-6.1-sol`, high): applies the owed lines, one `build --arm` (cap two), the records, both test tiers, the full arena, one commit. Started 23:07 | `01a109d1-1882-7332-a4e2-36ba50c4f7ac` |
-| `V4d-plan` | verifies the V4d scout and makes `brief-D-ragdoll.md` final; writes `brief-D-integrator.md` and `packets-S14.md` (docs only). Started 23:08 | first line of its `events.jsonl` |
+| V4c attack producers, pick stream, corpse, dead enemy, teams | closed | `d0f79574` |
+| V4d ragdoll from the `.phy` (30 bodies baked) | closed | `a5b58f37` |
+| V5b reload, capability word, interrupt-cache tail | closed | `9e29f419` |
+| **V6** session, clock, lifecycle | **integrating, uncommitted** | — |
+| V7 the 19 inputs | planned, briefs final (`stories/v7/`) | — |
+| V10 + V12 sound life, footsteps | planned, briefs final (`stories/v10/`) | — |
+| second full run | not started | — |
 
-**First steps for whoever picks this up:**
+Totals at V5b: arena 116 pass / 1 fail `rollcall_vzombie` (H11) / 15 expected-fail / 2
+unexpected-pass (`hear_world_investigate`, `interest_mode_never`, N4); default 169 / 0; arm 1,636 / 0;
+kernel 7/7. Nothing pushed since `2ac33a53`.
 
-1. `git log --oneline -3` and `git status --short`. If the integrator committed (a `feat(npc): V4c`
-   commit), read its message: the verdict table, what the three `damage_*` records measured about
-   the knockout, each red with its owner. If it did not commit, read `C-int/last.md`: it was told
-   not to commit a wave that is not green and to say what state the tree is in. Resume its thread
-   (model, effort and the bypass flag repeated) rather than starting a new integrator.
-2. If `V4d-plan` finished, check its packet against the listing, commit its three files, and
-   launch V4d's coders (`medium`) once V4c is committed.
-3. A Codex run can die on an expired login ("refresh token has expired", HTTP 401; it happened to
-   C1 and a scout). The fix is the owner's: `codex login`. Then resume the thread.
+## V6, right now
 
-**The coders' reports** are in `E:\elysium-work\codex\C-int\report-C1.txt`, `-C2.txt`, `-C3.txt`;
-the lines they owe other files are written as exact patches in `docs/vtmb/combat-and-damage.md`
-(~:1228), `docs/vtmb/npc-ai/lifecycle.md` (~:3418), `senses.md` (~:256) and `teams.md`.
+- The main checkout holds all of V6 uncommitted (~60 files); it compiles. Safety snapshot of the tree:
+  `refs/backup/v6-wip-2` (`de82b138`); the earlier `refs/backup/v6-wip` is the tree right after the
+  compile gate.
+- The integrator is a Codex run: folder `E:\elysium-work\codex\V6-int\` (`brief.md`, `events.jsonl`,
+  `last.md` when it ends), thread `01a10c1d-42a8-73a2-8554-ea601721fe89`. At 11:04 it was at 219
+  steps: default tier 169 / 0; N9 settled (the maker's box has no alive test: the first child's corpse
+  refuses the second, as retail `0x1034b692..0x1034b737`; the record was corrected); both
+  flamethrower real-reload records pass (the judge's fourth sitting); it was working through the
+  remaining named records, then the arm tier and the full arena.
+- **First step after a restart:** `git log --oneline -3`; is there a `fix(npc): V6` commit? If yes,
+  read its message and go on to V7. If not: is the run alive (`events.jsonl` still growing, a
+  `codex.exe` process)? Alive: put a watcher on it. Dead without `last.md`: resume the thread
+  (`codex exec resume <thread> -m gpt-6.1-sol -c model_reasoning_effort='"high"'
+  --dangerously-bypass-approvals-and-sandbox --json -o last2.md - < followup.md`) with "continue from
+  the working tree; the brief is unchanged", or, if the thread is very long, start a fresh integrator
+  on `V6-int/brief.md` plus what `events.jsonl`'s last agent messages say is done.
 
-**Scout packets** (`gpt-6-luna` at `max`; leads, NOT verified, outside the repository):
-`E:\elysium-work\codex\scout-V4d\packet.md`, `scout-V6`, `scout-V7`, `scout-V10V12`. Their main
-claims, each to be checked before a brief uses it:
+## Then
 
-- V4d: an ordinary death may never reach `StartBodyRagdoll` today (capability false, force bone
-  none, no `Bip01 Spine2` fallback); the `.phy` solid-to-bone frame mapping is unresolved; no
-  cleanup of the map-owned ragdoll mesh; 34 distinct character models on the two witness maps.
-- V6: the clock persists across map travel; there is no save / load action in the console or the
-  arena harness (V6's records cannot be staged until one exists); a restored corpse can lose its
-  removal think; the task cursor is `+0x5c40` (`+0x5c50` is the failure code).
-- V7: none of the 19 inputs is fired by either witness map (records go in the Green Room); N5
-  forwards the raw value; N6 starts the schedule at once where retail stores a forced-schedule
-  state; N11 omits retail's stealth eligibility arms; the movement-multiplier input needs the
-  shared playback / ground-speed scalar path.
-- V10 + V12: N4's cause — retail's `CanHearSound 0x1030f7b0` has no expiry test (a separate think
-  prunes at expiry + 4 s) while the port tests expiry inside hearing; retail's NPC footstep
-  handler emits body audio and inserts no AI sound, so V12 may be small.
+1. **V7:** create `E:\elysium-work\worktrees\v7` (`git worktree add -b spec-0002/v7-coders … HEAD`),
+   three coders at `medium` on `stories/v7/brief-V7-1…`, `-2…`, `-3…` (the wrapper brief of
+   `E:\elysium-work\codex\V6-1\brief.md` is the template: read from the main checkout, write only in
+   the worktree, never build); commit on the worktree branch; `git diff <base> <branch> | git apply`
+   into the main checkout; a `medium` compile gate (owed lines, build until it compiles, nothing
+   else; the template is `E:\elysium-work\codex\V6-gate\brief.md`); a `high` integrator (template
+   `E:\elysium-work\codex\V6-int\brief.md`).
+2. **V10 + V12** the same way (`stories/v10/`); its first step is the N4 diagnostic record.
+3. **The second full run:** every scenario, both tiers; then stop before V8 and write the summary.
 
-**Order left:** V4c (integrating) → V4d → V5b (planned, `stories/v5/`) → V6 → V7 → V10 → V12 → the
-second full run → stop before V8 (the owner live) → V9 → gate 2.
+## The method that worked
 
-## Read, in this order
+- Coders in a worktree outside the repo, a compile gate, then a fresh integrator per pass; builds are
+  cheap (about 2 minutes): cap runs, not builds. Default tier first after a build; records by name,
+  looped; arm; kernel check; the full arena once.
+- A wave's own records are the wave's: no `known_red` without the retail reason and the owner the
+  judge named.
+- Every Codex run gets one background watcher (end, `turn.failed`, 10–20 minutes of silence). Claude
+  Code kills background shells when the machine is critically low on memory (Unreal fills it): the
+  owner restarts with `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1`. The Codex runs themselves
+  survive that.
+- This session cannot edit the main checkout directly: doc edits are made in
+  `E:\elysium-work\worktrees\coord` (branch `spec-0002/coord`; rebase it onto the work branch first),
+  committed there and cherry-picked.
+- Worktrees (`coord`, `v4d`, `v5b`, `v6`) are never removed by the coordinator; see `AGENTS.md`.
+  `E:\dev\elysium-unreal-task-life5` is not this spec's.
+- `AGENTS.md` may show the owner's uncommitted edits and `Session/ElysiumRng.cpp` a line-ending
+  residue: never stage either.
 
-1. `AGENTS.md` (repo root) and the owner's global `~/.claude/CLAUDE.md` (the query budget).
-2. `docs/specs/0002-npc-ai/spec.md` — § Standing rules, § Step 2, § The bug protocol and, after it,
-   the owner's standing rulings and his two rules of 2026-10-04 (**Testable first**, **Settle
-   first**), § The sequence.
-3. `docs/specs/TRACKER.md` — what is ticked. Next unticked: **V4c** (in integration), then V4d.
-4. `docs/specs/0002-npc-ai/stories/v4/README.md` and the packets beside it: `packets-R1.md`,
-   `-R2`, `-spike`, `-R1b-measurement`, `-S1` … `-S12`. Briefs: `stories/v4o/` (O1–O3, integrator),
-   `stories/v4/brief-C1…`, `brief-C2…`, `brief-C3-team-registry.md`, `brief-C-integrator.md`,
-   `brief-D-ragdoll.md`, `packets-S13.md` (settled before V4c),
-   `stories/v5/` (the V5 plan), `stories/v5a/`, `stories/v11/` (landed; for reference).
-5. `docs/specs/0002-npc-ai/stories/v1/triage.md` — the two sections "Judge's rulings, V4" and
-   "Judge's rulings, V4 — second sitting" at its end.
-6. `Arena/README.md`; `git log --oneline -20`.
+## Judge's rulings
 
-## State (verified at V4o's commit `64895278`)
+J1–J14: `stories/v1/triage.md` (two sections "Judge's rulings, V4"). Third sitting (17 rulings on the
+V6 / V7 / V10 plans): `stories/v1/judge-third-sitting.md` — the arena clock starts at retail's 1.0;
+Bloodshield's status service pulled into V7; the 64-slot sound allocator pulled into V10; N4 closes
+only on three green boot orders; corpse visual persistence filed to 0014 / 0017; speculative
+pipeline work in V10 refused. Fourth sitting: `stories/v1/judge-fourth-sitting.md` — retail NPCs
+never reach the flamethrower's `Attack` and its sequences author no shot event; the real reload gets
+its live run from a staged empty clip (done inside V6).
 
-- **Branch `spec-0002/step-2`**, HEAD `64895278` plus this file's commit; nothing pushed.
-- **Arena:** 124 records — 102 pass / 19 expected-fail / 1 fail (`rollcall_vzombie`, H11) / 2
-  unexpected-pass (`hear_world_investigate`, `interest_mode_never`, intermittent on N4).
-- **Tests:** default 170 / 0; arm 1,594 / 0; `kernel --check` 7/7.
+## Known broken or open
 
-| step | state | commit |
-|---|---|---|
-| V4r: readers R1, R2, the ragdoll spike, the judge (J1–J9) | closed | `65220814` |
-| settling packets S1–S12, the judge's second sitting (J2b, J10–J14) | closed | `273a7dcc` … `08ff15c8` |
-| the seam (A0): words, probes H18–H22, the V4 records | closed | `d7afee0d` |
-| V5a + slot 363 (pulled forward) | closed | `a6bd4add` |
-| V4a: the dispatcher in each entity's think, the clock's speed words, N19 | closed | `c7a2645c` |
-| V4b + slot 562: retail's arrival script, the facing; N13 fixed | closed | `1442fdc2` |
-| V11 (pulled forward): the coordinator, slot 331, the melee contact, the grapple words | closed | `88649932` |
-| the V5 plan (V5b) | written | `ed91e53a` |
-| V4o (pulled from 0015): layers, move-and-shoot, the event shot | closed | `64895278` |
-| **V4c**: attack producers, the weighted pick, the death transaction, the corpse clocks | not started; briefs final | — |
-| **V4d**: the ragdoll from the `.phy` | not started; spike done, brief final | — |
-
-Order left: **V4c → V4d → V5b → V6 → V7 → V10 → V12 → V2 (full run) → V8 → V9 →
-gate 2.**
-
-## What moved green this session
-
-`range_bands`, `cover_armed`, `sense_enemy_facing_me`, `ranged_sustained_fire` (V5a);
-`script_walk_to_mark` (N19, V4a); `input_clearpatrolpath`, `patrol_sentry2_pingpong`,
-`places_pedestrian_visit` (N13, V4b); `melee_swing`, `melee_ally_in_the_way`, `patrol_monk_loop`
-(V11; the monk was a record error: the player's seat stood on the node). New and green:
-`ranged_friend_in_line_of_fire`, `verbs_feed_victim_dispatch`, the player / prop anim-event
-guards, `corpse_removed_unseen`, `corpse_kindred_burns`, `corpse_kept_seen`.
-
-`cover_move_shoot` and `ranged_open_fire` went green in V4o.
-
-Still red, with owner: `chase_melee` (the swing
-clip's movement never moves the body), `corpse_pedestrian_stays`, `corpse_fades` → V4c;
-`damage_lethal_death` → V4d; `rollcall_vzombie` → H11.
-
-## The judge's rulings (all in the triage)
-
-| # | item | ruling |
-|---|---|---|
-| J1 | N19: a missed sequence lookup plays sequence 0 | done, V4a |
-| J2 → J2b | slot 247's bbox import | withdrawn and filed (only the player's acquire cone reads it; that story is unported); the slot body stays on a named seam, arm test only, V4c C1 |
-| J3 | the player's anim-event dispatch | site and order done (V4a A4); the player's own sequence clock filed to 0015, a named pose-phase seam stands for it |
-| J4 | props and the camera | prop poll deleted, no replacement (retail props never dispatch); camera dispatch and its handler done |
-| J5 | the move-and-shoot overlay | first "stub"; superseded by "testable first": pulled forward as V4o |
-| J6 | the shot-timer estimate | removed for every NPC wielder (S2 read all operator bodies); V4o / V4c C1 |
-| J7 | record errors (`melee_swing`'s `hit_event`, N13's speeds per body) | corrected by the seam |
-| J8 | three doc conflicts | fixed by their lanes |
-| J9 | the arrival | only retail's whole velocity script counts: done, V4b; the arrival floor is retail's 0.0625 units (V11) |
-| J10 | `0x102a11d0`, a non-hated NPC blocks the swing | done, V11 |
-| J11 | four species with task-code fire (ChangBros, FrenzyShadow, Bach, ManBat) | filed; on neither witness map |
-| J12 | the NPC clip is never lowered by a shot | done, V4o; the reload is V5b's |
-| J13 / J14 | corpse removal by kind; the fade (25 makers on both maps) | V4c C2 and V4d, four records; the burn's look to 0014 |
-
-## Open, for the next session or the owner
-
-- **New from V4o, for V4c:** a gunman does not drop a dead enemy (it re-selects `START_COMBAT` on
-  `ENEMY_DEAD` every think) → C2. The shot-timer estimate (`BeginRangedShot`, the NPC arm of
-  `CommitArrivesFromAnimEvent`) is still in the code, unreached by any NPC task → C1 deletes it.
-  NPC bullets now land: three ranged records hold the player unkillable through `events_player`.
-
-- **The owner's rulings of 2026-10-04 (evening), do not re-ask:**
-  - K4: NPC and non-NPC animation picks draw on **one shared stream**, as retail's single engine
-    stream (V4c C2 routes them).
-  - The real `TASK_RELOAD` (slots 322 / 323) is **ported in V5** with arm tests, plus a Green Room
-    record with a flamethrower NPC so it gets a real run.
-  - The melee contact's same-team test (`+0x10b0`): the team registry is **built in V4c** (read
-    the field's writers first; a Green Room record of two same-team NPCs). One more V4c lane.
-  - `main` was fast-forwarded to the work branch and pushed.
-- Presence's rate-doubling is filed with 0006.
-- **Seams left, named:** the same-team test of the melee contact (`+0x10b0`; no team registry);
-  Ming Xiao's `GetBestMeleeWeapon`; slot 389's `muzzleflash` attachment; the turn script's arrival
-  direction (`path+0x64`); `MoveNormal`'s restore arm (`0x102efc11`); the crowd corridor has no
-  corners for the velocity script; the body turns to the facing point whole during a live move
-  (inside K1, the motor on the body's tick).
-- **Not read:** bytes `0x1026a233..0x1026a29f` (not indexed); which damage sources set the gib
-  bit; whether the corpse maker passes spawnflag bit 9 (`corpse_fades` depends on it: C2 reads it
-  first).
-- **Noted, unowned:** an idle row in the feed victim's first think after release; the arena
-  player dies to a few bat hits; four dangling citations fail `test_oracle_citations`; 18 other
-  pytest failures that look like terminal colour codes (unconfirmed).
-- `anim_prop_event` is vacuous by data (no placed prop authors an event; it proves the deleted
-  poll only).
-
-## The method — what this session added
-
-- **Settle first:** every "unrecovered" in a brief or a coder's report gets a read-only reader
-  (packets `S*`) before the lane that depends on it; readers run beside builds.
-- **Testable first:** a record that cannot go green for want of a later story pulls that story (or
-  its needed part) forward; the planner checks dependency cycles.
-- **Integrators exceeded the two-build cap** four times (shadowed locals C4458/C4459, missing
-  includes, fixes found during the run). Tell every coder shadowing is an error; tell every
-  integrator to read all diffs for shadowing, includes and double definitions before build 1.
-- Generated slot files (`…Slots.cpp`) are never hand-edited: a hand body goes in `…SlotBodies.cpp`
-  with a `kernel_verdicts.tsv` row, then regenerate and `uv run elysium research kernel --check`.
-- A coder's report always lists lines owed by other files; the integrator's prompt carries them.
-- Everything else as before: ≤3 coders on disjoint files, then one integrator; coders never
-  build; stage by explicit path; the verdict table in the commit message (a hook refuses
-  `report*.md`); never push.
-
-## The faster wave (the owner, 2026-10-05) — from V4d onward
-
-V4c's integrator ran 2 h 13 min and came out red: an hour of auditing before a 2-minute build that
-failed anyway, coder work done at `high` in one thread of 465 steps, staging and fixture errors found
-in the last run. The wave now runs like this:
-
-1. **Coders edit in a worktree, never in the main checkout**, so the next wave's coders run while the
-   current wave integrates. The worktree is outside the repository:
-   `E:\elysium-work\worktrees\<wave>` on branch `spec-0002/<wave>-coders`. A coder's shell starts in
-   the main checkout (the tools and the corpus MCP work only there) and reads from it; it writes only
-   under the worktree, by absolute path, only its lane's files. A lane whose files the running wave
-   is changing waits for that wave's commit.
-2. **Worktrees are never removed blindly (the owner).** A tree holds things git does not track (baked
-   content, caches, local env). Never `git worktree remove --force`, never `git clean`, never delete a
-   worktree folder by hand, in any tree. A worktree is removed only by plain `git worktree remove`
-   after `git status --porcelain --ignored` in it prints nothing, and otherwise left for the owner.
-   `E:\dev\elysium-unreal-task-life5` is not this spec's: do not touch it.
-   `E:\elysium-work\worktrees\coord` (branch `spec-0002/coord`) is the coordinator's, for doc edits
-   that are then cherry-picked onto the work branch.
-3. **A compile gate before the integrator:** one `medium` worker brings the lanes into the main
-   checkout (the coordinator commits the worktree branch; the gate merges it), applies the lines the
-   coders owe other files, and builds until it compiles. It fixes compile errors only.
-4. **Builds are not capped; runs are.** An incremental build is about 2 minutes: up to six
-   compile-only builds per wave. The full arena and the arm tier run once each at the close.
-5. **Order after the build:** the default tier first (a fixture abort shows at once), then the wave's
-   records, looped freely (a record is JSON: no rebuild), then the arm tier, then the full arena.
-6. **A fresh worker per phase** (gate, measure, fix), each handed the previous one's final message
-   and the briefs, rather than one resumed thread: a thread past a few hundred steps takes minutes
-   per step.
-7. **Every Codex run gets a watcher** that reports on its end, on `turn.failed`, and on 10 minutes
-   without an event: a stalled run sends no notification.
-8. **A wave's own records are the wave's.** An integrator may not hand a record it wrote or broke to
-   a later story; `known_red` on a new record needs the retail reason and a story that really owns it.
-
-## Sub-agents run on Codex CLI (the owner's ruling, 2026-10-04)
-
-**Load the `codex-cli` skill first** (`~/.claude/skills/codex-cli/SKILL.md`): it is the method —
-the launch line, the sandbox, MCP approval, reading the result, resuming. It may not appear in a
-session's skill listing; read the file. What follows is only what this project adds.
-
-- **Model and effort (the owner):** `-m gpt-6.1-sol`; `high` for Opus-level work (integrators,
-  readers over the listing, planners, judges), `medium` for Sonnet-level work (single-lane coders,
-  doc amendments, small reads). Always pass both, on a resume too (neither carries over).
-  The skill's benchmark found multi-function walks incomplete at `high` on a smaller model: a
-  reader's packet is a lead, verified before it reaches code (as every packet has been).
-- **No sandbox, ever (the owner): a sandboxed run errors.** Every `codex exec`, `resume` and
-  `review` carries `--dangerously-bypass-approvals-and-sandbox`; no `-s`, no `sandbox_mode`.
-- **Where a run lives:** `E:\elysium-work\codex\<slug>\` — `brief.md` (a copy of the brief; the
-  tracked brief stays under `docs/specs/…/stories/`), `events.jsonl`, `last.md`, `stderr.log`.
-- **Launch in the background, the brief on stdin** (`- < brief.md`). A positional prompt with
-  stdin open hangs forever (it cost an hour here). Check `events.jsonl` within a minute of the
-  launch; then wait for the completion notification, never poll.
-- **After a run meant to be read-only, `git status`** (full access: the brief's sentence is the
-  only guard). Every brief keeps the guardrails: the files named per lane, coders never build,
-  stage by explicit path, never push.
-- **Before an integrator's first build:** `codex exec review --uncommitted "<what to look for>"`
-  for shadowed locals (C4458 / C4459), missing includes and double definitions — the causes of
-  every over-cap build so far.
-- Models on this machine today (`~/.codex/models_cache.json`): `gpt-6.1-sol`, `gpt-6-astra`,
-  `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-*`, `gpt-5.5`; the skill's table predates 6.1.
-- A turn starts at about 20,000 input tokens (the global config's plugins and MCP servers), mostly
-  cached; drop unneeded servers per run with `-c 'mcp_servers.<name>.enabled=false'`, never
-  `--ignore-user-config`.
+- `rollcall_vzombie` (H11); the nine hidden-species rollcalls; N4's intermittents (V10).
+- Four bodies have no `.phy` and no ragdoll: `rat`, `rat_swimming`, `wolf_form`,
+  `mercuriodamagedstreet`.
+- A restored corpse keeps its dead mind and fallen body but its life / health words reset (V6 is
+  fixing the logical half; the visual pose is filed to 0014).
+- Unavailable and named: the event-free body seek (presentation continuation on restore), the
+  conversation producer, Presence (0006), the player's single-round reload continuation.
+- The old "victim dies on the fifth hit" never reproduced; three `damage_*` records guard the path.
