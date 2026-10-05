@@ -1,7 +1,18 @@
 # Brief V10-2 — cleanup and the reserved type-4 player record
 
+**Start fence:** V10 runs after committed V5b, V6 and V7. Its lanes share
+`ElysiumNpcSenses.*`, `ElysiumEntityWorld.cpp`, `ElysiumPlayer.h` and arena
+scenario files with V6/V7. Relocate functions by name on the committed code of
+all preceding waves; never replace a landed file with the planner snapshot.
+Fresh stages use V6's **1.0 before Load/entity initialization**; revisits use the
+map's frozen clock and explicit load its saved clock. Preserve seed/reset order,
+shared draws, state-ban rules and original behavioral bounds. Re-measure old
+zero-tuned records alone and after another; change only proved epoch/staging
+assumptions with per-record evidence, never replay RNG draws or widen windows.
+
+
 Read AGENTS.md, README and packets-V10 P1/P3. V10 lifetime lands before V12's
-producer correction. Coordinator names worktree; prerequisites V4d/V5b are landed
+producer correction. Coordinator names worktree; prerequisite waves through V7 are landed
 before this wave. No missing-footfall producer is to be invented.
 
 ## Only these nine files
@@ -16,7 +27,7 @@ before this wave. No missing-footfall producer is to be invented.
 - `Source/ElysiumUE/Private/Tests/ElysiumPlayerFootstepTests.cpp`
 - `docs/vtmb/footsteps.md`
 
-B∩A=B∩C=∅. No V4d/V5b coder-manifest overlap. EntityWorld wrapper/activation/
+B∩A=B∩C=∅: A4+B9+C32=45 unique paths. Earlier-wave overlap is serialized. EntityWorld wrapper/activation/
 tick lines are integrator-owned; header ownership does not authorize World edits.
 
 ## Numbered jobs
@@ -39,19 +50,21 @@ tick lines are integrator-owned; header ownership does not authorize World edits
    between cleanup passes retains the record. Remove age-four cutoff and prefix
    assumption; long record before short must not block cleanup. Emission does
    not force an early cleanup. Make Reset clear cleanup state and observers
-   safely; no process-global clocks. World invokes actual due pass once per tick
-   at its sound-entity position, integrator owed item below. Current128-capacity
-   overflow policy is inherited R1 scope, **not** replaced or sold as retail here;
-   never let pressure cleanup retire the permanently reserved player slot.
-   Stay below capacity in all wave fixtures. Keep existing non-player producer
+   safely; no process-global clocks. World dispatches it only as the soundent's
+   due callback in RunThinks at its mapped entity-list position (job10 and
+   integrator job7), never an independently privileged pre-Listen timer.
+   Job8 replaces 128/oldest eviction with the pulled-forward 64-slot allocator.
+   Pressure must preserve reserved rows. Keep existing non-player producer
    duration defaults named; do not assign new authored durations to R1 producers.
 
 3. **Reserved record**, `ElysiumGameSound.h/.cpp::Refresh/Retire` and event
    declaration, **0x101baf80 / 0x1016b480 / 0x101bab50**: distinguish stable
    allocation identity from changing revision serial. Refresh rewrites owner,
    origin, type4, integer volume, occlusion and time in place, expiry=-1, stable
-   allocation order. Reserve once per player/world session (allocation timing
-   equivalent to startup), including silent volume0; missing-slot path must be
+   allocation order. Initialize/reserve the configured client count at soundent
+   startup, consuming the same 64-slot pool (P5); bind the single-player client
+   index including silent volume0. Rebind saved reservations without reallocating.
+   Missing-slot path must be
    diagnosable. Retire is explicit teardown, never normal silent refresh.
    Do not use RadiusCm<=0 to re-resolve a quiet record to normal table radius.
    Use an explicit resolved-radius field/mode so zero really means zero.
@@ -111,16 +124,58 @@ tick lines are integrator-owned; header ownership does not authorize World edits
    0x101baf80 / 0x10274e30 / 0x10178a10**: correct persistent duration/cadence/
    integer semantics and distinguish two silence gates. Preserve retail
    no-AI-footfall fact. Name landing/gate seams, raw Jump's now-real source,
-   and inherited allocator scope without claiming a new modernization.
+   and the now-owned P5 allocator/refusal/free-list contract without claiming
+   other R1 producers. Report allocator oracle lines to lane1, which owns senses.md.
+
+8. **V10.2 pull-forward allocator**, `ElysiumGameSound.h/.cpp::Reset/Emit/
+   Refresh/Evict/Retire` (relocate actual allocator/free functions),
+   **0x101b9880 / 0x101baf80 / 0x101bab50 / 0x101ba9d0 / 0x101bac90**:
+   implement exactly 64 total embedded slots including client reservations.
+   Initialize free chain 0->1->...->63->-1, active=-1; reserve clients via the
+   same allocator with expiry=-1. Allocate free head and prepend to active;
+   exhaustion returns no stimulus and changes no surviving row/order/identity.
+   Unlink the actual removed index through its predecessor (or active head), then
+   push it onto free head. No oldest eviction/replacement and no reserved bypass
+   pool. Separate slot/allocation identity from observation revisions; reuse must
+   not alias an old allocation in traces. Refresh in place does not relocate it.
+   Add real bus arm tests. **Proof:** lane3 `sound_pool_pressure` (single-client:
+   1 reserved+63 finite, 65th request refused), `sound_pool_reuse` (head/interior/
+   tail removals and LIFO reuse), `sound_pool_reserved_survival` (pressure, silent
+   restamp and finite cleanup, same sentinel identity). Other R1 producers remain
+   named `R1SoundProducer/VSound` seams under 0002/R1, not new production work.
+
+9. **V10.3 save handoff API**, `ElysiumGameSound.h/.cpp` pool capture/apply/rebind
+   helpers and `ElysiumPlayerEntity.cpp::Hydrate/Dehydrate/UpdatePlayerSound`
+   with `ElysiumPlayer.h` declarations/state, **0x101baf80 / 0x1016b480** plus
+   P6 raw datamaps: expose complete pool/list state, saved player target volume
+   INT (+0x2130), current integer volume in CSound, client binding and callback
+   state to the common applier. Owner EHANDLE fixup must use V6's shared identity
+   map; times go through its audited TIME policy, preserving -1 expiry semantics.
+   Do not synthesize fresh reservations during apply. Diagnostic observers and
+   revision views are host instrumentation, not retail SAVE fields. The integrator
+   owns codec/snapshot plumbing outside this manifest. **Proof:** `sound_save_finite`
+   and `sound_save_reserved` show pool heads/links, owner rebind, stable allocation,
+   volumes, expiry policy and first real Listen at the apply fence; add local
+   capture/apply tests without replacing production save/load evidence.
+
+10. **V10.4 callback interface**, `ElysiumGameSound.h/.cpp::Activate/PruneDue`
+    (or named equivalents), **0x101ba6f0 / 0x101ba890 / 0x1003bdd0 /
+    0x100f7060 / 0x100f9fc0 / 0x1023c020 / 0x101a2e40**: provide the due
+    cleanup callback for integrator's stable soundent identity and native-list
+    placement. Initial now+1; recurrence now+0.3; restored due state uses the
+    audited callback contract, not an activation restart. **Proof:** lane3
+    `sound_lifetime_prune` pins both explicit callback orders; real-world
+    `sound_cleanup_coincident` traces dispatch indices, cleanup/Listen order and
+    finite expiry+4 equality. P7's fresh/restore-position mapping gates a
+    boundary parity claim; do not hardcode first/last priority.
 
 ## Integrator owed lines and data contract
 
 - `ElysiumEntityWorld.cpp::Activate` (relocate actual activation method),
-  **0x101ba6f0**: arm bus cleanup and player reservation once on activation, not
-  every Emit or fixture record refresh. `::Tick`, **0x101ba890**, invokes due
-  sound cleanup as a think with its actual ordering measured/documented; no
-  clock catch-up loop. Packet's final note does not verify coincident thinker
-  priority; follow integrator's recovery gate rather than force pre-Listen.
+  **0x101ba6f0 / 0x1023c020**: initialize once at the recovered soundent
+  creation/spawn fence; activation must not restart restored state. `::RunThinks`,
+  **0x101ba890 / 0x1003bdd0 / 0x100f7060**, dispatches cleanup in native-list
+  sequence. P7 fresh/restore mapping gates parity; no clock catch-up loop.
   Preserve player post-move ordering.
 - `ElysiumEntityWorld.cpp::RefreshGameSound` and public declaration,
   **0x1016b480**: silent type4 refresh is zero-volume rewrite, no Retire; remove
@@ -133,8 +188,16 @@ tick lines are integrator-owned; header ownership does not authorize World edits
   Jump; no PlayerController rewrite is owed. Player sound origin is the sampled
   post-move Origin, before NPC RunThinks.
 - Any stale `FootstepSenseTests.cpp` / `FootstepSeamTests.cpp` assertion needing
-  exact replacement is reported, not edited. PlayerSound fields/save behavior
-  beyond this transient producer belong to V6. No content import or re-bake.
+  exact replacement is reported, not edited. Integrator extends landed V6
+  codec/common applier for new pool/list/player-volume state (job9).
+  Full landing publication: `PlayerLayer0LandingState` -> 0015 player layer0.
+  Missing game-over/locked/observer producers: named
+  `PlayerPostThinkGameOver/Locked/Observer` accessors -> player story.
+  Missing locomotion: `PlayerSoundLocomotion` -> player embodiment.
+  Keep `sound_player_landing_live`, `sound_player_locked_live`,
+  `sound_player_observer_live` and `sound_player_game_over_live` absent;
+  fixtures prove consumer arms only. Integrator lists seams/owners at close.
+  No speculative content import or re-bake.
 
 ## Coder rules
 

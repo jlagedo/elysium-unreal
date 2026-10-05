@@ -1,10 +1,21 @@
 # Brief V10-3 — diagnostic, boundary fixtures and tutorial hearing records
 
+**Start fence:** V10 runs after committed V5b, V6 and V7. Its lanes share
+`ElysiumNpcSenses.*`, `ElysiumEntityWorld.cpp`, `ElysiumPlayer.h` and arena
+scenario files with V6/V7. Relocate functions by name on the committed code of
+all preceding waves; never replace a landed file with the planner snapshot.
+Fresh stages use V6's **1.0 before Load/entity initialization**; revisits use the
+map's frozen clock and explicit load its saved clock. Preserve seed/reset order,
+shared draws, state-ban rules and original behavioral bounds. Re-measure old
+zero-tuned records alone and after another; change only proved epoch/staging
+assumptions with per-record evidence, never replay RNG draws or widen windows.
+
+
 Read AGENTS.md, Arena/README, this wave's README and packets-V10. This lane owns
 the support needed to make every wave behavior an arena record. Coordinator names
 worktree; you never run the records. Implement support without editing substrate.
 
-## Only these 26 files
+## Only these 32 files
 
 - `Source/ElysiumUE/Private/Debug/ElysiumArenaScenario.h`
 - `Source/ElysiumUE/Private/Debug/ElysiumArenaScenario.cpp`
@@ -30,10 +41,16 @@ worktree; you never run the records. Implement support without editing substrate
 - New `Arena/scenarios/perception/sound_player_decay.json`
 - New `Arena/scenarios/perception/sound_player_gates.json`
 - New `Arena/scenarios/perception/footstep_events_no_ai.json`
+- New `Arena/scenarios/perception/sound_pool_pressure.json`
+- New `Arena/scenarios/perception/sound_pool_reuse.json`
+- New `Arena/scenarios/perception/sound_pool_reserved_survival.json`
+- New `Arena/scenarios/perception/sound_save_finite.json`
+- New `Arena/scenarios/perception/sound_save_reserved.json`
+- New `Arena/scenarios/perception/sound_cleanup_coincident.json`
 - New `Arena/scenarios/world/map_tutorial_hearing_walk_radius.json`
 - New `Arena/scenarios/world/map_tutorial_hearing_sneak_radius.json`
 
-C∩A=C∩B=∅, no V4d/V5b coder-manifest overlap. The two new helper files are debug
+C∩A=C∩B=∅; A4+B9+C32=45 unique paths. V6/V7 overlaps are serialized. The two new helper files are debug
 code only; do not add a module/build dependency or use editor services.
 
 ## Numbered jobs
@@ -68,8 +85,10 @@ code only; do not add a module/build dependency or use editor services.
    0x101ba890 / 0x1016b480**: add `do:"sound_fixture", case:"<finite name>"`
    for Green Room only. Reject unknown case, wrong fields, map host, absent
    required substrate API and fixture errors as structured `error`, never pass.
-   Case names correspond one-for-one to README's 12 exact sound/footstep control
-   records (all names beginning sound_, plus footstep_events_no_ai: **12 cases**).
+   Case names correspond one-for-one to README's 15 exact sound/footstep control
+   records (**15 cases**: the original 11 sound controls, three pool controls,
+   plus footstep_events_no_ai). The two sound_save records and
+   sound_cleanup_coincident use live production transport/dispatch, not RunCase.
    Each uses an isolated FElysiumEntityWorld with explicit substrate stamps,
    real GameSoundBus methods, real TickHearing/PerformSensing, real player
    UpdatePlayerSound/PostThinkAnimation or real HandleAnimEvent as appropriate.
@@ -108,7 +127,7 @@ code only; do not add a module/build dependency or use editor services.
    Never run a fixture, force a first listen, lengthen D or change cadence there.
    This is the wave's first record the integrator runs after compilation/default.
 
-5. All **12 fixture JSON records** in manifest, proposed helper RunCase,
+5. All **15 fixture JSON records** in manifest, proposed helper RunCase,
    **0x101ba6f0 / 0x101ba890 / 0x101baf80 / 0x1030f940 / 0x1030f7b0 /
    0x1016b480 / 0x10274e30 / 0x10178a10**: transcribe the exact staging/expect/
    never contracts in README. Each JSON has actual assertions over sound_word/
@@ -173,18 +192,83 @@ code only; do not add a module/build dependency or use editor services.
    Integrator runs the changed Python tests after compilation. No changes to pipeline implementation,
    baking or launcher are required for named records.
 
+10. **V10.2 pressure/refusal/reuse records**, new
+    `perception/sound_pool_pressure.json`, `sound_pool_reuse.json`,
+    `sound_pool_reserved_survival.json` and `ElysiumArenaSoundFixtures.cpp::RunCase`
+    with owned reader/runner case inventory, **0x101baf80 / 0x101bab50 /
+    0x101ba9d0 / 0x101ba890 / 0x1016b480**: use real bus methods and inspect
+    all heads/links/identities, no mock allocator. One configured client reserves
+    one of 64 slots: admit 63 finite, refuse next with no stimulus or displacement;
+    remove actual head/interior/tail rows and prove next allocations consume free
+    head in LIFO order. Reserved row survives pressure/finite cleanup and quiet
+    refresh without moving or changing identity. Assert refusal and absence of
+    emitted/heard sound for refused request, not just final count. These are
+    deterministic isolated real-bus fixtures; add strict refusal/parser arms.
+
+11. **V10.3 real save/load witnesses**, new `perception/sound_save_finite.json`
+    and `sound_save_reserved.json`, `ElysiumArenaScenarioRunner.cpp` landed V6
+    checkpoint/rebind/fence support and owned read-only probes, **0x101a2e40 /
+    0x1027cc10 (0x1027ccda) / 0x1027c160 / 0x1027bf50 / 0x1016b480**,
+    P6 raw SAVE/TIME audit: use V6 production codec/storage/common applier with
+    Green Room transport, not copying members or a sound_fixture pretending to
+    load. At apply fence before first Listen/PostThink inspect all pool heads/
+    links, finite TIME offsets, reserved sentinel policy, bound owner/client,
+    target/current integer volume, callback due/placement and lastListen=0.
+    Finite record uses real ambient delivery, saved after its authored expiry
+    but before grace removal, then first real Listen admits/promotes/outputs.
+    Reserved record uses live post-move player production, checkpoints nonzero
+    target/current volume and proves the same restored slot, first hearing and
+    next actual integer decay/restamp; also exercise zero-volume saved reservation.
+    Probe missing owner/fixup as refusal, never invented hearing. Save/resume
+    actions use committed V6 names; scenario elapsed remains monotonic separately
+    from restored world time. No forced Listen or producer at the apply fence.
+
+12. **V10.4 live coincident-due wire**, new
+    `perception/sound_cleanup_coincident.json` and
+    `ElysiumArenaScenarioRunner.cpp::RecordEvent/ReadProbe`, **0x1023c020 /
+    0x100f9fc0 / 0x100f7060 / 0x1003bdd0 / 0x101ba6f0 / 0x101ba890 /
+    0x101a2e40 / 0x1030f940**: stage a real-world finite delivery with the
+    sound entity and NPC genuinely due together at expiry+4 equality. Capture
+    creation/restored dispatch position, due/callback sequence and actual
+    candidate removal/admission disposition; assertion order follows the proved
+    native list mapping. Use a bounded Green Room staging hook only to set
+    reviewable due inputs, never invoke callbacks directly or invent stamps;
+    production RunThinks dispatches both. Retain separate cleanup-before/after-
+    Listen controls inside sound_lifetime_prune. A fixture pass cannot close
+    this live record; unread fresh/restore mapping blocks its acceptance.
+
+13. **V10.1, V10.5 and standing N4/Clock acceptance**, existing donors,
+    diagnostic/tutorial records and `ElysiumArenaScenarioRunner.cpp::FireDueActions/
+    RecordEvent`, **0x1011abc0 / 0x1003bdd0 / 0x100cfac0 / 0x1030f7b0 /
+    0x1030f940 / 0x1026a5e0 / 0x102b9060 / 0x102b8980**, engine epoch
+    **0x200f5bb4..0x200f5bc4 / 0x200975f0**: label absolute world stamps vs
+    stage-relative action time. Equal insert/old-listen is a retail rejection;
+    deliver genuinely later only after observation proves a donor phase error,
+    retaining original trace and separate sound_freshness_equal negative.
+    No epsilon/seed change/duration increase/global IO reorder. Supply known_red
+    removal separately; integrator requires final real donor disposition/output/
+    program traces solo, after control_sequence and reverse donor order, green
+    lifetime/freshness/order controls and unchanged hear_world_out_of_range.
+    A diagnostic pass or a nonreproducing miss alone never closes N4. Probe
+    deployed tutorial child full_investigate=0/initial alert=0 and actual WORLD
+    backend duration/receipt; no maker/key/pipeline lane is authorized. If a
+    required payload is concretely wrong/missing, report exact provenance for
+    integrator's narrow acceptance repair; no fake receipt. Named live
+    landing/locked/observer/game-over records remain absent under player owners.
+
 ## Owed lines, chronology and close
 
 Lanes1/2 emit/provide actual observations; integrator owns NPCThink/full-gather
 gate taps and World cleanup/producer placement. Report their exact signature/
 callsite requirements. All map timing is measured after the landed prerequisites;
-do not claim the planner ran it. Stage-zero/seed and state-ban behavior remain V4c.
+do not claim the planner ran it. Fresh world epoch is V6 1.0 before Load; preserve seed ordering/shared draws
+and state-ban behavior, with epoch evidence per changed record.
 Records this wave writes or breaks belong to this wave. Do not add known_red for
 a later owner without concrete retail evidence and an actual owner decision.
 
 ## Coder rules
 
-Write only the 26 listed files in the worktree the coordinator names, **by
+Write only the 32 listed files in the worktree the coordinator names, **by
 absolute path**. Read files and run read-only tools from
 `E:\dev\elysium-unreal`. Never build, run editor/game/tests/arena, bake or commit;
 never push. No git clean/reset/stash/checkout/worktree/delete. Address at every

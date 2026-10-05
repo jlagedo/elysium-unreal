@@ -3,8 +3,11 @@
 Planner reads, 2026-10-05, main checkout `E:\dev\elysium-unreal`. No source edit,
 build, test, arena or commit. `uv run elysium research kernel --check` passed all
 seven checks before using the ledger; its normal query log is outside the repository.
-V4c baseline is `d0f79574`, not a claim about the installed binary. V4d is editing
-the main checkout now; V5b will also land before this wave. Locate functions anew.
+The original reading used V4c `d0f79574`; today's recorded work-branch commit is
+V4d `a5b58f37` (arena114 pass/1 fail rollcall_vzombie/15 EF/2 UP,
+default169/0, arm1,625/0). Neither is a new binary measurement. V10 runs after
+committed V5b/V6/V7; relocate functions by name at the latest work-branch commit
+when integration starts. The third-sitting rulings supersede old deferrals below.
 
 ## Evidence method and limits
 
@@ -86,9 +89,11 @@ must be separate for the reserved slot.
 
 **Boundary:** initializer `0x101baf80` constructs **64** pool entries and reserves
 one per client; `0x101bab50` refuses an empty free list. Port MaxRetained=128 and
-overflow eviction are inherited R1 allocator work. All this wave's records stay
-below capacity. This is not a new modernization or a claim of whole-CSound parity;
-judge choices are in README. Reserved records must not be age/expiry evicted.
+overflow eviction are repaired here by the pulled-forward P5 allocator slice.
+Pressure/refusal/reuse/reserved survival are required records. Other producers,
+VSound, memory families and investigation programs stay 0002/R1 under README's
+named seams. No new modernization or whole-CSound parity is claimed. Reserved
+records must not be age/expiry evicted.
 
 ## P2. N4 — defect verified, intermittent cause not established
 
@@ -126,8 +131,9 @@ Listen entry/exit, old/new stamp, candidate rejection reason, each cleanup/
 eviction and think/full-gather gates. Diagnose **before** behavior hunks land.
 If neither A nor B fits, retain the trace and recover the measured chain. Never
 relax freshness, add epsilon, bump duration, change seed or reorder world IO to
-make the record green. A measured IO-order divergence needs actual retail engine
-delivery evidence (judge); no such divergence is authorized by this packet.
+make the record green. P7 now verifies the coarse think-before-queue chain. A finer measured
+runtime divergence needs its exact retail delivery evidence before correction;
+equality alone is retail and authorizes only a proved donor-phase restaging.
 
 ## P3. V12 is the reserved player sound, not a footfall insertion
 
@@ -212,7 +218,8 @@ that one record assertion and its prose; retain its later real sight/enemy leg.
 Integration additionally probes actual child FullInvestigate=0 and alert before/
 after the hearing so baked-data provenance or another sound cannot masquerade as
 this proof. If deployed row differs from the two read BSPs, record precise data
-path/value and refer an import/bake to the judge instead of rewriting map content.
+path/value and classify the concrete defect and repair only that evidenced required payload
+within the acceptance prerequisite; no speculative maker/import/re-bake lane.
 
 `vtmb_readers` for class+0x6340 returned **zero** typed and untyped accesses,
 despite the verified untyped ladder read; `vtmb_grep /0x6340/` returned ladder
@@ -239,13 +246,153 @@ installed baked wave was run/read through Unreal. Integrator's diagnostic record
 collects actual D, stamps, gates and evictions before repair and after repair.
 Listing cannot establish installed binary revision, current baked maker receipt,
 map movement/cadence or final deadlines. Record those during integration, not as
-new generic retail-reading jobs. Pool pressure, full landing animation publisher,
-and restore semantics are explicitly outside this wave, with judge alternatives.
+new generic retail-reading jobs. P5 pulls pool pressure/refusal/reuse into this wave; P6 owns the bounded restore
+handoff and transient senses. Full landing publication remains the named 0015
+player layer0 seam.
 
-The read CSoundEnt callback does not establish engine scheduling priority against
-an NPC whose Listen is due at the same cleanup threshold. Integration must log
-the actual port phase and inspect existing thinker ordering; the explicit
-cleanup-before/after-Listen fixture controls pin the callback contract. If that
-priority changes a gameplay verdict, recover/measure retail engine ordering or
-refer it to the judge before claiming equivalence. No arbitrary pre-Listen phase
-is a verified retail fact.
+The callback alone does not establish coincident order. P7 now adds native
+entity-list traversal and tail insertion; integration still must finish the
+soundent's exact fresh/restore placement mapping before claiming boundary parity.
+Two explicit fixture orders supplement, never replace the live dispatch record.
+
+## P5. Pulled-forward CSound allocator/free-list slice (V10.2)
+
+**Verified new listing reads, 2026-10-05**, vampire.dll banners checked; the
+unrelated client.dll body at 0x101baf80 was excluded:
+
+- `Initialize 0x101baf80`: free head soundent+0x450=0, active head+0x454=-1;
+  initialize **64** records, stride **0x2c**, using `0x101b9880`; link free
+  0->1->...->63->-1. Loop over gpGlobals maxClients (+0x14), allocate via
+  `0x101bab50`, write expiry=-1 to each client-reserved slot; failure reports
+  unavailable client slot and returns. Reservations consume the same total pool.
+- `0x101b9880`: owner invalid, origin zero, type/volume/start/expiry zero,
+  occlusion false, next=-1, nextAudible=0 before Initialize constructs free links.
+- `AllocSound 0x101bab50`: if free head==-1, report empty and return -1;
+  otherwise pop that index and prepend it to active. `InsertSound 0x101bac90`
+  writes no stimulus on that failure. No oldest eviction or fallback replacement.
+- `FreeSound 0x101ba9d0`: use actual predecessor, or active head if -1, to unlink
+  that record. Set freed next=old free head and free head=freed index. Cleanup
+  `0x101ba890` captures next before freeing, retaining predecessor only on a
+  surviving row. Head/interior/tail deletion and whole-list iteration all matter.
+- Reserved refresh `0x1016b480` rewrites its row in place; no AllocSound, expiry
+  write or list relocation. Slot identity, allocation generation and observation
+  revisions are separate concepts; instrumentation must distinguish reused rows.
+
+**Port divergence:** `ElysiumGameSound.h::MaxRetained=128` and
+`ElysiumGameSound.cpp::Emit/Evict` oldest overflow eviction are not retail.
+Lane2 replaces exactly this slice and exposes the active list to lane1. Lane3
+proves `sound_pool_pressure`, `sound_pool_reuse`, `sound_pool_reserved_survival`.
+Other producer census/VSound/memory families/investigation programs stay 0002/R1.
+
+## P6. SAVE audit and transient senses (V10.3)
+
+**Verified raw audit:** read-only parse of
+`E:\elysium-work\research\ghidra\types\datamap_records-vampire.dll.json`;
+flags=2 is SAVE. Corpus typed fields corroborate these rows but omit some handle
+rows, so the raw audit supplies serialization evidence:
+
+| class / offset | field / type / policy |
+|---|---|
+| CSoundEnt +0x450/+0x454/+0x458/+0x460 | free head, active head, last-active count, debug overlays: INT SAVE |
+| CSoundEnt +0x464 | embedded CSound[64], stride0x2c, SAVE |
+| CSound +0/+4/+8 | owner EHANDLE, type INT, volume INT: SAVE |
+| CSound +0xc/+0x10 | start/expiry: TIME SAVE, use V6 audited bases/sentinel policy |
+| CSound +0x18/+0x1c/+0x20 | next INT, nextAudible INT, origin VECTOR: SAVE |
+| CSound +0x14 | occlusion byte has no raw SAVE row; do not invent a datamap flag |
+| CBasePlayer +0x2130 | m_iTargetVolume INT SAVE; current volume lives in CSound +8 |
+| CAI_Senses +0x10/+0x80 | look distance FLOAT SAVE, can-perform BOOL SAVE |
+| CAI_Senses +0x84 | last-listen has **no SAVE row**, not TIME |
+
+**Verified constructor/restore listing:** `CAI_BaseNPC` senses factory slot425
+`0x1027cc10` constructs fresh senses and binds owner; assembly **0x1027ccda**
+explicitly writes last-listen+0x84=0. `CAI_BaseNPC::Restore 0x1027c160` reads its
+extended header, delegates combat restore and restores motor/move-shoot state;
+`OnRestore 0x1027bf50` repairs schedule/cine/navigation and delegates combat
+OnRestore; neither writes senses+0x84. Read CAI_Senses method closure (8 rows:
+destructor/closest/Listen/PerformSensing and thunks), with no senses restore
+method. This evidence covers the transient stamp, not every sensory-memory word.
+`CEntitySaveRestoreBlockHandler 0x101a2e40` constructs entities in its first
+pass before field application in its second pass (P7); preserve that fence.
+
+**Port consequence:** `ElysiumNpcSenses.cpp::Serialize` currently archives
+LastListenTime and `OnPostRestore` advances a serial cursor to the live head.
+Lane1 removes saved-listen, restores only audited saved senses fields and
+reconstructs transient hearing/pass state; active Listen ignores serial cursor.
+Lane2 supplies pool capture/apply/owner-fixup/client-bind APIs and player target/
+current volume. Integrator extends landed V6 `Freeze/ApplySnapshot` and common
+codec: preserve heads/links, bind owners after identity construction, audit
+callback/due state and TIME/sentinel policies; no restart or extra reservation
+at apply. Host revision/observer metadata is not a new retail SAVE field.
+
+**Acceptance:** `sound_save_finite` and `sound_save_reserved` use actual production
+codec/storage/common applier, observe pool/client/volumes and lastListen=0 at
+apply fence before first Listen/PostThink, then observe real continuation.
+A local capture/apply fixture alone cannot close the save wire. Full landing
+publisher is `PlayerLayer0LandingState` -> 0015 player layer0; unknown game-over/
+locked/observer sources are `PlayerPostThinkGameOver/Locked/Observer` -> player
+story, with corresponding live records absent, not claimed implemented.
+
+## P7. Think-before-queue and soundent placement (V10.1/V10.4)
+
+**Verified new listing reads**, vampire.dll only:
+
+- `CServerGameDLL::GameFrame 0x1011abc0` calls
+  `Physics_RunThinkFunctions 0x1003bdd0` before
+  `CEventQueue::ServiceEvents 0x100cfac0`. The old packet's coarse-order
+  uncertainty is superseded; `ElysiumEntityWorld.cpp::Tick` already has
+  `RunThinks` then `ServiceEvents`, and runner `FireDueActions` queues donor IO.
+- Simulating `0x1003bdd0` walks `NextEnt 0x100f7060`, dispatches through
+  `0x1003bad0`, restores the same frame curtime before each entity and after the
+  pass. NextEnt follows linked list head/next with handle serial checks; it
+  neither sorts by deadline nor assigns sound cleanup a global priority.
+- `AddEntityAtSlot 0x100f9fc0` inserts at the native list **tail**, updating
+  previous tail.next/new.prev/new.next=-1 (native ushort sentinel0xffff), head
+  if empty, and slot-to-link mapping. Native iteration order is insertion
+  order, not a bare numeric slot sort after deletion/restore.
+- `CWorld::Precache 0x1023c020` creates `soundent` through CBaseEntity::Create;
+  `CSoundEnt::Spawn 0x101ba6f0` initializes pool and nextThink=now+1. Callback
+  `0x101ba890` rearms now+0.3 and prunes finite expiry+4<=now, sentinel excluded.
+- `CEntitySaveRestoreBlockHandler 0x101a2e40`: first pass walks saved table in
+  order, creates/restores class identities (world is distinguished; client slots
+  have a separate creation branch); second pass applies fields/calls lifecycle.
+  This establishes a construction-before-fields seam, not a blanket promise
+  that every world precache-generated helper keeps its old numeric index.
+
+**Bounded remaining mapping gate:** before implementing/crediting boundary
+parity, integrator follows soundent fresh world/map creation through registration,
+and restore factory/world Precache interaction through the common applier. Record
+which soundent survives, its stable identity/list predecessor/successor, native
+creation/restore position and port counterpart. Avoid duplicate soundent on
+restore. If a remaining edge is unread, read that edge before choosing policy.
+The existing port `RunThinks` scans `EntityList` indices; append behavior alone
+does not prove soundent placement matches both native paths. Use existing
+entity-think sequence with this bounded mapping, not a general scheduler rewrite
+or first/last globally privileged timer. Put oracle lines in lane1's `senses.md`;
+integrator records concrete world mapping in its close.
+
+**Acceptance:** keep explicit cleanup-before/after Listen fixture controls, add
+real-world `sound_cleanup_coincident` (actual production dispatch order and
+expiry+4 equality disposition), including restored placement observation. A
+fixture-only ordering claim cannot close this wire. Equal insert/old-listen is
+retail strict-freshness rejection; only prove/restage a record-phase error with
+a genuinely later real delivery and retain its equal-time negative. Finer
+runtime differences require their exact retail chain; no epsilon, timestamp
+invention, seed change or blanket IO reorder.
+
+## P8. Final standing Clock/N4 application
+
+Clock ruling: fresh map/stage1.0 before entity initialization (engine assembly
+0x200f5bb4..0x200f5bc4); revisit frozen map time, explicit load saved header time
+(engine0x200975f0). This supersedes all preserve-zero wording. Re-measure old
+epoch-tuned records alone/after another with unchanged predicates/draw order/
+behavioral bounds; unexplained reds block acceptance.
+
+N4 may close without reproducing the historical intermittent **only** on a
+verified contract plus both real donor disposition traces in solo, after
+control_sequence and reverse donor order, green lifetime/freshness/order controls
+and unchanged out-of-range, all on final binary/V6 epoch. Prove actual fresh
+stimulus reaches delayed condition/output/program and no unclassified rejection
+remains. Diagnostic green supplies observation coverage only. Retain old trace
+and retail evidence for any phase restaging; remove known_red only at that gate.
+State historical cause unproved unless causal evidence exists; never assert
+expiry caused the intermittent. An unexplained miss keeps N4 open.

@@ -1,6 +1,17 @@
 # Brief V10-1 — Listen freshness, active traversal and observation
 
-Read AGENTS.md, README and packets-V10 P1/P2 first. Base is landed V4c+V4d+V5b,
+**Start fence:** V10 runs after committed V5b, V6 and V7. Its lanes share
+`ElysiumNpcSenses.*`, `ElysiumEntityWorld.cpp`, `ElysiumPlayer.h` and arena
+scenario files with V6/V7. Relocate functions by name on the committed code of
+all preceding waves; never replace a landed file with the planner snapshot.
+Fresh stages use V6's **1.0 before Load/entity initialization**; revisits use the
+map's frozen clock and explicit load its saved clock. Preserve seed/reset order,
+shared draws, state-ban rules and original behavioral bounds. Re-measure old
+zero-tuned records alone and after another; change only proved epoch/staging
+assumptions with per-record evidence, never replay RNG draws or widen windows.
+
+
+Read AGENTS.md, README and packets-V10 P1/P2 first. Base is the committed prerequisite waves through V7,
 not a whole-file copy from the planner snapshot. The coordinator names your worktree.
 Find functions by name; all sites below are under repository root.
 
@@ -11,7 +22,7 @@ Find functions by name; all sites below are under repository root.
 - `Source/ElysiumUE/Private/Tests/ElysiumNpcSensesTests.cpp`
 - `docs/vtmb/npc-ai/senses.md`
 
-A∩B=A∩C=∅; this lane has no V4d/V5b coder-manifest overlap. World, think and
+A∩B=A∩C=∅; A has 4 files, B 9, C 32: union 45. Earlier-wave overlaps are serialized by the start fence. World, think and
 condition-gather taps outside these files are exact integrator owed lines.
 
 ## Numbered jobs
@@ -42,9 +53,9 @@ condition-gather taps outside these files are exact integrator owed lines.
    Do not invoke QueryHearSound twice, or draw during admission. LastListenTime
    is stamped after OnListened work even with interest0 or no active record.
    Preserve the sensing-disabled gate: no stamp when Listen never ran.
-   Existing SoundCursor/StartSoundCursorAtHead may remain for API/archive
-   compatibility until V6, but must not limit ordinary Listen's active scan.
-   Do not change initial/reset/restore words or serialize the active list.
+   Existing cursor APIs may serve unrelated revision consumers but never limit
+   Listen. Job6 owns transient construction/restore; no save compatibility is
+   required and last-listen is not a TIME field.
 
 3. `ElysiumNpcSenses.cpp::TickHearing`, retail **0x1026a5e0 / 0x1026a8a0 /
    0x102cc6c0 / 0x102cc590**: retain existing exact-type mapping, memory selection,
@@ -75,8 +86,24 @@ condition-gather taps outside these files are exact integrator owed lines.
    no-expiry predicate, strict freshness, cleanup equality/grace/recurrence,
    allocation/listen ordering and diagnostic distinction. State N4 cause as
    unmeasured until integration evidence exists. Do not overwrite unrelated
-   recovery or claim pool-capacity/other-producer parity. Oracle is retail facts;
+   recovery or claim other-producer parity. Add P5 allocator facts supplied by lane2
+   at 0x101baf80/0x101bab50/0x101ba9d0 to this owned oracle; pool parity needs
+   the pressure/reuse/reserved-survival records, not ordinary hearing alone. Oracle is retail facts;
    final port/run narrative belongs in triage/commit, not a speculative oracle.
+
+6. **V10.3 transient restore**, `ElysiumNpcSenses.h` defaults and
+   `ElysiumNpcSenses.cpp::Serialize/OnPostRestore/StartSoundCursorAtHead`,
+   **0x1027cc10 (asm 0x1027ccda) / 0x1027c160 / 0x1027bf50** and P6 raw
+   `CAI_Senses` datamap: construct last-listen at 0; do not archive/rebase it.
+   Restore saved look-distance and sense-enable words, rebuild transient audible/
+   pass caches from the construction/restore chain, and keep already landed saved
+   memory/delayed words intact. No restore override read writes +0x84. Clear only
+   demonstrated transient state; a live-head cursor must not suppress restored
+   active stimuli. Add owned transaction tests for first Listen after apply.
+   **Proof:** lane3 `sound_save_finite` and `sound_save_reserved` capture lastListen=0
+   at the apply fence before first Listen, then actual admission/output, including
+   finite sound beyond expiry but inside grace and the bound reserved row. Extend
+   `senses.md` with P6 field types/chain and P7 ordering, not a saved-listen claim.
 
 ## Dependencies and exact owed lines
 
@@ -93,7 +120,8 @@ Agree names by messages/report; never edit their files. Expected integrator line
   to Conditions19PerformSensing. No cadence or gate change is authorized.
 - If old `ElysiumFootstepSenseTests.cpp` assertions expect expired PLAYER loss,
   supply exact assertion replacements justified by the reserved-slot contract.
-  Do not silently remove those tests or restore tests belonging to V6.
+  Do not silently remove those tests; preserve landed V6 restore coverage while
+  updating this wave's transient-senses contract in the owned tests.
 
 N4 diagnostic excludes deliberate timestamp/sense fixtures. If it observes
 equality, retail also rejects it: neither adding grace nor changing freshness

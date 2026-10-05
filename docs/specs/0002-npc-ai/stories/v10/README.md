@@ -1,14 +1,17 @@
 # V10 + V12 — sound lifetime, then the reserved player stimulus
 
-Final planner cut, 2026-10-05. Read AGENTS.md and [packets-V10.md](packets-V10.md).
-This wave covers **V10 then V12**. It follows the committed V4c `d0f79574` and the
-forthcoming V4d/V5b integrations. Planning writes only these six new Markdown
-files in `E:\elysium-work\worktrees\coord`; no implementation or validation run
-has been made. Coordinator names implementation worktrees and integration branch.
+Judge-applied planner cut, 2026-10-05. Read AGENTS.md,
+[packets-V10.md](packets-V10.md) and the final
+[judge's third sitting](../v1/judge-third-sitting.md). This wave covers **V10 then
+V12**, after committed **V5b -> V6 -> V7**. Planner edits only the existing six
+Markdown files under `E:\elysium-work\worktrees\coord`; no source edit, build,
+test or commit. Implementation worktrees/integration branch are coordinator-named.
 
-V4c recorded default 169/0, arm 1624/0, arena 113 pass / 1 fail / 16 expected-fail /
-2 unexpected-pass of 132. Both N4 intermittents remain UP. Re-establish provenance
-from the landed V4d/V5b commits when integrating; do not use an assumed old binary.
+Integrator's baseline is the **latest commit of the work branch when it starts**,
+including V5b/V6/V7. Today that is **`a5b58f37` (V4d)**: arena **114 pass / 1 fail
+(`rollcall_vzombie`) / 15 expected-fail / 2 unexpected-pass**; default **169/0**;
+arm **1,625/0**. These are historical recorded results, not a new measurement.
+V5b lands before V10; capture subsequent prerequisite commits/results at start.
 
 ## Order and deliverable
 
@@ -21,11 +24,15 @@ from the landed V4d/V5b commits when integrating; do not use an assumed old bina
    removal, or neither caused a miss. A pass alone does not prove historical cause.
 2. V10 corrections: no listener expiry predicate; active-list access uses timestamp
    freshness; cleanup at +1 initially, then current+0.3, finite expiry+4 <=now,
-   sentinel excluded, whole-list pruning, no insertion-age cutoff. Preserve the
+   sentinel excluded, whole-list pruning, no insertion-age cutoff. Pull forward
+   the 64-slot allocator/free-list/refusal slice (P5), preserving client reservations.
+   Preserve the
    actual QueryHearSound, list ordering, delayed-condition/RNG/output chain.
 3. V12 corrections: one in-place reserved type-4 record, expiry -1, including
    silent frames; producer in existing post-move PostThink tail each frame;
-   retained Jump button and integer per-frame decay. No animation-event AI insert.
+   retained Jump button and integer per-frame decay; save/rebind new pool/list/
+   player-volume state through V6's common applier, with transient last-listen
+   reconstructed at 0 (P6). No animation-event AI insert.
    Correct tutorial's first heard-player program to 0x4c: Q-V3bf1 is settled.
 4. Compile final sources, default tests, records by name (loop freely), arm,
    kernel check, final full arena once; record all moved verdicts and commit once.
@@ -35,8 +42,9 @@ No new modernization is authorized. Equal-time freshness is retail, not an expir
 bug. If diagnostics show equal-time loss, do not change `<` into `<=`, reorder IO,
 add epsilon or lengthen the sound. Establish whether the record deliberately
 collides with retail freshness or a real port delivery divergence exists. Correct
-only a proven record error with evidence; an unknown engine-order issue goes to
-the judge and prevents an unearned N4 closure.
+only a proven record error with evidence. Think-before-queue is recovered
+(P7); a finer measured discrepancy requires its exact retail chain before a
+runtime correction, and any unexplained miss keeps N4 open.
 
 ## Three coder manifests
 
@@ -48,7 +56,7 @@ the coordinator names. `S` below means `Source/ElysiumUE/Private/Substrate/`,
 |---|---|
 | V10-1 listener | `S/ElysiumNpcSenses.cpp`; `S/ElysiumNpcSenses.h`; `T/ElysiumNpcSensesTests.cpp`; `docs/vtmb/npc-ai/senses.md` |
 | V10-2 lifetime/player | `S/ElysiumGameSound.cpp`; `S/ElysiumGameSound.h`; `S/ElysiumPlayerEntity.cpp`; `S/ElysiumFootsteps.cpp`; `S/ElysiumFootsteps.h`; `Source/ElysiumUE/Public/ElysiumPlayer.h`; `T/ElysiumGameSoundTests.cpp`; `T/ElysiumPlayerFootstepTests.cpp`; `docs/vtmb/footsteps.md` |
-| V10-3 harness/records | `D/ElysiumArenaScenario.h`; `D/ElysiumArenaScenario.cpp`; `D/ElysiumArenaScenarioRunner.h`; `D/ElysiumArenaScenarioRunner.cpp`; new `D/ElysiumArenaSoundFixtures.h`; new `D/ElysiumArenaSoundFixtures.cpp`; `Arena/README.md`; `pipeline/tests/test_arena_suite.py`; the 18 JSON files enumerated below |
+| V10-3 harness/records | `D/ElysiumArenaScenario.h`; `D/ElysiumArenaScenario.cpp`; `D/ElysiumArenaScenarioRunner.h`; `D/ElysiumArenaScenarioRunner.cpp`; new `D/ElysiumArenaSoundFixtures.h`; new `D/ElysiumArenaSoundFixtures.cpp`; `Arena/README.md`; `pipeline/tests/test_arena_suite.py`; the 24 JSON files enumerated below |
 
 Lane 3 JSON manifest, all under `Arena/scenarios/`:
 
@@ -61,34 +69,55 @@ Lane 3 JSON manifest, all under `Arena/scenarios/`:
   `perception/sound_player_reserved.json`, `perception/sound_player_modes.json`,
   `perception/sound_player_decay.json`, `perception/sound_player_gates.json`,
   `perception/footstep_events_no_ai.json`, `world/map_tutorial_hearing_walk_radius.json`,
-  `world/map_tutorial_hearing_sneak_radius.json`.
+  `world/map_tutorial_hearing_sneak_radius.json`,
+  `perception/sound_pool_pressure.json`,
+  `perception/sound_pool_reuse.json`,
+  `perception/sound_pool_reserved_survival.json`,
+  `perception/sound_save_finite.json`,
+  `perception/sound_save_reserved.json`,
+  `perception/sound_cleanup_coincident.json`.
 
-**Disjointness:** A has 4 files, B 9, C 26 (8 harness/schema files +18 records).
-A∩B=A∩C=B∩C=∅, union size **39**. Dependencies are calls/owed lines, never
+**Disjointness:** A has 4 files, B 9, C 32 (8 harness/schema files +24 records).
+Literal path sets give A∩B=A∩C=B∩C=∅; 4+9+32=**45 unique files**. Dependencies are calls/owed lines, never
 cross-lane edits. Each coder brief repeats the full manifest and numbered jobs.
 
 Integrator alone owns exact owed lines in `S/ElysiumEntityWorld.cpp`,
 `Source/ElysiumUE/Public/ElysiumEntityWorld.h`, `S/ElysiumNpcThink.cpp`,
 `S/ElysiumNpcBaseConditions2.cpp`, `S/ElysiumNpc.h`, and, if old fixture assertions
 need migration, `T/ElysiumFootstepSenseTests.cpp` / `T/ElysiumFootstepSeamTests.cpp`.
-It owns `docs/vtmb/npc-ai/programs.md`, `docs/specs/0002-npc-ai/stories/v1/triage.md`,
+The bounded V6 handoff additionally owns `S/ElysiumEntityWorldPersistence.cpp`
+(`Freeze/ApplySnapshot`), `Source/ElysiumUE/Public/ElysiumSaveTypes.h` (snapshot
+state), and `Source/ElysiumUE/Private/Session/ElysiumSaveArchive.cpp` (codec),
+only for new sound state/due placement and audited field policy. These are
+integrator-owned, disjoint from all coder paths. It owns `docs/vtmb/npc-ai/programs.md`, `docs/specs/0002-npc-ai/stories/v1/triage.md`,
 spec.md, TRACKER.md, `research/tooling/ghidra/driver/kernel_verdicts.tsv` and generated
 ledger outputs. No unbounded “fix any file” coder authorization. Generated Slots
 are never hand-edited; hand bodies go in SlotBodies, verdict row by integrator.
 
-## Shared files with earlier waves
+## Shared files with earlier waves and start order
 
-No coder-manifest file overlaps V4d's listed three lanes or V5b's three lanes.
-Integrator **does** share `S/ElysiumNpcThink.cpp` with the earlier V4c work,
-`S/ElysiumNpc.h` with V4d (read-only numeric/accessor additions only if needed),
-and triage/spec/TRACKER/kernel_verdicts/generated npc-kernel docs with both prior
-integrations. V5b's integrator owns Npc.cpp, Guard1, Schedule and their tests;
-this wave reads those but does not plan edits. V4d owns TestServices.h,
-WorldServices.h, bodies/map embodiment, lifecycle and corpse records; this wave
-does **not** edit them. The fixture helper implements its own minimal recording
-services instead of changing TestServices.h. Preserve V4c zero stage clock,
-state-establishment ban rule, shared RNG and all V5b interrupt-cache changes.
-Never merge an older whole file over either landed wave.
+**V10 waits for V7**, which itself follows V6; V5b must also have landed. V10's
+lanes/integrator share `ElysiumNpcSenses.*`, `ElysiumEntityWorld.cpp`,
+`ElysiumPlayer.h` and arena scenario files with V6/V7 lanes. All four briefs carry
+this start fence: relocate functions by name in those waves' committed code.
+Preserve their changes, shared RNG/draw order and state-establishment ban rule.
+V6's fresh-map epoch is **1.0 before Load/entity initialization**; revisit uses
+frozen map time and explicit load saved time. Re-measure zero-tuned records
+alone and after another, with evidence for each staging/epoch correction; no
+old-draw injection, seed change or widened behavioral bounds.
+
+**One round, at most three coders.** After the prerequisite fence lanes 1, 2 and
+3 may start together, agreeing API names; only dependency hunks wait for lane2's
+pool/capture API and lane1's observations. The allocator fits lane2's existing
+files; lane3 owns all six additional records. No lanes4–6 or new brief needed.
+Integrate observation hunks first; compile/default/diagnose the donors before
+applying corrections, then serially integrate correction APIs and consumers.
+Integrator alone wires callback placement and the bounded V6 common-applier
+handoff after coder integration. No simultaneous coder/integrator writes.
+
+TestServices.h/WorldServices.h are outside this wave; helpers provide local
+recording services. Keep V4d corpse/body changes and V5b interrupt-cache changes.
+Never merge an older whole file over any landed wave.
 
 ## Arena contracts — all new support belongs to lane 3
 
@@ -102,6 +131,10 @@ or blanket “pass” result. Fixtures publish observed words through sound trac
 events for JSON expect/never/probes to judge; never bake expected answers into
 the helper. Real-map records prove the actual producer/consumer wire. Diagnostic
 record always uses the real staged world, no forced clock or suppressed sensing.
+The two save/load witnesses use landed V6 production transport/common applier;
+the coincident-due witness runs the production world dispatcher. None is a
+sound_fixture callback-order result. Fixed-case controls retain explicit
+substrate stamps separate from the host's V6 fresh epoch.
 
 New trace kinds: `sound_insert`, `sound_refresh`, `sound_cleanup`, `sound_listen`,
 `sound_candidate`, `sound_word`, `sense_gate`. Text identifies `id`, `revision`,
@@ -132,6 +165,12 @@ snapshots without unsupported dynamic probe times.
 | `sound_player_decay` / arena | Fixture post-move frame dt1/60, old240,target0 ->235 (truncated), next230; target180 clamps; increase jumps to240. Expect once-per-frame post-animation sound_refresh and integer words, then zero; never second pre-move refresh/0.1-heartbeat-only update. Preserve observed timestamp and ordinary frame delta. 0x1016be10/0x1016b5ee..0x1016b610. |
 | `sound_player_gates` / arena | Fixture separates FL_NOTARGET (volume0, previous owner/type/time preserved), m_fNoPlayerSound (volume0 but ordinary restamp), missing reserved lookup handling, no live body (named locomotion seam), and dead PostThink gate. Expect exact observed writes/no writes; never free the slot or dispatch post-death refresh. 0x1016b4b8/0x1016b610/0x1016be10. Unknown game-over/locked/observer inputs remain named, not claimed implemented. |
 | `footstep_events_no_ai` / arena | Fixture sends all2050..2053 to real NPC/player handlers, valid source; recording audio proves NPC handler reached. Expect NPC audio-only and player swallowed; never sound_insert/refresh attributable to either event. Do not run PostThink movement in this fixture. 0x10274e30/0x1026d460/0x10178a10. |
+| `sound_pool_pressure` / arena | Real-bus fixed case: 64 total slots, configured single client reserves one; allocate 63 finite, refuse next request with no insert/hear or displaced identity/order. Inspect full/free heads and chain, not just count. P5, 0x101baf80/0x101bab50/0x101bac90. |
+| `sound_pool_reuse` / arena | Real-bus fixed case frees active head/interior/tail, proves exact unlink and free-head LIFO reuse; unchanged survivors and distinct new allocation identity vs revisions. Never oldest eviction. P5, 0x101ba9d0/0x101bab50. |
+| `sound_pool_reserved_survival` / arena | Pressure plus finite cleanup and quiet in-place refresh retain same reserved identity/position, expiry=-1 and zero volume; no capacity bypass or replacement. P5/P3, 0x101baf80/0x101ba890/0x1016b480. |
+| `sound_save_finite` / arena | Real ambient WORLD delivery, checkpoint after actual expiry but inside grace; V6 codec/storage/common applier restores pool/heads/links/TIME/owner/due state. Fence before first Listen has lastListen=0; first real Listen admits, then delayed HEAR_WORLD/OnHearWorld/program chain; no direct member-copy load/forced listen. P6, 0x101a2e40/0x1027ccda/0x1027c160/0x1027bf50/0x1030f940. |
+| `sound_save_reserved` / arena | Actual post-move player producer, production checkpoint/apply, observe at fence before Listen/PostThink: saved target/current INT volume, rebased owner/client binding, same row/list position and sentinel policy; next real frame decays/restamps and hearing continues. Include zero-volume saved row and missing-owner refusal control; no fresh allocation or synthetic publisher. P6/P3, 0x1016b480/0x101a2e40/0x1027ccda. |
+| `sound_cleanup_coincident` / arena | Real-world RunThinks dispatch: soundent cleanup and NPC due together at finite expiry+4 equality. Bounded staging hook sets due inputs, callbacks run through production dispatcher; trace stable identity, native fresh/restore placement, dispatch order and removal/admission. Assert mapped order, never fixture-only priority or privileged timer. Keep explicit before/after callback controls in sound_lifetime_prune. P7, 0x1023c020/0x100f9fc0/0x100f7060/0x1003bdd0/0x101ba890/0x101a2e40. |
 | `map_tutorial_sneak_past` / map:sp_tutorial_1, existing | Keep maker.Spawn, pt1 place leg and later sight/enemy/output. Probe child full_investigate=0 and initial alert0 before walking; expect player sound refresh/type4, OnHearPlayer/HEAR_PLAYER, break INVESTIGATE_SOUND, **exact0x4c first rung**, then original SEE_PLAYER/NEW_ENEMY/OnFoundPlayer. Never SEE_PLAYER/OnFoundPlayer before deliberate sight teleport or death. 0x1034b7b0/0x1016b480/0x102b9060/0x102b8980. Correct known_red/prose, not child keys. |
 | `map_tutorial_hearing_walk_radius` / map:sp_tutorial_1 | Same real maker/place setup; after at_place+3 walk from [-1280,1000,-96] toward [-1280,747,-96], behind pt1. Standing movement crosses240u and remains beyond180u; expect type4 radius240 and OnHearPlayer/HEAR_PLAYER/0x4c. Never SEE_PLAYER/OnFoundPlayer in hearing window. Probe actual eye-to-sound distance in (180,240] Source units; correct geometry if trace disproves seats, not radius. 0x1016b480/0x1030f7b0. |
 | `map_tutorial_hearing_sneak_radius` / map:sp_tutorial_1 | Same path, crouch before movement, settle old volume to0 before walk. Expect crouched real sample, sneak180 refresh and completed walk; never HEAR_PLAYER/OnHearPlayer/SEE_PLAYER/OnFoundPlayer on path and through reaction tail (>=1.5s). All points stay >180u. Probe actual range and crouch; no light-based sound attenuation. 0x1016b480/0x1030f7b0, table180. |
@@ -146,37 +185,39 @@ must also run after `control_sequence` in the **same boot**. Three N4 acceptance
 orders are solo, after control_sequence, and after interest_mode_never (reverse
 pair for interest). Include hear_world_out_of_range as an unchanged negative.
 
-## For the judge
+## Judge's rulings applied
 
-1. **If N4 is equal-time loss:** retail 0x1030f7b0 requires strict freshness;
-   port RunThinks->ServiceEvents makes equality possible. Listing/scouts do not
-   establish the retail engine's queued-input vs NPC frame order at that delivery.
-   Alternatives: prove a record-phase error and stage the real input after a
-   completed Listen with a genuinely later clock; or recover the engine delivery
-   chain before a runtime change. No epsilon, synthetic timestamp or blanket IO
-   reorder. If failure does not reproduce, close only measured lifecycle parity
-   and report historical cause unproved; N4 acceptance still needs three green boots.
-2. **R1 allocator/other producers:** 0x101baf80 has64 entries, 0x101bab50 refuses
-   exhaustion; current128/oldest-eviction is inherited divergence. Alternatives:
-   R1's complete allocator/producer story, or owner explicitly pulls that separate
-   scope forward after its full contract is recovered. This wave stays below
-   pressure and implements no replacement pool policy. Other sound types, memory
-   words and investigation programs remain R1; no producer census lane.
-3. **Player landing/whole PostThink and restore:** the existing landing latch lacks
-   the full retail SetAnimation publisher; unused game-over/locked/observer inputs
-   are named seams. V6 owns save/restore of transient senses/player sound state;
-   no archive migration or fresh restore semantics here. Alternatives: respective
-   player/lifecycle stories supply true fields; fixtures pin already recovered
-   producer arms without claiming those missing sources. Raw Jump has a source now
-   and **is** wired in this wave.
-4. **Coincident sound cleanup/NPC think priority:** 0x101ba890 settles its
-   callback and recurrence, not engine thinker order at the expiry+grace boundary.
-   Alternatives: participate in existing entity think order with recovered retail
-   priority, or measure/recover the exact boundary ordering before a parity claim.
-   Integration traces both phases; fixtures pin both explicit callback orders.
-   No arbitrary pre-Listen timer priority is adopted as a modernization.
-5. **Only if measured content differs:** both retail BSPs author full_investigate0;
-   deployed maker/volume receipt or missing WAV is an import/pipeline issue.
-   Alternatives: correct record provenance to current baked map if legitimate,
-   or explicit content owner/import/re-bake. No content/pipeline/bake coder lane;
-   no expected missing content is currently evidenced.
+Final rulings from the third sitting; no open alternatives remain in this plan.
+
+| item | ruling | where it landed / proof |
+|---|---|---|
+| V10.1 equal-time N4 | do now | V10-1 jobs1–4 retain strict freshness; V10-3 jobs6/13 and integrator jobs3–5 observe both donors first, restage only a proved phase error. P7 think-before-queue; equal-time negative plus genuinely later real delivery. |
+| V10.2 allocator | pull forward | V10-2 job8, P5; V10-3 job10 and three pool records. Manifests include refusal/reuse/reserved survival. |
+| V10.3 producer/restore | do now | V10-2 jobs4/5/9; V10-1 job6; V10-3 job11; integrator job8 bounded V6 handoff. P6 and two real save/load records before first Listen. Landing/other player arms filed below. |
+| V10.4 callback order | do now | V10-2 jobs2/10; V10-3 job12; integrator job7. P7 native-list insertion/restore mapping gates acceptance; explicit order controls plus live coincident equality record. |
+| V10.5 prospective maker/WAV work | refuse | Removed speculative maker/pipeline/re-bake lane and alternatives. V10-3 jobs7/13 and integrator job9 still prove installed child0/alert0, first PLAYER rung0x4c, actual WORLD duration/receipt; evidenced required payload alone permits narrow acceptance repair. |
+| Standing Clock | do now | Start fence in all briefs; README order; integrator jobs1/9. Fresh1.0, frozen revisit, saved load; re-measure alone/after without seed/draw/window compensation. |
+| Standing N4 closure | do now | V10-3 jobs6/13, integrator jobs4/5/10/13; final donor dispositions in three independent orders plus controls and unchanged out-of-range. Diagnostic green alone cannot close; historical cause remains unproved without causal evidence. |
+
+### Filed seams and the integrator's close
+
+- **0002/R1:** named `R1SoundProducer` and `VSound` producer seams; producer
+  census, other sound sources, remaining memory families/investigation programs
+  remain R1. Existing unproduced-sound live witnesses stay absent. V10 closes
+  only this pool/free-list/lifetime/player slice, never all R1.
+- **0015 player layer0:** `PlayerLayer0LandingState`, the true SetAnimation/
+  landing-state publisher. `sound_player_landing_live` stays absent; fixed landing
+  input proves the producer's consumer arm only.
+- **Player story:** `PlayerPostThinkGameOver`, `PlayerPostThinkLocked`,
+  `PlayerPostThinkObserver` named unavailable producer accessors, and
+  `PlayerSoundLocomotion` for unavailable embodiment samples. Keep
+  `sound_player_game_over_live`, `sound_player_locked_live`,
+  `sound_player_observer_live` absent. Bind already landed sources by function
+  name; leave genuinely unavailable accessors answering nothing with retail-field
+  comments, rather than advertising fixtures as live publishers. Unrelated whole
+  PostThink arms remain that owner.
+
+Integrator job13 lists each seam, owning later story, absent record and exact
+implemented boundary. New sound state restoration is **not filed back to V6**:
+its common-applier handoff closes in this wave. Unknown donor rejection, callback
+placement or save-load miss blocks the relevant acceptance, not a filed-red tick.
