@@ -175,6 +175,40 @@ clip's movement never moves the body), `corpse_pedestrian_stays`, `corpse_fades`
   build; stage by explicit path; the verdict table in the commit message (a hook refuses
   `report*.md`); never push.
 
+## The faster wave (the owner, 2026-10-05) — from V4d onward
+
+V4c's integrator ran 2 h 13 min and came out red: an hour of auditing before a 2-minute build that
+failed anyway, coder work done at `high` in one thread of 465 steps, staging and fixture errors found
+in the last run. The wave now runs like this:
+
+1. **Coders edit in a worktree, never in the main checkout**, so the next wave's coders run while the
+   current wave integrates. The worktree is outside the repository:
+   `E:\elysium-work\worktrees\<wave>` on branch `spec-0002/<wave>-coders`. A coder's shell starts in
+   the main checkout (the tools and the corpus MCP work only there) and reads from it; it writes only
+   under the worktree, by absolute path, only its lane's files. A lane whose files the running wave
+   is changing waits for that wave's commit.
+2. **Worktrees are never removed blindly (the owner).** A tree holds things git does not track (baked
+   content, caches, local env). Never `git worktree remove --force`, never `git clean`, never delete a
+   worktree folder by hand, in any tree. A worktree is removed only by plain `git worktree remove`
+   after `git status --porcelain --ignored` in it prints nothing, and otherwise left for the owner.
+   `E:\dev\elysium-unreal-task-life5` is not this spec's: do not touch it.
+   `E:\elysium-work\worktrees\coord` (branch `spec-0002/coord`) is the coordinator's, for doc edits
+   that are then cherry-picked onto the work branch.
+3. **A compile gate before the integrator:** one `medium` worker brings the lanes into the main
+   checkout (the coordinator commits the worktree branch; the gate merges it), applies the lines the
+   coders owe other files, and builds until it compiles. It fixes compile errors only.
+4. **Builds are not capped; runs are.** An incremental build is about 2 minutes: up to six
+   compile-only builds per wave. The full arena and the arm tier run once each at the close.
+5. **Order after the build:** the default tier first (a fixture abort shows at once), then the wave's
+   records, looped freely (a record is JSON: no rebuild), then the arm tier, then the full arena.
+6. **A fresh worker per phase** (gate, measure, fix), each handed the previous one's final message
+   and the briefs, rather than one resumed thread: a thread past a few hundred steps takes minutes
+   per step.
+7. **Every Codex run gets a watcher** that reports on its end, on `turn.failed`, and on 10 minutes
+   without an event: a stalled run sends no notification.
+8. **A wave's own records are the wave's.** An integrator may not hand a record it wrote or broke to
+   a later story; `known_red` on a new record needs the retail reason and a story that really owns it.
+
 ## Sub-agents run on Codex CLI (the owner's ruling, 2026-10-04)
 
 **Load the `codex-cli` skill first** (`~/.claude/skills/codex-cli/SKILL.md`): it is the method —
