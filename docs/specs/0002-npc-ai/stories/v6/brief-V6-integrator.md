@@ -1,8 +1,13 @@
 # V6 integrator — clocks, restoration and executable witnesses
 
-Read main AGENTS.md and all five V6 planning files. V4d/V5b must be landed first. Coordinator
-names the integration branch/worktree and each coder's worktree. The planner wrote docs only;
-do not mistake its source observations or V4c acceptance for the installed binary's baseline.
+Read main AGENTS.md and all five V6 planning files plus the final third-sitting rulings.
+Take the latest commit of the work branch when integration starts; today that is V4d `a5b58f37`:
+arena114 pass / 1 fail (`rollcall_vzombie`) / 15 expected-fail / 2 unexpected-pass; default169/0;
+arm1625/0. V5b lands before V6 integration; refresh commit/results after it lands. These are
+reported baseline results, not planner runs or a claim about the installed binary.
+Start V6-1/V6-3 first before V5b is committed; they share no V5b file. Start V6-2 after V5b
+because ElysiumNpc.cpp/ElysiumWeaponClasses.cpp and Schedule hunks overlap. Coordinator names
+worktrees/branch. Three coders, pairwise disjoint manifests; no second round is required.
 
 ## Compile first, then measurement and acceptance
 
@@ -26,9 +31,9 @@ do not mistake its source observations or V4c acceptance for the installed binar
 6. Update recovery/triage/spec/tracker only with demonstrated acceptance. One commit, explicit
    paths only, never `git add -A`/`.`; verdict table in message, no push. No report*.md files.
 
-Runtime fixes consume existing assets; no content import/re-bake/pipeline lane. Judge items are
-README § For the judge. The inherited Recast and V4d Chaos modernizations stay named; no new
-event/state-order modernization is authorized. M2's list-lifetime inference stays explicit.
+Runtime fixes consume existing assets, with only job6's evidenced bounded serialized payload
+prerequisite if required. Judge items are final in README § Judge's rulings applied. The inherited
+Recast and V4d Chaos modernizations stay named; no new event/state-order modernization is authorized.
 
 ## Integrator-owned seam work
 
@@ -43,6 +48,13 @@ These are serial integration jobs outside the coder manifests, with retail addre
    navigator service; never copy UE path pointers. These files overlap V4d; preserve its rig,
    handoff/capability/terminal ReleaseNpcVisual. Needed declarations in another body/animation
    driver file are exact report-owed edits, staged explicitly; do not rewrite the visual system.
+   For V6.2 also reconstruct existing admitted corpse presentation after logical restore without
+   OnDeath/CreateCorpse replay, impulse, sound restart or a new removal timer. Visually observe
+   body simulation/release across each applicable corpse witness and animation phase across cine/
+   move_shoot; attach admission and before/after visual evidence. Pose equality is filed, not V6.
+   Leave named IElysiumEmbodiment::EmbodimentPoseCapture/EmbodimentPoseApply declarations and
+   adapter hooks in these files, explicitly unavailable until 0017/35 owns pose/velocity storage,
+   with no logic feedback. All six logical origin/callback/deadline/removal records close now.
 2. **Maker admission tap and conditional repair** —0x1034b580/0x101cc9e0/0x1034bc90;
    `Private/Substrate/ElysiumNpcMaker.cpp::CanMakeNPC/MakerThink/DeathNotice`,
    `Private/Map/ElysiumMapActor.cpp::IsNpcMakerSpawnAreaOccupied`,
@@ -71,6 +83,80 @@ These are serial integration jobs outside the coder manifests, with retail addre
    triage N14 AddMarker writer and N9 measurement verdict, TRACKER V6 after acceptance, and
    matching `stories/v1/divergences.md` K1/restart rows. Preserve incoming oracle edits.
 
+6. **V6.1 required payload admission before M3** — vampire0x10090180/0x1032c0e0,
+   animating0x1008df10; `Private/AiInfra/ElysiumInfraActor.cpp::BuildDefKeys`,
+   `Private/Visual/ElysiumEntityBodies.cpp::StartBodyRagdoll` and job1's body/clip continuation
+   adapter; lane3 Stage/ReadProbe/RunAction consumes the ledger. For EVERY required witness
+   record exact classname, model, native sequence, admitted asset path/recipe/revision, rig/
+   physics capability and runtime admission result, distinguishing absent payload from refusal
+   or a missing continuation hook. Repair continuation in job1. A controlled arena record may
+   use an already baked donor only with proof of the identical retail arm; authored
+   map_tutorial_unhide_thug3 and save_cine_possession_resume retain their actors. If the required
+   actor has a proved missing payload, serialize a prerequisite limited to that body's missing
+   body/clip/rig, name exact artifact/recipe, repair it and repeat admission before M3/acceptance.
+   No full-corpus bake, speculative pipeline lane, invented event or enlarged deadline. An
+   unavailable required witness blocks its acceptance; filing a red cannot close this wave.
+   Proof: admission ledger plus map_tutorial_unhide_thug3, cine, move_shoot and all required
+   corpse/hidden records, each running its real native arm.
+
+7. **Filed seams and later owners (V6.2/V6.3/V6.5)** —0x10090180/0x1032c0e0,
+   slot141/0x10323b60/0x1025506f..77, engine0x20097d00; job1 embodiment adapter,
+   `Private/Substrate/ElysiumNpcBaseLifecycle2.cpp::OnRestore`/NpcBase::Serialize and lane2
+   layer/weapon serializers, lane1 SaveArchive/WorldPersistence::ApplySnapshot/ApplyEntityRecord.
+   Confirm named EmbodimentPoseCapture/Apply, ReactionSlot141Source, PresenceListSource and
+   PlayerSingleRoundReloadSource seams. Any needed outside-lane combat declaration belongs to
+   `Public/ElysiumPlayer.h::FElysiumCombatCharacter` and its reader/rebind implementation in
+   `Private/Substrate/ElysiumCombatCharacter.cpp`; a serial integrator edit is limited to
+   access/rebind of already landed state through those named accessors, with no new producer.
+   Assign death impulse/prop_ragdoll to 0014/4, /6, remaining rigs to full-corpus physics rollout,
+   burning presentation to 0014 handoff follow-up, Chaos pose/velocity to 0017/35; reaction to
+   0005/4 reaction follow-up, Presence to 0006/2 Presence-source follow-up, player single-round
+   to named 0008 firearms-controller reload follow-up (no existing numbered 0008 story).
+   Name lane1's source/destination bases/shared identity-fixup-apply hooks; inventory today's
+   carried classes/entities and explicitly list excluded transition classes/global entities.
+   Complete transition-set/global importer goes to 0017/3 and /9. In close, list all nine absent
+   records from the packet's filed-seam list under their owners, with no V6 credit. Existing
+   native animation/event resume, NPC single-round fixture, six logical corpse outcomes and
+   actual current-carrier rebasing remain mandatory V6 acceptance, not filed seams.
+
+8. **V6.4 complete bounded restore prerequisites and N17 consequence** —0x102da0d0/
+   0x102da860/0x102da7c0/0x102da600/0x102d9240/0x102d9320 and0x102f2330/0x102f1dc0;
+   lane2 InterestingPlace::PickSpotFor/Claim/Release/Serialize, Npc::ClaimAmbientSpot,
+   NpcStartTask::StartTask and NpcBaseLifecycle2::RefindPostRestorePath, lane3 ReadProbe/RunAction.
+   Integrate complete raw-capacity/failed-attempt arithmetic, sampled bounds/FIND destination,
+   shipped refusal/exhausted-clearance success, restore goal-type/missing-handle/refind/retry/
+   arrival sequence through live navigator/corner services. No general R2 selector rewrite.
+   Proof: place_marker_reservation capacity0 and all writer controls; visit/activity/invalid-marker
+   continuation; mid_path/invalid_schedule plus actual applier arm tests. Report only a proved
+   N17 closure consequence (record/address/reason) to R2; broad algorithms stay R2.
+
+9. **Standing clock ruling: exhaustive zero-tuned audit** — engine0x200f5bb4..c4/0x200975f0,
+   vampire0x10273390/0x10273ad0; lane1 GameClock::Reset/TimeControl::ResetClock,
+   SessionSubsystem::BeginNewGame, MapActorLifecycle::LoadMap and lane3 ArenaStage::Stage.
+   Assert1.0 before fresh entity initialization/arena Load; revisit selects frozen time and
+   explicit load saved time. Supersede every V7/V10 preserve-zero instruction in the V6 handoff;
+   those later planners/integrators inherit this ruling, not a zero-clock contract. Inventory
+   EVERY zero-tuned record, including existing records beyond the named V6 guards; re-measure
+   each alone and after another record in one boot. Retain original behavioral bounds, retail
+   predicates and shared RNG draw order. Change only proved staging/epoch assumptions with a
+   per-record before/after trace and retail reason; never inject old draws, change seed to keep
+   green, widen windows or hide a miss. Unexplained reds block closure. Proof: session fresh/
+   revisit/saved/rebase plus the exhaustive epoch audit and final suite on the final binary.
+
+10. **M2 retail lifetime confirmation before policy** — engine0x20096010→0x2008f2e0→
+    0x200f55f0; server0x1011a7a0/0x101a2e40→factory0x10136580→worldspawn0x1023ae40→
+    CWorld0x1023b840→0x1028d770→0x1025d880/0x1025d9d0; destruction0x1023ba30→
+    0x1028d800→0x1025d940 (packet §8's direct listing/assembly supplement).
+    `ElysiumEntityWorld.cpp::FElysiumEntityWorld/Teardown/AttackCoordinator`,
+    `ElysiumEntityWorldPersistence.cpp::ApplySnapshot`, `ElysiumSessionSave.cpp::ApplyPayload`;
+    lane3 ReadProbe/RecordEvent supplies measurement. Confirm/record the entire same-map
+    reconstruction path before coding policy: saved world index0 is class-created in the first
+    restore pass, coordinator construction precedes fields, cleanup belongs to CWorld destruction.
+    Read any remaining newly encountered edge before the record or a parity claim. Keep fresh
+    coordinators, no serialized membership or guessed re-admission. Proof:
+    save_restore_melee_coordinator empty at apply, first real melee admission, cap2/idempotency
+    and legitimate later admission/release. Port-only empty lists cannot establish retail lifetime.
+
 ## Harness contract and measurements
 
 Lane3 supplies final JSON spellings; the semantic recipes below are not pretend-ready JSON.
@@ -98,12 +184,10 @@ until witness logs refusal, then normal Kill to clear it and observe next1..2 re
 refusal now, log success/gates and restate the obsolete red with evidence. “Live0” is never proof
 that spawn must succeed; all earlier gate arms remain real.
 
-M2: record port coordinator lists at pre-decode, applied fence and first melee gather. If an
-available retail debugger session can bracket0x1028d770/0x1028d800/0x1025d880/0x1025d940 and
-admission on same-map load, obtain that measurement. Corpus direct/virtual/thunk searches and
-CWorld Precache did not locate exact lifecycle. Without retail observation, retain fresh-world
-empty-list policy as **inferred**, with capacity guard record, and report this limit explicitly.
-Do not serialize guessed membership or demand “same members” in an expectation.
+M2: confirm job10/packet §8's recovered reconstruction chain first, then record coordinator lists
+at pre-decode, applied-before-think and first real melee admission. Empty reconstruction, cap2,
+idempotency and lawful later admission/release are mandatory. Do not serialize guessed membership
+or demand saved-member equality. No optional-debugger or empty-port-list inference fallback.
 
 ## Record recipes — stage, staging, expect and never
 
@@ -145,7 +229,10 @@ delta+newbase and sentinel values. Arm target wait through normal schedule, not 
 math. Expect remaining deadlines fire once; FLOAT attack/layer fields unchanged and named sentinel
 unchanged. Never blanket shift, double rebase, overdue immediate duplicate. TIME0x101a0a80/
 0x101a2a30, transition engine0x20097d00, raw datamap exception table. This controlled arm proves
-the already supported carrier's conversion, not a new full cross-map entity importer.
+the already supported carrier's conversion, not a full transition-set/global importer. Add a
+current-carrier witness/control using EVERY represented carried class at unequal source and
+destination bases, recording actual codec/fixup/applier execution. Inventory exclusions under
+0017/3 and /9; transition_full_carried_roster and transition_global_merge remain absent.
 
 ### Cursor, cine and event continuation
 
@@ -166,8 +253,8 @@ short, capture on its native sequence-start fence before advancing; do not slow 
 Expect accepted+Written save, saved cine/script state/task/native phase equal at apply, clip ends
 and one OnEndSequence/release. Never K1 refusal, second OnBeginSequence after load, repeated
 possession/task-start, premature cleanup or duplicate end. `0x101a7880/0x1027bf50/0x1008df10`.
-This map reaches it; don't replace with an easier synthetic cine if an existing asset is missing
-without sending exact asset evidence to judge. Also retain a mid-WAIT_FOR_SCRIPT arm in the
+This map reaches it; keep the authored cine/actor. A proved missing required payload follows
+job6's bounded prerequisite/re-admission, never an invented sequence or deadline. Retain a mid-WAIT_FOR_SCRIPT arm in the
 Green Room donor script_walk_to_mark via checkpoint in persistence_world_rebind.
 
 **save_restore_move_shoot — arena.** cover_move_shoot donor: save at first active move/shoot
@@ -223,7 +310,7 @@ four-slot failed-box now+2 on clearance failure, and the shipped warning+SUCCESS
 after second failed clearance. Never origin-only destination overwrite, overlap predicate
 “correction”, extra sampling draw or ClaimMarker writing occupant. `0x102d9fa0/0x102da0d0/
 0x102da9e0/0x102d9ed0/0x102da860/0x102da7c0`. Include post-save row equality here. N17 consequence
-goes to judge/R2 bookkeeping; reservation writer is an immediate N14 dependency, not a re-bake.
+goes to R2 bookkeeping only with evidence; reservation writer is an immediate N14 dependency.
 
 ### Corpse save — six callback outcomes
 
@@ -244,9 +331,11 @@ and any new death-relative timer at load. Dead logical origin stays the saved de
 | save_restore_corpse_pedestrian | map:sm_hub_1, pedestrian_female lethal with later fade bit absent | NULL callback remains, corpse exists beyond original+10; never removal/ordinary AI |0x103a38c0|
 
 The map predicates are probed/logged, not assumed from rendered visibility. Exact physics rest
-pose across load is not required: V4d modernization only gets body simulation/release smoke.
-If static-copy creation is an absent later-spec substrate, the half-second original callback
-remains executable; record precisely the absent visual/static copy under judge0014.
+pose across load is filed to0017/35. Existing presentation must reconstruct and be visually
+proved without replaying death, with body simulation/release observed and logical death-spot
+origin/callback/deadline/removal all closed. Static-copy presentation gaps are explicitly named
+under0014/4, /6; they cannot excuse failure of the half-second original callback. The four filed
+visual-only records stay absent; neither pose equality nor burning-look continuity is V6 credit.
 
 ### Hidden, ground and perception
 
@@ -260,8 +349,9 @@ callback as an ordinary think. `0x100a8710/0x100a8990/0x102998c0/0x102c1ec0`.
 thirtyeight/knife, spawnflags4. Player placed on accessible visible floor near converted origin
 (-1725,471,0 Source); ScriptUnhide at2. Probe actual body/capsule/ground and sequence, expect
 SEE_ENEMY→START_COMBAT→range attack. Never AI before unhide, no-body success or indefinite
-FALL_TO_GROUND. `0x100a8990/0x102c1ec0/0x10273ad0/0x1028a2a0`. If baked body absent, judge
-evidence; a ground teleport is not a fix. Relabel existing lifecycle_unhide_fights/animal rollcalls
+FALL_TO_GROUND. `0x100a8990/0x102c1ec0/0x10273ad0/0x1028a2a0`. Job6 records payload/admission;
+an evidenced missing body/clip/rig gets its bounded prerequisite and repeat admission. Keep thug_3;
+no ground teleport, invented event or wider deadline. Relabel lifecycle_unhide_fights/animal rollcalls
 only after their true hidden nevers pass.
 
 **lifecycle_unhide_fall_to_ground — arena.** Existing hidden HumanCombatant donor explicitly at
@@ -348,8 +438,11 @@ Never add alive test. `0x1034b692..737/0x101cc9e0/0x1034bbf0`.
 one coordinator and a high-health/un-killable target; capture after admissions, normal load,
 read fresh-world empty arrays at apply, then ordinary re-admission/retarget/remove. Expect cap2,
 idempotent add/no duplicate handle and legal subsequent melee decisions. Never cap overflow
-or stale-epoch members. `0x1025d880/0x1025db70/0x1025dca0/0x1025ddd0`; explicitly label empty
-restore policy as port inference pending M2. This guards it without declaring retail equality.
+or stale-epoch members. `0x1025d880/0x1025db70/0x1025dca0/0x1025ddd0`. Job10 confirms retail
+same-map world reconstruction before policy/record. Trace empty applied-before-think membership,
+first real ordinary admission, second admission, third cap refusal, idempotent repeated add,
+then legitimate release/retarget/re-admission. No guessed restore admission or optional inference
+qualification; an unread edge must be resolved before coordinator parity.
 
 ### Harness self-tests and suite isolation
 
@@ -385,8 +478,19 @@ records are yours; never transfer a V6 failure to H11 or a vague “asset issue�
 
 Record every new/changed record's stage, seed, measured capture/applied/continuation times,
 alone/paired results and final full-run verdict. Oracle recovery accompanies code; fix spec/C4
-cursor, N14 writer, N9 classification, K1/restart divergence rows. Keep M2's explicit unresolved
-retail lifecycle and README judge owners in final report. No blanket “V6 owes nothing”.
+cursor, N14 writer, N9 classification, K1/restart divergence rows. Close explicitly records:
+V6.1 admission/prerequisite evidence and unavailable-witness blockers; V6.2 existing visual
+reconstruction and named pose seam →0014/4, /6/full-corpus physics/burning handoff and0017/35;
+V6.3 landed words/unavailable producer seams →0005/4,0006/2,named0008 reload follow-ups;
+V6.4 complete prerequisites and only demonstrated N17 consequence →R2; V6.5 actual current-
+carrier coverage/excluded transition classes/global entities →0017/3 and /9; Clock exhaustive
+original-bound alone/paired epoch audit; M2 complete reconstruction citations and actual empty-
+apply/first-melee/cap2/idempotency/admission/release traces. List absent, uncredited records:
+save_restore_chaos_pose, corpse_death_impulse, save_restore_corpse_burning_look,
+save_restore_prop_ragdoll, save_restore_flinch_live, save_restore_presence_live,
+save_restore_player_single_round, transition_full_carried_roster, transition_global_merge.
+All logical corpse and current-carrier/clock records close now; unexplained reds block closure.
+No blanket “V6 owes nothing” or coordinator parity based only on port measurement.
 
 Stage by explicit path on the named integration branch. One commit, no push. Suggested subject:
 `fix(npc): V6 map clocks and coherent lifecycle restore`.

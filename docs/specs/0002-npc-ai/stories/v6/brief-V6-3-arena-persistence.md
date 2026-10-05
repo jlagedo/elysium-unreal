@@ -3,6 +3,8 @@
 Read main AGENTS.md, Arena/README.md, V6 README and packets. Existing console actions reach
 elysium.cmd save/load, but do not fence completion and runner aborts on world replacement.
 Implement the harness dependencies now; records belong to integrator, not this lane.
+Start first with V6-1, before V5b is committed: this manifest intersects no V5b file. V6-2
+starts after V5b and supplies later resume consumers; it is not a prerequisite for coding this lane.
 
 Exhaustive files (under Source/ElysiumUE except the final path):
 
@@ -20,6 +22,13 @@ Arena/README.md
 ```
 
 ## Numbered jobs
+
+Early-start interfaces: consume V6-1's agreed operation-id/result, capture/write/apply/ready
+fences and common codec/storage/applier API; build schema/runner/envelope around those hooks.
+Use a typed field-dispatch boundary backed by existing read-only entity/kernel accessors. If a
+new NPC witness/fixture needs an unavailable V6-2 accessor, report its exact signature and keep
+that field unavailable until integration; do not reference a proposed NPC member or fake success.
+Thus harness coding needs no V6-2 state layout; final NPC resume acceptance waits for all lanes.
 
 1. **Strict transaction schema** — retail engine0x20096010/0x200975f0, server0x1011a620;
    `ElysiumArenaScenario.{h,cpp}::ReadActionName/ReadAction/ReadProbe/ActionName`.
@@ -107,8 +116,9 @@ Arena/README.md
    tap at CanMakeNPC refusal with live/global/gate/box and every enumerated candidate's flags,
    alive/life/bounds. Runner must not sample it a tick later. Distinguish same-name old corpse/new
    child by stable index; end probe may not choose the corpse merely by ambiguous targetname.
-   No alive filter in the consumer, no tracing-induced RNG draw. Coordinator record exposes
-   existing empty-list policy/capacity; do not present it as a verified retail saved list.
+   No alive filter in the consumer, no tracing-induced RNG draw. Coordinator probes expose
+   reconstructed-world membership and real admission/release; job11 supplies the recovered
+   lifetime contract, not a serialized retail saved list.
 
 8. **Harness verification, no coder runs** — same addresses;
    `Tests/ElysiumV6ArenaPersistenceTests.cpp` under Elysium.Arm.V6.ArenaPersistence.
@@ -118,13 +128,47 @@ Arena/README.md
    Document full schema/examples/transport/time bases in Arena/README.md, replace the zero-clock
    paragraph with verified1.0 initialization and ready-time caveat. Keep first NONE edge semantics.
 
+9. **V6.1/V6.4 witness admission and place controls** —0x10090180, place0x102da0d0/
+   0x102da860/0x102da7c0/0x102da600; `ElysiumArenaScenarioRunner.cpp::RunAction/ReadProbe`,
+   `ElysiumArenaStage.cpp::Stage`, schema `ReadProbe`. Consume integrator job6's per-witness
+   class/model/native sequence/asset/recipe/admission ledger before required records close.
+   Only a controlled arena record may substitute an already baked donor proving the identical
+   retail arm; map_tutorial_unhide_thug3 retains authored thug_3 and its bounded prerequisite.
+   Expose raw capacity, used rows AND failed attempts, sampled destination/both bounds/ring,
+   reservation/in-use/release counts at fences. Proof: place_marker_reservation capacity0,
+   enabled/full/occupied/clearance controls; save_restore_interesting_place_visit and
+   save_restore_place_activity continue without duplicate reservation/ClaimMarker/arrival.
+   An unavailable witness blocks acceptance; it cannot be a filed-red completion.
+
+10. **Clock ruling and original-bound remeasurement** — engine0x200f5bb4..c4,
+    vampire0x10273390/0x10273ad0; `ElysiumArenaStage.cpp::Stage`,
+    `ElysiumArenaScenarioRunner.cpp::Tick/RecordEvent/ReadProbe`, Arena/README.md.
+    Reset EVERY freshly rebuilt arena to1.0 before Load, keeping seed/reset order and shared
+    draw order. Revisit/save-load select frozen/saved time through V6-1, never reseed a resumed
+    checkpoint. Supply pre-init/ready/first-think epoch and draw-position traces for integrator
+    job9's complete zero-tuned record audit: every such record alone and after another at
+    original predicates/behavioral bounds, with per-record evidence for staging/epoch edits.
+    V7/V10 preserve-zero instructions are superseded. No compensation draws or loosened windows;
+    unexplained reds block close. Proof: four session clock records plus all audited arena guards.
+
+11. **M2 apply-fence emptiness then live melee admission** — packet §8's world factory/load
+    0x1023ae40/0x1023b840/0x101a2e40 and coordinator0x1025d880/0x1025db70/0x1025dca0/0x1025ddd0;
+    `ElysiumArenaScenarioRunner.cpp::ReadProbe/RecordEvent`, scenario `ReadProbe`.
+    After integrator confirms the complete reconstruction chain, trace fresh empty membership
+    at apply-before-think, then the first ordinary melee admission and subsequent real
+    admission/release. Proof: save_restore_melee_coordinator with three melee actors, cap2,
+    idempotency and no stale epoch/duplicate member. Never restore guessed saved membership,
+    synthesize admission or claim lifetime from port-only emptiness. Any unread reconstruction
+    edge must be read before this record/parity, rather than left to an optional debugger.
+
 ## Owed integration lines
 
 Lane1 supplies context, capture/apply and result fences; lane2 provides state serialization and
 typed witness accessors. Integrator supplies makerattempt/map geometry tap, real phase seek/motor
 adapters, any nonshipping MapActor declarations for stage restoration, and all JSON/oracle/verdict
 edits. No pipeline lane: GI-owned in-record travel/rebind stays in one launch/report. Report any
-actual pipeline-host failure to judge; do not edit arena_suite.py or launch a second process here.
+actual pipeline-host failure to integrator for a concrete prerequisite diagnosis; do not edit
+arena_suite.py or launch a second process here. Third-sitting rulings are final.
 
 The three self-tests are persistence_refused_save, persistence_missing_load and
 persistence_world_rebind; integrator authors them from your schema. The first two expect_fail

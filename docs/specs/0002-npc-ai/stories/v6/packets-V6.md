@@ -1,8 +1,11 @@
 # V6 settling packet — session, clock and lifecycle
 
-Planner read, 2026-10-05. Baseline: V4c `d0f79574`; V4d and V5b must land before implementation.
+Planner read, 2026-10-05; final third-sitting rulings folded in. Integrator baseline is the latest
+work-branch commit at its start, today V4d `a5b58f37`: arena114 pass / 1 fail rollcall_vzombie /
+15 expected-fail / 2 unexpected-pass, default169/0, arm1625/0. V5b lands before integration;
+V6-1/V6-3 start first before that commit, V6-2 waits for it (README interfaces/manifests).
 Main-checkout source observations are provisional: other workers were editing it during this read.
-No build, test, arena, bake, commit or source change was made. Only new V6 briefs were written in
+No build, test, arena, bake, commit or source change was made. Only the six V6 planning files were updated in
 `E:/elysium-work/worktrees/coord`. Addresses below are vampire.dll unless explicitly engine.dll.
 
 ## Evidence method
@@ -125,6 +128,33 @@ UE path pointer or StartTask replay. Existing RefindPostRestorePath always retur
 Recast remains the project's existing navigation modernization; route choice need not reproduce
 Source's node graph, but failure/order/cursor and preserved destination must.
 
+**Third-sitting listing supplement (vampire.dll, directly re-read).** `DoFindPath 0x102f2330`
+clears transient path storage and route node+0x44 before dispatch. Type1 requires the goal
+target handle and refreshes its position via slot217 (+0x364); type2 requires that handle,
+reads remembered-enemy position via memory `0x102dfed0` and passes the NPC slot563 (+0x8cc)
+goal-adjustment hook. Type3 reads NPC path-corner +0x5de8, refuses null, applies its nonzero speed,
+walks NextTarget (+0x2b0) for at most128 corners, builds linked waypoints retaining corner handles,
+applies the same goal-adjustment hook, then terminates the last link. Assembly
+`0x102f24ca..0x102f24e3` marks the terminal bit8/publishes the goal only when count<128;
+at the128 cutoff it skips those final writes but still returns success. Preserve that arm. Types
+4/5/6/9 keep stored goal. Type7 reaches the owning entity+0x98's slot586 (+0x928) target, changes
+goal type to1, then applies goal-adjustment; type8 sets the goal's byte+1 before normal route build.
+Assembly `0x102f2543..0x102f258d` explicitly refuses a missing type7 owner, but dereferences the
+resolved slot586 target without a null guard; do not label that missing target a recovered refusal.
+Name the unavailable owner/target source if its producer is absent; never invent a follower or
+green producer witness. Missing-handle refusal controls cover types1/2/3 and type7's owner.
+Other types refuse. Except the self-built type3 arm, valid arms call the existing
+route builder `0x102f2060`; this is bounded restore dispatch, not general R2 route selection.
+
+`0x102f1dc0` clears transient storage even when memory bit0x20 is set. Initial success clears
+that bit and invokes navigator slot2 (+8, argument0) unless NPC slot529 (+0x844) reports already
+arrived. Initial failure with retry duration navigator+0x40==0 calls failure slot10 (+0x28,
+0xc,1); otherwise sets bit0x20, next retry+0x4c=now+interval+0x44 and timeout+0x48=now+duration.
+While retrying, timeout < now fails (equality does not); next retry < now attempts (equality
+does not). Retry success clears bit0x20 and invokes arrival slot2 unless NPC state is0x6e;
+retry failure advances only next retry. Persist/rebase the saved retry/timeout words and prove
+these strict boundaries and missing-handle controls through the common applier.
+
 Troika OnRestore `0x102998c0`: validate/release two patrol paths; base restore; LAST matching
 place scan `0x102db5e0`; pedestrian link rebind; shoot-at timer reroll; follower/type and combat
 activity rebind; spawn-called; consistency `0x10299a80`; hidden NULL think/FLT_MAX; slot593.
@@ -153,6 +183,14 @@ authorized end state, conditioned on its successful possession round-trip record
 
 **Verified:** PickSpotFor `0x102da0d0` samples bounds, tests existing markers/hull, and calls
 AddMarker `0x102da860` on success (including the shipped exhausted-clearance success arm).
+The directly re-read entry gate is signed raw allocation+0x584 minus row count+0x588 minus
+failed-attempt count+0x58c >=1, then enabled byte+0x57c. Capacity0 refuses; no floor-to1,
+claimant-set substitution or omitted failure debit. The occupied-resample counter is shared
+across both clearance attempts; it increments after drawing each replacement and refuses on
+the ninth replacement (>8), incrementing +0x58c once. Clearance failure instead calls the
+four-slot failed-box writer `0x102d9ed0` (ring index+0x604 wraps when >3, stores now+2 plus
+both absolute vectors, then increments index); it does not increment +0x58c. The warning arm
+also runs on a clear second clearance attempt, then AddMarker succeeds. Preserve draw order.
 AddMarker stores occupant plus TWO absolute bounds vectors in stride0x1c, increments +0x588
 under allocated capacity +0x584. ClaimMarker `0x102da7c0` finds an existing row and increments
 in-use +0x564; it does not write occupant. Release `0x102da600` stores last place on NPC,
@@ -170,7 +208,8 @@ place at global list HEAD. Existing ClaimAmbientSpot simply takes place origin a
 FIND overwrites destination with it; adding only a marker there is insufficient. Port this writer
 chain as N14's prerequisite. min_bounds/max_bounds keys are raw authored bounds, currently
 UNBOUND in KernelBindings; InfraActor::BuildDefKeys preserves AuthoredKeys. No pipeline change
-is established. Missing actually baked keys is a concrete judge/content issue, not guessed bounds.
+is established. Proved missing baked keys/payload follow the integrator's bounded admission
+prerequisite; the final ruling does not permit guessed bounds or a broad import.
 `0x102db5e0` scans the linked list without stopping: last matching place wins.
 `0x10299a80` validates list membership then occupant; either refusal logs and clears +0x62ec.
 `0x102b53d0` validates before release and returns if invalid.
@@ -286,16 +325,63 @@ post-death attempt. If retained corpse occupies it, correct record and triage, t
 via normal Kill and prove second spawn; never add an alive filter. If another arm is wrong,
 fix only that demonstrated retail divergence in integrator-owned Maker/Map geometry sites.
 
-Coordinator constructors `0x1025d880` allocate three cap2 lists; cleanup `0x1025d940` frees them.
-`0x1028d770` invokes constructor and `0x1028d800` cleanup. CWorld Precache0x1023c020 calls
-empty0x1028d7e0, NOT constructor. Corpus callers of constructor/cleanup (including thunks)
-do not establish exactly when same-map retail load resets the lists. No coordinator datamap.
-**Unsettled M2:** same-map retail array lifetime across load. Do not serialize/rebuild membership
-from guesses. Instrument port pre-decode/post-restore/first melee gather; if an accessible retail
-debugger session can measure constructor/destructor/admission at the same-map load, record it.
-Without that retail measurement retain existing fresh-world empty lists as an explicitly
-inferred seam, and do not claim exact list equivalence. Arena guards capacity/idempotency on
-the restored world and records the empty-list policy, not fabricated saved membership.
+**M2 retail reconstruction recovered, not an optional debugger inference.** Direct corpus reads
+confirmed engine `CSaveRestore::vfunc3 0x20096010` → `0x2008f2e0(map,1)` → fresh server spawn
+`0x200f55f0`, then server LevelInit `0x1011a7a0` with restoration enabled. LevelInit prepares
+restore with `0x1011a710`, asks engine slot115 (+0x1cc) for saved-level restore (`0x200975f0`),
+and later runs post-restore `0x1011a620`. Entity handler `0x101a2e40` makes all saved identities
+in its first pass, before the field-restore/Precache-or-Spawn second pass: saved index0 uses
+the class factory as well, and only worldspawn may retain native entity index0. Player indexes
+have their separate player-create arm; that does not turn worldspawn into a reused player.
+
+Class factory `0x10136580` obtains the saved classname export with GetProcAddress and JMP EAX
+(vampire assembly read because its decompilation is flagged damaged; client homonym excluded).
+`worldspawn` factory `0x1023ae40` allocates0x524, calls CWorld constructor `0x1023b840`, and sets
+classname worldspawn. That constructor calls `0x1028d770` → `0x1025d880`, allocating Normal,
+Player and Boss coordinators with cap2; `0x1025d9d0` zeros their list storage/count. CWorld
+destructor `0x1023ba30` calls `0x1028d800` → `0x1025d940`, which destroys/frees all three and
+zeros the globals. Precache `0x1023c020`'s empty `0x1028d7e0` is not their constructor.
+The same-map construction pass therefore starts fresh membership before saved fields apply;
+there is no coordinator membership archive. Fresh lists do not authorize synthesized admissions.
+
+Port mapping: `ElysiumEntityWorld.cpp::FElysiumEntityWorld/Teardown/AttackCoordinator` owns the
+three world-scoped coordinators; `ElysiumEntityWorldPersistence.cpp::ApplySnapshot` and
+`SessionSave.cpp::ApplyPayload` must use a reconstructed world, not an in-place membership copy.
+Integrator verifies/records this complete load→construction→export→world→allocator path before
+coding its policy and checks any newly encountered edge in the listing first. M2's remaining
+measurement is empty membership at the applied-before-think fence, followed by the first REAL
+melee admission, cap2/idempotency and later admission/release. Port-only emptiness is not the
+retail evidence; no parity claim can retain an unread reconstruction edge.
+
+### Filed seams fixed by the third sitting
+
+- **Presentation:** existing body reconstruction remains V6 and must be visually observed without
+  replaying logical death. Named `IElysiumEmbodiment::EmbodimentPoseCapture/EmbodimentPoseApply`
+  seam belongs in the integrator's WorldServices/MapActorEmbodiment/Bodies adapter: unavailable
+  capture/apply until 0017/35 supplies Chaos pose/velocity storage; no feedback into origin,
+  callbacks, deadlines or AI. Death impulse and prop_ragdoll → 0014/4, /6; remaining rigs → full-
+  corpus physics rollout; burning look → 0014 handoff follow-up. save_restore_chaos_pose,
+  corpse_death_impulse, save_restore_corpse_burning_look and save_restore_prop_ragdoll stay absent.
+- **Missing producers:** lane2 archives every already landed flinch/layer/weapon word and rebinds
+  existing references. Name `ReactionSlot141Source` (0005/4 reaction follow-up),
+  `PresenceListSource` (0006/2 Presence-source follow-up) and `PlayerSingleRoundReloadSource`
+  (0008 firearms-controller reload follow-up, no numbered story) as unavailable producer
+  accessors where necessary, explicitly tied to slot141 / `0x10323b60` / `0x1025506f..77`.
+  save_restore_flinch_live, save_restore_presence_live and save_restore_player_single_round remain
+  absent. Ordinary animation/event resume and the real-function NPC single-round fixture stay V6.
+- **Transition roster:** lane1's `SaveBase/RestoreBase`, stable identity fixup and shared applier
+  rebase every entity currently carried. Integrator inventories actual codec/applier execution and
+  excluded transition classes/global entities. Complete transition-set/global merge → 0017/3
+  and /9; transition_full_carried_roster and transition_global_merge remain absent. A map snapshot
+  is not a complete transition import; different-base session_time_rebase proves the real core.
+- **Admission prerequisite:** before M3, integrator records exact class/model/native sequence,
+  asset/recipe and admission per required witness. A controlled donor may change only to an already
+  baked donor proving the identical arm. Authored thug_3 remains; an evidenced missing body/clip/
+  rig gets a serialized bounded prerequisite and repeat admission. Missing continuation is fixed
+  in the presentation adapter. Unavailable required witnesses block acceptance.
+- **Clock:** engine1.0 supersedes V7/V10 preserve-zero instructions. Re-measure every zero-tuned
+  record alone/paired, retaining shared draws, predicates and original behavioral bounds. Correct
+  only evidenced staging/epoch assumptions; no injected RNG draws, widened windows or unexplained red.
 
 ## 9. Entry surfaces and harness — no UI required
 
@@ -342,6 +428,7 @@ pedestrian_female authors use_interesting1/groups1 31; bus_stop is Idle/max_npcs
 staging facts, not proof of baked availability. The Green Room's RebuildStageWorld deliberately
 leaves Defs.MapName empty; its production payload cannot identify that stage as a baked map.
 
-No further retail reading assignment is hidden in a coder lane. M1/M2/M3 and concrete asset
-availability/timing are measurements. New behaviour discovered beyond this packet is reported
+M1/M3, M2's executable admission traces and concrete asset availability/timing are measurements.
+M2's reconstruction chain above must be confirmed before policy/acceptance; any unread edge is
+read before parity, never deferred to a port-only observation. New behaviour beyond this packet is reported
 with address; it is not adopted as an unnamed modernization.

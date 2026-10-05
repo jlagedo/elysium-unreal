@@ -1,6 +1,8 @@
 # Brief V6-2 — coherent NPC resume and lifecycle words
 
-Read main AGENTS.md, V6 README and packets §§2–8. Consume landed V4d/V5b; no coder build/run.
+Read main AGENTS.md, V6 README and packets §§2–8. Start after V5b lands: ElysiumNpc.cpp and
+ElysiumWeaponClasses.cpp overlap it (Schedule files also need its integrator hunks). Consume
+landed V4d/V5b; no coder build/run. V6-1/V6-3 have already started on disjoint files/contracts.
 Your exhaustive list (under Source/ElysiumUE) is exactly README V6-2:
 
 ```text
@@ -66,6 +68,16 @@ Private/Tests/ElysiumV6PlaceRestoreTests.cpp
    Remove RestorePatrolAndAmbient's unconditional bMoveIssued=false for a restored active path.
    Route reconstruction uses existing Recast modernization, with retail semantic/order contract.
    Report any motor API missing to integrator's embodiment adapter; no new navigation algorithm.
+   Apply packet §3's complete restore-reachable dispatch: type1 resolved target, type2 remembered
+   enemy and goal-adjust hook, type3 speed/corner chain (max128; terminal bit8/goal publication
+   only below128, cutoff still succeeds), stored4/5/6/9, owner-target7 and byte-setting8 where
+   represented. Other types and missing type1/2 target, type3 corner or type7 owner refuse;
+   type7's slot586 target is an unguarded native precondition, not an invented refusal arm.
+   Initial success clears retry bit0x20 and uses already-arrived gate; initial failure with
+   duration0 fails, otherwise arms retry+timeout. Strict timeout<now/retry<now and retry success
+   state0x6e arrival suppression survive restore; no broad R2 selector/route rewrite.
+   Proof: save_restore_mid_path and save_restore_invalid_schedule missing-target/path controls,
+   plus Elysium.Arm.V6.NpcRestore dispatch/retry equality/success/failure/arrival arms.
 
 3. **Animation and move/shoot** —0x1008f120/0x10091880/0x10098c80/0x1008df10,
   0x102e8aa0/0x102e8ac0; `ElysiumNpcBase.cpp::Serialize`,
@@ -118,7 +130,14 @@ Private/Tests/ElysiumV6PlaceRestoreTests.cpp
    Save handles/both POSITION bounds, restore/rebase all rows before NPC scan; preserve linked-list
    ordering so LAST match wins. Implement both consistency refusals and early return on invalid
    release. Eliminate post-load Claimants hack as restore authority; no duplicate arrival/left.
-   Keep raw capacity arithmetic and existing constructor semantics. If this required writer
+   Entry gate is signed capacity+0x584 minus used rows+0x588 minus failed attempts+0x58c>=1,
+   followed by enabled+0x57c; remove IsAvailable's capacity floor-to1. Shared occupied counter
+   spans clearance attempts; ninth replacement draw refuses and increments +0x58c exactly once.
+   Clearance failures write the failed-box ring but not that counter; second attempt warns even
+   when clear, then AddMarker succeeds (packet §4). Keep constructor/list semantics. Proof:
+   place_marker_reservation (capacity0/disabled/full/overlap/clearance/clear),
+   save_restore_interesting_place_visit, save_restore_place_activity and restore_place_invalid_marker.
+   If this required writer
    closes N17's zero-capacity symptom, report exact consequence/record to integrator for R2;
    do not silently broaden other defaults. Any absence of a needed POSITION
    transition offset in core is an exact owed line to lane1, not a different local encoding.
@@ -168,6 +187,25 @@ Private/Tests/ElysiumV6PlaceRestoreTests.cpp
    cursor and sentinel/type distinctions, hidden callback and corpse/fade/null state, retained
    single-round flags, marker save/rebase/swap-remove/LAST scan/both refusals. Use real common
    serializer/applier, not mock member copies. RNG state and output counters distinguish replay.
+
+10. **V6.3 landed words and filed producer accessors** — slot141/0x10265ed0,
+    animating restore0x1008df10, combat restore0x10323b60, player gate0x1025506f..77;
+    `ElysiumNpcBase.{h,cpp}::Serialize`, `ElysiumNpcBaseLifecycle2.cpp::OnRestore`,
+    `ElysiumAnimatingOverlaySlotBodies.cpp`/public inl layer state,
+    `ElysiumWeaponClasses.cpp::Serialize`. Persist/restore ALL already landed flinch, layer and
+    weapon words; rebind existing owner/source references after shared fixup, without introducing
+    a producer or replaying its event. Declare named unavailable producer accessors where needed
+    at the lane-owned restore boundary: ReactionSlot141Source → 0005/4 reaction follow-up;
+    PresenceListSource → 0006/2 Presence-source follow-up; PlayerSingleRoundReloadSource →
+    named 0008 firearms-controller reload follow-up (no existing numbered 0008 story owns it).
+    They answer unavailable/nothing for missing producers and identify the retail field/list,
+    never fake a successful reaction/Presence admission/player continuation. An accessor required
+    in an outside-lane combat declaration is an exact owed integrator line. Keep
+    save_restore_flinch_live, save_restore_presence_live and save_restore_player_single_round
+    absent under those owners. Proof now: save_restore_single_round_reload invokes the real
+    V5b WeaponFinishReload/FinishReload NPC early-exit fixture; save_restore_move_shoot and
+    save_cine_possession_resume prove ordinary native animation/event resume. No authored-map
+    stand-in producer; no missing-source excuse to erase existing saved words.
 
 ## Owed lines and acceptance
 

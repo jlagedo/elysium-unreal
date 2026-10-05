@@ -1,6 +1,7 @@
 # Brief V6-1 — map clock, world boundary and save core
 
-Read main AGENTS.md, V6 README and packets §§1–3/5/9. Implement only after V4d/V5b land.
+Read main AGENTS.md, V6 README and packets §§1–3/5/8/9. Start first with V6-3, before V5b
+is committed. This lane shares no file with V5b; V6-2 alone waits for its NPC/weapon hunks.
 The exhaustive twenty-file lane list is README § V6-1; it is reproduced here as grouped paths
 (braces expand to separate files, all under Source/ElysiumUE):
 
@@ -28,6 +29,12 @@ Private/Tests/ElysiumV6ClockPersistenceTests.cpp
 ```
 
 ## Numbered jobs
+
+Early-start assumption: entity Serialize/OnPostRestore and registered accessor metadata are
+existing opaque interfaces. Define the base/type/policy/identity/fence contract in your own files;
+later V6-2 plugs in TIME annotations, saved leaf state and override behavior. No new NPC member,
+WeaponClasses edit or V6-2 helper is required to code this lane. V6-3 consumes operation ids,
+capture/write/apply/ready results and common transport; report exact public signatures early.
 
 1. **Map time selection** — engine0x200f5bb4..c4,0x200975f0, server0x1011a7a0;
    `ElysiumGameClock.h::FElysiumGameClock::Reset`, `ElysiumTimeControl.{h,cpp}::ResetClock`,
@@ -103,6 +110,30 @@ Private/Tests/ElysiumV6ClockPersistenceTests.cpp
    raw FLOAT weapon/layer exception; delayed I/O once; all-entity decode before callbacks;
    later hidden/deadline writes winning; fresh-load old runtime/one-shot absence. Test actual
    capture/apply paths, not a duplicate arithmetic helper. Coders only write tests, integrator runs.
+
+8. **V6.5 carrier boundary and filed importer** — engine0x20097d00, vampire0x101a0a80/
+   0x101a2a30; `ElysiumSaveArchive.{h,cpp}::FElysiumSaveArchive/operator<<`,
+   `ElysiumEntityWorldPersistence.cpp::CaptureState/Freeze/ApplySnapshot/ApplyEntityRecord`,
+   `ElysiumSessionSave.cpp::BuildPayload/ApplyPayload`. Expose explicit source SaveBase and
+   destination RestoreBase, shared stable-identity/fixup and apply hooks for today's carrier.
+   Route EVERY currently carried entity through them, auditing TIME/FLOAT/POSITION/handle types;
+   no local copying or map-snapshot-as-full-import claim. Report actual carried classes and
+   excluded transition/global classes to integrator. Proof: session_time_rebase executes real
+   codec/applier at different bases, with a current-carrier entity as well as wait/queue/memory
+   controls; session_map_load_fresh_world, session_map_clock_revisit and session_load_saved_clock
+   prove clock selection. Full transition-set/global importer is filed to 0017/3 and /9;
+   transition_full_carried_roster and transition_global_merge remain absent under those owners.
+
+9. **M2 reconstructed-world coordinator lifetime** — engine0x20096010→0x2008f2e0,
+   vampire0x1011a7a0/0x101a2e40→0x10136580→0x1023ae40→0x1023b840→0x1028d770→0x1025d880;
+   destructor0x1023ba30→0x1028d800→0x1025d940 (packet §8).
+   `ElysiumEntityWorld.cpp::FElysiumEntityWorld/Teardown/AttackCoordinator`,
+   `ElysiumEntityWorldPersistence.cpp::ApplySnapshot`, `ElysiumSessionSave.cpp::ApplyPayload`.
+   Preserve fresh world-scoped coordinators on load, no serialized membership or guessed
+   re-admission. Integrator confirms the full reconstruction edge before policy coding; report
+   any newly unread edge for listing recovery before parity. V6-3 observes empty lists at apply
+   and real subsequent admission/release, not synthetic restore admission. Proof:
+   save_restore_melee_coordinator, first real melee admit, cap2 and idempotency.
 
 ## Owed integration lines
 
