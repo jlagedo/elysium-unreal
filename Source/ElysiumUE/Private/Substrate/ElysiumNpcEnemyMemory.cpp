@@ -225,7 +225,8 @@ void FElysiumNpcEnemyMemory::Serialize(FElysiumSaveArchive& Ar)
 	for (FElysiumNpcEnemyMemoryRecord& Record : Entries)
 	{
 		Ar << Record.Handle << Record.LastPosition << Record.Anchor << Record.Velocity;
-		Ar << Record.LastSeenTime << Record.LastNavNode << Record.AnchorNavNode;
+		Ar.Time(Record.LastSeenTime); // 0x102df010/0x102df090 AI_EMemory_t +0x28 TIME SAVE
+		Ar << Record.LastNavNode << Record.AnchorNavNode;
 		uint8 PositionOnly = Record.bPositionOnly ? 1 : 0;
 		uint8 Eluded = Record.bEluded ? 1 : 0;
 		Ar << PositionOnly << Eluded;

@@ -83,6 +83,12 @@ public:
 	bool CanSave(FString& OutReason) const;
 	const FElysiumSaveResult& LastSaveResult() const { return SaveResult; }
 	FOnElysiumSaveResult& OnSaveResult() { return SaveResults; }
+	EElysiumPersistencePhase LastPersistencePhase() const { return PersistencePhase; } // exact fence alongside existing result
+	bool IsSaveRestorePending() const { return PendingRestoreOperation != 0; } // ordinary load has no old-level argument, 0x1011a7a0
+	TFunction<void(const FElysiumSavePayload&)> OnPayloadCaptured; // exact immutable capture, 0x200962c0
+	void NotifyRestoreApplied(); // 0x1011a620, before activation/think
+	void NotifyRestoreReady(); // 0x1011aaf0, successful readiness only
+	void NotifyRestoreFailed(const FString& Reason); // readiness failure is terminal
 	bool BuildPayload(FElysiumSavePayload& Out, FString& OutError) const;
 	void ApplyPayload(const FElysiumSavePayload& In);
 	bool Load(const FString& Slot, FString& OutError); // existing route; restore barrier is SG-02
@@ -223,6 +229,7 @@ public:
 	// scratch. A run never does this — a fire-once trigger staying fired is the faithful
 	// behaviour. It exists for the dev entries that replay a map's opening (`elysium.newgame_ttd`).
 	void ClearMapSnapshot(const FString& Map);
+	void SelectMapClock(const FString& Map); // engine 0x200975f0 before any entity initialization
 
 	// First-visit order, for the World block. A map is "visited" the first time it is frozen.
 	const TArray<FString>& VisitedMaps() const { return Visited; }
@@ -305,6 +312,8 @@ private:
 	void RegisterSaveCommands();
 	void PublishSaveResult(const FElysiumSaveResult& Result);
 	FElysiumSaveStorage SaveStorage;
+	EElysiumPersistencePhase PersistencePhase = EElysiumPersistencePhase::None; // supplement, not a second operation machine
+	uint64 PendingRestoreOperation = 0; // uses NextSaveOperation ids and OnSaveResult
 	FElysiumSaveResult SaveResult;
 	FOnElysiumSaveResult SaveResults;
 	uint64 NextSaveOperation = 0;

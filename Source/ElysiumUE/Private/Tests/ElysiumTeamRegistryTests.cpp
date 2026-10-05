@@ -257,10 +257,10 @@ bool FElysiumTeamRestoreNamesTest::RunTest(const FString&)
 	const uint16 OldSymbol = Subject->GetTeamSymbol();
 	FElysiumMapSnapshot Snapshot;
 	Source.World.Freeze(Snapshot);
-	FElysiumNpcWorldFixture Destination(MakeBuilder());
+	FElysiumNpcWorldFixture Destination(MakeBuilder(), true);
 	const uint16 RetainedSymbol = Destination.World.TeamRegistry().FindOrInsert("unrelated_live_team");
 	Destination.World.TeamRegistry().FindOrInsert("another_live_team");
-	TestTrue(TEXT("0x10348890: restore applies after the saved field walk"), Destination.World.ApplySnapshot(Snapshot) > 0);
+	TestTrue(TEXT("0x10348890: restore applies after the saved field walk"), Destination.World.ApplySnapshot(Snapshot, Snapshot.SaveBase) > 0);
 	FElysiumNpc* Restored = Destination.Npc(TEXT("subject"));
 	FElysiumNpc* RestoredWitness = Destination.Npc(TEXT("witness"));
 	if (!TestNotNull(TEXT("restored subject exists"), Restored) || !TestNotNull(TEXT("restored witness exists"), RestoredWitness)) return false;

@@ -1,0 +1,27 @@
+{
+  "name": "persistence_missing_load",
+  "about": "Harness must refuse a genuinely missing slot; 0x20096010 missing-file arm.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 30,
+  "script": [
+    {
+      "t": 0,
+      "do": "load",
+      "slot": "missing_867b6d557a0147c3aaf872a3"
+    }
+  ],
+  "expect": [],
+  "never": [
+    {
+      "kind": "script",
+      "match": "fence=3"
+    },
+    {
+      "kind": "script",
+      "match": "fence=4"
+    }
+  ],
+  "probes": [],
+  "expect_fail": true
+}

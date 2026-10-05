@@ -89,6 +89,8 @@ public:
 	// One step. False once the run is over (`GetResult` is then final).
 	bool Tick();
 	bool IsDone() const { return bDone; }
+	FElysiumEntityWorld* GetCurrentEntityWorld() const { return LiveWorld(); } // GI host rebind, 0x101a2e40
+	friend struct FElysiumV6ArenaPersistenceFixture;
 	// Whether scenario time zero was seen: false for a run that ended because its stage failed or never
 	// activated, whose host must hand the next record a released stage.
 	bool HasStageActivated() const { return bZeroKnown; }
@@ -103,11 +105,15 @@ public:
 private:
 	struct FEvent
 	{
-		double Time = 0.0;                 // the world clock, raw
+		double Time = 0.0;                 // scenario interval coordinate; 0x200975f0
+		double WorldTime = 0.0;
+		uint32 Epoch = 0;
+		FString Map;
 		FElysiumEntityHandle Entity;
 		FString Name;
 		FName Kind;
 		FString Text;
+		bool bPlayer = false; // event-time identity survives retired epochs, 0x101a2e40
 		bool bEstablishingState = false; // first NONE edge; retained in trace/expect, outside state bans
 	};
 
@@ -141,11 +147,19 @@ private:
 	// Clear the sink and the activation binding. Idempotent.
 	void Detach();
 
-	double ScenarioTime(const FEvent& Event) const { return Event.Time - ZeroWorld; }
+	double ScenarioTime(const FEvent& Event) const { return Event.Time; }
+	void StampEvent(FEvent& Event, double WorldTime) const;
+	void OnTransactionFence(const ElysiumArenaStage::FTransactionFence& Fence);
+	bool ReadWitness(const FString& Who, const FString& Field, FElysiumArenaValue& Out, FString& OutError) const;
+	bool CompareCheckpoint(const FElysiumArenaAction& Action, FString& OutError) const;
+	void FailTransaction(const FString& Reason);
+	void Rebind(AElysiumMapActor* Map);
 	bool Matches(const FMatcher& Matcher, const FEvent& Event) const;
 	double ExpectDeadline(int32 Index) const;
 
 	bool ApplyPlayerAtZero(FElysiumEntityWorld& World);
+	bool ApplyInitialWeaponState(FElysiumEntityWorld& World);
+	bool ObserveFinalWeaponState(FElysiumEntityWorld& World);
 	void MatchExpectations();
 	// Where a `never`'s window opens, scenario seconds; false while it waits on an unmet `after` label.
 	bool NeverWindowStart(const FElysiumArenaMatch& Spec, double& OutStart) const;
@@ -185,9 +199,24 @@ private:
 
 	bool bZeroKnown = false;
 	bool bZeroApplied = false;
+	bool bInitialWeaponApplied = false, bFinalWeaponObserved = false;
 	double ZeroWorld = 0.0;
 	double StartWall = 0.0;
 	double LastNow = 0.0;
+	// Segment offset freezes during no-world gaps; world epochs may rewind (0x200975f0).
+	double SegmentElapsed = 0.0, SegmentWorld = 0.0;
+	bool bTransactionPending = false, bTransactionCaptured = false, bTransactionApplied = false;
+	int32 TransactionAction = INDEX_NONE;
+	uint64 TransactionId = 0;
+	double TransactionWall = 0.0;
+	struct FCheckpoint
+	{
+		FString Slot;
+		TMap<FString, FElysiumArenaValue> Captured, Applied;
+		bool bWritten = false, bApplied = false;
+		double SaveBase = 0.0, RestoreBase = 0.0; // TIME comparison context, 0x101a2a30
+	};
+	TMap<FString, FCheckpoint> Checkpoints;
 
 	TArray<FEvent> Events;
 	TSet<FElysiumEntityHandle> EstablishedStateEntities;

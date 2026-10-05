@@ -88,7 +88,7 @@ namespace
 	//      out-blocker over `TraceRetail`: the kept character, or Invalid for the static world (retail's
 	//      `tr.m_pEnt` there is the world entity). The gates above write nothing, as retail's return
 	//      before the trace.
-	bool BaseFVisible(const FElysiumNpc& Looker, const FElysiumEntity& Target, int32 Mask, int32 Probe,
+	bool BaseFVisible(const FElysiumEntity& Looker, const FElysiumEntity& Target, int32 Mask, int32 Probe,
 		FElysiumNpc* CellOwner = nullptr)
 	{
 		if (FElysiumNpcBase::HasNoTargetFlag(Target))                            // 100a7017
@@ -152,6 +152,13 @@ bool FElysiumNpc::BaseEntityFVisible(const FElysiumEntity& SeenTarget, int32 Mas
 	// The `FVisible` fourth argument is not on this declaration (`ElysiumNpcSenses10.inl`), so the
 	// body proper is `BaseFVisible` above and this is its probe-0 form.
 	return BaseFVisible(*this, SeenTarget, Mask, 0);
+}
+
+bool FElysiumNpc::BaseEntityFVisibleFrom(const FElysiumEntity& Looker, const FElysiumEntity& SeenTarget, int32 Mask)
+{
+	// 0x100a6fa0 has a CBaseEntity observer, including CHL2_Player in SUB_PVSRemove0x102696f0.
+	// Share every gate/target-origin/trace arm with Troika's base tail; no camera-frustum substitute.
+	return BaseFVisible(Looker, SeenTarget, Mask, 0);
 }
 
 bool FElysiumNpc::FVisible(FElysiumEntity* SeenTarget, int32 Mask, FElysiumEntity* Blocker, int32 Arg4)

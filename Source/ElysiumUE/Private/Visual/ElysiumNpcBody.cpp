@@ -19,9 +19,12 @@
 #include "ElysiumGroundSurface.h"    // the surfaceprop under the feet, this body's own trace
 #include "ElysiumMapActor.h"
 #include "ElysiumMoveSolve.h"        // ElysiumMove::U -- the Source unit the trace depth is in
+#include "Player/ElysiumCommandBus.h"
+#include "Debug/ElysiumConsole.h"
 #include "ElysiumPawn.h"             // the player's hull, the one toucher `NotifyHit` records
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpcAccess.h"   // the hull words and the snapshot's DebugString()
+#include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcGait.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
@@ -638,6 +641,9 @@ void AElysiumNpcBody::AnimTick(float DeltaSeconds)
 	// with no live kernel keeps the path above.
 	LastMoveIntervalSeconds = DeltaSeconds;
 	ScriptIdealSpeedCm = 0.0f;
+	// 0x1003b190: STEP gravity runs independently of navigation. Reconnect it each motor
+	// frame after a route stop; disabled/frozen bodies stay parked.
+	if (bRuntimeReady && bRequestedEnabled && !bFrozen) ApplyEnabledState();
 	bool bScriptDrove = false;
 	if (bMoveRequested)
 	{
@@ -701,7 +707,24 @@ const FElysiumAnimationSelection& AElysiumNpcBody::GetAnimSelection() const
 FVector AElysiumNpcBody::FeetLocation() const
 {
 	const UCapsuleComponent* Capsule = GetCapsuleComponent();
-	return GetActorLocation() - FVector(0.0f, 0.0f, Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 0.0f);
+	FVector LogicalFeetCm = GetActorLocation() - FVector(0.0f, 0.0f, Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 0.0f);
+	const UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (Movement && Movement->IsMovingOnGround() && Movement->CurrentFloor.IsWalkableFloor())
+	{
+		// Retail STEP origin is the traced hull endpoint (0x102e7880 -> 0x10273b8b),
+		// mins.z0 on the contact plane. UE FloorDist is float while the capsule position is
+		// double: subtracting it leaves a positive residue even on a flat floor, which makes
+		// a flat retail maker box miss. Read the actual support plane at these same feet XY.
+		const FHitResult& FloorHit = Movement->CurrentFloor.HitResult;
+		const FVector& FloorNormal = FloorHit.ImpactNormal;
+		if (FloorNormal.Z > UE_SMALL_NUMBER)
+		{
+			LogicalFeetCm.Z = FloorHit.ImpactPoint.Z
+				- ((LogicalFeetCm.X - FloorHit.ImpactPoint.X) * FloorNormal.X
+					+ (LogicalFeetCm.Y - FloorHit.ImpactPoint.Y) * FloorNormal.Y) / FloorNormal.Z;
+		}
+	}
+	return LogicalFeetCm;
 }
 
 const FElysiumNpc* AElysiumNpcBody::ResolveOwningNpc(const FElysiumEntityWorld*& OutWorld) const
@@ -1563,7 +1586,27 @@ void AElysiumNpcBody::ApplyEnabledState()
 				// with nothing walkable under it keeps `MOVE_None` and honestly reads as not grounded.
 				Movement->SetMovementMode(MOVE_Walking);
 			}
-			Movement->Deactivate();
+			if (Floor.IsWalkableFloor()) Movement->Deactivate();
+			else
+			{
+				// Existing UE motor integration: native STEP physics0x1003a610/0x1003b190
+				// applies gravity without a navigation request. Hidden/NONE, fly and submerged
+				// swim arms remain parked. No ScriptUnhide teleport or selector condition is invented.
+				const FElysiumEntityWorld* GravityWorld = nullptr;
+				const FElysiumNpc* GravityNpc = ResolveOwningNpc(GravityWorld);
+				if (GravityNpc && GravityNpc->GetMoveType() == 4 && (GravityNpc->Flags & 0x400) == 0
+					&& ((GravityNpc->Flags & 0x800) == 0 || GravityNpc->WaterLevel < 1))
+				{
+					FElysiumMoveTuning FallingTuning;
+					FallingTuning.LoadFrom([](const TCHAR* CvarName) { return ElysiumCommandBus::Console().GetCvar(CvarName); });
+					const float Scalar = GravityNpc->Gravity == 0.f ? 1.f : GravityNpc->Gravity; // 0x10035490 zero means1
+					if (GetWorld() && GetWorld()->GetGravityZ() != 0.f) Movement->GravityScale = -FallingTuning.Gravity * Scalar / GetWorld()->GetGravityZ();
+					Movement->bRunPhysicsWithNoController = true;
+					Movement->SetMovementMode(MOVE_Falling);
+					Movement->Activate();
+				}
+				else Movement->Deactivate();
+			}
 		}
 	}
 }

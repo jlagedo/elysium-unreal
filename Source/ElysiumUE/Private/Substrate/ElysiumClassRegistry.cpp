@@ -109,6 +109,7 @@ TArray<FName> FElysiumClassRegistry::SaveFields(const FElysiumClassDesc& Desc) c
 	{
 		for (const TPair<FName, FElysiumFieldAccessor>& F : D->Fields)
 		{
+			// 0x101a0a80: persistence type/policy stays on this accessor, independent of variant type.
 			if (F.Value.bSave && F.Value.Get && F.Value.Set && !Seen.Contains(F.Key))
 			{
 				Seen.Add(F.Key);

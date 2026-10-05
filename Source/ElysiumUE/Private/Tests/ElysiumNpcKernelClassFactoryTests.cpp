@@ -534,6 +534,7 @@ bool FElysiumNpcKernelClassRegistryTest::RunTest(const FString&)
 			return;
 		}
 		const FString Name = Desc.ClassName.ToString();
+		if (Name.StartsWith(TEXT("__"))) return; // arm fixtures are not retail exports
 		if (Desc.bAbstract)
 		{
 			Abstract.Add(Name);

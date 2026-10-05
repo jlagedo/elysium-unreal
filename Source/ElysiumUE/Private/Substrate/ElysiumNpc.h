@@ -87,7 +87,7 @@ public:
 	// still deals in sequence NUMBERS; this table gives every clip the resolver answered for this body
 	// a stable number, so `m_nSequence` / `m_nIdealSequence` compare and `ResetSequence` plays. Row 0
 	// is retail's floor sequence ("even ACT_DISPOSITION missed") and plays nothing. Session state:
-	// a restored body re-resolves its rows on demand.
+	// a restored body reconnects the saved row identities without weighted selection.
 	struct FSequenceRow
 	{
 		FString OwnerStem;    // empty: a clip of this body's own model (the stance set)
@@ -711,7 +711,8 @@ public:
 		// A lookup while admission was pending may have cached "no stance" for this ID.
 		// Invalidate only that metadata result; do not re-arm the mind or replay a schedule.
 		StanceResolvedFor.Reset();
-		FElysiumScriptedCharacter::OnPreparedVisualAttached();
+		FElysiumNpcBase::OnPreparedVisualAttached(); // 0x1008df10 pending restored phase, never ResetSequenceInfo
+		if (IsCorpse()) RestoreDeathBodyState(); // 0x10090180 one handoff per newly attached visual
 	}
 
 	virtual void OnDormancyChanged() override;
@@ -722,6 +723,20 @@ public:
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 
 	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override;
+	virtual void ScriptUnhide() override; // 0x102c1ec0, hand SlotBodies body
+	virtual void RebaseSavedReferences(FElysiumEntityWorld& InWorld) override; // 0x101a2e40
+	virtual bool ReadScriptPhysicalWords(int32& OutSolid, int32& OutMoveType, int32& OutMoveCollide,
+		int32& OutSolidFlags, int32& OutEffects) const override; // 0x100a8710
+	virtual void WriteScriptPhysicalWords(int32 InSolid, int32 InMoveType, int32 InMoveCollide,
+		int32 InSolidFlags, int32 InEffects) override; // 0x100a8990
+	bool EyeFidgetClockSource(double& OutStamp) const { return false; } // +0x657c, 0x102993c0: no landed clock producer
+	void RememberLastInterestingPlace(int32 PlaceIndex) { LastSpotIndex = PlaceIndex; } // 0x102da600 +0x62fc writer
+	int32 LastInterestingPlaceIndex() const { return LastSpotIndex; } // 0x102db4b4 read-only witness
+#if !UE_BUILD_SHIPPING
+	bool StageInvalidMarker(const FString& Control); // narrow malformed +0x62ec setup, then real 0x10299a80/0x102b53d0
+	void StageResolveLoadout() { ResolveLoadout(); } // non-authored ready fixture runs the actual deferred equip prerequisite
+#endif
+	FElysiumEntity* RestoreOwnerTargetSource() const; // 0x102f2543, owner/slot586 boundary
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
@@ -1051,18 +1066,12 @@ protected:
 
 	void SerializePatrolBlock(FElysiumSaveArchive& Ar);
 	void SerializeMakerBlock(FElysiumSaveArchive& Ar);
-	void SerializeMindBlock(FElysiumSaveArchive& Ar);
 
 	// --- OnPostRestore(), retail's slot 130 ----------------------------------------------------
 
-	void RestartRestoredSchedule();
 	void RestorePatrolAndAmbient();
-	void RestoreMindState();
 	void RestoreDisciplineState(FElysiumEntityWorld& InWorld);
 
-	// The mind's saved words, held between the record and `RestoreMindState`, which validates them
-	// against the patrol and ambient state the same hook has just settled.
-	uint8 RestoredMindState = 0;
 
 	// ---------------------------------------------------------------------------------------------
 

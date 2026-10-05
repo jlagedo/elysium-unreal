@@ -1,0 +1,132 @@
+{
+  "name": "session_map_clock_revisit",
+  "about": "Retail map starts at1.0 (engine0x200f5bb4..c4); fresh world, frozen revisit, or saved header base0x200975f0.",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 30,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sp_tutorial_1"
+    },
+    {
+      "after": "fresh_ready",
+      "do": "spawn",
+      "row": {
+        "name": "v6_sink",
+        "classname": "logic_relay",
+        "at": [
+          -4381.5,
+          -1196.34,
+          0
+        ]
+      }
+    },
+    {
+      "after": "fresh_ready",
+      "do": "spawn",
+      "row": {
+        "name": "v6_delayed",
+        "classname": "logic_relay",
+        "at": [
+          -4381.5,
+          -1196.34,
+          0
+        ],
+        "outputs": [
+          {
+            "name": "OnTrigger",
+            "target": "v6_sink",
+            "input": "Trigger",
+            "delay": 4,
+            "times": 1
+          }
+        ]
+      }
+    },
+    {
+      "after": "fresh_ready",
+      "delay": 1,
+      "do": "fire",
+      "target": "v6_delayed",
+      "input": "Trigger"
+    },
+    {
+      "after": "fresh_ready",
+      "delay": 3,
+      "do": "travel",
+      "map": "sm_hub_1"
+    },
+    {
+      "after": "hub_ready",
+      "delay": 6,
+      "do": "travel",
+      "map": "sp_tutorial_1"
+    }
+  ],
+  "expect": [
+    {
+      "label": "fresh_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "hub_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "tutorial_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "remaining_fire",
+      "who": "v6_sink",
+      "kind": "input",
+      "match": "Trigger",
+      "within": 2.2
+    }
+  ],
+  "never": [
+    {
+      "who": "v6_sink",
+      "kind": "input",
+      "match": "Trigger",
+      "after": "hub_ready",
+      "within": 5.9
+    },
+    {
+      "who": "v6_sink",
+      "kind": "input",
+      "match": "Trigger",
+      "after": "tutorial_ready",
+      "within": 3,
+      "at_most": 1
+    }
+  ],
+  "probes": [
+    {
+      "at": "pre_init",
+      "who": "world",
+      "probe": "witness",
+      "field": "clock",
+      "equals": 1.0
+    },
+    {
+      "at": "end",
+      "who": "world",
+      "probe": "witness",
+      "field": "clock",
+      "less": 8
+    }
+  ],
+  "shares_map": true
+}

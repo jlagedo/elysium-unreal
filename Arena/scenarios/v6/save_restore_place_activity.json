@@ -1,0 +1,527 @@
+{
+  "name": "save_restore_place_activity",
+  "about": "Authored hub pedestrian_female and its actually chosen marker; 0x102da0d0/0x102d9240/0x102d9320/0x10299a80 continuation.",
+  "stage": "map:sm_hub_1",
+  "seed": 1,
+  "duration": 65,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sm_hub_1"
+    },
+    {
+      "after": "fresh_ready",
+      "do": "player_teleport",
+      "at": [
+        -5700,
+        5765.44,
+        -284.48
+      ],
+      "face": "pedestrian_female"
+    },
+    {
+      "after": "fresh_ready",
+      "delay": 39,
+      "do": "player_teleport",
+      "at": [
+        -2700,
+        5100,
+        -284.48
+      ],
+      "face": "pedestrian_female"
+    },
+    {
+      "after": "activity",
+      "delay": 0.05,
+      "do": "save",
+      "slot": "save_restore_place_activity",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "pedestrian_female",
+          "field": "task.index"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.status"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.task_started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.failure"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.move_wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.type"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.flags"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.arrival"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.target"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.goal.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.goal.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.goal.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.identity"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.capacity"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.count"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.failed_attempts"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.occupant"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.sequence"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.cycle",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.rate",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.time",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.previous_time",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.last_event",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.finished"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.past_half"
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "save_restore_place_activity",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "pedestrian_female",
+          "field": "task.index"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.status"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.task_started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.failure"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.move_wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.type"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.flags"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.arrival"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.target"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.goal.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.goal.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.goal.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.identity"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.capacity"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.count"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.failed_attempts"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.occupant"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.sequence"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.cycle",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.rate",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.time",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.previous_time",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.last_event",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.finished"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "anim.past_half"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "label": "fresh_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "activity",
+      "who": "pedestrian_female",
+      "kind": "task",
+      "match": "task_do_interest_activity (",
+      "by": 60
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "leave",
+      "who": "pedestrian_female",
+      "kind": "output",
+      "match": "OnInterestingPlaceLeft",
+      "within": 20
+    }
+  ],
+  "never": [
+    {
+      "who": "pedestrian_female",
+      "kind": "death"
+    },
+    {
+      "who": "pedestrian_female",
+      "kind": "taskfail"
+    },
+    {
+      "who": "pedestrian_female",
+      "kind": "output",
+      "match": "OnInterestingPlaceLeft",
+      "at_most": 1
+    }
+  ],
+  "probes": [
+    {
+      "at": 1,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.x",
+      "greater": -100000
+    },
+    {
+      "at": 1,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.y",
+      "greater": -100000
+    },
+    {
+      "at": 1,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.z",
+      "greater": -100000
+    },
+    {
+      "at": 15,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.x",
+      "greater": -100000
+    },
+    {
+      "at": 15,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.y",
+      "greater": -100000
+    },
+    {
+      "at": 15,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.z",
+      "greater": -100000
+    },
+    {
+      "at": 29,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.x",
+      "greater": -100000
+    },
+    {
+      "at": 29,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.y",
+      "greater": -100000
+    },
+    {
+      "at": 29,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.z",
+      "greater": -100000
+    }
+  ],
+  "shares_map": true,
+  "cast": [
+    {
+      "name": "pedestrian_female"
+    }
+  ],
+  "known_red": "0017/35: saved native activity/layer phase has no event-free body seek source (0x1008df10/0x10098c80).",
+  "notes": "Measured20261005T165054.295652Z: authored route reaches task_do_interest_activity49.817 and save admission49.867 names only missing event-free seek0017/35. Earlier30s route budget never reached this arm. Set capture staging limit50.3 from actual route at retail epoch1, not a gameplay deadline; keep transaction/release windows and all predicates. No speed/seed/navigation change. Final pass: keep the final approach in player PVS through fresh_ready+39 teleport to[-2700,5100,-284.48], matching the walking-visit witness. 0x102aa210 continuation is after the untimed WAIT_FOR_MOVEMENT0x10288f46..0x10288f7e; no task/wait/seed override. Measured200357 on final worker build1: still WAIT_FOR_MOVEMENT at50.3, with identical selected goal and no task failure. The native task operand0 has no travel deadline (0x10288f46..0x10288f7e); align the activity arrival observation budget60 with the already measured untimed walking-visit witness, keeping authored wait/continuation bounds unchanged. This is a capture staging budget, not a gameplay timing assertion; record the actual arrival/refusal in proof. Final measurement201116.653266Z: arrival51.717, task_do_interest_activity52.417, capture52.467 reaches exact event-free seek refusal0017/35. Native idle01 sequence1395, female/misc75frames@30fps, cooked meshSK_female_citizen_2, rig1/motor1 admitted. No other admission source is missing."
+}

@@ -603,6 +603,8 @@ bool FElysiumNpcKernelMaintainPlaceReleaseTest::RunTest(const FString&)
 	// The visit `0xff`'s `FIND_INTERESTING_PLACE` (`0x102a1f23`) leaves: the place's claim
 	// (`PickSpotFor 0x102da0d0`, claim 1) and `+0x62ec`.
 	auto Visit = [&N, &Place]() {
+		Place.MarkersAllocated = 1; Place.Markers.SetNum(1); Place.MarkersUsed = 1;
+		Place.Markers[0].Occupant = N.Handle; // 0x102da860 prerequisite before ClaimMarker
 		N.*FMaintainPlaceSlot::Member() = Place.Handle.Index;
 		return Place.Claim(N.Handle);
 	};

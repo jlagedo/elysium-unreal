@@ -1,0 +1,125 @@
+{
+  "name": "lifecycle_unhide_fall_to_ground",
+  "about": "0x10273ad0 full-hull ground drop, or 0x1028a2a0 airborne unhide fall; no invented floor.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 20.0,
+  "player": {
+    "at": [
+      -775,
+      683,
+      0
+    ]
+  },
+  "cast": [
+    {
+      "name": "arena_hidden",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        200,
+        683,
+        100
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_thirtyeight",
+        "player_reaction": "D_HT 5",
+        "hint_groups": "1",
+        "npc_perception": "3",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "1"
+      }
+    }
+  ],
+  "script": [
+    {
+      "t": 0.05,
+      "do": "fire",
+      "target": "v6_player_events",
+      "input": "MakePlayerUnkillable"
+    },
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "arena_hidden",
+      "input": "ScriptUnhide"
+    }
+  ],
+  "expect": [
+    {
+      "label": "unhidden",
+      "who": "arena_hidden",
+      "kind": "input",
+      "match": "ScriptUnhide",
+      "by": 2.5
+    },
+    {
+      "label": "sees",
+      "who": "arena_hidden",
+      "kind": "cond+",
+      "match": "SEE_ENEMY (0x46)",
+      "within": 3.0
+    },
+    {
+      "label": "fights",
+      "who": "arena_hidden",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_START_COMBAT (",
+      "within": 2.0
+    },
+    {
+      "label": "fires",
+      "who": "arena_hidden",
+      "kind": "task",
+      "match": "task_range_attack1 (",
+      "within": 6.0
+    }
+  ],
+  "never": [
+    {
+      "who": "arena_hidden",
+      "kind": "taskfail"
+    },
+    {
+      "who": "arena_hidden",
+      "kind": "death"
+    },
+    {
+      "who": "arena_hidden",
+      "kind": "schedule",
+      "until": 1.9
+    }
+  ],
+  "probes": [
+    {
+      "at": 3,
+      "who": "arena_hidden",
+      "probe": "on_ground",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "arena_hidden",
+      "probe": "alive",
+      "equals": true
+    },
+    {
+      "at": 3.5,
+      "who": "arena_hidden",
+      "probe": "has_condition",
+      "condition": "FLOATING_OFF_GROUND",
+      "equals": false
+    }
+  ],
+  "notes": "V6 close: 0x1003b190 STEP gravity lands by3s after the motor wire. Original far_ne[683,683] ran repeated native backup into the arena wall; at15.150 TASK_STEP_BACK used its real0x102a6924 clearance refusal -> Bad activity0x15 (0x102a697b). Translate controlled actor/player pair483cm west, preserving975cm separation, same floor+100 elevation, spawnflag4, hidden/unhide2 and every bound/never. No gameplay failure is suppressed. The native c4 fake-reload fallback with hint_groups2 necessarily reports no-cover0x8 after six shots (measured18.500). Use the arena existing compatible group1 cover for the full20s no-taskfail guard, and the actual unkillable input for target survival. Full STEP contact wire:0x100b1420 sets/clears FL_ONGROUND with the ground handle; actual motor landing publishes the native bit, so0x10269b30 clears FLOATING_OFF_GROUND. Probe checks the kernel bit as well as the body floor.",
+  "rows": [
+    {
+      "classname": "events_player",
+      "name": "v6_player_events",
+      "at": "start"
+    }
+  ]
+}

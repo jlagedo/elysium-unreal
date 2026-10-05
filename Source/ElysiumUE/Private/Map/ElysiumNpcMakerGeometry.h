@@ -48,6 +48,9 @@ namespace ElysiumNpcMakerGeometry
 	bool IsSpawnAreaOccupied(const FElysiumEntityWorld* EntityWorld, const AActor* PlayerPawn,
 		const FVector& CentreCm, float HalfExtentCm, float FloorZCm);
 
+    FString DescribeSpawnArea(const FElysiumEntityWorld* EntityWorld, const AActor* PlayerPawn,
+        const FVector& CentreCm, float HalfExtentCm, float FloorZCm);
+
 	/** The channel `0x2400b` (`MASK_NPCSOLID_BRUSHONLY`) maps to: whether a brush blocks an NPC. */
 	inline constexpr ECollisionChannel GroundChannel = ECC_Pawn;
 

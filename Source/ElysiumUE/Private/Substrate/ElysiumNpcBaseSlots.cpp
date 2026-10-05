@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 182 generated slot bodies of `FElysiumNpcBase`: 55 carry the retail default story 29c recovered,
-// 88 are defined by hand in the substrate, and 16 are still stubs — 14 29c, 2 29d. 23 are closed
+// 183 generated slot bodies of `FElysiumNpcBase`: 55 carry the retail default story 29c recovered,
+// 88 are defined by hand in the substrate, and 17 are still stubs — 15 29c, 2 29d. 23 are closed
 // (0019/6) and answer the value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -50,6 +50,16 @@ namespace
 //   layer 15, story 29d
 // verdict `mechanism`: the body is `FElysiumNpcBase::Save`, written by hand in the substrate.
 // Declared here, defined there.
+
+// slot 127 0x1027c160 (walked) `int Restore(IRestore&)`
+//   takes `IRestore&`
+//   layer 9, story 29c
+int32 FElysiumNpcBase::Restore(void*)
+{
+	FireKernelBaseSlot(TEXT("CAI_BaseNPC::Restore"), TEXT("0x1027c160"), TEXT("29c"),
+		DebugString());
+	return {};
+}
 
 // slot 128 0x101a6520 (sdk) `bool ShouldSavePhysics()`
 //   layer 0, story 29c
@@ -1298,6 +1308,10 @@ namespace ElysiumNpcKernelShape
 			{ 126, TEXT("0x1027bc60"), TEXT("CAI_BaseNPC"), TEXT("Save"), EElysiumNpcSlotBody::Hand,
 				TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, int32(void*)>::Test(&FElysiumNpcBase::Save),
+				nullptr },
+			{ 127, TEXT("0x1027c160"), TEXT("CAI_BaseNPC"), TEXT("Restore"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpcBase, int32(void*)>::Test(&FElysiumNpcBase::Restore),
 				nullptr },
 			{ 128, TEXT("0x101a6520"), TEXT("CAI_BaseNPC"), TEXT("ShouldSavePhysics"),
 				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, true,

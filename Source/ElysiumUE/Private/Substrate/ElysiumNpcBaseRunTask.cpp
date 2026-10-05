@@ -275,6 +275,7 @@ void FElysiumNpcBase::FadeOutThink()
 	{
 		Alpha -= 7; // 0x10269960
 		NextThink = static_cast<float>(FadeNow + 0.1); // 0x10269960
+		if (World && World->HasAiTraceSink()) EmitAiTrace(TEXT("script"), FString::Printf(TEXT("fade alpha=%d next=%.6f"), Alpha, NextThink)); // actual decrement, not a staged event
 		return;
 	}
 	Alpha = 0; // 0x10269960
@@ -608,6 +609,11 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 	case TaskReload:
 	case TaskReloadNoTurn:
 	{
+		if (World && World->HasAiTraceSink())
+		{
+			EmitAiTrace(TEXT("sequence"), FString::Printf(TEXT("reload sequence=%d label=%s owner=%s finished=%d"),
+				SequenceNumber, *ScheduleIdealActivity.Label, *ScheduleIdealActivity.OwnerStem, IsActivityFinished() ? 1 : 0)); // read-only 0x102890f3
+		}
 		AutoMovement();                                                            // 0x102890f5
 		if (Id != TaskReloadNoTurn)                                                // 0x102890fd
 		{
@@ -626,8 +632,10 @@ int32 FElysiumNpcBase::RunTaskSlot444(void* Task)
 		{
 			WeaponFinishReload(*Weapon);                                           // 0x1028918d / 0x1028919d
 			// same arm: 0x10289194 CALL
+			const bool bHadNoPrimaryAmmo = Cognition.Conditions.Has(EElysiumNpcCond::NoPrimaryAmmo);
 			Cognition.Conditions.Clear(EElysiumNpcCond::NoPrimaryAmmo);            // 0x102891a7
 			Cognition.Conditions.ClearOrdinal(CondNoSecondaryAmmo);                // 0x102891b0
+			if (bHadNoPrimaryAmmo && World && World->HasAiTraceSink()) EmitAiTrace(TEXT("cond-"), TEXT("NO_PRIMARY_AMMO (0x40)")); // actual clear, before completion
 		}
 		TaskComplete(false);                                                       // 0x102891b9 / 0x10289713
 		return 0;

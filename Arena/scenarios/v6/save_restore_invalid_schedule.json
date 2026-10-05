@@ -1,0 +1,117 @@
+{
+  "name": "save_restore_invalid_schedule",
+  "about": "CRC control at a live finite nonzero cursor; normal0x1027bf50/0x1027be60 clears schedule and semantic goal. Missing cine/target/path controls are composed in real applier arm tests.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 20.0,
+  "player": {
+    "at": "start"
+  },
+  "cast": [
+    {
+      "name": "arena_bystander",
+      "classname": "npc_VHumanCombatant",
+      "at": "east",
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "expect": [
+    {
+      "label": "idles",
+      "who": "arena_bystander",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_IDLE_DISPOSITION (",
+      "by": 5.0
+    },
+    {
+      "label": "plays",
+      "who": "arena_bystander",
+      "kind": "sequence",
+      "match": "rate=1",
+      "within": 6.0
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    }
+  ],
+  "probes": [
+    {
+      "at": "applied",
+      "who": "arena_bystander",
+      "probe": "schedule",
+      "equals": "SCHED_NONE"
+    }
+  ],
+  "script": [
+    {
+      "after": "plays",
+      "delay": 0.2,
+      "do": "save",
+      "slot": "save_restore_invalid_schedule",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "arena_bystander",
+          "field": "task.index"
+        },
+        {
+          "who": "arena_bystander",
+          "field": "task.status"
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "corrupt_checkpoint",
+      "checkpoint": "mid",
+      "control": "crc"
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "save_restore_invalid_schedule",
+      "checkpoint": "mid"
+    }
+  ],
+  "never": [
+    {
+      "who": "arena_bystander",
+      "kind": "death"
+    }
+  ]
+}

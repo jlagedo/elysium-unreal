@@ -4,12 +4,17 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/ElysiumArenaScenario.h"
+#include "ElysiumMapPlaces.h"
+#include "ElysiumSaveTypes.h"
+#include "ElysiumSaveStorage.h"
 #include "Debug/ElysiumArenaSpec.h"   // the arena host's room, held by value
 #include "UObject/WeakObjectPtr.h"
 
 class AElysiumMapActor;
 class FElysiumEntityWorld;
 class UWorld;
+class UElysiumSessionSubsystem;
 struct FElysiumArenaAt;
 struct FElysiumArenaFace;
 struct FElysiumArenaRow;
@@ -31,6 +36,18 @@ struct FElysiumEntityDef;
 // and the map is not rebuilt. It seeds the streams and seats the player.
 namespace ElysiumArenaStage
 {
+	// Harness-only fences around retail capture/apply (0x200975f0/0x1011a620).
+	enum class EFence : uint8 { Rebinding, Captured, Written, Applied, Ready, Failed };
+	struct FTransactionFence
+	{
+		uint64 OperationId = 0;
+		EFence Phase = EFence::Failed;
+		TWeakObjectPtr<UWorld> World;
+		TWeakObjectPtr<AElysiumMapActor> Map;
+		FString MapIdentity, Reason;
+	};
+	struct FTransport;
+
 	// Where a record runs.
 	struct FHost
 	{
@@ -41,11 +58,54 @@ namespace ElysiumArenaStage
 		bool bArena = true;
 		ElysiumArena::FSpec Spec;
 		FVector Origin = FVector::ZeroVector;
+		// Shared through the GI runner and lab host, including the original stage provenance.
+		TSharedPtr<FTransport> Transport;
+		TFunction<bool(FElysiumEntityWorld&, const FString&, const FString&, FElysiumArenaValue&, FString&)> ReadWitness;
+		TFunction<bool(FElysiumEntityWorld&, const FElysiumArenaAction&, FString&)> RunFixture;
+		TFunction<bool(FElysiumEntityWorld&, const FElysiumArenaScenario&, FString&)> ValidateWitnessAdmission; // integrator ledger, 0x10090180
 
 		UWorld* GetWorld() const { return World.Get(); }
 		AElysiumMapActor* GetMap() const { return Map.Get(); }
 		FElysiumEntityWorld* GetEntityWorld() const;
 	};
+
+	// Common-codec checkpoint transport; stage identity is never admitted through production Load.
+	struct FTransport : TSharedFromThis<FTransport>
+	{
+		FElysiumEntityDefs Defs;
+		TArray<FElysiumPlaceRow> Network;
+		FVector SeatFeet = FVector::ZeroVector;
+		float SeatYaw = 0.0f;
+		double StageInitialTime = -1.0;
+		int32 StageInitialDraw = 0; // actual before-Load sample, engine 0x200f5bc4
+		FElysiumSaveStorage Storage;
+		TFunction<void(const FTransactionFence&)> Observer;
+		TWeakObjectPtr<UElysiumSessionSubsystem> Session;
+		FDelegateHandle ResultHandle;
+		uint64 OperationId = 0;
+		bool bPending = false, bArena = false, bLoading = false, bAppliedSent = false;
+		bool bHasRestoreBase = false;
+		double RestoreBase = 0.0;
+		FString RestoreBaseSlot;
+		TMap<FString, FString> Corruptions;
+		TFunction<bool(FElysiumMapSnapshot&, const FString&, FString&)> MutateCheckpoint; // header fixture, 0x1027bf50
+		FString ExpectedMap;
+		TWeakObjectPtr<AElysiumMapActor> PendingMap;
+		~FTransport();
+		bool Begin(const FHost& Host, const FElysiumArenaAction& Action,
+			TFunction<void(const FTransactionFence&)> InObserver, FString& OutError);
+		void Poll();
+		void Cancel();
+		void Emit(EFence Phase, AElysiumMapActor* Map, const FString& Reason = FString());
+	};
+	// Called by the nonshipping map adapter immediately after construction, BEFORE Load/apply.
+	// 0x101a2e40/0x1011a620: sink must precede all restoration/activation traces.
+	void NotifyWorldConstructed(AElysiumMapActor* Map);
+	void NotifyWorldApplied(AElysiumMapActor* Map); // fresh Load fence before activation, 0x1011a620
+	void ConfigureHost(FHost& Host);
+	// Integrator installs read-only NPC witness/fixture adapters once; missing source is unavailable.
+	using FHostAdapter = TFunction<void(FHost&)>;
+	void SetHostAdapter(FHostAdapter Adapter);
 
 	// A resolved place: feet in world centimetres and an Unreal-native yaw.
 	struct FPlace

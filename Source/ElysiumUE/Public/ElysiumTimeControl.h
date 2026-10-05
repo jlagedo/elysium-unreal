@@ -56,7 +56,8 @@ struct FElysiumTimeControl
 
 	// Rewind the clock (a fresh session, or a load restoring a saved curtime); clears the hold,
 	// the scale and any armed steps, and re-stamps the engine side.
-	void ResetClock(double StartSeconds = 0.0);
+	void ResetClock(double StartSeconds = 1.0); // engine 0x200f5bc4
+	void SelectMapClock(double StartSeconds); // engine 0x200975f0; leaves scale/pause/steps intact
 
 	// Re-stamp the current hold + scale onto the live world. Engine pause and dilation are
 	// per-world state and the clock is not, so a travel would otherwise silently drop them.

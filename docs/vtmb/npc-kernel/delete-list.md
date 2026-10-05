@@ -172,8 +172,8 @@ Every `dead` row of the verdict overlay: a retail body nothing can observe — n
 | `0x1027e7d0` | CAI_BaseNPC::FUN_1027e7d0 | 1 | - | — | — | navigation type NAME lookup slot 407 used only by the debug overlays |
 | `0x1027ede0` | CAI_BaseNPC::GetShortConditionName | 1 | - | — | — | GetShortConditionName slot 408, condition NAME lookup for debug prints |
 | `0x1027ee00` | CAI_BaseNPC::GetLastSharedCondition | 0 | default:0x77 | — | — | slot 409 last-shared-condition id 0x77, read only by the condition NAME lookup and the trace formatter CONDS walk |
-| `0x1027efb0` | FUN_1027efb0 | 1 | - | ElysiumEntityDebugSubsystem.cpp:361, ElysiumNpcBaseThink.cpp:120, ElysiumEntityWorld.h:806 | — | the debug ring dump, whole effect is DevMsg |
-| `0x10280fd0` | CAI_BaseNPC::FUN_10280fd0 | 0 | default:void | ElysiumNpcMaintain.cpp:331, ElysiumSchedule.cpp:236 | — | empty body, slot 411 has one body in the family and no override |
+| `0x1027efb0` | FUN_1027efb0 | 1 | - | ElysiumEntityDebugSubsystem.cpp:361, ElysiumNpcBaseThink.cpp:120, ElysiumEntityWorld.h:811 | — | the debug ring dump, whole effect is DevMsg |
+| `0x10280fd0` | CAI_BaseNPC::FUN_10280fd0 | 0 | default:void | ElysiumNpcMaintain.cpp:331, ElysiumSchedule.cpp:237 | — | empty body, slot 411 has one body in the family and no override |
 | `0x1028b0b0` | CAI_BaseNPC::FUN_1028b0b0 | 0 | - | — | ElysiumNpcKernelPositionsTests.cpp:562 | slot 549 has one body and no dispatch site anywhere in the DLL |
 | `0x1028b0f0` | CAI_BaseNPC::FUN_1028b0f0 | 0 | - | — | — | whole effect is a Subclass-missing error print and constant 0; slot 547 has one body and no caller |
 | `0x1028df30` | CAI_BaseNPCTroika::FUN_1028df30 | 12 | - | — | — | TraceMessage slot 20, raw text to the debug ring or DevMsg |

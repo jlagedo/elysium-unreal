@@ -1,0 +1,100 @@
+{
+  "name": "ranged_flamethrower_silent",
+  "about": "Loaded flamethrower control: clip1/reserve250/fake8; ordinary ranged tasks finish without shot events or real reload (0x10238160/0x102383b0).",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 30.000001564621925,
+  "player": {
+    "at": "cover_seat"
+  },
+  "cast": [
+    {
+      "name": "arena_flame_reloader",
+      "classname": "npc_VHumanCombatant",
+      "at": "far_ne",
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "HunterSafeArea2",
+        "npc_perception": "3",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "additionalequipment": "item_w_flamethrower",
+        "player_reaction": "D_HT 5",
+        "hint_groups": "32",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": ""
+      }
+    }
+  ],
+  "initial_weapon_state": [
+    {
+      "who": "arena_flame_reloader",
+      "weapon": "item_w_flamethrower",
+      "magazine": 1,
+      "reserve": 250,
+      "fake_reload_count": 8
+    }
+  ],
+  "script": [],
+  "expect": [
+    {
+      "label": "initial",
+      "who": "arena_flame_reloader",
+      "kind": "reload",
+      "match": "initial item=item_w_flamethrower clip=1 reserve=250 fake=8",
+      "by": 0.1
+    },
+    {
+      "label": "ranged",
+      "who": "arena_flame_reloader",
+      "kind": "taskdone",
+      "match": "^task_range_attack1$",
+      "regex": true,
+      "within": 15
+    },
+    {
+      "label": "final",
+      "who": "arena_flame_reloader",
+      "kind": "reload",
+      "match": "final item=item_w_flamethrower clip=1 reserve=250 flags=0",
+      "by": 30.000001564621925
+    }
+  ],
+  "never": [
+    {
+      "who": "arena_flame_reloader",
+      "kind": "reload",
+      "match": "finish_enter"
+    },
+    {
+      "who": "arena_flame_reloader",
+      "kind": "cond+",
+      "match": "NO_PRIMARY_AMMO (0x40)"
+    },
+    {
+      "who": "arena_flame_reloader",
+      "kind": "animevent",
+      "match": "^30(3[0-9]|4[0-4])( |$)",
+      "regex": true
+    },
+    {
+      "who": "player",
+      "kind": "damage"
+    },
+    {
+      "who": "arena_flame_reloader",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "arena_flame_reloader",
+      "probe": "alive",
+      "equals": true
+    }
+  ],
+  "notes": "Fixture applied once after equip before first think. Default NPC equip was clip1 (0x10334e70); empty0 and reserve250 are controlled initial state. Male reload65/30s is the real sequence clock. c2 continues via successful cover c3 or its authored generic RELOAD fail schedule. No event/Attack/timer is fabricated. Final observation is emitted before end evaluation at duration30. Actual live trace establishes timing; this sitting performed no run. V6 measured final world31.000002 (scenario30.000001565): end-observation bound includes only float-to-double frame accumulation, no behavioural deadline changed. End phase is measured at 30.000001564621925 scenario seconds; float frame accumulation only."
+}

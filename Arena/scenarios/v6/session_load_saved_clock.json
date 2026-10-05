@@ -1,0 +1,108 @@
+{
+  "name": "session_load_saved_clock",
+  "about": "Retail map starts at1.0 (engine0x200f5bb4..c4); fresh world, frozen revisit, or saved header base0x200975f0.",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 30,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sp_tutorial_1"
+    },
+    {
+      "t": 2.8,
+      "do": "fire",
+      "target": "popup_1",
+      "input": "CloseWindow"
+    },
+    {
+      "t": 3,
+      "do": "save",
+      "slot": "session_load_saved_clock",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "world",
+          "field": "clock",
+          "tolerance": 0.0001
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "session_load_saved_clock",
+      "checkpoint": "mid",
+      "delay": 2
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "world",
+          "field": "clock",
+          "tolerance": 0.0001
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "label": "fresh_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    }
+  ],
+  "never": [],
+  "probes": [
+    {
+      "at": "pre_init",
+      "who": "world",
+      "probe": "witness",
+      "field": "clock",
+      "equals": 1.0
+    },
+    {
+      "at": "applied",
+      "who": "world",
+      "probe": "witness",
+      "field": "clock",
+      "checkpoint": "mid"
+    }
+  ],
+  "shares_map": true,
+  "notes": " V6 close: trig_popup_move enables at world2.0 and opens popup_1 at2.2 (trace 20261005T161036.148864Z). CloseWindow at scenario2.8 uses the real sign dismissal before CanSave; no gate bypass."
+}

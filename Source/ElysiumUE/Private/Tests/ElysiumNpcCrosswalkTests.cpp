@@ -174,8 +174,8 @@ namespace
 		FElysiumNpc* Walker = nullptr;
 		FElysiumNpc* Queue = nullptr;
 
-		FXwRig(const TCHAR* Map, uint32 Seed)
-			: F(XwWorld(Map, Seed))
+		FXwRig(const TCHAR* Map, uint32 Seed, bool bDormant = false)
+			: F(XwWorld(Map, Seed), bDormant)
 		{
 			Walker = F.Npc(TEXT("walker"));
 			Queue = F.Npc(TEXT("queue"));
@@ -322,6 +322,9 @@ bool FElysiumNpcCrosswalkArrivalTest::RunTest(const FString&)
 	// `0x102ae69b` first, so `0x102a0940` releases the place -- retail's own write, on a path `0xff`
 	// never takes. From here every step is the kernel's own think.
 	W.bUseInteresting = true;
+	auto* ReservedPlace = static_cast<FElysiumInterestingPlace*>(R.F.World.FindByName(TEXT("place")));
+	ReservedPlace->MarkersAllocated = 1; ReservedPlace->Markers.SetNum(1); ReservedPlace->MarkersUsed = 1;
+	ReservedPlace->Markers[0].Occupant = W.Handle; // explicit already-reserved 0x102da860 prerequisite, not a Claim writer
 	// `PickSpotFor(place, this, &m_vecInterestingPlace, 1)` (`0x102da0d0`): the claim the place holds.
 	TestTrue(TEXT("the place takes the claim"),
 		static_cast<FElysiumInterestingPlace*>(R.F.World.FindByName(TEXT("place")))->Claim(W.Handle));
@@ -538,7 +541,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCrosswalkSaveTest,
 bool FElysiumNpcCrosswalkSaveTest::RunTest(const FString&)
 {
 	FXwRig From(TEXT("xw_save"), 0x7c0a5);
-	FXwRig To(TEXT("xw_save"), 0x7c0a5);
+	FXwRig To(TEXT("xw_save"), 0x7c0a5, true);
 	if (!TestTrue(TEXT("rigs"), From.Ready() && To.Ready()))
 	{
 		return false;

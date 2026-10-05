@@ -11,6 +11,11 @@
   ],
   "script": [
     {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sp_tutorial_1"
+    },
+    {
       "t": 0.1,
       "do": "player_teleport",
       "at": [
@@ -73,5 +78,6 @@
       "kind": "death"
     }
   ],
-  "notes": "The staging and the first three expectations are patrol_sentry2_pingpong's (its notes explain the wires and the pre-wire TaskFail). The record ends when the two footsteps are met; its `never`s run to the duration, so it also watches ~15 s of the walk for a client-band id reaching the trace. V4c measurement: the old player seat is ~700 cm from the first patrol goal, outside the near cadence; a 0.939 Hz walk at one-second NPCThink loses the wrap at 0x10091880. Seat the player 150 cm north of that goal to measure repeated server footsteps on the near think cadence 0x10290b60. Event expectations remain unchanged."
+  "notes": "The staging and the first three expectations are patrol_sentry2_pingpong's (its notes explain the wires and the pre-wire TaskFail). The record ends when the two footsteps are met; its `never`s run to the duration, so it also watches ~15 s of the walk for a client-band id reaching the trace. V4c measurement: the old player seat is ~700 cm from the first patrol goal, outside the near cadence; a 0.939 Hz walk at one-second NPCThink loses the wrap at 0x10091880. Seat the player 150 cm north of that goal to measure repeated server footsteps on the near think cadence 0x10290b60. Event expectations remain unchanged. V6 epoch audit: explicit fresh_map before this guard isolates authored state and allows an actual same-boot predecessor. Original seed, all behavioural predicates/windows/probes and existing script times retained.",
+  "shares_map": true
 }

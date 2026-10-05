@@ -74,12 +74,12 @@ namespace
 		FElysiumNpcWorldFixture W;
 		FThink19GateProbe* Guard = nullptr;
 
-		explicit FThink19GateFixture(EThink19GateMotor Motor = EThink19GateMotor::None)
+		explicit FThink19GateFixture(EThink19GateMotor Motor = EThink19GateMotor::None, bool bDormant = false, double SpawnClock = -FElysiumNpcBase::NpcInitThinkDelay)
 			: W(MakeThink19GateBuilder(Motor), [Motor](FElysiumRecordingServices& Services)
 				{
 					Services.bProvideNpcMotor = Motor == EThink19GateMotor::Provided;
 					Services.bNpcActivitiesResolve = Motor == EThink19GateMotor::Provided;
-				})
+				}, bDormant, SpawnClock)
 		{
 			Guard = static_cast<FThink19GateProbe*>(W.Npc(TEXT("guard")));
 			FElysiumNpcWorldFixture::Quiet({ Guard });
@@ -165,14 +165,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThink19GateRestoreTest,
 bool FElysiumThink19GateRestoreTest::RunTest(const FString&)
 {
 	FThink19GateFixture Saved;
-	FThink19GateFixture Restored;
+	Saved.W.World.Tick(5.0);
+	FThink19GateFixture Restored(EThink19GateMotor::None, true, 5.0);
 	if (!TestNotNull(TEXT("both probes stand"), Restored.Guard) || !TestNotNull(TEXT("saved"), Saved.Guard))
 	{
 		return false;
 	}
 	// The restored world has been up long enough that its build's gate is long open.
-	Restored.W.World.Tick(5.0);
-	TestTrue(TEXT("0x1026cb36 the first build's gate is open at 5.0"), Restored.Guard->Think19AiNetworkReady());
+	TestTrue(TEXT("the outgoing source gate is open before reconstruction"), Saved.Guard->Think19AiNetworkReady());
 
 	ElysiumRoundTripSnapshot(Saved.W.World, Restored.W.World);
 	// `0x101a2e40` runs Precache on the restored world entity: a fresh `curtime + 0.8` is armed.

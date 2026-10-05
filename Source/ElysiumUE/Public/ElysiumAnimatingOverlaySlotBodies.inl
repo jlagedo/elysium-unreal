@@ -97,3 +97,5 @@ int32 FirstGestureLayerOrRefusal() const;
 // tier stands no sequence index, so this answers -1 and the ladder falls through to its `ACT_IDLE`
 // tail, which is retail's own answer for a body with no turn clips.
 int32 SelectWeightedSequenceForActivity(int32 Activity) const;
+
+void SerializeNativeOverlay(FElysiumSaveArchive& Ar); // 0x10098c80, embedded datamap rows

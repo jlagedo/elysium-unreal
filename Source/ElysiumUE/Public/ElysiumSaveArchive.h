@@ -16,8 +16,10 @@
 // produces and which every call site already handles (§6).
 struct FElysiumSaveArchive : public FArchiveProxy
 {
-	FElysiumSaveArchive(FArchive& InInner, int32 InVersion)
+	FElysiumSaveArchive(FArchive& InInner, int32 InVersion, double InSaveBase = 0.0, double InRestoreBase = 0.0)
 		: FArchiveProxy(InInner)
+		, SourceBase(InSaveBase) // 0x101a0a80
+		, DestinationBase(InRestoreBase) // 0x101a2a30
 		, PayloadVersion(InVersion)
 	{
 		InInner.UsingCustomVersion(FElysiumSaveVersion::GUID);
@@ -25,8 +27,16 @@ struct FElysiumSaveArchive : public FArchiveProxy
 	}
 
 	int32 Version() const { return PayloadVersion; }
+	double SaveBase() const { return SourceBase; } // 0x101a0a80
+	double RestoreBase() const { return DestinationBase; } // 0x101a2a30
+	void Time(float& Value, EElysiumTimePolicy Policy = EElysiumTimePolicy::Ordinary); // TIME SAVE
+	void Time(double& Value, EElysiumTimePolicy Policy = EElysiumTimePolicy::Ordinary); // queue/port precision
+	static double EncodeTime(double Value, double Base, EElysiumTimePolicy Policy); // 0x101cf250
+	static double DecodeTime(double Value, double Base, EElysiumTimePolicy Policy); // 0x101cf2f0
 
 private:
+	double SourceBase = 0.0; // 0x101a0a80
+	double DestinationBase = 0.0; // 0x101a2a30
 	int32 PayloadVersion = FElysiumSaveVersion::Latest;
 };
 

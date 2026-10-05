@@ -1,0 +1,267 @@
+{
+  "name": "damage_record_branches",
+  "about": "Qualified scalar thresholds >0/>20, missing/non-NPC attacker record refusal, known/unknown memory fixtures invoke actual0x10265ed0; no substituted damage response.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 9,
+  "script": [
+    {
+      "t": 0.1,
+      "do": "seed_health",
+      "target": "nil",
+      "param": 100000
+    },
+    {
+      "t": 0.1,
+      "do": "seed_health",
+      "target": "prop",
+      "param": 100000
+    },
+    {
+      "t": 0.1,
+      "do": "seed_health",
+      "target": "seen",
+      "param": 100000
+    },
+    {
+      "t": 0.1,
+      "do": "seed_health",
+      "target": "known",
+      "param": 100000
+    },
+    {
+      "t": 0.1,
+      "do": "seed_health",
+      "target": "unknown",
+      "param": 100000
+    },
+    {
+      "t": 2,
+      "do": "damage_packet",
+      "target": "nil",
+      "attacker": "none",
+      "param": 1
+    },
+    {
+      "t": 2,
+      "do": "damage_packet",
+      "target": "prop",
+      "attacker": "prop_attacker",
+      "param": 1
+    },
+    {
+      "t": 2,
+      "do": "damage_memory",
+      "target": "seen",
+      "attacker": "player",
+      "inflictor": "v6_inflictor",
+      "control": "see_enemy",
+      "param": 20
+    },
+    {
+      "t": 2,
+      "do": "damage_memory",
+      "target": "known",
+      "attacker": "player",
+      "inflictor": "v6_inflictor",
+      "control": "known",
+      "param": 21
+    },
+    {
+      "t": 2,
+      "do": "damage_memory",
+      "target": "unknown",
+      "attacker": "player",
+      "control": "unknown_no_see",
+      "param": 1
+    }
+  ],
+  "expect": [
+    {
+      "label": "heavy",
+      "who": "known",
+      "kind": "script",
+      "match": "damage_record amount=21.000000 light=1 heavy=1",
+      "within": 5
+    }
+  ],
+  "never": [
+    {
+      "who": "seen",
+      "kind": "cond+",
+      "match": "HEAVY_DAMAGE (0x4d)"
+    },
+    {
+      "who": "nil",
+      "kind": "death"
+    },
+    {
+      "who": "prop",
+      "kind": "death"
+    },
+    {
+      "who": "seen",
+      "kind": "death"
+    },
+    {
+      "who": "known",
+      "kind": "death"
+    },
+    {
+      "who": "unknown",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": 2.05,
+      "who": "nil",
+      "probe": "witness",
+      "field": "damage.attacker",
+      "equals": "#<null>"
+    },
+    {
+      "at": 2.05,
+      "who": "prop",
+      "probe": "witness",
+      "field": "damage.attacker",
+      "equals": "#<null>"
+    },
+    {
+      "at": 2.05,
+      "who": "seen",
+      "probe": "witness",
+      "field": "damage.sum",
+      "equals": 20
+    },
+    {
+      "at": 2.05,
+      "who": "known",
+      "probe": "witness",
+      "field": "damage.sum",
+      "equals": 21
+    }
+  ],
+  "cast": [
+    {
+      "name": "nil",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        600,
+        600,
+        0
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    },
+    {
+      "name": "prop",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        600,
+        350,
+        0
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    },
+    {
+      "name": "seen",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        600,
+        100,
+        0
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    },
+    {
+      "name": "known",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        600,
+        -150,
+        0
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    },
+    {
+      "name": "unknown",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        600,
+        -400,
+        0
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "rows": [
+    {
+      "name": "prop_attacker",
+      "classname": "info_target",
+      "at": [
+        800,
+        300,
+        0
+      ]
+    },
+    {
+      "name": "v6_inflictor",
+      "classname": "info_target",
+      "at": [
+        500,
+        600,
+        0
+      ]
+    }
+  ]
+}

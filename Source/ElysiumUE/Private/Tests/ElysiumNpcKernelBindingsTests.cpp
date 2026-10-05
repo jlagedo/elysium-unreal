@@ -449,8 +449,8 @@ bool FElysiumNpcKernelBindingsSaveRoundTripTest::RunTest(const FString&)
 		B.AddNpc(TEXT("subject"));
 		B.AddNpc(TEXT("other"), FVector(256.0, 0.0, 0.0));
 		return B;
-	})());
-	TestTrue(TEXT("the snapshot applies"), G.World.ApplySnapshot(Snapshot) > 0);
+	})(), true);
+	TestTrue(TEXT("the snapshot applies"), G.World.ApplySnapshot(Snapshot, Snapshot.SaveBase) > 0);
 
 	FElysiumNpc* Restored = G.Npc(TEXT("subject"));
 	FElysiumNpc* RestoredOther = G.Npc(TEXT("other"));
@@ -475,7 +475,9 @@ bool FElysiumNpcKernelBindingsSaveRoundTripTest::RunTest(const FString&)
 		switch (Row.Value.Type)
 		{
 		case EElysiumVariantType::Bool:   bSame = Back.AsBool == Row.Value.AsBool; break;
-		case EElysiumVariantType::Int:    bSame = Back.AsInt == Row.Value.AsInt; break;
+		case EElysiumVariantType::Int:
+            bSame = Row.Key == FName(TEXT("m_afMemory")) ? Back.AsInt == (Row.Value.AsInt & ~0x20) : Back.AsInt == Row.Value.AsInt; // 0x1027be60 -> 0x102ee270 clears retry memory on real give-up
+            break;
 		case EElysiumVariantType::Float:
 			bSame = FMath::IsNearlyEqual(Back.AsFloat, Row.Value.AsFloat, 0.01f); break;
 		case EElysiumVariantType::String: bSame = Back.AsString == Row.Value.AsString; break;

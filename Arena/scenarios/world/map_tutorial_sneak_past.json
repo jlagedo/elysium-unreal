@@ -7,6 +7,11 @@
   "known_red": "V12 (the hearing half; the first half is green since the V3b follow-up: 0.633 0xff -> 0x100 goal -1288 213 -102 -> 3.733 arrived -> 3.933 SCHED_TROIKA_DO_INTEREST_ACTIVITY (0x103)). After the walk starts (6.933) thug_1 hears the player at 7.633 (OnHearPlayer, cond+ HEAR_PLAYER, break INVESTIGATE_SOUND, Idle -> Alert) and runs 0x4c SCHED_TROIKA_ALERT_TURN_TO_SOUND, not an INVESTIGATE program, within 1.0 s: retail's alert ladder FUN_102b8980 answers 0x4c at m_eAlertLevel 0 unless m_bFullInvestigate +0x6340 is set (docs/vtmb/npc-ai/programs.md:396-399). Whether investigate_mode 4 sets +0x6340, i.e. whether the INVESTIGATE match is a record error, is open for V12's reader (Q-V3bf1)",
   "script": [
     {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sp_tutorial_1"
+    },
+    {
       "t": 0.5,
       "do": "fire",
       "target": "thug_maker",
@@ -115,5 +120,6 @@
       "equals": true
     }
   ],
-  "notes": "Player places are map coordinates (cm) around pt1 (-1287.8, 213.4, -101.6) and thug_maker (-1287.8, 276.9): the footsteps start ~4.8 m behind him (+Y) and walk to ~1.4 m; the sight seat is 1.5 m in front along pt1's facing (Source yaw 101). They were chosen from the entity rows without a view of the geometry: an unwalkable seat is a record error to fix, not a red. The hearing half depends on the footstep sound producer (R1's CSound list) and may be red for that reason."
+  "notes": "Player places are map coordinates (cm) around pt1 (-1287.8, 213.4, -101.6) and thug_maker (-1287.8, 276.9): the footsteps start ~4.8 m behind him (+Y) and walk to ~1.4 m; the sight seat is 1.5 m in front along pt1's facing (Source yaw 101). They were chosen from the entity rows without a view of the geometry: an unwalkable seat is a record error to fix, not a red. The hearing half depends on the footstep sound producer (R1's CSound list) and may be red for that reason. V6 epoch audit: explicit fresh_map before this guard isolates authored state and allows an actual same-boot predecessor. Original seed, all behavioural predicates/windows/probes and existing script times retained.",
+  "shares_map": true
 }

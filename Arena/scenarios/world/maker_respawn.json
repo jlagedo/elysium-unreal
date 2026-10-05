@@ -1,10 +1,9 @@
 {
   "name": "maker_respawn",
-  "about": "An npc_maker spawns its child, and a second after the first dies (docs/vtmb/npc-ai/lifecycle.md \u00a7 'The NPC makers' and \u00a7 'CNPCMaker::MakeNPC 0x1034b7b0'). hw_hub_1's ratmaker_2 verbatim (use_interesting 0) (NPCType npc_VRat, NPCTargetname rat_2, Flag_StartDisabled 1, Flag_InfChild 1, MaxNPCCount 5, MaxLiveChildren 1, SpawnFrequency 5). Enable 0x1034b490 installs the base MakerThink 0x1034bbf0 at now; MakeNPC builds the child through the factory, names it rat_2, ++m_nLiveChildren and fires OnSpawnNPC (+0x6668); MakerThink re-arms at SpawnFrequency, and on a full live ceiling (1) spawns nothing. The child, killed by damage (TakeDamage 0x102c29a0, the corpus's own 500), dies through Event_Killed 0x10265ad0; the maker's DeathNotice (slot 139, 0x1034bc90) sees a dead child, fires OnNPCDied and drops the live count, so the next MakerThink (at most SpawnFrequency later) makes a second rat_2.",
+  "about": "N9 closes by measurement: first child corpse remains in occupancy box (0x1034b692..0x1034b737; 0x101cc9e0 enumerates flags without alive test). Observe refused attempt at live0/global0, remove old corpse with normal Kill, then normal 1..2s retry admits child2.",
   "stage": "arena",
   "seed": 1,
   "duration": 30.0,
-  "known_red": "new: after the child's death (OnNPCDied at 4.05 s) the maker makes no second child within SpawnFrequency (MakerThink 0x1034bbf0 re-arms at freq)",
   "player": {
     "at": "start"
   },
@@ -30,6 +29,12 @@
       "target": "rat_2",
       "input": "TakeDamage",
       "param": 500
+    },
+    {
+      "after": "refusal",
+      "delay": 0.1,
+      "do": "kill",
+      "target": "rat_2"
     }
   ],
   "expect": [
@@ -69,11 +74,18 @@
       "within": 0.5
     },
     {
+      "label": "refusal",
+      "who": "ratmaker_2",
+      "kind": "makerattempt",
+      "match": "gate=occupied live=0",
+      "within": 6
+    },
+    {
       "label": "second_spawn",
       "who": "ratmaker_2",
       "kind": "output",
       "match": "OnSpawnNPC",
-      "within": 5.5
+      "within": 2.2
     },
     {
       "label": "second_thinks",
@@ -91,5 +103,19 @@
       "equals": true
     }
   ],
-  "notes": "No never on a second OnSpawnNPC while the first child lives: the trace's output event cannot tell the two windows apart without a count (harness gap, triage-W.md)."
+  "notes": "M1 20261005T125348.523985Z: first refusal t6.033 world7.033, live0/global0, corpse #18 flags0x12000/alive0/life1 intersects. Keep original seed. Kill is explicit clearing of the native box, not an alive-filter repair.",
+  "never": [
+    {
+      "who": "ratmaker_2",
+      "kind": "output",
+      "match": "OnNPCDied",
+      "at_most": 1
+    },
+    {
+      "who": "ratmaker_2",
+      "kind": "output",
+      "match": "OnSpawnNPC",
+      "at_most": 2
+    }
+  ]
 }

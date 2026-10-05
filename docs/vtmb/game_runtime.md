@@ -1737,3 +1737,9 @@ Consolidated from the four investigations; each gates a real decision.
 **Save**
 - The exact `.sav` block order/format if import of original saves is ever wanted (the four
   block handlers are identified; the wire layout is not decoded).
+
+### Per-map clock bases (V6 recovery, 2026-10-05)
+
+Fresh server spawn engine0x200f55f0 writes double1.0 at0x200f5bb4..ba and float1.0 at0x200f5bc4. GameFrame0x200f7e40 publishes that clock to the server globals supplied by0x200eef40/0x1011a0c0. Transition0x2008f120 saves the departing level. Saved-level restore0x200975f0 publishes the header clock before restoring entities; explicit load0x20096010 goes through0x2008f2e0 and fresh reconstruction. A revisit therefore resumes the departing frozen clock; elapsed time on another map does not consume its think/I/O delays.
+
+Entity restoration0x101a2e40 creates saved identities before the common reverse OnRestore pass0x1011a620. Index0 is class-created worldspawn, not a reused world object: factory0x10136580 (GetProcAddress/JMP EAX), worldspawn0x1023ae40, CWorld0x1023b840 ->0x1028d770 ->0x1025d880. Normal/Player/Boss coordinators each start with cap2 and empty storage0x1025d9d0. Destruction0x1023ba30 ->0x1028d800 ->0x1025d940 frees all three; membership has no archive. The special index0 first-pass helper0x101a3380 runs Restore then ObjectCaps/Precache-or-Spawn before the later entity field pass.

@@ -11,6 +11,11 @@
   ],
   "script": [
     {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sp_tutorial_1"
+    },
+    {
       "t": 0.1,
       "do": "player_teleport",
       "at": [
@@ -141,8 +146,18 @@
     }
   ],
   "probes": [
-    {"at": 24.0, "who": "sentry2", "probe": "speed2d", "greater": 91.2},
-    {"at": 24.0, "who": "sentry2", "probe": "speed2d", "less": 111.4},
+    {
+      "at": 24.0,
+      "who": "sentry2",
+      "probe": "speed2d",
+      "greater": 91.2
+    },
+    {
+      "at": 24.0,
+      "who": "sentry2",
+      "probe": "speed2d",
+      "less": 111.4
+    },
     {
       "at": "end",
       "who": "sentry2",
@@ -150,5 +165,6 @@
       "match": "FOLLOW_PATROL_PATH_WALK"
     }
   ],
-  "notes": "No never on taskfail after the wires (1.83 / 1.93 s): retail's own Setup-then-Follow order installs the program on an empty path for 0.1 s, and a think in that window fails TASK_GET_PATH_TO_PATROL_POINT with 0x1d (current node -1) before the nodes arrive; whether a think falls there is cadence, not a contract. The goal texts are matched on the map Y the node's hull position carries (one sign and two digits), not on a pinned coordinate. Restated 2026-10-04 (V3c integrator, Q-V13a): the pre-wire never excludes TaskFail(0x0c) 'Don't have a route': sentry2 (use_interesting) selects 0xff at its first think, competes with mercenary_upstairs for the same places, and the loser draws one with no graph node in reach (navigation-jump-links.md:157); retail fails the route once and waits 5.1-10 s in the _FAILED program (programs.md:207-220). Caveat: the docs do not confirm the exported graph is the one retail loads."
+  "notes": "No never on taskfail after the wires (1.83 / 1.93 s): retail's own Setup-then-Follow order installs the program on an empty path for 0.1 s, and a think in that window fails TASK_GET_PATH_TO_PATROL_POINT with 0x1d (current node -1) before the nodes arrive; whether a think falls there is cadence, not a contract. The goal texts are matched on the map Y the node's hull position carries (one sign and two digits), not on a pinned coordinate. Restated 2026-10-04 (V3c integrator, Q-V13a): the pre-wire never excludes TaskFail(0x0c) 'Don't have a route': sentry2 (use_interesting) selects 0xff at its first think, competes with mercenary_upstairs for the same places, and the loser draws one with no graph node in reach (navigation-jump-links.md:157); retail fails the route once and waits 5.1-10 s in the _FAILED program (programs.md:207-220). Caveat: the docs do not confirm the exported graph is the one retail loads. V6 epoch audit: explicit fresh_map before this guard isolates authored state and allows an actual same-boot predecessor. Original seed, all behavioural predicates/windows/probes and existing script times retained.",
+  "shares_map": true
 }

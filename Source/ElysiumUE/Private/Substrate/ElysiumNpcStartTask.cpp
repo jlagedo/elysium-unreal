@@ -1593,11 +1593,11 @@ int32 FElysiumNpc::StartTaskSlot442(void* Task)
 			CurrentSpotIndex = INDEX_NONE;                                    // 0x102a1f2c
 			return StartTask19Fail(StartTask19A::LineInterestingPlaceNone, StartTask19A::FailNoInterestingPlace);  // 0x102a1f98..fb0 / 0x102a1f83 0x102a1fb0
 		}
-		// `0x102a1f42 PickSpotFor(place, this, &m_vecInterestingPlace (+0x62f0), 1)`: the claim held, / 0x102a1f4b
-		// so the spot is the place's own position. Its refusal arm (`+0x62ec = 0`, line 0x2eaa) is
-		// the claim `ClaimAmbientSpot` already refused.
-		(void)StartTask19A::LineInterestingPlaceNoSpot;   // the refusal arm's line, unreachable here
-		InterestingPlacePosition = StartTask19A::UnitsOf(Place->Origin);
+		if (!Place->PickSpotFor(*this, InterestingPlacePosition, true)) // 0x102a1f42, sampled SOURCE position
+		{
+			CurrentSpotIndex = INDEX_NONE; // 0x102a1f4b no marker on refusal
+			return StartTask19Fail(StartTask19A::LineInterestingPlaceNoSpot, StartTask19A::FailNoInterestingPlace);
+		}
 		return StartTask19Complete();                                         // 0x102a1f4f
 	}
 	// ---------------------------------------------------------------------------------------------

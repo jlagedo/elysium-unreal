@@ -54,8 +54,8 @@ namespace
 		FElysiumNpc* Troika = nullptr;
 
 		explicit FSpeciesLifecycle10Fixture(
-			const TCHAR* SpeciesClass = TEXT("CNPC_VHumanCombatant"))
-			: World(Build(SpeciesClass))
+			const TCHAR* SpeciesClass = TEXT("CNPC_VHumanCombatant"), bool bDormant = false)
+			: World(Build(SpeciesClass), bDormant)
 		{
 			Species = World.Npc(TEXT("species"));
 			Troika = World.Npc(TEXT("troika"));
@@ -325,7 +325,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelSpeciesLifecycle10AndreiBloodR
 bool FElysiumNpcKernelSpeciesLifecycle10AndreiBloodRestoreTest::RunTest(const FString&)
 {
 	FSpeciesLifecycle10Fixture From(TEXT("CNPC_VAndreiBlood"));
-	FSpeciesLifecycle10Fixture To(TEXT("CNPC_VAndreiBlood"));
+	FSpeciesLifecycle10Fixture To(TEXT("CNPC_VAndreiBlood"), true);
 	if (!TestNotNull(TEXT("the source spawned"), From.Species)
 		|| !TestNotNull(TEXT("the destination spawned"), To.Species))
 	{
@@ -365,7 +365,7 @@ bool FElysiumNpcKernelSpeciesLifecycle10ChangBrosRestoreTest::RunTest(const FStr
 	for (const TCHAR* Brother : Brothers)
 	{
 		FSpeciesLifecycle10Fixture From(Brother);
-		FSpeciesLifecycle10Fixture To(Brother);
+		FSpeciesLifecycle10Fixture To(Brother, true);
 		if (!TestNotNull(FString::Printf(TEXT("the %s source spawned"), Brother), From.Species)
 			|| !TestNotNull(FString::Printf(TEXT("the %s destination spawned"), Brother), To.Species))
 		{

@@ -1,0 +1,431 @@
+{
+  "name": "persistence_world_rebind",
+  "about": "V6 native continuation persistence_world_rebind; A scripted_sequence walks its NPC to the mark, plays, fires its outputs and lets it go (docs/specs/0003-scripted-sequence/spec.md \u00a7 Witness data, recovered 2026-09-12). sm_vamparena's sVamp_entrance (m_fMoveTo 1, m_iszPlay pre_fight_bow, no idle or post-idle, no spawnflags, OnBeginSequence -> AsianVamp.SetRelationship 'player D_HT 5') and its target AsianVamp (npc_VAsianVampire, D_NU 0, 281 cm off), verbatim. BeginSequence 0x101a7390 -> PossessEntity (CCineNPC 0x101a7880): m_scriptState +0x5d70 = 4, DelayStart(1), ideal state NPC_STATE_SCRIPT; SelectSchedule 0x1028a380 case 4 -> SCHED_AISCRIPT 0x2e, TranslateSchedule 0x102cc080 / 0x102b12f0 -> SCHED_TROIKA_SCRIPTED_WALK 0xf2 (cai_basenpctroika/sched_troika_scripted_walk.sch: SET_FAIL_SCHEDULE, SET_TOLERANCE_DISTANCE 2, WALK_TO_TARGET, WAIT_FOR_MOVEMENT, PLANT_ON_SCRIPT, FACE_SCRIPT, ENABLE_SCRIPT, WAIT_FOR_SCRIPT, PLAY_SCRIPT, PLAY_SCRIPT_POST_IDLE). OnBeginSequence fires from TASK_WAIT_FOR_SCRIPT's run arm when IsTimeToStart 0x101a7540 holds (on the mark, not at the input), then StartSequence(m_iszPlay); TASK_PLAY_SCRIPT waits m_bSequenceFinished -> SequenceDone 0x101a8460 -> Finish 0x101a8640 (no post-idle) and OnEndSequence fires unconditionally; CineCleanup 0x1027d170 sets the ideal state IDLE and FixScriptNPCSchedule 0x101a8840 clears the schedule, so the NPC selects again \u2014 here, hostile once OnBeginSequence's wire lands, a combat program. Corrected 2026-10-04 (V3c integrator, record errors): (1) m_iszPlay 'pre_fight_bow' is a content miss -- AsianVampire.mdl spells it 'prefight_bow' (docs/vtmb/entity_io.md:2471, animation_and_movers.md:2103-2107) -- so StartSequence 0x101a82d0 warns, writes m_nSequence := 0 (0x101a833d), m_flCycle := 0 and ResetSequenceInfo 0x10090950 plays the model's sequence 0 at rate 1.0; (2) the OnBeginSequence wire is authored 'AsianVamp,SetRelationship,player D_HT 5,3,-1' (sm_vamparena.bsp, Unofficial Patch and retail alike): a 3.0 s delay, so the input lands ~3 s after the output, after the scene has ended, and is expected last. Corrected 2026-10-04 (V4a integrator, N19 / J1): row 0 is the body's RawIndex 0 clip, played at rate 1.0 with its own loop bit. On AsianVampire.mdl sequence 0 IS prefight_bow (98 frames at 30 fps, ~3.2 s), so the missed lookup lands on the very clip the mapper meant and the scene now lasts its length: the 3.0 s wire of (2) lands INSIDE the scene, one think before the finish flag (DispatchAnimEvents 0x10091880 raises m_bSequenceFinished once m_flCycle + 0.1 s x cycle rate reaches 1, i.e. ~3.1 s after the play), so `flips` is expected before `played`. Measured: OnBeginSequence and 'seq 0 rate=1' 7.317, SetRelationship 10.317 (= 7.317 + 3.0), seqfinished 10.367, OnEndSequence and the release 10.483 (TASK_PLAY_SCRIPT's next think).",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 40.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sm_vamparena",
+    "names": [
+      "AsianVamp",
+      "sVamp_entrance"
+    ],
+    "anchor": "AsianVamp",
+    "at": "west"
+  },
+  "script": [
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "sVamp_entrance",
+      "input": "BeginSequence"
+    },
+    {
+      "after": "waits",
+      "delay": 0.05,
+      "do": "save",
+      "slot": "persistence_world_rebind",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "AsianVamp",
+          "field": "task.index",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "task.status",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "task.started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "task.task_started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "task.failure",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "task.wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "task.move_wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.sequence",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.cycle",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.rate",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.time",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.previous_time",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.last_event",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.finished"
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.past_half"
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.type",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.flags",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.arrival",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.target"
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.goal.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.goal.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.goal.z",
+          "tolerance": 0.0001
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "persistence_world_rebind",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "AsianVamp",
+          "field": "task.index",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "task.status",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "task.started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "task.task_started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "task.failure",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "task.wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "task.move_wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.sequence",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.cycle",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.rate",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.time",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.previous_time",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.last_event",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.finished"
+        },
+        {
+          "who": "AsianVamp",
+          "field": "anim.past_half"
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.type",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.flags",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.arrival",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.target"
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.goal.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.goal.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "AsianVamp",
+          "field": "nav.goal.z",
+          "tolerance": 0.0001
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "label": "begin_input",
+      "who": "sVamp_entrance",
+      "kind": "input",
+      "match": "BeginSequence",
+      "by": 2.5
+    },
+    {
+      "label": "scripted",
+      "who": "AsianVamp",
+      "kind": "state",
+      "match": "-> Script",
+      "within": 1.0
+    },
+    {
+      "label": "walk_program",
+      "who": "AsianVamp",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_SCRIPTED_WALK (",
+      "within": 1.0
+    },
+    {
+      "label": "walks",
+      "who": "AsianVamp",
+      "kind": "task",
+      "match": "task_walk_to_target (",
+      "within": 0.5
+    },
+    {
+      "label": "walk_row",
+      "who": "AsianVamp",
+      "kind": "sequence",
+      "match": "(?i)walk",
+      "regex": true,
+      "within": 0.3
+    },
+    {
+      "label": "footfall",
+      "who": "AsianVamp",
+      "kind": "animevent",
+      "match": "^205[0-3]( |$)",
+      "regex": true,
+      "within": 1.5
+    },
+    {
+      "label": "arrives",
+      "who": "AsianVamp",
+      "kind": "move",
+      "match": "arrived",
+      "within": 15.0
+    },
+    {
+      "label": "waits",
+      "who": "AsianVamp",
+      "kind": "task",
+      "match": "task_wait_for_script (",
+      "within": 5.0
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "begin_output",
+      "who": "sVamp_entrance",
+      "kind": "output",
+      "match": "OnBeginSequence",
+      "within": 1.0
+    },
+    {
+      "label": "plays",
+      "who": "AsianVamp",
+      "kind": "sequence",
+      "match": "^seq 0 rate=1$",
+      "within": 0.5,
+      "regex": true
+    },
+    {
+      "label": "flips",
+      "who": "AsianVamp",
+      "kind": "input",
+      "match": "SetRelationship",
+      "within": 3.2
+    },
+    {
+      "label": "played",
+      "who": "AsianVamp",
+      "kind": "seqfinished",
+      "match": "seq 0",
+      "within": 0.5
+    },
+    {
+      "label": "end_output",
+      "who": "sVamp_entrance",
+      "kind": "output",
+      "match": "OnEndSequence",
+      "within": 0.5
+    },
+    {
+      "label": "released",
+      "who": "AsianVamp",
+      "kind": "state",
+      "match": "^Script\\w* -> ",
+      "regex": true,
+      "within": 1.0
+    },
+    {
+      "label": "selects_again",
+      "who": "AsianVamp",
+      "kind": "schedule",
+      "match": "^(?!SCHED_TROIKA_SCRIPTED)",
+      "regex": true,
+      "within": 2.0
+    }
+  ],
+  "never": [
+    {
+      "who": "sVamp_entrance",
+      "kind": "output",
+      "match": "OnBeginSequence",
+      "until": 2.5
+    },
+    {
+      "who": "AsianVamp",
+      "kind": "taskfail",
+      "match": "^(?!No Target )",
+      "regex": true
+    },
+    {
+      "who": "AsianVamp",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "AsianVamp",
+      "probe": "alive",
+      "equals": true
+    }
+  ],
+  "notes": "The never on OnBeginSequence before 2.5 s pins retail's order (the output fires on the mark, not at the input; 0003 spec \u00a7 'The port today'). The taskfail never excludes one text, 'No Target (0x1)': after the release AsianVamp (is_bossmonster) selects SCHED_VASIANVAMPIRE_JUMP_UP (0x15a), whose task_vasianvampire_find_ledge_node fails 'No Target (0x1)' because the arena stages none of sm_vamparena's ledge nodes (10.483, the release's own instant, since V4a) -- staging, not the scene; a window cannot close at a label, and a 'No Target' inside the scene would break the ordered expectations on its own. `played` is within 0.5 s of `flips`: 3.0 s (the wire) against ~3.1 s (the clip less the 0.1 s look-ahead, 0x10091880).",
+  "known_red": "0017/35: event-free native body seek has no runtime source; 0x1008df10/0x1008f120/0x10098c80 must resume phase without replay."
+}

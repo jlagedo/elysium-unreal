@@ -937,8 +937,8 @@ bool FElysiumOpeningEmbodimentTest::RunTest(const FString&)
 	FElysiumEntityWorld Restored(nullptr, nullptr, Services.Bundle());
 	Restored.Load(BuildDefs());
 	Restored.SpawnPlayer();
-	Restored.Activate(0.0);
 	Restored.ApplySnapshot(Snapshot);
+	Restored.Activate(0.0);
 	TestNotNull(TEXT("snapshot rebinds the controller relationship"), Restored.FindPlayerController());
 	TestEqual(TEXT("snapshot preserves !playercontroller resolution"),
 		Restored.FindByName(TEXT("!playercontroller")), Restored.FindPlayerController());

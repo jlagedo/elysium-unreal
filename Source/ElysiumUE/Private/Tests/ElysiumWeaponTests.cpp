@@ -4147,214 +4147,32 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponLeafSchemaTest, "Elysium.Arm.Weap
 	GElysiumTestFlags)
 bool FElysiumWeaponLeafSchemaTest::RunTest(const FString&)
 {
-	const FElysiumItemTable Table = MakeWeaponTable();
-	ElysiumItems::Install(Table);
-	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
-
-	// Freeze a weapon carrying state on both sides of the new field, then re-write its blob at the
-	// schema a pre-26 build would have written — which is exactly what an old save file holds.
-	FElysiumMapSnapshot Snapshot;
-	{
-		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-		World.Load(MakeLeafSchemaDefs());
-		World.Activate(0.0);
-		World.Tick(0.0);
-
-		FElysiumWeapon* Pistol = FindLooseWeapon(World);
-		if (!TestNotNull(TEXT("the loose pistol installs as a weapon"), Pistol))
-		{
-			return false;
-		}
-		// Fields on BOTH sides of `bAwaitingAnimEvent`: the two ahead of it prove the read reached
-		// the right place, and the four behind it are what a shifted read destroys.
-		Pistol->NextPrimaryAttackTime = 2.25;
-		Pistol->NextSecondaryAttackTime = 3.75;
-		Pistol->bReloading = true;
-		Pistol->ReloadSerial = 7;
-		Pistol->ReloadEndTime = 11.5;
-		Pistol->bFireIntentDuringReload = true;
-
-		World.Freeze(Snapshot);
-		TestEqual(TEXT("a snapshot frozen in memory stamps this build's schema"),
-			Snapshot.SchemaVersion, (int32)FElysiumSaveVersion::Latest);
-
-		FElysiumEntityState* Record = Snapshot.Entities.FindByPredicate(
-			[](const FElysiumEntityState& S) { return S.TargetName == TEXT("loose_pistol"); });
-		if (!TestTrue(TEXT("the weapon was frozen with a leaf blob"),
-			Record != nullptr && Record->LeafState.Num() > 0))
-		{
-			return false;
-		}
-
-		// The pre-26 blob. Written through the leaf's own `Serialize` at the older schema, so it is
-		// byte-for-byte what that build produced rather than a hand-built approximation.
-		Record->LeafState.Reset();
-		{
-			FMemoryWriter Writer(Record->LeafState, /*bIsPersistent*/ true);
-			FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::NpcDisciplines);
-			Pistol->Serialize(Ar);
-		}
-		Snapshot.SchemaVersion = FElysiumSaveVersion::NpcDisciplines;
-	}
-
-	// --- Replayed at the schema it was written at ------------------------------------------------
-	{
-		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-		World.Load(MakeLeafSchemaDefs());
-		World.Activate(0.0);
-		World.ApplySnapshot(Snapshot);
-
-		FElysiumWeapon* Pistol = FindLooseWeapon(World);
-		if (!TestNotNull(TEXT("the weapon restored"), Pistol))
-		{
-			return false;
-		}
-		TestTrue(TEXT("the field ahead of the new one is intact"),
-			NearlyEqual(Pistol->NextPrimaryAttackTime, 2.25));
-		TestTrue(TEXT("...and its neighbour"),
-			NearlyEqual(Pistol->NextSecondaryAttackTime, 3.75));
-		// The four behind it. A blob read one field out of step turns every one of these into
-		// garbage, which is the whole failure the recorded schema exists to prevent.
-		TestTrue(TEXT("the reload latch behind the new field is intact"), Pistol->bReloading);
-		TestEqual(TEXT("...its serial"), Pistol->ReloadSerial, 7);
-		TestTrue(TEXT("...its deadline"), NearlyEqual(Pistol->ReloadEndTime, 11.5));
-		TestTrue(TEXT("...and the fire-intent latch after it"), Pistol->bFireIntentDuringReload);
-		// And the field the old build never wrote defaults to the only route it could have taken.
-		TestFalse(TEXT("a pre-26 transaction restores on the estimate route"),
-			Pistol->Swing.bAwaitingAnimEvent);
-	}
-
-	// --- The control: the same blob replayed at `Latest` -----------------------------------------
-	{
-		// What every leaf gate did before the schema was recorded. This is not a supported path —
-		// it is the failure being fixed, reproduced deliberately so the fix is shown to be
-		// load-bearing rather than decorative. The read runs off the end of the blob, and that must
-		// be reported rather than restoring a half-read weapon in silence.
-		AddExpectedError(TEXT("failed to read"), EAutomationExpectedErrorFlags::Contains, 1);
-		// The engine notices the shift before the overrun does: a `bool` field landing on bytes that
-		// spell neither 0 nor 1 is refused by `FArchive::SerializeBool`. How many do that depends on
-		// the byte layout, so this is expected without a count.
-		AddExpectedError(TEXT("Invalid boolean encountered"), EAutomationExpectedErrorFlags::Contains, 0);
-
-		FElysiumMapSnapshot Mislabelled = Snapshot;
-		Mislabelled.SchemaVersion = FElysiumSaveVersion::Latest;
-
-		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-		World.Load(MakeLeafSchemaDefs());
-		World.Activate(0.0);
-		World.ApplySnapshot(Mislabelled);
-
-		FElysiumWeapon* Pistol = FindLooseWeapon(World);
-		if (!TestNotNull(TEXT("the weapon still exists after a failed leaf read"), Pistol))
-		{
-			return false;
-		}
-		// The shift, stated as the concrete thing it destroys: the reload serial reads out of the
-		// deadline's bytes instead of its own.
-		TestNotEqual(TEXT("a blob read at the wrong schema does NOT restore the reload serial"),
-			Pistol->ReloadSerial, 7);
-	}
-
-	// --- The swing's clip owner, on both sides of its own version --------------------------------
-	//
-	// `Swing.ClipOwnerStem` is the LAST field of the swing block, so an older payload loses it
-	// rather than shifting anything — but the fields behind the block still have to read, which is
-	// what makes this a byte-layout assertion and not a field-presence one.
-	{
-		auto FreezeAt = [&](int32 Schema, FElysiumMapSnapshot& Out)
-		{
-			FElysiumRecordingServices Services;
-			FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-			World.Load(MakeLeafSchemaDefs());
-			World.Activate(0.0);
-			World.Tick(0.0);
-
-			FElysiumWeapon* Pistol = FindLooseWeapon(World);
-			if (Pistol == nullptr)
-			{
-				return false;
-			}
-			Pistol->Swing.bActive = true;
-			Pistol->Swing.Serial = 3;
-			Pistol->Swing.ClipLabel = TEXT("swing_long");
-			Pistol->Swing.ClipOwnerStem = TEXT("cast_bank");
-			Pistol->Swing.bAwaitingAnimEvent = true;
-			Pistol->ReloadSerial = 7;
-			Pistol->bFireIntentDuringReload = true;
-			World.Freeze(Out);
-
-			if (Schema != (int32)FElysiumSaveVersion::Latest)
-			{
-				FElysiumEntityState* Record = Out.Entities.FindByPredicate(
-					[](const FElysiumEntityState& S) { return S.TargetName == TEXT("loose_pistol"); });
-				if (Record == nullptr)
-				{
-					return false;
-				}
-				Record->LeafState.Reset();
-				FMemoryWriter Writer(Record->LeafState, /*bIsPersistent*/ true);
-				FElysiumSaveArchive Ar(Writer, Schema);
-				Pistol->Serialize(Ar);
-				Out.SchemaVersion = Schema;
-			}
-			return true;
-		};
-
-		auto RestoreFrom = [&](const FElysiumMapSnapshot& Snap, FString& OutStem, int32& OutSerial,
-			bool& bOutFireIntent)
-		{
-			FElysiumRecordingServices Services;
-			FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-			World.Load(MakeLeafSchemaDefs());
-			World.Activate(0.0);
-			World.ApplySnapshot(Snap);
-
-			FElysiumWeapon* Pistol = FindLooseWeapon(World);
-			if (Pistol == nullptr)
-			{
-				return false;
-			}
-			OutStem = Pistol->Swing.ClipOwnerStem;
-			OutSerial = Pistol->ReloadSerial;
-			bOutFireIntent = Pistol->bFireIntentDuringReload;
-			return true;
-		};
-
-		FString Stem;
-		int32 Serial = 0;
-		bool bFireIntent = false;
-
-		FElysiumMapSnapshot Current;
-		if (!TestTrue(TEXT("a v27 snapshot freezes"),
-			FreezeAt((int32)FElysiumSaveVersion::Latest, Current))
-			|| !TestTrue(TEXT("...and restores"), RestoreFrom(Current, Stem, Serial, bFireIntent)))
-		{
-			return false;
-		}
-		TestEqual(TEXT("a v27 payload round-trips the swing's clip owner"), Stem,
-			FString(TEXT("cast_bank")));
-		TestEqual(TEXT("...with the fields behind the swing block intact"), Serial, 7);
-
-		FElysiumMapSnapshot Legacy;
-		if (!TestTrue(TEXT("a v26 snapshot freezes"),
-			FreezeAt((int32)FElysiumSaveVersion::WeaponAnimEvent, Legacy))
-			|| !TestTrue(TEXT("...and restores"), RestoreFrom(Legacy, Stem, Serial, bFireIntent)))
-		{
-			return false;
-		}
-		// The degradation is the diagnostic alone: `ClipLabel` above still restores, and it plus the
-		// attacking body's stem are what address the blocked-reaction row, so a pre-27 swing plays
-		// the same reaction and only its log line cannot name the bank.
-		TestTrue(TEXT("a v26 payload restores an empty clip owner"), Stem.IsEmpty());
-		// And nothing shifted: the reload block sits behind the swing block in the record.
-		TestEqual(TEXT("...with every field behind the swing block still readable"), Serial, 7);
-		TestTrue(TEXT("...including the last one"), bFireIntent);
-	}
-
-	return true;
+ const FElysiumItemTable Table = MakeWeaponTable(); ElysiumItems::Install(Table);
+ ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+ FElysiumRecordingServices Services;
+ FElysiumEntityWorld Source(nullptr, nullptr, Services.Bundle()); Source.Load(MakeLeafSchemaDefs()); Source.Activate(1.0);
+ FElysiumWeapon* Weapon = FindLooseWeapon(Source);
+ if (!TestNotNull(TEXT("native weapon"), Weapon)) return false;
+ Weapon->NextPrimaryAttackTime = 2.25; Weapon->NextSecondaryAttackTime = 3.75; Weapon->WeaponIdleTime = 4.5;
+ Weapon->bInReload = Weapon->bInterruptReload = Weapon->bIsJammed = true;
+ Weapon->Swing.ClipOwnerStem = TEXT("cast_bank"); Weapon->Swing.ClipLabel = TEXT("swing_long");
+ Weapon->ReloadSerial = 7; Weapon->bFireIntentDuringReload = true;
+ FElysiumMapSnapshot Snapshot; Source.Freeze(Snapshot);
+ FElysiumEntityWorld Destination(nullptr, nullptr, Services.Bundle()); Destination.Load(MakeLeafSchemaDefs());
+ TestEqual(TEXT("latest leaf applies through common inactive reconstruction"), Destination.ApplySnapshot(Snapshot, 101.0), Snapshot.Entities.Num());
+ FElysiumWeapon* Restored = FindLooseWeapon(Destination);
+ if (!TestNotNull(TEXT("restored weapon"), Restored)) return false;
+ TestEqual(TEXT("0x730 raw FLOAT unchanged at unequal bases"), Restored->NextPrimaryAttackTime, 2.25);
+ TestEqual(TEXT("0x734 raw FLOAT unchanged"), Restored->NextSecondaryAttackTime, 3.75);
+ TestEqual(TEXT("idle TIME rebased once"), Restored->WeaponIdleTime, 104.5);
+ TestTrue(TEXT("all three retained native bytes"), Restored->bInReload && Restored->bIsJammed && Restored->bInterruptReload);
+ TestEqual(TEXT("clip bank retained"), Restored->Swing.ClipOwnerStem, FString(TEXT("cast_bank")));
+ TestEqual(TEXT("following leaf words intact"), Restored->ReloadSerial, 7);
+ TestTrue(TEXT("last leaf word intact"), Restored->bFireIntentDuringReload);
+ FElysiumMapSnapshot Old = Snapshot; Old.SchemaVersion = FElysiumSaveVersion::MinSupported - 1;
+ FElysiumEntityWorld Refused(nullptr, nullptr, Services.Bundle()); Refused.Load(MakeLeafSchemaDefs());
+ TestEqual(TEXT("disposable old schema refuses before any leaf read"), Refused.ApplySnapshot(Old), INDEX_NONE);
+ return true;
 }
 
 // =====================================================================================
@@ -5227,6 +5045,11 @@ bool FElysiumV5bReloadFinishTest::RunTest(const FString&)
 	TestEqual(TEXT("0x10255213: future leaves primary"), ReloadGun->NextPrimaryAttackTime, 12.0);
 	TestEqual(TEXT("0x10255213: future leaves secondary"), ReloadGun->NextSecondaryAttackTime, 13.0);
 	ReloadNpc->NextAttackTime = ReloadWorld.NowSeconds();
+	const double ObservedNow = ReloadWorld.NowSeconds();
+	ReloadNpc->NextAttackTime = std::numeric_limits<double>::quiet_NaN();
+	ReloadGun->FinishReload();
+	TestTrue(TEXT("0x102551ff unordered live deadline refuses without bulk commit"), ReloadGun->bInReload && ReloadGun->MagazineCount == 1);
+	ReloadNpc->NextAttackTime = ObservedNow;
 	ReloadGun->FinishReload();
 	TestEqual(TEXT("0x102552c0: equality admits min(5,3)"), ReloadGun->MagazineCount, 4);
 	TestEqual(TEXT("0x102552c0: NPC reserve untouched"), ReloadNpc->Inventory.Reserve(TEXT("TestRound")), 3);

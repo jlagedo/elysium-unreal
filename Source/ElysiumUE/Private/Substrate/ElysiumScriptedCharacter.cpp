@@ -31,6 +31,15 @@ void FElysiumScriptedCharacter::SyncMovingRecord()
 	FVector Feet = Origin;
 	float Yaw = -Angles.Y;
 	Motor->SampleTransform(Feet, Yaw);
+	if (AsNpcBase() != nullptr && IsAlive() && GetMoveType() == 4)
+	{
+		// 0x1003b190 STEP contact feeds SetGroundEntity0x100b1420's FL_ONGROUND write.
+		// The existing UE movement swap integrates outside the think; publish its actual mode
+		// before the next kernel pass, including stationary gravity with no navigation goal.
+		if (Motor->SampleNavigation().bGrounded) Flags |= 1; else Flags &= ~1;
+		// m_hGroundEntity for the arena's static world still has no named entity handle; geometry
+		// reports named brush/prop contacts through SampleFloor, independently of this contact bit.
+	}
 	// The yaw is compared tight: `CAI_Motor::DeltaIdealYaw`'s `FacingIdeal` tolerance is 0.006
 	// degrees (`0x10278c80`), so a record left 0.01 behind a settled body would never face.
 	if (Feet.Equals(Origin, 0.01) && FMath::IsNearlyEqual(-Yaw, Angles.Y, 1.0e-4f))

@@ -4,7 +4,9 @@
   "stage": "arena",
   "seed": 1,
   "duration": 30.0,
-  "player": { "at": "cover_seat" },
+  "player": {
+    "at": "cover_seat"
+  },
   "cast": [
     {
       "name": "arena_shooter",
@@ -27,35 +29,176 @@
     }
   ],
   "rows": [
-    { "classname": "events_player", "name": "arena_player_events", "at": "start" }
+    {
+      "classname": "events_player",
+      "name": "arena_player_events",
+      "at": "start"
+    }
   ],
   "script": [
-    { "t": 0.05, "do": "fire", "target": "arena_player_events", "input": "MakePlayerUnkillable" },
-    { "t": 6.0, "do": "player_teleport", "at": [587.0, 683.0, 0.0], "face": "far_ne" },
-    { "t": 16.0, "do": "player_teleport", "at": [-317.0, 683.0, 0.0], "face": "far_ne" }
+    {
+      "t": 0.05,
+      "do": "fire",
+      "target": "arena_player_events",
+      "input": "MakePlayerUnkillable"
+    },
+    {
+      "t": 6.0,
+      "do": "player_teleport",
+      "at": [
+        808.328,
+        685.864,
+        0
+      ],
+      "face": "far_ne"
+    },
+    {
+      "t": 16.0,
+      "do": "player_teleport",
+      "at": [
+        -317.0,
+        683.0,
+        0.0
+      ],
+      "face": "far_ne"
+    }
   ],
   "expect": [
-    { "label": "first_attack", "who": "arena_shooter", "kind": "task", "match": "task_range_attack1 (", "by": 5.5 },
-    { "label": "too_close", "who": "arena_shooter", "kind": "cond+", "match": "TOO_CLOSE_FOR_RANGED (0x8)", "by": 7.0 },
-    { "label": "steps_back", "who": "arena_shooter", "kind": "schedule", "match": "^SCHED_TROIKA_(STEP_BACK|FORCED)_RANGE_ATTACK1 \\(", "regex": true, "by": 12.0 },
-    { "label": "close_shot", "who": "arena_shooter", "kind": "taskdone", "match": "^task_range_attack1$", "regex": true, "within": 5.0 },
-    { "label": "far_band", "who": "arena_shooter", "kind": "cond+", "match": "CAN_RANGE_ATTACK1 (0x4f)", "by": 17.0 },
-    { "label": "reselects", "who": "arena_shooter", "kind": "schedule", "match": "^SCHED_TROIKA_(STEP_BACK_)?RANGE_ATTACK1 \\(", "regex": true, "within": 6.0 },
-    { "label": "refaces", "who": "arena_shooter", "kind": "taskdone", "match": "^task_face_enemy$", "regex": true, "within": 4.0 },
-    { "label": "far_shot", "who": "arena_shooter", "kind": "task", "match": "task_range_attack1 (", "within": 3.0 }
+    {
+      "label": "first_attack",
+      "who": "arena_shooter",
+      "kind": "task",
+      "match": "task_range_attack1 (",
+      "by": 5.5
+    },
+    {
+      "label": "too_close",
+      "who": "arena_shooter",
+      "kind": "cond+",
+      "match": "TOO_CLOSE_FOR_RANGED (0x8)",
+      "by": 7.0
+    },
+    {
+      "label": "steps_back",
+      "who": "arena_shooter",
+      "kind": "schedule",
+      "match": "^SCHED_TROIKA_(STEP_BACK|FORCED)_RANGE_ATTACK1 \\(",
+      "regex": true,
+      "by": 12.0
+    },
+    {
+      "label": "close_shot",
+      "who": "arena_shooter",
+      "kind": "taskdone",
+      "match": "^task_range_attack1$",
+      "regex": true,
+      "within": 5.0
+    },
+    {
+      "label": "far_band",
+      "who": "arena_shooter",
+      "kind": "cond+",
+      "match": "CAN_RANGE_ATTACK1 (0x4f)",
+      "by": 17.0
+    },
+    {
+      "label": "reselects",
+      "who": "arena_shooter",
+      "kind": "schedule",
+      "match": "^SCHED_TROIKA_(STEP_BACK_)?RANGE_ATTACK1 \\(",
+      "regex": true,
+      "within": 6.0
+    },
+    {
+      "label": "refaces",
+      "who": "arena_shooter",
+      "kind": "taskdone",
+      "match": "^task_face_enemy$",
+      "regex": true,
+      "within": 4.0
+    },
+    {
+      "label": "far_shot",
+      "who": "arena_shooter",
+      "kind": "task",
+      "match": "task_range_attack1 (",
+      "within": 3.0
+    }
   ],
   "never": [
-    { "who": "arena_shooter", "kind": "death" },
-    { "who": "arena_shooter", "kind": "schedule", "match": "SCHED_TROIKA_SWITCH_TO_MELEE (" }
+    {
+      "who": "arena_shooter",
+      "kind": "death"
+    },
+    {
+      "who": "arena_shooter",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_SWITCH_TO_MELEE ("
+    }
   ],
   "probes": [
-    { "at": 7.5, "who": "arena_shooter", "probe": "has_condition", "condition": "TOO_CLOSE_FOR_RANGED", "equals": true },
-    { "at": 7.5, "who": "arena_shooter", "probe": "has_condition", "condition": "CAN_RANGE_ATTACK1", "equals": false },
-    { "at": 7.5, "who": "arena_shooter", "probe": "has_condition", "condition": "TOO_CLOSE_TO_ATTACK", "equals": false },
-    { "at": 16.2, "who": "arena_shooter", "probe": "has_condition", "condition": "TOO_CLOSE_FOR_RANGED", "equals": false },
-    { "at": 18.0, "who": "arena_shooter", "probe": "has_condition", "condition": "CAN_RANGE_ATTACK1", "equals": true },
-    { "at": 18.0, "who": "arena_shooter", "probe": "has_condition", "condition": "TOO_CLOSE_FOR_RANGED", "equals": false },
-    { "at": "end", "who": "arena_shooter", "probe": "alive", "equals": true }
+    {
+      "at": 5.95,
+      "who": "arena_shooter",
+      "probe": "witness",
+      "field": "origin.x",
+      "greater": -100000
+    },
+    {
+      "at": 5.95,
+      "who": "arena_shooter",
+      "probe": "witness",
+      "field": "origin.y",
+      "greater": -100000
+    },
+    {
+      "at": 7.5,
+      "who": "arena_shooter",
+      "probe": "has_condition",
+      "condition": "TOO_CLOSE_FOR_RANGED",
+      "equals": true
+    },
+    {
+      "at": 7.5,
+      "who": "arena_shooter",
+      "probe": "has_condition",
+      "condition": "CAN_RANGE_ATTACK1",
+      "equals": false
+    },
+    {
+      "at": 7.5,
+      "who": "arena_shooter",
+      "probe": "has_condition",
+      "condition": "TOO_CLOSE_TO_ATTACK",
+      "equals": false
+    },
+    {
+      "at": 16.2,
+      "who": "arena_shooter",
+      "probe": "has_condition",
+      "condition": "TOO_CLOSE_FOR_RANGED",
+      "equals": false
+    },
+    {
+      "at": 18.0,
+      "who": "arena_shooter",
+      "probe": "has_condition",
+      "condition": "CAN_RANGE_ATTACK1",
+      "equals": false
+    },
+    {
+      "at": 18.0,
+      "who": "arena_shooter",
+      "probe": "has_condition",
+      "condition": "TOO_CLOSE_FOR_RANGED",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "arena_shooter",
+      "probe": "alive",
+      "equals": true
+    }
   ],
-  "notes": "Staging (V4o): since the event shot (CWeaponRanged 0x10238160 -> Shot 0x102387b0) an NPC's 3031 commits its bullets, 15 a set from the .38 here, and a 100-health player dies at the seventh; the record is about the gunman, so the player is held by retail's own unkillable latch, an events_player row's MakePlayerUnkillable input, from t=0.05."
+  "notes": "Staging (V4o): since the event shot (CWeaponRanged 0x10238160 -> Shot 0x102387b0) an NPC's 3031 commits its bullets, 15 a set from the .38 here, and a 100-health player dies at the seventh; the record is about the gunman, so the player is held by retail's own unkillable latch, an events_player row's MakePlayerUnkillable input, from t=0.05. V6 epoch1 synchronous origin probes at5.950 measured shooter[904.328,685.864] (20261005T163359.762409Z); old fixed player[587,683] was317cm away after earlier native STEP_BACK. Stage96cm in front of the measured position, preserving t6, t16, all condition predicates/deadlines and seed1. 0x1024f670 too-close cutoff100 Source units; corrected distance37.8 units. At18 the epoch1 trace reads CAN_RANGE_ATTACK1 false during WAITING_ATTACK_TIME after the real far shot; retain the positive far-band edge and far-shot expectations, and assert the measured cleared bit instead of an old zero-stream sampled retention."
 }

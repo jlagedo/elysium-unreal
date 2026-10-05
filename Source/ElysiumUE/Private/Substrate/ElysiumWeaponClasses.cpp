@@ -724,6 +724,7 @@ void FElysiumWeapon::Spawn()
 void FElysiumWeapon::Serialize(FElysiumSaveArchive& Ar)
 {
 	FElysiumItem::Serialize(Ar);
+	Ar << bInReload << bInterruptReload << bIsJammed; // +0x898/+0x899/+0x89a BOOL SAVE, 0x1025506f..77/0x1028918d
 
 	// The two queued halves ride the event queue's own save block, so the transaction they complete
 	// has to restore with them — exactly the pairing `CLogicRelay`'s refire latch keeps.
@@ -731,6 +732,7 @@ void FElysiumWeapon::Serialize(FElysiumSaveArchive& Ar)
 	Ar << SecondaryModeIndex;
 	Ar << NextPrimaryAttackTime;
 	Ar << NextSecondaryAttackTime;
+	Ar.Time(WeaponIdleTime); // +0x894 TIME SAVE, 0x101a0a80
 
 	Ar << Swing.bActive;
 	Ar << Swing.Serial;
@@ -741,8 +743,8 @@ void FElysiumWeapon::Serialize(FElysiumSaveArchive& Ar)
 	Ar << Swing.Opponent;
 	Ar << Swing.PlaybackRate;
 	Ar << Swing.ClipSeconds;
-	Ar << Swing.CommitTime;
-	Ar << Swing.RecoveryDeadline;
+	Ar.Time(Swing.CommitTime, EElysiumTimePolicy::Zero); // 0x101a0a80 port transaction deadline, map-clock domain
+	Ar.Time(Swing.RecoveryDeadline, EElysiumTimePolicy::Zero); // 0x101a0a80 port transaction deadline, map-clock domain
 	// Additive, behind its own version: a payload written before the event route existed carries a
 	// transaction whose estimate IS queued, which is exactly what the default false describes.
 	if (Ar.Version() >= FElysiumSaveVersion::WeaponAnimEvent)
@@ -760,7 +762,7 @@ void FElysiumWeapon::Serialize(FElysiumSaveArchive& Ar)
 
 	Ar << bReloading;
 	Ar << ReloadSerial;
-	Ar << ReloadEndTime;
+	Ar.Time(ReloadEndTime, EElysiumTimePolicy::Zero); // 0x101a0a80 port transaction deadline, map-clock domain
 	Ar << bFireIntentDuringReload;
 
 	// `m_fEffects & EF_NODRAW`. Additive behind its own version; the default is DRAWN, which is what
@@ -772,13 +774,15 @@ void FElysiumWeapon::Serialize(FElysiumSaveArchive& Ar)
 
 	if (Ar.IsLoading())
 	{
-		if (World)
-		{
-			Swing.Opponent = World->RebaseSavedHandle(Swing.Opponent);
-		}
 		SwingSerialCounter = FMath::Max(SwingSerialCounter, Swing.Serial);
 		ReloadSerialCounter = FMath::Max(ReloadSerialCounter, ReloadSerial);
 	}
+}
+
+void FElysiumWeapon::RebaseSavedReferences(FElysiumEntityWorld& InWorld)
+{
+	FElysiumItem::RebaseSavedReferences(InWorld);
+	Swing.Opponent = InWorld.RestoreHandle(Swing.Opponent); // 0x101a2e40, before consumers
 }
 
 void FElysiumWeapon::Hide()
@@ -4030,9 +4034,33 @@ bool FElysiumWeapon::CanReloadMagazine(int32 MagazineIndex) const
 		&& ReloadOwner->Inventory.Reserve(ReloadRecord->AmmoType) > 0; // 0x103346c0 / 0x10253ab0
 }
 
+#if !UE_BUILD_SHIPPING
+namespace
+{
+void ObserveNativeReload(FElysiumWeapon& Weapon, const FString& Phase, const FString& Detail = FString())
+{
+	if (!Weapon.World || !Weapon.World->HasAiTraceSink()) return;
+	FElysiumEntity* OwnerEntity = Weapon.World->Resolve(Weapon.Owner);
+	FElysiumNpc* OwnerNpc = OwnerEntity ? OwnerEntity->AsNpc() : nullptr;
+	if (!OwnerNpc) return;
+	const FElysiumItemDef* Record = Weapon.Data();
+	Weapon.World->EmitAiTrace(*OwnerNpc, FName(TEXT("reload")), FString::Printf(
+		TEXT("%s item=%s %s handle=%s clip=%d reserve=%d in_reload=%d interrupt=%d jam=%d next_attack=%.6f now=%.6f primary=%.6f secondary=%.6f"),
+		*Phase, *Weapon.ClassName(), *Detail, *Weapon.Handle.ToString(), Weapon.MagazineCount,
+		Record ? OwnerNpc->Inventory.Reserve(Record->AmmoType) : 0, Weapon.bInReload ? 1 : 0, Weapon.bInterruptReload ? 1 : 0,
+		Weapon.bIsJammed ? 1 : 0, OwnerNpc->NextAttackTime, Weapon.World->NowSeconds(), Weapon.NextPrimaryAttackTime, Weapon.NextSecondaryAttackTime));
+}
+}
+#endif
+
 void FElysiumWeapon::FinishReloadBulk()
 {
 	FElysiumCombatCharacter* const ReloadOwner = OwnerCharacter(); // 0x102552c0 / 0x102521f0
+#if !UE_BUILD_SHIPPING
+	ObserveNativeReload(*this, TEXT("bulk_enter"));
+	const int32 ObservedClip = MagazineCount;
+	const int32 ObservedReserve = ReloadOwner && Data() ? ReloadOwner->Inventory.Reserve(Data()->AmmoType) : 0;
+#endif
 	if (ReloadOwner == nullptr) return; // 0x102552c0 no owner, no writes
 	const FElysiumItemDef* const ReloadRecord = Data(); // 0x102552c0 +0x8c8
 	if (ReloadRecord != nullptr && ReloadRecord->bReloadSingle) // 0x102552c0
@@ -4061,11 +4089,20 @@ void FElysiumWeapon::FinishReloadBulk()
 	bInReload = false; // 0x102552c0 +0x898
 	bIsJammed = false; // 0x102552c0 +0x89a
 	bInterruptReload = false; // 0x102552c0 +0x899
+#if !UE_BUILD_SHIPPING
+	ObserveNativeReload(*this, TEXT("bulk_commit"), FString::Printf(TEXT("clip_before=%d clip_after=%d reserve_before=%d reserve_after=%d flags=%d"),
+		ObservedClip, MagazineCount, ObservedReserve, Data() ? ReloadOwner->Inventory.Reserve(Data()->AmmoType) : 0,
+		(bInReload ? 1 : 0) | (bInterruptReload ? 2 : 0) | (bIsJammed ? 4 : 0)));
+#endif
 }
 
 void FElysiumWeapon::FinishReload()
 {
 	FElysiumCombatCharacter* const ReloadOwner = OwnerCharacter(); // 0x10255062 / 0x102551e2
+#if !UE_BUILD_SHIPPING
+	ObserveNativeReload(*this, TEXT("finish_enter"), FString::Printf(TEXT("clip=%d reserve=%d in_reload=%d"), MagazineCount,
+		ReloadOwner && Data() ? ReloadOwner->Inventory.Reserve(Data()->AmmoType) : 0, bInReload ? 1 : 0));
+#endif
 	if (ReloadOwner == nullptr) return; // 0x10255069 / 0x102551e9
 	const FElysiumItemDef* const ReloadRecord = Data(); // 0x10255054 +0x8c8
 	if (ReloadRecord != nullptr && ReloadRecord->bReloadSingle) // 0x1025505c
@@ -4077,12 +4114,30 @@ void FElysiumWeapon::FinishReload()
 	}
 	const FElysiumNpc* const ReloadNpc = ReloadOwner->AsNpc(); // 0x102551eb owner combat +0x9c
 	// Player m_flNextAttack +0x1564 has no shared character accessor yet; no finish output here.
-	if (ReloadNpc == nullptr || !bInReload || World == nullptr) return; // 0x102551f3..fd
+	if (ReloadNpc == nullptr || !bInReload || World == nullptr)
+	{
+#if !UE_BUILD_SHIPPING
+		ObserveNativeReload(*this, TEXT("finish_refused"), TEXT("reason=owner_or_flag"));
+#endif
+		return; // 0x102551f3..fd
+	}
 	const double ReloadNow = World->NowSeconds(); // 0x10255205
-	if (!(ReloadNpc->NextAttackTime <= ReloadNow)) return; // 0x102551ff..13 LIVE +0x1564, equality admitted
+	if (!(ReloadNpc->NextAttackTime <= ReloadNow))
+	{
+#if !UE_BUILD_SHIPPING
+		ObserveNativeReload(*this, TEXT("finish_refused"), TEXT("reason=live_deadline"));
+#endif
+		return; // 0x102551ff..13 LIVE +0x1564, equality admitted; NaN refuses
+	}
+#if !UE_BUILD_SHIPPING
+	ObserveNativeReload(*this, TEXT("finish_admitted"));
+#endif
 	FinishReloadBulk(); // 0x10255219 slot 323
 	NextPrimaryAttackTime = ReloadNow; // 0x1025521f..3a +0x730
 	NextSecondaryAttackTime = ReloadNow; // 0x1025521f..3a +0x734
+#if !UE_BUILD_SHIPPING
+	ObserveNativeReload(*this, TEXT("finish_stamps"), NextPrimaryAttackTime == ReloadNow && NextSecondaryAttackTime == ReloadNow ? TEXT("stamps=now") : TEXT("stamps=mismatch"));
+#endif
 }
 
 bool FElysiumWeapon::BeginReload()

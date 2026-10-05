@@ -19,6 +19,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include <initializer_list>
+#include <type_traits>
 
 #include "ElysiumEntity.h"       // ELYSIUM_NEVER_THINK
 #include "ElysiumEntityDefs.h"
@@ -206,7 +207,8 @@ inline void ElysiumRoundTripSnapshot(FElysiumEntityWorld& From, FElysiumEntityWo
 {
 	FElysiumMapSnapshot Snapshot;
 	From.Freeze(Snapshot);
-	To.ApplySnapshot(Snapshot);
+	To.ApplySnapshot(Snapshot, Snapshot.SaveBase); // same-map clock selected before restore, engine 0x200975f0
+	To.Activate(Snapshot.SaveBase);
 }
 
 // The AI network a hand-built world's patrol points bind to (0018 story 4): one ground node at each
@@ -239,7 +241,7 @@ struct FElysiumNpcWorldFixture
 	// catalogue, …) — exactly where each fixture's own constructor body set them before building
 	// its `FElysiumEntityDefs`.
 	FElysiumNpcWorldFixture(FElysiumNpcWorldBuilder&& Builder,
-		TFunctionRef<void(FElysiumRecordingServices&)> Configure)
+		TFunctionRef<void(FElysiumRecordingServices&)> Configure, bool bDormant = false, double SpawnClock = -FElysiumNpcBase::NpcInitThinkDelay)
 		: World(nullptr, nullptr, Services.Bundle())
 	{
 		Configure(Services);
@@ -248,9 +250,10 @@ struct FElysiumNpcWorldFixture
 			World.Places().AdoptRows(MoveTemp(Builder.Places), 0, MoveTemp(Builder.WanderCaps),
 				MoveTemp(Builder.CrosswalkPairs), MoveTemp(Builder.CrosswalkMotions));
 		}
-		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
+		ElysiumStandSpawnClock(World, SpawnClock);
 		World.Load(MoveTemp(Builder.Defs));
 		World.SpawnPlayer();
+		if (bDormant) return; // 0x101a2e40: reconstructed restore destination, before activation/think
 		// The map stands up a tenth of a second BEFORE the case's zero. `CAI_BaseNPCTroika::NPCInit`
 		// (`0x1029a0b0`) runs inside `Spawn` (`0x10299057`) and its first-second arm puts the first
 		// think at `curtime + 0.1` (`_DAT_104493d0`), not at curtime — an NPC that has not reached
@@ -277,6 +280,12 @@ struct FElysiumNpcWorldFixture
 	// The common case: nothing needs configuring before the world stands up.
 	explicit FElysiumNpcWorldFixture(FElysiumNpcWorldBuilder&& Builder)
 		: FElysiumNpcWorldFixture(MoveTemp(Builder), [](FElysiumRecordingServices&) {})
+	{
+	}
+
+	template<typename TBool, std::enable_if_t<std::is_same_v<TBool, bool>, int> = 0>
+	FElysiumNpcWorldFixture(FElysiumNpcWorldBuilder&& Builder, TBool bDormant)
+		: FElysiumNpcWorldFixture(MoveTemp(Builder), [](FElysiumRecordingServices&) {}, bDormant)
 	{
 	}
 

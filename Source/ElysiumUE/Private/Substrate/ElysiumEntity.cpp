@@ -55,7 +55,9 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 	// collision + draw while bHidden.
 	if (bStartHidden)
 	{
-		bHidden = true;
+		bHidden = true; // 0x100a8710, hidden is not EFL_DORMANT
+		SavedThinkCallback = ThinkCallback; // FUNCTION SAVE +0xe4
+		ThinkCallback = NAME_None; // NULL think +0x118
 		NextThink = ELYSIUM_NEVER_THINK;
 	}
 }
@@ -68,6 +70,11 @@ void FElysiumEntity::ScriptHide()
 	{
 		return;
 	}
+	SavedThinkCallback = ThinkCallback; // 0x100a8710 +0xe4
+	ThinkCallback = NAME_None; // 0x100a8710 NULL think
+	bSavedPhysicalWordsAvailable = ReadScriptPhysicalWords(ScriptSavedSolid, ScriptSavedMoveType,
+		ScriptSavedMoveCollide, ScriptSavedSolidFlags, ScriptSavedEffects); // 0x100a8710; false until reader exists
+	if (bSavedPhysicalWordsAvailable) WriteScriptPhysicalWords(0, 0, 0, 4, 0xe0); // 0x100a8710
 	bHidden = true;
 	SavedNextThink = NextThink;
 	NextThink = ELYSIUM_NEVER_THINK;
@@ -83,7 +90,10 @@ void FElysiumEntity::ScriptUnhide()
 		return;
 	}
 	bHidden = false;
-	NextThink = SavedNextThink;
+	ThinkCallback = SavedThinkCallback; // 0x100a8990: reinstate saved callback
+	NextThink = World ? static_cast<float>(World->NowSeconds()) : 0.0f; // 0x100a8990 due NOW
+	if (bSavedPhysicalWordsAvailable) WriteScriptPhysicalWords(ScriptSavedSolid, ScriptSavedMoveType,
+		ScriptSavedMoveCollide, ScriptSavedSolidFlags, ScriptSavedEffects); // 0x100a8990
 	OnDormancyChanged();
 }
 

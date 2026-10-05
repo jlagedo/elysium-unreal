@@ -1,0 +1,216 @@
+{
+  "name": "lifecycle_startnpc_ground_drop",
+  "about": "0x10273ad0 full-hull ground drop, or 0x1028a2a0 airborne unhide fall; no invented floor.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 6,
+  "player": {
+    "at": "cover_seat"
+  },
+  "cast": [
+    {
+      "name": "arena_hidden",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        683,
+        683,
+        100
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_thirtyeight",
+        "player_reaction": "D_HT 5",
+        "hint_groups": "2",
+        "npc_perception": "3",
+        "squadname": "",
+        "spawnflags": "0",
+        "StartHidden": "0"
+      }
+    },
+    {
+      "name": "flag4",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        -683,
+        683,
+        100
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_thirtyeight",
+        "player_reaction": "D_NU 5",
+        "hint_groups": "2",
+        "npc_perception": "3",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    },
+    {
+      "name": "fly",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        -683,
+        -683,
+        100
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_thirtyeight",
+        "player_reaction": "D_NU 5",
+        "hint_groups": "2",
+        "npc_perception": "3",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    },
+    {
+      "name": "swim",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        683,
+        -683,
+        100
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_thirtyeight",
+        "player_reaction": "D_NU 5",
+        "hint_groups": "2",
+        "npc_perception": "3",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    },
+    {
+      "name": "caps",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        -980,
+        400,
+        100
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_thirtyeight",
+        "player_reaction": "D_NU 5",
+        "hint_groups": "2",
+        "npc_perception": "3",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    {
+      "t": 2,
+      "do": "startnpc_ground_gate",
+      "target": "fly",
+      "control": "fly"
+    },
+    {
+      "t": 2,
+      "do": "startnpc_ground_gate",
+      "target": "swim",
+      "control": "swim"
+    },
+    {
+      "t": 2,
+      "do": "startnpc_ground_gate",
+      "target": "caps",
+      "control": "capability4"
+    }
+  ],
+  "expect": [
+    {
+      "label": "sees",
+      "who": "arena_hidden",
+      "kind": "cond+",
+      "match": "SEE_ENEMY (0x46)",
+      "within": 3.0
+    },
+    {
+      "label": "fights",
+      "who": "arena_hidden",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_START_COMBAT (",
+      "within": 2.0
+    },
+    {
+      "label": "fires",
+      "who": "arena_hidden",
+      "kind": "task",
+      "match": "task_range_attack1 (",
+      "within": 6.0
+    }
+  ],
+  "never": [
+    {
+      "who": "arena_hidden",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": 3,
+      "who": "arena_hidden",
+      "probe": "on_ground",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "arena_hidden",
+      "probe": "alive",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "arena_hidden",
+      "probe": "witness",
+      "field": "floor_drop.performed",
+      "greater": 0
+    },
+    {
+      "at": 2.5,
+      "who": "flag4",
+      "probe": "witness",
+      "field": "floor_drop.skipped",
+      "greater": 0
+    },
+    {
+      "at": 2.5,
+      "who": "fly",
+      "probe": "witness",
+      "field": "floor_drop.skipped",
+      "greater": 0
+    },
+    {
+      "at": 2.5,
+      "who": "swim",
+      "probe": "witness",
+      "field": "floor_drop.skipped",
+      "greater": 0
+    },
+    {
+      "at": 2.5,
+      "who": "caps",
+      "probe": "witness",
+      "field": "floor_drop.skipped",
+      "greater": 0
+    }
+  ],
+  "notes": "Startup full-hull floor-drop witness ends before unrelated later cover selection; no behavioral deadline widened."
+}

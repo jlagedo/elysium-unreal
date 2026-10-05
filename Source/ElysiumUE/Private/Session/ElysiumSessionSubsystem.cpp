@@ -131,8 +131,9 @@ void UElysiumSessionSubsystem::BeginNewGame(int32 Clan, bool bMale)
 	Quests.Reset();
 	Snapshots.Reset();
 	Visited.Reset();
-	// The clock is session time (`curtime`), so a fresh run starts at zero — every restored FireTime,
-	// think deadline and ScheduleTask delay is absolute against it. ResetClock also drops any hold,
+	// engine 0x200f5bc4: a fresh map starts at 1.0; destination snapshots select their own clock.
+	// Restored queue/think TIME is relative to its own section base (0x101a0a80).
+	// ResetClock also drops any hold,
 	// time scale and armed dev step, which is what makes the run pristine rather than merely reseeded.
 	TimeCtl.ResetClock();
 
@@ -263,6 +264,12 @@ void UElysiumSessionSubsystem::StoreMapSnapshot(FElysiumMapSnapshot&& Snapshot)
 void UElysiumSessionSubsystem::SetMapSnapshots(TMap<FString, FElysiumMapSnapshot>&& In)
 {
 	Snapshots = MoveTemp(In);
+}
+
+void UElysiumSessionSubsystem::SelectMapClock(const FString& Map)
+{
+	const FElysiumMapSnapshot* Visit = FindMapSnapshot(Map); // engine 0x200975f0
+	TimeCtl.SelectMapClock(Visit ? Visit->FrozenAt : 1.0); // engine 0x200f5bc4 fresh epoch
 }
 
 void UElysiumSessionSubsystem::ClearMapSnapshot(const FString& Map)

@@ -20,6 +20,41 @@ namespace
 	const FName GElysiumSaveCompressor = NAME_Oodle;
 }
 
+// TIME SAVE uses context-relative values; FLOAT never calls this (0x101a0a80/0x101a2a30).
+double FElysiumSaveArchive::EncodeTime(double Value, double Base, EElysiumTimePolicy Policy)
+{
+	const bool Exceptional = (Policy == EElysiumTimePolicy::Negative && Value < 0.0)
+		|| (Policy == EElysiumTimePolicy::MinusOne && Value == -1.0)
+		|| (Policy == EElysiumTimePolicy::Zero && Value == 0.0)
+		|| (Policy == EElysiumTimePolicy::MaxFloat && Value == static_cast<double>(MAX_flt)); // 0x101cf250
+	return Exceptional ? 1e11 : Value - Base; // 0x101a0a80; sentinel is not a deadline
+}
+
+double FElysiumSaveArchive::DecodeTime(double Value, double Base, EElysiumTimePolicy Policy)
+{
+	if (Policy != EElysiumTimePolicy::Ordinary && Value >= 1e10) // 0x101cf2f0
+	{
+		if (Policy == EElysiumTimePolicy::Zero) return 0.0; // mode 3
+		if (Policy == EElysiumTimePolicy::MaxFloat) return static_cast<double>(MAX_flt); // mode 4
+		return -1.0; // modes 1/2, 0x101cf2f0
+	}
+	return Value + Base; // 0x101a2a30
+}
+
+void FElysiumSaveArchive::Time(float& Value, EElysiumTimePolicy Policy)
+{
+	float Encoded = IsSaving() ? static_cast<float>(EncodeTime(Value, SourceBase, Policy)) : 0.0f; // 0x101a0a80
+	*this << Encoded; // TIME SAVE
+	if (IsLoading()) Value = static_cast<float>(DecodeTime(Encoded, DestinationBase, Policy)); // 0x101a2a30
+}
+
+void FElysiumSaveArchive::Time(double& Value, EElysiumTimePolicy Policy)
+{
+	double Encoded = IsSaving() ? EncodeTime(Value, SourceBase, Policy) : 0.0; // 0x101a0a80
+	*this << Encoded; // queue precision; same TIME contract
+	if (IsLoading()) Value = DecodeTime(Encoded, DestinationBase, Policy); // 0x101a2a30
+}
+
 // Value types.
 
 FArchive& operator<<(FArchive& Ar, FElysiumVariant& V)
@@ -66,7 +101,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumEntityHandle& H)
 
 FArchive& operator<<(FArchive& Ar, FElysiumIOEvent& E)
 {
-	Ar << E.FireTime;
+	Ar << E.FireTime; // 0x101a0a80: snapshot capture already encoded section-relative queue TIME
 	Ar << E.Target;
 	Ar << E.Input;
 	Ar << E.Param;
@@ -386,7 +421,10 @@ FArchive& operator<<(FArchive& Ar, FElysiumEntityState& S)
 	{
 		Ar << S.bActivateCalled;
 	}
-	Ar << S.NextThink << S.SavedNextThink;
+	Ar << S.NextThink << S.NextThinkSR << S.SavedNextThink; // already section-relative, 0x101a0a80
+	Ar << S.ThinkCallback << S.SavedThinkCallback; // FUNCTION SAVE +0x118/+0xe4, 0x100a9f70
+	Ar << S.bSavedPhysicalWordsAvailable << S.ScriptSavedSolid << S.ScriptSavedMoveType
+		<< S.ScriptSavedMoveCollide << S.ScriptSavedSolidFlags << S.ScriptSavedEffects; // 0x100a8710/0x100a8990
 	Ar << S.OutputTimesRemaining;
 	Ar << S.Fields;
 	Ar << S.LeafState;
@@ -407,7 +445,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedFade& F)
 
 FArchive& operator<<(FArchive& Ar, FElysiumMapSnapshot& M)
 {
-	Ar << M.MapName << M.DefCount << M.FrozenAt;
+	Ar << M.MapName << M.DefCount << M.FrozenAt << M.SaveBase; // 0x200962c0/0x101a0a80
 	Ar << M.Entities;
 	Ar << M.AbsentEntities;
 	Ar << M.Queue << M.QueueNextSerial;

@@ -1488,3 +1488,9 @@ only in case are `sm_warehouse_1`'s `B1`/`b1` (rows 542 / 866), `B2`/`b2` (543 /
 `pt2` and `pt3` `enabled 0`, `min_time 3`, `max_time 6`). The patrol points that *reach* them are
 `A1`, `A2`, `A3` (rows 433, 434, 435; `nodeid` 39, 40, 41, `ip_percent 100`, `group_id 1`), each
 naming its place through `target_name`.
+
+### Interesting-place writer and consistency chain (V6 recovery, 2026-10-05)
+
+PickSpotFor0x102da0d0 gates raw allocation-used-failed >=1 and enabled. Sampler0x102d9fa0 draws padded hull X/Y (and Z only when requested), retains the shipped lower-Y/Z mins.X overlap operands0x102da9e0, and fails once after >8 occupied replacements. Both failed stationary clearance attempts enter the four-slot now+2 ring0x102d9ed0; exhaustion warns and still succeeds/AddMarker0x102da860. FIND keeps the sampled destination. ClaimMarker0x102da7c0 requires the existing occupant row and increments in-use; it does not write the occupant. Release0x102da600 writes last place, clears the occupant before conditional output, decrements/swap-removes the complete row.
+
+Restore scan0x102db5e0 retains the LAST matching place.0x10299a80 separately rejects a missing live place or a live place lacking the NPC occupant, clearing +0x62ec.0x102b53d0 validates before release and refuses invalid references without duplicate outputs.0x102da9a0 reads used rows. Conversation0x102db760 ->0x102dcc20 instead follows the selected conversation place/list/current index; it is not the current place's first row. That producer remains0018/18.

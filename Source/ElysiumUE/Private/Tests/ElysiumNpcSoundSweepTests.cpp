@@ -66,8 +66,8 @@ namespace
 			return Builder;
 		}
 
-		FSweepFixture()
-			: Fixture(BuildWorld())
+		FSweepFixture(bool bDormant = false)
+			: Fixture(BuildWorld(), bDormant)
 			, Services(Fixture.Services)
 			, World(Fixture.World)
 		{
@@ -626,7 +626,7 @@ bool FElysiumNpcSoundSweepSaveTest::RunTest(const FString&)
 	// generated datamap walk is what carries them -- `FElysiumNpcMemory::Serialize` keeps only the
 	// port-only words and the embedded sound records. So this goes through a whole record.
 	FSweepFixture F;
-	FSweepFixture G;
+	FSweepFixture G(true);
 	if (!TestNotNull(TEXT("npc"), F.Npc) || !TestNotNull(TEXT("owner"), F.Owner)
 		|| !TestNotNull(TEXT("the restored npc"), G.Npc)
 		|| !TestNotNull(TEXT("the restored owner"), G.Owner))
@@ -662,7 +662,7 @@ bool FElysiumNpcSoundSweepSaveTest::RunTest(const FString&)
 	// occupies it.
 	{
 		FSweepFixture H;
-		FSweepFixture I;
+		FSweepFixture I(true);
 		if (H.Npc == nullptr || I.Npc == nullptr)
 		{
 			return false;

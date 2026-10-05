@@ -3959,3 +3959,9 @@ _Recovered 2026-09-27, 0019 story 8 pass I (lane L12)._
 - `0x103d2a10`: an accepted point wins without re-testing its paths.
 
 **Unrecovered:** nothing named by the walk.
+
+### Dialogue and damage caller chains (V6 recovery, 2026-10-05)
+
+RunAI0x1026f110 clears gathered and skips ordinary/reduced GatherConditions while the live dialog partner +0xfe8 resolves. GetNewSchedule0x102814d0 may gather on reselection. PerformSensing0x10310710 itself has no dialog check, which does not remove the caller's gate. NPCThink0x10293095 independently invokes SetPlayerLOS0x10291610:2s cache, near512-unit bypass,8s same-PVS grace and the state/frenzy forced-true arms. Upkeep0x102c1400 has no distance/LOS dialog release.
+
+Damage0x10265ed0 qualified record position comes from inflictor +0x28 or self+64*death-throw direction. Unknown unseen attacker with a current enemy and no SEE_ENEMY updates the CURRENT enemy memory (GetEnemy0x1026612c), not null. Strict base light/heavy thresholds0x10266630/0x10266660 are >0/>20. Elapsed>=1 replaces the sum, otherwise adds; repeated requires sum>max*0.3. A scalar input with no qualified attacker does not fill the qualified last-damage record. These writes precede the next think's trace/gather, so a later condition-delta trace is not the synchronous writer evidence.

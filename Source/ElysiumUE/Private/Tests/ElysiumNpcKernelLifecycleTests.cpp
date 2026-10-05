@@ -320,6 +320,7 @@ bool FElysiumNpcKernelLifecycleDormancyTest::RunTest(const FString&)
 	N.bHidden = true;
 	Record = N.TroikaScriptUnhideTail();
 	TestFalse(TEXT("hidden with no cine still records nothing"), Record.bWroteToCine);
+	N.bCineScriptHidden = true; // 0x102c1ec0 separate +0x5d78 latch
 	N.ScriptOwner = N.Handle;   // any entity that resolves; retail's is the cine
 	Record = N.TroikaScriptUnhideTail();
 	TestTrue(TEXT("hidden with a resolving cine records the six words"), Record.bWroteToCine);

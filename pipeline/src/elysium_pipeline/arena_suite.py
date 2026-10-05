@@ -168,7 +168,10 @@ def discover_records(project_dir: Path) -> list[ScenarioRecord]:
 
 
 def select_records(records: Sequence[ScenarioRecord], names: Iterable[str]) -> list[ScenarioRecord]:
-    """The records named (every one when none is), in discovery order; an unknown name is an error."""
+    """The records named in requested order (all in discovery order); unknown names are errors.
+
+    Explicit ordering is part of a paired in-boot isolation proof, not just a selection filter.
+    """
 
     wanted = [name for name in names if name]
     if not wanted:
@@ -179,8 +182,8 @@ def select_records(records: Sequence[ScenarioRecord], names: Iterable[str]) -> l
         raise ArenaError(
             f"no scenario record named {', '.join(repr(name) for name in unknown)}; "
             f"the records are: {', '.join(sorted(known))}")
-    chosen = set(wanted)
-    return [record for record in records if record.name in chosen]
+    by_name = {record.name: record for record in records}
+    return [by_name[name] for name in dict.fromkeys(wanted)]
 
 
 def _slug(text: str) -> str:

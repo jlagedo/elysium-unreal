@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumSchedule.h"
+#include "ElysiumSaveArchive.h"
 
 #include "Substrate/ElysiumNpcLog.h"       // the one `npc_*` log category a refused registration reports on
 #include "Substrate/ElysiumScheduleCorpus.h"   // the loaded programs, the id spaces and the activity names
@@ -575,3 +576,16 @@ ElysiumSchedule::FTaskActivityScope::~FTaskActivityScope()
 	}
 }
 #endif
+
+// 0x1027bc60/0x1027c160: embedded AIScheduleState_t, cursor is +0x5c40, not failure +0x5c50.
+void FElysiumScheduleState::Serialize(FElysiumSaveArchive& Ar)
+{
+	Ar << Current << TaskIndex; // +0x5c38 identity / +0x5c40 INT SAVE
+	int32 SavedStatus = static_cast<int32>(TaskStatus); // +0x5c44 INT SAVE
+	Ar << SavedStatus;
+	if (Ar.IsLoading()) TaskStatus = static_cast<EElysiumTaskStatus>(SavedStatus);
+	Ar.Time(ScheduleStartedAt); // +0x5c48 TIME SAVE, 0x101a0a80/0x101a2a30
+	Ar.Time(TaskStartedAt); // +0x5c4c TIME SAVE
+	Ar.Time(TaskEndsAt, EElysiumTimePolicy::Zero); // port timed-task continuation, map-clock domain
+	Ar << FailScheduleOverride << ToleranceUnits << bDidMaintainSchedule; // +0x5c54 / task operands / +0x5bb8
+}

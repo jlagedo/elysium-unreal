@@ -115,6 +115,7 @@ public:
 
 	// Re-Travel the current map (the export->reload hot loop). Returns false with no map loaded.
 	bool Reload();
+	bool FreshLoad(const FString& Map); // engine 0x2008f2e0: discard destination visit before rebuild
 
 	// Ask the next map build to forget the destination's stored snapshot instead of replaying it,
 	// so its openings fire again. Consumed once by the freshly-loaded map actor, at the point it

@@ -5139,3 +5139,7 @@ _Recovered 2026-09-28, 0019 story 8 pass I (lane L13b)._
 A negative tick would index before the table (retail hazard; not reachable with a monotonic tick).
 
 **Unrecovered:** the two ConVar names (`0x1093f73c`, `0x1093f95c`).
+
+### Restore cursor and navigator prerequisite (V6 recovery, 2026-10-05)
+
+OnRestore0x1027bf50 resumes cursor +0x5c40/status +0x5c44 from a valid name/CRC header, clamps only failure +0x5c50 >=42 to1, then refinds the saved route through0x102ee1e0/0x102f1dc0/0x102f2330. No SetGoal/StartTask or ClaimMarker is replayed. Entity/remembered-enemy/corner/stored-location/owner-slot586/pedestrian goal arms retain their semantic inputs. Strict retry comparisons and a false/deferred refind still take the native give-up chain; saved state cannot convert a failed route into success. Models, collision, navigation and the motor input must already be prepared when that consumer runs, before activation/first think.

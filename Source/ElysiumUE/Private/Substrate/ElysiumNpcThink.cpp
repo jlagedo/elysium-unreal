@@ -429,6 +429,10 @@ void FElysiumNpc::Think19Tail(double Now, bool bUpdateDue, float UpdateInterval)
 //   `0x10293788`, `0x1029378d`, `0x10293790`, `0x1029379e`.
 void FElysiumNpc::NPCThink()
 {
+#if !UE_BUILD_SHIPPING
+	if (World && World->HasAiTraceSink()) World->EmitAiTrace(*this, FName(TEXT("thinkfence")),
+		FString::Printf(TEXT("npc_draw=%d"), ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).GetCurrentSeed()));
+#endif
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
 	// `m_bfAINPCFlags2 &= 0x7ffffffb`: SCHEDULE_CHANGED (0x4) AND bit 31, before the disable test.
 	NpcFlags.Clear(EElysiumNpcFlag2::SCHEDULE_CHANGED);                     // 0x10292e5e

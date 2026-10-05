@@ -2,6 +2,9 @@
 // build, spawn placement resolution, EndPlay, and the activation poll that admits gameplay.
 
 #include "ElysiumMapActor.h"
+#if !UE_BUILD_SHIPPING
+#include "Debug/ElysiumArenaStage.h" // 0x101a2e40 nonshipping transaction rebind before Load
+#endif
 
 #include "AiInfra/ElysiumInfraActor.h"
 #include "AiInfra/ElysiumInfraIndex.h"
@@ -216,6 +219,9 @@ void AElysiumMapActor::BuildStageWorld()
 			CancelCharacterModelAdmissions();
 			ReleasePropAndWieldModels();
 			EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
+#if !UE_BUILD_SHIPPING
+			ElysiumArenaStage::NotifyWorldConstructed(this); // 0x101a2e40 all restore observers bind before Load
+#endif
 			FString ModelContextError;
 			// A lab stands any catalogue model on demand, so the whole catalogue is resident here --
 			// unless the stage's owner stages only what its defs name (`bStageWithoutCatalogue`).
@@ -339,6 +345,9 @@ bool AElysiumMapActor::RebuildStageWorld(FElysiumEntityDefs&& Defs, TArray<FElys
 	Services.Weather    = this;
 	Services.Camera     = LocalCameraService(this);
 	EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
+#if !UE_BUILD_SHIPPING
+	ElysiumArenaStage::NotifyWorldConstructed(this); // 0x101a2e40 all restore observers bind before Load
+#endif
 	// No payload: the stage's collision component stays Disabled, and the arena's solids are Unreal
 	// actors, not brush entities.
 	EntityWorld->SetCollisionPayload(nullptr);
@@ -405,6 +414,7 @@ bool AElysiumMapActor::RebuildStageWorld(FElysiumEntityDefs&& Defs, TArray<FElys
 	// Teardown freezes a snapshot into the session's visited-map set for any named world with a
 	// player, and a stage is nobody's map.
 	const int32 DefCount = Defs.Num();
+	// engine 0x200f5bc4/0x200975f0: stage host selects 1.0 or checkpoint base BEFORE RebuildStageWorld.
 	EntityWorld->Load(MoveTemp(Defs));
 	PrepareExpressionTables();
 	EntityCount = DefCount;
@@ -468,6 +478,16 @@ void AElysiumMapActor::PrepareExpressionTables()
 
 void AElysiumMapActor::LoadMap()
 {
+	RestoreBeforeActivation = nullptr;
+	if (UGameInstance* ClockGI = GetGameInstance()) // engine 0x200f5bc4/0x200975f0
+	{
+		if (UElysiumSessionSubsystem* ClockSession = ClockGI->GetSubsystem<UElysiumSessionSubsystem>())
+		{
+			UElysiumMapSubsystem* ClockMaps = ClockGI->GetSubsystem<UElysiumMapSubsystem>();
+			if (ClockMaps && ClockMaps->ConsumeFreshMapState()) ClockSession->ClearMapSnapshot(MapName);
+			ClockSession->SelectMapClock(MapName); // engine 0x200975f0 BEFORE Load/Spawn
+		}
+	}
 	if (bStageOnly)
 	{
 		BuildStageWorld();
@@ -644,6 +664,9 @@ void AElysiumMapActor::LoadMap()
 				CancelCharacterModelAdmissions();
 				ReleasePropAndWieldModels();
 				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
+#if !UE_BUILD_SHIPPING
+				ElysiumArenaStage::NotifyWorldConstructed(this); // 0x101a2e40 all restore observers bind before Load
+#endif
 				// The map's cooked per-entity collision, when Collision->Build adopted a payload
 				// above. Null on an unconverted map, and
 				// then every brush body cooks from its def's hulls as it always has.
@@ -709,20 +732,27 @@ void AElysiumMapActor::LoadMap()
 					// After SpawnPlayer, so the player exists for the
 					// records that reference it, and before the first Tick, so nothing has run yet.
 					//
-					// A dev fresh-state entry (`elysium.newgame_ttd`) drops the snapshot here rather
-					// than at the command, because the travel it issued tore this map down on the way
-					// out and froze it again.
-					UElysiumMapSubsystem* MapsForState =
-						GetGameInstance() ? GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
-					if (MapsForState && MapsForState->ConsumeFreshMapState())
+					// 0x200975f0: the fresh-state door was consumed before Load/Spawn and clock selection.
+					if (const FElysiumMapSnapshot* Snapshot = GameState->FindMapSnapshot(MapName))
 					{
-						GameState->ClearMapSnapshot(MapName);
-						UE_LOG(LogElysium, Log, TEXT("fresh map state: %s forgotten"), *MapName);
+						const bool bRestoreLevelTransition = !GameState->IsSaveRestorePending(); // 0x1011a7a0 old-level argument
+						RestoreBeforeActivation = [this, GameState, SnapshotCopy = *Snapshot, bRestoreLevelTransition]()
+						{
+							TFunction<void()> AppliedObserver = MoveTemp(EntityWorld->OnSnapshotApplied);
+							EntityWorld->OnSnapshotApplied = [GameState, AppliedObserver]()
+							{
+								GameState->NotifyRestoreApplied();
+								if (AppliedObserver) AppliedObserver();
+							};
+							const int32 AppliedRows = EntityWorld->ApplySnapshot(SnapshotCopy, EntityWorld->NowSeconds(), bRestoreLevelTransition);
+							EntityWorld->OnSnapshotApplied = nullptr;
+							if (AppliedRows != SnapshotCopy.Entities.Num()) { GameState->NotifyRestoreFailed(TEXT("snapshot entity decode failed")); return false; }
+							return true;
+						};
 					}
-					else if (const FElysiumMapSnapshot* Snapshot = GameState->FindMapSnapshot(MapName))
-					{
-						EntityWorld->ApplySnapshot(*Snapshot);
-					}
+#if !UE_BUILD_SHIPPING
+					if (!RestoreBeforeActivation) ElysiumArenaStage::NotifyWorldApplied(this); // fresh boundary; saved apply waits for actual prerequisites
+#endif
 				}
 			}
 			else if (!bInfrastructureAdoptionFailed)
@@ -884,6 +914,7 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void AElysiumMapActor::TeardownEntityWorld()
 {
+	RestoreBeforeActivation = nullptr;
 	CancelCharacterModelAdmissions();
 	EntityWorld.Reset();
 	// The body-sound channel ledger keys on that world's entity handles; the voices themselves are
@@ -1193,6 +1224,17 @@ void AElysiumMapActor::ActivateRuntime()
 			Motor->SetRuntimeReady(true);
 		}
 	}
+	if (RestoreBeforeActivation)
+	{
+		auto ApplyRestore = MoveTemp(RestoreBeforeActivation);
+		RestoreBeforeActivation = nullptr;
+		if (!ApplyRestore())
+		{
+			for (AElysiumNpcBody* RestoreMotor : NpcMotors) if (IsValid(RestoreMotor)) RestoreMotor->SetRuntimeReady(false);
+			FailRuntime(TEXT("prepared restore apply refused"));
+			return;
+		}
+	}
 
 	if (EntityWorld)
 	{
@@ -1248,6 +1290,9 @@ void AElysiumMapActor::ActivateRuntime()
 
 	UE_LOG(LogElysium, Log, TEXT("map runtime %s: Active after %.3fs at game time %.3f"),
 		*MapName, GetRuntimeWaitSeconds(), Now);
+	if (UGameInstance* ReadyGI = GetGameInstance())
+		if (UElysiumSessionSubsystem* ReadySession = ReadyGI->GetSubsystem<UElysiumSessionSubsystem>())
+			ReadySession->NotifyRestoreReady(); // 0x1011aaf0 full runtime barrier, first-think sample is Applied
 	RuntimeReady.Broadcast(this);
 }
 
@@ -1265,5 +1310,8 @@ void AElysiumMapActor::FailRuntime(const FString& Reason)
 		TEXT("map runtime %s: Failed after %.3fs: %s [missing: %s]"),
 		*MapName, GetRuntimeWaitSeconds(), *RuntimeFailureReason,
 		*GetMissingRuntimePrerequisites());
+	if (UGameInstance* FailedGI = GetGameInstance())
+		if (UElysiumSessionSubsystem* FailedSession = FailedGI->GetSubsystem<UElysiumSessionSubsystem>())
+			FailedSession->NotifyRestoreFailed(Reason); // readiness refusal is terminal
 	RuntimeFailed.Broadcast(this, RuntimeFailureReason);
 }

@@ -302,23 +302,43 @@ bool FElysiumNpcMaker::IsSpawnBoxOccupied(float FloorZ) const
 // Slot 618: `0x1034b580`.
 bool FElysiumNpcMaker::CanMakeNPC(bool bBypass)
 {
+    auto TraceAttempt = [this](bool bAccepted = false) -> bool
+    {
+#if !UE_BUILD_SHIPPING
+        if (World && World->HasAiTraceSink())
+        {
+            const float HalfExtentCm = GMakerSpawnBoxHalfExtentUnits * ElysiumMove::U;
+            FString Candidates;
+            const IElysiumEmbodiment* Services = World->Embodiment();
+            if (!Services || !Services->DescribeNpcMakerSpawnArea(Origin, HalfExtentCm, static_cast<float>(Origin.Z), Candidates))
+                Candidates = TEXT("candidates=unavailable:no maker geometry reader");
+            const FVector BoxMin(Origin.X - HalfExtentCm, Origin.Y - HalfExtentCm, Origin.Z);
+            const FVector BoxMax(Origin.X + HalfExtentCm, Origin.Y + HalfExtentCm, Origin.Z);
+            World->EmitAiTrace(*this, FName(TEXT("makerattempt")), FString::Printf(
+                TEXT("gate=%s live=%d max_live=%d global=%d box_min=%s box_max=%s %s"),
+                AttemptName(LastAttempt), LiveChildren, MaxLiveChildren, World->IsNpcMakerSceneBlocked() ? 1 : 0,
+                *BoxMin.ToString(), *BoxMax.ToString(), *Candidates)); // synchronous 0x1034b580 admission/refusal
+        }
+#endif
+        return bAccepted;
+    };
 	// 1. A bypass answers yes before anything else.
 	if (bBypass)
 	{
 		LastAttempt = EAttempt::Spawned;
-		return true;
+		return TraceAttempt(true);
 	}
 	// 2. `0 < m_iMaxLiveChildren && m_iMaxLiveChildren <= m_cLiveChildren`.
 	if (MaxLiveChildren > 0 && LiveChildren >= MaxLiveChildren)
 	{
 		LastAttempt = EAttempt::LiveLimit;
-		return false;
+		return TraceAttempt();
 	}
 	// 3. `DAT_106c8a41`, the global no-spawn byte (a scene holds the stage).
 	if (World != nullptr && World->IsNpcMakerSceneBlocked())
 	{
 		LastAttempt = EAttempt::Scene;
-		return false;
+		return TraceAttempt();
 	}
 	// 4. With a player (`0x101cda50`): npcclip visibility (`0x101d1a90`), the player's view cone
 	//    (the player's slot 363 asked of this maker), and the Euclidean minimum distance, truncated.
@@ -329,12 +349,12 @@ bool FElysiumNpcMaker::CanMakeNPC(bool bBypass)
 		if (bNpcClip && Embodiment != nullptr && Embodiment->IsNpcMakerVisibleFromPlayer(Origin))
 		{
 			LastAttempt = EAttempt::Visible;
-			return false;
+			return TraceAttempt();
 		}
 		if (bViewCone && Embodiment != nullptr && Embodiment->IsNpcMakerInPlayerViewCone(Origin))
 		{
 			LastAttempt = EAttempt::ViewCone;
-			return false;
+			return TraceAttempt();
 		}
 		if (MinPcDistance > 0)
 		{
@@ -342,7 +362,7 @@ bool FElysiumNpcMaker::CanMakeNPC(bool bBypass)
 			if (DistanceUnits < MinPcDistance)
 			{
 				LastAttempt = EAttempt::Distance;
-				return false;
+				return TraceAttempt();
 			}
 		}
 	}
@@ -353,10 +373,10 @@ bool FElysiumNpcMaker::CanMakeNPC(bool bBypass)
 	if (IsSpawnBoxOccupied(static_cast<float>(Origin.Z)))
 	{
 		LastAttempt = EAttempt::Occupied;
-		return false;
+		return TraceAttempt();
 	}
 	LastAttempt = EAttempt::Spawned;
-	return true;
+	return TraceAttempt(true);
 }
 
 // Slot 619: `0x1034af30` — `RET 4`.

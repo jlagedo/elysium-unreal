@@ -1,0 +1,163 @@
+{
+  "name": "save_restore_single_round_reload",
+  "about": "0x1025506f..77 NPC single-round retained-byte arm plus owner/clip/FLOAT/TIME persistence; explicit real FinishReload fixture, no player producer claim.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 20.0,
+  "player": {
+    "at": "start"
+  },
+  "cast": [
+    {
+      "name": "arena_bystander",
+      "classname": "npc_VHumanCombatant",
+      "at": "east",
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "additionalequipment": "item_w_ithaca_m_37"
+      }
+    }
+  ],
+  "expect": [
+    {
+      "label": "idles",
+      "who": "arena_bystander",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_IDLE_DISPOSITION (",
+      "by": 5.0
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    }
+  ],
+  "probes": [
+    {
+      "at": "applied",
+      "who": "arena_bystander",
+      "probe": "witness",
+      "field": "weapon.reload",
+      "equals": true
+    }
+  ],
+  "script": [
+    {
+      "t": 2,
+      "do": "npc_single_round_finish_reload",
+      "target": "arena_bystander"
+    },
+    {
+      "t": 2.1,
+      "do": "save",
+      "slot": "save_restore_single_round_reload",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "arena_bystander",
+          "field": "weapon.reload"
+        },
+        {
+          "who": "arena_bystander",
+          "field": "weapon.jam"
+        },
+        {
+          "who": "arena_bystander",
+          "field": "weapon.interrupt"
+        },
+        {
+          "who": "arena_bystander",
+          "field": "weapon.owner"
+        },
+        {
+          "who": "arena_bystander",
+          "field": "weapon.next_primary",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "arena_bystander",
+          "field": "weapon.next_secondary",
+          "tolerance": 0.0001
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "save_restore_single_round_reload",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "arena_bystander",
+          "field": "weapon.reload"
+        },
+        {
+          "who": "arena_bystander",
+          "field": "weapon.jam"
+        },
+        {
+          "who": "arena_bystander",
+          "field": "weapon.interrupt"
+        },
+        {
+          "who": "arena_bystander",
+          "field": "weapon.owner"
+        },
+        {
+          "who": "arena_bystander",
+          "field": "weapon.next_primary",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "arena_bystander",
+          "field": "weapon.next_secondary",
+          "tolerance": 0.0001
+        }
+      ]
+    }
+  ],
+  "never": [
+    {
+      "who": "arena_bystander",
+      "kind": "reload",
+      "match": "finish_stamps",
+      "after": "applied"
+    }
+  ]
+}

@@ -110,8 +110,8 @@
       "kind": "taskdone",
       "match": "^task_wait_attack_time1$",
       "regex": true,
-      "after": "waits",
-      "within": 0.5
+      "after": "shot_event",
+      "within": 1.6
     },
     {
       "who": "arena_shooter",
@@ -159,7 +159,7 @@
       "equals": "Combat"
     }
   ],
-  "notes": "Green since V4o (lane O3): the unstaged 3031 is the shot and Shot 0x102387b0 writes the next-attack stamp, so every wait holds. The first wait is pinned absolutely (until 1.6, retail 1.64 s) and the first two relatively (`after` waits / waits_again, `within` 0.5: a wait starts 0.5 s after its shot and cannot end before 1.14 s after it). Corrected by the V4a seam (J7, J6): `shot_event` matched any animevent; it is the attack clip's 3031 (smith_attack authors 3031 at cycle 0), through CWeaponRanged's operator 0x10238160 -> 0x10238320 -> ModeDispatch(1) 0x102383b0 -> slot 373 Shot 0x102387b0: no retail path fires a Troika human's shot without the event. The `never` damage on the player states that no shot lands before the event: the schema has no window that closes at a label, so it closes at 0.3 s, the earliest instant retail's first shot event can fall (START_COMBAT's TASK_WAIT_FACE_ENEMY 0.2 s, then a selection and the attack program's first think). V4c stages retail unkillable like sustained_fire: death after seven .38 packets otherwise makes BestEnemy 0x10274475 correctly drop the player and exit Combat. The timing and event assertions are unchanged.",
+  "notes": "Green since V4o (lane O3): the unstaged 3031 is the shot and Shot 0x102387b0 writes the next-attack stamp, so every wait holds. The first wait is pinned absolutely (until 1.6, retail 1.64 s) and the first two relatively (`after` waits / waits_again, `within` 0.5: a wait starts 0.5 s after its shot and cannot end before 1.14 s after it). Corrected by the V4a seam (J7, J6): `shot_event` matched any animevent; it is the attack clip's 3031 (smith_attack authors 3031 at cycle 0), through CWeaponRanged's operator 0x10238160 -> 0x10238320 -> ModeDispatch(1) 0x102383b0 -> slot 373 Shot 0x102387b0: no retail path fires a Troika human's shot without the event. The `never` damage on the player states that no shot lands before the event: the schema has no window that closes at a label, so it closes at 0.3 s, the earliest instant retail's first shot event can fall (START_COMBAT's TASK_WAIT_FACE_ENEMY 0.2 s, then a selection and the attack program's first think). V4c stages retail unkillable like sustained_fire: death after seven .38 packets otherwise makes BestEnemy 0x10274475 correctly drop the player and exit Combat. The timing and event assertions are unchanged. V6 epoch1 measurement: initial0xef step-back lasts beyond shot+1.64, so WAIT_ATTACK_TIME1 starts/completes together at3.1. The first cooldown guard now measures the same1.64 retail deadline from its3031 writer (1.6 no-early bound); no0.5 hold is required after a delayed task start. Later wait guard retained.",
   "rows": [
     {
       "classname": "events_player",

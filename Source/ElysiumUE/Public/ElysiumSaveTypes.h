@@ -111,6 +111,8 @@ struct FElysiumSaveVersion
 		// moves.
 		NpcMindOwnerRetired = 42,
 
+		MapTimeContext = 43, // 0x101a0a80/0x101a2a30: section deltas and callback identity
+
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
 	};
@@ -141,7 +143,7 @@ struct FElysiumSaveVersion
 	//
 	// `NpcMindOwnerRetired` removes the body-owner byte from the NPC's mind block; saves are
 	// disposable (no migration) and the floor moves with it.
-	static constexpr int32 MinSupported = NpcMindOwnerRetired;
+	static constexpr int32 MinSupported = MapTimeContext;
 
 	static const FGuid GUID;
 };
@@ -149,13 +151,19 @@ struct FElysiumSaveVersion
 // 'ELYS' — the payload's first four bytes, so a truncated or foreign file fails loudly.
 inline constexpr uint32 ElysiumSaveMagic = 0x53594C45u;
 
+// 0x101cf250/0x101cf2f0: independent datamap persistence type and exceptional TIME modes.
+enum class EElysiumPersistenceType : uint8 { Value, Time };
+enum class EElysiumTimePolicy : uint8 { Ordinary, Negative, MinusOne, Zero, MaxFloat };
+// Exact transaction fences supplement the existing save-result stream (0x20096010/0x1011a620).
+enum class EElysiumPersistencePhase : uint8 { None, Captured, Decoded, Applied, Ready, Failed };
+
 // The `Maps` block — one frozen map.
 
 // One entity's saved state. Identity is the **def index** (stable across runs, never reused
 // within a map load), so it is also the save id with no extra id space.
 //
-// `Fields` holds only what differs from what a fresh build of the same def would produce — the
-// generalisation of VtMB's zero-value-omission rule, and most of why these payloads are small.
+// `Fields` holds the saved accessor walk. TIME/opaque leaf words are always explicit because
+// a construction baseline at a different epoch is not a safe omission baseline (0x101a0a80).
 // Restoring matches **by name**, so a field added to a base class does not invalidate a payload.
 struct FElysiumEntityState
 {
@@ -174,11 +182,17 @@ struct FElysiumEntityState
 	// Saves are taken from an active map. Default true preserves that fact for older supported
 	// payloads which predate this explicit latch; a freshly captured dormant entity overwrites it.
 	bool  bActivateCalled = true;
-	float NextThink = 0.0f;           // absolute game seconds, rebased onto the restored clock
-	float SavedNextThink = 0.0f;      // what ScriptUnhide restores
+	FName ThinkCallback = TEXT("EntityThink"); // FUNCTION SAVE +0x118, 0x100a9f70
+	bool bSavedPhysicalWordsAvailable = false; // 0x100a8710
+	int32 ScriptSavedSolid = 0, ScriptSavedMoveType = 0, ScriptSavedMoveCollide = 0;
+	int32 ScriptSavedSolidFlags = 0, ScriptSavedEffects = 0; // saved physical transaction
+	FName SavedThinkCallback; // FUNCTION SAVE +0xe4, 0x100a8710
+	float NextThinkSR = 1.0f; // +0x180 FLOAT SAVE, 0x100a9f70 exceptional <=0/FLT_MAX
+	float NextThink = 0.0f;           // section-relative TIME, applied at RestoreBase
+	float SavedNextThink = 0.0f;      // old deadline diagnostic; unhide is due NOW (0x100a8990)
 
 	TArray<int32> OutputTimesRemaining;
-	TArray<TPair<FName, FElysiumVariant>> Fields;   // sorted by name; only the differing ones
+	TArray<TPair<FName, FElysiumVariant>> Fields;   // sorted by name; TIME values are section-relative
 
 	// A leaf's derived runtime state (a mover's phase, a sequence cursor) — the one thing that does
 	// not fit the field walk, written by FElysiumEntity::SaveState.
@@ -215,6 +229,7 @@ struct FElysiumMapSnapshot
 {
 	FString MapName;
 	int32   DefCount = 0;             // the def array's size when frozen; a mismatch refuses the snapshot
+	double SaveBase = 0.0; // 0x101a0a80: source section base for all entity/queue deltas
 	double  FrozenAt = 0.0;           // game seconds at freeze, for the readable dump
 
 	// **The schema every `FElysiumEntityState::LeafState` blob in this snapshot was written at.**
@@ -237,7 +252,7 @@ struct FElysiumMapSnapshot
 	// player is — without it, walking back re-materialises the whole inventory.
 	TArray<int32> AbsentEntities;
 
-	// The one time-sorted queue, absolute times kept as-is (the restored clock is the saved clock).
+	// The one time-sorted queue, FireTime/guard stored relative to SaveBase (0x101a0a80).
 	TArray<FElysiumIOEvent> Queue;
 	uint64 QueueNextSerial = 1;
 	// The queue's backward-clock guard state, saved with the queue it guards. The restored clock is

@@ -2901,3 +2901,9 @@ I/O path. `ranged_step_back_holds` supplies `player`, numeric integer 1; the
 Damage.Producers test pins the integer/type arm, activator condition and caller
 inflictor. This is a recovered input repair; no damage threshold was increased.
 Force/position/custom-damage words remain the packet's existing zero seams.
+
+### Fourth sitting: flamethrower NPC reload reachability (V6 recovery, 2026-10-05)
+
+An ordinary humanoid NPC reaches shared ranged operator0x10238160/0x102383b0, not the flamethrower's own Attack/controller arms. Its native attack/layer sequences author no3030..3044 shot events; silence is not a missing-content reload blocker. A disclosed initial empty clip with reserve and fake count8 reaches slot3650x1024f670 condition0x40, pre-pass0x102b86e5 real reload0xc2, TASK_RELOAD0x102842cf/0x1028918d..b9, slots322/3230x10255050/0x102552c0. Male A_flamet_reload is65/30s; the female duration is its own47/30s, not the male value. This is reload reachability, not natural flamethrower exhaustion.
+
+Slot322 reads the LIVE owner NextAttack +0x1564 with ordered <=NOW (future/NaN refuse); the NPC single-round arm retains bInReload at0x1025506f..77 because the owner has no PLAYER subobject. Bulk0x102552c0 uses min(missing,reserve), including negative missing capacity, retains NPC reserve and clears all three native flags. Then0x1025521f..3a writes both weapon FLOAT stamps. TASK_RELOAD performs its own condition clears/completion even when finish refuses.

@@ -731,6 +731,7 @@ void FElysiumEntityWorld::ActivateListedEntity(FElysiumEntity& Ent)
 	}
 	Ent.bActivateCalled = true;
 	Ent.Activate();
+	if (Ent.bHidden) { Ent.ThinkCallback = NAME_None; Ent.NextThink = ELYSIUM_NEVER_THINK; } // 0x100a8710: admission must leave NULL think parked
 }
 
 void FElysiumEntityWorld::CallEntityActivate(FElysiumEntity& Ent)
@@ -741,6 +742,7 @@ void FElysiumEntityWorld::CallEntityActivate(FElysiumEntity& Ent)
 	}
 	Ent.bActivateCalled = true;
 	Ent.Activate();
+	if (Ent.bHidden) { Ent.ThinkCallback = NAME_None; Ent.NextThink = ELYSIUM_NEVER_THINK; } // 0x100a8710: admission must leave NULL think parked
 }
 
 FElysiumEntityHandle FElysiumEntityWorld::SpawnRuntimeEntity(FElysiumEntityDef Def)
@@ -1831,7 +1833,7 @@ void FElysiumEntityWorld::ClearTrackCamera(float BlendOutSeconds)
 
 void FElysiumEntityWorld::RunPlayerThink(double Now)
 {
-	if (!bActive)
+	if (!bActive || bApplyingSnapshot || bDetached) // 0x1011a620: no simulation inside restore fence
 	{
 		return;
 	}
@@ -1881,7 +1883,7 @@ void FElysiumEntityWorld::RunPlayerThink(double Now)
 
 void FElysiumEntityWorld::Tick(double Now)
 {
-	if (!bActive)
+	if (!bActive || bApplyingSnapshot || bDetached) // 0x1011a620: no simulation inside restore fence
 	{
 		return;
 	}
@@ -2192,7 +2194,7 @@ void FElysiumEntityWorld::RunThinks(double Now)
 			continue;
 		}
 		FElysiumEntity& Ent = *EntPtr;
-		if (Ent.IsInert() || Ent.NextThink == ELYSIUM_NEVER_THINK || Ent.NextThink > Now)
+		if (bApplyingSnapshot || Ent.ThinkCallback.IsNone() || Ent.IsInert() || Ent.NextThink == ELYSIUM_NEVER_THINK || Ent.NextThink > Now)
 		{
 			continue;
 		}
@@ -2207,10 +2209,11 @@ void FElysiumEntityWorld::RunThinks(double Now)
 
 void FElysiumEntityWorld::ServiceEvents(double Now)
 {
+	if (bApplyingSnapshot) return; // 0x1011a620 no I/O between restore phases
 	// Drain every due event, including zero-delay chains queued *during* this pass, until the
 	// queue has nothing due or the loop guard trips. Pause holds delivery unless steps are armed.
 	int32 Delivered = 0;
-	while (EventQueue.HasDue(Now))
+	while (!bDetached && !bApplyingSnapshot && EventQueue.HasDue(Now)) // engine 0x2008f120 departure closes old I/O
 	{
 		if (EventQueue.IsPaused())
 		{
@@ -2980,6 +2983,18 @@ void FElysiumEntityWorld::Teardown()
 	}
 	ClearTrackCamera(/*BlendOutSeconds*/ 0.0f);
 	ClearScriptedCamera();
+
+	// ~CAI_BaseNPCTroika0x1028d610 calls its own UpdateOnRemove0x1028d6e0.
+	// Run that destructor work before invalidating handles or destroying any records:
+	// hint/coordinator/place/dialogue consumers still need the coherent outgoing world.
+	// In particular both global patrol pool cells must be returned on every reload/load.
+	for (const TUniquePtr<FElysiumEntity>& OutgoingEntity : EntityList)
+	{
+		if (FElysiumNpc* OutgoingNpc = OutgoingEntity ? OutgoingEntity->AsNpc() : nullptr)
+		{
+			OutgoingNpc->TroikaUpdateOnRemove(); // destructor uses Troika dispatch, not species slot180
+		}
+	}
 
 	// Epoch 0 matches no minted handle, so every outstanding handle goes stale at once.
 	Epoch = 0;

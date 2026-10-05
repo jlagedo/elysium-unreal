@@ -98,6 +98,35 @@ bool ElysiumNpcMakerGeometry::IsSpawnAreaOccupied(const FElysiumEntityWorld* Ent
 	return false;
 }
 
+FString ElysiumNpcMakerGeometry::DescribeSpawnArea(const FElysiumEntityWorld* EntityWorld,
+    const AActor* PlayerPawn, const FVector& CentreCm, float HalfExtentCm, float FloorZCm)
+{
+    const FBox Box(FVector(CentreCm.X - HalfExtentCm, CentreCm.Y - HalfExtentCm, FMath::Min(FloorZCm, CentreCm.Z)),
+        FVector(CentreCm.X + HalfExtentCm, CentreCm.Y + HalfExtentCm, CentreCm.Z));
+    TArray<FString> Rows;
+    if (!EntityWorld) return TEXT("candidates=unavailable:no entity world");
+    for (const auto& Entry : EntityWorld->Entities())
+    {
+        const FElysiumEntity* Candidate = Entry.Get();
+        if (!Candidate) continue;
+        const bool bPlayer = Candidate->Handle == EntityWorld->PlayerHandle();
+        if (!bPlayer && (Candidate->Flags & SpawnAreaFlagMask) == 0) continue;
+        if (bPlayer && !PlayerPawn)
+        {
+            Rows.Add(FString::Printf(TEXT("candidate=#%d flags=0x%x alive=%d life=%d bounds=unavailable:no player pawn"),
+                Candidate->Handle.Index, Candidate->Flags, Candidate->LifeState == ElysiumLifeState::Alive ? 1 : 0, Candidate->LifeState));
+            continue;
+        }
+        const FVector Half(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth, 0.f);
+        const FBox Bounds = bPlayer ? PlayerPawn->GetComponentsBoundingBox(false)
+            : FBox(Candidate->Origin - Half, Candidate->Origin + Half + FVector(0.f, 0.f, ElysiumMove::StandHeight));
+        Rows.Add(FString::Printf(TEXT("candidate=#%d flags=0x%x alive=%d life=%d inert=%d origin=%s min=%s max=%s intersects=%d"),
+            Candidate->Handle.Index, Candidate->Flags, Candidate->LifeState == ElysiumLifeState::Alive ? 1 : 0, Candidate->LifeState,
+            Candidate->IsInert() ? 1 : 0, *Candidate->Origin.ToString(), *Bounds.Min.ToString(), *Bounds.Max.ToString(), Box.Intersect(Bounds) ? 1 : 0));
+    }
+    return FString::Printf(TEXT("candidates=%d %s"), Rows.Num(), *FString::Join(Rows, TEXT(";")));
+}
+
 #if !UE_BUILD_SHIPPING
 // `elysium.npcmaker.groundprobe X Y Z [depthcm]` — the ground ray of `ResolveGroundZ` at a point, run
 // against every channel the world's collision profiles distinguish, with and without initial

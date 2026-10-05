@@ -340,6 +340,9 @@ public:
 	FString GetMissingRuntimePrerequisites() const;
 	const FString& GetRuntimeFailureReason() const { return RuntimeFailureReason; }
 	FOnElysiumMapRuntimeReady& OnRuntimeReady() { return RuntimeReady; }
+	// 0x101a2e40/0x1011a620: restore consumes prepared collision/navigation/motors, before
+	// activation or any simulation think. Production and stage transport use the common applier.
+	TFunction<bool()> RestoreBeforeActivation;
 	FOnElysiumMapRuntimeFailed& OnRuntimeFailed() { return RuntimeFailed; }
 
 	// The live Track-B entity world, or null if the map has no `.ents`. Owned by this
@@ -620,6 +623,9 @@ public:
 	virtual bool IsNpcMakerInPlayerViewCone(const FVector& MakerOriginCm) const override;
 	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector& MakerOriginCm,
 		float HalfExtentCm, float FloorZCm) const override;
+    virtual bool DescribeNpcMakerSpawnArea(const FVector& OriginCm, float HalfExtentCm,
+        float FloorZCm, FString& Out) const override;
+
 	// R7.2: the ranged shot's forward world trace and the decal it leaves, through the world's
 	// UElysiumDecalSubsystem.
 	virtual bool LayShotImpactDecal(const FVector& FromCm, const FVector& Direction, float RangeCm,

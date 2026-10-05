@@ -1697,18 +1697,19 @@ bool FElysiumDisciplineNpcPersistenceTest::RunTest(const FString&)
 		FElysiumRecordingServices Services;
 		FElysiumEntityWorld World;
 
-		FDisciplineWorld() : World(nullptr, nullptr, Services.Bundle())
+		FDisciplineWorld(bool bDormant = false) : World(nullptr, nullptr, Services.Bundle())
 		{
 			ElysiumRng::SeedAll(9109);
 			World.Load(MakeDisciplineTestDefs());
 			World.SpawnPlayer();
+			if (bDormant) return; // restore before activation
 			World.Activate(0.0);
 			World.Tick(0.0);
 		}
 	};
 
 	FDisciplineWorld Source;
-	FDisciplineWorld Dest;
+	FDisciplineWorld Dest(true);
 
 	FElysiumPlayer* Player = Source.World.FindPlayer();
 	FElysiumCombatCharacter* Victim = FindCharacter(Source.World, TEXT("victim0"));
@@ -1761,11 +1762,10 @@ bool FElysiumDisciplineNpcPersistenceTest::RunTest(const FString&)
 	TestEqual(TEXT("...exactly once per tracked row, never twice"),
 		Restored->Effects.FilterByPredicate([DazeGroup](const FString& E)
 			{ return E.Equals(DazeGroup, ESearchCase::IgnoreCase); }).Num(), 1);
-	// A pedestrian's restore re-runs `NPCInit` (`CNPC_VPedestrian::OnRestore`, slot 420), whose first
-	// write is `m_iHealth = sk_basenpctroika_health` — the discipline restore does not touch it.
-	TestEqual(TEXT("...and the pedestrian's restore re-seeds health from sk_basenpctroika_health"),
-		Restored->Health, static_cast<int32>(ElysiumNpcTunables::ConVarFloat(
-			ElysiumNpcTunables::EConVar::SkBasenpctroikaHealth)));
+	// 0x1011a710/0x1011a620 passes false on ordinary save load. Pedestrian0x103a25a0
+	// only re-runs NPCInit on a level transition; discipline cache rebuild preserves saved health.
+	TestEqual(TEXT("...and ordinary pedestrian load retains saved health"), Restored->Health,
+		Victim->Health);
 	// The caster's epoch is re-stamped, so expiry can still resolve who cast it.
 	TestTrue(TEXT("the caster handle rebases onto the restored world"),
 		!Expected.Source.IsSet() || Dest.World.Resolve(R.Source) != nullptr);

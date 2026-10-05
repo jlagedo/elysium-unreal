@@ -1,25 +1,89 @@
 {
   "name": "map_hub_idle",
-  "about": "sm_hub_1 at idle for sixty seconds, nothing scripted. The map's logic_auto runs copPatrol() OnMapLoad (santamonica.py:1923): patrol_cop gets SetupPatrolType '255 0 FOLLOW_PATROL_PATH_WALK' and FollowPatrolPath 's1 s2 s3 s4 s7 s8 s9 s10 s11 s12 s13 s14' in one call (no window with an empty path), patrol_cop_north '255 0 ...' and 'n1 n2 n3 n4 n1 ... n4'; both loop (type 0) under SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK, one goal per point, arriving and stepping with TASK_NEXT_PATROL_POINT (docs/vtmb/npc-ai/programs.md § 'Patrol paths, walked'). pedestrian_female (use_interesting 1, groups '1 31') runs the interesting-place programs: 0xff SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP -> 0x100 -> SCHED_TROIKA_DO_INTEREST_ACTIVITY (programs.md § 'Interesting places: the selector, the programs, the wait'). 0019/8's map smoke: 0 ensure / assert (in the launcher's log, not the trace).",
+  "about": "sm_hub_1 at idle for sixty seconds, nothing scripted. The map's logic_auto runs copPatrol() OnMapLoad (santamonica.py:1923): patrol_cop gets SetupPatrolType '255 0 FOLLOW_PATROL_PATH_WALK' and FollowPatrolPath 's1 s2 s3 s4 s7 s8 s9 s10 s11 s12 s13 s14' in one call (no window with an empty path), patrol_cop_north '255 0 ...' and 'n1 n2 n3 n4 n1 ... n4'; both loop (type 0) under SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK, one goal per point, arriving and stepping with TASK_NEXT_PATROL_POINT (docs/vtmb/npc-ai/programs.md \u00a7 'Patrol paths, walked'). pedestrian_female (use_interesting 1, groups '1 31') runs the interesting-place programs: 0xff SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP -> 0x100 -> SCHED_TROIKA_DO_INTEREST_ACTIVITY (programs.md \u00a7 'Interesting places: the selector, the programs, the wait'). 0019/8's map smoke: 0 ensure / assert (in the launcher's log, not the trace).",
   "stage": "map:sm_hub_1",
   "seed": 1,
   "duration": 60.0,
-  "cast": [ { "name": "patrol_cop" }, { "name": "patrol_cop_north" }, { "name": "pedestrian_female" } ],
+  "cast": [
+    {
+      "name": "patrol_cop"
+    },
+    {
+      "name": "patrol_cop_north"
+    },
+    {
+      "name": "pedestrian_female"
+    }
+  ],
   "expect": [
-    { "label": "cop_arrives", "who": "patrol_cop", "kind": "move", "match": "arrived", "by": 30.0 },
-    { "label": "cop_steps", "who": "patrol_cop", "kind": "taskdone", "match": "^task_next_patrol_point$", "regex": true, "within": 5.0 },
-    { "label": "cop_arrives_again", "who": "patrol_cop", "kind": "move", "match": "arrived", "within": 25.0 }
+    {
+      "label": "cop_arrives",
+      "who": "patrol_cop",
+      "kind": "move",
+      "match": "arrived",
+      "by": 30.0
+    },
+    {
+      "label": "cop_steps",
+      "who": "patrol_cop",
+      "kind": "taskdone",
+      "match": "^task_next_patrol_point$",
+      "regex": true,
+      "within": 5.0
+    },
+    {
+      "label": "cop_arrives_again",
+      "who": "patrol_cop",
+      "kind": "move",
+      "match": "arrived",
+      "within": 25.0
+    }
   ],
   "never": [
-    { "who": "patrol_cop", "kind": "taskfail" },
-    { "who": "patrol_cop_north", "kind": "taskfail" },
-    { "who": "patrol_cop", "kind": "death" },
-    { "who": "patrol_cop_north", "kind": "death" }
+    {
+      "who": "patrol_cop",
+      "kind": "taskfail"
+    },
+    {
+      "who": "patrol_cop_north",
+      "kind": "taskfail"
+    },
+    {
+      "who": "patrol_cop",
+      "kind": "death"
+    },
+    {
+      "who": "patrol_cop_north",
+      "kind": "death"
+    }
   ],
   "probes": [
-    { "at": "end", "who": "patrol_cop", "probe": "schedule", "match": "FOLLOW_PATROL_PATH_WALK" },
-    { "at": "end", "who": "patrol_cop_north", "probe": "schedule", "match": "FOLLOW_PATROL_PATH_WALK" },
-    { "at": "end", "who": "pedestrian_female", "probe": "schedule", "match": "INTEREST" }
+    {
+      "at": "end",
+      "who": "patrol_cop",
+      "probe": "schedule",
+      "match": "FOLLOW_PATROL_PATH_WALK"
+    },
+    {
+      "at": "end",
+      "who": "patrol_cop_north",
+      "probe": "schedule",
+      "match": "FOLLOW_PATROL_PATH_WALK"
+    },
+    {
+      "at": "end",
+      "who": "pedestrian_female",
+      "probe": "schedule",
+      "match": "INTEREST"
+    }
   ],
-  "notes": "The pedestrian is held by an end probe only: her program at sixty seconds may be any of the three place schedules (each carries INTEREST in its name). The trace's never takes no count, so the map's other NPCs are not held to 'no taskfail' (harness gap)."
+  "notes": "The pedestrian is held by an end probe only: her program at sixty seconds may be any of the three place schedules (each carries INTEREST in its name). The trace's never takes no count, so the map's other NPCs are not held to 'no taskfail' (harness gap). V6 audit predecessor: explicit fresh-map action isolates this idle guard while shares_map allows a following record in the same process. Every original predicate and bound retained.",
+  "shares_map": true,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sm_hub_1"
+    }
+  ]
 }

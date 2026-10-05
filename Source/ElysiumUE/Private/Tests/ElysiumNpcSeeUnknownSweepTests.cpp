@@ -62,8 +62,8 @@ namespace
 			return Builder;
 		}
 
-		FSweepFixture()
-			: Fixture(BuildWorld())
+		FSweepFixture(bool bDormant = false)
+			: Fixture(BuildWorld(), bDormant)
 			, World(Fixture.World)
 		{
 			Npc = Fixture.Npc(TEXT("npc"));
@@ -383,7 +383,7 @@ bool FElysiumNpcSeeUnknownSweepSaveTest::RunTest(const FString&)
 	// datamap walk carries it rather than `FElysiumNpcMemory::Serialize` -- so the round trip has to
 	// be a whole record, not a bare struct through an archive.
 	FSweepFixture F;
-	FSweepFixture G;
+	FSweepFixture G(true);
 	if (F.Npc == nullptr || G.Npc == nullptr)
 	{
 		return false;

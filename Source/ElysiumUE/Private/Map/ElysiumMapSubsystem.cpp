@@ -5,9 +5,12 @@
 #include "ElysiumMapEntities.h"
 #include "ElysiumSessionSubsystem.h"
 #include "ElysiumMapActor.h"
+#include "ElysiumEntityWorld.h" // engine 0x2008f2e0 fresh world lifetime
+#include "ElysiumPlayer.h"
 #include "ElysiumPlayerBody.h"
 #include "Debug/ElysiumGreenRoomConsole.h"
 #include "Debug/ElysiumArenaRun.h"
+#include "Debug/ElysiumArenaV6Adapters.h"
 #include "Debug/ElysiumCastRun.h"
 #include "Debug/ElysiumComposeRun.h"
 #include "Debug/ElysiumGreenRoomRun.h"
@@ -41,10 +44,19 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 
 #if !UE_BUILD_SHIPPING
+	ElysiumArenaInstallV6Adapters();
 	// The green room's own verb set. Registered for the whole session rather than with the lab: they
 	// must be callable before one is armed in order to report that none is.
 	GreenRoomConsole = MakePimpl<FElysiumGreenRoomConsole>(this);
 #endif
+
+	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.map_load"), TEXT("elysium.map_load <map> — fresh map epoch; elysium.map retains visits."),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			if (Args.Num() != 1 || !FreshLoad(Args[0])) // engine 0x2008f2e0
+				UE_LOG(LogElysiumMap, Warning, TEXT("elysium.map_load: expected one baked map"));
+		}), ECVF_Default));
 
 	// Engine-console mirrors of the dev-console commands, handy for -ExecCmds automation.
 	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
@@ -384,6 +396,21 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 		NextLandmarkSpawn = FLandmarkSpawn{ true, Landmark, FVector::ZeroVector, 0.0f, /*bHasYaw*/ false };
 	}
 
+	if (UElysiumSessionSubsystem* TravelSession = GetGameInstance()->GetSubsystem<UElysiumSessionSubsystem>())
+	{
+		if (FElysiumEntityWorld* Departing = TravelSession->CurrentEntityWorld())
+		{
+			if (const FElysiumPlayer* DepartingPlayer = Departing->FindPlayer())
+			{
+				DepartingPlayer->Dehydrate(TravelSession->PlayerRecord()); // engine 0x2008f120 save departing map first
+				FElysiumMapSnapshot DepartingSnapshot;
+				Departing->Freeze(DepartingSnapshot);
+				TravelSession->StoreMapSnapshot(MoveTemp(DepartingSnapshot));
+				Departing->Detach(); // EndPlay must not replace the exact frozen boundary
+			}
+		}
+	}
+
 	// Stow the target for the world that builds it. This subsystem is GI-scoped, so PendingMapLoad
 	// (and NextLandmarkSpawn) survive the OpenLevel below.
 	PendingMapLoad = FPendingMapLoad{ true, Map, Landmark };
@@ -659,6 +686,23 @@ FString UElysiumMapSubsystem::PendingTravelDesc() const
 		: FString::Printf(TEXT("%s @ %s"), *PendingMapLoad.Map, *PendingMapLoad.Landmark);
 }
 
+bool UElysiumMapSubsystem::FreshLoad(const FString& Map)
+{
+	UGameInstance* GI = GetGameInstance(); // engine 0x2008f2e0 preflight before mutation
+	if (!GI || !GI->GetWorld() || !HasBakedMap(Map)) return false;
+	UElysiumSessionSubsystem* Session = GI->GetSubsystem<UElysiumSessionSubsystem>();
+	if (!Session) return false;
+	if (FElysiumEntityWorld* Outgoing = Session->CurrentEntityWorld())
+	{
+		if (const FElysiumPlayer* PlayerEntity = Outgoing->FindPlayer()) PlayerEntity->Dehydrate(Session->PlayerRecord());
+		Outgoing->Detach(); // prevent EndPlay refreezing the discarded visit, 0x2008f2e0
+		Outgoing->Teardown(); // invalidate epoch/queue/coordinators before destination init
+	}
+	Session->ClearMapSnapshot(Map); // destination is fresh, other visits remain frozen
+	RequestFreshMapState(); // consolidated consume-before-Load door
+	return Travel(Map); // baked-map gate and authored construction remain the normal route
+}
+
 bool UElysiumMapSubsystem::Reload()
 {
 	const FString Current = GetCurrentMapName();
@@ -667,7 +711,7 @@ bool UElysiumMapSubsystem::Reload()
 		UE_LOG(LogElysiumMap, Warning, TEXT("elysium.reload: no map loaded"));
 		return false;
 	}
-	return Travel(Current);
+	return FreshLoad(Current); // engine 0x2008f2e0, reload is a fresh epoch
 }
 
 FString UElysiumMapSubsystem::NextMapName() const

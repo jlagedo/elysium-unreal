@@ -227,8 +227,8 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 		Ar << Sound.StealthHearingReductionCm;
 		Ar << Sound.UnadjustedRadiusCm;
 		Ar << Sound.Source;
-		Ar << Sound.Time;
-		Ar << Sound.ExpireTime;
+		Ar.Time(Sound.Time); // 0x10265ed0 embedded sound stamp, map-clock domain
+		Ar.Time(Sound.ExpireTime, EElysiumTimePolicy::MinusOne); // CSound +0x10 TIME mode2, 0x101b9840/0x101b9860
 		Ar << Sound.Serial;
 		uint8 Occludable = Sound.bOccludable ? 1 : 0;
 		Ar << Occludable;
@@ -237,7 +237,7 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	Ar << LastHeardSource;
 	Ar << LastHeardPosition;
 	Ar << LastHeardCategory;
-	Ar << LastHeardTime;
+	Ar.Time(LastHeardTime, EElysiumTimePolicy::MinusOne); // 0x10310710 port memory, map-clock domain
 	uint8 InRange = bPlayerInRange ? 1 : 0;
 	uint8 OuterBand = bPlayerInOuterBand ? 1 : 0;
 	uint8 InCone = bPlayerInCone ? 1 : 0;
@@ -255,7 +255,7 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	SerializeSound(LastSoundWorld);
 	SerializeSound(BestSound);
 	Ar << DetectedAttackAttacker;
-	Ar << DetectedAttackTime;
+	Ar.Time(DetectedAttackTime, EElysiumTimePolicy::MinusOne); // 0x10265ed0 port attack memory
 	if (Ar.IsLoading())
 	{
 		bPlayerInRange = InRange != 0;
@@ -282,7 +282,7 @@ void FElysiumNpcBaseMemory::Serialize(FElysiumSaveArchive& Ar)
 {
 	for (int32 i = 0; i < static_cast<int32>(ESeen::Count); ++i)
 	{
-		Ar << LastSeenTime[i];
+		Ar.Time(LastSeenTime[i], EElysiumTimePolicy::MinusOne); // 0x102df090 port observed-actor stamp, map-clock domain
 	}
 }
 
@@ -442,6 +442,7 @@ bool FElysiumNpcSenses::PerformSensing(FElysiumNpc& Npc, double Now)
 	}
 	TickSight(Npc, Now);
 	TickHearing(Npc, Now);
+	++PassCount; // observation only: the admitted 0x10310710 Look/Listen transaction
 	return true;
 }
 
@@ -908,7 +909,8 @@ float FElysiumNpcSenses::EffectiveVisionDistanceCm(const FElysiumNpc& Npc, doubl
 void FElysiumNpcSenses::Serialize(FElysiumSaveArchive& Ar)
 {
 	Memory.Serialize(Ar);
-	Ar << LastListenTime;
+	Ar.Time(LastListenTime, EElysiumTimePolicy::MinusOne); // 0x10310710 port cadence, map-clock domain
+	for (double& LookDeadline : NextLookTime) Ar.Time(LookDeadline, EElysiumTimePolicy::MinusOne); // 0x1030ff10 port scan deadline, map-clock domain
 }
 
 void FElysiumNpcPendingSound::SerializeQueue(FElysiumSaveArchive& Ar, TArray<FElysiumNpcPendingSound>& Queue)
@@ -920,7 +922,7 @@ void FElysiumNpcPendingSound::SerializeQueue(FElysiumSaveArchive& Ar, TArray<FEl
 	{
 		uint8 Condition = static_cast<uint8>(Sound.Condition);
 		Ar << Condition;
-		Ar << Sound.PromoteAt;
+		Ar.Time(Sound.PromoteAt); // 0x1026ec30 delayed sound deadline, map-clock domain
 		if (Ar.IsLoading()) Sound.Condition = static_cast<EElysiumNpcCond>(Condition);
 	}
 }
@@ -934,7 +936,7 @@ void FElysiumNpcSenses::OnPostRestore(FElysiumNpc& Npc)
 	SeenThisPass.Reset();
 	for (int32 Channel = 0; Channel < 3; ++Channel)
 	{
-		NextLookTime[Channel] = -1.0;
+		// 0x1030ff10: keep restored map-domain scan deadline; rebuild only the sight list cache.
 		SeenByChannel[Channel].Reset();
 	}
 	if (Npc.World)

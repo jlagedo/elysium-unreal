@@ -409,7 +409,46 @@ void FElysiumNpcBase::Serialize(FElysiumSaveArchive& Ar)
 	// The `CAI_BaseNPC` half of the NPC record, written ahead of the Troika's (the Troika `Save`
 	// calls `0x1027bc60` first): retail's one hand block (`AIExtendedSaveHeader_t`), then the base words no
 	// retail datamap row reaches through the generated walk.
-	SerializeExtendedHeader(Ar);
+	SerializeExtendedHeader(Ar); // 0x1027bc60
+	int32 SavedNpcState = Mind.NpcStateRetail(), SavedIdealState = Mind.IdealStateRetail(); // +0x5cc0/+0x5cc4, 0x1027bc60
+	bool bSavedForceState = Mind.IsStateChangeForced(); // +0x1b28 BOOL SAVE
+	double SavedStateTime = Mind.GetLastStateChangeTime(); // +0x5cc8 TIME SAVE
+	Ar << SavedNpcState << SavedIdealState << bSavedForceState;
+	Ar.Time(SavedStateTime);
+	if (Ar.IsLoading())
+	{
+		Mind.Restore(EElysiumNpcState::Idle); // host admission only; raw words below supersede the old SCRIPT clamp
+		Mind.WriteNpcStateRetail(SavedNpcState);
+		Mind.WriteIdealStateRetail(SavedIdealState);
+		Mind.StampLastStateChangeTime(SavedStateTime);
+		if (bSavedForceState) Mind.ForceStateChange(); else Mind.ClearForceStateChange();
+	}
+	Schedule.Serialize(Ar); // embedded AIScheduleState_t +0x5c40; FailureReason has its own writer below
+	bool bGathered = Cognition.GatheredAt >= 0.0; // +0x5ca4 BOOL SAVE, not TIME
+	Ar << bGathered; // 0x1027bc60/0x1027c160
+	if (Ar.IsLoading()) Cognition.GatheredAt = bGathered ? Ar.RestoreBase() : -1.0;
+	Ar << ScheduleIdealActivity.OwnerStem << ScheduleIdealActivity.OwnerRoot << ScheduleIdealActivity.Label; // 0x1008df10 task clip continuation identity
+	Ar << SequenceZero.Label << SequenceZero.OwnerStem << SequenceZero.bLoops << SequenceZero.Seconds; // raw native seq0 binding, no weighted pick
+	Ar << ActivityNumber << IdealActivityNumber << TranslatedActivity; // combat +0xfec/+0xff0/+0xff4 INT SAVE, 0x1008df10
+	Ar << SequenceNumber << SequenceCycle << SequenceCycleRate; // 0x1008f120 +0x6f0 INT, +0x6f8 FLOAT / derived rate
+	Ar.Time(AnimTime); // +0x174 TIME SAVE, 0x101a0a80
+	Ar.Time(PrevAnimTime); // +0x170 TIME SAVE
+	Ar.Time(LastEventCheck); // +0x658 TIME SAVE; layer cursor below is FLOAT
+	Ar << bSequenceFinished << bSequenceLoopedOnce << SequencePastHalf; // 0x1008f120 +0x65c/+0x65d/+0x568
+	Ar << GroundSpeed << YawSpeed << bGroundSpeedFromIntervalMovement; // 0x1008f120 live speed words
+	SerializeNativeOverlay(Ar); // 0x10098c80 four layer rows and three flinch rows
+	Ar << MoveAndShootOverlay.bMovingAndShooting << MoveAndShootOverlay.MoveShots; // 0x102e8aa0 +0x10/+0x14
+	Ar.Time(MoveAndShootOverlay.NextShotTime, EElysiumTimePolicy::MaxFloat); // +0x18 TIME SAVE mode4
+	Ar << MoveAndShootOverlay.MinBurst << MoveAndShootOverlay.MaxBurst; // +0x1c/+0x20 INT SAVE
+	Ar << MoveAndShootOverlay.PauseMin << MoveAndShootOverlay.PauseMax << MoveAndShootOverlay.InitialDelay; // +0x24..2c FLOAT SAVE
+	Navigator.Serialize(Ar); // 0x102ee1e0 semantic route, not UE cache pointers
+	Ar << bMoveIssued << bDeathCommitted; // 0x1032c0e0 continuation and committed corpse identity
+	Ar.Time(DeathPerformanceEndsAt, EElysiumTimePolicy::Zero); // 0x10265b00 port clip deadline, map-clock domain
+	if (Ar.IsLoading())
+	{
+		RestoreThinkCallback(); // +0x118 is archived once by lane1's base snapshot
+		bNativeAnimationRestorePending = true; // 0x1008df10 seek when its actual body is available
+	}
 	// The combat character's flag words travel with the record and not with the walk: retail's
 	// `m_bfAINPCFlags` pair is a concern the shape map reaches no compiled path into. The NPC's own
 	// `m_iIsOblivious` and `m_bfNPCFrenziedFlags` are generated bindings and ride the walk.
@@ -423,7 +462,15 @@ void FElysiumNpcBase::Serialize(FElysiumSaveArchive& Ar)
 	// base host saved it, so the record's order is unchanged.
 	Ar << AttackExtentsCm;
 	// `m_hTargetEnt`, a retail `SAVE` row and a recorded gap in the generated walk.
-	Ar << TargetEnt;
+	Ar << TargetEnt; // +0x5ce4 EHANDLE SAVE, 0x1027bc60
+	Ar << ScriptOwner << BaseScheduleHost.GoalEnt << IgnoreCollisionEntity; // +0x5d74/+0x5de8/+0x55c
+	Ar << NavPathScalar20; // path+0x20 route operand, 0x102ee1e0; bShouldMove is accessor-owned
+	Ar << RetailMoveType << RetailMoveCollide << RetailSolidType << RetailSolidFlags; // 0x100a9f70 native physical SAVE words
+	Ar << RetailSolidSets; // port availability spelling for the saved solid word
+	bool bSavedDeathReported = HasReportedDeath(); // 0x10265a90 once-only death output latch
+	Ar << bSavedDeathReported;
+	if (Ar.IsLoading()) SetDeathReportedForRestore(bSavedDeathReported);
+	Ar << FadeRenderAlpha; // +0x1a3 BYTE SAVE on base-only NPC, 0x10269960
 }
 
 // --- Moved from `ElysiumNpc.cpp` (story 5 step 5) ---
@@ -470,4 +517,101 @@ void FElysiumNpcBase::StopMoving()
 		ClearMoveIgnores();
 	}
 	bMoveIssued = false;
+}
+
+FName FElysiumNpcBase::SelectedThinkCallback() const
+{
+	// 0x100a9f70: public FUNCTION identity is authoritative, including NULL.
+	return ThinkCallback;
+}
+
+void FElysiumNpcBase::RestoreThinkCallback()
+{
+	// 0x100aa140: restore dispatch spelling without ThinkSet/deadline side effects.
+	ThinkFunctionName = ThinkCallback.IsNone() ? FString() : ThinkCallback.ToString();
+}
+
+void FElysiumNpcBase::RebaseSavedReferences(FElysiumEntityWorld& InWorld)
+{
+	FElysiumScriptedCharacter::RebaseSavedReferences(InWorld); // 0x101a2e40 all words before consumers
+	TargetEnt = InWorld.RestoreHandle(TargetEnt); // +0x5ce4 EHANDLE SAVE, 0x1027bf50
+	ScriptOwner = InWorld.RestoreHandle(ScriptOwner); // +0x5d74 m_hCine
+	BaseScheduleHost.GoalEnt = InWorld.RestoreHandle(BaseScheduleHost.GoalEnt); // +0x5de8 CLASS PTR
+	BlockedDoor = InWorld.RestoreHandle(BlockedDoor); // +0x5d28
+	CondHitByDoor = InWorld.RestoreHandle(CondHitByDoor); // +0x5d2c
+	ShootTargetOverride = InWorld.RestoreHandle(ShootTargetOverride); // +0x5ba8
+	IgnoreCollisionEntity = InWorld.RestoreHandle(IgnoreCollisionEntity); // +0x55c, 0x1008df10
+	BaseMemory.Rebase(InWorld); // 0x102df090 enemy before OnRestore liveness checks
+	EnemyMemory.BindOwner(*this); // 0x102df090 owner/world pointers are rebound, never serialized
+	EnemyMemory.Rebase(InWorld); // 0x102df090
+	Relationships.Rebase(InWorld); // 0x10273790
+	Navigator.RebaseSavedReferences(InWorld); // 0x102ee1e0
+	// 0x101a7880/0x1027bf50: director links are rebound in the shared fixup fence, not OnPostRestore.
+	if (FElysiumScriptedSequence* Director = AsSpecies<FElysiumScriptedSequence>())
+	{
+		Director->LastInputActivator = InWorld.RestoreHandle(Director->LastInputActivator);
+		Director->LastInputCaller = InWorld.RestoreHandle(Director->LastInputCaller);
+		FElysiumEntity* OwnedEntity = Director->RestoredNpcIndex == INDEX_NONE ? nullptr
+			: InWorld.Resolve(FElysiumEntityHandle(Director->RestoredNpcIndex, InWorld.GetEpoch()));
+		FElysiumNpcBase* OwnedNpc = OwnedEntity != nullptr ? OwnedEntity->AsNpcBase() : nullptr;
+		if (OwnedNpc != nullptr && !OwnedNpc->IsDead())
+		{
+			Director->SetTarget(OwnedNpc->Handle);
+			OwnedNpc->ScriptOwner = Director->Handle;
+			OwnedNpc->BaseScheduleHost.GoalEnt = Director->Handle;
+		}
+		Director->RestoredNpcIndex = INDEX_NONE;
+	}
+
+}
+
+TFunction<bool(FElysiumNpcBase&)> FElysiumNpcBase::RestoreNativeAnimationAdapter;
+
+bool FElysiumNpcBase::RestoreNativeAnimation()
+{
+	// 0x1008df10: invalidate studio descriptor cache; no ResetSequenceInfo, pick, event or cursor reset.
+	SequenceDescriptorRows.Reset();
+	bNativeAnimationRestoreApplied = RestoreNativeAnimationAdapter ? RestoreNativeAnimationAdapter(*this) : false;
+	bNativeAnimationRestorePending = !bNativeAnimationRestoreApplied; // unavailable admission stays unavailable
+	return bNativeAnimationRestoreApplied;
+}
+
+void FElysiumNpcBase::OnPostRestore(FElysiumEntityWorld& InWorld)
+{
+	PrepareRestoredBody(); // 0x100aa140 motor position before route reconstruction
+	OnRestore(InWorld.IsLevelTransitionRestore()); // 0x1011a710/0x1011a620: false on ordinary save load
+	RestoreThinkCallback(); // 0x100aa140 identity only, no timer write
+	RestoreNativeAnimation(); // 0x1008df10 unavailable visual consumer never resets logical words
+}
+
+void FElysiumNpcBase::PrepareRestoredBody()
+{
+	// 0x100aa140/0x102ee1e0: native fields restore position before navigator refind. The existing
+	// UE Teleport cancels its route, so perform it once here and consume the applier's later duplicate.
+	FElysiumScriptedCharacter::OnRuntimeTransformChanged();
+	if (Motor) Motor->SetEnabled(!IsInert()); // restored physical words before0x102ee1e0 route acceptance, not an activation/think
+	SnapshotTransformOrigin = Origin; SnapshotTransformAngles = Angles;
+	bSkipSnapshotTransformOnce = true;
+}
+
+void FElysiumNpcBase::OnRuntimeTransformChanged()
+{
+	if (World != nullptr && World->IsApplyingSnapshot() && bSkipSnapshotTransformOnce)
+	{
+		if (Origin == SnapshotTransformOrigin && Angles == SnapshotTransformAngles)
+		{
+			bSkipSnapshotTransformOnce = false; // 0x102ee1e0 skip only the unchanged applier duplicate
+			return;
+		}
+		FElysiumScriptedCharacter::OnRuntimeTransformChanged(); // 0x100aa140 later native transform writes still win
+		SnapshotTransformOrigin = Origin; SnapshotTransformAngles = Angles;
+		return;
+	}
+	FElysiumScriptedCharacter::OnRuntimeTransformChanged(); // ordinary live transform writer
+}
+
+void FElysiumNpcBase::OnPreparedVisualAttached()
+{
+	FElysiumScriptedCharacter::OnPreparedVisualAttached(); // stand the existing motor, no AI initialization
+	if (bNativeAnimationRestorePending) RestoreNativeAnimation(); // 0x1008df10 event-free phase rebind
 }

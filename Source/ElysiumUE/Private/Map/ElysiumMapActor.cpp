@@ -2208,6 +2208,13 @@ bool AElysiumMapActor::IsNpcMakerSpawnAreaOccupied(const FVector& MakerOriginCm,
 		MakerOriginCm, HalfExtentCm, FloorZCm);
 }
 
+bool AElysiumMapActor::DescribeNpcMakerSpawnArea(const FVector& MakerOriginCm, float HalfExtentCm,
+    float FloorZCm, FString& Out) const
+{
+    Out = ElysiumNpcMakerGeometry::DescribeSpawnArea(EntityWorld.Get(), ResolvePlayerPawn(), MakerOriginCm, HalfExtentCm, FloorZCm);
+    return EntityWorld.IsValid();
+}
+
 void AElysiumMapActor::PreMoveTick(float DeltaSeconds)
 {
 	// Steps 2-3 — everything that must be settled before the pawn moves.

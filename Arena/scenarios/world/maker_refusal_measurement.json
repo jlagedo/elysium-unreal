@@ -1,0 +1,88 @@
+{
+  "name": "maker_refusal_measurement",
+  "about": "N9 measurement at the synchronous 0x1034b580 maker attempt; 0x1034b692..0x1034b737 / 0x101cc9e0 occupancy enumerates flag0x2080 without alive filtering.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 30.0,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "hw_hub_1",
+    "names": [
+      "ratmaker_2"
+    ],
+    "anchor": "ratmaker_2",
+    "at": "north"
+  },
+  "script": [
+    {
+      "t": 1.0,
+      "do": "fire",
+      "target": "ratmaker_2",
+      "input": "Enable"
+    },
+    {
+      "after": "first_thinks",
+      "delay": 3.0,
+      "do": "fire",
+      "target": "rat_2",
+      "input": "TakeDamage",
+      "param": 500
+    }
+  ],
+  "expect": [
+    {
+      "label": "enabled",
+      "who": "ratmaker_2",
+      "kind": "input",
+      "match": "Enable",
+      "by": 1.5
+    },
+    {
+      "label": "first_spawn",
+      "who": "ratmaker_2",
+      "kind": "output",
+      "match": "OnSpawnNPC",
+      "within": 0.5
+    },
+    {
+      "label": "first_thinks",
+      "who": "rat_2",
+      "kind": "schedule",
+      "match": "",
+      "within": 2.0
+    },
+    {
+      "label": "dies",
+      "who": "rat_2",
+      "kind": "death",
+      "match": "",
+      "within": 4.0
+    },
+    {
+      "label": "notice",
+      "who": "ratmaker_2",
+      "kind": "output",
+      "match": "OnNPCDied",
+      "within": 0.5
+    },
+    {
+      "label": "attempt",
+      "who": "ratmaker_2",
+      "kind": "makerattempt",
+      "match": "live=0",
+      "within": 6.0
+    }
+  ],
+  "probes": [],
+  "notes": "Initial donor and seed unchanged. Attempt-time candidates, origin, flags and life select the retail gate; live0 alone does not imply admission.",
+  "never": [
+    {
+      "who": "ratmaker_2",
+      "kind": "output",
+      "match": "OnNPCDied",
+      "at_most": 1
+    }
+  ]
+}

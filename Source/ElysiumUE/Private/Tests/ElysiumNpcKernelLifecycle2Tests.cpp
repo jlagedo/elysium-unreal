@@ -69,14 +69,14 @@ namespace
 		FElysiumNpcWorldFixture World;
 		FElysiumNpc* Npc = nullptr;
 
-		explicit FLifecycle19Fixture(const TCHAR* RetailClass = TEXT("CNPC_VHumanCombatant"))
+		explicit FLifecycle19Fixture(const TCHAR* RetailClass = TEXT("CNPC_VHumanCombatant"), bool bDormant = false)
 			: World([RetailClass]
 				{
 					FElysiumNpcWorldBuilder Builder(TEXT("lifecycle19_kernel"), 919);
 					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
 					Builder.AddNpcOfClass(TEXT("subject"), FVector::ZeroVector, RetailClass);
 					return Builder;
-				}())
+				}(), bDormant)
 		{
 			Npc = World.Npc(TEXT("subject"));
 			if (Npc == nullptr && RetailClass != nullptr)
@@ -149,7 +149,7 @@ bool FElysiumNpcKernelLifecycle19TroikaNpcInitTest::RunTest(const FString&)
 	// `1029a0f5`: `m_NPCState = 0` — NPC_STATE_NONE, a state the raw overlay must be able to spell.
 	TestEqual(TEXT("1029a0f5 m_NPCState = NONE"), F.Npc->NpcStateRetail(), 0);
 	// `1029a0c0`: `m_fEffects = 0`, whose one modelled bit here is EF_NODRAW.
-	TestFalse(TEXT("1029a0c0 m_fEffects cleared unhides"), F.Npc->bHidden);
+	TestTrue(TEXT("0x1029a0c0 clears effects but retains script-hidden latch"), F.Npc->bHidden);
 	// `102735xx`: `m_bCineScriptHidden = 0` — its own byte, not the entity's hidden flag.
 	TestFalse(TEXT("102735xx m_bCineScriptHidden cleared"), F.Npc->bCineScriptHidden);
 	// `1029a589`: the four discipline bit words, cleared whole.
@@ -1112,7 +1112,7 @@ bool FElysiumNpcKernelLifecycle19MingXiaoStampRoundTripTest::RunTest(const FStri
 {
 	{
 		FLifecycle19Fixture From(TEXT("CNPC_VMingXiao"));
-		FLifecycle19Fixture To(TEXT("CNPC_VMingXiao"));
+		FLifecycle19Fixture To(TEXT("CNPC_VMingXiao"), true);
 		if (From.Npc == nullptr || To.Npc == nullptr)
 		{
 			AddError(TEXT("no NPC"));
@@ -1134,7 +1134,7 @@ bool FElysiumNpcKernelLifecycle19MingXiaoStampRoundTripTest::RunTest(const FStri
 	}
 	{
 		FLifecycle19Fixture From(TEXT("CNPC_VMingXiaoTentacle"));
-		FLifecycle19Fixture To(TEXT("CNPC_VMingXiaoTentacle"));
+		FLifecycle19Fixture To(TEXT("CNPC_VMingXiaoTentacle"), true);
 		if (From.Npc == nullptr || To.Npc == nullptr)
 		{
 			AddError(TEXT("no NPC"));
@@ -1188,7 +1188,7 @@ bool FElysiumNpcKernelLifecycle19BossPostRestoreTest::RunTest(const FString&)
 	for (const FRow& Row : Rows)
 	{
 		FLifecycle19Fixture From(Row.Class);
-		FLifecycle19Fixture To(Row.Class);
+		FLifecycle19Fixture To(Row.Class, true);
 		if (!TestNotNull(*FString::Printf(TEXT("%s stood"), Row.Class), From.Npc)
 			|| !TestNotNull(*FString::Printf(TEXT("%s stood twice"), Row.Class), To.Npc))
 		{

@@ -304,11 +304,11 @@ bool FElysiumNpc::ValidateHintCoverRange(const FHintWords& Hint, const FElysiumE
 
 FElysiumNpc* FElysiumNpc::InterestingPlaceMarkerOccupant(const FElysiumInterestingPlace* Place) const
 {
-	// SEAM for `0x102db760` (the place's occupied marker record) and `0x102dcc20` (the NPC that
-	// holds it). `FElysiumInterestingPlace` carries claimants as a set of entity indices and no
-	// per-marker record, so there is no marker to ask.
-	(void)Place;
-	return nullptr;
+	// 0x102db760/0x102dcc20: conversation-selected place marker0, not this place's first occupant.
+	if (Place == nullptr || World == nullptr) return nullptr;
+	FElysiumEntity* Talker = World->Resolve(Place->ConversationTalkerSource()); // unavailable until 0018/18
+	return Talker != nullptr ? Talker->AsNpc() : nullptr;
+
 }
 
 void FElysiumNpc::MoveToBoneOriginAngles(const TCHAR* BoneName, bool bMoveOrigin, bool bMoveAngles)
@@ -628,8 +628,11 @@ void FElysiumNpc::ClaimInterestingPlace(FElysiumInterestingPlace* Place, bool bC
 	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
 
 	// 1. `thunk_FUN_102da7c0(place, this, param_3, '\x01')` — claim the marker.
-	(void)bClaimSecondary;   // retail's third argument, a marker-selection byte; see the seam note
-	Place->Claim(Handle);
+	if (bClaimSecondary) // 0x102da7c0 param2
+	{
+		Place->Claim(Handle, true); // 0x102da7c0 output before in-use, only for an existing marker
+	}
+	else Place->Arrived(Handle); // 0x102da7c0 non-marker output arm
 
 	// 2. `m_OnInterestingPlaceArrived` (`+0x5f74`), fired with the PLACE as activator and this NPC
 	//    as caller, zero delay.

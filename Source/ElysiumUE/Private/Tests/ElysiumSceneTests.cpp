@@ -794,7 +794,7 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 
 	auto BuildWorld = [&](FElysiumEntityWorld& World, int32 PositionStart, int32 PositionEnd,
 		const TCHAR* SceneFile, const TCHAR* ActorName,
-		const TCHAR* ActorClassname = TEXT("logic_relay"))
+		const TCHAR* ActorClassname = TEXT("logic_relay"), bool bDormant = false)
 	{
 		FElysiumEntityDefs Defs;
 		Defs.MapName = TEXT("__test__");
@@ -829,7 +829,7 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 		Defs.Defs.Add(MoveTemp(Counter));
 
 		World.Load(MoveTemp(Defs));
-		World.Activate(0.0);
+		if (!bDormant) World.Activate(0.0);
 	};
 
 	// --- bool keyfields read numerically, not as string truthiness -------------------------
@@ -947,9 +947,9 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 		Before.Freeze(Snapshot);
 
 		FElysiumEntityWorld After(nullptr, nullptr);
-		BuildWorld(After, 0, 0, TEXT("test/scene.vcd"), TEXT("A"));
-		After.Tick(T); // match the saved wall clock before the leaf computes its restored base
-		After.ApplySnapshot(Snapshot);
+		BuildWorld(After, 0, 0, TEXT("test/scene.vcd"), TEXT("A"), TEXT("logic_relay"), true);
+		After.ApplySnapshot(Snapshot, Snapshot.SaveBase); // selected same-map base at common applier
+		After.Activate(Snapshot.SaveBase);
 		const FElysiumEntity* Count = After.FindByName(TEXT("counter1"));
 		TestEqual(TEXT("snapshot carried the first trigger"), CounterValue(Count), 1001.f);
 		T = 1.3; After.Tick(T);

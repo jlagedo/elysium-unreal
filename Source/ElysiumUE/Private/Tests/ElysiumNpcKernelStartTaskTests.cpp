@@ -943,6 +943,7 @@ bool FElysiumNpcKernelStartTask19MovementArmsTest::RunTest(const FString&)
 	TestTrue(TEXT("0x6e completes with no route"), F.Completed());
 	// Inside the window the rescue probes the goal and writes the origin (slot 216).
 	N.TeleportMoveTimer = static_cast<float>(F.Now() + 5.0);
+	F.World.Services.TraceRetailQuery = [](const FElysiumRetailTrace& Query, FElysiumRetailTraceResult& Out) { Out.Fraction = .5f; Out.EndPosCm = FMath::Lerp(Query.StartCm, Query.EndCm, .5); return true; }; // real trace seam supplies floor
 	const int32 OriginsBefore = N.StartTask19SetAbsOriginCalls;
 	F.Start(0x6e);
 	TestEqual(TEXT("0x102a1eda slot 216 inside the window"), N.StartTask19SetAbsOriginCalls, OriginsBefore + 1);

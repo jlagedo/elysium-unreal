@@ -3,6 +3,7 @@
 // `ElysiumAnimatingOverlaySlots.inl` (a slot body) or in `ElysiumAnimatingOverlaySlotBodies.inl`.
 
 #include "ElysiumAnimatingOverlay.h"
+#include "ElysiumSaveArchive.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -313,4 +314,38 @@ int32 FElysiumAnimatingOverlay::SelectWeightedSequenceForActivity(int32 Activity
 		return const_cast<FElysiumNpc*>(Npc)->SequenceForActivity(Activity);
 	}
 	return -1;
+}
+
+void FElysiumAnimatingOverlay::SerializeNativeOverlay(FElysiumSaveArchive& Ar)
+{
+	// 0x10098c80: twelve SAVE words per 0x30-byte layer; LastEventCheck is FLOAT.
+	for (FAnimOverlayLayer& Layer : AnimOverlay)
+	{
+		Ar << Layer.Flags << Layer.SequenceFinished << Layer.Sequence;
+		Ar << Layer.Cycle << Layer.PlaybackRate << Layer.Weight << Layer.WeightMax;
+		Ar << Layer.BlendIn << Layer.BlendOut << Layer.Activity;
+		Ar << Layer.bAutoKillWhenFinished << Layer.LastEventCheck;
+	}
+	// 0x1008df10 / slot265: retain every landed flinch word; no slot141 producer is invented.
+	for (FFlinchRecord& Reaction : Flinch)
+	{
+		Ar << Reaction.Sequence << Reaction.Latch << Reaction.FadeIn << Reaction.FadeOut;
+		Ar << Reaction.PoseParamIndex << Reaction.PoseParamValue;
+		Ar.Time(Reaction.ExpireTime); // +0x80c/+0x828/+0x844 TIME SAVE, 0x101a0a80
+	}
+}
+
+// V6 slot78 hand body (0x102c1ec0); the lane manifest admits this hand SlotBodies file.
+
+void FElysiumNpc::ScriptUnhide()
+{
+	// 0x102c1ec0: four getter dispatches precede base; no floor or ground write.
+	if (bCineScriptHidden && ScriptOwnerIsLive())
+	{
+		(void)GetMoveType(); (void)GetMoveCollide(); (void)GetSolid(); (void)GetSolidFlags();
+	}
+	const bool bWasScriptHidden = bHidden;
+	FElysiumEntity::ScriptUnhide(); // 0x100a8990 callback due NOW, dormancy hook supplies slot614 once
+	if (!bWasScriptHidden) ResetThinkTimers(World != nullptr ? World->NowSeconds() : 0.0); // 0x102c1ec0 unconditional slot614
+	TroikaScriptUnhideTail(); // weapon unhide, six-word cine handback, latch clear
 }

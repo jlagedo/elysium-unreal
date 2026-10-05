@@ -96,6 +96,11 @@ void FElysiumTimeControl::StepFrames(int32 NumFrames)
 	ApplyPaused(false);
 }
 
+void FElysiumTimeControl::SelectMapClock(double StartSeconds)
+{
+	Clock.SelectMapTime(StartSeconds); // engine 0x200975f0: before Load/Spawn
+}
+
 void FElysiumTimeControl::ResetClock(double StartSeconds)
 {
 	PendingSteps = 0;

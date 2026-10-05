@@ -6,6 +6,7 @@
 #include "ElysiumRng.h"
 #include "ElysiumSessionSubsystem.h"
 #include "Substrate/ElysiumInterestingPlace.h"
+#include "ElysiumClassRegistry.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "ElysiumNpcFlags.h"
@@ -210,9 +211,10 @@ int32 FElysiumNpc::FindInterestingPlaceHoldingMe() const
 		return INDEX_NONE;
 	}
 	int32 Found = INDEX_NONE;
-	for (const TUniquePtr<FElysiumEntity>& Candidate : World->Entities())
+	for (int32 PlaceIndex = World->Entities().Num() - 1; PlaceIndex >= 0; --PlaceIndex) // 0x102d99d0 HEAD insertion
 	{
-		if (!Candidate.IsValid() || Candidate->Def == nullptr
+		const TUniquePtr<FElysiumEntity>& Candidate = World->Entities()[PlaceIndex];
+		if (!Candidate.IsValid() || Candidate->IsInert() || Candidate->Def == nullptr
 			|| !Candidate->Def->Classname.Equals(TEXT("intersting_place"), ESearchCase::IgnoreCase))
 		{
 			continue;
@@ -269,6 +271,30 @@ void FElysiumNpc::ValidateRestoredInterestingPlace()
 	CurrentSpotIndex = INDEX_NONE;                                       // 10299be2
 }
 
+#if !UE_BUILD_SHIPPING
+bool FElysiumNpc::StageInvalidMarker(const FString& Control)
+{
+	FElysiumInterestingPlace* Place = CurrentAmbientSpot();
+	if (!Place) { CurrentSpotIndex = FindInterestingPlaceHoldingMe(); Place = CurrentAmbientSpot(); } // narrow saved-reference setup from the actual surviving row
+	if (!Place || !Place->HasMarker(Handle)) return false;
+	const int32 SavedPlace = CurrentSpotIndex;
+	if (Control == TEXT("missing_place")) CurrentSpotIndex = MAX_int32;
+	else if (Control == TEXT("missing_occupant"))
+	{
+		for (auto& Marker : Place->Markers) if (Marker.Occupant == Handle) Marker.Occupant = FElysiumEntityHandle::Invalid();
+	}
+	else if (Control != TEXT("valid")) return false;
+	ValidateRestoredInterestingPlace(); // 0x10299a80, normal malformed-reference consumer
+	if (Control != TEXT("valid"))
+	{
+		CurrentSpotIndex = Control == TEXT("missing_place") ? MAX_int32 : SavedPlace;
+		LeaveInterestingPlaceOnRemove(); // 0x102b53d0 must independently refuse before release/output
+		ValidateRestoredInterestingPlace();
+	}
+	return true;
+}
+#endif
+
 // =================================================================================================
 // `0x10273390` — `CAI_BaseNPC::NPCInit`
 // =================================================================================================
@@ -280,15 +306,7 @@ void FElysiumNpc::ValidateRestoredInterestingPlace()
 void FElysiumNpc::TroikaNPCInit()
 {
 	InNpcInit() = true;                                                  // 1029a0b3 DAT_10937cf1 = 1
-	// `1029a0c0`: `m_fEffects = 0`. This runtime spells that word's one modelled bit — `EF_NODRAW`
-	// (`0x40`) — as `FElysiumEntity::bHidden`, which is what `FElysiumWeapon::Hide` writes and what
-	// `Weapon_TranslateActivity` reads; clearing the word therefore UNHIDES. Retail does exactly
-	// that here, before the base body runs, and `CNPC_VZombie::NPCInit` re-hides itself afterwards.
-	bHidden = false;                                                     // 1029a0c0 m_fEffects +0x19c
-	// The same store on the kernel's own spelling of the word. `bHidden` and `EffectsWord` bit `0x40`
-	// are TWO port spellings of the one retail `m_fEffects` (follow-up: unify them). This zero is why
-	// the player controller ends at exactly `0x60`: `CopyAnimationDataFrom` (`0x10097310`, `100973cc`)
-	// wrote `player | 0x10`, `DispatchSpawn` reaches this body, and `GetControllerNPC` ORs `0x60` after.
+	// 0x1029a0c0 clears effects, not m_bScriptHidden: born-hidden admission stays parked.
 	EffectsWord = 0;                                                     // 1029a0c0 m_fEffects +0x19c
 	// `1029a0c6`–`1029a0ef`: `m_iHealth = ftol(DAT_10923f14->IsCommand() ? 0.0 : cvar+0x28)` —
 	// `sk_basenpctroika_health`, shipped "10". Written verbatim over what `SeedSheet` derived: this
@@ -498,6 +516,19 @@ void FElysiumNpc::TroikaOnRestore(bool bFromLoad)
 	FElysiumNpcBase::OnRestore(bFromLoad);                                            // 1027bf50
 	++RestorePlaceScans;
 	CurrentSpotIndex = FindInterestingPlaceHoldingMe();                  // 102db5e0 -> +0x62ec
+#if !UE_BUILD_SHIPPING
+	if (World && World->HasAiTraceSink())
+	{
+		World->EmitAiTrace(*this, FName(TEXT("script")), FString::Printf(TEXT("restore_place held=%d"), CurrentSpotIndex));
+		for (const auto& Candidate : World->Entities())
+			if (Candidate && Candidate->Class && Candidate->Class->ClassName == FName(TEXT("intersting_place")))
+			{
+				const auto* RestoredPlace = static_cast<const FElysiumInterestingPlace*>(Candidate.Get());
+				World->EmitAiTrace(*this, FName(TEXT("script")), FString::Printf(TEXT("restore_place row place=%d used=%d inert=%d occupant0=%s"), RestoredPlace->Handle.Index,
+					RestoredPlace->MarkersUsed, RestoredPlace->IsInert() ? 1 : 0, *RestoredPlace->MarkerOccupant(0).ToString()));
+			}
+	}
+#endif
 	RestorePedestrianLink();                                             // +0x630c = 0x102f96e0(+0x6310, +0x6314)
 	const double Now = NpcKernelLifecycle19Shared::Lifecycle19Now(*this);
 	ScheduleHost.ShootAtHintNode = 0;

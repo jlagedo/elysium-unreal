@@ -90,8 +90,8 @@ namespace
 			return Builder;
 		}
 
-		explicit FWitnessFixture(int32 SafeArea = 1)
-			: Fixture(BuildWorld(SafeArea))
+		explicit FWitnessFixture(int32 SafeArea = 1, bool bDormant = false)
+			: Fixture(BuildWorld(SafeArea), bDormant)
 			, Services(Fixture.Services)
 			, World(Fixture.World)
 		{
@@ -965,7 +965,7 @@ bool FElysiumNpcWitnessSaveTest::RunTest(const FString&)
 	// `m_flNosferatuIgnoreTimer` and their kin), and the clamps and the handle re-stamping are
 	// `FElysiumNpcWitness::Rebase`, which `OnPostRestore` -- retail's slot 130 -- is what runs.
 	FWitnessFixture F;
-	FWitnessFixture G;
+	FWitnessFixture G(1, true);
 	if (F.Guard == nullptr || F.Player == nullptr || G.Guard == nullptr || G.Player == nullptr)
 	{
 		return false;
@@ -1012,7 +1012,7 @@ bool FElysiumNpcWitnessSaveTest::RunTest(const FString&)
 	// `Rebase` is what holds it to the rulebook's ceiling.
 	{
 		FWitnessFixture H;
-		FWitnessFixture I;
+		FWitnessFixture I(1, true);
 		if (H.Guard == nullptr || H.Player == nullptr || I.Guard == nullptr)
 		{
 			return false;

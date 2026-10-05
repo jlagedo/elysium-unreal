@@ -836,10 +836,11 @@ int32 FElysiumEntity::GetMoveType() const
 }
 
 // slot 208 `CBaseEntity::SetGroundEntity` 0x100b1420 -- `m_hGroundEntity = ent` (`+0x384`); retail also
-// re-links the ground entity's "standing on me" list, which is engine bookkeeping this runtime does not keep.
+// adds/removes FL_ONGROUND1, and re-links the ground entity's standing list (engine bookkeeping).
 void FElysiumEntity::SetGroundEntity(FElysiumEntity* Ground)
 {
 	RetailGroundEntity = Ground != nullptr ? Ground->Handle : FElysiumEntityHandle::Invalid();
+	if (Ground != nullptr) Flags |= 1; else Flags &= ~1; // 0x100b1420 AddFlag/RemoveFlag, both native arms
 }
 
 // slot 209 `CBaseEntity::GetGroundEntity` 0x100b1510 -- `m_hGroundEntity.Get()`, a serial-checked resolve.
@@ -885,4 +886,13 @@ const FVector& FElysiumEntity::GetAngles()
 	// `0x100b3110`, slot 221, returns `&m_angRotation`, the LOCAL angles; the port has no local/abs
 	// split (as 220).
 	return Angles;
+}
+
+// V6 shared readers: represented retail primitive words and the target-name successor.
+int32 FElysiumEntity::GetSolid() const { return RetailSolidType; } // 0x10027570 collision getter
+int32 FElysiumEntity::GetMoveCollide() const { return RetailMoveCollide; } // 0x100aacd0 +0x159
+int32 FElysiumEntity::GetSolidFlags() const { return static_cast<int32>(RetailSolidFlags); } // 0x100274d0
+FElysiumEntity* FElysiumEntity::GetNextTarget()
+{
+	return World != nullptr && !Target.IsEmpty() ? World->FindByName(Target) : nullptr; // 0x100a1d20 -> 0x100f7770
 }

@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 140 generated slot bodies of `FElysiumNpc`: 8 carry the retail default story 29c recovered, 130
-// are defined by hand in the substrate, and 2 are still stubs — 2 29c.
+// 141 generated slot bodies of `FElysiumNpc`: 8 carry the retail default story 29c recovered, 130
+// are defined by hand in the substrate, and 3 are still stubs — 2 29c, 1 29d.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -170,6 +170,15 @@ int32 FElysiumNpc::YouForgotToImplementOrDeclareServerClass()
 //   layer 14, story 29d
 // verdict `mechanism`: the body is `FElysiumNpc::SetModel`, written by hand in the substrate.
 // Declared here, defined there.
+
+// slot 126 0x102993c0 (sdk) `int Save(ISave&)`
+//   takes `ISave&`
+//   layer 16, story 29d
+int32 FElysiumNpc::Save(void*)
+{
+	FireKernelSlot(TEXT("CAI_BaseNPCTroika::Save"), TEXT("0x102993c0"), TEXT("29d"), DebugString());
+	return {};
+}
 
 // slot 130 0x102998c0 (walked) `void OnRestore(bool)`
 //   layer 22, story 29e
@@ -911,6 +920,10 @@ namespace ElysiumNpcKernelShape
 			{ 105, TEXT("0x10298ce0"), TEXT("CAI_BaseNPCTroika"), TEXT("SetModel"),
 				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpc, void(TCHAR*)>::Test(&FElysiumNpc::SetModel),
+				nullptr },
+			{ 126, TEXT("0x102993c0"), TEXT("CAI_BaseNPCTroika"), TEXT("Save"),
+				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumNpc, int32(void*)>::Test(&FElysiumNpc::Save),
 				nullptr },
 			{ 130, TEXT("0x102998c0"), TEXT("CAI_BaseNPCTroika"), TEXT("OnRestore"),
 				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,

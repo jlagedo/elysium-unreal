@@ -1,0 +1,147 @@
+{
+  "name": "dialogue_perception",
+  "about": "Hunter1 actual hunter1.dlg; live0xfe8 holds ordinary gather while0x10293095/0x10291610 independently maintain LOS. Release via CDialog normal end.",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 24,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sp_tutorial_1"
+    },
+    {
+      "after": "fresh_ready",
+      "do": "player_teleport",
+      "at": [
+        -18869.66,
+        -10424.16,
+        17432.02
+      ],
+      "face": "Hunter1"
+    },
+    {
+      "after": "fresh_ready",
+      "delay": 2,
+      "do": "fire",
+      "target": "Hunter1",
+      "input": "StartPlayerDialogRemote"
+    },
+    {
+      "after": "holds",
+      "delay": 0.2,
+      "do": "fire",
+      "target": "Hunter1",
+      "input": "SetRelationship",
+      "param": "player D_HT 5"
+    },
+    {
+      "after": "holds",
+      "delay": 1,
+      "do": "player_teleport",
+      "at": [
+        -21155.66,
+        -10424.16,
+        17432.02
+      ],
+      "face": "Hunter1"
+    },
+    {
+      "after": "holds",
+      "delay": 12,
+      "do": "player_teleport",
+      "at": [
+        -18869.66,
+        -10424.16,
+        17432.02
+      ],
+      "face": "Hunter1"
+    },
+    {
+      "after": "holds",
+      "delay": 15,
+      "do": "dialog_choose",
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "label": "fresh_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "holds",
+      "who": "Hunter1",
+      "kind": "task",
+      "match": "task_run_dialog (",
+      "within": 6
+    },
+    {
+      "label": "ends",
+      "who": "Hunter1",
+      "kind": "output",
+      "match": "OnDialogEnd",
+      "within": 17
+    },
+    {
+      "label": "gathers",
+      "who": "Hunter1",
+      "kind": "cond+",
+      "match": "SEE_ENEMY (0x46)",
+      "within": 3
+    }
+  ],
+  "never": [
+    {
+      "who": "Hunter1",
+      "kind": "cond+",
+      "match": "SEE_ENEMY (0x46)",
+      "until": 17
+    },
+    {
+      "who": "Hunter1",
+      "kind": "output",
+      "match": "OnDialogEnd",
+      "at_most": 1
+    }
+  ],
+  "probes": [
+    {
+      "at": 6,
+      "who": "Hunter1",
+      "probe": "witness",
+      "field": "dialog.partner_live",
+      "equals": true
+    },
+    {
+      "at": 6,
+      "who": "Hunter1",
+      "probe": "witness",
+      "field": "task.id",
+      "equals": 185
+    },
+    {
+      "at": 14,
+      "who": "Hunter1",
+      "probe": "witness",
+      "field": "los.player",
+      "equals": false
+    },
+    {
+      "at": 16,
+      "who": "Hunter1",
+      "probe": "witness",
+      "field": "los.player",
+      "equals": true
+    }
+  ],
+  "shares_map": true,
+  "cast": [
+    {
+      "name": "Hunter1"
+    }
+  ]
+}

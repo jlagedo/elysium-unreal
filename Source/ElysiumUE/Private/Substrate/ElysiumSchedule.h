@@ -290,6 +290,7 @@ public:
 };
 
 // The per-NPC runner state. Saved as part of the NPC, so a schedule survives a save.
+struct FElysiumSaveArchive; // 0x1027bc60
 struct FElysiumScheduleState
 {
 	/** The GLOBAL id of the installed program -- retail's `m_pSchedule` (`+0x5c38`) by identity
@@ -324,12 +325,10 @@ struct FElysiumScheduleState
 	// false by every install (`ElysiumSchedule::Start`), true at the end of a pass that ran a task
 	// (`ElysiumSchedule::Tick`).
 	//
-	// NOT serialized, and the default is the reason: a restore re-installs its program through
-	// `Start`, so a loaded NPC gets exactly the one think of immunity a fresh install gives. Carrying
-	// the saved value would only differ for a payload saved mid-window, and it is not a value the
-	// player can observe.
+	// 0x1027bc60: BOOL SAVE; restore does not install a fresh program.
 	bool bDidMaintainSchedule = false;
 
+	void Serialize(FElysiumSaveArchive& Ar); // 0x1027bc60 AIScheduleState_t +0x5c40
 	bool IsRunning() const { return Current != ElysiumScheduleId::None; }
 	void Clear()
 	{

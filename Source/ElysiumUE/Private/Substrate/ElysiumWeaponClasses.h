@@ -597,6 +597,8 @@ public:
 	bool bInReload = false; // 0x1028918d +0x898 m_bInReload
 	bool bIsJammed = false; // 0x102552c0 +0x89a m_bIsJammed
 	bool bInterruptReload = false; // 0x102552c0 +0x899 m_bInterruptReload
+	double WeaponIdleTime = 0.0; // CBaseCombatWeapon +0x894 TIME SAVE
+	virtual void RebaseSavedReferences(FElysiumEntityWorld& InWorld) override;
 	// The reload request starts with reserve and missing capacity; returns whether it began.
 	bool BeginReload();
 

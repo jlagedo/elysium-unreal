@@ -640,6 +640,8 @@ bool FElysiumNpcKernelHintsInterestTest::RunTest(const FString&)
 	// corpus is missing, so expecting it makes the case depend on which suite ran first.
 	AddExpectedError(TEXT("Can not find interest"), EAutomationExpectedErrorFlags::Contains, 0);
 	Spot->MinTime = 4.0f;
+	Spot->MarkersAllocated = 1; Spot->Markers.SetNum(1); Spot->MarkersUsed = 1;
+	Spot->Markers[0].Occupant = Npc->Handle; // already-reserved 0x102da860 prerequisite
 	Spot->MaxTime = 4.0f;   // a degenerate range pins the deadline exactly
 	Npc->ClaimInterestingPlace(Spot, /*bClaimSecondary=*/false, 100.0);
 	TestEqual(TEXT("the wait deadline is curtime + RandomFloat(min_time, max_time)"),

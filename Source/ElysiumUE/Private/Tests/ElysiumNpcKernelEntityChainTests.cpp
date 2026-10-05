@@ -140,7 +140,7 @@ bool FElysiumNpcKernelEntityChainStandableTest::RunTest(const FString&)
 	//                            and the helper's own two arms both miss -> false.
 	//   0x100b5110             : false, for the same reason.
 	TestFalse(TEXT("the standability helper refuses a SOLID_NONE entity"), Npc.IsStandableSolid());
-	TestFalse(TEXT("slot 164 IsStandable refuses it too"), Npc.IsStandable());
+	TestTrue(TEXT("0x100b50a0 live GetSolid exposes SOLID_BBOX"), Npc.IsStandable());
 
 	// Slot 166 `0x10026f80`: a null candidate (the static world under the floor sample) is
 	// standable; a real one answers ITS slot 164, dispatched through the candidate.

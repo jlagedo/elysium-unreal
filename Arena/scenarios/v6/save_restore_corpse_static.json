@@ -1,0 +1,175 @@
+{
+  "name": "save_restore_corpse_static",
+  "about": "V6 logical corpse callback continuation through common codec/apply, no replay: 0x1032c0e0/0x102696f0/0x10269960. An ordinary mortal's corpse nobody sees is removed ten seconds after the death. The damage_lethal_death staging (an idle TutorialThug on the east pad, TakeDamage 10000 at 3 s) with the player turned away: the player stands at the start facing yaw -135, the east pad 180 degrees behind the view. CBaseCombatCharacter::CreateCorpse 0x1032c0e0's tail arms SUB_PVSRemove 0x102696f0 at curtime + 10.0 (0x1032c404) on an ordinary mortal's corpse; the think re-arms itself every 10 s while any player passes all three of the view cone (slot 363 FInViewCone), the PVS test (0x101d1a90) and FVisible(corpse, mask 0x2804091) (slot 201), and otherwise calls UTIL_Remove 0x101cd940 (stories/v4/packets-S1.md item 1; stories/v1/triage.md, Judge's rulings, V4 -- second sitting, J13). Unseen at the first think, the corpse is removed at death + 10 s: one `removed` event on arena_victim, none before death + 9.5 s.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 8,
+  "player": {
+    "at": "start",
+    "face": -135.0
+  },
+  "cast": [
+    {
+      "name": "arena_victim",
+      "classname": "npc_VHumanCombatant",
+      "at": "east",
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "npc_perception": "3",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "player_reaction": "D_NU 5",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0"
+      }
+    }
+  ],
+  "script": [
+    {
+      "t": 2.5,
+      "do": "no_ragdoll_death",
+      "target": "arena_victim"
+    },
+    {
+      "t": 3.0,
+      "do": "fire",
+      "target": "arena_victim",
+      "input": "TakeDamage",
+      "param": 10000
+    },
+    {
+      "after": "corpse",
+      "delay": 0,
+      "do": "save",
+      "slot": "save_restore_corpse_static",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "arena_victim",
+          "field": "callback"
+        },
+        {
+          "who": "arena_victim",
+          "field": "think.next",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "arena_victim",
+          "field": "hidden"
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "save_restore_corpse_static",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "arena_victim",
+          "field": "callback"
+        },
+        {
+          "who": "arena_victim",
+          "field": "think.next",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "arena_victim",
+          "field": "hidden"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "label": "hit",
+      "who": "arena_victim",
+      "kind": "input",
+      "match": "TakeDamage",
+      "by": 3.5
+    },
+    {
+      "label": "dies",
+      "who": "arena_victim",
+      "kind": "death",
+      "match": "",
+      "within": 0.5
+    },
+    {
+      "label": "corpse",
+      "who": "arena_victim",
+      "kind": "corpse",
+      "match": "",
+      "within": 1.0
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "gone",
+      "who": "arena_victim",
+      "kind": "removed",
+      "match": "",
+      "by": 3.6
+    }
+  ],
+  "never": [
+    {
+      "who": "arena_victim",
+      "kind": "death",
+      "after": "applied"
+    },
+    {
+      "who": "arena_victim",
+      "kind": "corpse",
+      "after": "applied"
+    },
+    {
+      "who": "arena_victim",
+      "kind": "schedule",
+      "after": "applied"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "arena_victim",
+      "probe": "exists",
+      "equals": false
+    }
+  ],
+  "notes": "Static/no-ragdoll original SUB_Remove at death+0.5 (0x1032c288). Capture at the synchronous corpse fence, not after its timer."
+}

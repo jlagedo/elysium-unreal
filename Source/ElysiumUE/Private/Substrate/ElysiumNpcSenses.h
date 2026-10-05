@@ -181,6 +181,8 @@ struct FElysiumNpcBaseMemory
 // "forgotten and neutral", which is exactly what this struct exists to keep separate.
 struct FElysiumNpcMemory
 {
+	const FElysiumGameSoundEvent* InvestigateSoundSource() const { return nullptr; } // +0x60dc, 0x102993c0: missing ninth sound producer
+
 	// --- Last heard ----------------------------------------------------------------------------
 	FElysiumEntityHandle LastHeardSource;      // invalid means "the world made it" (a door)
 	FVector LastHeardPosition = FVector::ZeroVector;
@@ -378,6 +380,7 @@ public:
 	void TickSight(FElysiumNpc& Npc, double Now);
 	void TickHearing(FElysiumNpc& Npc, double Now);
 	const TArray<FElysiumEntityHandle>& Sighted() const { return SeenThisPass; }
+	uint64 CompletedPasses() const { return PassCount; } // diagnostic at actual 0x10310710 completion, not SAVE
 	void CommitBestSound(FElysiumNpc& Npc, const FElysiumNpcConditions& Conditions);
 	void ExtendVisionOverride(FElysiumNpc& Npc, FElysiumEntityHandle Source, double Now, double Duration);
 
@@ -426,6 +429,7 @@ public:
 
 private:
 	uint64 Cursor = 0;
+	uint64 PassCount = 0;
 	// `CAI_Senses::Look` keeps per-candidate throttles separate from closest-player/PVS cache.
 	double NextLookTime[3] = { -1.0, -1.0, -1.0 };
 	TArray<FElysiumEntityHandle> SeenByChannel[3];

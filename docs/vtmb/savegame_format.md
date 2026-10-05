@@ -692,3 +692,11 @@ is distinct from the still-unverified save/load-inside-an-intact-volume case.
   nothing in the image reads it, so what would clear it is unrecovered.
 - **`m_vDiscBloodType` writer** and **`m_sPlayerName` writer** (the setter `10170ad0` has no
   recovered callers; live name is `pl.netname` and the `.HL2` trailer).
+
+### Native NPC continuation and time types (V6 recovery, 2026-10-05)
+
+The task cursor is INT +0x5c40, status INT +0x5c44, schedule/task starts TIME +0x5c48/+0x5c4c. Failure +0x5c50 >=42 clamps to1 in0x1027bf50; it does not clamp a valid cursor43. Valid header version/name/CRC preserves the program/cursor; required enemy/target/cine/path refusal calls0x1027be60. BOOL gathered +0x5ca4 persists independently of unsaved condition masks and RunAI clears it later.
+
+TIME0x101a0a80/0x101a2a30 stores source-base deltas and adds the destination base once. Native sentinel policies stay field-specific: zero waits, -1 attention/expiry clocks and FLT_MAX deferred clocks are not blanket-shifted. Base animation LastEventCheck is TIME; layer LastEventCheck, weapon +0x730/+0x734 attack stamps and player-LOS caches are FLOAT. Weapon idle and owner NextAttack are TIME. Native base phase, four layer records, three flinch records, move/shoot +0x10..2c, selected callback FUNCTION +0x118 and saved callback +0xe4 are separate retained words. Serialization is not proof of an event-free presentation seek or a live producer.
+
+Place custom ops0x102d9240/0x102d9320 carry allocation/used count, EHANDLE and both absolute POSITION bounds of each used row; spare rows clear on decode. In-use +0x564 and failed-box ring have no SAVE rows. Current carriers use the same explicit-base codec, identity fixup and common applier; complete transition-set/global import remains0017/3 and/9.

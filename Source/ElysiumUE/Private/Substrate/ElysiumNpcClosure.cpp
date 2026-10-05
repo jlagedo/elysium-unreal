@@ -567,7 +567,12 @@ void FElysiumNpc::Slot584(int32 Unused)
 	//
 	// The `int` argument reaches no instruction in the retail body.
 	(void)Unused;
+	const double BeforeResetNextThink = NextThink;
 	ResetAllThinkStamps(World != nullptr ? World->NowSeconds() : 0.0);
+#if !UE_BUILD_SHIPPING
+	if (World && World->HasAiTraceSink()) World->EmitAiTrace(*this, FName(TEXT("script")), FString::Printf(TEXT("slot584 reset callback=%s life=%d old_next=%.6f next=%.6f"),
+		*ThinkCallback.ToString(), LifeState, BeforeResetNextThink, NextThink)); // 0x1028d910 -> slot614, no alive guard in 0x1028d8d0/0x100f8370
+#endif
 }
 
 // =================================================================================================

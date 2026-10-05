@@ -684,7 +684,7 @@ bool FElysiumNpcKernelDirectorSaveRestoreTest::RunTest(const FString&)
 		Sched->ThinkFunction == FElysiumScriptedSequence::EThinkFunction::CineThink);
 	TestNull(TEXT("an idle director does not refuse the save"), Seq->SaveBlockReason());
 
-	FElysiumNpcWorldFixture To(Build());
+	FElysiumNpcWorldFixture To(Build(), true);
 	ElysiumRoundTripSnapshot(From.World, To.World);
 	FElysiumScriptedSequence* RSeq = DirectorAs(To.World, TEXT("seq"));
 	FElysiumAiScriptedSchedule* RSched = DirectorAs<FElysiumAiScriptedSchedule>(To.World, TEXT("sched"));

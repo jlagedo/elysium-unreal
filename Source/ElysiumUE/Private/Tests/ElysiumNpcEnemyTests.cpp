@@ -87,8 +87,8 @@ namespace
 			return Builder;
 		}
 
-		FEnemyFixture()
-			: Fixture(BuildWorld())
+		FEnemyFixture(bool bDormant = false)
+			: Fixture(BuildWorld(), bDormant)
 			, Services(Fixture.Services)
 			, World(Fixture.World)
 		{
@@ -1254,7 +1254,7 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 	// pass C, while the `CAI_Memory` record list stays in the leaf blob (retail's own nested
 	// datamap). Only `Freeze`/`ApplySnapshot` drives both, and only it runs the restore hook.
 	FEnemyFixture F;
-	FEnemyFixture G;
+	FEnemyFixture G(true);
 	if (F.Guard == nullptr || F.Player == nullptr || G.Guard == nullptr || G.Player == nullptr)
 	{
 		return false;
@@ -1311,7 +1311,7 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 	// rather than left naming a dead index (`FElysiumNpcEnemyMemory::Rebase`).
 	{
 		FEnemyFixture H;
-		FEnemyFixture I;
+		FEnemyFixture I(true);
 		if (H.Guard == nullptr || H.Player == nullptr || I.Guard == nullptr)
 		{
 			return false;

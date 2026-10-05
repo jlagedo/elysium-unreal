@@ -134,6 +134,7 @@ UWorld* FElysiumArenaRun::GetWorld() const
 
 FElysiumEntityWorld* FElysiumArenaRun::GetEntityWorld() const
 {
+	if (Runner.IsValid()) return Runner->GetCurrentEntityWorld(); // never pose a retired world, 0x101a2e40
 	const UElysiumMapSubsystem* Sub = Subsystem.Get();
 	const AElysiumMapActor* Map = Sub != nullptr ? Sub->GetCurrentMap() : nullptr;
 	return Map != nullptr ? Map->GetEntityWorld() : nullptr;
@@ -299,6 +300,7 @@ void FElysiumArenaRun::BeginNextRecord()
 		Host.Origin = ElysiumArena::DefaultOrigin();
 	}
 
+	ElysiumArenaStage::ConfigureHost(Host); // GI runner retains transport across hard travel, 0x20096010
 	FString Summary;
 	FString Error;
 	if (!ElysiumArenaStage::Stage(Record, Host, Summary, Error))

@@ -323,7 +323,7 @@ bool FElysiumGeometryKernelFloorDropTest::RunTest(const FString&)
 
 	const FVector Spawned(10.0, 20.0, 100.0);   // Source units, the port's axes
 	FVector At = Spawned;
-	TestTrue(TEXT("no collision world: the found-floor arm, a zero-length drop"), Guard->MoveProbeFloorDrop(At));
+	TestFalse(TEXT("0x102e7880: missing collision refuses, no manufactured floor"), Guard->MoveProbeFloorDrop(At));
 	TestTrue(TEXT("the origin is left where it was"), At.Equals(Spawned, 1e-6));
 
 	FElysiumRetailTrace Asked;

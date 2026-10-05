@@ -50,7 +50,7 @@ struct FElysiumSessionSaveFixture
 		World = Entities.Get();
 		World->Load(ElysiumSaveTestHelpers::MakeSaveTestDefs());
 		World->SpawnPlayer();
-		World->Activate(0.0);
+		World->Activate(1.0); // engine0x200f5bc4
 		Host.MapActor->AdoptEntityWorldForTests(MoveTemp(Entities));
 		Session->OnSaveResult().AddLambda([this](const FElysiumSaveResult& Result) { Phases.Add(Result.State); });
 		return true;
@@ -101,17 +101,17 @@ public:
 			FElysiumEntityWorld Restored(nullptr, nullptr);
 			Restored.Load(ElysiumSaveTestHelpers::MakeSaveTestDefs());
 			Restored.SpawnPlayer();
-			Restored.Activate(0.0);
 			const FElysiumMapSnapshot* Map = Saved.Maps.Find(TEXT("__save_test__"));
 			if (!Test->TestNotNull(TEXT("native payload contains current map"), Map)) return true;
-			Test->TestEqual(TEXT("every captured entity record applied"), Restored.ApplySnapshot(*Map), Map->Entities.Num());
+			Test->TestEqual(TEXT("every captured entity record applied"), Restored.ApplySnapshot(*Map, Map->SaveBase), Map->Entities.Num());
+			Restored.Activate(Map->SaveBase); // 0x1011a620 restore before activation
 			auto Value = [&]() { return ElysiumSaveTestHelpers::SaveTestCounterValue(Restored.FindByName(TEXT("counter1"))); };
 			Test->TestEqual(TEXT("registered counter field retains captured value"), Value(), 5.0f);
-			Restored.Tick(9.0);
-			Test->TestEqual(TEXT("saved output not dispatched early"), Value(), 5.0f);
 			Restored.Tick(10.0);
+			Test->TestEqual(TEXT("saved output not dispatched early"), Value(), 5.0f);
+			Restored.Tick(11.0);
 			Test->TestEqual(TEXT("next saved delivery applies once at deadline"), Value(), 8.0f);
-			Restored.Tick(10.1);
+			Restored.Tick(11.1);
 			Test->TestEqual(TEXT("next delivery does not repeat"), Value(), 8.0f);
 			Test->TestEqual(TEXT("save did not transfer maps into run cache"), F.Session->MapSnapshots().Num(), 0);
 			FElysiumSaveStorage Storage;
@@ -167,7 +167,7 @@ bool FElysiumSessionNamedSaveTest::RunTest(const FString&)
 	F->Phases.Reset();
 	F->Session->SetGlobalInt(TEXT("SG01_Witness"), 17);
 	F->World->EnqueueInput(TEXT("counter1"), TEXT("Add"), FElysiumVariant::Int(5), 0.0, {}, {});
-	F->World->Tick(0.0);
+	F->World->Tick(1.0);
 	F->World->EnqueueInput(TEXT("counter1"), TEXT("Add"), FElysiumVariant::Int(3), 10.0, {}, {});
 	IConsoleObject* Object = IConsoleManager::Get().FindConsoleObject(TEXT("elysium.save"));
 	IConsoleCommand* Command = Object ? Object->AsCommand() : nullptr;
@@ -181,7 +181,7 @@ bool FElysiumSessionNamedSaveTest::RunTest(const FString&)
 	TestFalse(TEXT("second save cannot race first"), F->Session->RequestSave({EElysiumSaveKind::Manual, F->Named}, Slot, Error));
 	F->Session->SetGlobalInt(TEXT("SG01_Witness"), 99);
 	F->World->EnqueueInput(TEXT("counter1"), TEXT("Add"), FElysiumVariant::Int(20), 0.0, {}, {});
-	F->World->Tick(0.0);
+	F->World->Tick(1.0);
 	TestEqual(TEXT("live field changes after snapshot acceptance"), ElysiumSaveTestHelpers::SaveTestCounterValue(F->World->FindByName(TEXT("counter1"))), 25.0f);
 	ADD_LATENT_AUTOMATION_COMMAND(FElysiumAwaitSave(this, F));
 	return true;

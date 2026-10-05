@@ -83,25 +83,17 @@ FElysiumNpc::FCineUnhideRecord FElysiumNpc::TroikaScriptUnhideTail()
 	//    `+0x5f78`..`+0x5f8c`, in this order — slot 94 `GetMoveType`, slot 95 `GetMoveCollide`,
 	//    slot 92 `GetSolid`, slot 211 `GetSolidFlags`, `m_fEffects`, `m_bfAINPCFlags`.
 	//
-	//    `+0x5d78` is its OWN byte (story 29e rebound it as `FElysiumNpc::bCineScriptHidden`, which
-	//    `NPCInit` clears at `102735xx` and this body clears on both arms), distinct from
-	//    `m_bScriptHidden` (`+0x0f4`) and from `m_fEffects`. Its SETTER — retail's `ScriptHide` —
-	//    is not ported yet, so the latch would never stand; until it is, the condition is read from
-	//    the entity's own hidden flag, which is this runtime's only live spelling of "hidden by a
-	//    script". The words land on the director (`FElysiumScriptedSequence::Saved*`, story 5 fold
-	//    A3) when `m_hCine` resolves to one; the record is returned for the test either way.
-	const bool bCineLatchStands = bHidden;
+	// 0x102c1ec0: +0x5d78 is a separate cine latch, never the base hidden bit.
+	const bool bCineLatchStands = bCineScriptHidden;
 	FElysiumEntity* Cine = (World && ScriptOwner.IsSet()) ? World->Resolve(ScriptOwner) : nullptr;
 	if (bCineLatchStands && Cine != nullptr)
 	{
 		Record.bWroteToCine = true;
 		Record.MoveType = GetMoveType();
-		Record.MoveCollide = GetMoveCollide();
-		Record.Solid = GetSolid();
-		Record.SolidFlags = GetSolidFlags();
-		// `m_fEffects` stays 0: this runtime carries no `m_fEffects` word (rendering effects are the
-		// body's, not the entity's). `m_bfAINPCFlags` is the whole first flag word.
-		Record.Effects = 0;
+		Record.MoveCollide = RetailMoveCollide; // 0x100aacd0 represented word while shared slot95 is unfilled
+		Record.Solid = RetailSolidType; // 0x10027570 represented collision word
+		Record.SolidFlags = static_cast<int32>(RetailSolidFlags); // 0x100274d0 represented collision flags
+		Record.Effects = static_cast<int32>(EffectsWord); // 0x102c1ec0 sixth-word handback
 		Record.NpcFlagWord = NpcFlags.RawWord1();
 		if (FElysiumScriptedSequence* Director = ResolveCine())
 		{
@@ -117,11 +109,7 @@ FElysiumNpc::FCineUnhideRecord FElysiumNpc::TroikaScriptUnhideTail()
 	//    the record (`102c1fxx` and the tail).
 	bCineScriptHidden = false;
 	//
-	// **Unrecovered:** the four vtable dispatches ahead of `CBaseEntity::ScriptUnhide` in the
-	// listing (the same slots 94/95/92/211, results discarded by the decompiler). They are the same
-	// sequence in the same order as the recorded one, so either the compiler hoisted the reads or
-	// retail restores them from the cine first; nothing in the corpus settles which, and this body
-	// reproduces only the sequence whose destination is stated.
+	// 0x102c1ec0: the pre-base four getters live in ScriptUnhide above.
 	return Record;
 }
 

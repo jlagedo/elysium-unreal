@@ -97,7 +97,7 @@ bool FElysiumTerminalScreenSaverTest::RunTest(const FString&)
 	// both reproducible (`.claude/rules/cpp.md` — randomness is never `FMath::Rand*`).
 	ElysiumRng::SeedAll(20260907);
 
-	World.Activate(0.0);
+	World.Activate(1.0); // retail engine fresh epoch 0x200f5bc4
 	FElysiumEntity* Entity = World.FindByName(TEXT("terminal"));
 	FElysiumTerminal* Base = Entity ? Entity->AsTerminal() : nullptr;
 	if (!TestNotNull(TEXT("the terminal resolves"), Base))
@@ -111,7 +111,7 @@ bool FElysiumTerminalScreenSaverTest::RunTest(const FString&)
 	// --- the three schedules ------------------------------------------------------------------
 	// Activate: `RandomFloat(0, 1) + curtime`, and the floor applied only AFTER that.
 	TestTrue(TEXT("Activate arms the first tick inside the first second"),
-		Terminal->NextThink >= 0.0f && Terminal->NextThink < 1.0f);
+		Terminal->NextThink >= 1.0f && Terminal->NextThink < 2.0f);
 	TestEqual(TEXT("an authored ss_delay of 0.5 is floored at 2.0 by Activate"),
 		Terminal->ScreenSaverDelay, FElysiumPropHacking::ScreenSaverDelayFloor);
 	TestEqual(TEXT("ss_start is never floored"), Terminal->ScreenSaverStart, 7.25f);
@@ -130,7 +130,7 @@ bool FElysiumTerminalScreenSaverTest::RunTest(const FString&)
 	// think fires on the first frame at or past its schedule and re-arms on that frame's clock.
 	const float FirstArmedAt = Terminal->NextThink;
 	const uint32 RevisionBeforeFirst = Terminal->ViewRevision;
-	Advance(1.0);
+	Advance(1.0 + 1.0);
 	TestEqual(TEXT("the first tick fired exactly once inside the first second"),
 		Terminal->ViewRevision, RevisionBeforeFirst + 1);
 	TestTrue(TEXT("and rescheduled itself the floored ss_delay later"),

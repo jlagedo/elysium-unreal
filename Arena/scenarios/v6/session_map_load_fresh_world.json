@@ -1,0 +1,109 @@
+{
+  "name": "session_map_load_fresh_world",
+  "about": "Retail map starts at1.0 (engine0x200f5bb4..c4); fresh world, frozen revisit, or saved header base0x200975f0.",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 12,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sp_tutorial_1"
+    },
+    {
+      "after": "fresh_ready",
+      "do": "spawn",
+      "row": {
+        "name": "v6_runtime",
+        "classname": "logic_relay",
+        "at": [
+          -4381.5,
+          -1196.34,
+          0
+        ],
+        "outputs": [
+          {
+            "name": "OnTrigger",
+            "target": "thug_3",
+            "input": "ScriptUnhide",
+            "delay": 6,
+            "times": 1
+          }
+        ]
+      }
+    },
+    {
+      "after": "fresh_ready",
+      "delay": 1,
+      "do": "fire",
+      "target": "v6_runtime",
+      "input": "Trigger"
+    },
+    {
+      "after": "fresh_ready",
+      "do": "kill",
+      "target": "thug_3"
+    },
+    {
+      "after": "fresh_ready",
+      "delay": 3,
+      "do": "fresh_map",
+      "map": "sp_tutorial_1"
+    }
+  ],
+  "expect": [
+    {
+      "label": "fresh_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "fresh_again",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    }
+  ],
+  "never": [
+    {
+      "who": "thug_3",
+      "kind": "input",
+      "match": "ScriptUnhide",
+      "after": "fresh_again",
+      "within": 7
+    }
+  ],
+  "probes": [
+    {
+      "at": "pre_init",
+      "who": "world",
+      "probe": "witness",
+      "field": "clock",
+      "equals": 1.0
+    },
+    {
+      "at": 2,
+      "who": "v6_runtime",
+      "probe": "witness",
+      "field": "outputs.remaining",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "v6_runtime",
+      "probe": "exists",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "thug_3",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    }
+  ],
+  "shares_map": true
+}

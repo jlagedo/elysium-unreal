@@ -1,0 +1,204 @@
+{
+  "name": "damage_last_record",
+  "about": "Authored thug_3 last damage attacker/player and independent live inflictor POSITION; scalar1 calls0x10265ed0, TIME persists through common apply.",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 18,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sp_tutorial_1"
+    },
+    {
+      "after": "fresh_ready",
+      "do": "spawn",
+      "row": {
+        "name": "v6_inflictor",
+        "classname": "info_target",
+        "at": [
+          -4000,
+          -1400,
+          0
+        ]
+      }
+    },
+    {
+      "after": "fresh_ready",
+      "do": "fire",
+      "target": "thug_3",
+      "input": "ScriptUnhide"
+    },
+    {
+      "after": "fresh_ready",
+      "delay": 2,
+      "do": "damage_packet",
+      "target": "thug_3",
+      "attacker": "player",
+      "inflictor": "v6_inflictor",
+      "param": 1
+    },
+    {
+      "t": 2.8,
+      "do": "fire",
+      "target": "popup_1",
+      "input": "CloseWindow"
+    },
+    {
+      "t": 3,
+      "do": "save",
+      "slot": "damage_last_record",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "thug_3",
+          "field": "damage.attacker"
+        },
+        {
+          "who": "thug_3",
+          "field": "damage.position.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_3",
+          "field": "damage.position.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_3",
+          "field": "damage.position.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_3",
+          "field": "damage.sum"
+        },
+        {
+          "who": "thug_3",
+          "field": "damage.time",
+          "tolerance": 0.0001
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "damage_last_record",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "thug_3",
+          "field": "damage.attacker"
+        },
+        {
+          "who": "thug_3",
+          "field": "damage.position.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_3",
+          "field": "damage.position.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_3",
+          "field": "damage.position.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_3",
+          "field": "damage.sum"
+        },
+        {
+          "who": "thug_3",
+          "field": "damage.time",
+          "tolerance": 0.0001
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "label": "fresh_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "light",
+      "who": "thug_3",
+      "kind": "script",
+      "match": "damage_record amount=1.000000 light=1",
+      "within": 6
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    }
+  ],
+  "never": [
+    {
+      "who": "thug_3",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": "captured",
+      "who": "thug_3",
+      "probe": "witness",
+      "field": "damage.position.x",
+      "equals": -4000
+    },
+    {
+      "at": "captured",
+      "who": "thug_3",
+      "probe": "witness",
+      "field": "damage.sum",
+      "equals": 1
+    },
+    {
+      "at": "end",
+      "who": "thug_3",
+      "probe": "alive",
+      "equals": true
+    }
+  ],
+  "shares_map": true,
+  "cast": [
+    {
+      "name": "thug_3"
+    }
+  ],
+  "notes": " V6 close: trig_popup_move enables at world2.0 and opens popup_1 at2.2 (trace 20261005T161036.148864Z). CloseWindow at scenario2.8 uses the real sign dismissal before CanSave; no gate bypass."
+}

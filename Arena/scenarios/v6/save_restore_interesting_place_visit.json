@@ -1,0 +1,507 @@
+{
+  "name": "save_restore_interesting_place_visit",
+  "about": "Authored hub pedestrian_female and its actually chosen marker; 0x102da0d0/0x102d9240/0x102d9320/0x10299a80 continuation.",
+  "stage": "map:sm_hub_1",
+  "seed": 1,
+  "duration": 121,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sm_hub_1"
+    },
+    {
+      "after": "fresh_ready",
+      "do": "player_teleport",
+      "at": [
+        -5700,
+        5765.44,
+        -284.48
+      ],
+      "face": "pedestrian_female"
+    },
+    {
+      "after": "walking",
+      "delay": 0.05,
+      "do": "save",
+      "slot": "save_restore_interesting_place_visit",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "pedestrian_female",
+          "field": "task.index"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.status"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.task_started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.failure"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.move_wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.type"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.flags"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.arrival"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.target"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.goal.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.goal.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.goal.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.identity"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.capacity"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.count"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.failed_attempts"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.occupant"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.z",
+          "tolerance": 0.0001
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "save_restore_interesting_place_visit",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "pedestrian_female",
+          "field": "task.index"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.status"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.task_started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.failure"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "task.move_wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.type"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.flags"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.arrival"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.target"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.goal.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.goal.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "nav.goal.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.identity"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.capacity"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.count"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.failed_attempts"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.occupant"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.z",
+          "tolerance": 0.0001
+        }
+      ]
+    },
+    {
+      "after": "ready",
+      "delay": 39,
+      "do": "player_teleport",
+      "at": [
+        -2700,
+        5100,
+        -284.48
+      ],
+      "face": "pedestrian_female"
+    },
+    {
+      "after": "leave",
+      "do": "fire",
+      "target": "pedestrian_female",
+      "input": "ScriptHide"
+    }
+  ],
+  "expect": [
+    {
+      "label": "fresh_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "walking",
+      "who": "pedestrian_female",
+      "kind": "task",
+      "match": "task_wait_for_movement (",
+      "within": 30
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "arrived",
+      "who": "pedestrian_female",
+      "kind": "output",
+      "match": "OnInterestingPlaceArrived",
+      "within": 60
+    },
+    {
+      "label": "leave",
+      "who": "pedestrian_female",
+      "kind": "output",
+      "match": "OnInterestingPlaceLeft",
+      "within": 60.1
+    }
+  ],
+  "never": [
+    {
+      "who": "pedestrian_female",
+      "kind": "death"
+    },
+    {
+      "who": "pedestrian_female",
+      "kind": "taskfail"
+    },
+    {
+      "who": "pedestrian_female",
+      "kind": "output",
+      "match": "OnInterestingPlaceLeft",
+      "at_most": 1
+    }
+  ],
+  "probes": [
+    {
+      "at": 1,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.x",
+      "greater": -100000
+    },
+    {
+      "at": 1,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.y",
+      "greater": -100000
+    },
+    {
+      "at": 1,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.z",
+      "greater": -100000
+    },
+    {
+      "at": 15,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.x",
+      "greater": -100000
+    },
+    {
+      "at": 15,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.y",
+      "greater": -100000
+    },
+    {
+      "at": 15,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.z",
+      "greater": -100000
+    },
+    {
+      "at": 29,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.x",
+      "greater": -100000
+    },
+    {
+      "at": 29,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.y",
+      "greater": -100000
+    },
+    {
+      "at": 29,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.z",
+      "greater": -100000
+    },
+    {
+      "at": 40,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.x",
+      "greater": -100000
+    },
+    {
+      "at": 40,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.y",
+      "greater": -100000
+    },
+    {
+      "at": 50,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.x",
+      "greater": -100000
+    },
+    {
+      "at": 50,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.y",
+      "greater": -100000
+    },
+    {
+      "at": 60,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.x",
+      "greater": -100000
+    },
+    {
+      "at": 60,
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "origin.y",
+      "greater": -100000
+    }
+  ],
+  "shares_map": true,
+  "cast": [
+    {
+      "name": "pedestrian_female"
+    }
+  ],
+  "notes": "Measured20261005T165054.295652Z: common restore preserves row/cursor/goal; arrival50.100 and one left87.767. Listing0x102a9f40 unconditionally samples place MinStayTime/MaxStayTime into WaitFinished after arrival; the old20s after-ready bound included both a ~50s authored route and ~37.667s native stay. Set staging observation budget88 from actual release, preserving saved words/retail predicates, with no wait override/seed/route change. Raw patch sm_hub_1 BSP bus_stop(-922.341,-1904.28,-117.71 Source) authors min_time30/max_time60, typeIdle, max_npcs4, rating3/group1. 0x102a9f40 samples exactly those values. Retain actual saved route then assert arrival within measured50.2 after ready and release within retail max60 +0.1 think, rather than the invalid20s total. After proved lawful release, normal ScriptHide ends this visit witness so unrelated later visits do not enter its duplicate-output guard. No native wait/bound is enlarged. Keep the final approach/arrival/stay in player PVS through an explicit ready+39 teleport to[-2700,5100,-284.48], over300cm from the sampled marker (two hulls total74cm). Original initial seat faced away near the departure point for the entire walk. Paired trace reaches40cm short of the goal at50s while standalone had arrived; do not enlarge the route bound to mask it. Both traces retain identical saved goal and match positions through29s; later Recast crowd avoidance varies the travel time by~1s. TASK_WAIT_FOR_MOVEMENT data0 (0x10288f46..0x10288f7e) has NO retail travel deadline. The60s arrival observation budget measures this untimed route, rather than claiming our temporary50.2s measurement is a behavioural bound. The actual authored stay maximum60 and post-arrival60.1 assertion are unchanged."
+}

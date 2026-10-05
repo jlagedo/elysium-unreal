@@ -2178,43 +2178,9 @@ bool FElysiumNpcBase::NavBuildRoute(bool bHaveDest, const FVector& DestCm)
 	// `SetGoal 0x102ecd20` fails only on the route: the running program owns the navigator.
 	FElysiumNpc* Troika = AsNpc();
 	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	auto Build = [this, Troika, bHaveDest, &DestCm]() -> bool
+	auto Build = [this]() -> bool
 	{
-		if (!bHaveDest || Motor == nullptr)
-		{
-			bMoveIssued = false;
-			return false;                                            // no target / no navigator: no route
-		}
-		if (Troika != nullptr)
-		{
-			Troika->MoveGoal = DestCm;
-		}
-		// The request is filled from the navigator's goal words (`MakeNavigatorMoveRequest`): the
-		// arrival radius is retail's waypoint constant, not the path's goal tolerance (`path+0x28`, which
-		// retail applies to a blocked step only, `0x102ef760`).
-		const FElysiumNpcMoveRequest Request = MakeNavigatorMoveRequest(Navigator, Motor, DestCm);
-		if (Troika != nullptr && Navigator.GetGoalType() == GOALTYPE_PLACE_PEDESTRIAN)
-		{
-			// A pedestrian goal's route is the pedestrian search's (`0x102f2330` sees the path's
-			// pedestrian byte -> `0x102fe9f0`, chain `0x102fcd00`): its crosswalk curbs are waypoints
-			// of their own, flagged for the wait. NAMED MODERNIZATION (decision 2): the NavMesh route
-			// stands for the chain and the curbs are spliced into it as legs
-			// (`FElysiumNpc::NavLayPedestrianLegs`), the first one issued here.
-			bMoveIssued = Troika->NavLayPedestrianLegs(Request);
-		}
-		else
-		{
-			bMoveIssued = NavIssueLeg(Request);
-		}
-		if (bMoveIssued)
-		{
-			// An accepted request: the head waypoint stands (`path+0x24` set). It is the goal's own
-			// (`(wp+0x28 >> 3) & 1`, `0x1030bd50`) unless a curb leg was laid ahead of the goal. The pop
-			// at arrival is the navigator's move step.
-			Navigator.bHasHeadWaypoint = true;
-			Navigator.bHeadIsGoal = Troika == nullptr || Troika->PedestrianLegs.Num() <= 1;
-		}
-		return bMoveIssued;
+		return DoFindSavedPath(); // 0x102f2330 complete semantic goal dispatch
 	};
 	// `0x102f1de4` `0x10319ee0(path+0x24)`, `path+0x44 := -1`: the path's waypoint list is emptied at
 	// every entry, so a search that finds nothing leaves no head (`Navigator.bHasHeadWaypoint`).

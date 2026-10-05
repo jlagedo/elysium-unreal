@@ -1,0 +1,227 @@
+{
+  "name": "save_restore_melee_coordinator",
+  "about": "M2 confirmed engine0x20096010->0x2008f2e0/0x200f55f0->0x1011a7a0->0x101a2e40 factory0x10136580/world0x1023ae40/0x1023b840/0x1028d770/0x1025d880: fresh lists before fields, then real melee re-admission/cap2/idempotence/release.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 30,
+  "player": {
+    "at": "cover_seat"
+  },
+  "cast": [
+    {
+      "name": "brawlerA",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        300,
+        540,
+        0
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_baseball_bat",
+        "player_reaction": "D_HT 5",
+        "npc_perception": "3",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    },
+    {
+      "name": "brawlerB",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        450,
+        850,
+        0
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_baseball_bat",
+        "player_reaction": "D_HT 5",
+        "npc_perception": "3",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    },
+    {
+      "name": "brawlerC",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        683,
+        683,
+        0
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_baseball_bat",
+        "player_reaction": "D_HT 5",
+        "npc_perception": "3",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "expect": [
+    {
+      "label": "admitted",
+      "who": "",
+      "kind": "script",
+      "match": "coordinator phase=admit",
+      "within": 6
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "readmitted",
+      "who": "",
+      "kind": "script",
+      "match": "coordinator phase=admit",
+      "within": 5
+    },
+    {
+      "label": "cap2",
+      "who": "",
+      "kind": "script",
+      "match": "count=2 cap=2",
+      "within": 5
+    },
+    {
+      "label": "idempotent",
+      "who": "",
+      "kind": "script",
+      "match": "coordinator phase=idempotent",
+      "within": 5
+    },
+    {
+      "label": "cap_refusal",
+      "who": "",
+      "kind": "script",
+      "match": "coordinator phase=refuse",
+      "within": 6
+    },
+    {
+      "label": "released",
+      "who": "",
+      "kind": "script",
+      "match": "coordinator phase=release",
+      "within": 15
+    }
+  ],
+  "never": [],
+  "probes": [
+    {
+      "at": "applied",
+      "who": "world",
+      "probe": "witness",
+      "field": "coordinator.player.count",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "world",
+      "probe": "witness",
+      "field": "coordinator.normal.count",
+      "equals": 0
+    }
+  ],
+  "rows": [
+    {
+      "name": "v6_player_events",
+      "classname": "events_player",
+      "at": "start"
+    }
+  ],
+  "script": [
+    {
+      "t": 0.05,
+      "do": "fire",
+      "target": "v6_player_events",
+      "input": "MakePlayerUnkillable"
+    },
+    {
+      "after": "admitted",
+      "delay": 0.2,
+      "do": "save",
+      "slot": "save_restore_melee_coordinator",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "world",
+          "field": "coordinator.player.cap"
+        },
+        {
+          "who": "world",
+          "field": "coordinator.normal.cap"
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "save_restore_melee_coordinator",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "world",
+          "field": "coordinator.player.cap"
+        },
+        {
+          "who": "world",
+          "field": "coordinator.normal.cap"
+        }
+      ]
+    },
+    {
+      "after": "ready",
+      "delay": 8,
+      "do": "kill",
+      "target": "brawlerA"
+    }
+  ],
+  "notes": "V6 close: original brawlerC[683,-683] never saw the player and idled (20261005T161036.148864Z). Stage C beside/farther than B in its visible lane, beyond capsule overlap, so normal slot599 reaches full coordinator0x1025db70/0x1025dca0; no admission fixture. Offset C by167cm in Y because B occludes the straight shared lane; preserve cap/real admission. Stage A/B offset from the C-player sight ray and closer than C, so full-list refusal uses actual distance ordering."
+}

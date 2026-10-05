@@ -43,7 +43,7 @@
       "input": "MakePlayerUnkillable"
     },
     {
-      "t": 6.0,
+      "t": 0.5,
       "do": "player_teleport",
       "at": [
         587.0,
@@ -129,7 +129,7 @@
   ],
   "probes": [
     {
-      "at": 6.45,
+      "at": 1.0,
       "who": "arena_shooter",
       "probe": "distance_to",
       "to": "player",
@@ -142,5 +142,5 @@
       "equals": true
     }
   ],
-  "notes": "Seed 1 selects 0xef at 6.100. Teleport at 6.400 to [1200,683,0], behind the initial west-facing shooter [683,683,0], 517 cm (203.5 Source units), inside the 1300.48 cm wall. Timed distance probe >500 cm excludes the earlier d<100 and min-range arms. Turning reacquires SEE_ENEMY and raises NOT_FACING_ATTACK at 6.900; final task_wait_attack_time1 completes 9.100, then 0xed reselects. TakeDamage 1 names player activator: retail InputTakeDamage 0x102c29a0 retains it; null attacker would return at 0x10265f64 before LIGHT_DAMAGE 0x10266239. No damage escalation."
+  "notes": "Seed 1 selects 0xef at 6.100. Teleport at 6.400 to [1200,683,0], behind the initial west-facing shooter [683,683,0], 517 cm (203.5 Source units), inside the 1300.48 cm wall. Timed distance probe >500 cm excludes the earlier d<100 and min-range arms. Turning reacquires SEE_ENEMY and raises NOT_FACING_ATTACK at 6.900; final task_wait_attack_time1 completes 9.100, then 0xed reselects. TakeDamage 1 names player activator: retail InputTakeDamage 0x102c29a0 retains it; null attacker would return at 0x10265f64 before LIGHT_DAMAGE 0x10266239. No damage escalation. V6 epoch1 measurement: first0xef t0.617, teleport at0.917. Close fixture moved to0.5 before selection; >500 guard at1.0 after that teleport, same bound/seed. Old6.0/6.45 staging teleported close after the completed witness."
 }

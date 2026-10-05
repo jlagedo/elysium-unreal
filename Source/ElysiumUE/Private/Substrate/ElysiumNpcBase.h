@@ -503,6 +503,24 @@ public:
 	// Troika's: the extended header, the flag words, relationships, the base memory, the pending
 	// sounds, the enemy memory, the base schedule host and `m_hTargetEnt`.
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
+	virtual void RebaseSavedReferences(FElysiumEntityWorld& InWorld) override; // 0x101a2e40
+	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override; // 0x1027bf50 base-only consumers
+	static TFunction<bool(FElysiumNpcBase&)> RestoreNativeAnimationAdapter; // 0x1008df10 visual seek, no events
+	bool RestoreNativeAnimation(); // false until presentation adapter is installed
+	bool bNativeAnimationRestoreApplied = false; // 0x1008df10 unsaved admission diagnostic
+	bool bNativeAnimationRestorePending = false; // asynchronous body rebind, never saved
+	virtual void OnPreparedVisualAttached() override; // 0x1008df10 no event/restart dispatch
+	virtual void OnRuntimeTransformChanged() override; // 0x100aa140 physical restore before 0x102ee1e0
+	void PrepareRestoredBody(); // existing motor Teleport invalidates UE routes
+	bool bSkipSnapshotTransformOnce = false; // transient bridge fence, never saved
+	FVector SnapshotTransformOrigin = FVector::ZeroVector, SnapshotTransformAngles = FVector::ZeroVector; // 0x100aa140 physical fence
+	bool DoFindSavedPath(); // 0x102f2330 restore-reachable dispatch
+	// Missing producers, separate from the already saved words (V6.3).
+	virtual FElysiumEntityHandle ReactionSlot141Source() const { return {}; } // slot141, 0005/4
+	virtual FElysiumEntityHandle PresenceListSource() const { return {}; } // 0x10323b60, 0006/2
+	virtual FElysiumEntityHandle PlayerSingleRoundReloadSource() const { return {}; } // 0x1025506f..77, 0008 follow-up
+	FName SelectedThinkCallback() const; // FUNCTION SAVE +0x118, 0x100a9f70
+	void RestoreThinkCallback(); // 0x100aa140
 
 	// `m_pSenses` (+0x5cdc), the `CAI_Senses` object (`Senses` above). Never null: every NPC-base
 	// instance carries one (story 5 fold A3 ended the Troika-only transitional home).

@@ -41,10 +41,14 @@ A record with no `expect`, `never` or `probes` is refused: it asserts nothing.
 broadcast, `AElysiumMapActor::ActivateRuntime`; every event of the activation pass is at 0) and the
 run's start on a map host.
 
-Each rebuilt arena starts its game clock at 0 before `Load`, along with the record's seed. Retail
-`NPCInit` / `StartNPC` (`0x10273390` / `0x10273ad0`) branch on the first second of `curtime` and
-draw a startup delay there. Inheriting the previous record's clock changes the shared animation /
-schedule stream's draw order even when `SeedAll` resets it. Map hosts keep their live map clock.
+Each fresh arena starts its game clock at **1.0 before entity `Load`**, with the existing seed/reset
+order (engine `0x200f5bb4..c4`). `NPCInit` / `StartNPC` (`0x10273390` / `0x10273ad0`) branch on
+`curtime <= 1`; do not inject draws to preserve a former zero-clock record. Ready can be later
+(engine `0x200f5170` runs startup frames); the pre-init fence and ready observation are distinct.
+Map revisits select their frozen clock and checkpoint loads select saved time (`0x200975f0`).
+Resumed checkpoints restore RNG position without reseeding the record. Scenario elapsed time is
+an accumulated simulation interval across map epochs; it never rewinds with the map clock. A
+no-world travel gap adds no simulation seconds and has its own wall timeout.
 
 A `never` state ban judges an established NPC. Its first `None -> …` state edge establishes it
 and is excluded from state bans, while remaining in the trace and available to `expect`.
@@ -92,7 +96,8 @@ after the room's four, in def order.
 
 Def order on the arena host: the room's 8 anchors, its 4 cover-node rows, `rows`, `from_map`,
 `cast`. On a map host a `cast` row is `{ "name": ... }` only: an entity the map already has; the
-staging refuses the record if it is not there. `rows`, `from_map` and `spawn` are refused there.
+staging refuses the record if it is not there. `rows` and `from_map` are refused there. `spawn` is allowed with explicit map coordinates,
+through the same authored-row parser and `SpawnRuntimeEntity` factory (`0x101a2e40`).
 
 ## `from_map`
 
@@ -116,7 +121,7 @@ Each action runs at `"t": <scenario seconds>` or `"after": "<expect label>"` plu
 | `fire` | `target`, `input`, `param`, optional `activator` | one queued input per live entity of that name, as `elysium_entity_fire` (a JSON number marshals Int/Float, a bool Bool) |
 | `kill` | `target` | `fire` with `Kill` |
 | `console` | `command` | any console command |
-| `spawn` | `row` | one more row through `SpawnRuntimeEntity` (arena only) |
+| `spawn` | `row` | one more row through `SpawnRuntimeEntity` (map host requires coordinate `at`) |
 | `player_crouch` | `on` (bool, required) | one press of the duck key through the same replay door as `player_walk` (merged into the walk's command when both run), then a frame with the key up. The duck is retail's toggle on the press edge (`CGameMovement::Duck` `0x10126fd0`): no press when the body is already heading for `on` (ducked or lowering for `true`, standing or rising for `false`); a stand-up with no headroom is swallowed, as a player's is |
 | `light_pin` | `value` (required): a number in `[0, 1]`, or `null` | pins the player's normalized body light through retail's `debug_stealth_light` (`0x109384d8`; set to `value * 10`, so the light reads `value`); `null` sets it back to `-1`, off. The run's end releases a pin it set |
 | `dialog_choose` | `index` (a whole number ≥ 0, the response row as the open turn lists it) or `"end": true`, exactly one | the player answers the open conversation through the conversation screen's own doors: a row through `PlayerDialogChoose` (retail `CDialog::Pick` `0x100e4bd0`), `end` -- retail's pick -1, which releases (`docs/vtmb/game_runtime.md` § Retail conversation chain, item 4) -- through `PlayerDialogAdvance`, the Continue, whose close is the port's `CDialog::Release` (`0x100e5240`). Never a teardown the player cannot reach |
@@ -299,3 +304,143 @@ record — and a `reason`) and
 | `_selftest/stage_failed_a`, `stage_failed_b` | a stage that goes Failed (`a`, `error` by design, so parked as `.json.parked`: restore it to run the pair) does not stop the next record staging fresh and passing (`b`) |
 
 A `fire` action may name a live `activator` (including `player`). It reaches the ordinary input queue: retail InputTakeDamage `0x102c29a0` uses the caller as inflictor and activator as attacker. Missing named activators are errors. Without an activator, positive damage returns at `0x10265f64` before raising damage conditions.
+
+## V6 transactions and exact fences
+
+Harness transport follows engine `0x20096010` / `0x200975f0` and server reverse post-restore
+`0x1011a620`. An action at `t` or `after` is submitted once. Dependent actions wait for the exact
+capture/storage/apply/readiness result. Refusal, decode error, wrong map, unavailable witness,
+missing pre-Load rebind or wall timeout is a script error (a `script` failure for `expect_fail`).
+A write accepted for asynchronous storage is not a successful save. Label matches, never counts,
+fired actions and zero-player setup survive replacement; the runner is not restarted. Retired
+removal baselines are cleared, so restored entities produce no synthetic removal sweep.
+
+| `do` | Required fields | Optional fields / host |
+|---|---|---|
+| `save` | `slot` | `checkpoint` with nonempty `fields`, `timeout` (wall seconds, `(0,60]`, default 60); either host |
+| `load` | `slot` | `checkpoint` (must be written in the same slot), `timeout`; either host |
+| `fresh_map` | `map` | map host; fresh destination without discarding other revisits |
+| `travel` | `map` | `landmark`; map host; normal travel/revisit |
+| `restore_compare` | `checkpoint`, nonempty `fields` | compares cached apply-before-think values, never a later tick |
+
+Slots are logical names prefixed with `__arena_v6_` in native storage, including map-host saves.
+They never overwrite the user's latest slot and are never deleted. Map hosts use the real
+`RequestSave` / `Load` / `FreshLoad` / `Travel` gates. The direct `elysium.load` alias remains an
+independent integrator witness; a console trace is not transaction completion.
+
+```json
+{
+  "script": [
+    {"t":1,"do":"save","slot":"path","checkpoint":"mid",
+     "fields":[{"who":"walker","field":"task.index"},
+               {"who":"walker","field":"task.task_started","tolerance":0.000001}]},
+    {"t":2,"do":"load","slot":"path","checkpoint":"mid"},
+    {"t":2,"do":"restore_compare","checkpoint":"mid",
+     "fields":[{"who":"walker","field":"task.index"},
+               {"who":"walker","field":"task.task_started","tolerance":0.000001}]}
+  ],
+  "probes": [
+    {"at":"applied","who":"world","probe":"witness",
+     "field":"coordinator.normal.count","equals":0},
+    {"at":"end","who":"walker","probe":"witness",
+     "field":"task.index","checkpoint":"mid"}
+  ]
+}
+```
+
+This is a fragment: the ordinary name/stage/duration/staging and behavior expectations are required.
+A checkpoint name is single-assignment. Comparison fields must have been captured. Unknown fields,
+wrong scalar types, duplicate words, unknown checkpoints, irrelevant transaction keys and unsupported
+hosts are parse failures. A timed comparison before its capture/write/load is a runtime refusal.
+`fields` entries are exactly `{who, field, tolerance?}`. Handles use stable `#index` identities;
+`who:"#12"` explicitly distinguishes a retained corpse from a later same-name maker child.
+Boolean/name/identity equality is exact and case-sensitive. Numeric tolerance is only for stated
+native conversion error, not lost frames. TIME equality uses source and destination bases, including
+wait-zero, move/shoot-never and NextThinkSR sentinel rules (`0x101a0a80` / `0x101a2a30`). Weapon
+next-attack stamps and layer event cursors remain FLOAT. Base LastEventCheck remains TIME.
+
+`probe:"witness"` requires `field` and one ordinary typed comparison, or `checkpoint` for saved-word
+equality (no literal comparison). `at` accepts `end`, a scenario time, or `pre_init`, `captured`,
+`applied`, `ready`. Fence probes run synchronously at the first named fence; an absent fence fails.
+Saved equality uses the cached apply sample even when the assertion is scheduled at the end.
+Pre-init reads the selected map clock before entity initialization; ready reports activation latency.
+The initial Green Room pre-init probe supports its captured clock only; other pre-init words must
+use a transaction reconstruction fence. `stage_pre_init` retains that measured clock/draw sample.
+Trace TSV retains its first four columns and appends `world_time`, `epoch`, `map`. Transaction
+fences print the operation id, phase and NpcSchedule stream position without drawing. `stage_ready`
+prints the initial ready position. Integrator `thinkfence` taps report actual first-think entry;
+`makerattempt` taps must report admission synchronously, not a sample from the next runner tick.
+
+The closed witness vocabulary is defined in `ElysiumArenaScenario::WitnessType`:
+
+- World: `clock`, `map`, `world_generation`, `identity`.
+- Task: `task.id`, `index`, `status`, `failure`, `started`, `task_started`, `wait`, `move_wait`
+  (each after `task.`); callback: `callback`, `callback.saved`, `think.next`, `hidden`, `script.owner`.
+- Base animation: `anim.sequence`, `cycle`, `rate`, `time`, `previous_time`,
+  `last_event`, `ground_speed`, `yaw_speed`, `finished`, `past_half` (after `anim.`).
+- Each `layer.0` through `layer.3`: `flags`, `finished`, `sequence`, `cycle`, `rate`, `weight`,
+  `weight_max`, `blend_in`, `blend_out`, `activity`, `auto_kill`, `last_event`. Auto-kill is boolean;
+  the other native row words are numeric (`0x10098c80`).
+- `move_shoot.active`, `next`, `burst`, `min_burst`, `max_burst`, `pause_min`, `pause_max`, `initial_delay`; `weapon.owner`, `reload`, `jam`,
+  `interrupt`, `next_primary`, `next_secondary`, `idle` (after their respective prefix).
+- `nav.type`, `flags`, `target`, `arrival`, `retry_interval`, `retry_duration`, `retry_next`, `timeout`;
+  `nav.goal.x/y/z`; `memory.enemy`, `memory.last_seen`, `memory.position.x/y/z`;
+  `damage.attacker`, `damage.sum`, `damage.time`, `damage.position.x/y/z`.
+- `place.identity`, `capacity`, `count`, `failed_attempts`, `in_use`, `ring_index`, `reservations`,
+  `releases`; `place.destination.x/y/z`, `place.bounds_min.x/y/z`, `place.bounds_max.x/y/z`;
+  `place.marker.<nonnegative index>.occupant`, `.min.x/y/z`, `.max.x/y/z`;
+  `place.ring.0..3.time`, `.min.x/y/z`, `.max.x/y/z`.
+- `senses.can_sense`, `gathered`, `pass`, `sighted`; `dialog.open`, `partner`, `partner_live`;
+  `los.player`, `pvs`, `cache`, `last_clear`.
+- `coordinator.normal/player/boss.count`, `.cap`, `.members` read the actual world-owned lists.
+
+Unavailable dispatch sources fail with their field name. The integrator installs exact read-only
+NPC, motor, memory, place and weapon accessors through `SetHostAdapter`; the harness never invents
+values to turn a record green. Epoch, gather-pass and the rebuilt Sighted list are literal diagnostics excluded from snapshot
+equality. Raw pointers, transient routes/caches, shoot-at reroll, rendered animation labels and opaque
+archive bytes are excluded. Coordinator membership is observed fresh, not archived or synthesized
+(`0x1023ae40` → `0x1023b840` → `0x1025d880`); the integrator must first confirm that retail chain.
+
+Green Room provenance is nonshipping and distinct from gameplay map identity. The normal payload
+codec/storage carries a snapshot named `__arena_checkpoint_v6` plus `__arena_provenance_v6` containing
+original defs, exact node/network words and original stage seat. Metadata uses runtime-def records
+in that envelope only, never runtime entities. Load decodes the same codec, restores session blocks,
+selects saved/tagged time, rebuilds actual stage bodies/admissions, applies the SAME snapshot core,
+and waits for the barrier. Saved player placement outranks the original seat. A malformed envelope,
+missing native factory provenance, partial snapshot apply or unavailable body blocks acceptance.
+Production Load still rejects this stage identity as unbaked. Existing `EnterStageWorld` establishes
+the real GameFlow session; an absent in-session/player gate is reported rather than bypassed.
+
+## V6 Green Room fixtures
+
+These are controlled setup followed by ordinary runtime consumers, never map inputs or generic
+member setters. Every setup is traced. Missing runtime adapters are unavailable, not successful.
+
+| `do` | Required fields | Consumer / reason controlled staging is needed |
+|---|---|---|
+| `npc_single_round_finish_reload` | `target` | real NPC WeaponFinishReload (`0x1028918d` → `0x10255077`); ordinary NPC shots do not spend clips |
+| `corrupt_checkpoint` | `checkpoint`, `control`: `crc`, `missing_cine`, `missing_target`, `missing_path` | decoded checkpoint-header adapter then ordinary OnRestore (`0x1027bf50`); corruption is not a player input |
+| `invalid_marker` | `target` | remove only fixture membership then ordinary consistency (`0x10299a80`) |
+| `restore_base` | `checkpoint`, numeric `param` | tagged restore-context destination base (`0x20097d00`), never arbitrary NPC timestamp writes |
+| `no_ragdoll_death` | `target` | MiscFlag `0x80000` fixture, then normal death (`0x1032c0e0`); no guessed callback |
+| `damage_memory` | `target`, `attacker` (current enemy), `control`: `unknown_no_see`, `known`, `see_enemy` | real memory/SEE_ENEMY setup then ordinary damage_packet (`0x10265ed0`) |
+| `reserve_spot` | `target` (place), `attacker` (NPC), `control`: `normal`, `full`, `occupied`, `exhausted_clearance` | actual PickSpotFor (`0x102da0d0`); hull/collision services must answer live |
+| `startnpc_ground_gate` | `target`, `control`: `normal`, `fly`, `swim`, `capability4` | actual StartNPC (`0x10273ad0`), full hull sweep/motor; ordinary authored spawnflags/bounds stay row keys |
+
+`damage_packet` retains nonnegative scalar `param` (zero included), required `target`, and optional `attacker`
+(default `none`, also accepted explicitly). Optional `inflictor` is a real named entity or `none`. The scalar
+packet currently lacks the independent +0x28 inflictor seam: a named inflictor requires the runtime
+adapter, with an exact unavailable error until wired. No synthetic CVDmg_t changes scalar admission.
+M1's makerattempt tap includes refusal gate/live/global/box and every enumerated candidate's stable
+index/flags/life/bounds (`0x1034b580` / `0x101cc9e0`); do not add an alive filter or an RNG draw.
+
+Required resume witnesses also consume `ValidateWitnessAdmission`'s class/model/native-sequence/
+asset/recipe/admission ledger at scenario zero. Missing assets/continuations block acceptance.
+Only controlled records may substitute an already baked donor proving the identical arm; authored
+`map_tutorial_unhide_thug3` remains thug_3. Clock records must be remeasured alone and paired at
+original predicates/windows, with pre-init/ready/first-think stream positions, before closure.
+
+Tests are authored under `Elysium.Arm.V6.ArenaPersistence` and not run by the coder. Integrator owns
+the real `persistence_refused_save`, `persistence_missing_load`, `persistence_world_rebind` records,
+both-host activation/admission measurements and all behavior records. No acceptance is inferred
+from these parser/transaction-law tests.

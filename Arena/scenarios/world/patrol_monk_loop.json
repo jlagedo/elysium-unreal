@@ -11,6 +11,11 @@
   ],
   "script": [
     {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sp_tutorial_1"
+    },
+    {
       "t": 0.1,
       "do": "player_teleport",
       "at": [
@@ -154,11 +159,28 @@
       "who": "monk_upstairs_podium",
       "kind": "death"
     },
-    { "who": "monk_upstairs_podium", "kind": "taskdone", "match": "^task_do_patrol_interest_activity$", "regex": true, "after": "podium", "within": 9.9 }
+    {
+      "who": "monk_upstairs_podium",
+      "kind": "taskdone",
+      "match": "^task_do_patrol_interest_activity$",
+      "regex": true,
+      "after": "podium",
+      "within": 9.9
+    }
   ],
   "probes": [
-    {"at": 6.5, "who": "monk_upstairs_podium", "probe": "speed2d", "greater": 123.0},
-    {"at": 6.5, "who": "monk_upstairs_podium", "probe": "speed2d", "less": 150.4},
+    {
+      "at": 6.5,
+      "who": "monk_upstairs_podium",
+      "probe": "speed2d",
+      "greater": 123.0
+    },
+    {
+      "at": 6.5,
+      "who": "monk_upstairs_podium",
+      "probe": "speed2d",
+      "less": 150.4
+    },
     {
       "at": "end",
       "who": "monk_upstairs_podium",
@@ -166,5 +188,6 @@
       "match": "FOLLOW_PATROL_PATH_WALK"
     }
   ],
-  "notes": "Measured at the new seat (V11, FollowerArrivalFloorCm at retail's 0.0625 units): the five legs take 2.8 / 6.5 / 4.0 / 4.6 / 5.2 s, the monk stands 13.0 s at pod_1 (RandomFloat(10, 15)), fires OnInterestingPlaceLeft and loops; the floor under the seat is the hall's (the teleport lands, the monk raises SEE_PLAYER at 0.833). taskdone of the podium activity cannot come before 10 s after it starts (min_time 10): pinned by the `never` opened `after` `podium` and closed `within` 9.9 s (the relative window, V4o; 9.9 rather than 10.0 leaves the last think's instant to the >= comparison)."
+  "notes": "Measured at the new seat (V11, FollowerArrivalFloorCm at retail's 0.0625 units): the five legs take 2.8 / 6.5 / 4.0 / 4.6 / 5.2 s, the monk stands 13.0 s at pod_1 (RandomFloat(10, 15)), fires OnInterestingPlaceLeft and loops; the floor under the seat is the hall's (the teleport lands, the monk raises SEE_PLAYER at 0.833). taskdone of the podium activity cannot come before 10 s after it starts (min_time 10): pinned by the `never` opened `after` `podium` and closed `within` 9.9 s (the relative window, V4o; 9.9 rather than 10.0 leaves the last think's instant to the >= comparison). V6 epoch audit: explicit fresh_map before this guard isolates authored state and allows an actual same-boot predecessor. Original seed, all behavioural predicates/windows/probes and existing script times retained.",
+  "shares_map": true
 }

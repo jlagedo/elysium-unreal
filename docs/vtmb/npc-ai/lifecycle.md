@@ -4006,3 +4006,65 @@ real .phy assets, frame measurement and Chaos admission remain the integrator's 
 The serial `ElysiumNpcBaseAnim.inl::PlaySequenceClip` forward is integrated: the base
 plays its retained raw seed through GetBodyClipByRawIndex and PlayAnimSegment, using
 the source loop bit and making no second weighted pick. Troika's V4c bridge is unchanged.
+
+### V6 lifecycle chain supplement (2026-10-05)
+
+ScriptHide0x100a8710 retains FUNCTION +0xe4 and physical words, installs NULL think/FLT_MAX and hides. ScriptUnhide0x100a8990 reinstalls the callback due NOW, with no floor teleport. Troika0x102c1ec0 uses its separate cine-hidden latch +0x5d78 for the six-word handback. NPCInit0x1029a0c0 clears effects, not the base hidden latch. StartNPC0x10273ad0 owns the full-hull down256 startup sweep and its fly/swim/capability4/spawnflag4 skips. Native STEP physics0x1003a610/0x1003b190 applies gravity off ground without a route;0x10035490 treats gravity0 as scalar1 and gates fly/submerged-swim/water arms. CheckOnGround0x1026e5e0 separately skips native move-type7; it must not invent FLOATING_OFF_GROUND for that arm.
+
+N9:0x1034b692..0x1034b737 / enumerator0x101cc9e0 uses the flagged occupancy box without an alive test. DeathNotice0x1034bc90 decrements live once; live0 does not imply an empty box. Refused non-cap attempts use MakerThink0x1034bbf0's random1..2 retry.
+
+A restored corpse first retains its saved callback/deadline. A later network-init writer can supersede the deadline:0x102f6690 ->0x102f6a50 at the fresh network's +0.8, then0x1028d8d0 enumerates m_edtDerivedType +0x4c mask0x40 using0x100f8370, with no alive test; slot5840x1028d910 -> slot614 writes NextThink NOW. CBaseEntity's raw datamap marks derived type SAVE. Therefore an ordinary/burning corpse callback may run at that reset, while a NULL pedestrian callback remains NULL. This is a later native write, not a new death timer.
+
+### Post-restore argument is level transition, not save load (V6 closing recovery, 2026-10-05)
+
+`CServerGameDLL::LevelInit`0x1011a7a0 calls0x1011a710 with `param_3 != 0` (old-level argument). That function stores the byte in DAT_1070b268; reverse post-restore loop0x1011a620 forwards it to every slot130. Ordinary load0x20096010 ->0x2008f2e0 has no old-level argument. Consequently CNPC_VPedestrian::OnRestore0x103a25a0 takes its reset ladder only on transition, not an ordinary save load. With transition true, level_reset_type2 returns; other types reset alive actors, type0 also resets dead actors, except ScriptHidden. Reset destroys inventory, restores dead hull, NPCInit, initial position/angles, solid flags/type, STEP and VPhysics. With false, the preceding Troika restore0x102998c0 still scans/validates the saved marker table, while pedestrian CreateCorpse0x103a38c0's NULL function survives. The boolean's old port spelling bFromLoad was misleading.
+
+Native STEP type is4 (NPC Spawn0x10298fed), while7 is VPHYSICS. PhysicsStepTroika0x1003a610 -> PhysicsStepRunTimestep0x1003b190 integrates off-ground gravity independently of a route, excluding FL_FLY0x400 and submerged FL_SWIM0x800. PhysicsAddHalfGravity0x10035490 treats scalar0 as1. The existing UE CharacterMovement swap must therefore remain active for this enabled off-ground STEP arm.
+
+Rebuilt network broadcast0x1028d8d0 uses0x100f8370's derived-type mask0x40, with no alive test. Slot5840x1028d910 calls slot614 and resets think stamps, so the restored corpse's existing function may run at network-ready+0.8, before its saved death-relative deadline. SUB_PVSRemove0x102696f0 then tests player cone -> PVS0x101d1a90 -> FVisible mask0x2804091; all true writes now+10, otherwise removal0x101cd940. This later writer wins over the correctly restored deadline; it does not select a new corpse function.
+
+SUB_PVSRemove0x102696f0 dispatches player slot3630x10326750 on the corpse: WorldSpaceCenter, target GetStealthVisionCone and native m_flFieldOfView, then engine PVS, then base FVisible0x100a6fa0 mask0x2804091/probe0. This is not CNPCMaker camera rectangle/origin visibility. FVisible rejects FL_NOTARGET, applies the submerged water gate, traces from observer EyePosition to target eye for probe0 using CTraceFilterFVisible and accepts fraction1 or the target hit. The complete already recovered NPC base visibility tail also accepts a player observer; its shared source preserves those gates and target/observer inputs.
+
+Ground contact0x100b1420 has two explicit arms: non-NULL writes EHANDLE and AddFlag(1); NULL writes0xffffffff and RemoveFlag(1). PhysicsStepRunTimestep0x1003b190 dispatches it when its ground trace hits. The prior port omitted both flag writes; off-route UE landing also needs its existing per-frame motor-to-entity synchronization to publish FL_ONGROUND. Otherwise CheckOnGround0x10269b30 holds condition0x73 indefinitely despite a landed body. Named brush/prop ground identities remain the SampleFloor input; an arena static floor has no named worldspawn handle.
+
+V6 M1 closing measurement: after the live STEP contact wire, corpse#18 is flags0x12001/life1 at logicalZ2.150, so the flat maker box atZ0 admits child2 at6.033. This exposed UE CharacterMovement clearance leaking through CapsuleBottom -> logical Origin. Retail ground drop0x102e7880 returns trace endpoint, and StartNPC0x10273b8b writes it through slot62: hull mins.z0 sits at the plane. The UE adapter reads the actual support plane at the same feet X/Y (the initial FloorDist subtraction was superseded after the float/double residue measurement below); rendered capsule clearance stays. No alive filter, expanded spawn box, corpse origin override or ScriptUnhide floor teleport is authorized. The all-attempt tap now logs admission as well as refusal.
+
+### V6 final integration: destruction, floor origin and corpse visibility (2026-10-05)
+
+The listing of the Troika deleting destructor `0x1028d5e0` calls `0x1028d610`;
+that body directly calls Troika `UpdateOnRemove 0x1028d6e0` before destroying
+its members and the base. The removal body returns both patrol cells through
+`0x1029f5d0` / `0x10307db0`. The port destroyed world records without this
+edge: repeated save loads/fresh maps exhausted the process-global 32-slot pool.
+The full arena185438 log reports the dry pool before the four tutorial patrol
+failures; a shorter clean-boot run195654 passes all four on the same binary.
+World teardown now runs this Troika destructor work before invalidating handles
+and emptying records, after freezing the departing map. No pool resize/reset
+or schedule-record exception is added.
+
+Retail startup `0x10273ad0`, sweep `0x102e7880`, stores the hull trace endpoint
+as origin (`0x10273b8b`), with hull mins.z0 at the floor. The existing Unreal
+locomotion modernization carries capsule floor clearance. Subtracting float
+`CurrentFloor.FloorDist` from a double capsule position left a positive residue:
+N9's corpse printed Z0.000 but missed the flat maker box. The shared feet
+accessor now evaluates the actual measured support plane at the same feet X/Y.
+Transform synchronization, navigator/arrival and maker bounds share that origin;
+no tolerance or maker predicate changes. Airborne origins retain capsule feet.
+
+The restored unseen witness185438 reaches the later network reset at2.850,
+but its native cone/PVS/visibility tap is1/1/1. Retail `0x102696f0` therefore
+correctly re-arms +10. `0x1028d8d0` / `0x100f8370` enumerates mask0x40 without
+an alive test, overwriting NextThink through slot584/614. The record's face-135
+staging was inside the native cone; face0 points away from the westward corpse.
+Saved callback/deadline equality remains checked at apply, followed by the real
+network writer and removal consumer; the runtime deadline is unchanged.
+
+The activity witness201116 reaches arrival51.717,
+DO_INTEREST_ACTIVITY52.417 and capture52.467. Assembly `0x10288f46..0x10288f7e`
+skips the movement timer when its operand is zero, as authored here. The old
+50.3 observation budget was therefore a temporary route measurement, not a
+retail deadline. The 60-second capture observation budget matches the walking
+visit; no native stay time or continuation window changes. At capture the
+real idle01 native sequence1395/female-misc75frames@30fps, body/rig/motor are
+admitted; the sole missing continuation source is event-free body seek0017/35
+(`0x1008df10`/`0x10098c80`), which the record now reaches explicitly.

@@ -999,6 +999,10 @@ public:
 	// Terminal entity removal (0x101cd940), never lethal death or a model swap. Explicit visual:
 	// simulation can detach it from the motor. The adapter clears the pointer even after retirement.
 	virtual void ReleaseNpcVisual(USkeletalMeshComponent*& Body, IElysiumNpcMotor* Motor) { Body = nullptr; }
+	// Filed 0017/35: Chaos rest-pose/velocity archive has no source. These presentation-only
+	// hooks explicitly refuse; logical POSITION, callbacks, deadlines and AI never read them.
+	virtual bool EmbodimentPoseCapture(const FElysiumEntityHandle&, TArray<uint8>& Out) const { Out.Reset(); return false; }
+	virtual bool EmbodimentPoseApply(const FElysiumEntityHandle&, const TArray<uint8>&) { return false; }
 
 	// 0x10090180 presentation: Chaos takes the current pose using the cooked .phy-derived asset.
 	// Refusal is a bake/attachment failure, independent of source rig capability; no held-pose substitute.
@@ -1864,6 +1868,10 @@ public:
 	// The spawn box `[Origin.xy ± HalfExtent] x [FloorZ, Origin.z]` (`CNPCMaker::CanMakeNPC`
 	// `0x1034b580`: flat, `FloorZ == Origin.z`; the fleshpile lowers the floor to its cached ground).
 	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector&, float, float) const { return false; }
+    // Nonshipping makerattempt diagnostics; no query result, state or RNG change (0x101cc9e0).
+    virtual bool DescribeNpcMakerSpawnArea(const FVector& OriginCm, float HalfExtentCm,
+        float FloorZCm, FString& Out) const { return false; }
+
 
 	// R7.2 -- the ranged shot's forward world trace and the stain it leaves, owner call B.
 	//

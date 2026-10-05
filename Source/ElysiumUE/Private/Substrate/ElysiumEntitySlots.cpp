@@ -7,7 +7,7 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 219 generated slot bodies of `FElysiumEntity`: 52 carry the retail default story 29c recovered,
-// 35 are defined by hand in the substrate, and 114 are still stubs — 112 29c, 2 unassigned. 18 are
+// 39 are defined by hand in the substrate, and 110 are still stubs — 108 29c, 2 unassigned. 18 are
 // closed (0019/6) and answer the value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -704,11 +704,8 @@ bool FElysiumEntity::IsTransparent() const
 // slot 92 0x10027570 (sdk) `SolidType_t GetSolid() const`
 //   returns `SolidType_t`
 //   layer 0, story 29c
-int32 FElysiumEntity::GetSolid() const
-{
-	FireEntitySlot(TEXT("CBaseEntity::GetSolid"), TEXT("0x10027570"), TEXT("29c"), DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumEntity::GetSolid`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 93 0x100aad70 (sdk) `void SetMoveType(MoveType_t, MoveCollide_t)`
 //   takes `MoveType_t`
@@ -729,12 +726,8 @@ int32 FElysiumEntity::GetSolid() const
 // slot 95 0x100aacd0 (sdk) `MoveCollide_t GetMoveCollide() const`
 //   returns `MoveCollide_t`
 //   layer 0, story 29c
-int32 FElysiumEntity::GetMoveCollide() const
-{
-	FireEntitySlot(TEXT("CBaseEntity::GetMoveCollide"), TEXT("0x100aacd0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumEntity::GetMoveCollide`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 96 0x100a9ba0 (walked) `edict_t* GetAimEntEdict()`
 //   returns `edict_t*`
@@ -1259,12 +1252,8 @@ void FElysiumEntity::SetMovedir()
 
 // slot 172 0x100a1d20 (sdk) `CBaseEntity* GetNextTarget()`
 //   layer 0, story 29c
-FElysiumEntity* FElysiumEntity::GetNextTarget()
-{
-	FireEntitySlot(TEXT("CBaseEntity::GetNextTarget"), TEXT("0x100a1d20"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumEntity::GetNextTarget`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 174 0x100a49d0 (sdk) `void StartTouch(CBaseEntity*)`
 //   layer 0, story 29c
@@ -1526,12 +1515,8 @@ void FElysiumEntity::GetGroundVelocityToApply(FVector&)
 
 // slot 211 0x100274d0 (sdk) `int GetSolidFlags() const`
 //   layer 0, story 29c
-int32 FElysiumEntity::GetSolidFlags() const
-{
-	FireEntitySlot(TEXT("CBaseEntity::GetSolidFlags"), TEXT("0x100274d0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// verdict `rule`: the body is `FElysiumEntity::GetSolidFlags`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 212 0x100b15f0 (sdk) `void SetModelName(string_t)`
 //   layer 0, story 29c
@@ -2115,7 +2100,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(int32, int32) const>::Test(&FElysiumEntity::ShouldCollide),
 				nullptr },
 			{ 92, TEXT("0x10027570"), TEXT("CBaseEntity"), TEXT("GetSolid"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32() const>::Test(&FElysiumEntity::GetSolid),
 				nullptr },
 			{ 93, TEXT("0x100aad70"), TEXT("CBaseEntity"), TEXT("SetMoveType"),
@@ -2127,7 +2112,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32() const>::Test(&FElysiumEntity::GetMoveType),
 				nullptr },
 			{ 95, TEXT("0x100aacd0"), TEXT("CBaseEntity"), TEXT("GetMoveCollide"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32() const>::Test(&FElysiumEntity::GetMoveCollide),
 				nullptr },
 			{ 96, TEXT("0x100a9ba0"), TEXT("CBaseEntity"), TEXT("GetAimEntEdict"),
@@ -2391,7 +2376,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::SetMovedir),
 				nullptr },
 			{ 172, TEXT("0x100a1d20"), TEXT("CBaseEntity"), TEXT("GetNextTarget"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FElysiumEntity*()>::Test(&FElysiumEntity::GetNextTarget),
 				nullptr },
 			{ 174, TEXT("0x100a49d0"), TEXT("CBaseEntity"), TEXT("StartTouch"),
@@ -2531,7 +2516,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FVector&)>::Test(&FElysiumEntity::GetGroundVelocityToApply),
 				nullptr },
 			{ 211, TEXT("0x100274d0"), TEXT("CBaseEntity"), TEXT("GetSolidFlags"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32() const>::Test(&FElysiumEntity::GetSolidFlags),
 				nullptr },
 			{ 212, TEXT("0x100b15f0"), TEXT("CBaseEntity"), TEXT("SetModelName"),

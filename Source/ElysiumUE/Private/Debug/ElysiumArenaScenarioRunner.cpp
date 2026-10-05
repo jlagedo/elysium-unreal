@@ -20,6 +20,8 @@
 #include "ElysiumVariant.h"
 #include "ElysiumWorldServices.h"            // `player_crouched`: `IElysiumEmbodiment::IsPlayerDucking`
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Substrate/ElysiumItemTable.h"
+#include "Substrate/ElysiumAttackCoordinator.h"
 #include "Substrate/ElysiumItemClasses.h"    // `player_weapon`: the active item's classname
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -110,6 +112,14 @@ namespace ElysiumArenaRunnerDetail
 		if (Who.Equals(TEXT("player"), ESearchCase::IgnoreCase))
 		{
 			return World.FindPlayer();
+		}
+		// Stable index selection distinguishes a retained corpse from its same-name successor.
+		// Maker enumeration 0x101cc9e0 does not filter life state.
+		if (Who.StartsWith(TEXT("#")) && Who.Mid(1).IsNumeric())
+		{
+			const int32 StableIndex = FCString::Atoi(*Who.Mid(1));
+			const auto& Entities = World.Entities();
+			return Entities.IsValidIndex(StableIndex) ? Entities[StableIndex].Get() : nullptr;
 		}
 		FElysiumEntity* Dead = nullptr;
 		for (const TUniquePtr<FElysiumEntity>& Entity : World.Entities())
@@ -299,14 +309,37 @@ bool FElysiumArenaScenarioRunner::Start(EZero Zero, FString& OutError)
 	if (Zero == EZero::Now)
 	{
 		ZeroWorld = World->NowSeconds();
+		SegmentWorld = ZeroWorld; // scenario zero; engine 0x200f5bc4
 		bZeroKnown = true;
+		if (!Record.InitialWeaponState.IsEmpty() && !ApplyInitialWeaponState(*World)) return false;
 	}
 	else
 	{
 		ReadyMap = Map;
 		ReadyHandle = Map->OnRuntimeReady().AddRaw(this, &FElysiumArenaScenarioRunner::OnStageActivated);
 	}
+	ElysiumArenaStage::ConfigureHost(Host); // both lab and GI hosts share adapter/transport, 0x1011a620
 	bStarted = true;
+	if (Host.bArena && Host.Transport && Host.Transport->StageInitialTime >= 0.0)
+	{
+		FEvent& InitEvent = Events.AddDefaulted_GetRef();
+		StampEvent(InitEvent, Host.Transport->StageInitialTime);
+		InitEvent.Kind = FName(TEXT("script"));
+		InitEvent.Text = FString::Printf(TEXT("stage_pre_init npc_draw=%d"), Host.Transport->StageInitialDraw);
+		for (int32 ProbeIndex = 0; ProbeIndex < Record.Probes.Num(); ++ProbeIndex)
+		{
+			const FElysiumArenaProbeSpec& Probe = Record.Probes[ProbeIndex];
+			if (Probe.Fence != TEXT("pre_init")) continue;
+			// Only the clock was sampled before this initial Load; other fields cannot be read late.
+			if (Probe.Probe != EElysiumArenaProbe::Witness || Probe.Field != TEXT("clock") || !Probe.Checkpoint.IsEmpty())
+			{ OutError = TEXT("initial stage pre_init supports its captured clock only"); Abort(OutError); return false; }
+			FElysiumArenaValue InitialClock;
+			InitialClock.Type = FElysiumArenaValue::EType::Number; InitialClock.Number = Host.Transport->StageInitialTime;
+			ProbeRead[ProbeIndex] = true;
+			if (!ElysiumArenaRunnerDetail::Compare(InitialClock, Probe))
+			{ OutError = TEXT("initial pre-entity clock assertion failed"); Abort(OutError); return false; }
+		}
+	}
 	UE_LOG(LogElysiumArenaScenario, Log, TEXT("%s: recording (%d expect, %d never, %d probe(s), %d action(s), ")
 		TEXT("duration %.1f s)%s"), *Record.Name, Record.Expect.Num(), Record.Never.Num(), Record.Probes.Num(),
 		Record.Script.Num(), Record.Duration, bZeroKnown ? TEXT("") : TEXT("; zero is the stage's Activate"));
@@ -315,9 +348,11 @@ bool FElysiumArenaScenarioRunner::Start(EZero Zero, FString& OutError)
 
 void FElysiumArenaScenarioRunner::RecordEvent(const FElysiumAiTraceEvent& Event)
 {
+	if (bDone) return; // retired operation observer cannot append after detach, 0x1011a620
 	FEvent& Recorded = Events.AddDefaulted_GetRef();
-	Recorded.Time = Event.Time;
+	StampEvent(Recorded, Event.Time);
 	Recorded.Entity = Event.Entity;
+	if (FElysiumEntityWorld* EventWorld = LiveWorld()) Recorded.bPlayer = Event.Entity == EventWorld->PlayerHandle();
 	Recorded.Name = Event.Name;
 	Recorded.Kind = Event.Kind;
 	Recorded.Text = Event.Text;
@@ -343,7 +378,31 @@ void FElysiumArenaScenarioRunner::OnStageActivated(AElysiumMapActor* Map)
 	if (FElysiumEntityWorld* World = LiveWorld())
 	{
 		ZeroWorld = World->NowSeconds();
+		SegmentWorld = ZeroWorld;
+		// Activation's events belong to zero; later segments are already stamped (0x1011a620).
+		for (FEvent& Recorded : Events) Recorded.Time = Recorded.WorldTime - ZeroWorld;
 		bZeroKnown = true;
+		if (!Record.InitialWeaponState.IsEmpty() && !ApplyInitialWeaponState(*World)) return;
+		FEvent& ReadyEvent = Events.AddDefaulted_GetRef();
+		StampEvent(ReadyEvent, World->NowSeconds());
+		ReadyEvent.Kind = FName(TEXT("script"));
+		ReadyEvent.Text = FString::Printf(TEXT("stage_ready npc_draw=%d"), ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).GetCurrentSeed()); // 0x200f5170 ready caveat
+		for (int32 ProbeIndex = 0; ProbeIndex < Record.Probes.Num(); ++ProbeIndex)
+		{
+			const FElysiumArenaProbeSpec& Probe = Record.Probes[ProbeIndex];
+			if (Probe.Fence != TEXT("ready") || ProbeRead[ProbeIndex]) continue;
+			ProbeRead[ProbeIndex] = true;
+			FString Read, Error;
+			if (!ReadProbe(Probe, Read, Error))
+			{
+				FFailure Failure;
+				Failure.bSet = true; Failure.Section = TEXT("probe"); Failure.Index = ProbeIndex;
+				Failure.Reason = Error.IsEmpty() ? FString::Printf(TEXT("initial ready probe read %s"), *Read) : Error;
+				Finish(0.0, Failure);
+				return;
+			}
+		}
+
 	}
 }
 
@@ -366,6 +425,8 @@ void FElysiumArenaScenarioRunner::Detach()
 	{
 		World->SetAiTraceSink(FElysiumAiTraceSink());
 	}
+	if (Host.Transport) Host.Transport->Cancel(); // observer must not outlive runner, 0x1011a620
+	bTransactionPending = false;
 	InstalledWorld = nullptr;
 	if (ReadyHandle.IsValid())
 	{
@@ -408,14 +469,15 @@ bool FElysiumArenaScenarioRunner::Matches(const FMatcher& Matcher, const FEvent&
 	{
 		return false;
 	}
-	if (!Spec.Who.IsEmpty() && !Event.Name.Equals(Spec.Who, ESearchCase::IgnoreCase))
+	const bool bStableWho = Spec.Who.StartsWith(TEXT("#")) && Spec.Who.Mid(1).IsNumeric();
+	if (bStableWho && (!Event.Entity.IsSet() || Event.Entity.Index != FCString::Atoi(*Spec.Who.Mid(1)))) return false;
+	if (!Spec.Who.IsEmpty() && !bStableWho && !Event.Name.Equals(Spec.Who, ESearchCase::IgnoreCase))
 	{
 		// H21: `who: "player"` is the player ENTITY, whatever targetname it answers to (a tap names an
 		// event by targetname and the player's is not `player`); the runner's own `script` events
 		// carry that name already and matched above.
-		const FElysiumEntityWorld* World = Spec.Who.Equals(TEXT("player"), ESearchCase::IgnoreCase)
-			? LiveWorld() : nullptr;
-		if (World == nullptr || !Event.Entity.IsSet() || !(Event.Entity == World->PlayerHandle()))
+		// Judge identity when the event was emitted, not against a later restored epoch (0x101a2e40).
+		if (!Spec.Who.Equals(TEXT("player"), ESearchCase::IgnoreCase) || !Event.bPlayer)
 		{
 			return false;
 		}
@@ -607,7 +669,7 @@ void FElysiumArenaScenarioRunner::ReadDueProbes(double Now, FFailure& Out)
 	for (int32 Index = 0; Index < Record.Probes.Num(); ++Index)
 	{
 		const FElysiumArenaProbeSpec& Probe = Record.Probes[Index];
-		if (ProbeRead[Index] || Probe.bAtEnd || Now < Probe.Time)
+		if (ProbeRead[Index] || Probe.bAtEnd || !Probe.Fence.IsEmpty() || Now < Probe.Time)
 		{
 			continue;
 		}
@@ -644,6 +706,26 @@ bool FElysiumArenaScenarioRunner::ReadProbe(const FElysiumArenaProbeSpec& Probe,
 	{
 		OutError = TEXT("no entity world to read");
 		return false;
+	}
+	if (Probe.Probe == EElysiumArenaProbe::Witness)
+	{
+		FElysiumArenaValue Word;
+		if (!Probe.Checkpoint.IsEmpty())
+		{
+			const FCheckpoint* Saved = Checkpoints.Find(Probe.Checkpoint);
+			const FString Key = Probe.Who + TEXT("\n") + Probe.Field;
+			const FElysiumArenaValue* Before = Saved ? Saved->Captured.Find(Key) : nullptr;
+			const FElysiumArenaValue* After = Saved ? Saved->Applied.Find(Key) : nullptr;
+			if (!Before || !After || !Saved->bWritten || !Saved->bApplied)
+			{ OutError = TEXT("checkpoint has no successful capture/write/apply fence"); return false; }
+			OutRead = After->Describe();
+			return ElysiumArenaScenario::WitnessEqual(ElysiumArenaScenario::RebaseWitness(Probe.Field, *Before, Saved->SaveBase, Saved->RestoreBase), *After, Probe.Tolerance);
+		}
+		if (!ReadWitness(Probe.Who, Probe.Field, Word, OutError)) return false;
+		OutRead = Word.Describe();
+		if (Probe.Compare == EElysiumArenaCompare::Equals)
+			return ElysiumArenaScenario::WitnessEqual(Probe.Value, Word, Probe.Tolerance);
+		return ElysiumArenaRunnerDetail::Compare(Word, Probe);
 	}
 	FElysiumEntity* Entity = ElysiumArenaRunnerDetail::FindEntity(*World, Probe.Who);
 	if (Probe.Probe == EElysiumArenaProbe::Exists)
@@ -930,6 +1012,8 @@ bool FElysiumArenaScenarioRunner::CurrentPlayerFeet(FVector& OutFeet) const
 
 bool FElysiumArenaScenarioRunner::ApplyPlayerAtZero(FElysiumEntityWorld& World)
 {
+	// Required save witnesses are admitted immediately before capture, after any lawful maker
+	// spawn/unhide, not prematurely at scenario zero. Reload's explicit initial fixture stays at ready.
 	if (Record.Player.bNoTarget)
 	{
 		// Refused rather than written: `FL_NOTARGET` (0x8000) has no producer in this runtime and its
@@ -963,6 +1047,62 @@ bool FElysiumArenaScenarioRunner::ApplyPlayerAtZero(FElysiumEntityWorld& World)
 		Abort(FString::Printf(TEXT("player.armed: nothing was granted (%s)"), *Armed.FirstError));
 		return false;
 	}
+	return true;
+}
+
+bool FElysiumArenaScenarioRunner::ApplyInitialWeaponState(FElysiumEntityWorld& World)
+{
+	if (bInitialWeaponApplied) return true;
+	if (!Host.bArena) { Abort(TEXT("initial weapon fixture requires Green Room")); return false; }
+	FString AdmissionError;
+	if (!Host.ValidateWitnessAdmission || !Host.ValidateWitnessAdmission(World, Record, AdmissionError))
+	{ Abort(AdmissionError.IsEmpty() ? TEXT("weapon fixture admission unavailable") : AdmissionError); return false; }
+	// Validate every entry before any writes. The sink proves no owner NPCThink has run.
+	for (const auto& Initial : Record.InitialWeaponState)
+	{
+		FElysiumEntity* Entity = ElysiumArenaRunnerDetail::FindEntity(World, Initial.Who);
+		FElysiumNpc* Npc = Entity ? Entity->AsNpc() : nullptr;
+		// The ordinary port equip is deferred to ResolveLoadout on the first think (retail spawn
+		// 0x10273200/0x1032d380 equips before think). Stage that real prerequisite at ready,
+		// before touching the explicit clip/reserve fixture; no invented item or condition.
+		if (Npc && !Npc->bLoadoutResolved) Npc->StageResolveLoadout();
+		FElysiumEntity* Held = Npc ? World.Resolve(Npc->Inventory.ActiveWeapon) : nullptr;
+		FElysiumWeapon* Weapon = Held && Held->AsItem() ? Held->AsItem()->AsWeapon() : nullptr;
+		const FElysiumItemDef* Data = Weapon ? Weapon->Data() : nullptr;
+		if (!Npc || !Npc->Visual || !Weapon || Weapon->ClassName() != Initial.Weapon || !Data || Data->AmmoType.IsEmpty() || Data->MagazineSize <= 0 || Data->bReloadSingle
+			|| Weapon->Owner != Npc->Handle || Events.ContainsByPredicate([&](const FEvent& Event) { return Event.Entity == Npc->Handle && Event.Kind == FName(TEXT("thinkfence")); }))
+		{ Abort(TEXT("initial weapon fixture missing/mismatched NPC/item/ammo/bulk body, or after first think")); return false; }
+	}
+	for (const auto& Initial : Record.InitialWeaponState)
+	{
+		FElysiumNpc* Npc = ElysiumArenaRunnerDetail::FindEntity(World, Initial.Who)->AsNpc();
+		FElysiumWeapon* Weapon = World.Resolve(Npc->Inventory.ActiveWeapon)->AsItem()->AsWeapon();
+		const int32 EquippedClip = Weapon->MagazineCount;
+		Weapon->MagazineCount = Initial.Magazine;
+		Npc->Inventory.AddReserve(Weapon->Data()->AmmoType, Initial.Reserve - Npc->Inventory.Reserve(Weapon->Data()->AmmoType));
+		Npc->FakeReloadCount = Initial.FakeReloadCount;
+		World.EmitAiTrace(*Npc, FName(TEXT("reload")), FString::Printf(TEXT("initial item=%s clip=%d reserve=%d fake=%d post_equip_clip=%d handle=%s now=%.6f"),
+			*Weapon->ClassName(), Weapon->MagazineCount, Npc->Inventory.Reserve(Weapon->Data()->AmmoType), Npc->FakeReloadCount, EquippedClip, *Weapon->Handle.ToString(), World.NowSeconds()));
+	}
+	bInitialWeaponApplied = true;
+	return true;
+}
+
+bool FElysiumArenaScenarioRunner::ObserveFinalWeaponState(FElysiumEntityWorld& World)
+{
+	if (bFinalWeaponObserved) return true;
+	for (const auto& Initial : Record.InitialWeaponState)
+	{
+		FElysiumEntity* Entity = ElysiumArenaRunnerDetail::FindEntity(World, Initial.Who);
+		FElysiumNpc* Npc = Entity ? Entity->AsNpc() : nullptr;
+		FElysiumEntity* Held = Npc ? World.Resolve(Npc->Inventory.ActiveWeapon) : nullptr;
+		FElysiumWeapon* Weapon = Held && Held->AsItem() ? Held->AsItem()->AsWeapon() : nullptr;
+		if (!Weapon || !Weapon->Data()) { Abort(TEXT("final reload observation lost real NPC/weapon")); return false; }
+		World.EmitAiTrace(*Npc, FName(TEXT("reload")), FString::Printf(TEXT("final item=%s clip=%d reserve=%d flags=%d handle=%s now=%.6f"),
+			*Weapon->ClassName(), Weapon->MagazineCount, Npc->Inventory.Reserve(Weapon->Data()->AmmoType),
+			(Weapon->bInReload ? 1 : 0) | (Weapon->bInterruptReload ? 2 : 0) | (Weapon->bIsJammed ? 4 : 0), *Weapon->Handle.ToString(), World.NowSeconds()));
+	}
+	bFinalWeaponObserved = true;
 	return true;
 }
 
@@ -1015,6 +1155,11 @@ bool FElysiumArenaScenarioRunner::FireDueActions(double Now, FElysiumEntityWorld
 				*Error));
 			return false;
 		}
+		if (bDone) return false; // capture observer may have refused; 0x1027bc60
+		// A transaction may replace World synchronously; never reuse this reference afterward.
+		// 0x200975f0/0x1011a620: even inline Ready ends this action batch.
+		if (Action.Do == EElysiumArenaAction::Save || Action.Do == EElysiumArenaAction::Load
+			|| Action.Do == EElysiumArenaAction::FreshMap || Action.Do == EElysiumArenaAction::Travel) return true;
 		if (bLogProgress)
 		{
 			UE_LOG(LogElysiumArenaScenario, Display, TEXT("%s: script[%d] %s at t=%.2f"), *Record.Name, Index,
@@ -1034,6 +1179,23 @@ void FElysiumArenaScenarioRunner::RecordAction(const FElysiumArenaAction& Action
 	FString Text = ElysiumArenaScenario::ActionName(Action.Do);
 	switch (Action.Do)
 	{
+	case EElysiumArenaAction::Save:
+	case EElysiumArenaAction::Load:
+	case EElysiumArenaAction::FreshMap:
+	case EElysiumArenaAction::Travel:
+	case EElysiumArenaAction::RestoreCompare:
+	case EElysiumArenaAction::NpcSingleRoundFinishReload:
+	case EElysiumArenaAction::CorruptCheckpoint:
+	case EElysiumArenaAction::InvalidMarker:
+	case EElysiumArenaAction::RestoreBase:
+	case EElysiumArenaAction::NoRagdollDeath:
+	case EElysiumArenaAction::DamageMemory:
+	case EElysiumArenaAction::ReserveSpot:
+	case EElysiumArenaAction::StartNpcGroundGate:
+		Name = Action.Target;
+		Text += FString::Printf(TEXT(" slot=%s map=%s landmark=%s checkpoint=%s control=%s param=%s"),
+			*Action.Slot, *Action.Map, *Action.Landmark, *Action.Checkpoint, *Action.Control, *Action.Param.Describe());
+		break;
 	case EElysiumArenaAction::PlayerTeleport:
 	case EElysiumArenaAction::PlayerWalk:
 		Name = TEXT("player");
@@ -1077,8 +1239,9 @@ void FElysiumArenaScenarioRunner::RecordAction(const FElysiumArenaAction& Action
 	// Into the run's own event list, in time order: the runner ticks between frames, so every event a
 	// tap has emitted so far is at or before the world's now.
 	FEvent& Recorded = Events.AddDefaulted_GetRef();
-	Recorded.Time = World.NowSeconds();
+	StampEvent(Recorded, World.NowSeconds());
 	Recorded.Name = Name;
+	Recorded.bPlayer = Name == TEXT("player");
 	Recorded.Kind = ElysiumArenaRunnerDetail::ScriptKind();
 	Recorded.Text = Text;
 }
@@ -1086,6 +1249,54 @@ void FElysiumArenaScenarioRunner::RecordAction(const FElysiumArenaAction& Action
 bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& World, FString& OutError)
 {
 	const FElysiumArenaAction& Action = Record.Script[Index];
+	// Completion-aware harness transactions, never a generic console trace (0x20096010).
+	if (Action.Do == EElysiumArenaAction::Save || Action.Do == EElysiumArenaAction::Load
+		|| Action.Do == EElysiumArenaAction::FreshMap || Action.Do == EElysiumArenaAction::Travel)
+	{
+		if (!Host.Transport) { OutError = TEXT("no common save transport installed"); return false; }
+		if (Action.Do == EElysiumArenaAction::Save && !Action.Fields.IsEmpty())
+		{
+			FElysiumArenaScenario Admission; Admission.Script.Add(Action);
+			if (!Host.ValidateWitnessAdmission || !Host.ValidateWitnessAdmission(World, Admission, OutError))
+			{
+				if (OutError.Contains(TEXT("event-free body seek")) && !Record.KnownRed.IsEmpty())
+				{
+					FFailure Failure; Failure.bSet = true; Failure.Section = TEXT("admission"); Failure.Index = Index; Failure.Reason = OutError;
+					Finish(LastNow, Failure); // measured named refusal, never a successful default
+				}
+				return false;
+			}
+		}
+		if (Action.Do == EElysiumArenaAction::Load && !Action.Checkpoint.IsEmpty())
+		{
+			const FCheckpoint* Saved = Checkpoints.Find(Action.Checkpoint);
+			if (!Saved || !Saved->bWritten || Saved->Slot != Action.Slot)
+			{ OutError = TEXT("load checkpoint has no successful write in this slot"); return false; }
+		}
+		bTransactionPending = true;
+		bTransactionCaptured = bTransactionApplied = false;
+		TransactionAction = Index;
+		TransactionId = 0;
+		TransactionWall = FPlatformTime::Seconds();
+		return Host.Transport->Begin(Host, Action,
+			[this](const ElysiumArenaStage::FTransactionFence& Fence) { OnTransactionFence(Fence); }, OutError);
+	}
+	if (Action.Do == EElysiumArenaAction::RestoreCompare) return CompareCheckpoint(Action, OutError);
+	if (Action.Do == EElysiumArenaAction::CorruptCheckpoint || Action.Do == EElysiumArenaAction::RestoreBase)
+	{
+		const FCheckpoint* Saved = Checkpoints.Find(Action.Checkpoint);
+		if (!Host.bArena || !Host.Transport || !Saved || !Saved->bWritten)
+		{ OutError = TEXT("fixture requires written Green Room checkpoint"); return false; }
+		if (Action.Do == EElysiumArenaAction::CorruptCheckpoint)
+			Host.Transport->Corruptions.Add(Saved->Slot, Action.Control); // normal header consumer follows, 0x1027bf50
+		else { Host.Transport->bHasRestoreBase = true; Host.Transport->RestoreBase = Action.Param.Number; Host.Transport->RestoreBaseSlot = Saved->Slot; } // 0x20097d00 tagged base
+		return true;
+	}
+	if (Action.Do >= EElysiumArenaAction::NpcSingleRoundFinishReload)
+	{
+		if (!Host.bArena || !Host.RunFixture) { OutError = TEXT("unavailable Green Room runtime fixture adapter"); return false; }
+		return Host.RunFixture(World, Action, OutError); // setup then real consumer; 0x10255077/0x102da0d0/0x10273ad0
+	}
 	switch (Action.Do)
 	{
 	case EElysiumArenaAction::PlayerTeleport:
@@ -1139,12 +1350,22 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 	{
 		FElysiumEntity* PacketVictimEntity = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
 		FElysiumNpc* PacketVictim = PacketVictimEntity ? PacketVictimEntity->AsNpc() : nullptr;
-		FElysiumEntity* PacketAttacker = ElysiumArenaRunnerDetail::FindEntity(World, Action.Attacker);
-		FElysiumCombatCharacter* PacketAttackerCharacter = PacketAttacker ? PacketAttacker->AsCombatCharacter() : nullptr;
-		if (!Host.bArena || !PacketVictim || !PacketAttackerCharacter || !PacketAttackerCharacter->IsAlive())
+		FElysiumEntity* PacketAttacker = Action.Attacker == TEXT("none") ? nullptr : ElysiumArenaRunnerDetail::FindEntity(World, Action.Attacker);
+		FElysiumEntity* PacketInflictor = Action.Inflictor.IsEmpty() || Action.Inflictor == TEXT("none") ? nullptr : ElysiumArenaRunnerDetail::FindEntity(World, Action.Inflictor);
+		if (!Action.Inflictor.IsEmpty() && Action.Inflictor != TEXT("none") && !PacketInflictor)
+		{ OutError = TEXT("damage_packet inflictor is unavailable"); return false; }
+		if (!PacketVictim || (Action.Attacker != TEXT("none") && (!PacketAttacker || !PacketAttacker->IsAlive())))
 		{ OutError = TEXT("damage_packet requires a victim and a live named attacker"); return false; }
+		// The current scalar packet has no +0x28 inflictor seam; integration supplies that
+		// runtime consumer through the typed fixture adapter, never a fake CVDmg_t scalar.
+		if (PacketInflictor)
+		{
+			if (!Host.RunFixture) { OutError = TEXT("unavailable scalar damage inflictor seam (+0x28, 0x10265ed0)"); return false; }
+			return Host.RunFixture(World, Action, OutError);
+		}
 		FElysiumNpcBase::FElysiumTakeDamageInfo FixturePacket;
-		FixturePacket.Attacker = PacketAttacker->Handle;
+		FixturePacket.Attacker = PacketAttacker ? PacketAttacker->Handle : FElysiumEntityHandle::Invalid();
+
 		FixturePacket.Damage = static_cast<float>(Action.Param.Number);
 		PacketVictim->OnTakeDamage(&FixturePacket); // 0x1032ef60 -> 0x10265ed0 -> 0x102bee60
 		return true;
@@ -1200,11 +1421,6 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 	}
 	case EElysiumArenaAction::Spawn:
 	{
-		if (!Host.bArena)
-		{
-			OutError = TEXT("unsupported in this host: a map host spawns nothing");
-			return false;
-		}
 		FVector PlayerFeet = FVector::ZeroVector;
 		CurrentPlayerFeet(PlayerFeet);
 		FElysiumEntityDef Def;
@@ -1407,8 +1623,9 @@ void FElysiumArenaScenarioRunner::TraceRemovals(FElysiumEntityWorld& World)
 			continue;
 		}
 		FEvent& Recorded = Events.AddDefaulted_GetRef();
-		Recorded.Time = World.NowSeconds();
+		StampEvent(Recorded, World.NowSeconds());
 		Recorded.Entity = It->Key;
+		Recorded.bPlayer = It->Key == World.PlayerHandle();
 		Recorded.Name = It->Value.Name;
 		Recorded.Kind = ElysiumArenaRunnerDetail::RemovedKind();
 		Recorded.Text = It->Key.ToString();
@@ -1470,6 +1687,7 @@ void FElysiumArenaScenarioRunner::SampleCorpsePelvises(FElysiumEntityWorld& Worl
 
 bool FElysiumArenaScenarioRunner::IsComplete(double Now) const
 {
+	if (bTransactionPending || ActionFired.Contains(false)) return false; // 0x200975f0: completion is a fence
 	if (NextExpect < Record.Expect.Num())
 	{
 		return false;
@@ -1512,6 +1730,19 @@ bool FElysiumArenaScenarioRunner::Tick()
 	{
 		return true;
 	}
+	if (Host.Transport) Host.Transport->Poll(); // readiness fence can finish a replacement, 0x1011a620
+	if (bDone) return false;
+	if (bTransactionPending)
+	{
+		const FElysiumArenaAction& Pending = Record.Script[TransactionAction];
+		if (FPlatformTime::Seconds() - TransactionWall > Pending.Timeout) FailTransaction(TEXT("transaction wall timeout"));
+		if (Pending.Do == EElysiumArenaAction::Save && !LiveWorld())
+		{ FailTransaction(TEXT("unexpected world loss during save")); return !bDone; }
+		// No actions/probes/player replay in a no-world gap; no fabricated simulation elapsed.
+		if (FElysiumEntityWorld* PendingWorld = LiveWorld())
+			LastNow = SegmentElapsed + FMath::Max(0.0, PendingWorld->NowSeconds() - SegmentWorld);
+		return !bDone;
+	}
 	FElysiumEntityWorld* World = LiveWorld();
 	if (World == nullptr)
 	{
@@ -1541,7 +1772,7 @@ bool FElysiumArenaScenarioRunner::Tick()
 		return true;
 	}
 
-	const double Now = World->NowSeconds() - ZeroWorld;
+	const double Now = SegmentElapsed + FMath::Max(0.0, World->NowSeconds() - SegmentWorld); // 0x200975f0 monotonic segments
 	LastNow = Now;
 	if (!bZeroApplied)
 	{
@@ -1554,6 +1785,7 @@ bool FElysiumArenaScenarioRunner::Tick()
 
 	TraceRemovals(*World);
 	SampleCorpsePelvises(*World);
+	if (Now >= Record.Duration && !Record.InitialWeaponState.IsEmpty() && !ObserveFinalWeaponState(*World)) return false;
 
 	// What has happened so far, judged in time order: the earliest of a `never` that appeared, an
 	// expectation whose deadline passed, and a timed probe that did not hold is the failure.
@@ -1572,6 +1804,9 @@ bool FElysiumArenaScenarioRunner::Tick()
 	{
 		return false;
 	}
+	if (bDone) return false;
+	// FireDueActions may have retired World, even with inline completion (0x200975f0).
+	if (bTransactionPending || LiveWorld() != World) return true;
 	TickPlayerInput();
 
 	if (IsComplete(Now) || Now >= Record.Duration)
@@ -1585,9 +1820,24 @@ bool FElysiumArenaScenarioRunner::Tick()
 void FElysiumArenaScenarioRunner::FinishWithEndProbes(double Now)
 {
 	FFailure Failure;
+	for (int32 ActionIndex = 0; ActionIndex < Record.Script.Num(); ++ActionIndex)
+	{
+		if (Record.Script[ActionIndex].Do >= EElysiumArenaAction::Save && !ActionFired[ActionIndex])
+		{
+			Failure.bSet = true; Failure.Time = Now; Failure.Section = TEXT("script"); Failure.Index = ActionIndex;
+			Failure.Reason = TEXT("required transaction/fixture action never fired");
+			break;
+		}
+	}
 	for (int32 Index = 0; Index < Record.Probes.Num(); ++Index)
 	{
 		const FElysiumArenaProbeSpec& Probe = Record.Probes[Index];
+		if (!Probe.Fence.IsEmpty() && !ProbeRead[Index])
+		{
+			Failure.bSet = true; Failure.Time = Now; Failure.Section = TEXT("probe"); Failure.Index = Index;
+			Failure.Reason = TEXT("required transaction fence never occurred");
+			break;
+		}
 		if (!Probe.bAtEnd)
 		{
 			continue;
@@ -1651,6 +1901,8 @@ void FElysiumArenaScenarioRunner::Finish(double Now, const FFailure& Failure)
 	Result.Result = Record.KnownRed.IsEmpty()
 		? FString(bPass ? TEXT("pass") : TEXT("fail"))
 		: FString(bPass ? TEXT("unexpected-pass") : TEXT("expected-fail"));
+	if (!bPass && Record.KnownRed.StartsWith(TEXT("0017/35:")) && !Failure.Reason.Contains(TEXT("event-free body seek")))
+		Result.Result = TEXT("fail"); // named source filing cannot cover another missed stage or behaviour
 	Result.GameSeconds = Now;
 	Result.WallSeconds = FPlatformTime::Seconds() - StartWall;
 	Result.Events = Events.Num();
@@ -1675,17 +1927,296 @@ void FElysiumArenaScenarioRunner::Abort(const FString& Error)
 	UE_LOG(LogElysiumArenaScenario, Error, TEXT("%s"), *Result.Summary());
 }
 
+
+// Harness coordinates and typed reads; engine 0x200975f0 restores a different clock epoch.
+void FElysiumArenaScenarioRunner::StampEvent(FEvent& Event, double WorldTime) const
+{
+	Event.WorldTime = WorldTime;
+	Event.Time = bZeroKnown ? SegmentElapsed + FMath::Max(0.0, WorldTime - SegmentWorld) : WorldTime;
+	Event.Epoch = InstalledEpoch;
+	Event.Map = Host.bArena ? TEXT("arena") : Host.GetMap() ? Host.GetMap()->MapName : TEXT("gap");
+}
+
+void FElysiumArenaScenarioRunner::Rebind(AElysiumMapActor* Map)
+{
+	// Never dereference the retired pointer. Keep labels/actions/counts; discard removal baseline.
+	// Retail identities are reconstructed at 0x101a2e40 before 0x1011a620 post-restore.
+	if (FElysiumEntityWorld* Previous = LiveWorld())
+	{
+		LastNow = SegmentElapsed + FMath::Max(0.0, Previous->NowSeconds() - SegmentWorld);
+		Previous->SetAiTraceSink(FElysiumAiTraceSink());
+	}
+	SegmentElapsed = LastNow;
+	Host.Map = Map;
+	Host.World = Map ? Map->GetWorld() : nullptr;
+	InstalledWorld = Map ? Map->GetEntityWorld() : nullptr;
+	InstalledEpoch = InstalledWorld ? InstalledWorld->GetEpoch() : 0;
+	SegmentWorld = InstalledWorld ? InstalledWorld->NowSeconds() : 0.0;
+	TrackedEntities.Reset();
+	PelvisSamples.Reset();
+	PelvisSamples.SetNum(Record.Probes.Num());
+	if (InstalledWorld) InstalledWorld->SetAiTraceSink([this](const FElysiumAiTraceEvent& Event) { RecordEvent(Event); });
+}
+
+bool FElysiumArenaScenarioRunner::ReadWitness(const FString& Who, const FString& Field,
+	FElysiumArenaValue& Out, FString& OutError) const
+{
+	FElysiumEntityWorld* World = LiveWorld();
+	FElysiumArenaValue::EType RequiredType;
+	if (!World || !ElysiumArenaScenario::WitnessType(Field, RequiredType))
+	{ OutError = TEXT("no live world or unknown witness"); return false; }
+	Out.Type = RequiredType;
+	if (Field == TEXT("clock")) Out.Number = World->NowSeconds();
+	else if (Field == TEXT("world_generation")) Out.Number = World->GetEpoch();
+	else if (Field == TEXT("map")) Out.String = Host.bArena ? TEXT("arena") : Host.GetMap()->MapName;
+	else if (Field.StartsWith(TEXT("coordinator.")))
+	{
+		const int32 CoordinatorIndex = Field.StartsWith(TEXT("coordinator.normal.")) ? 1 : Field.StartsWith(TEXT("coordinator.player.")) ? 2 : 3;
+		const FElysiumAttackCoordinator* Coordinator = World->AttackCoordinator(CoordinatorIndex);
+		if (!Coordinator) { OutError = TEXT("coordinator unavailable"); return false; }
+		if (Field.EndsWith(TEXT(".count"))) Out.Number = Coordinator->Num();
+		else if (Field.EndsWith(TEXT(".cap"))) Out.Number = Coordinator->Cap();
+		else
+		{
+			TArray<int32> Members;
+			for (const FElysiumEntityHandle& Member : Coordinator->Handles()) Members.Add(Member.Index);
+			Members.Sort();
+			TArray<FString> Identities;
+			for (int32 MemberIndex : Members) Identities.Add(FString::Printf(TEXT("#%d"), MemberIndex));
+			Out.String = FString::Join(Identities, TEXT(","));
+		}
+	}
+	else
+	{
+		FElysiumEntity* Entity = ElysiumArenaRunnerDetail::FindEntity(*World, Who);
+		FElysiumNpc* Npc = Entity ? Entity->AsNpc() : nullptr;
+		if (Field == TEXT("identity") && Entity) Out.String = Entity->Handle.ToString();
+		else if (Field == TEXT("hidden") && Entity) Out.bBool = Entity->IsHidden();
+		else if (Field == TEXT("callback") && Entity) Out.String = Entity->ThinkCallback.ToString();
+		else if (Field == TEXT("callback.saved") && Entity) Out.String = Entity->SavedThinkCallback.ToString();
+		else if (Field == TEXT("think.next") && Entity) Out.Number = Entity->NextThink;
+		else if (Field == TEXT("task.index") && Npc) Out.Number = Npc->Schedule.TaskIndex;
+		else if (Field == TEXT("task.status") && Npc) Out.Number = static_cast<int32>(Npc->Schedule.TaskStatus);
+		else if (Field == TEXT("task.started") && Npc) Out.Number = Npc->Schedule.ScheduleStartedAt;
+		else if (Field == TEXT("task.task_started") && Npc) Out.Number = Npc->Schedule.TaskStartedAt;
+		else if (Field == TEXT("task.failure") && Npc) Out.Number = Npc->BaseScheduleHost.FailureReason;
+		else if (Field == TEXT("task.wait") && Npc) Out.Number = Npc->BaseScheduleHost.WaitFinished;
+		else if (Field == TEXT("task.move_wait") && Npc) Out.Number = Npc->BaseScheduleHost.MoveWaitFinished;
+		else if (Field == TEXT("senses.gathered") && Npc) Out.bBool = Npc->Cognition.GatheredAt >= 0.0;
+		else if (Field == TEXT("script.owner") && Entity) Out.String = Entity->ScriptOwner.ToString();
+		else if (Field == TEXT("anim.sequence") && Npc) Out.Number = Npc->SequenceNumber;
+		else if (Field == TEXT("anim.cycle") && Npc) Out.Number = Npc->SequenceCycle;
+		else if (Field == TEXT("anim.rate") && Npc) Out.Number = Npc->SequencePlaybackRate;
+		else if (Field == TEXT("anim.time") && Npc) Out.Number = Npc->AnimTime;
+		else if (Field == TEXT("anim.previous_time") && Npc) Out.Number = Npc->PrevAnimTime;
+		else if (Field == TEXT("anim.last_event") && Npc) Out.Number = Npc->LastEventCheck;
+		else if (Field == TEXT("anim.ground_speed") && Npc) Out.Number = Npc->GroundSpeed;
+		else if (Field == TEXT("anim.yaw_speed") && Npc) Out.Number = Npc->YawSpeed;
+		else if (Field == TEXT("anim.finished") && Npc) Out.bBool = Npc->bSequenceFinished;
+		else if (Field == TEXT("anim.past_half") && Npc) Out.bBool = Npc->SequencePastHalf;
+		else if (Field == TEXT("move_shoot.active") && Npc) Out.bBool = Npc->MoveAndShootOverlay.bMovingAndShooting;
+		else if (Field == TEXT("move_shoot.next") && Npc) Out.Number = Npc->MoveAndShootOverlay.NextShotTime;
+		else if (Field == TEXT("move_shoot.burst") && Npc) Out.Number = Npc->MoveAndShootOverlay.MoveShots;
+		else if (Field == TEXT("move_shoot.min_burst") && Npc) Out.Number = Npc->MoveAndShootOverlay.MinBurst;
+		else if (Field == TEXT("move_shoot.max_burst") && Npc) Out.Number = Npc->MoveAndShootOverlay.MaxBurst;
+		else if (Field == TEXT("move_shoot.pause_min") && Npc) Out.Number = Npc->MoveAndShootOverlay.PauseMin;
+		else if (Field == TEXT("move_shoot.pause_max") && Npc) Out.Number = Npc->MoveAndShootOverlay.PauseMax;
+		else if (Field == TEXT("move_shoot.initial_delay") && Npc) Out.Number = Npc->MoveAndShootOverlay.InitialDelay;
+		else if (Field == TEXT("damage.attacker") && Npc) Out.String = Npc->BaseMemory.LastDamageAttacker.ToString();
+		else if (Field == TEXT("damage.sum") && Npc) Out.Number = Npc->BaseMemory.RepeatedDamageAccumulated;
+		else if (Field == TEXT("damage.time") && Npc) Out.Number = Npc->BaseMemory.RepeatedDamageWindowStart;
+		else if (Field.StartsWith(TEXT("damage.position.")) && Npc)
+		{
+			const FVector& Position = Npc->BaseMemory.LastDamageAttackPosition;
+			Out.Number = Field.EndsWith(TEXT(".x")) ? Position.X : Field.EndsWith(TEXT(".y")) ? Position.Y : Position.Z;
+		}
+		else if (Field == TEXT("senses.can_sense") && Npc) Out.bBool = Npc->Senses.bCanPerformSenses;
+		else if (Field == TEXT("senses.sighted") && Npc)
+		{
+			TArray<FString> Identities;
+			for (const FElysiumEntityHandle& Sighted : Npc->Senses.Sighted()) Identities.Add(Sighted.ToString());
+			Out.String = FString::Join(Identities, TEXT(","));
+		}
+		else if (Field == TEXT("los.player") && Npc) Out.bBool = Npc->Senses.Memory.bPlayerLos;
+		else if (Field == TEXT("los.pvs") && Npc) Out.bBool = Npc->Senses.Memory.bPlayerInPvs;
+		else if (Field == TEXT("los.cache") && Npc) Out.Number = Npc->Senses.Memory.PlayerLosNextUpdateTime;
+		else if (Field == TEXT("los.last_clear") && Npc) Out.Number = Npc->Senses.Memory.PlayerLosLastClearTime;
+		else if (Field == TEXT("dialog.partner") && Entity && Entity->AsCombatCharacter()) Out.String = Entity->AsCombatCharacter()->GetDialogPartner().ToString();
+		else if (Field == TEXT("dialog.partner_live") && Entity && Entity->AsCombatCharacter()) Out.bBool = World->Resolve(Entity->AsCombatCharacter()->GetDialogPartner()) != nullptr;
+		else if (Field.StartsWith(TEXT("memory.")) && Npc)
+		{
+			const FElysiumEntity* Enemy = Npc->GetEnemy();
+			const FElysiumNpcEnemyMemoryRecord* Memory = Enemy ? Npc->EnemyMemory.Find(Enemy->Handle) : nullptr;
+			if (Field == TEXT("memory.enemy")) Out.String = Enemy ? Enemy->Handle.ToString() : TEXT("#<null>");
+			else if (!Memory) { OutError = TEXT("committed enemy has no memory record"); return false; }
+			else if (Field == TEXT("memory.last_seen")) Out.Number = Memory->LastSeenTime;
+			else Out.Number = Field.EndsWith(TEXT(".x")) ? Memory->LastPosition.X : Field.EndsWith(TEXT(".y")) ? Memory->LastPosition.Y : Memory->LastPosition.Z;
+		}
+		else if (Field.StartsWith(TEXT("layer.")) && Npc)
+		{
+			TArray<FString> Parts; Field.ParseIntoArray(Parts, TEXT("."));
+			const int32 LayerIndex = FCString::Atoi(*Parts[1]);
+			const FElysiumAnimatingOverlay::FAnimOverlayLayer& Layer = Npc->AnimOverlay[LayerIndex]; // four native records, 0x10098c80
+			const FString& Word = Parts[2];
+			if (Word == TEXT("flags")) Out.Number = Layer.Flags;
+			else if (Word == TEXT("finished")) Out.Number = Layer.SequenceFinished;
+			else if (Word == TEXT("sequence")) Out.Number = Layer.Sequence;
+			else if (Word == TEXT("cycle")) Out.Number = Layer.Cycle;
+			else if (Word == TEXT("rate")) Out.Number = Layer.PlaybackRate;
+			else if (Word == TEXT("weight")) Out.Number = Layer.Weight;
+			else if (Word == TEXT("weight_max")) Out.Number = Layer.WeightMax;
+			else if (Word == TEXT("blend_in")) Out.Number = Layer.BlendIn;
+			else if (Word == TEXT("blend_out")) Out.Number = Layer.BlendOut;
+			else if (Word == TEXT("activity")) Out.Number = Layer.Activity;
+			else if (Word == TEXT("auto_kill")) Out.bBool = Layer.bAutoKillWhenFinished;
+			else if (Word == TEXT("last_event")) Out.Number = Layer.LastEventCheck;
+		}
+		else if (Field == TEXT("dialog.open")) Out.bBool = World->GetOpenDialog() != nullptr;
+		else if (!Host.ReadWitness || !Host.ReadWitness(*World, Who, Field, Out, OutError))
+		{ if (OutError.IsEmpty()) OutError = FString::Printf(TEXT("unavailable retail witness %s.%s"), *Who, *Field); return false; }
+	}
+	if (Out.Type != RequiredType || (Out.Type == FElysiumArenaValue::EType::Number && !FMath::IsFinite(Out.Number)))
+	{ OutError = TEXT("witness adapter returned an incompatible type/value"); return false; }
+	return true;
+}
+
+void FElysiumArenaScenarioRunner::FailTransaction(const FString& Reason)
+{
+	if (bDone) return;
+	FEvent& FailureEvent = Events.AddDefaulted_GetRef();
+	StampEvent(FailureEvent, LiveWorld() ? LiveWorld()->NowSeconds() : SegmentWorld);
+	FailureEvent.Kind = FName(TEXT("script"));
+	FailureEvent.Text = FString::Printf(TEXT("transaction id=%llu failed reason=%s"), TransactionId, *Reason); // exact fence reason, 0x200975f0
+
+	if (Record.bExpectFail)
+	{
+		FFailure Failure;
+		Failure.bSet = true;
+		Failure.Time = LastNow;
+		Failure.Section = TEXT("script");
+		Failure.Index = TransactionAction;
+		Failure.Reason = Reason;
+		Finish(LastNow, Failure);
+	}
+	else Abort(FString::Printf(TEXT("script[%d] transaction: %s"), TransactionAction, *Reason));
+}
+
+void FElysiumArenaScenarioRunner::OnTransactionFence(const ElysiumArenaStage::FTransactionFence& Fence)
+{
+	using ElysiumArenaStage::EFence;
+	if (!bTransactionPending || bDone) return;
+	if (TransactionId == 0) TransactionId = Fence.OperationId;
+	if (Fence.OperationId != TransactionId) { FailTransaction(TEXT("wrong operation id")); return; }
+	const FElysiumArenaAction& Action = Record.Script[TransactionAction];
+	if (Fence.Phase == EFence::Failed) { FailTransaction(Fence.Reason); return; }
+	if (Fence.Phase == EFence::Rebinding)
+	{
+		if (!Action.Map.IsEmpty() && Action.Map != Fence.MapIdentity) { FailTransaction(TEXT("wrong map at reconstruction fence")); return; }
+		Rebind(Fence.Map.Get());
+	}
+	FEvent& Event = Events.AddDefaulted_GetRef();
+	StampEvent(Event, LiveWorld() ? LiveWorld()->NowSeconds() : SegmentWorld);
+	Event.Kind = FName(TEXT("script"));
+	Event.Text = FString::Printf(TEXT("transaction id=%llu fence=%d npc_draw=%d"), Fence.OperationId,
+		static_cast<int32>(Fence.Phase), ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).GetCurrentSeed());
+	if (Fence.Phase == EFence::Captured)
+	{
+		bTransactionCaptured = true;
+		if (!Action.Checkpoint.IsEmpty())
+		{
+			FCheckpoint& Saved = Checkpoints.FindOrAdd(Action.Checkpoint);
+			Saved.Slot = Action.Slot;
+			Saved.SaveBase = LiveWorld() ? LiveWorld()->NowSeconds() : 0.0;
+			for (const FElysiumArenaWitness& Word : Action.Fields)
+			{
+				FElysiumArenaValue Value;
+				FString Error;
+				if (!ReadWitness(Word.Who, Word.Field, Value, Error)) { FailTransaction(Error); return; }
+				Saved.Captured.Add(Word.Who + TEXT("\n") + Word.Field, MoveTemp(Value));
+			}
+		}
+	}
+	if (Fence.Phase == EFence::Written)
+	{
+		if (!bTransactionCaptured) { FailTransaction(TEXT("write completed without capture fence")); return; }
+		if (FCheckpoint* Saved = Checkpoints.Find(Action.Checkpoint)) Saved->bWritten = true;
+		bTransactionPending = false;
+	}
+	if (Fence.Phase == EFence::Applied)
+	{
+		if (!LiveWorld()) { FailTransaction(TEXT("apply without pre-restore world rebind")); return; }
+		bTransactionApplied = true;
+		if (FCheckpoint* Saved = Checkpoints.Find(Action.Checkpoint))
+		{
+			Saved->RestoreBase = LiveWorld()->NowSeconds();
+			for (const TPair<FString, FElysiumArenaValue>& Pair : Saved->Captured)
+			{
+				FString Who, Field;
+				Pair.Key.Split(TEXT("\n"), &Who, &Field);
+				FElysiumArenaValue Value;
+				FString Error;
+				if (!ReadWitness(Who, Field, Value, Error)) { FailTransaction(Error); return; }
+				Saved->Applied.Add(Pair.Key, MoveTemp(Value));
+			}
+			Saved->bApplied = true;
+		}
+	}
+	const FString ProbeFence = Fence.Phase == EFence::Rebinding ? TEXT("pre_init")
+		: Fence.Phase == EFence::Captured ? TEXT("captured") : Fence.Phase == EFence::Applied ? TEXT("applied")
+		: Fence.Phase == EFence::Ready ? TEXT("ready") : TEXT("");
+	for (int32 ProbeIndex = 0; ProbeIndex < Record.Probes.Num(); ++ProbeIndex)
+	{
+		const FElysiumArenaProbeSpec& Probe = Record.Probes[ProbeIndex];
+		if (ProbeFence.IsEmpty() || Probe.Fence != ProbeFence || ProbeRead[ProbeIndex]) continue;
+		if ((Probe.Fence == TEXT("captured") && Action.Do != EElysiumArenaAction::Save)
+			|| (Probe.Fence == TEXT("applied") && Action.Do != EElysiumArenaAction::Load)) continue;
+		if (!Probe.Checkpoint.IsEmpty() && Action.Checkpoint != Probe.Checkpoint) continue;
+		ProbeRead[ProbeIndex] = true;
+		FString Read, Error;
+		if (!ReadProbe(Probe, Read, Error))
+		{ FailTransaction(Error.IsEmpty() ? FString::Printf(TEXT("fence probe[%d] failed: %s"), ProbeIndex, *Read) : Error); return; }
+	}
+	if (Fence.Phase == EFence::Ready)
+	{
+		if (!bTransactionApplied) { FailTransaction(TEXT("ready without apply fence")); return; }
+		if (Action.Do == EElysiumArenaAction::FreshMap)
+		{
+			for (const FElysiumArenaRow& Row : Record.Cast)
+				if (!LiveWorld() || !ElysiumArenaRunnerDetail::FindEntity(*LiveWorld(), Row.Name))
+				{ FailTransaction(TEXT("fresh-map cast missing ") + Row.Name); return; }
+		}
+		bTransactionPending = false;
+	}
+}
+
+bool FElysiumArenaScenarioRunner::CompareCheckpoint(const FElysiumArenaAction& Action, FString& OutError) const
+{
+	const FCheckpoint* Saved = Checkpoints.Find(Action.Checkpoint);
+	if (!Saved || !Saved->bWritten || !Saved->bApplied)
+	{ OutError = TEXT("checkpoint has no successful capture/write/apply fence"); return false; }
+	for (const FElysiumArenaWitness& Word : Action.Fields)
+	{
+		const FString Key = Word.Who + TEXT("\n") + Word.Field;
+		const FElysiumArenaValue* Before = Saved->Captured.Find(Key);
+		const FElysiumArenaValue* After = Saved->Applied.Find(Key);
+		if (!Before || !After || !ElysiumArenaScenario::WitnessEqual(ElysiumArenaScenario::RebaseWitness(Word.Field, *Before, Saved->SaveBase, Saved->RestoreBase), *After, Word.Tolerance))
+		{ OutError = FString::Printf(TEXT("restore equality failed %s.%s: saved=%s applied=%s"), *Word.Who, *Word.Field,
+			Before ? *Before->Describe() : TEXT("unavailable"), After ? *After->Describe() : TEXT("unavailable")); return false; }
+	}
+	return true;
+}
+
 bool FElysiumArenaScenarioRunner::WriteTrace(const FString& Path, FString& OutError) const
 {
 	FString Text;
 	Text.Reserve(64 + Events.Num() * 96);
-	Text += TEXT("time\tname\tkind\ttext\n");
+	Text += TEXT("time\tname\tkind\ttext\tworld_time\tepoch\tmap\n");
 	for (const FEvent& Event : Events)
 	{
 		// Scenario seconds once zero is known; the raw world clock otherwise (a run that never activated).
-		Text += FString::Printf(TEXT("%.3f\t%s\t%s\t%s\n"), bZeroKnown ? ScenarioTime(Event) : Event.Time,
+		Text += FString::Printf(TEXT("%.3f\t%s\t%s\t%s\t%.6f\t%u\t%s\n"), ScenarioTime(Event),
 			Event.Name.IsEmpty() ? TEXT("-") : *ElysiumArenaRunnerDetail::OneLine(Event.Name),
-			*Event.Kind.ToString(), *ElysiumArenaRunnerDetail::OneLine(Event.Text));
+			*Event.Kind.ToString(), *ElysiumArenaRunnerDetail::OneLine(Event.Text), Event.WorldTime, Event.Epoch, *ElysiumArenaRunnerDetail::OneLine(Event.Map));
 	}
 	if (!FFileHelper::SaveStringToFile(Text, *Path, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
 	{

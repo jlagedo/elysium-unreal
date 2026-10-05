@@ -461,11 +461,11 @@ SAVE_ROW_PATHS: dict[int, str] = {
 # port re-derives rather than stores.
 SAVE_UNBOUND: dict[int, str] = {
     0x1A9C: "EMBEDDED",
-    0x1AE0: "EMBEDDED",
-    0x5C40: "EMBEDDED",
+    0x1AE0: "MoveAndShootOverlay +0x10..2c is leaf-saved (0x102e8aa0/0x102e8ac0)",
+    0x5C40: "schedule cursor/status/starts are leaf-saved by FElysiumScheduleState::Serialize (0x1027bc60)",
     0x5CDC: "EMBEDDED",
     0x60B0: "EMBEDDED",
-    0x60DC: "EMBEDDED",
+    0x60DC: "InvestigateSoundSource is unavailable; missing ninth sound producer",
     0x6108: "EMBEDDED",
     0x6134: "EMBEDDED",
     0x6160: "EMBEDDED",
@@ -486,12 +486,8 @@ SAVE_UNBOUND: dict[int, str] = {
             "disposition table whenever the model or the disposition changes "
             "(`FElysiumNpc::StanceResolvedFor`); persisting it would restore a stale derivation",
     0x64DC: "`m_flMaxBlink` is the same resolved-row word as `m_flMinBlink`",
-    0x5CA4: "`m_bConditionsGathered` is retail's BOOL latch for `has this pass gathered yet`, and "
-            "this port carries the same fact as the pass EDGE itself -- "
-            "`FElysiumNpcCognition::GatheredAt`, a `double` every stimulus producer measures "
-            "against. Binding the two would marshal a timestamp under a bool's name, and the "
-            "restore hook re-stamps the edge to the load's own `now` in any case, so there is no "
-            "member here to save",
+    0x5CA4: "GatheredAt sign is BOOL leaf-saved by FElysiumNpcBase::Serialize (0x1027bc60)",
+    0x657C: "EyeFidgetClockSource is unavailable; no clock producer (0x102993c0)",
 }
 
 # What each of the shape map's four no-member forms means for the save walk. They are not one
@@ -517,13 +513,15 @@ EMBEDDED_REASON = (
 CLASS_MEMBER_MAPS: dict[str, dict[int, tuple[str, str]]] = {
     "CAI_InterestingPlace": {
         0x544: ("FElysiumInterestingPlace", "Type"),
+        0x54C: ("FElysiumInterestingPlace", "MinBoundsUnits"),
+        0x558: ("FElysiumInterestingPlace", "MaxBoundsUnits"),
         0x568: ("FElysiumInterestingPlace", "MinTime"),
         0x56C: ("FElysiumInterestingPlace", "MaxTime"),
         0x570: ("FElysiumInterestingPlace", "bMatchOrientation"),
         0x574: ("FElysiumInterestingPlace", "GroupId"),
         0x578: ("FElysiumInterestingPlace", "Rating"),
         0x57C: ("FElysiumInterestingPlace", "bEnabled"),
-        0x584: ("FElysiumInterestingPlace", "MaxNpcs"),
+        0x584: ("FElysiumInterestingPlace", "MarkersAllocated"),
     },
     # `ai_hint` (0018 story 2): every keyfield the replay names, one port member each.
     "CAI_Hint": {
@@ -1021,6 +1019,10 @@ def _wrapped(text: str, indent: str) -> list[str]:
 
 
 def flags_of(row: Row) -> str:
+    # The common snapshot and custom marker leaf are the sole persistence writers.
+    if row.binding in (("FElysiumEntity", "NextThink"),
+                       ("FElysiumInterestingPlace", "MarkersAllocated")):
+        return "EElysiumField::None"
     parts = []
     if "SAVE" in row.flags:
         parts.append("EElysiumField::Save")
@@ -1134,6 +1136,25 @@ def _array_asserts(model_class: ClassModel, rows: list[Row]) -> list[str]:
     return out
 
 
+def _time_annotation(row: Row) -> list[str]:
+    if row.type != "time":
+        return []
+    policies = {
+        "m_flWaitFinished": "Zero", "m_flExtendedBlockedByFriendTimer": "MaxFloat",
+        "m_flCanSeekCoverTimer": "Zero", "m_flSeeUnknownCheatVisionTime": "MinusOne",
+        "m_flMeleeHeightDiffTimer": "MinusOne", "m_flOccludedReportTimeE": "Zero",
+        "m_flOccludedReportTimeT": "Zero", "m_flOccludedReportTimeW": "Zero",
+        "m_flInterruptTime": "Zero", "m_flNextInterestChangeTime": "MinusOne",
+        "m_flWeaponScareTime": "MinusOne", "m_flIgnoreCollisionTimer": "MaxFloat",
+    }
+    name = row.name if row.kind == "save" else row.external
+    if row.element is not None:
+        name += f"[{row.element}]"
+    policy = policies.get(row.name)
+    suffix = f", EElysiumTimePolicy::{policy}" if policy else ""
+    return [f"\t\tD.TimeField({_literal(name)}{suffix}); // 0x101a0a80 TIME metadata"]
+
+
 def _render_add(model_class: ClassModel) -> list[str]:
     out = [
         f"\tvoid {_add_function_name(model_class)}(FElysiumClassDesc& D)",
@@ -1148,6 +1169,7 @@ def _render_add(model_class: ClassModel) -> list[str]:
         lines = _wrapped(_row_code(model_class, row), "\t\t")
         lines[-1] += f"  // +0x{row.offset:x} {row.name}"
         out += lines
+        out += _time_annotation(row)
     for row in model_class.unbound:
         out += _comment(f"UNBOUND +0x{row.offset:x} {row.name} \"{row.external}\" "
                         f"— {row.reason}", "\t\t")
@@ -1174,6 +1196,7 @@ def _render_save(model_class: ClassModel) -> list[str]:
         index = "" if row.element is None else f"[{row.element}]"
         lines[-1] += f"  // +0x{row.offset:x}{index} {row.type}"
         out += lines
+        out += _time_annotation(row)
     for row in model_class.save_unbound:
         out += _comment(f"NOT SAVED +0x{row.offset:x} {row.name} ({row.type}) — {row.reason}",
                         "\t\t")

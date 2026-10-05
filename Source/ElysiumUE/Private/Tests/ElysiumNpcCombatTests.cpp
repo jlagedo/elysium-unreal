@@ -223,7 +223,7 @@ namespace
 			return Builder;
 		}
 
-		FCombatFixture(const TCHAR* FighterEquip, bool bWithFists = true, bool bInstallCatalogue = true)
+		FCombatFixture(const TCHAR* FighterEquip, bool bWithFists = true, bool bInstallCatalogue = true, bool bDormant = false)
 			: Items(MakeCombatItemTable(bWithFists))
 			, Fixture(BuildWorld(FighterEquip), [this, bInstallCatalogue](FElysiumRecordingServices& S)
 				{
@@ -234,7 +234,7 @@ namespace
 					}
 					// The recording motor is opt-in, and every movement task in this suite needs one.
 					S.bProvideNpcMotor = true;
-				})
+				}, bDormant)
 			, Services(Fixture.Services)
 			, World(Fixture.World)
 		{
@@ -1414,7 +1414,7 @@ bool FElysiumNpcCombatRetaliationSaveTest::RunTest(const FString&)
 	// borrows the first one's. Both stand before the round trip, because since 0019/2 pass C the
 	// relationship store's handles are re-stamped by `OnPostRestore` (retail's slot 130) rather
 	// than by the leaf blob, and only `Freeze`/`ApplySnapshot` runs it.
-	FCombatFixture G(TEXT("0"), /*bWithFists*/ true, /*bInstallCatalogue*/ false);
+	FCombatFixture G(TEXT("0"), /*bWithFists*/ true, /*bInstallCatalogue*/ false, true);
 	if (F.Target == nullptr || F.Fighter == nullptr || F.Player == nullptr
 		|| G.Target == nullptr || G.Fighter == nullptr || G.Player == nullptr)
 	{
@@ -1726,8 +1726,10 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	F.Services.ResolvedNpcActivityOwner = TEXT("misc");
 	F.Services.OneShotSeconds = 2.0f;
 	// The player can see where the body falls, so `SUB_PVSRemove` (`0x102696f0`) keeps the corpse.
-	F.Services.bNpcMakerInViewCone = true;
-	F.Services.bNpcMakerVisible = true;
+	F.Player->Origin = FVector(-Cm(100.0), 0.0, 0.0);
+	F.Player->Angles = FVector::ZeroVector; // 0x10326750 actual +X view cone at corpse centre
+	F.Player->FieldOfView = 0.5f; // CBasePlayer::Spawn0x1016d260
+	F.Services.bLineOfSightClear = true; // 0x100a6fa0 actual eye-to-eye visibility source
 	F.Services.Calls.Reset();
 
 	// --- The transaction itself -------------------------------------------------------------------
@@ -1819,7 +1821,7 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 		F.Services.Saw(TEXT("StartBodyRagdoll")));
 
 	// --- Nobody sees it: `UTIL_Remove` ------------------------------------------------------------
-	F.Services.bNpcMakerVisible = false;
+	F.Services.bLineOfSightClear = false; // 0x100a6fa0, not the maker's camera visibility helper
 	F.Fighter->NextThink = 0.0f;
 	F.World.Tick(40.0);
 	TestTrue(TEXT("0x102696f0: a corpse no player sees is removed (0x101cd940 UTIL_Remove)"),

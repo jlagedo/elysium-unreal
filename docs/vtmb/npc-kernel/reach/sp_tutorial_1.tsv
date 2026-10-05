@@ -782,8 +782,8 @@ function	0x10027450	CAISound::FUN_10027450	CCineNPC#0, CNPCMaker#0, CNPC_VHumanC
 function	0x10027470	CBaseEntity::GetRefEHandle	CCineNPC#1, CNPCMaker#1, CNPC_VHumanCombatant#1, CNPC_VPedestrian#1, CNPC_VRat#1, CNPC_VVampire#1		layer 0
 function	0x10027490	CAISound::FUN_10027490	CCineNPC#116, CNPCMaker#116, CNPC_VHumanCombatant#116, CNPC_VPedestrian#116, CNPC_VRat#116, CNPC_VVampire#116	mechanism	layer 0
 function	0x100274b0	CBaseEntity::GetLocalVelocity	CCineNPC#198, CNPCMaker#198, CNPC_VHumanCombatant#198, CNPC_VPedestrian#198, CNPC_VRat#198, CNPC_VVampire#198		layer 0
-function	0x100274d0	CBaseEntity::GetSolidFlags	CCineNPC#211, CNPCMaker#211, CNPC_VHumanCombatant#211, CNPC_VPedestrian#211, CNPC_VRat#211, CNPC_VVampire#211		layer 0
-function	0x10027570	CBaseEntity::GetSolid	CCineNPC#92, CNPCMaker#92, CNPC_VHumanCombatant#92, CNPC_VPedestrian#92, CNPC_VRat#92, CNPC_VVampire#92		layer 0
+function	0x100274d0	CBaseEntity::GetSolidFlags	CCineNPC#211, CNPCMaker#211, CNPC_VHumanCombatant#211, CNPC_VPedestrian#211, CNPC_VRat#211, CNPC_VVampire#211	rule	layer 0
+function	0x10027570	CBaseEntity::GetSolid	CCineNPC#92, CNPCMaker#92, CNPC_VHumanCombatant#92, CNPC_VPedestrian#92, CNPC_VRat#92, CNPC_VVampire#92	rule	layer 0
 function	0x10027610	CBaseEntity::GetCollideable	CCineNPC#2, CNPCMaker#2, CNPC_VHumanCombatant#2, CNPC_VPedestrian#2, CNPC_VRat#2, CNPC_VVampire#2		layer 0
 function	0x10027630	CAISound::FUN_10027630	CCineNPC#3, CNPCMaker#3, CNPC_VHumanCombatant#3, CNPC_VPedestrian#3, CNPC_VRat#3, CNPC_VVampire#3	mechanism	layer 0
 function	0x10027650	CAISound::FUN_10027650	CCineNPC#4, CNPCMaker#4, CNPC_VHumanCombatant#4, CNPC_VPedestrian#4, CNPC_VRat#4, CNPC_VVampire#4	mechanism	layer 0
@@ -1057,7 +1057,7 @@ function	0x100a19c0	FUN_100a19c0	-		layer 0
 function	0x100a1a70	CBaseEntity::Event_Killed	-		layer 0
 function	0x100a1b40	CBaseEntity::HasTarget	CCineNPC#160, CNPCMaker#160, CNPC_VHumanCombatant#160, CNPC_VPedestrian#160, CNPC_VRat#160, CNPC_VVampire#160		layer 0
 function	0x100a1c30	CBaseEntity::HasLinkedDoor	CCineNPC#161, CNPCMaker#161, CNPC_VHumanCombatant#161, CNPC_VPedestrian#161, CNPC_VRat#161, CNPC_VVampire#161		layer 0
-function	0x100a1d20	CBaseEntity::GetNextTarget	CCineNPC#172, CNPCMaker#172, CNPC_VHumanCombatant#172, CNPC_VPedestrian#172, CNPC_VRat#172, CNPC_VVampire#172		layer 0
+function	0x100a1d20	CBaseEntity::GetNextTarget	CCineNPC#172, CNPCMaker#172, CNPC_VHumanCombatant#172, CNPC_VPedestrian#172, CNPC_VRat#172, CNPC_VVampire#172	rule	layer 0
 function	0x100a47d0	CBaseEntity::UpdateOnRemove	-		layer 0
 function	0x100a49d0	CBaseEntity::StartTouch	CCineNPC#174, CNPCMaker#174, CNPC_VHumanCombatant#174, CNPC_VPedestrian#174, CNPC_VRat#174, CNPC_VVampire#174		layer 0
 function	0x100a4af0	CBaseEntity::Touch	CNPCMaker#175, CNPC_VHumanCombatant#175, CNPC_VPedestrian#175, CNPC_VRat#175, CNPC_VVampire#175		layer 0
@@ -1106,7 +1106,7 @@ function	0x100aa9a0	CBaseEntity::TestHitboxes	-		layer 0
 function	0x100aaa40	CBaseEntity::SetCollisionGroup	-		layer 0
 function	0x100aab10	CBaseEntity::SetOwnerEntity	CCineNPC#202, CNPCMaker#202, CNPC_VHumanCombatant#202, CNPC_VPedestrian#202, CNPC_VRat#202, CNPC_VVampire#202		layer 0
 function	0x100aac30	CBaseEntity::GetMoveType	CCineNPC#94, CNPCMaker#94, CNPC_VHumanCombatant#94, CNPC_VPedestrian#94, CNPC_VRat#94, CNPC_VVampire#94		layer 0
-function	0x100aacd0	CBaseEntity::GetMoveCollide	CCineNPC#95, CNPCMaker#95, CNPC_VHumanCombatant#95, CNPC_VPedestrian#95, CNPC_VRat#95, CNPC_VVampire#95		layer 0
+function	0x100aacd0	CBaseEntity::GetMoveCollide	CCineNPC#95, CNPCMaker#95, CNPC_VHumanCombatant#95, CNPC_VPedestrian#95, CNPC_VRat#95, CNPC_VVampire#95	rule	layer 0
 function	0x100aad70	CBaseEntity::SetMoveType	CCineNPC#93, CNPCMaker#93, CNPC_VHumanCombatant#93, CNPC_VPedestrian#93, CNPC_VRat#93, CNPC_VVampire#93		layer 0
 function	0x100aaf30	CBaseEntity::PostSpawn	-		layer 0
 function	0x100ab020	CBaseEntity::ShouldTransmit	-		layer 0

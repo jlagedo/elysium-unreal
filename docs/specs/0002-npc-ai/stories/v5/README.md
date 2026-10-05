@@ -170,15 +170,21 @@ Arm coverage: fake/real selection, loader defaults/truncation/equal-bound RNG, c
 capability word, ranged masks/testers, and CacheTail order/inverse/freeze preservation on
 HumanCombatant and Guard1. Weapon family prefix is **Elysium.Arm.Weapons.** (plural).
 
-Real reload's finish is implemented and proved by arm tests: an ordinary NPC event shot does not
-spend its clip (`0x10238a15` player-only). The owner requires a flamethrower live witness
-when possible with source changes alone. The V5b audit found the item registration,
-baked wield models and standing `flamet_attack` / reload sequences present, but both
-standing and layered flamethrower attack timelines have no shot event in either sex bank.
-The specialized Attack `0x103e2f30` is also absent from the port. Under the owner's
-no-bake fallback, arm proof remains and the precise event/Attack-entry gap is recorded
-in combat-and-damage.md; no synthetic event, pipeline change or re-bake is made.
-Presence's producer remains spec 0006. Retained single-round bInReload goes to V6.
+The judge's fourth sitting supersedes the earlier event/content fallback.
+The stock and patch flame attack timelines are correctly empty; ordinary
+humanoid NPC ranged tasks do not reach specialized Attack `0x103e2f30`.
+The bounded live reload witness therefore explicitly stages clip0/reserve250/
+fake8 after ordinary equip's clip1, then uses native condition0x40, selection
+0xc2, authored reload animation and weapon slots322/323.
+
+V6 closing build1 standalone205510.095024 passes `ranged_real_reload`: real
+finish/bulk commit at2.800 scenario seconds, clip0→250, NPC reserve250 retained,
+all three flags0 and both stamps=world3.800; final30.000 remains250/250/0.
+The loaded silent control also passes. Current-binary pair/full evidence is
+recorded at V6 close in `../v6/proof-V6.json`; until those runs finish this
+paragraph claims only the standalone measurement. No event, firing loop, clip
+debit, asset change or bake was introduced. Presence production remains0006;
+retained NPC single-round bytes are V6, player continuation0008 follow-up.
 
 ## 5. Integration risks and limits
 

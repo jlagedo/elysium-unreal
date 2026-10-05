@@ -1,0 +1,331 @@
+{
+  "name": "place_marker_reservation",
+  "about": "0x102da0d0 raw capacity/enabled/full controls, >8 occupied replacement refusal and two real blocked-hull attempts still AddMarker; 0x102da860 before Claim, row codec equality.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 12,
+  "script": [
+    {
+      "t": 1,
+      "do": "reserve_spot",
+      "target": "clear",
+      "attacker": "visitor",
+      "control": "normal"
+    },
+    {
+      "t": 1.1,
+      "do": "reserve_spot",
+      "target": "clear",
+      "attacker": "visitor",
+      "control": "occupied"
+    },
+    {
+      "t": 1.2,
+      "do": "reserve_spot",
+      "target": "blocked",
+      "attacker": "visitor",
+      "control": "exhausted_clearance"
+    },
+    {
+      "t": 1.3,
+      "do": "reserve_spot",
+      "target": "zero",
+      "attacker": "visitor",
+      "control": "normal"
+    },
+    {
+      "t": 1.4,
+      "do": "reserve_spot",
+      "target": "disabled",
+      "attacker": "visitor",
+      "control": "normal"
+    },
+    {
+      "t": 1.5,
+      "do": "reserve_spot",
+      "target": "full",
+      "attacker": "visitor",
+      "control": "full"
+    },
+    {
+      "t": 2,
+      "do": "save",
+      "slot": "place_marker_reservation",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "clear",
+          "field": "place.capacity"
+        },
+        {
+          "who": "clear",
+          "field": "place.count"
+        },
+        {
+          "who": "clear",
+          "field": "place.failed_attempts"
+        },
+        {
+          "who": "clear",
+          "field": "place.marker.0.occupant"
+        },
+        {
+          "who": "clear",
+          "field": "place.marker.0.min.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "clear",
+          "field": "place.marker.0.max.x",
+          "tolerance": 0.0001
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "place_marker_reservation",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "clear",
+          "field": "place.capacity"
+        },
+        {
+          "who": "clear",
+          "field": "place.count"
+        },
+        {
+          "who": "clear",
+          "field": "place.failed_attempts"
+        },
+        {
+          "who": "clear",
+          "field": "place.marker.0.occupant"
+        },
+        {
+          "who": "clear",
+          "field": "place.marker.0.min.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "clear",
+          "field": "place.marker.0.max.x",
+          "tolerance": 0.0001
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "label": "clear",
+      "who": "",
+      "kind": "script",
+      "match": "reserve_spot control=normal picked=1",
+      "within": 2
+    },
+    {
+      "label": "occupied",
+      "who": "",
+      "kind": "script",
+      "match": "control=occupied picked=0",
+      "within": 1
+    },
+    {
+      "label": "clearance",
+      "who": "",
+      "kind": "script",
+      "match": "control=exhausted_clearance picked=1",
+      "within": 1
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    }
+  ],
+  "never": [],
+  "probes": [
+    {
+      "at": 1.8,
+      "who": "clear",
+      "probe": "witness",
+      "field": "place.count",
+      "equals": 1
+    },
+    {
+      "at": 1.8,
+      "who": "clear",
+      "probe": "witness",
+      "field": "place.failed_attempts",
+      "equals": 1
+    },
+    {
+      "at": 1.8,
+      "who": "blocked",
+      "probe": "witness",
+      "field": "place.count",
+      "equals": 1
+    },
+    {
+      "at": 1.8,
+      "who": "blocked",
+      "probe": "witness",
+      "field": "place.ring_index",
+      "equals": 2
+    },
+    {
+      "at": 1.8,
+      "who": "zero",
+      "probe": "witness",
+      "field": "place.count",
+      "equals": 0
+    },
+    {
+      "at": 1.8,
+      "who": "disabled",
+      "probe": "witness",
+      "field": "place.count",
+      "equals": 0
+    },
+    {
+      "at": 1.8,
+      "who": "full",
+      "probe": "witness",
+      "field": "place.count",
+      "equals": 0
+    }
+  ],
+  "cast": [
+    {
+      "name": "visitor",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        -1100,
+        800,
+        0
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "rows": [
+    {
+      "name": "clear",
+      "classname": "intersting_place",
+      "at": [
+        -800,
+        800,
+        0
+      ],
+      "keys": {
+        "type": "Idle",
+        "max_npcs": "8",
+        "min_bounds": "0 0 0",
+        "max_bounds": "0 0 0",
+        "enabled": "1"
+      }
+    },
+    {
+      "name": "blocked",
+      "classname": "intersting_place",
+      "at": [
+        0,
+        0,
+        20
+      ],
+      "keys": {
+        "type": "Idle",
+        "max_npcs": "8",
+        "min_bounds": "0 0 0",
+        "max_bounds": "0 0 0",
+        "enabled": "1"
+      }
+    },
+    {
+      "name": "zero",
+      "classname": "intersting_place",
+      "at": [
+        -800,
+        -800,
+        0
+      ],
+      "keys": {
+        "type": "Idle",
+        "max_npcs": "0",
+        "min_bounds": "0 0 0",
+        "max_bounds": "0 0 0",
+        "enabled": "1"
+      }
+    },
+    {
+      "name": "disabled",
+      "classname": "intersting_place",
+      "at": [
+        -800,
+        -600,
+        0
+      ],
+      "keys": {
+        "type": "Idle",
+        "max_npcs": "8",
+        "min_bounds": "0 0 0",
+        "max_bounds": "0 0 0",
+        "enabled": "0"
+      }
+    },
+    {
+      "name": "full",
+      "classname": "intersting_place",
+      "at": [
+        -800,
+        -400,
+        0
+      ],
+      "keys": {
+        "type": "Idle",
+        "max_npcs": "8",
+        "min_bounds": "0 0 0",
+        "max_bounds": "0 0 0",
+        "enabled": "1"
+      }
+    }
+  ]
+}

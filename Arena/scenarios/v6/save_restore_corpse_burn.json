@@ -1,0 +1,171 @@
+{
+  "name": "save_restore_corpse_burn",
+  "about": "V6 logical corpse callback continuation through common codec/apply, no replay: 0x1032c0e0/0x102696f0/0x10269960. A Kindred's corpse burns and is removed ten seconds after the death, seen or not. sp_tutorial_1's sabbat_redshirt_1 (npc_VVampire, stattemplate TutorialShovelhead, spawnflags 4: a placed row, not a maker child, so it carries neither Flag_InfChild nor Flag_Fade) verbatim on the east pad, unhidden at 0.5 s (the row is StartHidden 1), the player at the start WATCHING it; TakeDamage 10000 at 2 s. CreateCorpse 0x1032c0e0's burn arm: burn = 0x10207df0 (the template's Has_Burning_Death, or Kindred without Disallow_Kindred_Death) -> BurnModel 0x10090580 and SUB_Remove 0x101c0b10 armed at curtime + 10.0 (0x1032c32f), unconditionally: no view cone, no PVS, no FVisible (stories/v4/packets-S1.md item 1; stories/v1/triage.md, Judge's rulings, V4 -- second sitting, J13). So one `removed` on the corpse at death + 10 s (by death + 10.5 s), none before death + 9.5 s.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 15.0,
+  "player": {
+    "at": "start",
+    "face": "east"
+  },
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "sabbat_redshirt_1"
+    ],
+    "anchor": "sabbat_redshirt_1",
+    "at": "east"
+  },
+  "script": [
+    {
+      "t": 0.5,
+      "do": "fire",
+      "target": "sabbat_redshirt_1",
+      "input": "ScriptUnhide"
+    },
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "sabbat_redshirt_1",
+      "input": "TakeDamage",
+      "param": 10000
+    },
+    {
+      "after": "corpse",
+      "delay": 0,
+      "do": "save",
+      "slot": "save_restore_corpse_burn",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "sabbat_redshirt_1",
+          "field": "callback"
+        },
+        {
+          "who": "sabbat_redshirt_1",
+          "field": "think.next",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "sabbat_redshirt_1",
+          "field": "hidden"
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "save_restore_corpse_burn",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "sabbat_redshirt_1",
+          "field": "callback"
+        },
+        {
+          "who": "sabbat_redshirt_1",
+          "field": "think.next",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "sabbat_redshirt_1",
+          "field": "hidden"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "label": "hit",
+      "who": "sabbat_redshirt_1",
+      "kind": "input",
+      "match": "TakeDamage",
+      "by": 2.5
+    },
+    {
+      "label": "dies",
+      "who": "sabbat_redshirt_1",
+      "kind": "death",
+      "match": "",
+      "within": 0.5
+    },
+    {
+      "label": "corpse",
+      "who": "sabbat_redshirt_1",
+      "kind": "corpse",
+      "match": "",
+      "within": 1.0
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "gone",
+      "who": "sabbat_redshirt_1",
+      "kind": "removed",
+      "match": "",
+      "by": 2.9
+    }
+  ],
+  "never": [
+    {
+      "who": "sabbat_redshirt_1",
+      "kind": "removed",
+      "until": 2.84
+    },
+    {
+      "who": "sabbat_redshirt_1",
+      "kind": "death",
+      "after": "applied"
+    },
+    {
+      "who": "sabbat_redshirt_1",
+      "kind": "corpse",
+      "after": "applied"
+    },
+    {
+      "who": "sabbat_redshirt_1",
+      "kind": "schedule",
+      "after": "applied"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "sabbat_redshirt_1",
+      "probe": "exists",
+      "equals": false
+    }
+  ],
+  "notes": "Applied fence preserves original13.016666 deadline; measured later network0x102f6a50 ->0x1028d8d0 ->slot5840x1028d910 resets NextThink3.816667 and removes at scenario2.850000. Native enumeration0x100f8370 has no alive test. Tightened record correction, no runtime alive filter."
+}

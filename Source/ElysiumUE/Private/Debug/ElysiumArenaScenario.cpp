@@ -2,6 +2,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "ElysiumSaveArchive.h"
 #include "Substrate/ElysiumNpcConditions.h"   // `has_condition`: a condition name read against the table
 
 #include "Dom/JsonObject.h"
@@ -27,8 +28,9 @@ namespace ElysiumArenaScenarioParse
 		TEXT("cond+"), TEXT("cond-"), TEXT("state"), TEXT("sequence"), TEXT("seqfinished"),
 		TEXT("animevent"), TEXT("move"), TEXT("damage"), TEXT("death"), TEXT("corpse"),
 		TEXT("hint+"), TEXT("hint-"), TEXT("output"), TEXT("input"), TEXT("stealthkill"), TEXT("swinghit"), TEXT("meleeimpact"), TEXT("deathcaller"),
-		TEXT("removed"),
+		TEXT("removed"), TEXT("thinkfence"), TEXT("makerattempt"), // synchronous refusal tap 0x1034b580/0x101cc9e0
 		TEXT("script"),
+		TEXT("reload"),
 	};
 
 	enum class ENeed : uint8 { Optional, Required };
@@ -387,7 +389,7 @@ namespace ElysiumArenaScenarioParse
 			return ReadString(R, Object, TEXT("name"), Path, ENeed::Required, Out.Name);
 		}
 		if (!CheckFields(R, Object, Path,
-				{ TEXT("name"), TEXT("classname"), TEXT("at"), TEXT("face"), TEXT("body"), TEXT("keys") }))
+				{ TEXT("name"), TEXT("classname"), TEXT("at"), TEXT("face"), TEXT("body"), TEXT("keys"), TEXT("outputs") }))
 		{
 			return false;
 		}
@@ -399,6 +401,25 @@ namespace ElysiumArenaScenarioParse
 			|| !ReadKeys(R, Object, Path, Out.Keys))
 		{
 			return false;
+		}
+		const TArray<TSharedPtr<FJsonValue>>* Wires = nullptr;
+		if (!ReadArray(R, Object, TEXT("outputs"), Path, Wires)) return false;
+		for (int32 WireIndex = 0; Wires && WireIndex < Wires->Num(); ++WireIndex)
+		{
+			const FString WirePath = Field(Path, *Indexed(TEXT("outputs"), WireIndex));
+			TSharedPtr<FJsonObject> Wire;
+			FElysiumOutputDef& Output = Out.Outputs.AddDefaulted_GetRef();
+			if (!ElementObject(R, (*Wires)[WireIndex], WirePath, Wire)
+				|| !CheckFields(R, *Wire, WirePath, {TEXT("name"),TEXT("target"),TEXT("input"),TEXT("param"),TEXT("delay"),TEXT("times")})
+				|| !ReadString(R, *Wire, TEXT("name"), WirePath, ENeed::Required, Output.Name)
+				|| !ReadString(R, *Wire, TEXT("target"), WirePath, ENeed::Required, Output.Target)
+				|| !ReadString(R, *Wire, TEXT("input"), WirePath, ENeed::Required, Output.Input)
+				|| !ReadString(R, *Wire, TEXT("param"), WirePath, ENeed::Optional, Output.Param)) return false;
+			double Delay = 0.0, Times = -1.0; bool bValue = false;
+			if (!ReadNumber(R, *Wire, TEXT("delay"), WirePath, ENeed::Optional, Delay, bValue)
+				|| !ReadNumber(R, *Wire, TEXT("times"), WirePath, ENeed::Optional, Times, bValue)) return false;
+			if (Delay < 0 || Times < -1 || Times > MAX_int32 || Times != FMath::RoundToDouble(Times)) return R.Fail(WirePath, TEXT("nonnegative delay and integer times>=-1 required"));
+			Output.Delay = static_cast<float>(Delay); Output.Times = Times == 0.0 ? -1 : static_cast<int32>(Times); // retail authored zero means unlimited
 		}
 		if (!Out.At.bSet)
 		{
@@ -537,6 +558,7 @@ namespace ElysiumArenaScenarioParse
 			EElysiumArenaProbe::Wounds,
 			EElysiumArenaProbe::HealthCap,
 			EElysiumArenaProbe::NpcFlags1,
+			EElysiumArenaProbe::Witness,
 			EElysiumArenaProbe::SpawnFlags,
 			EElysiumArenaProbe::RenderAlpha,
 			EElysiumArenaProbe::RenderMode,
@@ -589,13 +611,44 @@ namespace ElysiumArenaScenarioParse
 			*Text));
 	}
 
+	// Harness field list, strictly typed; capture is later at 0x1027bc60, not parse time.
+	bool ReadWitnesses(FReader& R, const FJsonObject& Object, const FString& Path,
+		TArray<FElysiumArenaWitness>& Out)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Fields = nullptr;
+		if (!ReadArray(R, Object, TEXT("fields"), Path, Fields)) return false;
+		if (Fields == nullptr || Fields->IsEmpty()) return R.Fail(Path, TEXT("fields must be a nonempty typed witness list"));
+		TSet<FString> Seen;
+		for (int32 WitnessIndex = 0; WitnessIndex < Fields->Num(); ++WitnessIndex)
+		{
+			const FString WitnessPath = Field(Path, *Indexed(TEXT("fields"), WitnessIndex));
+			TSharedPtr<FJsonObject> Item;
+			FElysiumArenaWitness Word;
+			bool bTolerance = false;
+			FElysiumArenaValue::EType WordType;
+			if (!ElementObject(R, (*Fields)[WitnessIndex], WitnessPath, Item)
+				|| !CheckFields(R, *Item, WitnessPath, { TEXT("who"), TEXT("field"), TEXT("tolerance") })
+				|| !ReadString(R, *Item, TEXT("who"), WitnessPath, ENeed::Required, Word.Who)
+				|| !ReadString(R, *Item, TEXT("field"), WitnessPath, ENeed::Required, Word.Field)
+				|| !ReadNumber(R, *Item, TEXT("tolerance"), WitnessPath, ENeed::Optional, Word.Tolerance, bTolerance)) return false;
+			if (!ElysiumArenaScenario::WitnessType(Word.Field, WordType)) return R.Fail(WitnessPath, TEXT("unknown or excluded witness field"));
+			if (Word.Field == TEXT("world_generation") || Word.Field == TEXT("senses.pass") || Word.Field == TEXT("senses.sighted")) return R.Fail(WitnessPath, TEXT("epoch/pass/Sighted are transient literal probes, excluded from snapshot equality"));
+			if (bTolerance && WordType != FElysiumArenaValue::EType::Number) return R.Fail(WitnessPath, TEXT("tolerance requires a number"));
+			const FString Key = Word.Who + TEXT("\n") + Word.Field;
+			if (Seen.Contains(Key)) return R.Fail(WitnessPath, TEXT("duplicate witness"));
+			Seen.Add(Key);
+			Out.Add(MoveTemp(Word));
+		}
+		return true;
+	}
+
 	bool ReadProbe(FReader& R, const FJsonObject& Object, const FString& Path, double Duration,
 		FElysiumArenaProbeSpec& Out)
 	{
 		Out = FElysiumArenaProbeSpec();
 		if (!CheckFields(R, Object, Path, { TEXT("at"), TEXT("who"), TEXT("probe"), TEXT("equals"),
 				TEXT("match"), TEXT("less"), TEXT("greater"), TEXT("condition"), TEXT("to"),
-				TEXT("max_height") }))
+				TEXT("max_height"), TEXT("field"), TEXT("checkpoint"), TEXT("tolerance") }))
 		{
 			return false;
 		}
@@ -607,6 +660,12 @@ namespace ElysiumArenaScenarioParse
 		if ((*At)->Type == EJson::String && (*At)->AsString().Equals(TEXT("end"), ESearchCase::IgnoreCase))
 		{
 			Out.bAtEnd = true;
+		}
+		else if ((*At)->Type == EJson::String && ((*At)->AsString() == TEXT("pre_init")
+			|| (*At)->AsString() == TEXT("captured") || (*At)->AsString() == TEXT("applied") || (*At)->AsString() == TEXT("ready")))
+		{
+			Out.bAtEnd = false;
+			Out.Fence = (*At)->AsString();
 		}
 		else if ((*At)->Type == EJson::Number && (*At)->AsNumber() >= 0.0)
 		{
@@ -639,6 +698,28 @@ namespace ElysiumArenaScenarioParse
 				ElysiumArenaScenario::ProbeName(Out.Probe)));
 		}
 
+		// Saved-word equality is explicit and typed (0x1027bf50); no opaque byte comparison.
+		if (Out.Probe == EElysiumArenaProbe::Witness)
+		{
+			bool bTolerance = false;
+			FElysiumArenaValue::EType WordType;
+			if (!ReadString(R, Object, TEXT("field"), Path, ENeed::Required, Out.Field)
+				|| !ReadString(R, Object, TEXT("checkpoint"), Path, ENeed::Optional, Out.Checkpoint)
+				|| !ReadNumber(R, Object, TEXT("tolerance"), Path, ENeed::Optional, Out.Tolerance, bTolerance)) return false;
+			if (!ElysiumArenaScenario::WitnessType(Out.Field, WordType)) return R.Fail(Path, TEXT("unknown or excluded witness field"));
+			if (bTolerance && WordType != FElysiumArenaValue::EType::Number) return R.Fail(Path, TEXT("tolerance requires a number"));
+			if (!Out.Checkpoint.IsEmpty())
+			{
+				for (const TCHAR* Key : { TEXT("equals"), TEXT("match"), TEXT("less"), TEXT("greater") })
+					if (FindValue(Object, Key)) return R.Fail(Path, TEXT("checkpoint equality excludes literal comparisons"));
+				for (const TCHAR* Key : { TEXT("condition"), TEXT("to"), TEXT("max_height") })
+					if (FindValue(Object, Key)) return R.Fail(Path, TEXT("field is incompatible with witness"));
+				return true;
+			}
+		}
+		else if (FindValue(Object, TEXT("field")) || FindValue(Object, TEXT("checkpoint")) || FindValue(Object, TEXT("tolerance")))
+			return R.Fail(Path, TEXT("field/checkpoint/tolerance require witness"));
+
 		// Exactly one comparison.
 		const TCHAR* const Compares[] = { TEXT("equals"), TEXT("match"), TEXT("less"), TEXT("greater") };
 		const EElysiumArenaCompare CompareKinds[] =
@@ -668,6 +749,9 @@ namespace ElysiumArenaScenarioParse
 		FElysiumArenaValue::EType Answer = FElysiumArenaValue::EType::String;
 		switch (Out.Probe)
 		{
+		case EElysiumArenaProbe::Witness:
+			ElysiumArenaScenario::WitnessType(Out.Field, Answer);
+			break;
 		case EElysiumArenaProbe::Alive:
 		case EElysiumArenaProbe::HasCondition:
 		case EElysiumArenaProbe::OnGround:
@@ -764,7 +848,12 @@ namespace ElysiumArenaScenarioParse
 			EElysiumArenaAction::PlayerTeleport, EElysiumArenaAction::PlayerWalk, EElysiumArenaAction::Fire,
 			EElysiumArenaAction::Console, EElysiumArenaAction::Spawn, EElysiumArenaAction::Kill,
 			EElysiumArenaAction::PlayerCrouch, EElysiumArenaAction::LightPin, EElysiumArenaAction::DialogChoose, EElysiumArenaAction::SeedHealth,
-			EElysiumArenaAction::DamagePacket,
+			EElysiumArenaAction::DamagePacket, EElysiumArenaAction::Save, EElysiumArenaAction::Load,
+			EElysiumArenaAction::FreshMap, EElysiumArenaAction::Travel, EElysiumArenaAction::RestoreCompare,
+			EElysiumArenaAction::NpcSingleRoundFinishReload, EElysiumArenaAction::CorruptCheckpoint,
+			EElysiumArenaAction::InvalidMarker, EElysiumArenaAction::RestoreBase,
+			EElysiumArenaAction::NoRagdollDeath, EElysiumArenaAction::DamageMemory,
+			EElysiumArenaAction::ReserveSpot, EElysiumArenaAction::StartNpcGroundGate,
 		};
 		TArray<FString> Names;
 		for (const EElysiumArenaAction Action : All)
@@ -786,7 +875,8 @@ namespace ElysiumArenaScenarioParse
 		Out = FElysiumArenaAction();
 		if (!CheckFields(R, Object, Path, { TEXT("t"), TEXT("after"), TEXT("delay"), TEXT("do"), TEXT("at"),
 				TEXT("face"), TEXT("target"), TEXT("input"), TEXT("param"), TEXT("command"), TEXT("row"),
-				TEXT("on"), TEXT("value"), TEXT("index"), TEXT("end"), TEXT("attacker"), TEXT("activator") }))
+				TEXT("on"), TEXT("value"), TEXT("index"), TEXT("end"), TEXT("attacker"), TEXT("activator"), TEXT("inflictor"),
+				TEXT("slot"), TEXT("map"), TEXT("landmark"), TEXT("checkpoint"), TEXT("fields"), TEXT("control"), TEXT("timeout") }))
 		{
 			return false;
 		}
@@ -807,6 +897,33 @@ namespace ElysiumArenaScenarioParse
 		if (bDelay && Out.After.IsEmpty())
 		{
 			return R.Fail(Field(Path, TEXT("delay")), TEXT("`delay` counts from an `after` label's match"));
+		}
+		// No irrelevant transaction keys may be silently swallowed (0x20096010 harness schema).
+		TArray<FString> V6Allowed = { TEXT("t"), TEXT("after"), TEXT("delay"), TEXT("do") };
+		switch (Out.Do)
+		{
+		case EElysiumArenaAction::Save: V6Allowed.Append({ TEXT("slot"), TEXT("checkpoint"), TEXT("fields"), TEXT("timeout") }); break;
+		case EElysiumArenaAction::Load: V6Allowed.Append({ TEXT("slot"), TEXT("checkpoint"), TEXT("timeout") }); break;
+		case EElysiumArenaAction::FreshMap: V6Allowed.Add(TEXT("map")); break;
+		case EElysiumArenaAction::Travel: V6Allowed.Append({ TEXT("map"), TEXT("landmark") }); break;
+		case EElysiumArenaAction::RestoreCompare: V6Allowed.Append({ TEXT("checkpoint"), TEXT("fields") }); break;
+		case EElysiumArenaAction::CorruptCheckpoint: V6Allowed.Append({ TEXT("checkpoint"), TEXT("control") }); break;
+		case EElysiumArenaAction::RestoreBase: V6Allowed.Append({ TEXT("checkpoint"), TEXT("param") }); break;
+		case EElysiumArenaAction::NpcSingleRoundFinishReload:
+		case EElysiumArenaAction::InvalidMarker: V6Allowed.Append({ TEXT("target"), TEXT("control") }); break;
+		case EElysiumArenaAction::NoRagdollDeath: V6Allowed.Add(TEXT("target")); break;
+		case EElysiumArenaAction::DamageMemory: V6Allowed.Append({ TEXT("target"), TEXT("attacker"), TEXT("control"), TEXT("param"), TEXT("inflictor") }); break;
+		case EElysiumArenaAction::ReserveSpot: V6Allowed.Append({ TEXT("target"), TEXT("attacker"), TEXT("control") }); break;
+		case EElysiumArenaAction::StartNpcGroundGate: V6Allowed.Append({ TEXT("target"), TEXT("control") }); break;
+		default: break;
+		}
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : Object.Values)
+		{
+			if (Out.Do >= EElysiumArenaAction::Save && !V6Allowed.Contains(Pair.Key)) return R.Fail(Field(Path, *Pair.Key), TEXT("field is incompatible with this transaction/fixture"));
+			if (Out.Do < EElysiumArenaAction::Save)
+				for (const TCHAR* Key : { TEXT("slot"), TEXT("map"), TEXT("landmark"), TEXT("checkpoint"), TEXT("fields"), TEXT("control"), TEXT("timeout") })
+					if (Pair.Key == Key) return R.Fail(Field(Path, Key), TEXT("field requires a transaction/fixture"));
+			if (Pair.Key == TEXT("inflictor") && Out.Do != EElysiumArenaAction::DamagePacket && Out.Do != EElysiumArenaAction::DamageMemory) return R.Fail(Field(Path, TEXT("inflictor")), TEXT("inflictor requires scalar damage"));
 		}
 		// `value` may be a JSON null (the release), so its presence is read off the object itself.
 		const bool bHasValue = Object.Values.Contains(TEXT("value"));
@@ -832,6 +949,78 @@ namespace ElysiumArenaScenarioParse
 
 		switch (Out.Do)
 		{
+		// Transaction staging only; runtime fences are 0x200975f0/0x1011a620.
+		case EElysiumArenaAction::Save:
+		case EElysiumArenaAction::Load:
+		{
+			bool bTimeout = false;
+			if (!ReadString(R, Object, TEXT("slot"), Path, ENeed::Required, Out.Slot)
+				|| !ReadString(R, Object, TEXT("checkpoint"), Path, ENeed::Optional, Out.Checkpoint)
+				|| !ReadNumber(R, Object, TEXT("timeout"), Path, ENeed::Optional, Out.Timeout, bTimeout)) return false;
+			if (Out.Timeout <= 0.0 || Out.Timeout > 60.0) return R.Fail(Path, TEXT("timeout must be in (0,60] wall seconds"));
+			if (Out.Slot.Contains(TEXT("/")) || Out.Slot.Contains(TEXT("\\")) || Out.Slot.Contains(TEXT(".."))) return R.Fail(Path, TEXT("slot must be a plain slot name"));
+			if (Out.Do == EElysiumArenaAction::Save && !Out.Checkpoint.IsEmpty()) return ReadWitnesses(R, Object, Path, Out.Fields);
+			if (FindValue(Object, TEXT("fields"))) return R.Fail(Path, TEXT("fields require a save checkpoint"));
+			return true;
+		}
+		case EElysiumArenaAction::FreshMap:
+		case EElysiumArenaAction::Travel:
+		{
+			if (RowKind != ERowKind::MapCast) return R.Fail(Path, TEXT("map transaction requires a map host"));
+			if (!ReadString(R, Object, TEXT("map"), Path, ENeed::Required, Out.Map)) return false;
+			if (Out.Do == EElysiumArenaAction::Travel) return ReadString(R, Object, TEXT("landmark"), Path, ENeed::Optional, Out.Landmark);
+			return FindValue(Object, TEXT("landmark")) ? R.Fail(Path, TEXT("fresh_map takes no landmark")) : true;
+		}
+		case EElysiumArenaAction::RestoreCompare:
+			return ReadString(R, Object, TEXT("checkpoint"), Path, ENeed::Required, Out.Checkpoint)
+				&& ReadWitnesses(R, Object, Path, Out.Fields);
+		case EElysiumArenaAction::NpcSingleRoundFinishReload:
+		case EElysiumArenaAction::NoRagdollDeath:
+			if (RowKind == ERowKind::MapCast) return R.Fail(Path, TEXT("fixture requires Green Room"));
+			return ReadString(R, Object, TEXT("target"), Path, ENeed::Required, Out.Target);
+		case EElysiumArenaAction::InvalidMarker:
+			if (RowKind == ERowKind::MapCast) return R.Fail(Path, TEXT("fixture requires Green Room"));
+			if (!ReadString(R, Object, TEXT("target"), Path, ENeed::Required, Out.Target)
+				|| !ReadString(R, Object, TEXT("control"), Path, ENeed::Required, Out.Control)) return false;
+			return Out.Control == TEXT("missing_place") || Out.Control == TEXT("missing_occupant") || Out.Control == TEXT("valid")
+				? true : R.Fail(Path, TEXT("unknown marker control"));
+		case EElysiumArenaAction::CorruptCheckpoint:
+		case EElysiumArenaAction::RestoreBase:
+		{
+			if (RowKind == ERowKind::MapCast) return R.Fail(Path, TEXT("fixture requires Green Room"));
+			if (!ReadString(R, Object, TEXT("checkpoint"), Path, ENeed::Required, Out.Checkpoint)) return false;
+			if (Out.Do == EElysiumArenaAction::CorruptCheckpoint)
+			{
+				if (!ReadString(R, Object, TEXT("control"), Path, ENeed::Required, Out.Control)) return false;
+				return Out.Control == TEXT("crc") || Out.Control == TEXT("missing_cine") || Out.Control == TEXT("missing_target") || Out.Control == TEXT("missing_path")
+					? true : R.Fail(Path, TEXT("unknown checkpoint corruption"));
+			}
+			const TSharedPtr<FJsonValue>* Base = FindValue(Object, TEXT("param"));
+			return Base && ReadValue(R, *Base, Field(Path, TEXT("param")), Out.Param) && Out.Param.Type == FElysiumArenaValue::EType::Number
+				? true : R.Fail(Path, TEXT("restore_base requires numeric param"));
+		}
+		case EElysiumArenaAction::DamageMemory:
+		case EElysiumArenaAction::ReserveSpot:
+		case EElysiumArenaAction::StartNpcGroundGate:
+		{
+			if (RowKind == ERowKind::MapCast) return R.Fail(Path, TEXT("fixture requires Green Room"));
+			if (!ReadString(R, Object, TEXT("target"), Path, ENeed::Required, Out.Target)
+				|| !ReadString(R, Object, TEXT("control"), Path, ENeed::Required, Out.Control)) return false;
+			const bool bValid = Out.Do == EElysiumArenaAction::DamageMemory ? (Out.Control == TEXT("unknown_no_see") || Out.Control == TEXT("known") || Out.Control == TEXT("see_enemy"))
+				: Out.Do == EElysiumArenaAction::ReserveSpot ? (Out.Control == TEXT("full") || Out.Control == TEXT("occupied") || Out.Control == TEXT("exhausted_clearance") || Out.Control == TEXT("normal"))
+				: (Out.Control == TEXT("fly") || Out.Control == TEXT("swim") || Out.Control == TEXT("capability4") || Out.Control == TEXT("normal"));
+			if (!bValid) return R.Fail(Path, TEXT("unknown fixture control"));
+			if (Out.Do == EElysiumArenaAction::DamageMemory)
+			{
+				const TSharedPtr<FJsonValue>* Damage = FindValue(Object, TEXT("param"));
+				if (!Damage || !ReadValue(R, *Damage, Field(Path, TEXT("param")), Out.Param)
+					|| Out.Param.Type != FElysiumArenaValue::EType::Number || Out.Param.Number < 0.0)
+					return R.Fail(Path, TEXT("damage_memory requires nonnegative numeric param"));
+				if (!ReadString(R, Object, TEXT("inflictor"), Path, ENeed::Optional, Out.Inflictor)) return false;
+			}
+			return Out.Do == EElysiumArenaAction::StartNpcGroundGate
+				? true : ReadString(R, Object, TEXT("attacker"), Path, ENeed::Required, Out.Attacker);
+		}
 		case EElysiumArenaAction::PlayerTeleport:
 		case EElysiumArenaAction::PlayerWalk:
 			if (!ReadAt(R, Object, TEXT("at"), Path, Out.At) || !ReadFace(R, Object, Path, Out.Face))
@@ -867,9 +1056,10 @@ namespace ElysiumArenaScenarioParse
 		}
 		case EElysiumArenaAction::DamagePacket:
 		{
-			if (RowKind == ERowKind::MapCast) return R.Fail(Path, TEXT("damage_packet is an arena fixture action"));
 			if (!ReadString(R, Object, TEXT("target"), Path, ENeed::Required, Out.Target)
-				|| !ReadString(R, Object, TEXT("attacker"), Path, ENeed::Required, Out.Attacker)) return false;
+				|| !ReadString(R, Object, TEXT("attacker"), Path, ENeed::Optional, Out.Attacker)
+				|| !ReadString(R, Object, TEXT("inflictor"), Path, ENeed::Optional, Out.Inflictor)) return false;
+			if (Out.Attacker.IsEmpty()) Out.Attacker = TEXT("none"); // absent-attacker retail arm, 0x10265ed0
 			const TSharedPtr<FJsonValue>* PacketAmount = FindValue(Object, TEXT("param"));
 			if (!PacketAmount || !ReadValue(R, *PacketAmount, Field(Path, TEXT("param")), Out.Param)) return false;
 			return Out.Param.Type == FElysiumArenaValue::EType::Number && Out.Param.Number >= 0
@@ -881,10 +1071,6 @@ namespace ElysiumArenaScenarioParse
 			return ReadString(R, Object, TEXT("command"), Path, ENeed::Required, Out.Command);
 		case EElysiumArenaAction::Spawn:
 		{
-			if (RowKind == ERowKind::MapCast)
-			{
-				return R.Fail(Field(Path, TEXT("do")), TEXT("a map host spawns nothing; stage it in the arena"));
-			}
 			TSharedPtr<FJsonObject> Row;
 			if (!ReadObject(R, Object, TEXT("row"), Path, Row))
 			{
@@ -894,7 +1080,10 @@ namespace ElysiumArenaScenarioParse
 			{
 				return R.Fail(Field(Path, TEXT("row")), TEXT("required: the row to spawn"));
 			}
-			return ReadRow(R, *Row, Field(Path, TEXT("row")), ERowKind::ArenaRow, Out.Row);
+			if (!ReadRow(R, *Row, Field(Path, TEXT("row")), ERowKind::ArenaRow, Out.Row)) return false;
+			// Disposable map witness must state real coordinates; 0x101a2e40 factory chain.
+			return RowKind != ERowKind::MapCast || Out.Row.At.bCoordinates
+				? true : R.Fail(Path, TEXT("map spawn requires explicit coordinates"));
 		}
 		case EElysiumArenaAction::PlayerCrouch:
 			if (FindValue(Object, TEXT("on")) == nullptr)
@@ -1065,7 +1254,7 @@ namespace ElysiumArenaScenarioParse
 		if (!CheckFields(R, Root, FString(), { TEXT("name"), TEXT("about"), TEXT("stage"), TEXT("seed"),
 				TEXT("duration"), TEXT("known_red"), TEXT("expect_fail"), TEXT("shares_map"), TEXT("player"),
 				TEXT("cast"), TEXT("rows"), TEXT("from_map"), TEXT("script"), TEXT("expect"), TEXT("never"),
-				TEXT("probes"), TEXT("notes") }))
+				TEXT("probes"), TEXT("notes"), TEXT("initial_weapon_state") }))
 		{
 			return false;
 		}
@@ -1146,6 +1335,32 @@ namespace ElysiumArenaScenarioParse
 			if (Row.Name.IsEmpty())
 			{
 				return R.Fail(Field(Path, TEXT("name")), TEXT("required: a cast row is addressed by name"));
+			}
+		}
+
+		if (!ReadArray(R, Root, TEXT("initial_weapon_state"), FString(), Items)) return false;
+		if (Items && bMapHost) return R.Fail(TEXT("initial_weapon_state"), TEXT("explicit fixture requires Green Room"));
+		TSet<FString> FixtureNames;
+		for (int32 Index = 0; Items && Index < Items->Num(); ++Index)
+		{
+			const FString Path = Indexed(TEXT("initial_weapon_state"), Index);
+			TSharedPtr<FJsonObject> Item;
+			FElysiumArenaInitialWeaponState& Initial = Out.InitialWeaponState.AddDefaulted_GetRef();
+			if (!ElementObject(R, (*Items)[Index], Path, Item)
+				|| !CheckFields(R, *Item, Path, {TEXT("who"), TEXT("weapon"), TEXT("magazine"), TEXT("reserve"), TEXT("fake_reload_count")})
+				|| !ReadString(R, *Item, TEXT("who"), Path, ENeed::Required, Initial.Who)
+				|| !ReadString(R, *Item, TEXT("weapon"), Path, ENeed::Required, Initial.Weapon)) return false;
+			const FString Folded = Initial.Who.ToLower();
+			if (FixtureNames.Contains(Folded)) return R.Fail(Path, TEXT("duplicate weapon fixture actor"));
+			FixtureNames.Add(Folded);
+			for (const TCHAR* Key : {TEXT("magazine"), TEXT("reserve"), TEXT("fake_reload_count")})
+			{
+				double Number = 0.0; bool bPresent = false;
+				if (!ReadNumber(R, *Item, Key, Path, ENeed::Required, Number, bPresent)) return false;
+				if (Number < 0.0 || Number > MAX_int32 || Number != FMath::RoundToDouble(Number)) return R.Fail(Field(Path, Key), TEXT("nonnegative integer required"));
+				if (FCString::Strcmp(Key, TEXT("magazine")) == 0) Initial.Magazine = static_cast<int32>(Number);
+				else if (FCString::Strcmp(Key, TEXT("reserve")) == 0) Initial.Reserve = static_cast<int32>(Number);
+				else Initial.FakeReloadCount = static_cast<int32>(Number);
 			}
 		}
 
@@ -1262,6 +1477,8 @@ namespace ElysiumArenaScenarioParse
 				return false;
 			}
 			const FElysiumArenaAction& Action = Out.Script.Last();
+			if (Action.Do >= EElysiumArenaAction::Save && Action.bAtTime && Action.Time > Out.Duration)
+				return R.Fail(Field(Path, TEXT("t")), TEXT("transaction action is past duration"));
 			if (!Action.After.IsEmpty() && !Out.Expect.ContainsByPredicate([&Action](const FElysiumArenaMatch& M)
 				{ return M.Label.Equals(Action.After, ESearchCase::CaseSensitive); }))
 			{
@@ -1269,6 +1486,31 @@ namespace ElysiumArenaScenarioParse
 					TEXT("'%s' labels no expectation"), *Action.After));
 			}
 		}
+
+		// Checkpoint names are single-assignment and references must name a captured field (0x1027bf50).
+		TMap<FString, const FElysiumArenaAction*> Checkpoints;
+		for (const FElysiumArenaAction& Action : Out.Script)
+		{
+			if (Action.Do == EElysiumArenaAction::Save && !Action.Checkpoint.IsEmpty())
+			{
+				if (Checkpoints.Contains(Action.Checkpoint)) return R.Fail(TEXT("script"), TEXT("duplicate checkpoint"));
+				Checkpoints.Add(Action.Checkpoint, &Action);
+			}
+		}
+		auto HasSavedWord = [&Checkpoints](const FString& Name, const FString& Who, const FString& Word)
+		{
+			const FElysiumArenaAction* const* Saved = Checkpoints.Find(Name);
+			return Saved && (*Saved)->Fields.ContainsByPredicate([&](const FElysiumArenaWitness& Entry) { return Entry.Who == Who && Entry.Field == Word; });
+		};
+		for (const FElysiumArenaAction& Action : Out.Script)
+		{
+			if (Action.Do == EElysiumArenaAction::Save || Action.Checkpoint.IsEmpty()) continue;
+			if (!Checkpoints.Contains(Action.Checkpoint)) return R.Fail(TEXT("script"), TEXT("missing checkpoint"));
+			for (const FElysiumArenaWitness& Word : Action.Fields)
+				if (!HasSavedWord(Action.Checkpoint, Word.Who, Word.Field)) return R.Fail(TEXT("script"), TEXT("comparison field was not captured"));
+		}
+		for (const FElysiumArenaProbeSpec& Probe : Out.Probes)
+			if (!Probe.Checkpoint.IsEmpty() && !HasSavedWord(Probe.Checkpoint, Probe.Who, Probe.Field)) return R.Fail(TEXT("probes"), TEXT("missing checkpoint or uncaptured field"));
 
 		if (Out.Expect.IsEmpty() && Out.Never.IsEmpty() && Out.Probes.IsEmpty())
 		{
@@ -1361,6 +1603,107 @@ void LoadAll(TArray<FElysiumArenaScenario>& Out, TArray<FString>& OutErrors)
 	Out.Sort([](const FElysiumArenaScenario& A, const FElysiumArenaScenario& B) { return A.Name < B.Name; });
 }
 
+
+// Typed harness vocabulary for the retained retail words; 0x1027bf50/0x102998c0/0x102d9240/0x10265ed0/0x10255077.
+bool WitnessType(const FString& Field, FElysiumArenaValue::EType& Out)
+{
+	for (const TCHAR* Name : {
+		TEXT("clock"), TEXT("world_generation"), TEXT("task.id"), TEXT("life.state"), TEXT("render.alpha"), TEXT("solid.type"), TEXT("solid.flags"), TEXT("effects"), TEXT("outputs.remaining"), TEXT("weapon.clip"), TEXT("weapon.reserve"), TEXT("floor_drop.performed"), TEXT("floor_drop.skipped"),
+		TEXT("task.index"), TEXT("task.status"), TEXT("task.failure"),
+		TEXT("task.started"), TEXT("task.task_started"), TEXT("task.wait"),
+		TEXT("task.move_wait"), TEXT("think.next"), TEXT("anim.sequence"),
+		TEXT("anim.cycle"), TEXT("anim.rate"), TEXT("anim.time"),
+		TEXT("anim.previous_time"), TEXT("anim.last_event"), TEXT("anim.ground_speed"),
+		TEXT("anim.yaw_speed"), TEXT("move_shoot.next"), TEXT("move_shoot.burst"),
+		TEXT("move_shoot.min_burst"), TEXT("move_shoot.max_burst"), TEXT("move_shoot.pause_min"),
+		TEXT("move_shoot.pause_max"), TEXT("move_shoot.initial_delay"), TEXT("weapon.next_primary"),
+		TEXT("weapon.next_secondary"), TEXT("weapon.idle"), TEXT("nav.type"),
+		TEXT("nav.flags"), TEXT("nav.arrival"), TEXT("nav.retry_interval"),
+		TEXT("nav.retry_duration"), TEXT("nav.retry_next"), TEXT("nav.timeout"),
+		TEXT("memory.last_seen"), TEXT("damage.sum"), TEXT("damage.time"),
+		TEXT("place.capacity"), TEXT("place.count"), TEXT("place.failed_attempts"),
+		TEXT("place.in_use"), TEXT("place.ring_index"), TEXT("place.reservations"),
+		TEXT("place.releases"), TEXT("senses.pass"), TEXT("los.cache"),
+		TEXT("los.last_clear"), TEXT("coordinator.normal.count"), TEXT("coordinator.player.count"),
+		TEXT("coordinator.boss.count"), TEXT("coordinator.normal.cap"), TEXT("coordinator.player.cap"),
+		TEXT("coordinator.boss.cap")
+	})
+		if (Field == Name) { Out = FElysiumArenaValue::EType::Number; return true; }
+	for (const TCHAR* Name : {
+		TEXT("hidden"), TEXT("life.dead"), TEXT("anim.finished"), TEXT("anim.past_half"),
+		TEXT("move_shoot.active"), TEXT("weapon.reload"), TEXT("weapon.jam"),
+		TEXT("weapon.interrupt"), TEXT("senses.can_sense"), TEXT("senses.gathered"),
+		TEXT("dialog.open"), TEXT("dialog.partner_live"), TEXT("los.player"),
+		TEXT("los.pvs")
+	})
+		if (Field == Name) { Out = FElysiumArenaValue::EType::Bool; return true; }
+	for (const TCHAR* Name : {
+		TEXT("map"), TEXT("identity"), TEXT("callback"),
+		TEXT("callback.saved"), TEXT("script.owner"), TEXT("weapon.owner"),
+		TEXT("nav.target"), TEXT("memory.enemy"), TEXT("damage.attacker"),
+		TEXT("place.identity"), TEXT("senses.sighted"), TEXT("dialog.partner"),
+		TEXT("coordinator.normal.members"), TEXT("coordinator.player.members"), TEXT("coordinator.boss.members")
+	})
+		if (Field == Name) { Out = FElysiumArenaValue::EType::String; return true; }
+	for (const TCHAR* Prefix : { TEXT("origin"), TEXT("nav.goal"), TEXT("memory.position"), TEXT("damage.position"), TEXT("place.destination"), TEXT("place.bounds_min"), TEXT("place.bounds_max") })
+		for (const TCHAR* Axis : { TEXT("x"), TEXT("y"), TEXT("z") })
+			if (Field == FString(Prefix) + TEXT(".") + Axis) { Out = FElysiumArenaValue::EType::Number; return true; }
+	for (int32 LayerIndex = 0; LayerIndex < 4; ++LayerIndex)
+	{
+		const FString Prefix = FString::Printf(TEXT("layer.%d."), LayerIndex);
+		for (const TCHAR* Word : { TEXT("finished"), TEXT("flags"), TEXT("sequence"), TEXT("cycle"), TEXT("rate"), TEXT("weight"), TEXT("weight_max"), TEXT("blend_in"), TEXT("blend_out"), TEXT("activity"), TEXT("last_event") })
+			if (Field == Prefix + Word) { Out = FElysiumArenaValue::EType::Number; return true; }
+		if (Field == Prefix + TEXT("auto_kill")) { Out = FElysiumArenaValue::EType::Bool; return true; }
+		const FString Ring = FString::Printf(TEXT("place.ring.%d."), LayerIndex);
+		if (Field == Ring + TEXT("time")) { Out = FElysiumArenaValue::EType::Number; return true; }
+		for (const TCHAR* Bound : { TEXT("min"), TEXT("max") })
+			for (const TCHAR* Axis : { TEXT("x"), TEXT("y"), TEXT("z") })
+				if (Field == Ring + Bound + TEXT(".") + Axis) { Out = FElysiumArenaValue::EType::Number; return true; }
+	}
+	// Variable marker rows retain identity + both absolute bounds (0x102d9240).
+	TArray<FString> Parts;
+	Field.ParseIntoArray(Parts, TEXT("."));
+	if (Parts.Num() >= 4 && Parts[0] == TEXT("place") && Parts[1] == TEXT("marker") && Parts[2].IsNumeric() && Parts[2] == LexToString(FCString::Atoi(*Parts[2])) && FCString::Atoi(*Parts[2]) >= 0)
+	{
+		if (Parts.Num() == 4 && Parts[3] == TEXT("occupant")) { Out = FElysiumArenaValue::EType::String; return true; }
+		if (Parts.Num() == 5 && (Parts[3] == TEXT("min") || Parts[3] == TEXT("max")) && (Parts[4] == TEXT("x") || Parts[4] == TEXT("y") || Parts[4] == TEXT("z")))
+		{ Out = FElysiumArenaValue::EType::Number; return true; }
+	}
+	return false;
+}
+
+FElysiumArenaValue RebaseWitness(const FString& Field, const FElysiumArenaValue& Saved, double SaveBase, double RestoreBase)
+{
+	FElysiumArenaValue Expected = Saved;
+	if (Saved.Type != FElysiumArenaValue::EType::Number) return Expected;
+	EElysiumTimePolicy Policy = EElysiumTimePolicy::Ordinary;
+	bool bTime = Field == TEXT("clock") || Field == TEXT("task.started") || Field == TEXT("task.task_started")
+		|| Field == TEXT("task.move_wait") || Field == TEXT("nav.retry_next") || Field == TEXT("nav.timeout") || Field == TEXT("anim.time") || Field == TEXT("anim.previous_time")
+		|| Field == TEXT("anim.last_event") || Field == TEXT("memory.last_seen") || Field == TEXT("damage.time") || Field == TEXT("weapon.idle");
+	if (Field == TEXT("task.wait")) { bTime = true; Policy = EElysiumTimePolicy::Zero; }
+	if (Field == TEXT("move_shoot.next")) { bTime = true; Policy = EElysiumTimePolicy::MaxFloat; }
+	if (Field == TEXT("think.next"))
+	{
+		// Entity NextThinkSR's exceptional negative/zero/never encoding is separate (0x100aa140).
+		bTime = Saved.Number > 0.0 && Saved.Number != static_cast<double>(MAX_flt);
+	}
+	// Layer cursor/next weapon attacks and LOS FLOAT words do not shift with the save epoch.
+	if (bTime) Expected.Number = FElysiumSaveArchive::DecodeTime(FElysiumSaveArchive::EncodeTime(Saved.Number, SaveBase, Policy), RestoreBase, Policy);
+	return Expected;
+}
+
+bool WitnessEqual(const FElysiumArenaValue& Saved, const FElysiumArenaValue& Applied, double Tolerance)
+{
+	if (Saved.Type != Applied.Type) return false;
+	switch (Saved.Type)
+	{
+	case FElysiumArenaValue::EType::Number: return FMath::IsFinite(Saved.Number) && FMath::IsFinite(Applied.Number) && FMath::Abs(Saved.Number - Applied.Number) <= Tolerance;
+	case FElysiumArenaValue::EType::Bool: return Saved.bBool == Applied.bBool;
+	case FElysiumArenaValue::EType::String: return Saved.String.Equals(Applied.String, ESearchCase::CaseSensitive);
+	default: return false;
+	}
+}
+
 const TCHAR* ActionName(EElysiumArenaAction Action)
 {
 	switch (Action)
@@ -1376,6 +1719,19 @@ const TCHAR* ActionName(EElysiumArenaAction Action)
 	case EElysiumArenaAction::DialogChoose:   return TEXT("dialog_choose");
 	case EElysiumArenaAction::SeedHealth: return TEXT("seed_health");
 	case EElysiumArenaAction::DamagePacket: return TEXT("damage_packet");
+	case EElysiumArenaAction::Save: return TEXT("save");
+	case EElysiumArenaAction::Load: return TEXT("load");
+	case EElysiumArenaAction::FreshMap: return TEXT("fresh_map");
+	case EElysiumArenaAction::Travel: return TEXT("travel");
+	case EElysiumArenaAction::RestoreCompare: return TEXT("restore_compare");
+	case EElysiumArenaAction::NpcSingleRoundFinishReload: return TEXT("npc_single_round_finish_reload");
+	case EElysiumArenaAction::CorruptCheckpoint: return TEXT("corrupt_checkpoint");
+	case EElysiumArenaAction::InvalidMarker: return TEXT("invalid_marker");
+	case EElysiumArenaAction::RestoreBase: return TEXT("restore_base");
+	case EElysiumArenaAction::NoRagdollDeath: return TEXT("no_ragdoll_death");
+	case EElysiumArenaAction::DamageMemory: return TEXT("damage_memory");
+	case EElysiumArenaAction::ReserveSpot: return TEXT("reserve_spot");
+	case EElysiumArenaAction::StartNpcGroundGate: return TEXT("startnpc_ground_gate");
 	default:                                 return TEXT("?");
 	}
 }
@@ -1400,6 +1756,7 @@ const TCHAR* ProbeName(EElysiumArenaProbe Probe)
 	case EElysiumArenaProbe::Wounds: return TEXT("wounds");
 	case EElysiumArenaProbe::HealthCap: return TEXT("health_cap");
 	case EElysiumArenaProbe::NpcFlags1: return TEXT("npc_flags1");
+	case EElysiumArenaProbe::Witness: return TEXT("witness");
 	case EElysiumArenaProbe::SpawnFlags: return TEXT("spawn_flags");
 	case EElysiumArenaProbe::RenderAlpha: return TEXT("render_alpha");
 	case EElysiumArenaProbe::RenderMode: return TEXT("render_mode");

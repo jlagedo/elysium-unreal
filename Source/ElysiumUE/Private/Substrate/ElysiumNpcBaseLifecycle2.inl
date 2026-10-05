@@ -25,7 +25,7 @@ static constexpr int32 NpcInitCollisionMask = 0x0202400b;
 
 static constexpr int32 NpcInitAddFlags = 0x12000;
 
-static constexpr int32 RestoreTaskIndexCeiling = 0x29;
+static constexpr int32 RestoreFailureReasonCeiling = 0x29;
 
 static constexpr uint32 CapabilityNoFloorDrop = 4u;
 

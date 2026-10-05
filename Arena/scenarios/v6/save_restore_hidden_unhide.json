@@ -1,0 +1,180 @@
+{
+  "name": "save_restore_hidden_unhide",
+  "about": "Born-hidden NULL callback and saved callback/physical words survive save/apply before real unhide: 0x100a8710/0x100a8990/0x102998c0.",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 20,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sp_tutorial_1"
+    },
+    {
+      "after": "fresh_ready",
+      "do": "player_teleport",
+      "at": [
+        -4180,
+        -1196.34,
+        0
+      ],
+      "face": "thug_3"
+    },
+    {
+      "t": 2,
+      "do": "save",
+      "slot": "save_restore_hidden_unhide",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "thug_3",
+          "field": "callback"
+        },
+        {
+          "who": "thug_3",
+          "field": "hidden"
+        },
+        {
+          "who": "thug_3",
+          "field": "callback.saved"
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "save_restore_hidden_unhide",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "thug_3",
+          "field": "callback"
+        },
+        {
+          "who": "thug_3",
+          "field": "hidden"
+        },
+        {
+          "who": "thug_3",
+          "field": "callback.saved"
+        }
+      ]
+    },
+    {
+      "after": "ready",
+      "delay": 0.1,
+      "do": "fire",
+      "target": "thug_3",
+      "input": "ScriptUnhide"
+    }
+  ],
+  "expect": [
+    {
+      "label": "fresh_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "unhidden",
+      "who": "thug_3",
+      "kind": "input",
+      "match": "ScriptUnhide",
+      "within": 3
+    },
+    {
+      "label": "sees",
+      "who": "thug_3",
+      "kind": "cond+",
+      "match": "SEE_ENEMY (0x46)",
+      "within": 3
+    },
+    {
+      "label": "fights",
+      "who": "thug_3",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_START_COMBAT (",
+      "within": 2
+    },
+    {
+      "label": "fires",
+      "who": "thug_3",
+      "kind": "task",
+      "match": "task_range_attack1 (",
+      "within": 6
+    }
+  ],
+  "never": [
+    {
+      "who": "thug_3",
+      "kind": "schedule",
+      "until": 1.9
+    },
+    {
+      "who": "thug_3",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": 5,
+      "who": "thug_3",
+      "probe": "on_ground",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "thug_3",
+      "probe": "alive",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "thug_3",
+      "probe": "witness",
+      "field": "think.next",
+      "equals": 3.4028234663852886e+38
+    }
+  ],
+  "shares_map": true,
+  "cast": [
+    {
+      "name": "thug_3"
+    }
+  ],
+  "notes": "Native network slot584 can write a deadline even with NULL callback while hidden; native0x102998c0 hidden restore tail writes NULL/FLT_MAX later. Compare the retained callback/hidden words and assert that authoritative later deadline."
+}

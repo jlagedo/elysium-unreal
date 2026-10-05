@@ -97,7 +97,8 @@ def test_discovery_without_records_is_a_usage_error(tmp_path: Path) -> None:
 def test_selection_keeps_discovery_order_and_refuses_an_unknown_name() -> None:
     records = [_record("a"), _record("b"), _record("c")]
     assert [r.name for r in arena_suite.select_records(records, [])] == ["a", "b", "c"]
-    assert [r.name for r in arena_suite.select_records(records, ["c", "a"])] == ["a", "c"]
+    assert [r.name for r in arena_suite.select_records(records, ["c", "a"])] == ["c", "a"]
+    assert [r.name for r in arena_suite.select_records(records, ["c", "a", "c"])] == ["c", "a"]
     with pytest.raises(ArenaError, match="'nope'"):
         arena_suite.select_records(records, ["a", "nope"])
 

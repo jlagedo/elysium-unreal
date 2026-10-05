@@ -699,8 +699,9 @@ tests the green scenarios cover deleted.
   combat-and-damage.md. Presence producer is 0006; retained NPC single-round
   bInReload persistence is V6. Four builds used; no modernization.
 - [ ] **V6. Fix: session, clock and lifecycle.** (Was C4.) Per-level `curtime`; `map_load` tearing
-  the entity world down first; `elysium.load <slot>`; resume at the task cursor `+0x5c50` with the
-  animating words (the divergence closed); `ScriptUnhide`'s ground snap; `SetRelationship` into
+  the entity world down first; `elysium.load <slot>`; resume at INT task cursor `+0x5c40`/status `+0x5c44` (failure clamp `+0x5c50`);
+  retained native words and explicit presentation-source refusal; `ScriptUnhide` due-now callback,
+  StartNPC ground drop and normal STEP physics; `SetRelationship` into
   `Sighted()`; perception during a dialogue; `OnTakeDamage_Alive 0x10265ed0`'s last-damage record.
   Detail: draft § C4. *Scenarios:* hidden-then-unhidden, relationship-flip, save-mid-schedule.
   *Size:* M. *Model:* Opus/high.

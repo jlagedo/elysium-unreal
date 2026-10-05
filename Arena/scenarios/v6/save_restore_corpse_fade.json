@@ -1,0 +1,207 @@
+{
+  "name": "save_restore_corpse_fade",
+  "about": "V6 logical corpse callback continuation through common codec/apply, no replay: 0x1032c0e0/0x102696f0/0x10269960. A maker's fading child fades out and is removed about 13.8 s after its death, seen or not. sp_tutorial_1's stealth_victim_maker verbatim (npc_maker, NPCType npc_VVampire, NPCTargetname stealth_victim, Flag_InfChild 1 -> m_bFade, so CNPCMaker::MakeNPC 0x1034b7b0 gives the child spawnflags 0x204), sent Spawn (the map's own wire, logic_jack_melee_room) at 1 s; the child is killed by TakeDamage 10000 and the player WATCHES it. Event_Killed's step 14, after slot 301: slot 552 ShouldFadeOnDeath (spawnflag bit 9) -> SUB_StartFadeOut 0x102695d0 (first think at curtime + 10.0) -> SUB_FadeOut 0x10269960: alpha -7 per 0.1 s from 255 (36 steps), then alpha 0 and SUB_Remove after 0.2 s -- gone about 13.8 s after the death. The child is Kindred, so CreateCorpse's burn arm also arms SUB_Remove at + 10 s; the fade's later ThinkSet replaces it (the later think wins: stories/v4/packets-S4.md, the fade; stories/v1/triage.md, Judge's rulings, V4 -- second sitting, J14.1). No `removed` through death + 13 s; one by death + 14.5 s.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 22.0,
+  "player": {
+    "at": "start",
+    "face": "east"
+  },
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "stealth_victim_maker"
+    ],
+    "anchor": "stealth_victim_maker",
+    "at": "east"
+  },
+  "script": [
+    {
+      "t": 1.0,
+      "do": "fire",
+      "target": "stealth_victim_maker",
+      "input": "Spawn"
+    },
+    {
+      "after": "child",
+      "delay": 2.0,
+      "do": "fire",
+      "target": "stealth_victim",
+      "input": "TakeDamage",
+      "param": 10000
+    },
+    {
+      "after": "fade_tick",
+      "delay": 0,
+      "do": "save",
+      "slot": "save_restore_corpse_fade",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "stealth_victim",
+          "field": "callback"
+        },
+        {
+          "who": "stealth_victim",
+          "field": "think.next",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "stealth_victim",
+          "field": "hidden"
+        },
+        {
+          "who": "stealth_victim",
+          "field": "render.alpha"
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "save_restore_corpse_fade",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "stealth_victim",
+          "field": "callback"
+        },
+        {
+          "who": "stealth_victim",
+          "field": "think.next",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "stealth_victim",
+          "field": "hidden"
+        },
+        {
+          "who": "stealth_victim",
+          "field": "render.alpha"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "label": "spawned",
+      "who": "stealth_victim_maker",
+      "kind": "output",
+      "match": "OnSpawnNPC",
+      "by": 2.0
+    },
+    {
+      "label": "child",
+      "who": "stealth_victim",
+      "kind": "schedule",
+      "match": "",
+      "within": 2.0
+    },
+    {
+      "label": "dies",
+      "who": "stealth_victim",
+      "kind": "death",
+      "match": "",
+      "within": 3.0
+    },
+    {
+      "label": "still_there",
+      "who": "stealth_victim",
+      "kind": "corpse",
+      "match": "",
+      "within": 1.0
+    },
+    {
+      "label": "fade_tick",
+      "who": "stealth_victim",
+      "kind": "script",
+      "match": "fade alpha=248",
+      "within": 10.2
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "gone",
+      "who": "stealth_victim",
+      "kind": "removed",
+      "match": "",
+      "within": 14.5
+    }
+  ],
+  "never": [
+    {
+      "who": "stealth_victim",
+      "kind": "removed",
+      "after": "dies",
+      "within": 13
+    },
+    {
+      "who": "stealth_victim",
+      "kind": "death",
+      "after": "applied"
+    },
+    {
+      "who": "stealth_victim",
+      "kind": "corpse",
+      "after": "applied"
+    },
+    {
+      "who": "stealth_victim",
+      "kind": "schedule",
+      "after": "applied"
+    }
+  ],
+  "notes": "Capture after the actual first seven-unit decrement0x10269960, not an invented fade-start event. Alpha/deadline equality uses common apply; later network-init slot584 writes win.",
+  "probes": [
+    {
+      "at": 2.5,
+      "who": "stealth_victim",
+      "probe": "spawn_flags",
+      "equals": 516
+    },
+    {
+      "at": 2.5,
+      "who": "stealth_victim",
+      "probe": "render_alpha",
+      "equals": 255
+    },
+    {
+      "at": 2.5,
+      "who": "stealth_victim",
+      "probe": "render_mode",
+      "equals": 0
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "name": "persistence_refused_save",
+  "about": "An actual feed grapple blocks CanSave0x10174f80. Refusal must be real, with no Written/Applied fence.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 25.0,
+  "player": {
+    "at": [
+      0.0,
+      905.0,
+      0.0
+    ],
+    "face": "east"
+  },
+  "cast": [
+    {
+      "name": "arena_vessel",
+      "classname": "npc_VHumanCombatant",
+      "at": "east",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "player_reaction": "D_NU 5",
+        "npc_perception": "3",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "script": [
+    {
+      "t": 2.0,
+      "do": "console",
+      "command": "elysium.cmd +feed"
+    },
+    {
+      "t": 2.1,
+      "do": "console",
+      "command": "elysium.cmd -feed"
+    },
+    {
+      "t": 3.3,
+      "do": "console",
+      "command": "elysium.cmd +feed"
+    },
+    {
+      "t": 3.4,
+      "do": "console",
+      "command": "elysium.cmd -feed"
+    },
+    {
+      "after": "grapples",
+      "delay": 0.1,
+      "do": "save",
+      "slot": "refused"
+    }
+  ],
+  "expect": [
+    {
+      "label": "idles",
+      "who": "arena_vessel",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_IDLE_DISPOSITION (",
+      "by": 1.5
+    },
+    {
+      "label": "grapples",
+      "who": "arena_vessel",
+      "kind": "output",
+      "match": "OnGrappleBegin",
+      "by": 2.5
+    },
+    {
+      "label": "entranced",
+      "who": "arena_vessel",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_MESMERIZED (0xfb)",
+      "by": 8.0
+    },
+    {
+      "label": "oblivious",
+      "who": "arena_vessel",
+      "kind": "task",
+      "match": "task_make_oblivious (",
+      "within": 5.0
+    },
+    {
+      "label": "holds",
+      "who": "arena_vessel",
+      "kind": "task",
+      "match": "task_wait (",
+      "within": 2.0
+    }
+  ],
+  "never": [
+    {
+      "kind": "script",
+      "match": "fence=2"
+    },
+    {
+      "kind": "script",
+      "match": "fence=3"
+    }
+  ],
+  "notes": "V11 (packets-S10, the grapple's activity words): `grapples` and the idle-sequence never were added. SetGrappleActivity 0x1032a100 makes each feed clip the victim's own sequence with m_Activity a grapple cell, so RunAnimation 0x1026c540's idle re-pick is off for the whole grapple, and LeaveGrappleState 0x10329a70 writes no animation word: no idle row may be committed between OnGrappleBegin and the leave. `until` takes seconds, not a label: 5.6 s stands for the leave (OnGrappleEnd measured 5.667 at seed 1).",
+  "probes": [
+    {
+      "at": "end",
+      "who": "arena_vessel",
+      "probe": "schedule",
+      "equals": "SCHED_TROIKA_MESMERIZED"
+    },
+    {
+      "at": "end",
+      "who": "arena_vessel",
+      "probe": "alive",
+      "equals": true
+    }
+  ],
+  "expect_fail": true
+}

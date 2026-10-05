@@ -453,7 +453,7 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 		{ TEXT("npc_VTzimisce"), TEXT("m_ePathMode"), EDerived::Zero,
 		  TEXT("cleared by the Tzimisce's slot 435 `0x103bf630` on the restart") },
 		{ TEXT("npc_VDialogPedestrian"), TEXT("m_bFirstThink"), EDerived::False,
-		  TEXT("`CNPC_VPedestrian::OnRestore` `0x103a25a0` re-runs `NPCInit` `0x103a2570` on a load") },
+		  TEXT("`CNPC_VPedestrian::OnRestore` `0x103a25a0` re-runs `NPCInit` on level transition (0x1011a710 flag), not ordinary load") },
 		// 0019/6 (lane P): the boss line's `Restore` twins moved to `OnPostRestore` -- the model name and
 		// the four emitter names (+0x6680, +0x6684..+0x6690) are reset to the class constants on every load,
 		// and Asian / Chang / Sheriff re-seed the jump gravity (+0x64b8). A stamped value cannot survive.
@@ -648,8 +648,8 @@ bool FElysiumNpcKernelSpeciesBindingsSaveRoundTripTest::RunTest(const FString&)
 
 	FElysiumMapSnapshot Snapshot;
 	F.World.Freeze(Snapshot);
-	FElysiumNpcWorldFixture G(Build());
-	TestTrue(TEXT("the snapshot applies"), G.World.ApplySnapshot(Snapshot) > 0);
+	FElysiumNpcWorldFixture G(Build(), true);
+	TestTrue(TEXT("the transition snapshot applies"), G.World.ApplySnapshot(Snapshot, Snapshot.SaveBase, true) > 0);
 	FElysiumNpc* RestoredOther = G.Npc(TEXT("other"));
 	FElysiumNpc* RestoredTroika = G.Npc(TEXT("troika"));
 	if (!TestNotNull(TEXT("the witness restores"), RestoredOther) || !TestNotNull(TEXT("the Troika NPC restores"), RestoredTroika))

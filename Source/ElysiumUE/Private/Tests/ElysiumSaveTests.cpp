@@ -380,7 +380,7 @@ bool FElysiumSaveRoundTripTest::RunTest(const FString&)
 	AddExpectedError(TEXT("was frozen against 3 defs, this build parsed 2"),
 		EAutomationExpectedErrorFlags::Contains, 1);
 	TestEqual(TEXT("a snapshot frozen against another def array applies nothing"),
-		D.ApplySnapshot(First), 0);
+		D.ApplySnapshot(First), INDEX_NONE);
 	D.Activate(0.0);
 	TestEqual(TEXT("and the counter keeps the value its fresh build gave it"),
 		SaveTestCounterValue(D.FindByName(TEXT("counter1"))), 0.0f);
@@ -433,8 +433,7 @@ bool FElysiumOutputCardinalityMismatchTest::RunTest(const FString&)
 	GrownRelay->Outputs.Add(SecondWire);
 
 	FElysiumEntityWorld B(/*Owner*/ nullptr, /*GameState*/ nullptr);
-	B.Load(MoveTemp(GrownDefs));
-	B.Activate(0.0);
+	B.Load(MoveTemp(GrownDefs)); // 0x101a2e40 restore into inactive reconstruction
 	FElysiumEntity* RelayB = B.FindByName(TEXT("relay1"));
 	if (!TestNotNull(TEXT("relay1 in the grown build"), RelayB))
 	{
@@ -668,8 +667,8 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `NpcAmbientExecutorRetired` (0002 V3b) took the ambient executor's two timers out of the middle
 	// of the NPC's patrol block, which moved it again. `NpcMindOwnerRetired` (0002 V3d) took the
 	// body-owner byte out of the NPC's mind block, which moved it once more.
-	TestEqual(TEXT("the floor is the mind-owner-retired schema"),
-		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::NpcMindOwnerRetired);
+	TestEqual(TEXT("the floor is the map TIME-context schema"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::MapTimeContext);
 	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
 	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
 	// being refused, and the floor stays where the last breaking schema left it.
@@ -752,7 +751,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `m_hTargetEnt` to the END of the NPC leaf behind its own version. Additive: a `SeeUnknownSweep`
 	// payload restores a sweep due at once and no target, the spawn defaults.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcMindOwnerRetired);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::MapTimeContext);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
@@ -1015,7 +1014,7 @@ bool FElysiumSaveSchemaTest::RunTest(const FString&)
 	Defs2.Defs.Add(MoveTemp(Counter2));
 	FElysiumEntityWorld Other(/*Owner*/ nullptr, /*GameState*/ nullptr);
 	Other.Load(MoveTemp(Defs2));
-	TestEqual(TEXT("the mismatched record is skipped"), Other.ApplySnapshot(Wrong), 0);
+	TestEqual(TEXT("the mismatched record is skipped"), Other.ApplySnapshot(Wrong), INDEX_NONE);
 	Other.Activate(0.0);
 	TestEqual(TEXT("and nothing was written"),
 		SaveTestCounterValue(Other.FindByName(TEXT("counter1"))), 0.0f);

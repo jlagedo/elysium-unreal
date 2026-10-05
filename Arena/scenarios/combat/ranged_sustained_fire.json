@@ -100,6 +100,13 @@
       "within": 8.0
     },
     {
+      "label": "fake_reload",
+      "who": "arena_shooter",
+      "kind": "sequence",
+      "match": "Pistol_Reload_Fast rate=1",
+      "within": 8
+    },
+    {
       "label": "shot_7",
       "who": "arena_shooter",
       "kind": "animevent",
@@ -145,5 +152,5 @@
       "equals": true
     }
   ],
-  "notes": "ShotFromAnimEvent -> CommitQueuedAttack (0x10238160 -> 0x102387b0) commits NPC event bullets; ordinary Shot spends only for players (0x10238a15). MakePlayerUnkillable at 0.05 keeps the target alive. Seed 1: shot six 16.500, 0xc4 19.500, no-cover 0xc5 19.600, Pistol_Reload_Fast finishes 22.100, taskdone and shot seven 22.200. The measured 5.700 s gap includes the last wait and fake reload; shot_7 uses 6.0 s. Other 8.0 s shot windows retain the range-scaled wait evidence. BEHIND_ENEMY stays forbidden (slot 363 V5a/A3)."
+  "notes": "ShotFromAnimEvent -> CommitQueuedAttack (0x10238160 -> 0x102387b0) commits NPC event bullets; ordinary Shot spends only for players (0x10238a15). MakePlayerUnkillable at 0.05 keeps the target alive. Seed 1: shot six 16.500, 0xc4 19.500, no-cover 0xc5 19.600, Pistol_Reload_Fast finishes 22.100, taskdone and shot seven 22.200. The measured 5.700 s gap includes the last wait and fake reload; shot_7 uses 6.0 s. Other 8.0 s shot windows retain the range-scaled wait evidence. BEHIND_ENEMY stays forbidden (slot 363 V5a/A3). V6 epoch1 measurement: sixth shot12.150, wait ends16.550, c5 reload begins16.650. The seed-specific6s last-shot gap mixed the preceding attack wait with reload. Keep the6s continuation bound anchored to the actual reload clip; the preceding8s attack-wait bound stays explicit (0x102b8620/0x102c54c0)."
 }

@@ -1,0 +1,1223 @@
+{
+  "status": "not green; not committed",
+  "baseline_commit": "9e29f419",
+  "builds_used": 10,
+  "successful_binary_build": 9,
+  "last_build_error": "ElysiumNpcLifecycle2.cpp:523 FElysiumClassDesc incomplete in diagnostic; include corrected after cap, not rebuilt",
+  "default": {
+    "pass_count": 169,
+    "fail_count": 0
+  },
+  "arm": {
+    "pass_count": 1650,
+    "fail_count": 1,
+    "cause": "initial-state parser unit omitted required expectation/probe; source corrected, unbuilt"
+  },
+  "kernel": "7/7 after source regeneration",
+  "arena": {
+    "pass": 130,
+    "fail": 9,
+    "expected-fail": 12,
+    "unexpected-pass": 7,
+    "error": 9
+  },
+  "full_arena_report": "E:/elysium-work/reports/arena/20261005T152300.880828Z/index.json",
+  "remaining": [
+    {
+      "name": "range_bands",
+      "result": "fail",
+      "cause": "Epoch1 selection changed the zero-tuned distance staging; TOO_CLOSE_FOR_RANGED not observed at original bound.",
+      "first_unmet": {
+        "index": 1,
+        "section": "expect",
+        "expect": {
+          "who": "arena_shooter",
+          "kind": "cond+",
+          "match": "TOO_CLOSE_FOR_RANGED (0x8)"
+        },
+        "deadline": 7,
+        "reason": "unmet at its deadline (expect[0] was met at t=0.62)"
+      },
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\range_bands.trace.tsv"
+    },
+    {
+      "name": "ranged_sustained_fire",
+      "result": "fail",
+      "cause": "Epoch1 run misses the second burst3031 after the stage at12.15; unresolved timing/continuation divergence.",
+      "first_unmet": {
+        "index": 7,
+        "section": "expect",
+        "expect": {
+          "who": "arena_shooter",
+          "kind": "animevent",
+          "match": "^3031( |$)"
+        },
+        "deadline": 18.15000063367188,
+        "reason": "unmet at its deadline (expect[6] was met at t=12.15)"
+      },
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\ranged_sustained_fire.trace.tsv"
+    },
+    {
+      "name": "hear_world_investigate",
+      "result": "unexpected-pass",
+      "cause": "Stale known_red after observed pass.",
+      "first_unmet": null,
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\hear_world_investigate.trace.tsv"
+    },
+    {
+      "name": "idle_lookaround",
+      "result": "fail",
+      "cause": "Epoch1 idle selector misses the0.5-second zero-tuned lookaround expectation.",
+      "first_unmet": {
+        "index": 0,
+        "section": "expect",
+        "expect": {
+          "who": "idle_walker",
+          "kind": "schedule",
+          "match": "SCHED_TROIKA_ALERT_LOOK_AROUND_NI (0x4f)"
+        },
+        "deadline": 0.5,
+        "reason": "unmet at its deadline"
+      },
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\idle_lookaround.trace.tsv"
+    },
+    {
+      "name": "interest_mode_never",
+      "result": "unexpected-pass",
+      "cause": "Stale known_red after observed pass.",
+      "first_unmet": null,
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\interest_mode_never.trace.tsv"
+    },
+    {
+      "name": "lifecycle_unhide_fall_to_ground",
+      "result": "fail",
+      "cause": "Enabled body remains airborne at3.0 despite the STEP falling wire; source/physical readiness still unresolved.",
+      "first_unmet": {
+        "index": 0,
+        "section": "probe",
+        "expect": {
+          "who": "arena_hidden",
+          "kind": "probe:on_ground",
+          "match": "equals true"
+        },
+        "deadline": 3,
+        "reason": "read false"
+      },
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\lifecycle_unhide_fall_to_ground.trace.tsv"
+    },
+    {
+      "name": "restore_place_invalid_marker",
+      "result": "error",
+      "cause": "The apply fence has no held place identity; consistency controls cannot proceed.",
+      "first_unmet": null,
+      "error": "script[1] transaction: V6 adapter: place.identity has no reader yet",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\restore_place_invalid_marker.trace.tsv"
+    },
+    {
+      "name": "save_restore_corpse_fade",
+      "result": "error",
+      "cause": "Native bridge raw-index admission refuses after first fade; label-descriptor fallback is in unbuilt sources.",
+      "first_unmet": null,
+      "error": "script[2] save: V6 adapter: admission body/clip/motor stealth_victim has no reader yet",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\save_restore_corpse_fade.trace.tsv"
+    },
+    {
+      "name": "save_restore_corpse_static",
+      "result": "error",
+      "cause": "Native bridge raw-index admission refuses; logical-only admission correction is in unbuilt sources.",
+      "first_unmet": null,
+      "error": "script[2] save: V6 adapter: admission body/clip/motor arena_victim has no reader yet",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\save_restore_corpse_static.trace.tsv"
+    },
+    {
+      "name": "save_restore_melee_coordinator",
+      "result": "fail",
+      "cause": "Apply-empty, real re-admission, cap2/idempotence/release observed; the third-cap-refusal arm is not reached.",
+      "first_unmet": {
+        "index": 8,
+        "section": "expect",
+        "expect": {
+          "who": "",
+          "kind": "script",
+          "match": "coordinator phase=refuse"
+        },
+        "deadline": 9.950000206008554,
+        "reason": "unmet at its deadline (expect[7] was met at t=3.95)"
+      },
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\save_restore_melee_coordinator.trace.tsv"
+    },
+    {
+      "name": "save_restore_single_round_reload",
+      "result": "error",
+      "cause": "Native bridge raw-index admission refuses; retained-byte arm passed earlier, correction is unbuilt.",
+      "first_unmet": null,
+      "error": "script[1] save: V6 adapter: admission body/clip/motor arena_bystander has no reader yet",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\save_restore_single_round_reload.trace.tsv"
+    },
+    {
+      "name": "rollcall_vmercurio",
+      "result": "unexpected-pass",
+      "cause": "Stale known_red after observed pass.",
+      "first_unmet": null,
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\rollcall_vmercurio.trace.tsv"
+    },
+    {
+      "name": "rollcall_vpedestrian",
+      "result": "unexpected-pass",
+      "cause": "Stale known_red after observed pass.",
+      "first_unmet": null,
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\rollcall_vpedestrian.trace.tsv"
+    },
+    {
+      "name": "rollcall_vsabbatleader",
+      "result": "unexpected-pass",
+      "cause": "Stale known_red after observed pass.",
+      "first_unmet": null,
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\rollcall_vsabbatleader.trace.tsv"
+    },
+    {
+      "name": "rollcall_vvampireboss",
+      "result": "unexpected-pass",
+      "cause": "Stale known_red after observed pass.",
+      "first_unmet": null,
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\rollcall_vvampireboss.trace.tsv"
+    },
+    {
+      "name": "rollcall_vwerewolf",
+      "result": "unexpected-pass",
+      "cause": "Stale known_red after observed pass.",
+      "first_unmet": null,
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\rollcall_vwerewolf.trace.tsv"
+    },
+    {
+      "name": "rollcall_vzombie",
+      "result": "fail",
+      "cause": "Inherited baseline failure: no eligible interesting place, native0x22.",
+      "first_unmet": {
+        "index": 0,
+        "section": "never",
+        "expect": {
+          "who": "Entrance_Zombie",
+          "kind": "taskfail",
+          "match": ""
+        },
+        "deadline": 2.1000001095235348,
+        "reason": "appeared at t=2.10: match 1 where at most 0 may appear in [0.00, 10.00]: Entrance_Zombie No interesting places were available to go to. (0x22)"
+      },
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\rollcall_vzombie.trace.tsv"
+    },
+    {
+      "name": "save_restore_corpse_pedestrian",
+      "result": "error",
+      "cause": "Applied callback is LAB_1000f4e8 instead ofNULL; capture/restore caller provenance remains unresolved.",
+      "first_unmet": null,
+      "error": "script[4] transaction: fence probe[1] failed: \"LAB_1000f4e8\"",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sm_hub_1\\save_restore_corpse_pedestrian.trace.tsv"
+    },
+    {
+      "name": "save_restore_interesting_place_visit",
+      "result": "error",
+      "cause": "The apply fence has no held place identity; row/continuation equality fails.",
+      "first_unmet": null,
+      "error": "script[3] transaction: V6 adapter: place.identity has no reader yet",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sm_hub_1\\save_restore_interesting_place_visit.trace.tsv"
+    },
+    {
+      "name": "save_restore_place_activity",
+      "result": "fail",
+      "cause": "Authored hub actor does not reach the activity capture arm within30; this is not the filed seek refusal.",
+      "first_unmet": {
+        "index": 1,
+        "section": "expect",
+        "expect": {
+          "who": "pedestrian_female",
+          "kind": "task",
+          "match": "task_do_interest_activity ("
+        },
+        "deadline": 30.0166666675359,
+        "reason": "unmet at its deadline (expect[0] was met at t=0.02)"
+      },
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sm_hub_1\\save_restore_place_activity.trace.tsv"
+    },
+    {
+      "name": "damage_last_record",
+      "result": "error",
+      "cause": "Actual CanSave refuses because a sign panel is open; stage must lawfully dismiss it.",
+      "first_unmet": null,
+      "error": "script[4] transaction: a sign panel is open",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\damage_last_record.trace.tsv"
+    },
+    {
+      "name": "save_cine_possession_resume",
+      "result": "error",
+      "cause": "Native bridge raw-index admission refuses before the allowed seek refusal; descriptor fallback is unbuilt.",
+      "first_unmet": null,
+      "error": "script[3] save: V6 adapter: admission body/clip/motor thug_1 has no reader yet",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\save_cine_possession_resume.trace.tsv"
+    },
+    {
+      "name": "save_restore_corpse_seen",
+      "result": "fail",
+      "cause": "Later network slot584 resets original deadline at+0.8 and visibility fails; removes at2.85.",
+      "first_unmet": {
+        "index": 0,
+        "section": "never",
+        "expect": {
+          "who": "thug_3",
+          "kind": "removed",
+          "match": ""
+        },
+        "deadline": 2.850000148639083,
+        "reason": "appeared at t=2.85: match 1 where at most 0 may appear in [0.00, 11.40]: thug_3 #472"
+      },
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\save_restore_corpse_seen.trace.tsv"
+    },
+    {
+      "name": "save_restore_corpse_unseen",
+      "result": "fail",
+      "cause": "Later native network slot584 writer removes at2.85; remaining-death-delay expectation needs that retail correction.",
+      "first_unmet": {
+        "index": 0,
+        "section": "never",
+        "expect": {
+          "who": "thug_3",
+          "kind": "removed",
+          "match": ""
+        },
+        "deadline": 2.850000148639083,
+        "reason": "appeared at t=2.85: match 1 where at most 0 may appear in [0.00, 11.40]: thug_3 #472"
+      },
+      "error": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\save_restore_corpse_unseen.trace.tsv"
+    },
+    {
+      "name": "session_load_saved_clock",
+      "result": "error",
+      "cause": "Actual CanSave refuses because a sign panel is open; stage must lawfully dismiss it.",
+      "first_unmet": null,
+      "error": "script[1] transaction: a sign panel is open",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\session_load_saved_clock.trace.tsv"
+    }
+  ],
+  "moved_verdicts": [
+    {
+      "name": "range_bands",
+      "before": "pass",
+      "after": "fail",
+      "first_unmet": {
+        "index": 1,
+        "section": "expect",
+        "expect": {
+          "who": "arena_shooter",
+          "kind": "cond+",
+          "match": "TOO_CLOSE_FOR_RANGED (0x8)"
+        },
+        "deadline": 7,
+        "reason": "unmet at its deadline (expect[0] was met at t=0.62)"
+      },
+      "cause": "Epoch1 selection changed the zero-tuned distance staging; TOO_CLOSE_FOR_RANGED not observed at original bound.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\range_bands.trace.tsv"
+    },
+    {
+      "name": "ranged_flamethrower_silent",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\ranged_flamethrower_silent.trace.tsv"
+    },
+    {
+      "name": "ranged_real_reload",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\ranged_real_reload.trace.tsv"
+    },
+    {
+      "name": "ranged_sustained_fire",
+      "before": "pass",
+      "after": "fail",
+      "first_unmet": {
+        "index": 7,
+        "section": "expect",
+        "expect": {
+          "who": "arena_shooter",
+          "kind": "animevent",
+          "match": "^3031( |$)"
+        },
+        "deadline": 18.15000063367188,
+        "reason": "unmet at its deadline (expect[6] was met at t=12.15)"
+      },
+      "cause": "Epoch1 run misses the second burst3031 after the stage at12.15; unresolved timing/continuation divergence.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\ranged_sustained_fire.trace.tsv"
+    },
+    {
+      "name": "idle_lookaround",
+      "before": "pass",
+      "after": "fail",
+      "first_unmet": {
+        "index": 0,
+        "section": "expect",
+        "expect": {
+          "who": "idle_walker",
+          "kind": "schedule",
+          "match": "SCHED_TROIKA_ALERT_LOOK_AROUND_NI (0x4f)"
+        },
+        "deadline": 0.5,
+        "reason": "unmet at its deadline"
+      },
+      "cause": "Epoch1 idle selector misses the0.5-second zero-tuned lookaround expectation.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\idle_lookaround.trace.tsv"
+    },
+    {
+      "name": "damage_record_branches",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\damage_record_branches.trace.tsv"
+    },
+    {
+      "name": "lifecycle_startnpc_ground_drop",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\lifecycle_startnpc_ground_drop.trace.tsv"
+    },
+    {
+      "name": "lifecycle_unhide_fall_to_ground",
+      "before": "new",
+      "after": "fail",
+      "first_unmet": {
+        "index": 0,
+        "section": "probe",
+        "expect": {
+          "who": "arena_hidden",
+          "kind": "probe:on_ground",
+          "match": "equals true"
+        },
+        "deadline": 3,
+        "reason": "read false"
+      },
+      "cause": "Enabled body remains airborne at3.0 despite the STEP falling wire; source/physical readiness still unresolved.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\lifecycle_unhide_fall_to_ground.trace.tsv"
+    },
+    {
+      "name": "persistence_missing_load",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": {
+        "index": 0,
+        "section": "script",
+        "expect": {
+          "who": "",
+          "kind": "",
+          "match": ""
+        },
+        "deadline": 0,
+        "reason": "no save in slot '__arena_v6_missing_867b6d557a0147c3aaf872a3'"
+      },
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\persistence_missing_load.trace.tsv"
+    },
+    {
+      "name": "persistence_refused_save",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": {
+        "index": 4,
+        "section": "script",
+        "expect": {
+          "who": "",
+          "kind": "",
+          "match": ""
+        },
+        "deadline": 2.116666777059436,
+        "reason": "a grapple is in progress"
+      },
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\persistence_refused_save.trace.tsv"
+    },
+    {
+      "name": "persistence_world_rebind",
+      "before": "new",
+      "after": "expected-fail",
+      "first_unmet": {
+        "index": 1,
+        "section": "admission",
+        "expect": {
+          "who": "",
+          "kind": "",
+          "match": ""
+        },
+        "deadline": 0,
+        "reason": "V6 adapter: native presentation continuation (event-free body seek; 0017/35) has no reader yet"
+      },
+      "cause": "0017/35: event-free native body seek has no runtime source; 0x1008df10/0x1008f120/0x10098c80 must resume phase without replay.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\persistence_world_rebind.trace.tsv"
+    },
+    {
+      "name": "place_marker_reservation",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\place_marker_reservation.trace.tsv"
+    },
+    {
+      "name": "restore_place_invalid_marker",
+      "before": "new",
+      "after": "error",
+      "first_unmet": null,
+      "cause": "The apply fence has no held place identity; consistency controls cannot proceed.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\restore_place_invalid_marker.trace.tsv"
+    },
+    {
+      "name": "save_restore_corpse_burn",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\save_restore_corpse_burn.trace.tsv"
+    },
+    {
+      "name": "save_restore_corpse_fade",
+      "before": "new",
+      "after": "error",
+      "first_unmet": null,
+      "cause": "Native bridge raw-index admission refuses after first fade; label-descriptor fallback is in unbuilt sources.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\save_restore_corpse_fade.trace.tsv"
+    },
+    {
+      "name": "save_restore_corpse_static",
+      "before": "new",
+      "after": "error",
+      "first_unmet": null,
+      "cause": "Native bridge raw-index admission refuses; logical-only admission correction is in unbuilt sources.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\save_restore_corpse_static.trace.tsv"
+    },
+    {
+      "name": "save_restore_invalid_schedule",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\save_restore_invalid_schedule.trace.tsv"
+    },
+    {
+      "name": "save_restore_melee_coordinator",
+      "before": "new",
+      "after": "fail",
+      "first_unmet": {
+        "index": 8,
+        "section": "expect",
+        "expect": {
+          "who": "",
+          "kind": "script",
+          "match": "coordinator phase=refuse"
+        },
+        "deadline": 9.950000206008554,
+        "reason": "unmet at its deadline (expect[7] was met at t=3.95)"
+      },
+      "cause": "Apply-empty, real re-admission, cap2/idempotence/release observed; the third-cap-refusal arm is not reached.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\save_restore_melee_coordinator.trace.tsv"
+    },
+    {
+      "name": "save_restore_mid_path",
+      "before": "new",
+      "after": "expected-fail",
+      "first_unmet": {
+        "index": 0,
+        "section": "admission",
+        "expect": {
+          "who": "",
+          "kind": "",
+          "match": ""
+        },
+        "deadline": 0,
+        "reason": "V6 adapter: native presentation continuation (event-free body seek; 0017/35) has no reader yet"
+      },
+      "cause": "0017/35: event-free native body seek has no runtime source; 0x1008df10/0x1008f120/0x10098c80 must resume phase without replay.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\save_restore_mid_path.trace.tsv"
+    },
+    {
+      "name": "save_restore_move_shoot",
+      "before": "new",
+      "after": "expected-fail",
+      "first_unmet": {
+        "index": 1,
+        "section": "admission",
+        "expect": {
+          "who": "",
+          "kind": "",
+          "match": ""
+        },
+        "deadline": 0,
+        "reason": "V6 adapter: native presentation continuation (event-free body seek; 0017/35) has no reader yet"
+      },
+      "cause": "0017/35: event-free native body seek has no runtime source; 0x1008df10/0x1008f120/0x10098c80 must resume phase without replay.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\save_restore_move_shoot.trace.tsv"
+    },
+    {
+      "name": "save_restore_single_round_reload",
+      "before": "new",
+      "after": "error",
+      "first_unmet": null,
+      "cause": "Native bridge raw-index admission refuses; retained-byte arm passed earlier, correction is unbuilt.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\save_restore_single_round_reload.trace.tsv"
+    },
+    {
+      "name": "session_time_rebase",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\session_time_rebase.trace.tsv"
+    },
+    {
+      "name": "maker_refusal_measurement",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\maker_refusal_measurement.trace.tsv"
+    },
+    {
+      "name": "maker_respawn",
+      "before": "expected-fail",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\maker_respawn.trace.tsv"
+    },
+    {
+      "name": "rollcall_vmercurio",
+      "before": "expected-fail",
+      "after": "unexpected-pass",
+      "first_unmet": null,
+      "cause": "Hidden NULL callback repair makes the old red5 label stale.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\rollcall_vmercurio.trace.tsv"
+    },
+    {
+      "name": "rollcall_vpedestrian",
+      "before": "expected-fail",
+      "after": "unexpected-pass",
+      "first_unmet": null,
+      "cause": "Hidden NULL callback repair makes the old red5 label stale.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\rollcall_vpedestrian.trace.tsv"
+    },
+    {
+      "name": "rollcall_vsabbatleader",
+      "before": "expected-fail",
+      "after": "unexpected-pass",
+      "first_unmet": null,
+      "cause": "Hidden NULL callback repair makes the old red5 label stale.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\rollcall_vsabbatleader.trace.tsv"
+    },
+    {
+      "name": "rollcall_vvampireboss",
+      "before": "expected-fail",
+      "after": "unexpected-pass",
+      "first_unmet": null,
+      "cause": "Hidden NULL callback repair makes the old red5 label stale.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\rollcall_vvampireboss.trace.tsv"
+    },
+    {
+      "name": "rollcall_vwerewolf",
+      "before": "expected-fail",
+      "after": "unexpected-pass",
+      "first_unmet": null,
+      "cause": "Hidden NULL callback repair makes the old red5 label stale.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\arena\\rollcall_vwerewolf.trace.tsv"
+    },
+    {
+      "name": "save_restore_corpse_pedestrian",
+      "before": "new",
+      "after": "error",
+      "first_unmet": null,
+      "cause": "Applied callback is LAB_1000f4e8 instead ofNULL; capture/restore caller provenance remains unresolved.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sm_hub_1\\save_restore_corpse_pedestrian.trace.tsv"
+    },
+    {
+      "name": "save_restore_interesting_place_visit",
+      "before": "new",
+      "after": "error",
+      "first_unmet": null,
+      "cause": "The apply fence has no held place identity; row/continuation equality fails.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sm_hub_1\\save_restore_interesting_place_visit.trace.tsv"
+    },
+    {
+      "name": "save_restore_place_activity",
+      "before": "new",
+      "after": "fail",
+      "first_unmet": {
+        "index": 1,
+        "section": "expect",
+        "expect": {
+          "who": "pedestrian_female",
+          "kind": "task",
+          "match": "task_do_interest_activity ("
+        },
+        "deadline": 30.0166666675359,
+        "reason": "unmet at its deadline (expect[0] was met at t=0.02)"
+      },
+      "cause": "Authored hub actor does not reach the activity capture arm within30; this is not the filed seek refusal.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sm_hub_1\\save_restore_place_activity.trace.tsv"
+    },
+    {
+      "name": "damage_last_record",
+      "before": "new",
+      "after": "error",
+      "first_unmet": null,
+      "cause": "Actual CanSave refuses because a sign panel is open; stage must lawfully dismiss it.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\damage_last_record.trace.tsv"
+    },
+    {
+      "name": "dialogue_perception",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\dialogue_perception.trace.tsv"
+    },
+    {
+      "name": "map_tutorial_unhide_thug3",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\map_tutorial_unhide_thug3.trace.tsv"
+    },
+    {
+      "name": "save_cine_possession_resume",
+      "before": "new",
+      "after": "error",
+      "first_unmet": null,
+      "cause": "Native bridge raw-index admission refuses before the allowed seek refusal; descriptor fallback is unbuilt.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\save_cine_possession_resume.trace.tsv"
+    },
+    {
+      "name": "save_restore_corpse_seen",
+      "before": "new",
+      "after": "fail",
+      "first_unmet": {
+        "index": 0,
+        "section": "never",
+        "expect": {
+          "who": "thug_3",
+          "kind": "removed",
+          "match": ""
+        },
+        "deadline": 2.850000148639083,
+        "reason": "appeared at t=2.85: match 1 where at most 0 may appear in [0.00, 11.40]: thug_3 #472"
+      },
+      "cause": "Later network slot584 resets original deadline at+0.8 and visibility fails; removes at2.85.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\save_restore_corpse_seen.trace.tsv"
+    },
+    {
+      "name": "save_restore_corpse_unseen",
+      "before": "new",
+      "after": "fail",
+      "first_unmet": {
+        "index": 0,
+        "section": "never",
+        "expect": {
+          "who": "thug_3",
+          "kind": "removed",
+          "match": ""
+        },
+        "deadline": 2.850000148639083,
+        "reason": "appeared at t=2.85: match 1 where at most 0 may appear in [0.00, 11.40]: thug_3 #472"
+      },
+      "cause": "Later native network slot584 writer removes at2.85; remaining-death-delay expectation needs that retail correction.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\save_restore_corpse_unseen.trace.tsv"
+    },
+    {
+      "name": "save_restore_hidden_unhide",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\save_restore_hidden_unhide.trace.tsv"
+    },
+    {
+      "name": "session_load_saved_clock",
+      "before": "new",
+      "after": "error",
+      "first_unmet": null,
+      "cause": "Actual CanSave refuses because a sign panel is open; stage must lawfully dismiss it.",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\session_load_saved_clock.trace.tsv"
+    },
+    {
+      "name": "session_map_clock_revisit",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\session_map_clock_revisit.trace.tsv"
+    },
+    {
+      "name": "session_map_load_fresh_world",
+      "before": "new",
+      "after": "pass",
+      "first_unmet": null,
+      "cause": "",
+      "trace": "E:\\elysium-work\\reports\\arena\\20261005T152300.880828Z\\map-sp_tutorial_1\\session_map_load_fresh_world.trace.tsv"
+    }
+  ],
+  "n9": {
+    "gate": "occupied",
+    "live": 0,
+    "global_byte": 0,
+    "child": 18,
+    "flags": "0x12000",
+    "alive": false,
+    "life": 1,
+    "intersects": true,
+    "first_attempt_scenario": 6.033334,
+    "retail": "0x1034b692..0x1034b737 /0x101cc9e0 no alive test",
+    "outcome": "maker_respawn correction passed"
+  },
+  "unavailable": {
+    "event_free_body_seek": "0017/35 (owner filing allowed by integrator instruction)",
+    "conversation_producer": "0018/18",
+    "reaction_slot141": "0005/4",
+    "Presence": "0006/2",
+    "player_single_round_reload": "0008 firearms-controller reload follow-up",
+    "transition_set_global_merge": "0017/3,/9",
+    "Chaos_pose_velocity": "0017/35",
+    "death_impulse_prop_ragdoll": "0014/4,/6",
+    "burning_look": "0014 handoff follow-up"
+  },
+  "validation_limitations": [
+    "Final sources are unbuilt after the cap. Totals describe successful binary9.",
+    "Complete alone/paired clock audit and each new record alone/paired remain incomplete.",
+    "Required admission provenance and composed damage/invalid-header recipe coverage remain incomplete."
+  ],
+  "real_reload_pairing": [
+    {
+      "command_order": [
+        [
+          "control_sequence",
+          "ranged_real_reload",
+          "ranged_flamethrower_silent",
+          "ranged_fake_reload"
+        ]
+      ],
+      "counts": {
+        "pass": 4,
+        "fail": 0,
+        "expected-fail": 0,
+        "unexpected-pass": 0,
+        "error": 0
+      },
+      "report": "E:\\elysium-work\\reports\\arena\\20261005T154044.410299Z\\index.json",
+      "results": [
+        {
+          "name": "control_sequence",
+          "result": "pass"
+        },
+        {
+          "name": "ranged_real_reload",
+          "result": "pass"
+        },
+        {
+          "name": "ranged_flamethrower_silent",
+          "result": "pass"
+        },
+        {
+          "name": "ranged_fake_reload",
+          "result": "pass"
+        }
+      ]
+    },
+    {
+      "command_order": [
+        [
+          "ranged_fake_reload",
+          "ranged_real_reload"
+        ]
+      ],
+      "counts": {
+        "pass": 2,
+        "fail": 0,
+        "expected-fail": 0,
+        "unexpected-pass": 0,
+        "error": 0
+      },
+      "report": "E:\\elysium-work\\reports\\arena\\20261005T154846.675306Z\\index.json",
+      "results": [
+        {
+          "name": "ranged_fake_reload",
+          "result": "pass"
+        },
+        {
+          "name": "ranged_real_reload",
+          "result": "pass"
+        }
+      ]
+    }
+  ],
+  "closing_progress": {
+    "builds_used": 8,
+    "successful_builds": 6,
+    "compile_failure": "build2 regression fixture passed lvalue defs to rvalue Load; fixed/build3",
+    "default": {
+      "pass_count": 169,
+      "fail_count": 0
+    },
+    "resolved_named": [
+      "restore_place_invalid_marker",
+      "save_restore_corpse_pedestrian",
+      "save_restore_corpse_fade",
+      "save_restore_corpse_static",
+      "save_restore_single_round_reload",
+      "damage_last_record",
+      "session_load_saved_clock",
+      "save_restore_corpse_unseen",
+      "save_restore_corpse_seen",
+      "range_bands",
+      "ranged_sustained_fire",
+      "idle_lookaround",
+      "lifecycle_unhide_fall_to_ground",
+      "save_restore_melee_coordinator"
+    ],
+    "rollcalls_alone_and_paired": "five confirmed, stale labels removed; hearing labels untouched",
+    "visit_measurement": "bus_stop min30/max60, arrival49.850..50.100, actual stay37.667 or another legal shared-stream draw; assert per-phase retail60 max, cleanup via ScriptHide after first release",
+    "activity_capture": "native activity reached; subsequent event-free body seek refusal belongs0017/35",
+    "pending": [
+      "final arm/kernel gates",
+      "new and original epoch alone/paired audit",
+      "final full arena",
+      "recipe/admission/carrier evidence inventory",
+      "tracker/spec and single commit after acceptance"
+    ],
+    "compile_failures": [
+      "build2 test lvalue defs -> rvalue Load",
+      "build7 test called private world sync -> corrected public motor seam"
+    ],
+    "ground_contract": "0x1003b190/0x100b1420 full live STEP contact flag now joins the actual per-frame motor-to-entity sync; falling record checks FLOATING_OFF_GROUND clear as well as a real floor",
+    "named_build8_report": "E:/elysium-work/reports/arena/20261005T174508.318362Z/index.json",
+    "visit_pair_staging": "Original final approach was left near departure PVS. Actual paired route has same goal and same positions through29s, then crowd avoidance costs~0.5s. Added real ready+39 player teleport near destination, keeping original phase bounds."
+  },
+  "final_worker": {
+    "builds_used": 1,
+    "builds": [
+      {
+        "number": 1,
+        "result": "pass",
+        "seconds": 32.3,
+        "report": "E:/elysium-work/logs/20261005T200239.545335Z-build.json"
+      }
+    ],
+    "default": {
+      "pass_count": 169,
+      "fail_count": 0,
+      "report": "E:/elysium-work/reports/tests/20261005T200324.189043Z-elysium-session-elysium-substrate/index.json"
+    },
+    "recovery": [
+      {
+        "records": [
+          "anim_footsteps_walk",
+          "map_tutorial_idle",
+          "patrol_monk_loop",
+          "patrol_sentry2_pingpong"
+        ],
+        "cause": "global patrol pool dry in185438 after repeated fresh/save loads; clean shorter run195654 all four pass same old binary",
+        "retail": "0x1028d5e0 -> 0x1028d610 directly calls0x1028d6e0 -> both0x1029f5d0/0x10307db0",
+        "change": "world teardown runs Troika destructor cleanup before invalidation/deletion;40-reconstruction test without pool reset"
+      },
+      {
+        "records": [
+          "maker_respawn",
+          "maker_refusal_measurement"
+        ],
+        "cause": "float FloorDist subtraction left positive double feet residue;printedZ0.000 missed flat maker box",
+        "retail": "0x102e7880 -> 0x10273b8b traced hull origin;0x1034b692..737 occupancy has no alive test",
+        "change": "shared feet reads support plane at same XY; no occupancy/arrival predicate change",
+        "report": "E:/elysium-work/reports/arena/20261005T200357.402784Z/arena/index.json",
+        "measurement": "live0/global0 corpse18 flags0x12001 life1 intersects1 refuses6.033;normalKill then spawned7.217"
+      },
+      {
+        "records": [
+          "save_restore_corpse_unseen"
+        ],
+        "cause": "face-135 passes nativecone/PVS/visible1/1/1 at reset2.850;native removal rearmed+10",
+        "retail": "0x1028d8d0/0x100f8370 mask0x40 no alive test;0x102696f0 cone->PVS->visible",
+        "change": "recordface0away; no runtime deadline change"
+      },
+      {
+        "records": [
+          "save_restore_place_activity"
+        ],
+        "cause": "original final approach outside playerPVS; short temporary50.3 route observation bound missed on old binary195654 too",
+        "retail": "0x102aa210 continuation;TASK_WAIT_FOR_MOVEMENT0x10288f46..0x10288f7e operand0 has no timeout",
+        "change": "real playerteleportfresh_ready+39 nearapproach;retain bounds pending measurement"
+      }
+    ],
+    "pending": [
+      "named final binary",
+      "seven alone and paired",
+      "arm/kernel",
+      "remaining audit",
+      "full arena",
+      "proof/tracker/spec/commit after green"
+    ],
+    "named_report": "E:/elysium-work/reports/arena/20261005T200357.402784Z/index.json",
+    "named_partial": {
+      "maker_respawn": "pass",
+      "maker_refusal_measurement": "pass",
+      "anim_footsteps_walk": "pass",
+      "map_tutorial_idle": "pass",
+      "patrol_monk_loop": "pass",
+      "patrol_sentry2_pingpong": "pass",
+      "save_restore_corpse_unseen": "pass"
+    },
+    "arm": {
+      "pass_count": 1654,
+      "fail_count": 0,
+      "report": "E:/elysium-work/reports/tests/20261005T200958.607352Z-elysium-arm/index.json"
+    },
+    "audit_manifest": "E:/elysium-work/codex/V6-close/audit.json",
+    "activity_measurement": {
+      "arrival": 51.717,
+      "task": 52.417,
+      "capture": 52.467,
+      "result": "expected-fail",
+      "cause": "exact event-free body seek0017/35 after actual activity reached",
+      "report": "E:/elysium-work/reports/arena/20261005T201116.653266Z/index.json",
+      "sequence": 1395,
+      "label": "idle01",
+      "bank": "vtmb:model:character/shared/female/misc",
+      "frames": 75,
+      "fps": 30,
+      "rig": 1,
+      "motor": 1
+    },
+    "kernel": "7/7 E:/elysium-work/logs/20261005T201122.086224Z-research.json",
+    "seven_standalone": [
+      {
+        "binary": "closing-build1",
+        "name": "maker_respawn",
+        "mode": "alone",
+        "hash": "20eda2dd02a4e473e16e25bc3ac2270092d78e2aa8e29038ca2dc9066ffe015f",
+        "requested": [
+          "maker_respawn"
+        ],
+        "report": "E:\\elysium-work\\reports\\arena\\20261005T201051.291784Z\\index.json",
+        "target": {
+          "name": "maker_respawn",
+          "result": "pass",
+          "known_red": "",
+          "error": "",
+          "first_unmet": null,
+          "game_seconds": 30.000001564621925,
+          "wall_seconds": 1.5823649019002914,
+          "events": 5586,
+          "trace": "E:\\elysium-work\\reports\\arena\\20261005T201051.291784Z\\arena\\maker_respawn.trace.tsv",
+          "host": "arena",
+          "boot": "arena",
+          "expect_fail": false
+        },
+        "same_boot": true,
+        "accepted": true,
+        "wall_seconds": 26.37
+      },
+      {
+        "binary": "closing-build1",
+        "name": "save_restore_place_activity",
+        "mode": "alone",
+        "hash": "24f6d6c20c558c680d6e01dd73b7d118758a8abf909d8c9662442c151e67680f",
+        "requested": [
+          "save_restore_place_activity"
+        ],
+        "report": "E:\\elysium-work\\reports\\arena\\20261005T201116.653266Z\\index.json",
+        "target": {
+          "name": "save_restore_place_activity",
+          "result": "expected-fail",
+          "known_red": "0017/35: saved native activity/layer phase has no event-free body seek source (0x1008df10/0x10098c80).",
+          "error": "",
+          "first_unmet": {
+            "index": 3,
+            "section": "admission",
+            "expect": {
+              "who": "",
+              "kind": "",
+              "match": ""
+            },
+            "deadline": 0,
+            "reason": "V6 adapter: native presentation continuation (event-free body seek; 0017/35) has no reader yet"
+          },
+          "game_seconds": 52.46666940301657,
+          "wall_seconds": 68.45946599915624,
+          "events": 79946,
+          "trace": "E:\\elysium-work\\reports\\arena\\20261005T201116.653266Z\\map-sm_hub_1\\save_restore_place_activity.trace.tsv",
+          "host": "map:sm_hub_1",
+          "boot": "map-sm_hub_1",
+          "expect_fail": false
+        },
+        "same_boot": true,
+        "accepted": true,
+        "wall_seconds": 97.51
+      },
+      {
+        "binary": "closing-build1",
+        "name": "save_restore_corpse_unseen",
+        "mode": "alone",
+        "hash": "91609ebda92278b7380b2481e9a7493af1500e45101a7064340bd946cc86aa52",
+        "requested": [
+          "save_restore_corpse_unseen"
+        ],
+        "report": "E:\\elysium-work\\reports\\arena\\20261005T201254.172276Z\\index.json",
+        "target": {
+          "name": "save_restore_corpse_unseen",
+          "result": "pass",
+          "known_red": "",
+          "error": "",
+          "first_unmet": null,
+          "game_seconds": 30.000001564621925,
+          "wall_seconds": 47.68767810240388,
+          "events": 2533,
+          "trace": "E:\\elysium-work\\reports\\arena\\20261005T201254.172276Z\\map-sp_tutorial_1\\save_restore_corpse_unseen.trace.tsv",
+          "host": "map:sp_tutorial_1",
+          "boot": "map-sp_tutorial_1",
+          "expect_fail": false
+        },
+        "same_boot": true,
+        "accepted": true,
+        "wall_seconds": 75.96
+      },
+      {
+        "binary": "closing-build1",
+        "name": "anim_footsteps_walk",
+        "mode": "alone",
+        "hash": "bea9414aa0f05cd9517e9014ce946a8d2ecc2d2c5586fe7f0b76ac059df902b6",
+        "requested": [
+          "anim_footsteps_walk"
+        ],
+        "report": "E:\\elysium-work\\reports\\arena\\20261005T201410.134576Z\\index.json",
+        "target": {
+          "name": "anim_footsteps_walk",
+          "result": "pass",
+          "known_red": "",
+          "error": "",
+          "first_unmet": null,
+          "game_seconds": 20.000001043081284,
+          "wall_seconds": 26.738887298852205,
+          "events": 2606,
+          "trace": "E:\\elysium-work\\reports\\arena\\20261005T201410.134576Z\\map-sp_tutorial_1\\anim_footsteps_walk.trace.tsv",
+          "host": "map:sp_tutorial_1",
+          "boot": "map-sp_tutorial_1",
+          "expect_fail": false
+        },
+        "same_boot": true,
+        "accepted": true,
+        "wall_seconds": 56.4
+      },
+      {
+        "binary": "closing-build1",
+        "name": "map_tutorial_idle",
+        "mode": "alone",
+        "hash": "4e1010434676a169afdbb4e64377fdddb1d4ca71e4d508fcf36d46b1fbfdce35",
+        "requested": [
+          "map_tutorial_idle"
+        ],
+        "report": "E:\\elysium-work\\reports\\arena\\20261005T201506.567253Z\\index.json",
+        "target": {
+          "name": "map_tutorial_idle",
+          "result": "pass",
+          "known_red": "",
+          "error": "",
+          "first_unmet": null,
+          "game_seconds": 60.00000312924385,
+          "wall_seconds": 39.5955242998898,
+          "events": 4326,
+          "trace": "E:\\elysium-work\\reports\\arena\\20261005T201506.567253Z\\map-sp_tutorial_1\\map_tutorial_idle.trace.tsv",
+          "host": "map:sp_tutorial_1",
+          "boot": "map-sp_tutorial_1",
+          "expect_fail": false
+        },
+        "same_boot": true,
+        "accepted": true,
+        "wall_seconds": 67.94
+      },
+      {
+        "binary": "closing-build1",
+        "name": "patrol_monk_loop",
+        "mode": "alone",
+        "hash": "e1ed4a6e92150e15c0e21c4a5a4d97571db6df5c64f1dcd38f171850c77dd3a8",
+        "requested": [
+          "patrol_monk_loop"
+        ],
+        "report": "E:\\elysium-work\\reports\\arena\\20261005T201614.484471Z\\index.json",
+        "target": {
+          "name": "patrol_monk_loop",
+          "result": "pass",
+          "known_red": "",
+          "error": "",
+          "first_unmet": null,
+          "game_seconds": 90.00000469386578,
+          "wall_seconds": 56.53453500196338,
+          "events": 13646,
+          "trace": "E:\\elysium-work\\reports\\arena\\20261005T201614.484471Z\\map-sp_tutorial_1\\patrol_monk_loop.trace.tsv",
+          "host": "map:sp_tutorial_1",
+          "boot": "map-sp_tutorial_1",
+          "expect_fail": false
+        },
+        "same_boot": true,
+        "accepted": true,
+        "wall_seconds": 84.93
+      },
+      {
+        "binary": "closing-build1",
+        "name": "patrol_sentry2_pingpong",
+        "mode": "alone",
+        "hash": "c4877f193dc4ef90fc91a28c9d1e7c6e524e0d750cb4f085f96f432b52efe8c7",
+        "requested": [
+          "patrol_sentry2_pingpong"
+        ],
+        "report": "E:\\elysium-work\\reports\\arena\\20261005T201739.397362Z\\index.json",
+        "target": {
+          "name": "patrol_sentry2_pingpong",
+          "result": "pass",
+          "known_red": "",
+          "error": "",
+          "first_unmet": null,
+          "game_seconds": 75.00000391155481,
+          "wall_seconds": 45.0193861015141,
+          "events": 6123,
+          "trace": "E:\\elysium-work\\reports\\arena\\20261005T201739.397362Z\\map-sp_tutorial_1\\patrol_sentry2_pingpong.trace.tsv",
+          "host": "map:sp_tutorial_1",
+          "boot": "map-sp_tutorial_1",
+          "expect_fail": false
+        },
+        "same_boot": true,
+        "accepted": true,
+        "wall_seconds": 73.41
+      }
+    ],
+    "audit_plan": {
+      "original_and_new_standalone": "167 records, one public arena command per record; hash/exact verdict/report journal in audit_manifest",
+      "new_paired": "new records after recipe predecessor in same boot",
+      "seven_paired": "seven records after predecessor, same boot",
+      "full_final": "all167; baseline pass comparison, zero errors; hearing exceptions preserved"
+    }
+  }
+}

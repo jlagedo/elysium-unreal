@@ -93,7 +93,8 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("max_health"), &FElysiumEntity::MaxHealth,
 			EElysiumField::Save);  // +0x208 m_iMaxHealth
 		ElysiumAddClassField(D, TEXT("model"), &FElysiumEntity::Model, EElysiumField::Save);  // +0x388 m_ModelName
-		ElysiumAddClassField(D, TEXT("nextthink"), &FElysiumEntity::NextThink, EElysiumField::Save);  // +0x17c m_flNextThink
+		ElysiumAddClassField(D, TEXT("nextthink"), &FElysiumEntity::NextThink, EElysiumField::None);  // +0x17c m_flNextThink
+		D.TimeField(TEXT("nextthink")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("npc_transparent"), &FElysiumEntity::bNpcTransparent,
 			EElysiumField::Save);  // +0xfc m_bNPCTransparent
 		ElysiumAddClassField(D, TEXT("parentname"), &FElysiumEntity::ParentName,
@@ -622,24 +623,32 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flCacheInterruptTime"),
 			[](auto& E) -> auto&{ return E.BaseScheduleHost.CacheInterruptTime; },
 			EElysiumField::Save);  // +0x1b24 time
+		D.TimeField(TEXT("m_flCacheInterruptTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flDistTooFar"), &FElysiumNpcBase::DistTooFar,
 			EElysiumField::Save);  // +0x5de4 float
 		ElysiumAddClassField(D, TEXT("m_flExtendedBlockedByFriendTimer"),
 			&FElysiumNpcBase::ExtendedBlockedByFriendTimer, EElysiumField::Save);  // +0x5b8c time
+		D.TimeField(TEXT("m_flExtendedBlockedByFriendTimer"), EElysiumTimePolicy::MaxFloat); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flLastAttackTime"), &FElysiumNpcBase::LastAttackTime,
 			EElysiumField::Save);  // +0x5d9c time
+		D.TimeField(TEXT("m_flLastAttackTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flLastDamageTime"),
 			[](auto& E) -> auto&{ return E.BaseMemory.RepeatedDamageWindowStart; },
 			EElysiumField::Save);  // +0x5d98 time
+		D.TimeField(TEXT("m_flLastDamageTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flMoveWaitFinished"),
 			[](auto& E) -> auto&{ return E.BaseScheduleHost.MoveWaitFinished; },
 			EElysiumField::Save);  // +0x5cf0 time
+		D.TimeField(TEXT("m_flMoveWaitFinished")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flNextDoorUseTime"), &FElysiumNpcBase::NextDoorUseTime,
 			EElysiumField::Save);  // +0x5b60 time
+		D.TimeField(TEXT("m_flNextDoorUseTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flNextWeaponSearchTime"),
 			&FElysiumNpcBase::NextWeaponSearchTime, EElysiumField::Save);  // +0x5da0 time
+		D.TimeField(TEXT("m_flNextWeaponSearchTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flSoundWaitTime"),
 			[](auto& E) -> auto&{ return E.BaseMemory.SoundWaitTime; }, EElysiumField::Save);  // +0x5ce8 time
+		D.TimeField(TEXT("m_flSoundWaitTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flSpecialDistanceAccum"),
 			&FElysiumNpcBase::SpecialDistanceAccum, EElysiumField::Save);  // +0x5bac float
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flSumDamage"),
@@ -647,8 +656,10 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x5d94 float
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flWaitFinished"),
 			[](auto& E) -> auto&{ return E.BaseScheduleHost.WaitFinished; }, EElysiumField::Save);  // +0x5db4 time
+		D.TimeField(TEXT("m_flWaitFinished"), EElysiumTimePolicy::Zero); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flWeaponBlockedByFriendTimer"),
 			&FElysiumNpcBase::WeaponBlockedByFriendTimer, EElysiumField::Save);  // +0x5b88 time
+		D.TimeField(TEXT("m_flWeaponBlockedByFriendTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_hBlockedDoor"), &FElysiumNpcBase::BlockedDoor,
 			EElysiumField::Save);  // +0x5d28 ehandle
 		ElysiumAddClassField(D, TEXT("m_hCondHitByDoor"), &FElysiumNpcBase::CondHitByDoor,
@@ -701,9 +712,8 @@ namespace ElysiumNpcKernelBindings
 		// NOT SAVED +0x1a9c m_DelayedConditionList (embedded) — a FIELD_EMBEDDED row: retail's
 		// datamap points at a second `datamap_t` and recurses, and this port's matching member
 		// carries its own typed `Serialize`, which is the same shape
-		// NOT SAVED +0x1ae0 m_DelayedSoundConditionList (embedded) — a FIELD_EMBEDDED row: retail's
-		// datamap points at a second `datamap_t` and recurses, and this port's matching member
-		// carries its own typed `Serialize`, which is the same shape
+		// NOT SAVED +0x1ae0 m_DelayedSoundConditionList (embedded) — MoveAndShootOverlay +0x10..2c
+		// is leaf-saved (0x102e8aa0/0x102e8ac0)
 		// NOT SAVED +0x5cc4 m_IdealNPCState (int) — the port member exists but its owner keeps it
 		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
 		// which is where it stays until that struct exposes an accessor
@@ -712,17 +722,12 @@ namespace ElysiumNpcKernelBindings
 		// NOT SAVED +0x5cc0 m_NPCState (int) — the port member exists but its owner keeps it
 		// private, so no compiled path reaches it; the owning struct's own `Serialize` carries it,
 		// which is where it stays until that struct exposes an accessor
-		// NOT SAVED +0x5c40 m_ScheduleState (embedded) — a FIELD_EMBEDDED row: retail's datamap
-		// points at a second `datamap_t` and recurses, and this port's matching member carries its
-		// own typed `Serialize`, which is the same shape
+		// NOT SAVED +0x5c40 m_ScheduleState (embedded) — schedule cursor/status/starts are
+		// leaf-saved by FElysiumScheduleState::Serialize (0x1027bc60)
 		// NOT SAVED +0x5d48 m_UnreachableEnts (custom) — this port declares no member for the word
 		// (the shape map's row says why), so there is nothing for the save walk to carry
-		// NOT SAVED +0x5ca4 m_bConditionsGathered (bool) — `m_bConditionsGathered` is retail's BOOL
-		// latch for `has this pass gathered yet`, and this port carries the same fact as the pass
-		// EDGE itself -- `FElysiumNpcCognition::GatheredAt`, a `double` every stimulus producer
-		// measures against. Binding the two would marshal a timestamp under a bool's name, and the
-		// restore hook re-stamps the edge to the load's own `now` in any case, so there is no
-		// member here to save
+		// NOT SAVED +0x5ca4 m_bConditionsGathered (bool) — GatheredAt sign is BOOL leaf-saved by
+		// FElysiumNpcBase::Serialize (0x1027bc60)
 		// NOT SAVED +0x1b28 m_bForceStateChange (bool) — the port member exists but its owner keeps
 		// it private, so no compiled path reaches it; the owning struct's own `Serialize` carries
 		// it, which is where it stays until that struct exposes an accessor
@@ -823,6 +828,7 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x6435 m_bStayEntrenched
 		ElysiumAddClassField(D, TEXT("teleport_move_timer"), &FElysiumNpc::TeleportMoveTimer,
 			EElysiumField::Save);  // +0x65dc m_flTeleportMoveTimer
+		D.TimeField(TEXT("teleport_move_timer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("times_talked"), &FElysiumNpc::TimesTalked,
 			EElysiumField::Save);  // +0x64bc m_nTimesTalked
 		ElysiumAddClassField(D, TEXT("use_interesting"), &FElysiumNpc::bUseInteresting,
@@ -904,28 +910,36 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x65cc int
 		ElysiumAddClassField(D, TEXT("m_fFinishingMoveBoneTrackLastTime"),
 			&FElysiumNpc::FinishingMoveBoneTrackLastTime, EElysiumField::Save);  // +0x6018 time
+		D.TimeField(TEXT("m_fFinishingMoveBoneTrackLastTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_fJumpGravity"), &FElysiumNpc::JumpGravity,
 			EElysiumField::Save);  // +0x64b8 float
 		ElysiumAddClassField(D, TEXT("m_fJumpHeight"), &FElysiumNpc::JumpHeight,
 			EElysiumField::Save);  // +0x64b4 float
 		ElysiumAddClassField(D, TEXT("m_fKnockbackWallHitFallTime"),
 			&FElysiumNpc::KnockbackWallHitFallTime, EElysiumField::Save);  // +0x6014 time
+		D.TimeField(TEXT("m_fKnockbackWallHitFallTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_fNextDodgeTimer"), &FElysiumNpc::NextDodgeTime,
 			EElysiumField::Save);  // +0x65a4 time
+		D.TimeField(TEXT("m_fNextDodgeTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_fSavePositionWalk"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.bSavePositionWalk; },
 			EElysiumField::Save);  // +0x63e0 bool
 		ElysiumAddClassField(D, TEXT("m_flAlternateAIExpireTimer"),
 			&FElysiumNpc::AlternateAiExpireTime, EElysiumField::Save);  // +0x6450 time
+		D.TimeField(TEXT("m_flAlternateAIExpireTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flCanSeekCoverTimer"), &FElysiumNpc::CanSeekCoverTimer,
 			EElysiumField::Save);  // +0x607c time
+		D.TimeField(TEXT("m_flCanSeekCoverTimer"), EElysiumTimePolicy::Zero); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flCorpseConditionTimer"),
 			&FElysiumNpc::CorpseConditionTime, EElysiumField::Save);  // +0x6608 time
+		D.TimeField(TEXT("m_flCorpseConditionTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flCriminalIgnoreTimer"),
 			[](auto& E) -> auto&{ return E.Witness.Channels[0].IgnoreUntil; },
 			EElysiumField::Save);  // +0x6398 time
+		D.TimeField(TEXT("m_flCriminalIgnoreTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flCriminalWitnessedTimer"),
 			[](auto& E) -> auto&{ return E.Witness.CriminalWitnessedTime; }, EElysiumField::Save);  // +0x63a4 time
+		D.TimeField(TEXT("m_flCriminalWitnessedTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flDesiredMoveYaw"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.DesiredMoveYaw; }, EElysiumField::Save);  // +0x63ec float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flEnemyDist"),
@@ -945,18 +959,23 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x63c0 float
 		ElysiumAddClassField(D, TEXT("m_flHuntExpireTimer"), &FElysiumNpc::HuntExpireTime,
 			EElysiumField::Save);  // +0x6474 time
+		D.TimeField(TEXT("m_flHuntExpireTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flIgnoreCollisionTimer"),
 			&FElysiumNpc::IgnoreCollisionUntil, EElysiumField::Save);  // +0x6458 time
+		D.TimeField(TEXT("m_flIgnoreCollisionTimer"), EElysiumTimePolicy::MaxFloat); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flInsideInterruptDistanceSqr"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.InsideInterruptDistanceSqr; },
 			EElysiumField::Save);  // +0x6324 float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flInterruptTime"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.InterruptTime; }, EElysiumField::Save);  // +0x632c time
+		D.TimeField(TEXT("m_flInterruptTime"), EElysiumTimePolicy::Zero); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flKickPhysicsPropSearchTimer"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.KickPropSearchTimer; },
 			EElysiumField::Save);  // +0x6438 time
+		D.TimeField(TEXT("m_flKickPhysicsPropSearchTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flLastAIThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.LastAI; }, EElysiumField::Save);  // +0x6260 time
+		D.TimeField(TEXT("m_flLastAIThink")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flLastInPlayerLOS"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.PlayerLosLastClearTime; },
 			EElysiumField::Save);  // +0x6280 float
@@ -965,54 +984,74 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x627c float
 		ElysiumAddClassField(D, TEXT("m_flLastMeleeStepbackTime"),
 			&FElysiumNpc::LastMeleeStepbackTime, EElysiumField::Save);  // +0x606c time
+		D.TimeField(TEXT("m_flLastMeleeStepbackTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flLastMoveThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.LastMove; }, EElysiumField::Save);  // +0x625c time
+		D.TimeField(TEXT("m_flLastMoveThink")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flLastNormalThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.LastNormal; }, EElysiumField::Save);  // +0x6258 time
+		D.TimeField(TEXT("m_flLastNormalThink")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flLastUpdateThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.LastUpdate; }, EElysiumField::Save);  // +0x6254 time
+		D.TimeField(TEXT("m_flLastUpdateThink")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flLoudExpressionTime"), &FElysiumNpc::LoudExpressionTime,
 			EElysiumField::Save);  // +0x6574 time
+		D.TimeField(TEXT("m_flLoudExpressionTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flMeleeCanEnterTimer"), &FElysiumNpc::MeleeCanEnterTimer,
 			EElysiumField::Save);  // +0x6070 time
+		D.TimeField(TEXT("m_flMeleeCanEnterTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flMeleeHeightDiffTimer"),
 			&FElysiumNpc::MeleeHeightDiffTimer, EElysiumField::Save);  // +0x6274 time
+		D.TimeField(TEXT("m_flMeleeHeightDiffTimer"), EElysiumTimePolicy::MinusOne); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flMeleeMustLeaveTimer"), &FElysiumNpc::MeleeMustLeaveTimer,
 			EElysiumField::Save);  // +0x6074 time
+		D.TimeField(TEXT("m_flMeleeMustLeaveTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextAIThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.NextAI; }, EElysiumField::Save);  // +0x6250 time
+		D.TimeField(TEXT("m_flNextAIThink")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flNextBurnTime"), &FElysiumNpc::NextBurnTime,
 			EElysiumField::Save);  // +0x65bc time
+		D.TimeField(TEXT("m_flNextBurnTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextCheckEnterPVSTime"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.NextCheckEnterPvsTime; },
 			EElysiumField::Save);  // +0x6288 float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextCoverLOSCheck"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.NextCoverLosCheck; },
 			EElysiumField::Save);  // +0x6400 time
+		D.TimeField(TEXT("m_flNextCoverLOSCheck")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flNextCrosswalkUpdateTime"),
 			&FElysiumNpc::NextCrosswalkUpdateTime, EElysiumField::Save);  // +0x6318 time
+		D.TimeField(TEXT("m_flNextCrosswalkUpdateTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextFleeSoundTime"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.NextFleeSoundTime; },
 			EElysiumField::Save);  // +0x641c time
+		D.TimeField(TEXT("m_flNextFleeSoundTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextInvestigateSoundTime"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.NextInvestigateSoundTime; },
 			EElysiumField::Save);  // +0x623c time
+		D.TimeField(TEXT("m_flNextInvestigateSoundTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextMoveThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.NextMove; }, EElysiumField::Save);  // +0x624c time
+		D.TimeField(TEXT("m_flNextMoveThink")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextNormalThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.NextNormal; }, EElysiumField::Save);  // +0x6248 time
+		D.TimeField(TEXT("m_flNextNormalThink")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flNextPedInteractTime"), &FElysiumNpc::NextPedInteractTime,
 			EElysiumField::Save);  // +0x631c time
+		D.TimeField(TEXT("m_flNextPedInteractTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextPlayerLOS"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.PlayerLosNextUpdateTime; },
 			EElysiumField::Save);  // +0x6284 float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextSeeSoundSourceTime"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.NextSeeSoundSourceTime; },
 			EElysiumField::Save);  // +0x6418 time
+		D.TimeField(TEXT("m_flNextSeeSoundSourceTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextUpdateThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.NextUpdate; }, EElysiumField::Save);  // +0x6244 time
+		D.TimeField(TEXT("m_flNextUpdateThink")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNosferatuIgnoreTimer"),
 			[](auto& E) -> auto&{ return E.Witness.NosferatuIgnoreUntil; }, EElysiumField::Save);  // +0x63a0 time
+		D.TimeField(TEXT("m_flNosferatuIgnoreTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flOccludedDelay"), &FElysiumNpc::OccludedDelay,
 			EElysiumField::Save);  // +0x62c8 float
 		ElysiumAddClassField(D, TEXT("m_flOccludedDelayCover"), &FElysiumNpc::OccludedDelayCover,
@@ -1021,10 +1060,13 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x62c0 float
 		ElysiumAddClassField(D, TEXT("m_flOccludedReportTimeE"), &FElysiumNpc::OccludedReportTimeE,
 			EElysiumField::Save);  // +0x62cc time
+		D.TimeField(TEXT("m_flOccludedReportTimeE"), EElysiumTimePolicy::Zero); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flOccludedReportTimeT"), &FElysiumNpc::OccludedReportTimeT,
 			EElysiumField::Save);  // +0x62d0 time
+		D.TimeField(TEXT("m_flOccludedReportTimeT"), EElysiumTimePolicy::Zero); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flOccludedReportTimeW"), &FElysiumNpc::OccludedReportTimeW,
 			EElysiumField::Save);  // +0x62d4 time
+		D.TimeField(TEXT("m_flOccludedReportTimeW"), EElysiumTimePolicy::Zero); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flOutsideInterruptDistanceSqr"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.OutsideInterruptDistanceSqr; },
 			EElysiumField::Save);  // +0x6328 float
@@ -1034,12 +1076,15 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSeeUnknownCheatVisionTime"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.SeeUnknownGraceUntil; },
 			EElysiumField::Save);  // +0x6084 time
+		D.TimeField(TEXT("m_flSeeUnknownCheatVisionTime"), EElysiumTimePolicy::MinusOne); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSeeUnknownRunTimer"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.SeeUnknownRunTimer; },
 			EElysiumField::Save);  // +0x609c time
+		D.TimeField(TEXT("m_flSeeUnknownRunTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSeeUnknownStartTimer"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.SeeUnknownStartTimer; },
 			EElysiumField::Save);  // +0x60a0 time
+		D.TimeField(TEXT("m_flSeeUnknownStartTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSeekDistInspection"),
 			[](auto& E) -> auto&{ return E.Senses.Perception.VisionDistanceCm; },
 			EElysiumField::Save);  // +0x63b8 float
@@ -1047,6 +1092,7 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.Dialogue.SpeechVolume; }, EElysiumField::Save);  // +0x6550 float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flStanceTime"),
 			[](auto& E) -> auto&{ return E.Stance.LastChangeTime; }, EElysiumField::Save);  // +0x64e4 time
+		D.TimeField(TEXT("m_flStanceTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flStandingOnHeadTimer"), &FElysiumNpc::StandingOnHeadTimer,
 			EElysiumField::Save);  // +0x65fc float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flStealthHearingDist"),
@@ -1056,23 +1102,29 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flStealthVisionOverrideTime"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.StealthVisionOverrideUntil; },
 			EElysiumField::Save);  // +0x6604 time
+		D.TimeField(TEXT("m_flStealthVisionOverrideTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flStealthVisionScalar"),
 			[](auto& E) -> auto&{ return E.Senses.StealthVisionScalar; }, EElysiumField::Save);  // +0x63c4 float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSupernaturalIgnoreTimer"),
 			[](auto& E) -> auto&{ return E.Witness.Channels[1].IgnoreUntil; },
 			EElysiumField::Save);  // +0x639c time
+		D.TimeField(TEXT("m_flSupernaturalIgnoreTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSupernaturalWitnessedTimer"),
 			[](auto& E) -> auto&{ return E.Witness.SupernaturalWitnessedTime; },
 			EElysiumField::Save);  // +0x63a8 time
+		D.TimeField(TEXT("m_flSupernaturalWitnessedTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flTalkTime"), &FElysiumNpc::TalkingUntil,
 			EElysiumField::Save);  // +0x64cc time
+		D.TimeField(TEXT("m_flTalkTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flWaitFinishedDelta"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.WaitFinishedDelta; },
 			EElysiumField::Save);  // +0x6330 float
 		ElysiumAddClassField(D, TEXT("m_flWeaponScareTime"), &FElysiumNpc::WeaponScareTime,
 			EElysiumField::Save);  // +0x63dc time
+		D.TimeField(TEXT("m_flWeaponScareTime"), EElysiumTimePolicy::MinusOne); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flWeaponThroughWallTime"),
 			&FElysiumNpc::WeaponThroughWallTime, EElysiumField::Save);  // +0x6600 time
+		D.TimeField(TEXT("m_flWeaponThroughWallTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hBestSeeUnknown"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.BestSeeUnknown; }, EElysiumField::Save);  // +0x6088 ehandle
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hClosestPlayer"),
@@ -1163,9 +1215,8 @@ namespace ElysiumNpcKernelBindings
 		// NOT SAVED +0x60b0 m_BestSound (embedded) — a FIELD_EMBEDDED row: retail's datamap points
 		// at a second `datamap_t` and recurses, and this port's matching member carries its own
 		// typed `Serialize`, which is the same shape
-		// NOT SAVED +0x60dc m_InvestigateSound (embedded) — a FIELD_EMBEDDED row: retail's datamap
-		// points at a second `datamap_t` and recurses, and this port's matching member carries its
-		// own typed `Serialize`, which is the same shape
+		// NOT SAVED +0x60dc m_InvestigateSound (embedded) — InvestigateSoundSource is unavailable;
+		// missing ninth sound producer
 		// NOT SAVED +0x618c m_LastSoundBulletImpact (embedded) — a FIELD_EMBEDDED row: retail's
 		// datamap points at a second `datamap_t` and recurses, and this port's matching member
 		// carries its own typed `Serialize`, which is the same shape
@@ -1201,8 +1252,8 @@ namespace ElysiumNpcKernelBindings
 		// NOT SAVED +0x6580 m_flEyeFidgetStepTime (time) — the port carries this concern on the
 		// entity chain BELOW the NPC, and the class that owns the member is the class that persists
 		// it
-		// NOT SAVED +0x657c m_flEyeFidgetTime (time) — the port carries this concern on the entity
-		// chain BELOW the NPC, and the class that owns the member is the class that persists it
+		// NOT SAVED +0x657c m_flEyeFidgetTime (time) — EyeFidgetClockSource is unavailable; no
+		// clock producer (0x102993c0)
 		// NOT SAVED +0x64dc m_flMaxBlink (float) — `m_flMaxBlink` is the same resolved-row word as
 		// `m_flMinBlink`
 		// NOT SAVED +0x6588 m_flMaxEyeFidget (float) — the port carries this concern on the entity
@@ -1246,18 +1297,20 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x574 m_iGroupID
 		ElysiumAddClassField(D, TEXT("match_orientation"),
 			&FElysiumInterestingPlace::bMatchOrientation, EElysiumField::Save);  // +0x570 m_bMatchOrientation
-		ElysiumAddClassField(D, TEXT("max_npcs"), &FElysiumInterestingPlace::MaxNpcs,
-			EElysiumField::Save);  // +0x584 m_iMarkersAllocated
+		ElysiumAddClassField(D, TEXT("max_bounds"), &FElysiumInterestingPlace::MaxBoundsUnits,
+			EElysiumField::Save);  // +0x558 m_vecMaxBounds
+		ElysiumAddClassField(D, TEXT("max_npcs"), &FElysiumInterestingPlace::MarkersAllocated,
+			EElysiumField::None);  // +0x584 m_iMarkersAllocated
 		ElysiumAddClassField(D, TEXT("max_time"), &FElysiumInterestingPlace::MaxTime,
 			EElysiumField::Save);  // +0x56c m_fMaxStayTime
+		ElysiumAddClassField(D, TEXT("min_bounds"), &FElysiumInterestingPlace::MinBoundsUnits,
+			EElysiumField::Save);  // +0x54c m_vecMinBounds
 		ElysiumAddClassField(D, TEXT("min_time"), &FElysiumInterestingPlace::MinTime,
 			EElysiumField::Save);  // +0x568 m_fMinStayTime
 		ElysiumAddClassField(D, TEXT("rating"), &FElysiumInterestingPlace::Rating,
 			EElysiumField::Save);  // +0x578 m_iRating
 		ElysiumAddClassField(D, TEXT("type"), &FElysiumInterestingPlace::Type, EElysiumField::Save);  // +0x544 m_sType
 		// UNBOUND +0x571 m_bHolsterWeapon "holster_weapon" — no port member
-		// UNBOUND +0x558 m_vecMaxBounds "max_bounds" — no port member
-		// UNBOUND +0x54c m_vecMinBounds "min_bounds" — no port member
 	}
 
 	void AddHintFields(FElysiumClassDesc& D)
@@ -1368,6 +1421,7 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x5f70 int
 		ElysiumAddClassField(D, TEXT("m_startTime"), &FElysiumScriptedSequence::StartTime,
 			EElysiumField::Save);  // +0x5f74 time
+		D.TimeField(TEXT("m_startTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_saved_movetype"), &FElysiumScriptedSequence::SavedMoveType,
 			EElysiumField::Save);  // +0x5f78 int
 		ElysiumAddClassField(D, TEXT("m_saved_movecollide"),
@@ -1468,6 +1522,7 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcAndreiBlood::bAndreiTriggerUnhide, EElysiumField::Save);  // +0x66ce bool
 		ElysiumAddClassField(D, TEXT("m_fTeleportWaitStartTime"),
 			&FElysiumNpcAndreiBlood::AndreiTeleportWaitStartTime, EElysiumField::Save);  // +0x66d0 time
+		D.TimeField(TEXT("m_fTeleportWaitStartTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_bForceTeleport"),
 			&FElysiumNpcAndreiBlood::bAndreiForceTeleport, EElysiumField::Save);  // +0x66d4 bool
 		ElysiumAddClassField(D, TEXT("m_iHitCounter"), &FElysiumNpcAndreiBlood::AndreiHitCounter,
@@ -1539,6 +1594,7 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcBach::BachLastOccludeOriginUnits, EElysiumField::Save);  // +0x6664 vector
 		ElysiumAddClassField(D, TEXT("m_flOccludeEnterTime"),
 			&FElysiumNpcBach::BachOccludeEnterTime, EElysiumField::Save);  // +0x6670 time
+		D.TimeField(TEXT("m_flOccludeEnterTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_iWasOccluded"), &FElysiumNpcBach::BachWasOccluded,
 			EElysiumField::Save);  // +0x6674 int
 		ElysiumAddClassField(D, TEXT("m_iReusedOccludeCount"),
@@ -1547,16 +1603,22 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x667c int
 		ElysiumAddClassField(D, TEXT("m_flLastGrenadeTime"), &FElysiumNpcBach::BachLastGrenadeTime,
 			EElysiumField::Save);  // +0x6680 time
+		D.TimeField(TEXT("m_flLastGrenadeTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flShieldTime"), &FElysiumNpcBach::BachShieldTime,
 			EElysiumField::Save);  // +0x6684 time
+		D.TimeField(TEXT("m_flShieldTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flNextShieldTime"), &FElysiumNpcBach::BachNextShieldTime,
 			EElysiumField::Save);  // +0x6688 time
+		D.TimeField(TEXT("m_flNextShieldTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flNextWeaponSwitchTime"),
 			&FElysiumNpcBach::BachNextWeaponSwitchTime, EElysiumField::Save);  // +0x668c time
+		D.TimeField(TEXT("m_flNextWeaponSwitchTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flNextHolyLightTime"),
 			&FElysiumNpcBach::BachNextHolyLightTime, EElysiumField::Save);  // +0x6690 time
+		D.TimeField(TEXT("m_flNextHolyLightTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flWarningTime"), &FElysiumNpcBach::BachWarningTime,
 			EElysiumField::Save);  // +0x6694 time
+		D.TimeField(TEXT("m_flWarningTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flSkipToWarningTime"),
 			&FElysiumNpcBach::BachSkipToWarningTime, EElysiumField::Save);  // +0x6698 float
 		ElysiumAddClassField(D, TEXT("m_iBachTeleportState"), &FElysiumNpcBach::BachTeleportState,
@@ -1600,16 +1662,20 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcChangBros::ChangLastTeleportPosition, EElysiumField::Save);  // +0x66bc vector
 		ElysiumAddClassField(D, TEXT("m_fLastTeleportTime"),
 			&FElysiumNpcChangBros::ChangLastTeleportTime, EElysiumField::Save);  // +0x66c8 time
+		D.TimeField(TEXT("m_fLastTeleportTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_fLastJumpTime"), &FElysiumNpcChangBros::LastJumpTime,
 			EElysiumField::Save);  // +0x66cc time
+		D.TimeField(TEXT("m_fLastJumpTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_fFacingTime"), &FElysiumNpcChangBros::FacingTime,
 			EElysiumField::Save);  // +0x66d0 time
+		D.TimeField(TEXT("m_fFacingTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_vArenaCenter"), &FElysiumNpcChangBros::ChangArenaCenter,
 			EElysiumField::Save);  // +0x66dc vector
 		ElysiumAddClassField(D, TEXT("m_bCenterStored"), &FElysiumNpcChangBros::bChangCenterStored,
 			EElysiumField::Save);  // +0x66e8 bool
 		ElysiumAddClassField(D, TEXT("m_fLastUnitedAttackTime"),
 			&FElysiumNpcChangBros::ChangLastUnitedAttackTime, EElysiumField::Save);  // +0x66ec time
+		D.TimeField(TEXT("m_fLastUnitedAttackTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_hCenterEmitter"),
 			&FElysiumNpcChangBros::ChangCenterEmitter, EElysiumField::Save);  // +0x66f4 ehandle
 		// NOT SAVED +0x66d4 m_fUnitedTime (time) — no port member (the species shape map's ABSENT
@@ -1696,6 +1762,7 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x6668 int
 		ElysiumAddClassField(D, TEXT("m_flNextTouchBurnTime"),
 			&FElysiumNpcGhoulCroucher::GhoulNextTouchBurnTime, EElysiumField::Save);  // +0x666c time
+		D.TimeField(TEXT("m_flNextTouchBurnTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_hBurningParticle"),
 			&FElysiumNpcGhoulCroucher::BurningParticle, EElysiumField::Save);  // +0x6670 ehandle
 	}
@@ -1720,14 +1787,17 @@ namespace ElysiumNpcKernelBindings
 		// and they cannot collide with the externals above.
 		ElysiumAddClassField(D, TEXT("m_flIgnoreCollisionTimer"),
 			&FElysiumNpc::IgnoreCollisionUntil, EElysiumField::Save);  // +0x6458 time
+		D.TimeField(TEXT("m_flIgnoreCollisionTimer"), EElysiumTimePolicy::MaxFloat); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_hPickupTarget"),
 			&FElysiumNpcHengeyokai::HengeyokaiPickupTarget, EElysiumField::Save);  // +0x6664 ehandle
 		ElysiumAddClassField(D, TEXT("m_iPickupTargetGrabBone"),
 			&FElysiumNpcHengeyokai::HengeyokaiPickupTargetGrabBone, EElysiumField::Save);  // +0x6668 int
 		ElysiumAddClassField(D, TEXT("m_flFishTimer"), &FElysiumNpc::HengeyokaiFishTimer,
 			EElysiumField::Save);  // +0x666c time
+		D.TimeField(TEXT("m_flFishTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flShunnedFishTimer"),
 			&FElysiumNpcHengeyokai::HengeyokaiShunnedFishTimer, EElysiumField::Save);  // +0x6670 time
+		D.TimeField(TEXT("m_flShunnedFishTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_iShunnedFindFish"),
 			&FElysiumNpcHengeyokai::HengeyokaiShunnedFindFish, EElysiumField::Save);  // +0x6678 int
 		ElysiumAddClassField(D, TEXT("m_bJustFoundFish"),
@@ -1781,12 +1851,15 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcManBat::ManBatMoveGoalNodeId, EElysiumField::Save);  // +0x6674 int
 		ElysiumAddClassField(D, TEXT("m_flFlapTimer"), &FElysiumNpcManBat::ManBatFlapTimer,
 			EElysiumField::Save);  // +0x6678 time
+		D.TimeField(TEXT("m_flFlapTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flFlyTimer"), &FElysiumNpcManBat::ManBatFlyTimer,
 			EElysiumField::Save);  // +0x667c time
+		D.TimeField(TEXT("m_flFlyTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_hSlowedEntity"), &FElysiumNpcManBat::ManBatSlowedEntity,
 			EElysiumField::Save);  // +0x6680 ehandle
 		ElysiumAddClassField(D, TEXT("m_flSlowedExpire"), &FElysiumNpcManBat::ManBatSlowedExpire,
 			EElysiumField::Save);  // +0x6684 time
+		D.TimeField(TEXT("m_flSlowedExpire")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_pFlyNode"), &FElysiumNpcManBat::ManBatFlyNode,
 			EElysiumField::Save);  // +0x6688 classptr
 		ElysiumAddClassField(D, TEXT("m_hPickupTarget"), &FElysiumNpcManBat::ManBatPickupTarget,
@@ -1862,6 +1935,7 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.Proxies[5]; }, EElysiumField::Save);  // +0x668c[5] ehandle
 		ElysiumAddClassField(D, TEXT("m_flProxyReadyTimer"),
 			&FElysiumNpcMingXiao::MingXiaoProxyReadyTimer, EElysiumField::Save);  // +0x66a4 time
+		D.TimeField(TEXT("m_flProxyReadyTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhSeveredTentacles[0]"),
 			[](auto& E) -> auto&{ return E.SeveredTentacles[0]; }, EElysiumField::Save);  // +0x66a8[0] ehandle
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhSeveredTentacles[1]"),
@@ -1876,18 +1950,25 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.SeveredTentacles[5]; }, EElysiumField::Save);  // +0x66a8[5] ehandle
 		ElysiumAddClassField(D, TEXT("m_flSpitAttackTimer"),
 			&FElysiumNpcMingXiao::MingXiaoSpitAttackTimer, EElysiumField::Save);  // +0x66c0 time
+		D.TimeField(TEXT("m_flSpitAttackTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[0]"),
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[0]; }, EElysiumField::Save);  // +0x66c4[0] time
+		D.TimeField(TEXT("m_rflAttackTimers[0]")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[1]"),
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[1]; }, EElysiumField::Save);  // +0x66c4[1] time
+		D.TimeField(TEXT("m_rflAttackTimers[1]")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[2]"),
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[2]; }, EElysiumField::Save);  // +0x66c4[2] time
+		D.TimeField(TEXT("m_rflAttackTimers[2]")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[3]"),
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[3]; }, EElysiumField::Save);  // +0x66c4[3] time
+		D.TimeField(TEXT("m_rflAttackTimers[3]")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[4]"),
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[4]; }, EElysiumField::Save);  // +0x66c4[4] time
+		D.TimeField(TEXT("m_rflAttackTimers[4]")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[5]"),
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[5]; }, EElysiumField::Save);  // +0x66c4[5] time
+		D.TimeField(TEXT("m_rflAttackTimers[5]")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflHitPoints[0]"),
 			[](auto& E) -> auto&{ return E.MingXiaoHitPoints[0]; }, EElysiumField::Save);  // +0x66dc[0] float
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflHitPoints[1]"),
@@ -1902,16 +1983,22 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.MingXiaoHitPoints[5]; }, EElysiumField::Save);  // +0x66dc[5] float
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[0]"),
 			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[0]; }, EElysiumField::Save);  // +0x66f4[0] time
+		D.TimeField(TEXT("m_rflRegrowTimers[0]")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[1]"),
 			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[1]; }, EElysiumField::Save);  // +0x66f4[1] time
+		D.TimeField(TEXT("m_rflRegrowTimers[1]")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[2]"),
 			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[2]; }, EElysiumField::Save);  // +0x66f4[2] time
+		D.TimeField(TEXT("m_rflRegrowTimers[2]")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[3]"),
 			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[3]; }, EElysiumField::Save);  // +0x66f4[3] time
+		D.TimeField(TEXT("m_rflRegrowTimers[3]")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[4]"),
 			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[4]; }, EElysiumField::Save);  // +0x66f4[4] time
+		D.TimeField(TEXT("m_rflRegrowTimers[4]")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[5]"),
 			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[5]; }, EElysiumField::Save);  // +0x66f4[5] time
+		D.TimeField(TEXT("m_rflRegrowTimers[5]")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_iConnectedTentacleCount"),
 			&FElysiumNpcMingXiao::MingXiaoConnectedTentacleCount, EElysiumField::Save);  // +0x670c int
 		ElysiumAddClassField(D, TEXT("m_iSeveredTentacleMask"),
@@ -1938,6 +2025,7 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x6748 float
 		ElysiumAddClassField(D, TEXT("m_flChargeReadyTime"),
 			&FElysiumNpcMingXiao::MingXiaoChargeReadyTime, EElysiumField::Save);  // +0x674c time
+		D.TimeField(TEXT("m_flChargeReadyTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_bBlockedByFriend"), &FElysiumNpcMingXiao::bBlockedByFriend,
 			EElysiumField::Save);  // +0x6750 bool
 	}
@@ -1963,12 +2051,16 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x6670 int
 		ElysiumAddClassField(D, TEXT("m_flPhaseExpireTimer"),
 			&FElysiumNpcMingXiaoTentacle::MingXiaoTentaclePhaseExpireTimer, EElysiumField::Save);  // +0x6674 time
+		D.TimeField(TEXT("m_flPhaseExpireTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flFailedEvadeTimer"),
 			&FElysiumNpcMingXiaoTentacle::MingXiaoTentacleFailedEvadeTimer, EElysiumField::Save);  // +0x6678 time
+		D.TimeField(TEXT("m_flFailedEvadeTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flUpdateEvadeTimer"),
 			&FElysiumNpcMingXiaoTentacle::TentacleUpdateEvadeTimer, EElysiumField::Save);  // +0x667c time
+		D.TimeField(TEXT("m_flUpdateEvadeTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flHideReadyTimer"),
 			&FElysiumNpcMingXiaoTentacle::TentacleHideReadyTimer, EElysiumField::Save);  // +0x6680 time
+		D.TimeField(TEXT("m_flHideReadyTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_bIgnoreCollision"),
 			&FElysiumNpcMingXiaoTentacle::bIgnoreCollisionSpecies, EElysiumField::Save);  // +0x6688 bool
 		ElysiumAddClassField(D, TEXT("m_vecScatterCenter"),
@@ -2024,6 +2116,7 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcSabbatLeader::SabbatLastWaterLevel, EElysiumField::Save);  // +0x66c4 int
 		ElysiumAddClassField(D, TEXT("m_fLastSplashTime"),
 			&FElysiumNpcSabbatLeader::SabbatLastSplashTime, EElysiumField::Save);  // +0x66c8 time
+		D.TimeField(TEXT("m_fLastSplashTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_LastPlayerHealth"),
 			&FElysiumNpcSabbatLeader::SabbatLastPlayerHealth, EElysiumField::Save);  // +0x66cc int
 		ElysiumAddClassField(D, TEXT("m_bTrackPlayer"),
@@ -2060,6 +2153,7 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcScurrying::ScurryingFrightDistanceUnits, EElysiumField::Save);  // +0x6698 m_flFrightDistance
 		ElysiumAddClassField(D, TEXT("fright_duration"),
 			&FElysiumNpcScurrying::ScurryingFrightDurationSeconds, EElysiumField::Save);  // +0x669c m_flFrightDurationSeconds
+		D.TimeField(TEXT("fright_duration")); // 0x101a0a80 TIME metadata
 	}
 
 	void AddSheriffManSaveFields(FElysiumClassDesc& D)
@@ -2075,6 +2169,7 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcSheriffMan::SheriffLastTeleportPosition, EElysiumField::Save);  // +0x66d4 vector
 		ElysiumAddClassField(D, TEXT("m_fLastTeleportTime"),
 			&FElysiumNpcSheriffMan::SheriffLastTeleportTime, EElysiumField::Save);  // +0x66e0 time
+		D.TimeField(TEXT("m_fLastTeleportTime")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_bTeleporting"),
 			&FElysiumNpcSheriffMan::bSheriffTeleporting, EElysiumField::Save);  // +0x66e4 bool
 		ElysiumAddClassField(D, TEXT("m_bDead"), &FElysiumNpcSheriffMan::bSheriffDead,
@@ -2107,6 +2202,7 @@ namespace ElysiumNpcKernelBindings
 		// and they cannot collide with the externals above.
 		ElysiumAddClassField(D, TEXT("m_flIgnoreCollisionTimer"),
 			&FElysiumNpc::IgnoreCollisionUntil, EElysiumField::Save);  // +0x6458 time
+		D.TimeField(TEXT("m_flIgnoreCollisionTimer"), EElysiumTimePolicy::MaxFloat); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_hPickupTarget"), &FElysiumNpcTzimisce::PickupTarget,
 			EElysiumField::Save);  // +0x6670 ehandle
 		ElysiumAddClassField(D, TEXT("m_vecPickupTargetPos"),
@@ -2123,10 +2219,13 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x668c int
 		ElysiumAddClassField(D, TEXT("m_flBodyTimer"), &FElysiumNpcTzimisce::TzimisceBodyTimer,
 			EElysiumField::Save);  // +0x66a4 time
+		D.TimeField(TEXT("m_flBodyTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flPounceCheckTimer"),
 			&FElysiumNpcTzimisce::TzimiscePounceCheckTimer, EElysiumField::Save);  // +0x66ac time
+		D.TimeField(TEXT("m_flPounceCheckTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_flShunnedBodyTimer"),
 			&FElysiumNpcTzimisce::TzimisceShunnedBodyTimer, EElysiumField::Save);  // +0x66b0 time
+		D.TimeField(TEXT("m_flShunnedBodyTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_bDidFakeThrow"),
 			&FElysiumNpcTzimisce::bTzimisceDidFakeThrow, EElysiumField::Save);  // +0x66b4 bool
 		ElysiumAddClassField(D, TEXT("m_iShunnedFindBody"),
@@ -2148,6 +2247,7 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcTzimisceHeadClaw::HeadClawSlowedEntity, EElysiumField::Save);  // +0x6674 ehandle
 		ElysiumAddClassField(D, TEXT("m_flSlowedExpire"),
 			&FElysiumNpcTzimisceHeadClaw::HeadClawSlowedExpire, EElysiumField::Save);  // +0x6678 time
+		D.TimeField(TEXT("m_flSlowedExpire")); // 0x101a0a80 TIME metadata
 	}
 
 	void AddTzimisceRunnerSaveFields(FElysiumClassDesc& D)
@@ -2242,6 +2342,7 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x66c8 bool
 		ElysiumAddClassField(D, TEXT("m_flTimeTeleportedOut"),
 			&FElysiumNpcWerewolf::WerewolfTimeTeleportedOut, EElysiumField::Save);  // +0x66f0 time
+		D.TimeField(TEXT("m_flTimeTeleportedOut")); // 0x101a0a80 TIME metadata
 	}
 
 	void AddWolfMorphSaveFields(FElysiumClassDesc& D)
@@ -2284,6 +2385,7 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcZombie::ZombieDeathForceVector, EElysiumField::Save);  // +0x6680 vector
 		ElysiumAddClassField(D, TEXT("m_flGrappleReadyTimer"),
 			&FElysiumNpcZombie::ZombieGrappleReadyTimer, EElysiumField::Save);  // +0x66d8 time
+		D.TimeField(TEXT("m_flGrappleReadyTimer")); // 0x101a0a80 TIME metadata
 		ElysiumAddClassField(D, TEXT("m_bShouldGib"), &FElysiumNpcZombie::bZombieShouldGib,
 			EElysiumField::Save);  // +0x66e0 bool
 	}
@@ -3012,7 +3114,7 @@ namespace ElysiumNpcKernelBindings
 			case EClass::NpcBase:
 				return {4, 0, 16, 1, 56};
 			case EClass::InterestingPlace:
-				return {8, 3, 10, 2, 0};
+				return {10, 1, 10, 2, 0};
 			case EClass::Hint:
 				return {11, 0, 10, 5, 0};
 			case EClass::ConversationPlace:

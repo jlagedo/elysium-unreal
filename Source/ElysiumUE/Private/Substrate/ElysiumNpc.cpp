@@ -568,12 +568,15 @@ namespace
 	// view, so nothing sees the corpse there.
 	void NpcSubPvsRemove(FElysiumNpc& Npc, double Now)
 	{
-		const FElysiumPlayer* const Player = Npc.World != nullptr ? Npc.World->FindPlayer() : nullptr;
+		FElysiumPlayer* const Player = Npc.World != nullptr ? Npc.World->FindPlayer() : nullptr;
 		const IElysiumEmbodiment* const Embodiment = Npc.World != nullptr ? Npc.World->Embodiment() : nullptr;
-		if (Player != nullptr && Embodiment != nullptr
-			&& Embodiment->IsNpcMakerInPlayerViewCone(Npc.Origin)                  // player slot 363 (+0x5ac)
-			&& Embodiment->ArePointsInSamePvs(Player->Origin, Npc.Origin)          // 0x101d1a90
-			&& Embodiment->IsNpcMakerVisibleFromPlayer(Npc.Origin))                // player slot 201 (+0x324)
+		const bool bCone = Player && Player->FInViewCone(&Npc); // slot3630x10326750: centre/scalar/native FOV
+		const bool bPvs = bCone && Embodiment && Embodiment->ArePointsInSamePvs(Player->Origin, Npc.Origin); // no PVS source in a headless world
+		const bool bVisible = bPvs && FElysiumNpc::BaseEntityFVisibleFrom(*Player, Npc, 0x2804091); // slot2010x100a6fa0 probe0
+		if (Npc.World && Npc.World->HasAiTraceSink()) Npc.World->EmitAiTrace(Npc, FName(TEXT("script")), FString::Printf(TEXT("pvsremove cone=%d pvs=%s visible=%s origin=%s player=%s"),
+			bCone ? 1 : 0, bCone ? (bPvs ? TEXT("1") : TEXT("0")) : TEXT("skipped"), bPvs ? (bVisible ? TEXT("1") : TEXT("0")) : TEXT("skipped"),
+			*Npc.Origin.ToString(), Player ? *Player->Origin.ToString() : TEXT("absent")));
+		if (bVisible) // same short-circuit cone -> PVS -> visibility order, 0x102696f0
 		{
 			Npc.NextThink = static_cast<float>(Now + static_cast<double>(GNpcCorpseThinkDelaySeconds));   // param_1[0x5f] = curtime + 10.0
 			return;
@@ -904,7 +907,7 @@ FElysiumInterestingPlace* FElysiumNpc::ClaimAmbientSpot()
 		Picked = LastPlace;
 	}
 	// `PickSpotFor 0x102da0d0`'s claim; `TASK_FIND_INTERESTING_PLACE` stores `+0x62ec`.
-	if (Picked && Picked->Claim(Handle))
+	if (Picked != nullptr) // 0x102db590 selects; PickSpotFor is the caller's separate transaction
 	{
 		CurrentSpotIndex = Picked->Handle.Index;
 		return Picked;
@@ -1593,12 +1596,9 @@ void FElysiumNpc::FinishAmbientUse(bool bFireLeft)
 		// ported here. **Unrecovered in the substrate:** its second refusal (the place's marker table
 		// `+0x580` does not name this NPC) -- the port keeps the visitor record as the place's claimant
 		// set and `FMarker::Occupant` has no writer, so that test would refuse every visit.
+		ValidateRestoredInterestingPlace(); // 0x102b53d0 -> 0x10299a80 both consistency refusals
+		if (CurrentSpotIndex == INDEX_NONE) return; // preserve arrived latch on invalid release
 		FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
-		if (Spot == nullptr)
-		{
-			CurrentSpotIndex = INDEX_NONE;
-			return;
-		}
 		// **Unrecovered:** `0x102b5451..0x102b54e0`, two `EmitSound`s through a
 		// `CPASAttenuationFilter` (channel 4 then 2, pitch `0x24`, volume 100); the sample names come
 		// from the sound-emitter interface (`DAT_1070b22c +0x8c`) and are not read. Not emitted.
@@ -1616,12 +1616,7 @@ void FElysiumNpc::FinishAmbientUse(bool bFireLeft)
 		// `0x102da600(place, this, 1, fired)` (`0x102b551d`): `npc +0x62fc := place` before its
 		// marker scan, then on the visitor match the place's `OnNPCLeft` (`+0x468`) when `fired`, and
 		// the visitor record removed.
-		LastSpotIndex = Spot->Handle.Index;                                         // +0x62fc
-		if (bFired)
-		{
-			Spot->Left(Handle);
-		}
-		Spot->Release(Handle);
+		Spot->Release(Handle, bFired); // 0x102da600 clears occupant before conditional place output, then swap-removes row
 		CurrentSpotIndex = INDEX_NONE;                                              // 0x102b553c +0x62ec
 		AmbientPhase = EAmbientPhase::None;                                         // 0x102b5542 +0x6304
 		NpcFlags.Clear(EElysiumNpcFlag::INTERESTING_INTO);                          // +0x14b8 &= 0xdfffffff
@@ -1735,6 +1730,18 @@ void FElysiumNpc::Activate()
 	// The hearing cursor starts at the live head so an NPC never hears the map's own load.
 	Senses.StartSoundCursorAtHead(*this);
 	Mind.ArmAdmission();
+	if (bHidden) // 0x100a8710: lawful activation/body admission does not unpark NPCThink
+	{
+		if (!bSavedPhysicalWordsAvailable)
+		{
+			bSavedPhysicalWordsAvailable = ReadScriptPhysicalWords(ScriptSavedSolid, ScriptSavedMoveType,
+				ScriptSavedMoveCollide, ScriptSavedSolidFlags, ScriptSavedEffects);
+			if (bSavedPhysicalWordsAvailable) WriteScriptPhysicalWords(0, 0, 0, 4, 0xe0);
+		}
+		ThinkCallback = NAME_None;
+		NextThink = ELYSIUM_NEVER_THINK;
+		RestoreThinkCallback();
+	}
 	// Slot 420 `NPCInit` (`0x1029a0b0`) -- the writer of the eight think stamps, the PVS/LOS seeds,
 	// `m_flNextThink` and `InitPerceptionDistances` (`0x1029a6a4`) -- is NOT called here: retail runs
 	// it inside `Spawn` (`CAI_BaseNPCTroika::Spawn` `0x10299057`; `CNPC_VCamera::Spawn` `0x10368cf1`),
@@ -1840,9 +1847,11 @@ bool FElysiumNpc::IsTransmitted() const
 void FElysiumNpc::OnDormancyChanged()
 {
 	FElysiumCombatCharacter::OnDormancyChanged();
+	RestoreThinkCallback(); // 0x100a8710/0x100a8990 public FUNCTION identity follows hide/unhide
 	if (IsInert())
 	{
-		ReleaseOnDeathOrDormancy(bDead ? TEXT("death") : TEXT("dormancy"), bDead);
+		if (!bHidden && (World == nullptr || !World->IsApplyingSnapshot()))
+			ReleaseOnDeathOrDormancy(bDead ? TEXT("death") : TEXT("dormancy"), bDead); // 0x100a8710 hidden/restore does not clear schedule or release markers
 		// A hidden body is off screen and off its route anyway; the hold must not outlive the
 		// silence that placed it, or the unhide would wake a body that cannot move.
 		SetBodyHeld(false);
@@ -1890,7 +1899,20 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 	SerializePedestrianLink(Ar);  // Troika Save's tail: `+0x630c != 0`, then `link+4` / `link+8` (the archive is the mechanism)
 	SerializePatrolBlock(Ar);
 	SerializeMakerBlock(Ar);
-	SerializeMindBlock(Ar);
+	Ar.Time(NextAttackTime); // combat +0x1564 TIME SAVE, unlike weapon +0x730/+0x734 FLOAT; 0x102551ff
+	Ar << SequencePlaybackRate << RenderAlphaByte << RenderFxWord; // +0x6f4 FLOAT / +0x1a3 BYTE / +0x168, 0x1008df10/0x10269960
+	Ar << NavHeadCorner; // wp+0x20 retained semantic corner, 0x102f2330
+	int32 SavedSequenceRows = SequenceRows.Num(); // sequence bridge identities, 0x1008df10
+	Ar << SavedSequenceRows;
+	if (Ar.IsLoading())
+	{
+		if (SavedSequenceRows < 0 || SavedSequenceRows > 65536) { Ar.SetError(); return; }
+		SequenceRows.SetNum(SavedSequenceRows);
+		SequenceDescriptorRows.Reset(); // model/cache rebind without ResetSequenceInfo or RNG
+	}
+	for (FSequenceRow& SavedSequenceRow : SequenceRows)
+		Ar << SavedSequenceRow.OwnerStem << SavedSequenceRow.Label << SavedSequenceRow.RawIndex
+			<< SavedSequenceRow.bLoops << SavedSequenceRow.bSnap << SavedSequenceRow.Seconds;
 	Senses.Serialize(Ar);
 	Ar << bLoadoutResolved;
 	Disciplines.Serialize(Ar);
@@ -1899,7 +1921,7 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 	// `m_flNextComfortCheckTime`, a retail `SAVE` row and a recorded gap in the generated walk
 	// (`ElysiumNpcKernelBindings.cpp`: "the port member exists but its owner keeps it private"), so
 	// the record carries it until that owner opens a path.
-	Ar << NextComfortCheckTime;
+	Ar.Time(NextComfortCheckTime); // +0x62f8 TIME SAVE, 0x101a0a80
 	// `m_fEffects` (`CBaseEntity +0x19c`, datamap offset 412, flags 6 = `SAVE|KEY`, external
 	// `effects`): a retail save row the generated walk does not bind, so the record carries it. It is
 	// what keeps a restored `!playercontroller` undrawn (`EF_NODRAW`, `GetControllerNPC` `0x10161a70`);
@@ -1917,107 +1939,35 @@ void FElysiumNpc::OnPostRestore(FElysiumEntityWorld& InWorld)
 	// --- Retail's own chain, arm for arm (the seams inside it are named at their sites). ---
 	// `FElysiumNpcBase::OnRestore` re-finds the program the record named, compares the checksum of its task
 	// array against the one the record carries, and gives up to `RestoreGiveUp` when either fails.
-	OnRestore(/*bFromLoad=*/true);
-	RestartRestoredSchedule();
+	PrepareRestoredBody(); // 0x100aa140 synchronize motor before 0x102ee1e0 re-find
+	OnRestore(InWorld.IsLevelTransitionRestore()); // 0x1011a710/0x1011a620; true only with an old level
+	RestoreThinkCallback(); // 0x100aa140; valid OnRestore does not install/start the program
+	RestoreNativeAnimation(); // 0x1008df10 seek adapter; no replay or ResetSequenceInfo
 
 	// --- The port's re-derivations, which retail has no counterpart for. ---
 	// Each of these is a component saying what its own restored words mean; the order is the order
 	// the components depend on one another in, and no component reads an archive.
 	ScheduleHost.OnPostRestore();
-	// The base layer's memory first: the senses' own rebase reads its enemy.
-	if (World)
-	{
-		BaseMemory.Rebase(*World);
-	}
-	else
-	{
-		BaseMemory.Reset();
-	}
-	Senses.OnPostRestore(*this);
-	EnemyMemory.Rebase(InWorld);
-	Relationships.Rebase(InWorld);
-	Witness.Rebase(InWorld);
-	RestoreDisciplineState(InWorld);
-
-	// `m_hTargetEnt` and the maker relationship ride the record rather than the walk (both are
-	// recorded gaps), so their epochs are this hook's to re-stamp.
-	TargetEnt = InWorld.RebaseSavedHandle(TargetEnt);
-	OwnerEntity = InWorld.RebaseSavedHandle(OwnerEntity);
-
+	// 0x101a2e40: owned EHANDLE fixup already completed before OnRestore.
+	Senses.OnPostRestore(*this); // transient sight cache/tuning only
+	RestoreDisciplineState(InWorld); // 0x10323b60 owned effect/cache reconstruction after the native hook
 	RestorePatrolAndAmbient();
-	RestoreMindState();
+	// 0x1027bf50: raw mind words were decoded before prerequisite validation.
 
-	// Conditions are not saved (`ElysiumNpcConditions.h`): slot 433 rebuilds them on the first pass.
-	// `m_bConditionsGathered` (+0x5ca4) is not saved either: a restored body has not gathered. (The
-	// old stamp-the-load-time edge served the port's re-deriving gather, deleted at story 8 wave 2.)
+	// 0x1027bc60: condition masks are transient; BOOL gathered was saved separately.
 	Cognition.Conditions.Reset();
-	Cognition.GatheredAt = -1.0;
 	RestoreDeathBodyState();
 	// The restored `m_fEffects` decides whether the body is transmitted (`ShouldTransmit` `0x100ab020`).
 	RefreshVisualGate();
 }
 
-// **Divergence, stated.** Retail's `OnRestore` installs the re-found program by writing
-// `m_pSchedule` and nothing else, because its datamap has already restored the whole
-// `m_ScheduleState` block underneath it -- the task index at `+0x5c50` (which is what the ceiling
-// clamp just above exists to sanitise), `timeStarted +0x5c48` and `timeCurTaskStarted +0x5c4c`. So
-// a retail NPC genuinely RESUMES mid-program.
-//
-// This port does not save those three words, deliberately: a task holds a playing clip, a pending
-// motor move or a wall-clock deadline, and none of those survive a load, so resuming at task 3
-// would hold a pose nothing is playing. Restarting the same program keeps the intent (an NPC
-// mid-lookaround resumes looking around rather than dropping to its stance) without pretending the
-// state under it survived. That choice is older than this hook; what changes with pass C is only
-// WHICH program comes back -- retail's re-find by name and task-array checksum instead of a saved
-// enum -- so the restart is applied here, over retail's own answer, rather than inside it.
-void FElysiumNpc::RestartRestoredSchedule()
-{
-	if (!Schedule.IsRunning())
-	{
-		return;
-	}
-	const int32 Restored = Schedule.Current;
-	// `Clear` and not `ClearSchedule`: nothing is running here, the record is being replaced by the
-	// one the header named. Dispatching slot 435 would release the NPC flag word the record has
-	// just restored, and the program would come back conversable and un-oblivious.
-	Schedule.Clear();
-	ElysiumSchedule::Start(Schedule, Restored, *this);
-}
-
-// A restored body stands where the record puts it, so no in-flight travel survives the load; a beat
-// cannot be in flight across a save at all (`FElysiumScriptedSequence::SaveBlockReason`, a named
-// modernization). The patrol path objects come back with the record (`SerializePatrolBlock`) and
-// `TroikaOnRestore` validates them (`0x1029f610`).
+// 0x102998c0: marker rows are restored before this consumer; no post-load claimant replay.
 void FElysiumNpc::RestorePatrolAndAmbient()
 {
-	bMoveIssued = false;
-	// A held place is the word `m_pInterestingPlace +0x62ec`, held from `TASK_FIND_INTERESTING_PLACE`
-	// on (mode `+0x6304` still 0 on the walk there). The place's visitor record is not in the save
-	// (`place +0x564` is unsaved, `docs/vtmb/entity_io.md`), so the claim is taken again here.
-	if (CurrentSpotIndex != INDEX_NONE)
-	{
-		FElysiumInterestingPlace* Spot = CurrentAmbientSpot();
-		if (!Spot || !Spot->Claim(Handle))
-		{
-			CurrentSpotIndex = INDEX_NONE;
-			AmbientPhase = EAmbientPhase::None;
-			bAmbientArrived = false;
-		}
-	}
-	// No clock is touched on any branch: the saved cadence is the authoritative one, and
-	// `ApplyEntityRecord` restamps the saved `NextThink` after this hook returns. Retail restores
-	// its stamps the same way and resets nothing on a load.
+	ValidateRestoredInterestingPlace(); // 0x10299a80, no Claim/arrival output or route reset
 }
 
-// The mind's state (`m_NPCState +0x5cc0`, a datamap word), after the patrol and ambient state the
-// step above has just settled. Retail saves no body owner (V3d deleted the port's owner byte); an
-// `aiscripted_schedule` keeps nothing on the NPC to restore (`0x101a98c0`), and what its push
-// durably changed is this state and, for mode 3, the committed enemy the senses record carries.
-void FElysiumNpc::RestoreMindState()
-{
-	Mind.Restore(static_cast<EElysiumNpcState>(RestoredMindState));
-}
-
+// 0x1032c0e0/0x10090180: restore visual corpse handoff without logical death replay.
 void FElysiumNpc::RestoreDeathBodyState()
 {
 	if (Mind.State() != EElysiumNpcState::Dead)
@@ -2079,8 +2029,8 @@ void FElysiumNpc::SerializePatrolBlock(FElysiumSaveArchive& Ar)
 	// arrived (schema `NpcAmbientExecutorRetired`: the executor's two timers are gone).
 	uint8 SavedAmbientPhase = static_cast<uint8>(AmbientPhase);
 	Ar << SavedAmbientPhase;
-	Ar << CurrentSpotIndex;
-	Ar << AmbientNextActivityAt;
+	Ar << CurrentSpotIndex; // 0x102db5e0 restores current place from rows; last place +0x62fc has no SAVE row
+	Ar.Time(AmbientNextActivityAt, EElysiumTimePolicy::MinusOne); // +0x63d4 TIME SAVE mode2, 0x102993c0/0x101a0a80
 	Ar << bAmbientArrived;
 	if (Ar.IsLoading())
 	{
@@ -2094,20 +2044,6 @@ void FElysiumNpc::SerializeMakerBlock(FElysiumSaveArchive& Ar)
 {
 	Ar << OwnerEntity;
 	Ar << bOwnerTerminationNotified;
-}
-
-// `m_NPCState` (`+0x5cc0`, a datamap word), as a raw word. The shape map records the state pair as
-// `PRIVATE`, so no compiled path reaches it and the walk cannot carry it. Validation is
-// `RestoreMindState`. Retail saves no body owner: the port's owner byte went in V3d
-// (`FElysiumSaveVersion::NpcMindOwnerRetired`).
-void FElysiumNpc::SerializeMindBlock(FElysiumSaveArchive& Ar)
-{
-	uint8 SavedState = static_cast<uint8>(Mind.State());
-	Ar << SavedState;
-	if (Ar.IsLoading())
-	{
-		RestoredMindState = SavedState;
-	}
 }
 
 // The NPC's own tracked discipline effects, restored. A targeted `disciplinetgt` cast lands its
@@ -2126,12 +2062,7 @@ void FElysiumNpc::RestoreDisciplineState(FElysiumEntityWorld& InWorld)
 	// Session state, never simulation state: a restored character starts from the live sound bus
 	// rather than replaying a retention window that no longer exists.
 	Disciplines.SoundCursor = 0;
-	// HitInfo end/interrupt callbacks (0x101dfe80) retain the original caster. Handle archives strip
-	// the map epoch; restore it before expiry resolves the source.
-	for (FElysiumActiveDisciplineEffect& Effect : Disciplines.TargetEffects)
-	{
-		Effect.Source = InWorld.RebaseSavedHandle(Effect.Source);
-	}
+	(void)InWorld; // 0x101a2e40 caster references were fixed before the native hook, not rederived here.
 
 	// The tracked rows say which authored groups this NPC is carrying; `Effects` is the list they
 	// were installed into, and an NPC's `Effects` is rebuilt at spawn from its `stattemplate` alone
@@ -2320,4 +2251,45 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		ElysiumNpcWitness::IsWindowOpen(Witness.NosferatuIgnoreUntil, LawNow)
 			? TEXT("OPEN") : TEXT("closed"),
 		Witness.bSupernaturalFleeOnly ? TEXT(", flee only") : TEXT("")));
+}
+
+void FElysiumNpc::RebaseSavedReferences(FElysiumEntityWorld& InWorld)
+{
+	FElysiumNpcBase::RebaseSavedReferences(InWorld); // 0x101a2e40 before OnRestore
+	OwnerEntity = InWorld.RestoreHandle(OwnerEntity); // maker/cine owner, 0x102998c0
+	NavHeadCorner = InWorld.RestoreHandle(NavHeadCorner); // wp+0x20, 0x102f2330
+	Senses.Memory.Rebase(InWorld, BaseMemory); // 0x10310710 owned sound handles
+	Witness.Rebase(InWorld); // 0x102998c0 owned witnesses
+	for (FElysiumActiveDisciplineEffect& SavedEffect : Disciplines.TargetEffects)
+		SavedEffect.Source = InWorld.RestoreHandle(SavedEffect.Source); // 0x101a2e40 retained caster before consumers
+}
+
+bool FElysiumNpc::ReadScriptPhysicalWords(int32& OutSolid, int32& OutMoveType, int32& OutMoveCollide,
+	int32& OutSolidFlags, int32& OutEffects) const
+{
+	OutSolid = RetailSolidType; // 0x100a8710 / 0x10027570 represented collision word; shared getter body is still owed
+	OutMoveType = GetMoveType();
+	OutMoveCollide = RetailMoveCollide; // 0x100aacd0 +0x159
+	OutSolidFlags = static_cast<int32>(RetailSolidFlags); // 0x100274d0 collision flags
+	OutEffects = static_cast<int32>(EffectsWord);
+	return true;
+}
+
+void FElysiumNpc::WriteScriptPhysicalWords(int32 InSolid, int32 InMoveType, int32 InMoveCollide,
+	int32 InSolidFlags, int32 InEffects)
+{
+	RetailSolidType = InSolid; // 0x100a8990 primitive writes, no guessed bit values
+	RetailMoveType = InMoveType;
+	RetailMoveCollide = InMoveCollide;
+	RetailSolidFlags = static_cast<uint32>(InSolidFlags);
+	EffectsWord = static_cast<uint32>(InEffects);
+	RestoreThinkCallback(); // saved FUNCTION restored by base ScriptUnhide before this hook
+}
+
+FElysiumEntity* FElysiumNpc::RestoreOwnerTargetSource() const
+{
+	// 0x102f2543: navigator owner NPC's +0x98, slot586 GetBestSeeUnknown.
+	// A resolved target is an unguarded native precondition; no follower is involved.
+	return World != nullptr ? World->Resolve(const_cast<FElysiumNpc*>(this)->GetBestSeeUnknown()) : nullptr;
+
 }

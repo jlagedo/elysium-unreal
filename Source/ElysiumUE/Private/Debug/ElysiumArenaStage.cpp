@@ -13,6 +13,9 @@
 #include "ElysiumGymSpec.h"                 // SeatOrigin, the one feet-to-centre conversion
 #include "ElysiumInputRouter.h"             // ResetPlayerState: the router's held-button latches
 #include "ElysiumMapActor.h"
+#include "ElysiumMapSubsystem.h"
+#include "ElysiumSaveArchive.h"
+#include "Engine/GameInstance.h"
 #include "ElysiumMapEntities.h"             // from_map: the baked DA_<map>_Entities reader
 #include "ElysiumMapPlaces.h"               // FElysiumPlaceRow, the network handed to the rebuild
 #include "ElysiumMoveSolve.h"               // ElysiumMove::U, for a moved row's Source `origin`
@@ -21,6 +24,7 @@
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPlayerController.h"
 #include "ElysiumRng.h"
+#include "Engine/Engine.h"
 #include "ElysiumSessionSubsystem.h"
 #include "ElysiumUserCmd.h"
 #include "Substrate/ElysiumDisciplines.h"   // ClearAll: the one discipline teardown
@@ -225,8 +229,340 @@ namespace ElysiumArenaStageDetail
 	}
 }
 
+
+// Harness envelope maps carry provenance through the NORMAL payload codec, never gameplay Load.
+// Retail save/restore consumer: 0x1027bc60/0x1027c160; post-restore fence: 0x1011a620.
+namespace ElysiumArenaStageTransport
+{
+	TWeakPtr<ElysiumArenaStage::FTransport> Active;
+	ElysiumArenaStage::FHostAdapter Adapter;
+	uint64 NextOperation = uint64(1) << 63;
+	const TCHAR* const SnapshotName = TEXT("__arena_checkpoint_v6");
+	const TCHAR* const EnvelopeName = TEXT("__arena_provenance_v6");
+	FString Number(double Value) { return FString::Printf(TEXT("%.17g"), Value); }
+
+	void EncodeEnvelope(const ElysiumArenaStage::FTransport& Transport, FElysiumSavePayload& Payload)
+	{
+		FElysiumMapSnapshot Envelope;
+		Envelope.MapName = EnvelopeName;
+		for (const FElysiumEntityDef& Def : Transport.Defs.Defs)
+		{
+			FElysiumEntityState& Row = Envelope.Entities.AddDefaulted_GetRef();
+			Row.bRuntime = true;
+			Row.Index = Envelope.Entities.Num() - 1;
+			Row.Def = Def;
+			// The ordinary runtime-def codec omits these annotations; envelope preserves them.
+			// Harness provenance only, removed before Load (0x101a2e40).
+			Row.Def.Keys.Add(TEXT("__arena_source_class"), Def.SourceClassname);
+			Row.Def.Keys.Add(TEXT("__arena_brush_mesh"), Def.BrushMesh);
+			Row.Def.Keys.Add(TEXT("__arena_cull"), Number(Def.CullMaxCm));
+			Row.Def.Keys.Add(TEXT("__arena_floor_count"), LexToString(Def.ElevatorFloors.Num()));
+			for (int32 FloorIndex = 0; FloorIndex < Def.ElevatorFloors.Num(); ++FloorIndex)
+				Row.Def.Keys.Add(FString::Printf(TEXT("__arena_floor_%d"), FloorIndex), Number(Def.ElevatorFloors[FloorIndex]));
+		}
+		Envelope.DefCount = Transport.Defs.Num();
+		for (const FElysiumPlaceRow& Node : Transport.Network)
+		{
+			FElysiumEntityState& Row = Envelope.Entities.AddDefaulted_GetRef();
+			Row.bRuntime = true;
+			Row.Index = Envelope.Entities.Num() - 1;
+			Row.Def.Classname = TEXT("__arena_network_v6");
+			Row.Def.Origin = Node.OriginCm;
+			Row.Def.Keys.Add(TEXT("index"), LexToString(Node.NetworkIndex));
+			Row.Def.Keys.Add(TEXT("type"), LexToString(Node.Type));
+			Row.Def.Keys.Add(TEXT("flags"), LexToString(Node.Flags));
+			Row.Def.Keys.Add(TEXT("yaw"), Number(Node.YawDeg));
+			Row.Def.Keys.Add(TEXT("wc"), LexToString(Node.WcId));
+			Row.Def.Keys.Add(TEXT("hint"), LexToString(Node.HintBspIndex));
+			for (int32 HullIndex = 0; HullIndex < 22; ++HullIndex)
+				Row.Def.Keys.Add(FString::Printf(TEXT("z%d"), HullIndex), Number(Node.ZOffsetCm[HullIndex]));
+		}
+		FElysiumEntityState& Seat = Envelope.Entities.AddDefaulted_GetRef();
+		Seat.bRuntime = true;
+		Seat.Index = Envelope.Entities.Num() - 1;
+		Seat.Def.Classname = TEXT("__arena_seat_v6");
+		Seat.Def.Origin = Transport.SeatFeet;
+		Seat.Def.Keys.Add(TEXT("yaw"), Number(Transport.SeatYaw));
+		Seat.Def.Keys.Add(TEXT("sky_scale"), Number(Transport.Defs.SkyScale));
+		Seat.Def.Keys.Add(TEXT("sky_origin"), Transport.Defs.SkyOrigin.ToString());
+		Payload.Maps.Add(EnvelopeName, MoveTemp(Envelope));
+	}
+
+	bool DecodeEnvelope(const FElysiumSavePayload& Payload, ElysiumArenaStage::FTransport& Transport, FString& Error)
+	{
+		const FElysiumMapSnapshot* Envelope = Payload.Maps.Find(EnvelopeName);
+		if (!Envelope || Envelope->DefCount < 0 || Envelope->Entities.Num() <= Envelope->DefCount)
+		{ Error = TEXT("missing or malformed arena provenance"); return false; }
+		Transport.Defs = FElysiumEntityDefs();
+		Transport.Network.Reset();
+		for (int32 DefIndex = 0; DefIndex < Envelope->DefCount; ++DefIndex)
+		{
+			const FElysiumEntityState& Row = Envelope->Entities[DefIndex];
+			if (!Row.bRuntime || Row.Index != DefIndex || Row.Def.Classname.IsEmpty())
+			{ Error = TEXT("invalid arena def provenance"); return false; }
+			FElysiumEntityDef Def = Row.Def;
+			Def.SourceClassname = Def.Keys.FindRef(TEXT("__arena_source_class"));
+			Def.BrushMesh = Def.Keys.FindRef(TEXT("__arena_brush_mesh"));
+			Def.CullMaxCm = FCString::Atof(*Def.Keys.FindRef(TEXT("__arena_cull")));
+			const int32 FloorCount = FCString::Atoi(*Def.Keys.FindRef(TEXT("__arena_floor_count")));
+			if (FloorCount < 0 || FloorCount > 8) { Error = TEXT("invalid arena floor provenance"); return false; }
+			for (int32 FloorIndex = 0; FloorIndex < FloorCount; ++FloorIndex)
+			{
+				const FString Key = FString::Printf(TEXT("__arena_floor_%d"), FloorIndex);
+				Def.ElevatorFloors.Add(FCString::Atof(*Def.Keys.FindRef(Key)));
+				Def.Keys.Remove(Key);
+			}
+			for (const TCHAR* Key : { TEXT("__arena_source_class"), TEXT("__arena_brush_mesh"), TEXT("__arena_cull"), TEXT("__arena_floor_count") }) Def.Keys.Remove(Key);
+			Transport.Defs.Defs.Add(MoveTemp(Def));
+		}
+		for (int32 NodeIndex = Envelope->DefCount; NodeIndex < Envelope->Entities.Num() - 1; ++NodeIndex)
+		{
+			const FElysiumEntityDef& Def = Envelope->Entities[NodeIndex].Def;
+			if (Def.Classname != TEXT("__arena_network_v6") || Def.Keys.Num() != 28)
+			{ Error = TEXT("invalid arena network provenance"); return false; }
+			FElysiumPlaceRow Node;
+			Node.OriginCm = Def.Origin;
+			Node.NetworkIndex = FCString::Atoi(*Def.Keys.FindRef(TEXT("index")));
+			Node.Type = FCString::Atoi(*Def.Keys.FindRef(TEXT("type")));
+			Node.Flags = FCString::Atoi(*Def.Keys.FindRef(TEXT("flags")));
+			Node.YawDeg = FCString::Atof(*Def.Keys.FindRef(TEXT("yaw")));
+			Node.WcId = FCString::Atoi(*Def.Keys.FindRef(TEXT("wc")));
+			Node.HintBspIndex = FCString::Atoi(*Def.Keys.FindRef(TEXT("hint")));
+			for (int32 HullIndex = 0; HullIndex < 22; ++HullIndex)
+				Node.ZOffsetCm[HullIndex] = FCString::Atof(*Def.Keys.FindRef(FString::Printf(TEXT("z%d"), HullIndex)));
+			Transport.Network.Add(Node);
+		}
+		const FElysiumEntityDef& Seat = Envelope->Entities.Last().Def;
+		if (Seat.Classname != TEXT("__arena_seat_v6")) { Error = TEXT("invalid arena seat provenance"); return false; }
+		Transport.SeatFeet = Seat.Origin;
+		Transport.SeatYaw = FCString::Atof(*Seat.Keys.FindRef(TEXT("yaw")));
+		Transport.Defs.SkyScale = FCString::Atof(*Seat.Keys.FindRef(TEXT("sky_scale")));
+		Transport.Defs.SkyOrigin.InitFromString(Seat.Keys.FindRef(TEXT("sky_origin")));
+		return true;
+	}
+}
+
 namespace ElysiumArenaStage
 {
+void SetHostAdapter(FHostAdapter InAdapter) { ElysiumArenaStageTransport::Adapter = MoveTemp(InAdapter); }
+void ConfigureHost(FHost& Host)
+{
+	if (!Host.Transport) Host.Transport = MakeShared<FTransport>();
+	if (ElysiumArenaStageTransport::Adapter) ElysiumArenaStageTransport::Adapter(Host);
+}
+FTransport::~FTransport() { Cancel(); }
+void FTransport::Cancel()
+{
+	if (UElysiumSessionSubsystem* State = Session.Get())
+		if (ResultHandle.IsValid()) State->OnSaveResult().Remove(ResultHandle);
+	ResultHandle.Reset();
+	Observer = nullptr;
+	bPending = false;
+}
+void FTransport::Emit(EFence Phase, AElysiumMapActor* Map, const FString& Reason)
+{
+	FTransactionFence Fence;
+	Fence.OperationId = OperationId;
+	Fence.Phase = Phase;
+	Fence.Map = Map;
+	Fence.World = Map ? Map->GetWorld() : nullptr;
+	Fence.MapIdentity = bArena ? TEXT("arena") : Map ? Map->MapName : ExpectedMap;
+	Fence.Reason = Reason;
+	if (Phase == EFence::Applied) bAppliedSent = true;
+	if (Phase == EFence::Written || Phase == EFence::Ready || Phase == EFence::Failed) bPending = false;
+	// Observer may cancel/destroy bindings; invoke a private copy (0x1011a620 synchronous fence).
+	const auto Notify = Observer;
+	if (Notify) Notify(Fence);
+}
+void NotifyWorldConstructed(AElysiumMapActor* Map)
+{
+	const TSharedPtr<FTransport> Transport = ElysiumArenaStageTransport::Active.Pin();
+	if (!Transport || !Transport->bPending || !Transport->bLoading || !Map) return;
+	if (!Transport->bArena && !Transport->ExpectedMap.IsEmpty() && Transport->ExpectedMap != Map->MapName)
+	{ Transport->Emit(EFence::Failed, Map, TEXT("wrong map at world construction")); return; }
+	Transport->PendingMap = Map;
+	Transport->Emit(EFence::Rebinding, Map);
+	if (FElysiumEntityWorld* World = Map->GetEntityWorld())
+	{
+		const TWeakPtr<FTransport> Weak = Transport;
+		const auto PreviousApplied = World->OnSnapshotApplied;
+		World->OnSnapshotApplied = [Weak, Map, PreviousApplied]()
+		{
+			if (PreviousApplied) PreviousApplied();
+			if (const TSharedPtr<FTransport> Live = Weak.Pin())
+				if (Live->bPending && !Live->bAppliedSent) Live->Emit(EFence::Applied, Map);
+		};
+	}
+}
+void NotifyWorldApplied(AElysiumMapActor* Map)
+{
+	if (const TSharedPtr<FTransport> Transport = ElysiumArenaStageTransport::Active.Pin())
+		if (Transport->bPending && Transport->bLoading && !Transport->bArena && Transport->PendingMap.Get() == Map && !Transport->bAppliedSent)
+			Transport->Emit(EFence::Applied, Map);
+}
+void FTransport::Poll()
+{
+	if (!bPending || !bLoading) return;
+	AElysiumMapActor* Map = PendingMap.Get();
+	if (!Map) return;
+	if (Map->GetRuntimePhase() == EElysiumMapRuntimePhase::Failed)
+	{ Emit(EFence::Failed, Map, Map->GetRuntimeFailureReason()); return; }
+	if (Map->GetRuntimePhase() == EElysiumMapRuntimePhase::Active)
+	{
+		if (!bAppliedSent) { Emit(EFence::Failed, Map, TEXT("ready without pre-think applied fence")); return; }
+		Emit(EFence::Ready, Map);
+	}
+}
+
+bool FTransport::Begin(const FHost& Host, const FElysiumArenaAction& Action,
+	TFunction<void(const FTransactionFence&)> InObserver, FString& OutError)
+{
+	if (bPending || Storage.IsWriting()) { OutError = TEXT("arena persistence operation in flight"); return false; }
+	UGameInstance* Instance = Host.GetWorld() ? Host.GetWorld()->GetGameInstance() : nullptr;
+	UElysiumSessionSubsystem* State = Instance ? Instance->GetSubsystem<UElysiumSessionSubsystem>() : nullptr;
+	UElysiumMapSubsystem* Maps = Instance ? Instance->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+	if (!State || !Maps || !Host.GetEntityWorld()) { OutError = TEXT("no real harness session/world"); return false; }
+	Cancel();
+	Session = State;
+	Observer = MoveTemp(InObserver);
+	bPending = true;
+	bLoading = Action.Do != EElysiumArenaAction::Save;
+	bArena = Host.bArena;
+	bAppliedSent = false;
+	OperationId = ++ElysiumArenaStageTransport::NextOperation;
+	PendingMap = Host.Map;
+	if (bLoading) PendingMap.Reset(); // no stale source map during replacement, 0x101a2e40
+	ElysiumArenaStageTransport::Active = AsShared();
+	const FString Slot = TEXT("__arena_v6_") + Action.Slot;
+	ExpectedMap = Action.Map;
+	if (!Host.bArena)
+	{
+		if (Action.Do == EElysiumArenaAction::FreshMap || Action.Do == EElysiumArenaAction::Travel)
+		{
+			const bool bAccepted = Action.Do == EElysiumArenaAction::FreshMap ? Maps->FreshLoad(Action.Map) : Maps->Travel(Action.Map, Action.Landmark);
+			if (!bAccepted) { OutError = TEXT("map travel refused"); Emit(EFence::Failed, Host.GetMap(), OutError); }
+			return bAccepted;
+		}
+		if (bLoading)
+		{
+			FElysiumSaveHeaderData Header;
+			if (State->ReadSlotHeader(Slot, Header)) ExpectedMap = Header.Map;
+		}
+		OperationId = 0; // latch actual session id at its first synchronous result
+		const TWeakPtr<FTransport> Weak = AsShared();
+		ResultHandle = State->OnSaveResult().AddLambda([Weak, Slot](const FElysiumSaveResult& Result)
+		{
+			const TSharedPtr<FTransport> Live = Weak.Pin();
+			if (!Live || !Live->bPending || Result.Slot != Slot) return;
+			if (Live->OperationId == 0) Live->OperationId = Result.OperationId;
+			if (Live->OperationId != Result.OperationId) return;
+			UElysiumSessionSubsystem* Current = Live->Session.Get();
+			if (!Current) return;
+			if (Result.State == EElysiumSaveOperationState::Failed) { Live->Emit(EFence::Failed, Live->PendingMap.Get(), Result.Error); return; }
+			if (!Live->bLoading && Result.State == EElysiumSaveOperationState::Written) { Live->Emit(EFence::Written, Live->PendingMap.Get()); return; }
+			const EElysiumPersistencePhase Phase = Current->LastPersistencePhase();
+			if (!Live->bLoading && Phase == EElysiumPersistencePhase::Captured && Result.State == EElysiumSaveOperationState::Capturing)
+				Live->Emit(EFence::Captured, Live->PendingMap.Get());
+			if (Live->bLoading && Phase == EElysiumPersistencePhase::Applied && !Live->bAppliedSent)
+				Live->Emit(EFence::Applied, Live->PendingMap.Get());
+			if (Live->bLoading && Phase == EElysiumPersistencePhase::Ready) Live->Poll();
+		});
+		FString WrittenSlot;
+		// The observer is armed above before the direct public alias. This proves the real
+		// console route, including inline refusal, rather than counting command enqueue as load.
+		const bool bAccepted = bLoading ? (GEngine && GEngine->Exec(Host.GetWorld(), *FString::Printf(TEXT("elysium.load %s"), *Slot)))
+			: State->RequestSave({ EElysiumSaveKind::Manual, Slot }, WrittenSlot, OutError);
+		if (!bAccepted && bPending) Emit(EFence::Failed, Host.GetMap(), OutError);
+		return bAccepted;
+	}
+	// Green Room codec/storage is explicit harness provenance; production baked-map gate untouched.
+	if (Action.Do == EElysiumArenaAction::Save)
+	{
+		if (!State->CanSave(OutError)) { Emit(EFence::Failed, Host.GetMap(), OutError); return false; }
+		FElysiumSavePayload Payload;
+		// BuildPayload fills every ordinary block before its final empty-map refusal.
+		if (!State->BuildPayload(Payload, OutError) && OutError != TEXT("no current map to save"))
+		{ Emit(EFence::Failed, Host.GetMap(), OutError); return false; }
+		OutError.Reset();
+		FElysiumMapSnapshot Snapshot;
+		Host.GetEntityWorld()->Freeze(Snapshot);
+		Snapshot.MapName = ElysiumArenaStageTransport::SnapshotName;
+		Payload.World.CurrentMap = Snapshot.MapName;
+		Payload.Maps.Add(Snapshot.MapName, MoveTemp(Snapshot));
+		for (const FElysiumEntityDef& Def : Defs.Defs)
+		{
+			if (Def.InternalFactory) { OutError = TEXT("native internal factory cannot be checkpoint provenance"); Emit(EFence::Failed, Host.GetMap(), OutError); return false; }
+			for (const TPair<FString, FString>& Key : Def.Keys)
+				if (Key.Key.StartsWith(TEXT("__arena_"))) { OutError = TEXT("reserved arena provenance key collision"); Emit(EFence::Failed, Host.GetMap(), OutError); return false; }
+		}
+		ElysiumArenaStageTransport::EncodeEnvelope(*this, Payload);
+		Emit(EFence::Captured, Host.GetMap());
+		if (!bPending) { OutError = TEXT("capture witness refused"); return false; }
+		const TWeakPtr<FTransport> Weak = AsShared();
+		if (!Storage.Write(Slot, EElysiumSaveKind::Manual, Payload, [Weak](bool bSuccess)
+		{
+			if (const TSharedPtr<FTransport> Live = Weak.Pin())
+				if (Live->bPending) Live->Emit(bSuccess ? EFence::Written : EFence::Failed,
+					Live->PendingMap.Get(), bSuccess ? FString() : FString(TEXT("native arena slot write failed")));
+		}, OutError)) { Emit(EFence::Failed, Host.GetMap(), OutError); return false; }
+		return true;
+	}
+	FElysiumSavePayload Payload;
+	if (!Storage.ReadSlotPayload(Slot, Payload, OutError)
+		|| Payload.World.CurrentMap != ElysiumArenaStageTransport::SnapshotName
+		|| !ElysiumArenaStageTransport::DecodeEnvelope(Payload, *this, OutError))
+	{
+		if (OutError.IsEmpty()) OutError = TEXT("slot has wrong arena provenance/map");
+		Emit(EFence::Failed, Host.GetMap(), OutError); return false;
+	}
+	FElysiumMapSnapshot* Snapshot = Payload.Maps.Find(ElysiumArenaStageTransport::SnapshotName);
+	if (const FString* Corruption = Corruptions.Find(Action.Slot))
+	{
+		if (!Snapshot || !MutateCheckpoint || !MutateCheckpoint(*Snapshot, *Corruption, OutError))
+		{ if (OutError.IsEmpty()) OutError = TEXT("unavailable retail checkpoint-header fixture adapter"); Emit(EFence::Failed, Host.GetMap(), OutError); return false; }
+	}
+	if (!Snapshot || Snapshot->DefCount != Defs.Num()) { OutError = TEXT("arena snapshot/defs mismatch"); Emit(EFence::Failed, Host.GetMap(), OutError); return false; }
+	// Tear down session ownership before applying blocks; reconstruct actual stage admissions.
+	State->ApplyPayload(Payload);
+	State->TimeControl().ResetClock(bHasRestoreBase && RestoreBaseSlot == Action.Slot ? RestoreBase : Payload.Session.ClockNow);
+	FElysiumStageSeat Seat;
+	Seat.FeetCm = SeatFeet; Seat.YawDeg = SeatYaw; Seat.bReleaseMovement = true;
+	if (Payload.World.bHasPlacement)
+	{
+		const ElysiumGreenRoom::FDriveRefs Refs = ElysiumGreenRoom::ResolveDriveBody(Host.GetWorld());
+		if (!Refs) { OutError = TEXT("saved player placement has no admitted body"); Emit(EFence::Failed, Host.GetMap(), OutError); return false; }
+		Seat.FeetCm = Payload.World.PlayerOrigin - FVector(0.0, 0.0, Refs.Body->GetBodyHalfHeight());
+		Seat.YawDeg = Payload.World.PlayerYaw; // barrier seats at saved pose, never original zero pose (0x200975f0)
+	}
+	FElysiumEntityDefs RestoredDefs = Defs;
+	TArray<FElysiumPlaceRow> RestoredNetwork = Network;
+	AElysiumMapActor* Map = Host.GetMap();
+	if (!Map->RebuildStageWorld(MoveTemp(RestoredDefs), MoveTemp(RestoredNetwork), Seat, OutError))
+	{ Emit(EFence::Failed, Map, OutError); return false; }
+	// The integrator hook in RebuildStageWorld installs the sink BEFORE its Load pass.
+	// Fallback refuses if absent; late installation cannot claim restoration trace parity.
+	if (PendingMap.Get() != Map) { OutError = TEXT("stage rebuild lacks pre-Load world fence"); Emit(EFence::Failed, Map, OutError); return false; }
+	FElysiumEntityWorld* World = Map->GetEntityWorld();
+	if (!World) { OutError = TEXT("rebuilt stage has no entity world"); Emit(EFence::Failed, Map, OutError); return false; }
+	const TWeakPtr<FTransport> RestoreTransport = AsShared();
+	const TWeakObjectPtr<AElysiumMapActor> RestoreMap = Map;
+	Map->RestoreBeforeActivation = [RestoreTransport, RestoreMap, PayloadCopy = MoveTemp(Payload)]() mutable
+	{
+		const auto Live = RestoreTransport.Pin(); AElysiumMapActor* PreparedMap = RestoreMap.Get();
+		if (!Live || !Live->bPending || !PreparedMap) return false;
+		FElysiumEntityWorld* PreparedWorld = PreparedMap->GetEntityWorld();
+		const FElysiumMapSnapshot* PreparedSnapshot = PayloadCopy.Maps.Find(ElysiumArenaStageTransport::SnapshotName);
+		if (!PreparedWorld || !PreparedSnapshot) { Live->Emit(EFence::Failed, PreparedMap, TEXT("prepared restore lost snapshot/world")); return false; }
+		// Native0x101a2e40 has prepared model/collision/navigation inputs before0x1011a620.
+		// Body admission draws finish first; then restore the saved stream before OnRestore's reroll.
+		ElysiumRng::Restore(PayloadCopy.Session.Rng);
+		if (PreparedWorld->ApplySnapshot(*PreparedSnapshot) == INDEX_NONE)
+		{ Live->Emit(EFence::Failed, PreparedMap, TEXT("common prepared snapshot apply refused")); return false; }
+		return true;
+	};
+	return bPending;
+}
+
 
 FElysiumEntityWorld* FHost::GetEntityWorld() const
 {
@@ -391,6 +727,7 @@ bool BuildRow(const FHost& Host, const FElysiumArenaRow& Row, const FVector& Pla
 		return false;
 	}
 	Out = ElysiumArena::AuthoredRow(*Row.Classname, Row.Name, Place.FeetCm, Yaw);
+	Out.Outputs = Row.Outputs; // stage fixture wires use normal FireOutput/queue/count machinery
 	if (!Row.Body.IsEmpty())
 	{
 		FString ModelPath;
@@ -552,6 +889,8 @@ bool Stage(const FElysiumArenaScenario& Record, const FHost& Host, FString& OutS
 		}
 		for (const FElysiumArenaRow& Row : Record.Cast)
 		{
+			if (!Record.Script.IsEmpty() && Record.Script[0].Do == EElysiumArenaAction::FreshMap
+				&& Record.Script[0].bAtTime && Record.Script[0].Time == 0.0) break; // validate after its own fresh boundary, not against the predecessor's dead cast
 			if (EntityWorld->FindByName(Row.Name) == nullptr)
 			{
 				OutError = FString::Printf(TEXT("cast: %s has no live entity named '%s'"),
@@ -663,7 +1002,12 @@ bool Stage(const FElysiumArenaScenario& Record, const FHost& Host, FString& OutS
 	{
 		if (UElysiumSessionSubsystem* StageSession = StageInstance->GetSubsystem<UElysiumSessionSubsystem>())
 		{
-			StageSession->TimeControl().ResetClock();
+			StageSession->TimeControl().ResetClock(1.0); // engine 0x200f5bc4: before entity Load, never restore reseeding
+			if (Host.Transport)
+			{
+				Host.Transport->StageInitialTime = StageSession->GameClock().GetNow();
+				Host.Transport->StageInitialDraw = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).GetCurrentSeed();
+			}
 		}
 	}
 
@@ -681,6 +1025,16 @@ bool Stage(const FElysiumArenaScenario& Record, const FHost& Host, FString& OutS
 	StageSeat.FeetCm = Seat.FeetCm;
 	StageSeat.YawDeg = Seat.YawDeg;
 	StageSeat.bReleaseMovement = true;   // the arena's floor is under the seat
+	// Harness envelope retains exact defs/network/seat, not a copy of NPC members (0x1027bc60).
+	if (Host.Transport)
+	{
+		Host.Transport->Defs = Defs;
+		Host.Transport->Network = Network;
+		Host.Transport->SeatFeet = StageSeat.FeetCm;
+		Host.Transport->SeatYaw = StageSeat.YawDeg;
+	}
+	UE_LOG(LogElysiumArenaStage, Log, TEXT("%s: pre-entity clock=1 epoch=fresh npc_draw=%d"),
+		*Record.Name, ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).GetCurrentSeed());
 	if (!Map->RebuildStageWorld(MoveTemp(Defs), MoveTemp(Network), StageSeat, OutError))
 	{
 		return false;

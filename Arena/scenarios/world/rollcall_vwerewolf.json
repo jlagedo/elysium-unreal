@@ -4,7 +4,6 @@
   "stage": "arena",
   "seed": 1,
   "duration": 10.0,
-  "known_red": "5: the StartHidden row thinks while hidden (cond+ TOO_FAR_FOR_MELEE at t=0.00, before the 0.5 s ScriptUnhide; retail PostSpawn 0x100aaf30 -> ScriptHide 0x100a8710 parks the think at FLT_MAX)",
   "player": {
     "at": "start"
   },
@@ -82,8 +81,18 @@
     }
   ],
   "never": [
-    { "who": "werewolf", "kind": "schedule", "match": "", "until": 0.45 },
-    { "who": "werewolf", "kind": "cond+", "match": "", "until": 0.45 },
+    {
+      "who": "werewolf",
+      "kind": "schedule",
+      "match": "",
+      "until": 0.45
+    },
+    {
+      "who": "werewolf",
+      "kind": "cond+",
+      "match": "",
+      "until": 0.45
+    },
     {
       "who": "werewolf",
       "kind": "taskfail"
@@ -101,5 +110,5 @@
       "equals": true
     }
   ],
-  "notes": "Hand-copied from $ELYSIUM_WORK_ROOT/exports_v2/_sidecars/sp_observatory_2/sp_observatory_2.ents (unbaked map). V2 (2026-10-04): the two nevers before 0.45 s are retail -- CBaseEntity::PostSpawn 0x100aaf30 runs slot 77 ScriptHide 0x100a8710 for m_bStartHidden, which saves m_pfnThink, installs NULL and parks m_flNextThink at FLT_MAX until ScriptUnhide 0x100a8990: a hidden row senses and selects nothing; without them the roll call passed on known red 5 (FALL_TO_GROUND selected while hidden)."
+  "notes": "Hand-copied from $ELYSIUM_WORK_ROOT/exports_v2/_sidecars/sp_observatory_2/sp_observatory_2.ents (unbaked map). V2 (2026-10-04): the two nevers before 0.45 s are retail -- CBaseEntity::PostSpawn 0x100aaf30 runs slot 77 ScriptHide 0x100a8710 for m_bStartHidden, which saves m_pfnThink, installs NULL and parks m_flNextThink at FLT_MAX until ScriptUnhide 0x100a8990: a hidden row senses and selects nothing; without them the roll call passed on known red 5 (FALL_TO_GROUND selected while hidden). V6 closing pass: original hidden-callback red5 cleared. True hidden nevers pass both standalone 20261005T164850..165029 and after another record in 20261005T163359.762409Z; 0x100aaf30 ->0x100a8710 NULL/FLT_MAX until real ScriptUnhide0x100a8990."
 }

@@ -301,6 +301,11 @@ public:
 	// It **replaces** the event queue rather than appending to it, because Spawn() will have queued
 	// this load's own openers. Reports how many entity records were applied.
 	int32 ApplySnapshot(const FElysiumMapSnapshot& Snapshot);
+	int32 ApplySnapshot(const FElysiumMapSnapshot& Snapshot, double RestoreBase, bool bLevelTransition = false); // 0x1011a710 transition flag, engine 0x20097d00 base
+	bool IsLevelTransitionRestore() const { return bLevelTransitionRestore; }
+	FElysiumEntityHandle RestoreHandle(const FElysiumEntityHandle& Saved) const { return RebaseHandle(Saved); } // 0x101a2e40
+	TFunction<void()> OnSnapshotDecoded; // 0x101a2e40: all words present, before fixup/hooks
+	TFunction<void()> OnSnapshotApplied; // 0x1011a620: reverse hooks complete, before think
 	// Leaf serializers that own handles use the same epoch re-stamping rule as the generic field
 	// applier. This keeps the epoch private and avoids duplicating handle validity checks.
 	FElysiumEntityHandle RebaseSavedHandle(const FElysiumEntityHandle& Saved) const
@@ -1019,7 +1024,7 @@ private:
 	// written at. It is a parameter rather than a constant because a blob carries no version of its
 	// own and a leaf's `Ar.Version()` gate is meaningless without it.
 	bool ApplyEntityRecord(const FElysiumEntityState& S, const FString& SnapshotMapName,
-		int32 LeafSchemaVersion);
+		int32 LeafSchemaVersion, double SaveBase, double RestoreBase); // 0x101a2a30
 	// Record one entity's post-Load state as the omission baseline. Called for every entity at the
 	// end of Load and for each runtime entity as it spawns.
 	void CaptureBaseline(int32 Index);
@@ -1129,6 +1134,7 @@ private:
 	// restore from a live `ScriptUnhide`, and the two want opposite things from the clock: an
 	// unhide arms the body to think on this frame, a restore must leave the saved cadence alone.
 	bool bApplyingSnapshot = false;
+	bool bLevelTransitionRestore = false; // DAT_1070b268, 0x1011a710 -> 0x1011a620 -> slot130
 
 	// The omission baseline: each entity's state as the spawn pass left it, index-aligned
 	// with EntityList. A freeze records only what has moved since, which is what makes a 2,600-entity

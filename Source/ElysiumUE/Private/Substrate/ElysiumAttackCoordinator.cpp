@@ -39,12 +39,18 @@ bool FElysiumAttackCoordinator::Add(const FElysiumNpc* Npc)
 	{
 		if (ResolveMember(Member) == Npc)
 		{
+#if !UE_BUILD_SHIPPING
+			if (Npc->World && Npc->World->HasAiTraceSink()) Npc->World->EmitAiTrace(*Npc, FName(TEXT("script")), FString::Printf(TEXT("coordinator phase=idempotent name=%s count=%d cap=%d"), *NameText, Members.Num(), CapCount)); // 0x1025db70 actual existing-member arm
+#endif
 			return true;
 		}
 	}
 	if (Members.Num() < CapCount)   // 0x1025db70: `this[4] < this[0]`
 	{
 		Members.Add(Npc->Handle);   // 0x1025d840 (the EHANDLE) appended at `count`, `count++`
+#if !UE_BUILD_SHIPPING
+		if (Npc->World && Npc->World->HasAiTraceSink()) Npc->World->EmitAiTrace(*Npc, FName(TEXT("script")), FString::Printf(TEXT("coordinator phase=admit name=%s count=%d cap=%d"), *NameText, Members.Num(), CapCount));
+#endif
 		return true;
 	}
 	return AddOrEvict(Npc, EElysiumCoordinatorEvict::FartherThanCandidate);   // 0x1025dca0(this, npc, 1)
@@ -88,6 +94,9 @@ bool FElysiumAttackCoordinator::AddOrEvict(const FElysiumNpc* Npc, EElysiumCoord
 	}
 	if (Evict == INDEX_NONE)
 	{
+#if !UE_BUILD_SHIPPING
+		if (Npc->World && Npc->World->HasAiTraceSink()) Npc->World->EmitAiTrace(*Npc, FName(TEXT("script")), FString::Printf(TEXT("coordinator phase=refuse name=%s count=%d cap=%d"), *NameText, Members.Num(), CapCount)); // 0x1025dca0 unchanged full list
+#endif
 		return false;   // `return uVar5 & 0xffffff00`: nobody farther, nothing changed
 	}
 	// 0x1025dca0: `0x1025ddd0(this, resolved)` then `0x1025db70(this, npc)`.
@@ -109,6 +118,9 @@ void FElysiumAttackCoordinator::Release(const FElysiumNpc* Npc)
 		{
 			// `memmove(&list[i], &list[count - 1], 4); count--`: the LAST entry over the found one.
 			Members.RemoveAtSwap(Index);
+#if !UE_BUILD_SHIPPING
+			if (Npc->World && Npc->World->HasAiTraceSink()) Npc->World->EmitAiTrace(*Npc, FName(TEXT("script")), FString::Printf(TEXT("coordinator phase=release name=%s count=%d cap=%d"), *NameText, Members.Num(), CapCount)); // 0x1025ddd0 actual removal
+#endif
 			return;
 		}
 	}

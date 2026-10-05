@@ -77,6 +77,7 @@ void WriteFVisibleBlocker(const FElysiumEntity* Target);
  *  segment with retail's caller-supplied mask. The mask is this runtime's channel question and the
  *  embodiment answers a plain "is the segment clear", so the mask is carried for the record. */
 bool BaseEntityFVisible(const FElysiumEntity& Target, int32 Mask) const;
+static bool BaseEntityFVisibleFrom(const FElysiumEntity& Looker, const FElysiumEntity& Target, int32 Mask); // 0x100a6fa0 player observer
 
 // --- Slot 469 `OnLooked`: the `CAI_BaseNPC` base body beneath the Troika override ----------------
 
@@ -154,4 +155,3 @@ bool SecCameraInViewCone(const FElysiumEntity* Camera, const FElysiumEntity* Tar
 // `SetHullSizeSmall(bForce)` (`0x10273180`) — the tail every `CheckStuck` exit but the teleport ends
 // in — is family **Motor10**'s body and is declared in `ElysiumNpcMotor10.inl`. Dispatched
 // here, not re-ported.
-

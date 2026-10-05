@@ -198,6 +198,9 @@ struct FElysiumNpcNavigator
 	// witness that the wander pick installed a PATH and never went through `SetGoal`.
 	int32 PathNoGoalInstalls = 0;
 
+	void Serialize(struct FElysiumSaveArchive& Ar); // 0x102ee1e0 / 0x102f2330
+	void RebaseSavedReferences(class FElysiumEntityWorld& InWorld); // 0x101a2e40
+
 	// --- Getters (SDK names where R1 matched one), each answering retail's no-goal value ----------
 
 	// `0x102ee680` -- `GetGoalType() != 0`. No goal: false.

@@ -1,0 +1,265 @@
+{
+  "name": "restore_place_invalid_marker",
+  "about": "Real reserved row restores, then valid/missing-live-place/missing-occupant controls invoke0x10299a80 and0x102b53d0; no invented claimant.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 20,
+  "player": {
+    "at": "start"
+  },
+  "from_map": {
+    "map": "sm_hub_1",
+    "names": [
+      "pedestrian_female"
+    ],
+    "anchor": "pedestrian_female",
+    "at": "west"
+  },
+  "expect": [
+    {
+      "label": "setup",
+      "who": "pedestrian_female",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP (",
+      "by": 3.0
+    },
+    {
+      "label": "finds",
+      "who": "pedestrian_female",
+      "kind": "taskdone",
+      "match": "^task_find_interesting_place$",
+      "regex": true,
+      "within": 1.0
+    },
+    {
+      "label": "walk_program",
+      "who": "pedestrian_female",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_WALK_TO_INTERESTING_PLACE (",
+      "within": 1.0
+    },
+    {
+      "label": "walks",
+      "who": "pedestrian_female",
+      "kind": "move",
+      "match": "goal",
+      "within": 1.0
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    }
+  ],
+  "never": [
+    {
+      "who": "pedestrian_female",
+      "kind": "death"
+    },
+    {
+      "who": "pedestrian_female",
+      "kind": "output",
+      "match": "OnInterestingPlaceLeft",
+      "after": "applied"
+    }
+  ],
+  "probes": [],
+  "script": [
+    {
+      "after": "walks",
+      "delay": 0.05,
+      "do": "save",
+      "slot": "restore_place_invalid_marker",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "pedestrian_female",
+          "field": "place.identity"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.capacity"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.count"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.failed_attempts"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.occupant"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.z",
+          "tolerance": 0.0001
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "restore_place_invalid_marker",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "pedestrian_female",
+          "field": "place.identity"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.capacity"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.count"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.failed_attempts"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.destination.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.occupant"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.min.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "place.marker.0.max.z",
+          "tolerance": 0.0001
+        }
+      ]
+    },
+    {
+      "after": "ready",
+      "do": "invalid_marker",
+      "target": "pedestrian_female",
+      "control": "valid",
+      "delay": 0.05
+    },
+    {
+      "after": "ready",
+      "do": "invalid_marker",
+      "target": "pedestrian_female",
+      "control": "missing_place",
+      "delay": 0.1
+    },
+    {
+      "after": "ready",
+      "do": "invalid_marker",
+      "target": "pedestrian_female",
+      "control": "missing_occupant",
+      "delay": 0.15
+    }
+  ]
+}

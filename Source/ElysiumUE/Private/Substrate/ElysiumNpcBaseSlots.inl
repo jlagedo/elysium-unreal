@@ -6,7 +6,7 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 182 generated slot rows of `FElysiumNpcBase` (CAI_BaseNPC): 157 it introduces and 25 it overrides
+// 183 generated slot rows of `FElysiumNpcBase` (CAI_BaseNPC): 157 it introduces and 26 it overrides
 // with a body of its own.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -31,6 +31,10 @@
 	//   takes `ISave&`
 	//   layer 15, story 29d
 	int32 Save(void*) override;
+	// slot 127 0x1027c160 (walked) `int Restore(IRestore&)`
+	//   takes `IRestore&`
+	//   layer 9, story 29c
+	int32 Restore(void*) override;
 	// slot 128 0x101a6520 (sdk) `bool ShouldSavePhysics()`
 	//   layer 0, story 29c
 	bool ShouldSavePhysics() override;

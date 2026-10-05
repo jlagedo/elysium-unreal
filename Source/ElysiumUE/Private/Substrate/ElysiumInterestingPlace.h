@@ -14,7 +14,6 @@ class FElysiumInterestingPlace final : public FElysiumEntity
 public:
 	FString Type;
 	bool bEnabled = true;
-	int32 MaxNpcs = 1;
 	int32 GroupId = 0;
 	int32 Rating = 0;
 	int32 TestFlags = 0;
@@ -43,7 +42,31 @@ public:
 	// `m_iMarkersAllocated` records of stride `0x1c`, whose first dword is the occupant handle.
 	// Over 20 of them makes retail `DevMsg` "Warning: Possible speed issues w...".
 	int32 MarkersAllocated = 0;
-	struct FMarker { FElysiumEntityHandle Occupant; };
+	struct FMarker // 0x102da860, stride0x1c: EHANDLE + two absolute POSITION bounds
+	{
+		FElysiumEntityHandle Occupant;
+		FVector MinBoundsCm = FVector::ZeroVector, MaxBoundsCm = FVector::ZeroVector;
+	};
+	int32 MarkersUsed = 0; // +0x588, 0x102da860
+	int32 FailedAttempts = 0; // +0x58c INT SAVE, 0x102da0d0
+	uint64 ReservationsObserved = 0, ReleasesObserved = 0; // diagnostic actual 0x102da860/0x102da600 writes, never SAVE
+	int32 InUse = 0; // +0x564, unsaved constructor word, 0x102da7c0
+	FVector MinBoundsUnits = FVector::ZeroVector; // +0x54c VECTOR SAVE KEY min_bounds
+	FVector MaxBoundsUnits = FVector::ZeroVector; // +0x558 VECTOR SAVE KEY max_bounds
+	struct FFailedBox // 0x102d9ed0, unsaved four-slot ring
+	{
+		double Until = 0.0;
+		FVector MinBoundsCm = FVector::ZeroVector, MaxBoundsCm = FVector::ZeroVector;
+	};
+	FFailedBox FailedBoxes[4];
+	int32 FailedBoxCursor = 0; // +0x604, wraps on next write when >3
+	bool PickSpotFor(class FElysiumNpc& Npc, FVector& OutPositionUnits, bool bKeepZ = true); // 0x102da0d0
+	FElysiumEntityHandle MarkerOccupant(int32 RowIndex) const; // 0x102da9a0 raw row reader
+	FElysiumEntityHandle ConversationTalkerSource() const; // 0x102db760 -> 0x102dcc20, unavailable 0018/18
+	bool HasMarker(const FElysiumEntityHandle& Npc) const; // 0x10299a80
+	virtual void Serialize(FElysiumSaveArchive& Ar) override; // 0x102d9240/0x102d9320
+	virtual void RebaseSavedReferences(FElysiumEntityWorld& InWorld) override; // 0x101a2e40
+	virtual void OnPostRestore(FElysiumEntityWorld& InWorld) override; // 0x102d9c20 restore half
 	TArray<FMarker> Markers;
 	static constexpr int32 MarkerSpeedWarningThreshold = 0x14;
 
@@ -56,8 +79,8 @@ public:
 	bool ResolveTypeOrRemove(bool bWarn);
 
 	bool IsAvailable() const;
-	bool Claim(const FElysiumEntityHandle& Npc);
-	void Release(const FElysiumEntityHandle& Npc) { Claimants.Remove(Npc.Index); }
+	bool Claim(const FElysiumEntityHandle& Npc, bool bFireArrived = false); // 0x102da7c0 output before in-use write
+	void Release(const FElysiumEntityHandle& Npc, bool bFireLeft = false); // 0x102da600 full-row swap removal
 	bool IsEnabledFor(const FElysiumEntityHandle& Npc) const;
 	void Arrived(const FElysiumEntityHandle& Npc);
 	void Left(const FElysiumEntityHandle& Npc);
@@ -68,7 +91,8 @@ public:
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
 private:
-	TSet<int32> Claimants;
+	FVector SampleSpot(const FVector& HullMinUnits, const FVector& HullMaxUnits, bool bKeepZ) const; // 0x102d9fa0
+	bool OverlapsMarker(const FVector& PositionUnits, const FVector& HullMinUnits, const FVector& HullMaxUnits) const; // 0x102da9e0
 };
 
 namespace ElysiumInterestingPlaces

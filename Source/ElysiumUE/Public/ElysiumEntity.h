@@ -637,8 +637,19 @@ public:
 	// rides a save. The freeze is the port's whole transition carry, so that is where this is read.
 	virtual int32 ObjectCaps() const { return ElysiumEntityCaps::AcrossTransition; }
 
-	// ScriptUnhide's stashed think. Exposed because the snapshot carries it: an entity frozen while
-	// hidden restores with the think it will resume on, not with "never".
+	// Hidden saves callback identity; ScriptUnhide is due NOW, never the old deadline (0x100a8990).
+	// FUNCTION SAVE identities, never native pointers (0x100a9f70/+0x118, 0x100a8710/+0xe4).
+	FName ThinkCallback = TEXT("EntityThink");
+	FName SavedThinkCallback;
+	virtual void RebaseSavedReferences(FElysiumEntityWorld& InWorld) {} // 0x101a2e40, before OnRestore
+	// Physical primitives have no common substrate reader yet: explicit no-input seams (0x100a8710).
+	virtual bool ReadScriptPhysicalWords(int32& OutSolid, int32& OutMoveType, int32& OutMoveCollide,
+		int32& OutSolidFlags, int32& OutEffects) const { return false; }
+	virtual void WriteScriptPhysicalWords(int32 InSolid, int32 InMoveType, int32 InMoveCollide,
+		int32 InSolidFlags, int32 InEffects) {} // 0x100a8990
+	bool bSavedPhysicalWordsAvailable = false;
+	int32 ScriptSavedSolid = 0, ScriptSavedMoveType = 0, ScriptSavedMoveCollide = 0;
+	int32 ScriptSavedSolidFlags = 0, ScriptSavedEffects = 0; // 0x100a8710
 	float GetSavedNextThink() const { return SavedNextThink; }
 	void  SetSavedNextThink(float InThink) { SavedNextThink = InThink; }
 

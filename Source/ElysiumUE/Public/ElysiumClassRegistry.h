@@ -4,6 +4,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityHandle.h"
 #include "ElysiumVariant.h"
+#include "ElysiumSaveTypes.h" // 0x101a0a80: independent persistence metadata
 
 #include <type_traits>
 
@@ -60,6 +61,8 @@ struct FElysiumFieldAccessor
 	EElysiumVariantType Type = EElysiumVariantType::Void;
 	bool bKeyable = false;
 	bool bSave = false;
+	EElysiumPersistenceType PersistenceType = EElysiumPersistenceType::Value; // raw FLOAT by default
+	EElysiumTimePolicy TimePolicy = EElysiumTimePolicy::Ordinary; // 0x101cf250
 	TFunction<FElysiumVariant(const FElysiumEntity&)> Get;
 	TFunction<void(FElysiumEntity&, const FElysiumVariant&)> Set;
 
@@ -104,6 +107,15 @@ struct FElysiumClassDesc
 	FElysiumClassDesc& Input(FName Name, FElysiumInputThunk Thunk)
 	{
 		Inputs.Add(Name, Thunk);
+		return *this;
+	}
+
+	// Annotate a row this descriptor owns; does not change Python marshalling (0x101a0a80).
+	FElysiumClassDesc& TimeField(FName Name, EElysiumTimePolicy Policy = EElysiumTimePolicy::Ordinary)
+	{
+		FElysiumFieldAccessor& Accessor = Fields.FindChecked(Name); // only the row's existing writer
+		Accessor.PersistenceType = EElysiumPersistenceType::Time; // raw datamap TIME, not FLOAT
+		Accessor.TimePolicy = Policy; // 0x101cf250/0x101cf2f0
 		return *this;
 	}
 

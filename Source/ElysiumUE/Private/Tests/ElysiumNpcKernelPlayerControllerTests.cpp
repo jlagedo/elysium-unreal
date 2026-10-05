@@ -924,8 +924,8 @@ bool FElysiumNpcKernelPlayerControllerEffectsSaveTest::RunTest(const FString&)
 	FElysiumEntityWorld Restored(nullptr, nullptr, Services.Bundle());
 	Restored.Load(BuildDefs());
 	Restored.SpawnPlayer();
-	Restored.Activate(0.0);
 	Restored.ApplySnapshot(Snapshot);
+	Restored.Activate(0.0);
 	FElysiumEntity* Stand = Restored.FindPlayerController();
 	FElysiumNpc* StandNpc = Stand != nullptr ? Stand->AsNpc() : nullptr;
 	if (!TestNotNull(TEXT("the relationship is rebound"), StandNpc))

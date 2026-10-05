@@ -233,7 +233,7 @@ bool FElysiumNpcKernelDamaged19ScriptHideScriptStateTest::RunTest(const FString&
 	C.Jack->ScriptHide();
 	TestEqual(TEXT("0x102c1e12 CineCleanup ran on this NPC (the dead-cine SetSolid)"),
 		C.Jack->RetailSolidSets, SolidSets + 1);
-	TestEqual(TEXT("and wrote SetSolidFlags(0x10)"), static_cast<int32>(C.Jack->RetailSolidFlags), 0x10);
+	TestEqual(TEXT("0x100a8710 later hide writes4 after cleanup10"), static_cast<int32>(C.Jack->RetailSolidFlags), 4);
 	TestEqual(TEXT("0x102c1e24 m_iForcedSchedule := 0x6b"),
 		C.Jack->ScheduleHost.ForcedSchedule, ElysiumSched::SCHED_TROIKA_IDLE_DISPOSITION);
 	TestTrue(TEXT("0x102c1e2b the body hides"), C.Jack->IsHidden());

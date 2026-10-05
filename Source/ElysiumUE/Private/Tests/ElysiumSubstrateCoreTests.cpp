@@ -1541,13 +1541,13 @@ bool FElysiumTimeControlTest::RunTest(const FString&)
 	FElysiumGameClock Clock;
 	FElysiumTimeControl Time(Clock);
 
-	TestEqual(TEXT("clock starts at 0"), Clock.GetNow(), 0.0);
+	TestEqual(TEXT("engine 0x200f5bc4 starts at 1"), Clock.GetNow(), 1.0);
 	TestEqual(TEXT("scale starts at 1"), Time.GetScale(), 1.0);
 	TestFalse(TEXT("starts running"), Time.IsPaused());
 
 	// A frame advances by exactly the delta it is handed, within the frame bound.
 	TestEqual(TEXT("a frame applies its whole delta"), Time.AdvanceFrame(0.05), 0.05);
-	TestEqual(TEXT("now advanced"), Clock.GetNow(), 0.05);
+	TestEqual(TEXT("now advanced"), Clock.GetNow(), 1.05);
 
 	// Scale is applied EXACTLY ONCE. Engine dilation has already
 	// scaled the tick's delta by the time it reaches AdvanceFrame, so the clock must multiply by
@@ -1555,7 +1555,7 @@ bool FElysiumTimeControlTest::RunTest(const FString&)
 	Time.SetScale(0.25);
 	TestEqual(TEXT("scale recorded on the clock"), Time.GetScale(), 0.25);
 	TestEqual(TEXT("the clock adds no factor of its own"), Time.AdvanceFrame(0.02), 0.02);
-	TestEqual(TEXT("now advanced by the dilated delta"), Clock.GetNow(), 0.07);
+	TestEqual(TEXT("now advanced by the dilated delta"), Clock.GetNow(), 1.07);
 	// The BOUND scales with it, exactly as `Host_FilterTime`'s does (`timescale * 0.1`) and as
 	// AWorldSettings::FixupDeltaSeconds does (`Max * Dilation`). A flat bound here would cut the
 	// substrate short of the delta every other actor on the frame received.

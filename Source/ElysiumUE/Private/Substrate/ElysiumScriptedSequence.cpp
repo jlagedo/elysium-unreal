@@ -1213,11 +1213,8 @@ void FElysiumScriptedSequence::AddInputs(FElysiumClassDesc& D, const TCHAR* Reta
 
 const TCHAR* FElysiumScriptedSequence::SaveBlockReason() const
 {
-	// **K1, a named divergence (the owner, 2026-10-04) — no save while this director possesses an
-	// NPC** (its target's `m_hCine` is this director), a held post-idle included. Retail saves
-	// anywhere and resumes the NPC's scripted schedule at its task cursor (`+0x5c50`); the port
-	// restarts a restored program (divergence 3), and a restarted `0xf2` re-runs `TASK_ENABLE_SCRIPT`
-	// and `TASK_WAIT_FOR_SCRIPT`, firing `OnBeginSequence` twice. V6 (resume) deletes this refusal.
+	// 0x1027bf50/0x1008df10: logical cursor, phase and possession now resume.
+	// K1 remains until the integrator installs event-free native seek and passes the possession witness.
 	const FElysiumNpcBase* Npc = TargetNpc();
 	return Npc != nullptr && Npc->ScriptOwner == Handle ? TEXT("a scripted sequence is active") : nullptr;
 }
@@ -1232,9 +1229,10 @@ void FElysiumScriptedSequence::Serialize(FElysiumSaveArchive& Ar)
 	FElysiumNpcBase::Serialize(Ar);
 	uint8 Function = static_cast<uint8>(ThinkFunction);
 	Ar << Function;
-	Ar << CineThinkAt;
+	Ar.Time(CineThinkAt, EElysiumTimePolicy::MaxFloat); // 0x101a0a80 port director deadline, map-clock domain
 	int32 ActivatorIndex = LastInputActivator.IsSet() ? LastInputActivator.Index : INDEX_NONE;
 	Ar << ActivatorIndex;
+	Ar << LastInputCaller; // +0x110 EHANDLE, 0x101a7880 input identity
 	const FElysiumNpcBase* Owned = Ar.IsLoading() ? nullptr : TargetNpc();
 	int32 OwnedIndex = Owned != nullptr && Owned->ScriptOwner == Handle ? Owned->Handle.Index : INDEX_NONE;
 	Ar << OwnedIndex;
@@ -1252,21 +1250,9 @@ void FElysiumScriptedSequence::Serialize(FElysiumSaveArchive& Ar)
 void FElysiumScriptedSequence::OnPostRestore(FElysiumEntityWorld& InWorld)
 {
 	FElysiumNpcBase::OnPostRestore(InWorld);
-	if (RestoredNpcIndex == INDEX_NONE)
-	{
-		return;
-	}
-	// Re-stamp the possession: `m_hTargetEnt` on this director, `m_hCine` and `m_pGoalEnt` on the NPC.
-	FElysiumEntity* Entity = InWorld.Resolve(FElysiumEntityHandle(RestoredNpcIndex, InWorld.GetEpoch()));
-	FElysiumNpcBase* Npc = Entity != nullptr ? Entity->AsNpcBase() : nullptr;
-	RestoredNpcIndex = INDEX_NONE;
-	if (Npc == nullptr || Npc->IsDead())
-	{
-		return;
-	}
-	SetTarget(Npc->Handle);
-	Npc->ScriptOwner = Handle;
-	Npc->BaseScheduleHost.GoalEnt = Handle;
+	// 0x101a2e40/0x101a7880: possession was rebound before ANY NPC prerequisite consumer.
+	FElysiumNpcBase* Npc = TargetNpc();
+	if (Npc == nullptr || Npc->IsDead() || Npc->ScriptOwner != Handle) return;
 	// The collision view follows the restored `NAV_IGNORE_NPC` bit, as at possession and cleanup
 	// (`IsIgnoreCollisionEntity` reads the bit live; the view does not ride the snapshot).
 	if ((SpawnFlags & GCineSfIgnoreNpcCollision) != 0)

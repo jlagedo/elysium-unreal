@@ -115,3 +115,25 @@ name, kind, text.
 the hosts' `index.json` files into one there, prints one line per scenario and the first unmet
 expectation of each failure, and exits 7 on any `fail` / `unexpected-pass` / `error` (the test
 command's verdict code).
+
+## V6 real-reload observation (judge fourth sitting, 2026-10-05)
+
+`reload` is a read-only trace kind emitted for the actual NPC weapon owner,
+behind `HasAiTraceSink`. The initial fixture discloses the ordinary equipped
+clip1 and the one-time controlled clip0/reserve250/fake-count8 state. Runtime
+phases are `finish_enter`, `finish_admitted` or `finish_refused`, `bulk_enter`,
+`bulk_commit`, `finish_stamps` and `final`. They read the real weapon handle,
+clip/reserve, three reload flags, owner NextAttack, callback time and both
+weapon attack stamps; `stamps=now` is emitted only after actual equality.
+No observation changes a queue, callback, RNG draw, condition or animation.
+Weapon slots322/323 (`0x10255050`/`0x102552c0`) are distinguished from NPC
+slots with the same numbers. The existing taskdone tap follows the actual
+RunTask condition clears/completion (`0x1028918d..0x102891b9`).
+
+The root `initial_weapon_state` array is arena staging, applied once after
+equip and before the first NPC think. Each row names `who`, `weapon`,
+`magazine`, `reserve`, `fake_reload_count`; type/range, actor/item/ammo store,
+host, timing and duplicate checks refuse invalid admission. It does not
+set an enemy, condition, schedule, finished activity or bInReload. The loaded
+flamethrower silent control keeps clip1/reserve250/fake8 and empty authored
+shot-event timelines. Neither record claims natural flame depletion.

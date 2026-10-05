@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumEntityDefs.h"
 
 #if !UE_BUILD_SHIPPING
 
@@ -56,6 +57,13 @@ struct FElysiumArenaValue
 	FString Describe() const;
 };
 
+// Explicit non-authored initial state for the fourth-sitting same-arm reload witness (0x10334e70).
+struct FElysiumArenaInitialWeaponState
+{
+	FString Who, Weapon;
+	int32 Magazine = 0, Reserve = 0, FakeReloadCount = 0;
+};
+
 // One entity row: a `cast` entry, a `rows` entry, or a `spawn` action's row.
 struct FElysiumArenaRow
 {
@@ -67,6 +75,7 @@ struct FElysiumArenaRow
 	// key a shipped map row carries (`models/<unit>.mdl`).
 	FString Body;
 	TMap<FString, FString> Keys;   // ordinary map keyvalues, stated whole
+	TArray<FElysiumOutputDef> Outputs; // explicit stage wires, same map-shaped representation
 };
 
 // `from_map`: rows of a baked map's `DA_<map>_Entities`, verbatim, moved so `Anchor` stands at `At`.
@@ -92,6 +101,18 @@ enum class EElysiumArenaAction : uint8
 	DialogChoose,
 	SeedHealth, // fixture-only high-cap measurement; no gameplay input
 	DamagePacket, // fixture-only packet with a real attacker; 0x1032ef60 admission
+	// Harness transaction/fixture doors; 0x20096010/0x200975f0/0x1011a620.
+	Save, Load, FreshMap, Travel, RestoreCompare,
+	NpcSingleRoundFinishReload, CorruptCheckpoint, InvalidMarker, RestoreBase,
+	NoRagdollDeath, DamageMemory, ReserveSpot, StartNpcGroundGate,
+};
+
+// Typed retail words at capture/apply fences (0x1027bf50/0x1011a620).
+struct FElysiumArenaWitness
+{
+	FString Who;
+	FString Field;
+	double Tolerance = 0.0;
 };
 
 // One `script` entry: when (an absolute scenario time, or a delay after a labelled expectation's
@@ -109,7 +130,12 @@ struct FElysiumArenaAction
 	FElysiumArenaFace Face;        // player_teleport
 	FString Target;                // fire, kill
 	FString Activator;             // fire: optional live input activator (0x102c29a0)
-	FString Attacker;              // damage_packet: live named actor
+	FString Attacker;              // damage_packet: live named actor or explicit none
+	FString Inflictor;
+	FString Slot, Map, Landmark, Checkpoint, Control;
+	TArray<FElysiumArenaWitness> Fields;
+	double Timeout = 60.0; // harness wall bound, never simulation time; 0x200975f0
+
 	FString Input;                 // fire
 	FElysiumArenaValue Param;      // fire; None is a void parameter
 	FString Command;               // console
@@ -181,6 +207,7 @@ enum class EElysiumArenaProbe : uint8
 	CorpseOnFloor,   // bool
 	// H22's companion: a live (not removed) entity of that name is in the entity world.
 	SameTeam, SwingRecordedHit, OneHitKill, TeamSymbol, Wounds, HealthCap, NpcFlags1, SpawnFlags, RenderAlpha, RenderMode, Activity, // V4c read-only retail words/contact
+	Witness,        // typed dispatch, including checkpoint equality; 0x1027bf50
 	Exists,          // bool
 };
 
@@ -195,6 +222,7 @@ enum class EElysiumArenaCompare : uint8
 struct FElysiumArenaProbeSpec
 {
 	bool bAtEnd = true;
+	FString Fence; // at: pre_init/captured/applied/ready, exact runtime observation (0x1011a620)
 	double Time = 0.0;
 	FString Who;                   // a targetname, or `player`
 	EElysiumArenaProbe Probe = EElysiumArenaProbe::Alive;
@@ -206,6 +234,8 @@ struct FElysiumArenaProbeSpec
 	double MaxHeightCm = 0.0;
 	EElysiumArenaCompare Compare = EElysiumArenaCompare::Equals;
 	FElysiumArenaValue Value;
+	FString Field, Checkpoint; // witness: selected retail word; 0x1027bf50
+	double Tolerance = 0.0;
 };
 
 struct FElysiumArenaPlayer
@@ -233,6 +263,7 @@ struct FElysiumArenaScenario
 	FElysiumArenaPlayer Player;
 	TArray<FElysiumArenaRow> Cast;
 	TArray<FElysiumArenaRow> Rows;
+	TArray<FElysiumArenaInitialWeaponState> InitialWeaponState;
 	FElysiumArenaFromMap FromMap;
 	TArray<FElysiumArenaAction> Script;
 	TArray<FElysiumArenaMatch> Expect;
@@ -264,6 +295,10 @@ namespace ElysiumArenaScenario
 	const TCHAR* ActionName(EElysiumArenaAction Action);
 	const TCHAR* ProbeName(EElysiumArenaProbe Probe);
 	const TCHAR* CompareName(EElysiumArenaCompare Compare);
+	// Closed typed vocabulary; raw pointers/caches/shoot-at reroll are excluded (0x102998c0).
+	bool WitnessType(const FString& Field, FElysiumArenaValue::EType& Out);
+	bool WitnessEqual(const FElysiumArenaValue& Saved, const FElysiumArenaValue& Applied, double Tolerance);
+	FElysiumArenaValue RebaseWitness(const FString& Field, const FElysiumArenaValue& Saved, double SaveBase, double RestoreBase); // 0x101a0a80/0x101a2a30
 	// `who kind "match"` for a log line or a report.
 	FString DescribeMatch(const FElysiumArenaMatch& Match);
 }

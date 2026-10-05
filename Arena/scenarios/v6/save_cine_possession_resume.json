@@ -1,0 +1,277 @@
+{
+  "name": "save_cine_possession_resume",
+  "about": "Authored sSabbat_distracted/thug_maker child thug_1; capture inside TASK_PLAY_SCRIPT; 0x101a7880/0x1027bf50/0x1008df10, no duplicate begin/end.",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 25,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sp_tutorial_1"
+    },
+    {
+      "after": "fresh_ready",
+      "do": "fire",
+      "target": "thug_maker",
+      "input": "Spawn"
+    },
+    {
+      "after": "child",
+      "do": "fire",
+      "target": "sSabbat_distracted",
+      "input": "BeginSequence"
+    },
+    {
+      "after": "plays",
+      "delay": 0.05,
+      "do": "save",
+      "slot": "save_cine_possession_resume",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "thug_1",
+          "field": "task.index"
+        },
+        {
+          "who": "thug_1",
+          "field": "task.status"
+        },
+        {
+          "who": "thug_1",
+          "field": "task.started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "task.task_started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "task.failure"
+        },
+        {
+          "who": "thug_1",
+          "field": "task.wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "task.move_wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.sequence"
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.cycle",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.rate",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.time",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.previous_time",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.last_event",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.finished"
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.past_half"
+        },
+        {
+          "who": "thug_1",
+          "field": "script.owner"
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "save_cine_possession_resume",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "thug_1",
+          "field": "task.index"
+        },
+        {
+          "who": "thug_1",
+          "field": "task.status"
+        },
+        {
+          "who": "thug_1",
+          "field": "task.started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "task.task_started",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "task.failure"
+        },
+        {
+          "who": "thug_1",
+          "field": "task.wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "task.move_wait",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.sequence"
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.cycle",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.rate",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.time",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.previous_time",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.last_event",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.finished"
+        },
+        {
+          "who": "thug_1",
+          "field": "anim.past_half"
+        },
+        {
+          "who": "thug_1",
+          "field": "script.owner"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "label": "fresh_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "child",
+      "who": "thug_maker",
+      "kind": "output",
+      "match": "OnSpawnNPC",
+      "within": 2
+    },
+    {
+      "label": "plays",
+      "who": "thug_1",
+      "kind": "task",
+      "match": "task_play_script (",
+      "within": 10
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "end",
+      "who": "sSabbat_distracted",
+      "kind": "output",
+      "match": "OnEndSequence",
+      "within": 5
+    }
+  ],
+  "never": [
+    {
+      "who": "sSabbat_distracted",
+      "kind": "output",
+      "match": "OnBeginSequence",
+      "after": "applied"
+    },
+    {
+      "who": "sSabbat_distracted",
+      "kind": "output",
+      "match": "OnEndSequence",
+      "at_most": 1
+    }
+  ],
+  "probes": [],
+  "shares_map": true,
+  "cast": [
+    {
+      "name": "thug_maker"
+    },
+    {
+      "name": "sSabbat_distracted"
+    }
+  ],
+  "known_red": "0017/35: event-free body/clip seek continuation is unavailable; native phase at0x1008df10/0x1008f120 cannot be claimed from serialized equality."
+}

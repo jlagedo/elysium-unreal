@@ -847,6 +847,7 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			Host.Spec = Run.ArenaSpec();
 			Host.Origin = ElysiumArena::DefaultOrigin();
 			FString Summary;
+			ElysiumArenaStage::ConfigureHost(Host); // 0x1011a620: retain lab checkpoint provenance before Stage
 			if (!ElysiumArenaStage::Stage(*Record, Host, Summary, Error))
 			{
 				UE_LOG(LogElysiumGreenRoomCmd, Warning, TEXT("gr_scenario failed: %s"), *Error);

@@ -13,6 +13,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumSave, Log, All);
 
 void UElysiumSessionSubsystem::PublishSaveResult(const FElysiumSaveResult& Result)
 {
+	if (Result.State == EElysiumSaveOperationState::Failed) PersistencePhase = EElysiumPersistencePhase::Failed; // shared refusal fence
 	SaveResult = Result;
 	const TCHAR* Phase = Result.State == EElysiumSaveOperationState::Capturing ? TEXT("capturing") :
 		Result.State == EElysiumSaveOperationState::Writing ? TEXT("writing") :
@@ -39,7 +40,7 @@ bool UElysiumSessionSubsystem::RequestSave(const FElysiumSaveRequest& Request,
 	OutSlot.Reset();
 	OutError.Reset();
 	// Do not overwrite the active operation's observable result on a rejected competing request.
-	if (bCapturingSave || SaveStorage.IsWriting())
+	if (bCapturingSave || SaveStorage.IsWriting() || PendingRestoreOperation != 0)
 	{
 		OutError = TEXT("write in progress (one save operation at a time)");
 		return false;
@@ -64,6 +65,8 @@ bool UElysiumSessionSubsystem::RequestSave(const FElysiumSaveRequest& Request,
 		return false;
 	}
 	const FElysiumSavePayload Snapshot = MoveTemp(Captured);
+	PersistencePhase = EElysiumPersistencePhase::Captured; // 0x200962c0 exact completed capture fence
+	if (OnPayloadCaptured) OnPayloadCaptured(Snapshot); // no simulation has advanced
 	PublishSaveResult(Operation);
 	TWeakObjectPtr<UElysiumSessionSubsystem> WeakThis(this);
 	if (!SaveStorage.Write(Operation.Slot, Request.Kind, Snapshot,
@@ -98,7 +101,7 @@ bool UElysiumSessionSubsystem::RequestSave(const FElysiumSaveRequest& Request,
 
 bool UElysiumSessionSubsystem::CanSave(FString& OutReason) const
 {
-	if (bCapturingSave || SaveStorage.IsWriting())
+	if (bCapturingSave || SaveStorage.IsWriting() || PendingRestoreOperation != 0)
 	{
 		OutReason = TEXT("write in progress (one save operation at a time)");
 		return false;
@@ -256,6 +259,7 @@ void UElysiumSessionSubsystem::ApplyPayload(const FElysiumSavePayload& In)
 	if (FElysiumEntityWorld* Dying = State->CurrentEntityWorld())
 	{
 		Dying->Detach();
+		Dying->Teardown(); // engine 0x20096010 -> 0x2008f2e0 fresh world before restore
 	}
 
 	State->ClearAllGlobals();
@@ -284,19 +288,32 @@ void UElysiumSessionSubsystem::ApplyPayload(const FElysiumSavePayload& In)
 
 bool UElysiumSessionSubsystem::Load(const FString& Slot, FString& OutError)
 {
+	check(IsInGameThread()); // engine 0x20096010 runs synchronously on the host
+	if (bCapturingSave || SaveStorage.IsWriting() || PendingRestoreOperation != 0)
+	{
+		OutError = TEXT("a persistence operation is in flight"); return false;
+	}
+	FElysiumSaveResult Operation;
+	Operation.OperationId = ++NextSaveOperation; Operation.Slot = Slot; // one shared id namespace
+	auto Refuse = [this, &Operation, &OutError]()
+	{
+		Operation.State = EElysiumSaveOperationState::Failed; Operation.Error = OutError;
+		PendingRestoreOperation = 0; PersistencePhase = EElysiumPersistencePhase::Failed;
+		PublishSaveResult(Operation); return false; // engine 0x20096010 refusal
+	};
 	UGameInstance* GI = GetGameInstance();
 	UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
 	if (!Maps)
 	{
 		OutError = TEXT("no map subsystem");
-		return false;
+		return Refuse();
 	}
 
 	FElysiumSavePayload Payload;
 	if (!ReadSlotPayload(Slot, Payload, OutError))
 	{
 		UE_LOG(LogElysiumSave, Warning, TEXT("load '%s' refused: %s"), *Slot, *OutError);
-		return false;
+		return Refuse();
 	}
 
 	// Check the destination before touching the session, the same precondition New Game asks: a load
@@ -305,9 +322,19 @@ bool UElysiumSessionSubsystem::Load(const FString& Slot, FString& OutError)
 	{
 		OutError = FString::Printf(TEXT("saved map '%s' is not baked"), *Payload.World.CurrentMap);
 		UE_LOG(LogElysiumSave, Warning, TEXT("load '%s' refused: %s"), *Slot, *OutError);
-		return false;
+		return Refuse();
 	}
 
+	if (!Payload.Maps.Contains(Payload.World.CurrentMap))
+	{
+		OutError = TEXT("saved current-map snapshot is missing"); return Refuse(); // 0x200975f0 no partial load
+	}
+
+	PendingRestoreOperation = Operation.OperationId;
+	Operation.State = EElysiumSaveOperationState::Capturing; // existing nonterminal state
+	PersistencePhase = EElysiumPersistencePhase::Decoded; // 0x200975f0 complete codec decode
+	PublishSaveResult(Operation);
+	Maps->ConsumeFreshMapState(); // 0x20096010 load supersedes any dev fresh-state request
 	ApplyPayload(Payload);
 
 	if (Payload.World.bHasPlacement)
@@ -317,7 +344,7 @@ bool UElysiumSessionSubsystem::Load(const FString& Slot, FString& OutError)
 	if (!Maps->Travel(Payload.World.CurrentMap))
 	{
 		OutError = FString::Printf(TEXT("travel to '%s' was refused"), *Payload.World.CurrentMap);
-		return false;
+		return Refuse();
 	}
 
 	UE_LOG(LogElysiumSave, Display, TEXT("loaded '%s': map %s at t=%.3f, %d map snapshots"),
@@ -325,8 +352,44 @@ bool UElysiumSessionSubsystem::Load(const FString& Slot, FString& OutError)
 	return true;
 }
 
+void UElysiumSessionSubsystem::NotifyRestoreApplied()
+{
+	if (PendingRestoreOperation == 0) return;
+	PersistencePhase = EElysiumPersistencePhase::Applied; // 0x1011a620 exact applied-before-think
+	FElysiumSaveResult Operation = SaveResult;
+	Operation.OperationId = PendingRestoreOperation; Operation.State = EElysiumSaveOperationState::Capturing;
+	PublishSaveResult(Operation); // existing stream, phase is LastPersistencePhase()
+}
+
+void UElysiumSessionSubsystem::NotifyRestoreReady()
+{
+	if (PendingRestoreOperation == 0) return;
+	FElysiumSaveResult Operation = SaveResult;
+	Operation.OperationId = PendingRestoreOperation; Operation.State = EElysiumSaveOperationState::Written;
+	PendingRestoreOperation = 0; PersistencePhase = EElysiumPersistencePhase::Ready; // 0x1011aaf0
+	PublishSaveResult(Operation); // completion after readiness, never merely on enqueue
+}
+
+void UElysiumSessionSubsystem::NotifyRestoreFailed(const FString& Reason)
+{
+	if (PendingRestoreOperation == 0) return;
+	FElysiumSaveResult Operation = SaveResult;
+	Operation.OperationId = PendingRestoreOperation; Operation.State = EElysiumSaveOperationState::Failed;
+	Operation.Error = Reason; PendingRestoreOperation = 0; PersistencePhase = EElysiumPersistencePhase::Failed;
+	PublishSaveResult(Operation); // failed activation cannot report ready
+}
+
 void UElysiumSessionSubsystem::RegisterSaveCommands()
 {
+	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.load"), TEXT("elysium.load <slot> — decode and restore a native slot."),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			FString Error; // engine 0x20096010, same backend as elysium.cmd load
+			if (Args.Num() != 1) Error = TEXT("usage: elysium.load <slot>");
+			else if (Load(Args[0], Error)) return;
+			UE_LOG(LogElysiumSave, Warning, TEXT("elysium.load: %s"), *Error);
+		}), ECVF_Default));
 	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.save"), TEXT("elysium.save [slot] — capture the run and write a native slot."),
 		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)

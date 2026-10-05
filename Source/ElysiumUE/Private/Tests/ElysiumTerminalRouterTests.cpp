@@ -110,7 +110,7 @@ bool FElysiumTerminalRouterTest::RunTest(const FString&)
 		EAutomationExpectedErrorFlags::Contains, 1);
 	World.Load(MoveTemp(Defs));
 	const FElysiumEntityHandle Player = World.SpawnPlayer();
-	World.Activate(0.0);
+	World.Activate(1.0); // retail engine fresh epoch 0x200f5bc4
 
 	FElysiumEntity* Entity = World.FindByName(TEXT("terminal"));
 	FElysiumTerminal* Base = Entity ? Entity->AsTerminal() : nullptr;
@@ -201,7 +201,7 @@ bool FElysiumTerminalRouterTest::RunTest(const FString&)
 	// Rating 0 against difficulty 1 rolls 1 deterministically: the skill arm fails, shows the
 	// difficulty and returns to root without leaving the terminal (0x1021c560). The reveal runs for
 	// `(5 - rating * 0.25) / speedScale` seconds, so the clock has to reach five.
-	Advance(5.5);
+	Advance(1.0 + 5.5);
 	TestTrue(TEXT("the buffer is spent"), Terminal->HackBuffer().IsEmpty());
 	TestEqual(TEXT("a failed bypass returns to root"), Terminal->CurrentDirectory, INDEX_NONE);
 	TestTrue(TEXT("the terminal is still open"), World.BuildTerminalView(View));
@@ -297,7 +297,7 @@ bool FElysiumTerminalHudHintTest::RunTest(const FString&)
 		EAutomationExpectedErrorFlags::Contains, 1);
 	World.Load(MoveTemp(Defs));
 	const FElysiumEntityHandle Player = World.SpawnPlayer();
-	World.Activate(0.0);
+	World.Activate(1.0); // retail engine fresh epoch 0x200f5bc4
 
 	FElysiumEntity* Entity = World.FindByName(TEXT("terminal"));
 	FElysiumTerminal* Base = Entity ? Entity->AsTerminal() : nullptr;
@@ -420,7 +420,7 @@ bool FElysiumTerminalHudHintTest::RunTest(const FString&)
 		Get(&World, MakingHackAttempt) + FString::FromInt(View.HudHintValue));
 
 	// --- the skill-blocked arm raises type 6 with the difficulty ----------------------------------
-	Advance(5.5);
+	Advance(1.0 + 5.5);
 	TestTrue(TEXT("the failed bypass leaves the session open"), World.BuildTerminalView(View));
 	TestEqual(TEXT("the skill arm raises InfoCtrl type 6"), View.HudHintType, 6);
 	TestEqual(TEXT("carrying the entity's difficulty"), View.HudHintValue, 3);

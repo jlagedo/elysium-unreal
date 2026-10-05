@@ -49,8 +49,7 @@ namespace ElysiumFrame
 // next-think — through the one FElysiumEventQueue; the queue and think times both
 // serialize, so game time must be ours, never FTimerManager.
 //
-// The clock lives on UElysiumSessionSubsystem and persists across map travel (only the
-// entity world and its queue die with the map actor).
+// The facade lives on the session; curtime belongs to the selected map (engine 0x200975f0).
 //
 // Advanced in exactly one place. `Advance` is private and reachable only through
 // FElysiumTimeControl, which the map actor's gameplay tick calls as its first statement.
@@ -84,6 +83,8 @@ private:
 		return DilatedDeltaSeconds;
 	}
 
+	void SelectMapTime(double StartSeconds) { Now = StartSeconds; } // engine 0x200975f0, preserve pause/scale
+
 	void SetPaused(bool bInPaused) { bPaused = bInPaused; }
 
 	// Recorded only (clamped non-negative); the facade is what applies it, as engine dilation.
@@ -97,7 +98,7 @@ private:
 		bPaused = false;
 	}
 
-	double Now = 0.0;
+	double Now = 1.0; // engine 0x200f5bc4
 	double Scale = 1.0;
 	bool bPaused = false;
 };

@@ -165,8 +165,8 @@ namespace
 			return Builder;
 		}
 
-		explicit FSensesFixture(float VisionUnits = 4000.f, float HearingScalar = 1.0f)
-			: Fixture(BuildWorld(VisionUnits, HearingScalar))
+		explicit FSensesFixture(float VisionUnits = 4000.f, float HearingScalar = 1.0f, bool bDormant = false)
+			: Fixture(BuildWorld(VisionUnits, HearingScalar), bDormant)
 			, Services(Fixture.Services)
 			, World(Fixture.World)
 		{
@@ -697,7 +697,7 @@ bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 	// the port-only state plus the eight embedded sound records, which is what retail's own
 	// `FIELD_EMBEDDED` rows recurse into. Only `Freeze`/`ApplySnapshot` drives both.
 	FSensesFixture F;
-	FSensesFixture G;
+	FSensesFixture G(4000.f, 1.f, true);
 	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard)
 		|| !TestNotNull(TEXT("the player exists"), F.Player)
 		|| G.Guard == nullptr || G.Player == nullptr)

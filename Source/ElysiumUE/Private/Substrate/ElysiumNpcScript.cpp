@@ -594,6 +594,7 @@ bool FElysiumNpc::NavFindPathCorners()
 	// (`0x102f2443..0x102f2458`).
 	int32 Laid = 0;
 	FVector HeadCm = FVector::ZeroVector;
+	FVector TailCm = FVector::ZeroVector; // 0x102f24ca terminal goal
 	for (FElysiumEntity* Corner = First; Corner != nullptr;)
 	{
 		FVector PositionCm = Corner->Origin;
@@ -607,6 +608,7 @@ bool FElysiumNpc::NavFindPathCorners()
 			HeadCm = PositionCm;
 		}
 		++Laid;
+		TailCm = PositionCm; // 0x102f24ca last laid waypoint
 		Corner = Corner->GetNextTarget();                                           // 0x102f249f slot 172
 		if (Laid >= GScript19CornerChainCap)
 		{
@@ -615,6 +617,7 @@ bool FElysiumNpc::NavFindPathCorners()
 	}
 	// The goal bit (`|= 8`) rides the LAST waypoint, and only for a chain shorter than the cap
 	// (`0x102f24ca CMP EAX,0x80; JGE`); the head is that waypoint only for a one-corner chain.
+	if (Laid < GScript19CornerChainCap) Navigator.GoalPosCm = TailCm; // 0x102f24ca..24e3 cutoff succeeds without terminal publication
 	Navigator.bHeadIsGoal = Laid == 1;
 	NavHeadCorner = First->Handle;                                                  // wp+0x20
 

@@ -5,10 +5,43 @@
   "seed": 1,
   "duration": 300.0,
   "expect": [
-    { "label": "red", "who": "", "kind": "input", "match": "DontWalk", "by": 60.0 },
-    { "label": "waits", "who": "", "kind": "schedule", "match": "SCHED_TROIKA_WAIT_AT_CROSSWALK (", "by": 280.0 },
-    { "label": "green", "who": "", "kind": "input", "match": "^Walk( |$)", "regex": true, "within": 45.0 },
-    { "label": "crosses", "who": "", "kind": "break", "match": "CROSSWALK_WALK (", "within": 17.0 }
+    {
+      "label": "red",
+      "who": "",
+      "kind": "input",
+      "match": "DontWalk",
+      "by": 60.0
+    },
+    {
+      "label": "waits",
+      "who": "",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_WAIT_AT_CROSSWALK (",
+      "by": 280.0
+    },
+    {
+      "label": "green",
+      "who": "",
+      "kind": "input",
+      "match": "^Walk( |$)",
+      "regex": true,
+      "within": 45.0
+    },
+    {
+      "label": "crosses",
+      "who": "",
+      "kind": "break",
+      "match": "CROSSWALK_WALK (",
+      "within": 17.0
+    }
   ],
-  "notes": "Q-V13c (record error, inferred): the crosswalk chain matches retail. 0x102a0d20 raises CROSSWALK_WALK only on a normal think, and out of the player's PVS retail's normal-think interval is x10, capped at 16 s (docs/vtmb/npc-ai/lifecycle.md:340-343, 'Normal: ... !PVS -> x10 cap 16'). The waiting pedestrian's own cadence is about 9.9 s, so its next think after the 40.833 green falls past the old 2 s deadline. 'crosses' within 17.0 = the 16 s cap plus the 1 s re-arm. The duration (300 s) already covers the observed run (green 40.833 + 17 = 57.8). Green in two boots, V13 final pass 2026-10-04 (arena 20261004T102327, 20261004T102849), the same trace both times: 11.833 crosswalk_south DontWalk; 23.917 male_asylum_patron break CROSSWALK_DONTWALK (0x13) -> SCHED_TROIKA_WAIT_AT_CROSSWALK (0x102); 40.833 crosswalk_south Walk; 43.550 break CROSSWALK_WALK (0x12) -> SCHED_TROIKA_WALK_TO_INTERESTING_PLACE (0x100), task_walk_path (2.717 s after the green)."
+  "notes": "Q-V13c (record error, inferred): the crosswalk chain matches retail. 0x102a0d20 raises CROSSWALK_WALK only on a normal think, and out of the player's PVS retail's normal-think interval is x10, capped at 16 s (docs/vtmb/npc-ai/lifecycle.md:340-343, 'Normal: ... !PVS -> x10 cap 16'). The waiting pedestrian's own cadence is about 9.9 s, so its next think after the 40.833 green falls past the old 2 s deadline. 'crosses' within 17.0 = the 16 s cap plus the 1 s re-arm. The duration (300 s) already covers the observed run (green 40.833 + 17 = 57.8). Green in two boots, V13 final pass 2026-10-04 (arena 20261004T102327, 20261004T102849), the same trace both times: 11.833 crosswalk_south DontWalk; 23.917 male_asylum_patron break CROSSWALK_DONTWALK (0x13) -> SCHED_TROIKA_WAIT_AT_CROSSWALK (0x102); 40.833 crosswalk_south Walk; 43.550 break CROSSWALK_WALK (0x12) -> SCHED_TROIKA_WALK_TO_INTERESTING_PLACE (0x100), task_walk_path (2.717 s after the green). V6 epoch audit: explicit fresh_map before this guard isolates authored state and allows an actual same-boot predecessor. Original seed, all behavioural predicates/windows/probes and existing script times retained.",
+  "shares_map": true,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sm_hub_1"
+    }
+  ]
 }

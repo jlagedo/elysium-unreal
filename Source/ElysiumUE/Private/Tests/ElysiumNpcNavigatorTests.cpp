@@ -256,6 +256,7 @@ bool FElysiumNavigatorRetryWindowTest::RunTest(const FString&)
 
 	// A search window of 2 s (`TASK_SET_ROUTE_SEARCH_TIME`) and a route the body refuses.
 	Motor->bAcceptMoves = false;
+	Nav.GoalType = 4; Nav.GoalPosCm = GNavDestCm; // actual stored-location prerequisite, 0x102f2379
 	Nav.RouteSearchTime = 2.f;
 	Guard->BaseScheduleHost.MemoryBits &= ~GNavMemoryPathFailed;
 	const double T0 = F.World.NowSeconds();

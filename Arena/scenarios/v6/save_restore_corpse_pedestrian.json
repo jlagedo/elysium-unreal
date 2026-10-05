@@ -1,0 +1,250 @@
+{
+  "name": "save_restore_corpse_pedestrian",
+  "about": "Logical pedestrian corpse callback/deadline/origin continuation; 0x1032c0e0/0x102696f0/0x103a38c0, no death replay.",
+  "stage": "map:sm_hub_1",
+  "seed": 1,
+  "duration": 30,
+  "script": [
+    {
+      "t": 0,
+      "do": "fresh_map",
+      "map": "sm_hub_1"
+    },
+    {
+      "after": "fresh_ready",
+      "do": "player_teleport",
+      "at": [
+        -5700,
+        5700,
+        -284.48
+      ],
+      "face": -135
+    },
+    {
+      "after": "fresh_ready",
+      "delay": 2,
+      "do": "fire",
+      "target": "pedestrian_female",
+      "input": "TakeDamage",
+      "param": 10000
+    },
+    {
+      "after": "corpse",
+      "delay": 0,
+      "do": "save",
+      "slot": "save_restore_corpse_pedestrian",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "pedestrian_female",
+          "field": "callback"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "think.next",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "hidden"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "origin.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "origin.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "origin.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "life.state"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "effects"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "solid.type"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "solid.flags"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "render.alpha"
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "save_restore_corpse_pedestrian",
+      "checkpoint": "mid"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "mid",
+      "fields": [
+        {
+          "who": "pedestrian_female",
+          "field": "callback"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "think.next",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "hidden"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "origin.x",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "origin.y",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "origin.z",
+          "tolerance": 0.0001
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "life.state"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "effects"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "solid.type"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "solid.flags"
+        },
+        {
+          "who": "pedestrian_female",
+          "field": "render.alpha"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "label": "fresh_ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    },
+    {
+      "label": "death",
+      "who": "pedestrian_female",
+      "kind": "death",
+      "match": "",
+      "within": 4
+    },
+    {
+      "label": "corpse",
+      "who": "pedestrian_female",
+      "kind": "corpse",
+      "match": "",
+      "within": 1
+    },
+    {
+      "label": "captured",
+      "who": "",
+      "kind": "script",
+      "match": "fence=1",
+      "within": 10
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "applied",
+      "who": "",
+      "kind": "script",
+      "match": "fence=3",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    }
+  ],
+  "never": [
+    {
+      "who": "pedestrian_female",
+      "kind": "removed"
+    },
+    {
+      "who": "pedestrian_female",
+      "kind": "death",
+      "after": "applied"
+    },
+    {
+      "who": "pedestrian_female",
+      "kind": "corpse",
+      "after": "applied"
+    },
+    {
+      "who": "pedestrian_female",
+      "kind": "schedule",
+      "after": "applied"
+    }
+  ],
+  "probes": [
+    {
+      "at": 16,
+      "who": "pedestrian_female",
+      "probe": "exists",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "callback",
+      "equals": "None"
+    },
+    {
+      "at": "captured",
+      "who": "pedestrian_female",
+      "probe": "witness",
+      "field": "callback",
+      "equals": "None"
+    }
+  ],
+  "shares_map": true,
+  "cast": [
+    {
+      "name": "pedestrian_female"
+    }
+  ]
+}

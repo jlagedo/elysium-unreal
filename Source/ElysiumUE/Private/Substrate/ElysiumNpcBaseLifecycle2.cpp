@@ -10,6 +10,8 @@
 #include "ElysiumSessionSubsystem.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcGait.h"
+#include "Substrate/ElysiumNpcEngineRandom.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "ElysiumNpcFlags.h"
@@ -72,8 +74,16 @@ FString FElysiumNpcBase::AuthoredRelationshipString() const
 void FElysiumNpcBase::ThinkSet(const TCHAR* Function, double Delay)
 {
 	++ThinkSetCalls;                                                     // ThinkSet
-	ThinkFunctionName = Function != nullptr ? FString(Function) : FString();
+	ThinkFunctionName = Function != nullptr ? FString(Function) : FString(); // 0x100a9f70 FUNCTION +0x118
+	ThinkCallback = Function != nullptr ? FName(Function) : NAME_None; // 0x100a8710 NULL is meaningful
 	ThinkSetDelay = Delay;
+	if (bHidden && Function != nullptr && Function[0] != 0) // 0x100a8710 parked body stays NULL
+	{
+		SavedThinkCallback = ThinkCallback;
+		ThinkCallback = NAME_None;
+		NextThink = ELYSIUM_NEVER_THINK;
+		return;
+	}
 	if (Function == nullptr || Function[0] == 0)
 	{
 		NextThink = ELYSIUM_NEVER_THINK;                                 // ThinkSet(NULL)
@@ -95,9 +105,7 @@ bool FElysiumNpcBase::MoveProbeFloorDrop(FVector& InOutOriginUnits)
 	// `m_Collision` box (no foot box), no `CanStandOn`, no `m_bForceNPCCheck` bracket. Family
 	// Motor's `KernelHullTrace`, in its frame (Source units, the port's axes).
 	//
-	// A world with no collision answers nothing; the body then keeps the found-floor arm with a
-	// zero-length drop, so the origin is left where the caller put it (this seam's answer before
-	// 0018 story 6), rather than warning "stuck in wall" in every headless run.
+	// 0x102e7880: missing collision source refuses the sweep; no manufactured floor hit.
 	constexpr double GFloorDropUnits = 256.0;
 	constexpr int32 GFloorDropMask = 0x202400b;
 	FVector MinsUnits = FVector::ZeroVector;
@@ -107,7 +115,7 @@ bool FElysiumNpcBase::MoveProbeFloorDrop(FVector& InOutOriginUnits)
 	FKernelHullTrace Trace;
 	if (!KernelHullTrace(InOutOriginUnits, EndUnits, MinsUnits, MaxsUnits, GFloorDropMask, Trace))
 	{
-		return true;
+		return false;
 	}
 	if (Trace.Fraction == 1.0f)
 	{
@@ -120,12 +128,10 @@ bool FElysiumNpcBase::MoveProbeFloorDrop(FVector& InOutOriginUnits)
 void FElysiumNpcBase::RestoreGiveUp()
 {
 	// `0x1027be60`.
-	if (Motor != nullptr)
-	{
-		Motor->ClearNavigationGoal();                                    // 1027be6x
-	}
+	StartTaskClearGoal(); // 0x1027be60 -> 0x102ee270 whole semantic and physical goal clear
 	++NavigationGoalClears;
 	ClearSchedule();                                                     // 10280d30
+	ActivityNumber = 0; // 0x1027be60 +0xfec m_Activity, after ClearSchedule
 	if (GetEnemy() == nullptr)
 	{
 		Cognition.Conditions.Reset();                                    // six-word block +0x5c5c
@@ -141,8 +147,46 @@ void FElysiumNpcBase::RestoreGiveUp()
 
 bool FElysiumNpcBase::RefindPostRestorePath()
 {
-	// SEAM for `0x102ee1e0`. No navigator: answers failure.
+	// 0x102ee1e0 -> 0x102f1dc0: invalidate route cache without replaying SetGoal or StartTask.
 	++PostRestorePathRefinds;
+	Navigator.bHasHeadWaypoint = false;
+	Navigator.bHeadIsGoal = false;
+	Navigator.LastNodePassed = INDEX_NONE;
+	bMoveIssued = false;
+	if (Motor != nullptr)
+	{
+		Motor->ClearNavigationGoal();
+		Motor->SetNavigationType(static_cast<EElysiumNpcNavType>(Navigator.NavType)); // 0x102ecb50 owner/nav reconnection
+	}
+	const double RestoreNow = World != nullptr ? World->NowSeconds() : 0.0;
+	const bool bRetrying = (BaseScheduleHost.MemoryBits & 0x20) != 0;
+	if (bRetrying && Navigator.RouteGiveUpTime < RestoreNow) // strict timeout, 0x102f1f4d
+	{
+		NavOnNavFailed(0x0c);
+		return false;
+	}
+	if (bRetrying && !(Navigator.RouteRetryTime < RestoreNow)) return false; // equality waits, 0x102f1f73
+	if (DoFindSavedPath()) // 0x102f2330, actual motor route acceptance
+	{
+		BaseScheduleHost.MemoryBits &= ~0x20; // 0x102f1e22/0x102f1f8d
+		int32 RestoredTaskNumber = INDEX_NONE;
+		const bool bSuppressArrival = bRetrying
+			? CurrentRetailTaskNumber(RestoredTaskNumber) && RestoredTaskNumber == 0x6e
+			: IsCurTaskContinuousMove(); // slot529, 0x102f1e2c
+		if (!bSuppressArrival) MotorTaskComplete(false); // navigator slot2
+		return true;
+	}
+	if (!bRetrying)
+	{
+		if (Navigator.RouteSearchTime == 0.f) // 0x102f1ee8
+		{
+			NavOnNavFailed(0x0c);
+			return false;
+		}
+		BaseScheduleHost.MemoryBits |= 0x20;
+		Navigator.RouteGiveUpTime = RestoreNow + Navigator.RouteSearchTime;
+	}
+	Navigator.RouteRetryTime = RestoreNow + Navigator.RouteRetryInterval; // 0x102f1fc5
 	return false;
 }
 
@@ -300,7 +344,7 @@ void FElysiumNpcBase::StartNPC()
 				TEXT("NPC %s stuck in wall--level design error"),      // 10273b78 105cc558
 				Def != nullptr ? *Def->Classname : TEXT(""));
 		}
-		Origin = OriginUnits * ElysiumMove::U;                           // 10273b8b slot 62
+		SetOrigin(OriginUnits * ElysiumMove::U); // 0x10273b8b slot62: existing changed-origin writer synchronizes motor
 		++FloorDropPerformed;
 	}
 	else
@@ -373,9 +417,9 @@ void FElysiumNpcBase::OnRestore(bool /*bFromLoad*/)
 			bGiveUp = false;
 		}
 	}
-	if (Schedule.TaskIndex > RestoreTaskIndexCeiling)
+	if (BaseScheduleHost.FailureReason > RestoreFailureReasonCeiling) // 0x1027bff6 +0x5c50
 	{
-		Schedule.TaskIndex = 1;
+		BaseScheduleHost.FailureReason = 1; // 0x1027c006; cursor +0x5c40 is retained
 	}
 	if (!bGiveUp)
 	{
@@ -416,14 +460,76 @@ void FElysiumNpcBase::OnRestore(bool /*bFromLoad*/)
 	// +0x5b90 m_pSurfaceData ABSENT.
 	if (!BaseScheduleHost.bDoPostRestoreRefindPath)
 	{
-		if (Motor != nullptr)
-		{
-			Motor->ClearNavigationGoal();
-		}
+		StartTaskClearGoal(); // 0x1027bf50 no saved path -> 0x102ee270, preserve retail later writes
 		++NavigationGoalClears;
 	}
 	else if (!RefindPostRestorePath())
 	{
 		RestoreGiveUp();
 	}
+}
+
+bool FElysiumNpcBase::DoFindSavedPath()
+{
+	// 0x102f2330: semantic goal dispatch; Recast is the existing route modernization.
+	FElysiumNpc* const Troika = AsNpc();
+	FElysiumEntity* GoalEntity = World != nullptr ? World->Resolve(Navigator.TargetEntity) : nullptr;
+	FVector GoalCm = Navigator.GoalPosCm;
+	switch (Navigator.GoalType)
+	{
+	case 1: // 0x102f2390 target slot217
+		if (GoalEntity == nullptr) return false;
+		GoalCm = GoalEntity->Origin;
+		break;
+	case 2: // 0x102f25a0 remembered enemy + slot563 adjustment
+		if (GoalEntity == nullptr) return false;
+		GoalCm = Conditions19LastKnownPosition(GoalEntity); // 0x102dfed0 native memory fallback
+		if (Troika != nullptr)
+		{
+			float GoalScalarCm = NavPathScalar20 * ElysiumMove::U;
+			Troika->TranslateEnemyChasePosition(GoalEntity, GoalCm, &Navigator.GoalToleranceCm, &GoalScalarCm);
+			NavPathScalar20 = GoalScalarCm / ElysiumMove::U;
+		}
+		break;
+	case 3: // 0x102f2380..24e3: native corner chain; cutoff succeeds without terminal publication
+		return Troika != nullptr && Troika->NavFindPathCorners();
+	case 4: case 5: case 6: case 9: // stored location, 0x102f2379
+		break;
+	case 7: // 0x102f2543 owner +0x98; slot586 target is a native precondition
+		// +0x98 m_pBaseNPCTroika is null on a base-only owner; slot586 is GetBestSeeUnknown.
+		if (Troika == nullptr) return false;
+		GoalEntity = Troika->RestoreOwnerTargetSource();
+		if (GoalEntity == nullptr) return false; // crash guard for violated native slot586 precondition, not a recovered refusal
+		GoalCm = GoalEntity->Origin;
+		Navigator.GoalType = 1;
+		{
+			float GoalScalarCm = NavPathScalar20 * ElysiumMove::U;
+			Troika->TranslateEnemyChasePosition(GoalEntity, GoalCm, &Navigator.GoalToleranceCm, &GoalScalarCm);
+			NavPathScalar20 = GoalScalarCm / ElysiumMove::U;
+		}
+		break;
+	case 8: // 0x102f258d pedestrian byte before normal build
+		Navigator.bPedestrian = true;
+		break;
+	default:
+		return false;
+	}
+	Navigator.GoalPosCm = GoalCm; // 0x1030b950, no goal-offset normalization
+	if (Motor == nullptr) return false;
+	FElysiumNpcMoveRequest RestoredRequest; // 0x102f2060 reconstructed from semantic goal
+	RestoredRequest.DestinationCm = Navigator.GetGoalPos();
+	RestoredRequest.AcceptanceToleranceCm = 0.0625f * ElysiumMove::U; // 0x10451f78 navigator slot16
+	const EElysiumNpcGaitKind RestoreGait = Navigator.MovementActivity == 0x13 ? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
+	RestoredRequest.SpeedCmPerSecond = ElysiumNpcGait::TravelSpeed(Motor, RestoreGait);
+	RestoredRequest.GaitKind = RestoreGait;
+	RestoredRequest.PartialPath = EElysiumNpcPartialPath::Refuse;
+	RestoredRequest.PedestrianCostMultiplier = Navigator.bPedestrian ? ElysiumNpcEngineRandom::RandomInt(5, 10) : 0; // 0x102fe9f0 per-search draw
+	RestoredRequest.MovementActivityName = FName(*FString::Printf(TEXT("ACT_0x%02x"), Navigator.MovementActivity));
+	if (Troika != nullptr) Troika->MoveGoal = RestoredRequest.DestinationCm;
+	bMoveIssued = Troika != nullptr && Navigator.bPedestrian
+		? Troika->NavLayPedestrianLegs(RestoredRequest) : NavIssueLeg(RestoredRequest);
+	Navigator.bHasHeadWaypoint = bMoveIssued;
+	Navigator.bHeadIsGoal = bMoveIssued && (Troika == nullptr || Troika->PedestrianLegs.Num() <= 1);
+	if (bMoveIssued && Navigator.bPaused) Motor->SetHeld(true); // 0x102ee2e0 retain paused semantic goal
+	return bMoveIssued;
 }

@@ -117,8 +117,8 @@ namespace ElysiumHintSearchTests
 		FElysiumNpcWorldFixture F;
 		FElysiumNpc* Npc = nullptr;
 
-		explicit FRig(FElysiumNpcWorldBuilder&& Builder)
-			: F(MoveTemp(Builder))
+		explicit FRig(FElysiumNpcWorldBuilder&& Builder, bool bDormant = false)
+			: F(MoveTemp(Builder), bDormant)
 		{
 			Npc = F.Npc(TEXT("npc"));
 			FElysiumNpcWorldFixture::Quiet({ Npc, F.Npc(TEXT("other")) });
@@ -863,7 +863,7 @@ bool FElysiumHintSearchSaveRoundTripClaimTest::RunTest(const FString&)
 	using namespace ElysiumHintSearchTests;
 	const TArray<FHintSpec> Layout = { Spec(TEXT("a"), 50.0), Spec(TEXT("b"), 100.0) };
 	FRig From(BuildWorld(TEXT("__hint_search_save__"), 12, nullptr, Layout));
-	FRig To(BuildWorld(TEXT("__hint_search_save__"), 12, nullptr, Layout));
+	FRig To(BuildWorld(TEXT("__hint_search_save__"), 12, nullptr, Layout), true);
 	if (!From.Has(*this, { TEXT("a"), TEXT("b") }) || !To.Has(*this, { TEXT("a"), TEXT("b") }))
 	{
 		return false;
