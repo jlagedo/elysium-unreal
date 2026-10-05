@@ -219,3 +219,24 @@ float FElysiumAnimating::GetIdealSpeed() const
 	const FElysiumNpcBase* const Npc = AsNpcBase();
 	return Npc != nullptr ? Npc->GroundSpeed : 0.f;
 }
+
+// Slot 247, 0x10090c80 -> entity slot 15 0x1009af40, never the motor's size setter.
+void FElysiumAnimating::SetAttackExtentsForSequence(int32 ExtentsSequence)
+{
+	if ((EntityFlags2Word & 4u) == 0) return; // 0x10090c80 GetFlags2
+	const FElysiumNpc* const ExtentsNpc = AsNpc(); // 0x10090c80
+	FVector BoundsMinCm, BoundsMaxCm; // 0x10090c80
+	if (ExtentsNpc == nullptr || !ExtentsNpc->SequenceBounds(ExtentsSequence, BoundsMinCm, BoundsMaxCm))
+		return; // 0x10090c80 no seqdesc; J2b live bbox seam returns false, no partition write
+	FVector ExtentsCm(FMath::Max(FMath::Abs(BoundsMinCm.X), BoundsMaxCm.X),
+		FMath::Max(FMath::Abs(BoundsMinCm.Y), BoundsMaxCm.Y),
+		FMath::Max(FMath::Abs(BoundsMinCm.Z), BoundsMaxCm.Z)); // 0x10090c80
+	ExtentsCm.X = FMath::Sqrt(ExtentsCm.X * ExtentsCm.X + ExtentsCm.Y * ExtentsCm.Y); // 0x10090c80
+	ExtentsCm.Y = ExtentsCm.X; // 0x10090c80 radial XY
+	FVector CollisionMinUnits, CollisionMaxUnits; // 0x10090c80
+	FElysiumNpcBase::RetailCollisionExtents(*this, CollisionMinUnits, CollisionMaxUnits); // 0x100dc830
+	const FVector CollisionMaxCm = CollisionMaxUnits * ElysiumMove::U; // 0x10090c80
+	for (int32 ExtentsAxis = 0; ExtentsAxis < 3; ++ExtentsAxis)
+		ExtentsCm[ExtentsAxis] = FMath::Max(ExtentsCm[ExtentsAxis] - CollisionMaxCm[ExtentsAxis], 0.0); // 0x10090c80
+	SetAttackExtents(ExtentsCm); // 0x1009af40 entity extents/partition seam, no motor write
+}

@@ -17,6 +17,8 @@
 #include "Substrate/ElysiumNpcMotorShared.h"
 #include "Substrate/ElysiumRetailHullTable.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Substrate/ElysiumWeaponClasses.h"
+#include "Visual/ElysiumNpcClips.h"
 
 // --- File-scope helpers moved with the base bodies (story 5 step 5) ---
 
@@ -151,14 +153,30 @@ bool FElysiumNpcBase::NavLinkActivity(int32& OutActivity) const
 }
 
 bool FElysiumNpcBase::AnimIntervalMovement(float Interval, FVector& OutDeltaUnits,
-	float& OutYawDelta) const
+	float& OutYawDelta, bool* OutIntervalFinished) const
 {
-	// `CBaseAnimating::GetIntervalMovement(m_flAnimTime - m_flPrevAnimTime, …)`. **SEAM**: the
-	// animating tier publishes no interval movement to the kernel.
-	(void)Interval;
-	OutDeltaUnits = FVector::ZeroVector;
-	OutYawDelta = 0.f;
-	return false;
+	OutDeltaUnits = Origin / ElysiumMove::U;                         // 0x10094b70 slot 220
+	OutYawDelta = Angles.Y;                                         // 0x10094b70 slot 221
+	const FElysiumNpc* const Troika = AsNpc();                       // 0x10094b70 GetModelPtr
+	if (Visual == nullptr || Troika == nullptr) return false;        // 0x10094b70 no model
+	float CycleTo = SequenceCycle + SequenceCycleRate * Troika->SequencePlaybackRate * Interval; // 0x10094b70
+	const bool bIntervalFinished = !bSequenceLoopedOnce && CycleTo > 1.f; // 0x10094b70
+	if (OutIntervalFinished != nullptr) *OutIntervalFinished = bIntervalFinished; // 0x10094b70 local output byte
+	if (bIntervalFinished) CycleTo = 1.f;                            // 0x10094b70
+	// 0x100c5d10 -> 0x100c5400: pose blending is a named seam; the baked path is animation 0.
+	const int32 RawIndex = SequenceNumber == 0 ? 0
+		: (Troika->SequenceRows.IsValidIndex(SequenceNumber)
+			? Troika->SequenceRows[SequenceNumber].RawIndex : INDEX_NONE); // 0x100c5d10 current sequence
+	// 0x100c5d10: an unnumbered bridge row has no studio input; no activity re-pick or guessed index.
+	IElysiumEmbodiment* const Embodiment = World != nullptr ? World->Embodiment() : nullptr; // 0x10094b70
+	FVector LocalDeltaCm = FVector::ZeroVector;                      // 0x100c5d10 nummovements=0
+	float LocalYawDegrees = 0.f;                                    // 0x100c5d10 dAng.y
+	const bool bMovement = Embodiment != nullptr && RawIndex >= 0
+		&& Embodiment->GetBodySequenceIntervalMovement(Visual, ModelStem(), RawIndex,
+			SequenceCycle, CycleTo, LocalDeltaCm, LocalYawDegrees);    // 0x100c5d10 -> 0x100c6020
+	OutDeltaUnits += FRotator(0.f, -Angles.Y, 0.f).RotateVector(LocalDeltaCm) / ElysiumMove::U; // 0x1013a7e0
+	OutYawDelta -= LocalYawDegrees;                                 // 0x10094b70 Source yaw
+	return bMovement;                                              // 0x10094b70
 }
 
 bool FElysiumNpcBase::KernelHullTrace(const FVector& StartUnits, const FVector& EndUnits,
@@ -331,6 +349,8 @@ bool FElysiumNpcBase::RetailCollisionExtents(const FElysiumEntity& Entity, FVect
 	const FElysiumNpcBase* const Npc = Entity.AsNpcBase();
 	if (Npc != nullptr)
 	{
+  if (Npc->SetSizeCalls > 0)
+  { OutMinsUnits = Npc->LastSetSizeMinsUnits; OutMaxsUnits = Npc->LastSetSizeMaxsUnits; return true; } // 0x101cf390 latest UTIL_SetSize
 		return Npc->RetailHullExtents(Npc->HullKind,
 			Npc->bIsUsingSmallHull ? EElysiumHullExtents::Small : EElysiumHullExtents::Full,
 			OutMinsUnits, OutMaxsUnits);
@@ -548,40 +568,37 @@ bool FElysiumNpcBase::ValidateNavGoal()
 
 bool FElysiumNpcBase::AutoMovement()
 {
-	// `CAI_BaseNPC::AutoMovement` `0x10280a50`:
-	//     vtable[1000/4 = 250]();                                   // first, unconditionally
-	//     GetIntervalMovement(m_flAnimTime - m_flPrevAnimTime, …);
-	//     if (GetMoveType() != 4) return false;                     // vtable +0x178, slot 94
-	//     if (GetFlags() & 0x400) return false;                     // FL_FROZEN
-	//     return thunk_FUN_102e0bd0(m_pMotor, delta, thunk_FUN_102729d0(this), yaw, …) == 1;
-	//
-	// **The gate is the retail contract.** `ElysiumNpc.cpp` already records that this runtime cedes
-	// root-motion EXTRACTION to Unreal's animation instance (a visual-only modernization); what it
-	// may not cede is WHEN the extraction is allowed to move the body, and that is `GetMoveType()`
-	// being 4 with `0x400` clear, after slot 250 has run. Both are ported.
-	// Slot 250 is `StudioFrameAdvance(float)` (`0x10098bb0`); retail passes no argument, so the
-	// frame advance runs on the animating tier's own clock.
-	StudioFrameAdvance(0.f);
-	FVector DeltaUnits = FVector::ZeroVector;
-	float YawDelta = 0.f;
-	// `m_flAnimTime - m_flPrevAnimTime` (+0x174 - +0x170): the animating tier's own interval, which
-	// is a CHAIN concern here, so the seam is asked for the interval as well as the delta.
-	AnimIntervalMovement(0.f, DeltaUnits, YawDelta);
-	if (GetMoveType() != 4)
+	StudioFrameAdvance(0.f);                                       // 0x10280a50 slot 250 first
+	FVector EndUnits = Origin / ElysiumMove::U;                       // 0x10094b70
+	float EndYaw = Angles.Y;                                        // 0x10094b70
+	AnimIntervalMovement(AnimTime - PrevAnimTime, EndUnits, EndYaw); // 0x10280a50 just-advanced cycle
+	if (Visual == nullptr || GetMoveType() != 4 || (Flags & 0x400) != 0) return false;      // 0x10280a50
+	FMotorMoveTrace MoveTrace;                                     // 0x102e0bd0
+	// 0x102e0c48: flags=5 (ground seam's existing NavMesh contract); pct=100, mask=0x202400b.
+	MotorMoveTraceSweep(0, Origin / ElysiumMove::U, EndUnits,
+		0x202400b, 100.f, nullptr, MoveTrace);                       // 0x102e0c57 MoveLimit
+	// 0x102e0c57: the landed ground seam supplies the floor; the hull supplies solid obstructions.
+	FVector AutoHullMins, AutoHullMaxs; // 0x102e0bd0
+	RetailCollisionExtents(*this, AutoHullMins, AutoHullMaxs); // 0x102e0bd0
+	FKernelHullTrace AutoHullTrace; // 0x102e0bd0
+	if (KernelHullTrace(Origin / ElysiumMove::U, EndUnits, AutoHullMins, AutoHullMaxs,
+		0x202400b, AutoHullTrace) && (AutoHullTrace.Fraction < 1.f
+			|| AutoHullTrace.bStartSolid || AutoHullTrace.bAllSolid)) // 0x102e0bd0 MoveLimit status
 	{
-		return false;
+		MoveTrace.EndPositionUnits = AutoHullTrace.EndPosUnits; // 0x102e0bd0
+		MoveTrace.ObstructionHandle = AutoHullTrace.HitEntity; // 0x102e0bd0
+		MoveTrace.Obstruction = World != nullptr ? World->Resolve(AutoHullTrace.HitEntity) : nullptr; // 0x102e0bd0
+		MoveTrace.Status = MoveTrace.Obstruction == nullptr ? -2
+			: (MoveTrace.Obstruction->AsNpcBase() != nullptr ? -3 : -1); // 0x102e2d70
 	}
-	if ((Flags & 0x400) != 0)
-	{
-		return false;
-	}
-	// The apply, `thunk_FUN_102e0bd0(m_pMotor, delta, …) == 1`, is Unreal's: the animation instance
-	// extracts the root motion and the character movement component moves the body (a named
-	// modernization, story 6). It answers the kernel no `AIMoveResult_t`, so the rule reads retail's
-	// not-moved answer, as the recording seam it replaced did.
-	(void)DeltaUnits;
-	(void)YawDelta;
-	return false;
+	FElysiumEntity* const ExpectedTarget = GetNavTargetEntity();     // 0x102729d0 goals 2/1/7 only
+	const bool bStoppedAtTarget = ExpectedTarget != nullptr
+		&& (MoveTrace.Obstruction == ExpectedTarget
+			|| MoveTrace.ObstructionHandle == ExpectedTarget->Handle); // 0x102e0cb5..0x102e0cc9
+	if (MoveTrace.Status < 0 && !bStoppedAtTarget) return false;     // 0x102e0cd8..0x102e0cee
+	SetOrigin(MoveTrace.EndPositionUnits * ElysiumMove::U);           // 0x102e0cfc; carries motor capsule
+	if (EndYaw != -1.f) SetRuntimeAngles(FVector(Angles.X, EndYaw, Angles.Z)); // 0x102e0d7e..0x102e0dc2
+	return !bStoppedAtTarget && MoveTrace.Status >= 0;               // 0x102e0dc8: only result 1
 }
 
 float FElysiumNpcBase::PostRun()
@@ -595,6 +612,11 @@ float FElysiumNpcBase::PostRun()
 	DispatchAnimEvents(Interval, this);                                          // 0x1026c8d8 slot 258
 	MotorSeams.PostRunInterval = Interval;
 	++MotorSeams.PostRunWeaponUpdates;                                           // 0x1026c8e0 Weapon_FrameUpdate
+	FElysiumEntity* const HeldEntity = ActiveWeaponEntity(); // 0x1032aa40
+	if (FElysiumWeapon* const ActiveWeapon = HeldEntity && HeldEntity->AsItem() ? HeldEntity->AsItem()->AsWeapon() : nullptr)
+	{
+		ActiveWeapon->WeaponFrameUpdate(*this);                                  // 0x1032aa40 -> 0x1024efa0
+	}
 	return Interval;
 }
 

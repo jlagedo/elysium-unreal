@@ -1,0 +1,198 @@
+{
+  "name": "ranged_enemy_dead_retarget",
+  "about": "BestEnemy 0x10274475 / IsAlive 0x100b4dc0 rejects a visible resolvable dead body; ChooseEnemy 0x10279dd0, GatherEnemyConditions 0x10270e5a..0x10270e89 and Troika 0x102afc24..0x102afca7 keep selection order. Quiet exit ALERT/0x4b; live replacement permits one START_COMBAT.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 8,
+  "player": {
+    "at": [
+      -900,
+      700,
+      0
+    ],
+    "face": 180
+  },
+  "cast": [
+    {
+      "name": "arena_gunman",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        -775,
+        600,
+        0
+      ],
+      "face": 0,
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "npc_perception": "3",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "player_reaction": "D_NU 5",
+        "hint_groups": "2",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": "",
+        "additionalequipment": "item_w_thirtyeight"
+      }
+    },
+    {
+      "name": "arena_dead",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        -225,
+        600,
+        0
+      ],
+      "face": 0,
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "npc_perception": "3",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "player_reaction": "D_NU 5",
+        "hint_groups": "2",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": ""
+      }
+    },
+    {
+      "name": "arena_live",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        -225,
+        850,
+        0
+      ],
+      "face": 0,
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "npc_perception": "3",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "player_reaction": "D_NU 5",
+        "hint_groups": "2",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": ""
+      }
+    }
+  ],
+  "script": [
+    {
+      "do": "fire",
+      "target": "arena_dead",
+      "input": "DisableThink",
+      "t": 0,
+      "param": true
+    },
+    {
+      "do": "seed_health",
+      "target": "arena_dead",
+      "param": 100000,
+      "t": 0.1
+    },
+    {
+      "do": "fire",
+      "target": "arena_gunman",
+      "input": "SetRelationship",
+      "t": 1.0,
+      "param": "arena_dead D_HT 20"
+    },
+    {
+      "do": "fire",
+      "target": "arena_dead",
+      "input": "TakeDamage",
+      "param": 1000000,
+      "t": 1.8
+    },
+    {
+      "do": "fire",
+      "target": "arena_live",
+      "input": "DisableThink",
+      "t": 0,
+      "param": true
+    },
+    {
+      "do": "seed_health",
+      "target": "arena_live",
+      "param": 100000,
+      "t": 0.1
+    },
+    {
+      "do": "fire",
+      "target": "arena_gunman",
+      "input": "SetRelationship",
+      "t": 1.0,
+      "param": "arena_live D_HT 10"
+    }
+  ],
+  "expect": [
+    {
+      "label": "engages",
+      "who": "arena_gunman",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_START_COMBAT (",
+      "by": 3
+    },
+    {
+      "label": "dies",
+      "who": "arena_dead",
+      "kind": "death",
+      "match": "",
+      "within": 2
+    },
+    {
+      "label": "corpse",
+      "who": "arena_dead",
+      "kind": "corpse",
+      "match": "",
+      "within": 0.2
+    },
+    {
+      "label": "replacement",
+      "who": "arena_gunman",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_START_COMBAT (",
+      "within": 2
+    }
+  ],
+  "never": [
+    {
+      "who": "arena_dead",
+      "kind": "damage",
+      "match": "from=arena_gunman",
+      "after": "dies"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "arena_gunman",
+      "probe": "enemy",
+      "equals": "arena_live"
+    },
+    {
+      "at": "end",
+      "who": "arena_dead",
+      "probe": "exists",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "arena_dead",
+      "probe": "alive",
+      "equals": false
+    }
+  ],
+  "notes": "S13 acceptance prediction; measured result is recorded at V4c integration close. InputDisableThink 0x1029f2a0 accepts a Bool variant; integer1 disables nothing. Setup corrected to JSON true. Seats moved to the open y600 corridor: the initial y0 ray crossed the room cover and no hostile was acquired. The corpse remains resolvable inside the +10 removal clock. Death is staged after the network-init broadcast: 0x1028d8d0 walks every Troika (+0x4c bit0x40), and slot584 0x1028d910 resets all think timers. The previous 0.417 death was legitimately rearmed at 0.80. The quiet ALERT probe measures the 0x4b transition before its 5-second wait returns to idle."
+}

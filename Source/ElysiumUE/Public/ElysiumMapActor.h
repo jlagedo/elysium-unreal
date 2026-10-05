@@ -410,6 +410,8 @@ public:
 		const FString& ClipName) override;
 	virtual bool PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial,
 		const FString& ClipName) override;
+	virtual bool TranslateNpcActivityRequest(const FElysiumActivityClipRequest& Request,
+ FString& OutTranslated, FString& OutFirstWeapon) override;
 	virtual bool ResolveNpcActivityClip(const FElysiumActivityClipRequest& Request,
 		FElysiumActivityClip& Out) override;
 	virtual void NpcActivitySequences(const FElysiumActivityClipRequest& Request,
@@ -434,6 +436,9 @@ public:
 	virtual FString NpcClipOwner(const FString& Stem, const FString& ClipLabel) override;
 	virtual bool GetBodyClipByRawIndex(USkeletalMeshComponent* Body, const FString& Stem,
 		int32 RawIndex, FString& OutLabel, struct FElysiumNpcClip& OutClip) override;
+	virtual void SetBodySequencePlaybackRate(USkeletalMeshComponent* Body, float NewRate) override;
+	virtual bool GetBodySequenceIntervalMovement(USkeletalMeshComponent* Body, const FString& Stem,
+ int32 RawIndex, float CycleFrom, float CycleTo, FVector& OutDeltaCm, float& OutYawDeltaDegrees) override;
 	virtual bool GetBodySequenceMovement(USkeletalMeshComponent* Body, const FString& Stem,
 		int32 RawIndex, FVector& OutDeltaCm) override;
 	virtual bool GetNpcSequenceDescriptor(const FString& Stem, const FString& OwnerStem,
@@ -500,6 +505,7 @@ public:
 	virtual int32 FinishAnimationPreload() override;
 	virtual void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 		const FString& StaticStem, int32 Family) override;
+	virtual FString PickAnimatedPropRestClip(const FString& Stem) const override;
 	virtual FString AnimatedPropRestClip(const FString& Stem,
 		int32 PlacementToken = 0) const override;
 	virtual bool FindAnimatedPropClip(const FString& Stem, const FString& ClipName,

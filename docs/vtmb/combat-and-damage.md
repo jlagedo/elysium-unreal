@@ -1014,17 +1014,21 @@ the record's bone-local segment — transformed into world space by that bone's 
 `VectorTransform` — committing any hit through the weapon's traced-impact virtual `vt +0x438` =
 `0x102579F0`.
 
-**The `N < 1` branch is unreachable in retail's own environment, and reproducing it literally is a
-defect.** That branch jumps straight into the epilogue stores, which overwrite the stored timestamp
-(`+0xAA4`, one writer image-wide), position and angles and discard the short span. But the clock is
-server `curtime`, which advances in fixed ticks, and the update's `dt <= 0` early exit is the one
-path that does *not* write the timestamp — so a call either sees `dt == 0` and stores nothing, or
-sees a whole tick and walks it. **The observable is tick-batched walking**, not span-dropping; a
-literal port makes melee stop landing above 100 fps, a behaviour retail's clock cannot produce.
-(The reproduction adds two guards of its own on top of that reconciliation —
-`ElysiumSwing::MaxBatchSeconds` and `MaxBatchTravelCm` — which bound a hitched frame's sub-step
-count and refuse to sweep through an engine discontinuity such as a teleport. Retail's server never
-hands its update either case, so neither stands in for a recovered rule.)
+**The update uses its own character clock, not a render-frame accumulator.** The listing of
+`0x10346cd0` confirms `dt = curtime - +0xaa4`, `dt <= 0` returning unstamped, and
+`N = ceil(dt * 100)` with float `0x10450564`. Every positive finite span buys at least one step:
+0.25 buys 25 and 0.101 buys 11. The V4c port removes the old floor-based accumulation, hitch cap
+and travel-discontinuity re-prime from the contact caller. No descriptor or zero swing records
+clears `+0xaa1` and returns unstamped. A non-live descriptor first runs `Step(pos,angles,0,0)`,
+then `ForceMeleeReset 0x10346760` and the timestamp/pose epilogue. A live update computes
+`rate = cycleRate * playbackRate`, `c1 = (curtime - animTime + 0.1) * rate + cycle`, and
+`c0 = c1 - rate * dt`; it interpolates the stored pose and cycle, clamps to 1 and stops once the
+previous cycle is 1. The angle helper `0x10345890`, re-read from the listing by C1, quantizes each
+shortest-angle delta: `ftol((to-from+180)*(65536/360)) & 0xffff`, then multiplies by `360/65536`
+and subtracts 180 before lerping; an unquantized shortest-angle lerp is not its answer.
+NPC completion clears `+0x6064`, the incoming notice is once-only, and the
+active-swing test `0x103451d0` reads `cycle - melee_swish_sound_time_offset` (shipped -0.1),
+with start inclusive and end exclusive, before weapon slot 333 `(0x15,1,0,0,0,0)`.
 
 **The step and the commit, walked 2026-10-04** (spec 0002 `stories/v4/packets-S5.md` item 3 holds
 both bodies arm by arm). `MeleeSwingStep 0x10343020`, per record: the two bone-local points through
@@ -1162,6 +1166,150 @@ are not on the path. The male `baseball` bank's attack clips author **no event a
 records are 4050/4051/5118 on the four stealth-kill clips), so a bat swing produces contact and
 damage with no anim event in between.
 
+**V4c implementation and bounded inputs (C1, 2026-10-04).** `PostRun 0x1026c7c0` now calls
+the active weapon frame after slot 258, preserving its update observation. The held model has no
+sequence-word source in the current substrate: `FElysiumWeapon::WeaponModelClock()` returns
+null. The frame body accepts real words, advances them with slot-250(0)'s clock contract,
+re-picks through C2's shared `ElysiumAnimationPick::Weighted` stream, resets only a nonnegative
+answer, and dispatches the weapon's events to its wielder. ResetSequenceInfo `0x10090950`,
+re-read from the server listing, preserves the just-wrapped cycle; it does not zero cycle.
+0015 owes the held-model
+`+0x170/+0x174`, `+0x65c/+0x65d/+0x658`, `+0x6f0/+0x6f4/+0x6f8`, activity and descriptor
+event/weight inputs, plus the reset's new descriptor; neither the wielder's row nor its pose
+phase supplies them. Weapon-model bodygroup presentation and slot-333 SetActivity are also
+named 0015 inputs; the operator's 4001/4002 stores and active-event call are observed here.
+
+All NPC estimate transactions and UpperBody stand-ins in `BeginRangedShot` are removed
+(`0x10238160 -> 0x10238320 -> 0x102383b0 -> 0x102387b0`). A silent NPC ranged attack clip
+warns once per model/sequence at Warning and fires nothing. The player's estimate remains.
+The task's melee arm retains capability `0x18000`, last-attack stamp, direct Primary/Secondary
+virtual, then AutoMovement (`0x102a45c6`); it no longer passes through ItemPostFrame's timer
+gate. NPC `RequestActivity 0x103e9e00` uses GetEnemy, weapon translation, slot 376 and slot 331,
+refuses an unforced failed/negative selection, commits through slot 311, then assigns playback
+rate and raises the recovery clocks. The direct NPC Primary/Secondary virtual passes force=1
+(`0x103ead7a`); `0x103ea1b5..0x103ea1be` therefore bypasses refusal on that arm. Slot 311
+leaves the old kernel sequence when given -1, but playback rate and clocks still write;
+the listing of SequenceDuration `0x10091080`, reached through `0x10009813`, confirms its
+invalid-sequence return is 0.1 at `0x10091196`. There is no NPC PlayAnimSegment. The exact melee trigger
+set is 3001, 3030..3037, 3039..3044 and 3047, non-player only; 3003 is swallowed and
+3038/3045/3046 take the base. The TzimisceMelee class is absent: its temporary +0x910 variants
+and RequestActivity arm (`0x103e8be0`, `0x103e8c50`, `0x103e8c90`) remain a named species seam,
+not a fabricated species implementation.
+
+`AutoMovement 0x10280a50` now advances slot 250 first and samples from that just-advanced
+cycle through `cycle + cycleRate * playbackRate * (animTime - prevAnimTime)`, with a nonlooping
+end above 1 clamped to 1 (`0x10094b70 -> 0x100c5d10`). Local yaw rotates the displacement;
+local origin and yaw are then added. Pose blending `0x100c5400` remains named: the baked path
+is the first animation, and a swing is not a grid. Move type 4 and FL_FROZEN-clear gate the
+`0x102e0bd0` ground probe (mask `0x202400b`, percent 100, flags 5), using the landed NavMesh
+ground seam and hull trace for solids. An unexpected obstruction refuses without moving;
+an expected goal-2 enemy, goal-1 target or goal-7 Troika target permits the partial endpoint,
+but result 4 remains false. Only result 1 returns true. SetOrigin already reaches
+`FElysiumScriptedCharacter::OnRuntimeTransformChanged` and Motor->Teleport, including capsule.
+
+**D9 is still bounded.** No sequence-cycle bone accessor exists in IElysiumEmbodiment.
+`ElysiumSwingEndpointsAt` asks the named `ElysiumCalcPoseAtCycle` seam with each query's own
+cycle, character and bone-local record (`0x10343020`, matrix `0x100c3600`); that seam answers
+false and retains the existing live-bone interpolation. The contact window, sample and impact
+order D1–D8/D10/D11 remain intact. The debug_allow_melee_ff input is a virtual seam answering
+its shipped false value, permitting an explicit arm fixture to test the debug bypass.
+The team predicate now calls the shared IsSameTeam
+(`0x10323930`), after hate/fear but before RecordHits, impact, damage or knockback
+(`0x1034394d..0x103439a7`). `SwingHasRecordedHit` is the read-only contact observation;
+CalcPoseSeams records each supplied cycle and its unavailable provider for the D9 arm fixture.
+The explicit TzimisceMeleeActivityFromAnimEvent seam answers false, retaining the base-event route.
+The arena still lacks the hit-once observation. Integration's new `swing_recorded_hit` probe
+in `Debug/ElysiumArenaScenarioRunner.cpp::ReadProbe` must resolve the source's active weapon
+and the `to` entity and assign exactly
+`Answer.bBool = ContactWeapon != nullptr && ProbeVictim != nullptr && ContactWeapon->SwingHasRecordedHit(ProbeVictim->Handle);`
+after `Answer.Type = FElysiumArenaValue::EType::Bool;`. Add the matching enum/parser/name entry
+in the arena's owning files; damage refusal alone is not evidence for this contact filter.
+
+Integration owns the following declarations and the slot regeneration, outside C1's file list:
+
+```cpp
+// Public/ElysiumPlayer.h, FElysiumCombatCharacter, beside MeleeSwingCompletionPercent:
+bool bMeleeSwingIsLive = false;               // 0x10346cd0 +0xaa1
+bool bDidSendIncomingSwingNotice = false;    // 0x10346cd0 +0xaa2
+bool bDidSendSwingActiveEvent = false;       // 0x10346cd0 +0xaa3
+float LastMeleeSwingUpdate = 0.f;            // 0x10346cd0 +0xaa4
+FVector LastMeleeSwingPosition = FVector::ZeroVector; // +0xaa8
+FVector LastMeleeSwingAngles = FVector::ZeroVector;   // +0xab4
+
+// Public/ElysiumWorldServices.h, IElysiumEmbodiment, beside GetBodySequenceMovement:
+virtual bool GetBodySequenceIntervalMovement(USkeletalMeshComponent* Body, const FString& Stem,
+    int32 RawIndex, float CycleFrom, float CycleTo, FVector& OutDeltaCm, float& OutYawDeltaDegrees)
+{
+    OutDeltaCm = FVector::ZeroVector;
+    OutYawDeltaDegrees = 0.f;
+    return false; // 0x100c5d10 nummovements=0
+}
+// Public/ElysiumMapActor.h: same signature with override.
+// Map/ElysiumMapActorEmbodiment.cpp: clone GetBodySequenceMovement's raw-index/path lookup,
+// then SampleDelta(*Path, Path->LastFrame()+1, CycleFrom, CycleTo, OutDeltaCm).
+// PositionAtFrame at each cycle supplies yaw; OutYawDeltaDegrees = ToYaw - FromYaw for a
+// positive interval, otherwise zero. Every shipped movement record's yaw is zero.
+
+// Tests/ElysiumTestServices.h, FElysiumRecordingServices: same override, zero outputs first:
+TFunction<bool(int32, float, float, FVector&, float&)> BodySequenceIntervalMovementQuery;
+// Override returns:
+return BodySequenceIntervalMovementQuery
+    ? BodySequenceIntervalMovementQuery(RawIndex, CycleFrom, CycleTo, OutDeltaCm, OutYawDeltaDegrees)
+    : false;
+
+// D9 accessor proposed to the integrator/judge; default false until a CalcPose source exists:
+virtual bool GetBodySequenceBoneTransform(USkeletalMeshComponent* Body, const FString& Stem,
+    const FString& OwnerStem, const FString& Label, float Cycle, const FString& Bone,
+    const FTransform& PoseFrame, FTransform& OutBoneWorld) const;
+```
+
+Remove `EntityWorld->AdvanceMeleeSwings(DeltaSeconds);` and its obsolete caller-delta comment
+from `Map/ElysiumMapActor.cpp::PostMoveTick`, and `void AdvanceMeleeSwings(float DeltaSeconds);` plus
+its comment from `Public/ElysiumEntityWorld.h`. Replace the two comment lines above
+`Visual/ElysiumMeleeTrail.h::Advance` with
+`// Visual trail sampling follows the character's slot-315 sweep; it owns no contact clock.`
+C2 owns the player's already requested MeleeSwingUpdate call at PostThinkAnimation's tail.
+
+V11's `Tests/ElysiumMeleeSwingStepTests.cpp::FStepFixture::Swing` needs direct Step fixture
+inputs: replace its AttackIntent/Verdict block and the two world-poll calls with the following;
+also remove `World->Tick(1.0);` from this direct Step fixture:
+`Weapon->ResetSwingContact(); Weapon->Swing.ClipLabel = GSwingLabel;`
+`Weapon->Swing.ClipOwnerStem = GSwingBank; Swinger.bMeleeSwingIsLive = true;`
+`Weapon->PrepareSwingContact(); Weapon->MeleeSwingStep(Swinger.Origin,Swinger.Angles,0.f,0.f);`
+`Weapon->MeleeSwingStep(Swinger.Origin,Swinger.Angles,0.f,0.5f);`.
+In `FElysiumMeleeSwingStepCandidateGatesTest`, replace its third poll with
+`F.Weapon->MeleeSwingStep(F.Attacker->Origin,F.Attacker->Angles,0.5f,0.6f);`.
+Those tests pin Step/contact, while C1's new CharacterSwingClock pins scheduling; do not delete
+V11's tests. The verdict rows to add are `10346cd0`, rule, 10-18 (order layer 18),
+`hand:FElysiumCombatCharacter::MeleeSwingUpdate`, evidence
+`[0019/1 obs=via: UpdateCharacter slot 315, authored melee contact timing] own dt ceil(dt*100)`;
+and `10090c80`, rule, 0-4, `hand:FElysiumAnimating::SetAttackExtentsForSequence`, evidence
+`[0019/1 obs=via: sequence-reset entity attack extents] Flags2&4 descriptor gate, J2b false seam`.
+Regeneration must remove the generated stub bodies before compiling the hand bodies.
+The movement reader uses C2's stored FSequenceRow::RawIndex without an activity re-query.
+In `Substrate/ElysiumMeleeSequenceChoice.cpp::MeleeSequenceNumberOf`, integration must change
+the successful raw-lookup return to exactly:
+`return Troika->SequenceRowFor(Found.Owner, Label, Found.IsLooping(), Found.RawIndex);`
+so a slot-331-picked swing carries that index. Unnumbered rows answer no movement, not a guessed
+studio index. C2's weighted picker already supplies it to SequenceRowFor.
+
+**Fifth-hit attribution is unverified (S13 §4; C1 listing re-read, 2026-10-04).** The listing
+at `0x102a3339/0x102a3344/0x102a3352` ORs 0x440a0000 and restarts activity 0x1050;
+UNKNOCKOUT's `0x102a3364..0x102a336b` only restarts 0x1052 and does not clear flags.
+`0x102a585d..0x102a5874` accepts a positive mask and applies it to flags1, reached by
+COWER_SIMPLE/HINT/NOSEE 0x109/0x10a/0x10b (blobs 0x105e5788/0x105e5590/0x105e5398)
+and DO_SLEEP_ACTIVITY's ONE_HIT_KILL task. Pedestrian damage reaches FLEE via
+`0x103a2e30/0x103a34a3`, then Troika `0x102b0250` and COWER or failed FLEE_AND_COWER.
+The listing of `OnTakeDamage_Alive 0x102beda0` confirms nonzero base result at 0x102bee57,
+strictly positive packet at 0x102bee77 and flags1 0x40000000 at 0x102bee93 before death
+caller `0x102beea4` (slot 144). The independent missing-interest-death-activity caller is
+`0x102bef13`. `OnTakeDamage 0x1032ef60`, read from the listing, compares current sheet stat
+0x0f against cap 0x11 at 0x1032f17f; its ordinary death caller is `0x1032f18e`.
+These verify the predicates, not a historical death. No schedule/flags, still-effective
+cap/wounds, packet magnitude or actual death caller snapshot exists for the old fifth hit;
+five 18 packets below a still-effective cap 100000 do not establish either knockout or cower.
+The isolated shot fixture keeps victim AI disabled. No damage math change is justified here.
+
 #### Weapon operator bodies, the shot's gates and the attack data (S2)
 
 _Read 2026-10-04 (spec 0002 V4r, packet S2: `docs/specs/0002-npc-ai/stories/v4/packets-S2.md`)._
@@ -1194,6 +1342,18 @@ activity (slot 333, 6), the muzzle effect bit, `FireBullets` per set, a `SOUND_C
 default 120. The NPC's wait reads them in `0x102c5730` (`RandomFloat(Min, Max)`) →
 `0x102c5570`: `(v − Attack_Rate) × sqrt(dist / BaseRange)`, with `× 1` when `BaseRange <= 0`,
 `sqrt(1 / BaseRange)` with no target and `× dist` when `dist <= 0`.
+
+V4c closing timing audit (2026-10-05): the listing `0x1023891b..0x102389d9`
+writes the NPC shot's next-primary stamp from `max(old, curtime - frametime)`,
+advancing by GetFireRate until strictly greater than curtime. WAIT_ATTACK_TIME
+at `0x102a337d` reads that stamp through `0x10252450`, plus a fresh
+RandomFloat(NPC_Attack_Rate_Min, Max) at `0x102c5730`, distance-scaled by the
+listing `0x102c5570`. Neither 3 nor 4 seconds is a fixed retail deadline.
+The closing red's first completion at 3.0 instead of the earlier 4.0 came from
+the inherited boot clock skipping startup draws. With each arena's fresh clock,
+seed 1 fires at 0.750, enters WAIT at 1.300 and completes at 3.700; at 6.100 the
+range-band staging now observes TOO_CLOSE_FOR_RANGED before STEP_BACK moves it.
+Both unchanged records pass. No cooldown code or timing window was loosened.
 
 **The melee band `0x103ea7e0`** reads only the owner's sequence descriptors for the attack
 activity: `+0x10` (weight), `+0x2c4` (swing-record count), `+0x2cc` / `+0x2d0` (near and far
@@ -1233,6 +1393,13 @@ hypot(e.x, e.y)`, each reduced by the collision maxs and floored at 0. `SetAttac
 is only ever saved and restored (`0x102a1910`, `0x102b7110`); the engine copy grows the element's
 box in `CEnumBox` `0x200426e0` / `CEnumRay` `0x20042b70` for flagged queries only, and the flagged
 queries in `vampire.dll` are the player's acquire cone (`0x1040f550`, `0x1040f080`).
+
+V4c's hand body preserves the Flags2&4 gate and calls C2's virtual SequenceBounds false seam
+(J2b: no bbox import); the descriptor fixture alone proves radial/excess writes to entity slot 15.
+The species RemoveFlag2(4) callers were checked against thunk `0x1000df44`: Hengeyokai::Spawn,
+Werewolf::Spawn, Tzimisce::Spawn, TzimisceHeadClaw::Spawn, TzimisceRunner::Spawn and
+TzimisceRunner::OnPostRestore, and MingXiaoTentacle::Spawn are already in the port. No missing
+species write was found. Sleep/cover extents save/restore are unchanged.
 
 **`GetBestMeleeWeapon` `0x10336f20`** walks a type list (`0x10619eb4`), each type's inventory
 range (`0x10619d28`, `0x10937cd0`, owner slot 298), and returns the first weapon whose slot 360
@@ -1876,8 +2043,12 @@ invented general rule.
 `CAI_BaseNPC::OnTakeDamageAlive` (`0x10265ed0`) itself calls `UpdateEnemyMemory` (slot 544,
 `0x102709c0`) through the same component `BestEnemy` reads. Existing actor records refresh; its
 unknown-attacker route can request a position-only record from the packet's attack position. The
-record remains until `RefreshMemories` (`0x102df320`) drops an invalid/dead handle; no five-second
-derived `D_HT` relationship exists in the retail call chain. The port carries the three recovered
+`RefreshMemories 0x102df320` removes unresolved handles unconditionally; resolved NPC-state-7
+entries require actual owner slot54 or squad AND permission. It unlinks before slot56/fanout
+receives target, LKP, vector+0x18 and function tag, then skips the immediate successor.
+Retained entries refresh only tracked +0x00 while now<lastSeen+freeKnowledge, never LKP or
+age-expire. Player corpses may remain records but BestEnemy 0x10274475 rejects !IsAlive.
+No five-second derived `D_HT` relationship exists in the retail call chain. The port carries the three recovered
 known/current/anonymous CAI_Memory branches behind an explicit damage-packet inflictor/attack-point
 seam. Retail melee sets packet `+0x28` from weapon `this` (`CBaseCombatWeapon::102579f0`), and the
 ranged packet carries weapon `this` at `+0x98` (`0x102387b0` → `0x10268330`); the port wires both
@@ -2571,3 +2742,77 @@ the same mask the rest of the kernel traces with.
 blocked sweep is what refuses the task.
 
 **Unrecovered:** what the probe's `100.0` argument bounds.
+
+### V4c second-pass close measurement (2026-10-05; not green, no commit)
+
+The three-build allowance is exhausted: build1 passed118.6s; build2 failed27.5s on two
+fixture ResolveClipPair calls missing the required side argument; build3 passed25.2s.
+No source changed after build3; temporary clock/sweep diagnostics were removed before it.
+The lanes and all integration remain uncommitted and unstaged on spec-0002/step-2.
+An external documentation commit advanced HEAD to947e57b6 (AGENTS/HANDOVER only).
+Neither V4c nor V4s was ticked; no commit or push. Root200KB is absent.
+
+Final default:169 executed,168 passed,1 failed (Stance.Driver),15.8s wall.
+Final arm:1624 executed,1611 passed,13 failed,53.8s wall; no abort or unrun test.
+Baseline default170 loses only the retired world-sweep MeleeBatch test, replaced by arm
+character-clock coverage. Baseline arm1594 gains30 cases.
+Full Arena ONCE after build3:132 records,110 pass/4 fail/16 expected-fail/2 unexpected-pass,
+527.5s wall, report20261005T053609.881342Z. The eight new records all pass.
+The earlier33-record named run was28 pass/4 fail/1 expected-fail; record-only cower/footstep
+corrections passed by name and in the full run. After the full run, input_setrelationship's
+unkillable staging passed by name (20261005T054700.512138Z); the full report still records
+its original failure. No second full run. Kernel check7/7; no re-bake or corpus write.
+
+
+Recovery and staging corrected in this pass:
+
+- NPC event3031 stages at curtime; CommitTime>0 is not an estimate discriminator. The invalid
+  guard was removed; BeginRangedShot still stages no NPC estimate. Retail0x10238160→0x10238320→
+  0x102383b0→0x102387b0. cover_move_shoot and team_damage_gate pass again.
+- Constructor0x1028d230 writes m_flStanceTime(+0x64e4)=curtime; this host writes it before
+  Troika spawn's disposition lookup. NPCInit0x1029a6a9 seeds a valid default disposition index;
+  bHasDispositionIndex now reflects that. These fixes remove spurious initial stance draws,
+  but do not yet recover idle_lookaround/unknown_crouched_band's required verdicts. No reseed
+  or expectation relaxation was made for either; the remaining draw-order audit is V4c.
+- InputFaint0x1029f250 resets slot614, records line0x26c2 and SetSchedule(0xfa,false).
+- Dead-enemy records originally killed at0.417, before network-init0.80. Retail0x1028d8d0
+  walks every Troika (derived bit0x40) and slot5840x1028d910 resets all think timers, including
+  that corpse's +10 deadline. Death is now after network-init; both controls pass. Quiet
+  ALERT is probed before0x4b's five-second timeout, rather than promised through end8s.
+- seed_health now recomputes before the initial probe: effective cap99999 is measured.
+  The five-hit control ends alive at90 wounds. Knockout flags0x440a0000 kill positive18 at
+  18 wounds; cower flags0x40000400 kill positive18 at19 wounds (including trigger1), both
+  at0x102beea4, far below cap. Zero during cower raises LIGHT_DAMAGE at0x10265ed0 and interrupts
+  the schedule/clears its flag; zero is staged before cower, and the positive packet atflag+0.45
+  lands inside the unchanged0.5 deadline. No damage arithmetic or historical fifth-hit claim.
+- The same-team contact control passes on identical negative-Y seats. No contact/impact/hit-list
+  write reaches the matching teammate. The scalar cower trigger was replaced by a real player
+  handle through damage_packet; the actual OnTakeDamage chain runs for zero too.
+- ranged_open_fire and input_setrelationship use retail MakePlayerUnkillable: dead-enemy
+  selection correctly drops a player who dies under their real bullets. Their expectations
+  remain intact. Footstep staging now seats the player150cm north of the first patrol goal;
+  the old ~700cm seat allowed one-second thinks against a0.939Hz walk, and0x10091880 lost loop
+  windows. The near cadence0x10290b60 restores repeated2050/2051; event windows are unchanged.
+- SharedPick/RagdollSeed/RunAnimation/interval-movement tests now supply models; the shared
+  picker already returns-1 on empty0x10427fc0, and the test guards its array index. Session
+  registry construction covers uninitialized headless fixtures. Other migrated tests author
+  raw candidates, exact disposition levels, real feed cells/side, and the actual event shot.
+
+Seams still named: D9 CalcPose-at-cycle / bone cache, m_flPoseParameter blending, slot247
+seqdesc bounds, held weapon model clock/events/weights (0015), ordinary ragdoll rig/hitbone/
+Spine2/force (V4d), render-alpha presentation, restored-corpse presentation (V6), real reload
+slots322/323 (V5b), and TzimisceMelee+0x910. No pipeline/body-data/bbox import or re-bake.
+Bounded silent inventory475 sidecars/9401 clips in0.404s found only male/female move_and_ranged
+flamet_attack and flamet_attack_layer without3030..3044; both have no events. No timer fallback.
+
+
+### V4c closing-worker damage measurement (2026-10-05)
+
+Build6 full arena20261005T064949.706263Z confirms all three damage witnesses.
+Effective sheet cap99999: five18 commits leave90 wounds, alive; Faint/knockout
+flags0x440a0000 kill the positive18 packet at18 wounds; cower flags0x40000400
+kill at19 wounds, including the trigger1. Both immediate deathcaller rows are
+0x102beea4. Zero packets survive in their staged windows. The historical fifth-hit
+attribution remains unverified. No damage arithmetic was changed by this worker.
+The wave remains uncommitted: triage's closing-worker section records final
+105/9/17/1 arena verdicts, the retained-state/RNG audit and remaining phase failures.

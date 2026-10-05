@@ -255,17 +255,10 @@ namespace
 			{
 				return false;
 			}
-			const FElysiumWeapon::EVerdict Verdict = Weapon->AttackIntent(FElysiumWeapon::EIntent::Primary);
-			if (!Test.TestEqual(TEXT("the swing is accepted"), static_cast<int32>(Verdict),
-				static_cast<int32>(FElysiumWeapon::EVerdict::Accepted)))
-			{
-				return false;
-			}
-			World->Tick(1.0);
-			Services.BodyClipPhase.Cycle = 0.0f;
-			World->AdvanceMeleeSwings(0.02f);
-			Services.BodyClipPhase.Cycle = 0.50f;
-			World->AdvanceMeleeSwings(0.02f);
+			Weapon->ResetSwingContact(); Weapon->Swing.ClipLabel = GSwingLabel;
+			Weapon->Swing.ClipOwnerStem = GSwingBank; Swinger.bMeleeSwingIsLive = true;
+			Weapon->PrepareSwingContact(); Weapon->MeleeSwingStep(Swinger.Origin, Swinger.Angles, 0.f, 0.f);
+			Weapon->MeleeSwingStep(Swinger.Origin, Swinger.Angles, 0.f, 0.5f);
 			return true;
 		}
 
@@ -577,7 +570,7 @@ bool FElysiumMeleeSwingStepCandidatesTest::RunTest(const FString&)
 			return false;
 		}
 		F.Services.BodyClipPhase.Cycle = 0.60f;
-		F.World->AdvanceMeleeSwings(0.05f);
+		F.Weapon->MeleeSwingStep(F.Attacker->Origin, F.Attacker->Angles, 0.5f, 0.6f);
 		TestEqual(TEXT("0x10343020 3.6: an entity already in the record's list is skipped"), F.Impacts(), 1);
 	}
 

@@ -44,18 +44,12 @@ public:
 	 *  `+8` into `m_vecPreDeathMaxs` (`+0x666c`) — because the base resizes the hull; then
 	 *  `CBaseCombatCharacter::CreateCorpse`, `ThinkSet(NULL, 0.0, NULL)` and `SetSolid(SOLID_NONE)`.
 	 *
-	 *  **NOT WIRED TO SLOT 301.** Slot 301's Troika-line body (`0x1032c0e0`,
-	 *  `CBaseCombatCharacter::CreateCorpse`, layer 14) carries no verdict yet, so `gen_kernel_shape`
-	 *  still emits its stub and there is no port method to hang the species case on. The body lands
-	 *  under its recovered name and the gap is named in the story's answer. */
-	void PedestrianCreateCorpse();
+	 *  Slot 301 dispatches this wrapper around the complete base corpse transaction. */
+	virtual void CreateCorpse(const FVector& Force, void* InInfo) override;
+	void PedestrianCreateCorpse(const FVector& Force = FVector::ZeroVector, void* InInfo = nullptr);
 	FVector PedestrianPreDeathMinsUnits = FVector::ZeroVector;   // +0x6660 `m_vecPreDeathMins`
 	FVector PedestrianPreDeathMaxsUnits = FVector::ZeroVector;   // +0x666c `m_vecPreDeathMaxs`
-	/** SEAM for `CBaseCombatCharacter::CreateCorpse` (`0x1032c0e0`, slot 301's Troika-line body): this
-	 *  substrate stands no corpse entity at the kernel tier and that row carries no verdict, so the
-	 *  chain call is counted. `ThinkSet(NULL, 0.0, NULL)` and `SetSolid(SOLID_NONE)` are recorded beside
-	 *  it for the same reason — neither has a port word, and the ORDER around the base is the load-bearing
-	 *  half of this body. */
+	/** 0x103a38c0 diagnostics beside the real base/clear/solid writes. */
 	int32 PedestrianCreateCorpseCalls = 0;
 	bool bPedestrianCorpseThinkStopped = false;
 	int32 PedestrianCorpseSolid = -1;

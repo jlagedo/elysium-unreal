@@ -1,3 +1,4 @@
+#include "Tests/ElysiumMeleeStepFixture.h"
 // Content-free Substrate automation for the Discipline runtime, plus one Content-tier case
 // that parses the real `disciplinetgt_*` corpus.
 //
@@ -1137,10 +1138,10 @@ bool FElysiumDisciplinePotenceTest::RunTest(const FString&)
 		// The contact walk: the first live frame stages the opposed record, the second carries the
 		// cycle into the authored window where the sweep lands.
 		Services.BodyClipPhase.Cycle = 0.0f;
-		World.AdvanceMeleeSwings(0.02f);
+		ElysiumTestMeleeStep(World, Services.BodyClipPhase);
 		Services.BodyClipPhase.Cycle = 0.50f;
-		World.AdvanceMeleeSwings(0.02f);
-		World.Tick(2.0);
+		ElysiumTestMeleeStep(World, Services.BodyClipPhase);
+		// 0x10346cd0: this fixture drives contact directly; a player PostThink would sweep it again.
 		return Victim->Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Health);
 	};
 

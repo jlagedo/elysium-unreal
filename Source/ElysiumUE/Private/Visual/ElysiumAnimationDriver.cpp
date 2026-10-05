@@ -700,6 +700,9 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 
 	FElysiumAnimationIntent Intent = ElysiumAnimIntent::BuildLocomotionIntent(Body, Latch, Gait,
 		Source, BodyKind, Stem, Character, Variant);
+	// 0x10272130: NPC schedule/task selection owns the weighted draw. This classifier only
+	// previews a pose until the kernel's sequence claim arrives; rendering must not advance it.
+	if (BodyKind == EElysiumAnimBodyKind::Cast) Intent.Select = EElysiumAnimSelect::Heaviest;
 	// The translation context, which the classifier has no business knowing: it answers what the body
 	// did, and these answer which sequence set realizes it.
 	Intent.ActorClassname = ActorClassname;

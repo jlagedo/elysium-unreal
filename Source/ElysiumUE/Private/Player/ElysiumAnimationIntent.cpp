@@ -535,7 +535,8 @@ FElysiumAnimationIntent BuildLocomotionIntent(const FElysiumLocomotionSample& Sa
 	{
 		Out.Select = EElysiumAnimSelect::Heaviest;
 	}
-	Out.Variant = Variant;
+	(void)Variant; // 0x101644f0 / 0x10272130: no owner/variant seed
+	Out.Variant = 0; // 0x101644f0 heaviest; cast 0x10272130 draws at lookup
 	Out.Body = Sample;
 	Out.AirPhase = Latch.Phase;
 	Out.CompletionOwner = Source;

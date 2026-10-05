@@ -1328,6 +1328,134 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 	}
 	return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cEnemyMemoryFidelityTest,
+	"Elysium.Arm.NpcEnemy.MemoryFidelity", GElysiumTestFlags)
+bool FElysiumV4cEnemyMemoryFidelityTest::RunTest(const FString&)
+{
+	FEnemyFixture F;
+	if (F.Guard == nullptr || F.ThugA == nullptr || F.ThugB == nullptr || F.Player == nullptr) { return false; }
+	auto& Memory = *static_cast<FElysiumNpcEnemyMemory*>(F.Guard->GetEnemies()); // 0x10273e10 actual owner
+	Memory.Update(*F.Guard, F.ThugA->Handle, 1.0);
+	const FVector OriginalLkp = Memory.Find(F.ThugA->Handle)->Anchor;
+	F.ThugA->Origin += FVector(11, 0, 0);
+	Memory.Refresh(F.World, 1.249);
+	TestEqual(TEXT("0x102df539 free knowledge tracks +0"), Memory.Find(F.ThugA->Handle)->LastPosition, F.ThugA->Origin);
+	TestEqual(TEXT("0x102df539 never updates LKP +0xc"), Memory.Find(F.ThugA->Handle)->Anchor, OriginalLkp);
+	F.ThugA->Origin += FVector(9, 0, 0);
+	Memory.Refresh(F.World, 1.25);
+	TestFalse(TEXT("0x102df533 strict free-knowledge boundary"), Memory.Find(F.ThugA->Handle)->LastPosition == F.ThugA->Origin);
+	Memory.Refresh(F.World, 99999.0);
+	TestNotNull(TEXT("0x102df320 no age expiry"), Memory.Find(F.ThugA->Handle));
+
+	// 0x102b50b0: current enemy retained while a real no-LOST_ENEMY program is installed.
+	F.Guard->BaseMemory.Enemy = F.ThugA->Handle;
+	F.Hate(F.ThugA, 10); // 0x10274483: live control admitted before killing
+	F.Guard->Schedule.Current = F.Guard->ResolveScheduleId(0x3a); // retail NPC_FREEZE
+	F.ThugA->LifeState = 1; F.ThugA->SetState(7);
+	Memory.Refresh(F.World, 100000.0);
+	TestNotNull(TEXT("0x102b50b0 owner veto retains dead record"), Memory.Find(F.ThugA->Handle));
+	TestNull(TEXT("0x10274475 retained nonhidden corpse is never selected"), F.Guard->BestEnemy());
+	F.Guard->Schedule.Current = ElysiumScheduleId::None;
+	F.Guard->BaseMemory.LastEnemy = F.ThugA->Handle;
+	Memory.Refresh(F.World, 100001.0);
+	TestNull(TEXT("0x102df455 owner permission now removes state7"), Memory.Find(F.ThugA->Handle));
+	TestFalse(TEXT("0x102b5120 slot56 clears matching dead last enemy"), F.Guard->BaseMemory.LastEnemy.IsSet());
+
+	Memory.Update(*F.Guard, F.Player->Handle, 2.0);
+	F.Player->LifeState = 1;
+	Memory.Refresh(F.World, 100002.0);
+	TestNotNull(TEXT("0x102df40f player corpse has no NPC-state7 cast"), Memory.Find(F.Player->Handle));
+	F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 99);
+	TestNull(TEXT("0x10274475 player corpse still unselectable"), F.Guard->BestEnemy());
+
+	// 0x102df50e..0x102df518: prepended head and middle unresolved; immediate successor skipped.
+	Memory = FElysiumNpcEnemyMemory(); Memory.BindOwner(*F.Guard);
+	F.ThugA->LifeState = 0; F.ThugA->SetState(1);
+	Memory.Update(*F.Guard, F.ThugA->Handle, 3.0);
+	Memory.Update(*F.Guard, F.ThugB->Handle, 3.0);
+	Memory.Update(*F.Guard, F.Player->Handle, 3.0);
+	Memory.FindMutable(F.Player->Handle)->Handle = FElysiumEntityHandle(9901, 1);
+	Memory.FindMutable(F.ThugB->Handle)->Handle = FElysiumEntityHandle(9902, 1);
+	Memory.Refresh(F.World, 4.0);
+	TestEqual(TEXT("0x102df518 skips unresolved immediate successor"), Memory.Num(), 2);
+	Memory.Refresh(F.World, 4.0);
+	TestEqual(TEXT("0x102df40d unresolved removal unconditional next pass"), Memory.Num(), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cMemoryNotifyTest,
+	"Elysium.Arm.NpcEnemy.MemoryNotifyAndSelectedStore", GElysiumTestFlags)
+bool FElysiumV4cMemoryNotifyTest::RunTest(const FString&)
+{
+	struct FMemoryNotifier : FElysiumNpc
+	{
+		FElysiumNpcEnemyMemory* WatchedStore = nullptr;
+		bool bUnlinkedAtNotify = false;
+		FElysiumEntity* NotifiedTarget = nullptr;
+		FVector NotifiedLkp = FVector::ZeroVector;
+		FVector NotifiedVector = FVector::ZeroVector;
+		FString NotifiedTag;
+		virtual bool Slot54(FElysiumEntity*) override { return true; } // 0x102b50b0 no schedule
+		virtual void Slot56(FElysiumEntity* InTarget, FVector InLkp, FVector InVector, const TCHAR* InTag) override
+		{
+			bUnlinkedAtNotify = WatchedStore != nullptr && WatchedStore->Find(InTarget->Handle) == nullptr;
+			NotifiedTarget = InTarget; NotifiedLkp = InLkp; NotifiedVector = InVector; NotifiedTag = InTag;
+		}
+	};
+	FEnemyFixture F;
+	FMemoryNotifier ActualOwner;
+	ActualOwner.World = &F.World;
+	FElysiumNpcEnemyMemory SharedStore;
+	SharedStore.BindOwner(ActualOwner);
+	ActualOwner.WatchedStore = &SharedStore;
+	SharedStore.Update(*F.Guard, F.ThugB->Handle, 1.0); // arbitrary observer must not rebind owner
+	FElysiumNpcEnemyMemoryRecord* SharedRecord = SharedStore.FindMutable(F.ThugB->Handle);
+	SharedRecord->Anchor = FVector(1, 2, 3); SharedRecord->Velocity = FVector(4, 5, 6);
+	F.ThugB->LifeState = 1; F.ThugB->SetState(7);
+	SharedStore.Refresh(F.World, 2.0);
+	TestTrue(TEXT("0x102df46a unlink precedes slot56"), ActualOwner.bUnlinkedAtNotify);
+	TestEqual(TEXT("0x102df4ea target argument"), ActualOwner.NotifiedTarget, static_cast<FElysiumEntity*>(F.ThugB));
+	TestEqual(TEXT("0x102df4e4 LKP argument"), ActualOwner.NotifiedLkp, FVector(1, 2, 3));
+	TestEqual(TEXT("0x102df4c7 vector+18 argument"), ActualOwner.NotifiedVector, FVector(4, 5, 6));
+	TestEqual(TEXT("0x102df4c2 function tag"), ActualOwner.NotifiedTag, FString(TEXT("CAI_Memory::RefreshMemories")));
+
+	F.ThugB->LifeState = 0; F.ThugB->SetState(1);
+	SharedStore.Update(*F.Guard, F.ThugB->Handle, 3.0);
+	F.Hate(F.ThugA, 1); F.Guard->Relationships.SetEntity(F.ThugB->Handle, EElysiumRelationship::Hate, 9);
+	F.Guard->EnemyMemory.RedirectTo(&SharedStore);
+	TestEqual(TEXT("0x102743eb selection walks redirected GetEnemies"), F.Guard->BestEnemy(), static_cast<FElysiumEntity*>(F.ThugB));
+	F.Guard->BaseScheduleHost.SquadDisconnected = 1;
+	TestFalse(TEXT("0x10273e10 disconnected selects the global, not redirected member"),
+		F.Guard->GetEnemies() == &SharedStore);
+	TestNull(TEXT("0x102743eb disconnected selected empty store"), F.Guard->BestEnemy());
+	F.Guard->BaseScheduleHost.SquadDisconnected = -1;
+	TestEqual(TEXT("0x10273e10 negative disconnect count is connected"), F.Guard->GetEnemies(), static_cast<void*>(&SharedStore));
+	SharedStore.BindSquadOwner(nullptr, &F.World); // named +4 hook: no squad object fabricated
+	F.ThugB->SetState(7); F.ThugB->LifeState = 1;
+	SharedStore.Refresh(F.World, 4.0);
+	TestNotNull(TEXT("0x102df438 null squad owner refuses dead permission"), SharedStore.Find(F.ThugB->Handle));
+	F.Guard->EnemyMemory.RedirectTo(nullptr);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cMemoryCursorSpliceTest,
+	"Elysium.Arm.NpcEnemy.MemorySuccessorSplice", GElysiumTestFlags)
+bool FElysiumV4cMemoryCursorSpliceTest::RunTest(const FString&)
+{
+	FEnemyFixture F;
+	FElysiumNpcEnemyMemory Memory;
+	Memory.BindOwner(*F.Guard);
+	Memory.Update(*F.Guard, F.ThugA->Handle, 1.0); // tail, later removal candidate
+	Memory.Update(*F.Guard, F.ThugB->Handle, 1.0); // skipped live successor
+	Memory.Update(*F.Guard, F.Player->Handle, 1.0); // head, first removal candidate
+	Memory.FindMutable(F.Player->Handle)->Handle = FElysiumEntityHandle(9911, 1);
+	Memory.FindMutable(F.ThugA->Handle)->Handle = FElysiumEntityHandle(9912, 1);
+	Memory.Refresh(F.World, 2.0);
+	TestEqual(TEXT("0x102df46a/0x102df518 previous-link stays: second unlink detaches skipped node"),
+		Memory.Num(), 0);
+	return true;
+}
+
 #endif // ELYSIUM_WITH_ARM_TESTS
 
 }   // namespace ElysiumNpcEnemyTests

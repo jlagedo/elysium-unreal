@@ -1301,12 +1301,13 @@ void AElysiumNpcBody::SetHullSize(const FVector& MinsCm, const FVector& MaxsCm)
 	}
 	const float Radius = static_cast<float>(FMath::Max(FMath::Abs(MaxsCm.X), FMath::Abs(MinsCm.X)));
 	const float HalfHeight = static_cast<float>((MaxsCm.Z - MinsCm.Z) * 0.5);
-	if (Radius <= 0.0f || HalfHeight <= 0.0f)
+	if (Radius < 0.0f || HalfHeight < 0.0f)
 	{
 		return;
 	}
 	const float OldHalfHeight = Capsule->GetUnscaledCapsuleHalfHeight();
-	Capsule->SetCapsuleSize(Radius, HalfHeight, /*bUpdateOverlaps=*/true);
+	Capsule->SetCapsuleSize(Radius, HalfHeight, /*bUpdateOverlaps=*/true); // 0x101cf390 includes the corpse's zero box
+	if (USkeletalMeshComponent* HullMesh = Visual.Get()) HullMesh->AddLocalOffset(FVector(0.0, 0.0, OldHalfHeight - HalfHeight)); // preserve drawn feet while capsule centre changes
 	AddActorWorldOffset(FVector(0.0, 0.0, HalfHeight - OldHalfHeight));
 }
 

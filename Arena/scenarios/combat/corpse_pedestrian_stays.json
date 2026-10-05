@@ -4,22 +4,71 @@
   "stage": "arena",
   "seed": 1,
   "duration": 28.0,
-  "known_red": "V4c lane C2 (item 8): the override is not wired to slot 301, and the port's Think runs SUB_PVSRemove on any committed death (ElysiumNpc.cpp, the dead think)",
-  "player": {"at": "start", "face": -135.0},
-  "from_map": {"map": "sm_hub_1", "names": ["pedestrian_female"], "anchor": "pedestrian_female", "at": "east"},
+  "player": {
+    "at": "start",
+    "face": -135.0
+  },
+  "from_map": {
+    "map": "sm_hub_1",
+    "names": [
+      "pedestrian_female"
+    ],
+    "anchor": "pedestrian_female",
+    "at": "east"
+  },
   "script": [
-    {"t": 2.0, "do": "fire", "target": "pedestrian_female", "input": "TakeDamage", "param": 10000}
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "pedestrian_female",
+      "input": "TakeDamage",
+      "param": 10000
+    }
   ],
   "expect": [
-    {"label": "hit", "who": "pedestrian_female", "kind": "input", "match": "TakeDamage", "by": 2.5},
-    {"label": "dies", "who": "pedestrian_female", "kind": "death", "match": "", "within": 0.5},
-    {"label": "corpse", "who": "pedestrian_female", "kind": "corpse", "match": "", "within": 1.0}
+    {
+      "label": "hit",
+      "who": "pedestrian_female",
+      "kind": "input",
+      "match": "TakeDamage",
+      "by": 2.5
+    },
+    {
+      "label": "dies",
+      "who": "pedestrian_female",
+      "kind": "death",
+      "match": "",
+      "within": 0.5
+    },
+    {
+      "label": "corpse",
+      "who": "pedestrian_female",
+      "kind": "corpse",
+      "match": "",
+      "within": 1.0
+    }
   ],
   "never": [
-    {"who": "pedestrian_female", "kind": "removed"}
+    {
+      "who": "pedestrian_female",
+      "kind": "removed",
+      "after": "dies",
+      "within": 25
+    }
   ],
   "probes": [
-    {"at": 27.5, "who": "pedestrian_female", "probe": "exists", "equals": true}
+    {
+      "at": 27.5,
+      "who": "pedestrian_female",
+      "probe": "exists",
+      "equals": true
+    },
+    {
+      "at": 1,
+      "who": "pedestrian_female",
+      "probe": "spawn_flags",
+      "equals": 12292
+    }
   ],
-  "notes": "Death at 2.0-2.1 s; the record runs through death + 25 s. The pedestrian walks its interesting places for the first 2 s (places_pedestrian_visit's row); where it dies does not matter to the clock."
+  "notes": "Death at 2.0-2.1 s; the record runs through death + 25 s. The pedestrian walks its interesting places for the first 2 s (places_pedestrian_visit's row); where it dies does not matter to the clock. Setup correction: the verbatim hub row measures spawnflags 0x3004 (12292), with bit9 clear, not 4. 0x103a38c0 retains the original never-removal contract. Full V4c build2 run proved retention through27.5s; known_red removed."
 }

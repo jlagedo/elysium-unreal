@@ -2008,7 +2008,7 @@ The rest of the walk holds: the ground-Z cache into `+0x66b8` from one downward 
 and `"Non Troika Ent in NPCMaker!"` as its two refusals; the `m_sRefMapDataBuffer` (`+0x76cc`) copy
 into `+0x66cc` and its replay through the child's `ParseMapData` (`+0x1ac`), `Precache` (`+0x1bc`)
 and `SetClassname` (`+0x1e8`) — `+0x1bc` is slot **111** (`MemberSync`), not `Precache` (slot 104
-is `+0x1a0`; corrected 2026-09-27); spawnflags 4 or `0x204`; the disable-AI copy; slot 619
+is `+0x1a0`; corrected 2026-09-27); **assignment** of spawnflags 4 or `0x204`, not OR; the disable-AI copy; slot 619
 `ChildPreSpawn`; `DispatchSpawn`; `SetOwnerEntity`; the optional `SetName` from `+0x66bc`; slot 620
 `ChildPostSpawn`; `++m_nLiveChildren`; and, unless `m_bInfChild` (`+0x66c3`), `--m_iMaxNumNPCs` with
 `ThinkSet(0)` and `+0x1f0 = 0` once `0x1034b430` reports depleted.
@@ -2791,10 +2791,11 @@ negative, not a gap.
 
 ### A death sounds more than once
 
-The slot-488 call at `0x10265cb8` is guarded **only** by the grapple-role/partner test on `+0x153c`
-and `+0x1538`. There is no life-state guard. So `Event_Killed` plays the death sound,
-`TASK_SOUND_DIE` plays it again, and on the non-ragdoll path the second `Event_Killed` plays it a
-third time. Troika's hook `0x10293ec0` caches the vdata sound-table entry named "Death"
+An ordinary kill's slot-488 call at `0x10265cb8` plays **once**, guarded by the grapple-role/
+partner test on `+0x153c/+0x1538`. CreateCorpse replaces NPCThink on every ordinary NPC arm.
+Only the separate rig-less state-7 fork reaches SOUND_DIE -> DIE -> `Die 0x103392c0` ->
+Event_Killed and the three-sound route; neither ordinary death arena record reaches that fork.
+Troika's hook `0x10293ec0` caches the vdata sound-table entry named "Death"
 (`0x105d8c30`) once in `DAT_10924d64` under the guard byte `DAT_10923f0d`, then plays it as sound
 type 2 at volume `1.0` (`0x3f800000`) and pitch `1.25` (`0x3fa00000`) -- unconditionally, every
 call. This is retail's behaviour and is reproduced.
@@ -3344,3 +3345,621 @@ _Recovered 2026-09-27, 0019 story 8 pass I (lane L08)._
 `CNPC_VVampireBoss::TransformationStart`, DIRECT. The boss body's render writes land last.
 
 **Unrecovered:** nothing.
+
+
+### V4c C2 recovery and serial integration (2026-10-04)
+
+No build, editor, arena or suite was run. All queries finished within 10 seconds. Mandatory
+listing reads 0x102df320, 0x103167f0 and 0x103169a0, including owner storage/call arguments,
+are recorded in senses.md.
+
+**Picks:** 0x1008dc40 -> 0x10427fc0: miss -1, singleton/no draw, positive raw total
+RandomInt(0,total-1), weight<=remainder subtraction in table order, nonpositive total uniform.
+0x1008dd30 -> 0x104280f0: strict maximum, first tie, no draw. K4's resolved owner ruling:
+all animation picks share advancing ElysiumRng::Stream(EElysiumRngStream::NpcSchedule), retail
+*0x1070b244 slot2. No per-entity/hash/Reaction Variant seeds. SequenceForActivity and slot331
+gather the same bare matching rows, each with a kernel number; no selected-clip cache.
+Baked rows have owner/flags/raw index, but lack include-group boundaries and the last-local
+flags&0x80 sentinel required by Studio_GetSequencesForActivity 0x10427df0. Pipeline owner must
+supply provenance; this lane does not invent shadowing from labels or weights.
+
+Site inventory: SequenceForActivity/SelectWeightedSequence 0x1008dc40/0x10272130;
+PlayActivity 0x10272130; StartWalkingAnimation motor 0x10264680; StartTaskSlot442 0x102827f0;
+RunAnimation 0x1026c540 (loop weighted, otherwise heaviest), commit 0x10260a50 keeps cycle;
+ChangeStance/slot611 0x102c1230/0x102c12a0; feed attacker then victim 0x1032a2cc/0x1032a2de;
+landed melee 0x10347180/0x10348100 unchanged; visual TryActivity/PickWeighted 0x1008dc40;
+reaction 0x10099690/0x101606e0; weapon player 0x101644f0/0x1015fbb0, NPC 0x10272130,
+weapon model 0x10253390/0x1024efa0; locomotion player heaviest 0x101644f0, cast 0x10272130;
+prop Spawn/Think 0x1018df70/0x10190850. AnimationDriver's Variant cache is presentation reuse,
+not meaningful as a weighted seed; it must never replace a retail selection transaction.
+Kernel picks bypass it, including repeated same-activity commits. Exact-label replay/cache
+pass-throughs spend no draw. The finished nonloop idle still resets at cycle1 every think,
+redispatching its whole event table (S12's retail bug).
+
+**Disposition:** 0x102c0f70 always writes tuning; miss -> Neutral/1 and old=-1. Index change
+takes slot611 or 0x100ed150's named transition, _1_..._1, then new idle. Valid choice always
+writes ideal0xf1/ideal sequence; DisableAI gates only sequence/cycle0/activity0xf1/animTime/reset.
+No feed/body-owner gate. 0x100ecd30 aliases both blink outputs at +0x64d8 (max wins);
++0x6584/8 are eye-fidget intervals. +0x5b94/+0xe3c/+0x10b4/+0x64d0/+0x10b8 use existing
+named gaze/expression bridges; three missing timing words were added. The index is represented
+by name/level with bHasDispositionIndex for initial -1. 0x102c1230 redraws 0..2 until different,
+writes stance/time only. Slot611 preserves alternate-chance then time-gated change-chance
+then that retry loop; misses keep the current sequence.
+
+**Corpse:** ordinary 0x1032c0e0 fires OnDeath before corpse creation and owns every replacement
+think: hidden static source +0.5 SUB_Remove; mortal +10 SUB_PVSRemove; Kindred/burning +10
+SUB_Remove. Pedestrian 0x103a38c0 snapshots OBB before the entire base, then clears think and
+sets SOLID_NONE. Explicit clear stays cleared. A missing restored corpse function name never
+infers a clock or resumes NPCThink; V6 owns saving/restoring actual function/render/collision
+words. The DeathRestore test pinned synthetic HoldBodyFinalPose/PVS inference and was deleted.
+Legacy RestoreDeathBodyState/CompleteDeathHandoff presentation remains outside this lane's
+function scope; its owner must reconcile it before claiming restored-corpse parity.
+
+0x10090180 checks rig capability first: no rig only zeroes bounds/returns false. Listing read
+refines the brief: every rigged call picks ACT_DIERAGDOLL, but only bone-1 commits at 0x1009021a.
+Real-bone calls retain pose/cycle while still advancing the stream when multiple seed rows
+exist. Skipping that lookup would be a new stream divergence and was not adopted.
+HasClientRagdollRig is the named false model-slot18 hook until V4d supplies capability;
+CorpseForceBone is the named absent hitbox/Spine2 lookup. Ordinary missing bone never becomes
+bone-1. Rigged ordinary handoff requires those inputs and the force/bone presentation adapter.
+Seed reachers: deferred CineCleanup 0x1027d170 health<1, sibling 0x1027d0a0, Werewolf
+0x103d0820, zombie collapse 0x103dfbb0. Neither death arena record reaches it. 0x102b5bb0 is dead.
+
+**Fade/makers:** ordinary 0x1034b7b0 assigns 4/0x204; infinite-child Spawn0x1034afe0 forces fade.
+Fleshpile 0x1034c2d0 ORs 4/0x204 and Spawn0x1034c020 has that implication. Zombie0x1034d140
+calls ordinary maker and Spawn0x1034cc60 forces fade. Landed maker bodies match; no patch owed.
+The existing Event_Killed 0x10265d66/0x10265d72 call and TASK_DIE share StartFadeOut0x102695d0:
+mode0 -> mode2/alpha255, other modes keep alpha; solid4, angular zero, relink, think+10,
+SUB_FadeOut thunk0x100152b2. 0x10269960 subtracts7/+0.1 while alpha>7; else zero/+0.2/
+SUB_Remove. Later fade wins over Kindred removal and pedestrian clear. Alpha255: 36 decrements,
+zero near death+13.6, removal near+13.8; visibility irrelevant. Alpha presentation and spatial
+relink remain named visual/partition seams, not missing kernel clocks.
+
+**Serial patches owed (not applied in concurrent files):**
+
+1. ElysiumNpcBaseHelpers2.cpp::SelectHeaviestSequence, keep signature and replace body:
+~~~cpp
+(void)CurrentSequence; // 0x1008dd30
+const FElysiumNpc* const HeaviestNpc = AsNpc();
+return HeaviestNpc != nullptr
+    ? const_cast<FElysiumNpc*>(HeaviestNpc)->SelectHeaviestSequence(Activity) : INDEX_NONE;
+~~~
+Include Substrate/ElysiumNpc.h if absent. Overlay's existing NPC forwarder stays exactly
+return const_cast<FElysiumNpc*>(Npc)->SequenceForActivity(Activity);, non-NPC model-less -1.
+
+2. ElysiumNpcTroikaHelpers.cpp::Slot611, replace body:
+~~~cpp
+return SelectDispositionStance(); // 0x102c12a0
+~~~
+Keep existing hand:FElysiumNpc::Slot611 verdict. No body is added to generated Slots.cpp.
+The old ElysiumStance::ChangeStance single-draw shortcut is no longer a live NPC caller.
+
+3. Visual/ElysiumAnimSubsystem.cpp::ActivitySequences: remove intent/selection/Resolve
+temporaries (gather neither draws nor falls back). Keep Out.Reset and existing descriptor joins,
+with these exact catalogue/guard/loop lines:
+~~~cpp
+const FElysiumAnimationCatalog Catalog = BuildCatalog(Request.Stem);
+if (Catalog.Clips == nullptr || Request.Activity.IsEmpty()) { return; }
+for (const FElysiumClipRef& Ref : Catalog.Clips->ByActivity(Request.Activity))
+~~~
+This is required before claiming one draw per transaction. Delete obsolete
+Guard->SequenceResolveCache.Reset(); and F.Guard->SequenceResolveCache.Reset(); statements
+in ElysiumNpcKernelOverlayTests.cpp::FElysiumNpcKernelOverlayAddGestureTest::RunTest,
+ElysiumNpcKernelMoveAndShootTests.cpp::FMoveShootFixture, and
+FElysiumNpcKernelMoveAndShootArmTest::RunTest (four sites).
+Locate functions by name. No selected-clip cache remains in the kernel.
+
+4. C1 ElysiumWeaponClasses.cpp::BuildActivityClipRequest: replace the Handle.Index assignment:
+~~~cpp
+Out.Variant = 0; // 0x101644f0/0x10272130: actual picker owns shared draw
+~~~
+Preserve each weighted/heaviest caller. Weapon-model looping re-pick at 0x1024efa0 uses
+ElysiumAnimationPick::Weighted, never speculative Variant followed by a second weighted draw.
+
+5. Prop interface beside AnimatedPropRestClip in Public/ElysiumWorldServices.h:
+~~~cpp
+virtual FString PickAnimatedPropRestClip(const FString& Stem) const { return FString(); }
+~~~
+Public/ElysiumMapActor.h:
+~~~cpp
+virtual FString PickAnimatedPropRestClip(const FString& Stem) const override;
+~~~
+Private/Visual/ElysiumEntityBodies.h:
+~~~cpp
+FString PickAnimatedPropRestClip(const FString& Stem) const;
+~~~
+Map/ElysiumMapActorEmbodiment.cpp:
+~~~cpp
+FString AElysiumMapActor::PickAnimatedPropRestClip(const FString& Stem) const
+{ return Bodies ? Bodies->PickAnimatedPropRestClip(Stem) : FString(); }
+~~~
+Visual/ElysiumEntityBodiesProps.cpp includes Visual/ElysiumAnimationPick.h and adds:
+~~~cpp
+FString UElysiumEntityBodies::PickAnimatedPropRestClip(const FString& Stem) const
+{
+    const auto Prepared = ElysiumPreparedProps::ForOwner(GetOwner());
+    FString Failure;
+    const auto* ModelRow = Prepared
+        ? Prepared->Model(ElysiumPreparedProps::ModelId(Stem), Failure) : nullptr;
+    if (ModelRow == nullptr) { return FString(); }
+    TArray<ElysiumAnimationPick::FCandidate> Candidates;
+    for (int32 ClipIndex : ModelRow->RestCandidates)
+    {
+        if (!ModelRow->Clips.IsValidIndex(ClipIndex)) { return FString(); }
+        Candidates.Add({ClipIndex, ModelRow->Clips[ClipIndex].Weight});
+    }
+    const int32 Picked = ElysiumAnimationPick::Weighted(Candidates);
+    return ModelRow->Clips.IsValidIndex(Picked) ? ModelRow->Clips[Picked].Label : FString();
+}
+~~~
+Raw weights stay raw. SelectRest remains only for BuildBody capability and
+BuildAnimatedPropVisualWithStaticStem's initial draw-free preview. No catalogue re-bake.
+
+6. ElysiumNpcBaseSelect.cpp::SelectBecomeClientRagdoll: keep counter and replace false return:
+~~~cpp
+FElysiumNpc* const RagdollNpc = AsNpc();
+return RagdollNpc != nullptr
+    && RagdollNpc->BecomeClientRagdoll(FVector::ZeroVector, INDEX_NONE, false); // 0x1028a8f7
+~~~
+Include Substrate/ElysiumNpc.h. This explicit state7 fork owns bone-1; ordinary kills do not.
+
+7. research/tooling/ghidra/driver/kernel_verdicts.tsv: replace stale pedestrian row:
+~~~tsv
+103a38c0	rule	10-18	hand:FElysiumNpcPedestrian::CreateCorpse	[0002/V4c obs=timing: snapshot before complete base corpse, then NULL think/SOLID_NONE] 0x103a38c0 wrapper dispatches PedestrianCreateCorpse(force,info).
+~~~
+Regenerate dispatch/bindings serially. Keep base slot301's existing signature; no generated file
+was edited or hand body duplicated. Refresh's abbreviated present verdict likewise becomes
+rule for FElysiumNpcEnemyMemory::Refresh, with senses.md's owner/cursor evidence.
+C3 owns team_name binding/world registry hooks. After ApplyEntityRecord:
+~~~cpp
+if (!RestoredNpc->TeamName.IsEmpty()) { RestoredNpc->AddToTeam(RestoredNpc->TeamName); }
+~~~
+Re-register names; no numeric symbol persists across levels.
+
+Arm tests written: weighted/heaviest/miss/singleton/zero-total/interleaving; RunAnimation gates/
+kept cycle; disposition ideal-vs-commit/tuning/stance retry; bone-1/real-bone/no-rig/miss;
+pedestrian entire base/clear/solid; late fade/full clocks; BestEnemy NPC/player corpse rejection;
+memory owner veto/free knowledge/LKP/cursor/notify/selected store; released-base disposition
+maintenance; player alive gate/slot312 order. Removed Death's positive freeze/collision/hold-pose
+stand-ins and deleted NpcCombat.DeathRestore. Compilation/runtime acceptance are integrator work.
+
+
+Additional serial wires found while checking the direct collector:
+
+8. ElysiumNpcTroikaHelpers.cpp::EntityWord0x200 is still a false seam, contrary to the brief's
+claim that slot56's entire live gate landed. Replace its body with:
+~~~cpp
+return Entity.LifeState != 0; // 0x102b5120 reads the DWORD at +0x200, LIFE_ALIVE=0
+~~~
+This is required for MemoryFidelity's real Troika notification arm; do not fabricate the
+Slot56 effect in Refresh. Refresh unlinks first; separate ClearMemory0x102dfaa0 was also read
+and notifies BEFORE unlink, forwarding the caller's tag. A null tag is its named absent input.
+
+9. ElysiumNpcBaseMotor.cpp::RetailCollisionExtents, inside the Npc != nullptr arm BEFORE the
+hull-table return, add:
+~~~cpp
+if (Npc->SetSizeCalls > 0)
+{
+    OutMinsUnits = Npc->LastSetSizeMinsUnits;
+    OutMaxsUnits = Npc->LastSetSizeMaxsUnits;
+    return true; // 0x101cf390: latest UTIL_SetSize, including corpse zero bounds
+}
+~~~
+The current reader ignores all UTIL_SetSize writes and synthesizes the live hull. C1 owns this
+file concurrently; this is an integrator wire, not a second writer.
+
+10. Bare gather must not lose the already-recovered name-keyed class/weapon translation.
+ElysiumNpcBaseAnim.cpp::TranslateActivityNumber now calls a PURE adapter before collecting;
+the existing native aim-gait early translation remains first. Add these exact declarations:
+
+Public/ElysiumWorldServices.h (beside ResolveNpcActivityClip):
+~~~cpp
+virtual bool TranslateNpcActivityRequest(const FElysiumActivityClipRequest& Request,
+    FString& OutTranslated, FString& OutFirstWeapon) { return false; }
+~~~
+Public/ElysiumMapActor.h:
+~~~cpp
+virtual bool TranslateNpcActivityRequest(const FElysiumActivityClipRequest& Request,
+    FString& OutTranslated, FString& OutFirstWeapon) override;
+~~~
+Private/Visual/ElysiumEntityBodies.h:
+~~~cpp
+bool TranslateNpcActivityRequest(const FElysiumActivityClipRequest& Request,
+    FString& OutTranslated, FString& OutFirstWeapon);
+~~~
+Visual/ElysiumAnimSubsystem.h (public):
+~~~cpp
+bool TranslateActivityRequest(const FElysiumActivityClipRequest& Request,
+    FString& OutTranslated, FString& OutFirstWeapon);
+~~~
+Map/ElysiumMapActorEmbodiment.cpp:
+~~~cpp
+bool AElysiumMapActor::TranslateNpcActivityRequest(const FElysiumActivityClipRequest& Request,
+    FString& OutTranslated, FString& OutFirstWeapon)
+{
+    return Bodies && Bodies->TranslateNpcActivityRequest(Request, OutTranslated, OutFirstWeapon);
+}
+~~~
+Visual/ElysiumEntityBodies.cpp:
+~~~cpp
+bool UElysiumEntityBodies::TranslateNpcActivityRequest(const FElysiumActivityClipRequest& Request,
+    FString& OutTranslated, FString& OutFirstWeapon)
+{
+    UElysiumAnimSubsystem* const TranslationAnims = GetAnims();
+    return TranslationAnims
+        && TranslationAnims->TranslateActivityRequest(Request, OutTranslated, OutFirstWeapon);
+}
+~~~
+Visual/ElysiumAnimSubsystem.cpp:
+~~~cpp
+bool UElysiumAnimSubsystem::TranslateActivityRequest(const FElysiumActivityClipRequest& Request,
+    FString& OutTranslated, FString& OutFirstWeapon)
+{
+    const FElysiumAnimationCatalog Catalog = BuildCatalog(Request.Stem);
+    if (Catalog.Clips == nullptr) { return false; }
+    const auto Translation = ElysiumAnimResolve::TranslateActivity(
+        ElysiumAnimResolve::ActivityIntentFor(Request), Catalog);
+    OutTranslated = Translation.Resolved;
+    OutFirstWeapon = Translation.FirstWeaponActivity;
+    return true; // 0x10271ff0, no Resolve/weighted pick
+}
+~~~
+The false default is the named absent table hook, not a successful translation. Restored
+player/cast/weapon presentation caches do not suppress kernel draws. The raw collection adapter
+in item3 still looks up Request.Activity directly, with no translation or selection transaction.
+
+
+Pedestrian's NEW slot301 forwarding definition is owed to the matching hand-body file,
+Private/Substrate/ElysiumNpcPedestrianSlotBodies.cpp, not a generated Slots.cpp:
+~~~cpp
+#include "Substrate/ElysiumNpcPedestrian.h"
+
+void FElysiumNpcPedestrian::CreateCorpse(const FVector& Force, void* InInfo)
+{
+    PedestrianCreateCorpse(Force, InInfo); // 0x103a38c0 slot301
+}
+~~~
+The declaration and helper are C2's; this one definition and item7's hand verdict/regeneration
+are integrator work, to keep the file boundary and avoid defining a slot body twice.
+
+C2 edited only these brief-listed paths (prefix Private/Substrate unless stated):
+ElysiumNpcAnim.cpp, ElysiumNpc.h, ElysiumNpcBaseAnim.cpp, ElysiumNpcBaseStartTask.cpp,
+ElysiumNpc.cpp, ElysiumNpcBaseRunTask.cpp/.inl, ElysiumNpcBaseSpawn.cpp/.inl,
+ElysiumCombatCharacter.cpp, ElysiumNpcPedestrian.h/.cpp, ElysiumPlayerEntity.cpp,
+ElysiumFeed.cpp, ElysiumNpcBaseSenses10.cpp, ElysiumNpcBaseSenses.cpp,
+ElysiumNpcEnemyMemory.h/.cpp, ElysiumNpcBaseConditions2.cpp, ElysiumProp.cpp;
+Private/Visual/ElysiumAnimationResolve.cpp and new ElysiumAnimationPick.h/.cpp;
+Private/Player/ElysiumAnimationIntent.cpp; Private/Tests/ElysiumPlayerPostThinkTests.cpp,
+ElysiumNpcKernelSpeciesMisc10Tests.cpp, ElysiumNpcKernelAnimTests.cpp,
+ElysiumNpcCombatTests.cpp, ElysiumNpcEnemyTests.cpp, ElysiumNpcKernelSenses10Tests.cpp;
+docs/vtmb/npc-ai/lifecycle.md, senses.md, docs/vtmb/feeding.md.
+
+C1 may read SequenceRows[Sequence].RawIndex directly in its interval-movement/swing descriptor
+mapping; weighted gathers now retain every candidate's raw number. No second draw is needed.
+The exact body-row expression is
+SequenceNumber == 0 ? 0 : (Troika->SequenceRows.IsValidIndex(SequenceNumber)
+    ? Troika->SequenceRows[SequenceNumber].RawIndex : INDEX_NONE).
+
+
+C3's new TeamName member exposes an existing C4458 shadow in the other spawn body.
+ElysiumNpcSpawn.cpp::TroikaSpawnBody, at its already-ordered join after Precache, replace
+the three TeamName local references with these exact lines (no order change):
+~~~cpp
+const FString SpawnTeamName = Spawn19TeamName();
+if (!SpawnTeamName.IsEmpty()) // 0x10298daa
+{
+    Spawn19AddToTeam(SpawnTeamName); // 0x10298db6
+}
+~~~
+The owning constructor should call EnemyMemory.BindOwner(*this); BindOwner retains that identity
+and attaches MemoryWorld when the same owner later reaches GetEnemies after world registration.
+
+Exact Refresh verdict row, replacing its abbreviated present row:
+~~~tsv
+102df320	rule	0-4	FElysiumNpcEnemyMemory::Refresh	[0002/V4c obs=timing: actual owner/squad permission, unlink before notify, retained tracked-only free knowledge and successor-next predecessor splice] 0x102df320/0x102df50e..0x102df518; arguments and listing evidence in senses.md.
+~~~
+
+
+Restore join with the actual existing variable: in
+ElysiumEntityWorldPersistence.cpp::FElysiumEntityWorld::ApplyEntityRecord, after
+E->SetSavedNextThink(S.SavedNextThink) and before NotifyVisualChanged(*E), add:
+~~~cpp
+if (FElysiumNpc* const RestoredNpc = E->AsNpc())
+{
+    if (!RestoredNpc->TeamName.IsEmpty()) { RestoredNpc->AddToTeam(RestoredNpc->TeamName); }
+}
+~~~
+This is C3/integrator's world restore hook; C2's own Spawn/Hydrate already join literal player.
+
+
+Final static review also read CBaseEntity::Hide0x1009d2a0: it ORs EF_NODRAW0x40 into
+m_fScriptSavedEffects when ScriptHidden, otherwise m_fEffects, then ForceTransmit. The base
+Hide slot in ElysiumEntitySlots.cpp is still only counted; CreateCorpse correctly calls it,
+but static-source hide presentation remains that slot owner's missing wire. It must not be
+implemented as ScriptHide/bHidden, which would incorrectly suppress the +0.5 removal think.
+No C2 patch is owed to a generated Slots.cpp; the integrator should route the real Hide body
+to ElysiumEntitySlotBodies.cpp with a hand verdict when its saved-effects input is supplied.
+
+Added NpcCombat.CorpseThinkInstall also pins mortal/Kindred/static replacement deadlines and
+explicit NULL versus missing restored identity. There are eleven new V4c arm cases in C2's
+six test files; DeathRestore is the sole whole-case deletion. No tests were executed.
+
+
+Recording-service integration (Private/Tests/ElysiumTestServices.h, integrator only):
+the new prop API must also be answered by the existing one-label-per-stem fixture. Beside
+AnimatedPropRestClip, add:
+~~~cpp
+virtual FString PickAnimatedPropRestClip(const FString& Stem) const override
+{
+    return AnimatedPropRestClip(Stem, 0); // 0x10427fc0: fixed fixture candidate is a singleton
+}
+~~~
+It spends no draw for the fixture singleton/miss; production uses the raw weighted adapter.
+The recording services currently do not override NpcActivitySequences. Add a table-driven
+answer beside GetBodyClipByRawIndex:
+~~~cpp
+virtual void NpcActivitySequences(const FElysiumActivityClipRequest& Request,
+    TArray<FElysiumNpcClip>& Out) override
+{
+    Out.Reset();
+    for (const auto& RawRow : BodyClipsByRawIndex)
+    {
+        if (RawRow.Value.Clip.Activity.Equals(Request.Activity, ESearchCase::IgnoreCase))
+        {
+            FElysiumNpcClip Row = RawRow.Value.Clip;
+            Row.RawIndex = RawRow.Key;
+            Out.Add(MoveTemp(Row));
+        }
+    }
+    Out.Sort([](const FElysiumNpcClip& Left, const FElysiumNpcClip& Right)
+        { return Left.RawIndex < Right.RawIndex; });
+}
+~~~
+Fixtures that previously stood only bNpcActivitiesResolve/ResolvedNpcActivityLabel must seed
+their actual activity/weight/raw-index rows explicitly. Do not make a bare miss succeed by
+borrowing the full resolver's fallback answer. C2's new pick tests provide their own candidates
+and explicit raw rows, independent of that old resolver double.
+
+### V4c second-pass close measurement (2026-10-05; not green, no commit)
+
+The three-build allowance is exhausted: build1 passed118.6s; build2 failed27.5s on two
+fixture ResolveClipPair calls missing the required side argument; build3 passed25.2s.
+No source changed after build3; temporary clock/sweep diagnostics were removed before it.
+The lanes and all integration remain uncommitted and unstaged on spec-0002/step-2.
+An external documentation commit advanced HEAD to947e57b6 (AGENTS/HANDOVER only).
+Neither V4c nor V4s was ticked; no commit or push. Root200KB is absent.
+
+Final default:169 executed,168 passed,1 failed (Stance.Driver),15.8s wall.
+Final arm:1624 executed,1611 passed,13 failed,53.8s wall; no abort or unrun test.
+Baseline default170 loses only the retired world-sweep MeleeBatch test, replaced by arm
+character-clock coverage. Baseline arm1594 gains30 cases.
+Full Arena ONCE after build3:132 records,110 pass/4 fail/16 expected-fail/2 unexpected-pass,
+527.5s wall, report20261005T053609.881342Z. The eight new records all pass.
+The earlier33-record named run was28 pass/4 fail/1 expected-fail; record-only cower/footstep
+corrections passed by name and in the full run. After the full run, input_setrelationship's
+unkillable staging passed by name (20261005T054700.512138Z); the full report still records
+its original failure. No second full run. Kernel check7/7; no re-bake or corpus write.
+
+
+Recovery and staging corrected in this pass:
+
+- NPC event3031 stages at curtime; CommitTime>0 is not an estimate discriminator. The invalid
+  guard was removed; BeginRangedShot still stages no NPC estimate. Retail0x10238160→0x10238320→
+  0x102383b0→0x102387b0. cover_move_shoot and team_damage_gate pass again.
+- Constructor0x1028d230 writes m_flStanceTime(+0x64e4)=curtime; this host writes it before
+  Troika spawn's disposition lookup. NPCInit0x1029a6a9 seeds a valid default disposition index;
+  bHasDispositionIndex now reflects that. These fixes remove spurious initial stance draws,
+  but do not yet recover idle_lookaround/unknown_crouched_band's required verdicts. No reseed
+  or expectation relaxation was made for either; the remaining draw-order audit is V4c.
+- InputFaint0x1029f250 resets slot614, records line0x26c2 and SetSchedule(0xfa,false).
+- Dead-enemy records originally killed at0.417, before network-init0.80. Retail0x1028d8d0
+  walks every Troika (derived bit0x40) and slot5840x1028d910 resets all think timers, including
+  that corpse's +10 deadline. Death is now after network-init; both controls pass. Quiet
+  ALERT is probed before0x4b's five-second timeout, rather than promised through end8s.
+- seed_health now recomputes before the initial probe: effective cap99999 is measured.
+  The five-hit control ends alive at90 wounds. Knockout flags0x440a0000 kill positive18 at
+  18 wounds; cower flags0x40000400 kill positive18 at19 wounds (including trigger1), both
+  at0x102beea4, far below cap. Zero during cower raises LIGHT_DAMAGE at0x10265ed0 and interrupts
+  the schedule/clears its flag; zero is staged before cower, and the positive packet atflag+0.45
+  lands inside the unchanged0.5 deadline. No damage arithmetic or historical fifth-hit claim.
+- The same-team contact control passes on identical negative-Y seats. No contact/impact/hit-list
+  write reaches the matching teammate. The scalar cower trigger was replaced by a real player
+  handle through damage_packet; the actual OnTakeDamage chain runs for zero too.
+- ranged_open_fire and input_setrelationship use retail MakePlayerUnkillable: dead-enemy
+  selection correctly drops a player who dies under their real bullets. Their expectations
+  remain intact. Footstep staging now seats the player150cm north of the first patrol goal;
+  the old ~700cm seat allowed one-second thinks against a0.939Hz walk, and0x10091880 lost loop
+  windows. The near cadence0x10290b60 restores repeated2050/2051; event windows are unchanged.
+- SharedPick/RagdollSeed/RunAnimation/interval-movement tests now supply models; the shared
+  picker already returns-1 on empty0x10427fc0, and the test guards its array index. Session
+  registry construction covers uninitialized headless fixtures. Other migrated tests author
+  raw candidates, exact disposition levels, real feed cells/side, and the actual event shot.
+
+Seams still named: D9 CalcPose-at-cycle / bone cache, m_flPoseParameter blending, slot247
+seqdesc bounds, held weapon model clock/events/weights (0015), ordinary ragdoll rig/hitbone/
+Spine2/force (V4d), render-alpha presentation, restored-corpse presentation (V6), real reload
+slots322/323 (V5b), and TzimisceMelee+0x910. No pipeline/body-data/bbox import or re-bake.
+Bounded silent inventory475 sidecars/9401 clips in0.404s found only male/female move_and_ranged
+flamet_attack and flamet_attack_layer without3030..3044; both have no events. No timer fallback.
+
+
+### V4c final integrator: establishment and record clocks (2026-10-05)
+
+Closing reads of vampire.dll NPCInit `0x1029a0b0` / base `0x10273390`,
+NPCInitThink `0x10273aa0` (listing), MaintainSchedule `0x102817c0` (listing at
+`0x10281b5a..0x10281b89`) and SetState `0x1026e340` settle the initial edge.
+Troika stores current NONE directly at `0x1029a0f5`; base init stores ideal IDLE
+at `0x10273473`. NPCInitThink applies relationships, calls StartNPC (slot 422),
+then tail-calls PostNPCInit (slot 421). The first AI MaintainSchedule invokes
+SetState(ideal) at `0x10281b63` before GetNewSchedule. This is a real NONE -> IDLE
+transition: SetState stamps the change clock, writes both state words, and calls
+slot 463's state-change hooks. Admission must not replace it with IDLE.
+Arena traces and ordered expectations retain the edge; state bans begin after
+that establishing edge. Other kinds and later state edges are still judged.
+
+Animation picks already share `ElysiumRng::NpcSchedule` and SeedAll resets it.
+The surviving input was the boot clock: NPCInit and StartNPC branch on curtime
+in the first second (`0x10273390` / `0x10273ad0`). A later rebuilt record skipped
+startup delay draws and ran its selector at activation, while a named run waited
+for startup. Arena staging now resets its game clock before Load, alongside
+SeedAll, so the same seed gives the same initialization and draw order. This is
+a harness correction; map hosts and runtime scheduling keep the retail clock.
+Seeds and expectations for idle_lookaround and unknown_crouched_band are intact.
+
+AndreiBlood Activate writes COMBAT at `0x1035dc93`; the CanPlaySequence arm's
+two idle assertions now explicitly stage SetState(1), preserving spawn state.
+
+FrenzyShadow NPCInit `0x10375c80` calls the controller init, sets ideal HUNT 0xb,
+and calls real SetState(0xb). Its selector `0x10375d90` only intercepts COMBAT
+with a live enemy; this ownerless row falls through Human to Troika `0x102af660`.
+With no hunt path, MADE_HUNT_PATH clears; the default expired hunt timer selects
+HUNT_FINISH 0x85. GET_PATH_TO_LASTPOSITION's listing `0x10285bb0` copies the stored
+vector into a location goal without an enemy/position guard. Refusal calls
+TaskFail(0xc) at `0x10285c87`. This arena's zero stored position is inside the
+central cover block and has no route, so its roll call now asserts HUNT_FINISH,
+the path task and NO_ROUTE, plus survival. The old generic taskfail ban depended
+on invented IDLE. The production frenzy population/caster remains unrecovered
+in the player substrate; this hand-authored row does not assert that seam.
+
+The first full fresh-clock run exposed three additional record assumptions:
+
+- lifecycle_relationship_flip's player died at 18.5 after seven real event shots;
+  BestEnemy `0x10274475` correctly dropped it at 18.6, yielding ALERT. Stage the
+  same retail MakePlayerUnkillable latch as the other combat records. The state,
+  enemy and combat-program assertions are unchanged.
+- SetSchedule `0x10280e50` clears all six condition words. RunAI's host trace
+  compares the set entering GatherConditions to the set leaving it. When a
+  program installation already cleared SEE_HATE between gathers, OnLooked's
+  real clear (`0x1026a2cf`) has no falling delta to emit. memory_occluded_kept
+  now probes SEE_HATE/SEE_ENEMY false at the original 1.3/2.1 deadlines; initial
+  sight, LOS output ordering, debounce, memory and state assertions remain.
+- FACE_ENEMY's listing `0x102aae61..0x102aaf24` uses the override or remembered
+  enemy position, not an unseen player's current location. face_enemy_turn's
+  6.0 teleport coincided with a new player scan, so no new LKP was written and
+  facing the old LKP correctly completed immediately. At 5.9 (after a scan),
+  the cached list's OnLooked `0x1026a2c0` writes the new LKP before rescan:
+  NOT_FACING_ATTACK at 6.0, task starts 6.1, SEE_ENEMY rises during the turn at
+  6.2, FacingIdeal completes at 6.3. The record keeps the 0.5 turn bound and
+  probes SEE_ENEMY true at 7.0; demanding a new rising edge after completion
+  incorrectly imposed event order retail does not promise. No runtime change.
+
+### V4c closing worker: the first-pass random stream (2026-10-05)
+
+Retail reads were vampire.dll 0x1028d230 (constructor listing), 0x10273390,
+0x10272650 (listing required), 0x10272130, 0x1029a0b0, 0x10273aa0 (listing),
+0x10273ad0, 0x1028e310, 0x102c0f70, 0x102c12a0, 0x1028fa50, 0x102b1a20,
+0x102b3e00 and 0x102b15c0; integer generation is vstdlib.dll 0x10002e60.
+No arena seed or expectation was changed.
+
+The constructor stores the default name Neutral at 0x1028d42c, not an empty name.
+NPCInit stores current state NONE at 0x1029a0f5 and ideal IDLE at 0x10273473,
+then seeds the valid disposition index zero at 0x1029a6a9. Neutral is the first
+retail disposition-table row. Activate's SetDisposition(Neutral,1) therefore
+refreshes tuning without calling slot611. The host admission barrier must retain
+those state words: its previous typed Idle write cleared the raw NONE overlay,
+so the first base gather ran the idle-sound RNG before retail's state transition.
+
+The locked idle_lookaround path, through its first selector, is:
+
+| order | retail transaction | advancing draw | port after correction |
+|---|---|---|---|
+| 1 | NPCInit heaviest ACT_IDLE probe, 0x1008dd30; SetIdealActivity -> 0x10272130 -> 0x1008dc40/0x10427fc0 | one weighted integer for the multiple idle rows | same; heaviest itself draws nothing |
+| - | ResetFakeReloadCount 0x102c54c0 | none for TutorialThug's equal 6/6 bounds | named missing-template input still answers 0/0; the write is retained, no draw |
+| - | Activate -> SetDisposition 0x102c0f70 | none for unchanged valid Neutral index | same; constructor no longer supplies an empty lookup |
+| 2 | StartNPC 0x10273ad0, curtime <=1 | Float(0.1,0.4) | same |
+| - | first base GatherConditions 0x1026ecce sees NONE | no idle-sound draw | same; admission no longer overwrites NONE |
+| 3 | Troika corpse gather 0x1028fa50 | Float(2,2.5) | same |
+| 4 | comfort gather 0x102b1a20 | Float(0.2,0.4) | same |
+| 5 | first idle selector 0x102af822 | Int(0,99), compare with 10 | same; seed4 selects 0x4f at t=0.350 |
+
+Two additional former port draws came from AElysiumNpcBody's visual classifier
+before the first AI pass. They have no retail selection transaction: the kernel
+resolver owns the NPC pick. The classifier's interim cast preview now uses
+heaviest selection, while actual kernel selections remain weighted and shared.
+The stream was neither re-seeded nor split. The common picker also observes
+vstdlib 0x10002e60's no-generation return when total positive weight is one,
+even with several candidates (zero-weight rows included).
+
+The rest of idle_lookaround's program uses the existing task order: look-around
+activity lookup, WAIT3, WAIT_RANDOM3 (one float), SET_ACTIVITY idle and its
+resolver maintenance, WAIT_RANDOM2 (one float), then the next idle selector.
+Stance selections retain 0x102c12a0's alternate-idle chance, time-gated change
+chance and 0x102c1230's destination retry loop. A miss, singleton, heaviest pick,
+equal integer bounds or exact-label presentation consumes no value.
+
+unknown_crouched_band has the same initialization without the look-around
+selector roll. After maintenance installs IDLE, subsequent base gathers can
+roll idle sound (0x1027a420), with corpse and comfort draws only when their
+clocks are due. The first changed unknown handle at 0x102b3e00 draws the run
+Float(10,20), then start Float(5,10), before the sweep's Roll B Int(0,99) at
+0x102b15c0; a retained handle draws neither timer again. Selector/activity/task
+picks follow that gather. Build5 measures SEE_UNKNOWN and INVESTIGATE_SIGHT at
+0.750 and schedule0x59; the unchanged record passes. Before these corrections
+it retracted SEE_UNKNOWN and selected IGNORE_UNKNOWN0x60.
+
+The named startup-path audit now selects look-around, but idle_lookaround is
+still red: its unchanged blanket never(state) rejects the now-visible retail None -> Idle transition
+at0.350, immediately before the required0x4f. That initial transition was
+previously hidden by the admission state overwrite. It was not suppressed and
+the record was not relaxed. Thus this wave cannot be called green under the
+locked expectation. Raw first-pass state remains observable as retail requires.
+
+Remaining inputs are still named: template fake-reload +0x34/+0x38 (the loader
+0x101d3f10 reads Min default8, Max defaultMin; TutorialThug authors6), and include
+group boundaries/last-local flags0x80 at0x10427df0. The equal-bound seam consumes
+no RNG; its returned count is not claimed to be the live retail count.
+
+Fixture migrations retain their subjects. Stance.Driver now supplies the model's
+ACT_DISPOSITION activity row for NPCInit's heaviest probe, not only named stance
+clips. Task completion fixtures supply a ten-second nonlooping model row and
+reset its clock before testing unfinished branches; AutoMovement advances it
+before those gates. Move-and-shoot supplies ACT_WALK/RUN before early translation.
+Controller fixtures supply the valid Neutral table row; static-corpse identity
+is separated from the absence of a ragdoll request; gestures pin m_AnimOverlay;
+NPC melee pins kernel base presentation while player claim assertions remain.
+ActivityResolve pins the unchanged sequence/no replay on an unchanged activity.
+Hull restoration uses the forced normal setter after a small-hull mutation.
+Arm worlds explicitly stage established IDLE after their initialization think;
+initialization tests re-run NPCInit, and State19 pins that admission retains
+NONE/idealIDLE. A refused desired-state request pins no change from its initial
+word rather than assuming that word was zero. No test was deleted by this worker.
+
+
+### V4c closing worker: final binary and full-run qualification (2026-10-05)
+
+Six builds passed (112.703 / 18.500 / 18.859 / 21.765 / 15.125 / 60.031 seconds).
+The final default tier is169 pass/0 fail. The final arm tier is1623 pass/1 fail;
+all thirteen failures from the previous integrator are fixed. The remaining
+NpcKernelBosses.CanPlaySequence test constructs AndreiBlood, whose Activate
+0x1035dc93/0x1035dc99 writes COMBAT2 to both state words. Admission previously
+erased that write. The test calls CanPlaySequence(false,0) as though the actor
+were idle; it must explicitly stage SetState(1) for those two idle assertions.
+The unaffected pure state-arm and disregard-state assertions remain green.
+This is a stale fixture, not a reason to restore the admission overwrite.
+
+The sole full run on build6 is20261005T064949.706263Z, aggregated index.json:
+132 records,105 pass/9 fail/17 expected-fail/1 unexpected-pass. Its arena-host
+subreport has125 records; seven map-host records are in the aggregate. All eight
+new V4c records pass. This result supersedes any claim of full-run RNG closure.
+Named build6 unknown_crouched_band passes at0.750; the full run still retracts
+SEE_UNKNOWN at0.700, raises IGNORE_UNKNOWN and installs0x60. Named startup
+reaches the selector at0.250/0.350, whereas later full-run stages select at0.000.
+The arena re-seeds before RebuildStageWorld but carries the game clock into
+Activate; NPCInit/StartNPC branch on curtime<=1 (0x10273390/0x10273ad0), so that
+later path omits the initialization delay/random-start transaction. This is an
+evidenced difference in prerequisites; the complete full-run draw interleaving
+remains unfinished. No new known_red or relaxed expectation masks either record.
+In the full run idle_lookaround still answers0x6b as well as emitting None->Idle;
+the record stops on the forbidden state event before its selection assertion.
+
+Retaining species state also exposes rollcall_vfrenzyshadow's real NPCInit state
+0xb (0x10375c80): HUNT_FINISH0x85 runs GET_PATH_TO_LASTPOSITION and fails0xc at
+its first tick. The old admission erased that state. The arena has no usable
+route for the goal0,0,0; a no-failure assertion needs its whole retail hunt path
+and navigation prerequisite audited. It is newly red, not the baseline hidden
+species problem. No navigation or selector shortcut was added.
+
+The three damage records still measure cap99999; the high-health control is
+alive at90 wounds after five18 commits; knockout and cower call0x102beea4 with
+18 and19 wounds, respectively, flags0x440a0000 /0x40000400. These distinguish
+the flag rule, not the historical fifth-hit attribution.

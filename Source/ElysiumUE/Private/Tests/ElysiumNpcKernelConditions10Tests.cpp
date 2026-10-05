@@ -691,9 +691,12 @@ bool FElysiumNpcKernelConditions10FakeReloadTest::RunTest(const FString&)
 	// The write still happens: retail's body has no arm that skips its only write, and
 	// `RandomInt(0, 0)` is 0.
 	F.Guard->FakeReloadCount = 7;
+	const int32 BeforeFakeReload = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).GetCurrentSeed();
 	F.Guard->ResetFakeReloadCount();
 	TestEqual(TEXT("m_iFakeReloadCount is rerolled from the template range (+0x65f0)"),
 		F.Guard->FakeReloadCount, 0);
+	TestEqual(TEXT("vstdlib 0x10002e60: an equal-bound range consumes no draw"),
+		ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).GetCurrentSeed(), BeforeFakeReload);
 	return true;
 }
 

@@ -237,10 +237,22 @@ the partner is live, then the camera / frenzy / weapon cleanup). Neither is NPC 
 names all eight cells of every family (`ACT_FEEDING_ENGAGE_VICTIM_TALLATTACKER_FRONT` = 3935 =
 `0xf5f`), and asks the clip resolver for that name; `MeleeSequencesForActivity` and the
 embodiment's `NpcActivitySequences` take the same request. The lookup walks the activity chain's
-fallback ladder, which `0x1032a100`'s bare `SelectWeightedSequence` does not, so the feed commit
-accepts its answer only when it is the cell's own clip and otherwise finds the clip by the cell's
-label (a named modernization). The kernel-side weighted draw (`SelectWeightedSequence`
-`0x1008dc40`) is not built.
+fallback ladder in older ports. V4c's `SelectWeightedSequence 0x1008dc40` now gathers the bare
+activity table and uses the common stream, without label fallback or a ladder guard. Every shipped
+feed cell has one authored sequence (S12), so these calls consume no draw; a true miss still warns
+and ends the grapple. Attacker lookup `0x1032a2cc` precedes victim lookup `0x1032a2de`.
+
+_V4c / S13 correction:_ the leave itself writes no animation words, but the next sequence need
+not be the trance task's. `FeedInterrupt 0x1033a9e0` installs MESMERIZED while paired. Release
+ideal/base is `0xf88`, activity/cell `0xf8c`; the first released task, MAKE_OBLIVIOUS
+`0x102a72e3..0x102a7315`, changes neither. `MaintainSchedule 0x10281eee` maintains immediately
+after that task, before later SET_ACTIVITY `0x102a1c0f`. Released translation
+`0x10328030/0x10328380` leaves the bare `0xf88`, which genuinely misses; resolver `0x10272130`
+retries disposition `0xf1/0x10295a80/slot611` and can commit an idle-labelled sequence while
+the requested activity stays `0xf88`. Later maintenance commits mesmerized `0x104e`.
+`RunAnimation 0x1026c540` requires activity 1 and cannot produce this intermediate row.
+No leave reset, maintenance reorder or released no-idle gate is warranted; variant 3 is not
+guaranteed. The no-idle constraint belongs only to the still-paired interval.
 
 The compact player action `PLAYER_FEED` (code 6) has no recovered producer. Live ordinary feeding
 is represented by `PLAYER_GRAPPLE` and its paired mode, so a remake must not use the dormant

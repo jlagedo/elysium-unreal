@@ -252,8 +252,34 @@ void FElysiumNpcBase::InsertAiSound(int32 Type, const FVector& OriginCm, int32 V
 
 void FElysiumNpcBase::StartFadeOut()
 {
-	// `0x102695d0` -- SEAM (declaration).
-	++StartFadeOutCalls;
+	++StartFadeOutCalls; // 0x102695d0, diagnostic only
+	FElysiumNpc* const FadeNpc = AsNpc(); // 0x102695d0: shared render words on the actual body
+	uint8& Alpha = FadeNpc != nullptr ? FadeNpc->RenderAlphaByte : FadeRenderAlpha; // 0x102695d0
+	if (RenderMode == 0) // 0x102695d0 +0x16c
+	{
+		Alpha = 255; RenderMode = 2; // 0x102695d0: other modes keep alpha
+	}
+	RetailSolidFlags |= 4u; // 0x102695d0 FSOLID_NOT_SOLID
+	AngularVelocity = FVector::ZeroVector; // 0x102695d0 SetLocalAngularVelocity
+	++FadeRelinkCalls; // 0x102695d0 Relink; no spatial partition at this tier
+	NextThink = static_cast<float>((World != nullptr ? World->NowSeconds() : 0.0) + 10.0); // 0x1026968d
+	ThinkSet(TEXT("0x100152b2"), 0.0); // 0x102695d0 SUB_FadeOut thunk
+}
+
+void FElysiumNpcBase::FadeOutThink()
+{
+	FElysiumNpc* const FadeNpc = AsNpc(); // 0x10269960
+	uint8& Alpha = FadeNpc != nullptr ? FadeNpc->RenderAlphaByte : FadeRenderAlpha; // 0x10269960
+	const double FadeNow = World != nullptr ? World->NowSeconds() : 0.0; // 0x10269960
+	if (Alpha > 7) // 0x10269960
+	{
+		Alpha -= 7; // 0x10269960
+		NextThink = static_cast<float>(FadeNow + 0.1); // 0x10269960
+		return;
+	}
+	Alpha = 0; // 0x10269960
+	NextThink = static_cast<float>(FadeNow + 0.2); // 0x10269960
+	ThinkSet(TEXT("0x101c0b10"), 0.0); // 0x10269960 SUB_Remove, later than zero alpha
 }
 
 void FElysiumNpcBase::WeaponFinishReload(FElysiumEntity& Weapon)

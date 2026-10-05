@@ -93,7 +93,8 @@ void* FElysiumNpcBase::GetEnemies()
 	// connected answer.
 	if (BaseScheduleHost.SquadDisconnected < 1)
 	{
-		return &EnemyMemory;
+		EnemyMemory.BindOwner(*this); // 0x10273e10: member store belongs to this NPC, bind once
+		return &EnemyMemory.ConnectedStore(); // 0x10273e10: explicit squad-store redirection seam
 	}
 	return &GDisconnectedEnemies;
 }
@@ -117,6 +118,7 @@ void FElysiumNpcBase::RemoveMemory()
 		return;
 	}
 	EnemyMemory = FElysiumNpcEnemyMemory();
+	EnemyMemory.BindOwner(*this); // 0x10273e40: freshly empty member retains its actual owner
 }
 
 bool FElysiumNpcBase::IsHintViewable(const FHintWords& Hint)

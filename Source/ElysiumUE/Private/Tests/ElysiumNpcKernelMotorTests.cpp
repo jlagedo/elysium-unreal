@@ -27,6 +27,7 @@
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumNpcTestCensus.h"
 #include "Tests/ElysiumTestServices.h"
+#include "Visual/ElysiumNpcClips.h"
 
 // Story 29c-1, family **Motor** — `CAI_Motor`, `CAI_Navigator` and everything the NPC asks of its
 // motor.
@@ -1218,11 +1219,13 @@ bool FElysiumNpcKernelMotorSpeciesProbesTest::RunTest(const FString&)
 	TestTrue(TEXT("an NPC's m_Collision answers"), FElysiumNpcBase::RetailCollisionExtents(*Leader, Mins, Maxs));
 	TestTrue(TEXT("with its standing hull's FULL row (0x10273070)"), Mins == RowMins && Maxs == RowMaxs);
 	Leader->bIsUsingSmallHull = true;
+	Leader->SetHullSizeSmall(true); // 0x10273180 changes m_Collision, not just the byte
 	Leader->RetailHullExtents(Leader->HullKind, FElysiumNpcBase::EElysiumHullExtents::Small, RowMins, RowMaxs);
 	FElysiumNpcBase::RetailCollisionExtents(*Leader, Mins, Maxs);
 	TestTrue(TEXT("and its SMALL row while m_fIsUsingSmallHull stands (0x10273180)"),
 		Mins == RowMins && Maxs == RowMaxs);
 	Leader->bIsUsingSmallHull = false;
+	Leader->SetHullSizeNormal(true); // 0x10273070 force restoration after changing the hull byte
 	TestTrue(TEXT("the player's box answers"), FElysiumNpcBase::RetailCollisionExtents(*Player, Mins, Maxs));
 	TestEqual(TEXT("0x1011e0d0: standing mins"), Mins, FVector(-16.0, -16.0, 0.0));
 	TestEqual(TEXT("0x1011e0d0: standing maxs"), Maxs, FVector(16.0, 16.0, 72.0));
@@ -1483,4 +1486,112 @@ bool FElysiumNpcKernelMotorTraceFilterShouldCollideTest::RunTest(const FString&)
 	Fixture.Services.TraceRetailQuery = nullptr;
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cAnimIntervalMovementTest,
+	"Elysium.Arm.NpcKernelMotor.AnimIntervalMovement", GElysiumNpcKernelMotorFlags)
+bool FElysiumV4cAnimIntervalMovementTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder IntervalBuilder(TEXT("v4c_interval_movement"), 4441);
+	IntervalBuilder.AddNpc(TEXT("mover")).Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl")); // 0x10094b70 model input
+	FElysiumNpcWorldFixture IntervalFixture(MoveTemp(IntervalBuilder));
+	FElysiumNpc* const IntervalNpc = IntervalFixture.Npc(TEXT("mover"));
+	if (!TestNotNull(TEXT("mover"), IntervalNpc)) return false;
+	FElysiumNpcWorldFixture::Quiet({IntervalNpc});
+	IntervalNpc->SequenceRows.SetNum(2); IntervalNpc->SequenceRows[1].Label = TEXT("interval_fixture"); IntervalNpc->SequenceRows[1].RawIndex = 7;
+	IntervalNpc->SequenceNumber = 1; IntervalNpc->SequenceCycle = 0.4f;
+	IntervalNpc->SequenceCycleRate = 2.f; IntervalNpc->SequencePlaybackRate = 0.5f;
+	IntervalNpc->bSequenceLoopedOnce = false; IntervalNpc->Angles = FVector(0.f,-90.f,0.f);
+	IntervalNpc->Origin = FVector(10.f,20.f,30.f);
+	FElysiumRecordingServices::FRawIndexClip IntervalRawClip;
+	IntervalRawClip.Label = TEXT("interval_fixture"); IntervalRawClip.Clip.RawIndex = 7;
+	IntervalFixture.Services.BodyClipsByRawIndex.Add(7, IntervalRawClip);
+	float SampledFrom = -1.f, SampledTo = -1.f;
+	IntervalFixture.Services.BodySequenceIntervalMovementQuery = [&SampledFrom, &SampledTo](
+		int32 RawSequence, float IntervalFrom, float IntervalTo, FVector& IntervalDeltaCm, float& IntervalYaw)
+	{
+		SampledFrom = IntervalFrom; SampledTo = IntervalTo;
+		IntervalDeltaCm = FVector(10.f,0.f,0.f); IntervalYaw = 15.f;
+		return RawSequence == 7; // 0x100c5d10 nummovements fixture
+	};
+	FVector MovedEndpoint; float MovedYaw = 0.f;
+	TestTrue(TEXT("0x10094b70: authored interval movement exists"), IntervalNpc->AnimIntervalMovement(0.2f, MovedEndpoint, MovedYaw));
+	TestEqual(TEXT("0x10094b70: FROM is the just-advanced cycle"), SampledFrom, 0.4f);
+	TestTrue(TEXT("0x10094b70: TO includes rate * playback * interval"), FMath::IsNearlyEqual(SampledTo,0.6f));
+	TestTrue(TEXT("0x1013a7e0: local yaw rotates delta then local origin is added"),
+		(MovedEndpoint * ElysiumMove::U).Equals(FVector(10.f,30.f,30.f),1.e-4));
+	TestEqual(TEXT("0x10094b70: Source yaw adds converted dAng.y"), MovedYaw, -105.f);
+	IntervalNpc->SequenceCycle = 0.95f;
+	bool bIntervalEnded = false;
+	IntervalNpc->AnimIntervalMovement(0.2f, MovedEndpoint, MovedYaw, &bIntervalEnded);
+	TestEqual(TEXT("0x10094b70: nonlooping end is clamped to 1"), SampledTo, 1.f);
+	TestTrue(TEXT("0x10094b70: nonlooping clamp writes finished output"),bIntervalEnded);
+	IntervalNpc->bSequenceLoopedOnce = true;
+	IntervalNpc->AnimIntervalMovement(0.2f, MovedEndpoint, MovedYaw, &bIntervalEnded);
+	TestTrue(TEXT("0x10094b70: looping interval crosses 1"), SampledTo > 1.f);
+	TestFalse(TEXT("0x10094b70: looping interval writes unfinished"),bIntervalEnded);
+	USkeletalMeshComponent* const IntervalBody = IntervalNpc->Visual;
+	IntervalNpc->Visual = nullptr; SampledFrom = -1.f;
+	TestFalse(TEXT("0x10094b70: no model asks for no movement"), IntervalNpc->AnimIntervalMovement(0.2f, MovedEndpoint, MovedYaw));
+	TestEqual(TEXT("0x10094b70: no model does not sample"), SampledFrom, -1.f);
+	IntervalNpc->Visual = IntervalBody;
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cAutoMovementTest,
+	"Elysium.Arm.NpcKernelMotor.AutoMovementTraceAndGates", GElysiumNpcKernelMotorFlags)
+bool FElysiumV4cAutoMovementTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder AutoBuilder(TEXT("v4c_auto_movement"), 4442);
+	AutoBuilder.AddNpc(TEXT("mover")).Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl")); // 0x10280a50 motor/body input
+	AutoBuilder.AddNpc(TEXT("blocker"), FVector(300.f,0.f,0.f));
+	FElysiumNpcWorldFixture AutoFixture(MoveTemp(AutoBuilder), [](FElysiumRecordingServices& AutoServices)
+	{ AutoServices.bProvideNpcMotor = true; });
+	FElysiumNpc* const AutoNpc = AutoFixture.Npc(TEXT("mover"));
+	FElysiumNpc* const AutoBlocker = AutoFixture.Npc(TEXT("blocker"));
+	if (!TestNotNull(TEXT("mover"), AutoNpc) || !TestNotNull(TEXT("blocker"), AutoBlocker)) return false;
+	FElysiumNpcWorldFixture::Quiet({AutoNpc, AutoBlocker});
+	AutoNpc->SequenceRows.SetNum(2); AutoNpc->SequenceRows[1].Label = TEXT("interval_fixture"); AutoNpc->SequenceRows[1].RawIndex = 7;
+	AutoNpc->SequenceNumber = 1; AutoNpc->SequenceCycle = 0.2f;
+	AutoNpc->SequenceCycleRate = 1.f; AutoNpc->SequencePlaybackRate = 1.f;
+	AutoNpc->RetailMoveType = 4; AutoNpc->Flags &= ~0x400u;
+	FElysiumRecordingServices::FRawIndexClip AutoRawClip;
+	AutoRawClip.Label = TEXT("interval_fixture"); AutoRawClip.Clip.RawIndex = 7;
+	AutoFixture.Services.BodyClipsByRawIndex.Add(7, AutoRawClip);
+	float AutoSampleFrom = -1.f;
+	AutoFixture.Services.BodySequenceIntervalMovementQuery = [&AutoSampleFrom](int32, float FromCycle,
+		float, FVector& DeltaCm, float& YawDegrees)
+	{ AutoSampleFrom = FromCycle; DeltaCm = FVector(12.f,0.f,0.f); YawDegrees = 0.f; return true; };
+	FElysiumRecordingNpcMotor* const AutoMotor = static_cast<FElysiumRecordingNpcMotor*>(AutoNpc->GetNpcMotor());
+	if (!TestNotNull(TEXT("motor"), AutoMotor)) return false;
+	AutoMotor->NavRaycastQuery = [](const FElysiumNpcNavRaycast&, FElysiumNpcNavRaycastAnswer& NavAnswer)
+	{ NavAnswer.bHit = false; return true; };
+	AutoFixture.Services.TraceRetailQuery = [](const FElysiumRetailTrace& HullQuery, FElysiumRetailTraceResult& HullAnswer)
+	{ HullAnswer = FElysiumRetailTraceResult(); HullAnswer.EndPosCm = HullQuery.EndCm; return true; };
+	AutoNpc->AnimTime = 0.f; AutoNpc->PrevAnimTime = 0.f;
+	const FVector AutoOriginBefore = AutoNpc->Origin;
+	TestTrue(TEXT("0x10280a50 / 0x102e0bd0: clear trace result 1 moves"), AutoNpc->AutoMovement());
+	TestTrue(TEXT("0x10280a50: slot 250 ran before extraction (.2 -> .3)"), FMath::IsNearlyEqual(AutoSampleFrom,0.3f));
+	TestTrue(TEXT("0x102e0cfc: trace endpoint applied to capsule"), AutoNpc->Origin.Equals(AutoOriginBefore + FVector(12.f,0.f,0.f),1.e-4));
+	TestTrue(TEXT("0x102e0cfc: motor carries endpoint"), AutoMotor->Feet.Equals(AutoNpc->Origin,1.e-4));
+	TestEqual(TEXT("0x102e0c4e: mask"), AutoNpc->Motor10Seams.LastMoveTraceMask,0x202400b);
+	TestEqual(TEXT("0x102e0c49: ground percent"), AutoNpc->Motor10Seams.LastMoveTraceExtent,100.f);
+	AutoNpc->RetailMoveType = 0;
+	const FVector GatedOrigin = AutoNpc->Origin;
+	TestFalse(TEXT("0x10280a50: move type gate"), AutoNpc->AutoMovement());
+	AutoNpc->RetailMoveType = 4; AutoNpc->Flags |= 0x400u;
+	TestFalse(TEXT("0x10280a50: FL_FROZEN gate"), AutoNpc->AutoMovement());
+	TestTrue(TEXT("0x10280a50: both gates move nothing"), AutoNpc->Origin.Equals(GatedOrigin));
+	AutoNpc->Flags &= ~0x400u;
+	AutoFixture.Services.TraceRetailQuery = [AutoBlocker](const FElysiumRetailTrace& HullQuery, FElysiumRetailTraceResult& HullAnswer)
+	{ HullAnswer = FElysiumRetailTraceResult(); HullAnswer.Fraction = 0.5f; HullAnswer.HitEntity = AutoBlocker->Handle;
+		HullAnswer.EndPosCm = FMath::Lerp(HullQuery.StartCm,HullQuery.EndCm,0.5f); return true; };
+	AutoNpc->Navigator.GoalType = 0;
+	TestFalse(TEXT("0x102e0ce6: blocked-other refuses with no move"), AutoNpc->AutoMovement());
+	TestTrue(TEXT("0x102e0ce6: blocked-other kept origin"), AutoNpc->Origin.Equals(GatedOrigin));
+	AutoNpc->BaseMemory.Enemy = AutoBlocker->Handle; AutoNpc->Navigator.GoalType = 2;
+	TestFalse(TEXT("0x102e0dcc: stopped-at-target result 4 is false"), AutoNpc->AutoMovement());
+	TestTrue(TEXT("0x102e0cf1: stopped-at-target still applies partial endpoint"), AutoNpc->Origin.X > GatedOrigin.X);
+	return true;
+}
+
 #endif  // WITH_DEV_AUTOMATION_TESTS

@@ -21,6 +21,7 @@
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPlayerController.h"
 #include "ElysiumRng.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumUserCmd.h"
 #include "Substrate/ElysiumDisciplines.h"   // ClearAll: the one discipline teardown
 #include "HAL/IConsoleManager.h"            // ResetPlayerState: the `debug_stealth_light` pin
@@ -654,6 +655,17 @@ bool Stage(const FElysiumArenaScenario& Record, const FHost& Host, FString& OutS
 	ElysiumRng::SeedAll(Record.Seed);
 	FMath::RandInit(Record.Seed);
 	FMath::SRandInit(Record.Seed);
+
+	// Each rebuilt arena is a fresh map clock as well as a fresh random position. Otherwise
+	// NPCInit/StartNPC (0x10273390 / 0x10273ad0) cross their curtime <= 1 startup branches
+	// in later records, changing both first-think timing and the shared NpcSchedule draw order.
+	if (UGameInstance* StageInstance = World->GetGameInstance())
+	{
+		if (UElysiumSessionSubsystem* StageSession = StageInstance->GetSubsystem<UElysiumSessionSubsystem>())
+		{
+			StageSession->TimeControl().ResetClock();
+		}
+	}
 
 	// A stage the last record left Failed (the barrier's wait ended) is rebuilt over, not refused: its
 	// pending character admissions are released here, and the rebuild replaces the failed flag, the

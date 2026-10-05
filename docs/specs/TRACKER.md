@@ -107,7 +107,7 @@ Wave 3 (build work, one agent):
   Order re-cut 2026-10-04 by the owner's "testable first" and "settle first" rules
   (`0002-npc-ai/spec.md` § the bug protocol's end): settling packets S1–S3 → the seam → [V5a + A3]
   → V4a → [V4b + V11] → V4o → V4c → V4d → V5b.
-  - [ ] **V4s** — settling packets S1–S3 (death and turn; weapons; overlay and coordinator). S.
+  - [x] **V4s** — settling packets S1–S3 (death and turn; weapons; overlay and coordinator). S.
   - [x] **V4a0** — the seam (A0). S. Done 2026-10-04: one build (2m22s), default 171 / 0, arena
     120 records: 85 pass / 33 expected-fail / 1 fail (H11) / 1 unexpected-pass (`hear_world_investigate`,
     N4's intermittent). 14 new records, 10 corrected; `face_enemy_turn` is green (the 13.4 s turn does
@@ -146,7 +146,10 @@ Wave 3 (build work, one agent):
     (the N4 intermittents); default 170 / 0, arm 1,594 / 0. An NPC's bullets now land: three records
     stage retail's unkillable latch on the player. Open: a dead enemy is not dropped (the gunman
     re-selects `START_COMBAT` on `ENEMY_DEAD` every think) -- V4c C2.
-  - [ ] **V4c** — attack producers, the weighted pick, the death transaction. M.
+  - [x] **V4c** — attack producers, the weighted pick, the death transaction. M.
+    Closed 2026-10-05: default 169 / 0, arm 1,624 / 0; kernel 7/7; full arena 113 pass /
+    1 fail / 16 expected-fail / 2 unexpected-pass. All 102 baseline passes and eight additions pass.
+    Retail startup state retained; arena clock/establishment fixed; remaining reds keep their owners.
   - [ ] **V4d** — the corpse falls: a physics asset from the `.phy`, Unreal's solve (the owner's
     ruling: a named modernization). M.
 - [ ] **V5** — Fix: the attack conditions and the combat interrupts. S · Fable/medium.

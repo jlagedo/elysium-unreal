@@ -454,6 +454,11 @@ bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S,
 		}
 	}
 
+ if (FElysiumCombatCharacter* RestoredCharacter = E->AsCombatCharacter()) // 0x10348890 after all fields
+ {
+  if (!RestoredCharacter->TeamName.IsEmpty()) RestoredCharacter->AddToTeam(RestoredCharacter->TeamName);
+  if (E == FindPlayer()) RestoredCharacter->AddToTeam(TEXT("player")); // 0x1016ebd0 after base
+ }
 	// Dormancy last, and written directly rather than through ScriptHide/ScriptUnhide: those are
 	// inputs with side effects (they stash and restore the think we have just restored ourselves).
 	E->bHidden = S.bHidden;

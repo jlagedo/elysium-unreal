@@ -842,6 +842,13 @@ bool FElysiumSpeciesMisc10PedestrianCorpseTest::RunTest(const FString&)
 	TestTrue(TEXT("`103a391c`: ThinkSet(NULL, 0.0, NULL) — the think is stopped"),
 		Pedestrian->bPedestrianCorpseThinkStopped);
 	TestEqual(TEXT("`103a396b`: SetSolid(SOLID_NONE)"), Pedestrian->PedestrianCorpseSolid, 0);
+	TestTrue(TEXT("0x1032c0e0 the entire base made a corpse"), Pedestrian->IsCorpse());
+	TestTrue(TEXT("0x103a391c actual think pointer is cleared"), Pedestrian->ThinkFunctionName.IsEmpty());
+	TestEqual(TEXT("0x103a396b actual SOLID_NONE"), Pedestrian->RetailSolidType, 0);
+	TestEqual(TEXT("0x1032c0e0 base zeroed bounds after snapshot"), Pedestrian->LastSetSizeMaxsUnits, FVector::ZeroVector);
+	Pedestrian->Think(); // 0x103a391c explicit clear must stay cleared
+	TestTrue(TEXT("0x103a391c forced think does not become PVSRemove"), Pedestrian->ThinkFunctionName.IsEmpty());
+	TestFalse(TEXT("0x103a391c corpse stays in world"), Pedestrian->IsInert());
 	// The snapshot reads `m_Collision`'s OBB (`+4` mins / `+8` maxs) as it stands BEFORE the base
 	// resizes the hull: the pedestrian's standing hull `m_eHull` (`+0x1568`) FULL row, HUMAN_HULL
 	// (hull 0: `(-13,-13,0)..(13,13,72)`, static init `0x102d4440`).

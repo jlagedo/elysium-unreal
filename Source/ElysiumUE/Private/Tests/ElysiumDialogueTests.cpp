@@ -1693,9 +1693,11 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	ElysiumStance::ApplyPrecacheFallbacks(Services.StanceClips);
 	FElysiumDisposition Neutral;
 	Neutral.Name = TEXT("Neutral");
+	Neutral.Level = 1; // 0x102c0f70 exact table row
 	Neutral.AnimName = TEXT("Neutral");
 	FElysiumDisposition Joy;
 	Joy.Name = TEXT("Joy");
+	Joy.Level = 1; // 0x102c0f70 exact table row
 	Joy.AnimName = TEXT("Joy");
 	Services.DispositionRows.Add(TEXT("neutral|1"), Neutral);
 	Services.DispositionRows.Add(TEXT("joy|1"), Joy);
@@ -1705,6 +1707,9 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	// a miss would play the model's sequence 0, which the sequence bridge cannot yet name (N19).
 	Services.KnownNpcClips.Add(TEXT("smiling_jack"),
 		{ TEXT("Stance_Trans_Neutral_1_Joy_1"), TEXT("waveover01") });
+	Services.SeedFixtureStance(TEXT("smiling_jack")); // 0x100ed150 fallback table
+	FElysiumRecordingServices::FRawIndexClip& DialogueTransition = Services.BodyClipsByRawIndex.Add(11000);
+	DialogueTransition.Label = TEXT("Stance_Trans_Neutral_1_Joy_1"); // 0x100ed150 nonloop transition
 
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	FElysiumEntityDefs Defs;

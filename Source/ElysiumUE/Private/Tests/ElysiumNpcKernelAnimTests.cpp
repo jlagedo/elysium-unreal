@@ -7,6 +7,12 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumOverlayStack.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumEntityWorld.h"
+#include "ElysiumRng.h"
+#include "Visual/ElysiumAnimationPick.h"
+#include "Visual/ElysiumAnimationResolve.h"
+#include "Visual/ElysiumNpcClips.h"
+#include "Tests/ElysiumTestServices.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcMingXiao.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -821,6 +827,280 @@ bool FElysiumNpcKernelAnimSequenceZeroTest::RunTest(const FString&)
 		Jack->StudioFrameAdvance(0.f);
 		TestTrue(TEXT("which finishes on the first advance"), Jack->bSequenceFinished);
 	}
+	return true;
+}
+
+namespace
+{
+	struct FV4cPickNpc : FElysiumNpc
+	{
+		TArray<FElysiumNpcClip> TestSequences;
+		bool bTestRig = false;
+		virtual void MeleeSequencesForActivity(int32 InActivity, TArray<FElysiumNpcClip>& OutRows) const override
+		{
+			OutRows = InActivity == 0xf88 ? TArray<FElysiumNpcClip>() : TestSequences; // 0x1008dc40: no base-release row
+		}
+		virtual bool HasClientRagdollRig() const override { return bTestRig; } // 0x10090180 model slot18
+		virtual int32 CorpseForceBone(const void*) const override { return 5; } // 0x1032c1e4 real bone input
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cSharedPickTest,
+	"Elysium.Arm.NpcKernelAnim.SharedPick", GElysiumNpcKernelAnimFlags)
+bool FElysiumV4cSharedPickTest::RunTest(const FString&)
+{
+	using namespace ElysiumAnimationPick;
+	FRandomStream& PickStream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
+	PickStream.Initialize(923);
+	const int32 OriginalSeed = PickStream.GetCurrentSeed();
+	const TArray<FCandidate> EmptyRows;
+	const TArray<FCandidate> SingleRow = {{17, 0}};
+	const TArray<FCandidate> EqualRows = {{17, 2}, {18, 2}, {19, 0}};
+	const TArray<FCandidate> UnitWeightRows = {{17, 0}, {18, 1}, {19, 0}};
+	TestEqual(TEXT("0x10427fc0 miss"), Weighted(EmptyRows), INDEX_NONE);
+	TestEqual(TEXT("0x104280f0 heaviest miss"), Heaviest(EmptyRows), INDEX_NONE);
+	TestEqual(TEXT("0x10427fc0 singleton"), Weighted(SingleRow), 17);
+	TestEqual(TEXT("0x104280f0 heaviest singleton"), Heaviest(SingleRow), 17);
+	TestEqual(TEXT("0x104280f0 first maximum wins tie"), Heaviest(EqualRows), 17);
+	TestEqual(TEXT("vstdlib 0x10002e60: total weight one selects its only positive row"), Weighted(UnitWeightRows), 18);
+	TestEqual(TEXT("0x10427fc0/0x104280f0 these arms spend no draw"), PickStream.GetCurrentSeed(), OriginalSeed);
+
+	FElysiumNpcWorldBuilder Builder(TEXT("v4c_pick"), 8301);
+	Builder.AddNpc(TEXT("guard")).Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl")); // 0x1008dc40 model rows
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FV4cPickNpc PickNpc;
+	PickNpc.World = &Fixture.World;
+	PickNpc.Visual = Fixture.Npc(TEXT("guard"))->Visual;
+	PickNpc.Model = Fixture.Npc(TEXT("guard"))->Model;
+	FElysiumNpcClipSet VisualSet;
+	VisualSet.Stem = TEXT("v4c");
+	for (int32 RowIndex = 0; RowIndex < 3; ++RowIndex)
+	{
+		FElysiumNpcClip Row;
+		Row.RawIndex = RowIndex + 10;
+		Row.Owner = TEXT("v4c_bank");
+		Row.Activity = TEXT("ACT_IDLE");
+		Row.Weight = RowIndex == 2 ? 0 : 2;
+		Row.Flags = 1;
+		Row.Frames = 30; Row.Fps = 30.f;
+		const FString RowLabel = FString::Printf(TEXT("pick%d"), RowIndex);
+		FElysiumRecordingServices::FRawIndexClip RawRow;
+		RawRow.Label = RowLabel; RawRow.Clip = Row;
+		Fixture.Services.BodyClipsByRawIndex.Add(Row.RawIndex, RawRow);
+		PickNpc.TestSequences.Add(Row);
+		VisualSet.Clips.Add(RowLabel, Row);
+	}
+	PickStream.Initialize(71);
+	FRandomStream ExpectedStream(71);
+	for (int32 Transaction = 0; Transaction < 8; ++Transaction)
+	{
+		const int32 ExpectedIndex = ExpectedStream.RandRange(0, 3) < 2 ? 0 : 1; // 0x10427fc0 raw 2/2/0
+		if (Transaction % 4 == 0)
+		{
+			const int32 ChosenRow = PickNpc.SelectWeightedSequence(1); // 0x1008dc40 NPC
+			if (!TestTrue(TEXT("0x10427fc0 a miss is -1, never an array index"), PickNpc.SequenceRows.IsValidIndex(ChosenRow))) return false;
+			TestEqual(TEXT("0x1008dc40 NPC interleaves"), PickNpc.SequenceRows[ChosenRow].Label,
+				FString::Printf(TEXT("pick%d"), ExpectedIndex));
+		}
+		else
+		{
+			// 0x1008dc40 reaction, 0x10253390 weapon and 0x10190850 prop share this same body.
+			const FElysiumClipRef Chosen = ElysiumAnimResolve::PickWeighted(VisualSet, TEXT("ACT_IDLE"), Transaction);
+			TestEqual(TEXT("0x1070b244 slot2 non-NPC interleaves"), Chosen.Label,
+				FString::Printf(TEXT("pick%d"), ExpectedIndex));
+		}
+		TestEqual(TEXT("0x1070b244 exactly one shared draw"), PickStream.GetCurrentSeed(), ExpectedStream.GetCurrentSeed());
+	}
+	const TArray<FCandidate> ZeroRows = {{20, 0}, {21, 0}, {22, 0}};
+	TestEqual(TEXT("0x10427fc0 zero total is uniform"), Weighted(ZeroRows),
+		20 + ExpectedStream.RandRange(0, 2));
+	TestEqual(TEXT("0x1008dc40 bare release base misses"), PickNpc.SelectWeightedSequence(0xf88), INDEX_NONE);
+	TestEqual(TEXT("0x1008dd30 strict kernel maximum"), PickNpc.SelectHeaviestSequence(1), 1);
+	TestEqual(TEXT("0x1008dd30 no extra draw"), PickStream.GetCurrentSeed(), ExpectedStream.GetCurrentSeed());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cRagdollSeedTest,
+	"Elysium.Arm.NpcKernelAnim.RagdollSeed", GElysiumNpcKernelAnimFlags)
+bool FElysiumV4cRagdollSeedTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("v4c_seed"), 8302);
+	Builder.AddNpc(TEXT("guard")).Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl")); // 0x10090180 model input
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FV4cPickNpc SeedNpc;
+	SeedNpc.World = &Fixture.World;
+	SeedNpc.Visual = Fixture.Npc(TEXT("guard"))->Visual;
+	SeedNpc.Model = Fixture.Npc(TEXT("guard"))->Model;
+	FElysiumNpcClip SeedClip;
+	SeedClip.RawIndex = 10; SeedClip.Owner = TEXT("misc"); SeedClip.Weight = 1;
+	SeedClip.Activity = TEXT("ACT_DIERAGDOLL"); SeedClip.Frames = 30; SeedClip.Fps = 30.f;
+	FElysiumRecordingServices::FRawIndexClip SeedRaw;
+	SeedRaw.Label = TEXT("ragdollseed"); SeedRaw.Clip = SeedClip;
+	Fixture.Services.BodyClipsByRawIndex.Add(10, SeedRaw);
+	SeedNpc.TestSequences.Add(SeedClip);
+	SeedNpc.SequenceNumber = 44; SeedNpc.SequenceCycle = 0.6f;
+	SeedNpc.ThinkSet(TEXT("npc"), 0.0);
+	SeedNpc.RetailSolidFlags = 0;
+	Fixture.Services.Calls.Reset();
+	TestFalse(TEXT("0x10090180 no rig refuses"), SeedNpc.BecomeClientRagdoll(FVector::ZeroVector, -1, false));
+	TestEqual(TEXT("0x10090180 no rig only zeroes bounds"), SeedNpc.LastSetSizeMaxsUnits, FVector::ZeroVector);
+	TestEqual(TEXT("0x10090180 no rig leaves sequence"), SeedNpc.SequenceNumber, 44);
+	TestEqual(TEXT("0x10090180 no rig leaves solid flag"), SeedNpc.RetailSolidFlags, 0u);
+	TestEqual(TEXT("0x10090180 no rig leaves think"), SeedNpc.ThinkFunctionName, FString(TEXT("npc")));
+	TestFalse(TEXT("0x10090180 no hold-pose substitute"), Fixture.Services.Saw(TEXT("HoldBodyFinalPose")));
+	SeedNpc.bTestRig = true;
+	TestTrue(TEXT("0x10090180 real bone rig succeeds"), SeedNpc.BecomeClientRagdoll(FVector::ZeroVector, 5, false));
+	TestEqual(TEXT("0x1009021a real bone keeps current pose"), SeedNpc.SequenceNumber, 44);
+	TestEqual(TEXT("0x1009021a real bone keeps cycle"), SeedNpc.SequenceCycle, 0.6f);
+	TestTrue(TEXT("0x10090180 rig adds solid4"), (SeedNpc.RetailSolidFlags & 4u) != 0);
+	TestTrue(TEXT("0x10090180 bone-1 seed"), SeedNpc.BecomeClientRagdoll(FVector::ZeroVector, -1, true));
+	TestEqual(TEXT("0x1009021a seed commits row"), SeedNpc.SequenceNumber, 1);
+	TestEqual(TEXT("0x1009021a seed zeroes cycle"), SeedNpc.SequenceCycle, 0.f);
+	SeedNpc.TestSequences.Reset(); SeedNpc.SequenceNumber = 33; SeedNpc.SequenceCycle = 0.7f;
+	SeedNpc.BecomeClientRagdoll(FVector::ZeroVector, -1, true);
+	TestEqual(TEXT("0x1009021a miss keeps sequence"), SeedNpc.SequenceNumber, 33);
+	TestEqual(TEXT("0x1009021a miss keeps cycle"), SeedNpc.SequenceCycle, 0.7f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cRunAnimationTest,
+	"Elysium.Arm.NpcKernelAnim.RunAnimationCycle", GElysiumNpcKernelAnimFlags)
+bool FElysiumV4cRunAnimationTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("v4c_runanimation"), 8303);
+	Builder.AddNpc(TEXT("guard")).Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl")); // 0x1008dd30 model rows
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FV4cPickNpc IdleNpc;
+	IdleNpc.World = &Fixture.World; IdleNpc.Visual = Fixture.Npc(TEXT("guard"))->Visual;
+	IdleNpc.Model = Fixture.Npc(TEXT("guard"))->Model;
+	for (int32 IdleIndex = 0; IdleIndex < 2; ++IdleIndex)
+	{
+		FElysiumNpcClip IdleClip;
+		IdleClip.RawIndex = IdleIndex + 10; IdleClip.Owner = TEXT("misc");
+		IdleClip.Weight = IdleIndex + 1; IdleClip.Frames = 30; IdleClip.Fps = 30.f;
+		FElysiumRecordingServices::FRawIndexClip IdleRaw;
+		IdleRaw.Label = FString::Printf(TEXT("idle%d"), IdleIndex); IdleRaw.Clip = IdleClip;
+		Fixture.Services.BodyClipsByRawIndex.Add(IdleClip.RawIndex, IdleRaw);
+		IdleNpc.TestSequences.Add(IdleClip);
+	}
+	IdleNpc.SelectHeaviestSequence(1); // 0x1008dd30 numbers both rows
+	IdleNpc.SetState(1); IdleNpc.ActivityNumber = 1; IdleNpc.TranslatedActivity = 1;
+	IdleNpc.SequenceNumber = 1; IdleNpc.IdealSequence = 1;
+	IdleNpc.bSequenceFinished = true; IdleNpc.bSequenceLoopedOnce = false;
+	IdleNpc.SequenceCycle = 1.f; IdleNpc.AnimTime = 1.f;
+	FRandomStream& IdleStream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
+	const int32 IdleSeed = IdleStream.GetCurrentSeed();
+	IdleNpc.RunAnimation(); // 0x1026c540, frame-advance early return isolates the finished re-pick
+	TestEqual(TEXT("0x1026c628 nonloop takes heaviest"), IdleNpc.SequenceNumber, 2);
+	TestEqual(TEXT("0x10260a50 commit keeps cycle1"), IdleNpc.SequenceCycle, 1.f);
+	TestEqual(TEXT("0x1008dd30 no draw"), IdleStream.GetCurrentSeed(), IdleSeed);
+	for (int32 RefusedState : {4, 7})
+	{
+		IdleNpc.SetState(RefusedState); IdleNpc.SequenceNumber = 1; IdleNpc.IdealSequence = 1;
+		IdleNpc.bSequenceFinished = true;
+		IdleNpc.RunAnimation();
+		TestEqual(TEXT("0x1026c5e5 script/dead gates"), IdleNpc.SequenceNumber, 1);
+	}
+	IdleNpc.SetState(1); IdleNpc.ActivityNumber = 0xf88; IdleNpc.bSequenceFinished = true;
+	IdleNpc.RunAnimation();
+	TestEqual(TEXT("0x1026c5fc release is not ACT_IDLE"), IdleNpc.SequenceNumber, 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cDispositionTest,
+	"Elysium.Arm.NpcKernelAnim.DispositionCommitAndStance", GElysiumNpcKernelAnimFlags)
+bool FElysiumV4cDispositionTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("v4c_disposition"), 8312);
+	Builder.AddTroikaNpc(TEXT("guard")).Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl")); // 0x102c0f70 model input
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	if (Guard == nullptr || Guard->Visual == nullptr) { return false; }
+	auto& Services = Fixture.Services;
+	Services.DispositionRow.Name = TEXT("Neutral"); Services.DispositionRow.AnimName = TEXT("Neutral");
+	Services.DispositionRow.Level = 1;
+	Services.DispositionRow.MinBlinkInterval = 2.f; Services.DispositionRow.MaxBlinkInterval = 8.f;
+	Services.DispositionRow.StandingStanceChangeThreshold = 1000.f;
+	auto& Known = Services.KnownNpcClips.FindOrAdd(FElysiumRecordingServices::StemOf(Guard->ModelStem()).ToLower());
+	for (int32 StanceIndex = 0; StanceIndex < 3; ++StanceIndex)
+	{
+		const FString IdleName = FString::Printf(TEXT("stance_idle%d"), StanceIndex);
+		Services.StanceClips.Idle[StanceIndex] = IdleName;
+		Services.StanceClips.Fidget[StanceIndex] = IdleName;
+		Known.Add(IdleName);
+		for (int32 Destination = 0; Destination < 3; ++Destination)
+		{
+			Services.StanceClips.Trans[StanceIndex][Destination] =
+				FString::Printf(TEXT("stance_trans%d_%d"), StanceIndex, Destination);
+			Known.Add(Services.StanceClips.Trans[StanceIndex][Destination]);
+		}
+	}
+	Guard->SetDisableAi(true); Guard->SequenceNumber = 71; Guard->SequenceCycle = 0.44f;
+	Guard->ActivityNumber = 0xf8c; Guard->TranslatedActivity = 0xf8c;
+	Guard->bHasDispositionIndex = false;
+	Guard->SetDisposition(TEXT("Neutral"), 1);
+	TestEqual(TEXT("0x102c0f70 DisableAI still writes ideal disposition"), Guard->IdealActivityNumber, 0xf1);
+	TestTrue(TEXT("0x102c0f70 DisableAI still writes valid ideal sequence"), Guard->IdealSequence > 0);
+	TestEqual(TEXT("0x102c0f70 DisableAI keeps current sequence"), Guard->SequenceNumber, 71);
+	TestEqual(TEXT("0x102c0f70 DisableAI keeps cycle"), Guard->SequenceCycle, 0.44f);
+	TestEqual(TEXT("0x102c0f70 aliased blink output ends on maximum"), Guard->DispositionBlinkWord, 8.f);
+	Services.DispositionRow.MaxBlinkInterval = 9.f;
+	Guard->SetDisposition(TEXT("Neutral"), 1);
+	TestEqual(TEXT("0x102c0f70 unchanged index still writes tuning"), Guard->DispositionBlinkWord, 9.f);
+	Guard->SetDisableAi(false);
+	Guard->SetDisposition(TEXT("missing"), 9); // 0x102c0f70 miss -> Neutral,1, old=-1
+	TestEqual(TEXT("0x102c0f70 miss resolves Neutral"), Guard->Disposition, FString(TEXT("Neutral")));
+	TestEqual(TEXT("0x102c0f70 miss resolves level1"), Guard->DispositionLevel, 1);
+	TestEqual(TEXT("0x102c0f70 commit activity"), Guard->ActivityNumber, 0xf1);
+	TestEqual(TEXT("0x102c0f70 commit cycle0"), Guard->SequenceCycle, 0.f);
+	TestEqual(TEXT("0x102c0f70 never writes translated activity"), Guard->TranslatedActivity, 0xf8c);
+	Guard->StanceTuning.StandingStanceChangeThreshold = -1.f;
+	Guard->StanceTuning.StandingStanceChangeChance = 101;
+	Guard->StanceClips.Fidget[0] = TEXT("fidget0"); Known.Add(TEXT("fidget0"));
+	Guard->StanceTuning.StandingFidgetChance = 0;
+	Guard->Stance.Current = 0; Guard->Stance.bInFidget = false; Guard->Stance.bInChange = false;
+	FRandomStream& StanceStream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
+	StanceStream.Initialize(1);
+	FRandomStream Expected(1);
+	Expected.RandRange(1, 100); Expected.RandRange(1, 100); // 0x102c12a0 alternate then change
+	int32 ExpectedStance = 0;
+	do { ExpectedStance = Expected.RandRange(0, 2); } while (ExpectedStance == 0); // 0x102c1230 retries
+	Guard->SelectDispositionStance();
+	TestEqual(TEXT("0x102c1230 stance redraw until different"), Guard->Stance.Current, ExpectedStance);
+	TestEqual(TEXT("0x102c12a0/0x102c1230 exact shared draw order"), StanceStream.GetCurrentSeed(), Expected.GetCurrentSeed());
+	TestTrue(TEXT("0x102c12a0 transition latch set"), Guard->Stance.bInChange);
+	const int32 BeforeSettleSeed = StanceStream.GetCurrentSeed();
+	Guard->SelectDispositionStance();
+	TestEqual(TEXT("0x102c12a0 latch settle draws nothing"), StanceStream.GetCurrentSeed(), BeforeSettleSeed);
+	TestFalse(TEXT("0x102c12a0 latch settle clears change"), Guard->Stance.bInChange);
+	Guard->SequenceNumber = 71; Guard->StanceClips.Idle[Guard->Stance.Current] = TEXT("missing_idle");
+	Guard->bIsTalking = true;
+	TestEqual(TEXT("0x102c12a0 sequence miss keeps current"), Guard->SelectDispositionStance(), 71);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cReleasedMaintenanceTest,
+	"Elysium.Arm.NpcKernelAnim.ReleasedMaintenance", GElysiumNpcKernelAnimFlags)
+bool FElysiumV4cReleasedMaintenanceTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("v4c_release"), 8313);
+	Builder.AddTroikaNpc(TEXT("victim"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Victim = Fixture.Npc(TEXT("victim"));
+	if (Victim == nullptr) { return false; }
+	Victim->SequenceNumber = 21; Victim->ActivityNumber = 0xf8c; Victim->IdealActivityNumber = 0xf88;
+	Victim->Grapple.Role = EElysiumGrappleRole::None; // released after 0x102b5d9d
+	// 0x10281eee first MAKE_OBLIVIOUS completed; it changed no activity before this maintenance.
+	int32 ReleasedSequence = INDEX_NONE; int32 ReleasedTranslated = 0; int32 ReleasedWeapon = 0;
+	TestEqual(TEXT("0x1008dc40 bare released base really misses"), Victim->SelectWeightedSequence(0xf88), INDEX_NONE);
+	Victim->ResolveActivityToSequence(0xf88, ReleasedSequence, ReleasedTranslated, ReleasedWeapon);
+	TestEqual(TEXT("0x10272130 released base retries disposition"), ReleasedTranslated, 0xf1);
+	TestEqual(TEXT("0x10295a80 slot611 fallback keeps current when body authors no stance"), ReleasedSequence, 21);
+	Victim->SetActivity(0xf88);
+	TestEqual(TEXT("0x10272490 fallback retains requested release activity"), Victim->ActivityNumber, 0xf88);
+	Victim->SetIdealActivity(0x104e); // 0x102a1c0f later TASK_SET_ACTIVITY, after first maintenance
+	Victim->SetActivity(0x104e);
+	TestEqual(TEXT("0x102a1c0f eventual mesmerized activity"), Victim->ActivityNumber, 0x104e);
 	return true;
 }
 

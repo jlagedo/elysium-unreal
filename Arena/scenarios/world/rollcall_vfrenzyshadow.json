@@ -1,6 +1,6 @@
 {
   "name": "rollcall_vfrenzyshadow",
-  "about": "Roll call: classname npc_VFrenzyShadow builds CNPC_VFrenzyShadow (factory 0x10375050, research/tooling/ghidra/driver/kernel_factories.tsv). No map, maker or script authors a row of it (docs/vtmb/npc-ai/population.md \u00a7 NPC classes with no instance / placed by code); a hand-written row stands it; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "about": "Roll call: classname npc_VFrenzyShadow builds CNPC_VFrenzyShadow (factory 0x10375050). This hand-written, ownerless row has no enemy, hunt path or stored last position. NPCInit 0x10375c80 sets current/ideal HUNT (0xb); SelectSchedule 0x10375d90 falls through Human to Troika 0x102af660, whose expired hunt timer selects HUNT_FINISH (0x85). Its GET_PATH_TO_LASTPOSITION attempts the zero stored position, inside this arena's central cover block, and the navigator refuses: retail task arm 0x10285bb0..0x10285c87 reports NO_ROUTE (0xc). The roll call asserts this initialization/failure chain, rather than an Idle state that admission used to invent.",
   "stage": "arena",
   "seed": 1,
   "duration": 10.0,
@@ -24,14 +24,40 @@
       "label": "selects",
       "who": "playercontroller",
       "kind": "schedule",
-      "match": "",
+      "match": "SCHED_TROIKA_HUNT_FINISH (0x85)",
       "by": 3.0
+    },
+    {
+      "who": "playercontroller",
+      "kind": "task",
+      "match": "task_get_path_to_lastposition (",
+      "within": 0.5
+    },
+    {
+      "who": "playercontroller",
+      "kind": "taskfail",
+      "match": "Don't have a route (0xc)",
+      "within": 0.5
+    },
+    {
+      "who": "playercontroller",
+      "kind": "schedule",
+      "match": "FAIL (0x43)",
+      "within": 0.5
+    },
+    {
+      "who": "playercontroller",
+      "kind": "task",
+      "match": "task_wait (1000000002) 1",
+      "within": 0.5
     }
   ],
   "never": [
     {
       "who": "playercontroller",
-      "kind": "taskfail"
+      "kind": "taskfail",
+      "match": "^(?!Don't have a route \\(0xc\\)$)",
+      "regex": true
     },
     {
       "who": "playercontroller",
@@ -46,5 +72,5 @@
       "equals": true
     }
   ],
-  "notes": "The cast row is named playercontroller: the controller line's spawn renames the entity to it (the first run's trace carried every event under that name). Hand-written row: no authored row exists; the model is the record's choice, not retail's."
+  "notes": "The cast row is named playercontroller: the controller line's spawn renames the entity to it. Hand-written row: no authored row exists; the model is the record's choice, not retail's. V4c: retained HUNT from 0x10375c80 exposes retail's no-route arm 0x10285c87; no last position is supplied by a caster here. This is a record correction, with no selector or navigation change."
 }

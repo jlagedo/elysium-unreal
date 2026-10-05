@@ -10,6 +10,7 @@
 #include "ElysiumTimeControl.h"
 #include "ElysiumVariant.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumTeamRegistry.h"
 #include "ElysiumSessionSubsystem.generated.h"
 
 // `G` and the quest map mirror Python dicts, which are case-sensitive — Unreal's default
@@ -73,6 +74,7 @@ class UElysiumSessionSubsystem : public UGameInstanceSubsystem
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
+ FElysiumTeamRegistry& TeamRegistry() const; // 0x10751140
 
 	// The save entry for console, flow/UI, quicksave and autosave. Success means the
 	// private snapshot was accepted for writing; only the completion publishes Written.
@@ -299,6 +301,7 @@ public:
 	FElysiumEntityWorld* CurrentEntityWorld() const;
 
 private:
+ TUniquePtr<FElysiumTeamRegistry> TeamRegistryPtr = MakeUnique<FElysiumTeamRegistry>(); // 0x10230750: also constructed for headless session fixtures
 	void RegisterSaveCommands();
 	void PublishSaveResult(const FElysiumSaveResult& Result);
 	FElysiumSaveStorage SaveStorage;

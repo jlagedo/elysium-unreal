@@ -99,6 +99,9 @@ bool FElysiumNpc::Spawn19DamageInfoSuppressesStimulus(const FElysiumTakeDamageIn
 
 void FElysiumNpc::TroikaSpawnBody()
 {
+	// 0x1028d230 constructor: +0x64e4 starts at curtime. World is assigned after C++
+	// construction in this host, so materialize that write before spawn's disposition lookup.
+	Stance.LastChangeTime = static_cast<float>(World ? World->NowSeconds() : 0.0);
 	bSpawnCalled = true;                                                                 // 0x10298d3d m_bInitialized (+0x62e9)
 
 	// A non-empty `m_statTemplate` (`+0x10e4`) is applied through the template manager
@@ -113,10 +116,10 @@ void FElysiumNpc::TroikaSpawnBody()
 	Precache();                                                                          // 0x10298d9c slot 104
 
 	// `AddToTeam(m_sTeamName)` only on a non-empty team string.
-	const FString TeamName = Spawn19TeamName();
-	if (!TeamName.IsEmpty())                                                             // 0x10298daa null default / 0x10298db1
+	const FString RegistrationTeamName = Spawn19TeamName();
+	if (!RegistrationTeamName.IsEmpty())                                                             // 0x10298daa null default / 0x10298db1
 	{
-		Spawn19AddToTeam(TeamName);                                                      // 0x10298db6 -> 0x103239a0
+		Spawn19AddToTeam(RegistrationTeamName);                                                      // 0x10298db6 -> 0x103239a0
 	}
 
 	// `SetModel(STRING(GetModelName()))`. Slot 9 is the generated stub; the word it answers,

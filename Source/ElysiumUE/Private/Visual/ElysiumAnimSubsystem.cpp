@@ -1000,21 +1000,26 @@ bool UElysiumAnimSubsystem::ResolveActivityClip(const FElysiumActivityClipReques
 	return true;
 }
 
+bool UElysiumAnimSubsystem::TranslateActivityRequest(const FElysiumActivityClipRequest& Request,
+ FString& OutTranslated, FString& OutFirstWeapon)
+{
+ const FElysiumAnimationCatalog Catalog = BuildCatalog(Request.Stem);
+ if (Catalog.Clips == nullptr) return false;
+ const auto Translation = ElysiumAnimResolve::TranslateActivity(ElysiumAnimResolve::ActivityIntentFor(Request), Catalog);
+ OutTranslated = Translation.Resolved; OutFirstWeapon = Translation.FirstWeaponActivity;
+ return true; // 0x10271ff0 pure translation, no draw
+}
+
 void UElysiumAnimSubsystem::ActivitySequences(const FElysiumActivityClipRequest& Request,
 	TArray<FElysiumNpcClip>& Out)
 {
 	Out.Reset();
-	// The same intent and the same resolver as `ResolveActivityClip`, so the activity the list is
-	// collected under is the one a play of this request would search for.
-	const FElysiumAnimationIntent Intent = ElysiumAnimResolve::ActivityIntentFor(Request);
-	const FElysiumAnimationCatalog Catalog = BuildCatalog(Request.Stem);
-	FElysiumAnimationSelection Selection;
-	ElysiumAnimResolve::Resolve(Intent, Catalog, Selection);
-	if (Catalog.Clips == nullptr || Selection.ResolvedActivity.IsEmpty())
+ const FElysiumAnimationCatalog Catalog = BuildCatalog(Request.Stem); // 0x1008dc40 bare gather, no draw
+ if (Catalog.Clips == nullptr || Request.Activity.IsEmpty())
 	{
 		return;
 	}
-	for (const FElysiumClipRef& Ref : Catalog.Clips->ByActivity(Selection.ResolvedActivity))
+	for (const FElysiumClipRef& Ref : Catalog.Clips->ByActivity(Request.Activity))
 	{
 		if (const FElysiumNpcClip* Clip = Catalog.Clips->Find(Ref))
 		{

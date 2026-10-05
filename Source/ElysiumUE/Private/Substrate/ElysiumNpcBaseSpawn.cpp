@@ -203,7 +203,8 @@ void FElysiumNpcBase::Spawn19InsertCarcassSound()
 
 void FElysiumNpcBase::Spawn19StartFadeOut()
 {
-	++Spawn19FadeOutStarts;
+	++Spawn19FadeOutStarts; // 0x10265d72, diagnostic only
+	StartFadeOut(); // 0x102695d0: same body as TASK_DIE
 }
 
 bool FElysiumNpcBase::Spawn19DeathVPhysicsArmed() const
@@ -255,10 +256,10 @@ void FElysiumNpcBase::Spawn19CombatCharacterSpawn()
 	// `CBaseAnimating::Spawn`. The inherited `Spawn` chain below this class is the port's (a no-op on
 	// `FElysiumEntity`); the skeletal body is the Troika leaf's presentation.
 	++Spawn19CombatCharacterSpawns;
-	const FString TeamName = Spawn19TeamName();
-	if (!TeamName.IsEmpty())
+	const FString RegistrationTeamName = Spawn19TeamName();
+	if (!RegistrationTeamName.IsEmpty())
 	{
-		Spawn19AddToTeam(TeamName);
+		Spawn19AddToTeam(RegistrationTeamName); // 0x10323a90: existing spawn order
 	}
 	FElysiumScriptedCharacter::Spawn();
 }
@@ -277,11 +278,11 @@ FElysiumEntity* FElysiumNpcBase::Spawn19WeaponCreate(const FString& ClassName)
 
 FString FElysiumNpcBase::Spawn19TeamName() const
 {
-	return FString();
+	return TeamName; // 0x10323a90 +0x10ac, C3's combat-character word
 }
 
-void FElysiumNpcBase::Spawn19AddToTeam(const FString& TeamName)
+void FElysiumNpcBase::Spawn19AddToTeam(const FString& Name)
 {
-	(void)TeamName;
-	++Spawn19AddToTeamCalls;
+	++Spawn19AddToTeamCalls; // 0x103239a0, diagnostic only
+	AddToTeam(Name); // 0x103239a0 / 0x10323a90 shared registry
 }

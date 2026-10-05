@@ -545,7 +545,11 @@ bool FElysiumNpcKernelPlayerControllerCreationTest::RunTest(const FString&)
 	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_controller_create"), 5220);
 	Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
 	Builder.AddNpc(TEXT("guard"), FVector(500.f, 0.f, 0.f));
-	FElysiumNpcWorldFixture F(MoveTemp(Builder));
+	FElysiumNpcWorldFixture F(MoveTemp(Builder), [](FElysiumRecordingServices& ControllerServices)
+	{
+		ControllerServices.DispositionRow.Name = TEXT("Neutral"); // 0x102c0f70 real default-table entry
+		ControllerServices.DispositionRow.Level = 1;
+	});
 	FElysiumPlayer* Player = F.Player();
 	FElysiumNpc* Guard = F.Npc(TEXT("guard"));
 	if (!TestNotNull(TEXT("the player"), Player) || !TestNotNull(TEXT("the guard"), Guard))
@@ -901,6 +905,8 @@ bool FElysiumNpcKernelPlayerControllerEffectsSaveTest::RunTest(const FString&)
 		return MoveTemp(Builder.Defs);
 	};
 	FElysiumRecordingServices Services;
+	Services.DispositionRow.Name = TEXT("Neutral"); // 0x102c0f70 fixture supplies the real default entry
+	Services.DispositionRow.Level = 1;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(BuildDefs());
 	World.SpawnPlayer();

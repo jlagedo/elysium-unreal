@@ -919,6 +919,8 @@ public:
 	//
 	// A negative answer is a named miss on the resolver's own selection record, not a failure the
 	// caller has to restate: each caller keeps its own stated fallback.
+	virtual bool TranslateNpcActivityRequest(const FElysiumActivityClipRequest& Request,
+ FString& OutTranslated, FString& OutFirstWeapon) { return false; } // 0x10271ff0 absent table
 	virtual bool ResolveNpcActivityClip(const FElysiumActivityClipRequest& Request,
 		FElysiumActivityClip& Out)
 	{
@@ -1139,6 +1141,10 @@ public:
 	// path's net displacement in the clip's own frame, centimetres, this runtime's axes (X forward,
 	// Y right, Z up). False -- the default -- when the body has no such sequence or the sequence
 	// authors no movement record (retail's own false: `nummovements == 0`); `OutDeltaCm` is zeroed.
+	virtual void SetBodySequencePlaybackRate(USkeletalMeshComponent* Body, float NewRate) {} // 0x103ea297 presentation of committed kernel rate
+	virtual bool GetBodySequenceIntervalMovement(USkeletalMeshComponent* Body, const FString& Stem,
+ int32 RawIndex, float CycleFrom, float CycleTo, FVector& OutDeltaCm, float& OutYawDeltaDegrees)
+ { OutDeltaCm = FVector::ZeroVector; OutYawDeltaDegrees = 0.f; return false; } // 0x100c5d10 nummovements=0
 	virtual bool GetBodySequenceMovement(USkeletalMeshComponent* Body, const FString& Stem,
 		int32 RawIndex, FVector& OutDeltaCm)
 	{
@@ -1353,6 +1359,7 @@ public:
 	// The clip this model rests on — `SelectWeightedSequence(ACT_IDLE)` with retail's sequence-0
 	// fallback. **Empty exactly when the model bakes no clip**, which is also the test a prop uses
 	// to keep its baked static mesh instead of standing a bind-pose skeleton.
+	virtual FString PickAnimatedPropRestClip(const FString& Stem) const { return FString(); }
 	virtual FString AnimatedPropRestClip(const FString& Stem,
 		int32 PlacementToken = 0) const { return FString(); }
 	// Does this model bake a clip by this name, and does that clip's own STUDIO_LOOPING bit ask for

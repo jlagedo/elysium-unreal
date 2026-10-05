@@ -121,9 +121,11 @@ bool FElysiumNpc::Think19InPlayerPvs(const FElysiumEntity* Player) const
 
 void FElysiumNpc::Think19CombatCharacterUpdateCharacter(float IntervalSeconds)
 {
-	// SEAM: `CBaseCombatCharacter::UpdateCharacter` `0x103246d0` (see the declaration).
-	Think19LastUpdateCharacterInterval = IntervalSeconds;
-	++Think19CombatUpdateCharacterCalls;
+	// 0x103246d0: discipline visuals, slots 313/314/333, heal, expressions, eyes and
+	// render-fx expiry remain named 0006/0015 seams answering nothing here.
+	Think19LastUpdateCharacterInterval = IntervalSeconds; // 0x103246d0 call observation
+	++Think19CombatUpdateCharacterCalls; // 0x103246d0 call observation
+	MeleeSwingUpdate(); // 0x103246d0 slot 315, no argument; think-tail caller 0x1029365b
 }
 
 // Slot 312: `0x10298070`, 574 bytes. The prologue's profiler-scope name (`this == NULL` ->

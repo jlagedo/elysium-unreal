@@ -128,6 +128,7 @@ bool FElysiumNpcKernelOverlayAddGestureTest::RunTest(const FString&)
 			Services.ResolvedNpcActivityLabel = TEXT("smith_attack_layer");
 			Services.ResolvedNpcActivityClip = TEXT("smith_attack_layer");
 			Services.ClipSeconds = 0.5f;
+			Services.SeedFixtureActivity(TEXT("ACT_RANGE_ATTACK1_LAYER"), 10);
 		});
 	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
 	if (!TestNotNull(TEXT("the guard spawned"), Guard))
@@ -216,7 +217,7 @@ bool FElysiumNpcKernelOverlayAddGestureTest::RunTest(const FString&)
 	// A sequence below 1 refuses before any slot is allocated.
 	OverlayResetLayers(*Guard);
 	Fixture.Services.bNpcActivitiesResolve = false;
-	Guard->SequenceResolveCache.Reset();
+	Fixture.Services.BodyClipsByRawIndex.Reset();
 	TestEqual(TEXT("0x100991b0: `SelectWeightedSequence < 1` refuses with -1"),
 		Guard->AddGesture(GOverlayActRangeAttack1Layer, true), static_cast<int32>(INDEX_NONE));
 	TestEqual(TEXT("0x100991b0: ...and no slot is taken"), Guard->AnimOverlay[0].Weight, 0.f);

@@ -139,7 +139,9 @@ FElysiumEntity* FElysiumNpcBase::BestEnemy()
 
 	// `102743eb`: `GetEnemies()->+0xc` is the memory list head; `+0x38` is the next link and `+0x24`
 	// the record's handle. An empty list answers null immediately.
-	for (const FElysiumNpcEnemyMemoryRecord& Record : EnemyMemory.Records())
+	const FElysiumNpcEnemyMemory* const SelectedEnemies = static_cast<FElysiumNpcEnemyMemory*>(GetEnemies()); // 0x102743eb slot541
+	if (SelectedEnemies == nullptr) { return nullptr; } // named missing selected-store seam
+	for (const FElysiumNpcEnemyMemoryRecord& Record : SelectedEnemies->Records()) // 0x102743eb
 	{
 		FElysiumEntity* Candidate = World->Resolve(Record.Handle);
 		// `1027440e`: an unresolvable or null handle is skipped.
@@ -170,7 +172,7 @@ FElysiumEntity* FElysiumNpcBase::BestEnemy()
 			continue;
 		}
 		// `10274475`: slot 158 `IsAlive` on the CANDIDATE.
-		if (Candidate->IsInert())
+		if (!Candidate->IsAlive()) // 0x10274475 / 0x100b4dc0: visible resolvable corpses also rejected
 		{
 			continue;
 		}
@@ -182,7 +184,7 @@ FElysiumEntity* FElysiumNpcBase::BestEnemy()
 			continue;
 		}
 		// `102744a7`: `HasEludedMe` (`0x102e0210`) on the same `GetEnemies()` list.
-		if (EnemyMemory.IsEluded(Candidate->Handle))
+		if (SelectedEnemies->IsEluded(Candidate->Handle)) // 0x102744a7: same selected store
 		{
 			continue;
 		}
@@ -279,17 +281,18 @@ uint32 FElysiumNpcBase::SquadWord() const
 
 bool FElysiumNpcBase::UpdateCaiMemory(FElysiumEntity* Enemy, const FVector& PositionCm)
 {
+	FElysiumNpcEnemyMemory& SelectedEnemies = *static_cast<FElysiumNpcEnemyMemory*>(GetEnemies()); // 0x102df700 selected store
 	// `CAI_Memory::UpdateMemory` (`0x102df700`) with the node array at `m_pNavigator+0x2c`, the
 	// enemy, the position and the enemy's velocity. The node array is the AI network and does not
 	// exist here, so the record's two node ids stay `INDEX_NONE`.
-	const bool bFirstRecord = Enemy != nullptr && EnemyMemory.Find(Enemy->Handle) == nullptr;
+	const bool bFirstRecord = Enemy != nullptr && SelectedEnemies.Find(Enemy->Handle) == nullptr;
 	const double Now = NpcKernelSenses10Shared::NowOf(*this);
 	if (Enemy == nullptr)
 	{
-		EnemyMemory.UpdatePositionOnly(PositionCm, Now);
+		SelectedEnemies.UpdatePositionOnly(PositionCm, Now);
 		return false;
 	}
-	EnemyMemory.UpdateAtPosition(*this, Enemy->Handle, PositionCm, Now);
+	SelectedEnemies.UpdateAtPosition(*this, Enemy->Handle, PositionCm, Now);
 	return bFirstRecord;
 }
 
@@ -321,7 +324,7 @@ bool FElysiumNpcBase::UpdateEnemyMemory(FElysiumEntity* Enemy, const FVector& Po
 			}
 		}
 		// `10270a2b`: `IsEluded` (`0x102e0210`) on the same list fires slot 494 `FoundEnemySound`.
-		if (EnemyMemory.IsEluded(Enemy->Handle))
+		if (static_cast<FElysiumNpcEnemyMemory*>(GetEnemies())->IsEluded(Enemy->Handle))
 		{
 			FoundEnemySound();
 		}

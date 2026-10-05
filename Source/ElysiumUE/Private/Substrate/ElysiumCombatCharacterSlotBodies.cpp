@@ -40,6 +40,7 @@
 #include "Substrate/ElysiumNpcHintsShared.h"
 #include "Substrate/ElysiumNpcKernelBaseHelpersShared.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
+#include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
@@ -1002,4 +1003,130 @@ void FElysiumCombatCharacter::Slot354()
 	// `CBaseCombatCharacter` slot 354 (`0x1014f8d0`) is a lone `RET`: a victim that is not a
 	// `CAI_BaseNPC` does nothing on feed begin (`FeedBegin` `0x10339d90` dispatches it,
 	// `CALL [EDX+0x588]`). Hand body since story 8 lane L11; overlay row `hand:` (lane L12 integration).
+}
+
+// Slot 315, 0x10346cd0. The character owns the update clock, independent of think interval.
+void FElysiumCombatCharacter::MeleeSwingUpdate()
+{
+	FElysiumEntity* const SwingWeaponEntity = ActiveWeaponEntity(); // 0x10346cd0 GetActiveWeapon
+	FElysiumWeapon* const SwingWeapon = SwingWeaponEntity && SwingWeaponEntity->AsItem() ? SwingWeaponEntity->AsItem()->AsWeapon() : nullptr; // 0x10346cd0
+	IElysiumEmbodiment* const SwingEmbodiment = World != nullptr ? World->Embodiment() : nullptr; // 0x10346cd0
+	FElysiumNpc* const SwingNpc = AsNpc(); // 0x10346cd0 +0x98
+	if (Visual == nullptr)
+	{
+		bMeleeSwingIsLive = false; // 0x10346cd0 no model/seqdesc, unstamped
+		return; // 0x10346cd0
+	}
+	FString SwingLabel; // 0x10346cd0
+	float SwingCycle = 0.f; // 0x10346cd0
+	float SwingRate = 0.f; // 0x10346cd0
+	float SwingAnimTime = 0.f; // 0x10346cd0
+	if (SwingNpc != nullptr && SwingNpc->SequenceRows.IsValidIndex(SwingNpc->SequenceNumber))
+	{
+		const FElysiumNpc::FSequenceRow& SwingRow = SwingNpc->SequenceRows[SwingNpc->SequenceNumber]; // 0x10346cd0
+		SwingLabel = SwingRow.Label; // 0x10346cd0 GetSeqDesc(m_nSequence)
+		SwingCycle = SwingNpc->SequenceCycle; // +0x6f8
+		SwingRate = SwingNpc->SequenceCycleRate * SwingNpc->SequencePlaybackRate; // 0x10346cd0
+		SwingAnimTime = SwingNpc->AnimTime; // +0x174
+		if (SwingWeapon != nullptr)
+		{
+			SwingWeapon->Swing.ClipLabel = SwingRow.Label; // 0x10346cd0
+			SwingWeapon->Swing.ClipOwnerStem = SwingRow.OwnerStem; // 0x10343020 current seqdesc
+		}
+	}
+	else if (SwingNpc == nullptr && SwingWeapon != nullptr)
+	{
+		FElysiumClipPhase PlayerPhase; // 0x10346cd0
+		// 0015 player sequence-clock seam: current phase, never caller delta or a shot estimate.
+		if (GetLiveClipPhase(SwingWeapon->Swing.ClipOwnerStem, SwingWeapon->Swing.ClipLabel, PlayerPhase))
+		{
+			SwingLabel = SwingWeapon->Swing.ClipLabel; // 0x10346cd0
+			SwingCycle = PlayerPhase.Cycle; // 0x10346cd0
+			SwingRate = SwingWeapon->Swing.ClipSeconds > 0.f
+				? PlayerPhase.PlayRate / SwingWeapon->Swing.ClipSeconds : 0.f; // 0x10346cd0
+			SwingAnimTime = World != nullptr ? static_cast<float>(World->NowSeconds()) : 0.f; // 0x10346cd0
+		}
+	}
+	const TArray<FElysiumSwingRecord>* const SwingRecords = SwingEmbodiment != nullptr && !SwingLabel.IsEmpty()
+		? SwingEmbodiment->NpcClipSwings(ModelStem(), SwingLabel) : nullptr; // 0x10346cd0 seqdesc+0x2c4
+	if (SwingRecords == nullptr || SwingRecords->Num() < 1)
+	{
+		bMeleeSwingIsLive = false; // 0x10347076 +0xaa1 only; unstamped
+		return; // 0x10346cd0
+	}
+	const float SwingNow = World != nullptr ? static_cast<float>(World->NowSeconds()) : 0.f; // 0x10346cd0
+	if (!bMeleeSwingIsLive)
+	{
+		if (SwingWeapon != nullptr)
+		{
+			// 0x10343020: Step seeds endpoints with the live byte clear, before ForceMeleeReset.
+			SwingWeapon->Swing.bActive = true; // 0x10346cd0
+			SwingWeapon->MeleeSwingStep(Origin, Angles, 0.f, 0.f); // 0x10346cd0
+			SwingWeapon->ResetSwingContact(); // 0x10346760; no timestamp write inside reset
+			SwingWeapon->LastSwingSubSteps = 0; // 0x10346cd0
+		}
+		bMeleeSwingIsLive = true; // 0x10346760 +0xaa1
+		bDidSendIncomingSwingNotice = false; // 0x10346760 +0xaa2
+		bDidSendSwingActiveEvent = false; // 0x10346760 +0xaa3
+	}
+	else
+	{
+		const float SwingDt = SwingNow - LastMeleeSwingUpdate; // 0x10346cd0 own +0xaa4
+		if (SwingDt <= 0.f) return; // 0x10347076 unstamped, no pose/cache write
+		const float SwingC1 = (SwingNow - SwingAnimTime + 0.1f) * SwingRate + SwingCycle; // 0x10346cd0
+		const float SwingC0 = SwingC1 - SwingRate * SwingDt; // 0x10346cd0
+		if (SwingNpc != nullptr && SwingCycle >= MeleeSwingCompletionPercent)
+			ClearHitBuildup(); // 0x10346cd0 NPC +0x6064 only
+		if (!bDidSendIncomingSwingNotice)
+		{
+			if (SwingWeapon != nullptr) SwingWeapon->PrepareSwingContact(); // 0x10346ac0
+			bDidSendIncomingSwingNotice = true; // +0xaa2, even no active weapon
+		}
+		if (!bDidSendSwingActiveEvent)
+		{
+			// 0x103451d0: melee_swish_sound_time_offset=-0.1; start inclusive, end exclusive.
+			bool bWindowActive = SwingWeapon == nullptr; // 0x10346cd0
+			for (int32 ActiveRecord = 0; ActiveRecord < FMath::Min(SwingRecords->Num(), 20); ++ActiveRecord)
+				bWindowActive |= (*SwingRecords)[ActiveRecord].Start <= SwingCycle + 0.1f
+					&& SwingCycle + 0.1f < (*SwingRecords)[ActiveRecord].End; // 0x103451d0 cycle-offset
+			if (bWindowActive)
+			{
+				if (SwingWeapon != nullptr) SwingWeapon->SwingActiveWeaponEvent(); // 0x10346cd0 slot 333
+				bDidSendSwingActiveEvent = true; // +0xaa3
+			}
+		}
+		const int32 SwingSteps = FMath::CeilToInt(SwingDt * 100.f); // 0x10346cd0 f32 0x10450564
+		if (SwingWeapon != nullptr) SwingWeapon->LastSwingSubSteps = SwingSteps; // 0x10346cd0
+		if (SwingWeapon != nullptr) SwingWeapon->BeginSwingPoseBatch(); // D9 preserves existing fallback interpolation // 0x10346cd0
+		float SwingPreviousCycle = FMath::Max(SwingC0, 0.f); // 0x10346cd0
+		for (int32 SwingStepIndex = 1; SwingStepIndex <= SwingSteps && SwingPreviousCycle < 1.f; ++SwingStepIndex)
+		{
+			const float SwingAlpha = static_cast<float>(SwingStepIndex) / static_cast<float>(SwingSteps); // 0x10346cd0
+			float SwingStepCycle = FMath::Lerp(SwingC0, SwingC1, SwingAlpha); // 0x10346cd0
+			if (SwingStepCycle < 0.f) continue; // 0x10346cd0 no Step before cycle 0
+			SwingStepCycle = FMath::Min(SwingStepCycle, 1.f); // 0x10346cd0
+			const FVector SwingStepPosition = FMath::Lerp(LastMeleeSwingPosition, Origin, SwingAlpha); // 0x10346cd0
+			FVector SwingStepAngles = LastMeleeSwingAngles; // 0x10345890 AngleInterp
+			for (int32 SwingAngleAxis = 0; SwingAngleAxis < 3; ++SwingAngleAxis)
+			{
+				// 0x103458f7..0x10345931: ftol((to-from+180)*65536/360), low WORD,
+				// then *(360/65536)-180, interpolate. A floating shortest-angle lerp differs.
+				const double SwingAngleFixed = (static_cast<double>(static_cast<float>(Angles[SwingAngleAxis]))
+					- static_cast<double>(static_cast<float>(LastMeleeSwingAngles[SwingAngleAxis])) + 180.0)
+					* ElysiumNpcTunables::AngleQuantumInverse; // 0x1044ffe0
+				const float SwingWrappedDelta = static_cast<float>(static_cast<uint64>(static_cast<int64>(SwingAngleFixed))
+					& 0xffffu) * ElysiumNpcTunables::AngleQuantum - 180.f; // 0x1044ffdc / 0x1044c3a8
+				SwingStepAngles[SwingAngleAxis] = static_cast<float>(
+					static_cast<double>(static_cast<float>(LastMeleeSwingAngles[SwingAngleAxis]))
+					+ static_cast<double>(SwingWrappedDelta) * SwingAlpha); // 0x1034592a..0x10345931 one float store
+			}
+			if (SwingWeapon != nullptr) SwingWeapon->MeleeSwingStep(SwingStepPosition,
+				SwingStepAngles, SwingPreviousCycle, SwingStepCycle, SwingAlpha); // 0x10343020
+			SwingPreviousCycle = SwingStepCycle; // 0x10346cd0
+		}
+		if (SwingWeapon != nullptr) SwingWeapon->EndSwingPoseBatch(); // D9 fallback only // 0x10346cd0
+	}
+	LastMeleeSwingUpdate = SwingNow; // 0x10346cd0 epilogue +0xaa4
+	LastMeleeSwingPosition = Origin; // 0x10346cd0 +0xaa8
+	LastMeleeSwingAngles = Angles; // 0x10346cd0 +0xab4
 }

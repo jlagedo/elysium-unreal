@@ -1,3 +1,4 @@
+#include "Tests/ElysiumMeleeStepFixture.h"
 // Content-free Substrate automation: the combat schedule families — the NPC loadout, the weapon
 // capability split, the committed-enemy attack conditions, the two recovered selectors, the chase
 // and swing programs end to end over a recording motor, and the body-owner lifecycle around them.
@@ -878,6 +879,17 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 		Record.BCm = FVector(30.f, 0.f, 0.f);
 		F.Services.SwingsByClip.Add(TEXT("swing_long"), { Record });
 		F.Services.SwingContacts = { F.Target->Handle };
+		F.Services.SeedFixtureActivity(TEXT("ACT_MELEE_ATTACK_KATANA"), 10);
+		F.Services.SeedFixtureActivity(TEXT("ACT_MELEE_ATTACK"), 11);
+		for (int32 AttackRawIndex : {10, 11})
+		{
+			auto& AttackClip = F.Services.BodyClipsByRawIndex[AttackRawIndex].Clip;
+			AttackClip.LowReachCm = 0.f; AttackClip.ReachCm = 10000.f;
+			FElysiumMeleeEnvelope AttackEnvelope;
+			AttackEnvelope.Min = FVector(-10000.f, -10000.f, -10000.f);
+			AttackEnvelope.Max = FVector(10000.f, 10000.f, 10000.f);
+			AttackClip.Envelopes.Add(AttackEnvelope);
+		}
 	}
 
 	// The whole approach plus its transfer to the terminal swing runs inside one think: face, stop,
@@ -913,9 +925,9 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 	// Two walked frames on the same pass the player's swing takes: the first stages the opposed
 	// record and the notice, the second carries the cycle into the authored window.
 	F.Services.BodyClipPhase.Cycle = 0.0f;
-	F.World.AdvanceMeleeSwings(0.02f);
+	ElysiumTestMeleeStep(F.World, F.Services.BodyClipPhase);
 	F.Services.BodyClipPhase.Cycle = 0.50f;
-	F.World.AdvanceMeleeSwings(0.02f);
+	ElysiumTestMeleeStep(F.World, F.Services.BodyClipPhase);
 	TestTrue(TEXT("the contact commits damage through the typed health commit"),
 		F.DamageTaken(F.Target) > 0);
 	if (TestTrue(TEXT("the real weapon contact produced anonymous damage memory"),
@@ -1671,26 +1683,22 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	const int32 ReactionSeedBefore = Reaction.GetCurrentSeed();
 	F.Fighter->OnKilled();
 
-	TestTrue(TEXT("every animation-channel claim the character held goes back"),
-		F.Services.Saw(TEXT("ReleaseBodyAnimClaims")));
 	TestEqual(TEXT("0x1032b9b0 m_lifeState = LIFE_DYING"), F.Fighter->LifeState, 1);
 	TestFalse(TEXT("...so slot 158 IsAlive answers false"), F.Fighter->IsAlive());
 	TestTrue(TEXT("the mind is dead, current (0x10265dba SetState(7)) and ideal (0x10265d06) both"),
 		F.Fighter->GetMind().State() == EElysiumNpcState::Dead
 			&& F.Fighter->GetMind().IdealState() == EElysiumNpcState::Dead);
-	TestTrue(TEXT("the body is frozen where it stands"), Motor->bFrozen);
-	TestTrue(TEXT("...and stops answering the character channel"),
-		Motor->bIgnoreCharacterCollision);
+	TestFalse(TEXT("0x10090180 no-rig arm adds no frozen-body stand-in"), Motor->bFrozen);
+	TestFalse(TEXT("0x10090180 no-rig arm adds no collision switch"), Motor->bIgnoreCharacterCollision);
 	// Frozen is NOT hidden: a corpse stays on screen. `SetEnabled(false)` is what would take it off,
 	// and death never calls it.
 	TestTrue(TEXT("...while staying enabled, because a corpse is visible"), Motor->bEnabled);
 	TestFalse(TEXT("nothing disabled the body"),
 		F.Services.Saw(TEXT("NpcMotor SetEnabled 0")));
 	TestFalse(TEXT("the entity is not killed or hidden by dying"), F.Fighter->IsInert());
-	TestTrue(TEXT("0x1032c0e0 the body is offered to physics, seeded from its current pose"),
-		F.Services.Saw(TEXT("StartBodyRagdoll -> 0")));
-	TestTrue(TEXT("a body with no physics asset holds its final frame instead"),
-		F.Services.Saw(TEXT("HoldBodyFinalPose")));
+	TestFalse(TEXT("0x10090180 no-rig arm never requests physics"), F.Services.Saw(TEXT("StartBodyRagdoll")));
+	TestFalse(TEXT("0x10090180 no-rig arm never holds final pose"), F.Services.Saw(TEXT("HoldBodyFinalPose")));
+	TestEqual(TEXT("0x10090180 no-rig arm zeroes bounds"), F.Fighter->LastSetSizeMaxsUnits, FVector::ZeroVector);
 	TestFalse(TEXT("no death program runs: the corpse's think is gone"), F.Fighter->Schedule.IsRunning());
 	// Corrected (L13 wave-2 fixes): `BecomeClientRagdoll` (`0x10090180`) clears the think, and
 	// `CreateCorpse`'s tail re-arms it -- `ThinkSet(SUB_PVSRemove)` at `curtime + 10.0`
@@ -1745,9 +1753,8 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	F.Fighter->SetBodyFrozen(false);
 	F.Fighter->NextThink = 0.0f;
 	F.World.Tick(20.0);
-	TestTrue(TEXT("a body handed back to a corpse is frozen again by its next think"),
-		Motor->bFrozen);
-	TestTrue(TEXT("...and still ignores the character channel"), Motor->bIgnoreCharacterCollision);
+	TestFalse(TEXT("0x102696f0 removal poll adds no frozen-body write"), Motor->bFrozen);
+	TestFalse(TEXT("0x102696f0 removal poll adds no collision switch"), Motor->bIgnoreCharacterCollision);
 	TestEqual(TEXT("0x102696f0: ...and SUB_PVSRemove re-arms at curtime + 10.0"), F.Fighter->NextThink,
 		static_cast<float>(20.0 + 10.0));
 	TestFalse(TEXT("...without handing the body to physics a second time"),
@@ -1763,117 +1770,153 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 }
 
 
-// The death transaction across a save.
-//
-// A corpse's body state is not save state — the motor is rebuilt at load — so the death
-// transaction's body half is RE-APPLIED on restore. It cannot be deferred to a think: the whole
-// point of the transaction is that a corpse's saved cadence is `never`, and `ApplySnapshot` restamps
-// that saved cadence after every leaf has deserialized. Without the re-application a loaded corpse
-// stands up solid, animating its spawn idle.
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatDeathRestoreTest,
-	"Elysium.Arm.NpcCombat.DeathRestore", GElysiumTestFlags)
-bool FElysiumNpcCombatDeathRestoreTest::RunTest(const FString&)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cFadeClockTest,
+	"Elysium.Arm.NpcCombat.FadeClock", GElysiumTestFlags)
+bool FElysiumV4cFadeClockTest::RunTest(const FString&)
 {
-	// --- Kill one, run its program out, freeze the map --------------------------------------------
-	FElysiumMapSnapshot Snapshot;
+	FElysiumNpcWorldBuilder Builder(TEXT("v4c_fade"), 8311);
+	Builder.AddTroikaNpc(TEXT("child"));
+	Builder.AddNpcOfClass(TEXT("ped"), FVector(200, 0, 0), TEXT("CNPC_VPedestrian"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Child = Fixture.Npc(TEXT("child"));
+	FElysiumNpc* Ped = Fixture.Npc(TEXT("ped"));
+	if (Child == nullptr || Ped == nullptr) { return false; }
+	FElysiumNpcWorldFixture::Quiet({Child, Ped});
+	Fixture.World.Tick(1.0); // 0x1028d8d0 network-init broadcast precedes the measured death clock
+	Child->bHasKindredTemplate = true; Child->bKindredTemplate = true;
+	Child->SpawnFlags = 0x204; Child->RenderMode = 0; Child->RenderAlphaByte = 255;
+	Child->AngularVelocity = FVector(1, 2, 3);
+	const float DeathNow = static_cast<float>(Fixture.World.NowSeconds());
+	Child->OnKilled(); // 0x1032c0e0 burn remove -> 0x10265d72 later fade install
+	TestEqual(TEXT("0x102695d0 mode0 becomes2"), Child->RenderMode, 2);
+	TestEqual(TEXT("0x102695d0 alpha starts255"), Child->RenderAlphaByte, uint8(255));
+	TestTrue(TEXT("0x102695d0 solid4"), (Child->RetailSolidFlags & 4u) != 0);
+	TestEqual(TEXT("0x102695d0 angular zero"), Child->AngularVelocity, FVector::ZeroVector);
+	TestEqual(TEXT("0x102695d0 relink once"), Child->FadeRelinkCalls, 1);
+	TestEqual(TEXT("0x1026968d first think +10"), Child->NextThink, DeathNow + 10.f);
+	TestEqual(TEXT("0x10265d72 fade overrides Kindred SUB_Remove"), Child->ThinkFunctionName, FString(TEXT("0x100152b2")));
+	const FElysiumEntityHandle ChildHandle = Child->Handle;
+	Fixture.World.Tick(DeathNow + 9.0);
+	TestEqual(TEXT("0x102695d0 no early decrement"), Child->RenderAlphaByte, uint8(255));
+	for (int32 Decrement = 0; Decrement < 36; ++Decrement)
 	{
-		FCombatFixture F(TEXT("0"), /*bWithFists=*/false, /*bInstallCatalogue=*/false);
-		if (F.Fighter == nullptr)
-		{
-			return false;
-		}
-		F.RunAdmissionAndLoadout();
-		F.Services.bNpcActivitiesResolve = true;
-		F.Services.bNpcOneShotsPlay = true;
-		F.Services.ResolvedNpcActivityLabel = TEXT("diesimple");
-		F.Services.ResolvedNpcActivityClip = TEXT("diesimple");
-		F.Services.ResolvedNpcActivityOwner = TEXT("misc");
-		F.Services.OneShotSeconds = 2.0f;
-		// The player sees the corpse, so `SUB_PVSRemove` (`0x102696f0`) keeps it and re-arms.
-		F.Services.bNpcMakerInViewCone = true;
-		F.Services.bNpcMakerVisible = true;
-
-		F.Fighter->OnKilled();
-		F.World.Tick(0.0);
-		F.Fighter->NextThink = 0.0f;
-		F.World.Tick(F.Services.OneShotSeconds + 0.1);
-		// Corrected (L13 wave-2 fixes): a corpse is not saved with its think off -- `CreateCorpse`'s
-		// tail armed `SUB_PVSRemove`, which re-arms at `curtime + 10.0` while a player sees it.
-		if (!TestEqual(TEXT("0x102696f0: the seen corpse is saved with its removal think re-armed"),
-			F.Fighter->NextThink, static_cast<float>(F.Services.OneShotSeconds + 0.1 + 10.0)))
-		{
-			return false;
-		}
-		// The live NPC beside it carries an ordinary cadence into the payload, so the restore's death
-		// arm can be shown not to reach it.
-		if (F.Target != nullptr)
-		{
-			F.Target->NextThink = 5.0f;
-		}
-		F.World.Freeze(Snapshot);
+		const double Due = Child->NextThink;
+		Fixture.World.Tick(Due);
+		TestEqual(TEXT("0x10269960 subtract7"), int32(Child->RenderAlphaByte), 255 - 7 * (Decrement + 1));
+		TestEqual(TEXT("0x10269960 rearm +0.1"), Child->NextThink, static_cast<float>(Due + 0.1));
 	}
-	if (!TestTrue(TEXT("the frozen map carries records"), Snapshot.Entities.Num() > 0))
-	{
-		return false;
-	}
+	Fixture.World.Tick(Child->NextThink);
+	TestEqual(TEXT("0x10269960 remainder3 becomes0"), Child->RenderAlphaByte, uint8(0));
+	TestEqual(TEXT("0x10269960 install remove +0.2"), Child->ThinkFunctionName, FString(TEXT("0x101c0b10")));
+	TestTrue(TEXT("0x10269960 alive entity through zero-alpha think"), Fixture.World.Resolve(ChildHandle) != nullptr);
+	const float RemoveDue = Child->NextThink;
+	Fixture.World.Tick(RemoveDue);
+	const FElysiumEntity* Removed = Fixture.World.Resolve(ChildHandle);
+	TestTrue(TEXT("0x101c0b10 removal only on following think"), Removed == nullptr || Removed->IsInert());
+	TestTrue(TEXT("0x10269960 approximate death+13.8 deadline"), FMath::Abs(RemoveDue - (DeathNow + 13.8f)) < 0.01f);
 
-	// --- Load it over a fresh world, whose bodies were just built and know nothing about a death ---
-	FCombatFixture G(TEXT("0"), /*bWithFists=*/false, /*bInstallCatalogue=*/false);
-	if (G.Fighter == nullptr)
-	{
-		return false;
-	}
-	G.RunAdmissionAndLoadout();
-	FElysiumRecordingNpcMotor* Motor = G.MotorFor(G.Fighter);
-	if (!TestNotNull(TEXT("the freshly built corpse has a motor"), Motor))
-	{
-		return false;
-	}
-	TestFalse(TEXT("...which starts unfrozen, as a live NPC's does"), Motor->bFrozen);
-	G.Services.bNpcMakerInViewCone = true;
-	G.Services.bNpcMakerVisible = true;
-	G.Services.Calls.Reset();
-
-	TestTrue(TEXT("the snapshot applies"), G.World.ApplySnapshot(Snapshot) > 0);
-
-	TestTrue(TEXT("the restored mind is dead"),
-		G.Fighter->GetMind().State() == EElysiumNpcState::Dead);
-	TestTrue(TEXT("the rebuilt body is frozen again by the restore itself"), Motor->bFrozen);
-	TestTrue(TEXT("...and stops answering the character channel again"),
-		Motor->bIgnoreCharacterCollision);
-	TestTrue(TEXT("...and holds its final frame, because no baked body carries a physics asset"),
-		G.Services.Saw(TEXT("HoldBodyFinalPose")));
-	TestTrue(TEXT("...still visible, because a corpse is not hidden"), Motor->bEnabled);
-	// The restore does NOT buy a think to do this with: the saved cadence is authoritative, and for a
-	// corpse it is the removal think's `curtime + 10.0`.
-	TestEqual(TEXT("the saved cadence survives the restore"),
-		G.Fighter->NextThink, static_cast<float>(2.0 + 0.1 + 10.0));
-	TestFalse(TEXT("and no schedule restarts on a corpse whose program had already ended"),
-		G.Fighter->Schedule.IsRunning());
-
-	// A live NPC restored from the same snapshot keeps its own cadence: the death arm is the corpse's
-	// alone and does not reach across the record.
-	if (G.Target != nullptr)
-	{
-		TestEqual(TEXT("a restored live NPC keeps the exact cadence its record carried"),
-			G.Target->NextThink, 5.0f);
-	}
-
-	// Ticking it hard changes nothing: the restored corpse is the same corpse.
-	G.Services.Calls.Reset();
-	for (int32 i = 0; i < 3; ++i)
-	{
-		G.Fighter->NextThink = 0.0f;
-		G.World.Tick(30.0 + i);
-	}
-	TestFalse(TEXT("no schedule is selected after a restore either"),
-		G.Fighter->Schedule.IsRunning());
-	TestFalse(TEXT("...and no activity is resolved"),
-		G.Services.Saw(TEXT("ResolveNpcActivityClip")));
-	TestEqual(TEXT("0x102696f0: ...and the restored corpse re-arms its removal think (the think name is not saved; a committed corpse runs SUB_PVSRemove)"),
-		G.Fighter->NextThink, static_cast<float>(32.0 + 10.0));
+	Ped->RenderMode = 4; Ped->RenderAlphaByte = 6; Ped->SpawnFlags = 0x204;
+	Ped->OnKilled(); // 0x103a391c clear, later 0x10265d72 fade wins
+	TestEqual(TEXT("0x102695d0 nonzero render mode retained"), Ped->RenderMode, 4);
+	TestEqual(TEXT("0x102695d0 nonzero mode keeps alpha"), Ped->RenderAlphaByte, uint8(6));
+	TestEqual(TEXT("0x10265d72 fade overrides pedestrian clear"), Ped->ThinkFunctionName, FString(TEXT("0x100152b2")));
 	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cCorpseThinkInstallTest,
+	"Elysium.Arm.NpcCombat.CorpseThinkInstall", GElysiumTestFlags)
+bool FElysiumV4cCorpseThinkInstallTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("v4c_corpse_thinks"), 8314);
+	Builder.AddTroikaNpc(TEXT("mortal"));
+	Builder.AddTroikaNpc(TEXT("kindred"), FVector(100, 0, 0));
+	Builder.AddTroikaNpc(TEXT("static"), FVector(200, 0, 0));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Mortal = Fixture.Npc(TEXT("mortal"));
+	FElysiumNpc* Kindred = Fixture.Npc(TEXT("kindred"));
+	FElysiumNpc* StaticNpc = Fixture.Npc(TEXT("static"));
+	if (Mortal == nullptr || Kindred == nullptr || StaticNpc == nullptr) { return false; }
+	FElysiumNpcWorldFixture::Quiet({Mortal, Kindred, StaticNpc});
+	Mortal->bHasKindredTemplate = true; Mortal->bKindredTemplate = false;
+	Kindred->bHasKindredTemplate = true; Kindred->bKindredTemplate = true;
+	StaticNpc->MiscFlags |= 0x80000u;
+	const float CorpseNow = static_cast<float>(Fixture.World.NowSeconds());
+	Mortal->OnKilled(); Kindred->OnKilled(); StaticNpc->OnKilled();
+	TestEqual(TEXT("0x1032c40f mortal installs PVSRemove"), Mortal->ThinkFunctionName, FString(TEXT("0x102696f0")));
+	TestEqual(TEXT("0x1032c41a mortal +10"), Mortal->NextThink, CorpseNow + 10.f);
+	TestEqual(TEXT("0x1032c33c Kindred installs Remove"), Kindred->ThinkFunctionName, FString(TEXT("0x101c0b10")));
+	TestEqual(TEXT("0x1032c347 Kindred +10"), Kindred->NextThink, CorpseNow + 10.f);
+	TestEqual(TEXT("0x1032c2cb static source installs Remove"), StaticNpc->ThinkFunctionName, FString(TEXT("0x101c0b10")));
+	TestEqual(TEXT("0x1032c2cb static source +0.5"), StaticNpc->NextThink, CorpseNow + 0.5f);
+
+	// 0x103a391c explicit NULL is different from a missing restored function identity.
+	Mortal->ThinkSet(nullptr, 0.0);
+	Mortal->Think();
+	TestTrue(TEXT("0x103a391c explicit NULL stays NULL"), Mortal->ThinkFunctionName.IsEmpty());
+	TestEqual(TEXT("0x103a391c explicit NULL stays unscheduled"), Mortal->NextThink, ELYSIUM_NEVER_THINK);
+	Kindred->ThinkFunctionName.Reset(); Kindred->ThinkSetCalls = 0; Kindred->NextThink = 42.f;
+	Kindred->Think();
+	TestTrue(TEXT("0x1032c0e0 missing restored function never becomes mortal PVSRemove"),
+		Kindred->ThinkFunctionName.IsEmpty());
+	TestEqual(TEXT("0x1032c0e0 missing restored clock kept for V6, not inferred"), Kindred->NextThink, 42.f);
+	TestFalse(TEXT("0x1032c0e0 missing function never re-enters NPCThink"), Kindred->Schedule.IsRunning());
+	return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cNamedTeamDamageTest,
+ "Elysium.Arm.NpcCombat.NamedTeamDamageGate", GElysiumTestFlags)
+bool FElysiumV4cNamedTeamDamageTest::RunTest(const FString&)
+{
+ struct FObservedVictim : FElysiumNpc
+ {
+  int32 AliveDispatches = 0, DyingDispatches = 0, DeadDispatches = 0;
+  virtual int32 OnTakeDamage_Alive(void* Packet) override { ++AliveDispatches; return FElysiumNpc::OnTakeDamage_Alive(Packet); }
+  virtual int32 OnTakeDamage_Dying(void* Packet) override { ++DyingDispatches; return FElysiumNpc::OnTakeDamage_Dying(Packet); }
+  virtual int32 OnTakeDamage_Dead(void* Packet) override { ++DeadDispatches; return FElysiumNpc::OnTakeDamage_Dead(Packet); }
+ };
+ FElysiumNpcWorldBuilder Builder(TEXT("v4c_team_damage"), 8315);
+ Builder.AddTroikaNpc(TEXT("victim")).InternalFactory = []() -> TUniquePtr<FElysiumEntity> { return MakeUnique<FObservedVictim>(); };
+ Builder.AddTroikaNpc(TEXT("attacker"), FVector(100, 0, 0));
+ Builder.AddEntity(TEXT("prop_base"), TEXT("noncharacter"));
+ FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+ auto* Victim = static_cast<FObservedVictim*>(Fixture.Npc(TEXT("victim")));
+ FElysiumNpc* Attacker = Fixture.Npc(TEXT("attacker"));
+ if (!Victim || !Attacker) return false;
+ FElysiumNpcWorldFixture::Quiet({Victim, Attacker});
+ Victim->TakeDamageMode = 2;
+ Victim->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 100000);
+ Victim->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, 0);
+ Victim->SyncHealthFromSheet();
+ Victim->AddToTeam(TEXT("!damage_team")); Attacker->AddToTeam(TEXT("DAMAGE_TEAM"));
+ FElysiumNpcBase::FElysiumTakeDamageInfo Info;
+ Info.Attacker = Attacker->Handle; Info.Damage = 18.f;
+ FElysiumActiveDisciplineEffect Removable;
+ Removable.bRemoveOnTakeDamage = true;
+ Victim->Disciplines.TargetEffects.Add(Removable);
+ TestEqual(TEXT("0x1032ef60 named teammate packet refused"), Victim->OnTakeDamage(&Info), 0);
+ TestEqual(TEXT("0x1032ef60 refusal before alive dispatch"), Victim->AliveDispatches, 0);
+ TestEqual(TEXT("0x1032ef60 refusal before 0x101e3cf0 notification"), Victim->Disciplines.TargetEffects.Num(), 1);
+ TestEqual(TEXT("0x1032ef60 refusal commits no wounds"), Victim->Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Health), 0);
+ for (int32 RefusedLife : {1, 2})
+ {
+  Victim->LifeState = RefusedLife;
+  TestEqual(TEXT("0x1032ef60 teammate refusal before dying/dead dispatch"), Victim->OnTakeDamage(&Info), 0);
+ }
+ TestEqual(TEXT("0x1032ef60 no dying dispatch"), Victim->DyingDispatches, 0);
+ TestEqual(TEXT("0x1032ef60 no dead dispatch"), Victim->DeadDispatches, 0);
+ Victim->LifeState = 0; Attacker->AddToTeam(TEXT("different_damage_team"));
+ TestTrue(TEXT("0x1032ef60 different-team control damages"), Victim->OnTakeDamage(&Info) > 0);
+ TestEqual(TEXT("0x101e3cf0 admitted packet removes damage-sensitive effect"), Victim->Disciplines.TargetEffects.Num(), 0);
+ Info.Attacker = Victim->Handle;
+ TestTrue(TEXT("0x1032ef60 self packet admitted despite same symbol"), Victim->OnTakeDamage(&Info) > 0);
+ Info.Attacker = FElysiumEntityHandle::Invalid();
+ TestTrue(TEXT("0x1032ef60 null attacker admitted by this gate"), Victim->OnTakeDamage(&Info) > 0);
+ Info.Attacker = Fixture.World.FindByName(TEXT("noncharacter"))->Handle;
+ TestTrue(TEXT("0x1032ef60 noncharacter attacker admitted by this gate"), Victim->OnTakeDamage(&Info) > 0);
+ Victim->AddToTeam(TEXT("")); Attacker->AddToTeam(TEXT("")); Info.Attacker = Attacker->Handle;
+ TestTrue(TEXT("0x10323930 two invalid symbols never reject damage"), Victim->OnTakeDamage(&Info) > 0);
+ return true;
 }
 
 }   // namespace ElysiumNpcCombatTests

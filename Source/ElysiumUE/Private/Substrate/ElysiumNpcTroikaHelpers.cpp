@@ -245,10 +245,7 @@ const int32* FElysiumNpc::AttackCoordinatorIndices(int32& OutCount)
 
 bool FElysiumNpc::EntityWord0x200(const FElysiumEntity& Entity)
 {
-	// `entity->+0x200`, slot 56's first gate. **UNRECOVERED**: the corpus holds no other reader
-	// that pins the word. False is retail's own early return.
-	(void)Entity;
-	return false;
+ return Entity.LifeState != 0; // 0x102b5120 DWORD +0x200 LIFE_ALIVE=0
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -956,46 +953,7 @@ void FElysiumNpc::Slot610(EElysiumNpcState NewState)
 
 int32 FElysiumNpc::Slot611()
 {
-	// `0x102c12a0` — the disposition stance selector, and **the port already carries it**.
-	//
-	//     rec = DispositionRecord(this, &delay, &changeChance, &altChance);   // 0x100ecee0
-	//     if (m_bIsTalking) { seq = rec.A[stance]; m_bFidget = 0; }           // +0x64c0
-	//     else if (m_bFidget || m_bTransition) { seq = rec.A[stance]; m_bFidget = 0; }
-	//     else if (rec.A[stance] != rec.B[stance] && RandomInt(1,100) < altChance) {
-	//         seq = rec.B[stance]; m_bFidget = 1;                             // and NOT settled
-	//     } else if (delay < curtime - m_flStanceTime && RandomInt(1,100) < changeChance) {
-	//         seq = ChangeStance(); m_bFidget = 0; m_bTransition = 1; return seq;
-	//     } else { seq = rec.A[stance]; m_bFidget = 0; }
-	//     m_bTransition = 0;
-	//     return seq == -1 ? m_nSequence : seq;                               // +0x6f0
-	//
-	// `ElysiumStance::Select` (`Public/ElysiumStanceTypes.h`, `Substrate/ElysiumStance.cpp`) IS that
-	// body arm for arm: the talking settle, the latch settle, the `Fidget[n] != Idle[n]` availability
-	// test (retail's `rec.A[n] != rec.B[n]`), the fidget roll, the `Now - LastChangeTime > threshold`
-	// floor and the change roll, in that order — over NAMES rather than sequence indices, which is
-	// why `m_CurrStance` (+0x64c8), `m_flStanceTime` (+0x64e4) and the two latches (+0x64e0/+0x64e1)
-	// are the same four words. So this slot CALLS it rather than standing a second selector beside
-	// it, and the decision, the rolls and the latch writes are the landed ones.
-	//
-	// The RETURN is the chosen clip's number in the sequence bridge (`SequenceRows`): retail answers
-	// a studio sequence index, this runtime a clip name, and the bridge numbers the name. Retail's
-	// own fallback for an unresolved sequence is `m_nSequence` (`+0x6f0`, family **Anim**'s
-	// `SequenceNumber`): `return seq == -1 ? m_nSequence : seq`.
-	if (!EnsureStanceResolved())
-	{
-		// No stance set on this body at all: retail's table lookup would have taken the default row.
-		// This runtime's monsters and one-off models idle off `ACT_IDLE` instead, which the callers
-		// already handle, and the answer is the playing sequence.
-		return SequenceNumber;
-	}
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	const FElysiumStanceChoice Choice = ElysiumStance::Select(StanceClips, StanceTuning, Stance,
-		IsTalking(Now), Now, ElysiumRng::Stream(EElysiumRngStream::NpcSchedule));
-	if (!Choice.IsSet())
-	{
-		return SequenceNumber;
-	}
-	return SequenceRowFor(FString(), Choice.Clip, Choice.bLoop);
+ return SelectDispositionStance(); // 0x102c12a0
 }
 
 // -------------------------------------------------------------------------------------------------

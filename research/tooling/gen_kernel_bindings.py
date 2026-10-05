@@ -224,6 +224,7 @@ CHAIN_MEMBER_MAPS: dict[str, dict[int, tuple[str, str]]] = {
         0x0670: ("FElysiumAnimating", "Skin"),
     },
     "CBaseCombatCharacter": {
+        0x10AC: ("FElysiumCombatCharacter", "TeamName"),
         0x10E8: ("FElysiumCombatCharacter", "FloatSoundFrequency"),
         0x13D8: ("FElysiumCombatCharacter", "Money"),
     },
@@ -321,9 +322,6 @@ CHAIN_UNBOUND: dict[tuple[str, int], str] = {
     ("CBaseCombatCharacter", 0x00DC):
         "`m_impactEnergyScale` scales the damage a physics impact deals; this port has no "
         "physics-impact damage path yet, so there is nothing the word would reach",
-    ("CBaseCombatCharacter", 0x10AC):
-        "`m_sTeamName` is Source's team string; VtMB decides hostility through the relationship "
-        "table and the disposition, and the six maps that author the key have no reader",
     ("CBaseCombatCharacter", 0x13A0):
         "`m_iVHistoryID` is bound on `player` alone: this port stores the History index on "
         "`FElysiumPlayerRecord`, which no NPC has",

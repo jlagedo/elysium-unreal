@@ -90,6 +90,8 @@ enum class EElysiumArenaAction : uint8
 	PlayerCrouch,
 	LightPin,
 	DialogChoose,
+	SeedHealth, // fixture-only high-cap measurement; no gameplay input
+	DamagePacket, // fixture-only packet with a real attacker; 0x1032ef60 admission
 };
 
 // One `script` entry: when (an absolute scenario time, or a delay after a labelled expectation's
@@ -106,6 +108,7 @@ struct FElysiumArenaAction
 	FElysiumArenaAt At;            // player_teleport, player_walk
 	FElysiumArenaFace Face;        // player_teleport
 	FString Target;                // fire, kill
+	FString Attacker;              // damage_packet: live named actor
 	FString Input;                 // fire
 	FElysiumArenaValue Param;      // fire; None is a void parameter
 	FString Command;               // console
@@ -176,6 +179,7 @@ enum class EElysiumArenaProbe : uint8
 	// H20: the drawn mesh's `Bip01 Pelvis` bone within `max_height` cm of the floor under it and at rest.
 	CorpseOnFloor,   // bool
 	// H22's companion: a live (not removed) entity of that name is in the entity world.
+	SameTeam, SwingRecordedHit, OneHitKill, TeamSymbol, Wounds, HealthCap, NpcFlags1, SpawnFlags, RenderAlpha, RenderMode, Activity, // V4c read-only retail words/contact
 	Exists,          // bool
 };
 

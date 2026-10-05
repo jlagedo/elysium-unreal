@@ -426,6 +426,7 @@ void FElysiumNpc::TroikaNPCInit()
 	// from the corpus. This runtime's disposition is a NAME, applied by
 	// `ApplyDefaultDispositionOnActivate` immediately before this body runs, and is left standing.
 	++DispositionSeeds;
+	bHasDispositionIndex = true; // 0x1029a6a9: NPCInit seeds the valid default index, not -1
 	EyeLookTargetHandle = FElysiumEntityHandle::Invalid();               // 1029a6b4 +0x0e64
 	RelativeEyeTarget = 0;                                               // 1029a6ba +0x5b94
 	if (TeleportMoveTimer > TeleportMoveTimerFloor)                      // 1029a6c1 FCOMP 0.0
@@ -522,4 +523,3 @@ void FElysiumNpc::OnRestore(bool bFromLoad)
 	// `TroikaOnRestore` first, the direct call retail makes.
 	TroikaOnRestore(bFromLoad);
 }
-

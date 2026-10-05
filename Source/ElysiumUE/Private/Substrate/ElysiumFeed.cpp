@@ -532,33 +532,12 @@ namespace ElysiumFeedGrappleCommit
 	{
 		// `SelectWeightedSequence(body, translated, -1)` (`0x1032a2cc` attacker, `0x1032a2de`
 		// victim): the pick is by ACTIVITY NUMBER through the body's own activity -> sequence table.
-		// The kernel-side weighted draw (`SelectWeightedSequence 0x1008dc40`, lane C2's
-		// `FElysiumNpc::SelectWeightedSequence`) is not built yet; until C2 routes this line through
-		// it the pick is the kernel's existing sequence-for-activity lookup, `SequenceForActivity`
-		// (the cell's registered name through the clip resolver; the feed banks author one sequence
-		// per cell, so the weight draw has nothing to choose among).
-		//
-		// The named modernization's guard: `SequenceForActivity` walks the activity chain's fallback
-		// ladder, which `0x1032a100` does not (a bare `SelectWeightedSequence`), so an answer that is
-		// not the cell's own clip is a ladder substitution and is refused; and where the resolver
-		// answers nothing for the cell number the clip is found by the label the cell names
-		// (`LookupSequenceByName`: name-keyed clips for the studio table). -1 only when the body
-		// authors neither, which is retail's miss.
+		// 0x1008dc40: bare common pick. S12's one sequence per authored cell spends no draw;
+		// a true miss belongs to the caller's warning/EndGrapple, with no name or ladder fallback.
 		int32 SelectGrappleSequence(FElysiumNpc& Npc, int32 Translated, const FString& CellLabel)
 		{
-			const int32 ByActivity = Npc.SequenceForActivity(Translated);   // C2: SelectWeightedSequence 0x1008dc40
-			if (ByActivity > 0 && Npc.SequenceRows.IsValidIndex(ByActivity)
-				&& Npc.SequenceRows[ByActivity].Label.Equals(CellLabel, ESearchCase::IgnoreCase))
-			{
-				return ByActivity;
-			}
-			if (ByActivity > 0)
-			{
-				UE_LOG(LogElysiumFeed, Verbose,
-					TEXT("%s: activity 0x%x resolved off its cell ('%s' wanted); taking the label"),
-					*Npc.DebugString(), Translated, *CellLabel);
-			}
-			return Npc.LookupSequenceByName(*CellLabel);
+			(void)CellLabel; // 0x1032a2cc / 0x1032a2de: no label fallback
+			return Npc.SelectWeightedSequence(Translated); // 0x1008dc40, attacker before victim
 		}
 	}
 }

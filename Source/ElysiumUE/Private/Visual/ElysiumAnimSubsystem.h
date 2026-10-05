@@ -357,6 +357,7 @@ public:
 	// Every clip carrying the activity `ResolveActivityClip`'s translation searches the vocabulary
 	// for, in `FElysiumNpcClipSet::ByActivity`'s order: retail's `GetSequencesForActivity`
 	// (`0x103ea950`), which reads each sequence's own attack data rather than one pick's.
+	bool TranslateActivityRequest(const FElysiumActivityClipRequest& Request, FString& OutTranslated, FString& OutFirstWeapon);
 	void ActivitySequences(const FElysiumActivityClipRequest& Request, TArray<FElysiumNpcClip>& Out);
 
 	// The one cell a body that cannot evaluate a fan collapses one onto: the grid resolved at

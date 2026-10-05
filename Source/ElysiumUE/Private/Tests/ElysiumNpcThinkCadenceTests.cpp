@@ -516,7 +516,7 @@ bool FElysiumThinkAiGateTest::RunTest(const FString&)
 	TestTrue(TEXT("...the refused think asks the body for ACT_IDLE"),
 		F.Services.Calls.ContainsByPredicate([](const FString& Call)
 		{
-			return Call.StartsWith(TEXT("ResolveNpcActivityClip"))
+			return Call.StartsWith(TEXT("NpcActivitySequences")) // 0x1008dc40 bare gather
 				&& Call.Contains(TEXT(" ACT_IDLE "));
 		}));
 	TestTrue(TEXT("...and holds the body"), Motor->bHeld);

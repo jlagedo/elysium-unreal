@@ -54,6 +54,7 @@ public: \
 class FElysiumNpcBase : public FElysiumScriptedCharacter, public IElysiumScheduleRunner
 {
 public:
+ FElysiumNpcBase(); // 0x1027c300 owner identity before any memory access
 	// `+0x94 m_pBaseNPC`, set by the `CAI_BaseNPC` constructor `0x1027c300` (which also adds the NPC
 	// to the AI list `DAT_1090fe10` and sets `FL_NPC`).
 	virtual FElysiumNpcBase* AsNpcBase() override { return this; }

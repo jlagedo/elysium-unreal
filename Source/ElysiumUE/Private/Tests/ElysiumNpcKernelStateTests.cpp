@@ -78,6 +78,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelState19SetStateTest,
 	"Elysium.Arm.NpcKernelState19.SetState", GState19Flags)
 bool FElysiumNpcKernelState19SetStateTest::RunTest(const FString&)
 {
+	FElysiumNpcMind AdmissionMind;
+	AdmissionMind.WriteNpcStateRetail(0); // 0x1029a0f5
+	AdmissionMind.WriteIdealStateRetail(1); // 0x10273473
+	AdmissionMind.ArmAdmission();
+	TestTrue(TEXT("the host admission barrier opens"), AdmissionMind.Admit());
+	TestEqual(TEXT("0x1029a0f5: admission retains NONE until maintenance"), AdmissionMind.NpcStateRetail(), 0);
+	TestEqual(TEXT("0x10273473: admission retains ideal IDLE"), AdmissionMind.IdealStateRetail(), 1);
 	FState19Fixture F;
 	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard))
 	{
@@ -85,7 +92,7 @@ bool FElysiumNpcKernelState19SetStateTest::RunTest(const FString&)
 	}
 	FElysiumNpc& N = *F.Guard;
 	
-	TestEqual(TEXT("1026e340 admission idle is retail 1"), N.NpcStateRetail(), 1);
+	TestEqual(TEXT("1026e340 the fixture's established idle is retail 1"), N.NpcStateRetail(), 1);
 	N.SetState(2);
 	TestEqual(TEXT("1026e340 writes +0x5cc0"), N.NpcStateRetail(), 2);
 	TestEqual(TEXT("1026e340 writes +0x5cc4 too"), N.IdealStateRetail(), 2);

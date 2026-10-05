@@ -1,4 +1,5 @@
 #include "ElysiumEntityWorld.h"
+#include "Substrate/ElysiumTeamRegistry.h"
 
 #include "ElysiumBrushComponent.h"
 #include "ElysiumCameraSolve.h"
@@ -100,7 +101,8 @@ FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumSessionSubsyst
 	, WorldServices(InServices)
 	, Epoch(GElysiumNextWorldEpoch++)
 {
-	GameSoundBus = MakeUnique<FElysiumGameSoundBus>();
+	if (!GameState) HeadlessTeamRegistry = MakeUnique<FElysiumTeamRegistry>(); // 0x10230750
+ GameSoundBus = MakeUnique<FElysiumGameSoundBus>();
 	// The law-record store, built beside the sound bus it is modelled on.
 	LawEventBus = MakeUnique<ElysiumNpcWitness::FElysiumLawEventBus>();
 	// Empty until the map actor adopts the map's baked places; a headless world keeps it empty.
@@ -210,6 +212,7 @@ FString FElysiumEntityWorld::AiTraceName(const FElysiumEntity* Entity)
 
 void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 {
+ TeamRegistry().LevelInitPreEntity(); // 0x10230820
 	bActive = false;
 	bSnapshotApplied = false;
 	SnapshotEntityIndices.Reset();
@@ -511,7 +514,8 @@ void FElysiumEntityWorld::Activate(double Now)
 			CaptureBaseline(Index);
 		}
 	}
-	bActive = true;
+	TeamRegistry().LevelInitPostEntity(); // 0x102308f0 diagnostics only
+ bActive = true;
 	WeatherState.Tick(Now);
 	PublishWetness();
 	UE_LOG(LogElysiumWorld, Log, TEXT("(%8.3f) world '%s' activated, epoch %u"),
@@ -3005,6 +3009,7 @@ void FElysiumEntityWorld::Teardown()
 	ElysiumWorldDestroyWeakComponents(Constraints);
 
 	EntityList.Empty();
+ if (!bDetached) TeamRegistry().LevelShutdownPostEntity(); // 0x10230860, retired world cannot reset a new level
 	Baseline.Empty();
 	RuntimeDefs.Empty();
 	// The tally is keyed by entity index, which means something only inside one map epoch.
@@ -3012,3 +3017,6 @@ void FElysiumEntityWorld::Teardown()
 	Ring = nullptr;
 	Sinks.Empty();
 }
+
+FElysiumTeamRegistry& FElysiumEntityWorld::TeamRegistry() const
+{ if (GameState) return GameState->TeamRegistry(); check(HeadlessTeamRegistry); return *HeadlessTeamRegistry; } // 0x10751140

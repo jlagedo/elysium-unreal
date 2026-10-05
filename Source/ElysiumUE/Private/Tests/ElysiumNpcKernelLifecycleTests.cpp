@@ -567,6 +567,9 @@ bool FElysiumNpcKernelLifecycleActivateTest::RunTest(const FString&)
 	}
 	FElysiumNpc& N = *Fix.Npc;
 	// The gate: `Classify() != 0`. Every living NPC on this leaf passes it.
+	FElysiumDisposition ActivateNormal;
+	ActivateNormal.Name = TEXT("Normal"); ActivateNormal.Level = 1;
+	Fix.World.Services.DispositionRows.Add(TEXT("normal|1"), ActivateNormal); // 0x102c0f70 explicit fixture row
 	TestTrue(TEXT("a living NPC's Classify is non-zero"), N.ClassifyIsNonZero());
 
 	// `SetDisposition(m_sDefaultDisposition, 1)` — the LEVEL is retail's literal 1, and this is what
@@ -582,7 +585,7 @@ bool FElysiumNpcKernelLifecycleActivateTest::RunTest(const FString&)
 	N.Disposition = FString();
 	N.DispositionLevel = 4;
 	N.ApplyDefaultDispositionOnActivate();
-	TestEqual(TEXT("an unset default_disposition writes nothing"), N.DispositionLevel, 4);
+	TestEqual(TEXT("0x102c0f70 an unset default retries Neutral,1"), N.DispositionLevel, 1);
 
 	// `CAI_InterestingPlaceConverstation::Activate` (0x102dbde0) — a name that resolves nothing
 	// admits nothing, and an unset one never looks up.

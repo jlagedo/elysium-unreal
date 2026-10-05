@@ -466,6 +466,7 @@ bool FElysiumNpcKernelBossesCanPlaySequenceTest::RunTest(const FString&)
 	TestTrue(TEXT("a fresh NPC is alive"), Andre->IsAlive());
 	TestEqual(TEXT("a live body with no cine answers 1"), Andre->CanPlaySequenceSpecies(true, 0), 1);
 	TestEqual(TEXT("and slot 482's base body agrees"), Andre->CanPlaySequence(true, 0), 1);
+	Andre->SetState(1); // stage the idle arm; Activate 0x1035dc93 rightly leaves Andrei in COMBAT
 	TestEqual(TEXT("the state gate lets an idle body through too"),
 		Andre->CanPlaySequenceSpecies(false, 0), 1);
 	TestEqual(TEXT("as it does for the base"), Andre->CanPlaySequence(false, 0), 1);

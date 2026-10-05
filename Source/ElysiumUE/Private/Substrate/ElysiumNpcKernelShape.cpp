@@ -3016,7 +3016,7 @@ namespace
 			ETier::Walked, TEXT("0x1008e310"), 0, TEXT("29c"), false, TEXT(""), TEXT("") },
 		{ 247, TEXT(""), TEXT("SetAttackExtentsForSequence"),
 			TEXT("void SetAttackExtentsForSequence(int)"), TEXT("SetAttackExtentsForSequence"),
-			ETier::Walked, TEXT("0x10090c80"), 0, TEXT("29c"), false, TEXT(""), TEXT("") },
+			ETier::Walked, TEXT("0x10090c80"), 0, TEXT("29c"), false, TEXT("rule"), TEXT("") },
 		{ 248, TEXT(""), TEXT("GetIdealSpeed"), TEXT("float GetIdealSpeed() const"),
 			TEXT("GetIdealSpeed"), ETier::Sdk, TEXT("0x10091740"), 0, TEXT("29c"), false,
 			TEXT("rule"), TEXT("") },
@@ -3226,7 +3226,7 @@ namespace
 			TEXT("mechanism"), TEXT("") },
 		{ 315, TEXT(""), TEXT("MeleeSwingUpdate"), TEXT("void MeleeSwingUpdate()"),
 			TEXT("MeleeSwingUpdate"), ETier::Walked, TEXT("0x10346cd0"), 18, TEXT("29d"), false,
-			TEXT(""), TEXT("") },
+			TEXT("rule"), TEXT("") },
 		{ 316, TEXT(""), TEXT(""), TEXT("void vfunc316(CBaseCombatCharacter*, bool, bool)"),
 			TEXT("Slot316"), ETier::Walked, TEXT("0x1029fa50"), 20, TEXT("29e"), false,
 			TEXT("rule"), TEXT("") },
@@ -8939,11 +8939,11 @@ const FElysiumNpcShapeCensus& Census()
 		/* Classes          */ 77,
 		/* Classnames       */ 74,
 		/* Overrides        */ 2344,
-		/* VerdictedSlots   */ 446,
+		/* VerdictedSlots   */ 448,
 		/* DefaultSlots     */ 82,
 		/* VerdictedOverrides */ 2302,
 		/* RegistryValues   */ 218,
-		/* RowDigest        */ 0xadbdf5474fbbe081ull,
+		/* RowDigest        */ 0xcb6ae69008db3c71ull,
 	};
 	return GCensus;
 }

@@ -79,11 +79,8 @@ bool Think19InPlayerPvs(const FElysiumEntity* Player) const;
  *  species override (`vtmb_slot 312`), so this is not virtual. Replaces `UpdateCharacter(double)`. */
 void UpdateCharacterRetail(float IntervalSeconds);
 
-/** SEAM for `CBaseCombatCharacter::UpdateCharacter` (`0x103246d0`): the discipline visuals, slot 313,
- *  `UpdateVampHeal_HOT`, `UpdateExpressions`, the eye direction (slot 333 / the scripted
- *  maintainer), slots 314 / 315 and the `m_nRenderFX` expiries. Each of those runs on its own owner
- *  in this runtime (the gaze in `FElysiumCombatCharacter`'s eye pass, the heal pulse, the discipline
- *  visuals), none of them from here; this counts the call and does nothing. */
+/** `UpdateCharacter 0x103246d0`: slot 315 (no argument) is live here. Discipline visuals,
+ *  slots 313/314/333, heal, expressions, eyes and render-fx expiry are 0006/0015 named seams. */
 void Think19CombatCharacterUpdateCharacter(float IntervalSeconds);
 int32 Think19CombatUpdateCharacterCalls = 0;
 float Think19LastUpdateCharacterInterval = 0.f;

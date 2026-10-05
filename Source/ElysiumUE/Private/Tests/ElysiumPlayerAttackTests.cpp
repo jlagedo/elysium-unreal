@@ -1202,10 +1202,17 @@ bool FElysiumPlayerAttackReloadTest::RunTest(const FString&)
 		TestEqual(TEXT("the cast's shot is accepted"),
 			CastGun->AttackIntent(FElysiumWeapon::EIntent::Primary),
 			FElysiumWeapon::EVerdict::Accepted);
-		TestTrue(TEXT("an NPC shot composes the attack layer on the overlay slot, as the player's does"),
-			F.Services.Saw(FString::Printf(
-				TEXT("PlayNpcClip %s %s loop=0 band=ambient rate=1.00 act=ACT_RANGE_ATTACK1_LAYER %s"),
-				GCastStem, GLayerClip, GOnSlot)));
+		TestFalse(TEXT("0x10238160 a task creates no estimated shot transaction"), CastGun->Swing.bActive);
+		F.Services.ResolvedNpcActivityLabel = GLayerClip;
+		F.Services.ResolvedNpcActivityLoops = false;
+		F.Services.SeedFixtureActivity(TEXT("ACT_RANGE_ATTACK1_LAYER"), 91); // 0x10099020 actual gesture row
+		const int32 ShotLayer = Gunman->AsNpc()->AddGesture(26, true); // 0x102aaa60 -> 0x10099020
+		if (!TestTrue(TEXT("the NPC shot allocates an actual m_AnimOverlay slot"), ShotLayer >= 0)) return false;
+		const auto& ShotOverlay = Gunman->AsNpc()->AnimOverlay[ShotLayer];
+		TestEqual(TEXT("0x100991b0: the shot layer carries ACT_RANGE_ATTACK1_LAYER"), ShotOverlay.Activity, 26);
+		TestTrue(TEXT("0x10099020: the shot layer is occupied"), ShotOverlay.Weight > 0.f);
+		TestTrue(TEXT("the layer presents the selected clip"), ShotOverlay.Sequence >= 0
+			&& Gunman->AsNpc()->SequenceRows[ShotOverlay.Sequence].Label == GLayerClip);
 		TestEqual(TEXT("...and asks the cast body for no base pose at all"),
 			ClipPlaysOn(F.Services, GOnBase), 0);
 

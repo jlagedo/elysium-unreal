@@ -41,6 +41,19 @@ A record with no `expect`, `never` or `probes` is refused: it asserts nothing.
 broadcast, `AElysiumMapActor::ActivateRuntime`; every event of the activation pass is at 0) and the
 run's start on a map host.
 
+Each rebuilt arena starts its game clock at 0 before `Load`, along with the record's seed. Retail
+`NPCInit` / `StartNPC` (`0x10273390` / `0x10273ad0`) branch on the first second of `curtime` and
+draw a startup delay there. Inheriting the previous record's clock changes the shared animation /
+schedule stream's draw order even when `SeedAll` resets it. Map hosts keep their live map clock.
+
+A `never` state ban judges an established NPC. Its first `None -> …` state edge establishes it
+and is excluded from state bans, while remaining in the trace and available to `expect`.
+Retail Troika `NPCInit` writes NONE directly (`0x1029a0f5`) and base init writes ideal IDLE
+(`0x10273473`). The first `MaintainSchedule` calls real `SetState` (`0x10281b63 -> 0x1026e340`)
+before selecting its program, including the state-change hooks; admission must retain those words.
+Subsequent state edges, including another edge in that same think, count normally. Other event
+kinds keep their existing windows.
+
 ## Places
 
 `at` is a name or `[x, y, z]` centimetres.
@@ -216,6 +229,29 @@ comparison: `equals`, `match` (string contains), `less`, `greater` (numbers).
 An unknown probe, a comparison the answer's type cannot take, or a probe that cannot be read (no
 such entity, not an NPC, no motor, no drawn mesh with the bone, a pelvis read fewer than twice, no
 floor under it) fails.
+
+V4c adds read-only `same_team` and `swing_recorded_hit` boolean probes (`to` names the other
+entity), `team_symbol`, `wounds`, `health_cap`, `npc_flags1`, `spawn_flags`, `render_alpha`,
+`render_mode` and `activity` numeric probes, and `one_hit_kill` (boolean). These read the actual
+character words: wounds/cap are sheet slots 0x0f/0x11, and ONE_HIT_KILL is flags1 0x40000000.
+`swinghit` traces the hit-list insertion at 0x10343e37 / 0x10343b16; `meleeimpact` traces entry
+to 0x102579f0. Both name the victim and print `from=<attacker>`. They let the team record prove
+rejection before contact, independently of the later damage gate. `deathcaller` records the
+actual health-threshold or ONE_HIT_KILL call site, with the latter's packet, flags, wounds,
+cap and schedule, before Event_Killed changes them.
+
+The arena-only `seed_health` action takes `target` and a positive integer `param` (the sheet
+base cap). It seeds base Max_Health and zero wounds through the same sheet API as arm fixtures,
+then recomputes the sheet and synchronizes engine health. Base 100000 measures effective 99999
+under the shipped sheet bounds. This is measurement setup for 0x1032ef60, not a retail input:
+the SAVE-only datamap fields cannot be assigned through Python, and NPC Spawn seeds the sheet
+after map keyvalues. All subsequent damage uses the ordinary runtime packet path.
+
+The arena-only `damage_packet` action takes `target`, a live named `attacker` (including `player`),
+and nonnegative numeric `param`. It submits that scalar packet with the real attacker handle to
+the victim's ordinary `OnTakeDamage` chain (0x1032ef60 → 0x10265ed0 → 0x102bee60). Zero is a
+packet too: unlike the scalar `TakeDamage` input, it is not refused before admission. Its damage
+conditions can interrupt a cower schedule; stage it before cower when measuring ONE_HIT_KILL.
 
 ## The run and its verdict
 

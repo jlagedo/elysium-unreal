@@ -1541,6 +1541,16 @@ bool UElysiumBipedAnimInstance::PlayOneShot(const FElysiumClipIdentity& Identity
 	return true;
 }
 
+void UElysiumBipedAnimInstance::SetCurrentSequencePlaybackRate(float NewRate)
+{
+	FElysiumBipedAnimProxy& RateProxy = GetProxyOnGameThread<FElysiumBipedAnimProxy>();
+	RateProxy.SetDirectPlaybackRate(NewRate);
+	Armed(EElysiumBasePhaseSource::Clip).PlayRate = NewRate;
+	Armed(EElysiumBasePhaseSource::Montage).PlayRate = NewRate;
+	if (ActiveSlotMontage) Montage_SetPlayRate(ActiveSlotMontage, NewRate);
+	PublishBasePhase(true); // rate changes only; keep the existing play/cursor and cycle
+}
+
 bool UElysiumBipedAnimInstance::HasCompiledReactionBranch() const
 {
 	if (bReactionBranchResolved)

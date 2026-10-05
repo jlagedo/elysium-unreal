@@ -4,7 +4,14 @@
   "stage": "arena",
   "seed": 1,
   "duration": 9.5,
-  "player": { "at": [102.0, 635.0, 0.0], "face": 0.0 },
+  "player": {
+    "at": [
+      102.0,
+      635.0,
+      0.0
+    ],
+    "face": 0.0
+  },
   "cast": [
     {
       "name": "memory_guard",
@@ -25,24 +32,101 @@
     }
   ],
   "script": [
-    { "t": 1.0, "do": "player_teleport", "at": [-447.0, -152.0, 0.0], "face": 0.0 }
+    {
+      "t": 1.0,
+      "do": "player_teleport",
+      "at": [
+        -447.0,
+        -152.0,
+        0.0
+      ],
+      "face": 0.0
+    }
   ],
   "expect": [
-    { "label": "sees_enemy", "who": "memory_guard", "kind": "cond+", "match": "SEE_ENEMY (0x46)", "by": 0.9 },
-    { "label": "combat", "who": "memory_guard", "kind": "state", "match": "Idle -> Combat", "within": 0.9 },
-    { "label": "sight_dropped", "who": "memory_guard", "kind": "cond-", "match": "SEE_HATE (0x43)", "by": 1.3 },
-    { "label": "enemy_sight_dropped", "who": "memory_guard", "kind": "cond-", "match": "SEE_ENEMY (0x46)", "by": 2.1 },
-    { "label": "lost_player_los", "who": "memory_guard", "kind": "output", "match": "OnLostPlayerLOS", "by": 5.0 },
-    { "label": "lost_enemy_los", "who": "memory_guard", "kind": "output", "match": "OnLostEnemyLOS", "within": 0.1 },
-    { "label": "occluded", "who": "memory_guard", "kind": "cond+", "match": "ENEMY_OCCLUDED (0x48)", "within": 0.6 }
+    {
+      "label": "sees_enemy",
+      "who": "memory_guard",
+      "kind": "cond+",
+      "match": "SEE_ENEMY (0x46)",
+      "by": 0.9
+    },
+    {
+      "label": "combat",
+      "who": "memory_guard",
+      "kind": "state",
+      "match": "Idle -> Combat",
+      "within": 0.9
+    },
+    {
+      "label": "lost_player_los",
+      "who": "memory_guard",
+      "kind": "output",
+      "match": "OnLostPlayerLOS",
+      "by": 5.0
+    },
+    {
+      "label": "lost_enemy_los",
+      "who": "memory_guard",
+      "kind": "output",
+      "match": "OnLostEnemyLOS",
+      "within": 0.1
+    },
+    {
+      "label": "occluded",
+      "who": "memory_guard",
+      "kind": "cond+",
+      "match": "ENEMY_OCCLUDED (0x48)",
+      "within": 0.6
+    }
   ],
   "never": [
-    { "who": "memory_guard", "kind": "cond+", "match": "LOST_ENEMY (0x47)", "until": 9.0 },
-    { "who": "memory_guard", "kind": "output", "match": "OnLostPlayer ", "until": 9.0 },
-    { "who": "memory_guard", "kind": "state", "match": "Combat -> ", "until": 9.0 }
+    {
+      "who": "memory_guard",
+      "kind": "cond+",
+      "match": "LOST_ENEMY (0x47)",
+      "until": 9.0
+    },
+    {
+      "who": "memory_guard",
+      "kind": "output",
+      "match": "OnLostPlayer ",
+      "until": 9.0
+    },
+    {
+      "who": "memory_guard",
+      "kind": "state",
+      "match": "Combat -> ",
+      "until": 9.0
+    }
   ],
   "probes": [
-    { "at": 9.0, "who": "memory_guard", "probe": "enemy", "equals": "!player" },
-    { "at": 9.0, "who": "memory_guard", "probe": "state", "equals": "Combat" }
-  ]
+    {
+      "at": 1.3,
+      "who": "memory_guard",
+      "probe": "has_condition",
+      "condition": "SEE_HATE",
+      "equals": false
+    },
+    {
+      "at": 2.1,
+      "who": "memory_guard",
+      "probe": "has_condition",
+      "condition": "SEE_ENEMY",
+      "equals": false
+    },
+    {
+      "at": 9.0,
+      "who": "memory_guard",
+      "probe": "enemy",
+      "equals": "!player"
+    },
+    {
+      "at": 9.0,
+      "who": "memory_guard",
+      "probe": "state",
+      "equals": "Combat"
+    }
+  ],
+  "notes": "V4c full close: assert the SEE_HATE/SEE_ENEMY bits at the original 1.3/2.1 deadlines. RunAI 0x1026f110 traces the gather delta against the entering condition set; a schedule change clears that set between gathers, so the real OnLooked 0x1026a2cf clear can have no cond- delta to emit. Initial sight/state, LOS outputs, debounce, memory and end-state assertions remain."
 }

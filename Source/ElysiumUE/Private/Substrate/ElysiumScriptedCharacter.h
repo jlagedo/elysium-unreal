@@ -58,6 +58,7 @@ public:
 	// It reads `SampleTransform`, not `Sample`: the latter consumes the terminal `Reached` status
 	// by calling `Stop()`, and stealing that from the executor waiting on it would strand the move.
 	void SyncMovingRecord();
+	IElysiumNpcMotor* GetNpcMotor() const { return Motor; } // the same collision/movement body for common-chain consumers
 
 protected:
 

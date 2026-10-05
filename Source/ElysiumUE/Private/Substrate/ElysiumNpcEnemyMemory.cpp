@@ -4,6 +4,39 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSaveArchive.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcBase.h"
+
+void FElysiumNpcEnemyMemory::BindOwner(FElysiumNpcBase& StoreOwner)
+{
+	if (MemoryOwner == nullptr && !bSquadOwned) // 0x102df320 +0
+	{
+		MemoryOwner = &StoreOwner; // 0x102df320: creator's identity, never changed by an observer
+	}
+	if (MemoryOwner == &StoreOwner) { MemoryWorld = StoreOwner.World; } // same owner attaches to its world after construction
+}
+
+void FElysiumNpcEnemyMemory::BindSquadOwner(IElysiumEnemyMemorySquadOwner* InSquadOwner,
+	FElysiumEntityWorld* StoreWorld)
+{
+	MemoryOwner = nullptr; SquadOwner = InSquadOwner; bSquadOwned = true; // 0x102df320 +0/+4/+8
+	MemoryWorld = StoreWorld; // actual squad-store owner context, never arbitrary caller
+}
+
+void FElysiumNpcEnemyMemory::NotifyRemoved(const FElysiumNpcEnemyMemoryRecord& RemovedRecord,
+	FElysiumEntity* Target, const TCHAR* FunctionTag)
+{
+	if (bSquadOwned) // 0x102df470
+	{
+		if (SquadOwner != nullptr) // 0x102df477: absent squad receives nothing
+		{
+			SquadOwner->Removed(Target, RemovedRecord.Anchor, RemovedRecord.Velocity, FunctionTag); // 0x103169a0
+		}
+	}
+	else if (MemoryOwner != nullptr) // 0x102df4bc
+	{
+		MemoryOwner->Slot56(Target, RemovedRecord.Anchor, RemovedRecord.Velocity, FunctionTag); // 0x102df4fa
+	}
+}
 
 void FElysiumNpcEnemyMemory::Update(FElysiumNpc& Npc, const FElysiumEntityHandle& Target,
 	double Now)
@@ -62,20 +95,41 @@ void FElysiumNpcEnemyMemory::UpdateObserved(const FElysiumEntityHandle& Target,
 
 void FElysiumNpcEnemyMemory::Refresh(const FElysiumEntityWorld& World, double Now)
 {
-	for (FElysiumNpcEnemyMemoryRecord& Record : Entries)
+	int32 EntryIndex = 0; // 0x102df3ce: head, then ordered +0x38 links
+	int32 PreviousIndex = INDEX_NONE; // 0x102df3d1: address of head or last kept +0x38 link
+	while (Entries.IsValidIndex(EntryIndex)) // 0x102df3da
 	{
-		const FElysiumEntity* Entity = World.Resolve(Record.Handle);
-		if (Entity != nullptr && !Entity->IsInert()
-			&& Now < Record.LastSeenTime + FreeKnowledgeDuration)
+		FElysiumNpcEnemyMemoryRecord& Entry = Entries[EntryIndex]; // 0x102df3e0
+		FElysiumEntity* const Target = const_cast<FElysiumEntity*>(World.Resolve(Entry.Handle)); // 0x102df3ec..0x102df409
+		bool bRemoveEntry = Target == nullptr; // 0x102df40d: unresolved unconditionally
+		if (Target != nullptr) // 0x102df40f: NPC self-cast +0x94, not IsAlive
 		{
-			Record.LastPosition = Entity->Origin;
+			FElysiumNpcBase* const TargetNpc = Target->AsNpcBase(); // 0x102df40f
+			if (TargetNpc != nullptr && TargetNpc->NpcStateRetail() == 7) // 0x102df41f slot464
+			{
+				bRemoveEntry = bSquadOwned // 0x102df42e
+					? SquadOwner != nullptr && SquadOwner->MayRemove(Target) // 0x103167f0, null hook refuses
+					: MemoryOwner != nullptr && MemoryOwner->Slot54(Target); // 0x102df455
+			}
 		}
+		if (bRemoveEntry) // 0x102df467: unlink before notify
+		{
+			const FElysiumNpcEnemyMemoryRecord RemovedRecord = Entry; // 0x102df47f..0x102df4f7
+			const int32 NextLinkIndex = PreviousIndex + 1; // 0x102df46a: *prev = removed->next
+			// 0x102df518 leaves prev unchanged when skipping the successor. A later removal can
+			// consequently detach that skipped node too, without a notification or free for it.
+			Entries.RemoveAt(NextLinkIndex, EntryIndex - PreviousIndex); // 0x102df46a reachable-list splice
+			NotifyRemoved(RemovedRecord, Target, TEXT("CAI_Memory::RefreshMemories")); // 0x102df4fa
+			EntryIndex = NextLinkIndex + 1; // 0x102df50e..0x102df518: successor->next, prev stays
+			continue;
+		}
+		if (Now < Entry.LastSeenTime + FreeKnowledgeDuration) // 0x102df51d..0x102df533: strict boundary
+		{
+			Entry.LastPosition = Target->GetAbsOrigin(); // 0x102df539: +0 only, never LKP +0x0c
+		}
+		PreviousIndex = EntryIndex; // 0x102df54f: prev advances only after a kept entry
+		++EntryIndex; // 0x102df556
 	}
-	Entries.RemoveAll([&World](const FElysiumNpcEnemyMemoryRecord& Record)
-	{
-		const FElysiumEntity* Entity = World.Resolve(Record.Handle);
-		return Entity == nullptr || Entity->IsInert();
-	});
 }
 
 void FElysiumNpcEnemyMemory::UpdatePositionOnly(const FVector& Position, double Now)
@@ -122,7 +176,7 @@ bool FElysiumNpcEnemyMemory::IsEluded(const FElysiumEntityHandle& Target) const
 	return Record != nullptr && Record->bEluded;
 }
 
-bool FElysiumNpcEnemyMemory::ClearMemory(const FElysiumEntityHandle& Target)
+bool FElysiumNpcEnemyMemory::ClearMemory(const FElysiumEntityHandle& Target, const TCHAR* FunctionTag)
 {
 	// `0x102dfaa0`: `param_1 != 0` guards the walk; the first record whose `+0x24` handle resolves
 	// to the entity is unlinked (`*prev = rec->next`) and freed (`0x102df1b0`).
@@ -136,7 +190,12 @@ bool FElysiumNpcEnemyMemory::ClearMemory(const FElysiumEntityHandle& Target)
 	{
 		return false;
 	}
-	Entries.RemoveAt(Index);
+	const FElysiumNpcEnemyMemoryRecord RemovedRecord = Entries[Index]; // 0x102dfaa0
+	FElysiumEntity* const RemovedTarget = MemoryWorld != nullptr
+		? MemoryWorld->Resolve(Target) : nullptr; // 0x102dfaa0: resolve from store owner
+	if (RemovedTarget == nullptr) { return false; } // 0x102dfaa0: null target cannot match a live pointer
+	NotifyRemoved(RemovedRecord, RemovedTarget, FunctionTag); // 0x102dfaa0: unlike Refresh, before unlink
+	Entries.RemoveAt(Index); // 0x102dfaa0 unlink after notify, original caller tag (null named seam)
 	return true;
 }
 

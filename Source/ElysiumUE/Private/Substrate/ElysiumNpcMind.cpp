@@ -26,9 +26,10 @@ bool FElysiumNpcMind::Admit()
 		return false;
 	}
 	AdmissionPhase = EAdmission::Admitted;
-	SetCurrentStateTyped(EElysiumNpcState::Idle);
-	SetDesiredStateTyped(EElysiumNpcState::Idle);
-	Record(TEXT("admission: armed -> admitted (Idle, no executor)"));
+	// 0x1029a0f5 leaves m_NPCState NONE; 0x10273473 leaves the ideal IDLE. Admission is
+	// a host barrier, not a retail state writer: retain both until MaintainSchedule selects.
+	// Otherwise the first GatherConditions (0x1026ecce) rolls an idle sound before it should.
+	Record(TEXT("admission: armed -> admitted (state retained, no executor)"));
 	return true;
 }
 

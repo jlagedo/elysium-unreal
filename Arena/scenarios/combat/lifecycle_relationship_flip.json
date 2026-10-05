@@ -4,7 +4,9 @@
   "stage": "arena",
   "seed": 1,
   "duration": 20.0,
-  "player": { "at": "cover_seat" },
+  "player": {
+    "at": "cover_seat"
+  },
   "cast": [
     {
       "name": "arena_turncoat",
@@ -27,22 +29,96 @@
     }
   ],
   "script": [
-    { "t": 3.0, "do": "fire", "target": "arena_turncoat", "input": "SetRelationship", "param": "player D_HT 5" }
+    {
+      "t": 0.05,
+      "do": "fire",
+      "target": "arena_player_events",
+      "input": "MakePlayerUnkillable"
+    },
+    {
+      "t": 3.0,
+      "do": "fire",
+      "target": "arena_turncoat",
+      "input": "SetRelationship",
+      "param": "player D_HT 5"
+    }
   ],
   "expect": [
-    { "label": "idles", "who": "arena_turncoat", "kind": "schedule", "match": "SCHED_TROIKA_IDLE_DISPOSITION (", "by": 2.0 },
-    { "label": "flipped", "who": "arena_turncoat", "kind": "input", "match": "SetRelationship", "by": 3.5 },
-    { "label": "new_enemy", "who": "arena_turncoat", "kind": "cond+", "match": "NEW_ENEMY (0x54)", "within": 2.0 },
-    { "label": "breaks", "who": "arena_turncoat", "kind": "break", "match": "NEW_ENEMY (0x54)", "within": 1.0 },
-    { "label": "fights", "who": "arena_turncoat", "kind": "schedule", "match": "SCHED_TROIKA_START_COMBAT (", "within": 1.0 },
-    { "label": "fires", "who": "arena_turncoat", "kind": "task", "match": "task_range_attack1 (", "within": 6.0 }
+    {
+      "label": "idles",
+      "who": "arena_turncoat",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_IDLE_DISPOSITION (",
+      "by": 2.0
+    },
+    {
+      "label": "flipped",
+      "who": "arena_turncoat",
+      "kind": "input",
+      "match": "SetRelationship",
+      "by": 3.5
+    },
+    {
+      "label": "new_enemy",
+      "who": "arena_turncoat",
+      "kind": "cond+",
+      "match": "NEW_ENEMY (0x54)",
+      "within": 2.0
+    },
+    {
+      "label": "breaks",
+      "who": "arena_turncoat",
+      "kind": "break",
+      "match": "NEW_ENEMY (0x54)",
+      "within": 1.0
+    },
+    {
+      "label": "fights",
+      "who": "arena_turncoat",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_START_COMBAT (",
+      "within": 1.0
+    },
+    {
+      "label": "fires",
+      "who": "arena_turncoat",
+      "kind": "task",
+      "match": "task_range_attack1 (",
+      "within": 6.0
+    }
   ],
   "never": [
-    { "who": "arena_turncoat", "kind": "cond+", "match": "SEE_ENEMY (0x46)", "until": 2.9 },
-    { "who": "arena_turncoat", "kind": "death" }
+    {
+      "who": "arena_turncoat",
+      "kind": "cond+",
+      "match": "SEE_ENEMY (0x46)",
+      "until": 2.9
+    },
+    {
+      "who": "arena_turncoat",
+      "kind": "death"
+    }
   ],
   "probes": [
-    { "at": "end", "who": "arena_turncoat", "probe": "state", "equals": "Combat" },
-    { "at": "end", "who": "arena_turncoat", "probe": "enemy", "match": "player" }
-  ]
+    {
+      "at": "end",
+      "who": "arena_turncoat",
+      "probe": "state",
+      "equals": "Combat"
+    },
+    {
+      "at": "end",
+      "who": "arena_turncoat",
+      "probe": "enemy",
+      "match": "player"
+    }
+  ],
+  "rows": [
+    {
+      "classname": "events_player",
+      "name": "arena_player_events",
+      "at": "start"
+    }
+  ],
+  "notes": "V4c full close: the real event shots killed the required enemy player at 18.5s and BestEnemy 0x10274475 correctly dropped him at 18.6s. Stage retail MakePlayerUnkillable so the relationship/state record keeps a live enemy; combat expectations and end probes are unchanged."
 }

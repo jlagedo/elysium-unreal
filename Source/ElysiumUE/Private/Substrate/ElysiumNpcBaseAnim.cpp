@@ -537,33 +537,32 @@ void FElysiumNpcBase::ForcePreTranslatedSequenceAndActivity(int32 Activity, int3
 int32 FElysiumNpcBase::WeaponActivityOverride(int32 Activity,
 	TArray<FElysiumNpcClip>* OutSequences) const
 {
-	// Weapon slot 361 `ActivityOverride 0x1024f210`: the ladder's first playable target, else the
-	// input. Every sequence the resolver hands carries the one activity it resolved to, so the
-	// first row's `Activity` names it; a name the shared registrations do not carry keeps the input.
-	TArray<FElysiumNpcClip> Sequences;
-	MeleeSequencesForActivity(Activity, Sequences);
-	int32 Translated = Activity;
-	if (Sequences.Num() > 0)
+	int32 Translated = Activity; // 0x1024f210 weapon translation precedes bare gather
+	const FElysiumNpc* TranslationNpc = AsNpc();
+	IElysiumEmbodiment* TranslationSource = World ? World->Embodiment() : nullptr;
+	const TCHAR* TranslationName = ElysiumRetailActivities::RegistrationNameOf(Activity);
+	if (TranslationNpc && TranslationSource && TranslationName)
 	{
-		const int32 Value = ElysiumRetailActivities::ValueOf(Sequences[0].Activity);
-		if (Value >= 0)
+		FElysiumActivityClipRequest TranslationRequest;
+		TranslationNpc->FillActivityClipRequest(TranslationRequest);
+		TranslationRequest.Activity = TranslationName;
+		TranslationRequest.BodyKind = EElysiumAnimBodyKind::Cast;
+		TranslationRequest.bWeaponTranslationOnly = true; // slot361, no class translation transaction
+		FString IgnoredClassResult, FirstWeaponResult;
+		if (TranslationSource->TranslateNpcActivityRequest(TranslationRequest, IgnoredClassResult, FirstWeaponResult))
 		{
-			Translated = Value;
+			const int32 WeaponResult = ElysiumRetailActivities::ValueOf(FirstWeaponResult);
+			if (WeaponResult >= 0) Translated = WeaponResult;
 		}
 	}
-	if (OutSequences != nullptr)
-	{
-		*OutSequences = MoveTemp(Sequences);
-	}
+	if (OutSequences) MeleeSequencesForActivity(Translated, *OutSequences); // 0x103ea81c -> bare 0x103ea950
 	return Translated;
 }
 
 int32 FElysiumNpcBase::TranslateActivityNumber(int32 Activity, int32& OutWeaponActivity) const
 {
-	// `CAI_BaseNPC::TranslateActivity` (`0x10271ff0`). **SEAM**: the recovered per-species and
-	// per-weapon translation is `Visual/ElysiumAnimationResolve.cpp`'s and is keyed on activity
-	// NAMES, so there is no retail-numbered table at this tier. Answering the activity unchanged is
-	// what retail's own EMPTY translation table gives, which is the unarmed body's case.
+	// 0x10271ff0: recovered class/weapon name tables through a pure translation adapter.
+	// Missing adapter/table answers the unchanged activity, retail's empty-table arm.
 	//
 	// One rewrite of retail's chain is made here, because the name-keyed resolver cannot make it: the
 	// AIM GAITS the move-and-shoot overlay installs (`0x102e84a0`: `9 -> 0x11`, `0x13 -> 0x15`).
@@ -582,6 +581,26 @@ int32 FElysiumNpcBase::TranslateActivityNumber(int32 Activity, int32& OutWeaponA
 			const int32 Gait = Activity == 0x11 ? 9 : 0x13;
 			OutWeaponActivity = Gait;
 			return Gait;
+		}
+	}
+	// 0x10271ff0: the name-keyed table's pure translation, moved ahead of the bare collector.
+	// The embodiment adapter must use TranslateActivity, never Resolve/selection (no draw here).
+	const FElysiumNpc* const TranslationNpc = AsNpc();
+	IElysiumEmbodiment* const TranslationSource = World != nullptr ? World->Embodiment() : nullptr;
+	const TCHAR* const TranslationName = ElysiumRetailActivities::RegistrationNameOf(Activity);
+	if (TranslationNpc != nullptr && TranslationSource != nullptr && TranslationName != nullptr)
+	{
+		FElysiumActivityClipRequest TranslationRequest;
+		TranslationNpc->FillActivityClipRequest(TranslationRequest); // 0x10271ff0 class/weapon/state inputs
+		TranslationRequest.Activity = TranslationName; // 0x10271ff0
+		TranslationRequest.BodyKind = EElysiumAnimBodyKind::Cast;
+		FString TranslatedName; FString FirstWeaponName;
+		if (TranslationSource->TranslateNpcActivityRequest(TranslationRequest, TranslatedName, FirstWeaponName)) // 0x10271ff0
+		{
+			const int32 FirstWeaponNumber = ElysiumRetailActivities::ValueOf(FirstWeaponName);
+			OutWeaponActivity = FirstWeaponNumber != INDEX_NONE ? FirstWeaponNumber : Activity; // 0x10271ff0 first weapon out
+			const int32 TranslatedNumber = ElysiumRetailActivities::ValueOf(TranslatedName);
+			return TranslatedNumber != INDEX_NONE ? TranslatedNumber : Activity; // 0x10271ff0 grapple-number bridge
 		}
 	}
 	OutWeaponActivity = Activity;

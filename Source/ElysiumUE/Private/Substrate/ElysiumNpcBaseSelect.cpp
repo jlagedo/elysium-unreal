@@ -74,8 +74,9 @@ namespace
 
 bool FElysiumNpcBase::SelectBecomeClientRagdoll()
 {
-	++SelectRagdollRequests;
-	return false;
+ ++SelectRagdollRequests;
+ FElysiumNpc* const RagdollNpc = AsNpc();
+ return RagdollNpc != nullptr && RagdollNpc->BecomeClientRagdoll(FVector::ZeroVector, INDEX_NONE, false); // 0x1028a8f7
 }
 
 // =================================================================================================

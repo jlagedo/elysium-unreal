@@ -7,7 +7,7 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 38 generated slot bodies of `FElysiumAnimating`: 0 carry the retail default story 29c recovered,
-// 4 are defined by hand in the substrate, and 34 are still stubs — 22 29c, 12 unassigned.
+// 5 are defined by hand in the substrate, and 33 are still stubs — 21 29c, 12 unassigned.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -221,11 +221,8 @@ void FElysiumAnimating::RemoveExtraAnimationModels()
 
 // slot 247 0x10090c80 (walked) `void SetAttackExtentsForSequence(int)`
 //   layer 0, story 29c
-void FElysiumAnimating::SetAttackExtentsForSequence(int32)
-{
-	FireAnimatingSlot(TEXT("CBaseAnimating::SetAttackExtentsForSequence"), TEXT("0x10090c80"),
-		TEXT("29c"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumAnimating::SetAttackExtentsForSequence`, written by hand in
+// the substrate. Declared here, defined there.
 
 // slot 248 0x10091740 (sdk) `float GetIdealSpeed() const`
 //   layer 0, story 29c
@@ -457,7 +454,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, void()>::Test(&FElysiumAnimating::RemoveExtraAnimationModels),
 				nullptr },
 			{ 247, TEXT("0x10090c80"), TEXT("CBaseAnimating"), TEXT("SetAttackExtentsForSequence"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, void(int32)>::Test(&FElysiumAnimating::SetAttackExtentsForSequence),
 				nullptr },
 			{ 248, TEXT("0x10091740"), TEXT("CBaseAnimating"), TEXT("GetIdealSpeed"),

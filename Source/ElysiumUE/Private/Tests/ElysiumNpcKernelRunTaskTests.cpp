@@ -80,14 +80,22 @@ namespace RunTask19TestShared
 		FElysiumNpcWorldFixture World;
 		T* Npc = nullptr;
 
-		explicit TFixture(const TCHAR* RetailClass)
-			: World([RetailClass]
+		explicit TFixture(const TCHAR* RetailClass, bool bAnimated = false)
+			: World([RetailClass, bAnimated]
 				{
 					FElysiumNpcWorldBuilder Builder(TEXT("runtask19_kernel"), 0x1944u);
 					Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
-					Builder.AddNpcOfClass(TEXT("npc"), FVector::ZeroVector, RetailClass);
+					FElysiumEntityDef& TaskNpcDef = Builder.AddNpcOfClass(TEXT("npc"), FVector::ZeroVector, RetailClass);
+					if (bAnimated) TaskNpcDef.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
 					return Builder;
-				}())
+				}(), [bAnimated](FElysiumRecordingServices& TaskServices)
+				{
+					if (!bAnimated) return;
+					TaskServices.ResolvedNpcActivityLabel = TEXT("task_activity");
+					TaskServices.ResolvedNpcActivityLoops = false;
+					TaskServices.ClipSeconds = 10.f;
+					TaskServices.SeedFixtureActivity(TEXT("ACT_IDLE"), 0); // 0x1008f120 real unfinished clip
+				})
 		{
 			if constexpr (std::is_same_v<T, FElysiumNpc>)
 			{
@@ -102,6 +110,16 @@ namespace RunTask19TestShared
 		}
 
 		double Now() const { return World.World.NowSeconds(); }
+		void UnfinishActivity()
+		{
+			// 0x10280a50 now advances the sequence before the task's completion gate.
+			Npc->SequenceNumber = 0;
+			Npc->IdealSequence = 0;
+			Npc->SequenceCycle = 0.f;
+			Npc->ResetSequenceInfo();
+			Npc->AnimTime = static_cast<float>(Now());
+			Npc->PrevAnimTime = static_cast<float>(Now());
+		}
 	};
 
 	// A step as the runner hands it: the GLOBAL task id. The cases name retail's class-LOCAL number
@@ -300,6 +318,7 @@ bool FElysiumNpcKernelRunTask19BaseActivityArmsTest::RunTest(const FString&)
 		FElysiumScheduleStep S = Step(*F.Npc, Id);
 		Reset(N);
 		N.bSequenceFinished = false;
+		N.AnimTime = N.PrevAnimTime = static_cast<float>(F.Now() + 1.0); // 0x1008f1e9 isolate activity finish from AutoMovement's advance
 		N.FElysiumNpcBase::RunTaskSlot444(&S);
 		TestFalse(FString::Printf(TEXT("0x%x waits on the activity"), Id), Completed(N));
 		FinishActivity(N);
@@ -382,12 +401,12 @@ bool FElysiumNpcKernelRunTask19BaseReloadAndSequenceTest::RunTest(const FString&
 	// 0x38 (`0x102890f3`): with no active weapon a finished activity completes at `0x10289713`;
 	// 0x4b (`0x102889a2`): `m_nSequence == m_nIdealSequence` completes.
 	using namespace RunTask19TestShared;
-	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
+	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"), true);
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
 	FElysiumScheduleStep S = Step(*F.Npc, 0x38);
 	Reset(N);
-	N.bSequenceFinished = false;
+	F.UnfinishActivity();
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
 	TestFalse(TEXT("0x1028916f: the reload waits on the activity"), Completed(N));
 	FinishActivity(N);
@@ -441,7 +460,7 @@ bool FElysiumNpcKernelRunTask19BaseScriptArmsTest::RunTest(const FString&)
 	// 0x60 with no live `m_hCine` -> "Cine died!" and complete (`0x1028942a`); 0x62 with the
 	// sequence finished and no cine -> complete (`0x1028970f`); 0x62 unfinished waits.
 	using namespace RunTask19TestShared;
-	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
+	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"), true);
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
 	FElysiumScheduleStep S = Step(*F.Npc, 0x60);
@@ -450,7 +469,7 @@ bool FElysiumNpcKernelRunTask19BaseScriptArmsTest::RunTest(const FString&)
 	TestTrue(TEXT("a dead cine completes"), Completed(N));
 	S = Step(*F.Npc, 0x62);
 	Reset(N);
-	N.bSequenceFinished = false;
+	F.UnfinishActivity();
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
 	TestFalse(TEXT("0x10289448 waits on m_bSequenceFinished"), Completed(N));
 	N.bSequenceFinished = true;
@@ -601,7 +620,7 @@ bool FElysiumNpcKernelRunTask19TroikaAttackArmsTest::RunTest(const FString&)
 	// Index 5 `0x102ab0a9` (0x34) with no burst completes on the activity (`0x102ab1da`); a burst
 	// with no weapon completes at `0x102ab181`. Index 6 / 7 / 0x0e / 0x0f: activity waits.
 	using namespace RunTask19TestShared;
-	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
+	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"), true);
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
 	for (const int32 Id : { 0x34, 0x35, 0x36, 0x92, 0x93 })
@@ -609,7 +628,7 @@ bool FElysiumNpcKernelRunTask19TroikaAttackArmsTest::RunTest(const FString&)
 		FElysiumScheduleStep S = Step(*F.Npc, Id);
 		Reset(N);
 		N.BurstFireCount = 0;
-		N.bSequenceFinished = false;
+		F.UnfinishActivity();
 		N.RunTaskSlot444(&S);
 		TestFalse(FString::Printf(TEXT("0x%x waits"), Id), Completed(N));
 		FinishActivity(N);
@@ -619,7 +638,7 @@ bool FElysiumNpcKernelRunTask19TroikaAttackArmsTest::RunTest(const FString&)
 	FElysiumScheduleStep S = Step(*F.Npc, 0x34);
 	Reset(N);
 	N.BurstFireCount = 2;
-	N.bSequenceFinished = false;
+	F.UnfinishActivity();
 	if (N.ActiveWeaponEntity() == nullptr)
 	{
 		N.RunTaskSlot444(&S);
@@ -773,12 +792,12 @@ bool FElysiumNpcKernelRunTask19TroikaFinishingMoveTest::RunTest(const FString&)
 	// completes (`0x102ac496`). Index 0x15 `0x102abffe` (0x9d) finished completes (`0x102ac11b`);
 	// 0x14 / 0x16 (0x9c / 0x9e) complete on the activity.
 	using namespace RunTask19TestShared;
-	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"));
+	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"), true);
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
 	FElysiumScheduleStep S = Step(*F.Npc, 0x99);
 	Reset(N);
-	N.bSequenceFinished = false;
+	F.UnfinishActivity();
 	N.FinishingMoveBoneTrackLastTime = -5.0;
 	N.RunTaskSlot444(&S);
 	TestEqual(TEXT("0x102ac4c7 stamps the sample time"), N.FinishingMoveBoneTrackLastTime, F.Now());
@@ -899,12 +918,12 @@ bool FElysiumNpcKernelRunTask19AnimalTest::RunTest(const FString&)
 	// `0x1035f940` (on `CNPC_VRat`): 0x89 completes when curtime - m_flLastAttackTime exceeds the
 	// task data (`0x1035fa2b`); 0x8b on the activity.
 	using namespace RunTask19TestShared;
-	TFixture<FElysiumNpc> F(TEXT("CNPC_VRat"));
+	TFixture<FElysiumNpc> F(TEXT("CNPC_VRat"), true);
 	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
 	FElysiumNpc& N = *F.Npc;
 	FElysiumScheduleStep S = Step(*F.Npc, 0x89, 2.f);
 	Reset(N);
-	N.bSequenceFinished = false;
+	F.UnfinishActivity();
 	N.LastAttackTime = F.Now() - 1.0;
 	N.RunTaskSlot444(&S);
 	TestFalse(TEXT("one second of two keeps running"), Completed(N));
@@ -958,7 +977,9 @@ bool FElysiumNpcKernelRunTask19ZombieTest::RunTest(const FString&)
 	// a `prop_base`), slot 66 `Hide` (`0x1032c2ba`) and `ThinkSet(SUB_Remove)` at +0.5 s -- NOT the
 	// ragdoll (corrected: the witness was the ragdoll arm's corpse mark).
 	TestTrue(TEXT("AddMiscFlag(0x80000)"), (N.MiscFlags & 0x80000u) != 0);
-	TestFalse(TEXT("0x1032c296: the static-corpse arm makes no ragdoll"), N.IsCorpse());
+	TestTrue(TEXT("0x1032c296: the static-corpse arm still marks corpse identity"), N.IsCorpse());
+	TestEqual(TEXT("0x1032c296: the static-corpse arm never requests a ragdoll"),
+		F.World.Services.Count(TEXT("StartBodyRagdoll")), 0);
 	bool bStaticCorpse = false;
 	for (const TUniquePtr<FElysiumEntity>& Ent : F.World.World.Entities())
 	{

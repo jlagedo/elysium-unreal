@@ -766,9 +766,10 @@ bool FElysiumNpcKernelCondRequestFleeTest::RunTest(const FString&)
 	// listing it. With no program installed there is no mask, so a standing condition is refused.
 	F.Npc->Schedule.Clear();
 	F.Npc->Cognition.Conditions.Set(EElysiumNpcCond::SupernaturalFleeLevel);   // 0x21
+	const int32 DesiredBeforeRefusal = F.Npc->GetMind().DesiredRetailState();
 	TestEqual(TEXT("with no installed program the flee request is refused"),
 		F.Npc->RequestFleeDesiredState(EElysiumNpcCond::SupernaturalFleeLevel, 0x4468), 0);
-	TestEqual(TEXT("and nothing was written"), F.Npc->GetMind().DesiredRetailState(), 0);
+	TestEqual(TEXT("and nothing was written"), F.Npc->GetMind().DesiredRetailState(), DesiredBeforeRefusal);
 	TestFalse(TEXT("INITIAL_FLEE is not armed"),
 		F.Npc->NpcFlags.Has(EElysiumNpcFlag::INITIAL_FLEE));
 

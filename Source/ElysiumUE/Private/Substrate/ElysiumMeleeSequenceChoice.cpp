@@ -345,7 +345,7 @@ namespace
 			if (Embodiment->GetBodyClipByRawIndex(Character.Visual, Character.ModelStem(),
 					Clip.RawIndex, Label, Found) && !Label.IsEmpty())
 			{
-				return Troika->SequenceRowFor(Found.Owner, Label, Found.IsLooping());
+				return Troika->SequenceRowFor(Found.Owner, Label, Found.IsLooping(), Found.RawIndex);
 			}
 		}
 		return Clip.HasRawIndex() ? Clip.RawIndex : Ordinal;

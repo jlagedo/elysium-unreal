@@ -255,6 +255,8 @@ public:
 	// fade, or 0 when it carries the no-transition bit. The host takes the larger of this and the
 	// clip already playing, so this answers for one clip rather than for the pair.
 	float ClipFadeSeconds(const FString& Stem, const FString& ClipName) const;
+	bool TranslateNpcActivityRequest(const FElysiumActivityClipRequest& Request,
+ FString& OutTranslated, FString& OutFirstWeapon);
 	bool ResolveNpcActivityClip(const struct FElysiumActivityClipRequest& Request,
 		struct FElysiumActivityClip& Out);
 	void NpcActivitySequences(const struct FElysiumActivityClipRequest& Request,
@@ -285,6 +287,7 @@ public:
 	void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp, const FString& Stem, int32 Family);
 	// The model's resting clip, and whether a named clip loops. Both read the manifest only — no
 	// glb, no mesh — so a prop can ask before deciding which representation to stand.
+	FString PickAnimatedPropRestClip(const FString& Stem) const;
 	FString AnimatedPropRestClip(const FString& Stem, int32 PlacementToken = 0) const;
 	bool FindAnimatedPropClip(const FString& Stem, const FString& ClipName, bool& bOutLoops) const;
 

@@ -165,6 +165,7 @@ void FElysiumPlayer::Spawn()
 	RefreshClanEffects();
 	SyncHealthFromSheet();
 	SyncFromBody();
+	AddToTeam(TEXT("player")); // 0x1016db7e, before visual installation
 
 	if (!Model.IsEmpty())
 	{
@@ -919,6 +920,7 @@ void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
 	Money      = Record.Money;
 	Health     = Record.Health;
 	MaxHealth  = Record.MaxHealth;
+	AddToTeam(TEXT("player")); // 0x1016ebd0: successful base restored sheet first
 	Law        = Record.Law;
 	// The law/police block crosses UNSCOPED, unlike the feed, discipline and stealth blocks below.
 	// Every deadline in it is on the session clock (`UElysiumSessionSubsystem`'s, which outlives
@@ -1175,14 +1177,21 @@ void FElysiumPlayer::PollTouchContacts(double Now)
 
 void FElysiumPlayer::PostThinkAnimation()
 {
+	// 0x1016bede..0x1016bf17: game-over, locked, alive, observer in that order.
+	constexpr bool bGameOverInput = false; // named open seam: game-rules game-over input
+	constexpr bool bPlayerLockedInput = false; // named open seam: m_iPlayerLocked
+	constexpr bool bObserverInput = false; // named open seam: IsObserver
+	if (bGameOverInput) { return; } // 0x1016bede
+	if (bPlayerLockedInput) { return; } // 0x1016beef
+	if (!IsAlive()) { return; } // 0x1016bf03: before body lookup, every channel word kept
+	if (bObserverInput) { return; } // 0x1016bf17
 	// `CBasePlayer::PostThink 0x1016be10`'s animation step, in retail's order: slot 250
 	// `StudioFrameAdvance(0)` -> `0x101600a0` -> slot 258 `DispatchAnimEvents(interval, this)` ->
 	// slot 312 `UpdateCharacter`. Called once per world tick at the point that stands for
 	// `PostThink`: after `SyncFromBody` / `TickStepClock`, before `RunThinks`.
 	//
 	// Retail's live body is skipped by game-over, `m_iPlayerLocked`, a non-live player and
-	// `IsObserver`; the port carries no gate here, as the world tick's poll it replaces carried none
-	// (`IsObserver` has no writer in the image; `TickStealthKill` tests `IsAlive` itself).
+	// `IsObserver`; liveness is real above, the other three inputs are named open seams.
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 	USkeletalMeshComponent* SkeletalBody = GetSkeletalBody();
 	// `GetModelPtr() != 0`, the dispatcher's own precondition: a bodiless player, a headless world
@@ -1343,9 +1352,9 @@ void FElysiumPlayer::PostThinkAnimation()
 
 	// --- slot 312 `UpdateCharacter`'s stand-in, last. ---
 	// The paired stealth action's completion (`0x10165d90` reads `m_bSequenceFinished`). The other
-	// half of slot 312 is the player's melee sweep (`MeleeSwingUpdate 0x10346cd0`): slot 312's sweep,
-	// still at the map actor's tick (`EntityWorld->AdvanceMeleeSwings`, `Map/ElysiumMapActor.cpp`).
+	// half of slot 312 is the player's melee sweep (`MeleeSwingUpdate 0x10346cd0`) at this tail.
 	TickStealthKill();
+	MeleeSwingUpdate(); // 0x1016c316 slot312 -> 0x103246d0 slot315, after slot258
 }
 
 void FElysiumPlayer::SyncFromBody()

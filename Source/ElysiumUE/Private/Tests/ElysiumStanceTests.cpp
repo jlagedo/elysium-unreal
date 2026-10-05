@@ -18,6 +18,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Substrate/ElysiumDisposition.h"
+#include "Substrate/ElysiumNpc.h"
 #include "ElysiumStanceTypes.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -35,6 +36,7 @@ namespace
 	{
 		FElysiumDisposition Row;
 		Row.Name = TEXT("Neutral");
+		Row.Level = 1; // 0x102c0f70 exact (name, level) lookup
 		Row.AnimName = TEXT("Neutral");
 		Row.TalkingStanceChangeThreshold = 0.15f;
 		Row.TalkingStanceChangeChance = 65;
@@ -314,6 +316,10 @@ bool FElysiumStanceDriverTest::RunTest(const FString&)
 		FElysiumRecordingServices Services;
 		Services.StanceClips = JackShapedClips();
 		Services.DispositionRow = NeutralTuning();
+		Services.SeedFixtureStance(TEXT("smiling_jack")); // 0x100ecee0 named model table
+		// 0x10273390 probes the model activity table before SetIdealActivity(0xf1).
+		// Names alone do not supply that input; the first idle is the table's disposition row.
+		Services.BodyClipsByRawIndex[10000].Clip.Activity = TEXT("ACT_DISPOSITION");
 		Services.ClipSeconds = 2.0f;   // every stance clip reports the same length
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
@@ -328,6 +334,7 @@ bool FElysiumStanceDriverTest::RunTest(const FString&)
 		// commits it through slot 611 (`0x10295a80` -> `0x102c12a0`). That is the fifth think, 0.4 s.
 		double Now = 0.0;
 		for (int32 i = 0; i < 5; ++i) { World.Tick(Now); Now += 0.1; }
+
 
 		TestTrue(TEXT("the table is resolved through the disposition row, not a raw name"),
 			Services.Saw(TEXT("ResolveDisposition Neutral")));
@@ -437,6 +444,7 @@ bool FElysiumStanceCrossDispositionTransitionTest::RunTest(const FString&)
 	Joy.AnimName = TEXT("Joy");
 	Services.DispositionRows.Add(TEXT("neutral|1"), Neutral);
 	Services.DispositionRows.Add(TEXT("joy|1"), Joy);
+	Services.SeedFixtureStance(TEXT("smiling_jack")); // 0x100ed150 absent transition -> new idle
 	// KnownNpcClips is deliberately left empty: this fixture authors no Neutral<->Joy transition,
 	// which is the ordinary case B4 exists for.
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
@@ -465,8 +473,8 @@ bool FElysiumStanceCrossDispositionTransitionTest::RunTest(const FString&)
 		{
 			return C.StartsWith(TEXT("PlayNpcClip smiling_jack Stance_Trans_"));
 		}));
-	TestTrue(TEXT("the body still lands on its idle pose through ResetAnimToIdle"),
-		Services.Saw(TEXT("RefreshNpcIdle smiling_jack")));
+	TestTrue(TEXT("0x100ed150 the body commits the new disposition's idle fallback"),
+		Services.Saw(TEXT("PlayNpcClip smiling_jack Stance_Neutral_Idle_1 loop=1")));
 
 	return true;
 }

@@ -276,6 +276,7 @@ void UElysiumSessionSubsystem::ClearMapSnapshot(const FString& Map)
 void UElysiumSessionSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
+ TeamRegistryPtr = MakeUnique<FElysiumTeamRegistry>(); // 0x10230750
 	RegisterSaveCommands();
 
 	// The time facade reaches the engine (pause, dilation) through the game instance's
@@ -529,7 +530,8 @@ void UElysiumSessionSubsystem::Deinitialize()
 	NativeCallCounts.Empty();
 	ScriptHostPtr.Reset();
 
-	Super::Deinitialize();
+	TeamRegistryPtr.Reset(); // 0x102307b0
+ Super::Deinitialize();
 }
 
 void UElysiumSessionSubsystem::SetScriptHost(TUniquePtr<IElysiumScriptHost> InHost)
@@ -933,3 +935,6 @@ void UElysiumSessionSubsystem::RecordNativeCall(const FString& Call, const FElys
 		NativeCallHistory.RemoveAt(0, NativeCallHistory.Num() - NativeCallHistoryMax, EAllowShrinking::No);
 	}
 }
+
+FElysiumTeamRegistry& UElysiumSessionSubsystem::TeamRegistry() const
+{ check(TeamRegistryPtr); return *TeamRegistryPtr; } // 0x10751140

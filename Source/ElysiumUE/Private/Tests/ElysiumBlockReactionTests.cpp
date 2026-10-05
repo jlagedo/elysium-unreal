@@ -1,3 +1,4 @@
+#include "Tests/ElysiumMeleeStepFixture.h"
 // Content-free Substrate automation: the melee block family — its pure rules, the two
 // reactions a blocked contact produces, the damage that still lands behind them, and the one channel
 // they and the flinch have to share.
@@ -334,16 +335,16 @@ namespace
 		{
 			if (FElysiumWeapon* Weapon = GiveWeapon(*Attacker, GFists))
 			{
-				Weapon->AttackIntent(FElysiumWeapon::EIntent::Primary);
+				Weapon->ResetSwingContact(); Weapon->Swing.ClipLabel = GSwingLabel; Weapon->Swing.ClipOwnerStem = GSwingBank;
 			}
 			// The clock moves FIRST, so the base-channel holds the contact takes are measured against
 			// a `now` inside the swing rather than against zero. The walk does not advance the clock —
 			// it is a per-frame pass over a cycle, not a scheduler.
 			World->Tick(GContactTick);
 			Services.BodyClipPhase.Cycle = 0.0f;
-			World->AdvanceMeleeSwings(0.02f);
+			ElysiumTestMeleeStep(*World, Services.BodyClipPhase);
 			Services.BodyClipPhase.Cycle = 0.50f;
-			World->AdvanceMeleeSwings(0.02f);
+			ElysiumTestMeleeStep(*World, Services.BodyClipPhase);
 		}
 	};
 }
@@ -575,7 +576,9 @@ bool FElysiumBlockReactionProducerTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, F.Player->Handle);
+		F.Attacker->AsNpc()->BaseMemory.Enemy = F.Player->Handle; // 0x102387b0 real named shooter
+  FElysiumAnimEvent ShotEvent; ShotEvent.Event = 3031; ShotEvent.Options = TEXT("0");
+  Pistol->ShotFromAnimEvent(ShotEvent); // 0x10238160 no NPC shot timer
 		F.World->Tick(GContactTick);
 
 		TestTrue(TEXT("the shot lands"), DamageTaken(*F.Player) > 0);
@@ -627,13 +630,13 @@ bool FElysiumBlockReactionDamageTest::RunTest(const FString&)
 		// decides the damage is the margin, and what decides the reaction is the block.
 		if (FElysiumWeapon* Stick = GiveWeapon(*F.Attacker, GStick))
 		{
-			Stick->AttackIntent(FElysiumWeapon::EIntent::Primary);
+			Stick->ResetSwingContact(); Stick->Swing.ClipLabel = GSwingLabel; Stick->Swing.ClipOwnerStem = GSwingBank;
 		}
 		F.World->Tick(GContactTick);
 		F.Services.BodyClipPhase.Cycle = 0.0f;
-		F.World->AdvanceMeleeSwings(0.02f);
+		ElysiumTestMeleeStep(*F.World, F.Services.BodyClipPhase);
 		F.Services.BodyClipPhase.Cycle = 0.50f;
-		F.World->AdvanceMeleeSwings(0.02f);
+		ElysiumTestMeleeStep(*F.World, F.Services.BodyClipPhase);
 
 		TestTrue(TEXT("a non-damaging blocked contact still plays the blocked reaction"),
 			Saw(F.Services, TEXT("ResolveNpcActivityClip"), TEXT("ACT_BLOCKED_REACTION")));

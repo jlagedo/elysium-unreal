@@ -40,6 +40,7 @@ class UPhysicsConstraintComponent;
 class UPrimitiveComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
+class FElysiumTeamRegistry;
 class FElysiumEntityWorld;
 
 // Source clamps `gpGlobals->frametime` and so does `FElysiumEntityWorld::FrameSeconds()`. The
@@ -148,10 +149,12 @@ using FElysiumAiTraceSink = TFunction<void(const FElysiumAiTraceEvent&)>;
 // subsystem, which is what lets the whole substrate run with `nullptr, nullptr, {}`.
 class FElysiumEntityWorld
 {
+ TUniquePtr<FElysiumTeamRegistry> HeadlessTeamRegistry; // fixture owner
 public:
 	FElysiumEntityWorld(AActor* InOwner, UElysiumSessionSubsystem* InGameState,
 		const FElysiumWorldServices& InServices = FElysiumWorldServices());
 	~FElysiumEntityWorld();
+	void Teardown(); // explicit level shutdown for fixture/owner lifecycle, also called by destructor
 
 	FElysiumEntityWorld(const FElysiumEntityWorld&) = delete;
 	FElysiumEntityWorld& operator=(const FElysiumEntityWorld&) = delete;
@@ -421,15 +424,8 @@ public:
 
 	// One frame of the melee contact walk, for EVERY character holding a live melee swing.
 	//
-	// Retail runs the swept contact on the CHARACTER's own update rather than on the player's input
-	// path, so this is not a sibling of the weapon frame above: the player and every swinging NPC
-	// reach it through the same walk over the entity list. It sits in the post-move pass because the
-	// sweep reads the frame's final positions and the pose the body is actually drawing.
-	//
-	// It takes the frame's delta because the sub-step count is `floor(dt * 100)` — the one place in
-	// this layer that needs a delta rather than a clock, and the reason it is driven from the map
-	// actor's tick instead of from `Tick(Now)`.
-	void AdvanceMeleeSwings(float DeltaSeconds);
+	// 0x10751140: common game-system table, or one fixture table.
+	FElysiumTeamRegistry& TeamRegistry() const; // 0x10751140
 
 	// The whole combat button field, forwarded as a LEVEL rather than as an edge pair. This
 	// is retail's one current-button field at player `+0x2088`: every consumer reads bits off it and
@@ -961,7 +957,6 @@ public:
 		const TCHAR* Note) const;
 
 private:
-	void Teardown();
 	// `FocusCandidate` is the slot-32 answer and owns `FocusedUsable` (and therefore what a `+use`
 	// press can act on); `IconCandidate` is the union of slots 32/34/35 and owns the reticle prompt,
 	// because retail's `PlayerUseIconFilter` draws the icon on any of the three

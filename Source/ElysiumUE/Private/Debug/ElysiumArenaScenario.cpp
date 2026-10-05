@@ -26,7 +26,7 @@ namespace ElysiumArenaScenarioParse
 		TEXT("schedule"), TEXT("task"), TEXT("taskdone"), TEXT("taskfail"), TEXT("break"),
 		TEXT("cond+"), TEXT("cond-"), TEXT("state"), TEXT("sequence"), TEXT("seqfinished"),
 		TEXT("animevent"), TEXT("move"), TEXT("damage"), TEXT("death"), TEXT("corpse"),
-		TEXT("hint+"), TEXT("hint-"), TEXT("output"), TEXT("input"), TEXT("stealthkill"),
+		TEXT("hint+"), TEXT("hint-"), TEXT("output"), TEXT("input"), TEXT("stealthkill"), TEXT("swinghit"), TEXT("meleeimpact"), TEXT("deathcaller"),
 		TEXT("removed"),
 		TEXT("script"),
 	};
@@ -530,6 +530,18 @@ namespace ElysiumArenaScenarioParse
 			EElysiumArenaProbe::PlayerWeapon, EElysiumArenaProbe::PlayerCrouched,
 			EElysiumArenaProbe::PlayerGrappling, EElysiumArenaProbe::Speed2d, EElysiumArenaProbe::MoveYaw,
 			EElysiumArenaProbe::GroundSpeed, EElysiumArenaProbe::CorpseOnFloor, EElysiumArenaProbe::Exists,
+			EElysiumArenaProbe::SameTeam,
+			EElysiumArenaProbe::SwingRecordedHit,
+			EElysiumArenaProbe::OneHitKill,
+			EElysiumArenaProbe::TeamSymbol,
+			EElysiumArenaProbe::Wounds,
+			EElysiumArenaProbe::HealthCap,
+			EElysiumArenaProbe::NpcFlags1,
+			EElysiumArenaProbe::SpawnFlags,
+			EElysiumArenaProbe::RenderAlpha,
+			EElysiumArenaProbe::RenderMode,
+			EElysiumArenaProbe::Activity,
+
 		};
 		TArray<FString> Names;
 		for (const EElysiumArenaProbe Probe : All)
@@ -662,9 +674,20 @@ namespace ElysiumArenaScenarioParse
 		case EElysiumArenaProbe::PlayerCrouched:
 		case EElysiumArenaProbe::PlayerGrappling:
 		case EElysiumArenaProbe::CorpseOnFloor:
+				case EElysiumArenaProbe::SameTeam:
+		case EElysiumArenaProbe::SwingRecordedHit:
+		case EElysiumArenaProbe::OneHitKill:
 		case EElysiumArenaProbe::Exists:
 			Answer = FElysiumArenaValue::EType::Bool;
 			break;
+				case EElysiumArenaProbe::TeamSymbol:
+		case EElysiumArenaProbe::Wounds:
+		case EElysiumArenaProbe::HealthCap:
+		case EElysiumArenaProbe::NpcFlags1:
+		case EElysiumArenaProbe::SpawnFlags:
+		case EElysiumArenaProbe::RenderAlpha:
+		case EElysiumArenaProbe::RenderMode:
+		case EElysiumArenaProbe::Activity:
 		case EElysiumArenaProbe::Health:
 		case EElysiumArenaProbe::DistanceTo:
 		case EElysiumArenaProbe::Speed2d:
@@ -701,7 +724,7 @@ namespace ElysiumArenaScenarioParse
 		{
 			return R.Fail(Field(Path, TEXT("condition")), TEXT("only `has_condition` takes a condition"));
 		}
-		if (Out.Probe == EElysiumArenaProbe::DistanceTo)
+		if (Out.Probe == EElysiumArenaProbe::DistanceTo || Out.Probe == EElysiumArenaProbe::SameTeam || Out.Probe == EElysiumArenaProbe::SwingRecordedHit)
 		{
 			if (!ReadAt(R, Object, TEXT("to"), Path, Out.To))
 			{
@@ -740,7 +763,8 @@ namespace ElysiumArenaScenarioParse
 		{
 			EElysiumArenaAction::PlayerTeleport, EElysiumArenaAction::PlayerWalk, EElysiumArenaAction::Fire,
 			EElysiumArenaAction::Console, EElysiumArenaAction::Spawn, EElysiumArenaAction::Kill,
-			EElysiumArenaAction::PlayerCrouch, EElysiumArenaAction::LightPin, EElysiumArenaAction::DialogChoose,
+			EElysiumArenaAction::PlayerCrouch, EElysiumArenaAction::LightPin, EElysiumArenaAction::DialogChoose, EElysiumArenaAction::SeedHealth,
+			EElysiumArenaAction::DamagePacket,
 		};
 		TArray<FString> Names;
 		for (const EElysiumArenaAction Action : All)
@@ -762,7 +786,7 @@ namespace ElysiumArenaScenarioParse
 		Out = FElysiumArenaAction();
 		if (!CheckFields(R, Object, Path, { TEXT("t"), TEXT("after"), TEXT("delay"), TEXT("do"), TEXT("at"),
 				TEXT("face"), TEXT("target"), TEXT("input"), TEXT("param"), TEXT("command"), TEXT("row"),
-				TEXT("on"), TEXT("value"), TEXT("index"), TEXT("end") }))
+				TEXT("on"), TEXT("value"), TEXT("index"), TEXT("end"), TEXT("attacker") }))
 		{
 			return false;
 		}
@@ -824,6 +848,27 @@ namespace ElysiumArenaScenarioParse
 			}
 			const TSharedPtr<FJsonValue>* Param = FindValue(Object, TEXT("param"));
 			return Param == nullptr || ReadValue(R, *Param, Field(Path, TEXT("param")), Out.Param);
+		}
+		case EElysiumArenaAction::SeedHealth:
+		{
+			if (RowKind == ERowKind::MapCast) return R.Fail(Path, TEXT("seed_health is an arena fixture action"));
+			if (!ReadString(R, Object, TEXT("target"), Path, ENeed::Required, Out.Target)) return false;
+			const TSharedPtr<FJsonValue>* Param = FindValue(Object, TEXT("param"));
+			if (Param == nullptr || !ReadValue(R, *Param, Field(Path, TEXT("param")), Out.Param)) return false;
+			if (Out.Param.Type != FElysiumArenaValue::EType::Number || Out.Param.Number <= 0
+				|| Out.Param.Number > MAX_int32 || FMath::FloorToDouble(Out.Param.Number) != Out.Param.Number)
+				return R.Fail(Path, TEXT("seed_health param must be a positive integer cap"));
+			return true;
+		}
+		case EElysiumArenaAction::DamagePacket:
+		{
+			if (RowKind == ERowKind::MapCast) return R.Fail(Path, TEXT("damage_packet is an arena fixture action"));
+			if (!ReadString(R, Object, TEXT("target"), Path, ENeed::Required, Out.Target)
+				|| !ReadString(R, Object, TEXT("attacker"), Path, ENeed::Required, Out.Attacker)) return false;
+			const TSharedPtr<FJsonValue>* PacketAmount = FindValue(Object, TEXT("param"));
+			if (!PacketAmount || !ReadValue(R, *PacketAmount, Field(Path, TEXT("param")), Out.Param)) return false;
+			return Out.Param.Type == FElysiumArenaValue::EType::Number && Out.Param.Number >= 0
+				? true : R.Fail(Path, TEXT("damage_packet param must be a nonnegative amount"));
 		}
 		case EElysiumArenaAction::Kill:
 			return ReadString(R, Object, TEXT("target"), Path, ENeed::Required, Out.Target);
@@ -1324,6 +1369,8 @@ const TCHAR* ActionName(EElysiumArenaAction Action)
 	case EElysiumArenaAction::PlayerCrouch:   return TEXT("player_crouch");
 	case EElysiumArenaAction::LightPin:       return TEXT("light_pin");
 	case EElysiumArenaAction::DialogChoose:   return TEXT("dialog_choose");
+	case EElysiumArenaAction::SeedHealth: return TEXT("seed_health");
+	case EElysiumArenaAction::DamagePacket: return TEXT("damage_packet");
 	default:                                 return TEXT("?");
 	}
 }
@@ -1341,6 +1388,18 @@ const TCHAR* ProbeName(EElysiumArenaProbe Probe)
 	case EElysiumArenaProbe::HasCondition:    return TEXT("has_condition");
 	case EElysiumArenaProbe::OnGround:        return TEXT("on_ground");
 	case EElysiumArenaProbe::DistanceTo:      return TEXT("distance_to");
+	case EElysiumArenaProbe::SameTeam: return TEXT("same_team");
+	case EElysiumArenaProbe::SwingRecordedHit: return TEXT("swing_recorded_hit");
+	case EElysiumArenaProbe::OneHitKill: return TEXT("one_hit_kill");
+	case EElysiumArenaProbe::TeamSymbol: return TEXT("team_symbol");
+	case EElysiumArenaProbe::Wounds: return TEXT("wounds");
+	case EElysiumArenaProbe::HealthCap: return TEXT("health_cap");
+	case EElysiumArenaProbe::NpcFlags1: return TEXT("npc_flags1");
+	case EElysiumArenaProbe::SpawnFlags: return TEXT("spawn_flags");
+	case EElysiumArenaProbe::RenderAlpha: return TEXT("render_alpha");
+	case EElysiumArenaProbe::RenderMode: return TEXT("render_mode");
+	case EElysiumArenaProbe::Activity: return TEXT("activity");
+
 	case EElysiumArenaProbe::PlayerWeapon:    return TEXT("player_weapon");
 	case EElysiumArenaProbe::PlayerCrouched:  return TEXT("player_crouched");
 	case EElysiumArenaProbe::PlayerGrappling: return TEXT("player_grappling");

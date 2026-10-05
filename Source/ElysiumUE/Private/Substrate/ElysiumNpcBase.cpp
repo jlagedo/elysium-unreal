@@ -39,6 +39,8 @@
 
 #include <cmath>
 
+FElysiumNpcBase::FElysiumNpcBase() { EnemyMemory.BindOwner(*this); } // 0x102df320 +0
+
 // --- `m_hCine` and the ideal-state writers a director uses (story 5 fold A3) ------------------
 
 FElysiumScriptedSequence* FElysiumNpcBase::ResolveCine() const

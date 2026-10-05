@@ -1803,6 +1803,13 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Mode
 	return Comp;
 }
 
+bool UElysiumEntityBodies::TranslateNpcActivityRequest(const FElysiumActivityClipRequest& Request,
+ FString& OutTranslated, FString& OutFirstWeapon)
+{
+ UElysiumAnimSubsystem* const TranslationAnims = GetAnims();
+ return TranslationAnims && TranslationAnims->TranslateActivityRequest(Request, OutTranslated, OutFirstWeapon);
+}
+
 bool UElysiumEntityBodies::ResolveNpcActivityClip(const FElysiumActivityClipRequest& Request,
 	FElysiumActivityClip& Out)
 {

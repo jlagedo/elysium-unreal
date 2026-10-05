@@ -367,6 +367,7 @@ bool FElysiumFeedTranceActivityIdentityTest::RunTest(const FString&)
 		return false;
 	}
 	F.Services.bNpcActivitiesResolve = true;
+	F.Services.SeedFixtureActivity(TEXT("ACT_DISPOSITION_MESMERIZED"), 50);
 	// `MaintainSchedule` calls RunTask after StartTask in the same loop. Put the body on the resolved
 	// sequence before that think, so the identity probe must advance without spending the watchdog.
 	F.Services.bBodyClipPhaseSet = true;

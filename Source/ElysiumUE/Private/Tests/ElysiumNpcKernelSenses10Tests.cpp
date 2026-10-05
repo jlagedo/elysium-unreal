@@ -606,9 +606,9 @@ bool FElysiumNpcKernelSenses10BestEnemyTest::RunTest(const FString&)
 		F.Guard->BestEnemy(), static_cast<FElysiumEntity*>(F.Other));
 
 	// `10274475`: slot 158 `IsAlive` on the candidate.
-	F.Other->bDead = true;
+	F.Other->LifeState = 1; // 0x100b4dc0: dead while nonhidden/resolvable, bDead stays false
 	TestNull(TEXT("0x1027447d a dead candidate is refused"), F.Guard->BestEnemy());
-	F.Other->bDead = false;
+	F.Other->LifeState = 0;
 
 	// `1027452b`: the distance key is `__ftol` of the SUM OF SQUARES — no root. At 400 units the key
 	// is 160000, not 400. This is the correction to `CNPC_VFrenzyShadow`'s walk, and the base body
@@ -625,6 +625,9 @@ bool FElysiumNpcKernelSenses10BestEnemyTest::RunTest(const FString&)
 	F.Guard->Relationships.SetEntity(F.Other->Handle, EElysiumRelationship::Hate, 1);
 	TestEqual(TEXT("0x102744f1 a higher IRelationPriority wins whatever the distance"),
 		F.Guard->BestEnemy(), static_cast<FElysiumEntity*>(F.Player));
+	F.Player->LifeState = 1; // 0x10274475: player corpses are retained in memory but rejected
+	TestEqual(TEXT("0x10274475 rejects dead player and chooses live replacement"),
+		F.Guard->BestEnemy(), static_cast<FElysiumEntity*>(F.Other));
 	return true;
 }
 

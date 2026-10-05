@@ -1,0 +1,135 @@
+{
+  "name": "damage_knockout_one_hit",
+  "about": "Positive 18 packet admitted by 0x1032ef60: ONE_HIT_KILL independently kills below cap at 0x102beea4. Knockout writer 0x102a3339/0x102a3344, cower flag writer 0x102a585d..0x102a5874 (0x105e5788/0x105e5590/0x105e5398); no claim about the historical fifth hit.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 9,
+  "player": {
+    "at": "start"
+  },
+  "cast": [
+    {
+      "name": "arena_victim",
+      "classname": "npc_VHumanCombatant",
+      "at": "east",
+      "face": 0,
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "npc_perception": "3",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "player_reaction": "D_NU 5",
+        "hint_groups": "2",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": ""
+      }
+    }
+  ],
+  "script": [
+    {
+      "do": "seed_health",
+      "target": "arena_victim",
+      "param": 100000,
+      "t": 0.1
+    },
+    {
+      "do": "fire",
+      "target": "arena_victim",
+      "input": "Faint",
+      "t": 2
+    },
+    {
+      "do": "damage_packet",
+      "target": "arena_victim",
+      "after": "flag_task",
+      "delay": 0.2,
+      "param": 0,
+      "attacker": "player"
+    },
+    {
+      "do": "damage_packet",
+      "target": "arena_victim",
+      "after": "flag_task",
+      "delay": 0.5,
+      "param": 18,
+      "attacker": "player"
+    }
+  ],
+  "expect": [
+    {
+      "label": "flag_task",
+      "who": "arena_victim",
+      "kind": "task",
+      "match": "task_knockout (",
+      "by": 4
+    },
+    {
+      "label": "zero",
+      "who": "arena_victim",
+      "kind": "script",
+      "match": "damage_packet 0 from=player",
+      "within": 0.3
+    },
+    {
+      "label": "positive",
+      "who": "arena_victim",
+      "kind": "damage",
+      "match": "18 ",
+      "within": 0.5
+    },
+    {
+      "label": "caller",
+      "who": "arena_victim",
+      "kind": "deathcaller",
+      "match": "0x102beea4",
+      "within": 0.1
+    },
+    {
+      "label": "dies",
+      "who": "arena_victim",
+      "kind": "death",
+      "match": "",
+      "within": 0.2
+    },
+    {
+      "label": "corpse",
+      "who": "arena_victim",
+      "kind": "corpse",
+      "match": "",
+      "within": 0.2
+    }
+  ],
+  "never": [
+    {
+      "who": "arena_victim",
+      "kind": "death",
+      "after": "flag_task",
+      "within": 0.4
+    }
+  ],
+  "probes": [
+    {
+      "at": 1,
+      "who": "arena_victim",
+      "probe": "health_cap",
+      "equals": 99999
+    },
+    {
+      "at": "end",
+      "who": "arena_victim",
+      "probe": "wounds",
+      "less": 100000
+    },
+    {
+      "at": "end",
+      "who": "arena_victim",
+      "probe": "alive",
+      "equals": false
+    }
+  ],
+  "notes": "S13 acceptance prediction; measured result is recorded at V4c integration close. Current cap, wounds and flag probes are measurements; five separately logged packets in control must total 90. No arithmetic fix or retrospective knockout attribution. Second-pass measurement setup recomputes the sheet before the initial probe: base cap 100000 yields effective cap 99999, the same value read at 0x1032ef60. No damage arithmetic changed. The fixture packet carries the real player handle into 0x10265ed0; the zero packet reaches the same admission body, rather than the scalar input refusing it."
+}

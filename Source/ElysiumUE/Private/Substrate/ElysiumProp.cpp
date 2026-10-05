@@ -405,7 +405,7 @@ bool FElysiumProp::PlayRandomAnimation()
 	{
 		return false;
 	}
-	const FString Clip = Embodiment->AnimatedPropRestClip(AnimatedStem, Handle.Index);
+	const FString Clip = Embodiment->PickAnimatedPropRestClip(AnimatedStem); // 0x10190850
 	bool bLoops = false;
 	Embodiment->FindAnimatedPropClip(AnimatedStem, Clip, bLoops);
 	return PlayAnimation(Clip, bLoops);
@@ -533,7 +533,7 @@ bool FElysiumProp::StandRestPose()
 	// (Sequence == Playing && bLoop && bPlayingLoop) *without* restoring the play rate, so a
 	// hold created as a loop would latch a later request out of ever un-freezing — and
 	// `palmtree`'s rest clip and its `LoopSequence` are the same clip, so that path is live.
-	if (!PlayAnimation(Embodiment->AnimatedPropRestClip(AnimatedStem, Handle.Index), /*bLoop*/ false))
+	if (!PlayAnimation(Embodiment->PickAnimatedPropRestClip(AnimatedStem), /*bLoop*/ false)) // 0x1018df70
 	{
 		return false;
 	}

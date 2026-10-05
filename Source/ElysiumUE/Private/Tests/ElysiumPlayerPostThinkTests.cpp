@@ -214,6 +214,43 @@ bool FElysiumPlayerPostThinkOrderTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerPostThinkAliveGateTest,
+	"Elysium.Arm.Player.PostThink.AliveGateSlot312Order", GFlags)
+bool FElysiumPlayerPostThinkAliveGateTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("v4c_postthink"), 8310);
+	Builder.AddEntity(TEXT("worldspawn"), TEXT("world"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumPlayer& Subject = *Fixture.Player(); // FElysiumPlayer is final; exercise the actual player
+	Subject.SetRuntimeModel(TEXT("models/character/pc/male/tremere_armor_0.mdl"));
+	Fixture.Services.NpcEventTimelines.Add(FElysiumRecordingServices::EventTimelineKey(TEXT("pc_bank"), TEXT("walk"))).Add(Ev(0.25f, 2050));
+	StandOn(Fixture.Services, EElysiumAnimChannel::Base, TEXT("pc_bank"), TEXT("walk"), 1, 0.3f);
+	bool bDispatched = false, bLiveAtDispatch = false, bStealthAtDispatch = false;
+	Fixture.World.SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+	{
+		if (Event.Entity == Subject.Handle && Event.Kind == FName(TEXT("animevent")))
+		{ bDispatched = true; bLiveAtDispatch = Subject.bMeleeSwingIsLive; bStealthAtDispatch = Subject.Grapple.bOwnsStealthAction; }
+	});
+	Subject.PostThinkChannels[0].Words.LastEventCheck = 0.42f;
+	Subject.PostThinkChannels[0].PlayId = 77;
+	Subject.bMeleeSwingIsLive = true; Subject.LifeState = 1;
+	Subject.PostThinkAnimation();
+	TestFalse(TEXT("0x1016bf03 dead player dispatches nothing"), bDispatched);
+	TestTrue(TEXT("0x1016bf03 dead gate preserves slot315 live byte"), Subject.bMeleeSwingIsLive);
+	TestEqual(TEXT("0x1016bf03 dead player keeps cursor"), Subject.PostThinkChannels[0].Words.LastEventCheck, 0.42f);
+	TestEqual(TEXT("0x1016bf03 dead player keeps channel identity"), Subject.PostThinkChannels[0].PlayId, uint32(77));
+	Subject.LifeState = 0;
+	Subject.Grapple.Type = EElysiumGrappleType::StealthKill; Subject.Grapple.Role = EElysiumGrappleRole::Attacker;
+	Subject.Grapple.bOwnsStealthAction = true;
+	Subject.PostThinkAnimation();
+	TestTrue(TEXT("0x1016c316 slot258 dispatches before the update tail"), bDispatched);
+	TestTrue(TEXT("0x1016c316 slot315 has not cleared its no-descriptor live byte at dispatch"), bLiveAtDispatch);
+	TestTrue(TEXT("0x1016c316 stealth completion has not run at dispatch"), bStealthAtDispatch);
+	TestFalse(TEXT("0x10346cd0 update tail clears live on no descriptor"), Subject.bMeleeSwingIsLive);
+	TestFalse(TEXT("0x1016c316 TickStealthKill ran in the tail"), Subject.Grapple.bOwnsStealthAction);
+	return true;
+}
+
 }   // namespace ElysiumPlayerPostThinkTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS && ELYSIUM_WITH_ARM_TESTS

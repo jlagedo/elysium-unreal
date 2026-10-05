@@ -346,6 +346,10 @@ int32 FElysiumNpc::OnTakeDamage_Alive(void* InInfo)
 		// 5. `m_bfAINPCFlags & 0x40000000` (ONE_HIT_KILL): slot 144 `Event_Killed(info)` and return.
 		if (NpcFlags.Has(EElysiumNpcFlag::ONE_HIT_KILL))                    // 0x102bee93 / 0x102bee9d
 		{
+			if (World && World->HasAiTraceSink()) World->EmitAiTrace(*this, TEXT("deathcaller"),
+				FString::Printf(TEXT("0x102beea4 amount=%g flags=0x%x wounds=%d cap=%d schedule=%s"), Amount, NpcFlags.RawWord1(),
+					Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Health),
+					Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth), ElysiumScheduleName(Schedule.Current)));
 			Event_Killed(Info);                                             // 0x102beea4
 			return Result;                                                  // 0x102beeaf
 		}

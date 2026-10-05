@@ -1188,15 +1188,6 @@ void FElysiumCombatCharacter::DispatchTakeDamagePacket(FElysiumDmg* Dmg, float S
 
 namespace
 {
-	// `m_TeamSymbol` (`+0x10b0`) as `0x10323a70` reads it. The team registry `AddToTeam`
-	// (`0x103239a0`) fills is not carried (`Spawn19AddToTeam` is a counted seam), so every character
-	// answers the constructor's `0xffff` (`0x10326de0`), which is "no team".
-	constexpr uint16 GNoTeamSymbol = 0xffff;
-	uint16 CombatTeamSymbolOf(const FElysiumCombatCharacter& /*Character*/)
-	{
-		return GNoTeamSymbol;
-	}
-
 	// A retail body this substrate does not carry, called at its retail position: the stub tally
 	// (`elysium.stubs`) records the call, and nothing else happens -- the seam answers "nothing".
 	void CombatFireSeam(const FElysiumCombatCharacter& Self, const TCHAR* Surface, const TCHAR* Address,
@@ -1273,17 +1264,6 @@ namespace
 		return Rules != nullptr ? Rules->Rules().Int(TEXT("VampFrenzy_Info"), Key, ImageDefault) : ImageDefault;
 	}
 
-	// `0x10323930`: both characters on the same team (a non-`0xffff` symbol, equal on both).
-	bool CombatSameTeam(const FElysiumCombatCharacter& Self, const FElysiumCombatCharacter* Other)
-	{
-		const uint16 Mine = CombatTeamSymbolOf(Self);
-		if (Mine == GNoTeamSymbol || Other == nullptr)
-		{
-			return false;
-		}
-		const uint16 Theirs = CombatTeamSymbolOf(*Other);
-		return Theirs != GNoTeamSymbol && Theirs == Mine;
-	}
 }
 
 int32 FElysiumCombatCharacter::OnTakeDamage(void* InInfo)
@@ -1308,7 +1288,7 @@ int32 FElysiumCombatCharacter::OnTakeDamage(void* InInfo)
 		(World != nullptr && Info->Attacker.IsSet()) ? World->Resolve(Info->Attacker) : nullptr;
 	const FElysiumCombatCharacter* const AttackerCharacter =
 		AttackerEntity != nullptr ? AttackerEntity->AsCombatCharacter() : nullptr;
-	if (CombatSameTeam(*this, AttackerCharacter) && AttackerEntity != this)
+	if (IsSameTeam(AttackerCharacter) && AttackerEntity != this) // 0x1032ef60: before discipline/life dispatch
 	{
 		return 0;
 	}
@@ -1365,6 +1345,8 @@ int32 FElysiumCombatCharacter::OnTakeDamage(void* InInfo)
 	//    false, a `DMG_ALWAYSGIB` (0x2000) hit without `DMG_NEVERGIB` (0x1000) — takes slot 402
 	//    `Event_Gibbed`, whose answer is what the body returns; a false answer (or no gib) takes
 	//    slot 403 `Event_Dying`.
+	if (World && World->HasAiTraceSink()) World->EmitAiTrace(*this, TEXT("deathcaller"),
+		FString::Printf(TEXT("0x1032f18e wounds=%d cap=%d"), Taken, Ceiling)); // read-only actual caller
 	Event_Killed(Info);                                                          // slot 144 (+0x240)
 	const uint32 Bits = Info->Dmg != nullptr ? (Info->Dmg->DmgMask | Info->DamageBits) : Info->DamageBits;
 	const bool bGib = Slot399()                                                  // slot 399 (+0x63c)
@@ -1495,10 +1477,30 @@ void FElysiumCombatCharacter::CreateCorpse(const FVector& Force, void* InInfo)
 	}
 	else
 	{
-		BecomeClientRagdoll();                                                 // 0x1032c29c 0x10090180
+		if (FElysiumNpc* const RagdollNpc = AsNpc()) // 0x1032c29c
+		{
+			const int32 ForceBone = RagdollNpc->CorpseForceBone(InInfo); // 0x1032c1e4
+			// 0x1032c1e4: an absent bone input must never masquerade as the explicit bone -1 fork.
+			if (ForceBone != INDEX_NONE) // named bone-source seam; V4d supplies hitbox/Spine2
+			{
+				(void)RagdollNpc->BecomeClientRagdoll(Force, ForceBone, false); // 0x1032c29c
+			}
+			else if (!RagdollNpc->HasClientRagdollRig()) // 0x10090180: only the proved no-rig arm
+			{
+				RagdollNpc->LastSetSizeMinsUnits = FVector::ZeroVector; // 0x10090180
+				RagdollNpc->LastSetSizeMaxsUnits = FVector::ZeroVector; // 0x10090180
+				if (RagdollNpc->GetNpcMotor()) RagdollNpc->GetNpcMotor()->SetHullSize(FVector::ZeroVector, FVector::ZeroVector); // 0x101cf390
+				++RagdollNpc->SetSizeCalls; // 0x10090180
+			}
+		}
+		else { BecomeClientRagdoll(); } // 0x1032c29c: non-NPC body adapter
 		Corpse = this;                                                         // 0x1032c2a5 slot 137 answers `this`
 	}
 	// The AI trace's `corpse` event: which arm landed the body (debug output only, behind its sink).
+	if (FElysiumNpc* const CorpseOwner = AsNpc()) // 0x1032c0e0: after OnDeath and corpse creation
+	{
+		CorpseOwner->MarkCorpseCreated(); // port corpse identity, independent of rig capability
+	}
 	if (World != nullptr && World->HasAiTraceSink())
 	{
 		World->EmitAiTrace(*this, TEXT("corpse"),
@@ -2019,10 +2021,9 @@ bool FElysiumCombatCharacter::PlayReactionActivity(const FElysiumReactionPlayReq
 	FElysiumActivityClipRequest Resolve;
 	FillActivityClipRequest(Resolve);
 	Resolve.Activity = Request.Activity;
-	// Retail's `SelectWeightedSequence` picks among the equal activity's variants with `random()`, so
-	// the weighted pick re-rolls with every reaction. Off the session's own Reaction stream, whose
-	// position is in the save.
-	Resolve.Variant = ElysiumRng::Stream(EElysiumRngStream::Reaction).RandHelper(MAX_int32);
+	// 0x1008dc40 / 0x101606e0: the actual activity lookup draws on the one shared pick stream.
+	// Non-selection reaction direction/jitter retain their own stream and call order.
+	Resolve.Variant = 0; // 0x1008dc40 / 0x101606e0: actual lookup draws once on common stream
 	Resolve.HitYaw = Request.HitYawDegrees;
 	Resolve.Source = EElysiumAnimSource::Damage;
 	// The chain is the BODY's, and the identity is the world's own player handle — the same test the

@@ -38,7 +38,7 @@ Made by makers: `npc_VPedestrian` 3, `npc_VRat` 3, `npc_VVampire` 8.
 
 | Band | Reached core | `rule` | `mechanism` | `present` | `dead` | `unsettled` | No verdict |
 |---|---|---|---|---|---|---|---|
-| 0–4 | 671 | 294 | 122 | 88 | 164 | 3 | 0 |
+| 0–4 | 671 | 295 | 122 | 87 | 164 | 3 | 0 |
 | 5–9 | 120 | 53 | 35 | 26 | 6 | 0 | 0 |
 | 10–18 | 139 | 84 | 27 | 8 | 20 | 0 | 0 |
 | 19–29 | 132 | 109 | 9 | 2 | 11 | 0 | 1 |
@@ -415,7 +415,7 @@ A reached body a map class holds where neither `CAI_BaseNPC` nor `CAI_BaseNPCTro
 | `0x1034afe0` CNPCMaker::Spawn | CNPCMaker#103 | 15 | rule | FElysiumNpcMaker::Spawn |
 | `0x10386560` CNPC_VHuman::SelectScheduleRangedCombat | CNPC_VHumanCombatant#605, CNPC_VPedestrian#605, CNPC_VVampire#605 | 15 | rule | FElysiumNpc::SelectScheduleRangedCombat |
 | `0x103a2930` CNPC_VPedestrian::IRelationType | CNPC_VPedestrian#404 | 15 | rule | FElysiumNpc::IRelationType |
-| `0x103a38c0` CNPC_VPedestrian::CreateCorpse | CNPC_VPedestrian#301 | 15 | rule | FElysiumNpcPedestrian::PedestrianCreateCorpse |
+| `0x103a38c0` CNPC_VPedestrian::CreateCorpse | CNPC_VPedestrian#301 | 15 | rule | hand:FElysiumNpcPedestrian::CreateCorpse |
 | `0x103854f0` CNPC_VHuman::NPC_EarlyTranslateActivity | CNPC_VHumanCombatant#375, CNPC_VPedestrian#375, CNPC_VVampire#375 | 16 | rule | FElysiumNpc::NPC_EarlyTranslateActivity |
 | `0x1034af70` CNPCMaker::vfunc5 | CNPCMaker#5 | 17 | mechanism | CRT:operator delete |
 | `0x10386b20` CNPC_VHumanCombatant::vfunc5 | CNPC_VHumanCombatant#5 | 17 | mechanism | CRT:operator delete |

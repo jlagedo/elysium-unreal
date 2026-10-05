@@ -261,6 +261,14 @@ struct FElysiumNpcWorldFixture
 		// which is the clock every case measures its absolute stamps from.
 		World.Activate(-FElysiumNpcBase::NpcInitThinkDelay);
 		World.Tick(0.0);
+		// These arm worlds drive already-idle actors at the case's zero. 0x1029a0f5 now
+		// survives admission, so supply that precondition explicitly through SetState
+		// (0x1026e340); initialization tests re-run NPCInit to inspect its NONE state.
+		for (const TUniquePtr<FElysiumEntity>& FixtureEntity : World.Entities())
+		{
+			FElysiumNpc* FixtureNpc = FixtureEntity ? FixtureEntity->AsNpc() : nullptr;
+			if (FixtureNpc != nullptr && FixtureNpc->NpcStateRetail() == 0) FixtureNpc->SetState(1);
+		}
 	}
 
 	// The clock at which the NPC's first think falls — the frame this fixture ends on.

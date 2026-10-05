@@ -1,0 +1,226 @@
+{
+  "name": "melee_same_team",
+  "about": "Melee contact 0x1034394d..0x103439a7: NPC hate/fear then valid equal SameTeam 0x10323930 rejects before hit-list insertion, impact 0x102579f0 or knockback. Slot331 0x10347180 centre ray remains clear.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 10,
+  "player": {
+    "at": "start",
+    "face": 0
+  },
+  "cast": [
+    {
+      "name": "arena_attacker",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        -815,
+        0,
+        0
+      ],
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "npc_perception": "3",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "player_reaction": "D_HT 5",
+        "hint_groups": "2",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": "",
+        "additionalequipment": "item_w_baseball_bat",
+        "team_name": "!Arena_Melee"
+      }
+    },
+    {
+      "name": "arena_teammate",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        -875,
+        -45,
+        0
+      ],
+      "face": 0,
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "npc_perception": "3",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "player_reaction": "D_NU 5",
+        "hint_groups": "2",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": "",
+        "team_name": "arena_melee"
+      }
+    },
+    {
+      "name": "arena_control",
+      "classname": "npc_VHumanCombatant",
+      "at": [
+        -875,
+        -45,
+        0
+      ],
+      "face": 0,
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "npc_perception": "3",
+        "spawnflags": "4",
+        "StartHidden": "0",
+        "player_reaction": "D_NU 5",
+        "hint_groups": "2",
+        "use_interesting": "0",
+        "allow_alert_lookaround": "0",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": "",
+        "team_name": "different_melee"
+      }
+    }
+  ],
+  "script": [
+    {
+      "do": "fire",
+      "target": "arena_player_events",
+      "input": "MakePlayerUnkillable",
+      "t": 0.05
+    },
+    {
+      "do": "fire",
+      "target": "arena_teammate",
+      "input": "DisableThink",
+      "t": 0,
+      "param": true
+    },
+    {
+      "do": "fire",
+      "target": "arena_control",
+      "input": "DisableThink",
+      "t": 0,
+      "param": true
+    },
+    {
+      "do": "fire",
+      "target": "arena_attacker",
+      "input": "SetRelationship",
+      "t": 0,
+      "param": "arena_teammate D_HT 1"
+    },
+    {
+      "do": "fire",
+      "target": "arena_attacker",
+      "input": "SetRelationship",
+      "t": 0,
+      "param": "arena_control D_HT 1"
+    },
+    {
+      "do": "seed_health",
+      "target": "arena_teammate",
+      "param": 100000,
+      "t": 0.1
+    },
+    {
+      "do": "seed_health",
+      "target": "arena_control",
+      "param": 100000,
+      "t": 0.1
+    }
+  ],
+  "expect": [
+    {
+      "label": "engages",
+      "who": "arena_attacker",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_START_COMBAT (",
+      "by": 3
+    },
+    {
+      "label": "swing",
+      "who": "arena_attacker",
+      "kind": "task",
+      "match": "task_melee_attack1 (",
+      "within": 3
+    },
+    {
+      "label": "control_hit",
+      "who": "arena_control",
+      "kind": "swinghit",
+      "match": "from=arena_attacker",
+      "within": 4
+    },
+    {
+      "label": "control_damage",
+      "who": "arena_control",
+      "kind": "damage",
+      "match": "from=arena_attacker",
+      "within": 1
+    }
+  ],
+  "never": [
+    {
+      "who": "arena_teammate",
+      "kind": "damage",
+      "match": "from=arena_attacker"
+    },
+    {
+      "who": "arena_teammate",
+      "kind": "swinghit",
+      "match": "from=arena_attacker"
+    },
+    {
+      "who": "arena_teammate",
+      "kind": "meleeimpact",
+      "match": "from=arena_attacker"
+    }
+  ],
+  "probes": [
+    {
+      "at": 1,
+      "who": "arena_attacker",
+      "probe": "same_team",
+      "equals": true,
+      "to": "arena_teammate"
+    },
+    {
+      "at": 1,
+      "who": "arena_attacker",
+      "probe": "team_symbol",
+      "less": 65535
+    },
+    {
+      "at": "end",
+      "who": "arena_teammate",
+      "probe": "wounds",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "arena_control",
+      "probe": "wounds",
+      "greater": 0
+    },
+    {
+      "at": "end",
+      "who": "arena_attacker",
+      "probe": "swing_recorded_hit",
+      "equals": false,
+      "to": "arena_teammate"
+    }
+  ],
+  "notes": "S13 acceptance prediction; measured result is recorded at V4c integration close. InputDisableThink 0x1029f2a0 accepts a Bool variant; integer1 disables nothing. Setup corrected to JSON true. Off-ray overlap moved nearer the attacker: both bystanders occupy the same [-875,45,0] seat; the different-team control must still record a hit and positive damage. Second pass places both controls on the negative-Y side of the swing; the positive-Y controls recorded no contact.",
+  "rows": [
+    {
+      "classname": "events_player",
+      "name": "arena_player_events",
+      "at": "start"
+    }
+  ]
+}

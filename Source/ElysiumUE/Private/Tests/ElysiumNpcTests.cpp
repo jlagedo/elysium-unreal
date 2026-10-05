@@ -1099,6 +1099,7 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		// The body authors its walk: `TASK_WALK_PATH` (`0x10286438`) walks only when
 		// `SelectWeightedSequence(ACT_WALK)` finds a sequence, and runs otherwise.
 		Services.bNpcActivitiesResolve = true;
+		Services.SeedFixtureActivity(TEXT("ACT_WALK"), 49); // 0x10286438 explicit walk candidate
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
 		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		ElysiumAdoptPlacesAt(World, { FVector(100.0, 25.0, 0.0), FVector(200.0, 25.0, 0.0) });   // route_1, route_2
@@ -1236,6 +1237,7 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 		// would still look right against the default fixture.
 		Services.ResolvedNpcActivityLabel = TEXT("relaxed_walk");
 		Services.ResolvedNpcActivityClip = TEXT("relaxed_walk_0");
+		Services.SeedFixtureActivity(TEXT("ACT_WALK"), 50);
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
 		ElysiumStandSpawnClock(World, -FElysiumNpcBase::NpcInitThinkDelay);
 		ElysiumAdoptPlacesAt(World, { FVector(100.0, 25.0, 0.0), FVector(200.0, 25.0, 0.0) });   // route_1, route_2
@@ -1267,7 +1269,7 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 		FString Resolve;
 		for (const FString& Call : Services.Calls)
 		{
-			if (Call.StartsWith(TEXT("ResolveNpcActivityClip jack ACT_WALK")))
+			if (Call.StartsWith(TEXT("NpcActivitySequences jack ACT_WALK")))
 			{
 				Resolve = Call;
 				break;
@@ -1325,7 +1327,8 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 		// `m_bSequenceLoops` off the sequence's own flags, and without that a body-language idle
 		// authored as a loop plays once and then stands on its last frame — frozen, not resting.
 		Services.ResolvedNpcActivityLoops = true;
-		const float Looped = Walker->PlayActivity(TEXT("ACT_SMOKING"));
+		Services.SeedFixtureActivity(TEXT("ACT_SMALL_FLINCH"), 50); // 0x104126e0 registered fixture activity
+		const float Looped = Walker->PlayActivity(TEXT("ACT_SMALL_FLINCH"));
 		TestTrue(TEXT("an authored loop keeps looping however the task asked for it"),
 			Services.Saw(TEXT("PlayNpcClip jack smoke loop=1")));
 		// The schedule executor's wait IS this number, so the task has to be told the clip's own
@@ -1335,7 +1338,9 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 
 		Services.Calls.Reset();
 		Services.ResolvedNpcActivityLoops = false;
-		Walker->PlayActivity(TEXT("ACT_SMOKING"));
+		Walker->ActivityNumber = 0; // 0x10272440 fresh transaction, rather than changing a live descriptor
+		Services.SeedFixtureActivity(TEXT("ACT_SMALL_FLINCH"), 50); // 0x104126e0: ACT_SMOKING is not registered
+		Walker->PlayActivity(TEXT("ACT_SMALL_FLINCH"));
 		TestTrue(TEXT("a row authoring no loop plays as the one-shot the task asked for"),
 			Services.Saw(TEXT("PlayNpcClip jack smoke loop=0")));
 
@@ -1343,10 +1348,12 @@ bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
 		// clip and never an invented duration.
 		Services.Calls.Reset();
 		Services.bNpcActivitiesResolve = false;
-		TestTrue(TEXT("an unresolved activity fails the task with a negative wait"),
-			Walker->PlayActivity(TEXT("ACT_SMOKING")) < 0.f);
-		TestFalse(TEXT("...and nothing was played on the body"),
-			Services.Saw(TEXT("PlayNpcClip")));
+		Services.BodyClipsByRawIndex.Reset();
+		const int32 RetainedSequence = Walker->SequenceNumber;
+		TestTrue(TEXT("0x10272130: missing activity retries disposition/current row"), Walker->PlayActivity(TEXT("ACT_SMALL_FLINCH")) >= 0.f);
+		TestEqual(TEXT("0x10295a80: absent stance table retains current sequence"), Walker->SequenceNumber, RetainedSequence);
+		TestFalse(TEXT("0x10272440: unchanged activity/sequence does not reset its playback"),
+			Services.Saw(TEXT("PlayNpcClip jack smoke loop=0")));
 	}
 
 	return true;

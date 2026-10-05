@@ -1,6 +1,6 @@
 {
   "name": "rollcall_vplaceholder",
-  "about": "Roll call: classname npc_VPlaceholder builds CNPC_VPlaceholder (factory 0x103a3a20, research/tooling/ghidra/driver/kernel_factories.tsv). No map, maker or script authors a row of it (docs/vtmb/npc-ai/population.md \u00a7 NPC classes with no instance / placed by code); a hand-written row stands it; NPCThink 0x10292de0 -> RunAI 0x1026f110 -> MaintainSchedule: on its first thinks the class's SelectSchedule (its own override or the Troika arm it inherits) picks a program and SetSchedule 0x10280e50 installs it; the program then runs (StartTask/RunTask) for the rest of the ten seconds without a task failing every think.",
+  "about": "CNPC_VPlaceholder::NPCInit 0x103a4350 calls the Troika base, sets targetable, then ThinkSet(NULL). The explicit clear at 0x103a43d4 forbids any subsequent NPCThink/schedule. The prior rollcall incorrectly relied on the port ignoring that clear.",
   "stage": "arena",
   "seed": 1,
   "duration": 10.0,
@@ -19,15 +19,7 @@
       }
     }
   ],
-  "expect": [
-    {
-      "label": "selects",
-      "who": "rollcall_vplaceholder",
-      "kind": "schedule",
-      "match": "",
-      "by": 3.0
-    }
-  ],
+  "expect": [],
   "never": [
     {
       "who": "rollcall_vplaceholder",
@@ -36,6 +28,10 @@
     {
       "who": "rollcall_vplaceholder",
       "kind": "death"
+    },
+    {
+      "who": "rollcall_vplaceholder",
+      "kind": "schedule"
     }
   ],
   "probes": [

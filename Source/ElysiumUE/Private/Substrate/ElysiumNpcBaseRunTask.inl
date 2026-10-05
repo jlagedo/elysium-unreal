@@ -106,8 +106,11 @@ int32 InsertedAiSoundVolume = 0;
 float InsertedAiSoundDuration = 0.f;
 void InsertAiSound(int32 Type, const FVector& OriginCm, int32 Volume, float Duration);
 
-/** `FUN_102695d0` `0x102695d0` -- `SUB_StartFadeOut`. **SEAM**: counted; the fade think is not built. */
+/** `0x102695d0` / `0x10269960`: the installed fade clock, independent of visibility. */
 int32 StartFadeOutCalls = 0;
+uint8 FadeRenderAlpha = 255; // 0x10269960 +0x1a3; Troika uses RenderAlphaByte
+int32 FadeRelinkCalls = 0; // 0x102695d0 Relink; spatial-partition presentation seam
+void FadeOutThink(); // 0x10269960, thunk 0x100152b2
 void StartFadeOut();
 
 /** The active weapon's `m_bInReload` (`CBaseCombatWeapon +0x898`) write and its slot 322

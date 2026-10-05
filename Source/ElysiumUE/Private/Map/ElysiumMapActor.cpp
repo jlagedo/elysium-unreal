@@ -2619,15 +2619,6 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 		// the phase of the clip the transaction just armed, so it answers correctly on the arming
 		// frame.
 		EntityWorld->UpdatePlayerWeaponFrame();
-		// The melee contact walk, for the player and every swinging NPC alike. It runs
-		// AFTER the weapon frame, so a swing accepted this frame starts its walk on the next one:
-		// the body's pose layer has not ticked since the clip was armed, and the first frame that
-		// reports the clip playing is the first frame the walk has a cycle to test. That is the
-		// swing's first live frame, and the frame the opposed roll is staged on.
-		//
-		// It is the only substrate call in this pass that takes the frame's delta, because the
-		// sub-step count is `floor(dt * 100)` and nothing else in the layer measures a frame.
-		EntityWorld->AdvanceMeleeSwings(DeltaSeconds);
 		// `CBasePlayer::PostThink`'s controller copy (`0x1016c510`..`0x1016c672`), at its own place in
 		// retail's body: after the live half (the weapon frame and the melee walk above stand for
 		// `ItemPostFrame` and `UpdateCharacter`), past `LAB_1016c41d`, so it runs whatever the

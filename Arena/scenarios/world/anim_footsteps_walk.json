@@ -5,21 +5,73 @@
   "seed": 1,
   "duration": 20.0,
   "cast": [
-    {"name": "sentry2"}
+    {
+      "name": "sentry2"
+    }
   ],
   "script": [
-    {"t": 0.1, "do": "player_teleport", "at": [-18343.88, -7632.56, 17440.0], "face": -90.0}
+    {
+      "t": 0.1,
+      "do": "player_teleport",
+      "at": [
+        -18992,
+        -7767,
+        17409
+      ],
+      "face": -90.0
+    }
   ],
   "expect": [
-    {"label": "setup", "who": "sentry2", "kind": "input", "match": "SetupPatrolType", "by": 3.0},
-    {"label": "follow", "who": "sentry2", "kind": "input", "match": "FollowPatrolPath", "within": 1.0},
-    {"label": "goal_1", "who": "sentry2", "kind": "move", "match": "^goal -?[0-9.]+ -79[0-9][0-9]", "regex": true, "within": 1.5},
-    {"label": "left_foot", "who": "sentry2", "kind": "animevent", "match": "^2050( |$)", "regex": true, "within": 6.0},
-    {"label": "right_foot", "who": "sentry2", "kind": "animevent", "match": "^2051( |$)", "regex": true, "within": 2.0}
+    {
+      "label": "setup",
+      "who": "sentry2",
+      "kind": "input",
+      "match": "SetupPatrolType",
+      "by": 3.0
+    },
+    {
+      "label": "follow",
+      "who": "sentry2",
+      "kind": "input",
+      "match": "FollowPatrolPath",
+      "within": 1.0
+    },
+    {
+      "label": "goal_1",
+      "who": "sentry2",
+      "kind": "move",
+      "match": "^goal -?[0-9.]+ -79[0-9][0-9]",
+      "regex": true,
+      "within": 1.5
+    },
+    {
+      "label": "left_foot",
+      "who": "sentry2",
+      "kind": "animevent",
+      "match": "^2050( |$)",
+      "regex": true,
+      "within": 6.0
+    },
+    {
+      "label": "right_foot",
+      "who": "sentry2",
+      "kind": "animevent",
+      "match": "^2051( |$)",
+      "regex": true,
+      "within": 2.0
+    }
   ],
   "never": [
-    {"who": "sentry2", "kind": "animevent", "match": "^[5-9][0-9]{3,}( |$)", "regex": true},
-    {"who": "sentry2", "kind": "death"}
+    {
+      "who": "sentry2",
+      "kind": "animevent",
+      "match": "^[5-9][0-9]{3,}( |$)",
+      "regex": true
+    },
+    {
+      "who": "sentry2",
+      "kind": "death"
+    }
   ],
-  "notes": "The staging and the first three expectations are patrol_sentry2_pingpong's (its notes explain the wires and the pre-wire TaskFail). The record ends when the two footsteps are met; its `never`s run to the duration, so it also watches ~15 s of the walk for a client-band id reaching the trace."
+  "notes": "The staging and the first three expectations are patrol_sentry2_pingpong's (its notes explain the wires and the pre-wire TaskFail). The record ends when the two footsteps are met; its `never`s run to the duration, so it also watches ~15 s of the walk for a client-band id reaching the trace. V4c measurement: the old player seat is ~700 cm from the first patrol goal, outside the near cadence; a 0.939 Hz walk at one-second NPCThink loses the wrap at 0x10091880. Seat the player 150 cm north of that goal to measure repeated server footsteps on the near think cadence 0x10290b60. Event expectations remain unchanged."
 }

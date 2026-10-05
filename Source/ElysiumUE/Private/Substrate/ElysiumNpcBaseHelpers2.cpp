@@ -78,11 +78,9 @@ int32 FElysiumNpcBase::NavCurrentLinkActivity() const
 
 int32 FElysiumNpcBase::SelectHeaviestSequence(int32 Activity, int32 CurrentSequence) const
 {
-	// `CBaseAnimating::SelectHeaviestSequence(activity, -1)`. The sequence bridge (story 8 wave 2):
-	// this runtime's resolver has no weights, so the heaviest sequence is the resolver's own first
-	// (primary) answer for the activity, which is also what the weighted pick answers here.
-	(void)CurrentSequence;
-	return SelectWeightedSequenceForActivity(Activity);
+ (void)CurrentSequence; // 0x1008dd30
+ const FElysiumNpc* const HeaviestNpc = AsNpc();
+ return HeaviestNpc != nullptr ? const_cast<FElysiumNpc*>(HeaviestNpc)->SelectHeaviestSequence(Activity) : INDEX_NONE;
 }
 
 void FElysiumNpcBase::FUN_102e1270()

@@ -13,6 +13,7 @@
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumAnimEvent.h"                  // FElysiumAnimEvent — `SequenceEvents`' view
 #include "Visual/ElysiumNpcClips.h"           // FElysiumNpcClip — `MeleeSequencesForActivity`'s list
+#include "Visual/ElysiumAnimationPick.h"
 
 // Story 29c-1, family **Anim** — the animation layers, the flex/expression controllers and the
 // scene-event queue of `order.md` layers 0–9.
@@ -144,15 +145,46 @@ int32 FElysiumNpc::ChangeStanceForReaction()
 	{
 		return INDEX_NONE;
 	}
-	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
-	const double Now = World != nullptr ? World->NowSeconds() : 0.0;
-	const FElysiumStanceChoice Choice = ElysiumStance::ChangeStance(StanceClips, Stance, Now,
-		Stream);
-	if (!Choice.IsSet())
+	FRandomStream& StanceStream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule); // 0x102c1230
+	int32 NewStance = 0; // 0x102c1230
+	do { NewStance = StanceStream.RandRange(0, 2); } while (NewStance == Stance.Current); // 0x102c1230
+	const int32 FromStance = Stance.Current; // 0x102c1230
+	const int32 Transition = LookupSequenceByName(*StanceClips.Trans[FromStance][NewStance]); // 0x100ecfc0
+	Stance.Current = NewStance; // 0x102c1230 +0x64c8
+	Stance.LastChangeTime = static_cast<float>(World != nullptr ? World->NowSeconds() : 0.0); // 0x102c1230
+	return Transition; // 0x102c1230: this body does not write either latch
+}
+
+int32 FElysiumNpc::SelectDispositionStance()
+{
+	if (!EnsureStanceResolved()) { return SequenceNumber; } // 0x102c12a0: -1 keeps current
+	const int32 CurrentStance = Stance.Current; // 0x102c12a0 +0x64c8
+	const double StanceNow = World != nullptr ? World->NowSeconds() : 0.0; // 0x102c12a0
+	int32 StanceSequence = INDEX_NONE; // 0x102c12a0
+	FRandomStream& StanceStream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule); // 0x102c12a0
+	if (bIsTalking || Stance.bInFidget || Stance.bInChange) // 0x102c12a0 +0x64c0/+0x64e0/1
 	{
-		return INDEX_NONE;
+		StanceSequence = LookupSequenceByName(*StanceClips.Idle[CurrentStance]); // 0x102c12a0
+		Stance.bInFidget = false; Stance.bInChange = false; // 0x102c12a0
 	}
-	return LookupSequenceByName(*Choice.Clip);
+	else if (StanceClips.Idle[CurrentStance] != StanceClips.Fidget[CurrentStance] // 0x102c12a0
+		&& StanceStream.RandRange(1, 100) < StanceTuning.StandingFidgetChance) // 0x102c12a0
+	{
+		StanceSequence = LookupSequenceByName(*StanceClips.Fidget[CurrentStance]); // 0x102c12a0
+		Stance.bInFidget = true; Stance.bInChange = false; // 0x102c12a0
+	}
+	else if (StanceTuning.StandingStanceChangeThreshold < StanceNow - Stance.LastChangeTime // 0x102c12a0
+		&& StanceStream.RandRange(1, 100) < StanceTuning.StandingStanceChangeChance) // 0x102c12a0
+	{
+		StanceSequence = ChangeStanceForReaction(); // 0x102c1230, redraw loop after both chance draws
+		Stance.bInFidget = false; Stance.bInChange = true; // 0x102c12a0
+	}
+	else
+	{
+		StanceSequence = LookupSequenceByName(*StanceClips.Idle[CurrentStance]); // 0x102c12a0
+		Stance.bInFidget = false; Stance.bInChange = false; // 0x102c12a0
+	}
+	return StanceSequence == INDEX_NONE ? SequenceNumber : StanceSequence; // 0x102c12a0
 }
 
 void FElysiumNpc::CallPythonDialogFunction(const FString& FunctionName)
@@ -321,7 +353,8 @@ void FElysiumNpc::ResolveDispositionActivity(int32& OutSequence, int32& OutTrans
 // `ElysiumNpcBaseAnim.cpp`) answered for this body gets a stable number the kernel's sequence words
 // carry; `ResetSequence` plays it.
 
-int32 FElysiumNpc::SequenceRowFor(const FString& OwnerStem, const FString& Label, bool bLoops)
+int32 FElysiumNpc::SequenceRowFor(const FString& OwnerStem, const FString& Label, bool bLoops,
+	int32 InRawIndex)
 {
 	if (SequenceRows.IsEmpty())
 	{
@@ -334,12 +367,18 @@ int32 FElysiumNpc::SequenceRowFor(const FString& OwnerStem, const FString& Label
 		const FSequenceRow& Row = SequenceRows[Index];
 		if (Row.OwnerStem == OwnerStem && Row.Label == Label && Row.bLoops == bLoops)
 		{
+			if (InRawIndex != INDEX_NONE && Row.RawIndex != INDEX_NONE && Row.RawIndex != InRawIndex)
+			{
+				continue; // 0x1008dc40: distinct raw rows can share owner/label
+			}
+			if (InRawIndex != INDEX_NONE) { SequenceRows[Index].RawIndex = InRawIndex; } // 0x1008dc40
 			return Index;
 		}
 	}
 	FSequenceRow& Row = SequenceRows.AddDefaulted_GetRef();
 	Row.OwnerStem = OwnerStem;
 	Row.Label = Label;
+	Row.RawIndex = InRawIndex; // 0x1008dc40: unselected candidates retain their own identity
 	Row.bLoops = bLoops;
 	// The row's `seqdesc.flags & 2` (`STUDIO_SNAP`, read by `SetLayer 0x10099020` at `0x100990a4`),
 	// taken here so every way a row is numbered -- by activity, by name (`LookupSequenceByName`), the
@@ -357,69 +396,57 @@ int32 FElysiumNpc::SequenceRowFor(const FString& OwnerStem, const FString& Label
 
 int32 FElysiumNpc::SequenceForActivity(int32 Activity)
 {
-	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
-	if (Embodiment == nullptr || Visual == nullptr)
+	return SelectWeightedSequence(Activity); // 0x1008dc40: no selected-clip cache
+}
+
+namespace
+{
+	TArray<ElysiumAnimationPick::FCandidate> AnimationCandidates(FElysiumNpc& BodyNpc, int32 Activity)
 	{
-		return INDEX_NONE;
-	}
-	// `ACT_DISPOSITION` (0xf1): the sequences a retail model tags with it are its stance clips, which
-	// this runtime resolves as the stance set rather than through the activity resolver. The
-	// weighted pick answers the current stance's idle — it does NOT roll the stance machine; only
-	// slot 611 (through `0x10295a80`) does.
-	if (Activity == NpcKernelAnimShared::GAnimActDisposition)
-	{
-		if (!EnsureStanceResolved())
+		TArray<FElysiumNpcClip> Clips; // 0x1008dc40 GetSequencesForActivity
+		BodyNpc.MeleeSequencesForActivity(Activity, Clips); // 0x1008dc40 / 0x103ea950: one gather
+		TArray<ElysiumAnimationPick::FCandidate> Candidates; // 0x1008dc40
+		IElysiumEmbodiment* const ClipSource = BodyNpc.World != nullptr ? BodyNpc.World->Embodiment() : nullptr;
+		for (const FElysiumNpcClip& Clip : Clips) // 0x1008dc40: preserve table order and raw weights
 		{
-			return INDEX_NONE;
+			FString ClipLabel; FElysiumNpcClip RawClip; // 0x1008dc40: bridge identity by raw index
+			if (ClipSource == nullptr || !ClipSource->GetBodyClipByRawIndex(BodyNpc.Visual,
+				BodyNpc.ModelStem(), Clip.RawIndex, ClipLabel, RawClip) || ClipLabel.IsEmpty()) // 0x1008dc40
+			{
+				continue; // 0x1008dc40: no descriptor input, no invented label
+			}
+			const int32 KernelRow = BodyNpc.SequenceRowFor(Clip.Owner, ClipLabel, Clip.IsLooping(), Clip.RawIndex); // 0x1008dc40
+			BodyNpc.SequenceRows[KernelRow].bSnap = Clip.IsSnap(); // 0x10090a12
+			Candidates.Add({KernelRow, Clip.Weight}); // 0x1008dc40
 		}
-		const int32 Current = FMath::Clamp(Stance.Current, 0, ElysiumStance::Count - 1);
-		return StanceClips.Idle[Current].IsEmpty() ? INDEX_NONE
-			: SequenceRowFor(FString(), StanceClips.Idle[Current], /*bLoops=*/true);
+		return Candidates; // 0x1008dc40
 	}
-	// The retail activity VALUE, keyed by the name its registration pushed
-	// (`ActivityList_RegisterSharedActivities`' 4,460 registrations): the shared rows' name table
-	// entry, or for one of the 29 grapple rows (which name nothing in retail's table) the name the
-	// registration pushed -- the grapple activities resolve by id.
-	const TCHAR* Name = ElysiumRetailActivities::RegistrationNameOf(Activity);
-	if (Name == nullptr)
-	{
-		return INDEX_NONE;
-	}
-	FElysiumActivityClipRequest Request;
-	FillActivityClipRequest(Request);
-	Request.Activity = Name;
-	Request.Variant = 0;   // the resolver's primary answer: this runtime carries no sequence weights
-	Request.BodyKind = EElysiumAnimBodyKind::Cast;
-	// The answer is a pure function of the request (the model, the activity, the class, the weapon
-	// and the state the armed/alert branch reads), and the navigator asks every frame a body moves,
-	// so it is cached on those words.
-	const FString Key = FString::Printf(TEXT("%s|%s|%s|%s|%d"), *Request.Stem, Name,
-		*Request.ActorClassname, *Request.WeaponClassname, static_cast<int32>(Request.ActorState));
-	if (const int32* Cached = SequenceResolveCache.Find(Key))
-	{
-		return *Cached;
-	}
-	FElysiumActivityClip Clip;
-	const int32 Row = Embodiment->ResolveNpcActivityClip(Request, Clip)
-		? SequenceRowFor(Clip.OwnerStem, Clip.Label, Clip.bLooping)
-		: INDEX_NONE;   // the body authors no clip for it: retail's own -1
-	if (Row != INDEX_NONE)
-	{
-		// The row's `seqdesc.flags & 2` (`STUDIO_SNAP`), which `SetLayer 0x10099020` reads at
-		// `0x100990a4`: the resolved clip's own baked bit, on the row (`SequenceSnaps`).
-		SequenceRows[Row].bSnap = Clip.bSnap;
-	}
-	SequenceResolveCache.Add(Key, Row);
-	return Row;
+}
+
+int32 FElysiumNpc::SelectWeightedSequence(int32 Activity)
+{
+	const TArray<ElysiumAnimationPick::FCandidate> Candidates = AnimationCandidates(*this, Activity); // 0x1008dc40
+	return ElysiumAnimationPick::Weighted(Candidates); // 0x10427fc0
+}
+
+int32 FElysiumNpc::SelectHeaviestSequence(int32 Activity)
+{
+	const TArray<ElysiumAnimationPick::FCandidate> Candidates = AnimationCandidates(*this, Activity); // 0x1008dd30
+	return ElysiumAnimationPick::Heaviest(Candidates); // 0x104280f0
+}
+
+bool FElysiumNpc::SequenceBounds(int32 Seq, FVector& OutMinCm, FVector& OutMaxCm) const
+{
+	// 0x10090c80 / seqdesc +0x1c..+0x30: J2b's named false seam, no bbox import in V4c.
+	(void)Seq; (void)OutMinCm; (void)OutMaxCm;
+	return false;
 }
 
 void FElysiumNpc::MeleeSequencesForActivity(int32 Activity, TArray<FElysiumNpcClip>& OutSequences) const
 {
 	// `0x103ea950 GetSequencesForActivity` over the activity `0x103ea81c` (weapon `+0x5a4`) and
-	// `0x103ea827` (owner `+0x5e0`) translated. The translation is the name-keyed resolver's (the
-	// same request `SequenceForActivity` builds), so the list is every clip carrying the activity
-	// the resolver searched the vocabulary for. Not cached: the armed/alert state the request
-	// carries moves, and only a melee-armed NPC's gather asks.
+	// `0x103ea827` (owner `+0x5e0`) already translated by the caller. This collector is bare:
+	// 0x1008dc40 and the slot331 band see the same ordered rows, with no fallback or random draw.
 	OutSequences.Reset();
 	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
 	const TCHAR* Name = ElysiumRetailActivities::RegistrationNameOf(Activity);
@@ -432,6 +459,7 @@ void FElysiumNpc::MeleeSequencesForActivity(int32 Activity, TArray<FElysiumNpcCl
 	Request.Activity = Name;
 	Request.Variant = 0;
 	Request.BodyKind = EElysiumAnimBodyKind::Cast;
+	Request.bAllowFallbackLadder = false; // 0x1008dc40: bare table lookup, no resolver retry
 	Embodiment->NpcActivitySequences(Request, OutSequences);
 }
 

@@ -117,6 +117,9 @@ namespace
 					// The body authors a sequence for every activity asked (`0x11`, `0x15`, `0x1a`,
 					// `0x47`, `0x48`); a case that needs a miss turns this off and drops the cache.
 					Services.bNpcActivitiesResolve = true;
+					int32 FixtureActivityIndex = 10;
+					for (const TCHAR* ActivityName : {TEXT("ACT_WALK"), TEXT("ACT_RUN"), TEXT("ACT_WALK_AIM"), TEXT("ACT_RUN_AIM"), TEXT("ACT_RANGE_ATTACK1_LAYER"), TEXT("ACT_LOOKBACK_LEFT"), TEXT("ACT_LOOKBACK_RIGHT")})
+						Services.SeedFixtureActivity(ActivityName, FixtureActivityIndex++);
 				})
 		{
 			Guard = Fixture.Npc(TEXT("guard"));
@@ -168,7 +171,6 @@ namespace
 				Guard->Inventory.SetActiveWeapon(*Guard, *Item);
 			}
 			// The resolver's answers are cached on the weapon among other words.
-			Guard->SequenceResolveCache.Reset();
 			return Item;
 		}
 
@@ -288,7 +290,7 @@ bool FElysiumNpcKernelMoveAndShootArmTest::RunTest(const FString&)
 	// A weapon, but no sequence for the translated 0x11 / 0x15: the disable, and no draw.
 	TestNotNull(TEXT("the gun arms"), F.Arm(GMoveShootGun));
 	F.Fixture.Services.bNpcActivitiesResolve = false;
-	F.Guard->SequenceResolveCache.Reset();
+	F.Fixture.Services.BodyClipsByRawIndex.Reset();
 	Overlay.NextShotTime = 12.f;
 	const int32 SeedBeforeRefusal = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).GetCurrentSeed();
 	F.Guard->ArmMoveAndShootOverlay(1.f, 2.f);
@@ -299,7 +301,11 @@ bool FElysiumNpcKernelMoveAndShootArmTest::RunTest(const FString&)
 
 	// Both sequences authored: the arm.
 	F.Fixture.Services.bNpcActivitiesResolve = true;
-	F.Guard->SequenceResolveCache.Reset();
+	F.Fixture.Services.SeedFixtureActivity(TEXT("ACT_WALK"), 8); // 0x103854f0 de-aims 0x11
+	F.Fixture.Services.SeedFixtureActivity(TEXT("ACT_RUN"), 9); // 0x103854f0 de-aims 0x15
+	int32 FixtureActivityIndex = 10;
+	for (const TCHAR* ActivityName : {TEXT("ACT_WALK_AIM"), TEXT("ACT_RUN_AIM"), TEXT("ACT_RANGE_ATTACK1_LAYER"), TEXT("ACT_LOOKBACK_LEFT"), TEXT("ACT_LOOKBACK_RIGHT")})
+		F.Fixture.Services.SeedFixtureActivity(ActivityName, FixtureActivityIndex++);
 	FRandomStream Probe = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
 	const int32 ExpectedShots = Probe.RandRange(3, 5);
 	Overlay.InitialDelay = 0.f;                                    // 0x1027c300 leaves 0

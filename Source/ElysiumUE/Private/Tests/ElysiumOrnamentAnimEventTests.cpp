@@ -21,6 +21,7 @@
 #include "ElysiumSheetSlots.h"
 #include "Substrate/ElysiumAnimEvents.h"
 #include "Substrate/ElysiumFeed.h"
+#include "Substrate/ElysiumRetailActivities.h" // 0x10328380 explicit translated fixture rows
 #include "Tests/ElysiumNativeCharacterTestData.h"
 #include "Tests/ElysiumTestServices.h"
 #include "Visual/ElysiumBlendGrids.h"
@@ -308,6 +309,7 @@ bool FElysiumFeedBoundaryAnimEventTest::RunTest(const FString&)
 	// `male_citizen` does through the shared bank; before V4b the direct clip play asked nothing.
 	{
 		TSet<FString>& FeedClips = Services.KnownNpcClips.FindOrAdd(TEXT("male_citizen"));
+		int32 FeedRawIndex = 100;
 		for (const EElysiumFeedPhase FeedPhase : { EElysiumFeedPhase::Engage, EElysiumFeedPhase::Bite,
 			EElysiumFeedPhase::Loop, EElysiumFeedPhase::Release })
 		{
@@ -317,6 +319,17 @@ bool FElysiumFeedBoundaryAnimEventTest::RunTest(const FString&)
 				const ElysiumFeed::FClipPair FeedPair = ElysiumFeed::ResolveClipPair(FeedPhase, FeedHeight);
 				FeedClips.Add(FeedPair.Attacker);
 				FeedClips.Add(FeedPair.Victim);
+				const ElysiumFeed::FClipPair ExactPair = ElysiumFeed::ResolveClipPair(FeedPhase, FeedHeight, FeedHeight, ElysiumFeed::ESide::Front);
+				for (bool bFixtureVictim : {false, true})
+				{
+					ElysiumFeed::FGrappleCell FeedCell;
+					FeedCell.Position = 0; FeedCell.bVictim = bFixtureVictim;
+					FeedCell.bPartnerMale = FeedHeight == ElysiumFeed::EPartnerHeight::Taller;
+					const int32 FeedActivity = ElysiumFeed::TranslateBaseGrappleActivity(ElysiumFeed::PhaseBaseActivity(FeedPhase), FeedCell);
+					Services.ResolvedNpcActivityLabel = bFixtureVictim ? ExactPair.Victim : ExactPair.Attacker;
+					Services.ResolvedNpcActivityOwner = TEXT("character_shared_male_feeding");
+					Services.SeedFixtureActivity(ElysiumRetailActivities::RegistrationNameOf(FeedActivity), FeedRawIndex++); // 0x1032a2cc/2de bare table
+				}
 			}
 		}
 	}
@@ -386,8 +399,9 @@ bool FElysiumFeedBoundaryAnimEventTest::RunTest(const FString&)
 	// `Elysium.Substrate.Feeding`), so this is the bite label `FeedBoundaryArrivesFromAnimEvent` will
 	// resolve. The fixture stands the attacker's base channel on it with a timeline carrying the
 	// record, which is what the real dispatcher would walk on its next pass.
-	const ElysiumFeed::FClipPair Bite = ElysiumFeed::ResolveClipPair(
-		EElysiumFeedPhase::Bite, ElysiumFeed::EPartnerHeight::Shorter);
+	const ElysiumFeed::FClipPair Bite = ElysiumFeed::ResolveClipPair(EElysiumFeedPhase::Bite,
+		Victim->Sheet.IsMale() ? ElysiumFeed::EPartnerHeight::Taller : ElysiumFeed::EPartnerHeight::Shorter,
+		Attacker->Sheet.IsMale() ? ElysiumFeed::EPartnerHeight::Taller : ElysiumFeed::EPartnerHeight::Shorter, ElysiumFeed::ESide::Front); // 0x103282e0 reads sex
 	const FString BiteOwner = TEXT("character_shared_male_feeding");
 	auto ArmPairAtEngage = [&]()
 	{
@@ -398,6 +412,7 @@ bool FElysiumFeedBoundaryAnimEventTest::RunTest(const FString&)
 		Attacker->FeedState.bContinuation = true;
 		Attacker->FeedState.Phase = EElysiumFeedPhase::Engage;
 		Attacker->FeedState.PhaseDeadline = 0.0f;
+		Attacker->Grapple.Position = Victim->Grapple.Position = 0; // 0x10328380 front pair, not untranslated -1
 		Victim->FeedState.Peer = Attacker->Handle;
 		Victim->FeedState.bVictim = true;
 		Victim->FeedState.Phase = EElysiumFeedPhase::Engage;

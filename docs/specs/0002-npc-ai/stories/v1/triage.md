@@ -1315,3 +1315,269 @@ first, then the ruling, the cost, the proving record. No query ran over 10 s.
 - **Known red 2 closed** — `range_bands` green: `GatherAttackConditions 0x1026dd10` whole (the top clear `0x1026de02`, both arms, the friend timers, the tail `0x1026e062..0x1026e107`).
 - **Known red 3, slot 363's part, closed** — `sense_enemy_facing_me` green; `ranged_open_fire` and `ranged_sustained_fire` raise no `BEHIND_ENEMY`. The trace named `0x56` `COND_?` (no name row); it is `ENEMY_FACING_ME` now (harness).
 - **Packet R2's "`m_flStealthVisionCone +0x63c8` has no writer" is wrong**: `0x1028fca5` (in `FUN_1028fc90`, the per-pass reset) stores 1.0 (`docs/vtmb/npc-ai/senses.md` § Cone, corrected).
+
+### V4c second-pass close measurement (2026-10-05; not green, no commit)
+
+The three-build allowance is exhausted: build1 passed118.6s; build2 failed27.5s on two
+fixture ResolveClipPair calls missing the required side argument; build3 passed25.2s.
+No source changed after build3; temporary clock/sweep diagnostics were removed before it.
+The lanes and all integration remain uncommitted and unstaged on spec-0002/step-2.
+An external documentation commit advanced HEAD to947e57b6 (AGENTS/HANDOVER only).
+Neither V4c nor V4s was ticked; no commit or push. Root200KB is absent.
+
+Final default:169 executed,168 passed,1 failed (Stance.Driver),15.8s wall.
+Final arm:1624 executed,1611 passed,13 failed,53.8s wall; no abort or unrun test.
+Baseline default170 loses only the retired world-sweep MeleeBatch test, replaced by arm
+character-clock coverage. Baseline arm1594 gains30 cases.
+Full Arena ONCE after build3:132 records,110 pass/4 fail/16 expected-fail/2 unexpected-pass,
+527.5s wall, report20261005T053609.881342Z. The eight new records all pass.
+The earlier33-record named run was28 pass/4 fail/1 expected-fail; record-only cower/footstep
+corrections passed by name and in the full run. After the full run, input_setrelationship's
+unkillable staging passed by name (20261005T054700.512138Z); the full report still records
+its original failure. No second full run. Kernel check7/7; no re-bake or corpus write.
+
+| record | 64895278 | full run | remaining owner / measured cause |
+|---|---|---|---|
+| chase_melee | expected-fail | pass | Kernel swing, root interval movement and contact; distance below200cm. |
+| corpse_fades | expected-fail | pass | Later fade installation wins: +10, alpha decrements, deferred removal. |
+| corpse_pedestrian_stays | expected-fail | pass | 0x103a38c0 explicit NULL think remains NULL; no automatic removal. |
+| damage_cower_one_hit | new | pass | Named attacker reaches0x109; task data2 is bit pattern0x40000000; positive18 kills with19 wounds. Zero staged before cower to preserve flag. |
+| damage_high_health_control | new | pass | Effective cap99999, flag clear, five18 packets leave90 wounds and alive. |
+| damage_knockout_one_hit | new | pass | Faint wired; TASK_KNOCKOUT sets0x440a0000; zero survives, positive18 kills at0x102beea4 with18 wounds. |
+| melee_enemy_blocked | new | pass | 0x10347180 centre-ray block and failure ladder measured. |
+| melee_same_team | new | pass | Same valid symbol rejects before hit-list/impact; negative-Y identical control contacts and damages. |
+| ranged_enemy_dead | new | pass | BestEnemy drops dead entry; quiet ALERT observed; death after network-init retains corpse. |
+| ranged_enemy_dead_retarget | new | pass | Live remembered replacement selected; dead corpse remains unselectable and resolvable. |
+| team_damage_gate | new | pass | Real event shot admitted on different-team control, rejected on teammate before life dispatch. |
+| idle_lookaround | pass | fail | Measured0x6b instead of required0x4f. Shared-stream draw-order audit remains V4c; record unchanged, no known_red. |
+| unknown_crouched_band | pass | fail | MeasuredIGNORE_UNKNOWN0x3/0x60 instead of SEE_UNKNOWN0x1. Shared-stream draw-order audit remains V4c; record unchanged, no known_red. |
+| input_setrelationship | pass | fail | Full-run player dies2.80 after31/31/31/33; enemy drops2.90. Unkillable staging subsequently passes named; full run was not repeated. |
+
+Remaining test work is V4c, not V12. No V4d/V5b/V6 known_red was added to mask it.
+
+| failing test | measured cause / next correction |
+|---|---|
+| Elysium.Substrate.Stance.Driver | No opening stance play or later destination play. Named stance rows alone leave the initial floor/activity fixture incomplete after the valid NPCInit disposition seed0x1029a6a9; inspect its initial sequence/clock, not a new RNG seed. |
+| Elysium.Arm.Npc.ActivityResolve | Current sequence is retained on the miss, but the stale final assertion demands another play. ResolveActivityToSequence0x10272130 / SetActivity0x10272440 need fixture review. |
+| Elysium.Arm.NpcKernelMotor.SpeciesProbes | After actual UTIL_SetSize propagation, the fixture must restore m_Collision through a forced hull setter before CheckStuck0x103ab580; measured push-distance assertion fails. |
+| Elysium.Arm.NpcKernelMoveAndShoot.Run | Fixture still seeds only aim rows; CAP_MOVE_SHOOT early translation0x103854f0 needs ACT_WALK/RUN rows (added only in its Arm sibling). Overlay remains disabled. |
+| Elysium.Arm.NpcKernelPlayerController.CreationPath | Effects assertion fails after disposition/sequence reset. Fixture authors no disposition table; floor ResetSequenceInfo0x10090950 adds0x300. Missing-table/activation ordering needs review. |
+| Elysium.Arm.NpcKernelPlayerController.EffectsSurviveSnapshot | Same effects/setup failure, not proven to require V6. No later-owner placement. |
+| Elysium.Arm.NpcKernelRunTask19.Base.ReloadAndSetActivity | AutoMovement advances floor sequence during the call; fixture only clears finished beforehand. IsActivityFinished0x10272900 completes early; isolate real clip/clock, not V5b reload. |
+| Elysium.Arm.NpcKernelRunTask19.Base.ScriptArms | Same floor-sequence AutoMovement advance; slot251 gate0x10289448 sees finished. |
+| Elysium.Arm.NpcKernelRunTask19.Species.Animal | AutoMovement finishes the unmodelled floor before the two-second arm0x1035f940; one-second fixture prematurely completes. |
+| Elysium.Arm.NpcKernelRunTask19.Species.Zombie | Test asks IsCorpse for physics. That is now corpse identity; static0x1032c0e0 is a corpse too. Assert actual ragdoll creation, not identity. |
+| Elysium.Arm.NpcKernelRunTask19.Troika.AttackArms | Floor-sequence AutoMovement advance; four unfinished arms complete early. Same clip/clock fixture migration. |
+| Elysium.Arm.NpcKernelRunTask19.Troika.FinishingMoveAndOnFire | Floor finishes before bone-track sampling0x102ac4c7; sample time remains-5 and task completes. |
+| Elysium.Arm.PlayerAttack.Reload | Old fixture expects PlayNpcClip on a claim channel; actual NPC AddGesture0x10099020 is the AnimOverlay table. Assert actual overlay before changing producer. |
+| Elysium.Arm.Weapons.MeleeBand | NPC kernel commit plays at ambient; old expectation asks player scripted parity. Review presentation projection at0x10272400/0x10090950 against the claim contract before correcting it. |
+
+Baseline reds are retained, with no new owner reassignment:
+
+| record | baseline | current | measured cause / existing owner |
+|---|---|---|---|
+| damage_lethal_death | expected-fail | expected-fail | read false (pelvis 100.8 cm over the floor, bound 24.0; 0.0 cm/s, at rest under 5.0) at the end; V4d (no character physics asset) |
+| lifecycle_unhide_fights | expected-fail | expected-fail | appeared at t=0.00: match 1 where at most 0 may appear in [0.00, 1.90]: arena_hidden SEE_ENEMY (0x46); 5: the StartHidden NPC thinks while hidden (SEE_ENEMY and FALL_TO_GROUND at t=0; retail ScriptHide 0x100a8710 installs a NULL think at FLT_MAX until ScriptUnhide 0x100a8990) |
+| verbs_stealth_kill_scripted | expected-fail | expected-fail | unmet at its deadline (expect[1] was met at t=0.53); N11 (V7): the port's IsValidStealthKillTarget state term admits only Idle/Alert (ElysiumNpc.cpp, its comment calls the relaxed arm a developer arm); retail's shipping arm (debug_allow_non_idle_auto_sk '1') admits a victim in NPC_STATE_SCRIPT |
+| idle_lookaround | pass | fail | unmet at its deadline; V4c |
+| unknown_crouched_band | pass | fail | unmet at its deadline; V4c |
+| input_changeschedule_reselect | expected-fail | expected-fail | unmet at its deadline (expect[1] was met at t=3.02); new: ChangeSchedule '-' forces no reselection (retail sets CHOOSE_NEW 0x82000000 in flags2 on every call, 0x102c33f0) |
+| input_disablethink | expected-fail | expected-fail | appeared at t=5.08: match 1 where at most 0 may appear in [0.00, 9.00]: Hunter1 task_special_idle_activity; new: DisableThink with the wire's string param '1' disables nothing (ElysiumNpc.cpp:1387 takes only a Bool variant; retail converts the wire string to FIELD_BOOLEAN): task_special_idle_activity completes at 5.3 s |
+| input_setrelationship | pass | fail | read "none" at the end; V4c |
+| maker_respawn | expected-fail | expected-fail | unmet at its deadline (expect[4] was met at t=4.05); new: after the child's death (OnNPCDied at 4.05 s) the maker makes no second child within SpawnFrequency (MakerThink 0x1034bbf0 re-arms at freq) |
+| rollcall_vanimal | expected-fail | expected-fail | appeared at t=0.00: match 1 where at most 0 may appear in [0.00, 0.45]: plus_cat FALL_TO_GROUND (0x3e); 5: the StartHidden row thinks while hidden (cond+ FLOATING_OFF_GROUND and schedule FALL_TO_GROUND (0x3e) at t=0.00, before the 0.5 s ScriptUnhide; retail PostSpawn 0x100aaf30 -> ScriptHide 0x100a8710 parks the think at FLT_MAX). Was N10 ('installs no schedule'): that was red 6 -- the row is use_interesting 1 and the port's ambient executor held it; V3b deleted the executor and the row now selects |
+| rollcall_vdog | expected-fail | expected-fail | appeared at t=0.00: match 1 where at most 0 may appear in [0.00, 0.45]: plus_crowd FALL_TO_GROUND (0x3e); 5: the StartHidden row thinks while hidden (cond+ FLOATING_OFF_GROUND and schedule FALL_TO_GROUND (0x3e) at t=0.00, before the 0.5 s ScriptUnhide; retail PostSpawn 0x100aaf30 -> ScriptHide 0x100a8710 parks the think at FLT_MAX). Was N10 ('installs no schedule'): that was red 6 -- the row is use_interesting 1 and the port's ambient executor held it; V3b deleted the executor and the row now selects |
+| rollcall_vmanbat | expected-fail | expected-fail | appeared at t=0.00: match 1 where at most 0 may appear in [0.00, 0.45]: ManBat FALL_TO_GROUND (0x3e); 5: the StartHidden row thinks while hidden (cond+ FLOATING_OFF_GROUND at t=0.00, before the 0.5 s ScriptUnhide; retail PostSpawn 0x100aaf30 -> ScriptHide 0x100a8710 parks the think at FLT_MAX) |
+| rollcall_vmercurio | expected-fail | expected-fail | appeared at t=0.00: match 1 where at most 0 may appear in [0.00, 0.45]: Mercurio FALL_TO_GROUND (0x3e); 5: the StartHidden row thinks while hidden (cond+ FLOATING_OFF_GROUND at t=0.00, before the 0.5 s ScriptUnhide; retail PostSpawn 0x100aaf30 -> ScriptHide 0x100a8710 parks the think at FLT_MAX) |
+| rollcall_vpedestrian | expected-fail | expected-fail | appeared at t=0.00: match 1 where at most 0 may appear in [0.00, 0.45]: havenbum FALL_TO_GROUND (0x3e); 5: the StartHidden row thinks while hidden (cond+ FLOATING_OFF_GROUND at t=0.00, before the 0.5 s ScriptUnhide; retail PostSpawn 0x100aaf30 -> ScriptHide 0x100a8710 parks the think at FLT_MAX) |
+| rollcall_vsabbatleader | expected-fail | expected-fail | appeared at t=0.00: match 1 where at most 0 may appear in [0.00, 0.45]: plus_Andrei FALL_TO_GROUND (0x3e); 5: the StartHidden row thinks while hidden (cond+ FLOATING_OFF_GROUND at t=0.00, before the 0.5 s ScriptUnhide; retail PostSpawn 0x100aaf30 -> ScriptHide 0x100a8710 parks the think at FLT_MAX) |
+| rollcall_vscurrying | expected-fail | expected-fail | appeared at t=0.00: match 1 where at most 0 may appear in [0.00, 0.45]: CabbieSewer FALL_TO_GROUND (0x3e); 5: the StartHidden row thinks while hidden (cond+ FLOATING_OFF_GROUND and schedule FALL_TO_GROUND (0x3e) at t=0.00, before the 0.5 s ScriptUnhide; retail PostSpawn 0x100aaf30 -> ScriptHide 0x100a8710 parks the think at FLT_MAX). Was N10 ('installs no schedule'): that was red 6 -- the row is use_interesting 1 and the port's ambient executor held it; V3b deleted the executor and the row now selects |
+| rollcall_vvampireboss | expected-fail | expected-fail | appeared at t=0.00: match 1 where at most 0 may appear in [0.00, 0.45]: MingXiao2 FALL_TO_GROUND (0x3e); 5: the StartHidden row thinks while hidden (cond+ FLOATING_OFF_GROUND at t=0.00, before the 0.5 s ScriptUnhide; retail PostSpawn 0x100aaf30 -> ScriptHide 0x100a8710 parks the think at FLT_MAX) |
+| rollcall_vwerewolf | expected-fail | expected-fail | appeared at t=0.00: match 1 where at most 0 may appear in [0.00, 0.45]: werewolf SCHED_TROIKA_START_COMBAT (0xea); 5: the StartHidden row thinks while hidden (cond+ TOO_FAR_FOR_MELEE at t=0.00, before the 0.5 s ScriptUnhide; retail PostSpawn 0x100aaf30 -> ScriptHide 0x100a8710 parks the think at FLT_MAX) |
+| rollcall_vzombie | fail | fail | unmet at its deadline; H11 baseline harness |
+| map_tutorial_sneak_past | expected-fail | expected-fail | unmet at its deadline (expect[2] was met at t=5.63); V12 (the hearing half; the first half is green since the V3b follow-up: 0.633 0xff -> 0x100 goal -1288 213 -102 -> 3.733 arrived -> 3.933 SCHED_TROIKA_DO_INTEREST_ACTIVITY (0x103)). After the walk starts (6.933) thug_1 hears the player at 7.633 (OnHearPlayer, cond+ HEAR_PLAYER, break INVESTIGATE_SOUND, Idle -> Alert) and runs 0x4c SCHED_TROIKA_ALERT_TURN_TO_SOUND, not an INVESTIGATE program, within 1.0 s: retail's alert ladder FUN_102b8980 answers 0x4c at m_eAlertLevel 0 unless m_bFullInvestigate +0x6340 is set (docs/vtmb/npc-ai/programs.md:396-399). Whether investigate_mode 4 sets +0x6340, i.e. whether the INVESTIGATE match is a record error, is open for V12's reader (Q-V3bf1) |
+
+Every one of the nine hidden species rollcalls above was expected-fail at64895278, as was lifecycle_unhide_fights. They are not newly parked on V5b; their existing red5 is hidden-lifecycle work, not reload. Placeholder was green at baseline and was corrected to retail NPCInit0x103a4350 ThinkSet(NULL), remaining green. N4 hear_world_investigate and interest_mode_never remain the two baseline unexpected-passes.
+
+Recovery and staging corrected in this pass:
+
+- NPC event3031 stages at curtime; CommitTime>0 is not an estimate discriminator. The invalid
+  guard was removed; BeginRangedShot still stages no NPC estimate. Retail0x10238160→0x10238320→
+  0x102383b0→0x102387b0. cover_move_shoot and team_damage_gate pass again.
+- Constructor0x1028d230 writes m_flStanceTime(+0x64e4)=curtime; this host writes it before
+  Troika spawn's disposition lookup. NPCInit0x1029a6a9 seeds a valid default disposition index;
+  bHasDispositionIndex now reflects that. These fixes remove spurious initial stance draws,
+  but do not yet recover idle_lookaround/unknown_crouched_band's required verdicts. No reseed
+  or expectation relaxation was made for either; the remaining draw-order audit is V4c.
+- InputFaint0x1029f250 resets slot614, records line0x26c2 and SetSchedule(0xfa,false).
+- Dead-enemy records originally killed at0.417, before network-init0.80. Retail0x1028d8d0
+  walks every Troika (derived bit0x40) and slot5840x1028d910 resets all think timers, including
+  that corpse's +10 deadline. Death is now after network-init; both controls pass. Quiet
+  ALERT is probed before0x4b's five-second timeout, rather than promised through end8s.
+- seed_health now recomputes before the initial probe: effective cap99999 is measured.
+  The five-hit control ends alive at90 wounds. Knockout flags0x440a0000 kill positive18 at
+  18 wounds; cower flags0x40000400 kill positive18 at19 wounds (including trigger1), both
+  at0x102beea4, far below cap. Zero during cower raises LIGHT_DAMAGE at0x10265ed0 and interrupts
+  the schedule/clears its flag; zero is staged before cower, and the positive packet atflag+0.45
+  lands inside the unchanged0.5 deadline. No damage arithmetic or historical fifth-hit claim.
+- The same-team contact control passes on identical negative-Y seats. No contact/impact/hit-list
+  write reaches the matching teammate. The scalar cower trigger was replaced by a real player
+  handle through damage_packet; the actual OnTakeDamage chain runs for zero too.
+- ranged_open_fire and input_setrelationship use retail MakePlayerUnkillable: dead-enemy
+  selection correctly drops a player who dies under their real bullets. Their expectations
+  remain intact. Footstep staging now seats the player150cm north of the first patrol goal;
+  the old ~700cm seat allowed one-second thinks against a0.939Hz walk, and0x10091880 lost loop
+  windows. The near cadence0x10290b60 restores repeated2050/2051; event windows are unchanged.
+- SharedPick/RagdollSeed/RunAnimation/interval-movement tests now supply models; the shared
+  picker already returns-1 on empty0x10427fc0, and the test guards its array index. Session
+  registry construction covers uninitialized headless fixtures. Other migrated tests author
+  raw candidates, exact disposition levels, real feed cells/side, and the actual event shot.
+
+Seams still named: D9 CalcPose-at-cycle / bone cache, m_flPoseParameter blending, slot247
+seqdesc bounds, held weapon model clock/events/weights (0015), ordinary ragdoll rig/hitbone/
+Spine2/force (V4d), render-alpha presentation, restored-corpse presentation (V6), real reload
+slots322/323 (V5b), and TzimisceMelee+0x910. No pipeline/body-data/bbox import or re-bake.
+Bounded silent inventory475 sidecars/9401 clips in0.404s found only male/female move_and_ranged
+flamet_attack and flamet_attack_layer without3030..3044; both have no events. No timer fallback.
+
+
+### V4c closing worker final measurement (2026-10-05; six builds, not committed)
+
+All six builds passed:112.703s/18.500s/18.859s/21.765s/15.125s/60.031s.
+No seventh build, no staging/commit/push; V4c/V4s remain unticked and AGENTS.md
+was not edited or staged. The original lanes remain in the working tree.
+Temporary stack/RNG diagnostics were removed before build4. No asset re-bake.
+
+Final default169/0 failures (15.5s); final arm1624 executed,1623 pass/1 fail
+(53.5s); kernel7/7. The sole full arena run, on build6, is
+E:/elysium-work/reports/arena/20261005T064949.706263Z/index.json:
+132 records,105 pass/9 fail/17 expected-fail/1 unexpected-pass (8m49s).
+Use that aggregated index: the arena-host subindex contains only125 records.
+All eight new wave records pass. The three EF->pass wave records remain green.
+The nine hidden-species rollcalls and damage_lethal_death retain baseline red.
+
+Every moved full-run verdict since previous-report.md:
+
+| record | previous full run | final full run | measured cause / remaining audit |
+|---|---|---|---|
+| input_setrelationship | fail | pass | Previous worker's MakePlayerUnkillable staging now included in full run; bullets no longer kill the required enemy player. |
+| range_bands | pass | fail | At6s the player is teleported during STEP_BACK, rather than the previous range-only phase: TOO_CLOSE_TO_ATTACK0x5f at6.1, CAN_RANGE_ATTACK1 again6.5, but no0x8 by7. First WAIT_ATTACK_TIME1 completes3.0 instead of4.0. Actor position/program phase changed with the corrected draw stream; whole band/task timing attribution remains open. No band predicate or expectation changed. |
+| ranged_open_fire | pass | fail | Same program-phase movement: STEP_BACK and WAIT_ATTACK_TIME1 complete3.0; the record forbids completion in[3,3.5]. Previous completion4.0. The first real3031 still occurs0.5; the weapon deadline has expired by3.0. Full retail phase audit remains open. |
+| hear_world_out_of_range | pass | fail | Blanket never(state) rejects the now-visible retail initialization None->Idle at0.0; no sound-investigation assertion failed first. |
+| sense_beyond_vision | pass | fail | Same initial None->Idle rejection, not a newly measured vision-range predicate failure. |
+| sense_cone_outside | pass | fail | Same initial None->Idle rejection, not a newly measured cone predicate failure. |
+| interest_mode_never | unexpected-pass | expected-fail | Its existing known_red now catches the same blanket initial state ban. The hearing-expiry attribution is not what failed first in this run. |
+| rollcall_vfrenzyshadow | pass | fail | Admission retains NPCInit's0xb, verified0x10375c80; HUNT_FINISH0x85 -> GET_PATH_TO_LASTPOSITION -> no route0xc at0.0. The former Idle overwrite hid this program; full route prerequisite remains to audit. |
+
+Unmoved red records:
+
+- idle_lookaround: named build6 selects0x4f at0.350, then fails its unchanged
+  never(state) on None->Idle. Full run selects0x6b at0.0 and also fails that state
+  ban. ConstructorNeutral0x1028d42c, equal-bound no-draw vstdlib0x10002e60,
+  draw-free visual preview, and retained NPCInit state0x1029a0f5 are recovered;
+  full-run start-clock/draw interleaving remains open. No seed/expectation change.
+- unknown_crouched_band: named passes, full still IGNORE_UNKNOWN0x3/0x60 at0.700.
+  Named initialization and later full-stage curtime branches differ; complete
+  full-run draw order remains unresolved. The record is unchanged and has no
+  known_red. This is still V4c work.
+- rollcall_vzombie: baseline H11; no interesting places -> TaskFail0x22 at1.967.
+
+The one arm failure is Elysium.Arm.NpcKernelBosses.CanPlaySequence: AndreiBlood
+Activate0x1035dc93/99 writes COMBAT2, now retained through admission. Two idle
+assertions call CanPlaySequence(false,0) without staging idle. Explicit SetState(1)
+is the next fixture correction; the compile cap prevents another tested change.
+All original13 arm failures and Stance.Driver pass on the final binary. Their
+fixture migrations, new equal-range no-draw assertion and admission-state pins
+are documented in npc-ai/lifecycle.md's closing-worker recovery. Twenty-five
+additional stale-state fixtures exposed by admission were migrated through the
+common world's explicit established-IDLE setup; the boss's COMBAT2 was correctly
+not overwritten by that setup. No test was deleted by this worker.
+
+Damage measurements remain: effective cap99999, five18 commits ->90 wounds alive;
+knockout flags0x440a0000 ->18 wounds/death; cower flags0x40000400 ->19 wounds/death
+(including trigger1), both0x102beea4. Historical fifth-hit cause remains unverified.
+Pose/bone-cache, include-group shadow metadata, template fake-reload bounds,
+ragdoll rig/bone/force/pelvis (V4d), real reload and restore seams remain named.
+No modernization of event/state order was adopted to hide a failure.
+
+
+### V4c final integration accepted (2026-10-05)
+
+One build used of six allowed: --arm incremental 31.3 s, passed. Final binary
+unchanged after that build. Default 169 pass / 0 fail (15.5 s wall); arm 1624
+pass / 0 fail (52.9 s wall); regenerated kernel 7/7. Both RNG records pass alone
+and after another record in one boot, with seeds/expectations unchanged.
+
+The first full run (20261005T072253.912124Z) was 110 pass / 4 fail / 16 EF / 2 UP;
+it exposed face_enemy_turn, lifecycle_relationship_flip and memory_occluded_kept.
+Their retail/staging/observation corrections are in npc-ai/lifecycle.md's
+"V4c final integrator" section. The turn's 0.5 bound and memory's 1.3/2.1
+condition deadlines remain. No additional code or build was needed.
+
+Final second full run: E:/elysium-work/reports/arena/20261005T074109.557188Z/index.json,
+132 records, 113 pass / 1 fail / 16 expected-fail / 2 unexpected-pass, 8m49s wall.
+Compared against 64895278's archived full run 20261004T210246.613350Z:
+all 102 baseline passes and all eight new records pass; no baseline pass regresses.
+V4c and V4s ticked. No asset import/re-bake, no generated slots edited by hand,
+no new event/state-order modernization. AGENTS.md is the owner's edit and excluded.
+
+A: NPCInit 0x1029a0f5 directly writes NONE, ideal IDLE at 0x10273473. The first
+MaintainSchedule calls real SetState/hook chain at 0x10281b63 -> 0x1026e340 before
+selecting a program. Keep that trace event and all hooks; state bans judge after
+its establishing edge. One arena rule, with no edits to the four records.
+B: the animation picker already shares NpcSchedule and SeedAll resets it; the leak
+was boot curtime bypassing NPCInit/StartNPC's first-second delay/draw branches.
+Each rebuilt arena now starts clock 0 before Load; map hosts retain their clock.
+C: retail Shot 0x1023891b writes the next-attack stamp; WAIT_ATTACK_TIME 0x102a337d
+adds RandomFloat(Min,Max) 0x102c5730 scaled by 0x102c5570. No fixed 3/4 deadline:
+the fresh-clock first wait ends 3.700 and both unchanged records pass.
+D: FrenzyShadow 0x10375c80 keeps HUNT 0xb. Select 0x10375d90 -> 0x102af660 reaches
+HUNT_FINISH without enemy/path; zero last position is inside cover. 0x10285c87
+reports NO_ROUTE. Corrected roll call asserts that chain, FAIL/backoff, and survival.
+E: Andrei Activate 0x1035dc93 keeps COMBAT; idle CanPlaySequence assertions stage
+SetState(1) explicitly. Arm now has zero failures.
+
+Every verdict moved during V4c since 64895278 (arrows include temporary reds
+from the two handoff reports and the first full run; EF/UP abbreviate expected-fail/
+unexpected-pass):
+
+| record | 64895278 -> interim -> final | cause |
+|---|---|---|
+| chase_melee | EF -> pass | Kernel swing commit, root interval movement and character-owned contact; distance below 200cm. |
+| corpse_fades | EF -> pass | Later fade installation wins; +10 deadline, alpha decrement and deferred removal. |
+| corpse_pedestrian_stays | EF -> pass | Retail 0x103a38c0 NULL think retained; no automatic removal. |
+| melee_enemy_blocked | new -> pass | Centre-ray block 0x10347180 and failure ladder. |
+| melee_same_team | new -> pass | Equal valid team symbol rejects before hit-list/impact; identical different-team control contacts. |
+| team_damage_gate | new -> pass | Real event shot rejected on teammate before life dispatch; different-team control admitted. |
+| ranged_enemy_dead | new -> pass | BestEnemy drops the dead entry; ALERT before timeout; death staged after network init. |
+| ranged_enemy_dead_retarget | new -> pass | Live remembered replacement selected; corpse resolvable but unselectable. |
+| damage_high_health_control | new -> pass | Effective cap 99999, five 18-point packets -> 90 wounds, alive, flag clear. |
+| damage_knockout_one_hit | new -> pass | TASK_KNOCKOUT sets 0x440a0000; zero survives; positive 18 kills at 18 wounds through 0x102beea4. |
+| damage_cower_one_hit | new -> pass | Cower sets 0x40000400; positive 18 kills at 19 wounds (trigger 1 included) through 0x102beea4; zero staged before cower to preserve flag. |
+| idle_lookaround | pass -> fail -> pass | First-second clock/draw leak selected 0x6b instead of 0x4f; initial state edge also tripped ban. |
+| unknown_crouched_band | pass -> fail -> pass | Same clock/draw leak read IGNORE_UNKNOWN; fresh clock restores SEE_UNKNOWN. |
+| input_setrelationship | pass -> fail -> pass | Required enemy player died under real bullets; retail MakePlayerUnkillable staging. |
+| range_bands | pass -> fail -> pass | Inherited boot clock changed draw/program phase; teleport landed during STEP_BACK. Fresh stage clock restores 0x8 at 6.100. |
+| ranged_open_fire | pass -> fail -> pass | Same startup draw leak moved the wait to 3.0 inside its ban; fresh-clock first wait ends 3.700 with windows unchanged. |
+| hear_world_out_of_range | pass -> fail -> pass | Blanket state ban counted the real establishing NONE -> IDLE edge. |
+| sense_beyond_vision | pass -> fail -> pass | Same initialization-state observation rule; vision predicate intact. |
+| sense_cone_outside | pass -> fail -> pass | Same initialization-state observation rule; cone predicate intact. |
+| rollcall_vfrenzyshadow | pass -> fail -> pass | Retained retail HUNT exposes the real no-route chain; corrected record instead of inventing IDLE. |
+| face_enemy_turn | pass -> fail -> pass | Fresh-clock rescan lost new LKP; teleport after scan restores knowledge. Sight rises mid-turn, so probe SEE_ENEMY at 7.0; original 0.5 turn bound retained. |
+| lifecycle_relationship_flip | pass -> fail -> pass | Seven real shots killed player at 18.5; retail unkillable staging preserves required enemy/state. |
+| memory_occluded_kept | pass -> fail -> pass | Schedule condition clear erased gather's falling trace delta; probe actual SEE bits at original 1.3/2.1 deadlines. |
+| interest_mode_never | UP -> EF -> UP | Initialization-state ban repaired; baseline N4 intermittent hearing verdict remains allowed. |
+
+The three damage controls measured cap 99999: flag-clear five 18-point packets
+leave 90 wounds alive; knockout 0x440a0000 kills positive 18 at 18 wounds; cower
+0x40000400 kills positive 18 at 19 wounds (trigger 1 included), both 0x102beea4.
+Zero survives knockout; before-cower zero preserves the cower flag. These controls
+do not prove the historical fifth-hit cause, which remains unverified.
+
+Remaining reds are baseline: rollcall_vzombie H11 (no interesting places, 0x22);
+nine hidden-species rollcalls and lifecycle_unhide_fights (NULL-think hiding);
+damage_lethal_death V4d (pelvis 100.8cm high, no physics asset); scripted stealth
+kill, ChangeSchedule/DisableThink inputs, maker respawn, tutorial hearing.
+The two N4 hearing intermittents remain unexpected-pass. Existing pose/bone-cache,
+include-group shadow metadata, bounds/template fake-reload, discipline, rig/force,
+real reload and restore seams remain named. No new known_red field masks V4c.

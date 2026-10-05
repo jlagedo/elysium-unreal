@@ -779,6 +779,25 @@ struct FElysiumRecordingServices final
 			*StemOf(Stem), bPlayerMaterial ? 1 : 0, *ClipName));
 		return !Stem.IsEmpty() && !ClipName.IsEmpty();
 	}
+	virtual void NpcActivitySequences(const FElysiumActivityClipRequest& Request,
+		TArray<FElysiumNpcClip>& OutSequences) override
+	{
+		OutSequences.Reset();
+		Record(FString::Printf(TEXT("NpcActivitySequences %s %s class=%s weapon=%s state=%s body=%s"),
+			*StemOf(Request.Stem), *Request.Activity, Request.ActorClassname.IsEmpty() ? TEXT("-") : *Request.ActorClassname,
+			Request.WeaponClassname.IsEmpty() ? TEXT("-") : *Request.WeaponClassname,
+			LexToString(Request.ActorState), ElysiumAnimIntent::BodyKindName(Request.BodyKind)));
+		for (const auto& RawRow : BodyClipsByRawIndex)
+		{
+			if (RawRow.Value.Clip.Activity.Equals(Request.Activity, ESearchCase::IgnoreCase))
+			{
+				FElysiumNpcClip Row = RawRow.Value.Clip;
+				Row.RawIndex = RawRow.Key;
+				OutSequences.Add(MoveTemp(Row));
+			}
+		}
+		OutSequences.Sort([](const FElysiumNpcClip& Left, const FElysiumNpcClip& Right) { return Left.RawIndex < Right.RawIndex; });
+}
 	virtual bool ResolveNpcActivityClip(const FElysiumActivityClipRequest& Request,
 		FElysiumActivityClip& Out) override
 	{
@@ -1125,6 +1144,56 @@ struct FElysiumRecordingServices final
 		FElysiumNpcClip Clip;
 	};
 	TMap<int32, FRawIndexClip> BodyClipsByRawIndex;
+	void SeedFixtureStance(const FString& FixtureStem)
+	{
+		// 0x102c12a0 / 0x100ed150: named lookups need actual model rows, including loop flags.
+		TSet<FString>& FixtureNames = KnownNpcClips.FindOrAdd(StemOf(FixtureStem).ToLower());
+		int32 FixtureRaw = 10000;
+		auto AddFixtureSequence = [&](const FString& FixtureLabel, bool bFixtureLoop)
+		{
+			if (FixtureLabel.IsEmpty() || FixtureNames.Contains(FixtureLabel)) return;
+			FixtureNames.Add(FixtureLabel);
+			FRawIndexClip& FixtureSequence = BodyClipsByRawIndex.Add(FixtureRaw);
+			FixtureSequence.Label = FixtureLabel; FixtureSequence.Clip.RawIndex = FixtureRaw++;
+			FixtureSequence.Clip.Flags = bFixtureLoop ? 1 : 0;
+		};
+		for (int32 FixtureStance = 0; FixtureStance < 3; ++FixtureStance)
+		{
+			AddFixtureSequence(StanceClips.Idle[FixtureStance], true);
+			AddFixtureSequence(StanceClips.Fidget[FixtureStance], true);
+			for (int32 FixtureDestination = 0; FixtureDestination < 3; ++FixtureDestination)
+				AddFixtureSequence(StanceClips.Trans[FixtureStance][FixtureDestination], false);
+		}
+	}
+	virtual bool GetNpcSequenceDescriptor(const FString&, const FString&, const FString& FixtureLabel,
+		FElysiumSequenceDescriptor& OutFixtureDescriptor) override
+	{
+		// 0x10090a12: the double reads its explicit model table, never synthesizes a missing clip.
+		for (const auto& FixtureRawRow : BodyClipsByRawIndex)
+		{
+			if (FixtureRawRow.Value.Label.Equals(FixtureLabel, ESearchCase::IgnoreCase))
+			{
+				OutFixtureDescriptor.bStudioLooping = FixtureRawRow.Value.Clip.IsLooping();
+				OutFixtureDescriptor.bStudioSnap = FixtureRawRow.Value.Clip.IsSnap();
+				OutFixtureDescriptor.CycleSeconds = ClipSeconds;
+				return true;
+			}
+		}
+		return false;
+	}
+	void SeedFixtureActivity(const FString& Activity, int32 FixtureIndex)
+	{
+		FRawIndexClip& FixtureRow = BodyClipsByRawIndex.Add(FixtureIndex);
+		FixtureRow.Label = ResolvedNpcActivityLabel;
+		FixtureRow.Clip.Owner = ResolvedNpcActivityOwner;
+		FixtureRow.Clip.Activity = Activity;
+		FixtureRow.Clip.RawIndex = FixtureIndex;
+		FixtureRow.Clip.Weight = 1;
+		FixtureRow.Clip.Flags = ResolvedNpcActivityLoops ? 1 : 0;
+		FixtureRow.Clip.Fps = 30.f; FixtureRow.Clip.Frames = FMath::Max(2, FMath::RoundToInt(ClipSeconds * 30.f) + 1);
+		if (const TArray<FElysiumSwingRecord>* FixtureSwings = SwingsByClip.Find(FixtureRow.Label.ToLower()))
+			FixtureRow.Clip.Swings = *FixtureSwings;
+	}
 	virtual bool GetBodyClipByRawIndex(USkeletalMeshComponent* Body, const FString& Stem,
 		int32 RawIndex, FString& OutLabel, FElysiumNpcClip& OutClip) override
 	{
@@ -1164,6 +1233,17 @@ struct FElysiumRecordingServices final
 		OutWorld = UseBodyBounds;
 		return true;
 	}
+ float LastBodySequencePlaybackRate = 1.f;
+ virtual void SetBodySequencePlaybackRate(USkeletalMeshComponent*, float NewRate) override
+ { LastBodySequencePlaybackRate = NewRate; Record(FString::Printf(TEXT("SetBodySequencePlaybackRate %g"), NewRate)); }
+ TFunction<bool(int32, float, float, FVector&, float&)> BodySequenceIntervalMovementQuery;
+ virtual bool GetBodySequenceIntervalMovement(USkeletalMeshComponent* Body, const FString& Stem,
+ int32 RawIndex, float CycleFrom, float CycleTo, FVector& OutDeltaCm, float& OutYawDeltaDegrees) override
+ {
+  OutDeltaCm = FVector::ZeroVector; OutYawDeltaDegrees = 0.f;
+  return BodySequenceIntervalMovementQuery
+   ? BodySequenceIntervalMovementQuery(RawIndex, CycleFrom, CycleTo, OutDeltaCm, OutYawDeltaDegrees) : false;
+ }
 	virtual bool GetBodyBoneTransform(USkeletalMeshComponent* Body, const FString& BoneName,
 		FTransform& OutWorld) const override
 	{
@@ -1604,6 +1684,7 @@ struct FElysiumRecordingServices final
 	{
 		Record(FString::Printf(TEXT("ApplyAnimatedPropSkin %s family=%d"), *StemOf(StaticStem), Family));
 	}
+	virtual FString PickAnimatedPropRestClip(const FString& Stem) const override { return AnimatedPropRestClip(Stem, 0); } // singleton fixture
 	virtual FString AnimatedPropRestClip(const FString& Stem,
 		int32 PlacementToken = 0) const override
 	{

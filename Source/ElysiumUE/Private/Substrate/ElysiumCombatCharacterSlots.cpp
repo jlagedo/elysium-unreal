@@ -7,7 +7,7 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 136 generated slot bodies of `FElysiumCombatCharacter`: 19 carry the retail default story 29c
-// recovered, 23 are defined by hand in the substrate, and 93 are still stubs — 59 29c, 24 29d, 5
+// recovered, 24 are defined by hand in the substrate, and 92 are still stubs — 59 29c, 23 29d, 5
 // 29e, 5 unassigned. 1 are closed (0019/6) and answer the value-initialised default without
 // tallying.
 //
@@ -489,11 +489,8 @@ void FElysiumCombatCharacter::UpdatePoseParameters(float)
 
 // slot 315 0x10346cd0 (walked) `void MeleeSwingUpdate()`
 //   layer 18, story 29d
-void FElysiumCombatCharacter::MeleeSwingUpdate()
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::MeleeSwingUpdate"), TEXT("0x10346cd0"),
-		TEXT("29d"), DebugString());
-}
+// verdict `rule`: the body is `FElysiumCombatCharacter::MeleeSwingUpdate`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 316 0x1014f710 (walked) `void vfunc316(CBaseCombatCharacter*, bool, bool)`
 //   layer 0, story 29c
@@ -1380,7 +1377,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void(float)>::Test(&FElysiumCombatCharacter::UpdatePoseParameters),
 				nullptr },
 			{ 315, TEXT("0x10346cd0"), TEXT("CBaseCombatCharacter"), TEXT("MeleeSwingUpdate"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void()>::Test(&FElysiumCombatCharacter::MeleeSwingUpdate),
 				nullptr },
 			{ 316, TEXT("0x1014f710"), TEXT("CBaseCombatCharacter"), TEXT("Slot316"),

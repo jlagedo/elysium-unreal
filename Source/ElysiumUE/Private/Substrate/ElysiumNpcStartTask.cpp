@@ -574,7 +574,7 @@ void FElysiumNpc::StartTask19WeaponSwing(bool bSecondary)
 	{
 		return;
 	}
-	const FElysiumWeapon::EVerdict Verdict = Weapon->AttackIntent(
+	const FElysiumWeapon::EVerdict Verdict = Weapon->NpcMeleeAttack( // 0x102a4608 / 0x102a4624 direct virtual
 		bSecondary ? FElysiumWeapon::EIntent::Secondary : FElysiumWeapon::EIntent::Primary);
 	RecordScheduleEvent(FString::Printf(TEXT("StartTask weapon slot 0x%x -> %s"),
 		bSecondary ? 0x51c : 0x518, FElysiumWeapon::VerdictName(Verdict)));

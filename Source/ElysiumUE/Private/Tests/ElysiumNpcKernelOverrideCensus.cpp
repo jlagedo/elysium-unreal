@@ -6,8 +6,8 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 1052 live own bodies the port carries as overrides, of 1419 live (class, slot) own-body rows on
-// live classes; `kernel_shape --unported` lists the other 367.
+// 1053 live own bodies the port carries as overrides, of 1419 live (class, slot) own-body rows on
+// live classes; `kernel_shape --unported` lists the other 366.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -3286,6 +3286,11 @@ namespace
 			TEXT("FElysiumNpcPedestrian"), TEXT("FElysiumNpcPedestrian"), TEXT("OnRestore"),
 			&FElysiumNpcPedestrian::StaticRetailClass,
 			TDeclaredOn<FElysiumNpcPedestrian, void(bool)>::Test(&FElysiumNpcPedestrian::OnRestore),
+			std::is_base_of_v<FElysiumNpcPedestrian, FElysiumNpcPedestrian> },
+		{ TEXT("CNPC_VPedestrian"), 301, TEXT("0x103a38c0"), TEXT("rule"),
+			TEXT("FElysiumNpcPedestrian"), TEXT("FElysiumNpcPedestrian"), TEXT("CreateCorpse"),
+			&FElysiumNpcPedestrian::StaticRetailClass,
+			TDeclaredOn<FElysiumNpcPedestrian, void(const FVector&, void*)>::Test(&FElysiumNpcPedestrian::CreateCorpse),
 			std::is_base_of_v<FElysiumNpcPedestrian, FElysiumNpcPedestrian> },
 		{ TEXT("CNPC_VPedestrian"), 366, TEXT("0x10385a70"), TEXT("rule"),
 			TEXT("FElysiumNpcPedestrian"), TEXT("FElysiumNpcHuman"), TEXT("HandleInteraction"),

@@ -19,6 +19,7 @@
 #include "ElysiumUserCmd.h"
 #include "ElysiumVariant.h"
 #include "ElysiumWorldServices.h"            // `player_crouched`: `IElysiumEmbodiment::IsPlayerDucking`
+#include "Substrate/ElysiumWeaponClasses.h"
 #include "Substrate/ElysiumItemClasses.h"    // `player_weapon`: the active item's classname
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -320,6 +321,15 @@ void FElysiumArenaScenarioRunner::RecordEvent(const FElysiumAiTraceEvent& Event)
 	Recorded.Name = Event.Name;
 	Recorded.Kind = Event.Kind;
 	Recorded.Text = Event.Text;
+	if (Event.Kind == FName(TEXT("state")))
+	{
+		// NPCInit writes NONE directly (0x1029a0f5); MaintainSchedule's first SetState
+		// (0x10281b63 -> 0x1026e340) establishes the NPC and runs real state-change hooks.
+		// Keep that edge observable, but a state ban judges subsequent behaviour.
+		Recorded.bEstablishingState = !EstablishedStateEntities.Contains(Event.Entity)
+			&& Event.Text.StartsWith(TEXT("None -> "));
+		EstablishedStateEntities.Add(Event.Entity);
+	}
 }
 
 void FElysiumArenaScenarioRunner::OnStageActivated(AElysiumMapActor* Map)
@@ -535,7 +545,7 @@ void FElysiumArenaScenarioRunner::FindNeverViolation(FFailure& Out)
 		{
 			const FEvent& Event = Events[Scan];
 			const double Time = ScenarioTime(Event);
-			if (Time < Opens || Time > Closes || !Matches(NeverMatchers[Index], Event))
+			if (Event.bEstablishingState || Time < Opens || Time > Closes || !Matches(NeverMatchers[Index], Event))
 			{
 				continue;
 			}
@@ -794,6 +804,51 @@ bool FElysiumArenaScenarioRunner::ReadProbe(const FElysiumArenaProbeSpec& Probe,
 			ElysiumArenaRunnerDetail::CorpseRestSpeedCmPerSecond);
 		return ElysiumArenaRunnerDetail::Compare(Answer, Probe);
 	}
+ case EElysiumArenaProbe::SameTeam:
+ case EElysiumArenaProbe::SwingRecordedHit:
+ {
+  const FElysiumCombatCharacter* ProbeCharacter = Entity->AsCombatCharacter();
+  FElysiumEntity* ProbeVictim = ElysiumArenaRunnerDetail::FindEntity(*World, Probe.To.Name);
+  if (!ProbeCharacter || !ProbeVictim) { OutError = TEXT("missing character/target for team/contact probe"); return false; }
+  Answer.Type = FElysiumArenaValue::EType::Bool;
+  if (Probe.Probe == EElysiumArenaProbe::SameTeam) Answer.bBool = ProbeCharacter->IsSameTeam(ProbeVictim->AsCombatCharacter());
+  else
+  {
+   FElysiumEntity* ProbeWeaponEntity = ProbeCharacter->ActiveWeaponEntity();
+   const FElysiumWeapon* ContactWeapon = ProbeWeaponEntity && ProbeWeaponEntity->AsItem() ? ProbeWeaponEntity->AsItem()->AsWeapon() : nullptr;
+   Answer.bBool = ContactWeapon != nullptr && ContactWeapon->SwingHasRecordedHit(ProbeVictim->Handle);
+  }
+  break;
+ }
+ case EElysiumArenaProbe::TeamSymbol:
+ case EElysiumArenaProbe::Wounds:
+ case EElysiumArenaProbe::HealthCap:
+ {
+  const FElysiumCombatCharacter* ProbeCharacter = Entity->AsCombatCharacter();
+  if (!ProbeCharacter) { OutError = TEXT("sheet/team probe requires a character"); return false; }
+  Answer.Type = FElysiumArenaValue::EType::Number;
+  Answer.Number = Probe.Probe == EElysiumArenaProbe::TeamSymbol ? ProbeCharacter->GetTeamSymbol()
+   : ProbeCharacter->Sheet.GetCurrent(EElysiumTraitContainer::Attributes,
+    Probe.Probe == EElysiumArenaProbe::Wounds ? ElysiumSlot::Health : ElysiumSlot::MaxHealth);
+  break;
+ }
+ case EElysiumArenaProbe::SpawnFlags:
+ case EElysiumArenaProbe::RenderMode:
+  Answer.Type = FElysiumArenaValue::EType::Number;
+  Answer.Number = Probe.Probe == EElysiumArenaProbe::SpawnFlags ? Entity->SpawnFlags : Entity->RenderMode;
+  break;
+ case EElysiumArenaProbe::OneHitKill:
+ case EElysiumArenaProbe::NpcFlags1:
+ case EElysiumArenaProbe::RenderAlpha:
+ case EElysiumArenaProbe::Activity:
+  if (!Npc) { OutError = TEXT("NPC word probe requires an NPC"); return false; }
+  if (Probe.Probe == EElysiumArenaProbe::OneHitKill)
+  { Answer.Type = FElysiumArenaValue::EType::Bool; Answer.bBool = (Npc->NpcFlags.RawWord1() & 0x40000000u) != 0; }
+  else
+  { Answer.Type = FElysiumArenaValue::EType::Number;
+    Answer.Number = Probe.Probe == EElysiumArenaProbe::NpcFlags1 ? Npc->NpcFlags.RawWord1()
+     : Probe.Probe == EElysiumArenaProbe::RenderAlpha ? Npc->RenderAlphaByte : Npc->ActivityNumber; }
+  break;
 	case EElysiumArenaProbe::DistanceTo:
 	{
 		FVector Target = FVector::ZeroVector;
@@ -988,8 +1043,13 @@ void FElysiumArenaScenarioRunner::RecordAction(const FElysiumArenaAction& Action
 		Name = Action.Target;
 		Text += FString::Printf(TEXT(" %s %s"), *Action.Input, *Action.Param.Describe());
 		break;
+	case EElysiumArenaAction::SeedHealth:
 	case EElysiumArenaAction::Kill:
 		Name = Action.Target;
+		break;
+	case EElysiumArenaAction::DamagePacket:
+		Name = Action.Target;
+		Text += FString::Printf(TEXT(" %s from=%s"), *Action.Param.Describe(), *Action.Attacker);
 		break;
 	case EElysiumArenaAction::Console:
 		Text += FString::Printf(TEXT(" %s"), *Action.Command);
@@ -1060,6 +1120,32 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 		}
 		bWalking = true;
 		WalkFeet = Place.FeetCm;
+		return true;
+	}
+	case EElysiumArenaAction::SeedHealth:
+	{
+		FElysiumEntity* FixtureEntity = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
+		FElysiumCombatCharacter* FixtureCharacter = FixtureEntity ? FixtureEntity->AsCombatCharacter() : nullptr;
+		if (!Host.bArena || !FixtureCharacter || !FixtureCharacter->IsAlive())
+		{ OutError = TEXT("seed_health requires a live arena fixture character"); return false; }
+		// Measurement setup for sheet +0x0f/+0x11 read by 0x1032ef60; never a retail input.
+		FixtureCharacter->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, static_cast<int32>(Action.Param.Number));
+		FixtureCharacter->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, 0);
+		FixtureCharacter->RecomputeSheet(); // effective cap, through the same formula as a damage commit
+		return true;
+	}
+	case EElysiumArenaAction::DamagePacket:
+	{
+		FElysiumEntity* PacketVictimEntity = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
+		FElysiumNpc* PacketVictim = PacketVictimEntity ? PacketVictimEntity->AsNpc() : nullptr;
+		FElysiumEntity* PacketAttacker = ElysiumArenaRunnerDetail::FindEntity(World, Action.Attacker);
+		FElysiumCombatCharacter* PacketAttackerCharacter = PacketAttacker ? PacketAttacker->AsCombatCharacter() : nullptr;
+		if (!Host.bArena || !PacketVictim || !PacketAttackerCharacter || !PacketAttackerCharacter->IsAlive())
+		{ OutError = TEXT("damage_packet requires a victim and a live named attacker"); return false; }
+		FElysiumNpcBase::FElysiumTakeDamageInfo FixturePacket;
+		FixturePacket.Attacker = PacketAttacker->Handle;
+		FixturePacket.Damage = static_cast<float>(Action.Param.Number);
+		PacketVictim->OnTakeDamage(&FixturePacket); // 0x1032ef60 -> 0x10265ed0 -> 0x102bee60
 		return true;
 	}
 	case EElysiumArenaAction::Fire:

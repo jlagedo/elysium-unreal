@@ -108,6 +108,7 @@ private:
 		FString Name;
 		FName Kind;
 		FString Text;
+		bool bEstablishingState = false; // first NONE edge; retained in trace/expect, outside state bans
 	};
 
 	struct FMatcher
@@ -189,6 +190,7 @@ private:
 	double LastNow = 0.0;
 
 	TArray<FEvent> Events;
+	TSet<FElysiumEntityHandle> EstablishedStateEntities;
 	TArray<FMatcher> ExpectMatchers;
 	TArray<FMatcher> NeverMatchers;
 

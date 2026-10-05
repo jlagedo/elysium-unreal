@@ -1,3 +1,4 @@
+#include "Tests/ElysiumMeleeStepFixture.h"
 // Content-free Substrate automation: the GROUNDED knockback family — who is eligible for
 // one, the direction bands retail cuts, the yaw it snaps the victim to, the cell that plays, and
 // what the whole path spends off the Reaction stream (nothing).
@@ -411,16 +412,16 @@ namespace
 			// victim standing 100 cm dead ahead of the attacker.
 			if (FElysiumWeapon* Held = GiveWeapon(*Attacker, Weapon))
 			{
-				Held->AttackIntent(FElysiumWeapon::EIntent::Primary);
+				Held->ResetSwingContact(); Held->Swing.ClipLabel = GSwingLabel; Held->Swing.ClipOwnerStem = GSwingBank;
 			}
 			// The clock moves FIRST, so the holds the contact takes are measured against a `now`
 			// inside the swing. Then two walked frames: the swing's first live frame stages the
 			// opposed roll and the notice, and the second carries the cycle into the authored window.
 			World->Tick(GContactTick);
 			Services.BodyClipPhase.Cycle = 0.0f;
-			World->AdvanceMeleeSwings(0.02f);
+			ElysiumTestMeleeStep(*World, Services.BodyClipPhase);
 			Services.BodyClipPhase.Cycle = 0.50f;
-			World->AdvanceMeleeSwings(0.02f);
+			ElysiumTestMeleeStep(*World, Services.BodyClipPhase);
 		}
 	};
 }
@@ -979,8 +980,8 @@ bool FElysiumKnockbackProducerTest::RunTest(const FString&)
 		//
 		// This count was 1 while the cell was a stand-in with nothing to draw for. Consuming the
 		// authored table is what made it 2, and that is the whole visible difference.
-		TestTrue(TEXT("the producer spends two draws: the variant pick and the candidate draw"),
-			SpentDraws(SeedBefore, Rng, 2));
+		TestTrue(TEXT("0x101606e0: Reaction spends the authored bucket draw; sequence selection has no Variant draw"),
+			SpentDraws(SeedBefore, Rng, 1));
 	}
 
 	// --- The four buckets, each through the real producer ------------------------------------------
@@ -1279,10 +1280,11 @@ bool FElysiumKnockbackProducerTest::RunTest(const FString&)
 
 		if (FElysiumWeapon* Held = GiveWeapon(*F.Victim, GHammer))
 		{
-			const FElysiumWeapon::EVerdict Verdict =
-				Held->AttackIntent(FElysiumWeapon::EIntent::Primary);
-			TestEqual(TEXT("the victim's own swing is accepted"), static_cast<int32>(Verdict),
-				static_cast<int32>(FElysiumWeapon::EVerdict::Accepted));
+			Held->ResetSwingContact(); Held->Swing.ClipLabel = GSwingLabel; Held->Swing.ClipOwnerStem = GSwingBank;
+			FElysiumNpc* CounterNpc = F.Victim->AsNpc();
+			CounterNpc->SequenceNumber = CounterNpc->SequenceRowFor(GSwingBank, GSwingLabel, false);
+			CounterNpc->SequenceCycleRate = 1.f; CounterNpc->SequencePlaybackRate = 1.f;
+			CounterNpc->bMeleeSwingIsLive = true;
 		}
 		else
 		{
@@ -1290,12 +1292,16 @@ bool FElysiumKnockbackProducerTest::RunTest(const FString&)
 		}
 		F.World->Tick(GContactTick);
 		F.Services.BodyClipPhase.Cycle = 0.0f;
-		F.World->AdvanceMeleeSwings(0.02f);
+		ElysiumTestMeleeStep(*F.World, F.Services.BodyClipPhase);
 		TestNotEqual(TEXT("a swing short of the completion cycle clears nothing"),
 			F.Victim->HitBuildupCount, 0);
 
 		F.Services.BodyClipPhase.Cycle = FElysiumCombatCharacter::MeleeSwingCompletionPercent;
-		F.World->AdvanceMeleeSwings(0.02f);
+		FElysiumNpc* CounterNpc = F.Victim->AsNpc();
+		CounterNpc->SequenceCycle = FElysiumCombatCharacter::MeleeSwingCompletionPercent;
+		CounterNpc->AnimTime = static_cast<float>(F.World->NowSeconds()) + 0.1f;
+		CounterNpc->LastMeleeSwingUpdate = static_cast<float>(F.World->NowSeconds()) - 0.1f;
+		CounterNpc->MeleeSwingUpdate(); // 0x10346cd0 clears NPC +0x6064 before Step
 		TestEqual(TEXT("a body that swings past the completion cycle clears its own counter"),
 			F.Victim->HitBuildupCount, 0);
 	}

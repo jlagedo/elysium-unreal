@@ -5,7 +5,11 @@
   "seed": 1,
   "duration": 15.0,
   "player": {
-    "at": [975.0, 762.0, 0.0],
+    "at": [
+      975.0,
+      762.0,
+      0.0
+    ],
     "face": -90.0
   },
   "from_map": {
@@ -17,6 +21,12 @@
     "at": "north"
   },
   "script": [
+    {
+      "t": 0.05,
+      "do": "fire",
+      "target": "arena_player_events",
+      "input": "MakePlayerUnkillable"
+    },
     {
       "t": 2.0,
       "do": "fire",
@@ -88,5 +98,12 @@
       "equals": "!player"
     }
   ],
-  "notes": "The end probe names the committed enemy; the player answers '!player' in this runtime (as sense_bodies_transparent's passing probe reads it; corrected 2026-10-04 by V2 from 'player')."
+  "notes": "The end probe names the committed enemy; the player answers '!player' in this runtime (as sense_bodies_transparent's passing probe reads it; corrected 2026-10-04 by V2 from 'player'). V4c full trace: SetRelationship acquires the player at2.10; real 3031 shots of31,31,31,33 kill the player at2.80; BestEnemy 0x10274475 / IsAlive 0x100b4dc0 correctly clears the handle at2.90. Stage retail MakePlayerUnkillable for this relationship test, preserving its end enemy probe and all expectations.",
+  "rows": [
+    {
+      "classname": "events_player",
+      "name": "arena_player_events",
+      "at": "start"
+    }
+  ]
 }

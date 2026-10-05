@@ -19,7 +19,7 @@
 //    `Operator_HandleAnimEvent` `+0x5c8`: ids 3030-3044 re-enter mode dispatch and queue the commit
 //    with no delay. Where that route cannot run — a headless world, a body whose pose layer
 //    publishes no phase, or a shot clip whose timeline names no id — the transaction schedules the
-//    `ContactEventCycle` estimate instead. Either way the commit rides the one event queue as a
+//    PLAYER ONLY `ContactEventCycle` estimate instead. The NPC has no timer fallback. Commit rides a
 //    self-input, so there is no private timer and no second scheduler (K11).
 //
 //  * MELEE commits from a PER-FRAME SWEPT CONTACT WALK over the clip's own authored swing records
@@ -39,7 +39,9 @@
 #include "ElysiumSwingRecord.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumAnimEvents.h"
 
+class FElysiumNpc;
 struct FElysiumDiceTables;
 struct FElysiumFeatTable;
 struct FElysiumRules;
@@ -232,12 +234,8 @@ namespace ElysiumWeapons
 	//    fire-state transition, which re-enters `ModeDispatch` `0x102383b0` in event mode and calls
 	//    the weapon's shot virtual `CWeaponRanged::Shot` `0x102387b0`. The event chooses the instant;
 	//    the shot body spends ammunition and builds the fire packet.
-	//  * `0x103ea5b0`, the 29 common-melee classes — **3047** is the NPC swing trigger, and 3001,
-	//    3003 and 3030..3037 are SWALLOWED: accepted and acted on by nothing, so a melee clip carrying
-	//    a swish or a ranged id does not fall through to a warning. **3047 commits nothing**: the
-	//    melee contact is the per-frame swept walk over the clip's authored swing records, and the
-	//    trigger's own consumer — an NPC asking its weapon for a swing from inside a clip — is not
-	//    built, so the id is claimed and reported once rather than wired to the damage spine.
+	//  * 0x103ea5b0: 3001, 3030..3037, 3039..3044, 3047 -> NPC PrimaryAttack only;
+	//    3003 swallowed; 3038/3045/3046 base. Contact remains 0x10343020, never this event.
 	//  * `0x1024f030`, the 17 base/discipline/armor/**thrown**/unarmed classes — **no accepted
 	//    route**. A thrown weapon is not a slow firearm: nothing in the band commits it, and this
 	//    runtime must not hand it the ranged body's ids merely because it is not melee.
@@ -247,7 +245,7 @@ namespace ElysiumWeapons
 	// with no shipped item record of their own, and the 103 inventory/non-combat classes
 	// `0x103f4470` covers are plain `FElysiumItem`s in this runtime — `IsControllableWeapon` gives
 	// them no controller, so no record ever reaches this file. Every body's 4001/4002 bodygroup route
-	// is presentation and is claimed by none of them here.
+	// is stored here; held-model presentation is the 0015 seam.
 	inline constexpr int32 RangedShotEventFirst = 3030;
 	inline constexpr int32 RangedShotEventLast  = 3044;
 	// Retail's NPC swing trigger on the common-melee body. Claimed, and deliberately not a commit.
@@ -273,9 +271,7 @@ namespace ElysiumWeapons
 	// swing records, so no id in the band names its instant.
 	bool IsCommitEvent(int32 Event, EOperatorBody Body);
 
-	// Retail's NPC swing trigger on the common-melee body (3047). Claimed here, and reported once
-	// rather than wired: its consumer — an NPC asking its weapon for a swing from inside a clip —
-	// is not built, and committing on it would put a second melee route beside the contact walk.
+	// 0x103ea5b0: exact PrimaryAttack trigger set, NPC operator only.
 	bool IsMeleeSwingTrigger(int32 Event);
 
 	// The common-melee body's swallow set — claimed, and deliberately without effect.
@@ -507,18 +503,14 @@ public:
 		// recovery deadline having committed nothing. That is the same outcome retail gives any swing
 		// whose clip is cut short.
 
-		// Whether this swing's opposed record and incoming-swing notice have been staged. Both are
-		// staged ONCE per swing, on its first BATCHED frame, before any contact test — a frame that
-		// runs no batch records nothing at all, which is the point of the accumulator below.
+		// 0x10346ac0: opposed record/notice staged once on a positive-dt character update.
 		bool bContactStaged = false;
-		// Elapsed time the walk has been handed and not yet walked. A frame shorter than one sub-step
-		// leaves it here rather than discarding it, so the batch that does run covers everything the
-		// clip advanced through since the last one (`ElysiumSwing::SubStepSeconds`).
-		float PendingSeconds = 0.0f;
-		// The play the walk is following. A clip re-armed is a new play whose window walk starts over,
-		// which is the same discriminator the animation-event cursor keys on. Zero is "the walk has
-		// not met a play yet".
-		uint32 WalkPlayId = 0;
+		// D9 named fallback: preserve the previous/current update's live-bone lerp while slot 315
+		// supplies its own cycles and interpolated pose. CalcPose-at-cycle will replace this input.
+		bool bPoseBatchActive = false;
+		TArray<TPair<FVector, FVector>> PoseBatchFromSegmentsLocal;
+		TArray<TPair<FVector, FVector>> PoseBatchToSegmentsLocal;
+		TBitArray<> PoseBatchHasSegments;
 		// The cycle the last batch left off at. Negative is "not yet primed": the first batch has no
 		// previous position and covers only the instant it stands on.
 		float PrevCycle = -1.0f;
@@ -548,8 +540,6 @@ public:
 		// whole transaction ending is what clears it, through `ClearSwing`.
 		void ResetWalk()
 		{
-			WalkPlayId = 0;
-			PendingSeconds = 0.0f;
 			PrevCycle = -1.0f;
 			RecordHits.Reset();
 			PrevSegmentsLocal.Reset();
@@ -557,17 +547,7 @@ public:
 			PrevAngles = FRotator::ZeroRotator;
 		}
 
-		// Re-prime the walk's POSITION only, after an engine discontinuity: the next batch starts
-		// from where the limb actually is instead of sweeping through wherever it used to be. The
-		// hit lists survive, deliberately — a teleport is not a reason for a record whose window is
-		// still open to land a second time on a body it already hit.
-		void RePrimePosition()
-		{
-			PrevCycle = -1.0f;
-			PrevSegmentsLocal.Reset();
-			PrevOrigin = FVector::ZeroVector;
-			PrevAngles = FRotator::ZeroRotator;
-		}
+
 	};
 	FSwing Swing;
 
@@ -592,6 +572,8 @@ public:
 	// own opponent.
 	EVerdict AttackIntent(EIntent Intent,
 		const FElysiumEntityHandle& Victim = FElysiumEntityHandle::Invalid());
+	// 0x103eaca0 / 0x103eae00: direct NPC weapon virtual, without ItemPostFrame's timer gate.
+	EVerdict NpcMeleeAttack(EIntent Intent);
 
 	// `CWeaponMelee::ItemPostFrame` (`0x103EAEC0`) / `CWeaponRanged`'s shared frame: one frame of
 	// button state turned into at most one weapon transaction. `Held` is what is down now; `Pressed`
@@ -629,7 +611,52 @@ public:
 	// A frame that records nothing at all is the ordinary case: a span below one sub-step is
 	// accumulated rather than walked, and the batch that follows covers it. A swing whose clip
 	// declares no records is the other, and it never opens a contact window.
-	void AdvanceSwingContact(float DeltaSeconds);
+	// 0x10346cd0: compatibility entry; caller delta is ignored, the character owns +0xaa4.
+	void AdvanceSwingContact(float DeltaSeconds = 0.f);
+	// 0x10343020: one slot-315 substep, using the supplied pose and sequence cycles.
+	void MeleeSwingStep(const FVector& StepOrigin, const FVector& StepAngles,
+		float PreviousCycle, float CurrentCycle, float PoseFraction = -1.f);
+	void BeginSwingPoseBatch(); // D9 fallback snapshot, independent of caller/render delta
+	void EndSwingPoseBatch();
+	void PrepareSwingContact(); // 0x10346ac0, once per swing before Step
+	void ResetSwingContact();   // ForceMeleeReset, preserves the accepted transaction
+	void SwingActiveWeaponEvent(); // 0x10346cd0 weapon slot 333 (0x15,1,...), named activity seam
+	int32 SwingActiveWeaponEvents = 0;
+	TMap<int32, int32> WeaponModelBodygroups;
+	virtual void SetWeaponModelBodygroup(int32 GroupIndex, int32 GroupValue)
+	{
+		WeaponModelBodygroups.Add(GroupIndex, GroupValue); // 0x103ea5b0 / 0x10238160
+		// 0015 held-model bodygroup presentation seam; no held model source yet.
+	}
+
+	int32 LastSwingSubSteps = 0; // 0x10346cd0 ceil(dt*100), read-only arm observation
+	struct FCalcPoseSeams
+	{
+		int32 Queries = 0;
+		float PreviousQueryCycle = 0.f;
+		float LastQueryCycle = 0.f;
+		bool bAvailable = false;
+	};
+	FCalcPoseSeams CalcPoseSeams; // 0x10343020: read-only observation of the D9 input seam
+	bool SwingHasRecordedHit(const FElysiumEntityHandle& Victim) const;
+	// 0x1034394d: debug_allow_melee_ff (0x10936ee0), shipped zero; named ConVar input seam.
+	virtual bool MeleeFriendlyFireAllowed() const { return false; }
+	void WarnNpcRangedClipWithoutShotEvent(const FElysiumNpc& Npc, int32 Sequence);
+	// 0x1024efa0: held model clock, never the wielder's row or the rendered pose phase.
+	struct FWeaponModelClock
+	{
+		FElysiumSequenceWords Words;
+		float PrevAnimTime = 0.f; // +0x170
+		int32 Activity = 0;      // +0xfec
+		TArray<FElysiumAnimEvent> Events;
+		TArray<TPair<int32, int32>> Candidates; // activity's (sequence, actweight), studio order
+	};
+	// 0015 owns the held-model sequence source. None means no model words; no invented clock.
+	virtual FWeaponModelClock* WeaponModelClock() { return nullptr; }
+	void WeaponFrameUpdate(FElysiumCombatCharacter& Wielder);
+	// 0x1024efa0: the held model's picker/reset are 0015 seams. Picker must use C2's shared stream.
+	virtual int32 PickWeaponModelSequence(int32 Activity);
+	virtual void ResetWeaponModelSequence(int32 Sequence);
 
 	// **SEAMS of the traced impact `0x102579f0` (slot 270) and the wall arm `0x10343f96`**, each
 	// called at its retail position and recorded, because nothing behind it is built here. Public so
@@ -663,6 +690,8 @@ public:
 	// own melee and base bodies warn there instead; the census is this runtime's report for the same
 	// fact, and it is a work list rather than a fault.
 	bool OperatorHandleAnimEvent(FElysiumCombatCharacter& Operator, const FElysiumAnimEvent& Event);
+	virtual bool TzimisceMeleeActivityFromAnimEvent(FElysiumCombatCharacter& TzimisceOperator,
+		int32 TzimisceEvent); // 0x103e8be0: absent class, +0x910 variant input answers nothing
 
 	// **An NPC's commit event with nothing staged IS the shot** (spec 0002 V4o lane O3).
 	// `CWeaponRanged::Operator_HandleAnimEvent 0x10238160` (3030..3044) -> `0x10238320`
@@ -808,7 +837,8 @@ public:
 
 private:
 	// The two halves of an accepted swing.
-	EVerdict BeginMeleeSwing(EIntent Intent, int32 ModeIndex, const FElysiumWeaponMode& Mode);
+	EVerdict BeginMeleeSwing(EIntent Intent, int32 ModeIndex, const FElysiumWeaponMode& Mode,
+		bool bForceSequence = false); // 0x103ea1b5 force bypass, NPC PrimaryAttack passes true
 
 	// The busy path: what a melee primary press does DURING an attack.
 	//

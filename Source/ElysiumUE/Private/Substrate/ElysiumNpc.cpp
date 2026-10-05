@@ -8,6 +8,7 @@
 // class's A/B, not the animating node's.
 
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumRetailActivities.h"
 #include <cmath>
 
 #include "ElysiumAnimEvent.h"
@@ -285,33 +286,55 @@ void FElysiumNpc::KilledBy(const FElysiumEntityHandle& Attacker)
 
 void FElysiumNpc::BecomeClientRagdoll()
 {
-	if (bDeathCommitted)
+	(void)BecomeClientRagdoll(FVector::ZeroVector, INDEX_NONE, false); // 0x1028a8f7 bone -1 fork
+}
+
+bool FElysiumNpc::HasClientRagdollRig() const
+{
+	// 0x10090180 *0x1070b250 slot18: model ragdoll capability not exposed until V4d.
+	return false;
+}
+
+int32 FElysiumNpc::CorpseForceBone(const void* InInfo) const
+{
+	// 0x1032c1e4: hitbox bone or LookupBone("Bip01 Spine2"). No bone/hitbox source yet.
+	(void)InInfo;
+	return INDEX_NONE;
+}
+
+bool FElysiumNpc::BecomeClientRagdoll(const FVector& Force, int32 Bone, bool bRetainEntity)
+{
+	if (!HasClientRagdollRig()) // 0x10090180 model-interface slot18
 	{
-		return;
+		LastSetSizeMinsUnits = FVector::ZeroVector; LastSetSizeMaxsUnits = FVector::ZeroVector; // 0x10090180
+		if (Motor) Motor->SetHullSize(FVector::ZeroVector, FVector::ZeroVector); // 0x101cf390
+		++SetSizeCalls; // 0x10090180 UTIL_SetSize, no-rig arm
+		return false; // 0x10090180: no other writes, no hold-pose substitute
 	}
-	bDeathCommitted = true;
-	// Every animation-channel claim goes back ahead of the physics handoff: a claim outliving its
-	// producer parks a channel. (The body-owner tokens and the mind are vacated at the end of the
-	// Troika `Event_Killed`, after retail's own state change.)
-	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	if (Embodiment != nullptr && Visual != nullptr && !bStealthDeathCommitted)
+	const int32 SeedSequence = SelectWeightedSequence(0x21); // 0x1009021a: every rigged call picks
+	if (Bone == INDEX_NONE && SeedSequence != INDEX_NONE) // 0x1009021a: only bone -1 commits
 	{
-		Embodiment->ReleaseBodyAnimClaims(Visual);
+		SequenceNumber = SeedSequence; SequenceCycle = 0.f; // 0x1009021a
+		ResetSequenceInfo(); // 0x10090950
 	}
-	// `FSOLID_NOT_SOLID` / `MOVETYPE_NONE`: frozen rather than hidden — a corpse stays on screen.
-	// `SetIgnoreCharacterCollision` is stated beside it because the two are separate switches with
-	// separate lifetimes: whatever later un-freezes a body must not make a corpse block the player.
-	SetBodyFrozen(true);
-	RetailSolidFlags |= 0x4u;   // 0x10090180 AddSolidFlags(w | 4): FSOLID_NOT_SOLID, on the kill frame
-	SetIgnoreCharacterCollision(true);
-	SetBodyHeld(false);
-	SetBodyAnimationHeld(false);
-	// The pose goes to physics (`ACT_DIERAGDOLL`'s seed in retail; this runtime's current pose).
-	CompleteDeathHandoff();
-	// The think stops: `0x10090180` clears it. `CreateCorpse`'s tail (`0x1032c404..0x1032c423`) then
-	// re-arms `SUB_PVSRemove` at +10 s (or `SUB_Remove` for a burning corpse).
-	ThinkSet(nullptr, 0.0);
-	NextThink = ELYSIUM_NEVER_THINK;
+	// 0x10090180 slot225: physics destruction input absent, not fabricated.
+	if (!bRetainEntity) { RetailSolidFlags |= 4u; } // 0x10090180 rig branch only
+	IElysiumEmbodiment* const RagdollBody = World != nullptr ? World->Embodiment() : nullptr;
+	if (RagdollBody != nullptr && Visual != nullptr) // 0x10090180 TriggerClientRagdoll visual seam
+	{
+		(void)RagdollBody->StartBodyRagdoll(Visual); // 0x10090180; V4d supplies force/bone adapter
+	}
+	(void)Force; // 0x10090180 m_vecForce/m_nForceBone presentation inputs, V4d
+	RenderFxWord = 0x17; // 0x10090180
+	if (!bRetainEntity) // 0x10090180
+	{
+		SetMoveType(0, 0); // 0x10090180 slot93
+		LastSetSizeMinsUnits = FVector::ZeroVector; LastSetSizeMaxsUnits = FVector::ZeroVector; // 0x10090180
+		if (Motor) Motor->SetHullSize(FVector::ZeroVector, FVector::ZeroVector); // 0x101cf390
+		++SetSizeCalls; // 0x10090180 UTIL_SetSize
+		ThinkSet(nullptr, 0.0); // 0x10090180
+	}
+	return true; // 0x10090180
 }
 
 void FElysiumNpc::InputUseInteresting(const FElysiumInputArgs& Args)
@@ -518,28 +541,9 @@ void FElysiumNpc::InputClearPatrolPath(const FElysiumInputArgs&)
 
 bool FElysiumNpc::StartWalkingAnimation(bool bRunning)
 {
-	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	if (Embodiment && Visual)
-	{
-		// The one activity seam: the gait is chosen through this body's whole translation chain, so a
-		// class body's alert walk and a weapon's own gait reach a patrol leg exactly as they reach the
-		// frame publish. A travel cycle always loops, whatever the selected row's own flag says.
-		FElysiumActivityClipRequest Request;
-		FillActivityClipRequest(Request);
-		Request.Activity = bRunning ? TEXT("ACT_RUN") : TEXT("ACT_WALK");
-		Request.Variant = FMath::Max(0, Handle.Index);
-		Request.BodyKind = EElysiumAnimBodyKind::Cast;
-
-		FElysiumActivityClip Clip;
-		if (Embodiment->ResolveNpcActivityClip(Request, Clip)
-			&& PlayAnimClip(Clip.Label, /*bLoop=*/true))
-		{
-			return true;
-		}
-	}
-	// A few early manifests only carry the retail label. Keep them mobile while the animation
-	// catalog remains strict for every model that does expose ACT_WALK.
-	return PlayAnimClip(bRunning ? TEXT("run") : TEXT("walk"), /*bLoop=*/true);
+	const int32 WalkActivity = bRunning ? 0x13 : 9; // 0x10264680 -> 0x10272130
+	SetActivity(WalkActivity); // 0x10272440 -> 0x10272130, one lookup, row's own flags
+	return SequenceNumber >= 0; // no Handle.Index variant
 }
 
 // V3c: the `Sequence` claim (`AcquireSequenceBody`, `ClaimScriptMove`, `ClaimScriptBody` and their
@@ -619,12 +623,11 @@ void FElysiumNpc::Think()
 	// the port's own, each piece named:
 	//
 	//  - `IsInert`: an entity the world has not activated or has removed (port lifecycle).
-	//  - The two removal thinks retail installs by function pointer, dispatched here by the name
+	//  - The removal/fade thinks retail installs by function pointer, dispatched by the name
 	//    `ThinkSet` recorded: `SUB_Remove` (`0x101c0b10`, the static-corpse arm of `CreateCorpse`, a
 	//    burning corpse, and the species tasks that ThinkSet it) and `SUB_PVSRemove` (`0x102696f0`,
-	//    the ragdoll corpse's think `CreateCorpse`'s tail arms at +10 s). A committed corpse whose
-	//    think name was not carried (a load) runs `SUB_PVSRemove`, the ragdoll arm's think; the body
-	//    stays frozen and non-solid to characters either way.
+	//    the ragdoll corpse's think `CreateCorpse`'s tail arms at +10 s). Explicit NULL remains NULL;
+	//    a missing restored corpse function is V6's named save seam, never inferred PVS removal.
 	//  - The three lifecycle one-shots retail runs in `NPCInit` and this runtime cannot run at spawn
 	//    (an item entity created inside the world's spawn pass invalidates the array being iterated;
 	//    admission establishes idle and would wipe a director's forced state applied ahead of it).
@@ -643,16 +646,21 @@ void FElysiumNpc::Think()
 		NpcSubRemove(*this);                                                  // 0x101c0b10
 		return;
 	}
-	if (bDeathCommitted || ThinkFunctionName == NpcSubPvsRemoveThinkName())
+	if (ThinkFunctionName == TEXT("0x100152b2") || ThinkFunctionName == TEXT("0x10269960"))
 	{
-		if (bDeathCommitted)
-		{
-			SetBodyFrozen(true);
-			SetIgnoreCharacterCollision(true);
-		}
+		FadeOutThink(); // 0x10269960: later installed fade wins over corpse removal or clear
+		return;
+	}
+	if (ThinkFunctionName == NpcSubPvsRemoveThinkName())
+	{
 		NpcSubPvsRemove(*this, World != nullptr ? World->NowSeconds() : 0.0); // 0x102696f0
 		return;
 	}
+	if (ThinkFunctionName.IsEmpty() && (ThinkSetCalls > 0 || bDeathCommitted)) // 0x103a391c ThinkSet(NULL)
+	{
+		return; // explicit clear stays clear; a missing restored name has no inferred corpse clock
+	}
+	if (bDeathCommitted) { return; } // 0x1032c0e0: missing restored corpse function never runs NPCThink
 	if (!bDisableAi && IsNormalThinkDue())
 	{
 		RunAdmissionBarrier();
@@ -1021,72 +1029,64 @@ bool FElysiumNpc::EnsureStanceResolved()
 
 bool FElysiumNpc::SetDisposition(const FString& NewDisposition, int32 NewLevel)
 {
-	FElysiumDisposition OldRow;
-	FElysiumDisposition NewRow;
-	bool bChanged = false;
-	if (!CommitDisposition(NewDisposition, NewLevel, bChanged, &OldRow, &NewRow))
+	IElysiumEmbodiment* const DispositionSource = World != nullptr ? World->Embodiment() : nullptr;
+	FElysiumDisposition RequestedRow; // 0x102c0f70 Find(name, level)
+	const bool bLookupMiss = DispositionSource == nullptr
+		|| !DispositionSource->ResolveDisposition(NewDisposition, NewLevel, RequestedRow)
+		|| !RequestedRow.Name.Equals(NewDisposition, ESearchCase::IgnoreCase)
+		|| RequestedRow.Level != NewLevel; // 0x102c0f70: miss takes Neutral,1 and old=-1
+	const bool bOldMissing = !bHasDispositionIndex || bLookupMiss; // 0x102c0f70
+	FElysiumDisposition OldRow; FElysiumDisposition NewRow; bool bChanged = false;
+	if (!CommitDisposition(bLookupMiss ? FString(TEXT("Neutral")) : NewDisposition,
+		bLookupMiss ? 1 : NewLevel, bChanged, &OldRow, &NewRow)) // 0x102c0f70
 	{
-		return false;
+		return false; // named missing disposition-table seam
 	}
-	if (!bChanged)
+	bHasDispositionIndex = DispositionSource != nullptr && NewRow.IsValid(); // 0x102c0f70 +0x64d4
+	StanceTuning = NewRow; // 0x102c0f70: tuning always written, even unchanged
+	DispositionBlinkWord = NewRow.MinBlinkInterval; // 0x100ecd30 +0x64d8
+	DispositionBlinkWord = NewRow.MaxBlinkInterval; // 0x100ecd30 same output address, second wins
+	DispositionMinEyeFidget = NewRow.EyeTarget.MinInterval; // 0x100ecd30 +0x6584
+	DispositionMaxEyeFidget = NewRow.EyeTarget.MaxInterval; // 0x100ecd30 +0x6588
+	RelativeEyeTarget = NewRow.EyeTarget.DefaultDirection; // 0x100eccf0 +0x5b94
+	EyeIntegRate = NewRow.EyeTurnRate; // 0x100ecdf0(index0) +0xe3c
+	DefExpression = NewRow.DefaultExpression; // 0x100ec360 +0x10b4, name-index bridge
+	NoDeformExpression = NewRow.TalkingExpression; // 0x100ec2e0 +0x64d0, name-index bridge
+	ExpressionBlendWeight = NewRow.ExpressionIntensity; // 0x100ec3d0 +0x10b8
+	if (!bChanged && !bOldMissing) { return true; } // 0x102c0f70: only index change picks
+	StanceResolvedFor.Reset(); // 0x102c0f70 new disposition's stance row
+	int32 DispositionSequence = INDEX_NONE; // 0x102c0f70
+	if (bOldMissing)
 	{
-		return true;
+		DispositionSequence = Slot611(); // 0x102c0f70 old=-1, slot611 0x102c12a0
 	}
-
-	StanceResolvedFor.Reset();
-	bool bPlayedTransition = false;
-	// `SetDisposition 0x102c0f70` asks no body owner (gated on `m_bDisableAI +0x6080` only, draft).
-	// The `IsFeedBusy()` term and the by-name transition clip below are V4's: the rest of
-	// `0x102c0f70`'s body (`+0xff0 = 0xf1`, `+0x5ccc`, `ResetSequenceInfo`, `GetTransitionAnim
-	// 0x100ed150`).
-	if (Visual && !FElysiumCombatCharacter::IsFeedBusy())
+	else
 	{
-		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-		if (Embodiment)
+		const FString OldAnim = OldRow.AnimName.IsEmpty() ? OldRow.Name : OldRow.AnimName; // 0x100ed150
+		const FString NewAnim = NewRow.AnimName.IsEmpty() ? NewRow.Name : NewRow.AnimName; // 0x100ed150
+		const int32 StanceNumber = Stance.Current + 1; // 0x100ed150
+		DispositionSequence = LookupSequenceByName(*FString::Printf(TEXT("Stance_Trans_%s_%d_%s_%d"),
+			*OldAnim, StanceNumber, *NewAnim, StanceNumber)); // 0x100ed150 named transition
+		if (DispositionSequence == INDEX_NONE)
 		{
-			const FString OldAnim = !OldRow.AnimName.IsEmpty() ? OldRow.AnimName : OldRow.Name;
-			const FString NewAnim = !NewRow.AnimName.IsEmpty() ? NewRow.AnimName : NewRow.Name;
-			const int32 StanceNumber = FMath::Clamp(
-				Stance.Current, 0, ElysiumStance::Count - 1) + 1;
-			auto TryTransition = [&](int32 Number)
-			{
-				if (OldAnim.IsEmpty() || NewAnim.IsEmpty())
-				{
-					return false;
-				}
-				const FString Clip = FString::Printf(TEXT("Stance_Trans_%s_%d_%s_%d"),
-					*OldAnim, Number, *NewAnim, Number);
-				// This cross-disposition transition is authored per model, and most bodies carry
-				// none: probe the vocabulary first, so an absent clip is a quiet negative query
-				// result rather than PlayNpcClip's logged miss.
-				if (!Embodiment->HasNpcClip(ModelStem(), Clip))
-				{
-					UE_LOG(LogElysiumNpcEnt, Verbose,
-						TEXT("%s disposition transition '%s' not authored; not taken"),
-						*DebugString(), *Clip);
-					return false;
-				}
-				float Seconds = 0.f;
-				if (!Embodiment->PlayNpcClip(Visual, ModelStem(),
-					FElysiumClipSegment(Clip, /*bLoop=*/false), &Seconds))
-				{
-					return false;
-				}
-				UE_LOG(LogElysiumNpcEnt, Verbose,
-					TEXT("%s disposition transition '%s' taken"), *DebugString(), *Clip);
-				Mind.RecordExternal(FString::Printf(TEXT("disposition %s L%d -> %s L%d via %s"),
-					*OldRow.Name, OldRow.Level, *NewRow.Name, NewRow.Level, *Clip));
-				return true;
-			};
-			bPlayedTransition = TryTransition(StanceNumber)
-				|| (StanceNumber != 1 && TryTransition(1));
+			DispositionSequence = LookupSequenceByName(*FString::Printf(TEXT("Stance_Trans_%s_1_%s_1"),
+				*OldAnim, *NewAnim)); // 0x100ed150 second lookup, even stance1 repeats it
+		}
+		if (DispositionSequence == INDEX_NONE && EnsureStanceResolved())
+		{
+			DispositionSequence = LookupSequenceByName(*StanceClips.Idle[Stance.Current]); // 0x100ed150 new idle
 		}
 	}
-	if (!bPlayedTransition)
+	if (DispositionSequence >= 0) // 0x102c0f70
 	{
-		ResetAnimToIdle();
-		// No clock reset: a disposition change is not a slot-614 site; the next stance selection
-		// happens on the cadence.
+		IdealActivityNumber = 0xf1; IdealSequence = DispositionSequence; // 0x102c0f70 +0xff0/+0x5ccc
+		if (!bDisableAi) // 0x102c0f70: commit alone is gated, no feed/body-owner gate
+		{
+			SequenceNumber = DispositionSequence; SequenceCycle = 0.f; // 0x102c0f70
+			ActivityNumber = 0xf1; // 0x102c0f70 +0xfec, translated activity untouched
+			AnimTime = static_cast<float>(World != nullptr ? World->NowSeconds() : 0.0); // 0x102c0f70
+			ResetSequenceInfo(); // 0x10090950
+		}
 	}
 	return true;
 }
@@ -1113,37 +1113,11 @@ void FElysiumNpc::OnDialogFilePlayed(double DurationSeconds)
 
 float FElysiumNpc::PlayActivity(const FString& Activity)
 {
-	ScheduleIdealActivity = FElysiumClipIdentity();
-	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	if (Embodiment == nullptr || Visual == nullptr)
-	{
-		return -1.f;
-	}
-	FElysiumActivityClipRequest Request;
-	FillActivityClipRequest(Request);
-	Request.Activity = Activity;
-	Request.Variant = ScheduleActivityCycle++;
-	Request.BodyKind = EElysiumAnimBodyKind::Cast;
-
-	FElysiumActivityClip Clip;
-	float Seconds = 0.f;
-	// The task asks for a one-shot; the selected row's own loop bit still wins. Completion is the
-	// base-channel phase identity reaching the resolved ideal, with the kernel's retail watchdog;
-	// this clip length remains the body's presentation result only.
-	if (!Embodiment->ResolveNpcActivityClip(Request, Clip))
-	{
-		return -1.f;
-	}
-	// `FElysiumActivityClip::OwnerStem` and Label are the resolver's canonical bank identity -- the
-	// exact pair the clip player later publishes in the base-channel phase. Do not keep the requested
-	// ACT_* name here: several activities can resolve to one sequence, while equal labels in different
-	// banks are different sequences.
-	ScheduleIdealActivity = FElysiumClipIdentity(Clip.OwnerStem, Clip.Label);
-	if (!PlayAnimClip(Clip.Label, Clip.bLooping, &Seconds))
-	{
-		return -1.f;
-	}
-	return Seconds;
+	ScheduleIdealActivity = FElysiumClipIdentity(); // 0x10272130 bridge identity
+	const int32 RequestedActivity = ElysiumRetailActivities::ValueOf(Activity); // 0x10412520
+	if (RequestedActivity == INDEX_NONE) { return -1.f; } // 0x10272130 missing activity
+	SetActivity(RequestedActivity); // 0x10272440 -> 0x10272130: one actual kernel selection
+	return SequenceNumber >= 0 ? SequenceDurationSeconds(SequenceNumber) : -1.f; // 0x10091080
 }
 
 bool FElysiumNpc::TakeClearScheduleRequest()

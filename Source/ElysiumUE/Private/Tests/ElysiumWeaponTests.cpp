@@ -37,6 +37,8 @@
 #include "Substrate/ElysiumSwingContact.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumItemTable.h"
+#include "Tests/ElysiumNpcTestFixture.h"
+#include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumNpc.h"   // FElysiumNpc — the OnStateChange holster/draw body
 #include "Substrate/ElysiumReactions.h"
 #include "Substrate/ElysiumRulebook.h"
@@ -301,6 +303,28 @@ namespace
 	{
 		Attacker.Origin = At;
 		Attacker.Angles = FVector::ZeroVector;   // yaw 0 -> forward is +X, which is where the victim is
+	}
+
+	// 0x10343020 fixtures specify the Step interval directly. Production scheduling is tested
+	// separately by CharacterSwingClock below; this is never a replacement world tick.
+	void AdvanceTestMeleeSteps(FElysiumEntityWorld& StepWorld)
+	{
+		for (const TUniquePtr<FElysiumEntity>& StepEntity : StepWorld.Entities())
+		{
+			FElysiumCombatCharacter* const StepCharacter = StepEntity->AsCombatCharacter();
+			FElysiumItem* const StepItem = StepCharacter != nullptr ? StepCharacter->Inventory.Active(*StepCharacter) : nullptr;
+			FElysiumWeapon* const StepWeapon = StepItem != nullptr ? StepItem->AsWeapon() : nullptr;
+			if (StepWeapon == nullptr || !StepWeapon->Swing.bActive || !StepWeapon->Swing.bMelee) continue;
+			FElysiumClipPhase StepPhase;
+			if (!StepCharacter->GetLiveClipPhase(StepWeapon->Swing.ClipOwnerStem, StepWeapon->Swing.ClipLabel, StepPhase)) continue;
+			const TArray<FElysiumSwingRecord>* StepRecords = StepWorld.Embodiment()
+				? StepWorld.Embodiment()->NpcClipSwings(StepCharacter->ModelStem(), StepWeapon->Swing.ClipLabel) : nullptr;
+			if (!StepRecords || StepRecords->IsEmpty()) continue; // 0x10346cd0 no-record gate before notice/roll
+			StepCharacter->bMeleeSwingIsLive = true;
+			StepWeapon->PrepareSwingContact();
+			StepWeapon->MeleeSwingStep(StepCharacter->Origin, StepCharacter->Angles,
+				FMath::Max(StepWeapon->Swing.PrevCycle, 0.f), StepPhase.Cycle);
+		}
 	}
 
 	bool NearlyEqual(double A, double B) { return FMath::Abs(A - B) < 1.0e-3; }
@@ -791,6 +815,10 @@ namespace
 
 		Services.BoneFrames.Add(FString(GSwingBone).ToLower(), FTransform::Identity);
 		Services.SwingsByClip.Add(FString(GSwingClip).ToLower(), MoveTemp(Records));
+		Services.SeedFixtureActivity(TEXT("ACT_MELEE_ATTACK"), 55); // 0x103ea950 NPC model candidates
+		FElysiumMeleeEnvelope BandEnvelope;
+		BandEnvelope.Min = FVector(-500.f); BandEnvelope.Max = FVector(500.f);
+		Services.BodyClipsByRawIndex[55].Clip.Envelopes.Add(BandEnvelope); // 0x10347bb0 fixture envelope reaches its close enemy
 	}
 }
 
@@ -890,7 +918,7 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 
 		// The first live frame: the roll and the notice are staged, before any contact test, and the
 		// cycle is still outside the authored window.
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		TestEqual(TEXT("the first live frame stages the roll and sweeps nothing"),
 			DamageTaken(*Victim), 0);
 		TestTrue(TEXT("...staging the opposed record on the defender at swing start"),
@@ -899,7 +927,7 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		// A frame that walks the cycle into the authored window: the record is live and the sweep
 		// lands.
 		Services.BodyClipPhase.Cycle = 0.40f;
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		// lethality 8 - defense 0 - soak 0 = 8; total = 8 x (BaseDamage 2 + DamageModifier) x 1.
 		// `DamageModifier` is the attacker's `Close_Combat_Brawl` rating, which reads 0 with no
 		// rulebook loaded — the formula itself is asserted over its whole domain in the Rules suite.
@@ -908,7 +936,7 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 
 		// Hit-once: the same record cannot land twice while its window stays open.
 		Services.BodyClipPhase.Cycle = 0.55f;
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		TestEqual(TEXT("the record lands once for as long as its window is open"),
 			DamageTaken(*Victim), 16);
 
@@ -996,9 +1024,9 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		// `!(+0x2b4 & 4)`). A dead character misses because its death made it non-solid
 		// (`CreateCorpse 0x1032c0e0`), so the fixture's hand-set death states that word too.
 		Victim->RetailSolidFlags |= 0x4u;           // FSOLID_NOT_SOLID
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		Services.BodyClipPhase.Cycle = 0.40f;
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		TestEqual(TEXT("a sweep onto a dead victim misses"), DamageTaken(*Victim), 0);
 		TestTrue(TEXT("...and stages no opposed record"),
 			Victim->FindMeleeRoll(Player->Handle) == nullptr);
@@ -1041,7 +1069,7 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		for (float Cycle = 0.0f; Cycle <= 1.0f; Cycle += 0.1f)
 		{
 			Services.BodyClipPhase.Cycle = Cycle;
-			World.AdvanceMeleeSwings(0.02f);
+			AdvanceTestMeleeSteps(World);
 		}
 		TestEqual(TEXT("a clip with no swing records never contacts"), DamageTaken(*Victim), 0);
 		TestTrue(TEXT("...and stages no opposed record either — the walk never went live"),
@@ -1118,9 +1146,9 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		// Swing 1: the victim is inside the roll cone, so a record is staged and the sweep lands.
 		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
 		const int32 FirstSerial = Fists->Swing.Serial;
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		Services.BodyClipPhase.Cycle = 0.40f;
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		const int32 AfterFirst = DamageTaken(*Victim);
 		TestTrue(TEXT("the first swing lands"), AfterFirst > 0);
 
@@ -1136,7 +1164,7 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		TestTrue(TEXT("the second swing takes its own serial"),
 			Fists->Swing.Serial != FirstSerial);
 
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		const FElysiumMeleeRoll* Stale = Victim->FindMeleeRoll(Player->Handle);
 		if (!TestTrue(TEXT("the first swing's record is still on the victim"), Stale != nullptr))
 		{
@@ -1148,7 +1176,7 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 			Victim->FindMeleeRoll(Player->Handle, Fists->Swing.Serial) == nullptr);
 
 		Services.BodyClipPhase.Cycle = 0.40f;
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		// Corrected to retail (spec 0002 V11-2, D2): this pinned "no record of its own swing, no
 		// contact". `0x102579f0` reads `rolls == 0` for a body the swing's roll query never selected
 		// as `blocked = 0`, successes 1, and DISPATCHES the damage (`0x10257b92..0x10257c1c`). The
@@ -1187,26 +1215,26 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 			return false;
 		}
 		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
-		World.AdvanceMeleeSwings(0.02f);              // the first live frame: staging, no sweep
+		AdvanceTestMeleeSteps(World);              // the first live frame: staging, no sweep
 
 		Services.BodyClipPhase.Cycle = 0.30f;
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		const int32 AfterFirstGroup = DamageTaken(*Victim);
 		TestTrue(TEXT("the overlapping pair lands exactly one contact"), AfterFirstGroup == 16);
 
 		Services.BodyClipPhase.Cycle = 0.38f;
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		TestEqual(TEXT("...and does not land again while its window stays open"),
 			DamageTaken(*Victim), AfterFirstGroup);
 
 		// Past the first group entirely: both its records close and forget the victim.
 		Services.BodyClipPhase.Cycle = 0.55f;
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		TestEqual(TEXT("the gap between the groups contacts nothing"),
 			DamageTaken(*Victim), AfterFirstGroup);
 
 		Services.BodyClipPhase.Cycle = 0.75f;
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		TestEqual(TEXT("the second, disjoint group lands its own contact"),
 			DamageTaken(*Victim), AfterFirstGroup * 2);
 	}
@@ -1512,7 +1540,7 @@ bool FElysiumWeaponMeleeRollTest::RunTest(const FString&)
 			Victim->FindMeleeRoll(Player->Handle) == nullptr);
 
 		// The first batched frame. The roll and the notice are staged here, before any contact test.
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		TestEqual(TEXT("the first batched frame spends the opposed roll, exactly once"),
 			DiceSeed(), SeedAfterStaging);
 		const FElysiumMeleeRoll* Staged = Victim->FindMeleeRoll(Player->Handle);
@@ -1528,7 +1556,7 @@ bool FElysiumWeaponMeleeRollTest::RunTest(const FString&)
 
 		// The contact. It CONSUMES the record; nothing here may reach the resolver again.
 		Services.BodyClipPhase.Cycle = 0.40f;
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		TestEqual(TEXT("the contact spends no dice — it consumes the staged record"),
 			DiceSeed(), SeedAfterStaging);
 		TestTrue(TEXT("...leaving the record it consumed untouched"),
@@ -1576,7 +1604,7 @@ bool FElysiumWeaponMeleeRollTest::RunTest(const FString&)
 			return false;
 		}
 		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
-		World.AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(World);
 		TestEqual(TEXT("a swing that opens on empty air spends only the combo draw"),
 			DiceSeed(), SeedAfterCombo);
 		TestTrue(TEXT("...and stages no record anywhere"),
@@ -1587,195 +1615,7 @@ bool FElysiumWeaponMeleeRollTest::RunTest(const FString&)
 }
 #endif // ELYSIUM_WITH_ARM_TESTS
 
-// =====================================================================================
-// The contact walk's batching: accumulation below one sub-step, the span cap above it,
-// and the discontinuity guard between two batches.
-//
-// Retail walks on a server tick and its update either sees `dt == 0` and records nothing or
-// sees a whole tick and walks. Under a render clock the same observable is accumulation, so a
-// 144 Hz frame must not drop the span it covered — it has to survive into the batch that runs.
-// =====================================================================================
-
-namespace
-{
-	// One frame at a rate too fast for a batch to run on its own.
-	constexpr float GFastFrame = 1.0f / 144.0f;
-
-	// The whole walk fixture in one place: a bodied player, a live victim, a phase standing on the
-	// swing clip, and one accepted swing. Returns with the walk unprimed and nothing swept.
-	struct FBatchFixture
-	{
-		FElysiumRecordingServices Services;
-		TUniquePtr<FElysiumEntityWorld> World;
-		FElysiumPlayer* Player = nullptr;
-		FElysiumCombatCharacter* Victim = nullptr;
-		FElysiumWeapon* Fists = nullptr;
-
-		bool Stand(FAutomationTestBase& Test, TArray<FElysiumSwingRecord> Records)
-		{
-			ElysiumRng::SeedAll(0x42415443);
-			ArmSwingSeam(Services, MoveTemp(Records));
-			World = MakeUnique<FElysiumEntityWorld>(nullptr, nullptr, Services.Bundle());
-			World->Load(MakeWeaponTestDefs());
-			World->SpawnPlayer();
-			World->Activate(0.0);
-			World->Tick(0.0);
-
-			Player = World->FindPlayer();
-			Victim = FindCharacter(*World, TEXT("victim"));
-			if (!Test.TestNotNull(TEXT("the player exists"), Player)
-				|| !Test.TestNotNull(TEXT("the victim exists"), Victim))
-			{
-				return false;
-			}
-			Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
-			SeedHealth(*Victim, 5000);
-			PlaceFacing(*Player, FVector::ZeroVector);
-			Services.SwingContacts = { Victim->Handle };
-			Fists = GiveWeapon(*Player, GFists);
-			if (!Test.TestNotNull(TEXT("the fists are granted"), Fists))
-			{
-				return false;
-			}
-			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
-			return true;
-		}
-
-		// One frame of the walk at a stated cycle and delta.
-		void Frame(float Cycle, float DeltaSeconds)
-		{
-			Services.BodyClipPhase.Cycle = Cycle;
-			World->AdvanceMeleeSwings(DeltaSeconds);
-		}
-	};
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeBatchTest,
-	"Elysium.Substrate.Weapons.MeleeBatch", GElysiumTestFlags)
-bool FElysiumWeaponMeleeBatchTest::RunTest(const FString&)
-{
-	const FElysiumItemTable Table = MakeWeaponTable();
-	ElysiumItems::Install(Table);
-	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
-
-	// --- A frame too short to batch records NOTHING, and its span is walked by the next one ----
-	{
-		// The window sits BEHIND the cycle the un-batched frame stands on and ahead of the one the
-		// priming batch recorded, which is what makes the damage assertion below falsifying: a walk
-		// that dropped the short frame's span would batch from 0.31 and step over [0.22, 0.24]
-		// entirely, while one that batches from the last recorded cycle covers it.
-		FBatchFixture F;
-		if (!F.Stand(*this, { SwingRec(0.22f, 0.24f) }))
-		{
-			return false;
-		}
-
-		F.Frame(0.20f, 0.02f);   // the priming batch
-		TestTrue(TEXT("the priming batch records where it stands"),
-			FMath::IsNearlyEqual(F.Fists->Swing.PrevCycle, 0.20f));
-		TestEqual(TEXT("...and sweeps nothing, having no previous position"),
-			DamageTaken(*F.Victim), 0);
-
-		F.Frame(0.31f, GFastFrame);
-		TestEqual(TEXT("a 144 Hz frame runs no batch"), DamageTaken(*F.Victim), 0);
-		TestTrue(TEXT("...and records nothing at all, so its span is not lost"),
-			FMath::IsNearlyEqual(F.Fists->Swing.PrevCycle, 0.20f));
-		TestTrue(TEXT("...it is held instead"), F.Fists->Swing.PendingSeconds > 0.0f);
-
-		F.Frame(0.40f, GFastFrame);
-		TestTrue(TEXT("the frame that crosses one sub-step batches the WHOLE accumulated span"),
-			DamageTaken(*F.Victim) > 0);
-		TestTrue(TEXT("...and records the cycle it reached"),
-			FMath::IsNearlyEqual(F.Fists->Swing.PrevCycle, 0.40f));
-		TestTrue(TEXT("...having consumed what it accumulated"),
-			FMath::IsNearlyEqual(F.Fists->Swing.PendingSeconds, 0.0f));
-	}
-
-	// --- The span cap: a hitch walks at the cap rather than at hundreds of sub-steps -----------
-	{
-		FBatchFixture F;
-		if (!F.Stand(*this, { SwingRec(0.0f, 1.0f) }))
-		{
-			return false;
-		}
-		F.Frame(0.10f, 0.02f);              // prime
-		F.Services.SwingContactSweeps.Reset();
-
-		// Three seconds on one frame. Uncapped that is 300 sub-steps; the cap makes it 25, and one
-		// sweep is issued per live record per sub-step.
-		F.Frame(0.50f, 3.0f);
-		TestEqual(TEXT("a hitch is walked at the stated cap, not at its own length"),
-			F.Services.SwingContactSweeps.Num(),
-			ElysiumSwing::SubStepCount(ElysiumSwing::MaxBatchSeconds));
-		TestTrue(TEXT("...and the batch still covers the cycle the clip reached"),
-			FMath::IsNearlyEqual(F.Fists->Swing.PrevCycle, 0.50f));
-	}
-
-	// --- The discontinuity guard, with its own control ------------------------------------------
-	// Record 0's window sits between the two batched cycles, so a batch that sweeps THROUGH the gap
-	// reaches it and one that re-primes does not. Record 1 opens later, so either way the walk is
-	// still alive afterwards.
-	{
-		FBatchFixture Control;
-		if (!Control.Stand(*this, { SwingRec(0.30f, 0.35f), SwingRec(0.70f, 0.80f) }))
-		{
-			return false;
-		}
-		Control.Frame(0.20f, 0.02f);
-		Control.Frame(0.50f, 0.02f);
-		TestTrue(TEXT("without a jump, the batch sweeps through the window between two cycles"),
-			DamageTaken(*Control.Victim) > 0);
-	}
-	{
-		FBatchFixture F;
-		if (!F.Stand(*this, { SwingRec(0.30f, 0.35f), SwingRec(0.70f, 0.80f) }))
-		{
-			return false;
-		}
-		F.Frame(0.20f, 0.02f);
-
-		// A teleport between two batches. Swept as motion this would drag the limb across everything
-		// on the line; re-priming throws away the crossing and keeps the swing.
-		F.Player->Origin = FVector(50000.0, 0.0, 0.0);
-		F.Frame(0.50f, 0.02f);
-		TestEqual(TEXT("a body that jumped does not sweep through the window it crossed"),
-			DamageTaken(*F.Victim), 0);
-		TestTrue(TEXT("...and the walk re-primed rather than stopping"),
-			FMath::IsNearlyEqual(F.Fists->Swing.PrevCycle, 0.50f));
-
-		F.Frame(0.75f, 0.02f);
-		TestTrue(TEXT("the next record still lands, from where the limb actually is"),
-			DamageTaken(*F.Victim) > 0);
-	}
-
-	// --- What ends the transaction: a stopped clip, past the recovery deadline ------------------
-	// Melee has no commit event and no queued half, so the walk is the only thing that can close a
-	// swing. A transaction left standing would let a later play of the same clip label re-open
-	// contact for a swing that ended, against a record its own serial still matches.
-	{
-		FBatchFixture F;
-		if (!F.Stand(*this, { SwingRec(0.30f, 0.60f) }))
-		{
-			return false;
-		}
-		F.Frame(0.20f, 0.02f);
-		TestTrue(TEXT("the transaction stands while its clip plays"), F.Fists->Swing.bActive);
-
-		// The clip is on no polled channel, but the recovery has not passed: that is also the shape
-		// of a swing whose pose layer has not armed the clip yet, and it must not end anything.
-		F.Services.bBodyClipPhaseSet = false;
-		F.World->AdvanceMeleeSwings(0.02f);
-		TestTrue(TEXT("a clip the pose layer is not publishing does not end it on its own"),
-			F.Fists->Swing.bActive);
-
-		F.World->Tick(2.0);
-		F.World->AdvanceMeleeSwings(0.02f);
-		TestFalse(TEXT("...but a stopped clip past the recovery deadline retires it"),
-			F.Fists->Swing.bActive);
-	}
-
-	return true;
-}
+// 0x10346cd0: render accumulation/cap/re-prime test removed; CharacterSwingClock pins own dt.
 
 // =====================================================================================
 // The combo chain: what a press does while an attack is already running.
@@ -1914,9 +1754,9 @@ bool FElysiumWeaponComboTest::RunTest(const FString&)
 		// Walk the swing far enough that its roll is staged and its own window has opened, so the
 		// hand-off is asserted against a transaction with real state to throw away.
 		F.StandOn(GSwingClip, 0.35f);
-		F.World->AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(*F.World);
 		F.StandOn(GSwingClip, 0.45f);
-		F.World->AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(*F.World);
 		TestTrue(TEXT("the first swing staged its opposed roll"), F.Fists->Swing.bContactStaged);
 
 		// The press, inside the authored window.
@@ -1939,8 +1779,8 @@ bool FElysiumWeaponComboTest::RunTest(const FString&)
 		TestEqual(TEXT("...leaving the logical activity the ordinary attack"),
 			F.Fists->Swing.Activity, FString(TEXT("ACT_MELEE_ATTACK")));
 		TestFalse(TEXT("...with a fresh roll to stage"), F.Fists->Swing.bContactStaged);
-		TestEqual(TEXT("...and a walk that has met no play yet"),
-			static_cast<int32>(F.Fists->Swing.WalkPlayId), 0);
+		TestEqual(TEXT("0x10346760: successor has no seeded endpoints yet"),
+			F.Fists->Swing.PrevCycle, -1.f);
 		TestTrue(TEXT("the successor was played from the start of its own clip"),
 			F.Services.Saw(FString::Printf(TEXT("PlayNpcClip male_pc %s loop=0"), GComboNext)));
 
@@ -1951,11 +1791,11 @@ bool FElysiumWeaponComboTest::RunTest(const FString&)
 		// And the sweep follows the NEW clip: a fresh play, its own records, its own roll.
 		const int32 Before = DamageTaken(*F.Victim);
 		F.StandOn(GComboNext, 0.20f, /*PlayId*/ 2);
-		F.World->AdvanceMeleeSwings(0.02f);
-		TestEqual(TEXT("the walk primes on the successor's own play"),
-			static_cast<int32>(F.Fists->Swing.WalkPlayId), 2);
+		AdvanceTestMeleeSteps(*F.World);
+		TestEqual(TEXT("0x10343020: successor Step stores its own cycle"),
+			F.Fists->Swing.PrevCycle, 0.20f);
 		F.StandOn(GComboNext, 0.40f, /*PlayId*/ 2);
-		F.World->AdvanceMeleeSwings(0.02f);
+		AdvanceTestMeleeSteps(*F.World);
 		TestTrue(TEXT("...and the successor's own window lands its contact"),
 			DamageTaken(*F.Victim) > Before);
 	}
@@ -2184,6 +2024,11 @@ namespace
 			}
 			Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
 			Victim->SetRuntimeModel(TEXT("models/character/npc/male/gangbanger_a.mdl"));
+			if (FElysiumNpc* BandNpc = Victim->AsNpc())
+			{
+				BandNpc->BaseMemory.Enemy = Player->Handle; // 0x10347180 NPC's enemy input
+				BandNpc->Origin = FVector(50.f, 0.f, 0.f); BandNpc->Angles.Y = 180.f;
+			}
 			SeedHealth(*Victim, 5000);
 			SeedHealth(*Player, 5000);
 			PlaceFacing(*Player, FVector::ZeroVector);
@@ -2231,10 +2076,8 @@ bool FElysiumWeaponMeleeBandTest::RunTest(const FString&)
 			F.Services.bNpcSegmentHeld);
 	}
 
-	// --- The same weapon in a cast hand states the same band ------------------------------------
-	// `DefaultPriority(Npc)` answers `Ambient`, so a producer that read the band off its source
-	// would leave the identical defect on every travelling combatant. The band is the ATTACK's, not
-	// the owner's.
+	// V4c C1 deletes the NPC's direct claim producer: slot 311 (0x10272400) commits the kernel
+	// sequence, which the bridge presents on the base channel. Player claims retain their band.
 	{
 		FBandFixture F;
 		if (!F.Stand(*this))
@@ -2250,10 +2093,10 @@ bool FElysiumWeaponMeleeBandTest::RunTest(const FString&)
 		TestEqual(TEXT("the NPC's swing is accepted"),
 			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary, F.Player->Handle),
 			FElysiumWeapon::EVerdict::Accepted);
-		TestEqual(TEXT("a cast swing claims the base at the same band the player's does"),
+		TestEqual(TEXT("0x10272400: the NPC's own kernel sequence is presented on its base channel"),
 			BandOfPlay(F.Services,
 				FString::Printf(TEXT("PlayNpcClip gangbanger_a %s loop=0 "), GSwingClip)),
-			FString(ElysiumAnimIntent::PriorityName(EElysiumAnimPriority::Scripted)));
+			FString(ElysiumAnimIntent::PriorityName(EElysiumAnimPriority::Ambient)));
 	}
 
 	// --- The layer families keep yielding: a shot leaves the base to the gait ladder -------------
@@ -3246,8 +3089,9 @@ bool FElysiumWeaponAnimBodyKindTest::RunTest(const FString&)
 		TestEqual(TEXT("its shot is accepted too"),
 			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, Player->Handle),
 			FElysiumWeapon::EVerdict::Accepted);
-		TestEqual(TEXT("an NPC-owned weapon resolves through the cast chain"),
-			ChainOf(Services), FString(TEXT("cast")));
+		TestEqual(TEXT("0x10238580: NPC Attack requests no estimate clip"),
+			Services.Count(TEXT("ResolveNpcActivityClip")), 0);
+		TestFalse(TEXT("0x10238160: no NPC timed transaction"), Pistol->Swing.bActive);
 	}
 
 	// --- The scene stand-in is a cast body, not the player it stands in for ---------------------
@@ -3280,8 +3124,9 @@ bool FElysiumWeaponAnimBodyKindTest::RunTest(const FString&)
 		TestEqual(TEXT("the stand-in's shot is accepted"),
 			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, Player->Handle),
 			FElysiumWeapon::EVerdict::Accepted);
-		TestEqual(TEXT("a stand-in wearing the player's model still resolves through the cast chain"),
-			ChainOf(Services), FString(TEXT("cast")));
+		TestEqual(TEXT("0x10238580: a non-player stand-in stages no clip"),
+			Services.Count(TEXT("ResolveNpcActivityClip")), 0);
+		TestFalse(TEXT("0x10238160: no stand-in timer exception"), Pistol->Swing.bActive);
 	}
 
 	return true;
@@ -3538,59 +3383,8 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 		}
 	}
 
-	// --- an NPC's fire composes on the same channel the player's does -----------------------------
-	{
-		// The commoner path, and the one every cast combat schedule reaches. Retail's cast fires
-		// through `CAI_BaseNPC::RunAI` -> `AddGesture(ACT_RANGE_ATTACK1_LAYER)` into `m_AnimOverlay`,
-		// which IS slot 0 — the same mechanism the player's `SetAnimation(PLAYER_ATTACK1)` reaches —
-		// so there is no fork on this transaction the way there is on reload. Driving the cast only
-		// through `BeginReload` would leave that unproven on the commoner of the two paths, and a
-		// cast fire routed to the base channel poses a masked layer as the whole body: the bones the
-		// mask leaves out decode to a zero quaternion and a zero position, and the character
-		// collapses.
-		ElysiumRng::SeedAll(4242);
-		ElysiumAnimEventCensus::Clear();
-		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-		FElysiumPlayer* Player = nullptr;
-		FElysiumCombatCharacter* Gunman = nullptr;
-		if (!Stand(Services, World, Player, Gunman))
-		{
-			return false;
-		}
-		ArmClipSeam(Services, 0.0f);
-		Services.BodyClipPhase.Channel = EElysiumAnimChannel::UpperBody;
-		TArray<FElysiumAnimEvent>& Timeline = Services.NpcEventTimelines.Add(
-			FElysiumRecordingServices::EventTimelineKey(GAttackOwner, GAttackLabel));
-		Timeline.Add(WeaponEv(0.30f, 3038, TEXT("0")));
-
-		// The shooter is the CAST body this time, and it needs a body of its own: the clip seam is
-		// only reached through one, and without it the transaction falls through to the headless
-		// timing fallback and records which pose was asked for nowhere.
-		Gunman->SetRuntimeModel(TEXT("models/character/npc/gangbanger/gangbanger_a.mdl"));
-		if (!TestNotNull(TEXT("the cast body exists"), Gunman->Visual))
-		{
-			return false;
-		}
-		FElysiumWeapon* CastGun = GiveWeapon(*Gunman, GPistol);
-		if (!TestNotNull(TEXT("the cast body is armed"), CastGun))
-		{
-			return false;
-		}
-		Services.Calls.Reset();
-		TestEqual(TEXT("the cast's shot is accepted"),
-			CastGun->AttackIntent(FElysiumWeapon::EIntent::Primary, Player->Handle),
-			FElysiumWeapon::EVerdict::Accepted);
-		// The channel is read off the recorded call rather than inferred: every other token on that
-		// line is identical between retail's two mechanisms, so the tail is the only thing that says
-		// which of them the producer asked for.
-		TestTrue(TEXT("an NPC fire asks for the overlay slot, exactly as the player's does"),
-			Services.Saw(FString::Printf(
-				TEXT("PlayNpcClip gangbanger_a %s loop=0 band=ambient rate=1.00 "
-					"act=ACT_RANGE_ATTACK1_LAYER ch=upper body"), GAttackLabel)));
-		TestEqual(TEXT("...and asks the cast body for exactly that one clip, on no other channel"),
-			Services.Count(TEXT("PlayNpcClip")), 1);
-	}
+	// 0x10238160: NPC ranged animation is produced by task/gesture code, never BeginRangedShot.
+	// The obsolete NPC UpperBody transaction assertion was removed; V4o covers the actual layer.
 
 	// --- 3047 is CLAIMED and commits nothing; the swallow set is claimed and does nothing ---------
 	{
@@ -4007,11 +3801,12 @@ bool FElysiumWeaponShotFromAnimEventTest::RunTest(const FString&)
 		return false;
 	}
 	SeedHealth(*Enemy, 100000);
-	// The victim is a live `npc_VPedestrian` and this case shoots it ten times and more: left to its
-	// own AI it thinks between the ticks, and after four hits its fifth kills it whatever its health
-	// (it died carrying 18 damage of 100000 -- the knocked-out body's ONE_HIT_KILL, `TASK_KNOCKOUT
-	// 0x102a3339`, is the one writer of a kill that reads no health). The victim's mind is not what
-	// this case is about: it is switched off.
+	// 0x102beea4 kills independently of health only after a nonzero base result, a positive
+	// admitted packet and ONE_HIT_KILL. TASK_KNOCKOUT 0x102a3344 ORs 0x440a0000;
+	// cower schedules 0x109/0x10a/0x10b and DO_SLEEP_ACTIVITY also set ONE_HIT_KILL
+	// through 0x102a585d..0x102a5874. UNKNOCKOUT does not clear it. The old fifth-hit cause
+	// was never measured (no flags/schedule/effective cap/wounds/packet/death-caller trace).
+	// Five 18 packets below an effective cap 100000 cannot establish that cause. Keep AI off.
 	if (FElysiumNpc* const Victim = Enemy->AsNpc())
 	{
 		Victim->SetDisableAi(true);
@@ -4164,12 +3959,11 @@ bool FElysiumWeaponShotFromAnimEventTest::RunTest(const FString&)
 		TestEqual(TEXT("the standing shot is staged"),
 			Gun->AttackIntent(FElysiumWeapon::EIntent::Primary, Enemy->Handle),
 			FElysiumWeapon::EVerdict::Accepted);
-		const int32 Staged = Gun->Swing.Serial;
+		TestFalse(TEXT("0x10238160 NPC task stages no estimated transaction"), Gun->Swing.bActive);
 		Fire(*Gun);
-		TestEqual(TEXT("the event stages no second transaction over the staged one"),
-			Gun->Swing.Serial, Staged);
-		TestEqual(TEXT("...and does not run Shot's unstaged entry"),
-			Gun->ShotSeams.WeaponActivityCalls, Activities);
+		const int32 Staged = Gun->Swing.Serial; // 0x10238160 the event is the producer
+		TestTrue(TEXT("0x10238160 event stages the transaction"), Gun->Swing.bActive);
+		TestEqual(TEXT("0x102387b0 event runs Shot exactly once"), Gun->ShotSeams.WeaponActivityCalls, Activities + 1);
 		Gun->CommitQueuedAttack(Staged);
 		TestEqual(TEXT("the staged transaction commits"), DamageTaken(*Enemy), Before + OneSet);
 		Gun->CommitQueuedAttack(Staged);
@@ -5014,6 +4808,359 @@ bool FElysiumWeaponHiddenStateChangeTest::RunTest(const FString&)
 
 	return true;
 }
+#endif // ELYSIUM_WITH_ARM_TESTS
+
+#if ELYSIUM_WITH_ARM_TESTS
+namespace
+{
+	struct FAttackProducerNpc final : FElysiumNpc
+	{
+		bool bChooseAllowed = true;
+		bool bChangeSpeedOnCommit = false;
+		int32 ChosenAttackSequence = 1;
+		int32 SequencePlays = 0;
+		int32 LastTranslatedRequest = INDEX_NONE;
+		int32 LastSelectionActivity = INDEX_NONE;
+		FElysiumEntity* SelectionEnemy = nullptr;
+		virtual void OnChangeActivity(int32 CommitActivityNumber) override
+		{
+			if (bChangeSpeedOnCommit) NpcSpeedScale = 2.f;
+			FElysiumNpc::OnChangeActivity(CommitActivityNumber);
+		} // 0x10272400 callback input; RequestActivity must read speed after the callback/reset
+		virtual int32 NPC_TranslateActivity(int32 TranslateInput) override
+		{ LastTranslatedRequest = TranslateInput; return TranslateInput; }
+		virtual bool ChooseMeleeAttackSequence(FElysiumEntity*, FElysiumEntity* ChoiceEnemy,
+			int32 ChoiceActivity, void* ChoiceOutput) override
+		{
+			SelectionEnemy = ChoiceEnemy; LastSelectionActivity = ChoiceActivity;
+			*static_cast<int32*>(ChoiceOutput) = ChosenAttackSequence;
+			return bChooseAllowed; // 0x10347180 fixture input, commit remains real slot 311
+		}
+		virtual bool PlaySequenceClip(int32 PlayedSequence, float& OutClipSeconds, bool& OutClipLoops) override
+		{
+			++SequencePlays; OutClipSeconds = 1.f; OutClipLoops = false;
+			return PlayedSequence >= 0; // model descriptor/presentation fixture
+		}
+		virtual void MeleeSequencesForActivity(int32, TArray<FElysiumNpcClip>& OutputClips) const override
+		{ OutputClips.Reset(); } // no weapon translation rows -> unchanged activity, 0x1024f210
+	};
+	TUniquePtr<FElysiumEntity> MakeAttackProducerNpc() { return MakeUnique<FAttackProducerNpc>(); }
+	FElysiumEntityDefs MakeAttackProducerDefs()
+	{
+		FElysiumEntityDefs ResultDefs = MakeReachTestDefs();
+		for (FElysiumEntityDef& ProducerDef : ResultDefs.Defs)
+			if (ProducerDef.TargetName == TEXT("mid")) ProducerDef.InternalFactory = &MakeAttackProducerNpc;
+		return ResultDefs;
+	}
+	void SeedAttackRow(FAttackProducerNpc& AttackNpc)
+	{
+		AttackNpc.SetDisableAi(true);
+		AttackNpc.SetRuntimeModel(TEXT("models/character/npc/common/male_citizen.mdl"));
+		AttackNpc.SequenceRows.SetNum(2);
+		AttackNpc.SequenceRows[1].Label = TEXT("v4c_attack_fixture");
+		AttackNpc.SequenceRows[1].OwnerStem = TEXT("v4c_attack_bank");
+		AttackNpc.SequenceRows[1].Seconds = 1.f;
+		AttackNpc.SequenceDescriptorRows.SetNum(2);
+		AttackNpc.SequenceDescriptorRows[1].bAsked = true;
+		AttackNpc.SequenceDescriptorRows[1].bKnown = true;
+		AttackNpc.SequenceDescriptorRows[1].DurationSeconds = 1.f;
+	}
+	struct FDebugContactWeapon final : FElysiumWeapon
+	{
+		virtual bool MeleeFriendlyFireAllowed() const override { return true; } // 0x10936ee0 fixture
+	};
+	struct FWeaponClockFixture final : FElysiumWeapon
+	{
+		FWeaponModelClock ModelClock;
+		virtual FWeaponModelClock* WeaponModelClock() override { return &ModelClock; }
+	};
+	struct FWeaponEventReceiver final : FElysiumCombatCharacter
+	{
+		TArray<int32> SeenModelEvents;
+		virtual bool HandleAnimEvent(const FElysiumAnimEvent& ReceivedEvent) override
+		{ SeenModelEvents.Add(ReceivedEvent.Event); return true; }
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cWeaponClockTest,
+	"Elysium.Arm.Weapon.ModelClock", GElysiumTestFlags)
+bool FElysiumV4cWeaponClockTest::RunTest(const FString&)
+{
+	// 0x1032aa40 -> 0x1024efa0 -> 0x1008f120 -> 0x10091880, held-model events to wielder.
+	FWeaponClockFixture ClockWeapon;
+	FWeaponEventReceiver ClockReceiver;
+	ClockWeapon.ModelClock.Words.CycleRate = 2.f;
+	ClockWeapon.ModelClock.Words.bHasDescriptor = true;
+	ClockWeapon.ModelClock.Events.Add(WeaponEv(0.15f, 2070));
+	ClockWeapon.WeaponFrameUpdate(ClockReceiver);
+	TestTrue(TEXT("0x1008f120: slot 250(0) advances the held model"),
+		FMath::IsNearlyEqual(ClockWeapon.ModelClock.Words.Cycle, 0.2f));
+	TestTrue(TEXT("0x10091880: held-model event reaches the wielder"), ClockReceiver.SeenModelEvents.Contains(2070));
+	TestFalse(TEXT("0x1024efa0: frame update stages no attack"), ClockWeapon.Swing.bActive);
+	ClockWeapon.ModelClock.Words.Cycle = 0.99f;
+	ClockWeapon.ModelClock.Words.bLoops = true;
+	ClockWeapon.ModelClock.Words.bDescriptorLoops = true;
+	ClockWeapon.ModelClock.Candidates.Add({7, 1});
+	ClockWeapon.WeaponFrameUpdate(ClockReceiver);
+	TestEqual(TEXT("0x1024efa0: finished looping model commits weighted pick"), ClockWeapon.ModelClock.Words.Sequence, 7);
+	TestTrue(TEXT("0x10090950: model re-pick preserves the wrapped cycle"),FMath::IsNearlyEqual(ClockWeapon.ModelClock.Words.Cycle,0.19f, 1.e-6f));
+	ClockWeapon.ModelClock.Candidates.Reset();
+	ClockWeapon.ModelClock.Words.bSequenceFinished = true;
+	ClockWeapon.ModelClock.Words.Cycle = 0.5f;
+	ClockWeapon.WeaponFrameUpdate(ClockReceiver);
+	TestEqual(TEXT("0x1024efa0: negative pick leaves the sequence"), ClockWeapon.ModelClock.Words.Sequence, 7);
+	FElysiumWeapon ClocklessWeapon;
+	ClocklessWeapon.WeaponFrameUpdate(ClockReceiver);
+	TestFalse(TEXT("0015 missing weapon words fabricate no clock/attack"), ClocklessWeapon.Swing.bActive);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cNpcEventOnlyTest,
+	"Elysium.Arm.Weapon.NpcEventOnlyAndSilentWarning", GElysiumTestFlags)
+bool FElysiumV4cNpcEventOnlyTest::RunTest(const FString&)
+{
+	const FElysiumItemTable EventTable = MakeWeaponTable(); ElysiumItems::Install(EventTable);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(EventTable); };
+	FElysiumRecordingServices EventServices;
+	FElysiumEntityWorld EventWorld(nullptr, nullptr, EventServices.Bundle());
+	EventWorld.Load(MakeAttackProducerDefs()); EventWorld.SpawnPlayer(); EventWorld.Activate(0.0); EventWorld.Tick(0.0);
+	FAttackProducerNpc* const EventNpc = static_cast<FAttackProducerNpc*>(EventWorld.FindByName(TEXT("mid")));
+	if (!TestNotNull(TEXT("NPC"), EventNpc)) return false;
+	SeedAttackRow(*EventNpc); EventNpc->SequenceNumber = 1;
+	FElysiumWeapon* const EventGun = GiveWeapon(*EventNpc, GPistol);
+	if (!TestNotNull(TEXT("gun"), EventGun)) return false;
+	AddExpectedError(TEXT("authors no 3030..3044; no shot"), EAutomationExpectedErrorFlags::Contains, 1);
+	EventServices.Calls.Reset();
+	for (int32 SilentRequest = 0; SilentRequest < 2; ++SilentRequest)
+	{
+		TestEqual(TEXT("0x10238580: NPC Attack accepted without timed shot"), EventGun->AttackIntent(FElysiumWeapon::EIntent::Primary), FElysiumWeapon::EVerdict::Accepted);
+		TestFalse(TEXT("0x10238160: silent clip stages no transaction"), EventGun->Swing.bActive);
+	}
+	TestEqual(TEXT("0x10238580: no NPC UpperBody estimate play"), EventServices.Count(TEXT("PlayNpcClip")), 0);
+	const int32 EventClipBefore = EventGun->MagazineCount;
+	EventWorld.Tick(20.0);
+	TestEqual(TEXT("0x10238160: elapsed time spends no NPC clip"), EventGun->MagazineCount, EventClipBefore);
+	TestFalse(TEXT("0x10238160: elapsed time invents no shot"), EventGun->Swing.bActive);
+	FElysiumWeapon* const EventThrown = GiveWeapon(*EventNpc,GThrown);
+	if (!TestNotNull(TEXT("thrown record"),EventThrown)) return false;
+	EventThrown->AttackIntent(FElysiumWeapon::EIntent::Primary);
+	TestFalse(TEXT("0x1024f030 / 0x103ed200: no NPC thrown timer exception"),EventThrown->Swing.bActive);
+	TestFalse(TEXT("0x1024f030: NPC thrown accepts no shot event"),EventThrown->OperatorHandleAnimEvent(*EventNpc,WeaponEv(0.f,3031)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cMeleeProducerTest,
+	"Elysium.Arm.Weapon.NpcMeleeCommitRefusalAndTriggers", GElysiumTestFlags)
+bool FElysiumV4cMeleeProducerTest::RunTest(const FString&)
+{
+	const FElysiumItemTable ProducerTable = MakeWeaponTable(); ElysiumItems::Install(ProducerTable);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(ProducerTable); };
+	FElysiumRecordingServices ProducerServices;
+	FElysiumEntityWorld ProducerWorld(nullptr, nullptr, ProducerServices.Bundle());
+	ProducerWorld.Load(MakeAttackProducerDefs()); ProducerWorld.SpawnPlayer(); ProducerWorld.Activate(0.0); ProducerWorld.Tick(0.0);
+	FAttackProducerNpc* const ProducerNpc = static_cast<FAttackProducerNpc*>(ProducerWorld.FindByName(TEXT("mid")));
+	if (!TestNotNull(TEXT("NPC"), ProducerNpc)) return false;
+	SeedAttackRow(*ProducerNpc); ProducerNpc->NpcSpeedScale = 1.f;
+	ProducerNpc->ActivityNumber = 9; ProducerNpc->bChangeSpeedOnCommit = true;
+	ProducerNpc->SequencePlays = 0;
+	FElysiumWeapon* const ProducerFists = GiveWeapon(*ProducerNpc, GFists);
+	if (!TestNotNull(TEXT("fists"), ProducerFists)) return false;
+	ProducerNpc->BaseMemory.Enemy = ProducerWorld.FindPlayer()->Handle;
+	ProducerServices.Calls.Reset();
+	TestEqual(TEXT("0x103e9e00: accepted NPC swing"), ProducerFists->AttackIntent(FElysiumWeapon::EIntent::Primary), FElysiumWeapon::EVerdict::Accepted);
+	TestEqual(TEXT("0x103ea214: kernel sequence committed"), ProducerNpc->SequenceNumber, 1);
+	TestEqual(TEXT("0x10272400: activity and ideal are ACT_MELEE_ATTACK"), ProducerNpc->ActivityNumber, 0x4b);
+	TestEqual(TEXT("0x10272400: ideal activity"), ProducerNpc->IdealActivityNumber, 0x4b);
+	TestEqual(TEXT("0x10272400: cycle reset"), ProducerNpc->SequenceCycle, 0.f);
+	TestTrue(TEXT("0x103ea297: rate assigned AFTER slot 311 reset"), FMath::IsNearlyEqual(ProducerNpc->SequencePlaybackRate, 1.4f));
+	TestTrue(TEXT("0x103ea2eb: owner recovery raised"), NearlyEqual(ProducerNpc->NextAttackTime, 1.0 / 1.4));
+	TestTrue(TEXT("0x103e9e00: GetEnemy reaches slot 331"), ProducerNpc->SelectionEnemy == ProducerWorld.FindPlayer());
+	TestEqual(TEXT("0x103e9e00: no NPC PlayAnimSegment stand-in"), ProducerServices.Count(TEXT("PlayNpcClip")), 0);
+	TestTrue(TEXT("0x103ea297: post-reset rate reaches the live presentation without another play"),
+		FMath::IsNearlyEqual(ProducerServices.LastBodySequencePlaybackRate, 1.4f));
+	const int32 TaskPlaysBefore = ProducerNpc->SequencePlays;
+	ProducerFists->NextPrimaryAttackTime = 1000.0;
+	ProducerNpc->StartTask19WeaponSwing(false);
+	TestEqual(TEXT("0x102a4608: task calls direct PrimaryAttack despite held timer"),ProducerNpc->SequencePlays,TaskPlaysBefore + 1);
+	const int32 ProducerPlaysBefore = ProducerNpc->SequencePlays;
+	ProducerNpc->bChooseAllowed = false;
+	ProducerFists->NextPrimaryAttackTime = 0.0;
+	TestEqual(TEXT("0x103ea1b5: refused selector plays nothing"), ProducerFists->AttackIntent(FElysiumWeapon::EIntent::Primary), FElysiumWeapon::EVerdict::NotReady);
+	TestEqual(TEXT("0x103ea1b5: no forced sequence"), ProducerNpc->SequencePlays, ProducerPlaysBefore);
+	ProducerNpc->bChooseAllowed = true; ProducerNpc->ChosenAttackSequence = INDEX_NONE;
+	TestEqual(TEXT("0x103ea1b1: negative sequence refuses"), ProducerFists->AttackIntent(FElysiumWeapon::EIntent::Primary), FElysiumWeapon::EVerdict::NotReady);
+	const int32 ForcedPlaysBefore = ProducerNpc->SequencePlays;
+	TestEqual(TEXT("0x103ea1be: direct NPC force bypasses negative selector refusal"),
+		ProducerFists->NpcMeleeAttack(FElysiumWeapon::EIntent::Primary),FElysiumWeapon::EVerdict::Accepted);
+	TestEqual(TEXT("0x10272400: forced -1 keeps the old sequence"),ProducerNpc->SequenceNumber,1);
+	TestEqual(TEXT("0x10272400: forced -1 plays nothing"),ProducerNpc->SequencePlays,ForcedPlaysBefore);
+	TestTrue(TEXT("0x10091196: forced invalid duration is .1, then clocks still raise"),
+		NearlyEqual(ProducerFists->NextPrimaryAttackTime,0.1 / 1.4));
+	ProducerNpc->ChosenAttackSequence = 1;
+	for (int32 TriggerId = 2999; TriggerId <= 3048; ++TriggerId)
+	{
+		const bool bExpectedTrigger = TriggerId == 3001 || (TriggerId >= 3030 && TriggerId <= 3037)
+			|| (TriggerId >= 3039 && TriggerId <= 3044) || TriggerId == 3047;
+		TestEqual(FString::Printf(TEXT("0x103ea5b0 trigger %d"), TriggerId), ElysiumWeapons::IsMeleeSwingTrigger(TriggerId), bExpectedTrigger);
+		if (bExpectedTrigger)
+		{
+			const int32 TriggerPlaysBefore = ProducerNpc->SequencePlays;
+			ProducerFists->OperatorHandleAnimEvent(*ProducerNpc, WeaponEv(0.f, TriggerId));
+			TestEqual(TEXT("0x103ea5b0: event calls NPC PrimaryAttack despite held timer"), ProducerNpc->SequencePlays, TriggerPlaysBefore + 1);
+		}
+	}
+	const int32 SwallowPlaysBefore = ProducerNpc->SequencePlays;
+	TestTrue(TEXT("0x103ea5b0 3003 swallowed"), ProducerFists->OperatorHandleAnimEvent(*ProducerNpc, WeaponEv(0.f, 3003)));
+	TestEqual(TEXT("0x103ea5b0 swallow plays nothing"), ProducerNpc->SequencePlays, SwallowPlaysBefore);
+	for (int32 BaseId : {3038, 3045, 3046})
+		TestFalse(TEXT("0x103ea5b0 base event (TzimisceMelee absent)"), ProducerFists->OperatorHandleAnimEvent(*ProducerNpc, WeaponEv(0.f, BaseId)));
+	ProducerFists->OperatorHandleAnimEvent(*ProducerNpc, WeaponEv(0.f, 4001, TEXT("3")));
+	TestEqual(TEXT("0x103ea5b0 bodygroup on"), ProducerFists->WeaponModelBodygroups.FindRef(3), 1);
+	ProducerFists->OperatorHandleAnimEvent(*ProducerNpc, WeaponEv(0.f, 4002, TEXT("3")));
+	TestEqual(TEXT("0x103ea5b0 bodygroup off"), ProducerFists->WeaponModelBodygroups.FindRef(3), 0);
+	FElysiumWeapon* const PlayerTriggerFists = GiveWeapon(*ProducerWorld.FindPlayer(),GFists);
+	if (!TestNotNull(TEXT("player fists"),PlayerTriggerFists)) return false;
+	const int32 PlayerTriggerSerial = PlayerTriggerFists->Swing.Serial;
+	PlayerTriggerFists->OperatorHandleAnimEvent(*ProducerWorld.FindPlayer(),WeaponEv(0.f,3001));
+	PlayerTriggerFists->OperatorHandleAnimEvent(*ProducerWorld.FindPlayer(),WeaponEv(0.f,3047));
+	TestEqual(TEXT("0x103ea5b0: player trigger ids are accepted without PrimaryAttack"),PlayerTriggerFists->Swing.Serial,PlayerTriggerSerial);
+	ProducerNpc->Grapple.Role = EElysiumGrappleRole::Victim;
+	ProducerNpc->Grapple.Partner = ProducerWorld.FindPlayer()->Handle;
+	ProducerFists->NextPrimaryAttackTime = 0.0;
+	TestEqual(TEXT("0x103eaca0: paired owner refuses"), ProducerFists->AttackIntent(FElysiumWeapon::EIntent::Primary), FElysiumWeapon::EVerdict::Busy);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cCharacterSwingClockTest,
+	"Elysium.Arm.Weapon.CharacterSwingClock", GElysiumTestFlags)
+bool FElysiumV4cCharacterSwingClockTest::RunTest(const FString&)
+{
+	const FElysiumItemTable ClockTable = MakeWeaponTable(); ElysiumItems::Install(ClockTable);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(ClockTable); };
+	FElysiumRecordingServices SwingServices;
+	FElysiumEntityWorld SwingWorld(nullptr, nullptr, SwingServices.Bundle());
+	SwingWorld.Load(MakeAttackProducerDefs()); SwingWorld.SpawnPlayer(); SwingWorld.Activate(0.0); SwingWorld.Tick(1.0);
+	FAttackProducerNpc* const ClockNpc = static_cast<FAttackProducerNpc*>(SwingWorld.FindByName(TEXT("mid")));
+	if (!TestNotNull(TEXT("NPC"), ClockNpc)) return false;
+	SeedAttackRow(*ClockNpc); ClockNpc->SequenceNumber = 1; ClockNpc->SequenceCycle = 0.4f;
+	for (const TUniquePtr<FElysiumEntity>& ClockEntity : SwingWorld.Entities())
+		if (ClockEntity->AsCombatCharacter() != nullptr && ClockEntity.Get() != ClockNpc)
+			ClockEntity->Origin = FVector(10000.f,10000.f,10000.f); // notice's 60-unit query has no candidate
+	SwingServices.BoneFrames.Add(FString(TEXT("Bip01 R Hand")).ToLower(),FTransform::Identity);
+	ClockNpc->SequenceCycleRate = 1.f; ClockNpc->SequencePlaybackRate = 1.f; ClockNpc->AnimTime = 1.1f;
+	FElysiumWeapon* const ClockFists = GiveWeapon(*ClockNpc, GFists);
+	if (!TestNotNull(TEXT("fists"), ClockFists)) return false;
+	ClockFists->Swing.bActive = true; ClockFists->Swing.bMelee = true;
+	FElysiumSwingRecord ClockRecord; ClockRecord.Start = 0.3f; ClockRecord.End = 0.7f;
+	ClockRecord.Bone = TEXT("Bip01 R Hand"); ClockRecord.BCm = FVector(30.f,0.f,0.f);
+	SwingServices.SwingsByClip.Add(TEXT("v4c_attack_fixture"), {ClockRecord});
+	ClockNpc->bMeleeSwingIsLive = true;
+	ClockNpc->LastMeleeSwingUpdate = 0.75f;
+	ClockNpc->LastMeleeSwingAngles.Y = 350.f; ClockNpc->Angles.Y = 10.f;
+	ClockNpc->MeleeSwingUpdate();
+	TestEqual(TEXT("0x10346cd0 own dt .25 buys 25, not caller interval"), ClockFists->LastSwingSubSteps, 25);
+	TestEqual(TEXT("0x10346cd0 tail timestamp"), ClockNpc->LastMeleeSwingUpdate, 1.f);
+	TestTrue(TEXT("0x10345890: AngleInterp quantizes 350 -> 10 to +20.0006103515625"),
+		FMath::IsNearlyEqual(static_cast<float>(ClockFists->Swing.PrevAngles.Yaw),-370.0006103515625f,1.e-4f));
+	TestTrue(TEXT("0x10346ac0: incoming notice latched once"), ClockNpc->bDidSendIncomingSwingNotice);
+	ClockNpc->LastMeleeSwingUpdate = 0.899f;
+	ClockNpc->MeleeSwingUpdate();
+	TestEqual(TEXT("0x10346cd0 .101 buys 11 (ceil)"), ClockFists->LastSwingSubSteps, 11);
+	TestEqual(TEXT("0x10346cd0: active weapon event sent once"),ClockFists->SwingActiveWeaponEvents,1);
+	ClockNpc->LastMeleeSwingPosition = FVector(8.f,9.f,10.f);
+	ClockNpc->MeleeSwingUpdate();
+	TestTrue(TEXT("0x10346cd0 dt=0 returns unstamped pose"), ClockNpc->LastMeleeSwingPosition.Equals(FVector(8.f,9.f,10.f)));
+	ClockNpc->LastMeleeSwingUpdate = 2.f; ClockNpc->MeleeSwingUpdate();
+	TestEqual(TEXT("0x10346cd0 dt<0 returns unstamped time"), ClockNpc->LastMeleeSwingUpdate, 2.f);
+	SwingServices.SwingsByClip.Reset(); ClockNpc->MeleeSwingUpdate();
+	TestFalse(TEXT("0x10346cd0 no records clears live"), ClockNpc->bMeleeSwingIsLive);
+	TestEqual(TEXT("0x10346cd0 no records is unstamped"), ClockNpc->LastMeleeSwingUpdate, 2.f);
+	SwingServices.SwingsByClip.Add(TEXT("v4c_attack_fixture"), {ClockRecord});
+	ClockNpc->MeleeSwingUpdate();
+	TestTrue(TEXT("0x10346760 first descriptor pass resets live"), ClockNpc->bMeleeSwingIsLive);
+	TestFalse(TEXT("0x10346760 notice reset after seed Step"), ClockNpc->bDidSendIncomingSwingNotice);
+	TestEqual(TEXT("0x10346cd0 not-live branch stamps"), ClockNpc->LastMeleeSwingUpdate, 1.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cMeleeTeamContactTest,
+	"Elysium.Arm.Weapon.ContactTeamBeforeHitListAndEffects", GElysiumTestFlags)
+bool FElysiumV4cMeleeTeamContactTest::RunTest(const FString&)
+{
+	const FElysiumItemTable TeamTable = MakeWeaponTable(); ElysiumItems::Install(TeamTable);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(TeamTable); };
+	FElysiumRecordingServices TeamServices;
+	FElysiumEntityWorld TeamWorld(nullptr, nullptr, TeamServices.Bundle());
+	FElysiumEntityDefs TeamDefs = MakeAttackProducerDefs();
+	FElysiumEntityDef TeamCrateDef; TeamCrateDef.Classname = TEXT("prop_base"); TeamCrateDef.TargetName = TEXT("team_crate");
+	TeamDefs.Defs.Add(MoveTemp(TeamCrateDef));
+	TeamWorld.Load(MoveTemp(TeamDefs)); TeamWorld.SpawnPlayer(); TeamWorld.Activate(0.0); TeamWorld.Tick(0.0);
+	FAttackProducerNpc* const TeamNpc = static_cast<FAttackProducerNpc*>(TeamWorld.FindByName(TEXT("mid")));
+	FElysiumCombatCharacter* const TeamVictim = FindCharacter(TeamWorld,TEXT("far"));
+	if (!TestNotNull(TEXT("attacker"),TeamNpc) || !TestNotNull(TEXT("victim"),TeamVictim)) return false;
+	SeedAttackRow(*TeamNpc); TeamVictim->AsNpc()->SetDisableAi(true); SeedHealth(*TeamVictim,100000);
+	TeamVictim->AsNpc()->bIsBccTargetable = true;
+	TeamNpc->Relationships.AddEntityRelationship(TeamVictim->Handle, EElysiumRelationship::Hate, 10);
+	TeamNpc->AddToTeam(TEXT("!V4c_Contact")); TeamVictim->AddToTeam(TEXT("v4c_contact"));
+	TestTrue(TEXT("0x10323930: non-invalid equal symbols"), TeamNpc->TeamSymbol != 0xffff && TeamNpc->IsSameTeam(TeamVictim));
+	FElysiumWeapon* const TeamFists = GiveWeapon(*TeamNpc,GFists);
+	if (!TestNotNull(TEXT("fists"),TeamFists)) return false;
+	TeamFists->ResetSwingContact(); TeamFists->Swing.ClipLabel = TEXT("v4c_team_swing");
+	TeamNpc->bMeleeSwingIsLive = true;
+	FElysiumSwingRecord TeamRecord; TeamRecord.Start = 0.3f; TeamRecord.End = 0.7f;
+	TeamRecord.Bone = TEXT("Bip01 R Hand"); TeamRecord.BCm = FVector(30.f,0.f,0.f);
+	TeamServices.BoneFrames.Add(FString(TEXT("Bip01 R Hand")).ToLower(),FTransform::Identity);
+	TeamServices.SwingsByClip.Add(TEXT("v4c_team_swing"),{TeamRecord});
+	TeamServices.SwingContacts = {TeamVictim->Handle};
+	TeamFists->MeleeSwingStep(TeamNpc->Origin,TeamNpc->Angles,0.3f,0.5f);
+	TestEqual(TEXT("0x10343020: named CalcPose seam asked once for each endpoint query"),TeamFists->CalcPoseSeams.Queries,2);
+	TestEqual(TEXT("0x10343020: current endpoint query receives cycle .5"),TeamFists->CalcPoseSeams.PreviousQueryCycle,0.5f);
+	TestEqual(TEXT("0x10343020: previous endpoint query receives its own cycle .3"),TeamFists->CalcPoseSeams.LastQueryCycle,0.3f);
+	TestFalse(TEXT("0x100c3600: absent cycle-pose provider returns nothing, retains named lerp"),TeamFists->CalcPoseSeams.bAvailable);
+	TestFalse(TEXT("0x1034394d..0x103439a7: hated teammate never enters RecordHits"), TeamFists->SwingHasRecordedHit(TeamVictim->Handle));
+	TestEqual(TEXT("0x1034394d: team gate precedes impact"), TeamFists->MeleeImpactSeams.ImpactEffects,0);
+	TestEqual(TEXT("0x1034394d: team gate precedes sound"), TeamFists->MeleeImpactSeams.CombatSoundInserts,0);
+	TestEqual(TEXT("0x1034394d: team gate precedes damage"),DamageTaken(*TeamVictim),0);
+	TestEqual(TEXT("0x1034394d: no candidate sample rays after team refusal"),TeamServices.SwingRays.Num(),0);
+	FDebugContactWeapon DebugFists;
+	DebugFists.World = &TeamWorld; DebugFists.Def = TeamFists->Def; DebugFists.Class = TeamFists->Class;
+	DebugFists.Owner = TeamNpc->Handle; DebugFists.PrimaryModeIndex = TeamFists->PrimaryModeIndex;
+	DebugFists.ModeDamage = TeamFists->ModeDamage; DebugFists.ResetSwingContact();
+	DebugFists.Swing.ClipLabel = TEXT("v4c_team_swing");
+	DebugFists.MeleeSwingStep(TeamNpc->Origin,TeamNpc->Angles,0.3f,0.5f);
+	TestTrue(TEXT("0x1034394d debug bypass: matching team enters contact hit list"),DebugFists.SwingHasRecordedHit(TeamVictim->Handle));
+	TestTrue(TEXT("0x1034394d debug bypass: matching team reaches impact before outer damage gate"),DebugFists.MeleeImpactSeams.ImpactEffects > 0);
+	TeamVictim->AddToTeam(TEXT("v4c_other"));
+	TeamFists->MeleeSwingStep(TeamNpc->Origin,TeamNpc->Angles,0.5f,0.6f);
+	TestTrue(TEXT("0x103439a7: different-team control enters RecordHits"),TeamFists->SwingHasRecordedHit(TeamVictim->Handle));
+	TestTrue(TEXT("0x102579f0: control reaches the impact"),TeamFists->MeleeImpactSeams.ImpactEffects > 0);
+	TestTrue(TEXT("0x102579f0: control receives positive damage"),DamageTaken(*TeamVictim) > 0);
+	// D9: without CalcPose-at-cycle the same live bone is queried; cycle-pose sampling remains named.
+	TestTrue(TEXT("0x10343020 / 0x100c3600 named D9 fallback asks the bone"),TeamServices.Count(TEXT("GetBodyBoneTransform")) >= 2);
+	FElysiumPlayer* const TeamPlayer = TeamWorld.FindPlayer();
+	TeamPlayer->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
+	TeamPlayer->AddToTeam(TEXT("v4c_other"));
+	FElysiumWeapon* const PlayerFists = GiveWeapon(*TeamPlayer,GFists);
+	if (!TestNotNull(TEXT("player fists"),PlayerFists)) return false;
+	PlayerFists->ResetSwingContact(); PlayerFists->Swing.ClipLabel = TEXT("v4c_team_swing");
+	TeamPlayer->bMeleeSwingIsLive = true;
+	PlayerFists->MeleeSwingStep(TeamPlayer->Origin,TeamPlayer->Angles,0.3f,0.5f);
+	TestTrue(TEXT("0x1034394d: player-attacker bypass even with matching team"),PlayerFists->SwingHasRecordedHit(TeamVictim->Handle));
+	TeamNpc->bIsBccTargetable = true;
+	TeamServices.SwingContacts = {TeamNpc->Handle};
+	const int32 SelfImpactsBefore = TeamFists->MeleeImpactSeams.ImpactEffects;
+	TeamFists->MeleeSwingStep(TeamNpc->Origin,TeamNpc->Angles,0.5f,0.6f);
+	TestTrue(TEXT("0x1034394d: self bypasses team gate, then owner-root lists it without impact"),TeamFists->SwingHasRecordedHit(TeamNpc->Handle));
+	TestEqual(TEXT("0x1012c9c0: self has no impact"),TeamFists->MeleeImpactSeams.ImpactEffects,SelfImpactsBefore);
+	FElysiumEntity* const TeamCrate = TeamWorld.FindByName(TEXT("team_crate"));
+	if (!TestNotNull(TEXT("non-character"),TeamCrate)) return false;
+	TeamCrate->RetailSolidSets = 1; TeamCrate->RetailSolidType = 2; TeamCrate->RetailSolidFlags = 0;
+	TeamServices.SwingContacts = {TeamCrate->Handle};
+	TeamFists->MeleeSwingStep(TeamNpc->Origin,TeamNpc->Angles,0.5f,0.6f);
+	TestTrue(TEXT("0x1034394d: non-character bypasses team filter and hits by overlap"),TeamFists->SwingHasRecordedHit(TeamCrate->Handle));
+	return true;
+}
+
 #endif // ELYSIUM_WITH_ARM_TESTS
 
 }   // namespace ElysiumWeaponTests

@@ -32,6 +32,7 @@
 #include "Components/SpotLightComponent.h"
 #include "Visual/ElysiumMapVisuals.h"    // RegisterRuntimeBrush — runtime brush visuals join the look
 #include "Visual/ElysiumNpcBody.h"       // AElysiumNpcBody — the NPC motor actor
+#include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumPlacedAttachments.h" // a placed model's `$attachment` off the baked asset
 #include "Visual/ElysiumPreparedPropModels.h" // the model row the attachment asset comes from
 #include "ElysiumUseIcons.h"             // ELYSIUM_USE_CHANNEL — the pin sweep's channel
@@ -173,6 +174,12 @@ bool AElysiumMapActor::ResolveDisposition(const FString& Disposition, int32 Disp
 bool AElysiumMapActor::IsNpcBodyVisible(USkeletalMeshComponent* Body)
 {
 	return Bodies->IsNpcBodyVisible(Body);
+}
+
+bool AElysiumMapActor::TranslateNpcActivityRequest(const FElysiumActivityClipRequest& Request,
+ FString& OutTranslated, FString& OutFirstWeapon)
+{
+ return Bodies && Bodies->TranslateNpcActivityRequest(Request, OutTranslated, OutFirstWeapon);
 }
 
 bool AElysiumMapActor::ResolveNpcActivityClip(const FElysiumActivityClipRequest& Request,
@@ -331,6 +338,36 @@ bool AElysiumMapActor::GetBodySequenceMovement(USkeletalMeshComponent* Body, con
 		return false;   // the bank states no record for it: `nummovements == 0`
 	}
 	return ElysiumClipMovement::SampleDelta(*Path, Path->LastFrame() + 1, 0.0f, 1.0f, OutDeltaCm);
+}
+
+void AElysiumMapActor::SetBodySequencePlaybackRate(USkeletalMeshComponent* Body, float NewRate)
+{
+	if (!Body) return;
+	if (UElysiumBipedAnimInstance* RateHost = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()))
+		RateHost->SetCurrentSequencePlaybackRate(NewRate);
+	else Body->SetPlayRate(NewRate);
+}
+
+bool AElysiumMapActor::GetBodySequenceIntervalMovement(USkeletalMeshComponent* Body, const FString& Stem,
+ int32 RawIndex, float CycleFrom, float CycleTo, FVector& OutDeltaCm, float& OutYawDeltaDegrees)
+{
+ OutDeltaCm = FVector::ZeroVector; OutYawDeltaDegrees = 0.f;
+ FString Label; FElysiumNpcClip Clip;
+ if (!GetBodyClipByRawIndex(Body, Stem, RawIndex, Label, Clip) || Label.IsEmpty()) return false;
+ const UGameInstance* Game = GetGameInstance();
+ UElysiumAnimSubsystem* Anims = Game ? Game->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+ const TSharedPtr<const FElysiumBlendTable> Table = Anims ? Anims->GetBlendTable(Clip.Owner) : TSharedPtr<const FElysiumBlendTable>();
+ const FElysiumClipMovementPath* Path = Table.IsValid() ? Table->FindMovement(Label) : nullptr;
+ if (Path == nullptr) return false; // 0x100c5d10 nummovements=0
+ const bool bSampled = ElysiumClipMovement::SampleDelta(*Path, Path->LastFrame()+1, CycleFrom, CycleTo, OutDeltaCm);
+ if (bSampled && CycleTo > CycleFrom)
+ {
+  FVector IgnoredPosition; float FromYaw = 0.f, ToYaw = 0.f;
+  ElysiumClipMovement::PositionAtFrame(*Path, CycleFrom * Path->LastFrame(), IgnoredPosition, FromYaw);
+  ElysiumClipMovement::PositionAtFrame(*Path, CycleTo * Path->LastFrame(), IgnoredPosition, ToYaw);
+  OutYawDeltaDegrees = ToYaw - FromYaw; // 0x10094b70 dAng.y; shipped rows zero
+ }
+ return bSampled; // 0x100c6020
 }
 
 bool AElysiumMapActor::GetNpcSequenceDescriptor(const FString& Stem, const FString& OwnerStem,
@@ -899,6 +936,9 @@ int32 AElysiumMapActor::FinishAnimationPreload()
 {
 	return Bodies ? Bodies->FinishAnimationPreload() : 0;
 }
+
+FString AElysiumMapActor::PickAnimatedPropRestClip(const FString& Stem) const
+{ return Bodies ? Bodies->PickAnimatedPropRestClip(Stem) : FString(); }
 
 FString AElysiumMapActor::AnimatedPropRestClip(const FString& Stem, int32 PlacementToken) const
 {

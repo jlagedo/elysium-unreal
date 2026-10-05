@@ -4,22 +4,98 @@
   "stage": "arena",
   "seed": 1,
   "duration": 22.0,
-  "known_red": "V4c lane C2 (J14.1): StartFadeOut is a counted seam reached only from TASK_DIE",
-  "player": {"at": "start", "face": "east"},
-  "from_map": {"map": "sp_tutorial_1", "names": ["stealth_victim_maker"], "anchor": "stealth_victim_maker", "at": "east"},
+  "player": {
+    "at": "start",
+    "face": "east"
+  },
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "stealth_victim_maker"
+    ],
+    "anchor": "stealth_victim_maker",
+    "at": "east"
+  },
   "script": [
-    {"t": 1.0, "do": "fire", "target": "stealth_victim_maker", "input": "Spawn"},
-    {"after": "child", "delay": 2.0, "do": "fire", "target": "stealth_victim", "input": "TakeDamage", "param": 10000}
+    {
+      "t": 1.0,
+      "do": "fire",
+      "target": "stealth_victim_maker",
+      "input": "Spawn"
+    },
+    {
+      "after": "child",
+      "delay": 2.0,
+      "do": "fire",
+      "target": "stealth_victim",
+      "input": "TakeDamage",
+      "param": 10000
+    }
   ],
   "expect": [
-    {"label": "spawned", "who": "stealth_victim_maker", "kind": "output", "match": "OnSpawnNPC", "by": 2.0},
-    {"label": "child", "who": "stealth_victim", "kind": "schedule", "match": "", "within": 2.0},
-    {"label": "dies", "who": "stealth_victim", "kind": "death", "match": "", "within": 3.0},
-    {"label": "still_there", "who": "stealth_victim", "kind": "corpse", "match": "", "within": 1.0},
-    {"label": "gone", "who": "stealth_victim", "kind": "removed", "match": "", "within": 14.5}
+    {
+      "label": "spawned",
+      "who": "stealth_victim_maker",
+      "kind": "output",
+      "match": "OnSpawnNPC",
+      "by": 2.0
+    },
+    {
+      "label": "child",
+      "who": "stealth_victim",
+      "kind": "schedule",
+      "match": "",
+      "within": 2.0
+    },
+    {
+      "label": "dies",
+      "who": "stealth_victim",
+      "kind": "death",
+      "match": "",
+      "within": 3.0
+    },
+    {
+      "label": "still_there",
+      "who": "stealth_victim",
+      "kind": "corpse",
+      "match": "",
+      "within": 1.0
+    },
+    {
+      "label": "gone",
+      "who": "stealth_victim",
+      "kind": "removed",
+      "match": "",
+      "within": 14.5
+    }
   ],
   "never": [
-    {"who": "stealth_victim", "kind": "removed", "until": 16.0}
+    {
+      "who": "stealth_victim",
+      "kind": "removed",
+      "after": "dies",
+      "within": 13
+    }
   ],
-  "notes": "`gone` is `within` 14.5 s of `still_there` (the corpse event, in the death's own think), so by death + 14.5 s. The `never` is the lower bound: the death is no earlier than 3.0 s (the Spawn at 1 s, the child's first schedule, then 2 s), so nothing may be removed before 16.0 = death + 13 s at the earliest death. Staging difference from brief A0 item 7b: none; the maker's OnDeath wires name map entities the arena does not carry (logic_enable_in_stealth, thug_maker_4) and are inert here."
+  "notes": "0x1034b7b0 assigns 0x204 after infinite-child Spawn 0x1034afe0. Relative lower removal bound is death+13; 0x10265d72 later fade overrides Kindred +10 removal. S13 section 1. V4c build2 named run 20261005T033758.611695Z proved the expectations/probes; known_red removed.",
+  "probes": [
+    {
+      "at": 2.5,
+      "who": "stealth_victim",
+      "probe": "spawn_flags",
+      "equals": 516
+    },
+    {
+      "at": 2.5,
+      "who": "stealth_victim",
+      "probe": "render_alpha",
+      "equals": 255
+    },
+    {
+      "at": 2.5,
+      "who": "stealth_victim",
+      "probe": "render_mode",
+      "equals": 0
+    }
+  ]
 }

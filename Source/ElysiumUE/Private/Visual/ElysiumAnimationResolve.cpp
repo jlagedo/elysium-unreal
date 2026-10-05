@@ -1,4 +1,5 @@
 #include "Visual/ElysiumAnimationResolve.h"
+#include "Visual/ElysiumAnimationPick.h"
 
 #include "Visual/ElysiumActionTables.h"
 #include "Visual/ElysiumAnimGraph.h"
@@ -718,37 +719,15 @@ FElysiumClipRef PickWeighted(const FElysiumNpcClipSet& Set, const FString& Activ
 	// **Raw weights, not floored.** Retail sums `actweight` as authored, so a candidate the
 	// author gave no share gets none; flooring each at 1 hands every zero-weight clip a slice of
 	// a draw it was written out of.
-	int32 TotalWeight = 0;
-	for (const FElysiumClipRef& Ref : Candidates)
+	(void)Variant; // 0x1008dc40: the owner/variant is not an RNG seed
+	TArray<ElysiumAnimationPick::FCandidate> WeightedRows; // 0x1008dc40
+	for (int32 CandidateIndex = 0; CandidateIndex < Candidates.Num(); ++CandidateIndex) // 0x1008dc40
 	{
-		const FElysiumNpcClip* Clip = Set.Find(Ref);
-		TotalWeight += Clip != nullptr ? Clip->Weight : 0;
+		const FElysiumNpcClip* Clip = Set.Find(Candidates[CandidateIndex]); // 0x1008dc40
+		WeightedRows.Add({CandidateIndex, Clip != nullptr ? Clip->Weight : 0}); // 0x1008dc40
 	}
-	// **The seed stands in for retail's `RandomInt`, and that is a stated divergence.** The draw
-	// is `hash(stem lowered) ^ variant` rather than a live random stream, so one body resolves
-	// the same clip every load and a headless run can assert it. The cost is that this arm's
-	// answer cannot be compared against a capture the way the heaviest arm's can: retail rolled,
-	// and what it rolled is not a property of the corpus.
-	const uint32 Seed = HashCombineFast(GetTypeHash(Set.Stem.ToLower()),
-		static_cast<uint32>(FMath::Max(0, Variant)));
-	// A candidate set whose authored shares sum to nothing is drawn UNIFORMLY, which is retail's
-	// own second branch rather than a guard: with no share to divide, every candidate is equally
-	// likely instead of the first one being certain.
-	if (TotalWeight <= 0)
-	{
-		return Candidates[Seed % static_cast<uint32>(Candidates.Num())];
-	}
-	int32 Pick = static_cast<int32>(Seed % static_cast<uint32>(TotalWeight));
-	for (const FElysiumClipRef& Ref : Candidates)
-	{
-		const FElysiumNpcClip* Clip = Set.Find(Ref);
-		Pick -= Clip != nullptr ? Clip->Weight : 0;
-		if (Pick < 0)
-		{
-			return Ref;
-		}
-	}
-	return Candidates[0];
+	const int32 Chosen = ElysiumAnimationPick::Weighted(WeightedRows); // 0x10427fc0, shared stream
+	return Candidates.IsValidIndex(Chosen) ? Candidates[Chosen] : FElysiumClipRef(); // 0x1008dc40
 }
 
 FElysiumClipRef PickHeaviest(const FElysiumNpcClipSet& Set, const FString& Activity)
@@ -770,19 +749,14 @@ FElysiumClipRef PickHeaviest(const FElysiumNpcClipSet& Set, const FString& Activ
 	//
 	// **It spends no randomness**, so a body that commits a canonical clip and one that draws
 	// consume the same amount of every stream.
-	FElysiumClipRef Best = Candidates[0];
-	int32 BestWeight = MIN_int32;
-	for (const FElysiumClipRef& Ref : Candidates)
+	TArray<ElysiumAnimationPick::FCandidate> WeightedRows; // 0x1008dd30
+	for (int32 CandidateIndex = 0; CandidateIndex < Candidates.Num(); ++CandidateIndex)
 	{
-		const FElysiumNpcClip* Clip = Set.Find(Ref);
-		const int32 Weight = Clip != nullptr ? Clip->Weight : 0;
-		if (BestWeight < Weight)
-		{
-			BestWeight = Weight;
-			Best = Ref;
-		}
+		const FElysiumNpcClip* Clip = Set.Find(Candidates[CandidateIndex]); // 0x1008dd30
+		WeightedRows.Add({CandidateIndex, Clip != nullptr ? Clip->Weight : 0}); // 0x1008dd30
 	}
-	return Best;
+	const int32 Chosen = ElysiumAnimationPick::Heaviest(WeightedRows); // 0x104280f0, no draw
+	return Candidates.IsValidIndex(Chosen) ? Candidates[Chosen] : FElysiumClipRef(); // 0x1008dd30
 }
 
 FElysiumPoseParams PoseFrom(const FElysiumAnimationIntent& Intent)

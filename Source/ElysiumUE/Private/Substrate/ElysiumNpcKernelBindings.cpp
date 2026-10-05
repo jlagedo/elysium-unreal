@@ -524,6 +524,8 @@ namespace ElysiumNpcKernelBindings
 			/*bBase=*/false, EElysiumField::Save);  // +0x1180 m_iVAttributesCurrent[ v_attribute_strength ]
 		ElysiumAddSheetField(D, TEXT("subterfuge"), EElysiumTraitContainer::Abilities, 4,
 			/*bBase=*/false, EElysiumField::Save);  // +0x1254 m_iVAbilitiesCurrent[ v_ability_subterfuge ]
+		ElysiumAddClassField(D, TEXT("team_name"), &FElysiumCombatCharacter::TeamName,
+			EElysiumField::Save);  // +0x10ac m_sTeamName
 		ElysiumAddSheetField(D, TEXT("thaumaturgy"), EElysiumTraitContainer::Disciplines, 12,
 			/*bBase=*/false, EElysiumField::Save);  // +0x12f4 m_iVDisciplinesCurrent[ v_discipline_thaumaturgy ]
 		ElysiumAddSheetField(D, TEXT("vampheal_type"), EElysiumTraitContainer::Attributes, 32,
@@ -549,9 +551,6 @@ namespace ElysiumNpcKernelBindings
 		// is nothing the word would reach
 		// UNBOUND +0x10e4 m_statTemplate "stattemplate" — bound by binding class Npc
 		// (`FElysiumNpc::StatTemplate`)
-		// UNBOUND +0x10ac m_sTeamName "team_name" — `m_sTeamName` is Source's team string; VtMB
-		// decides hostility through the relationship table and the disposition, and the six maps
-		// that author the key have no reader
 		// UNBOUND +0x13a0 m_iVHistoryID "vhistory" — `m_iVHistoryID` is bound on `player` alone:
 		// this port stores the History index on `FElysiumPlayerRecord`, which no NPC has
 	}
@@ -3009,7 +3008,7 @@ namespace ElysiumNpcKernelBindings
 			case EClass::Animating:
 				return {1, 10, 0, 4, 0};
 			case EClass::CombatCharacter:
-				return {150, 8, 2, 25, 0};
+				return {151, 7, 2, 25, 0};
 			case EClass::NpcBase:
 				return {4, 0, 16, 1, 56};
 			case EClass::InterestingPlace:

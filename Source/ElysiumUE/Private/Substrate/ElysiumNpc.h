@@ -49,7 +49,11 @@ public:
 	// disable is meaningless against a false default, and with one the 79 authored calls would be
 	// the only way any character could ever be talked to, leaving `+use` dead on every NPC no
 	// script cues. The real initializer remains unrecovered.
-	FElysiumNpc() { bWillTalk = true; }
+	FElysiumNpc()
+	{
+		bWillTalk = true;
+		Disposition = TEXT("Neutral"); // 0x1028d42c: m_sDefaultDisposition constructor value
+	}
 
 	bool  bUseInteresting = false;    // use_interesting — the NPC is a look/use target (seeded from the key)
 	// The dialogue and use-to-talk state. `Substrate/ElysiumNpcDialogue.h`.
@@ -68,6 +72,10 @@ public:
 	// row travels with the clips because they are two halves of the same table entry.
 	FElysiumStanceClips StanceClips;
 	FElysiumDisposition StanceTuning;
+	bool bHasDispositionIndex = false; // 0x102c0f70 +0x64d4: initial/missed index -1
+	float DispositionBlinkWord = 0.f; // 0x102c0f70 +0x64d8: aliased min/max, final max wins
+	float DispositionMinEyeFidget = 0.f; // 0x102c0f70 +0x6584
+	float DispositionMaxEyeFidget = 0.f; // 0x102c0f70 +0x6588
 	FString StanceResolvedFor;        // "<stem>|<disposition>" the pair above was resolved for
 	bool bStanceUnavailable = false;  // this model authors no stance set; do not ask again
 
@@ -84,6 +92,7 @@ public:
 	{
 		FString OwnerStem;    // empty: a clip of this body's own model (the stance set)
 		FString Label;
+		int32 RawIndex = INDEX_NONE; // 0x1008dc40: each candidate's model-table identity
 		bool bLoops = false;
 		// `mstudioseqdesc_t::flags & 2` (`STUDIO_SNAP`), which slot 268 `SetLayer 0x10099020` zeroes
 		// both blends for (`0x100990a4`): the clip's baked bit, taken when the row is numbered.
@@ -91,17 +100,20 @@ public:
 		float Seconds = 0.f;  // the first-pass length the clip player last reported; 0 = not yet played
 	};
 	TArray<FSequenceRow> SequenceRows;
-	// The resolver's answers by request (model, activity, class, weapon, state), `INDEX_NONE` for a
-	// miss. Session state, as the rows are.
-	TMap<FString, int32> SequenceResolveCache;
 
 	/** The row number for a clip, added on first sight. */
-	int32 SequenceRowFor(const FString& OwnerStem, const FString& Label, bool bLoops);
+	int32 SequenceRowFor(const FString& OwnerStem, const FString& Label, bool bLoops,
+		int32 InRawIndex = INDEX_NONE);
 
 	/** `SelectWeightedSequence(activity)` through the resolver: the retail activity NUMBER is named
 	 *  by the corpus's activity namespace, resolved for this body, and numbered. -1 when the body
 	 *  authors no clip for it (retail's own answer). */
 	int32 SequenceForActivity(int32 Activity);
+	int32 SelectWeightedSequence(int32 Activity); // 0x1008dc40: direct table, no fallback
+	using FElysiumNpcBase::SelectHeaviestSequence;
+	int32 SelectHeaviestSequence(int32 Activity); // 0x1008dd30: no random draw
+	virtual bool SequenceBounds(int32 Seq, FVector& OutMinCm, FVector& OutMaxCm) const;
+	int32 SelectDispositionStance(); // 0x102c12a0: slot 611 forwarding owed
 
 	/** `0x103ea950` for the melee band `0x103ea7e0`: every clip of this body's vocabulary carrying
 	 *  the activity the resolver translates the retail NUMBER to (weapon ladder, then the class
@@ -290,7 +302,13 @@ public:
 	 * body-owner token, the mind) is vacated with it.
 	 */
 	virtual void BecomeClientRagdoll() override;
+	bool BecomeClientRagdoll(const FVector& Force, int32 Bone, bool bRetainEntity);
+	// 0x10090180 model-interface slot 18: no capability source yet, false until wired.
+	virtual bool HasClientRagdollRig() const;
+	// 0x1032c1e4: packet hitbox bone / LookupBone("Bip01 Spine2"); model bone source absent.
+	virtual int32 CorpseForceBone(const void* InInfo) const;
 	virtual bool IsCorpse() const override { return bDeathCommitted; }
+	void MarkCorpseCreated() { bDeathCommitted = true; } // 0x1032c0e0: port corpse identity
 
 	/** Slot 77 `CAI_BaseNPCTroika::ScriptHide` (`0x102c1ce0`, family Damaged19): the live-cine
 	 *  warning and cancel, `m_iForcedSchedule := 0x6b` unless DEAD, then `CBaseEntity::ScriptHide`

@@ -445,6 +445,7 @@ bool FElysiumNpcKernelStartTask19SpeciesDogTest::RunTest(const FString&)
 	}
 	// 0x36: the attack -- completes only when slot 251 `IsActivityFinished` answers true.
 	Dog->bSequenceFinished = false;
+	Dog->AnimTime = Dog->PrevAnimTime = static_cast<float>(F.Now() + 1.0); // 0x1008f1e9 isolate slot251 gate
 	F.Start(0x36);
 	TestTrue(TEXT("0x36 with the sequence playing stays running"), F.Running());
 	Dog->bSequenceFinished = true;
@@ -1730,6 +1731,7 @@ bool FElysiumNpcKernelStartTask19SpeciesTzimisceTest::RunTest(const FString&)
 	// 0xcb: the stamp; completes iff the activity is finished.
 	Tzim->bSequenceFinished = false;
 	Tzim->LastAttackTime = -1.0;
+	Tzim->AnimTime = Tzim->PrevAnimTime = static_cast<float>(F.Now() + 1.0); // 0x103bae05 slot251 gate
 	F.Start(0xcb);
 	TestEqual(TEXT("0xcb stamps m_flLastAttackTime"), Tzim->LastAttackTime, F.Now());
 	TestTrue(TEXT("0xcb unfinished keeps running"), F.Running());
@@ -2137,6 +2139,7 @@ bool FElysiumNpcKernelStartTask19SpeciesZombieTest::RunTest(const FString&)
 	F.Start(0x14e);
 	TestEqual(TEXT("0x14e: ideal 0x1081"), Zombie->IdealActivityNumber, 0x1081);
 	Zombie->bSequenceFinished = false;
+	Zombie->AnimTime = Zombie->PrevAnimTime = static_cast<float>(F.Now() + 1.0); // 0x103dfe45 isolate slot251 gate
 	F.Start(0x36);
 	TestTrue(TEXT("0x36 unfinished keeps running"), F.Running());
 	Zombie->bSequenceFinished = true;

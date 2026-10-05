@@ -65,13 +65,11 @@ FElysiumEntity* Spawn19WeaponCreate(const FString& ClassName);
 int32 Spawn19WeaponCreateRequests = 0;
 FString Spawn19LastWeaponCreate;
 
-/** SEAM for `m_sTeamName` (`+0x10ac`, keyfield `team_name`, UNBOUND in `ElysiumNpcKernelBindings.cpp`:
- *  six maps author it and nothing reads it). Answers the empty string, retail's own "no team" value,
- *  so `AddToTeam` is not called. */
+/** `m_sTeamName` +0x10ac: C3's real combat-character word, read at Spawn's existing join site. */
 FString Spawn19TeamName() const;
 
-/** SEAM for `CBaseCombatCharacter::AddToTeam` (`0x103239a0`). No team registry stands here; counted. */
-void Spawn19AddToTeam(const FString& TeamName);
+/** `CBaseCombatCharacter::AddToTeam` (`0x103239a0`): the shared registry join. */
+void Spawn19AddToTeam(const FString& Name);
 int32 Spawn19AddToTeamCalls = 0;
 
 /** SEAM for the death impulse gate of `0x10265ad0` (`0x10265c1a..0x10265c3e`): the ConVar object at
@@ -81,10 +79,8 @@ int32 Spawn19AddToTeamCalls = 0;
  *  slot-39 impulse is not dispatched. */
 bool Spawn19DeathVPhysicsArmed() const;
 
-/** SEAM for `SUB_StartFadeOut` (`0x102695d0`, the `ShouldFadeOnDeath` arm at `0x10265d72`):
- *  `m_nRenderMode 0 -> 2` with alpha `0xff`, `AddSolidFlags(FSOLID_NOT_SOLID)`, the angular velocity
- *  zeroed, `Relink`, `m_flNextThink = curtime + 0.1` and `ThinkSet(SUB_FadeOut)`. Not a Spawn19 row:
- *  the fade think chain is unported, so the request is counted. */
+/** `SUB_StartFadeOut` 0x102695d0: mode0 -> 2/alpha255, solid4, angular zero, Relink,
+ *  next think +10 and SUB_FadeOut. Shares StartFadeOut's body with TASK_DIE. */
 void Spawn19StartFadeOut();
 int32 Spawn19FadeOutStarts = 0;
 

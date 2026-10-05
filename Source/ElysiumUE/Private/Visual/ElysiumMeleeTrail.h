@@ -15,8 +15,7 @@ class USkeletalMeshComponent;
 // mesh draws no trail either.
 namespace ElysiumMeleeTrail
 {
-	// Once per frame, after the world's own melee-swing contact walk has advanced this frame's
-	// Swing state (AElysiumMapActor's Step 8, alongside FElysiumEntityWorld::AdvanceMeleeSwings).
+	// Visual trail sampling follows the character's slot-315 sweep; it owns no contact clock.
 	void Advance(float DeltaSeconds, FElysiumEntityWorld& World);
 
 	// Tear down any trail riding `Body`, unconditionally -- mirrors

@@ -1,10 +1,17 @@
 {
   "name": "verbs_feed_victim_dispatch",
-  "about": "The feed victim's paired clip is its own kernel sequence, so its own think dispatches the clip's records (stories/v4/packets-S9.md item 3). CBaseCombatCharacter::SetGrappleActivity 0x1032a100 commits the attacker and the victim alike: m_IdealActivity / m_Activity are the grapple activity, 0x10260a50(seq) writes m_nSequence and runs ResetSequenceInfo 0x10090950, m_flCycle = 0. The victim's PostRun 0x1026c7c0 then walks that row through slot 258 (DispatchAnimEvents 0x10091880), so its 4007 is dispatched from its own think -- and refused by CBaseCombatCharacter::HandleAnimEvent 0x1032e330 on the paired-role guard (+0x153c != 0), the attacker's 4007 being the one that opens the transaction. With m_Activity no longer ACT_IDLE, RunAnimation 0x1026c540's idle re-pick stays off for the whole grapple: no idle row is committed over the feed clip. The end (stories/v4/packets-S10.md items 2-3): FeedInterrupt 0x1033a9e0 installs SCHED_TROIKA_MESMERIZED (0xfb) while the pair still stands -- the one schedule line of the grapple, the entry having cleared the schedule and RunAlternateAI 0x1028fd80 skipping RunAI -- and the release clip plays out on the victim's own sequence (m_IdealActivity 0xf88, m_Activity the release cell); LeaveGrappleState 0x10329a70 / 0x1026ce30 / 0x102b5d90 fires m_OnGrappleEnd and writes no activity, sequence or cycle word, so no idle row is committed by the end; slot 614 (0x102c23f0) re-arms the think and the installed program's first task runs on that pass. Staging and keys are verbs_feed_trance's; the second +feed at 3.3 s requests the release.",
+  "about": "The feed victim's paired clip is its own kernel sequence, so its own think dispatches the clip's records (stories/v4/packets-S9.md item 3). CBaseCombatCharacter::SetGrappleActivity 0x1032a100 commits the attacker and the victim alike: m_IdealActivity / m_Activity are the grapple activity, 0x10260a50(seq) writes m_nSequence and runs ResetSequenceInfo 0x10090950, m_flCycle = 0. The victim's PostRun 0x1026c7c0 then walks that row through slot 258 (DispatchAnimEvents 0x10091880), so its 4007 is dispatched from its own think -- and refused by CBaseCombatCharacter::HandleAnimEvent 0x1032e330 on the paired-role guard (+0x153c != 0), the attacker's 4007 being the one that opens the transaction. With m_Activity no longer ACT_IDLE, RunAnimation 0x1026c540's idle re-pick stays off for the whole grapple: no idle row is committed over the feed clip. The end (stories/v4/packets-S10.md items 2-3): FeedInterrupt 0x1033a9e0 installs SCHED_TROIKA_MESMERIZED (0xfb) while the pair still stands -- the one schedule line of the grapple, the entry having cleared the schedule and RunAlternateAI 0x1028fd80 skipping RunAI -- and the release clip plays out on the victim's own sequence (m_IdealActivity 0xf88, m_Activity the release cell); LeaveGrappleState 0x10329a70 / 0x1026ce30 / 0x102b5d90 fires m_OnGrappleEnd and writes no activity, sequence or cycle word, so no idle row is committed by the end; slot 614 (0x102c23f0) re-arms the think and the installed program's first task runs on that pass. Staging and keys are verbs_feed_trance's; the second +feed at 3.3 s requests the release. Released first-pass idle is retail: MAKE_OBLIVIOUS -> MaintainActivity 0x10281eee/0x102727d0 -> resolver 0x10272130/0x10295a80 disposition fallback, before SET_ACTIVITY 0x102a1c0f commits 0x104e. No variant is pinned.",
   "stage": "arena",
   "seed": 1,
   "duration": 10.0,
-  "player": { "at": [0.0, 905.0, 0.0], "face": "east" },
+  "player": {
+    "at": [
+      0.0,
+      905.0,
+      0.0
+    ],
+    "face": "east"
+  },
   "cast": [
     {
       "name": "arena_vessel",
@@ -23,24 +30,138 @@
     }
   ],
   "script": [
-    { "t": 2.0, "do": "console", "command": "elysium.cmd +feed" },
-    { "t": 2.1, "do": "console", "command": "elysium.cmd -feed" },
-    { "t": 3.3, "do": "console", "command": "elysium.cmd +feed" },
-    { "t": 3.4, "do": "console", "command": "elysium.cmd -feed" }
+    {
+      "t": 2.0,
+      "do": "console",
+      "command": "elysium.cmd +feed"
+    },
+    {
+      "t": 2.1,
+      "do": "console",
+      "command": "elysium.cmd -feed"
+    },
+    {
+      "t": 3.3,
+      "do": "console",
+      "command": "elysium.cmd +feed"
+    },
+    {
+      "t": 3.4,
+      "do": "console",
+      "command": "elysium.cmd -feed"
+    }
   ],
   "expect": [
-    { "label": "grapples", "who": "arena_vessel", "kind": "output", "match": "OnGrappleBegin", "by": 2.5 },
-    { "label": "engage_row", "who": "arena_vessel", "kind": "sequence", "match": "^(?!.*(?i:idle))", "regex": true, "within": 0.2 },
-    { "label": "fed_upon", "who": "arena_vessel", "kind": "output", "match": "OnFedUponBegin", "within": 1.0 },
-    { "label": "victim_event", "who": "arena_vessel", "kind": "animevent", "match": "^4007( |$)", "regex": true, "within": 0.5 },
-    { "label": "interrupted", "who": "arena_vessel", "kind": "schedule", "match": "SCHED_TROIKA_MESMERIZED (0xfb)", "within": 3.0 },
-    { "label": "released", "who": "arena_vessel", "kind": "output", "match": "OnGrappleEnd", "within": 6.0 },
-    { "label": "trance", "who": "arena_vessel", "kind": "task", "match": "task_make_oblivious (", "within": 1.0 }
+    {
+      "label": "grapples",
+      "who": "arena_vessel",
+      "kind": "output",
+      "match": "OnGrappleBegin",
+      "by": 2.5
+    },
+    {
+      "label": "engage_row",
+      "who": "arena_vessel",
+      "kind": "sequence",
+      "match": "^(?!.*(?i:idle))",
+      "regex": true,
+      "within": 0.2
+    },
+    {
+      "label": "fed_upon",
+      "who": "arena_vessel",
+      "kind": "output",
+      "match": "OnFedUponBegin",
+      "within": 1.0
+    },
+    {
+      "label": "victim_event",
+      "who": "arena_vessel",
+      "kind": "animevent",
+      "match": "^4007( |$)",
+      "regex": true,
+      "within": 0.5
+    },
+    {
+      "label": "interrupted",
+      "who": "arena_vessel",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_MESMERIZED (0xfb)",
+      "within": 3.0
+    },
+    {
+      "label": "released",
+      "who": "arena_vessel",
+      "kind": "output",
+      "match": "OnGrappleEnd",
+      "within": 6.0
+    },
+    {
+      "label": "trance",
+      "who": "arena_vessel",
+      "kind": "task",
+      "match": "task_make_oblivious (",
+      "within": 1.0
+    },
+    {
+      "label": "released_fallback",
+      "who": "arena_vessel",
+      "kind": "sequence",
+      "match": "(?i)idle",
+      "regex": true,
+      "within": 0.3
+    },
+    {
+      "label": "set_trance",
+      "who": "arena_vessel",
+      "kind": "task",
+      "match": "task_set_activity (",
+      "within": 0.3
+    },
+    {
+      "label": "mesmerized",
+      "who": "arena_vessel",
+      "kind": "sequence",
+      "match": "(?i)mesmerized",
+      "regex": true,
+      "within": 0.3
+    }
   ],
   "never": [
-    { "who": "arena_vessel", "kind": "sequence", "match": "(?i)idle", "regex": true, "after": "grapples", "until": 5.6 },
-    { "who": "arena_vessel", "kind": "schedule", "match": "^(?!SCHED_TROIKA_MESMERIZED \\()", "regex": true, "after": "grapples", "until": 5.6 },
-    { "who": "arena_vessel", "kind": "death" }
+    {
+      "who": "arena_vessel",
+      "kind": "sequence",
+      "match": "(?i)idle",
+      "regex": true,
+      "after": "grapples",
+      "until": 5.6
+    },
+    {
+      "who": "arena_vessel",
+      "kind": "schedule",
+      "match": "^(?!SCHED_TROIKA_MESMERIZED \\()",
+      "regex": true,
+      "after": "grapples",
+      "until": 5.6
+    },
+    {
+      "who": "arena_vessel",
+      "kind": "death"
+    }
   ],
-  "notes": "Order corrected by the V4b integrator (a record error in packets-S9's draft, which put the victim's 4007 before OnFedUponBegin): the output is fired by the ATTACKER's 4007, dispatched from the player's PostThink 0x1016be10 on the frame the bite clip is committed (measured 2.517), while the victim's own 4007 waits for the victim's next think (PostRun 0x1026c7c0, 0.1 s cadence; measured 2.600) and is refused by the role guard. Both are asserted; the victim's follows within one think and a frame. V11 (the grapple fix, S10): the end is asserted as measured (OnFedUponEnd and the MESMERIZED install 4.017, OnGrappleEnd 5.667, task_make_oblivious 5.667). Two record errors of the S10 draft are corrected with their retail source: (1) it expected the MESMERIZED `schedule` line AFTER OnGrappleEnd, but the line is the INSTALL, FeedInterrupt 0x1033a9e0's SetSchedule(0xfb), which runs when the feed ends and before the release clip has played out -- so `interrupted` (the install) comes before `released`, and `trance` is the installed program's first TASK within one think of the leave; (2) for the same reason `no schedule line between OnGrappleBegin and OnGrappleEnd` would forbid retail's own install: the never forbids every schedule line EXCEPT that one. The schema's `until` takes scenario seconds, not a label: both never windows close at 5.6 s, a number standing for `released` / `trance` (measured 5.667 at seed 1; the script is timed, so the release cannot come earlier than the 3.3 s request plus the release clip). Not covered by the window: at 5.667, after task_make_oblivious starts and OnIncapacitatedStart fires, the trace shows `sequence Stance_Neutral_Idle_3` before task_set_activity commits `mesmerized` in the same think -- an idle row inside the trance program's first pass, not the grapple's end; whether retail commits it there is not recovered (for the judge)."
+  "notes": "Order corrected by the V4b integrator (a record error in packets-S9's draft, which put the victim's 4007 before OnFedUponBegin): the output is fired by the ATTACKER's 4007, dispatched from the player's PostThink 0x1016be10 on the frame the bite clip is committed (measured 2.517), while the victim's own 4007 waits for the victim's next think (PostRun 0x1026c7c0, 0.1 s cadence; measured 2.600) and is refused by the role guard. Both are asserted; the victim's follows within one think and a frame. V11 (the grapple fix, S10): the end is asserted as measured (OnFedUponEnd and the MESMERIZED install 4.017, OnGrappleEnd 5.667, task_make_oblivious 5.667). Two record errors of the S10 draft are corrected with their retail source: (1) it expected the MESMERIZED `schedule` line AFTER OnGrappleEnd, but the line is the INSTALL, FeedInterrupt 0x1033a9e0's SetSchedule(0xfb), which runs when the feed ends and before the release clip has played out -- so `interrupted` (the install) comes before `released`, and `trance` is the installed program's first TASK within one think of the leave; (2) for the same reason `no schedule line between OnGrappleBegin and OnGrappleEnd` would forbid retail's own install: the never forbids every schedule line EXCEPT that one. The schema's `until` takes scenario seconds, not a label: both never windows close at 5.6 s, a number standing for `released` / `trance` (measured 5.667 at seed 1; the script is timed, so the release cannot come earlier than the 3.3 s request plus the release clip). Not covered by the window: at 5.667, after task_make_oblivious starts and OnIncapacitatedStart fires, the trace shows `sequence Stance_Neutral_Idle_3` before task_set_activity commits `mesmerized` in the same think -- an idle row inside the trance program's first pass, not the grapple's end; whether retail commits it there is not recovered (for the judge). S13 section 5 settles that first released idle: 0x1033a9e0 installs before OnGrappleEnd, and LeaveGrappleState 0x102b5d9d writes no animation words. The 5.6 paired boundary is retained.",
+  "probes": [
+    {
+      "at": "end",
+      "who": "arena_vessel",
+      "probe": "activity",
+      "equals": 4174
+    },
+    {
+      "at": "end",
+      "who": "arena_vessel",
+      "probe": "alive",
+      "equals": true
+    }
+  ]
 }

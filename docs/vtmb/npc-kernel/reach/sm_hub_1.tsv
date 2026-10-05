@@ -961,7 +961,7 @@ function	0x100904a0	CBaseAnimating::ClearAllClientRagdolling	-		layer 0
 function	0x10090580	CBaseAnimating::BurnModel	CCineAI#243, CCineAISchedule#243, CCineNPC#243, CNPCMaker#243, CNPC_VCop#243, CNPC_VHuman#243, CNPC_VHumanCombatant#243, CNPC_VHunter#243, CNPC_VPedestrian#243, CNPC_VRat#243, CNPC_VTaxiDriver#243, CNPC_VVampire#243		layer 0
 function	0x10090890	FUN_10090890	-		layer 0
 function	0x10090950	FUN_10090950	-		layer 4
-function	0x10090c80	CBaseAnimating::SetAttackExtentsForSequence	CCineAI#247, CCineAISchedule#247, CCineNPC#247, CNPCMaker#247, CNPC_VCop#247, CNPC_VHuman#247, CNPC_VHumanCombatant#247, CNPC_VHunter#247, CNPC_VPedestrian#247, CNPC_VRat#247, CNPC_VTaxiDriver#247, CNPC_VVampire#247		layer 0
+function	0x10090c80	CBaseAnimating::SetAttackExtentsForSequence	CCineAI#247, CCineAISchedule#247, CCineNPC#247, CNPCMaker#247, CNPC_VCop#247, CNPC_VHuman#247, CNPC_VHumanCombatant#247, CNPC_VHunter#247, CNPC_VPedestrian#247, CNPC_VRat#247, CNPC_VTaxiDriver#247, CNPC_VVampire#247	rule	layer 0
 function	0x10090ef0	CBaseAnimating::GetSequenceFlags	-		layer 0
 function	0x10091080	CBaseAnimating::SequenceDuration	-		layer 0
 function	0x10091230	CBaseAnimating::GetSequenceCycleRate	-		layer 0
@@ -3193,7 +3193,7 @@ function	0x102ddc00	FUN_102ddc00	-		layer 0
 function	0x102ddc40	FUN_102ddc40	-		layer 0
 function	0x102df130	FUN_102df130	-		layer 8
 function	0x102df1b0	FUN_102df1b0	-		layer 1
-function	0x102df320	CAI_Memory::RefreshMemories	-	present	layer 2
+function	0x102df320	CAI_Memory::RefreshMemories	-	rule	layer 2
 function	0x102df700	CAI_Memory::UpdateMemory	-	present	layer 9
 function	0x102dfa20	FUN_102dfa20	-		layer 0
 function	0x102dfaa0	FUN_102dfaa0	-		layer 2
@@ -3548,9 +3548,9 @@ function	0x10323370	CBaseCombatCharacter::AddToPresenceList	-		layer 1
 function	0x103234a0	CBaseCombatCharacter::RemoveFromPresenceList	-		layer 1
 function	0x10323630	CBaseCombatCharacter::AddToComfortList	-		layer 1
 function	0x10323770	CBaseCombatCharacter::RemoveFromComfortList	-		layer 1
-function	0x10323930	FUN_10323930	-		layer 1
-function	0x103239a0	CBaseCombatCharacter::AddToTeam	-		layer 7
-function	0x10323a70	FUN_10323a70	-		layer 0
+function	0x10323930	FUN_10323930	-	rule	layer 1
+function	0x103239a0	CBaseCombatCharacter::AddToTeam	-	rule	layer 7
+function	0x10323a70	FUN_10323a70	-	rule	layer 0
 function	0x10323a90	CBaseCombatCharacter::Spawn	-		layer 8
 function	0x10323b60	CBaseCombatCharacter::FUN_10323b60	-		layer 11
 function	0x10323c20	CBaseCombatCharacter::GetMaxInvenSlotsPerSection	CCineAI#298, CCineAISchedule#298, CCineNPC#298, CNPCMaker#298, CNPC_VCop#298, CNPC_VHuman#298, CNPC_VHumanCombatant#298, CNPC_VHunter#298, CNPC_VPedestrian#298, CNPC_VRat#298, CNPC_VTaxiDriver#298, CNPC_VVampire#298		layer 0
@@ -3768,7 +3768,7 @@ function	0x10346380	CBaseCombatCharacter::CalcAndStoreMeleeDiceRolls	-		layer 15
 function	0x10346760	CBaseCombatCharacter::ForceMeleeReset	-		layer 0
 function	0x10346910	CBaseCombatCharacter::MeleeRollAndSendNotice	-		layer 16
 function	0x10346ac0	CBaseCombatCharacter::SendIncomingSwingNotice	-		layer 17
-function	0x10346cd0	CBaseCombatCharacter::MeleeSwingUpdate	CCineAI#315, CCineAISchedule#315, CCineNPC#315, CNPCMaker#315, CNPC_VCop#315, CNPC_VHuman#315, CNPC_VHumanCombatant#315, CNPC_VHunter#315, CNPC_VPedestrian#315, CNPC_VRat#315, CNPC_VTaxiDriver#315, CNPC_VVampire#315		layer 18
+function	0x10346cd0	CBaseCombatCharacter::MeleeSwingUpdate	CCineAI#315, CCineAISchedule#315, CCineNPC#315, CNPCMaker#315, CNPC_VCop#315, CNPC_VHuman#315, CNPC_VHumanCombatant#315, CNPC_VHunter#315, CNPC_VPedestrian#315, CNPC_VRat#315, CNPC_VTaxiDriver#315, CNPC_VVampire#315	rule	layer 18
 function	0x10347180	CBaseCombatCharacter::ChooseMeleeAttackSequence	CCineAI#331, CCineAISchedule#331, CCineNPC#331, CNPCMaker#331, CNPC_VCop#331, CNPC_VHuman#331, CNPC_VHumanCombatant#331, CNPC_VHunter#331, CNPC_VPedestrian#331, CNPC_VRat#331, CNPC_VTaxiDriver#331, CNPC_VVampire#331	present	layer 11
 function	0x10348100	FUN_10348100	-		layer 1
 function	0x103482e0	CAI_BaseNPC::FUN_103482e0	CCineAI#326, CCineAISchedule#326, CCineNPC#326	present	layer 13

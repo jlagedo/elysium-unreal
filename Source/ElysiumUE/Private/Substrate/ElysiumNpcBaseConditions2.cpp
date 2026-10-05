@@ -225,7 +225,10 @@ void FElysiumNpcBase::GatherConditions()
 		Conditions19PerformSensing(Now);                                 // 1026ee04 0x1026e4f0
 		if (World != nullptr)
 		{
-			EnemyMemory.Refresh(*World, Now);                            // 1026ee0d slot 541 / 1026ee15
+			if (FElysiumNpcEnemyMemory* const SelectedEnemies = static_cast<FElysiumNpcEnemyMemory*>(GetEnemies())) // 0x1026ee0d slot541
+			{
+				SelectedEnemies->Refresh(*World, Now); // 0x1026ee15 / 0x102df320, actual selected store
+			}
 		}
 		// `CAI_BaseNPC::ChooseEnemy` (`0x10279dd0`, Misc19's row, landed by lane L11): every NPC,
 		// base-only included.
@@ -292,17 +295,18 @@ float FElysiumNpcBase::Conditions19EnemyDistanceUnits(const FElysiumEntity& Enem
 
 double FElysiumNpcBase::Conditions19LastTimeSeen(const FElysiumEntity* Enemy) const
 {
+	const FElysiumNpcEnemyMemory& SelectedEnemies = *static_cast<FElysiumNpcEnemyMemory*>(const_cast<FElysiumNpcBase*>(this)->GetEnemies()); // 0x102e0150 slot541
 	// `0x102e0150`.
 	if (Enemy == nullptr)
 	{
 		return 0.0;
 	}
-	if (const FElysiumNpcEnemyMemoryRecord* const Record = EnemyMemory.Find(Enemy->Handle))
+	if (const FElysiumNpcEnemyMemoryRecord* const Record = SelectedEnemies.Find(Enemy->Handle))
 	{
 		return Record->LastSeenTime;
 	}
 	const FElysiumNpcEnemyMemoryRecord* PositionOnly = nullptr;
-	for (const FElysiumNpcEnemyMemoryRecord& Record : EnemyMemory.Records())
+	for (const FElysiumNpcEnemyMemoryRecord& Record : SelectedEnemies.Records())
 	{
 		if (Record.bPositionOnly)                                        // record `+0x34 == 1`
 		{
@@ -320,6 +324,7 @@ double FElysiumNpcBase::Conditions19LastTimeSeen(const FElysiumEntity* Enemy) co
 
 FVector FElysiumNpcBase::Conditions19LastKnownPosition(const FElysiumEntity* Enemy) const
 {
+	const FElysiumNpcEnemyMemory& SelectedEnemies = *static_cast<FElysiumNpcEnemyMemory*>(const_cast<FElysiumNpcBase*>(this)->GetEnemies()); // 0x102dfed0 slot541
 	// `0x102dfed0`. Every arm copies the record's `+0xc` (`Anchor`), never `+0x0` (`LastPosition`):
 	// `CAI_Memory::UpdateMemory` (`0x102df700`) latches both on a sighting, but
 	// `RefreshMemories` (`0x102df320`) re-copies only `+0x0` from the target's live origin while
@@ -327,13 +332,13 @@ FVector FElysiumNpcBase::Conditions19LastKnownPosition(const FElysiumEntity* Ene
 	// enemy was last SEEN, not where free knowledge followed him. Q-H3, story V13.
 	if (Enemy != nullptr)
 	{
-		if (const FElysiumNpcEnemyMemoryRecord* const Record = EnemyMemory.Find(Enemy->Handle))
+		if (const FElysiumNpcEnemyMemoryRecord* const Record = SelectedEnemies.Find(Enemy->Handle))
 		{
 			return Record->Anchor;                                       // record `+0xc`
 		}
 	}
 	const FElysiumNpcEnemyMemoryRecord* PositionOnly = nullptr;
-	for (const FElysiumNpcEnemyMemoryRecord& Record : EnemyMemory.Records())
+	for (const FElysiumNpcEnemyMemoryRecord& Record : SelectedEnemies.Records())
 	{
 		if (Record.bPositionOnly)
 		{
@@ -564,7 +569,8 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 		return;
 	}
 	// `m_hEnemy (+0x5ce0)` resolved (10271281 `-1`, 1027129e serial), 102712ab slot 541, 102712b3 `0x102e0210`
-	if (EnemyMemory.IsEluded(BaseMemory.Enemy))                          // 10271278..102712ba (m_hEnemy +0x5ce0)
+	FElysiumNpcEnemyMemory& SelectedEnemies = *static_cast<FElysiumNpcEnemyMemory*>(GetEnemies()); // 0x10271278 slot541
+	if (SelectedEnemies.IsEluded(BaseMemory.Enemy))                          // 10271278..102712ba (m_hEnemy +0x5ce0)
 	{
 		return;
 	}
@@ -580,7 +586,7 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 			Troika->NpcFlags.Clear(EElysiumNpcFlag::DONE_EXTRAPOLATING); // 10271316 / 10271319
 			if (const FElysiumEntity* const Eluding = ConstThis->GetEnemy())
 			{
-				EnemyMemory.MarkEluded(Eluding->Handle);                 // 1027131f..10271399 0x102dfd90 (10271323 slot 167, 1027132e slot 541)
+				SelectedEnemies.MarkEluded(Eluding->Handle);                 // 1027131f..10271399 0x102dfd90 (10271323 slot 167, 1027132e slot 541)
 			}
 		}
 	}
@@ -595,7 +601,7 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 		{
 			if (const FElysiumEntity* const Eluding = ConstThis->GetEnemy())
 			{
-				EnemyMemory.MarkEluded(Eluding->Handle);                 // 10271382..10271399 0x102dfd90 (10271386 slot 167, 10271391 slot 541)
+				SelectedEnemies.MarkEluded(Eluding->Handle);                 // 10271382..10271399 0x102dfd90 (10271386 slot 167, 10271391 slot 541)
 			}
 		}
 	}
@@ -609,7 +615,7 @@ void FElysiumNpcBase::GatherEnemyConditions(FElysiumEntity* Enemy)
 		{
 			if (const FElysiumEntity* const Eluding = ConstThis->GetEnemy())
 			{
-				EnemyMemory.MarkEluded(Eluding->Handle);                 // 10271500..10271517 0x102dfd90 (10271504 slot 167, 1027150f slot 541)
+				SelectedEnemies.MarkEluded(Eluding->Handle);                 // 10271500..10271517 0x102dfd90 (10271504 slot 167, 1027150f slot 541)
 			}
 		}
 	}

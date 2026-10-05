@@ -329,6 +329,7 @@ struct FElysiumBipedAnimProxy : public FElysiumBodyAnimProxy
 	// reload, pre-jump or land asked for again re-fires from frame one. Returns whether the clip
 	// actually (re)started, because the phase arm above it must not name a new play the pose refused.
 	bool PlayDirect(UAnimSequence* Sequence, bool bLoop, bool bRestart, float PlayRate = 1.0f);
+	void SetDirectPlaybackRate(float NewRate) { ClipPlayer.SetPlayRate(NewRate); }
 	// Pin the current clip to an absolute authored time, freezing its play rate. A scene frame's
 	// pose becomes a function of scene time rather than of accumulated animation delta.
 	void Seek(float PositionSeconds);
@@ -701,6 +702,7 @@ public:
 	virtual bool PlayOneShot(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence,
 		bool bLoop, float BlendInSeconds, float BlendOutSeconds, bool bRestart = false,
 		float PlayRate = 1.0f) override;
+	void SetCurrentSequencePlaybackRate(float NewRate); // 0x103ea297, preserve play/cycle identity
 	virtual void StopOneShot(float BlendSeconds) override;
 
 	// The overlay slot seam.

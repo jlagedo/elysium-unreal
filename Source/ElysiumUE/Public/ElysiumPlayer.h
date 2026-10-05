@@ -927,6 +927,12 @@ struct FElysiumReactionPlayRequest
 class FElysiumCombatCharacter : public FElysiumFlex, public IElysiumCameraOverrideSource
 {
 public:
+	FString TeamName; // 0x1031a600: m_sTeamName +0x10ac, keyfield team_name; no symbol key/input.
+	uint16 TeamSymbol = 0xffff; // 0x10326de0 / 0x103272f6: unsigned WORD +0x10b0, invalid.
+	void AddToTeam(const FString& Name); // 0x103239a0: one leading !, register, store WORD; name unchanged.
+	uint16 GetTeamSymbol() const; // 0x10323a70 (0x1000bc44): raw WORD getter.
+	bool IsSameTeam(const FElysiumCombatCharacter* Other) const; // 0x10323930 (0x10008d7d).
+
 	FElysiumSheet Sheet;
 
 	// The 224 item-entity handles, the active weapon and the reserve ammo pools. On this node
@@ -1374,6 +1380,12 @@ public:
 	// Retail's `melee_swing_completion_percent`, default `"0.8"`. The cycle a body's own swing has
 	// to pass for the counter above to clear.
 	static constexpr float MeleeSwingCompletionPercent = 0.8f;
+ bool bMeleeSwingIsLive = false; // 0x10346cd0 +0xaa1
+ bool bDidSendIncomingSwingNotice = false; // +0xaa2
+ bool bDidSendSwingActiveEvent = false; // +0xaa3
+ float LastMeleeSwingUpdate = 0.f; // +0xaa4
+ FVector LastMeleeSwingPosition = FVector::ZeroVector; // +0xaa8
+ FVector LastMeleeSwingAngles = FVector::ZeroVector; // +0xab4
 
 	// A landed hit on this body. Called on the VICTIM; the attacker is not recorded, because retail
 	// does not record it either.

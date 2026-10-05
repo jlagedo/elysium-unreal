@@ -275,10 +275,11 @@ int32 NavGoalState() const;
  *  `Navigator.GetMovementActivity()`) — the pair `FUN_1027a6c0` reads. False without an active goal. */
 bool NavLinkActivity(int32& OutActivity) const;
 
-/** `CBaseAnimating::GetIntervalMovement(flInterval, …)` — the per-frame root-motion delta
- *  `AutoMovement` blends. **SEAM**: the animating tier here publishes no interval movement to the
- *  kernel; answers false with the delta zeroed. */
-bool AnimIntervalMovement(float Interval, FVector& OutDeltaUnits, float& OutYawDelta) const;
+/** `GetIntervalMovement 0x10094b70` -> `0x100c5d10`: absolute local endpoint/yaw from the
+ *  just-advanced cycle. Interval sampler defaults to nummovements=0; pose blend 0x100c5400
+ *  remains a named seam (first animation's baked path). */
+bool AnimIntervalMovement(float Interval, FVector& OutDeltaUnits, float& OutYawDelta,
+	bool* OutIntervalFinished = nullptr) const;
 
 /** `UTIL_TraceHull 0x1026e940` under the kernel's trace filters (0018 story 6, R1 §3): one
  *  `IElysiumEmbodiment::TraceRetail` from `StartUnits` to `EndUnits` with the box `HullMins` ..
@@ -346,8 +347,8 @@ float MotorMinStoppingDistanceUnits() const;
 bool IsIgnoreCollisionEntityTail(const FElysiumEntity* Other) const;
 
 /** `CAI_BaseNPC::AutoMovement` `0x10280a50` — slot 250 first, then the interval movement, applied
- *  ONLY when `GetMoveType() == 4` and `FL_FROZEN 0x400` is clear. The gate is the retail contract a
- *  modernization has to keep; the extraction underneath it is Unreal's. */
+ *  ONLY when `GetMoveType() == 4` and `FL_FROZEN 0x400` is clear. `0x102e0bd0` ground trace,
+ *  blocked-other refusal, endpoint/yaw apply; only result 1 is true (target-stop result 4 false). */
 bool AutoMovement();
 
 /** `CAI_BaseNPC::PostRun` `0x1026c7c0` — `RunAnimation` (`0x1026c8c4`, its one caller), then own
@@ -385,4 +386,3 @@ bool NavigatorIsPaused() const;
  *  function of the three points and the three thresholds, so both fills of slot 521 are one body. */
 static bool IsJumpLegalGeometry(const FVector& StartUnits, const FVector& ApexUnits,
 	const FVector& EndUnits, float MaxRise, float MaxDrop, float MaxDistance);
-

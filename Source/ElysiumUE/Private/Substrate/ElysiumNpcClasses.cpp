@@ -9,6 +9,7 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumEntityWorld.h" // 0x1029f250 InputFaint's clock
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumConversationPlace.h"
@@ -170,6 +171,13 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// `CAI_BaseNPCTroika::InputDisableThink` `0x1029f2a0` -> `SetDisableAI` `0x1029f300`.
 	D.Input(TEXT("DisableThink"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputDisableThink(Args); });
+	D.Input(TEXT("Faint"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+		{
+			FElysiumNpc& FaintNpc = static_cast<FElysiumNpc&>(E);
+			FaintNpc.ResetThinkTimers(FaintNpc.World ? FaintNpc.World->NowSeconds() : 0.0); // 0x1029f250 slot614
+			FaintNpc.RecordScheduleEvent(TEXT("InputFaint AI_BaseNPCTroika.cpp:0x26c2")); // 0x1029f250 +0x1b30/+0x1b34 trace
+			FaintNpc.SetSchedule(0xfa, false); // 0x1029f250 -> 0x102ae750; TASK_KNOCKOUT
+		});
 	// `CAI_BaseNPCTroika::InputTweakParam` (`0x1029ea40`) -> slot 585 `ProcessTweakParam`. Until
 	// story 5 step 2 only the `npc_VCamera` stub row answered this name.
 	D.Input(TEXT("TweakParam"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)

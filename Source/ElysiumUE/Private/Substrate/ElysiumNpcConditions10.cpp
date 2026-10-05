@@ -533,13 +533,13 @@ void FElysiumNpc::ResetFakeReloadCount()
 	// `0x102c54c0`, 43 bytes: `m_iFakeReloadCount = RandomInt(template[0x34], template[0x38])`.
 	// `(*DAT_1070b244)->+8` is `IUniformRandomStream::RandomInt`.
 	//
-	// The roll happens even with no template columns, because retail's body has no arm that skips
-	// the write and a body that silently declined its only write would be a refusal this row does
-	// not have. `RandomInt(0, 0)` is 0.
+	// The write is unconditional. vstdlib.dll 0x10002e60 returns Min without drawing when
+	// Max <= Min; in particular the missing template seam's (0,0) must not advance the stream.
 	int32 Min = 0;
 	int32 Max = 0;
 	CharTemplateFakeReloadRange(Min, Max);
-	FakeReloadCount = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(Min, Max);
+	FakeReloadCount = Max <= Min ? Min
+		: ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(Min, Max); // 0x10002e60
 }
 
 // =================================================================================================

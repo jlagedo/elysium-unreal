@@ -807,8 +807,8 @@ bool FElysiumDamageFlinchProducerTest::RunTest(const FString&)
 		Services.Calls.Reset();
 		Victim->CommitDamage(Melee);
 		const FString Second = FirstCall(Services, TEXT("ResolveNpcActivityClip"));
-		TestNotEqual(TEXT("two hits draw two different variants"),
-			FieldOf(Second, TEXT("var=")), FirstVariant);
+		TestEqual(TEXT("0x1008dc40: a reaction has no speculative Variant draw"), FirstVariant, FString(TEXT("0")));
+		TestEqual(TEXT("0x1008dc40: the actual shared lookup owns selection"), FieldOf(Second, TEXT("var=")), FString(TEXT("0")));
 
 		// Ranged and discipline damage reach the same commit, so both flinch.
 		Services.Calls.Reset();

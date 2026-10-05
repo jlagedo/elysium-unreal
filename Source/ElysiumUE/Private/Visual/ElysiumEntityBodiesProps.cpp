@@ -1,4 +1,5 @@
 #include "Visual/ElysiumEntityBodies.h"
+#include "Visual/ElysiumAnimationPick.h"
 
 #include "ElysiumCollisionChannels.h"
 #include "ElysiumContentPaths.h"
@@ -448,4 +449,20 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildPhysPropVisual(const FString& S
 	Comp->RegisterComponent();
 	Owner->AddInstanceComponent(Comp);
 	return Comp;
+}
+
+FString UElysiumEntityBodies::PickAnimatedPropRestClip(const FString& Stem) const
+{
+ const auto Prepared = ElysiumPreparedProps::ForOwner(GetOwner());
+ FString Failure;
+ const auto* ModelRow = Prepared ? Prepared->Model(ElysiumPreparedProps::ModelId(Stem), Failure) : nullptr;
+ if (ModelRow == nullptr) return FString();
+ TArray<ElysiumAnimationPick::FCandidate> Candidates;
+ for (int32 ClipIndex : ModelRow->RestCandidates)
+ {
+  if (!ModelRow->Clips.IsValidIndex(ClipIndex)) return FString();
+  Candidates.Add({ClipIndex, ModelRow->Clips[ClipIndex].Weight});
+ }
+ const int32 Picked = ElysiumAnimationPick::Weighted(Candidates); // 0x10190850 raw weights, common stream
+ return ModelRow->Clips.IsValidIndex(Picked) ? ModelRow->Clips[Picked].Label : FString();
 }

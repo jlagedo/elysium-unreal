@@ -307,7 +307,7 @@ uint32 FElysiumNpcPedestrian::DecodeWitnessedLevel(uint32 Stored)
 
 // --- Moved from `ElysiumNpcSpeciesMisc10_2.cpp` (story 5 step 4) ---
 
-void FElysiumNpcPedestrian::PedestrianCreateCorpse()
+void FElysiumNpcPedestrian::PedestrianCreateCorpse(const FVector& Force, void* InInfo)
 {
 	// `103a38c6` / `103a38e8`: the collision OBB snapshot, BEFORE the base, because the base resizes
 	// the hull. `m_Collision` vtable `+4` is the mins and `+8` the maxs, three floats each; family
@@ -321,14 +321,16 @@ void FElysiumNpcPedestrian::PedestrianCreateCorpse()
 	// at the kernel tier and slot 301's Troika-line body is another row's, so the call is the record
 	// below and nothing else. Named rather than hidden.
 	++PedestrianCreateCorpseCalls;
+	FElysiumCombatCharacter::CreateCorpse(Force, InInfo); // 0x103a3910: full base after snapshot
 	// `103a391c`: `ThinkSet(NULL, 0.0, NULL)` — the think function is CLEARED, so a pedestrian
 	// corpse never thinks again. Nothing in this substrate unbinds a think function; the record is
 	// what says the body asked.
 	bPedestrianCorpseThinkStopped = true;
+	ThinkSet(nullptr, 0.0); // 0x103a391c: drop the base's installed think
 	// `103a396b`: `SetSolid(SOLID_NONE)` on the collision, under a `CBaseEntity::SetSolid`
 	// scope-trace frame.
 	PedestrianCorpseSolid = 0;
+	RetailSolidType = 0; // 0x103a396b: SOLID_NONE, independent of later fade install
 }
 
 // --- Moved from `ElysiumNpcState_2.cpp` (story 5 step 4) ---
-

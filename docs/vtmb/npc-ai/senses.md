@@ -208,14 +208,66 @@ Record (list head **`mem+0xc`**, stride from `0x102df130`):
 | `+0x35` | **eluded byte — 0 on every create and every refresh** |
 | `+0x38` | next |
 
-`CAI_Memory::RefreshMemories` (`0x102df320`) drops an entry only when its handle dies or its
-NPC's state (slot 464) is 7 (dead); otherwise it re-copies the target's origin while `curtime <
-lastSeen + m_flFreeKnowledgeDuration`. **No time-based expiry**: once sensed, the player is a
-permanent `BestEnemy` candidate until eluded or the map ends. `BestEnemy` (`0x102743c0`) walks
+`CAI_Memory::RefreshMemories` (`0x102df320`) unconditionally unlinks an unresolved handle.
+A resolved NPC self-cast `+0x94` with slot 464 state 7 is a removal candidate only with owner
+slot 54 permission, or squad `0x103167f0`'s AND of live members' slot 54 answers. Base slot 54
+`0x10026910` refuses; Troika `0x102b50b0` vetoes its current enemy while a schedule exists
+without `LOST_ENEMY`. Such dead records can remain indefinitely; player corpses have no NPC
+self-cast and remain records. Kept entries copy only tracked `+0x00`, never LKP `+0x0c`, while
+`curtime < lastSeen + m_flFreeKnowledgeDuration`. **No time-based expiry.** A retained record
+is not necessarily selectable: `BestEnemy` rejects `!IsAlive` at `0x10274475` (`0x100b4dc0`).
+`BestEnemy` (`0x102743c0`) walks
 this list and nothing else — gates: handle resolves, `!FL_NOTARGET`, `+0x1480`, `!= this`,
 `IsAlive`, `IsValidEnemy` (slot 479 = `0x101a6820`, `return 1`, **no override anywhere**),
 relation ∈ {D_HT, D_FR}, `!eluded`; ranking reachability (`+0x848`) > `IRelationPriority` >
 integer distance, visibility = `senses->DidSeeEntity` (`0x1030fb10`) or `FVisible`.
+
+_V4c C2, 2026-10-04: listing read before owner/squad plumbing._ `0x102df320` stores its NPC
+owner at memory `+0`, squad owner at `+4`, and the squad selector byte at `+8`. Permission
+receives `(target)`. After `*prev = record->next` at `0x102df46a`, slot 56 receives
+`(target, record+0x0c LKP by value, record+0x18 vector by value,
+"CAI_Memory::RefreshMemories")`; the squad fanout `0x103169a0` forwards that same argument
+list to each resolvable member. The squad array begins at `squad+0x1c`, count at `+0x5c`;
+`0x103167f0` short-circuits on the first false and returns true for no resolvable members.
+`0x102df50e..0x102df518` advances to the successor's **next**, skipping the immediate successor
+after every unlink, **without advancing the predecessor-link address**. A subsequent removal
+before a kept entry therefore rewrites that same link and can detach the skipped node too,
+without notifying/freeing that skipped node. This extra consequence follows directly from
+`0x102df46a`, `0x102df504` and `0x102df518`; the brief's "skip successor" abbreviated the splice.
+The array representation retains predecessor and candidate indices and splices that reachable
+range, notifying only the actual removal candidate. Detached nodes are absent from the reachable
+store, matching the listing; reproducing retail's allocator leak is not a substrate behavior.
+
+The owner is bound to the actual member store at `GetEnemies 0x10273e10`, once, and remains
+the creator when other observers write to it. Explicit `RedirectTo` selects a shared connected
+store without rebinding its owner. `<1` is connected; the disconnected global has no invented
+owner. Refresh, BestEnemy and condition-memory reads use the store selected by slot 541.
+`IElysiumEnemyMemorySquadOwner` is the named null hook for memory `+4/+8`; broader squads must
+bind their actual creator/world and implement the verified member AND/fanout, not infer an
+owner from a victim or the caller of Refresh. Troika slot 56 `0x102b5120` clears only a matching
+nonalive last enemy, after the record is gone.
+
+The separate explicit ClearMemory helper `0x102dfaa0`, read in the listing during V4c, differs:
+it notifies **before** unlink, forwards its caller-supplied function tag, then frees the first
+matching resolved target. The port's optional tag is null until a caller supplies that input;
+Refresh alone hard-codes its own function name and unlinks first. Do not generalize the Refresh
+ordering to ClearMemory. A stale target handle does not identify a resolved target to remove.
+
+Serial integration outside C2's function scope: `ElysiumNpcBaseSenses10.cpp::UpdateCaiMemory`
+must begin with `FElysiumNpcEnemyMemory& SelectedEnemies = *static_cast<FElysiumNpcEnemyMemory*>(GetEnemies());`
+and replace its three `EnemyMemory` accesses with `SelectedEnemies`; `UpdateEnemyMemory`'s
+eluded lookup likewise uses `static_cast<FElysiumNpcEnemyMemory*>(GetEnemies())->IsEluded(Enemy->Handle)`.
+At the owning NPC's memory creation (`ElysiumNpcBase.cpp`, constructor), add
+`EnemyMemory.BindOwner(*this);` so direct-store callers see the owner before the first slot 541.
+The future squad's creation/redirection calls are exactly
+`SquadStore.BindSquadOwner(SquadAdapter, World); EnemyMemory.RedirectTo(&SquadStore);`.
+
+C1's exact replacement for `combat-and-damage.md`'s abbreviated RefreshMemories sentence:
+"`RefreshMemories 0x102df320` removes unresolved handles unconditionally; resolved NPC-state-7
+entries require actual owner slot54 or squad AND permission. It unlinks before slot56/fanout
+receives target, LKP, vector+0x18 and function tag, then skips the immediate successor.
+Retained entries refresh only tracked +0x00 while now<lastSeen+freeKnowledge, never LKP or
+age-expire. Player corpses may remain records but BestEnemy 0x10274475 rejects !IsAlive."
 
 **Port consequence.** This runtime's `BestEnemy` walked the world entity list gated on the
 relationship table (`ElysiumNpcEnemy.cpp`), so a `D_HT` player anywhere on the map was a

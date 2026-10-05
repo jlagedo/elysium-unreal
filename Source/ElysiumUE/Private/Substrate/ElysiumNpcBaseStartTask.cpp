@@ -399,7 +399,7 @@ int32 FElysiumNpcBase::StartTaskSlot442(void* Task)
 			Activity = GetScriptCustomMoveActivity();                    // 0x10284040  0x10289fe0
 		}
 		// `SelectWeightedSequence(act, -1)` (`0x1008dc40`), skipped only for the custom-move answer.
-		if (Activity != ACT_SCRIPT_CUSTOM_MOVE && SelectWeightedSequenceForActivity(Activity) == INDEX_NONE) // 0x10284050 0x1028404a
+		if (Activity != ACT_SCRIPT_CUSTOM_MOVE && SelectWeightedSequenceForActivity(Activity) == INDEX_NONE) // 0x10284050 0x1028404a / 0x1008dc40 common stream
 		{
 			TaskComplete(false);                                         // 0x1028405d 0x10284057
 			ArrivalTail();

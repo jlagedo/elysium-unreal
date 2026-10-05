@@ -5,6 +5,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumAnimationIntent.h"
+#include "ElysiumRng.h"
 #include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"               // what a map stands each cast body as
@@ -505,8 +506,8 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 			FString(TEXT("ACT_RUN_RELAXED")));
 		TestEqual(TEXT("and the whole sample, so the record can say what was classified"),
 			Intent.Body.Speed2D(), Sample.Speed2D());
-		TestEqual(TEXT("the variant rides through, because the pick has to be repeatable"),
-			Intent.Variant, 3);
+		TestEqual(TEXT("0x10427fc0 selection belongs to the shared stream, with no variant draw"),
+			Intent.Variant, 0);
 		TestTrue(TEXT("a gait loops"), Intent.bLoop);
 
 		// A one-shot is a property of the request, not of the clip's looping flag: `crouch` is a
@@ -1118,18 +1119,18 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 
 	// --- Weighted selection is repeatable ---------------------------------------------------------------
 	{
-		FElysiumAnimationSelection First;
-		FElysiumAnimationSelection Second;
-		ElysiumAnimResolve::Resolve(ActivityIntent(TEXT("pc_body"), TEXT("ACT_IDLE")), PcCatalog,
-			First);
-		ElysiumAnimResolve::Resolve(ActivityIntent(TEXT("pc_body"), TEXT("ACT_IDLE")), PcCatalog,
-			Second);
-		TestEqual(TEXT("the same stem and variant pick the same clip"), First.SequenceLabel,
-			Second.SequenceLabel);
-		// And the pick matches the seed the subsystem's own weighted chooser uses, which is what makes
-		// one implementation rather than two.
-		TestEqual(TEXT("and it is the seed the catalog's chooser uses"), First.SequenceLabel,
-			ElysiumAnimResolve::PickWeighted(Pc, TEXT("ACT_IDLE"), 0).Label);
+		FRandomStream& SharedPick = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
+		SharedPick.Initialize(8112); FRandomStream ExpectedPick(8112);
+		FElysiumAnimationSelection First, Second;
+		ElysiumAnimResolve::Resolve(ActivityIntent(TEXT("pc_body"), TEXT("ACT_IDLE")), PcCatalog, First);
+		ExpectedPick.RandRange(0, 31); // ordered raw weights 30/1/1, 0x1008dc40
+		TestEqual(TEXT("0x1070b244: first weighted lookup draws once"), SharedPick.GetCurrentSeed(), ExpectedPick.GetCurrentSeed());
+		ElysiumAnimResolve::Resolve(ActivityIntent(TEXT("pc_body"), TEXT("ACT_IDLE")), PcCatalog, Second);
+		ExpectedPick.RandRange(0, 31);
+		TestEqual(TEXT("0x1070b244: identical request still advances the shared stream"), SharedPick.GetCurrentSeed(), ExpectedPick.GetCurrentSeed());
+		SharedPick.Initialize(8112);
+		TestEqual(TEXT("0x1008dc40: reseeding replays first weighted transaction"), First.SequenceLabel, ElysiumAnimResolve::PickWeighted(Pc, TEXT("ACT_IDLE"), 0).Label);
+		TestEqual(TEXT("0x1008dc40: reseeding replays the second transaction too"), Second.SequenceLabel, ElysiumAnimResolve::PickWeighted(Pc, TEXT("ACT_IDLE"), 0).Label);
 	}
 
 	// --- The route census: one schema, four routes -------------------------------------------------------
