@@ -46,7 +46,7 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 ### Docs
 
 - `docs/vision.md` — what Elysium is and is not, and how it is built.
-- `docs/vtmb/` — the oracle: recovered retail facts and addresses. Never port narrative.
+- `docs/vtmb/` — the oracle: recovered retail facts and addresses.
 - `docs/contracts/` — the seam data formats shared by the pipeline and the runtime.
 
 ## Editing files
@@ -59,7 +59,6 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 - The port is a VM host for VtMB's data. Schedules, dialogue and map scripts are the bytecode; the C++ substrate is the interpreter. Anything the bytecode can observe is reproduced verbatim: task semantics, condition order, interrupt timing, what a failure writes, and bugs, because shipped programs were tuned against them.
 - Modernization is a peripheral swap. Two halves: visual-only (Unreal renders it better; adopt freely) and an algorithm Unreal already ships (adopt only with the retail contract and event sequencing kept). Nothing that changes event order or state is a modernization.
 - Build the host in dependency order. Clock before programs, kernel before consumers.
-- A defect claim needs the retail script, schedule or map that reaches it, not a mask read.
 
 ## When a problem is reported
 
@@ -106,5 +105,9 @@ A reported defect is a question about VtMB, never a request for a patch.
   `<Script>: wrote <path>` in its log, not its exit code.
 - Retail map entities without an import → lump 0 of `$ELYSIUM_VTMB_ROOT/Unofficial_Patch/maps/<map>.bsp`
   (fall back to `Vampire/maps/`); offset/size at byte 8. Script: `E:/elysium-work/codex/sol-ghidra/maps.py`.
-- Parallel coders → `git worktree add -b <branch> E:/elysium-work/worktrees/<name> HEAD` (committed
-  work only); never remove a worktree blindly — it can delete untracked baked assets.
+- `git worktree remove` deletes gitignored files without asking and recurses through junctions, so a
+  worktree linked to the main checkout's gitignored trees (`Content/ElysiumGenerated/`,
+  `Content/ElysiumCorpus/`, `Plugins/ElysiumBaked/Content/`, `Plugins/External/`) takes the real
+  baked content with it → never `git worktree remove --force`, never `git clean`, never delete a
+  worktree folder by hand, in any checkout. Remove a worktree only with plain `git worktree remove`
+  after `git status --porcelain --ignored` inside it prints nothing; otherwise leave it for the owner.
