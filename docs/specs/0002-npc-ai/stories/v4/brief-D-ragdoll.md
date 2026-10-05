@@ -1,286 +1,235 @@
-# V4d — the corpse falls: retail's bodies, Unreal's solve (the owner's ruling, 2026-10-04)
+# V4d — the corpse falls: final coder brief
 
-Added to V4 by the owner after a three-agent re-validation (retail's death chain read from the
-listing; the port and pipeline inventoried; an independent sizing). It replaces README § 8 Q3 and
-§ 7 K5 as they were first written, and withdraws item 1 of `brief-J-judge.md`. *Size:* M. One
-spike, then one coder and one integrator. Runs after V4a (it uses the `corpse_on_floor` probe the
-seam adds); it does not depend on V4b or V4c.
+Final, 2026-10-04. Run after V4c integration, retaining V4a, V4b, V11 and V4o. Read
+AGENTS.md first, HANDOVER.md, packets-spike.md, S1 §§1/3, S4 §§e/f.1, S13 §1 and
+**packets-S14.md**. S14 verifies the scout and supersedes this brief's old contradictions.
+Source is being edited by V4c: relocate functions by name and preserve its final diff.
+Three disjoint coder lanes, then one integrator using brief-D-integrator.md.
 
-**Re-checked against the code as landed (2026-10-04, after V5a, V4a, V4b and V11;
-`packets-S12.md` item c). Nothing in the plan changes.** V4d runs last (V4o → V4c → V4d), so the
-thinks it must survive are C2's landed ones. The file list, confirmed on disk (line numbers have
-drifted; re-locate by name): the handoff `UElysiumEntityBodies::StartBodyRagdoll`
-(`Visual/ElysiumEntityBodies.cpp`) behind `AElysiumMapActor::StartBodyRagdoll`
-(`Map/ElysiumMapActorEmbodiment.cpp` :235), called from `ElysiumNpcBase.cpp` :107; the builder's
-precedent `BuildPhysicsAsset` (`Editor/ElysiumClothBuildLibrary.cpp` :256); the bake's `_PHYS`
-products and `PRODUCER_VERSION` (`pipeline/unreal/import_characters.py` :17, :295-320);
-`pipeline/unreal/import_physics_data.py`, `importers/physics_data.py`,
-`formats/model_glb/physics.py`; the rig stub `FElysiumNpcBase::SelectBecomeClientRagdoll`
-(`ElysiumNpcBaseSelect.cpp` :75); the test double's `bBodiesRagdoll`
-(`Tests/ElysiumTestServices.h` :922-934); `NpcCombat.Death` (`Tests/ElysiumNpcCombatTests.cpp`
-~:1686-1749, whose `StartBodyRagdoll -> 0` assertions C2 deletes — the ragdoll-true test is
-yours). The burn arm's sound is at `ElysiumCombatCharacter.cpp` ~:1522. Two facts landed since
-this brief was written: **`BecomeClientRagdoll` sets `RetailSolidFlags |= 4`** (V4b,
-`ElysiumNpc.cpp` :305, `0x10090180`) — so "the ragdoll does not collide with the player" (Step 1
-item 3) is **the contract, not an inference**: the corpse is `FSOLID_NOT_SOLID` on the server
-and the ragdoll is the client's object (S12 item c); and the corpse records are **five**
-(`corpse_kept_seen` beside the four below). The gib bit `0x2000`'s producers stay unread — an
-unbounded sweep, owner 0014, and a gibbed NPC is removed, not ragdolled.
+## The contract
 
-## The ruling: a named modernization
+**Chaos owns the fall; no calibration against retail. The .phy supplies bodies, convex
+hulls, masses and joint limits. What game logic observes stays retail's.** Solver iterations,
+damping, sleep thresholds and presentation collision tuning are Unreal's. The entity and
+use/feed/loot anchor remain at the death spot; the visual pelvis may move independently.
+Keep the existing world-colliding, Pawn-ignoring Ragdoll profile. Do not change the motor's
+ApplyCollisionState: the spike proved its actor collision switch does not gate the separately
+map-owned mesh. Keep V4c's `RetailSolidFlags |= 4` in the rigged branch.
 
-The death animation's look and the ragdoll's fall are Unreal's problem, not retail's. **The fall
-is solved by Unreal (Chaos); no calibration against VtMB's simulation is required. The bodies, the
-masses and the joint limits are taken from the game's own `.phy` data. What game logic observes
-stays retail's.** This is the visual-only half of a modernization (`AGENTS.md` § Project rules):
-retail's ragdoll is client-side and nothing the bytecode reads depends on where the drawn body
-rests.
+Ordinary death: Troika Event_Killed **0x102bf340** → NPC **0x10265ad0** (freeze/script
+exceptions, DeathSound, OnDeath) → combat character **0x1032b9b0** (lifeState 1, slot 301)
+→ CreateCorpse **0x1032c0e0**. Player and No_Ragdoll_Death 0x80000 use static corpses.
+Ordinary NPCs call BecomeClientRagdoll **0x10090180** with the hitbox's bone or
+**LookupBone("Bip01 Spine2")** and discard its answer. The same NPC is the corpse.
+TriggerClientRagdoll **0x1008b800** latches force/bone only for nonzero force and bone>0.
+Death impulse simulation is outside this story.
 
-| from the game (`.phy`) | free for Unreal | retail contract, unchanged |
+Capability is the source model's rig. No rig: zero bounds, return false; no new solid,
+move or think writes, no HoldBodyFinalPose. Rig: always make the weighted ACT_DIERAGDOLL
+pick; commit/reset cycle only for explicit bone−1 (0x1009021a). Ordinary deaths retain the
+current pose. Preserve V4c's shared RNG draw, solid flag, render FX 0x17, move-none, bounds
+and think-clear ordering. The corpse tail replaces think with or without a rig: no ordinary
+corpse returns to NPCThink/SelectSchedule. The separate state 7 fork
+**0x1028a8ec..0x1028a92b** executes the transaction with zero force/bone−1/flag 0,
+selecting 0x2c on success or 0x2b on refusal; it is not the next program of an ordinary corpse.
+
+| Corpse | V4c clock to preserve | V4d lifetime |
 |---|---|---|
-| which bones get a body; the convex hull per solid; the mass per solid; one joint per `ragdollconstraint` with its per-axis min/max | damping, solver iterations, sleep thresholds, the collision profile, the impulse scale, how the body looks as it falls and rests | `OnDeath` on the kill tick; the `corpse` event; the corpse is the same NPC entity, frozen at the death spot, with its use / feed / loot anchor there; its removal — **four clocks, not one** (§ "The removal, per body" below): an ordinary mortal, unseen, at a 10 s poll (`SUB_PVSRemove`); Kindred or `Has_Burning_Death` at +10 s, seen or not; a fade corpse at about +13.8 s, seen or not; a pedestrian never; whether the model has a ragdoll at all |
+| ordinary mortal | SUB_PVSRemove 0x102696f0 at +10; rearm +10 while view cone/PVS/FVisible all pass, otherwise remove | retain while seen; release on actual removal |
+| Kindred / Has_Burning_Death | CreateCorpse burn tail 0x1032c32f: SUB_Remove+10, regardless of sight | release at +10; burn look remains0014 |
+| pedestrian, bit 9 clear | 0x103a38c0 calls base, clears think, sets SOLID_NONE | retain indefinitely; sleep allowed |
+| fade child | later 0x10265d72 →0x102695d0 →0x10269960; start +10, alpha−7/+0.1, zero then remove/+0.2, about +13.8 | retain until actual removal; preserve C2 alpha state/visual wiring |
 
-## The removal, per body (settling packets S1 and S4, the judge's second sitting J13 / J14.1, 2026-10-04)
+Fade wins over burn or pedestrian clear. S13's ordinary maker assigns 4/0x204: no maker patch
+or map bake. `verbs_stealth_kill` is a direct regular_cop cast with spawnflags 4, not a fade
+child; `corpse_fades` owns stealth_victim_maker/Shovelhead. Keep both stages.
 
-`CreateCorpse 0x1032c0e0`'s tail, and the two bodies that run after it and replace the think
-again (`packets-S1.md` item 1, `packets-S4.md` items e and f.1). **All four clocks are state — an
-entity that is gone answers no name lookup and fires no output — so none of them is V4d's to
-modernize.** The thinks are V4c lane C2's (the pedestrian's wiring and `Think` gate, the fade);
-**yours is the body that must survive them**: the drawn ragdoll's lifetime follows the entity's.
-The records are `corpse_removed_unseen`, `corpse_kindred_burns`, `corpse_pedestrian_stays`,
-`corpse_fades` (written red by the seam agent A0, turned by the C integrator); your integrator
-re-runs all four with the `.phy`-built asset on the body.
+## First step — one controlled frame measurement
 
-| body | think after death | what removes the corpse |
-|---|---|---|
-| **ordinary mortal** (`burn` false) | `SUB_PVSRemove 0x102696f0` (thunk `0x10009c9b`) at `curtime + 10.0` (`0x1032c404`) | re-armed every 10 s while **any player passes all three**: the player's view cone on the corpse (slot 363), the PVS test (`0x101d1a90`), and `FVisible(corpse, mask 0x2804091)` (slot 201); no player passes → `UTIL_Remove` |
-| **Kindred, or `Has_Burning_Death`** (`burn = 0x10207df0`: `template[+0x98]`, or `IsKindred && !template[+0x9d] Disallow_Kindred_Death`) — a `CNPC_VVampire` on both witness maps (3 / 16) | `SUB_Remove 0x101c0b10` at `curtime + 10.0` (`0x1032c32f`), **unconditionally** | `BurnModel 0x10090580` first: `m_nRenderFX = 0x1b`, effects `\| 0xa0`, `m_flEffectStartTime = curtime`, one `DMGFX_vampire_death` particle per hitbox bone, a `dynamic_prop` of the skeleton (`models/character/npc/common/skel…`, male or female) following the corpse (`SetAimEnt`, move type `0xb`) and itself removed at `curtime + 0.5 + 3.0`; `EmitSound("character/vampire burning death.wav")` at 0.8. **The ragdoll burns and goes at +10 s, seen or not** |
-| **pedestrian** (`CNPC_VPedestrian::CreateCorpse 0x103a38c0`; 28 / 3 on the witness maps) | **none**: after the base, `ThinkSet(this, NULL)` and `SetSolid(SOLID_NONE)` | **nothing: this chain never removes it.** (Wired to slot 301 by V4c lane C2; until C2 lands the port gives a pedestrian `SUB_PVSRemove`.) |
-| **fade corpse** (slot 552 `ShouldFadeOnDeath`, spawnflag bit 9; `Event_Killed` step 14, after `CreateCorpse`) | `SUB_FadeOut 0x100152b2` at `curtime + 10.0` (`SUB_StartFadeOut 0x102695d0`; the cell `0x1044fac0` is the double 10.0, not 0.0) | render mode 2 / alpha 255 when the mode was 0, `AddSolidFlags(4)`, zero angular velocity; then `SUB_FadeOut` (thunk `0x100152b2` → **`0x10269960`**): alpha `> 7` → `−= 7`, next think +0.1 s; else alpha 0, +0.2 s, `ThinkSet(SUB_Remove)`. From 255: 36 steps, then 0, then removal — **gone about 13.8 s after the death, seen or not**. **25 of the 62 makers on the two maps make such children** (`Flag_InfChild` 22, `Flag_Fade` 3; the tutorial's `stealth_victim_maker` and `guard_maker` among them): `verbs_stealth_kill`'s victim is one. A Kindred child both burns (look and sound at death) and fades: the later think wins, removal at about +13.8 s. Ported by C2 (J14.1) |
-| `MiscFlag 0x80000` `No_Ragdoll_Death` | the NPC: `SUB_Remove` at +0.5 s, hidden; the static corpse copy then takes the row above that fits (`burn` or not) | not in V4d (the static-corpse arms) |
+The reads settle units/basis, **not solid placement or the joint reference basis**. D1 first
+prepares the diagnostic regular_cop asset and candidate transforms below. The integrator
+performs the first scoped bake and **one controlled Physics Asset Editor/lab check** after
+build 1; coders still never build, bake or run. No 34-body bake before that gate. Feed the
+measured choice back to D1/D2 serially; reserve reviewed build 2/re-bake for a frame correction.
 
-What V4d does with it (J13 — two lines of contract added to Step 1):
+Verified conversions (model_glb/physics.py::_ledge, physics_data.py::physics_projection,
+phy.py::_read_ledge, bsp.py::source_to_unreal/source_quat_to_unreal,
+skeletal_stage/payload.py::_conv_pos/_conv_quat):
 
-- **Survive the removal.** The fall is the same for all four bodies; the ragdoll's removal is
-  the entity's. **A body that is still simulating when its entity is removed — a Kindred at
-  +10 s, a fade corpse at about +13.8 s, an unseen mortal at a 10 s poll — must be torn down
-  cleanly: no ensure, no crash, no drawn body left lying.** The coder finds by Grep where the
-  drawn mesh is released on the entity's removal and makes that path stop the simulation and
-  release the physics state first; the first test of the ragdoll-true branch (Step 1 item 5)
-  includes "removed while simulating". A pedestrian's body is never removed: it must simply
-  keep lying (and may sleep).
-- **The burning-death sound is emitted** — one call at the burn arm:
-  `EmitSound("character/vampire burning death.wav")` at attenuation 0.8, volume 1.0, pitch 100
-  (`CreateCorpse`'s `burn` tail). The burn arm's think is ported
-  (`ElysiumCombatCharacter.cpp:~1518-1527`); check by Grep that the sound is emitted there, and
-  if it is not, **write the exact line in your report** — that file is C2's in V4c, so it is
-  yours to edit only if V4c has landed (say which).
-- **Filed to 0014, not yours: `BurnModel`'s look** (`0x10090580`: render fx `0x1b`, the
-  per-bone `DMGFX_vampire_death` particles, the skeleton `dynamic_prop` for 3.5 s). A named
-  seam at the burn arm ("`BurnModel 0x10090580`'s look; 0014"); nothing the bytecode reads
-  depends on it. The fade's alpha on the drawn body is likewise the visual side's: if C2 left
-  a visual seam for it, the ragdoll simply stays opaque until removed — say so.
+- Binary IVP `(x,y,z)` metres becomes published **`g=(x,-y,-z)`** metres. PhysicsData copies
+  `g` unchanged. Its frame label does not mean raw binary IVP. Published vertices to Unreal
+  centimetres: **`q=100*(g.x,g.z,g.y)`**. Raw binary IVP would use `100*(x,-z,-y)`.
+- Source MDL positions are inches: `2.54*(x,-y,z)`; quaternion becomes `(-x,y,-z,w)`.
+  Thus `R_u=M R_s M`, `M=diag(1,-1,1)`. Use the mesh's accumulated reference-bone
+  transform `B_u`, not a parent-relative transform or assumed shared humanoid pose.
+  PoseToBone is raw Source-inch row-major 3x4 inverse bind.
+- **Candidate if hulls are solid-local:** convert solid origin/QAngles into `S_u` through
+  the Source conversion, then `p_b=B_u.inverse(S_u(q))`. If already model-local, the
+  candidate is `B_u.inverse(q)`; if already corresponding bone-local, it is `q`.
+  These are alternatives to distinguish, not transforms to stack. Props have no articulated
+  bone frame and their collision precedent cannot choose among them.
+- After identifying joint frame `J_u`, express the same pivot/basis in both bodies:
+  `J_parent=B_parent.inverse*J_u`, `J_child=B_child.inverse*J_u`. Angular axes transform
+  with `det(M)*M`. Only if aligned to the mirrored Source bone basis do x/z ranges reverse
+  `(min,max)→(-max,-min)` while y keeps its sign. Limits: half-span symmetric limit,
+  midpoint signed frame/rest offset; zero span locked. Do not assume Source z is UE Swing2.
 
-## What retail does (read from the listing, 2026-10-04)
+**The single measurement:** regular_cop's real 15 solids/14 joints, collision and constraint
+gizmos visible. Record right-thigh/right-calf hull placement against the bind mesh and common
+knee pivot. In the same controlled check sweep its only free Source z axis to the authored
+−95° and +4° stops: knee bends anatomically, calf hull follows, endpoint pivots coincide.
+Confirm left-knee and elbow mirroring with those transforms (elbow z −120°..+4°, x/y locked).
+Record accepted solid→model→bone and joint-axis matrices, endpoint sign, screenshot and recipe
+in phy_vphysics.md before the wider bake. Free fall alone does not prove axes/stops.
+Correct frames/signs and re-bake; never enlarge limits or floor tolerance to hide errors.
+If the check cannot distinguish a consistent frame, stop the wider bake and report the exact
+failed transform. No generic frame-reading task remains in the handoff.
 
-`CAI_BaseNPCTroika::Event_Killed 0x102bf340` (the crime record, `MarkAsDead`) →
-`CAI_BaseNPC::Event_Killed 0x10265ad0` (the death sound, `OnDeath`) →
-`CBaseCombatCharacter::Event_Killed 0x1032b9b0` (`m_lifeState = 1`, the force: the damage force or
-`CalcDamageForceVector`, plus velocity, clamped) → slot 301 `CreateCorpse 0x1032c0e0`, three arms:
-the player → `SpawnStaticCorpse`; `MiscFlag 0x80000` → `SpawnStaticCorpse` (an unsimulated copy of
-the pose), `Hide`, the NPC removed at +0.5 s; otherwise `BecomeClientRagdoll(force, bone, 0)` with
-`bone` the hit bone or `LookupBone("Bip01 Spine2")`, its return discarded (`0x1032c2a1`). Tail: the
-corpse (slot 137, `this`) gets `ThinkSet(SUB_PVSRemove)` at +10 s (`0x1032c404`) **when it is an
-ordinary mortal; a Kindred, a pedestrian and a fade corpse differ — § "The removal, per body"**.
-A feed death (`Die 0x103392c0` from `FeedInterrupt 0x1033a9e0` / `DecBloodPool 0x10338df0`) and an
-explosion death (`DMG_BLAST 0x40`) are this same ordinary chain (`packets-S1.md` item 4).
-`BecomeClientRagdoll 0x10090180` → `TriggerClientRagdoll 0x1008b800` latches `m_vecForce` /
-`m_nForceBone` (only for |F| > 0 and bone > 0), sets `m_nRenderFX = 0x17`, makes the NPC not solid,
-move type none, zero bounds, the think cleared (then replaced by `CreateCorpse`'s tail). **A model
-with no rig**: `BecomeClientRagdoll` zeroes the collision bounds and returns false — **not** made
-non-solid, no move type change, no think change of its own; the think is still replaced by
-`CreateCorpse`'s tail. The server simulates nothing; the client builds the ragdoll from the `.phy`.
+## D1 — editor builder and frame recovery
 
-**Corrections to README § 1 and § 7 K5:** the `ACT_DIERAGDOLL` seed runs only when the bone is −1
-(`0x1009021a`), and `CreateCorpse` always passes a real bone: an ordinary corpse ragdolls from the
-pose it holds. No seed pose is held, and K5's "rigless corpse holding its seed pose" stand-in is
-withdrawn.
+**Only these files:**
 
-## What exists, and what is missing (inventoried 2026-10-04)
+- `Source/ElysiumUE/Private/Editor/ElysiumClothBuildLibrary.h`
+- `Source/ElysiumUE/Private/Editor/ElysiumClothBuildLibrary.cpp`
+- `Source/ElysiumUE/ElysiumUE.Build.cs` (editor dependencies only, if needed)
+- `docs/vtmb/phy_vphysics.md`
 
-- The `.phy` is decoded (`pipeline/src/elysium_pipeline/formats/model_glb/physics.py:299-433`:
-  solids and hulls, `solid` mass / damping / inertia, `ragdollconstraint` parent / child and per-axis
-  min / max / friction; `importers/physics_data.py:151-180` joins each solid to its bone) and
-  already baked: one `UElysiumPhysicsData` asset per model (`pipeline/unreal/import_physics_data.py`;
-  621 in the last run, 363 under `character/`), read by nothing.
-- The handoff exists: `StartBodyRagdoll` (`Visual/ElysiumEntityBodies.cpp:1507-1558`) sets the
-  `Ragdoll` profile and simulates if the mesh has a physics asset; it returns false today because
-  none has one. The true branch has never run (`ElysiumTestServices.h:909` `bBodiesRagdoll` is never
-  set).
-- **Missing:** a builder from `UElysiumPhysicsData` to a `UPhysicsAsset`; its bake step; and a fix
-  in the dead body's collision — the frozen NPC switches the whole actor's collision off every
-  think (`ElysiumNpcBody.cpp:1313`), the ragdoll's mesh included, so a body handed to physics would
-  not simulate or would fall through the floor.
-- 321 character models carry a ragdoll rig (npc 238, pc 58, monster 19, gibs 6); 289 share the
-  same 15 bodies and 14 joints.
+1. Add an editor-callable ragdoll builder beside BuildPhysicsAsset. Agree its exact signature
+   with D2: typed PhysicsData, skeletal mesh, output package; error and readback body/convex/
+   constraint counts and frame version. Prepare the diagnostic first. **Source:**
+   ElysiumClothBuildLibrary.cpp::BuildPhysicsAsset/MakePackage/BoneBindTransform; S14 §2.
+2. One simulating USkeletalBodySetup per solid, exact named bone join; one FKConvexElem per
+   ledge, no fitted primitives, simplification or decomposition. Cook in the settled bone frame;
+   update index/bounds maps and registry/package. Do not copy cloth's PhysType_Kinematic.
+   **Source:** BuildPhysicsAsset; bake_lib.py::set_phy_collision (one exact hull per ledge).
+3. Actual authored mass override per solid, read back in receipt. Resolve constraint endpoints
+   by authored solid IDs/typed ordinals, never bone ordinals. Refuse missing/ambiguous joins,
+   required limits or usable hulls with unit/solid/field errors; skip no-physics units without
+   inventing rigs. **Source:** physics_data.py::physics_projection, Gaps/optional numbers;
+   regular_cop solid/constraint data, S14 §2.
+4. One constraint per ragdollconstraint with measured frames and exact ranges; zero span locked.
+   Disable adjacent-body collision as named presentation tuning, state remaining self-collision
+   policy; solver choices never alter masses/limits. Use convex point clouds or validate winding:
+   phy.py's determinant comment is wrong. Add PhysicsUtilities only if the chosen editor API
+   needs it. **Source:** bsp.py::source_quat_to_unreal, existing PhysicsAsset builder, S14 §2.
+5. Record measured matrices/endpoints and citations in phy_vphysics.md, distinguishing read
+   equations from measurement. **Source:** that document's The ragdoll rig and first-step check.
 
-## Step 0 — the spike (one agent, one build, about two hours; before the builder is written)
+## D2 — scoped bake, independent recipe, mesh binding
 
-The biggest unknown is whether this project's NPC body falls and rests at all once handed to
-physics (its custom animation instance, the per-think collision switch, the attached garments).
-Settle it cheaply: in a scratch state, give `regular_cop` Unreal's default physics asset (the
-editor's `CreatePhysicsAsset`), switch off only the movement capsule on the dead body, run
-`damage_lethal_death`, and read the pelvis height over time. Nothing from the spike is committed
-except its findings in `stories/v4/packets-spike.md` (done: see § "After the spike"). If the body does not fall and rest, stop: report
-what holds it (the animation instance still driving the pose, a garment's attachment, the profile).
+**Only:** `pipeline/unreal/import_characters.py`.
 
-## Step 1 — the coder (files; re-locate by Grep)
+1. Add the ragdoll step after physics_source on fresh and reused meshes, calling D1's API with
+   PhysicsSourceData. Distinct mesh-local `_RAGDOLL` package, never cloth's `_PHYS`; protect
+   against pruning. **Source:** import_characters.py::physics_source/cloth_assets/entry loop.
+2. Independent ragdoll producer/version/fingerprint: physics projection hash/receipt or data
+   recipe, stored mesh recipe, builder/frame version. Stamp/check under its own producer,
+   report counts/masses/frame/build/skip/failure. **Do not bump characters-v2 or change mesh/
+   animation fingerprints.** **Source:** import_characters.py::fingerprint/cloth_assets,
+   import_physics_data.py::publish_entry; bake_lib.py::recipe_fingerprint/stored_recipe/stamp_recipe.
+3. Attach saved asset to skeletal mesh and save the package, including repairing missing/wrong
+   attachment on reuse. Package save is permitted; mesh/animation re-import is not owed. No
+   runtime sidecar reads. **Source:** physics_source/cloth_assets binding/save precedent;
+   ElysiumEntityBodies.cpp::StartBodyRagdoll/GetPhysicsAsset.
+4. Keep repeatable --bodies and include closure. Scope S14's 34 witness models plus record bodies
+   (already included); diagnostic first, full scope after gate; report no-.phy skips. **Source:**
+   importers/characters.py::stage_characters, cli.py::import_characters; S14 §4. Do not edit
+   CLI, staging, decoder, asset-name catalogue or PhysicsData producer. Report extra-file lines.
 
-1. **The builder** — a C++ editor function beside `BuildPhysicsAsset`
-   (`ElysiumClothBuildLibrary.cpp:256`, the precedent): from a model's `UElysiumPhysicsData`, a
-   `UPhysicsAsset` with one body per solid (the solid's convex hull, as `bake_lib.set_phy_collision`
-   `:520` converts a `.phy` hull for props; the solid's mass) and one constraint per
-   `ragdollconstraint` (half the range as the limit, the midpoint as the frame offset, a zero range
-   locked; x and z signs through the skeleton's mirror, `bsp.py:121`). The axis and unit conversion
-   are the pipeline's existing ones: state them at the line. Knee and elbow on `regular_cop` are
-   z-only hinges (−95..4, −120..4): the acceptance check for the sign mapping.
-2. **The bake step** — a step in `pipeline/unreal/import_characters.py` with its own recipe
-   fingerprint (as cloth's `_PHYS` assets, `:285-353`), attaching the asset to the mesh.
-   `PRODUCER_VERSION` (`:17`) is NOT bumped: no mesh or animation is re-imported. `--bodies` scopes
-   a run. Step 2's scope is the bodies the two witness maps and the arena records use; the whole
-   corpus is a later run (0014).
-3. **The dead body's collision** — the frozen corpse switches off only its movement capsule, so the
-   ragdoll's bodies collide with the world (`ElysiumNpcBody.cpp:~1313`). Whether a ragdoll collides
-   with the player is not recovered from retail (inferred: it does not): leave it not colliding
-   with pawns, named at the line.
-4. **Whether a model has a ragdoll** is answered from its `.phy` data asset (retail's "the model
-   interface answers a ragdoll"), never from whether Unreal built a physics asset; today it is a
-   stub (`ElysiumNpcBaseSelect.cpp:75-79`). A model with no rig keeps its last pose
-   (`BecomeClientRagdoll` answering false changes no schedule). **Open, one read first:** the two
-   re-validation agents disagree on whether a rig-less ordinary NPC ever reaches `SCHED_DIE`
-   (`CreateCorpse` replaces the think; inferred that it does not). Read `SelectSchedule`'s state-7
-   fork against `0x1032c404` before writing this item.
-5. **Tests**: the ragdoll-true branch gets its first test (the recording double answering a rig);
-   no test of the solver.
+## D3 — capability, handoff, terminal release
 
-Not in V4d (0014 keeps them, no rework): the death impulse (the arena's scalar `TakeDamage` yields
-zero force in retail, `docs/vtmb/` `combat-and-damage.md:1832-1835`, so step 2's records need
-none), `prop_ragdoll`, joint friction and surface properties, the full-corpus rollout (a reuse run,
-~12–18 min inferred), the calibrations (0014/1–2: a visual check replaces them), the static-corpse
-arms (`MiscFlag 0x80000`, the player), the burn's look (`BurnModel 0x10090580`: a named seam,
-filed to 0014 by J13), the thinks themselves (the pedestrian's and the fade are V4c lane C2's). Feed and explosion deaths are **read** (`packets-S1.md` item
-4): both are the ordinary chain — a feed death has no hit bone (→ `Bip01 Spine2`) and its death
-sound is silenced while the grapple partner is live; an explosion's packet is `DMG_BLAST`, never
-the gib bit `0x2000` — so nothing is added to V4d for them. *Unrecovered: whether any shipped
-damage source sets bit `0x2000` (the gib route, slot 402 `0x102658f0`); no V4d record depends on
-it.*
+**Only these files (Source paths below are under Source/ElysiumUE):**
 
-## Step 2 — the integrator
+- `Private/Substrate/ElysiumNpc.h`, `Private/Substrate/ElysiumNpc.cpp`
+- `Private/Substrate/ElysiumNpcBase.h`, `Private/Substrate/ElysiumNpcBase.cpp`
+- `Private/Substrate/ElysiumNpcBaseSelect.cpp`, `Private/Substrate/ElysiumNpcBaseSelect.inl`
+- `Private/Substrate/ElysiumCombatCharacter.cpp`
+- `Private/Substrate/ElysiumEntity.cpp`, `Private/Substrate/ElysiumScriptedCharacter.cpp`
+- `Public/ElysiumWorldServices.h`, `Public/ElysiumMapActor.h`
+- `Private/Map/ElysiumMapActorEmbodiment.cpp`
+- `Private/Visual/ElysiumEntityBodies.h`, `Private/Visual/ElysiumEntityBodies.cpp`
+- `Private/Tests/ElysiumNpcCombatTests.cpp`, `Private/Tests/ElysiumTestServices.h`
+- `docs/vtmb/npc-ai/lifecycle.md`, `docs/vtmb/combat-and-damage.md`,
+  `docs/vtmb/physics-interaction.md`
 
-One build; two or three scoped bakes (minutes each); `damage_lethal_death` and `verbs_stealth_kill`
-with the `corpse_on_floor` probe (the pelvis within 24 cm of the floor and at rest by the record's
-deadline) green; the retail contract unchanged in the traces (`OnDeath` on the kill tick, `corpse`,
-the entity at the death spot, no `move` / `task` / `schedule` after death); **the four removal
-clocks with the ragdoll on the body** (§ "The removal, per body"): run `corpse_removed_unseen`,
-`corpse_kindred_burns`, `corpse_pedestrian_stays`, `corpse_fades` beside the two death records —
-each keeps the verdict V4c left it, **and the log shows no ensure when a simulating body is
-removed** (the Kindred at +10 s, the fade at about +13.8 s); `verbs_stealth_kill`'s victim is a
-fade child: its `corpse_on_floor` probe must be read before about +13.8 s after the death or
-the record's timing is corrected with that source; if V4c has not landed, say which of the four
-are red on C2's cause; the default and arm
-tiers green; the full suite with every other verdict unchanged. A visual check in the lab
-(`uv run elysium gr --arena`, `elysium.gr_scenario damage_lethal_death`): knees and elbows bend the
-right way, nothing folds or explodes — a screenshot in the report. A sign or frame mistake is fixed
-by a re-bake, not a study. Commit once; tick V4d.
+1. HasClientRagdollRig reads cooked mesh provenance `PhysicsSourceData->Data.bHasPhysics`.
+   Share the predicate with selector capability. A missing PhysicsAsset is a failed bake,
+   never a rigless classification. **Source:** 0x10090180 model-interface slot 18;
+   CharacterProvenance.h::PhysicsSourceData; physics_projection::bHasPhysics.
+2. CorpseForceBone's absent-hit input resolves native `Bip01 Spine2` on the drawn mesh,
+   through typed source/native bone names if needed; never hardcode regular_cop ordinal 5.
+   With source rig and valid fallback, CreateCorpse calls BecomeClientRagdoll(Force,bone,false)
+   and StartBodyRagdoll on the kill tick. Keep no-rig bounds/tail. A missing fallback on a
+   purported rig is a named data/attachment failure, never substitute explicit bone−1.
+   **Source:** 0x1032c1e4..0x1032c22b /0x1032c29c. The packet has no hitbox index/bone;
+   retain a named no-hit accessor seam for CTakeDamageInfo's 0x101c2a30 input and use Spine2.
+   Producer completion and impulse are 0014; do not claim hitbox damage support.
+3. SelectBecomeClientRagdoll executes the same transaction with zero force/explicit−1/flag 0,
+   not just a capability bool. Wire a common implementation for base/Troika callers without
+   double seed draws/handoffs. Preserve C2's seed tests/RNG and corpse think override. Guard
+   CompleteDeathHandoff/RestoreDeathBodyState by source capability, prevent a second ordinary
+   handoff, and never replay OnDeath, weighted picks or clocks on visual restoration. Remove
+   stale late-DIE/hold-pose commentary. **Source:** 0x1028a8ec..0x1028a92b/0x10090180;
+   ElysiumNpcBase.cpp::CompleteDeathHandoff, ElysiumNpc.cpp::RestoreDeathBodyState.
+4. Keep StartBodyRagdoll's proven profile→simulate→verify→wake order. Diagnose absent/empty
+   assets or refusal as bake/handoff failures while keeping source capability. Log successful
+   admission with the real asset path, body count and active-simulation result; log the same
+   body's pre-release simulation state on terminal cleanup, so floor/exists probes cannot
+   conceal a non-simulating pose or retained physics body. No new no-rig hold-pose modernization.
+   **Source:** packets-spike.md Findings 2; StartBodyRagdoll;
+   0x10090180 false arm.
+5. Add one idempotent **ReleaseNpcVisual** embodiment/Bodies adapter. Capture actual Visual;
+   release claims, stop simulation/collision, destroy physics state, remove presentation-owned
+   garments/wield/ornament/trail components and destroy mesh; erase claim entries and clear
+   entity Visual. Route actual **FElysiumEntity::Kill** through NPC release, including already
+   hidden removal. Route **FElysiumScriptedCharacter destructor** through the same release
+   before DestroyMotor. Respect retired/EndPlay guard before dereferencing UObject pointers.
+   Never discover the mesh by motor attachment: simulation may detach it. Never release at
+   lethal Event_Killed, ordinary ScriptHide, or the DestroyMotor path used for model replacement
+   (which preserves authored children). Do not destroy other entities' attached children as
+   presentation garbage. **Source:** Entity.cpp::Kill; AnimatingImpl.cpp::GateVisual/
+   OnRuntimeModelChanged; ScriptedCharacter.cpp destructor/DestroyMotor; MapActorEmbodiment.cpp::
+   BuildNpcMotor/DestroyNpcMotor; EntityWorld.cpp::RegisterNpcBody/Teardown;
+   NpcVisual.cpp::GateLeaderCloth/child-cleanup precedents. Today Kill hides/stops pose ticks;
+   only world teardown destroys registered NPC meshes, so a new simulating corpse is retained.
+6. Recheck burn tail after V4c. In this snapshot the sound is still a comment. If absent,
+   emit exactly once `character/vampire burning death.wav`, volume 1, attenuation 0.8,
+   pitch 100 (native multiplier 1), channel 0, via existing entity audio; preserve later fade,
+   invent no AI sound. **Source:** 0x1032c3c1..0x1032c3d7;
+   ElysiumNpcSounds.cpp's EmitSound→PlayBodySound precedent (set channel explicitly).
+7. Add NpcCombat.Death arms with typed provenance true/false and recording service: ordinary
+   rigged death resolves Spine2, starts once and preserves sequence/cycle despite weighted pick;
+   assert retail writes/tail. No rig: false writes only/no simulation/no hold. Source rig with
+   failed asset stays rigged and reports failure. Terminal removal while simulating releases
+   once (also hidden case), lethal death does not; pedestrian keeps body. Assert one burn sound
+   and exact fields/no duplicate using existing BodySounds/request recording, no arena audio
+   vocabulary. Keep C2 seed/fade/pedestrian tests. **Source:** 0x1032c0e0/0x10090180/0x103a38c0;
+   ElysiumTestServices.h::StartBodyRagdoll/PlayBodySound. These test transaction/lifetime;
+   real assets plus integrator checks prove Chaos.
+8. Update matching lifecycle/combat/physics recovery without overwriting C2. physics-interaction
+   still calls burning a static creation arm; combat-and-damage's creation list is already
+   corrected in this snapshot. Record source capability/fallback/release and named absent
+   hitbox/impulse inputs. **Source:** 0x1032c0e0/0x10090180; S14 §§1–3.
 
-## Rules
+## Not yours and rules
 
-As every V4 brief: coders never build; the integrator builds once and commits once on the work
-branch, never pushes; the query budget (10 s warns, 60 s stops); text through Grep / Read / Glob;
-a build, a bake or a run waited on by blocking or by its completion notification, never a sleep or
-a polling loop.
+Manifests have **empty pairwise intersections**. No coder edits Arena/, tracker, spec.md,
+research/, generated Slots.cpp, another lane's files or planning packets. Integrator owns
+records/close. V4c owns removal/fade/maker/team/attack logic; preserve its completed changes.
+No capsule collision rewrite, visual-to-entity feedback or re-created death schedule.
 
-## After the spike (2026-10-04)
+0014 owns death impulse/hitbox producer completion, prop_ragdoll, friction/surface properties,
+full-corpus rollout and BurnModel ash/particles/skeleton look. Gib-source sweeps are 0014;
+no V4d record depends on them. V6 owns corpse save semantics; one load check is presentation
+smoke only. Retain the no-rig refusal writes; do not assert an unmeasured client animation clock.
 
-Step 0 is done: `packets-spike.md` (read it whole; it is short). Where it and the text above
-disagree, this section wins. The spike's findings are in `packets-spike.md`, not in `packets.md`
-as Step 0 said — that file does not exist.
+**Touch only listed files. Never build, bake, run tests, arena or game, or commit. Never push.
+Shadowed locals are compile errors (C4458/C4459); check includes/declarations/double definitions.**
+Every query has a 60 s hard timeout: >10 s warns/logs, 60 s stops dependent work until optimized;
+never retry as-is/widen. No whole read over ~200 KB to find one item; indexed/narrow reads.
+Time required query paths before scheduling work. Wait on completion, never polling/sleep loops.
 
-**The verdict.** Handed to physics, the body **falls and comes to rest, headless** (`-nullrhi`,
-fixed step 60 Hz), with the project's animation instance still installed and unpaused and with a
-garment attached, and **with no change to the handoff**: `StartBodyRagdoll`'s existing order
-(`SetCollisionProfileName("Ragdoll")`, then `SetSimulatePhysics(true)`) creates the physics state
-and simulates once the component has a physics asset; the true branch ran for the first time and
-is sound; the animation instance does not fight physics. The builder can be written. The run is
-deterministic. Time to rest is about 2 s after the handoff.
-
-**Changes to Step 1.**
-
-- **Item 3 (the dead body's collision fix) is withdrawn: it is not needed for the fall.** The
-  drawn mesh is created with the **map actor** as its owner (`Visual/ElysiumEntityBodies.cpp`
-  ~:1741) and only *attached* to the motor (`Map/ElysiumMapActorEmbodiment.cpp` ~:107), so
-  `SetActorEnableCollision` on `AElysiumNpcBody` gates the capsule and that actor's own unused
-  mesh, not the ragdoll. With today's code unchanged the body collided with the floor and rested
-  exactly as with a capsule-only switch. **Leave `ApplyCollisionState` alone**; the coder does
-  not touch `Visual/ElysiumNpcBody.cpp`. README §8 Q3's "a ragdoll would fall through the floor"
-  and § "What exists, and what is missing" above ("a fix in the dead body's collision") are
-  wrong on this point. The ragdoll not colliding with pawns stays as briefed (inferred, named at
-  the line where the profile is set).
-- **Item 4's open read is settled.** `CreateCorpse 0x1032c0e0` replaces the think at `0x1032c404`
-  on every ordinary arm, so **an ordinary kill never reaches `SCHED_DIE`, rig or no rig** (the
-  state-7 fork `0x1028a8ec` is reached only by other state-7 writers; **confirmed as written by
-  S1**, `packets-S1.md` items 1 and 3, which also rewrote `lifecycle.md`'s chain). A model with
-  no rig: `BecomeClientRagdoll` **zeroes the bounds, does not make it non-solid**, and the think
-  is replaced by `CreateCorpse`'s tail all the same; it **keeps animating its last sequence** —
-  *inferred* (nothing writes `m_flPlaybackRate`; retail's client has no ragdoll to build). Write
-  item 4 on that: no read of `SelectSchedule` is needed first.
-- **Item 2, an option the spike opened:** the asset can be set **per component**
-  (`SetPhysicsAsset(Asset, /*bForceReInit*/ true)`) without re-saving the mesh package. The bake
-  step may still attach it to the mesh as briefed; use the component path only if re-saving mesh
-  packages turns out to be a problem, and say which you chose.
-- Items 1 and 5 stand.
-
-**The rest test and the height bound (Step 2, and the `corpse_on_floor` probe the seam wrote).**
-
-- **At rest is a speed threshold, never the sleep state.** The body never sleeps:
-  `IsAnyRigidBodyAwake()` stayed true for the whole 11.8 s with a residual 0.3–0.7 cm/s on the
-  pelvis. The probe passes on **pelvis speed under ~5 cm/s** (above the jitter, below the last
-  settling sample of 3.6). Sleep thresholds and damping are free for Unreal under the ruling, so
-  the coder may tune the asset so it sleeps; the probe must not depend on it.
-- **The probe reads the `Bip01 Pelvis` bone of the drawn mesh** (`GetBoneLocation`; the simulated
-  pose reaches the component's bone transforms headless), never the component's location — the
-  component follows the root body and ends below the floor (Z 2.0 → −23.6).
-- **The height bound is per body and is measured with the real `.phy` asset.** "Within 24 cm" in
-  Step 2 above is not a constant: with Unreal's default capsule asset `regular_cop` rests at
-  **16.2 cm** and `bum_male` at **32.9 cm**. The retail `.phy` hulls will give other numbers. The
-  integrator, after the scoped bake, reads the measured rest height of **each record's body** on
-  the `.phy`-built asset (the lab, `elysium_entity_get` or the probe's own value in the trace),
-  and sets each record's bound from it with the measurement in `about`; a rig that rests propped
-  gets a wider bound or a named body, never a loosened rule.
-- **`on_ground` stays false on a corpse** (the motor's floor answer). The two death records turn
-  green only when their end probe is `corpse_on_floor` (the seam's edit) and `known_red` is
-  removed.
-
-**What keeps reading the motor.** The mesh component moves with the ragdoll (the pelvis ended
-59 cm from the death spot); the motor capsule stays put. So the **entity's origin and the use /
-feed / loot anchors keep being read from the motor** — the retail contract: frozen at the death
-spot — never from the visual component or a bone. The integrator's trace check ("the entity at
-the death spot") is that.
-
-**Untested by the spike — the integrator's to check, the coder's to keep in mind.**
-
-- **Rendering**: nothing was drawn. Whether knees and elbows bend the right way, and how a
-  garment (`UChaosClothComponent`, leader pose) and the hair dynamics look on a simulated body.
-  `regular_cop` wears no garment, so the briefed record does not exercise one; `bum_male` does
-  (it fell and rested; its look was not seen). The lab's visual check covers both bodies.
-- **Joint limits**: the default asset has ball-and-socket limits and no collision between its own
-  bodies; the `.phy` asset's hinges, self-collision and masses are untested.
-- **Save / load** of a ragdolled corpse (`RestoreDeathBodyState` runs the handoff again from the
-  spawn pose): not run. Save files are disposable, but a load must not throw or leave the body
-  standing: one manual check, noted in the report.
-- **A map floor**: only the arena floor (a static-world actor) was tested. `verbs_stealth_kill`'s
-  staging decides whether a map floor is exercised; if not, one lab kill on a witness map.
-
-The spike's scratch code is reverted; the editor binary on the spike's machine holds it until the
-next build. It needed the `PhysicsUtilities` module in the editor block of `ElysiumUE.Build.cs`
-for `FPhysicsAssetUtils`: the builder may need the same.
+Reports **under 350 words**: changed paths/functions/source addresses; read-only validation;
+exact lines owed by other files; diagnostic/API details and remaining owner placement.
+No file named report*.md. D1/D2 coordinate signatures by messages/reports, not cross-file edits.
+Declare extra-file changes by path/function/source; integrator applies serially after reports.
