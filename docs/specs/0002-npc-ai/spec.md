@@ -14,8 +14,9 @@ points back here.
 
 ### State
 
-Branch `spec-0002/step-2`, merged into `main` locally at the close of 2026-10-05; nothing pushed
-since `2ac33a53`.
+Everything is on `main` (local; nothing pushed since `2ac33a53`). The work branch
+`spec-0002/step-2`, the coders' worktrees and their branches were merged or applied and then
+removed on 2026-10-05: cut a new branch from `main` before the first change.
 
 | wave | state | commit |
 |---|---|---|
