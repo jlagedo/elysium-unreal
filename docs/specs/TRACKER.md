@@ -166,6 +166,8 @@ Wave 3 (build work, one agent):
   fallback records its missing standing shot event. Presence remains 0006,
   retained NPC single-round bInReload persistence V6.
 - [ ] **V6** — Fix: session, clock and lifecycle. M · Opus/high.
+  Committed unverified 2026-10-05 (`bafe1e9e`, at the owner's word): its gate is the first step of
+  `0002-npc-ai/spec.md` § "Resume here"; the order after it is the two tooling slices, V10 + V12, V7.
 - [x] **V11** — The attack coordinator's list (pulled from R4; melee never starts without it). S–M · Opus/high.
 - [ ] **V7** — The 19 inputs and the one-line items. S · Sonnet/medium.
 - [ ] **V10** — A sound's life in `Listen` (new: the expiry race). S.

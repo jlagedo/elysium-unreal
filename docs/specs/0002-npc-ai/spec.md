@@ -6,6 +6,120 @@ hand-offs and 0003's stories 1–2; 0018 and 0019 are closed with a pointer here
 is § "The sequence" below; the old tracker is `tracker-record-2026-09-30.md`. The audit behind this
 text is in `consolidation/` (findings A–F; the 2026-09-30 draft is `consolidation/draft-2026-09-30.md`).
 
+## Resume here (2026-10-05, evening) — state, method, the work left
+
+A session that is pointed at this spec and told to execute it starts here. This section and
+§ "The method per story" replace every earlier handover and coordination note; `HANDOVER.md` only
+points back here.
+
+### State
+
+Branch `spec-0002/step-2`, merged into `main` locally at the close of 2026-10-05; nothing pushed
+since `2ac33a53`.
+
+| wave | state | commit |
+|---|---|---|
+| V4c attack producers, one shared pick stream, corpse clocks, the dead-enemy rule, the team registry | closed, green | `d0f79574` |
+| V4d ragdolls from the `.phy` (30 bodies baked; `rat`, `rat_swimming`, `wolf_form`, `mercuriodamagedstreet` have no `.phy` in retail and need none) | closed, green | `a5b58f37` |
+| V5b reload (fake and real), the capability word, the interrupt-cache tail | closed, green | `9e29f419` |
+| **V6** session, clock, lifecycle | **committed unverified** | `bafe1e9e` |
+| V7 the inputs | planned (`stories/v7/`), no code | — |
+| V10 + V12 a sound's life, the footstep producer | planned (`stories/v10/`), no code | — |
+| V2 again, V8, V9, gate 2 | not started | — |
+
+The last fully measured baseline is V5b's: arena 116 pass / 1 fail `rollcall_vzombie` (H11) / 15
+expected-fail / 2 unexpected-pass (`hear_world_investigate`, `interest_mode_never`: N4, intermittent);
+default 169 / 0; arm 1,636 / 0; kernel 7/7.
+
+**V6 was committed at the owner's word before its gate finished.** On that tree: it builds; the
+default tier is 169 / 0; the kernel check is 7/7. Measured one binary earlier: arm 1,654 / 0; a full
+arena of 167 records with 144 pass / 8 fail / 13 expected-fail / 2 unexpected-pass and no errors, and
+afterwards each of the seven non-baseline fails fixed and green by name. Not measured: a full arena
+run and the arm tier on the committed tree. The commit message of `bafe1e9e` and
+`stories/v6/proof-V6.json` hold the detail. **V6 is not ticked until step 1 below passes.**
+
+Judge's rulings: J1–J14 in `stories/v1/triage.md`; the third sitting (17 rulings on V6 / V7 / V10) in
+`stories/v1/judge-third-sitting.md`; the fourth (the flamethrower and the real reload) in
+`stories/v1/judge-fourth-sitting.md`.
+
+### What the run of 2026-10-04 / 05 measured (why the method changed)
+
+Twenty-two hours, 55 Codex worker runs, analysed from their logs:
+
+- **Integrators took 15.4 of the 21.6 hours**, and for 12.3 hours an integrator was the only worker
+  alive. 65% of integrator time (603 minutes) was model latency: a step costs about 12 s under
+  100,000 tokens of context, 27 s at 400–500,000, 81 s above 600,000. The big integrators sat at
+  400–700,000.
+- **What closed fast and green had one shape:** one to five named, already diagnosed causes, 40–60
+  minutes (V4c's last pass, V4d, V5b). **What failed had another:** a whole wave, or "fix whatever is
+  red" (V4c's first three passes; V6's three passes, 10.6 hours without a verified close).
+- **Builds were never the cost:** 46 builds, 41 minutes in all, median 27 s; 13 failed (14 minutes),
+  none on a shadowed local: missing includes, access to protected members, signature mismatches. A
+  cap of two builds cost one integrator 108 minutes of reading before a build that failed anyway.
+- **The arena's cost is fixed overhead.** A run of one record takes about 25 s, 0.7 s of it the
+  record (6 s engine start, 15 s building the stage's model contexts once per process). 153 named
+  runs cost 164 minutes. A full run is about 20 minutes since V6 (9 before): three boots, one after
+  another, and 48% of it is map loads, 18 s each, since V6 gave every map record its own
+  `fresh_map`. 7 of 9 full runs failed: they were spent before the named set was green.
+- **Integrators did coders' work:** 142 patches at 54–86 s each, 135 minutes; stale test fixtures
+  and record staging errors were the largest category of problem, not behaviour defects.
+- **One worker at a time for 71% of the run.** V7 and V10 had final briefs for eight hours and no
+  coder ran, though four of their six lanes share almost no file with V6.
+- A worker hung for 40 minutes on a command that had already returned; arena reports are pruned to
+  the newest 50, so full-run reports were gone when wanted.
+
+### The work left, by priority
+
+Each numbered item is done by § "The method per story". "Gate" there means the coordinator's own
+run, not a worker's.
+
+1. **Verify V6.** Run the gate on `bafe1e9e`'s tree. Green against the V5b baseline (every record
+   that passed there passes; every record V6 added passes or carries a `known_red` naming an owner
+   the judge assigned): tick V6. Red: triage the moved verdicts into causes, one fix worker per
+   cause. The V6 ruling "re-measure every zero-tuned record alone and paired" is satisfied by the
+   batched audit of method step 9, run once, by script — not by a worker, one boot per record.
+2. **Two tooling slices, before V7** (each a single small worker; they pay for themselves at once):
+   - the arena launcher runs its boots concurrently (`arena_suite.run_arena` loops
+     `for boot in boots`; one process per boot already, per-boot report folders already; check the
+     trace port 1985, `Saved/Logs` and the shader working directory; measure peak memory, 32 GB
+     machine): a full run falls from about 20 to about 9 minutes;
+   - `REPORT_RETENTION` raised from 50, and an `arena --audit` mode that runs each named record
+     first in a boot and again after another record, batched into few boots, and prints the verdict
+     table against a named baseline report.
+3. **V10 + V12** (`stories/v10/`): the tutorial's hearing is what V8 plays first. Its first slice is
+   the N4 diagnostic record (insert, expiry and listen stamps); N4 closes only on a verified
+   contract and three green boot orders (the judge). Then the listener's strict freshness, the
+   sound's lifetime with the 64-slot allocator, the reserved player sound, the records.
+4. **V7** (`stories/v7/`): `SetFollowerBoss` witnessed on `sm_hub_1`; N5, N6 (the `-` arm at
+   `0x102c3418`), N11; the movement multiplier; Bloodshield's direct status service (pulled forward
+   by the judge); the remaining inputs in the Green Room.
+5. **V2 again:** the full run, every scenario green, in three boot orders.
+6. **V8** (the owner live), **V9**, **gate 2**. Stop before V8 and report.
+
+Slices of items 3 and 4 that share no file with the item in front of them start while it is still
+closing (method step 3); the overlap between V6's, V7's and V10's lanes was computed on 2026-10-05:
+V10-2 and V10-3 and V7-2 and V7-3 are nearly disjoint from V6; V7-1, V7-2 and V10-1 share
+`ElysiumNpc.*`, `ElysiumNpcSenses.*`, `ElysiumSchedule.*` and `ElysiumEntityWorld.cpp` with it.
+
+A scope the owner may cut to shorten the road to V8 (not decided; the default is the plans as
+written): of V7, only the hub's `SetFollowerBoss` and the N5 / N6 / N11 defects, filing the twelve
+inputs no script fires and Bloodshield; of V10 + V12, only the N4 fix and the player's reserved
+footstep sound, filing the allocator and the lifetime suite.
+
+### Found and not fixed, with owner
+
+- `rollcall_vzombie` (H11: no interesting places); the nine hidden-species rollcalls.
+- Rat feeding uses the ordinary feed mode (retail: mode 6 for class type 13, death on the release
+  event); rat death sound and blood are recorded only; Mercurio's feed refusal has a correct gate
+  that no request path calls (`ElysiumFeed.cpp` bypasses `ElysiumNpcConditions10.cpp`'s gate);
+  Spectral Wolves' copy props have no break / fade / removal. Feeding and disciplines: 0005 / 0006.
+- Unavailable and named: the event-free body seek and corpse pose persistence (0017/35, 0014), the
+  conversation producer (0018/18), the reaction producer (0005/4), Presence (0006/2), the player's
+  single-round reload continuation (a 0008 follow-up), the death impulse, `prop_ragdoll` and the
+  burn look (0014).
+- The old "victim dies on its fifth hit" never reproduced; `damage_knockout_one_hit`,
+  `damage_cower_one_hit` and `damage_high_health_control` guard the path.
+
 ## The goals, in order (the owner, 2026-10-03)
 
 1. **Make every later step cheap.** Optimize the tools and the tests first. No development starts
@@ -778,7 +892,7 @@ tests the green scenarios cover deleted.
   the six slab maps and every other baked map's door cuts at their next bake (R2).
   *Follow-up 2026-10-04, **N21 closed*** (`stories/v1/triage.md` § "V13 follow-up"): every nav mark includes the agent height (`ElysiumNavAreaActor.cpp`, `NAV_AREA_ACTOR_SHAPE` 4); both witness maps re-baked; `junkyardgate` / `gasstationgate` walls, door 339 probed, `Elysium.Content.NavArea.*` green whole; counts, links, `verify nav` and the seven map records unchanged.
 
-Order: V1 → V2 → H → V3 (V3r, V3a, V3b, V13, V3c, V3d) → T6b → V4r → V4a0 (seam) → [V5a + V4a-A3] → V4a → V4b → V11 → V4o → V4c → V4d → V5b → V6 → V7 → V10 → V12 → V2 again (full run) → V8 → V9.
+Order: V1 → V2 → H → V3 (V3r, V3a, V3b, V13, V3c, V3d) → T6b → V4r → V4a0 (seam) → [V5a + V4a-A3] → V4a → V4b → V11 → V4o → V4c → V4d → V5b → V6 → [the two tooling slices] → V10 + V12 → V7 → V2 again (full run) → V8 → V9 (re-ordered 2026-10-05: § "Resume here").
 **T6b, the header pass** (the owner, 2026-10-04; `stories/t6b/brief.md`): the kernel headers' include fan-out cut after V3d and before V4, one agent holding the build; it closes T6 (edit-mix p90 ≤ 90 s). Landed 2026-10-04: p90 104.1 → 81.7 s (kernel headers 100.9 / 97.7 → 74.0 / 72.5 s), verdicts unchanged; T6 ticked (§ T6, "T6b, measured").
 The new reds ride their stories: N1, N2 in V5; N5, N6 in V7; N7, N8 in V3; N9, N10 in V6; N13 in
 V4 (from V3a: the patrols' acceptance moves there); N12 in R2; N14 in V6; N15 in V3b's follow-up
@@ -838,21 +952,69 @@ second sitting", 2026-10-04):
 
 ## The method per story
 
-1. **Seam first.** The first commit declares the interface or the named stubs (retail address,
-   admitting default, the retail field they stand for) and the scenario record, red. It builds
-   green on its own.
-2. **Coders fan out.** ≤3 coder agents per wave, each on disjoint files named in its brief, in the
-   one checkout; briefs and findings are files under `docs/specs/0002-npc-ai/stories/`; reports
-   ≤300 words. A coder does not build or run suites (rule 8).
-3. **One integrator per wave.** It builds once, runs the story's scenario and the family filter
-   once, fixes only integration breaks and reports. The family arm tier and the full suite run once,
-   at the story's close, by the integrator.
-4. **Read before write.** A body whose retail walk is not in `docs/vtmb/` gets a reading packet
-   first (looked up through the address index, under the query budget), never a guess.
-5. **The scenario is the acceptance.** A story closes when its scenario is green in `uv run elysium
-   arena` and its arm tests are green.
-6. **Ledger last.** `kernel --check`, the override census and `unported.tsv` regenerated once, at
-   close.
+Rewritten 2026-10-05 from the measurements in § "Resume here". The unit of work is a **slice**: one
+behaviour (one root cause, or one retail function with its consumers), its arm tests and its arena
+records, small enough for one worker to finish under about 150,000 tokens of context.
+
+**Who does what.** The coordinator is the session reading this spec. Workers are headless Codex runs
+(`codex exec`; the `codex-cli` skill is the manual): `gpt-6.1-sol`, `medium` for a coding slice,
+`high` for a reader, a planner, a diagnosis or a judge; always unsandboxed; the brief a file on
+stdin; one run folder per worker under `$ELYSIUM_WORK_ROOT/codex/<slug>/`.
+
+1. **Read before write.** A body whose retail walk is not in `docs/vtmb/` gets a reading first (a
+   `high` reader, read-only), never a guess. The plans of V7 and V10 already carry their packets.
+2. **One slice, one worker, end to end.** The worker writes the code, the arm tests and the records
+   of its slice, **builds it** (`uv run elysium build --arm`, about 30 s incremental; no cap on
+   builds), runs the default tier, its own arm family and its records **in one arena invocation**
+   (`uv run elysium arena a b c …`: a boot costs 25 s, a record under a second), loops until those
+   are green, and hands back a diff and a report under 300 words. It does not run the full arena or
+   the whole arm tier, and it does not commit.
+3. **Where a slice runs.** One slice at a time in the main checkout (one binary). Slices that share
+   no file with the one in the main checkout are written in parallel in a worktree
+   (`git worktree add -b <branch> E:/elysium-work/worktrees/<name> HEAD`; the worktree rule of
+   `AGENTS.md` holds: never removed blindly); a worktree slice is compiled and tested when its turn
+   in the main checkout comes (`git diff <base> <branch> | git apply`), by a short worker that
+   fixes only compile errors and stale fixtures. Never leave the queue idle behind one slice.
+4. **The gate is the coordinator's.** After each slice lands in the main checkout the coordinator
+   itself runs, in this order: the build; `uv run elysium test`; the slice's records and the wave's
+   records in one invocation; and at a wave's close `uv run elysium test arm`,
+   `uv run elysium research kernel --check`, the full arena. It compares the verdicts with the
+   baseline report and lists every moved verdict with its `first_unmet`. A worker never certifies
+   its own change.
+5. **Triage is judgement.** The coordinator (or a `high` judge worker) sorts each moved verdict into
+   a cause: a real defect, a wrong record expectation, a staging error, an order dependence between
+   records, an intermittent, a vacuous pass. A diff says what moved, never why; a green is not
+   accepted without its record's assertion having been read once.
+6. **Diagnose in parallel, fix in series.** One read-only `high` worker per cause reads the trace and
+   the retail listing and returns the cause and the fix as a proposal (several at once, fresh
+   contexts). Fixes are then applied one at a time by a slice worker (step 2), and the gate (step 4)
+   runs after each. A regression is a new cause for a new worker, never an addition to a running
+   one.
+7. **Fresh context, small context.** No worker is resumed past about 150 steps; a follow-up is a new
+   worker with a short brief (the cause, the record, the trace lines, the address, the one place to
+   fix). No worker is handed a report of 100 KB to read whole. "Finish the wave" and "fix whatever
+   is red" are not briefs.
+8. **Commit small.** One commit per green slice, staged by explicit path, with the moved verdicts in
+   the message; the wave's tick in the tracker follows the wave's gate. Never push unless told.
+9. **Mechanical work is a script.** Running each record alone and paired, comparing verdicts with a
+   baseline, applying owed lines: a command of the harness (§ "Resume here", item 2), run by the
+   coordinator. Reports are read from disk
+   (`$ELYSIUM_WORK_ROOT/reports/arena/<stamp>/index.json`, field `result`).
+10. **The full arena is spent last.** Only once the named set is green; 7 of 9 full runs of
+    2026-10-05 failed for want of that. A regression it shows is step 5's input.
+11. **Watch every worker.** One background watcher per run: it reports the run's end,
+    `turn.failed`, and five minutes without an event while no child process of the worker is alive
+    (a worker can hang on a command that has returned: then read the report from disk and replace
+    the worker). The owner starts the coordinator with `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1`;
+    Unreal fills memory and background shells are otherwise killed. One Unreal process at a time
+    unless the concurrent-boot slice has measured otherwise.
+12. **Report unasked.** A status line to the owner at every stage change: what closed, what is
+    running, what is next.
+
+A record this slice writes or breaks is this slice's: no `known_red` without the retail reason and
+an owner a judge named. The harness's recurring staging faults are fixed once in the harness, not
+per record: an unkillable player where a record needs the enemy alive, a seed action for SAVE-only
+fields, a popup that blocks a save.
 
 ## The bug protocol (the owner, 2026-10-03)
 
