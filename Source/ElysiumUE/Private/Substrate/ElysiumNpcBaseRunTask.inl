@@ -113,9 +113,8 @@ int32 FadeRelinkCalls = 0; // 0x102695d0 Relink; spatial-partition presentation 
 void FadeOutThink(); // 0x10269960, thunk 0x100152b2
 void StartFadeOut();
 
-/** The active weapon's `m_bInReload` (`CBaseCombatWeapon +0x898`) write and its slot 322
- *  (vtable `+0x508`), `TASK_RELOAD`'s finish. **SEAM**: `FElysiumWeapon` carries no reload state;
- *  counted. */
+/** TASK_RELOAD sets +0x898 before slot 322 (0x1028918d / 0x1028919d).
+ *  Bulk finish reads the live owner deadline; single-round NPC state is retained. */
 int32 WeaponFinishReloadCalls = 0;
 void WeaponFinishReload(FElysiumEntity& Weapon);
 

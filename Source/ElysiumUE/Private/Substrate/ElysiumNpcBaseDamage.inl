@@ -17,6 +17,7 @@ bool CandidateIsStandable(const FElysiumEntity* Candidate) const;
 struct FElysiumTakeDamageInfo
 {
 	FElysiumDmg* Dmg = nullptr;                 // +0x00  the CVDmg_t*, may be null
+	FElysiumEntityHandle Inflictor;             // +0x28, InputTakeDamage caller (0x102c29c7/29dc)
 	FElysiumEntityHandle Attacker;              // +0x2c  m_hAttacker (`param_1[0xb]` in 0x1032ef60)
 	float Damage = 0.f;                         // +0x30  m_flDamage, the scalar fallback
 	uint32 DamageBits = 0;                      // +0x38  m_bitsDamageType
@@ -85,4 +86,3 @@ void SpawnBlood(const FVector& PositionUnits, int32 BloodColor, float Damage);
 TArray<FElysiumTakeDamageInfo> MultiDamageAccumulator;
 
 void AddMultiDamage(const FElysiumTakeDamageInfo& SubInfo);
-

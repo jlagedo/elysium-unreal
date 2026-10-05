@@ -651,7 +651,7 @@ namespace ElysiumNpcCond
 	const TCHAR* CapabilityName(ECapability Capability);
 	// Retail's own two values, carried so a trace row and the binary agree.
 	int32 CapabilityBits(ECapability Capability);
-	inline constexpr int32 MeleeCapabilityBits = 0x18000;
+	inline constexpr int32 MeleeCapabilityBits = 0x40018000; // 0x103eaea0: full torch slot-360 word
 	inline constexpr int32 RangedCapabilityBits = 0x2000;
 
 	// The active weapon's family, resolved through its parsed `vdata/items` record. Never from a

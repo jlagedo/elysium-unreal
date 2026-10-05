@@ -380,9 +380,14 @@ bool FElysiumNpcBase::RetailCollisionExtents(const FElysiumEntity& Entity, FVect
 
 uint32 FElysiumNpcBase::ActiveWeaponCapabilityWord() const
 {
-	// The active weapon's vtable +0x5a0 (slot 360, retail body `0x1014f930`). **SEAM**: no such
-	// word on `FElysiumWeapon`; answering 0 closes `ShouldMoveAndShoot`'s Troika gate.
-	return 0;
+	// Slot 360 (+0x5a0): character 0x1014f930 and weapon base 0x10149e80 answer zero;
+	// concrete weapons supply their capability word, as in SelectActiveWeaponWord.
+	if (ActiveWeaponEntity() == nullptr) // 0x1026db30: no active weapon, no slot-360 word
+	{
+		return 0; // 0x1014f930 / 0x10149e80
+	}
+	return static_cast<uint32>(ElysiumNpcCond::CapabilityBits(
+		ElysiumNpcCond::WeaponCapability(*this))); // 0x1026db30, weapon slot 360
 }
 
 float FElysiumNpcBase::MotorMinStoppingDistanceUnits() const

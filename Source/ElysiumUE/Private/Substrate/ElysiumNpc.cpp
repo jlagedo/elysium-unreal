@@ -1528,8 +1528,6 @@ void FElysiumNpc::BuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
 	{
 		InOutMask.Clear(EElysiumNpcCond::SquadSeeEnemy);
 	}
-	// `CacheInterruptConditions` (`0x1026a0f0`) adds this one unconditionally after the virtual.
-	InOutMask.Set(EElysiumNpcCond::NpcFreeze);
 }
 
 int32 FElysiumNpc::SelectDoorObstructionSchedule()

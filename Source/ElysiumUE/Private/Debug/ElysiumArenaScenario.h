@@ -108,6 +108,7 @@ struct FElysiumArenaAction
 	FElysiumArenaAt At;            // player_teleport, player_walk
 	FElysiumArenaFace Face;        // player_teleport
 	FString Target;                // fire, kill
+	FString Activator;             // fire: optional live input activator (0x102c29a0)
 	FString Attacker;              // damage_packet: live named actor
 	FString Input;                 // fire
 	FElysiumArenaValue Param;      // fire; None is a void parameter

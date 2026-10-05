@@ -1,6 +1,6 @@
 {
-  "name": "ranged_sustained_fire",
-  "about": "An NPC's clip never runs down: it fires an eighth shot from a six-round weapon. The ranged_open_fire staging (a hostile TutorialThug gunman with item_w_thirtyeight, Size 6, fighting from the open at ~387 units), run long enough for eight shots. Retail fills an NPC's clip once, at equip (Inventory_Insert 0x10334e70: max(Default_Size, 1)), and CWeaponRanged's Shot 0x102387b0 subtracts Ammo_Cost only inside its player block (0x10238a15): an NPC wielder's clip never drops, so NO_PRIMARY_AMMO (0x40) cannot rise from firing and no REAL reload arises from clip spend; after six sets an NPC fake-reloads (0x102b8620 / 0x102c54c0 / 0x10268919) (stories/v4/packets-S4.md item a; stories/v1/triage.md, Judge's rulings, V4 -- second sitting, J12). Each shot is the attack clip's 3031 event (smith_attack authors 3031 at cycle 0, male move_and_ranged) through CWeaponRanged's operator 0x10238160. Eight animevent 3031 on the shooter, never cond+ NO_PRIMARY_AMMO, never TASK_RELOAD.",
+  "name": "ranged_fake_reload",
+  "about": "TutorialThug fake-reloads after six bullet sets: loader 0x101d4394..0x101d43c8, reroll 0x102c54c0, per-set decrement 0x10268919, pre-pass 0x102b8620 -> 0xc4 -> no-cover 0xc5. ACT_RELOAD_FAST never runs TASK_RELOAD or spends the clip.",
   "stage": "arena",
   "seed": 1,
   "duration": 60.0,
@@ -57,7 +57,7 @@
       "kind": "animevent",
       "match": "^3031( |$)",
       "regex": true,
-      "within": 6.0
+      "within": 8.0
     },
     {
       "label": "shot_2",
@@ -100,20 +100,43 @@
       "within": 8.0
     },
     {
-      "label": "shot_7",
+      "label": "fake_reload",
       "who": "arena_shooter",
-      "kind": "animevent",
-      "match": "^3031( |$)",
+      "kind": "schedule",
+      "match": "\\(0xc4\\)$",
       "regex": true,
       "within": 6.0
     },
     {
-      "label": "shot_8",
+      "label": "reload_in_place",
+      "who": "arena_shooter",
+      "kind": "schedule",
+      "match": "\\(0xc5\\)$",
+      "regex": true,
+      "within": 8.0
+    },
+    {
+      "label": "reload_clip",
+      "who": "arena_shooter",
+      "kind": "task",
+      "match": "task_play_sequence (",
+      "within": 2.0
+    },
+    {
+      "label": "reload_done",
+      "who": "arena_shooter",
+      "kind": "taskdone",
+      "match": "^task_play_sequence$",
+      "regex": true,
+      "within": 6.0
+    },
+    {
+      "label": "resumes",
       "who": "arena_shooter",
       "kind": "animevent",
       "match": "^3031( |$)",
       "regex": true,
-      "within": 8.0
+      "within": 10.0
     }
   ],
   "never": [
@@ -129,8 +152,9 @@
     },
     {
       "who": "arena_shooter",
-      "kind": "cond+",
-      "match": "BEHIND_ENEMY (0x57)"
+      "kind": "schedule",
+      "match": "\\(0xc[23]\\)$",
+      "regex": true
     },
     {
       "who": "arena_shooter",
@@ -145,5 +169,5 @@
       "equals": true
     }
   ],
-  "notes": "ShotFromAnimEvent -> CommitQueuedAttack (0x10238160 -> 0x102387b0) commits NPC event bullets; ordinary Shot spends only for players (0x10238a15). MakePlayerUnkillable at 0.05 keeps the target alive. Seed 1: shot six 16.500, 0xc4 19.500, no-cover 0xc5 19.600, Pistol_Reload_Fast finishes 22.100, taskdone and shot seven 22.200. The measured 5.700 s gap includes the last wait and fake reload; shot_7 uses 6.0 s. Other 8.0 s shot windows retain the range-scaled wait evidence. BEHIND_ENEMY stays forbidden (slot 363 V5a/A3)."
+  "notes": "3031 events can emit zero or multiple sets; exact six-set accounting is pinned by Elysium.Arm.Weapons.FakeReloadCountPerSet. ShotFromAnimEvent -> CommitQueuedAttack (0x10238160 -> 0x102387b0) commits the events. Player survival uses retail MakePlayerUnkillable at 0.05."
 }

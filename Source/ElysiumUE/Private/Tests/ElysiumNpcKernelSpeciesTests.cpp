@@ -30,6 +30,8 @@
 #include "Substrate/ElysiumNpcAnimal.h"
 #include "Substrate/ElysiumNpcZombie.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumNpcDialogue.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -525,8 +527,8 @@ bool FElysiumNpcKernelSpeciesMeleeQuartetTest::RunTest(const FString&)
 	TestTrue(TEXT("and m_hPotentialEnemy cached"), Runner->RunnerPotentialEnemy == Enemy->Handle);
 
 	// --- `CNPC_VYukie` 600: not a melee body at all ---------------------------------------------
-	// `ActiveWeaponCapabilityWord()` is family Motor's seam and answers 0, so the `0x18000` gate is
-	// closed and the whole body refuses without writing anything.
+	// 0x103dd900: an explicitly unarmed Yukie fails the weapon's 0x18000 gate.
+	Fixture.Yukie->Inventory.Holster(*Fixture.Yukie);
 	Fixture.Yukie->bInMelee = false;
 	Fixture.Yukie->MeleeMustLeaveTimer = 0.0;
 	Fixture.Yukie->MeleeEventFires = 0;
@@ -1889,16 +1891,40 @@ bool FElysiumNpcKernelSpeciesWiredYukieMeleeTest::RunTest(const FString&)
 	TestTrue(TEXT("with a must-leave window of at least 22.5 s"),
 		Yukie->MeleeMustLeaveTimer >= Now + 22.5 && Yukie->MeleeMustLeaveTimer <= Now + 45.0);
 
-	// 600 `0x103dd900`: the weapon-capability seam answers 0, so the body refuses and writes nothing.
+	// 600 `0x103dd900`: unarmed refuses; a real melee weapon admits the one-shot latch.
+	Yukie->Inventory.Holster(*Yukie);
 	Yukie->bInMelee = false;
 	Yukie->MeleeMustLeaveTimer = 0.0;
 	Yukie->MeleeEventFires = 0;
 	TestFalse(TEXT("a Yukie's slot 600 refuses without the weapon capability bits"), Yukie->Slot600(Cop));
 	TestFalse(TEXT("writing no latch"), Yukie->bInMelee);
 	TestEqual(TEXT("and firing no event"), Yukie->MeleeEventFires, 0);
+	FElysiumItemTable Items;
+	FElysiumItemDef Bat;
+	Bat.Classname = TEXT("item_w_v5b_yukie_bat");
+	Bat.Type = EElysiumItemType::WeaponMelee;
+	Items.Items.Add(MoveTemp(Bat));
+	Items.Reindex();
+	ElysiumItems::Install(Items);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Items); };
+	const FElysiumEntityHandle BatHandle = Yukie->Inventory.GiveNamedItem(*Yukie, TEXT("item_w_v5b_yukie_bat"));
+	FElysiumEntity* BatEntity = Fixture.World.World.Resolve(BatHandle);
+	FElysiumItem* BatItem = BatEntity != nullptr ? BatEntity->AsItem() : nullptr;
+	if (!TestNotNull(TEXT("Yukie's bat"), BatItem)) return false;
+	Yukie->Inventory.SetActiveWeapon(*Yukie, *BatItem);
+	TestEqual(TEXT("0x103eaea0: the bat supplies the full melee word"), Yukie->ActiveWeaponCapabilityWord(), 0x40018000u);
+	TestTrue(TEXT("0x103dd900: melee word admits slot 600"), Yukie->Slot600(Cop));
+	TestTrue(TEXT("0x103dd900: admission sets the latch"), Yukie->bInMelee);
+	TestEqual(TEXT("0x103dd900: admission fires one event"), Yukie->MeleeEventFires, 1);
+	TestTrue(TEXT("0x103dd900: admission stamps the 22.5..45 second window"),
+		Yukie->MeleeMustLeaveTimer >= Now + 22.5 && Yukie->MeleeMustLeaveTimer <= Now + 45.0);
+	TestFalse(TEXT("0x103dd900: a second request refuses the latched body"), Yukie->Slot600(Cop));
+	TestEqual(TEXT("0x103dd900: refusal fires no second event"), Yukie->MeleeEventFires, 1);
+	Yukie->Inventory.Holster(*Yukie);
 
 	// 601 `0x103dd9a0`: the event and the clear, and no coordinator release.
 	Yukie->bInMelee = true;
+	Yukie->MeleeEventFires = 0;
 	Yukie->MeleeCoordinatorReleases = 0;
 	Yukie->Slot601(Cop);
 	TestFalse(TEXT("a Yukie's slot 601 leaves melee"), Yukie->bInMelee);

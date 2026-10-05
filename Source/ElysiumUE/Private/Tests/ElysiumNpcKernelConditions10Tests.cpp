@@ -24,6 +24,7 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
+#include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumNpcTestCensus.h"
@@ -688,15 +689,63 @@ bool FElysiumNpcKernelConditions10FakeReloadTest::RunTest(const FString&)
 		return false;
 	}
 
-	// The write still happens: retail's body has no arm that skips its only write, and
-	// `RandomInt(0, 0)` is 0.
+	// Loader 0x101d4394..0x101d43c8; reroll 0x102c54c0; vstdlib.dll 0x10002e60.
+	F.Guard->FootstepTemplate.Reset();
+	int32 ReloadMin = -1;
+	int32 ReloadMax = -1;
+	TestFalse(TEXT("absent template explicitly reports the loader-default stand-in"),
+		F.Guard->CharTemplateFakeReloadRange(ReloadMin, ReloadMax));
+	TestEqual(TEXT("absent template Min is 8"), ReloadMin, 8);
+	TestEqual(TEXT("absent template Max is 8"), ReloadMax, 8);
 	F.Guard->FakeReloadCount = 7;
 	const int32 BeforeFakeReload = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).GetCurrentSeed();
 	F.Guard->ResetFakeReloadCount();
-	TestEqual(TEXT("m_iFakeReloadCount is rerolled from the template range (+0x65f0)"),
-		F.Guard->FakeReloadCount, 0);
+	TestEqual(TEXT("the unconditional write uses 8 without a template"), F.Guard->FakeReloadCount, 8);
 	TestEqual(TEXT("vstdlib 0x10002e60: an equal-bound range consumes no draw"),
 		ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).GetCurrentSeed(), BeforeFakeReload);
+
+	TSharedPtr<FElysiumClanTemplate> ReloadTemplate = MakeShared<FElysiumClanTemplate>();
+	F.Guard->FootstepTemplate = ReloadTemplate;
+	TestTrue(TEXT("a present template reports its range even without keys"),
+		F.Guard->CharTemplateFakeReloadRange(ReloadMin, ReloadMax));
+	F.Guard->ResetFakeReloadCount();
+	TestEqual(TEXT("no General keys uses 8/8"), F.Guard->FakeReloadCount, 8);
+	ReloadTemplate->General.Add(TEXT("NpcFakeReloadCountMin"), TEXT("6"));
+	F.Guard->ResetFakeReloadCount();
+	TestEqual(TEXT("TutorialThug Min6 with no Max uses 6/6"), F.Guard->FakeReloadCount, 6);
+	ReloadTemplate->General.Add(TEXT("NpcFakeReloadCountMin"), TEXT("6.9"));
+	F.Guard->CharTemplateFakeReloadRange(ReloadMin, ReloadMax);
+	TestEqual(TEXT("fractional Min truncates toward zero"), ReloadMin, 6);
+	TestEqual(TEXT("absent Max defaults to the truncated Min"), ReloadMax, 6);
+	ReloadTemplate->General.Add(TEXT("NpcFakeReloadCountMin"), TEXT("-4.9"));
+	ReloadTemplate->General.Add(TEXT("NpcFakeReloadCountMax"), TEXT("-2.9"));
+	F.Guard->CharTemplateFakeReloadRange(ReloadMin, ReloadMax);
+	TestEqual(TEXT("negative fractional Min truncates toward zero"), ReloadMin, -4);
+	TestEqual(TEXT("negative fractional Max truncates toward zero"), ReloadMax, -2);
+
+	ReloadTemplate->General.Add(TEXT("NpcFakeReloadCountMin"), TEXT("9"));
+	ReloadTemplate->General.Add(TEXT("NpcFakeReloadCountMax"), TEXT("4"));
+	F.Guard->ResetFakeReloadCount();
+	TestEqual(TEXT("inverted bounds return Min"), F.Guard->FakeReloadCount, 9);
+	TestEqual(TEXT("all equal/inverted rerolls preserve the shared stream"),
+		ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).GetCurrentSeed(), BeforeFakeReload);
+
+	ReloadTemplate->General.Add(TEXT("NpcFakeReloadCountMin"), TEXT("4"));
+	ReloadTemplate->General.Add(TEXT("NpcFakeReloadCountMax"), TEXT("9"));
+	FRandomStream ExpectedReloadStream;
+	ExpectedReloadStream.Initialize(BeforeFakeReload);
+	for (int32 ReloadTrial = 0; ReloadTrial < 16; ++ReloadTrial)
+	{
+		const int32 ExpectedReloadCount = ExpectedReloadStream.RandRange(4, 9);
+		F.Guard->ResetFakeReloadCount();
+		TestEqual(TEXT("bounded reroll takes the shared stream's next draw"),
+			F.Guard->FakeReloadCount, ExpectedReloadCount);
+		TestTrue(TEXT("Min4/Max9 stays inside the inclusive range"),
+			F.Guard->FakeReloadCount >= 4 && F.Guard->FakeReloadCount <= 9);
+	}
+	TestEqual(TEXT("bounded rerolls advance exactly the shared stream draws"),
+		ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).GetCurrentSeed(),
+		ExpectedReloadStream.GetCurrentSeed());
 	return true;
 }
 

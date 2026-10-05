@@ -79,17 +79,18 @@ namespace
 		return Info.Dmg != nullptr ? static_cast<float>(Info.Dmg->GetDmg()) : Info.Damage;
 	}
 
-	// `+0x28`, the packet's inflictor. The port's packet has no `+0x28` word; the descriptor's own
-	// `Inflictor` handle is the packet `m_hInflictor` seam (`ElysiumDamage.h`), and an absent one
-	// stays absent — which takes retail's null-inflictor arm rather than guessing the attacker.
+	// `+0x28`, the packet's inflictor: scalar I/O carries its caller (0x102c29c7/29dc).
+	// Descriptor producers retain their existing Inflictor source; neither guesses the attacker.
 	FElysiumEntity* Damage19BaseInflictor(const FElysiumNpcBase& Npc,
 		const FElysiumNpcBase::FElysiumTakeDamageInfo& Info)
 	{
-		if (Npc.World == nullptr || Info.Dmg == nullptr || !Info.Dmg->Inflictor.IsSet())
+		if (Npc.World == nullptr)
 		{
 			return nullptr;
 		}
-		return Npc.World->Resolve(Info.Dmg->Inflictor);
+		const FElysiumEntityHandle DamageInflictor = Info.Inflictor.IsSet() ? Info.Inflictor
+			: (Info.Dmg != nullptr ? Info.Dmg->Inflictor : FElysiumEntityHandle::Invalid());
+		return DamageInflictor.IsSet() ? Npc.World->Resolve(DamageInflictor) : nullptr;
 	}
 
 	// `UTIL_VecToYaw` over a delta in this world's axes (Source yaw is `atan2(y, x)` with Unreal's

@@ -40,10 +40,8 @@ int32 FElysiumNpcBase::CapabilitiesGet() const
 	// Retail calls `GetActiveWeapon` TWICE, once for the null test and once for the dispatch; the
 	// second call cannot answer differently, so one resolve carries both here.
 	//
-	// `ActiveWeaponCapabilityWord()` is family **Motor**'s seam for slot 360 (`0x1014f930`) and
-	// answers 0 — there is no capability word on `FElysiumWeapon` — so today this is
-	// `m_afCapability` verbatim, which is exactly what family Motor's own comment at `0x10278c60`
-	// already assumed. Asking the seam rather than assuming it is what makes that assumption true.
+	// 0x1026db30: ActiveWeaponCapabilityWord reads the held weapon's slot-360 capability.
+	// No active weapon contributes zero; dropping it removes only the weapon contribution.
 	int32 Capabilities = CapabilityWord;
 	const FElysiumEntity* Weapon = World != nullptr && Inventory.ActiveWeapon.IsSet()
 		? World->Resolve(Inventory.ActiveWeapon)

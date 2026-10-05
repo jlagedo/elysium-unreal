@@ -113,7 +113,7 @@ Each action runs at `"t": <scenario seconds>` or `"after": "<expect label>"` plu
 |---|---|---|
 | `player_teleport` | `at`, `face` | the seat's four steps (mover reset, feet to centre, control yaw, camera reseed) |
 | `player_walk` | `at` | the player walks there through the input router's replay door (`gr_walk`'s player arm), one command a frame, until within 32 cm |
-| `fire` | `target`, `input`, `param` | one queued input per live entity of that name, as `elysium_entity_fire` (a JSON number marshals Int/Float, a bool Bool) |
+| `fire` | `target`, `input`, `param`, optional `activator` | one queued input per live entity of that name, as `elysium_entity_fire` (a JSON number marshals Int/Float, a bool Bool) |
 | `kill` | `target` | `fire` with `Kill` |
 | `console` | `command` | any console command |
 | `spawn` | `row` | one more row through `SpawnRuntimeEntity` (arena only) |
@@ -297,3 +297,5 @@ record — and a `reason`) and
 | `_selftest/dialog_choose_none` | a `dialog_choose` with no open conversation is reported as an action the harness could not run, never passed |
 | `_selftest/player_reset_a`, `player_reset_b` | the player's posture and wielded item do not leak into the next record of the boot (`player_crouch`, the player probes) |
 | `_selftest/stage_failed_a`, `stage_failed_b` | a stage that goes Failed (`a`, `error` by design, so parked as `.json.parked`: restore it to run the pair) does not stop the next record staging fresh and passing (`b`) |
+
+A `fire` action may name a live `activator` (including `player`). It reaches the ordinary input queue: retail InputTakeDamage `0x102c29a0` uses the caller as inflictor and activator as attacker. Missing named activators are errors. Without an activator, positive damage returns at `0x10265f64` before raising damage conditions.

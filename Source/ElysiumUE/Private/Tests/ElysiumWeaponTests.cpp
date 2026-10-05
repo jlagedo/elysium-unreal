@@ -5161,6 +5161,192 @@ bool FElysiumV4cMeleeTeamContactTest::RunTest(const FString&)
 	return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV5bCanReloadMagazineTest,
+	"Elysium.Arm.Weapons.CanReloadMagazine", GElysiumTestFlags)
+bool FElysiumV5bCanReloadMagazineTest::RunTest(const FString&)
+{
+	const FElysiumItemTable ReloadTable = MakeWeaponTable();
+	ElysiumItems::Install(ReloadTable);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(ReloadTable); };
+	FElysiumRecordingServices ReloadServices;
+	FElysiumEntityWorld ReloadWorld(nullptr, nullptr, ReloadServices.Bundle());
+	ReloadWorld.Load(MakeReachTestDefs()); ReloadWorld.SpawnPlayer(); ReloadWorld.Activate(0.0);
+	FElysiumCombatCharacter* const ReloadCharacter = FindCharacter(ReloadWorld, TEXT("mid"));
+	if (!TestNotNull(TEXT("owner"), ReloadCharacter)) return false;
+	ReloadCharacter->AsNpc()->SetDisableAi(true);
+	FElysiumWeapon* const ReloadGun = GiveWeapon(*ReloadCharacter, GPistol);
+	FElysiumWeapon* const NoAmmoWeapon = GiveWeapon(*ReloadCharacter, GFists);
+	if (!TestNotNull(TEXT("gun"), ReloadGun) || !TestNotNull(TEXT("no-ammo weapon"), NoAmmoWeapon)) return false;
+	TestTrue(TEXT("0x10253b40: no ammo type admits"), NoAmmoWeapon->CanReloadMagazine(0));
+	TestTrue(TEXT("0x10253b40: magazine 1 has absent ammo type, not clip 0"), ReloadGun->CanReloadMagazine(1));
+	ReloadGun->MagazineCount = 1;
+	TestTrue(TEXT("0x10253ab0: positive clip admits without reserve"), ReloadGun->CanReloadMagazine(0));
+	ReloadGun->MagazineCount = 0;
+	TestFalse(TEXT("0x10253ab0: empty clip and reserve decline"), ReloadGun->CanReloadMagazine(0));
+	ReloadCharacter->Inventory.AddReserve(TEXT("TestRound"), 1);
+	TestTrue(TEXT("0x103346c0: positive owner reserve admits"), ReloadGun->CanReloadMagazine(0));
+	ReloadGun->Owner = FElysiumEntityHandle::Invalid();
+	TestFalse(TEXT("0x102521f0: absent owner cannot supply reserve"), ReloadGun->CanReloadMagazine(0));
+	ReloadGun->MagazineCount = 1;
+	TestTrue(TEXT("0x10253ab0: clip arm precedes owner lookup"), ReloadGun->CanReloadMagazine(0));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV5bReloadFinishTest,
+	"Elysium.Arm.Weapons.ReloadFinish", GElysiumTestFlags)
+bool FElysiumV5bReloadFinishTest::RunTest(const FString&)
+{
+	const FElysiumItemTable ReloadTable = MakeWeaponTable();
+	ElysiumItems::Install(ReloadTable);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(ReloadTable); };
+	FElysiumRecordingServices ReloadServices;
+	FElysiumEntityWorld ReloadWorld(nullptr, nullptr, ReloadServices.Bundle());
+	ReloadWorld.Load(MakeReachTestDefs()); ReloadWorld.SpawnPlayer(); ReloadWorld.Activate(0.0);
+	FElysiumCombatCharacter* const ReloadCharacter = FindCharacter(ReloadWorld, TEXT("mid"));
+	FElysiumNpc* const ReloadNpc = ReloadCharacter != nullptr ? ReloadCharacter->AsNpc() : nullptr;
+	if (!TestNotNull(TEXT("NPC"), ReloadNpc)) return false;
+	ReloadNpc->SetDisableAi(true);
+	FElysiumWeapon* const ReloadGun = GiveWeapon(*ReloadNpc, GPistol);
+	if (!TestNotNull(TEXT("gun"), ReloadGun)) return false;
+	ReloadNpc->Inventory.AddReserve(TEXT("TestRound"), 3);
+	ReloadGun->MagazineCount = 1;
+	ReloadGun->NextPrimaryAttackTime = 12.0;
+	ReloadGun->NextSecondaryAttackTime = 13.0;
+	ReloadGun->bIsJammed = true; ReloadGun->bInterruptReload = true;
+	ReloadGun->FinishReload();
+	TestEqual(TEXT("0x102551fd: not in reload leaves clip"), ReloadGun->MagazineCount, 1);
+	TestEqual(TEXT("0x102551fd: not in reload leaves primary"), ReloadGun->NextPrimaryAttackTime, 12.0);
+	TestEqual(TEXT("0x102551fd: not in reload leaves secondary"), ReloadGun->NextSecondaryAttackTime, 13.0);
+	TestTrue(TEXT("0x102551fd: not admitted leaves flags"), ReloadGun->bIsJammed && ReloadGun->bInterruptReload);
+	ReloadGun->bInReload = true;
+	ReloadNpc->NextAttackTime = ReloadWorld.NowSeconds() + 1.0;
+	ReloadGun->FinishReload();
+	TestTrue(TEXT("0x10255213: future LIVE owner deadline retains reload"), ReloadGun->bInReload);
+	TestEqual(TEXT("0x10255213: future leaves clip"), ReloadGun->MagazineCount, 1);
+	TestEqual(TEXT("0x10255213: future leaves primary"), ReloadGun->NextPrimaryAttackTime, 12.0);
+	TestEqual(TEXT("0x10255213: future leaves secondary"), ReloadGun->NextSecondaryAttackTime, 13.0);
+	ReloadNpc->NextAttackTime = ReloadWorld.NowSeconds();
+	ReloadGun->FinishReload();
+	TestEqual(TEXT("0x102552c0: equality admits min(5,3)"), ReloadGun->MagazineCount, 4);
+	TestEqual(TEXT("0x102552c0: NPC reserve untouched"), ReloadNpc->Inventory.Reserve(TEXT("TestRound")), 3);
+	TestEqual(TEXT("0x1025521f: primary stamped"), ReloadGun->NextPrimaryAttackTime, ReloadWorld.NowSeconds());
+	TestEqual(TEXT("0x1025523a: secondary stamped"), ReloadGun->NextSecondaryAttackTime, ReloadWorld.NowSeconds());
+	TestFalse(TEXT("0x102552c0: reload cleared"), ReloadGun->bInReload);
+	TestFalse(TEXT("0x102552c0: jam cleared"), ReloadGun->bIsJammed);
+	TestFalse(TEXT("0x102552c0: interruption cleared"), ReloadGun->bInterruptReload);
+	ReloadGun->MagazineCount = 8; ReloadGun->FinishReloadBulk();
+	TestEqual(TEXT("0x102552c0: negative missing capacity is not clamped"), ReloadGun->MagazineCount, 6);
+	ReloadGun->Owner = FElysiumEntityHandle::Invalid();
+	ReloadGun->bInReload = true; ReloadGun->bIsJammed = true; ReloadGun->bInterruptReload = true;
+	ReloadGun->NextPrimaryAttackTime = 12.0; ReloadGun->NextSecondaryAttackTime = 13.0;
+	ReloadGun->FinishReload(); ReloadGun->FinishReloadBulk();
+	TestEqual(TEXT("0x102552c0: no owner leaves clip"), ReloadGun->MagazineCount, 6);
+	TestTrue(TEXT("0x102552c0: no owner leaves every flag"), ReloadGun->bInReload && ReloadGun->bIsJammed && ReloadGun->bInterruptReload);
+	TestEqual(TEXT("0x102551e9: no owner leaves primary"), ReloadGun->NextPrimaryAttackTime, 12.0);
+	TestEqual(TEXT("0x102551e9: no owner leaves secondary"), ReloadGun->NextSecondaryAttackTime, 13.0);
+	FElysiumWeapon* const SingleGun = GiveWeapon(*ReloadNpc, GShotgun);
+	if (!TestNotNull(TEXT("single gun"), SingleGun)) return false;
+	SingleGun->MagazineCount = 0; SingleGun->bInReload = true;
+	SingleGun->bIsJammed = true; SingleGun->bInterruptReload = true;
+	SingleGun->NextPrimaryAttackTime = 12.0; SingleGun->NextSecondaryAttackTime = 13.0;
+	SingleGun->FinishReload();
+	TestTrue(TEXT("0x10255077: single NPC retains all flags"), SingleGun->bInReload && SingleGun->bIsJammed && SingleGun->bInterruptReload);
+	TestEqual(TEXT("0x10255077: single NPC writes no clip"), SingleGun->MagazineCount, 0);
+	TestEqual(TEXT("0x10255077: single NPC writes no primary stamp"), SingleGun->NextPrimaryAttackTime, 12.0);
+	TestEqual(TEXT("0x10255077: single NPC writes no secondary stamp"), SingleGun->NextSecondaryAttackTime, 13.0);
+	SingleGun->FinishReloadBulk();
+	TestFalse(TEXT("0x102552c0: direct single bulk tail clears flags after absent activity-send"), SingleGun->bInReload || SingleGun->bIsJammed || SingleGun->bInterruptReload);
+	FElysiumPlayer* const ReloadPlayer = ReloadWorld.FindPlayer();
+	if (!TestNotNull(TEXT("player"), ReloadPlayer)) return false;
+	FElysiumWeapon* const PlayerGun = GiveWeapon(*ReloadPlayer, GPistol);
+	if (!TestNotNull(TEXT("player gun"), PlayerGun)) return false;
+	ReloadPlayer->Inventory.AddReserve(TEXT("TestRound"), 8); PlayerGun->MagazineCount = 1;
+	PlayerGun->FinishReloadBulk();
+	TestEqual(TEXT("0x102552c0: capacity arm fills player clip"), PlayerGun->MagazineCount, 6);
+	TestEqual(TEXT("0x102552c0: existing DAT_1088aef4 debit stand-in"), ReloadPlayer->Inventory.Reserve(TEXT("TestRound")), 3);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV5bFakeReloadCountPerSetTest,
+	"Elysium.Arm.Weapons.FakeReloadCountPerSet", GElysiumTestFlags)
+bool FElysiumV5bFakeReloadCountPerSetTest::RunTest(const FString&)
+{
+	const FElysiumItemTable CountTable = MakeEventShotTable();
+	ElysiumItems::Install(CountTable);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(CountTable); };
+	FElysiumRecordingServices CountServices;
+	FElysiumEntityWorld CountWorld(nullptr, nullptr, CountServices.Bundle());
+	CountWorld.Load(MakeReachTestDefs()); CountWorld.SpawnPlayer(); CountWorld.Activate(0.0); CountWorld.Tick(0.0);
+	FElysiumCombatCharacter* const CountAttacker = FindCharacter(CountWorld, TEXT("mid"));
+	FElysiumCombatCharacter* const CountVictim = FindCharacter(CountWorld, TEXT("far"));
+	if (!TestNotNull(TEXT("shooter"), CountAttacker) || !TestNotNull(TEXT("victim"), CountVictim)) return false;
+	FElysiumNpc* const CountNpc = CountAttacker->AsNpc();
+	CountNpc->SetDisableAi(true); CountVictim->AsNpc()->SetDisableAi(true); SeedHealth(*CountVictim, 100000);
+	FElysiumWeapon* const CountGun = GiveWeapon(*CountAttacker, GFastGun);
+	if (!TestNotNull(TEXT("gun"), CountGun)) return false;
+	CountWorld.Tick(10.0);
+	CountNpc->FakeReloadCount = 20;
+	const TArray<FElysiumAnimEvent> CountEvents = { WeaponEv(0.3f, 3031) };
+	const auto DispatchShot = [&](bool bLayer, FElysiumEntityHandle CountTarget)
+	{
+		CountNpc->BaseMemory.Enemy = CountTarget;
+		CountGun->NextPrimaryAttackTime = 0.0;
+		FElysiumSequenceWords CountWords; CountWords.Cycle = 0.4f; CountWords.CycleRate = 1.f;
+		if (bLayer) ElysiumAnimEvents::DispatchLayer(CountWords, CountEvents, *CountNpc, *CountNpc);
+		else ElysiumAnimEvents::DispatchBase(CountWords, CountEvents, *CountNpc, *CountNpc);
+		TestEqual(TEXT("0x102387b0: event stages exactly when clip covers sets"), CountGun->Swing.bActive, CountGun->MagazineCount > 0);
+	};
+	CountGun->MagazineCount = 1;
+	DispatchShot(false, CountVictim->Handle);
+	TestEqual(TEXT("0x102387b0: normal event caps to one set"), CountGun->Swing.BulletSets, 1);
+	const int32 CountSerial = CountGun->Swing.Serial;
+	TestEqual(TEXT("0x10268919: staging does not decrement"), CountNpc->FakeReloadCount, 20);
+	CountGun->CommitQueuedAttack(CountSerial);
+	TestEqual(TEXT("0x10268919: one set decrements once"), CountNpc->FakeReloadCount, 19);
+	CountGun->CommitQueuedAttack(CountSerial);
+	TestEqual(TEXT("0x10268919: serial replay decrements nothing"), CountNpc->FakeReloadCount, 19);
+	CountGun->MagazineCount = 6;
+	DispatchShot(true, CountVictim->Handle);
+	TestEqual(TEXT("0x10098cd0 -> 0x102387b0: overlay stages two sets"), CountGun->Swing.BulletSets, 2);
+	CountGun->CommitQueuedAttack(CountGun->Swing.Serial);
+	TestEqual(TEXT("0x10268919: multiple sets counted, not pellets"), CountNpc->FakeReloadCount, 17);
+	CountGun->MagazineCount = 0;
+	DispatchShot(false, CountVictim->Handle);
+	TestFalse(TEXT("0x102387b0: zero sets do not stage"), CountGun->Swing.bActive);
+	TestEqual(TEXT("0x10268919: zero sets unchanged"), CountNpc->FakeReloadCount, 17);
+	CountGun->MagazineCount = 6;
+	DispatchShot(false, FElysiumEntityHandle::Invalid());
+	CountGun->CommitQueuedAttack(CountGun->Swing.Serial);
+	TestEqual(TEXT("0x10268919: miss still counts both sets"), CountNpc->FakeReloadCount, 15);
+	DispatchShot(false, CountVictim->Handle);
+	CountVictim->bDead = true;
+	CountGun->CommitQueuedAttack(CountGun->Swing.Serial);
+	CountVictim->bDead = false;
+	TestEqual(TEXT("0x10268919: target dying after event still counts both sets"), CountNpc->FakeReloadCount, 13);
+	CountAttacker->AddToTeam(TEXT("v5b_count")); CountVictim->AddToTeam(TEXT("v5b_count"));
+	const int32 CountDamageBefore = DamageTaken(*CountVictim);
+	DispatchShot(true, CountVictim->Handle);
+	CountGun->CommitQueuedAttack(CountGun->Swing.Serial);
+	TestEqual(TEXT("0x10268919: teammate refusal still counts both sets"), CountNpc->FakeReloadCount, 11);
+	TestEqual(TEXT("0x10268330: teammate damage refused"), DamageTaken(*CountVictim), CountDamageBefore);
+	DispatchShot(false, CountVictim->Handle);
+	CountGun->CommitQueuedAttack(CountGun->Swing.Serial + 1);
+	TestEqual(TEXT("0x10268919: stale serial leaves count"), CountNpc->FakeReloadCount, 11);
+	CountGun->Owner = FElysiumEntityHandle::Invalid();
+	CountGun->CommitQueuedAttack(CountGun->Swing.Serial);
+	TestEqual(TEXT("0x10268919: refused owner leaves count"), CountNpc->FakeReloadCount, 11);
+	FElysiumPlayer* const CountPlayer = CountWorld.FindPlayer();
+	if (!TestNotNull(TEXT("player"), CountPlayer)) return false;
+	FElysiumWeapon* const CountPlayerGun = GiveWeapon(*CountPlayer, GPistol);
+	if (!TestNotNull(TEXT("player gun"), CountPlayerGun)) return false;
+	TestEqual(TEXT("player press accepted"), CountPlayerGun->AttackIntent(FElysiumWeapon::EIntent::Primary, CountNpc->Handle), FElysiumWeapon::EVerdict::Accepted);
+	TestTrue(TEXT("player shot stages a real transaction"), CountPlayerGun->Swing.bActive);
+	CountPlayerGun->CommitQueuedAttack(CountPlayerGun->Swing.Serial);
+	TestEqual(TEXT("0x10268919: player shot has no NPC decrement"), CountNpc->FakeReloadCount, 11);
+	return true;
+}
+
 #endif // ELYSIUM_WITH_ARM_TESTS
 
 }   // namespace ElysiumWeaponTests

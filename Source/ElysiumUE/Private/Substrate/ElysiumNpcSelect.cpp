@@ -229,10 +229,9 @@ bool FElysiumNpc::SelectRunningScheduleIs(int32 RetailId)
 
 uint32 FElysiumNpc::SelectActiveWeaponWord() const
 {
-	// The weapon `+0x5a0` word (slot 360). No weapon, no word (`0x10385008 XOR EAX,EAX`); else the
-	// weapon record's capability. DUPLICATE READ, listed for consolidation: family Motor's
-	// `ActiveWeaponCapabilityWord` is a seam answering 0 for the same word, and answering the real
-	// word there moves the Combat10 ranged pre-pass (`0x102b86ba`) and its tests — not this lane's.
+	// Slot 360 (0x10149e80); Combat10 reads this live weapon word at 0x102b8656.
+	// 0x10385008: no active weapon, no word; otherwise the weapon capability mapping,
+	// shared with ActiveWeaponCapabilityWord (weapon slot 360, +0x5a0).
 	if (ActiveWeaponEntity() == nullptr)
 	{
 		return 0;

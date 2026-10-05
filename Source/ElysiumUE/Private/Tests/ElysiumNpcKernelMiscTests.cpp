@@ -70,10 +70,9 @@ bool FElysiumNpcKernelMiscCapabilitiesGetTest::RunTest(const FString&)
 	Npc->CapabilityWord = 0x4000040;   // bits_CAP_SQUAD | bits_CAP_MOVE_SHOOT
 	TestEqual(TEXT("the whole word is answered verbatim"), Npc->CapabilitiesGet(), 0x4000040);
 
-	// The OR term is the active weapon's slot 360 (`+0x5a0`), which family Motor's seam answers 0
-	// for — so the answer cannot grow past `m_afCapability` today. Asserting the seam's refusal is
-	// the point: the day slot 360 lands, this case is what says the OR is live.
-	TestEqual(TEXT("so the OR adds nothing"), Npc->CapabilitiesGet(), Npc->CapabilityWord);
+	// 0x1026db30: this unarmed fixture contributes no slot-360 weapon word.
+	// Armed OR coverage is Elysium.Arm.NpcKernelMotor.WeaponCapabilityWord.
+	TestEqual(TEXT("unarmed contributes no weapon bits"), Npc->CapabilitiesGet(), Npc->CapabilityWord);
 	return true;
 }
 

@@ -157,7 +157,14 @@ Wave 3 (build work, one agent):
     All 113 baseline passes retained; only damage_lethal_death moved expected-fail -> pass.
     Cop rest 18.138/17.016 cm, bound 20; floor read before real terminal cleanup. Garment/witness
     and save/load presentation smokes done; corpse save words remain V6, impulse/burn look 0014.
-- [ ] **V5** — Fix: the attack conditions and the combat interrupts. S · Fable/medium.
+- [x] **V5** — Fix: the attack conditions and the combat interrupts. S · Fable/medium.
+  Closed 2026-10-05 with V5a / V5a-3 / V5b: default 169/0, arm 1636/0,
+  kernel 7/7; full arena 116 pass / 1 existing fail / 15 expected-fail /
+  2 unexpected-pass of 134. All 114 V4d passes retained. New ranged_fake_reload
+  and ranged_step_back_holds pass alone, after another record and in the full run.
+  Real reload slots322/323 have arm proof; the authorized flamethrower no-bake
+  fallback records its missing standing shot event. Presence remains 0006,
+  retained NPC single-round bInReload persistence V6.
 - [ ] **V6** — Fix: session, clock and lifecycle. M · Opus/high.
 - [x] **V11** — The attack coordinator's list (pulled from R4; melee never starts without it). S–M · Opus/high.
 - [ ] **V7** — The 19 inputs and the one-line items. S · Sonnet/medium.

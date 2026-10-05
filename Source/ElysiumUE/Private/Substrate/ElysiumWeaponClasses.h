@@ -590,8 +590,14 @@ public:
 	EVerdict ItemPostFrame(EElysiumWeaponButton Held, EElysiumWeaponButton Pressed,
 		const FElysiumEntityHandle& AimTarget = FElysiumEntityHandle::Invalid());
 
-	// The reload request. Starts only with reserve ammunition, reload permitted, and a magazine
-	// missing capacity. Returns whether a reload transaction began.
+	// NPC reload slots and stored weapon words. Player requests keep the queued route below.
+	bool CanReloadMagazine(int32 MagazineIndex) const; // slot 280, 0x10253ab0
+	void FinishReload(); // slot 322, 0x10255050
+	void FinishReloadBulk(); // slot 323, 0x102552c0
+	bool bInReload = false; // 0x1028918d +0x898 m_bInReload
+	bool bIsJammed = false; // 0x102552c0 +0x89a m_bIsJammed
+	bool bInterruptReload = false; // 0x102552c0 +0x899 m_bInterruptReload
+	// The reload request starts with reserve and missing capacity; returns whether it began.
 	bool BeginReload();
 
 	// The queued halves. Public because the registered input thunks are free functions.
@@ -740,12 +746,9 @@ public:
 	// owner's `0x1033d940`, which doubles it under `PresenceDoublesAttackRate`. Seconds.
 	float ShotAttackRate(const FElysiumWeaponMode& Mode) const;
 
-	// SEAM for `0x1033d940`'s test `0x101e3f50(&DAT_10739a4c, owner)`: a Presence level bit
-	// (discipline id 10, five level bits) in the owner's `m_iDisciplineFlags2 (+0xeb4)` doubles the
-	// attack rate. Nothing in this runtime writes a Presence bit into `FElysiumNpc::DisciplineFlags2`
-	// (its one writer is the reset `0x1029a58f`), and the bit values are the run-time table's, so
-	// this answers false: an NPC's slot 332 is `Attack_Rate` unscaled. The same seam as
-	// `FElysiumNpc::RangedDisciplineGate`.
+	// 0x1033d940 / 0x101e3f50: Presence id 10 tests m_iDisciplineFlags2 +0xeb4.
+	// Status apply 0x101e3560 calls AddDiscFlag 0x1033cfb0; spec 0006 owns the cast/status
+	// producer and runtime level-bit table. Until that seam exists this answers false.
 	static bool PresenceDoublesAttackRate(const FElysiumCombatCharacter* Owner);
 
 	// Every write to the two deadlines goes through here: a MAXIMUM operation, never a shortening

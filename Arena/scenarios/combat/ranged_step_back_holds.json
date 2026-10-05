@@ -1,0 +1,146 @@
+{
+  "name": "ranged_step_back_holds",
+  "about": "0xef omits NOT_FACING_ATTACK 0x61, WEAPON_THROUGH_WALL 0x3c and TOO_CLOSE_FOR_RANGED 0x08; completed cache 0x1026a0f0 and positive-only tester 0x10269d30 preserve the hold until its last task, then LIGHT_DAMAGE interrupts the next ranged program.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 30.0,
+  "player": {
+    "at": "cover_seat"
+  },
+  "cast": [
+    {
+      "name": "arena_shooter",
+      "classname": "npc_VHumanCombatant",
+      "at": "far_ne",
+      "face": "player",
+      "body": "regular_cop",
+      "keys": {
+        "stattemplate": "TutorialThug",
+        "additionalequipment": "item_w_thirtyeight",
+        "player_reaction": "D_HT 5",
+        "hint_groups": "2",
+        "npc_perception": "3",
+        "stay_entrenched": "0",
+        "allow_kick_hint_use": "0",
+        "squadname": "",
+        "spawnflags": "4",
+        "StartHidden": "0"
+      }
+    }
+  ],
+  "rows": [
+    {
+      "classname": "events_player",
+      "name": "arena_player_events",
+      "at": "start"
+    }
+  ],
+  "script": [
+    {
+      "t": 0.05,
+      "do": "fire",
+      "target": "arena_player_events",
+      "input": "MakePlayerUnkillable"
+    },
+    {
+      "t": 6.0,
+      "do": "player_teleport",
+      "at": [
+        587.0,
+        683.0,
+        0.0
+      ],
+      "face": "far_ne"
+    },
+    {
+      "after": "steps_back",
+      "delay": 0.3,
+      "do": "player_teleport",
+      "at": [
+        1200.0,
+        683.0,
+        0.0
+      ],
+      "face": "far_ne"
+    },
+    {
+      "after": "reselects",
+      "delay": 0.5,
+      "do": "fire",
+      "target": "arena_shooter",
+      "input": "TakeDamage",
+      "param": 1,
+      "activator": "player"
+    }
+  ],
+  "expect": [
+    {
+      "label": "steps_back",
+      "who": "arena_shooter",
+      "kind": "schedule",
+      "match": "^SCHED_TROIKA_STEP_BACK_RANGE_ATTACK1 \\(",
+      "regex": true,
+      "by": 12.0
+    },
+    {
+      "label": "not_facing",
+      "who": "arena_shooter",
+      "kind": "cond+",
+      "match": "NOT_FACING_ATTACK (0x61)",
+      "within": 2.0
+    },
+    {
+      "label": "runs_on",
+      "who": "arena_shooter",
+      "kind": "taskdone",
+      "match": "^task_wait_attack_time1$",
+      "regex": true,
+      "within": 6.0
+    },
+    {
+      "label": "reselects",
+      "who": "arena_shooter",
+      "kind": "schedule",
+      "match": "^SCHED_TROIKA_(STEP_BACK_)?RANGE_ATTACK1 \\(",
+      "regex": true,
+      "within": 3.0
+    },
+    {
+      "label": "hurt_breaks",
+      "who": "arena_shooter",
+      "kind": "break",
+      "match": "LIGHT_DAMAGE",
+      "within": 1.5
+    }
+  ],
+  "never": [
+    {
+      "who": "arena_shooter",
+      "kind": "break",
+      "match": "(NOT_FACING_ATTACK|WEAPON_THROUGH_WALL|TOO_CLOSE_FOR_RANGED)",
+      "regex": true,
+      "after": "steps_back",
+      "within": 8.0
+    },
+    {
+      "who": "arena_shooter",
+      "kind": "death"
+    }
+  ],
+  "probes": [
+    {
+      "at": 6.45,
+      "who": "arena_shooter",
+      "probe": "distance_to",
+      "to": "player",
+      "greater": 500
+    },
+    {
+      "at": "end",
+      "who": "arena_shooter",
+      "probe": "alive",
+      "equals": true
+    }
+  ],
+  "notes": "Seed 1 selects 0xef at 6.100. Teleport at 6.400 to [1200,683,0], behind the initial west-facing shooter [683,683,0], 517 cm (203.5 Source units), inside the 1300.48 cm wall. Timed distance probe >500 cm excludes the earlier d<100 and min-range arms. Turning reacquires SEE_ENEMY and raises NOT_FACING_ATTACK at 6.900; final task_wait_attack_time1 completes 9.100, then 0xed reselects. TakeDamage 1 names player activator: retail InputTakeDamage 0x102c29a0 retains it; null attacker would return at 0x10265f64 before LIGHT_DAMAGE 0x10266239. No damage escalation."
+}

@@ -393,7 +393,7 @@ done:* the `.mdl`'s own `animdesc.fps` bytes were not re-read; the sidecar value
   2. `SUB_PVSRemove`'s keep test is three-fold: view cone, PVS, `FVisible`.
   3. "After the spike" item 4 is confirmed as written. A rig-less model: bounds zeroed, **not**
      made non-solid, think replaced.
-  4. "feed and explosion deaths (unread)" in § "Not in V4d": read — both are the ordinary chain
+  4. "feed and explosion deaths (unread)" in § "Not yours and rules": read — both are the ordinary chain
      (item 4); nothing to add to V4d.
 - **A1, A2, A3, A4, C1:** none.
 

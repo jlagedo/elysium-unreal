@@ -28,7 +28,7 @@ also ran every record after `verbs_stealth_kill` with a crouched player (H4), wh
 | 1 arbiter | yes; **its kernel half fixed by V3a (2026-10-04)** | `cover` (and behind other reds: `cover_armed`, `cover_reclaim`'s clips); ~~provisionally the patrols (doubt 1)~~ — not red 1: N13 | `cover` 7.400 `arena_gunman sequence smith_lean_left_into rate=0` after `task_play_cover_outof`, no `seqfinished` by 17.4. After V3a: 3.300 `smith_lean_left_into rate=1`, 4.400 `seqfinished`, `taskdone task_play_cover_outof`, 4.800 `task_range_attack1`, 5.300 its `taskdone`: `cover` green. The `Sequence` / `Ambient` / `Dialogue` / `ScriptedSchedule` claims remain for V3b–V3d |
 | 2 attack conditions | yes, after the correction | `range_bands` | probe at 16.2 `TOO_CLOSE_FOR_RANGED` read **true** one gather after 16.100 `cond+ CAN_RANGE_ATTACK1 (0x4f)` (the tail `0x1026e0b0..0x1026e107` would have cleared `0x08`) |
 | 3 anim chain / slot 363 | yes | `sense_enemy_facing_me`, `ranged_open_fire`, `damage_lethal_death`; every hostile trace | 0.000 `sight_guard cond+ BEHIND_ENEMY (0x57)` with the player facing it; `damage_lethal_death` end probe `on_ground` false after 3.017 `death none` |
-| 4 `0xef` sink | **no** | no record stages `NOT_FACING_ATTACK` or `WEAPON_THROUGH_WALL` under `0xef` | — (V5 needs a record: the player behind the shooter's back at 96 cm) |
+| 4 `0xef` sink | **yes, closed by V5b** | `ranged_step_back_holds` | 0xef 6.100; behind teleport 6.400 at 517 cm; NOT_FACING_ATTACK 6.900; final task_wait_attack_time1 9.100; next 0xed breaks on one-point LIGHT_DAMAGE 9.700. Texts omit 0x61/0x3c/0x08; old 99 s was unfinished TASK_RANGE_ATTACK1. |
 | 5 hidden / flipped | **hidden half yes; flip half no** | `lifecycle_unhide_fights`, 6 hidden roll-call rows; the animals (N10) | 0.000 `arena_hidden cond+ FLOATING_OFF_GROUND (0x73)` then `schedule FALL_TO_GROUND (0x3e)` before the 2.0 `ScriptUnhide` |
 | 6 executor | yes, wider than written; **fixed by V3b (2026-10-04)**: every `use_interesting` NPC on every record now selects `0xff` and runs the programs; what stays red is N15, H16, Q-V3b1 (§ "V3b", below) | the places, `input_useinteresting`, both hub records, the sneak-past, `rollcall_vhuman`, `rollcall_vhumancombatpatrol` | `map_hub_idle` end probe `pedestrian_female` schedule reads `SCHED_NONE`; `places_pedestrian_visit` no event from the NPC in 3 s |
 | 7 reach | no | no record can show it in one run | — |
@@ -712,7 +712,7 @@ for the verdict, the key unchanged).
 
 ## V13 follow-up (2026-10-04): N21 -- every nav mark includes the agent height; closed
 
-The judge's ruling (§ "Judge's rulings … (continued)"), one agent. `UElysiumNavAreaComponent::
+The judge's ruling (§ "Judge's rulings filed by the coordinator"), one agent. `UElysiumNavAreaComponent::
 GetNavigationData` (`ElysiumNavAreaActor.cpp`) now calls `SetIncludeAgentHeight(true)` on every
 modifier, door cuts as well as the roadway: Recast lowers each mesh's cut by that mesh's own agent
 height (`RecastNavMeshGenerator.cpp:4885`, `OffsetZMin = ch + AgentHeight`) -- the Human's
@@ -1197,7 +1197,7 @@ first, then the ruling, the cost, the proving record. No query ran over 10 s.
   with no fire event, once per model and sequence) stays as the tripwire.
 - **Cost.** Four lines in the spec. **Proof:** none in step 2; each row names its record when run.
 
-### J12. The NPC clip: **an old bug in landed work — implement now, V4o lane O3 (no spend, no refusal); the reload finish stays a seam, its text corrected, owner V5b**
+### J12. The NPC clip: **ordinary Shot never spends; fake reload after template sets; V5b ports real reload finish**
 
 - **Against.** The spend sits in the commit the player shares; touching it risks the player's
   ammunition and the weapon tests; "NPCs never run dry" reads like a cheat; and a gunman reloading
@@ -1218,6 +1218,13 @@ first, then the ruling, the cost, the proving record. No query ran over 10 s.
   bulk: `clip += min(Size − clip, owner's reserve)`, reserve untouched, both next-attack words
   `= curtime` — owner V5b. Any V5 record that expects a reload after emptying a gun is a record
   error.
+- **V5b close.** The reload seam described in the historical ruling is now ported:
+  TASK_RELOAD sets bInReload before slots322/323; bulk completion reads the live
+  deadline and leaves NPC reserve unchanged. Ordinary Shot still cannot raise
+  NO_PRIMARY_AMMO through clip spend; TutorialThug fake-reloads after six sets.
+  Presence belongs to spec0006, retained single-round bInReload to V6. The owner's
+  flamethrower witness uses the explicit no-bake fallback: standing attack event
+  absent; complete class/model/sequence/Attack-entry evidence is recorded below.
 - **Cost.** XS in O3's file; weapon tests that pin an NPC wielder's spend are deleted (they pin a
   port mechanism). **Proof:** new record `ranged_sustained_fire` — the `ranged_open_fire` staging,
   `expect` eight `animevent 3031` on the shooter (two more than `Size`), `never` `cond+
@@ -1270,7 +1277,9 @@ first, then the ruling, the cost, the proving record. No query ran over 10 s.
    think wins. Cost S. Proof: `corpse_fades`.
 2. **`NO_PRIMARY_AMMO` cannot rise from firing** (J12). `SCHED_TROIKA_TAKE_COVER_NO_AMMO` drops
    out of V4o's list of live `0x400` writers; V5b loses any "empties the gun, then reloads"
-   expectation.
+   expectation for ordinary Shot. The owner's flamethrower exception remains: Attack
+   `0x103e2f30` spends on NPC owners too; V5b found no standing shot event in the
+   baked `flamet_attack` timeline, so its authorized no-bake fallback is arm-only.
 3. **Who can run-and-gun** (S4 item d): nine placed rows on the tutorial, none on the hub with a
    ranged primary. V8's hub clause cannot witness the overlay; `cover_move_shoot` and the tutorial
    are the proofs. No order change.
@@ -1302,7 +1311,8 @@ first, then the ruling, the cost, the proving record. No query ran over 10 s.
 - **V11-1**: `0x102a11d0` is yours, with its files and the record `melee_ally_in_the_way` (J10);
   item 11 from the inventory sections; slot 331's doc read before `0x51` (J14.5, J14.7).
 - **V5a-1**: the melee band's body and constants (J14.4). **V5b**: the reload finish as read; no
-  empty-gun reload record (J12).
+  ordinary-gun empty-clip reload record (J12); the owner's flamethrower exception
+  requires the standing shot event, absent in the installed bank.
 - **B1**: the turn script's helpers (J14.6).
 - **A0 / harness**: the `removed` event kind if absent (J13).
 - **`spec.md`**: the four species rows on the "on demand" line (J11); the bbox import and the
@@ -1607,3 +1617,102 @@ at8s before correct unseen removal at13.017. All corpse controls and stealth sta
 Default 169/0, arm 1625/0, kernel 7/7. No new known_red; existing H11/N4/other-story
 placements retain their actual verdicts. Physics frames/garments/release are proved
 for this scope; save state/impulse/BurnModel remain the named V6/0014 work.
+
+
+## V5b integration recovery (2026-10-05)
+
+Integration tree: `spec-0002/step-2` at `e6e21d58`, a docs-only descendant of
+V4d `a5b58f37`, plus the three lanes and the
+compile gate's owed lines, excluding the owner's dirty AGENTS.md / ElysiumRng.cpp
+from staging. The compile gate used two builds (127 s failed protected access;
+83 s passed after two test friends), with kernel regeneration/check 7/7.
+
+Red 4 is a record question, not a mask defect: the authored 0xef text and slot 453
+omit NOT_FACING_ATTACK 0x61 / WEAPON_THROUGH_WALL 0x3c / TOO_CLOSE_FOR_RANGED 0x08.
+The old 99-second sink was unfinished TASK_RANGE_ATTACK1. Seed 1 stages 0xef at
+6.100, teleport [1200,683,0] at 6.400 behind the west-facing shooter [683,683,0]
+(517 cm = 203.5 Source units; timed distance >500 cm). The turn reacquires the
+enemy, NOT_FACING_ATTACK rises 6.900, and the program's LAST task_wait_attack_time1
+finishes 9.100 before 0xed is selected. This witness is `ranged_step_back_holds`.
+The damage witness needs a player activator: retail null-attacker exit
+`0x10265f64` precedes LIGHT_DAMAGE. V5b ports InputTakeDamage `0x102c29a0`'s
+integer/zero type arms and caller/activator packet identities, and the arena
+fire action can name the live activator. No magnitude escalation is used.
+
+The separately confirmed cache defect IS repaired: `0x1026a0f0` copies both masks
+then calls slot453 once, empty411, positive freeze insertion; it preserves
+current conditions, and Guard1 replaces Troika453. Arm tests pin order, inverse
+mask, condition preservation and positive-only HasInterruptCondition.
+
+J12's ordinary NPC Shot retains its clip, but the six-set TutorialThug counter
+now decrements per FireBullets set `0x10268919`, rerolls through the char-template
+loader `0x101d4394..0x101d43c8` / `0x102c54c0`, and selects fake reload first
+(`0x102b8620`). `ranged_fake_reload` observes shot six 16.500, 0xc4 19.500,
+no-cover 0xc5 19.600, Pistol_Reload_Fast finish 22.100 and resume 22.200.
+`ranged_sustained_fire` keeps its four never clauses; shot_7's 6.0-second
+window is the measured 5.7-second interval plus 0.3 seconds.
+
+Real TASK_RELOAD slots322/323 are ported with arm proof of live deadline,
+bulk writes and NPC reserve retention. The owner's flamethrower exception was
+checked: entity registration and baked wield/standing attack/reload assets exist,
+but `flamet_attack` and `flamet_attack_layer` have empty event timelines in the
+male AND female banks, and specialized Attack `0x103e2f30` is absent in the port.
+The missing shot event / actual NPC Attack entry is filed for the asset/attack
+judge under the explicit no-bake fallback. Full evidence: combat-and-damage.md.
+Presence cast/status producer remains spec0006; retained NPC single-round
+bInReload persistence remains V6 (`0x1025506f..0x10255077`). No modernization.
+
+Named final binary proof: `20261005T100145.635221Z`, all eleven records pass
+with no first_unmet: cover_armed, cover_move_shoot, range_bands, ranged_fake_reload,
+ranged_friend_in_line_of_fire, ranged_open_fire, ranged_step_back_holds,
+ranged_sustained_fire, control_sequence, cover, input_takedamage. The host
+actually runs combat records before world records; cover_armed precedes both
+new records (control_sequence is later), so this boot proves after-another
+independence. Alone: step `20261005T095940.898815Z`, fake
+`20261005T100012.187497Z`, sustained `20261005T100047.958407Z`: all pass.
+The step witness breaks LIGHT_DAMAGE at 9.700 after the 9.617 input delivery.
+Its distance probe runs at 6.450, after the 6.400 teleport; a probe at the
+same script timestamp samples before the action and cannot measure the new seat.
+Third build (the input/activator repair) passed in 116 s; default final
+`20261005T095834.803076Z-elysium-session-elysium-substrate`: 169/0.
+Oracle citations: 3/3, fixing the four values, brief copies of those old
+headings, and the two GetSchedule citations invalidated by PreSelectSchedule's
+corrected identity.
+
+First arm run exposed two wave test defects, not runtime divergence: CacheTail
+claimed a non-interruptible director but authored no `spawnflags 32`; Spawn
+`0x101a6f10` therefore made it interruptible and RemoveIgnoredConditions
+`0x101a89a0` correctly returned. The fixture now authors retail `0x20`.
+WiredYukieMelee still expected `0x18000` after the compile gate restored
+CWeaponMelee's complete `0x40018000` (`0x103eaea0`); its expectation is corrected
+without changing Yukie's masked gate `0x103dd900`. All other arm tests passed.
+
+Fourth build passed in 15.312 s (two arm fixture/expectation edits only).
+The final source citation identifies director Spawn `0x101a6f10`; the comment
+correction after compilation changes no compiled behavior. Final default
+again executes all 169 tests with zero failures.
+
+Final build-four validation: default `20261005T100533.860877Z-elysium-session-elysium-substrate`, named boot
+V5b-int/named-final4.log (11/11), arm `20261005T100858.960158Z-elysium-arm`
+(1636/0). Both new records and changed sustained fire also pass alone on build
+four, with outputs in V5b-int/{fake,step,sustained}-alone-final.log.
+Kernel final check `20261005T101242.470381Z`: 7/7. Evidence-only completion
+corrected the stale schedule-kernel empty-inverse paragraph and slot453
+verdict targets/evidence (Troika, Guard1 and HumanCombatant), then regenerated;
+all three generated runtime outputs remained unchanged.
+
+Full arena ONCE, final binary: `20261005T101029.230065Z`, 9m00s, 134 records:
+116 pass / 1 existing fail rollcall_vzombie / 15 expected-fail / 2 unexpected-pass.
+Machine comparison with V4d `20261005T091932.640246Z` retains all 114 baseline
+passes, finds no missing records and no moved existing verdict. Only additions:
+
+| record | before | after | retail cause |
+|---|---|---|---|
+| ranged_fake_reload | new | pass | Six-set TutorialThug count, reroll, 0xc4 -> no-cover 0xc5, authored Pistol_Reload_Fast -> resume 22.200. |
+| ranged_step_back_holds | new | pass | 0xef texts/overlay omit 0x61/0x3c/0x08; NOT_FACING_ATTACK survives the hold through final task 9.100; player-activated one-point hit breaks next 0xed on LIGHT_DAMAGE 9.700. |
+
+The baseline zombie still fails on `No interesting places were available to go
+to. (0x22)` at 4.3667, H11; it is not a V5b regression. The launch command
+returns exit7 for that existing fail / the two retained unexpected-pass records;
+the owner's green criterion is satisfied by the explicit verdict comparison.
+V5 is ticked in spec.md and TRACKER.md. No new known_red or modernization.

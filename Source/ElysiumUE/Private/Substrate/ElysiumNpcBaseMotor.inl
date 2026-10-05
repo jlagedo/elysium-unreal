@@ -332,9 +332,9 @@ bool RetailHullExtents(int32 Hull, EElysiumHullExtents Which, FVector& OutMinsUn
 static bool RetailCollisionExtents(const FElysiumEntity& Entity, FVector& OutMinsUnits,
 	FVector& OutMaxsUnits);
 
-/** The active weapon's capability word (weapon vtable +0x5a0, slot 360, retail body `0x1014f930`),
- *  which `ShouldMoveAndShoot` requires to carry `0x6000`. **SEAM**: `FElysiumWeapon` stands no such
- *  word; answers 0, so the Troika gate closes and the base rung is never reached. */
+/** The active weapon's slot-360 capability word (+0x5a0), read by slot 513 `0x1026db30`.
+ *  No weapon, character `0x1014f930` and weapon base `0x10149e80` answer zero; concrete
+ *  weapons supply CapabilityBits(WeaponCapability), also read by SelectActiveWeaponWord. */
 uint32 ActiveWeaponCapabilityWord() const;
 
 /** `CAI_Motor`'s deceleration query (`CAI_Motor#16`) lives on `IElysiumNpcMotor`

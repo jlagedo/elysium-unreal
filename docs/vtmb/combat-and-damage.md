@@ -518,6 +518,8 @@ instead is the fake reload**: `m_iFakeReloadCount`, counted down per `FireBullet
 from the NPC template's `NpcFakeReloadCountMin` / `Max` — `npc-ai/conditions-and-states.md`
 § "`FUN_102b8620` — the ranged weapon pre-pass".
 
+V5b ports slots 280/322/323 and the per-set decrement at 0x10268919. NPC bulk completion reads live NextAttackTime; single-round bInReload remains set for V6 persistence.
+
 ### Damage and reaction boundary
 
 The per-victim ranged body (`0x10268330`) is reached by a volley path that groups traces by
@@ -2839,3 +2841,63 @@ precedent; no AI hearing sound is inserted by this audio call. BurnModel's look 
 Later fade still overrides the burn/pedestrian think. The four V4c clocks are untouched;
 terminal Kill/destruction, including hidden removal, releases the explicitly retained visual
 and its physics through ReleaseNpcVisual. Lethal death retains it.
+
+
+### V5b real-reload live witness: flamethrower content gate (2026-10-05)
+
+The owner requires an NPC flamethrower empty-clip -> TASK_RELOAD witness if it can be
+staged using source changes alone. The entity classname `item_w_flamethrower` is registered
+by `ElysiumItemClasses.cpp` through the item catalogue as a generic `FElysiumWeapon`;
+there is no specialized `CWeaponRanged_FlameThrower::Attack` body in the port.
+The weapon translator in `ElysiumWeaponActivityTables.cpp` carries its FLAMETHROWER
+activity block. Both male/female wield models exist as baked SK/DA assets at
+`/ElysiumBaked/Models/weapons/flamethrower/wield/{SK,DA}_w_{m,f}_flamethrower`.
+`regular_cop` includes the baked male `move_and_ranged` bank (sequence base 86).
+Its `flamet_attack` (`ACT_RANGE_ATTACK_FLAMETHROWER`, 1.0 s) and
+`flamet_attack_layer` (`ACT_RANGE_ATTACK_LAYER_FLAMETHROWER`, 1.0 s) exist as
+baked `A_flamet_attack` / `A_flamet_attack_layer` assets under that bank.
+Both event timelines are EMPTY in the deployed export's `move_and_ranged.clips.json`;
+the female bank agrees. The standing sequence therefore supplies no 3030..3044 shot
+event either: the missing event is not confined to move-and-shoot. Reload
+`flamet_reload` (`ACT_RELOAD_FLAMETHROWER`, 2.1667 s) exists too.
+
+A fresh vampire.dll listing of Attack `0x103e2f30` confirms: base ranged Attack call
+`0x103e2f38`; jam clear `0x103e2f41`; owner resolution/null return
+`0x103e2f47..0x103e2f50`; active-flame deadline stop
+`0x103e2f56..0x103e2f87`; unconditional clip decrement/store
+`0x103e2f88..0x103e2f91`; empty result clears flame-active and returns
+`0x103e2f97..0x103e2fa7`; positive result writes flame-active at `0x103e2fa8`,
+then direction/origin/flame-effect work through `0x103e30a5`. There is no NPC
+spend gate. This attack is distinct from ordinary Shot `0x102387b0`, whose
+spend is player-only. Porting only a decrement into generic Shot would alter the
+retail entry/event chain and would not supply the missing event.
+
+No `ranged_real_reload` record, synthetic event, pipeline edit or re-bake is made.
+Under the owner's explicit no-bake fallback, slots 322/323 retain their arm proof.
+The asset/attack judge must settle the flamethrower's actual NPC Attack entry and
+the absent standing shot event before a live empty-clip witness can be authored.
+The concrete content gap is the event; class registration, wield model, standing
+attack sequence and reload sequence are present.
+
+
+### V5b interrupt witness: TakeDamage wire identity (2026-10-05)
+
+The first `ranged_step_back_holds` hurt action delivered positive one-point scalar
+damage but no LIGHT_DAMAGE. The brief omitted the activator: base alive damage
+returns at `0x10265f64` for a null attacker before slot 576 and `0x10266239`.
+The port additionally discarded the wire activator by calling `TakeDamage(float)`.
+The vampire.dll InputTakeDamage listing `0x102c29a0` settles the entire input:
+`0x102c29aa..0x102c29c1` admits type 4 (FIELD_INTEGER), otherwise scalar zero;
+`0x102c29c5..0x102c29dc` builds the packet with caller as inflictor and activator
+as attacker, zero damage bits/custom damage, ammo -1; `0x102c29e5..0x102c29f8`
+zeros force; `0x102c2a00` takes the ordinary damage transaction. The input no
+longer refuses zero or non-integer variants before that transaction.
+
+`ElysiumNpcClasses.cpp` now constructs that scalar packet. The packet carries
+`m_hInflictor +0x28`, and base alive damage reads it before the existing
+descriptor-provided inflictor fallback; neither guesses an attacker. The arena
+`fire` action accepts a named live activator and enqueues it through the ordinary
+I/O path. `ranged_step_back_holds` supplies `player`, numeric integer 1; the
+Damage.Producers test pins the integer/type arm, activator condition and caller
+inflictor. This is a recovered input repair; no damage threshold was increased.
+Force/position/custom-damage words remain the packet's existing zero seams.

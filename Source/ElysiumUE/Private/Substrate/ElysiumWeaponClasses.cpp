@@ -1449,11 +1449,11 @@ bool FElysiumWeapon::CommitFromAnimEvent(const FElysiumAnimEvent& Event)
 
 bool FElysiumWeapon::PresenceDoublesAttackRate(const FElysiumCombatCharacter* /*Owner*/)
 {
-	// SEAM for `0x101e3f50(&DAT_10739a4c, owner)`, the test inside `0x1033d940`: one of the five
-	// Presence level bits (discipline id 10) in the owner's `m_iDisciplineFlags2 (+0xeb4)`. The port
-	// carries the word (`FElysiumNpc::DisciplineFlags2`) but nothing writes a Presence bit into it and
-	// the bit values are the run-time table's, so this answers false.
-	return false;
+	// 0x1033d940 / 0x101e3f50: Presence id 10 reads m_iDisciplineFlags2 +0xeb4.
+	// Status apply 0x101e3560 writes via AddDiscFlag 0x1033cfb0; activation callers are
+	// 0x101e2f50 / 0x101e3380 / 0x101e33c0 / 0x101f8620. Spec 0006 owns that producer
+	// and the runtime level-bit table; the absent cast/status input answers false.
+	return false; // 0x101e3f50
 }
 
 float FElysiumWeapon::ShotAttackRate(const FElysiumWeaponMode& Mode) const
@@ -2781,6 +2781,10 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 	// task stages one set, so this is one trace for every transaction but an event shot's catch-up.
 	for (int32 Set = 0; Set < Sets; ++Set)
 	{
+		if (FElysiumNpc* const ShotNpc = Attacker->AsNpc()) // 0x10268919 owner NPC +0x98
+		{
+			--ShotNpc->FakeReloadCount; // 0x10268919 DEC +0x65f0, once per FireBullets set
+		}
 		TraceShotImpact(*Attacker, *Mode);
 	}
 
@@ -4011,6 +4015,75 @@ void FElysiumWeapon::RangedImpact(FElysiumCombatCharacter& Attacker, FElysiumCom
 }
 
 
+
+bool FElysiumWeapon::CanReloadMagazine(int32 MagazineIndex) const
+{
+	const FElysiumItemDef* const ReloadRecord = Data(); // 0x10253ab0
+	// Slot 277 (+0x454): magazine 1 has no clip or ammo type in the item surface;
+	// retail m_iMagazineCurAmts[1] +0x750 is an absent input, never magazine 0's count.
+	const bool bHasAmmoType = MagazineIndex == 0 && ReloadRecord != nullptr
+		&& !ReloadRecord->AmmoType.IsEmpty(); // 0x10253b40
+	if (!bHasAmmoType) return true; // 0x10253ab0 first arm
+	if (ReloadRecord->MagazineSize > 0 && MagazineCount > 0) return true; // 0x10253ab0 slot 277
+	const FElysiumCombatCharacter* const ReloadOwner = OwnerCharacter(); // 0x102521f0
+	return ReloadOwner != nullptr
+		&& ReloadOwner->Inventory.Reserve(ReloadRecord->AmmoType) > 0; // 0x103346c0 / 0x10253ab0
+}
+
+void FElysiumWeapon::FinishReloadBulk()
+{
+	FElysiumCombatCharacter* const ReloadOwner = OwnerCharacter(); // 0x102552c0 / 0x102521f0
+	if (ReloadOwner == nullptr) return; // 0x102552c0 no owner, no writes
+	const FElysiumItemDef* const ReloadRecord = Data(); // 0x102552c0 +0x8c8
+	if (ReloadRecord != nullptr && ReloadRecord->bReloadSingle) // 0x102552c0
+	{
+		// 0x10254cd0(this, 0xc3): weapon activity-send hook is absent. No output;
+		// player single-round continuation remains on BeginReload / CommitQueuedReload.
+	}
+	else
+	{
+		for (int32 ReloadMagazine = 0; ReloadMagazine < 2; ++ReloadMagazine) // 0x102552c0
+		{
+			// Slot 277: magazine 1's m_iMagazineCurAmts[1] +0x750 and ammo type are absent.
+			if (ReloadMagazine != 0 || ReloadRecord == nullptr
+				|| ReloadRecord->MagazineSize <= 0) continue; // 0x102552c0 slot 277
+			const int32 ReloadReserve = ReloadOwner->Inventory.Reserve(ReloadRecord->AmmoType); // 0x103346c0
+			const int32 ReloadMissing = ReloadRecord->MagazineSize - MagazineCount; // 0x102552c0 slot 275
+			const int32 ReloadAdded = ReloadMissing < ReloadReserve ? ReloadMissing : ReloadReserve; // 0x102552c0
+			MagazineCount += ReloadAdded; // 0x102552c0, deliberately no negative-capacity clamp
+			if (IsPlayerSide(*ReloadOwner)) // 0x102552c0 owner player +0xa8
+			{
+				// DAT_1088aef4 (IsCommand OR int<1) is absent: retain the existing player-debit stand-in.
+				ReloadOwner->Inventory.AddReserve(ReloadRecord->AmmoType, -ReloadAdded); // 0x102552c0 RemoveAmmo
+			}
+		}
+	}
+	bInReload = false; // 0x102552c0 +0x898
+	bIsJammed = false; // 0x102552c0 +0x89a
+	bInterruptReload = false; // 0x102552c0 +0x899
+}
+
+void FElysiumWeapon::FinishReload()
+{
+	FElysiumCombatCharacter* const ReloadOwner = OwnerCharacter(); // 0x10255062 / 0x102551e2
+	if (ReloadOwner == nullptr) return; // 0x10255069 / 0x102551e9
+	const FElysiumItemDef* const ReloadRecord = Data(); // 0x10255054 +0x8c8
+	if (ReloadRecord != nullptr && ReloadRecord->bReloadSingle) // 0x1025505c
+	{
+		// 0x1025506f..77 requires PLAYER +0xa8: an NPC retains bInReload.
+		// Player continuation (0x102550b4 / 0x102550d2 / 0x102551cb..dc) belongs
+		// to the player weapon story; existing queued player reloads use their own route.
+		return; // 0x1025523c
+	}
+	const FElysiumNpc* const ReloadNpc = ReloadOwner->AsNpc(); // 0x102551eb owner combat +0x9c
+	// Player m_flNextAttack +0x1564 has no shared character accessor yet; no finish output here.
+	if (ReloadNpc == nullptr || !bInReload || World == nullptr) return; // 0x102551f3..fd
+	const double ReloadNow = World->NowSeconds(); // 0x10255205
+	if (!(ReloadNpc->NextAttackTime <= ReloadNow)) return; // 0x102551ff..13 LIVE +0x1564, equality admitted
+	FinishReloadBulk(); // 0x10255219 slot 323
+	NextPrimaryAttackTime = ReloadNow; // 0x1025521f..3a +0x730
+	NextSecondaryAttackTime = ReloadNow; // 0x1025521f..3a +0x734
+}
 
 bool FElysiumWeapon::BeginReload()
 {

@@ -202,13 +202,13 @@ single-round stateV6 are explicit. No padding mystery remains. Wait for actual b
 `uv run pytest pipeline/tests/test_oracle_citations.py -q -n 0` fails on four citation values (five
 occurrences). Fix each in the same commit, then re-run that test:
 
-- `docs/specs/0002-npc-ai/stories/v1/triage-K.md:66` cites `lifecycle.md` § "A hidden maker" (an
+- `docs/specs/0002-npc-ai/stories/v1/triage-K.md:66` cites `lifecycle.md` section formerly named "A hidden maker" (an
   italic run-in, not an anchor): cite § "The NPC makers".
-- `docs/specs/0002-npc-ai/stories/v1/triage.md:715` cites § "Judge's rulings … (continued)": cite
+- `docs/specs/0002-npc-ai/stories/v1/triage.md:715` cites section formerly named "Judge's rulings … (continued)": cite
   § "Judge's rulings filed by the coordinator".
-- `docs/specs/0002-npc-ai/stories/v4/packets-S1.md:396` cites `brief-D-ragdoll.md` § "Not in V4d":
+- `docs/specs/0002-npc-ai/stories/v4/packets-S1.md:396` cites `brief-D-ragdoll.md` section formerly named "Not in V4d":
   cite § "Not yours and rules".
-- `docs/specs/0002-npc-ai/stories/v4/README.md:17` and `:757` cite § "After the spike": cite
+- `docs/specs/0002-npc-ai/stories/v4/README.md:17` and `:757` cite section formerly named "After the spike": cite
   § "First step — one controlled frame measurement".
 
 Confirm each target heading still exists before editing (V4d may have moved them).

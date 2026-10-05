@@ -130,13 +130,13 @@ static float ScaleWeaponBurstPause(float Value, float Base, float Range, float D
 
 /** `0x102c54c0` — `m_iFakeReloadCount (+0x65f0) = RandomInt(template[0x34], template[0x38])`, the
  *  template resolved by `GetCharTemplate` (`0x10207c40`) through the template manager
- *  (`0x101d5e80` over `DAT_10738d10`). No caller in the corpus reaches it virtually; its two direct
- *  callers are the AsianVampire's reload arms. */
+ *  (`0x101d5e80` over `DAT_10738d10`). Non-virtual; NPCInit (`0x1029a0b0`) and the ranged
+ *  pre-pass (`0x102b866d`) use the same reroll. */
 void ResetFakeReloadCount();
 
-/** The two template columns that roll it, `+0x34` and `+0x38`. **SEAM**: `FElysiumClanTemplate`
- *  exposes no such pair, so this answers false with both ends zero — and the ROLL STILL HAPPENS,
- *  because retail's body has no arm that skips the write and a body that silently declined its only
- *  write would be a refusal this row does not have. `RandomInt(0, 0)` is 0. */
+/** Loader `0x101d4394..0x101d43c8`: the resolved `FootstepTemplate` General keys supply
+ *  `+0x34` / `+0x38`, truncating toward zero; Min defaults to 8, Max to the truncated Min.
+ *  Absent template answers false with the loader-default stand-in 8/8. `0x102c54c0` still writes
+ *  unconditionally; equal/inverted bounds consume no shared draw (`vstdlib.dll 0x10002e60`). */
 bool CharTemplateFakeReloadRange(int32& OutMin, int32& OutMax) const;
 

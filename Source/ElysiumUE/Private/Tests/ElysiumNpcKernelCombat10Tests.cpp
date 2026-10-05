@@ -1010,6 +1010,100 @@ bool FElysiumNpcKernelCombat10CombatReactionTest::RunTest(const FString&)
 // `0x102b7fc0` — slot 605, the Troika-line ranged selector, and the two helpers it offers.
 // =================================================================================================
 
+// Fake reload precedes the loaded-clip decline: 0x102b8620..0x102b86a9.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10FakeReloadArmTest,
+	"Elysium.Arm.NpcKernelCombat10.FakeReloadArm", GElysiumNpcKernelCombat10Flags)
+bool FElysiumNpcKernelCombat10FakeReloadArmTest::RunTest(const FString&)
+{
+	FCombat10Fixture F(nullptr);
+	if (!TestNotNull(TEXT("fighter constructs"), F.Fighter))
+	{
+		return false;
+	}
+	FElysiumNpc& N = *F.Fighter;
+	FElysiumItem* const Rifle = F.Arm(GCombat10BachRifle);
+	if (!TestNotNull(TEXT("ranged weapon constructs"), Rifle))
+	{
+		return false;
+	}
+	N.FootstepTemplate.Reset();
+	Rifle->MagazineCount = 3; // isolate fake arms from real reload and the draw tail
+	const float SavedFakeReloadCvar = ElysiumNpcTunables::ConVarFloat(
+		ElysiumNpcTunables::EConVar::DebugAllowFakeReload);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugAllowFakeReload, 1.f);
+	N.FakeReloadCount = 0;
+	N.BaseScheduleHost.HintNode = INDEX_NONE;
+	const int32 PrepCallsBefore = N.RangedReloadPrepCalls;
+	TestEqual(TEXT("0x102b8682 null hint chooses 0xc4"), N.RangedWeaponPrePass(), 0xc4);
+	TestEqual(TEXT("0x102b866d rerolls before returning"), N.FakeReloadCount, 8);
+	TestEqual(TEXT("real reroll has one diagnostic tally"), N.RangedReloadPrepCalls, PrepCallsBefore + 1);
+	TestEqual(TEXT("fake reload does not change the magazine"), Rifle->MagazineCount, 3);
+	N.FakeReloadCount = -1;
+	N.BaseScheduleHost.HintNode = 0;
+	TestEqual(TEXT("0x102b8682 valid hint index zero chooses 0xc6"), N.RangedWeaponPrePass(), 0xc6);
+	TestEqual(TEXT("negative count also rerolls"), N.FakeReloadCount, 8);
+	const int32 PrepCallsAfter = N.RangedReloadPrepCalls;
+	N.FakeReloadCount = 1;
+	TestEqual(TEXT("positive count skips fake reload then loaded clip declines"), N.RangedWeaponPrePass(), 0);
+	N.FakeReloadCount = 0;
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugAllowFakeReload, 0.f);
+	TestEqual(TEXT("disabled cvar skips fake reload"), N.RangedWeaponPrePass(), 0);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugAllowFakeReload, 1.f);
+	N.Inventory.Holster(N);
+	TestEqual(TEXT("no weapon skips fake reload and reaches 0x98"), N.RangedWeaponPrePass(), 0x98);
+	FElysiumItem* const Melee = F.Arm(GCombat10Katana);
+	if (TestNotNull(TEXT("melee weapon constructs"), Melee))
+	{
+		Melee->MagazineCount = 1; // isolate the ranged-word gate from the spacing tail
+		TestEqual(TEXT("melee word skips fake reload"), N.RangedWeaponPrePass(), 0);
+	}
+	TestEqual(TEXT("skipped fake arms do not reroll"), N.RangedReloadPrepCalls, PrepCallsAfter);
+	TestEqual(TEXT("skipped fake arms retain count"), N.FakeReloadCount, 0);
+	ElysiumNpcTunables::SetConVar(ElysiumNpcTunables::EConVar::DebugAllowFakeReload, SavedFakeReloadCvar);
+	return true;
+}
+
+// Real reload: clip decline, slot 280, reserve and SEE_ENEMY / NEW_ENEMY, in that order.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10RealReloadArmTest,
+	"Elysium.Arm.NpcKernelCombat10.RealReloadArm", GElysiumNpcKernelCombat10Flags)
+bool FElysiumNpcKernelCombat10RealReloadArmTest::RunTest(const FString&)
+{
+	FCombat10Fixture F(nullptr);
+	if (!TestNotNull(TEXT("fighter constructs"), F.Fighter))
+	{
+		return false;
+	}
+	FElysiumNpc& N = *F.Fighter;
+	FElysiumItem* const Rifle = F.Arm(GCombat10BachRifle);
+	if (!TestNotNull(TEXT("ranged weapon constructs"), Rifle))
+	{
+		return false;
+	}
+	N.FakeReloadCount = 1;
+	Rifle->MagazineCount = 0;
+	N.Inventory.AddReserve(Rifle->AmmoType, -N.Inventory.Reserve(Rifle->AmmoType));
+	N.Inventory.AddReserve(Rifle->AmmoType, 1);
+	N.Cognition.Conditions.Reset();
+	TestTrue(TEXT("0x10253ab0 empty magazine with reserve may reload"), N.ActiveWeaponWantsReload());
+	TestEqual(TEXT("neither SEE_ENEMY nor NEW_ENEMY chooses 0xc3"), N.RangedWeaponPrePass(), 0xc3);
+	N.Cognition.Conditions.Set(EElysiumNpcCond::SeeEnemy);
+	TestEqual(TEXT("SEE_ENEMY chooses 0xc2"), N.RangedWeaponPrePass(), 0xc2);
+	N.Cognition.Conditions.Clear(EElysiumNpcCond::SeeEnemy);
+	N.Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
+	TestEqual(TEXT("NEW_ENEMY alone chooses 0xc2"), N.RangedWeaponPrePass(), 0xc2);
+	N.Cognition.Conditions.Set(EElysiumNpcCond::SeeEnemy);
+	TestEqual(TEXT("both enemy conditions choose 0xc2"), N.RangedWeaponPrePass(), 0xc2);
+	Rifle->MagazineCount = 1;
+	TestTrue(TEXT("reload gate remains true with reserve"), N.ActiveWeaponWantsReload());
+	TestEqual(TEXT("0x102b86c4 positive clip declines before the admitted gate"), N.RangedWeaponPrePass(), 0);
+	Rifle->MagazineCount = 0;
+	N.Inventory.AddReserve(Rifle->AmmoType, -N.Inventory.Reserve(Rifle->AmmoType));
+	TestFalse(TEXT("reserve zero refuses slot 280"), N.ActiveWeaponWantsReload());
+	TestEqual(TEXT("refused reload reaches the existing ranged draw tail"), N.RangedWeaponPrePass(), 0xe9);
+	TestEqual(TEXT("real reload selection never rerolls fake count"), N.FakeReloadCount, 1);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelCombat10TroikaRangedTest,
 	"Elysium.Arm.NpcKernelCombat10.TroikaRanged", GElysiumNpcKernelCombat10Flags)
 bool FElysiumNpcKernelCombat10TroikaRangedTest::RunTest(const FString&)
@@ -1047,6 +1141,8 @@ bool FElysiumNpcKernelCombat10TroikaRangedTest::RunTest(const FString&)
 	if (Rifle != nullptr)
 	{
 		Rifle->MagazineCount = 3;
+		N.FakeReloadCount = 1; // isolate the pre-existing draw/split assertions from fake reload
+		N.Inventory.AddReserve(Rifle->AmmoType, -N.Inventory.Reserve(Rifle->AmmoType));
 		// `102b86ba`: a NON-EMPTY magazine declines the pre-pass outright.
 		TestEqual(TEXT("102b86ba a loaded weapon declines the pre-pass"),
 			N.RangedWeaponPrePass(), 0);

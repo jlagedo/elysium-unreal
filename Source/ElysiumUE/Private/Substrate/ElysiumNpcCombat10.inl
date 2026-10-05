@@ -239,25 +239,20 @@ static bool RangedGateConVarEnabled(ElysiumNpcTunables::EConVar ConVar);
 
 /** SEAM for `0x101e3f50(&DAT_10739a4c, entity)` — the discipline test both the Troika base and the
  *  human arm put in front of their slot-606 branch (the base passes THIS body, the human passes
- *  `enemy->+0x9c`, its combat-character self-downcast). `DAT_10739a4c` is an unnamed discipline
- *  record and no port discipline is bound to it, so this answers **false**, which is the arm that
- *  ADMITS the slot-606 branch rather than skipping it. */
+ *  `enemy->+0x9c`, its combat-character self-downcast). Presence id 10 (`0x1033d940`) reads
+ *  m_iDisciplineFlags2 (+0xeb4); status apply `0x101e3560 / 0x101dfc20` feeds AddDiscFlag
+ *  `0x1033cfb0`. Spec 0006 owns the cast/status source; absent input answers false, admitting 606. */
 bool RangedDisciplineGate(const FElysiumEntity* Subject) const;
 
-/** SEAM for the weapon-side reads `0x102b8620` makes: the active weapon's slot `+0x5a0` capability
- *  word (tested against `0x6000`), its `+0x74c` first ammo entry, its slot `+0x460` "wants reload"
- *  and its `+0x744` ammo-type id fed to `thunk_FUN_103346c0` `GetAmmoCount`. The port's item record
- *  answers the last two through the inventory's own magazine and reserve; `+0x460` has no port
- *  surface and answers false, which is the arm that skips the reload and the cover pair and lets the
- *  body reach its spacing tail. The `+0x5a0` word is family **Motor**'s `ActiveWeaponCapabilityWord`
- *  seam (`ElysiumNpcMotor.inl`) — the SAME read with the SAME `0x6000` mask — and is reused
- *  rather than stood a second time. */
+/** `0x102b8620` weapon reads: slot 360 through SelectActiveWeaponWord (0x6000),
+ *  +0x74c through MagazineCount, slot 280 `0x10253ab0` through CanReloadMagazine(0), and
+ *  +0x744 through AmmoType / inventory reserve (`0x103346c0`). */
 int32 ActiveWeaponFirstAmmoEntry() const;
 bool ActiveWeaponWantsReload() const;
 int32 ActiveWeaponReserveAmmo() const;
 
 /** `thunk_FUN_102c54c0(this)` (`0x102c54c0`) — the call `0x102b8620` makes before answering a reload
- *  schedule. **SEAM**: unported; counted so the arm is observable. */
+ *  schedule. Diagnostic tally beside the real ResetFakeReloadCount call (`0x102b866d`). */
 int32 RangedReloadPrepCalls = 0;
 
 /** `m_iFakeReloadCount` (`+0x65f0`) is already a member (`FakeReloadCount`) and `+0x5ddc` is

@@ -5,6 +5,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumWeaponClasses.h" // slot 280, 0x10253ab0
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -82,11 +83,10 @@ bool FElysiumNpc::ShouldDodgeRangedAttack()
 
 bool FElysiumNpc::RangedDisciplineGate(const FElysiumEntity* /*Subject*/) const
 {
-	// SEAM for `0x101e3f50(&DAT_10739a4c, entity)`. `DAT_10739a4c` is an unnamed discipline record
-	// and no port discipline is bound to it, so this answers false — which ADMITS the slot-606
-	// branch of the Troika base and the human arm rather than skipping it, and which makes this arm
-	// of the dodge test decline rather than accept.
-	return false;
+	// `0x1033d940 / 0x101e3f50`: Presence id 10 reads m_iDisciplineFlags2 (+0xeb4).
+	// Status apply `0x101e3560 / 0x101dfc20` feeds AddDiscFlag `0x1033cfb0`; spec 0006 owns
+	// that cast/status source. Until it exists, false admits slot 606 and declines this dodge arm.
+	return false; // 0x101e3f50: absent Presence input
 }
 
 bool FElysiumNpc::RangedGateConVarEnabled(ElysiumNpcTunables::EConVar ConVar)
@@ -100,11 +100,8 @@ bool FElysiumNpc::RangedGateConVarEnabled(ElysiumNpcTunables::EConVar ConVar)
 // `FUN_102b8620` — the ranged weapon pre-pass, 688 bytes.
 // =================================================================================================
 
-// `ActiveWeaponCapabilityWord` — the weapon vtable `+0x5a0` read, tested against `0x6000` — is
-// family **Motor**'s seam (`ElysiumNpcMotor.inl`, `ShouldMoveAndShoot`'s gate) and is the same
-// read with the same mask. Reused here rather than stood a second time; it answers `0`, so the
-// reload arm is skipped, which is the arm the pre-pass takes for a weapon that declares no reload
-// capability.
+// `0x102b8656..0x102b865c`: SelectActiveWeaponWord reads the live weapon's slot 360 word,
+// tested against 0x6000 before the fake-reload count and reroll.
 
 int32 FElysiumNpc::ActiveWeaponFirstAmmoEntry() const
 {
@@ -115,10 +112,12 @@ int32 FElysiumNpc::ActiveWeaponFirstAmmoEntry() const
 
 bool FElysiumNpc::ActiveWeaponWantsReload() const
 {
-	// SEAM for the active weapon's own vtable `+0x460`, the "may this be reloaded" test the cover
-	// pair sits behind. No weapon vtable stands here; false skips the pair, which is retail's answer
-	// for a weapon that cannot be reloaded, and lets the body reach its spacing tail.
-	return false;
+	const FElysiumEntity* const ReloadEntity = ActiveWeaponEntity();           // 0x102b86db
+	const FElysiumItem* const ReloadItem = ReloadEntity != nullptr
+		? ReloadEntity->AsItem() : nullptr;                                  // 0x102b86e6, weapon self
+	const FElysiumWeapon* const ReloadWeapon = ReloadItem != nullptr
+		? ReloadItem->AsWeapon() : nullptr;                                  // 0x102b86e6, slot 280
+	return ReloadWeapon != nullptr && ReloadWeapon->CanReloadMagazine(0);    // 0x10253ab0
 }
 
 int32 FElysiumNpc::ActiveWeaponReserveAmmo() const
@@ -135,12 +134,12 @@ int32 FElysiumNpc::RangedWeaponPrePass()
 	// `m_iFakeReloadCount` (`+0x65f0`) below 1.
 	const FElysiumEntity* const Weapon = ActiveWeaponEntity();
 	if (RangedGateConVarEnabled(ElysiumNpcTunables::EConVar::DebugAllowFakeReload) && Weapon != nullptr
-		&& (ActiveWeaponCapabilityWord() & 0x6000u) != 0 && FakeReloadCount < 1)
+		&& (SelectActiveWeaponWord() & 0x6000u) != 0 && FakeReloadCount < 1) // 0x102b8656..0x102b8669
 	{
-		// `102b867e`: `thunk_FUN_102c54c0(this)` — unported, counted.
-		++RangedReloadPrepCalls;
-		// `102b8692`: `m_pHintNode` (`+0x5ddc`) decides which reload program.
-		if (BaseScheduleHost.HintNode == 0)
+		ResetFakeReloadCount();                                             // 0x102b866d -> 0x102c54c0
+		++RangedReloadPrepCalls;                                             // 0x102b866d diagnostic tally
+		// `0x102b8682`: m_pHintNode (+0x5ddc) null maps to the existing INDEX_NONE sentinel.
+		if (BaseScheduleHost.HintNode == INDEX_NONE)                         // 0x102b8682
 		{
 			RecordScheduleEvent(FString::Printf(
 				TEXT("RangedWeaponPrePass %s:%d -> 0xc4"), GTroikaFile, 0x5e8f));

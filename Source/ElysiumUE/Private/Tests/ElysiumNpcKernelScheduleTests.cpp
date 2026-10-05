@@ -870,7 +870,7 @@ bool FElysiumNpcKernelScheduleTestBitsTest::RunTest(const FString&)
 			Mask.Has(EElysiumNpcCond::Comfort));
 		TestTrue(TEXT("and the species addition composes with it"),
 			Mask.Has(EElysiumNpcCond::SeeCorpseFriend));
-		TestTrue(TEXT("and CacheInterruptConditions' unconditional NPC_FREEZE is last"),
+		TestFalse(TEXT("0x1026a225: freeze belongs after direct slot 453"),
 			Mask.Has(EElysiumNpcCond::NpcFreeze));
 	}
 

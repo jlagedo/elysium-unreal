@@ -63,7 +63,7 @@ seconds), the retail source, the class. Runs: `$ELYSIUM_WORK_ROOT/reports/arena/
 - **First unmet:** `never[0]` `SEE_ENEMY` at 0.00 — the hidden NPC senses, sets
   `FLOATING_OFF_GROUND` and runs `FALL_TO_GROUND (0x3e)` before `ScriptUnhide`. Retail `ScriptHide
   0x100a8710` parks the think (`NULL` at `FLT_MAX`) until `ScriptUnhide 0x100a8990`
-  (`lifecycle.md` § "A hidden maker"). Known red 5.
+  (`lifecycle.md` § "The NPC makers"). Known red 5.
 
 ### `verbs_stealth_kill` — harness gap
 - **First unmet:** `expect[1]` `death` by 12.0. Nothing happens on `+use` (2.0); `+attack` (4.0)

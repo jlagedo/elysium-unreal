@@ -77,10 +77,8 @@ bool FElysiumNpcYukie::Slot600(FElysiumEntity* Enemy)
 	// The latch is what makes it one-shot: `m_bInMelee` is never cleared by this body, so a second
 	// call before something else clears it answers false and writes nothing.
 	//
-	// `ActiveWeaponCapabilityWord()` is family Motor's seam over the weapon's `+0x5a0` (slot 360)
-	// and answers 0, so the gate is closed today and the whole body refuses. The refusal is the
-	// recovered one — retail refuses for a weapon with neither capability bit — and the arm that
-	// this substrate cannot yet reach is the accepting one.
+	// 0x103dd900: ActiveWeaponCapabilityWord supplies the held weapon's slot-360 answer.
+	// The 0x18000 test admits melee weapons; unarmed and ranged weapons refuse.
 	(void)Enemy;
 	const FElysiumEntity* Weapon = (World != nullptr && Inventory.ActiveWeapon.IsSet())
 		? World->Resolve(Inventory.ActiveWeapon)

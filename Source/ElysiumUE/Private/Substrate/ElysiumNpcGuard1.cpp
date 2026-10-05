@@ -227,7 +227,6 @@ int32 FElysiumNpcGuard1::SelectIdealStateRetail()
 void FElysiumNpcGuard1::BuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
 {
 	Guard1BuildScheduleTestBits(InOutMask);
-	InOutMask.Set(EElysiumNpcCond::NpcFreeze);
 }
 
 // Slot 440: `0x1037d240`.

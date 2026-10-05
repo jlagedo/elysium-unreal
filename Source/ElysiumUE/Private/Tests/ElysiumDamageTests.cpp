@@ -19,6 +19,7 @@
 #include "ElysiumSheetSlots.h"
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumDamage.h"
+#include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumDice.h"
 #include "Tests/ElysiumSaveTestHelpers.h"
@@ -590,15 +591,29 @@ bool FElysiumDamageProducersTest::RunTest(const FString&)
 		World.EnqueueInput(TEXT("victim"), FName(TEXT("TakeDamage")), FElysiumVariant::Int(12), 0.0,
 			FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
 		World.Tick(0.0);
-		TestEqual(TEXT("a numeric TakeDamage wire routes to the scalar fallback"),
+		TestEqual(TEXT("an integer TakeDamage wire builds the scalar packet (0x102c29a0)"),
 			Trait(*Victim, ElysiumSlot::Health), 12);
 
 		World.EnqueueInput(TEXT("victim"), FName(TEXT("TakeDamage")),
 			FElysiumVariant::String(TEXT("lots")), 0.0, FElysiumEntityHandle::Invalid(),
 			FElysiumEntityHandle::Invalid());
 		World.Tick(0.0);
-		TestEqual(TEXT("a non-numeric parameter is a reported no-op, not a guessed default"),
+		TestEqual(TEXT("a non-integer variant builds zero scalar damage (0x102c29b9)"),
 			Trait(*Victim, ElysiumSlot::Health), 12);
+		FElysiumNpc* InputVictim = Victim->AsNpc();
+		FElysiumPlayer* InputPlayer = World.FindPlayer();
+		if (!TestNotNull(TEXT("input victim is an NPC"), InputVictim)
+			|| !TestNotNull(TEXT("input activator is live"), InputPlayer)) return false;
+		InputVictim->Cognition.Conditions.Clear(EElysiumNpcCond::LightDamage);
+		World.EnqueueInput(TEXT("victim"), FName(TEXT("TakeDamage")), FElysiumVariant::Int(1), 0.0,
+			InputPlayer->Handle, InputVictim->Handle);
+		World.Tick(0.0);
+		TestEqual(TEXT("one integer point applies (0x102c29c1)"), Trait(*Victim, ElysiumSlot::Health), 13);
+		TestTrue(TEXT("live activator reaches LIGHT_DAMAGE (0x10265f64 -> 0x10266239)"),
+			InputVictim->Cognition.Conditions.Has(EElysiumNpcCond::LightDamage));
+		TestTrue(TEXT("wire caller is the packet inflictor (0x102c29c7)"),
+			InputVictim->LastTakeDamageInfo.Inflictor == InputVictim->Handle);
+
 	}
 
 	// --- trigger_hurt: entry half tick, then x3 every 3 s ---------------------------------------

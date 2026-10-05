@@ -233,6 +233,8 @@ FElysiumNpcConditions ElysiumSchedule::EffectiveInterrupts(const FElysiumSchedul
 	}
 	FElysiumNpcConditions Mask = Active->Interrupts.ToLocalOrdinals(Runner.ConditionIdSpace());
 	Runner.BuildScheduleTestBits(Mask);
+	// 0x1026a21b: slot 411 is empty (0x10280fd0 RET).
+	Mask.Set(EElysiumNpcCond::NpcFreeze); // 0x1026a221 PUSH 0x75 / 0x1026a225 -> 0x10269eb0
 	return Mask;
 }
 

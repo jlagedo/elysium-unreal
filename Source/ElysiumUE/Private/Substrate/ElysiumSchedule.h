@@ -390,7 +390,7 @@ namespace ElysiumSchedule
 
 	/**
 	 * The mask the NPC actually runs against this think: the installed program's authored
-	 * `Interrupts` plus the runner's `BuildScheduleTestBits` overlay.
+	 * `Interrupts`, virtual slot 453's overlay, empty slot 411, then unconditional NPC_FREEZE.
 	 *
 	 * This is retail's `CacheInterruptConditions` (`0x1026a0f0`) product, `m_ScheduleTestBits`
 	 * `+0x5c74`. With no installed schedule there is no mask at all, and retail's two mask testers
@@ -426,10 +426,8 @@ namespace ElysiumSchedule
 	 * `(conds & +0x5c74) | (~conds & +0x5c8c)`). The per-NPC overlay is not `+0x5c8c`: it ORs into
 	 * `+0x5c74` via `SetScheduleTestBits` (`0x10269eb0`).
 	 *
-	 * This runtime models the normal mask only, which is exact because no shipped schedule uses the
-	 * inverted one (see the oracle's interrupt-conditions section). If that is ever modelled it must
-	 * be a SEPARATE word: folding it in here would make `HasInterruptCondition` below honour `!COND`
-	 * bits that retail's `0x10269d30` — which reads `+0x5c74` alone — deliberately ignores.
+	 * This accessor and HasInterruptCondition use the positive mask only. Authored inverse
+	 * interrupts are stored separately and IsScheduleValid evaluates their absence.
 	 */
 	bool MaskHasCondition(const FElysiumScheduleState& State, IElysiumScheduleRunner& Runner,
 		EElysiumNpcCond Cond);

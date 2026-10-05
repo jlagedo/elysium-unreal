@@ -183,25 +183,17 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	D.Input(TEXT("TweakParam"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputTweakParam(Args); });
 
-	// `TakeDamage` — 4 map wires, plus the same name as a Character method the script surface
-	// dispatches (K1: two bindings, one implementation). The wire's own datamap record is
-	// unrecovered, so its argument's FIELD TYPE is a genuine unknown; what the corpus passes is a
-	// number, and a number routes to the scalar fallback exactly as the script call does. A
-	// parameter that is not numeric is refused and reported rather than turned into a plausible
-	// default, because the marshalling contract is what is missing, not the receiver.
+	// InputTakeDamage 0x102c29a0: integer variant only (0x102c29aa..29c1),
+	// caller -> inflictor, activator -> attacker (0x102c29c5..29dc), scalar packet
+	// with zero damage bits/force/position and ammo -1; TakeDamage at 0x102c2a00.
 	D.Input(TEXT("TakeDamage"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{
-			FElysiumNpc& Npc = static_cast<FElysiumNpc&>(E);
-			const float Amount = Args.Param.ToFloat();
-			if (Amount <= 0.f)
-			{
-				UE_LOG(LogElysiumNpcEnt, Warning,
-					TEXT("%s TakeDamage '%s' is not a positive number — refused (the recovered "
-						"datamap record does not name this input's field type)"),
-					*Npc.DebugString(), *Args.Param.Describe());
-				return;
-			}
-			Npc.TakeDamage(Amount);
+			FElysiumNpcBase::FElysiumTakeDamageInfo InputPacket;
+			InputPacket.Inflictor = Args.Caller;                         // 0x102c29c7 / 29db
+			InputPacket.Attacker = Args.Activator;                       // 0x102c29c5 / 29da
+			InputPacket.Damage = Args.Param.IsInt()
+				? static_cast<float>(Args.Param.ToInt()) : 0.0f;          // 0x102c29aa..29c1
+			static_cast<FElysiumNpc&>(E).OnTakeDamage(&InputPacket);     // 0x102c2a00 -> 0x1032ef60
 		});
 
 	ElysiumAddClassField(D, TEXT("stattemplate"),    &FElysiumNpc::StatTemplate);

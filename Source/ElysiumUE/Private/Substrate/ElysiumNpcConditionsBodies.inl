@@ -29,8 +29,8 @@
 
 // +0x1564 CBaseCombatCharacter::m_flNextAttack (datamap) — an absolute curtime deadline, carried as
 // double. It sits on the CHAIN, not on `CAI_BaseNPCTroika`'s own 388 words, which is why 29b's shape
-// map has no row for it; `RefreshCombatConditions` (`0x102b2570`) and `GatherAttackConditions`
-// (`0x1026dd10`) are its two readers in this band and nothing in this runtime writes it yet.
+// map has no row for it.
+// Readers: 0x102b2570 / 0x1026dd10 / 0x102551ff; writers: 0x1029fd6a / 0x1029fd6f / 0x1029fdb0 / 0x103ea2eb.
 double NextAttackTime = 0.0;
 
 // +0x10b4 CAI_BaseNPCTroika::m_idxDefExpression (datamap). Retail stores the resolved index from

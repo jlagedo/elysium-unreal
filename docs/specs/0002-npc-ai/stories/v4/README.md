@@ -14,7 +14,7 @@ Paths are relative to `Source/ElysiumUE/Private/Substrate/` unless they say othe
 | V4a | `brief-A0-seam.md`, `brief-A1-dispatcher.md`, `brief-A2-clock-words.md`, `brief-A3-view-cone.md`, `brief-A4-player-camera-dispatch.md`, `brief-A-integrator.md` |
 | V4b | `brief-R1b-slow-turn-reader.md` (one short read, J9, before B1/B2 start), `brief-B1-body-speed.md`, `brief-B2-move-yaw-facing.md`, `brief-B-integrator.md` |
 | V4c | `brief-C1-attack-producers.md`, `brief-C2-pick-disposition-corpse.md`, `brief-C-integrator.md` |
-| V4d | `brief-D-ragdoll.md` (its § "After the spike") |
+| V4d | `brief-D-ragdoll.md` (its § "First step — one controlled frame measurement") |
 
 **(amended after V4r, 2026-10-04)** The briefs are final: each was amended from the packets and the
 judge's rulings and a coder works from its brief alone. There is no `packets.md`: R1's packet is
@@ -754,7 +754,7 @@ on `m_TranslatedActivity`); `.DieRagdollSeed` states who reaches the bone −1 a
   refuted the last point: the drawn mesh is the map actor's component, only attached to the
   motor, so the dead body's collision switch does not reach it — the body fell and rested with
   no handoff or collision change. The collision fix is withdrawn; the rest test is a speed
-  threshold and the height bound is per body (`brief-D-ragdoll.md` § "After the spike").
+  threshold and the height bound is per body (`brief-D-ragdoll.md` § "First step — one controlled frame measurement").
 - **Q4. Slot 247 needs the sequence bbox**, which the bake drops (`clip_data.py:13-25`). If R2 shows
   `Flags2 & 4` set on any NPC class, **for the judge**: the bbox on the `UElysiumBodyData` row
   (re-authors the `DA_` assets; unverified whether that avoids re-cooking the animation packages) or

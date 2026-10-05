@@ -22,6 +22,9 @@
 #include "Substrate/ElysiumNpcRat.h"
 #include "Substrate/ElysiumNpcDog.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"
+#include "Misc/ScopeExit.h"
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
 #include "Tests/ElysiumNpcTestFixture.h"
@@ -1591,6 +1594,60 @@ bool FElysiumV4cAutoMovementTest::RunTest(const FString&)
 	AutoNpc->BaseMemory.Enemy = AutoBlocker->Handle; AutoNpc->Navigator.GoalType = 2;
 	TestFalse(TEXT("0x102e0dcc: stopped-at-target result 4 is false"), AutoNpc->AutoMovement());
 	TestTrue(TEXT("0x102e0cf1: stopped-at-target still applies partial endpoint"), AutoNpc->Origin.X > GatedOrigin.X);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcKernelMotorWeaponCapabilityWordTest,
+	"Elysium.Arm.NpcKernelMotor.WeaponCapabilityWord", GElysiumNpcKernelMotorFlags)
+bool FElysiumNpcKernelMotorWeaponCapabilityWordTest::RunTest(const FString&)
+{
+	FElysiumItemTable Items;
+	FElysiumItemDef Firearm;
+	Firearm.Classname = TEXT("item_w_v5b_motor_firearm");
+	Firearm.Type = EElysiumItemType::WeaponFirearm;
+	Items.Items.Add(MoveTemp(Firearm));
+	FElysiumItemDef Bat;
+	Bat.Classname = TEXT("item_w_v5b_motor_bat");
+	Bat.Type = EElysiumItemType::WeaponMelee;
+	Items.Items.Add(MoveTemp(Bat));
+	Items.Reindex();
+	ElysiumItems::Install(Items);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Items); };
+	FElysiumNpcWorldBuilder Builder(TEXT("npc_kernel_motor_weapon_word"), 4350);
+	Builder.AddNpc(TEXT("guard"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* Guard = Fixture.Npc(TEXT("guard"));
+	if (!TestNotNull(TEXT("guard"), Guard)) return false;
+	FElysiumNpcWorldFixture::Quiet({ Guard });
+	Guard->Inventory.Holster(*Guard);
+	Guard->CapabilityWord = 0x40;
+	TestEqual(TEXT("0x1014f930 / 0x10149e80: unarmed word is zero"),
+		Guard->ActiveWeaponCapabilityWord(), 0u);
+	TestEqual(TEXT("0x1026db30: unarmed retains the NPC capabilities"), Guard->CapabilitiesGet(), 0x40);
+	struct FExpected { const TCHAR* Classname; uint32 Word; };
+	const FExpected Expected[] = {
+		// 0x102347c0 returns 0x2000; 0x6000 is the consumers' mask, not the word.
+		{ TEXT("item_w_v5b_motor_firearm"), 0x2000u },
+		// 0x103eaea0 returns the full melee word, including 0x40000000.
+		{ TEXT("item_w_v5b_motor_bat"), 0x40018000u },
+	};
+	for (const FExpected& Row : Expected)
+	{
+		const FElysiumEntityHandle ItemHandle = Guard->Inventory.GiveNamedItem(*Guard, Row.Classname);
+		FElysiumEntity* Entity = Fixture.World.Resolve(ItemHandle);
+		FElysiumItem* Item = Entity != nullptr ? Entity->AsItem() : nullptr;
+		if (!TestNotNull(Row.Classname, Item)) return false;
+		Guard->Inventory.SetActiveWeapon(*Guard, *Item);
+		TestEqual(TEXT("slot 360: concrete weapon capability word"),
+			Guard->ActiveWeaponCapabilityWord(), Row.Word);
+		TestEqual(TEXT("slot 360: firearm satisfies 0x6000; bat satisfies 0x18000"),
+			Guard->ActiveWeaponCapabilityWord() & (Row.Word == 0x2000u ? 0x6000u : 0x18000u),
+			Row.Word == 0x2000u ? 0x2000u : 0x18000u);
+		TestEqual(TEXT("0x1026db30: slot 513 ORs NPC and weapon words"),
+			Guard->CapabilitiesGet(), static_cast<int32>(Row.Word | 0x40u));
+	}
+	Guard->Inventory.Holster(*Guard);
+	TestEqual(TEXT("slot 360: holstering clears the weapon word"), Guard->ActiveWeaponCapabilityWord(), 0u);
 	return true;
 }
 

@@ -1,7 +1,10 @@
 # V5b — combat interrupts, NPC reload and the weapon capability word
 
 Final planner brief, 2026-10-05, against **V4c `d0f79574`**, after V4o `64895278`.
-Implementation has not started. This wave follows V5a / V5a-3 and V4d, and precedes V6.
+Implementation closed 2026-10-05 against the owner's V4d baseline: default 169/0,
+arm 1636/0, kernel 7/7; arena 116 pass / 1 existing fail / 15 expected-fail /
+2 unexpected-pass of 134. Both new records pass alone and after another.
+This wave follows V5a / V5a-3 and V4d, and precedes V6.
 The planning checkout is `spec-0002/coord`; the coordinator names each coder's worktree and the
 integration branch. The checker audit and settling reads are in `packets-V5b-check.md`.
 
@@ -168,8 +171,13 @@ capability word, ranged masks/testers, and CacheTail order/inverse/freeze preser
 HumanCombatant and Guard1. Weapon family prefix is **Elysium.Arm.Weapons.** (plural).
 
 Real reload's finish is implemented and proved by arm tests: an ordinary NPC event shot does not
-spend its clip (`0x10238a15` player-only), so the witness maps do not reach it by emptying the gun.
-The flamethrower attack `0x103e2f30` is a separate attack/pipeline scope, not pulled into V5b.
+spend its clip (`0x10238a15` player-only). The owner requires a flamethrower live witness
+when possible with source changes alone. The V5b audit found the item registration,
+baked wield models and standing `flamet_attack` / reload sequences present, but both
+standing and layered flamethrower attack timelines have no shot event in either sex bank.
+The specialized Attack `0x103e2f30` is also absent from the port. Under the owner's
+no-bake fallback, arm proof remains and the precise event/Attack-entry gap is recorded
+in combat-and-damage.md; no synthetic event, pipeline change or re-bake is made.
 Presence's producer remains spec 0006. Retained single-round bInReload goes to V6.
 
 ## 5. Integration risks and limits

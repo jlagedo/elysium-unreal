@@ -1096,6 +1096,9 @@ protected:
 	// Shared rather than unique so the header needs no complete type: `TSharedPtr`'s deleter is
 	// captured where `MakeShared` runs, which is the .cpp that has `ElysiumRulebook.h`.
 	TSharedPtr<const FElysiumClanTemplate> FootstepTemplate;
+	// Reload arms stage the resolved template directly (0x101d4394..0x101d43c8).
+	friend class FElysiumNpcKernelCombat10FakeReloadArmTest;
+	friend class FElysiumNpcKernelConditions10FakeReloadTest;
 
 	// The two silent arms of the footfall, counted rather than logged per occurrence — the anim-event
 	// census's rule, and for its reason: a body with no surface under it fires 2050 every half

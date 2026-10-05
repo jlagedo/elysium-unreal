@@ -470,8 +470,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatCapabilityTest,
 	"Elysium.Arm.NpcCombat.Capability", GElysiumTestFlags)
 bool FElysiumNpcCombatCapabilityTest::RunTest(const FString&)
 {
-	TestEqual(TEXT("the melee capability is retail's own 0x18000"),
-		ElysiumNpcCond::CapabilityBits(ElysiumNpcCond::ECapability::Melee), 0x18000);
+	TestEqual(TEXT("0x103eaea0: the full melee capability is 0x40018000"),
+		ElysiumNpcCond::CapabilityBits(ElysiumNpcCond::ECapability::Melee), 0x40018000);
 	TestEqual(TEXT("a firearm reports 0x2000"),
 		ElysiumNpcCond::CapabilityBits(ElysiumNpcCond::ECapability::Ranged), 0x2000);
 

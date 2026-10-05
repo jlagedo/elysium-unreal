@@ -833,8 +833,11 @@ preserves the raw retail number of every currently supported selector answer and
 translation separate from that ideal stamp. The shape map previously bound **both** `+0x1b24` and Troika
 `m_flInterruptTime +0x632c` to one `ScheduleHost.InterruptTime`; Maintain19 splits the first into
 `CacheInterruptTime`, because the schedule-change reset of `+0x632c` must not silently force or
-suppress the cache gate. The current program format has no authored inverse-interrupt column, so
-the cached inverse mask remains empty; the positive authored mask plus slot 453 is complete.
+suppress the cache gate. V5b copies the authored positive and inverse masks separately
+(`0x1026a1a2..1d2`, `0x1026a1d8..207`), calls slot 453 once (`0x1026a211`),
+then empty slot 411 (`0x1026a21b`) and adds NPC_FREEZE to the positive mask
+(`0x1026a221 / 0x1026a225`). Neither inverse bits nor current conditions are
+folded into that mask or cleared by caching.
 
 `FElysiumNpc::MaintainSchedule` supplies the entity words to that loop. The former pre-loop
 `UpdateIdealState` runtime call and the select/start/second-tick body in `ThinkStanceOrIdle` no
@@ -4110,7 +4113,7 @@ port; recorded through `RecordScheduleEvent`); "sel N" is the `+0x1b2c` selector
 running schedule's mask). States are retail's `m_NPCState` numbers.
 
 Slot 437's Troika body `0x102ae920` is walked where the oracle already held it: `conditions-and-states.md`
-§ "`GetSchedule` `0x102ae920` runs ahead of `SelectSchedule`".
+§ "`PreSelectSchedule` `0x102ae920` runs ahead of `SelectSchedule`".
 
 ### `GetNewSchedule` `0x1028a260` — the selector pair (no verdict row)
 

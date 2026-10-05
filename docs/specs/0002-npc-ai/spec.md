@@ -683,11 +683,21 @@ tests the green scenarios cover deleted.
   size M, not 0014's M + M + L + XS with a 24-minute re-import (the `.phy` is decoded and already
   baked as data; the handoff exists; the bake step re-imports nothing). The death impulse,
   `prop_ragdoll`, joint friction and the full-corpus rollout stay in 0014.
-- [ ] **V5. Fix: the attack conditions and the combat interrupts.** (Was C3.) The two clears and
+- [x] **V5. Fix: the attack conditions and the combat interrupts.** (Was C3.) The two clears and
   the timers of `GatherAttackConditions`; why `0xef`'s mask does not break (packet first),
   `HasInterruptCondition 0x10269d30`. *Scenario:* cover-and-fire with the player at 96 cm and
   10 m. *Size:* S. *Model:* Fable/medium.
   *2026-10-04:* V5a landed (with V4a's lane A3): `range_bands`, `cover_armed`, `sense_enemy_facing_me` green; `ranged_open_fire` placed on A1 then O3.
+  *2026-10-05 close:* V5a + V5a-3 + V5b proven: range bands, slot562 friend hold,
+  event standing fire, six-set fake reload, and 0xef hold through its LAST task
+  (`ranged_fake_reload`, `ranged_step_back_holds`). Default 169/0; arm 1636/0;
+  kernel 7/7; full arena 116 pass / 1 existing fail rollcall_vzombie /
+  15 expected-fail / 2 unexpected-pass of 134; all 114 V4d passes retained.
+  Real TASK_RELOAD slots322/323 are ported with arm proof under the owner's
+  explicit no-bake fallback: the baked flamethrower standing attack has no
+  shot event. Exact class/model/sequence/event and Attack-entry evidence is in
+  combat-and-damage.md. Presence producer is 0006; retained NPC single-round
+  bInReload persistence is V6. Four builds used; no modernization.
 - [ ] **V6. Fix: session, clock and lifecycle.** (Was C4.) Per-level `curtime`; `map_load` tearing
   the entity world down first; `elysium.load <slot>`; resume at the task cursor `+0x5c50` with the
   animating words (the divergence closed); `ScriptUnhide`'s ground snap; `SetRelationship` into

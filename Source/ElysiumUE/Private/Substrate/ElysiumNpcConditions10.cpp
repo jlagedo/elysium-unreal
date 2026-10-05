@@ -13,6 +13,7 @@
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
+#include "Substrate/ElysiumRulebook.h" // 0x101d3f10: General template reads
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "ElysiumWorldServices.h"
@@ -520,12 +521,19 @@ void FElysiumNpc::UpdateBurstShootPause()
 
 bool FElysiumNpc::CharTemplateFakeReloadRange(int32& OutMin, int32& OutMax) const
 {
-	// **SEAM** for the char template's `+0x34` / `+0x38` pair, resolved by `GetCharTemplate`
-	// (`0x10207c40`) through the template manager (`0x101d5e80` over `DAT_10738d10`).
-	// `FElysiumClanTemplate` exposes no such columns, so this answers false with both ends zero.
-	OutMin = 0;
-	OutMax = 0;
-	return false;
+	const FElysiumClanTemplate* const ReloadTemplate = FootstepTemplate.Get(); // 0x10207c40
+	if (ReloadTemplate == nullptr)                                           // 0x101d3f10 defaults
+	{
+		// No resolved template: stand in with the loader's own 8/8 pair, not a retail null arm.
+		OutMin = 8;                                                         // 0x101d4394
+		OutMax = OutMin;                                                    // 0x101d43ad..0x101d43c8
+		return false;                                                       // 0x101d3f10 stand-in
+	}
+	OutMin = static_cast<int32>(ReloadTemplate->GeneralFloat(
+		TEXT("NpcFakeReloadCountMin"), 8.f));                                // 0x101d4394..0x101d43b1
+	OutMax = static_cast<int32>(ReloadTemplate->GeneralFloat(
+		TEXT("NpcFakeReloadCountMax"), static_cast<float>(OutMin)));          // 0x101d43ad..0x101d43c8
+	return true;                                                            // 0x101d3f10
 }
 
 void FElysiumNpc::ResetFakeReloadCount()
@@ -534,7 +542,7 @@ void FElysiumNpc::ResetFakeReloadCount()
 	// `(*DAT_1070b244)->+8` is `IUniformRandomStream::RandomInt`.
 	//
 	// The write is unconditional. vstdlib.dll 0x10002e60 returns Min without drawing when
-	// Max <= Min; in particular the missing template seam's (0,0) must not advance the stream.
+	// Max <= Min; in particular the missing template stand-in's (8,8) must not advance the stream.
 	int32 Min = 0;
 	int32 Max = 0;
 	CharTemplateFakeReloadRange(Min, Max);

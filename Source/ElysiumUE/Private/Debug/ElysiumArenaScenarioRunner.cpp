@@ -1042,6 +1042,7 @@ void FElysiumArenaScenarioRunner::RecordAction(const FElysiumArenaAction& Action
 	case EElysiumArenaAction::Fire:
 		Name = Action.Target;
 		Text += FString::Printf(TEXT(" %s %s"), *Action.Input, *Action.Param.Describe());
+		if (!Action.Activator.IsEmpty()) Text += FString::Printf(TEXT(" activator=%s"), *Action.Activator);
 		break;
 	case EElysiumArenaAction::SeedHealth:
 	case EElysiumArenaAction::Kill:
@@ -1169,9 +1170,20 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 		const bool bKill = Action.Do == EElysiumArenaAction::Kill;
 		const FName Input = bKill ? FName(TEXT("Kill")) : FName(*Action.Input);
 		const FElysiumVariant Param = bKill ? FElysiumVariant::Void() : ElysiumArenaRunnerDetail::ToVariant(Action.Param);
+		FElysiumEntityHandle InputActivator = FElysiumEntityHandle::Invalid();
+		if (!Action.Activator.IsEmpty())
+		{
+			FElysiumEntity* ActivatingEntity = ElysiumArenaRunnerDetail::FindEntity(World, Action.Activator);
+			if (ActivatingEntity == nullptr || ActivatingEntity->IsDead())
+			{
+				OutError = FString::Printf(TEXT("no live activator named '%s'"), *Action.Activator);
+				return false;
+			}
+			InputActivator = ActivatingEntity->Handle; // 0x102c29c5: inputdata activator reaches damage packet
+		}
 		for (const FElysiumEntityHandle& Target : Targets)
 		{
-			World.EnqueueInput(TEXT("!self"), Input, Param, 0.0, FElysiumEntityHandle::Invalid(), Target);
+			World.EnqueueInput(TEXT("!self"), Input, Param, 0.0, InputActivator, Target);
 		}
 		return true;
 	}

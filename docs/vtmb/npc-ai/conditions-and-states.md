@@ -57,9 +57,9 @@ Interrupts  COND_NEW_ENEMY COND_SEE_ENEMY COND_SQUAD_SEE_ENEMY COND_SEE_FEAR
             COND_INVESTIGATE_SIGHT COND_IGNORE_UNKNOWN COND_DETECTED_ATTACK COND_PLAYER_ON_HEAD
 ```
 
-## `GetSchedule` `0x102ae920` runs ahead of `SelectSchedule`
+## `PreSelectSchedule` `0x102ae920` runs ahead of `SelectSchedule`
 
-`GetNewSchedule` (`0x1028a260`) dispatches slot 437 (`CAI_BaseNPCTroika::GetSchedule`
+`GetNewSchedule` (`0x1028a260`) dispatches slot 437 (`CAI_BaseNPCTroika::PreSelectSchedule`
 `0x102ae920`, 55 classes) and, only when it answers 0, slot 438 (`SelectSchedule` `0x102af660`,
 the state cases above). A non-zero pre-selector answer therefore pre-empts every state case.
 (Name, story 29a: the image calls slot 437 `PreSelectSchedule` — the VProf string of
@@ -2409,8 +2409,8 @@ identity of the weapon vtable slot `+0x450`.
 **Settled 2026-10-04 (spec 0002 `stories/v5/README.md` §1.2–§1.4, read from the listing).**
 
 - **`+0x5a0` is slot 360, the weapon's capability word**: `0x1014f930` (the character line) and
-  `CBaseCombatWeapon 0x10149e80` answer 0; the subclasses answer `0x6000` (ranged) or the melee
-  word. Slot 513 `CapabilitiesGet` is `m_afCapability | activeWeapon->slot360()`.
+  `CBaseCombatWeapon 0x10149e80` answer 0; CWeaponRanged `0x102347c0` answers `0x2000`; CWeaponMelee `0x103eaea0` answers
+  `0x40018000`. The consumers test `&0x6000` and `&0x18000`, respectively. Slot 513 `CapabilitiesGet` is `m_afCapability | activeWeapon->slot360()`.
 - **`+0x460` is slot 280, `CBaseCombatWeapon 0x10253ab0(i)`**: `m_iAmmoTypes[i] (+0x744) < 0`
   (`0x10253b40` false) → 1; slot 277 (`+0x454`, uses a clip) and `m_iMagazineCurAmts[i] (+0x74c)
   > 0` → 1; an owner whose `GetAmmoCount(type)` (`0x103346c0`) `> 0` → 1; else 0.
@@ -2436,6 +2436,16 @@ identity of the weapon vtable slot `+0x450`.
 - **`CacheInterruptConditions 0x1026a0f0`'s tail** is three statements: slot 453 (`0x1026a211`),
   slot 411 (`0x1026a21b`; `0x10280fd0`, an empty body on the whole NPC line),
   `SetScheduleTestBits(0x75)` (`0x1026a225`); the function ends at `0x1026a232`.
+
+V5b restores the template-backed reroll, null-hint sentinel and slot-280 magazine gate. The vampire.dll listing places the reroll call at 0x102b866d and the hint null test at 0x102b8682; the brief's 0x102b867e / 0x102b8692 citations differ.
+
+V5b's shared capability helper now retains the full `0x40018000` melee word from
+`0x103eaea0`, including the formerly omitted `0x40000000` bit; ranged remains `0x2000`.
+
+`0x1026a16b` stamps time. No program resets both masks at `0x1026a173..196`;
+a program copies positive `0x1026a1a2..1d2` and inverse `0x1026a1d8..207`, then
+calls slot453 `0x1026a211`, empty411 `0x1026a21b`, and adds positive freeze at
+`0x1026a221 / 0x1026a225`. It never clears current freeze or ignored conditions.
 
 ### `FUN_102b7f40` — the dodge test
 

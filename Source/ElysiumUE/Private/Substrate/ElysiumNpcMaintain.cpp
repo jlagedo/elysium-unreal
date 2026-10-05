@@ -315,20 +315,22 @@ void FElysiumNpc::CommitIdealStateForSchedule()
 
 void FElysiumNpc::CacheInterruptConditionsForMaintenance(double Now)
 {
-	BaseScheduleHost.CacheInterruptTime = Now; // 0x1026a16d, +0x1b24
-	if (!Schedule.IsRunning())
+	BaseScheduleHost.CacheInterruptTime = Now; // 0x1026a16b, +0x1b24
+	const FElysiumScheduleProgram* Installed = ElysiumScheduleFor(Schedule.Current); // 0x1026a171
+	if (Installed == nullptr) // 0x1026a171: no installed program
 	{
-		Cognition.CustomInterruptConditions.Reset();  // 0x1026a18d
-		Cognition.InverseInterruptConditions.Reset(); // 0x1026a1a3
+		Cognition.CustomInterruptConditions.Reset();  // 0x1026a173..0x1026a183
+		Cognition.InverseInterruptConditions.Reset(); // 0x1026a185..0x1026a196
 		return;
 	}
-	// The port's program record has no authored inverse-mask column; its recovered positive mask
-	// plus slot 453 is the whole cached mask the interpreter and debug view consume.
-	Cognition.CustomInterruptConditions =
-		ElysiumSchedule::EffectiveInterrupts(Schedule, *this); // 0x1026a1d9..0x1026a25f
-	Cognition.InverseInterruptConditions.Reset();
-	RemoveIgnoredConditions();								// 0x1026a267, slot 459
-	Cognition.Conditions.Clear(EElysiumNpcCond::NpcFreeze); // 0x1026a274
+	Cognition.CustomInterruptConditions = Installed->Interrupts.ToLocalOrdinals(
+		ConditionIdSpace()); // 0x1026a1a2..0x1026a1d2, schedule +0x28..0x3c
+	Cognition.InverseInterruptConditions = Installed->InvertedInterrupts.ToLocalOrdinals(
+		ConditionIdSpace()); // 0x1026a1d8..0x1026a207, schedule +0x00..0x14
+	BuildScheduleTestBits(Cognition.CustomInterruptConditions); // 0x1026a211, slot 453
+	// 0x1026a21b: slot 411 is empty across the NPC hierarchy (0x10280fd0 RET).
+	Cognition.CustomInterruptConditions.Set(EElysiumNpcCond::NpcFreeze); // 0x1026a221 PUSH 0x75;
+	// 0x1026a225 -> 0x100123f5 -> 0x10269eb0; 0x10269f02 ORs the positive cache.
 }
 
 int32 FElysiumNpc::SelectScheduleForMaintenance(double Now,

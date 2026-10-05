@@ -5,7 +5,7 @@ _vampire.dll sha256 `c546f4de2003624d…`; from `research/tooling/ghidra/driver/
 
 Every `dead` row of the verdict overlay: a retail body nothing can observe — no keyfield, schedule text, script name, output, save field, player-visible timing or witness test would notice its absence. Spec 0019 story 1 judged them; story 6 removes the port body and its tests and writes `-` in the row's target. **Standing** is a row whose target still names a port body; **gone** is a row at `-`. *Port sites* and *Tests* are where the port cites the retail address today.
 
-649 rows, 192 standing — 0 with a hand-written port site, the rest a generated stub or a registry value that goes with the slot stubs in story 5.
+649 rows, 192 standing — 1 with a hand-written port site, the rest a generated stub or a registry value that goes with the slot stubs in story 5.
 
 | Address | Function | Layer | Port target | Port sites | Tests | Why |
 |---|---|---|---|---|---|---|
@@ -166,14 +166,14 @@ Every `dead` row of the verdict overlay: a retail body nothing can observe — n
 | `0x10279060` | CAI_BaseNPC::FUN_10279060 | 4 | - | — | — | slot 540 PlayScene has one body and no dispatch site anywhere in the DLL |
 | `0x1027c2e0` | CAI_BaseNPC::LoadedSchedules | 0 | default:1 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
 | `0x1027d9d0` | CAI_BaseNPC::FUN_1027d9d0 | 0 | default:0 | — | — | constant false, slot 514 has one body in the family and no caller |
-| `0x1027d9f0` | CAI_BaseNPC::OverrideMoveFacing | 0 | - | ElysiumNpcMotor10.cpp:486 | ElysiumNpcKernelMotorTests.cpp:416 | constant false inside a scope-trace frame, slot 526 has one body in the family and no caller |
+| `0x1027d9f0` | CAI_BaseNPC::OverrideMoveFacing | 0 | - | ElysiumNpcMotor10.cpp:486 | ElysiumNpcKernelMotorTests.cpp:419 | constant false inside a scope-trace frame, slot 526 has one body in the family and no caller |
 | `0x1027e120` | CAI_BaseNPC::FUN_1027e120 | 0 | - | — | — | slot 423 has one body and no dispatch site on this family in the DLL; the template spawnflag bit 11 has no reader through it |
 | `0x1027e740` | CAI_BaseNPC::FUN_1027e740 | 1 | - | — | — | NPC state NAME lookup slot 406 used only by the debug overlays and ReportAIState |
 | `0x1027e7d0` | CAI_BaseNPC::FUN_1027e7d0 | 1 | - | — | — | navigation type NAME lookup slot 407 used only by the debug overlays |
 | `0x1027ede0` | CAI_BaseNPC::GetShortConditionName | 1 | - | — | — | GetShortConditionName slot 408, condition NAME lookup for debug prints |
 | `0x1027ee00` | CAI_BaseNPC::GetLastSharedCondition | 0 | default:0x77 | — | — | slot 409 last-shared-condition id 0x77, read only by the condition NAME lookup and the trace formatter CONDS walk |
 | `0x1027efb0` | FUN_1027efb0 | 1 | - | ElysiumEntityDebugSubsystem.cpp:361, ElysiumNpcBaseThink.cpp:120, ElysiumEntityWorld.h:806 | — | the debug ring dump, whole effect is DevMsg |
-| `0x10280fd0` | CAI_BaseNPC::FUN_10280fd0 | 0 | default:void | — | — | empty body, slot 411 has one body in the family and no override |
+| `0x10280fd0` | CAI_BaseNPC::FUN_10280fd0 | 0 | default:void | ElysiumNpcMaintain.cpp:331, ElysiumSchedule.cpp:236 | — | empty body, slot 411 has one body in the family and no override |
 | `0x1028b0b0` | CAI_BaseNPC::FUN_1028b0b0 | 0 | - | — | ElysiumNpcKernelPositionsTests.cpp:562 | slot 549 has one body and no dispatch site anywhere in the DLL |
 | `0x1028b0f0` | CAI_BaseNPC::FUN_1028b0f0 | 0 | - | — | — | whole effect is a Subclass-missing error print and constant 0; slot 547 has one body and no caller |
 | `0x1028df30` | CAI_BaseNPCTroika::FUN_1028df30 | 12 | - | — | — | TraceMessage slot 20, raw text to the debug ring or DevMsg |
@@ -239,7 +239,7 @@ Every `dead` row of the verdict overlay: a retail body nothing can observe — n
 | `0x1034bd30` | CNPCMaker::DrawDebugGeometryOverlays | 0 | registry:123 | — | — | empty override of debug slot 123 DrawDebugGeometryOverlays on the three makers |
 | `0x1034d410` | CScriptedTarget::vfunc117 | 1 | - | — | — | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
 | `0x1034d430` | CScriptedTarget::vfunc82 | 0 | - | — | — | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034d6e0` | CScriptedTarget::Spawn | 5 | - | — | ElysiumNpcKernelSpeciesTests.cpp:1282 | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034d6e0` | CScriptedTarget::Spawn | 5 | - | — | ElysiumNpcKernelSpeciesTests.cpp:1284 | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
 | `0x1034ddf0` | CScriptedTarget::DrawDebugTextOverlays | 4 | - | — | — | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
 | `0x1034e070` | CScriptedTarget::DrawDebugGeometryOverlays | 4 | - | — | — | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
 | `0x1034e320` | CScriptedTarget::Save | 16 | - | — | ElysiumNpcKernelSaveRestore10Tests.cpp:333 | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
@@ -260,12 +260,12 @@ Every `dead` row of the verdict overlay: a retail body nothing can observe — n
 | `0x10357660` | CNPC_Crow::Classify | 0 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
 | `0x10357680` | CNPC_Crow::GatherEnemyConditions | 23 | - | ElysiumEyeRig.h:244 | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
 | `0x10357760` | CNPC_Crow::vfunc192 | 1 | - | ElysiumNpcGeometry.cpp:94 | ElysiumNpcKernelGeometryTests.cpp:215 | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103577d0` | CNPC_Crow::vfunc197 | 2 | - | — | ElysiumNpcKernelSpeciesTests.cpp:1225 | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103577d0` | CNPC_Crow::vfunc197 | 2 | - | — | ElysiumNpcKernelSpeciesTests.cpp:1227 | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
 | `0x10357800` | CNPC_Crow::vfunc511 | 11 | - | ElysiumNpcBaseSounds.cpp:303, ElysiumNpcSounds10.cpp:12 | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
 | `0x10357820` | CNPC_Crow::HandleAnimEvent | 25 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
 | `0x10357b30` | CNPC_Crow::OnChangeActivity | 0 | - | ElysiumNpcMingXiao.cpp:659 | ElysiumNpcKernelFacingTests.cpp:568 | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357ba0` | CNPC_Crow::OverrideMove | 6 | - | ElysiumNpcBaseMotor.cpp:463 | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357be0` | FUN_10357be0 | 5 | - | — | ElysiumNpcKernelSpeciesTests.cpp:1225 | crow flight step toward its hint at 170 u/s, called only by the crow OverrideMove 0x10357ba0; npc_crow has no instance |
+| `0x10357ba0` | CNPC_Crow::OverrideMove | 6 | - | ElysiumNpcBaseMotor.cpp:468 | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10357be0` | FUN_10357be0 | 5 | - | — | ElysiumNpcKernelSpeciesTests.cpp:1227 | crow flight step toward its hint at 170 u/s, called only by the crow OverrideMove 0x10357ba0; npc_crow has no instance |
 | `0x10358310` | CNPC_Crow::PrescheduleThink | 0 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
 | `0x10358330` | CNPC_Crow::StartTask | 25 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
 | `0x103587b0` | CNPC_Crow::RunTask | 23 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |

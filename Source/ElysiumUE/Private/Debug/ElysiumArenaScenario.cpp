@@ -786,7 +786,7 @@ namespace ElysiumArenaScenarioParse
 		Out = FElysiumArenaAction();
 		if (!CheckFields(R, Object, Path, { TEXT("t"), TEXT("after"), TEXT("delay"), TEXT("do"), TEXT("at"),
 				TEXT("face"), TEXT("target"), TEXT("input"), TEXT("param"), TEXT("command"), TEXT("row"),
-				TEXT("on"), TEXT("value"), TEXT("index"), TEXT("end"), TEXT("attacker") }))
+				TEXT("on"), TEXT("value"), TEXT("index"), TEXT("end"), TEXT("attacker"), TEXT("activator") }))
 		{
 			return false;
 		}
@@ -810,6 +810,10 @@ namespace ElysiumArenaScenarioParse
 		}
 		// `value` may be a JSON null (the release), so its presence is read off the object itself.
 		const bool bHasValue = Object.Values.Contains(TEXT("value"));
+		if (Out.Do != EElysiumArenaAction::Fire && FindValue(Object, TEXT("activator")) != nullptr)
+		{
+			return R.Fail(Field(Path, TEXT("activator")), TEXT("only `fire` takes `activator`"));
+		}
 		if (Out.Do != EElysiumArenaAction::PlayerCrouch && FindValue(Object, TEXT("on")) != nullptr)
 		{
 			return R.Fail(Field(Path, TEXT("on")), TEXT("only `player_crouch` takes `on`"));
@@ -842,7 +846,8 @@ namespace ElysiumArenaScenarioParse
 		case EElysiumArenaAction::Fire:
 		{
 			if (!ReadString(R, Object, TEXT("target"), Path, ENeed::Required, Out.Target)
-				|| !ReadString(R, Object, TEXT("input"), Path, ENeed::Required, Out.Input))
+				|| !ReadString(R, Object, TEXT("input"), Path, ENeed::Required, Out.Input)
+				|| !ReadString(R, Object, TEXT("activator"), Path, ENeed::Optional, Out.Activator))
 			{
 				return false;
 			}

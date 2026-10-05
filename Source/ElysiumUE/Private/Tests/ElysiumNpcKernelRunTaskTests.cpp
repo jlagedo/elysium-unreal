@@ -30,6 +30,9 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include <type_traits>
+#include "Misc/ScopeExit.h"
+#include "Substrate/ElysiumItemTable.h"
+#include "Substrate/ElysiumWeaponClasses.h"
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumMoveSolve.h"
@@ -406,12 +409,19 @@ bool FElysiumNpcKernelRunTask19BaseReloadAndSequenceTest::RunTest(const FString&
 	FElysiumNpc& N = *F.Npc;
 	FElysiumScheduleStep S = Step(*F.Npc, 0x38);
 	Reset(N);
+	TestNull(TEXT("0x10289177: no active weapon"), N.ActiveWeaponEntity());
+	const int32 ReloadCallsBefore = N.WeaponFinishReloadCalls;
+	N.Cognition.Conditions.SetOrdinal(0x40);
+	N.Cognition.Conditions.SetOrdinal(0x41);
 	F.UnfinishActivity();
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
 	TestFalse(TEXT("0x1028916f: the reload waits on the activity"), Completed(N));
 	FinishActivity(N);
 	N.FElysiumNpcBase::RunTaskSlot444(&S);
-	TestTrue(TEXT("and completes"), Completed(N));
+	TestTrue(TEXT("0x10289713: no weapon completes"), Completed(N));
+	TestEqual(TEXT("0x1028917e: no weapon skips finish call"), N.WeaponFinishReloadCalls, ReloadCallsBefore);
+	TestTrue(TEXT("0x1028917e: no weapon skips ammo-condition clears"),
+		N.Cognition.Conditions.HasOrdinal(0x40) && N.Cognition.Conditions.HasOrdinal(0x41));
 	S = Step(*F.Npc, 0x4b);
 	Reset(N);
 	N.SequenceNumber = 3;
@@ -1418,6 +1428,80 @@ bool FElysiumNpcKernelRunTask19HengeyokaiTest::RunTest(const FString&)
 	TestTrue(TEXT("0xc8 completes facing"), Completed(N));
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV5bRunTaskReloadFinishTest,
+	"Elysium.Arm.NpcKernelRunTask19.ReloadFinish", GRunTask19Flags)
+bool FElysiumV5bRunTaskReloadFinishTest::RunTest(const FString&)
+{
+	using namespace RunTask19TestShared;
+	FElysiumItemTable TaskReloadTable;
+	FElysiumItemDef TaskReloadDef;
+	TaskReloadDef.Classname = TEXT("item_w_test_v5b_task_reload");
+	TaskReloadDef.Type = EElysiumItemType::WeaponFirearm;
+	TaskReloadDef.bWieldable = true;
+	TaskReloadDef.MagazineSize = 6;
+	TaskReloadDef.DefaultAmmo = 6;
+	TaskReloadDef.AmmoType = TEXT("V5bTaskRound");
+	FElysiumWeaponMode TaskReloadMode;
+	TaskReloadMode.Tag = TEXT("Primary"); TaskReloadMode.Type = EElysiumWeaponModeType::Attack;
+	TaskReloadMode.TypeName = TEXT("Attack"); TaskReloadMode.AttackRate = 1.f;
+	TaskReloadDef.Modes.Add(MoveTemp(TaskReloadMode));
+	TaskReloadTable.Items.Add(MoveTemp(TaskReloadDef)); TaskReloadTable.Reindex();
+	ElysiumItems::Install(TaskReloadTable);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(TaskReloadTable); };
+	TFixture<FElysiumNpc> F(TEXT("CAI_BaseNPCTroika"), true);
+	if (!TestNotNull(TEXT("npc"), F.Npc)) return false;
+	FElysiumNpc& TaskReloadNpc = *F.Npc;
+	const FElysiumEntityHandle TaskReloadHandle = TaskReloadNpc.Inventory.GiveNamedItem(TaskReloadNpc, TEXT("item_w_test_v5b_task_reload"));
+	FElysiumEntity* const TaskReloadEntity = F.World.World.Resolve(TaskReloadHandle);
+	FElysiumItem* const TaskReloadItem = TaskReloadEntity != nullptr ? TaskReloadEntity->AsItem() : nullptr;
+	FElysiumWeapon* const TaskReloadGun = TaskReloadItem != nullptr ? TaskReloadItem->AsWeapon() : nullptr;
+	if (!TestNotNull(TEXT("weapon"), TaskReloadGun)) return false;
+	TestTrue(TEXT("0x10289177: active weapon is the granted gun"), TaskReloadNpc.ActiveWeaponEntity() == TaskReloadGun);
+	TaskReloadNpc.Inventory.AddReserve(TEXT("V5bTaskRound"), 4);
+	TaskReloadGun->MagazineCount = 0;
+	TaskReloadGun->bIsJammed = true; TaskReloadGun->bInterruptReload = true;
+	TaskReloadNpc.NextAttackTime = F.Now();
+	FElysiumScheduleStep TaskReloadStep = Step(TaskReloadNpc, 0x38);
+	Reset(TaskReloadNpc); F.UnfinishActivity();
+	TaskReloadNpc.Cognition.Conditions.SetOrdinal(0x40); TaskReloadNpc.Cognition.Conditions.SetOrdinal(0x41);
+	const int32 TaskReloadCalls = TaskReloadNpc.WeaponFinishReloadCalls;
+	const int32 TaskReloadTurns = TaskReloadNpc.MotorUpdateYawCalls;
+	const float TaskReloadAnimTime = TaskReloadNpc.AnimTime;
+	TaskReloadNpc.FElysiumNpcBase::RunTaskSlot444(&TaskReloadStep);
+	TestTrue(TEXT("0x102890f5: AutoMovement advances animation before activity gate"), TaskReloadNpc.AnimTime > TaskReloadAnimTime);
+	TestTrue(TEXT("0x1028915e: turn precedes activity gate"), TaskReloadNpc.MotorUpdateYawCalls > TaskReloadTurns);
+	TestFalse(TEXT("0x1028916f: unfinished activity waits"), Completed(TaskReloadNpc));
+	TestFalse(TEXT("0x1028916f: unfinished activity does not set reload"), TaskReloadGun->bInReload);
+	TestEqual(TEXT("0x1028916f: unfinished skips weapon call"), TaskReloadNpc.WeaponFinishReloadCalls, TaskReloadCalls);
+	TestTrue(TEXT("0x1028916f: unfinished preserves ammo conditions"), TaskReloadNpc.Cognition.Conditions.HasOrdinal(0x40) && TaskReloadNpc.Cognition.Conditions.HasOrdinal(0x41));
+	FinishActivity(TaskReloadNpc);
+	TaskReloadNpc.FElysiumNpcBase::RunTaskSlot444(&TaskReloadStep);
+	TestEqual(TEXT("0x1028919d: finish called once"), TaskReloadNpc.WeaponFinishReloadCalls, TaskReloadCalls + 1);
+	TestEqual(TEXT("0x1028918d before 0x1028919d: false initial reload flag still admits bulk fill"), TaskReloadGun->MagazineCount, 4);
+	TestFalse(TEXT("0x102552c0: admitted bulk clears reload/jam/interruption"), TaskReloadGun->bInReload || TaskReloadGun->bIsJammed || TaskReloadGun->bInterruptReload);
+	TestEqual(TEXT("0x102552c0: NPC reserve retained"), TaskReloadNpc.Inventory.Reserve(TEXT("V5bTaskRound")), 4);
+	TestFalse(TEXT("0x102891a7: primary condition cleared"), TaskReloadNpc.Cognition.Conditions.HasOrdinal(0x40));
+	TestFalse(TEXT("0x102891b0: secondary condition cleared"), TaskReloadNpc.Cognition.Conditions.HasOrdinal(0x41));
+	TestTrue(TEXT("0x102891b9: task completes after clears"), Completed(TaskReloadNpc));
+	Reset(TaskReloadNpc); FinishActivity(TaskReloadNpc);
+	TaskReloadGun->MagazineCount = 0; TaskReloadNpc.NextAttackTime = F.Now() + 1.0;
+	TaskReloadNpc.Cognition.Conditions.SetOrdinal(0x40); TaskReloadNpc.Cognition.Conditions.SetOrdinal(0x41);
+	TaskReloadStep = Step(TaskReloadNpc, 0x3d);
+	const int32 TaskReloadNoTurnCalls = TaskReloadNpc.MotorUpdateYawCalls;
+	TaskReloadNpc.FElysiumNpcBase::RunTaskSlot444(&TaskReloadStep);
+	TestEqual(TEXT("0x102890fd: NOTURN skips turn"), TaskReloadNpc.MotorUpdateYawCalls, TaskReloadNoTurnCalls);
+	TestTrue(TEXT("0x10255213: future deadline retains set-before-call reload state"), TaskReloadGun->bInReload);
+	TestEqual(TEXT("0x10255213: future deadline leaves empty clip"), TaskReloadGun->MagazineCount, 0);
+	TestTrue(TEXT("0x102891b9: task completes even if weapon cannot finish yet"), Completed(TaskReloadNpc));
+	TestFalse(TEXT("0x102891a7/b0: clears do not depend on admitted weapon finish"), TaskReloadNpc.Cognition.Conditions.HasOrdinal(0x40) || TaskReloadNpc.Cognition.Conditions.HasOrdinal(0x41));
+	FElysiumEntity TaskReloadNonWeapon;
+	const int32 TaskReloadWitnessBefore = TaskReloadNpc.WeaponFinishReloadCalls;
+	TaskReloadNpc.WeaponFinishReload(TaskReloadNonWeapon);
+	TestEqual(TEXT("0x1028918d: nonweapon carries only diagnostic tally"), TaskReloadNpc.WeaponFinishReloadCalls, TaskReloadWitnessBefore + 1);
+	return true;
+}
+
 #endif // ELYSIUM_WITH_ARM_TESTS
 
 #endif  // WITH_DEV_AUTOMATION_TESTS
