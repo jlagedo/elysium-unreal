@@ -1,104 +1,128 @@
-# Brief V5b-2 — the weapon side: slots 280 / 322 / 323, the count per set, the Presence seam's text (coder; no build)
+# Brief V5b-2 — weapon reload, per-set count and Presence text
 
-Read `README.md` here (§1.2 "The count-down", §1.3, §1.5, §2 P3, P5, P7, §3, §6), `AGENTS.md`,
-`spec.md` § "Standing rules", `../v4/packets-S4.md` item a (who fills an NPC's clip; J12),
-`docs/vtmb/combat-and-damage.md` § "Reload and dry fire" (`uv run elysium research section
-0x102552c0`). **Re-locate every site by Grep on the function name**; cited lines are hints.
-Retail was read for you: `0x10288780` (`0x102890f3..0x102891b9`), `0x10255050` (its decompilation
-is damaged at three tail jumps — each is `JMP [vtable + 0x50c]` or `+0x514`; the non-single arm is
-whole), `0x102552c0`, `0x10253ab0`, `0x10268900` (`0x10268919`). If a body you meet contradicts
-this brief, stop and report it.
+Final against V4c `d0f79574`, after V4o `64895278`. Read AGENTS.md, README,
+`packets-V5b-check.md`, and research section `0x102552c0` in combat-and-damage.md.
+Retail: TASK_RELOAD `0x102890f3..0x102891b9`, slots 280 `0x10253ab0`,
+322 `0x10255050`, 323 `0x102552c0`, FireBullets `0x10268900 / 0x10268919`.
+Use the assembly for slot 322's tail jumps and deadline comparison.
 
-## Files (only these)
+## Files — only these six
 
-- `Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h`, `ElysiumWeaponClasses.cpp`
-  (three new bodies; the per-set loop of the shot; `PresenceDoublesAttackRate`'s comment)
-- `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.cpp` (`WeaponFinishReload` ~:259 only)
-- `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.inl` (its declaration ~:113-117)
-- `Source/ElysiumUE/Private/Tests/ElysiumWeaponTests.cpp`,
-  `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelRunTaskTests.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.h`
+- `Source/ElysiumUE/Private/Substrate/ElysiumWeaponClasses.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcBaseRunTask.inl`
+- `Source/ElysiumUE/Private/Tests/ElysiumWeaponTests.cpp`
+- `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelRunTaskTests.cpp`
 
-## The job
+README's A∩B=A∩C=B∩C=∅ proves disjointness. These files include V4o/V4c changes.
+Already carried out: event-only NPC shot guard in CommitArrivesFromAnimEvent, shared attack
+stream/fixtures and live owner deadlines. Preserve them; do not reopen the player estimate path.
 
-Declare, with exactly these names (lane 1 calls the first; README §3):
+## Numbered jobs
 
-```cpp
-bool CanReloadMagazine(int32 MagazineIndex) const;   // slot 280, 0x10253ab0
-void FinishReload();                                 // slot 322, 0x10255050
-void FinishReloadBulk();                             // slot 323, 0x102552c0
-bool bInReload = false;                              // +0x898 m_bInReload
-```
+1. **FElysiumWeapon declarations**, WeaponClasses.h (lane 1 calls the first):
 
-The port's weapon carries **one** magazine (`FElysiumItem::MagazineCount`, `AmmoType`; the mode
-record's `MagazineSize`, `bReloadSingle`). Magazine index 1 is a named seam: slot 277 (`+0x454`,
-"uses a clip") answers false for it, stated at the line with the retail word
-(`m_iMagazineCurAmts[1] +0x750`).
+   ```cpp
+   bool CanReloadMagazine(int32 MagazineIndex) const; // slot 280, 0x10253ab0
+   void FinishReload();                              // slot 322, 0x10255050
+   void FinishReloadBulk();                          // slot 323, 0x102552c0
+   bool bInReload = false;                           // +0x898 m_bInReload
+   ```
 
-1. **Slot 280 `CanReloadMagazine(i)`**, four arms in order: no ammo type for `i`
-   (`m_iAmmoTypes[i] < 0`, `0x10253b40`; the port: an empty `AmmoType`) → **true**; uses a clip
-   and `clip[i] > 0` → true; an owner whose reserve of that type is `> 0`
-   (`GetAmmoCount 0x103346c0`; the port's `Inventory.Reserve(AmmoType)` on the owner) → true;
-   else false.
-2. **Slot 323 `FinishReloadBulk`**. No owner → nothing at all. `bReloadSingle` clear: for each
-   magazine that uses a clip: `Add = min(Size − clip, owner's reserve)` — the listing's
-   `if (Size − clip < reserve) Add = Size − clip; else Add = reserve`; `clip += Add`; the reserve
-   is debited **only for a player owner** and only under retail's cvar `DAT_1088aef4`
-   (`IsCommand()` or its int `< 1`): for an NPC nothing is removed. If the port's player reload
-   (`CommitQueuedReload`) already owns the player's debit, do not route the player here — this
-   body is reached only from slot 322; name the cvar as a seam answering "debit" if no such cvar
-   stands in the tunables. `bReloadSingle` set: `0x10254cd0(this, 0xc3)` — a weapon activity send;
-   a named seam answering nothing unless the port has the call. Then, both arms: `bInReload =
-   false`; `m_bIsJammed`, `m_bInterruptReload` cleared where the port has them, named where not.
-3. **Slot 322 `FinishReload`**. `bReloadSingle` clear: an owner that is a combat character,
-   `bInReload`, and the owner's `m_flNextAttack (+0x1564) <= curtime` (`<=`: the listing's
-   `(a < b) != (a == b)`) → `FinishReloadBulk()`, then **both** next-attack stamps (`+0x730`,
-   `+0x734`: `NextPrimaryAttackTime`, `NextSecondaryAttackTime`) `= curtime`. `bReloadSingle` set:
-   every arm needs a **player** owner; for an NPC return with nothing changed (`bInReload` stays
-   true — retail's own). The player's single-round arms are the player story's: name them at the
-   line (`0x102550b4`, `0x102550d2`, `0x102551cb..0x102551dc`), port nothing of them.
-   `m_flNextAttack` on an NPC has no writer in the port (named at its declaration): it reads 0,
-   which is retail's "`<= curtime`".
-4. **`FElysiumNpcBase::WeaponFinishReload`** (`0x1028918d`, `0x1028919d`): the entity is the active
-   weapon; set `bInReload = true`, then call `FinishReload()`. An entity that is not an
-   `FElysiumWeapon` keeps the count and does nothing. `WeaponFinishReloadCalls` stays as the
-   call's witness. The arm around it (`AutoMovement`, the turn, slot 251, the two condition
-   clears, `TaskComplete`) is retail and not yours.
-5. **The fake-reload count, per bullet set** (`FireBullets 0x10268900`, slot 185: `0x10268919 DEC
-   [m_pBaseNPCTroika + 0x65f0]`, its first statement, once per call; `Shot 0x102387b0` step 9
-   calls it once per set). The port's shot stands a per-set loop for slot 185 (`TraceShotImpact`,
-   in the queued-attack commit; Grep `One trace per set`). In **that loop**, per set, when the
-   attacker is an NPC (`AsNpc()`): `--FakeReloadCount`. Every path that fires an NPC's sets must
-   pass it once and only once — the event shot (`ShotFromAnimEvent` → the commit) and the
-   move-and-shoot layer's shot (V4o) reach the same commit; verify by reading and say so. The
-   player decrements nothing (`+0x98` null). Do not call `FElysiumEntity::FireBullets`
-   (`ElysiumEntitySlotBodies.cpp`, not your file): it would trace a second time.
-6. **`PresenceDoublesAttackRate`'s comment** (`0x1033d940` / `0x101e3f50`): replace "nothing writes
-   a Presence bit … the bit values are the run-time table's" with README §1.5 — the bit is set
-   only by `AddDiscFlag 0x1033cfb0` from the discipline manager's status apply `0x101e3560`
-   (callers `0x101e2f50`, `0x101e3380`, `0x101e33c0`, `0x101f8620`), i.e. while a Presence effect
-   cast on the owner is applied; owner spec 0006. It keeps answering false. Same sentence in the
-   `.h` (~:711-714).
-7. **Tests** (README §6): `Elysium.Arm.Weapon.ReloadFinish`, `.CanReloadMagazine`,
-   `.FakeReloadCountPerSet` (use the weapon tests' actual prefix);
-   `Elysium.Arm.NpcKernelRunTask19.ReloadFinish`. Delete any assertion that pins
-   `WeaponFinishReload` doing nothing; list what you deleted. `ranged_sustained_fire`'s rule
-   stays true and is not yours to prove: an NPC's shot neither spends nor refuses on the clip (O3).
+   The current FElysiumItem has MagazineCount/AmmoType and mode MagazineSize/bReloadSingle.
+   Magazine1 is a named no-clip input for slot 277 (+0x454), ammo type absent; name retail
+   m_iMagazineCurAmts[1] +0x750 at the stand-in. Add representable jammed/interrupt-reload flags
+   in this owned header if absent (m_bIsJammed +0x89a / m_bInterruptReload +0x899), so slot 323 can clear its stored outputs.
 
-## Not yours
+2. **CanReloadMagazine**, WeaponClasses.cpp, slot 280 `0x10253ab0`, four arms in order:
+   absent ammo type (`0x10253b40` false; empty AmmoType here) →true;
+   uses clip and clip>0 →true;
+   owner with Inventory.Reserve(AmmoType)>0 (`GetAmmoCount 0x103346c0`) →true;
+   otherwise false. Name magazine1's representation rather than reading index0 for it.
 
-The pre-pass and the template's range (lane 1). `ActiveWeaponCapabilityWord` (lane 3).
-`ShotFromAnimEvent`'s gates, the stamp and the clip rule (O3, landed), the swing and the contact
-(V11-2, C1), the player's `BeginReload` / `CommitQueuedReload`, `ElysiumEntitySlotBodies.cpp`,
-`ElysiumItemTable.*`, `ElysiumItemClasses.*` (if a word you need has its home there, write the
-exact declaration in your report). The records.
+3. **FinishReloadBulk**, WeaponClasses.cpp, slot 323 `0x102552c0`:
+   no owner →no writes, including flags.
+   Bulk: for each magazine0..1 which uses clip, Add=min(Size-clip, reserve), clip+=Add.
+   Do not silently clamp negative Size-clip: preserve the listing's two-arm min.
+   NPC reserve is untouched. Debit ONLY player owners under DAT_1088aef4
+   (IsCommand OR int<1); if the tunable is absent, name that input and the existing debit
+   stand-in, rather than inventing a cvar.
+   Single: send weapon activity `0x10254cd0(this,0xc3)`; use an existing call if present,
+   otherwise name the missing activity-send hook as a no-output seam.
+   Both arms then clear bInReload, m_bIsJammed, m_bInterruptReload.
+   Preserve the player's existing BeginReload / CommitQueuedReload route.
+
+4. **FinishReload**, WeaponClasses.cpp, slot 322 `0x10255050`:
+   bulk owner combat pointer +0x9c present AND bInReload AND the owner's
+   **LIVE m_flNextAttack +0x1564 <=curtime** (`0x102551e2..0x10255219`) →
+   FinishReloadBulk, then both weapon NextPrimaryAttackTime / NextSecondaryAttackTime
+   (+0x730/+0x734, `0x1025521f..0x1025523a`) =curtime.
+   Read FElysiumNpc::NextAttackTime for NPC owners; no constant-zero stand-in.
+   The current writers include PlayerDefenderBlockReaction (Damage3.cpp,
+   `0x1029fd6a / 0x1029fd6f`), Damage.cpp::PlayerAttackerBlockedReaction (`0x1029fdb0`), and V4c's
+   WeaponClasses.cpp::BeginMeleeSwing (`0x103ea2eb`). A future deadline forbids finishing.
+   Slot 322's single-round arm requires PLAYER +0xa8 (`0x1025506f..0x10255077`);
+   NPC returns without writes, retaining bInReload=true. Player continuation is a named
+   later player-weapon input, with tail targets `0x102550b4 / 0x102550d2 / 0x102551cb..0x102551dc`.
+   Do not route existing player reloads through an incomplete single-round body.
+   Integrator owes the stale no-writer declaration comment in ConditionsBodies.inl.
+   Bulk clearing occurs only when admitted; retained NPC single-round state is owed to V6.
+
+5. **FElysiumNpcBase::WeaponFinishReload**, BaseRunTask.cpp / declaration BaseRunTask.inl:
+   keep WeaponFinishReloadCalls as a witness, resolve the active entity as FElysiumWeapon,
+   set bInReload=true (`0x1028918d`), then call FinishReload (`0x1028919d`).
+   A nonweapon entity retains only the diagnostic tally.
+   Keep surrounding RunTask's AutoMovement, turn/slot251 gate, condition clears 0x40/0x41,
+   and TaskComplete in their existing order (`0x102890f3..0x102891b9`).
+
+6. **FakeReloadCount per SET**, WeaponClasses.cpp::CommitQueuedAttack:
+   `0x10268919 DEC [NPC+0x65f0]` is FireBullets' first NPC statement; Shot `0x102387b0`
+   calls FireBullets once per set.
+   Put --FakeReloadCount at the top of **the existing trace loop**, before TraceShotImpact.
+   That loop precedes the missing/dead-victim refusal and the separate damage loop.
+   Decrement for NPC attackers even on miss, dead target or team damage refusal.
+   No decrement for a player, zero-set shot, refused/stale commit, or repeated queue delivery.
+   The event route is ShotFromAnimEvent → StageRangedShot → queued CommitQueuedAttack;
+   overlay HandleAnimEvent reaches the same route. V4c's CommitArrivesFromAnimEvent refuses
+   NPC timer exceptions, including missing model/timeline. Preserve it.
+   Do not call Entity::FireBullets (EntitySlotBodies.cpp): that would trace twice.
+   Do not decrement inside RangedImpact/damage loop, which can refuse or stop early.
+   The existing EntitySlotBodies decrement remains for its separate direct callers.
+
+7. **PresenceDoublesAttackRate**, WeaponClasses.cpp and declaration in .h,
+   `0x1033d940 / 0x101e3f50`: name Presence id10, m_iDisciplineFlags2 +0xeb4, writer
+   AddDiscFlag `0x1033cfb0` from status apply `0x101e3560` (activation callers
+   `0x101e2f50 / 0x101e3380 / 0x101e33c0 / 0x101f8620`).
+   Keep false until spec0006 supplies the cast/status seam; replace “nothing writes” text.
+
+8. **Arm tests**, owned test files, actual prefix **Elysium.Arm.Weapons.**:
+   - `.CanReloadMagazine` pins all four arms (`0x10253ab0`).
+   - `.ReloadFinish` pins bulk writes, untouched NPC reserve, both stamps, flags,
+     owner absent, bInReload false, owner future deadline, exact equality admitted;
+     single-round NPC retains bInReload (`0x10255050 / 0x102552c0`).
+   - `.FakeReloadCountPerSet` pins one/multiple/zero sets, player, miss, dead and teammate
+     targets, serial replay, and both normal/overlay event entry (`0x10268919`).
+   - `Elysium.Arm.NpcKernelRunTask19.ReloadFinish` pins set-before-call and the surrounding
+     clears/completion/no-weapon behavior (`0x1028918d / 0x1028919d`).
+   Rewrite the seam-only assertions in the existing Base.ReloadAndSetActivity test;
+   report exact test names. Keep V4c fixture and shared-stream assertions.
+
+## Dependencies and owed lines
+
+Lane1 owns gate/template, lane3 Motor/cache. Do not edit their files, ItemClasses/ItemTable,
+EntitySlotBodies, or Arena. A needed field in an unowned file is an exact owed declaration/body
+line for the integrator. The live NextAttackTime declaration-comment repair belongs to integrator.
+Record changes and retained-single-round persistence assessment are integrator/V6 work.
 
 ## Rules
 
-Coders never build, launch the editor or run a suite. Retail first: the listing decides, and a
-divergence you find is **recorded in your report, not adopted**. A shadowed local or member (C4458 /
-C4459) is a compile error here. Query budget: 10 s warns, 60 s stops (never retried as-is, never
-widened); never read a file over ~200 KB whole (`ElysiumWeaponClasses.cpp` and
-`ElysiumWeaponTests.cpp` are near it: Grep the function, then Read the range); text through Grep /
-Read / Glob, not shell. Only your files; a line needed elsewhere goes in the report, exact. No
-commit. Report ≤300 words: the bodies ported (addresses), the seams left with their retail word,
-which paths reach the per-set count, tests added and deleted, cross-lane lines.
+Write only this lane's six files, in the worktree the coordinator names, **by absolute path**.
+Read files and run read-only tools from **E:\dev\elysium-unreal**.
+Never build, run the editor/game/tests/arena, or commit. Retail first, with the retail address
+at every changed runtime line. Report a new divergence; do not adopt it.
+Never hand-edit generated `*Slots.cpp`: a hand body goes in the matching `*SlotBodies.cpp`;
+the integrator owns the kernel_verdicts.tsv row and regeneration.
+Shadowed locals/members/globals are compile errors (C4458 / C4459).
+End with a report **under 350 words**: addresses ported, tests changed, seams retained and the
+exact lines owed by each file outside the lane, or explicitly none.

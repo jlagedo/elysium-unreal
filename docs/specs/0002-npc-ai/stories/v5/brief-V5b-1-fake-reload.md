@@ -1,85 +1,95 @@
-# Brief V5b-1 — the ranged pre-pass's reload arms and the template's count (coder; no build)
+# Brief V5b-1 — ranged pre-pass reload arms and template count
 
-Read `README.md` here (§1.2, §1.3 slot 280, §2 P1, P2, P4, P7, §3, §6), `AGENTS.md`, `spec.md`
-§ "Standing rules", `docs/vtmb/npc-ai/conditions-and-states.md` § "`FUN_102b8620` — the ranged
-weapon pre-pass" (`uv run elysium research section 0x102b8620`). **Re-locate every site by Grep on
-the function name**; cited lines are hints. Retail was read for you: `0x102b8620`, `0x102c54c0`,
-`0x101d3f10`, `0x10253ab0`. If a body you meet contradicts this brief, stop and report it.
+Final against V4c `d0f79574`, after V4o `64895278`. Read AGENTS.md, this README and
+`packets-V5b-check.md`; use research where/section before oracle searches.
+Retail entries: `0x102b8620`, `0x102c54c0`, `0x101d3f10`, `0x10253ab0`.
+Locate sites by function name. V4c's shared stream/equal-bound behavior is already carried out;
+reuse it. V4o/V4c's event shot, NPC guard and fresh-stage clock need no work here.
 
-## Files (only these)
+## Files — only these six
 
-- `Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10_2.cpp` (`RangedWeaponPrePass`'s first
-  three arms ~:132-182; `ActiveWeaponWantsReload` ~:116; `RangedDisciplineGate`'s comment ~:85)
-- `Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.inl` (their declaration comments ~:205-263;
-  `RangedReloadPrepCalls`)
-- `Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp` (`CharTemplateFakeReloadRange`
-  ~:521; `ResetFakeReloadCount`'s comment ~:531)
-- `Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.inl` (their declaration comments ~:129-141)
-- `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp`,
-  `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions10Tests.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10_2.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcCombat10.inl`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.cpp`
+- `Source/ElysiumUE/Private/Substrate/ElysiumNpcConditions10.inl`
+- `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelCombat10Tests.cpp`
+- `Source/ElysiumUE/Private/Tests/ElysiumNpcKernelConditions10Tests.cpp`
 
-## The job
+README's A∩B=A∩C=B∩C=∅ proves these do not overlap another lane. Conditions10.cpp and its
+tests include V4c changes; read their current bodies rather than importing the older version.
 
-1. **The template's count — `CharTemplateFakeReloadRange`** (`0x101d3f10`, the template loader's
-   `General` block; `0x10207c40` = `GetCharTemplate` through the manager). Replace the seam:
-   - `Min = (int32)GeneralFloat("NpcFakeReloadCountMin", 8.0f)` — retail's `__ftol` of a
-     `GetFloat` whose default is the dword `0x41000000` (8.0);
-   - `Max = (int32)GeneralFloat("NpcFakeReloadCountMax", (float)Min)` — the default is the Min
-     **just parsed** (`(float)(int)lVar10`), so an NPC that authors only Min (all 20 shipped
-     templates) rolls exactly Min.
-   - The template is the NPC's resolved record: take it the way the footstep reader does
-     (`ElysiumFootsteps.cpp`, `NpcSource`, `FElysiumClanTemplate::GeneralFloat` — Grep how its
-     caller resolves the NPC's template; reuse that accessor, do not write a second resolver).
-     **No template** → 8 / 8 (the loader writes both words into every record it loads; the
-     footstep reader's own rule, same comment).
-   - Truncation is toward zero (`__ftol`); `"6.0"` → 6. Return true when a template answered.
-   - `ResetFakeReloadCount` (`0x102c54c0`) is already retail: `RandomInt(Min, Max)` on the
-     `NpcSchedule` stream. Correct its comment only ("RandomInt(0, 0) is 0" no longer describes it).
-2. **The fake-reload arm — `RangedWeaponPrePass`, `0x102b8626..0x102b86b5`.** In order, as today,
-   with two changes:
-   - the capability read is **`SelectActiveWeaponWord() & 0x6000`** (`FElysiumNpc`,
-     `ElysiumNpcSelect.cpp`: the weapon's slot 360 `+0x5a0`, the real word; read, do not edit).
-     `ActiveWeaponCapabilityWord()` is not asked here any more — lane 3 owns that seam;
-   - where retail calls `thunk_FUN_102c54c0(this)` (`0x102b867e`), **call
-     `ResetFakeReloadCount()`**; `RangedReloadPrepCalls` stays, tallied beside the real call (a
-     test reads it), or goes with its test — say which.
-   - Unchanged: the cvar gate `debug_allow_fake_reload` (`IsCommand()` false and the int non-zero),
-     a live weapon, `FakeReloadCount < 1`; `m_pHintNode (+0x5ddc) == 0` → `0xc4` (line `0x5e8f`),
-     else `0xc6` (`0x5e93`). Check the port's hint test against the listing: retail tests the
-     pointer for null (`param_1[0x1777] == 0`); the port compares `BaseScheduleHost.HintNode == 0`
-     while elsewhere "no hint" is `INDEX_NONE` — if `0` is not the port's "no hint", fix it at the
-     line and say so.
-3. **The real-reload arm — `0x102b86ba..0x102b87b0`.** `ActiveWeaponWantsReload()` becomes the
-   weapon's slot 280: `Weapon->CanReloadMagazine(0)` (`0x10253ab0`; **lane 2 declares and writes
-   it** in `ElysiumWeaponClasses.h` — README §3's exact name; you write the call and resolve the
-   weapon as the body's other reads do). Keep retail's order: clip `> 0` declines (arm 2) **before**
-   slot 280; then the second null check, the reserve (`ActiveWeaponReserveAmmo() < 1` → 0),
-   `SEE_ENEMY 0x46` or `NEW_ENEMY 0x54` → `0xc2` (`0x5ecb`), else `0xc3` (`0x5ecf`). These lines
-   exist; verify each against the listing and correct a difference at its line.
-4. **`RangedDisciplineGate`'s comment** (the seam for `0x101e3f50(&DAT_10739a4c, entity)`): replace
-   "an unnamed discipline record" with README §1.5 — a Presence level bit (discipline id 10) of
-   `m_iDisciplineFlags2 (+0xeb4)`, set only by `AddDiscFlag 0x1033cfb0` from the discipline
-   manager's status apply `0x101e3560`; owner spec 0006. It keeps answering false.
-5. **Tests** (README §6): `Elysium.Arm.NpcKernelCombat10.FakeReloadArm`, `.RealReloadArm`;
-   `Elysium.Arm.NpcKernelConditions10.ResetFakeReloadCount` rewritten (delete ~:693-696's "… 0").
-   Delete or rewrite each `RangedWeaponPrePass` assertion (~:1040-1056) that held only because the
-   gate read 0; list them. A fixture template is a `FElysiumClanTemplate` with the `General` key
-   set, as the footstep seam tests build one (`Tests/ElysiumFootstepSeamTests.cpp`, read only).
+## Numbered jobs
 
-## Not yours
+1. **CharTemplateFakeReloadRange**, Conditions10.cpp, loader `0x101d3f10`:
+   use **`FootstepTemplate.Get()`**, the already resolved FElysiumClanTemplate stored by
+   FElysiumNpc::ApplyResolvedTemplate (Npc.cpp) and passed to the footstep NpcSource. No edit to Npc.cpp/h,
+   no second template resolver.
+   Min=(int32)GeneralFloat("NpcFakeReloadCountMin",8.0f), truncating toward zero
+   (`0x101d4394 / 0x101d43a3 / 0x101d43b1`).
+   Max=(int32)GeneralFloat("NpcFakeReloadCountMax",(float)Min)
+   (`0x101d43ad..0x101d43c8`): default is the just-truncated Min.
+   Template present → true; absent → 8/8, false, explicitly the loader-default stand-in.
+   Update Conditions10.inl's false/zero seam description.
+   **ResetFakeReloadCount**, same file, `0x102c54c0`: preserve the unconditional write,
+   V4c's `Max <= Min ? Min : NpcSchedule.RandRange(Min,Max)` (`vstdlib.dll 0x10002e60`).
+   Correct its missing-template comment to 8/8; do not reintroduce a draw for equal bounds.
 
-`FElysiumWeapon` (lane 2: slots 280 / 322 / 323 and the per-set count-down — without it the count
-never drops; the integrator checks both landed). `ActiveWeaponCapabilityWord`'s body (lane 3).
-`ElysiumNpcSelect.cpp`, `ElysiumNpcLifecycle2.cpp` (the spawn's `ResetFakeReloadCount` call is
-already there), `ElysiumEntitySlotBodies.cpp`, `ElysiumRulebook.*`, `ElysiumFootsteps.cpp`. The
-draw / melee-switch / spacing arms of the pre-pass. The records (`Arena/` is the integrator's).
+2. **RangedWeaponPrePass**, Combat10_2.cpp, `0x102b8626..0x102b86b5`:
+   preserve cvar enabled → live weapon → ranged word &0x6000 → FakeReloadCount<1.
+   Read **SelectActiveWeaponWord()**, the existing real slot-360 read in NpcSelect.cpp, rather
+   than Motor's seam. At `0x102b867e` call ResetFakeReloadCount before choosing the schedule.
+   Keep RangedReloadPrepCalls as a diagnostic tally beside the real call; update its declaration
+   comment in Combat10.inl. At `0x102b8692` test **BaseScheduleHost.HintNode == INDEX_NONE**:
+   retail's null pointer maps to this existing sentinel, not numeric zero.
+   No hint →0xc4 (retail diagnostic 0x5e8f), hint →0xc6 (0x5e93).
+   Update the block/declaration comments which still describe Motor's zero read or no reroll.
+
+3. **ActiveWeaponWantsReload / RangedWeaponPrePass**, Combat10_2.cpp,
+   `0x102b86ba..0x102b87b0`, slot 280 `0x10253ab0`:
+   resolve FElysiumWeapon via the current active-entity/item downcast and call
+   **CanReloadMagazine(0)**, declared by lane 2 in ElysiumWeaponClasses.h.
+   Include that header by layer path if needed.
+   Keep clip>0 declining BEFORE this gate, then second active-weapon null check, reserve>=1,
+   SEE_ENEMY (0x46) OR NEW_ENEMY (0x54) →0xc2 (0x5ecb), neither →0xc3 (0x5ecf).
+   Preserve draw/melee/spacing tail unchanged. Update Combat10.inl's reload-seam comments.
+
+4. **RangedDisciplineGate**, Combat10_2.cpp and Combat10.inl, `0x101e3f50 / 0x1033d940):
+   name Presence id 10 in m_iDisciplineFlags2 +0xeb4. Its bit is applied by AddDiscFlag
+   `0x1033cfb0` from discipline status apply `0x101e3560` / `0x101dfc20`; spec 0006 owns
+   the cast/status source. Keep the hook answering false until that source lands.
+
+5. **Arm tests**, the two owned test files:
+   - `Elysium.Arm.NpcKernelCombat10.FakeReloadArm` (`0x102b8626 / 0x102b867e / 0x102b8692`):
+     ranged count<1 rerolls; INDEX_NONE selects 0xc4; valid hint index **0** selects 0xc6;
+     count>=1, disabled cvar, no weapon and melee skip fake reload. Keep reserve/clip staging
+     separate so skipped fake arms are not confused with real reload.
+   - `.RealReloadArm` (`0x102b86e5 / 0x10253ab0`): clip0 + may reload + reserve>=1 chooses
+     0xc2 under either SEE_ENEMY or NEW_ENEMY and 0xc3 under neither; reserve0 declines,
+     clip>0 declines first. Arrange positive FakeReloadCount to isolate real reload.
+   - rewrite `Elysium.Arm.NpcKernelConditions10.ResetFakeReloadCount`
+     (`0x101d4394..0x101d43c8 / 0x102c54c0 / vstdlib.dll 0x10002e60`):
+     Min6/no Max→6, no keys→8, absent template→8, fractional values truncate toward zero,
+     Min4/Max9 bounded; equal/inverted bounds consume no shared RNG draw.
+     Use FElysiumClanTemplate General keys as in the read-only FootstepSeam tests.
+   Rewrite assertions which pinned the zero capability/range seams, preserving V4c's
+   shared-stream fixture checks. List changed/deleted assertions by test name in your report.
+
+## Dependencies and owed lines
+
+Lane 2 owns the weapon declaration and per-set decrement; reroll, template and count-down land
+together. Lane 3 owns Motor and maintenance. You do not touch NpcSelect.cpp, NpcLifecycle2.cpp
+(the spawn ResetFakeReloadCount call already exists), EntitySlotBodies.cpp, Rulebook, Footsteps,
+generated Slots, or Arena. If their comments need an exact line, report it for the integrator.
+There is no new cross-lane edit for the template accessor or hint sentinel.
 
 ## Rules
 
-Coders never build, launch the editor or run a suite. Retail first: the listing decides, and a
-divergence you find is **recorded in your report, not adopted**. A shadowed local or member (C4458 /
-C4459) is a compile error here: name nothing after a member or an outer local. Query budget: 10 s
-warns, 60 s stops (never retried as-is, never widened); never read a file over ~200 KB whole; text
-through Grep / Read / Glob, not shell. Only your files; a line needed elsewhere goes in the report,
-exact. No commit. Report ≤300 words: what you ported (addresses), the hint test's verdict, the
-tests added and deleted, cross-lane lines, anything that contradicted the brief.
+Write only this lane's six files, in the worktree the coordinator names, **by absolute path**.
+Read files and run read-only tools from **E:\dev\elysium-unreal**.
+Never build, run the editor/game/tests/arena, or commit. Retail first, with the retail address
+at every changed runtime line. Report a new divergence; do not adopt it.
+Never hand-edit generated `*Slots.cpp`: a hand body goes in the matching `*SlotBodies.cpp`;
+the integrator owns the kernel_verdicts.tsv row and regeneration.
+Shadowed locals/members/globals are compile errors (C4458 / C4459).
+End with a report **under 350 words**: addresses ported, tests changed, and the exact lines owed
+by each file outside the lane, or explicitly none.
