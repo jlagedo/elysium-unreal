@@ -19,29 +19,16 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 - `uv run elysium test <prefix>` — automation test name prefix (`Elysium.Arm.NpcKernelSelect19.`);
   `test A B C` runs several in one boot; results in
   `$ELYSIUM_WORK_ROOT/reports/tests/<timestamp>-<slug>/index.json`.
+- Arena scenario results → `$ELYSIUM_WORK_ROOT/reports/arena/<UTC-stamp>/arena/index.json`
+  (`.scenarios[]` with `name`, `result`, `first_unmet`) plus `<scenario>.trace.tsv` beside it.
+- Build failed on C4458/C4459 (a local shadowing a member or global) → these are errors here;
+  check changed functions for shadowed names before building. Incremental build 13–18 s,
+  `--arm` build ~130 s.
 - `uv run elysium import <lane>` — deploy a corpus lane into `Content/ElysiumCorpus/`; the
   retail Python scripts land at `Content/ElysiumCorpus/scripts/`.
 - `$ELYSIUM_WORK_ROOT/research/ghidra/types/datamap_records-vampire.dll.json` — datamap replay (field flags).
 - The running game takes no content argument and opens no file outside the project: what it
   reads is baked package content plus the deployed `Content/ElysiumCorpus/`.
-
-## Query budget: 10 s warning, 60 s hard stop
-
-A query is anything that answers a question from data: a search or read over text files (md, tsv,
-json, logs), a database or corpus lookup, an MCP read tool, or a script or project tool (a ledger,
-census, gate or check) that reads data and reports. Builds, test runs, bakes and agent runs are not
-queries.
-
-- **10 s is the warning.** A query that takes longer is slow: note it (the project's slow-query log
-  if it has one, else in the answer) and treat it as an optimization candidate.
-- **60 s is the hard stop.** Run every query command with a 60 s timeout. When one hits it, stop: do
-  not retry it as-is and do not widen it. The task in hand waits while the query path is optimized
-  (an index, a cache, a narrower parameter, a precomputed table, a faster script), then resumes.
-- **Optimize before scheduling.** A planned process that depends on a query is timed first; if it
-  breaks the budget it is optimized before the process runs.
-- Never read a large data file whole (over ~200 KB) to find one thing: look it up, then read the
-  section.
-- Briefs for subagents and external workers carry this rule.
 
 ## Project layout
 
@@ -85,6 +72,8 @@ A reported defect is a question about VtMB, never a request for a patch.
   `entries.md`: what a function touches, who writes a field, who fills a slot, who calls in
   from outside), then the walked prose in `docs/vtmb/npc-ai/`, then the `vtmb-corpus`
   decompilation for what neither holds. Cite addresses.
+- Before trusting the kernel ledger after code commits → `uv run elysium research kernel --check`
+  (exits 7 when stale); regenerate with `uv run elysium research kernel` (~9 s).
 - Look an address, name, field or slot up before searching `docs/` for it: the `vtmb_where`
   tool, or `uv run elysium research where 0x1028a380 m_scriptState "slot 442"`,
   answers in under a second with its ledger rows, its `docs/vtmb` sections (file, heading,
@@ -104,3 +93,18 @@ A reported defect is a question about VtMB, never a request for a patch.
   retail field it stands for. Say explicitly what remains unrecovered.
 - Record the recovery in the matching `docs/vtmb/` document.
 - Divergences from retail are allowed only as named modernizations, stated in the answer.
+
+## Gotchas
+
+- `vtmb_asm`/`vtmb_code` say "no function matches" for bytes outside a Ghidra function → read the
+  PE directly: `python E:/elysium-work/codex/sol-ghidra/pe.py const|asm <hexaddr> [count]`
+  (system Python has capstone; the uv venv does not). Addresses past a section's raw size read as zero.
+- A bare address in `vtmb_*` matches in every module → prefix the module or check which DLL answered.
+- Headless Ghidra, even read-only dumps (`DumpAsm` logs `Save succeeded`) → run on a scratch copy
+  of `$ELYSIUM_WORK_ROOT/research/ghidra/project/vtmb.{gpr,rep}`, never the shared project (lock
+  races, zero-filled `.gbf`); see `research/tooling/ghidra/driver/README.md`. Judge a run by
+  `<Script>: wrote <path>` in its log, not its exit code.
+- Retail map entities without an import → lump 0 of `$ELYSIUM_VTMB_ROOT/Unofficial_Patch/maps/<map>.bsp`
+  (fall back to `Vampire/maps/`); offset/size at byte 8. Script: `E:/elysium-work/codex/sol-ghidra/maps.py`.
+- Parallel coders → `git worktree add -b <branch> E:/elysium-work/worktrees/<name> HEAD` (committed
+  work only); never remove a worktree blindly — it can delete untracked baked assets.
