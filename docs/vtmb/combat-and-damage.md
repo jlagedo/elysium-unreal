@@ -2224,8 +2224,9 @@ fresh corpse is still solid and still takes damage.
 - an NPC carrying MiscFlag **`No_Ragdoll_Death` (bit 19, `0x80000`)** spawns a static corpse and
   takes a `curtime + 0.5` think. `TASK_SET_MISC_FLAG MiscFlag:No_Ragdoll_Death` in
   `SCHED_TROIKA_D_VISION_OF_DEATH` is the authored producer;
-- otherwise `BecomeClientRagdoll(force, bone, 0)`, where `bone` is the hitbox index carried by
-  `info`, or the bone looked up as `Bip01 Spine2` when that index is negative.
+- otherwise `BecomeClientRagdoll(force, bone, 0)`, where `bone` is the hitbox record's bone
+  resolved from the index carried by `info`, or `LookupBone("Bip01 Spine2")` when that index
+  is negative (`0x1032c1e4..0x1032c226`).
 
 _The tail, the overrides and the other ways in (read 2026-10-04, 0002 V4 packet S1)._ When the
 corpse exists, `CreateCorpse` ends by replacing its main think: `SUB_PVSRemove 0x102696f0` at
@@ -2254,9 +2255,9 @@ move type, no think change) — that false is what drives the death
 schedule choice recorded in
 [npc-ai/README.md](npc-ai/README.md). On success:
 
-- **when the force bone is `-1` it first sets a weighted-random sequence of activity `0x21`
-  (`ACT_DIERAGDOLL`) at cycle 0**, so the ragdoll starts from the first frame of a death animation;
-  with a real hit bone the current pose is kept;
+- every successful rig call makes the weighted activity `0x21` (`ACT_DIERAGDOLL`) pick;
+  **only force bone `-1` commits it at cycle 0 and resets sequence info** (`0x1009021a`).
+  A real hit/fallback bone retains the current sequence/cycle while still consuming the pick;
 - `TriggerClientRagdoll` fires with the force and bone, `m_nRenderFX` becomes `0x17`
   (`kRenderFxRagdoll`), and — because both call sites pass `0` for the third argument —
   `FSOLID_NOT_SOLID` is added, move type becomes `MOVETYPE_NONE`, velocity is zeroed and the think
@@ -2816,3 +2817,25 @@ kill at19 wounds, including the trigger1. Both immediate deathcaller rows are
 attribution remains unverified. No damage arithmetic was changed by this worker.
 The wave remains uncommitted: triage's closing-worker section records final
 105/9/17/1 arena verdicts, the retained-state/RNG audit and remaining phase failures.
+
+
+### V4d D3 — ordinary ragdoll admission and burn audio (2026-10-05)
+
+The recovered `0x1032c1e4..0x1032c226` absent-hit arm now resolves drawn native Spine2 through
+cooked physics source bone names. `CorpseHitboxBone` remains the explicit no-hit seam for
+`0x101c2a30`; completing hitbox damage and the `0x1008b800` nonzero-force/bone>0 latch/impulse
+producer is 0014. No explicit bone -1 is substituted for missing fallback data. The common
+`0x10090180` transaction uses source `bHasPhysics`, not PhysicsAsset presence: ordinary rigged
+death draws but retains sequence/cycle, enters Chaos once on the kill tick, then installs
+V4c's corpse tail. No-rig refusal only collapses bounds; no held-pose or late-DIE substitute.
+A missing/empty/refusing cooked asset is a named bake/handoff failure with source capability
+still true. Presentation restoration never replays the pick, output or removal clock.
+
+The burn tail's `0x1032c3c1..0x1032c3d7` emission is now carried through PlayBodySound exactly
+once per completed death transaction: `character/vampire burning death.wav`, volume 1,
+attenuation 0.8, native pitch multiplier 1 (retail 100), channel Auto (0), on the dying entity.
+The existing sound seam expresses ATTN_NORM as level 75 (`50 + 20/0.8`), the NPC sound-hook
+precedent; no AI hearing sound is inserted by this audio call. BurnModel's look remains 0014.
+Later fade still overrides the burn/pedestrian think. The four V4c clocks are untouched;
+terminal Kill/destruction, including hidden removal, releases the explicitly retained visual
+and its physics through ReleaseNpcVisual. Lethal death retains it.

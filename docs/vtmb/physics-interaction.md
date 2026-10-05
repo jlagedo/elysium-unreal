@@ -52,8 +52,9 @@ the *result* are this document's:
 
 **The corpse entity is the dying NPC, not a new one.** In the ragdoll branch `CreateCorpse`
 (`0x1032c0e0`) returns `this` — the same `CAI_BaseNPC`, now `FSOLID_NOT_SOLID`, `MOVETYPE_NONE`,
-velocity zeroed and think cleared. Only the static-corpse branches (`No_Ragdoll_Death`, the player,
-the burning path) call `SpawnStaticCorpse` and get a second entity.
+velocity zeroed and think cleared. Only the static-corpse branches (`No_Ragdoll_Death`, the
+player) call `SpawnStaticCorpse` and get a second entity. Burning is a later removal/look tail,
+not a static-creation arm (`0x1032c32f`).
 
 **Nothing on the server simulates.** The server sets `m_nRenderFX = 0x17` (`kRenderFxRagdoll`) and
 stops; the client builds a `CRagdoll` from the model's vcollide and simulates it locally
@@ -72,7 +73,7 @@ touches server state.
 |---|---|
 | the player dies | never ragdolls — static corpse, all 18 body-fire emitters stopped |
 | MiscFlag `No_Ragdoll_Death` (bit 19, `0x80000`) | static corpse; `SCHED_TROIKA_D_VISION_OF_DEATH` is the authored producer |
-| model carries no ragdoll collide | `BecomeClientRagdoll` returns false; the NPC animates `SCHED_DIE` instead |
+| model carries no ragdoll collide | `BecomeClientRagdoll` only zeroes bounds and returns false; ordinary corpse think is replaced anyway. Only the separate state-7 selector fork chooses `SCHED_DIE`. |
 | `CNPC_VZombie` with `should_ragdoll` unset | gates two VZombie paths (`vfunc142`, `vfunc301`) |
 
 `should_ragdoll` is authored **162 times across 7 maps and is `1` in every one** — `hw_cemetery_1`
@@ -336,3 +337,30 @@ retail `client.dll`, SHA-256
 `e88beae0dd03af06493c71c5e8d87a6993b54e590cb6ad37cd3513c588582870`. Corpus counts are over the
 engine-resolved patch-first install and the retail VPK set separately, both stated where they
 differ.
+
+
+## V4d D3 — cooked rig admission and retained visual lifetime (2026-10-05)
+
+`0x10090180` model-interface slot 18 is represented by the cooked skeletal mesh's
+`PhysicsSourceData->Data.bHasPhysics`. PhysicsAsset absence/empty bodies/simulation refusal
+is a bake/attachment/handoff failure, never evidence of source riglessness. Native Spine2 is
+looked up on the actual mesh using typed source/native bone names (`0x1032c226`); missing data
+is reported, never replaced by the state-7 bone -1 seed. Every source-rig transaction makes
+its weighted pick, but only explicit -1 resets sequence/cycle. The ordinary real-bone body
+starts from its current pose.
+
+StartBodyRagdoll retains the spike-proven Ragdoll profile -> simulate -> verify -> wake order.
+Admission logs component, real asset path, body count and simulation result. Terminal release
+logs the same component's pre-release simulation/awake state, then releases claims, simulation,
+collision and physics state, presentation-owned children and the mesh. ReleaseNpcVisual takes
+an explicit visual pointer: a simulated component can detach from its motor. Pointer clearing
+is idempotent, and the map retirement check precedes UObject access. Children belonging to
+other entities survive detached; no shared-owner stale-component sweep is used.
+
+The entity/use/feed/loot anchor remains at the death spot. Ordinary mortal corpses remain while
+seen, burning ones release at +10 regardless of sight, ordinary pedestrians retain indefinitely,
+and fade children release only on actual removal (about +13.8 from alpha255). Lethal death and
+ScriptHide retain the body; terminal Kill, including already hidden removal, and destruction
+release it. Chaos solving/collision tuning is the named presentation modernization; impulse,
+hitbox producer completion, prop_ragdoll/friction and BurnModel visuals remain 0014; save
+semantics remain V6. Coder arms record lifetime requests, not proof of a real Chaos solve.

@@ -25,13 +25,10 @@ float StudioFrameAdvance(float Interval) override;
 // The sequence bridge's play hook (a named modernization: the studio sequence index is swapped for
 // the name-keyed clip resolver). `ResetSequence` (`0x10260a50` -> `ResetSequenceInfo` `0x10090950`)
 // hands the committed sequence here; a body that can play it answers the clip's first-pass length
-// and its OWN loop bit (`GetSequenceFlags & 1`, `+0x65d`). The base plays nothing.
+// and its OWN loop bit (`GetSequenceFlags & 1`, `+0x65d`). The base plays its retained native ragdoll seed; other base sequence inputs remain absent.
 virtual bool PlaySequenceClip(int32 Sequence, float& OutSeconds, bool& bOutLoops)
 {
-	(void)Sequence;
-	(void)OutSeconds;
-	(void)bOutLoops;
-	return false;
+	return PlayBaseClientRagdollSeed(Sequence, OutSeconds, bOutLoops); // 0x10090950 native base seed
 }
 
 // `0x103ea950 GetSequencesForActivity(owner, translated activity, …)` as `CWeaponMelee`'s band

@@ -8,6 +8,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumNpcBase.h"
 #include "Visual/ElysiumNpcVisual.h"   // GateLeaderCloth -- a native placed model's garments
 
 #include "Components/PrimitiveComponent.h"
@@ -127,6 +128,14 @@ void FElysiumEntity::Kill()
 		// Already hidden (OnDormancyChanged is skipped), but the visual state still changed
 		// hidden -> dead, so a retained visualizer must still be told.
 		World->NotifyVisualChanged(*this);
+	}
+	// 0x101cd940 actual removal, not Event_Killed: even an already hidden corpse owns physics.
+	if (FElysiumNpcBase* const RemovedNpc = AsNpcBase())
+	{
+		if (IElysiumEmbodiment* const RemovalBody = World != nullptr ? World->Embodiment() : nullptr)
+		{
+			RemovalBody->ReleaseNpcVisual(RemovedNpc->Visual, RemovedNpc->GetNpcMotor());
+		}
 	}
 }
 

@@ -241,7 +241,19 @@ void AElysiumMapActor::ReleaseBodyAnimClaims(USkeletalMeshComponent* Body)
 
 bool AElysiumMapActor::StartBodyRagdoll(USkeletalMeshComponent* Body)
 {
-	return Bodies && Bodies->StartBodyRagdoll(Body);
+	return !bMotorsRetired && Bodies && Bodies->StartBodyRagdoll(Body);
+}
+
+void AElysiumMapActor::ReleaseNpcVisual(USkeletalMeshComponent*& Body, IElysiumNpcMotor* Motor)
+{
+	USkeletalMeshComponent* const RemovedVisual = Body; // 0x101cd940 terminal removal
+	Body = nullptr; // idempotent, including entity-world destruction after EndPlay
+	if (bMotorsRetired) { return; } // before even IsValid: retired UObject indices may already be freed
+	if (RemovedVisual == nullptr || !IsValid(RemovedVisual)) { return; }
+	// Simulation may have detached RemovedVisual. Release the driver through its explicit identity.
+	AElysiumNpcBody* const RemovedMotor = static_cast<AElysiumNpcBody*>(Motor);
+	if (RemovedMotor != nullptr && IsValid(RemovedMotor)) { RemovedMotor->ReleaseAllAnimRequests(); }
+	if (Bodies != nullptr) { Bodies->ReleaseNpcVisual(RemovedVisual); }
 }
 
 void AElysiumMapActor::HoldBodyFinalPose(USkeletalMeshComponent* Body)

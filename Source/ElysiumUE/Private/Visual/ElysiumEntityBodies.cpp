@@ -23,6 +23,7 @@
 #include "Animation/Skeleton.h"
 #include "Animation/BlendSpace.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "ChaosClothAsset/ClothComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/Actor.h"
@@ -1507,55 +1508,84 @@ void UElysiumEntityBodies::ReleaseBodyAnimClaims(USkeletalMeshComponent* Body)
 
 bool UElysiumEntityBodies::StartBodyRagdoll(USkeletalMeshComponent* Body)
 {
-	if (Body == nullptr)
+	if (Body == nullptr) { return false; }
+	const UPhysicsAsset* const RagdollPhysics = Body->GetPhysicsAsset();
+	if (RagdollPhysics == nullptr || RagdollPhysics->SkeletalBodySetups.IsEmpty())
 	{
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("ragdoll bake/attachment failure: mesh=%s asset=%s bodies=%d; source capability retained (0x10090180)"),
+			*GetPathNameSafe(Body->GetSkinnedAsset()), *GetPathNameSafe(RagdollPhysics),
+			RagdollPhysics != nullptr ? RagdollPhysics->SkeletalBodySetups.Num() : 0);
 		return false;
 	}
-	const UPhysicsAsset* Physics = Body->GetPhysicsAsset();
-	if (Physics == nullptr || Physics->SkeletalBodySetups.IsEmpty())
-	{
-		// Reported ONCE per process rather than once per corpse: the character bake writes no physics
-		// asset for a body at all, so this is one absent pipeline product and not a per-body fault.
-		// The caller's stated fallback — hold the final pose — runs either way.
-		static bool bReportedMissingPhysics = false;
-		if (!bReportedMissingPhysics)
-		{
-			bReportedMissingPhysics = true;
-			UE_LOG(LogElysiumBodies, Warning,
-				TEXT("'%s' carries no physics asset, so a killed character holds its final pose "
-					 "instead of handing to a ragdoll. Reported once per process; the character bake "
-					 "writes no physics asset for any body."),
-				*GetNameSafe(Body->GetSkinnedAsset()));
-		}
-		return false;
-	}
-	// Unreal owns the physics from here: the collision profile, the solver and the constraint set are
-	// the engine's, and nothing of Source's ragdoll is reproduced. `SetSimulatePhysics` initialises
-	// every body at its CURRENT bone transform, which is what makes the pose the death sequence left
-	// behind the simulation's first frame.
-	// The engine's own shipped `Ragdoll` profile (`BaseEngine.ini`), which is `QueryAndPhysics` on the
-	// `PhysicsBody` object type and ignores the Pawn and Visibility channels — the same
-	// character-versus-character release the death transaction already made on the capsule. It has no
-	// `UCollisionProfile` constant, so the name is spelled; `bCanModify=False` keeps it stable.
-	// The profile already declares `QueryAndPhysics`; a name the engine does not know reports
-	// itself (`COLLISION PROFILE [...] is not found`, LogPhysics), so a missing profile is not a
-	// silent no-op.
+	// Capture the driver before physics can detach this map-owned visual from it.
+	AElysiumNpcBody* const RagdollMotor = Cast<AElysiumNpcBody>(Body->GetAttachParentActor());
+	// 0x10090180 presentation modernization: Chaos solves the authored .phy bodies/joints.
+	// Keep the spike-proven profile -> simulate -> verify -> wake order; the current pose seeds it.
 	Body->SetCollisionProfileName(TEXT("Ragdoll"));
 	Body->SetSimulatePhysics(true);
 	if (!Body->IsSimulatingPhysics())
 	{
-		// `SetSimulatePhysics` reports failure only by not simulating: an unregistered component or
-		// an asset whose bodies did not instantiate both leave it exactly where it was. Answering
-		// true here would take the caller past its own fallback and leave a corpse with a live pose
-		// nothing advances.
 		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("'%s' carries a physics asset but refused to simulate; the killed character holds "
-				 "its final pose instead"),
-			*GetNameSafe(Body->GetSkinnedAsset()));
+			TEXT("ragdoll handoff failure: mesh=%s asset=%s bodies=%d sim=0 (0x10090180)"),
+			*GetPathNameSafe(Body->GetSkinnedAsset()), *RagdollPhysics->GetPathName(),
+			RagdollPhysics->SkeletalBodySetups.Num());
 		return false;
 	}
 	Body->WakeAllRigidBodies();
+	if (RagdollMotor != nullptr) { RagdollMotor->ReleaseAllAnimRequests(); }
+	UE_LOG(LogElysiumBodies, Log, TEXT("ragdoll admitted: body=%s mesh=%s asset=%s bodies=%d sim=%d"),
+		*Body->GetPathName(), *GetPathNameSafe(Body->GetSkinnedAsset()), *RagdollPhysics->GetPathName(),
+		RagdollPhysics->SkeletalBodySetups.Num(), Body->IsSimulatingPhysics() ? 1 : 0);
 	return true;
+}
+
+void UElysiumEntityBodies::ReleaseNpcVisual(USkeletalMeshComponent* Body)
+{
+	if (Body == nullptr || !IsValid(Body) || Body->IsBeingDestroyed()) { return; } // map checks retirement first
+	// 0x101cd940 terminal removal: log the same visual before releasing any physics state.
+	const UPhysicsAsset* const RemovedPhysics = Body->GetPhysicsAsset();
+	UE_LOG(LogElysiumBodies, Log, TEXT("ragdoll release: body=%s asset=%s bodies=%d sim=%d awake=%d"),
+		*Body->GetPathName(), *GetPathNameSafe(RemovedPhysics),
+		RemovedPhysics != nullptr ? RemovedPhysics->SkeletalBodySetups.Num() : 0,
+		Body->IsSimulatingPhysics() ? 1 : 0, Body->IsAnyRigidBodyAwake() ? 1 : 0);
+	ReleaseBodyAnimClaims(Body);
+	const FObjectKey RemovedKey(Body);
+	CinematicClaims.Remove(RemovedKey);
+	SegmentClaims.Remove(RemovedKey);
+	HeldReactionClaims.Remove(RemovedKey);
+	Body->SetSimulatePhysics(false);
+	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Body->DestroyPhysicsState();
+	// NpcVisual's ownership rule, narrowed to this body's presentation children only. Do not
+	// sweep stale components of other entities sharing the map actor, or their authored children.
+	if (AActor* const VisualOwner = Body->GetOwner())
+	{
+		TArray<USceneComponent*> OwnedComponents;
+		VisualOwner->GetComponents(OwnedComponents);
+		for (USceneComponent* OwnedComponent : OwnedComponents)
+		{
+			if (OwnedComponent == nullptr || OwnedComponent == Body) { continue; }
+			UChaosClothComponent* const Garment = Cast<UChaosClothComponent>(OwnedComponent);
+			const bool bOwnGarment = Garment != nullptr && Garment->LeaderPoseComponent.Get() == Body;
+			const bool bOwnTaggedChild = OwnedComponent->GetAttachParent() == Body
+				&& (OwnedComponent->ComponentHasTag(ElysiumNpcVisual::WieldComponentTag())
+					|| OwnedComponent->ComponentHasTag(ElysiumNpcVisual::OrnamentComponentTag())
+					|| OwnedComponent->ComponentHasTag(TEXT("ElysiumMeleeTrail")));
+			if (bOwnGarment || bOwnTaggedChild)
+			{
+				if (Garment != nullptr) { Garment->SuspendSimulation(); }
+				OwnedComponent->DestroyComponent();
+			}
+		}
+	}
+	TArray<USceneComponent*> RemainingChildren;
+	Body->GetChildrenComponents(false, RemainingChildren);
+	for (USceneComponent* EntityChild : RemainingChildren)
+	{
+		if (EntityChild != nullptr) { EntityChild->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform); }
+	}
+	Body->DestroyComponent();
 }
 
 void UElysiumEntityBodies::HoldBodyFinalPose(USkeletalMeshComponent* Body)

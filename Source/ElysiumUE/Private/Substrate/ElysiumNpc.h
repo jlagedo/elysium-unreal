@@ -297,16 +297,13 @@ public:
 
 	/**
 	 * `BecomeClientRagdoll` `0x10090180`, `CreateCorpse`'s tail: the pose goes to physics (the
-	 * handoff), the body stops being solid, and the think stops. What this runtime keeps that retail
-	 * does not — the entity itself — is what `bDeathCommitted` marks, and the port's arbiter (every
-	 * body-owner token, the mind) is vacated with it.
+	 * handoff), the body stops being solid, and the think stops. The ordinary corpse remains this
+	 * entity (0x1032c2a5); `bDeathCommitted` records that identity independently of rig capability.
 	 */
 	virtual void BecomeClientRagdoll() override;
 	bool BecomeClientRagdoll(const FVector& Force, int32 Bone, bool bRetainEntity);
-	// 0x10090180 model-interface slot 18: no capability source yet, false until wired.
-	virtual bool HasClientRagdollRig() const;
-	// 0x1032c1e4: packet hitbox bone / LookupBone("Bip01 Spine2"); model bone source absent.
-	virtual int32 CorpseForceBone(const void* InInfo) const;
+	virtual bool HasClientRagdollRig() const override;
+	virtual int32 CorpseForceBone(const void* InInfo) const override;
 	virtual bool IsCorpse() const override { return bDeathCommitted; }
 	void MarkCorpseCreated() { bDeathCommitted = true; } // 0x1032c0e0: port corpse identity
 
@@ -1075,10 +1072,8 @@ protected:
 	// (`Kill`/`ScriptHide`) and death — the difference being only whether the mind ends up dead.
 	void ReleaseOnDeathOrDormancy(const TCHAR* Reason, bool bDeadMind);
 
-	// The death transaction's body half, re-applied after a restore. A load rebuilds the motor, so
-	// frozen / non-solid-to-characters / held-pose all have to be stated again on it — and a corpse's
-	// saved `NextThink` is `never`, so this cannot be deferred to a think the way the patrol and
-	// discipline blocks defer theirs.
+	// Presentation-only restoration of a source-rigged corpse. No weighted pick, output or clock
+	// replay; one handoff per rebuilt visual. V6 owns actual saved corpse function/render words.
 	void RestoreDeathBodyState();
 
 	// --- The footfall (`0x1026d460`), sequenced ---------------------------------------------------

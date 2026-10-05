@@ -176,10 +176,10 @@ public:
 	// Give back every channel claim standing on this body, and the cinematic claim tracked here
 	// beside them, so a character that stops having behaviour stops owning every channel at once.
 	void ReleaseBodyAnimClaims(USkeletalMeshComponent* Body);
-	// Start Unreal's physics simulation on this body, seeded from its current bone transforms. False
-	// when the mesh carries no physics asset to simulate — the shipped case, because the character
-	// bake writes none — and the caller then holds the final pose instead.
+	// 0x10090180 presentation: Chaos starts from the current pose with the .phy-derived asset.
+	// False diagnoses a bake/handoff failure, independently of source capability; no pose substitute.
 	bool StartBodyRagdoll(USkeletalMeshComponent* Body);
+	void ReleaseNpcVisual(USkeletalMeshComponent* Body); // terminal removal, explicit map-owned visual
 	// Stop advancing the pose and leave the last drawn frame on screen.
 	void HoldBodyFinalPose(USkeletalMeshComponent* Body);
 

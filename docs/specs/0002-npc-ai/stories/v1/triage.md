@@ -1581,3 +1581,29 @@ kill, ChangeSchedule/DisableThink inputs, maker respawn, tutorial hearing.
 The two N4 hearing intermittents remain unexpected-pass. Existing pose/bone-cache,
 include-group shadow metadata, bounds/template fake-reload, discipline, rig/force,
 real reload and restore seams remain named. No new known_red field masks V4c.
+
+### V4d witness save smoke — V6 placement (2026-10-05)
+
+On sm_hub_1, two placed bum_male pedestrians (#1925/#1927) died from numeric
+TakeDamage10000; both actual .phy assets admitted15 bodies/sim1. Save v4d-smoke at
+118.439, load: anchors and Dead minds remain, one guarded presentation handoff per
+rebuilt visual, coherent collapsed garments and no crash/standing resurrection.
+However m_lifeState(+0x200, slot158 IsAlive at0x100b4dc0) reads0 instead of1, and
+Health10 returns after load. `research where m_lifeState` identifies its generated
+SAVE row (ElysiumClassRegistry.cpp); this observation does not recover why the live
+restore loses those words. **V6**, already the owner of corpse save semantics, must
+recover/port the complete save/restore word/think chain. No V4d record is marked
+known_red for this smoke, no physics frame/timing was altered to conceal it.
+Evidence: codex/V4d-int/bum-map-dead.png and bum-map-restored-close.png under the
+work root; run-play 20261005T091313.291073Z.
+
+### V4d final verdict comparison (2026-10-05)
+
+Compared complete 132-record reports: d0f79574's 20261005T074109.557188Z against
+20261005T091932.640246Z. Baseline113/1/16/2 ->114/1/15/2 (pass/fail/expected-fail/
+unexpected-pass); all 113 baseline passes retained. Only damage_lethal_death moves
+expected-fail -> pass: real authored ragdoll plus measured rest and the floor probe
+at8s before correct unseen removal at13.017. All corpse controls and stealth stay pass.
+Default 169/0, arm 1625/0, kernel 7/7. No new known_red; existing H11/N4/other-story
+placements retain their actual verdicts. Physics frames/garments/release are proved
+for this scope; save state/impulse/BurnModel remain the named V6/0014 work.

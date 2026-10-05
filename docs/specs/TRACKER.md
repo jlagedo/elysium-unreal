@@ -101,8 +101,8 @@ Wave 3 (build work, one agent):
   `ElysiumNpc.h` 97.7 → 72.5 s (42 → 36), `ElysiumEntityWorld.h` 111.7 → 99.6 s (47 → 46).
   Default 171 / 0, arm 1,541 / 0, arena 75 pass / 30 expected-fail / 1 fail (H11) of 106 — each
   identical record by record; `kernel --check` clean.
-- [ ] **V4** — Fix: the animation chain under the kernel. M · Opus/high. Planned 2026-10-04
-  (`0002-npc-ai/stories/v4/README.md`), not started:
+- [x] **V4** — Fix: the animation chain under the kernel. M · Opus/high. Closed 2026-10-05
+  (`0002-npc-ai/stories/v4/README.md`); V4d completes the authored corpse fall:
   - [x] **V4r** — the two reading packets and the judge (N19). S–M.
   Order re-cut 2026-10-04 by the owner's "testable first" and "settle first" rules
   (`0002-npc-ai/spec.md` § the bug protocol's end): settling packets S1–S3 → the seam → [V5a + A3]
@@ -150,8 +150,13 @@ Wave 3 (build work, one agent):
     Closed 2026-10-05: default 169 / 0, arm 1,624 / 0; kernel 7/7; full arena 113 pass /
     1 fail / 16 expected-fail / 2 unexpected-pass. All 102 baseline passes and eight additions pass.
     Retail startup state retained; arena clock/establishment fixed; remaining reds keep their owners.
-  - [ ] **V4d** — the corpse falls: a physics asset from the `.phy`, Unreal's solve (the owner's
-    ruling: a named modernization). M.
+  - [x] **V4d** — the corpse falls: a physics asset from the `.phy`, Unreal's solve (the owner's
+    ruling: a named modernization). M. Closed 2026-10-05: numeric solid-local-source-bone-v1
+    gate; 30 of 34 witness rigs baked, four no-.phy skips. Default 169/0, arm 1625/0, kernel 7/7;
+    full arena 114 pass / 1 existing fail / 15 expected-fail / 2 unexpected-pass of 132.
+    All 113 baseline passes retained; only damage_lethal_death moved expected-fail -> pass.
+    Cop rest 18.138/17.016 cm, bound 20; floor read before real terminal cleanup. Garment/witness
+    and save/load presentation smokes done; corpse save words remain V6, impulse/burn look 0014.
 - [ ] **V5** — Fix: the attack conditions and the combat interrupts. S · Fable/medium.
 - [ ] **V6** — Fix: session, clock and lifecycle. M · Opus/high.
 - [x] **V11** — The attack coordinator's list (pulled from R4; melee never starts without it). S–M · Opus/high.

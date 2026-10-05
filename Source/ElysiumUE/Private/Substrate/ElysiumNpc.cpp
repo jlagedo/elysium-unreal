@@ -291,50 +291,17 @@ void FElysiumNpc::BecomeClientRagdoll()
 
 bool FElysiumNpc::HasClientRagdollRig() const
 {
-	// 0x10090180 *0x1070b250 slot18: model ragdoll capability not exposed until V4d.
-	return false;
+	return FElysiumNpcBase::HasClientRagdollRig(); // 0x10090180 shared source predicate
 }
 
 int32 FElysiumNpc::CorpseForceBone(const void* InInfo) const
 {
-	// 0x1032c1e4: hitbox bone or LookupBone("Bip01 Spine2"). No bone/hitbox source yet.
-	(void)InInfo;
-	return INDEX_NONE;
+	return FElysiumNpcBase::CorpseForceBone(InInfo); // 0x1032c1e4..0x1032c226
 }
 
 bool FElysiumNpc::BecomeClientRagdoll(const FVector& Force, int32 Bone, bool bRetainEntity)
 {
-	if (!HasClientRagdollRig()) // 0x10090180 model-interface slot18
-	{
-		LastSetSizeMinsUnits = FVector::ZeroVector; LastSetSizeMaxsUnits = FVector::ZeroVector; // 0x10090180
-		if (Motor) Motor->SetHullSize(FVector::ZeroVector, FVector::ZeroVector); // 0x101cf390
-		++SetSizeCalls; // 0x10090180 UTIL_SetSize, no-rig arm
-		return false; // 0x10090180: no other writes, no hold-pose substitute
-	}
-	const int32 SeedSequence = SelectWeightedSequence(0x21); // 0x1009021a: every rigged call picks
-	if (Bone == INDEX_NONE && SeedSequence != INDEX_NONE) // 0x1009021a: only bone -1 commits
-	{
-		SequenceNumber = SeedSequence; SequenceCycle = 0.f; // 0x1009021a
-		ResetSequenceInfo(); // 0x10090950
-	}
-	// 0x10090180 slot225: physics destruction input absent, not fabricated.
-	if (!bRetainEntity) { RetailSolidFlags |= 4u; } // 0x10090180 rig branch only
-	IElysiumEmbodiment* const RagdollBody = World != nullptr ? World->Embodiment() : nullptr;
-	if (RagdollBody != nullptr && Visual != nullptr) // 0x10090180 TriggerClientRagdoll visual seam
-	{
-		(void)RagdollBody->StartBodyRagdoll(Visual); // 0x10090180; V4d supplies force/bone adapter
-	}
-	(void)Force; // 0x10090180 m_vecForce/m_nForceBone presentation inputs, V4d
-	RenderFxWord = 0x17; // 0x10090180
-	if (!bRetainEntity) // 0x10090180
-	{
-		SetMoveType(0, 0); // 0x10090180 slot93
-		LastSetSizeMinsUnits = FVector::ZeroVector; LastSetSizeMaxsUnits = FVector::ZeroVector; // 0x10090180
-		if (Motor) Motor->SetHullSize(FVector::ZeroVector, FVector::ZeroVector); // 0x101cf390
-		++SetSizeCalls; // 0x10090180 UTIL_SetSize
-		ThinkSet(nullptr, 0.0); // 0x10090180
-	}
-	return true; // 0x10090180
+	return FElysiumNpcBase::BecomeClientRagdoll(Force, Bone, bRetainEntity); // 0x10090180
 }
 
 void FElysiumNpc::InputUseInteresting(const FElysiumInputArgs& Args)
@@ -2059,19 +2026,11 @@ void FElysiumNpc::RestoreDeathBodyState()
 	{
 		return;
 	}
-	// A corpse's BODY state is not save state and cannot be: the motor is rebuilt at load and a held
-	// pose is a pose, not a fact about the character. So the death transaction's body half -- frozen,
-	// non-solid to characters, handed to physics or held on its final frame -- is re-applied rather
-	// than restored. Without it a loaded corpse stands up solid, animating its spawn idle.
-	//
-	// Re-applied HERE and not from an armed think, because a corpse's saved cadence is `never` and
-	// there is no think to arm: the snapshot applier restamps the saved `NextThink` after this
-	// returns and is the authoritative one there. The body already exists -- `Spawn` builds it, and a
-	// snapshot is applied over a fully-spawned world.
-	// A dead mind is a corpse: `CreateCorpse` ran inside the death transaction (story 8 wave 2), so
-	// the handoff is the load's own work and the corpse mark comes back with it.
-	bDeathHandoffDone = false;
+	// Presentation restoration only (0x10090180): never replay OnDeath, picks or corpse clocks.
+	// A rebuilt visual gets one handoff; calling restore again on the same visual does nothing.
 	bDeathCommitted = true;
+	if (!HasClientRagdollRig() || (MiscFlags & 0x80000u) != 0
+		|| CorpseForceBone(nullptr) == INDEX_NONE) { return; } // missing rig fallback is still a data failure
 	SetBodyFrozen(true);
 	SetIgnoreCharacterCollision(true);
 	CompleteDeathHandoff();

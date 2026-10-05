@@ -423,6 +423,7 @@ public:
 		USkeletalMeshComponent* Body) const override;
 	virtual void ReleaseBodyAnimClaims(USkeletalMeshComponent* Body) override;
 	virtual bool StartBodyRagdoll(USkeletalMeshComponent* Body) override;
+	virtual void ReleaseNpcVisual(USkeletalMeshComponent*& Body, IElysiumNpcMotor* Motor) override;
 	virtual void HoldBodyFinalPose(USkeletalMeshComponent* Body) override;
 	virtual bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
 		EElysiumAnimBodyKind BodyKind, FString& OutAnimName,

@@ -75,8 +75,7 @@ namespace
 bool FElysiumNpcBase::SelectBecomeClientRagdoll()
 {
  ++SelectRagdollRequests;
- FElysiumNpc* const RagdollNpc = AsNpc();
- return RagdollNpc != nullptr && RagdollNpc->BecomeClientRagdoll(FVector::ZeroVector, INDEX_NONE, false); // 0x1028a8f7
+ return BecomeClientRagdoll(FVector::ZeroVector, INDEX_NONE, false); // 0x1028a8f7, base and Troika transaction
 }
 
 // =================================================================================================

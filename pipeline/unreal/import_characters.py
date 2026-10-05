@@ -16,6 +16,13 @@ PRODUCER = "characters"
 #: script changes what it authors; the data half is content-hashed. Never hash code.
 PRODUCER_VERSION = "characters-v2"   # v2: donor poses mark bones a bank never had as absent
 
+# Independent from mesh/animation recipes (import_physics_data.py::publish_entry; S14 §2).
+RAGDOLL_PRODUCER = "character-ragdolls"
+RAGDOLL_PRODUCER_VERSION = "character-ragdolls-v1"
+RAGDOLL_BUILDER_VERSION = "ragdoll-v1"
+# S14's saved-asset hull/bind and signed hinge measurement, docs/vtmb/phy_vphysics.md.
+RAGDOLL_FRAME_RECIPE = "solid-local-source-bone-v1"
+
 
 def argument(name, default=""):
     needle = "-" + name.lower() + "="
@@ -94,7 +101,7 @@ def blend_plan(asset_id, body, clips, role=""):
     return table, expected, omissions
 
 
-def run(manifest_path, material_root, force=False, export_root=None):
+def run(manifest_path, material_root, force=False, export_root=None, ragdoll_frame_recipe=RAGDOLL_FRAME_RECIPE):
     started = time.time()
     root = Path(manifest_path).parent
     manifest = _json(manifest_path)
@@ -112,8 +119,11 @@ def run(manifest_path, material_root, force=False, export_root=None):
               "failed": [], "pruned": 0, "foreign": 0, "unstamped": 0, "pendingProjections": {},
               "blendOmissions": {}, "suppressedAppendixTracks": {}, "clothBuilds": {}, "clothTuningPending": {}, "assets": []}
     report["physicsSourceData"] = {"assets": 0, "sourceGaps": 0, "receipts": []}
+    report["ragdolls"] = {"producer": RAGDOLL_PRODUCER, "version": RAGDOLL_PRODUCER_VERSION,
+                          "builderVersion": RAGDOLL_BUILDER_VERSION, "frameVersion": ragdoll_frame_recipe,
+                          "built": 0, "reused": 0, "skipped": 0, "failed": 0, "receipts": []}
     report["physicsScope"] = "export-import-data-conservation"
-    report["deferredPhysicsFeatures"] = ["simulation-ready-physics-assets", "solver-calibration", "ragdoll-activation", "gameplay-physics"]
+    report["deferredPhysicsFeatures"] = ["death-impulse-hitbox-producer", "prop-ragdoll", "friction-surface-inertia"]
     physics_published = set()
     unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(
         [manifest["packageRoot"], "/ElysiumBaked/Materials"], force_rescan=True)
@@ -281,6 +291,97 @@ def run(manifest_path, material_root, force=False, export_root=None):
         if record is None or not bl.save(entry["meshAsset"]):
             raise RuntimeError(error or "could not bind native physics source data")
         physics_published.add(entry["assetId"])
+        return physics, receipt
+
+    def ragdoll_asset(entry, source):
+        # BuildPhysicsAsset/cloth_assets own _PHYS; this asset feeds StartBodyRagdoll/GetPhysicsAsset.
+        if (ragdoll_frame_recipe.startswith("diagnostic-") and entry["assetId"] !=
+                "vtmb:model:character/npc/common/cop_variant/regular_cop/regular_cop"):
+            report["ragdolls"]["skipped"] += 1
+            report["ragdolls"]["receipts"].append({"assetId": entry["assetId"], "outcome": "skipped",
+                                                   "reason": "outside diagnostic frame scope"})
+            return
+        if not entry["meshAsset"]:
+            report["ragdolls"]["skipped"] += 1
+            report["ragdolls"]["receipts"].append({"assetId": entry["assetId"], "outcome": "skipped",
+                                                   "reason": "no skeletal mesh"})
+            return
+        path = entry["meshAsset"] + "_RAGDOLL"
+        protected.add(path)
+        receipt = {"assetId": entry["assetId"], "assetPath": path,
+                   "builderVersion": RAGDOLL_BUILDER_VERSION, "frameVersion": ragdoll_frame_recipe}
+        try:
+            # physics_projection::bHasPhysics is presence, never fitted-body capability (0x10090180).
+            if source is None or not source[1]["hasPhysics"]:
+                receipt.update(outcome="skipped", reason="no .phy", bodyCount=0, convexCount=0,
+                               constraintCount=0, bodyMasses=[])
+                report["ragdolls"]["skipped"] += 1
+                report["ragdolls"]["receipts"].append(receipt)
+                return
+            physics, physics_receipt = source
+            mesh = unreal.load_asset(entry["meshAsset"])
+            mesh_recipe = bl.stored_recipe(entry["meshAsset"], producer=PRODUCER)
+            if mesh is None or not mesh_recipe:
+                raise RuntimeError("ragdoll requires a saved/stamped skeletal mesh")
+            recipe = {"tool": RAGDOLL_PRODUCER_VERSION, "physicsSource": physics_receipt["recipe"],
+                      "mesh": mesh_recipe, "builder": RAGDOLL_BUILDER_VERSION, "frame": ragdoll_frame_recipe}
+            ledger.record(path, recipe)
+            digest = bl.recipe_fingerprint(RAGDOLL_PRODUCER, path, recipe)
+            receipt["recipe"] = digest
+            asset = unreal.load_asset(path)
+            if asset is not None and (not isinstance(asset, unreal.PhysicsAsset)
+                    or str(unreal.EditorAssetLibrary.get_metadata_tag(asset, bl.PRODUCER_TAG)) != RAGDOLL_PRODUCER):
+                raise RuntimeError("ragdoll target is foreign, unstamped or wrong class: " + path)
+            stored = bl.stored_recipe(path, producer=RAGDOLL_PRODUCER)
+            counters = json.loads(unreal.EditorAssetLibrary.get_metadata_tag(asset, "ElysiumRagdollBuildReceipt") or "{}") if asset else {}
+            reused = (not force and asset is not None and stored == digest and counters.get("recipe") == digest
+                      and counters.get("builderVersion") == RAGDOLL_BUILDER_VERSION
+                      and counters.get("frameVersion") == ragdoll_frame_recipe)
+            if reused:
+                receipt.update(counters)
+            else:
+                # D1::BuildRagdollPhysicsAsset consumes typed source data, not a runtime sidecar.
+                result = unreal.ElysiumClothBuildLibrary.build_ragdoll_physics_asset(
+                    physics, mesh, path, ragdoll_frame_recipe)
+                receipt.update(bodyCount=int(result.body_count), convexCount=int(result.convex_count),
+                               constraintCount=int(result.constraint_count), bodyMasses=[float(mass) for mass in result.body_masses],
+                               builderVersion=str(result.builder_version), frameVersion=str(result.frame_version),
+                               warnings=[str(warning) for warning in result.warnings])
+                if result.errors or result.skipped:
+                    raise RuntimeError("rigged ragdoll build refused: " + str(list(result.errors)))
+                if str(result.asset_path).split(".", 1)[0] != path:
+                    raise RuntimeError("ragdoll builder changed the output package")
+                asset = unreal.load_asset(path)
+            if (asset is None or not isinstance(asset, unreal.PhysicsAsset)
+                    or receipt.get("builderVersion") != RAGDOLL_BUILDER_VERSION
+                    or receipt.get("frameVersion") != ragdoll_frame_recipe
+                    or receipt.get("bodyCount", 0) <= 0 or receipt.get("convexCount", 0) < receipt["bodyCount"]
+                    or receipt.get("constraintCount", -1) < 0
+                    or len(receipt.get("bodyMasses", [])) != receipt["bodyCount"]):
+                raise RuntimeError("ragdoll asset/readback receipt is incomplete or has the wrong version")
+            receipt["outcome"] = "reused" if reused else "built"
+            if not reused:
+                bl.stamp_recipe(asset, digest, producer=RAGDOLL_PRODUCER)
+                unreal.EditorAssetLibrary.set_metadata_tag(asset, "ElysiumAssetId", entry["assetId"])
+                unreal.EditorAssetLibrary.set_metadata_tag(asset, "ElysiumRagdollBuildReceipt", json.dumps(receipt))
+                if not bl.save(path):
+                    raise RuntimeError("could not save ragdoll asset: " + path)
+            # physics_source/cloth_assets save precedent: repair attachment even on a recipe hit.
+            attached = mesh.get_editor_property("physics_asset")
+            if attached != asset:
+                mesh.set_editor_property("physics_asset", asset)
+                if not bl.save(entry["meshAsset"]):
+                    raise RuntimeError("could not save ragdoll mesh attachment: " + entry["meshAsset"])
+            receipt["attachmentRepaired"] = attached != asset
+            report["ragdolls"][receipt["outcome"]] += 1
+            report["reused" if reused else "imported"] += 1
+            report["assets"].append(path)
+            report["ragdolls"]["receipts"].append(receipt)
+        except Exception as exc:
+            receipt.update(outcome="failed", reason=str(exc))
+            report["ragdolls"]["failed"] += 1
+            report["ragdolls"]["receipts"].append(receipt)
+            raise
 
     def cloth_assets(entry):
         if not entry.get("clothData"):
@@ -403,7 +504,8 @@ def run(manifest_path, material_root, force=False, export_root=None):
                     report["imported"] += 1
                 else:
                     report["reused"] += 1
-            physics_source(entry, body)
+            source_physics = physics_source(entry, body)
+            ragdoll_asset(entry, source_physics)
             cloth_assets(entry)
             if entry.get("nativeMainOwner", True):
                 animations(entry, body, entry)
@@ -504,7 +606,8 @@ if __name__ == "__main__":
     if not manifest or not materials:
         raise SystemExit("-ImportCharacters and -ImportMaterialsRoot are required")
     try:
-        result = run(manifest, materials, argument("ImportForce") == "1", argument("ImportUnitRoot") or None)
+        result = run(manifest, materials, argument("ImportForce") == "1", argument("ImportUnitRoot") or None,
+                     argument("ImportRagdollFrameRecipe", RAGDOLL_FRAME_RECIPE))
     except Exception as exc:
         report_path = Path(manifest).parent / "import_report.json"
         result = _json(report_path) if report_path.is_file() else {"producer": PRODUCER, "failed": []}

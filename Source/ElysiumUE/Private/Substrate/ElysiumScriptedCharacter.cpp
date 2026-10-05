@@ -11,6 +11,14 @@
 
 FElysiumScriptedCharacter::~FElysiumScriptedCharacter()
 {
+	// Terminal release only; DestroyMotor also serves model replacement, which retains entity children.
+	if (Visual != nullptr)
+	{
+		if (IElysiumEmbodiment* const RemovalBody = World != nullptr ? World->Embodiment() : nullptr)
+		{
+			RemovalBody->ReleaseNpcVisual(Visual, Motor); // 0x101cd940, before DestroyNpcMotor
+		}
+	}
 	DestroyMotor();
 }
 

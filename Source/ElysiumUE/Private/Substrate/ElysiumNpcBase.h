@@ -55,6 +55,16 @@ class FElysiumNpcBase : public FElysiumScriptedCharacter, public IElysiumSchedul
 {
 public:
  FElysiumNpcBase(); // 0x1027c300 owner identity before any memory access
+	// 0x10090180 model-interface slot 18: source rig, independent of the cooked solver asset.
+	virtual bool HasClientRagdollRig() const;
+	bool BecomeClientRagdoll(const FVector& Force, int32 Bone, bool bRetainEntity);
+	virtual void BecomeClientRagdoll() override;
+	// 0x101c2a30: damage packets have no hitbox input yet (0014); answers no hit.
+	virtual int32 CorpseHitboxBone(const void* InInfo) const;
+	virtual int32 CorpseForceBone(const void* InInfo) const; // 0x1032c226 LookupBone("Bip01 Spine2")
+	int32 BaseRagdollRenderFxWord = 0; // m_nRenderFX +0x168 on base-only NPCs; Troika carries RenderFxWord
+	// 0x10090950 native seed playback hook; serial base PlaySequenceClip forward is owed outside D3.
+	bool PlayBaseClientRagdollSeed(int32 Sequence, float& OutSeconds, bool& bOutLoops);
 	// `+0x94 m_pBaseNPC`, set by the `CAI_BaseNPC` constructor `0x1027c300` (which also adds the NPC
 	// to the AI list `DAT_1090fe10` and sets `FL_NPC`).
 	virtual FElysiumNpcBase* AsNpcBase() override { return this; }
@@ -706,11 +716,11 @@ protected:
 	// Whether the death handoff has already run. Session state, not save state: it is derivable from
 	// the mind's dead state, and a restored corpse re-runs the handoff on the body the load rebuilt.
 	bool bDeathHandoffDone = false;
+	USkeletalMeshComponent* DeathHandoffVisual = nullptr; // presentation identity only, never dereferenced
+	int32 BaseClientRagdollSeed = INDEX_NONE; // native raw seed identity on the base-only line
 
-	// `BecomeClientRagdoll` (`0x10090180`, the ragdoll arm of `CreateCorpse` `0x1032c0e0`) has run:
-	// the body went to physics. Retail has no such flag -- its client ragdoll is a separate entity --
-	// so this marks the port's own body as the corpse (`IsCorpse`), which the think's
-	// `SUB_PVSRemove` later removes.
+	// `CreateCorpse` 0x1032c0e0 retains the ordinary NPC as the corpse. Port identity marker,
+	// independent of source capability and physics admission; the corpse think owns removal.
 	bool bDeathCommitted = false;
 
 	// When the death clip `PlayDeathActivity` started runs out. `TASK_DIE`'s gate waits on it; zero
@@ -721,11 +731,7 @@ protected:
 
 	void SerializeExtendedHeader(FElysiumSaveArchive& Ar);
 
-	// The end of the death transaction, run once: hand the body to Unreal's physics, seeded from the
-	// pose it is standing in. A body with no physics asset behind it holds that pose instead — the
-	// shipped outcome, because the character bake writes none. The solid-body policy is deliberately
-	// NOT here: it is re-asserted on every terminal dead think, because a corpse's body can be handed
-	// back to it by something that took it before the kill.
+	// 0x10090180 presentation half only, once per visual. No picks, clocks or no-rig substitute.
 	void CompleteDeathHandoff();
 
 };

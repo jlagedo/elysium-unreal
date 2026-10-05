@@ -996,15 +996,13 @@ public:
 	// reaction and an ambient stance all stop owning it in the same instant. A body no driver
 	// arbitrates holds nothing, which is an ordinary absence.
 	virtual void ReleaseBodyAnimClaims(USkeletalMeshComponent* Body) {}
+	// Terminal entity removal (0x101cd940), never lethal death or a model swap. Explicit visual:
+	// simulation can detach it from the motor. The adapter clears the pointer even after retirement.
+	virtual void ReleaseNpcVisual(USkeletalMeshComponent*& Body, IElysiumNpcMotor* Motor) { Body = nullptr; }
 
-	// Hand this body to Unreal's physics, seeded from the pose it is standing in right now — the
-	// simulation starts at the current bone transforms, so the death sequence's last frame is the
-	// ragdoll's first. **Unreal owns the physics**: nothing about Source's ragdoll solver, its force
-	// envelope or its bone mapping is reproduced.
-	//
-	// False means this body carries no physics asset to simulate, and the caller's stated fallback is
-	// `HoldBodyFinalPose`. That is the shipped case today: the character bake writes no physics
-	// asset, so the corpse holds its final frame instead of falling.
+	// 0x10090180 presentation: Chaos takes the current pose using the cooked .phy-derived asset.
+	// Refusal is a bake/attachment failure, independent of source rig capability; no held-pose substitute.
+	// Death impulse/hitbox producer completion remains 0014.
 	virtual bool StartBodyRagdoll(USkeletalMeshComponent* Body) { return false; }
 
 	// Stop evaluating animation and leave the last drawn pose on screen. The body stays visible and

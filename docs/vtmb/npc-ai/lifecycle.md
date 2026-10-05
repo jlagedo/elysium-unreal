@@ -2750,7 +2750,7 @@ negative, not a gap.
    `CBaseCombatCharacter::Event_Killed` `0x1032b9b0`.
 3. `0x1032b9b0` writes `m_lifeState = 1`, computes and clamps the death force, and calls slot 301
    **`CreateCorpse` `0x1032c0e0`** -- death bone or `Bip01 Spine2`; `BecomeClientRagdoll` for normal
-   NPCs; `SpawnStaticCorpse` `0x1032be80` for `No_Ragdoll_Death`, burning and static cases. The
+   NPCs; `SpawnStaticCorpse` `0x1032be80` for `No_Ragdoll_Death` and the player (burning is a later tail). The
    ragdoll branch keeps the dying NPC as the corpse; the static branch spawns a second entity and
    schedules the original for removal. Cleanup at `curtime + 10.0` (`_DAT_1044e664`); static
    no-ragdoll at `curtime + 0.5` (`_DAT_104454d0`).
@@ -3963,3 +3963,46 @@ The three damage records still measure cap99999; the high-health control is
 alive at90 wounds after five18 commits; knockout and cower call0x102beea4 with
 18 and19 wounds, respectively, flags0x440a0000 /0x40000400. These distinguish
 the flag rule, not the historical fifth-hit attribution.
+
+
+### V4d D3 — source capability, handoff and terminal release (2026-10-05)
+
+`vampire.dll` `0x10090180` checks model-interface slot 18 before any rig writes; it always
+picks ACT_DIERAGDOLL on success and commits/resets only at explicit bone -1 (`0x1009021a`).
+Ordinary `CreateCorpse` resolves the hitbox record's bone or LookupBone("Bip01 Spine2")
+(`0x1032c1e4..0x1032c226`) and discards the transaction's answer at `0x1032c29c`. The state-7
+selector (`0x1028a8ec..0x1028a92b`) runs that same transaction with zero force/bone -1/flag 0;
+it is not the next program of an ordinary corpse. V4c's corpse clocks and retained NPCInit
+NONE state are unchanged.
+
+The common base/Troika transaction now reads cooked mesh provenance's
+`PhysicsSourceData->Data.bHasPhysics`, independently of the generated PhysicsAsset. The
+absent-hit accessor `CorpseHitboxBone` represents `CTakeDamageInfo`'s `0x101c2a30` input and
+answers no hit: the packet has no hitbox/bone producer (0014). The fallback joins the typed
+SourceName/NativeName and looks the native name up on the drawn mesh; no regular_cop ordinal
+or fabricated bone -1 is used. Missing Spine2 on a purported rig is a data/attachment failure.
+Source-rig success preserves V4c's weighted draw and real-bone pose, solid4/FX17/move-none/
+bounds/think-clear order. A missing/refusing solver asset remains a named bake/handoff failure,
+not rigless classification or HoldBodyFinalPose. Base-only sequence-table/playback remains the
+existing model-input seam; the common transaction does not invent its missing descriptors.
+
+`CompleteDeathHandoff` is presentation-only and guarded once per visual; restoration does
+not replay OnDeath, weighted picks or clocks. `FElysiumEntity::Kill` (actual `UTIL_Remove`
+`0x101cd940`) and the scripted-character destructor call
+`ReleaseNpcVisual(USkeletalMeshComponent*&, IElysiumNpcMotor*)`. The adapter captures the
+explicit visual, checks retirement before UObject access, releases driver/stored claims,
+logs pre-release simulation, stops simulation/collision, destroys physics state, removes only
+that body's garment/wield/ornament/trail presentation, destroys the mesh and clears Visual.
+Already hidden removal is included. Lethal Event_Killed, ordinary ScriptHide and the
+model-replacement DestroyMotor path never release the visual. Other entities' authored
+children are detached with their world transforms retained. Seen mortal and indefinite
+pedestrian corpses retain simulation; burn/fade bodies release only at actual removal.
+
+Chaos's current-pose solve/profile is the named presentation modernization. No death impulse,
+hitbox damage support, BurnModel ash/skeleton look (0014), or corpse save parity (V6) is claimed.
+The new NpcCombat.Death arms record typed capability, same-tick admission and terminal release;
+real .phy assets, frame measurement and Chaos admission remain the integrator's checks.
+
+The serial `ElysiumNpcBaseAnim.inl::PlaySequenceClip` forward is integrated: the base
+plays its retained raw seed through GetBodyClipByRawIndex and PlayAnimSegment, using
+the source loop bit and making no second weighted pick. Troika's V4c bridge is unchanged.

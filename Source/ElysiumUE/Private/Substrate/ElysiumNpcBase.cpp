@@ -2,6 +2,10 @@
 
 #include "Debug/ElysiumNpcDebugLogging.h"
 #include "ElysiumAnimEvent.h"
+#include "ElysiumCharacterProvenance.h"
+#include "ElysiumPhysicsData.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
@@ -36,6 +40,8 @@
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Visual/ElysiumAnimationPick.h"
+#include "Visual/ElysiumNpcClips.h"
 
 #include <cmath>
 
@@ -88,37 +94,158 @@ const FElysiumEntity* FElysiumNpcBase::FindPatrolPoint(const FString& Name) cons
 	return nullptr;
 }
 
+bool FElysiumNpcBase::HasClientRagdollRig() const
+{
+	// 0x10090180 *0x1070b250 slot 18: source model capability, never the generated PhysicsAsset.
+	const UElysiumCharacterProvenance* const RagdollSource = Visual != nullptr
+		? UElysiumCharacterProvenance::Find(Visual->GetSkeletalMeshAsset()) : nullptr;
+	return RagdollSource != nullptr && RagdollSource->PhysicsSourceData != nullptr
+		&& RagdollSource->PhysicsSourceData->Data.bHasPhysics;
+}
+
+int32 FElysiumNpcBase::CorpseHitboxBone(const void* InInfo) const
+{
+	// 0x101c2a30 CTakeDamageInfo input: no hitbox/bone field in this packet. Producer is 0014.
+	(void)InInfo;
+	return INDEX_NONE;
+}
+
+int32 FElysiumNpcBase::CorpseForceBone(const void* InInfo) const
+{
+	const int32 HitBone = CorpseHitboxBone(InInfo); // 0x1032c1e4
+	if (HitBone != INDEX_NONE) { return HitBone; }
+	if (Visual == nullptr) { return INDEX_NONE; }
+	// 0x1032c226 LookupBone("Bip01 Spine2"): use the actual drawn mesh's native bone ordinal.
+	FName NativeSpine(TEXT("Bip01 Spine2"));
+	const UElysiumCharacterProvenance* const RagdollSource =
+		UElysiumCharacterProvenance::Find(Visual->GetSkeletalMeshAsset());
+	if (RagdollSource != nullptr && RagdollSource->PhysicsSourceData != nullptr)
+	{
+		for (const FElysiumPhysicsSourceBone& SourceBone : RagdollSource->PhysicsSourceData->Data.Bones)
+		{
+			if (SourceBone.SourceName.Equals(TEXT("Bip01 Spine2"), ESearchCase::IgnoreCase))
+			{
+				NativeSpine = SourceBone.NativeName;
+				break;
+			}
+		}
+	}
+	const int32 SpineBone = Visual->GetBoneIndex(NativeSpine);
+	if (SpineBone == INDEX_NONE && HasClientRagdollRig())
+	{
+		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s source ragdoll rig lacks drawn Spine2 '%s': data/attachment failure (0x1032c226)"),
+			*DebugString(), *NativeSpine.ToString());
+	}
+	return SpineBone;
+}
+
+void FElysiumNpcBase::BecomeClientRagdoll()
+{
+	(void)BecomeClientRagdoll(FVector::ZeroVector, INDEX_NONE, false); // 0x1028a8f7 explicit seed
+}
+
+bool FElysiumNpcBase::BecomeClientRagdoll(const FVector& Force, int32 Bone, bool bRetainEntity)
+{
+	if (!HasClientRagdollRig()) // 0x10090180 model-interface slot18
+	{
+		LastSetSizeMinsUnits = FVector::ZeroVector; LastSetSizeMaxsUnits = FVector::ZeroVector; // 0x10090180
+		if (Motor) Motor->SetHullSize(FVector::ZeroVector, FVector::ZeroVector); // 0x101cf390
+		++SetSizeCalls; // 0x10090180 UTIL_SetSize, no-rig arm
+		return false; // 0x10090180: no other writes, no hold-pose substitute
+	}
+	FElysiumNpc* const TroikaRagdoll = AsNpc();
+	int32 SeedSequence = INDEX_NONE;
+	if (TroikaRagdoll != nullptr)
+	{
+		SeedSequence = TroikaRagdoll->SelectWeightedSequence(0x21); // 0x1009021a, V4c bridge/shared draw
+	}
+	else
+	{
+		// 0x1008dc40 bare model table on the base line too; no Troika activity translation or probe.
+		TArray<FElysiumNpcClip> BaseSeedClips;
+		IElysiumEmbodiment* const BaseSeedSource = World != nullptr ? World->Embodiment() : nullptr;
+		if (BaseSeedSource != nullptr && Visual != nullptr)
+		{
+			FElysiumActivityClipRequest BaseSeedRequest;
+			FillActivityClipRequest(BaseSeedRequest);
+			BaseSeedRequest.Activity = TEXT("ACT_DIERAGDOLL");
+			BaseSeedRequest.BodyKind = EElysiumAnimBodyKind::Cast;
+			BaseSeedRequest.bAllowFallbackLadder = false;
+			BaseSeedSource->NpcActivitySequences(BaseSeedRequest, BaseSeedClips);
+		}
+		TArray<ElysiumAnimationPick::FCandidate> BaseSeedCandidates;
+		for (const FElysiumNpcClip& BaseSeedClip : BaseSeedClips)
+		{
+			if (BaseSeedClip.RawIndex != INDEX_NONE)
+			{
+				BaseSeedCandidates.Add({BaseSeedClip.RawIndex, BaseSeedClip.Weight}); // base has no bridge numbering
+			}
+		}
+		SeedSequence = ElysiumAnimationPick::Weighted(BaseSeedCandidates); // 0x10427fc0 same shared stream
+		BaseClientRagdollSeed = SeedSequence; // source row retained for ResetSequenceInfo's base play hook
+	}
+	if (Bone == INDEX_NONE && SeedSequence != INDEX_NONE) // 0x1009021a: only bone -1 commits
+	{
+		SequenceNumber = SeedSequence; SequenceCycle = 0.f; // 0x1009021a
+		ResetSequenceInfo(); // 0x10090950
+	}
+	// 0x10090180 slot225: physics destruction input absent, not fabricated.
+	if (!bRetainEntity) { RetailSolidFlags |= 4u; } // 0x10090180 rig branch only
+	CompleteDeathHandoff(); // 0x10090180 TriggerClientRagdoll visual seam, once per drawn body
+	(void)Force; // 0x1008b800 force/bone latch and impulse producer remain 0014
+	if (TroikaRagdoll != nullptr) { TroikaRagdoll->RenderFxWord = 0x17; } // 0x10090180
+	else { BaseRagdollRenderFxWord = 0x17; } // same +0x168 word on the base-only line
+	if (!bRetainEntity) // 0x10090180
+	{
+		SetMoveType(0, 0); // 0x10090180 slot93
+		LastSetSizeMinsUnits = FVector::ZeroVector; LastSetSizeMaxsUnits = FVector::ZeroVector; // 0x10090180
+		if (Motor) Motor->SetHullSize(FVector::ZeroVector, FVector::ZeroVector); // 0x101cf390
+		++SetSizeCalls; // 0x10090180 UTIL_SetSize
+		ThinkSet(nullptr, 0.0); // 0x10090180
+	}
+	return true; // 0x10090180
+}
+
+bool FElysiumNpcBase::PlayBaseClientRagdollSeed(int32 Sequence, float& OutSeconds, bool& bOutLoops)
+{
+	// 0x10090950: base-only explicit -1 seed, resolved by the actual model's raw sequence identity.
+	IElysiumEmbodiment* const SeedBody = World != nullptr ? World->Embodiment() : nullptr;
+	if (Sequence == INDEX_NONE || Sequence != BaseClientRagdollSeed || SeedBody == nullptr || Visual == nullptr)
+	{
+		return false;
+	}
+	FString SeedLabel;
+	FElysiumNpcClip NativeSeed;
+	if (!SeedBody->GetBodyClipByRawIndex(Visual, ModelStem(), Sequence, SeedLabel, NativeSeed)
+		|| SeedLabel.IsEmpty()) { return false; } // absent descriptor is a named model-input seam
+	bOutLoops = NativeSeed.IsLooping(); // 0x10090a14 studio loop bit
+	FElysiumClipSegment SeedSegment;
+	SeedSegment.ClipName = SeedLabel;
+	SeedSegment.OwnerStem = NativeSeed.Owner;
+	SeedSegment.AnimationName = SeedLabel;
+	SeedSegment.bLoop = bOutLoops;
+	return PlayAnimSegment(SeedSegment, &OutSeconds); // 0x10090950 same clip funnel, no second pick
+}
+
 void FElysiumNpcBase::CompleteDeathHandoff()
 {
-	if (bDeathHandoffDone)
-	{
-		return;
-	}
+	if (!HasClientRagdollRig() || Visual == nullptr
+		|| (bDeathHandoffDone && DeathHandoffVisual == Visual)) { return; } // 0x10090180
+	IElysiumEmbodiment* const DeathEmbodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (DeathEmbodiment == nullptr) { return; }
 	bDeathHandoffDone = true;
-	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	if (Embodiment == nullptr || Visual == nullptr)
+	DeathHandoffVisual = Visual;
+	// 0x10090180: ordinary real-bone deaths hand the CURRENT pose over on the kill tick.
+	if (DeathEmbodiment->StartBodyRagdoll(Visual))
 	{
-		return;   // headless, or a bodiless record — an ordinary absence, not a failure
+		DeathEmbodiment->ReleaseBodyAnimClaims(Visual);
+		Mind.RecordExternal(TEXT("death: current body pose admitted to physics"));
 	}
-	// **The named divergence.** Retail creates its ragdoll inside the shared `Event_Killed` body,
-	// from the model's own `ACT_DIERAGDOLL` seed pose and with a force envelope composed from the
-	// killing blow (`docs/vtmb/combat-and-damage.md`). Ours hands over at the END of the death
-	// program, seeded from whatever pose that program left on the body, and with no impulse: the
-	// force envelope is unrecovered (the launch slice cannot start before the impulse is), so an
-	// invented one would be a behaviour rather than a reproduction.
-	if (Embodiment->StartBodyRagdoll(Visual))
+	else
 	{
-		// Physics owns the pose now, so the animation claims mean nothing and go back.
-		Embodiment->ReleaseBodyAnimClaims(Visual);
-		Mind.RecordExternal(TEXT("death: the body handed to physics from its current pose"));
-		return;
+		// Source capability stays true. The solver asset/attachment failed; no HoldBodyFinalPose.
+		Mind.RecordExternal(TEXT("death: source rig present, physics bake/handoff failed"));
 	}
-	// The stated fallback, and the shipped one. The claims deliberately STAY: the pose stops being
-	// evaluated at all, and releasing them would hand the base channel back to a locomotion publish
-	// on a body that no longer answers it, leaving the verdict surface naming no holder for a pose it
-	// is holding.
-	Embodiment->HoldBodyFinalPose(Visual);
-	Mind.RecordExternal(TEXT("death: no physics behind this body — holding its final frame"));
 }
 
 uint8 FElysiumNpcBase::NpcStateFlags() const

@@ -19,6 +19,10 @@
 #include "Misc/ScopeExit.h"
 
 #include "ElysiumEntityDefs.h"
+#include "ElysiumCharacterProvenance.h"
+#include "ElysiumPhysicsData.h"
+#include "Engine/SkeletalMesh.h"
+#include "ReferenceSkeleton.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumNpcMindTypes.h"
@@ -60,6 +64,51 @@ using EId = int32;
 namespace
 {
 	double Cm(double SourceUnits) { return SourceUnits * ElysiumMove::U; }
+
+	// Typed cooked provenance, with a deliberately non-regular_cop native Spine2 at ordinal 2.
+	void InstallCorpseSource(USkeletalMeshComponent* Body, bool bSourceRig, bool bSpinePresent = true)
+	{
+		USkeletalMesh* const CorpseMesh = NewObject<USkeletalMesh>(GetTransientPackage());
+		FReferenceSkeleton CorpseBones;
+		{
+			FReferenceSkeletonModifier BoneWriter(CorpseBones, nullptr);
+			BoneWriter.Add(FMeshBoneInfo(TEXT("fixture_root"), TEXT("fixture_root"), INDEX_NONE), FTransform::Identity);
+			BoneWriter.Add(FMeshBoneInfo(TEXT("fixture_spine"), TEXT("fixture_spine"), 0), FTransform::Identity);
+			const FName NativeSpine(bSpinePresent ? TEXT("fixture_spine2") : TEXT("fixture_missing"));
+			BoneWriter.Add(FMeshBoneInfo(NativeSpine, NativeSpine.ToString(), 1), FTransform::Identity);
+		}
+		CorpseMesh->SetRefSkeleton(CorpseBones);
+		UElysiumCharacterProvenance* const SourceRecord = NewObject<UElysiumCharacterProvenance>(CorpseMesh);
+		UElysiumPhysicsData* const SourcePhysics = NewObject<UElysiumPhysicsData>(CorpseMesh);
+		SourcePhysics->Data.bHasPhysics = bSourceRig;
+		FElysiumPhysicsSourceBone& SourceSpine = SourcePhysics->Data.Bones.AddDefaulted_GetRef();
+		SourceSpine.Index = 17; // source ordinal is deliberately distinct from the native ordinal
+		SourceSpine.SourceName = TEXT("Bip01 Spine2");
+		SourceSpine.NativeName = TEXT("fixture_spine2");
+		SourceRecord->PhysicsSourceData = SourcePhysics;
+		CorpseMesh->AddAssetUserData(SourceRecord);
+		Body->SetSkeletalMeshAsset(CorpseMesh);
+	}
+
+	struct FV4dDeathNpc : FElysiumNpc
+	{
+		TArray<FElysiumNpcClip> DeathPickRows;
+		mutable int32 SeedGathers = 0;
+		mutable int32 ObservedForceBone = INDEX_NONE;
+		virtual void MeleeSequencesForActivity(int32 Activity, TArray<FElysiumNpcClip>& OutRows) const override
+		{
+			if (Activity == 0x21) { ++SeedGathers; OutRows = DeathPickRows; }
+			else { OutRows.Reset(); }
+		}
+		virtual int32 CorpseForceBone(const void* InInfo) const override
+		{
+			ObservedForceBone = FElysiumNpc::CorpseForceBone(InInfo);
+			return ObservedForceBone;
+		}
+		void RestoreVisualForTest() { RestoreDeathBodyState(); }
+		void CompleteHandoffForTest() { CompleteDeathHandoff(); }
+	};
+
 
 	// --- The synthetic catalogue ---------------------------------------------------------------
 	// `item_w_fists` is spelled EXACTLY, because the loadout's fallback names that record and no
@@ -1634,11 +1683,8 @@ bool FElysiumNpcCombatReactionProducerTest::RunTest(const FString&)
 
 // The death transaction.
 //
-// `docs/vtmb/combat-and-damage.md` -> "NPC and player death transaction": the shared body fires the
-// output and notifies the owner, and the NPC override vacates every claim, makes current and ideal
-// state 7 (dead), applies the solid-body policy and selects the death schedule. What follows the
-// program is ours and is a stated divergence: the handoff to Unreal's physics is seeded from the
-// pose the program left behind, and a body carrying no physics asset holds that pose instead.
+// 0x102bf340 -> 0x10265ad0 -> 0x1032b9b0 -> 0x1032c0e0: death creates the corpse
+// synchronously. Rig capability and solver admission are distinct; no ordinary DIE program.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatDeathTest,
 	"Elysium.Arm.NpcCombat.Death", GElysiumTestFlags)
@@ -1659,6 +1705,18 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	{
 		return false;
 	}
+	InstallCorpseSource(F.Fighter->Visual, false); // 0x10090180 typed source refusal, not missing PhysicsAsset
+	TestFalse(TEXT("0x10090180 authored no-rig capability"), F.Fighter->HasClientRagdollRig());
+	const uint32 NoRigSolidBefore = F.Fighter->RetailSolidFlags;
+	const int32 NoRigMoveBefore = F.Fighter->RetailMoveType;
+	const int32 NoRigFxBefore = F.Fighter->RenderFxWord;
+	const FString NoRigThinkBefore = F.Fighter->ThinkFunctionName;
+	TestFalse(TEXT("0x10090180 typed no-rig transaction refuses"),
+		F.Fighter->BecomeClientRagdoll(FVector::ZeroVector, INDEX_NONE, false));
+	TestEqual(TEXT("0x10090180 refusal keeps solid"), F.Fighter->RetailSolidFlags, NoRigSolidBefore);
+	TestEqual(TEXT("0x10090180 refusal keeps move"), F.Fighter->RetailMoveType, NoRigMoveBefore);
+	TestEqual(TEXT("0x10090180 refusal keeps FX"), F.Fighter->RenderFxWord, NoRigFxBefore);
+	TestEqual(TEXT("0x10090180 refusal keeps think"), F.Fighter->ThinkFunctionName, NoRigThinkBefore);
 	// The death sequence resolves and plays, so the transaction is asserted with a real pose on the
 	// body rather than through a vocabulary that answers nothing.
 	F.Services.bNpcActivitiesResolve = true;
@@ -1769,6 +1827,176 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4dRiggedDeathTest,
+	"Elysium.Arm.NpcCombat.Death.RiggedLifetime", GElysiumTestFlags)
+bool FElysiumV4dRiggedDeathTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("v4d_rigged_death"), 8413);
+	for (const TCHAR* NpcName : {TEXT("rig"), TEXT("failed"), TEXT("missing")})
+	{
+		FElysiumEntityDef& RigDef = Builder.AddTroikaNpc(NpcName);
+		RigDef.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/blueblood/male/Blueblood_Male.mdl"));
+		RigDef.InternalFactory = []() -> TUniquePtr<FElysiumEntity>
+		{ return MakeUnique<FV4dDeathNpc>(); };
+	}
+	Builder.AddNpcOfClass(TEXT("ped"), FVector(300, 0, 0), TEXT("CNPC_VPedestrian"))
+		.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/blueblood/male/Blueblood_Male.mdl"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FV4dDeathNpc* const RigNpc = static_cast<FV4dDeathNpc*>(Fixture.Npc(TEXT("rig")));
+	FV4dDeathNpc* const FailedNpc = static_cast<FV4dDeathNpc*>(Fixture.Npc(TEXT("failed")));
+	FV4dDeathNpc* const MissingNpc = static_cast<FV4dDeathNpc*>(Fixture.Npc(TEXT("missing")));
+	FElysiumNpc* const PedNpc = Fixture.Npc(TEXT("ped"));
+	if (!RigNpc || !FailedNpc || !MissingNpc || !PedNpc) { return false; }
+	FElysiumNpcWorldFixture::Quiet({RigNpc, FailedNpc, MissingNpc, PedNpc});
+	Fixture.World.Tick(1.0); // 0x1028d8d0 network-init before the measured death transaction
+	for (FElysiumNpc* CorpseNpc : {static_cast<FElysiumNpc*>(RigNpc), static_cast<FElysiumNpc*>(FailedNpc), PedNpc})
+	{
+		if (!TestNotNull(TEXT("fixture carries a visual"), CorpseNpc->Visual)) { return false; }
+		InstallCorpseSource(CorpseNpc->Visual, true);
+		CorpseNpc->bHasKindredTemplate = true;
+		CorpseNpc->bKindredTemplate = false;
+		CorpseNpc->SpawnFlags = 4;
+	}
+	if (!TestNotNull(TEXT("missing-bone fixture carries a visual"), MissingNpc->Visual)) { return false; }
+	InstallCorpseSource(MissingNpc->Visual, true, false);
+	MissingNpc->bHasKindredTemplate = true; MissingNpc->bKindredTemplate = false; MissingNpc->SpawnFlags = 4;
+	for (int32 SeedRow = 0; SeedRow < 2; ++SeedRow)
+	{
+		FElysiumNpcClip SeedClip;
+		SeedClip.RawIndex = 701 + SeedRow; SeedClip.Owner = TEXT("v4d_seed_bank");
+		SeedClip.Activity = TEXT("ACT_DIERAGDOLL"); SeedClip.Weight = 2;
+		FElysiumRecordingServices::FRawIndexClip RawSeed;
+		RawSeed.Label = FString::Printf(TEXT("v4d_seed%d"), SeedRow); RawSeed.Clip = SeedClip;
+		Fixture.Services.BodyClipsByRawIndex.Add(SeedClip.RawIndex, RawSeed);
+		RigNpc->DeathPickRows.Add(SeedClip);
+	}
+	RigNpc->SequenceNumber = 104; RigNpc->SequenceCycle = 0.37f;
+	RigNpc->RetailSolidFlags = 0; RigNpc->SetMoveType(4, 0);
+	const double DeathNow = Fixture.World.NowSeconds();
+	USkeletalMeshComponent* const RigVisual = RigNpc->Visual;
+	Fixture.Services.Calls.Reset(); Fixture.Services.bBodiesRagdoll = true;
+	FRandomStream& PickStream = ElysiumRng::Stream(EElysiumRngStream::NpcSchedule);
+	PickStream.Initialize(129); FRandomStream ExpectedPick(129); (void)ExpectedPick.RandRange(0, 3);
+	RigNpc->OnKilled(); // 0x1032c29c real fallback bone, same-tick simulation admission
+	TestTrue(TEXT("0x10090180 source capability despite no real solver asset in recording fixture"), RigNpc->HasClientRagdollRig());
+	TestEqual(TEXT("0x1032c226 native Spine2 lookup, never cop ordinal5"), RigNpc->ObservedForceBone, 2);
+	TestEqual(TEXT("0x1009021a one weighted gather"), RigNpc->SeedGathers, 1);
+	TestEqual(TEXT("0x10427fc0 ordinary real-bone call still spends its shared pick"), PickStream.GetCurrentSeed(), ExpectedPick.GetCurrentSeed());
+	TestEqual(TEXT("0x1009021a real bone retains sequence"), RigNpc->SequenceNumber, 104);
+	TestEqual(TEXT("0x1009021a real bone retains cycle"), RigNpc->SequenceCycle, 0.37f);
+	TestEqual(TEXT("0x10090180 solid flag4"), RigNpc->RetailSolidFlags, 4u);
+	TestEqual(TEXT("0x10090180 renderFX17"), RigNpc->RenderFxWord, 0x17);
+	TestEqual(TEXT("0x10090180 move none"), RigNpc->RetailMoveType, 0);
+	TestEqual(TEXT("0x10090180 zero bounds"), RigNpc->LastSetSizeMaxsUnits, FVector::ZeroVector);
+	TestEqual(TEXT("0x1032c0e0 lifeState1"), RigNpc->LifeState, 1);
+	TestEqual(TEXT("0x1032c40f tail PVSRemove"), RigNpc->ThinkFunctionName, FString(TEXT("0x102696f0")));
+	TestEqual(TEXT("0x1032c41a tail +10"), RigNpc->NextThink, static_cast<float>(DeathNow + 10.0));
+	TestEqual(TEXT("same-tick admission once"), Fixture.Services.Count(TEXT("StartBodyRagdoll")), 1);
+	TestEqual(TEXT("lethal death retains the simulating visual"), Fixture.Services.Count(TEXT("ReleaseNpcVisual")), 0);
+	TestTrue(TEXT("recording solver retains body"), Fixture.Services.SimulatingNpcVisuals.Contains(RigVisual));
+	RigNpc->OnKilled(); RigNpc->CompleteHandoffForTest(); RigNpc->RestoreVisualForTest(); RigNpc->RestoreVisualForTest();
+	TestEqual(TEXT("duplicate kill/handoff/restoration never admits twice"), Fixture.Services.Count(TEXT("StartBodyRagdoll")), 1);
+	TestEqual(TEXT("restoration never repeats weighted picks"), RigNpc->SeedGathers, 1);
+	TestEqual(TEXT("restoration preserves corpse clock"), RigNpc->NextThink, static_cast<float>(DeathNow + 10.0));
+	RigNpc->ScriptHide();
+	TestEqual(TEXT("ordinary hide retains corpse physics"), Fixture.Services.Count(TEXT("ReleaseNpcVisual")), 0);
+	RigNpc->Kill(); RigNpc->Kill();
+	TestEqual(TEXT("terminal hidden removal releases once"), Fixture.Services.Count(TEXT("ReleaseNpcVisual sim=1")), 1);
+	TestNull(TEXT("terminal removal clears entity Visual"), RigNpc->Visual);
+	TestFalse(TEXT("terminal removal clears recording simulation"), Fixture.Services.SimulatingNpcVisuals.Contains(RigVisual));
+
+	Fixture.Services.Calls.Reset(); Fixture.Services.bBodiesRagdoll = false;
+	FailedNpc->OnKilled();
+	TestTrue(TEXT("missing/failed PhysicsAsset never reclassifies source rig"), FailedNpc->HasClientRagdollRig());
+	TestEqual(TEXT("failed admission is attempted once"), Fixture.Services.Count(TEXT("StartBodyRagdoll -> 0")), 1);
+	TestTrue(TEXT("failed admission is named"), Fixture.Services.Saw(TEXT("ragdoll bake/handoff failed")));
+	TestFalse(TEXT("failed admission never substitutes hold pose"), Fixture.Services.Saw(TEXT("HoldBodyFinalPose")));
+	TestEqual(TEXT("failed asset still follows retail rig writes"), FailedNpc->RenderFxWord, 0x17);
+	TestEqual(TEXT("failed asset still installs corpse tail"), FailedNpc->ThinkFunctionName, FString(TEXT("0x102696f0")));
+	FailedNpc->CompleteHandoffForTest();
+	TestEqual(TEXT("failed handoff is not retried by late completion"), Fixture.Services.Count(TEXT("StartBodyRagdoll")), 1);
+
+	Fixture.Services.Calls.Reset(); Fixture.Services.bBodiesRagdoll = true;
+	MissingNpc->RetailSolidFlags = 0; MissingNpc->OnKilled();
+	TestTrue(TEXT("missing fallback stays source-rigged"), MissingNpc->HasClientRagdollRig());
+	TestEqual(TEXT("missing fallback is not fabricated bone-1"), MissingNpc->SeedGathers, 0);
+	TestFalse(TEXT("missing fallback does not hand off"), Fixture.Services.Saw(TEXT("StartBodyRagdoll")));
+	TestEqual(TEXT("missing fallback does not invent solid writes"), MissingNpc->RetailSolidFlags, 0u);
+	TestEqual(TEXT("missing fallback still receives corpse tail"), MissingNpc->ThinkFunctionName, FString(TEXT("0x102696f0")));
+
+	Fixture.Services.Calls.Reset(); PedNpc->OnKilled();
+	USkeletalMeshComponent* const PedVisual = PedNpc->Visual;
+	TestTrue(TEXT("0x103a38c0 pedestrian body retained"), Fixture.Services.SimulatingNpcVisuals.Contains(PedVisual));
+	TestTrue(TEXT("0x103a38c0 pedestrian clears think"), PedNpc->ThinkFunctionName.IsEmpty());
+	TestEqual(TEXT("0x103a38c0 pedestrian never-think clock"), PedNpc->NextThink, ELYSIUM_NEVER_THINK);
+	TestEqual(TEXT("0x103a38c0 pedestrian SOLID_NONE"), PedNpc->RetailSolidType, 0);
+	TestEqual(TEXT("pedestrian lethal death never releases visual"), Fixture.Services.Count(TEXT("ReleaseNpcVisual")), 0);
+	PedNpc->Kill();
+	TestEqual(TEXT("visible terminal removal also releases simulation"), Fixture.Services.Count(TEXT("ReleaseNpcVisual sim=1")), 1);
+	Fixture.Services.Calls.Reset();
+	USkeletalMeshComponent* DestructedVisual = nullptr;
+	{
+		TUniquePtr<FElysiumNpc> DestructedNpc = MakeUnique<FElysiumNpc>();
+		DestructedNpc->World = &Fixture.World;
+		DestructedNpc->Visual = Fixture.Services.BuildNpcVisual(RigNpc->ModelStem(), FVector::ZeroVector,
+			FRotator::ZeroRotator, 1.f, TEXT("Neutral"), 0);
+		InstallCorpseSource(DestructedNpc->Visual, true);
+		DestructedVisual = DestructedNpc->Visual;
+		(void)DestructedNpc->BecomeClientRagdoll(FVector::ZeroVector, 2, false);
+	}
+	TestEqual(TEXT("destructor releases retained simulation once"), Fixture.Services.Count(TEXT("ReleaseNpcVisual sim=1")), 1);
+	TestFalse(TEXT("destructor clears recording physics"), Fixture.Services.SimulatingNpcVisuals.Contains(DestructedVisual));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4dBurnSoundTest,
+	"Elysium.Arm.NpcCombat.Death.BurnSound", GElysiumTestFlags)
+bool FElysiumV4dBurnSoundTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("v4d_burn_sound"), 8414);
+	Builder.AddTroikaNpc(TEXT("kindred"))
+		.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/blueblood/male/Blueblood_Male.mdl"));
+	FElysiumNpcWorldFixture Fixture(MoveTemp(Builder));
+	FElysiumNpc* const BurningNpc = Fixture.Npc(TEXT("kindred"));
+	if (!BurningNpc) { return false; }
+	FElysiumNpcWorldFixture::Quiet({BurningNpc}); Fixture.World.Tick(1.0);
+	BurningNpc->bHasKindredTemplate = true; BurningNpc->bKindredTemplate = true;
+	BurningNpc->SpawnFlags = 4; // 0x1032c32f burning corpse has an unconditional +10 clock
+	if (!TestNotNull(TEXT("burn fixture carries a visual"), BurningNpc->Visual)) { return false; }
+	InstallCorpseSource(BurningNpc->Visual, true);
+	Fixture.Services.bBodiesRagdoll = true;
+	USkeletalMeshComponent* const BurnVisual = BurningNpc->Visual;
+	const FElysiumEntityHandle BurnHandle = BurningNpc->Handle;
+	const double BurnNow = Fixture.World.NowSeconds();
+	Fixture.Services.Calls.Reset();
+	Fixture.Services.BodySounds.Reset(); Fixture.Services.BodySoundOwners.Reset();
+	BurningNpc->OnKilled(); BurningNpc->OnKilled();
+	const int32 BurnCount = Fixture.Services.BodySounds.FilterByPredicate([](const FElysiumBodySound& Sound)
+	{ return Sound.Rel == TEXT("character/vampire burning death.wav"); }).Num();
+	TestEqual(TEXT("0x1032c3c1 burn wav exactly once, duplicate kill inert"), BurnCount, 1);
+	for (int32 SoundIndex = 0; SoundIndex < Fixture.Services.BodySounds.Num(); ++SoundIndex)
+	{
+		const FElysiumBodySound& BurnSound = Fixture.Services.BodySounds[SoundIndex];
+		if (BurnSound.Rel != TEXT("character/vampire burning death.wav")) { continue; }
+		TestEqual(TEXT("0x1032c3c1 volume1"), BurnSound.Volume, 1.f);
+		TestEqual(TEXT("0x1032c3c1 attenuation0.8 -> soundlevel75"), BurnSound.SoundLevelDb, 75);
+		TestEqual(TEXT("0x1032c3c1 pitch100 -> native1"), BurnSound.Pitch, 1.f);
+		TestTrue(TEXT("0x1032c3c1 channel0"), BurnSound.Channel == EElysiumSoundChannel::Auto);
+		TestTrue(TEXT("0x1032c3c1 sound belongs to dying entity"), Fixture.Services.BodySoundOwners[SoundIndex] == BurningNpc->Handle);
+	}
+	TestEqual(TEXT("0x1032c32f burn installs SUB_Remove"), BurningNpc->ThinkFunctionName, FString(TEXT("0x101c0b10")));
+	TestEqual(TEXT("0x1032c347 burn deadline +10"), BurningNpc->NextThink, static_cast<float>(BurnNow + 10.0));
+	TestEqual(TEXT("burn death retains visual until removal"), Fixture.Services.Count(TEXT("ReleaseNpcVisual")), 0);
+	Fixture.World.Tick(BurnNow + 9.0);
+	TestTrue(TEXT("burn body retained before +10"), Fixture.Services.SimulatingNpcVisuals.Contains(BurnVisual));
+	Fixture.World.Tick(BurnNow + 10.0);
+	TestEqual(TEXT("burn removal releases simulation exactly once"), Fixture.Services.Count(TEXT("ReleaseNpcVisual sim=1")), 1);
+	TestFalse(TEXT("burn removal releases recording physics"), Fixture.Services.SimulatingNpcVisuals.Contains(BurnVisual));
+	const FElysiumEntity* const BurnRemoved = Fixture.World.Resolve(BurnHandle);
+	TestTrue(TEXT("burn removal is terminal"), BurnRemoved == nullptr || BurnRemoved->IsInert());
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV4cFadeClockTest,
 	"Elysium.Arm.NpcCombat.FadeClock", GElysiumTestFlags)

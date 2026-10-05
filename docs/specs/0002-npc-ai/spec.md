@@ -643,7 +643,7 @@ tests the green scenarios cover deleted.
   divergence dropped (K2); the admission barrier is V6's and `UpdateIdealState` with its tests
   V9's. `cover`'s shot stays red on V4 (anim events) and V5 (N2). (The text above says
   "`0x6a RUN_DIALOG`": `0x6a` is the schedule; the task is `0xb9`.)
-- [ ] **V4. Fix: the animation chain under the kernel.** (Was C2.) `PostRun 0x1026c8c4`:
+- [x] **V4. Fix: the animation chain under the kernel.** (Was C2.) `PostRun 0x1026c8c4`:
   `StudioFrameAdvance` (slot 250), `DispatchAnimEvents` (slot 258, `0x10091880`) over the clip's
   baked event table (the world-tick poll retired for NPCs), `HandleAnimEvent 0x10274e30`,
   `SetAttackExtentsForSequence 0x10090c80`, `IsActivityFinished` (slot 251); death through slot
@@ -651,22 +651,26 @@ tests the green scenarios cover deleted.
   on the combat character; the weighted sequence pick from the `.mdl` `activityweight` the bake
   carries. Detail: draft § C2. *Scenarios:* melee-and-die, damage-and-death. *Size:* M.
   *Model:* Opus/high.
-  *Planned 2026-10-04 (`stories/v4/README.md`; the plan only, not started):*
+  *Planned 2026-10-04; closed 2026-10-05 (`stories/v4/README.md`, TRACKER.md and phy_vphysics.md for measured V4d proof):*
   - [x] **V4r** — two reading packets (the walk and N13's cause; the chain: the dispatcher, the
     attack producers, slot 363, and — the owner's ruling — where the player, props and the camera
     dispatch their anim events and which retail body makes each visual clip pick), then the judge
     (N19; slot 247's bbox and N13-in-the-bake only if the packets raise them). S–M.
-  - [ ] **V4a** — the seam, the clock's speed words, the dispatcher in `PostRun` for every animating
+  - [x] **V4a** — the seam, the clock's speed words, the dispatcher in `PostRun` for every animating
     entity (the world-tick poll deleted whole), slot 363. *Records:* `sense_enemy_facing_me`,
     `anim_player_footsteps`, `anim_player_weapon_event`, `anim_prop_event` (the Green Room, a prop
     from anywhere in the corpus). M.
-  - [ ] **V4b** — the walk and the turn (N13). *Records:* the three patrols,
+  - [x] **V4b** — the walk and the turn (N13). *Records:* the three patrols,
     `places_pedestrian_visit`, `face_enemy_turn`. S–M.
-  - [ ] **V4c** — the attack producers, the weighted sequence pick for every animating entity,
+  - [x] **V4c** — the attack producers, the weighted sequence pick for every animating entity,
     `SetDisposition`, the death transaction. M.
-  - [ ] **V4d** — the corpse falls (`stories/v4/brief-D-ragdoll.md`): a spike, then a physics asset
+  - [x] **V4d** — the corpse falls (`stories/v4/brief-D-ragdoll.md`): a spike, then a physics asset
     built from the game's `.phy` data and Unreal's solve. *Records:* `damage_lethal_death`,
-    `verbs_stealth_kill` with `corpse_on_floor`. M.
+    `verbs_stealth_kill` with `corpse_on_floor`. M. Closed 2026-10-05: accepted numeric
+    solid-local-source-bone-v1, 30 rigs / four source-no-.phy skips; real simulation and terminal
+    release. Default 169/0, arm 1625/0, kernel 7/7; full 132: 114 pass, 1 baseline fail, 15 expected-fail,
+    2 unexpected-pass. Every baseline pass/corpse verdict retained; lethal death is green.
+    V6 retains life/health/think/render save words; 0014 retains impulse/hitbox/burn look.
 
   The owner's rulings on V4 (2026-10-04): **the world-tick event poll and the visual side's
   hash-seeded pick are not divergences** — retail can be followed (both bodies sit on

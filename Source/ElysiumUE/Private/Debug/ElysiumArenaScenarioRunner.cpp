@@ -1428,6 +1428,25 @@ void FElysiumArenaScenarioRunner::SampleCorpsePelvises(FElysiumEntityWorld& Worl
 			Sample.SpeedCmPerSecond = FVector::Dist(Location, Sample.LocationCm) / (Now - Sample.Time);
 			Sample.bSpeedKnown = true;
 		}
+		// V4d numeric proof: drawn pelvis, never capsule/component origin or sleep state.
+		// Reuse the probe's WorldStatic floor query; this log changes no acceptance or game state.
+		if (Entity != nullptr && Entity->LifeState != ElysiumLifeState::Alive && Sample.bSpeedKnown
+			&& FMath::FloorToInt(Now * 5.) != FMath::FloorToInt(Sample.Time * 5.))
+		{
+			const UWorld* SampleWorld = Host.GetWorld();
+			FCollisionObjectQueryParams SampleObjects;
+			SampleObjects.AddObjectTypesToQuery(ECC_WorldStatic);
+			FCollisionQueryParams SampleParams(SCENE_QUERY_STAT(ElysiumArenaCorpseSeries), false);
+			SampleParams.AddIgnoredComponent(Skeletal);
+			FHitResult SampleHit;
+			if (SampleWorld != nullptr && SampleWorld->LineTraceSingleByObjectType(SampleHit, Location,
+				Location - FVector(0., 0., ElysiumArenaRunnerDetail::CorpseFloorReachCm), SampleObjects, SampleParams))
+			{
+				UE_LOG(LogElysiumArenaScenario, Log, TEXT("corpse sample: record=%s who=%s t=%.3f pelvis=(%.3f,%.3f,%.3f) floor=%.3f height=%.3f speed=%.3f sim=%d"),
+					*Record.Name, *Probe.Who, Now, Location.X, Location.Y, Location.Z, SampleHit.ImpactPoint.Z,
+					Location.Z - SampleHit.ImpactPoint.Z, Sample.SpeedCmPerSecond, Skeletal->IsSimulatingPhysics() ? 1 : 0);
+			}
+		}
 		if (!Sample.bRead || Now > Sample.Time)
 		{
 			Sample.bRead = true;

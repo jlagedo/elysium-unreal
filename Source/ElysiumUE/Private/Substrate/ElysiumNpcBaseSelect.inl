@@ -26,9 +26,6 @@ int32 BaseSelectSchedule();
  *  stamps); ported here because three Select19 bodies re-enter through it. */
 int32 SelectNewScheduleRetail();
 
-/** SEAM for `CBaseAnimating::BecomeClientRagdoll(&DAT_1070d1b0, -1, 0)` (`0x10090180`), the
- *  base selector's state-7 test. This substrate's ragdoll handoff is `CompleteDeathHandoff`, run
- *  by the death transaction and not by a selector, and the character bake writes no physics asset
- *  (`FElysiumNpcBase::CompleteDeathHandoff`), so the client ragdoll never forms: answers false,
- *  which is the arm that selects `DIE` 0x2b — the schedule `FElysiumNpc::OnKilled` already starts. */
+/** `0x1028a8ec..0x1028a92b`: execute the zero-force, explicit bone -1, flag 0 transaction;
+ *  source-rig success selects 0x2c, refusal selects 0x2b. Ordinary corpse think never reaches it. */
 bool SelectBecomeClientRagdoll();

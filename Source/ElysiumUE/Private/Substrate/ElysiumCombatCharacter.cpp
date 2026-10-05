@@ -1451,7 +1451,7 @@ void FElysiumCombatCharacter::CreateCorpse(const FVector& Force, void* InInfo)
 		NpcBase->FireOnDeathOnce(NpcBase->BaseMemory.LastEnemy);
 	}
 	// 2. The ragdoll seed bone (`0x101c2a30`: the packet's hit bone, else `Bip01 Spine2`) and the
-	//    force are the client ragdoll's; neither reaches this runtime's physics handoff.
+	//    force remain 0014; the absent-hit arm resolves the drawn native Spine2 for admission.
 
 	// 3. The corpse, by three arms (`0x1032c22d..0x1032c2e4`).
 	FElysiumEntity* Corpse = nullptr;
@@ -1477,23 +1477,17 @@ void FElysiumCombatCharacter::CreateCorpse(const FVector& Force, void* InInfo)
 	}
 	else
 	{
-		if (FElysiumNpc* const RagdollNpc = AsNpc()) // 0x1032c29c
+		if (NpcBase != nullptr) // 0x1032c29c, common base/Troika body
 		{
-			const int32 ForceBone = RagdollNpc->CorpseForceBone(InInfo); // 0x1032c1e4
-			// 0x1032c1e4: an absent bone input must never masquerade as the explicit bone -1 fork.
-			if (ForceBone != INDEX_NONE) // named bone-source seam; V4d supplies hitbox/Spine2
+			const int32 ForceBone = NpcBase->CorpseForceBone(InInfo); // 0x1032c1e4 / 0x1032c226
+			// A missing Spine2 on a source rig is a data failure, never the explicit bone -1 seed.
+			if (ForceBone != INDEX_NONE || !NpcBase->HasClientRagdollRig())
 			{
-				(void)RagdollNpc->BecomeClientRagdoll(Force, ForceBone, false); // 0x1032c29c
-			}
-			else if (!RagdollNpc->HasClientRagdollRig()) // 0x10090180: only the proved no-rig arm
-			{
-				RagdollNpc->LastSetSizeMinsUnits = FVector::ZeroVector; // 0x10090180
-				RagdollNpc->LastSetSizeMaxsUnits = FVector::ZeroVector; // 0x10090180
-				if (RagdollNpc->GetNpcMotor()) RagdollNpc->GetNpcMotor()->SetHullSize(FVector::ZeroVector, FVector::ZeroVector); // 0x101cf390
-				++RagdollNpc->SetSizeCalls; // 0x10090180
+				(void)NpcBase->BecomeClientRagdoll(Force, ForceBone, false); // 0x1032c29c
 			}
 		}
-		else { BecomeClientRagdoll(); } // 0x1032c29c: non-NPC body adapter
+		else { BecomeClientRagdoll(); } // non-NPC adapter, player/static arms above
+
 		Corpse = this;                                                         // 0x1032c2a5 slot 137 answers `this`
 	}
 	// The AI trace's `corpse` event: which arm landed the body (debug output only, behind its sink).
@@ -1519,10 +1513,7 @@ void FElysiumCombatCharacter::CreateCorpse(const FVector& Force, void* InInfo)
 		{
 			if (bBurns)
 			{
-				// `0x1032c30f..0x1032c3fe`: the corpse's slot 243 takes this body's slot 244(1) (the
-				// burn material, visual), `ThinkSet(SUB_Remove)` at +10 s, and the
-				// `"character/vampire burning death.wav"` emission (`0x1061fff0`, volume 1.0,
-				// attenuation 0.8) -- the render and the sound are not carried (visual/audio only).
+				// 0x1032c30f..0x1032c3fe: BurnModel look remains 0014; keep remove/+10 and sound.
 				if (CorpseNpc != nullptr)
 				{
 					CorpseNpc->ThinkSet(TEXT("0x101c0b10"), 0.0);              // 0x1032c33c
@@ -1538,6 +1529,20 @@ void FElysiumCombatCharacter::CreateCorpse(const FVector& Force, void* InInfo)
 			if (CorpseNpc != nullptr)
 			{
 				Corpse->NextThink = static_cast<float>(Now + static_cast<double>(GCombatCorpseThinkDelaySeconds));
+			}
+			if (bBurns) // 0x1032c3c1: audio follows the removal clock writes
+			{
+				// 0x1032c3c1..0x1032c3d7: volume 1, attenuation 0.8 (= level 75), pitch 100, CHAN_AUTO.
+				if (IElysiumAudio* const BurnAudio = World != nullptr ? World->Audio() : nullptr)
+				{
+					FElysiumBodySound BurnSound;
+					BurnSound.Rel = TEXT("character/vampire burning death.wav");
+					BurnSound.Volume = 1.f;
+					BurnSound.SoundLevelDb = 75; // ATTN_NORM: 50 + 20 / 0.8 (NpcSounds precedent)
+					BurnSound.Pitch = 1.f; // native multiplier for retail pitch 100
+					BurnSound.Channel = EElysiumSoundChannel::Auto;
+					BurnAudio->PlayBodySound(Handle, BurnSound);
+				}
 			}
 		}
 		// `UTIL_Remove(m_hAnimFollowModel)` and the handle reset (`0x1032c429..0x1032c45e`): the

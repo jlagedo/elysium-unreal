@@ -32,9 +32,7 @@ to the ledge respectively, not to the file.
 `ConvertPositionToHL` -- the phy frame is mirrored with respect to it. The mapping here was
 settled empirically, by scoring all 48 axis-permutation/sign combinations against the already
 verified render-mesh bounds over every `prop_physics` model: `(x, -z, -y) * 100` wins at
-0.85 cm/model/axis, and the nearest *distinct* mapping is 4.6x worse. Negating two axes is a
-rotation (determinant +1), not a reflection, so triangle winding carries through unchanged --
-unlike `bsp.source_to_unreal`, which negates one axis and forces a winding reversal.
+0.85 cm/model/axis, and the nearest *distinct* mapping is 4.6x worse. The full (x, -z, -y) mapping swaps Y/Z as well as negating two axes, so its determinant is -1. Triangle consumers must validate/reverse winding for that transform; convex point-cloud cooking does not consume triangle winding.
 Evidence and method: `docs/vtmb/phy_vphysics.md`.
 """
 import os

@@ -934,11 +934,11 @@ struct FElysiumRecordingServices final
 	}
 
 	// The death handoff.
-	// Whether this fixture's bodies carry a physics asset. FALSE by default, and that default is the
-	// shipped answer rather than a convenience: the character bake writes no physics asset, so every
-	// death in the game today takes the frozen-final-pose arm. A case that wants the ragdoll arm has
-	// to say so.
+	// Recording solver admission. A test opts in to success explicitly; source rig capability is
+	// independently read from its mesh's typed provenance (0x10090180).
 	bool bBodiesRagdoll = false;
+	TSet<USkeletalMeshComponent*> SimulatingNpcVisuals; // recording admission, no Chaos in arm tests
+	TArray<USkeletalMeshComponent*> ReleasedNpcVisuals;
 	virtual void ReleaseBodyAnimClaims(USkeletalMeshComponent* Body) override
 	{
 		Record(FString::Printf(TEXT("ReleaseBodyAnimClaims body=%d"), Body != nullptr ? 1 : 0));
@@ -951,7 +951,19 @@ struct FElysiumRecordingServices final
 	{
 		const bool bStarted = bBodiesRagdoll && Body != nullptr;
 		Record(FString::Printf(TEXT("StartBodyRagdoll -> %d"), bStarted ? 1 : 0));
+		if (bStarted) { SimulatingNpcVisuals.Add(Body); }
+		else { Record(TEXT("ragdoll bake/handoff failed")); }
 		return bStarted;
+	}
+	virtual void ReleaseNpcVisual(USkeletalMeshComponent*& Body, IElysiumNpcMotor* Motor) override
+	{
+		if (Body == nullptr) { return; }
+		Record(FString::Printf(TEXT("ReleaseNpcVisual sim=%d motor=%d"),
+			SimulatingNpcVisuals.Contains(Body) ? 1 : 0, Motor != nullptr ? 1 : 0));
+		ReleaseBodyAnimClaims(Body);
+		SimulatingNpcVisuals.Remove(Body);
+		ReleasedNpcVisuals.Add(Body);
+		Body = nullptr;
 	}
 	virtual void HoldBodyFinalPose(USkeletalMeshComponent* Body) override
 	{

@@ -5,6 +5,28 @@
 
 #include "ElysiumClothBuildLibrary.generated.h"
 
+class UElysiumPhysicsData;
+class USkeletalMesh;
+class UPhysicsAsset;
+
+/** Readback of a .phy build; diagnostic frames require the S14 measurement gate. */
+USTRUCT(BlueprintType)
+struct FElysiumRagdollBuildResult
+{
+	GENERATED_BODY()
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Ragdoll") FString AssetPath;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Ragdoll") TArray<FString> Errors;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Ragdoll") TArray<FString> Warnings;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Ragdoll") bool Skipped = false;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Ragdoll") int32 BodyCount = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Ragdoll") int32 ConvexCount = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Ragdoll") int32 ConstraintCount = 0;
+	/** Kilograms, read from DefaultInstance in typed solid order. */
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Ragdoll") TArray<float> BodyMasses;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Ragdoll") FString BuilderVersion;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Ragdoll") FString FrameVersion;
+};
+
 /** What one garment build produced. Empty Errors means success. */
 USTRUCT(BlueprintType)
 struct FElysiumClothBuildResult
@@ -161,6 +183,19 @@ class ELYSIUMUE_API UElysiumClothBuildLibrary final : public UBlueprintFunctionL
 	GENERATED_BODY()
 
 public:
+	/** S14 §2 / physics_projection: exact ledges, solid IDs, masses and authored joint ranges.
+	 * OutputPackage is a long package name. Caller saves/stamps and attaches the result.
+	 * solid-local-source-bone-v1 passed the numeric S14 gate; diagnostic recipes remain cop-only.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Ragdoll")
+	static FElysiumRagdollBuildResult BuildRagdollPhysicsAsset(
+		UElysiumPhysicsData* PhysicsSourceData, USkeletalMesh* SkeletalMesh,
+		const FString& OutputPackage, const FString& FrameRecipe);
+
+	/** Numeric S14 frame gate: inspect actual saved hulls, joints and weighted bind mesh. */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Ragdoll")
+	static FString InspectRagdollPhysicsAsset(USkeletalMesh* SkeletalMesh, UPhysicsAsset* PhysicsAsset);
+
 	/**
 	 * Build one cloth asset per garment in `SidecarPath` under `PackageDirectory`.
 	 *

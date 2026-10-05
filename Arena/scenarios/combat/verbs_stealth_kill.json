@@ -1,10 +1,18 @@
 {
   "name": "verbs_stealth_kill",
-  "about": "The stealth kill (stealth.md 'Stealth-kill transaction (RE50)'). An idle neutral Troika human on the east pad faces the room's middle; the player stands 85 cm (33 units) straight behind it, crouched, a knife wielded (granted by player.armed and wielded by the melee-category verb slot2; item_w_fists is 'weapon_melee hidden' and is not offered by the selector), unseen and unheard. +use at 2 s (and, as the second door, +attack at 4 s: the melee primary 0x103eaca0 calls the stealth thunk at 0x103ead0b before its own swing): PlayerUse 0x10167850 -> PlayerTryStealthKill 0x10167370 -> CStealthKillRules::FindVictim 0x101be1f0: the posture (FL_DUCKING), the melee weapon byte (CWeaponMelee 0x103e9ac0 writes +0x872 = 1), the forward MASK_PLAYERSOLID trace over StealthKillDistMax (70) hits the victim, IsValidStealthKillTarget 0x102c2300 passes (not hidden, no dialogname, not invincible, not dead under debug_allow_non_idle_auto_sk '1', neither HEAR_PLAYER 0x6f nor SEE_PLAYER 0x5a, alive), InDeafArc 0x101be500 passes (dot 1.0 behind), CanStartGrappleAttack(type 3) passes: the query admits the mark (trace kind stealthkill, `arena_mark admit gate=can_grapple`); the probes at 1.5 s read the posture and the wielded knife it needs. StartGrappleAttack 0x10328df0 locks both into grapple mode 3 (the NPC's grapple entry 0x1026cdc0 -> 0x1026d130 clears its enemy and raises m_iIsOblivious, so it senses nothing more); the attacker's paired clip finishing enters 0x10165d90, which copies Max_Health into the damage-taken stat and calls Event_Killed directly (slot 144): the synchronized death, OnDeath, the corpse -- the same chain as an ordinary kill from slot 144 on (CBaseCombatCharacter::Event_Killed 0x1032b9b0 -> slot 301 CreateCorpse 0x1032c0e0 -> BecomeClientRagdoll 0x10090180: the pose handed to physics, the drawn body on the floor; stories/v4/brief-D-ragdoll.md § 'What retail does').",
+  "about": "The stealth kill (stealth.md 'Stealth-kill transaction (RE50)'). An idle neutral Troika human on the east pad faces the room's middle; the player stands 85 cm (33 units) straight behind it, crouched, a knife wielded (granted by player.armed and wielded by the melee-category verb slot2; item_w_fists is 'weapon_melee hidden' and is not offered by the selector), unseen and unheard. +use at 2 s (and, as the second door, +attack at 4 s: the melee primary 0x103eaca0 calls the stealth thunk at 0x103ead0b before its own swing): PlayerUse 0x10167850 -> PlayerTryStealthKill 0x10167370 -> CStealthKillRules::FindVictim 0x101be1f0: the posture (FL_DUCKING), the melee weapon byte (CWeaponMelee 0x103e9ac0 writes +0x872 = 1), the forward MASK_PLAYERSOLID trace over StealthKillDistMax (70) hits the victim, IsValidStealthKillTarget 0x102c2300 passes (not hidden, no dialogname, not invincible, not dead under debug_allow_non_idle_auto_sk '1', neither HEAR_PLAYER 0x6f nor SEE_PLAYER 0x5a, alive), InDeafArc 0x101be500 passes (dot 1.0 behind), CanStartGrappleAttack(type 3) passes: the query admits the mark (trace kind stealthkill, `arena_mark admit gate=can_grapple`); the probes at 1.5 s read the posture and the wielded knife it needs. StartGrappleAttack 0x10328df0 locks both into grapple mode 3 (the NPC's grapple entry 0x1026cdc0 -> 0x1026d130 clears its enemy and raises m_iIsOblivious, so it senses nothing more); the attacker's paired clip finishing enters 0x10165d90, which copies Max_Health into the damage-taken stat and calls Event_Killed directly (slot 144): the synchronized death, OnDeath, the corpse -- the same chain as an ordinary kill from slot 144 on (CBaseCombatCharacter::Event_Killed 0x1032b9b0 -> slot 301 CreateCorpse 0x1032c0e0 -> BecomeClientRagdoll 0x10090180: the pose handed to physics, the drawn body on the floor; stories/v4/brief-D-ragdoll.md \u00a7 'What retail does').",
   "stage": "arena",
   "seed": 1,
   "duration": 20.0,
-  "player": { "at": [0.0, 1060.0, 0.0], "face": "east", "armed": "item_w_knife" },
+  "player": {
+    "at": [
+      0.0,
+      1060.0,
+      0.0
+    ],
+    "face": "east",
+    "armed": "item_w_knife"
+  },
   "cast": [
     {
       "name": "arena_mark",
@@ -23,30 +31,154 @@
     }
   ],
   "script": [
-    { "t": 0.2, "do": "console", "command": "elysium.cmd slot2" },
-    { "t": 0.5, "do": "player_crouch", "on": true },
-    { "t": 2.0, "do": "console", "command": "elysium.cmd +use" },
-    { "t": 2.1, "do": "console", "command": "elysium.cmd -use" },
-    { "t": 4.0, "do": "console", "command": "elysium.cmd +attack" },
-    { "t": 4.1, "do": "console", "command": "elysium.cmd -attack" }
+    {
+      "t": 0.2,
+      "do": "console",
+      "command": "elysium.cmd slot2"
+    },
+    {
+      "t": 0.5,
+      "do": "player_crouch",
+      "on": true
+    },
+    {
+      "t": 2.0,
+      "do": "console",
+      "command": "elysium.cmd +use"
+    },
+    {
+      "t": 2.1,
+      "do": "console",
+      "command": "elysium.cmd -use"
+    },
+    {
+      "t": 4.0,
+      "do": "console",
+      "command": "elysium.cmd +attack"
+    },
+    {
+      "t": 4.1,
+      "do": "console",
+      "command": "elysium.cmd -attack"
+    }
   ],
   "expect": [
-    { "label": "idles", "who": "arena_mark", "kind": "schedule", "match": "SCHED_TROIKA_IDLE_DISPOSITION (", "by": 1.5 },
-    { "label": "admits", "who": "arena_mark", "kind": "stealthkill", "match": "arena_mark admit gate=can_grapple", "by": 2.5 },
-    { "label": "dies", "who": "arena_mark", "kind": "death", "match": "", "by": 12.0 },
-    { "label": "on_death", "who": "arena_mark", "kind": "output", "match": "OnDeath", "within": 0.5 },
-    { "label": "corpse", "who": "arena_mark", "kind": "corpse", "match": "ragdoll", "within": 1.0 }
+    {
+      "label": "idles",
+      "who": "arena_mark",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_IDLE_DISPOSITION (",
+      "by": 1.5
+    },
+    {
+      "label": "admits",
+      "who": "arena_mark",
+      "kind": "stealthkill",
+      "match": "arena_mark admit gate=can_grapple",
+      "by": 2.5
+    },
+    {
+      "label": "dies",
+      "who": "arena_mark",
+      "kind": "death",
+      "match": "",
+      "by": 12.0
+    },
+    {
+      "label": "on_death",
+      "who": "arena_mark",
+      "kind": "output",
+      "match": "OnDeath",
+      "within": 0.5
+    },
+    {
+      "label": "corpse",
+      "who": "arena_mark",
+      "kind": "corpse",
+      "match": "ragdoll",
+      "within": 1.0
+    }
   ],
   "never": [
-    { "who": "arena_mark", "kind": "cond+", "match": "SEE_PLAYER (0x5a)" },
-    { "who": "arena_mark", "kind": "schedule", "match": "SCHED_TROIKA_START_COMBAT (" }
+    {
+      "who": "arena_mark",
+      "kind": "cond+",
+      "match": "SEE_PLAYER (0x5a)"
+    },
+    {
+      "who": "arena_mark",
+      "kind": "schedule",
+      "match": "SCHED_TROIKA_START_COMBAT ("
+    },
+    {
+      "who": "arena_mark",
+      "kind": "schedule",
+      "match": "",
+      "after": "dies"
+    },
+    {
+      "who": "arena_mark",
+      "kind": "task",
+      "match": "",
+      "after": "dies"
+    },
+    {
+      "who": "arena_mark",
+      "kind": "move",
+      "match": "",
+      "after": "dies"
+    },
+    {
+      "who": "arena_mark",
+      "kind": "death",
+      "match": "",
+      "at_most": 1
+    },
+    {
+      "who": "arena_mark",
+      "kind": "corpse",
+      "match": "",
+      "at_most": 1
+    },
+    {
+      "who": "arena_mark",
+      "kind": "output",
+      "match": "OnDeath",
+      "at_most": 1
+    }
   ],
   "probes": [
-    { "at": 1.5, "who": "player", "probe": "player_crouched", "equals": true },
-    { "at": 1.5, "who": "player", "probe": "player_weapon", "equals": "item_w_knife" },
-    { "at": 1.5, "who": "player", "probe": "player_grappling", "equals": false },
-    { "at": "end", "who": "arena_mark", "probe": "alive", "equals": false },
-    { "at": "end", "who": "arena_mark", "probe": "corpse_on_floor", "equals": true, "max_height": 24.0 }
+    {
+      "at": 1.5,
+      "who": "player",
+      "probe": "player_crouched",
+      "equals": true
+    },
+    {
+      "at": 1.5,
+      "who": "player",
+      "probe": "player_weapon",
+      "equals": "item_w_knife"
+    },
+    {
+      "at": 1.5,
+      "who": "player",
+      "probe": "player_grappling",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "arena_mark",
+      "probe": "alive",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "arena_mark",
+      "probe": "corpse_on_floor",
+      "equals": true,
+      "max_height": 20.0
+    }
   ],
-  "notes": "The body is regular_cop. corpse_on_floor (H20) reads the drawn mesh's `Bip01 Pelvis` bone: within max_height of the floor under it and at rest (under 5 cm/s). 24 cm is PROVISIONAL: with Unreal's default capsule asset regular_cop rests at 16.2 cm (stories/v4/packets-spike.md finding 5); V4d's integrator measures the rest height on the retail .phy asset and sets the bound from it. The end probe was on_ground, the motor capsule's floor answer, false on every corpse by construction (a record error, corrected by the V4a seam). GREEN on the seam's build, so it carries no known_red (brief A0 wrote 'V4d (no character physics asset)'): the victim's paired stealth-kill clip ends lying and the body HOLDS that pose (no physics asset, so no ragdoll), which is within the bound and at rest. The probe cannot tell a held lying pose from a body that fell; V4d's ragdoll must keep it green."
+  "notes": "V4d measured solid-local-source-bone-v1 / ragdoll-v1, 15 authored convex bodies / 14 joints, real admission sim=1. Headless fixed-60-Hz regular_cop pelvis rest: scalar death 18.138 cm (stable under 5 cm/s from t=5.6), paired stealth death 17.016 cm (stable under 5 from t=6.4). Shared 20 cm asset-specific bound leaves 1.862 cm margin over the higher measured rest; no limit or hull enlarged. Both deaths consume the weighted pick but retain the current real-bone pose. Death/OnDeath/corpse occur once on the kill tick, no movement/tasks/schedules follow death. Direct arena_mark regular_cop, spawnflags4, knife/crouch behind; no fade child or timing change. Final floor/rest query stays at t=20. The earlier green held paired pose has now been replaced by positively observed simulation and a settling series."
 }

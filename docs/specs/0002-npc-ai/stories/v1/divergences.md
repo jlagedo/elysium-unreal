@@ -37,3 +37,21 @@ and the Werewolf ground-point miss (95) are outside D's 22 and not placed here.
 | 23 (K1) | a cine refuses a save while it possesses its NPC (`m_hCine == this`) | `Private/Substrate/ElysiumScriptedSequence.cpp:1214` `SaveBlockReason` | retail saves mid-scene (the datamap words and the scripted schedule) and resumes at the task cursor `+0x5c50` | `Arm.NpcKernelDirector.Removal` (the refusal while possessed) | kept: named divergence (V3 README § 7 K1) — a restored, restarted `0xf2` would re-run `TASK_ENABLE_SCRIPT` / `TASK_WAIT_FOR_SCRIPT` and fire `OnBeginSequence` twice; V6 deletes it with resume |
 
 Counts: V3 0 · V4 1 · V6 1 · R2 6 · R3 1 · R6 4 · kept 8 (row 11 already closed: stale text; row 18 closed by V3c; row 1 closed by V3d) — 23.
+
+## V4d close (2026-10-05)
+
+The corpse fall is the owner's named visual modernization: Chaos with authored .phy
+convex ledges, masses and signed limits (solid-local-source-bone-v1). Adjacent-body
+collision is disabled; remaining self-collision and solver/damping/sleep are Unreal's.
+Retail 0x1032c0e0/0x10090180 ordering, source capability, weighted draw/real-bone pose,
+solid 4, fixed entity/use/feed/loot anchors and all four corpse clocks are retained.
+The held-pose/late-DIE substitute is gone. Source-absent physics is not fitted.
+Native multi-axis swing-cone equivalence is not proved by the numeric hinge sweep.
+
+Only damage_lethal_death moves (expected-fail -> pass): real 15-body fall, rest 18.138 cm,
+bound 20 and pre-removal 8s query; the destroyed corpse has no floor query at 15s.
+All 113 prior passes and all corpse-control verdicts remain. Default 169/0; arm 1625/0;
+kernel 7/7; full 132: 114 pass, 1 fail(H11),15 expected-fail,2 unexpected-pass.
+Hitbox/impulse/friction/BurnModel look remain 0014. V6 owns corpse save/restore: the
+witness bum body's Dead mind/fallen presentation survived load, but life/health words
+reset (triage's V4d witness save smoke); no exact pose/save parity claim.

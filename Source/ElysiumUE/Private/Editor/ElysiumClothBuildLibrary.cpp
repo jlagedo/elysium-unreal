@@ -6,6 +6,7 @@
 #include "ElysiumClothTuningConfig.h"
 #include "ElysiumCastData.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumPhysicsData.h"
 #include "ChaosCloth/ChaosClothConfig.h"
 #include "ChaosCloth/ChaosClothingSimulationConfig.h"
 #include "ChaosClothAsset/ClothAsset.h"
@@ -22,7 +23,13 @@
 #include "Materials/MaterialInterface.h"
 #include "Misc/PackageName.h"
 #include "PhysicsEngine/PhysicsAsset.h"
+#include "PhysicsEngine/BodyInstance.h"
+#include "PhysicsEngine/ConstraintInstance.h"
+#include "PhysicsEngine/ConvexElem.h"
+#include "PhysicsEngine/PhysicsConstraintTemplate.h"
 #include "PhysicsEngine/SkeletalBodySetup.h"
+#include "Rendering/SkeletalMeshModel.h"
+#include "Rendering/SkeletalMeshLODModel.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "UObject/Package.h"
@@ -378,6 +385,421 @@ namespace
 		Package->MarkPackageDirty();
 		return Asset;
 	}
+}
+
+namespace
+{
+	// S14 §2 / bsp.py::source_angles_to_unreal_quat: Source Rz(yaw) Ry(pitch) Rx(roll),
+	// then M R M, M=diag(1,-1,1). FRotator has a different Euler convention.
+	FTransform RagdollSolidTransform(const FElysiumPhysicsSourceSolid& Solid)
+	{
+		const FQuat SourceRotation = FQuat(FVector::ZAxisVector, FMath::DegreesToRadians(Solid.Angles[1]))
+			* FQuat(FVector::YAxisVector, FMath::DegreesToRadians(Solid.Angles[0]))
+			* FQuat(FVector::XAxisVector, FMath::DegreesToRadians(Solid.Angles[2]));
+		return FTransform(FQuat(-SourceRotation.X, SourceRotation.Y, -SourceRotation.Z, SourceRotation.W),
+			FVector(Solid.Origin[0], -Solid.Origin[1], Solid.Origin[2]) * 2.54);
+	}
+
+	// A point-cloud cook does not consume the reflected decoder's triangle winding.
+	// Refuse a lower-dimensional ledge instead of silently fitting a primitive.
+	bool RagdollHullHasVolume(const TArray<FVector>& Points)
+	{
+		if (Points.Num() < 4) return false;
+		FVector Edge = FVector::ZeroVector;
+		for (const FVector& Point : Points)
+		{
+			if ((Point - Points[0]).SizeSquared() > Edge.SizeSquared()) Edge = Point - Points[0];
+		}
+		if (Edge.SizeSquared() <= UE_DOUBLE_SMALL_NUMBER) return false;
+		FVector Normal = FVector::ZeroVector;
+		for (const FVector& Point : Points)
+		{
+			const FVector Candidate = FVector::CrossProduct(Edge, Point - Points[0]);
+			if (Candidate.SizeSquared() > Normal.SizeSquared()) Normal = Candidate;
+		}
+		if (Normal.SizeSquared() <= UE_DOUBLE_SMALL_NUMBER) return false;
+		Normal.Normalize();
+		for (const FVector& Point : Points)
+		{
+			if (FMath::Abs(FVector::DotProduct(Normal, Point - Points[0])) > UE_DOUBLE_SMALL_NUMBER) return true;
+		}
+		return false;
+	}
+
+	struct FRagdollSolidPlan
+	{
+		FName Bone;
+		FTransform Bind;
+		float Mass = 0.f;
+		TArray<FKConvexElem> Hulls;
+	};
+
+	struct FRagdollJointPlan
+	{
+		int32 Parent = INDEX_NONE;
+		int32 Child = INDEX_NONE;
+		double HalfSpan[3] = {};
+		double Midpoint[3] = {};
+	};
+}
+
+FElysiumRagdollBuildResult UElysiumClothBuildLibrary::BuildRagdollPhysicsAsset(
+	UElysiumPhysicsData* PhysicsSourceData, USkeletalMesh* SkeletalMesh,
+	const FString& OutputPackage, const FString& FrameRecipe)
+{
+	FElysiumRagdollBuildResult Result;
+	Result.BuilderVersion = TEXT("ragdoll-v1");
+	Result.FrameVersion = FrameRecipe;
+	if (!PhysicsSourceData)
+	{
+		Result.Errors.Add(TEXT("unit <absent> field PhysicsSourceData: missing typed source"));
+		return Result;
+	}
+	const FElysiumPhysicsSourceData& Source = PhysicsSourceData->GetSourceData();
+	auto Fail = [&](const FString& Field, const FString& Reason)
+	{
+		Result.Errors.Add(FString::Printf(TEXT("unit %s %s: %s"), *Source.AssetId, *Field, *Reason));
+	};
+	// physics_data.py::physics_projection: .phy absence is source capability, not a bake failure.
+	if (!Source.bHasPhysics)
+	{
+		Result.Skipped = true;
+		return Result;
+	}
+	const bool ProductionFrame = FrameRecipe == TEXT("solid-local-source-bone-v1");
+	const bool SolidLocal = ProductionFrame || FrameRecipe == TEXT("diagnostic-solid-local-source-bone-v1");
+	const bool ModelLocal = FrameRecipe == TEXT("diagnostic-model-local-source-bone-v1");
+	const bool BoneLocal = FrameRecipe == TEXT("diagnostic-bone-local-source-bone-v1");
+	// S14 numeric gate, 2026-10-05: saved hull/bind and signed knee/elbow sweep in phy_vphysics.md.
+	if (!SolidLocal && !ModelLocal && !BoneLocal) Fail(TEXT("field FrameRecipe"), TEXT("unmeasured or unknown recipe"));
+	if (!ProductionFrame && (Source.AssetId != TEXT("vtmb:model:character/npc/common/cop_variant/regular_cop/regular_cop")
+		|| Source.Solids.Num() != 15 || Source.Constraints.Num() != 14))
+		Fail(TEXT("field diagnostic"), TEXT("S14 gate permits only regular_cop's 15 solids / 14 joints"));
+	if (!SkeletalMesh) Fail(TEXT("field SkeletalMesh"), TEXT("missing bound mesh"));
+	if (Source.GeometryFrame != TEXT("IVP metres, axis-only")) Fail(TEXT("field GeometryFrame"), TEXT("unknown published geometry basis"));
+	if (!FPackageName::IsValidLongPackageName(OutputPackage) || !OutputPackage.EndsWith(TEXT("_RAGDOLL")))
+		Fail(TEXT("field OutputPackage"), TEXT("expected a writable long _RAGDOLL package name"));
+	for (const FElysiumPhysicsSourceGap& Gap : Source.Gaps)
+		Fail(FString::Printf(TEXT("%s %d field %s"), *Gap.Kind, Gap.Ordinal, *Gap.Field), Gap.Reason);
+	if (!Result.Errors.IsEmpty()) return Result;
+
+	const FReferenceSkeleton& Ref = SkeletalMesh->GetRefSkeleton();
+	TArray<FRagdollSolidPlan> SolidPlans;
+	TMap<int32, int32> ByAuthoredId;
+	TMap<int32, int32> ByOrdinal;
+	TSet<FName> UsedBones;
+	// physics_projection / BuildPhysicsAsset: authored IDs and exact source/native joins,
+	// resolved against this mesh's accumulated reference skeleton, never bone ordinals.
+	for (const FElysiumPhysicsSourceSolid& Solid : Source.Solids)
+	{
+		const FString SolidField = FString::Printf(TEXT("solid %d field"), Solid.Ordinal);
+		FRagdollSolidPlan Plan;
+		Plan.Bone = Solid.NativeBoneName;
+		int32 SourceMatches = 0;
+		for (const FElysiumPhysicsSourceBone& SourceBone : Source.Bones)
+		{
+			if (SourceBone.SourceName == Solid.SourceName && SourceBone.NativeName == Plan.Bone
+				&& SourceBone.Index == Solid.SourceBoneIndex) ++SourceMatches;
+		}
+		const int32 NativeIndex = Ref.FindBoneIndex(Plan.Bone);
+		if (SourceMatches != 1 || NativeIndex == INDEX_NONE || Plan.Bone.IsNone() || UsedBones.Contains(Plan.Bone))
+		{
+			Fail(SolidField + TEXT(" name"), TEXT("missing/ambiguous source/native bone join or repeated body bone"));
+			return Result;
+		}
+		UsedBones.Add(Plan.Bone);
+		Plan.Bind = BoneBindTransform(Ref, NativeIndex);
+		if (!Plan.Bind.IsValid() || !Plan.Bind.GetScale3D().Equals(FVector::OneVector, UE_DOUBLE_SMALL_NUMBER))
+		{
+			Fail(SolidField + TEXT(" bind"), TEXT("invalid or scaled accumulated reference transform"));
+			return Result;
+		}
+		const double AuthoredId = Solid.AuthoredIndex.Value;
+		if (!Solid.AuthoredIndex.bPresent || !FMath::IsFinite(AuthoredId) || AuthoredId < 0.
+			|| AuthoredId > MAX_int32 || AuthoredId != FMath::FloorToDouble(AuthoredId)
+			|| ByAuthoredId.Contains(static_cast<int32>(AuthoredId)) || Solid.Ordinal < 0 || ByOrdinal.Contains(Solid.Ordinal))
+		{
+			Fail(SolidField + TEXT(" index"), TEXT("missing/ambiguous authored solid ID or typed ordinal"));
+			return Result;
+		}
+		ByAuthoredId.Add(static_cast<int32>(AuthoredId), SolidPlans.Num());
+		ByOrdinal.Add(Solid.Ordinal, SolidPlans.Num());
+		int32 MassMatches = 0;
+		double AuthoredMass = 0.;
+		for (const FElysiumPhysicsNamedNumber& Parameter : Solid.Parameters)
+		{
+			if (Parameter.Name == TEXT("mass")) { ++MassMatches; AuthoredMass = Parameter.Value; }
+		}
+		Plan.Mass = static_cast<float>(AuthoredMass);
+		if (MassMatches != 1 || !FMath::IsFinite(AuthoredMass) || !FMath::IsFinite(Plan.Mass) || Plan.Mass <= 0.f)
+		{
+			Fail(SolidField + TEXT(" mass"), TEXT("missing/ambiguous/nonpositive authored kilograms"));
+			return Result;
+		}
+		FTransform SolidTransform = FTransform::Identity;
+		if (SolidLocal)
+		{
+			if (Solid.Origin.Num() != 3 || Solid.Angles.Num() != 3)
+			{
+				Fail(SolidField + TEXT(" origin/angles"), TEXT("solid-local candidate requires three Source components each"));
+				return Result;
+			}
+			for (int32 Component = 0; Component < 3; ++Component)
+			{
+				if (!FMath::IsFinite(Solid.Origin[Component]) || !FMath::IsFinite(Solid.Angles[Component]))
+					Fail(SolidField + TEXT(" origin/angles"), TEXT("nonfinite Source component"));
+			}
+			if (!Result.Errors.IsEmpty()) return Result;
+			SolidTransform = RagdollSolidTransform(Solid);
+		}
+		TSet<int32> UsedLedges;
+		for (const FElysiumPhysicsSourceHull& Hull : Solid.Hulls)
+		{
+			if (Hull.SolidOrdinal != Solid.Ordinal || Hull.LedgeOrdinal < 0 || UsedLedges.Contains(Hull.LedgeOrdinal))
+			{
+				Fail(SolidField + TEXT(" hull ordinal"), TEXT("missing/ambiguous ledge join"));
+				return Result;
+			}
+			UsedLedges.Add(Hull.LedgeOrdinal);
+			FKConvexElem Convex;
+			for (const FElysiumPhysicsSourcePoint& Point : Hull.Vertices)
+			{
+				// model_glb/physics.py::_ledge publishes g=(x,-y,-z); S14 §2:
+				// q=100*(g.x,g.z,g.y), applied exactly once (determinant -1).
+				FVector Position(Point.X * 100., Point.Z * 100., Point.Y * 100.);
+				if (SolidLocal) Position = SolidTransform.TransformPosition(Position);
+				if (!BoneLocal) Position = Plan.Bind.InverseTransformPosition(Position);
+				if (!FMath::IsFinite(Position.X) || !FMath::IsFinite(Position.Y) || !FMath::IsFinite(Position.Z))
+				{
+					Fail(SolidField + FString::Printf(TEXT(" ledge %d vertices"), Hull.LedgeOrdinal), TEXT("nonfinite bone-space point"));
+					return Result;
+				}
+				Convex.VertexData.Add(Position);
+			}
+			if (!RagdollHullHasVolume(Convex.VertexData))
+			{
+				Fail(SolidField + FString::Printf(TEXT(" ledge %d vertices"), Hull.LedgeOrdinal), TEXT("no usable convex volume"));
+				return Result;
+			}
+			Convex.UpdateElemBox();
+			Plan.Hulls.Add(MoveTemp(Convex));
+		}
+		if (Plan.Hulls.IsEmpty())
+		{
+			Fail(SolidField + TEXT(" hulls"), TEXT("source solid has no usable ledges"));
+			return Result;
+		}
+		SolidPlans.Add(MoveTemp(Plan));
+	}
+
+	TArray<FRagdollJointPlan> JointPlans;
+	TSet<int32> UsedJoints;
+	for (const FElysiumPhysicsSourceConstraint& Joint : Source.Constraints)
+	{
+		const FString JointField = FString::Printf(TEXT("constraint %d field"), Joint.Ordinal);
+		FRagdollJointPlan JointPlan;
+		const int32* ParentById = ByAuthoredId.Find(Joint.ParentSolidIndex);
+		const int32* ChildById = ByAuthoredId.Find(Joint.ChildSolidIndex);
+		const int32* ParentByOrdinal = ByOrdinal.Find(Joint.ParentSolidOrdinal);
+		const int32* ChildByOrdinal = ByOrdinal.Find(Joint.ChildSolidOrdinal);
+		if (!ParentById || !ChildById || !ParentByOrdinal || !ChildByOrdinal
+			|| *ParentById != *ParentByOrdinal || *ChildById != *ChildByOrdinal || *ParentById == *ChildById
+			|| Joint.Ordinal < 0 || UsedJoints.Contains(Joint.Ordinal))
+		{
+			Fail(JointField + TEXT(" endpoints"), TEXT("authored solid IDs/typed ordinals absent, ambiguous or inconsistent"));
+			return Result;
+		}
+		UsedJoints.Add(Joint.Ordinal);
+		JointPlan.Parent = *ParentById;
+		JointPlan.Child = *ChildById;
+		if (Joint.Axes.Num() != 3)
+		{
+			Fail(JointField + TEXT(" axes"), TEXT("expected exactly the authored x/y/z axes"));
+			return Result;
+		}
+		for (int32 AxisIndex = 0; AxisIndex < 3; ++AxisIndex)
+		{
+			const FString AxisName = AxisIndex == 0 ? TEXT("x") : AxisIndex == 1 ? TEXT("y") : TEXT("z");
+			const FElysiumPhysicsSourceAxis* AuthoredAxis = nullptr;
+			int32 AxisMatches = 0;
+			for (const FElysiumPhysicsSourceAxis& Axis : Joint.Axes)
+			{
+				if (Axis.Name == AxisName) { AuthoredAxis = &Axis; ++AxisMatches; }
+			}
+			if (AxisMatches != 1 || !AuthoredAxis->Minimum.bPresent || !AuthoredAxis->Maximum.bPresent
+				|| !FMath::IsFinite(AuthoredAxis->Minimum.Value) || !FMath::IsFinite(AuthoredAxis->Maximum.Value)
+				|| AuthoredAxis->Minimum.Value > AuthoredAxis->Maximum.Value
+				|| AuthoredAxis->Minimum.Value < -180. || AuthoredAxis->Maximum.Value > 180.)
+			{
+				Fail(JointField + TEXT(" ") + AxisName + TEXT("min/max"), TEXT("missing/ambiguous/nonfinite or unrepresentable authored range"));
+				return Result;
+			}
+			// bsp.py::source_quat_to_unreal: det(M)*M=(-1,+1,-1).
+			// The accepted Source-bone basis: numeric knee/elbow stops in phy_vphysics.md.
+			const double AxisSign = AxisIndex == 1 ? 1. : -1.;
+			JointPlan.HalfSpan[AxisIndex] = (AuthoredAxis->Maximum.Value - AuthoredAxis->Minimum.Value) * 0.5;
+			JointPlan.Midpoint[AxisIndex] = AxisSign * (AuthoredAxis->Maximum.Value + AuthoredAxis->Minimum.Value) * 0.5;
+		}
+		JointPlans.Add(JointPlan);
+	}
+
+	// Preflight completes before creating/replacing the caller's package.
+	FString ObjectPath;
+	const FString AssetName = FPackageName::GetShortName(OutputPackage);
+	UPackage* Package = MakePackage(FPackageName::GetLongPackagePath(OutputPackage), AssetName, ObjectPath);
+	UPhysicsAsset* Asset = NewObject<UPhysicsAsset>(Package, *AssetName, RF_Public | RF_Standalone | RF_Transactional);
+	Asset->SetPreviewMesh(SkeletalMesh);
+	for (int32 SolidIndex = 0; SolidIndex < SolidPlans.Num(); ++SolidIndex)
+	{
+		const FRagdollSolidPlan& Plan = SolidPlans[SolidIndex];
+		USkeletalBodySetup* Setup = NewObject<USkeletalBodySetup>(Asset, NAME_None, RF_Transactional);
+		Setup->BoneName = Plan.Bone;
+		Setup->PhysicsType = PhysType_Simulated;
+		Setup->CollisionTraceFlag = CTF_UseSimpleAsComplex;
+		Setup->DefaultInstance.SetMassOverride(Plan.Mass, true);
+		Setup->AggGeom.ConvexElems = Plan.Hulls;
+		Setup->InvalidatePhysicsData();
+		Setup->CreatePhysicsMeshes();
+		if (Setup->bFailedToCreatePhysicsMeshes)
+			Fail(FString::Printf(TEXT("solid %d field cook"), Source.Solids[SolidIndex].Ordinal), TEXT("Chaos failed to cook authored ledges"));
+		for (const FKConvexElem& CookedHull : Setup->AggGeom.ConvexElems)
+		{
+			if (!CookedHull.GetChaosConvexMesh())
+				Fail(FString::Printf(TEXT("solid %d field cook"), Source.Solids[SolidIndex].Ordinal), TEXT("ledge has no cooked convex"));
+		}
+		Asset->SkeletalBodySetups.Add(Setup);
+		Result.BodyMasses.Add(Setup->DefaultInstance.GetMassOverride());
+		Result.ConvexCount += Setup->AggGeom.ConvexElems.Num();
+	}
+	for (int32 JointIndex = 0; JointIndex < JointPlans.Num(); ++JointIndex)
+	{
+		const FRagdollJointPlan& Plan = JointPlans[JointIndex];
+		UPhysicsConstraintTemplate* Template = NewObject<UPhysicsConstraintTemplate>(Asset, NAME_None, RF_Transactional);
+		FConstraintInstance& Instance = Template->DefaultInstance;
+		Instance.JointName = FName(*FString::Printf(TEXT("phy_joint_%d"), Source.Constraints[JointIndex].Ordinal));
+		Instance.ConstraintBone1 = SolidPlans[Plan.Child].Bone;
+		Instance.ConstraintBone2 = SolidPlans[Plan.Parent].Bone;
+		Instance.SetLinearLimits(LCM_Locked, LCM_Locked, LCM_Locked, 0.f);
+		Instance.SetAngularTwistLimit(Plan.HalfSpan[0] == 0. ? ACM_Locked : ACM_Limited, static_cast<float>(Plan.HalfSpan[0]));
+		Instance.SetAngularSwing2Limit(Plan.HalfSpan[1] == 0. ? ACM_Locked : ACM_Limited, static_cast<float>(Plan.HalfSpan[1]));
+		Instance.SetAngularSwing1Limit(Plan.HalfSpan[2] == 0. ? ACM_Locked : ACM_Limited, static_cast<float>(Plan.HalfSpan[2]));
+		// S14 measured common pivot/hinge basis: J_u is the child's accumulated bind frame.
+		// Frame1=child, Frame2=parent (ConstraintInstance.cpp::CreateJoint_AssumesLocked).
+		// Offset the child's BASIS, not its pivot, to represent signed min/max midpoints.
+		const FTransform& CommonFrame = SolidPlans[Plan.Child].Bind;
+		const FQuat RestOffset = FQuat(FVector::ZAxisVector, FMath::DegreesToRadians(-Plan.Midpoint[2]))
+			* FQuat(FVector::YAxisVector, FMath::DegreesToRadians(-Plan.Midpoint[1]))
+			* FQuat(FVector::XAxisVector, FMath::DegreesToRadians(-Plan.Midpoint[0]));
+		Instance.SetRefFrame(EConstraintFrame::Frame1, FTransform(RestOffset));
+		Instance.SetRefFrame(EConstraintFrame::Frame2, CommonFrame.GetRelativeTransform(SolidPlans[Plan.Parent].Bind));
+		// Named presentation tuning: adjacent hulls do not collide; other pairs still do.
+		Instance.SetDisableCollision(true);
+		Asset->DisableCollision(Plan.Parent, Plan.Child);
+		Template->SetDefaultProfile(Instance);
+		Asset->ConstraintSetup.Add(Template);
+	}
+	Asset->UpdateBodySetupIndexMap();
+	Asset->UpdateBoundsBodiesArray();
+	Result.BodyCount = Asset->SkeletalBodySetups.Num();
+	Result.ConstraintCount = Asset->ConstraintSetup.Num();
+	if (!ProductionFrame)
+		Result.Warnings.Add(TEXT("S14 diagnostic candidate: compare saved hulls and signed joint stops before choosing a production recipe"));
+	Result.Warnings.Add(TEXT("Presentation tuning: adjacent-body collision disabled, all other self-collision enabled; joint friction/surface/inertia mapping remains 0014"));
+	if (!Result.Errors.IsEmpty()) return Result;
+	FAssetRegistryModule::AssetCreated(Asset);
+	Package->MarkPackageDirty();
+	Result.AssetPath = ObjectPath;
+	return Result;
+}
+
+FString UElysiumClothBuildLibrary::InspectRagdollPhysicsAsset(USkeletalMesh* SkeletalMesh, UPhysicsAsset* PhysicsAsset)
+{
+	if (!SkeletalMesh || !PhysicsAsset || !SkeletalMesh->GetImportedModel()
+		|| SkeletalMesh->GetImportedModel()->LODModels.IsEmpty()) return TEXT("{\"error\":\"missing mesh/asset/LOD\"}");
+	const FReferenceSkeleton& MeasureRef = SkeletalMesh->GetRefSkeleton();
+	const FSkeletalMeshLODModel& MeasureLOD = SkeletalMesh->GetImportedModel()->LODModels[0];
+	const auto VectorJson = [](const FVector& Value) {
+		return TArray<TSharedPtr<FJsonValue>>{MakeShared<FJsonValueNumber>(Value.X), MakeShared<FJsonValueNumber>(Value.Y), MakeShared<FJsonValueNumber>(Value.Z)};
+	};
+	const auto TransformJson = [&VectorJson](const FTransform& Value) {
+		auto Row = MakeShared<FJsonObject>();
+		Row->SetArrayField(TEXT("position"), VectorJson(Value.GetTranslation()));
+		const FQuat Rotation = Value.GetRotation();
+		Row->SetArrayField(TEXT("quaternion"), {MakeShared<FJsonValueNumber>(Rotation.X), MakeShared<FJsonValueNumber>(Rotation.Y), MakeShared<FJsonValueNumber>(Rotation.Z), MakeShared<FJsonValueNumber>(Rotation.W)});
+		return Row;
+	};
+	const auto BoundsJson = [&VectorJson](const FBox& Bounds) {
+		auto Row = MakeShared<FJsonObject>();
+		Row->SetBoolField(TEXT("valid"), Bounds.IsValid != 0);
+		if (Bounds.IsValid) { Row->SetArrayField(TEXT("min"), VectorJson(Bounds.Min)); Row->SetArrayField(TEXT("max"), VectorJson(Bounds.Max)); }
+		return Row;
+	};
+	auto Root = MakeShared<FJsonObject>();
+	Root->SetStringField(TEXT("mesh"), SkeletalMesh->GetPathName());
+	Root->SetStringField(TEXT("asset"), PhysicsAsset->GetPathName());
+	Root->SetBoolField(TEXT("attached"), SkeletalMesh->GetPhysicsAsset() == PhysicsAsset);
+	TArray<TSharedPtr<FJsonValue>> BoneRows, BodyRows, JointRows;
+	for (int32 BoneOrdinal = 0; BoneOrdinal < MeasureRef.GetNum(); ++BoneOrdinal)
+	{
+		auto Row = TransformJson(BoneBindTransform(MeasureRef, BoneOrdinal));
+		Row->SetStringField(TEXT("name"), MeasureRef.GetBoneName(BoneOrdinal).ToString());
+		Row->SetNumberField(TEXT("parent"), MeasureRef.GetParentIndex(BoneOrdinal));
+		BoneRows.Add(MakeShared<FJsonValueObject>(Row));
+	}
+	for (const USkeletalBodySetup* Setup : PhysicsAsset->SkeletalBodySetups)
+	{
+		const int32 BodyBone = MeasureRef.FindBoneIndex(Setup->BoneName);
+		const FTransform BodyBind = BoneBindTransform(MeasureRef, BodyBone);
+		auto Row = MakeShared<FJsonObject>();
+		Row->SetStringField(TEXT("bone"), Setup->BoneName.ToString());
+		Row->SetNumberField(TEXT("mass"), Setup->DefaultInstance.GetMassOverride());
+		FBox MeshBounds(ForceInit);
+		int32 WeightedVertices = 0;
+		for (const FSkelMeshSection& Section : MeasureLOD.Sections)
+			for (const FSoftSkinVertex& Vertex : Section.SoftVertices)
+				for (int32 Influence = 0; Influence < MAX_TOTAL_INFLUENCES; ++Influence)
+					if (Vertex.InfluenceWeights[Influence] > 0 && Section.BoneMap.IsValidIndex(Vertex.InfluenceBones[Influence])
+						&& Section.BoneMap[Vertex.InfluenceBones[Influence]] == BodyBone)
+					{ MeshBounds += FVector(Vertex.Position); ++WeightedVertices; break; }
+		Row->SetObjectField(TEXT("meshBounds"), BoundsJson(MeshBounds));
+		Row->SetNumberField(TEXT("weightedVertices"), WeightedVertices);
+		TArray<TSharedPtr<FJsonValue>> HullRows;
+		for (const FKConvexElem& Hull : Setup->AggGeom.ConvexElems)
+		{
+			FBox HullBounds(ForceInit); FVector Centroid = FVector::ZeroVector;
+			TArray<TSharedPtr<FJsonValue>> Points;
+			for (const FVector& LocalPoint : Hull.VertexData)
+			{
+				const FVector ComponentPoint = BodyBind.TransformPosition(Hull.GetTransform().TransformPosition(LocalPoint));
+				HullBounds += ComponentPoint; Centroid += ComponentPoint;
+				Points.Add(MakeShared<FJsonValueArray>(VectorJson(ComponentPoint)));
+			}
+			auto HullRow = BoundsJson(HullBounds);
+			HullRow->SetArrayField(TEXT("centroid"), VectorJson(Centroid / FMath::Max(1, Hull.VertexData.Num())));
+			HullRow->SetArrayField(TEXT("points"), Points);
+			HullRows.Add(MakeShared<FJsonValueObject>(HullRow));
+		}
+		Row->SetArrayField(TEXT("hulls"), HullRows); BodyRows.Add(MakeShared<FJsonValueObject>(Row));
+	}
+	for (const UPhysicsConstraintTemplate* Template : PhysicsAsset->ConstraintSetup)
+	{
+		const FConstraintInstance& Instance = Template->DefaultInstance;
+		auto Row = MakeShared<FJsonObject>();
+		Row->SetStringField(TEXT("child"), Instance.ConstraintBone1.ToString());
+		Row->SetStringField(TEXT("parent"), Instance.ConstraintBone2.ToString());
+		const FTransform ChildBind = BoneBindTransform(MeasureRef, MeasureRef.FindBoneIndex(Instance.ConstraintBone1));
+		const FTransform ParentBind = BoneBindTransform(MeasureRef, MeasureRef.FindBoneIndex(Instance.ConstraintBone2));
+		Row->SetObjectField(TEXT("childFrame"), TransformJson(Instance.GetRefFrame(EConstraintFrame::Frame1)));
+		Row->SetObjectField(TEXT("parentFrame"), TransformJson(Instance.GetRefFrame(EConstraintFrame::Frame2)));
+		Row->SetObjectField(TEXT("childComponentFrame"), TransformJson(Instance.GetRefFrame(EConstraintFrame::Frame1) * ChildBind));
+		Row->SetObjectField(TEXT("parentComponentFrame"), TransformJson(Instance.GetRefFrame(EConstraintFrame::Frame2) * ParentBind));
+		Row->SetNumberField(TEXT("twist"), Instance.GetAngularTwistLimit());
+		Row->SetNumberField(TEXT("swing1"), Instance.GetAngularSwing1Limit());
+		Row->SetNumberField(TEXT("swing2"), Instance.GetAngularSwing2Limit());
+		JointRows.Add(MakeShared<FJsonValueObject>(Row));
+	}
+	Root->SetArrayField(TEXT("bones"), BoneRows); Root->SetArrayField(TEXT("bodies"), BodyRows); Root->SetArrayField(TEXT("joints"), JointRows);
+	FString Json; FJsonSerializer::Serialize(Root, TJsonWriterFactory<>::Create(&Json)); return Json;
 }
 
 TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFromSidecar(
