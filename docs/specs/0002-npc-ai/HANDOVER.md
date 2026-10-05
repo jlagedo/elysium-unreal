@@ -3,11 +3,58 @@
 You are the coordinator for spec 0002 in `E:\dev\elysium-unreal`. Load this file first, then read
 what it points at. It replaces the conversation that produced it.
 
-## The tree
+## Where things stand (2026-10-04, 23:20) — read this first
 
-V4o is closed (`64895278`): the integrator resumed after the session limit and finished. The only
-uncommitted files are `.codex/config.toml`, `AGENTS.md` and `AGENTS.md`, which the coordinator did
-**not** edit (the owner's Codex CLI setup; see the end): his to commit.
+**Wave V4c is in integration and the tree is NOT clean.** About 71 modified and 8 new files are
+uncommitted: the three coders' lanes (C1 attack producers, C2 pick / corpse / dead enemy, C3 the
+team registry) plus whatever the integrator has applied. HEAD is `b430dc37` plus this file's
+commit; nothing pushed since `2ac33a53` (`origin/main`).
+
+Two Codex runs were alive when this was written. Their folders are under `E:\elysium-work\codex\`
+(`brief.md`, `events.jsonl`, `last.md`, `stderr.log`); a run is over when `last.md` exists and
+`events.jsonl` ends with `turn.completed` (or `turn.failed`: then read `stderr.log`).
+
+| run | what | thread id (for `codex exec resume`) |
+|---|---|---|
+| `C-int` | V4c's integrator (`gpt-6.1-sol`, high): applies the owed lines, one `build --arm` (cap two), the records, both test tiers, the full arena, one commit. Started 23:07 | `01a109d1-1882-7332-a4e2-36ba50c4f7ac` |
+| `V4d-plan` | verifies the V4d scout and makes `brief-D-ragdoll.md` final; writes `brief-D-integrator.md` and `packets-S14.md` (docs only). Started 23:08 | first line of its `events.jsonl` |
+
+**First steps for whoever picks this up:**
+
+1. `git log --oneline -3` and `git status --short`. If the integrator committed (a `feat(npc): V4c`
+   commit), read its message: the verdict table, what the three `damage_*` records measured about
+   the knockout, each red with its owner. If it did not commit, read `C-int/last.md`: it was told
+   not to commit a wave that is not green and to say what state the tree is in. Resume its thread
+   (model, effort and the bypass flag repeated) rather than starting a new integrator.
+2. If `V4d-plan` finished, check its packet against the listing, commit its three files, and
+   launch V4d's coders (`medium`) once V4c is committed.
+3. A Codex run can die on an expired login ("refresh token has expired", HTTP 401; it happened to
+   C1 and a scout). The fix is the owner's: `codex login`. Then resume the thread.
+
+**The coders' reports** are in `E:\elysium-work\codex\C-int\report-C1.txt`, `-C2.txt`, `-C3.txt`;
+the lines they owe other files are written as exact patches in `docs/vtmb/combat-and-damage.md`
+(~:1228), `docs/vtmb/npc-ai/lifecycle.md` (~:3418), `senses.md` (~:256) and `teams.md`.
+
+**Scout packets** (`gpt-6-luna` at `max`; leads, NOT verified, outside the repository):
+`E:\elysium-work\codex\scout-V4d\packet.md`, `scout-V6`, `scout-V7`, `scout-V10V12`. Their main
+claims, each to be checked before a brief uses it:
+
+- V4d: an ordinary death may never reach `StartBodyRagdoll` today (capability false, force bone
+  none, no `Bip01 Spine2` fallback); the `.phy` solid-to-bone frame mapping is unresolved; no
+  cleanup of the map-owned ragdoll mesh; 34 distinct character models on the two witness maps.
+- V6: the clock persists across map travel; there is no save / load action in the console or the
+  arena harness (V6's records cannot be staged until one exists); a restored corpse can lose its
+  removal think; the task cursor is `+0x5c40` (`+0x5c50` is the failure code).
+- V7: none of the 19 inputs is fired by either witness map (records go in the Green Room); N5
+  forwards the raw value; N6 starts the schedule at once where retail stores a forced-schedule
+  state; N11 omits retail's stealth eligibility arms; the movement-multiplier input needs the
+  shared playback / ground-speed scalar path.
+- V10 + V12: N4's cause — retail's `CanHearSound 0x1030f7b0` has no expiry test (a separate think
+  prunes at expiry + 4 s) while the port tests expiry inside hearing; retail's NPC footstep
+  handler emits body audio and inserts no AI sound, so V12 may be small.
+
+**Order left:** V4c (integrating) → V4d → V5b (planned, `stories/v5/`) → V6 → V7 → V10 → V12 → the
+second full run → stop before V8 (the owner live) → V9 → gate 2.
 
 ## Read, in this order
 
@@ -15,10 +62,11 @@ uncommitted files are `.codex/config.toml`, `AGENTS.md` and `AGENTS.md`, which t
 2. `docs/specs/0002-npc-ai/spec.md` — § Standing rules, § Step 2, § The bug protocol and, after it,
    the owner's standing rulings and his two rules of 2026-10-04 (**Testable first**, **Settle
    first**), § The sequence.
-3. `docs/specs/TRACKER.md` — what is ticked. Next unticked: **V4c**, then V4d.
+3. `docs/specs/TRACKER.md` — what is ticked. Next unticked: **V4c** (in integration), then V4d.
 4. `docs/specs/0002-npc-ai/stories/v4/README.md` and the packets beside it: `packets-R1.md`,
    `-R2`, `-spike`, `-R1b-measurement`, `-S1` … `-S12`. Briefs: `stories/v4o/` (O1–O3, integrator),
-   `stories/v4/brief-C1…`, `brief-C2…`, `brief-C-integrator.md`, `brief-D-ragdoll.md`,
+   `stories/v4/brief-C1…`, `brief-C2…`, `brief-C3-team-registry.md`, `brief-C-integrator.md`,
+   `brief-D-ragdoll.md`, `packets-S13.md` (settled before V4c),
    `stories/v5/` (the V5 plan), `stories/v5a/`, `stories/v11/` (landed; for reference).
 5. `docs/specs/0002-npc-ai/stories/v1/triage.md` — the two sections "Judge's rulings, V4" and
    "Judge's rulings, V4 — second sitting" at its end.
