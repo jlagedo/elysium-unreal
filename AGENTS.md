@@ -48,6 +48,8 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 - `docs/vision.md` — what Elysium is and is not, and how it is built.
 - `docs/vtmb/` — the oracle: recovered retail facts and addresses.
 - `docs/contracts/` — the seam data formats shared by the pipeline and the runtime.
+- `docs/specs/layers/` — the build order: the layer map, every retail function the 108 maps need
+  with its port status (`audit.tsv`), the upward hooks (`hooks.tsv`), one spec per layer.
 
 ## Editing files
 
@@ -58,7 +60,17 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 - Save game files are disposable, we have not released and don't try to migrate or keep compatibility
 - The port is a VM host for VtMB's data. Schedules, dialogue and map scripts are the bytecode; the C++ substrate is the interpreter. Anything the bytecode can observe is reproduced verbatim: task semantics, condition order, interrupt timing, what a failure writes, and bugs, because shipped programs were tuned against them.
 - Modernization is a peripheral swap. Two halves: visual-only (Unreal renders it better; adopt freely) and an algorithm Unreal already ships (adopt only with the retail contract and event sequencing kept). Nothing that changes event order or state is a modernization.
-- Build the host in dependency order. Clock before programs, kernel before consumers.
+- Build in layer order, bottom-up: **L0 entity** (`CBaseEntity`, physics and movetypes, entity I/O,
+  triggers, movers and doors, the save framework, the sound list, sound emission, effects, ConVars
+  and game rules) → **L1 animation** → **L2 character** (`CBaseCombatCharacter` with stats,
+  disciplines, feeding, weapons, inventory) → **L3 player** → **L4 NPC with L5 scripting** (the
+  kernel, species, senses, navigation, squads, hints; scripted sequences, dialogue, Python; the
+  player's verbs on NPCs). The order is retail's own: each layer calls the one below it far more
+  than it is called back (`docs/specs/layers/README.md`).
+- A layer is built for its **core** first — every retail function at least half the maps reach —
+  and tested before the next layer starts. `sp_tutorial_1` and `sm_hub_1` together reach the whole
+  core: they are every layer's witnesses. **Map-specific code** (reached by ten maps or fewer) is
+  built per map after the core, in any order; it depends on the core, never on another map's code.
 
 ## When a problem is reported
 
@@ -71,8 +83,9 @@ A reported defect is a question about VtMB, never a request for a patch.
   `entries.md`: what a function touches, who writes a field, who fills a slot, who calls in
   from outside), then the walked prose in `docs/vtmb/npc-ai/`, then the `vtmb-corpus`
   decompilation for what neither holds. Cite addresses.
-- Before trusting the kernel ledger after code commits → `uv run elysium research kernel --check`
-  (exits 7 when stale); regenerate with `uv run elysium research kernel` (~9 s).
+- The kernel ledger (`docs/vtmb/npc-kernel/`) describes retail. It is regenerated when the corpus
+  changes, not after a code commit, and no story gate runs `research kernel --check`. What the port
+  cites is answered by `uv run elysium research where <address>`.
 - Look an address, name, field or slot up before searching `docs/` for it: the `vtmb_where`
   tool, or `uv run elysium research where 0x1028a380 m_scriptState "slot 442"`,
   answers in under a second with its ledger rows, its `docs/vtmb` sections (file, heading,
@@ -87,9 +100,14 @@ A reported defect is a question about VtMB, never a request for a patch.
 - A one-line fix is acceptable only when the retail chain was already reproduced and
   the defect is a single divergence from it, and the answer must say so with the
   retail evidence.
-- Where a retail input has no source in the substrate yet, build the seam (the hook,
-  the field, the accessor) and leave it answering "nothing" with a comment naming the
-  retail field it stands for. Say explicitly what remains unrecovered.
+- A retail input whose producer sits in the same layer or a lower one is built with the work
+  that reads it, never stubbed. If that lower layer is not finished, the work stops and the gap
+  is reported as a planning fault, with the retail chain that needs it.
+- A seam answering "nothing" is allowed in two places only: an **upward hook** — a lower
+  layer's branch that only a higher layer runs (listed by address in
+  `docs/specs/layers/hooks.tsv`, owned and tested by that higher layer) — and code **no map
+  reaches**. Each names the retail field or function it stands for and, for a hook, the layer
+  that completes it. Say explicitly what remains unrecovered.
 - Record the recovery in the matching `docs/vtmb/` document.
 - Divergences from retail are allowed only as named modernizations, stated in the answer.
 

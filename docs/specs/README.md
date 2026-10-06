@@ -1,6 +1,13 @@
 # Specs
 
-Numbered in the order they are cleared, one at a time; 0001–0009 make `sp_tutorial_1` beatable
+**Since 2026-10-06 the work proceeds by layers** ([`layers/README.md`](layers/README.md)): one spec
+per layer of retail's own dependency order — L0 entity, L1 animation, L2 character, L3 player,
+L4 NPC with L5 scripting — then the map-specific tails. Each layer spec owns its rows of
+[`layers/audit.tsv`](layers/audit.tsv); its first story is its test instrument. The numbered specs
+below are **parked**: their open stories are mapped to layers and their witnesses are acceptance
+scenarios. **What is next:** [`TRACKER.md`](TRACKER.md).
+
+The numbered specs, as they were (cleared in number order until 2026-10-06): 0001–0009 make `sp_tutorial_1` beatable
 on retail logic, 0010–0017 are polish the tutorial does not need. 0018 and 0019 (2026-09-15) split 0002: the world's AI
 infrastructure, and the kernel rework that turns Troika's typed data into loaded data. Every spec follows 0002's
 shape. Renumbered 2026-09-12; the last column translates citations that predate it.
@@ -31,6 +38,5 @@ Retired 2026-09-12: 0000 play-tier — no beat-script driver is built; acceptanc
 
 **0018 and 0019 closed into 0002 on 2026-10-03** ([0002's consolidated spec](0002-npc-ai/spec.md)):
 tools and tests first, then the landed work proven live in the Green Room, then the road to close
-the character AI; 0003 onward resume after it.
-**What is next:** [`TRACKER.md`](TRACKER.md) — one serial sequence, first unticked box.
+the character AI; 0003 onward resume after it. (Superseded by the layers, 2026-10-06.)
 **What still needs reverse engineering:** [`RE-BACKLOG.md`](RE-BACKLOG.md).

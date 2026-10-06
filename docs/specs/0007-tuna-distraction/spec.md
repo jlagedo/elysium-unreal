@@ -1,5 +1,8 @@
 # 0007 tuna-distraction — grab and throw tuna cans to draw the guard off the door: the physics hands and the physics world the tutorial touches
 
+> **Parked 2026-10-06.** Work proceeds by layers ([`docs/specs/layers/README.md`](../layers/README.md)); this spec's open stories are mapped there and its witness is an acceptance scenario.
+
+
 **Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
 
 ## Witness

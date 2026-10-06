@@ -1,5 +1,8 @@
 # 0002 npc-ai — the character AI, consolidated 2026-10-03: tools first, then the landed work proven live, then the road to close
 
+> **Parked 2026-10-06.** Work proceeds by layers ([`docs/specs/layers/README.md`](../layers/README.md)); this spec's open stories are mapped there and its witness is an acceptance scenario.
+
+
 This spec replaces 0002's earlier text (moved verbatim to `record-2026-09-30.md`, which keeps every
 old story's detail and is cited below as `record § <n>`). It absorbs 0018's open rows 8–20, 0019's
 hand-offs and 0003's stories 1–2; 0018 and 0019 are closed with a pointer here. The serial tracker

@@ -1,5 +1,8 @@
 # 0003 scripted-sequence — the cutscene beat as the NPC's own schedule
 
+> **Parked 2026-10-06.** Work proceeds by layers ([`docs/specs/layers/README.md`](../layers/README.md)); this spec's open stories are mapped there and its witness is an acceptance scenario.
+
+
 **2026-10-03:** stories 1–2's kernel half (`m_scriptState`, the scripted schedules and tasks,
 `CineCleanup`) fold into [0002's consolidated spec](../0002-npc-ai/spec.md), story V3. Stories 3–4
 stay here (0002's open question Q4).

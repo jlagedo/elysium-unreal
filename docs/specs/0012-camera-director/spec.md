@@ -1,5 +1,8 @@
 # 0012 camera-director — every scoped camera returns to the exact chosen view: input scopes, prop focus, the sequencer bridge, the last direct producers
 
+> **Parked 2026-10-06.** Work proceeds by layers ([`docs/specs/layers/README.md`](../layers/README.md)); this spec's open stories are mapped there and its witness is an acceptance scenario.
+
+
 **Standing rule for every story:** follow retail behaviour; do not take on work already planned in another story of this spec or in another spec.
 
 ## Witness
