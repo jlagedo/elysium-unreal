@@ -1,6 +1,6 @@
 # Worker runs — L2-character
 
-Each run is one Codex worker: the slice briefs listed, in order, in one go (`briefs/`). Bundled from
+Each run is one worker session (any agent, `../method.md`): the slice briefs listed, in order, in one go (`briefs/`). Bundled from
 consecutive slices of one subsystem up to ~1.5 KB of retail code or 8 functions. Estimated minutes =
 25 fixed + 20 per KB of retail code.
 

@@ -1,9 +1,9 @@
 # Schedule
 
 478 stories, 736 slice briefs, bundled into **337 worker runs** (`<layer>/runs.md`): one
-Codex worker per run, one build at a time per checkout. Durations: 25 min fixed + 20 min per KB of
-retail code per run, a 5-min gate after each, 45 min to close each layer (0002's measured runs,
-2026-10-04/05: a diagnosed cause closed in 40-60 min).
+worker session per run (any agent, `method.md`), one build at a time per checkout. Durations: 25 min fixed + 20 min per KB of
+retail code per run, a 5-min gate after each, 45 min to close each layer (0002's measured Codex runs,
+2026-10-04/05: a diagnosed cause closed in 40-60 min; re-measure when another agent runs the lanes).
 
 | stage | runs | functions | worker-hours | runs ready now |
 |---|---|---|---|---|

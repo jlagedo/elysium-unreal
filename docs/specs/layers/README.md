@@ -10,7 +10,7 @@ subsystem another spec owned (44 recorded stops in 0002 alone). The rules are in
 | `README.md` | this: the layer map, how it was measured, the parked specs mapped to layers |
 | `L0-entity/` … `L4-npc/` | one spec per layer (`spec.md`: scope, gate, order, decisions), its stories in order (`stories-table.md`, `stories/`), its worker briefs (`briefs/`, ≤ 4 KB each), the briefs bundled into worker runs (`runs.md`), and its contract checks (`contract-checks.md`) |
 | `harness.md` | the test instrument every layer's records use; built by L0's story 0 |
-| `method.md` | how a run is executed with Codex, gated, committed; how a layer closes |
+| `method.md` | how a run is executed (by any agent), gated, committed; how a layer closes |
 | `schedule.md` | worker-hours per layer and elapsed time by number of lanes |
 | `checks.md` | the plan's consistency checks (all pass) and the harness pieces the records ask for |
 | `decisions.md` | everything only the owner can decide (D1–D6) |
@@ -74,9 +74,9 @@ spawned: 20 of them are 74 % of all entities, 50 are 94 %; 100 appear on one map
 ## Where the port stands (core, retail code bytes)
 
 Status per function: cited by address in the port or named there; for the 2,289 unnamed, uncited
-functions, a read-only Codex sweep (`gpt-6-luna`, `max`) decided carried / partial / not carried /
+functions, a read-only model sweep (Codex `gpt-6-luna`, `max`) decided carried / partial / not carried /
 engine-replaced, the 958 trivial ones following their callers. A blind re-check of 72 rows by
-`gpt-6.1-sol` at `high` agreed on done-or-open 78 % (the sweep leans optimistic), so every open,
+a stronger model (`gpt-6.1-sol`, `high`) agreed on done-or-open 78 % (the sweep leans optimistic), so every open,
 partial or uncertain core row of every layer was then re-checked at that grade (1,127 rows; `audit.tsv`
 column `checked`), except 281 rows already known open by hard evidence (generated stubs, functions the
 port neither cites nor names).
