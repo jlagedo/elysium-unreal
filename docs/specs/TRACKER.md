@@ -9,8 +9,8 @@ The previous tracker — 0002's character-AI sequence, steps 1–3 — is
 [`0002-npc-ai/tracker-record-2026-10-06.md`](0002-npc-ai/tracker-record-2026-10-06.md); 0002 and
 0003–0017 are parked, their open work mapped to layers in `layers/README.md`.
 
-- [ ] **L0 entity** — [`layers/L0-entity/spec.md`](layers/L0-entity/spec.md): 156 stories, 208 briefs in
-  83 worker runs (`runs.md`). First: story 0, the test instrument (`layers/harness.md`), and the two
+- [ ] **L0 entity** — [`layers/L0-entity/spec.md`](layers/L0-entity/spec.md): 165 stories, 264 briefs in
+  88 worker runs (`runs.md`). First: story 0, the test instrument (`layers/harness.md`), and the two
   tooling stories; then the stories in `stories-table.md` order. Witnesses `sp_tutorial_1` + `sm_hub_1`.
 - [ ] **L1 animation** — [`layers/L1-animation/spec.md`](layers/L1-animation/spec.md)
 - [ ] **L2 character** — [`layers/L2-character/spec.md`](layers/L2-character/spec.md): the combat character with stats, disciplines, feeding; weapons; inventory

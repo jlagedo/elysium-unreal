@@ -10,6 +10,7 @@ subsystem another spec owned (44 recorded stops in 0002 alone). The rules are in
 | `README.md` | this: the layer map, how it was measured, the parked specs mapped to layers |
 | `L0-entity/` … `L4-npc/` | one spec per layer (`spec.md`: scope, gate, order, decisions), its stories in order (`stories-table.md`, `stories/`), its worker briefs (`briefs/`, ≤ 4 KB each), the briefs bundled into worker runs (`runs.md`), and its contract checks (`contract-checks.md`) |
 | `harness.md` | the test instrument every layer's records use; built by L0's story 0 |
+| `method.md` | how a run is executed with Codex, gated, committed; how a layer closes |
 | `schedule.md` | worker-hours per layer and elapsed time by number of lanes |
 | `checks.md` | the plan's consistency checks (all pass) and the harness pieces the records ask for |
 | `decisions.md` | everything only the owner can decide (D1–D6) |
@@ -128,3 +129,14 @@ layer it crosses is finished.
 L0 entity → L1 animation → L2 character → L3 player → L4 NPC + L5 scripting → the map-specific
 tails, per hub group (`la`, `hw`, `sm`, `sp`, `ch`). What is next = the first unfinished layer, then
 its first open story (`TRACKER.md`).
+
+## Known gaps (2026-10-06)
+
+- 3 parked items have no story yet: the physics constraint entities (0007:112), paired scene actions
+  (0010:128), the Level Sequence camera bridge (0012:69) — listed in their layer's `spec.md`.
+- 6 open core rows the planners placed in no layer (each says another layer, none names a story):
+  `0x10190810`, `0x10104730`, `0x10245a40`, `0x1017f900`, `0x101b4170`, `0x101b0c10` — `audit.tsv` column `plan`.
+- Non-core statuses (the shared band and the tails) are inferred, not settled: each beyond-core spec starts
+  by settling its rows.
+- The datamap inputs and think functions were matched by name only (217 of 669), so the input surface
+  is under-counted in the closure; a story that ports an input reads its class's datamap first.
