@@ -1,4 +1,39 @@
 # Project-level Codex config, layered over ~/.codex/config.toml when this repo is trusted.
+
+# Small contexts. Measured over 67 worker runs (2026-10-03..05): a step costs ~12 s under 100k
+# tokens of context, ~31 s at 400-600k and ~115 s above 600k, and compaction never fired below the
+# 828k window. Compact at 200k, and keep a single tool output from flooding the context.
+model_auto_compact_token_limit = 200000
+tool_output_token_limit = 8000
+
+# Servers this project never uses, switched off here so every session (and every headless worker)
+# skips their start-up and their tool definitions. Each is defined in this machine's
+# ~/.codex/config.toml; a server not defined there must not be listed (Codex rejects a table with
+# no transport).
+[mcp_servers.blender]
+enabled = false
+
+[mcp_servers.node_repl]
+enabled = false
+
+[mcp_servers.openaiDeveloperDocs]
+enabled = false
+
+[mcp_servers.cloudflare]
+enabled = false
+
+[mcp_servers.cloudflare-docs]
+enabled = false
+
+[mcp_servers.cloudflare-bindings]
+enabled = false
+
+[mcp_servers.cloudflare-builds]
+enabled = false
+
+[mcp_servers.cloudflare-observability]
+enabled = false
+
 # Approve the project's live Elysium tools in headless sessions too.
 # The server launcher is inherited from ~/.codex/config.toml.
 [mcp_servers.elysium]
