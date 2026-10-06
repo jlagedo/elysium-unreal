@@ -21,6 +21,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "VisualStudioTools",
+			"Enabled": false
+		},
+		{
 			"Name": "CableComponent",
 			"Enabled": true
 		},
