@@ -8,9 +8,36 @@ subsystem another spec owned (44 recorded stops in 0002 alone). The rules are in
 | file | what |
 |---|---|
 | `README.md` | this: the layer map, how it was measured, the parked specs mapped to layers |
-| `audit.tsv` | every retail function the 108 maps need: layer, subsystem, band (core / mid / tail), port status, the maps that reach it, and for the settled rows a one-line role, the port lines that carry it and what is missing |
+| `L0-entity/` … `L4-npc/` | one spec per layer (`spec.md`: scope, gate, order, decisions), its stories in order (`stories-table.md`, `stories/`), its worker briefs (`briefs/`, ≤ 4 KB each), the briefs bundled into worker runs (`runs.md`), and its contract checks (`contract-checks.md`) |
+| `harness.md` | the test instrument every layer's records use; built by L0's story 0 |
+| `schedule.md` | worker-hours per layer and elapsed time by number of lanes |
+| `checks.md` | the plan's consistency checks (all pass) and the harness pieces the records ask for |
+| `decisions.md` | everything only the owner can decide (D1–D6) |
+| `baseline.md` | the build, tiers and arena before L0, with the stubs the arena fires |
+| `beyond-core/` | after the cores: the shared band (11–53 maps) and the map-specific tails per hub group |
+| `parked-map.md` | every open item of the parked specs 0002–0017 mapped to a layer story |
+| `audit.tsv` | every retail function the 108 maps need: layer, subsystem, band (core / mid / tail), port status, the maps that reach it, a one-line role, the port lines that carry it, what is missing, and its plan (the story, or why it is not work) |
 | `hooks.tsv` | the upward hooks: a lower layer's function that calls into a higher layer (694 calls from 451 functions) |
-| `L0-entity/` … | one spec per layer (L0 first) |
+
+## The plan in numbers
+
+| stage | stories | briefs | worker runs | worker-hours | stories ready now |
+|---|---|---|---|---|---|
+| L0 entity | 165 | 264 | 88 | ~78 | all 165 |
+| L1 animation | 21 | 37 | 15 | ~13 | 16 of 21 |
+| L2 character | 135 | 178 | 106 | ~89 | 106 of 135 |
+| L3 player | 55 | 103 | 51 | ~45 | 24 of 55 |
+| L4 NPC + L5 scripting | 102 | 154 | 77 | ~82 | 80 of 102 |
+| **all** | **478** | **736** | **337** | **~307** (with layer closes) | |
+
+"Ready now" = nothing the story calls in a lower layer is still open; under R1 as committed, a layer
+still starts only after the one below it closes.
+
+One lane: ~307 h of worker time; three lanes: ~111 h in strict layer order, ~105 h if a story may start
+once what it calls below is done (`decisions.md` D1). The 478 stories include L0's test instrument and
+two tooling stories, 28 stories written for the parked specs' uncovered items, and the parked items'
+remainders as slices of the stories they belong to (`parked-map.md`). How a run is executed: `method.md`. Beyond the cores: ~1,700 more functions
+(`beyond-core/`), settled and planned when their turn comes.
 
 ## How it was measured
 
@@ -48,20 +75,22 @@ spawned: 20 of them are 74 % of all entities, 50 are 94 %; 100 appear on one map
 Status per function: cited by address in the port or named there; for the 2,289 unnamed, uncited
 functions, a read-only Codex sweep (`gpt-6-luna`, `max`) decided carried / partial / not carried /
 engine-replaced, the 958 trivial ones following their callers. A blind re-check of 72 rows by
-`gpt-6.1-sol` at `high` agreed on done-or-open 78 % (the sweep leans optimistic); L0 and L1 are being
-re-checked in full at that grade. Read the numbers as ±10–15 %.
+`gpt-6.1-sol` at `high` agreed on done-or-open 78 % (the sweep leans optimistic), so every open,
+partial or uncertain core row of every layer was then re-checked at that grade (1,127 rows; `audit.tsv`
+column `checked`), except 281 rows already known open by hard evidence (generated stubs, functions the
+port neither cites nor names).
 
 | layer | retail code | done | partial | open | functions open or partial |
 |---|---|---|---|---|---|
-| L0 entity | 350 KB | 67 % | 10 % | 20 % | 459 |
-| L1 animation | 36 KB | 52 % | 12 % | 36 % | 63 |
-| L2 character | 263 KB | 61 % | 15 % | 23 % | 392 |
-| L3 player | 128 KB | 60 % | 18 % | 20 % | 157 |
-| L4 NPC | 334 KB | 91 % | 2 % | 6 % | 119 |
-| L5 scripting | 44 KB | 55 % | 6 % | 38 % | 50 |
+| L0 entity | 350 KB | 67 % | 14 % | 17 % | 424 |
+| L1 animation | 36 KB | 56 % | 14 % | 29 % | 54 |
+| L2 character | 263 KB | 58 % | 13 % | 27 % | 397 |
+| L3 player | 128 KB | 55 % | 15 % | 28 % | 178 |
+| L4 NPC | 334 KB | 90 % | 1 % | 8 % | 127 |
+| L5 scripting | 44 KB | 55 % | 3 % | 42 % | 56 |
 
-The port was built upside down: the NPC layer is 91 % done (its map-specific tail 95 %), the layers
-it stands on 52–67 %. In L0 the largest gap is **physics and movetypes** (step, toss, push, fly, the
+The port was built upside down: the NPC layer is 90 % done (its map-specific tail 95 %), the layers
+it stands on 55–67 %. In L0 the largest gap is **physics and movetypes** (step, toss, push, fly, the
 VPhysics shadow: 37 % done, 54 % open) — the movement NPCs and items run on.
 
 ## The parked specs, mapped to layers

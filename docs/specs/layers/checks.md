@@ -5,11 +5,11 @@
 | every open core row is in exactly one story, or recorded as not work (done, engine, unreachable) | 0 | 1236 | pass |
 | rows the planners could not place (listed in stories.json with the reason) | 0 | 1236 | pass |
 | every open upward hook's target is owned by a story of the layer above | 0 | 694 | pass |
-| no story depends on a later layer | 0 | 447 | pass |
-| no dependency cycle between stories | 0 | 447 | pass |
-| every story has at least one test record | 0 | 447 | pass |
-| every story row is in exactly one of its slices | 0 | 1170 | pass |
-| every brief is at most 4 KB | 0 | 588 | pass |
+| no story depends on a later layer | 0 | 478 | pass |
+| no dependency cycle between stories | 0 | 478 | pass |
+| every story has at least one test record | 0 | 478 | pass |
+| every story row is in exactly one of its slices | 0 | 1285 | pass |
+| every brief is at most 4 KB | 0 | 736 | pass |
 
 ## Harness additions the records ask for
 

@@ -8,8 +8,8 @@ A story closes on its records green on the arena and its rows re-read against th
 ## Scope
 
 - **Retail:** `CBasePlayer`, `CHL2_Player`, `CGameMovement`: movement, input, the player's view, use, the player's weapons and disciplines.
-- **Work:** 178 open or partial core functions (56 KB of retail code) in 49 stories and 77 briefs; player 46, entity_core 1, combat 1, physics 1.
-- **Ready now:** 18 of 49 stories call nothing open below this layer (`schedule.md`).
+- **Work:** 178 open or partial core functions (56 KB of retail code) in 55 stories and 103 briefs; player 46, parked 6, entity_core 1, combat 1, physics 1.
+- **Ready now:** 24 of 55 stories call nothing open below this layer (`schedule.md`).
 - **Live paths first:** 0 stories hold stubs the baseline's arena fired (0 hits) — they lead the order.
 - **Hooks:** 17 calls into higher layers stay as named hooks (`../hooks.tsv`).
 - **Witnesses:** the arena, `sp_tutorial_1` and `sm_hub_1` (map records).
@@ -22,7 +22,9 @@ A story closes on its records green on the arena and its rows re-read against th
    (`../decisions.md`);
 3. the default and arm tiers have 0 failures, and every record that passed in `../baseline.md`
    still passes;
-4. its upward hooks are listed, each with the layer that completes it.
+4. its upward hooks are listed, each with the layer that completes it;
+5. its state-bearing engine-replaced rows ([`contract-checks.md`](contract-checks.md)) keep retail's
+   inputs, outputs and event order, shown by a record, or are named divergences the owner accepted.
 
 ## Order
 
@@ -37,3 +39,12 @@ A story closes on its records green on the arena and its rows re-read against th
 - Owner decision: retain or remove the already named transform-flattening modernization at 0x100b7e40; if removed, player eye angles must compose with the move parent's transform.
 - Owner decision: choose the Unreal-side replacement for VPhysicsShadowUpdate at 0x1017b8a0 and ShouldSavePhysics at 0x1017be30, with the retail transform, velocity, collision, and save ordering as its contract.
 - Owner decision: confirm the scope cut for the six CHL2 suit-device and suit-power rows; the recovered player document finds no VtMB datamap or authored-content producer for them. The rows stay unplaced unless that scope changes.
+
+## Stories added from the parked specs
+
+- 0006-first-disciplines:84 — 9. The client-disable presentation.: [Player Discipline client-disable presentation](stories/L3.parked.l3-player-discipline-client-disable.md)
+- 0007-tuna-distraction:104 — 6. The icons.: [Player physics-hand interaction icons](stories/L3.parked.l3-physics-l3-player-physcannon-icons.md)
+- 0016-input-pads:42 — 2. The keyboard and mouse remainder (was 10.6b).: [Complete keyboard and mouse routing](stories/L3.parked.l3-player-input-keyboard-mouse.md)
+- 0016-input-pads:46 — 3. Reserved keys (was 10.6c).: [Finish reserved-key policy](stories/L3.parked.l3-player-input-reserved-keys.md)
+- 0016-input-pads:50 — 4. DS4/Edge and the combat stick (was 10.6e).: [Finish DS4/Edge and combat-stick mappings](stories/L3.parked.l3-player-input-ds4-edge-combat-stick.md)
+- 0016-input-pads:55 — 5. User settings and `config.cfg` (was 10.6f).: [Persist and export input settings](stories/L3.parked.l3-player-input-user-settings.md)

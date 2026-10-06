@@ -1,0 +1,31 @@
+# Contract checks — engine-replaced rows that bear state or event order (L3-player)
+
+`decisions.md` D3: Unreal does these jobs instead of the Source mechanism. The modernization rule admits
+that only with the retail contract kept — the same inputs, outputs and event order. Each row is checked
+before the layer closes (gate item 5): a record shows the contract holds, or the row becomes a named
+divergence the owner accepts. 26 other engine-replaced core rows of this layer are
+presentation, networking, memory or debug and need no check.
+
+| subsystem | address | function | maps | what it does | how the port replaces it |
+|---|---|---|---|---|---|
+| player | `0x1016c9d0` | Global::FUN_1016c9d0 | 108 | Updates the player's Source VPhysics shadow target and related position and velocity state. | Unreal movement and physics own player transforms and velocity; the Source IPhysicsObject shadow-control behavior is not reproduced. |
+| player | `0x1017be50` | CBasePlayer::vfunc468 | 108 | Build standing and crouching collision shapes and initialize the player's VPhysics shadow objects. | Unreal's box collision component and hull resizing replace Source's paired VPhysics shadow objects and controller setup. |
+| player | `0x102270f0` | CPlayerEvents::vfunc5 | 108 | Destroys CPlayerEvents output members and its base object, optionally freeing the object. | Source member teardown and object freeing are handled by C++ ownership and Unreal entity storage. |
+| player | `0x10351430` | CHL2_Player::vfunc468 | 108 | Draws the player collision bounds through the Source debug overlay. | The collision shape is configured in Unreal; the Source debug overlay rendering path is not carried. |
+| player | `0x1002dfe0` | Global::FUN_1002dfe0 | 108 | Wraps the engine call that creates a physics bounding box and invokes its callback. | Source physics bounding-box creation is replaced by Unreal collision geometry and movement hulls. |
+| player | `0x1011e8f0` | Global::FUN_1011e8f0 | 108 | Builds a ray trace from movement inputs and calls the Source trace interface. | The Source Ray_t and trace-interface wrapper is replaced by Unreal collision sweeps. |
+| player | `0x10122cd0` | CGameMovement::vfunc19 | 108 | Traces the player bounding box against the world for movement collision checks. | The Source trace and filter calls are replaced by Unreal collision sweeps used for position categorization and sliding movement. |
+| player | `0x1013ecd0` | Global::FUN_1013ecd0 | 108 | Initializes and registers the singleton server movement helper and its backing allocation. | The Source CMoveHelperServer adapter and static allocation are replaced by the Unreal movement component and command flow. |
+| player | `0x10144790` | Global::FUN_10144790 | 108 | Converts a traced Source edict into a CBaseEntity instance and performs the engine trace-scope work. | Source edict-to-entity conversion and trace-scope plumbing are replaced by the Unreal world and Elysium entity-handle lookup. |
+| player | `0x1016b980` | Global::FUN_1016b980 | 108 | Compares a candidate physics object’s mass with twice the player physics object’s mass to select a shadow-update response. | This is Source VPhysics shadow-update logic; the port uses Unreal swept movement and has no matching VPhysics callback body. |
+| player | `0x1016b9d0` | Global::FUN_1016b9d0 | 108 | Resolves the player’s linked movable physics object when the current physics object has the expected VPhysics type. | The linked-object lookup is part of Source VPhysics shadow simulation, which the port replaces with Unreal movement and collision. |
+| player | `0x10170340` | Global::FUN_10170340 | 108 | Validate a live player's solidity, collision group, movetype, hull bounds and required inventory, emitting developer warnings and returning  | Developer diagnostics only: caller 0x1016fed0 invokes it under the developer gate and uses failure solely to emit another warning. It changes no gameplay state. |
+| player | `0x101714a0` | Global::FUN_101714a0 | 108 | Creates and positions a spray-can effect and plays the spray sound. | This is Source effect placement and sound playback handled by the engine presentation path. |
+| player | `0x1017b6f0` | Global::FUN_1017b6f0 | 108 | Creates standing and crouching player VPhysics bodies, attaches the standing body, and sets the physics mode from entity flags. | Source VPhysics body construction is replaced by Unreal character collision and swept movement. |
+| player | `0x1017bf10` | Global::FUN_1017bf10 | 108 | Switches the player between Source VPhysics shadow-object modes. | The port uses Unreal physics and movement instead of Source VPhysics object switching. |
+| player | `0x101842a0` | Global::FUN_101842a0 | 108 | Searches the player’s simulated-entity handle array for an entity with the same resolved object and returns its index. | This is part of Source’s player-simulated-entity physics list and client simulation path; the port has no separate list or client-prediction path. |
+| player | `0x101850b0` | Global::FUN_101850b0 | 108 | Removes a range from the player’s simulated-entity array by shifting the remaining entries with memmove. | This mutates Source’s player-simulated-entity list, which is part of the replaced client physics simulation path. |
+| player | `0x101cd190` | Global::FUN_101cd190 | 108 | Builds an ignore-other trace filter, performs a VPhysics collision trace, and passes the result to the engine trace service. | This trace is a Source VPhysics shadow-update callback; Unreal swept movement handles collision in the port. |
+| player | `0x10227b20` | Global::FUN_10227b20 | 108 | Grows the active CPlayerEvents handle array using Source allocation routines. | Array storage growth is provided by Unreal's C++ containers. |
+| player | `0x101b0dc0` | Global::FUN_101b0dc0 | 104 | Resolve a sound script and its parameters, then emit the selected sound through the Source engine. | The function is the Source sound-script and engine playback path, which the port replaces with Unreal audio services. |
+| player | `0x1019d3d0` | Global::FUN_1019d3d0 | 61 | Remove a specified client from a sound recipient filter. | This is Source network recipient filtering used by the engine sound path; the port does not use that networking service. |

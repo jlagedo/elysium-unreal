@@ -8,10 +8,10 @@ A story closes on its records green on the arena and its rows re-read against th
 ## Scope
 
 - **Retail:** `CBaseEntity` and physics (movetypes, VPhysics objects, touch, push), entity I/O and the event queue, triggers, movers and doors, the save framework, the sound list, sound emission, effects, ConVars and game rules.
-- **Work:** 372 open or partial core functions (92 KB of retail code) in 153 stories and 203 briefs; entity_core 46, physics 36, audio 16, entity_io 13, movers_doors 12, save_restore 10, effects_world 10, triggers 5, rules_cvars 3, sound_list 2.
-- **Ready now:** 153 of 153 stories call nothing open below this layer.
+- **Work:** 391 open or partial core functions (96 KB of retail code) in 165 stories and 264 briefs; entity_core 46, physics 37, audio 16, movers_doors 14, entity_io 13, save_restore 10, effects_world 10, parked 6, triggers 5, rules_cvars 3, tooling 2, sound_list 2, harness 1.
+- **Ready now:** 165 of 165 stories call nothing open below this layer.
 - **Live paths first:** 2 stories hold stubs the baseline's arena fired (1,064 hits) — they lead the order.
-- **Hooks:** 51 calls into higher layers stay as named hooks (`../hooks.tsv`).
+- **Hooks:** 52 calls into higher layers stay as named hooks (`../hooks.tsv`).
 - **Witnesses:** the arena, `sp_tutorial_1` and `sm_hub_1` (map records).
 
 ## The gate — the layer is done when
@@ -22,7 +22,9 @@ A story closes on its records green on the arena and its rows re-read against th
    (`../decisions.md`);
 3. the default and arm tiers have 0 failures, and every record that passed in `../baseline.md`
    still passes;
-4. its upward hooks are listed, each with the layer that completes it.
+4. its upward hooks are listed, each with the layer that completes it;
+5. its state-bearing engine-replaced rows ([`contract-checks.md`](contract-checks.md)) keep retail's
+   inputs, outputs and event order, shown by a record, or are named divergences the owner accepted.
 
 ## Order
 
@@ -50,3 +52,16 @@ A story closes on its records green on the arena and its rows re-read against th
 - Choose the Unreal physics-state serializer that preserves the `ShouldSavePhysics == true` admission and the save handler's timing; the current base slot returns false.
 - Choose the Unreal asset-loading replacement for `MODELNAME` and `SOUNDNAME` precaching in `0x101a2820`, preserving its restore ordering.
 - The owner must choose whether the 128-event serial/cursor bus is a named modernization for the retail 64-slot and reserved-client-index behavior, or whether the port will expose that retail lookup contract. The current bus does not establish equivalent slot identity, bounds or null-pool lifetime.
+
+## Stories added from the parked specs
+
+- 0007-tuna-distraction:112 — 8. The constraint family.: **not planned yet** — New story: physics constraint entities. Implement `phys_ballsocket`, `phys_constraint`, `phys_convert`, `phys_thruster`, `phys_constraintsystem`, and `phys_animlink` over attached entity bodies.
+- 0007-tuna-distraction:124 — 11. `CPropSwitch` residue.: [Prop switch sound events and reset state](stories/L0.movers_doors.l0-entity-io-prop-switch-sound-and-reset.md)
+- 0009-elevator-final:83 — 5. `MoveDone`'s arrival binding.: [Bind door completion and close sound at arrival](stories/L0.movers_doors.l0-movers-doors-door-arrival-binding.md)
+- 0009-elevator-final:93 — 7. The mover sound's emission point.: [Bind door completion and close sound at arrival](stories/L0.movers_doors.l0-movers-doors-door-arrival-binding.md)
+- 0014-ragdoll:65 — 3. The physics-asset bake.: [Connect VPhysics data to baked ragdoll assets](stories/L0.parked.l0-physics-ragdoll-physics-asset-import.md)
+- 0017-save-game:101 — 6. Slots committed reliably, operations ordered (SG-06; after 2, 4).: [Reliable native slot storage](stories/L0.parked.l0-save-restore-reliable-native-slot-storage.md)
+- 0017-save-game:111 — 8. Saves and imports refused against incompatible content (SG-08; after 5, 7).: [Save content compatibility preflight](stories/L0.parked.l0-save-restore-content-compatibility-preflight.md)
+- 0017-save-game:331 — 43. Semantic save and import diagnostics (SG-43; after 10–42).: [Semantic save and import diagnostics](stories/L0.parked.l0-save-restore-semantic-save-diagnostics.md)
+- 0017-save-game:337 — 44. The retail save's full roster against native maps (SG-44; after 7, 8, 9, 14, 43).: [Match retail ETABLE roster to native map definitions](stories/L0.parked.l0-save-restore-retail-save-roster-match.md)
+- 0017-save-game:343 — 45. The retail save as a native slot (SG-45; after 6, 12, 42, 43, 44).: [Import a retail save into one native slot](stories/L0.parked.l0-save-restore-retail-save-native-slot-import.md)

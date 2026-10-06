@@ -8,8 +8,8 @@ A story closes on its records green on the arena and its rows re-read against th
 ## Scope
 
 - **Retail:** `CAI_BaseNPC` / `CAI_BaseNPCTroika`, the species, senses and memory, the navigator and motor, squads and relationships, hints and places — with L5: scripted sequences and cine, dialogue, the Python bridge — and the player's verbs on NPCs.
-- **Work:** 168 open or partial core functions (51 KB of retail code) in 91 stories and 115 briefs; npc_kernel 36, dialogue 11, npc_species 9, scripted 8, navigation 5, social 5, perception 5, entity_core 3, camera_ui 2, audio 2, player 2, hints_places 1, python 1, physics 1.
-- **Ready now:** 75 of 91 stories call nothing open below this layer (`schedule.md`).
+- **Work:** 264 open or partial core functions (128 KB of retail code) in 102 stories and 154 briefs; npc_kernel 39, dialogue 11, npc_species 10, scripted 10, navigation 5, social 5, perception 5, entity_core 4, parked 4, camera_ui 2, audio 2, player 2, hints_places 1, python 1, physics 1.
+- **Ready now:** 80 of 102 stories call nothing open below this layer (`schedule.md`).
 - **Live paths first:** 1 stories hold stubs the baseline's arena fired (17 hits) — they lead the order.
 - **Hooks:** 1 calls into higher layers stay as named hooks (`../hooks.tsv`).
 - **Witnesses:** the arena, `sp_tutorial_1` and `sm_hub_1` (map records).
@@ -22,7 +22,9 @@ A story closes on its records green on the arena and its rows re-read against th
    (`../decisions.md`);
 3. the default and arm tiers have 0 failures, and every record that passed in `../baseline.md`
    still passes;
-4. its upward hooks are listed, each with the layer that completes it.
+4. its upward hooks are listed, each with the layer that completes it;
+5. its state-bearing engine-replaced rows ([`contract-checks.md`](contract-checks.md)) keep retail's
+   inputs, outputs and event order, shown by a record, or are named divergences the owner accepted.
 
 ## Order
 
@@ -43,3 +45,19 @@ A story closes on its records green on the arena and its rows re-read against th
 - Squad scope: this story includes the `CAI_Squad` roster storage and writer path that the packet omits, because the current substrate has no squad object and the notifier cannot be wired with a null-squad seam.
 - Assign the missing scent producer before closing `l4-nearest-sound-scent`. The current selector's input source is absent from the L0 sound path; the owner must place that producer in the earlier sound-emission work rather than accept a null GetBestScent seam.
 - Decide whether `TArray` growth is an approved Unreal replacement for retail's five-entry expansion and allocation-failure behavior, or whether to model the explicit capacity, copy, zero and warning path.
+
+## Stories added from the parked specs
+
+- 0002-npc-ai:925 — R7. The hub's species rows. `CNPC_VCop`, `CNPC_VHuman`, `CNPC_VHunter`,: [Hub NPC species rule rows](stories/L4.scripted.l4-npc-species-hub-species-rule-rows.md)
+- 0003-scripted-sequence:137 — 1. The kernel vocabulary.: [Scripted task and schedule vocabulary](stories/L4.npc_kernel.l4-npc-kernel-scripted-task-schedule-vocabulary.md)
+- 0003-scripted-sequence:156 — 2. The NPC in `NPC_STATE_SCRIPT`.: [NPC_STATE_SCRIPT selection and cleanup](stories/L4.npc_kernel.l4-npc-kernel-npc-state-script-selection-cleanup.md)
+- 0003-scripted-sequence:179 — 3. The cine.: [Scripted sequence cine lifecycle](stories/L5.npc_species.l5-scripted-cine-lifecycle.md)
+- 0003-scripted-sequence:202 — 4. Targets retail never has.: [Scripted target task execution](stories/L5.entity_core.l5-scripted-cine-target-execution.md)
+- 0004-jack-arrival:127 — 7. The reaction-score consumer (was 9.9, talk slice).: [Dialogue reaction-score consumer](stories/L5.parked.l5-dialogue-reaction-score-consumer.md)
+- 0004-jack-arrival:135 — 8. Presentation completion.: [Conversation panel presentation](stories/L5.parked.l5-dialogue-conversation-panel-presentation.md)
+- 0005-first-kill:126 — 8. The flying knockback chain.: [Flying knockback chain](stories/L4.npc_kernel.l4-npc-kernel-flying-knockback-chain.md)
+- 0006-first-disciplines:54 — 4. The tutorial's offer.: [Tutorial discipline offer](stories/L5.parked.l5-scripted-tutorial-discipline-offer.md)
+- 0009-elevator-final:129 — 13. The level script's delegated fills.: [Level-script barter native dispatch](stories/L5.parked.l5-python-level-script-native-dispatch.md)
+- 0010-theatre-scene:122 — 8. Gesture and sequence un-collapsed.: [Scene gestures on overlay slots](stories/L5.scripted.l5-scripted-scene-gesture-overlay.md)
+- 0010-theatre-scene:128 — 9. Paired actions.: **not planned yet** — Title: Paired scene action variants and claims. Port the role/size/side catalog arithmetic and dual-participant claim behavior, using L1 animation and L2 reaction/death-pose machinery.
+- 0012-camera-director:69 — 4. The sequencer bridge and the composition call (was 11.13g).: **not planned yet** — Title: Level Sequence camera request bridge. Preserve the recovered scene-owner decision, let the Camera Cut Track own cuts and camera transforms, and release the request on stop, abort, skip, or trav
