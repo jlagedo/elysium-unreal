@@ -64,6 +64,23 @@ struct FElysiumArenaInitialWeaponState
 	int32 Magazine = 0, Reserve = 0, FakeReloadCount = 0;
 };
 
+// One typed fixture of the record's `fixtures` catalog (`docs/specs/layers/harness.md`): staged by the
+// runner before the observation window, then named by an `entity_call` argument (`{"fixture": id}`)
+// or an `entity_field` probe (`who: "fixture:<id>"`). Kinds are `ElysiumArenaScenario::FixtureKinds()`.
+struct FElysiumArenaFixture
+{
+	FString Id;
+	FString Kind;
+	TMap<FString, FString> Values; // `keyvalues`: a controlled KeyValues table, text as a map row spells it
+};
+
+// One argument of an `entity_call`: a typed scalar, or a staged fixture's handle.
+struct FElysiumArenaCallArg
+{
+	FElysiumArenaValue Value;
+	FString Fixture; // non-empty: the argument is this fixture, `Value` unused
+};
+
 // One entity row: a `cast` entry, a `rows` entry, or a `spawn` action's row.
 struct FElysiumArenaRow
 {
@@ -101,6 +118,7 @@ enum class EElysiumArenaAction : uint8
 	DialogChoose,
 	SeedHealth, // fixture-only high-cap measurement; no gameplay input
 	DamagePacket, // fixture-only packet with a real attacker; 0x1032ef60 admission
+	EntityCall,   // a retail entry point through the allowlist (inputs, use, touch, think, spawn, damage)
 	// Harness transaction/fixture doors; 0x20096010/0x200975f0/0x1011a620.
 	Save, Load, FreshMap, Travel, RestoreCompare,
 	NpcSingleRoundFinishReload, CorruptCheckpoint, InvalidMarker, RestoreBase,
@@ -136,6 +154,8 @@ struct FElysiumArenaAction
 	TArray<FElysiumArenaWitness> Fields;
 	double Timeout = 60.0; // harness wall bound, never simulation time; 0x200975f0
 
+	FString Function;              // entity_call: the retail operation, checked against the allowlist
+	TArray<FElysiumArenaCallArg> Args; // entity_call
 	FString Input;                 // fire
 	FElysiumArenaValue Param;      // fire; None is a void parameter
 	FString Command;               // console
@@ -156,6 +176,7 @@ struct FElysiumArenaMatch
 	FString Label;                 // expect only: what a script `after` names
 	FString Who;                   // a targetname; empty matches any entity
 	FName Kind;                    // one of `ElysiumArenaScenario::TraceKinds()`
+	FString Site;                  // `retail_site` only: the event's `tag=` token; empty matches any site
 	FString Match;                 // case-sensitive substring of the event's text; empty matches any
 	bool bRegex = false;           // `Match` is a regular expression instead
 
@@ -209,6 +230,7 @@ enum class EElysiumArenaProbe : uint8
 	SameTeam, SwingRecordedHit, OneHitKill, TeamSymbol, Wounds, HealthCap, NpcFlags1, SpawnFlags, RenderAlpha, RenderMode, Activity, // V4c read-only retail words/contact
 	Witness,        // typed dispatch, including checkpoint equality; 0x1027bf50
 	Exists,          // bool
+	EntityField,     // a retail field by its retail name (`m_iHealth`...), typed by the field; read-only
 };
 
 enum class EElysiumArenaCompare : uint8
@@ -234,7 +256,8 @@ struct FElysiumArenaProbeSpec
 	double MaxHeightCm = 0.0;
 	EElysiumArenaCompare Compare = EElysiumArenaCompare::Equals;
 	FElysiumArenaValue Value;
-	FString Field, Checkpoint; // witness: selected retail word; 0x1027bf50
+	FString Index, Member; // entity_field: optional indexed-table / vector-component selectors
+	FString Field, Checkpoint; // witness / entity_field: selected retail word; 0x1027bf50
 	double Tolerance = 0.0;
 };
 
@@ -264,6 +287,7 @@ struct FElysiumArenaScenario
 	TArray<FElysiumArenaRow> Cast;
 	TArray<FElysiumArenaRow> Rows;
 	TArray<FElysiumArenaInitialWeaponState> InitialWeaponState;
+	TArray<FElysiumArenaFixture> Fixtures;
 	FElysiumArenaFromMap FromMap;
 	TArray<FElysiumArenaAction> Script;
 	TArray<FElysiumArenaMatch> Expect;
@@ -281,6 +305,13 @@ namespace ElysiumArenaScenario
 	// The trace kinds a matcher may name: `seam.md`'s, then `script`, the runner's own record of each
 	// action it ran.
 	TArrayView<const TCHAR* const> TraceKinds();
+
+	// The fixture kinds a `fixtures` entry may name.
+	TArrayView<const TCHAR* const> FixtureKinds();
+
+	// The retail entry points `entity_call` may invoke (inputs, use, touch, think, spawn, damage).
+	// Empty until a story adds the entry points its records drive, in the slice that ports them.
+	const TArray<FString>& EntityCallAllowlist();
 
 	// Parse one record. False with `OutError` naming the file and the field.
 	bool ParseText(const FString& Text, const FString& File, FElysiumArenaScenario& Out,

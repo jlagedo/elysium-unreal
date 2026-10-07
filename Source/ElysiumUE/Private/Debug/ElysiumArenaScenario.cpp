@@ -31,7 +31,13 @@ namespace ElysiumArenaScenarioParse
 		TEXT("removed"), TEXT("thinkfence"), TEXT("makerattempt"), // synchronous refusal tap 0x1034b580/0x101cc9e0
 		TEXT("script"),
 		TEXT("reload"),
+		// Emitted at the port line that carries a retail address: `tag=<tag> fn=<symbol> va=0x<VA>
+		// phase=<phase> <payload>` (`FElysiumEntityWorld::EmitRetailSite`, `docs/specs/layers/harness.md`).
+		TEXT("retail_site"),
 	};
+
+	// The `fixtures` catalog's kinds. A story adds its own in the slice that stages it.
+	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues") };
 
 	enum class ENeed : uint8 { Optional, Required };
 
@@ -503,9 +509,9 @@ namespace ElysiumArenaScenarioParse
 	{
 		Out = FElysiumArenaMatch();
 		const bool bFields = Kind == EMatchKind::Expect
-			? CheckFields(R, Object, Path, { TEXT("label"), TEXT("who"), TEXT("kind"), TEXT("match"),
+			? CheckFields(R, Object, Path, { TEXT("label"), TEXT("who"), TEXT("kind"), TEXT("site"), TEXT("match"),
 				TEXT("regex"), TEXT("by"), TEXT("within") })
-			: CheckFields(R, Object, Path, { TEXT("who"), TEXT("kind"), TEXT("match"), TEXT("regex"),
+			: CheckFields(R, Object, Path, { TEXT("who"), TEXT("kind"), TEXT("site"), TEXT("match"), TEXT("regex"),
 				TEXT("until"), TEXT("from"), TEXT("after"), TEXT("delay"), TEXT("within"), TEXT("at_most") });
 		if (!bFields)
 		{
@@ -515,6 +521,7 @@ namespace ElysiumArenaScenarioParse
 		if (!ReadString(R, Object, TEXT("label"), Path, ENeed::Optional, Out.Label)
 			|| !ReadString(R, Object, TEXT("who"), Path, ENeed::Optional, Out.Who)
 			|| !ReadString(R, Object, TEXT("kind"), Path, ENeed::Required, KindText)
+			|| !ReadString(R, Object, TEXT("site"), Path, ENeed::Optional, Out.Site)
 			|| !ReadString(R, Object, TEXT("match"), Path, ENeed::Optional, Out.Match)
 			|| !ReadBool(R, Object, TEXT("regex"), Path, Out.bRegex)
 			|| !ReadNumber(R, Object, TEXT("by"), Path, ENeed::Optional, Out.By, Out.bBy)
@@ -534,6 +541,14 @@ namespace ElysiumArenaScenarioParse
 				*KindText, *FString::Join(Names, TEXT(", "))));
 		}
 		Out.Kind = FName(*KindText);
+		if (FindValue(Object, TEXT("site")) != nullptr && Out.Kind != FName(TEXT("retail_site")))
+		{
+			return R.Fail(Field(Path, TEXT("site")), TEXT("only a `retail_site` matcher takes a `site` tag"));
+		}
+		if (Out.Site.IsEmpty() && FindValue(Object, TEXT("site")) != nullptr)
+		{
+			return R.Fail(Field(Path, TEXT("site")), TEXT("an empty tag names no site"));
+		}
 		if (Out.bRegex && Out.Match.IsEmpty())
 		{
 			return R.Fail(Field(Path, TEXT("match")), TEXT("`regex` needs a pattern"));
@@ -551,6 +566,7 @@ namespace ElysiumArenaScenarioParse
 			EElysiumArenaProbe::PlayerWeapon, EElysiumArenaProbe::PlayerCrouched,
 			EElysiumArenaProbe::PlayerGrappling, EElysiumArenaProbe::Speed2d, EElysiumArenaProbe::MoveYaw,
 			EElysiumArenaProbe::GroundSpeed, EElysiumArenaProbe::CorpseOnFloor, EElysiumArenaProbe::Exists,
+			EElysiumArenaProbe::EntityField,
 			EElysiumArenaProbe::SameTeam,
 			EElysiumArenaProbe::SwingRecordedHit,
 			EElysiumArenaProbe::OneHitKill,
@@ -648,7 +664,8 @@ namespace ElysiumArenaScenarioParse
 		Out = FElysiumArenaProbeSpec();
 		if (!CheckFields(R, Object, Path, { TEXT("at"), TEXT("who"), TEXT("probe"), TEXT("equals"),
 				TEXT("match"), TEXT("less"), TEXT("greater"), TEXT("condition"), TEXT("to"),
-				TEXT("max_height"), TEXT("field"), TEXT("checkpoint"), TEXT("tolerance") }))
+				TEXT("max_height"), TEXT("field"), TEXT("checkpoint"), TEXT("tolerance"), TEXT("index"),
+				TEXT("member") }))
 		{
 			return false;
 		}
@@ -717,8 +734,21 @@ namespace ElysiumArenaScenarioParse
 				return true;
 			}
 		}
+		else if (Out.Probe == EElysiumArenaProbe::EntityField)
+		{
+			// A retail field by its retail name (`m_iHealth`); `to`, `index` and `member` select within it.
+			if (!ReadString(R, Object, TEXT("field"), Path, ENeed::Required, Out.Field)
+				|| !ReadString(R, Object, TEXT("index"), Path, ENeed::Optional, Out.Index)
+				|| !ReadString(R, Object, TEXT("member"), Path, ENeed::Optional, Out.Member)
+				|| !ReadAt(R, Object, TEXT("to"), Path, Out.To)) return false;
+			for (const TCHAR* Key : { TEXT("checkpoint"), TEXT("tolerance"), TEXT("condition"), TEXT("max_height") })
+				if (FindValue(Object, Key)) return R.Fail(Field(Path, Key), TEXT("`entity_field` does not take this field"));
+		}
 		else if (FindValue(Object, TEXT("field")) || FindValue(Object, TEXT("checkpoint")) || FindValue(Object, TEXT("tolerance")))
 			return R.Fail(Path, TEXT("field/checkpoint/tolerance require witness"));
+		if (Out.Probe != EElysiumArenaProbe::EntityField)
+			for (const TCHAR* Key : { TEXT("index"), TEXT("member") })
+				if (FindValue(Object, Key)) return R.Fail(Field(Path, Key), TEXT("only `entity_field` takes this selector"));
 
 		// Exactly one comparison.
 		const TCHAR* const Compares[] = { TEXT("equals"), TEXT("match"), TEXT("less"), TEXT("greater") };
@@ -751,6 +781,12 @@ namespace ElysiumArenaScenarioParse
 		{
 		case EElysiumArenaProbe::Witness:
 			ElysiumArenaScenario::WitnessType(Out.Field, Answer);
+			break;
+		case EElysiumArenaProbe::EntityField:
+			// The field's own type is known only when it is read: the comparison's value states it.
+			if (Out.Value.Type == FElysiumArenaValue::EType::None)
+				return R.Fail(Path, TEXT("`entity_field` compares with a boolean, a number or a string"));
+			Answer = Out.Value.Type;
 			break;
 		case EElysiumArenaProbe::Alive:
 		case EElysiumArenaProbe::HasCondition:
@@ -819,7 +855,7 @@ namespace ElysiumArenaScenarioParse
 				return R.Fail(Field(Path, TEXT("to")), TEXT("required: a targetname, `player`, or a place"));
 			}
 		}
-		else if (FindValue(Object, TEXT("to")) != nullptr)
+		else if (Out.Probe != EElysiumArenaProbe::EntityField && FindValue(Object, TEXT("to")) != nullptr)
 		{
 			return R.Fail(Field(Path, TEXT("to")), TEXT("only `distance_to` takes `to`"));
 		}
@@ -848,7 +884,7 @@ namespace ElysiumArenaScenarioParse
 			EElysiumArenaAction::PlayerTeleport, EElysiumArenaAction::PlayerWalk, EElysiumArenaAction::Fire,
 			EElysiumArenaAction::Console, EElysiumArenaAction::Spawn, EElysiumArenaAction::Kill,
 			EElysiumArenaAction::PlayerCrouch, EElysiumArenaAction::LightPin, EElysiumArenaAction::DialogChoose, EElysiumArenaAction::SeedHealth,
-			EElysiumArenaAction::DamagePacket, EElysiumArenaAction::Save, EElysiumArenaAction::Load,
+			EElysiumArenaAction::DamagePacket, EElysiumArenaAction::EntityCall, EElysiumArenaAction::Save, EElysiumArenaAction::Load,
 			EElysiumArenaAction::FreshMap, EElysiumArenaAction::Travel, EElysiumArenaAction::RestoreCompare,
 			EElysiumArenaAction::NpcSingleRoundFinishReload, EElysiumArenaAction::CorruptCheckpoint,
 			EElysiumArenaAction::InvalidMarker, EElysiumArenaAction::RestoreBase,
@@ -876,7 +912,7 @@ namespace ElysiumArenaScenarioParse
 		if (!CheckFields(R, Object, Path, { TEXT("t"), TEXT("after"), TEXT("delay"), TEXT("do"), TEXT("at"),
 				TEXT("face"), TEXT("target"), TEXT("input"), TEXT("param"), TEXT("command"), TEXT("row"),
 				TEXT("on"), TEXT("value"), TEXT("index"), TEXT("end"), TEXT("attacker"), TEXT("activator"), TEXT("inflictor"),
-				TEXT("slot"), TEXT("map"), TEXT("landmark"), TEXT("checkpoint"), TEXT("fields"), TEXT("control"), TEXT("timeout") }))
+				TEXT("function"), TEXT("args"), TEXT("slot"), TEXT("map"), TEXT("landmark"), TEXT("checkpoint"), TEXT("fields"), TEXT("control"), TEXT("timeout") }))
 		{
 			return false;
 		}
@@ -938,6 +974,13 @@ namespace ElysiumArenaScenarioParse
 		if (Out.Do != EElysiumArenaAction::LightPin && bHasValue)
 		{
 			return R.Fail(Field(Path, TEXT("value")), TEXT("only `light_pin` takes `value`"));
+		}
+		for (const TCHAR* Key : { TEXT("function"), TEXT("args") })
+		{
+			if (Out.Do != EElysiumArenaAction::EntityCall && FindValue(Object, Key) != nullptr)
+			{
+				return R.Fail(Field(Path, Key), FString::Printf(TEXT("only `entity_call` takes `%s`"), Key));
+			}
 		}
 		for (const TCHAR* Key : { TEXT("index"), TEXT("end") })
 		{
@@ -1064,6 +1107,34 @@ namespace ElysiumArenaScenarioParse
 			if (!PacketAmount || !ReadValue(R, *PacketAmount, Field(Path, TEXT("param")), Out.Param)) return false;
 			return Out.Param.Type == FElysiumArenaValue::EType::Number && Out.Param.Number >= 0
 				? true : R.Fail(Path, TEXT("damage_packet param must be a nonnegative amount"));
+		}
+		case EElysiumArenaAction::EntityCall:
+		{
+			// The function's allowlist verdict is the run's (a refused call is a script failure the
+			// record can state with `expect_fail`), not a parse error: the record must still run.
+			if (!ReadString(R, Object, TEXT("target"), Path, ENeed::Required, Out.Target)
+				|| !ReadString(R, Object, TEXT("function"), Path, ENeed::Required, Out.Function))
+			{
+				return false;
+			}
+			const TArray<TSharedPtr<FJsonValue>>* Args = nullptr;
+			if (!ReadArray(R, Object, TEXT("args"), Path, Args)) return false;
+			for (int32 ArgIndex = 0; Args && ArgIndex < Args->Num(); ++ArgIndex)
+			{
+				const FString ArgPath = Field(Path, *Indexed(TEXT("args"), ArgIndex));
+				FElysiumArenaCallArg& Arg = Out.Args.AddDefaulted_GetRef();
+				if ((*Args)[ArgIndex].IsValid() && (*Args)[ArgIndex]->Type == EJson::Object)
+				{
+					const TSharedPtr<FJsonObject> Reference = (*Args)[ArgIndex]->AsObject();
+					if (!CheckFields(R, *Reference, ArgPath, { TEXT("fixture") })
+						|| !ReadString(R, *Reference, TEXT("fixture"), ArgPath, ENeed::Required, Arg.Fixture)) return false;
+				}
+				else if (!ReadValue(R, (*Args)[ArgIndex], ArgPath, Arg.Value) || Arg.Value.Type == FElysiumArenaValue::EType::None)
+				{
+					return R.Fail(ArgPath, TEXT("an argument is a boolean, a number, a string or {\"fixture\": id}"));
+				}
+			}
+			return true;
 		}
 		case EElysiumArenaAction::Kill:
 			return ReadString(R, Object, TEXT("target"), Path, ENeed::Required, Out.Target);
@@ -1249,12 +1320,68 @@ namespace ElysiumArenaScenarioParse
 		return true;
 	}
 
+	// The typed `fixtures` catalog: an id, a kind and that kind's configuration, strictly.
+	bool ReadFixtures(FReader& R, const FJsonObject& Root, TArray<FElysiumArenaFixture>& Out)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Items = nullptr;
+		if (!ReadArray(R, Root, TEXT("fixtures"), FString(), Items)) return false;
+		for (int32 Index = 0; Items && Index < Items->Num(); ++Index)
+		{
+			const FString Path = Indexed(TEXT("fixtures"), Index);
+			TSharedPtr<FJsonObject> Item;
+			FElysiumArenaFixture& Fixture = Out.AddDefaulted_GetRef();
+			if (!ElementObject(R, (*Items)[Index], Path, Item)
+				|| !CheckFields(R, *Item, Path, { TEXT("id"), TEXT("kind"), TEXT("values") })
+				|| !ReadString(R, *Item, TEXT("id"), Path, ENeed::Required, Fixture.Id)
+				|| !ReadString(R, *Item, TEXT("kind"), Path, ENeed::Required, Fixture.Kind))
+			{
+				return false;
+			}
+			for (int32 Earlier = 0; Earlier < Index; ++Earlier)
+			{
+				if (Out[Earlier].Id.Equals(Fixture.Id, ESearchCase::CaseSensitive))
+				{
+					return R.Fail(Field(Path, TEXT("id")), FString::Printf(TEXT("'%s' is already fixtures[%d]'s id"), *Fixture.Id, Earlier));
+				}
+			}
+			bool bKnownKind = false;
+			for (const TCHAR* Known : GFixtureKinds)
+			{
+				bKnownKind |= Fixture.Kind.Equals(Known, ESearchCase::CaseSensitive);
+			}
+			if (!bKnownKind)
+			{
+				TArray<FString> Names;
+				for (const TCHAR* Known : GFixtureKinds)
+				{
+					Names.Add(Known);
+				}
+				return R.Fail(Field(Path, TEXT("kind")), FString::Printf(TEXT("'%s' is not a fixture kind (%s)"),
+					*Fixture.Kind, *FString::Join(Names, TEXT(", "))));
+			}
+			// `keyvalues`: a controlled KeyValues table, read back by `entity_field` on `fixture:<id>`.
+			TSharedPtr<FJsonObject> Values;
+			if (!ReadObject(R, *Item, TEXT("values"), Path, Values)) return false;
+			if (!Values.IsValid() || Values->Values.IsEmpty())
+			{
+				return R.Fail(Field(Path, TEXT("values")), TEXT("required: the table's keys and values"));
+			}
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : Values->Values)
+			{
+				FString Text;
+				if (!KeyText(R, Pair.Value, Field(Field(Path, TEXT("values")), *Pair.Key), Text)) return false;
+				Fixture.Values.Add(Pair.Key, Text);
+			}
+		}
+		return true;
+	}
+
 	bool ReadRecord(FReader& R, const FJsonObject& Root, FElysiumArenaScenario& Out)
 	{
 		if (!CheckFields(R, Root, FString(), { TEXT("name"), TEXT("about"), TEXT("stage"), TEXT("seed"),
 				TEXT("duration"), TEXT("known_red"), TEXT("expect_fail"), TEXT("shares_map"), TEXT("player"),
 				TEXT("cast"), TEXT("rows"), TEXT("from_map"), TEXT("script"), TEXT("expect"), TEXT("never"),
-				TEXT("probes"), TEXT("notes"), TEXT("initial_weapon_state") }))
+				TEXT("probes"), TEXT("notes"), TEXT("initial_weapon_state"), TEXT("fixtures") }))
 		{
 			return false;
 		}
@@ -1392,6 +1519,8 @@ namespace ElysiumArenaScenarioParse
 			return R.Fail(TEXT("from_map"), TEXT("a map host stages no rows: its entities are the map's"));
 		}
 
+		if (!ReadFixtures(R, Root, Out.Fixtures)) return false;
+
 		if (!ReadArray(R, Root, TEXT("expect"), FString(), Items))
 		{
 			return false;
@@ -1477,6 +1606,14 @@ namespace ElysiumArenaScenarioParse
 				return false;
 			}
 			const FElysiumArenaAction& Action = Out.Script.Last();
+			for (const FElysiumArenaCallArg& Arg : Action.Args)
+			{
+				if (!Arg.Fixture.IsEmpty() && !Out.Fixtures.ContainsByPredicate([&Arg](const FElysiumArenaFixture& F)
+					{ return F.Id.Equals(Arg.Fixture, ESearchCase::CaseSensitive); }))
+				{
+					return R.Fail(Field(Path, TEXT("args")), FString::Printf(TEXT("'%s' names no fixture"), *Arg.Fixture));
+				}
+			}
 			if (Action.Do >= EElysiumArenaAction::Save && Action.bAtTime && Action.Time > Out.Duration)
 				return R.Fail(Field(Path, TEXT("t")), TEXT("transaction action is past duration"));
 			if (!Action.After.IsEmpty() && !Out.Expect.ContainsByPredicate([&Action](const FElysiumArenaMatch& M)
@@ -1509,6 +1646,11 @@ namespace ElysiumArenaScenarioParse
 			for (const FElysiumArenaWitness& Word : Action.Fields)
 				if (!HasSavedWord(Action.Checkpoint, Word.Who, Word.Field)) return R.Fail(TEXT("script"), TEXT("comparison field was not captured"));
 		}
+		for (const FElysiumArenaProbeSpec& Probe : Out.Probes)
+			if (Probe.Probe == EElysiumArenaProbe::EntityField && Probe.Who.StartsWith(TEXT("fixture:"))
+				&& !Out.Fixtures.ContainsByPredicate([&Probe](const FElysiumArenaFixture& F)
+					{ return F.Id.Equals(Probe.Who.Mid(8), ESearchCase::CaseSensitive); }))
+				return R.Fail(TEXT("probes"), FString::Printf(TEXT("'%s' names no fixture"), *Probe.Who));
 		for (const FElysiumArenaProbeSpec& Probe : Out.Probes)
 			if (!Probe.Checkpoint.IsEmpty() && !HasSavedWord(Probe.Checkpoint, Probe.Who, Probe.Field)) return R.Fail(TEXT("probes"), TEXT("missing checkpoint or uncaptured field"));
 
@@ -1719,6 +1861,7 @@ const TCHAR* ActionName(EElysiumArenaAction Action)
 	case EElysiumArenaAction::DialogChoose:   return TEXT("dialog_choose");
 	case EElysiumArenaAction::SeedHealth: return TEXT("seed_health");
 	case EElysiumArenaAction::DamagePacket: return TEXT("damage_packet");
+	case EElysiumArenaAction::EntityCall: return TEXT("entity_call");
 	case EElysiumArenaAction::Save: return TEXT("save");
 	case EElysiumArenaAction::Load: return TEXT("load");
 	case EElysiumArenaAction::FreshMap: return TEXT("fresh_map");
@@ -1770,8 +1913,20 @@ const TCHAR* ProbeName(EElysiumArenaProbe Probe)
 	case EElysiumArenaProbe::GroundSpeed:     return TEXT("ground_speed");
 	case EElysiumArenaProbe::CorpseOnFloor:   return TEXT("corpse_on_floor");
 	case EElysiumArenaProbe::Exists:          return TEXT("exists");
+	case EElysiumArenaProbe::EntityField:     return TEXT("entity_field");
 	default:                                  return TEXT("?");
 	}
+}
+
+TArrayView<const TCHAR* const> FixtureKinds()
+{
+	return MakeArrayView(ElysiumArenaScenarioParse::GFixtureKinds);
+}
+
+const TArray<FString>& EntityCallAllowlist()
+{
+	static const TArray<FString> Allowed;
+	return Allowed;
 }
 
 const TCHAR* CompareName(EElysiumArenaCompare Compare)
@@ -1788,8 +1943,9 @@ const TCHAR* CompareName(EElysiumArenaCompare Compare)
 
 FString DescribeMatch(const FElysiumArenaMatch& Match)
 {
-	return FString::Printf(TEXT("%s %s \"%s\"%s"), Match.Who.IsEmpty() ? TEXT("*") : *Match.Who,
-		*Match.Kind.ToString(), *Match.Match, Match.bRegex ? TEXT(" (regex)") : TEXT(""));
+	const FString Site = Match.Site.IsEmpty() ? FString() : FString::Printf(TEXT("[%s]"), *Match.Site);
+	return FString::Printf(TEXT("%s %s%s \"%s\"%s"), Match.Who.IsEmpty() ? TEXT("*") : *Match.Who,
+		*Match.Kind.ToString(), *Site, *Match.Match, Match.bRegex ? TEXT(" (regex)") : TEXT(""));
 }
 
 } // namespace ElysiumArenaScenario

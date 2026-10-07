@@ -311,6 +311,7 @@ bool FElysiumArenaScenarioRunner::Start(EZero Zero, FString& OutError)
 		ZeroWorld = World->NowSeconds();
 		SegmentWorld = ZeroWorld; // scenario zero; engine 0x200f5bc4
 		bZeroKnown = true;
+		StageFixtures(*World);
 		if (!Record.InitialWeaponState.IsEmpty() && !ApplyInitialWeaponState(*World)) return false;
 	}
 	else
@@ -382,6 +383,7 @@ void FElysiumArenaScenarioRunner::OnStageActivated(AElysiumMapActor* Map)
 		// Activation's events belong to zero; later segments are already stamped (0x1011a620).
 		for (FEvent& Recorded : Events) Recorded.Time = Recorded.WorldTime - ZeroWorld;
 		bZeroKnown = true;
+		StageFixtures(*World);
 		if (!Record.InitialWeaponState.IsEmpty() && !ApplyInitialWeaponState(*World)) return;
 		FEvent& ReadyEvent = Events.AddDefaulted_GetRef();
 		StampEvent(ReadyEvent, World->NowSeconds());
@@ -466,6 +468,12 @@ bool FElysiumArenaScenarioRunner::Matches(const FMatcher& Matcher, const FEvent&
 {
 	const FElysiumArenaMatch& Spec = *Matcher.Spec;
 	if (Event.Kind != Spec.Kind)
+	{
+		return false;
+	}
+	// A `retail_site` matcher names the site tag: the event text opens `tag=<tag> ` (`EmitRetailSite`).
+	if (!Spec.Site.IsEmpty()
+		&& !Event.Text.StartsWith(FString::Printf(TEXT("tag=%s "), *Spec.Site), ESearchCase::CaseSensitive))
 	{
 		return false;
 	}
@@ -698,6 +706,108 @@ void FElysiumArenaScenarioRunner::ReadDueProbes(double Now, FFailure& Out)
 	}
 }
 
+void FElysiumArenaScenarioRunner::StageFixtures(FElysiumEntityWorld& World)
+{
+	for (const FElysiumArenaFixture& Fixture : Record.Fixtures)
+	{
+		StagedFixtures.Add(Fixture.Id, Fixture);
+		FEvent& Staged = Events.AddDefaulted_GetRef();
+		StampEvent(Staged, World.NowSeconds());
+		Staged.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+		Staged.Text = FString::Printf(TEXT("fixture %s %s staged keys=%d"), *Fixture.Id, *Fixture.Kind, Fixture.Values.Num());
+	}
+}
+
+bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& Probe, FElysiumEntityWorld& World,
+	FElysiumArenaValue& OutAnswer, FString& OutError) const
+{
+	OutAnswer = FElysiumArenaValue();
+	if (Probe.To.bSet)
+	{
+		OutError = FString::Printf(TEXT("field '%s' takes no `to`"), *Probe.Field);
+		return false;
+	}
+	if (Probe.Who.StartsWith(TEXT("fixture:")))
+	{
+		// A `keyvalues` fixture: the field is the key, the answer the text a map row would spell.
+		const FElysiumArenaFixture* Fixture = StagedFixtures.Find(Probe.Who.Mid(8));
+		if (Fixture == nullptr)
+		{
+			OutError = FString::Printf(TEXT("fixture '%s' is not staged"), *Probe.Who.Mid(8));
+			return false;
+		}
+		const FString* Value = Fixture->Values.Find(Probe.Field);
+		if (Value == nullptr || !Probe.Index.IsEmpty() || !Probe.Member.IsEmpty())
+		{
+			OutError = Value == nullptr ? FString::Printf(TEXT("fixture '%s' has no key '%s'"), *Fixture->Id, *Probe.Field)
+				: FString(TEXT("a fixture key takes no selector"));
+			return false;
+		}
+		OutAnswer.Type = FElysiumArenaValue::EType::String;
+		OutAnswer.String = *Value;
+	}
+	else
+	{
+		const FElysiumEntity* Entity = ElysiumArenaRunnerDetail::FindEntity(World, Probe.Who);
+		if (Entity == nullptr)
+		{
+			OutError = FString::Printf(TEXT("no entity named '%s'"), *Probe.Who);
+			return false;
+		}
+		// The retail field names (datamap / ledger), not the port's members, so a probe survives a rename.
+		// A story adds an adapter here only for a retail value the current witnesses do not expose.
+		const bool bVector = Probe.Field == TEXT("m_vecOrigin");
+		if (!bVector && (!Probe.Index.IsEmpty() || !Probe.Member.IsEmpty()))
+		{
+			OutError = FString::Printf(TEXT("field '%s' takes no index or member"), *Probe.Field);
+			return false;
+		}
+		if (Probe.Field == TEXT("m_iName"))
+		{
+			OutAnswer.Type = FElysiumArenaValue::EType::String;
+			OutAnswer.String = Entity->TargetName;
+		}
+		else if (Probe.Field == TEXT("m_iClassname"))
+		{
+			OutAnswer.Type = FElysiumArenaValue::EType::String;
+			OutAnswer.String = Entity->Def != nullptr ? Entity->Def->Classname : FString();
+		}
+		else if (Probe.Field == TEXT("m_iHealth") || Probe.Field == TEXT("m_spawnflags")
+			|| Probe.Field == TEXT("m_nRenderMode") || Probe.Field == TEXT("m_lifeState"))
+		{
+			OutAnswer.Type = FElysiumArenaValue::EType::Number;
+			OutAnswer.Number = Probe.Field == TEXT("m_iHealth") ? Entity->Health
+				: Probe.Field == TEXT("m_spawnflags") ? Entity->SpawnFlags
+				: Probe.Field == TEXT("m_nRenderMode") ? Entity->RenderMode : Entity->LifeState;
+		}
+		else if (bVector)
+		{
+			if (Probe.Member != TEXT("x") && Probe.Member != TEXT("y") && Probe.Member != TEXT("z"))
+			{
+				OutError = TEXT("m_vecOrigin needs `member`: x, y or z");
+				return false;
+			}
+			OutAnswer.Type = FElysiumArenaValue::EType::Number;
+			OutAnswer.Number = Probe.Member == TEXT("x") ? Entity->Origin.X
+				: Probe.Member == TEXT("y") ? Entity->Origin.Y : Entity->Origin.Z;
+		}
+		else
+		{
+			OutError = FString::Printf(TEXT("no retail field adapter named '%s' (m_iName, m_iClassname, m_iHealth, ")
+				TEXT("m_spawnflags, m_nRenderMode, m_lifeState, m_vecOrigin)"), *Probe.Field);
+			return false;
+		}
+	}
+	// The field's own type must be the comparison's: a number is never compared with a string.
+	if (OutAnswer.Type != Probe.Value.Type)
+	{
+		OutError = FString::Printf(TEXT("field '%s' answers %s; the comparison is %s"), *Probe.Field,
+			*OutAnswer.Describe(), *Probe.Value.Describe());
+		return false;
+	}
+	return true;
+}
+
 bool FElysiumArenaScenarioRunner::ReadProbe(const FElysiumArenaProbeSpec& Probe, FString& OutRead,
 	FString& OutError) const
 {
@@ -726,6 +836,13 @@ bool FElysiumArenaScenarioRunner::ReadProbe(const FElysiumArenaProbeSpec& Probe,
 		if (Probe.Compare == EElysiumArenaCompare::Equals)
 			return ElysiumArenaScenario::WitnessEqual(Probe.Value, Word, Probe.Tolerance);
 		return ElysiumArenaRunnerDetail::Compare(Word, Probe);
+	}
+	if (Probe.Probe == EElysiumArenaProbe::EntityField)
+	{
+		FElysiumArenaValue FieldAnswer;
+		if (!ReadEntityField(Probe, *World, FieldAnswer, OutError)) return false;
+		OutRead = FieldAnswer.Describe();
+		return ElysiumArenaRunnerDetail::Compare(FieldAnswer, Probe);
 	}
 	FElysiumEntity* Entity = ElysiumArenaRunnerDetail::FindEntity(*World, Probe.Who);
 	if (Probe.Probe == EElysiumArenaProbe::Exists)
@@ -1206,6 +1323,17 @@ void FElysiumArenaScenarioRunner::RecordAction(const FElysiumArenaAction& Action
 		Text += FString::Printf(TEXT(" %s %s"), *Action.Input, *Action.Param.Describe());
 		if (!Action.Activator.IsEmpty()) Text += FString::Printf(TEXT(" activator=%s"), *Action.Activator);
 		break;
+	case EElysiumArenaAction::EntityCall:
+	{
+		Name = Action.Target;
+		TArray<FString> ArgText;
+		for (const FElysiumArenaCallArg& Arg : Action.Args)
+		{
+			ArgText.Add(Arg.Fixture.IsEmpty() ? Arg.Value.Describe() : FString::Printf(TEXT("fixture:%s"), *Arg.Fixture));
+		}
+		Text += FString::Printf(TEXT(" %s(%s)"), *Action.Function, *FString::Join(ArgText, TEXT(", ")));
+		break;
+	}
 	case EElysiumArenaAction::SeedHealth:
 	case EElysiumArenaAction::Kill:
 		Name = Action.Target;
@@ -1369,6 +1497,29 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 		FixturePacket.Damage = static_cast<float>(Action.Param.Number);
 		PacketVictim->OnTakeDamage(&FixturePacket); // 0x1032ef60 -> 0x10265ed0 -> 0x102bee60
 		return true;
+	}
+	case EElysiumArenaAction::EntityCall:
+	{
+		// Only what retail itself exposes to the world: an input, Use, a touch, a think, spawn and
+		// activate, damage through the damage entry. Never an internal helper (`harness.md`). Each
+		// story adds its entry points to `EntityCallAllowlist` together with their dispatch here.
+		const TArray<FString>& Allowed = ElysiumArenaScenario::EntityCallAllowlist();
+		if (!Allowed.Contains(Action.Function))
+		{
+			OutError = FString::Printf(TEXT("entity_call '%s' is not an allowlisted retail entry point (allowed: %s)"),
+				*Action.Function, Allowed.IsEmpty() ? TEXT("none") : *FString::Join(Allowed, TEXT(", ")));
+			return false;
+		}
+		for (const FElysiumArenaCallArg& Arg : Action.Args)
+		{
+			if (!Arg.Fixture.IsEmpty() && !StagedFixtures.Contains(Arg.Fixture))
+			{
+				OutError = FString::Printf(TEXT("fixture '%s' is not staged"), *Arg.Fixture);
+				return false;
+			}
+		}
+		OutError = FString::Printf(TEXT("entity_call '%s' is allowlisted but has no dispatch"), *Action.Function);
+		return false;
 	}
 	case EElysiumArenaAction::Fire:
 	case EElysiumArenaAction::Kill:

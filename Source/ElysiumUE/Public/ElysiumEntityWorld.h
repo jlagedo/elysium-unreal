@@ -852,6 +852,12 @@ public:
 	bool HasAiTraceSink() const { return static_cast<bool>(AiTraceSink); }
 	// No-op without a sink. `Entity` may be any entity; the event carries its handle and targetname.
 	void EmitAiTrace(const FElysiumEntity& Entity, FName Kind, FString Text);
+	// The `retail_site` kind (`docs/specs/layers/harness.md`): emit it at the port line that carries the
+	// retail address it names, at the semantic event a record measures (`entry`, a branch, a write, a
+	// callback, `return`), with the retail values at that point as `Payload`. Text:
+	// `tag=<Tag> fn=<RetailFn> va=0x<RetailVa> phase=<Phase> <Payload>`. No-op without a sink.
+	void EmitRetailSite(const FElysiumEntity& Entity, const TCHAR* Tag, const TCHAR* RetailFn, uint32 RetailVa,
+		const TCHAR* Phase, const FString& Payload);
 	// `EmitAiTrace` for a tap whose producer runs every frame (`stealthkill`: the HUD asks the query
 	// each frame): emits only when this kind's entity or text differs from the last event it emitted
 	// for the kind. The memory belongs to the sink and is cleared with it, so each recorded run opens

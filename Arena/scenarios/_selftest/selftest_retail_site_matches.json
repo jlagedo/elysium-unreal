@@ -1,0 +1,19 @@
+{
+  "name": "selftest_retail_site_matches",
+  "about": "Harness self-test: a `retail_site` event carries its tag, the retail function and its address (`tag=accept_input fn=CBaseEntity::AcceptInput va=0x100abc90`), and `expect` / `never` match on the `site` tag. The relay's Trigger input is accepted at t=0.5: the `accept_input` site fires with the input's own values, and a `never` on a tag no port line emits holds. Reported as `fail`, the site did not fire, named the wrong address, or a matcher took another tag's event.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 2.0,
+  "rows": [
+    { "classname": "logic_relay", "name": "selftest_relay", "at": "start" }
+  ],
+  "script": [
+    { "t": 0.5, "do": "fire", "target": "selftest_relay", "input": "Trigger" }
+  ],
+  "expect": [
+    { "who": "selftest_relay", "kind": "retail_site", "site": "accept_input", "match": "fn=CBaseEntity::AcceptInput va=0x100abc90 phase=dispatch input=Trigger", "by": 1.5 }
+  ],
+  "never": [
+    { "kind": "retail_site", "site": "no_such_site" }
+  ]
+}

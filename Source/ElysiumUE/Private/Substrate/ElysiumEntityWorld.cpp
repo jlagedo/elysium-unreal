@@ -181,6 +181,17 @@ void FElysiumEntityWorld::EmitAiTraceOnChange(const FElysiumEntity& Entity, FNam
 	EmitAiTrace(Entity, Kind, MoveTemp(Text));
 }
 
+void FElysiumEntityWorld::EmitRetailSite(const FElysiumEntity& Entity, const TCHAR* Tag, const TCHAR* RetailFn,
+	uint32 RetailVa, const TCHAR* Phase, const FString& Payload)
+{
+	if (!AiTraceSink)
+	{
+		return;
+	}
+	EmitAiTrace(Entity, TEXT("retail_site"), FString::Printf(TEXT("tag=%s fn=%s va=0x%08x phase=%s %s"),
+		Tag, RetailFn, RetailVa, Phase, *Payload));
+}
+
 void FElysiumEntityWorld::EmitAiTrace(const FElysiumEntity& Entity, FName Kind, FString Text)
 {
 	if (!AiTraceSink)
@@ -2538,6 +2549,10 @@ void FElysiumEntityWorld::DeliverInputTo(
 	{
 		EmitAiTrace(Target, TEXT("input"), FString::Printf(TEXT("%s %s from=%s"),
 			*Event.Input.ToString(), *Event.Param.ToString(), *AiTraceName(Resolve(Event.Activator))));
+		// 0x100abc90 CBaseEntity::AcceptInput: the receiver has resolved the input's handler and is about to run it.
+		EmitRetailSite(Target, TEXT("accept_input"), TEXT("CBaseEntity::AcceptInput"), 0x100abc90u, TEXT("dispatch"),
+			FString::Printf(TEXT("input=%s param=%s activator=%s"), *Event.Input.ToString(), *Event.Param.ToString(),
+				*AiTraceName(Resolve(Event.Activator))));
 	}
 	Thunk(Target, Args);
 	// Counted per TARGET, not per event: one fire of a `patrol_cop_*` wire is one Fired and as many

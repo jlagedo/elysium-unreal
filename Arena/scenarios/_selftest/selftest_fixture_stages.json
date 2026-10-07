@@ -1,0 +1,21 @@
+{
+  "name": "selftest_fixture_stages",
+  "about": "Harness self-test: a `fixtures` entry stages before the observation window (one `script` event at zero says so) and `entity_field` reads it back by its key, and reads a live entity's retail fields (`m_iName`, `m_iClassname`) by their retail names. Reported as `fail`, a fixture did not stage or a retail field answered something else.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 2.0,
+  "fixtures": [
+    { "id": "kv", "kind": "keyvalues", "values": { "targetname": "selftest_kv", "health": 7 } }
+  ],
+  "rows": [
+    { "classname": "logic_relay", "name": "selftest_relay", "at": "start" }
+  ],
+  "expect": [
+    { "who": "", "kind": "script", "match": "fixture kv keyvalues staged keys=2", "by": 1.0 }
+  ],
+  "probes": [
+    { "at": "end", "who": "fixture:kv", "probe": "entity_field", "field": "health", "equals": "7" },
+    { "at": "end", "who": "selftest_relay", "probe": "entity_field", "field": "m_iName", "equals": "selftest_relay" },
+    { "at": "end", "who": "selftest_relay", "probe": "entity_field", "field": "m_iClassname", "equals": "logic_relay" }
+  ]
+}

@@ -29,6 +29,7 @@ the entry's `do` or `probe` does not take is a parse error naming the file and t
 | `cast` | array | the characters (below) |
 | `rows` | array | further entity rows, loaded with the cast (arena only) |
 | `from_map` | object | rows of a baked map, verbatim (arena only) |
+| `fixtures` | array | the typed fixture catalog, staged at scenario zero before any action or probe (below) |
 | `script` | array | timed actions |
 | `expect` | array | ordered expectations over the trace |
 | `never` | array | events that fail the run whenever they appear |
@@ -139,6 +140,56 @@ target (`player` for the player's actions and `light_pin`, the row's name for `s
 `player_walk north`, `player_crouch on`, `light_pin 0.2`, `light_pin release`, `dialog_choose 0`,
 `dialog_choose end`; `player` is the entity column of the last two).
 
+## The test instrument
+
+Four general pieces every layer's records use (`docs/specs/layers/harness.md`). A record states what
+retail does: the setup, the action, the observable outcome and its timing, citing the retail address
+that defines the outcome.
+
+**`fixtures`** -- a typed catalog, staged at scenario zero. Each entry is `{ "id", "kind", ... }`; the id
+is unique in the record, the kind one of `ElysiumArenaScenario::FixtureKinds()`. Staging writes one
+`script` event per fixture at time 0 (`fixture <id> <kind> staged keys=<n>`). Kinds:
+
+| `kind` | Configuration | Staged as |
+|---|---|---|
+| `keyvalues` | `values`: an object of keys to string, number or boolean values (read as a map row spells them) | a controlled KeyValues table, read back by `entity_field` on `who: "fixture:<id>"`, `field` the key |
+
+A fixture is named by an `entity_call` argument (`{"fixture": "<id>"}`) or an `entity_field` `who`. An
+unknown kind, a duplicate id, or a reference to a fixture the record does not declare is a parse error.
+Later stories add their kinds (save blocks, sound tables, physics bodies...) in the slice that stages them.
+
+**`entity_call`** (a `script` action: `target`, `function`, optional `args`) -- invokes one retail entry
+point at its time: an input, `Use`, a touch, a think, spawn and activate, damage through the damage
+entry. Never an internal helper: a record that calls a helper tests the port's structure, not the game.
+`args` are booleans, numbers, strings or `{"fixture": id}`. `function` is checked against
+`ElysiumArenaScenario::EntityCallAllowlist()` when the action runs, which is **empty** until a story adds
+the entry points its records drive (with their dispatch in `RunAction`). A call outside the allowlist is
+refused as a script failure (`entity_call '<f>' is not an allowlisted retail entry point`): `error` on an
+ordinary record, a `script` failure on an `expect_fail` one. Traced as `script`:
+`entity_call <function>(<args>)`, entity column the target.
+
+**`entity_field`** (a `probes` entry: `who`, `field`, optional `to`, `index`, `member`, one comparison) --
+reads a retail field by its **retail name** (`m_iName`, `m_iHealth`, the datamap name or the ledger's
+field name), so a probe survives the port renaming its members. The comparison's value states the type;
+a field that answers another type fails the probe, and so does a field with no adapter (the reason lists
+the known ones). Read-only. Adapters: `m_iName`, `m_iClassname`, `m_iHealth`, `m_spawnflags`,
+`m_nRenderMode`, `m_lifeState`, `m_vecOrigin` (`member`: `x`, `y` or `z`). A story adds an adapter in
+`FElysiumArenaScenarioRunner::ReadEntityField` only for a retail value the current witnesses do not expose.
+
+**`retail_site`** (a trace kind) -- emitted at the port line that carries a retail address, by
+`FElysiumEntityWorld::EmitRetailSite(Entity, Tag, RetailFn, RetailVa, Phase, Payload)`, at the semantic
+event a record measures (`entry`, a branch, a write, a callback, `return`). Text:
+`tag=<tag> fn=<retail symbol> va=0x<VA> phase=<phase> <ordered typed payload>`; the payload states the
+retail values at that point, never port-only state. An `expect` or `never` of kind `retail_site` takes
+`site`, the event's `tag=` token (`{"kind": "retail_site", "site": "accept_input", "match": "va=0x100abc90"}`);
+`match` is the usual substring or regex over the whole text. Same-time events keep their emission order.
+Sites so far: `accept_input` (`CBaseEntity::AcceptInput` `0x100abc90`, phase `dispatch`, payload
+`input= param= activator=`).
+
+Rules: `entity_call` drives only what retail exposes to the world; `retail_site` events are emitted where
+the retail address they name is ported and state retail values; `entity_field` reads retail names;
+a record states the retail outcome and cites its address.
+
 ## `expect`
 
 ```json
@@ -148,8 +199,8 @@ target (`player` for the player's actions and `light_pin`, the row's name for `s
 - `kind`: one of the trace kinds of `docs/specs/0002-npc-ai/stories/wave2/seam.md` (`schedule`,
   `task`, `taskdone`, `taskfail`, `break`, `cond+`, `cond-`, `state`, `sequence`, `seqfinished`,
   `animevent`, `move`, `damage`, `death`, `corpse`, `hint+`, `hint-`, `output`, `input`,
-  `stealthkill`), with the text its table states, or one of the runner's own two: `script` (above)
-  and `removed` (below). Read the
+  `stealthkill`, `retail_site`), with the text its table states, or one of the runner's own two:
+  `script` (above) and `removed` (below). Read the
   event texts there before matching them: a schedule is `NAME (0x<n>)`, the class-local id in lower-case
   hex with no padding (`SCHED_IDLE_STAND (0x1)`; `NAME (<n>)`, the global id in decimal, when the
   class has no local one), a stealth-kill query `<victim or none> <admit|refuse> gate=<gate>` (`ray`,
@@ -295,6 +346,10 @@ record — and a `reason`) and
 | `_selftest/must_fail` | an expectation nothing meets fails the run |
 | `_selftest/bound_trips` | a deadline is a deadline: a real event after it does not count |
 | `_selftest/never_at_most_holds`, `never_at_most_trips` | `at_most` tolerates its bound and fails the run at the match past it |
+| `_selftest/selftest_fixture_stages` | a `fixtures` entry stages at zero and `entity_field` reads it, and a live entity's retail fields, back |
+| `_selftest/selftest_entity_call_refused` | an `entity_call` outside the (empty) allowlist is refused as a script failure, never run |
+| `_selftest/selftest_entity_field_fails` | an `entity_field` probe on a field with no retail adapter fails the run |
+| `_selftest/selftest_retail_site_matches` | a `retail_site` event carries tag, retail function and address, and `expect` / `never` match on `site` |
 | `_selftest/never_after_ignores` | a `never` opened `after` a label does not count a match before it |
 | `_selftest/never_within_holds`, `never_within_trips` | a `never` closed `within` seconds of its label ignores a match after the window and fails the run on one inside it |
 | `combat/cover_move_shoot` | the run-and-gun: a gunman running to cover fires from an overlay layer's own 3031 (`0x102e8560` -> `AddGesture 0x100991b0` -> `0x10098cd0` -> `Shot 0x102387b0`; spec 0002 V4o) |

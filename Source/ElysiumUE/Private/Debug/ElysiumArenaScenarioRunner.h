@@ -159,6 +159,13 @@ private:
 
 	bool ApplyPlayerAtZero(FElysiumEntityWorld& World);
 	bool ApplyInitialWeaponState(FElysiumEntityWorld& World);
+	// The record's `fixtures` catalog, staged at scenario zero before any action or probe runs; one
+	// `script` event per fixture states what staged.
+	void StageFixtures(FElysiumEntityWorld& World);
+	// `entity_field`: the retail field named by `Probe.Field` on `Probe.Who` (an entity, or
+	// `fixture:<id>`), typed by the field. Read-only.
+	bool ReadEntityField(const FElysiumArenaProbeSpec& Probe, FElysiumEntityWorld& World,
+		FElysiumArenaValue& OutAnswer, FString& OutError) const;
 	bool ObserveFinalWeaponState(FElysiumEntityWorld& World);
 	void MatchExpectations();
 	// Where a `never`'s window opens, scenario seconds; false while it waits on an unmet `after` label.
@@ -233,6 +240,7 @@ private:
 	TArray<int32> NeverScans;
 	TArray<int32> NeverCounts;
 
+	TMap<FString, FElysiumArenaFixture> StagedFixtures;   // by id, filled by StageFixtures
 	TArray<bool> ActionFired;
 	TArray<bool> ProbeRead;
 

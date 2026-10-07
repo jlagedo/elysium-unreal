@@ -1,0 +1,20 @@
+{
+  "name": "selftest_entity_call_refused",
+  "about": "Harness self-test: `entity_call` drives only an allowlisted retail entry point (an input, Use, touch, think, spawn, damage), never an internal helper. The allowlist is empty, so `UTIL_Remove` (a helper) is refused: the action fails the run as `script` and `expect_fail` turns that into this record's pass. Reported as `fail`, the call ran or its refusal was not reported as a script failure.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 3.0,
+  "expect_fail": true,
+  "fixtures": [
+    { "id": "kv", "kind": "keyvalues", "values": { "targetname": "selftest_kv" } }
+  ],
+  "rows": [
+    { "classname": "logic_relay", "name": "selftest_relay", "at": "start" }
+  ],
+  "script": [
+    { "t": 0.5, "do": "entity_call", "target": "selftest_relay", "function": "UTIL_Remove", "args": [ { "fixture": "kv" }, 1 ] }
+  ],
+  "expect": [
+    { "who": "selftest_relay", "kind": "removed", "by": 2.0 }
+  ]
+}

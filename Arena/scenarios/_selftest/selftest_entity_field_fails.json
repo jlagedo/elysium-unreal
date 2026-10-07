@@ -1,0 +1,14 @@
+{
+  "name": "selftest_entity_field_fails",
+  "about": "Harness self-test: an `entity_field` probe on a field with no retail adapter fails the run at its read, never answers a made-up value; `expect_fail` turns that into this record's pass. Reported as `fail`, the probe answered for a field the harness does not know.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 1.0,
+  "expect_fail": true,
+  "rows": [
+    { "classname": "logic_relay", "name": "selftest_relay", "at": "start" }
+  ],
+  "probes": [
+    { "at": "end", "who": "selftest_relay", "probe": "entity_field", "field": "m_iNoSuchRetailField", "equals": 0 }
+  ]
+}
