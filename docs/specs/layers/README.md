@@ -10,7 +10,7 @@ subsystem another spec owned (44 recorded stops in 0002 alone). The rules are in
 | `README.md` | this: the layer map, how it was measured, the parked specs mapped to layers |
 | `L0-entity/` … `L4-npc/` | one spec per layer (`spec.md`: scope, gate, order, decisions), its stories in order (`stories-table.md`, `stories/`), its worker briefs (`briefs/`, ≤ 4 KB each), the briefs bundled into worker runs (`runs.md`), and its contract checks (`contract-checks.md`) |
 | `harness.md` | the test instrument every layer's records use; built by L0's story 0 |
-| `method.md` | how a run is executed (by any agent), gated, committed; how a layer closes |
+| `method.md` | how a run is executed, gated, committed; how a layer closes |
 | `schedule.md` | worker-hours per layer and elapsed time by number of lanes |
 | `checks.md` | the plan's consistency checks (all pass) and the harness pieces the records ask for |
 | `decisions.md` | everything only the owner can decide (D1–D6) |

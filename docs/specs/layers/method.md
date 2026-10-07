@@ -1,54 +1,24 @@
 # Method — how a layer is executed
 
-Any coding agent can execute the plan. The unit of work is a **run** (`<layer>/runs.md`): consecutive
-slice briefs of one subsystem that one worker finishes in one go. What follows replaces 0002's "method
-per story" (parked).
+The unit of work is a **run** (`<layer>/runs.md`): consecutive slice briefs of one subsystem that one
+worker finishes in one go. What follows replaces 0002's "method per story" (parked).
 
 ## Roles
 
-- **The coordinator** — the session driving the layer (an agent or a person). It picks the next ready
-  run, launches its worker, gates the result, commits it and moves on. It reads only the run's briefs and
-  the worker's report, never a whole spec or a 100 KB log, and restarts itself (fresh context) at every
-  layer close.
-- **Workers** — one headless agent session per run, a fresh context each, never resumed past ~150 steps.
-- **Readers** — read-only sessions when a brief's retail chain is not in `docs/vtmb/` yet: they return
+- **The coordinator** — drives the layer. It picks the next ready run, hands its briefs to a worker,
+  gates the result, commits it and moves on.
+- **Workers** — one per run. A worker's input is the run's briefs, in order (`<layer>/briefs/`); its
+  output is the report each brief asks for.
+- **Readers** — read-only work when a brief's retail chain is not in `docs/vtmb/` yet: they return
   the walk with addresses; the run waits for it.
 
-The coordinator and the workers need not be the same agent; lanes may mix agents.
+## What a worker uses
 
-## What a worker needs
+- The repository, `AGENTS.md`, and `uv run elysium build | test | arena`.
+- Retail lookups: the `vtmb-corpus` and `elysium` MCP servers, or `uv run elysium research
+  where|section <address>` and the PE reader in `AGENTS.md` § Gotchas.
 
-- The repository checked out, `AGENTS.md` read, and the
-  shell commands `uv run elysium build | test | arena`.
-- The project's two MCP servers, `vtmb-corpus` (`vtmb_code`, `vtmb_where`, …) and `elysium` (the live
-  game). They are configured for each agent the project uses: `.mcp.json` (Claude Code),
-  `.codex/config.toml` (Codex), `opencode.json` (opencode). An agent without MCP uses
-  `uv run elysium research where|section <address>` and the PE reader in `AGENTS.md` § Gotchas.
-- No approval prompts (it runs unattended) and no sandbox that blocks the build or the editor.
-- A small context: compaction around 200k tokens and tool outputs capped (~8k tokens). Measured over 67
-  runs (2026-10-03..05), a step costs ~12 s under 100k tokens of context and ~115 s above 600k.
-
-## Launching a run
-
-```
-O=$ELYSIUM_WORK_ROOT/runs/<run id>; mkdir -p "$O"
-cat <layer>/briefs/<each brief of the run, in order> > "$O/brief.md"
-<agent> < "$O/brief.md"   # headless, the brief on stdin; its final message to "$O/last.md", its log beside it
-```
-
-Examples of `<agent>` (any headless agent with the above works):
-
-| agent | headless line |
-|---|---|
-| Codex | `codex exec --dangerously-bypass-approvals-and-sandbox --color never --json -o "$O/last.md" - > "$O/events.jsonl"` |
-| Claude Code | `claude -p --permission-mode bypassPermissions --output-format stream-json --verbose > "$O/events.jsonl"` (the last `result` event is the report) |
-| opencode | `opencode run` with the brief as its message, output to `"$O/events.log"` |
-
-- A medium reasoning grade for a coding run; a higher one for a reader or a run whose report came back
-  incomplete.
-- One run at a time per checkout (one binary). More lanes need a second checkout (`decisions.md` D2).
-- A watcher per run: its end, a failed turn, or five minutes without output while no child process is
-  alive (a worker can hang on a returned command: read its last message, replace the worker).
+One run at a time per checkout (one binary). More lanes need a second checkout (`decisions.md` D2).
 
 ## The gate after each run (the coordinator's, never the worker's)
 
