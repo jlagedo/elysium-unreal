@@ -6,7 +6,7 @@ L0 entity	L1 animation	0x10070470	Global::FUN_10070470	108	ported	0x1006ef50	Glo
 L0 entity	L1 animation	0x10090180	CBaseAnimating::BecomeClientRagdoll	108	ported	0x10090950	Global::FUN_10090950
 L0 entity	L1 animation	0x10090180	CBaseAnimating::BecomeClientRagdoll	108	ported	0x1008dc40	CBaseAnimating::SelectWeightedSequence
 L0 entity	L1 animation	0x100a0670	Global::FUN_100a0670	108	ported	0x101d1530	Global::FUN_101d1530
-L0 entity	L1 animation	0x100b2150	CBaseEntity::GetParentToWorldTransform	108	missing	0x10093000	CBaseAnimating::GetAttachment03
+L0 entity	L1 animation	0x100b2150	CBaseEntity::GetParentToWorldTransform	108	missing	0x10092ef0	CBaseAnimating::GetAttachment02
 L0 entity	L1 animation	0x100c3600	Global::FUN_100c3600	108	ported	0x1013b090	Global::FUN_1013b090
 L0 entity	L1 animation	0x1013af60	Global::QuaternionMult	108	ported	0x1013a9f0	Global::FUN_1013a9f0
 L0 entity	L1 animation	0x101de660	Global::FUN_101de660	108	ported	0x1008dc40	CBaseAnimating::SelectWeightedSequence

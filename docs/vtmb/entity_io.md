@@ -396,8 +396,9 @@ Walked in `docs/specs/layers/L0-entity/walks/L0-r010.md`; ported in
 
 - **Words.** `m_pParent` +0x254 (the handle given, -1 for NULL, kept even when it fails), `m_iParentAttachment`
   +0x258 (byte), `m_pMoveParent` +0x25c, `m_pMoveChild` +0x260 (the FIRST child), `m_pMovePeer` +0x264 (the
-  next sibling), `m_iEFlags` +0x268 (`0x800` abs transform dirty, `0x1000`/`0x2000` abs velocity, `0x10000`
-  spatial partition -- unnamed in the corpus, Source's `EFL_DIRTY_*` values), `m_hAimEnt` +0x37c,
+  next sibling), `m_iEFlags` +0x268 (`0x800` abs transform dirty, `0x1000`/`0x2000` numeric descendant
+  invalidation bits whose names remain unrecovered, `0x8000` partition dirty; `0x10000` is set on
+  position changes, but its reader/meaning remains unrecovered), `m_hAimEnt` +0x37c,
   `m_NetworkChangeState.m_bChanged` +0x1b1, the LOCAL pose `m_vecOrigin` +0x41c / `m_angRotation` +0x428 and
   the absolute cache `m_vecAbsOrigin` +0x404 / `m_angAbsRotation` +0x410. Slots 220/221 (`GetOrigin` /
   `GetAngles`, `0x100b3070` / `0x100b3110`) return the LOCAL words; 217/219 (`0x100b31b0` / `0x100b3280`)
@@ -1177,11 +1178,10 @@ Who asks for an untouch pass, and when it runs (`docs/specs/layers/L0-entity/wal
   `0x10454124`; built by `staticinit_100dba30`). Its consumer `CDirtySpatialPartitionEntityList::vfunc0`
   `0x100dbd70` walks the vector last to first, resolves each handle (serial `>> 0xd`, index `& 0x1fff`,
   table `0x106eb5dc` / `0x106eb5e0`) and runs `FUN_100ddd90(entity+0x270)` — the partition update, which
-  clears `0x8000` and relinks the spatial partition — then empties the list. The partition is
-  engine-replaced in the port (Unreal's overlap queries), so `0x8000` is never cleared there: a second
-  change after the first never re-appends (the named seam). UNRECOVERED: the engine caller of
-  `vfunc0`, the surrounding-box arm of `FUN_100ddd90` (`cp` vtable `+0x3c`, the `1.0f` inflation,
-  `ISpatialPartition` vfunc 7), the readers of `0x4000` / `0x10000`, the x87 precision word.
+  clears `0x8000` and relinks the spatial partition — then empties the list. **Current port gap
+  (r022 checkpoint):** only the bit is implemented; there is no append, list or consumer. Unreal
+  overlap-query equivalence has not been proved, so this is an unfinished L0 prerequisite rather
+  than an accepted engine replacement. The complete chain and remaining recovery are below.
 - **`CBaseEntity::GetSize`** `0x100b1960` (slot 214, `+0x358`): the scope-trace frame, then `LEA
   EAX,[ECX+0x38C]` — `&m_vecSize`, never NULL (a NULL `this` returns `0x38C`). No class of the 497
   overrides it. Readers: `CBaseDoor::vfunc103` `0x100ef260` (Spawn), `CBaseDoor::vfunc245` `0x100f0a40`,
@@ -3296,3 +3296,83 @@ disassembly. Examples from `CAI_BaseNPCTroika`, the class the NPC wires address:
 
 A declared input that no map wires is still real: `FadeToSkin` and `SetSkinFadeTime` are
 declared by the skin family above and wired zero times.
+
+
+## Parented transforms: current substrate and prerequisite fault [decompiled/asm, L0-r022 checkpoint 2026-10-10]
+
+The confirmed walk `docs/specs/layers/L0-entity/walks/L0-r022.md` remains the transform oracle.
+A fresh current-source comparison found a planning fault before implementation. No runtime code,
+record, build or test changed in this checkpoint. The earlier overlap-query replacement claim is
+unproved; the missing state-bearing chain is not a named modernization accepted by the owner.
+
+- **Current transforms.** `CalcAbsolutePosition` `0x100b1ac0` already implements its dirty gate,
+  clear, no-parent copy, composition and resolved-path network byte. `SetAbsOrigin` `0x100b2300`
+  and `SetAbsAngles` `0x100b2510` are real r017 bodies, not stubs. All still reconstruct the parent's
+  frame from absolute Euler angles. There is no stored `m_rgflCoordinateFrame` (+0x130), and
+  unparented local/absolute words are folded by `bParentLocalPose`. Restoring separate words is
+  required even without a parent: a local write leaves retail's absolute cache stale until a read.
+  Near MatrixAngles' `xy <= 0.001f` arm (roll forced to zero), reconstructing the matrix from the
+  reported angles loses information. Consumers, persistence bindings and runtime writers must be
+  reviewed when splitting these words. NPC slot-216 substitutions for SetOrigin remain in
+  `ElysiumNpcStartTask.cpp` and `ElysiumNpcStartTaskSpecies.cpp`.
+- **Setter asymmetry, confirmed bodies re-read.** `SetAbsOrigin` calls both
+  `InvalidateTransform(0x10800, 0)` `0x100b5340` and the partition tree `0x100b52a0` unconditionally.
+  `SetAbsAngles` calls only `InvalidateTransform(0x800, 0x3000)`; it calls neither `0x100b52a0` nor
+  surrounding-bounds tree `0x100b51b0`. Its parent conversion uses the parent's raw stored frame,
+  rather than GetParentToWorldTransform.
+- **Direct L1 hook.** `GetParentToWorldTransform` `0x100b2150` calls GetAttachment02 `0x10092ef0`
+  through thunk `0x10005d12`; that helper's virtual slot 262 targets GetAttachment03 `0x10093000`.
+  The confirmed shipped callers all pass attachment 0; the attachment arm can remain explicitly
+  named as a shipped-unreachable L1 hook. `hooks.tsv` now records the direct callee.
+- **Dirty producer.** `0x100b52a0` walks this entity then every move descendant and calls
+  `0x100ddd20`. The latter checks IndexOfEdict, and if nonzero and bit 0x8000 clear, sets it and
+  calls `0x100dbc60` to append the owner's serial-bearing reference handle to DAT_106e8144.
+  Current `MarkPartitionHandleDirty` sets only the bit: no queue exists, no consumer runs, the
+  bit is never cleared, and a later change cannot append again. `0x10000` is a numeric position
+  invalidation bit whose reader/meaning remains unrecovered; partition dirtiness is 0x8000.
+- **Actual consumer.** `CDirtySpatialPartitionEntityList::vfunc0` `0x100dbd70` is the +8 subobject
+  callback. It traverses from last handle to first, resolves index/serial, calls entity slot 4,
+  and on a non-null result calls `0x100ddd90(entity+0x270)`; finally it zeroes the list size.
+  `0x100dbac0` is the destructor (frees storage), not the consumer. Coordinator's targeted body/asm
+  recovery supplies scheduling: `0x100dbbe0 Init` registers this+8 through partition slot 10;
+  `0x100dbc20 Shutdown` removes it through slot 11. Engine `CSpatialPartition` table `0x2017432c`
+  slot 10 `0x20040f60` appends the callback; slot 11 `0x20040f80` searches backwards and removes
+  by swap with last. Query slots 12 `0x20042550` (box), 13 `0x20042770` (sphere), 14 `0x20042910`
+  and 15 `0x20042170` call registered callbacks in forward order **before the nonzero-mask gate**.
+  Slot 16 `0x20041640` changes the suppression mask and invokes no callback. Thus draining is
+  query-time, not frame-end. The callback/partition lifecycle remains unimplemented; service and
+  reentrancy details beyond these verified bodies still need the prerequisite packet.
+- **Partition update.** `0x100ddd90` exits when 0x8000 is clear; otherwise clears it before checking
+  the owner edict. With an edict, invalid cp handle (+0x46 == 0xffff) calls `0x100ddbd0` (cp slot 0
+  to ISpatialPartition slot 2 CreateHandle) then membership `0x100ddc40`. The bounds update runs
+  for (solid and not flag 4), or flag 8, or owner EFlags 0x40000. Zero radius uses cp slot 8's origin;
+  nonzero radius uses cp slot 15 `0x100ddae0`, then expands each bound by 1.0 before partition slot 7.
+  These engine operations and state are absent in the current port; handles remain 0xffff.
+- **Surrounding bounds.** `0x100ddae0` reads cp slot 8 origin; under owner EFlags 0x4000 it clears
+  that bit, calls `0x100dd780`, and stores relative surrounding mins/maxs (world results minus
+  origin). Otherwise it adds origin to the cached relative pair. The `0x100dd780` damaged switch
+  was checked against asm: solid type 5 and surround type other than 4 return an origin point;
+  types 0/1/6 select `0x100dd740` (physics selection differs), type 2 calls `0x100dd600` (L1 hitbox
+  hook), type 3 translates specified bounds, type 4 tail-dispatches owner slot 101, type 5 calls
+  `0x100dd630`, out-of-range returns. Default type 0 selects physics only for solid type 6,
+  owner move type 7, a non-null physics object (+0x36c) whose slot 4 returns true.
+- **Ordinary versus physics bounds prerequisites.** `0x100dd740(false)` calls cp slot 3
+  `0x100dc850` -> `0x100dcd90` (r044's rotated/translated collision box) and applies flag 0x100
+  trigger bloat: mins XY decrease, maxs XY increase, max Z adds half the bloat. `0x100dcd90`
+  depends on cp slot 10 `0x100dc680` for the stored frame, which refreshes owner slot 98 when
+  dirty. `0x100dd740(true)` calls `0x100dd450`: asm confirms physics object slot 49 (+0xc4),
+  cp origin/angles and physics collision service at DAT_1072393c slot 18 (+0x48); NULL object gives
+  an origin point. Solid flag 0x100 unions the ordinary collision bounds afterwards.
+  The object's geometry contract and the service call are not implemented or recovered here.
+
+**Proposed prerequisite order, not a closure:** split r022 into (a) stored frame/local-state writers,
+`0x100b2150` and `0x100b1ac0`; (b) ordinary bounds `0x100dcd90` / `0x100dc850` / `0x100dc680`,
+surrounding helpers above, the live physics-reference producer (`VPhysicsSetObject` `0x100a6490`,
+`VPhysicsSwapObject` `0x100a68f0`) and geometry reads needed by `0x100dd450`, and the complete
+queue/engine callback/update lifecycle; (c) the two absolute setters and their consumers/record.
+Only the needed r044/r045 functions are prerequisites; their unrelated velocity/impulse work is
+not implied. The coarse run list places r044/r045 after r022, but the function graph is separable:
+CalcAbsolutePosition and GetParentToWorldTransform perform no partition walk. Their stored-frame
+subset can precede bounds, which can precede SetAbsOrigin. The eager producer-to-setter-to-queue
+ordering alone does not prove an engine scheduling cycle. The coordinator recovered query-time
+callback timing above; the prerequisite must wire that contract, not invent a frame-end scheduler.

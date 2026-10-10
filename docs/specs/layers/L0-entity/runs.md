@@ -4,6 +4,32 @@ Each run is one worker's job (`../method.md`): the slice briefs listed, in order
 consecutive slices of one subsystem up to ~1.5 KB of retail code or 8 functions. Estimated minutes =
 25 fixed + 20 per KB of retail code.
 
+## Active dependency correction (2026-10-10)
+
+Original r022 remains open. Its absolute setters need a partition lifecycle that was omitted from
+the coarse r022 -> r044/r045 ordering. Approved sequence:
+
+1. r022a: stored frame and separate local state, parent accessor `0x100b2150`, dirty rebuild
+   `0x100b1ac0`. Bounded record `l0_parent_frame_cache` plus existing parenting regressions;
+   this does not close r022's absolute setters or full `l0_parented_transforms` record.
+2. Prerequisite packet: ordinary bounds `0x100dcd90` / `0x100dc850` / `0x100dc680`, surrounding
+   helpers `0x100ddae0` / `0x100dd780` / `0x100dd740`, physics geometry `0x100dd450` with live
+   object producer `0x100a6490` / `0x100a68f0` and required object/service operations; dirty list
+   `0x100ddd20` / `0x100dbc60` / `0x100dbd70`, update `0x100ddd90`, handle `0x100ddbd0`,
+   membership `0x100ddc40`, registration/shutdown `0x100dbbe0` / `0x100dbc20`.
+   Records `l0_partition_lifecycle` and `l0_physics_bounds`, with existing bounds regressions.
+   Exact physics geometry service bodies and other surrounding arms remain to be recovered before
+   dispatch; split further only at a complete producer boundary. Engine partition query slots 12-15
+   call the consumer before their mask gate; do not invent frame-end scheduling.
+3. r022b: absolute setters `0x100b2300` / `0x100b2510` and affected callers, full
+   `l0_parented_transforms` record including matrix preservation and SetAbsAngles' absent partition
+   walk. Re-read all original r022 rows and gate before marking that run complete.
+
+These are planned packets and records, not implementation or validation. Current next ready
+coding run is r024, reusing its confirmed walk while the prerequisite packet is refined read-only.
+The detailed retail evidence and missing producers are in `docs/vtmb/entity_io.md` under
+"Parented transforms: current substrate and prerequisite fault".
+
 | run | subsystem | briefs | functions | retail B | est. min | ready | after |
 |---|---|---|---|---|---|---|---|
 | L0-r001 | harness | `L0.harness.test-instrument-1`, `L0.harness.test-instrument-2`, `L0.harness.test-instrument-3` | 0 | 0 | 25 | yes | — |

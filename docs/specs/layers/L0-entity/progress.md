@@ -1,9 +1,26 @@
 # L0 progress — the orchestrator's log
 
-One row per worker run (`runs.md`). Pipeline per run: Haiku CLI reader (API, max effort) walks the retail functions
-(`walks/<run>.md`) → a Sonnet confirmer verifies the walk in place → one Opus worker ports the run's briefs (Fable until r017/r029/r030, Opus from r018 on, the owner's instruction)
-(one coding lane per checkout, `method.md`) → the coordinator gates (build, default tier, the run's
-records) and commits the run alone.
+One row per worker run (`runs.md`). Current operating policy (2026-10-10): GPT-6.1 Sol Medium
+coordinates fresh GPT-6.1 Sol High coding workers, one worker and one run at a time on `main`
+in this checkout. Reuse confirmed walks; make targeted retail lookups when facts remain uncertain.
+The coordinator reviews, gates (build, default tier, run and touched-story records), stages exact
+paths and commits each run alone. Never push. Current AGENTS.md excludes ledger regeneration and
+`research kernel --check` from these gates. Retail is the default for unresolved behavior choices.
+
+Historical attribution below remains intact: Haiku CLI readers walked retail, Sonnet confirmed,
+and Fable/Opus workers implemented the earlier runs. Their older gate claims are historical
+evidence, not new validation or acceptance of the layer closing gate.
+
+## Current checkpoint
+
+- Start: `47b6f780`, clean `main`; r001-r021, r029, r030 landed (23/88).
+- r022 deferred before runtime edits: its absolute-origin partition walk needs the unfinished
+  bounds/physics/partition lifecycle. Docs-only recovery checkpoint; no code gate or new record.
+- Approved dependency repair: r022a cached frame/accessor -> complete bounds/physics/partition
+  prerequisite -> r022b absolute setters/full parented record. Original r022 remains open.
+- Next dependency-ready run: r024 named thinks/base spawn/removal, using its confirmed walk.
+- Layer closure remains open: 65 unlanded runs, rebakes, default/arm and full arena gate,
+  intermittent records in three boot orders, audit/hooks and state-bearing replacement checks.
 
 | run | walk | confirmed | worker | gate | commit |
 |---|---|---|---|---|---|
@@ -14,21 +31,21 @@ records) and commits the run alone.
 | L0-r005 | haiku 82 turns $0.61 | sonnet: 3 corrected (preset block, SetMoveType, UTIL_Remove path) | done, 20 min (B) | B: build ok, 169/0, l0_ambient_init pass; main re-gate ok | `9dde13a1` (cherry-pick of lane-b 3a1e3295) | — | — |
 | L0-r006 | haiku 126 turns $0.77 | sonnet: fadein 2560 not 512; slot 113 is Activate (once, ServerActivate); preset table decoded | done, 53 min | build ok, 169/0, kernel --check ok (ledger regenerated), arena 6 new + 9 prior pass | `665bd107` |
 | L0-r007 | haiku 79 turns $0.44 | sonnet: lazy getters -2 sentinel, SndScheme_Char registry, RTTI CBaseTerminal/CPropSwitch | done, 42 min | build ok, 169/0, ledger regenerated, 3 new + 10 prior records pass | `5939e7ac` | — | — |
-| L0-r008 | haiku 70 turns $0.43 | sonnet: RandomInt(0,0) draws nothing; rec+0x48 = missing-wave flag; case-insensitive interning |
-| L0-r009 | haiku 79 turns $0.35 | sonnet: eviction key = quietest retiring; retire rate +0x48/duration; 0x1044fab0 double |
-| L0-r010 | haiku 100 turns $0.61 (rerun via stdin) | sonnet: SetParent never touches triggers (bTouch 0), attach always 0, slot 115 no-op; MOVETYPE_FOLLOW |
-| L0-r011 | haiku 149 turns $0.91 | sonnet: +0x494 is the host FRAME counter (story goal wrong), decal filter table, CTEBSPDecal |
-| L0-r012 | haiku 103 turns $0.48 | sonnet: style 32 gates Spawn/Use only; inputs bypass Use; AcceptInput refuses non-string params |
-| L0-r013 | haiku 99 turns $0.56 | sonnet: 0x10449280 is 1.0 (frames > 1); sprite angle arm SetAngles(pitch,0,yaw); blood x5 arm dead in SP |
-| L0-r014 | haiku 52 turns $0.31 | sonnet: TE spray emits nothing (slot 14 bare RET; r013 slot 13/14 swapped); IsMultiplayer 0 kills x5 arm; Smoke scale 0.1 |
-| L0-r015 | haiku 93 turns $0.48 | sonnet: fresh entity eflags 0x50000; FUN_100dc300 runs twice per entity; untouch queue consumer 0x100f9160 |
-| L0-r016 | haiku 132 turns $1.03 (max) | sonnet: ctor eflags 0x54000 (no 0x8000 without edict); ParentName is m_iParent +0x124; lip formulas unclamped |
-| L0-r017 | haiku 95 turns $1.01 (max) | sonnet: ParseMapData has 2 more dispatch sites; outputs arrive as type-10 KEY rows; debug gate is ent_debugkeys |
-| L0-r018 | haiku 104 turns $0.81 (max) | sonnet: tokenizer 0x10136ce0 read (signed compares); mins/maxs/origin/angles arms set EFL 0x8000; Python __getattr__ bypasses ReadKeyField |
-| L0-r019 | haiku 132 turns $0.82 (max) | sonnet: all six CONFIRMED; thunks not extra call sites; 0x450 size stands |
-| L0-r020 | haiku 97 turns $0.61 (max) | sonnet: thunks not second bodies; NPC/player override BodyTarget; IsMonster byte 0/1 |
-| L0-r021 | haiku 138 turns $0.98 (max) | sonnet: SetModel/UTIL_SetModel never precache (unprecached name fatal); IsViewable via GetModelType; weapon bHidden != script-hidden latch |
-| L0-r022 | haiku 128 turns $0.89 (max) | sonnet: SetAbsAngles has NO partition walk; hooks.tsv:9 hook is 0x10092ef0 not 0x10093000; ctor sets EFL 0x10000 |
+| L0-r008 | haiku 70 turns $0.43 | sonnet: RandomInt(0,0) draws nothing; rec+0x48 = missing-wave flag; case-insensitive interning | done (historical commit) | historical commit reports build ok, default 169/0; l0_sound_script_resolve; 12 prior pass; exact report path not recorded | `09ddb703` |
+| L0-r009 | haiku 79 turns $0.35 | sonnet: eviction key = quietest retiring; retire rate +0x48/duration; 0x1044fab0 double | done (historical commit) | historical commit reports build ok, default 169/0; l0_sound_scheme_switch; 7 prior pass; exact report path not recorded | `cfdc35ac` |
+| L0-r010 | haiku 100 turns $0.61 (rerun via stdin) | sonnet: SetParent never touches triggers (bTouch 0), attach always 0, slot 115 no-op; MOVETYPE_FOLLOW | done (historical commit) | historical commit reports build ok, default 169/0; l0_entity_parenting, l0_particle_attachment; 8 prior pass, input_changeschedule_reselect expected-fail; exact report path not recorded | `993c5af9` |
+| L0-r011 | haiku 149 turns $0.91 | sonnet: +0x494 is the host FRAME counter (story goal wrong), decal filter table, CTEBSPDecal | done (historical commit) | historical commit reports build ok, default 169/0; l0_particle_spawn, l0_particle_ramp_time, l0_world_sweep_query, l0_runtime_decal; 9 prior pass; exact report path not recorded | `a9f47710` |
+| L0-r012 | haiku 103 turns $0.48 | sonnet: style 32 gates Spawn/Use only; inputs bypass Use; AcceptInput refuses non-string params | done (historical commit) | historical commit reports build ok, default 169/0; l0_switchable_light; 11 prior pass, two expected-fails; exact report path not recorded | `03a8625d` |
+| L0-r013 | haiku 99 turns $0.56 | sonnet: 0x10449280 is 1.0 (frames > 1); sprite angle arm SetAngles(pitch,0,yaw); blood x5 arm dead in SP | done (historical commit) | historical commit reports build ok, default 169/0; l0_sprite_lifecycle, l0_illusionary_spawn, l0_blood_effects; 11 prior pass; exact report path not recorded | `d7fed4d2` |
+| L0-r014 | haiku 52 turns $0.31 | sonnet: TE spray emits nothing (slot 14 bare RET; r013 slot 13/14 swapped); IsMultiplayer 0 kills x5 arm; Smoke scale 0.1 | done (historical commit) | historical commit reports build ok, default 169/0; l0_blood_effects; 8 prior pass; exact report path not recorded | `283bec98` |
+| L0-r015 | haiku 93 turns $0.48 | sonnet: fresh entity eflags 0x50000; FUN_100dc300 runs twice per entity; untouch queue consumer 0x100f9160 | done (historical commit) | historical commit reports build ok, default 169/0; l0_eflags_word, l0_solid_touch_generation; 13 prior pass; exact report path not recorded | `c78f9398` |
+| L0-r016 | haiku 132 turns $1.03 (max) | sonnet: ctor eflags 0x54000 (no 0x8000 without edict); ParentName is m_iParent +0x124; lip formulas unclamped | done (historical commit) | historical commit reports build ok, default 169/0; l0_collision_bounds_size, l0_entity_constructor_defaults; 18 prior pass; exact report path not recorded | `8d5b0296` |
+| L0-r017 | haiku 95 turns $1.01 (max) | sonnet: ParseMapData has 2 more dispatch sites; outputs arrive as type-10 KEY rows; debug gate is ent_debugkeys | done (historical commit) | historical commit reports build ok, default 169/0; l0_datamap_keyvalues; 23 prior pass, input_disablethink expected-fail; exact report path not recorded | `e76026a4` |
+| L0-r018 | haiku 104 turns $0.81 (max) | sonnet: tokenizer 0x10136ce0 read (signed compares); mins/maxs/origin/angles arms set EFL 0x8000; Python __getattr__ bypasses ReadKeyField | done (historical commit) | historical commit reports build ok, default 169/0; l0_datamap_keyvalues; 11 named regression records pass; exact report path not recorded | `ff43d137` |
+| L0-r019 | haiku 132 turns $0.82 (max) | sonnet: all six CONFIRMED; thunks not extra call sites; 0x450 size stands | done (historical commit) | historical commit reports build ok, default 169/0; l0_data_object_registry; 8 prior pass; touched arms 2/2; exact report path not recorded | `d4d8bf10` |
+| L0-r020 | haiku 97 turns $0.61 (max) | sonnet: thunks not second bodies; NPC/player override BodyTarget; IsMonster byte 0/1 | done (historical commit) | historical commit reports build ok, default 169/0; l0_target_name_predicates, l0_should_toggle, l0_base_perception_defaults, l0_is_monster_template_flag; 9 prior pass; exact report path not recorded | `c1151ee7` |
+| L0-r021 | haiku 138 turns $0.98 (max) | sonnet: SetModel/UTIL_SetModel never precache (unprecached name fatal); IsViewable via GetModelType; weapon bHidden != script-hidden latch | done (historical commit) | historical commit reports build ok, default 169/0; l0_entity_visual_state, l0_angle_motion; 15 prior pass; exact report path not recorded | `00187639` |
+| L0-r022 | haiku 128 turns $0.89 (max) | sonnet: SetAbsAngles has NO partition walk; direct hook 0x10092ef0; current Sol recovery adds query-time partition lifecycle | deferred, no runtime edits | not gated: docs-only checkpoint; record still absent | pending docs-only checkpoint |
 | L0-r023 | haiku 98 turns $0.94 (max) | sonnet: Teleport has 3 bodies, 12 callers; notify block has physicsRotate byte; base has no m_fEffects storage |
 | L0-r024 | haiku 121 turns $0.86 (max) | sonnet: ctor leaves grow size 0 / current ctx -1; slot 15 SetAttackExtents updates the partition; last-think written after the callback |
 | L0-r025 | haiku 191 turns $1.25 (max) | sonnet: PostConstructor forces serial -1; empty classname never enqueues (+0x448 = -1); CGameStringPool case-sensitive |
@@ -37,13 +54,12 @@ records) and commits the run alone.
 | L0-r028 | haiku 182 turns $0.85 (max) | sonnet: stat-action callback resolves 3 names (port knows 1); FString == is case-insensitive; TMultiMap returns last landmark first |
 | L0-r029 | haiku 93 turns $0.67 (max) | sonnet: cleanup inlined (no callees); 5 blocks Entities/EventQueue/Physics/AI/Python; slot order 17/18/19, restore 20 then 21 | done, 48 min (B) | B: build ok, 169/0, kernel ok, l0_save_restore_blocks + V6 checkpoint records pass | `c5617a18` (cherry-pick of lane-b c8a56c36); follow-up `08ad2527` (bindings keep retail's KEY flag for max_npcs/nextthink — exposed by restore_place_invalid_marker) |
 | L0-r034 | haiku 88 turns $0.85 (max) | sonnet: pickers return the node/link in EAX; 4 callers via thunks; GetPosition already ported (FElysiumPlaceSet::GetPositionCm) |
-| L0-r030 | haiku 125 turns $0.80 (max) | sonnet: changelevel args are (oldLevel, landmark); m_szMapName +0x598 / m_szLandmarkName +0x5b8 (walk had them swapped); transition mask aliases >= 32 |
+| L0-r030 | haiku 125 turns $0.80 (max) | sonnet: changelevel args are (oldLevel, landmark); m_szMapName +0x598 / m_szLandmarkName +0x5b8 (walk had them swapped); transition mask aliases >= 32 | done (historical commit) | historical commit reports build ok, default 169/0; l0_transition_state; l0_save_restore_blocks, V6 checkpoint, 7 prior pass; persistence_world_rebind expected-fail; exact report path not recorded | `71d63e31` |
 | L0-r031 | haiku 166 turns $1.01 (max) | sonnet: 0x101707c0 gate is pOldLevel != NULL (not a float); slot 134 is Think; m_fFlags +0x434 |
 | L0-r032 | haiku 130 turns $0.81 (max) | sonnet: IsFloating's this is the ground entity; -9999 sentinel skips the distance test; slot 135 is CBaseEntity's own default |
 | L0-r035 | haiku 98 turns $0.98 (max) | sonnet: a BSP/static-prop hit leaves trace.m_pEnt = the WORLD entity (port writes Invalid — unnamed divergence); view-pick runs only on a total miss |
 | L0-r036 | haiku 129 turns $0.87 (max) | — (not yet confirmed) |
 | L0-r033 | haiku 111 turns $1.01 (max; out of order, a lane-B candidate) | sonnet: acos(+-1) finite; A14/A15 = cand between src/dst; port has no link storage; hooks.tsv:345-346 stale |
-| L0-r026 | haiku running | — | — | — | — | — | — | — |
 
 ## Where this stopped (2026-10-10 13:50 UTC, the owner's stop)
 
@@ -55,13 +71,24 @@ is reset to `main`. Before the layer closes: rebake sprites (r013 `frames`) and 
 arm tier (ElysiumNpcKernelPositionsTests.cpp:799 assumes IsViewable false), the full arena and
 `contract-checks.md`, settle the owner notes below.
 
-## Lanes
+## Historical lanes (inactive under current policy)
 
 Lane A: this checkout (`main`). Lane B: the clone `E:/dev/elysium-unreal-b` (branch `lane-b`, own binaries,
 `Plugins/ElysiumBaked/Content` junctioned to lane A's baked content, `Plugins/External` copied); its runs are
 gated in the clone, cherry-picked onto `main`, and re-gated here (`decisions.md` D2).
 
 ## Planning faults (reported by workers)
+
+- r022: `SetAbsOrigin` 0x100b2300 -> tree 0x100b52a0 -> dirty append 0x100ddd20 /
+  0x100dbc60 -> query callback 0x100dbd70 -> update 0x100ddd90 -> surrounding bounds
+  0x100ddae0 / 0x100dd780. Ordinary bounds need 0x100dcd90 and the stored absolute frame;
+  physics-selected bounds need the live object at +0x36c, slots 4/49 and collision-service slot 18.
+  Those r044/r045 prerequisites were incorrectly scheduled after r022. Root approved splitting
+  cached frame/accessor first, complete producer lifecycle second, absolute setters last.
+  Query callbacks run before partition query slots 12-15, including zero-mask queries; a frame-end
+  drain would diverge. Detail and remaining recovery: `docs/vtmb/entity_io.md` current r022 section.
+  Overlap-query equivalence is unproved. This checkpoint downgrades overstated audit closure;
+  it accepts no modernization and completes no run. r024 proceeds independently next.
 
 - r029/r030: `hooks.tsv` has no rows for the AI and Python save-block handlers (0x1011a0c0 -> 0x1030c390 / 0x1019b360);
   they are registered with empty bodies as L4/L5 hooks — the owner adds the rows.
