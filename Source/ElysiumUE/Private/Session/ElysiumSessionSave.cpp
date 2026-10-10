@@ -208,7 +208,10 @@ bool UElysiumSessionSubsystem::BuildPayload(FElysiumSavePayload& Out, FString& O
 
 	// Maps.
 	// Every map visited this run, plus the current one frozen right now through the same call a
-	// travel boundary uses.
+	// travel boundary uses. The freeze is the engine's SaveGameState (0x20096470): CServerGameDLL
+	// slot 17 PreSave 0x1011b890, slot 18 Save 0x1011b080 (always 1, so slot 19 always follows),
+	// slot 19 WriteSaveHeaders + PostSave 0x1011b8b0 over the registered block set (L0-r029,
+	// `ElysiumSaveRestoreBlocks.h`); the snapshot carries the stream the five handlers wrote.
 	Out.Maps = State->MapSnapshots();
 	if (World && !World->MapName().IsEmpty())
 	{
@@ -309,6 +312,11 @@ bool UElysiumSessionSubsystem::Load(const FString& Slot, FString& OutError)
 		return Refuse();
 	}
 
+	// The decode runs each map's block stream through the set with no world (L0-r029: slots 20 and
+	// 21, `DecodeMapBlocks`); a stream that does not read back refuses the whole payload here. The
+	// restore proper -- slot 20 0x1011b950 then slot 21 0x1011b300 with the world -- runs at the
+	// map's spawn (`ElysiumMapActorLifecycle.cpp` -> `ApplySnapshot`), as the engine's 0x200975f0
+	// does after the map is up.
 	FElysiumSavePayload Payload;
 	if (!ReadSlotPayload(Slot, Payload, OutError))
 	{

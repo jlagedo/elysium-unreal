@@ -104,6 +104,7 @@ static bool CorruptCrc(FElysiumMapSnapshot& Snapshot, int32 NpcIndex)
 		const int64 CrcOffset = Reader.Tell(); uint32 Crc = 0; Ar << Crc;
 		if (Reader.IsError()) return false;
 		FMemoryWriter Writer(Record.LeafState, true); Writer.Seek(CrcOffset); Crc ^= 0xffffffffu; Writer << Crc; // 0x1027c064 control
+		Snapshot.BlockStream.Reset(); // the row was edited after its freeze: the codec re-encodes the block stream from the rows (L0-r029)
 		return !Writer.IsError();
 	}
 	return false;

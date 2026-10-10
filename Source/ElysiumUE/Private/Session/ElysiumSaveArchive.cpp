@@ -1,5 +1,6 @@
 #include "ElysiumSaveArchive.h"
 
+#include "Substrate/ElysiumSaveRestoreGame.h" // L0-r029: the block set's stream a map snapshot travels as
 #include "Serialization/ArchiveLoadCompressedProxy.h"
 #include "Serialization/ArchiveSaveCompressedProxy.h"
 #include "Serialization/MemoryReader.h"
@@ -446,18 +447,19 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedFade& F)
 FArchive& operator<<(FArchive& Ar, FElysiumMapSnapshot& M)
 {
 	Ar << M.MapName << M.DefCount << M.FrozenAt << M.SaveBase; // 0x200962c0/0x101a0a80
-	Ar << M.Entities;
+	// L0-r029: the Entities and EventQueue rows travel as the block set's stream (`.HL1`'s header and
+	// data areas, `docs/vtmb/savegame_format.md`), written by `Freeze` through CServerGameDLL slots
+	// 17 / 18 / 19. A snapshot built or edited in memory after its freeze carries no stream (the
+	// harness resets it), so the writer encodes one here through the same chain. The scalars below
+	// are the section's own words outside the block set (its global preamble and `.HL3`).
+	if (Ar.IsSaving() && M.BlockStream.IsEmpty())
+	{
+		ElysiumSaveRestore::EncodeMapBlocks(M, nullptr);
+	}
+	Ar << M.BlockStream << M.BlockHeaderStart;
 	Ar << M.AbsentEntities;
-	Ar << M.Queue << M.QueueNextSerial;
-	if (Ar.IsSaving() || Ar.CustomVer(FElysiumSaveVersion::GUID) >= FElysiumSaveVersion::EventClock)
-	{
-		Ar << M.QueueLastEnqueue;
-	}
 	Ar << M.Fade;
-	if (Ar.IsSaving() || Ar.CustomVer(FElysiumSaveVersion::GUID) >= FElysiumSaveVersion::Weather)
-	{
-		Ar << M.Weather;
-	}
+	Ar << M.Weather;
 	// The schema the snapshot's opaque leaf blobs were written at. It has to be recorded rather than
 	// assumed, because a leaf archive is constructed from bytes and carries no version of its own —
 	// see `FElysiumMapSnapshot::SchemaVersion`.
@@ -475,6 +477,17 @@ FArchive& operator<<(FArchive& Ar, FElysiumMapSnapshot& M)
 		M.SchemaVersion = Ar.CustomVer(FElysiumSaveVersion::GUID);
 	}
 	Ar << M.ComfortTargets;
+	if (Ar.IsLoading())
+	{
+		// The reader's decode (engine 0x200975f0's "complete codec decode" fence): slots 20 / 21 over
+		// the stream with no world, so the arrays hold the rows for every consumer that reads a payload
+		// before a map applies it (the slot browser's dump, the lifecycle's row count, the harness
+		// envelope). `ApplySnapshot` runs the same chain again with the world.
+		if (!ElysiumSaveRestore::DecodeMapBlocks(M))
+		{
+			Ar.SetError(); // a stream that does not read back: refuse the payload, never half-read it
+		}
+	}
 	return Ar;
 }
 

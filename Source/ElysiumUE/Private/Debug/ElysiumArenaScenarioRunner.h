@@ -278,6 +278,9 @@ private:
 		virtual bool FileExists(const TCHAR* Path) override { return Files.Contains(ElysiumSoundScript::FExactKey(Path)); }
 	};
 	TMap<FString, TUniquePtr<FStagedSoundScript>> StagedSoundScripts;
+	// `save_blocks` fixtures (L0-r029): each one's `CSaveRestoreBlockSet`, handlers and engine save
+	// buffer, kept for the run so a `SaveRestore_Restore` reads what the `SaveRestore_Save` wrote.
+	TMap<FString, TSharedPtr<struct FElysiumArenaStagedSaveBlocks>> StagedBlockSets;
 	TArray<bool> ActionFired;
 	TArray<bool> ProbeRead;
 

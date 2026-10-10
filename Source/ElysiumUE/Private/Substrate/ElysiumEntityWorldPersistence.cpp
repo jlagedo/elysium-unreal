@@ -3,8 +3,10 @@
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumRetailSite.h"
 #include "ElysiumSaveArchive.h"
 #include "Substrate/ElysiumEntityWorldShared.h"
+#include "Substrate/ElysiumSaveRestoreGame.h" // L0-r029: the block set's chain over this map's rows
 
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
@@ -154,10 +156,21 @@ void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
 	Out.Weather = WeatherState;
 	Out.Weather.TransitionStart -= Out.SaveBase; // TIME; durations stay FLOAT
 
+	// L0-r029: the engine's save (CSaveRestore::vfunc13 0x20096470) hands the buffer to the registered
+	// block set -- CServerGameDLL slot 17 PreSave (0x1011b890), slot 18 Save (0x1011b080), slot 19
+	// WriteSaveHeaders + PostSave (0x1011b8b0) -- whose Entities and EventQueue handlers write the rows
+	// captured above into the section's stream. Retail runs it at exactly this point of a save and of
+	// a departing map's freeze; the tap names the set ("Game", set slot 0) in the entity column.
+	{
+		FElysiumEntityWorld& TraceWorld = const_cast<FElysiumEntityWorld&>(*this); // the trace sink is debug output, never state
+		FElysiumNamedRetailSites Sites(TraceWorld, TEXT("Game"));
+		ElysiumSaveRestore::EncodeMapBlocks(Out, HasAiTraceSink() ? &Sites : nullptr);
+	}
+
 	UE_LOG(LogElysiumWorld, Log,
-		TEXT("froze '%s' at %.3f: %d/%d entity records, %d absent, %d queued"),
+		TEXT("froze '%s' at %.3f: %d/%d entity records, %d absent, %d queued, %d block bytes"),
 		*Out.MapName, Out.FrozenAt, Out.Entities.Num(), EntityList.Num(),
-		Out.AbsentEntities.Num(), Out.Queue.Num());
+		Out.AbsentEntities.Num(), Out.Queue.Num(), Out.BlockStream.Num());
 }
 
 int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
@@ -202,6 +215,68 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot, do
 	// think (`0x102f6690`) is armed afresh: the gate re-stamps here (0018 story 5, lane D).
 	BuildStamp = NowSeconds();
 	bNetworkManagerFirstThinkRun = false;
+
+	// L0-r029: the engine's restore runs the registered block set over the section's stream --
+	// CServerGameDLL slot 20 (0x1011b950: set PreRestore, then ReadRestoreHeaders reads the two lengths,
+	// the directory and each found block's headers) and, on an ordinary load (CSaveRestore::vfunc9
+	// 0x200975f0), slot 21 (0x1011b300: set Restore seeks each found block's body and calls its handler,
+	// then PostRestore). A level transition (vfunc10 0x20097d00) calls slot 20 only and the engine
+	// reads the entity data itself. The Entities and EventQueue handlers' Restore bodies decode the
+	// rows into `Decoded` and apply them here (`ApplyRestoredEntities` / `ApplyRestoredQueue`).
+	FElysiumMapSnapshot Decoded;
+	int32 Applied = INDEX_NONE;
+	{
+		FElysiumNamedRetailSites Sites(*this, TEXT("Game"));
+		Applied = ElysiumSaveRestore::RestoreMapBlocks(Snapshot, *this, Decoded, RestoreBase, bLevelTransition,
+			HasAiTraceSink() ? &Sites : nullptr);
+	}
+	if (Applied == INDEX_NONE) return INDEX_NONE; // a refused row or a stream that did not read back: no partial decode
+
+	ComfortTargetList.Reset();
+	for (const FElysiumEntityHandle& Saved : Decoded.ComfortTargets)
+	{
+		const FElysiumEntityHandle Target = RebaseHandle(Saved);
+		if (Target.IsSet()) { ComfortTargetList.Add(Target); }
+	}
+	ScreenFade = FScreenFade::FromSaved(Decoded.Fade);
+	ScreenFade.StartTime += RestoreBase; // 0x101a2a30
+	WeatherState = Decoded.Weather;
+	WeatherState.TransitionStart += RestoreBase; // 0x101a2a30
+	WeatherState.Tick(NowSeconds());
+	PublishWetness();
+
+	// 0x1011a620: reversed restored list, only after all decode/fixup/queue work.
+	for (int32 Row = Decoded.Entities.Num() - 1; Row >= 0; --Row)
+	{
+		const int32 RestoredIndex = Decoded.Entities[Row].Index;
+		if (!SnapshotEntityIndices.Contains(RestoredIndex) || Decoded.AbsentEntities.Contains(RestoredIndex)) continue;
+		FElysiumEntity& Restored = *EntityList[RestoredIndex];
+		if (FElysiumCombatCharacter* Character = Restored.AsCombatCharacter()) // 0x10348890 V4c team registration
+		{
+			if (!Character->TeamName.IsEmpty()) Character->AddToTeam(Character->TeamName);
+			if (&Restored == FindPlayer()) Character->AddToTeam(TEXT("player")); // 0x1016ebd0
+		}
+		Restored.OnPostRestore(*this); // 0x1027bf50/0x102998c0, later callback/deadline writes WIN
+		Restored.OnRuntimeTransformChanged(); // 0x100aa140 POSITION physical reconnect after coherent words
+		Restored.OnDormancyChanged(); // reconnect presentation after coherent restore
+		NotifyVisualChanged(Restored);
+	}
+	bSnapshotApplied = true; // 0x1011a620 complete restoration
+	if (OnSnapshotApplied) OnSnapshotApplied(); // exact applied-before-think witness
+
+	UE_LOG(LogElysiumWorld, Log,
+		TEXT("applied snapshot '%s': %d/%d entity records, %d absent, %d queued"),
+		*Decoded.MapName, Applied, Decoded.Entities.Num(), Decoded.AbsentEntities.Num(),
+		Decoded.Queue.Num());
+	return Applied;
+}
+
+int32 FElysiumEntityWorld::ApplyRestoredEntities(const FElysiumMapSnapshot& Snapshot, double RestoreBase)
+{
+	// The Entities block's restore half (L0-r029): called from the block set's slot 7 dispatch of the
+	// `Entities` handler, or from the engine-side transition path. Everything below is the port's
+	// existing apply, unchanged in order.
+	SnapshotEntityIndices.Reset();
 
 	// Pass 1 — re-create the runtime-spawned entities (npc_maker.Spawn, CreateEntityNoSpawn) from the
 	// defs that ride along, in index order, so every one lands back on its saved index. They do land
@@ -298,7 +373,13 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot, do
 			break;
 		}
 	}
+	return Applied;
+}
 
+void FElysiumEntityWorld::ApplyRestoredQueue(const FElysiumMapSnapshot& Snapshot, double RestoreBase)
+{
+	// The EventQueue block's restore half (L0-r029): the `EventQueue` handler's slot 7 body, after the
+	// Entities handler's (retail's registration order), or the engine-side transition path.
 	// The queue is REPLACED: this load's Spawn pass has already queued its own openers, and the
 	// saved queue is the one that was actually pending.
 	EventQueue.Reset();
@@ -317,44 +398,6 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot, do
 	// absolute against the restored clock. The guard's own state comes back with it, so the first
 	// live enqueue after the load compares against the time the save was written at.
 	EventQueue.SetLastEnqueue(Snapshot.QueueLastEnqueue + RestoreBase); // TIME guard
-
-	ComfortTargetList.Reset();
-	for (const FElysiumEntityHandle& Saved : Snapshot.ComfortTargets)
-	{
-		const FElysiumEntityHandle Target = RebaseHandle(Saved);
-		if (Target.IsSet()) { ComfortTargetList.Add(Target); }
-	}
-	ScreenFade = FScreenFade::FromSaved(Snapshot.Fade);
-	ScreenFade.StartTime += RestoreBase; // 0x101a2a30
-	WeatherState = Snapshot.Weather;
-	WeatherState.TransitionStart += RestoreBase; // 0x101a2a30
-	WeatherState.Tick(NowSeconds());
-	PublishWetness();
-
-	// 0x1011a620: reversed restored list, only after all decode/fixup/queue work.
-	for (int32 Row = Snapshot.Entities.Num() - 1; Row >= 0; --Row)
-	{
-		const int32 RestoredIndex = Snapshot.Entities[Row].Index;
-		if (!SnapshotEntityIndices.Contains(RestoredIndex) || Snapshot.AbsentEntities.Contains(RestoredIndex)) continue;
-		FElysiumEntity& Restored = *EntityList[RestoredIndex];
-		if (FElysiumCombatCharacter* Character = Restored.AsCombatCharacter()) // 0x10348890 V4c team registration
-		{
-			if (!Character->TeamName.IsEmpty()) Character->AddToTeam(Character->TeamName);
-			if (&Restored == FindPlayer()) Character->AddToTeam(TEXT("player")); // 0x1016ebd0
-		}
-		Restored.OnPostRestore(*this); // 0x1027bf50/0x102998c0, later callback/deadline writes WIN
-		Restored.OnRuntimeTransformChanged(); // 0x100aa140 POSITION physical reconnect after coherent words
-		Restored.OnDormancyChanged(); // reconnect presentation after coherent restore
-		NotifyVisualChanged(Restored);
-	}
-	bSnapshotApplied = true; // 0x1011a620 complete restoration
-	if (OnSnapshotApplied) OnSnapshotApplied(); // exact applied-before-think witness
-
-	UE_LOG(LogElysiumWorld, Log,
-		TEXT("applied snapshot '%s': %d/%d entity records, %d absent, %d queued"),
-		*Snapshot.MapName, Applied, Snapshot.Entities.Num(), Snapshot.AbsentEntities.Num(),
-		Snapshot.Queue.Num());
-	return Applied;
 }
 
 bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S,

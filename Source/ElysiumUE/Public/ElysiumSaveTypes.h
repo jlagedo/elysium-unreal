@@ -113,6 +113,12 @@ struct FElysiumSaveVersion
 
 		MapTimeContext = 43, // 0x101a0a80/0x101a2a30: section deltas and callback identity
 
+		// L0-r029: a map's Entities and EventQueue rows travel inside the save/restore block set's
+		// stream (`FElysiumMapSnapshot::BlockStream`, `ElysiumSaveRestoreBlocks.h`), not as two
+		// top-level arrays; the queue's serial and guard words moved into the EventQueue body. A
+		// whole-record change, so the floor moves.
+		SaveBlocks = 44,
+
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
 	};
@@ -143,7 +149,10 @@ struct FElysiumSaveVersion
 	//
 	// `NpcMindOwnerRetired` removes the body-owner byte from the NPC's mind block; saves are
 	// disposable (no migration) and the floor moves with it.
-	static constexpr int32 MinSupported = MapTimeContext;
+	//
+	// `SaveBlocks` moves the entity and queue rows into the block set's stream (L0-r029); saves are
+	// disposable (no migration) and the floor moves with it.
+	static constexpr int32 MinSupported = SaveBlocks;
 
 	static const FGuid GUID;
 };
@@ -245,14 +254,20 @@ struct FElysiumMapSnapshot
 	// is exact: every blob in it was written by the build that wrote the file.
 	int32 SchemaVersion = FElysiumSaveVersion::Latest;
 
+	// The Entities block's rows: the DECODED form of what the block set's `Entities` handler writes
+	// (L0-r029). In memory `Freeze` fills it and encodes `BlockStream` from it; a file carries the
+	// stream only, and the reader decodes these back. A snapshot built or edited by hand (the
+	// harness) must leave `BlockStream` empty so the writer re-encodes it.
 	TArray<FElysiumEntityState> Entities;
 
 	// The `.HL3` equivalent: def indices that left the map with the player (the player plus
 	// everything carried). On restore the build skips them, because they now live wherever the
-	// player is — without it, walking back re-materialises the whole inventory.
+	// player is — without it, walking back re-materialises the whole inventory. Retail writes the
+	// `.HL3` outside the block set, and so does the port: a scalar of the section, not a block body.
 	TArray<int32> AbsentEntities;
 
-	// The one time-sorted queue, FireTime/guard stored relative to SaveBase (0x101a0a80).
+	// The one time-sorted queue, FireTime/guard stored relative to SaveBase (0x101a0a80): the
+	// EventQueue block's decoded rows, with the two words its body carries beside them.
 	TArray<FElysiumIOEvent> Queue;
 	uint64 QueueNextSerial = 1;
 	// The queue's backward-clock guard state, saved with the queue it guards. The restored clock is
@@ -263,6 +278,15 @@ struct FElysiumMapSnapshot
 	FElysiumSavedFade Fade;
 	FElysiumWeatherState Weather;
 	TArray<FElysiumEntityHandle> ComfortTargets;
+
+	// The block set's stream (L0-r029, `ElysiumSaveRestoreBlocks.h`): the engine's one save buffer
+	// as the five registered handlers wrote it -- the data section (set slot 2 0x101a48e0, from
+	// offset 0) then the header section (set slot 3 0x101a4970, from `BlockHeaderStart`: the two
+	// section lengths, the `SaveRestoreBlockHeader_t` directory, each handler's headers). Retail's
+	// engine moves the two sections into the `.HL1` header and data areas; the port keeps the buffer
+	// whole and the one offset. `Freeze` produces it; `ApplySnapshot` restores through it.
+	TArray<uint8> BlockStream;
+	int32 BlockHeaderStart = 0;
 
 	bool IsValid() const { return !MapName.IsEmpty(); }
 };

@@ -14,6 +14,8 @@
 #include "ElysiumKeyValuesLoader.h"          // `entity_call KeyValues_LoadFile`
 #include "ElysiumRetailSite.h"               // the named sink those calls report through
 #include "Audio/ElysiumSoundScript.h"        // `entity_call SoundScript_New` / `SoundScript_SetChannel`
+#include "ElysiumSaveRestoreBlocks.h"         // `save_blocks` fixtures and `entity_call SaveRestore_*` (L0-r029)
+#include "Misc/ScopeExit.h"
 #include "Substrate/ElysiumBloodEffects.h"   // `entity_call Blood_Spawn`: `FUN_102699e0` on a utility target
 #include "ElysiumInputRouter.h"              // `player_walk`: the input replay door `gr_walk` drives
 #include "ElysiumMapActor.h"
@@ -881,6 +883,113 @@ namespace ElysiumArenaRunnerDetail
 	}
 }
 
+// L0-r029 `save_blocks`: one handler of the record's own, an ISaveRestoreBlockHandler whose Save writes
+// `BodyWords` dwords and whose WriteSaveHeaders writes `HeaderWords` dwords (values a reader can check),
+// and whose restore slots read them back. The set's dispatch is what the record observes (the set's
+// `retail_site` taps); the handler keeps what it read so the call's result line can say it read back.
+struct FElysiumArenaSaveBlockHandler final : public ElysiumSaveRestore::IBlockHandler
+{
+	FElysiumArenaSaveBlockHandler(const FString& InName, int32 InHeaderWords, int32 InBodyWords, int32 InSeed)
+		: Name(InName), HeaderWords(InHeaderWords), BodyWords(InBodyWords), Seed(InSeed)
+	{
+		FMemory::Memzero(NameAnsi, sizeof(NameAnsi));
+		FCStringAnsi::Strncpy(NameAnsi, TCHAR_TO_ANSI(*InName), sizeof(NameAnsi));
+	}
+	virtual const char* GetBlockName() const override { return NameAnsi; }
+	virtual void PreSave(ElysiumSaveRestore::FSaveRestoreData* /*Arg*/) override { ++PreSaves; }
+	virtual void Save(ElysiumSaveRestore::FSave& S) override
+	{
+		for (int32 K = 0; K < BodyWords; ++K) { const int32 Word = BodyWord(K); S.WriteInt(&Word, 1); }
+	}
+	virtual void WriteSaveHeaders(ElysiumSaveRestore::FSave& S) override
+	{
+		for (int32 K = 0; K < HeaderWords; ++K) { const int32 Word = HeaderWord(K); S.WriteInt(&Word, 1); }
+	}
+	virtual void PostSave() override { ++PostSaves; }
+	virtual void PreRestore() override { ++PreRestores; bHeaderOk = false; bBodyOk = false; bRestoredThisCall = false; }
+	virtual void ReadRestoreHeaders(ElysiumSaveRestore::FRestore& R) override
+	{
+		++HeaderReads;
+		bHeaderOk = true;
+		for (int32 K = 0; K < HeaderWords; ++K) { int32 Word = 0; R.ReadInt(&Word, 1, 0); bHeaderOk &= Word == HeaderWord(K); }
+	}
+	virtual void Restore(ElysiumSaveRestore::FRestore& R, int32 P2, int32 P3) override
+	{
+		++Restores; bRestoredThisCall = true; LastP2 = P2; LastP3 = P3;
+		bBodyOk = true;
+		for (int32 K = 0; K < BodyWords; ++K) { bBodyOk &= R.ReadInt() == BodyWord(K); }
+	}
+	virtual void PostRestore() override { ++PostRestores; }
+	int32 HeaderWord(int32 K) const { return 0x0A000000 + Seed * 0x10000 + K; }
+	int32 BodyWord(int32 K) const { return 0x0B000000 + Seed * 0x10000 + K; }
+
+	FString Name;
+	char NameAnsi[32];
+	int32 HeaderWords = 1, BodyWords = 1, Seed = 0;
+	int32 PreSaves = 0, PostSaves = 0, PreRestores = 0, HeaderReads = 0, Restores = 0, PostRestores = 0;
+	int32 LastP2 = 0, LastP3 = 0;
+	bool bHeaderOk = false, bBodyOk = false, bRestoredThisCall = false;
+};
+
+// The fixture's set (the shape of the static 0x1072bae8), the engine's save buffer beside it, and
+// every handler the record registered (a removed one stays alive: the set holds raw pointers).
+struct FElysiumArenaStagedSaveBlocks
+{
+	ElysiumSaveRestore::FBlockSet Set;
+	ElysiumSaveRestore::FSaveRestoreData Data;
+	TArray<TUniquePtr<FElysiumArenaSaveBlockHandler>> Handlers;
+	TArray<FElysiumArenaFixture::FSaveBlockPatch> Patches;
+	int32 Capacity = 0;
+	int32 HeaderStart = 0;
+	bool bSaved = false;
+	int32 NextSeed = 1;
+
+	FElysiumArenaSaveBlockHandler* FindRegistered(const FString& Name) const
+	{
+		for (ElysiumSaveRestore::IBlockHandler* Registered : Set.HandlerList())
+		{
+			FElysiumArenaSaveBlockHandler* Handler = static_cast<FElysiumArenaSaveBlockHandler*>(Registered);
+			if (Handler->Name == Name) return Handler;
+		}
+		return nullptr;
+	}
+
+	FElysiumArenaSaveBlockHandler& Add(const FString& Name, int32 HeaderWords, int32 BodyWords, IElysiumRetailSiteSink* Sites)
+	{
+		Handlers.Add(MakeUnique<FElysiumArenaSaveBlockHandler>(Name, HeaderWords, BodyWords, NextSeed++));
+		Set.Sites = Sites;
+		Set.AddBlockHandler(Handlers.Last().Get()); // set slot 9 0x101a5020, as DLLInit 0x1011a0c0 calls it
+		Set.Sites = nullptr;
+		return *Handlers.Last();
+	}
+
+	// The fixture's `patch` rows over the saved directory: the header section opens with the two
+	// lengths, then the dword N, then N records of 0x28 bytes (szName +0x00, locHeader +0x20, locBody +0x24).
+	bool ApplyPatches(FString& OutError)
+	{
+		for (const FElysiumArenaFixture::FSaveBlockPatch& Patch : Patches)
+		{
+			const int32 CountAt = HeaderStart + 8;
+			if (CountAt + 4 > Data.Bytes.Num()) { OutError = TEXT("save_blocks patch: no directory in the saved stream"); return false; }
+			int32 Count = 0;
+			FMemory::Memcpy(&Count, Data.Bytes.GetData() + CountAt, 4);
+			bool bPatched = false;
+			for (int32 J = 0; J < Count; ++J)
+			{
+				const int32 RecordAt = CountAt + 4 + J * 0x28;
+				if (RecordAt + 0x28 > Data.Bytes.Num()) break;
+				const char* RecordName = reinterpret_cast<const char*>(Data.Bytes.GetData() + RecordAt);
+				if (FCStringAnsi::Strncmp(RecordName, TCHAR_TO_ANSI(*Patch.Name), 32) != 0) continue;
+				const int32 FieldAt = RecordAt + (Patch.Field == TEXT("locHeader") ? 0x20 : 0x24);
+				FMemory::Memcpy(Data.Bytes.GetData() + FieldAt, &Patch.Value, 4);
+				bPatched = true;
+			}
+			if (!bPatched) { OutError = FString::Printf(TEXT("save_blocks patch: no directory record named '%s'"), *Patch.Name); return false; }
+		}
+		return true;
+	}
+};
+
 void FElysiumArenaScenarioRunner::StageFixtures(FElysiumEntityWorld& World)
 {
 	for (const FElysiumArenaFixture& Fixture : Record.Fixtures)
@@ -891,6 +1000,21 @@ void FElysiumArenaScenarioRunner::StageFixtures(FElysiumEntityWorld& World)
 			// L0-r013: one row of the engine's model table (`VEngineServer014` slot 26's frame count),
 			// staged into the world so a sprite the record creates reads it in `CSprite::Spawn`.
 			World.StageSpriteModelFrames(Fixture.Model, Fixture.Frames);
+		}
+		else if (Fixture.Kind == TEXT("save_blocks"))
+		{
+			// L0-r029: the record's own block set, its handlers appended in the record's order through
+			// set slot 9 (0x101a5020) -- DLLInit 0x1011a0c0's five appends, with the fixture's names. The
+			// `register` sites name the fixture in the entity column.
+			TSharedPtr<FElysiumArenaStagedSaveBlocks> Staged = MakeShared<FElysiumArenaStagedSaveBlocks>();
+			Staged->Capacity = Fixture.Capacity;
+			Staged->Patches = Fixture.Patches;
+			FElysiumNamedRetailSites Sites(World, Fixture.Id);
+			for (const FElysiumArenaFixture::FSaveBlock& Block : Fixture.Blocks)
+			{
+				Staged->Add(Block.Name, Block.HeaderWords, Block.BodyWords, &Sites);
+			}
+			StagedBlockSets.Add(Fixture.Id, Staged);
 		}
 		FEvent& Staged = Events.AddDefaulted_GetRef();
 		StampEvent(Staged, World.NowSeconds());
@@ -1116,6 +1240,8 @@ void FElysiumArenaScenarioRunner::StageFixtures(FElysiumEntityWorld& World)
 			? FString::Printf(TEXT("fixture %s %s staged chars=%d"), *Fixture.Id, *Fixture.Kind, Fixture.Text.Len())
 			: Fixture.Kind == TEXT("sprite_model")
 			? FString::Printf(TEXT("fixture %s %s staged model=%s frames=%d"), *Fixture.Id, *Fixture.Kind, *Fixture.Model, Fixture.Frames)
+			: Fixture.Kind == TEXT("save_blocks")
+			? FString::Printf(TEXT("fixture %s %s staged blocks=%d capacity=%d patches=%d"), *Fixture.Id, *Fixture.Kind, Fixture.Blocks.Num(), Fixture.Capacity, Fixture.Patches.Num())
 			: FString::Printf(TEXT("fixture %s %s staged keys=%d"), *Fixture.Id, *Fixture.Kind, Fixture.Values.Num());
 	}
 }
@@ -2375,6 +2501,114 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			Done.Name = Action.Target;
 			Done.Text = Text;
 			return true;
+		}
+		if (Action.Function.StartsWith(TEXT("SaveRestore_")))
+		{
+			// L0-r029: the engine's calls into CServerGameDLL's save / restore slots over a `save_blocks`
+			// fixture (argument 0). The set's `retail_site` taps name the target in the entity column.
+			const FElysiumArenaFixture* Source = Action.Args.Num() >= 1 && !Action.Args[0].Fixture.IsEmpty()
+				? StagedFixtures.Find(Action.Args[0].Fixture) : nullptr;
+			TSharedPtr<FElysiumArenaStagedSaveBlocks>* StagedPtr = Source && Source->Kind == TEXT("save_blocks")
+				? StagedBlockSets.Find(Source->Id) : nullptr;
+			if (StagedPtr == nullptr || !StagedPtr->IsValid())
+			{
+				OutError = FString::Printf(TEXT("entity_call '%s' takes a `save_blocks` fixture as its first argument"), *Action.Function);
+				return false;
+			}
+			FElysiumArenaStagedSaveBlocks& Staged = **StagedPtr;
+			FElysiumNamedRetailSites Sites(World, Action.Target);
+			Staged.Data.Sites = &Sites;
+			ON_SCOPE_EXIT { Staged.Data.Sites = nullptr; Staged.Set.Sites = nullptr; };
+			auto RecordDone = [this, &World, &Action](const FString& Text)
+			{
+				FEvent& Done = Events.AddDefaulted_GetRef();
+				StampEvent(Done, World.NowSeconds());
+				Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+				Done.Name = Action.Target;
+				Done.Text = Text;
+			};
+			auto NumberAt = [&Action](int32 Index, int32 Default) -> int32
+			{
+				return Action.Args.Num() > Index && Action.Args[Index].Value.Type == FElysiumArenaValue::EType::Number
+					? static_cast<int32>(Action.Args[Index].Value.Number) : Default;
+			};
+			auto Verified = [&Staged](int32& OutOk, int32& OutRestored)
+			{
+				OutOk = 0; OutRestored = 0;
+				for (ElysiumSaveRestore::IBlockHandler* Registered : Staged.Set.HandlerList())
+				{
+					const FElysiumArenaSaveBlockHandler* Handler = static_cast<const FElysiumArenaSaveBlockHandler*>(Registered);
+					if (Handler->bRestoredThisCall) ++OutRestored;
+					if (Handler->bHeaderOk && Handler->bBodyOk) ++OutOk;
+				}
+			};
+			if (Action.Function == TEXT("SaveRestore_Save"))
+			{
+				// CSaveRestore::vfunc13 0x20096470: slot 17, slot 18, the return test, slot 19 -- over a fresh
+				// buffer of the fixture's capacity (0: grows). The header section begins where slot 2 ended.
+				Staged.Data.Reset(Staged.Capacity);
+				int32 HeaderStart = 0;
+				const bool bWroteHeaders = ElysiumSaveRestore::EngineSaveGameState(Staged.Set, Staged.Data, HeaderStart);
+				Staged.HeaderStart = HeaderStart;
+				Staged.bSaved = true;
+				RecordDone(FString::Printf(TEXT("entity_call SaveRestore_Save done result=%d data_len=%d hdr_len=%d hdr_start=%d bytes=%d N=%d"),
+					bWroteHeaders ? 1 : 0, Staged.Set.DataSectionLength(), Staged.Set.HeaderSectionLength(), HeaderStart,
+					Staged.Data.Bytes.Num(), Staged.Set.HeaderCount()));
+				return true;
+			}
+			if (Action.Function == TEXT("SaveRestore_Restore") || Action.Function == TEXT("SaveRestore_LevelTransition"))
+			{
+				if (!Staged.bSaved)
+				{
+					OutError = FString::Printf(TEXT("entity_call '%s': the fixture has not been saved"), *Action.Function);
+					return false;
+				}
+				if (!Staged.ApplyPatches(OutError)) return false;
+				if (Action.Function == TEXT("SaveRestore_Restore"))
+				{
+					// CSaveRestore::vfunc9 0x200975f0: slot 20 on the header section, slot 21 (p2, p3) on the data section.
+					const int32 P2 = NumberAt(1, 0);
+					const int32 P3 = NumberAt(2, 0);
+					ElysiumSaveRestore::EngineLoadGameState(Staged.Set, Staged.Data, Staged.HeaderStart, 0, P2, P3);
+					int32 Ok = 0, Restored = 0;
+					Verified(Ok, Restored);
+					RecordDone(FString::Printf(TEXT("entity_call SaveRestore_Restore done p2=%d p3=%d cursor=%d restored=%d verified=%d/%d N=%d"),
+						P2, P3, Staged.Data.Offset, Restored, Ok, Staged.Set.HandlerCount(), Staged.Set.HeaderCount()));
+					return true;
+				}
+				// CSaveRestore::vfunc10 0x20097d00: slot 20 only; the header vector keeps its records.
+				ElysiumSaveRestore::EngineLevelTransition(Staged.Set, Staged.Data, Staged.HeaderStart);
+				RecordDone(FString::Printf(TEXT("entity_call SaveRestore_LevelTransition done cursor=%d N=%d"),
+					Staged.Data.Offset, Staged.Set.HeaderCount()));
+				return true;
+			}
+			if (Action.Function == TEXT("SaveRestore_AddBlockHandler") || Action.Function == TEXT("SaveRestore_RemoveBlockHandler"))
+			{
+				if (Action.Args.Num() < 2 || Action.Args[1].Value.Type != FElysiumArenaValue::EType::String || Action.Args[1].Value.String.IsEmpty())
+				{
+					OutError = FString::Printf(TEXT("entity_call '%s' takes [{\"fixture\": id}, \"<block name>\", ...]"), *Action.Function);
+					return false;
+				}
+				const FString& BlockName = Action.Args[1].Value.String;
+				if (Action.Function == TEXT("SaveRestore_AddBlockHandler"))
+				{
+					// Set slot 9 0x101a5020: a new handler of the fixture's kind, appended.
+					Staged.Add(BlockName, NumberAt(2, 1), NumberAt(3, 1), &Sites);
+					RecordDone(FString::Printf(TEXT("entity_call SaveRestore_AddBlockHandler done name=%s count=%d"), *BlockName, Staged.Set.HandlerCount()));
+					return true;
+				}
+				// Set slot 10 0x101a5100: the registered handler of that name removed by value; an unknown
+				// name is the retail miss (nothing written).
+				FElysiumArenaSaveBlockHandler* Handler = Staged.FindRegistered(BlockName);
+				Staged.Set.Sites = &Sites;
+				Staged.Set.RemoveBlockHandler(Handler);
+				Staged.Set.Sites = nullptr;
+				RecordDone(FString::Printf(TEXT("entity_call SaveRestore_RemoveBlockHandler done name=%s found=%d count=%d"),
+					*BlockName, Handler ? 1 : 0, Staged.Set.HandlerCount()));
+				return true;
+			}
+			OutError = FString::Printf(TEXT("entity_call '%s' has no dispatch"), *Action.Function);
+			return false;
 		}
 		if (Action.Function == TEXT("Blood_Spawn"))
 		{

@@ -37,7 +37,7 @@ namespace ElysiumArenaScenarioParse
 	};
 
 	// The `fixtures` catalog's kinds. A story adds its own in the slice that stages it.
-	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues"), TEXT("text"), TEXT("sound_folder"), TEXT("vsound_registry"), TEXT("sound_script"), TEXT("sprite_model") };
+	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues"), TEXT("text"), TEXT("sound_folder"), TEXT("vsound_registry"), TEXT("sound_script"), TEXT("sprite_model"), TEXT("save_blocks") };
 
 	enum class ENeed : uint8 { Optional, Required };
 
@@ -1338,7 +1338,8 @@ namespace ElysiumArenaScenarioParse
 			TSharedPtr<FJsonObject> Item;
 			FElysiumArenaFixture& Fixture = Out.AddDefaulted_GetRef();
 			if (!ElementObject(R, (*Items)[Index], Path, Item)
-				|| !CheckFields(R, *Item, Path, { TEXT("id"), TEXT("kind"), TEXT("values"), TEXT("text"), TEXT("config"), TEXT("model"), TEXT("frames") })
+				|| !CheckFields(R, *Item, Path, { TEXT("id"), TEXT("kind"), TEXT("values"), TEXT("text"), TEXT("config"), TEXT("model"), TEXT("frames"),
+						TEXT("blocks"), TEXT("capacity"), TEXT("patch") })
 				|| !ReadString(R, *Item, TEXT("id"), Path, ENeed::Required, Fixture.Id)
 				|| !ReadString(R, *Item, TEXT("kind"), Path, ENeed::Required, Fixture.Kind))
 			{
@@ -1365,6 +1366,99 @@ namespace ElysiumArenaScenarioParse
 				}
 				return R.Fail(Field(Path, TEXT("kind")), FString::Printf(TEXT("'%s' is not a fixture kind (%s)"),
 					*Fixture.Kind, *FString::Join(Names, TEXT(", "))));
+			}
+			const bool bSaveBlockFields = FindValue(*Item, TEXT("blocks")) != nullptr || FindValue(*Item, TEXT("capacity")) != nullptr
+				|| FindValue(*Item, TEXT("patch")) != nullptr;
+			if (Fixture.Kind == TEXT("save_blocks"))
+			{
+				// `save_blocks` (L0-r029): a `CSaveRestoreBlockSet` (0x1072bae8's shape) of the record's own
+				// handlers -- `blocks`: `[{"name", "header"?, "body"?}]`, registered in order at staging through
+				// set slot 9 0x101a5020, each writing `header` dwords in its WriteSaveHeaders and `body` dwords
+				// in its Save (default 1 each) -- beside the engine's save buffer (`capacity`: 0, the
+				// default, grows; a pinned size reaches `CSave::vfunc12`'s overflow arm). `patch`:
+				// `[{"name", "field": "locHeader"|"locBody", "value"}]`, edits of the saved directory applied
+				// before every restore (the controlled save bytes the -1 skip arm of set slots 6 / 7 needs).
+				if (FindValue(*Item, TEXT("values")) != nullptr || FindValue(*Item, TEXT("text")) != nullptr
+					|| FindValue(*Item, TEXT("model")) != nullptr || FindValue(*Item, TEXT("frames")) != nullptr)
+				{
+					return R.Fail(Path, TEXT("a `save_blocks` fixture takes `blocks`, `capacity` and `patch` only"));
+				}
+				const TArray<TSharedPtr<FJsonValue>>* Blocks = nullptr;
+				if (!ReadArray(R, *Item, TEXT("blocks"), Path, Blocks)) return false;
+				if (Blocks == nullptr || Blocks->IsEmpty())
+				{
+					return R.Fail(Field(Path, TEXT("blocks")), TEXT("required: the registered blocks, in order"));
+				}
+				for (int32 BlockIndex = 0; BlockIndex < Blocks->Num(); ++BlockIndex)
+				{
+					const FString BlockPath = Field(Path, *Indexed(TEXT("blocks"), BlockIndex));
+					TSharedPtr<FJsonObject> BlockItem;
+					FElysiumArenaFixture::FSaveBlock& Block = Fixture.Blocks.AddDefaulted_GetRef();
+					if (!ElementObject(R, (*Blocks)[BlockIndex], BlockPath, BlockItem)
+						|| !CheckFields(R, *BlockItem, BlockPath, { TEXT("name"), TEXT("header"), TEXT("body") })
+						|| !ReadString(R, *BlockItem, TEXT("name"), BlockPath, ENeed::Required, Block.Name))
+					{
+						return false;
+					}
+					if (Block.Name.IsEmpty() || Block.Name.Len() >= 32)
+					{
+						return R.Fail(Field(BlockPath, TEXT("name")), TEXT("a block name is 1..31 characters (szName is char[32])"));
+					}
+					for (const TCHAR* WordsKey : { TEXT("header"), TEXT("body") })
+					{
+						const TSharedPtr<FJsonValue>* WordsValue = FindValue(*BlockItem, WordsKey);
+						if (WordsValue == nullptr) continue;
+						FElysiumArenaValue WordsRead;
+						if (!ReadValue(R, *WordsValue, Field(BlockPath, WordsKey), WordsRead) || WordsRead.Type != FElysiumArenaValue::EType::Number
+							|| WordsRead.Number < 0 || FMath::FloorToDouble(WordsRead.Number) != WordsRead.Number)
+						{
+							return R.Fail(Field(BlockPath, WordsKey), TEXT("a whole number >= 0, the dwords the handler writes"));
+						}
+						(FCString::Strcmp(WordsKey, TEXT("header")) == 0 ? Block.HeaderWords : Block.BodyWords) = static_cast<int32>(WordsRead.Number);
+					}
+				}
+				if (const TSharedPtr<FJsonValue>* CapacityValue = FindValue(*Item, TEXT("capacity")))
+				{
+					FElysiumArenaValue CapacityRead;
+					if (!ReadValue(R, *CapacityValue, Field(Path, TEXT("capacity")), CapacityRead) || CapacityRead.Type != FElysiumArenaValue::EType::Number
+						|| CapacityRead.Number < 0 || FMath::FloorToDouble(CapacityRead.Number) != CapacityRead.Number)
+					{
+						return R.Fail(Field(Path, TEXT("capacity")), TEXT("a whole number >= 0 of bytes (0: the buffer grows)"));
+					}
+					Fixture.Capacity = static_cast<int32>(CapacityRead.Number);
+				}
+				const TArray<TSharedPtr<FJsonValue>>* Patches = nullptr;
+				if (!ReadArray(R, *Item, TEXT("patch"), Path, Patches)) return false;
+				for (int32 PatchIndex = 0; Patches && PatchIndex < Patches->Num(); ++PatchIndex)
+				{
+					const FString PatchPath = Field(Path, *Indexed(TEXT("patch"), PatchIndex));
+					TSharedPtr<FJsonObject> PatchItem;
+					FElysiumArenaFixture::FSaveBlockPatch& Patch = Fixture.Patches.AddDefaulted_GetRef();
+					if (!ElementObject(R, (*Patches)[PatchIndex], PatchPath, PatchItem)
+						|| !CheckFields(R, *PatchItem, PatchPath, { TEXT("name"), TEXT("field"), TEXT("value") })
+						|| !ReadString(R, *PatchItem, TEXT("name"), PatchPath, ENeed::Required, Patch.Name)
+						|| !ReadString(R, *PatchItem, TEXT("field"), PatchPath, ENeed::Required, Patch.Field))
+					{
+						return false;
+					}
+					if (Patch.Field != TEXT("locHeader") && Patch.Field != TEXT("locBody"))
+					{
+						return R.Fail(Field(PatchPath, TEXT("field")), TEXT("`locHeader` or `locBody` (SaveRestoreBlockHeader_t's two offsets)"));
+					}
+					const TSharedPtr<FJsonValue>* PatchValue = FindValue(*PatchItem, TEXT("value"));
+					FElysiumArenaValue ValueRead;
+					if (PatchValue == nullptr || !ReadValue(R, *PatchValue, Field(PatchPath, TEXT("value")), ValueRead)
+						|| ValueRead.Type != FElysiumArenaValue::EType::Number || FMath::FloorToDouble(ValueRead.Number) != ValueRead.Number)
+					{
+						return R.Fail(Field(PatchPath, TEXT("value")), TEXT("required: a whole number, the offset word to write (-1: the skip arm)"));
+					}
+					Patch.Value = static_cast<int32>(ValueRead.Number);
+				}
+				continue;
+			}
+			if (bSaveBlockFields)
+			{
+				return R.Fail(Path, TEXT("only a `save_blocks` fixture takes `blocks`, `capacity` and `patch`"));
 			}
 			if (Fixture.Kind == TEXT("sprite_model"))
 			{
@@ -2096,6 +2190,20 @@ const TArray<FString>& EntityCallAllowlist()
 		TEXT("Illumination"),
 		// L0.entity_core.monster-template: slot 70 `IsMonster()` on a live entity, no arguments.
 		TEXT("IsMonster"),
+		// L0.entity_core.save-block-framework (L0-r029): the engine's calls into CServerGameDLL's save
+		// and restore slots over a `save_blocks` fixture's set and buffer, on a utility target.
+		// `SaveRestore_Save [fixture]`: CSaveRestore::vfunc13 0x20096470's order -- slot 17 PreSave
+		// 0x1011b890, slot 18 Save 0x1011b080, the return test, slot 19 WriteSaveHeaders 0x1011b8b0.
+		// `SaveRestore_Restore [fixture, p2, p3]`: vfunc9 0x200975f0 -- slot 20 0x1011b950 on the header
+		// section, slot 21 Restore 0x1011b300 (p2, p3 forwarded) on the data section.
+		// `SaveRestore_LevelTransition [fixture]`: vfunc10 0x20097d00 -- slot 20 only.
+		// `SaveRestore_AddBlockHandler [fixture, name, header?, body?]` / `SaveRestore_RemoveBlockHandler
+		// [fixture, name]`: set slots 9 0x101a5020 / 10 0x101a5100, the calls DLLInit 0x1011a0c0 makes.
+		TEXT("SaveRestore_Save"),
+		TEXT("SaveRestore_Restore"),
+		TEXT("SaveRestore_LevelTransition"),
+		TEXT("SaveRestore_AddBlockHandler"),
+		TEXT("SaveRestore_RemoveBlockHandler"),
 	};
 	return Allowed;
 }

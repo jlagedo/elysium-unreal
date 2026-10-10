@@ -258,6 +258,46 @@ to a string), `CVTSDependencySaveRestoreDataOps`, `CAI_MemoryListSaveRestoreOps`
 `CBitStringSaveRestoreOps<CBitString>`, and eight `CSafeDiscSaveRestoreOps_0…7` stubs left by the
 copy-protection wrapper.
 
+### The block set at run time (L0-r029, `docs/specs/layers/L0-entity/walks/L0-r029.md`)
+
+The set is `CSaveRestoreBlockSet`, one static object at `0x1072bae8` (the datum `0x10592db0` points
+at it; vftable `0x10477160`; ctor `FUN_101a47b0` names it `"Game"`, `Q_strncpy(this+0x04, ..., 0x20)`).
+Its handler vector is `+0x24..+0x34` (count `+0x30`), its header vector `+0x40..+0x50` (count `+0x4c`),
+`+0x38` the header-section length and `+0x3c` the data-section length. The five handlers are appended
+from DLLInit (`CServerGameDLL::vfunc1 0x1011a0c0`, asm `0x1011a20b–0x1011a279`) through set slot 9
+`0x101a5020` in the table's order: Entities (object `0x1072bb44`), EventQueue (`0x106e70a8`), Physics
+(`0x106bda60`), AI (`0x10936b5c`), Python (`0x1072b354`).
+
+`CServerGameDLL` dispatches into it from five vtable slots, each building a `CSave` (`FUN_1019f870`)
+or `CRestore` (`FUN_101a12a0`) adapter over the engine's save-data struct (`[0]` base, `[1]` cursor,
+`[2]` offset, `[3]` size, `[4]`/`[5]` the token table):
+
+| slot | address | body |
+|---|---|---|
+| 17 | `0x1011b890` | a tail JMP into set slot 1 `0x101a4850` (PreSave): `+0x4c := 0`, the header vector grown to the handler count, each record named by `Q_strncpy(rec, GetBlockName(), 0x20)`, each handler's slot 1 |
+| 18 | `0x1011b080` | `Save`: set slot 2 `0x101a48e0` (`t0 = Tell`; per block `locBody := Tell − t0`, the handler's slot 2; `+0x3c := Tell − t0`); returns 1 on every path |
+| 19 | `0x1011b8b0` | set slot 3 `0x101a4970` (WriteSaveHeaders: two `0xFFFFFFFF` placeholders, a `0xFF`-filled temp directory of N records, per block `locHeader := Tell − t0` then the handler's slot 3, `+0x38 := Tell − t0`, `Seek(t0)` and the in-place rewrite of `+0x38`, `+0x3c` and the real directory, `Seek(end)`), then set slot 4 `0x101a4bf0` (every handler's PostSave, then the directory freed) |
+| 20 | `0x1011b950` | set slot 5 `0x101a4c70` (every PreRestore), then set slot 6 `0x101a4cb0` (ReadRestoreHeaders: `+0x38`, `+0x3c`, the directory; per registered handler a bytewise-strcmp lookup among the N records — found and `locHeader != −1`: `Seek(t0 + locHeader)` and the handler's slot 6, else a silent skip; finally `Seek(t0 + +0x38)`) |
+| 21 | `0x1011b300` | `Restore(p2, p3)`: set slot 7 `0x101a4e70` (the same lookup on `locBody`, `Seek(t0 + locBody)`, the handler's slot 7 with `(adapter, p2, p3)` forwarded unchanged; finally `Seek(t0 + +0x3c)`), then set slot 8 `0x101a4fa0` (every PostRestore, the directory freed) |
+
+The engine's order (engine.dll): a save (`CSaveRestore::vfunc13 0x20096470`) calls 17, 23
+(BuildAdjacentMapList), 18, tests the return and skips 19 on 0, then 19 — so slot 2's offsets exist
+before slot 3 writes the directory. A load (`vfunc9 0x200975f0`) calls 20 then 21; a level transition
+(`vfunc10 0x20097d00`) calls 20 only, so the slot-8 purge does not run and the directory keeps its
+records until the next slot 1 / 6 / 8. `p2` is vfunc9's own second argument and `p3` a dword whose
+low byte is `DAT_212af2f8 != 0`; their meaning is unrecovered (the engine also pushes a fourth dword
+the callee's `RET 0xC` never pops). The record stride is `0x28`, a record's fields `szName` (`+0x00`),
+`locHeader` (`+0x20`), `locBody` (`+0x24`); `CSave::vfunc12 0x101a07b0` writes in place at the
+cursor and Warns `"Save/Restore overflow!"` (offset := size, nothing written) past the buffer;
+`Seek` (`0x1019fa30` / `0x101a14b0`) is valid for `0 <= pos < size` and otherwise a silent no-op.
+
+Port: `Source/ElysiumUE/Public/ElysiumSaveRestoreBlocks.h` (the set, the adapters, the five slots, the
+engine order), `Private/Substrate/ElysiumSaveRestoreGame.cpp` (the "Game" set's five handlers over a
+map snapshot; `Freeze` runs 17/18/19, `ApplySnapshot` 20 and 21 or 20 alone). Unrecovered after the
+walk: the element encoding of the datamap writer (`CSave::vfunc2 0x1019f930`; the port writes a record
+as its 0x28 raw bytes — a named modernization), the handlers' own slot bodies, the adapter's `+0x04`
+vector, and the engine helpers around the calls.
+
 ### `EventQueue`
 
 One record per pending event, each a straight serialisation of an entity-I/O firing in flight:

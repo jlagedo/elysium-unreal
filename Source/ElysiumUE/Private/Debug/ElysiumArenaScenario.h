@@ -80,6 +80,16 @@ struct FElysiumArenaFixture
 	// asks (`VEngineServer014` slot 26): the model name and its frame count (L0-r013).
 	FString Model;
 	int32 Frames = 0;
+	// `save_blocks` (L0-r029): a `CSaveRestoreBlockSet` of the record's own handlers, each writing
+	// `header` dwords in WriteSaveHeaders and `body` dwords in Save, registered in order at staging
+	// (set slot 9 0x101a5020); the engine's save buffer beside it (`capacity` 0: grows). `patch`
+	// edits a directory record (`locHeader` / `locBody`) of the saved stream before every restore,
+	// the controlled save bytes a −1 arm needs.
+	struct FSaveBlock { FString Name; int32 HeaderWords = 1; int32 BodyWords = 1; };
+	struct FSaveBlockPatch { FString Name; FString Field; int32 Value = -1; };
+	TArray<FSaveBlock> Blocks;
+	TArray<FSaveBlockPatch> Patches;
+	int32 Capacity = 0;
 };
 
 // One argument of an `entity_call`: a typed scalar, or a staged fixture's handle.

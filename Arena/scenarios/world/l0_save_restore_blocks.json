@@ -1,0 +1,112 @@
+{
+  "name": "l0_save_restore_blocks",
+  "about": "The save/restore block framework CServerGameDLL runs a map's save and restore through (L0-r029): slot 17 PreSave 0x1011b890 (a tail jump into CSaveRestoreBlockSet slot 1 0x101a4850: N := the handler count, each record named by Q_strncpy, each handler's PreSave), slot 18 Save 0x1011b080 (set slot 2 0x101a48e0: locBody := Tell-t0 per block, the handler's Save, +0x3c := the data length; returns 1 on every path), slot 19 0x1011b8b0 (set slot 3 0x101a4970: two 0xFFFFFFFF placeholders, a 0xFF-filled temp directory, locHeader := Tell-t0 per block before the handler's WriteSaveHeaders, +0x38 := the header length, Seek(t0) and the in-place rewrite of the two lengths and the real directory, Seek(end); then set slot 4 0x101a4bf0: every PostSave, then the directory purge), slot 20 0x1011b950 (set slot 5 0x101a4c70 every PreRestore; set slot 6 0x101a4cb0: the two lengths, the directory, per registered handler a strcmp lookup among the N records -- found and locHeader != -1: Seek(t0+locHeader) and ReadRestoreHeaders, else a silent skip -- then Seek(t0 + +0x38)), slot 21 Restore 0x1011b300 (set slot 7 0x101a4e70: the same lookup on locBody, Seek(t0+locBody), the handler's Restore(adapter, p2, p3) with the engine's two dwords forwarded unchanged, then Seek(t0 + +0x3c); set slot 8 0x101a4fa0: every PostRestore, then the purge), in the engine's order (vfunc13 0x20096470: 17, 18, test, 19; vfunc9 0x200975f0: 20, 21; a level transition vfunc10 0x20097d00: 20 only, no purge). Set slots 9 0x101a5020 / 10 0x101a5100 register and remove handlers (DLLInit 0x1011a0c0 appends retail's five: Entities, EventQueue, Physics, AI, Python -- the three-block fixtures here stand in for them). Offsets are the port's: a record is its 0x28 raw bytes and a handler writes dwords (decisions.md D6, the byte encoding is a named modernization); the sequence, the offsets' relations and the cursor postconditions are retail's. Reported as fail when a phase runs out of order, a block is dispatched that the directory does not name, a -1 offset is not skipped, or a cursor ends elsewhere.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 4.5,
+  "fixtures": [
+    { "id": "blockset", "kind": "save_blocks", "capacity": 4096,
+      "blocks": [
+        { "name": "X", "header": 1, "body": 3 },
+        { "name": "Y", "header": 2, "body": 0 },
+        { "name": "Z", "header": 0, "body": 2 }
+      ] },
+    { "id": "patched", "kind": "save_blocks", "capacity": 4096,
+      "blocks": [
+        { "name": "X", "header": 1, "body": 3 },
+        { "name": "Y", "header": 2, "body": 0 },
+        { "name": "Z", "header": 0, "body": 2 }
+      ],
+      "patch": [
+        { "name": "Z", "field": "locHeader", "value": -1 },
+        { "name": "Y", "field": "locBody", "value": -1 }
+      ] }
+  ],
+  "script": [
+    { "t": 0.5, "do": "entity_call", "target": "blockset", "function": "SaveRestore_Save", "args": [ { "fixture": "blockset" } ] },
+    { "t": 1.0, "do": "entity_call", "target": "blockset", "function": "SaveRestore_Restore", "args": [ { "fixture": "blockset" }, 7, 1 ] },
+    { "t": 1.5, "do": "entity_call", "target": "blockset", "function": "SaveRestore_LevelTransition", "args": [ { "fixture": "blockset" } ] },
+    { "t": 2.0, "do": "entity_call", "target": "blockset", "function": "SaveRestore_RemoveBlockHandler", "args": [ { "fixture": "blockset" }, "Y" ] },
+    { "t": 2.2, "do": "entity_call", "target": "blockset", "function": "SaveRestore_AddBlockHandler", "args": [ { "fixture": "blockset" }, "Q", 1, 1 ] },
+    { "t": 2.5, "do": "entity_call", "target": "blockset", "function": "SaveRestore_Restore", "args": [ { "fixture": "blockset" }, 0, 0 ] },
+    { "t": 3.0, "do": "entity_call", "target": "patched", "function": "SaveRestore_Save", "args": [ { "fixture": "patched" } ] },
+    { "t": 3.5, "do": "entity_call", "target": "patched", "function": "SaveRestore_Restore", "args": [ { "fixture": "patched" }, 0, 0 ] }
+  ],
+  "expect": [
+    { "label": "reg_x", "who": "blockset", "kind": "retail_site", "site": "register", "match": "va=0x101a5020 phase=add name=X count=1", "by": 0.2 },
+    { "who": "blockset", "kind": "retail_site", "site": "register", "match": "phase=add name=Y count=2", "by": 0.2 },
+    { "who": "blockset", "kind": "retail_site", "site": "register", "match": "phase=add name=Z count=3", "by": 0.2 },
+
+    { "label": "save_tail", "who": "blockset", "kind": "retail_site", "site": "save_top", "match": "fn=CServerGameDLL::vfunc17 va=0x1011b890 phase=tail", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_pre", "match": "va=0x101a4850 phase=entry count=3 N=3", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_pre", "match": "phase=block i=0 name=X", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_pre", "match": "phase=block i=1 name=Y", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_pre", "match": "phase=block i=2 name=Z", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_block", "match": "va=0x101a48e0 phase=block i=0 name=X rel=0", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_block", "match": "phase=block i=1 name=Y rel=12", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_block", "match": "phase=block i=2 name=Z rel=12", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_block", "match": "phase=return len=20", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_top", "match": "fn=CServerGameDLL::Save va=0x1011b080 phase=return result=1", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_header", "match": "va=0x101a4970 phase=placeholder words=2 value=0xffffffff N=3", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_header", "match": "phase=header i=0 name=X rel=132", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_header", "match": "phase=header i=1 name=Y rel=136", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_header", "match": "phase=header i=2 name=Z rel=144", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_header", "match": "phase=return hdr_len=144 data_len=20 N=3 t0=20 end=164 cursor=164", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_post", "match": "va=0x101a4bf0 phase=post i=0 name=X", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_post", "match": "phase=post i=2 name=Z", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_post", "match": "phase=purge owned=1 N_before=3 N=0", "by": 0.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_top", "match": "fn=CServerGameDLL::vfunc19 va=0x1011b8b0 phase=return", "by": 0.8 },
+    { "label": "saved", "who": "blockset", "kind": "script", "match": "entity_call SaveRestore_Save done result=1 data_len=20 hdr_len=144 hdr_start=20 bytes=4096 N=0", "by": 0.8 },
+
+    { "who": "blockset", "kind": "retail_site", "site": "restore_pre", "match": "va=0x101a4c70 phase=pre i=0 name=X", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_pre", "match": "phase=pre i=2 name=Z", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_read", "match": "va=0x101a4cb0 phase=entry t0=20 hdr_len=144 data_len=20 N=3", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_read", "match": "phase=lookup i=0 name=X j=0 seek=152", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_read", "match": "phase=lookup i=1 name=Y j=1 seek=156", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_read", "match": "phase=lookup i=2 name=Z j=2 seek=164", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_read", "match": "phase=return seek=164 cursor=164", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_top", "match": "fn=CServerGameDLL::vfunc20 va=0x1011b950 phase=return", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_block", "match": "va=0x101a4e70 phase=restore i=0 name=X j=0 seek=0 args=(A,7,1)", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_block", "match": "phase=restore i=1 name=Y j=1 seek=12 args=(A,7,1)", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_block", "match": "phase=restore i=2 name=Z j=2 seek=12 args=(A,7,1)", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_block", "match": "phase=return seek=20 cursor=20", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_post", "match": "va=0x101a4fa0 phase=post i=0 name=X", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_post", "match": "phase=purge owned=1 N_before=3 N=0", "by": 1.3 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_top", "match": "fn=CServerGameDLL::Restore va=0x1011b300 phase=return p2=7 p3=1", "by": 1.3 },
+    { "label": "restored", "who": "blockset", "kind": "script", "match": "entity_call SaveRestore_Restore done p2=7 p3=1 cursor=20 restored=3 verified=3/3 N=0", "by": 1.3 },
+
+    { "who": "blockset", "kind": "retail_site", "site": "restore_pre", "match": "phase=pre i=0 name=X", "by": 1.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_read", "match": "phase=entry t0=20 hdr_len=144 data_len=20 N=3", "by": 1.8 },
+    { "label": "transition_read", "who": "blockset", "kind": "retail_site", "site": "restore_read", "match": "phase=return seek=164 cursor=164", "by": 1.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "save_top", "match": "fn=CServerGameDLL::vfunc20 va=0x1011b950 phase=return", "by": 1.8 },
+    { "label": "transition_done", "who": "blockset", "kind": "script", "match": "entity_call SaveRestore_LevelTransition done cursor=164 N=3", "by": 1.8 },
+
+    { "who": "blockset", "kind": "retail_site", "site": "register", "match": "va=0x101a5100 phase=remove name=Y found=1 count=2", "by": 2.4 },
+    { "who": "blockset", "kind": "retail_site", "site": "register", "match": "va=0x101a5020 phase=add name=Q count=3", "by": 2.4 },
+
+    { "who": "blockset", "kind": "retail_site", "site": "restore_read", "match": "phase=lookup i=0 name=X j=0 seek=152", "by": 2.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_read", "match": "phase=lookup i=1 name=Z j=2 seek=164", "by": 2.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_read", "match": "phase=lookup i=2 name=Q j=miss seek=skip", "by": 2.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_block", "match": "phase=restore i=0 name=X j=0 seek=0 args=(A,0,0)", "by": 2.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_block", "match": "phase=restore i=1 name=Z j=2 seek=12 args=(A,0,0)", "by": 2.8 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_block", "match": "phase=restore i=2 name=Q j=miss seek=skip args=(A,0,0)", "by": 2.8 },
+    { "who": "blockset", "kind": "script", "match": "entity_call SaveRestore_Restore done p2=0 p3=0 cursor=20 restored=2 verified=2/3 N=0", "by": 2.8 },
+
+    { "who": "patched", "kind": "script", "match": "entity_call SaveRestore_Save done result=1 data_len=20 hdr_len=144 hdr_start=20", "by": 3.3 },
+    { "who": "patched", "kind": "retail_site", "site": "restore_read", "match": "phase=lookup i=1 name=Y j=1 seek=156", "by": 3.8 },
+    { "who": "patched", "kind": "retail_site", "site": "restore_read", "match": "phase=lookup i=2 name=Z j=2 seek=skip", "by": 3.8 },
+    { "who": "patched", "kind": "retail_site", "site": "restore_read", "match": "phase=return seek=164 cursor=164", "by": 3.8 },
+    { "who": "patched", "kind": "retail_site", "site": "restore_block", "match": "phase=restore i=0 name=X j=0 seek=0 args=(A,0,0)", "by": 3.8 },
+    { "who": "patched", "kind": "retail_site", "site": "restore_block", "match": "phase=restore i=1 name=Y j=1 seek=skip args=(A,0,0)", "by": 3.8 },
+    { "who": "patched", "kind": "retail_site", "site": "restore_block", "match": "phase=restore i=2 name=Z j=2 seek=12 args=(A,0,0)", "by": 3.8 },
+    { "who": "patched", "kind": "retail_site", "site": "restore_block", "match": "phase=return seek=20 cursor=20", "by": 3.8 },
+    { "who": "patched", "kind": "script", "match": "entity_call SaveRestore_Restore done p2=0 p3=0 cursor=20 restored=2 verified=1/3 N=0", "by": 3.8 }
+  ],
+  "never": [
+    { "who": "blockset", "kind": "retail_site", "site": "restore_block", "match": "", "after": "transition_read", "within": 0.9 },
+    { "who": "blockset", "kind": "retail_site", "site": "restore_post", "match": "", "after": "transition_read", "within": 0.9 },
+    { "who": "", "kind": "retail_site", "site": "restore_read", "match": "j=miss", "from": 0.1, "until": 2.4 },
+    { "who": "", "kind": "retail_site", "site": "save_header", "match": "phase=header i=0 name=X rel=0", "from": 0.1 }
+  ],
+  "notes": "Layout: X body 3 dwords at rel 0, Y body 0 at 12, Z body 2 at 12, data length 20; header section at 20: 2 placeholders (8) + N (4) + 3 x 0x28 (120) = 132, then X header 1 dword at 132, Y 2 dwords at 136, Z 0 at 144, header length 144, end 164. The buffer is pinned at 4096 so every Seek lands as it does in the engine's own allocation. The `patched` fixture's directory is edited before its restore (Z locHeader -1, Y locBody -1) for the two skip arms. A level transition leaves N=3 (no slot 8 purge); a restore ends at N=0."
+}

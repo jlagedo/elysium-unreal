@@ -305,6 +305,13 @@ public:
 	// this load's own openers. Reports how many entity records were applied.
 	int32 ApplySnapshot(const FElysiumMapSnapshot& Snapshot);
 	int32 ApplySnapshot(const FElysiumMapSnapshot& Snapshot, double RestoreBase, bool bLevelTransition = false); // 0x1011a710 transition flag, engine 0x20097d00 base
+	// The restore halves of the `Entities` and `EventQueue` block handlers (L0-r029,
+	// `Substrate/ElysiumSaveRestoreGame.h`): the decoded rows of one snapshot onto this world, called
+	// from inside the block set's slot 7 dispatch (an ordinary load) or from the engine-side
+	// transition path (set slot 21 never runs there). `ApplyRestoredEntities` answers the applied
+	// row count, `INDEX_NONE` when a row refused (no partial decode). Only `ApplySnapshot` calls them.
+	int32 ApplyRestoredEntities(const FElysiumMapSnapshot& Decoded, double RestoreBase);
+	void ApplyRestoredQueue(const FElysiumMapSnapshot& Decoded, double RestoreBase);
 	bool IsLevelTransitionRestore() const { return bLevelTransitionRestore; }
 	FElysiumEntityHandle RestoreHandle(const FElysiumEntityHandle& Saved) const { return RebaseHandle(Saved); } // 0x101a2e40
 	TFunction<void()> OnSnapshotDecoded; // 0x101a2e40: all words present, before fixup/hooks

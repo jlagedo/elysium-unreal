@@ -520,6 +520,7 @@ bool FTransport::Begin(const FHost& Host, const FElysiumArenaAction& Action,
 	{
 		if (!Snapshot || !MutateCheckpoint || !MutateCheckpoint(*Snapshot, *Corruption, OutError))
 		{ if (OutError.IsEmpty()) OutError = TEXT("unavailable retail checkpoint-header fixture adapter"); Emit(EFence::Failed, Host.GetMap(), OutError); return false; }
+		Snapshot->BlockStream.Reset(); // the rows were edited after their freeze: the block stream is re-encoded from them (L0-r029)
 	}
 	if (!Snapshot || Snapshot->DefCount != Defs.Num()) { OutError = TEXT("arena snapshot/defs mismatch"); Emit(EFence::Failed, Host.GetMap(), OutError); return false; }
 	// Tear down session ownership before applying blocks; reconstruct actual stage admissions.
