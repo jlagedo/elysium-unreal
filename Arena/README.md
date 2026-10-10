@@ -648,6 +648,16 @@ A `fire` action may name a live `activator` (including `player`). It reaches the
 
 ## V6 transactions and exact fences
 
+`world/l0_named_think_context_storage` is the narrow L0-r024a storage record: first case-sensitive
+32-byte context lookup, caller-owned name pointers, duplicate reuse, append zeroing and logical
+capacity 2/4/8. Its `think_contexts` fixture takes `config: {target, register: [names], lookup:
+[names], rename_first?: text}`. The optional mutation keeps the first caller buffer's byte length;
+the world retains those buffers after the runner detaches. `m_aThinkFunctions` probes read count,
+`m_nAllocationCount`, `m_nGrowSize`, or an indexed record's `m_flThinkTime`, `m_flLastThink`,
+`m_pfnThink` (presence). This fixture initializes storage through the real helpers only. It does
+not set a current context or a last-think stamp and proves no live-dispatch behavior. The full
+`l0_named_think_contexts`, base-spawn and removal records remain open.
+
 Harness transport follows engine `0x20096010` / `0x200975f0` and server reverse post-restore
 `0x1011a620`. An action at `t` or `after` is submitted once. Dependent actions wait for the exact
 capture/storage/apply/readiness result. Refusal, decode error, wrong map, unavailable witness,

@@ -94,7 +94,9 @@ void FElysiumEntity::ConstructBaseEntity()
 	//    bytes 0..2 and u16s +4 / +6 := 0 (`bNetworkChanged` is its +1).
 	bNetworkChanged = false;                                        // 1009d9e9 -> 0x10146640
 	// 5. `FUN_100b4610(+0x1b8, 0, 0)`, +0x1c4 := 0, +0x1c8: `m_aThinkFunctions`, an empty CUtlVector of
-	//    `thinkfunc_t`. This port runs one think (`ThinkCallback`); the context list is empty here too.
+	//    `thinkfunc_t`. Grow size is 0; registration doubles capacity from an initial 2 (0x100b49b0).
+	ThinkContexts.Empty();
+	ThinkContextCapacity = 0;
 	// 6. `FUN_100b4650(+0x1d0, 0, 0)`, +0x1dc := 0, +0x1e0: `m_ResponseContexts`, empty. No port word.
 	// 7. +0x218 `m_hUseFilter`, +0x220 `m_hDamageFilter` := -1: the filters resolve by name here
 	//    (`UseFilterName` / `DamageFilterName`, both empty).

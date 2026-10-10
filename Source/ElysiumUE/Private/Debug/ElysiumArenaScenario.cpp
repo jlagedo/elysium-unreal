@@ -37,7 +37,7 @@ namespace ElysiumArenaScenarioParse
 	};
 
 	// The `fixtures` catalog's kinds. A story adds its own in the slice that stages it.
-	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues"), TEXT("text"), TEXT("sound_folder"), TEXT("vsound_registry"), TEXT("sound_script"), TEXT("sprite_model"), TEXT("save_blocks") };
+	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues"), TEXT("text"), TEXT("sound_folder"), TEXT("vsound_registry"), TEXT("sound_script"), TEXT("sprite_model"), TEXT("save_blocks"), TEXT("think_contexts") };
 
 	enum class ENeed : uint8 { Optional, Required };
 
@@ -1474,6 +1474,40 @@ namespace ElysiumArenaScenarioParse
 			if (bSaveBlockFields)
 			{
 				return R.Fail(Path, TEXT("only a `save_blocks` fixture takes `blocks`, `capacity` and `patch`"));
+			}
+			if (Fixture.Kind == TEXT("think_contexts"))
+			{
+				if (FindValue(*Item, TEXT("values")) || FindValue(*Item, TEXT("text"))
+					|| FindValue(*Item, TEXT("model")) || FindValue(*Item, TEXT("frames")))
+					return R.Fail(Path, TEXT("a `think_contexts` fixture takes `config` only"));
+				TSharedPtr<FJsonObject> ContextConfig;
+				if (!ReadObject(R, *Item, TEXT("config"), Path, ContextConfig) || !ContextConfig.IsValid())
+					return R.Fail(Path, TEXT("think_contexts requires config"));
+				const FString ConfigPath = Field(Path, TEXT("config"));
+				if (!CheckFields(R, *ContextConfig, ConfigPath, { TEXT("target"), TEXT("register"), TEXT("lookup"), TEXT("rename_first") })
+					|| !ReadString(R, *ContextConfig, TEXT("target"), ConfigPath, ENeed::Required, Fixture.ContextTarget))
+					return false;
+				const TCHAR* ArrayNames[] = { TEXT("register"), TEXT("lookup") };
+				for (int32 ListIndex = 0; ListIndex < 2; ++ListIndex)
+				{
+					const TArray<TSharedPtr<FJsonValue>>* Names = nullptr;
+					if (!ReadArray(R, *ContextConfig, ArrayNames[ListIndex], ConfigPath, Names)) return false;
+					TArray<FString>& Destination = ListIndex == 0 ? Fixture.ContextNames : Fixture.ContextLookups;
+					for (int32 NameIndex = 0; Names && NameIndex < Names->Num(); ++NameIndex)
+					{
+						if (!(*Names)[NameIndex].IsValid() || (*Names)[NameIndex]->Type != EJson::String)
+							return R.Fail(ConfigPath, TEXT("think context names must be strings"));
+						Destination.Add((*Names)[NameIndex]->AsString());
+					}
+				}
+				if (!ReadString(R, *ContextConfig, TEXT("rename_first"), ConfigPath, ENeed::Optional, Fixture.ContextRenameFirst)) return false;
+				if (!Fixture.ContextRenameFirst.IsEmpty())
+				{
+					if (Fixture.ContextNames.IsEmpty()
+						|| FTCHARToUTF8(*Fixture.ContextRenameFirst).Length() != FTCHARToUTF8(*Fixture.ContextNames[0]).Length())
+						return R.Fail(ConfigPath, TEXT("rename_first must keep the first caller buffer's byte length"));
+				}
+				continue;
 			}
 			if (Fixture.Kind == TEXT("sprite_model"))
 			{

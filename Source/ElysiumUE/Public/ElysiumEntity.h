@@ -265,9 +265,22 @@ public:
 	// never runs here (Unreal's frame is the clock), so the word keeps the constructor's value.
 	int32 SimulationTick = -1;
 	// `m_iCurrentThinkContext` (+0x1cc, `layout.md:93`): -1 from the constructor (`1009db9b`); the
-	// think-context list `m_aThinkFunctions` (+0x1b8) is empty at construction and this port runs one
-	// think (`ThinkCallback`), so the index stays -1.
+	// think-context list `m_aThinkFunctions` (+0x1b8) is empty at construction. Its dispatch/stamp
+	// producer (0x10033f60 / 0x10033de0) remains open; registration does not change this index.
 	int32 CurrentThinkContext = -1;
+	using FContextThink = void (*)(FElysiumEntity&, double);
+	struct FThinkContext
+	{
+		// Retail stores the caller's pointer, not a pooled or case-folded name. The caller owns it.
+		const ANSICHAR* Name = nullptr;
+		FContextThink Callback = nullptr;
+		float NextThink = 0.0f;
+		float LastThink = 0.0f;
+	};
+	TArray<FThinkContext> ThinkContexts; // thinkfunc_t +0x00/+0x04/+0x08/+0x0c
+	int32 ThinkContextCapacity = 0; // +0x1bc; grow size +0x1c0 is 0 (constructor 0x1009d980)
+	int32 GetIndexForContext(const ANSICHAR* ContextName) const; // 0x100ac250
+	int32 RegisterThinkContext(const ANSICHAR* ContextName); // 0x100ac360
 	// `m_clrRender` (+0x1a0), a `color32`: `0xFFFFFFFF` from the constructor (`1009db44-1009db58`, four
 	// byte stores). The `rendercolor` / `renderamt` keys of `CBaseEntity::KeyValue` 0x1009e430 write it;
 	// Unreal renders, so nothing here reads it (the binding is UNBOUND for that reason).

@@ -1,0 +1,315 @@
+{
+  "name": "l0_named_think_context_storage",
+  "about": "Storage-only r024a: CBaseEntity::GetIndexForContext 0x100ac250 uses first case-sensitive strncmp(...,32); RegisterThinkContext 0x100ac360 returns a hit unchanged or appends the caller's name pointer and zero callback/next/last words. Constructed grow size is 0 (0x1009d980), logical capacity grows 2,4,8 via 0x100b49b0. Controlled fixture setup registers Alpha, Beta, a duplicate, lower-case alpha, two 33-byte names sharing 32 bytes, a NUL-shorter prefix, and a longer Alpha name. The caller then mutates its first buffer Alpha->Gamma: Gamma must resolve to 0 and Alpha to -1. The untouched entity proves the empty branch. No current-context or stamp is fabricated; this record proves storage mechanics only. GetLastThink/live dispatch and the original l0_named_think_contexts record remain open. A later Gamma is registered at index 6 before mutation, so lookup Gamma choosing index 0 proves first-match priority over an actual second matching record.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 0.5,
+  "rows": [
+    {
+      "classname": "logic_relay",
+      "name": "contexts",
+      "at": [
+        100,
+        0,
+        50
+      ]
+    },
+    {
+      "classname": "logic_relay",
+      "name": "empty_contexts",
+      "at": [
+        200,
+        0,
+        50
+      ]
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "empty",
+      "kind": "think_contexts",
+      "config": {
+        "target": "empty_contexts",
+        "lookup": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "id": "names",
+      "kind": "think_contexts",
+      "config": {
+        "target": "contexts",
+        "register": [
+          "Alpha",
+          "Beta",
+          "Alpha",
+          "alpha",
+          "0123456789abcdef0123456789abcdefA",
+          "0123456789abcdef0123456789abcdefB",
+          "Alph",
+          "AlphaTail",
+          "Gamma"
+        ],
+        "rename_first": "Gamma",
+        "lookup": [
+          "Gamma",
+          "Alpha",
+          "alpha",
+          "Beta",
+          "0123456789abcdef0123456789abcdefC",
+          "Alph",
+          "AlphaTail",
+          "missing"
+        ]
+      }
+    }
+  ],
+  "expect": [
+    {
+      "label": "empty",
+      "who": "empty_contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "fn=CBaseEntity::GetIndexForContext va=0x100ac250 phase=return name=missing index=-1 count=0",
+      "by": 0.1
+    },
+    {
+      "label": "alpha_append",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "fn=CBaseEntity::RegisterThinkContext va=0x100ac360 phase=return arm=append index=0 count=1 capacity=2 callback=0 next=0 last=0",
+      "within": 0.01
+    },
+    {
+      "label": "beta_append",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "arm=append index=1 count=2 capacity=2 callback=0 next=0 last=0",
+      "within": 0.01
+    },
+    {
+      "label": "duplicate",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "arm=hit index=0 count=2 capacity=2",
+      "within": 0.01
+    },
+    {
+      "label": "case",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "arm=append index=2 count=3 capacity=4 callback=0 next=0 last=0",
+      "within": 0.01
+    },
+    {
+      "label": "long_append",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "arm=append index=3 count=4 capacity=4 callback=0 next=0 last=0",
+      "within": 0.01
+    },
+    {
+      "label": "long_hit",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "arm=hit index=3 count=4 capacity=4",
+      "within": 0.01
+    },
+    {
+      "label": "short_nul",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "arm=append index=4 count=5 capacity=8 callback=0 next=0 last=0",
+      "within": 0.01
+    },
+    {
+      "label": "long_nul",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "arm=append index=5 count=6 capacity=8 callback=0 next=0 last=0",
+      "within": 0.01
+    },
+    {
+      "label": "later_gamma",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "arm=append index=6 count=7 capacity=8 callback=0 next=0 last=0",
+      "within": 0.01
+    },
+    {
+      "label": "caller_pointer",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "name=Gamma index=0 count=7",
+      "within": 0.01
+    },
+    {
+      "label": "old_text",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "name=Alpha index=-1 count=7",
+      "within": 0.01
+    },
+    {
+      "label": "case_lookup",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "name=alpha index=2 count=7",
+      "within": 0.01
+    },
+    {
+      "label": "beta_lookup",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "name=Beta index=1 count=7",
+      "within": 0.01
+    },
+    {
+      "label": "bounded_lookup",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "name=0123456789abcdef0123456789abcdefC index=3 count=7",
+      "within": 0.01
+    },
+    {
+      "label": "short_lookup",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "name=Alph index=4 count=7",
+      "within": 0.01
+    },
+    {
+      "label": "long_lookup",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "name=AlphaTail index=5 count=7",
+      "within": 0.01
+    },
+    {
+      "label": "missing",
+      "who": "contexts",
+      "kind": "retail_site",
+      "site": "think_context",
+      "match": "name=missing index=-1 count=7",
+      "within": 0.01
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "empty_contexts",
+      "probe": "entity_field",
+      "field": "m_aThinkFunctions",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "empty_contexts",
+      "probe": "entity_field",
+      "field": "m_aThinkFunctions",
+      "member": "m_nAllocationCount",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "contexts",
+      "probe": "entity_field",
+      "field": "m_aThinkFunctions",
+      "equals": 7
+    },
+    {
+      "at": "end",
+      "who": "contexts",
+      "probe": "entity_field",
+      "field": "m_aThinkFunctions",
+      "member": "m_nAllocationCount",
+      "equals": 8
+    },
+    {
+      "at": "end",
+      "who": "contexts",
+      "probe": "entity_field",
+      "field": "m_aThinkFunctions",
+      "member": "m_nGrowSize",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "contexts",
+      "probe": "entity_field",
+      "field": "m_iCurrentThinkContext",
+      "equals": -1
+    },
+    {
+      "at": "end",
+      "who": "contexts",
+      "probe": "entity_field",
+      "field": "m_aThinkFunctions",
+      "index": "0",
+      "member": "m_flThinkTime",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "contexts",
+      "probe": "entity_field",
+      "field": "m_aThinkFunctions",
+      "index": "0",
+      "member": "m_flLastThink",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "contexts",
+      "probe": "entity_field",
+      "field": "m_aThinkFunctions",
+      "index": "0",
+      "member": "m_pfnThink",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "contexts",
+      "probe": "entity_field",
+      "field": "m_aThinkFunctions",
+      "index": "6",
+      "member": "m_flThinkTime",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "contexts",
+      "probe": "entity_field",
+      "field": "m_aThinkFunctions",
+      "index": "6",
+      "member": "m_flLastThink",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "contexts",
+      "probe": "entity_field",
+      "field": "m_aThinkFunctions",
+      "index": "6",
+      "member": "m_pfnThink",
+      "equals": false
+    }
+  ]
+}

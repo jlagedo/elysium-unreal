@@ -3376,3 +3376,69 @@ CalcAbsolutePosition and GetParentToWorldTransform perform no partition walk. Th
 subset can precede bounds, which can precede SetAbsOrigin. The eager producer-to-setter-to-queue
 ordering alone does not prove an engine scheduling cycle. The coordinator recovered query-time
 callback timing above; the prerequisite must wire that contract, not invent a frame-end scheduler.
+
+## Named think storage and lifecycle prerequisites [decompiled/asm, L0-r024a 2026-10-10]
+
+The confirmed `L0-r024.md` walk is reused. Current targeted body reads verified `GetIndexForContext`
+`0x100ac250`, `RegisterThinkContext` `0x100ac360`, `GetLastThink` `0x100ac720` (also asm: the
+decompile loses its floating return), `ThinkSet` `0x100ac4e0`, `SetNextThink` `0x100ac610`,
+`PhysicsRunSpecificThink` `0x10033de0` and `PhysicsRunThink` `0x10033f60`. This packet implements
+only the independent lookup/registration rows; the original r024 stays open.
+
+**Storage.** `GetIndexForContext` returns the first `strncmp(record.name, name, 0x20) == 0`,
+case-sensitive, with the count re-read on each loop; absent/empty returns -1. A NUL ends the
+comparison earlier than 32 bytes. Registration first performs that lookup, returns a hit without
+writes, or appends a record retaining the caller's pointer and zeroing callback, next and last.
+The append's memmove count is always zero. Constructor `0x1009d980` leaves the vector empty,
+grow size 0 and current index -1; grow helper `0x100b49b0` produces capacities 2,4,8,... . Unreal
+owns the allocation, while the logical capacity word follows retail. The grow-size -1 no-op
+cannot arise in a constructed entity. NULL-name faults are outside the valid registration input.
+
+`l0_named_think_context_storage` stages caller-owned byte buffers through the two real methods,
+then reads zeroed records and capacity. Alpha/Beta/Alpha/alpha prove duplicate/case rules; two
+33-byte names sharing 32 bytes prove the bounded comparison; shorter and longer NUL-delimited
+names remain distinct. A later Gamma record is registered before mutating the first caller buffer
+Alpha to Gamma; lookup Gamma returns the first index 0 over the later index 6, proving pointer
+retention and first-match priority with two actual matching records. The
+fixture does not fabricate a current context or stamp. This is local storage evidence, not live
+named dispatch, nor completion of `l0_named_think_contexts`.
+
+**Think producer still open.** `0x10033f60` runs default unless mode 2, then named records in
+index order unless mode 1, setting current index before each call and -1 immediately afterwards,
+even before a failure return. `0x10033de0` requires `next > 0 && next <= curtime + frametime`,
+clamps dispatch time to at least curtime, clears next before dispatch, temporarily installs that
+clock, and writes last only AFTER the callback, before restoring the clock. `GetLastThink(NULL)`
+inside the callback therefore sees the previous stamp. An absent explicit name reads base-4;
+no retail caller reaches it and its value remains unrecovered. Current `RunThinks` lacks named
+dispatch/stamps and uses a different default due convention. It was deliberately not patched here.
+
+The actual default-zero producer inventory at this checkpoint is: `ElysiumStarterClasses.cpp`
+logic_auto Spawn; `ElysiumLogicClasses.cpp` func_brush Spawn (deferred host solidity);
+`ElysiumMover.cpp` START_OPEN seat and restore seat; `ElysiumElevator.cpp` restore seat;
+`ElysiumFuncRotating.cpp` restore rebase and Arm. These use zero as immediate, whereas retail's
+specific-think gate treats it as inactive. A faithful scheduler must recover those producers and
+move host-only body deferrals off the retail think deadline. `CLogicAuto::Spawn` `0x10130d10`
+actually writes `curtime + 0.2`: PE `0x10449198` is the double 0.2 (`9a9999999999c93f`). No new
+timing modernization or replacement-zero convention is accepted by this storage packet.
+
+**Base Spawn prerequisite, exact chain.** `0x100aae50` clears `m_flForceTransmitUntil` (+0x90),
+then virtual slot 15 receives zero. `SetAttackExtents` `0x1009af40` first calls `0x100dc220`
+on the embedded collision property, before writing extents. With partition service present,
+`0x100dc220` reads cp+0x46; invalid handle 0xffff calls `0x100ddd90`, re-reads the handle, logs
+and returns if still invalid, otherwise calls partition-service slot 0 with handle and margin.
+The no-service arm also logs and returns. Current handles stay 0xffff, and the live handle/update/
+margin-service producer is missing (see r022 above). Making slot 15 a pure setter would silently
+skip this same-layer chain. Base Spawn and `l0_base_spawn_defaults` remain open.
+
+**Removal prerequisite, exact chain.** `UpdateOnRemove` `0x100a47d0` reaches virtual slot 225
+`0x100b5040`: non-null `m_pPhysicsObject` (+0x36c) calls `PhysRemoveShadow` `0x1002ee60`, then
+destroy helper `0x10158520`, then clears the pointer. Current slot 225 is empty; the live
+physics-reference producer (`VPhysicsSetObject` `0x100a6490` / `VPhysicsSwapObject` `0x100a68f0`)
+and shadow/object lifetime are unfinished L0 pieces, not an upward hook. Also, move unlink
+`0x1012c840` -> `0x1012c7f0` clears links BEFORE `SetAngles(GetAbsAngles())` and
+`SetOrigin(GetAbsOrigin())`; current `ClearMoveLinks` already clears before its getters, but
+folds unparented local/absolute words afterwards. Full cache equivalence needs the cached-transform
+prerequisite in r022a; this checkpoint does not claim a new pre-clear ordering defect.
+Act-copy/swap/sweep `0x102c9da0` / `0x102ca460` / `0x102ca630`
+and predictable-list remover `0x10099b00` were re-read but not implemented into an incomplete
+removal chain. Removal and `l0_entity_remove_cleanup` remain open. No no-op physics hook was added.

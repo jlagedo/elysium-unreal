@@ -1007,6 +1007,34 @@ void FElysiumArenaScenarioRunner::StageFixtures(FElysiumEntityWorld& World)
 	for (const FElysiumArenaFixture& Fixture : Record.Fixtures)
 	{
 		StagedFixtures.Add(Fixture.Id, Fixture);
+		if (Fixture.Kind == TEXT("think_contexts"))
+		{
+			FElysiumEntity* ContextEntity = ElysiumArenaRunnerDetail::FindEntity(World, Fixture.ContextTarget);
+			if (!ContextEntity || ContextEntity->IsDead())
+			{
+				Abort(FString::Printf(TEXT("think_contexts fixture '%s': no live target '%s'"),
+					*Fixture.Id, *Fixture.ContextTarget));
+				return;
+			}
+			// Controlled setup, through the real storage methods. The world retains the caller buffers;
+			// the registered pointer is never a temporary TCHAR_TO_ANSI result or an FName.
+			ANSICHAR* FirstCallerName = nullptr;
+			for (const FString& ContextName : Fixture.ContextNames)
+			{
+				ANSICHAR* CallerName = World.StageThinkContextName(ContextName);
+				if (!FirstCallerName) FirstCallerName = CallerName;
+				ContextEntity->RegisterThinkContext(CallerName);
+			}
+			if (!Fixture.ContextRenameFirst.IsEmpty())
+			{
+				const FTCHARToUTF8 Replacement(*Fixture.ContextRenameFirst);
+				FMemory::Memcpy(FirstCallerName, Replacement.Get(), Replacement.Length());
+				// Mutation belongs to the caller buffer. A copied/pooled registration would fail the
+				// subsequent lookup, while retail's retained pointer immediately sees the new bytes.
+			}
+			for (const FString& ContextName : Fixture.ContextLookups)
+				ContextEntity->GetIndexForContext(World.StageThinkContextName(ContextName));
+		}
 		if (Fixture.Kind == TEXT("sprite_model"))
 		{
 			// L0-r013: one row of the engine's model table (`VEngineServer014` slot 26's frame count),
@@ -1404,13 +1432,41 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 		// `target,input,param,delay,times,python`.
 		const bool bEffectsWord = Probe.Field == TEXT("m_fEffects") || Probe.Field == TEXT("m_fScriptSavedEffects");
 		const bool bOutputList = Probe.Field == TEXT("m_OnUseBegin") || Probe.Field == TEXT("m_OnUseEnd");
+		const bool bThinkContexts = Probe.Field == TEXT("m_aThinkFunctions");
 		if (!bVector && !bFlagWord && !bDataObjectMask && !bEffectsWord && !bOutputList
+			&& !bThinkContexts
 			&& (!Probe.Index.IsEmpty() || !Probe.Member.IsEmpty()))
 		{
 			OutError = FString::Printf(TEXT("field '%s' takes no index or member"), *Probe.Field);
 			return false;
 		}
-		if (bHandleField)
+		if (bThinkContexts)
+		{
+			OutAnswer.Type = FElysiumArenaValue::EType::Number;
+			if (Probe.Index.IsEmpty())
+			{
+				if (Probe.Member.IsEmpty() || Probe.Member == TEXT("m_Size")) OutAnswer.Number = Entity->ThinkContexts.Num();
+				else if (Probe.Member == TEXT("m_nAllocationCount")) OutAnswer.Number = Entity->ThinkContextCapacity;
+				else if (Probe.Member == TEXT("m_nGrowSize")) OutAnswer.Number = 0;
+				else { OutError = TEXT("unknown m_aThinkFunctions container member"); return false; }
+			}
+			else
+			{
+				int32 ContextIndex = -1;
+				if (!LexTryParseString(ContextIndex, *Probe.Index) || !Entity->ThinkContexts.IsValidIndex(ContextIndex))
+				{ OutError = TEXT("m_aThinkFunctions index must name an existing record"); return false; }
+				const FElysiumEntity::FThinkContext& Context = Entity->ThinkContexts[ContextIndex];
+				if (Probe.Member == TEXT("m_flThinkTime")) OutAnswer.Number = Context.NextThink;
+				else if (Probe.Member == TEXT("m_flLastThink")) OutAnswer.Number = Context.LastThink;
+				else if (Probe.Member == TEXT("m_pfnThink"))
+				{
+					OutAnswer.Type = FElysiumArenaValue::EType::Bool;
+					OutAnswer.bBool = Context.Callback != nullptr;
+				}
+				else { OutError = TEXT("unknown thinkfunc_t member"); return false; }
+			}
+		}
+		else if (bHandleField)
 		{
 			const FElysiumEntityHandle Word = Probe.Field == TEXT("m_pParent") ? Entity->ParentHandle
 				: Probe.Field == TEXT("m_pMoveParent") ? Entity->MoveParent

@@ -18,9 +18,28 @@ evidence, not new validation or acceptance of the layer closing gate.
   bounds/physics/partition lifecycle. Docs-only recovery checkpoint; no code gate or new record.
 - Approved dependency repair: r022a cached frame/accessor -> complete bounds/physics/partition
   prerequisite -> r022b absolute setters/full parented record. Original r022 remains open.
-- Next dependency-ready run: r024 named thinks/base spawn/removal, using its confirmed walk.
+- r024a gated: independent named-think registration/lookup and context storage, fresh Sol High
+  worker reusing the confirmed walk. Only 0x100ac250 / 0x100ac360 close. Original r024 stays open:
+  scheduler and stamp producers, plus Spawn/removal's physics/partition inputs, remain deferred.
+- Next ready packet: r022a stored frame/local state and parent accessor, bounded by
+  `l0_parent_frame_cache`; then recover/implement the actual bounds/physics/partition producers.
+- Deferred recovery checkpoint: `a3aac976` (docs only, no runtime gate); clean checkout at dispatch.
 - Layer closure remains open: 65 unlanded runs, rebakes, default/arm and full arena gate,
   intermittent records in three boot orders, audit/hooks and state-bearing replacement checks.
+
+### r024a gate evidence (2026-10-10)
+
+Coordinator build: `E:/elysium-work/logs/20261010T215457.595573Z-build.json` (pass).
+Default tier: `E:/elysium-work/reports/tests/20261010T215501.934183Z-elysium-session-elysium-substrate/index.json`
+(169/169, zero failed or abstained). Arena:
+`E:/elysium-work/reports/arena/20261010T215628.816258Z/arena/index.json` (12/12 pass):
+`l0_named_think_context_storage`, `l0_entity_constructor_defaults`, `selftest_fixture_stages`,
+`selftest_retail_site_matches`, `selftest_entity_field_fails`, `selftest_entity_call_refused`,
+`l0_entity_parenting`, `l0_datamap_keyvalues`, `l0_eflags_word`, `control_sequence`, `corpse_fades`,
+`restore_place_invalid_marker`. Selected historical passing verdicts remain passing; storage is new.
+Worker touched-family gate: `E:/elysium-work/reports/tests/20261010T215412.967987Z-elysium-substrate/index.json`
+(168/168). No arm or full-arena closure gate was run. Fixtures prove local storage only; no live
+dispatch/current/stamp substitute. Original completed-run count stays 23/88. No modernization accepted.
 
 | run | walk | confirmed | worker | gate | commit |
 |---|---|---|---|---|---|
@@ -45,9 +64,9 @@ evidence, not new validation or acceptance of the layer closing gate.
 | L0-r019 | haiku 132 turns $0.82 (max) | sonnet: all six CONFIRMED; thunks not extra call sites; 0x450 size stands | done (historical commit) | historical commit reports build ok, default 169/0; l0_data_object_registry; 8 prior pass; touched arms 2/2; exact report path not recorded | `d4d8bf10` |
 | L0-r020 | haiku 97 turns $0.61 (max) | sonnet: thunks not second bodies; NPC/player override BodyTarget; IsMonster byte 0/1 | done (historical commit) | historical commit reports build ok, default 169/0; l0_target_name_predicates, l0_should_toggle, l0_base_perception_defaults, l0_is_monster_template_flag; 9 prior pass; exact report path not recorded | `c1151ee7` |
 | L0-r021 | haiku 138 turns $0.98 (max) | sonnet: SetModel/UTIL_SetModel never precache (unprecached name fatal); IsViewable via GetModelType; weapon bHidden != script-hidden latch | done (historical commit) | historical commit reports build ok, default 169/0; l0_entity_visual_state, l0_angle_motion; 15 prior pass; exact report path not recorded | `00187639` |
-| L0-r022 | haiku 128 turns $0.89 (max) | sonnet: SetAbsAngles has NO partition walk; direct hook 0x10092ef0; current Sol recovery adds query-time partition lifecycle | deferred, no runtime edits | not gated: docs-only checkpoint; record still absent | pending docs-only checkpoint |
+| L0-r022 | haiku 128 turns $0.89 (max) | sonnet: SetAbsAngles has NO partition walk; direct hook 0x10092ef0; current Sol recovery adds query-time partition lifecycle | deferred, no runtime edits | not gated: docs-only checkpoint; record still absent | `a3aac976` docs-only; implementation open |
 | L0-r023 | haiku 98 turns $0.94 (max) | sonnet: Teleport has 3 bodies, 12 callers; notify block has physicsRotate byte; base has no m_fEffects storage |
-| L0-r024 | haiku 121 turns $0.86 (max) | sonnet: ctor leaves grow size 0 / current ctx -1; slot 15 SetAttackExtents updates the partition; last-think written after the callback |
+| L0-r024 | haiku 121 turns $0.86 (max) | sonnet: ctor leaves grow size 0 / current ctx -1; slot 15 SetAttackExtents updates the partition; last-think written after the callback | r024a storage subset gated; full r024 open | build ok; default 169/169; storage + constructor + 10 regressions 12/12 pass; exact paths below | r024a implementation commit; checkpoint records hash below |
 | L0-r025 | haiku 191 turns $1.25 (max) | sonnet: PostConstructor forces serial -1; empty classname never enqueues (+0x448 = -1); CGameStringPool case-sensitive |
 | L0-r026 | haiku 176 turns $1.08 (max) | sonnet: port classname is LAST occurrence, retail FIRST (bake folds last-wins); qsort is VC6 CRT (port verbatim); 0x10352f00 runs before thinks |
 | L0-r027 | haiku 150 turns $0.76 (max) | sonnet done |
@@ -89,6 +108,25 @@ gated in the clone, cherry-picked onto `main`, and re-gated here (`decisions.md`
   drain would diverge. Detail and remaining recovery: `docs/vtmb/entity_io.md` current r022 section.
   Overlap-query equivalence is unproved. This checkpoint downgrades overstated audit closure;
   it accepts no modernization and completes no run. r024 proceeds independently next.
+
+- r024: Spawn `0x100aae50` calls slot15 SetAttackExtents `0x1009af40` before storing extents;
+  `0x100dc220` reads cp handle +0x46 and, if invalid, invokes `0x100ddd90` before partition slot0
+  margin update. It therefore shares r022's unfinished producer lifecycle. Removal calls slot225
+  VPhysicsDestroyObject, currently empty, plus move-tree unlink pose handling. Approved r024a
+  closes only independent named-think registration/lookup and context storage; Spawn/removal
+  remain deferred, and the original 23/88 completed-run count does not increase for that subset.
+  After r024a's gate/checkpoint, the next packet is r022a cached frames/accessor, then the actual
+  physics/partition prerequisites, rather than numerically advancing through dependent consumers.
+
+- r024 scheduling: retail `PhysicsRunSpecificThink` 0x10033de0 requires deadline >0, clears it to0,
+  dispatches at max(deadline,curtime) under a temporary clock and stamps last-think after return.
+  Current default dispatcher treats deadline0 as immediate and parks with FLT_MAX. Actual zero
+  writers include Elevator.cpp:127, FuncRotating.cpp:141/204, LogicClasses.cpp:512 (brush host
+  deferral), Mover.cpp:377/410 and StarterClasses.cpp:40. Correcting all producers requires their
+  targeted retail recovery and moving host deferrals out of retail think state. No default-zero
+  modernization was accepted. Root bounded r024a to independent storage operations: fixtures can
+  prove their local mechanics, never replace live current-context/last-stamp production.
+  GetLastThink and named/default scheduling remain open until those producers are implemented.
 
 - r029/r030: `hooks.tsv` has no rows for the AI and Python save-block handlers (0x1011a0c0 -> 0x1030c390 / 0x1019b360);
   they are registered with empty bodies as L4/L5 hooks — the owner adds the rows.

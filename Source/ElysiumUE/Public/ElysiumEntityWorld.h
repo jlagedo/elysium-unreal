@@ -961,6 +961,9 @@ public:
 	// Not a service — nothing reads behaviour off it.
 	AActor* GetOwnerActor() const { return Owner; }
 	double NowSeconds() const;
+	// Arena caller-owned context strings. The buffers live with the world, so registered raw name
+	// pointers remain valid after the record runner detaches; production registration owns no text.
+	ANSICHAR* StageThinkContextName(const FString& Name);
 	// `VEngineServer014` slot 120 (`engine.dll 0x2010acf0`: `MOV EAX,[0x20b42980]; RET`): the HOST
 	// FRAME COUNTER, an integer `_Host_RunFrame` `0x2008e450` increments once per host frame
 	// (`0x2008e737`). Not a time. `CEnvParticle`'s `m_nRampFrame` (+0x494) is stamped from it by
@@ -1454,6 +1457,7 @@ private:
 	// The last time this world was ticked. NowSeconds() reads it when there is no game state to
 	// hold the clock.
 	double LastTickNow = 0.0;
+	TArray<TUniquePtr<TArray<ANSICHAR>>> ThinkContextFixtureNames;
 	// The clamped gap between the last two ticks. Seeded rather than zero, because the first tick
 	// has no previous one to measure against and a zero epsilon is not a shorter frame — it is a
 	// due test that answers no to a stamp standing exactly at the clock.

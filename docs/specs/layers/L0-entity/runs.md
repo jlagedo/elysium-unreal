@@ -21,12 +21,22 @@ the coarse r022 -> r044/r045 ordering. Approved sequence:
    Exact physics geometry service bodies and other surrounding arms remain to be recovered before
    dispatch; split further only at a complete producer boundary. Engine partition query slots 12-15
    call the consumer before their mask gate; do not invent frame-end scheduling.
+   Targeted recovery identifies DAT_1072393c as `VPhysicsCollision007`, loaded by
+   `CPhysicsHook::Init` `0x1002d7d0`; its actual implementation is outside the current corpus.
+   `0x100dd450` asm pushes literal 0, cp slot9 angles, cp slot8 origin, physics-object slot49
+   geometry, out-maxs and out-mins before service slot18. Preserve these arguments and recover
+   the service geometry contract rather than assuming a component's current world AABB is equal.
 3. r022b: absolute setters `0x100b2300` / `0x100b2510` and affected callers, full
    `l0_parented_transforms` record including matrix preservation and SetAbsAngles' absent partition
    walk. Re-read all original r022 rows and gate before marking that run complete.
 
 These are planned packets and records, not implementation or validation. Current next ready
-coding run is r024, reusing its confirmed walk while the prerequisite packet is refined read-only.
+coding packet is r022a. r024a has gated only GetIndexForContext `0x100ac250` and
+RegisterThinkContext `0x100ac360`, with `l0_named_think_context_storage` and constructor/harness
+regressions; exact report paths are in progress.md. Full r024 remains open: GetLastThink needs
+the live scheduler/stamp producers, base Spawn needs partition handle/margin production, and
+removal needs real physics/shadow lifetime and cached unlink poses. Its original full records
+remain absent. Do not increment the 23/88 completed-original-run count for this partial packet.
 The detailed retail evidence and missing producers are in `docs/vtmb/entity_io.md` under
 "Parented transforms: current substrate and prerequisite fault".
 
