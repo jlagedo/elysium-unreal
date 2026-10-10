@@ -802,3 +802,9 @@ Tests are authored under `Elysium.Arm.V6.ArenaPersistence` and not run by the co
 the real `persistence_refused_save`, `persistence_missing_load`, `persistence_world_rebind` records,
 both-host activation/admission measurements and all behavior records. No acceptance is inferred
 from these parser/transaction-law tests.
+
+`l0_physics_damage_type` uses `entity_call GetDamageType` on live registered base/NPC/player
+receivers to witness base slot 189 `0x100ad850` returning zero. Complete stateless collision
+rules and the existing special-mask character-filter caller are covered separately by
+`Elysium.Substrate.CollisionRulesProduction`. The record proves the selector only: nonzero
+overrides, trace geometry, group mutation and the complete filter remain open.

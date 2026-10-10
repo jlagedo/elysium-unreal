@@ -54,14 +54,28 @@ record construction, simulation, lifetime and exact remaining dependencies.
 The first independent prerequisite packet is slot 237 `PhysicsSolidMaskForEntity`
 `0x1003e7a0`: real Flags and player self-downcast construction suffice; no body or query
 surrogate is needed. Its completion does not close collision query, r044/r045, or r022.
-Subsequent independent mask/filter/query producers must preserve collision group, custom
-collision dispatch, cylindrical hull state and retail veto order. A complete owned body/controller
+Subsequent independent mask/filter/query producers must preserve collision group, damage-type
+selection of rules slot 76, cylindrical hull state and retail veto order. A complete owned body/controller
 packet requires shape/collision identity, simulation clock, active enumeration and deferred deletion
 together; it can precede its STEP/pusher callers when its own inputs are complete. Then implement
 the required consumer loop with the cache it consumes, followed by query-time bounds/partition
 and absolute setters. Do not substitute UE teleport, frame-end refresh, target storage alone,
 or assume that the IVP solver must be copied. Resume the saved candidate only after that real
 producer boundary is built. Geometry and the complete body/controller environment remain open.
+
+Second independent prerequisite packet: base GetDamageType slot189 `0x100ad850` returns zero;
+the actual SP rules pair `0x10356230 -> 0x1042c0c0 -> 0x1042df70` is implemented completely,
+including 6->3 before signed sorting and all rejecting pairs. The existing NPC rules wrapper
+uses it. `0x10035030`'s slot189 is not a custom entity predicate; its nonzero branch invokes
+rules slot76 `0x10128fa0`, an ordinary centered trace with no cylinder. The detailed recovery
+and concrete remaining producer frontier are in `physics-interaction.md` and the targeted walk.
+Group setter `0x100aaa40` needs actual object#25 -> `0x26016da0 -> 0x2602e320 -> 0x26048b00`
+pair/contact rebuild; anim slot68's pair-hash service needs its true mutation/lifetime and the
+same recheck notifications. Whole Simple filter and its candidate-first bilateral stage stay
+open; no same-L0 state was stubbed. Worker and coordinator evidence is recorded in progress.md:
+reviewed build/default171/171, selected motor/sight6/6 and bounded arena18/18 pass. This closes
+only the independent getter/predicates. Original completed runs stay 23/88, no modernization
+accepted; no push or layer closure gate.
 
 Candidate/evidence: `E:/elysium-work/codex/l0-r022a-deferred-20261010/README.md`;
 durable recovery: `docs/vtmb/entity_io.md`, "Separate transform cache: physical consumer planning fault".

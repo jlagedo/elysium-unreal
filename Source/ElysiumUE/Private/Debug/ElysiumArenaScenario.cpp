@@ -2238,6 +2238,7 @@ const TArray<FString>& EntityCallAllowlist()
 		TEXT("GetStealthVisionCone"),
 		TEXT("Illumination"),
 		TEXT("PhysicsSolidMaskForEntity"),
+		TEXT("GetDamageType"),
 		// L0.entity_core.monster-template: slot 70 `IsMonster()` on a live entity, no arguments.
 		TEXT("IsMonster"),
 		// L0.entity_core.save-block-framework (L0-r029): the engine's calls into CServerGameDLL's save

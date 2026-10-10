@@ -441,3 +441,91 @@ open. Exact clock limits/contact producers and damaged quaternion/parameter alia
 to be walked before an engine adapter is a complete service. Unreal may replace solver algorithms
 under AGENTS.md only with the retail contract/state/event sequence preserved. No such replacement
 acceptance or object/controller runtime implementation is claimed by this recovery.
+
+### Independent trace selectors and actual single-player collision rules (2026-10-10)
+
+All `0x100...` / `0x101...` / `0x103...` / `0x104...` addresses here are vampire.dll;
+`0x260...` are vphysics.dll. Bodies were read through the corpus; missing tiny Ghidra boundaries
+were read from the installed PE without writing the corpus or shared project.
+
+`Physics_TraceHull` `0x10035030` calls **slot 189 GetDamageType** at vtable offset `0x2f4`.
+The base body `0x100ad850` does only diagnostic scope push/pop and returns zero. It reads no
+entity field. The port now provides that complete constant-zero body and hand-slot metadata;
+this replaces a tallying generated stub, not a collision algorithm. A nonzero override selects
+game-rules slot 76 at offset `0x130`, with start/end/mins/maxs/mask, entity, its collision group,
+entity again, and trace output. It is not an entity custom-collision predicate or callback.
+Single-player rules inherit slot 76 `0x10128fa0`: an ordinary centered Ray_t, Simple filter with
+the passed entity/group, engine TraceRay, optional debug trace, then return 1. It does not set
+the cylindrical flag. Neither that engine-backed function nor nonzero damage-type overrides
+are completed by this packet.
+
+The zero arm reads `m_CollisionGroup +0x368`, then slot 211 `GetSolidFlags`, initializes the
+centered ray and tests bit `0x40`. Extents are `(maxs-mins)*0.5`, center is `(maxs+mins)*0.5`,
+start is start+center, start-offset is -center. IsRay is `extent.LengthSquared() < 1e-6`
+(`0x104492e0` is an f64 literal); IsSwept is `delta.LengthSquared() != 0`. Flags start clear;
+the cylinder arm requires bit `0x40`, a non-ray, and `sqrt(extent.x²+extent.y²) > 1e-6` before
+setting the cylinder byte. Thus the squared-length and radius comparisons have different
+dimensions in retail. Current UE box traces do not implement that cylinder query contract.
+`SetSolidFlags 0x100dc580` has partition/body tails, so a fixture setting `0x40` does not
+establish its complete same-L0 production. Full trace/geometry/filter remains open.
+
+The actual single-player rules object is established by `CWorld::Precache 0x1023c020`, which
+assigns `DAT_1070ba0c = InstallGameRules 0x10352f70`. On the single-player byte arm it calls
+ctor `0x10355740`, which installs **CHalfLife2 table `0x104a308c`**. Slot 77 is
+`0x10356230`, whose asm tail-dispatches getter `0x1042c0a0`, then singleton `0x109eed4c`
+(initialized by `0x1042c080` with CHLSharedGameRules table `0x10516c58`), then slot 0
+`0x1042c0c0`. This differs from base CGameRules slot 77 `0x10128f80`, whose getter
+`0x1042df50` selects separate singleton `0x109eff34` / table `0x10516ce4` / `0x1042df70`.
+The HL function's extra arms therefore apply to the shipped single-player trace.
+
+`CHLSharedGameRules::vfunc0 0x1042c0c0` remaps each group 6 to 3 **before signed sorting**.
+In order it rejects 15/15, 13/13, larger-group 17 with smaller 3/16/17, then 18/18. It then
+runs the inlined shared rule `0x1042df70`, which signed-sorts again and rejects either group
+8, smaller group 1, then pair 4/4; otherwise it accepts. No rules-object field is read or
+written by either predicate. Negative/unrecognized values are not clamped: 0/1 and -1/1
+accept, 1/2 rejects. The complete stateless predicates are ported in `ElysiumCollisionRules`;
+the existing `FElysiumNpcBase::RetailGameRulesShouldCollide` caller now invokes the actual SP
+function instead of always accepting. No nonzero entity group producer was fabricated.
+
+#### Smallest remaining filter producer frontier
+
+`CBaseEntity::SetCollisionGroup 0x100aaa40` returns unchanged on an equal group; otherwise it
+stores the group first and, only with a real `m_pPhysicsObject +0x36c`, calls object slot 25.
+The object table `0x260c9db0` has slot 25 `0x26016da0`, whose PE body replaces this with
+the real IVP object at wrapper+8 and tail-calls `0x2602e320`. With an IVP collision record at
+object+0x9c it invokes `0x26048b00`: live broad-phase candidates, filter dispatch, existing
+collision-pair comparison, obsolete-contact deletion and insertion callbacks. A group word
+setter with a bool body-presence/recheck counter omits these effects and is not this producer.
+This packet therefore leaves SetCollisionGroup open until the actual owned body/contact service.
+
+`CTraceFilterSimple::ShouldHitEntity 0x101d31c0` executes StandardFilterRules `0x101d3080`,
+pass rules `0x101d2fc0`, **candidate slot 91**, candidate BCC targetable/script-hidden gate,
+actual rules slot 77, then **candidate slot 68 before pass slot 68**, with short-circuiting.
+Mask `0x46004003` skips only the last bilateral stage. Pass rules reject identical entity
+pointers, candidate's owner equal to pass, and pass's owner equal to candidate; this is owner
+slot 97, not move-parent/root resolution. The current shared character helper's tester-first
+order belongs to the nav filter and remains a known divergence for Simple; base-line/player
+slot-68 overrides and lower collision-pair state are unfinished, so the whole filter cannot
+be claimed reproduced except for one line.
+
+That lower state is concrete: `CBaseAnimating::ShouldIgnoreCollision 0x1008bfe0` returns
+`0x10158b90`, which calls `DAT_10723948` slot 3. LevelInitPreEntity `0x1002d930` obtains
+that service through VPhysics030 slot 3 `0x26001d00 -> 0x260116d0`: it allocates a 0x48-byte
+pair-hash service, initializes tables, creates a 0x400-capacity hash through `0x26040340`,
+then publishes table `0x260c9b7c`. Slot 3 `0x26011b70` asks embedded pair-hash table
+`0x260c9b9c` slot 0 `0x2603b190` and inverts AL; that query canonicalizes the pair through
+`0x2603b0e0` and queries `0x2603aff0`. Pair add/remove entry points `0x10158b40` /
+`0x10158af0` and service slots 1/2 `0x26011780` / `0x26011920` also call `0x10158ab0`:
+for each physics object whose slot 1 predicate is clear, invoke the same real object slot 25
+recheck. Slot 1 `0x26016d60` tests bits `0x0c` on the word reached through wrapper+8 then
+IVP object+0xa4; this is not the deletion predicate at object slot 4 `0x26016cf0`.
+Identity lifetime, complete hash mutations and their body/contact notifications remain open;
+an always-empty hash would stub same-L0 state, not provide an upward hook.
+
+`Elysium.Substrate.CollisionRulesProduction` covers each predicate rejection/neighbor and
+reversed arguments, 6 remapping, signed edge values, the existing wrapper, registered base/NPC/
+player construction and virtual slot 189. Its real registered NPC/player call with special
+mask `0x46004003` reaches the rules consumer before bypassing the unfinished bilateral tail.
+`l0_physics_damage_type` calls the actual slot 189 on three live registered receivers; it
+does not call an internal filter helper or invent a hull hit. No body, controller, partition,
+cache, query or complete filter closure follows; no modernization was accepted.

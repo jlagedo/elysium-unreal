@@ -1,0 +1,20 @@
+{
+  "name": "l0_physics_damage_type",
+  "about": "Independent base GetDamageType slot189 vampire.dll 0x100ad850, read by physics trace 0x10035030 to select game-rules slot76 on a nonzero return. Real registered logic_relay, NPC and player inherit the constant-zero body. This proves the base selector only; no trace, cylinder, nonzero override, collision-group mutation, physics object or full filter closure is claimed. CollisionRulesProduction tests complete stateless SP/shared rules pairs and the real special-mask character-filter caller separately.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 0.8,
+  "player": { "at": "start" },
+  "script": [
+    { "t": 0.1, "do": "spawn", "row": { "classname": "logic_relay", "name": "damage_base", "at": [0, 0, 50], "keys": {} } },
+    { "t": 0.1, "do": "spawn", "row": { "classname": "npc_VPedestrian", "name": "damage_npc", "at": [150, 0, 50], "keys": { "stattemplate": "TutorialThug" } } },
+    { "t": 0.2, "do": "entity_call", "target": "damage_base", "function": "GetDamageType", "args": [] },
+    { "t": 0.3, "do": "entity_call", "target": "damage_npc", "function": "GetDamageType", "args": [] },
+    { "t": 0.4, "do": "entity_call", "target": "player", "function": "GetDamageType", "args": [] }
+  ],
+  "expect": [
+    { "label": "base_damage_type", "who": "damage_base", "kind": "script", "match": "entity_call GetDamageType done value=0", "by": 0.25 },
+    { "label": "npc_damage_type", "who": "damage_npc", "kind": "script", "match": "entity_call GetDamageType done value=0", "by": 0.35 },
+    { "label": "player_damage_type", "who": "player", "kind": "script", "match": "entity_call GetDamageType done value=0", "by": 0.45 }
+  ]
+}

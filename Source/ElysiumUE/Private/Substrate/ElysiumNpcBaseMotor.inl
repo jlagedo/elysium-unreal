@@ -308,9 +308,8 @@ bool KernelHullTrace(const FVector& StartUnits, const FVector& EndUnits, const F
  *  game rules' group pair run ahead of the slot-68 vetoes. True = the character blocks. */
 bool KernelTraceKeepsCharacter(const FElysiumEntityHandle& Character, int32 Mask) const;
 
-/** SEAM for `g_pGameRules->ShouldCollide(collisionGroup0, collisionGroup1)`, the group-pair test of
- *  `PassServerEntityFilter` / `CTraceFilterSimple` (arm (d) of the nav filters). The port stands no
- *  game-rules object and VtMB's body is unrecovered; answers true ("collide"), which drops nothing. */
+/** Actual single-player game-rules pair: CHalfLife2 slot 77 0x10356230 -> 0x1042c0c0
+ *  -> shared 0x1042df70. Stateless and independent of the unfinished physics-object producer. */
 static bool RetailGameRulesShouldCollide(int32 GroupA, int32 GroupB);
 
 /** The shared hull table's mins and maxs for a hull id, in SOURCE units.

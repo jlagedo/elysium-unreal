@@ -534,6 +534,9 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
     237: ("", "`CBaseEntity::PhysicsSolidMaskForEntity` 0x1003e7a0: FL_NPC first, then the real "
               "m_pPlayer self-downcast, else the base mask (L0 physics producer checkpoint; "
               "`ElysiumEntitySlotBodies.cpp`)"),
+    189: ("", "`CBaseEntity::GetDamageType` 0x100ad850: constant zero after diagnostic scope; "
+              "physics trace 0x10035030 reads the actual damage-type slot "
+              "(`ElysiumEntitySlotBodies.cpp`)"),
 }
 
 # A `CHAIN_HAND` slot whose hand body stands on ONE chain owner only; the other chain classes that

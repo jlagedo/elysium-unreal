@@ -530,6 +530,13 @@ FElysiumEntity* FElysiumEntity::GetBaseEntity()
 	return this;
 }
 
+int32 FElysiumEntity::GetDamageType() const
+{
+	// vampire.dll 0x100ad850, slot 189: only diagnostic scope push/pop and constant zero.
+	// FUN_10035030 uses this return to select game-rules slot 76, not an entity collision slot.
+	return 0;
+}
+
 // slot 91 `bool ShouldCollide(int, int) const` — 0x100b4de0
 bool FElysiumEntity::ShouldCollide(int32 CollisionGroupArg, int32 ContentsMask) const
 {

@@ -193,12 +193,12 @@ The live NPC loop adds specific L0 prerequisites, not a general “physics missi
   corner traces and `PhysicsTouchTriggers 0x100a53d0`. The independent mask selector is now
   implemented: `0x2000` flag -> `0x202400b`, else nonzero +0xa8 -> `0x201400b`, else
   `0x200400b`, preserving first-arm precedence. It does not require an object or think scheduler.
-- `0x10035030` chooses custom collision (entity slot 189 -> game-rules slot 76) or builds a
+- `0x10035030` selects game-rules slot 76 when GetDamageType entity slot 189 is nonzero, or builds a
   centered ray, including cylinder flag for collision flags bit 0x40. It constructs
   `CTraceFilterSimple 0x101d3190` with owner and entity collision group +0x368, then engine trace
   slot 4. Filter `0x101d31c0` reads candidate ShouldCollide slot 91, game-rules group-pair slot
   77 and bilateral entity slot 68 vetoes, in addition to StandardFilterRules/pass entity.
-  `FElysiumRetailTrace` cannot represent group/custom/cylinder; MapActor's rejection callback
+  `FElysiumRetailTrace` cannot represent group/rules-slot-76/cylinder; MapActor's rejection callback
   supplies only render/solid-flag arms. Generic box sweeps alone are not the required producer.
 - `PhysicsRunThink 0x10033f60` distinguishes named-only/primary-only modes, sets current named
   index around callbacks and uses `PhysicsRunSpecificThink 0x10033de0` for stamps/deletion.
@@ -247,3 +247,25 @@ Only this selector is marked ported; no generic trace, object/controller, geomet
 publication closure follows. No modernization is accepted. The failed r022a candidate stays
 deferred; this packet replaces an unspecified service frontier with exact production and ordering
 dependencies while landing one complete independent prerequisite.
+
+## Independent damage selector/rules checkpoint (2026-10-10)
+
+Targeted actual bodies confirm trace `0x10035030` offset `0x2f4` is **GetDamageType slot 189**,
+not a custom-collision predicate; base `0x100ad850` returns zero. Nonzero selects rules slot76
+`0x10128fa0` (ordinary centered box, no cylinder), not an entity callback. The complete base
+selector is now hand-written. Full nonzero trace/engine geometry remains open.
+
+Actual SP rules dispatch is `CWorld::Precache 0x1023c020 -> InstallGameRules 0x10352f70 ->
+ctor 0x10355740 -> CHalfLife2 table0x104a308c #77 0x10356230 -> getter0x1042c0a0 ->
+singleton0x109eed4c -> CHLSharedGameRules0x1042c0c0`, with the shared0x1042df70 rule inlined.
+Both stateless predicates are complete independently; the existing NPC rules caller uses them.
+Base CGameRules #77 0x10128f80 selects a different singleton0x109eff34/shared table.
+
+The exact remaining same-L0 group/pair frontier, corrected cylinder comparisons, pass-owner
+identity and bilateral order are recorded in `docs/vtmb/physics-interaction.md`, "Independent
+trace selectors and actual single-player collision rules". Group setter100aaa40 needs real
+object#25 26016da0 -> IVP2602e320 -> pair/contact rebuild26048b00. Anim slot68 needs
+pair-hash10158b90/service#3 26011b70; its mutation notifications need that same live recheck.
+No fake setter/pair producer or full filter implementation was added; the shared helper still
+uses nav tester-first veto order. The special-mask production test deliberately bypasses that
+unfinished tail exactly as retail does. Neither broad trace row nor original run closes.

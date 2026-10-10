@@ -6,6 +6,7 @@
 #include "Substrate/ElysiumMover.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumCollisionRules.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
@@ -275,16 +276,18 @@ bool FElysiumNpcBase::KernelTraceKeepsCharacter(const FElysiumEntityHandle& Char
 	//
 	// Arm (c), the candidate's own slot 91 `ShouldCollide(group, mask)` (`0x100b4de0`, the chain
 	// body `FElysiumEntity::ShouldCollide`); the filter's group is the tester's `m_CollisionGroup`
-	// (`+0x368`), which that body ignores. Arm (d), `g_pGameRules->ShouldCollide(group, group)`:
-	// no game-rules object stands in the port (`RetailGameRulesShouldCollide` answers "collide").
+	// (`+0x368`), which that body ignores. Arm (d) dispatches the actual single-player
+	// CHalfLife2 rules pair via 0x10356230 -> 0x1042c0c0 -> 0x1042df70.
 	if (!Other->ShouldCollide(CollisionGroup, Mask)
 		|| !RetailGameRulesShouldCollide(CollisionGroup, Other->CollisionGroup))
 	{
 		return false;
 	}
 	// Then, unless the mask is `0x46004003`, slot 68 `ShouldIgnoreCollision` in both directions: the
-	// candidate's own body asked about this NPC, and this NPC's asked about the candidate. The nav
-	// filters (`0x102e32d0` arm (e)) run the tester's direction first; the answer is the same OR.
+	// candidate's own body asked about this NPC, and this NPC's asked about the candidate.
+	// OPEN: this shared port currently runs the tester first (the nav filter's order), while
+	// Simple 0x101d31c0 runs candidate first and short-circuits. Complete filter work must split
+	// those dispatch orders along with the missing lower-layer pair-hash and ownership inputs.
 	// This NPC's slot 68 is the one `m_bForceNPCCheck` (`+0x63da`) reaches: with the bracket up
 	// (`CanStandAt 0x102a0ed0`, `IsAreaClear 0x102a0fb0`) its NPC/player/sleeping arm is skipped
 	// and other NPCs are solid. Neither slot-68 body writes anything.
@@ -311,11 +314,7 @@ bool FElysiumNpcBase::KernelTraceKeepsCharacter(const FElysiumEntityHandle& Char
 
 bool FElysiumNpcBase::RetailGameRulesShouldCollide(int32 GroupA, int32 GroupB)
 {
-	// **SEAM**: `CGameRules::ShouldCollide` (VtMB's body unrecovered). No game-rules object stands in
-	// the port; answers "collide", which drops nothing.
-	(void)GroupA;
-	(void)GroupB;
-	return true;
+	return ElysiumCollisionRules::ShouldCollide(GroupA, GroupB); // vampire.dll 0x1042c0c0
 }
 
 bool FElysiumNpcBase::RetailHullExtents(int32 Hull, EElysiumHullExtents Which, FVector& OutMinsUnits,

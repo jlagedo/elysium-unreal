@@ -2485,7 +2485,7 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			|| Action.Function == TEXT("ShouldToggle") || Action.Function == TEXT("BodyTarget")
 			|| Action.Function == TEXT("GetStealthVisionScalar") || Action.Function == TEXT("GetStealthVisionCone")
 			|| Action.Function == TEXT("Illumination") || Action.Function == TEXT("IsMonster")
-			|| Action.Function == TEXT("PhysicsSolidMaskForEntity"))
+			|| Action.Function == TEXT("PhysicsSolidMaskForEntity") || Action.Function == TEXT("GetDamageType"))
 		{
 			// The L0-r020 base queries on a live entity (`walks/L0-r020.md`): slots 160 / 161 / 197 / 28 / 29 /
 			// 200 / 70 through the vtable (an override answers for its class) and the non-virtual
@@ -2584,6 +2584,11 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 				{
 					Text = FString::Printf(TEXT("entity_call PhysicsSolidMaskForEntity done value=0x%x"),
 						static_cast<uint32>(Query->PhysicsSolidMaskForEntity()));
+				}
+				else if (Action.Function == TEXT("GetDamageType"))
+				{
+					// Actual slot 189, vampire.dll 0x100ad850, on the live registered receiver.
+					Text = FString::Printf(TEXT("entity_call GetDamageType done value=%d"), Query->GetDamageType());
 				}
 				else
 				{

@@ -1348,14 +1348,8 @@ bool FElysiumEntity::IsLockedByMaster()
 	return false;
 }
 
-// slot 189 0x100ad850 (sdk) `int GetDamageType() const`
-//   layer 0, story 29c
-int32 FElysiumEntity::GetDamageType() const
-{
-	FireEntitySlot(TEXT("CBaseEntity::GetDamageType"), TEXT("0x100ad850"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// slot 189 0x100ad850: hand body in ElysiumEntitySlotBodies.cpp. Physics trace 0x10035030
+// reads this damage-type return to select rules slot 76; it is not a custom-collision predicate.
 
 // slot 190 0x10027120 (walked) `float GetDamage()`
 //   layer 0, story 29c
@@ -2408,7 +2402,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::IsLockedByMaster),
 				[](FElysiumEntity& Receiver) -> int64 { return Receiver.IsLockedByMaster() ? 1 : 0; } },
 			{ 189, TEXT("0x100ad850"), TEXT("CBaseEntity"), TEXT("GetDamageType"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32() const>::Test(&FElysiumEntity::GetDamageType),
 				nullptr },
 			{ 190, TEXT("0x10027120"), TEXT("CBaseEntity"), TEXT("GetDamage"),

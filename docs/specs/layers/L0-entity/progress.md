@@ -46,6 +46,65 @@ evidence, not new validation or acceptance of the layer closing gate.
 - Layer closure remains open: 65 unlanded runs, rebakes, default/arm and full arena gate,
   intermittent records in three boot orders, audit/hooks and state-bearing replacement checks.
 
+### Independent damage selector and collision rules coordinator gates (2026-10-10)
+
+Coordinator reviewed the complete stateless shared/SP predicates against their actual retail
+dispatch and branch order, base slot 189 and metadata, production witnesses and recovery docs.
+The proposed internal filter-helper arena action was removed during review; the new record
+calls only the actual public getter on live registered receivers. Source then froze for gates.
+Build: `E:/elysium-work/logs/20261010T230131.518969Z-build.json` (succeeded, exit 0).
+Default: `E:/elysium-work/reports/tests/20261010T230143.205321Z-elysium-session-elysium-substrate/index.json`
+(171/171 pass, failed 0, notRun 0; CollisionRulesProduction included with zero errors).
+Selected touched-family regressions:
+`E:/elysium-work/reports/tests/20261010T230316.979829Z-elysium-arm-npckernelmotor-tracefiltersh-c95e4993/index.json`
+(6/6 pass, zero errors, failed 0, notRun 0): motor TraceFilterShouldCollide, IgnoreCollision,
+Probes and the three Geometry.Sight tests. This command enabled the arm build but did not run
+the full arm tier. Synthetic legacy query/group fixtures establish regressions only, not the
+unfinished group/contact/filter producers.
+
+Arena: `E:/elysium-work/reports/arena/20261010T230332.586985Z/index.json`
+(18/18 pass, failed 0; arena and sm_hub_1 hosts exit 0): `l0_physics_damage_type`,
+`l0_physics_solid_mask`, `l0_entity_parenting`, `l0_collision_bounds_size`,
+`l0_entity_constructor_defaults`, `l0_datamap_keyvalues`, `l0_eflags_word`,
+`l0_named_think_context_storage`, `l0_solid_touch_generation`, `l0_save_restore_blocks`,
+`l0_transition_state`, `control_sequence`, `corpse_fades`, `restore_place_invalid_marker`,
+and the four fixture/site/field/call selftests. All reports and new getter trace were read;
+base/NPC/player returned zero at 0.2/0.3/0.4. The two intentional failure selftests pass by
+inversion. Previous selected passing records remain passing. Existing engine Python plugin
+startup errors remain in arena logs; no new runtime error acceptance is inferred.
+
+Only the independent base getter and shared/SP predicates close. Original completed runs
+remain 23/88; full trace/filter, group mutation, pair hash/contact notifications, body/controller,
+partition/cache and layer closure remain open. Next concrete frontier is the actual owned
+body/contact service required by group-change object slot 25 and ignored-pair notifications,
+with box/shape/parameter construction and clock/activity/deferred deletion inputs recovered
+in the targeted producer walk. No full arm/full arena/mutation or layer closure gate ran;
+no modernization accepted. Commit is reported at handoff, clean main, no push.
+
+### Independent damage selector and collision rules worker evidence (2026-10-10)
+
+Fresh Sol High worker completed base GetDamageType slot 189 `0x100ad850` and the actual
+single-player rules dispatch `0x10356230 -> 0x1042c0c0 -> 0x1042df70`. The existing NPC rules
+wrapper now calls that complete stateless predicate. All rejection/neighbor/reversed/signed
+argument cases are covered, together with registered base/NPC/player construction and the
+existing special-mask character-filter consumer. The arena record calls only real public
+GetDamageType slots; it exposes no internal filter helper. Full trace/filter, nonzero damage
+overrides, group mutation, cylinder, body/controller/partition and cache stay open. Targeted
+recovery now names the actual group-change object-slot-25 contact recheck and the ignored-pair
+hash factory/query/mutation notification frontier in `docs/vtmb/physics-interaction.md`.
+
+Worker stable-source build: `E:/elysium-work/logs/20261010T225656.677606Z-build.json`
+(succeeded, exit 0). Production report:
+`E:/elysium-work/reports/tests/20261010T225719.569028Z-elysium-substrate-collisionrulesproducti-df9ce040/index.json`
+(1/1 pass, failed 0, notRun 0, zero errors, four existing NPC diagnostics). Bounded arena:
+`E:/elysium-work/reports/arena/20261010T225741.842642Z/index.json`
+(3/3 pass, failed 0, arena host exit 0): `l0_physics_damage_type`, `l0_physics_solid_mask`,
+`l0_entity_constructor_defaults`. The new trace records zero from live base/NPC/player at
+0.2/0.3/0.4; existing engine Python plugin startup errors remain in the arena log. Reports
+and trace were read. Coordinator review/default/bounded regression gates remain pending;
+the worker ran no default, arm, full arena or mutation gate. Original runs remain 23/88;
+no modernization was accepted.
+
 ### Independent physics mask and producer recovery gates (2026-10-10)
 
 Fresh Sol High worker implemented complete independent selector `0x1003e7a0` and the real
@@ -72,7 +131,8 @@ records remain passing. Existing engine Python plugin startup errors remain in t
 the scenario JSON and process results were read. No arm/full-arena/mutation or layer closure
 gate ran. Original completed runs stay 23/88; only selector row 237 closes.
 
-Next frontier: complete independent trace/filter producers with collision-group/custom/cylinder
+Next frontier: complete independent trace/filter producers with collision group, nonzero damage-type
+selection of rules slot 76, cylinder
 and veto-order semantics, then the real owned box/body/controller service boundary (shape and
 parameter conversion, independent target/solved pose, environment clock/activity/contact/deletion).
 That service can precede its callers once its own inputs are complete. STEP/pusher/think/relink
