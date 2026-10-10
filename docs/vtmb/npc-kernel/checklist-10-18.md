@@ -7,7 +7,7 @@ One row per *core* function (a family or helper class method, or a body touching
 
 - **rule** — the body carries a formula, a threshold, an ordering or a state write a program can observe. It is ported verbatim onto the port's virtual, cites the retail address, and has one automation test derived from the decompiled C. *Target* names the port method; *Evidence* leads with the observable, `[0019/1 obs=<kind>: …]`.
 - **mechanism** — Unreal already supplies it (a trace, a physics query, an audio call, a string or CRT routine, a math or container helper). *Target* names the service seam; nothing is ported.
-- **present** — the port already runs it. *Target* names the port function, which cites the retail address, so the Port column below turns true on the next run.
+- **present** — the port already runs it. *Target* names the port function, which cites the retail address (`research where <address>` finds the line).
 - **dead** — nothing can observe it: no keyfield, schedule text, script name, output, save field, player-visible timing or witness test would notice its absence (spec 0019 story 1). One row, no body, no test; `delete-list.md` lists the port bodies still standing.
 - **unsettled** — read and not settled; *Evidence* says why. Counted apart: it is a recorded failure to reach a verdict, not a verdict.
 
@@ -23,9 +23,8 @@ One row per *core* function (a family or helper class method, or a body touching
 | … `unsettled` | 0 |
 | … no verdict yet | 0 |
 | … damaged decompilation | 5 |
-| … cited by the port | 225 |
 | … cited by the oracle | 282 |
-| … cited by neither and unverdicted | 0 |
+| … uncited by the oracle and unverdicted | 0 |
 
 | Address | Function | Size | Layer | Slots | Writes | Reads | Callers | Verdict | Target | Evidence |
 |---|---|---|---|---|---|---|---|---|---|---|

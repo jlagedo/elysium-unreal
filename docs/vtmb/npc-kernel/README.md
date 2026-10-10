@@ -4,6 +4,14 @@ The whole of `CAI_BaseNPC`'s family in `vampire.dll` — every class, vtable slo
 reachable function — as generated tables, so a story starts from a query instead of a
 re-discovery.
 
+**The tables describe retail only.** They are built from the corpus, the overlays beside the tools
+and the oracle (`docs/vtmb/**`); nothing that renders a table reads the port's source, so a code
+commit never makes them stale and they are regenerated when the corpus or an overlay changes. What
+the port cites is answered fresh from the tree by `uv run elysium research where <address>` (and
+`research cited` for what it never cites). Two things still read `Source/`, and neither is a table:
+`gen_kernel_shape --check` compares the C++ it emits, and `kernel_lists --check`'s closed-row audit
+refuses a closed row the port still cites (`kernel_lists.port_cites`).
+
 The whole generated surface — these tables, the two lists, the shape tables, the pin and the project
 source the generators emit — is regenerated or checked by one command:
 
@@ -101,8 +109,8 @@ The overlay is the record and the rendered checklist is a view of it, which is t
 checklist is regenerated from the corpus on every run, and a verdict has to survive that. A row
 with no overlay entry renders an empty verdict. **A verdict counts as a citation** — it says the
 body was read and what was done with it — so `coverage.md`'s `## Verdicts by layer band` table
-measures each band's core functions against port citations, oracle citations *and* verdicts, and
-its **Neither** column is the acceptance measure of stories 29c, 29d and 29e.
+measures each band's core functions against oracle citations *and* verdicts, and its **Neither**
+column is the acceptance measure of stories 29c, 29d and 29e.
 
 A `rule` row's target is one of four spellings, and the last two are read by `gen_kernel_shape`:
 `FElysiumSomething::Method` (the port method that carries the body), `registry:<slot>` (a species
@@ -153,14 +161,15 @@ Start from the question:
 | Question | Table |
 |---|---|
 | Which classes are NPCs, what do they derive from, which entity classnames spawn them? | `classes.md` |
-| Who fills vtable slot *N* — base, Troika, which species override — and does the port cite it? | `slots.md` |
-| What is `+0xNNNN`, who writes it, who reads it, what does the port call it? | `fields.md` |
+| Who fills vtable slot *N* — base, Troika, which species override — and where does the oracle walk it? | `slots.md` |
+| What is `+0xNNNN`, who writes it, who reads it, where does the oracle name it? | `fields.md` |
 | What type is `+0xNNNN`, what fills the words no datamap declares, what does a species add? | `layout.md` |
 | What does slot *N* take and return? | `signatures.md` |
-| What does function `0x10……` touch, fill, call, and where is it already cited? | `functions.md` |
+| What does function `0x10……` touch, fill, call, and where does the oracle walk it? | `functions.md` |
 | In what order do the kernel's functions depend on each other? | `order.md` |
 | Which kernel functions does the rest of the game call — the producers other subsystems own? | `entries.md` |
-| What has neither the port nor the oracle mentioned yet; which bodies are damaged? | `coverage.md` |
+| What has the oracle not walked yet; which bodies are damaged? | `coverage.md` |
+| Where does the port cite `0x10……`? | `uv run elysium research where 0x10……` (not a table) |
 | Which functions still have no name? | `unnamed.md` |
 | What did the porting story decide about every function of layers 0–9, and why? | `checklist-0-9.md` |
 | The same, for the middle layers 10–18 | `checklist-10-18.md` |
@@ -190,8 +199,7 @@ entity base classes (`CBaseEntity`, `CBaseAnimating`, `CBaseFlex`, `CBaseCombatW
   direction; the ledger classifies each site from the decompiled C (`= v`, `++`, `op=`, or the
   destination of a copy routine is a write; everything else a read). A body that both reads and
   writes an offset appears in both columns. Offsets reached through `param_1` in a body that
-  never names `this` are marked `?` — the receiver is guessed. The port-member column in
-  `fields.md` is the identifier declared where a header cites the offset, a guess too.
+  never names `this` are marked `?` — the receiver is guessed.
 - **Shape tiers.** `layout.md` and `signatures.md` say per row where the answer came from:
   `datamap` (a record states name, type, count), `interior` (SDK 2013's sub-layout of an output,
   a `CUtlVector`, a `Vector`, an array element), `sdk` (SDK 2013 declares the slot's method and
@@ -206,9 +214,9 @@ entity base classes (`CBaseEntity`, `CBaseAnimating`, `CBaseFlex`, `CBaseCombatW
 
 ## Conventions the tables rely on
 
-- The port cites a retail function as `0x10……` and a field as `+0xNNNN` in a comment; the
-  oracle does the same in prose. Those two spellings are what the citation columns join on. A
-  citation of an address *inside* a body counts for that body.
+- The oracle cites a retail function as `0x10……` and a field as `+0xNNNN` in prose (the port
+  does the same in a comment, which `research where` reads). Those two spellings are what the
+  Oracle columns join on. A citation of an address *inside* a body counts for that body.
 - `order.md` layers the call graph only (direct and resolved virtual edges). Field dependencies
   are annotations: *Producers later* names fields a function reads whose every writer sits in a
   later layer; *Unwritten* names fields nothing in the closure writes — their producer is another
@@ -229,5 +237,6 @@ entity base classes (`CBaseEntity`, `CBaseAnimating`, `CBaseFlex`, `CBaseCombatW
   family or helper class method, or a body touching an offset past `CBaseCombatCharacter`'s
   layout, so a name that moves a body into `CBaseEntity`'s namespace also moves it out of the
   core and behind the walk's boundary.
-- It does not decide what to port. It says what exists, who depends on what, and what is
-  already cited; the spec's build order is derived from it, not stored in it.
+- It does not decide what to port, and it does not say what the port carries. It says what
+  exists, who depends on what, and what the oracle and the verdicts already settle; the spec's
+  build order is derived from it, not stored in it.

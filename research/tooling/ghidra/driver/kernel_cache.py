@@ -12,8 +12,9 @@ sharing one work root never evict each other's build on every switch.
 
 Two more layers sit on top:
 
-* `FileScans`, a per-file cache of a scan over the checkout (the ledger's citation scan), keyed on
-  each file's size and mtime: an edit rescans one file, not 1,639.
+* `FileScans`, a per-file cache of a scan over the checkout (the ledger's oracle citation scan of
+  `docs/vtmb`, `kernel_lists`' port scan for the closed-row audit), keyed on each file's size and
+  mtime: an edit rescans one file, not 1,639.
 * `stamped`, the `--check` short-circuit: one fingerprint of every file the generators read or
   compare (the source tree, the docs, the tooling, the corpus, the datamap records, the SDK
   headers, the family files). A `--check` that passed on the same fingerprint replays its recorded
@@ -267,9 +268,8 @@ def shape_key(ledger, sdk, records) -> str | None:
 
 # Under the checkout: everything a kernel generator reads or compares, and the code it runs (this
 # directory with its overlays, the generators beside it, the two RTTI probes, the pipeline modules
-# the reach cut and the tunables import). `docs/specs` is scanned by the ledger but reaches no
-# output -- a spec citation feeds only `Ledger.interior`, which `cites` filters to a table's own
-# members and `_render_index` to `docs/vtmb/` -- so a spec edit does not unseal a stamp.
+# the reach cut and the tunables import). `Source/ElysiumUE` is here for the generators that
+# compare the C++ they emit and for the closed-row audit; no ledger table reads it.
 REPO_ROOTS = ("Source/ElysiumUE", "docs/vtmb", "research/tooling/ghidra/driver",
               "research/tooling/kernel.py", "research/tooling/gen_kernel_shape.py",
               "research/tooling/gen_kernel_bindings.py", "research/tooling/gen_kernel_tunables.py",

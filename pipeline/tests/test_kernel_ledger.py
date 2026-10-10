@@ -59,16 +59,6 @@ def test_tarjan_finds_cycles_and_keeps_singletons():
     assert len(comps) == 3
 
 
-def test_declared_member_reads_the_next_declaration():
-    lines = [
-        "\t// `m_bNoAlertState` (+0x65f6), authored per NPC.",
-        "\t// It skips the TROIKA layer's own damage.",
-        "\tbool bNoAlertState = false;",
-    ]
-    assert kl.Ledger._declared_member(lines, 0) == "bNoAlertState"
-    assert kl.Ledger._declared_member(["\t// +0x1234", "\tvirtual void Foo();"], 0) == ""
-
-
 def test_parse_band_reads_a_range_and_a_single_layer():
     assert kl.parse_band("0-9") == (0, 9)
     assert kl.parse_band("19-99") == (19, 99)
@@ -119,8 +109,57 @@ def test_citation_regexes_match_the_two_spellings():
     line = "// `EnterGrappleState` `0x10329760` (slot 379) writes `+0x5ce4` and +0x14b8 bit 8"
     assert [m.group(1) for m in kl.ADDRESS_RE.finditer(line)] == ["10329760"]
     assert [int(m.group(1), 16) for m in kl.OFFSET_RE.finditer(line)] == [0x5CE4, 0x14B8]
-    assert kl.SEAM_RE.search("// SEAM: retail's third arm") is not None
-    assert kl.SEAM_RE.search("// CHOSEN, NOT RECOVERED — the position") is not None
+
+
+def _citing_checkout(root: Path, port_line: str) -> Path:
+    """A checkout with one oracle page and one port file, each citing a different function."""
+    (root / "docs" / "vtmb" / "npc-ai").mkdir(parents=True)
+    (root / "docs" / "vtmb" / "npc-ai" / "senses.md").write_text(
+        "# Senses\n\n## Hearing\n\n`0x10000001` writes +0x5c3c.\n", encoding="utf-8")
+    substrate = root / "Source" / "ElysiumUE" / "Private" / "Substrate"
+    substrate.mkdir(parents=True)
+    (substrate / "ElysiumNpcSenses.cpp").write_text(port_line + "\n", encoding="utf-8")
+    return root
+
+
+def _bare_ledger(repo: Path) -> kl.Ledger:
+    ledger = kl.Ledger.__new__(kl.Ledger)
+    ledger.repo = repo
+    ledger.functions = {a: kl.Function(a, f"F{a[-1]}", "CAI_BaseNPC", 16, False, "", "")
+                        for a in ("10000001", "10000002")}
+    ledger.ranges = [(0x10000001, 0x10000011, "10000001"), (0x10000002, 0x10000012, "10000002")]
+    ledger.globals, ledger.string_addrs, ledger.vtable_owner = {}, set(), {}
+    ledger.oracle_addr = kl.collections.defaultdict(list)
+    ledger.oracle_off = kl.collections.defaultdict(list)
+    ledger.oracle_sections = kl.collections.defaultdict(list)
+    ledger.interior = kl.collections.defaultdict(list)
+    ledger._cite_members, ledger._cite_memo = {}, {}
+    return ledger
+
+
+def test_citations_read_the_oracle_and_never_the_port(tmp_path, monkeypatch):
+    # R3: the ledger describes retail. A port line citing a function and an offset reaches no
+    # table; the oracle's citation lands with its section.
+    monkeypatch.setenv("ELYSIUM_KERNEL_CACHE", "off")
+    repo = _citing_checkout(tmp_path, "// 0x10000002 +0x5c40 SEAM: the port's own line")
+    ledger = _bare_ledger(repo)
+    ledger.citations()
+    assert set(ledger.oracle_addr) == {"10000001"}
+    assert set(ledger.oracle_off) == {0x5C3C}
+    assert ledger.oracle_sections["10000001"] == [("docs/vtmb/npc-ai/senses.md", "Hearing")]
+    assert not any(hasattr(ledger, name) for name in ("port_addr", "port_off", "port_member"))
+
+
+def test_check_is_unchanged_by_a_port_only_edit(tmp_path, monkeypatch):
+    # The same oracle under two port trees renders the same citation tables.
+    monkeypatch.setenv("ELYSIUM_KERNEL_CACHE", "off")
+    before = _bare_ledger(_citing_checkout(tmp_path / "a", "// nothing cited"))
+    after = _bare_ledger(_citing_checkout(tmp_path / "b", "// 0x10000001 0x10000002 +0x5c3c"))
+    for ledger in (before, after):
+        ledger.citations()
+    assert dict(before.oracle_addr) == dict(after.oracle_addr)
+    assert dict(before.oracle_off) == dict(after.oracle_off)
+    assert dict(before.interior) == dict(after.interior)
 
 
 def test_inline_cells_recognizes_convar_reader_aliases(tmp_path):
@@ -154,7 +193,7 @@ class _FixtureLedger(kl.Ledger):
     checklist renders below that is arithmetic over the tables set here.
     """
 
-    def __init__(self, functions, layers, verdicts, port=(), oracle=()):
+    def __init__(self, functions, layers, verdicts, oracle=()):
         self.module = "vampire.dll"
         self.depth = 6
         self.meta = {"sha256": "c0ffee" * 8, "dumped_at": 0}
@@ -169,9 +208,7 @@ class _FixtureLedger(kl.Ledger):
         self.interior = {}
         self._cite_members = {}
         self._cite_memo = {}
-        self.port_addr = {a: [kl.Citation("ElysiumNpc.cpp", 1, False, "")] for a in port}
-        self.oracle_addr = {a: [kl.Citation("docs/vtmb/npc-ai/senses.md", 1, False, "")]
-                            for a in oracle}
+        self.oracle_addr = {a: [kl.Citation("docs/vtmb/npc-ai/senses.md", 1, "")] for a in oracle}
 
     def core(self):
         return sorted(self.functions)
@@ -188,7 +225,7 @@ def _band_fixture(verdicts):
         "10000004": fn("10000004", "High", 40),
     }
     layers = {"10000001": 0, "10000002": 3, "10000003": 7, "10000004": 12}
-    return _FixtureLedger(functions, layers, verdicts, port=["10000002"], oracle=["10000004"])
+    return _FixtureLedger(functions, layers, verdicts, oracle=["10000002", "10000004"])
 
 
 def test_band_stats_counts_a_verdict_as_a_citation():
@@ -198,8 +235,8 @@ def test_band_stats_counts_a_verdict_as_a_citation():
     low = ledger.band_stats(0, 4)
     assert low["core"] == 2                 # layers 0 and 3
     assert low["rule"] == 1 and low["empty"] == 1
-    assert low["port"] == 1 and low["oracle"] == 0
-    # 10000001 is verdicted and 10000002 is port-cited, so nothing in the band is uncited.
+    assert low["oracle"] == 1
+    # 10000001 is verdicted and 10000002 is oracle-cited, so nothing in the band is uncited.
     assert low["neither"] == 0
 
     high = ledger.band_stats(5, 9)
@@ -214,19 +251,19 @@ def test_cites_keeps_its_own_tables_interior_sites_once():
     # `interior` pools the inside-a-body citations of every table; `cites` hands a table back its
     # own, after the start-address ones, each line once and in scan order.
     ledger = _band_fixture({})
-    start = ledger.port_addr["10000002"][0]
-    site = kl.Citation("ElysiumNpc.cpp", 9, False, "0x10000005")
-    prose = kl.Citation("docs/vtmb/npc-ai/senses.md", 2, False, "0x10000006")
-    ledger.port_addr["10000005"] = [site]
-    ledger.oracle_addr["10000006"] = [prose]
-    ledger.interior = {"10000002": [site, start, prose, site]}
+    start = ledger.oracle_addr["10000002"][0]
+    site = kl.Citation("docs/vtmb/npc-ai/senses.md", 9, "0x10000005")
+    other = kl.Citation("docs/vtmb/npc-ai/social.md", 2, "0x10000006")
+    ledger.oracle_addr["10000005"] = [site]
+    elsewhere = {"10000006": [other]}
+    ledger.interior = {"10000002": [site, start, other, site]}
 
-    assert ledger.cites(ledger.port_addr, "10000002") == [start, site]
-    assert ledger.cites(ledger.oracle_addr, "10000002") == [prose]
+    assert ledger.cites(ledger.oracle_addr, "10000002") == [start, site]
+    assert ledger.cites(elsewhere, "10000002") == [other]
     assert ledger.cites(ledger.oracle_addr, "10000001") == []
     # The memo hands out copies: a caller's edit does not reach the next answer.
-    ledger.cites(ledger.port_addr, "10000002").clear()
-    assert ledger.cites(ledger.port_addr, "10000002") == [start, site]
+    ledger.cites(ledger.oracle_addr, "10000002").clear()
+    assert ledger.cites(ledger.oracle_addr, "10000002") == [start, site]
 
 
 def test_band_stats_counts_unsettled_apart_from_the_four_verdicts():

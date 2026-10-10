@@ -6,9 +6,10 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 219 generated slot bodies of `FElysiumEntity`: 52 carry the retail default story 29c recovered,
-// 39 are defined by hand in the substrate, and 110 are still stubs — 108 29c, 2 unassigned. 18 are
-// closed (0019/6) and answer the value-initialised default without tallying.
+// 219 generated slot bodies of `FElysiumEntity`: 72 carry retail's one-constant default (story
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 39 are defined by hand in the substrate,
+// and 90 are still stubs — 88 29c, 2 unassigned. 18 are closed (0019/6) and answer the
+// value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -230,10 +231,9 @@ void FElysiumEntity::Slot23(FElysiumEntity*)
 
 // slot 24 0x10026590 (walked) `void OnVictimHitByMe(CBaseEntity*)`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::OnVictimHitByMe 0x10026590: `ret 4`
 void FElysiumEntity::OnVictimHitByMe(FElysiumEntity*)
 {
-	FireEntitySlot(TEXT("CBaseEntity::OnVictimHitByMe"), TEXT("0x10026590"), TEXT("29c"),
-		DebugString());
 }
 
 // slot 25 0x100265b0 (walked) `void vfunc25(CBaseEntity*)`
@@ -304,11 +304,11 @@ int32 FElysiumEntity::Slot33()
 
 // slot 34 0x100266b0 (walked) `int GetHighlightMaterial(CBaseEntity*)`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::GetHighlightMaterial 0x100266b0: `return
+// 0;`
 int32 FElysiumEntity::GetHighlightMaterial(FElysiumEntity*)
 {
-	FireEntitySlot(TEXT("CBaseEntity::GetHighlightMaterial"), TEXT("0x100266b0"), TEXT("29c"),
-		DebugString());
-	return {};
+	return static_cast<int32>(0);
 }
 
 // slot 35 0x100266d0 (walked) `int vfunc35(CBaseEntity*)`
@@ -512,20 +512,20 @@ void FElysiumEntity::Unhide()
 
 // slot 68 0x10026a90 (walked) `bool ShouldIgnoreCollision(CBaseEntity*)`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::ShouldIgnoreCollision 0x10026a90: `return
+// false;`
 bool FElysiumEntity::ShouldIgnoreCollision(FElysiumEntity*)
 {
-	FireEntitySlot(TEXT("CBaseEntity::ShouldIgnoreCollision"), TEXT("0x10026a90"), TEXT("29c"),
-		DebugString());
-	return {};
+	return false;
 }
 
 // slot 69 0x10026ab0 (walked) `bool NavIgnoreCollision(CBaseEntity*)`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::NavIgnoreCollision 0x10026ab0: `return
+// false;`
 bool FElysiumEntity::NavIgnoreCollision(FElysiumEntity*)
 {
-	FireEntitySlot(TEXT("CBaseEntity::NavIgnoreCollision"), TEXT("0x10026ab0"), TEXT("29c"),
-		DebugString());
-	return {};
+	return false;
 }
 
 // slot 70 0x1009d820 (walked) `bool IsMonster()`
@@ -546,28 +546,28 @@ void FElysiumEntity::PrecacheSoundTable()
 
 // slot 72 0x10026ad0 (walked) `bool vfunc72(int)`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity slot 72 0x10026ad0: `return 0;`
 bool FElysiumEntity::Slot72(int32)
 {
-	FireEntitySlot(TEXT("CBaseEntity::Slot72"), TEXT("0x10026ad0"), TEXT("29c"), DebugString());
-	return {};
+	return false;
 }
 
 // slot 73 0x10026af0 (walked) `bool CausesImpactDamage(CBaseEntity*)`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::CausesImpactDamage 0x10026af0: `return
+// false;`
 bool FElysiumEntity::CausesImpactDamage(FElysiumEntity*)
 {
-	FireEntitySlot(TEXT("CBaseEntity::CausesImpactDamage"), TEXT("0x10026af0"), TEXT("29c"),
-		DebugString());
-	return {};
+	return false;
 }
 
 // slot 74 0x10026b10 (walked) `bool ReceivesImpactDamage(CBaseEntity*)`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::ReceivesImpactDamage 0x10026b10: `return
+// false;`
 bool FElysiumEntity::ReceivesImpactDamage(FElysiumEntity*)
 {
-	FireEntitySlot(TEXT("CBaseEntity::ReceivesImpactDamage"), TEXT("0x10026b10"), TEXT("29c"),
-		DebugString());
-	return {};
+	return false;
 }
 
 // slot 75 0x100a8400 (walked) `void TakeDamageFromCollision(int, gamevcollisionevent_t*)`
@@ -752,11 +752,11 @@ void FElysiumEntity::CalcAbsolutePosition()
 //   takes `unsignedint`
 //   takes `trace_t&`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::TestCollision 0x100aa900: the scope-trace
+// push and pop, then the low byte of EAX cleared (`& 0xffffff00`): false, the trace untouched
 bool FElysiumEntity::TestCollision(void*, int32, void*)
 {
-	FireEntitySlot(TEXT("CBaseEntity::TestCollision"), TEXT("0x100aa900"), TEXT("29c"),
-		DebugString());
-	return {};
+	return false;
 }
 
 // slot 100 0x100aa9a0 (sdk) `bool TestHitboxes(Ray_t&, unsignedint, trace_t&)`
@@ -764,11 +764,11 @@ bool FElysiumEntity::TestCollision(void*, int32, void*)
 //   takes `unsignedint`
 //   takes `trace_t&`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::TestHitboxes 0x100aa9a0: the scope-trace
+// push and pop, then the low byte of EAX cleared (`& 0xffffff00`): false, the trace untouched
 bool FElysiumEntity::TestHitboxes(void*, int32, void*)
 {
-	FireEntitySlot(TEXT("CBaseEntity::TestHitboxes"), TEXT("0x100aa9a0"), TEXT("29c"),
-		DebugString());
-	return {};
+	return false;
 }
 
 // slot 101 0x100ab430 (walked) `void ComputeWorldSpaceSurroundingBox(Vector*, Vector*)`
@@ -791,9 +791,9 @@ void FElysiumEntity::Physics_TraceEntity(FElysiumEntity*, const FVector&, const 
 
 // slot 104 0x10026b90 (sdk) `void Precache()`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::Precache 0x10026b90: `ret`
 void FElysiumEntity::Precache()
 {
-	FireEntitySlot(TEXT("CBaseEntity::Precache"), TEXT("0x10026b90"), TEXT("29c"), DebugString());
 }
 
 // slot 105 0x100ad460 (sdk) `void SetModel(char*)`
@@ -830,9 +830,9 @@ bool FElysiumEntity::KeyValue(const TCHAR*, const TCHAR*)
 
 // slot 111 0x10026bb0 (walked) `void MemberSync()`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::MemberSync 0x10026bb0: `ret`
 void FElysiumEntity::MemberSync()
 {
-	FireEntitySlot(TEXT("CBaseEntity::MemberSync"), TEXT("0x10026bb0"), TEXT("29c"), DebugString());
 }
 
 // slot 112 0x10026bd0 (walked) `void vfunc112(int, int)`
@@ -989,28 +989,29 @@ float FElysiumEntity::Slot135(float)
 
 // slot 136 0x10026d30 (walked) `bool vfunc136()`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity slot 136 0x10026d30: `return 0;`
 bool FElysiumEntity::Slot136()
 {
-	FireEntitySlot(TEXT("CBaseEntity::Slot136"), TEXT("0x10026d30"), TEXT("29c"), DebugString());
-	return {};
+	return false;
 }
 
 // slot 137 0x10026d50 (walked) `CBaseAnimating* GetBaseAnimating()`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::GetBaseAnimating 0x10026d50: `return
+// NULL;`
 FElysiumEntity* FElysiumEntity::GetBaseAnimating()
 {
-	FireEntitySlot(TEXT("CBaseEntity::GetBaseAnimating"), TEXT("0x10026d50"), TEXT("29c"),
-		DebugString());
-	return {};
+	return nullptr;
 }
 
 // slot 138 0x100a7a80 (sdk) `Class_T Classify()`
 //   returns `Class_T`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::Classify 0x100a7a80: `return 0;`
+// (CLASS_NONE)
 int32 FElysiumEntity::Classify()
 {
-	FireEntitySlot(TEXT("CBaseEntity::Classify"), TEXT("0x100a7a80"), TEXT("29c"), DebugString());
-	return {};
+	return static_cast<int32>(0);
 }
 
 // slot 139 0x10026d70 (walked) `void DeathNotice(CBaseEntity*)`
@@ -1122,10 +1123,11 @@ bool FElysiumEntity::RemovePlayerItem(FElysiumEntity*)
 
 // slot 152 0x10026e50 (walked) `float GetDelay()`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::GetDelay 0x10026e50: `return
+// _DAT_104454c4;`, the pooled float 0.0
 float FElysiumEntity::GetDelay()
 {
-	FireEntitySlot(TEXT("CBaseEntity::GetDelay"), TEXT("0x10026e50"), TEXT("29c"), DebugString());
-	return {};
+	return static_cast<float>(0.0);
 }
 
 // slot 153 0x10026e70 (walked) `bool IsMoving()`
@@ -1215,10 +1217,10 @@ bool FElysiumEntity::IsViewable()
 
 // slot 167 0x10027000 (walked) `CBaseEntity* GetEnemy() const`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::GetEnemy const 0x10027000: `return NULL;`
 FElysiumEntity* FElysiumEntity::GetEnemy() const
 {
-	FireEntitySlot(TEXT("CBaseEntity::GetEnemy"), TEXT("0x10027000"), TEXT("29c"), DebugString());
-	return {};
+	return nullptr;
 }
 
 // slot 168 0x10027020 (walked) `CBaseEntity* GetEnemy()`
@@ -1593,11 +1595,11 @@ FVector FElysiumEntity::GetSoundEmissionOrigin() const
 
 // slot 223 0x100b5080 (walked) `bool CreateVPhysics()`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::CreateVPhysics 0x100b5080: `return
+// false;`
 bool FElysiumEntity::CreateVPhysics()
 {
-	FireEntitySlot(TEXT("CBaseEntity::CreateVPhysics"), TEXT("0x100b5080"), TEXT("29c"),
-		DebugString());
-	return {};
+	return false;
 }
 
 // slot 224 0x100273b0 (walked) `bool ForceVPhysicsCollide(CBaseEntity*)`
@@ -1638,19 +1640,18 @@ int32 FElysiumEntity::VPhysicsTakeDamage(void*)
 // slot 228 0x100a65a0 (sdk) `void VPhysicsShadowCollision(int, gamevcollisionevent_t*)`
 //   takes `gamevcollisionevent_t*`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::VPhysicsShadowCollision 0x100a65a0: the
+// scope-trace push and pop, nothing else
 void FElysiumEntity::VPhysicsShadowCollision(int32, void*)
 {
-	FireEntitySlot(TEXT("CBaseEntity::VPhysicsShadowCollision"), TEXT("0x100a65a0"), TEXT("29c"),
-		DebugString());
 }
 
 // slot 229 0x100273d0 (sdk) `void VPhysicsShadowUpdate(IPhysicsObject*)`
 //   takes `IPhysicsObject*`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::VPhysicsShadowUpdate 0x100273d0: `ret 4`
 void FElysiumEntity::VPhysicsShadowUpdate(void*)
 {
-	FireEntitySlot(TEXT("CBaseEntity::VPhysicsShadowUpdate"), TEXT("0x100273d0"), TEXT("29c"),
-		DebugString());
 }
 
 // slot 230 0x100a6640 (sdk) `void VPhysicsCollision(int, gamevcollisionevent_t*)`
@@ -1724,10 +1725,10 @@ int32 FElysiumEntity::PhysicsSolidMaskForEntity() const
 
 // slot 238 0x10039ff0 (sdk) `void PerformCustomPhysics(Vector*, Vector*, QAngle*, QAngle*)`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::PerformCustomPhysics 0x10039ff0: the
+// scope-trace push and pop; the four out-arguments untouched
 void FElysiumEntity::PerformCustomPhysics(FVector*, FVector*, FRotator*, FRotator*)
 {
-	FireEntitySlot(TEXT("CBaseEntity::PerformCustomPhysics"), TEXT("0x10039ff0"), TEXT("29c"),
-		DebugString());
 }
 
 // slot 239 0x100389e0 (sdk) `CBaseEntity* PhysicsPushRotate(float)`
@@ -1851,9 +1852,9 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::Slot23),
 				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; Receiver.Slot23(Arg0); return 0; } },
 			{ 24, TEXT("0x10026590"), TEXT("CBaseEntity"), TEXT("OnVictimHitByMe"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("void"), 0, true, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::OnVictimHitByMe),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; Receiver.OnVictimHitByMe(Arg0); return 0; } },
 			{ 25, TEXT("0x100265b0"), TEXT("CBaseEntity"), TEXT("Slot25"),
 				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::Slot25),
@@ -1891,9 +1892,9 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32()>::Test(&FElysiumEntity::Slot33),
 				[](FElysiumEntity& Receiver) -> int64 { return static_cast<int64>(Receiver.Slot33()); } },
 			{ 34, TEXT("0x100266b0"), TEXT("CBaseEntity"), TEXT("GetHighlightMaterial"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32(FElysiumEntity*)>::Test(&FElysiumEntity::GetHighlightMaterial),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; return static_cast<int64>(Receiver.GetHighlightMaterial(Arg0)); } },
 			{ 35, TEXT("0x100266d0"), TEXT("CBaseEntity"), TEXT("Slot35"),
 				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32(FElysiumEntity*)>::Test(&FElysiumEntity::Slot35),
@@ -2011,13 +2012,13 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::Unhide),
 				nullptr },
 			{ 68, TEXT("0x10026a90"), TEXT("CBaseEntity"), TEXT("ShouldIgnoreCollision"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FElysiumEntity*)>::Test(&FElysiumEntity::ShouldIgnoreCollision),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; return Receiver.ShouldIgnoreCollision(Arg0) ? 1 : 0; } },
 			{ 69, TEXT("0x10026ab0"), TEXT("CBaseEntity"), TEXT("NavIgnoreCollision"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FElysiumEntity*)>::Test(&FElysiumEntity::NavIgnoreCollision),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; return Receiver.NavIgnoreCollision(Arg0) ? 1 : 0; } },
 			{ 70, TEXT("0x1009d820"), TEXT("CBaseEntity"), TEXT("IsMonster"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::IsMonster),
@@ -2027,17 +2028,17 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::PrecacheSoundTable),
 				nullptr },
 			{ 72, TEXT("0x10026ad0"), TEXT("CBaseEntity"), TEXT("Slot72"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(int32)>::Test(&FElysiumEntity::Slot72),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { int32 Arg0{}; return Receiver.Slot72(Arg0) ? 1 : 0; } },
 			{ 73, TEXT("0x10026af0"), TEXT("CBaseEntity"), TEXT("CausesImpactDamage"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FElysiumEntity*)>::Test(&FElysiumEntity::CausesImpactDamage),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; return Receiver.CausesImpactDamage(Arg0) ? 1 : 0; } },
 			{ 74, TEXT("0x10026b10"), TEXT("CBaseEntity"), TEXT("ReceivesImpactDamage"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FElysiumEntity*)>::Test(&FElysiumEntity::ReceivesImpactDamage),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; return Receiver.ReceivesImpactDamage(Arg0) ? 1 : 0; } },
 			{ 75, TEXT("0x100a8400"), TEXT("CBaseEntity"), TEXT("TakeDamageFromCollision"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(int32, void*)>::Test(&FElysiumEntity::TakeDamageFromCollision),
@@ -2124,13 +2125,13 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::CalcAbsolutePosition),
 				nullptr },
 			{ 99, TEXT("0x100aa900"), TEXT("CBaseEntity"), TEXT("TestCollision"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(void*, int32, void*)>::Test(&FElysiumEntity::TestCollision),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { void* Arg0{}; int32 Arg1{}; void* Arg2{}; return Receiver.TestCollision(Arg0, Arg1, Arg2) ? 1 : 0; } },
 			{ 100, TEXT("0x100aa9a0"), TEXT("CBaseEntity"), TEXT("TestHitboxes"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(void*, int32, void*)>::Test(&FElysiumEntity::TestHitboxes),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { void* Arg0{}; int32 Arg1{}; void* Arg2{}; return Receiver.TestHitboxes(Arg0, Arg1, Arg2) ? 1 : 0; } },
 			{ 101, TEXT("0x100ab430"), TEXT("CBaseEntity"), TEXT("ComputeWorldSpaceSurroundingBox"),
 				EElysiumNpcSlotBody::Default, TEXT("void"), 0, true, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FVector*, FVector*)>::Test(&FElysiumEntity::ComputeWorldSpaceSurroundingBox),
@@ -2140,9 +2141,9 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*, const FVector&, const FVector&, uint32, void*)>::Test(&FElysiumEntity::Physics_TraceEntity),
 				nullptr },
 			{ 104, TEXT("0x10026b90"), TEXT("CBaseEntity"), TEXT("Precache"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("void"), 0, true, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::Precache),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { Receiver.Precache(); return 0; } },
 			{ 105, TEXT("0x100ad460"), TEXT("CBaseEntity"), TEXT("SetModel"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(TCHAR*)>::Test(&FElysiumEntity::SetModel),
@@ -2160,9 +2161,9 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(const TCHAR*, const TCHAR*)>::Test(&FElysiumEntity::KeyValue),
 				nullptr },
 			{ 111, TEXT("0x10026bb0"), TEXT("CBaseEntity"), TEXT("MemberSync"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("void"), 0, true, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::MemberSync),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { Receiver.MemberSync(); return 0; } },
 			{ 112, TEXT("0x10026bd0"), TEXT("CBaseEntity"), TEXT("Slot112"),
 				EElysiumNpcSlotBody::Default, TEXT("void"), 0, true, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(int32, int32)>::Test(&FElysiumEntity::Slot112),
@@ -2240,17 +2241,17 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, float(float)>::Test(&FElysiumEntity::Slot135),
 				nullptr },
 			{ 136, TEXT("0x10026d30"), TEXT("CBaseEntity"), TEXT("Slot136"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::Slot136),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { return Receiver.Slot136() ? 1 : 0; } },
 			{ 137, TEXT("0x10026d50"), TEXT("CBaseEntity"), TEXT("GetBaseAnimating"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FElysiumEntity*()>::Test(&FElysiumEntity::GetBaseAnimating),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { return static_cast<int64>(reinterpret_cast<UPTRINT>(Receiver.GetBaseAnimating())); } },
 			{ 138, TEXT("0x100a7a80"), TEXT("CBaseEntity"), TEXT("Classify"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32()>::Test(&FElysiumEntity::Classify),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { return static_cast<int64>(Receiver.Classify()); } },
 			{ 139, TEXT("0x10026d70"), TEXT("CBaseEntity"), TEXT("DeathNotice"),
 				EElysiumNpcSlotBody::Default, TEXT("void"), 0, true, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::DeathNotice),
@@ -2304,9 +2305,9 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FElysiumEntity*)>::Test(&FElysiumEntity::RemovePlayerItem),
 				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; return Receiver.RemovePlayerItem(Arg0) ? 1 : 0; } },
 			{ 152, TEXT("0x10026e50"), TEXT("CBaseEntity"), TEXT("GetDelay"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0.0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, float()>::Test(&FElysiumEntity::GetDelay),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { return static_cast<int64>(Receiver.GetDelay()); } },
 			{ 153, TEXT("0x10026e70"), TEXT("CBaseEntity"), TEXT("IsMoving"),
 				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::IsMoving),
@@ -2356,9 +2357,9 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FElysiumEntity*)>::Test(&FElysiumEntity::CanStandOn),
 				nullptr },
 			{ 167, TEXT("0x10027000"), TEXT("CBaseEntity"), TEXT("GetEnemy"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FElysiumEntity*() const>::Test(&FElysiumEntity::GetEnemy),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { return static_cast<int64>(reinterpret_cast<UPTRINT>(Receiver.GetEnemy())); } },
 			{ 168, TEXT("0x10027020"), TEXT("CBaseEntity"), TEXT("GetEnemy"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FElysiumEntity*()>::Test(&FElysiumEntity::GetEnemy),
@@ -2564,9 +2565,9 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FVector() const>::Test(&FElysiumEntity::GetSoundEmissionOrigin),
 				nullptr },
 			{ 223, TEXT("0x100b5080"), TEXT("CBaseEntity"), TEXT("CreateVPhysics"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::CreateVPhysics),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { return Receiver.CreateVPhysics() ? 1 : 0; } },
 			{ 224, TEXT("0x100273b0"), TEXT("CBaseEntity"), TEXT("ForceVPhysicsCollide"),
 				EElysiumNpcSlotBody::Default, TEXT("0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FElysiumEntity*)>::Test(&FElysiumEntity::ForceVPhysicsCollide),
@@ -2584,13 +2585,13 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32(void*)>::Test(&FElysiumEntity::VPhysicsTakeDamage),
 				nullptr },
 			{ 228, TEXT("0x100a65a0"), TEXT("CBaseEntity"), TEXT("VPhysicsShadowCollision"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("void"), 0, true, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(int32, void*)>::Test(&FElysiumEntity::VPhysicsShadowCollision),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { int32 Arg0{}; void* Arg1{}; Receiver.VPhysicsShadowCollision(Arg0, Arg1); return 0; } },
 			{ 229, TEXT("0x100273d0"), TEXT("CBaseEntity"), TEXT("VPhysicsShadowUpdate"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("void"), 0, true, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(void*)>::Test(&FElysiumEntity::VPhysicsShadowUpdate),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { void* Arg0{}; Receiver.VPhysicsShadowUpdate(Arg0); return 0; } },
 			{ 230, TEXT("0x100a6640"), TEXT("CBaseEntity"), TEXT("VPhysicsCollision"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(int32, void*)>::Test(&FElysiumEntity::VPhysicsCollision),
@@ -2625,9 +2626,9 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32() const>::Test(&FElysiumEntity::PhysicsSolidMaskForEntity),
 				nullptr },
 			{ 238, TEXT("0x10039ff0"), TEXT("CBaseEntity"), TEXT("PerformCustomPhysics"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("void"), 0, true, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FVector*, FVector*, FRotator*, FRotator*)>::Test(&FElysiumEntity::PerformCustomPhysics),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { FVector* Arg0{}; FVector* Arg1{}; FRotator* Arg2{}; FRotator* Arg3{}; Receiver.PerformCustomPhysics(Arg0, Arg1, Arg2, Arg3); return 0; } },
 			{ 239, TEXT("0x100389e0"), TEXT("CBaseEntity"), TEXT("PhysicsPushRotate"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FElysiumEntity*(float)>::Test(&FElysiumEntity::PhysicsPushRotate),

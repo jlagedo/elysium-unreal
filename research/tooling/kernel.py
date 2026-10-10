@@ -11,14 +11,15 @@ census model are built once and every tool renders from the same objects.
 runs with `--reach` for every map whose cut is committed (`docs/vtmb/npc-kernel/reach/<map>.tsv`),
 so a stale reach cut fails the gate with the tables.
 
-Without it the tools write, in the order below, and then the gate runs on fresh builds. The chain
-is not a straight line: the ledger's citation scan reads `Source/`, and `kernel_story8_shape`
-writes forwarding bodies there that the scan does not skip, so a later tool's write can leave an
-earlier table stale. A pass repeats until the gate holds, at most `MAX_PASSES` times.
+Without it the tools write, in the order below, and then the gate runs on fresh builds. No table
+reads the port's source (the ledger and the lists describe retail and the overlay; what the port
+cites is `research where`), so a later tool's write leaves no earlier table stale, and one pass
+settles. A pass still repeats until the gate holds, at most `MAX_PASSES` times: a generator that
+does not settle is reported, not looped on.
 
 Across processes the builds come from `kernel_cache` (the corpus stage, the SDK index, the shape's
-corpus half, the citation scan per file), and a `--check` whose inputs and outputs have not changed
-since it last passed replays that pass: an unchanged tree answers in well under a second.
+corpus half, the oracle citation scan per file), and a `--check` whose inputs and outputs have not
+changed since it last passed replays that pass: an unchanged tree answers in well under a second.
 
 Usage::
 

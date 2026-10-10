@@ -6,8 +6,9 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 38 generated slot bodies of `FElysiumAnimating`: 0 carry the retail default story 29c recovered,
-// 5 are defined by hand in the substrate, and 33 are still stubs — 21 29c, 12 unassigned.
+// 38 generated slot bodies of `FElysiumAnimating`: 0 carry retail's one-constant default (story
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 5 are defined by hand in the substrate, and
+// 33 are still stubs — 21 29c, 12 unassigned.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.

@@ -460,7 +460,7 @@ class Shape:
         found: dict[str, str] = {}
         if off < NPC_START:
             return ""
-        cites = list(self.ledger.oracle_off.get(off, [])) + list(self.ledger.port_off.get(off, []))
+        cites = list(self.ledger.oracle_off.get(off, []))
         spelled = re.compile(rf"\+0x0*{off:x}\b", re.I)
         for c in sorted(cites, key=lambda c: (c.path, c.line)):
             if not HINT_PATH_RE.search(c.path):
@@ -470,8 +470,6 @@ class Shape:
                 names = re.findall(r"\b(m_[A-Za-z]\w*|bf?[A-Z]\w*)\b", window)
                 for name in names:
                     found.setdefault(name, f"{c.path}:{c.line}")
-        if off in self.ledger.port_member:
-            found.setdefault(f"port:{self.ledger.port_member[off]}", "")
         return ", ".join(f"`{n}`" + (f" ({w})" if w else "") for n, w in list(found.items())[:3])
 
     def sdk_between(self, layer: str, before: str, after: str) -> str:

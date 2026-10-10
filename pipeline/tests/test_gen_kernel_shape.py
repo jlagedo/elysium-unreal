@@ -227,6 +227,45 @@ def test_a_constant_body_is_emitted_with_its_probe():
     assert "return TArrayView<const TElysiumNpcSlotRow<FElysiumNpc>>();" in empty_text
 
 
+class _Bodies:
+    """The one thing `apply_retail_default` asks a ledger: the decompiled body by address."""
+
+    def __init__(self, code):
+        self.functions = {addr: gks.kl.Function(addr, "F", "CBaseEntity", 5, False, "", text)
+                          for addr, text in code.items()}
+
+
+def test_a_retail_default_answers_a_stub_and_nothing_else():
+    # L0.tooling.default-stubs: a stub whose retail body `RETAIL_DEFAULTS` reads as one constant
+    # answers it; a row a verdict already settled keeps the verdict's emission.
+    addr = "100266b0"
+    ledger = _Bodies({addr: "int __thiscall F(void)\n{\n  return 0;\n}\n"})
+    row = _slot()
+    row.body, row.address = addr, f"0x{addr}"
+    gks.apply_retail_default(row, ledger)
+    assert row.default == "0" and "GetHighlightMaterial" in row.default_why and not row.stubbed
+    text = gks.render_slots_cpp(gks.Model(words=[], slots=[row], branch=[], classes=[], overrides=[],
+                                          reserved=set(), family=set(), meta={}),
+                                "vampire.dll", "FElysiumNpc")
+    assert "retail default (L0.tooling.default-stubs)" in text and "FireKernelSlot(TEXT(" not in text
+    hand = _slot(hand="FElysiumNpc::Slot33")
+    hand.body = addr
+    gks.apply_retail_default(hand, ledger)
+    assert hand.default == "" and hand.default_why == ""
+    other = _slot()
+    other.body = "10000001"
+    gks.apply_retail_default(other, ledger)
+    assert other.stubbed
+
+
+def test_a_retail_default_that_disagrees_with_its_body_is_a_failure():
+    addr = "100266b0"
+    row = _slot()
+    row.body, row.address = addr, f"0x{addr}"
+    with pytest.raises(SystemExit, match="RETAIL_DEFAULTS"):
+        gks.apply_retail_default(row, _Bodies({addr: "int F(void)\n{\n  return 1;\n}\n"}))
+
+
 def test_each_class_emits_its_own_typed_slot_table():
     # A chain class's own constant body is probed on a receiver of that class, not through a
     # qualified call on an NPC (plan step 6c).

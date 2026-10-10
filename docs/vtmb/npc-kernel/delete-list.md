@@ -3,658 +3,658 @@
 
 _vampire.dll sha256 `c546f4de2003624d…`; from `research/tooling/ghidra/driver/kernel_verdicts.tsv`. Rebuild: `uv run elysium research kernel_lists`._
 
-Every `dead` row of the verdict overlay: a retail body nothing can observe — no keyfield, schedule text, script name, output, save field, player-visible timing or witness test would notice its absence. Spec 0019 story 1 judged them; story 6 removes the port body and its tests and writes `-` in the row's target. **Standing** is a row whose target still names a port body; **gone** is a row at `-`. *Port sites* and *Tests* are where the port cites the retail address today.
+Every `dead` row of the verdict overlay: a retail body nothing can observe — no keyfield, schedule text, script name, output, save field, player-visible timing or witness test would notice its absence. Spec 0019 story 1 judged them; story 6 removes the port body and its tests and writes `-` in the row's target. **Standing** is a row whose target still names a port body; **gone** is a row at `-`. Where the port cites a row today is `uv run elysium research where <address>`.
 
-649 rows, 192 standing — 1 with a hand-written port site, the rest a generated stub or a registry value that goes with the slot stubs in story 5.
+649 rows, 192 standing.
 
-| Address | Function | Layer | Port target | Port sites | Tests | Why |
-|---|---|---|---|---|---|---|
-| `0x10026570` | CAISound::FUN_10026570 | 0 | default:void | — | — | empty base of slot 23, which has no dispatch site in the decompiled corpus - the byte-identical twin of the live slot 22 (conditions-and-states.md) |
-| `0x10026670` | CAISound::FUN_10026670 | 0 | default:0 | — | — | constant 0, slot 32 has one body in the family and the row has no caller |
-| `0x10026690` | CAISound::FUN_10026690 | 0 | default:0xffffffff | — | — | constant -1, slot 33 has one body in the family and the row has no caller |
-| `0x100266f0` | CAISound::FUN_100266f0 | 0 | default:0 | — | — | constant 0, slot 36 has one body in the family and the row has no caller |
-| `0x10026730` | CAISound::FUN_10026730 | 0 | - | — | — | returns this, slot 38 has one body in the family and the row has no caller; no observable |
-| `0x10026750` | CAISound::FUN_10026750 | 0 | default:void | — | — | empty body, slot 40 has one body in the family and no override |
-| `0x10026770` | CAISound::FUN_10026770 | 0 | default:void | — | — | empty body, slot 41 has one body in the family and no override |
-| `0x10026790` | CAISound::FUN_10026790 | 0 | default:void | — | — | empty body, slot 43 has one body in the family and no override |
-| `0x100267b0` | CAISound::FUN_100267b0 | 0 | default:1 | — | — | constant 1, slot 44 has one body in the family and the row has no caller |
-| `0x100267d0` | CAISound::FUN_100267d0 | 0 | default:void | — | — | empty body, slot 46 camera-target notice has one body in the family; only CCameraTrack fills it |
-| `0x100267f0` | CAISound::FUN_100267f0 | 0 | default:void | — | — | empty body, slot 47 camera-view notice has one body in the family; only CCameraTrack fills it |
-| `0x10026930` | CAISound::FUN_10026930 | 0 | default:void | — | — | empty body and Troika 0x102b5100 is empty too; the oracle finds no observable effect of slot 55 |
-| `0x10026970` | CAISound::FUN_10026970 | 0 | default:void | — | — | empty body and Troika 0x102b51a0 is empty too; the oracle finds no observable effect of slot 57 |
-| `0x10026990` | CAISound::FUN_10026990 | 0 | default:void | — | — | empty body and Troika 0x102b51c0 is empty too; the oracle finds no observable effect of slot 58 |
-| `0x10026ad0` | CAISound::FUN_10026ad0 | 0 | registry:72 | — | — | constant 0 on the helper-entity line only (slot 72), no caller |
-| `0x10026bd0` | CAISound::FUN_10026bd0 | 0 | default:void | — | — | empty body, slot 112 has one body in the family; its only caller is the StudioFrameAdvance mechanism |
-| `0x10026bf0` | CAISound::FUN_10026bf0 | 0 | default:void | — | — | empty body, slot 115 has one body in the family and no override |
-| `0x10026c10` | CAISound::FUN_10026c10 | 0 | default:0xffffffff | — | — | constant -1 RequiredEdictIndex, slot 131 has one body and no caller; edict bookkeeping |
-| `0x10026c30` | CAISound::FUN_10026c30 | 0 | default:void | — | — | empty body, slot 132 has one body in the family and no override |
-| `0x10026d10` | CAISound::FUN_10026d10 | 0 | registry:135 | — | — | identity float pass-through on the helper-entity line only (slot 135), no named observable; the NPC line fills 0x101c10d0 |
-| `0x10026d30` | CAISound::FUN_10026d30 | 0 | registry:136 | — | — | constant 0 on the helper-entity line only (slot 136), no caller |
-| `0x10026d50` | CAISound::FUN_10026d50 | 0 | registry:137 | — | — | constant 0 on the helper-entity line only (slot 137), no caller |
-| `0x10026db0` | CAISound::FUN_10026db0 | 0 | default:1 | — | — | constant 1 IsTriggered, slot 147 has one body in the family and the row has no caller |
-| `0x10026dd0` | CAISound::FUN_10026dd0 | 0 | default:void | — | — | empty body AddPoints, slot 148 has one body in the family; multiplayer scoring |
-| `0x10026df0` | CAISound::FUN_10026df0 | 0 | default:void | — | — | empty body AddPointsToTeam, slot 149 has one body in the family; multiplayer scoring |
-| `0x10026e10` | CAISound::FUN_10026e10 | 0 | default:0 | — | — | constant 0 AddPlayerItem, slot 150 has one body in the family and the row has no caller |
-| `0x10026e30` | CAISound::FUN_10026e30 | 0 | default:0 | — | — | constant 0 RemovePlayerItem, slot 151 has one body in the family and the row has no caller |
-| `0x10026e50` | CAISound::FUN_10026e50 | 0 | registry:152 | — | — | constant 0.0 on the helper-entity line only (slot 152), no caller |
-| `0x10026e70` | CAISound::FUN_10026e70 | 0 | - | — | — | helper-entity IsMoving fill of slot 153; its one reader is PickLookTarget 0x1025f1c0 on CAI_BaseHumanoid, a line with no instance |
-| `0x10026ee0` | CAISound::FUN_10026ee0 | 0 | default:void | — | — | empty body, slot 156 has one body in the family and no override |
-| `0x10026f00` | CAISound::FUN_10026f00 | 0 | default:0 | — | — | constant 0 OnControls, slot 157 has one body in the family and the row has no caller |
-| `0x10026f20` | CAISound::FUN_10026f20 | 1 | - | — | — | slot 159 ReflectGauss has no dispatch site in the module and one body; nothing asks it |
-| `0x10026f60` | CAISound::FUN_10026f60 | 0 | default:0 | — | — | constant 0 IsPlayer, slot 162 has one body in the family and the row has no caller |
-| `0x10027040` | CAISound::FUN_10027040 | 0 | default:void | — | — | empty body ViewPunch, slot 169 has one body in the family; an NPC has no view to punch |
-| `0x10027060` | CAISound::FUN_10027060 | 0 | default:void | — | — | empty body VelocityPunch, slot 170 has one body in the family and no override |
-| `0x100270a0` | CAISound::FUN_100270a0 | 0 | default:void | — | — | empty body EndBlocked, slot 179 has one body in the family and no override |
-| `0x100270e0` | CAISound::FUN_100270e0 | 0 | default:0 | — | — | constant 0 Respawn, slot 187 has one body in the family and the row has no caller |
-| `0x10027100` | CAISound::FUN_10027100 | 0 | default:0 | — | — | constant 0 IsLockedByMaster, slot 188 has one body in the family and the row has no caller |
-| `0x10027120` | CAISound::FUN_10027120 | 0 | default:0.0 | — | — | constant 0.0 GetDamage, slot 190 has one body in the family and the row has no caller |
-| `0x10027140` | CAISound::FUN_10027140 | 0 | default:void | — | — | empty body SetDamage, slot 191 has one body in the family and no override |
-| `0x10027330` | CAISound::FUN_10027330 | 0 | default:0 | — | — | constant 0, slot 205 has one body in the family and the row has no caller |
-| `0x10027350` | CAISound::FUN_10027350 | 0 | default:0 | — | — | constant 0, slot 206 has one body in the family and the row has no caller |
-| `0x100273b0` | CAISound::FUN_100273b0 | 0 | default:0 | — | — | constant 0 ForceVPhysicsCollide, slot 224 has one body and no caller; VPhysics |
-| `0x100273f0` | CAISound::FUN_100273f0 | 0 | default:void | — | — | empty body OnPhysGunPickup, slot 235 has one body; no physgun ships |
-| `0x10027410` | CAISound::FUN_10027410 | 0 | default:void | — | — | empty body OnPhysGunDrop, slot 236 has one body; no physgun ships |
-| `0x10027430` | CAISound::FUN_10027430 | 0 | registry:240 | — | — | returns an unresolved global on the helper-entity line only (slot 240), no caller |
-| `0x1004fbb0` | CAI_BaseNPC::FUN_1004fbb0 | 11 | - | — | — | slot 108 KeyValue(key, Vector) has no dispatch site in the module; authored keys arrive as strings through slot 110 |
-| `0x1004fbf0` | CAI_BaseNPC::FUN_1004fbf0 | 11 | - | — | — | slot 109 KeyValue(key, float) has no dispatch site in the module; authored keys arrive as strings through slot 110 |
-| `0x1004fc10` | CAI_BaseNPC::FUN_1004fc10 | 0 | - | — | — | slot 152 GetDelay field read has no dispatch site in the module and one body in the family |
-| `0x1009a660` | CAISound::FUN_1009a660 | 0 | registry:80 | — | — | returns a static table pointer on the helper-entity line only (slot 80), no caller |
-| `0x1009a680` | CAISound::FUN_1009a680 | 0 | registry:81 | — | — | constant 0 on the helper-entity line only (slot 81), no caller |
-| `0x1009af00` | CAISound::FUN_1009af00 | 0 | - | — | — | DebugGetClassName slot 14, a name lookup for debug prints |
-| `0x1009b2c0` | CAISound::FUN_1009b2c0 | 1 | - | — | — | TraceMessage slot 18, scope-trace push around TraceMessageBase; developer diagnostic |
-| `0x1009b380` | CAISound::FUN_1009b380 | 1 | - | — | — | TraceMessage slot 17, scope-trace push around TraceMessageBase; developer diagnostic |
-| `0x1009b500` | CAISound::FUN_1009b500 | 1 | - | — | — | TraceMessageBare slot 20, scope-trace push around TraceMessageBareBase; developer diagnostic |
-| `0x1009b5a0` | CAISound::FUN_1009b5a0 | 1 | - | — | — | TraceMessageBare slot 19, scope-trace push around TraceMessageBareBase; developer diagnostic |
-| `0x1009ebb0` | CAISound::FUN_1009ebb0 | 10 | - | — | — | only caller is the undispatched slot 109 forward 0x1004fbf0; a float-to-string format helper with a scope-trace frame |
-| `0x1009eca0` | CAISound::FUN_1009eca0 | 10 | - | — | — | only caller is the undispatched slot 108 forward 0x1004fbb0; a vector-to-string format helper with a scope-trace frame |
-| `0x100ab430` | CAISound::FUN_100ab430 | 0 | default:void | — | — | empty body ComputeWorldSpaceSurroundingBox, slot 101 has one body in the family |
-| `0x100ad8f0` | CAISound::FUN_100ad8f0 | 0 | default:void | — | — | empty body, slot 182 has one body in the family and no override |
-| `0x100ad910` | CAISound::FUN_100ad910 | 0 | default:void | — | — | empty body NotifySystemEvent, slot 183 has one body in the family and no override |
-| `0x100b5080` | CAISound::FUN_100b5080 | 0 | registry:223 | — | — | constant 0 on the helper-entity line only (slot 223), no caller |
-| `0x1014f7b0` | CAI_BaseNPC::FUN_1014f7b0 | 0 | default:0 | — | ElysiumKnockbackTests.cpp:1134 | constant 0, slot 321 has one body in the family; its one stated reader is a weapon body outside the kernel and no observable is named |
-| `0x1014f8b0` | CAI_BaseNPC::FUN_1014f8b0 | 0 | - | — | — | slot 240 has one body in the family, no caller, and only returns the CPython interop global DAT_1072b360 |
-| `0x1014f950` | CAI_BaseNPC::FUN_1014f950 | 0 | default:0 | — | — | slot 361 returns 0, one body in the family, no caller |
-| `0x101a6440` | CAI_BaseNPC::GetLastUpdateThink | 1 | - | — | — | no dispatch reaches slot 412 on an NPC (the only candidates are the CBasePlayer vtable in 0x10181780); forwards to CBaseEntity::GetLastThink |
-| `0x101a6460` | CAI_BaseNPC::GetLastNormalThink | 1 | - | — | — | no dispatch reaches slot 413 on an NPC (the one candidate is CBasePlayer 0x10181780 on itself); forwards to CBaseEntity::GetLastThink |
-| `0x101a6480` | CAI_BaseNPC::GetLastMoveThink | 1 | - | — | — | slot 414 think-timestamp getter with no caller; forwards to CBaseEntity::GetLastThink, the clock itself lives in the think seam |
-| `0x101a64a0` | CAI_BaseNPC::FUN_101a64a0 | 1 | - | — | — | slot 415 think-timestamp getter with no caller; forwards to CBaseEntity::GetLastThink, the clock itself lives in the think seam |
-| `0x101a64e0` | CAI_BaseNPC::GetForceFrequentThink | 0 | default:0 | — | — | slot 417 base answers 0 and nothing asks it - the think-rate rule reads m_bForceFrequentThink +0x63f0 directly, and the Troika getter 0x101aa770 has no caller |
-| `0x101a6520` | CAI_BaseNPC::ShouldSavePhysics | 0 | default:0 | — | — | slot 128 ShouldSavePhysics returns 0, one body in the family, no caller; save plumbing besides |
-| `0x101a6540` | CAI_BaseNPC::PostNPCInit | 0 | default:void | — | — | empty base of slot 421 PostNPCInit, and its one override, the werewolf 0x103cb170, is a no-op too; neither body does anything |
-| `0x101a6580` | CAI_BaseNPC::FUN_101a6580 | 0 | default:void | — | — | empty body, slot 436 has one body in the family and no override |
-| `0x101a65a0` | CAI_BaseNPC::FUN_101a65a0 | 25 | - | — | — | slot 441 wrong-StartTask trap: DevMsg plus a forward to slot 442; no dispatch reaches slot 441 on an NPC, the runner enters 442 directly |
-| `0x101a65e0` | CAI_BaseNPC::FUN_101a65e0 | 23 | - | — | — | slot 443 wrong-RunTask trap: DevMsg plus a forward to slot 444; no dispatch reaches slot 443 on an NPC (candidates are player/weapon vtables) |
-| `0x101a6660` | CAI_BaseNPC::GetSchedulingErrorName | 0 | - | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x101a6680` | CAI_BaseNPC::FUN_101a6680 | 0 | default:0 | — | — | slot 454 returns 0, one body in the family, no caller |
-| `0x101a66a0` | CAI_BaseNPC::FUN_101a66a0 | 0 | default:0 | — | — | slot 455 returns 0, one body in the family, no caller |
-| `0x101a66c0` | CAI_BaseNPC::FUN_101a66c0 | 0 | default:0 | — | — | slot 456 returns 0, one body in the family, no direct or virtual caller; the 18 sites are same-offset dispatches on weapon, player and CAI_StandoffGoal vtables |
-| `0x101a66e0` | CAI_BaseNPC::FUN_101a66e0 | 0 | default:0 | — | — | slot 457 returns 0, one body in the family, no direct or virtual caller; the counted sites are same-offset dispatches on other classes |
-| `0x101a6860` | CAI_BaseNPC::FUN_101a6860 | 0 | default:1 | — | — | slot 136 returns 1, one body in the family, no dispatch site |
-| `0x101a6980` | CAI_BaseNPC::FUN_101a6980 | 0 | default:void | — | — | empty base of slot 496 TargetAcquiredSound, a slot with zero dispatch sites in the module |
-| `0x101a69a0` | CAI_BaseNPC::FUN_101a69a0 | 0 | default:void | — | — | empty base of slot 497, a slot with zero dispatch sites in the module |
-| `0x101a6a20` | CAI_BaseNPC::FUN_101a6a20 | 0 | default:void | — | — | empty base of slot 501 ExertLightSound, a slot with zero dispatch sites in the module |
-| `0x101a6a40` | CAI_BaseNPC::FUN_101a6a40 | 0 | default:void | — | — | empty base of slot 502 RiledSound, a slot with zero dispatch sites in the module |
-| `0x101a6aa0` | CAI_BaseNPC::FUN_101a6aa0 | 0 | default:void | — | — | empty base of slot 505 TargetGiveUpSound, a slot with zero dispatch sites in the module |
-| `0x101a6ac0` | CAI_BaseNPC::FUN_101a6ac0 | 0 | default:void | — | — | empty base of slot 506, a slot with zero dispatch sites in the module |
-| `0x101a6b00` | CAI_BaseNPC::FUN_101a6b00 | 0 | default:void | — | — | slot 508 SpeakSentence(int): base is empty and the only other body, CNPC_VCamera 0x10368330, is the same empty 3-byte return; no body in the family does anything |
-| `0x101a6b20` | CAI_BaseNPC::GetExpresser | 0 | default:0 | — | — | slot 512 GetExpresser base answers null; its one real override is on CAI_ExpressiveNPC, a line with no instance |
-| `0x101a6b80` | CAI_BaseNPC::GetJumpGravity | 0 | - | — | — | slot 524 GetJumpGravity returns a constant, one body in the family, no dispatch site and no caller |
-| `0x101a6bc0` | CAI_BaseNPC::FUN_101a6bc0 | 0 | default:void | — | — | empty base of slot 536 AddLookTarget; its one real override is on CAI_BaseHumanoid, a line with no instance |
-| `0x101a6be0` | CAI_BaseNPC::FUN_101a6be0 | 0 | default:void | — | — | empty base of slot 535 AddLookTarget; its one real override is on CAI_BaseHumanoid, a line with no instance |
-| `0x101a6c00` | CAI_BaseNPC::FUN_101a6c00 | 3 | - | — | — | slot 546 SquadSlotName, a NAME lookup whose only caller is 0x102767d0 DrawDebugTextOverlays |
-| `0x101a6c40` | CAI_BaseNPC::FUN_101a6c40 | 0 | default:void | — | — | empty body, slot 551 has one body in the family and no override |
-| `0x101a6c60` | CAI_BaseNPC::FUN_101a6c60 | 0 | default:1 | — | — | slot 557 returns 1, one body in the family, no dispatch site |
-| `0x101a6c80` | CAI_BaseNPC::FUN_101a6c80 | 0 | default:void | — | — | empty body, slot 558 has one body in the family and no override |
-| `0x101a6ca0` | CAI_BaseNPC::FUN_101a6ca0 | 0 | default:void | — | — | empty body, slot 565 has one body in the family and no override (GatherConditions calls into nothing) |
-| `0x101a6cc0` | CAI_BaseNPC::FUN_101a6cc0 | 0 | default:void | — | — | empty body, slot 578 has one body in the family and no override |
-| `0x101a6ce0` | CAI_BaseNPC::FUN_101a6ce0 | 1 | - | — | — | slot 579 has one body, no caller and no dispatch site; a NOT over slot 158 that nothing asks |
-| `0x101a7580` | CCineNPC::Blocked | 0 | - | — | — | empty Blocked override on the cine family; a scripted_sequence spawns FSOLID_NOT_SOLID and never blocks a mover |
-| `0x101a75a0` | CCineNPC::Touch | 0 | - | — | — | empty Touch override on the cine family; a scripted_sequence spawns FSOLID_NOT_SOLID and is never touched |
-| `0x101aa6d0` | CAI_BaseNPCTroika::GetLastUpdateThink | 0 | - | — | ElysiumNpcKernelLifecycleTests.cpp:272 | slot 412 getter with no caller on an NPC (the only candidates are CBasePlayer 0x10181780 on itself); m_flLastUpdateThink stays bound as the think clock field |
-| `0x101aa6f0` | CAI_BaseNPCTroika::GetLastNormalThink | 0 | - | — | ElysiumNpcKernelLifecycleTests.cpp:272 | slot 413 getter with no caller on an NPC (the one candidate is CBasePlayer 0x10181780 on itself); m_flLastNormalThink stays bound as the think clock field |
-| `0x101aa710` | CAI_BaseNPCTroika::GetLastMoveThink | 0 | - | — | ElysiumNpcKernelLifecycleTests.cpp:272 | plain getter of m_flLastMoveThink +0x625c; no direct or virtual caller in the closure, rules read the word itself |
-| `0x101aa730` | CAI_BaseNPCTroika::FUN_101aa730 | 0 | - | — | ElysiumNpcKernelLifecycleTests.cpp:272 | plain getter of the last-AI-think word +0x6260; no caller in the closure, no observable of its own |
-| `0x101aa770` | CAI_BaseNPCTroika::GetForceFrequentThink | 0 | - | — | — | plain getter of m_bForceFrequentThink; no caller, the think-rate rule reads +0x63f0 directly |
-| `0x101aa7b0` | CAI_BaseNPCTroika::GetSchedulingErrorName | 0 | - | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x101aa7f0` | CPayphone::HeadDirection2D | 4 | - | — | — | payphone head direction forwarded to body direction; its view and aim cones are constant false and senses are off, so no rule reads a phone head direction |
-| `0x101aa820` | CPayphone::HeadDirection3D | 3 | - | — | — | payphone HeadDirection3D forwarded to BodyDirection3D; nothing observable asks where a phone looks (cones constant false, m_bCanPerformSenses 0) |
-| `0x101aa890` | CPayphone::vfunc365 | 0 | registry:365 | — | — | slot 365 FInAimCone(entity) constant false with no caller; a payphone has no enemy and never reaches attack conditions, so nothing asks its aim cone |
-| `0x101aa8b0` | CPayphone::vfunc364 | 0 | registry:364 | — | — | slot 364 FInAimCone(point) constant false; only attack-condition and yaw code on the NPC itself asks it, and a senseless, enemy-less phone never runs them |
-| `0x101aae40` | CPayphone::vfunc37 | 0 | registry:37 | — | — | unnamed float slot 37 constant; its only entity-side reader is the physics tick 0x100b4f30 (mechanism) and a payphone is MOVETYPE_NONE |
-| `0x101c10d0` | CAI_BaseNPC::FUN_101c10d0 | 1 | - | — | — | CBaseEntity mover rebound easing inherited into the NPC vtable (slot 135); no caller, and no NPC arms m_flMoveDoneTime / m_flMoveReboundStartTime |
-| `0x101c1720` | CAI_BaseNPC::FUN_101c1720 | 9 | - | — | — | CBaseEntity mover MoveDone inherited at slot 133; m_movementType +0x558 and m_pfnMoveDone are armed only by LinearMove / AngularMove, which no NPC program issues |
-| `0x1025e450` | CAI_BaseHumanoid::vfunc82 | 0 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025e4e0` | CAI_BaseHumanoid::vfunc250 | 3 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025e510` | CAI_BaseHumanoid::SetModel | 11 | - | — | ElysiumNpcKernelAnim10Tests.cpp:229 | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025e780` | CAI_BaseHumanoid::vfunc277 | 1 | - | ElysiumNpcKernelBaseHelpers.cpp:28 | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025e8e0` | CAI_BaseHumanoid::vfunc193 | 3 | - | ElysiumNpcBaseGeometry.cpp:38 | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025e920` | CAI_BaseHumanoid::vfunc587 | 4 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025ea00` | CAI_BaseHumanoid::vfunc588 | 4 | - | ElysiumNpcKernelBaseHelpers.cpp:29, ElysiumNpcKernelBaseHelpers.cpp:774 | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025eaf0` | CAI_BaseHumanoid::SetHeadDirection | 6 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025f040` | CAI_BaseHumanoid::vfunc372 | 4 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025f0b0` | CAI_BaseHumanoid::vfunc373 | 3 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025f0f0` | CAI_BaseHumanoid::HeadDirection2D | 4 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025f160` | CAI_BaseHumanoid::HeadDirection3D | 3 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025f1a0` | CAI_BaseHumanoid::vfunc586 | 0 | - | ElysiumNpcKernelBaseHelpers.cpp:29 | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025f1c0` | CAI_BaseHumanoid::vfunc585 | 4 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025f760` | CAI_BaseHumanoid::vfunc536 | 2 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025f8e0` | CAI_BaseHumanoid::vfunc535 | 2 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1025fa50` | CAI_BaseHumanoid::MaintainEyeDirection | 10 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10260540` | CAI_BaseHumanoid::vfunc589 | 0 | - | ElysiumNpcKernelBaseHelpers.cpp:29 | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10260630` | CAI_BaseHumanoid::OnStateChange | 9 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10260670` | FUN_10260670 | 8 | - | ElysiumNpcKernelBaseHelpers.cpp:29 | — | SetExpression, called from 0x10260630 and twice from CAI_BaseActor::InputSetExpressionOverride 0x10260790, an input only CAI_BaseActor's line carries; CAI_BaseHumanoid line is reached only by the dev test npc_TestBaseHumanoid, placed by no shipped map; no Troika class holds this body |
-| `0x10260750` | FUN_10260750 | 0 | - | ElysiumNpcKernelBaseHelpers.cpp:29 | — | ClearExpression, called only from 0x10260670; CAI_BaseHumanoid line is reached only by the dev test npc_TestBaseHumanoid, placed by no shipped map; no Troika class holds this body |
-| `0x10260d70` | CAI_ExpressiveNPC::vfunc5 | 8 | - | — | — | class CAI_ExpressiveNPC has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10260da0` | CAI_ExpressiveNPC::GetExpresser | 0 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10260dc0` | FUN_10260dc0 | 11 | - | — | ElysiumNpcKernelAnim10Tests.cpp:1095 | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10260de0` | CAI_BaseHumanoid::vfunc5 | 8 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10260f40` | CAI_BaseHumanoid::vfunc427 | 5 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10262430` | CAI_BaseHumanoid::vfunc429 | 6 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x102624b0` | CAI_BaseHumanoid::MaxYawSpeed | 0 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1026a910` | CAI_BaseNPC::FUN_1026a910 | 0 | - | — | — | slot 568 constant (0.0): one body in the family, zero dispatch sites in the module, no caller |
-| `0x1026b270` | CAI_BaseNPC::FUN_1026b270 | 4 | - | — | — | slot 534 has zero dispatch sites in the module and no direct caller; the nearest-NPC gaze arm the port runs belongs to 0x1026b810 MaintainEyeDirection |
-| `0x1026d920` | CAI_BaseNPC::FUN_1026d920 | 0 | - | — | — | slot 554 has zero dispatch sites in the module - GatherAttackConditions 0x1026dd10 dispatches only 553 and 555 - and its two direct callers are slot-554 overrides themselves |
-| `0x1026da90` | CAI_BaseNPC::FUN_1026da90 | 1 | - | — | — | slot 556 has one body, zero dispatch sites in the module and no caller; GatherAttackConditions never asks the melee-2 band, so COND 0x52 has no producer here |
-| `0x1026dc60` | CAI_BaseNPC::CapabilitiesClear | 0 | - | — | — | CapabilitiesClear, whose one user is CNPC_Crow::Spawn 0x10357440 - a class with no instance |
-| `0x10275760` | CAI_BaseNPC::DrawDebugGeometryOverlays | 8 | - | — | — | debug geometry overlay slot 123, no output device; whole effect is m_debugOverlays-gated boxes and lines |
-| `0x102767d0` | CAI_BaseNPC::DrawDebugTextOverlays | 14 | - | — | — | debug text overlay slot 124 base body, whole effect is overlay lines |
-| `0x102775e0` | CAI_BaseNPC::DrawDebugStatOverlays | 6 | - | — | — | debug stat overlay slot 76 base body, whole effect is printed diagnostics |
-| `0x102779a0` | CAI_BaseNPC::FUN_102779a0 | 4 | - | — | — | ReportAIState developer dump, whole effect is DevMsg; slot 581 has one body and no caller |
-| `0x10277d90` | CAI_BaseNPC::FUN_10277d90 | 12 | - | — | — | over-think-limit developer report, whole effect is DevWarning plus a Slow text overlay; slot 582 one body, no caller |
-| `0x10278cb0` | CAI_BaseNPC::FUN_10278cb0 | 0 | - | — | — | slot 519 has one body and no dispatch site anywhere in the DLL; a gated tail-jump to motor slot 14 |
-| `0x10278e00` | CAI_BaseNPC::GetFacingDirection | 0 | - | — | — | slot 520 has one body and no dispatch site anywhere in the DLL; a one-line forward to the motor |
-| `0x10279060` | CAI_BaseNPC::FUN_10279060 | 4 | - | — | — | slot 540 PlayScene has one body and no dispatch site anywhere in the DLL |
-| `0x1027c2e0` | CAI_BaseNPC::LoadedSchedules | 0 | default:1 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x1027d9d0` | CAI_BaseNPC::FUN_1027d9d0 | 0 | default:0 | — | — | constant false, slot 514 has one body in the family and no caller |
-| `0x1027d9f0` | CAI_BaseNPC::OverrideMoveFacing | 0 | - | ElysiumNpcMotor10.cpp:486 | ElysiumNpcKernelMotorTests.cpp:419 | constant false inside a scope-trace frame, slot 526 has one body in the family and no caller |
-| `0x1027e120` | CAI_BaseNPC::FUN_1027e120 | 0 | - | — | — | slot 423 has one body and no dispatch site on this family in the DLL; the template spawnflag bit 11 has no reader through it |
-| `0x1027e740` | CAI_BaseNPC::FUN_1027e740 | 1 | - | — | — | NPC state NAME lookup slot 406 used only by the debug overlays and ReportAIState |
-| `0x1027e7d0` | CAI_BaseNPC::FUN_1027e7d0 | 1 | - | — | — | navigation type NAME lookup slot 407 used only by the debug overlays |
-| `0x1027ede0` | CAI_BaseNPC::GetShortConditionName | 1 | - | — | — | GetShortConditionName slot 408, condition NAME lookup for debug prints |
-| `0x1027ee00` | CAI_BaseNPC::GetLastSharedCondition | 0 | default:0x77 | — | — | slot 409 last-shared-condition id 0x77, read only by the condition NAME lookup and the trace formatter CONDS walk |
-| `0x1027efb0` | FUN_1027efb0 | 1 | - | ElysiumEntityDebugSubsystem.cpp:361, ElysiumNpcBaseThink.cpp:120, ElysiumEntityWorld.h:811 | — | the debug ring dump, whole effect is DevMsg |
-| `0x10280fd0` | CAI_BaseNPC::FUN_10280fd0 | 0 | default:void | ElysiumNpcMaintain.cpp:331, ElysiumSchedule.cpp:237 | — | empty body, slot 411 has one body in the family and no override |
-| `0x1028b0b0` | CAI_BaseNPC::FUN_1028b0b0 | 0 | - | — | ElysiumNpcKernelPositionsTests.cpp:562 | slot 549 has one body and no dispatch site anywhere in the DLL |
-| `0x1028b0f0` | CAI_BaseNPC::FUN_1028b0f0 | 0 | - | — | — | whole effect is a Subclass-missing error print and constant 0; slot 547 has one body and no caller |
-| `0x1028df30` | CAI_BaseNPCTroika::FUN_1028df30 | 12 | - | — | — | TraceMessage slot 20, raw text to the debug ring or DevMsg |
-| `0x1028dfb0` | CAI_BaseNPCTroika::FUN_1028dfb0 | 1 | - | — | — | TraceMessage slot 19, raw text to the global debug ring or DevMsg |
-| `0x10292500` | CAI_BaseNPCTroika::NPCThinkDebugPre | 12 | - | — | — | pre-think debug pass - witness timer boxes, ConVar-gated overlays and the debug ring dump; its one write +0x5b55 is ring state |
-| `0x10294720` | CAI_BaseNPCTroika::FUN_10294720 | 14 | - | — | — | slot 496 TargetAcquiredSound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7c0 call anywhere); the Target_Acquired concept is never spoken |
-| `0x102947e0` | CAI_BaseNPCTroika::FUN_102947e0 | 5 | - | — | — | slot 497 has no dispatch site (0d/0v/0c, no vt+0x7c4 call); body only caches the id of the placeholder concept ??? and emits nothing |
-| `0x102949f0` | CAI_BaseNPCTroika::FUN_102949f0 | 14 | - | — | — | slot 500 ExertHvySound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7d0 call); base Exert_Heavy hook never runs, the werewolf arm is its own row |
-| `0x10294ab0` | CAI_BaseNPCTroika::FUN_10294ab0 | 14 | - | — | — | slot 501 ExertLightSound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7d4 call); Exert_Light is never spoken through it |
-| `0x10294b70` | CAI_BaseNPCTroika::FUN_10294b70 | 14 | - | — | — | slot 502 RiledSound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7d8 call); Riled is never spoken through it |
-| `0x10294db0` | CAI_BaseNPCTroika::FUN_10294db0 | 14 | - | — | — | slot 505 TargetGiveUpSound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7e4 call); Target_GiveUp is never spoken through it |
-| `0x10294e70` | CAI_BaseNPCTroika::FUN_10294e70 | 14 | - | — | — | slot 506 has no dispatch site (0d/0v/0c, no vt+0x7e8 call); the duplicate of slot 494 FoundEnemySound, which is the hook that actually speaks Target_Reacquired |
-| `0x1029c010` | CAI_BaseNPCTroika::DrawDebugStatOverlays | 7 | - | — | — | slot 76 DrawDebugStatOverlays, debug HUD text with no output device |
-| `0x1029ca50` | CAI_BaseNPCTroika::DrawDebugGeometryOverlays | 15 | - | — | — | slot 123 DrawDebugGeometryOverlays, NDebugOverlay cones / boxes / rings only; its relationship-line arm is dead even in retail |
-| `0x1029d4e0` | CAI_BaseNPCTroika::DrawDebugTextOverlays | 15 | - | — | — | slot 124 DrawDebugTextOverlays, NDebugOverlay::EntityText lines only |
-| `0x1029f890` | CAI_BaseNPCTroika::FUN_1029f890 | 3 | - | — | — | slot 23 has no dispatch site anywhere in the corpus (0d/0v/0c); byte-identical twin of slot 22 |
-| `0x102b5100` | CAI_BaseNPCTroika::FUN_102b5100 | 0 | default:void | — | — | empty body; slot 55's only other body in the family, the base, is empty too, so the new-memory-record notification does nothing anywhere |
-| `0x102b51a0` | CAI_BaseNPCTroika::FUN_102b51a0 | 0 | default:void | — | — | empty body; slot 57's only other body in the family, the base, is empty too |
-| `0x102b51c0` | CAI_BaseNPCTroika::FUN_102b51c0 | 0 | default:void | — | — | empty body; slot 58's only other body in the family, the base, is empty too, so the memory lookup-miss notification does nothing anywhere |
-| `0x102b97f0` | CAI_BaseNPCTroika::LoadedSchedules | 0 | - | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x102c5890` | CAI_BaseNPCTroika::FUN_102c5890 | 0 | default:0 | — | — | slot 81 YouForgotToImplementOrDeclareServerClass returns constant 0 and has no callers |
-| `0x102c7310` | CAI_StandoffBehavior::vfunc19 | 0 | - | — | — | debug class-name string accessor (DebugGetClassName shape) on CAI_StandoffBehavior, which no NPC hosts |
-| `0x102c73f0` | CAI_StandoffBehavior::vfunc8 | 0 | default:void | — | — | empty body, slot 8 of CAI_StandoffBehavior, a behaviour no NPC hosts |
-| `0x102c7410` | CAI_StandoffBehavior::vfunc3 | 1 | - | — | — | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
-| `0x102c7490` | CAI_StandoffBehavior::vfunc4 | 0 | - | — | — | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
-| `0x102c7530` | CAI_StandoffBehavior::vfunc5 | 1 | - | — | — | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
-| `0x102c75c0` | CAI_StandoffBehavior::vfunc10 | 20 | - | — | — | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
-| `0x102c7600` | CAI_StandoffBehavior::vfunc13 | 2 | - | — | — | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
-| `0x102c7960` | CAI_StandoffBehavior::vfunc20 | 2 | - | — | — | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
-| `0x102c79a0` | CAI_StandoffBehavior::vfunc21 | 2 | - | — | — | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
-| `0x102c79e0` | CAI_StandoffBehavior::vfunc22 | 12 | - | — | — | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
-| `0x102c7bd0` | CAI_StandoffBehavior::vfunc15 | 21 | - | — | — | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script; NOTE the goal record's 0x13 below is its ACTIVITY word +0x14 (ACT_RUN), not a flag |
-| `0x102c7dd0` | CAI_StandoffBehavior::vfunc26 | 0 | - | — | — | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
-| `0x102c7ef0` | CAI_StandoffBehavior::vfunc28 | 0 | - | — | — | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
-| `0x102c8570` | CAI_StandoffGoal::vfunc244 | 22 | - | — | — | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
-| `0x102c8690` | CAI_StandoffGoal::vfunc245 | 22 | - | — | — | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
-| `0x102c87a0` | CAI_StandoffGoal::vfunc241 | 11 | - | — | — | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
-| `0x102c8830` | CAI_StandoffGoal::vfunc243 | 11 | - | — | — | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
-| `0x102cc300` | CAI_BaseNPC::FUN_102cc300 | 3 | - | — | — | slot 458 ConditionName lookup, reached only from DrawDebugTextOverlays |
-| `0x102cc350` | CAI_BaseNPC::TaskName | 3 | - | — | — | slot 449 TaskName lookup, used only by the debug overlays and the task DevMsg prints |
-| `0x102cd2d0` | CAI_StandoffGoal::Spawn | 1 | - | — | — | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
-| `0x102cd740` | CAI_StandoffGoal::vfunc242 | 23 | - | — | — | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
-| `0x102cdc50` | CAI_StandoffGoal::UpdateOnRemove | 12 | - | — | — | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
-| `0x102d1600` | CAI_Hint::DrawDebugTextOverlays | 4 | - | — | — | debug text overlay body (slot 124 on CAI_Hint) |
-| `0x102e0ea0` | CAI_Motor::FUN_102e0ea0 | 5 | - | — | — | CAI_Motor slot 3 is the climb start, reached only from MoveClimb 0x102eebc0 and the nav-type 3 arm of Move, and no shipped link climbs |
-| `0x102e0f90` | CAI_Motor::FUN_102e0f90 | 4 | - | — | — | CAI_Motor slot 4 is the climb execute, reached only from MoveClimb 0x102eebc0 and the nav-type 3 arm of Move, and no shipped link climbs |
-| `0x102e1110` | CAI_Motor::FUN_102e1110 | 2 | - | — | — | CAI_Motor slot 5 is the climb teardown, reached only from MoveClimb 0x102eebc0 and the nav-type 3 arm of Move, and no shipped link climbs |
-| `0x102e1420` | CAI_Motor::FUN_102e1420 | 0 | registry:9 | — | — | empty body, CAI_Motor slot 9 no-op with no callers |
-| `0x102eea30` | CAI_Navigator::FUN_102eea30 | 0 | registry:4 | — | — | empty body, CAI_Navigator slot 4 no-op with no callers |
-| `0x102eea50` | CAI_Navigator::FUN_102eea50 | 0 | registry:6 | — | — | empty body, CAI_Navigator slot 6 no-op with no callers |
-| `0x102eebc0` | CAI_Navigator::FUN_102eebc0 | 20 | - | — | — | the climb move step runs only on a nav-type 3 waypoint and no shipped link climbs (FINISH_CLIMB 0xfc cannot run) |
-| `0x10312cd0` | FUN_10312cd0 | 8 | - | — | — | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10321980` | CAI_BaseNPC::FUN_10321980 | 0 | default:0 | — | — | slot 81 returns constant 0 and has no callers |
-| `0x10345460` | CAI_BaseNPC::FUN_10345460 | 0 | default:1 | — | — | constant 1, slot 327 has one body in the family and no override; the melee-condition gate that asks the enemy is always open |
-| `0x10348ba0` | CAI_BaseNPC::FUN_10348ba0 | 0 | - | — | — | slot 296 has one body and no dispatch site in the image (oracle shape.md); the 0xb argument domain is unrecovered and nothing asks it |
-| `0x1034a2d0` | CGenericNPC::Classify | 0 | - | — | — | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034a2f0` | CGenericNPC::MaxYawSpeed | 0 | - | — | — | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034a680` | CGenericNPC::HandleAnimEvent | 25 | - | — | — | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034a6b0` | CGenericNPC::vfunc473 | 0 | - | — | — | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034a6d0` | CGenericNPC::Spawn | 21 | - | — | — | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034aa40` | CGenericNPC::Precache | 1 | - | — | — | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034aab0` | CGenericNPC::vfunc5 | 7 | - | — | — | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034bd30` | CNPCMaker::DrawDebugGeometryOverlays | 0 | registry:123 | — | — | empty override of debug slot 123 DrawDebugGeometryOverlays on the three makers |
-| `0x1034d410` | CScriptedTarget::vfunc117 | 1 | - | — | — | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034d430` | CScriptedTarget::vfunc82 | 0 | - | — | — | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034d6e0` | CScriptedTarget::Spawn | 5 | - | — | ElysiumNpcKernelSpeciesTests.cpp:1284 | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034ddf0` | CScriptedTarget::DrawDebugTextOverlays | 4 | - | — | — | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034e070` | CScriptedTarget::DrawDebugGeometryOverlays | 4 | - | — | — | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034e320` | CScriptedTarget::Save | 16 | - | — | ElysiumNpcKernelSaveRestore10Tests.cpp:333 | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034e370` | CScriptedTarget::Restore | 10 | - | — | ElysiumNpcKernelSaveRestore10Tests.cpp:333 | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1034e3b0` | CScriptedTarget::vfunc5 | 7 | - | — | — | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103564f0` | CNPC_Bullseye::vfunc82 | 0 | - | — | — | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10356740` | CNPC_Bullseye::vfunc5 | 8 | - | — | — | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103567e0` | CNPC_Bullseye::Spawn | 14 | - | — | — | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10356b50` | CNPC_Bullseye::Event_Killed | 21 | - | — | — | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10356f30` | CNPC_Bullseye::vfunc576 | 0 | - | — | — | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10356f60` | CNPC_Bullseye::vfunc141 | 9 | - | — | ElysiumNpcKernelDamageTests.cpp:380 | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10356ff0` | CNPC_Bullseye::OnTakeDamage | 25 | - | — | — | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357350` | CNPC_Crow::MaxYawSpeed | 0 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357370` | CNPC_Crow::vfunc580 | 0 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357390` | CNPC_Crow::GetSchedulingErrorName | 0 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103573b0` | CNPC_Crow::vfunc82 | 0 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357440` | CNPC_Crow::Spawn | 23 | - | ElysiumRetailHullTable.h:183 | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357660` | CNPC_Crow::Classify | 0 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357680` | CNPC_Crow::GatherEnemyConditions | 23 | - | ElysiumEyeRig.h:244 | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357760` | CNPC_Crow::vfunc192 | 1 | - | ElysiumNpcGeometry.cpp:94 | ElysiumNpcKernelGeometryTests.cpp:215 | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103577d0` | CNPC_Crow::vfunc197 | 2 | - | — | ElysiumNpcKernelSpeciesTests.cpp:1227 | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357800` | CNPC_Crow::vfunc511 | 11 | - | ElysiumNpcBaseSounds.cpp:303, ElysiumNpcSounds10.cpp:12 | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357820` | CNPC_Crow::HandleAnimEvent | 25 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357b30` | CNPC_Crow::OnChangeActivity | 0 | - | ElysiumNpcMingXiao.cpp:659 | ElysiumNpcKernelFacingTests.cpp:568 | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357ba0` | CNPC_Crow::OverrideMove | 6 | - | ElysiumNpcBaseMotor.cpp:468 | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10357be0` | FUN_10357be0 | 5 | - | — | ElysiumNpcKernelSpeciesTests.cpp:1227 | crow flight step toward its hint at 170 u/s, called only by the crow OverrideMove 0x10357ba0; npc_crow has no instance |
-| `0x10358310` | CNPC_Crow::PrescheduleThink | 0 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10358330` | CNPC_Crow::StartTask | 25 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103587b0` | CNPC_Crow::RunTask | 23 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10358c40` | CNPC_Crow::vfunc394 | 12 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10358c60` | CNPC_Crow::FValidateHintType | 0 | - | — | ElysiumNpcKernelHintsTests.cpp:66 | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10358c90` | CNPC_Crow::vfunc567 | 1 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10358ce0` | CNPC_Crow::SelectSchedule | 22 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10358ec0` | CNPC_Crow::Precache | 14 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10358ef0` | CNPC_Crow::vfunc490 | 12 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10358f10` | CNPC_Crow::vfunc489 | 12 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10358f30` | CNPC_Crow::vfunc491 | 12 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10358f50` | CNPC_Crow::vfunc488 | 12 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10358f90` | CNPC_Crow::DrawDebugTextOverlays | 15 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103590f0` | CNPC_Crow::vfunc473 | 0 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103591e0` | CNPC_Crow::LoadedSchedules | 0 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10359240` | CNPC_Crow::vfunc546 | 3 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10359b70` | CNPC_Crow::vfunc5 | 7 | - | — | — | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10359e30` | CGeneric_NPC::LoadedSchedules | 0 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10359e90` | CGeneric_NPC::vfunc546 | 3 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10359f00` | CGeneric_NPC::vfunc580 | 0 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10359f20` | CGeneric_NPC::GetSchedulingErrorName | 0 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10359f40` | CGeneric_NPC::vfunc5 | 17 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10359f70` | CGeneric_NPC::Precache | 15 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035a090` | CGeneric_NPC::Spawn | 23 | - | ElysiumRetailHullTable.h:185 | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035a220` | CGeneric_NPC::vfunc495 | 4 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035a390` | CGeneric_NPC::vfunc489 | 4 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035a500` | CGeneric_NPC::vfunc488 | 4 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035a670` | CGeneric_NPC::vfunc491 | 4 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035a7e0` | CGeneric_NPC::vfunc473 | 0 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035a810` | CGeneric_NPC::MaxYawSpeed | 0 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035a850` | CGeneric_NPC::Classify | 0 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035a900` | CGeneric_NPC::vfunc432 | 26 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035a920` | CGeneric_NPC::PrescheduleThink | 0 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035a980` | CGeneric_NPC::Event_Killed | 22 | - | — | — | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035ac80` | CGeneric_NPC_bathack::LoadedSchedules | 0 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035ace0` | CGeneric_NPC_bathack::vfunc546 | 3 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035ad50` | CGeneric_NPC_bathack::vfunc117 | 1 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035ad70` | CGeneric_NPC_bathack::vfunc580 | 0 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035ad90` | CGeneric_NPC_bathack::GetSchedulingErrorName | 0 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035adb0` | CGeneric_NPC_bathack::vfunc5 | 7 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035ade0` | CGeneric_NPC_bathack::Precache | 14 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035ae80` | CGeneric_NPC_bathack::Spawn | 21 | - | ElysiumRetailHullTable.h:187 | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035afe0` | CGeneric_NPC_bathack::vfunc495 | 0 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b000` | CGeneric_NPC_bathack::vfunc489 | 0 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b020` | CGeneric_NPC_bathack::vfunc488 | 0 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b040` | CGeneric_NPC_bathack::vfunc491 | 0 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b080` | CGeneric_NPC_bathack::MaxYawSpeed | 0 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b0c0` | CGeneric_NPC_bathack::Classify | 0 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b160` | CGeneric_NPC_bathack::vfunc432 | 25 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b1a0` | CGeneric_NPC_bathack::PrescheduleThink | 0 | - | — | — | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b490` | CGenericSabbat_NPC::LoadedSchedules | 0 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b4f0` | CGenericSabbat_NPC::vfunc546 | 3 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b560` | CGenericSabbat_NPC::vfunc580 | 0 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b580` | CGenericSabbat_NPC::GetSchedulingErrorName | 0 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b5a0` | CGenericSabbat_NPC::vfunc5 | 7 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b5d0` | CGenericSabbat_NPC::Precache | 14 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b700` | CGenericSabbat_NPC::Spawn | 21 | - | ElysiumRetailHullTable.h:188 | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035b890` | CGenericSabbat_NPC::vfunc495 | 4 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035ba00` | CGenericSabbat_NPC::vfunc489 | 4 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035bb70` | CGenericSabbat_NPC::vfunc488 | 4 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035bce0` | CGenericSabbat_NPC::vfunc491 | 4 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035be50` | CGenericSabbat_NPC::vfunc473 | 0 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035be80` | CGenericSabbat_NPC::MaxYawSpeed | 0 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035bec0` | CGenericSabbat_NPC::Classify | 0 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035bf70` | CGenericSabbat_NPC::vfunc432 | 25 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035bfb0` | CGenericSabbat_NPC::PrescheduleThink | 0 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035c010` | CGenericSabbat_NPC::Event_Killed | 21 | - | — | — | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1035c1d0` | CNPC_VVampireBoss::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x1035c250` | CNPC_VAndreiBlood::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x1035c400` | CNPC_VAndreiBlood::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x1035c460` | CNPC_VAndreiBlood::vfunc546 | 3 | - | — | — | squad-slot NAME remap for Andrei; the name feeds only the debug text overlay's Slot line |
-| `0x1035dba0` | CNPC_VAndreiBlood::SetSchedule | 8 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x1035ec30` | CNPC_VAnimal::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x1035ed50` | CNPC_VAnimal::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x1035edb0` | CNPC_VAnimal::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName is a NAME lookup for debug prints, and the species id space is empty so it answers null for every id |
-| `0x10360160` | CNPC_VAnimal::FUN_10360160 | 26 | - | ElysiumNpcRunAiSpecies.cpp:4, ElysiumNpcRunAiSpecies.cpp:211, ElysiumNpcRunAiSpecies.cpp:224, ElysiumNpcRunAiSpecies.cpp:232, ElysiumNpcRunAiSpecies.cpp:244, ElysiumNpcRunAiSpecies.cpp:625 | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x103603f0` | CNPC_VAsianVampire::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103605b0` | CNPC_VAsianVampire::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x10360610` | CNPC_VAsianVampire::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName is a NAME lookup for debug prints over an empty species id space |
-| `0x10361530` | CNPC_VAsianVampire::SetSchedule | 8 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x10362c70` | CNPC_VBach::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x10362d90` | CNPC_VBach::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x10362df0` | CNPC_VBach::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName is a NAME lookup for debug prints over an empty species id space |
-| `0x10363a10` | CNPC_VBach::SelectSchedule | 27 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x10363b40` | CNPC_VBach::vfunc461 | 24 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x10364550` | CNPC_VBach::vfunc554 | 0 | - | — | — | slot 554 RangeAttack2Conditions has zero dispatch sites in the module - GatherAttackConditions 0x1026dd10 asks only 553 and 555 - so this override is as unreachable as the base 0x1026d920 |
-| `0x10366290` | CNPC_VBaseBoss::DrawDebugStatOverlays | 7 | - | — | — | slot 76 DrawDebugStatOverlays override, a Dist to player debug text line then the base overlay |
-| `0x10366c70` | CNPC_VBatSwarm::vfunc580 | 0 | - | — | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10366c90` | CNPC_VBatSwarm::GetSchedulingErrorName | 0 | - | — | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10366cb0` | CNPC_VBatSwarm::vfunc5 | 17 | - | — | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10366db0` | CNPC_VBatSwarm::LoadedSchedules | 0 | - | — | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10366e10` | CNPC_VBatSwarm::vfunc546 | 3 | - | — | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103672d0` | CNPC_VBatSwarm::vfunc82 | 0 | - | — | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10367380` | CNPC_VBatSwarm::Spawn | 27 | - | — | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103673b0` | CNPC_VBatSwarm::NPCInit | 23 | - | — | ElysiumNpcKernelLifecycle2Tests.cpp:673, ElysiumNpcKernelLifecycle2Tests.cpp:1008, ElysiumNpcKernelLifecycle2Tests.cpp:1012 | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103673e0` | CNPC_VBatSwarm::vfunc473 | 0 | - | — | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10367400` | CNPC_VBatSwarm::Classify | 0 | - | — | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10367460` | CNPC_VBatSwarm::SelectSchedule | 27 | - | — | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103674a0` | CNPC_VBatSwarm::vfunc461 | 24 | - | — | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103674c0` | CNPC_VBatSwarm::vfunc432 | 27 | - | — | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10367580` | CNPC_VBatSwarm::GatherAttackConditions | 5 | - | — | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103675e0` | CNPC_VBatSwarm::vfunc553 | 1 | - | ElysiumNpcBaseConditions.cpp:122 | ElysiumNpcKernelConditionsTests.cpp:196 | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10367610` | CNPC_VBatSwarm::vfunc554 | 1 | - | — | ElysiumNpcKernelConditionsTests.cpp:196 | class CNPC_VBatSwarm has no instance, and slot 554 has zero dispatch sites in the module |
-| `0x10367740` | FUN_10367740 | 6 | - | ElysiumNpcBach.cpp:493, ElysiumNpcBach.h:57, ElysiumNpcTroikaHelpers.cpp:868 | — | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10367890` | CNPC_VBrujah::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103679b0` | CNPC_VBrujah::LoadedSchedules | 0 | - | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x10367a10` | CNPC_VBrujah::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName is a NAME lookup for debug prints over an empty species id space |
-| `0x103681b0` | CNPC_VCamera::FUN_103681b0 | 0 | - | — | — | empty override of slot 496 TargetAcquiredSound, and the slot ledger records no dispatch site for slot 496, so nothing can reach it |
-| `0x103681d0` | CNPC_VCamera::FUN_103681d0 | 0 | - | — | — | empty override of the unnamed sound hook slot 497, and the slot ledger records no dispatch site for slot 497 |
-| `0x10368230` | CNPC_VCamera::FUN_10368230 | 0 | - | — | — | camera's empty slot 500 override; the slot's only dispatch is the werewolf's own 0x103d8df0, so nothing ever asks a camera |
-| `0x10368250` | CNPC_VCamera::FUN_10368250 | 0 | - | — | — | empty override of slot 501 ExertLightSound, and the slot ledger records no dispatch site for slot 501 |
-| `0x10368270` | CNPC_VCamera::FUN_10368270 | 0 | - | — | — | empty override of slot 502 RiledSound, and the slot ledger records no dispatch site for slot 502 |
-| `0x103682d0` | CNPC_VCamera::FUN_103682d0 | 0 | - | — | — | empty override of slot 505 TargetGiveUpSound, and the slot ledger records no dispatch site for slot 505 |
-| `0x103682f0` | CNPC_VCamera::FUN_103682f0 | 0 | - | — | — | empty override of the unnamed sound hook slot 506, and the slot ledger records no dispatch site for slot 506 |
-| `0x10368330` | CNPC_VCamera::FUN_10368330 | 0 | - | — | — | empty slot 508 SpeakSentence override over an equally empty base 0x101a6b00; no effect either way |
-| `0x103683d0` | CNPC_VCamera::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103684f0` | CNPC_VCamera::LoadedSchedules | 0 | - | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x10368550` | CNPC_VCamera::FUN_10368550 | 3 | - | — | — | slot 546 SquadSlotName is a NAME lookup for debug prints over an empty species id space |
-| `0x103690e0` | CNPC_VCamera::FUN_103690e0 | 26 | - | — | — | bare tail call down to CAI_BaseNPCTroika::RunAI 0x1028fcc0, the body the class inherits anyway; no arm, nothing read or written, absence unobservable |
-| `0x10369240` | CNPC_VCamera::FUN_10369240 | 0 | registry:390 | — | — | constant 0 with no callers; camera NPCInit 0x103692c0 sets m_takedamage 0 so no damage ever reaches slot 390 on a camera |
-| `0x10369260` | CNPC_VCamera::HandleInteraction | 0 | registry:366 | — | — | constant false with no callers and no interaction dispatched at a camera; the slot 366 HandleInteraction answer is never read for this class |
-| `0x1036a1d0` | CNPC_VChangBros::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x1036a390` | CNPC_VChangBros::LoadedSchedules | 0 | - | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x1036a3f0` | CNPC_VChangBros::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
-| `0x1036b500` | CNPC_VChangBros::SelectIdealState | 24 | - | — | — | whole species content is debug tag 10 in +0x1b38; it tail-calls CNPC_VHuman::SelectIdealState 0x103851e0, the very body CNPC_VVampireBoss slot 461 would hand down |
-| `0x1036c760` | CNPC_VChangBros::SetSchedule | 8 | - | — | — | slot 619 species forwarder adds only the scope-trace name around SetSchedule 0x10280de0, whose own row carries the m_IdealSchedule rule; no class logic |
-| `0x1036ead0` | CNPC_VChangBrosBlade::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x1036ec90` | CNPC_VChangBrosBlade::LoadedSchedules | 0 | - | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x1036ecf0` | CNPC_VChangBrosBlade::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
-| `0x1036f2d0` | CNPC_VChangBrosClaw::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x1036f490` | CNPC_VChangBrosClaw::LoadedSchedules | 0 | - | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x1036f4f0` | CNPC_VChangBrosClaw::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
-| `0x1036fb10` | CNPC_VCombatman::vfunc580 | 0 | - | ElysiumNpcSchedule.cpp:103 | — | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1036fb30` | CNPC_VCombatman::GetSchedulingErrorName | 0 | - | — | — | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1036fb50` | CNPC_VCombatman::vfunc5 | 17 | - | — | — | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1036fc50` | CNPC_VCombatman::LoadedSchedules | 0 | - | — | — | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1036fcb0` | CNPC_VCombatman::vfunc546 | 3 | - | — | — | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103701a0` | CNPC_VCombatman::Spawn | 26 | - | — | — | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103701d0` | CNPC_VCombatman::Classify | 0 | - | — | — | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10370230` | CNPC_VCombatman::SelectSchedule | 27 | - | — | — | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10370320` | CNPC_VCombatman::vfunc461 | 24 | - | — | — | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10370340` | CNPC_VCombatman::vfunc432 | 27 | - | — | — | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10370950` | CNPC_VCop::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x10370a70` | CNPC_VCop::LoadedSchedules | 0 | - | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x10370ad0` | CNPC_VCop::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
-| `0x10372aa0` | CNPC_VCop::vfunc432 | 28 | - | — | — | bare tail call down to CAI_BaseNPCTroika::RunAI 0x1028fcc0, the body the class inherits anyway; no arm, nothing read or written, absence unobservable |
-| `0x10372f00` | CNPC_VCop::DrawDebugGeometryOverlays | 16 | - | — | — | slot 123 DrawDebugGeometryOverlays, a debug overlay text body gated on m_debugOverlays bit 0 with no output device |
-| `0x10373550` | CNPC_VDog::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x10373670` | CNPC_VDog::LoadedSchedules | 0 | - | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103736d0` | CNPC_VDog::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
-| `0x10375100` | CNPC_VVampire::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x10375260` | CNPC_VFrenzyShadow::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103753e0` | CNPC_VFrenzyShadow::LoadedSchedules | 0 | - | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x10375440` | CNPC_VFrenzyShadow::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
-| `0x10377070` | CNPC_VGangrel::vfunc580 | 0 | - | ElysiumNpcSchedule.cpp:104 | — | class CNPC_VGangrel has no instance - npc_VGangrel is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10377090` | CNPC_VGangrel::GetSchedulingErrorName | 0 | - | — | — | class CNPC_VGangrel has no instance - npc_VGangrel is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103770b0` | CNPC_VGangrel::vfunc5 | 17 | - | — | — | class CNPC_VGangrel has no instance - npc_VGangrel is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103771b0` | CNPC_VGangrel::LoadedSchedules | 0 | - | — | — | class CNPC_VGangrel has no instance - npc_VGangrel is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10377210` | CNPC_VGangrel::vfunc546 | 3 | - | — | — | class CNPC_VGangrel has no instance - npc_VGangrel is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10377700` | CNPC_VGangrel::Classify | 0 | - | — | — | class CNPC_VGangrel has no instance - npc_VGangrel is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10377b40` | CNPC_VGargoyle::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x10377c70` | CNPC_VGargoyle::LoadedSchedules | 0 | - | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x10377cd0` | CNPC_VGargoyle::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
-| `0x10378b60` | CNPC_VGargoyle::vfunc461 | 24 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x1037a8f0` | CNPC_VGhoulCroucher::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x1037a950` | CNPC_VGhoulCroucher::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName feeds only the debug text overlay Slot line and every species id space is empty |
-| `0x1037afd0` | CNPC_VGhoulCroucher::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x1037c680` | CNPC_VGuard1::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x1037c7a0` | CNPC_VGuard1::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x1037c800` | CNPC_VGuard1::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName feeds only the debug text overlay Slot line and every species id space is empty |
-| `0x1037e1e0` | CNPC_VGuard1::vfunc432 | 27 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x1037e850` | CNPC_VHengeyokai::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x1037ea00` | CNPC_VHengeyokai::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x1037ea60` | CNPC_VHengeyokai::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName feeds only the debug text overlay Slot line and every species id space is empty |
-| `0x10380100` | CNPC_VHengeyokai::vfunc461 | 24 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x10383560` | CNPC_VHengeyokai::DrawDebugTextOverlays | 16 | - | — | — | DrawDebugTextOverlays override, debug overlay text with no output device |
-| `0x10384080` | CNPC_VHuman::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103841a0` | CNPC_VHuman::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x10384200` | CNPC_VHuman::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName feeds only the debug text overlay Slot line and every species id space is empty |
-| `0x10385a10` | CNPC_VChangBros::FUN_10385a10 | 26 | - | ElysiumNpcPlayerController.h:16, ElysiumNpcRunAiSpecies.cpp:4, ElysiumNpcRunAiSpecies.cpp:156, ElysiumNpcRunAiSpecies.cpp:162, ElysiumNpcRunAiSpecies.cpp:175, ElysiumNpcRunAiSpecies.cpp:202 … +6 | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x10386b00` | CNPC_VHumanCombatant::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x10386c20` | CNPC_VHumanCombatant::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x10386c80` | CNPC_VHumanCombatant::FUN_10386c80 | 3 | - | — | — | slot 546 SquadSlotName feeds only the debug text overlay Slot line and every species id space is empty |
-| `0x10387500` | CNPC_VGhoulCroucher::FUN_10387500 | 27 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x10387730` | CNPC_VHumanCombatPatrol::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x10387850` | CNPC_VHumanCombatPatrol::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103878b0` | CNPC_VHumanCombatPatrol::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName feeds only the debug text overlay Slot line and every species id space is empty |
-| `0x10388080` | CNPC_VHunter::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103881a0` | CNPC_VHunter::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x10388200` | CNPC_VHunter::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName is a name lookup; every species squad-slot id space ships empty, so it answers <<null>> for every id |
-| `0x10388a20` | CNPC_VHunter::SelectSchedule | 28 | - | — | — | own effect is only the +0x1b2c selector trace stamp 0x17; the forward to 0x103872d0 is what inheriting the parent slot 438 gives |
-| `0x10388ab0` | CNPC_VHunter::vfunc461 | 25 | - | — | — | own effect is only the +0x1b38 ideal-state trace stamp 0x17; the forward to 0x10387380 is the inherited parent slot 461 |
-| `0x10388ad0` | CNPC_VHunter::vfunc432 | 28 | - | — | — | bare forward down the parent chain to CAI_BaseNPCTroika::RunAI; reads and writes nothing, same as inheriting slot 432 |
-| `0x10388b30` | CNPC_VHunter::NPCInit | 24 | - | — | — | second Hide of the active weapon is idempotent on m_fEffects 0x40 (extra ForceTransmit only); inheriting 0x10387140 leaves the same state |
-| `0x10388e00` | CNPC_VLasombra::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x10388f20` | CNPC_VLasombra::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x10388f80` | CNPC_VLasombra::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName is a name lookup; every species squad-slot id space ships empty, so it answers <<null>> for every id |
-| `0x10389560` | CNPC_VMalkavian::vfunc580 | 0 | - | — | — | class CNPC_VMalkavian has no instance - npc_VMalkavian is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10389580` | CNPC_VMalkavian::GetSchedulingErrorName | 0 | - | — | — | class CNPC_VMalkavian has no instance - npc_VMalkavian is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103895a0` | CNPC_VMalkavian::vfunc5 | 17 | - | — | — | class CNPC_VMalkavian has no instance - npc_VMalkavian is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103896a0` | CNPC_VMalkavian::LoadedSchedules | 0 | - | — | — | class CNPC_VMalkavian has no instance - npc_VMalkavian is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10389700` | CNPC_VMalkavian::vfunc546 | 3 | - | — | — | class CNPC_VMalkavian has no instance - npc_VMalkavian is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10389bf0` | CNPC_VMalkavian::Classify | 0 | - | — | — | class CNPC_VMalkavian has no instance - npc_VMalkavian is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x10389dd0` | CNPC_VManBat::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x10389ef0` | CNPC_VManBat::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x10389f50` | CNPC_VManBat::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName is a name lookup; every species squad-slot id space ships empty, so it answers <<null>> for every id |
-| `0x10390ff0` | CNPC_VBaseBoss::RemoveBaseFightingItems | 0 | registry:305 | — | — | empty override with no caller; slot 304 is empty for bosses too, so MiscFlag 0x10 fists never exist for the Troika remove to undo |
-| `0x10391090` | CNPC_VMingXiao::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x10391330` | CNPC_VMingXiao::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x10391390` | CNPC_VMingXiao::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName is a name lookup; every species squad-slot id space ships empty, so it answers <<null>> for every id |
-| `0x103929d0` | CNPC_VMingXiao::vfunc473 | 0 | registry:473 | — | — | constant 0x81f equal to the Troika base GetSoundInterests 0x102b4070 it overrides; no caller in the closure |
-| `0x10394970` | CNPC_VMingXiao::vfunc432 | 26 | - | — | — | bare tail call to CAI_BaseNPCTroika::RunAI; reads and writes nothing, same as inheriting slot 432 |
-| `0x103951d0` | CNPC_VMingXiao::GetShortConditionName | 2 | - | — | — | slot 408 GetShortConditionName, debug strings for COND 0x77-0x7e used only by debug prints |
-| `0x10395270` | CNPC_VMingXiao::GetLastSharedCondition | 0 | registry:409 | — | — | slot 409 only bounds the CONDS: debug print walk under the schedule-debug ConVar |
-| `0x10395290` | CNPC_VMingXiao::PrescheduleThink | 0 | registry:434 | — | — | bare return identical to the empty base PrescheduleThink 0x101a6560 it would inherit |
-| `0x10395b80` | CNPC_VMingXiao::HandleInteraction | 0 | registry:366 | — | — | constant 0 HandleInteraction with no caller at all |
-| `0x10399c70` | CNPC_VMingXiao::PushPhysicsObjects | 0 | - | ElysiumNpcThinkSpecies.cpp:264 | — | body is only scope-trace and VProf push/pop around zero game logic |
-| `0x10399d40` | CNPC_VMingXiao::DrawDebugGeometryOverlays | 16 | - | — | — | slot 123 DrawDebugGeometryOverlays, four debug range rings with no output device |
-| `0x1039b0b0` | CNPC_VMingXiaoTentacle::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x1039b1d0` | CNPC_VMingXiaoTentacle::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x1039b230` | CNPC_VMingXiaoTentacle::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName is a name lookup; every species squad-slot id space ships empty, so it answers <<null>> for every id |
-| `0x1039c440` | CNPC_VMingXiaoTentacle::vfunc473 | 0 | registry:473 | — | — | constant 0x81f equal to the Troika base GetSoundInterests 0x102b4070 it overrides; no caller in the closure |
-| `0x1039e7e0` | CNPC_VMingXiaoTentacle::PrescheduleThink | 0 | registry:434 | — | — | bare return identical to the empty base PrescheduleThink 0x101a6560 it would inherit |
-| `0x1039e860` | CNPC_VMingXiaoTentacle::vfunc23 | 1 | - | — | — | slot 23 override; slot 23 has no dispatch site in the decompiled corpus, so the forward to the owning Ming Xiao never runs |
-| `0x1039e8e0` | CNPC_VMingXiaoTentacle::HandleInteraction | 0 | registry:366 | — | — | constant return 0 with no caller in the pack (0d/0v/0c, no outside); the tentacle takes no interaction and nothing dispatches one at it |
-| `0x1039ece0` | CNPC_VMingXiaoTentacle::GetShortConditionName | 2 | - | — | — | GetShortConditionName override, slot 408; condition-name strings 0x77-0x79 read only by debug prints |
-| `0x1039ed30` | CNPC_VMingXiaoTentacle::GetLastSharedCondition | 0 | registry:409 | — | — | slot 409 GetLastSharedCondition constant 0x7a; its only reader is the CONDS: block of the debug string builder 0x1028d990 |
-| `0x1039f600` | CNPC_VMoleman::vfunc580 | 0 | - | — | — | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1039f620` | CNPC_VMoleman::GetSchedulingErrorName | 0 | - | — | — | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1039f640` | CNPC_VMoleman::vfunc5 | 17 | - | — | — | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1039f740` | CNPC_VMoleman::LoadedSchedules | 0 | - | — | — | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1039f7a0` | CNPC_VMoleman::vfunc546 | 3 | - | — | — | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1039fc90` | CNPC_VMoleman::Spawn | 26 | - | — | — | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1039fcc0` | CNPC_VMoleman::Classify | 0 | - | — | — | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1039fd20` | CNPC_VMoleman::SelectSchedule | 27 | - | — | — | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1039fe10` | CNPC_VMoleman::vfunc461 | 24 | - | — | — | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x1039fe30` | CNPC_VMoleman::vfunc432 | 27 | - | — | — | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103a00f0` | CNPC_VNewscaster::vfunc496 | 0 | registry:496 | — | — | empty override of slot 496 TargetAcquiredSound, a slot with zero dispatch sites in the whole module |
-| `0x103a0110` | CNPC_VNewscaster::vfunc497 | 0 | registry:497 | — | — | empty override of slot 497, a slot with zero dispatch sites in the whole module |
-| `0x103a0150` | CNPC_VNewscaster::vfunc362 | 0 | registry:362 | — | — | constant return 0 with no caller (0d/0v/0c); slot 362 is asked of an enemy and nothing takes the untargetable, D_NU newscaster as one |
-| `0x103a0170` | CNPC_VNewscaster::vfunc365 | 0 | registry:365 | — | — | constant return 0 with no caller (0d/0v/0c); slot 365 aim-cone wrapper on an NPC that holds no weapon and never attacks |
-| `0x103a0210` | CNPC_VNewscaster::vfunc377 | 0 | registry:377 | — | — | constant return 0 with no caller (0d/0v/0c); slot 377 is the attacker-side grapple permit and the newscaster never attacks |
-| `0x103a0ff0` | FUN_103a0ff0 | 5 | - | — | — | debug overlay text: not playing VCD / Main Stories / Side Stories listing, no output device |
-| `0x103a1250` | CNPC_VNewscaster::DrawDebugTextOverlays | 16 | - | — | — | DrawDebugTextOverlays override, slot 124; base overlay plus the story-queue listing under m_debugOverlays bit 0 |
-| `0x103a14a0` | CNPC_VNosferatu::vfunc580 | 0 | - | — | — | class CNPC_VNosferatu has no instance - npc_VNosferatu is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103a14c0` | CNPC_VNosferatu::GetSchedulingErrorName | 0 | - | — | — | class CNPC_VNosferatu has no instance - npc_VNosferatu is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103a14e0` | CNPC_VNosferatu::vfunc5 | 17 | - | — | — | class CNPC_VNosferatu has no instance - npc_VNosferatu is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103a15e0` | CNPC_VNosferatu::LoadedSchedules | 0 | - | — | — | class CNPC_VNosferatu has no instance - npc_VNosferatu is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103a1640` | CNPC_VNosferatu::vfunc546 | 3 | - | — | — | class CNPC_VNosferatu has no instance - npc_VNosferatu is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103a1b30` | CNPC_VNosferatu::Classify | 0 | - | — | — | class CNPC_VNosferatu has no instance - npc_VNosferatu is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103a1e20` | CNPC_VPedestrian::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103a1f40` | CNPC_VPedestrian::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103a1fa0` | CNPC_VPedestrian::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName feeds only the debug text overlay line Slot: %s; the species id space is empty so it answers <<null>> |
-| `0x103a3bf0` | CNPC_VPlaceholder::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103a3c50` | CNPC_VPlaceholder::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName feeds only the debug text overlay line Slot: %s; the species id space is empty so it answers <<null>> |
-| `0x103a4160` | CNPC_VPlaceholder::vfunc317 | 0 | registry:317 | — | — | constant return 0 with no caller (0d/0v/0c); slot 317 reads COND 0x0c that the empty slot 316 override never sets |
-| `0x103a4180` | CNPC_VPlaceholder::PlayerDefenderBlockReaction | 0 | registry:318 | — | — | constant return 0 with no caller (0d/0v/0c, no outside); the placeholder never blocks, so no defender block reaction is ever asked of it |
-| `0x103a41a0` | CNPC_VPlaceholder::PlayerAttackerBlockedReaction | 0 | registry:319 | — | — | constant return 0 with no caller (0d/0v/0c, no outside); the placeholder never attacks, so an attacker-blocked reaction cannot reach it |
-| `0x103a4280` | CNPC_VPlaceholder::vfunc362 | 0 | registry:362 | — | — | constant return 0 with no caller (0d/0v/0c); the entity form of the view-cone test on an NPC whose think is removed |
-| `0x103a42a0` | CNPC_VPlaceholder::vfunc365 | 0 | registry:365 | — | — | constant return 0 with no caller (0d/0v/0c); slot 365 aim-cone wrapper on an NPC that never thinks or attacks |
-| `0x103a4300` | CNPC_VPlaceholder::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103a4830` | CNPC_VFrenzyShadow::FUN_103a4830 | 0 | registry:496 | — | — | empty override of slot 496 TargetAcquiredSound, a slot with zero dispatch sites in the whole module |
-| `0x103a4850` | CNPC_VFrenzyShadow::FUN_103a4850 | 0 | registry:497 | — | — | empty override of slot 497, a slot with zero dispatch sites in the whole module |
-| `0x103a4870` | CNPC_VFrenzyShadow::FUN_103a4870 | 27 | - | ElysiumNpcPlayerController.h:16 | — | bare tail call to the inherited slot 432 body 0x10385a10 (itself a forward to the Troika RunAI); no arm, no read, no write, absence is plain inheritance |
-| `0x103a50c0` | CNPC_VSabbatGunman::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103a51e0` | CNPC_VSabbatGunman::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103a5240` | CNPC_VSabbatGunman::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName feeds only the debug text overlay line Slot: %s; the species id space is empty so it answers <<null>> |
-| `0x103a5cc0` | CNPC_VSabbatLeader::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103a5df0` | CNPC_VSabbatLeader::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103a5e50` | CNPC_VSabbatLeader::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName feeds only the debug text overlay line Slot: %s; the species id space is empty so it answers <<null>> |
-| `0x103a7650` | CNPC_VSabbatLeader::PrescheduleThink | 1 | - | — | — | scope-trace frame around a call to 0x10385a30, the inherited slot 434 body that is a bare return; no effect at all |
-| `0x103a76d0` | CNPC_VSabbatLeader::HandleInteraction | 1 | - | — | — | scope-trace frame around a bare forward to the inherited slot 366 body 0x10385a70 (return 0); absence is plain inheritance |
-| `0x103a7760` | CNPC_VSabbatLeader::Event_Killed | 22 | - | — | — | scope-trace frame around a bare forward to the inherited CAI_BaseNPCTroika::Event_Killed (no intermediate override of slot 144); no species datum, absence is plain inheritance |
-| `0x103a9fd0` | CNPC_VSabbatLeader::SetSchedule | 8 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x103abbc0` | CNPC_VScurrying::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103abce0` | CNPC_VScurrying::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103abd40` | CNPC_VScurrying::FUN_103abd40 | 3 | - | — | — | slot 546 SquadSlotName name lookup for debug prints; the species squad-slot id space is empty so it answers <<null>> for every id |
-| `0x103adc50` | CNPC_VSheriffMan::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103adcb0` | CNPC_VSheriffMan::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName name lookup for debug prints; the species squad-slot id space is empty so it answers <<null>> for every id |
-| `0x103ae4d0` | CNPC_VSheriffMan::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103af8d0` | CNPC_VSheriffMan::SetSchedule | 8 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x103b0560` | CNPC_VSheriffMan::KillTeleportBats | 4 | - | — | — | m_hTeleportSwarm +0x66d0 has one live writer, SpawnTeleportBats 0x103b03b0, which has no caller; the handle never resolves, so this only rewrites 0xffffffff |
-| `0x103b1c20` | CNPC_VSheriffSwarm::vfunc580 | 0 | - | — | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b1c40` | CNPC_VSheriffSwarm::GetSchedulingErrorName | 0 | - | — | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b1c60` | CNPC_VSheriffSwarm::vfunc5 | 17 | - | — | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b1d60` | CNPC_VSheriffSwarm::LoadedSchedules | 0 | - | — | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b1dc0` | CNPC_VSheriffSwarm::vfunc546 | 3 | - | — | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b2280` | CNPC_VSheriffSwarm::vfunc82 | 0 | - | — | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b2330` | CNPC_VSheriffSwarm::Spawn | 27 | - | — | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b2360` | CNPC_VSheriffSwarm::NPCInit | 23 | - | — | ElysiumNpcKernelLifecycle2Tests.cpp:673, ElysiumNpcKernelLifecycle2Tests.cpp:1008, ElysiumNpcKernelLifecycle2Tests.cpp:1017 | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b2390` | CNPC_VSheriffSwarm::vfunc473 | 0 | - | — | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b23b0` | CNPC_VSheriffSwarm::Classify | 0 | - | — | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b2410` | CNPC_VSheriffSwarm::SelectSchedule | 27 | - | — | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b2450` | CNPC_VSheriffSwarm::vfunc461 | 24 | - | — | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b2470` | CNPC_VSheriffSwarm::vfunc432 | 27 | - | — | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b2530` | CNPC_VSheriffSwarm::GatherAttackConditions | 5 | - | — | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b2590` | CNPC_VSheriffSwarm::vfunc553 | 1 | - | ElysiumNpcBaseConditions.cpp:122 | ElysiumNpcKernelConditionsTests.cpp:196 | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b25c0` | CNPC_VSheriffSwarm::vfunc554 | 1 | - | — | ElysiumNpcKernelConditionsTests.cpp:196 | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b26f0` | FUN_103b26f0 | 6 | - | ElysiumNpcBach.cpp:494, ElysiumNpcBach.h:58, ElysiumNpcTroikaHelpers.cpp:869 | — | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b2770` | CNPC_VStalker::vfunc82 | 0 | - | — | — | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b28b0` | CNPC_VStalker::vfunc580 | 0 | - | — | — | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b28d0` | CNPC_VStalker::GetSchedulingErrorName | 0 | - | — | — | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b28f0` | CNPC_VStalker::vfunc5 | 17 | - | — | — | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b29f0` | CNPC_VStalker::LoadedSchedules | 0 | - | — | — | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b2a50` | CNPC_VStalker::vfunc546 | 3 | - | — | — | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b2e60` | CNPC_VStalker::NPC_EarlyTranslateActivity | 0 | - | — | — | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b2f90` | CNPC_VTaxiDriver::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103b3110` | CNPC_VTaxiDriver::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103b3170` | CNPC_VTaxiDriver::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName name lookup for debug prints; the species squad-slot id space is empty so it answers <<null>> for every id |
-| `0x103b3650` | CNPC_VTaxiDriver::vfunc432 | 27 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x103b3670` | CNPC_VTaxiDriver::SelectSchedule | 27 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x103b3b20` | CNPC_VTest::vfunc580 | 0 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b3b40` | CNPC_VTest::GetSchedulingErrorName | 0 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b3b60` | CNPC_VTest::vfunc5 | 17 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b3c60` | CNPC_VTest::LoadedSchedules | 0 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b3cc0` | CNPC_VTest::vfunc546 | 3 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b41e0` | CNPC_VTest::Precache | 15 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b42f0` | CNPC_VTest::Spawn | 27 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b4320` | CNPC_VTest::vfunc488 | 4 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b4490` | CNPC_VTest::vfunc489 | 4 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b4600` | CNPC_VTest::vfunc490 | 4 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b4780` | CNPC_VTest::vfunc491 | 4 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b48f0` | CNPC_VTest::vfunc492 | 4 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b4a60` | CNPC_VTest::vfunc493 | 4 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b4bd0` | CNPC_VTest::vfunc494 | 4 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b4d40` | CNPC_VTest::vfunc495 | 4 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b4eb0` | CNPC_VTest::vfunc473 | 0 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b4ed0` | CNPC_VTest::Classify | 0 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b4f30` | CNPC_VTest::SelectSchedule | 27 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b4ff0` | CNPC_VTest::vfunc461 | 24 | - | ElysiumNpcConditions.h:429 | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b51a0` | CNPC_VTest::vfunc432 | 27 | - | — | — | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b5330` | CNPC_VToreador::vfunc580 | 0 | - | — | — | class CNPC_VToreador has no instance - npc_VToreador is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b5350` | CNPC_VToreador::GetSchedulingErrorName | 0 | - | — | — | class CNPC_VToreador has no instance - npc_VToreador is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b5370` | CNPC_VToreador::vfunc5 | 17 | - | — | — | class CNPC_VToreador has no instance - npc_VToreador is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b5470` | CNPC_VToreador::LoadedSchedules | 0 | - | — | — | class CNPC_VToreador has no instance - npc_VToreador is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b54d0` | CNPC_VToreador::vfunc546 | 3 | - | — | — | class CNPC_VToreador has no instance - npc_VToreador is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b59c0` | CNPC_VToreador::Classify | 0 | - | — | — | class CNPC_VToreador has no instance - npc_VToreador is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b5ad0` | CNPC_VTremere::vfunc580 | 0 | - | — | — | class CNPC_VTremere has no instance - npc_VTremere is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b5af0` | CNPC_VTremere::GetSchedulingErrorName | 0 | - | — | — | class CNPC_VTremere has no instance - npc_VTremere is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b5b10` | CNPC_VTremere::vfunc5 | 17 | - | — | — | class CNPC_VTremere has no instance - npc_VTremere is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b5c10` | CNPC_VTremere::LoadedSchedules | 0 | - | — | — | class CNPC_VTremere has no instance - npc_VTremere is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b5c70` | CNPC_VTremere::vfunc546 | 3 | - | — | — | class CNPC_VTremere has no instance - npc_VTremere is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b6160` | CNPC_VTremere::Classify | 0 | - | — | — | class CNPC_VTremere has no instance - npc_VTremere is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103b6e70` | CNPC_VTzimisce::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103b7090` | CNPC_VTzimisce::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103b70f0` | CNPC_VTzimisce::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName name lookup; its only call site is the debug text overlay Slot: line |
-| `0x103b9270` | CNPC_VTzimisce::vfunc422 | 22 | - | — | — | override adds only a second identical ThinkSet(same fn, 0.0) after the Troika StartNPC; writes nothing the base did not |
-| `0x103b9660` | CNPC_VTzimisce::vfunc496 | 0 | registry:496 | — | — | empty override of slot 496, a slot with zero dispatch sites in the module |
-| `0x103b9680` | CNPC_VTzimisce::vfunc497 | 0 | registry:497 | — | — | empty override of slot 497, a slot with zero dispatch sites in the module |
-| `0x103bdd10` | CNPC_VTzimisce::GetEventName | 1 | - | — | — | slot 241 GetEventName, anim-event id to START_* name strings for debug prints; no dispatch site in the closure and the port keeps it in the Debug unit |
-| `0x103bdf60` | CNPC_VTzimisce::PrescheduleThink | 0 | registry:434 | — | — | empty override of slot 434 PrescheduleThink over an equally empty base 0x101a6560; no per-tick work either way |
-| `0x103c08d0` | CNPC_VTzimisce::DrawDebugTextOverlays | 16 | - | — | — | slot 124 DrawDebugTextOverlays, Body: distance overlay text and its cross-NPC debug latch globals |
-| `0x103c0c30` | CNPC_VTzimisceHeadClaw::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103c0c90` | CNPC_VTzimisceHeadClaw::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName name lookup; only call site is the debug text overlay |
-| `0x103c1320` | CNPC_VTzimisceHeadClaw::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103c2a00` | CNPC_VTzimisceRunner::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103c2a60` | CNPC_VTzimisceRunner::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName name lookup; only call site is the debug text overlay |
-| `0x103c3100` | CNPC_VTzimisceRunner::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103c4a20` | CNPC_VVampire::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103c4a80` | CNPC_VVampire::FUN_103c4a80 | 3 | - | — | — | slot 546 SquadSlotName name lookup; only call site is the debug text overlay |
-| `0x103c5210` | CNPC_VVampireBoss::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103c5270` | CNPC_VVampireBoss::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName name lookup; only call site is the debug text overlay |
-| `0x103c77b0` | CNPC_VVentrue::vfunc580 | 0 | - | — | — | class CNPC_VVentrue has no instance - npc_VVentrue is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103c77d0` | CNPC_VVentrue::GetSchedulingErrorName | 0 | - | — | — | class CNPC_VVentrue has no instance - npc_VVentrue is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103c77f0` | CNPC_VVentrue::vfunc5 | 17 | - | — | — | class CNPC_VVentrue has no instance - npc_VVentrue is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103c78f0` | CNPC_VVentrue::LoadedSchedules | 0 | - | — | — | class CNPC_VVentrue has no instance - npc_VVentrue is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103c7950` | CNPC_VVentrue::vfunc546 | 3 | - | — | — | class CNPC_VVentrue has no instance - npc_VVentrue is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103c7e40` | CNPC_VVentrue::Classify | 0 | - | — | — | class CNPC_VVentrue has no instance - npc_VVentrue is in no map, script or template of the install and vampire.dll names it only at its factory |
-| `0x103c8e70` | CNPC_VWerewolf::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103c8ed0` | CNPC_VWerewolf::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName is read only by the debug text overlay line Slot: %s (shape.md:4283); a name lookup for a debug print |
-| `0x103ca770` | CNPC_VWerewolf::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103cb170` | CNPC_VWerewolf::PostNPCInit | 0 | registry:421 | — | — | no-op beyond the scope trace; slot 421 base 0x101a6540 is empty too, so neither body does anything |
-| `0x103d0640` | CNPC_VWerewolf::GetShortConditionName | 2 | - | — | — | GetShortConditionName, condition-name lookup for debug prints only |
-| `0x103d0780` | CNPC_VWerewolf::GetLastSharedCondition | 0 | registry:409 | — | — | slot 409 GetLastSharedCondition is dispatched only by the AI trace line 0x1028d990, a debug dump |
-| `0x103d1ca0` | CNPC_VWerewolf::StartSearchTimer | 0 | - | — | — | rdtsc search-profiler stamp into a static pair; developer timing only |
-| `0x103d1d60` | CNPC_VWerewolf::ReportSearchTimer | 0 | - | — | — | rdtsc search-profiler report; passes its bool argument through unchanged, so callers keep their own answer |
-| `0x103d4820` | CNPC_VWerewolf::DrawDebugHullAtPoint | 4 | - | — | — | DrawDebug hull box and line, debug overlay only |
-| `0x103d5050` | CNPC_VWerewolf::DrawBBoxOverlay | 4 | - | — | — | DrawBBoxOverlay debug colour override |
-| `0x103d5130` | CNPC_VWerewolf::DrawDebugStatOverlays | 13 | - | — | — | slot 76 DrawDebugStatOverlays body |
-| `0x103d5590` | CNPC_VWerewolf::DrawDebugHintInfo | 12 | - | — | — | DrawDebugHintInfo, pure debug overlay with no member written and no output device |
-| `0x103dc770` | CNPC_VWolfMorph::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103dc8f0` | CNPC_VWolfMorph::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103dc950` | CNPC_VWolfMorph::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName, read only by the debug text overlay line Slot: %s |
-| `0x103dd070` | CNPC_VYukie::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103dd190` | CNPC_VYukie::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103dd1f0` | CNPC_VYukie::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName, read only by the debug text overlay line Slot: %s |
-| `0x103dd780` | CNPC_VYukie::vfunc461 | 25 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x103dd7a0` | CNPC_VYukie::vfunc432 | 28 | - | — | — | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
-| `0x103de2d0` | CNPC_VZombie::GetSchedulingErrorName | 0 | registry:451 | — | — | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
-| `0x103de470` | CNPC_VZombie::LoadedSchedules | 0 | registry:452 | — | — | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
-| `0x103de4d0` | CNPC_VZombie::vfunc546 | 3 | - | — | — | slot 546 SquadSlotName, read only by the debug text overlay line Slot: %s |
-| `0x103e0e80` | CNPC_VZombie::DrawDebugTextOverlays | 16 | - | — | — | slot 124 DrawDebugTextOverlays, Cond: %s debug lines |
+| Address | Function | Layer | Port target | Why |
+|---|---|---|---|---|
+| `0x10026570` | CAISound::FUN_10026570 | 0 | default:void | empty base of slot 23, which has no dispatch site in the decompiled corpus - the byte-identical twin of the live slot 22 (conditions-and-states.md) |
+| `0x10026670` | CAISound::FUN_10026670 | 0 | default:0 | constant 0, slot 32 has one body in the family and the row has no caller |
+| `0x10026690` | CAISound::FUN_10026690 | 0 | default:0xffffffff | constant -1, slot 33 has one body in the family and the row has no caller |
+| `0x100266f0` | CAISound::FUN_100266f0 | 0 | default:0 | constant 0, slot 36 has one body in the family and the row has no caller |
+| `0x10026730` | CAISound::FUN_10026730 | 0 | - | returns this, slot 38 has one body in the family and the row has no caller; no observable |
+| `0x10026750` | CAISound::FUN_10026750 | 0 | default:void | empty body, slot 40 has one body in the family and no override |
+| `0x10026770` | CAISound::FUN_10026770 | 0 | default:void | empty body, slot 41 has one body in the family and no override |
+| `0x10026790` | CAISound::FUN_10026790 | 0 | default:void | empty body, slot 43 has one body in the family and no override |
+| `0x100267b0` | CAISound::FUN_100267b0 | 0 | default:1 | constant 1, slot 44 has one body in the family and the row has no caller |
+| `0x100267d0` | CAISound::FUN_100267d0 | 0 | default:void | empty body, slot 46 camera-target notice has one body in the family; only CCameraTrack fills it |
+| `0x100267f0` | CAISound::FUN_100267f0 | 0 | default:void | empty body, slot 47 camera-view notice has one body in the family; only CCameraTrack fills it |
+| `0x10026930` | CAISound::FUN_10026930 | 0 | default:void | empty body and Troika 0x102b5100 is empty too; the oracle finds no observable effect of slot 55 |
+| `0x10026970` | CAISound::FUN_10026970 | 0 | default:void | empty body and Troika 0x102b51a0 is empty too; the oracle finds no observable effect of slot 57 |
+| `0x10026990` | CAISound::FUN_10026990 | 0 | default:void | empty body and Troika 0x102b51c0 is empty too; the oracle finds no observable effect of slot 58 |
+| `0x10026ad0` | CAISound::FUN_10026ad0 | 0 | registry:72 | constant 0 on the helper-entity line only (slot 72), no caller |
+| `0x10026bd0` | CAISound::FUN_10026bd0 | 0 | default:void | empty body, slot 112 has one body in the family; its only caller is the StudioFrameAdvance mechanism |
+| `0x10026bf0` | CAISound::FUN_10026bf0 | 0 | default:void | empty body, slot 115 has one body in the family and no override |
+| `0x10026c10` | CAISound::FUN_10026c10 | 0 | default:0xffffffff | constant -1 RequiredEdictIndex, slot 131 has one body and no caller; edict bookkeeping |
+| `0x10026c30` | CAISound::FUN_10026c30 | 0 | default:void | empty body, slot 132 has one body in the family and no override |
+| `0x10026d10` | CAISound::FUN_10026d10 | 0 | registry:135 | identity float pass-through on the helper-entity line only (slot 135), no named observable; the NPC line fills 0x101c10d0 |
+| `0x10026d30` | CAISound::FUN_10026d30 | 0 | registry:136 | constant 0 on the helper-entity line only (slot 136), no caller |
+| `0x10026d50` | CAISound::FUN_10026d50 | 0 | registry:137 | constant 0 on the helper-entity line only (slot 137), no caller |
+| `0x10026db0` | CAISound::FUN_10026db0 | 0 | default:1 | constant 1 IsTriggered, slot 147 has one body in the family and the row has no caller |
+| `0x10026dd0` | CAISound::FUN_10026dd0 | 0 | default:void | empty body AddPoints, slot 148 has one body in the family; multiplayer scoring |
+| `0x10026df0` | CAISound::FUN_10026df0 | 0 | default:void | empty body AddPointsToTeam, slot 149 has one body in the family; multiplayer scoring |
+| `0x10026e10` | CAISound::FUN_10026e10 | 0 | default:0 | constant 0 AddPlayerItem, slot 150 has one body in the family and the row has no caller |
+| `0x10026e30` | CAISound::FUN_10026e30 | 0 | default:0 | constant 0 RemovePlayerItem, slot 151 has one body in the family and the row has no caller |
+| `0x10026e50` | CAISound::FUN_10026e50 | 0 | registry:152 | constant 0.0 on the helper-entity line only (slot 152), no caller |
+| `0x10026e70` | CAISound::FUN_10026e70 | 0 | - | helper-entity IsMoving fill of slot 153; its one reader is PickLookTarget 0x1025f1c0 on CAI_BaseHumanoid, a line with no instance |
+| `0x10026ee0` | CAISound::FUN_10026ee0 | 0 | default:void | empty body, slot 156 has one body in the family and no override |
+| `0x10026f00` | CAISound::FUN_10026f00 | 0 | default:0 | constant 0 OnControls, slot 157 has one body in the family and the row has no caller |
+| `0x10026f20` | CAISound::FUN_10026f20 | 1 | - | slot 159 ReflectGauss has no dispatch site in the module and one body; nothing asks it |
+| `0x10026f60` | CAISound::FUN_10026f60 | 0 | default:0 | constant 0 IsPlayer, slot 162 has one body in the family and the row has no caller |
+| `0x10027040` | CAISound::FUN_10027040 | 0 | default:void | empty body ViewPunch, slot 169 has one body in the family; an NPC has no view to punch |
+| `0x10027060` | CAISound::FUN_10027060 | 0 | default:void | empty body VelocityPunch, slot 170 has one body in the family and no override |
+| `0x100270a0` | CAISound::FUN_100270a0 | 0 | default:void | empty body EndBlocked, slot 179 has one body in the family and no override |
+| `0x100270e0` | CAISound::FUN_100270e0 | 0 | default:0 | constant 0 Respawn, slot 187 has one body in the family and the row has no caller |
+| `0x10027100` | CAISound::FUN_10027100 | 0 | default:0 | constant 0 IsLockedByMaster, slot 188 has one body in the family and the row has no caller |
+| `0x10027120` | CAISound::FUN_10027120 | 0 | default:0.0 | constant 0.0 GetDamage, slot 190 has one body in the family and the row has no caller |
+| `0x10027140` | CAISound::FUN_10027140 | 0 | default:void | empty body SetDamage, slot 191 has one body in the family and no override |
+| `0x10027330` | CAISound::FUN_10027330 | 0 | default:0 | constant 0, slot 205 has one body in the family and the row has no caller |
+| `0x10027350` | CAISound::FUN_10027350 | 0 | default:0 | constant 0, slot 206 has one body in the family and the row has no caller |
+| `0x100273b0` | CAISound::FUN_100273b0 | 0 | default:0 | constant 0 ForceVPhysicsCollide, slot 224 has one body and no caller; VPhysics |
+| `0x100273f0` | CAISound::FUN_100273f0 | 0 | default:void | empty body OnPhysGunPickup, slot 235 has one body; no physgun ships |
+| `0x10027410` | CAISound::FUN_10027410 | 0 | default:void | empty body OnPhysGunDrop, slot 236 has one body; no physgun ships |
+| `0x10027430` | CAISound::FUN_10027430 | 0 | registry:240 | returns an unresolved global on the helper-entity line only (slot 240), no caller |
+| `0x1004fbb0` | CAI_BaseNPC::FUN_1004fbb0 | 11 | - | slot 108 KeyValue(key, Vector) has no dispatch site in the module; authored keys arrive as strings through slot 110 |
+| `0x1004fbf0` | CAI_BaseNPC::FUN_1004fbf0 | 11 | - | slot 109 KeyValue(key, float) has no dispatch site in the module; authored keys arrive as strings through slot 110 |
+| `0x1004fc10` | CAI_BaseNPC::FUN_1004fc10 | 0 | - | slot 152 GetDelay field read has no dispatch site in the module and one body in the family |
+| `0x1009a660` | CAISound::FUN_1009a660 | 0 | registry:80 | returns a static table pointer on the helper-entity line only (slot 80), no caller |
+| `0x1009a680` | CAISound::FUN_1009a680 | 0 | registry:81 | constant 0 on the helper-entity line only (slot 81), no caller |
+| `0x1009af00` | CAISound::FUN_1009af00 | 0 | - | DebugGetClassName slot 14, a name lookup for debug prints |
+| `0x1009b2c0` | CAISound::FUN_1009b2c0 | 1 | - | TraceMessage slot 18, scope-trace push around TraceMessageBase; developer diagnostic |
+| `0x1009b380` | CAISound::FUN_1009b380 | 1 | - | TraceMessage slot 17, scope-trace push around TraceMessageBase; developer diagnostic |
+| `0x1009b500` | CAISound::FUN_1009b500 | 1 | - | TraceMessageBare slot 20, scope-trace push around TraceMessageBareBase; developer diagnostic |
+| `0x1009b5a0` | CAISound::FUN_1009b5a0 | 1 | - | TraceMessageBare slot 19, scope-trace push around TraceMessageBareBase; developer diagnostic |
+| `0x1009ebb0` | CAISound::FUN_1009ebb0 | 10 | - | only caller is the undispatched slot 109 forward 0x1004fbf0; a float-to-string format helper with a scope-trace frame |
+| `0x1009eca0` | CAISound::FUN_1009eca0 | 10 | - | only caller is the undispatched slot 108 forward 0x1004fbb0; a vector-to-string format helper with a scope-trace frame |
+| `0x100ab430` | CAISound::FUN_100ab430 | 0 | default:void | empty body ComputeWorldSpaceSurroundingBox, slot 101 has one body in the family |
+| `0x100ad8f0` | CAISound::FUN_100ad8f0 | 0 | default:void | empty body, slot 182 has one body in the family and no override |
+| `0x100ad910` | CAISound::FUN_100ad910 | 0 | default:void | empty body NotifySystemEvent, slot 183 has one body in the family and no override |
+| `0x100b5080` | CAISound::FUN_100b5080 | 0 | registry:223 | constant 0 on the helper-entity line only (slot 223), no caller |
+| `0x1014f7b0` | CAI_BaseNPC::FUN_1014f7b0 | 0 | default:0 | constant 0, slot 321 has one body in the family; its one stated reader is a weapon body outside the kernel and no observable is named |
+| `0x1014f8b0` | CAI_BaseNPC::FUN_1014f8b0 | 0 | - | slot 240 has one body in the family, no caller, and only returns the CPython interop global DAT_1072b360 |
+| `0x1014f950` | CAI_BaseNPC::FUN_1014f950 | 0 | default:0 | slot 361 returns 0, one body in the family, no caller |
+| `0x101a6440` | CAI_BaseNPC::GetLastUpdateThink | 1 | - | no dispatch reaches slot 412 on an NPC (the only candidates are the CBasePlayer vtable in 0x10181780); forwards to CBaseEntity::GetLastThink |
+| `0x101a6460` | CAI_BaseNPC::GetLastNormalThink | 1 | - | no dispatch reaches slot 413 on an NPC (the one candidate is CBasePlayer 0x10181780 on itself); forwards to CBaseEntity::GetLastThink |
+| `0x101a6480` | CAI_BaseNPC::GetLastMoveThink | 1 | - | slot 414 think-timestamp getter with no caller; forwards to CBaseEntity::GetLastThink, the clock itself lives in the think seam |
+| `0x101a64a0` | CAI_BaseNPC::FUN_101a64a0 | 1 | - | slot 415 think-timestamp getter with no caller; forwards to CBaseEntity::GetLastThink, the clock itself lives in the think seam |
+| `0x101a64e0` | CAI_BaseNPC::GetForceFrequentThink | 0 | default:0 | slot 417 base answers 0 and nothing asks it - the think-rate rule reads m_bForceFrequentThink +0x63f0 directly, and the Troika getter 0x101aa770 has no caller |
+| `0x101a6520` | CAI_BaseNPC::ShouldSavePhysics | 0 | default:0 | slot 128 ShouldSavePhysics returns 0, one body in the family, no caller; save plumbing besides |
+| `0x101a6540` | CAI_BaseNPC::PostNPCInit | 0 | default:void | empty base of slot 421 PostNPCInit, and its one override, the werewolf 0x103cb170, is a no-op too; neither body does anything |
+| `0x101a6580` | CAI_BaseNPC::FUN_101a6580 | 0 | default:void | empty body, slot 436 has one body in the family and no override |
+| `0x101a65a0` | CAI_BaseNPC::FUN_101a65a0 | 25 | - | slot 441 wrong-StartTask trap: DevMsg plus a forward to slot 442; no dispatch reaches slot 441 on an NPC, the runner enters 442 directly |
+| `0x101a65e0` | CAI_BaseNPC::FUN_101a65e0 | 23 | - | slot 443 wrong-RunTask trap: DevMsg plus a forward to slot 444; no dispatch reaches slot 443 on an NPC (candidates are player/weapon vtables) |
+| `0x101a6660` | CAI_BaseNPC::GetSchedulingErrorName | 0 | - | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x101a6680` | CAI_BaseNPC::FUN_101a6680 | 0 | default:0 | slot 454 returns 0, one body in the family, no caller |
+| `0x101a66a0` | CAI_BaseNPC::FUN_101a66a0 | 0 | default:0 | slot 455 returns 0, one body in the family, no caller |
+| `0x101a66c0` | CAI_BaseNPC::FUN_101a66c0 | 0 | default:0 | slot 456 returns 0, one body in the family, no direct or virtual caller; the 18 sites are same-offset dispatches on weapon, player and CAI_StandoffGoal vtables |
+| `0x101a66e0` | CAI_BaseNPC::FUN_101a66e0 | 0 | default:0 | slot 457 returns 0, one body in the family, no direct or virtual caller; the counted sites are same-offset dispatches on other classes |
+| `0x101a6860` | CAI_BaseNPC::FUN_101a6860 | 0 | default:1 | slot 136 returns 1, one body in the family, no dispatch site |
+| `0x101a6980` | CAI_BaseNPC::FUN_101a6980 | 0 | default:void | empty base of slot 496 TargetAcquiredSound, a slot with zero dispatch sites in the module |
+| `0x101a69a0` | CAI_BaseNPC::FUN_101a69a0 | 0 | default:void | empty base of slot 497, a slot with zero dispatch sites in the module |
+| `0x101a6a20` | CAI_BaseNPC::FUN_101a6a20 | 0 | default:void | empty base of slot 501 ExertLightSound, a slot with zero dispatch sites in the module |
+| `0x101a6a40` | CAI_BaseNPC::FUN_101a6a40 | 0 | default:void | empty base of slot 502 RiledSound, a slot with zero dispatch sites in the module |
+| `0x101a6aa0` | CAI_BaseNPC::FUN_101a6aa0 | 0 | default:void | empty base of slot 505 TargetGiveUpSound, a slot with zero dispatch sites in the module |
+| `0x101a6ac0` | CAI_BaseNPC::FUN_101a6ac0 | 0 | default:void | empty base of slot 506, a slot with zero dispatch sites in the module |
+| `0x101a6b00` | CAI_BaseNPC::FUN_101a6b00 | 0 | default:void | slot 508 SpeakSentence(int): base is empty and the only other body, CNPC_VCamera 0x10368330, is the same empty 3-byte return; no body in the family does anything |
+| `0x101a6b20` | CAI_BaseNPC::GetExpresser | 0 | default:0 | slot 512 GetExpresser base answers null; its one real override is on CAI_ExpressiveNPC, a line with no instance |
+| `0x101a6b80` | CAI_BaseNPC::GetJumpGravity | 0 | - | slot 524 GetJumpGravity returns a constant, one body in the family, no dispatch site and no caller |
+| `0x101a6bc0` | CAI_BaseNPC::FUN_101a6bc0 | 0 | default:void | empty base of slot 536 AddLookTarget; its one real override is on CAI_BaseHumanoid, a line with no instance |
+| `0x101a6be0` | CAI_BaseNPC::FUN_101a6be0 | 0 | default:void | empty base of slot 535 AddLookTarget; its one real override is on CAI_BaseHumanoid, a line with no instance |
+| `0x101a6c00` | CAI_BaseNPC::FUN_101a6c00 | 3 | - | slot 546 SquadSlotName, a NAME lookup whose only caller is 0x102767d0 DrawDebugTextOverlays |
+| `0x101a6c40` | CAI_BaseNPC::FUN_101a6c40 | 0 | default:void | empty body, slot 551 has one body in the family and no override |
+| `0x101a6c60` | CAI_BaseNPC::FUN_101a6c60 | 0 | default:1 | slot 557 returns 1, one body in the family, no dispatch site |
+| `0x101a6c80` | CAI_BaseNPC::FUN_101a6c80 | 0 | default:void | empty body, slot 558 has one body in the family and no override |
+| `0x101a6ca0` | CAI_BaseNPC::FUN_101a6ca0 | 0 | default:void | empty body, slot 565 has one body in the family and no override (GatherConditions calls into nothing) |
+| `0x101a6cc0` | CAI_BaseNPC::FUN_101a6cc0 | 0 | default:void | empty body, slot 578 has one body in the family and no override |
+| `0x101a6ce0` | CAI_BaseNPC::FUN_101a6ce0 | 1 | - | slot 579 has one body, no caller and no dispatch site; a NOT over slot 158 that nothing asks |
+| `0x101a7580` | CCineNPC::Blocked | 0 | - | empty Blocked override on the cine family; a scripted_sequence spawns FSOLID_NOT_SOLID and never blocks a mover |
+| `0x101a75a0` | CCineNPC::Touch | 0 | - | empty Touch override on the cine family; a scripted_sequence spawns FSOLID_NOT_SOLID and is never touched |
+| `0x101aa6d0` | CAI_BaseNPCTroika::GetLastUpdateThink | 0 | - | slot 412 getter with no caller on an NPC (the only candidates are CBasePlayer 0x10181780 on itself); m_flLastUpdateThink stays bound as the think clock field |
+| `0x101aa6f0` | CAI_BaseNPCTroika::GetLastNormalThink | 0 | - | slot 413 getter with no caller on an NPC (the one candidate is CBasePlayer 0x10181780 on itself); m_flLastNormalThink stays bound as the think clock field |
+| `0x101aa710` | CAI_BaseNPCTroika::GetLastMoveThink | 0 | - | plain getter of m_flLastMoveThink +0x625c; no direct or virtual caller in the closure, rules read the word itself |
+| `0x101aa730` | CAI_BaseNPCTroika::FUN_101aa730 | 0 | - | plain getter of the last-AI-think word +0x6260; no caller in the closure, no observable of its own |
+| `0x101aa770` | CAI_BaseNPCTroika::GetForceFrequentThink | 0 | - | plain getter of m_bForceFrequentThink; no caller, the think-rate rule reads +0x63f0 directly |
+| `0x101aa7b0` | CAI_BaseNPCTroika::GetSchedulingErrorName | 0 | - | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x101aa7f0` | CPayphone::HeadDirection2D | 4 | - | payphone head direction forwarded to body direction; its view and aim cones are constant false and senses are off, so no rule reads a phone head direction |
+| `0x101aa820` | CPayphone::HeadDirection3D | 3 | - | payphone HeadDirection3D forwarded to BodyDirection3D; nothing observable asks where a phone looks (cones constant false, m_bCanPerformSenses 0) |
+| `0x101aa890` | CPayphone::vfunc365 | 0 | registry:365 | slot 365 FInAimCone(entity) constant false with no caller; a payphone has no enemy and never reaches attack conditions, so nothing asks its aim cone |
+| `0x101aa8b0` | CPayphone::vfunc364 | 0 | registry:364 | slot 364 FInAimCone(point) constant false; only attack-condition and yaw code on the NPC itself asks it, and a senseless, enemy-less phone never runs them |
+| `0x101aae40` | CPayphone::vfunc37 | 0 | registry:37 | unnamed float slot 37 constant; its only entity-side reader is the physics tick 0x100b4f30 (mechanism) and a payphone is MOVETYPE_NONE |
+| `0x101c10d0` | CAI_BaseNPC::FUN_101c10d0 | 1 | - | CBaseEntity mover rebound easing inherited into the NPC vtable (slot 135); no caller, and no NPC arms m_flMoveDoneTime / m_flMoveReboundStartTime |
+| `0x101c1720` | CAI_BaseNPC::FUN_101c1720 | 9 | - | CBaseEntity mover MoveDone inherited at slot 133; m_movementType +0x558 and m_pfnMoveDone are armed only by LinearMove / AngularMove, which no NPC program issues |
+| `0x1025e450` | CAI_BaseHumanoid::vfunc82 | 0 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025e4e0` | CAI_BaseHumanoid::vfunc250 | 3 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025e510` | CAI_BaseHumanoid::SetModel | 11 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025e780` | CAI_BaseHumanoid::vfunc277 | 1 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025e8e0` | CAI_BaseHumanoid::vfunc193 | 3 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025e920` | CAI_BaseHumanoid::vfunc587 | 4 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025ea00` | CAI_BaseHumanoid::vfunc588 | 4 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025eaf0` | CAI_BaseHumanoid::SetHeadDirection | 6 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025f040` | CAI_BaseHumanoid::vfunc372 | 4 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025f0b0` | CAI_BaseHumanoid::vfunc373 | 3 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025f0f0` | CAI_BaseHumanoid::HeadDirection2D | 4 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025f160` | CAI_BaseHumanoid::HeadDirection3D | 3 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025f1a0` | CAI_BaseHumanoid::vfunc586 | 0 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025f1c0` | CAI_BaseHumanoid::vfunc585 | 4 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025f760` | CAI_BaseHumanoid::vfunc536 | 2 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025f8e0` | CAI_BaseHumanoid::vfunc535 | 2 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1025fa50` | CAI_BaseHumanoid::MaintainEyeDirection | 10 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10260540` | CAI_BaseHumanoid::vfunc589 | 0 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10260630` | CAI_BaseHumanoid::OnStateChange | 9 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10260670` | FUN_10260670 | 8 | - | SetExpression, called from 0x10260630 and twice from CAI_BaseActor::InputSetExpressionOverride 0x10260790, an input only CAI_BaseActor's line carries; CAI_BaseHumanoid line is reached only by the dev test npc_TestBaseHumanoid, placed by no shipped map; no Troika class holds this body |
+| `0x10260750` | FUN_10260750 | 0 | - | ClearExpression, called only from 0x10260670; CAI_BaseHumanoid line is reached only by the dev test npc_TestBaseHumanoid, placed by no shipped map; no Troika class holds this body |
+| `0x10260d70` | CAI_ExpressiveNPC::vfunc5 | 8 | - | class CAI_ExpressiveNPC has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10260da0` | CAI_ExpressiveNPC::GetExpresser | 0 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10260dc0` | FUN_10260dc0 | 11 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10260de0` | CAI_BaseHumanoid::vfunc5 | 8 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10260f40` | CAI_BaseHumanoid::vfunc427 | 5 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10262430` | CAI_BaseHumanoid::vfunc429 | 6 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x102624b0` | CAI_BaseHumanoid::MaxYawSpeed | 0 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1026a910` | CAI_BaseNPC::FUN_1026a910 | 0 | - | slot 568 constant (0.0): one body in the family, zero dispatch sites in the module, no caller |
+| `0x1026b270` | CAI_BaseNPC::FUN_1026b270 | 4 | - | slot 534 has zero dispatch sites in the module and no direct caller; the nearest-NPC gaze arm the port runs belongs to 0x1026b810 MaintainEyeDirection |
+| `0x1026d920` | CAI_BaseNPC::FUN_1026d920 | 0 | - | slot 554 has zero dispatch sites in the module - GatherAttackConditions 0x1026dd10 dispatches only 553 and 555 - and its two direct callers are slot-554 overrides themselves |
+| `0x1026da90` | CAI_BaseNPC::FUN_1026da90 | 1 | - | slot 556 has one body, zero dispatch sites in the module and no caller; GatherAttackConditions never asks the melee-2 band, so COND 0x52 has no producer here |
+| `0x1026dc60` | CAI_BaseNPC::CapabilitiesClear | 0 | - | CapabilitiesClear, whose one user is CNPC_Crow::Spawn 0x10357440 - a class with no instance |
+| `0x10275760` | CAI_BaseNPC::DrawDebugGeometryOverlays | 8 | - | debug geometry overlay slot 123, no output device; whole effect is m_debugOverlays-gated boxes and lines |
+| `0x102767d0` | CAI_BaseNPC::DrawDebugTextOverlays | 14 | - | debug text overlay slot 124 base body, whole effect is overlay lines |
+| `0x102775e0` | CAI_BaseNPC::DrawDebugStatOverlays | 6 | - | debug stat overlay slot 76 base body, whole effect is printed diagnostics |
+| `0x102779a0` | CAI_BaseNPC::FUN_102779a0 | 4 | - | ReportAIState developer dump, whole effect is DevMsg; slot 581 has one body and no caller |
+| `0x10277d90` | CAI_BaseNPC::FUN_10277d90 | 12 | - | over-think-limit developer report, whole effect is DevWarning plus a Slow text overlay; slot 582 one body, no caller |
+| `0x10278cb0` | CAI_BaseNPC::FUN_10278cb0 | 0 | - | slot 519 has one body and no dispatch site anywhere in the DLL; a gated tail-jump to motor slot 14 |
+| `0x10278e00` | CAI_BaseNPC::GetFacingDirection | 0 | - | slot 520 has one body and no dispatch site anywhere in the DLL; a one-line forward to the motor |
+| `0x10279060` | CAI_BaseNPC::FUN_10279060 | 4 | - | slot 540 PlayScene has one body and no dispatch site anywhere in the DLL |
+| `0x1027c2e0` | CAI_BaseNPC::LoadedSchedules | 0 | default:1 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x1027d9d0` | CAI_BaseNPC::FUN_1027d9d0 | 0 | default:0 | constant false, slot 514 has one body in the family and no caller |
+| `0x1027d9f0` | CAI_BaseNPC::OverrideMoveFacing | 0 | - | constant false inside a scope-trace frame, slot 526 has one body in the family and no caller |
+| `0x1027e120` | CAI_BaseNPC::FUN_1027e120 | 0 | - | slot 423 has one body and no dispatch site on this family in the DLL; the template spawnflag bit 11 has no reader through it |
+| `0x1027e740` | CAI_BaseNPC::FUN_1027e740 | 1 | - | NPC state NAME lookup slot 406 used only by the debug overlays and ReportAIState |
+| `0x1027e7d0` | CAI_BaseNPC::FUN_1027e7d0 | 1 | - | navigation type NAME lookup slot 407 used only by the debug overlays |
+| `0x1027ede0` | CAI_BaseNPC::GetShortConditionName | 1 | - | GetShortConditionName slot 408, condition NAME lookup for debug prints |
+| `0x1027ee00` | CAI_BaseNPC::GetLastSharedCondition | 0 | default:0x77 | slot 409 last-shared-condition id 0x77, read only by the condition NAME lookup and the trace formatter CONDS walk |
+| `0x1027efb0` | FUN_1027efb0 | 1 | - | the debug ring dump, whole effect is DevMsg |
+| `0x10280fd0` | CAI_BaseNPC::FUN_10280fd0 | 0 | default:void | empty body, slot 411 has one body in the family and no override |
+| `0x1028b0b0` | CAI_BaseNPC::FUN_1028b0b0 | 0 | - | slot 549 has one body and no dispatch site anywhere in the DLL |
+| `0x1028b0f0` | CAI_BaseNPC::FUN_1028b0f0 | 0 | - | whole effect is a Subclass-missing error print and constant 0; slot 547 has one body and no caller |
+| `0x1028df30` | CAI_BaseNPCTroika::FUN_1028df30 | 12 | - | TraceMessage slot 20, raw text to the debug ring or DevMsg |
+| `0x1028dfb0` | CAI_BaseNPCTroika::FUN_1028dfb0 | 1 | - | TraceMessage slot 19, raw text to the global debug ring or DevMsg |
+| `0x10292500` | CAI_BaseNPCTroika::NPCThinkDebugPre | 12 | - | pre-think debug pass - witness timer boxes, ConVar-gated overlays and the debug ring dump; its one write +0x5b55 is ring state |
+| `0x10294720` | CAI_BaseNPCTroika::FUN_10294720 | 14 | - | slot 496 TargetAcquiredSound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7c0 call anywhere); the Target_Acquired concept is never spoken |
+| `0x102947e0` | CAI_BaseNPCTroika::FUN_102947e0 | 5 | - | slot 497 has no dispatch site (0d/0v/0c, no vt+0x7c4 call); body only caches the id of the placeholder concept ??? and emits nothing |
+| `0x102949f0` | CAI_BaseNPCTroika::FUN_102949f0 | 14 | - | slot 500 ExertHvySound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7d0 call); base Exert_Heavy hook never runs, the werewolf arm is its own row |
+| `0x10294ab0` | CAI_BaseNPCTroika::FUN_10294ab0 | 14 | - | slot 501 ExertLightSound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7d4 call); Exert_Light is never spoken through it |
+| `0x10294b70` | CAI_BaseNPCTroika::FUN_10294b70 | 14 | - | slot 502 RiledSound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7d8 call); Riled is never spoken through it |
+| `0x10294db0` | CAI_BaseNPCTroika::FUN_10294db0 | 14 | - | slot 505 TargetGiveUpSound has no dispatch site in vampire.dll (0d/0v/0c, no vt+0x7e4 call); Target_GiveUp is never spoken through it |
+| `0x10294e70` | CAI_BaseNPCTroika::FUN_10294e70 | 14 | - | slot 506 has no dispatch site (0d/0v/0c, no vt+0x7e8 call); the duplicate of slot 494 FoundEnemySound, which is the hook that actually speaks Target_Reacquired |
+| `0x1029c010` | CAI_BaseNPCTroika::DrawDebugStatOverlays | 7 | - | slot 76 DrawDebugStatOverlays, debug HUD text with no output device |
+| `0x1029ca50` | CAI_BaseNPCTroika::DrawDebugGeometryOverlays | 15 | - | slot 123 DrawDebugGeometryOverlays, NDebugOverlay cones / boxes / rings only; its relationship-line arm is dead even in retail |
+| `0x1029d4e0` | CAI_BaseNPCTroika::DrawDebugTextOverlays | 15 | - | slot 124 DrawDebugTextOverlays, NDebugOverlay::EntityText lines only |
+| `0x1029f890` | CAI_BaseNPCTroika::FUN_1029f890 | 3 | - | slot 23 has no dispatch site anywhere in the corpus (0d/0v/0c); byte-identical twin of slot 22 |
+| `0x102b5100` | CAI_BaseNPCTroika::FUN_102b5100 | 0 | default:void | empty body; slot 55's only other body in the family, the base, is empty too, so the new-memory-record notification does nothing anywhere |
+| `0x102b51a0` | CAI_BaseNPCTroika::FUN_102b51a0 | 0 | default:void | empty body; slot 57's only other body in the family, the base, is empty too |
+| `0x102b51c0` | CAI_BaseNPCTroika::FUN_102b51c0 | 0 | default:void | empty body; slot 58's only other body in the family, the base, is empty too, so the memory lookup-miss notification does nothing anywhere |
+| `0x102b97f0` | CAI_BaseNPCTroika::LoadedSchedules | 0 | - | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x102c5890` | CAI_BaseNPCTroika::FUN_102c5890 | 0 | default:0 | slot 81 YouForgotToImplementOrDeclareServerClass returns constant 0 and has no callers |
+| `0x102c7310` | CAI_StandoffBehavior::vfunc19 | 0 | - | debug class-name string accessor (DebugGetClassName shape) on CAI_StandoffBehavior, which no NPC hosts |
+| `0x102c73f0` | CAI_StandoffBehavior::vfunc8 | 0 | default:void | empty body, slot 8 of CAI_StandoffBehavior, a behaviour no NPC hosts |
+| `0x102c7410` | CAI_StandoffBehavior::vfunc3 | 1 | - | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
+| `0x102c7490` | CAI_StandoffBehavior::vfunc4 | 0 | - | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
+| `0x102c7530` | CAI_StandoffBehavior::vfunc5 | 1 | - | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
+| `0x102c75c0` | CAI_StandoffBehavior::vfunc10 | 20 | - | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
+| `0x102c7600` | CAI_StandoffBehavior::vfunc13 | 2 | - | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
+| `0x102c7960` | CAI_StandoffBehavior::vfunc20 | 2 | - | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
+| `0x102c79a0` | CAI_StandoffBehavior::vfunc21 | 2 | - | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
+| `0x102c79e0` | CAI_StandoffBehavior::vfunc22 | 12 | - | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
+| `0x102c7bd0` | CAI_StandoffBehavior::vfunc15 | 21 | - | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script; NOTE the goal record's 0x13 below is its ACTIVITY word +0x14 (ACT_RUN), not a flag |
+| `0x102c7dd0` | CAI_StandoffBehavior::vfunc26 | 0 | - | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
+| `0x102c7ef0` | CAI_StandoffBehavior::vfunc28 | 0 | - | CAI_StandoffBehavior is never hosted: slot 455 answers 0 on every NPC class and ai_goal_standoff is authored by no map and created by no script |
+| `0x102c8570` | CAI_StandoffGoal::vfunc244 | 22 | - | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
+| `0x102c8690` | CAI_StandoffGoal::vfunc245 | 22 | - | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
+| `0x102c87a0` | CAI_StandoffGoal::vfunc241 | 11 | - | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
+| `0x102c8830` | CAI_StandoffGoal::vfunc243 | 11 | - | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
+| `0x102cc300` | CAI_BaseNPC::FUN_102cc300 | 3 | - | slot 458 ConditionName lookup, reached only from DrawDebugTextOverlays |
+| `0x102cc350` | CAI_BaseNPC::TaskName | 3 | - | slot 449 TaskName lookup, used only by the debug overlays and the task DevMsg prints |
+| `0x102cd2d0` | CAI_StandoffGoal::Spawn | 1 | - | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
+| `0x102cd740` | CAI_StandoffGoal::vfunc242 | 23 | - | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
+| `0x102cdc50` | CAI_StandoffGoal::UpdateOnRemove | 12 | - | CAI_StandoffGoal never exists: ai_goal_standoff is authored by no map and created by no script, and no NPC hosts the behaviour it would enable |
+| `0x102d1600` | CAI_Hint::DrawDebugTextOverlays | 4 | - | debug text overlay body (slot 124 on CAI_Hint) |
+| `0x102e0ea0` | CAI_Motor::FUN_102e0ea0 | 5 | - | CAI_Motor slot 3 is the climb start, reached only from MoveClimb 0x102eebc0 and the nav-type 3 arm of Move, and no shipped link climbs |
+| `0x102e0f90` | CAI_Motor::FUN_102e0f90 | 4 | - | CAI_Motor slot 4 is the climb execute, reached only from MoveClimb 0x102eebc0 and the nav-type 3 arm of Move, and no shipped link climbs |
+| `0x102e1110` | CAI_Motor::FUN_102e1110 | 2 | - | CAI_Motor slot 5 is the climb teardown, reached only from MoveClimb 0x102eebc0 and the nav-type 3 arm of Move, and no shipped link climbs |
+| `0x102e1420` | CAI_Motor::FUN_102e1420 | 0 | registry:9 | empty body, CAI_Motor slot 9 no-op with no callers |
+| `0x102eea30` | CAI_Navigator::FUN_102eea30 | 0 | registry:4 | empty body, CAI_Navigator slot 4 no-op with no callers |
+| `0x102eea50` | CAI_Navigator::FUN_102eea50 | 0 | registry:6 | empty body, CAI_Navigator slot 6 no-op with no callers |
+| `0x102eebc0` | CAI_Navigator::FUN_102eebc0 | 20 | - | the climb move step runs only on a nav-type 3 waypoint and no shipped link climbs (FINISH_CLIMB 0xfc cannot run) |
+| `0x10312cd0` | FUN_10312cd0 | 8 | - | class CAI_BaseHumanoid has no instance - npc_TestBaseHumanoid is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10321980` | CAI_BaseNPC::FUN_10321980 | 0 | default:0 | slot 81 returns constant 0 and has no callers |
+| `0x10345460` | CAI_BaseNPC::FUN_10345460 | 0 | default:1 | constant 1, slot 327 has one body in the family and no override; the melee-condition gate that asks the enemy is always open |
+| `0x10348ba0` | CAI_BaseNPC::FUN_10348ba0 | 0 | - | slot 296 has one body and no dispatch site in the image (oracle shape.md); the 0xb argument domain is unrecovered and nothing asks it |
+| `0x1034a2d0` | CGenericNPC::Classify | 0 | - | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034a2f0` | CGenericNPC::MaxYawSpeed | 0 | - | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034a680` | CGenericNPC::HandleAnimEvent | 25 | - | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034a6b0` | CGenericNPC::vfunc473 | 0 | - | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034a6d0` | CGenericNPC::Spawn | 21 | - | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034aa40` | CGenericNPC::Precache | 1 | - | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034aab0` | CGenericNPC::vfunc5 | 7 | - | class CGenericNPC has no instance - monster_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034bd30` | CNPCMaker::DrawDebugGeometryOverlays | 0 | registry:123 | empty override of debug slot 123 DrawDebugGeometryOverlays on the three makers |
+| `0x1034d410` | CScriptedTarget::vfunc117 | 1 | - | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034d430` | CScriptedTarget::vfunc82 | 0 | - | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034d6e0` | CScriptedTarget::Spawn | 5 | - | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034ddf0` | CScriptedTarget::DrawDebugTextOverlays | 4 | - | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034e070` | CScriptedTarget::DrawDebugGeometryOverlays | 4 | - | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034e320` | CScriptedTarget::Save | 16 | - | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034e370` | CScriptedTarget::Restore | 10 | - | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1034e3b0` | CScriptedTarget::vfunc5 | 7 | - | class CScriptedTarget has no instance - scripted_target is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103564f0` | CNPC_Bullseye::vfunc82 | 0 | - | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10356740` | CNPC_Bullseye::vfunc5 | 8 | - | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103567e0` | CNPC_Bullseye::Spawn | 14 | - | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10356b50` | CNPC_Bullseye::Event_Killed | 21 | - | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10356f30` | CNPC_Bullseye::vfunc576 | 0 | - | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10356f60` | CNPC_Bullseye::vfunc141 | 9 | - | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10356ff0` | CNPC_Bullseye::OnTakeDamage | 25 | - | class CNPC_Bullseye has no instance - npc_bullseye is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10357350` | CNPC_Crow::MaxYawSpeed | 0 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10357370` | CNPC_Crow::vfunc580 | 0 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10357390` | CNPC_Crow::GetSchedulingErrorName | 0 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103573b0` | CNPC_Crow::vfunc82 | 0 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10357440` | CNPC_Crow::Spawn | 23 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10357660` | CNPC_Crow::Classify | 0 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10357680` | CNPC_Crow::GatherEnemyConditions | 23 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10357760` | CNPC_Crow::vfunc192 | 1 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103577d0` | CNPC_Crow::vfunc197 | 2 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10357800` | CNPC_Crow::vfunc511 | 11 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10357820` | CNPC_Crow::HandleAnimEvent | 25 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10357b30` | CNPC_Crow::OnChangeActivity | 0 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10357ba0` | CNPC_Crow::OverrideMove | 6 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10357be0` | FUN_10357be0 | 5 | - | crow flight step toward its hint at 170 u/s, called only by the crow OverrideMove 0x10357ba0; npc_crow has no instance |
+| `0x10358310` | CNPC_Crow::PrescheduleThink | 0 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10358330` | CNPC_Crow::StartTask | 25 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103587b0` | CNPC_Crow::RunTask | 23 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10358c40` | CNPC_Crow::vfunc394 | 12 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10358c60` | CNPC_Crow::FValidateHintType | 0 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10358c90` | CNPC_Crow::vfunc567 | 1 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10358ce0` | CNPC_Crow::SelectSchedule | 22 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10358ec0` | CNPC_Crow::Precache | 14 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10358ef0` | CNPC_Crow::vfunc490 | 12 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10358f10` | CNPC_Crow::vfunc489 | 12 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10358f30` | CNPC_Crow::vfunc491 | 12 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10358f50` | CNPC_Crow::vfunc488 | 12 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10358f90` | CNPC_Crow::DrawDebugTextOverlays | 15 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103590f0` | CNPC_Crow::vfunc473 | 0 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103591e0` | CNPC_Crow::LoadedSchedules | 0 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10359240` | CNPC_Crow::vfunc546 | 3 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10359b70` | CNPC_Crow::vfunc5 | 7 | - | class CNPC_Crow has no instance - npc_crow is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10359e30` | CGeneric_NPC::LoadedSchedules | 0 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10359e90` | CGeneric_NPC::vfunc546 | 3 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10359f00` | CGeneric_NPC::vfunc580 | 0 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10359f20` | CGeneric_NPC::GetSchedulingErrorName | 0 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10359f40` | CGeneric_NPC::vfunc5 | 17 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10359f70` | CGeneric_NPC::Precache | 15 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035a090` | CGeneric_NPC::Spawn | 23 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035a220` | CGeneric_NPC::vfunc495 | 4 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035a390` | CGeneric_NPC::vfunc489 | 4 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035a500` | CGeneric_NPC::vfunc488 | 4 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035a670` | CGeneric_NPC::vfunc491 | 4 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035a7e0` | CGeneric_NPC::vfunc473 | 0 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035a810` | CGeneric_NPC::MaxYawSpeed | 0 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035a850` | CGeneric_NPC::Classify | 0 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035a900` | CGeneric_NPC::vfunc432 | 26 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035a920` | CGeneric_NPC::PrescheduleThink | 0 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035a980` | CGeneric_NPC::Event_Killed | 22 | - | class CGeneric_NPC has no instance - npc_generic is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035ac80` | CGeneric_NPC_bathack::LoadedSchedules | 0 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035ace0` | CGeneric_NPC_bathack::vfunc546 | 3 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035ad50` | CGeneric_NPC_bathack::vfunc117 | 1 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035ad70` | CGeneric_NPC_bathack::vfunc580 | 0 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035ad90` | CGeneric_NPC_bathack::GetSchedulingErrorName | 0 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035adb0` | CGeneric_NPC_bathack::vfunc5 | 7 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035ade0` | CGeneric_NPC_bathack::Precache | 14 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035ae80` | CGeneric_NPC_bathack::Spawn | 21 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035afe0` | CGeneric_NPC_bathack::vfunc495 | 0 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b000` | CGeneric_NPC_bathack::vfunc489 | 0 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b020` | CGeneric_NPC_bathack::vfunc488 | 0 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b040` | CGeneric_NPC_bathack::vfunc491 | 0 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b080` | CGeneric_NPC_bathack::MaxYawSpeed | 0 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b0c0` | CGeneric_NPC_bathack::Classify | 0 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b160` | CGeneric_NPC_bathack::vfunc432 | 25 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b1a0` | CGeneric_NPC_bathack::PrescheduleThink | 0 | - | class CGeneric_NPC_bathack has no instance - npc_generic_bathack is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b490` | CGenericSabbat_NPC::LoadedSchedules | 0 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b4f0` | CGenericSabbat_NPC::vfunc546 | 3 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b560` | CGenericSabbat_NPC::vfunc580 | 0 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b580` | CGenericSabbat_NPC::GetSchedulingErrorName | 0 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b5a0` | CGenericSabbat_NPC::vfunc5 | 7 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b5d0` | CGenericSabbat_NPC::Precache | 14 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b700` | CGenericSabbat_NPC::Spawn | 21 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035b890` | CGenericSabbat_NPC::vfunc495 | 4 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035ba00` | CGenericSabbat_NPC::vfunc489 | 4 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035bb70` | CGenericSabbat_NPC::vfunc488 | 4 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035bce0` | CGenericSabbat_NPC::vfunc491 | 4 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035be50` | CGenericSabbat_NPC::vfunc473 | 0 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035be80` | CGenericSabbat_NPC::MaxYawSpeed | 0 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035bec0` | CGenericSabbat_NPC::Classify | 0 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035bf70` | CGenericSabbat_NPC::vfunc432 | 25 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035bfb0` | CGenericSabbat_NPC::PrescheduleThink | 0 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035c010` | CGenericSabbat_NPC::Event_Killed | 21 | - | class CGenericSabbat_NPC has no instance - npc_sabbat is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1035c1d0` | CNPC_VVampireBoss::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x1035c250` | CNPC_VAndreiBlood::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x1035c400` | CNPC_VAndreiBlood::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x1035c460` | CNPC_VAndreiBlood::vfunc546 | 3 | - | squad-slot NAME remap for Andrei; the name feeds only the debug text overlay's Slot line |
+| `0x1035dba0` | CNPC_VAndreiBlood::SetSchedule | 8 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x1035ec30` | CNPC_VAnimal::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x1035ed50` | CNPC_VAnimal::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x1035edb0` | CNPC_VAnimal::vfunc546 | 3 | - | slot 546 SquadSlotName is a NAME lookup for debug prints, and the species id space is empty so it answers null for every id |
+| `0x10360160` | CNPC_VAnimal::FUN_10360160 | 26 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x103603f0` | CNPC_VAsianVampire::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103605b0` | CNPC_VAsianVampire::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x10360610` | CNPC_VAsianVampire::vfunc546 | 3 | - | slot 546 SquadSlotName is a NAME lookup for debug prints over an empty species id space |
+| `0x10361530` | CNPC_VAsianVampire::SetSchedule | 8 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x10362c70` | CNPC_VBach::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x10362d90` | CNPC_VBach::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x10362df0` | CNPC_VBach::vfunc546 | 3 | - | slot 546 SquadSlotName is a NAME lookup for debug prints over an empty species id space |
+| `0x10363a10` | CNPC_VBach::SelectSchedule | 27 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x10363b40` | CNPC_VBach::vfunc461 | 24 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x10364550` | CNPC_VBach::vfunc554 | 0 | - | slot 554 RangeAttack2Conditions has zero dispatch sites in the module - GatherAttackConditions 0x1026dd10 asks only 553 and 555 - so this override is as unreachable as the base 0x1026d920 |
+| `0x10366290` | CNPC_VBaseBoss::DrawDebugStatOverlays | 7 | - | slot 76 DrawDebugStatOverlays override, a Dist to player debug text line then the base overlay |
+| `0x10366c70` | CNPC_VBatSwarm::vfunc580 | 0 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10366c90` | CNPC_VBatSwarm::GetSchedulingErrorName | 0 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10366cb0` | CNPC_VBatSwarm::vfunc5 | 17 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10366db0` | CNPC_VBatSwarm::LoadedSchedules | 0 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10366e10` | CNPC_VBatSwarm::vfunc546 | 3 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103672d0` | CNPC_VBatSwarm::vfunc82 | 0 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10367380` | CNPC_VBatSwarm::Spawn | 27 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103673b0` | CNPC_VBatSwarm::NPCInit | 23 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103673e0` | CNPC_VBatSwarm::vfunc473 | 0 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10367400` | CNPC_VBatSwarm::Classify | 0 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10367460` | CNPC_VBatSwarm::SelectSchedule | 27 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103674a0` | CNPC_VBatSwarm::vfunc461 | 24 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103674c0` | CNPC_VBatSwarm::vfunc432 | 27 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10367580` | CNPC_VBatSwarm::GatherAttackConditions | 5 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103675e0` | CNPC_VBatSwarm::vfunc553 | 1 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10367610` | CNPC_VBatSwarm::vfunc554 | 1 | - | class CNPC_VBatSwarm has no instance, and slot 554 has zero dispatch sites in the module |
+| `0x10367740` | FUN_10367740 | 6 | - | class CNPC_VBatSwarm has no instance - npc_VBatSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10367890` | CNPC_VBrujah::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103679b0` | CNPC_VBrujah::LoadedSchedules | 0 | - | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x10367a10` | CNPC_VBrujah::vfunc546 | 3 | - | slot 546 SquadSlotName is a NAME lookup for debug prints over an empty species id space |
+| `0x103681b0` | CNPC_VCamera::FUN_103681b0 | 0 | - | empty override of slot 496 TargetAcquiredSound, and the slot ledger records no dispatch site for slot 496, so nothing can reach it |
+| `0x103681d0` | CNPC_VCamera::FUN_103681d0 | 0 | - | empty override of the unnamed sound hook slot 497, and the slot ledger records no dispatch site for slot 497 |
+| `0x10368230` | CNPC_VCamera::FUN_10368230 | 0 | - | camera's empty slot 500 override; the slot's only dispatch is the werewolf's own 0x103d8df0, so nothing ever asks a camera |
+| `0x10368250` | CNPC_VCamera::FUN_10368250 | 0 | - | empty override of slot 501 ExertLightSound, and the slot ledger records no dispatch site for slot 501 |
+| `0x10368270` | CNPC_VCamera::FUN_10368270 | 0 | - | empty override of slot 502 RiledSound, and the slot ledger records no dispatch site for slot 502 |
+| `0x103682d0` | CNPC_VCamera::FUN_103682d0 | 0 | - | empty override of slot 505 TargetGiveUpSound, and the slot ledger records no dispatch site for slot 505 |
+| `0x103682f0` | CNPC_VCamera::FUN_103682f0 | 0 | - | empty override of the unnamed sound hook slot 506, and the slot ledger records no dispatch site for slot 506 |
+| `0x10368330` | CNPC_VCamera::FUN_10368330 | 0 | - | empty slot 508 SpeakSentence override over an equally empty base 0x101a6b00; no effect either way |
+| `0x103683d0` | CNPC_VCamera::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103684f0` | CNPC_VCamera::LoadedSchedules | 0 | - | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x10368550` | CNPC_VCamera::FUN_10368550 | 3 | - | slot 546 SquadSlotName is a NAME lookup for debug prints over an empty species id space |
+| `0x103690e0` | CNPC_VCamera::FUN_103690e0 | 26 | - | bare tail call down to CAI_BaseNPCTroika::RunAI 0x1028fcc0, the body the class inherits anyway; no arm, nothing read or written, absence unobservable |
+| `0x10369240` | CNPC_VCamera::FUN_10369240 | 0 | registry:390 | constant 0 with no callers; camera NPCInit 0x103692c0 sets m_takedamage 0 so no damage ever reaches slot 390 on a camera |
+| `0x10369260` | CNPC_VCamera::HandleInteraction | 0 | registry:366 | constant false with no callers and no interaction dispatched at a camera; the slot 366 HandleInteraction answer is never read for this class |
+| `0x1036a1d0` | CNPC_VChangBros::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x1036a390` | CNPC_VChangBros::LoadedSchedules | 0 | - | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x1036a3f0` | CNPC_VChangBros::vfunc546 | 3 | - | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
+| `0x1036b500` | CNPC_VChangBros::SelectIdealState | 24 | - | whole species content is debug tag 10 in +0x1b38; it tail-calls CNPC_VHuman::SelectIdealState 0x103851e0, the very body CNPC_VVampireBoss slot 461 would hand down |
+| `0x1036c760` | CNPC_VChangBros::SetSchedule | 8 | - | slot 619 species forwarder adds only the scope-trace name around SetSchedule 0x10280de0, whose own row carries the m_IdealSchedule rule; no class logic |
+| `0x1036ead0` | CNPC_VChangBrosBlade::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x1036ec90` | CNPC_VChangBrosBlade::LoadedSchedules | 0 | - | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x1036ecf0` | CNPC_VChangBrosBlade::vfunc546 | 3 | - | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
+| `0x1036f2d0` | CNPC_VChangBrosClaw::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x1036f490` | CNPC_VChangBrosClaw::LoadedSchedules | 0 | - | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x1036f4f0` | CNPC_VChangBrosClaw::vfunc546 | 3 | - | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
+| `0x1036fb10` | CNPC_VCombatman::vfunc580 | 0 | - | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1036fb30` | CNPC_VCombatman::GetSchedulingErrorName | 0 | - | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1036fb50` | CNPC_VCombatman::vfunc5 | 17 | - | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1036fc50` | CNPC_VCombatman::LoadedSchedules | 0 | - | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1036fcb0` | CNPC_VCombatman::vfunc546 | 3 | - | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103701a0` | CNPC_VCombatman::Spawn | 26 | - | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103701d0` | CNPC_VCombatman::Classify | 0 | - | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10370230` | CNPC_VCombatman::SelectSchedule | 27 | - | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10370320` | CNPC_VCombatman::vfunc461 | 24 | - | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10370340` | CNPC_VCombatman::vfunc432 | 27 | - | class CNPC_VCombatman has no instance - npc_VCombatman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10370950` | CNPC_VCop::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x10370a70` | CNPC_VCop::LoadedSchedules | 0 | - | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x10370ad0` | CNPC_VCop::vfunc546 | 3 | - | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
+| `0x10372aa0` | CNPC_VCop::vfunc432 | 28 | - | bare tail call down to CAI_BaseNPCTroika::RunAI 0x1028fcc0, the body the class inherits anyway; no arm, nothing read or written, absence unobservable |
+| `0x10372f00` | CNPC_VCop::DrawDebugGeometryOverlays | 16 | - | slot 123 DrawDebugGeometryOverlays, a debug overlay text body gated on m_debugOverlays bit 0 with no output device |
+| `0x10373550` | CNPC_VDog::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x10373670` | CNPC_VDog::LoadedSchedules | 0 | - | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103736d0` | CNPC_VDog::vfunc546 | 3 | - | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
+| `0x10375100` | CNPC_VVampire::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x10375260` | CNPC_VFrenzyShadow::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103753e0` | CNPC_VFrenzyShadow::LoadedSchedules | 0 | - | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x10375440` | CNPC_VFrenzyShadow::vfunc546 | 3 | - | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
+| `0x10377070` | CNPC_VGangrel::vfunc580 | 0 | - | class CNPC_VGangrel has no instance - npc_VGangrel is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10377090` | CNPC_VGangrel::GetSchedulingErrorName | 0 | - | class CNPC_VGangrel has no instance - npc_VGangrel is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103770b0` | CNPC_VGangrel::vfunc5 | 17 | - | class CNPC_VGangrel has no instance - npc_VGangrel is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103771b0` | CNPC_VGangrel::LoadedSchedules | 0 | - | class CNPC_VGangrel has no instance - npc_VGangrel is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10377210` | CNPC_VGangrel::vfunc546 | 3 | - | class CNPC_VGangrel has no instance - npc_VGangrel is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10377700` | CNPC_VGangrel::Classify | 0 | - | class CNPC_VGangrel has no instance - npc_VGangrel is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10377b40` | CNPC_VGargoyle::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x10377c70` | CNPC_VGargoyle::LoadedSchedules | 0 | - | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x10377cd0` | CNPC_VGargoyle::vfunc546 | 3 | - | slot 546 SquadSlotName, a NAME lookup whose only reader is the debug overlay text Slot: %s; every species id space is empty so it answers <<null>> |
+| `0x10378b60` | CNPC_VGargoyle::vfunc461 | 24 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x1037a8f0` | CNPC_VGhoulCroucher::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x1037a950` | CNPC_VGhoulCroucher::vfunc546 | 3 | - | slot 546 SquadSlotName feeds only the debug text overlay Slot line and every species id space is empty |
+| `0x1037afd0` | CNPC_VGhoulCroucher::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x1037c680` | CNPC_VGuard1::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x1037c7a0` | CNPC_VGuard1::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x1037c800` | CNPC_VGuard1::vfunc546 | 3 | - | slot 546 SquadSlotName feeds only the debug text overlay Slot line and every species id space is empty |
+| `0x1037e1e0` | CNPC_VGuard1::vfunc432 | 27 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x1037e850` | CNPC_VHengeyokai::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x1037ea00` | CNPC_VHengeyokai::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x1037ea60` | CNPC_VHengeyokai::vfunc546 | 3 | - | slot 546 SquadSlotName feeds only the debug text overlay Slot line and every species id space is empty |
+| `0x10380100` | CNPC_VHengeyokai::vfunc461 | 24 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x10383560` | CNPC_VHengeyokai::DrawDebugTextOverlays | 16 | - | DrawDebugTextOverlays override, debug overlay text with no output device |
+| `0x10384080` | CNPC_VHuman::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103841a0` | CNPC_VHuman::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x10384200` | CNPC_VHuman::vfunc546 | 3 | - | slot 546 SquadSlotName feeds only the debug text overlay Slot line and every species id space is empty |
+| `0x10385a10` | CNPC_VChangBros::FUN_10385a10 | 26 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x10386b00` | CNPC_VHumanCombatant::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x10386c20` | CNPC_VHumanCombatant::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x10386c80` | CNPC_VHumanCombatant::FUN_10386c80 | 3 | - | slot 546 SquadSlotName feeds only the debug text overlay Slot line and every species id space is empty |
+| `0x10387500` | CNPC_VGhoulCroucher::FUN_10387500 | 27 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x10387730` | CNPC_VHumanCombatPatrol::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x10387850` | CNPC_VHumanCombatPatrol::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103878b0` | CNPC_VHumanCombatPatrol::vfunc546 | 3 | - | slot 546 SquadSlotName feeds only the debug text overlay Slot line and every species id space is empty |
+| `0x10388080` | CNPC_VHunter::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103881a0` | CNPC_VHunter::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x10388200` | CNPC_VHunter::vfunc546 | 3 | - | slot 546 SquadSlotName is a name lookup; every species squad-slot id space ships empty, so it answers <<null>> for every id |
+| `0x10388a20` | CNPC_VHunter::SelectSchedule | 28 | - | own effect is only the +0x1b2c selector trace stamp 0x17; the forward to 0x103872d0 is what inheriting the parent slot 438 gives |
+| `0x10388ab0` | CNPC_VHunter::vfunc461 | 25 | - | own effect is only the +0x1b38 ideal-state trace stamp 0x17; the forward to 0x10387380 is the inherited parent slot 461 |
+| `0x10388ad0` | CNPC_VHunter::vfunc432 | 28 | - | bare forward down the parent chain to CAI_BaseNPCTroika::RunAI; reads and writes nothing, same as inheriting slot 432 |
+| `0x10388b30` | CNPC_VHunter::NPCInit | 24 | - | second Hide of the active weapon is idempotent on m_fEffects 0x40 (extra ForceTransmit only); inheriting 0x10387140 leaves the same state |
+| `0x10388e00` | CNPC_VLasombra::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x10388f20` | CNPC_VLasombra::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x10388f80` | CNPC_VLasombra::vfunc546 | 3 | - | slot 546 SquadSlotName is a name lookup; every species squad-slot id space ships empty, so it answers <<null>> for every id |
+| `0x10389560` | CNPC_VMalkavian::vfunc580 | 0 | - | class CNPC_VMalkavian has no instance - npc_VMalkavian is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10389580` | CNPC_VMalkavian::GetSchedulingErrorName | 0 | - | class CNPC_VMalkavian has no instance - npc_VMalkavian is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103895a0` | CNPC_VMalkavian::vfunc5 | 17 | - | class CNPC_VMalkavian has no instance - npc_VMalkavian is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103896a0` | CNPC_VMalkavian::LoadedSchedules | 0 | - | class CNPC_VMalkavian has no instance - npc_VMalkavian is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10389700` | CNPC_VMalkavian::vfunc546 | 3 | - | class CNPC_VMalkavian has no instance - npc_VMalkavian is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10389bf0` | CNPC_VMalkavian::Classify | 0 | - | class CNPC_VMalkavian has no instance - npc_VMalkavian is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x10389dd0` | CNPC_VManBat::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x10389ef0` | CNPC_VManBat::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x10389f50` | CNPC_VManBat::vfunc546 | 3 | - | slot 546 SquadSlotName is a name lookup; every species squad-slot id space ships empty, so it answers <<null>> for every id |
+| `0x10390ff0` | CNPC_VBaseBoss::RemoveBaseFightingItems | 0 | registry:305 | empty override with no caller; slot 304 is empty for bosses too, so MiscFlag 0x10 fists never exist for the Troika remove to undo |
+| `0x10391090` | CNPC_VMingXiao::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x10391330` | CNPC_VMingXiao::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x10391390` | CNPC_VMingXiao::vfunc546 | 3 | - | slot 546 SquadSlotName is a name lookup; every species squad-slot id space ships empty, so it answers <<null>> for every id |
+| `0x103929d0` | CNPC_VMingXiao::vfunc473 | 0 | registry:473 | constant 0x81f equal to the Troika base GetSoundInterests 0x102b4070 it overrides; no caller in the closure |
+| `0x10394970` | CNPC_VMingXiao::vfunc432 | 26 | - | bare tail call to CAI_BaseNPCTroika::RunAI; reads and writes nothing, same as inheriting slot 432 |
+| `0x103951d0` | CNPC_VMingXiao::GetShortConditionName | 2 | - | slot 408 GetShortConditionName, debug strings for COND 0x77-0x7e used only by debug prints |
+| `0x10395270` | CNPC_VMingXiao::GetLastSharedCondition | 0 | registry:409 | slot 409 only bounds the CONDS: debug print walk under the schedule-debug ConVar |
+| `0x10395290` | CNPC_VMingXiao::PrescheduleThink | 0 | registry:434 | bare return identical to the empty base PrescheduleThink 0x101a6560 it would inherit |
+| `0x10395b80` | CNPC_VMingXiao::HandleInteraction | 0 | registry:366 | constant 0 HandleInteraction with no caller at all |
+| `0x10399c70` | CNPC_VMingXiao::PushPhysicsObjects | 0 | - | body is only scope-trace and VProf push/pop around zero game logic |
+| `0x10399d40` | CNPC_VMingXiao::DrawDebugGeometryOverlays | 16 | - | slot 123 DrawDebugGeometryOverlays, four debug range rings with no output device |
+| `0x1039b0b0` | CNPC_VMingXiaoTentacle::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x1039b1d0` | CNPC_VMingXiaoTentacle::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x1039b230` | CNPC_VMingXiaoTentacle::vfunc546 | 3 | - | slot 546 SquadSlotName is a name lookup; every species squad-slot id space ships empty, so it answers <<null>> for every id |
+| `0x1039c440` | CNPC_VMingXiaoTentacle::vfunc473 | 0 | registry:473 | constant 0x81f equal to the Troika base GetSoundInterests 0x102b4070 it overrides; no caller in the closure |
+| `0x1039e7e0` | CNPC_VMingXiaoTentacle::PrescheduleThink | 0 | registry:434 | bare return identical to the empty base PrescheduleThink 0x101a6560 it would inherit |
+| `0x1039e860` | CNPC_VMingXiaoTentacle::vfunc23 | 1 | - | slot 23 override; slot 23 has no dispatch site in the decompiled corpus, so the forward to the owning Ming Xiao never runs |
+| `0x1039e8e0` | CNPC_VMingXiaoTentacle::HandleInteraction | 0 | registry:366 | constant return 0 with no caller in the pack (0d/0v/0c, no outside); the tentacle takes no interaction and nothing dispatches one at it |
+| `0x1039ece0` | CNPC_VMingXiaoTentacle::GetShortConditionName | 2 | - | GetShortConditionName override, slot 408; condition-name strings 0x77-0x79 read only by debug prints |
+| `0x1039ed30` | CNPC_VMingXiaoTentacle::GetLastSharedCondition | 0 | registry:409 | slot 409 GetLastSharedCondition constant 0x7a; its only reader is the CONDS: block of the debug string builder 0x1028d990 |
+| `0x1039f600` | CNPC_VMoleman::vfunc580 | 0 | - | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1039f620` | CNPC_VMoleman::GetSchedulingErrorName | 0 | - | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1039f640` | CNPC_VMoleman::vfunc5 | 17 | - | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1039f740` | CNPC_VMoleman::LoadedSchedules | 0 | - | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1039f7a0` | CNPC_VMoleman::vfunc546 | 3 | - | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1039fc90` | CNPC_VMoleman::Spawn | 26 | - | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1039fcc0` | CNPC_VMoleman::Classify | 0 | - | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1039fd20` | CNPC_VMoleman::SelectSchedule | 27 | - | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1039fe10` | CNPC_VMoleman::vfunc461 | 24 | - | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x1039fe30` | CNPC_VMoleman::vfunc432 | 27 | - | class CNPC_VMoleman has no instance - npc_VMoleman is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103a00f0` | CNPC_VNewscaster::vfunc496 | 0 | registry:496 | empty override of slot 496 TargetAcquiredSound, a slot with zero dispatch sites in the whole module |
+| `0x103a0110` | CNPC_VNewscaster::vfunc497 | 0 | registry:497 | empty override of slot 497, a slot with zero dispatch sites in the whole module |
+| `0x103a0150` | CNPC_VNewscaster::vfunc362 | 0 | registry:362 | constant return 0 with no caller (0d/0v/0c); slot 362 is asked of an enemy and nothing takes the untargetable, D_NU newscaster as one |
+| `0x103a0170` | CNPC_VNewscaster::vfunc365 | 0 | registry:365 | constant return 0 with no caller (0d/0v/0c); slot 365 aim-cone wrapper on an NPC that holds no weapon and never attacks |
+| `0x103a0210` | CNPC_VNewscaster::vfunc377 | 0 | registry:377 | constant return 0 with no caller (0d/0v/0c); slot 377 is the attacker-side grapple permit and the newscaster never attacks |
+| `0x103a0ff0` | FUN_103a0ff0 | 5 | - | debug overlay text: not playing VCD / Main Stories / Side Stories listing, no output device |
+| `0x103a1250` | CNPC_VNewscaster::DrawDebugTextOverlays | 16 | - | DrawDebugTextOverlays override, slot 124; base overlay plus the story-queue listing under m_debugOverlays bit 0 |
+| `0x103a14a0` | CNPC_VNosferatu::vfunc580 | 0 | - | class CNPC_VNosferatu has no instance - npc_VNosferatu is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103a14c0` | CNPC_VNosferatu::GetSchedulingErrorName | 0 | - | class CNPC_VNosferatu has no instance - npc_VNosferatu is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103a14e0` | CNPC_VNosferatu::vfunc5 | 17 | - | class CNPC_VNosferatu has no instance - npc_VNosferatu is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103a15e0` | CNPC_VNosferatu::LoadedSchedules | 0 | - | class CNPC_VNosferatu has no instance - npc_VNosferatu is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103a1640` | CNPC_VNosferatu::vfunc546 | 3 | - | class CNPC_VNosferatu has no instance - npc_VNosferatu is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103a1b30` | CNPC_VNosferatu::Classify | 0 | - | class CNPC_VNosferatu has no instance - npc_VNosferatu is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103a1e20` | CNPC_VPedestrian::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103a1f40` | CNPC_VPedestrian::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103a1fa0` | CNPC_VPedestrian::vfunc546 | 3 | - | slot 546 SquadSlotName feeds only the debug text overlay line Slot: %s; the species id space is empty so it answers <<null>> |
+| `0x103a3bf0` | CNPC_VPlaceholder::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103a3c50` | CNPC_VPlaceholder::vfunc546 | 3 | - | slot 546 SquadSlotName feeds only the debug text overlay line Slot: %s; the species id space is empty so it answers <<null>> |
+| `0x103a4160` | CNPC_VPlaceholder::vfunc317 | 0 | registry:317 | constant return 0 with no caller (0d/0v/0c); slot 317 reads COND 0x0c that the empty slot 316 override never sets |
+| `0x103a4180` | CNPC_VPlaceholder::PlayerDefenderBlockReaction | 0 | registry:318 | constant return 0 with no caller (0d/0v/0c, no outside); the placeholder never blocks, so no defender block reaction is ever asked of it |
+| `0x103a41a0` | CNPC_VPlaceholder::PlayerAttackerBlockedReaction | 0 | registry:319 | constant return 0 with no caller (0d/0v/0c, no outside); the placeholder never attacks, so an attacker-blocked reaction cannot reach it |
+| `0x103a4280` | CNPC_VPlaceholder::vfunc362 | 0 | registry:362 | constant return 0 with no caller (0d/0v/0c); the entity form of the view-cone test on an NPC whose think is removed |
+| `0x103a42a0` | CNPC_VPlaceholder::vfunc365 | 0 | registry:365 | constant return 0 with no caller (0d/0v/0c); slot 365 aim-cone wrapper on an NPC that never thinks or attacks |
+| `0x103a4300` | CNPC_VPlaceholder::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103a4830` | CNPC_VFrenzyShadow::FUN_103a4830 | 0 | registry:496 | empty override of slot 496 TargetAcquiredSound, a slot with zero dispatch sites in the whole module |
+| `0x103a4850` | CNPC_VFrenzyShadow::FUN_103a4850 | 0 | registry:497 | empty override of slot 497, a slot with zero dispatch sites in the whole module |
+| `0x103a4870` | CNPC_VFrenzyShadow::FUN_103a4870 | 27 | - | bare tail call to the inherited slot 432 body 0x10385a10 (itself a forward to the Troika RunAI); no arm, no read, no write, absence is plain inheritance |
+| `0x103a50c0` | CNPC_VSabbatGunman::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103a51e0` | CNPC_VSabbatGunman::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103a5240` | CNPC_VSabbatGunman::vfunc546 | 3 | - | slot 546 SquadSlotName feeds only the debug text overlay line Slot: %s; the species id space is empty so it answers <<null>> |
+| `0x103a5cc0` | CNPC_VSabbatLeader::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103a5df0` | CNPC_VSabbatLeader::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103a5e50` | CNPC_VSabbatLeader::vfunc546 | 3 | - | slot 546 SquadSlotName feeds only the debug text overlay line Slot: %s; the species id space is empty so it answers <<null>> |
+| `0x103a7650` | CNPC_VSabbatLeader::PrescheduleThink | 1 | - | scope-trace frame around a call to 0x10385a30, the inherited slot 434 body that is a bare return; no effect at all |
+| `0x103a76d0` | CNPC_VSabbatLeader::HandleInteraction | 1 | - | scope-trace frame around a bare forward to the inherited slot 366 body 0x10385a70 (return 0); absence is plain inheritance |
+| `0x103a7760` | CNPC_VSabbatLeader::Event_Killed | 22 | - | scope-trace frame around a bare forward to the inherited CAI_BaseNPCTroika::Event_Killed (no intermediate override of slot 144); no species datum, absence is plain inheritance |
+| `0x103a9fd0` | CNPC_VSabbatLeader::SetSchedule | 8 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x103abbc0` | CNPC_VScurrying::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103abce0` | CNPC_VScurrying::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103abd40` | CNPC_VScurrying::FUN_103abd40 | 3 | - | slot 546 SquadSlotName name lookup for debug prints; the species squad-slot id space is empty so it answers <<null>> for every id |
+| `0x103adc50` | CNPC_VSheriffMan::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103adcb0` | CNPC_VSheriffMan::vfunc546 | 3 | - | slot 546 SquadSlotName name lookup for debug prints; the species squad-slot id space is empty so it answers <<null>> for every id |
+| `0x103ae4d0` | CNPC_VSheriffMan::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103af8d0` | CNPC_VSheriffMan::SetSchedule | 8 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x103b0560` | CNPC_VSheriffMan::KillTeleportBats | 4 | - | m_hTeleportSwarm +0x66d0 has one live writer, SpawnTeleportBats 0x103b03b0, which has no caller; the handle never resolves, so this only rewrites 0xffffffff |
+| `0x103b1c20` | CNPC_VSheriffSwarm::vfunc580 | 0 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b1c40` | CNPC_VSheriffSwarm::GetSchedulingErrorName | 0 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b1c60` | CNPC_VSheriffSwarm::vfunc5 | 17 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b1d60` | CNPC_VSheriffSwarm::LoadedSchedules | 0 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b1dc0` | CNPC_VSheriffSwarm::vfunc546 | 3 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b2280` | CNPC_VSheriffSwarm::vfunc82 | 0 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b2330` | CNPC_VSheriffSwarm::Spawn | 27 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b2360` | CNPC_VSheriffSwarm::NPCInit | 23 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b2390` | CNPC_VSheriffSwarm::vfunc473 | 0 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b23b0` | CNPC_VSheriffSwarm::Classify | 0 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b2410` | CNPC_VSheriffSwarm::SelectSchedule | 27 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b2450` | CNPC_VSheriffSwarm::vfunc461 | 24 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b2470` | CNPC_VSheriffSwarm::vfunc432 | 27 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b2530` | CNPC_VSheriffSwarm::GatherAttackConditions | 5 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b2590` | CNPC_VSheriffSwarm::vfunc553 | 1 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b25c0` | CNPC_VSheriffSwarm::vfunc554 | 1 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b26f0` | FUN_103b26f0 | 6 | - | class CNPC_VSheriffSwarm has no instance - npc_VSheriffSwarm is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b2770` | CNPC_VStalker::vfunc82 | 0 | - | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b28b0` | CNPC_VStalker::vfunc580 | 0 | - | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b28d0` | CNPC_VStalker::GetSchedulingErrorName | 0 | - | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b28f0` | CNPC_VStalker::vfunc5 | 17 | - | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b29f0` | CNPC_VStalker::LoadedSchedules | 0 | - | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b2a50` | CNPC_VStalker::vfunc546 | 3 | - | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b2e60` | CNPC_VStalker::NPC_EarlyTranslateActivity | 0 | - | class CNPC_VStalker has no instance - npc_VStalker is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b2f90` | CNPC_VTaxiDriver::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103b3110` | CNPC_VTaxiDriver::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103b3170` | CNPC_VTaxiDriver::vfunc546 | 3 | - | slot 546 SquadSlotName name lookup for debug prints; the species squad-slot id space is empty so it answers <<null>> for every id |
+| `0x103b3650` | CNPC_VTaxiDriver::vfunc432 | 27 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x103b3670` | CNPC_VTaxiDriver::SelectSchedule | 27 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x103b3b20` | CNPC_VTest::vfunc580 | 0 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b3b40` | CNPC_VTest::GetSchedulingErrorName | 0 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b3b60` | CNPC_VTest::vfunc5 | 17 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b3c60` | CNPC_VTest::LoadedSchedules | 0 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b3cc0` | CNPC_VTest::vfunc546 | 3 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b41e0` | CNPC_VTest::Precache | 15 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b42f0` | CNPC_VTest::Spawn | 27 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b4320` | CNPC_VTest::vfunc488 | 4 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b4490` | CNPC_VTest::vfunc489 | 4 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b4600` | CNPC_VTest::vfunc490 | 4 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b4780` | CNPC_VTest::vfunc491 | 4 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b48f0` | CNPC_VTest::vfunc492 | 4 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b4a60` | CNPC_VTest::vfunc493 | 4 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b4bd0` | CNPC_VTest::vfunc494 | 4 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b4d40` | CNPC_VTest::vfunc495 | 4 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b4eb0` | CNPC_VTest::vfunc473 | 0 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b4ed0` | CNPC_VTest::Classify | 0 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b4f30` | CNPC_VTest::SelectSchedule | 27 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b4ff0` | CNPC_VTest::vfunc461 | 24 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b51a0` | CNPC_VTest::vfunc432 | 27 | - | class CNPC_VTest has no instance - npc_VTest is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b5330` | CNPC_VToreador::vfunc580 | 0 | - | class CNPC_VToreador has no instance - npc_VToreador is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b5350` | CNPC_VToreador::GetSchedulingErrorName | 0 | - | class CNPC_VToreador has no instance - npc_VToreador is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b5370` | CNPC_VToreador::vfunc5 | 17 | - | class CNPC_VToreador has no instance - npc_VToreador is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b5470` | CNPC_VToreador::LoadedSchedules | 0 | - | class CNPC_VToreador has no instance - npc_VToreador is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b54d0` | CNPC_VToreador::vfunc546 | 3 | - | class CNPC_VToreador has no instance - npc_VToreador is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b59c0` | CNPC_VToreador::Classify | 0 | - | class CNPC_VToreador has no instance - npc_VToreador is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b5ad0` | CNPC_VTremere::vfunc580 | 0 | - | class CNPC_VTremere has no instance - npc_VTremere is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b5af0` | CNPC_VTremere::GetSchedulingErrorName | 0 | - | class CNPC_VTremere has no instance - npc_VTremere is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b5b10` | CNPC_VTremere::vfunc5 | 17 | - | class CNPC_VTremere has no instance - npc_VTremere is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b5c10` | CNPC_VTremere::LoadedSchedules | 0 | - | class CNPC_VTremere has no instance - npc_VTremere is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b5c70` | CNPC_VTremere::vfunc546 | 3 | - | class CNPC_VTremere has no instance - npc_VTremere is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b6160` | CNPC_VTremere::Classify | 0 | - | class CNPC_VTremere has no instance - npc_VTremere is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103b6e70` | CNPC_VTzimisce::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103b7090` | CNPC_VTzimisce::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103b70f0` | CNPC_VTzimisce::vfunc546 | 3 | - | slot 546 SquadSlotName name lookup; its only call site is the debug text overlay Slot: line |
+| `0x103b9270` | CNPC_VTzimisce::vfunc422 | 22 | - | override adds only a second identical ThinkSet(same fn, 0.0) after the Troika StartNPC; writes nothing the base did not |
+| `0x103b9660` | CNPC_VTzimisce::vfunc496 | 0 | registry:496 | empty override of slot 496, a slot with zero dispatch sites in the module |
+| `0x103b9680` | CNPC_VTzimisce::vfunc497 | 0 | registry:497 | empty override of slot 497, a slot with zero dispatch sites in the module |
+| `0x103bdd10` | CNPC_VTzimisce::GetEventName | 1 | - | slot 241 GetEventName, anim-event id to START_* name strings for debug prints; no dispatch site in the closure and the port keeps it in the Debug unit |
+| `0x103bdf60` | CNPC_VTzimisce::PrescheduleThink | 0 | registry:434 | empty override of slot 434 PrescheduleThink over an equally empty base 0x101a6560; no per-tick work either way |
+| `0x103c08d0` | CNPC_VTzimisce::DrawDebugTextOverlays | 16 | - | slot 124 DrawDebugTextOverlays, Body: distance overlay text and its cross-NPC debug latch globals |
+| `0x103c0c30` | CNPC_VTzimisceHeadClaw::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103c0c90` | CNPC_VTzimisceHeadClaw::vfunc546 | 3 | - | slot 546 SquadSlotName name lookup; only call site is the debug text overlay |
+| `0x103c1320` | CNPC_VTzimisceHeadClaw::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103c2a00` | CNPC_VTzimisceRunner::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103c2a60` | CNPC_VTzimisceRunner::vfunc546 | 3 | - | slot 546 SquadSlotName name lookup; only call site is the debug text overlay |
+| `0x103c3100` | CNPC_VTzimisceRunner::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103c4a20` | CNPC_VVampire::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103c4a80` | CNPC_VVampire::FUN_103c4a80 | 3 | - | slot 546 SquadSlotName name lookup; only call site is the debug text overlay |
+| `0x103c5210` | CNPC_VVampireBoss::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103c5270` | CNPC_VVampireBoss::vfunc546 | 3 | - | slot 546 SquadSlotName name lookup; only call site is the debug text overlay |
+| `0x103c77b0` | CNPC_VVentrue::vfunc580 | 0 | - | class CNPC_VVentrue has no instance - npc_VVentrue is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103c77d0` | CNPC_VVentrue::GetSchedulingErrorName | 0 | - | class CNPC_VVentrue has no instance - npc_VVentrue is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103c77f0` | CNPC_VVentrue::vfunc5 | 17 | - | class CNPC_VVentrue has no instance - npc_VVentrue is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103c78f0` | CNPC_VVentrue::LoadedSchedules | 0 | - | class CNPC_VVentrue has no instance - npc_VVentrue is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103c7950` | CNPC_VVentrue::vfunc546 | 3 | - | class CNPC_VVentrue has no instance - npc_VVentrue is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103c7e40` | CNPC_VVentrue::Classify | 0 | - | class CNPC_VVentrue has no instance - npc_VVentrue is in no map, script or template of the install and vampire.dll names it only at its factory |
+| `0x103c8e70` | CNPC_VWerewolf::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103c8ed0` | CNPC_VWerewolf::vfunc546 | 3 | - | slot 546 SquadSlotName is read only by the debug text overlay line Slot: %s (shape.md:4283); a name lookup for a debug print |
+| `0x103ca770` | CNPC_VWerewolf::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103cb170` | CNPC_VWerewolf::PostNPCInit | 0 | registry:421 | no-op beyond the scope trace; slot 421 base 0x101a6540 is empty too, so neither body does anything |
+| `0x103d0640` | CNPC_VWerewolf::GetShortConditionName | 2 | - | GetShortConditionName, condition-name lookup for debug prints only |
+| `0x103d0780` | CNPC_VWerewolf::GetLastSharedCondition | 0 | registry:409 | slot 409 GetLastSharedCondition is dispatched only by the AI trace line 0x1028d990, a debug dump |
+| `0x103d1ca0` | CNPC_VWerewolf::StartSearchTimer | 0 | - | rdtsc search-profiler stamp into a static pair; developer timing only |
+| `0x103d1d60` | CNPC_VWerewolf::ReportSearchTimer | 0 | - | rdtsc search-profiler report; passes its bool argument through unchanged, so callers keep their own answer |
+| `0x103d4820` | CNPC_VWerewolf::DrawDebugHullAtPoint | 4 | - | DrawDebug hull box and line, debug overlay only |
+| `0x103d5050` | CNPC_VWerewolf::DrawBBoxOverlay | 4 | - | DrawBBoxOverlay debug colour override |
+| `0x103d5130` | CNPC_VWerewolf::DrawDebugStatOverlays | 13 | - | slot 76 DrawDebugStatOverlays body |
+| `0x103d5590` | CNPC_VWerewolf::DrawDebugHintInfo | 12 | - | DrawDebugHintInfo, pure debug overlay with no member written and no output device |
+| `0x103dc770` | CNPC_VWolfMorph::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103dc8f0` | CNPC_VWolfMorph::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103dc950` | CNPC_VWolfMorph::vfunc546 | 3 | - | slot 546 SquadSlotName, read only by the debug text overlay line Slot: %s |
+| `0x103dd070` | CNPC_VYukie::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103dd190` | CNPC_VYukie::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103dd1f0` | CNPC_VYukie::vfunc546 | 3 | - | slot 546 SquadSlotName, read only by the debug text overlay line Slot: %s |
+| `0x103dd780` | CNPC_VYukie::vfunc461 | 25 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x103dd7a0` | CNPC_VYukie::vfunc432 | 28 | - | override whose only own content is a debug stamp or scope trace around the very body the class would inherit at this slot; absence is plain inheritance |
+| `0x103de2d0` | CNPC_VZombie::GetSchedulingErrorName | 0 | registry:451 | slot 451 GetSchedulingErrorName, the class NAME string read only by schedule-error debug prints |
+| `0x103de470` | CNPC_VZombie::LoadedSchedules | 0 | registry:452 | slot 452 LoadedSchedules, the parse-succeeded flag - it ships true and its one reader is the Precache 0x1027bb50 spawn-reject arm no shipped text reaches; 0019/3 makes a malformed text a load error instead |
+| `0x103de4d0` | CNPC_VZombie::vfunc546 | 3 | - | slot 546 SquadSlotName, read only by the debug text overlay line Slot: %s |
+| `0x103e0e80` | CNPC_VZombie::DrawDebugTextOverlays | 16 | - | slot 124 DrawDebugTextOverlays, Cond: %s debug lines |

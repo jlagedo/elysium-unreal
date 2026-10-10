@@ -201,15 +201,15 @@ def test_a_chain_hand_body_over_a_closed_row_is_a_failure():
 
 
 class _Cited(kl.Ledger):
-    """The citation half of a ledger, with no corpus behind it."""
+    """The verdict half of a ledger, with no corpus behind it."""
 
-    def __init__(self, verdicts, port):
+    def __init__(self, verdicts):
         self.verdicts = verdicts
-        self.port_addr = {a: [kl.Citation(p, n, False, t) for p, n, t in cites]
-                          for a, cites in port.items()}
-        self.interior = {}
-        self._cite_members = {}
-        self._cite_memo = {}
+
+
+def _port(cites):
+    """`kernel_lists.port_cites`'s answer, by hand: address -> its port lines."""
+    return {a: [kl.Citation(p, n, t) for p, n, t in rows] for a, rows in cites.items()}
 
 
 def _v(addr, verdict, target):
@@ -232,13 +232,12 @@ def test_a_closed_row_still_cited_fails_the_check_and_names_its_cites():
         "10000004": [(tests, 7, "// 0x10000004: dead, deleted in 0019/6")],
         "10000005": [("Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp", 3, "// 0x10000005")],
     }
-    problems = kli.closed_problems(_Cited(verdicts, port))
+    problems = kli.closed_problems(_Cited(verdicts), _port(port))
     assert [p.split(":")[0] for p in problems] == ["0x10000001", "0x10000002"]
     assert "ElysiumNpc.cpp:12" in problems[0] and "ElysiumNpcKernelTests.cpp:40" in problems[1]
     port["10000004"].append(("Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp", 5,
                              "// 0x10000004: dead, deleted in 0019/6"))
-    ledger = _Cited(verdicts, port)
-    assert [p.split(":")[0] for p in kli.closed_problems(ledger)] == [
+    assert [p.split(":")[0] for p in kli.closed_problems(_Cited(verdicts), _port(port))] == [
         "0x10000001", "0x10000002", "0x10000004"]
 
 
@@ -249,8 +248,9 @@ def test_the_pinned_rows_are_exempt_and_the_meter_counts_closed_over_total():
                 "10000003": _v("10000003", "mechanism", "CRT:operator delete"),
                 "10000004": _v("10000004", "mechanism", "UClass"),            # legacy: open
                 "10000005": _v("10000005", "rule", "FElysiumNpc::Rule")}
-    ledger = _Cited(verdicts, {pinned: [("Source/ElysiumUE/Private/Substrate/X.cpp", 1, "x")]})
-    assert kli.closed_problems(ledger) == []
+    ledger = _Cited(verdicts)
+    port = _port({pinned: [("Source/ElysiumUE/Private/Substrate/X.cpp", 1, "x")]})
+    assert kli.closed_problems(ledger, port) == []
     assert kli.closed_meter(ledger) == {"dead": (1, 2), "mechanism": (1, 2)}
 
 

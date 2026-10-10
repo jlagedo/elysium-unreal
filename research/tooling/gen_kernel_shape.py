@@ -62,6 +62,14 @@ a verdict stops being an undifferentiated stub:
   has to ANSWER through the seam rather than tally a stub, and which of the three
   verdicts the body carries says where the answer comes from, not whether the
   slot has one.
+* no verdict, but the address is in ``RETAIL_DEFAULTS`` (story ``L0.tooling.default-stubs``) —
+  the same emission as ``default:``.  These are the entity chain's bodies no band's checklist
+  covers, which the 2026-10-06 re-check (``docs/specs/layers/audit.tsv``, ``firm:carried``) found
+  empty or answering one constant the stub's value-initialised answer already gave; only the
+  stub's tally differed.  The table is a reviewed reading, like ``SLOT_PORT_MAP``; the body is
+  the fact, so a readable one-literal body that disagrees fails generation, and an entry that
+  lands on no generated stub is stale and fails it too.  It decides the emission rows only: the
+  census row's ``Default`` stays the overlay's (a default only where a verdict read the body).
 * ``dead`` with either spelling (spec 0019 story 1) — the same emission as above.  A
   ``dead`` row keeps its port target until 0019/6 deletes the body and writes ``-``,
   so judging a slot dead changes nothing the runtime does.
@@ -211,6 +219,44 @@ REGISTRY_PREFIX = "registry:"
 # census may carry the literal a species answers only when the body cannot be anything else.
 CONSTANT_BODY_RE = re.compile(
     r"^\s*\{\s*return\s*(;|(?:-?\d+|0x[0-9a-fA-F]+)\s*;)\s*\}\s*$", re.S)
+
+# Retail-default bodies the verdict overlay does not record (story `L0.tooling.default-stubs`): the
+# entity chain's slot bodies the 2026-10-06 re-check (`docs/specs/layers/audit.tsv`, status
+# `firm:carried`, the port line a generated stub) found empty or answering one constant that the
+# stub's value-initialised answer already matched. Each is emitted as a `default:` body: retail's
+# answer, no tally. The 113- and 118-byte bodies are VPROF's scope-trace push and pop around nothing
+# (`g_ScopeTraceStack`, `g_ScopeTraceStackDepth`: depth +1 then -1, read by no rule) and then the
+# constant; the eight other stubs of that re-check (`GetRefEHandle`, `GetDataDescMap`,
+# `GetLocalVelocity`, slot 240, `IsActivityFinished`, `GetViewtarget`, the overlay's
+# `StudioFrameAdvance` and `DispatchAnimEvents`) answer a field, a pointer or real work and stay
+# stubs. address -> (literal, the reading).
+RETAIL_DEFAULTS: dict[str, tuple[str, str]] = {
+    "10026590": ("void", "CBaseEntity::OnVictimHitByMe 0x10026590: `ret 4`"),
+    "100266b0": ("0", "CBaseEntity::GetHighlightMaterial 0x100266b0: `return 0;`"),
+    "10026a90": ("0", "CBaseEntity::ShouldIgnoreCollision 0x10026a90: `return false;`"),
+    "10026ab0": ("0", "CBaseEntity::NavIgnoreCollision 0x10026ab0: `return false;`"),
+    "10026ad0": ("0", "CBaseEntity slot 72 0x10026ad0: `return 0;`"),
+    "10026af0": ("0", "CBaseEntity::CausesImpactDamage 0x10026af0: `return false;`"),
+    "10026b10": ("0", "CBaseEntity::ReceivesImpactDamage 0x10026b10: `return false;`"),
+    "100aa900": ("0", "CBaseEntity::TestCollision 0x100aa900: the scope-trace push and pop, then "
+                      "the low byte of EAX cleared (`& 0xffffff00`): false, the trace untouched"),
+    "100aa9a0": ("0", "CBaseEntity::TestHitboxes 0x100aa9a0: the scope-trace push and pop, then "
+                      "the low byte of EAX cleared (`& 0xffffff00`): false, the trace untouched"),
+    "10026b90": ("void", "CBaseEntity::Precache 0x10026b90: `ret`"),
+    "10026bb0": ("void", "CBaseEntity::MemberSync 0x10026bb0: `ret`"),
+    "10026d30": ("0", "CBaseEntity slot 136 0x10026d30: `return 0;`"),
+    "10026d50": ("0", "CBaseEntity::GetBaseAnimating 0x10026d50: `return NULL;`"),
+    "100a7a80": ("0", "CBaseEntity::Classify 0x100a7a80: `return 0;` (CLASS_NONE)"),
+    "10026e50": ("0.0", "CBaseEntity::GetDelay 0x10026e50: `return _DAT_104454c4;`, the pooled "
+                        "float 0.0"),
+    "10027000": ("0", "CBaseEntity::GetEnemy const 0x10027000: `return NULL;`"),
+    "100b5080": ("0", "CBaseEntity::CreateVPhysics 0x100b5080: `return false;`"),
+    "100a65a0": ("void", "CBaseEntity::VPhysicsShadowCollision 0x100a65a0: the scope-trace push "
+                         "and pop, nothing else"),
+    "100273d0": ("void", "CBaseEntity::VPhysicsShadowUpdate 0x100273d0: `ret 4`"),
+    "10039ff0": ("void", "CBaseEntity::PerformCustomPhysics 0x10039ff0: the scope-trace push and "
+                         "pop; the four out-arguments untouched"),
+}
 
 # The flattened table `FElysiumNpc` stands for. Species classes add words past its end; the census
 # carries them as rows, and each is a member of its own port class.
@@ -558,6 +604,7 @@ class Slot:
     verdict: str = ""        # the overlay's word for this slot's retail body
     verdict_target: str = ""
     default: str = ""        # the retail literal, or `void`, when the body is a constant
+    default_why: str = ""    # a `RETAIL_DEFAULTS` reading, when no verdict records the default
     hand: str = ""           # the port method that defines this virtual by hand
     # The emission by owner (story 0019/5 steps 5-6). `layers` holds the rows the slot files emit
     # for this slot, one per port class whose retail table holds a body of its own there: the
@@ -843,6 +890,7 @@ def chain_subclass_names(repo: Path, overrides: dict[str, set[str]] | None = Non
 def apply_verdict(row: Slot, ledger) -> None:
     """Read the overlay's verdict for `row.body` into the row's emission (default / hand)."""
     row.verdict, row.verdict_target, row.default, row.hand = "", "", "", ""
+    row.default_why = ""
     verdict = ledger.verdicts.get(row.body)
     if verdict is not None:
         row.verdict, row.verdict_target = verdict.verdict, verdict.target
@@ -873,6 +921,22 @@ def apply_verdict(row: Slot, ledger) -> None:
             default_body(row)   # fail here, not at the C++ compiler, on a type it cannot lower
         elif hand_target(row.verdict_target):
             row.hand = hand_target(row.verdict_target)
+
+
+def apply_retail_default(row: Slot, ledger) -> None:
+    """A still-stubbed emission row whose retail body `RETAIL_DEFAULTS` reads as one constant
+    answers it. Layer rows only (`split_layers`): the census row's `Default` stays the overlay's."""
+    reading = RETAIL_DEFAULTS.get(row.body)
+    if reading is None or not row.generated or row.default or row.hand or row.closed:
+        return
+    literal, why = reading
+    body = ledger.functions.get(row.body)
+    read = constant_return(body.code or "") if body is not None else ""
+    if read and read != literal and not same_word(read, literal):
+        raise SystemExit(f"gen_kernel_shape: `RETAIL_DEFAULTS` reads {row.address} as "
+                         f"`{literal}` but the body returns `{read}`")
+    row.default, row.default_why = literal, why
+    default_body(row)   # fail here, not at the C++ compiler, on a type it cannot lower
 
 
 def chain_tables(ledger) -> dict[str, dict[int, str]]:
@@ -927,6 +991,7 @@ def split_layers(row: Slot, ledger, tables: dict[str, dict[int, str]]) -> None:
         layer.layer = ledger.layer_of.get(body, -1)
         layer.story = story_for(layer.layer) if layer.layer >= 0 else ""
         apply_verdict(layer, ledger)
+        apply_retail_default(layer, ledger)
         if row.slot in CHAIN_HAND and owner == CHAIN_PORT[retail] and owner in SLOT_SURFACES \
                 and owner not in LAYER_PORT.values() \
                 and CHAIN_HAND_OWNER.get(row.slot, owner) == owner:
@@ -1149,6 +1214,13 @@ def model_of(repo: Path, built: tuple) -> Model:
 
     for row in branch:
         row.port_name = row.method or f"Slot{row.slot}"
+
+    # A reading that lands on no generated body is stale: the slot was ported, mapped or closed.
+    landed = {layer.body for row in slots for layer in row.layers if layer.default_why}
+    stale = sorted(set(RETAIL_DEFAULTS) - landed)
+    if stale:
+        raise SystemExit("gen_kernel_shape: `RETAIL_DEFAULTS` rows that are no generated slot "
+                         "body any more (drop them): " + ", ".join(f"0x{a}" for a in stale))
 
     # --- classes and the species overrides -------------------------------------------------------
     # Own bodies by primary-vtable diff against the direct base (the ledger's count, story 5
@@ -1650,7 +1722,8 @@ def render_slots_cpp(model: Model, module: str, owner: str) -> str:
     hand = [r for r in generated if r.hand]
     stories = collections.Counter(r.story or "unassigned" for r in stubbed)
     counts = (f"{len(generated)} generated slot bodies of `{owner}`: {len(layer_defaults)} carry "
-              f"the retail default story 29c recovered, {len(hand)} are defined by hand in the "
+              f"retail's one-constant default (story 29c's verdicts, the L0 re-check's "
+              f"`RETAIL_DEFAULTS`), {len(hand)} are defined by hand in the "
               f"substrate, and {len(stubbed)} are still stubs"
               + (" — " + ", ".join(f"{count} {story}" for story, count in sorted(stories.items()))
                  if stories else "") + ".")
@@ -1708,9 +1781,12 @@ def render_slots_cpp(model: Model, module: str, owner: str) -> str:
         out += _slot_comment(row, "")
         if row.default:
             statement, _, _ = default_body(row)
-            out += _comment(f"verdict `{row.verdict}`: retail's whole body is "
-                            f"`{'return;' if row.default == 'void' else f'return {row.default};'}`",
-                            "")
+            if row.default_why:
+                out += _comment(f"retail default (L0.tooling.default-stubs): {row.default_why}", "")
+            else:
+                out += _comment(f"verdict `{row.verdict}`: retail's whole body is "
+                                f"`{'return;' if row.default == 'void' else f'return {row.default};'}`",
+                                "")
         out += _wrapped(row.port_declaration(f"{owner}::"), "")
         out.append("{")
         if row.default:
