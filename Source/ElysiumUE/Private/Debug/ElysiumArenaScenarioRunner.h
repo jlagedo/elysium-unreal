@@ -5,6 +5,7 @@
 #if !UE_BUILD_SHIPPING
 
 #include "Audio/ElysiumSoundFolderIndex.h"  // `sound_folder` fixtures: the staged owner `T`
+#include "Audio/ElysiumSoundScriptTable.h"  // `sound_script` fixtures: the staged CSoundEmitterSystemBase table
 #include "Substrate/ElysiumVSoundGroup.h"   // `vsound_registry` fixtures: the staged SndScheme table object
 #include "Debug/ElysiumArenaScenario.h"
 #include "Debug/ElysiumArenaStage.h"
@@ -268,6 +269,15 @@ private:
 	};
 	TUniquePtr<FStagedVSoundRegistry> StagedRegistry;
 	FElysiumEntityWorld* RegistryWorld = nullptr;   // the world `StagedRegistry` was installed on
+	// `sound_script` fixtures: a controlled `CSoundEmitterSystemBase` table (`Audio/ElysiumSoundScriptTable.h`)
+	// with the file set its `VFileSystem005` answers from (`files`), by fixture id.
+	struct FStagedSoundScript final : public ElysiumSoundScript::IFileExists
+	{
+		ElysiumSoundScript::FTable Table;
+		TSet<ElysiumSoundScript::FExactKey> Files;   // the `sound/<wave>` paths that exist, byte for byte
+		virtual bool FileExists(const TCHAR* Path) override { return Files.Contains(ElysiumSoundScript::FExactKey(Path)); }
+	};
+	TMap<FString, TUniquePtr<FStagedSoundScript>> StagedSoundScripts;
 	TArray<bool> ActionFired;
 	TArray<bool> ProbeRead;
 

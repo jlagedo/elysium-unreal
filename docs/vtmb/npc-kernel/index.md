@@ -83,7 +83,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10090950` | FUN_10090950 | docs/vtmb/activity_enum.md § The probe is unconditional, and it is what makes an unarmed body move, docs/vtmb/animation_and_movers.md § One speed pipeline answers a fanned gait and a plain clip alike [VtMB decompiled + data-verified], docs/vtmb/animation_and_movers.md § Player action selection is code around the model table [VtMB decompiled], docs/vtmb/animation_and_movers.md § Scripted travel speed is the resolved clip's own ground speed, +8 more |
 | `0x10090c80` | CBaseAnimating::SetAttackExtentsForSequence | docs/vtmb/combat-and-damage.md § Weapon operator bodies, the shot's gates and the attack data (S2) |
 | `0x10091080` | CBaseAnimating::SequenceDuration | docs/vtmb/animation_and_movers.md § Concurrency, eviction, interruption, docs/vtmb/combat-and-damage.md § The NPC attack producers, start to commit |
-| `0x10091230` | CBaseAnimating::GetSequenceCycleRate | docs/vtmb/animation_and_movers.md § A fan's cycle is the weighted mean of its cells' DURATIONS, not of their rates, docs/vtmb/animation_and_movers.md § The previous-sequence list, docs/vtmb/animation_and_movers.md § The refusal has three operands, ranked together, docs/vtmb/animation_events.md § Overlay layers dispatch their own timelines; autolayers never do, +12 more |
+| `0x10091230` | CBaseAnimating::GetSequenceCycleRate | docs/vtmb/animation_and_movers.md § A fan's cycle is the weighted mean of its cells' DURATIONS, not of their rates, docs/vtmb/animation_and_movers.md § The previous-sequence list, docs/vtmb/animation_and_movers.md § The refusal has three operands, ranked together, docs/vtmb/animation_events.md § Overlay layers dispatch their own timelines; autolayers never do, +13 more |
 | `0x10091310` | CBaseAnimating::GetSequenceYawSpeed | docs/vtmb/animation_and_movers.md § The previous-sequence list, docs/vtmb/animation_and_movers.md § The ramp is `SimpleSpline` |
 | `0x10091490` | CBaseAnimating::GetSequenceGroundSpeed | docs/vtmb/activity_enum.md § The probe is unconditional, and it is what makes an unarmed body move, docs/vtmb/animation_and_movers.md § One speed pipeline answers a fanned gait and a plain clip alike [VtMB decompiled + data-verified] |
 | `0x10091740` | CBaseAnimating::GetIdealSpeed | docs/vtmb/animation_and_movers.md § One speed pipeline answers a fanned gait and a plain clip alike [VtMB decompiled + data-verified], docs/vtmb/animation_and_movers.md § Scripted travel speed is the resolved clip's own ground speed, docs/vtmb/animation_and_movers.md § Transitions are client-side only |
@@ -309,6 +309,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1012c7a0` | FUN_1012c7a0 | docs/vtmb/entity_io.md § `SetParent` / `ClearParent` and the move hierarchy (`CBaseEntity`) [decompiled, L0-r010] |
 | `0x1012c7f0` | FUN_1012c7f0 | docs/vtmb/entity_io.md § `SetParent` / `ClearParent` and the move hierarchy (`CBaseEntity`) [decompiled, L0-r010] |
 | `0x1012c840` | FUN_1012c840 | docs/vtmb/entity_io.md § `SetParent` / `ClearParent` and the move hierarchy (`CBaseEntity`) [decompiled, L0-r010] |
+| `0x1012f700` | FUN_1012f700 | docs/vtmb/audio_pipeline.md § Resolving a sound script: `GetParametersForSound` and its helpers [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r008.md`] |
 | `0x10136580` | FUN_10136580 | docs/vtmb/npc-ai/lifecycle.md § `0x103c60a0` `CNPC_VVampireBoss::TransformationStart` (slot 618, 632 bytes) |
 | `0x10137220` | FUN_10137220 | docs/vtmb/combat-and-damage.md § `FUN_102a0290` — the knockback velocity builder, docs/vtmb/npc-ai/schedule-kernel.md § The three hint validators — `0x10295ed0`, `0x102961a0`, `0x10296c40` (2026-09-13), docs/vtmb/npc-ai/senses.md § `WeaponLOSCondition` `0x1026fbe0`, docs/vtmb/npc-ai/shape.md § The jump origin and target `0x102c4ad0`, +2 more |
 | `0x10137ed0` | FUN_10137ed0 | docs/vtmb/entity_io.md § `SetParent` / `ClearParent` and the move hierarchy (`CBaseEntity`) [decompiled, L0-r010] |
@@ -472,7 +473,14 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x101aaf80` | CPayphone::PassesFindEntityFOVTrace | docs/vtmb/npc-ai/senses.md § `PassesFindEntityFOVTrace`, the two species bodies — `0x101aaf80`, `0x103a4bb0` (2026-09-13) |
 | `0x101aeb60` | FUN_101aeb60 | docs/vtmb/npc-ai/shape.md § The species vocalization table — slots 488–508, 620, 621 |
 | `0x101b0c10` | FUN_101b0c10 | docs/vtmb/npc-ai/conditions-and-states.md § `CAI_BaseNPC::HandleAnimEvent` `0x10274e30` |
+| `0x101b0dc0` | FUN_101b0dc0 | docs/vtmb/audio_pipeline.md § Resolving a sound script: `GetParametersForSound` and its helpers [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r008.md`] |
+| `0x101b1040` | FUN_101b1040 | docs/vtmb/audio_pipeline.md § Resolving a sound script: `GetParametersForSound` and its helpers [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r008.md`] |
+| `0x101b14d0` | FUN_101b14d0 | docs/vtmb/audio_pipeline.md § Resolving a sound script: `GetParametersForSound` and its helpers [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r008.md`] |
+| `0x101b2f60` | FUN_101b2f60 | docs/vtmb/audio_pipeline.md § Resolving a sound script: `GetParametersForSound` and its helpers [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r008.md`] |
 | `0x101b30d0` | FUN_101b30d0 | docs/vtmb/audio_pipeline.md § The sound-script descriptor and the channel parser (`vampire.dll`) [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r007.md`] |
+| `0x101b3240` | FUN_101b3240 | docs/vtmb/audio_pipeline.md § Resolving a sound script: `GetParametersForSound` and its helpers [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r008.md`] |
+| `0x101b33f0` | FUN_101b33f0 | docs/vtmb/audio_pipeline.md § Resolving a sound script: `GetParametersForSound` and its helpers [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r008.md`] |
+| `0x101b4170` | FUN_101b4170 | docs/vtmb/audio_pipeline.md § Resolving a sound script: `GetParametersForSound` and its helpers [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r008.md`] |
 | `0x101b9840` | FUN_101b9840 | docs/vtmb/npc-ai/lifecycle.md § The sentinel codec — `0x101cf250`, `0x101cf2f0`, `0x101b9840`, `0x101b9860`, docs/vtmb/npc-ai/lifecycle.md § `CAI_BaseNPCTroika::Save` — `0x102993c0` |
 | `0x101b9860` | FUN_101b9860 | docs/vtmb/npc-ai/lifecycle.md § The sentinel codec — `0x101cf250`, `0x101cf2f0`, `0x101b9840`, `0x101b9860` |
 | `0x101b9880` | FUN_101b9880 | docs/vtmb/npc-ai/conditions-and-states.md § The pre-selector's thirteen steps, as ported (0019 story 8 pass I, 2026-09-27), docs/vtmb/npc-ai/conditions-and-states.md § `PreSelectSchedule` `0x102ae920` runs ahead of `SelectSchedule` |
@@ -622,7 +630,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10249aa0` | FUN_10249aa0 | docs/vtmb/npc-ai/programs.md § Patrol paths, walked (2026-09-12, story 10g) |
 | `0x10249c70` | FUN_10249c70 | docs/vtmb/npc-ai/conditions-and-states.md § Naming a condition, long and short — `0x102cc300`, `0x1027ede0`, `0x1027e7f0` (2026-09-13) |
 | `0x1024b2d0` | FUN_1024b2d0 | docs/vtmb/npc-ai/programs.md § Patrol paths, walked (2026-09-12, story 10g) |
-| `0x1024b400` | FUN_1024b400 | docs/vtmb/npc-ai/teams.md § Field and writer closure |
+| `0x1024b400` | FUN_1024b400 | docs/vtmb/audio_pipeline.md § Resolving a sound script: `GetParametersForSound` and its helpers [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r008.md`], docs/vtmb/npc-ai/teams.md § Field and writer closure |
 | `0x1024b5e0` | FUN_1024b5e0 | docs/vtmb/npc-ai/programs.md § Patrol paths, walked (2026-09-12, story 10g), docs/vtmb/npc-ai/teams.md § Field and writer closure |
 | `0x1024b9e0` | FUN_1024b9e0 | docs/vtmb/npc-ai/teams.md § Field and writer closure |
 | `0x1024cf80` | FUN_1024cf80 | docs/vtmb/entity_io.md § `SetParent` / `ClearParent` and the move hierarchy (`CBaseEntity`) [decompiled, L0-r010] |
@@ -2838,14 +2846,14 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x100022d0` | docs/vtmb/navigation-jump-links.md:985 |
 | `0x100028dd` | docs/vtmb/entity_io.md:2628 |
 | `0x10002cd4` | docs/vtmb/entity_io.md:701 |
-| `0x10003a71` | docs/vtmb/audio_pipeline.md:248, docs/vtmb/audio_pipeline.md:289 |
+| `0x10003a71` | docs/vtmb/audio_pipeline.md:331, docs/vtmb/audio_pipeline.md:372 |
 | `0x10004656` | docs/vtmb/navigation-jump-links.md:2453 |
 | `0x1000572c` | docs/vtmb/npc-ai/lifecycle.md:2140 |
 | `0x10006429` | docs/vtmb/python_bridge.md:491 |
 | `0x1000696a` | docs/vtmb/entity_io.md:1804, docs/vtmb/npc-ai/lifecycle.md:1246, docs/vtmb/npc-ai/lifecycle.md:2138 |
 | `0x10008bde` | docs/vtmb/entity_io.md:523 |
 | `0x10009557` | docs/vtmb/entity_io.md:452 |
-| `0x1000969c` | docs/vtmb/audio_pipeline.md:495, docs/vtmb/audio_pipeline.md:536 |
+| `0x1000969c` | docs/vtmb/audio_pipeline.md:578, docs/vtmb/audio_pipeline.md:619 |
 | `0x10009cc0` | docs/vtmb/navigation-jump-links.md:986 |
 | `0x1000a006` | docs/vtmb/navigation-jump-links.md:857 |
 | `0x1000a443` | docs/vtmb/python_bridge.md:188 |
@@ -3011,16 +3019,16 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x103cb754` | docs/vtmb/navigation-jump-links.md:915, docs/vtmb/npc-ai/lifecycle.md:223, docs/vtmb/npc-ai/schedule-kernel.md:5129 |
 | `0x10445000` | docs/vtmb/animation_rig_resolution.md:771, docs/vtmb/npc-ai/lifecycle.md:1713, docs/vtmb/npc-ai/shape.md:3710, +1 more |
 | `0x104454c0` | docs/vtmb/animation_and_movers.md:659, docs/vtmb/animation_events.md:242, docs/vtmb/feeding.md:212, +3 more |
-| `0x104454c4` | docs/vtmb/animation_events.md:222, docs/vtmb/animation_events.md:242, docs/vtmb/audio_pipeline.md:307, +12 more |
-| `0x104454d0` | docs/vtmb/audio_pipeline.md:279, docs/vtmb/camera-view-modes.md:667, docs/vtmb/entity_io.md:2272, +5 more |
+| `0x104454c4` | docs/vtmb/animation_events.md:222, docs/vtmb/animation_events.md:242, docs/vtmb/audio_pipeline.md:152, +13 more |
+| `0x104454d0` | docs/vtmb/audio_pipeline.md:362, docs/vtmb/camera-view-modes.md:667, docs/vtmb/entity_io.md:2272, +5 more |
 | `0x10445e08` | docs/vtmb/entity_io.md:2467 |
 | `0x10447ee0` | docs/vtmb/footsteps.md:278, docs/vtmb/footsteps.md:986, docs/vtmb/source_movement.md:402 |
 | `0x10447ee8` | docs/vtmb/navigation-jump-links.md:2119, docs/vtmb/npc-ai/schedule-kernel.md:35 |
 | `0x10449148` | docs/vtmb/footsteps.md:104, docs/vtmb/footsteps.md:969, docs/vtmb/npc-ai/senses.md:1025 |
 | `0x10449154` | docs/vtmb/npc-ai/rdata-cells.md:16 |
-| `0x10449198` | docs/vtmb/audio_pipeline.md:445, docs/vtmb/audio_pipeline.md:537, docs/vtmb/footsteps.md:364, +6 more |
+| `0x10449198` | docs/vtmb/audio_pipeline.md:528, docs/vtmb/audio_pipeline.md:620, docs/vtmb/footsteps.md:364, +6 more |
 | `0x104491a8` | docs/vtmb/navigation-jump-links.md:322, docs/vtmb/navigation-jump-links.md:1841, docs/vtmb/npc-ai/rdata-cells.md:62, +2 more |
-| `0x104491b4` | docs/vtmb/animation_and_movers.md:2201, docs/vtmb/animation_events.md:46, docs/vtmb/audio_pipeline.md:290, +5 more |
+| `0x104491b4` | docs/vtmb/animation_and_movers.md:2201, docs/vtmb/animation_events.md:46, docs/vtmb/audio_pipeline.md:373, +5 more |
 | `0x10449258` | docs/vtmb/camera-view-modes.md:701, docs/vtmb/entity_io.md:465 |
 | `0x10449260` | docs/vtmb/animation_events.md:212, docs/vtmb/animation_events.md:221, docs/vtmb/footsteps.md:362, +4 more |
 | `0x10449270` | docs/vtmb/entity_io.md:463, docs/vtmb/footsteps.md:364, docs/vtmb/footsteps.md:1000, +8 more |
@@ -3042,13 +3050,13 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1044c3a8` | docs/vtmb/entity_io.md:2272, docs/vtmb/navigation-jump-links.md:1922, docs/vtmb/npc-ai/conditions-and-states.md:1640, +2 more |
 | `0x1044dcf0` | docs/vtmb/npc-ai/schedule-kernel.md:4445 |
 | `0x1044ddb0` | docs/vtmb/npc-ai/conditions-and-states.md:1640 |
-| `0x1044e658` | docs/vtmb/audio_pipeline.md:345, docs/vtmb/navigation-jump-links.md:2049, docs/vtmb/npc-ai/rdata-cells.md:22, +1 more |
+| `0x1044e658` | docs/vtmb/audio_pipeline.md:428, docs/vtmb/navigation-jump-links.md:2049, docs/vtmb/npc-ai/rdata-cells.md:22, +1 more |
 | `0x1044e664` | docs/vtmb/animation_events.md:243, docs/vtmb/navigation-jump-links.md:924, docs/vtmb/navigation-jump-links.md:1766 |
 | `0x1044e668` | docs/vtmb/animation_events.md:212, docs/vtmb/animation_events.md:220 |
 | `0x1044eb0c` | docs/vtmb/npc-ai/conditions-and-states.md:1666 |
 | `0x1044f020` | docs/vtmb/animation_events.md:266, docs/vtmb/entity_io.md:1206, docs/vtmb/npc-ai/rdata-cells.md:66, +3 more |
 | `0x1044f030` | docs/vtmb/source_movement.md:426 |
-| `0x1044fab0` | docs/vtmb/audio_pipeline.md:305, docs/vtmb/footsteps.md:319, docs/vtmb/npc-ai/rdata-cells.md:23 |
+| `0x1044fab0` | docs/vtmb/audio_pipeline.md:388, docs/vtmb/footsteps.md:319, docs/vtmb/npc-ai/rdata-cells.md:23 |
 | `0x1044fac0` | docs/vtmb/combat-and-damage.md:2219, docs/vtmb/npc-ai/rdata-cells.md:64 |
 | `0x1044ffdc` | docs/vtmb/npc-ai/rdata-cells.md:24, docs/vtmb/npc-ai/rdata-cells.md:73 |
 | `0x1044ffe8` | docs/vtmb/npc-ai/shape.md:1552 |
@@ -3057,7 +3065,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10450564` | docs/vtmb/combat-and-damage.md:1012, docs/vtmb/combat-and-damage.md:1021, docs/vtmb/feeding.md:211, +4 more |
 | `0x10450a9c` | docs/vtmb/npc-ai/senses.md:1216 |
 | `0x10450aa0` | docs/vtmb/npc-ai/rdata-cells.md:65, docs/vtmb/npc-ai/senses.md:354 |
-| `0x10450aa4` | docs/vtmb/audio_pipeline.md:342, docs/vtmb/npc-ai/rdata-cells.md:26, docs/vtmb/npc-ai/schedule-kernel.md:4924 |
+| `0x10450aa4` | docs/vtmb/audio_pipeline.md:425, docs/vtmb/npc-ai/rdata-cells.md:26, docs/vtmb/npc-ai/schedule-kernel.md:4924 |
 | `0x10451acc` | docs/vtmb/npc-ai/conditions-and-states.md:1639, docs/vtmb/npc-ai/rdata-cells.md:27 |
 | `0x10451f78` | docs/vtmb/navigation-jump-links.md:533, docs/vtmb/navigation-jump-links.md:1390, docs/vtmb/navigation-jump-links.md:1634 |
 | `0x104528c8` | docs/vtmb/navigation-jump-links.md:2068 |
@@ -3073,7 +3081,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10454b8c` | docs/vtmb/source_movement.md:397 |
 | `0x10455050` | docs/vtmb/npc-ai/rdata-cells.md:29, docs/vtmb/npc-ai/rdata-cells.md:73 |
 | `0x1045597c` | docs/vtmb/footsteps.md:531, docs/vtmb/footsteps.md:1037, docs/vtmb/npc-ai/senses.md:120 |
-| `0x10457188` | docs/vtmb/audio_pipeline.md:445 |
+| `0x10457188` | docs/vtmb/audio_pipeline.md:528 |
 | `0x10457ac4` | docs/vtmb/navigation-jump-links.md:2919, docs/vtmb/navigation-jump-links.md:3246 |
 | `0x10457f54` | docs/vtmb/computer-terminals.md:524 |
 | `0x10457f5c` | docs/vtmb/navigation-jump-links.md:2712 |
@@ -3084,7 +3092,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10462914` | docs/vtmb/footsteps.md:300, docs/vtmb/source_movement.md:277 |
 | `0x10462918` | docs/vtmb/footsteps.md:370, docs/vtmb/footsteps.md:1001 |
 | `0x10462928` | docs/vtmb/footsteps.md:362, docs/vtmb/footsteps.md:998 |
-| `0x10462950` | docs/vtmb/audio_pipeline.md:469, docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:965, +3 more |
+| `0x10462950` | docs/vtmb/audio_pipeline.md:552, docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:965, +3 more |
 | `0x10462958` | docs/vtmb/footsteps.md:437, docs/vtmb/footsteps.md:1028, docs/vtmb/navigation-jump-links.md:2173 |
 | `0x10462968` | docs/vtmb/navigation-jump-links.md:684 |
 | `0x104629d8` | docs/vtmb/footsteps.md:530, docs/vtmb/footsteps.md:1037 |
@@ -3093,16 +3101,16 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1046a51c` | docs/vtmb/npc-ai/rdata-cells.md:30, docs/vtmb/npc-ai/rdata-cells.md:73 |
 | `0x1046bac4` | docs/vtmb/navigation-jump-links.md:935 |
 | `0x1046bacc` | docs/vtmb/navigation-jump-links.md:2919, docs/vtmb/navigation-jump-links.md:3247 |
-| `0x104704a8` | docs/vtmb/audio_pipeline.md:469, docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:964 |
+| `0x104704a8` | docs/vtmb/audio_pipeline.md:552, docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:964 |
 | `0x104704b4` | docs/vtmb/npc-ai/rdata-cells.md:31, docs/vtmb/npc-ai/rdata-cells.md:73 |
 | `0x104704b8` | docs/vtmb/footsteps.md:578, docs/vtmb/footsteps.md:1050 |
 | `0x10471720` | docs/vtmb/npc-ai/rdata-cells.md:32 |
 | `0x1047a3ac` | docs/vtmb/navigation-jump-links.md:1941, docs/vtmb/npc-ai/schedule-kernel.md:1021, docs/vtmb/npc-ai/schedule-kernel.md:1033 |
-| `0x1047aa18` | docs/vtmb/audio_pipeline.md:469, docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:963 |
+| `0x1047aa18` | docs/vtmb/audio_pipeline.md:552, docs/vtmb/footsteps.md:97, docs/vtmb/footsteps.md:963 |
 | `0x1047b868` | docs/vtmb/animation_events.md:206, docs/vtmb/combat-and-damage.md:2030, docs/vtmb/npc-ai/conditions-and-states.md:1669, +3 more |
 | `0x10483aac` | docs/vtmb/npc-ai/conditions-and-states.md:1640, docs/vtmb/npc-ai/rdata-cells.md:33, docs/vtmb/npc-ai/senses.md:116 |
 | `0x10488874` | docs/vtmb/combat-and-damage.md:1037 |
-| `0x1048dd2c` | docs/vtmb/audio_pipeline.md:329 |
+| `0x1048dd2c` | docs/vtmb/audio_pipeline.md:412 |
 | `0x104902c9` | docs/vtmb/vtmb-animation-reverse-engineering.md:2271 |
 | `0x10496f58` | docs/vtmb/npc-ai/rdata-cells.md:34, docs/vtmb/vdata-catalog.md:272 |
 | `0x10497530` | docs/vtmb/navigation-jump-links.md:1707, docs/vtmb/npc-ai/rdata-cells.md:35 |
@@ -3246,9 +3254,9 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1058f9f8` | docs/vtmb/python_bridge.md:595 |
 | `0x1058fa08` | docs/vtmb/python_bridge.md:594 |
 | `0x1059366c` | docs/vtmb/entity_io.md:2333 |
-| `0x10595eb4` | docs/vtmb/audio_pipeline.md:505 |
-| `0x10595f18` | docs/vtmb/audio_pipeline.md:506 |
-| `0x10596940` | docs/vtmb/audio_pipeline.md:506 |
+| `0x10595eb4` | docs/vtmb/audio_pipeline.md:588 |
+| `0x10595f18` | docs/vtmb/audio_pipeline.md:589 |
+| `0x10596940` | docs/vtmb/audio_pipeline.md:589 |
 | `0x10597c4c` | docs/vtmb/npc-ai/conditions-and-states.md:1678, docs/vtmb/npc-ai/programs.md:1060 |
 | `0x10598c78` | docs/vtmb/audio_pipeline.md:123 |
 | `0x105994a0` | docs/vtmb/animation_events.md:542 |

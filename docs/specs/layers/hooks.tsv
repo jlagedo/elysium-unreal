@@ -362,7 +362,6 @@ L0 entity	L4 NPC	0x10427a70	Global::FUN_10427a70	108	settled:partial	0x10412520	
 L0 entity	L4 NPC	0x10104730	Global::FUN_10104730	107	settled:partial	0x100b4790	Global::FUN_100b4790
 L0 entity	L4 NPC	0x1022a930	Global::FUN_1022a930	107	ported	0x10248c60	Global::FUN_10248c60
 L0 entity	L4 NPC	0x1027de00	Global::FUN_1027de00	107	ported	0x102ee6a0	Global::FUN_102ee6a0
-L0 entity	L5 script	0x101b33f0	Global::FUN_101b33f0	104	settled:partial	0x1024b400	Global::FUN_1024b400
 L0 entity	L4 NPC	0x10278220	Global::FUN_10278220	104	ported	0x102ecd20	Global::SetGoal
 L0 entity	L4 NPC	0x10278220	Global::FUN_10278220	104	ported	0x102e6d70	Global::FUN_102e6d70
 L0 entity	L4 NPC	0x1028ebc0	Global::FUN_1028ebc0	104	ported	0x10143d80	Global::FUN_10143d80

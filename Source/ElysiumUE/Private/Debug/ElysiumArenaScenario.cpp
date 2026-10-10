@@ -37,7 +37,7 @@ namespace ElysiumArenaScenarioParse
 	};
 
 	// The `fixtures` catalog's kinds. A story adds its own in the slice that stages it.
-	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues"), TEXT("text"), TEXT("sound_folder"), TEXT("vsound_registry") };
+	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues"), TEXT("text"), TEXT("sound_folder"), TEXT("vsound_registry"), TEXT("sound_script") };
 
 	enum class ENeed : uint8 { Optional, Required };
 
@@ -1379,14 +1379,18 @@ namespace ElysiumArenaScenarioParse
 			{
 				return R.Fail(Field(Path, TEXT("text")), TEXT("only a `text` fixture takes `text`"));
 			}
-			if (Fixture.Kind == TEXT("sound_folder") || Fixture.Kind == TEXT("vsound_registry"))
+			if (Fixture.Kind == TEXT("sound_folder") || Fixture.Kind == TEXT("vsound_registry") || Fixture.Kind == TEXT("sound_script"))
 			{
 				// `sound_folder`: the VSound folder index's owner `T` (`Audio/ElysiumSoundFolderIndex.h`),
 				// `config`: `{"categories": <n>, "counts": [<int>...], "root": <node>}`, a node being
 				// `{"label", "key", "name", "mask": [<0|1>...], "children": [<node>...], "siblings": [<node>...]}`.
 				// `vsound_registry`: a SndScheme table object `reg` (`Substrate/ElysiumVSoundGroup.h`),
 				// `config`: `{"tables": [<sound_folder fixture id>...]}`, the per-category table array in
-				// category order. The runner checks the shape when it stages the fixture.
+				// category order. `sound_script`: a controlled `CSoundEmitterSystemBase` table
+				// (`Audio/ElysiumSoundScriptTable.h`), `config`: `{"sounds": [{"name", "channel", "volume":
+				// [base, span], "pitch": [..], "soundlevel": [..], "play_to_owner_only", "waves": [<name> |
+				// {"name", "category"}...]}...], "files": [<wave>...], "mark_missing": <bool>}`. The runner
+				// checks the shape when it stages the fixture.
 				if (FindValue(*Item, TEXT("values")) != nullptr)
 				{
 					return R.Fail(Field(Path, TEXT("values")), FString::Printf(TEXT("a `%s` fixture takes `config`, not `values`"), *Fixture.Kind));
@@ -1396,7 +1400,9 @@ namespace ElysiumArenaScenarioParse
 				{
 					return R.Fail(Field(Path, TEXT("config")), Fixture.Kind == TEXT("sound_folder")
 						? TEXT("required: the owner's categories, counts and root node")
-						: TEXT("required: the registry's `tables`, the sound_folder fixture ids in category order"));
+						: Fixture.Kind == TEXT("sound_script")
+							? TEXT("required: the table's `sounds` (and optionally `files`, `mark_missing`)")
+							: TEXT("required: the registry's `tables`, the sound_folder fixture ids in category order"));
 				}
 				continue;
 			}
@@ -2010,6 +2016,12 @@ const TArray<FString>& EntityCallAllowlist()
 		// `FUN_101b24d0`. A `null` argument is the parser's NULL name.
 		TEXT("SoundScript_New"),
 		TEXT("SoundScript_SetChannel"),
+		// L0.audio.sound-script-resolve: `GetParametersForSound` `FUN_101b33f0` `0x101b33f0` on a staged
+		// `sound_script` table (`Audio/ElysiumSoundScriptTable.h`) -- the call every EmitSound /
+		// StopSound worker makes (`0x101b0dc0`, `0x101b1040`, `0x101b1120`, `0x101b14d0`, `0x101b1880`,
+		// `0x101b1a00`, `0x101b06a0`, `0x101b1dd0`, `0x101b40a0`, `0x101b4170`), with the callers' preset
+		// `CSoundParameters`. A `null` argument is `EmitAmbientSound`'s NULL name.
+		TEXT("SoundScript_GetParameters"),
 	};
 	return Allowed;
 }

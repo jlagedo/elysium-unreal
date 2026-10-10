@@ -29,8 +29,10 @@
 //
 // 1. `water.Impact` and `water.Scrape` are sound SCRIPT names in
 //    `scripts/game_sounds_surfaceproperties.txt` (`UElysiumPhysicalMaterial::SoundScriptImpact`
-//    carries them verbatim as `vtmb:sound-script:` ids), and this runtime has no script table to
-//    resolve one with. The wavs those scripts name are exported into the surfaceprop's own folder
+//    carries them verbatim as `vtmb:sound-script:` ids). The resolver exists
+//    (`ElysiumSoundScriptTable.h`: `GetParametersForSound` `0x101b33f0`, L0-r008) but the manifest
+//    reader that fills the live table (`AddSoundsFromFile` `0x101b4240`) is not ported, so nothing
+//    here can resolve one yet. The wavs those scripts name are exported into the surfaceprop's own folder
 //    beside its footstep pool -- `surfaces/water/impact1-3.wav` next to
 //    `surfaces/water/stepleft1.wav` -- so the pool is taken from that folder by the script's own
 //    verb. Replace this with the table when the sound-script lane lands; nothing else here moves.

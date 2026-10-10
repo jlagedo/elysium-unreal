@@ -44,6 +44,10 @@ enum class EElysiumRngStream : uint8
 	               // `CalcNextNormalThink` (`0x10290b60`) and `(0, 0.4)` in `CalcNextAIThink`
 	               // (`0x10291230`). Its own stream because it draws once per NPC per think and
 	               // would otherwise walk every other stream's position off the map
+	SoundScript,   // `VEngineRandom001` as the sound-script resolver draws it (`Audio/
+	               // ElysiumSoundScriptTable.h`): the volume / pitch / soundlevel interval samples of
+	               // `FUN_1012f700` (`0x1012f700`) and the wave pick of `FUN_101b3240` (`0x101b3240`),
+	               // in retail's order per `GetParametersForSound` `0x101b33f0`
 	Count
 };
 

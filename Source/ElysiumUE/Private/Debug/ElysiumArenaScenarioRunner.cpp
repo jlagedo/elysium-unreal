@@ -971,6 +971,140 @@ void FElysiumArenaScenarioRunner::StageFixtures(FElysiumEntityWorld& World)
 			}
 			continue;
 		}
+		if (Fixture.Kind == TEXT("sound_script"))
+		{
+			// A controlled `CSoundEmitterSystemBase` table (`Audio/ElysiumSoundScriptTable.h`), built the
+			// way `AddSoundsFromFile` 0x101b4240 ends: per entry a descriptor constructed by `FUN_101b30d0`,
+			// the keys the entry carries set on it (`channel` through the setter `FUN_101b2490`; the
+			// interval pairs stated as (base, span), their parsers not being this run's), each wave
+			// interned in the wave-string table with its category (0 plain, 1 male, 2 female -- what
+			// `FUN_101b3830` assigns), then the node inserted. `files` is the set of `sound/<wave>` paths
+			// the fixture's `VFileSystem005` answers true for. `mark_missing` (default true) runs the
+			// BaseInit pass `FUN_101b4740` quiet, as `0x101b2c60` does, so `rec+0x48` holds what retail's
+			// would; false models the records before that pass (flag 0 whatever the files).
+			TUniquePtr<FStagedSoundScript> Scripted = MakeUnique<FStagedSoundScript>();
+			// The pass below reports through the sink, which appends to `Events`: `Staged` may move, so
+			// the staged line is written through its index once the pass is done.
+			const int32 StagedIndex = Events.Num() - 1;
+			FString Error;
+			const TArray<TSharedPtr<FJsonValue>>* Sounds = nullptr;
+			if (!Fixture.Config.IsValid() || !Fixture.Config->TryGetArrayField(TEXT("sounds"), Sounds))
+			{
+				Error = TEXT("config needs `sounds` (an array of sound entries)");
+			}
+			else
+			{
+				const TArray<TSharedPtr<FJsonValue>>* Files = nullptr;
+				if (Fixture.Config->TryGetArrayField(TEXT("files"), Files))
+				{
+					for (const TSharedPtr<FJsonValue>& File : *Files)
+					{
+						if (File.IsValid() && File->Type == EJson::String)
+						{
+							Scripted->Files.Add(ElysiumSoundScript::FExactKey(FString(TEXT("sound/")) + File->AsString()));
+						}
+					}
+				}
+				for (const TSharedPtr<FJsonValue>& Sound : *Sounds)
+				{
+					const TSharedPtr<FJsonObject>* Entry = nullptr;
+					FString Name;
+					if (!Sound.IsValid() || !Sound->TryGetObject(Entry) || !(*Entry)->TryGetStringField(TEXT("name"), Name))
+					{
+						Error = TEXT("each of `sounds` is an object with a `name`");
+						break;
+					}
+					ElysiumSoundScript::FParams Params;
+					ElysiumSoundScript::Construct(Params, nullptr);
+					if (const TSharedPtr<FJsonValue> Channel = (*Entry)->TryGetField(TEXT("channel")); Channel.IsValid())
+					{
+						const FString ChannelText = Channel->Type == EJson::Number
+							? FString::FromInt(static_cast<int32>(Channel->AsNumber())) : Channel->AsString();
+						ElysiumSoundScript::SetChannel(Params, *ChannelText, nullptr);
+					}
+					auto ReadPair = [&Entry, &Error](const TCHAR* Key, ElysiumSoundScript::FInterval& Interval)
+					{
+						const TArray<TSharedPtr<FJsonValue>>* Pair = nullptr;
+						if (!(*Entry)->TryGetArrayField(Key, Pair))
+						{
+							return;
+						}
+						if (Pair->Num() != 2 || !(*Pair)[0].IsValid() || !(*Pair)[1].IsValid()
+							|| (*Pair)[0]->Type != EJson::Number || (*Pair)[1]->Type != EJson::Number)
+						{
+							Error = FString::Printf(TEXT("`%s` is [base, span]"), Key);
+							return;
+						}
+						Interval.Start = static_cast<float>((*Pair)[0]->AsNumber());
+						Interval.Range = static_cast<float>((*Pair)[1]->AsNumber());
+					};
+					ReadPair(TEXT("volume"), Params.Volume);
+					ReadPair(TEXT("pitch"), Params.Pitch);
+					ReadPair(TEXT("soundlevel"), Params.SoundLevel);
+					if (const TSharedPtr<FJsonValue> OwnerOnly = (*Entry)->TryGetField(TEXT("play_to_owner_only")); OwnerOnly.IsValid())
+					{
+						Params.bPlayToOwnerOnly = OwnerOnly->Type == EJson::Boolean ? (OwnerOnly->AsBool() ? 1 : 0)
+							: static_cast<uint8>(OwnerOnly->AsNumber());
+					}
+					const TArray<TSharedPtr<FJsonValue>>* Waves = nullptr;
+					if ((*Entry)->TryGetArrayField(TEXT("waves"), Waves))
+					{
+						for (const TSharedPtr<FJsonValue>& Wave : *Waves)
+						{
+							ElysiumSoundScript::FWave Built;
+							FString WaveName;
+							if (Wave.IsValid() && Wave->Type == EJson::String)
+							{
+								WaveName = Wave->AsString();
+							}
+							else if (const TSharedPtr<FJsonObject>* WaveObject = nullptr; Wave.IsValid() && Wave->TryGetObject(WaveObject)
+								&& (*WaveObject)->TryGetStringField(TEXT("name"), WaveName))
+							{
+								double Category = 0.0;
+								(*WaveObject)->TryGetNumberField(TEXT("category"), Category);
+								Built.Gender = static_cast<uint32>(Category);
+							}
+							else
+							{
+								Error = FString::Printf(TEXT("sound '%s': a wave is a string or {\"name\", \"category\"}"), *Name);
+								break;
+							}
+							Built.Symbol = Scripted->Table.InternWave(*WaveName);
+							Params.Waves.Add(Built);
+						}
+					}
+					if (!Error.IsEmpty())
+					{
+						break;
+					}
+					if (Scripted->Table.AddEntry(*Name, MoveTemp(Params)) == -1)
+					{
+						Error = FString::Printf(TEXT("sound '%s' is already in the table"), *Name);
+						break;
+					}
+				}
+			}
+			int32 Missing = 0;
+			if (Error.IsEmpty())
+			{
+				bool bMarkMissing = true;
+				Fixture.Config->TryGetBoolField(TEXT("mark_missing"), bMarkMissing);
+				if (bMarkMissing)
+				{
+					FElysiumNamedRetailSites Sites(World, Fixture.Id);
+					Missing = Scripted->Table.MarkMissingWaves(*Scripted, ElysiumSoundScript::EMissingReport::Quiet, &Sites);
+				}
+				Events[StagedIndex].Text = FString::Printf(TEXT("fixture %s %s staged sounds=%d names=%d waves=%d files=%d missing=%d"), *Fixture.Id, *Fixture.Kind,
+					Scripted->Table.Count(), Scripted->Table.NameCount(), Scripted->Table.WaveCount(), Scripted->Files.Num(), Missing);
+				StagedSoundScripts.Add(Fixture.Id, MoveTemp(Scripted));
+			}
+			else
+			{
+				Events[StagedIndex].Text = FString::Printf(TEXT("fixture %s %s failed: %s"), *Fixture.Id, *Fixture.Kind, *Error);
+				StagedFixtures.Remove(Fixture.Id);
+			}
+			continue;
+		}
 		Staged.Text = Fixture.Kind == TEXT("text")
 			? FString::Printf(TEXT("fixture %s %s staged chars=%d"), *Fixture.Id, *Fixture.Kind, Fixture.Text.Len())
 			: FString::Printf(TEXT("fixture %s %s staged keys=%d"), *Fixture.Id, *Fixture.Kind, Fixture.Values.Num());
@@ -1039,6 +1173,38 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 				}
 			}
 			OutError = FString::Printf(TEXT("fixture '%s' has no node labelled '%s'"), *Fixture->Id, *Probe.Index);
+			return false;
+		}
+		// A `sound_script` fixture answers `names` (the sound-name symbol table's count, `+0x12`: an
+		// unknown name `FindSound` interned shows here) and `missing_flag` (`index`: a sound name; its
+		// record's `+0x48` byte), both read without a retail call.
+		if (Fixture->Kind == TEXT("sound_script"))
+		{
+			const TUniquePtr<FStagedSoundScript>* Scripted = StagedSoundScripts.Find(Fixture->Id);
+			if (Scripted == nullptr || !Scripted->IsValid() || !Probe.Member.IsEmpty())
+			{
+				OutError = FString::Printf(TEXT("fixture '%s': `names` / `missing_flag` take no `member`"), *Fixture->Id);
+				return false;
+			}
+			if (Probe.Field == TEXT("names") && Probe.Index.IsEmpty())
+			{
+				OutAnswer.Type = FElysiumArenaValue::EType::Number;
+				OutAnswer.Number = (*Scripted)->Table.NameCount();
+				return true;
+			}
+			if (Probe.Field == TEXT("missing_flag") && !Probe.Index.IsEmpty())
+			{
+				const ElysiumSoundScript::FParams* Rec = (*Scripted)->Table.Record((*Scripted)->Table.Lookup(*Probe.Index));
+				if (Rec == nullptr)
+				{
+					OutError = FString::Printf(TEXT("fixture '%s' has no sound '%s'"), *Fixture->Id, *Probe.Index);
+					return false;
+				}
+				OutAnswer.Type = FElysiumArenaValue::EType::Number;
+				OutAnswer.Number = Rec->bHasMissingWave;
+				return true;
+			}
+			OutError = FString::Printf(TEXT("fixture '%s' has no field '%s' (names; missing_flag with `index`)"), *Fixture->Id, *Probe.Field);
 			return false;
 		}
 		// A `text` fixture answers its one field, `text`.
@@ -2238,8 +2404,43 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 				TEXT("pitch=%.0f,%.0f pitch_text=%s level=%.0f,%.0f level_text=%s owner_only=%d precache=%d flag48=%d waves=%d second=%d"),
 				*Verb, Params.Channel, Params.ChannelText, Params.Volume.Start, Params.Volume.Range, Params.VolumeText,
 				Params.Pitch.Start, Params.Pitch.Range, Params.PitchText, Params.SoundLevel.Start, Params.SoundLevel.Range,
-				Params.SoundLevelText, Params.bPlayToOwnerOnly, Params.bPrecache, Params.Flag48, Params.Waves.Num(),
+				Params.SoundLevelText, Params.bPlayToOwnerOnly, Params.bPrecache, Params.bHasMissingWave, Params.Waves.Num(),
 				Params.SecondList.Num());
+			return true;
+		}
+		if (Action.Function == TEXT("SoundScript_GetParameters"))
+		{
+			// `GetParametersForSound` `FUN_101b33f0` `0x101b33f0` on a staged `sound_script` table
+			// (`Audio/ElysiumSoundScriptTable.h`), as the EmitSound / StopSound workers call it: argument
+			// 0 names the fixture (the instance `DAT_1072be18` and its `VFileSystem005`), argument 1 the
+			// sound-script name (a string, or `null` for `EmitAmbientSound`'s NULL). `out` is the callers'
+			// preset `CSoundParameters`; the draws go through the session's `VEngineRandom001`
+			// (`FSessionRandom`), whose generator calls the result line counts.
+			const FElysiumArenaFixture* Source = Action.Args.Num() >= 1 && !Action.Args[0].Fixture.IsEmpty()
+				? StagedFixtures.Find(Action.Args[0].Fixture) : nullptr;
+			TUniquePtr<FStagedSoundScript>* Scripted = Source != nullptr ? StagedSoundScripts.Find(Source->Id) : nullptr;
+			const bool bNameOk = Action.Args.Num() == 2 && Action.Args[1].Fixture.IsEmpty()
+				&& (Action.Args[1].Value.Type == FElysiumArenaValue::EType::String
+					|| Action.Args[1].Value.Type == FElysiumArenaValue::EType::None);
+			if (Source == nullptr || Source->Kind != TEXT("sound_script") || Scripted == nullptr || !Scripted->IsValid() || !bNameOk)
+			{
+				OutError = TEXT("entity_call 'SoundScript_GetParameters' takes [{\"fixture\": <sound_script id>}, \"<sound name>\" | null]");
+				return false;
+			}
+			FElysiumNamedRetailSites Sites(World, Action.Target);
+			ElysiumSoundScript::FSoundParameters Out;
+			ElysiumSoundScript::FSessionRandom Random;
+			const bool bNull = Action.Args[1].Value.Type == FElysiumArenaValue::EType::None;
+			const bool bResult = (*Scripted)->Table.GetParametersForSound(bNull ? nullptr : *Action.Args[1].Value.String, Out, Random,
+				**Scripted, &Sites);
+			FEvent& Done = Events.AddDefaulted_GetRef();
+			StampEvent(Done, World.NowSeconds());
+			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+			Done.Name = Action.Target;
+			Done.Text = FString::Printf(TEXT("entity_call SoundScript_GetParameters done result=%d channel=%d volume=%.3f pitch=%d pitch_low=%d ")
+				TEXT("pitch_high=%d level=%d owner_only=%d count=%d wave=%s draws=%d"),
+				bResult ? 1 : 0, Out.Channel, Out.Volume, Out.Pitch, Out.PitchLow, Out.PitchHigh, Out.SoundLevel, Out.bPlayToOwnerOnly,
+				Out.Count, *Out.SoundName, Random.GeneratorCalls());
 			return true;
 		}
 		OutError = FString::Printf(TEXT("entity_call '%s' is allowlisted but has no dispatch"), *Action.Function);

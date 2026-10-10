@@ -131,6 +131,89 @@ Port: `Source/ElysiumUE/Private/Audio/ElysiumSoundScript.{h,cpp}` (`FParams`, `C
 reader and the dictionary are not ported. Proven by `Arena/scenarios/audio/l0_sound_script_defaults.json`
 and `l0_sound_channel_parse.json`.
 
+### Resolving a sound script: `GetParametersForSound` and its helpers [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r008.md`]
+
+The one `CSoundEmitterSystemBase` instance (`DAT_1072be18`; RTTI `0x105986f0`, vftable `0x1047b3c0`,
+constructor `FUN_101b26c0`) answers every EmitSound / StopSound worker through
+`GetParametersForSound` `FUN_101b33f0` `0x101b33f0` (`__thiscall(this, name, out)`, `RET 8`, bool in
+AL; ten callers: `0x101b0dc0`, `0x101b1040`, `0x101b1120`, `0x101b14d0`, `0x101b1880`, `0x101b1a00`,
+`0x101b06a0`, the wrapper `0x101b1dd0`, the lookups `0x101b40a0` and `0x101b4170`). The instance's
+pieces: the sound tree at `+0x50` (`CUtlRBTree`, node stride 0xE8, u16 name symbol at `+0x10`, the
+descriptor of the previous section at `+0x1C`; LessFunc `FUN_101b6680` compares the two u16
+**symbols numerically**), the sound-name symbol table at `+0x70` (`FUN_1024b2d0(.., caseInsensitive=1)`,
+LessFunc `strcmpi`: two spellings differing only in case are one sound, the first spelling kept), the
+wave-string table at `+0xB0` (case-sensitive; `FUN_1024b830` maps a symbol back, 0xFFFF -> `""`).
+
+`FindSound` `FUN_101b2f60` `0x101b2f60`: intern the name (`FUN_1024b5e0` at 0x101b2f8c -- on EVERY
+call, so an unknown name is added to the table; NULL -> 0xFFFF) and walk the tree from the root
+(0x101b2f97) by symbol; the node index on equality, -1 off the tree (an empty tree at once). A
+node-shaped stack temp (`FUN_101b30d0` at 0x101b2f77) is built and destroyed unread.
+
+`FUN_1012f700` `0x1012f700` (`__cdecl(float* p)`, ST0): `p[1] == 0.0f` (`FCOMP` 0x104454c4 at
+0x1012f707; `-0.0` equal) -> `p[0]`; else `p[0] + VEngineRandom001.RandomFloat(0, p[1])` -- one
+generator call, the sum at x87 precision (`FADD` 0x1012f72b). A negative span is not rejected (the
+sample lies in `(base + span, base]`). `VEngineRandom001` (`DAT_1070b244`) forwards to vstdlib's
+`CUniformRandomStream` (`vstdlib.dll 0x10002e00` / `0x10002e60`): `RandomFloat = (hi - lo) * x + lo`
+with `x = ran * 4.656612875245797e-10` capped at `0x3f7ffffe`; `RandomInt(lo, hi)` with
+`hi - lo + 1 <= 1` returns `lo` **without a generator call**, else `r % n + lo` with a rejection
+loop on `r > 0x7fffffff - (0x80000000 % n)`. Generator: Park-Miller `ran1` (`0x10002d30`); its
+seeding is UNRECOVERED.
+
+`FUN_101b3240` `0x101b3240` (`__stdcall(list, category)`, `RET 8`; entries `{u16 symbol, pad, u32
+category}`): `count < 1` -> -1 (0x101b325e); the indices whose category matches (0x101b3289) ->
+`matches[RandomInt(0, m - 1)]` (0x101b32d0); none -> `RandomInt(0, count - 1)` over every entry
+(0x101b3330). A candidate set of one draws nothing. Categories (producer `FUN_101b3830`, run by the
+key parser for every `wave` / `rndwave` entry): 0 a plain wave; a name containing `$gender` becomes
+`<pre>male<post>` category 1 and `<pre>female<post>` category 2. The resolver always asks for 0, so
+an all-`$gender` script takes the fallback and picks uniformly over its male and female entries.
+
+The resolver's arms, in order: (1-2) `FindSound`, `FUN_101b3730` (`0 <= idx < count` -> the record)
+-- -1 or NULL -> `DevMsg("CSoundEmitterSystemBase::GetParametersForSound:  No such sound %s")`,
+false, `out` untouched (0x101b342b); (3) `out.channel = rec+0x00`; (4) `out.volume = interval(rec+4)`
+(float); (5) `out.pitch = trunc(interval(rec+0xC))`; (6) `out.pitchlow = trunc(rec+0xC)`,
+`out.pitchhigh = trunc(pitchlow + rec+0x10)`; (7) `out.count = rec+0x2C`, `out.name = ""`; (8) the
+wave pick for category 0, `Q_strncpy(out+0x20, wave, 0x80)` when `>= 0`; (9) `out.soundlevel =
+trunc(interval(rec+0x14))` -- sampled even with no wave; (10) `out+0x18 = rec+0x1C`
+(`play_to_owner_only`, one byte); (11) an empty name -> `DevMsg("...sound %s has no wave or rndwave
+key!")`, false (0x101b3516); (12) `rec+0x48 == 0` -> true, no validation (0x101b3528); (13) a name
+starting `!` -> true; (14) up to two leading characters of `* ? ! # @ > < ^ )` stripped, `Q_snprintf(buf,
+0x100, "sound/%s")`, `VFileSystem005` (`DAT_1070b238`) slot 9 as "exists" (0x101b3599) -> true when
+present; (15) the static case-sensitive cache `DAT_1072c078` keyed `"%s:%s"` (sound, wave as stored,
+0x101b35ed): a hit returns false silently (0x101b360b), a miss adds the key and prints `DevMsg("...sound
+'%s' references wave '%s' which doesn't exist on disk!")` (0x101b361c, 0x101b3628), false (0x101b3631).
+Draw order: volume -> pitch -> pick -> soundlevel, each iff its span is non-zero / two or more
+candidates. `out` (Source's `CSoundParameters`): `+0x00` channel, `+0x04` volume, `+0x08` pitch,
+`+0x0C` pitchlow, `+0x10` pitchhigh, `+0x14` soundlevel, `+0x18` play_to_owner_only (byte), `+0x1C`
+count, `+0x20` name[0x80]; the callers preset channel 0, volume 1.0, pitch 100/100/100, level 75,
+count 0, name `""`, which a false from arms 1-2 leaves visible.
+
+`rec+0x48`, "has a missing wave file", is never written by the script parser. Its writer is
+`FUN_101b4740` `0x101b4740` (`__thiscall(this, verbose)`), run once at the end of `BaseInit`
+`0x101b2c60` (quiet; the log line `Registered %i sounds ( %i missing .wav files referenced )`) and by
+the console command body `FUN_101b0670` (verbose): for every record and every wave, an empty name and
+a `!` name skipped, the same two-character strip, `Q_snprintf(buf, 0x200, "sound/%s")`, slot 9; a
+miss sets the byte, counts, and (verbose) prints `Sound %s references missing file %s`. So arm 14-15's
+validation runs only for a record the init pass flagged. `AddSound` `0x101b4d30` copies the byte.
+
+`hooks.tsv` carried `0x101b33f0 -> 0x1024b400 (L5 script)`; `FUN_1024b400` is the symbol table's
+`Find` (ledger L0; the routine `ElysiumTeamRegistry.cpp` also carries), reached only in arm 15 to
+de-duplicate the developer message. There is no script lookup on this path; the row was removed.
+UNRECOVERED: the `filesystem_stdio` `FileExists` body (search paths, pack files, case); the runtime
+x87 precision control (whether `trunc(base + span * x)` sees a float32 or an extended sum); the
+`volume` / `pitch` / `soundlevel` / `attenuation` key parsers (`0x101b2420`, `0x101b2570`,
+`0x101b2630`, `0x1012f640`, `0x101b4900`); the second wave vector at `rec+0x34`; why `0x101b1120`
+and `0x101b14d0` decompile identically.
+
+Port: `Source/ElysiumUE/Private/Audio/ElysiumSoundScriptTable.{h,cpp}` (`FTable::FindSound`,
+`SampleInterval`, `SelectWave`, `FTable::GetParametersForSound`, `FTable::MarkMissingWaves`;
+`IEngineRandom` / `FSessionRandom` for `VEngineRandom001` over the named `SoundScript` stream --
+vstdlib's formulas, the generator the codebase's named-stream swap; `IFileExists` / `FGameSoundFiles`
+for slot 9 over the bake and the deployed corpus). The missing-sample cache lives on the table rather
+than as a process static (DevMsg de-duplication only). The table is filled by the arena's
+`sound_script` fixture; the manifest reader `AddSoundsFromFile` `0x101b4240` and the key parser
+`FUN_101b3bb0` that fill `DAT_1072be18` in the game are not ported, so the EmitSound workers do not
+yet call the resolver. Proven by `Arena/scenarios/audio/l0_sound_script_resolve.json`.
+
 ## 4. DSP / reverb bank
 
 **Format is stock Source; the *selection* is not.**

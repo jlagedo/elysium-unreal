@@ -51,7 +51,7 @@ namespace ElysiumSoundScript
 		uint8 bPrecache = 0;                      // +0x1d: `precache`
 		TArray<FWave> Waves;                      // +0x20..+0x30: the `wave` / `rndwave` entries
 		TArray<FWave> SecondList;                 // +0x34..+0x44: a second vector of the same shape; its content is UNRECOVERED
-		uint8 Flag48 = 0;                         // +0x48: set 0 by the constructor; reader and writer UNRECOVERED
+		uint8 bHasMissingWave = 0;                // +0x48: "has a missing wave file"; written by `FUN_101b4740` at BaseInit, read by `FUN_101b33f0` arm 12 (`walks/L0-r008.md`)
 		TCHAR VolumeText[NameBufferSize] = {};    // +0x49: the `volume` key's text ("VOL_NORM")
 		TCHAR ChannelText[NameBufferSize] = {};   // +0x69: the `channel` key's text ("CHAN_AUTO")
 		TCHAR SoundLevelText[NameBufferSize] = {}; // +0x89: the `soundlevel` key's text ("SNDLVL_NORM")

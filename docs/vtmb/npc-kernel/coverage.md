@@ -11,8 +11,8 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
-| … cited by the oracle | 2813 |
-| … not cited by the oracle | 2374 |
+| … cited by the oracle | 2821 |
+| … not cited by the oracle | 2366 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |
@@ -682,10 +682,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x1019d2f0` FUN_1019d2f0 | `0x1010ff40` FUN_1010ff40, `0x101104c0` FUN_101104c0, `0x10110da0` CBreakableSurface::vfunc141, `0x10111ba0` FUN_10111ba0, +15 more |
 | `0x101a5290` FUN_101a5290 | `0x101a3470` FUN_101a3470 |
 | `0x101af070` FUN_101af070 | `0x101ae940` FUN_101ae940, `0x101aedc0` FUN_101aedc0, `0x101b1a00` FUN_101b1a00, `0x101cdac0` FUN_101cdac0 |
-| `0x101b0dc0` FUN_101b0dc0 | `0x1013f520` CMoveHelperServer::vfunc16 |
-| `0x101b14d0` FUN_101b14d0 | `0x1002cd50` FUN_1002cd50, `0x1013f610` CMoveHelperServer::vfunc5, `0x101bbde0` FUN_101bbde0, `0x101bc020` FUN_101bc020, +2 more |
-| `0x101b2f60` FUN_101b2f60 | `0x101b1fb0` FUN_101b1fb0, `0x101b4d30` FUN_101b4d30, `0x101b50f0` FUN_101b50f0, `0x101b5180` FUN_101b5180, +2 more |
-| `0x101b33f0` FUN_101b33f0 | `0x101b06a0` FUN_101b06a0, `0x101b1120` FUN_101b1120, `0x101b1880` FUN_101b1880, `0x101b1a00` FUN_101b1a00, +2 more |
 | `0x101b3730` FUN_101b3730 | `0x101afff0` CSoundEmitterSystem::vfunc2, `0x101b04a0` FUN_101b04a0, `0x101b1e00` FUN_101b1e00, `0x101b1fb0` FUN_101b1fb0, +2 more |
 | `0x101b3b90` FUN_101b3b90 | `0x101b06a0` FUN_101b06a0, `0x101b1120` FUN_101b1120, `0x101b3a10` FUN_101b3a10 |
 | `0x101b6120` FUN_101b6120 | `0x101b4240` FUN_101b4240, `0x101b4d30` FUN_101b4d30, `0x101b5870` FUN_101b5870 |

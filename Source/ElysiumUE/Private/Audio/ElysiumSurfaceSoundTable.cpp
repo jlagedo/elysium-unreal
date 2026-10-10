@@ -12,9 +12,10 @@ namespace
 	const TCHAR* SurfacePackageRoot = TEXT("/ElysiumBaked/SurfaceProperties/");
 
 	// The first entry of a sound-script pool, as the script NAME the table authored. The pools are
-	// `vtmb:sound-script:` ids rather than wav paths, and nothing in this runtime resolves a script
-	// yet (`ElysiumWaterAudio.h` divergence 1 says so at length); the name is carried so the
-	// consumer that lands the script table has the authored key to look up.
+	// `vtmb:sound-script:` ids rather than wav paths. The resolver is ported (`ElysiumSoundScriptTable.h`,
+	// `GetParametersForSound` `0x101b33f0`) but the live table it reads is not yet filled (the manifest
+	// reader `0x101b4240` is not ported; `ElysiumWaterAudio.h` divergence 1); the name is carried so
+	// the consumer that lands the table has the authored key to look up.
 	FString FirstScript(const TArray<FString>& Pool)
 	{
 		static const FString Prefix(TEXT("vtmb:sound-script:"));

@@ -134,14 +134,14 @@ namespace ElysiumSoundScript
 		// 13. byte +0x1c = 0 (`play_to_owner_only`).  14. byte +0x1d = 1 (`precache`).  15. byte +0x48 = 0.
 		Params.bPlayToOwnerOnly = 0;
 		Params.bPrecache = 1;
-		Params.Flag48 = 0;
+		Params.bHasMissingWave = 0;
 		// 16. `MOV EAX,ESI` (0x101b3162): return `desc`.
 		if (Sites != nullptr)
 		{
 			Sites->Site(TEXT("sndscript.defaults"), TEXT("Global::FUN_101b30d0"), 0x101b30d0u, TEXT("return"),
 				FString::Printf(TEXT("channel=%d volume=%.1f pitch=%.0f level=%.0f flags=%d,%d,%d"), Params.Channel,
 					Params.Volume.Start, Params.Pitch.Start, Params.SoundLevel.Start, Params.bPlayToOwnerOnly,
-					Params.bPrecache, Params.Flag48));
+					Params.bPrecache, Params.bHasMissingWave));
 		}
 		return Params;
 	}
