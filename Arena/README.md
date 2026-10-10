@@ -212,7 +212,14 @@ reused= brace= [dropped=]`), `kv.pair` (`FUN_10248510` `0x10248510`: `branch key
 ef=] type=<0|1|2|unset> [block=1]`), `kv.find` (`FUN_10248900` `0x10248900`: `return key= create=
 source=<own|chain|created|none> name=`), `kv.getint` (`FUN_10248bb0` `0x10248bb0`: `return key= type=
 default= result=`), `kv.getstr` (`FUN_10248cd0` `0x10248cd0`: `branch key= type= formatted=`, `return
-key= result= default=<0|1>`), `kv.setstr` (`FUN_102490e0` `0x102490e0`: `write key= new= type=0`). A
+key= result= default=<0|1>`), `kv.setstr` (`FUN_102490e0` `0x102490e0`: `write key= new= type=0`).; the ambient initialization
+(`walks/L0-r005.md`): `kv_key` (`CAmbientGeneric::vfunc110` `0x101ada80`, `write key= value= [mirror=]`,
+the stored dpv word per handled key), `spawn_empty` (`CAmbientGeneric::Spawn` `0x101ac4a0`, `branch
+origin= level=`, before the warning and the removal), `spawn_arm` (`CAmbientGeneric::Spawn` `0x101ac49a`,
+`branch m_flNextThink=0 m_pfnThink= m_pfnUse= m_fActive= m_fLooping= m_nSndFlags= m_hSoundSource=`, the
+words at the tail jump), `precache_arm` (`CAmbientGeneric::Precache` `0x101ac930`: `branch precache=
+name=`, `write field=m_fActive value=`), `dpv_pass` (`FUN_101ad0f0` `0x101ad0f0`: `entry m_iHealth=
+preset=`, `return volrun= vol= pitchrun= pitch= spinup= fadein= pitchfrac= volfrac= cspincount=`). A
 pure function reports through `IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a utility with no
 entity names its target in the entity column (`FElysiumNamedRetailSites`).
 
@@ -381,6 +388,7 @@ record — and a `reason`) and
 | `_selftest/selftest_entity_field_fails` | an `entity_field` probe on a field with no retail adapter fails the run |
 | `_selftest/selftest_retail_site_matches` | a `retail_site` event carries tag, retail function and address, and `expect` / `never` match on `site` |
 | `audio/l0_ambient_radius_level` | `0x101ac570` at `CAmbientGeneric::Spawn` (`0x101ac321` / `0x101ac326`): eleven radii (and one everywhere flag) to their `m_iSoundLevel`, each arm traced, the stored words probed (L0.audio.ambient-radius-level) |
+| `audio/l0_ambient_init` | `CAmbientGeneric` initialization: the dpv keys through `vfunc110` `0x101ada80` (clamps, spin/fade transforms, mirrors), `Spawn` `0x101ac310` (the empty-sound removal, `m_fLooping`, `m_nSndFlags`, the tail words), `Precache` `0x101ac930` (the engine-precache gate, `m_fActive`) and the dpv pass `FUN_101ad0f0` (health volume, preset 1, cspinup, the pitch 101 rule) over ten ambients, every `m_dpv` word probed by its offset (L0.audio.ambient-init) |
 | `audio/l0_keyvalues_lexer` | the tokenizer `0x10247280` through its wrapper `0x101f2f30`, tables `0x102473e0` / `0x1023eff0`: eighteen texts to their token, quote and cursor sequences (L0.audio.keyvalues-lexer) |
 | `audio/l0_keyvalues_tree` | the file reader `0x101f2180` and block parser `0x101f2360`: root reuse and chaining, the missing-brace error, the top-level `}`, the empty key, and the strtol/strtod leaf typing (L0.audio.keyvalues-tree) |
 | `audio/l0_scheme_file_load` | the KeyValues FILE loader `0x102480f0` (the `CSoundScheme::Precache` call), its wrapper `0x102482b0`, block parser `0x10248510` and text cache `0x102482f0`: the cache hit and miss, the loader's own open, no `.txt`, a missing file, every top-level token a root, the first-byte brace test, the typed leaves, and `sound/Schemes/SP_Tutorial_City.txt` itself (L0.audio.scheme-file-load) |

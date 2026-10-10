@@ -351,8 +351,12 @@ Fired by presence (looping beds), by I/O, or from Python via the datamap-bound
 `Entity.PlaySound()` / `StopSound()` (phone rings, sirens, buzzers) [script]. The
 stock LFO/spin envelope keys (`preset`/`spinup`/`volstart`/`lfotype`/`lforate`/…)
 are parsed in KeyValue override `vfunc110` `0x101ada80` into `m_dpv` (`+0x458`).
-**`fadein` / `fadeout` are those envelope keys**, not seconds-I/O: `atof` → `ftol` →
-`<< 8` into `m_dpv+0x1c/+0x20`. There are **no** `fadeinsecs` / `fadeoutsecs` strings
+**`fadein` / `fadeout` are those envelope keys**, not seconds-I/O: `atof(x)` → `100.0 / x * 0.2`
+on the FPU stack (`FDIVR [0x10457188]`, `FMUL [0x10449198]`, i.e. `20 / x`) → `__ftol` → `<< 8`
+into `m_dpv+0x1c/+0x20`, mirrored into `+0x50/+0x54` (`fadein 10` → 512, `0.75` → 6656, `30` → 0;
+`0` divides to +Inf and `__ftol` stores the integer indefinite, low dword 0). The word is the
+per-think (0.2 s) 8.8 volume step, so a health-4 bed with `fadein 10` reaches its ceiling of 40 in
+4 s. There are **no** `fadeinsecs` / `fadeoutsecs` strings
 in `vampire.dll`; a 108-map scan of current `.ents` finds **zero** non-zero
 `fadeinsecs` keys. 78 `ambient_generic` rows do author a non-zero `fadein` LFO value
 (including `sm_hub_1`'s `rain_sounds` `fadein=10` / `fadeout=10`).
@@ -380,6 +384,47 @@ UNRECOVERED: the x87 precision control in force (decides 36 → 40 or 39, 360 �
 of `m_radius` when the key is absent (no constructor or datamap default found). Port:
 `Source/ElysiumUE/Private/Audio/ElysiumSoundLevel.cpp` `FromAmbientRadius`,
 `Substrate/ElysiumAmbientGeneric.cpp` `Spawn`; record `Arena/scenarios/audio/l0_ambient_radius_level.json`.
+
+### Initialization: `vfunc110`, `Spawn`, `Precache`, the dpv pass [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r005.md`]
+
+Port: `Source/ElysiumUE/Private/Substrate/ElysiumAmbientGeneric.cpp`; record `Arena/scenarios/audio/l0_ambient_init.json`.
+
+- **KeyValue `vfunc110` `0x101ada80`** (slot 110, called per key by `CBaseEntity::ParseMapData`
+  `0x1009e280` before Spawn; `__strcmpi` whole-key match, `atoi` unless noted, signed clamps) writes
+  `m_dpv` `+0x458` (25 dwords, one unnamed 100-byte SAVE row): `preset` +0x00 unclamped; `pitch` +0x04
+  and `pitchstart` +0x08 clamped [0, 255]; `spinup` +0x0c / `spindown` +0x10 clamped [0, 100], then
+  `>0 → (101 − v)·64`, mirrored to +0x40 / +0x44 (even when 0); `volstart` +0x18 clamped [0, 10] then ×10;
+  `fadein` +0x1c / `fadeout` +0x20 as above; `lfotype` +0x24 raw, `>4 → 2`, no lower clamp; `lforate`
+  +0x28 clamped [0, 1000] then `<< 8`; `lfomodpitch` +0x2c, `lfomodvol` +0x30, `cspinup` +0x34 clamped
+  [0, 100]. Any other key goes to the base `CBaseEntity::KeyValue` `0x1009e430` (the datamap chain:
+  `message`, `radius`, `health`, `spawnflags`, `SourceEntityName`, `sound_event*`, `flag_*`). Every
+  handled key returns 1.
+- **`Spawn` `0x101ac310`**: `m_iSoundLevel` (§ above); `m_iszSound` null or `strlen < 1` → `Warning("EMPTY
+  AMBIENT AT: %f, %f, %f\n")` (`0x10597804`) and `UTIL_Remove` (`0x101cd940`; `DispatchSpawn` returns −1)
+  at `0x101ac4a0`; else `SetSolid(0)`, `SetMoveType(0, 0)` (no-ops on the fresh words), `m_pfnThink` ←
+  `0x1000969c` (the think `FUN_101acb70`), `m_flNextThink` ← 0 (nothing scheduled: Activate `0x101ac9c0`
+  arms it, only when `m_fActive`), `m_pfnUse` ← `0x100131e2` (`FUN_101ad470`), `m_fActive` ← 0,
+  `m_fLooping` ← 0 iff `m_bForceLooping == 0 ∧ spawnflags & 0x20` else 1, `m_nSndFlags` |= 0x800
+  (`flag_no_sfx`) | 0x1000 (`flag_no_voice_duck`) | 0x200 (`flag_skip_collide`) | 0x100
+  (`flag_force_looping`), the source handle `+0x4c8` ← −1, then `JMP [slot 104]` (`0x101ac49a`).
+- **`Precache` `0x101ac930`**: `CEngineSoundServer::PrecacheSound(name, 0)` (engine.dll `0x200018e0`)
+  only when `strlen > 1` and `name[0] != '!'`; then the dpv pass; then `m_fActive` ← 1 iff
+  `(spawnflags & 0x10) == 0 ∧ m_fLooping`.
+- **The dpv pass `FUN_101ad0f0`** (also re-run by the toggle Use at `0x101ad70a`): A. `+0x46c` ←
+  `clamp(m_iHealth·10, 0, 100)` (store, then >100, then <0). B. `preset ≠ 0 ∧ ≤ 27` (signed; a negative
+  preset reads below the table, unrecovered): copy the 25-word row at `0x10595eb4 + p·0x64` (rows 1..27
+  at `0x10595f18..0x10596940`; the full table is in the walk, Q3) over `+0x458..+0x4bb`, then spindown,
+  spinup `>0 → (101 − v)·64`; volstart, vol-ceiling ×10; fadein, fadeout `>0 → (101 − v)·64`; lforate
+  `<< 8`; mirrors +0x50/+0x54/+0x40/+0x44 ← the transformed words. C. every path: fadeout running ← 0,
+  fadein running ← initial; current volume `+0x4c` ← fadein-initial ? volstart : ceiling; spindown ← 0,
+  spinup ← initial; current pitch `+0x3c` ← spinup-initial ? pitchstart : pitch, 0 → 100; `+0x58` ← vol
+  `<< 8`; `+0x5c` ← 0; `+0x48` ← pitch `<< 8`; lforate ← |lforate|; `+0x38` ← 1; `cspinup ≠ 0` → pitch
+  ceiling ← pitchstart + (255 − pitchstart) / cspinup (IDIV), capped 255; (spinup-initial ∨
+  spindown-initial ∨ (lfotype ∧ lfomodpitch)) ∧ pitch == 100 → 101.
+- No shipped map authors a non-zero `preset`, `cspinup`, `lfotype`, `lforate` or `lfomod*`; one authors
+  `spinup 10` / `spindown 10`; `pitch 100` is on 1,522 and `pitchstart 100` on 1,623 of the 1,631
+  ambients; all 1,631 author `health`. The constructor `FUN_101ac230` never writes `m_iHealth` or `m_dpv`,
+  so a keyless default assumes a zero-filled allocation (unrecovered).
 
 ### `PlaySound` and `StopSound` are edge-only, and the wired parameter is inert
 

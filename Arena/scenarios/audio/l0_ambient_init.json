@@ -1,0 +1,957 @@
+{
+  "name": "l0_ambient_init",
+  "about": "`CAmbientGeneric` initialization, `walks/L0-r005.md`. The KeyValue override `vfunc110` 0x101ada80 parses the `m_dpv` (+0x458) keys: `pitch`/`pitchstart` clamped [0,255], `spinup`/`spindown` clamped [0,100] then (101-v)*64 and mirrored (+0x498/+0x49c), `volstart` clamped [0,10] then *10, `fadein`/`fadeout` atof -> ftol(100/x*0.2) << 8 and mirrored (+0x4a8/+0x4ac; x=0 gives the integer indefinite, 0), `lfotype` > 4 -> 2 with no lower clamp, `lforate` clamped [0,1000] << 8, `preset` unclamped. `Spawn` 0x101ac310: `m_iSoundLevel` from FUN_101ac570 at 0x101ac326, then an empty `message` warns `EMPTY AMBIENT AT` and UTIL_Removes the entity (0x101ac4a0); else `m_flNextThink`=0, the think/use pointers (0x1000969c, 0x100131e2), `m_fActive`=0, `m_fLooping` = !(flag_force_looping==0 && spawnflags&0x20), `m_nSndFlags` |= 0x800 no_sfx | 0x1000 no_voice_duck | 0x200 skip_collide | 0x100 force_looping, source handle -1, tail-jump (0x101ac49a) to `Precache` 0x101ac930 (engine PrecacheSound only when strlen > 1 and name[0] != '!'; then the dpv pass; `m_fActive`=1 iff !(spawnflags&0x10) && m_fLooping). The dpv pass FUN_101ad0f0: volume ceiling = clamp(health*10, 0, 100); preset 1..27 copies the 25-word row at 0x10595eb4+p*0x64 and transforms it; running fadein/spinup from their initials, current volume = fadein ? volstart : ceiling, current pitch = spinup ? pitchstart : pitch (0 -> 100), the 8.8 accumulators, cspincount 1, cspinup's ceiling step, and pitch 100 -> 101 when any spin or pitch LFO is set. Reported as `fail`, a parsed word, a Spawn/Precache word, the removal or a site payload differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 2.0,
+  "script": [
+    {
+      "t": 0.1,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_keys",
+        "at": "start",
+        "keys": {
+          "health": "10",
+          "pitch": "300",
+          "spinup": "20",
+          "volstart": "12",
+          "fadein": "10",
+          "fadeout": "1.5",
+          "lforate": "2000",
+          "lfotype": "7",
+          "message": "impact/physics/metal/hit_hard1.wav"
+        }
+      }
+    },
+    {
+      "t": 0.2,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_clamps",
+        "at": "start",
+        "keys": {
+          "health": "10",
+          "pitch": "-3",
+          "spinup": "150",
+          "lfotype": "-1",
+          "fadein": "0.75",
+          "message": "impact/physics/metal/hit_hard1.wav"
+        }
+      }
+    },
+    {
+      "t": 0.3,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_shipped",
+        "at": "start",
+        "keys": {
+          "health": "10",
+          "pitch": "100",
+          "pitchstart": "100",
+          "fadein": "30",
+          "fadeout": "0",
+          "preset": "0",
+          "spinup": "0",
+          "message": "impact/physics/metal/hit_hard1.wav"
+        }
+      }
+    },
+    {
+      "t": 0.4,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_cspin",
+        "at": "start",
+        "keys": {
+          "health": "10",
+          "spinup": "20",
+          "pitch": "150",
+          "pitchstart": "40",
+          "cspinup": "4",
+          "message": "impact/physics/metal/hit_hard1.wav"
+        }
+      }
+    },
+    {
+      "t": 0.5,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_preset1",
+        "at": "start",
+        "keys": {
+          "health": "3",
+          "preset": "1",
+          "pitch": "50",
+          "message": "impact/physics/metal/hit_hard1.wav"
+        }
+      }
+    },
+    {
+      "t": 0.6,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_empty",
+        "at": "start",
+        "keys": {
+          "health": "10",
+          "radius": "300"
+        }
+      }
+    },
+    {
+      "t": 0.7,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_flags",
+        "at": "start",
+        "keys": {
+          "health": "10",
+          "message": "x",
+          "spawnflags": "48",
+          "flag_no_sfx": "1",
+          "flag_force_looping": "1"
+        }
+      }
+    },
+    {
+      "t": 0.8,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_oneshot",
+        "at": "start",
+        "keys": {
+          "health": "10",
+          "message": "impact/physics/metal/hit_hard1.wav",
+          "spawnflags": "32",
+          "flag_skip_collide": "1",
+          "flag_no_voice_duck": "1"
+        }
+      }
+    },
+    {
+      "t": 0.9,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_bang",
+        "at": "start",
+        "keys": {
+          "health": "10",
+          "message": "!amb_bang_named"
+        }
+      }
+    },
+    {
+      "t": 1.0,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_nohealth",
+        "at": "start",
+        "keys": {
+          "message": "impact/physics/metal/hit_hard1.wav"
+        }
+      }
+    }
+  ],
+  "expect": [
+    {
+      "who": "amb_keys",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=pitch value=255",
+      "by": 0.6
+    },
+    {
+      "who": "amb_keys",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=spinup value=5184 mirror=5184",
+      "by": 0.6
+    },
+    {
+      "who": "amb_keys",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=volstart value=100",
+      "by": 0.6
+    },
+    {
+      "who": "amb_keys",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=fadein value=512 mirror=512",
+      "by": 0.6
+    },
+    {
+      "who": "amb_keys",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=fadeout value=3328 mirror=3328",
+      "by": 0.6
+    },
+    {
+      "who": "amb_keys",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=lforate value=256000",
+      "by": 0.6
+    },
+    {
+      "who": "amb_keys",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=lfotype value=2",
+      "by": 0.6
+    },
+    {
+      "who": "amb_keys",
+      "kind": "retail_site",
+      "site": "ambient_store",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac326 phase=write field=m_iSoundLevel value=70",
+      "by": 0.6
+    },
+    {
+      "who": "amb_keys",
+      "kind": "retail_site",
+      "site": "spawn_arm",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac49a phase=branch m_flNextThink=0 m_pfnThink=0x1000969c m_pfnUse=0x100131e2 m_fActive=0 m_fLooping=1 m_nSndFlags=0x0 m_hSoundSource=0xffffffff",
+      "by": 0.6
+    },
+    {
+      "who": "amb_keys",
+      "kind": "retail_site",
+      "site": "precache_arm",
+      "match": "fn=CAmbientGeneric::Precache va=0x101ac930 phase=branch precache=1 name=impact/physics/metal/hit_hard1.wav",
+      "by": 0.6
+    },
+    {
+      "who": "amb_keys",
+      "kind": "retail_site",
+      "site": "dpv_pass",
+      "match": "fn=FUN_101ad0f0 va=0x101ad0f0 phase=return volrun=100 vol=100 pitchrun=255 pitch=101 spinup=5184 fadein=512 pitchfrac=25600 volfrac=25600 cspincount=1",
+      "by": 0.6
+    },
+    {
+      "who": "amb_keys",
+      "kind": "retail_site",
+      "site": "precache_arm",
+      "match": "fn=CAmbientGeneric::Precache va=0x101ac930 phase=write field=m_fActive value=1",
+      "by": 0.6
+    },
+    {
+      "who": "amb_clamps",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=pitch value=0",
+      "by": 0.7
+    },
+    {
+      "who": "amb_clamps",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=spinup value=64 mirror=64",
+      "by": 0.7
+    },
+    {
+      "who": "amb_clamps",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=lfotype value=-1",
+      "by": 0.7
+    },
+    {
+      "who": "amb_clamps",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=fadein value=6656 mirror=6656",
+      "by": 0.7
+    },
+    {
+      "who": "amb_clamps",
+      "kind": "retail_site",
+      "site": "dpv_pass",
+      "match": "fn=FUN_101ad0f0 va=0x101ad0f0 phase=return volrun=100 vol=0 pitchrun=0 pitch=101 spinup=64 fadein=6656 pitchfrac=25600 volfrac=0 cspincount=1",
+      "by": 0.7
+    },
+    {
+      "who": "amb_shipped",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=fadein value=0 mirror=0",
+      "by": 0.8
+    },
+    {
+      "who": "amb_shipped",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=fadeout value=0 mirror=0",
+      "by": 0.8
+    },
+    {
+      "who": "amb_shipped",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=spinup value=0 mirror=0",
+      "by": 0.8
+    },
+    {
+      "who": "amb_shipped",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=preset value=0",
+      "by": 0.8
+    },
+    {
+      "who": "amb_shipped",
+      "kind": "retail_site",
+      "site": "dpv_pass",
+      "match": "fn=FUN_101ad0f0 va=0x101ad0f0 phase=return volrun=100 vol=100 pitchrun=100 pitch=100 spinup=0 fadein=0 pitchfrac=25600 volfrac=25600 cspincount=1",
+      "by": 0.8
+    },
+    {
+      "who": "amb_cspin",
+      "kind": "retail_site",
+      "site": "dpv_pass",
+      "match": "fn=FUN_101ad0f0 va=0x101ad0f0 phase=return volrun=100 vol=100 pitchrun=93 pitch=40 spinup=5184 fadein=0 pitchfrac=10240 volfrac=25600 cspincount=1",
+      "by": 0.9
+    },
+    {
+      "who": "amb_preset1",
+      "kind": "retail_site",
+      "site": "kv_key",
+      "match": "fn=CAmbientGeneric::vfunc110 va=0x101ada80 phase=write key=preset value=1",
+      "by": 1.0
+    },
+    {
+      "who": "amb_preset1",
+      "kind": "retail_site",
+      "site": "dpv_pass",
+      "match": "fn=FUN_101ad0f0 va=0x101ad0f0 phase=return volrun=100 vol=10 pitchrun=255 pitch=75 spinup=384 fadein=3264 pitchfrac=19200 volfrac=2560 cspincount=1",
+      "by": 1.0
+    },
+    {
+      "who": "amb_empty",
+      "kind": "retail_site",
+      "site": "ambient_store",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac326 phase=write field=m_iSoundLevel value=58",
+      "by": 1.1
+    },
+    {
+      "who": "amb_empty",
+      "kind": "retail_site",
+      "site": "spawn_empty",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac4a0 phase=branch origin=",
+      "by": 1.1
+    },
+    {
+      "who": "amb_flags",
+      "kind": "retail_site",
+      "site": "spawn_arm",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac49a phase=branch m_flNextThink=0 m_pfnThink=0x1000969c m_pfnUse=0x100131e2 m_fActive=0 m_fLooping=1 m_nSndFlags=0x900 m_hSoundSource=0xffffffff",
+      "by": 1.2
+    },
+    {
+      "who": "amb_flags",
+      "kind": "retail_site",
+      "site": "precache_arm",
+      "match": "fn=CAmbientGeneric::Precache va=0x101ac930 phase=branch precache=0 name=x",
+      "by": 1.2
+    },
+    {
+      "who": "amb_flags",
+      "kind": "retail_site",
+      "site": "precache_arm",
+      "match": "fn=CAmbientGeneric::Precache va=0x101ac930 phase=write field=m_fActive value=0",
+      "by": 1.2
+    },
+    {
+      "who": "amb_oneshot",
+      "kind": "retail_site",
+      "site": "spawn_arm",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac49a phase=branch m_flNextThink=0 m_pfnThink=0x1000969c m_pfnUse=0x100131e2 m_fActive=0 m_fLooping=0 m_nSndFlags=0x1200 m_hSoundSource=0xffffffff",
+      "by": 1.3
+    },
+    {
+      "who": "amb_oneshot",
+      "kind": "retail_site",
+      "site": "precache_arm",
+      "match": "fn=CAmbientGeneric::Precache va=0x101ac930 phase=branch precache=1 name=impact/physics/metal/hit_hard1.wav",
+      "by": 1.3
+    },
+    {
+      "who": "amb_oneshot",
+      "kind": "retail_site",
+      "site": "precache_arm",
+      "match": "fn=CAmbientGeneric::Precache va=0x101ac930 phase=write field=m_fActive value=0",
+      "by": 1.3
+    },
+    {
+      "who": "amb_bang",
+      "kind": "retail_site",
+      "site": "precache_arm",
+      "match": "fn=CAmbientGeneric::Precache va=0x101ac930 phase=branch precache=0 name=!amb_bang_named",
+      "by": 1.4
+    },
+    {
+      "who": "amb_bang",
+      "kind": "retail_site",
+      "site": "precache_arm",
+      "match": "fn=CAmbientGeneric::Precache va=0x101ac930 phase=write field=m_fActive value=1",
+      "by": 1.4
+    },
+    {
+      "who": "amb_nohealth",
+      "kind": "retail_site",
+      "site": "dpv_pass",
+      "match": "fn=FUN_101ad0f0 va=0x101ad0f0 phase=return volrun=0 vol=0 pitchrun=0 pitch=100 spinup=0 fadein=0 pitchfrac=25600 volfrac=0 cspincount=1",
+      "by": 1.5
+    }
+  ],
+  "never": [
+    {
+      "who": "amb_empty",
+      "kind": "retail_site",
+      "site": "spawn_arm"
+    },
+    {
+      "who": "amb_empty",
+      "kind": "retail_site",
+      "site": "precache_arm"
+    },
+    {
+      "who": "amb_empty",
+      "kind": "retail_site",
+      "site": "dpv_pass"
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x04]",
+      "equals": 255
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x0c]",
+      "equals": 5184
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x40]",
+      "equals": 5184
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x18]",
+      "equals": 100
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x1c]",
+      "equals": 512
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x50]",
+      "equals": 512
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x20]",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x54]",
+      "equals": 3328
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x24]",
+      "equals": 2
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x28]",
+      "equals": 256000
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x3c]",
+      "equals": 101
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x48]",
+      "equals": 25600
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x4c]",
+      "equals": 100
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x58]",
+      "equals": 25600
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x38]",
+      "equals": 1
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_dpv[0x10]",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_fLooping",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_fActive",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_nSndFlags",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_iSoundLevel",
+      "equals": 70
+    },
+    {
+      "at": "end",
+      "who": "amb_keys",
+      "probe": "entity_field",
+      "field": "m_iHealth",
+      "equals": 10
+    },
+    {
+      "at": "end",
+      "who": "amb_clamps",
+      "probe": "entity_field",
+      "field": "m_dpv[0x04]",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_clamps",
+      "probe": "entity_field",
+      "field": "m_dpv[0x0c]",
+      "equals": 64
+    },
+    {
+      "at": "end",
+      "who": "amb_clamps",
+      "probe": "entity_field",
+      "field": "m_dpv[0x24]",
+      "equals": -1
+    },
+    {
+      "at": "end",
+      "who": "amb_clamps",
+      "probe": "entity_field",
+      "field": "m_dpv[0x1c]",
+      "equals": 6656
+    },
+    {
+      "at": "end",
+      "who": "amb_clamps",
+      "probe": "entity_field",
+      "field": "m_dpv[0x4c]",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_clamps",
+      "probe": "entity_field",
+      "field": "m_dpv[0x3c]",
+      "equals": 101
+    },
+    {
+      "at": "end",
+      "who": "amb_clamps",
+      "probe": "entity_field",
+      "field": "m_dpv[0x58]",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_shipped",
+      "probe": "entity_field",
+      "field": "m_dpv[0x00]",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_shipped",
+      "probe": "entity_field",
+      "field": "m_dpv[0x04]",
+      "equals": 100
+    },
+    {
+      "at": "end",
+      "who": "amb_shipped",
+      "probe": "entity_field",
+      "field": "m_dpv[0x08]",
+      "equals": 100
+    },
+    {
+      "at": "end",
+      "who": "amb_shipped",
+      "probe": "entity_field",
+      "field": "m_dpv[0x3c]",
+      "equals": 100
+    },
+    {
+      "at": "end",
+      "who": "amb_shipped",
+      "probe": "entity_field",
+      "field": "m_dpv[0x4c]",
+      "equals": 100
+    },
+    {
+      "at": "end",
+      "who": "amb_shipped",
+      "probe": "entity_field",
+      "field": "m_dpv[0x1c]",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_shipped",
+      "probe": "entity_field",
+      "field": "m_dpv[0x50]",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_shipped",
+      "probe": "entity_field",
+      "field": "m_dpv[0x48]",
+      "equals": 25600
+    },
+    {
+      "at": "end",
+      "who": "amb_cspin",
+      "probe": "entity_field",
+      "field": "m_dpv[0x3c]",
+      "equals": 40
+    },
+    {
+      "at": "end",
+      "who": "amb_cspin",
+      "probe": "entity_field",
+      "field": "m_dpv[0x48]",
+      "equals": 10240
+    },
+    {
+      "at": "end",
+      "who": "amb_cspin",
+      "probe": "entity_field",
+      "field": "m_dpv[0x04]",
+      "equals": 93
+    },
+    {
+      "at": "end",
+      "who": "amb_cspin",
+      "probe": "entity_field",
+      "field": "m_dpv[0x0c]",
+      "equals": 5184
+    },
+    {
+      "at": "end",
+      "who": "amb_cspin",
+      "probe": "entity_field",
+      "field": "m_dpv[0x58]",
+      "equals": 25600
+    },
+    {
+      "at": "end",
+      "who": "amb_cspin",
+      "probe": "entity_field",
+      "field": "m_dpv[0x38]",
+      "equals": 1
+    },
+    {
+      "at": "end",
+      "who": "amb_cspin",
+      "probe": "entity_field",
+      "field": "m_dpv[0x34]",
+      "equals": 4
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x00]",
+      "equals": 1
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x04]",
+      "equals": 255
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x08]",
+      "equals": 75
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x0c]",
+      "equals": 384
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x10]",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x14]",
+      "equals": 100
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x18]",
+      "equals": 10
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x1c]",
+      "equals": 3264
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x20]",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x3c]",
+      "equals": 75
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x4c]",
+      "equals": 10
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x50]",
+      "equals": 3264
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x54]",
+      "equals": 384
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x40]",
+      "equals": 384
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x44]",
+      "equals": 384
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x48]",
+      "equals": 19200
+    },
+    {
+      "at": "end",
+      "who": "amb_preset1",
+      "probe": "entity_field",
+      "field": "m_dpv[0x58]",
+      "equals": 2560
+    },
+    {
+      "at": "end",
+      "who": "amb_empty",
+      "probe": "exists",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "amb_flags",
+      "probe": "entity_field",
+      "field": "m_fLooping",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "amb_flags",
+      "probe": "entity_field",
+      "field": "m_fActive",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "amb_flags",
+      "probe": "entity_field",
+      "field": "m_nSndFlags",
+      "equals": 2304
+    },
+    {
+      "at": "end",
+      "who": "amb_flags",
+      "probe": "entity_field",
+      "field": "flag_no_sfx",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "amb_flags",
+      "probe": "entity_field",
+      "field": "m_spawnflags",
+      "equals": 48
+    },
+    {
+      "at": "end",
+      "who": "amb_oneshot",
+      "probe": "entity_field",
+      "field": "m_fLooping",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "amb_oneshot",
+      "probe": "entity_field",
+      "field": "m_fActive",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "amb_oneshot",
+      "probe": "entity_field",
+      "field": "m_nSndFlags",
+      "equals": 4608
+    },
+    {
+      "at": "end",
+      "who": "amb_bang",
+      "probe": "entity_field",
+      "field": "m_fActive",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "amb_nohealth",
+      "probe": "entity_field",
+      "field": "m_iHealth",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_nohealth",
+      "probe": "entity_field",
+      "field": "m_dpv[0x14]",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_nohealth",
+      "probe": "entity_field",
+      "field": "m_dpv[0x4c]",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_nohealth",
+      "probe": "entity_field",
+      "field": "m_dpv[0x3c]",
+      "equals": 100
+    }
+  ]
+}

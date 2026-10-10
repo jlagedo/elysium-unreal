@@ -805,10 +805,13 @@ bool FElysiumWeatherTimerSequenceTest::RunTest(const FString&)
 		FElysiumVariant::Void(), FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
 	World.Tick(0.0);
 	TestEqual(TEXT("rain-on emits one audio start"), Services.Count(TEXT("Submit ")), 1);
+	// `fadein 10` is the retail 8.8 ramp rate (`vfunc110 0x101ada80`: ftol(100/10 * 0.2) << 8 = 512
+	// per 0.2 s think), not seconds: `health 4` (ceiling 40, `FUN_101ad0f0` step A) ramps 0 -> 40 in
+	// 40 * 256 / 512 / 5 = 4 s (`walks/L0-r005.md`; the port's interim ramp, `InterimRampSeconds`).
 	TestTrue(TEXT("authored audio fade-in is applied"), Services.Saw(TEXT("Submit area/Santa_Monica/rain_light_loop.wav"))
 		&& Services.Calls.ContainsByPredicate([](const FString& Call)
 		{
-			return Call.StartsWith(TEXT("Submit ")) && Call.Contains(TEXT("fade=10.00"));
+			return Call.StartsWith(TEXT("Submit ")) && Call.Contains(TEXT("fade=4.00"));
 		}));
 	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : Services.Emitters)
 	{
@@ -829,7 +832,7 @@ bool FElysiumWeatherTimerSequenceTest::RunTest(const FString&)
 	TestTrue(TEXT("authored audio fade-out is applied"),
 		Services.Calls.ContainsByPredicate([](const FString& Call)
 		{
-			return Call.StartsWith(TEXT("StopVoice ")) && Call.Contains(TEXT("fade=10.00"));
+			return Call.StartsWith(TEXT("StopVoice ")) && Call.Contains(TEXT("fade=4.00"));   // `fadeout 10`: 40 -> 0 at 512/think
 		}));
 	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : Services.Emitters)
 	{
