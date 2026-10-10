@@ -1017,12 +1017,16 @@ def _wrapped(text: str, indent: str) -> list[str]:
 
 
 def flags_of(row: Row) -> str:
-    # The common snapshot and custom marker leaf are the sole persistence writers.
-    if row.binding in (("FElysiumEntity", "NextThink"),
-                       ("FElysiumInterestingPlace", "MarkersAllocated")):
-        return "EElysiumField::None"
+    # The common snapshot and custom marker leaf are the sole persistence writers of these two
+    # words (`FElysiumEntity::Serialize`, `FElysiumInterestingPlace::Serialize`), so their SAVE flag
+    # is dropped here. Only SAVE: both rows keep retail's FTYPEDESC_KEY (replay flags 6, SAVE|KEY --
+    # CBaseEntity `nextthink` +0x17c, CAI_InterestingPlace `max_npcs` +0x584), which since L0-r017 is
+    # the datamap walker's candidate gate (`FUN_101a5a80`): without it the map pair `max_npcs 1` is
+    # refused, `m_iMarkersAllocated` stays 0 and `0x102da0d0`'s availability gate fails every place.
+    unsaved = row.binding in (("FElysiumEntity", "NextThink"),
+                              ("FElysiumInterestingPlace", "MarkersAllocated"))
     parts = []
-    if "SAVE" in row.flags:
+    if "SAVE" in row.flags and not unsaved:
         parts.append("EElysiumField::Save")
     if "INPUT" in row.flags:
         parts.append("EElysiumField::Key")

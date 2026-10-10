@@ -103,7 +103,8 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("model"), &FElysiumEntity::Model,
 			EElysiumField::Save | EElysiumField::MapKey);  // +0x388 m_ModelName
 		D.RetailType(TEXT("model"), 16); // fieldtype_t modelname
-		ElysiumAddClassField(D, TEXT("nextthink"), &FElysiumEntity::NextThink, EElysiumField::None);  // +0x17c m_flNextThink
+		ElysiumAddClassField(D, TEXT("nextthink"), &FElysiumEntity::NextThink,
+			EElysiumField::MapKey);  // +0x17c m_flNextThink
 		D.TimeField(TEXT("nextthink")); // 0x101a0a80 TIME metadata
 		D.RetailType(TEXT("nextthink"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("npc_transparent"), &FElysiumEntity::bNpcTransparent,
@@ -1414,7 +1415,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("max_bounds"), &FElysiumInterestingPlace::MaxBoundsUnits,
 			EElysiumField::Save | EElysiumField::MapKey);  // +0x558 m_vecMaxBounds
 		ElysiumAddClassField(D, TEXT("max_npcs"), &FElysiumInterestingPlace::MarkersAllocated,
-			EElysiumField::None);  // +0x584 m_iMarkersAllocated
+			EElysiumField::MapKey);  // +0x584 m_iMarkersAllocated
 		ElysiumAddClassField(D, TEXT("max_time"), &FElysiumInterestingPlace::MaxTime,
 			EElysiumField::Save | EElysiumField::MapKey);  // +0x56c m_fMaxStayTime
 		ElysiumAddClassField(D, TEXT("min_bounds"), &FElysiumInterestingPlace::MinBoundsUnits,
