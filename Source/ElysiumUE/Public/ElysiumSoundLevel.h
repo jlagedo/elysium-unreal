@@ -30,6 +30,8 @@
 // is the distance at which the step has fallen 20 dB**, not the distance at which it dies. A
 // 300-unit walk step is level 58, reference distance 28.6 units, audible (gain >= `snd_gain_min`
 // 0.01) out to 2860.
+struct IElysiumRetailSiteSink;   // ElysiumRetailSite.h: the `retail_site` tap a pure function reports through
+
 namespace ElysiumSoundLevel
 {
 	// ---------------------------------------------------------------------------------------
@@ -95,6 +97,23 @@ namespace ElysiumSoundLevel
 	// `npctemplate*.txt` keys author. Non-positive distance answers 0, which is retail's
 	// `SNDLVL_NONE` — `dist_mult == 0`, a sound that does not attenuate at all.
 	int32 FromDistanceUnits(float DistUnits);
+
+	// The `everywhere` byte `vampire.dll 0x101ac570` tests at `[ESP+8]`: `CAmbientGeneric::Spawn`
+	// (`0x101ac321`) passes `m_spawnflags & 1` (`0x101ac2f0`), `CSpeaker::Spawn` (`0x101af447`)
+	// `(m_spawnflags >> 1) & 1`.
+	enum class EPlacement : uint8
+	{
+		Positional,   // the byte is 0: the radius is converted
+		Everywhere,   // the byte is nonzero: level 0, whatever the radius
+	};
+
+	// `vampire.dll 0x101ac570` (65 B): the ambient radius -> `m_iSoundLevel`. The same x87 chain as
+	// `0x10228350` with one more arm: `radius > 0.0` strictly (`FCOMP [0x104454c4]`, C3|C0 masked, so
+	// `<= 0`, `-0.0` and NaN take the zero arm), then `everywhere != 0` -> 0, then
+	// `trunc(40.0 + 20.0 * log10(radius * 0x3F9C71C71C71C71C))` through `__ftol` (`0x10431320`).
+	// Negative levels are returned for `0 < radius < 0.36` (0.1 -> -11); `+Inf` answers 0 because
+	// `__ftol` stores the integer indefinite. `Sites` (may be null) reports the `ambient_level` tap.
+	int32 FromAmbientRadius(float Radius, EPlacement Placement, IElysiumRetailSiteSink* Sites);
 
 	// `0x1026d460`'s inline attenuation, integer division included:
 	// `level > 50 ? 20/(level - 50) : 4.0`.

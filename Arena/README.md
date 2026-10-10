@@ -153,6 +153,7 @@ is unique in the record, the kind one of `ElysiumArenaScenario::FixtureKinds()`.
 | `kind` | Configuration | Staged as |
 |---|---|---|
 | `keyvalues` | `values`: an object of keys to string, number or boolean values (read as a map row spells them) | a controlled KeyValues table, read back by `entity_field` on `who: "fixture:<id>"`, `field` the key |
+| `text` | `text`: a string, handed whole (JSON escapes spell newlines, quotes and backslashes) | raw text a reader is given as the buffer it would have read from a file: the argument of `entity_call KeyValues_Lex` / `KeyValues_Parse`; `entity_field` on `fixture:<id>` answers `field: "text"`. Staged as `fixture <id> text staged chars=<n>` |
 
 A fixture is named by an `entity_call` argument (`{"fixture": "<id>"}`) or an `entity_field` `who`. An
 unknown kind, a duplicate id, or a reference to a fixture the record does not declare is a parse error.
@@ -162,19 +163,27 @@ Later stories add their kinds (save blocks, sound tables, physics bodies...) in 
 point at its time: an input, `Use`, a touch, a think, spawn and activate, damage through the damage
 entry. Never an internal helper: a record that calls a helper tests the port's structure, not the game.
 `args` are booleans, numbers, strings or `{"fixture": id}`. `function` is checked against
-`ElysiumArenaScenario::EntityCallAllowlist()` when the action runs, which is **empty** until a story adds
-the entry points its records drive (with their dispatch in `RunAction`). A call outside the allowlist is
+`ElysiumArenaScenario::EntityCallAllowlist()` when the action runs; a story adds the entry points its
+records drive (with their dispatch in `RunAction`). A call outside the allowlist is
 refused as a script failure (`entity_call '<f>' is not an allowlisted retail entry point`): `error` on an
 ordinary record, a `script` failure on an `expect_fail` one. Traced as `script`:
 `entity_call <function>(<args>)`, entity column the target.
+
+| `function` | `target` | `args` | What runs | Result (`script`, entity column the target) |
+|---|---|---|---|---|
+| `KeyValues_Lex` | a utility name (`keyvalues`), the `who` of its events | `[{"fixture": <text id>}]` | the token wrapper `0x101f2f30` over the text until the cursor it writes back is NULL -- how `0x101f2360` / `0x101f2180` consume a buffer; each token is a `kv_token` site | `entity_call KeyValues_Lex done calls=<wrapper calls>` |
+| `KeyValues_Parse` | as above | `[{"fixture": <text id>}, "<target name>"]`; the second argument optional: the node `0x101f2e20` names after the file and hands `0x101f2180` in ECX; absent, no target | `0x101f2180`'s root loop (R7 on; the file arms are the loader's) with `kv_root` sites and `kv_leaf` sites from `0x101f2360` | `entity_call KeyValues_Parse done roots=<n> [<name>(<children>) ...] target=<name>(<children>)|null` |
 
 **`entity_field`** (a `probes` entry: `who`, `field`, optional `to`, `index`, `member`, one comparison) --
 reads a retail field by its **retail name** (`m_iName`, `m_iHealth`, the datamap name or the ledger's
 field name), so a probe survives the port renaming its members. The comparison's value states the type;
 a field that answers another type fails the probe, and so does a field with no adapter (the reason lists
 the known ones). Read-only. Adapters: `m_iName`, `m_iClassname`, `m_iHealth`, `m_spawnflags`,
-`m_nRenderMode`, `m_lifeState`, `m_vecOrigin` (`member`: `x`, `y` or `z`). A story adds an adapter in
-`FElysiumArenaScenarioRunner::ReadEntityField` only for a retail value the current witnesses do not expose.
+`m_nRenderMode`, `m_lifeState`, `m_vecOrigin` (`member`: `x`, `y` or `z`), and **any row of the entity's
+class datamap by the name the class registers it under** (`ElysiumAddClassField`: the retail key, as
+`radius`, or the retail member, as `m_iSoundLevel`), typed by the row (Int/Float a number, Bool a bool,
+String/Handle a string). A story adds a named adapter in `FElysiumArenaScenarioRunner::ReadEntityField`
+only for a retail value no datamap row or witness exposes.
 
 **`retail_site`** (a trace kind) -- emitted at the port line that carries a retail address, by
 `FElysiumEntityWorld::EmitRetailSite(Entity, Tag, RetailFn, RetailVa, Phase, Payload)`, at the semantic
@@ -184,7 +193,15 @@ retail values at that point, never port-only state. An `expect` or `never` of ki
 `site`, the event's `tag=` token (`{"kind": "retail_site", "site": "accept_input", "match": "va=0x100abc90"}`);
 `match` is the usual substring or regex over the whole text. Same-time events keep their emission order.
 Sites so far: `accept_input` (`CBaseEntity::AcceptInput` `0x100abc90`, phase `dispatch`, payload
-`input= param= activator=`).
+`input= param= activator=`); `ambient_level` (`FUN_101ac570` `0x101ac570`: `entry radius= everywhere=`,
+`branch positive=`, `return level=`) and `ambient_store` (`CAmbientGeneric::Spawn` `0x101ac326`, `write
+field=m_iSoundLevel value=`); `kv_token` (`FUN_10247280` `0x10247280`: `entry selector= table= cursor=`,
+`return token= quoted= cursor=<offset|null>`; `return cursor=null out=untouched quoted=0` for a NULL
+cursor in); `kv_leaf` (`FUN_101f2360` `0x101f2360`, `write key= type=<0..3> [num=] [str=]`); `kv_root`
+(`FUN_101f2180` `0x101f2180`: `entry file= target=<set|null>`, `branch arm=<reuse|new> name=`, `error
+file= expecting={ got={ dropped=<token>`, `return result=1 roots=`). A pure function reports through
+`IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a utility with no entity names its target in the
+entity column (`FElysiumNamedRetailSites`).
 
 Rules: `entity_call` drives only what retail exposes to the world; `retail_site` events are emitted where
 the retail address they name is ported and state retail values; `entity_field` reads retail names;
@@ -350,6 +367,9 @@ record — and a `reason`) and
 | `_selftest/selftest_entity_call_refused` | an `entity_call` outside the (empty) allowlist is refused as a script failure, never run |
 | `_selftest/selftest_entity_field_fails` | an `entity_field` probe on a field with no retail adapter fails the run |
 | `_selftest/selftest_retail_site_matches` | a `retail_site` event carries tag, retail function and address, and `expect` / `never` match on `site` |
+| `audio/l0_ambient_radius_level` | `0x101ac570` at `CAmbientGeneric::Spawn` (`0x101ac321` / `0x101ac326`): eleven radii (and one everywhere flag) to their `m_iSoundLevel`, each arm traced, the stored words probed (L0.audio.ambient-radius-level) |
+| `audio/l0_keyvalues_lexer` | the tokenizer `0x10247280` through its wrapper `0x101f2f30`, tables `0x102473e0` / `0x1023eff0`: eighteen texts to their token, quote and cursor sequences (L0.audio.keyvalues-lexer) |
+| `audio/l0_keyvalues_tree` | the file reader `0x101f2180` and block parser `0x101f2360`: root reuse and chaining, the missing-brace error, the top-level `}`, the empty key, and the strtol/strtod leaf typing (L0.audio.keyvalues-tree) |
 | `_selftest/never_after_ignores` | a `never` opened `after` a label does not count a match before it |
 | `_selftest/never_within_holds`, `never_within_trips` | a `never` closed `within` seconds of its label ignores a match after the window and fails the run on one inside it |
 | `combat/cover_move_shoot` | the run-and-gun: a gunman running to cover fires from an overlay layer's own 3031 (`0x102e8560` -> `AddGesture 0x100991b0` -> `0x10098cd0` -> `Shot 0x102387b0`; spec 0002 V4o) |

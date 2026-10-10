@@ -13,6 +13,10 @@ namespace ElysiumVdata
 
 	bool ReadVdata(const TCHAR* Rel, TSharedPtr<FKvNode>& OutRoot, FString& OutError)
 	{
+		// `0x101f2e20(name, fs)` on a cache miss: a node named after the file (`ctor(name, 1)`), then
+		// `0x101f2180` with that node as the target (ECX). R1..R6 of `0x101f2180`: Open `rb`
+		// (`0x105596CC`), Size, `malloc(size + 1)`, Read, Close, `buf[size] = 0`; a failed Open is the
+		// false return. The text arrives as TCHARs here (`ElysiumKeyValues.h`'s representation note).
 		const FString Path = FElysiumContentPaths::VdataFile(Rel);
 		FString Raw;
 		if (!FFileHelper::LoadFileToString(Raw, *Path))
@@ -20,11 +24,17 @@ namespace ElysiumVdata
 			OutError = FString::Printf(TEXT("not found: %s"), *Path);
 			return false;
 		}
-		OutRoot = ElysiumKeyValues::ParseText(Raw);
+		TSharedPtr<FKvNode> Target = MakeShared<FKvNode>();
+		ElysiumKeyValues::SetName(*Target, Rel);
+		ElysiumKeyValues::FKvReader Reader(Raw);
+		TArray<TSharedPtr<FKvNode>> Roots;
+		ElysiumKeyValues::ParseRoots(Reader, Path, Target, Roots);
+		// Retail returns 1 for an empty file too (the target keeps the requested name and has no
+		// children): the consumer's root lookup is what fails. The view holds the root chain.
+		OutRoot = ElysiumKeyValues::RootsView(Roots);
 		if (!OutRoot.IsValid())
 		{
-			OutError = FString::Printf(TEXT("empty or unparseable: %s"), *Path);
-			return false;
+			OutRoot = MakeShared<FKvNode>();
 		}
 		return true;
 	}

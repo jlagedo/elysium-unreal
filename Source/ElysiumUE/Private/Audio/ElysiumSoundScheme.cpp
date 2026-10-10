@@ -45,8 +45,6 @@ namespace
 	// The Source KeyValues reader lives in ElysiumKeyValues.h (shared with the sign
 	// definitions); pull its names into this file's anonymous namespace unchanged.
 	using ElysiumKeyValues::FKvNode;
-	using ElysiumKeyValues::Tokenize;
-	using ElysiumKeyValues::ParseBlock;
 
 	// Parse a Music/Combat/Alert/Ambient block, applying the retail defaults. bDryDefault /
 	// bNoPauseDefault differ per block (Ambient NoPause defaults 0; the music trio default 1).
@@ -73,25 +71,20 @@ bool FElysiumSoundScheme::ParseFile(const FString& AbsPath, FElysiumSoundScheme&
 		return false;
 	}
 
-	TArray<FString> Toks;
-	Tokenize(Text, Toks);
-	if (Toks.Num() == 0)
+	// The file through the retail reader (`0x101f2180`): its roots, of which `SoundScheme { ... }` is
+	// the one `CSoundScheme`'s parser (`0x1022a930`) walks; a file whose first root is named
+	// otherwise is read from that first root, as before.
+	const TSharedPtr<FKvNode> Roots = ElysiumKeyValues::ParseText(Text);
+	if (!Roots.IsValid())
 	{
 		return false;
 	}
-
-	// Root: `SoundScheme { ... }` — skip the leading key + brace, parse the block.
-	int32 Pos = 0;
-	if (Toks[0].ToLower() == TEXT("soundscheme") && Toks.IsValidIndex(1) && Toks[1] == TEXT("{"))
+	const FKvNode* Root = Roots->Child(TEXT("SoundScheme"));
+	if (Root == nullptr && !Roots->Kids.IsEmpty())
 	{
-		Pos = 2;
+		Root = Roots->Kids[0].Value.Get();
 	}
-	else if (Toks[0] == TEXT("{"))
-	{
-		Pos = 1;
-	}
-	const TSharedPtr<FKvNode> Root = ParseBlock(Toks, Pos);
-	if (!Root.IsValid())
+	if (Root == nullptr)
 	{
 		return false;
 	}

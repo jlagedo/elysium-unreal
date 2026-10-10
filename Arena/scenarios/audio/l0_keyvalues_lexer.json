@@ -1,0 +1,704 @@
+{
+  "name": "l0_keyvalues_lexer",
+  "about": "The KeyValues tokenizer FUN_10247280 (0x10247280), driven through its wrapper FUN_101f2f30 (0x101f2f30) over a text until the cursor is NULL, as FUN_101f2360/FUN_101f2180 consume a buffer. The tables FUN_102473e0 (0x102473e0) builds once through FUN_1023eff0 (0x1023eff0) -- A `{}()'` at 0x105794c0, B `{}()':` at 0x105c4ef8 -- and the selector byte DAT_10753641 (.bss, never written) pick table B: the colon is a delimiter. Arms in order: whitespace is every byte <= 0x20 signed (controls, space, bytes >= 0x80); `//` and `/* */` only at token start (`/*/` does not close, `/**/` does, unclosed runs to EOF and returns NULL); a quoted string with `\\\"` as its one escape, newlines kept, EOF leaving the cursor one past the NUL; a one-byte delimiter token; a bare word ending at whitespace or a delimiter, never at `\"` or `/`. Each `kv_token` return states the token, the quoted flag and the next cursor. The NULL-cursor-in arm (out untouched) is not reachable through the wrapper loop and is not asserted; neither is the call after an unterminated quote (retail reads past its buffer). Reported as `fail`, a token, a quote flag, a cursor or the call count differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 4.6,
+  "fixtures": [
+    {
+      "id": "v_word",
+      "kind": "text",
+      "text": "  abc"
+    },
+    {
+      "id": "v_escape",
+      "kind": "text",
+      "text": "\"a\\\"b\" c"
+    },
+    {
+      "id": "v_line_comment",
+      "kind": "text",
+      "text": "// x\nq"
+    },
+    {
+      "id": "v_block_comment",
+      "kind": "text",
+      "text": "/* x */q"
+    },
+    {
+      "id": "v_block_slash",
+      "kind": "text",
+      "text": "/*/ x */q"
+    },
+    {
+      "id": "v_block_empty",
+      "kind": "text",
+      "text": "/**/q"
+    },
+    {
+      "id": "v_slash_word",
+      "kind": "text",
+      "text": "a/b"
+    },
+    {
+      "id": "v_dslash_word",
+      "kind": "text",
+      "text": "a//b"
+    },
+    {
+      "id": "v_bcomment_word",
+      "kind": "text",
+      "text": "a/*c*/b"
+    },
+    {
+      "id": "v_quote_in_word",
+      "kind": "text",
+      "text": "ab\"cd\" e"
+    },
+    {
+      "id": "v_braces",
+      "kind": "text",
+      "text": "{x}"
+    },
+    {
+      "id": "v_punct",
+      "kind": "text",
+      "text": "(a)'"
+    },
+    {
+      "id": "v_colon",
+      "kind": "text",
+      "text": "a:b"
+    },
+    {
+      "id": "v_backslash_escape",
+      "kind": "text",
+      "text": "\"a\\\\\" b\""
+    },
+    {
+      "id": "v_open_quote",
+      "kind": "text",
+      "text": "\"abc"
+    },
+    {
+      "id": "v_empty_quote",
+      "kind": "text",
+      "text": "\"\""
+    },
+    {
+      "id": "v_open_comment",
+      "kind": "text",
+      "text": "/* open"
+    },
+    {
+      "id": "v_high_bytes",
+      "kind": "text",
+      "text": "Ã©"
+    }
+  ],
+  "script": [
+    {
+      "t": 0.2,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_word"
+        }
+      ]
+    },
+    {
+      "t": 0.4,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_escape"
+        }
+      ]
+    },
+    {
+      "t": 0.6,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_line_comment"
+        }
+      ]
+    },
+    {
+      "t": 0.8,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_block_comment"
+        }
+      ]
+    },
+    {
+      "t": 1.0,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_block_slash"
+        }
+      ]
+    },
+    {
+      "t": 1.2,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_block_empty"
+        }
+      ]
+    },
+    {
+      "t": 1.4,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_slash_word"
+        }
+      ]
+    },
+    {
+      "t": 1.6,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_dslash_word"
+        }
+      ]
+    },
+    {
+      "t": 1.8,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_bcomment_word"
+        }
+      ]
+    },
+    {
+      "t": 2.0,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_quote_in_word"
+        }
+      ]
+    },
+    {
+      "t": 2.2,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_braces"
+        }
+      ]
+    },
+    {
+      "t": 2.4,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_punct"
+        }
+      ]
+    },
+    {
+      "t": 2.6,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_colon"
+        }
+      ]
+    },
+    {
+      "t": 2.8,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_backslash_escape"
+        }
+      ]
+    },
+    {
+      "t": 3.0,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_open_quote"
+        }
+      ]
+    },
+    {
+      "t": 3.2,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_empty_quote"
+        }
+      ]
+    },
+    {
+      "t": 3.4,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_open_comment"
+        }
+      ]
+    },
+    {
+      "t": 3.6,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Lex",
+      "args": [
+        {
+          "fixture": "v_high_bytes"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=entry selector=0 table=B cursor=0",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=abc quoted=0 cursor=5",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=2",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=a\"b quoted=1 cursor=6",
+      "by": 0.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=c quoted=0 cursor=8",
+      "by": 0.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 0.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=3",
+      "by": 0.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=q quoted=0 cursor=6",
+      "by": 1.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 1.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=2",
+      "by": 1.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=q quoted=0 cursor=8",
+      "by": 1.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 1.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=2",
+      "by": 1.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=q quoted=0 cursor=9",
+      "by": 1.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 1.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=2",
+      "by": 1.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=q quoted=0 cursor=5",
+      "by": 1.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 1.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=2",
+      "by": 1.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=a/b quoted=0 cursor=3",
+      "by": 1.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 1.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=2",
+      "by": 1.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=a//b quoted=0 cursor=4",
+      "by": 2.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 2.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=2",
+      "by": 2.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=a/*c*/b quoted=0 cursor=7",
+      "by": 2.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 2.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=2",
+      "by": 2.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=ab\"cd\" quoted=0 cursor=6",
+      "by": 2.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=e quoted=0 cursor=8",
+      "by": 2.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 2.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=3",
+      "by": 2.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token={ quoted=0 cursor=1",
+      "by": 2.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=x quoted=0 cursor=2",
+      "by": 2.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=} quoted=0 cursor=3",
+      "by": 2.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 2.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=4",
+      "by": 2.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=( quoted=0 cursor=1",
+      "by": 2.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=a quoted=0 cursor=2",
+      "by": 2.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=) quoted=0 cursor=3",
+      "by": 2.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=' quoted=0 cursor=4",
+      "by": 2.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 2.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=5",
+      "by": 2.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=a quoted=0 cursor=1",
+      "by": 3.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=: quoted=0 cursor=2",
+      "by": 3.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=b quoted=0 cursor=3",
+      "by": 3.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 3.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=4",
+      "by": 3.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=a\\\" b quoted=1 cursor=8",
+      "by": 3.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 3.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=2",
+      "by": 3.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token=abc quoted=1 cursor=5",
+      "by": 3.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=1 cursor=2",
+      "by": 3.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 3.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=2",
+      "by": 3.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 3.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=1",
+      "by": 3.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_token",
+      "match": "fn=FUN_10247280 va=0x10247280 phase=return token= quoted=0 cursor=null",
+      "by": 4.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Lex done calls=1",
+      "by": 4.1
+    }
+  ]
+}

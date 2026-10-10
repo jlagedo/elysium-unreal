@@ -2,34 +2,61 @@
 
 #include "CoreMinimal.h"
 
-// Minimal Source KeyValues reader, shared by every runtime consumer of VtMB's `.res`/`.vmt`
-// grammar: the sound schemes (`ElysiumSoundScheme.cpp`) and the sign definitions
-// (`ElysiumSignData.cpp`).
+// VtMB's KeyValues reader (`VKeyValues`, `vampire.dll`), shared by every runtime consumer of the
+// `.res`/`.vmt`/`vdata` grammar: the sound schemes, the sign definitions, the rulebook tables, the
+// camera shots. The retail chain is `docs/specs/layers/L0-entity/walks/L0-r003.md`:
 //
-// Grammar: quoted or bare tokens, `{ }` nesting, `//` line comments outside quotes. Keys fold
-// to lower (Source KV is case-insensitive); values keep their case. Repeated block keys are
-// preserved in order (a scheme's `RandomSound`, a sign's `TextBlock`), and so are repeated *leaf*
-// keys — `Values` keeps the last, `Pairs` keeps them all.
+//   * `0x1023eff0` builds a 256-entry membership table from a delimiter string;
+//   * `0x102473e0` builds the two tables once -- A `{}()'` and B `{}()':`;
+//   * `0x10247280` is the tokenizer: skip bytes <= 0x20 (controls, space, and every byte >= 0x80,
+//     which is negative as a signed char), `//` and `/* */` comments at token start, a quoted string
+//     with `\"` as its one escape (raw bytes otherwise, newlines kept), a one-byte delimiter token, or
+//     a bare word that ends at whitespace or a delimiter (never at `"` or `/`). Returns the next
+//     cursor, or NULL at end of text; reports whether the token was quoted;
+//   * `0x101f2f30` wraps it over a cursor and the shared token buffer `0x1073AA80`;
+//   * `0x101f2360` parses a block recursively: `}` or an empty key closes, every child is appended in
+//     file order, `{` recurses, and an unquoted leaf is typed by `strtol`/`strtod` (int, float or
+//     string) while a quoted leaf stays a string;
+//   * `0x101f2180` reads a whole file into named roots: each top-level key must be followed by `{`,
+//     a missing brace logs `ERROR: parsing KeyValue in file %s, expecting {, got {` and the node is
+//     reused for the next key; roots chain through `+0x18`.
 //
-// Brace depth is the only structural signal. Several `vdata/` tables indent a child block at
-// column 0 (`levelingtemplate_000.txt`'s templates, one `rules.txt` key) and write whole blocks
-// inline on one line (`Level { "Strength" "2" }`), so indentation and line breaks mean nothing.
+// The table selector byte `DAT_10753641` is never written, so table B is live: `:` is a delimiter
+// (`a:b` is three tokens). Names are stored verbatim (`0x101f2090`); retail's in-tree name compare is
+// `__strcmpi` (`0x1043E780`), case-insensitive, which the port's lowercase lookup index reproduces.
 //
-// A quoted value MAY SPAN LINES: 127 of the game's 187 loose sign definitions put a wrapped
-// paragraph in a single `"Text"` value. The tokenizer is therefore a character stream over the
-// whole file, not a per-line scan — a line-based scan truncates such a value at the first
-// newline and turns its remainder into stray tokens.
-//
-// A quoted value may also carry `\"` — `clandoc000.txt`'s Malkavian description quotes the word
-// "insight". Only that one escape is honoured; a lone backslash stays literal, so the Windows
-// paths the same files carry (`models\props\x.mdl`) read verbatim. Both defects have the same
-// consequence and it is not a truncated string: a stray quote shifts every following key/value
-// pair by one, so the next `{` is consumed as a value and the block nesting collapses.
+// Two representation choices, named: the lexer runs on TCHARs where retail runs on bytes (a byte >= 0x80
+// and a TCHAR >= 0x80 are classified alike, and a quoted string keeps either verbatim), and a cursor past
+// the terminating NUL (retail: after an unterminated quote) reads NUL here where retail reads the heap.
+
+struct IElysiumRetailSiteSink;   // ElysiumRetailSite.h: the `retail_site` tap the reader reports through
 
 namespace ElysiumKeyValues
 {
+	// Node `+0x10`.
+	enum class EKvType : uint8
+	{
+		Block = 0,   // a `{ }` child, or a node whose value was never read (SetName/Clear zero the type)
+		String = 1,  // a quoted leaf, or an unquoted one neither strtol nor strtod consumed
+		Int = 2,     // strtol consumed as much as strtod: `+0x08` holds the int
+		Float = 3,   // strtod consumed more: `+0x08` holds the float
+	};
+
 	struct FKvNode
 	{
+		// --- The retail node (`VKeyValues`, 0x38 bytes from pool `0x1073D280`) -----------------------
+		FString Name;                   // `+0x14`, verbatim as `0x101f2090` interns it
+		EKvType Type = EKvType::Block;  // `+0x10`
+		FString StringValue;            // `+0x0C`: every leaf's text (`0x101f2f70` interns it, typed or not)
+		int32 IntValue = 0;             // `+0x08` read as int bits (Type == Int)
+		float FloatValue = 0.f;         // `+0x08` read as float bits (Type == Float)
+		// `+0x1C` first child, each child's `+0x18` next sibling: leaves and blocks in file order.
+		TArray<TSharedPtr<FKvNode>> Children;
+
+		// --- The port's lookup index over `Children`, keys folded to lower ------------------------
+		// Retail compares names with `__strcmpi` (`0x1043E780`): a lowercase index answers the same
+		// lookups. Repeated block keys are preserved in order (a scheme's `RandomSound`, a sign's
+		// `TextBlock`), and so are repeated leaf keys -- `Values` keeps the last, `Pairs` keeps them all.
 		TMap<FString, FString> Values;                     // leaf key -> value (last wins)
 		TArray<TPair<FString, FString>> Pairs;             // the same leaves in file order, repeats kept
 		TArray<TPair<FString, TSharedPtr<FKvNode>>> Kids;  // ordered child blocks (repeatable keys)
@@ -62,81 +89,66 @@ namespace ElysiumKeyValues
 		}
 	};
 
-	// Whole-text character stream: quotes suppress `//` and survive newlines; `{`/`}` are their own
-	// tokens; bare runs end at whitespace or a brace.
-	inline void Tokenize(const FString& Text, TArray<FString>& Out)
+	// `0x101f2f30`'s cursor and the shared token buffer `0x1073AA80`, over one NUL-terminated text
+	// (`0x101f2180` R3..R6: the file's bytes plus a NUL). `Text` is borrowed: the FString outlives the
+	// reader. `Pos` is the cursor; `INDEX_NONE` is retail's NULL cursor.
+	struct FKvReader
 	{
-		const int32 N = Text.Len();
-		int32 i = 0;
-		while (i < N)
-		{
-			const TCHAR C = Text[i];
-			if (FChar::IsWhitespace(C)) { ++i; continue; }
-			if (C == TEXT('/') && i + 1 < N && Text[i + 1] == TEXT('/'))
-			{
-				while (i < N && Text[i] != TEXT('\n')) { ++i; }   // comment runs to end of line
-				continue;
-			}
-			if (C == TEXT('{') || C == TEXT('}')) { Out.Add(FString(1, &Text[i])); ++i; continue; }
-			if (C == TEXT('"'))
-			{
-				++i;
-				FString Tok;
-				while (i < N && Text[i] != TEXT('"'))
-				{
-					if (Text[i] == TEXT('\\') && i + 1 < N && Text[i + 1] == TEXT('"')) { ++i; }
-					Tok.AppendChar(Text[i]);
-					++i;
-				}
-				++i;   // closing quote (tolerates an unterminated final string)
-				Out.Add(MoveTemp(Tok));
-				continue;
-			}
-			FString Tok;
-			while (i < N && !FChar::IsWhitespace(Text[i]) && Text[i] != TEXT('{') && Text[i] != TEXT('}'))
-			{
-				Tok.AppendChar(Text[i]);
-				++i;
-			}
-			Out.Add(MoveTemp(Tok));
-		}
-	}
+		explicit FKvReader(const FString& InText, IElysiumRetailSiteSink* InSites = nullptr)
+			: Text(*InText), Len(InText.Len()), Sites(InSites) {}
 
-	inline TSharedPtr<FKvNode> ParseBlock(const TArray<FString>& Toks, int32& Pos)
-	{
-		TSharedPtr<FKvNode> Node = MakeShared<FKvNode>();
-		while (Pos < Toks.Num())
-		{
-			const FString& T = Toks[Pos];
-			if (T == TEXT("}")) { ++Pos; break; }
-			const FString Key = T.ToLower();
-			++Pos;
-			if (Pos < Toks.Num() && Toks[Pos] == TEXT("{"))
-			{
-				++Pos;
-				Node->Kids.Emplace(Key, ParseBlock(Toks, Pos));
-			}
-			else if (Pos < Toks.Num())
-			{
-				Node->Values.Add(Key, Toks[Pos]);
-				Node->Pairs.Emplace(Key, Toks[Pos]);
-				++Pos;
-			}
-		}
-		return Node;
-	}
-
-	// Parse a whole file's text into a root node whose Kids are the top-level blocks. Returns null
-	// when the text has no tokens.
-	inline TSharedPtr<FKvNode> ParseText(const FString& Text)
-	{
-		TArray<FString> Toks;
-		Tokenize(Text, Toks);
-		if (Toks.Num() == 0)
-		{
-			return nullptr;
-		}
+		const TCHAR* Text;
+		int32 Len;
 		int32 Pos = 0;
-		return ParseBlock(Toks, Pos);
-	}
+		FString Token;                            // the shared buffer `0x1073AA80`
+		IElysiumRetailSiteSink* Sites = nullptr;  // the `kv_token` / `kv_leaf` / `kv_root` taps
+	};
+
+	// `0x1023eff0`: zero 256 entries, then mark each byte of `Delims` (signed index: a byte >= 0x80
+	// would write before the table; neither retail string has one, and the port skips it).
+	void BuildDelimiterTable(uint8 (&Table)[256], const ANSICHAR* Delims);
+
+	// `0x102473e0`: the two tables, built once. A `0x10753440` from `{}()'` (`0x105794c0`), B
+	// `0x10753540` from `{}()':` (`0x105c4ef8`); the once-flag is `0x10753640`.
+	struct FKvDelimiterTables
+	{
+		uint8 A[256];
+		uint8 B[256];
+	};
+	const FKvDelimiterTables& DelimiterTables();
+
+	// `0x10247280`: the next token from `R.Pos` into `Out`, `*Quoted` (may be null) set to 1 for a
+	// quoted string, 0 otherwise. Returns the next cursor, or `INDEX_NONE` for a NULL cursor in or
+	// end of text (`Out` is then `""`; untouched for a NULL cursor in). Does not move `R.Pos`.
+	int32 NextToken(FKvReader& R, FString& Out, uint8* Quoted);
+
+	// `0x101f2f30`: `NextToken` over `R.Pos` into `R.Token`, which it returns; `R.Pos` becomes the
+	// next cursor. The reference is to the shared buffer: the next call overwrites it.
+	const FString& ReadToken(FKvReader& R, uint8* Quoted);
+
+	// `0x101f2cf0`: a new node named `Name`, appended at the tail of `Parent`'s child list.
+	TSharedPtr<FKvNode> AddChild(FKvNode& Parent, const FString& Name);
+	// `0x101f2c60`: release the children, free the value and name texts, zero the type and links.
+	void Clear(FKvNode& Node);
+	// `0x101f2090`: intern `Name`; zero the value, the type, the children and the links.
+	void SetName(FKvNode& Node, const FString& Name);
+
+	// `0x101f2360`: parse `Node`'s block from `R` until `}`, an empty key, or end of text.
+	void ParseBlock(FKvNode& Node, FKvReader& R);
+
+	// `0x101f2180` from R7 on (the caller has read the file into `R`): the root loop. `Target`, when
+	// set, is the node the first root reuses (`0x101f2e20` passes the cache node it just named after
+	// the file; ECX at `0x101f218b`). Every root, in chain order, lands in `OutRoots` -- `Target`
+	// first when it was used, then each node `0x101f2cd0` linked. Always true: Open/Size/alloc
+	// failures (the false returns) are the file arms, which the caller owns.
+	bool ParseRoots(FKvReader& R, const FString& FileName, const TSharedPtr<FKvNode>& Target,
+		TArray<TSharedPtr<FKvNode>>& OutRoots);
+
+	// The port's view of a root chain: a node whose `Children`/`Kids` are the roots in chain order
+	// (retail hangs them off the cache node's `+0x18`). Null when there are no roots.
+	TSharedPtr<FKvNode> RootsView(const TArray<TSharedPtr<FKvNode>>& Roots);
+
+	// Parse a whole text with no target node and return the roots view; null when the text has no
+	// roots (empty or whitespace only).
+	TSharedPtr<FKvNode> ParseText(const FString& Text, IElysiumRetailSiteSink* Sites = nullptr);
 }

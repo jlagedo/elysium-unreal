@@ -72,6 +72,7 @@ struct FElysiumArenaFixture
 	FString Id;
 	FString Kind;
 	TMap<FString, FString> Values; // `keyvalues`: a controlled KeyValues table, text as a map row spells it
+	FString Text;                  // `text`: raw text handed whole to a reader (the KeyValues lexer / parser)
 };
 
 // One argument of an `entity_call`: a typed scalar, or a staged fixture's handle.
@@ -309,8 +310,9 @@ namespace ElysiumArenaScenario
 	// The fixture kinds a `fixtures` entry may name.
 	TArrayView<const TCHAR* const> FixtureKinds();
 
-	// The retail entry points `entity_call` may invoke (inputs, use, touch, think, spawn, damage).
-	// Empty until a story adds the entry points its records drive, in the slice that ports them.
+	// The retail entry points `entity_call` may invoke (inputs, use, touch, think, spawn, damage, and the
+	// KeyValues reader's lex/parse over a `text` fixture). A story adds the entry points its records
+	// drive, in the slice that ports them, with their dispatch in the runner's `RunAction`.
 	const TArray<FString>& EntityCallAllowlist();
 
 	// Parse one record. False with `OutError` naming the file and the field.

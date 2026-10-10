@@ -1,0 +1,558 @@
+{
+  "name": "l0_keyvalues_tree",
+  "about": "The KeyValues file reader FUN_101f2180 (0x101f2180) from its parse loop on (the file arms R1..R6 are the loader's), with the target node FUN_101f2e20 names after the file (ECX at 0x101f218b), and the recursive block parser FUN_101f2360 (0x101f2360) over the token wrapper FUN_101f2f30 (0x101f2f30). Roots: a key then `{` (0x10547B78); L3a reuses the target (Clear 0x101f2c60, SetName 0x101f2090), L3b makes a new root chained through 0x101f2cd0; a missing brace is `ERROR: parsing KeyValue in file %s, expecting {, got {` (the constant, not the token) and the node is reused for the next key; a top-level `}` is an ordinary root key; a blank text returns 1 with the target untouched. Blocks: `}` (0x10547B64) or an empty key (a quoted \"\" too) closes; every child is appended in file order; `{` recurses; a leaf is interned (0x101f2f70) and, unquoted, typed by _strtol (0x104319A8, base 10, clamping) against _strtod (0x1043190E, VC6 ___strgtold12: no hex, no inf/nan): strtod consuming more -> type 3 float, strtol consuming nothing -> type 1, else type 2 int; a quoted leaf stays type 1. A value missing before a brace takes the brace as its text. Reported as `fail`, a root arm, a leaf type or value, an error line or the root chain differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 2.8,
+  "fixtures": [
+    {
+      "id": "t_typed",
+      "kind": "text",
+      "text": "a { i 12 f 1.5 s abc q \"12\" m 12abc e 1e3 d .5 n - p +5 g -3 big 99999999999 h 0x1A inf inf nan nan b { } }"
+    },
+    {
+      "id": "t_missing_value",
+      "kind": "text",
+      "text": "a { k }"
+    },
+    {
+      "id": "t_eof_value",
+      "kind": "text",
+      "text": "a { k"
+    },
+    {
+      "id": "t_no_brace",
+      "kind": "text",
+      "text": "a k 12"
+    },
+    {
+      "id": "t_two_roots",
+      "kind": "text",
+      "text": "a { x 1 } a { y 2 }"
+    },
+    {
+      "id": "t_blank",
+      "kind": "text",
+      "text": "   \n\t  "
+    },
+    {
+      "id": "t_top_brace",
+      "kind": "text",
+      "text": "} a { }"
+    },
+    {
+      "id": "t_empty_key",
+      "kind": "text",
+      "text": "a { \"\" x }"
+    },
+    {
+      "id": "t_no_target",
+      "kind": "text",
+      "text": "a { k 1 }"
+    }
+  ],
+  "script": [
+    {
+      "t": 0.2,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Parse",
+      "args": [
+        {
+          "fixture": "t_typed"
+        },
+        "t_typed"
+      ]
+    },
+    {
+      "t": 0.4,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Parse",
+      "args": [
+        {
+          "fixture": "t_missing_value"
+        },
+        "t_missing_value"
+      ]
+    },
+    {
+      "t": 0.6,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Parse",
+      "args": [
+        {
+          "fixture": "t_eof_value"
+        },
+        "t_eof_value"
+      ]
+    },
+    {
+      "t": 0.8,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Parse",
+      "args": [
+        {
+          "fixture": "t_no_brace"
+        },
+        "t_no_brace"
+      ]
+    },
+    {
+      "t": 1.0,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Parse",
+      "args": [
+        {
+          "fixture": "t_two_roots"
+        },
+        "t_two_roots"
+      ]
+    },
+    {
+      "t": 1.2,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Parse",
+      "args": [
+        {
+          "fixture": "t_blank"
+        },
+        "t_blank"
+      ]
+    },
+    {
+      "t": 1.4,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Parse",
+      "args": [
+        {
+          "fixture": "t_top_brace"
+        },
+        "t_top_brace"
+      ]
+    },
+    {
+      "t": 1.6,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Parse",
+      "args": [
+        {
+          "fixture": "t_empty_key"
+        },
+        "t_empty_key"
+      ]
+    },
+    {
+      "t": 1.8,
+      "do": "entity_call",
+      "target": "keyvalues",
+      "function": "KeyValues_Parse",
+      "args": [
+        {
+          "fixture": "t_no_target"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=entry file=t_typed target=set",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=branch arm=reuse name=a",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=i type=2 num=12 str=12",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=f type=3 num=1.5 str=1.5",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=s type=1 str=abc",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=q type=1 str=12",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=m type=2 num=12 str=12abc",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=e type=3 num=1000 str=1e3",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=d type=3 num=0.5 str=.5",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=n type=1 str=-",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=p type=2 num=5 str=+5",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=g type=2 num=-3 str=-3",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=big type=2 num=2147483647 str=99999999999",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=h type=2 num=0 str=0x1A",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=inf type=1 str=inf",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=nan type=1 str=nan",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=b type=0$",
+      "regex": true,
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=return result=1 roots=1",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Parse done roots=1 [a(15)] target=a(15)",
+      "by": 0.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=branch arm=reuse name=a",
+      "by": 0.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=k type=1 str=\\}$",
+      "regex": true,
+      "by": 0.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=return result=1 roots=1",
+      "by": 0.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Parse done roots=1 [a(1)] target=a(1)",
+      "by": 0.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=branch arm=reuse name=a",
+      "by": 1.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=k type=1 str=$",
+      "regex": true,
+      "by": 1.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=return result=1 roots=1",
+      "by": 1.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Parse done roots=1 [a(1)] target=a(1)",
+      "by": 1.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=branch arm=reuse name=a",
+      "by": 1.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=error file=t_no_brace expecting={ got={ dropped=k",
+      "by": 1.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=branch arm=reuse name=12",
+      "by": 1.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=return result=1 roots=1",
+      "by": 1.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Parse done roots=1 [12(0)] target=12(0)",
+      "by": 1.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=branch arm=reuse name=a",
+      "by": 1.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=x type=2 num=1 str=1",
+      "by": 1.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=branch arm=new name=a",
+      "by": 1.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=y type=2 num=2 str=2",
+      "by": 1.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=return result=1 roots=2",
+      "by": 1.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Parse done roots=2 [a(1) a(1)] target=a(1)",
+      "by": 1.5
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=entry file=t_blank target=set",
+      "by": 1.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=return result=1 roots=0",
+      "by": 1.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Parse done roots=0 [] target=t_blank(0)",
+      "by": 1.7
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=branch arm=reuse name=}",
+      "by": 1.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=error file=t_top_brace expecting={ got={ dropped=a",
+      "by": 1.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=branch arm=reuse name={",
+      "by": 1.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=error file=t_top_brace expecting={ got={ dropped=}",
+      "by": 1.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=return result=1 roots=1",
+      "by": 1.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Parse done roots=1 [{(0)] target={(0)",
+      "by": 1.9
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=branch arm=reuse name=a",
+      "by": 2.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=branch arm=new name=x",
+      "by": 2.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=error file=t_empty_key expecting={ got={ dropped=}",
+      "by": 2.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=return result=1 roots=2",
+      "by": 2.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Parse done roots=2 [a(0) x(0)] target=a(0)",
+      "by": 2.1
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=entry file=(text) target=null",
+      "by": 2.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=branch arm=new name=a",
+      "by": 2.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_leaf",
+      "match": "fn=FUN_101f2360 va=0x101f2360 phase=write key=k type=2 num=1 str=1",
+      "by": 2.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "retail_site",
+      "site": "kv_root",
+      "match": "fn=FUN_101f2180 va=0x101f2180 phase=return result=1 roots=1",
+      "by": 2.3
+    },
+    {
+      "who": "keyvalues",
+      "kind": "script",
+      "match": "entity_call KeyValues_Parse done roots=1 [a(1)] target=null",
+      "by": 2.3
+    }
+  ]
+}

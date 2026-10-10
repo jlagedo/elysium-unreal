@@ -858,6 +858,10 @@ public:
 	// `tag=<Tag> fn=<RetailFn> va=0x<RetailVa> phase=<Phase> <Payload>`. No-op without a sink.
 	void EmitRetailSite(const FElysiumEntity& Entity, const TCHAR* Tag, const TCHAR* RetailFn, uint32 RetailVa,
 		const TCHAR* Phase, const FString& Payload);
+	// The same site for a utility that has no entity (the KeyValues reader driven by a record): the
+	// event names `Name` in the entity column and carries no handle. No-op without a sink.
+	void EmitRetailSite(const FString& Name, const TCHAR* Tag, const TCHAR* RetailFn, uint32 RetailVa,
+		const TCHAR* Phase, const FString& Payload);
 	// `EmitAiTrace` for a tap whose producer runs every frame (`stealthkill`: the HUD asks the query
 	// each frame): emits only when this kind's entity or text differs from the last event it emitted
 	// for the kind. The memory belongs to the sink and is cleared with it, so each recorded run opens

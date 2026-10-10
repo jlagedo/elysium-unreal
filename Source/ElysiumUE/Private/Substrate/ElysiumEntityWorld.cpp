@@ -192,6 +192,24 @@ void FElysiumEntityWorld::EmitRetailSite(const FElysiumEntity& Entity, const TCH
 		Tag, RetailFn, RetailVa, Phase, *Payload));
 }
 
+void FElysiumEntityWorld::EmitRetailSite(const FString& Name, const TCHAR* Tag, const TCHAR* RetailFn,
+	uint32 RetailVa, const TCHAR* Phase, const FString& Payload)
+{
+	if (!AiTraceSink)
+	{
+		return;
+	}
+	FElysiumAiTraceEvent Event;
+	Event.Time = NowSeconds();
+	Event.Entity = FElysiumEntityHandle::Invalid();
+	Event.Name = Name;
+	Event.Kind = FName(TEXT("retail_site"));
+	Event.Text = FString::Printf(TEXT("tag=%s fn=%s va=0x%08x phase=%s %s"), Tag, RetailFn, RetailVa, Phase, *Payload);
+	// A copy, as `EmitAiTrace`: a sink may clear or replace itself from inside the call.
+	const FElysiumAiTraceSink Sink = AiTraceSink;
+	Sink(Event);
+}
+
 void FElysiumEntityWorld::EmitAiTrace(const FElysiumEntity& Entity, FName Kind, FString Text)
 {
 	if (!AiTraceSink)

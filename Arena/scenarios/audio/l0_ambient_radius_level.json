@@ -1,0 +1,685 @@
+{
+  "name": "l0_ambient_radius_level",
+  "about": "`CAmbientGeneric::Spawn` 0x101ac310 calls FUN_101ac570 at 0x101ac321 with `m_spawnflags & 1` (0x101ac2f0) and `m_radius` (+0x450, key `radius`) and stores the answer in `m_iSoundLevel` (+0x454) at 0x101ac326. The helper's arms, in order: `radius > 0.0` strictly (FCOMP [0x104454c4], C3|C0 masked, so 0, -10 and NaN take the zero arm), then any nonzero everywhere byte -> 0, else trunc(40.0 + 20.0 * log10(radius * 0x3F9C71C71C71C71C)) through __ftol 0x10431320 (constants 0x1047aa18, 0x104704a8, 0x10462950). Vectors: 300 -> 58, 600 -> 64, 256 -> 57, 100 -> 48, 1000 -> 68, 1 -> 8, 0.5 -> 2, 0.1 -> -11 (negative levels are stored), 0 -> 0, -10 -> 0, 300 with spawnflags 1 -> 0. The precision-fragile radii (36, 360: x87 PC 53 vs 64, unrecovered) are kept out. Reported as `fail`, a level, a branch or the stored word differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 2.1,
+  "script": [
+    {
+      "t": 0.1,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_300",
+        "at": "start",
+        "keys": {
+          "radius": "300"
+        }
+      }
+    },
+    {
+      "t": 0.2,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_600",
+        "at": "start",
+        "keys": {
+          "radius": "600"
+        }
+      }
+    },
+    {
+      "t": 0.3,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_256",
+        "at": "start",
+        "keys": {
+          "radius": "256"
+        }
+      }
+    },
+    {
+      "t": 0.4,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_100",
+        "at": "start",
+        "keys": {
+          "radius": "100"
+        }
+      }
+    },
+    {
+      "t": 0.5,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_1000",
+        "at": "start",
+        "keys": {
+          "radius": "1000"
+        }
+      }
+    },
+    {
+      "t": 0.6,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_1",
+        "at": "start",
+        "keys": {
+          "radius": "1"
+        }
+      }
+    },
+    {
+      "t": 0.7,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_half",
+        "at": "start",
+        "keys": {
+          "radius": "0.5"
+        }
+      }
+    },
+    {
+      "t": 0.8,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_tenth",
+        "at": "start",
+        "keys": {
+          "radius": "0.1"
+        }
+      }
+    },
+    {
+      "t": 0.9,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_zero",
+        "at": "start",
+        "keys": {
+          "radius": "0"
+        }
+      }
+    },
+    {
+      "t": 1.0,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_neg",
+        "at": "start",
+        "keys": {
+          "radius": "-10"
+        }
+      }
+    },
+    {
+      "t": 1.1,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_generic",
+        "name": "amb_everywhere",
+        "at": "start",
+        "keys": {
+          "radius": "300",
+          "spawnflags": "1"
+        }
+      }
+    }
+  ],
+  "expect": [
+    {
+      "who": "amb_300",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=entry radius=300 everywhere=0",
+      "by": 0.6
+    },
+    {
+      "who": "amb_300",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=branch positive=1",
+      "by": 0.6
+    },
+    {
+      "who": "amb_300",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=return level=58",
+      "by": 0.6
+    },
+    {
+      "who": "amb_300",
+      "kind": "retail_site",
+      "site": "ambient_store",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac326 phase=write field=m_iSoundLevel value=58",
+      "by": 0.6
+    },
+    {
+      "who": "amb_600",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=entry radius=600 everywhere=0",
+      "by": 0.7
+    },
+    {
+      "who": "amb_600",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=branch positive=1",
+      "by": 0.7
+    },
+    {
+      "who": "amb_600",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=return level=64",
+      "by": 0.7
+    },
+    {
+      "who": "amb_600",
+      "kind": "retail_site",
+      "site": "ambient_store",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac326 phase=write field=m_iSoundLevel value=64",
+      "by": 0.7
+    },
+    {
+      "who": "amb_256",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=entry radius=256 everywhere=0",
+      "by": 0.8
+    },
+    {
+      "who": "amb_256",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=branch positive=1",
+      "by": 0.8
+    },
+    {
+      "who": "amb_256",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=return level=57",
+      "by": 0.8
+    },
+    {
+      "who": "amb_256",
+      "kind": "retail_site",
+      "site": "ambient_store",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac326 phase=write field=m_iSoundLevel value=57",
+      "by": 0.8
+    },
+    {
+      "who": "amb_100",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=entry radius=100 everywhere=0",
+      "by": 0.9
+    },
+    {
+      "who": "amb_100",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=branch positive=1",
+      "by": 0.9
+    },
+    {
+      "who": "amb_100",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=return level=48",
+      "by": 0.9
+    },
+    {
+      "who": "amb_100",
+      "kind": "retail_site",
+      "site": "ambient_store",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac326 phase=write field=m_iSoundLevel value=48",
+      "by": 0.9
+    },
+    {
+      "who": "amb_1000",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=entry radius=1000 everywhere=0",
+      "by": 1.0
+    },
+    {
+      "who": "amb_1000",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=branch positive=1",
+      "by": 1.0
+    },
+    {
+      "who": "amb_1000",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=return level=68",
+      "by": 1.0
+    },
+    {
+      "who": "amb_1000",
+      "kind": "retail_site",
+      "site": "ambient_store",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac326 phase=write field=m_iSoundLevel value=68",
+      "by": 1.0
+    },
+    {
+      "who": "amb_1",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=entry radius=1 everywhere=0",
+      "by": 1.1
+    },
+    {
+      "who": "amb_1",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=branch positive=1",
+      "by": 1.1
+    },
+    {
+      "who": "amb_1",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=return level=8",
+      "by": 1.1
+    },
+    {
+      "who": "amb_1",
+      "kind": "retail_site",
+      "site": "ambient_store",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac326 phase=write field=m_iSoundLevel value=8",
+      "by": 1.1
+    },
+    {
+      "who": "amb_half",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=entry radius=0.5 everywhere=0",
+      "by": 1.2
+    },
+    {
+      "who": "amb_half",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=branch positive=1",
+      "by": 1.2
+    },
+    {
+      "who": "amb_half",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=return level=2",
+      "by": 1.2
+    },
+    {
+      "who": "amb_half",
+      "kind": "retail_site",
+      "site": "ambient_store",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac326 phase=write field=m_iSoundLevel value=2",
+      "by": 1.2
+    },
+    {
+      "who": "amb_tenth",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=entry radius=0.1 everywhere=0",
+      "by": 1.3
+    },
+    {
+      "who": "amb_tenth",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=branch positive=1",
+      "by": 1.3
+    },
+    {
+      "who": "amb_tenth",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=return level=-11",
+      "by": 1.3
+    },
+    {
+      "who": "amb_tenth",
+      "kind": "retail_site",
+      "site": "ambient_store",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac326 phase=write field=m_iSoundLevel value=-11",
+      "by": 1.3
+    },
+    {
+      "who": "amb_zero",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=entry radius=0 everywhere=0",
+      "by": 1.4
+    },
+    {
+      "who": "amb_zero",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=branch positive=0",
+      "by": 1.4
+    },
+    {
+      "who": "amb_zero",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=return level=0",
+      "by": 1.4
+    },
+    {
+      "who": "amb_zero",
+      "kind": "retail_site",
+      "site": "ambient_store",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac326 phase=write field=m_iSoundLevel value=0",
+      "by": 1.4
+    },
+    {
+      "who": "amb_neg",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=entry radius=-10 everywhere=0",
+      "by": 1.5
+    },
+    {
+      "who": "amb_neg",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=branch positive=0",
+      "by": 1.5
+    },
+    {
+      "who": "amb_neg",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=return level=0",
+      "by": 1.5
+    },
+    {
+      "who": "amb_neg",
+      "kind": "retail_site",
+      "site": "ambient_store",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac326 phase=write field=m_iSoundLevel value=0",
+      "by": 1.5
+    },
+    {
+      "who": "amb_everywhere",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=entry radius=300 everywhere=1",
+      "by": 1.6
+    },
+    {
+      "who": "amb_everywhere",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=branch positive=0",
+      "by": 1.6
+    },
+    {
+      "who": "amb_everywhere",
+      "kind": "retail_site",
+      "site": "ambient_level",
+      "match": "fn=FUN_101ac570 va=0x101ac570 phase=return level=0",
+      "by": 1.6
+    },
+    {
+      "who": "amb_everywhere",
+      "kind": "retail_site",
+      "site": "ambient_store",
+      "match": "fn=CAmbientGeneric::Spawn va=0x101ac326 phase=write field=m_iSoundLevel value=0",
+      "by": 1.6
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "amb_300",
+      "probe": "entity_field",
+      "field": "radius",
+      "equals": 300.0
+    },
+    {
+      "at": "end",
+      "who": "amb_300",
+      "probe": "entity_field",
+      "field": "m_iSoundLevel",
+      "equals": 58
+    },
+    {
+      "at": "end",
+      "who": "amb_300",
+      "probe": "entity_field",
+      "field": "m_spawnflags",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_600",
+      "probe": "entity_field",
+      "field": "radius",
+      "equals": 600.0
+    },
+    {
+      "at": "end",
+      "who": "amb_600",
+      "probe": "entity_field",
+      "field": "m_iSoundLevel",
+      "equals": 64
+    },
+    {
+      "at": "end",
+      "who": "amb_600",
+      "probe": "entity_field",
+      "field": "m_spawnflags",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_256",
+      "probe": "entity_field",
+      "field": "radius",
+      "equals": 256.0
+    },
+    {
+      "at": "end",
+      "who": "amb_256",
+      "probe": "entity_field",
+      "field": "m_iSoundLevel",
+      "equals": 57
+    },
+    {
+      "at": "end",
+      "who": "amb_256",
+      "probe": "entity_field",
+      "field": "m_spawnflags",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_100",
+      "probe": "entity_field",
+      "field": "radius",
+      "equals": 100.0
+    },
+    {
+      "at": "end",
+      "who": "amb_100",
+      "probe": "entity_field",
+      "field": "m_iSoundLevel",
+      "equals": 48
+    },
+    {
+      "at": "end",
+      "who": "amb_100",
+      "probe": "entity_field",
+      "field": "m_spawnflags",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_1000",
+      "probe": "entity_field",
+      "field": "radius",
+      "equals": 1000.0
+    },
+    {
+      "at": "end",
+      "who": "amb_1000",
+      "probe": "entity_field",
+      "field": "m_iSoundLevel",
+      "equals": 68
+    },
+    {
+      "at": "end",
+      "who": "amb_1000",
+      "probe": "entity_field",
+      "field": "m_spawnflags",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_1",
+      "probe": "entity_field",
+      "field": "radius",
+      "equals": 1.0
+    },
+    {
+      "at": "end",
+      "who": "amb_1",
+      "probe": "entity_field",
+      "field": "m_iSoundLevel",
+      "equals": 8
+    },
+    {
+      "at": "end",
+      "who": "amb_1",
+      "probe": "entity_field",
+      "field": "m_spawnflags",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_half",
+      "probe": "entity_field",
+      "field": "radius",
+      "equals": 0.5
+    },
+    {
+      "at": "end",
+      "who": "amb_half",
+      "probe": "entity_field",
+      "field": "m_iSoundLevel",
+      "equals": 2
+    },
+    {
+      "at": "end",
+      "who": "amb_half",
+      "probe": "entity_field",
+      "field": "m_spawnflags",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_tenth",
+      "probe": "entity_field",
+      "field": "radius",
+      "equals": 0.1
+    },
+    {
+      "at": "end",
+      "who": "amb_tenth",
+      "probe": "entity_field",
+      "field": "m_iSoundLevel",
+      "equals": -11
+    },
+    {
+      "at": "end",
+      "who": "amb_tenth",
+      "probe": "entity_field",
+      "field": "m_spawnflags",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_zero",
+      "probe": "entity_field",
+      "field": "radius",
+      "equals": 0.0
+    },
+    {
+      "at": "end",
+      "who": "amb_zero",
+      "probe": "entity_field",
+      "field": "m_iSoundLevel",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_zero",
+      "probe": "entity_field",
+      "field": "m_spawnflags",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_neg",
+      "probe": "entity_field",
+      "field": "radius",
+      "equals": -10.0
+    },
+    {
+      "at": "end",
+      "who": "amb_neg",
+      "probe": "entity_field",
+      "field": "m_iSoundLevel",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_neg",
+      "probe": "entity_field",
+      "field": "m_spawnflags",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_everywhere",
+      "probe": "entity_field",
+      "field": "radius",
+      "equals": 300.0
+    },
+    {
+      "at": "end",
+      "who": "amb_everywhere",
+      "probe": "entity_field",
+      "field": "m_iSoundLevel",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "amb_everywhere",
+      "probe": "entity_field",
+      "field": "m_spawnflags",
+      "equals": 1
+    }
+  ]
+}

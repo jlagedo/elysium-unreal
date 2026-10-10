@@ -14,7 +14,10 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumRetailSite.h"               // the `ambient_level` / `ambient_store` taps
+#include "ElysiumSoundLevel.h"               // `0x101ac570`: radius -> m_iSoundLevel
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumClassFields.h"    // `radius`, `m_iSoundLevel` on the class datamap
 #include "Substrate/ElysiumGameSound.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAmbient, Log, All);
@@ -80,7 +83,27 @@ public:
 		SoundRel = Def ? Def->Keys.FindRef(TEXT("message")).Replace(TEXT("\\"), TEXT("/")) : FString();
 		// `health` is repurposed as VOLUME 0–10 (§7). Missing → full (Source default 10).
 		Volume = FMath::Clamp(AmbientKeyFloat(Def, TEXT("health"), 10.f) / 10.f, 0.f, 1.f);
-		RadiusCm = FMath::Max(AmbientKeyFloat(Def, TEXT("radius"), 1250.f) * AmbientInchToCm, 1.f);
+
+		// `CAmbientGeneric::Spawn` `0x101ac310`: at `0x101ac321` it calls `0x101ac570` with
+		// `m_spawnflags & 1` (`0x101ac2f0`, pushed first) and `m_radius` (`+0x450`, the `radius` key,
+		// applied by the datamap at Construct), and at `0x101ac326` stores the result in
+		// `m_iSoundLevel` (`+0x454`). The readers of that word (`InputPitch 0x101ac690`,
+		// `InputVolume 0x101ac7d0`, `vfunc113 0x101ac9c0`) are not this slice's.
+		FElysiumEntityRetailSites Sites(World, *this);
+		SoundLevel = ElysiumSoundLevel::FromAmbientRadius(Radius,
+			(SpawnFlags & SF_AMBIENT_EVERYWHERE) != 0 ? ElysiumSoundLevel::EPlacement::Everywhere
+				: ElysiumSoundLevel::EPlacement::Positional,
+			&Sites);
+		if (World != nullptr)
+		{
+			World->EmitRetailSite(*this, TEXT("ambient_store"), TEXT("CAmbientGeneric::Spawn"), 0x101ac326u,
+				TEXT("write"), FString::Printf(TEXT("field=m_iSoundLevel value=%d"), SoundLevel));
+		}
+
+		// The Unreal attenuation sphere the voice is submitted with (a visual-only swap of the falloff
+		// law; `m_iSoundLevel` above is the retail word). Clamped to 1 cm so a zero radius still
+		// spatializes; retail has no clamp there because its level is what carries the radius.
+		RadiusCm = FMath::Max(Radius * AmbientInchToCm, 1.f);
 		Pitch = FMath::Max(AmbientKeyFloat(Def, TEXT("pitch"), 100.f) / 100.f, 0.01f);
 		SourceEntityName = Def ? Def->Keys.FindRef(TEXT("SourceEntityName")) : FString();
 		SoundEventType = Def ? FCString::Atoi(*Def->Keys.FindRef(TEXT("sound_event"))) : 0;
@@ -268,6 +291,14 @@ private:
 		return nullptr;
 	}
 
+public:
+	// `m_radius` `+0x450`, the `radius` key (Source units). The value an absent key leaves is
+	// UNRECOVERED (no constructor or datamap default in the corpus); 1250 is the port's choice.
+	float Radius = 1250.f;
+	// `m_iSoundLevel` `+0x454`: `0x101ac570`'s answer, stored at `0x101ac326`.
+	int32 SoundLevel = 0;
+
+private:
 	FString SoundRel;
 	FString SourceEntityName;
 	FString SoundEventOwnerName;
@@ -293,6 +324,11 @@ static FElysiumClassRegistrar GRegAmbientGeneric(
 	TEXT("ambient_generic"), ElysiumBaseClassName(), &MakeAmbientGeneric,
 	[](FElysiumClassDesc& D)
 	{
+		// The class datamap rows this slice reads and writes (`walks/L0-r003.md` § 0x101ac570).
+		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("radius"), &FElysiumAmbientGeneric::Radius,
+			EElysiumField::Key | EElysiumField::Save);   // +0x450 m_radius
+		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("m_iSoundLevel"), &FElysiumAmbientGeneric::SoundLevel,
+			EElysiumField::Save);                        // +0x454 m_iSoundLevel (no key: written by Spawn)
 		D.Input(TEXT("PlaySound"),   [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumAmbientGeneric&>(E).InputPlaySound(); });
 		D.Input(TEXT("StopSound"),   [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumAmbientGeneric&>(E).InputStopSound(); });
 		D.Input(TEXT("ToggleSound"), [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumAmbientGeneric&>(E).InputToggleSound(); });

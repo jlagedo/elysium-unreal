@@ -37,7 +37,7 @@ namespace ElysiumArenaScenarioParse
 	};
 
 	// The `fixtures` catalog's kinds. A story adds its own in the slice that stages it.
-	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues") };
+	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues"), TEXT("text") };
 
 	enum class ENeed : uint8 { Optional, Required };
 
@@ -1331,7 +1331,7 @@ namespace ElysiumArenaScenarioParse
 			TSharedPtr<FJsonObject> Item;
 			FElysiumArenaFixture& Fixture = Out.AddDefaulted_GetRef();
 			if (!ElementObject(R, (*Items)[Index], Path, Item)
-				|| !CheckFields(R, *Item, Path, { TEXT("id"), TEXT("kind"), TEXT("values") })
+				|| !CheckFields(R, *Item, Path, { TEXT("id"), TEXT("kind"), TEXT("values"), TEXT("text") })
 				|| !ReadString(R, *Item, TEXT("id"), Path, ENeed::Required, Fixture.Id)
 				|| !ReadString(R, *Item, TEXT("kind"), Path, ENeed::Required, Fixture.Kind))
 			{
@@ -1358,6 +1358,20 @@ namespace ElysiumArenaScenarioParse
 				}
 				return R.Fail(Field(Path, TEXT("kind")), FString::Printf(TEXT("'%s' is not a fixture kind (%s)"),
 					*Fixture.Kind, *FString::Join(Names, TEXT(", "))));
+			}
+			if (Fixture.Kind == TEXT("text"))
+			{
+				// `text`: raw text a reader is handed whole (`entity_call KeyValues_Lex` / `KeyValues_Parse`).
+				if (FindValue(*Item, TEXT("values")) != nullptr)
+				{
+					return R.Fail(Field(Path, TEXT("values")), TEXT("a `text` fixture takes `text`, not `values`"));
+				}
+				if (!ReadString(R, *Item, TEXT("text"), Path, ENeed::Required, Fixture.Text)) return false;
+				continue;
+			}
+			if (FindValue(*Item, TEXT("text")) != nullptr)
+			{
+				return R.Fail(Field(Path, TEXT("text")), TEXT("only a `text` fixture takes `text`"));
 			}
 			// `keyvalues`: a controlled KeyValues table, read back by `entity_field` on `fixture:<id>`.
 			TSharedPtr<FJsonObject> Values;
@@ -1925,7 +1939,16 @@ TArrayView<const TCHAR* const> FixtureKinds()
 
 const TArray<FString>& EntityCallAllowlist()
 {
-	static const TArray<FString> Allowed;
+	// Each entry is a retail entry point a story's records drive, added with its dispatch in
+	// `FElysiumArenaScenarioRunner::RunAction` (`harness.md`: "keyvalue lex/parse/access").
+	static const TArray<FString> Allowed = {
+		// L0.audio.keyvalues-lexer: the token wrapper `0x101f2f30` over a `text` fixture until its
+		// cursor is NULL -- what `0x101f2360` / `0x101f2180` do to a buffer.
+		TEXT("KeyValues_Lex"),
+		// L0.audio.keyvalues-tree: `0x101f2180`'s root loop over a `text` fixture (the file's bytes),
+		// with an optional second argument naming the target node `0x101f2e20` hands it.
+		TEXT("KeyValues_Parse"),
+	};
 	return Allowed;
 }
 

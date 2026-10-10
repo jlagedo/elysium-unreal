@@ -4,10 +4,13 @@
 
 #include "Debug/ElysiumArenaCast.h"          // `player.armed`: the cast harness's own grants
 #include "Debug/ElysiumGreenRoomShared.h"    // ResolveDriveBody: the player's pawn, mover and controller
+#include "ElysiumClassRegistry.h"            // `entity_field`: a class datamap row by its name
 #include "ElysiumDlg.h"                      // `dialog_choose`: the open turn's response band
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumKeyValues.h"                // `entity_call KeyValues_Lex` / `KeyValues_Parse`
+#include "ElysiumRetailSite.h"               // the named sink those calls report through
 #include "ElysiumInputRouter.h"              // `player_walk`: the input replay door `gr_walk` drives
 #include "ElysiumMapActor.h"
 #include "ElysiumMovementComponent.h"        // `player_crouch`: the duck's heading, read off the mover
@@ -714,7 +717,9 @@ void FElysiumArenaScenarioRunner::StageFixtures(FElysiumEntityWorld& World)
 		FEvent& Staged = Events.AddDefaulted_GetRef();
 		StampEvent(Staged, World.NowSeconds());
 		Staged.Kind = ElysiumArenaRunnerDetail::ScriptKind();
-		Staged.Text = FString::Printf(TEXT("fixture %s %s staged keys=%d"), *Fixture.Id, *Fixture.Kind, Fixture.Values.Num());
+		Staged.Text = Fixture.Kind == TEXT("text")
+			? FString::Printf(TEXT("fixture %s %s staged chars=%d"), *Fixture.Id, *Fixture.Kind, Fixture.Text.Len())
+			: FString::Printf(TEXT("fixture %s %s staged keys=%d"), *Fixture.Id, *Fixture.Kind, Fixture.Values.Num());
 	}
 }
 
@@ -736,7 +741,10 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 			OutError = FString::Printf(TEXT("fixture '%s' is not staged"), *Probe.Who.Mid(8));
 			return false;
 		}
-		const FString* Value = Fixture->Values.Find(Probe.Field);
+		// A `text` fixture answers its one field, `text`.
+		const FString* Value = Fixture->Kind == TEXT("text")
+			? (Probe.Field == TEXT("text") ? &Fixture->Text : nullptr)
+			: Fixture->Values.Find(Probe.Field);
 		if (Value == nullptr || !Probe.Index.IsEmpty() || !Probe.Member.IsEmpty())
 		{
 			OutError = Value == nullptr ? FString::Printf(TEXT("fixture '%s' has no key '%s'"), *Fixture->Id, *Probe.Field)
@@ -793,9 +801,41 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 		}
 		else
 		{
-			OutError = FString::Printf(TEXT("no retail field adapter named '%s' (m_iName, m_iClassname, m_iHealth, ")
-				TEXT("m_spawnflags, m_nRenderMode, m_lifeState, m_vecOrigin)"), *Probe.Field);
-			return false;
+			// A row of the entity's class datamap, by the name the class registers it under: the
+			// retail key (`radius`) or the retail member (`m_iSoundLevel`), as `ElysiumAddClassField`
+			// names them. The same table the spawn pass, the save walk and Python read.
+			const FElysiumFieldAccessor* Row = Entity->Class != nullptr
+				? FElysiumClassRegistry::Get().FindField(*Entity->Class, FName(*Probe.Field)) : nullptr;
+			if (Row == nullptr || !Row->Get)
+			{
+				OutError = FString::Printf(TEXT("no retail field adapter named '%s' (m_iName, m_iClassname, m_iHealth, ")
+					TEXT("m_spawnflags, m_nRenderMode, m_lifeState, m_vecOrigin, or a datamap row the entity's class registers)"),
+					*Probe.Field);
+				return false;
+			}
+			const FElysiumVariant Word = Row->Get(*Entity);
+			switch (Row->Type)
+			{
+			case EElysiumVariantType::Int:
+			case EElysiumVariantType::Float:
+				OutAnswer.Type = FElysiumArenaValue::EType::Number;
+				OutAnswer.Number = Row->Type == EElysiumVariantType::Int ? static_cast<double>(Word.ToInt())
+					: static_cast<double>(Word.ToFloat());
+				break;
+			case EElysiumVariantType::Bool:
+				OutAnswer.Type = FElysiumArenaValue::EType::Bool;
+				OutAnswer.bBool = Word.ToInt() != 0;
+				break;
+			case EElysiumVariantType::String:
+			case EElysiumVariantType::Handle:
+				OutAnswer.Type = FElysiumArenaValue::EType::String;
+				OutAnswer.String = Word.ToString();
+				break;
+			default:
+				OutError = FString::Printf(TEXT("field '%s' is a %s row; read its members"), *Probe.Field,
+					Row->Type == EElysiumVariantType::Vector ? TEXT("vector") : TEXT("void"));
+				return false;
+			}
 		}
 	}
 	// The field's own type must be the comparison's: a number is never compared with a string.
@@ -1517,6 +1557,65 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 				OutError = FString::Printf(TEXT("fixture '%s' is not staged"), *Arg.Fixture);
 				return false;
 			}
+		}
+		if (Action.Function == TEXT("KeyValues_Lex") || Action.Function == TEXT("KeyValues_Parse"))
+		{
+			// Argument 0: a `text` fixture, the buffer `0x101f2180` R3..R6 would have read from the file.
+			const FElysiumArenaFixture* Source = Action.Args.Num() >= 1 && !Action.Args[0].Fixture.IsEmpty()
+				? StagedFixtures.Find(Action.Args[0].Fixture) : nullptr;
+			if (Source == nullptr || Source->Kind != TEXT("text"))
+			{
+				OutError = FString::Printf(TEXT("entity_call '%s' takes a `text` fixture as its first argument"), *Action.Function);
+				return false;
+			}
+			FElysiumNamedRetailSites Sites(World, Action.Target);
+			ElysiumKeyValues::FKvReader Reader(Source->Text, &Sites);
+			// The call's result, written after its sites (the sink appends to `Events` while the reader
+			// runs, so the event is built last and added once).
+			auto RecordDone = [this, &World, &Action](const FString& Text)
+			{
+				FEvent& Done = Events.AddDefaulted_GetRef();
+				StampEvent(Done, World.NowSeconds());
+				Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+				Done.Name = Action.Target;
+				Done.Text = Text;
+			};
+			if (Action.Function == TEXT("KeyValues_Lex"))
+			{
+				// The wrapper `0x101f2f30` called until the cursor it writes back is NULL -- how
+				// `0x101f2360` and `0x101f2180` consume a buffer. `calls` counts the wrapper calls.
+				int32 Calls = 0;
+				while (Reader.Pos != INDEX_NONE)
+				{
+					uint8 Quoted = 0;
+					ElysiumKeyValues::ReadToken(Reader, &Quoted);
+					++Calls;
+				}
+				RecordDone(FString::Printf(TEXT("entity_call KeyValues_Lex done calls=%d"), Calls));
+				return true;
+			}
+			// Argument 1 (optional): the target node's name -- `0x101f2e20` names its cache node after the
+			// file and hands it to `0x101f2180` in ECX. Absent or empty: no target (ECX NULL).
+			TSharedPtr<ElysiumKeyValues::FKvNode> Target;
+			FString FileName = TEXT("(text)");
+			if (Action.Args.Num() >= 2 && Action.Args[1].Value.Type == FElysiumArenaValue::EType::String
+				&& !Action.Args[1].Value.String.IsEmpty())
+			{
+				FileName = Action.Args[1].Value.String;
+				Target = MakeShared<ElysiumKeyValues::FKvNode>();
+				ElysiumKeyValues::SetName(*Target, FileName);
+			}
+			TArray<TSharedPtr<ElysiumKeyValues::FKvNode>> Roots;
+			ElysiumKeyValues::ParseRoots(Reader, FileName, Target, Roots);
+			TArray<FString> RootNames;
+			for (const TSharedPtr<ElysiumKeyValues::FKvNode>& Root : Roots)
+			{
+				RootNames.Add(FString::Printf(TEXT("%s(%d)"), *Root->Name, Root->Children.Num()));
+			}
+			RecordDone(FString::Printf(TEXT("entity_call KeyValues_Parse done roots=%d [%s] target=%s"), Roots.Num(),
+				*FString::Join(RootNames, TEXT(" ")),
+				Target.IsValid() ? *FString::Printf(TEXT("%s(%d)"), *Target->Name, Target->Children.Num()) : TEXT("null")));
+			return true;
 		}
 		OutError = FString::Printf(TEXT("entity_call '%s' is allowlisted but has no dispatch"), *Action.Function);
 		return false;

@@ -174,3 +174,57 @@ Several `system/` and `items/` files ship as a triplet: `<name>.txt`, `<name> - 
 `<name>.txt` is **byte-identical to the `- vampire` variant** (what the shipped game loads);
 the `- hunter` variant is the cut companion-mode data. All are mirrored verbatim; **consumers
 read the base (unsuffixed) file**.
+
+## The KeyValues reader (`VKeyValues`, `vampire.dll`) [recovered 2026-10-10]
+
+The retail grammar every `vdata/`, `.res` and `.vmt` text is read with; the walk is
+`docs/specs/layers/L0-entity/walks/L0-r003.md`, the port `Source/ElysiumUE/Private/ElysiumKeyValues.{h,cpp}`
+(records `Arena/scenarios/audio/l0_keyvalues_lexer.json`, `l0_keyvalues_tree.json`).
+
+- **Tables.** `FUN_1023eff0` zeroes a 256-byte membership table and marks each byte of a delimiter string
+  (signed index). `FUN_102473e0` builds two once (flag `0x10753640`): A `0x10753440` from `{}()'`
+  (`0x105794c0`) and B `0x10753540` from `{}()':` (`0x105c4ef8`). The selector byte `DAT_10753641` lives
+  in `.bss` and nothing in the image writes it, so **table B is the live table: `:` is a delimiter**
+  (`a:b` is three tokens) and table A is dead.
+- **Tokenizer `FUN_10247280`** `(cursor, out, quoted*) -> next cursor | NULL`. `*quoted = 0`; a NULL
+  cursor returns NULL with `out` untouched; `*out = 0`. Whitespace is every byte whose signed value is
+  `<= 0x20` (controls, space, and all bytes `>= 0x80`); NUL in the skip returns NULL with `out = ""`.
+  At token start only: `//` to `\n`/NUL, `/*` to the first `*/` at or after the byte following `/*`
+  (`/**/` closes, `/*/` does not; unclosed → NULL at EOF). `"` starts a string (`*quoted = 1`): raw
+  bytes, `\"` → `"` (both consumed; any other backslash kept literally), newlines kept; `"` ends with
+  the cursor after it, NUL ends with the cursor **one past the NUL** (the next call reads the heap). A
+  table byte is a one-byte token (cursor past it). Otherwise a bare word runs while the next byte is
+  neither in the table nor `<= 0x20`; `"` and `/` do not end a word (`a//b`, `ab"cd"`, `a/*c*/b` are
+  words). `out` (`0x1073AA80`, 8 KiB to the next global, declared size unrecovered) has no bound check.
+- **Wrapper `FUN_101f2f30`** `(char** cursor, fs unused, quoted*)`: tokenizes `*cursor` into the shared
+  buffer, writes the cursor back, returns the buffer (never NULL). Reached through three JMP thunks
+  `0x10004273 -> 0x10247430 -> 0x1000b947 -> 0x10247280`.
+- **Block parser `FUN_101f2360`** `(node, cursor)`: loop: `key = wrapper(NULL)`; empty key (EOF, or a
+  quoted `""`) or `"}"` (`0x10547B64`, quote not asked) returns; `child = 0x101f2cf0(key)` (always a new
+  node, appended at the tail of `+0x1C`/`+0x18`); `val = wrapper(&quoted)`; `"{"` (`0x10547B78`, quote
+  not asked) recurses into the child; else `child+0x0C = intern(val)` (`0x101f2f70`) for every leaf, and:
+  quoted → type 1; else `e1 = end of strtol(val, 10)`, `e2 = end of strtod(val)`: `e2 > e1` → `+0x08 =
+  (float)strtod`, type 3; `e1 <= val` (nothing consumed) → type 1; else `+0x08 = strtol`, type 2.
+  `_strtol` clamps on overflow (`99999999999` → 2147483647); the VC6 `_strtod` (`___strgtold12`
+  `0x1043B1BD`) has no hex and no inf/nan state (`0x1A` → int 0; `inf`/`nan` → strings), accepts `D`/`d`
+  as exponent letters. A value missing before `}` takes `}` as its text and the block runs to EOF.
+- **File reader `FUN_101f2180`** `(name, fs)`, ECX = target node or NULL: Open `rb` (`0x105596CC`),
+  Size, `malloc(size+1)`, Read, Close, NUL; then loop: `key = wrapper`; cursor NULL → done (return 1);
+  target set → `Clear 0x101f2c60` + `SetName 0x101f2090` on it, else a new node linked after the previous
+  root (`0x101f2cd0`, the `+0x18` chain); `tok = wrapper`; cursor NULL → done; `"{"` → block parse,
+  target = NULL; else `DevMsg("ERROR: parsing KeyValue in file %s, expecting {, got %s\n", name, "{")`
+  (the constant, not the token) and the node is reused for the next key. A top-level `}` is an ordinary
+  root key; an empty file returns 1 with the target untouched. Caller: `FUN_101f2e20(name, fs)` --
+  `keycache_Lookup` (VSTDLIB, body outside the corpus) hit returns the cached node's IKeyValues
+  (`+0x30`); miss creates the node named after the file, parses with it as target, `keycache_Add`s it.
+  The cache key is the file name; the node's name becomes the first root key. Names are stored verbatim;
+  the in-tree name compare `FUN_101f26f0` uses `__strcmpi` (`0x1043E780`).
+- **Node** (0x38 bytes, pool `0x1073D280`): `+0x04` refcount, `+0x08` int/float bits, `+0x0C` value
+  text, `+0x10` type (0 block, 1 string, 2 int, 3 float), `+0x14` name, `+0x18` next sibling / next root,
+  `+0x1C` first child, `+0x28` IKeyCacheable, `+0x30` IKeyValues (21 slots). UNRECOVERED: `+0x20`,
+  keycache case folding, the DevMsg gating, `___strgtold12` state 11 (`12-34`).
+- **Port.** Byte-for-byte except two named representations: the lexer runs on TCHARs (a TCHAR `>= 0x80`
+  classifies as a byte `>= 0x80` does; quoted text keeps either verbatim) and a cursor past the NUL reads
+  NUL, not the heap. The lookup index (`Values`/`Pairs`/`Kids`, lowercase keys) stands for the
+  case-insensitive compare; `Children` is the retail child list with the retail types. No keycache: every
+  load reads the file.

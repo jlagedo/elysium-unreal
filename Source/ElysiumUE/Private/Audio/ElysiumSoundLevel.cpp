@@ -1,11 +1,42 @@
 #include "ElysiumSoundLevel.h"
 
 #include "ElysiumMoveSolve.h"        // ElysiumMove::U — the one Source-unit -> cm conversion
+#include "ElysiumRetailSite.h"       // IElysiumRetailSiteSink: the `ambient_level` tap
 #include "Curves/CurveFloat.h"       // FRuntimeFloatCurve::GetRichCurve
 #include "Curves/RichCurve.h"
 
+#include <cmath>                     // std::log10: the FLDLG2/FYL2X pair
+
 namespace
 {
+	// The x87 chain `0x10228350` and `0x101ac570` share, instruction for instruction (the latter
+	// `0x101ac58d..0x101ac5a9`), from the positive-radius arm on:
+	//   FLD [radius]; FMUL double [0x1047aa18]   -- * 0x3F9C71C71C71C71C (the double nearest 1/36)
+	//   FLDLG2; FXCH; FYL2X                      -- log10
+	//   FMUL double [0x104704a8]                 -- * 20.0
+	//   FADD float [0x10462950]                  -- + 40.0f
+	//   JMP __ftol (0x10431320)                  -- truncate toward zero
+	// The multiplier is the stored double, not `/ 36`: at `radius = 36` the product is a tie
+	// (`1 - 5.55e-17`) that IEEE double rounds to even, 1.0, which is what PC = 53 does on the x87
+	// stack; the run-time precision control is unrecovered (`walks/L0-r003.md` § Open questions).
+	// `__ftol` stores the integer indefinite for a value outside int64 (`+Inf`), whose low dword is 0.
+	int32 RadiusLevelChain(float Radius)
+	{
+		static_assert(sizeof(double) == sizeof(uint64), "the multiplier is rebuilt from its bit pattern");
+		const uint64 MultiplierBits = 0x3F9C71C71C71C71Cull;   // `_DAT_1047aa18`, PE read
+		double Multiplier = 0.0;
+		FMemory::Memcpy(&Multiplier, &MultiplierBits, sizeof(double));
+		const double Level = static_cast<double>(ElysiumSoundLevel::DbPerDecade)
+			* std::log10(static_cast<double>(Radius) * Multiplier)
+			+ static_cast<double>(ElysiumSoundLevel::AuthoredFloorDb);
+		if (!FMath::IsFinite(Level))
+		{
+			return 0;   // `__ftol`'s integer indefinite, low dword
+		}
+		// `__ftol` truncates toward zero, which is `(int)` in C and NOT `FMath::RoundToInt`.
+		return static_cast<int32>(Level);
+	}
+
 	// ---------------------------------------------------------------------------------------
 	// A3: the shape of the sampled curve. Every VALUE the model uses is a recovered constant in
 	// A3: `ElysiumSoundLevel.h`'s block (`docs/vtmb/footsteps.md` §3.1); the two numbers here are
@@ -48,16 +79,42 @@ int32 FromDistanceUnits(float DistUnits)
 	//   FMUL [0x104704a8]                     -- * 20
 	//   FADD [0x10462950]                     -- + 40   <- the GAME dll's own reference, not snd_refdb
 	//   JMP __ftol                            -- truncate toward zero
-	// A non-finite distance is not a case retail can reach (its input is an authored float), but
-	// `log10` of one would poison the whole audio path, so it takes the same arm as `dist <= 0`.
-	if (!(DistUnits > 0.0f) || !FMath::IsFinite(DistUnits))
+	// `FCOMP` masks C3|C0: the positive arm needs `dist > 0` strictly; `<= 0`, `-0.0` and NaN (unordered)
+	// take the zero arm. `+Inf` reaches the chain and `__ftol` answers 0 for it (`RadiusLevelChain`).
+	if (!(DistUnits > 0.0f))
 	{
 		return 0;
 	}
-	const double Level = DbPerDecade * FMath::LogX(10.0, static_cast<double>(DistUnits) / RefDistUnits)
-		+ AuthoredFloorDb;
-	// `__ftol` truncates toward zero, which is `(int)` in C and NOT `FMath::RoundToInt`.
-	return static_cast<int32>(Level);
+	return RadiusLevelChain(DistUnits);
+}
+
+int32 FromAmbientRadius(float Radius, EPlacement Placement, IElysiumRetailSiteSink* Sites)
+{
+	// `vampire.dll 0x101ac570`, arms in retail order.
+	const bool bEverywhere = Placement == EPlacement::Everywhere;
+	if (Sites != nullptr)
+	{
+		Sites->Site(TEXT("ambient_level"), TEXT("FUN_101ac570"), 0x101ac570u, TEXT("entry"),
+			FString::Printf(TEXT("radius=%g everywhere=%d"), Radius, bEverywhere ? 1 : 0));
+	}
+	// 1. `FLD radius; FCOMP [0x104454c4] (0.0); FNSTSW; AND EAX,0x4100; JNZ zero`: C3|C0 set for
+	//    `radius <= 0`, `-0.0` and NaN (unordered), so only `radius > 0` strictly goes on.
+	// 2. `MOV AL,[ESP+8]; TEST AL,AL; JNZ zero`: any nonzero `everywhere` byte.
+	const bool bPositive = (Radius > 0.0f) && !bEverywhere;
+	if (Sites != nullptr)
+	{
+		Sites->Site(TEXT("ambient_level"), TEXT("FUN_101ac570"), 0x101ac570u, TEXT("branch"),
+			FString::Printf(TEXT("positive=%d"), bPositive ? 1 : 0));
+	}
+	// 3. The positive arm (`0x101ac58d`): the shared chain and `JMP __ftol`.
+	// 4. The zero arm (`0x101ac5ae`): `MOV EAX,ECX` with ECX zeroed at `0x101ac57a`.
+	const int32 Level = bPositive ? RadiusLevelChain(Radius) : 0;
+	if (Sites != nullptr)
+	{
+		Sites->Site(TEXT("ambient_level"), TEXT("FUN_101ac570"), 0x101ac570u, TEXT("return"),
+			FString::Printf(TEXT("level=%d"), Level));
+	}
+	return Level;
 }
 
 float SourceAttenuation(int32 LevelDb)

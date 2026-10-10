@@ -362,6 +362,25 @@ There are **no** `InputFadeIn` / `InputFadeOut` methods on this class. The only
 `ambient_generic,FadeIn` wires are `AcceptInput` refusals. `entity_io.md`'s
 FadeIn(2)/FadeOut(2) counts are those dead rows.
 
+### `radius` → `m_iSoundLevel` [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r003.md`]
+
+`CAmbientGeneric::Spawn` (`0x101ac310`) calls `FUN_101ac570` at `0x101ac321` with `m_spawnflags & 1`
+(`0x101ac2f0`, pushed first) and `m_radius` (`+0x450`, the `radius` key, float), and stores the answer
+in `m_iSoundLevel` (`+0x454`, int) at `0x101ac326`. `CSpeaker::Spawn` (`0x101af420`) does the same at
+`0x101af447` with `(m_spawnflags >> 1) & 1` and its `m_radius` at `+0x454`, storing at `+0x458`.
+`FUN_101ac570` (65 B, pure): `radius > 0.0` strictly (`FCOMP [0x104454c4]`, C3|C0 masked: `<= 0`,
+`-0.0` and NaN take the zero arm), then any nonzero `everywhere` byte → 0, else
+`trunc(40.0f + 20.0 * log10(radius * 0x3F9C71C71C71C71C))` through `__ftol` (`0x10431320`,
+truncate toward zero; `+Inf` stores the integer indefinite, low dword 0). Constants: `0x104454c4`
+0.0f, `0x1047aa18` the double nearest 1/36 (`0.027777777777777776`), `0x104704a8` 20.0, `0x10462950`
+40.0f. Levels are negative for `0 < radius < 0.36` (0.1 → −11) and are stored as such. `0x10228350`
+(footsteps, `footsteps.md` §3.1) is the same chain without the everywhere test. Readers of
+`m_iSoundLevel`: `InputPitch 0x101ac690`, `InputVolume 0x101ac7d0`, `vfunc113 0x101ac9c0` (not walked).
+UNRECOVERED: the x87 precision control in force (decides 36 → 40 or 39, 360 → 60 or 59) and the value
+of `m_radius` when the key is absent (no constructor or datamap default found). Port:
+`Source/ElysiumUE/Private/Audio/ElysiumSoundLevel.cpp` `FromAmbientRadius`,
+`Substrate/ElysiumAmbientGeneric.cpp` `Spawn`; record `Arena/scenarios/audio/l0_ambient_radius_level.json`.
+
 ### `PlaySound` and `StopSound` are edge-only, and the wired parameter is inert
 
 `InputPlaySound` `0x101ad3e0` (mode **1**), `InputStopSound` `0x101ad410` (mode **0**),
