@@ -24,6 +24,8 @@ evidence, not new validation or acceptance of the layer closing gate.
 - Next ready packet: r022a stored frame/local state and parent accessor, bounded by
   `l0_parent_frame_cache`; then recover/implement the actual bounds/physics/partition producers.
 - Deferred recovery checkpoint: `a3aac976` (docs only, no runtime gate); clean checkout at dispatch.
+- r024a implementation: `741fe3c3`, gated on main, no push. This coordinator session ends after
+  the hash checkpoint; the persistent L0 Goal continues with a fresh Sol Medium coordinator.
 - Layer closure remains open: 65 unlanded runs, rebakes, default/arm and full arena gate,
   intermittent records in three boot orders, audit/hooks and state-bearing replacement checks.
 
@@ -66,7 +68,7 @@ dispatch/current/stamp substitute. Original completed-run count stays 23/88. No 
 | L0-r021 | haiku 138 turns $0.98 (max) | sonnet: SetModel/UTIL_SetModel never precache (unprecached name fatal); IsViewable via GetModelType; weapon bHidden != script-hidden latch | done (historical commit) | historical commit reports build ok, default 169/0; l0_entity_visual_state, l0_angle_motion; 15 prior pass; exact report path not recorded | `00187639` |
 | L0-r022 | haiku 128 turns $0.89 (max) | sonnet: SetAbsAngles has NO partition walk; direct hook 0x10092ef0; current Sol recovery adds query-time partition lifecycle | deferred, no runtime edits | not gated: docs-only checkpoint; record still absent | `a3aac976` docs-only; implementation open |
 | L0-r023 | haiku 98 turns $0.94 (max) | sonnet: Teleport has 3 bodies, 12 callers; notify block has physicsRotate byte; base has no m_fEffects storage |
-| L0-r024 | haiku 121 turns $0.86 (max) | sonnet: ctor leaves grow size 0 / current ctx -1; slot 15 SetAttackExtents updates the partition; last-think written after the callback | r024a storage subset gated; full r024 open | build ok; default 169/169; storage + constructor + 10 regressions 12/12 pass; exact paths below | r024a implementation commit; checkpoint records hash below |
+| L0-r024 | haiku 121 turns $0.86 (max) | sonnet: ctor leaves grow size 0 / current ctx -1; slot 15 SetAttackExtents updates the partition; last-think written after the callback | r024a storage subset gated; full r024 open | build ok; default 169/169; storage + constructor + 10 regressions 12/12 pass; exact paths above | `741fe3c3` r024a only; original r024 open |
 | L0-r025 | haiku 191 turns $1.25 (max) | sonnet: PostConstructor forces serial -1; empty classname never enqueues (+0x448 = -1); CGameStringPool case-sensitive |
 | L0-r026 | haiku 176 turns $1.08 (max) | sonnet: port classname is LAST occurrence, retail FIRST (bake folds last-wins); qsort is VC6 CRT (port verbatim); 0x10352f00 runs before thinks |
 | L0-r027 | haiku 150 turns $0.76 (max) | sonnet done |
