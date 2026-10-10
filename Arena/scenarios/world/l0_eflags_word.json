@@ -1,6 +1,6 @@
 {
   "name": "l0_eflags_word",
-  "about": "CBaseEntity::GetEFlags 0x100b4ef0 (slot 83: `MOV EAX,[ECX+0x268]; RET`) and CBaseEntity::SetEFlags 0x100b4f10 (slot 84: `MOV EAX,[ESP+4]; MOV [ECX+0x268],EAX; RET 4`) share one complete-word contract over m_iEFlags (+0x268) (`walks/L0-r015.md`). Fresh entity: the base constructor 0x1009d980 leaves 0x54000 in the word -- its SetCollisionBounds(zero, zero) (0x1009dca4 -> 0x1009edc0 -> 0x100dc770) ends in FUN_100dda20's `|= 0x14000` (0x100dda23; the edict is still NULL, so FUN_100ddd20 adds no 0x8000), then 0x1009dcdc ORs 0x50000 -- so a logic_relay that nothing has parented or moved reads 0x54000 (bits 14, 16, 18 set; 0x800, 0x8000 and 0x1000000 clear). SetEFlags(0x01014000) is a whole-dword replace, no mask and no OR: GetEFlags then returns exactly 0x01014000 -- the constructor's 0x40000 is gone, and bit 24 in the argument runs no untouch enqueue (SetEFlags is not SetCheckUntouch). SetEFlags(0x2) (EFL_DORMANT) leaves exactly 0x2: bits 14, 16 and 24 gone. The two are reached as the engine reaches them, through CServerNetworkProperty::vfunc2 / vfunc3 (0x101ab690 / 0x101ab6b0), which forward to the owner's slots 83 / 84; the 124 `*DAT_1070b22c` slot 83/84 sites in the corpus are VEngineServer014's, not these. Reported as `fail`, a read word or a site payload differs from retail's.",
+  "about": "CBaseEntity::GetEFlags 0x100b4ef0 (slot 83: `MOV EAX,[ECX+0x268]; RET`) and CBaseEntity::SetEFlags 0x100b4f10 (slot 84: `MOV EAX,[ESP+4]; MOV [ECX+0x268],EAX; RET 4`) share one complete-word contract over m_iEFlags (+0x268) (`walks/L0-r015.md`). Fresh entity: the base constructor 0x1009d980 leaves 0x54000 in the word -- its SetCollisionBounds(zero, zero) (0x1009dca4 -> 0x1009edc0 -> 0x100dc770) ends in FUN_100dda20's `|= 0x14000` (0x100dda23; the edict is still NULL, so FUN_100ddd20 adds no 0x8000), then 0x1009dcdc ORs 0x50000 -- so the constructor leaves 0x54000 (bits 14, 16, 18 set; 0x800, 0x8000 and 0x1000000 clear). A map row then takes its keyvalue pass with the edict attached (the loader 0x10136b40 calls ParseMapData 0x1009e280 after CreateEntityByName), and the `origin` arm of CBaseEntity::KeyValue 0x1009e430 runs SetAbsOrigin 0x100b2300 -> FUN_100b52a0 -> FUN_100ddd20, whose IndexOfEdict gate now passes: `|= 0x8000` (L0-r017 / r018). So a logic_relay that nothing has parented or moved reads 0x5c000 after spawn. SetEFlags(0x01014000) is a whole-dword replace, no mask and no OR: GetEFlags then returns exactly 0x01014000 -- the constructor's 0x40000 is gone, and bit 24 in the argument runs no untouch enqueue (SetEFlags is not SetCheckUntouch). SetEFlags(0x2) (EFL_DORMANT) leaves exactly 0x2: bits 14, 16 and 24 gone. The two are reached as the engine reaches them, through CServerNetworkProperty::vfunc2 / vfunc3 (0x101ab690 / 0x101ab6b0), which forward to the owner's slots 83 / 84; the 124 `*DAT_1070b22c` slot 83/84 sites in the corpus are VEngineServer014's, not these. Reported as `fail`, a read word or a site payload differs from retail's.",
   "stage": "arena",
   "seed": 1,
   "duration": 1.0,
@@ -15,8 +15,8 @@
     { "t": 0.45, "do": "entity_call", "target": "word", "function": "GetEFlags" }
   ],
   "expect": [
-    { "label": "fresh", "who": "word", "kind": "retail_site", "site": "eflags_word", "match": "fn=CBaseEntity::GetEFlags va=0x100b4ef0 phase=return m_iEFlags=0x54000", "by": 0.15 },
-    { "label": "fresh_done", "who": "word", "kind": "script", "match": "entity_call GetEFlags done m_iEFlags=0x54000", "within": 0.01 },
+    { "label": "fresh", "who": "word", "kind": "retail_site", "site": "eflags_word", "match": "fn=CBaseEntity::GetEFlags va=0x100b4ef0 phase=return m_iEFlags=0x5c000", "by": 0.15 },
+    { "label": "fresh_done", "who": "word", "kind": "script", "match": "entity_call GetEFlags done m_iEFlags=0x5c000", "within": 0.01 },
     { "label": "store", "who": "word", "kind": "retail_site", "site": "eflags_word", "match": "fn=CBaseEntity::SetEFlags va=0x100b4f14 phase=write m_iEFlags=0x1014000", "by": 0.25 },
     { "label": "read_back", "who": "word", "kind": "retail_site", "site": "eflags_word", "match": "fn=CBaseEntity::GetEFlags va=0x100b4ef0 phase=return m_iEFlags=0x1014000", "by": 0.30 },
     { "label": "replace", "who": "word", "kind": "retail_site", "site": "eflags_word", "match": "fn=CBaseEntity::SetEFlags va=0x100b4f14 phase=write m_iEFlags=0x2", "by": 0.45 },
@@ -25,13 +25,13 @@
   "never": [
     { "who": "word", "kind": "retail_site", "site": "check_untouch", "match": "", "from": 0.0 },
     { "who": "word", "kind": "retail_site", "site": "untouch_enqueue", "match": "", "from": 0.0 },
-    { "who": "word", "kind": "retail_site", "site": "eflags_word", "match": "phase=return m_iEFlags=0x1054000", "from": 0.0 }
+    { "who": "word", "kind": "retail_site", "site": "eflags_word", "match": "phase=return m_iEFlags=0x105c000", "from": 0.0 }
   ],
   "probes": [
-    { "at": 0.05, "who": "word", "probe": "entity_field", "field": "m_iEFlags", "equals": 344064 },
+    { "at": 0.05, "who": "word", "probe": "entity_field", "field": "m_iEFlags", "equals": 376832 },
     { "at": 0.05, "who": "word", "probe": "entity_field", "field": "m_iEFlags", "member": "0x54000", "equals": true },
     { "at": 0.05, "who": "word", "probe": "entity_field", "field": "m_iEFlags", "member": "0x800", "equals": false },
-    { "at": 0.05, "who": "word", "probe": "entity_field", "field": "m_iEFlags", "member": "0x8000", "equals": false },
+    { "at": 0.05, "who": "word", "probe": "entity_field", "field": "m_iEFlags", "member": "0x8000", "equals": true },
     { "at": 0.05, "who": "word", "probe": "entity_field", "field": "m_iEFlags", "member": "0x1000000", "equals": false },
     { "at": 0.30, "who": "word", "probe": "entity_field", "field": "m_iEFlags", "equals": 16859136 },
     { "at": 0.30, "who": "word", "probe": "entity_field", "field": "m_iEFlags", "member": "0x40000", "equals": false },
@@ -40,5 +40,5 @@
     { "at": "end", "who": "word", "probe": "entity_field", "field": "m_touchStamp", "equals": 0 },
     { "at": "end", "who": "word", "probe": "exists", "equals": true }
   ],
-  "notes": "16859136 = 0x01014000 (bits 14, 16, 24; no bit 0, so slot 116 IsMarkedForDeletion stays out of the record) and 344064 = 0x54000. The entity is a map row (its constructor ran at Load), so the fresh-word probe reads what construction and the spawn pass left: a logic_relay has no move parent and nothing moves it, so no 0x800 lands and the word is the constructor's. The `never` on 0x1054000 pins the replace: a setter that ORed instead of storing would keep the constructor's 0x40000. EFL_DORMANT (0x2) on a live logic_relay only skips a later ServerActivate pass (0x100a8220), which the record does not run."
+  "notes": "16859136 = 0x01014000 (bits 14, 16, 24; no bit 0, so slot 116 IsMarkedForDeletion stays out of the record) and 376832 = 0x5c000 = 0x54000 (the constructor's word) | 0x8000. The entity is a map row (its constructor ran at Load), so the fresh-word probe reads what construction and the spawn pass left: the row's `origin` key ran SetAbsOrigin with the edict attached, so FUN_100ddd20 marked 0x8000 (L0-r017); a logic_relay has no move parent and nothing moves it after that, so 0x800 is cleared again by SetAbsOrigin's own `&= ~0x800` and no other bit lands. The `never` on 0x105c000 pins the replace: a setter that ORed instead of storing would keep the spawn word's 0x40000 and 0x8000. EFL_DORMANT (0x2) on a live logic_relay only skips a later ServerActivate pass (0x100a8220), which the record does not run."
 }

@@ -66,13 +66,14 @@ namespace
 class FElysiumEnvSprite final : public FElysiumEntity
 {
 public:
-	// `m_fEffects` (+0x19c, key `effects`): the EF_ word TurnOn clears 0x40 in and TurnOff sets it.
-	int32 Effects = 0;
+	// `m_fEffects` (+0x19c, key `effects`) is the base word `EffectsWord` (L0-r017): TurnOn clears 0x40
+	// in it and TurnOff sets it.
 	// `m_flSpriteFramerate` (+0x458, key `framerate`), `m_flSpriteScale` (+0x46c, key `scale`).
 	float SpriteFramerate = 0.0f;
 	float SpriteScale = 0.0f;
 	// `m_clrRender.a` (+0x1a3, key `renderamt`): the alpha `0x1042eee0` copies into `m_nBrightness`.
-	int32 RenderAmt = 255;
+	// `renderamt` is `m_clrRender`'s alpha byte (`RenderColor >> 24`), written by `CBaseEntity::KeyValue`
+	// 0x1009e430's arm 1b (L0-r017).
 	// `m_flFrame` (+0x45c), `m_flMaxFrame` (+0x478), `m_flLastTime` (+0x474).
 	float Frame = 0.0f;
 	float MaxFrame = 0.0f;
@@ -110,7 +111,7 @@ public:
 
 	virtual void Serialize(FElysiumSaveArchive& Ar) override
 	{
-		Ar << Effects;
+		Ar << EffectsWord;
 		Ar << Frame;
 		Ar << MaxFrame;
 		Ar << LastTime;
@@ -127,13 +128,13 @@ public:
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
-		Out.Emplace(TEXT("Sprite"), (Effects & EF_NODRAW) ? TEXT("off") : TEXT("on"));
+		Out.Emplace(TEXT("Sprite"), (EffectsWord & EF_NODRAW) ? TEXT("off") : TEXT("on"));
 		Out.Emplace(TEXT("Drawn"), IsVisible() ? TEXT("yes") : TEXT("no"));
 		Out.Emplace(TEXT("Frame"), FString::Printf(TEXT("%g / %g"), Frame, MaxFrame));
 	}
 
 	// The client's draw test: `m_fEffects & EF_NODRAW` hides; the port's dormancy switch hides too.
-	bool IsVisible() const { return (Effects & EF_NODRAW) == 0 && !IsInert(); }
+	bool IsVisible() const { return (EffectsWord & EF_NODRAW) == 0 && !IsInert(); }
 
 public:
 	virtual void Precache() override;        // CSprite::Precache 0x1042e8c0, slot 104
@@ -175,12 +176,11 @@ static FElysiumClassRegistrar GRegEnvSprite(
 		D.Input(TEXT("TurnOn"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumEnvSprite&>(E).TurnOn(); });
 		D.Input(TEXT("TurnOff"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumEnvSprite&>(E).TurnOff(); });
 		D.Input(TEXT("ToggleSprite"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumEnvSprite&>(E).InputToggleSprite(); });
-		// `CSprite`'s datamap rows by their retail key or member name, plus the `CBaseEntity` words this
-		// class is the first to carry (`effects`, `renderamt`: UNBOUND on the base table).
-		ElysiumAddClassField(D, TEXT("effects"), &FElysiumEnvSprite::Effects, EElysiumField::Save);
-		ElysiumAddClassField(D, TEXT("framerate"), &FElysiumEnvSprite::SpriteFramerate, EElysiumField::Save);
-		ElysiumAddClassField(D, TEXT("scale"), &FElysiumEnvSprite::SpriteScale, EElysiumField::Save);
-		ElysiumAddClassField(D, TEXT("renderamt"), &FElysiumEnvSprite::RenderAmt, EElysiumField::None);
+		// `CSprite`'s datamap rows by their retail key or member name (`m_flSpriteFramerate` +0x458 and
+		// `m_flSpriteScale` +0x46c are SAVE|KEY). `effects` and `rendercolor` are the base table's rows
+		// 18 / 19 over the base words; `renderamt` is the base `KeyValue`'s arm 1b (L0-r017).
+		ElysiumAddClassField(D, TEXT("framerate"), &FElysiumEnvSprite::SpriteFramerate, EElysiumField::Save | EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("scale"), &FElysiumEnvSprite::SpriteScale, EElysiumField::Save | EElysiumField::MapKey);
 		ElysiumAddClassField(D, TEXT("m_flFrame"), &FElysiumEnvSprite::Frame, EElysiumField::None);
 		ElysiumAddClassField(D, TEXT("m_flMaxFrame"), &FElysiumEnvSprite::MaxFrame, EElysiumField::None);
 		ElysiumAddClassField(D, TEXT("m_flLastTime"), &FElysiumEnvSprite::LastTime, EElysiumField::None);
@@ -201,7 +201,7 @@ void FElysiumEnvSprite::Spawn()
 	const bool bStartOn = (SpawnFlags & SF_SPRITE_START_ON) != 0;
 	Site(TEXT("sprite.spawn"), TEXT("CSprite::Spawn"), 0x1042e550u, TEXT("entry"),
 		FString::Printf(TEXT("model=%s named=%d flag1=%d angles=%s scale=%g renderamt=%d effects=0x%x"),
-			Model.IsEmpty() ? TEXT("(empty)") : *Model, bNamed ? 1 : 0, bStartOn ? 1 : 0, *Ang(LocalAnglesWord()), SpriteScale, RenderAmt, Effects));
+			Model.IsEmpty() ? TEXT("(empty)") : *Model, bNamed ? 1 : 0, bStartOn ? 1 : 0, *Ang(LocalAnglesWord()), SpriteScale, (RenderColor >> 24) & 0xffu, EffectsWord));
 	// 1. `SetSolid(&m_Collision, 0)` (thunk 0x1000428c -> 0x100dc480, under a "CBaseEntity::SetSolid"
 	//    scope frame): SOLID_NONE; acts only when the solid differs. The port's collision words.
 	RetailSolidType = 0;
@@ -263,7 +263,7 @@ void FElysiumEnvSprite::Spawn()
 	Site(TEXT("sprite.spawn"), TEXT("CSprite::Spawn"), 0x1042e550u, TEXT("scale"),
 		FString::Printf(TEXT("in=%g out=%g error=%d"), SpriteScale, Scale, bScaleError ? 1 : 0));
 	// 10. `0x1042eee0(this, rendercolor.a, 0)`: `m_nBrightness = m_clrRender.a`, `m_flBrightnessTime = 0`.
-	Brightness = RenderAmt & 0xff;
+	Brightness = static_cast<int32>((RenderColor >> 24) & 0xffu);
 	BrightnessTime = GZero;
 	// 11. `0x1042ef10(this, clamped, 0)`: `m_flSpriteScale = clamped`, `m_flScaleTime = 0`.
 	SpriteScale = Scale;
@@ -331,7 +331,7 @@ void FElysiumEnvSprite::TurnOn()
 {
 	// `FUN_1042ef70` (`__fastcall`, no stack argument), arms in retail order.
 	// 1. `m_fEffects &= ~0x40` (EF_NODRAW cleared), unconditional.
-	Effects &= ~EF_NODRAW;
+	EffectsWord &= ~static_cast<uint32>(EF_NODRAW);
 	// 2. `S = (m_flSpriteFramerate != 0.0f && (double)m_flMaxFrame > 1.0) || (m_spawnflags & 2)`. The
 	//    comparand is the DOUBLE 1.0 at 0x10449280: a 2-frame sprite (`m_flMaxFrame` 1.0) does not
 	//    schedule; the smallest scheduling frame count is 3.
@@ -355,7 +355,7 @@ void FElysiumEnvSprite::TurnOn()
 	//    Unreal's replication; not carried.
 	Site(TEXT("sprite.turnon"), TEXT("FUN_1042ef70"), 0x1042ef70u, TEXT("branch"),
 		FString::Printf(TEXT("sched=%s effects=0x%x m_pfnThink=0x%x next=%s last=%.4f frame=%g framerate=%g max=%g"),
-			bFrames ? TEXT("frames") : bOnce ? TEXT("flag2") : TEXT("none"), Effects, ThinkFn, *Next, LastTime, Frame,
+			bFrames ? TEXT("frames") : bOnce ? TEXT("flag2") : TEXT("none"), EffectsWord, ThinkFn, *Next, LastTime, Frame,
 			SpriteFramerate, MaxFrame));
 	Publish();
 }
@@ -366,9 +366,9 @@ void FElysiumEnvSprite::TurnOff()
 	// `m_pfnThink`, `m_flFrame` nor the timestamp. A next-think of 0 is Source's "no think"
 	// (`PhysicsRunSpecificThink`: `thinktime <= 0` returns), the port's `ELYSIUM_NEVER_THINK`.
 	NextThink = ELYSIUM_NEVER_THINK;
-	Effects |= EF_NODRAW;
+	EffectsWord |= static_cast<uint32>(EF_NODRAW);
 	Site(TEXT("sprite.turnoff"), TEXT("FUN_1042ef40"), 0x1042ef40u, TEXT("return"),
-		FString::Printf(TEXT("effects=0x%x next=0 m_pfnThink=0x%x frame=%g"), Effects, ThinkFn, Frame));
+		FString::Printf(TEXT("effects=0x%x next=0 m_pfnThink=0x%x frame=%g"), EffectsWord, ThinkFn, Frame));
 	Publish();
 }
 
@@ -377,9 +377,9 @@ void FElysiumEnvSprite::InputToggleSprite()
 	// `CSprite::InputToggleSprite` 0x1042f0c0: `CMP [this+0x19c], 0x40; JZ TurnOn; else TurnOff` -- an
 	// EXACT compare of the whole effects word, so a word of 0x60 (NODRAW|NOSHADOW) always takes the
 	// TurnOff arm and Toggle never shows that sprite.
-	const bool bOff = Effects != EF_NODRAW;
+	const bool bOff = EffectsWord != static_cast<uint32>(EF_NODRAW);
 	Site(TEXT("sprite.toggle"), TEXT("CSprite::InputToggleSprite"), 0x1042f0c0u, TEXT("branch"),
-		FString::Printf(TEXT("effects=0x%x arm=%s"), Effects, bOff ? TEXT("turnoff") : TEXT("turnon")));
+		FString::Printf(TEXT("effects=0x%x arm=%s"), EffectsWord, bOff ? TEXT("turnoff") : TEXT("turnon")));
 	if (bOff)
 	{
 		TurnOff();
@@ -416,9 +416,9 @@ void FElysiumEnvSprite::UseByType(const FElysiumEntityHandle& Activator, const F
 	// else `state` ? TurnOff : TurnOn. `activator`, `caller` and `value` are not read.
 	(void)Caller;
 	(void)Value;
-	const bool bState = Effects != EF_NODRAW;
+	const bool bState = EffectsWord != static_cast<uint32>(EF_NODRAW);
 	Site(TEXT("sprite.use"), TEXT("CSprite::Use"), 0x1042f030u, TEXT("entry"),
-		FString::Printf(TEXT("usetype=%d state=%d effects=0x%x activator=%s"), UseType, bState ? 1 : 0, Effects,
+		FString::Printf(TEXT("usetype=%d state=%d effects=0x%x activator=%s"), UseType, bState ? 1 : 0, EffectsWord,
 			Activator.IsSet() ? *Activator.ToString() : TEXT("none")));
 	if (!ShouldToggle(UseType, bState))
 	{

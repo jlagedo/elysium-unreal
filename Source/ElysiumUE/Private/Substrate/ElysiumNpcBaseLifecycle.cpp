@@ -263,17 +263,11 @@ void FElysiumNpcBase::HintSpawn(FHintWords& Hint)
 
 FString FElysiumNpcBase::RewriteAngleKey(float AngleValue, const FVector& CurrentAngles)
 {
-	// 0x1009e430's `angle` arm: `atof` the value, and then — this is the arm order, not a tidy-up —
-	// a value BELOW `_DAT_104454c4` (0.0f) takes the `__ftol` + `Q_strncpy` literal path, while any
-	// other value composes `"%f %f %f"` from `GetAbsAngles()[0]`, the VALUE, and `GetAbsAngles()[2]`.
-	// The yaw alone is replaced. Retail then re-enters the cascade with the key `angles`.
-	//
-	// **Unrecovered:** the literal the negative arm copies. `Q_strncpy`'s source is folded away in
-	// the decompilation and the `.rdata` it would name is not pinned; Source's own convention is
-	// that `angle -1` means "up" and `angle -2` "down", which this does NOT claim. The negative arm
-	// therefore answers the same composition, and says so.
-	return FString::Printf(TEXT("%f %f %f"),
-		static_cast<float>(CurrentAngles.X), AngleValue, static_cast<float>(CurrentAngles.Z));
+	// 0x1009e430's `angle` arm, now the base's (`FElysiumEntity::RewriteAngleKey`, L0-r017, which
+	// recovered the two literals the negative branch copies: `__ftol(v) == -1` -> `"-90 0 0"`
+	// 0x10555578, any other negative -> `"90 0 0"` 0x10555570; the positive branch formats
+	// `"%f %f %f"` from slot 221's LOCAL angles `+0x428`, pitch and roll, around the value).
+	return FElysiumEntity::RewriteAngleKey(static_cast<double>(AngleValue), CurrentAngles);
 }
 
 bool FElysiumNpcBase::OnRestoreForwardsCheckUntouch(bool bCallerValue)

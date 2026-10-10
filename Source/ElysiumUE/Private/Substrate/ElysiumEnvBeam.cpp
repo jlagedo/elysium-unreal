@@ -37,8 +37,9 @@ public:
 	float Life = 0.f;            // 0 = continuous
 	float StrikeTime = 0.f;
 	float Damage = 0.f;          // per second along the trace
-	FString RenderColor = TEXT("255 255 255");
-	float RenderAmt = 255.f;
+	// The colour is the base `m_clrRender` word (`FElysiumEntity::RenderColor`, 0xffffffff from the
+	// constructor): `CBaseEntity::KeyValue` 0x1009e430's `rendercolor` / `renderamt` arms write it
+	// (L0-r017); the beam reads the four bytes when it publishes.
 	// Provenance, inert.
 	FString ImpactParticle;
 	int32 FacesPlayer = 0;
@@ -91,8 +92,18 @@ public:
 
 	void InputWidth(const FElysiumVariant& V) { BoltWidth = FMath::Max(0.f, V.ToFloat()); Republish(); }
 	void InputNoise(const FElysiumVariant& V) { NoiseAmplitude = FMath::Max(0.f, V.ToFloat()); Republish(); }
-	void InputAlpha(const FElysiumVariant& V) { RenderAmt = FMath::Clamp(V.ToFloat(), 0.f, 255.f); Republish(); }
-	void InputColor(const FElysiumVariant& V) { RenderColor = V.ToString(); Republish(); }
+	void InputAlpha(const FElysiumVariant& V)
+	{
+		RenderColor = (RenderColor & 0x00ffffffu) | (static_cast<uint32>(FMath::Clamp(V.ToInt(), 0, 255)) << 24);
+		Republish();
+	}
+	void InputColor(const FElysiumVariant& V)
+	{
+		uint8 Rgba[4];
+		ElysiumParseRgba(V.ToString(), Rgba);   // the four-byte parse 0x101d0630; the alpha byte kept
+		RenderColor = (RenderColor & 0xff000000u) | Rgba[0] | (static_cast<uint32>(Rgba[1]) << 8) | (static_cast<uint32>(Rgba[2]) << 16);
+		Republish();
+	}
 
 	virtual void Think() override
 	{
@@ -302,15 +313,10 @@ private:
 		State.NoiseAmplitudeCm = NoiseAmplitude * 2.54f;
 		State.TextureScroll = TextureScroll;
 		State.Texture = Texture;
-		TArray<FString> Parts;
-		RenderColor.ParseIntoArrayWS(Parts);
-		State.Color = FLinearColor(1.f, 1.f, 1.f, FMath::Clamp(RenderAmt / 255.f, 0.f, 1.f));
-		if (Parts.Num() >= 3)
-		{
-			State.Color.R = FCString::Atof(*Parts[0]) / 255.f;
-			State.Color.G = FCString::Atof(*Parts[1]) / 255.f;
-			State.Color.B = FCString::Atof(*Parts[2]) / 255.f;
-		}
+		// `m_clrRender`'s four bytes (R | G<<8 | B<<16 | A<<24), as the client reads them (L0-r017).
+		State.Color = FLinearColor(static_cast<float>(RenderColor & 0xffu) / 255.f,
+			static_cast<float>((RenderColor >> 8) & 0xffu) / 255.f, static_cast<float>((RenderColor >> 16) & 0xffu) / 255.f,
+			static_cast<float>((RenderColor >> 24) & 0xffu) / 255.f);
 		Service->ApplyBeam(State);
 	}
 
@@ -336,21 +342,21 @@ static FElysiumClassRegistrar GRegEnvBeam(
 		D.Input(TEXT("Noise"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumEnvBeam&>(E).InputNoise(A.Param); });
 		D.Input(TEXT("Alpha"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumEnvBeam&>(E).InputAlpha(A.Param); });
 		D.Input(TEXT("Color"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumEnvBeam&>(E).InputColor(A.Param); });
-		ElysiumAddClassField(D, TEXT("LightningStart"), &FElysiumEnvBeam::LightningStart, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("LightningEnd"), &FElysiumEnvBeam::LightningEnd, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("BoltWidth"), &FElysiumEnvBeam::BoltWidth, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("NoiseAmplitude"), &FElysiumEnvBeam::NoiseAmplitude, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("texture"), &FElysiumEnvBeam::Texture, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("TextureScroll"), &FElysiumEnvBeam::TextureScroll, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("Radius"), &FElysiumEnvBeam::Radius, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("life"), &FElysiumEnvBeam::Life, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("StrikeTime"), &FElysiumEnvBeam::StrikeTime, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("damage"), &FElysiumEnvBeam::Damage, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("rendercolor"), &FElysiumEnvBeam::RenderColor, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("renderamt"), &FElysiumEnvBeam::RenderAmt, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("impact_particle"), &FElysiumEnvBeam::ImpactParticle, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("faces_player"), &FElysiumEnvBeam::FacesPlayer, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("framerate"), &FElysiumEnvBeam::Framerate, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("framestart"), &FElysiumEnvBeam::Framestart, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("renderfx"), &FElysiumEnvBeam::RenderFx, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("LightningStart"), &FElysiumEnvBeam::LightningStart, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("LightningEnd"), &FElysiumEnvBeam::LightningEnd, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("BoltWidth"), &FElysiumEnvBeam::BoltWidth, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("NoiseAmplitude"), &FElysiumEnvBeam::NoiseAmplitude, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("texture"), &FElysiumEnvBeam::Texture, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("TextureScroll"), &FElysiumEnvBeam::TextureScroll, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("Radius"), &FElysiumEnvBeam::Radius, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("life"), &FElysiumEnvBeam::Life, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("StrikeTime"), &FElysiumEnvBeam::StrikeTime, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("damage"), &FElysiumEnvBeam::Damage, EElysiumField::MapKey);
+		// `rendercolor` / `renderamt` are `CBaseEntity::KeyValue` 0x1009e430's literal arms over the base
+		// `m_clrRender` word (row 19 of the base datamap for the walk); no class row (L0-r017).
+		ElysiumAddClassField(D, TEXT("impact_particle"), &FElysiumEnvBeam::ImpactParticle, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("faces_player"), &FElysiumEnvBeam::FacesPlayer, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("framerate"), &FElysiumEnvBeam::Framerate, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("framestart"), &FElysiumEnvBeam::Framestart, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("renderfx"), &FElysiumEnvBeam::RenderFx, EElysiumField::MapKey);
 	});

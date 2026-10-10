@@ -226,16 +226,16 @@ static FElysiumClassRegistrar GRegFuncDustmotes(
 	{
 		D.Input(TEXT("TurnOn"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumFuncDustmotes&>(E).TurnOn(); });
 		D.Input(TEXT("TurnOff"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumFuncDustmotes&>(E).TurnOff(); });
-		ElysiumAddClassField(D, TEXT("SpawnRate"), &FElysiumFuncDustmotes::SpawnRate, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("Color"), &FElysiumFuncDustmotes::ColorText, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("Alpha"), &FElysiumFuncDustmotes::Alpha, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("SpeedMax"), &FElysiumFuncDustmotes::SpeedMax, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("SizeMin"), &FElysiumFuncDustmotes::SizeMin, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("SizeMax"), &FElysiumFuncDustmotes::SizeMax, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("LifetimeMin"), &FElysiumFuncDustmotes::LifetimeMin, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("LifetimeMax"), &FElysiumFuncDustmotes::LifetimeMax, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("DistMax"), &FElysiumFuncDustmotes::DistMax, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("Frozen"), &FElysiumFuncDustmotes::bFrozen, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("StartDisabled"), &FElysiumFuncDustmotes::bStartDisabled, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("SpriteName"), &FElysiumFuncDustmotes::SpriteName, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("SpawnRate"), &FElysiumFuncDustmotes::SpawnRate, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("Color"), &FElysiumFuncDustmotes::ColorText, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("Alpha"), &FElysiumFuncDustmotes::Alpha, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("SpeedMax"), &FElysiumFuncDustmotes::SpeedMax, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("SizeMin"), &FElysiumFuncDustmotes::SizeMin, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("SizeMax"), &FElysiumFuncDustmotes::SizeMax, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("LifetimeMin"), &FElysiumFuncDustmotes::LifetimeMin, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("LifetimeMax"), &FElysiumFuncDustmotes::LifetimeMax, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("DistMax"), &FElysiumFuncDustmotes::DistMax, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("Frozen"), &FElysiumFuncDustmotes::bFrozen, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("StartDisabled"), &FElysiumFuncDustmotes::bStartDisabled, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("SpriteName"), &FElysiumFuncDustmotes::SpriteName, EElysiumField::MapKey);
 	});

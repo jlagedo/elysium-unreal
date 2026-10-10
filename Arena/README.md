@@ -222,7 +222,11 @@ The collision box and the base constructor's words (`walks/L0-r016.md`): `m_vecM
 retail words, read raw); `m_flRadius` (coll+0x48), `m_flElasticity` (+0x370), `m_CollisionGroup` (+0x368),
 `m_clrRender` (+0x1a0, the dword as a number), `m_nSimulationTick` (+0x22c), `m_iCurrentThinkContext`
 (+0x1cc), `m_flLastThink` (+0x178, world seconds) (numbers); the handles `m_hOwnerEntity` (+0x364),
-`m_hGroundEntity` (+0x384), `m_hUseActivator` (+0x8c) (a string, `#<index>` or `-1`).
+`m_hGroundEntity` (+0x384), `m_hUseActivator` (+0x8c) (a string, `#<index>` or `-1`). The keyvalue
+pass's words (`walks/L0-r017.md`): `m_vecVelocity` (+0x3d4, `member` `x` / `y` / `z`, read raw),
+`m_fEffects` (+0x19c; bare, the word; `member`, a hex bit mask answered as a bool), and the base output
+lists `m_OnUseBegin` (+0x5c) / `m_OnUseEnd` (+0x74): bare, the count of actions the datamap walker parsed
+at run time; `index`, that action head-first as `target,input,param,delay,times,python`.
 
 **`retail_site`** (a trace kind) -- emitted at the port line that carries a retail address, by
 `FElysiumEntityWorld::EmitRetailSite(Entity, Tag, RetailFn, RetailVa, Phase, Payload)`, at the semantic
@@ -396,7 +400,24 @@ m_flElasticity= m_flNextThink=0 m_flLastThink= m_clrRender= m_nSimulationTick= m
 m_CollisionGroup= m_MoveType= m_nModelIndex=0 m_ModelName=0 m_iName=0 m_vecSize= m_vecMins= m_vecMaxs=
 m_flRadius= m_Solid= m_usSolidFlags= partition_handle= <the -1 handles> m_iVSoundGroup= m_iVSoundGroupFemale=
 m_iVSoundTableIdx= m_touchStamp= edict=0`, the constructor's end state; traced for a `spawn`ed entity, whose
-constructor runs with the world bound). A pure function reports
+constructor runs with the world bound); the datamap keyvalue pass (`walks/L0-r017.md`,
+`Substrate/ElysiumEntityKeyValue.cpp`), traced for a `spawn`ed entity: `kv_pair` (`CBaseEntity::ParseMapData`
+`0x1009e280`, `dispatch index= key= value="…"`, one per map pair in authored order), `kv_arm`
+(`CBaseEntity::KeyValue` `0x1009e430`: `branch arm=<rendercolor|renderamt|disableshadows|mins|maxs|
+disablereceiveshadows|angles|origin|walk> key= value="…" result=<0|1>`, and `rewrite arm=angle key=angle
+value="…" v= branch=<literal|format> angles="…"` for the `angle` arm's rewrite), `kv_write` (`0x1009e430`
+`write field=<m_clrRender|m_fEffects> value=`), `kv_parse` (`FUN_101d0310` `0x101d0310` `return count=3 tokens=
+zero_fill= out=x,y,z`, per vector parse), `kv_rgba` (`FUN_101d0630` `0x101d0630` `return r= g= b= a=`),
+`kv_walk` (`FUN_101a5a80` `0x101a5a80` `branch level=<class> row=<external> type=<fieldtype_t> key= value=
+result=1`, the row that took the key), `kv_warn` (`0x101a5a80` `warn level= row= type= msg="Bad field in
+entity!!"`), `kv_output` (`FUN_100cd6d0` `0x100cd6d0` `write output= target= input= param= delay= times=
+python="…" count=`, an output row's action prepended), `set_abs_angles` / `set_abs_origin`
+(`CBaseEntity::SetAbsAngles` `0x100b2510` / `SetAbsOrigin` `0x100b2300`, `write m_angAbsRotation=p,y,r
+m_angRotation= changed= parent= m_iEFlags=` / `write m_vecAbsOrigin=x,y,z m_vecOrigin= changed= parent=
+m_iEFlags=`, Source units), `kv_read` (`CBaseEntity::ReadKeyField` `0x100acab0`, `return name= level= row=
+flags=0x type=<n>(<NAME>) result=1` or `return name= result=0`, driven by `entity_call ReadKeyField`) and
+`kv_variant` (`FUN_100d0390` `0x100d0390` `write type= value=`); `ai_sound_input` (`CAISound::InputInsertSound`
+`0x101bb530` `call fn=CSoundEnt::InsertSound va=0x101bac90 type= volume= duration=0.2 flags=0`). A pure function reports
 through `IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a utility with no entity names its target in the
 entity column (`FElysiumNamedRetailSites`).
 

@@ -22,8 +22,8 @@ public:
 	float EndSize = 25.f;
 	float Rate = 26.f;         // particles / s
 	float JetLength = 80.f;    // inches
-	FString RenderColor = TEXT("255 255 255");
-	float RenderAmt = 255.f;
+	// The colour is the base `m_clrRender` word (`FElysiumEntity::RenderColor`): `CBaseEntity::KeyValue`
+	// 0x1009e430's `rendercolor` / `renderamt` arms write it (L0-r017); the jet reads its bytes.
 
 	virtual void Spawn() override
 	{
@@ -76,15 +76,10 @@ private:
 		State.Rate = FMath::Max(0.f, Rate);
 		State.JetLengthCm = JetLength * 2.54f;
 		State.Lifetime = Speed > 0.f ? JetLength / Speed : 0.f;
-		TArray<FString> Parts;
-		RenderColor.ParseIntoArrayWS(Parts);
-		State.Color = FLinearColor(1.f, 1.f, 1.f, FMath::Clamp(RenderAmt / 255.f, 0.f, 1.f));
-		if (Parts.Num() >= 3)
-		{
-			State.Color.R = FCString::Atof(*Parts[0]) / 255.f;
-			State.Color.G = FCString::Atof(*Parts[1]) / 255.f;
-			State.Color.B = FCString::Atof(*Parts[2]) / 255.f;
-		}
+		// `m_clrRender`'s four bytes (R | G<<8 | B<<16 | A<<24), as the client reads them (L0-r017).
+		State.Color = FLinearColor(static_cast<float>(RenderColor & 0xffu) / 255.f,
+			static_cast<float>((RenderColor >> 8) & 0xffu) / 255.f, static_cast<float>((RenderColor >> 16) & 0xffu) / 255.f,
+			static_cast<float>((RenderColor >> 24) & 0xffu) / 255.f);
 		Service->ApplySteam(State);
 	}
 
@@ -100,14 +95,14 @@ static FElysiumClassRegistrar GRegEnvSteam(
 		D.Input(TEXT("TurnOn"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumEnvSteam&>(E).TurnOn(); });
 		D.Input(TEXT("TurnOff"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumEnvSteam&>(E).TurnOff(); });
 		D.Input(TEXT("Toggle"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumEnvSteam&>(E).Toggle(); });
-		ElysiumAddClassField(D, TEXT("type"), &FElysiumEnvSteam::Type, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("InitialState"), &FElysiumEnvSteam::bInitialState, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("SpreadSpeed"), &FElysiumEnvSteam::SpreadSpeed, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("Speed"), &FElysiumEnvSteam::Speed, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("StartSize"), &FElysiumEnvSteam::StartSize, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("EndSize"), &FElysiumEnvSteam::EndSize, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("Rate"), &FElysiumEnvSteam::Rate, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("JetLength"), &FElysiumEnvSteam::JetLength, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("rendercolor"), &FElysiumEnvSteam::RenderColor, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("renderamt"), &FElysiumEnvSteam::RenderAmt, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("type"), &FElysiumEnvSteam::Type, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("InitialState"), &FElysiumEnvSteam::bInitialState, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("SpreadSpeed"), &FElysiumEnvSteam::SpreadSpeed, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("Speed"), &FElysiumEnvSteam::Speed, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("StartSize"), &FElysiumEnvSteam::StartSize, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("EndSize"), &FElysiumEnvSteam::EndSize, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("Rate"), &FElysiumEnvSteam::Rate, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("JetLength"), &FElysiumEnvSteam::JetLength, EElysiumField::MapKey);
+		// `rendercolor` / `renderamt` are `CBaseEntity::KeyValue` 0x1009e430's literal arms over the base
+		// `m_clrRender` word (row 19 of the base datamap for the walk); no class row (L0-r017).
 	});

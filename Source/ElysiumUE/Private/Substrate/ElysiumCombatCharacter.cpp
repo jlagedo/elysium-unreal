@@ -1090,6 +1090,15 @@ void FElysiumCombatCharacter::SyncHealthFromSheet()
 	Health = FMath::Max(0, MaxHealth - Damage);
 }
 
+// slot 82 `datamap_t* GetDataDescMap()` -- `CBaseCombatCharacter::vfunc82` 0x1031a5a0
+void* FElysiumCombatCharacter::GetDataDescMap()
+{
+	// `MOV EAX,0x1061664c; RET`: `&datamap_CBaseCombatCharacter`, `baseMap` -> `datamap_CBaseFlex`
+	// 0x10559360. The port's descriptor chain answers the leaf's descriptor through the base body
+	// (L0-r017, `ElysiumEntityKeyValue.cpp`).
+	return FElysiumEntity::GetDataDescMap();
+}
+
 void FElysiumCombatCharacter::Precache()
 {
 	// `CBaseCombatCharacter::Precache` `0x10340360` (slot 104; `walks/L0-r007.md` § entry points), in

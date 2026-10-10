@@ -22,6 +22,28 @@ struct FElysiumOutputDef
 	bool IsPythonOnly() const { return Target.IsEmpty() && !Python.IsEmpty(); }
 };
 
+// One action the datamap walker `FUN_101a5a80` 0x101a5a80 parsed out of a map key naming an output
+// row (its type-10 branch: `CEventsSaveDataOps::vfunc4` 0x100cdb20 -> `FUN_100cd6d0` 0x100cd6d0 ->
+// the six-field parser `FUN_100ccf90`), kept on the ENTITY because the def is immutable: the list
+// head is the most recently parsed action (retail prepends), and `TimesRemaining` is the row's
+// `+0x14` counter `FireOutput` decrements (`docs/vtmb/entity_io.md` "Output-list and queue order").
+struct FElysiumRuntimeOutput
+{
+	FElysiumOutputDef Row;
+	int32 TimesRemaining = -1;
+};
+
+// This port's `CEntityMapData` (`+0` start of the entity's key text, `+4` cursor): what slot 107
+// `CBaseEntity::ParseMapData` 0x1009e280 walks. The baked map arrives parsed (`Keys`, authored
+// order kept, a repeated key folded to its last occurrence by the exporter -- the same word retail's
+// last write leaves); `Text` is the raw block a class that stashes it reads (`CNPCMaker::ParseMapData`
+// 0x1034b3c0's `m_sRefMapDataBuffer`), null when no raw text exists for the row.
+struct FElysiumEntityMapData
+{
+	const TMap<FString, FString>* Keys = nullptr;
+	const FString* Text = nullptr;
+};
+
 // One brush entity's convex volume, in entity-local Unreal centimetres (world position =
 // def origin + vertex). Vertices are an unordered point cloud; the collision cooker
 // builds the hull, so order is irrelevant.

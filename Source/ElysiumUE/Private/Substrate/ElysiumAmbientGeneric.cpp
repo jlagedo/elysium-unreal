@@ -1160,25 +1160,25 @@ static FElysiumClassRegistrar GRegAmbientGeneric(
 		// The class datamap rows (`datamap_records-vampire.dll.json` `CAmbientGeneric`; `walks/L0-r003.md`,
 		// `walks/L0-r005.md`). A keyed row is registered under its key, the rest under the member name.
 		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("message"), &FElysiumAmbientGeneric::SoundName,
-			EElysiumField::Key | EElysiumField::Save);   // +0x4c0 m_iszSound
+			EElysiumField::Key | EElysiumField::Save | EElysiumField::MapKey);   // +0x4c0 m_iszSound
 		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("radius"), &FElysiumAmbientGeneric::Radius,
-			EElysiumField::Key | EElysiumField::Save);   // +0x450 m_radius
+			EElysiumField::Key | EElysiumField::Save | EElysiumField::MapKey);   // +0x450 m_radius
 		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("SourceEntityName"), &FElysiumAmbientGeneric::SourceEntityName,
-			EElysiumField::Key | EElysiumField::Save);   // +0x4c4 m_sSourceEntName
+			EElysiumField::Key | EElysiumField::Save | EElysiumField::MapKey);   // +0x4c4 m_sSourceEntName
 		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("sound_event"), &FElysiumAmbientGeneric::SoundEventType,
-			EElysiumField::Key | EElysiumField::Save);   // +0x4cc m_nSoundEvent
+			EElysiumField::Key | EElysiumField::Save | EElysiumField::MapKey);   // +0x4cc m_nSoundEvent
 		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("sound_event_level"), &FElysiumAmbientGeneric::SoundEventLevel,
-			EElysiumField::Key | EElysiumField::Save);   // +0x4d0 m_nSoundEventLevel
+			EElysiumField::Key | EElysiumField::Save | EElysiumField::MapKey);   // +0x4d0 m_nSoundEventLevel
 		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("sound_event_owner"), &FElysiumAmbientGeneric::SoundEventOwnerName,
-			EElysiumField::Key | EElysiumField::Save);   // +0x4d4 m_iszSoundEventOwner
+			EElysiumField::Key | EElysiumField::Save | EElysiumField::MapKey);   // +0x4d4 m_iszSoundEventOwner
 		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("flag_no_sfx"), &FElysiumAmbientGeneric::bNoSFX,
-			EElysiumField::Key | EElysiumField::Save);   // +0x4dc m_bNoSFX
+			EElysiumField::Key | EElysiumField::Save | EElysiumField::MapKey);   // +0x4dc m_bNoSFX
 		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("flag_no_voice_duck"), &FElysiumAmbientGeneric::bNoVoiceDuck,
-			EElysiumField::Key | EElysiumField::Save);   // +0x4dd m_bNoVoiceDuck
+			EElysiumField::Key | EElysiumField::Save | EElysiumField::MapKey);   // +0x4dd m_bNoVoiceDuck
 		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("flag_skip_collide"), &FElysiumAmbientGeneric::bSkipCollide,
-			EElysiumField::Key | EElysiumField::Save);   // +0x4de m_bSkipCollide
+			EElysiumField::Key | EElysiumField::Save | EElysiumField::MapKey);   // +0x4de m_bSkipCollide
 		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("flag_force_looping"), &FElysiumAmbientGeneric::bForceLooping,
-			EElysiumField::Key | EElysiumField::Save);   // +0x4df m_bForceLooping
+			EElysiumField::Key | EElysiumField::Save | EElysiumField::MapKey);   // +0x4df m_bForceLooping
 		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("m_iSoundLevel"), &FElysiumAmbientGeneric::SoundLevel,
 			EElysiumField::Save);                        // +0x454 (no key: written by Spawn)
 		ElysiumAddClassField<FElysiumAmbientGeneric>(D, TEXT("m_fActive"), &FElysiumAmbientGeneric::bActive,

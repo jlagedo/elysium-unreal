@@ -130,7 +130,9 @@ defect is not cosmetic: on the hub the port loses both a map-load script call an
 then fetches the next (`1009e336`) — **pairs are applied in authored order, so a repeated key's
 LAST occurrence is what the live field holds.** `CBaseEntity::KeyValue 0x1009e430` walks the
 datamap and follows `baseMap` at `1009e9a6`; an unmatched key returns false at `1009e9dd` and is
-dropped (printable under the `ent_messages` cvar, `0x106cf0d0`).
+dropped (printable under the `ent_debugkeys` cvar, object `0x106cf420`, name string `0x10555504`,
+constructed by `FUN_1009e3c0` -- not `ent_messages` `0x106cf0d0`, which is `cvar_ent_messages`, a
+different convar built by `FUN_100b0340`; corrected L0-r017).
 
 The walker is `0x101a5a80`. A record is a candidate only when its flags carry
 **`FTYPEDESC_KEY 0x4`**, and the external name is compared with CRT **`__strcmpi`** (`101a5b0a`) —
@@ -145,7 +147,10 @@ record of type 9 with subtype 1 recurses into its embedded chain. The type switc
 | 4 | `_atoi` -> int | | 10 | **custom op**, vtable `+0x10` (`101a5c3b`) |
 | 5 | `_atoi` != 0 -> bool | | | |
 
-A name that matches but whose type is outside `1..0x11` warns `Bad field in entity!!` (`0x105934c4`).
+A name that matches but whose type has no case label warns `Bad field in entity!!` (`0x105934c4`, the
+text ends in a newline) and the scan CONTINUES with the next row: that is every type outside `1..0x11`
+and, inside the range, 9 (past the embedded branch), 0xB, 0xC and 0xD (both jump tables decoded,
+L0-r017). No KEY row of `CBaseEntity` or `CAISound` carries one of those types.
 **Outputs arrive through type 10**, whose custom operation for an output record is
 `CEventsSaveDataOps::vfunc4 0x100cdb20` -> `0x100cd6d0` -> the row parser. The metadata bit
 `FTYPEDESC_OUTPUT 0x10` marks the record in the datamap (e.g. `CBaseEntity::m_OnUseBegin`, flags
@@ -153,6 +158,44 @@ A name that matches but whose type is outside `1..0x11` warns `Bad field in enti
 key's spelling. Hence both directions exist in the shipped datamaps: `CMomentaryRotButton.Position`
 is an output whose name starts with neither `On` nor `Out`, and `CNPC_VGhoulCroucher.on_fire` is a
 plain `SAVE|KEY` bool that looks like one.
+
+### The literal arms before the walk, the number parsers and `ReadKeyField` (L0-r017, decompiled)
+
+Before the walk, `CBaseEntity::KeyValue 0x1009e430` runs nine literal arms in this order, every one
+returning true (`strchr(key, '#')` 0x10431f30 truncates the key in place first, so `origin#2` is
+`origin`). Behind a **case-sensitive** `key[0] == 'r'` byte compare (`1009e4b6`): `rendercolor` /
+`rendercolor32` -> `FUN_101d0630` writes the three RGB bytes of `m_clrRender` `+0x1a0`, **alpha
+untouched**; `renderamt` -> `atoi`'s low byte into `+0x1a3` (`300` is 44). So `RenderColor` skips
+both and reaches the walk, where row 19 (COLOR32) writes all four bytes, a three-number value leaving
+alpha 0. Then `disableshadows` (`atoi != 0` -> `m_fEffects |= 0x20`), `mins` / `maxs` (`FUN_101d03e0`,
+then `SetCollisionBounds 0x100dc770` with the other side unchanged), `disablereceiveshadows` (`|=
+0x80`), `angle` (`atof`; `v < 0.0f` (0x104454c4) -> `__ftol(v) == -1` copies `"-90 0 0"` 0x10555578,
+any other negative `"90 0 0"` 0x10555570; else `Q_snprintf("%f %f %f", GetAngles()[0], v,
+GetAngles()[2])` -- slot 221, the LOCAL `+0x428` pitch and roll -- and the key becomes `angles`),
+`angles` (-> slot 218 `SetAbsAngles 0x100b2510`), `origin` (-> slot 216 `SetAbsOrigin 0x100b2300`,
+whose `FUN_100b52a0` marks the partition dirty: EFL 0x8000 when `IndexOfEdict` is non-zero).
+
+`FUN_101d0310 0x101d0310` (`parse_floats(out, count, src)`; `0x101d03e0` is count 3): a 128-byte
+copy, `atof` per token, separators are bytes `<= 0x20` under a signed compare, the tail zero-fills
+the unparsed slots -- `"1 2"` is (1, 2, 0), `"1,2"` is (1, 0, 0). `FUN_101d0570 0x101d0570`
+(`int_list`): `atoi` per token, the separator is 0x20 ONLY and the scan starts on the token start, so
+a leading or doubled space repeats the next number (`" 10 20 30"` -> 10, 10, 20, 30); `atoi` is VC6's
+`_atol` (no overflow clamp, stops at the first non-digit: `"3.9"` is 3). `FUN_101d0630 0x101d0630`:
+`int_list(.., 4, ..)`, low bytes in R, G, B, A order.
+
+`CBaseEntity::ReadKeyField 0x100acab0` (slot 121; its one confirmed caller is `ent_dump`,
+`CC_Ent_Dump_Sub 0x100af340`; Python's `Entity.__getattr__` goes through `FUN_10195940`, not this
+slot) walks derived-to-base for a row with `flags & 0x14` (KEY or OUTPUT), `__strcmpi`, first match,
+**never descending an embedded map** (`solid` reads false). `FUN_100d0390 0x100d0390` stores the
+row's own type at `variant+0x10` and copies 1, 2, 4, 8 as a dword, 3 / 14 as three floats, 5 as one
+zero-extended byte, 12 to `+0xc`, 11 through the pointee's handle; every other type (6, 7, 9, 10,
+13, 15-19) answers VOID 0 -- and the read still returns true. So `rendercolor` reads COLOR32 (8),
+`angles` VECTOR (3) of `+0x428`, `model` (16) and `OnUseBegin` (10) VOID.
+
+`CAISound`'s slot 82 `0x101bb4a0` answers `datamap_CAISound` 0x10599f48 (`soundtype` INTEGER
+`+0x450` SAVE|KEY; `InsertSound` INPUT -> `0x101bb530`; `baseMap` = `datamap_CBaseEntity`).
+`KeyValue(char*, float) 0x1009ebb0` and `KeyValue(char*, Vector) 0x1009eca0` format `"%f"` /
+`"%f %f %f"` into slot 110 and have no dispatch site in vampire.dll (dead).
 
 ### The row parser, field by field — `0x100ccf90`
 

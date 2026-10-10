@@ -2438,10 +2438,16 @@ void FElysiumEntityWorld::FireOutput(FElysiumEntity& Source, FName OutputName, c
 	// Retail PREPENDS each parsed action to the output object's linked list and then fires that list
 	// head to tail, so repeated rows for one output resolve in reverse lump/export order
 	// (`docs/vtmb/entity_io.md` → "Output-list and queue order"). The def keeps authoring order, so
-	// the walk runs backwards; OutputTimesRemaining is indexed by the def row and stays aligned.
-	for (int32 i = Source.Def->Outputs.Num() - 1; i >= 0; --i)
+	// the walk runs backwards; OutputTimesRemaining is indexed by the def row and stays aligned. The
+	// actions the datamap walker parsed at run time (`FElysiumEntity::RuntimeOutputs`, head first: the
+	// same prepend, L0-r017) stand ahead of the def's rows, as later-parsed actions do in retail's list.
+	const int32 DefRows = Source.Def->Outputs.Num();
+	const int32 RuntimeRows = Source.RuntimeOutputs.Num();
+	for (int32 Step = 0; Step < RuntimeRows + DefRows; ++Step)
 	{
-		const FElysiumOutputDef& O = Source.Def->Outputs[i];
+		const bool bRuntime = Step < RuntimeRows;
+		const int32 i = bRuntime ? Step : DefRows - 1 - (Step - RuntimeRows);
+		const FElysiumOutputDef& O = bRuntime ? Source.RuntimeOutputs[i].Row : Source.Def->Outputs[i];
 		if (FName(*O.Name) != OutputName)   // FName compare folds case
 		{
 			continue;
@@ -2450,14 +2456,15 @@ void FElysiumEntityWorld::FireOutput(FElysiumEntity& Source, FName OutputName, c
 
 		// The wire this row IS. Built before the `times` gate so an exhausted row is still counted
 		// against its own identity — a wire that stops firing because it is spent is a different
-		// finding from one that never fired, and only the tally can tell them apart.
+		// finding from one that never fired, and only the tally can tell them apart. A runtime row's
+		// ordinal follows the def's rows.
 		FElysiumWireRef Wire;
 		Wire.SourceIndex = Source.Handle.Index;
 		Wire.Output = FName(*O.Name);
-		Wire.Row = i;
+		Wire.Row = bRuntime ? DefRows + i : i;
 
 		// `times` countdown lives on the entity (the def is immutable); 0 = spent, -1 = unlimited.
-		int32& Remaining = Source.OutputTimesRemaining[i];
+		int32& Remaining = bRuntime ? Source.RuntimeOutputs[i].TimesRemaining : Source.OutputTimesRemaining[i];
 		if (Remaining == 0)
 		{
 			// No sink fires here and no event exists, so the tally is the only witness that the row

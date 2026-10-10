@@ -476,6 +476,25 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
              "walks/L0-r015.md; `ElysiumEntityCollision.cpp`)"),
     207: ("", "`CBaseEntity::IsCurrentlyTouching` 0x1003d3d0: `HasDataObjectType(this, 1)` "
               "(L0.entity_core.collision-touch, walks/L0-r015.md; `ElysiumEntityCollision.cpp`)"),
+    82: ("", "`CBaseEntity::GetDataDescMap` 0x100a2290: `return &datamap_CBaseEntity`; the port's "
+             "datamap is the class descriptor the registry built for the entity's classname, so the "
+             "dispatch answers the leaf's (L0.entity_core.datamap-keyvalues, walks/L0-r017.md; "
+             "`ElysiumEntityKeyValue.cpp`)"),
+    107: ("", "`CBaseEntity::ParseMapData` 0x1009e280: one virtual slot-110 `KeyValue` per map pair, in "
+              "authored order (L0.entity_core.datamap-keyvalues, walks/L0-r017.md; "
+              "`ElysiumEntityKeyValue.cpp`)"),
+    110: ("", "`CBaseEntity::KeyValue(char*, char*)` 0x1009e430: the `#` truncation, the nine literal "
+              "arms and the datamap walk `FUN_101a5a80` under the `ent_debugkeys` gate "
+              "(L0.entity_core.datamap-keyvalues, walks/L0-r017.md; `ElysiumEntityKeyValue.cpp`)"),
+    121: ("", "`CBaseEntity::ReadKeyField` 0x100acab0: the derived-to-base `KEY|OUTPUT` name walk and "
+              "the variant marshal `FUN_100d0390` (L0.entity_core.datamap-keyvalues, walks/L0-r017.md; "
+              "`ElysiumEntityKeyValue.cpp`)"),
+    216: ("", "`CBaseEntity::SetAbsOrigin` 0x100b2300: slot 98, the EFL 0x10800 invalidation, the "
+              "absolute word, the local word through the move parent's frame and `+0x1b1` "
+              "(L0.entity_core.datamap-keyvalues, walks/L0-r017.md; `ElysiumEntity.cpp`)"),
+    218: ("", "`CBaseEntity::SetAbsAngles` 0x100b2510: slot 98, the EFL 0x800 / 0x3000 invalidation, the "
+              "absolute word, the local word through the move parent's frame and `+0x1b1` "
+              "(L0.entity_core.datamap-keyvalues, walks/L0-r017.md; `ElysiumEntity.cpp`)"),
 }
 
 # A `CHAIN_HAND` slot whose hand body stands on ONE chain owner only; the other chain classes that

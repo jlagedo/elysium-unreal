@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Containers/ArrayView.h"
+#include "ElysiumEntityDefs.h"   // FElysiumRuntimeOutput, FElysiumEntityMapData
 #include "ElysiumEntityHandle.h"
 #include "ElysiumInteraction.h"
 #include "ElysiumNpcMindTypes.h"
@@ -72,6 +73,18 @@ struct FElysiumInputArgs
 	// handler shared by several inputs — the stub reporter is the one that needs it — has no other
 	// way to say which of them ran. Set by DeliverInputTo; empty on a hand-built probe.
 	FName Input;
+};
+
+// Retail's `variant_t` as `CBaseEntity::ReadKeyField` 0x100acab0 fills it (`FUN_100d0390`
+// 0x100d0390): `FieldType` is the matched row's own `fieldtype_t` code (`variant+0x10`; COLOR32 reads
+// back as 8, not INTEGER), `Value` what the marshal copied -- the dword for FLOAT / STRING / INTEGER /
+// COLOR32, three floats for VECTOR / POSITION_VECTOR, one zero-extended byte for BOOLEAN, the handle
+// for EHANDLE / CLASSPTR, and `Void` with `FieldType` reset to 0 for every other type (SHORT,
+// CHARACTER, EMBEDDED, CUSTOM, EDICT, TIME, MODELNAME, SOUNDNAME, INPUT, FUNCTION).
+struct FElysiumKeyFieldValue
+{
+	int32 FieldType = 0;
+	FElysiumVariant Value;
 };
 
 // One flex-controller write, by name. A face's only writable state is its 44 flex controllers;
@@ -249,6 +262,13 @@ public:
 	// byte stores). The `rendercolor` / `renderamt` keys of `CBaseEntity::KeyValue` 0x1009e430 write it;
 	// Unreal renders, so nothing here reads it (the binding is UNBOUND for that reason).
 	uint32 RenderColor = 0xffffffffu;
+	// `m_fEffects` (+0x19c), Source's `EF_*` bit field (datamap row 18 `effects`, INTEGER, KEY|SAVE).
+	// Written by `CBaseEntity::KeyValue` 0x1009e430's `disableshadows` (`|= 0x20`) and
+	// `disablereceiveshadows` (`|= 0x80`) arms, the `effects` key through the walker 0x101a5a80, the
+	// NPC kernel's `ScriptHide` save / restore (`0xe0`), the Werewolf teleport pair (`0x20` EF_NODRAW)
+	// and `CBaseEntity::ShouldTransmit` 0x100ab020's read. Unreal renders, so the bits drive no
+	// drawing here; the word is carried because retail writes and reads it (L0-r017).
+	uint32 EffectsWord = 0;
 	// The `CServerNetworkProperty` edict word (+0x2e0): NULL for the whole base constructor
 	// (`FUN_101ab590` zeroes it twice, `1009da5e` / `1009db12`), attached by `CreateEntityByName` after
 	// the constructor returns and before the keyvalues. `EdictIndex()` answers 0 until it is set.
@@ -322,8 +342,24 @@ public:
 	// this class carries (`walks/L0-r016.md`; `ElysiumEntity.cpp`). Run by `Construct` before the edict
 	// attach and the keyvalues, with `World` already bound (the `curtime` read and the sites).
 	void ConstructBaseEntity();
-	// `FUN_101d03e0` (`UTIL_StringToVector`): the map's "x y z" spelling, missing slots 0.
+	// `FUN_101d03e0` (`UTIL_StringToVector`): the map's "x y z" spelling, missing slots 0
+	// (`ElysiumParseVec3`, the retail parser `FUN_101d0310` with count 3).
 	static FVector ParseRetailVector(const FString& Text);
+	// `CBaseEntity::KeyValue` 0x1009e430's `angle` arm (1009e676-1009e746): `v = atof(value)`; `v < 0.0`
+	// (`FCOMP [0x104454c4]`) -> `__ftol(v) == -1` selects `"-90 0 0"` (0x10555578), any other negative
+	// `"90 0 0"` (0x10555570), copied with `Q_strncpy(.., 0x40)`; otherwise `Q_snprintf(.., 0x40,
+	// "%f %f %f", GetAngles()[0], v, GetAngles()[2])` -- slot 221, the LOCAL angles `+0x428`: pitch and
+	// roll kept, yaw := v, through six-decimal text. The arm then re-enters as the key `angles`.
+	static FString RewriteAngleKey(double AngleValue, const FVector& CurrentLocalAngles);
+	// The datamap walker `FUN_101a5a80` 0x101a5a80 over ONE level of the descriptor chain (`Level` is
+	// retail's `datamap_t*`): the KEY gate, the case-insensitive external-name match, the per-type
+	// parse and store, the custom (output) branch, the "Bad field in entity!!" warning-and-continue.
+	// True when a row of this level handled the key.
+	bool KeyValueDatamapWalk(const FElysiumClassDesc& Level, const TCHAR* Key, const TCHAR* Value);
+	// `CBaseEntity::ReadKeyField` 0x100acab0 with its variant typed: the derived-to-base walk over the
+	// rows carrying KEY or OUTPUT (`flags & 0x14`), case-insensitive, first match; `FUN_100d0390`
+	// stores the row's own `fieldtype_t` and the value it can carry (VOID 0 for the types it cannot).
+	bool ReadKeyFieldTyped(const TCHAR* Name, FElysiumKeyFieldValue& Out);
 	// `CBaseEntity::SetParent(const char*, CBaseEntity* activator)` 0x100a04e0: the by-name overload
 	// (`FindEntityByName` 0x100f7770, the "has bad parent" and "has ambigious parent" Msgs), what the
 	// `SetParent` input (`0x100ad030`) reaches.
@@ -340,6 +376,11 @@ public:
 	// `0x100b5340(this, selfBits, childBits)`: `m_iEFlags |= selfBits`, then every descendant
 	// (`m_pMoveChild`, then each `m_pMovePeer`, recursing) `|= selfBits | childBits`.
 	void InvalidateTransform(uint32 SelfBits, uint32 ChildBits);
+	// `FUN_100b52a0` 0x100b52a0 (`__fastcall`, called by `SetAbsOrigin` 0x100b2300 after the 0x10800
+	// invalidation): `FUN_100ddd20(&m_Collision)` on this entity -- the partition dirty mark, EFL 0x8000
+	// and the dirty-list append when `IndexOfEdict` is non-zero -- then the same on every move
+	// descendant (`m_pMoveChild`, each `m_pMovePeer`, recursing). L0-r017 / r018.
+	void MarkPartitionTreeDirty();
 	void SetAimEnt(FElysiumEntity* Aim);                                           // 0x1009ee80
 	// `CalcAbsolutePosition` 0x100b1ac0's arithmetic with no write: the absolute pose the move
 	// parent's absolute pose and this entity's local words compose to.
@@ -359,6 +400,19 @@ public:
 	// the mutable counter lives here). Seeded from each row's `Times` at Construct: -1 stays
 	// unlimited, N counts down to 0 (spent). The entity world decrements it as it fires outputs.
 	TArray<int32> OutputTimesRemaining;
+	// The actions the datamap walker `FUN_101a5a80` 0x101a5a80 parsed out of map keys naming this
+	// class's output rows (its type-10 branch -> `CEventsSaveDataOps::vfunc4` 0x100cdb20 ->
+	// `FUN_100cd6d0` 0x100cd6d0, which PREPENDS: index 0 is the last parsed). A baked map's output
+	// keys are hoisted into `Def->Outputs` by the exporter (the same parse, authored order kept), so
+	// this list holds only keys that reached the walker at run time; `FireOutput` walks it first,
+	// then the def's rows backwards -- one prepend-ordered list in two halves (L0-r017).
+	TArray<FElysiumRuntimeOutput> RuntimeOutputs;
+	// `FUN_100cd6d0` 0x100cd6d0 on the output row `Output` names: parse `Value` with `FUN_100ccf90`
+	// (six comma fields, no trimming; an empty input is `Use`; `times` 0 is -1) and prepend it.
+	void AddOutputAction(FName Output, const FString& Value);
+	// `FUN_100ccf90` 0x100ccf90, the six-field action parser, over the splitter `FUN_101d16c0`
+	// (copy to the next comma; neither trims nor knows quotes). `OutRow.Name` is left to the caller.
+	static void ParseOutputAction(const FString& Value, FElysiumOutputDef& OutRow);
 
 	bool IsHidden() const { return bHidden; }
 	bool IsDead() const { return bDead; }

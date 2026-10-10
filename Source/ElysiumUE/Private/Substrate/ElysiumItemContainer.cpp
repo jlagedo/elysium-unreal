@@ -524,7 +524,7 @@ namespace
 		};
 		D.Fields.Add(FName(TEXT("skin")), MoveTemp(Skin));
 
-		ElysiumAddClassField(D, TEXT("m_BCCUser"), &FElysiumItemContainer::CurrentUser, EElysiumField::Save);
+		ElysiumAddClassField(D, TEXT("m_BCCUser"), &FElysiumItemContainer::CurrentUser, EElysiumField::Save | EElysiumField::MapKey);
 		ElysiumAddClassField(D, TEXT("m_hLockEnt"), &FElysiumItemContainer::AttachedLock, EElysiumField::Save);
 	}
 

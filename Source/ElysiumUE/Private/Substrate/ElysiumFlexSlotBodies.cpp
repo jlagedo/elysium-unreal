@@ -22,6 +22,15 @@
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumSchedule.h"
 
+// slot 82 `datamap_t* GetDataDescMap()` -- `CBaseFlex::vfunc82` 0x100b57b0
+void* FElysiumFlex::GetDataDescMap()
+{
+	// `MOV EAX,0x10559360; RET`: `&datamap_CBaseFlex`, `baseMap` -> `datamap_CBaseAnimatingOverlay`
+	// 0x105509f8. The port's descriptor chain answers the leaf's descriptor through the base body
+	// (L0-r017, `ElysiumEntityKeyValue.cpp`).
+	return FElysiumEntity::GetDataDescMap();
+}
+
 // --- Moved from `ElysiumNpcBaseAnim.cpp` (story 5 step 6) ---
 
 float FElysiumFlex::SequenceDurationOf(int32 Sequence) const

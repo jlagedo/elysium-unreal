@@ -11,8 +11,8 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
-| … cited by the oracle | 2846 |
-| … not cited by the oracle | 2341 |
+| … cited by the oracle | 2852 |
+| … not cited by the oracle | 2335 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |
@@ -34,7 +34,7 @@ The porting stories' own measure. *Core* is this band's slice of the core set; t
 
 | Band | Core | `rule` | `mechanism` | `present` | `dead` | `unsettled` | No verdict | Cited by oracle | **Neither** | Reached by `sm_hub_1` | Reached by `sp_tutorial_1` |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 0–4 | 1468 | 669 | 207 | 105 | 484 | 3 | 0 | 767 | **0** | 704 (311) | 671 (295) |
+| 0–4 | 1468 | 669 | 207 | 105 | 484 | 3 | 0 | 768 | **0** | 704 (311) | 671 (295) |
 | 5–9 | 243 | 131 | 47 | 30 | 35 | 0 | 0 | 220 | **0** | 131 (60) | 120 (53) |
 | 10–18 | 355 | 178 | 108 | 10 | 59 | 0 | 0 | 282 | **0** | 151 (91) | 139 (84) |
 | 19–29 | 479 | 391 | 12 | 4 | 71 | 0 | 1 | 376 | **0** | 159 (129) | 132 (109) |
@@ -511,7 +511,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x100b1750` CBaseEntity::SetModelIndex | `0x1009d980` FUN_1009d980, `0x101c70d0` CTriggerVolume::Spawn, `0x1023bba0` CWorld::Spawn ‼ |
 | `0x100b17f0` CBaseEntity::GetModelIndex | `0x1008d7c0` CBaseAnimating::GetAnimFlags, `0x100a5bb0` CBaseEntity::VPhysicsInitStatic, `0x100b1a00` CBaseEntity::GetModel, `0x100ef6f0` CBaseDoor::vfunc223, +9 more |
 | `0x100b1d10` CBaseEntity::CalcAbsoluteVelocity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10035490` CBaseEntity::PhysicsAddHalfGravity, `0x10038180` CPhysicsPushedEntities::LinearlyMoveRootEntity, `0x10038cb0` CBaseEntity::PhysicsPusher, +38 more |
-| `0x100b2300` CBaseEntity::SetAbsOrigin | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x100397c0` CBaseEntity::PhysicsNoclip, `0x1003a610` CBaseEntity::PhysicsStepTroika, +5 more |
 | `0x100b2770` CBaseEntity::SetAbsVelocity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10035490` CBaseEntity::PhysicsAddHalfGravity, `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, +13 more |
 | `0x100b2e30` CBaseEntity::SetLocalVelocity | `0x1004e260` CPhysBox::Spawn, `0x1006d620` FUN_1006d620, `0x100adbd0` FUN_100adbd0, `0x100c0010` FUN_100c0010, +28 more |
 | `0x100b2f50` CBaseEntity::SetLocalAngularVelocity | `0x10033820` CPhysicsMovedEntities::RestoreEntities, `0x10036bd0` CPhysicsPushedEntities::FinishRotPushedEntity, `0x1006d620` FUN_1006d620, `0x100c0420` FUN_100c0420, +24 more |
@@ -545,7 +544,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x100ce210` FUN_100ce210 | `0x100ce0d0` FUN_100ce0d0, `0x100ce1c0` FUN_100ce1c0, `0x100ce2b0` FUN_100ce2b0 |
 | `0x100ce450` FUN_100ce450 | `0x100ce4e0` FUN_100ce4e0, `0x100d8830` FUN_100d8830 ‼, `0x10147430` FUN_10147430 |
 | `0x100ce600` FUN_100ce600 | `0x100d8830` FUN_100d8830 ‼, `0x100d9220` FUN_100d9220, `0x100d9610` FUN_100d9610, `0x10147430` FUN_10147430 |
-| `0x100d0390` FUN_100d0390 | `0x100cae20` FUN_100cae20, `0x100ce0d0` FUN_100ce0d0, `0x100d05d0` FUN_100d05d0, `0x100d0f00` CVariantSaveDataOps::vfunc1, +24 more |
 | `0x100d1210` FUN_100d1210 | `0x100d1250` FUN_100d1250 |
 | `0x100d15d0` FUN_100d15d0 | `0x100cebb0` FUN_100cebb0, `0x100efc90` CBaseDoor::Use |
 | `0x100dd990` FUN_100dd990 | `0x100b87a0` CBatSwarm::Spawn, `0x10155fb0` CRagdollProp::FUN_10155fb0 |
@@ -701,7 +699,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x101cf9b0` FUN_101cf9b0 | `0x101cfa40` FUN_101cfa40 |
 | `0x101cfe10` FUN_101cfe10 | `0x1012a9b0` FUN_1012a9b0, `0x1012ad20` FUN_1012ad20, `0x10171aa0` CBloodSplat::Remove, `0x102692d0` FUN_102692d0 |
 | `0x101cfea0` FUN_101cfea0 | `0x104296e0` CBaseGrenade::vfunc406 |
-| `0x101d0570` FUN_101d0570 | `0x1020e290` CGameText::vfunc110 |
 | `0x101d08e0` FUN_101d08e0 | `0x101d0a00` FUN_101d0a00 |
 | `0x101d1070` FUN_101d1070 | `0x100e34d0` CDialog::audit_asset_files, `0x100e37d0` CDialog::dump_script_file, `0x1016ea00` CBasePlayer::Save, `0x1016f2a0` FUN_1016f2a0, +1 more |
 | `0x101d2560` FUN_101d2560 | `0x103f1950` CVampireProjectile_MingXiaoSpit::vfunc266 |
@@ -963,7 +960,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x1043190e` _strtod | `0x1006c210` FUN_1006c210, `0x10248510` FUN_10248510 |
 | `0x104319a8` _strtol | `0x1006c210` FUN_1006c210, `0x10248510` FUN_10248510, `0x10434556` ___heap_select |
 | `0x10431c2f` _sprintf | `0x1006c810` FUN_1006c810, `0x1006cc20` FUN_1006cc20, `0x1006d0a0` FUN_1006d0a0, `0x10074f70` FUN_10074f70, +142 more |
-| `0x10431f30` FUN_10431f30 | `0x101dda70` FUN_101dda70, `0x101fb980` CVStatSubCost_t::Parse, `0x101fc9e0` CVStatAction_t::Load, `0x10204570` FUN_10204570, +4 more |
 | `0x10432028` _ceil | `0x100b8b50` FUN_100b8b50, `0x101104c0` FUN_101104c0, `0x10249710` FUN_10249710 |
 | `0x104320f7` _malloc | `0x100bf600` FUN_100bf600, `0x100d00a0` CPyObjStrSaveRestoreDataOps::vfunc1, `0x100d0290` CVTSDependencySaveRestoreDataOps::vfunc1, `0x101f3000` FUN_101f3000, +12 more |
 | `0x104321a9` _realloc | `0x100bf600` FUN_100bf600, `0x1043df79` ___crtsetenv |

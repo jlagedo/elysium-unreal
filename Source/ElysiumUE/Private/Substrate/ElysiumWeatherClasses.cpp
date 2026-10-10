@@ -20,14 +20,14 @@ static FElysiumClassRegistrar GRegEnvParticle(
 		D.Input(TEXT("JetLength"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumEnvParticle&>(E).InputJetLength(); });
 		// None: spawn-time keyvalue application ignores bKeyable, and these fields are neither
 		// runtime-writable nor save-enumerated.
-		ElysiumAddClassField(D, TEXT("active"), &FElysiumEnvParticle::bActive, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("particle_definition"), &FElysiumEnvParticle::ParticleDefinition, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("attach_type"), &FElysiumEnvParticle::AttachType, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("bone"), &FElysiumEnvParticle::AttachBone, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("attach_point"), &FElysiumEnvParticle::AttachPoint, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("spawnbounds"), &FElysiumEnvParticle::SpawnBounds, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("ramp_scale"), &FElysiumEnvParticle::RampScale, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("ramp_time"), &FElysiumEnvParticle::RampTime, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("active"), &FElysiumEnvParticle::bActive, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("particle_definition"), &FElysiumEnvParticle::ParticleDefinition, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("attach_type"), &FElysiumEnvParticle::AttachType, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("bone"), &FElysiumEnvParticle::AttachBone, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("attach_point"), &FElysiumEnvParticle::AttachPoint, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("spawnbounds"), &FElysiumEnvParticle::SpawnBounds, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("ramp_scale"), &FElysiumEnvParticle::RampScale, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("ramp_time"), &FElysiumEnvParticle::RampTime, EElysiumField::MapKey);
 		// The `DT_EnvParticle` words the datamap leaves unnamed (`walks/L0-r011.md`), registered under
 		// their SendTable names so a record reads them by retail name: `m_nParticle` (+0x454),
 		// `m_flActivationTime` (+0x488), `m_nRampFrame` (+0x494). Not keyable (no map authors them).

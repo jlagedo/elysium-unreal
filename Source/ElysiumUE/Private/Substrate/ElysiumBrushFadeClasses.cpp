@@ -53,15 +53,15 @@ static FElysiumClassRegistrar GRegFuncLod(
 	TEXT("func_lod"), ElysiumBaseClassName(), &MakeFuncLod,
 	[](FElysiumClassDesc& D)
 	{
-		ElysiumAddClassField(D, TEXT("DisappearDist"), &FElysiumFuncLod::DisappearDist, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("DisappearDist"), &FElysiumFuncLod::DisappearDist, EElysiumField::MapKey);
 	});
 
 static FElysiumClassRegistrar GRegFuncAreaPortalWindow(
 	TEXT("func_areaportalwindow"), ElysiumBaseClassName(), &MakeFuncAreaPortalWindow,
 	[](FElysiumClassDesc& D)
 	{
-		ElysiumAddClassField(D, TEXT("FadeStartDist"), &FElysiumFuncAreaPortalWindow::FadeStartDist, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("FadeDist"), &FElysiumFuncAreaPortalWindow::FadeDist, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("TranslucencyLimit"), &FElysiumFuncAreaPortalWindow::TranslucencyLimit, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("BackgroundBModel"), &FElysiumFuncAreaPortalWindow::BackgroundBModel, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("FadeStartDist"), &FElysiumFuncAreaPortalWindow::FadeStartDist, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("FadeDist"), &FElysiumFuncAreaPortalWindow::FadeDist, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("TranslucencyLimit"), &FElysiumFuncAreaPortalWindow::TranslucencyLimit, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("BackgroundBModel"), &FElysiumFuncAreaPortalWindow::BackgroundBModel, EElysiumField::MapKey);
 	});

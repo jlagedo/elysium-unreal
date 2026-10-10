@@ -184,16 +184,18 @@ FString FElysiumNpcMaker::ExtractRefMapDataBlock(const FString& MapData)
 // Slot 107: `0x1034b3c0`.
 void FElysiumNpcMaker::ParseMapData(void* MapData)
 {
-	// This port's `CEntityMapData` is the entity's keyvalue text (`const FString*`).
-	const FString* Text = static_cast<const FString*>(MapData);
+	// This port's `CEntityMapData` is `FElysiumEntityMapData` (`ElysiumEntityDefs.h`, L0-r017): the
+	// parsed pairs the base walks, and the raw text a class that stashes it reads -- null for a baked
+	// row, which arrives parsed.
+	const FElysiumEntityMapData* Map = static_cast<const FElysiumEntityMapData*>(MapData);
+	const FString* Text = Map != nullptr ? Map->Text : nullptr;
 	// Copy into `+0x66cc` up to `}`, always write `}`, then latch `m_sRefMapDataBuffer` (`+0x76cc`)
 	// from the first byte — never null, because the `}` was just written.
 	RefMapDataBuffer = ExtractRefMapDataBlock(Text != nullptr ? *Text : FString());
-	// Then `CBaseEntity::ParseMapData` `0x1009e280`: this runtime's keyvalue walk is
-	// `FElysiumEntity::Construct`, which the world ran before this entity could be reached, so there
-	// is nothing to forward to. SEAM: the world never hands a maker its raw text (maps arrive as
-	// parsed defs), so in play this slot is not dispatched and `+0x76cc` stays empty; `MakeNPC`'s
-	// replay reads the parsed form of the same block (`Def->Keys`).
+	// Then `CBaseEntity::ParseMapData` `0x1009e280` (thunk 0x1000915b): one virtual `KeyValue` per pair.
+	// SEAM: the world never hands a maker its raw text (maps arrive as parsed defs), so `+0x76cc` holds
+	// `}` alone in play; `MakeNPC`'s replay reads the parsed form of the same block (`Def->Keys`).
+	FElysiumEntity::ParseMapData(MapData);
 }
 
 // Slot 113: `0x1034b140` — `RET`.

@@ -69,59 +69,76 @@ namespace ElysiumNpcKernelBindings
 	void AddBaseEntityFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("StartHidden"), &FElysiumEntity::bStartHidden,
-			EElysiumField::Save);  // +0xe0 m_bStartHidden
-		ElysiumAddClassField(D, TEXT("angles"), &FElysiumEntity::Angles, EElysiumField::Save);  // +0x428 m_angRotation
+			EElysiumField::Save | EElysiumField::MapKey);  // +0xe0 m_bStartHidden
+		ElysiumAddClassField(D, TEXT("angles"), &FElysiumEntity::Angles,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x428 m_angRotation
 		ElysiumAddClassField(D, TEXT("avelocity"), &FElysiumEntity::AngularVelocity,
-			EElysiumField::Save);  // +0x3c8 m_vecAngVelocity
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x3c8 m_vecAngVelocity
 		ElysiumAddClassField(D, TEXT("basevelocity"), &FElysiumEntity::BaseVelocity,
-			EElysiumField::Save);  // +0x3b0 m_vecBaseVelocity
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x3b0 m_vecBaseVelocity
 		ElysiumAddClassField(D, TEXT("blocks_traces"), &FElysiumEntity::bBlocksTraces,
-			EElysiumField::Save);  // +0xfd m_bBlocksTraces
+			EElysiumField::Save | EElysiumField::MapKey);  // +0xfd m_bBlocksTraces
 		ElysiumAddClassField(D, TEXT("dialogname"), &FElysiumEntity::DialogName,
-			EElysiumField::Save);  // +0x128 m_iDialog
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x128 m_iDialog
 		ElysiumAddClassField(D, TEXT("dmg_filter_name"), &FElysiumEntity::DamageFilterName,
-			EElysiumField::Save);  // +0x21c m_iszDamageFilterName
-		ElysiumAddClassField(D, TEXT("flags"), &FElysiumEntity::Flags, EElysiumField::Save);  // +0x434 m_fFlags
-		ElysiumAddClassField(D, TEXT("friction"), &FElysiumEntity::Friction, EElysiumField::Save);  // +0x3f0 m_flFriction
-		ElysiumAddClassField(D, TEXT("gravity"), &FElysiumEntity::Gravity, EElysiumField::Save);  // +0x3ec m_flGravity
-		ElysiumAddClassField(D, TEXT("health"), &FElysiumEntity::Health, EElysiumField::Save);  // +0x210 m_iHealth
-		ElysiumAddClassField(D, TEXT("ltime"), &FElysiumEntity::LocalTime, EElysiumField::Save);  // +0x3f4 m_flLocalTime
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x21c m_iszDamageFilterName
+		ElysiumAddClassField(D, TEXT("effects"), &FElysiumEntity::EffectsWord,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x19c m_fEffects
+		ElysiumAddClassField(D, TEXT("flags"), &FElysiumEntity::Flags,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x434 m_fFlags
+		ElysiumAddClassField(D, TEXT("friction"), &FElysiumEntity::Friction,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x3f0 m_flFriction
+		ElysiumAddClassField(D, TEXT("gravity"), &FElysiumEntity::Gravity,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x3ec m_flGravity
+		ElysiumAddClassField(D, TEXT("health"), &FElysiumEntity::Health,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x210 m_iHealth
+		ElysiumAddClassField(D, TEXT("ltime"), &FElysiumEntity::LocalTime,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x3f4 m_flLocalTime
 		ElysiumAddClassField(D, TEXT("max_health"), &FElysiumEntity::MaxHealth,
-			EElysiumField::Save);  // +0x208 m_iMaxHealth
-		ElysiumAddClassField(D, TEXT("model"), &FElysiumEntity::Model, EElysiumField::Save);  // +0x388 m_ModelName
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x208 m_iMaxHealth
+		ElysiumAddClassField(D, TEXT("model"), &FElysiumEntity::Model,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x388 m_ModelName
+		D.RetailType(TEXT("model"), 16); // fieldtype_t modelname
 		ElysiumAddClassField(D, TEXT("nextthink"), &FElysiumEntity::NextThink, EElysiumField::None);  // +0x17c m_flNextThink
 		D.TimeField(TEXT("nextthink")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("nextthink"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("npc_transparent"), &FElysiumEntity::bNpcTransparent,
-			EElysiumField::Save);  // +0xfc m_bNPCTransparent
+			EElysiumField::Save | EElysiumField::MapKey);  // +0xfc m_bNPCTransparent
 		ElysiumAddClassField(D, TEXT("parentname"), &FElysiumEntity::ParentName,
-			EElysiumField::Save);  // +0x124 m_iParent
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x124 m_iParent
+		ElysiumAddClassField(D, TEXT("rendercolor"), &FElysiumEntity::RenderColor,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1a0 m_clrRender
+		D.RetailType(TEXT("rendercolor"), 8); // fieldtype_t color32
 		ElysiumAddClassField(D, TEXT("soundgroup"), &FElysiumEntity::SoundGroup,
-			EElysiumField::Save);  // +0xc0 m_iszVSoundGroup
+			EElysiumField::Save | EElysiumField::MapKey);  // +0xc0 m_iszVSoundGroup
 		ElysiumAddClassField(D, TEXT("spawnflags"), &FElysiumEntity::SpawnFlags,
-			EElysiumField::Save);  // +0x204 m_spawnflags
-		ElysiumAddClassField(D, TEXT("speed"), &FElysiumEntity::AuthoredSpeed, EElysiumField::Save);  // +0x164 m_flSpeed
-		ElysiumAddClassField(D, TEXT("target"), &FElysiumEntity::Target, EElysiumField::Save);  // +0x20c m_target
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x204 m_spawnflags
+		ElysiumAddClassField(D, TEXT("speed"), &FElysiumEntity::AuthoredSpeed,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x164 m_flSpeed
+		ElysiumAddClassField(D, TEXT("target"), &FElysiumEntity::Target,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x20c m_target
 		ElysiumAddClassField(D, TEXT("targetname"), &FElysiumEntity::TargetName,
-			EElysiumField::Save);  // +0x26c m_iName
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x26c m_iName
 		ElysiumAddClassField(D, TEXT("use_filter_name"), &FElysiumEntity::UseFilterName,
-			EElysiumField::Save);  // +0x214 m_iszUseFilterName
-		ElysiumAddClassField(D, TEXT("usescript"), &FElysiumEntity::UseScript, EElysiumField::Save);  // +0x374 m_iszUseScript
-		ElysiumAddClassField(D, TEXT("velocity"), &FElysiumEntity::Velocity, EElysiumField::Save);  // +0x3d4 m_vecVelocity
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x214 m_iszUseFilterName
+		ElysiumAddClassField(D, TEXT("usescript"), &FElysiumEntity::UseScript,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x374 m_iszUseScript
+		ElysiumAddClassField(D, TEXT("velocity"), &FElysiumEntity::Velocity,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x3d4 m_vecVelocity
 		ElysiumAddClassField(D, TEXT("waterlevel"), &FElysiumEntity::WaterLevel,
-			EElysiumField::Save);  // +0x3e0 m_nWaterLevel
-		ElysiumAddClassField(D, TEXT("watertype"), &FElysiumEntity::WaterType, EElysiumField::Save);  // +0x3e4 m_nWaterType
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x3e0 m_nWaterLevel
+		ElysiumAddClassField(D, TEXT("watertype"), &FElysiumEntity::WaterType,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x3e4 m_nWaterType
 		// UNBOUND +0x12c m_bBlocked "blocked" — `m_bBlocked` is the blocked-by-a-mover latch
 		// `CBaseToggle`'s movers set; this port's movers carry their own, and no shipped map
 		// authors the key
 		// UNBOUND +0x11c m_iClassname "classname" — the def's identity:
 		// `FElysiumEntityDef::Classname` is hoisted out of the keys and the registry keys the
 		// descriptor on it, so there is no member a write could land on
-		// UNBOUND +0x19c m_fEffects "effects" — a render word: `m_fEffects` is Source's EF_ bit
-		// field, and Unreal renders
 		// UNBOUND +0x120 m_iGlobalname "globalname" — `m_iGlobalname` is retail's FTYPEDESC_GLOBAL
 		// carry across a `trigger_changelevel`; this port carries state across a level change in
 		// the map snapshot, and no shipped map authors the key
@@ -129,8 +146,6 @@ namespace ElysiumNpcKernelBindings
 		// for `model`, an index into Source's own model table; this port resolves a model by name
 		// UNBOUND +0x190 m_vecMoveDir "movedir" — `m_vecMoveDir` is the mover's authored direction,
 		// which this port keeps on `FElysiumMoverBase`; no shipped map authors it on a character
-		// UNBOUND +0x1a0 m_clrRender "rendercolor" — a render word, and a `color32`: the binding
-		// API marshals no colour type because nothing in the substrate reads one -- Unreal renders
 		// UNBOUND +0x168 m_nRenderFX "renderfx" — a render word: `m_nRenderFX`'s effect table is
 		// Source's, and Unreal renders
 		// UNBOUND +0x16c m_nRenderMode "rendermode" — a render word: `m_nRenderMode`'s blend modes
@@ -157,9 +172,9 @@ namespace ElysiumNpcKernelBindings
 	void AddToggleFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		// UNBOUND +0x538 m_flHeight "height" — retail derives `CBaseCombatCharacter` from
 		// `CBaseToggle`, so every character inherits the mover's keys; this port keeps mover data
 		// on `FElysiumMoverBase`, a sibling of the character chain, so there is no member on this
@@ -200,11 +215,11 @@ namespace ElysiumNpcKernelBindings
 	void AddAnimatingFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("skin"), &FElysiumAnimating::Skin,
-			EElysiumField::Save | EElysiumField::Key);  // +0x670 m_nSkin
+			EElysiumField::Save | EElysiumField::Key | EElysiumField::MapKey);  // +0x670 m_nSkin
 		// UNBOUND +0x67c m_nBody "body" — `m_nBody` is Source's bodygroup word; this port composes
 		// a character from the model record's own parts
 		// UNBOUND +0x68c m_nBottomColor "bottomcolor" — `m_nBottomColor` is VtMB's two-tone model
@@ -232,311 +247,340 @@ namespace ElysiumNpcKernelBindings
 	void AddCombatCharacterFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddSheetField(D, TEXT("ability_order"), EElysiumTraitContainer::Abilities, 0,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1244 m_iVAbilitiesCurrent[ v_ability_ability_order ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1244 m_iVAbilitiesCurrent[ v_ability_ability_order ]
 		ElysiumAddSheetField(D, TEXT("academics"), EElysiumTraitContainer::Abilities, 12,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1274 m_iVAbilitiesCurrent[ v_ability_academics ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1274 m_iVAbilitiesCurrent[ v_ability_academics ]
 		ElysiumAddSheetField(D, TEXT("active_animalism"),
-			EElysiumTraitContainer::ActiveDisciplines, 0, /*bBase=*/false, EElysiumField::Save);  // +0x1354 m_iVActiveDisciplinesCurrent[ v_discipline_animalism ]
+			EElysiumTraitContainer::ActiveDisciplines, 0, /*bBase=*/false,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1354 m_iVActiveDisciplinesCurrent[ v_discipline_animalism ]
 		ElysiumAddSheetField(D, TEXT("active_auspex"), EElysiumTraitContainer::ActiveDisciplines,
-			1, /*bBase=*/false, EElysiumField::Save);  // +0x1358 m_iVActiveDisciplinesCurrent[ v_discipline_auspex ]
+			1, /*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1358 m_iVActiveDisciplinesCurrent[ v_discipline_auspex ]
 		ElysiumAddSheetField(D, TEXT("active_blood_healing"),
-			EElysiumTraitContainer::ActiveDisciplines, 2, /*bBase=*/false, EElysiumField::Save);  // +0x135c m_iVActiveDisciplinesCurrent[ v_discipline_blood_healing ]
+			EElysiumTraitContainer::ActiveDisciplines, 2, /*bBase=*/false,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x135c m_iVActiveDisciplinesCurrent[ v_discipline_blood_healing ]
 		ElysiumAddSheetField(D, TEXT("active_celerity"), EElysiumTraitContainer::ActiveDisciplines,
-			3, /*bBase=*/false, EElysiumField::Save);  // +0x1360 m_iVActiveDisciplinesCurrent[ v_discipline_celerity ]
+			3, /*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1360 m_iVActiveDisciplinesCurrent[ v_discipline_celerity ]
 		ElysiumAddSheetField(D, TEXT("active_corpus_vampirus"),
-			EElysiumTraitContainer::ActiveDisciplines, 4, /*bBase=*/false, EElysiumField::Save);  // +0x1364 m_iVActiveDisciplinesCurrent[ v_discipline_corpus_vampirus ]
+			EElysiumTraitContainer::ActiveDisciplines, 4, /*bBase=*/false,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1364 m_iVActiveDisciplinesCurrent[ v_discipline_corpus_vampirus ]
 		ElysiumAddSheetField(D, TEXT("active_dementation"),
-			EElysiumTraitContainer::ActiveDisciplines, 5, /*bBase=*/false, EElysiumField::Save);  // +0x1368 m_iVActiveDisciplinesCurrent[ v_discipline_dementation ]
+			EElysiumTraitContainer::ActiveDisciplines, 5, /*bBase=*/false,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1368 m_iVActiveDisciplinesCurrent[ v_discipline_dementation ]
 		ElysiumAddSheetField(D, TEXT("active_dominate"), EElysiumTraitContainer::ActiveDisciplines,
-			6, /*bBase=*/false, EElysiumField::Save);  // +0x136c m_iVActiveDisciplinesCurrent[ v_discipline_dominate ]
+			6, /*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x136c m_iVActiveDisciplinesCurrent[ v_discipline_dominate ]
 		ElysiumAddSheetField(D, TEXT("active_fortitude"),
-			EElysiumTraitContainer::ActiveDisciplines, 7, /*bBase=*/false, EElysiumField::Save);  // +0x1370 m_iVActiveDisciplinesCurrent[ v_discipline_fortitude ]
+			EElysiumTraitContainer::ActiveDisciplines, 7, /*bBase=*/false,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1370 m_iVActiveDisciplinesCurrent[ v_discipline_fortitude ]
 		ElysiumAddSheetField(D, TEXT("active_obfuscate"),
-			EElysiumTraitContainer::ActiveDisciplines, 8, /*bBase=*/false, EElysiumField::Save);  // +0x1374 m_iVActiveDisciplinesCurrent[ v_discipline_obfuscate ]
+			EElysiumTraitContainer::ActiveDisciplines, 8, /*bBase=*/false,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1374 m_iVActiveDisciplinesCurrent[ v_discipline_obfuscate ]
 		ElysiumAddSheetField(D, TEXT("active_potence"), EElysiumTraitContainer::ActiveDisciplines,
-			9, /*bBase=*/false, EElysiumField::Save);  // +0x1378 m_iVActiveDisciplinesCurrent[ v_discipline_potence ]
+			9, /*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1378 m_iVActiveDisciplinesCurrent[ v_discipline_potence ]
 		ElysiumAddSheetField(D, TEXT("active_presence"), EElysiumTraitContainer::ActiveDisciplines,
-			10, /*bBase=*/false, EElysiumField::Save);  // +0x137c m_iVActiveDisciplinesCurrent[ v_discipline_presence ]
+			10, /*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x137c m_iVActiveDisciplinesCurrent[ v_discipline_presence ]
 		ElysiumAddSheetField(D, TEXT("active_protean"), EElysiumTraitContainer::ActiveDisciplines,
-			11, /*bBase=*/false, EElysiumField::Save);  // +0x1380 m_iVActiveDisciplinesCurrent[ v_discipline_protean ]
+			11, /*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1380 m_iVActiveDisciplinesCurrent[ v_discipline_protean ]
 		ElysiumAddSheetField(D, TEXT("active_thaumaturgy"),
-			EElysiumTraitContainer::ActiveDisciplines, 12, /*bBase=*/false, EElysiumField::Save);  // +0x1384 m_iVActiveDisciplinesCurrent[ v_discipline_thaumaturgy ]
+			EElysiumTraitContainer::ActiveDisciplines, 12, /*bBase=*/false,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1384 m_iVActiveDisciplinesCurrent[ v_discipline_thaumaturgy ]
 		ElysiumAddSheetField(D, TEXT("animalism"), EElysiumTraitContainer::Disciplines, 0,
-			/*bBase=*/false, EElysiumField::Save);  // +0x12c4 m_iVDisciplinesCurrent[ v_discipline_animalism ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x12c4 m_iVDisciplinesCurrent[ v_discipline_animalism ]
 		ElysiumAddSheetField(D, TEXT("appearance"), EElysiumTraitContainer::Attributes, 6,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1194 m_iVAttributesCurrent[ v_attribute_appearance ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1194 m_iVAttributesCurrent[ v_attribute_appearance ]
 		ElysiumAddSheetField(D, TEXT("armor_rating"), EElysiumTraitContainer::Attributes, 19,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11c8 m_iVAttributesCurrent[ v_attribute_armor_rating ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11c8 m_iVAttributesCurrent[ v_attribute_armor_rating ]
 		ElysiumAddSheetField(D, TEXT("attrib_order"), EElysiumTraitContainer::Attributes, 0,
-			/*bBase=*/false, EElysiumField::Save);  // +0x117c m_iVAttributesCurrent[ v_attribute_attrib_order ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x117c m_iVAttributesCurrent[ v_attribute_attrib_order ]
 		ElysiumAddSheetField(D, TEXT("auspex"), EElysiumTraitContainer::Disciplines, 1,
-			/*bBase=*/false, EElysiumField::Save);  // +0x12c8 m_iVDisciplinesCurrent[ v_discipline_auspex ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x12c8 m_iVDisciplinesCurrent[ v_discipline_auspex ]
 		ElysiumAddSheetField(D, TEXT("autolevel_template"), EElysiumTraitContainer::Attributes, 33,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1200 m_iVAttributesCurrent[ v_attribute_autolevel_template ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1200 m_iVAttributesCurrent[ v_attribute_autolevel_template ]
 		ElysiumAddSheetField(D, TEXT("automatic_soak_successes"),
-			EElysiumTraitContainer::Attributes, 23, /*bBase=*/false, EElysiumField::Save);  // +0x11d8 m_iVAttributesCurrent[ v_attribute_automatic_soak_successes ]
+			EElysiumTraitContainer::Attributes, 23, /*bBase=*/false,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x11d8 m_iVAttributesCurrent[ v_attribute_automatic_soak_successes ]
 		ElysiumAddSheetField(D, TEXT("automatic_str_successes"),
-			EElysiumTraitContainer::Attributes, 24, /*bBase=*/false, EElysiumField::Save);  // +0x11dc m_iVAttributesCurrent[ v_attribute_automatic_str_successes ]
+			EElysiumTraitContainer::Attributes, 24, /*bBase=*/false,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x11dc m_iVAttributesCurrent[ v_attribute_automatic_str_successes ]
 		ElysiumAddSheetField(D, TEXT("base_ability_order"), EElysiumTraitContainer::Abilities, 0,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1210 m_iVAbilitiesBase[ v_ability_ability_order ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1210 m_iVAbilitiesBase[ v_ability_ability_order ]
 		ElysiumAddSheetField(D, TEXT("base_academics"), EElysiumTraitContainer::Abilities, 12,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1240 m_iVAbilitiesBase[ v_ability_academics ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1240 m_iVAbilitiesBase[ v_ability_academics ]
 		ElysiumAddSheetField(D, TEXT("base_active_active_active_dominate"),
-			EElysiumTraitContainer::ActiveDisciplines, 6, /*bBase=*/true, EElysiumField::Save);  // +0x1328 m_iVActiveDisciplinesBase[ v_discipline_dominate ]
+			EElysiumTraitContainer::ActiveDisciplines, 6, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1328 m_iVActiveDisciplinesBase[ v_discipline_dominate ]
 		ElysiumAddSheetField(D, TEXT("base_active_animalism"),
-			EElysiumTraitContainer::ActiveDisciplines, 0, /*bBase=*/true, EElysiumField::Save);  // +0x1310 m_iVActiveDisciplinesBase[ v_discipline_animalism ]
+			EElysiumTraitContainer::ActiveDisciplines, 0, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1310 m_iVActiveDisciplinesBase[ v_discipline_animalism ]
 		ElysiumAddSheetField(D, TEXT("base_active_auspex"),
-			EElysiumTraitContainer::ActiveDisciplines, 1, /*bBase=*/true, EElysiumField::Save);  // +0x1314 m_iVActiveDisciplinesBase[ v_discipline_auspex ]
+			EElysiumTraitContainer::ActiveDisciplines, 1, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1314 m_iVActiveDisciplinesBase[ v_discipline_auspex ]
 		ElysiumAddSheetField(D, TEXT("base_active_blood_healing"),
-			EElysiumTraitContainer::ActiveDisciplines, 2, /*bBase=*/true, EElysiumField::Save);  // +0x1318 m_iVActiveDisciplinesBase[ v_discipline_blood_healing ]
+			EElysiumTraitContainer::ActiveDisciplines, 2, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1318 m_iVActiveDisciplinesBase[ v_discipline_blood_healing ]
 		ElysiumAddSheetField(D, TEXT("base_active_celerity"),
-			EElysiumTraitContainer::ActiveDisciplines, 3, /*bBase=*/true, EElysiumField::Save);  // +0x131c m_iVActiveDisciplinesBase[ v_discipline_celerity ]
+			EElysiumTraitContainer::ActiveDisciplines, 3, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x131c m_iVActiveDisciplinesBase[ v_discipline_celerity ]
 		ElysiumAddSheetField(D, TEXT("base_active_corpus_vampirus"),
-			EElysiumTraitContainer::ActiveDisciplines, 4, /*bBase=*/true, EElysiumField::Save);  // +0x1320 m_iVActiveDisciplinesBase[ v_discipline_corpus_vampirus ]
+			EElysiumTraitContainer::ActiveDisciplines, 4, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1320 m_iVActiveDisciplinesBase[ v_discipline_corpus_vampirus ]
 		ElysiumAddSheetField(D, TEXT("base_active_dementation"),
-			EElysiumTraitContainer::ActiveDisciplines, 5, /*bBase=*/true, EElysiumField::Save);  // +0x1324 m_iVActiveDisciplinesBase[ v_discipline_dementation ]
+			EElysiumTraitContainer::ActiveDisciplines, 5, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1324 m_iVActiveDisciplinesBase[ v_discipline_dementation ]
 		ElysiumAddSheetField(D, TEXT("base_active_fortitude"),
-			EElysiumTraitContainer::ActiveDisciplines, 7, /*bBase=*/true, EElysiumField::Save);  // +0x132c m_iVActiveDisciplinesBase[ v_discipline_fortitude ]
+			EElysiumTraitContainer::ActiveDisciplines, 7, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x132c m_iVActiveDisciplinesBase[ v_discipline_fortitude ]
 		ElysiumAddSheetField(D, TEXT("base_active_obfuscate"),
-			EElysiumTraitContainer::ActiveDisciplines, 8, /*bBase=*/true, EElysiumField::Save);  // +0x1330 m_iVActiveDisciplinesBase[ v_discipline_obfuscate ]
+			EElysiumTraitContainer::ActiveDisciplines, 8, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1330 m_iVActiveDisciplinesBase[ v_discipline_obfuscate ]
 		ElysiumAddSheetField(D, TEXT("base_active_potence"),
-			EElysiumTraitContainer::ActiveDisciplines, 9, /*bBase=*/true, EElysiumField::Save);  // +0x1334 m_iVActiveDisciplinesBase[ v_discipline_potence ]
+			EElysiumTraitContainer::ActiveDisciplines, 9, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1334 m_iVActiveDisciplinesBase[ v_discipline_potence ]
 		ElysiumAddSheetField(D, TEXT("base_active_presence"),
-			EElysiumTraitContainer::ActiveDisciplines, 10, /*bBase=*/true, EElysiumField::Save);  // +0x1338 m_iVActiveDisciplinesBase[ v_discipline_presence ]
+			EElysiumTraitContainer::ActiveDisciplines, 10, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1338 m_iVActiveDisciplinesBase[ v_discipline_presence ]
 		ElysiumAddSheetField(D, TEXT("base_active_protean"),
-			EElysiumTraitContainer::ActiveDisciplines, 11, /*bBase=*/true, EElysiumField::Save);  // +0x133c m_iVActiveDisciplinesBase[ v_discipline_protean ]
+			EElysiumTraitContainer::ActiveDisciplines, 11, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x133c m_iVActiveDisciplinesBase[ v_discipline_protean ]
 		ElysiumAddSheetField(D, TEXT("base_active_thaumaturgy"),
-			EElysiumTraitContainer::ActiveDisciplines, 12, /*bBase=*/true, EElysiumField::Save);  // +0x1340 m_iVActiveDisciplinesBase[ v_discipline_thaumaturgy ]
+			EElysiumTraitContainer::ActiveDisciplines, 12, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1340 m_iVActiveDisciplinesBase[ v_discipline_thaumaturgy ]
 		ElysiumAddSheetField(D, TEXT("base_animalism"), EElysiumTraitContainer::Disciplines, 0,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1280 m_iVDisciplinesBase[ v_discipline_animalism ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1280 m_iVDisciplinesBase[ v_discipline_animalism ]
 		ElysiumAddSheetField(D, TEXT("base_appearance"), EElysiumTraitContainer::Attributes, 6,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1108 m_iVAttributesBase[ v_attribute_appearance ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1108 m_iVAttributesBase[ v_attribute_appearance ]
 		ElysiumAddSheetField(D, TEXT("base_armor_rating"), EElysiumTraitContainer::Attributes, 19,
-			/*bBase=*/true, EElysiumField::Save);  // +0x113c m_iVAttributesBase[ v_attribute_armor_rating ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x113c m_iVAttributesBase[ v_attribute_armor_rating ]
 		ElysiumAddSheetField(D, TEXT("base_attrib_order"), EElysiumTraitContainer::Attributes, 0,
-			/*bBase=*/true, EElysiumField::Save);  // +0x10f0 m_iVAttributesBase[ v_attribute_attrib_order ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x10f0 m_iVAttributesBase[ v_attribute_attrib_order ]
 		ElysiumAddSheetField(D, TEXT("base_auspex"), EElysiumTraitContainer::Disciplines, 1,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1284 m_iVDisciplinesBase[ v_discipline_auspex ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1284 m_iVDisciplinesBase[ v_discipline_auspex ]
 		ElysiumAddSheetField(D, TEXT("base_autolevel_template"),
-			EElysiumTraitContainer::Attributes, 33, /*bBase=*/true, EElysiumField::Save);  // +0x1174 m_iVAttributesBase[ v_attribute_autolevel_template ]
+			EElysiumTraitContainer::Attributes, 33, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1174 m_iVAttributesBase[ v_attribute_autolevel_template ]
 		ElysiumAddSheetField(D, TEXT("base_automatic_soak_successes"),
-			EElysiumTraitContainer::Attributes, 23, /*bBase=*/true, EElysiumField::Save);  // +0x114c m_iVAttributesBase[ v_attribute_automatic_soak_successes ]
+			EElysiumTraitContainer::Attributes, 23, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x114c m_iVAttributesBase[ v_attribute_automatic_soak_successes ]
 		ElysiumAddSheetField(D, TEXT("base_automatic_str_successes"),
-			EElysiumTraitContainer::Attributes, 24, /*bBase=*/true, EElysiumField::Save);  // +0x1150 m_iVAttributesBase[ v_attribute_automatic_str_successes ]
+			EElysiumTraitContainer::Attributes, 24, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1150 m_iVAttributesBase[ v_attribute_automatic_str_successes ]
 		ElysiumAddSheetField(D, TEXT("base_blood_healing"), EElysiumTraitContainer::Disciplines, 2,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1288 m_iVDisciplinesBase[ v_discipline_blood_healing ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1288 m_iVDisciplinesBase[ v_discipline_blood_healing ]
 		ElysiumAddSheetField(D, TEXT("base_bloodpool"), EElysiumTraitContainer::Attributes, 12,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1120 m_iVAttributesBase[ v_attribute_bloodpool ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1120 m_iVAttributesBase[ v_attribute_bloodpool ]
 		ElysiumAddSheetField(D, TEXT("base_bloodpool_max"), EElysiumTraitContainer::Attributes, 13,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1124 m_iVAttributesBase[ v_attribute_bloodpool_max ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1124 m_iVAttributesBase[ v_attribute_bloodpool_max ]
 		ElysiumAddSheetField(D, TEXT("base_brawl"), EElysiumTraitContainer::Abilities, 1,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1214 m_iVAbilitiesBase[ v_ability_brawl ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1214 m_iVAbilitiesBase[ v_ability_brawl ]
 		ElysiumAddSheetField(D, TEXT("base_celerity"), EElysiumTraitContainer::Disciplines, 3,
-			/*bBase=*/true, EElysiumField::Save);  // +0x128c m_iVDisciplinesBase[ v_discipline_celerity ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x128c m_iVDisciplinesBase[ v_discipline_celerity ]
 		ElysiumAddSheetField(D, TEXT("base_charisma"), EElysiumTraitContainer::Attributes, 4,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1100 m_iVAttributesBase[ v_attribute_charisma ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1100 m_iVAttributesBase[ v_attribute_charisma ]
 		ElysiumAddSheetField(D, TEXT("base_clan"), EElysiumTraitContainer::Attributes, 10,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1118 m_iVAttributesBase[ v_attribute_clan ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1118 m_iVAttributesBase[ v_attribute_clan ]
 		ElysiumAddSheetField(D, TEXT("base_computers"), EElysiumTraitContainer::Abilities, 9,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1234 m_iVAbilitiesBase[ v_ability_computers ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1234 m_iVAbilitiesBase[ v_ability_computers ]
 		ElysiumAddSheetField(D, TEXT("base_corpus_vampirus"), EElysiumTraitContainer::Disciplines,
-			4, /*bBase=*/true, EElysiumField::Save);  // +0x1290 m_iVDisciplinesBase[ v_discipline_corpus_vampirus ]
+			4, /*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1290 m_iVDisciplinesBase[ v_discipline_corpus_vampirus ]
 		ElysiumAddSheetField(D, TEXT("base_dementation"), EElysiumTraitContainer::Disciplines, 5,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1294 m_iVDisciplinesBase[ v_discipline_dementation ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1294 m_iVDisciplinesBase[ v_discipline_dementation ]
 		ElysiumAddSheetField(D, TEXT("base_dexterity"), EElysiumTraitContainer::Attributes, 2,
-			/*bBase=*/true, EElysiumField::Save);  // +0x10f8 m_iVAttributesBase[ v_attribute_dexterity ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x10f8 m_iVAttributesBase[ v_attribute_dexterity ]
 		ElysiumAddSheetField(D, TEXT("base_dodge"), EElysiumTraitContainer::Abilities, 2,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1218 m_iVAbilitiesBase[ v_ability_dodge ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1218 m_iVAbilitiesBase[ v_ability_dodge ]
 		ElysiumAddSheetField(D, TEXT("base_dominate"), EElysiumTraitContainer::Disciplines, 6,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1298 m_iVDisciplinesBase[ v_discipline_dominate ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1298 m_iVDisciplinesBase[ v_discipline_dominate ]
 		ElysiumAddSheetField(D, TEXT("base_encumbrance"), EElysiumTraitContainer::Attributes, 26,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1158 m_iVAttributesBase[ v_attribute_encumbrance ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1158 m_iVAttributesBase[ v_attribute_encumbrance ]
 		ElysiumAddSheetField(D, TEXT("base_excluded_equipment"),
-			EElysiumTraitContainer::Attributes, 31, /*bBase=*/true, EElysiumField::Save);  // +0x116c m_iVAttributesBase[ v_attribute_excluded_equipment ]
+			EElysiumTraitContainer::Attributes, 31, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x116c m_iVAttributesBase[ v_attribute_excluded_equipment ]
 		ElysiumAddSheetField(D, TEXT("base_experience"), EElysiumTraitContainer::Attributes, 34,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1178 m_iVAttributesBase[ v_attribute_experience ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1178 m_iVAttributesBase[ v_attribute_experience ]
 		ElysiumAddSheetField(D, TEXT("base_experience_modifier"),
-			EElysiumTraitContainer::Attributes, 29, /*bBase=*/true, EElysiumField::Save);  // +0x1164 m_iVAttributesBase[ v_attribute_experience_modifier ]
+			EElysiumTraitContainer::Attributes, 29, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1164 m_iVAttributesBase[ v_attribute_experience_modifier ]
 		ElysiumAddSheetField(D, TEXT("base_faithpoints"), EElysiumTraitContainer::Attributes, 14,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1128 m_iVAttributesBase[ v_attribute_faithpoints ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1128 m_iVAttributesBase[ v_attribute_faithpoints ]
 		ElysiumAddSheetField(D, TEXT("base_finance"), EElysiumTraitContainer::Abilities, 10,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1238 m_iVAbilitiesBase[ v_ability_finance ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1238 m_iVAbilitiesBase[ v_ability_finance ]
 		ElysiumAddSheetField(D, TEXT("base_firearms"), EElysiumTraitContainer::Abilities, 5,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1224 m_iVAbilitiesBase[ v_ability_firearms ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1224 m_iVAbilitiesBase[ v_ability_firearms ]
 		ElysiumAddSheetField(D, TEXT("base_fortitude"), EElysiumTraitContainer::Disciplines, 7,
-			/*bBase=*/true, EElysiumField::Save);  // +0x129c m_iVDisciplinesBase[ v_discipline_fortitude ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x129c m_iVDisciplinesBase[ v_discipline_fortitude ]
 		ElysiumAddSheetField(D, TEXT("base_frenzy_check_mod"), EElysiumTraitContainer::Attributes,
-			21, /*bBase=*/true, EElysiumField::Save);  // +0x1144 m_iVAttributesBase[ v_attribute_frenzy_check_mod ]
+			21, /*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1144 m_iVAttributesBase[ v_attribute_frenzy_check_mod ]
 		ElysiumAddSheetField(D, TEXT("base_gender_"), EElysiumTraitContainer::Attributes, 11,
-			/*bBase=*/true, EElysiumField::Save);  // +0x111c m_iVAttributesBase[ v_attribute_gender ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x111c m_iVAttributesBase[ v_attribute_gender ]
 		ElysiumAddSheetField(D, TEXT("base_generation"), EElysiumTraitContainer::Attributes, 18,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1138 m_iVAttributesBase[ v_attribute_generation ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1138 m_iVAttributesBase[ v_attribute_generation ]
 		ElysiumAddSheetField(D, TEXT("base_health_aggravated_dmg"),
-			EElysiumTraitContainer::Attributes, 16, /*bBase=*/true, EElysiumField::Save);  // +0x1130 m_iVAttributesBase[ v_attribute_health_aggravated_dmg ]
+			EElysiumTraitContainer::Attributes, 16, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1130 m_iVAttributesBase[ v_attribute_health_aggravated_dmg ]
 		ElysiumAddSheetField(D, TEXT("base_health_buffer"), EElysiumTraitContainer::Attributes, 25,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1154 m_iVAttributesBase[ v_attribute_health_buffer ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1154 m_iVAttributesBase[ v_attribute_health_buffer ]
 		ElysiumAddSheetField(D, TEXT("base_humanity"), EElysiumTraitContainer::Attributes, 27,
-			/*bBase=*/true, EElysiumField::Save);  // +0x115c m_iVAttributesBase[ v_attribute_humanity ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x115c m_iVAttributesBase[ v_attribute_humanity ]
 		ElysiumAddSheetField(D, TEXT("base_intelligence"), EElysiumTraitContainer::Attributes, 8,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1110 m_iVAttributesBase[ v_attribute_intelligence ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1110 m_iVAttributesBase[ v_attribute_intelligence ]
 		ElysiumAddSheetField(D, TEXT("base_intimidate"), EElysiumTraitContainer::Abilities, 3,
-			/*bBase=*/true, EElysiumField::Save);  // +0x121c m_iVAbilitiesBase[ v_ability_intimidate ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x121c m_iVAbilitiesBase[ v_ability_intimidate ]
 		ElysiumAddSheetField(D, TEXT("base_investigation"), EElysiumTraitContainer::Abilities, 11,
-			/*bBase=*/true, EElysiumField::Save);  // +0x123c m_iVAbilitiesBase[ v_ability_investigation ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x123c m_iVAbilitiesBase[ v_ability_investigation ]
 		ElysiumAddSheetField(D, TEXT("base_level"), EElysiumTraitContainer::Attributes, 20,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1140 m_iVAttributesBase[ v_attribute_level ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1140 m_iVAttributesBase[ v_attribute_level ]
 		ElysiumAddSheetField(D, TEXT("base_manipulation"), EElysiumTraitContainer::Attributes, 5,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1104 m_iVAttributesBase[ v_attribute_manipulation ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1104 m_iVAttributesBase[ v_attribute_manipulation ]
 		ElysiumAddSheetField(D, TEXT("base_masquerade"), EElysiumTraitContainer::Attributes, 28,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1160 m_iVAttributesBase[ v_attribute_masquerade ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1160 m_iVAttributesBase[ v_attribute_masquerade ]
 		ElysiumAddSheetField(D, TEXT("base_melee"), EElysiumTraitContainer::Abilities, 6,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1228 m_iVAbilitiesBase[ v_ability_melee ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1228 m_iVAbilitiesBase[ v_ability_melee ]
 		ElysiumAddSheetField(D, TEXT("base_obfuscate"), EElysiumTraitContainer::Disciplines, 8,
-			/*bBase=*/true, EElysiumField::Save);  // +0x12a0 m_iVDisciplinesBase[ v_discipline_obfuscate ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x12a0 m_iVDisciplinesBase[ v_discipline_obfuscate ]
 		ElysiumAddSheetField(D, TEXT("base_perception"), EElysiumTraitContainer::Attributes, 7,
-			/*bBase=*/true, EElysiumField::Save);  // +0x110c m_iVAttributesBase[ v_attribute_perception ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x110c m_iVAttributesBase[ v_attribute_perception ]
 		ElysiumAddSheetField(D, TEXT("base_potence"), EElysiumTraitContainer::Disciplines, 9,
-			/*bBase=*/true, EElysiumField::Save);  // +0x12a4 m_iVDisciplinesBase[ v_discipline_potence ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x12a4 m_iVDisciplinesBase[ v_discipline_potence ]
 		ElysiumAddSheetField(D, TEXT("base_presence"), EElysiumTraitContainer::Disciplines, 10,
-			/*bBase=*/true, EElysiumField::Save);  // +0x12a8 m_iVDisciplinesBase[ v_discipline_presence ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x12a8 m_iVDisciplinesBase[ v_discipline_presence ]
 		ElysiumAddSheetField(D, TEXT("base_protean"), EElysiumTraitContainer::Disciplines, 11,
-			/*bBase=*/true, EElysiumField::Save);  // +0x12ac m_iVDisciplinesBase[ v_discipline_protean ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x12ac m_iVDisciplinesBase[ v_discipline_protean ]
 		ElysiumAddSheetField(D, TEXT("base_security"), EElysiumTraitContainer::Abilities, 7,
-			/*bBase=*/true, EElysiumField::Save);  // +0x122c m_iVAbilitiesBase[ v_ability_security ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x122c m_iVAbilitiesBase[ v_ability_security ]
 		ElysiumAddSheetField(D, TEXT("base_soak_pool"), EElysiumTraitContainer::Attributes, 22,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1148 m_iVAttributesBase[ v_attribute_soak_pool ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1148 m_iVAttributesBase[ v_attribute_soak_pool ]
 		ElysiumAddSheetField(D, TEXT("base_stamina"), EElysiumTraitContainer::Attributes, 3,
-			/*bBase=*/true, EElysiumField::Save);  // +0x10fc m_iVAttributesBase[ v_attribute_stamina ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x10fc m_iVAttributesBase[ v_attribute_stamina ]
 		ElysiumAddSheetField(D, TEXT("base_starting_equipment"),
-			EElysiumTraitContainer::Attributes, 30, /*bBase=*/true, EElysiumField::Save);  // +0x1168 m_iVAttributesBase[ v_attribute_starting_equipment ]
+			EElysiumTraitContainer::Attributes, 30, /*bBase=*/true,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1168 m_iVAttributesBase[ v_attribute_starting_equipment ]
 		ElysiumAddSheetField(D, TEXT("base_stealth"), EElysiumTraitContainer::Abilities, 8,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1230 m_iVAbilitiesBase[ v_ability_stealth ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1230 m_iVAbilitiesBase[ v_ability_stealth ]
 		ElysiumAddSheetField(D, TEXT("base_strength"), EElysiumTraitContainer::Attributes, 1,
-			/*bBase=*/true, EElysiumField::Save);  // +0x10f4 m_iVAttributesBase[ v_attribute_strength ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x10f4 m_iVAttributesBase[ v_attribute_strength ]
 		ElysiumAddSheetField(D, TEXT("base_subterfuge"), EElysiumTraitContainer::Abilities, 4,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1220 m_iVAbilitiesBase[ v_ability_subterfuge ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1220 m_iVAbilitiesBase[ v_ability_subterfuge ]
 		ElysiumAddSheetField(D, TEXT("base_thaumaturgy"), EElysiumTraitContainer::Disciplines, 12,
-			/*bBase=*/true, EElysiumField::Save);  // +0x12b0 m_iVDisciplinesBase[ v_discipline_thaumaturgy ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x12b0 m_iVDisciplinesBase[ v_discipline_thaumaturgy ]
 		ElysiumAddSheetField(D, TEXT("base_vampheal_type"), EElysiumTraitContainer::Attributes, 32,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1170 m_iVAttributesBase[ v_attribute_vampheal_type ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1170 m_iVAttributesBase[ v_attribute_vampheal_type ]
 		ElysiumAddSheetField(D, TEXT("base_vhealth"), EElysiumTraitContainer::Attributes, 15,
-			/*bBase=*/true, EElysiumField::Save);  // +0x112c m_iVAttributesBase[ v_attribute_health ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x112c m_iVAttributesBase[ v_attribute_health ]
 		ElysiumAddSheetField(D, TEXT("base_vmax_health"), EElysiumTraitContainer::Attributes, 17,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1134 m_iVAttributesBase[ v_attribute_max_health ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1134 m_iVAttributesBase[ v_attribute_max_health ]
 		ElysiumAddSheetField(D, TEXT("base_wits"), EElysiumTraitContainer::Attributes, 9,
-			/*bBase=*/true, EElysiumField::Save);  // +0x1114 m_iVAttributesBase[ v_attribute_wits ]
+			/*bBase=*/true, EElysiumField::Save | EElysiumField::MapKey);  // +0x1114 m_iVAttributesBase[ v_attribute_wits ]
 		ElysiumAddSheetField(D, TEXT("blood_healing"), EElysiumTraitContainer::Disciplines, 2,
-			/*bBase=*/false, EElysiumField::Save);  // +0x12cc m_iVDisciplinesCurrent[ v_discipline_blood_healing ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x12cc m_iVDisciplinesCurrent[ v_discipline_blood_healing ]
 		ElysiumAddSheetField(D, TEXT("bloodpool"), EElysiumTraitContainer::Attributes, 12,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11ac m_iVAttributesCurrent[ v_attribute_bloodpool ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11ac m_iVAttributesCurrent[ v_attribute_bloodpool ]
 		ElysiumAddSheetField(D, TEXT("bloodpool_max"), EElysiumTraitContainer::Attributes, 13,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11b0 m_iVAttributesCurrent[ v_attribute_bloodpool_max ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11b0 m_iVAttributesCurrent[ v_attribute_bloodpool_max ]
 		ElysiumAddSheetField(D, TEXT("brawl"), EElysiumTraitContainer::Abilities, 1,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1248 m_iVAbilitiesCurrent[ v_ability_brawl ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1248 m_iVAbilitiesCurrent[ v_ability_brawl ]
 		ElysiumAddSheetField(D, TEXT("celerity"), EElysiumTraitContainer::Disciplines, 3,
-			/*bBase=*/false, EElysiumField::Save);  // +0x12d0 m_iVDisciplinesCurrent[ v_discipline_celerity ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x12d0 m_iVDisciplinesCurrent[ v_discipline_celerity ]
 		ElysiumAddSheetField(D, TEXT("charisma"), EElysiumTraitContainer::Attributes, 4,
-			/*bBase=*/false, EElysiumField::Save);  // +0x118c m_iVAttributesCurrent[ v_attribute_charisma ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x118c m_iVAttributesCurrent[ v_attribute_charisma ]
 		ElysiumAddSheetField(D, TEXT("clan"), EElysiumTraitContainer::Attributes, 10,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11a4 m_iVAttributesCurrent[ v_attribute_clan ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11a4 m_iVAttributesCurrent[ v_attribute_clan ]
 		ElysiumAddSheetField(D, TEXT("computers"), EElysiumTraitContainer::Abilities, 9,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1268 m_iVAbilitiesCurrent[ v_ability_computers ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1268 m_iVAbilitiesCurrent[ v_ability_computers ]
 		ElysiumAddSheetField(D, TEXT("corpus_vampirus"), EElysiumTraitContainer::Disciplines, 4,
-			/*bBase=*/false, EElysiumField::Save);  // +0x12d4 m_iVDisciplinesCurrent[ v_discipline_corpus_vampirus ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x12d4 m_iVDisciplinesCurrent[ v_discipline_corpus_vampirus ]
 		ElysiumAddSheetField(D, TEXT("dementation"), EElysiumTraitContainer::Disciplines, 5,
-			/*bBase=*/false, EElysiumField::Save);  // +0x12d8 m_iVDisciplinesCurrent[ v_discipline_dementation ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x12d8 m_iVDisciplinesCurrent[ v_discipline_dementation ]
 		ElysiumAddSheetField(D, TEXT("dexterity"), EElysiumTraitContainer::Attributes, 2,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1184 m_iVAttributesCurrent[ v_attribute_dexterity ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1184 m_iVAttributesCurrent[ v_attribute_dexterity ]
 		ElysiumAddSheetField(D, TEXT("dodge"), EElysiumTraitContainer::Abilities, 2,
-			/*bBase=*/false, EElysiumField::Save);  // +0x124c m_iVAbilitiesCurrent[ v_ability_dodge ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x124c m_iVAbilitiesCurrent[ v_ability_dodge ]
 		ElysiumAddSheetField(D, TEXT("dominate"), EElysiumTraitContainer::Disciplines, 6,
-			/*bBase=*/false, EElysiumField::Save);  // +0x12dc m_iVDisciplinesCurrent[ v_discipline_dominate ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x12dc m_iVDisciplinesCurrent[ v_discipline_dominate ]
 		ElysiumAddSheetField(D, TEXT("encumbrance"), EElysiumTraitContainer::Attributes, 26,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11e4 m_iVAttributesCurrent[ v_attribute_encumbrance ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11e4 m_iVAttributesCurrent[ v_attribute_encumbrance ]
 		ElysiumAddSheetField(D, TEXT("excluded_equipment"), EElysiumTraitContainer::Attributes, 31,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11f8 m_iVAttributesCurrent[ v_attribute_excluded_equipment ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11f8 m_iVAttributesCurrent[ v_attribute_excluded_equipment ]
 		ElysiumAddSheetField(D, TEXT("experience"), EElysiumTraitContainer::Attributes, 34,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1204 m_iVAttributesCurrent[ v_attribute_experience ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1204 m_iVAttributesCurrent[ v_attribute_experience ]
 		ElysiumAddSheetField(D, TEXT("experience_modifier"), EElysiumTraitContainer::Attributes,
-			29, /*bBase=*/false, EElysiumField::Save);  // +0x11f0 m_iVAttributesCurrent[ v_attribute_experience_modifier ]
+			29, /*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11f0 m_iVAttributesCurrent[ v_attribute_experience_modifier ]
 		ElysiumAddSheetField(D, TEXT("faithpoints"), EElysiumTraitContainer::Attributes, 14,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11b4 m_iVAttributesCurrent[ v_attribute_faithpoints ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11b4 m_iVAttributesCurrent[ v_attribute_faithpoints ]
 		ElysiumAddSheetField(D, TEXT("finance"), EElysiumTraitContainer::Abilities, 10,
-			/*bBase=*/false, EElysiumField::Save);  // +0x126c m_iVAbilitiesCurrent[ v_ability_finance ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x126c m_iVAbilitiesCurrent[ v_ability_finance ]
 		ElysiumAddSheetField(D, TEXT("firearms"), EElysiumTraitContainer::Abilities, 5,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1258 m_iVAbilitiesCurrent[ v_ability_firearms ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1258 m_iVAbilitiesCurrent[ v_ability_firearms ]
 		ElysiumAddClassField(D, TEXT("floatfreq"), &FElysiumCombatCharacter::FloatSoundFrequency,
-			EElysiumField::Save);  // +0x10e8 m_iFloatSoundFrequency
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x10e8 m_iFloatSoundFrequency
 		ElysiumAddSheetField(D, TEXT("fortitude"), EElysiumTraitContainer::Disciplines, 7,
-			/*bBase=*/false, EElysiumField::Save);  // +0x12e0 m_iVDisciplinesCurrent[ v_discipline_fortitude ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x12e0 m_iVDisciplinesCurrent[ v_discipline_fortitude ]
 		ElysiumAddSheetField(D, TEXT("frenzy_check_mod"), EElysiumTraitContainer::Attributes, 21,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11d0 m_iVAttributesCurrent[ v_attribute_frenzy_check_mod ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11d0 m_iVAttributesCurrent[ v_attribute_frenzy_check_mod ]
 		ElysiumAddSheetField(D, TEXT("gender"), EElysiumTraitContainer::Attributes, 11,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11a8 m_iVAttributesCurrent[ v_attribute_gender ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11a8 m_iVAttributesCurrent[ v_attribute_gender ]
 		ElysiumAddSheetField(D, TEXT("generation"), EElysiumTraitContainer::Attributes, 18,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11c4 m_iVAttributesCurrent[ v_attribute_generation ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11c4 m_iVAttributesCurrent[ v_attribute_generation ]
 		ElysiumAddSheetField(D, TEXT("health_aggravated_dmg"), EElysiumTraitContainer::Attributes,
-			16, /*bBase=*/false, EElysiumField::Save);  // +0x11bc m_iVAttributesCurrent[ v_attribute_health_aggravated_dmg ]
+			16, /*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11bc m_iVAttributesCurrent[ v_attribute_health_aggravated_dmg ]
 		ElysiumAddSheetField(D, TEXT("health_buffer"), EElysiumTraitContainer::Attributes, 25,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11e0 m_iVAttributesCurrent[ v_attribute_health_buffer ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11e0 m_iVAttributesCurrent[ v_attribute_health_buffer ]
 		ElysiumAddSheetField(D, TEXT("humanity"), EElysiumTraitContainer::Attributes, 27,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11e8 m_iVAttributesCurrent[ v_attribute_humanity ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11e8 m_iVAttributesCurrent[ v_attribute_humanity ]
 		ElysiumAddSheetField(D, TEXT("intelligence"), EElysiumTraitContainer::Attributes, 8,
-			/*bBase=*/false, EElysiumField::Save);  // +0x119c m_iVAttributesCurrent[ v_attribute_intelligence ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x119c m_iVAttributesCurrent[ v_attribute_intelligence ]
 		ElysiumAddSheetField(D, TEXT("intimidate"), EElysiumTraitContainer::Abilities, 3,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1250 m_iVAbilitiesCurrent[ v_ability_intimidate ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1250 m_iVAbilitiesCurrent[ v_ability_intimidate ]
 		ElysiumAddSheetField(D, TEXT("investigation"), EElysiumTraitContainer::Abilities, 11,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1270 m_iVAbilitiesCurrent[ v_ability_investigation ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1270 m_iVAbilitiesCurrent[ v_ability_investigation ]
 		ElysiumAddSheetField(D, TEXT("level"), EElysiumTraitContainer::Attributes, 20,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11cc m_iVAttributesCurrent[ v_attribute_level ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11cc m_iVAttributesCurrent[ v_attribute_level ]
 		ElysiumAddSheetField(D, TEXT("manipulation"), EElysiumTraitContainer::Attributes, 5,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1190 m_iVAttributesCurrent[ v_attribute_manipulation ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1190 m_iVAttributesCurrent[ v_attribute_manipulation ]
 		ElysiumAddSheetField(D, TEXT("masquerade"), EElysiumTraitContainer::Attributes, 28,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11ec m_iVAttributesCurrent[ v_attribute_masquerade ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11ec m_iVAttributesCurrent[ v_attribute_masquerade ]
 		ElysiumAddSheetField(D, TEXT("melee"), EElysiumTraitContainer::Abilities, 6,
-			/*bBase=*/false, EElysiumField::Save);  // +0x125c m_iVAbilitiesCurrent[ v_ability_melee ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x125c m_iVAbilitiesCurrent[ v_ability_melee ]
 		ElysiumAddClassField(D, TEXT("money"), &FElysiumCombatCharacter::Money,
-			EElysiumField::Save);  // +0x13d8 m_iMoney
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x13d8 m_iMoney
 		ElysiumAddSheetField(D, TEXT("obfuscate"), EElysiumTraitContainer::Disciplines, 8,
-			/*bBase=*/false, EElysiumField::Save);  // +0x12e4 m_iVDisciplinesCurrent[ v_discipline_obfuscate ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x12e4 m_iVDisciplinesCurrent[ v_discipline_obfuscate ]
 		ElysiumAddSheetField(D, TEXT("perception"), EElysiumTraitContainer::Attributes, 7,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1198 m_iVAttributesCurrent[ v_attribute_perception ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1198 m_iVAttributesCurrent[ v_attribute_perception ]
 		ElysiumAddSheetField(D, TEXT("potence"), EElysiumTraitContainer::Disciplines, 9,
-			/*bBase=*/false, EElysiumField::Save);  // +0x12e8 m_iVDisciplinesCurrent[ v_discipline_potence ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x12e8 m_iVDisciplinesCurrent[ v_discipline_potence ]
 		ElysiumAddSheetField(D, TEXT("presence"), EElysiumTraitContainer::Disciplines, 10,
-			/*bBase=*/false, EElysiumField::Save);  // +0x12ec m_iVDisciplinesCurrent[ v_discipline_presence ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x12ec m_iVDisciplinesCurrent[ v_discipline_presence ]
 		ElysiumAddSheetField(D, TEXT("protean"), EElysiumTraitContainer::Disciplines, 11,
-			/*bBase=*/false, EElysiumField::Save);  // +0x12f0 m_iVDisciplinesCurrent[ v_discipline_protean ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x12f0 m_iVDisciplinesCurrent[ v_discipline_protean ]
 		ElysiumAddSheetField(D, TEXT("security"), EElysiumTraitContainer::Abilities, 7,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1260 m_iVAbilitiesCurrent[ v_ability_security ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1260 m_iVAbilitiesCurrent[ v_ability_security ]
 		ElysiumAddSheetField(D, TEXT("soak_pool"), EElysiumTraitContainer::Attributes, 22,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11d4 m_iVAttributesCurrent[ v_attribute_soak_pool ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11d4 m_iVAttributesCurrent[ v_attribute_soak_pool ]
 		ElysiumAddSheetField(D, TEXT("stamina"), EElysiumTraitContainer::Attributes, 3,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1188 m_iVAttributesCurrent[ v_attribute_stamina ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1188 m_iVAttributesCurrent[ v_attribute_stamina ]
 		ElysiumAddSheetField(D, TEXT("starting_equipment"), EElysiumTraitContainer::Attributes, 30,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11f4 m_iVAttributesCurrent[ v_attribute_starting_equipment ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11f4 m_iVAttributesCurrent[ v_attribute_starting_equipment ]
 		ElysiumAddSheetField(D, TEXT("stealth"), EElysiumTraitContainer::Abilities, 8,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1264 m_iVAbilitiesCurrent[ v_ability_stealth ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1264 m_iVAbilitiesCurrent[ v_ability_stealth ]
 		ElysiumAddSheetField(D, TEXT("strength"), EElysiumTraitContainer::Attributes, 1,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1180 m_iVAttributesCurrent[ v_attribute_strength ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1180 m_iVAttributesCurrent[ v_attribute_strength ]
 		ElysiumAddSheetField(D, TEXT("subterfuge"), EElysiumTraitContainer::Abilities, 4,
-			/*bBase=*/false, EElysiumField::Save);  // +0x1254 m_iVAbilitiesCurrent[ v_ability_subterfuge ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x1254 m_iVAbilitiesCurrent[ v_ability_subterfuge ]
 		ElysiumAddClassField(D, TEXT("team_name"), &FElysiumCombatCharacter::TeamName,
-			EElysiumField::Save);  // +0x10ac m_sTeamName
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x10ac m_sTeamName
 		ElysiumAddSheetField(D, TEXT("thaumaturgy"), EElysiumTraitContainer::Disciplines, 12,
-			/*bBase=*/false, EElysiumField::Save);  // +0x12f4 m_iVDisciplinesCurrent[ v_discipline_thaumaturgy ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x12f4 m_iVDisciplinesCurrent[ v_discipline_thaumaturgy ]
 		ElysiumAddSheetField(D, TEXT("vampheal_type"), EElysiumTraitContainer::Attributes, 32,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11fc m_iVAttributesCurrent[ v_attribute_vampheal_type ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11fc m_iVAttributesCurrent[ v_attribute_vampheal_type ]
 		ElysiumAddSheetField(D, TEXT("vhealth"), EElysiumTraitContainer::Attributes, 15,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11b8 m_iVAttributesCurrent[ v_attribute_health ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11b8 m_iVAttributesCurrent[ v_attribute_health ]
 		ElysiumAddSheetField(D, TEXT("vmax_health"), EElysiumTraitContainer::Attributes, 17,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11c0 m_iVAttributesCurrent[ v_attribute_max_health ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11c0 m_iVAttributesCurrent[ v_attribute_max_health ]
 		ElysiumAddSheetField(D, TEXT("wits"), EElysiumTraitContainer::Attributes, 9,
-			/*bBase=*/false, EElysiumField::Save);  // +0x11a0 m_iVAttributesCurrent[ v_attribute_wits ]
+			/*bBase=*/false, EElysiumField::Save | EElysiumField::MapKey);  // +0x11a0 m_iVAttributesCurrent[ v_attribute_wits ]
 		// UNBOUND +0x1584 m_RelationshipString "Relationship" — `m_RelationshipString` is the
 		// authored relationship line; this port parses it into `FElysiumNpc::Relationships` through
 		// the `SetRelationship` input, so the string itself has no member
@@ -559,17 +603,18 @@ namespace ElysiumNpcKernelBindings
 	void AddNpcBaseFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("additionalequipment"), &FElysiumNpcBase::AdditionalEquipment,
-			EElysiumField::Save);  // +0x5dec m_spawnEquipment
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5dec m_spawnEquipment
 		ElysiumAddClassField(D, TEXT("alternateequipment"), &FElysiumNpcBase::AlternateEquipment,
-			EElysiumField::Save);  // +0x1a98 m_altEquipment
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x1a98 m_altEquipment
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("hintgroup"),
-			[](auto& E) -> auto&{ return E.BaseScheduleHost.HintGroup; }, EElysiumField::Save);  // +0x5db0 m_strHintGroup
+			[](auto& E) -> auto&{ return E.BaseScheduleHost.HintGroup; },
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5db0 m_strHintGroup
 		ElysiumAddClassField(D, TEXT("squadname"), &FElysiumNpcBase::SquadName,
-			EElysiumField::Save);  // +0x5da8 m_SquadName
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5da8 m_SquadName
 	}
 
 	void AddNpcBaseSaveFields(FElysiumClassDesc& D)
@@ -624,31 +669,39 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.BaseScheduleHost.CacheInterruptTime; },
 			EElysiumField::Save);  // +0x1b24 time
 		D.TimeField(TEXT("m_flCacheInterruptTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flCacheInterruptTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flDistTooFar"), &FElysiumNpcBase::DistTooFar,
 			EElysiumField::Save);  // +0x5de4 float
 		ElysiumAddClassField(D, TEXT("m_flExtendedBlockedByFriendTimer"),
 			&FElysiumNpcBase::ExtendedBlockedByFriendTimer, EElysiumField::Save);  // +0x5b8c time
 		D.TimeField(TEXT("m_flExtendedBlockedByFriendTimer"), EElysiumTimePolicy::MaxFloat); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flExtendedBlockedByFriendTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flLastAttackTime"), &FElysiumNpcBase::LastAttackTime,
 			EElysiumField::Save);  // +0x5d9c time
 		D.TimeField(TEXT("m_flLastAttackTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flLastAttackTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flLastDamageTime"),
 			[](auto& E) -> auto&{ return E.BaseMemory.RepeatedDamageWindowStart; },
 			EElysiumField::Save);  // +0x5d98 time
 		D.TimeField(TEXT("m_flLastDamageTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flLastDamageTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flMoveWaitFinished"),
 			[](auto& E) -> auto&{ return E.BaseScheduleHost.MoveWaitFinished; },
 			EElysiumField::Save);  // +0x5cf0 time
 		D.TimeField(TEXT("m_flMoveWaitFinished")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flMoveWaitFinished"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flNextDoorUseTime"), &FElysiumNpcBase::NextDoorUseTime,
 			EElysiumField::Save);  // +0x5b60 time
 		D.TimeField(TEXT("m_flNextDoorUseTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextDoorUseTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flNextWeaponSearchTime"),
 			&FElysiumNpcBase::NextWeaponSearchTime, EElysiumField::Save);  // +0x5da0 time
 		D.TimeField(TEXT("m_flNextWeaponSearchTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextWeaponSearchTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flSoundWaitTime"),
 			[](auto& E) -> auto&{ return E.BaseMemory.SoundWaitTime; }, EElysiumField::Save);  // +0x5ce8 time
 		D.TimeField(TEXT("m_flSoundWaitTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flSoundWaitTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flSpecialDistanceAccum"),
 			&FElysiumNpcBase::SpecialDistanceAccum, EElysiumField::Save);  // +0x5bac float
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flSumDamage"),
@@ -657,9 +710,11 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_flWaitFinished"),
 			[](auto& E) -> auto&{ return E.BaseScheduleHost.WaitFinished; }, EElysiumField::Save);  // +0x5db4 time
 		D.TimeField(TEXT("m_flWaitFinished"), EElysiumTimePolicy::Zero); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flWaitFinished"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flWeaponBlockedByFriendTimer"),
 			&FElysiumNpcBase::WeaponBlockedByFriendTimer, EElysiumField::Save);  // +0x5b88 time
 		D.TimeField(TEXT("m_flWeaponBlockedByFriendTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flWeaponBlockedByFriendTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_hBlockedDoor"), &FElysiumNpcBase::BlockedDoor,
 			EElysiumField::Save);  // +0x5d28 ehandle
 		ElysiumAddClassField(D, TEXT("m_hCondHitByDoor"), &FElysiumNpcBase::CondHitByDoor,
@@ -701,6 +756,7 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x5d70 int
 		ElysiumAddClassField(D, TEXT("m_vSavePosition"), &FElysiumNpcBase::SavePosition,
 			EElysiumField::Save);  // +0x5dd0 position
+		D.RetailType(TEXT("m_vSavePosition"), 14); // fieldtype_t position
 		ElysiumAddClassFieldVia<FElysiumNpcBase>(D, TEXT("m_vecEnemyWentOccluded"),
 			[](auto& E) -> auto&{ return E.BaseMemory.EnemyWentOccludedPosition; },
 			EElysiumField::Save);  // +0x5bc8 vector
@@ -709,6 +765,7 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x5b9c vector
 		ElysiumAddClassField(D, TEXT("m_vecLastPosition"), &FElysiumNpcBase::LastPosition,
 			EElysiumField::Save);  // +0x5db8 position
+		D.RetailType(TEXT("m_vecLastPosition"), 14); // fieldtype_t position
 		// NOT SAVED +0x1a9c m_DelayedConditionList (embedded) — a FIELD_EMBEDDED row: retail's
 		// datamap points at a second `datamap_t` and recurses, and this port's matching member
 		// carries its own typed `Serialize`, which is the same shape
@@ -765,75 +822,78 @@ namespace ElysiumNpcKernelBindings
 	void AddNpcFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("allow_alert_lookaround"),
-			&FElysiumNpc::bAllowAlertLookaround, EElysiumField::Save);  // +0x6434 m_bAllowAlertLookaround
+			&FElysiumNpc::bAllowAlertLookaround, EElysiumField::Save | EElysiumField::MapKey);  // +0x6434 m_bAllowAlertLookaround
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("allow_kick_hint_use"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.bAllowKickHintUse; },
-			EElysiumField::Save);  // +0x6436 m_bAllowKickHintUse
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6436 m_bAllowKickHintUse
 		ElysiumAddClassField(D, TEXT("bright_route_penalty"), &FElysiumNpc::BrightRoutePenalty,
-			EElysiumField::Save);  // +0x6344 m_iBrightRoutePenalty
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6344 m_iBrightRoutePenalty
 		ElysiumAddClassField(D, TEXT("combat_start_activity"), &FElysiumNpc::CombatStartActivity,
-			EElysiumField::Save);  // +0x65e0 m_sCombatStartActivity
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x65e0 m_sCombatStartActivity
 		ElysiumAddClassField(D, TEXT("default_camera"), &FElysiumNpc::DefaultCamera,
-			EElysiumField::Save);  // +0x64c4 m_sDefaultCamera
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x64c4 m_sDefaultCamera
 		ElysiumAddClassField(D, TEXT("follower_boss"), &FElysiumNpc::FollowerBossName,
-			EElysiumField::Save);  // +0x6478 m_sFollowerBoss
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6478 m_sFollowerBoss
 		ElysiumAddClassField(D, TEXT("follower_type"), &FElysiumNpc::FollowerType,
-			EElysiumField::Save);  // +0x6480 m_sFollowerType
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6480 m_sFollowerType
 		ElysiumAddClassField(D, TEXT("full_investigate"), &FElysiumNpc::FullInvestigate,
-			EElysiumField::Save);  // +0x6340 m_bFullInvestigate
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6340 m_bFullInvestigate
 		ElysiumAddClassField(D, TEXT("hearing"), &FElysiumNpc::AuthoredHearing,
-			EElysiumField::Save);  // +0x63bc m_flHearingScalarBase
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x63bc m_flHearingScalarBase
 		ElysiumAddClassField(D, TEXT("ignore_detected_attack"),
-			&FElysiumNpc::bIgnoreDetectedAttack, EElysiumField::Save);  // +0x65f5 m_bIgnoreDetectedAttack
+			&FElysiumNpc::bIgnoreDetectedAttack, EElysiumField::Save | EElysiumField::MapKey);  // +0x65f5 m_bIgnoreDetectedAttack
 		ElysiumAddClassField(D, TEXT("investigate_mode"), &FElysiumNpc::InvestigateMode,
-			EElysiumField::Save);  // +0x6338 m_eInvestigateMode
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6338 m_eInvestigateMode
 		ElysiumAddClassField(D, TEXT("investigate_mode_combat"),
-			&FElysiumNpc::InvestigateModeCombat, EElysiumField::Save);  // +0x633c m_eInvestigateModeCombat
-		ElysiumAddClassField(D, TEXT("invincible"), &FElysiumNpc::bInvincible, EElysiumField::Save);  // +0x63d8 m_bInvincible
+			&FElysiumNpc::InvestigateModeCombat, EElysiumField::Save | EElysiumField::MapKey);  // +0x633c m_eInvestigateModeCombat
+		ElysiumAddClassField(D, TEXT("invincible"), &FElysiumNpc::bInvincible,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x63d8 m_bInvincible
 		ElysiumAddClassField(D, TEXT("is_bossmonster"), &FElysiumNpc::bIsBossMonster,
-			EElysiumField::Save);  // +0x6496 m_bIsBossMonster
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6496 m_bIsBossMonster
 		ElysiumAddClassField(D, TEXT("nav_ignore_physics_props"),
-			&FElysiumNpc::bNavIgnorePhysicsProps, EElysiumField::Save);  // +0x65f7 m_bNavIgnorePhysicsProps
+			&FElysiumNpc::bNavIgnorePhysicsProps, EElysiumField::Save | EElysiumField::MapKey);  // +0x65f7 m_bNavIgnorePhysicsProps
 		ElysiumAddClassField(D, TEXT("no_alert_state"), &FElysiumNpc::bNoAlertState,
-			EElysiumField::Save);  // +0x65f6 m_bNoAlertState
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x65f6 m_bNoAlertState
 		ElysiumAddClassField(D, TEXT("npc_perception"), &FElysiumNpc::AuthoredPerception,
-			EElysiumField::Save);  // +0x63b0 m_iNPCPerception
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x63b0 m_iNPCPerception
 		ElysiumAddClassField(D, TEXT("percent_occluded_chase"), &FElysiumNpc::PercentOccludedChase,
-			EElysiumField::Save);  // +0x6430 m_iPercentOccludedChase
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6430 m_iPercentOccludedChase
 		ElysiumAddClassField(D, TEXT("percent_occluded_cover"), &FElysiumNpc::PercentOccludedCover,
-			EElysiumField::Save);  // +0x6424 m_iPercentOccludedCover
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6424 m_iPercentOccludedCover
 		ElysiumAddClassField(D, TEXT("percent_occluded_flank"), &FElysiumNpc::PercentOccludedFlank,
-			EElysiumField::Save);  // +0x642c m_iPercentOccludedFlank
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x642c m_iPercentOccludedFlank
 		ElysiumAddClassField(D, TEXT("percent_occluded_wait"), &FElysiumNpc::PercentOccludedWait,
-			EElysiumField::Save);  // +0x6420 m_iPercentOccludedWait
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6420 m_iPercentOccludedWait
 		ElysiumAddClassField(D, TEXT("percent_occluded_walk"), &FElysiumNpc::PercentOccludedWalk,
-			EElysiumField::Save);  // +0x6428 m_iPercentOccludedWalk
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6428 m_iPercentOccludedWalk
 		ElysiumAddClassField(D, TEXT("pl_criminal_attack"), &FElysiumNpc::PlCriminalAttack,
-			EElysiumField::Save | EElysiumField::Key);  // +0x6350 m_iPLCriminalAttackLevel
+			EElysiumField::Save | EElysiumField::Key | EElysiumField::MapKey);  // +0x6350 m_iPLCriminalAttackLevel
 		ElysiumAddClassField(D, TEXT("pl_criminal_flee"), &FElysiumNpc::PlCriminalFlee,
-			EElysiumField::Save | EElysiumField::Key);  // +0x634c m_iPLCriminalFleeLevel
+			EElysiumField::Save | EElysiumField::Key | EElysiumField::MapKey);  // +0x634c m_iPLCriminalFleeLevel
 		ElysiumAddClassField(D, TEXT("pl_investigate"), &FElysiumNpc::PlInvestigate,
-			EElysiumField::Save | EElysiumField::Key);  // +0x6348 m_iPLInvestigateLevel
+			EElysiumField::Save | EElysiumField::Key | EElysiumField::MapKey);  // +0x6348 m_iPLInvestigateLevel
 		ElysiumAddClassField(D, TEXT("pl_supernatural_attack"), &FElysiumNpc::PlSupernaturalAttack,
-			EElysiumField::Save | EElysiumField::Key);  // +0x6358 m_iPLSupernaturalAttackLevel
+			EElysiumField::Save | EElysiumField::Key | EElysiumField::MapKey);  // +0x6358 m_iPLSupernaturalAttackLevel
 		ElysiumAddClassField(D, TEXT("pl_supernatural_flee"), &FElysiumNpc::PlSupernaturalFlee,
-			EElysiumField::Save | EElysiumField::Key);  // +0x6354 m_iPLSupernaturalFleeLevel
+			EElysiumField::Save | EElysiumField::Key | EElysiumField::MapKey);  // +0x6354 m_iPLSupernaturalFleeLevel
 		ElysiumAddClassField(D, TEXT("player_reaction"), &FElysiumNpc::PlayerReaction,
-			EElysiumField::Save);  // +0x63ac m_sPlayerReaction
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x63ac m_sPlayerReaction
 		ElysiumAddClassField(D, TEXT("stay_entrenched"), &FElysiumNpc::bStayEntrenched,
-			EElysiumField::Save);  // +0x6435 m_bStayEntrenched
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6435 m_bStayEntrenched
 		ElysiumAddClassField(D, TEXT("teleport_move_timer"), &FElysiumNpc::TeleportMoveTimer,
-			EElysiumField::Save);  // +0x65dc m_flTeleportMoveTimer
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x65dc m_flTeleportMoveTimer
 		D.TimeField(TEXT("teleport_move_timer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("teleport_move_timer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("times_talked"), &FElysiumNpc::TimesTalked,
-			EElysiumField::Save);  // +0x64bc m_nTimesTalked
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x64bc m_nTimesTalked
 		ElysiumAddClassField(D, TEXT("use_interesting"), &FElysiumNpc::bUseInteresting,
-			EElysiumField::Save);  // +0x63d9 m_bUseInteresting
-		ElysiumAddClassField(D, TEXT("vision"), &FElysiumNpc::AuthoredVision, EElysiumField::Save);  // +0x63b4 m_flSeekDistBase
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x63d9 m_bUseInteresting
+		ElysiumAddClassField(D, TEXT("vision"), &FElysiumNpc::AuthoredVision,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x63b4 m_flSeekDistBase
 		// UNBOUND +0x6558 m_sDefaultDisposition "default_disposition" — bound by binding class
 		// Animating (`FElysiumAnimating::Disposition`)
 		// UNBOUND +0x62e0 m_sHintGroups "hint_groups" — hand-owned by its parse-on-write accessor
@@ -911,6 +971,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_fFinishingMoveBoneTrackLastTime"),
 			&FElysiumNpc::FinishingMoveBoneTrackLastTime, EElysiumField::Save);  // +0x6018 time
 		D.TimeField(TEXT("m_fFinishingMoveBoneTrackLastTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_fFinishingMoveBoneTrackLastTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_fJumpGravity"), &FElysiumNpc::JumpGravity,
 			EElysiumField::Save);  // +0x64b8 float
 		ElysiumAddClassField(D, TEXT("m_fJumpHeight"), &FElysiumNpc::JumpHeight,
@@ -918,28 +979,35 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_fKnockbackWallHitFallTime"),
 			&FElysiumNpc::KnockbackWallHitFallTime, EElysiumField::Save);  // +0x6014 time
 		D.TimeField(TEXT("m_fKnockbackWallHitFallTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_fKnockbackWallHitFallTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_fNextDodgeTimer"), &FElysiumNpc::NextDodgeTime,
 			EElysiumField::Save);  // +0x65a4 time
 		D.TimeField(TEXT("m_fNextDodgeTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_fNextDodgeTimer"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_fSavePositionWalk"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.bSavePositionWalk; },
 			EElysiumField::Save);  // +0x63e0 bool
 		ElysiumAddClassField(D, TEXT("m_flAlternateAIExpireTimer"),
 			&FElysiumNpc::AlternateAiExpireTime, EElysiumField::Save);  // +0x6450 time
 		D.TimeField(TEXT("m_flAlternateAIExpireTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flAlternateAIExpireTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flCanSeekCoverTimer"), &FElysiumNpc::CanSeekCoverTimer,
 			EElysiumField::Save);  // +0x607c time
 		D.TimeField(TEXT("m_flCanSeekCoverTimer"), EElysiumTimePolicy::Zero); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flCanSeekCoverTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flCorpseConditionTimer"),
 			&FElysiumNpc::CorpseConditionTime, EElysiumField::Save);  // +0x6608 time
 		D.TimeField(TEXT("m_flCorpseConditionTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flCorpseConditionTimer"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flCriminalIgnoreTimer"),
 			[](auto& E) -> auto&{ return E.Witness.Channels[0].IgnoreUntil; },
 			EElysiumField::Save);  // +0x6398 time
 		D.TimeField(TEXT("m_flCriminalIgnoreTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flCriminalIgnoreTimer"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flCriminalWitnessedTimer"),
 			[](auto& E) -> auto&{ return E.Witness.CriminalWitnessedTime; }, EElysiumField::Save);  // +0x63a4 time
 		D.TimeField(TEXT("m_flCriminalWitnessedTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flCriminalWitnessedTimer"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flDesiredMoveYaw"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.DesiredMoveYaw; }, EElysiumField::Save);  // +0x63ec float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flEnemyDist"),
@@ -960,22 +1028,27 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flHuntExpireTimer"), &FElysiumNpc::HuntExpireTime,
 			EElysiumField::Save);  // +0x6474 time
 		D.TimeField(TEXT("m_flHuntExpireTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flHuntExpireTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flIgnoreCollisionTimer"),
 			&FElysiumNpc::IgnoreCollisionUntil, EElysiumField::Save);  // +0x6458 time
 		D.TimeField(TEXT("m_flIgnoreCollisionTimer"), EElysiumTimePolicy::MaxFloat); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flIgnoreCollisionTimer"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flInsideInterruptDistanceSqr"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.InsideInterruptDistanceSqr; },
 			EElysiumField::Save);  // +0x6324 float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flInterruptTime"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.InterruptTime; }, EElysiumField::Save);  // +0x632c time
 		D.TimeField(TEXT("m_flInterruptTime"), EElysiumTimePolicy::Zero); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flInterruptTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flKickPhysicsPropSearchTimer"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.KickPropSearchTimer; },
 			EElysiumField::Save);  // +0x6438 time
 		D.TimeField(TEXT("m_flKickPhysicsPropSearchTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flKickPhysicsPropSearchTimer"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flLastAIThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.LastAI; }, EElysiumField::Save);  // +0x6260 time
 		D.TimeField(TEXT("m_flLastAIThink")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flLastAIThink"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flLastInPlayerLOS"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.PlayerLosLastClearTime; },
 			EElysiumField::Save);  // +0x6280 float
@@ -985,33 +1058,43 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flLastMeleeStepbackTime"),
 			&FElysiumNpc::LastMeleeStepbackTime, EElysiumField::Save);  // +0x606c time
 		D.TimeField(TEXT("m_flLastMeleeStepbackTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flLastMeleeStepbackTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flLastMoveThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.LastMove; }, EElysiumField::Save);  // +0x625c time
 		D.TimeField(TEXT("m_flLastMoveThink")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flLastMoveThink"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flLastNormalThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.LastNormal; }, EElysiumField::Save);  // +0x6258 time
 		D.TimeField(TEXT("m_flLastNormalThink")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flLastNormalThink"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flLastUpdateThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.LastUpdate; }, EElysiumField::Save);  // +0x6254 time
 		D.TimeField(TEXT("m_flLastUpdateThink")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flLastUpdateThink"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flLoudExpressionTime"), &FElysiumNpc::LoudExpressionTime,
 			EElysiumField::Save);  // +0x6574 time
 		D.TimeField(TEXT("m_flLoudExpressionTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flLoudExpressionTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flMeleeCanEnterTimer"), &FElysiumNpc::MeleeCanEnterTimer,
 			EElysiumField::Save);  // +0x6070 time
 		D.TimeField(TEXT("m_flMeleeCanEnterTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flMeleeCanEnterTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flMeleeHeightDiffTimer"),
 			&FElysiumNpc::MeleeHeightDiffTimer, EElysiumField::Save);  // +0x6274 time
 		D.TimeField(TEXT("m_flMeleeHeightDiffTimer"), EElysiumTimePolicy::MinusOne); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flMeleeHeightDiffTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flMeleeMustLeaveTimer"), &FElysiumNpc::MeleeMustLeaveTimer,
 			EElysiumField::Save);  // +0x6074 time
 		D.TimeField(TEXT("m_flMeleeMustLeaveTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flMeleeMustLeaveTimer"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextAIThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.NextAI; }, EElysiumField::Save);  // +0x6250 time
 		D.TimeField(TEXT("m_flNextAIThink")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextAIThink"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flNextBurnTime"), &FElysiumNpc::NextBurnTime,
 			EElysiumField::Save);  // +0x65bc time
 		D.TimeField(TEXT("m_flNextBurnTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextBurnTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextCheckEnterPVSTime"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.NextCheckEnterPvsTime; },
 			EElysiumField::Save);  // +0x6288 float
@@ -1019,26 +1102,33 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.ScheduleHost.NextCoverLosCheck; },
 			EElysiumField::Save);  // +0x6400 time
 		D.TimeField(TEXT("m_flNextCoverLOSCheck")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextCoverLOSCheck"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flNextCrosswalkUpdateTime"),
 			&FElysiumNpc::NextCrosswalkUpdateTime, EElysiumField::Save);  // +0x6318 time
 		D.TimeField(TEXT("m_flNextCrosswalkUpdateTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextCrosswalkUpdateTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextFleeSoundTime"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.NextFleeSoundTime; },
 			EElysiumField::Save);  // +0x641c time
 		D.TimeField(TEXT("m_flNextFleeSoundTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextFleeSoundTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextInvestigateSoundTime"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.NextInvestigateSoundTime; },
 			EElysiumField::Save);  // +0x623c time
 		D.TimeField(TEXT("m_flNextInvestigateSoundTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextInvestigateSoundTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextMoveThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.NextMove; }, EElysiumField::Save);  // +0x624c time
 		D.TimeField(TEXT("m_flNextMoveThink")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextMoveThink"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextNormalThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.NextNormal; }, EElysiumField::Save);  // +0x6248 time
 		D.TimeField(TEXT("m_flNextNormalThink")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextNormalThink"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flNextPedInteractTime"), &FElysiumNpc::NextPedInteractTime,
 			EElysiumField::Save);  // +0x631c time
 		D.TimeField(TEXT("m_flNextPedInteractTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextPedInteractTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextPlayerLOS"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.PlayerLosNextUpdateTime; },
 			EElysiumField::Save);  // +0x6284 float
@@ -1046,12 +1136,15 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.Senses.Memory.NextSeeSoundSourceTime; },
 			EElysiumField::Save);  // +0x6418 time
 		D.TimeField(TEXT("m_flNextSeeSoundSourceTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextSeeSoundSourceTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNextUpdateThink"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.NextUpdate; }, EElysiumField::Save);  // +0x6244 time
 		D.TimeField(TEXT("m_flNextUpdateThink")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextUpdateThink"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flNosferatuIgnoreTimer"),
 			[](auto& E) -> auto&{ return E.Witness.NosferatuIgnoreUntil; }, EElysiumField::Save);  // +0x63a0 time
 		D.TimeField(TEXT("m_flNosferatuIgnoreTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNosferatuIgnoreTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flOccludedDelay"), &FElysiumNpc::OccludedDelay,
 			EElysiumField::Save);  // +0x62c8 float
 		ElysiumAddClassField(D, TEXT("m_flOccludedDelayCover"), &FElysiumNpc::OccludedDelayCover,
@@ -1061,12 +1154,15 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flOccludedReportTimeE"), &FElysiumNpc::OccludedReportTimeE,
 			EElysiumField::Save);  // +0x62cc time
 		D.TimeField(TEXT("m_flOccludedReportTimeE"), EElysiumTimePolicy::Zero); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flOccludedReportTimeE"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flOccludedReportTimeT"), &FElysiumNpc::OccludedReportTimeT,
 			EElysiumField::Save);  // +0x62d0 time
 		D.TimeField(TEXT("m_flOccludedReportTimeT"), EElysiumTimePolicy::Zero); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flOccludedReportTimeT"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flOccludedReportTimeW"), &FElysiumNpc::OccludedReportTimeW,
 			EElysiumField::Save);  // +0x62d4 time
 		D.TimeField(TEXT("m_flOccludedReportTimeW"), EElysiumTimePolicy::Zero); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flOccludedReportTimeW"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flOutsideInterruptDistanceSqr"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.OutsideInterruptDistanceSqr; },
 			EElysiumField::Save);  // +0x6328 float
@@ -1077,14 +1173,17 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.Senses.Memory.SeeUnknownGraceUntil; },
 			EElysiumField::Save);  // +0x6084 time
 		D.TimeField(TEXT("m_flSeeUnknownCheatVisionTime"), EElysiumTimePolicy::MinusOne); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flSeeUnknownCheatVisionTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSeeUnknownRunTimer"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.SeeUnknownRunTimer; },
 			EElysiumField::Save);  // +0x609c time
 		D.TimeField(TEXT("m_flSeeUnknownRunTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flSeeUnknownRunTimer"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSeeUnknownStartTimer"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.SeeUnknownStartTimer; },
 			EElysiumField::Save);  // +0x60a0 time
 		D.TimeField(TEXT("m_flSeeUnknownStartTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flSeeUnknownStartTimer"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSeekDistInspection"),
 			[](auto& E) -> auto&{ return E.Senses.Perception.VisionDistanceCm; },
 			EElysiumField::Save);  // +0x63b8 float
@@ -1093,6 +1192,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flStanceTime"),
 			[](auto& E) -> auto&{ return E.Stance.LastChangeTime; }, EElysiumField::Save);  // +0x64e4 time
 		D.TimeField(TEXT("m_flStanceTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flStanceTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flStandingOnHeadTimer"), &FElysiumNpc::StandingOnHeadTimer,
 			EElysiumField::Save);  // +0x65fc float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flStealthHearingDist"),
@@ -1103,28 +1203,34 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.Senses.Memory.StealthVisionOverrideUntil; },
 			EElysiumField::Save);  // +0x6604 time
 		D.TimeField(TEXT("m_flStealthVisionOverrideTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flStealthVisionOverrideTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flStealthVisionScalar"),
 			[](auto& E) -> auto&{ return E.Senses.StealthVisionScalar; }, EElysiumField::Save);  // +0x63c4 float
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSupernaturalIgnoreTimer"),
 			[](auto& E) -> auto&{ return E.Witness.Channels[1].IgnoreUntil; },
 			EElysiumField::Save);  // +0x639c time
 		D.TimeField(TEXT("m_flSupernaturalIgnoreTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flSupernaturalIgnoreTimer"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flSupernaturalWitnessedTimer"),
 			[](auto& E) -> auto&{ return E.Witness.SupernaturalWitnessedTime; },
 			EElysiumField::Save);  // +0x63a8 time
 		D.TimeField(TEXT("m_flSupernaturalWitnessedTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flSupernaturalWitnessedTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flTalkTime"), &FElysiumNpc::TalkingUntil,
 			EElysiumField::Save);  // +0x64cc time
 		D.TimeField(TEXT("m_flTalkTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flTalkTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_flWaitFinishedDelta"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.WaitFinishedDelta; },
 			EElysiumField::Save);  // +0x6330 float
 		ElysiumAddClassField(D, TEXT("m_flWeaponScareTime"), &FElysiumNpc::WeaponScareTime,
 			EElysiumField::Save);  // +0x63dc time
 		D.TimeField(TEXT("m_flWeaponScareTime"), EElysiumTimePolicy::MinusOne); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flWeaponScareTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flWeaponThroughWallTime"),
 			&FElysiumNpc::WeaponThroughWallTime, EElysiumField::Save);  // +0x6600 time
 		D.TimeField(TEXT("m_flWeaponThroughWallTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flWeaponThroughWallTime"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hBestSeeUnknown"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.BestSeeUnknown; }, EElysiumField::Save);  // +0x6088 ehandle
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_hClosestPlayer"),
@@ -1168,6 +1274,7 @@ namespace ElysiumNpcKernelBindings
 			[](auto& E) -> auto&{ return E.Witness.Channels[0].Processed; }, EElysiumField::Save);  // +0x636c int
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_iPLCriminalLevelWitnessed"),
 			[](auto& E) -> auto&{ return E.Witness.Channels[0].Level; }, EElysiumField::Save);  // +0x635c custom
+		D.RetailType(TEXT("m_iPLCriminalLevelWitnessed"), 10); // fieldtype_t custom
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_iPLSupernaturalActProcessed"),
 			[](auto& E) -> auto&{ return E.Witness.Channels[1].Processed; }, EElysiumField::Save);  // +0x6370 int
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_iPLSupernaturalLevelWitnessed"),
@@ -1186,6 +1293,7 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpc::AttackCoordinatorName, EElysiumField::Save);  // +0x65ec string
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_szDialogQue"),
 			[](auto& E) -> auto&{ return E.Dialogue.DialogQue; }, EElysiumField::Save);  // +0x64ec char
+		D.RetailType(TEXT("m_szDialogQue"), 7); // fieldtype_t char
 		ElysiumAddClassField(D, TEXT("m_vFinishingMoveBoneTrackLastPos"),
 			&FElysiumNpc::FinishingMoveBoneTrackLastPos, EElysiumField::Save);  // +0x601c vector
 		ElysiumAddClassField(D, TEXT("m_vJumpOrigin"), &FElysiumNpc::JumpOrigin,
@@ -1199,15 +1307,20 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x645c vector
 		ElysiumAddClassField(D, TEXT("m_vecInitialPosition"), &FElysiumNpc::InitialPosition,
 			EElysiumField::Save);  // +0x62a8 position
+		D.RetailType(TEXT("m_vecInitialPosition"), 14); // fieldtype_t position
 		ElysiumAddClassField(D, TEXT("m_vecInterestingPlace"),
 			&FElysiumNpc::InterestingPlacePosition, EElysiumField::Save);  // +0x62f0 position
+		D.RetailType(TEXT("m_vecInterestingPlace"), 14); // fieldtype_t position
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_vecLastSeeUnknownPos"),
 			[](auto& E) -> auto&{ return E.Senses.Memory.LastSeeUnknownPosition; },
 			EElysiumField::Save);  // +0x6090 position
+		D.RetailType(TEXT("m_vecLastSeeUnknownPos"), 14); // fieldtype_t position
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_vecPLCriminalLocation"),
 			[](auto& E) -> auto&{ return E.Witness.Channels[0].Location; }, EElysiumField::Save);  // +0x6380 position
+		D.RetailType(TEXT("m_vecPLCriminalLocation"), 14); // fieldtype_t position
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_vecPLSupernaturalLocation"),
 			[](auto& E) -> auto&{ return E.Witness.Channels[1].Location; }, EElysiumField::Save);  // +0x6374 position
+		D.RetailType(TEXT("m_vecPLSupernaturalLocation"), 14); // fieldtype_t position
 		ElysiumAddClassField(D, TEXT("m_vecRight"), &FElysiumNpc::Right, EElysiumField::Save);  // +0x629c vector
 		ElysiumAddClassFieldVia<FElysiumNpc>(D, TEXT("m_vecSavedAttackExtents"),
 			[](auto& E) -> auto&{ return E.ScheduleHost.SavedSleepExtents; },
@@ -1288,126 +1401,137 @@ namespace ElysiumNpcKernelBindings
 	void AddInterestingPlaceFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("enabled"), &FElysiumInterestingPlace::bEnabled,
-			EElysiumField::Save);  // +0x57c m_bEnabled
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x57c m_bEnabled
 		ElysiumAddClassField(D, TEXT("group_id"), &FElysiumInterestingPlace::GroupId,
-			EElysiumField::Save);  // +0x574 m_iGroupID
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x574 m_iGroupID
 		ElysiumAddClassField(D, TEXT("match_orientation"),
-			&FElysiumInterestingPlace::bMatchOrientation, EElysiumField::Save);  // +0x570 m_bMatchOrientation
+			&FElysiumInterestingPlace::bMatchOrientation,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x570 m_bMatchOrientation
 		ElysiumAddClassField(D, TEXT("max_bounds"), &FElysiumInterestingPlace::MaxBoundsUnits,
-			EElysiumField::Save);  // +0x558 m_vecMaxBounds
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x558 m_vecMaxBounds
 		ElysiumAddClassField(D, TEXT("max_npcs"), &FElysiumInterestingPlace::MarkersAllocated,
 			EElysiumField::None);  // +0x584 m_iMarkersAllocated
 		ElysiumAddClassField(D, TEXT("max_time"), &FElysiumInterestingPlace::MaxTime,
-			EElysiumField::Save);  // +0x56c m_fMaxStayTime
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x56c m_fMaxStayTime
 		ElysiumAddClassField(D, TEXT("min_bounds"), &FElysiumInterestingPlace::MinBoundsUnits,
-			EElysiumField::Save);  // +0x54c m_vecMinBounds
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x54c m_vecMinBounds
 		ElysiumAddClassField(D, TEXT("min_time"), &FElysiumInterestingPlace::MinTime,
-			EElysiumField::Save);  // +0x568 m_fMinStayTime
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x568 m_fMinStayTime
 		ElysiumAddClassField(D, TEXT("rating"), &FElysiumInterestingPlace::Rating,
-			EElysiumField::Save);  // +0x578 m_iRating
-		ElysiumAddClassField(D, TEXT("type"), &FElysiumInterestingPlace::Type, EElysiumField::Save);  // +0x544 m_sType
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x578 m_iRating
+		ElysiumAddClassField(D, TEXT("type"), &FElysiumInterestingPlace::Type,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x544 m_sType
 		// UNBOUND +0x571 m_bHolsterWeapon "holster_weapon" — no port member
 	}
 
 	void AddHintFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
-		ElysiumAddClassField(D, TEXT("Group"), &FElysiumHint::Group, EElysiumField::Save);  // +0x5f0 m_strGroup
-		ElysiumAddClassField(D, TEXT("HintType"), &FElysiumHint::HintType, EElysiumField::Save);  // +0x5dc m_nHintType
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
+		ElysiumAddClassField(D, TEXT("Group"), &FElysiumHint::Group,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5f0 m_strGroup
+		ElysiumAddClassField(D, TEXT("HintType"), &FElysiumHint::HintType,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5dc m_nHintType
 		ElysiumAddClassField(D, TEXT("StartHintDisabled"), &FElysiumHint::Disabled,
-			EElysiumField::Save);  // +0x5e8 m_iDisabled
-		ElysiumAddClassField(D, TEXT("UserData"), &FElysiumHint::UserData, EElysiumField::Save);  // +0x5d4 m_iszUserData
-		ElysiumAddClassField(D, TEXT("group_id"), &FElysiumHint::GroupId, EElysiumField::Save);  // +0x470 m_iGroupID
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5e8 m_iDisabled
+		ElysiumAddClassField(D, TEXT("UserData"), &FElysiumHint::UserData,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5d4 m_iszUserData
+		ElysiumAddClassField(D, TEXT("group_id"), &FElysiumHint::GroupId,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x470 m_iGroupID
 		ElysiumAddClassField(D, TEXT("hint_rating"), &FElysiumHint::HintRating,
-			EElysiumField::Save);  // +0x464 m_flHintRating
-		ElysiumAddClassField(D, TEXT("ip_percent"), &FElysiumHint::IpPercent, EElysiumField::Save);  // +0x46c m_iIPPercent
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x464 m_flHintRating
+		ElysiumAddClassField(D, TEXT("ip_percent"), &FElysiumHint::IpPercent,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x46c m_iIPPercent
 		ElysiumAddClassField(D, TEXT("target_angle_range"), &FElysiumHint::TargetAngleRange,
-			EElysiumField::Save);  // +0x454 m_flTargetAngleRange
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x454 m_flTargetAngleRange
 		ElysiumAddClassField(D, TEXT("target_dist_max"), &FElysiumHint::TargetDistMax,
-			EElysiumField::Save);  // +0x460 m_flTargetDistMax
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x460 m_flTargetDistMax
 		ElysiumAddClassField(D, TEXT("target_dist_min"), &FElysiumHint::TargetDistMin,
-			EElysiumField::Save);  // +0x45c m_flTargetDistMin
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x45c m_flTargetDistMin
 		ElysiumAddClassField(D, TEXT("target_name"), &FElysiumHint::InterestTargetName,
-			EElysiumField::Save);  // +0x468 m_strTargetName
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x468 m_strTargetName
 	}
 
 	void AddConversationPlaceFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("audible_dist"), &FElysiumConversationPlace::AudibleDist,
-			EElysiumField::Save);  // +0x468 m_flAudibleDist
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x468 m_flAudibleDist
 		ElysiumAddClassField(D, TEXT("enabled"), &FElysiumConversationPlace::bEnabled,
-			EElysiumField::Save);  // +0x45c m_bEnabled
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x45c m_bEnabled
 		ElysiumAddClassField(D, TEXT("interesting_places"),
-			&FElysiumConversationPlace::InterestingPlaces, EElysiumField::Save);  // +0x450 m_iszInterestingPlaces
+			&FElysiumConversationPlace::InterestingPlaces,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x450 m_iszInterestingPlaces
 		ElysiumAddClassField(D, TEXT("max_time"), &FElysiumConversationPlace::MaxTime,
-			EElysiumField::Save);  // +0x510 m_flMaxTime
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x510 m_flMaxTime
 		ElysiumAddClassField(D, TEXT("min_time"), &FElysiumConversationPlace::MinTime,
-			EElysiumField::Save);  // +0x50c m_flMinTime
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x50c m_flMinTime
 		ElysiumAddClassField(D, TEXT("player_dist"), &FElysiumConversationPlace::PlayerDist,
-			EElysiumField::Save);  // +0x464 m_flPlayerDist
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x464 m_flPlayerDist
 		ElysiumAddClassField(D, TEXT("sound_loop"), &FElysiumConversationPlace::SoundLoop,
-			EElysiumField::Save);  // +0x454 m_iszSoundLoop
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x454 m_iszSoundLoop
 		ElysiumAddClassField(D, TEXT("sound_occluded"), &FElysiumConversationPlace::bSoundOccluded,
-			EElysiumField::Save);  // +0x515 m_bSoundOccluded
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x515 m_bSoundOccluded
 		ElysiumAddClassField(D, TEXT("sound_once"), &FElysiumConversationPlace::SoundOnce,
-			EElysiumField::Save);  // +0x458 m_iszSoundOnce
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x458 m_iszSoundOnce
 		ElysiumAddClassField(D, TEXT("turn_towards_talker"),
-			&FElysiumConversationPlace::bTurnTowardsTalker, EElysiumField::Save);  // +0x514 m_bTurnTowardsTalker
+			&FElysiumConversationPlace::bTurnTowardsTalker,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x514 m_bTurnTowardsTalker
 	}
 
 	void AddAiScriptedScheduleFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("goalent"), &FElysiumAiScriptedSchedule::GoalEntity,
-			EElysiumField::Save);  // +0x608c m_sGoalEnt
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x608c m_sGoalEnt
 		ElysiumAddClassField(D, TEXT("schedule"), &FElysiumAiScriptedSchedule::Mode,
-			EElysiumField::Save);  // +0x6090 m_nSchedule
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6090 m_nSchedule
 		ElysiumAddClassField(D, TEXT("forcestate"), &FElysiumAiScriptedSchedule::ForceState,
-			EElysiumField::Save);  // +0x6094 m_nForceState
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6094 m_nForceState
 	}
 
 	void AddScriptedSequenceFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("m_iszIdle"), &FElysiumScriptedSequence::PreIdle,
-			EElysiumField::Save);  // +0x5f44 m_iszPreIdle
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5f44 m_iszPreIdle
 		ElysiumAddClassField(D, TEXT("m_iszPlay"), &FElysiumScriptedSequence::Play,
-			EElysiumField::Save);  // +0x5f48 m_iszPlay
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5f48 m_iszPlay
 		ElysiumAddClassField(D, TEXT("m_iszPostIdle"), &FElysiumScriptedSequence::PostIdle,
-			EElysiumField::Save);  // +0x5f4c m_iszPostIdle
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5f4c m_iszPostIdle
 		ElysiumAddClassField(D, TEXT("m_iszCustomMove"), &FElysiumScriptedSequence::CustomMove,
-			EElysiumField::Save);  // +0x5f50 m_iszCustomMove
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5f50 m_iszCustomMove
 		ElysiumAddClassField(D, TEXT("m_iszEntity"), &FElysiumScriptedSequence::TargetEntity,
-			EElysiumField::Save);  // +0x5f54 m_iszEntity
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5f54 m_iszEntity
 		ElysiumAddClassField(D, TEXT("m_iszNextScript"), &FElysiumScriptedSequence::NextScript,
-			EElysiumField::Save);  // +0x5f58 m_iszNextScript
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5f58 m_iszNextScript
 		ElysiumAddClassField(D, TEXT("m_iszLinkedSequence"),
-			&FElysiumScriptedSequence::LinkedSequenceName, EElysiumField::Save);  // +0x5f5c m_iszLinkedSequence
+			&FElysiumScriptedSequence::LinkedSequenceName,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5f5c m_iszLinkedSequence
 		ElysiumAddClassField(D, TEXT("m_fMoveTo"), &FElysiumScriptedSequence::MoveTo,
-			EElysiumField::Save);  // +0x5f60 m_fMoveTo
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5f60 m_fMoveTo
 		ElysiumAddClassField(D, TEXT("m_iFinishSchedule"),
-			&FElysiumScriptedSequence::FinishSchedule, EElysiumField::Save);  // +0x5f64 m_iFinishSchedule
+			&FElysiumScriptedSequence::FinishSchedule,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5f64 m_iFinishSchedule
 		ElysiumAddClassField(D, TEXT("m_flRadius"), &FElysiumScriptedSequence::Radius,
-			EElysiumField::Save);  // +0x5f68 m_flRadius
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5f68 m_flRadius
 		ElysiumAddClassField(D, TEXT("m_flRepeat"), &FElysiumScriptedSequence::Repeat,
-			EElysiumField::Save);  // +0x5f6c m_flRepeat
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x5f6c m_flRepeat
 	}
 
 	void AddScriptedSequenceSaveFields(FElysiumClassDesc& D)
@@ -1422,6 +1546,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_startTime"), &FElysiumScriptedSequence::StartTime,
 			EElysiumField::Save);  // +0x5f74 time
 		D.TimeField(TEXT("m_startTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_startTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_saved_movetype"), &FElysiumScriptedSequence::SavedMoveType,
 			EElysiumField::Save);  // +0x5f78 int
 		ElysiumAddClassField(D, TEXT("m_saved_movecollide"),
@@ -1445,31 +1570,33 @@ namespace ElysiumNpcKernelBindings
 	void AddNpcMakerFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
-		ElysiumAddClassField(D, TEXT("NPCType"), &FElysiumNpcMaker::NpcType, EElysiumField::Save);  // +0x665c m_iszNPCClassname
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
+		ElysiumAddClassField(D, TEXT("NPCType"), &FElysiumNpcMaker::NpcType,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x665c m_iszNPCClassname
 		ElysiumAddClassField(D, TEXT("MaxNPCCount"), &FElysiumNpcMaker::RemainingTotal,
-			EElysiumField::Save);  // +0x6660 m_iMaxNumNPCs
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6660 m_iMaxNumNPCs
 		ElysiumAddClassField(D, TEXT("SpawnFrequency"), &FElysiumNpcMaker::SpawnFrequency,
-			EElysiumField::Save);  // +0x6664 m_flSpawnFrequency
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6664 m_flSpawnFrequency
 		ElysiumAddClassField(D, TEXT("MaxLiveChildren"), &FElysiumNpcMaker::MaxLiveChildren,
-			EElysiumField::Save);  // +0x66b4 m_iMaxLiveChildren
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x66b4 m_iMaxLiveChildren
 		ElysiumAddClassField(D, TEXT("NPCTargetname"), &FElysiumNpcMaker::ChildTargetName,
-			EElysiumField::Save);  // +0x66bc m_ChildTargetName
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x66bc m_ChildTargetName
 		ElysiumAddClassField(D, TEXT("Flag_StartDisabled"), &FElysiumNpcMaker::bDisabled,
-			EElysiumField::Save);  // +0x66c0 m_bDisabled
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x66c0 m_bDisabled
 		ElysiumAddClassField(D, TEXT("Flag_NPCClip"), &FElysiumNpcMaker::bNpcClip,
-			EElysiumField::Save);  // +0x66c1 m_bNPCClip
-		ElysiumAddClassField(D, TEXT("Flag_Fade"), &FElysiumNpcMaker::bFade, EElysiumField::Save);  // +0x66c2 m_bFade
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x66c1 m_bNPCClip
+		ElysiumAddClassField(D, TEXT("Flag_Fade"), &FElysiumNpcMaker::bFade,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x66c2 m_bFade
 		ElysiumAddClassField(D, TEXT("Flag_InfChild"), &FElysiumNpcMaker::bInfinite,
-			EElysiumField::Save);  // +0x66c3 m_bInfChild
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x66c3 m_bInfChild
 		ElysiumAddClassField(D, TEXT("Flag_NoDrop"), &FElysiumNpcMaker::bNoDrop,
-			EElysiumField::Save);  // +0x66c4 m_bNoDrop
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x66c4 m_bNoDrop
 		ElysiumAddClassField(D, TEXT("Flag_ViewCone"), &FElysiumNpcMaker::bViewCone,
-			EElysiumField::Save);  // +0x66c5 m_bViewCone
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x66c5 m_bViewCone
 		ElysiumAddClassField(D, TEXT("MinPCDistance"), &FElysiumNpcMaker::MinPcDistance,
-			EElysiumField::Save);  // +0x66c8 m_iMinPCDistance
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x66c8 m_iMinPCDistance
 	}
 
 	void AddNpcMakerSaveFields(FElysiumClassDesc& D)
@@ -1490,15 +1617,16 @@ namespace ElysiumNpcKernelBindings
 	void AddNpcMakerZombieFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("Flag_ZombieAIType"),
-			&FElysiumNpcMakerZombie::ZombieAiSpawnType, EElysiumField::Save);  // +0x76d0 m_iZombieAISpawnType
+			&FElysiumNpcMakerZombie::ZombieAiSpawnType,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x76d0 m_iZombieAISpawnType
 		ElysiumAddClassField(D, TEXT("should_ragdoll"), &FElysiumNpcMakerZombie::bShouldRagdoll,
-			EElysiumField::Save);  // +0x76d4 m_bShouldRagdoll
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x76d4 m_bShouldRagdoll
 		ElysiumAddClassField(D, TEXT("remove_distance"), &FElysiumNpcMakerZombie::RemoveDistance,
-			EElysiumField::Save);  // +0x76d8 m_flRemoveDist
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x76d8 m_flRemoveDist
 	}
 
 	void AddAndreiBloodSaveFields(FElysiumClassDesc& D)
@@ -1523,6 +1651,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_fTeleportWaitStartTime"),
 			&FElysiumNpcAndreiBlood::AndreiTeleportWaitStartTime, EElysiumField::Save);  // +0x66d0 time
 		D.TimeField(TEXT("m_fTeleportWaitStartTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_fTeleportWaitStartTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_bForceTeleport"),
 			&FElysiumNpcAndreiBlood::bAndreiForceTeleport, EElysiumField::Save);  // +0x66d4 bool
 		ElysiumAddClassField(D, TEXT("m_iHitCounter"), &FElysiumNpcAndreiBlood::AndreiHitCounter,
@@ -1534,15 +1663,17 @@ namespace ElysiumNpcKernelBindings
 	void AddAnimalFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("friendship_level"),
-			&FElysiumNpcAnimal::AnimalFriendshipLevel, EElysiumField::Save);  // +0x6664 m_iFriendshipLevel
+			&FElysiumNpcAnimal::AnimalFriendshipLevel,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6664 m_iFriendshipLevel
 		ElysiumAddClassField(D, TEXT("warn_range"), &FElysiumNpcAnimal::AnimalWarnRangeUnits,
-			EElysiumField::Save);  // +0x6668 m_flWarnRange
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6668 m_flWarnRange
 		ElysiumAddClassField(D, TEXT("conflict_range"),
-			&FElysiumNpcAnimal::AnimalConflictRangeUnits, EElysiumField::Save);  // +0x666c m_flConflictRange
+			&FElysiumNpcAnimal::AnimalConflictRangeUnits,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x666c m_flConflictRange
 	}
 
 	void AddAnimalSaveFields(FElysiumClassDesc& D)
@@ -1595,6 +1726,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flOccludeEnterTime"),
 			&FElysiumNpcBach::BachOccludeEnterTime, EElysiumField::Save);  // +0x6670 time
 		D.TimeField(TEXT("m_flOccludeEnterTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flOccludeEnterTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_iWasOccluded"), &FElysiumNpcBach::BachWasOccluded,
 			EElysiumField::Save);  // +0x6674 int
 		ElysiumAddClassField(D, TEXT("m_iReusedOccludeCount"),
@@ -1604,21 +1736,27 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flLastGrenadeTime"), &FElysiumNpcBach::BachLastGrenadeTime,
 			EElysiumField::Save);  // +0x6680 time
 		D.TimeField(TEXT("m_flLastGrenadeTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flLastGrenadeTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flShieldTime"), &FElysiumNpcBach::BachShieldTime,
 			EElysiumField::Save);  // +0x6684 time
 		D.TimeField(TEXT("m_flShieldTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flShieldTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flNextShieldTime"), &FElysiumNpcBach::BachNextShieldTime,
 			EElysiumField::Save);  // +0x6688 time
 		D.TimeField(TEXT("m_flNextShieldTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextShieldTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flNextWeaponSwitchTime"),
 			&FElysiumNpcBach::BachNextWeaponSwitchTime, EElysiumField::Save);  // +0x668c time
 		D.TimeField(TEXT("m_flNextWeaponSwitchTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextWeaponSwitchTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flNextHolyLightTime"),
 			&FElysiumNpcBach::BachNextHolyLightTime, EElysiumField::Save);  // +0x6690 time
 		D.TimeField(TEXT("m_flNextHolyLightTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextHolyLightTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flWarningTime"), &FElysiumNpcBach::BachWarningTime,
 			EElysiumField::Save);  // +0x6694 time
 		D.TimeField(TEXT("m_flWarningTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flWarningTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flSkipToWarningTime"),
 			&FElysiumNpcBach::BachSkipToWarningTime, EElysiumField::Save);  // +0x6698 float
 		ElysiumAddClassField(D, TEXT("m_iBachTeleportState"), &FElysiumNpcBach::BachTeleportState,
@@ -1642,11 +1780,12 @@ namespace ElysiumNpcKernelBindings
 	void AddCameraSecurityFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("linked_camera"),
-			&FElysiumNpcCameraSecurity::LinkedCameraName, EElysiumField::Save);  // +0x6660 m_iszLinkedCamera
+			&FElysiumNpcCameraSecurity::LinkedCameraName,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6660 m_iszLinkedCamera
 	}
 
 	void AddChangBrosSaveFields(FElysiumClassDesc& D)
@@ -1663,12 +1802,15 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_fLastTeleportTime"),
 			&FElysiumNpcChangBros::ChangLastTeleportTime, EElysiumField::Save);  // +0x66c8 time
 		D.TimeField(TEXT("m_fLastTeleportTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_fLastTeleportTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_fLastJumpTime"), &FElysiumNpcChangBros::LastJumpTime,
 			EElysiumField::Save);  // +0x66cc time
 		D.TimeField(TEXT("m_fLastJumpTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_fLastJumpTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_fFacingTime"), &FElysiumNpcChangBros::FacingTime,
 			EElysiumField::Save);  // +0x66d0 time
 		D.TimeField(TEXT("m_fFacingTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_fFacingTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_vArenaCenter"), &FElysiumNpcChangBros::ChangArenaCenter,
 			EElysiumField::Save);  // +0x66dc vector
 		ElysiumAddClassField(D, TEXT("m_bCenterStored"), &FElysiumNpcChangBros::bChangCenterStored,
@@ -1676,6 +1818,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_fLastUnitedAttackTime"),
 			&FElysiumNpcChangBros::ChangLastUnitedAttackTime, EElysiumField::Save);  // +0x66ec time
 		D.TimeField(TEXT("m_fLastUnitedAttackTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_fLastUnitedAttackTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_hCenterEmitter"),
 			&FElysiumNpcChangBros::ChangCenterEmitter, EElysiumField::Save);  // +0x66f4 ehandle
 		// NOT SAVED +0x66d4 m_fUnitedTime (time) — no port member (the species shape map's ABSENT
@@ -1738,13 +1881,13 @@ namespace ElysiumNpcKernelBindings
 	void AddGhoulCroucherFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("disturbed"), &FElysiumNpcGhoulCroucher::bGhoulSpawnDisturbed,
-			EElysiumField::Save);  // +0x6664 m_bSpawnDisturbed
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6664 m_bSpawnDisturbed
 		ElysiumAddClassField(D, TEXT("on_fire"), &FElysiumNpcGhoulCroucher::bGhoulSpawnBurning,
-			EElysiumField::Save);  // +0x6665 m_bSpawnBurning
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6665 m_bSpawnBurning
 	}
 
 	void AddGhoulCroucherSaveFields(FElysiumClassDesc& D)
@@ -1763,6 +1906,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flNextTouchBurnTime"),
 			&FElysiumNpcGhoulCroucher::GhoulNextTouchBurnTime, EElysiumField::Save);  // +0x666c time
 		D.TimeField(TEXT("m_flNextTouchBurnTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flNextTouchBurnTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_hBurningParticle"),
 			&FElysiumNpcGhoulCroucher::BurningParticle, EElysiumField::Save);  // +0x6670 ehandle
 	}
@@ -1788,6 +1932,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flIgnoreCollisionTimer"),
 			&FElysiumNpc::IgnoreCollisionUntil, EElysiumField::Save);  // +0x6458 time
 		D.TimeField(TEXT("m_flIgnoreCollisionTimer"), EElysiumTimePolicy::MaxFloat); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flIgnoreCollisionTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_hPickupTarget"),
 			&FElysiumNpcHengeyokai::HengeyokaiPickupTarget, EElysiumField::Save);  // +0x6664 ehandle
 		ElysiumAddClassField(D, TEXT("m_iPickupTargetGrabBone"),
@@ -1795,9 +1940,11 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flFishTimer"), &FElysiumNpc::HengeyokaiFishTimer,
 			EElysiumField::Save);  // +0x666c time
 		D.TimeField(TEXT("m_flFishTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flFishTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flShunnedFishTimer"),
 			&FElysiumNpcHengeyokai::HengeyokaiShunnedFishTimer, EElysiumField::Save);  // +0x6670 time
 		D.TimeField(TEXT("m_flShunnedFishTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flShunnedFishTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_iShunnedFindFish"),
 			&FElysiumNpcHengeyokai::HengeyokaiShunnedFindFish, EElysiumField::Save);  // +0x6678 int
 		ElysiumAddClassField(D, TEXT("m_bJustFoundFish"),
@@ -1806,6 +1953,7 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x667d bool
 		ElysiumAddClassField(D, TEXT("m_vecPickupTargetPos"),
 			&FElysiumNpcHengeyokai::HengeyokaiPickupTargetPos, EElysiumField::Save);  // +0x6684 position
+		D.RetailType(TEXT("m_vecPickupTargetPos"), 14); // fieldtype_t position
 		ElysiumAddClassField(D, TEXT("m_hPhysicsAnimlink"),
 			&FElysiumNpcHengeyokai::HengeyokaiPhysicsAnimlink, EElysiumField::Save);  // +0x6690 ehandle
 		ElysiumAddClassField(D, TEXT("m_bInSharkForm"),
@@ -1847,21 +1995,26 @@ namespace ElysiumNpcKernelBindings
 			&FElysiumNpcManBat::bManBatReachedMoveGoal, EElysiumField::Save);  // +0x6664 bool
 		ElysiumAddClassField(D, TEXT("m_iMoveGoalNodeMode"),
 			&FElysiumNpcManBat::ManBatMoveGoalNodeMode, EElysiumField::Save);  // +0x6668 custom
+		D.RetailType(TEXT("m_iMoveGoalNodeMode"), 10); // fieldtype_t custom
 		ElysiumAddClassField(D, TEXT("m_iMoveGoalNodeID"),
 			&FElysiumNpcManBat::ManBatMoveGoalNodeId, EElysiumField::Save);  // +0x6674 int
 		ElysiumAddClassField(D, TEXT("m_flFlapTimer"), &FElysiumNpcManBat::ManBatFlapTimer,
 			EElysiumField::Save);  // +0x6678 time
 		D.TimeField(TEXT("m_flFlapTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flFlapTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flFlyTimer"), &FElysiumNpcManBat::ManBatFlyTimer,
 			EElysiumField::Save);  // +0x667c time
 		D.TimeField(TEXT("m_flFlyTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flFlyTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_hSlowedEntity"), &FElysiumNpcManBat::ManBatSlowedEntity,
 			EElysiumField::Save);  // +0x6680 ehandle
 		ElysiumAddClassField(D, TEXT("m_flSlowedExpire"), &FElysiumNpcManBat::ManBatSlowedExpire,
 			EElysiumField::Save);  // +0x6684 time
 		D.TimeField(TEXT("m_flSlowedExpire")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flSlowedExpire"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_pFlyNode"), &FElysiumNpcManBat::ManBatFlyNode,
 			EElysiumField::Save);  // +0x6688 classptr
+		D.RetailType(TEXT("m_pFlyNode"), 11); // fieldtype_t classptr
 		ElysiumAddClassField(D, TEXT("m_hPickupTarget"), &FElysiumNpcManBat::ManBatPickupTarget,
 			EElysiumField::Save);  // +0x668c ehandle
 		ElysiumAddClassField(D, TEXT("m_hPhysicsAnimlink"),
@@ -1936,6 +2089,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flProxyReadyTimer"),
 			&FElysiumNpcMingXiao::MingXiaoProxyReadyTimer, EElysiumField::Save);  // +0x66a4 time
 		D.TimeField(TEXT("m_flProxyReadyTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flProxyReadyTimer"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhSeveredTentacles[0]"),
 			[](auto& E) -> auto&{ return E.SeveredTentacles[0]; }, EElysiumField::Save);  // +0x66a8[0] ehandle
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rhSeveredTentacles[1]"),
@@ -1951,24 +2105,31 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flSpitAttackTimer"),
 			&FElysiumNpcMingXiao::MingXiaoSpitAttackTimer, EElysiumField::Save);  // +0x66c0 time
 		D.TimeField(TEXT("m_flSpitAttackTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flSpitAttackTimer"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[0]"),
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[0]; }, EElysiumField::Save);  // +0x66c4[0] time
 		D.TimeField(TEXT("m_rflAttackTimers[0]")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_rflAttackTimers[0]"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[1]"),
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[1]; }, EElysiumField::Save);  // +0x66c4[1] time
 		D.TimeField(TEXT("m_rflAttackTimers[1]")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_rflAttackTimers[1]"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[2]"),
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[2]; }, EElysiumField::Save);  // +0x66c4[2] time
 		D.TimeField(TEXT("m_rflAttackTimers[2]")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_rflAttackTimers[2]"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[3]"),
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[3]; }, EElysiumField::Save);  // +0x66c4[3] time
 		D.TimeField(TEXT("m_rflAttackTimers[3]")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_rflAttackTimers[3]"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[4]"),
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[4]; }, EElysiumField::Save);  // +0x66c4[4] time
 		D.TimeField(TEXT("m_rflAttackTimers[4]")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_rflAttackTimers[4]"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflAttackTimers[5]"),
 			[](auto& E) -> auto&{ return E.MingXiaoAttackTimers[5]; }, EElysiumField::Save);  // +0x66c4[5] time
 		D.TimeField(TEXT("m_rflAttackTimers[5]")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_rflAttackTimers[5]"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflHitPoints[0]"),
 			[](auto& E) -> auto&{ return E.MingXiaoHitPoints[0]; }, EElysiumField::Save);  // +0x66dc[0] float
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflHitPoints[1]"),
@@ -1984,21 +2145,27 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[0]"),
 			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[0]; }, EElysiumField::Save);  // +0x66f4[0] time
 		D.TimeField(TEXT("m_rflRegrowTimers[0]")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_rflRegrowTimers[0]"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[1]"),
 			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[1]; }, EElysiumField::Save);  // +0x66f4[1] time
 		D.TimeField(TEXT("m_rflRegrowTimers[1]")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_rflRegrowTimers[1]"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[2]"),
 			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[2]; }, EElysiumField::Save);  // +0x66f4[2] time
 		D.TimeField(TEXT("m_rflRegrowTimers[2]")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_rflRegrowTimers[2]"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[3]"),
 			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[3]; }, EElysiumField::Save);  // +0x66f4[3] time
 		D.TimeField(TEXT("m_rflRegrowTimers[3]")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_rflRegrowTimers[3]"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[4]"),
 			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[4]; }, EElysiumField::Save);  // +0x66f4[4] time
 		D.TimeField(TEXT("m_rflRegrowTimers[4]")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_rflRegrowTimers[4]"), 15); // fieldtype_t time
 		ElysiumAddClassFieldVia<FElysiumNpcMingXiao>(D, TEXT("m_rflRegrowTimers[5]"),
 			[](auto& E) -> auto&{ return E.MingXiaoRegrowTimers[5]; }, EElysiumField::Save);  // +0x66f4[5] time
 		D.TimeField(TEXT("m_rflRegrowTimers[5]")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_rflRegrowTimers[5]"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_iConnectedTentacleCount"),
 			&FElysiumNpcMingXiao::MingXiaoConnectedTentacleCount, EElysiumField::Save);  // +0x670c int
 		ElysiumAddClassField(D, TEXT("m_iSeveredTentacleMask"),
@@ -2026,6 +2193,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flChargeReadyTime"),
 			&FElysiumNpcMingXiao::MingXiaoChargeReadyTime, EElysiumField::Save);  // +0x674c time
 		D.TimeField(TEXT("m_flChargeReadyTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flChargeReadyTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_bBlockedByFriend"), &FElysiumNpcMingXiao::bBlockedByFriend,
 			EElysiumField::Save);  // +0x6750 bool
 	}
@@ -2052,15 +2220,19 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flPhaseExpireTimer"),
 			&FElysiumNpcMingXiaoTentacle::MingXiaoTentaclePhaseExpireTimer, EElysiumField::Save);  // +0x6674 time
 		D.TimeField(TEXT("m_flPhaseExpireTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flPhaseExpireTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flFailedEvadeTimer"),
 			&FElysiumNpcMingXiaoTentacle::MingXiaoTentacleFailedEvadeTimer, EElysiumField::Save);  // +0x6678 time
 		D.TimeField(TEXT("m_flFailedEvadeTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flFailedEvadeTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flUpdateEvadeTimer"),
 			&FElysiumNpcMingXiaoTentacle::TentacleUpdateEvadeTimer, EElysiumField::Save);  // +0x667c time
 		D.TimeField(TEXT("m_flUpdateEvadeTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flUpdateEvadeTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flHideReadyTimer"),
 			&FElysiumNpcMingXiaoTentacle::TentacleHideReadyTimer, EElysiumField::Save);  // +0x6680 time
 		D.TimeField(TEXT("m_flHideReadyTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flHideReadyTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_bIgnoreCollision"),
 			&FElysiumNpcMingXiaoTentacle::bIgnoreCollisionSpecies, EElysiumField::Save);  // +0x6688 bool
 		ElysiumAddClassField(D, TEXT("m_vecScatterCenter"),
@@ -2076,11 +2248,12 @@ namespace ElysiumNpcKernelBindings
 	void AddPedestrianFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("level_reset_type"),
-			&FElysiumNpcPedestrian::PedestrianLevelResetType, EElysiumField::Save);  // +0x667c m_eLevelResetType
+			&FElysiumNpcPedestrian::PedestrianLevelResetType,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x667c m_eLevelResetType
 	}
 
 	void AddPedestrianSaveFields(FElysiumClassDesc& D)
@@ -2117,6 +2290,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_fLastSplashTime"),
 			&FElysiumNpcSabbatLeader::SabbatLastSplashTime, EElysiumField::Save);  // +0x66c8 time
 		D.TimeField(TEXT("m_fLastSplashTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_fLastSplashTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_LastPlayerHealth"),
 			&FElysiumNpcSabbatLeader::SabbatLastPlayerHealth, EElysiumField::Save);  // +0x66cc int
 		ElysiumAddClassField(D, TEXT("m_bTrackPlayer"),
@@ -2140,20 +2314,25 @@ namespace ElysiumNpcKernelBindings
 	void AddScurryingFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("detection_distance"),
-			&FElysiumNpcScurrying::ScurryingDetectionDistanceUnits, EElysiumField::Save);  // +0x6690 m_flDetectionDistance
+			&FElysiumNpcScurrying::ScurryingDetectionDistanceUnits,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6690 m_flDetectionDistance
 		ElysiumAddClassField(D, TEXT("ignore_nosferatu"),
-			&FElysiumNpcScurrying::bScurryingIgnoreNosferatu, EElysiumField::Save);  // +0x6694 m_fIgnoreNosferatu
+			&FElysiumNpcScurrying::bScurryingIgnoreNosferatu,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6694 m_fIgnoreNosferatu
 		ElysiumAddClassField(D, TEXT("must_detect"), &FElysiumNpcScurrying::bScurryingMustDetect,
-			EElysiumField::Save);  // +0x6695 m_fMustDetect
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6695 m_fMustDetect
 		ElysiumAddClassField(D, TEXT("fright_distance"),
-			&FElysiumNpcScurrying::ScurryingFrightDistanceUnits, EElysiumField::Save);  // +0x6698 m_flFrightDistance
+			&FElysiumNpcScurrying::ScurryingFrightDistanceUnits,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6698 m_flFrightDistance
 		ElysiumAddClassField(D, TEXT("fright_duration"),
-			&FElysiumNpcScurrying::ScurryingFrightDurationSeconds, EElysiumField::Save);  // +0x669c m_flFrightDurationSeconds
+			&FElysiumNpcScurrying::ScurryingFrightDurationSeconds,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x669c m_flFrightDurationSeconds
 		D.TimeField(TEXT("fright_duration")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("fright_duration"), 15); // fieldtype_t time
 	}
 
 	void AddSheriffManSaveFields(FElysiumClassDesc& D)
@@ -2170,6 +2349,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_fLastTeleportTime"),
 			&FElysiumNpcSheriffMan::SheriffLastTeleportTime, EElysiumField::Save);  // +0x66e0 time
 		D.TimeField(TEXT("m_fLastTeleportTime")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_fLastTeleportTime"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_bTeleporting"),
 			&FElysiumNpcSheriffMan::bSheriffTeleporting, EElysiumField::Save);  // +0x66e4 bool
 		ElysiumAddClassField(D, TEXT("m_bDead"), &FElysiumNpcSheriffMan::bSheriffDead,
@@ -2203,10 +2383,12 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flIgnoreCollisionTimer"),
 			&FElysiumNpc::IgnoreCollisionUntil, EElysiumField::Save);  // +0x6458 time
 		D.TimeField(TEXT("m_flIgnoreCollisionTimer"), EElysiumTimePolicy::MaxFloat); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flIgnoreCollisionTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_hPickupTarget"), &FElysiumNpcTzimisce::PickupTarget,
 			EElysiumField::Save);  // +0x6670 ehandle
 		ElysiumAddClassField(D, TEXT("m_vecPickupTargetPos"),
 			&FElysiumNpcTzimisce::PickupTargetPos, EElysiumField::Save);  // +0x6674 position
+		D.RetailType(TEXT("m_vecPickupTargetPos"), 14); // fieldtype_t position
 		ElysiumAddClassField(D, TEXT("m_iPickupTargetGrabBone"),
 			&FElysiumNpcTzimisce::TzimiscePickupGrabBone, EElysiumField::Save);  // +0x6680 int
 		ElysiumAddClassField(D, TEXT("m_hPhysicsAnimlink"),
@@ -2220,12 +2402,15 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flBodyTimer"), &FElysiumNpcTzimisce::TzimisceBodyTimer,
 			EElysiumField::Save);  // +0x66a4 time
 		D.TimeField(TEXT("m_flBodyTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flBodyTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flPounceCheckTimer"),
 			&FElysiumNpcTzimisce::TzimiscePounceCheckTimer, EElysiumField::Save);  // +0x66ac time
 		D.TimeField(TEXT("m_flPounceCheckTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flPounceCheckTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_flShunnedBodyTimer"),
 			&FElysiumNpcTzimisce::TzimisceShunnedBodyTimer, EElysiumField::Save);  // +0x66b0 time
 		D.TimeField(TEXT("m_flShunnedBodyTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flShunnedBodyTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_bDidFakeThrow"),
 			&FElysiumNpcTzimisce::bTzimisceDidFakeThrow, EElysiumField::Save);  // +0x66b4 bool
 		ElysiumAddClassField(D, TEXT("m_iShunnedFindBody"),
@@ -2248,6 +2433,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flSlowedExpire"),
 			&FElysiumNpcTzimisceHeadClaw::HeadClawSlowedExpire, EElysiumField::Save);  // +0x6678 time
 		D.TimeField(TEXT("m_flSlowedExpire")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flSlowedExpire"), 15); // fieldtype_t time
 	}
 
 	void AddTzimisceRunnerSaveFields(FElysiumClassDesc& D)
@@ -2266,11 +2452,13 @@ namespace ElysiumNpcKernelBindings
 	void AddVampireBossFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("MorphModel"),
-			&FElysiumNpcVampireBoss::VampireBossMorphModelName, EElysiumField::Save);  // +0x667c m_MorphModelName
+			&FElysiumNpcVampireBoss::VampireBossMorphModelName,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x667c m_MorphModelName
+		D.RetailType(TEXT("MorphModel"), 16); // fieldtype_t modelname
 	}
 
 	void AddVampireBossSaveFields(FElysiumClassDesc& D)
@@ -2330,19 +2518,25 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save);  // +0x6680 int
 		ElysiumAddClassField(D, TEXT("m_pTeleportHint"), &FElysiumNpcWerewolf::TeleportHintNode,
 			EElysiumField::Save);  // +0x66b0 classptr
+		D.RetailType(TEXT("m_pTeleportHint"), 11); // fieldtype_t classptr
 		ElysiumAddClassField(D, TEXT("m_pLastUsedTeleportHint"),
 			&FElysiumNpcWerewolf::WerewolfLastUsedTeleportHint, EElysiumField::Save);  // +0x66b4 classptr
+		D.RetailType(TEXT("m_pLastUsedTeleportHint"), 11); // fieldtype_t classptr
 		ElysiumAddClassField(D, TEXT("m_pMoveHint"), &FElysiumNpcWerewolf::MoveHintNode,
 			EElysiumField::Save);  // +0x66bc classptr
+		D.RetailType(TEXT("m_pMoveHint"), 11); // fieldtype_t classptr
 		ElysiumAddClassField(D, TEXT("m_pLastUsedMoveHint"),
 			&FElysiumNpcWerewolf::WerewolfLastUsedMoveHint, EElysiumField::Save);  // +0x66c0 classptr
+		D.RetailType(TEXT("m_pLastUsedMoveHint"), 11); // fieldtype_t classptr
 		ElysiumAddClassField(D, TEXT("m_pBreakHint"), &FElysiumNpcWerewolf::WerewolfBreakHintNode,
 			EElysiumField::Save);  // +0x66c4 classptr
+		D.RetailType(TEXT("m_pBreakHint"), 11); // fieldtype_t classptr
 		ElysiumAddClassField(D, TEXT("m_bRandomHint"), &FElysiumNpcWerewolf::bRandomHint,
 			EElysiumField::Save);  // +0x66c8 bool
 		ElysiumAddClassField(D, TEXT("m_flTimeTeleportedOut"),
 			&FElysiumNpcWerewolf::WerewolfTimeTeleportedOut, EElysiumField::Save);  // +0x66f0 time
 		D.TimeField(TEXT("m_flTimeTeleportedOut")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flTimeTeleportedOut"), 15); // fieldtype_t time
 	}
 
 	void AddWolfMorphSaveFields(FElysiumClassDesc& D)
@@ -2361,15 +2555,15 @@ namespace ElysiumNpcKernelBindings
 	void AddZombieFields(FElysiumClassDesc& D)
 	{
 		// One row per replay field row the class's member map binds, sorted by external.
-		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->
-		// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn
-		// keyvalues regardless of Key.
+		// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->
+		// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->
+		// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.
 		ElysiumAddClassField(D, TEXT("should_ragdoll"), &FElysiumNpcZombie::bZombieShouldRagdoll,
-			EElysiumField::Save);  // +0x6675 m_bShouldRagdoll
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6675 m_bShouldRagdoll
 		ElysiumAddClassField(D, TEXT("ZombieAIType"), &FElysiumNpc::ZombieAiType,
-			EElysiumField::Save);  // +0x6678 m_iZombieAIType
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x6678 m_iZombieAIType
 		ElysiumAddClassField(D, TEXT("remove_distance"), &FElysiumNpcZombie::ZombieRemoveDistUnits,
-			EElysiumField::Save);  // +0x66dc m_flRemoveDist
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x66dc m_flRemoveDist
 	}
 
 	void AddZombieSaveFields(FElysiumClassDesc& D)
@@ -2386,6 +2580,7 @@ namespace ElysiumNpcKernelBindings
 		ElysiumAddClassField(D, TEXT("m_flGrappleReadyTimer"),
 			&FElysiumNpcZombie::ZombieGrappleReadyTimer, EElysiumField::Save);  // +0x66d8 time
 		D.TimeField(TEXT("m_flGrappleReadyTimer")); // 0x101a0a80 TIME metadata
+		D.RetailType(TEXT("m_flGrappleReadyTimer"), 15); // fieldtype_t time
 		ElysiumAddClassField(D, TEXT("m_bShouldGib"), &FElysiumNpcZombie::bZombieShouldGib,
 			EElysiumField::Save);  // +0x66e0 bool
 	}
@@ -3104,7 +3299,7 @@ namespace ElysiumNpcKernelBindings
 		switch (Class)
 		{
 			case EClass::BaseEntity:
-				return {27, 11, 2, 10, 1};
+				return {29, 9, 2, 10, 1};
 			case EClass::Toggle:
 				return {0, 9, 2, 4, 0};
 			case EClass::Animating:

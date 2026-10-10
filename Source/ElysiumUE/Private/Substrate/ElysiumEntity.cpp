@@ -35,42 +35,17 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 	// hoisted bool still lands on the word the datamap row binds.
 	bStartHidden = InDef.bStartHidden;
 
-	// Apply the raw keyvalues as `CBaseEntity::KeyValue` 0x1009e430 (slot 110) does for each map key:
-	// the key is truncated at `#` (`FUN_10431f30`), the literal arms run first, and only an
-	// unmatched key walks the datamap chain. Of the literal arms, `mins` / `maxs` are the base's own
-	// (below); `rendercolor` / `renderamt` / `disableshadows` / `disablereceiveshadows` / `angle` /
-	// `angles` / `origin` are classified by `FElysiumAnimating::ClassifyKeyValue` and consumed where
-	// their words live. The datamap walk is the class-chain field table (`Reg.FindField`): only
-	// mapped base/leaf fields are copied onto members; unmapped keys stay on the def (property-bag
-	// reads land with the script host later). Spawn-time application ignores bKeyable — the
-	// write-gate is for runtime Python/I/O, not the map's own keyvalues.
-	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
-	for (const TPair<FString, FString>& KV : InDef.Keys)
-	{
-		int32 Hash = INDEX_NONE;
-		const FString Key = KV.Key.FindChar(TEXT('#'), Hash) ? KV.Key.Left(Hash) : KV.Key;
-		if (Key.Equals(TEXT("mins"), ESearchCase::IgnoreCase))
-		{
-			// `1009e5c2-1009e5d2`: `FUN_101d03e0(value, &v)` (the "x y z" parse), `max = cp.vtable[2]()`
-			// (`CCollisionProperty::vfunc2` 0x100dc830 = `&m_vecMaxs`), `FUN_100dc770(cp, v, max)`; true.
-			SetCollisionBounds(ParseRetailVector(KV.Value), CollMaxs);
-			continue;
-		}
-		if (Key.Equals(TEXT("maxs"), ESearchCase::IgnoreCase))
-		{
-			// `1009e61d-1009e62a`: `min = cp.vtable[1]()` (`vfunc1` 0x100dc810 = `&m_vecMins`),
-			// `FUN_100dc770(cp, min, v)`; true. No shipped map authors either key (0 of 71,096 entities).
-			SetCollisionBounds(CollMins, ParseRetailVector(KV.Value));
-			continue;
-		}
-		if (const FElysiumFieldAccessor* Acc = Reg.FindField(InClass, FName(*Key)))
-		{
-			if (Acc->Set)
-			{
-				Acc->Set(*this, FElysiumVariant::String(KV.Value));
-			}
-		}
-	}
+	// `CreateEntityByName`'s next call: slot 107 `ParseMapData` 0x1009e280 (`ElysiumEntityKeyValue.cpp`)
+	// -- one virtual slot-110 `KeyValue` 0x1009e430 per map pair, in authored order: the `#`
+	// truncation, the nine literal arms (`rendercolor`, `renderamt`, `disableshadows`, `mins`, `maxs`,
+	// `disablereceiveshadows`, `angle`, `angles`, `origin`), then the datamap walk `FUN_101a5a80` over
+	// the class descriptor chain (the KEY gate, the row's typed parse, the output rows' custom op).
+	// A class override of slot 110 (`FElysiumAnimating::KeyValue`, retail's lip / distance body) sees
+	// every pair first, as retail's does. Spawn-time application ignores `bKeyable`: the write-gate is
+	// for runtime Python / I/O, not the map's own keyvalues. Keys no row claims stay on the def.
+	FElysiumEntityMapData MapData;
+	MapData.Keys = &InDef.Keys;
+	ParseMapData(&MapData);
 
 	// Seed the per-output `times` counters from the def (the world counts them down as it fires).
 	OutputTimesRemaining.Reserve(InDef.Outputs.Num());
@@ -92,19 +67,11 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 
 FVector FElysiumEntity::ParseRetailVector(const FString& Text)
 {
-	// `FUN_101d03e0` (`UTIL_StringToVector` -> `UTIL_StringToFloatArray(v, 3, text)`): for each of the
-	// three slots, skip the separators, `atof`, advance past the number; a string that runs out leaves
-	// the remaining slots 0 (the output is zeroed first). The map's "x y z" spelling.
-	float V[3] = { 0.f, 0.f, 0.f };
-	const TCHAR* P = *Text;
-	for (int32 I = 0; I < 3; ++I)
-	{
-		while (*P != 0 && (FChar::IsWhitespace(*P) || *P == TEXT(','))) { ++P; }
-		if (*P == 0) { break; }
-		V[I] = FCString::Atof(P);
-		while (*P != 0 && !FChar::IsWhitespace(*P) && *P != TEXT(',')) { ++P; }
-	}
-	return FVector(V[0], V[1], V[2]);
+	// `FUN_101d03e0` 0x101d03e0 (`UTIL_StringToVector`): `FUN_101d0310(out, 3, text)` through the thunk
+	// 0x1000ce14 -- `ElysiumParseVec3`, the retail float-list parser with count 3 (`walks/L0-r017.md`):
+	// whitespace separators only (a comma ends `atof` and the next token is the rest), a short string
+	// keeps the parsed components and zero-fills the rest, text past 127 characters is cut.
+	return ElysiumParseVec3(Text);
 }
 
 void FElysiumEntity::ConstructBaseEntity()
@@ -908,6 +875,29 @@ void FElysiumEntity::InvalidateTransform(uint32 SelfBits, uint32 ChildBits)
 	}
 }
 
+void FElysiumEntity::MarkPartitionTreeDirty()
+{
+	// `FUN_100b52a0` 0x100b52a0: `thunk_FUN_100ddd20(this + 0x270)` -- `FUN_100ddd20` on this entity's
+	// collision property (`MarkPartitionHandleDirty`: `IndexOfEdict` gate, EFL 0x8000, the dirty-list
+	// append) -- then for the first move child (`+0x260`) and each peer after it (`+0x264`), the same
+	// body recursively. The guard bounds a malformed cycle retail would spin on, as `InvalidateTransform`'s.
+	MarkPartitionHandleDirty();
+	if (World == nullptr)
+	{
+		return;
+	}
+	FElysiumEntity* Child = World->Resolve(MoveChild);
+	int32 Guard = 0;
+	while (Child != nullptr && Guard++ < 8192)
+	{
+		if (Child != this)
+		{
+			Child->MarkPartitionTreeDirty();
+		}
+		Child = World->Resolve(Child->MovePeer);
+	}
+}
+
 void FElysiumEntity::SetAimEnt(FElysiumEntity* Aim)
 {
 	// `CBaseEntity::SetAimEnt` `0x1009ee80` (scope-traced): `m_hAimEnt` <- the entity's own handle
@@ -957,6 +947,127 @@ void FElysiumEntity::ComputeAbsolutePose(FVector& OutOrigin, FVector& OutAngles)
 		Store3x4(Q, World4);
 		MatrixAngles(Q, A);
 		OutAngles = FVector(A[0], A[1], A[2]);
+	}
+}
+
+void FElysiumEntity::SetAbsOrigin(FVector& NewOrigin)
+{
+	using namespace ElysiumRetailMatrix;
+	// `CBaseEntity::SetAbsOrigin` 0x100b2300, slot 216 (`walks/L0-r017.md`). The scope frame
+	// `"CBaseEntity::SetAbsOrigin"` (0x10558c1c) writes no game state. Then, in order: slot 98
+	// (`+0x188`, `CalcAbsolutePosition`); `FUN_100b5340(this, 0x10800, 0)` (this entity and every move
+	// descendant get EFL 0x800 | 0x10000); `FUN_100b52a0` (`MarkPartitionTreeDirty`: `FUN_100ddd20` on
+	// this entity's collision property and on every move descendant -- EFL 0x8000 and the dirty-list
+	// append when `IndexOfEdict` is non-zero, r018); `m_iEFlags &= ~0x800`; `m_vecAbsOrigin` (+0x404) := v;
+	// `FUN_10138760(v, 3, m_rgflCoordinateFrame)` (the frame's translation column -- this port keeps no
+	// cached frame); then the LOCAL word: no valid move parent -> local := v, else `VectorITransform(v,
+	// GetParentToWorldTransform(), local)` (`FUN_10138130`: `R^T (v - t)` of the parent's frame); a
+	// changed-only store of `m_vecOrigin` (+0x41c) with `+0x1b1 = 1`.
+	CalcAbsolutePosition();                                                      // 100b2353 slot 98
+	InvalidateTransform(0x10800u, 0u);                                           // 100b2362 -> 0x100b5340
+	MarkPartitionTreeDirty();                                                    // 100b236a -> 0x100b52a0
+	EFlags &= ~0x800u;                                                           // 100b2373
+	const FVector Abs = NewOrigin;
+	FElysiumEntity* P = World != nullptr ? World->Resolve(MoveParent) : nullptr;
+	FVector Local = Abs;                                                         // 100b23f1: no parent -> the value itself
+	if (P != nullptr)
+	{
+		const FVector ParentAbsAngles = P->GetAbsAngles();
+		const FVector ParentAbsOrigin = P->GetAbsOrigin();
+		float M[16], ParentSrc[3], AbsSrc[3], O[3];
+		float ParentAng[3] = { static_cast<float>(ParentAbsAngles.X), static_cast<float>(ParentAbsAngles.Y),
+			static_cast<float>(ParentAbsAngles.Z) };
+		ToSourceInches(ParentAbsOrigin, ParentSrc);
+		AngleMatrix4(M, ParentSrc, ParentAng);                                   // GetParentToWorldTransform, attachment 0
+		ToSourceInches(Abs, AbsSrc);
+		InverseTransformPoint(M, AbsSrc, O);                                     // 100b23e2 -> 0x10138130
+		Local = FromSourceInches(O[0], O[1], O[2]);
+	}
+	const FVector OldLocal = LocalOriginWord();
+	const bool bLocalChanged = Local.X != OldLocal.X || Local.Y != OldLocal.Y || Local.Z != OldLocal.Z;   // 100b2405-100b2423
+	SetRuntimeOrigin(Abs);                                                       // 100b2389-100b2395 m_vecAbsOrigin (the body follows)
+	if (bParentLocalPose)
+	{
+		if (bLocalChanged)
+		{
+			LocalOrigin = Local;                                                 // 100b2425-100b2431 m_vecOrigin
+		}
+	}
+	if (bLocalChanged)
+	{
+		bNetworkChanged = true;                                                  // 100b2435 +0x1b1
+	}
+	if (World != nullptr)
+	{
+		World->EmitRetailSite(*this, TEXT("set_abs_origin"), TEXT("CBaseEntity::SetAbsOrigin"), 0x100b2300u, TEXT("write"),
+			FString::Printf(TEXT("m_vecAbsOrigin=%s m_vecOrigin=%s changed=%d parent=%s m_iEFlags=0x%x"),
+				*RetailVectorText(FVector(Abs.X / ElysiumMove::U, -Abs.Y / ElysiumMove::U, Abs.Z / ElysiumMove::U)),
+				*RetailVectorText(FVector(Local.X / ElysiumMove::U, -Local.Y / ElysiumMove::U, Local.Z / ElysiumMove::U)),
+				bLocalChanged ? 1 : 0, P != nullptr ? *P->Handle.ToString() : TEXT("none"), EFlagsWord()));
+	}
+}
+
+void FElysiumEntity::SetAbsAngles(FRotator& NewAngles)
+{
+	using namespace ElysiumRetailMatrix;
+	// `CBaseEntity::SetAbsAngles` 0x100b2510, slot 218 (`walks/L0-r017.md`). The `FRotator` carries the
+	// retail QAngle verbatim (Pitch = x, Yaw = y, Roll = z, Source degrees), as slot 64's does. The
+	// scope frame `"CBaseEntity::SetAbsAngles"` (0x10558c3c) writes no game state. Then: slot 98;
+	// `FUN_100b5340(this, 0x800, 0x3000)` (this entity EFL 0x800, every descendant 0x3800);
+	// `m_iEFlags &= ~0x800`; `m_angAbsRotation` (+0x410) := a; `AngleMatrix(a, m_rgflCoordinateFrame)`
+	// (`FUN_10139b90`) and its translation (`FUN_10138760`); then the LOCAL word: no valid move parent
+	// -> local := a; else the parent's frame (recomputed through its slot 98 when its EFL 0x800 is set,
+	// 100b2600), `MatrixInvert` (`FUN_10138630`), `ConcatTransforms(inv, frame)` (`FUN_10138df0`) and
+	// `MatrixAngles` (`FUN_10137ed0`) -- the composition `SetParent` 0x100a0670 step 6g also runs; a
+	// changed-only store of `m_angRotation` (+0x428) with `+0x1b1 = 1`.
+	CalcAbsolutePosition();                                                      // 100b2563 slot 98
+	InvalidateTransform(0x800u, 0x3000u);                                        // 100b2572 -> 0x100b5340
+	EFlags &= ~0x800u;                                                           // 100b2581
+	const FVector Abs(NewAngles.Pitch, NewAngles.Yaw, NewAngles.Roll);
+	FElysiumEntity* P = World != nullptr ? World->Resolve(MoveParent) : nullptr;
+	FVector Local = Abs;                                                         // 100b2621: no parent -> the value itself
+	if (P != nullptr)
+	{
+		if ((P->EFlags & 0x800u) != 0)
+		{
+			P->CalcAbsolutePosition();                                           // 100b2600 parent slot 98
+		}
+		const FVector ParentAbsAngles = P->GetAbsAngles();
+		const FVector ParentAbsOrigin = P->GetAbsOrigin();
+		float M[16], T[16], F[16], R[16], ParentSrc[3], AbsSrc[3], Q[12], A[3];
+		float ParentAng[3] = { static_cast<float>(ParentAbsAngles.X), static_cast<float>(ParentAbsAngles.Y),
+			static_cast<float>(ParentAbsAngles.Z) };
+		float AbsAng[3] = { static_cast<float>(Abs.X), static_cast<float>(Abs.Y), static_cast<float>(Abs.Z) };
+		ToSourceInches(ParentAbsOrigin, ParentSrc);
+		ToSourceInches(Origin, AbsSrc);
+		AngleMatrix4(M, ParentSrc, ParentAng);                                   // the parent's frame
+		AngleMatrix4(F, AbsSrc, AbsAng);                                         // 100b258e-100b25b5 this frame
+		Transpose4(M, T);                                                        // 100b2655 MatrixInvert (rotation part)
+		Concat4(T, F, R);                                                        // 100b2666 ConcatTransforms
+		Store3x4(Q, R);
+		MatrixAngles(Q, A);                                                      // 100b267a MatrixAngles
+		Local = FVector(A[0], A[1], A[2]);
+	}
+	const FVector OldLocal = LocalAnglesWord();
+	const bool bLocalChanged = Local.X != OldLocal.X || Local.Y != OldLocal.Y || Local.Z != OldLocal.Z;   // 100b2687-100b26a5
+	SetRuntimeAngles(Abs);                                                       // 100b2597-100b25a3 m_angAbsRotation (the body follows)
+	if (bParentLocalPose)
+	{
+		if (bLocalChanged)
+		{
+			LocalAngles = Local;                                                 // 100b26a7-100b26b3 m_angRotation
+		}
+	}
+	if (bLocalChanged)
+	{
+		bNetworkChanged = true;                                                  // 100b26b7 +0x1b1
+	}
+	if (World != nullptr)
+	{
+		World->EmitRetailSite(*this, TEXT("set_abs_angles"), TEXT("CBaseEntity::SetAbsAngles"), 0x100b2510u, TEXT("write"),
+			FString::Printf(TEXT("m_angAbsRotation=%s m_angRotation=%s changed=%d parent=%s m_iEFlags=0x%x"),
+				*RetailVectorText(Abs), *RetailVectorText(Local), bLocalChanged ? 1 : 0,
+				P != nullptr ? *P->Handle.ToString() : TEXT("none"), EFlagsWord()));
 	}
 }
 

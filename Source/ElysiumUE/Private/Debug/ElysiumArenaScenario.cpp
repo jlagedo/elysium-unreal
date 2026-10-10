@@ -2028,6 +2028,10 @@ const TArray<FString>& EntityCallAllowlist()
 		// `0x1011aaf0` calls it once per level activation (the port's restore barrier runs the pass
 		// again): the second pass a record models to re-resolve `CAmbientGeneric`'s source handle.
 		TEXT("Activate"),
+		// L0.entity_core.datamap-keyvalues: slot 121 `CBaseEntity::ReadKeyField` 0x100acab0 on one live
+		// entity, the read `ent_dump` (`CC_Ent_Dump_Sub` 0x100af340) makes for every datamap row name;
+		// `["<field name>"]` (`walks/L0-r017.md`).
+		TEXT("ReadKeyField"),
 		// L0.audio.sound-folder-index: the VSound folder index's two owner methods (`Audio/
 		// ElysiumSoundFolderIndex.h`) on a staged `sound_folder` fixture -- `AddRange` `0x101f4330`,
 		// which runs `FUN_101f3ba0` over the tree, and `Find` `0x101f42d0`, which runs `FUN_101f3b00`:

@@ -1466,8 +1466,9 @@ type-10000 hint**: `CAI_Hint::Spawn 0x102d0b60` has no type-10000 branch that re
 their interest — the common case is not a chance at all. No shipped row omits the key, so the
 absent-key default of `+0x46c` is **`0`** (closed 2026-09-21): entities are allocated through the
 engine's slot 45 (`0x201092d0`), a `_calloc(1, size)`, neither the `CNodeEnt` ctor `0x102d7cd0` nor
-the `CAI_Hint` ctor `0x102d2e30` writes `+0x468` / `+0x46c`, and `ReadKeyField 0x100acab0` writes
-only a key that is present — so an absent `ip_percent` (`m_iIPPercent`, `FIELD_INTEGER`) is 0 and
+the `CAI_Hint` ctor `0x102d2e30` writes `+0x468` / `+0x46c`, and the datamap walker `FUN_101a5a80`
+`0x101a5a80` (under `CBaseEntity::KeyValue 0x1009e430`; `ReadKeyField 0x100acab0` is a READ, corrected
+L0-r017) writes only a key that is present — so an absent `ip_percent` (`m_iIPPercent`, `FIELD_INTEGER`) is 0 and
 never wins the strict `<`, and an absent `target_name` (`m_strTargetName`) is the null string.
 
 **`target_name`**: 60 rows, 35 distinct names, of which **53 resolve to an `intersting_place` on the

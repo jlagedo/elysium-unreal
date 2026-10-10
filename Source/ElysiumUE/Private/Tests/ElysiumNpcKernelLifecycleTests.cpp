@@ -534,10 +534,21 @@ bool FElysiumNpcKernelLifecycleKeyValueTest::RunTest(const FString&)
 	TestEqual(TEXT("angle"), Arm(TEXT("angle")), EArm::Angle);
 	TestEqual(TEXT("angles is not angle"), Arm(TEXT("angles")), EArm::Angles);
 	TestEqual(TEXT("origin"), Arm(TEXT("origin")), EArm::Origin);
-	// Retail's comparisons are `__strcmpi`.
-	TestEqual(TEXT("the compares are case-insensitive"), Arm(TEXT("RenderAmt")), EArm::RenderAmt);
+	// Retail's comparisons are `__strcmpi`, but the `r` guard before the first two is a CASE-SENSITIVE
+	// byte compare (`CMP byte [EBP],0x72`, 1009e4b6; `walks/L0-r017.md`): `RenderAmt` skips both arms
+	// and reaches the datamap walk, where no row takes it; `Mins` still matches its `__strcmpi`.
+	TestEqual(TEXT("RenderAmt skips the r-guarded arms"), Arm(TEXT("RenderAmt")), EArm::DataMap);
+	TestEqual(TEXT("RenderColor skips them too (row 19 takes it in the walk)"), Arm(TEXT("RenderColor")), EArm::DataMap);
+	TestEqual(TEXT("the other compares are case-insensitive"), Arm(TEXT("Mins")), EArm::Mins);
 	// Anything else walks the datamap chain, which is this runtime's class-chain field table.
 	TestEqual(TEXT("targetname falls to the datamap walk"), Arm(TEXT("targetname")), EArm::DataMap);
+
+	// The `angle` rewrite's negative branch: `__ftol(v) == -1` copies `"-90 0 0"` (0x10555578), any
+	// other negative `"90 0 0"` (0x10555570); the compare is on the unrounded double.
+	TestEqual(TEXT("angle -1 is the up literal"), FElysiumNpcBase::RewriteAngleKey(-1.f, FVector(11.0, 22.0, 33.0)), FString(TEXT("-90 0 0")));
+	TestEqual(TEXT("angle -1.5 truncates to -1"), FElysiumNpcBase::RewriteAngleKey(-1.5f, FVector::ZeroVector), FString(TEXT("-90 0 0")));
+	TestEqual(TEXT("angle -2 is the down literal"), FElysiumNpcBase::RewriteAngleKey(-2.f, FVector::ZeroVector), FString(TEXT("90 0 0")));
+	TestEqual(TEXT("angle -0.5 truncates to 0, the down literal"), FElysiumNpcBase::RewriteAngleKey(-0.5f, FVector::ZeroVector), FString(TEXT("90 0 0")));
 
 	// The `angle` rewrite: the YAW alone is replaced, pitch and roll come from the live angles.
 	const FString Rewritten = FElysiumNpcBase::RewriteAngleKey(90.f, FVector(11.0, 22.0, 33.0));
@@ -969,10 +980,13 @@ bool FElysiumNpcKernelLifecycleParseMapDataTest::RunTest(const FString&)
 		return false;
 	}
 	// Slot 107 is the maker's OVERRIDE (story 5 fold A4 ended the C4263 hide), dispatched through the
-	// entity's own declaration. This port's `CEntityMapData` is the keyvalue text.
+	// entity's own declaration. This port's `CEntityMapData` is `FElysiumEntityMapData`: the raw text
+	// the maker stashes and the parsed pairs the base body `0x1009e280` walks (none here).
 	const FString MapText = TEXT("\"npctype\" \"npc_VCop\"}");
+	FElysiumEntityMapData MapData;
+	MapData.Text = &MapText;
 	FElysiumEntity& AsEntity = *Maker;
-	AsEntity.ParseMapData(const_cast<FString*>(&MapText));
+	AsEntity.ParseMapData(&MapData);
 	TestEqual(TEXT("slot 107 latches the extracted block"), Maker->RefMapDataBuffer,
 		FString(TEXT("\"npctype\" \"npc_VCop\"}")));
 	// And `m_sRefMapDataBuffer` is a SAVE row (`+0x76cc`), generated on the `CNPCMaker` descriptor.

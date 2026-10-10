@@ -53,9 +53,10 @@ Everywhere, the compiler is the second check — a wrong member name fails
 ``uv run elysium build``.
 
 Flag mapping, fixed: ``SAVE`` -> ``EElysiumField::Save``; ``INPUT`` ->
-``EElysiumField::Key``; neither -> ``EElysiumField::None``.  ``KEY`` alone
-adds no flag, and that is retail: ``ReadKeyField``'s gate is ``KEY|OUTPUT``
-(a read), ``AcceptInput``'s field write needs ``INPUT`` *and* ``KEY``
+``EElysiumField::Key``; ``KEY`` -> ``EElysiumField::MapKey`` (L0-r017: the
+datamap walker 0x101a5a80's candidate gate and half of ``ReadKeyField``'s
+``KEY|OUTPUT`` read gate); none -> ``EElysiumField::None``.
+``AcceptInput``'s field write needs ``INPUT`` *and* ``KEY``
 (``0x100abc90``), and ``Entity.__setattr__``'s gate is ``INPUT`` alone
 (``docs/vtmb/python_bridge.md``).  The port's ``bKeyable`` is that write gate.
 
@@ -199,6 +200,8 @@ CHAIN_MEMBER_MAPS: dict[str, dict[int, tuple[str, str]]] = {
         0x0128: ("FElysiumEntity", "DialogName"),
         0x0164: ("FElysiumEntity", "AuthoredSpeed"),
         0x017C: ("FElysiumEntity", "NextThink"),
+        0x019C: ("FElysiumEntity", "EffectsWord"),
+        0x01A0: ("FElysiumEntity", "RenderColor"),
         0x0204: ("FElysiumEntity", "SpawnFlags"),
         0x0208: ("FElysiumEntity", "MaxHealth"),
         0x020C: ("FElysiumEntity", "Target"),
@@ -271,11 +274,6 @@ CHAIN_UNBOUND: dict[tuple[str, int], str] = {
     ("CBaseEntity", 0x0190):
         "`m_vecMoveDir` is the mover's authored direction, which this port keeps on "
         "`FElysiumMoverBase`; no shipped map authors it on a character",
-    ("CBaseEntity", 0x019C):
-        "a render word: `m_fEffects` is Source's EF_ bit field, and Unreal renders",
-    ("CBaseEntity", 0x01A0):
-        "a render word, and a `color32`: the binding API marshals no colour type because nothing "
-        "in the substrate reads one -- Unreal renders",
     ("CBaseEntity", 0x01A4):
         "`m_nModelIndex` is the engine's precache slot for `model`, an index into Source's own "
         "model table; this port resolves a model by name",
@@ -1028,7 +1026,30 @@ def flags_of(row: Row) -> str:
         parts.append("EElysiumField::Save")
     if "INPUT" in row.flags:
         parts.append("EElysiumField::Key")
+    if "KEY" in row.flags:
+        # Retail FTYPEDESC_KEY 0x4: the datamap walker `FUN_101a5a80`'s candidate gate and half of
+        # `ReadKeyField`'s `& 0x14` (L0-r017). A SAVE-only row (no external) never carries it.
+        parts.append("EElysiumField::MapKey")
     return " | ".join(parts) if parts else "EElysiumField::None"
+
+
+# The replay type names whose retail `fieldtype_t` code the port member's marshalling category does
+# not imply (`FElysiumFieldAccessor::RetailFieldType`): the walker 0x101a5a80 switches on the ROW's
+# code and `FUN_100d0390` keeps it in the read variant, so each such row states it (L0-r017).
+RETAIL_TYPE_CODES = {
+    "short": 6, "char": 7, "color32": 8, "custom": 10, "classptr": 11, "position": 14,
+    "time": 15, "modelname": 16, "soundname": 17,
+}
+
+
+def _retail_type_annotation(row: Row) -> list[str]:
+    code = RETAIL_TYPE_CODES.get(row.type)
+    if code is None:
+        return []
+    name = row.name if row.kind == "save" else row.external
+    if row.element is not None:
+        name += f"[{row.element}]"
+    return [f"\t\tD.RetailType({_literal(name)}, {code}); // fieldtype_t {row.type}"]
 
 
 def _header(model: Model) -> list[str]:
@@ -1160,9 +1181,9 @@ def _render_add(model_class: ClassModel) -> list[str]:
         f"\tvoid {_add_function_name(model_class)}(FElysiumClassDesc& D)",
         "\t{",
         "\t\t// One row per replay field row the class's member map binds, sorted by external.",
-        "\t\t// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, neither ->",
-        "\t\t// EElysiumField::None; KEY alone adds no flag, because the registry applies spawn",
-        "\t\t// keyvalues regardless of Key.",
+        "\t\t// Flags: SAVE -> EElysiumField::Save, INPUT -> EElysiumField::Key, KEY ->",
+        "\t\t// EElysiumField::MapKey (the walker 0x101a5a80 / ReadKeyField 0x100acab0 gate), none ->",
+        "\t\t// EElysiumField::None. A row whose fieldtype_t the member does not imply states it.",
     ]
     out += _array_asserts(model_class, model_class.bound)
     for row in model_class.bound:
@@ -1170,6 +1191,7 @@ def _render_add(model_class: ClassModel) -> list[str]:
         lines[-1] += f"  // +0x{row.offset:x} {row.name}"
         out += lines
         out += _time_annotation(row)
+        out += _retail_type_annotation(row)
     for row in model_class.unbound:
         out += _comment(f"UNBOUND +0x{row.offset:x} {row.name} \"{row.external}\" "
                         f"— {row.reason}", "\t\t")
@@ -1197,6 +1219,7 @@ def _render_save(model_class: ClassModel) -> list[str]:
         lines[-1] += f"  // +0x{row.offset:x}{index} {row.type}"
         out += lines
         out += _time_annotation(row)
+        out += _retail_type_annotation(row)
     for row in model_class.save_unbound:
         out += _comment(f"NOT SAVED +0x{row.offset:x} {row.name} ({row.type}) — {row.reason}",
                         "\t\t")

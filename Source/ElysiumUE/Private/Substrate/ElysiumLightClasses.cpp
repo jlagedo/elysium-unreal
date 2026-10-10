@@ -60,40 +60,38 @@ public:
 	FString Pattern;          // m_iszPattern +0x454, `pattern` (row 3); see FirstByte for the NULL word
 	float FadeTime = 0.f;     // m_flFadeTime +0x45c, `fade_time` (row 4): seconds per FadeThink step
 
-	// `CLight::vfunc110` `0x101303c0` arm 1 (`strcmpi(key, "pitch")`, `0x101303d1`), the slot-110
-	// KeyValue override. Retail runs it per key from `CBaseEntity::ParseMapData` `0x1009e280` in the
-	// lump's key order; the port's key pass is `Construct`, which applies the class datamap rows in the
-	// def's key order, so this row runs there, in sequence with the base `angles` row. Every light of
-	// sp_tutorial_1 (211) and sm_hub_1 (375) that authors `pitch` authors `angles` before it, so the
-	// pitch is what stands.
-	//   a. `GetAngles` (slot 221 `0x100b3110`, the LOCAL word +0x428) -> {X, Y, Z};
+	// `CLight::vfunc110` `0x101303c0`, the slot-110 KeyValue override: `CBaseEntity::ParseMapData`
+	// `0x1009e280` runs it once per map pair, in the lump's key order (`ElysiumEntityKeyValue.cpp`).
+	// Arm 1: `__strcmpi(key, "pitch")` (`0x101303d1`, `"pitch"` 0x1053f564) on the RAW key -- the `#`
+	// truncation belongs to the base body this arm runs before, so `pitch#2` is not `pitch` here. Then:
+	//   a. `GetAngles` (slot 221 `0x100b3110`, the LOCAL word +0x428) -> {X, Y, Z} on the stack;
 	//   b. `X = (float)atof(value)` (`0x10130400`); Y and Z keep theirs;
-	//   c. `SetAbsAngles` (slot 218 `0x100b2510`) writes m_angAbsRotation +0x410 and derives the local
-	//      word -- at the key pass no parent is linked yet (`MapEntity_ParseAllEntities` `0x10136650`
-	//      parents after every row is parsed), so the two words are one and `Angles` is both;
+	//   c. `SetAbsAngles` (slot 218 `0x100b2510`) with that triple: m_angAbsRotation +0x410 and the
+	//      derived local word -- at the key pass no parent is linked yet (`MapEntity_ParseAllEntities`
+	//      `0x10136650` parents after every row is parsed), so the two words are one;
 	//   d. return 1 (`MOV AL, 1` at `0x1013041c`).
-	// Any other key is the base `CBaseEntity::KeyValue` `0x1009e430`: the datamap rows, which the
-	// key pass applies on its own.
-	void KeyValuePitch(const FString& Value)
+	// Every light of sp_tutorial_1 (211) and sm_hub_1 (375) that authors `pitch` authors `angles`
+	// before it, so the pitch is what stands. Any other key tails into the base `CBaseEntity::KeyValue`
+	// `0x1009e430` (`0x10130420`): the literal arms, then the datamap walk -- `pitch` is no datamap row
+	// of CLight's, so a `pitch` the base saw would be a miss (`walks/L0-r017.md`).
+	virtual bool KeyValue(const TCHAR* Key, const TCHAR* Value) override
 	{
-		const FVector Local = LocalAnglesWord();
-		Angles = FVector(FCString::Atof(*Value), Local.Y, Local.Z);
-		// The key pass runs before the entity has a world to report through; `Spawn` reports the
-		// `light_keyvalue` return for it, the next thing retail does to the entity.
-		bPitchKeyed = true;
-		PitchKeyText = Value;
+		if (Key != nullptr && FCString::Stricmp(Key, TEXT("pitch")) == 0)        // 101303d1 __strcmpi
+		{
+			const TCHAR* Text = Value != nullptr ? Value : TEXT("");
+			const FVector Local = LocalAnglesWord();                             // 101303e0 slot 221 GetAngles
+			FRotator Keyed(FCString::Atof(Text), Local.Y, Local.Z);              // 10130400 atof -> X
+			SetAbsAngles(Keyed);                                                 // 10130410 slot 218
+			Site(TEXT("light_keyvalue"), TEXT("CLight::vfunc110"), 0x101303c0u, TEXT("return"),
+				FString::Printf(TEXT("key=pitch value=%s angles=[%g %g %g] result=1"), Text, Angles.X, Angles.Y, Angles.Z));
+			return true;                                                         // 1013041c MOV AL,1
+		}
+		return FElysiumEntity::KeyValue(Key, Value);                             // 10130420 the base body
 	}
 
 	// `CLight::Spawn` `0x10130460` (slot 103), the arms in retail's order.
 	virtual void Spawn() override
 	{
-		if (bPitchKeyed)
-		{
-			Site(TEXT("light_keyvalue"), TEXT("CLight::vfunc110"), 0x101303c0u, TEXT("return"),
-				FString::Printf(TEXT("key=pitch value=%s angles=[%g %g %g] result=1"), *PitchKeyText,
-					Angles.X, Angles.Y, Angles.Z));
-			bPitchKeyed = false;
-		}
 		// 1. `m_iName == 0` (`0x10130463`): `UTIL_RemoveImmediate(this)` (`0x1000e255` -> `0x101cd970`)
 		//    and return -- no floor, no publish, no pattern write. `hooks.tsv:297` lists the call as
 		//    the L0 -> L4 hook of this function; its body is the immediate removal (KILLME `+0x268`
@@ -388,8 +386,6 @@ private:
 	bool bFadeThinkInstalled = false;   // m_pfnThink +0x118 == CLightFadeThink (`0x10012215`)
 	int8 CurrentFade = 0;               // m_iCurrentFade +0x458, a signed byte
 	int8 TargetFade = 0;                // m_iTargetFade +0x459, a signed byte
-	bool bPitchKeyed = false;           // a `pitch` key landed at Construct; Spawn reports its site
-	FString PitchKeyText;
 };
 
 class FElysiumLightDynamic final : public FElysiumEntity
@@ -544,17 +540,18 @@ static void BuildLightDesc(FElysiumClassDesc& D)
 	// with `(activator, caller, USE_TOGGLE, 0)`.
 	D.Input(TEXT("Use"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
 		{ E.UseByType(A.Activator, A.Caller, ElysiumUseType::Toggle, 0.f); });
-	ElysiumAddClassField(D, TEXT("style"), &FElysiumLight::Style, EElysiumField::None);
-	ElysiumAddClassField(D, TEXT("pattern"), &FElysiumLight::Pattern, EElysiumField::None);
-	ElysiumAddClassField(D, TEXT("fade_time"), &FElysiumLight::FadeTime, EElysiumField::None);
-	// `pitch` is not a datamap row: it is `CLight::vfunc110` `0x101303c0`'s one own arm. It joins the
-	// class table so the key pass reaches it in the def's key order (see `KeyValuePitch`); not keyable
-	// at runtime, not saved (the angles are), its read the X it wrote.
+	ElysiumAddClassField(D, TEXT("style"), &FElysiumLight::Style, EElysiumField::MapKey);
+	ElysiumAddClassField(D, TEXT("pattern"), &FElysiumLight::Pattern, EElysiumField::MapKey);
+	ElysiumAddClassField(D, TEXT("fade_time"), &FElysiumLight::FadeTime, EElysiumField::MapKey);
+	// `pitch` is not a datamap row: it is `CLight::vfunc110` `0x101303c0`'s one own arm, reached through
+	// the virtual slot-110 `KeyValue` above. This row carries no KEY flag, so the walker `FUN_101a5a80`
+	// never claims it; it is the inspector's read (the X the arm wrote) and a runtime set that routes
+	// into the same virtual, as retail's Python `KeyValue` does. Not saved (the angles are).
 	FElysiumFieldAccessor PitchRow;
 	PitchRow.Type = EElysiumVariantType::Float;
 	PitchRow.ApplyFlags(EElysiumField::None);
 	PitchRow.Get = [](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<float>(E.Angles.X)); };
-	PitchRow.Set = [](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<FElysiumLight&>(E).KeyValuePitch(V.ToString()); };
+	PitchRow.Set = [](FElysiumEntity& E, const FElysiumVariant& V) { (void)E.KeyValue(TEXT("pitch"), *V.ToString()); };
 	D.Fields.Add(FName(TEXT("pitch")), MoveTemp(PitchRow));
 }
 
@@ -568,12 +565,12 @@ static FElysiumClassRegistrar GRegLightDynamic(
 		D.Input(TEXT("TurnOn"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumLightDynamic&>(E).TurnOn(); });
 		D.Input(TEXT("TurnOff"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumLightDynamic&>(E).TurnOff(); });
 		D.Input(TEXT("Toggle"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumLightDynamic&>(E).Toggle(); });
-		ElysiumAddClassField(D, TEXT("_light"), &FElysiumLightDynamic::LightColor, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("brightness"), &FElysiumLightDynamic::Brightness, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("distance"), &FElysiumLightDynamic::Distance, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("_inner_cone"), &FElysiumLightDynamic::InnerCone, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("_cone"), &FElysiumLightDynamic::Cone, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("spotlight_radius"), &FElysiumLightDynamic::SpotRadius, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("pitch"), &FElysiumLightDynamic::Pitch, EElysiumField::None);
-		ElysiumAddClassField(D, TEXT("style"), &FElysiumLightDynamic::Style, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("_light"), &FElysiumLightDynamic::LightColor, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("brightness"), &FElysiumLightDynamic::Brightness, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("distance"), &FElysiumLightDynamic::Distance, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("_inner_cone"), &FElysiumLightDynamic::InnerCone, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("_cone"), &FElysiumLightDynamic::Cone, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("spotlight_radius"), &FElysiumLightDynamic::SpotRadius, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("pitch"), &FElysiumLightDynamic::Pitch, EElysiumField::MapKey);
+		ElysiumAddClassField(D, TEXT("style"), &FElysiumLightDynamic::Style, EElysiumField::MapKey);
 	});

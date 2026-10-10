@@ -960,9 +960,9 @@ static FElysiumClassRegistrar GRegAmbientSoundscheme(
 		// The class datamap rows (`walks/L0-r009.md` § Shared facts, CSoundScheme). A keyed row is
 		// registered under its key; the unnamed playing flag under its offset, as `m_dpv[..]` is.
 		ElysiumAddClassField<FElysiumAmbientSoundscheme>(D, TEXT("scheme_file"), &FElysiumAmbientSoundscheme::SchemeFile,
-			EElysiumField::Key | EElysiumField::Save);   // +0x450 m_sSchemeFile
+			EElysiumField::Key | EElysiumField::Save | EElysiumField::MapKey);   // +0x450 m_sSchemeFile
 		ElysiumAddClassField<FElysiumAmbientSoundscheme>(D, TEXT("start_enabled"), &FElysiumAmbientSoundscheme::bStartEnabled,
-			EElysiumField::Key | EElysiumField::Save);   // +0x454 m_bStartEnabled
+			EElysiumField::Key | EElysiumField::Save | EElysiumField::MapKey);   // +0x454 m_bStartEnabled
 		ElysiumAddClassField<FElysiumAmbientSoundscheme>(D, TEXT("+0x455"), &FElysiumAmbientSoundscheme::bPlaying,
 			EElysiumField::Save);                        // +0x455 the playing flag (no retail name)
 		ElysiumAddClassField<FElysiumAmbientSoundscheme>(D, TEXT("m_pfnThink"), &FElysiumAmbientSoundscheme::ThinkFn,

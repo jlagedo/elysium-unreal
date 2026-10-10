@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 38 generated slot bodies of `FElysiumAnimating`: 0 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 5 are defined by hand in the substrate, and
-// 33 are still stubs — 21 29c, 12 unassigned.
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 6 are defined by hand in the substrate, and
+// 32 are still stubs — 21 29c, 11 unassigned.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
 // `docs/vtmb/npc-kernel/`.
@@ -98,12 +98,11 @@ int32 FElysiumAnimating::YouForgotToImplementOrDeclareServerClass()
 
 // slot 82 0x1008a760 (walked) `datamap_t* GetDataDescMap()`
 //   returns `datamap_t*`
-void* FElysiumAnimating::GetDataDescMap()
-{
-	FireAnimatingSlot(TEXT("CBaseAnimating::GetDataDescMap"), TEXT("0x1008a760"), TEXT(""),
-		DebugString());
-	return {};
-}
+// the body is `FElysiumAnimating::GetDataDescMap`, written by hand in the substrate:
+// `CBaseEntity::GetDataDescMap` 0x100a2290: `return &datamap_CBaseEntity`; the port's datamap is
+// the class descriptor the registry built for the entity's classname, so the dispatch answers the
+// leaf's (L0.entity_core.datamap-keyvalues, walks/L0-r017.md; `ElysiumEntityKeyValue.cpp`).
+// Declared here, defined there.
 
 // slot 99 0x100956e0 (sdk) `bool TestCollision(Ray_t&, unsignedint, trace_t&)`
 //   takes `Ray_t&`
@@ -395,7 +394,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, int32()>::Test(&FElysiumAnimating::YouForgotToImplementOrDeclareServerClass),
 				nullptr },
 			{ 82, TEXT("0x1008a760"), TEXT("CBaseAnimating"), TEXT("GetDataDescMap"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimating, void*()>::Test(&FElysiumAnimating::GetDataDescMap),
 				nullptr },
 			{ 99, TEXT("0x100956e0"), TEXT("CBaseAnimating"), TEXT("TestCollision"),

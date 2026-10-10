@@ -279,7 +279,7 @@ two walkers rather than inferred:
 
 | Path | Body | Mask it tests |
 |---|---|---|
-| Read a field by name — `Entity.__getattr__`, `GetKeyValue`, `ent_info` | `CBaseEntity::ReadKeyField` `0x100acab0` | `flags & 0x14` — **`KEY` or `OUTPUT`** |
+| Read a field by name — the `ent_dump` console command (`CC_Ent_Dump` `0x100af840` -> `CC_Ent_Dump_Sub` `0x100af340`, slot 121's one confirmed caller; L0-r017: `Entity.__getattr__` goes through `FUN_10195940`, case-sensitive, not this slot, and no `GetKeyValue` / `ent_info` dispatch to slot 121 exists in vampire.dll) | `CBaseEntity::ReadKeyField` `0x100acab0` | `flags & 0x14` — **`KEY` or `OUTPUT`**; the variant keeps the row's own `fieldtype_t` (`FUN_100d0390`: COLOR32 reads back as 8; TIME, MODELNAME, SOUNDNAME, SHORT, CHARACTER, CUSTOM read VOID 0, still `true`); embedded maps are not descended |
 | Dispatch an input by name | `CBaseEntity::AcceptInput` `0x100abc90` | `flags & 8` — **`INPUT`** |
 | …and, where that row's `inputFunc` (`+0x1c`) is null, WRITE the field | same body, second test | `flags & 4` — **`KEY`**, so a field-form input needs `INPUT` *and* `KEY` |
 | Assign by name — `Entity.__setattr__` | `0x10195a10` | `flags & 8` — **`INPUT`** |

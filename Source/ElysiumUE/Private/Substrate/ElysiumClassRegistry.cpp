@@ -217,8 +217,18 @@ static FElysiumClassRegistrar GRegBaseEntity(
 		// `m_Collision` FIELD_EMBEDDED at `+0x270`, so `+0x2b0`; `docs/vtmb/phy_vphysics.md`): the
 		// `solid` key a map row authors lands on the word itself at parse, not through `SetSolid`
 		// (`walks/L0-r015.md`). The replay's base table does not descend into the embedded map, so the
-		// row is hand-written here; `FElysiumProp` still reads the raw key for its body build.
-		D.Field(TEXT("solid"),           &FElysiumEntity::RetailSolidType);
+		// row is hand-written here; `FElysiumProp` still reads the raw key for its body build. The
+		// walker 0x101a5a80 reaches it by its embedded descent (row 5, type 9, size 1, `td`
+		// 0x10560c20); `ReadKeyField` 0x100acab0 never descends, so `Embedded` refuses the read.
+		D.Field(TEXT("solid"),           &FElysiumEntity::RetailSolidType,
+			EElysiumField::Save | EElysiumField::MapKey | EElysiumField::Embedded);
+		// Rows 108 / 109 of the base table: `m_OnUseBegin` (+0x5c) and `m_OnUseEnd` (+0x74), type 10
+		// CUSTOM, flags 0x16 SAVE|KEY|OUTPUT, ops `CEventsSaveDataOps` 0x106e70d8 (`walks/L0-r017.md`).
+		// A map key of either name reaches the walker's custom branch, which parses the six-field
+		// action and prepends it to the output's list; slots 39 / 42 (`OnUseBegin` 0x100a4fe0 /
+		// `OnUseEnd` 0x100a5030) fire them.
+		D.OutputRow(TEXT("OnUseBegin"));
+		D.OutputRow(TEXT("OnUseEnd"));
 	});
 
 // --- Verification command ---------------------------------------------------------------

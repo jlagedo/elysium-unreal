@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 219 generated slot bodies of `FElysiumEntity`: 72 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 49 are defined by hand in the substrate,
-// and 80 are still stubs — 78 29c, 2 unassigned. 18 are closed (0019/6) and answer the
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 55 are defined by hand in the substrate,
+// and 74 are still stubs — 73 29c, 1 unassigned. 18 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -620,12 +620,11 @@ int32 FElysiumEntity::YouForgotToImplementOrDeclareServerClass()
 
 // slot 82 0x100a2290 (walked) `datamap_t* GetDataDescMap()`
 //   returns `datamap_t*`
-void* FElysiumEntity::GetDataDescMap()
-{
-	FireEntitySlot(TEXT("CBaseEntity::GetDataDescMap"), TEXT("0x100a2290"), TEXT(""),
-		DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::GetDataDescMap`, written by hand in the substrate:
+// `CBaseEntity::GetDataDescMap` 0x100a2290: `return &datamap_CBaseEntity`; the port's datamap is
+// the class descriptor the registry built for the entity's classname, so the dispatch answers the
+// leaf's (L0.entity_core.datamap-keyvalues, walks/L0-r017.md; `ElysiumEntityKeyValue.cpp`).
+// Declared here, defined there.
 
 // slot 83 0x100b4ef0 (walked) `int GetEFlags()`
 //   layer 0, story 29c
@@ -811,19 +810,17 @@ void FElysiumEntity::PostConstructor(TCHAR*)
 // slot 107 0x1009e280 (sdk) `void ParseMapData(CEntityMapData*)`
 //   takes `CEntityMapData*`
 //   layer 0, story 29c
-void FElysiumEntity::ParseMapData(void*)
-{
-	FireEntitySlot(TEXT("CBaseEntity::ParseMapData"), TEXT("0x1009e280"), TEXT("29c"),
-		DebugString());
-}
+// the body is `FElysiumEntity::ParseMapData`, written by hand in the substrate:
+// `CBaseEntity::ParseMapData` 0x1009e280: one virtual slot-110 `KeyValue` per map pair, in authored
+// order (L0.entity_core.datamap-keyvalues, walks/L0-r017.md; `ElysiumEntityKeyValue.cpp`). Declared
+// here, defined there.
 
 // slot 110 0x1009e430 (walked) `bool KeyValue(const char*, const char*)`
 //   layer 9, story 29c
-bool FElysiumEntity::KeyValue(const TCHAR*, const TCHAR*)
-{
-	FireEntitySlot(TEXT("CBaseEntity::KeyValue"), TEXT("0x1009e430"), TEXT("29c"), DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::KeyValue`, written by hand in the substrate:
+// `CBaseEntity::KeyValue(char*, char*)` 0x1009e430: the `#` truncation, the nine literal arms and
+// the datamap walk `FUN_101a5a80` under the `ent_debugkeys` gate (L0.entity_core.datamap-keyvalues,
+// walks/L0-r017.md; `ElysiumEntityKeyValue.cpp`). Declared here, defined there.
 
 // slot 111 0x10026bb0 (walked) `void MemberSync()`
 //   layer 0, story 29c
@@ -870,12 +867,10 @@ void FElysiumEntity::GetInputDispatchEffectPosition(TCHAR*, FVector&, FRotator&)
 // slot 121 0x100acab0 (sdk) `bool ReadKeyField(char*, variant_t*)`
 //   takes `variant_t*`
 //   layer 0, story 29c
-bool FElysiumEntity::ReadKeyField(TCHAR*, void*)
-{
-	FireEntitySlot(TEXT("CBaseEntity::ReadKeyField"), TEXT("0x100acab0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::ReadKeyField`, written by hand in the substrate:
+// `CBaseEntity::ReadKeyField` 0x100acab0: the derived-to-base `KEY|OUTPUT` name walk and the
+// variant marshal `FUN_100d0390` (L0.entity_core.datamap-keyvalues, walks/L0-r017.md;
+// `ElysiumEntityKeyValue.cpp`). Declared here, defined there.
 
 // slot 122 0x1009f120 (sdk) `void SetClassname(char*)`
 //   layer 0, story 29c
@@ -1543,11 +1538,10 @@ void FElysiumEntity::SetModelName(FName)
 
 // slot 216 0x100b2300 (sdk) `void SetAbsOrigin(Vector&)`
 //   layer 0, story 29c
-void FElysiumEntity::SetAbsOrigin(FVector&)
-{
-	FireEntitySlot(TEXT("CBaseEntity::SetAbsOrigin"), TEXT("0x100b2300"), TEXT("29c"),
-		DebugString());
-}
+// the body is `FElysiumEntity::SetAbsOrigin`, written by hand in the substrate:
+// `CBaseEntity::SetAbsOrigin` 0x100b2300: slot 98, the EFL 0x10800 invalidation, the absolute word,
+// the local word through the move parent's frame and `+0x1b1` (L0.entity_core.datamap-keyvalues,
+// walks/L0-r017.md; `ElysiumEntity.cpp`). Declared here, defined there.
 
 // slot 217 0x100b31b0 (sdk) `Vector& GetAbsOrigin() const`
 //   layer 0, story 29c
@@ -1557,11 +1551,11 @@ void FElysiumEntity::SetAbsOrigin(FVector&)
 
 // slot 218 0x100b2510 (sdk) `void SetAbsAngles(QAngle&)`
 //   layer 0, story 29c
-void FElysiumEntity::SetAbsAngles(FRotator&)
-{
-	FireEntitySlot(TEXT("CBaseEntity::SetAbsAngles"), TEXT("0x100b2510"), TEXT("29c"),
-		DebugString());
-}
+// the body is `FElysiumEntity::SetAbsAngles`, written by hand in the substrate:
+// `CBaseEntity::SetAbsAngles` 0x100b2510: slot 98, the EFL 0x800 / 0x3000 invalidation, the
+// absolute word, the local word through the move parent's frame and `+0x1b1`
+// (L0.entity_core.datamap-keyvalues, walks/L0-r017.md; `ElysiumEntity.cpp`). Declared here, defined
+// there.
 
 // slot 219 0x100b3280 (sdk) `QAngle& GetAbsAngles() const`
 //   layer 0, story 29c
@@ -2056,7 +2050,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32()>::Test(&FElysiumEntity::YouForgotToImplementOrDeclareServerClass),
 				nullptr },
 			{ 82, TEXT("0x100a2290"), TEXT("CBaseEntity"), TEXT("GetDataDescMap"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void*()>::Test(&FElysiumEntity::GetDataDescMap),
 				nullptr },
 			{ 83, TEXT("0x100b4ef0"), TEXT("CBaseEntity"), TEXT("GetEFlags"),
@@ -2148,11 +2142,11 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(TCHAR*)>::Test(&FElysiumEntity::PostConstructor),
 				nullptr },
 			{ 107, TEXT("0x1009e280"), TEXT("CBaseEntity"), TEXT("ParseMapData"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(void*)>::Test(&FElysiumEntity::ParseMapData),
 				nullptr },
 			{ 110, TEXT("0x1009e430"), TEXT("CBaseEntity"), TEXT("KeyValue"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(const TCHAR*, const TCHAR*)>::Test(&FElysiumEntity::KeyValue),
 				nullptr },
 			{ 111, TEXT("0x10026bb0"), TEXT("CBaseEntity"), TEXT("MemberSync"),
@@ -2180,7 +2174,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(TCHAR*, FVector&, FRotator&)>::Test(&FElysiumEntity::GetInputDispatchEffectPosition),
 				nullptr },
 			{ 121, TEXT("0x100acab0"), TEXT("CBaseEntity"), TEXT("ReadKeyField"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(TCHAR*, void*)>::Test(&FElysiumEntity::ReadKeyField),
 				nullptr },
 			{ 122, TEXT("0x1009f120"), TEXT("CBaseEntity"), TEXT("SetClassname"),
@@ -2532,7 +2526,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void*() const>::Test(&FElysiumEntity::WorldSpaceCenter),
 				nullptr },
 			{ 216, TEXT("0x100b2300"), TEXT("CBaseEntity"), TEXT("SetAbsOrigin"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FVector&)>::Test(&FElysiumEntity::SetAbsOrigin),
 				nullptr },
 			{ 217, TEXT("0x100b31b0"), TEXT("CBaseEntity"), TEXT("GetAbsOrigin"),
@@ -2540,7 +2534,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, const FVector&() const>::Test(&FElysiumEntity::GetAbsOrigin),
 				nullptr },
 			{ 218, TEXT("0x100b2510"), TEXT("CBaseEntity"), TEXT("SetAbsAngles"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FRotator&)>::Test(&FElysiumEntity::SetAbsAngles),
 				nullptr },
 			{ 219, TEXT("0x100b3280"), TEXT("CBaseEntity"), TEXT("GetAbsAngles"),

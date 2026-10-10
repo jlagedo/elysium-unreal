@@ -215,7 +215,7 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// default and admits every hint group, which is retail's answer for an unset list.
 	{
 		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(EElysiumField::Key | EElysiumField::Save);
+		Acc.ApplyFlags(EElysiumField::Key | EElysiumField::Save | EElysiumField::MapKey);
 		Acc.Type = EElysiumVariantType::String;
 		Acc.Get = [](const FElysiumEntity& E)
 		{ return FElysiumVariant::String(static_cast<const FElysiumNpc&>(E).ScheduleHost.HintGroups); };
@@ -238,7 +238,8 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// payload has to carry what the entity was authored with, because the resolved loadout is
 	// derived from them on the first think. The resolution is `Substrate/ElysiumNpcLoadout.h`; what
 	// each is read for (and which of the three is deliberately unread) is stated on the members.
-	ElysiumAddClassField(D, TEXT("cantdropweapons"),     &FElysiumCombatCharacter::bCantDropWeapons,    EElysiumField::Save);
+	ElysiumAddClassField(D, TEXT("cantdropweapons"),     &FElysiumCombatCharacter::bCantDropWeapons,
+		EElysiumField::Save | EElysiumField::MapKey);   // `m_bCantDropWeapons` +0x1589 bool, SAVE|KEY
 }
 
 static void BuildInterestingPlaceClass(FElysiumClassDesc& D)

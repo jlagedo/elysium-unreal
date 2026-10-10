@@ -17,11 +17,12 @@
     { "label": "zero_box", "who": "fresh", "kind": "retail_site", "site": "entity_bounds", "match": "fn=FUN_100dc770 va=0x100dc7d8 phase=write mins=0,0,0 maxs=0,0,0 m_flRadius=0 edict=0", "within": 0.01 },
     { "label": "dirty_or", "who": "fresh", "kind": "retail_site", "site": "bounds_dirty", "match": "fn=FUN_100dda20 va=0x100dda23 phase=write m_iEFlags=0x14000", "within": 0.01 },
     { "label": "null_edict", "who": "fresh", "kind": "retail_site", "site": "bounds_dirty", "match": "fn=FUN_100ddd20 va=0x100ddd20 phase=branch eidx=0 arm=null_edict m_iEFlags=0x14000", "within": 0.01 },
-    { "label": "ctor_return", "who": "fresh", "kind": "retail_site", "site": "entity_ctor", "match": "fn=CBaseEntity::CBaseEntity va=0x1009d980 phase=return m_iEFlags=0x54000 m_fFlags=0 m_flFriction=1 m_flElasticity=1 m_flNextThink=0 m_flLastThink=[0-9.]+ m_clrRender=0xffffffff m_nSimulationTick=-1 m_iCurrentThinkContext=-1 m_CollisionGroup=0 m_MoveType=0 m_nModelIndex=0 m_ModelName=0 m_iName=0 m_vecSize=0,0,0 m_vecMins=0,0,0 m_vecMaxs=0,0,0 m_flRadius=0 m_Solid=0 m_usSolidFlags=0x0 partition_handle=0xffff m_hOwnerEntity=-1 m_hGroundEntity=-1 m_hAimEnt=-1 m_pParent=-1 m_pMoveParent=-1 m_pMoveChild=-1 m_pMovePeer=-1 m_hUseActivator=-1 m_RefEHandle=-1 m_iVSoundGroup=-2 m_iVSoundGroupFemale=-2 m_iVSoundTableIdx=-2 m_touchStamp=0 edict=0", "regex": true, "within": 0.01 }
+    { "label": "ctor_return", "who": "fresh", "kind": "retail_site", "site": "entity_ctor", "match": "fn=CBaseEntity::CBaseEntity va=0x1009d980 phase=return m_iEFlags=0x54000 m_fFlags=0 m_flFriction=1 m_flElasticity=1 m_flNextThink=0 m_flLastThink=[0-9.]+ m_clrRender=0xffffffff m_nSimulationTick=-1 m_iCurrentThinkContext=-1 m_CollisionGroup=0 m_MoveType=0 m_nModelIndex=0 m_ModelName=0 m_iName=0 m_vecSize=0,0,0 m_vecMins=0,0,0 m_vecMaxs=0,0,0 m_flRadius=0 m_Solid=0 m_usSolidFlags=0x0 partition_handle=0xffff m_hOwnerEntity=-1 m_hGroundEntity=-1 m_hAimEnt=-1 m_pParent=-1 m_pMoveParent=-1 m_pMoveChild=-1 m_pMovePeer=-1 m_hUseActivator=-1 m_RefEHandle=-1 m_iVSoundGroup=-2 m_iVSoundGroupFemale=-2 m_iVSoundTableIdx=-2 m_touchStamp=0 edict=0", "regex": true, "within": 0.01 },
+    { "label": "origin_mark", "who": "fresh", "kind": "retail_site", "site": "bounds_dirty", "match": "fn=FUN_100ddd20 va=0x100ddd20 phase=branch eidx=[1-9][0-9]* arm=mark m_iEFlags=0x5c800", "regex": true, "within": 0.01 }
   ],
   "never": [
     { "who": "fresh", "kind": "retail_site", "site": "set_solid", "match": "", "from": 0.0 },
-    { "who": "fresh", "kind": "retail_site", "site": "bounds_dirty", "match": "arm=mark", "from": 0.0 },
+    { "who": "fresh", "kind": "retail_site", "site": "bounds_dirty", "match": "arm=mark", "from": 0.0, "at_most": 1 },
     { "who": "fresh", "kind": "retail_site", "site": "bounds_dirty", "match": "arm=already_dirty", "from": 0.0 },
     { "who": "fresh", "kind": "retail_site", "site": "untouch_enqueue", "match": "", "from": 0.0 },
     { "who": "fresh", "kind": "retail_site", "site": "untouch_gate", "match": "", "from": 0.0 },
@@ -30,8 +31,8 @@
     { "who": "fresh", "kind": "retail_site", "site": "entity_ctor", "match": "phase=return", "from": 0.0, "at_most": 1 }
   ],
   "probes": [
-    { "at": 0.05, "who": "placed", "probe": "entity_field", "field": "m_iEFlags", "equals": 344064 },
-    { "at": 0.05, "who": "placed", "probe": "entity_field", "field": "m_iEFlags", "member": "0x8000", "equals": false },
+    { "at": 0.05, "who": "placed", "probe": "entity_field", "field": "m_iEFlags", "equals": 376832 },
+    { "at": 0.05, "who": "placed", "probe": "entity_field", "field": "m_iEFlags", "member": "0x8000", "equals": true },
     { "at": 0.05, "who": "placed", "probe": "entity_field", "field": "m_iEFlags", "member": "0x200", "equals": false },
     { "at": 0.05, "who": "placed", "probe": "entity_field", "field": "flags", "equals": 0 },
     { "at": 0.05, "who": "placed", "probe": "entity_field", "field": "friction", "equals": 1 },
@@ -71,8 +72,8 @@
     { "at": 0.05, "who": "placed", "probe": "entity_field", "field": "m_iVSoundGroupFemale", "equals": -2 },
     { "at": 0.05, "who": "placed", "probe": "entity_field", "field": "m_iVSoundTableIdx", "equals": -2 },
 
-    { "at": 0.20, "who": "fresh", "probe": "entity_field", "field": "m_iEFlags", "equals": 344064 },
-    { "at": 0.20, "who": "fresh", "probe": "entity_field", "field": "m_iEFlags", "member": "0x8000", "equals": false },
+    { "at": 0.20, "who": "fresh", "probe": "entity_field", "field": "m_iEFlags", "equals": 376832 },
+    { "at": 0.20, "who": "fresh", "probe": "entity_field", "field": "m_iEFlags", "member": "0x8000", "equals": true },
     { "at": 0.20, "who": "fresh", "probe": "entity_field", "field": "flags", "equals": 0 },
     { "at": 0.20, "who": "fresh", "probe": "entity_field", "field": "friction", "equals": 1 },
     { "at": 0.20, "who": "fresh", "probe": "entity_field", "field": "m_flElasticity", "equals": 1 },
@@ -93,5 +94,5 @@
     { "at": 0.20, "who": "fresh", "probe": "entity_field", "field": "m_iVSoundTableIdx", "equals": -2 },
     { "at": "end", "who": "fresh", "probe": "exists", "equals": true }
   ],
-  "notes": "344064 = 0x54000 (bits 14, 16, 18). The words compared through the port's mapping rather than raw (`walks/L0-r016.md` Record notes): the handles are `FElysiumEntityHandle`s, read as `-1` when unset; `m_flNextThink` is not probed because this port's never-think word is the queue's FLT_MAX sentinel where retail's is 0.0 (the `nextthink` row answers the sentinel); `m_flLastThink` is `curtime` at construction, the world clock the trace stamps carry (the `spawn` at scenario 0.10 reads as world 1.1 in the `entity_ctor` payload; `placed`'s is the Load time): probed as written and positive, matched exactly by the trace stamp of its own site. Not carried, so not probed: m_rgflCoordinateFrame (the pose is recomputed from the local words), m_hPlayerSimulationOwner (L3), the two COutputEvents (outputs fire by name), m_aThinkFunctions / m_ResponseContexts / m_DamageModifiers (empty containers with no port object), m_nModelIndex (UNBOUND: models resolve by name), the self-downcast caches (the class chain answers them). `m_iName` is probed by no row: the constructor leaves it 0 and the keyvalue pass that follows writes `fresh`."
+  "notes": "The constructor returns m_iEFlags = 0x54000 (bits 14, 16, 18; `ctor_return`); the probed post-spawn word is 376832 = 0x5c000 because the keyvalue pass that follows runs with the edict attached and its `origin` arm (CBaseEntity::KeyValue 0x1009e430 -> SetAbsOrigin 0x100b2300 -> FUN_100b52a0 -> FUN_100ddd20) marks 0x8000 once (`origin_mark`, read with 0x800 still raised by FUN_100b5340 and cleared right after; L0-r017 / r018); no mins/maxs key follows, so `already_dirty` never fires. The words compared through the port's mapping rather than raw (`walks/L0-r016.md` Record notes): the handles are `FElysiumEntityHandle`s, read as `-1` when unset; `m_flNextThink` is not probed because this port's never-think word is the queue's FLT_MAX sentinel where retail's is 0.0 (the `nextthink` row answers the sentinel); `m_flLastThink` is `curtime` at construction, the world clock the trace stamps carry (the `spawn` at scenario 0.10 reads as world 1.1 in the `entity_ctor` payload; `placed`'s is the Load time): probed as written and positive, matched exactly by the trace stamp of its own site. Not carried, so not probed: m_rgflCoordinateFrame (the pose is recomputed from the local words), m_hPlayerSimulationOwner (L3), the two COutputEvents (outputs fire by name), m_aThinkFunctions / m_ResponseContexts / m_DamageModifiers (empty containers with no port object), m_nModelIndex (UNBOUND: models resolve by name), the self-downcast caches (the class chain answers them). `m_iName` is probed by no row: the constructor leaves it 0 and the keyvalue pass that follows writes `fresh`."
 }

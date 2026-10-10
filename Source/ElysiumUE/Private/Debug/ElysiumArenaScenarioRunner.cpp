@@ -1250,13 +1250,20 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 		// `m_hOwnerEntity` (+0x364), `m_hGroundEntity` (+0x384), `m_hUseActivator` (+0x8c).
 		const bool bBoxVector = Probe.Field == TEXT("m_vecMins") || Probe.Field == TEXT("m_vecMaxs")
 			|| Probe.Field == TEXT("m_vecSize");
-		const bool bVector = Probe.Field == TEXT("m_vecOrigin") || Probe.Field == TEXT("m_angRotation")
+		const bool bVector = Probe.Field == TEXT("m_vecOrigin") || Probe.Field == TEXT("m_angRotation") || Probe.Field == TEXT("m_vecVelocity")
 			|| Probe.Field == TEXT("m_vecAbsOrigin") || Probe.Field == TEXT("m_angAbsRotation") || bBoxVector;
 		const bool bFlagWord = Probe.Field == TEXT("m_iEFlags");
 		// L0-r019's: `m_fDataObjectTypes`, the data-object type mask `+0x444` (no datamap row exposes it;
 		// `member`: a bit mask in hex, `0x2` for type 1, answered as a bool; bare, the whole word).
 		const bool bDataObjectMask = Probe.Field == TEXT("m_fDataObjectTypes");
-		if (!bVector && !bFlagWord && !bDataObjectMask && (!Probe.Index.IsEmpty() || !Probe.Member.IsEmpty()))
+		// L0-r017's: `m_fEffects` (+0x19c; `member`: a bit mask in hex, answered as a bool; bare, the whole
+		// word), and the two base output lists `m_OnUseBegin` (+0x5c) / `m_OnUseEnd` (+0x74): bare, the
+		// count of actions the datamap walker parsed at run time; `index`, that action head-first as
+		// `target,input,param,delay,times,python`.
+		const bool bEffectsWord = Probe.Field == TEXT("m_fEffects");
+		const bool bOutputList = Probe.Field == TEXT("m_OnUseBegin") || Probe.Field == TEXT("m_OnUseEnd");
+		if (!bVector && !bFlagWord && !bDataObjectMask && !bEffectsWord && !bOutputList
+			&& (!Probe.Index.IsEmpty() || !Probe.Member.IsEmpty()))
 		{
 			OutError = FString::Printf(TEXT("field '%s' takes no index or member"), *Probe.Field);
 			return false;
@@ -1328,6 +1335,51 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 				}
 				OutAnswer.Type = FElysiumArenaValue::EType::Bool;
 				OutAnswer.bBool = (Entity->DataObjectTypes & Mask) == Mask;
+			}
+		}
+		else if (bEffectsWord)
+		{
+			if (Probe.Member.IsEmpty())
+			{
+				OutAnswer.Type = FElysiumArenaValue::EType::Number;
+				OutAnswer.Number = static_cast<double>(Entity->EffectsWord);
+			}
+			else
+			{
+				const uint32 Mask = FParse::HexNumber(*Probe.Member);
+				if (Mask == 0)
+				{
+					OutError = TEXT("m_fEffects `member` is a non-zero hex bit mask (`0x20`)");
+					return false;
+				}
+				OutAnswer.Type = FElysiumArenaValue::EType::Bool;
+				OutAnswer.bBool = (Entity->EffectsWord & Mask) == Mask;
+			}
+		}
+		else if (bOutputList)
+		{
+			const FName Wanted(*Probe.Field.Mid(2));   // `m_OnUseBegin` -> `OnUseBegin`, the output's key
+			TArray<const FElysiumOutputDef*> Actions;
+			for (const FElysiumRuntimeOutput& Action : Entity->RuntimeOutputs)
+			{
+				if (FName(*Action.Row.Name) == Wanted) Actions.Add(&Action.Row);
+			}
+			if (Probe.Index.IsEmpty())
+			{
+				OutAnswer.Type = FElysiumArenaValue::EType::Number;
+				OutAnswer.Number = Actions.Num();
+			}
+			else
+			{
+				const int32 At = FCString::Atoi(*Probe.Index);
+				if (!Actions.IsValidIndex(At))
+				{
+					OutError = FString::Printf(TEXT("%s has %d action(s); `index` %d is outside them"), *Probe.Field, Actions.Num(), At);
+					return false;
+				}
+				const FElysiumOutputDef& R = *Actions[At];
+				OutAnswer.Type = FElysiumArenaValue::EType::String;
+				OutAnswer.String = FString::Printf(TEXT("%s,%s,%s,%g,%d,%s"), *R.Target, *R.Input, *R.Param, R.Delay, R.Times, *R.Python);
 			}
 		}
 		else if (Probe.Field == TEXT("m_NetworkChangeState.m_bChanged"))
@@ -1413,6 +1465,7 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 				: Probe.Field == TEXT("m_vecMins") ? Entity->CollMins
 				: Probe.Field == TEXT("m_vecMaxs") ? Entity->CollMaxs
 				: Probe.Field == TEXT("m_vecSize") ? Entity->SizeUnits
+				: Probe.Field == TEXT("m_vecVelocity") ? Entity->Velocity   // +0x3d4, the datamap `velocity` row, read raw (L0-r017)
 				: Probe.Field == TEXT("m_vecAbsOrigin") ? Entity->GetAbsOrigin() : Entity->GetAbsAngles();
 			OutAnswer.Type = FElysiumArenaValue::EType::Number;
 			OutAnswer.Number = Probe.Member == TEXT("x") ? Word.X : Probe.Member == TEXT("y") ? Word.Y : Word.Z;
@@ -1427,7 +1480,7 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 			if (Row == nullptr || !Row->Get)
 			{
 				OutError = FString::Printf(TEXT("no retail field adapter named '%s' (m_iName, m_iClassname, m_iHealth, ")
-					TEXT("m_spawnflags, m_nRenderMode, m_lifeState, m_vecOrigin, m_angRotation, m_vecAbsOrigin, m_angAbsRotation, ")
+					TEXT("m_spawnflags, m_nRenderMode, m_lifeState, m_vecOrigin, m_angRotation, m_vecVelocity, m_vecAbsOrigin, m_angAbsRotation, ")
 					TEXT("m_pParent, m_pMoveParent, m_pMoveChild, m_pMovePeer, m_hAimEnt, m_iParentAttachment, m_iEFlags, ")
 					TEXT("m_MoveType, m_MoveCollide, m_NetworkChangeState.m_bChanged, m_iVSoundGroup, m_iVSoundGroupFemale, ")
 					TEXT("m_iVSoundTableIdx, m_touchStamp, m_Solid, m_usSolidFlags, m_vecMins, m_vecMaxs, m_vecSize, m_flRadius, ")
@@ -2484,6 +2537,33 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
 			Done.Name = Action.Target;
 			Done.Text = TEXT("entity_call Activate done");
+			return true;
+		}
+		if (Action.Function == TEXT("ReadKeyField"))
+		{
+			// Slot 121 `CBaseEntity::ReadKeyField` 0x100acab0 on one live entity, as `CC_Ent_Dump_Sub`
+			// 0x100af340 (the `ent_dump` console command, its one confirmed caller) calls it for every row
+			// name (`walks/L0-r017.md`): `["<name>"]`. The variant's retail type code and value are reported.
+			FElysiumEntity* Target = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
+			if (Target == nullptr || Target->IsDead())
+			{
+				OutError = FString::Printf(TEXT("entity_call 'ReadKeyField': no live entity named '%s'"), *Action.Target);
+				return false;
+			}
+			if (Action.Args.Num() != 1 || Action.Args[0].Value.Type != FElysiumArenaValue::EType::String)
+			{
+				OutError = TEXT("entity_call 'ReadKeyField' takes [\"<field name>\"]");
+				return false;
+			}
+			FElysiumKeyFieldValue Variant;
+			FString Name = Action.Args[0].Value.String;
+			const bool bFound = Target->ReadKeyField(Name.GetCharArray().GetData(), &Variant);
+			FEvent& Done = Events.AddDefaulted_GetRef();
+			StampEvent(Done, World.NowSeconds());
+			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+			Done.Name = Action.Target;
+			Done.Text = FString::Printf(TEXT("entity_call ReadKeyField done name=%s result=%d type=%d value=%s"), *Name,
+				bFound ? 1 : 0, Variant.FieldType, *Variant.Value.ToString());
 			return true;
 		}
 		if (Action.Function == TEXT("GetEFlags") || Action.Function == TEXT("SetEFlags"))

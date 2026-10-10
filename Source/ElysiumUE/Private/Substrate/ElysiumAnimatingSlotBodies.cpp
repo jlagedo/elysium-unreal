@@ -36,6 +36,16 @@
 
 // --- Moved from `ElysiumNpcBaseLifecycle.cpp` (story 5 step 6) ---
 
+// slot 82 `datamap_t* GetDataDescMap()` -- `CBaseAnimating::FUN_1008a760` 0x1008a760
+void* FElysiumAnimating::GetDataDescMap()
+{
+	// `MOV EAX,0x1054cd70; RET`: `&datamap_CBaseAnimating`, whose `baseMap` (+0xc) is
+	// `datamap_CBaseEntity` 0x10552e18. This port's datamap is the class descriptor the registry built
+	// for the entity's classname, chained through `BaseName`, so the base body's answer -- the leaf
+	// descriptor -- is this class's too (L0-r017, `ElysiumEntityKeyValue.cpp`).
+	return FElysiumEntity::GetDataDescMap();
+}
+
 // slot 137 `CBaseAnimating* GetBaseAnimating()` — 0x1004fc50
 FElysiumEntity* FElysiumAnimating::GetBaseAnimating()
 {
@@ -52,16 +62,21 @@ FElysiumNpcBase::EKeyValueArm FElysiumAnimating::ClassifyKeyValue(const FString&
 	int32 Hash = INDEX_NONE;
 	OutKey = Key.FindChar(TEXT('#'), Hash) ? Key.Left(Hash) : Key;
 
-	// Retail guards the first two with `if (*param_1 == 'r')`, which is an optimisation and not a
-	// rule: a key that reaches them starts with `r` by definition.
-	if (OutKey.Equals(TEXT("rendercolor"), ESearchCase::IgnoreCase)
-		|| OutKey.Equals(TEXT("rendercolor32"), ESearchCase::IgnoreCase))
+	// Retail guards the first two with `if (key[0] == 'r')` -- a CASE-SENSITIVE byte compare (`CMP byte
+	// [EBP],0x72`, 1009e4b6), so `RenderColor` and `RenderAmt` skip both and reach the datamap walk,
+	// where CBaseEntity's row 19 (`rendercolor`, COLOR32) takes the first and nothing the second
+	// (`walks/L0-r017.md`). The two `__strcmpi`s inside the guard are case-insensitive.
+	if (OutKey.Len() > 0 && OutKey[0] == TEXT('r'))
 	{
-		return EKeyValueArm::RenderColor;
-	}
-	if (OutKey.Equals(TEXT("renderamt"), ESearchCase::IgnoreCase))
-	{
-		return EKeyValueArm::RenderAmt;
+		if (OutKey.Equals(TEXT("rendercolor"), ESearchCase::IgnoreCase)
+			|| OutKey.Equals(TEXT("rendercolor32"), ESearchCase::IgnoreCase))
+		{
+			return EKeyValueArm::RenderColor;
+		}
+		if (OutKey.Equals(TEXT("renderamt"), ESearchCase::IgnoreCase))
+		{
+			return EKeyValueArm::RenderAmt;
+		}
 	}
 	if (OutKey.Equals(TEXT("disableshadows"), ESearchCase::IgnoreCase))
 	{
@@ -92,13 +107,9 @@ FElysiumNpcBase::EKeyValueArm FElysiumAnimating::ClassifyKeyValue(const FString&
 		return EKeyValueArm::Origin;
 	}
 	// Nothing matched: retail walks the datamap chain (`vtable +0x148 GetDataDescMap`, following
-	// `baseMap` at `+0xc`) and offers the key to each level's `ParseKeyvalue`. THIS RUNTIME ALREADY
-	// DOES THAT — `FElysiumEntity::Construct` applies each raw keyvalue through the class-chain
-	// field table (`FElysiumClassRegistry::FindField`), which is the same walk over the same data.
-	// So this arm names the port's own path rather than standing a second one.
-	//
-	// **Not ported:** the `ent_debugkeys` cvar arm (`DAT_106cf424`), which `Msg`s every matched and
-	// unmatched key for one classname. It is a console diagnostic with no game-visible effect.
+	// `baseMap` at `+0xc`) with `FUN_101a5a80` under the `ent_debugkeys` gate -- the base body
+	// `FElysiumEntity::KeyValue` (`ElysiumEntityKeyValue.cpp`, L0-r017). This classifier is the
+	// test-facing map of that body's arms; the body itself is the one dispatch.
 	return EKeyValueArm::DataMap;
 }
 
@@ -164,37 +175,11 @@ bool FElysiumAnimating::KeyValue(const TCHAR* Key, const TCHAR* Value)
 
 bool FElysiumAnimating::BaseEntityKeyValue(const TCHAR* Key, const TCHAR* Value)
 {
-	// `CBaseEntity::KeyValue` (`0x1009e430`). Family **Lifecycle** recovered the classification and
-	// the `#` truncation retail performs FIRST; this is that classification, dispatched.
-	FString Truncated;
-	const EKeyValueArm Arm = ClassifyKeyValue(FString(Key != nullptr ? Key : TEXT("")), Truncated);
-	if (Arm != EKeyValueArm::DataMap)
-	{
-		// The nine literal arms — `rendercolor`, `renderamt`, `disableshadows`,
-		// `disablereceiveshadows`, `mins`, `maxs`, `angle`, `angles`, `origin`. Every one of them
-		// writes a `CBaseEntity` word (`m_clrRender`, `m_fEffects`, the collision bounds, the abs
-		// angles, the abs origin) and returns true. They are `CBaseEntity`'s story, NOT a row of
-		// this kernel's closure, so none is run here — but the ANSWER is retail's, true, because a
-		// key that matched is a key the caller must not treat as unhandled.
-		return true;
-	}
-	// The `DataMap` arm: retail walks `GetDataDescMap()` (`vtable +0x148`) down `baseMap` and offers
-	// the key to each level's `ParseKeyvalue`. `FElysiumEntity::Construct` applies a map's raw
-	// keyvalues through the class-chain field table, which is the same walk over the same data, so
-	// this arm IS that table.
-	if (Class == nullptr || Key == nullptr)
-	{
-		return false;
-	}
-	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
-	const FElysiumFieldAccessor* Acc = Reg.FindField(*Class, FName(*Truncated));
-	if (Acc == nullptr || !Acc->Set)
-	{
-		// Retail's own "no level of the chain claimed it" answer.
-		return false;
-	}
-	Acc->Set(*this, FElysiumVariant::String(FString(Value != nullptr ? Value : TEXT(""))));
-	return true;
+	// `CBaseEntity::KeyValue` (`0x1009e430`), the tail call of 0x101c1480's third arm: the base body
+	// itself (`ElysiumEntityKeyValue.cpp`, L0-r017) -- the `#` truncation, the nine literal arms with
+	// their writes (`m_clrRender`, `m_fEffects`, the collision bounds, slots 218 / 216), the datamap
+	// walk `FUN_101a5a80` -- and its answer verbatim.
+	return FElysiumEntity::KeyValue(Key, Value);
 }
 
 // --- The speed words' readers (spec 0002 V4a, lane A2) ---

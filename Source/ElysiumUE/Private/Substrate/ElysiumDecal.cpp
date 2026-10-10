@@ -126,7 +126,7 @@ static FElysiumClassRegistrar GRegInfoDecal(
 		// `CBaseEntity::Use` (slot 173, 0x100a4e70) dispatches `m_pfnUse`; `CDecal::Spawn` sets it on the
 		// named path only, and `Use` below answers nothing while the word is 0.
 		D.Input(TEXT("Use"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumDecal&>(E).Use(A.Activator); });
-		ElysiumAddClassField(D, TEXT("texture"), &FElysiumDecal::Texture, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("texture"), &FElysiumDecal::Texture, EElysiumField::MapKey);
 		ElysiumAddClassField(D, TEXT("m_nTexture"), &FElysiumDecal::TextureIndex, EElysiumField::None);
 		ElysiumAddClassField(D, TEXT("m_pfnThink"), &FElysiumDecal::ThinkFn, EElysiumField::None);
 		ElysiumAddClassField(D, TEXT("m_pfnUse"), &FElysiumDecal::UseFn, EElysiumField::None);

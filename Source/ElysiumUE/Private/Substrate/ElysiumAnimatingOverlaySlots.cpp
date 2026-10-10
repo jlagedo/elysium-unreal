@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 19 generated slot bodies of `FElysiumAnimatingOverlay`: 1 carry retail's one-constant default
-// (story 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 7 are defined by hand in the
-// substrate, and 8 are still stubs — 3 29c, 5 unassigned. 3 are closed (0019/6) and answer the
+// (story 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 8 are defined by hand in the
+// substrate, and 7 are still stubs — 3 29c, 4 unassigned. 3 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -92,12 +92,11 @@ int32 FElysiumAnimatingOverlay::YouForgotToImplementOrDeclareServerClass()
 
 // slot 82 0x10097ce0 (walked) `datamap_t* GetDataDescMap()`
 //   returns `datamap_t*`
-void* FElysiumAnimatingOverlay::GetDataDescMap()
-{
-	FireAnimatingOverlaySlot(TEXT("CBaseAnimatingOverlay::GetDataDescMap"), TEXT("0x10097ce0"),
-		TEXT(""), DebugString());
-	return {};
-}
+// the body is `FElysiumAnimatingOverlay::GetDataDescMap`, written by hand in the substrate:
+// `CBaseEntity::GetDataDescMap` 0x100a2290: `return &datamap_CBaseEntity`; the port's datamap is
+// the class descriptor the registry built for the entity's classname, so the dispatch answers the
+// leaf's (L0.entity_core.datamap-keyvalues, walks/L0-r017.md; `ElysiumEntityKeyValue.cpp`).
+// Declared here, defined there.
 
 // slot 250 0x10098bb0 (walked) `float StudioFrameAdvance(float)`
 //   layer 2, story 29c
@@ -215,7 +214,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, int32()>::Test(&FElysiumAnimatingOverlay::YouForgotToImplementOrDeclareServerClass),
 				nullptr },
 			{ 82, TEXT("0x10097ce0"), TEXT("CBaseAnimatingOverlay"), TEXT("GetDataDescMap"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumAnimatingOverlay, void*()>::Test(&FElysiumAnimatingOverlay::GetDataDescMap),
 				nullptr },
 			{ 250, TEXT("0x10098bb0"), TEXT("CBaseAnimatingOverlay"), TEXT("StudioFrameAdvance"),

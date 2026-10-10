@@ -218,7 +218,7 @@ static FElysiumClassRegistrar GRegAnimating(
 		// Project save-only companion for SetDisposition's second argument. It is deliberately not a
 		// script field: retail exposes the pair through the method, not as two writable attributes.
 		ElysiumAddClassField(D, TEXT("elysium_disposition_level"),
-			&FElysiumAnimating::DispositionLevel, EElysiumField::Save);
+			&FElysiumAnimating::DispositionLevel, EElysiumField::Save | EElysiumField::MapKey);
 
 		// `CBaseAnimating::InputSpawnTempParticle` (`0x1008d8b0`), a datamap INPUT every animating
 		// entity carries: the string argument goes to `FUN_100fce70`, the temp-particle spawn, which

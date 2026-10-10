@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 136 generated slot bodies of `FElysiumCombatCharacter`: 19 carry retail's one-constant default
-// (story 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 25 are defined by hand in the
-// substrate, and 91 are still stubs — 59 29c, 22 29d, 5 29e, 5 unassigned. 1 are closed (0019/6)
+// (story 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 26 are defined by hand in the
+// substrate, and 90 are still stubs — 59 29c, 22 29d, 5 29e, 4 unassigned. 1 are closed (0019/6)
 // and answer the value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -118,12 +118,11 @@ int32 FElysiumCombatCharacter::YouForgotToImplementOrDeclareServerClass()
 
 // slot 82 0x1031a5a0 (walked) `datamap_t* GetDataDescMap()`
 //   returns `datamap_t*`
-void* FElysiumCombatCharacter::GetDataDescMap()
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::GetDataDescMap"), TEXT("0x1031a5a0"),
-		TEXT(""), DebugString());
-	return {};
-}
+// the body is `FElysiumCombatCharacter::GetDataDescMap`, written by hand in the substrate:
+// `CBaseEntity::GetDataDescMap` 0x100a2290: `return &datamap_CBaseEntity`; the port's datamap is
+// the class descriptor the registry built for the entity's classname, so the dispatch answers the
+// leaf's (L0.entity_core.datamap-keyvalues, walks/L0-r017.md; `ElysiumEntityKeyValue.cpp`).
+// Declared here, defined there.
 
 // slot 86 0x103407b0 (walked) `bool ShouldTransmit(int, const edict_t*, const void*, int, int)`
 //   takes `const edict_t*`
@@ -1196,7 +1195,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, int32()>::Test(&FElysiumCombatCharacter::YouForgotToImplementOrDeclareServerClass),
 				[](FElysiumCombatCharacter& Receiver) -> int64 { return static_cast<int64>(Receiver.YouForgotToImplementOrDeclareServerClass()); } },
 			{ 82, TEXT("0x1031a5a0"), TEXT("CBaseCombatCharacter"), TEXT("GetDataDescMap"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void*()>::Test(&FElysiumCombatCharacter::GetDataDescMap),
 				nullptr },
 			{ 86, TEXT("0x103407b0"), TEXT("CBaseCombatCharacter"), TEXT("ShouldTransmit"),

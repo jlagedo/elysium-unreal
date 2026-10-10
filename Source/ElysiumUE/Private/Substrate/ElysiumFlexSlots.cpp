@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 21 generated slot bodies of `FElysiumFlex`: 0 carry retail's one-constant default (story 29c's
-// verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 1 are defined by hand in the substrate, and 9 are
-// still stubs — 3 29c, 6 unassigned. 11 are closed (0019/6) and answer the value-initialised
+// verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 2 are defined by hand in the substrate, and 8 are
+// still stubs — 3 29c, 5 unassigned. 11 are closed (0019/6) and answer the value-initialised
 // default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -81,11 +81,11 @@ int32 FElysiumFlex::YouForgotToImplementOrDeclareServerClass()
 
 // slot 82 0x100b57b0 (walked) `datamap_t* GetDataDescMap()`
 //   returns `datamap_t*`
-void* FElysiumFlex::GetDataDescMap()
-{
-	FireFlexSlot(TEXT("CBaseFlex::GetDataDescMap"), TEXT("0x100b57b0"), TEXT(""), DebugString());
-	return {};
-}
+// the body is `FElysiumFlex::GetDataDescMap`, written by hand in the substrate:
+// `CBaseEntity::GetDataDescMap` 0x100a2290: `return &datamap_CBaseEntity`; the port's datamap is
+// the class descriptor the registry built for the entity's classname, so the dispatch answers the
+// leaf's (L0.entity_core.datamap-keyvalues, walks/L0-r017.md; `ElysiumEntityKeyValue.cpp`).
+// Declared here, defined there.
 
 // slot 105 0x100b5ab0 (sdk) `void SetModel(char*)`
 //   layer 0, story 29c
@@ -249,7 +249,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, int32()>::Test(&FElysiumFlex::YouForgotToImplementOrDeclareServerClass),
 				nullptr },
 			{ 82, TEXT("0x100b57b0"), TEXT("CBaseFlex"), TEXT("GetDataDescMap"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumFlex, void*()>::Test(&FElysiumFlex::GetDataDescMap),
 				nullptr },
 			{ 105, TEXT("0x100b5ab0"), TEXT("CBaseFlex"), TEXT("SetModel"),

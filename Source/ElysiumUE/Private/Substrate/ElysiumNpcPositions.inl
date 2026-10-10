@@ -176,11 +176,10 @@ FVector LocalVelocityCm() const;
 static float WerewolfChaseToleranceConVar();
 
 // --- The Werewolf teleport pair -----------------------------------------------------------------
-
-/** `m_fEffects` (+0x019c) bit `0x20` — `EF_NODRAW`. `TeleportOut` raises it and `TeleportIn` clears
- *  it. This runtime has no effects word at the kernel tier; it is carried here because both bodies
- *  write it and the pairing is the recovered behaviour. */
-uint32 EffectsWord = 0;
+//
+// `m_fEffects` (+0x019c) bit `0x20` -- `EF_NODRAW`: `TeleportOut` raises it and `TeleportIn` clears
+// it. The word is `FElysiumEntity::EffectsWord` since L0-r017 (`CBaseEntity::KeyValue` 0x1009e430's
+// `disableshadows` / `disablereceiveshadows` arms and the `effects` datamap row write it on the base).
 
 // --- What is left of `FUN_102c5570` -------------------------------------------------------------
 //
