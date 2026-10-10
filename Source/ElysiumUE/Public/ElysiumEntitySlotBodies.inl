@@ -129,19 +129,21 @@ int32 RenderMode = 0;         // +0x016c m_nRenderMode (CBaseEntity); 4 is kRend
 
 TArray<FTraceBleedPass> TraceBleedPasses;
 
-/** `+0x8c` — the handle of whoever last began a `+use` on this entity, written by slot 39 and
- *  cleared to `-1` by slot 42 and by a null activator. Not a datamap field and not in
- *  `ElysiumNpcKernelShapeMap.cpp` (which covers the `CAI_BaseNPC` band only); its retail name is
- *  **unrecovered**. It has no reader in this family's closure — the two slots are its only
- *  toucher — so it is carried as the recorded write rather than wired to a consumer. */
-FElysiumEntityHandle UseActivator;   // +0x8c
+/** `+0x8c m_hUseActivator` (`docs/vtmb/npc-kernel/layout.md:34`) — the handle of whoever last began a
+ *  `+use` on this entity, written by slot 39 and cleared to `-1` by slot 42 and by a null activator;
+ *  the base constructor `0x1009d980` writes `-1` (`1009d9ad`). Not a datamap field. It has no reader
+ *  in this family's closure — the two slots are its only toucher — so it is carried as the recorded
+ *  write rather than wired to a consumer. */
+FElysiumEntityHandle UseActivator;   // +0x8c m_hUseActivator
 
 /** `+0x038c m_vecSize` and the two words after it — the box `CBaseEntity::SetSize` (`0x100b1890`,
- *  slot 213) writes. A `CBaseEntity` word, below 29b's band, and written by this one body and read
- *  by `GetSize` (slot 214) alone in layers 0–9. CENTIMETRES, like every other length on this
- *  struct; Unreal's collision component is the eventual host and this member is what the kernel
- *  sees until then. */
-FVector SizeCm = FVector::ZeroVector;
+ *  slot 213) writes and `CBaseEntity::GetSize` (`0x100b1960`, slot 214) returns the address of.
+ *  SOURCE UNITS (inches), the retail word: slot 213's one caller is `UTIL_SetSize` `0x101cf3c0`,
+ *  which hands it `maxs - mins` of the box it just gave `SetCollisionBounds`, and the readers
+ *  (`CBaseDoor::vfunc103` 0x100ef260 / `vfunc245` 0x100f0a40, `CBaseButton::Spawn` 0x100c8d60,
+ *  `CFuncMoveLinear::Spawn` 0x10116030) subtract retail's 2.0 inset from it. The base constructor
+ *  never writes it (zero from the `calloc` allocation; `walks/L0-r016.md`). */
+FVector SizeUnits = FVector::ZeroVector;
 
 /** `+0x1ddc`, read by `FUN_10160680` — a float scaled by the compiled constant `DAT_10725c9c`.
  *  **Unrecovered**: the body has one direct caller, no vtable slot, and neither the retail field
@@ -306,6 +308,30 @@ void SetSolid(int32 Type);
 // `0x180`; the physics object's slot 25 on a change of `0x4`; `FUN_100ddc40` then `FUN_100dc430` on a
 // change of `0xc`.
 void SetSolidFlags(uint16 Word);
+// `CBaseEntity::SetCollisionBounds` 0x1009edc0 (a scope-trace frame around `thunk_FUN_100dc770`) ->
+// `FUN_100dc770` 0x100dc770, the bounds setter: `m_vecMins` / `m_vecMaxs` stored, `m_flRadius =
+// f32(0.5 * sqrt(f32((dz*dz + dx*dx) + dy*dy)))` with `d = maxs - mins` (the x87 grouping, 0.5 =
+// `0x104454d0`), then `FUN_100dda20` (the `0x14000` OR and the edict-gated `0x8000` / dirty-list
+// arm). Never writes `m_vecSize`. Source units (`walks/L0-r016.md`). Its callers: the base
+// constructor (`1009dca4`, zero box), `UTIL_SetSize` 0x101cf3c0 and the `KeyValue` 0x1009e430
+// `mins` / `maxs` arms (`Construct`'s key walk).
+void SetCollisionBounds(const FVector& MinsUnits, const FVector& MaxsUnits);
+// `UTIL_SetSize` `FUN_101cf3c0` 0x101cf3c0 (`FUN_101cf390` 0x101cf390 is its 3-argument wrapper; the
+// fourth argument is never read): per axis `maxs[i] < mins[i]` -> `Error("backwards mins/maxs")`
+// (fatal in retail; logged and refused here), then `SetCollisionBounds(mins, maxs)`, then slot 213
+// `SetSize(maxs - mins)` (`101cf459`) -- the ONE writer of `m_vecSize` from a box. `UTIL_SetModel`
+// 0x101cf4a0 ends in it with the model's bounds (or `vec3_origin` twice for a NULL model), the NPC
+// hull setters 0x10273070 / 0x10273180 with the hull row.
+void UtilSetSize(const FVector& MinsUnits, const FVector& MaxsUnits);
+// `UTIL_SetModel` `FUN_101cf4a0` 0x101cf4a0, the tail of `CBaseEntity::SetModel` 0x100ad460 (slot 105):
+// a NULL or empty name returns untouched; else the model index (slot 10) and name (slot 212) are
+// re-set and the collision box is the model's bounds -- `UTIL_SetSize(this, mins, maxs, 1)`
+// (`101cf54f`), or `UTIL_SetSize(this, vec3_origin, vec3_origin, 1)` (`101cf56a`) when the engine has
+// no model for the name. The engine's model table is the def's hulls here (`FElysiumEntityDef::Hulls`,
+// the brush bake, cm on the Unreal axes), so a def with none takes the NULL-model arm.
+void UtilSetModel(const FString& Name);
+// A retail vector as a site payload spells it: `x,y,z`, each as the f32 `%g`.
+static FString RetailVectorText(const FVector& V);
 // `FUN_100dda20` 0x100dda20: `owner->m_iEFlags |= 0x14000`, then tail-jumps into `FUN_100ddd20`.
 // SDK analogue `MarkSurroundingBoundsDirty` (inference).
 void MarkCollisionBoundsDirty();
@@ -320,9 +346,10 @@ void UpdatePartitionMembership();
 // `FUN_100dc430` 0x100dc430: when the entity is not solid (`m_Solid == 0 || flags & 4`) and not a
 // trigger (`flags & 8` clear) and `IsCurrentlyTouching()` (slot 207), `SetCheckUntouch(true)` (slot 6).
 void CheckForUntouchOnSolidChange();
-// `IndexOfEdict(this->+0x2e0)` (`VEngineServer014` slot 35) as `FElysiumDecal::EdictIndex` answers it:
-// 0 for the world, else the entity's index. There are no edicts here; every non-world entity is
-// networked, as every `CreateEntityByName` entity is in retail.
+// `IndexOfEdict(this->+0x2e0)` (`VEngineServer014` slot 35, engine `0x20109110`: 0 for a NULL edict)
+// as `FElysiumDecal::EdictIndex` answers it: 0 while the edict is not attached (`bEdictAttached`,
+// the whole of the base constructor), 0 for the world, else the entity's index. There are no edicts
+// here; every non-world entity is networked, as every `CreateEntityByName` entity is in retail.
 int32 EdictIndex() const;
 // `CBaseEntity::PhysicsCheckForEntityUntouch` 0x1003d490: expire every touchlink whose stamp is not
 // `m_touchStamp` (the other side's EndTouch, the link freed), then `SetCheckUntouch(false)`

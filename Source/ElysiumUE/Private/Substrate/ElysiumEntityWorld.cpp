@@ -409,7 +409,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 			continue;
 		}
 		// The handle index IS the def-array index: stable, never recycled.
-		TUniquePtr<FElysiumEntity> Ent = FElysiumClassRegistry::Get().Create(D, FElysiumEntityHandle(i, Epoch));
+		TUniquePtr<FElysiumEntity> Ent = FElysiumClassRegistry::Get().Create(D, FElysiumEntityHandle(i, Epoch), this);
 		if (!Ent)
 		{
 			// An abstract retail class (`Create` logged it). The slot stays empty so every later
@@ -786,7 +786,7 @@ FElysiumEntityHandle FElysiumEntityWorld::CreateRuntimeEntityNoSpawn(FElysiumEnt
 	TUniquePtr<FElysiumEntityDef> Owned = MakeUnique<FElysiumEntityDef>(MoveTemp(Def));
 	const FElysiumEntityDef& Ref = *Owned;
 
-	TUniquePtr<FElysiumEntity> Ent = FElysiumClassRegistry::Get().Create(Ref, FElysiumEntityHandle(Idx, Epoch));
+	TUniquePtr<FElysiumEntity> Ent = FElysiumClassRegistry::Get().Create(Ref, FElysiumEntityHandle(Idx, Epoch), this);
 	if (!Ent)
 	{
 		return FElysiumEntityHandle::Invalid();   // an abstract retail class; `Create` logged it

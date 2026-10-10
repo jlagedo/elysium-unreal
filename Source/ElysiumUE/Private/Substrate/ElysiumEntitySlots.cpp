@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 219 generated slot bodies of `FElysiumEntity`: 72 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 48 are defined by hand in the substrate,
-// and 81 are still stubs — 79 29c, 2 unassigned. 18 are closed (0019/6) and answer the
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 49 are defined by hand in the substrate,
+// and 80 are still stubs — 78 29c, 2 unassigned. 18 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -1529,13 +1529,11 @@ void FElysiumEntity::SetModelName(FName)
 // Declared here, defined there.
 
 // slot 214 0x100b1960 (walked) `const Vector& GetSize()`
-//   returns `const Vector&`
 //   layer 0, story 29c
-void* FElysiumEntity::GetSize()
-{
-	FireEntitySlot(TEXT("CBaseEntity::GetSize"), TEXT("0x100b1960"), TEXT("29c"), DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::GetSize`, written by hand in the substrate: `CBaseEntity::GetSize`
+// 0x100b1960: `return &m_vecSize` (`+0x38c`, the word slot 213 writes and UTIL_SetSize 0x101cf3c0
+// fills with `maxs - mins`), Source units (L0.entity_core.bounds-size, walks/L0-r016.md). Declared
+// here, defined there.
 
 // slot 215 0x100b4c30 (walked) `const Vector& WorldSpaceCenter() const`
 //   returns `const Vector&`
@@ -2526,8 +2524,8 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(const FVector&)>::Test(&FElysiumEntity::SetSize),
 				nullptr },
 			{ 214, TEXT("0x100b1960"), TEXT("CBaseEntity"), TEXT("GetSize"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
-				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void*()>::Test(&FElysiumEntity::GetSize),
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
+				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, const FVector&()>::Test(&FElysiumEntity::GetSize),
 				nullptr },
 			{ 215, TEXT("0x100b4c30"), TEXT("CBaseEntity"), TEXT("WorldSpaceCenter"),
 				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,

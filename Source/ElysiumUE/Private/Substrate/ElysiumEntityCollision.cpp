@@ -8,6 +8,9 @@
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMoveSolve.h"   // ElysiumMove::U, the Source inch in cm
+
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumEntityCollision, Log, All);
 
 namespace
 {
@@ -54,14 +57,157 @@ void FElysiumEntity::InitCollisionProperty(FElysiumEntity* Owner)
 
 int32 FElysiumEntity::EdictIndex() const
 {
-	// `IndexOfEdict(this->+0x2e0)` (`VEngineServer014` slot 35, engine `0x20109110`): 0 for a NULL
-	// edict and for edict 0 (the world), else the edict's index. The same rule `FElysiumDecal::EdictIndex`
-	// applies: there are no edicts here, so the world is the one entity without one.
+	// `IndexOfEdict(this->+0x2e0)` (`VEngineServer014` slot 35, engine `0x20109110`: `if (edict ==
+	// NULL) return 0; return (edict - sv.edicts) / 0x78`): 0 for a NULL edict and for edict 0 (the
+	// world), else the edict's index. `+0x2e0` is NULL for the whole base constructor (`FUN_101ab590`
+	// zeroes it at `1009da5e` and `1009db12`; `CreateEntityByName` attaches the edict after the
+	// constructor returns and before the keyvalues) -- `bEdictAttached`. The same rule
+	// `FElysiumDecal::EdictIndex` applies: there are no edicts here, so the world is the one entity
+	// without one.
+	if (!bEdictAttached)
+	{
+		return 0;
+	}
 	if (Def != nullptr && Def->Classname.Equals(TEXT("worldspawn"), ESearchCase::IgnoreCase))
 	{
 		return 0;
 	}
 	return Handle.IsSet() ? Handle.Index : 0;
+}
+
+FString FElysiumEntity::RetailVectorText(const FVector& V)
+{
+	return FString::Printf(TEXT("%g,%g,%g"), static_cast<float>(V.X), static_cast<float>(V.Y), static_cast<float>(V.Z));
+}
+
+void FElysiumEntity::SetCollisionBounds(const FVector& MinsUnits, const FVector& MaxsUnits)
+{
+	// `CBaseEntity::SetCollisionBounds` 0x1009edc0: the scope-trace frame (`"CBaseEntity::
+	// SetCollisionBounds"` 0x10555610, `m_iName` / `""` / `"NULL ENTITY"`) around
+	// `thunk_FUN_100dc770(&m_Collision, mins, maxs)`; no game state of its own.
+	//
+	// `FUN_100dc770` 0x100dc770 (116 B, one path, `RET 8`), in retail's store order:
+	// 1. `cp+0x04..0x0c <- mins` (`100dc779-100dc785`); 2. `cp+0x10..0x18 <- maxs` (`100dc78f-100dc79b`).
+	//    The f32 words, as the entity's `m_vecMins` / `m_vecMaxs`.
+	const FVector Mins(static_cast<float>(MinsUnits.X), static_cast<float>(MinsUnits.Y), static_cast<float>(MinsUnits.Z));
+	const FVector Maxs(static_cast<float>(MaxsUnits.X), static_cast<float>(MaxsUnits.Y), static_cast<float>(MaxsUnits.Z));
+	CollMins = Mins;
+	CollMaxs = Maxs;
+	// 3. `d = maxs - mins` per axis in x87 (`100dc79e-100dc7ab`), then `S = (dz*dz + dx*dx) + dy*dy` in
+	//    extended precision (`100dc7ae-100dc7bc`; the asm grouping, not the decompiler's).
+	const double Dx = static_cast<double>(static_cast<float>(Maxs.X)) - static_cast<double>(static_cast<float>(Mins.X));
+	const double Dy = static_cast<double>(static_cast<float>(Maxs.Y)) - static_cast<double>(static_cast<float>(Mins.Y));
+	const double Dz = static_cast<double>(static_cast<float>(Maxs.Z)) - static_cast<double>(static_cast<float>(Mins.Z));
+	// 4. `FSTP float [ESP]` (`100dc7be`): S rounded to f32 as the argument of `[0x10579660]` ->
+	//    `FUN_101371d0` = `FLD; FSQRT; RET` (`float10 sqrt(float)`).
+	const float S32 = static_cast<float>((Dz * Dz + Dx * Dx) + Dy * Dy);
+	// 5. `FMUL float [0x104454d0]` (0.5f, `100dc7cd`); `FSTP f32 -> cp+0x48` (`100dc7d8`): `m_flRadius`.
+	//    UNRECOVERED: the x87 precision-control word at run time (the 53-bit default is assumed); it
+	//    decides the last bit only.
+	CollisionRadius = static_cast<float>(0.5 * FMath::Sqrt(static_cast<double>(S32)));
+	if (World != nullptr)
+	{
+		World->EmitRetailSite(*this, TEXT("entity_bounds"), TEXT("FUN_100dc770"), 0x100dc7d8u, TEXT("write"),
+			FString::Printf(TEXT("mins=%s maxs=%s m_flRadius=%.8g edict=%d"), *RetailVectorText(CollMins),
+				*RetailVectorText(CollMaxs), CollisionRadius, EdictIndex()));
+	}
+	// 6. `CALL thunk_FUN_100dda20` (`100dc7db`), ECX = cp: the `0x14000` OR and `FUN_100ddd20`'s edict gate.
+	MarkCollisionBoundsDirty();
+	// `m_vecSize` (`+0x38c`) is NOT written here: only `UTIL_SetSize`'s slot-213 call does that.
+}
+
+void FElysiumEntity::UtilSetSize(const FVector& MinsUnits, const FVector& MaxsUnits)
+{
+	// `UTIL_SetSize` `FUN_101cf3c0` 0x101cf3c0 (`void __cdecl (CBaseEntity*, const float* mins, const
+	// float* maxs, int unused)`; `FUN_101cf390` 0x101cf390 is the 3-argument wrapper passing 0,
+	// `UTIL_SetModel` 0x101cf4a0 passes 1; the fourth argument is never read), arms in retail order.
+	// 1. Per axis x, y, z: `if (maxs[i] < mins[i]) Error("backwards mins/maxs")` (`101cf3dd-101cf405`;
+	//    the call is `[0x109f366c]`, the engine's fatal `Error`). Retail dies here; this port logs the
+	//    fault, reports it and refuses the call -- the one divergence, on a path no shipped program
+	//    survives.
+	const float M[3] = { static_cast<float>(MinsUnits.X), static_cast<float>(MinsUnits.Y), static_cast<float>(MinsUnits.Z) };
+	const float X[3] = { static_cast<float>(MaxsUnits.X), static_cast<float>(MaxsUnits.Y), static_cast<float>(MaxsUnits.Z) };
+	for (int32 Axis = 0; Axis < 3; ++Axis)
+	{
+		if (X[Axis] < M[Axis])
+		{
+			UE_LOG(LogElysiumEntityCollision, Error, TEXT("%s: backwards mins/maxs (axis %d: mins %g maxs %g) -- "
+				"retail Error() 0x101cf3f6"), *DebugString(), Axis, M[Axis], X[Axis]);
+			if (World != nullptr)
+			{
+				World->EmitRetailSite(*this, TEXT("util_setsize"), TEXT("FUN_101cf3c0"), 0x101cf3f6u, TEXT("branch"),
+					FString::Printf(TEXT("arm=backwards_mins_maxs axis=%d mins=%s maxs=%s fn=Error"), Axis,
+						*RetailVectorText(FVector(M[0], M[1], M[2])), *RetailVectorText(FVector(X[0], X[1], X[2]))));
+			}
+			return;
+		}
+	}
+	// 2. `SetCollisionBounds(ent, mins, maxs)` (`101cf40f`, call 0x100157c1 -> 0x1009edc0).
+	SetCollisionBounds(FVector(M[0], M[1], M[2]), FVector(X[0], X[1], X[2]));
+	// 3. `size = maxs - mins` (three x87 subtracts stored as f32, `101cf41a-101cf449`), then
+	//    `ent->vtable[0x354/4 = 213](&size)` (`101cf459`): slot 213 `SetSize` through the dispatch.
+	const FVector Size(X[0] - M[0], X[1] - M[1], X[2] - M[2]);
+	if (World != nullptr)
+	{
+		World->EmitRetailSite(*this, TEXT("util_setsize"), TEXT("FUN_101cf3c0"), 0x101cf459u, TEXT("call"),
+			FString::Printf(TEXT("fn=CBaseEntity::SetSize size=%s mins=%s maxs=%s"), *RetailVectorText(Size),
+				*RetailVectorText(FVector(M[0], M[1], M[2])), *RetailVectorText(FVector(X[0], X[1], X[2]))));
+	}
+	SetSize(Size);
+}
+
+void FElysiumEntity::UtilSetModel(const FString& Name)
+{
+	// `UTIL_SetModel` `FUN_101cf4a0` 0x101cf4a0 (asm `101cf4a0-101cf577`), arms in retail order.
+	// 1. `name == NULL || *name == 0` -> `RET` (`101cf4ab` / `101cf4b4`): the entity is not touched.
+	if (Name.IsEmpty())
+	{
+		if (World != nullptr)
+		{
+			World->EmitRetailSite(*this, TEXT("util_setmodel"), TEXT("FUN_101cf4a0"), 0x101cf4b4u, TEXT("branch"),
+				TEXT("arm=empty_name"));
+		}
+		return;
+	}
+	// 2. `VModelInfoServer001` slot 12 (`+0x30`): the model index; negative -> `Error("no precache: %s")`.
+	//    3. the "passed a va string" check (`0x10002383`). 4. `SetModelIndex(idx)` (slot 10, `101cf505`)
+	//    and `SetModelName(name)` (slot 212, `101cf515`). The index is the engine's precache slot (no
+	//    port word, UNBOUND); the name is `Model`, already the authored key.
+	// 5. `modelinfo->GetModel(idx)` (slot 2, `101cf524`): non-NULL -> `GetModelBounds(model, mins, maxs)`
+	//    (slot 3, `101cf53f`) and `UTIL_SetSize(this, mins, maxs, 1)` (`101cf54f`); NULL ->
+	//    `UTIL_SetSize(this, vec3_origin, vec3_origin, 1)` (`101cf56a`). The model table here is the
+	//    def's baked hulls: their AABB in cm on the Unreal axes, turned into Source units with the Y
+	//    reflection (as `KernelHullTrace` and the NPC motor turn a hull the other way).
+	FBox LocalCm(ForceInit);
+	if (Def != nullptr)
+	{
+		for (const FElysiumConvexHull& Hull : Def->Hulls)
+		{
+			for (const FVector& V : Hull.Vertices)
+			{
+				LocalCm += V;
+			}
+		}
+	}
+	if (!LocalCm.IsValid)
+	{
+		if (World != nullptr)
+		{
+			World->EmitRetailSite(*this, TEXT("util_setmodel"), TEXT("FUN_101cf4a0"), 0x101cf56au, TEXT("call"),
+				FString::Printf(TEXT("arm=null_model model=%s fn=FUN_101cf3c0 mins=0,0,0 maxs=0,0,0"), *Name));
+		}
+		UtilSetSize(FVector::ZeroVector, FVector::ZeroVector);                       // 101cf56a: DAT_1070d1b0 twice
+		return;
+	}
+	const FVector MinsUnits(LocalCm.Min.X / ElysiumMove::U, -LocalCm.Max.Y / ElysiumMove::U, LocalCm.Min.Z / ElysiumMove::U);
+	const FVector MaxsUnits(LocalCm.Max.X / ElysiumMove::U, -LocalCm.Min.Y / ElysiumMove::U, LocalCm.Max.Z / ElysiumMove::U);
+	if (World != nullptr)
+	{
+		World->EmitRetailSite(*this, TEXT("util_setmodel"), TEXT("FUN_101cf4a0"), 0x101cf54fu, TEXT("call"),
+			FString::Printf(TEXT("arm=model_bounds model=%s fn=FUN_101cf3c0 mins=%s maxs=%s"), *Name,
+				*RetailVectorText(MinsUnits), *RetailVectorText(MaxsUnits)));
+	}
+	UtilSetSize(MinsUnits, MaxsUnits);                                                // 101cf54f
 }
 
 void FElysiumEntity::MarkCollisionBoundsDirty()
@@ -88,7 +234,9 @@ void FElysiumEntity::MarkPartitionHandleDirty()
 	const TCHAR* Arm = TEXT("mark");
 	if (Eidx == 0)
 	{
-		Arm = TEXT("world");
+		// `IndexOfEdict` answered 0: a NULL edict (the base constructor's `SetCollisionBounds`, before
+		// the edict is attached; engine `0x20109110` returns 0 for NULL) or edict 0, the world.
+		Arm = bEdictAttached ? TEXT("world") : TEXT("null_edict");
 	}
 	else if ((EFlags & 0x8000u) != 0)
 	{

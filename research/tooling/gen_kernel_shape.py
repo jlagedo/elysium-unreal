@@ -434,6 +434,9 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
              "written only when the type differs; the physics-object notify is a refusal"),
     194: ("const FVector&", "`EyeAngles` 0x100b4bc0: slot 219's answer (hand body, verdict overlay)"),
     195: ("const FVector&", "`LocalEyeAngles` 0x100b4be0: slot 221's answer (hand body, verdict overlay)"),
+    214: ("const FVector&", "`CBaseEntity::GetSize` 0x100b1960: `return &m_vecSize` (`+0x38c`, the word slot 213 "
+                            "writes and UTIL_SetSize 0x101cf3c0 fills with `maxs - mins`), Source units "
+                            "(L0.entity_core.bounds-size, walks/L0-r016.md)"),
     217: ("const FVector&", "`GetAbsOrigin` 0x100b31b0: `CalcAbsolutePosition` under EFL 0x800, then the "
                             "absolute origin cache `Origin`, in port units"),
     219: ("const FVector&", "`GetAbsAngles` 0x100b3280: `CalcAbsolutePosition` under EFL 0x800, then the "

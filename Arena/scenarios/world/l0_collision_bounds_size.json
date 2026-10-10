@@ -1,0 +1,72 @@
+{
+  "name": "l0_collision_bounds_size",
+  "about": "The collision box and the size word (`walks/L0-r016.md`): FUN_100dc770 0x100dc770, reached only through CBaseEntity::SetCollisionBounds 0x1009edc0 (a scope-trace frame) from the base constructor (zero box), UTIL_SetSize FUN_101cf3c0 0x101cf3c0 and the CBaseEntity::KeyValue 0x1009e430 `mins` / `maxs` arms; and CBaseEntity::GetSize 0x100b1960 (slot 214, `LEA EAX,[ECX+0x38C]`: the address of m_vecSize, which the bounds setter never writes). FUN_100dc770 stores m_vecMins (coll+0x04) and m_vecMaxs (coll+0x10), then m_flRadius (coll+0x48) = f32(0.5 * sqrt(f32((dz*dz + dx*dx) + dy*dy))) with d = maxs - mins (0.5 = 0x104454d0; sqrt through [0x10579660] = FUN_101371d0), then FUN_100dda20: m_iEFlags |= 0x14000 and FUN_100ddd20's gate -- IndexOfEdict(+0x2e0) non-zero and 0x8000 clear -> |= 0x8000 and the handle appended to the dirty-partition list DAT_106e8144 (CDirtySpatialPartitionEntityList; the partition itself is engine-replaced). `box` is created at run time with the keys `mins -1 -2 -3` and `maxs 3 2 1`: its constructor's SetCollisionBounds(vec3_origin, vec3_origin) runs with a NULL edict (engine IndexOfEdict(NULL) == 0, 0x20109110) so only 0x14000 lands (arm null_edict); CreateEntityByName then attaches the edict and applies the keys: the first key's arm stores one side against the other's zero (d = (1,2,3) or (3,2,1), S = 14, radius 1.8708287 either way) and FUN_100ddd20 sets 0x8000 (arm mark); the second stores the full box (d = (4,4,4), S = 48, radius 3.4641016 = 0x405db3d7) and finds 0x8000 already set (arm already_dirty, no second append). m_vecSize stays (0,0,0) through both: the story's premise (\"GetSize exposes the size established by the bounds state\") holds only through UTIL_SetSize's slot-213 call. `brush` is a func_illusionary created at run time with a `model` key: CFuncIllusionary::Spawn 0x100bf760 -> CBaseEntity::SetModel 0x100ad460 -> UTIL_SetModel 0x101cf4a0, which asks the engine's model table for the model and its bounds; the arena stages no brush model, so the NULL-model arm (0x101cf56a) runs UTIL_SetSize(this, vec3_origin, vec3_origin, 1): the backwards check passes, SetCollisionBounds(0, 0) stores and invalidates (0x8000 set: the edict is attached), then slot 213 SetSize(maxs - mins) = (0,0,0) at 0x101cf459. `hull` is a human NPC placed at Load: CAI_BaseNPCTroika::SetModel 0x10298ce0 forces SetHullSizeNormal 0x10273070, whose UTIL_SetSize (HUMAN_HULL mins (-13,-13,0), maxs (13,13,72)) leaves m_vecMins / m_vecMaxs the hull row, m_flRadius 40.422768 and, through slot 213, m_vecSize = (26,26,72) -- the one writer of the word GetSize returns. Reported as `fail`, a stored word or a site payload differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 0.8,
+  "rows": [
+    { "classname": "npc_VHumanCombatant", "name": "hull", "at": [0.0, 400.0, 0.0], "face": 180, "body": "regular_cop" }
+  ],
+  "script": [
+    { "t": 0.10, "do": "spawn", "row": { "classname": "logic_relay", "name": "box", "at": [100.0, 0.0, 0.0], "keys": { "mins": "-1 -2 -3", "maxs": "3 2 1" } } },
+    { "t": 0.30, "do": "spawn", "row": { "classname": "func_illusionary", "name": "brush", "at": [200.0, 0.0, 50.0], "keys": { "model": "*5" } } }
+  ],
+  "expect": [
+    { "label": "ctor_box", "who": "box", "kind": "retail_site", "site": "entity_bounds", "match": "fn=FUN_100dc770 va=0x100dc7d8 phase=write mins=0,0,0 maxs=0,0,0 m_flRadius=0 edict=0", "by": 0.15 },
+    { "label": "ctor_gate", "who": "box", "kind": "retail_site", "site": "bounds_dirty", "match": "fn=FUN_100ddd20 va=0x100ddd20 phase=branch eidx=0 arm=null_edict m_iEFlags=0x14000", "within": 0.01 },
+    { "label": "key_first", "who": "box", "kind": "retail_site", "site": "entity_bounds", "match": "va=0x100dc7d8 phase=write mins=(-1,-2,-3|0,0,0) maxs=(0,0,0|3,2,1) m_flRadius=1.8708287 edict=[1-9]", "regex": true, "within": 0.01 },
+    { "label": "key_first_dirty", "who": "box", "kind": "retail_site", "site": "bounds_dirty", "match": "fn=FUN_100dda20 va=0x100dda23 phase=write m_iEFlags=0x54000", "within": 0.01 },
+    { "label": "key_first_mark", "who": "box", "kind": "retail_site", "site": "bounds_dirty", "match": "va=0x100ddd20 phase=branch eidx=[1-9][0-9]* arm=mark m_iEFlags=0x5c000", "regex": true, "within": 0.01 },
+    { "label": "key_second", "who": "box", "kind": "retail_site", "site": "entity_bounds", "match": "va=0x100dc7d8 phase=write mins=-1,-2,-3 maxs=3,2,1 m_flRadius=3.4641016 edict=", "within": 0.01 },
+    { "label": "key_second_gate", "who": "box", "kind": "retail_site", "site": "bounds_dirty", "match": "va=0x100ddd20 phase=branch eidx=[1-9][0-9]* arm=already_dirty m_iEFlags=0x5c000", "regex": true, "within": 0.01 },
+
+    { "label": "brush_null_model", "who": "brush", "kind": "retail_site", "site": "util_setmodel", "match": "fn=FUN_101cf4a0 va=0x101cf56a phase=call arm=null_model model=\\*5 fn=FUN_101cf3c0 mins=0,0,0 maxs=0,0,0", "regex": true, "by": 0.35 },
+    { "label": "brush_bounds", "who": "brush", "kind": "retail_site", "site": "entity_bounds", "match": "va=0x100dc7d8 phase=write mins=0,0,0 maxs=0,0,0 m_flRadius=0 edict=[1-9]", "regex": true, "within": 0.01 },
+    { "label": "brush_mark", "who": "brush", "kind": "retail_site", "site": "bounds_dirty", "match": "va=0x100ddd20 phase=branch eidx=[1-9][0-9]* arm=mark m_iEFlags=0x5c000", "regex": true, "within": 0.01 },
+    { "label": "brush_setsize_call", "who": "brush", "kind": "retail_site", "site": "util_setsize", "match": "fn=FUN_101cf3c0 va=0x101cf459 phase=call fn=CBaseEntity::SetSize size=0,0,0 mins=0,0,0 maxs=0,0,0", "within": 0.01 },
+    { "label": "brush_size_write", "who": "brush", "kind": "retail_site", "site": "entity_size", "match": "fn=CBaseEntity::SetSize va=0x100b1890 phase=write m_vecSize=0,0,0", "within": 0.01 }
+  ],
+  "never": [
+    { "who": "box", "kind": "retail_site", "site": "entity_size", "match": "", "from": 0.0 },
+    { "who": "box", "kind": "retail_site", "site": "util_setsize", "match": "", "from": 0.0 },
+    { "who": "box", "kind": "retail_site", "site": "bounds_dirty", "match": "arm=mark", "from": 0.0, "at_most": 1 },
+    { "who": "box", "kind": "retail_site", "site": "entity_bounds", "match": "phase=write", "from": 0.0, "at_most": 3 },
+    { "who": "brush", "kind": "retail_site", "site": "util_setsize", "match": "arm=backwards_mins_maxs", "from": 0.0 },
+    { "who": "brush", "kind": "retail_site", "site": "util_setmodel", "match": "arm=empty_name", "from": 0.0 }
+  ],
+  "probes": [
+    { "at": 0.05, "who": "hull", "probe": "entity_field", "field": "m_vecMins", "member": "x", "equals": -13 },
+    { "at": 0.05, "who": "hull", "probe": "entity_field", "field": "m_vecMins", "member": "y", "equals": -13 },
+    { "at": 0.05, "who": "hull", "probe": "entity_field", "field": "m_vecMins", "member": "z", "equals": 0 },
+    { "at": 0.05, "who": "hull", "probe": "entity_field", "field": "m_vecMaxs", "member": "x", "equals": 13 },
+    { "at": 0.05, "who": "hull", "probe": "entity_field", "field": "m_vecMaxs", "member": "y", "equals": 13 },
+    { "at": 0.05, "who": "hull", "probe": "entity_field", "field": "m_vecMaxs", "member": "z", "equals": 72 },
+    { "at": 0.05, "who": "hull", "probe": "entity_field", "field": "m_flRadius", "equals": 40.422768 },
+    { "at": 0.05, "who": "hull", "probe": "entity_field", "field": "m_vecSize", "member": "x", "equals": 26 },
+    { "at": 0.05, "who": "hull", "probe": "entity_field", "field": "m_vecSize", "member": "y", "equals": 26 },
+    { "at": 0.05, "who": "hull", "probe": "entity_field", "field": "m_vecSize", "member": "z", "equals": 72 },
+    { "at": 0.05, "who": "hull", "probe": "entity_field", "field": "m_iEFlags", "member": "0x14000", "equals": true },
+    { "at": 0.05, "who": "hull", "probe": "entity_field", "field": "m_iEFlags", "member": "0x8000", "equals": true },
+
+    { "at": 0.20, "who": "box", "probe": "entity_field", "field": "m_vecMins", "member": "x", "equals": -1 },
+    { "at": 0.20, "who": "box", "probe": "entity_field", "field": "m_vecMins", "member": "y", "equals": -2 },
+    { "at": 0.20, "who": "box", "probe": "entity_field", "field": "m_vecMins", "member": "z", "equals": -3 },
+    { "at": 0.20, "who": "box", "probe": "entity_field", "field": "m_vecMaxs", "member": "x", "equals": 3 },
+    { "at": 0.20, "who": "box", "probe": "entity_field", "field": "m_vecMaxs", "member": "y", "equals": 2 },
+    { "at": 0.20, "who": "box", "probe": "entity_field", "field": "m_vecMaxs", "member": "z", "equals": 1 },
+    { "at": 0.20, "who": "box", "probe": "entity_field", "field": "m_flRadius", "equals": 3.4641016 },
+    { "at": 0.20, "who": "box", "probe": "entity_field", "field": "m_vecSize", "member": "x", "equals": 0 },
+    { "at": 0.20, "who": "box", "probe": "entity_field", "field": "m_vecSize", "member": "y", "equals": 0 },
+    { "at": 0.20, "who": "box", "probe": "entity_field", "field": "m_vecSize", "member": "z", "equals": 0 },
+    { "at": 0.20, "who": "box", "probe": "entity_field", "field": "m_iEFlags", "member": "0x14000", "equals": true },
+    { "at": 0.20, "who": "box", "probe": "entity_field", "field": "m_iEFlags", "member": "0x8000", "equals": true },
+    { "at": 0.20, "who": "box", "probe": "entity_field", "field": "m_iEFlags", "equals": 376832 },
+
+    { "at": 0.40, "who": "brush", "probe": "entity_field", "field": "m_vecSize", "member": "x", "equals": 0 },
+    { "at": 0.40, "who": "brush", "probe": "entity_field", "field": "m_flRadius", "equals": 0 },
+    { "at": 0.40, "who": "brush", "probe": "entity_field", "field": "m_iEFlags", "member": "0x8000", "equals": true },
+    { "at": "end", "who": "box", "probe": "exists", "equals": true },
+    { "at": "end", "who": "brush", "probe": "exists", "equals": true }
+  ],
+  "notes": "376832 = 0x5c000 = 0x54000 (the constructor's word) | 0x8000 (FUN_100ddd20 on the attached edict). The constructor's own sites are traced because the entity is created at run time (a map row's constructor runs at Load, before the sink; `hull` is read by probes alone). The two key arms run in the def's key order, which the record does not fix: the intermediate box is either side against zero and both give S = 14, so `key_first` accepts either. `m_vecSize` is in Source units, as the retail word is; `hull`'s row is the replayed HUMAN_HULL (`ElysiumRetailHullTable.h`). Not driven here: the backwards-mins/maxs Error (fatal in retail, no shipped program reaches it), the model-bounds arm of UTIL_SetModel (0x101cf54f; the arena stages no brush model -- the doors and buttons of a map host take it from their baked hulls), and the dirty list's drain (CDirtySpatialPartitionEntityList::vfunc0 0x100dbd70 -> FUN_100ddd90, the partition update, engine-replaced: 0x8000 stays set here, so a second change after the first never re-appends -- the named seam)."
+}

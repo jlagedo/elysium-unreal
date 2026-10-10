@@ -9,6 +9,7 @@
 #include <type_traits>
 
 struct FElysiumEntityDef;
+class FElysiumEntityWorld;
 
 // Parse a space-separated "x y z" keyvalue into an FVector (zero on any other shape). Used
 // by the Vector field accessor to marshal a string keyvalue (angles, velocity) at spawn.
@@ -227,8 +228,12 @@ public:
 
 	// Build a live entity for a def: its leaf class if registered, else an inert base record. Null
 	// (refused, logged) for an abstract class's descriptor, unless the def carries an internal
-	// factory -- retail's construction by code, which no classname reaches.
-	TUniquePtr<FElysiumEntity> Create(const FElysiumEntityDef& Def, FElysiumEntityHandle Handle) const;
+	// factory -- retail's construction by code, which no classname reaches. `World` is bound before
+	// `Construct` runs, as `gpGlobals` is live for the base constructor `0x1009d980` (it reads
+	// `curtime` into `m_flLastThink`) and the engine is for the edict attach that precedes the
+	// keyvalues; null for a worldless probe entity.
+	TUniquePtr<FElysiumEntity> Create(const FElysiumEntityDef& Def, FElysiumEntityHandle Handle,
+		FElysiumEntityWorld* World = nullptr) const;
 
 	void ForEach(TFunctionRef<void(const FElysiumClassDesc&)> Fn) const;
 	int32 Num() const { return Classes.Num(); }

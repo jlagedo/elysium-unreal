@@ -233,14 +233,16 @@ bool FElysiumNpcKernelGeometrySetSizeTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	TestTrue(TEXT("m_vecSize starts at zero"), F.Guard->SizeCm.IsNearlyZero());
+	// `m_vecSize` is not zero on a spawned NPC: `SetHullSizeNormal` 0x10273070 ran `UTIL_SetSize`
+	// 0x101cf3c0, whose slot-213 call wrote `maxs - mins` of the hull row (L0-r016). The test is slot
+	// 213 itself: three word stores, unconditional.
 	F.Guard->SetSize(FVector(32.f, 33.f, 72.f));
 	// Three word stores and nothing else; the 132 bytes of scope trace around them have no
 	// observable effect and are not reproduced.
 	TestTrue(TEXT("slot 213 writes all three words of m_vecSize"),
-		F.Guard->SizeCm.Equals(FVector(32.f, 33.f, 72.f), 0.001));
+		F.Guard->SizeUnits.Equals(FVector(32.f, 33.f, 72.f), 0.001));
 	F.Guard->SetSize(FVector::ZeroVector);
-	TestTrue(TEXT("and writes them again unconditionally"), F.Guard->SizeCm.IsNearlyZero());
+	TestTrue(TEXT("and writes them again unconditionally"), F.Guard->SizeUnits.IsNearlyZero());
 	return true;
 }
 

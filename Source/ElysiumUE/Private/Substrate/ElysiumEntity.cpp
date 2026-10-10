@@ -22,40 +22,48 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 	Handle = InHandle;
 	Class = &InClass;
 	TargetName = InDef.TargetName;
-	// The base constructor `FUN_1009d980` 0x1009d980's collision and flag-word steps, in its order
-	// (`walks/L0-r015.md` "Shared layout", `L0-r016.md`); the rest of that constructor is
-	// `L0.entity_core.base-construction`'s. `1009da53`: the member constructor `FUN_100dc190`.
-	// `1009db06`: `FUN_100dc300(this)`. `1009dbe3` / `1009dc53`: `SetSolid(0)` / `SetSolidFlags(0)`,
-	// both no-ops on the zeroed words. `1009dc79`: `SetCheckUntouch(false)`. `1009dca4`:
-	// `SetCollisionBounds(zero, zero)` -> `0x100dc770` -> `FUN_100dda20` (`|= 0x14000`, and
-	// `FUN_100ddd20` finds a NULL edict, so no `0x8000`). `1009dcdc`: `|= 0x50000`. A fresh entity
-	// reads `0x54000`.
-	ConstructCollisionProperty();                     // 1009da53 -> 0x100dc190
-	InitCollisionProperty(this);                      // 1009db06 -> 0x100dc300
-	SetSolid(0);                                      // 1009dbe3 -> 0x100dc480, no change
-	SetSolidFlags(0);                                 // 1009dc53 -> 0x100dc580, no change
-	SetCheckUntouch(false);                           // 1009dc79 -> 0x100b11d0
-	// `FUN_100dda20`'s OR, written out: inside the constructor the edict pointer `+0x2e0` is still
-	// NULL (`FUN_101ab590` zeroed it at `1009da5e`; the engine attaches the edict after
-	// construction), so the tail `FUN_100ddd20` reads `IndexOfEdict(NULL) == 0` and exits. Calling
-	// `MarkCollisionBoundsDirty()` here would read this port's edict index (the handle) as already
-	// attached and set `0x8000` early.
-	EFlags |= 0x14000u;                               // 1009dca4 -> 0x1009edc0 -> 0x100dc770 -> 0x100dda23
-	EFlags |= 0x50000u;                               // 1009dcdc OR EDX,0x50000
+	ConstructBaseEntity();
+
+	// `CreateEntityByName`'s order after the constructor returns: the edict is attached (the
+	// `CServerNetworkProperty` word `+0x2e0`, NULL for the whole constructor above), then the
+	// keyvalues. From here `IndexOfEdict` answers the entity's index and `FUN_100ddd20`'s `0x8000`
+	// arm is live (`walks/L0-r016.md`).
+	bEdictAttached = true;
 	Origin = InDef.Origin;   // the live copy; the def's is immutable (SetOrigin moves this one)
 	// The producer hoists `StartHidden` out of the keys, so seed the member from the def before
 	// the keyvalue walk below: an authored key still wins, and a def that carries only the
 	// hoisted bool still lands on the word the datamap row binds.
 	bStartHidden = InDef.bStartHidden;
 
-	// Apply the raw keyvalues through the class chain field table. Only mapped base/leaf
-	// fields are copied onto members; unmapped keys stay on the def (property-bag reads land
-	// with the script host later). Spawn-time application ignores bKeyable — the write-gate is
-	// for runtime Python/I/O, not the map's own keyvalues.
+	// Apply the raw keyvalues as `CBaseEntity::KeyValue` 0x1009e430 (slot 110) does for each map key:
+	// the key is truncated at `#` (`FUN_10431f30`), the literal arms run first, and only an
+	// unmatched key walks the datamap chain. Of the literal arms, `mins` / `maxs` are the base's own
+	// (below); `rendercolor` / `renderamt` / `disableshadows` / `disablereceiveshadows` / `angle` /
+	// `angles` / `origin` are classified by `FElysiumAnimating::ClassifyKeyValue` and consumed where
+	// their words live. The datamap walk is the class-chain field table (`Reg.FindField`): only
+	// mapped base/leaf fields are copied onto members; unmapped keys stay on the def (property-bag
+	// reads land with the script host later). Spawn-time application ignores bKeyable — the
+	// write-gate is for runtime Python/I/O, not the map's own keyvalues.
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 	for (const TPair<FString, FString>& KV : InDef.Keys)
 	{
-		if (const FElysiumFieldAccessor* Acc = Reg.FindField(InClass, FName(*KV.Key)))
+		int32 Hash = INDEX_NONE;
+		const FString Key = KV.Key.FindChar(TEXT('#'), Hash) ? KV.Key.Left(Hash) : KV.Key;
+		if (Key.Equals(TEXT("mins"), ESearchCase::IgnoreCase))
+		{
+			// `1009e5c2-1009e5d2`: `FUN_101d03e0(value, &v)` (the "x y z" parse), `max = cp.vtable[2]()`
+			// (`CCollisionProperty::vfunc2` 0x100dc830 = `&m_vecMaxs`), `FUN_100dc770(cp, v, max)`; true.
+			SetCollisionBounds(ParseRetailVector(KV.Value), CollMaxs);
+			continue;
+		}
+		if (Key.Equals(TEXT("maxs"), ESearchCase::IgnoreCase))
+		{
+			// `1009e61d-1009e62a`: `min = cp.vtable[1]()` (`vfunc1` 0x100dc810 = `&m_vecMins`),
+			// `FUN_100dc770(cp, min, v)`; true. No shipped map authors either key (0 of 71,096 entities).
+			SetCollisionBounds(CollMins, ParseRetailVector(KV.Value));
+			continue;
+		}
+		if (const FElysiumFieldAccessor* Acc = Reg.FindField(InClass, FName(*Key)))
 		{
 			if (Acc->Set)
 			{
@@ -79,6 +87,151 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 		SavedThinkCallback = ThinkCallback; // FUNCTION SAVE +0xe4
 		ThinkCallback = NAME_None; // NULL think +0x118
 		NextThink = ELYSIUM_NEVER_THINK;
+	}
+}
+
+FVector FElysiumEntity::ParseRetailVector(const FString& Text)
+{
+	// `FUN_101d03e0` (`UTIL_StringToVector` -> `UTIL_StringToFloatArray(v, 3, text)`): for each of the
+	// three slots, skip the separators, `atof`, advance past the number; a string that runs out leaves
+	// the remaining slots 0 (the output is zeroed first). The map's "x y z" spelling.
+	float V[3] = { 0.f, 0.f, 0.f };
+	const TCHAR* P = *Text;
+	for (int32 I = 0; I < 3; ++I)
+	{
+		while (*P != 0 && (FChar::IsWhitespace(*P) || *P == TEXT(','))) { ++P; }
+		if (*P == 0) { break; }
+		V[I] = FCString::Atof(P);
+		while (*P != 0 && !FChar::IsWhitespace(*P) && *P != TEXT(',')) { ++P; }
+	}
+	return FVector(V[0], V[1], V[2]);
+}
+
+void FElysiumEntity::ConstructBaseEntity()
+{
+	// The base constructor `FUN_1009d980` 0x1009d980 (`walks/L0-r016.md`, confirmed), its 33 steps in
+	// retail's order. Allocation is `CBaseEntity::operator new` 0x100aa720 -> engine slot 45 ->
+	// `calloc(1, size)` (`0x201092d0`): every word not written below is zero, which is what the
+	// member initializers of this class spell. The scope-trace rows (`"CBaseEntity::CBaseEntity"`
+	// 0x10555480, `SetSolid` 0x1053dafc, `ClearSolidFlags` 0x1055545c and each setter's own) are a
+	// crash-report breadcrumb and write no game state. Steps whose word this port does not carry are
+	// named where they fall; the end state is `l0_entity_constructor_defaults`'s.
+	//
+	// 1. vptr `vftable_IServerEntity` 0x10450a10 -- the C++ object model's.
+	// 2. `FUN_100cd2a0(+0x5c)`, `FUN_100cd2a0(+0x74)`: `m_OnUseBegin` / `m_OnUseEnd`, two `COutputEvent`s
+	//    (dword0 0, dword3 -1, dword4 0, dword5 0). Outputs fire by name here (`FireOutput`); no object.
+	// 3. `-1` to +0x8c `m_hUseActivator`, +0xc8, +0xd0 (UNRECOVERED names), +0x100 `m_hSoundOverrideEnt`,
+	//    +0x10c `m_hLastInputActivator`, +0x110 `m_hLastInputCaller`.
+	UseActivator = FElysiumEntityHandle::Invalid();                 // 1009d9ad
+	// 4. `FUN_1042d650(+0x1a8)` := 0 (UNRECOVERED name); `FUN_10146640(+0x1b0)`: `m_NetworkChangeState`
+	//    bytes 0..2 and u16s +4 / +6 := 0 (`bNetworkChanged` is its +1).
+	bNetworkChanged = false;                                        // 1009d9e9 -> 0x10146640
+	// 5. `FUN_100b4610(+0x1b8, 0, 0)`, +0x1c4 := 0, +0x1c8: `m_aThinkFunctions`, an empty CUtlVector of
+	//    `thinkfunc_t`. This port runs one think (`ThinkCallback`); the context list is empty here too.
+	// 6. `FUN_100b4650(+0x1d0, 0, 0)`, +0x1dc := 0, +0x1e0: `m_ResponseContexts`, empty. No port word.
+	// 7. +0x218 `m_hUseFilter`, +0x220 `m_hDamageFilter` := -1: the filters resolve by name here
+	//    (`UseFilterName` / `DamageFilterName`, both empty).
+	// 8. `FUN_100b4740(+0x230, 0, 0)`, `FUN_100b4710(+0x230)`, +0x250: `m_DamageModifiers`, an empty
+	//    `CUtlLinkedList` (head / tail / first-free -1, count 0). No port word.
+	// 9. +0x254 `m_pParent`, +0x25c `m_pMoveParent`, +0x260 `m_pMoveChild`, +0x264 `m_pMovePeer` := -1.
+	ParentHandle = FElysiumEntityHandle::Invalid();                 // 1009da2d
+	MoveParent = FElysiumEntityHandle::Invalid();                   // 1009da3a
+	MoveChild = FElysiumEntityHandle::Invalid();                    // 1009da41
+	MovePeer = FElysiumEntityHandle::Invalid();                     // 1009da48
+	// 10. `FUN_100dc190(+0x270)`: the `CCollisionProperty` member constructor.
+	ConstructCollisionProperty();                                   // 1009da53 -> 0x100dc190
+	// 11. `FUN_101ab3d0(+0x2d4)`: the `CServerNetworkProperty` constructor -- vptrs, `FUN_10146640(+0x2e4)`,
+	//     `FUN_101ab590(p, 0)`: +0x2d8 := 0, +0x2dc := 0, +0x2e0 (the edict) := 0.
+	bEdictAttached = false;                                         // 1009da5e -> 0x101ab3d0 -> 0x101ab590
+	// 12. -1 to +0x364 `m_hOwnerEntity`, +0x37c `m_hAimEnt`, +0x384 `m_hGroundEntity`, +0x3e8 (UNRECOVERED),
+	//     +0x440 `m_hPlayerSimulationOwner` (L3's word; none here), +0x448 `m_RefEHandle` (the port's
+	//     `Handle` IS the entity's handle; set by the registry before this runs).
+	OwnerEntity = FElysiumEntityHandle::Invalid();                  // 1009da63
+	AimEnt = FElysiumEntityHandle::Invalid();                       // 1009da6a
+	RetailGroundEntity = FElysiumEntityHandle::Invalid();           // 1009da71
+	// 13. vptr `vftable_CBaseEntity` 0x10450584; the constructor's scope-trace push (`m_iName` is 0: "").
+	// 14. +0x44, +0x48 := -1, +0xc4 := 0 (UNRECOVERED names); +0x368 `m_CollisionGroup` := 0; byte +0x258
+	//     `m_iParentAttachment` := 0.
+	CollisionGroup = 0;                                             // 1009daf8
+	ParentAttachment = 0;                                           // 1009dafe
+	// 15. `FUN_100dc300(+0x270, this)`: the collision property re-initialized with `owner = this`.
+	InitCollisionProperty(this);                                    // 1009db06 -> 0x100dc300
+	// 16. `FUN_101ab590(+0x2d4, this)`: the network property's owner := this, +0x2dc := 0, edict := 0.
+	// 17. +0x224 `m_debugOverlays`, +0x228 `m_pTimedOverlay`, +0x36c `m_pPhysicsObject`, +0x378
+	//     `m_pPythonObject` := 0 (no port words: no overlays, no vphysics object, the script host binds
+	//     by handle); +0x370 `m_flElasticity` := 1.0.
+	Elasticity = 1.0f;                                              // 1009db3a 0x3f800000
+	// 18. bytes +0x1a0..+0x1a3 := 0xFF: `m_clrRender` = 0xFFFFFFFF.
+	RenderColor = 0xffffffffu;                                      // 1009db44-1009db58
+	// 19. +0x22c `m_nSimulationTick` := -1; +0x178 `m_flLastThink` := `gpGlobals->curtime` (`DAT_1070b228 + 0xc`).
+	SimulationTick = -1;                                            // 1009db6c
+	LastThink = World != nullptr ? static_cast<float>(World->NowSeconds()) : 0.0f;   // 1009db72
+	// 20. `FUN_10139a90(+0x130)`: `m_rgflCoordinateFrame` := identity (3x4). No port word: the absolute
+	//     pose is recomputed from `Origin` / `Angles` (`CalcAbsolutePosition` 0x100b1ac0's port).
+	// 21. +0x3e8 := -1 (again); +0x1cc `m_iCurrentThinkContext` := -1.
+	CurrentThinkContext = -1;                                       // 1009db9b
+	// 22. `SetSolid(SOLID_NONE)` (`FUN_100dc480(cp, 0)`) and `ClearSolidFlags()` (`FUN_100dc580(cp, 0)`),
+	//     each under its own scope-trace row: both no-ops on the zeroed words.
+	SetSolid(0);                                                    // 1009dbe3 -> 0x100dc480, no change
+	SetSolidFlags(0);                                               // 1009dc53 -> 0x100dc580, no change
+	// 23. +0x4c `m_edtDerivedType` := 0. The port's class chain is the type.
+	// 24. `SetMoveType(0, 0)` 0x100aad70 (no-op: `m_MoveType` is 0); `SetOwnerEntity(NULL)` 0x100aab10
+	//     (no-op: -1 resolves to NULL); `SetCheckUntouch(false)` 0x100b11d0 (`&= 0xfeffffff`);
+	//     `SetSentLastFrame(false)` 0x100b12e0 (byte +0x380 := 0; no port word); `SetModelIndex(0)`
+	//     0x100b1750 (+0x1a4 := 0); `SetModelName(NULL)` 0x100b15f0 (+0x388 := 0: `Model` is empty).
+	SetMoveType(0, 0);                                              // 1009dc5f -> 0x100aad70
+	SetOwnerEntity(FElysiumEntityHandle::Invalid());                // 1009dc6c -> 0x100aab10
+	SetCheckUntouch(false);                                         // 1009dc79 -> 0x100b11d0
+	// `SetModelIndex(0)` (`1009dc8a`): `m_nModelIndex` is the engine's precache slot; this port
+	// resolves a model by name and carries no index word (the binding is UNBOUND), so the write has
+	// no word to land on. The slot-10 stub is not called: it is a censused refusal, not the write.
+	Model.Reset();                                                  // 1009dc97 -> 0x100b15f0
+	// 25. `SetCollisionBounds(this, &DAT_1070d1b0, &DAT_1070d1b0)` (`1009dca4` -> 0x1009edc0 -> 0x100dc770):
+	//     mins = maxs = 0, radius 0.0, then `FUN_100dda20`'s `|= 0x14000`; `FUN_100ddd20` finds the NULL
+	//     edict (`IndexOfEdict(NULL) == 0`, engine 0x20109110), so no `0x8000` and no dirty-list append.
+	SetCollisionBounds(FVector::ZeroVector, FVector::ZeroVector);   // 1009dca4
+	// 26. `ClearFlags()` 0x100b37a0: `m_fFlags` (+0x434) := 0.
+	Flags = 0;                                                      // 1009dcae -> 0x100b37a0
+	// 27. +0x3f0 `m_flFriction` := 1.0.
+	Friction = 1.0f;                                                // 1009dcb5 0x3f800000
+	// 28. `if (bool) m_iEFlags |= 0x200` (`OR AH,2`, 1009dcc2): all 286 call sites pass 0 -- never.
+	// 29. `m_iEFlags |= 0x50000` (1009dcdc). The word now reads 0x54000.
+	EFlags |= 0x50000u;                                             // 1009dcdc OR EDX,0x50000
+	// 30. +0x94 `m_pBaseNPC`, +0x98 `m_pBaseNPCTroika`, +0x9c `m_pCombatCharacter`, +0xa0 `m_pCombatWeapon`,
+	//     +0xa4, +0xa8 `m_pPlayer`, +0xac `m_pAnimal`, +0xb0 := 0 (the self-downcast caches the derived
+	//     constructors fill; this port's chain answers them by type). +0xc0 `m_iszVSoundGroup` := 0;
+	//     +0xb4 / +0xb8 / +0xbc := -2 (`layout.md:42-44`).
+	SoundGroup.Reset();                                             // 1009dd1c
+	VSoundGroup = -2;                                               // 1009dd23 0xfffffffe
+	VSoundGroupFemale = -2;                                         // 1009dd2a
+	VSoundTableIdx = -2;                                            // 1009dd31
+	// 31. bytes +0xf4 `m_bScriptHidden`, +0xfc `m_bNPCTransparent`, +0xfd `m_bBlocksTraces`, +0xfe
+	//     `m_bOccludesSound` := 0; +0x3e0 `m_nWaterLevel` := 0.
+	bHidden = false;                                                // 1009dd38
+	bNpcTransparent = false;                                        // 1009dd3c
+	bBlocksTraces = false;                                          // 1009dd40
+	WaterLevel = 0;                                                 // 1009dd48
+	// 32. the step-3 slots again: +0xc8 -1, +0xcc 0, +0xd0 -1, +0xd4 0, +0xd8 0, +0x100 -1 (the sound
+	//     override handle), byte +0x104 `m_bFakeSilence` 0, +0x108 `m_iszScriptedSoundOverrideEnt` 0, +0xdc 0,
+	//     +0x10c -1, +0x110 -1.
+	bFakeSilence = false;                                           // 1009dd6b
+	SoundOverrideEntityName.Reset();                                // 1009dd6f (+0x108; which of +0x100 / +0x108 it stands for is UNRECOVERED)
+	// 33. +0x1a4 := 0 (again); byte +0x44c `m_bHasCalledMakerDeathNotice` := 0 (the nearest port word is
+	//     `bOwnerTerminationNotified`; the meaning is not verified). Scope-trace pop; `RET 4` with `this`.
+	bOwnerTerminationNotified = false;                              // 1009dd97
+	if (World != nullptr)
+	{
+		World->EmitRetailSite(*this, TEXT("entity_ctor"), TEXT("CBaseEntity::CBaseEntity"), 0x1009d980u, TEXT("return"),
+			FString::Printf(TEXT("m_iEFlags=0x%x m_fFlags=%d m_flFriction=%g m_flElasticity=%g m_flNextThink=0 m_flLastThink=%g ")
+				TEXT("m_clrRender=0x%08x m_nSimulationTick=%d m_iCurrentThinkContext=%d m_CollisionGroup=%d m_MoveType=%d ")
+				TEXT("m_nModelIndex=0 m_ModelName=0 m_iName=0 m_vecSize=%s m_vecMins=%s m_vecMaxs=%s m_flRadius=%g m_Solid=%d ")
+				TEXT("m_usSolidFlags=0x%x partition_handle=0x%x m_hOwnerEntity=-1 m_hGroundEntity=-1 m_hAimEnt=-1 ")
+				TEXT("m_pParent=-1 m_pMoveParent=-1 m_pMoveChild=-1 m_pMovePeer=-1 m_hUseActivator=-1 m_RefEHandle=-1 ")
+				TEXT("m_iVSoundGroup=%d m_iVSoundGroupFemale=%d m_iVSoundTableIdx=%d m_touchStamp=%d edict=0"),
+				EFlagsWord(), Flags, Friction, Elasticity, LastThink, RenderColor, SimulationTick, CurrentThinkContext,
+				CollisionGroup, GetMoveType(), *RetailVectorText(SizeUnits), *RetailVectorText(CollMins),
+				*RetailVectorText(CollMaxs), CollisionRadius, RetailSolidType, RetailSolidFlags & 0xffffu,
+				static_cast<uint32>(PartitionHandle), VSoundGroup, VSoundGroupFemale, VSoundTableIdx, TouchStamp));
 	}
 }
 

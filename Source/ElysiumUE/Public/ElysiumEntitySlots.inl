@@ -655,9 +655,8 @@
 	//   layer 0, story 29c
 	virtual void SetSize(const FVector&);
 	// slot 214 0x100b1960 (walked) `const Vector& GetSize()`
-	//   returns `const Vector&`
 	//   layer 0, story 29c
-	virtual void* GetSize();
+	virtual const FVector& GetSize();
 	// slot 215 0x100b4c30 (walked) `const Vector& WorldSpaceCenter() const`
 	//   returns `const Vector&`
 	//   layer 8, story 29c

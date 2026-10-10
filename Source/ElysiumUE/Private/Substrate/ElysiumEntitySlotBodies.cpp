@@ -461,7 +461,7 @@ const FVector& FElysiumEntity::LocalEyeAngles()
 	return GetAngles();
 }
 
-void FElysiumEntity::SetSize(const FVector& InSizeCm)
+void FElysiumEntity::SetSize(const FVector& InSizeUnits)
 {
 	// `0x100b1890`, 146 bytes, of which 132 are the scope-trace push and pop: the body reads
 	// `m_iName` (`+0x026c`) purely to label a crash-report breadcrumb (`"CBaseEntity::SetSize"`,
@@ -469,10 +469,30 @@ void FElysiumEntity::SetSize(const FVector& InSizeCm)
 	// row, writes the three words, and pops. The breadcrumb stack has no observable effect on any
 	// program and is not reproduced.
 	//
-	// The three writes ARE the body: `m_vecSize` (`+0x038c`) and the two words after it. Nothing in
-	// layers 0–9 reads them but slot 214 `GetSize`. Unreal's collision component is the eventual
-	// host for an actor's bounds; until then this member is what the kernel sees.
-	SizeCm = InSizeCm;
+	// The three writes ARE the body: `m_vecSize` (`+0x038c`) and the two words after it, Source
+	// units. Its one dispatch site is `UTIL_SetSize` 0x101cf3c0 (`101cf459`), which hands it
+	// `maxs - mins`; slot 214 `GetSize` returns the word's address (`walks/L0-r016.md`).
+	SizeUnits = InSizeUnits;
+	if (World != nullptr)
+	{
+		World->EmitRetailSite(*this, TEXT("entity_size"), TEXT("CBaseEntity::SetSize"), 0x100b1890u, TEXT("write"),
+			FString::Printf(TEXT("m_vecSize=%s"), *RetailVectorText(SizeUnits)));
+	}
+}
+
+const FVector& FElysiumEntity::GetSize()
+{
+	// `CBaseEntity::GetSize` 0x100b1960, slot 214 (`+0x358`): the scope-trace frame
+	// (`"CBaseEntity::GetSize"` 0x10558b14, `m_iName` or `""` or `"NULL ENTITY"`), then
+	// `LEA EAX,[ECX+0x38C]` (`100b19d4`): the address of `m_vecSize`, never NULL. No class of the
+	// 497 overrides the slot; its 15 virtual sites are the door, button and func_movelinear Spawn
+	// bodies and the damage-force bodies (`walks/L0-r016.md`).
+	if (World != nullptr)
+	{
+		World->EmitRetailSite(*this, TEXT("entity_size"), TEXT("CBaseEntity::GetSize"), 0x100b19d4u, TEXT("return"),
+			FString::Printf(TEXT("off=0x38c m_vecSize=%s"), *RetailVectorText(SizeUnits)));
+	}
+	return SizeUnits;
 }
 
 // --- Moved from `ElysiumNpcBaseHelpers.cpp` (story 5 step 6) ---

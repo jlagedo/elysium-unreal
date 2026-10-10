@@ -367,6 +367,12 @@ void FElysiumDoorBase::Spawn()
 	// seated there by BuildBrushBody). Open is leaf-computed from the keyvalues + spawnflags.
 	ClosedLoc = Body ? Body->GetRelativeLocation() : (Def ? Def->Origin : FVector::ZeroVector);
 	ClosedRot = Body ? Body->GetRelativeRotation() : FRotator::ZeroRotator;
+	// `CBaseDoor::vfunc103` 0x100ef260 (Spawn), `100ef298`: `SetModel(STRING(GetModelName()) or "")`
+	// (slot 105 -> `CBaseEntity::SetModel` 0x100ad460 -> `UTIL_SetModel` 0x101cf4a0): the collision
+	// box and `m_vecSize` become the brush model's bounds -- what the open-pose arithmetic below reads
+	// through slot 214 `GetSize` (`walks/L0-r016.md`). The brush body is built after Spawn, so the
+	// bounds come from the def's hulls, as `UtilSetModel` reads them.
+	UtilSetModel(Model);
 	ComputeOpenTransform(OpenLoc, OpenRot);
 
 	// Mover sounds: open/close/swing/locked from usable/openable/<soundgroup>/. SF_DOOR_SILENT
@@ -1510,27 +1516,23 @@ FBox FElysiumFuncDoorRotating::ComputeCloseBounds() const
 
 // func_door — the sliding door / drawer / cabinet (214 uses / 40 maps; 7 on the tutorial).
 //
-// Reference: animation_and_movers.md B.2/B.4 + the decompiled CBaseDoor::Spawn (FUN_100ef260),
-// which computes the open pose as pos2 = pos1 + movedir · (|size·movedir| − lip). The door slides
-// along `angles` (SetMovedir) by its own depth in that direction, minus `lip`; `speed` is in/s.
+// Reference: animation_and_movers.md B.2/B.4 + the decompiled CBaseDoor::Spawn (`CBaseDoor::vfunc103`
+// 0x100ef260), which computes the open pose as `pos2 = pos1 + movedir * T`, `T = |(size.x - 2) *
+// movedir.x| + |(size.y - 2) * movedir.y| + |(size.z - 2) * movedir.z| - lip` (`walks/L0-r016.md`).
+// The door slides along `angles` (SetMovedir) by its own depth in that direction, less a 2-unit
+// inset and the `lip`; `speed` is in/s.
 class FElysiumFuncDoor final : public FElysiumDoorBase
 {
 protected:
 	virtual void ComputeOpenTransform(FVector& OutOpenLoc, FRotator& OutOpenRot) const override
 	{
-		// movedir from `angles` (Unreal space), REVERSE (0x2) negates it. Travel = the door's own
-		// extent projected on movedir minus the lip. The body isn't built yet at Spawn, so the size
-		// comes from the def hulls (entity-local cm), not the (absent) brush bounds.
+		// movedir from `angles` (Unreal space), REVERSE (0x2) negates it.
 		FVector Dir = SourceAnglesToUnrealDir(Angles);
 		if (SpawnFlags & SF_DOOR_REVERSE)
 		{
 			Dir = -Dir;
 		}
-		const FVector Size = HullLocalBounds(Def).GetSize();   // full width in cm
-		const double Span = FMath::Abs(FVector::DotProduct(Size, Dir.GetAbs()));
-		const double Travel = FMath::Max(0.0, Span - Lip * MoverInchToCm);
-
-		OutOpenLoc = ClosedLoc + Dir * Travel;
+		OutOpenLoc = ClosedLoc + Dir * (ElysiumRetailMoverTravelUnits(*this, Dir, Lip) * MoverInchToCm);
 		OutOpenRot = ClosedRot;   // a slide does not rotate
 	}
 
@@ -1543,16 +1545,35 @@ protected:
 	virtual bool ResolvesEndpointFromRotation() const override { return false; }
 
 	// `CBaseDoor` slot 245 `0x100f0a40`: the current origin moved by `-movedir` (`_DAT_104492dc` =
-	// -1.0) times the travel (`|(size - 2)·movedir| - lip`, `_DAT_10452dc4` = 2.0), plus the
-	// collision OBB -- the box the leaf fills when closed. The port's open pose carries no 2-unit
-	// pad (`ComputeOpenTransform`), so the closed pose is `ClosedLoc` itself; the box is the hulls
-	// there. GetNPCOpenData stays the base's -1 (`0x100f0ef0`).
+	// -1.0) times the travel (`|(size - 2)·movedir| - lip`, `_DAT_10452dc4` = 2.0, the same sum
+	// `ComputeOpenTransform` takes from slot 214, no clamp), plus the collision OBB -- the box the
+	// leaf fills when closed. Retail's call sites run it on a door at its open pose, where the move
+	// lands back on `m_vecPosition1`; the port asks it of the closed pose, `ClosedLoc` itself, so the
+	// box is the hulls there. GetNPCOpenData stays the base's -1 (`0x100f0ef0`).
 	virtual FBox ComputeCloseBounds() const override
 	{
 		const FBox Local = HullLocalBounds(Def);
 		return Local.IsValid ? Local.ShiftBy(ClosedLoc) : FBox(ForceInit);
 	}
 };
+
+double ElysiumRetailMoverTravelUnits(const FElysiumEntity& Mover, const FVector& MoveDir, float LipUnits)
+{
+	// The one extent sum of `CBaseDoor::vfunc103` 0x100ef260 (`100ef2d1-100ef31d`), `CBaseDoor::vfunc245`
+	// 0x100f0a40, `CBaseButton::Spawn` 0x100c8d60 and `CFuncMoveLinear::Spawn` 0x10116030: slot 214
+	// `GetSize` called three times (x from the first, z from the second, y from the third), then
+	// `T = |(size.x - 2.0) * dir.x| + |(size.y - 2.0) * dir.y| + |(size.z - 2.0) * dir.z| - lip`, 2.0 the
+	// f32 at `0x10452dc4`, the z term spilled as a double between steps, and NO clamp at zero: a lip
+	// past the depth moves the mover the other way (`walks/L0-r016.md`). Source units in, Source
+	// units out. `MoveDir` is a unit vector on the Unreal axes; the Y reflection does not change the
+	// absolute values the sum takes.
+	FElysiumEntity& Dispatch = const_cast<FElysiumEntity&>(Mover);   // slot 214 is non-const in retail
+	const FVector& First = Dispatch.GetSize();                                           // call 1: x, read last
+	const double TermZ = FMath::Abs((static_cast<double>(Dispatch.GetSize().Z) - 2.0) * MoveDir.Z);   // call 2: z (spilled)
+	const double TermY = FMath::Abs((static_cast<double>(Dispatch.GetSize().Y) - 2.0) * MoveDir.Y);   // call 3: y
+	const double TermX = FMath::Abs((static_cast<double>(First.X) - 2.0) * MoveDir.X);
+	return ((TermX + TermY) + TermZ) - static_cast<double>(LipUnits);
+}
 
 // --- Registration ---
 

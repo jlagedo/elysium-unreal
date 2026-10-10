@@ -1243,8 +1243,15 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 		// mask in hex, answered as a bool), `m_MoveType` / `m_MoveCollide`, `m_NetworkChangeState.m_bChanged`,
 		// the local pose words `m_vecOrigin` / `m_angRotation` and the absolute ones `m_vecAbsOrigin` /
 		// `m_angAbsRotation` (read through slots 217 / 219, which recompute under EFL 0x800 as retail's do).
+		// L0-r016's: the collision property's `m_vecMins` / `m_vecMaxs` (coll+0x04 / +0x10) and `m_flRadius`
+		// (coll+0x48), `m_vecSize` (+0x38c), and the base constructor's scalar words `m_flElasticity`
+		// (+0x370), `m_CollisionGroup` (+0x368), `m_clrRender` (+0x1a0, the dword), `m_nSimulationTick`
+		// (+0x22c), `m_iCurrentThinkContext` (+0x1cc), `m_flLastThink` (+0x178), and the handles
+		// `m_hOwnerEntity` (+0x364), `m_hGroundEntity` (+0x384), `m_hUseActivator` (+0x8c).
+		const bool bBoxVector = Probe.Field == TEXT("m_vecMins") || Probe.Field == TEXT("m_vecMaxs")
+			|| Probe.Field == TEXT("m_vecSize");
 		const bool bVector = Probe.Field == TEXT("m_vecOrigin") || Probe.Field == TEXT("m_angRotation")
-			|| Probe.Field == TEXT("m_vecAbsOrigin") || Probe.Field == TEXT("m_angAbsRotation");
+			|| Probe.Field == TEXT("m_vecAbsOrigin") || Probe.Field == TEXT("m_angAbsRotation") || bBoxVector;
 		const bool bFlagWord = Probe.Field == TEXT("m_iEFlags");
 		if (!bVector && !bFlagWord && (!Probe.Index.IsEmpty() || !Probe.Member.IsEmpty()))
 		{
@@ -1315,6 +1322,29 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 				: Probe.Field == TEXT("m_Solid") ? Entity->RetailSolidType
 				: static_cast<double>(Entity->RetailSolidFlags & 0xffffu);
 		}
+		else if (Probe.Field == TEXT("m_flRadius") || Probe.Field == TEXT("m_flElasticity")
+			|| Probe.Field == TEXT("m_CollisionGroup") || Probe.Field == TEXT("m_clrRender")
+			|| Probe.Field == TEXT("m_nSimulationTick") || Probe.Field == TEXT("m_iCurrentThinkContext")
+			|| Probe.Field == TEXT("m_flLastThink"))
+		{
+			OutAnswer.Type = FElysiumArenaValue::EType::Number;
+			OutAnswer.Number = Probe.Field == TEXT("m_flRadius") ? static_cast<double>(Entity->CollisionRadius)
+				: Probe.Field == TEXT("m_flElasticity") ? static_cast<double>(Entity->Elasticity)
+				: Probe.Field == TEXT("m_CollisionGroup") ? static_cast<double>(Entity->CollisionGroup)
+				: Probe.Field == TEXT("m_clrRender") ? static_cast<double>(Entity->RenderColor)
+				: Probe.Field == TEXT("m_nSimulationTick") ? static_cast<double>(Entity->SimulationTick)
+				: Probe.Field == TEXT("m_iCurrentThinkContext") ? static_cast<double>(Entity->CurrentThinkContext)
+				: static_cast<double>(Entity->LastThink);
+		}
+		else if (Probe.Field == TEXT("m_hOwnerEntity") || Probe.Field == TEXT("m_hGroundEntity")
+			|| Probe.Field == TEXT("m_hUseActivator"))
+		{
+			// The retail word: `#<index>` for a set handle, `-1` (0xFFFFFFFF) for the invalid one.
+			const FElysiumEntityHandle Word = Probe.Field == TEXT("m_hOwnerEntity") ? Entity->OwnerEntity
+				: Probe.Field == TEXT("m_hGroundEntity") ? Entity->RetailGroundEntity : Entity->UseActivator;
+			OutAnswer.Type = FElysiumArenaValue::EType::String;
+			OutAnswer.String = Word.IsSet() ? Word.ToString() : FString(TEXT("-1"));
+		}
 		else if (Probe.Field == TEXT("m_iName"))
 		{
 			OutAnswer.Type = FElysiumArenaValue::EType::String;
@@ -1354,8 +1384,13 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 			// `m_angAbsRotation` the absolute ones through slots 217 / 219 (a retail read: it recomputes
 			// and clears EFL 0x800 exactly as any retail reader of the pose does). Port units: cm on the
 			// Unreal axes for the origins, Source degrees (pitch, yaw, roll) for the angles.
+			// `m_vecMins` / `m_vecMaxs` / `m_vecSize` are the collision box and size words in Source
+			// units, read raw (the box setter and slot 213 wrote them).
 			const FVector Word = Probe.Field == TEXT("m_vecOrigin") ? Entity->LocalOriginWord()
 				: Probe.Field == TEXT("m_angRotation") ? Entity->LocalAnglesWord()
+				: Probe.Field == TEXT("m_vecMins") ? Entity->CollMins
+				: Probe.Field == TEXT("m_vecMaxs") ? Entity->CollMaxs
+				: Probe.Field == TEXT("m_vecSize") ? Entity->SizeUnits
 				: Probe.Field == TEXT("m_vecAbsOrigin") ? Entity->GetAbsOrigin() : Entity->GetAbsAngles();
 			OutAnswer.Type = FElysiumArenaValue::EType::Number;
 			OutAnswer.Number = Probe.Member == TEXT("x") ? Word.X : Probe.Member == TEXT("y") ? Word.Y : Word.Z;
@@ -1373,7 +1408,9 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 					TEXT("m_spawnflags, m_nRenderMode, m_lifeState, m_vecOrigin, m_angRotation, m_vecAbsOrigin, m_angAbsRotation, ")
 					TEXT("m_pParent, m_pMoveParent, m_pMoveChild, m_pMovePeer, m_hAimEnt, m_iParentAttachment, m_iEFlags, ")
 					TEXT("m_MoveType, m_MoveCollide, m_NetworkChangeState.m_bChanged, m_iVSoundGroup, m_iVSoundGroupFemale, ")
-					TEXT("m_iVSoundTableIdx, m_touchStamp, m_Solid, m_usSolidFlags, or a datamap row the entity's class registers)"),
+					TEXT("m_iVSoundTableIdx, m_touchStamp, m_Solid, m_usSolidFlags, m_vecMins, m_vecMaxs, m_vecSize, m_flRadius, ")
+					TEXT("m_flElasticity, m_CollisionGroup, m_clrRender, m_nSimulationTick, m_iCurrentThinkContext, m_flLastThink, ")
+					TEXT("m_hOwnerEntity, m_hGroundEntity, m_hUseActivator, or a datamap row the entity's class registers)"),
 					*Probe.Field);
 				return false;
 			}

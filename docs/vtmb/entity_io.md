@@ -969,6 +969,88 @@ Who asks for an untouch pass, and when it runs (`docs/specs/layers/L0-entity/wal
   → `FUN_100dc770` → `FUN_100dda20`'s `0x14000`, with a NULL edict so no `0x8000`; then `|= 0x50000`).
   The 124 slot-83/84 dispatches on `*DAT_1070b22c` in the corpus are `VEngineServer014`'s, not these.
 
+### The collision box, the size word and the base constructor (L0-r016, decompiled)
+
+`docs/specs/layers/L0-entity/walks/L0-r016.md` (confirmed); port
+`Source/ElysiumUE/Private/Substrate/ElysiumEntityCollision.cpp`, `ElysiumEntity.cpp`,
+`ElysiumEntitySlotBodies.cpp`; records `l0_collision_bounds_size`, `l0_entity_constructor_defaults`.
+
+- **`FUN_100dc770`** `0x100dc770` (`__thiscall` on the embedded `CCollisionProperty`, `RET 8`) — the
+  bounds setter. Stores `m_vecMins` (`coll+0x04`) and `m_vecMaxs` (`coll+0x10`), then `m_flRadius`
+  (`coll+0x48`) `= f32(0.5 * sqrt(f32((dz*dz + dx*dx) + dy*dy)))`, `d = maxs - mins` (the x87 grouping
+  at `100dc7ae-100dc7bc`; `0.5f` at `0x104454d0`; `[0x10579660]` → `FUN_101371d0` = `FLD; FSQRT; RET`),
+  then `FUN_100dda20` (`m_iEFlags |= 0x14000`, tail-jump into `FUN_100ddd20`). **Never writes
+  `m_vecSize`.** Reached only through the thunk `0x100123c3`, from `CBaseEntity::SetCollisionBounds`
+  `0x1009edc0` (a scope-trace frame and nothing else) and the `CBaseEntity::KeyValue` `0x1009e430`
+  `mins` / `maxs` arms (`1009e5c2` / `1009e61d`: the parsed vector against the other side's current
+  word, through `CCollisionProperty::vfunc1` / `vfunc2` `0x100dc810` / `0x100dc830` = `&m_vecMins` /
+  `&m_vecMaxs`). No shipped map authors `mins`, `maxs` or `size` (0 of 71,096 entities, 108 maps).
+- **`FUN_100ddd20`** — the gate: `IndexOfEdict(owner->+0x2e0)` (`VEngineServer014` slot 35, engine
+  `0x20109110`: **0 for a NULL edict**, else `(edict - sv.edicts) / 0x78`) non-zero and `0x8000` clear →
+  `|= 0x8000` and `FUN_100dbc60(&DAT_106e8144, owner)`: `m_RefEHandle` (`+0x448`, slot 1) appended to the
+  `CUtlVector<CBaseHandle>` of the global **`CDirtySpatialPartitionEntityList`** `DAT_106e8144` (RTTI
+  `0x10454124`; built by `staticinit_100dba30`). Its consumer `CDirtySpatialPartitionEntityList::vfunc0`
+  `0x100dbd70` walks the vector last to first, resolves each handle (serial `>> 0xd`, index `& 0x1fff`,
+  table `0x106eb5dc` / `0x106eb5e0`) and runs `FUN_100ddd90(entity+0x270)` — the partition update, which
+  clears `0x8000` and relinks the spatial partition — then empties the list. The partition is
+  engine-replaced in the port (Unreal's overlap queries), so `0x8000` is never cleared there: a second
+  change after the first never re-appends (the named seam). UNRECOVERED: the engine caller of
+  `vfunc0`, the surrounding-box arm of `FUN_100ddd90` (`cp` vtable `+0x3c`, the `1.0f` inflation,
+  `ISpatialPartition` vfunc 7), the readers of `0x4000` / `0x10000`, the x87 precision word.
+- **`CBaseEntity::GetSize`** `0x100b1960` (slot 214, `+0x358`): the scope-trace frame, then `LEA
+  EAX,[ECX+0x38C]` — `&m_vecSize`, never NULL (a NULL `this` returns `0x38C`). No class of the 497
+  overrides it. Readers: `CBaseDoor::vfunc103` `0x100ef260` (Spawn), `CBaseDoor::vfunc245` `0x100f0a40`,
+  `CBaseButton::Spawn` `0x100c8d60`, `CFuncMoveLinear::Spawn` `0x10116030` (when `m_flMoveDistance <= 0`),
+  each calling it three times (x, z, y) for `T = |(size.x - 2.0) * dir.x| + |(size.y - 2.0) * dir.y| +
+  |(size.z - 2.0) * dir.z| - m_flLip` (`2.0f` at `0x10452dc4`), **with no clamp at zero**; the door's
+  `m_vecPosition2 = m_vecPosition1 + dir * T`; the button additionally collapses
+  `if (sqrt(|pos2 - pos1|^2) < 1.0f [0x104454c0] || spawnflags & 1) pos2 = pos1`, after its zero
+  defaults (`m_flSpeed` 0 → 40.0, `m_flWait` 0 → 1.0, `m_flLip` 0 → 4.0). Not walked:
+  `CBreakable::OnTakeDamage`, `CBaseCombatCharacter::DamageForce` / `CalcDamageForceVector`,
+  `CBaseEntity::OnTakeDamage`.
+- **The writers of `m_vecSize`**: slot 213 `CBaseEntity::SetSize` `0x100b1890` (three f32 stores),
+  whose one dispatch site is **`UTIL_SetSize`** `FUN_101cf3c0` `0x101cf3c0` (`FUN_101cf390` the
+  3-argument wrapper; the fourth argument is never read): per axis `maxs[i] < mins[i]` →
+  `Error("backwards mins/maxs")` (fatal), `SetCollisionBounds(mins, maxs)`, `SetSize(maxs - mins)`
+  (`101cf459`). **`UTIL_SetModel`** `FUN_101cf4a0` `0x101cf4a0` (the tail of `CBaseEntity::SetModel`
+  `0x100ad460`) ends in it: an empty name returns untouched; else the model index (`VModelInfoServer001`
+  slot 12; negative → `Error("no precache: %s")`), `SetModelIndex`, `SetModelName`, then
+  `UTIL_SetSize(this, model mins, model maxs, 1)` or, for a NULL model, the `vec3_origin` pair.
+  The NPC hull setters `0x10273070` / `0x10273180` call `UTIL_SetSize` with the hull row (reached at
+  spawn through `CAI_BaseNPCTroika::SetModel` `0x10298ce0`). Also `FUN_102518f0` (a whole-entity copy)
+  and the datamap key `size` (never authored).
+- **`CBaseEntity::CBaseEntity`** `FUN_1009d980` `0x1009d980` (`this, bool`; `RET 4`), over a
+  `calloc(1, size)` allocation (`CBaseEntity::operator new` `0x100aa720` → engine slot 45
+  `0x201092d0`). All 286 call sites pass 0 for the bool (`|= 0x200` never runs). In order: the
+  `IServerEntity` vptr; `m_OnUseBegin` / `m_OnUseEnd` (`FUN_100cd2a0`); `-1` to `m_hUseActivator`
+  (`+0x8c`), `+0xc8`, `+0xd0`, `m_hSoundOverrideEnt` (`+0x100`), `+0x10c`, `+0x110`; `+0x1a8` 0;
+  `m_NetworkChangeState` (`FUN_10146640`: bytes 0..2, u16s +4 / +6); the empty `m_aThinkFunctions`,
+  `m_ResponseContexts`, `m_DamageModifiers` (`CUtlLinkedList`, head / tail / first-free -1);
+  `m_hUseFilter` / `m_hDamageFilter` -1; `m_pParent` / `m_pMoveParent` / `m_pMoveChild` / `m_pMovePeer`
+  -1; `FUN_100dc190` (the collision member: partition handle `0xffff`, `FUN_100dc300(0)`);
+  `FUN_101ab3d0` (the network property: edict `+0x2e0` 0); `-1` to `m_hOwnerEntity`, `m_hAimEnt`,
+  `m_hGroundEntity`, `+0x3e8`, `m_hPlayerSimulationOwner`, `m_RefEHandle`; the `CBaseEntity` vptr;
+  `+0x44` / `+0x48` -1, `+0xc4` 0, `m_CollisionGroup` 0, `m_iParentAttachment` 0; `FUN_100dc300(this)`;
+  `FUN_101ab590(this)`; `m_debugOverlays`, `m_pTimedOverlay`, `m_pPhysicsObject`, `m_pPythonObject` 0,
+  `m_flElasticity` 1.0; `m_clrRender` `0xFFFFFFFF`; `m_nSimulationTick` -1, `m_flLastThink = curtime`
+  (`DAT_1070b228 + 0xc`); `m_rgflCoordinateFrame` identity; `m_iCurrentThinkContext` -1;
+  `SetSolid(0)` and `ClearSolidFlags()` (no-ops on the zeroed words); `m_edtDerivedType` 0;
+  `SetMoveType(0, 0)`, `SetOwnerEntity(NULL)`, `SetCheckUntouch(false)`, `SetSentLastFrame(false)`,
+  `SetModelIndex(0)`, `SetModelName(NULL)`; **`SetCollisionBounds(vec3_origin, vec3_origin)`**
+  (`1009dca4`: zero box, radius 0, `|= 0x14000`; the edict is NULL so no `0x8000`); `ClearFlags()`;
+  `m_flFriction` 1.0; `|= 0x50000`; the self-downcast caches 0; `m_iszVSoundGroup` 0, the three VSound
+  words -2; the hidden / transparent / blocks-traces / occludes-sound bytes 0; `m_nWaterLevel` 0; the
+  step-3 slots again; `m_bHasCalledMakerDeathNotice` 0. End state `m_iEFlags = 0x54000`; never
+  written: `m_flNextThink`, `m_vecSize`, `m_iName`, `m_ModelName`, `m_lifeState`, `m_spawnflags`,
+  `m_iHealth`, `m_MoveType`, `m_flGravity`. Still unnamed: `+0x44`, `+0x48`, `+0xa4`, `+0xb0`, `+0xc4`,
+  `+0xc8`, `+0xcc`, `+0xd0`, `+0xd4`, `+0xd8`, `+0x1a8`, `+0x3e8`, network property `+0x2dc`.
+- **Port mapping notes.** `ParentName` is `m_iParent` (`+0x124`, the authored string), distinct from
+  `m_pParent` (`+0x254`, `ParentHandle`); `UseActivator` is `m_hUseActivator`; the port's never-think
+  word is the queue's FLT_MAX sentinel where retail's is 0.0 (a representation, compared through the
+  mapping). The edict attach is `bEdictAttached`, set by `Construct` after the constructor body and
+  before the keyvalues, so the constructor's `SetCollisionBounds` takes the NULL-edict arm and the
+  `mins` / `maxs` keys the attached one.
+
 ### `OnStartTouch` still fires inside the `wait == -1` removal window
 
 `ActivateMultiTrigger` (`FUN_101c68e0`) writes exactly three things on the `wait == -1` branch:

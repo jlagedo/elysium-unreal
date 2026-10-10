@@ -29,10 +29,11 @@ public:
 	static constexpr int32 SF_USEGATE  = 0x1000;   // secondary use-gate: activator must carry a flag (+0x5c5)
 
 	// Keyfields (B.2). Speed is the press-in speed in Source in/s; wait is the pressed hold before
-	// spring-back (-1 = latch open); lip trims the press-in travel.
-	float Speed = 40.0f;
-	float Wait  = 3.0f;
-	float Lip   = 4.0f;
+	// spring-back (-1 = latch open); lip trims the press-in travel. Zero until authored, as the
+	// `calloc` words are: `CBaseButton::Spawn` 0x100c8d60 turns a zero into 40.0 / 1.0 / 4.0.
+	float Speed = 0.0f;
+	float Wait  = 0.0f;
+	float Lip   = 0.0f;
 	bool  bLocked = false;
 
 	// Explicit press sounds (B.2): `unlocked_sound` = the press-success WAV, `locked_sound` = the
@@ -93,6 +94,15 @@ public:
 	{
 		bLocked = (SpawnFlags & SF_LOCKED) != 0;
 		ButtonState = EState::Rest;
+		// `CBaseButton::Spawn` 0x100c8d60: after `SetSolid(SOLID_BSP)`, `SetModel(STRING(GetModelName())
+		// or "")` (slot 105, `100c8e20` -> 0x100ad460 -> `UTIL_SetModel` 0x101cf4a0): the collision box
+		// and `m_vecSize` are the brush model's bounds, read back through slot 214 by the press-travel
+		// sum below. Then the zero defaults (`_DAT_104454c4` = 0.0f): `m_flSpeed` 0 -> 40.0 (`0x42200000`),
+		// `m_flWait` 0 -> 1.0 (`0x3f800000`), `m_flLip` 0 -> 4.0 (`0x40800000`) (`walks/L0-r016.md`).
+		UtilSetModel(Model);
+		if (Speed == 0.0f) { Speed = 40.0f; }
+		if (Wait == 0.0f)  { Wait = 1.0f; }
+		if (Lip == 0.0f)   { Lip = 4.0f; }
 		// Mover sounds: soundgroup on/off from usable/switches/<soundgroup>/ (RE: CBaseButton::
 		// Spawn FUN_100c8810 reads "on"/"off"), plus the explicit locked/unlocked press WAVs. Buttons
 		// have no SILENT spawnflag (0x1000 is USEGATE here), so pass 0.
@@ -228,10 +238,11 @@ private:
 		NextThink = ELYSIUM_NEVER_THINK;   // re-armed; waits for the next press
 	}
 
-	// Capture the rest pose and derive the pressed pose once the body exists. DONTMOVE (every
-	// exported button) collapses the two. The movedir derivation matches the door's shared
-	// SetMovedir helper; the moving path remains unexercised by shipped data — no exported
-	// func_button clears DONTMOVE.
+	// Capture the rest pose and derive the pressed pose once the body exists -- `CBaseButton::Spawn`
+	// 0x100c8d60's `m_vecPosition1` / `m_vecPosition2` arithmetic (`100c8e6b-100c8f47`), run late
+	// because the body (the rest pose) is built after Spawn. The movedir derivation is the door's
+	// shared SetMovedir helper; the moving path remains unexercised by shipped data (every exported
+	// func_button carries DONTMOVE).
 	void EnsurePositions()
 	{
 		if (bPositionsCached || !Body)
@@ -239,21 +250,20 @@ private:
 			return;
 		}
 		bPositionsCached = true;
-		RestLoc = Body->GetRelativeLocation();
-		if (SpawnFlags & SF_DONTMOVE)
-		{
-			PressedLoc = RestLoc;
-			return;
-		}
+		RestLoc = Body->GetRelativeLocation();                                   // m_vecPosition1 = GetAbsOrigin()
 		// movedir from `angles` (Unreal space) — the same shared helper the sliding door derives
 		// its slide direction through, sentinels and the Source→Unreal Y reflection included.
 		const FVector Dir = SourceAnglesToUnrealDir(Angles);
-		// Travel = the body's depth along movedir minus the lip (both in cm). Bounds are world-axis;
-		// good enough for the axis-aligned press this approximates until content exercises it.
-		const FVector Ext = Body->Bounds.BoxExtent;
-		const double Depth = 2.0 * FMath::Abs(FVector::DotProduct(Ext, Dir.GetAbs()));
-		const double Travel = FMath::Max(0.0, Depth - Lip * MoverInchToCm);
-		PressedLoc = RestLoc + Dir * Travel;
+		// `T = sum |(size_i - 2.0) * movedir_i| - lip` over slot 214 `GetSize` (the model bounds Spawn's
+		// `UtilSetModel` wrote), no clamp; `m_vecPosition2 = m_vecPosition1 + movedir * T`.
+		const double TravelUnits = ElysiumRetailMoverTravelUnits(*this, Dir, Lip);
+		PressedLoc = RestLoc + Dir * (TravelUnits * MoverInchToCm);
+		// `100c8f0f-100c8f4a`: `if (sqrt(|pos2 - pos1|^2) < 1.0f [0x104454c0] || spawnflags & 1 [DONTMOVE])
+		// pos2 = pos1` -- a press shorter than one unit, or a DONTMOVE button, does not move.
+		if (FVector::Dist(PressedLoc, RestLoc) < 1.0 * MoverInchToCm || (SpawnFlags & SF_DONTMOVE))
+		{
+			PressedLoc = RestLoc;
+		}
 	}
 
 	EState  ButtonState = EState::Rest;

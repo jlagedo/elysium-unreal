@@ -133,7 +133,8 @@ TArray<FName> FElysiumClassRegistry::SaveFields(const FElysiumClassDesc& Desc) c
 	return Names;
 }
 
-TUniquePtr<FElysiumEntity> FElysiumClassRegistry::Create(const FElysiumEntityDef& Def, FElysiumEntityHandle Handle) const
+TUniquePtr<FElysiumEntity> FElysiumClassRegistry::Create(const FElysiumEntityDef& Def, FElysiumEntityHandle Handle,
+	FElysiumEntityWorld* World) const
 {
 	const FElysiumClassDesc* Desc = Find(FName(*Def.Classname));
 	bool bRecord = false;
@@ -155,6 +156,7 @@ TUniquePtr<FElysiumEntity> FElysiumClassRegistry::Create(const FElysiumEntityDef
 	// A stub descriptor names inputs but implements none, so its entities are inert records just
 	// as an unregistered classname's are — the debug surfaces must not report otherwise.
 	Ent->bRecordOnly = bRecord || Desc->bStub;
+	Ent->World = World;   // the seam the base constructor's sites and `curtime` read (null on a probe)
 	Ent->Construct(Def, Handle, *Desc);
 	return Ent;
 }

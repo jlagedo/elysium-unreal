@@ -162,7 +162,11 @@ void FElysiumNpcBase::SetHullSizeNormal(bool bForce)
 	LastSetSizeMinsUnits = MinsUnits;
 	LastSetSizeMaxsUnits = MaxsUnits;
 	++SetSizeCalls;
-	// `UTIL_SetSize` itself is the capsule's (`IElysiumNpcMotor::SetHullSize`), in this world's axes.
+	// `UTIL_SetSize` `FUN_101cf3c0` (through `thunk_FUN_101cf390`, `102730f6`): the backwards check,
+	// `SetCollisionBounds` (the entity's `m_vecMins` / `m_vecMaxs` / `m_flRadius`, the `0x14000` /
+	// `0x8000` invalidation) and slot 213 `SetSize(maxs - mins)` (L0-r016); the capsule
+	// (`IElysiumNpcMotor::SetHullSize`) is the engine body that box drives, in this world's axes.
+	UtilSetSize(MinsUnits, MaxsUnits);
 	if (Motor != nullptr)
 	{
 		Motor->SetHullSize(Motor10PortOf(FVector(MinsUnits.X, MaxsUnits.Y, MinsUnits.Z)),
@@ -196,6 +200,7 @@ bool FElysiumNpcBase::SetHullSizeSmall(bool bForce)
 		LastSetSizeMinsUnits = MinsUnits;
 		LastSetSizeMaxsUnits = MaxsUnits;
 		++SetSizeCalls;
+		UtilSetSize(MinsUnits, MaxsUnits);                                     // 102731c2 -> 0x101cf390 -> 0x101cf3c0
 		if (Motor != nullptr)
 		{
 			Motor->SetHullSize(Motor10PortOf(FVector(MinsUnits.X, MaxsUnits.Y, MinsUnits.Z)),

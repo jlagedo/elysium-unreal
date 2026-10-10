@@ -102,17 +102,19 @@ void FElysiumFuncIllusionary::SetBrushModel(const FString& Name)
 {
 	// `CBaseEntity::SetModel` 0x100ad460: `VEngineServer014` slot 20 (name -> index), slot 21 (index ->
 	// type); a type other than 1 -> `Msg("Setting CBaseEntity to non-brush model %s")`. Then the base
-	// set `FUN_101cf4a0`: a non-empty name re-writes the model index (slot 10), the name (slot 212,
-	// `m_ModelName` +0x388) and the collision bounds from the model's mins/maxs (`SetCollisionBounds`
-	// through `FUN_101cf3c0`, then the size call slot 213); an empty name does nothing. Then `+0x1b1 = 1`
-	// unconditionally. The model is re-set from its own name: the authored key survives, the bounds
-	// are the brush model's -- which is what the world's brush body carries from the def's hulls.
+	// set `UTIL_SetModel` `FUN_101cf4a0` (`100ad4e6`; `FElysiumEntity::UtilSetModel`, L0-r016): a
+	// non-empty name re-writes the model index (slot 10), the name (slot 212, `m_ModelName` +0x388) and
+	// the collision bounds from the model's mins/maxs (`SetCollisionBounds` through `FUN_101cf3c0`,
+	// then the size call slot 213); an empty name does nothing. Then `+0x1b1 = 1` unconditionally. The
+	// model is re-set from its own name: the authored key survives, the bounds are the brush model's --
+	// the def's hulls, which is also what the world's brush body carries.
 	const int32 Type = IllusionaryModelTypeOfName(Name);
 	const bool bMsg = Type != GIllusionaryModelTypeBrush;
 	if (bMsg)
 	{
 		UE_LOG(LogElysiumIllusionary, Log, TEXT("Setting CBaseEntity to non-brush model %s"), *Name);
 	}
+	UtilSetModel(Name);                                                           // 100ad4e6 -> 0x101cf4a0
 	bNetworkChanged = true;
 	Site(TEXT("brush.setmodel"), TEXT("CBaseEntity::SetModel"), 0x100ad460u, TEXT("write"),
 		FString::Printf(TEXT("model=%s type=%d msg=%d set=%d m_bChanged=1"), Name.IsEmpty() ? TEXT("(empty)") : *Name, Type, bMsg ? 1 : 0, Name.IsEmpty() ? 0 : 1));

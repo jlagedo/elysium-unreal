@@ -162,8 +162,13 @@ public:
 	// the body placement read this, so SetOrigin moves the entity for real (VtMB's Entity.SetOrigin).
 	FVector Origin = FVector::ZeroVector;
 	FVector Angles = FVector::ZeroVector;
-	float   Gravity = 0.0f;
-	float   Friction = 0.0f;
+	float   Gravity = 0.0f;                          // +0x3ec m_flGravity: the constructor leaves the zero fill
+	// `m_flFriction` (+0x3f0): the base constructor `0x1009d980` writes `0x3f800000` = 1.0 (`1009dcb5`),
+	// after `ClearFlags`; an authored `friction` key overwrites it (`walks/L0-r016.md`).
+	float   Friction = 1.0f;
+	// `m_flElasticity` (+0x370): 1.0 from the same constructor (`1009db3a`). No datamap row, no key;
+	// its readers are the physics movetypes (L0 physics), carried here as the constructor's word.
+	float   Elasticity = 1.0f;
 	float   LocalTime = 0.0f;                        // ltime
 	int32   WaterLevel = 0;
 	int32   WaterType = 0;
@@ -226,7 +231,28 @@ public:
 	// Activate() has run. Unlike PostSpawn(), this late phase is admitted only after the player has
 	// reached its final frozen placement and the complete entity graph is available.
 	bool  bActivateCalled = false;
+	// `m_flNextThink` (+0x17c): the constructor never writes it (0.0 from the zero fill). This port's
+	// word is the queue's sentinel instead: `ELYSIUM_NEVER_THINK` (FLT_MAX) is "never", as retail's 0
+	// is for `CBaseEntity::PhysicsRunThink` -- a representation, compared through the mapping.
 	float NextThink = ELYSIUM_NEVER_THINK;
+	// `m_flLastThink` (+0x178): `gpGlobals->curtime` at construction (`DAT_1070b228 + 0xc`, `1009db72`).
+	// `Construct` stamps it from the world's clock (the world is bound before `Construct` runs).
+	float LastThink = 0.0f;
+	// `m_nSimulationTick` (+0x22c): -1 from the constructor (`1009db6c`); the engine's simulation tick
+	// never runs here (Unreal's frame is the clock), so the word keeps the constructor's value.
+	int32 SimulationTick = -1;
+	// `m_iCurrentThinkContext` (+0x1cc, `layout.md:93`): -1 from the constructor (`1009db9b`); the
+	// think-context list `m_aThinkFunctions` (+0x1b8) is empty at construction and this port runs one
+	// think (`ThinkCallback`), so the index stays -1.
+	int32 CurrentThinkContext = -1;
+	// `m_clrRender` (+0x1a0), a `color32`: `0xFFFFFFFF` from the constructor (`1009db44-1009db58`, four
+	// byte stores). The `rendercolor` / `renderamt` keys of `CBaseEntity::KeyValue` 0x1009e430 write it;
+	// Unreal renders, so nothing here reads it (the binding is UNBOUND for that reason).
+	uint32 RenderColor = 0xffffffffu;
+	// The `CServerNetworkProperty` edict word (+0x2e0): NULL for the whole base constructor
+	// (`FUN_101ab590` zeroes it twice, `1009da5e` / `1009db12`), attached by `CreateEntityByName` after
+	// the constructor returns and before the keyvalues. `EdictIndex()` answers 0 until it is set.
+	bool bEdictAttached = false;
 
 	// --- The move hierarchy: `CBaseEntity::SetParent` 0x100a0670 and its helpers (L0-r010) ---
 	// `m_pParent` (+0x254): the handle `SetParent` was handed (`0x100a0ae0`: the parent's own handle,
@@ -292,6 +318,12 @@ public:
 	// a parent-local one (`0x101d1530` -> `0x101d15f0` -> `0x100a0a10` -> `0x1024da80` -> `0x1024cf80`
 	// -> `0x100a0990` -> `0x10137ed0` -> slot 64 / `0x101cf5c0`), and the parent's slot-115 notify.
 	void SetParent(FElysiumEntity* Parent, uint8 Attachment);
+	// The base constructor `FUN_1009d980` 0x1009d980, its 33 steps in retail's order over the words
+	// this class carries (`walks/L0-r016.md`; `ElysiumEntity.cpp`). Run by `Construct` before the edict
+	// attach and the keyvalues, with `World` already bound (the `curtime` read and the sites).
+	void ConstructBaseEntity();
+	// `FUN_101d03e0` (`UTIL_StringToVector`): the map's "x y z" spelling, missing slots 0.
+	static FVector ParseRetailVector(const FString& Text);
 	// `CBaseEntity::SetParent(const char*, CBaseEntity* activator)` 0x100a04e0: the by-name overload
 	// (`FindEntityByName` 0x100f7770, the "has bad parent" and "has ambigious parent" Msgs), what the
 	// `SetParent` input (`0x100ad030`) reaches.

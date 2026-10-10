@@ -41,6 +41,13 @@ inline constexpr float MoverInchToCm = 2.54f;
 // ElysiumMover.cpp.
 FVector SourceAnglesToUnrealDir(const FVector& AnglesDeg);
 
+// The sliding movers' travel, `T = sum_i |(size_i - 2.0) * movedir_i| - lip` over slot 214 `GetSize`
+// (three calls), with no clamp at zero -- the sum `CBaseDoor::vfunc103` 0x100ef260, `CBaseDoor::vfunc245`
+// 0x100f0a40, `CBaseButton::Spawn` 0x100c8d60 and `CFuncMoveLinear::Spawn` 0x10116030 share
+// (`walks/L0-r016.md`). Source units; `MoveDir` a unit vector on the Unreal axes. Defined in
+// ElysiumMover.cpp.
+double ElysiumRetailMoverTravelUnits(const FElysiumEntity& Mover, const FVector& MoveDir, float LipUnits);
+
 // The CBaseToggle constant-velocity mover. Not a registered class — a pure-C++ base the door/
 // button/rotating families derive from. Drives the entity's Body transform; a bodiless mover is
 // inert (nothing to move).
