@@ -1494,6 +1494,14 @@ public:
 	// feeder's replicated `m_iClientFeedMaxBloodPool` `+0x1a90`). Zero when this character resolves
 	// no template, which is retail's own "nothing authored" answer.
 	virtual int32 TemplateBloodPool() const { return 0; }
+	// HOOK (`hooks.tsv:57` / `:111`, L0 -> L2 character): `FUN_101d5f10(&DAT_10738d10, cc)` -- the
+	// char-template RECORD of this combat character (`GetCharTemplate(cc)`, then `table[idx]`, else the
+	// default record `DAT_10738e50`: every flag 0, every string NULL). `CBaseEntity::IsMonster`
+	// (`0x1009d820`) reads its `"Monster"` byte (`+0x8e`) and the VSound group seam `FUN_101f55a0`
+	// its `"SoundGroup"` string (`+0x20`), both from the template's `General` block. Null here is the
+	// default record. The NPC leaf answers its resolved `npctemplate*.txt` block; the player's clan
+	// template is L3's to bind.
+	virtual const FElysiumClanTemplate* CharTemplateRecord() const { return nullptr; }
 	// Spend `Blood` blood points to heal `BloodToHealthRatio` (10) damage each — `VampHeal_Info`'s
 	// `VampFeedingHeal_Info`. Returns the damage actually healed.
 	int32 BloodHeal(int32 Blood);

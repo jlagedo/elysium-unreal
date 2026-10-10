@@ -19,6 +19,46 @@ namespace
 	{
 		return Node.Label.IsEmpty() ? TEXT("?") : *Node.Label;
 	}
+
+	// --- `FUN_101f39d0`'s three GLOBAL scratch buffers (`walks/L0-r007.md`) -------------------------
+	// `DAT_1073dad0` (the fixed-slash copy of the name, `Q_strncpy` 0x104), `DAT_1074b180` (the first
+	// path component) and `DAT_1073dc50` (the remainder after the first `\`). They are process globals
+	// in retail and stay globals here: a child call writes the same buffers its parent's later
+	// children are handed a POINTER into, so a matching child that misses leaves its REMAINDER where
+	// the parent's next child reads the whole name (N4). Reproduced, not repaired.
+	constexpr int32 GGroupPathCapacity = 0x104;
+	TCHAR GGroupPath[GGroupPathCapacity];       // DAT_1073dad0
+	TCHAR GGroupComponent[GGroupPathCapacity];  // DAT_1074b180 (its retail size is not recovered; a component never exceeds the path)
+	TCHAR GGroupRemainder[GGroupPathCapacity];  // DAT_1073dc50 (likewise)
+
+	// `Q_strncpy` (vstdlib `0x100037b0`): CRT `strncpy(dst, src, n)` then `dst[n - 1] = 0`. Spelled out
+	// so a source aliasing the destination (the identity copy a non-matching node's children make)
+	// behaves as the CRT's byte loop does.
+	void QStrncpy(TCHAR* Dst, const TCHAR* Src, int32 N)
+	{
+		if (N <= 0)
+		{
+			return;
+		}
+		int32 I = 0;
+		for (; I < N && Src[I] != TEXT('\0'); ++I)
+		{
+			Dst[I] = Src[I];
+		}
+		for (; I < N; ++I)
+		{
+			Dst[I] = TEXT('\0');
+		}
+		Dst[N - 1] = TEXT('\0');
+	}
+
+	void GroupSite(IElysiumRetailSiteSink* Sites, const TCHAR* Fn, uint32 Va, const TCHAR* Phase, const FString& Payload)
+	{
+		if (Sites != nullptr)
+		{
+			Sites->Site(TEXT("folder_group"), Fn, Va, Phase, Payload);
+		}
+	}
 }
 
 namespace ElysiumSoundFolder
@@ -80,6 +120,18 @@ namespace ElysiumSoundFolder
 		}
 		Counts[Category] = Hi + 1;
 		InsertRange(Root, Category, Hi, Old - 1, Sites);
+	}
+
+	int32 FOwner::GroupIndex(const TCHAR* Name, IElysiumRetailSiteSink* Sites)
+	{
+		// `iVar1 = FUN_101f39d0(T + 0x10, name); if (iVar1 == -1) iVar1 = *(int*)(T + 0x10); return iVar1;`
+		// -- the root node's own key is the miss value, so a group the category does not hold plays the
+		// sounds directly under the category (`audio_pipeline.md` § 7b, "A miss is not silence").
+		const int32 Found = FindGroup(Root, Name, Sites);
+		const int32 Result = Found == -1 ? Root.Key : Found;
+		GroupSite(Sites, TEXT("FUN_101f42a0"), 0x101f42a0u, TEXT("return"),
+			FString::Printf(TEXT("name=%s found=%d index=%d"), Name != nullptr && *Name != TEXT('\0') ? Name : TEXT("(empty)"), Found != -1 ? 1 : 0, Result));
+		return Result;
 	}
 
 	FNode* FOwner::Find(int32 Key, int32 Category, int32 Index, IElysiumRetailSiteSink* Sites)
@@ -157,6 +209,81 @@ namespace ElysiumSoundFolder
 				InsertRange(*Child, Category, Hi, Lo, Sites);
 			}
 		}
+	}
+
+	int32 FindGroup(FNode& Node, const TCHAR* Name, IElysiumRetailSiteSink* Sites)
+	{
+		// N0. `Q_strncpy(DAT_1073dad0, name, 0x104)`; `Q_FixSlashes(DAT_1073dad0, '\')` (every `/` to `\`);
+		//     `puVar2 = strchr(DAT_1073dad0, '\')` (`FUN_10431f30`). A NULL `name` faults in retail's
+		//     `Q_strncpy`; no caller passes one (every caller substitutes `""`), and the port reads `""`.
+		QStrncpy(GGroupPath, Name != nullptr ? Name : TEXT(""), GGroupPathCapacity);
+		for (TCHAR* C = GGroupPath; *C != TEXT('\0'); ++C)
+		{
+			if (*C == TEXT('/'))
+			{
+				*C = TEXT('\\');
+			}
+		}
+		const TCHAR* Backslash = FCString::Strchr(GGroupPath, TEXT('\\'));
+		// N1. The first component: with a `\`, `Q_strncpy(DAT_1074b180, DAT_1073dad0, (pos of the backslash) + 1)`
+		//     -- the bytes before the `\`, NUL-terminated -- else the whole string is the component.
+		const TCHAR* Component = GGroupPath;
+		int32 RemainderOffset = 0;
+		if (Backslash != nullptr)
+		{
+			RemainderOffset = static_cast<int32>(Backslash - GGroupPath) + 1;   // iVar6
+			QStrncpy(GGroupComponent, GGroupPath, RemainderOffset);
+			Component = GGroupComponent;
+		}
+		// N2. An EMPTY component answers -1 at once: the children are not searched (so `""` and a name
+		//     opening with `\` always miss).
+		if (*Component == TEXT('\0'))
+		{
+			GroupSite(Sites, TEXT("FUN_101f39d0"), 0x101f39d0u, TEXT("branch"),
+				FString::Printf(TEXT("node=%s arm=empty"), NodeLabel(Node)));
+			return -1;
+		}
+		// N3. `__strcmpi(node.name (NULL as ""), component)`. On a match with no `\` left the node's own
+		//     key (`*(int*)node`) is the answer.
+		const TCHAR* Next = GGroupPath;   // puVar5: what the children are handed -- the WHOLE fixed string
+		const bool bMatch = FCString::Stricmp(*Node.Name, Component) == 0;
+		if (bMatch && Backslash == nullptr)
+		{
+			GroupSite(Sites, TEXT("FUN_101f39d0"), 0x101f39d0u, TEXT("return"),
+				FString::Printf(TEXT("node=%s component=%s key=%d"), NodeLabel(Node), Component, Node.Key));
+			return Node.Key;
+		}
+		if (bMatch)
+		{
+			// N4. The REMAINDER after the `\` is copied to `DAT_1073dc50` and the children receive THAT.
+			//     (A byte loop, no bound: the remainder is shorter than the 0x104 path.)
+			int32 I = 0;
+			for (; GGroupPath[RemainderOffset + I] != TEXT('\0'); ++I)
+			{
+				GGroupRemainder[I] = GGroupPath[RemainderOffset + I];
+			}
+			GGroupRemainder[I] = TEXT('\0');
+			Next = GGroupRemainder;
+		}
+		GroupSite(Sites, TEXT("FUN_101f39d0"), 0x101f39d0u, TEXT("branch"),
+			FString::Printf(TEXT("node=%s component=%s match=%d next=%s children=%d"), NodeLabel(Node), Component,
+				bMatch ? 1 : 0, Next, Node.Children.Num()));
+		// N5. Every child in order with `Next` -- a POINTER into the global buffer, which the child's own
+		//     N0 / N4 may have rewritten by the time the next sibling reads it (retail's aliasing). The
+		//     first answer that is not -1 wins.
+		for (const TUniquePtr<FNode>& Child : Node.Children)
+		{
+			if (!Child.IsValid())
+			{
+				continue;
+			}
+			const int32 Found = FindGroup(*Child, Next, Sites);
+			if (Found != -1)
+			{
+				return Found;
+			}
+		}
+		return -1;
 	}
 
 	FNode* FindNode(FNode& Node, int32 Key, int32 Category, int32 Index, IElysiumRetailSiteSink* Sites)

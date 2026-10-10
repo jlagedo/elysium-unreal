@@ -1090,6 +1090,20 @@ void FElysiumCombatCharacter::SyncHealthFromSheet()
 	Health = FMath::Max(0, MaxHealth - Damage);
 }
 
+void FElysiumCombatCharacter::Precache()
+{
+	// `CBaseCombatCharacter::Precache` `0x10340360` (slot 104; `walks/L0-r007.md` § entry points), in
+	// retail's order: the scope-trace frame (instrumentation); `GetCharTemplate(this)` ->
+	// `FUN_101d5e80` -> `FUN_101d4f20` (the template's `+0x78` model name) -> `FUN_10191ac0`
+	// `PrecacheModel` -- asset acquisition, the bake's (0019/6, service `Bake`); then slot 71
+	// `PrecacheSoundTable` THROUGH THE DISPATCH (`CALL [vtbl+0x11c]` right after the model precache),
+	// the one write of this body; then the AI-links diagnostic (`FUN_102f9970` / slot `+0x544` /
+	// `FUN_102f9950`: five `DevMsg`s about an entity spawned after the links were built), which writes
+	// no state and is not carried. Reached from the species' `Precache` through `CAI_BaseNPC::Precache`
+	// (`FElysiumNpc::TroikaPrecache`) and, for the player, from `CBasePlayer::Precache` (L3's to wire).
+	PrecacheSoundTable();
+}
+
 bool FElysiumCombatCharacter::IsKindred() const
 {
 	// The base answer is the sheet's own clan slot: a character carrying one of the seven playable

@@ -106,6 +106,31 @@ STATIC/VOICE2` (`CHAN_USER_BASE` for game code); `soundlevel_t` in **dB**
 the standard SNDLVL-dB curve. Voice **ducking** cvars present (`snd_duckattacktime`/
 `snd_duckreleasetime`/`snd_duckvolume`) — dialogue ducks other channels.
 
+### The sound-script descriptor and the channel parser (`vampire.dll`) [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r007.md`]
+
+The game DLL's `CSoundEmitterSystem` keeps one `CSoundParametersInternal` per sound entry (0xcc bytes,
+with 32-byte name buffers). `FUN_101b30d0` `0x101b30d0` constructs it: both wave vectors (`+0x20`,
+`+0x34`) empty; channel `+0x00` 0 with `"CHAN_AUTO"` at `+0x69`; volume `+0x04/+0x08` (1.0, 0) with
+`"VOL_NORM"` at `+0x49`; pitch `+0x0c/+0x10` (100.0, 0) -- the engine's pitch percentage -- with
+`"PITCH_NORM"` at `+0xa9`; sound level `+0x14/+0x18` (75.0, 0) with `"SNDLVL_NORM"` at `+0x89`;
+`play_to_owner_only` `+0x1c` 0; `precache` `+0x1d` 1; `+0x48` 0 (reader UNRECOVERED). Each name is
+`Q_strncpy`'d, zero-padded to 32. `AddSoundsFromFile` `0x101b4240` constructs one per entry of every
+file `scripts/game_sounds_manifest.txt` names and the key parser `FUN_101b3bb0` overwrites only the
+keys the entry carries, so an omitted key keeps the default. The `channel` key goes through
+`FUN_101b2490` `0x101b2490`: `desc+0x00 = FUN_101b24d0(text)` and the text itself kept at `+0x69`.
+`FUN_101b24d0` `0x101b24d0`: NULL -> 0; `Q_strncasecmp(text, "chan_", 5) != 0` -> `atoi(text)`
+(`"2"` -> 2, `""` -> 0, `"chan"` -> 0); else the seven names `CHAN_AUTO` 0, `CHAN_WEAPON` 1,
+`CHAN_VOICE` 2, `CHAN_ITEM` 3, `CHAN_BODY` 4, `CHAN_STREAM` 5, `CHAN_STATIC` 6 (table `0x10598c78`,
+case-insensitive); else `DevMsg("CSoundEmitterSystem:  Warning, unknown channel type in sounds.txt
+(%s)\n")` -- printed only at `developer` 1 -- and 0. The `SoundFX` record loader `FUN_101dbe30`
+parses its `Channel` key through the same function; `FUN_101b4c00` wraps it and has no caller. The
+shipped `game_sounds_surfaceproperties.txt` authors `"2"`, `"CHAN_BODY"` and `"chan_voice"`.
+
+Port: `Source/ElysiumUE/Private/Audio/ElysiumSoundScript.{h,cpp}` (`FParams`, `Construct`,
+`TextToChannel`, `SetChannel`); `EElysiumSoundChannel::Stream` 5 added. The key parser, the manifest
+reader and the dictionary are not ported. Proven by `Arena/scenarios/audio/l0_sound_script_defaults.json`
+and `l0_sound_channel_parse.json`.
+
 ## 4. DSP / reverb bank
 
 **Format is stock Source; the *selection* is not.**
@@ -752,6 +777,56 @@ is silent (`switches/elevator_button` ships `on.wav` and no `off.wav`).
 
 Port: `Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.{h,cpp}` (`ElysiumSoundGroups::Resolve`),
 proven by `Elysium.Content.SoundGroupResolver`.
+
+### Voice-table category selection: `PrecacheSoundTable` and the group seam [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r007.md`]
+
+`CBaseEntity::PrecacheSoundTable` `0x1009d460` (vtable slot 71, `+0x11c`; 483 of 501 implementers
+run this body, the 18 others -- buttons, doors, terminals, containers, prop switches, the game rules
+-- carry nine bodies of their own that call the seam with their own registry) selects the entity's
+`SndScheme_Char` category and resolves both group indices. Order: with `+0x9c m_pCombatCharacter` and
+`+0xac m_pAnimal` set, `+0xbc m_iVSoundTableIdx = 3`; else slot 70 `IsMonster` true -> 2; else
+`CBaseCombatCharacter::IsMale` `0x10336920` (stat slot 0xb, the Gender attribute, `== 1`) -> 1; else
+0. With only `+0xa0 m_pCombatWeapon` set -> 0; with neither cache the word is NOT written (it keeps
+the constructor's -2, `0x1009d980`). Then, on every path, `+0xb4 m_iVSoundGroup =
+FUN_101f55a0(&DAT_1073dc28, this, m_iszVSoundGroup or "", 0)` and `+0xb8 m_iVSoundGroupFemale` =
+the same with flag 1. `IsMonster` `0x1009d820` is the char-template record's `General/Monster` byte
+(`+0x8e`) when `+0x9c` is set, else false. The getters `GetVSoundTableIdx` `0x1009d5e0` (below 0),
+`GetVSoundGroup` `0x1009d6a0` and `GetVSoundGroupFemale` `0x1009d760` (below -1) re-run slot 71
+lazily; an entity with neither cache and a loaded table would therefore recurse without bound through
+the seam's own `GetVSoundTableIdx` -- no shipped entry point reaches that. Callers: the lazy getters,
+`CBaseCombatCharacter::Precache` `0x10340360` (right after the template model precache; reached from
+`CAI_BaseNPCTroika::Precache` `0x10298ad0` through `CAI_BaseNPC::Precache`), three
+`CBaseCombatWeapon::Precache` bodies and the override classes' `Precache`.
+
+The seam `FUN_101f55a0` `0x101f55a0` (`reg, ent, group, female`): `reg+0x20 == NULL` -> **0** (not
+-1). Then `idx = GetVSoundTableIdx(ent)`. A combat character (`+0x9c`) takes **S2b** -- the
+`CBaseTerminal` cast (`0x105606d4`) of S2a cannot hold for one, so there is no PC/NPC split here: an
+empty group reads the template record's `General/SoundGroup` (`+0x20`, NULL when blank); the female
+flag makes `"<group>\Female_PC_Override"` (`"Female_PC_Override"` alone when empty). A weapon (`+0xa0`,
+S1a) reads the item record (`FUN_102517b0`): its `+0x2554` cache is -2 for every loaded record
+(`FUN_10258b00`), so the arm returns -2 without a lookup; only the dummy record (index 0xffff) ever
+caches the lookup of its `sound_group` (`+0x24d4`). Otherwise (S1b): a `CPropSwitch` (`0x105a6404`)
+looks the group up; a `func_button` / `func_rot_button` classname falls to the final lookup; any other
+non-`CBaseTerminal` answers **-1**, the seam's only explicit miss. The final lookup is `FUN_101f42a0`
+on `reg+0x20[idx]`: `FUN_101f39d0`'s component walk (above), and the category ROOT's own key on a
+miss -- 0, the per-category counter's first value (`FUN_101f4280`), so an unknown voice group plays
+the sounds directly under `Character\Male` etc. `FUN_101f39d0`'s three scratch buffers
+(`DAT_1073dad0` 0x104 bytes, `DAT_1074b180`, `DAT_1073dc50`) are process globals: a matching child
+that then misses leaves its REMAINDER where its parent's next sibling reads the whole name.
+
+The NPC gender the stat slot answers: retail seeds the stat lists in the `CBaseCombatCharacter`
+constructor (`0x10326de0`), applies the datamap keys (`gender` `+0x11a8`, `base_gender_` `+0x111c`)
+and then the template at Spawn; where the shipped templates' `General/Gender "Female"` text reaches the
+stat (if it does) is UNRECOVERED here.
+
+Port: `Source/ElysiumUE/Private/Substrate/ElysiumEntityVSound.cpp` (slots 70 and 71, the getters, the
+words on `FElysiumEntity`), `Substrate/ElysiumVSoundGroup.{h,cpp}` (the seam, every arm;
+`IElysiumVSoundRegistry` is the L2 data hook for `reg`, `FElysiumEntityWorld::VSoundCharRegistry`,
+null = S0 until L2 builds `SndScheme_Char`), `Audio/ElysiumSoundFolderIndex.cpp` (`FindGroup`,
+`GroupIndex`), `ElysiumCombatCharacter.cpp` (`Precache`). Divergence: the arm-6 recursion is refused
+once (`bInPrecacheSoundTable`), and an index past the table array answers -1 (`badidx`). Proven by
+`Arena/scenarios/audio/l0_voice_table_index.json`. The port's `FElysiumNpc::SeedSheet` re-seeds every
+stat at Spawn (after the keys), so an authored `gender` key does not reach `IsMale` -- an L2 gap.
 
 ## 8. Sentences and surface sounds (footsteps / impacts)
 

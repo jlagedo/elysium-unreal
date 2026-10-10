@@ -50,6 +50,9 @@ public:
 	bool bTransitioning = false;
 	FElysiumEntityHandle TransitionActivator;
 
+	// The `___RTDynamicCast(ent, CBaseEntity, CPropSwitch 0x105a6404)` the VSound group seam makes.
+	virtual FElysiumPropSwitch* AsPropSwitch() override { return this; }
+
 	virtual void Spawn() override;
 
 	virtual bool IsUsable() const override { return true; }

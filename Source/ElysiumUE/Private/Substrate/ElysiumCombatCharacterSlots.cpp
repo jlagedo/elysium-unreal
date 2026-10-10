@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 136 generated slot bodies of `FElysiumCombatCharacter`: 19 carry retail's one-constant default
-// (story 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 24 are defined by hand in the
-// substrate, and 92 are still stubs — 59 29c, 23 29d, 5 29e, 5 unassigned. 1 are closed (0019/6)
+// (story 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 25 are defined by hand in the
+// substrate, and 91 are still stubs — 59 29c, 22 29d, 5 29e, 5 unassigned. 1 are closed (0019/6)
 // and answer the value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -138,11 +138,11 @@ bool FElysiumCombatCharacter::ShouldTransmit(int32, void*, void*, int32, int32)
 
 // slot 104 0x10340360 (sdk) `void Precache()`
 //   layer 12, story 29d
-void FElysiumCombatCharacter::Precache()
-{
-	FireCombatCharacterSlot(TEXT("CBaseCombatCharacter::Precache"), TEXT("0x10340360"),
-		TEXT("29d"), DebugString());
-}
+// the body is `FElysiumCombatCharacter::Precache`, written by hand in the substrate:
+// `CBaseCombatCharacter::Precache` 0x10340360: the template model precache (the bake's), then slot
+// 71 `PrecacheSoundTable` through the dispatch; the AI-links diagnostic writes nothing
+// (L0.audio.voice-table-index, walks/L0-r007.md; `ElysiumCombatCharacter.cpp`). Declared here,
+// defined there.
 
 // slot 105 0x103409a0 (sdk) `void SetModel(char*)`
 //   layer 10, story 29d
@@ -1204,7 +1204,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, bool(int32, void*, void*, int32, int32)>::Test(&FElysiumCombatCharacter::ShouldTransmit),
 				nullptr },
 			{ 104, TEXT("0x10340360"), TEXT("CBaseCombatCharacter"), TEXT("Precache"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, true,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, true,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumCombatCharacter, void()>::Test(&FElysiumCombatCharacter::Precache),
 				nullptr },
 			{ 105, TEXT("0x103409a0"), TEXT("CBaseCombatCharacter"), TEXT("SetModel"),

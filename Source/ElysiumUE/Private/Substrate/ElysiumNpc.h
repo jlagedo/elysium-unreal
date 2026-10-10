@@ -271,6 +271,9 @@ public:
 	virtual bool IsKindred() const override;
 
 	virtual int32 TemplateBloodPool() const override { return TemplateBloodPoolValue; }
+	// The resolved `npctemplate*.txt` block (`FUN_101d5f10` on `GetCharTemplate(this)`), or null when
+	// `stattemplate` resolved to nothing -- retail's default record `DAT_10738e50`.
+	virtual const FElysiumClanTemplate* CharTemplateRecord() const override;
 
 	virtual bool GetTemplateDamageFilter(EElysiumDmgFamily Family, bool bFlame,
 		float& OutFilter) const override;

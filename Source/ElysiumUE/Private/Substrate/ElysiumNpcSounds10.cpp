@@ -15,9 +15,10 @@
 //
 // **What this family emits through.** Every hook here ends in the VSound play entry `0x101f5950`,
 // which resolves a wav out of the per-entity VSound table and hands it to `IEngineSound::EmitSound`.
-// This runtime parses no VSound table and no concept list — `PrecacheSoundTable` (slot 71) is still
-// a generated stub and `m_iVSoundTableIdx` (`+0x00bc`) has no writer — so the concept lookup answers
-// retail's own miss (`-1`) and the play entry takes retail's own out-of-bounds arm. Both are
+// This runtime parses no VSound table and no concept list — `PrecacheSoundTable` (slot 71) writes
+// `m_iVSoundTableIdx` (`+0x00bc`) since L0-r007 (`ElysiumEntityVSound.cpp`), but `SndScheme_Char`
+// itself (the L2 data hook `FElysiumEntityWorld::VSoundCharRegistry`) is still unbuilt — so the concept
+// lookup answers retail's own miss (`-1`) and the play entry takes retail's own out-of-bounds arm. Both are
 // SEAMS declared in `ElysiumNpcSounds10.inl` and both record what they were asked for, which
 // is the recovered half: the concept, the channel, the volume and the fifth argument.
 

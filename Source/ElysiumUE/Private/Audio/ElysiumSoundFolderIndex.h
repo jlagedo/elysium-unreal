@@ -13,9 +13,10 @@ struct IElysiumRetailSiteSink;
 // (`FUN_101f3d00`, the sound-name parser, audit `settled:engine_replaced`; `FUN_101f4600`, the wav
 // picker, `ported`): what this layer owns is the index itself.
 //
-// Layout read by the four functions (offsets from the node): `+0x00` key, `+0x04` owner `T`, `+0x08`
-// sibling, `+0x14` mask (a byte pointer), `+0x18` mask length, `+0x1c` child count, `+0x20` child
-// pointer array. The owner: `*(T + 0xc)` the int32 per-category counts, `*(T + 8)` the category
+// Layout read by the six functions (offsets from the node): `+0x00` key, `+0x04` owner `T`, `+0x08`
+// sibling, `+0x10` name (a string pointer, NULL read as `""`; `walks/L0-r007.md` § FUN_101f39d0),
+// `+0x14` mask (a byte pointer), `+0x18` mask length, `+0x1c` child count, `+0x20` child pointer
+// array. The owner: `*(T + 0xc)` the int32 per-category counts, `*(T + 8)` the category
 // table whose `+0x14` is the category count (NULL -> no categories), the root node embedded at
 // `T + 0x10` (its `+4` is `T`). The constructor and the owner's concrete type were not read
 // (UNRECOVERED): the layout above is the four bodies' own.
@@ -28,6 +29,7 @@ namespace ElysiumSoundFolder
 		int32 Key = 0;                         // +0x00
 		FOwner* Owner = nullptr;               // +0x04, the owner `T`
 		FNode* Sibling = nullptr;              // +0x08
+		FString Name;                          // +0x10: the folder's name (a group directory); NULL reads as ""
 		TArray<uint8> Mask;                    // +0x14 / +0x18: one byte per flat member, non-zero = member
 		TArray<TUniquePtr<FNode>> Children;    // +0x1c / +0x20
 		// A record's name for this node (a site payload names the node it visits by it; retail's
@@ -62,6 +64,11 @@ namespace ElysiumSoundFolder
 		// `FUN_101f42d0` `0x101f42d0` (`__thiscall(T, key, cat, idx)`): `key == -1` -> NULL; else
 		// `FUN_101f3b00(root, key, cat, idx)`.
 		FNode* Find(int32 Key, int32 Category, int32 Index, IElysiumRetailSiteSink* Sites);
+
+		// `FUN_101f42a0` `0x101f42a0` (27 B, `__thiscall(T, name)`, `RET 4`; `walks/L0-r007.md`): the key
+		// of the folder `name` names, `FUN_101f39d0(root, name)`; a miss (-1) answers the ROOT's own key
+		// (`*(int*)(T + 0x10)`), which is why an unknown group plays the category's default sounds.
+		int32 GroupIndex(const TCHAR* Name, IElysiumRetailSiteSink* Sites);
 	};
 
 	// `FUN_101f3ba0` `0x101f3ba0` (258 B, `__thiscall(node, cat, hi, lo)`, `RET 0xc`): open the flat
@@ -74,6 +81,15 @@ namespace ElysiumSoundFolder
 	// sibling are tested (the loop's key test is a self-compare, `asm 0x101f3b30`), and the children
 	// are never searched; on a mismatch each child is searched in turn. Arms F0-F2.
 	FNode* FindNode(FNode& Node, int32 Key, int32 Category, int32 Index, IElysiumRetailSiteSink* Sites);
+
+	// `FUN_101f39d0` `0x101f39d0` (233 B, `__thiscall(node, name)`, `RET 4`; `walks/L0-r007.md`): the key
+	// of the node a `\`-separated path names, case-insensitively, through three GLOBAL scratch buffers
+	// (`DAT_1073dad0` the fixed-slash copy, 0x104 bytes; `DAT_1074b180` the first component;
+	// `DAT_1073dc50` the remainder). Arms N0-N5 in retail order: an empty first component answers -1 at
+	// once; a node whose name matches the component answers its key when no `\` remains, else hands
+	// the REMAINDER to its children; a node that does not match hands the WHOLE name on, unconsumed;
+	// the first child not answering -1 wins; else -1.
+	int32 FindGroup(FNode& Node, const TCHAR* Name, IElysiumRetailSiteSink* Sites);
 
 	// The mask as a record spells it: the bytes joined by commas (`1,0,1`), `-` for an empty mask.
 	FString MaskText(const FNode& Node);

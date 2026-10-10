@@ -11,8 +11,8 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
-| … cited by the oracle | 2789 |
-| … not cited by the oracle | 2398 |
+| … cited by the oracle | 2795 |
+| … not cited by the oracle | 2392 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |
@@ -24,7 +24,7 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | `CAI_BaseNPC` slots whose body is unnamed | 299 |
 | … with the naming pass's reason recorded (`unsettled`) | 299 |
 | Troika fields | 835 |
-| … cited by the oracle | 591 |
+| … cited by the oracle | 592 |
 | Closure edges | 17596 |
 | Build layers | 30 |
 
@@ -458,8 +458,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x1009c850` CBaseEntity::DumpEhandleArray | `0x1015e140` CBasePlayer::Dump |
 | `0x1009c980` CBaseEntity::Dump | `0x101c0ec0` CBaseToggle::Dump |
 | `0x1009d1e0` CBaseEntity::ForceTransmit | `0x100a8fc0` CBaseEntity::SetFakeSilence, `0x101772b0` CBasePlayer::Weapon_Switch, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101a3380` FUN_101a3380, +5 more |
-| `0x1009d5e0` CBaseEntity::GetVSoundTableIdx | `0x101f58e0` FUN_101f58e0 |
-| `0x1009d6a0` CBaseEntity::GetVSoundGroup | `0x101f58e0` FUN_101f58e0 |
 | `0x1009e120` CBaseEntity::PostConstructor | `0x10027bb0` FUN_10027bb0, `0x100281f0` FUN_100281f0, `0x100289e0` FUN_100289e0, `0x10029ea0` FUN_10029ea0, +346 more |
 | `0x1009edc0` CBaseEntity::SetCollisionBounds | `0x1009d980` FUN_1009d980, `0x100bbbf0` FUN_100bbbf0, `0x10129960` FUN_10129960, `0x10155fb0` CRagdollProp::FUN_10155fb0, +3 more |
 | `0x1009f120` CBaseEntity::SetClassname | `0x1016d260` CBasePlayer::Spawn, `0x101905e0` CDynamicProp::Spawn ‼, `0x10190f20` COrnamentProp::Spawn |
@@ -698,7 +696,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x101b0dc0` FUN_101b0dc0 | `0x1013f520` CMoveHelperServer::vfunc16 |
 | `0x101b14d0` FUN_101b14d0 | `0x1002cd50` FUN_1002cd50, `0x1013f610` CMoveHelperServer::vfunc5, `0x101bbde0` FUN_101bbde0, `0x101bc020` FUN_101bc020, +2 more |
 | `0x101b2f60` FUN_101b2f60 | `0x101b1fb0` FUN_101b1fb0, `0x101b4d30` FUN_101b4d30, `0x101b50f0` FUN_101b50f0, `0x101b5180` FUN_101b5180, +2 more |
-| `0x101b30d0` FUN_101b30d0 | `0x101b4240` FUN_101b4240, `0x101b4d30` FUN_101b4d30, `0x101b6bd0` FUN_101b6bd0 |
 | `0x101b33f0` FUN_101b33f0 | `0x101b06a0` FUN_101b06a0, `0x101b1120` FUN_101b1120, `0x101b1880` FUN_101b1880, `0x101b1a00` FUN_101b1a00, +2 more |
 | `0x101b3730` FUN_101b3730 | `0x101afff0` CSoundEmitterSystem::vfunc2, `0x101b04a0` FUN_101b04a0, `0x101b1e00` FUN_101b1e00, `0x101b1fb0` FUN_101b1fb0, +2 more |
 | `0x101b3b90` FUN_101b3b90 | `0x101b06a0` FUN_101b06a0, `0x101b1120` FUN_101b1120, `0x101b3a10` FUN_101b3a10 |
@@ -961,7 +958,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x1033cef0` CBaseCombatCharacter::RemoveDisciplineEffects | `0x10182530` CBasePlayer::RemoveDisciplineEffects |
 | `0x1033e4a0` CBaseCombatCharacter::DrawDebugTextOverlays | `0x10161460` CBasePlayer::DrawDebugTextOverlays |
 | `0x1033eb60` CBaseCombatCharacter::FrenzyCheck | `0x1033e960` FUN_1033e960, `0x1033ea90` CBaseCombatCharacter::InputFrenzyCheck, `0x1033f1a0` CBaseCombatCharacter::FrenzyComparison, `0x1033f3f0` CBaseCombatCharacter::InputHungerCheck, +1 more |
-| `0x10340360` CBaseCombatCharacter::Precache | `0x101506a0` CPhysicsCannister::Precache, `0x10209710` CItemContainer::Precache, `0x1042b080` CBaseGrenade::Precache |
 | `0x103411c0` CBaseCombatCharacter::BarterBegin | `0x10208c90` CItemContainer::InputUse, `0x10208fc0` CItemContainer::InputBarterBegin, `0x10209090` CItemContainer::FUN_10209090 |
 | `0x103412b0` CBaseCombatCharacter::InputBarterBegin | `0x1034a230` CBaseCombatCharacter::InputBarterBegin ‼ |
 | `0x10341370` CBaseCombatCharacter::BarterEnd | `0x10208ff0` CItemContainer::InputBarterEnd, `0x10209090` CItemContainer::FUN_10209090 |

@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 219 generated slot bodies of `FElysiumEntity`: 72 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 40 are defined by hand in the substrate,
-// and 89 are still stubs — 87 29c, 2 unassigned. 18 are closed (0019/6) and answer the
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 42 are defined by hand in the substrate,
+// and 87 are still stubs — 85 29c, 2 unassigned. 18 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -530,19 +530,20 @@ bool FElysiumEntity::NavIgnoreCollision(FElysiumEntity*)
 
 // slot 70 0x1009d820 (walked) `bool IsMonster()`
 //   layer 0, story 29c
-bool FElysiumEntity::IsMonster()
-{
-	FireEntitySlot(TEXT("CBaseEntity::IsMonster"), TEXT("0x1009d820"), TEXT("29c"), DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::IsMonster`, written by hand in the substrate:
+// `CBaseEntity::IsMonster` 0x1009d820: with `m_pCombatCharacter` set, the char template record's
+// `Monster` byte (+0x8e, `FUN_101d5f10` -- the L2 hook `CharTemplateRecord`); else false
+// (L0.audio.voice-table-index, walks/L0-r007.md; `ElysiumEntityVSound.cpp`). Declared here, defined
+// there.
 
 // slot 71 0x1009d460 (walked) `void PrecacheSoundTable()`
 //   layer 0, story 29c
-void FElysiumEntity::PrecacheSoundTable()
-{
-	FireEntitySlot(TEXT("CBaseEntity::PrecacheSoundTable"), TEXT("0x1009d460"), TEXT("29c"),
-		DebugString());
-}
+// the body is `FElysiumEntity::PrecacheSoundTable`, written by hand in the substrate:
+// `CBaseEntity::PrecacheSoundTable` 0x1009d460: the category block over the three self-caches
+// (+0xbc = 3 animal / 2 monster via slot 70 / 1 `IsMale` / 0, unwritten with neither cache), then
+// `+0xb4` and `+0xb8` from the group seam `FUN_101f55a0` on `SndScheme_Char` with flags 0 and 1
+// (L0.audio.voice-table-index, walks/L0-r007.md; `ElysiumEntityVSound.cpp`). Declared here, defined
+// there.
 
 // slot 72 0x10026ad0 (walked) `bool vfunc72(int)`
 //   layer 0, story 29c
@@ -2018,11 +2019,11 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FElysiumEntity*)>::Test(&FElysiumEntity::NavIgnoreCollision),
 				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; return Receiver.NavIgnoreCollision(Arg0) ? 1 : 0; } },
 			{ 70, TEXT("0x1009d820"), TEXT("CBaseEntity"), TEXT("IsMonster"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::IsMonster),
 				nullptr },
 			{ 71, TEXT("0x1009d460"), TEXT("CBaseEntity"), TEXT("PrecacheSoundTable"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::PrecacheSoundTable),
 				nullptr },
 			{ 72, TEXT("0x10026ad0"), TEXT("CBaseEntity"), TEXT("Slot72"),

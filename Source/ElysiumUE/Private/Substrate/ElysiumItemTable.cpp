@@ -248,6 +248,10 @@ bool FElysiumItemTable::ParseText(const FString& Classname, const FString& Text,
 	Out.Bucket = Data->Int(TEXT("bucket"), 0);
 	Out.BucketPosition = Data->Int(TEXT("bucket_position"), 0);
 
+	// `sound_group` -> record `+0x24d4` (`FUN_10259f80` 0x1025a8e8; the `+0x2554` cache keeps the
+	// init's -2, `FUN_10258b00`).
+	Out.SoundGroup = Data->Str(TEXT("sound_group"), FString());
+
 	// The wield rule's weapon half (`docs/vtmb/wielded_weapons.md` § "Who may wield what").
 	Out.EquipMask = ElysiumEquipFlags::Parse(Data->Str(TEXT("equip_mask"), FString()));
 

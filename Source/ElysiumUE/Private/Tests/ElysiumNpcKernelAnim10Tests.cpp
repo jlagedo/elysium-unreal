@@ -184,9 +184,9 @@ bool FAnim10ZombieLineSetModelTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		F.Npc->VSoundGroupName.Reset();
-		F.Npc->VSoundTableIndex = 0;
-		F.Npc->VSoundGroupRow = 0;
+		F.Npc->SoundGroup.Reset();
+		F.Npc->VSoundTableIdx = 0;
+		F.Npc->VSoundGroup = -2;
 		const int32 SizeCallsBefore = F.Npc->SetSizeCalls;
 		F.Npc->SetModel(ModelName);
 
@@ -196,12 +196,14 @@ bool FAnim10ZombieLineSetModelTest::RunTest(const FString&)
 			F.Npc->SetSizeCalls, SizeCallsBefore + 1);
 		const bool bMale = F.Npc->Sheet.IsMale();
 		TestEqual(*FString::Printf(TEXT("%s: m_iszVSoundGroup takes the gendered literal"), Cls),
-			F.Npc->VSoundGroupName,
+			F.Npc->SoundGroup,
 			FString(bMale ? TEXT("Zombie_Male") : TEXT("Zombie_Female")));
 		TestEqual(*FString::Printf(TEXT("%s: +0x00bc takes the literal 2, unconditionally"), Cls),
-			F.Npc->VSoundTableIndex, 2);
-		TestEqual(*FString::Printf(TEXT("%s: the group resolves to retail's own count-zero miss"),
-				Cls), F.Npc->VSoundGroupRow, INDEX_NONE);
+			F.Npc->VSoundTableIdx, 2);
+		// The seam `FUN_101f55a0` (L0-r007) with no `SndScheme_Char` registry on the fixture's world:
+		// `reg+0x20 == NULL` answers 0 (S0), retail's own unloaded-table arm, not -1.
+		TestEqual(*FString::Printf(TEXT("%s: the group resolves to the unloaded table's answer (S0)"),
+				Cls), F.Npc->VSoundGroup, 0);
 	}
 
 	// The Troika body for the bare Troika line, which no species override stands over.
@@ -210,12 +212,12 @@ bool FAnim10ZombieLineSetModelTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	F.Cop->VSoundGroupName.Reset();
-	F.Cop->VSoundTableIndex = 0;
+	F.Cop->SoundGroup.Reset();
+	F.Cop->VSoundTableIdx = 0;
 	F.Cop->SetModel(ModelName);
 	TestTrue(TEXT("the bare Troika line takes the Troika body and writes no sound group"),
-		F.Cop->VSoundGroupName.IsEmpty());
-	TestEqual(TEXT("...and no +0x00bc"), F.Cop->VSoundTableIndex, 0);
+		F.Cop->SoundGroup.IsEmpty());
+	TestEqual(TEXT("...and no +0x00bc"), F.Cop->VSoundTableIdx, 0);
 	return true;
 }
 #endif // ELYSIUM_WITH_ARM_TESTS

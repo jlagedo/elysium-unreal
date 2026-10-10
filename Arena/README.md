@@ -154,7 +154,8 @@ is unique in the record, the kind one of `ElysiumArenaScenario::FixtureKinds()`.
 |---|---|---|
 | `keyvalues` | `values`: an object of keys to string, number or boolean values (read as a map row spells them) | a controlled KeyValues table, read back by `entity_field` on `who: "fixture:<id>"`, `field` the key |
 | `text` | `text`: a string, handed whole (JSON escapes spell newlines, quotes and backslashes) | raw text a reader is given as the buffer it would have read from a file: the argument of `entity_call KeyValues_Lex` / `KeyValues_Parse`, or the bytes a `KeyValues_LoadFile` name answers with; `entity_field` on `fixture:<id>` answers `field: "text"`. Staged as `fixture <id> text staged chars=<n>` |
-| `sound_folder` | `config`: `{"categories": <n>, "counts": [<int>...], "root": <node>}`, a node `{"label", "key", "mask": [<0|1>...], "children": [<node>...], "siblings": [<node>...]}` (a sibling is the parent's next child, linked through `+0x08`) | the VSound folder index's owner `T` (`Source/ElysiumUE/Private/Audio/ElysiumSoundFolderIndex.h`: `*(T + 8) + 0x14` the category count, `*(T + 0xc)` the counts, the root node at `T + 0x10`), with the harness's retail-shaped answer to the L2 hook `FUN_101f4530` (`sum(counts[0..cat-1]) + idx`); the argument of `entity_call VSoundFolder_AddRange` / `VSoundFolder_Find`; `entity_field` on `fixture:<id>` answers `field: "mask"` (`index`: a node label; the bytes joined by commas) and `field: "count"` (`index`: the category). Staged as `fixture <id> sound_folder staged categories= counts= total= root=<mask>`; a malformed `config` stages nothing (`fixture <id> sound_folder failed: <why>`) |
+| `sound_folder` | `config`: `{"categories": <n>, "counts": [<int>...], "root": <node>}`, a node `{"label", "key", "name", "mask": [<0|1>...], "children": [<node>...], "siblings": [<node>...]}` (a sibling is the parent's next child, linked through `+0x08`; `name` is the folder's `+0x10` string the group lookup `FUN_101f39d0` compares with, absent = NULL = `""`) | the VSound folder index's owner `T` (`Source/ElysiumUE/Private/Audio/ElysiumSoundFolderIndex.h`: `*(T + 8) + 0x14` the category count, `*(T + 0xc)` the counts, the root node at `T + 0x10`), with the harness's retail-shaped answer to the L2 hook `FUN_101f4530` (`sum(counts[0..cat-1]) + idx`); the argument of `entity_call VSoundFolder_AddRange` / `VSoundFolder_Find`; `entity_field` on `fixture:<id>` answers `field: "mask"` (`index`: a node label; the bytes joined by commas) and `field: "count"` (`index`: the category). Staged as `fixture <id> sound_folder staged categories= counts= total= root=<mask>`; a malformed `config` stages nothing (`fixture <id> sound_folder failed: <why>`) |
+| `vsound_registry` | `config`: `{"tables": [<sound_folder fixture id>...]}`, the per-category table array in category order (the `sound_folder` fixtures must come first in the list) | a SndScheme table object `reg` (`Source/ElysiumUE/Private/Substrate/ElysiumVSoundGroup.h`: `reg+0x1c` the count, `reg+0x20` the array), installed as the world's `SndScheme_Char` (`DAT_1073dc28`, `FElysiumEntityWorld::VSoundCharRegistry` -- the L0 -> L2 data hook the base `PrecacheSoundTable` `0x1009d460` and the group seam `FUN_101f55a0` read) from scenario zero to the run's end; an entity spawned before (a `cast` row) saw no table (S0). One per record. Staged as `fixture <id> vsound_registry staged tables=<n>`; a malformed `config` or an unknown table id stages nothing (`fixture <id> vsound_registry failed: <why>`) |
 
 A fixture is named by an `entity_call` argument (`{"fixture": "<id>"}`) or an `entity_field` `who`. An
 unknown kind, a duplicate id, or a reference to a fixture the record does not declare is a parse error.
@@ -163,7 +164,7 @@ Later stories add their kinds (save blocks, sound tables, physics bodies...) in 
 **`entity_call`** (a `script` action: `target`, `function`, optional `args`) -- invokes one retail entry
 point at its time: an input, `Use`, a touch, a think, spawn and activate, damage through the damage
 entry. Never an internal helper: a record that calls a helper tests the port's structure, not the game.
-`args` are booleans, numbers, strings or `{"fixture": id}`. `function` is checked against
+`args` are booleans, numbers, strings, `null` (a NULL pointer) or `{"fixture": id}`. `function` is checked against
 `ElysiumArenaScenario::EntityCallAllowlist()` when the action runs; a story adds the entry points its
 records drive (with their dispatch in `RunAction`). A call outside the allowlist is
 refused as a script failure (`entity_call '<f>' is not an allowlisted retail entry point`): `error` on an
@@ -182,12 +183,16 @@ ordinary record, a `script` failure on an `expect_fail` one. Traced as `script`:
 | `Activate` | a live entity's targetname | none | vslot 113 `Activate` on that entity, as `ServerActivate` `0x1011aaf0` calls it once per level activation (the port's restore barrier runs the pass again): the second pass a record models to re-resolve a cached handle (`CAmbientGeneric::vfunc113` `0x101ac9c0`) | `entity_call Activate done` |
 | `VSoundFolder_AddRange` | a utility name (`vsound`), the `who` of its events | `[{"fixture": <sound_folder id>}, <category>, <hi>]` | the owner's `AddRange` `0x101f4330`: `counts[cat] < hi + 1` -> store, then `FUN_101f3ba0` over the tree (`folder_addrange`, `folder_insert` sites) | `entity_call VSoundFolder_AddRange done cat= hi= count= total=` |
 | `VSoundFolder_Find` | as above | `[{"fixture": <sound_folder id>}, <key>, <category>, <index>]` | the owner's `Find` `0x101f42d0`: `key == -1` -> NULL, else `FUN_101f3b00` (`folder_find` sites) | `entity_call VSoundFolder_Find done key= cat= idx= node=<label|null>` |
+| `SoundScript_New` | a utility name (`sndscript`), the `who` of its events | none | the sound-script descriptor's constructor `FUN_101b30d0` `0x101b30d0` on a fresh record (`Audio/ElysiumSoundScript.h`), as `AddSoundsFromFile` `0x101b4240` builds one per sound entry (`sndscript.defaults` site) | `entity_call SoundScript_New done channel= channel_text= volume=<start>,<range> volume_text= pitch=, pitch_text= level=, level_text= owner_only= precache= flag48= waves= second=` |
+| `SoundScript_SetChannel` | as above | `["<channel text>"]` or `[null]` | `FUN_101b30d0` on a fresh record, then the `channel` key's setter `FUN_101b2490` `0x101b2490` (the key parser `FUN_101b3bb0`'s call at 0x101b3bfe), which runs the channel parser `FUN_101b24d0` `0x101b24d0` (`sndchan.parse` site) and keeps the text at `+0x69` | `entity_call SoundScript_SetChannel done channel= channel_text= ...` (the same words) |
 
 **`entity_field`** (a `probes` entry: `who`, `field`, optional `to`, `index`, `member`, one comparison) --
 reads a retail field by its **retail name** (`m_iName`, `m_iHealth`, the datamap name or the ledger's
 field name), so a probe survives the port renaming its members. The comparison's value states the type;
 a field that answers another type fails the probe, and so does a field with no adapter (the reason lists
 the known ones). Read-only. Adapters: `m_iName`, `m_iClassname`, `m_iHealth`, `m_spawnflags`,
+`m_iVSoundGroup`, `m_iVSoundGroupFemale`, `m_iVSoundTableIdx` (the ledger's names for `CBaseEntity`
+`+0xb4` / `+0xb8` / `+0xbc`, read raw -- never through the lazy getters that re-run slot 71),
 `m_nRenderMode`, `m_lifeState`, `m_vecOrigin` (`member`: `x`, `y` or `z`), and **any row of the entity's
 class datamap by the name the class registers it under** (`ElysiumAddClassField`: the retail key, as
 `radius`, or the retail member, as `m_iSoundLevel`), typed by the row (Int/Float a number, Bool a bool,
@@ -256,8 +261,20 @@ volume= duration= rate= channel= flags=`, `skip slot= name= volume=`), `track_re
 retiring=`, `clear slot=`), `chan_alloc` (`FUN_102297a0` `0x102297a0`: `free channel= retiring=`,
 `evict channel= index= name= current= retiring=`), `mgr_frame`
 (`CSoundSchemeManager::FrameUpdatePostEntityThink` `0x10228d00`: `remove name= channel= current=
-retiring=`). A pure function reports through `IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a
-utility with no entity names its target in the entity column (`FElysiumNamedRetailSites`).
+retiring=`); the voice-table selection (`walks/L0-r007.md`), in the entity's own column:
+`l0.voice.category` (`CBaseEntity::PrecacheSoundTable` `0x1009d460`, `write arm=<3|2|1|0|none>
+at=<0x1009d4de|0x1009d4f8|0x1009d513|0x1009d529|0x1009d527>`), `l0.voice.group` (the same body: `call
+at=<0x1009d54b|0x1009d56e> flag=<0|1> group=`, `write at=<0x1009d550|0x1009d573> field=<+0xb4|+0xb8>
+value=`), `l0.voice.seam` (`Global::FUN_101f55a0` `0x101f55a0`: `return
+arm=<S0|S1a|S1b-i|S1b-iii|S1b-iii-miss|S2a|S2b|final|badidx> value= group= idx= female=`; `badidx` is
+the port's refusal of a category index the table array does not hold), `folder_group` (`FUN_101f39d0`
+`0x101f39d0`: `branch node= arm=empty`, `branch node= component= match= next= children=`, `return
+node= component= key=`; `FUN_101f42a0` `0x101f42a0`: `return name= found= index=`); the sound script
+(`Audio/ElysiumSoundScript.h`): `sndscript.defaults` (`Global::FUN_101b30d0` `0x101b30d0`: `return
+channel=0 volume=1.0 pitch=100 level=75 flags=<+1c>,<+1d>,<+48>`), `sndchan.parse`
+(`Global::FUN_101b24d0` `0x101b24d0`: `return text=<name|null> ret= warn=<0|1>`). A pure function
+reports through `IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a utility with no entity names its
+target in the entity column (`FElysiumNamedRetailSites`).
 
 Rules: `entity_call` drives only what retail exposes to the world; `retail_site` events are emitted where
 the retail address they name is ported and state retail values; `entity_field` reads retail names;
@@ -435,6 +452,9 @@ record — and a `reason`) and
 | `audio/l0_scheme_file_load` | the KeyValues FILE loader `0x102480f0` (the `CSoundScheme::Precache` call), its wrapper `0x102482b0`, block parser `0x10248510` and text cache `0x102482f0`: the cache hit and miss, the loader's own open, no `.txt`, a missing file, every top-level token a root, the first-byte brace test, the typed leaves, and `sound/Schemes/SP_Tutorial_City.txt` itself (L0.audio.scheme-file-load) |
 | `audio/l0_keyvalues_access` | the loader class's accessors `0x10248900` / `0x10248bb0` / `0x10248cd0` / `0x102490e0`: first match, case folding, the fallback chain, `atoi` and `__ftol` conversions, the `%d` / `%f` writeback and the create arm (L0.audio.keyvalues-access) |
 | `audio/l0_sound_scheme_switch` | SoundScheme activation and switching: Activate `0x1022a300` (register, the 2.0 s start, `ThinkSet(0)`), FadeIn `0x1022b590` (the 0.5 floor, the per-entity guard, the player write, think and flag), the manager switch `0x10229270` -> `0x10229430` / `0x10229550` / `0x102297a0` over the shipped City and Underground schemes (slot order, same-name retarget, retire rate and channel, channel 4, no eviction) and the retiring records' removal at 0.01 (`0x10228d00`) (L0.audio.sound-scheme-switch) |
+| `audio/l0_voice_table_index` | `CBaseEntity::PrecacheSoundTable` `0x1009d460` from the NPC's Spawn (through `CBaseCombatCharacter::Precache` `0x10340360`): the category block (`IsMonster` `0x1009d820` on the template's `Monster` byte, `IsMale` `0x10336920`), the two tail calls into the group seam `FUN_101f55a0` `0x101f55a0` (S2b, the template `SoundGroup`, the `Female_PC_Override` form, S0 before the table exists) and the folder lookup `FUN_101f42a0` / `FUN_101f39d0` (the component walk, the root-key miss) on a staged `SndScheme_Char`, the three words probed (L0.audio.voice-table-index) |
+| `audio/l0_sound_channel_parse` | the channel parser `FUN_101b24d0` `0x101b24d0` through the `channel` setter `FUN_101b2490`: NULL, the `atoi` fallback, the seven case-insensitive names, the unknown-name warning, the text kept as typed (L0.audio.sound-channel-parse) |
+| `audio/l0_sound_script_defaults` | the sound-script descriptor's constructor `FUN_101b30d0` `0x101b30d0`: channel 0 / `CHAN_AUTO`, volume (1, 0) / `VOL_NORM`, pitch (100, 0) / `PITCH_NORM`, level (75, 0) / `SNDLVL_NORM`, `play_to_owner_only` 0, `precache` 1, `+0x48` 0, both vectors empty, and that the channel setter leaves the rest alone (L0.audio.sound-script-defaults) |
 | `_selftest/never_after_ignores` | a `never` opened `after` a label does not count a match before it |
 | `_selftest/never_within_holds`, `never_within_trips` | a `never` closed `within` seconds of its label ignores a match after the window and fails the run on one inside it |
 | `combat/cover_move_shoot` | the run-and-gun: a gunman running to cover fires from an overlay layer's own 3031 (`0x102e8560` -> `AddGesture 0x100991b0` -> `0x10098cd0` -> `Shot 0x102387b0`; spec 0002 V4o) |

@@ -276,3 +276,19 @@ bool IsRetailNotSolid() const
 {
 	return (RetailSolidFlags & 0x4u) != 0 || (RetailSolidSets > 0 && RetailSolidType == 0);
 }
+
+// --- The voice-table words' readers (`Substrate/ElysiumEntityVSound.cpp`, `walks/L0-r007.md`) -----
+
+// `CBaseEntity::GetVSoundTableIdx` 0x1009d5e0: slot 71 below 0, then `+0xbc`.
+int32 GetVSoundTableIdx();
+// `CBaseEntity::GetVSoundGroup` 0x1009d6a0: slot 71 below -1, then `+0xb4`.
+int32 GetVSoundGroup();
+// `CBaseEntity::GetVSoundGroupFemale` 0x1009d760: slot 71 below -1, then `+0xb8`.
+int32 GetVSoundGroupFemale();
+// `thunk_FUN_101f55a0(&DAT_1073dc28, this, group, flag)` -- the group seam on `SndScheme_Char`
+// (`FElysiumEntityWorld::VSoundCharRegistry`, the L2 data hook). What slot 71's tail and the species
+// writers (`CNPC_VWerewolf::Precache`, `CNPC_VZombie::SetModel`) call.
+int32 VSoundGroupIndexFor(const TCHAR* Group, EElysiumVSoundSex Sex);
+// Port-only: slot 71 is running on this entity, so a lazy getter it reaches (through the seam's
+// `GetVSoundTableIdx`) must not re-dispatch it -- retail's arm 6 recursion, refused once here.
+bool bInPrecacheSoundTable = false;

@@ -13,6 +13,7 @@
 #include "ElysiumKeyValues.h"                // `entity_call KeyValues_Lex` / `KeyValues_Parse` / the accessors
 #include "ElysiumKeyValuesLoader.h"          // `entity_call KeyValues_LoadFile`
 #include "ElysiumRetailSite.h"               // the named sink those calls report through
+#include "Audio/ElysiumSoundScript.h"        // `entity_call SoundScript_New` / `SoundScript_SetChannel`
 #include "ElysiumInputRouter.h"              // `player_walk`: the input replay door `gr_walk` drives
 #include "ElysiumMapActor.h"
 #include "ElysiumMovementComponent.h"        // `player_crouch`: the duck's heading, read off the mover
@@ -495,6 +496,14 @@ void FElysiumArenaScenarioRunner::Detach()
 	{
 		World->SetAiTraceSink(FElysiumAiTraceSink());
 	}
+	// A `vsound_registry` fixture installed on the live world comes off with the run; the world it was
+	// installed on is the one checked, so a world that went first is not touched.
+	if (RegistryWorld != nullptr && RegistryWorld == LiveWorld() && StagedRegistry.IsValid()
+		&& RegistryWorld->VSoundCharRegistry == StagedRegistry.Get())
+	{
+		RegistryWorld->VSoundCharRegistry = nullptr;
+	}
+	RegistryWorld = nullptr;
 	if (Host.Transport) Host.Transport->Cancel(); // observer must not outlive runner, 0x1011a620
 	bTransactionPending = false;
 	InstalledWorld = nullptr;
@@ -800,6 +809,9 @@ namespace ElysiumArenaRunnerDetail
 	{
 		Node.Owner = &Owner;
 		Json.TryGetStringField(TEXT("label"), Node.Label);
+		// `name` (`+0x10`): the folder name `FUN_101f39d0` compares a path component with; absent, NULL
+		// (read as ""), which is how a category root with no name answers.
+		Json.TryGetStringField(TEXT("name"), Node.Name);
 		double Key = 0.0;
 		if (!Json.TryGetNumberField(TEXT("key"), Key))
 		{
@@ -905,6 +917,52 @@ void FElysiumArenaScenarioRunner::StageFixtures(FElysiumEntityWorld& World)
 				Staged.Text = FString::Printf(TEXT("fixture %s %s staged categories=%d counts=%d total=%d root=%s"), *Fixture.Id, *Fixture.Kind,
 					Owner->CategoryCount, Owner->Counts.Num(), Owner->Total(), *ElysiumSoundFolder::MaskText(Owner->Root));
 				StagedFolders.Add(Fixture.Id, MoveTemp(Owner));
+			}
+			else
+			{
+				Staged.Text = FString::Printf(TEXT("fixture %s %s failed: %s"), *Fixture.Id, *Fixture.Kind, *Error);
+				StagedFixtures.Remove(Fixture.Id);
+			}
+			continue;
+		}
+		if (Fixture.Kind == TEXT("vsound_registry"))
+		{
+			// The SndScheme table object `reg` (`Substrate/ElysiumVSoundGroup.h`): `tables` names staged
+			// `sound_folder` fixtures in category order (`reg+0x20[i]`), each already built above (a
+			// fixture list is staged in record order, so the tables come first). Installed as the world's
+			// `SndScheme_Char` -- `DAT_1073dc28`, the registry the base `PrecacheSoundTable` reads -- for
+			// the run. One per record.
+			FString Error;
+			const TArray<TSharedPtr<FJsonValue>>* Tables = nullptr;
+			TUniquePtr<FStagedVSoundRegistry> Registry = MakeUnique<FStagedVSoundRegistry>();
+			if (!Fixture.Config.IsValid() || !Fixture.Config->TryGetArrayField(TEXT("tables"), Tables))
+			{
+				Error = TEXT("config needs `tables` (an array of sound_folder fixture ids)");
+			}
+			else if (StagedRegistry.IsValid())
+			{
+				Error = TEXT("a record stages one vsound_registry");
+			}
+			else
+			{
+				for (const TSharedPtr<FJsonValue>& Id : *Tables)
+				{
+					const FString Name = Id.IsValid() && Id->Type == EJson::String ? Id->AsString() : FString();
+					const TUniquePtr<ElysiumSoundFolder::FOwner>* Owner = StagedFolders.Find(Name);
+					if (Owner == nullptr || !Owner->IsValid())
+					{
+						Error = FString::Printf(TEXT("`tables` names '%s', which is not a staged sound_folder fixture"), *Name);
+						break;
+					}
+					Registry->Tables.Add(Owner->Get());
+				}
+			}
+			if (Error.IsEmpty())
+			{
+				Staged.Text = FString::Printf(TEXT("fixture %s %s staged tables=%d"), *Fixture.Id, *Fixture.Kind, Registry->Tables.Num());
+				StagedRegistry = MoveTemp(Registry);
+				World.VSoundCharRegistry = StagedRegistry.Get();
+				RegistryWorld = &World;
 			}
 			else
 			{
@@ -1026,6 +1084,16 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 				: Probe.Field == TEXT("m_spawnflags") ? Entity->SpawnFlags
 				: Probe.Field == TEXT("m_nRenderMode") ? Entity->RenderMode : Entity->LifeState;
 		}
+		else if (Probe.Field == TEXT("m_iVSoundGroup") || Probe.Field == TEXT("m_iVSoundGroupFemale")
+			|| Probe.Field == TEXT("m_iVSoundTableIdx"))
+		{
+			// The ledger's names for `CBaseEntity` `+0xb4` / `+0xb8` / `+0xbc` (`layout.tsv:20-22`; no
+			// datamap row), the words `PrecacheSoundTable` 0x1009d460 writes (L0.audio.voice-table-index).
+			// Read raw: a probe reads the stored word, never the lazy getter that would re-run slot 71.
+			OutAnswer.Type = FElysiumArenaValue::EType::Number;
+			OutAnswer.Number = Probe.Field == TEXT("m_iVSoundGroup") ? Entity->VSoundGroup
+				: Probe.Field == TEXT("m_iVSoundGroupFemale") ? Entity->VSoundGroupFemale : Entity->VSoundTableIdx;
+		}
 		else if (bVector)
 		{
 			if (Probe.Member != TEXT("x") && Probe.Member != TEXT("y") && Probe.Member != TEXT("z"))
@@ -1047,7 +1115,8 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 			if (Row == nullptr || !Row->Get)
 			{
 				OutError = FString::Printf(TEXT("no retail field adapter named '%s' (m_iName, m_iClassname, m_iHealth, ")
-					TEXT("m_spawnflags, m_nRenderMode, m_lifeState, m_vecOrigin, or a datamap row the entity's class registers)"),
+					TEXT("m_spawnflags, m_nRenderMode, m_lifeState, m_vecOrigin, m_iVSoundGroup, m_iVSoundGroupFemale, ")
+					TEXT("m_iVSoundTableIdx, or a datamap row the entity's class registers)"),
 					*Probe.Field);
 				return false;
 			}
@@ -2057,6 +2126,47 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			const ElysiumSoundFolder::FNode* Found = (*Owner)->Find(Key, Category, MemberIndex, &Sites);
 			RecordDone(FString::Printf(TEXT("entity_call VSoundFolder_Find done key=%d cat=%d idx=%d node=%s"), Key, Category, MemberIndex,
 				Found != nullptr ? (Found->Label.IsEmpty() ? TEXT("?") : *Found->Label) : TEXT("null")));
+			return true;
+		}
+		if (Action.Function == TEXT("SoundScript_New") || Action.Function == TEXT("SoundScript_SetChannel"))
+		{
+			// The sound-script descriptor as `AddSoundsFromFile` 0x101b4240 builds one per entry
+			// (`Audio/ElysiumSoundScript.h`): `FUN_101b30d0` on a fresh record (0x101b4318), then for
+			// `SoundScript_SetChannel` the `channel` key's setter `FUN_101b2490` with the one argument (a
+			// string, or `null` for the parser's NULL arm) -- the key parser `FUN_101b3bb0`'s call at
+			// 0x101b3bfe. The result line spells the record's words so a record can read them back.
+			FElysiumNamedRetailSites Sites(World, Action.Target);
+			ElysiumSoundScript::FParams Params;
+			ElysiumSoundScript::Construct(Params, &Sites);
+			FString Verb = TEXT("New");
+			if (Action.Function == TEXT("SoundScript_SetChannel"))
+			{
+				if (Action.Args.Num() != 1 || !Action.Args[0].Fixture.IsEmpty()
+					|| (Action.Args[0].Value.Type != FElysiumArenaValue::EType::String
+						&& Action.Args[0].Value.Type != FElysiumArenaValue::EType::None))
+				{
+					OutError = TEXT("entity_call 'SoundScript_SetChannel' takes [\"<channel text>\" | null]");
+					return false;
+				}
+				const bool bNull = Action.Args[0].Value.Type == FElysiumArenaValue::EType::None;
+				ElysiumSoundScript::SetChannel(Params, bNull ? nullptr : *Action.Args[0].Value.String, &Sites);
+				Verb = TEXT("SetChannel");
+			}
+			else if (!Action.Args.IsEmpty())
+			{
+				OutError = TEXT("entity_call 'SoundScript_New' takes no arguments");
+				return false;
+			}
+			FEvent& Done = Events.AddDefaulted_GetRef();
+			StampEvent(Done, World.NowSeconds());
+			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+			Done.Name = Action.Target;
+			Done.Text = FString::Printf(TEXT("entity_call SoundScript_%s done channel=%d channel_text=%s volume=%.1f,%.1f volume_text=%s ")
+				TEXT("pitch=%.0f,%.0f pitch_text=%s level=%.0f,%.0f level_text=%s owner_only=%d precache=%d flag48=%d waves=%d second=%d"),
+				*Verb, Params.Channel, Params.ChannelText, Params.Volume.Start, Params.Volume.Range, Params.VolumeText,
+				Params.Pitch.Start, Params.Pitch.Range, Params.PitchText, Params.SoundLevel.Start, Params.SoundLevel.Range,
+				Params.SoundLevelText, Params.bPlayToOwnerOnly, Params.bPrecache, Params.Flag48, Params.Waves.Num(),
+				Params.SecondList.Num());
 			return true;
 		}
 		OutError = FString::Printf(TEXT("entity_call '%s' is allowlisted but has no dispatch"), *Action.Function);

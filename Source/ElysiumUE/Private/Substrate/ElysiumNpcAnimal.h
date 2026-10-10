@@ -13,6 +13,9 @@ class FElysiumNpcAnimal : public FElysiumNpc
 public:
 	ELYSIUM_NPC_CLASS("CNPC_VAnimal", FElysiumNpc)
 
+	// `+0xac m_pAnimal`: the self-cache `CNPC_VAnimal`'s constructor (0x1035eba0) sets.
+	virtual FElysiumNpcAnimal* AsAnimal() override { return this; }
+
 	virtual int32 CanPlaySequence(bool bDisregardState, int32 InterruptLevel) override;
 	virtual int32 SelectIdealStateRetail() override;
 	virtual void TranslateEnemyChasePosition(FElysiumEntity* Enemy, FVector& ChasePositionCm, void* Tolerance, void* SecondTolerance) override;

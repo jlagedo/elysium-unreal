@@ -28,6 +28,7 @@ struct FElysiumDialogueSession;
 class FElysiumGameSoundBus;
 class FElysiumAttackCoordinator;
 class FElysiumLineService;
+struct IElysiumVSoundRegistry;   // Substrate/ElysiumVSoundGroup.h
 class FElysiumPlaceSet;
 // The law-record store's own type, forward-declared through its namespace so this
 // public header stays clear of the substrate's private ones (the sound bus's own posture).
@@ -717,6 +718,14 @@ public:
 	// producers are substrate rules and neither can see the console.
 	const FElysiumFootstepTuning& FootstepTuning() const { return FootstepTuningState; }
 	FElysiumFootstepTuning& FootstepTuning() { return FootstepTuningState; }
+
+	// `DAT_1073dc28` -- the `SndScheme_Char` table object the base `CBaseEntity::PrecacheSoundTable`
+	// (`0x1009d460`) and the species writers hand the VSound group seam `FUN_101f55a0`
+	// (`Substrate/ElysiumVSoundGroup.h`). HOOK (L0 -> L2, data): built by `FUN_101f66c0`'s chain,
+	// which is L2's; null until that layer installs it, which the seam reads as the unloaded table
+	// (`reg+0x20 == NULL`, S0 -> 0). The arena's `vsound_registry` fixture installs one for a run and
+	// clears it after. Not owned by the world.
+	IElysiumVSoundRegistry* VSoundCharRegistry = nullptr;
 
 	// --- The world-event law lane's record store ---
 	// The expiring criminal/supernatural records an NPC's global witness lane polls, in exactly the

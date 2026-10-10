@@ -5,6 +5,7 @@
 #if !UE_BUILD_SHIPPING
 
 #include "Audio/ElysiumSoundFolderIndex.h"  // `sound_folder` fixtures: the staged owner `T`
+#include "Substrate/ElysiumVSoundGroup.h"   // `vsound_registry` fixtures: the staged SndScheme table object
 #include "Debug/ElysiumArenaScenario.h"
 #include "Debug/ElysiumArenaStage.h"
 #include "Delegates/IDelegateInstance.h"   // FDelegateHandle, the activation binding
@@ -251,6 +252,22 @@ private:
 	// `sound_folder` fixtures: the owner `T` each one stages (`Audio/ElysiumSoundFolderIndex.h`), with
 	// the harness's retail-shaped answer to the L2 hook `FUN_101f4530`. By fixture id.
 	TMap<FString, TUniquePtr<ElysiumSoundFolder::FOwner>> StagedFolders;
+	// A `vsound_registry` fixture: the SndScheme table object `reg` (`reg+0x1c` the count, `reg+0x20`
+	// the per-category array of staged `sound_folder` owners), installed as the world's
+	// `SndScheme_Char` (`FElysiumEntityWorld::VSoundCharRegistry`, the L2 data hook) for the run and
+	// cleared by `Detach`. One per record; a second stages nothing.
+	struct FStagedVSoundRegistry final : public IElysiumVSoundRegistry
+	{
+		TArray<ElysiumSoundFolder::FOwner*> Tables;   // not owned: `StagedFolders`' owners, by category index
+		virtual bool HasTables() const override { return true; }
+		virtual int32 TableCount() const override { return Tables.Num(); }
+		virtual ElysiumSoundFolder::FOwner* Table(int32 Index) override
+		{
+			return Tables.IsValidIndex(Index) ? Tables[Index] : nullptr;
+		}
+	};
+	TUniquePtr<FStagedVSoundRegistry> StagedRegistry;
+	FElysiumEntityWorld* RegistryWorld = nullptr;   // the world `StagedRegistry` was installed on
 	TArray<bool> ActionFired;
 	TArray<bool> ProbeRead;
 

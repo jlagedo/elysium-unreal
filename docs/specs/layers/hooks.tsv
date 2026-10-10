@@ -53,8 +53,8 @@ L0 entity	L1 animation	0x10381cd0	Global::FUN_10381cd0	1	ported	0x102c4380	Globa
 L0 entity	L2 character	0x10032720	Global::FUN_10032720	108	settled:not_carried	0x100a1250	CBaseEntity::TakeDamage
 L0 entity	L2 character	0x1006f080	Global::FUN_1006f080	108	ported	0x10331da0	CBaseCombatCharacter::CalcLookData
 L0 entity	L2 character	0x10071e00	Global::FUN_10071e00	108	ported	0x10071cd0	Global::FUN_10071cd0
-L0 entity	L2 character	0x1009d460	CBaseEntity::PrecacheSoundTable	108	stub	0x10336920	CBaseCombatCharacter::IsMale
-L0 entity	L2 character	0x1009d820	CBaseEntity::IsMonster	108	stub	0x101d5f10	Global::FUN_101d5f10
+L0 entity	L2 character	0x1009d460	CBaseEntity::PrecacheSoundTable	108	ported	0x10336920	CBaseCombatCharacter::IsMale
+L0 entity	L2 character	0x1009d820	CBaseEntity::IsMonster	108	ported	0x101d5f10	Global::FUN_101d5f10
 L0 entity	L2 character	0x1009e430	CAISound::FUN_1009e430	108	stub	0x10431f30	Global::FUN_10431f30
 L0 entity	L2 character	0x1009f120	CBaseEntity::SetClassname	108	stub	0x1042bff0	Global::FUN_1042bff0
 L0 entity	L2 character	0x100a1580	CBaseEntity::VPhysicsTakeDamage	108	stub	0x101faa70	CVDmg_t::GetDmg

@@ -73,8 +73,9 @@ TArray<FVSoundSpeak> VSoundSpeakCalls;
  *  chose for `Float_Sound_Info`'s identical guard: with a pure lookup the cache is unobservable and
  *  a process-lifetime cache is one more thing a map reload cannot invalidate.
  *
- *  **This runtime loads no VSound concept list at all** — nothing parses one, `PrecacheSoundTable`
- *  (slot 71) is still a generated stub and `m_iVSoundTableIdx` (`+0x00bc`) is never written. So the
+ *  **This runtime loads no VSound concept list at all** — nothing parses one; `PrecacheSoundTable`
+ *  (slot 71) writes `m_iVSoundTableIdx` (`+0x00bc`) since L0-r007, but the `SndScheme_Char` tables
+ *  behind it are the L2 data hook still unfilled (`FElysiumEntityWorld::VSoundCharRegistry`). So the
  *  list is empty, which is retail's own count-zero case, and the answer is retail's own miss: `-1`.
  *  Named rather than inlined so the day a concept list is parsed every hook answers at once. */
 static int32 VSoundConceptId(const TCHAR* ConceptName);

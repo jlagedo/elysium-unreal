@@ -247,6 +247,15 @@ bool FElysiumNpc::NpcStep(int32 EventId, bool bHeavy)
 	return true;
 }
 
+const FElysiumClanTemplate* FElysiumNpc::CharTemplateRecord() const
+{
+	// `FUN_101d5f10(&DAT_10738d10, this)`: `GetCharTemplate(this)` -> `table[idx]` when in range, else
+	// the default record. `ApplyResolvedTemplate` keeps the resolved block (`FootstepTemplate`); an
+	// unresolved or empty `stattemplate` leaves it null, which is the default record's every-flag-0,
+	// every-string-NULL answer.
+	return FootstepTemplate.Get();
+}
+
 bool FElysiumNpc::IsKindred() const
 {
 	return bHasKindredTemplate ? bKindredTemplate : FElysiumCombatCharacter::IsKindred();

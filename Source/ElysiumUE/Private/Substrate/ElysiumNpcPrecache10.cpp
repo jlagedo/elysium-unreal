@@ -55,15 +55,6 @@ namespace
 // The seam.
 // -------------------------------------------------------------------------------------------------
 
-int32 FElysiumNpc::VSoundGroupRowFor(const TCHAR* GroupName)
-{
-	// SEAM for `thunk_FUN_101f55a0(&DAT_1073dc28, this, group, 0)`. Nothing in this runtime parses
-	// a VSound concept list (family Sounds10), so the table is empty and this takes retail's own
-	// count-zero miss.
-	(void)GroupName;
-	return INDEX_NONE;
-}
-
 FString FElysiumNpc::CharTemplateModelName() const
 {
 	// SEAM for `FUN_10207e60`: `GetCharTemplate(this)` (`0x10207c40`) then the template's `+0x78`
@@ -137,9 +128,17 @@ void FElysiumNpc::TroikaPrecache()
 	// The acquisitions retail makes next are gone (0019/6, verdict `mechanism`, service `Bake`: this
 	// runtime's assets are baked package references resolved at bake and load, never per NPC):
 	// `PrecacheModel(model, 0)` and slot 10, `UTIL_PrecacheOther(m_altEquipment)` unless it is `"0"`
-	// or `"item_w_unarmed"`, the direct call into `CAI_BaseNPC::Precache` (which only
-	// precaches `m_spawnEquipment`), and the two `sound/character/<dialog>` globs (`.wav`, `.mp3`)
-	// through `0x101d0f10`. What survives is every WORD the body writes that a later rule reads.
+	// or `"item_w_unarmed"`, the `m_spawnEquipment` precache inside `CAI_BaseNPC::Precache`, and the
+	// two `sound/character/<dialog>` globs (`.wav`, `.mp3`) through `0x101d0f10`. What survives is
+	// every WORD the body writes that a later rule reads.
+
+	// `CAI_BaseNPC::Precache((CAI_BaseNPC*)this)` -- the DIRECT call at this point of `0x10298ad0`
+	// (a `mechanism` row closed at `Bake`): its own content is the `m_spawnEquipment` precache, the slot `+0x710`
+	// spawn-admission check (`"ERROR: Rejecting spawn of %s as e..."` + `UTIL_Remove`; an L4 NPC arm,
+	// not ported here, named), and then the direct `CBaseCombatCharacter::Precache` `0x10340360`,
+	// whose surviving write is slot 71 `PrecacheSoundTable` (L0-r007; `walks/L0-r007.md`). The port
+	// calls that body directly, as retail's chain of direct thunks does.
+	FElysiumCombatCharacter::Precache();
 
 	// `*(int*)(this + 0x64e8) = thunk_FUN_100ec640(this)` — `CDispositionTable::PrecacheModel`
 	// (`0x100ec640`) on the singleton at `0x10924980`. Retail walks its rows for this entity's model

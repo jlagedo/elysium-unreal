@@ -9,6 +9,7 @@
 #include "ElysiumAnimationIntent.h"
 #include "Player/ElysiumCameraShots.h"
 #include "Substrate/ElysiumReactions.h"
+#include "Substrate/ElysiumVSoundGroup.h"    // EElysiumVSoundSex: the group seam's flag
 #include "Visual/ElysiumActionTables.h"
 
 // Story 29d, families **Anim10** and **SpeciesAnim10** — activity, sequence, pose and model.
@@ -278,16 +279,16 @@ void FElysiumNpc::ZombieLineSetModel(TCHAR* ModelName, const TCHAR* RetailBody)
 	// `IsMale` is ever asked. The call is direct in retail (`thunk_FUN_10298ce0`), and so it is here.
 	TroikaSetModel(ModelName);
 
-	// `CBaseCombatCharacter::IsMale` — the character's own stat slot 11.
-	VSoundGroupName = Sheet.IsMale() ? FString(GAnim10ZombieMale) : FString(GAnim10ZombieFemale);
+	// `CBaseCombatCharacter::IsMale` — the character's own stat slot 11. `+0x00c0 m_iszVSoundGroup`.
+	SoundGroup = Sheet.IsMale() ? FString(GAnim10ZombieMale) : FString(GAnim10ZombieFemale);
 
 	// `*(undefined4 *)&this->field_0xbc = 2` — unconditional, and AFTER the gender read.
-	VSoundTableIndex = GAnim10ZombieVSoundTableIndex;
+	VSoundTableIdx = GAnim10ZombieVSoundTableIndex;
 
-	// `thunk_FUN_101f55a0(&DAT_1073dc28, this, group ? group : "", 0)` — the vocalization registry,
-	// with the create flag CLEAR. Family Precache10's `VSoundGroupRowFor` is that seam and answers
-	// retail's own count-zero miss; it is called rather than restated.
-	VSoundGroupRow = VSoundGroupRowFor(*VSoundGroupName);
+	// `thunk_FUN_101f55a0(&DAT_1073dc28, this, group ? group : "", 0)` — the VSound group seam on
+	// `SndScheme_Char` with the female flag CLEAR (`Substrate/ElysiumVSoundGroup.h`, L0-r007), through
+	// the base entity's call into it. `+0x00b4 m_iVSoundGroup`.
+	VSoundGroup = VSoundGroupIndexFor(*SoundGroup, EElysiumVSoundSex::Normal);
 }
 
 // =================================================================================================

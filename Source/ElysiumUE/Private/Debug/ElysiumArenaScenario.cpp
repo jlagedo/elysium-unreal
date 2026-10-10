@@ -37,7 +37,7 @@ namespace ElysiumArenaScenarioParse
 	};
 
 	// The `fixtures` catalog's kinds. A story adds its own in the slice that stages it.
-	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues"), TEXT("text"), TEXT("sound_folder") };
+	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues"), TEXT("text"), TEXT("sound_folder"), TEXT("vsound_registry") };
 
 	enum class ENeed : uint8 { Optional, Required };
 
@@ -1129,9 +1129,15 @@ namespace ElysiumArenaScenarioParse
 					if (!CheckFields(R, *Reference, ArgPath, { TEXT("fixture") })
 						|| !ReadString(R, *Reference, TEXT("fixture"), ArgPath, ENeed::Required, Arg.Fixture)) return false;
 				}
+				else if ((*Args)[ArgIndex].IsValid() && (*Args)[ArgIndex]->Type == EJson::Null)
+				{
+					// `null`: a NULL pointer argument (the channel parser `FUN_101b24d0`'s first arm). Kept
+					// as `EType::None`, which no other argument reads as.
+					Arg.Value = FElysiumArenaValue();
+				}
 				else if (!ReadValue(R, (*Args)[ArgIndex], ArgPath, Arg.Value) || Arg.Value.Type == FElysiumArenaValue::EType::None)
 				{
-					return R.Fail(ArgPath, TEXT("an argument is a boolean, a number, a string or {\"fixture\": id}"));
+					return R.Fail(ArgPath, TEXT("an argument is a boolean, a number, a string, null or {\"fixture\": id}"));
 				}
 			}
 			return true;
@@ -1373,26 +1379,30 @@ namespace ElysiumArenaScenarioParse
 			{
 				return R.Fail(Field(Path, TEXT("text")), TEXT("only a `text` fixture takes `text`"));
 			}
-			if (Fixture.Kind == TEXT("sound_folder"))
+			if (Fixture.Kind == TEXT("sound_folder") || Fixture.Kind == TEXT("vsound_registry"))
 			{
 				// `sound_folder`: the VSound folder index's owner `T` (`Audio/ElysiumSoundFolderIndex.h`),
 				// `config`: `{"categories": <n>, "counts": [<int>...], "root": <node>}`, a node being
-				// `{"label", "key", "mask": [<0|1>...], "children": [<node>...], "siblings": [<node>...]}`.
-				// The runner checks the shape when it stages the fixture.
+				// `{"label", "key", "name", "mask": [<0|1>...], "children": [<node>...], "siblings": [<node>...]}`.
+				// `vsound_registry`: a SndScheme table object `reg` (`Substrate/ElysiumVSoundGroup.h`),
+				// `config`: `{"tables": [<sound_folder fixture id>...]}`, the per-category table array in
+				// category order. The runner checks the shape when it stages the fixture.
 				if (FindValue(*Item, TEXT("values")) != nullptr)
 				{
-					return R.Fail(Field(Path, TEXT("values")), TEXT("a `sound_folder` fixture takes `config`, not `values`"));
+					return R.Fail(Field(Path, TEXT("values")), FString::Printf(TEXT("a `%s` fixture takes `config`, not `values`"), *Fixture.Kind));
 				}
 				if (!ReadObject(R, *Item, TEXT("config"), Path, Fixture.Config)) return false;
 				if (!Fixture.Config.IsValid())
 				{
-					return R.Fail(Field(Path, TEXT("config")), TEXT("required: the owner's categories, counts and root node"));
+					return R.Fail(Field(Path, TEXT("config")), Fixture.Kind == TEXT("sound_folder")
+						? TEXT("required: the owner's categories, counts and root node")
+						: TEXT("required: the registry's `tables`, the sound_folder fixture ids in category order"));
 				}
 				continue;
 			}
 			if (FindValue(*Item, TEXT("config")) != nullptr)
 			{
-				return R.Fail(Field(Path, TEXT("config")), TEXT("only a `sound_folder` fixture takes `config`"));
+				return R.Fail(Field(Path, TEXT("config")), TEXT("only a `sound_folder` or `vsound_registry` fixture takes `config`"));
 			}
 			// `keyvalues`: a controlled KeyValues table, read back by `entity_field` on `fixture:<id>`.
 			TSharedPtr<FJsonObject> Values;
@@ -1992,6 +2002,14 @@ const TArray<FString>& EntityCallAllowlist()
 		// the entry points L2's sound-name parser (`FUN_101f3d00`) and wav picker (`FUN_101f4600`) call.
 		TEXT("VSoundFolder_AddRange"),
 		TEXT("VSoundFolder_Find"),
+		// L0.audio.sound-script-defaults / sound-channel-parse: the sound-script descriptor
+		// (`Audio/ElysiumSoundScript.h`) as `CSoundEmitterSystem::AddSoundsFromFile` `0x101b4240` builds
+		// one per sound entry -- `SoundScript_New` is its constructor `FUN_101b30d0` (0x101b4318), and
+		// `SoundScript_SetChannel` the `channel` key's setter `FUN_101b2490` (the key parser
+		// `FUN_101b3bb0`'s one call, 0x101b3bfe) on a fresh descriptor, which runs the channel parser
+		// `FUN_101b24d0`. A `null` argument is the parser's NULL name.
+		TEXT("SoundScript_New"),
+		TEXT("SoundScript_SetChannel"),
 	};
 	return Allowed;
 }

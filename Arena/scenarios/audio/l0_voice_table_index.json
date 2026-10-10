@@ -1,0 +1,100 @@
+{
+  "name": "l0_voice_table_index",
+  "about": "CBaseEntity::PrecacheSoundTable 0x1009d460 (slot 71; walks/L0-r007.md), reached from the NPC's Spawn through CAI_BaseNPCTroika::Precache 0x10298ad0 -> CAI_BaseNPC::Precache -> CBaseCombatCharacter::Precache 0x10340360's dispatch. The category block over the self-caches: m_pCombatCharacter and m_pAnimal -> +0xbc = 3 (0x1009d4de); else slot 70 IsMonster 0x1009d820 (the template's General `Monster` byte +0x8e) -> 2 (0x1009d4f8); else CBaseCombatCharacter::IsMale 0x10336920 (the Gender stat == 1) -> 1 (0x1009d513); else 0 (0x1009d529), the store a weapon (+0xa0 only) shares; neither cache -> +0xbc unwritten (-2). Then the tail on every path: m_iVSoundGroup +0xb4 = FUN_101f55a0(&DAT_1073dc28 SndScheme_Char, this, m_iszVSoundGroup or \"\", 0) (call 0x1009d54b, store 0x1009d550) and m_iVSoundGroupFemale +0xb8 = the same with flag 1 (0x1009d56e / 0x1009d573). The seam 0x101f55a0: an unloaded table (reg+0x20 NULL) answers 0 (S0); every combat character takes S2b (the CBaseTerminal cast of S2a cannot hold for one): an empty group reads the template record's `SoundGroup` (FUN_101d5f10 +0x20), the female flag looks up `<group>\\Female_PC_Override` (`Female_PC_Override` alone for an empty group), then FUN_101f42a0 on tbl[+0xbc]: FUN_101f39d0's component walk (a non-matching node hands the whole path on, a matching one the remainder) and the category ROOT's own key (0) on a miss. Witnesses on a staged SndScheme_Char (Female 0, Male 1, Monster 2, Animal 3; the Male tree holds Young_Thug 3 with Female_PC_Override 9 under it, Monster holds Sheriff 2): a male thug with soundgroup Young_Thug -> 1 / 3 / 9; the same with no soundgroup, through the WarehouseThugLesser template's `SoundGroup Young_Thug` -> 1 / 3 / 9; soundgroup Nobody -> 1 / 0 / 0 (both misses answer the root); the SheriffMan template (`Monster 1`) with soundgroup Sheriff -> 2 / 2 / 0; and a cast thug precached before the registry was installed -> 1 / 0 / 0 (S0). Reported as `fail` when an arm, a lookup step, an index or a stored word differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 1.6,
+  "player": {"at": "start"},
+  "cast": [
+    {"name": "thug_pre", "classname": "npc_VHumanCombatant", "at": "far_nw", "face": "player", "body": "regular_cop",
+     "keys": {"stattemplate": "WarehouseThugLesser", "soundgroup": "Young_Thug"}}
+  ],
+  "fixtures": [
+    {"id": "F", "kind": "sound_folder", "config": {"categories": 1, "counts": [1],
+      "root": {"label": "f_root", "key": 0, "name": "Female", "mask": [1], "children": [
+        {"label": "f_young_thug", "key": 4, "name": "Young_Thug"}
+      ]}}},
+    {"id": "M", "kind": "sound_folder", "config": {"categories": 1, "counts": [1],
+      "root": {"label": "m_root", "key": 0, "name": "Male", "mask": [1], "children": [
+        {"label": "m_young_thug", "key": 3, "name": "Young_Thug", "children": [
+          {"label": "m_ypc", "key": 9, "name": "Female_PC_Override"}
+        ]},
+        {"label": "m_sabbat", "key": 5, "name": "Sabbat_Thug"}
+      ]}}},
+    {"id": "Mo", "kind": "sound_folder", "config": {"categories": 1, "counts": [1],
+      "root": {"label": "mo_root", "key": 0, "name": "Monster", "mask": [1], "children": [
+        {"label": "mo_sheriff", "key": 2, "name": "Sheriff"}
+      ]}}},
+    {"id": "A", "kind": "sound_folder", "config": {"categories": 1, "counts": [1],
+      "root": {"label": "a_root", "key": 0, "name": "Animal", "mask": [1]}}},
+    {"id": "R", "kind": "vsound_registry", "config": {"tables": ["F", "M", "Mo", "A"]}}
+  ],
+  "script": [
+    {"t": 0.2, "do": "spawn", "row": {"name": "thug_m", "classname": "npc_VHumanCombatant", "at": "far_ne", "face": "player", "body": "regular_cop",
+      "keys": {"stattemplate": "WarehouseThugLesser", "soundgroup": "Young_Thug"}}},
+    {"t": 0.5, "do": "spawn", "row": {"name": "thug_tpl", "classname": "npc_VHumanCombatant", "at": "north", "face": "player", "body": "regular_cop",
+      "keys": {"stattemplate": "WarehouseThugLesser"}}},
+    {"t": 0.8, "do": "spawn", "row": {"name": "thug_miss", "classname": "npc_VHumanCombatant", "at": "east", "face": "player", "body": "regular_cop",
+      "keys": {"stattemplate": "WarehouseThugLesser", "soundgroup": "Nobody"}}},
+    {"t": 1.1, "do": "spawn", "row": {"name": "sheriff", "classname": "npc_VHumanCombatant", "at": "west", "face": "player", "body": "regular_cop",
+      "keys": {"stattemplate": "SheriffMan", "soundgroup": "Sheriff"}}}
+  ],
+  "expect": [
+    {"label": "registry", "who": "", "kind": "script", "match": "fixture R vsound_registry staged tables=4", "by": 0.1},
+
+    {"label": "m_cat", "who": "thug_m", "kind": "retail_site", "site": "l0.voice.category", "match": "fn=CBaseEntity::PrecacheSoundTable va=0x1009d460 phase=write arm=1 at=0x1009d513", "by": 0.4},
+    {"label": "m_call0", "who": "thug_m", "kind": "retail_site", "site": "l0.voice.group", "match": "phase=call at=0x1009d54b flag=0 group=Young_Thug", "within": 0.1},
+    {"label": "m_walk_root", "who": "thug_m", "kind": "retail_site", "site": "folder_group", "match": "fn=FUN_101f39d0 va=0x101f39d0 phase=branch node=m_root component=Young_Thug match=0 next=Young_Thug children=2", "within": 0.1},
+    {"label": "m_walk_hit", "who": "thug_m", "kind": "retail_site", "site": "folder_group", "match": "phase=return node=m_young_thug component=Young_Thug key=3", "within": 0.1},
+    {"label": "m_group", "who": "thug_m", "kind": "retail_site", "site": "folder_group", "match": "fn=FUN_101f42a0 va=0x101f42a0 phase=return name=Young_Thug found=1 index=3", "within": 0.1},
+    {"label": "m_seam0", "who": "thug_m", "kind": "retail_site", "site": "l0.voice.seam", "match": "fn=Global::FUN_101f55a0 va=0x101f55a0 phase=return arm=S2b value=3 group=Young_Thug idx=1 female=0", "within": 0.1},
+    {"label": "m_write0", "who": "thug_m", "kind": "retail_site", "site": "l0.voice.group", "match": "phase=write at=0x1009d550 field=+0xb4 value=3", "within": 0.1},
+    {"label": "m_call1", "who": "thug_m", "kind": "retail_site", "site": "l0.voice.group", "match": "phase=call at=0x1009d56e flag=1 group=Young_Thug", "within": 0.1},
+    {"label": "m_walk1_root", "who": "thug_m", "kind": "retail_site", "site": "folder_group", "match": "phase=branch node=m_root component=Young_Thug match=0 next=Young_Thug\\Female_PC_Override children=2", "within": 0.1},
+    {"label": "m_walk1_mid", "who": "thug_m", "kind": "retail_site", "site": "folder_group", "match": "phase=branch node=m_young_thug component=Young_Thug match=1 next=Female_PC_Override children=1", "within": 0.1},
+    {"label": "m_walk1_hit", "who": "thug_m", "kind": "retail_site", "site": "folder_group", "match": "phase=return node=m_ypc component=Female_PC_Override key=9", "within": 0.1},
+    {"label": "m_seam1", "who": "thug_m", "kind": "retail_site", "site": "l0.voice.seam", "match": "arm=S2b value=9 group=Young_Thug\\Female_PC_Override idx=1 female=1", "within": 0.1},
+    {"label": "m_write1", "who": "thug_m", "kind": "retail_site", "site": "l0.voice.group", "match": "phase=write at=0x1009d573 field=+0xb8 value=9", "within": 0.1},
+
+    {"label": "tpl_cat", "who": "thug_tpl", "kind": "retail_site", "site": "l0.voice.category", "match": "phase=write arm=1 at=0x1009d513", "by": 0.7},
+    {"label": "tpl_call0", "who": "thug_tpl", "kind": "retail_site", "site": "l0.voice.group", "match": "phase=call at=0x1009d54b flag=0 group=", "within": 0.1},
+    {"label": "tpl_seam0", "who": "thug_tpl", "kind": "retail_site", "site": "l0.voice.seam", "match": "arm=S2b value=3 group=Young_Thug idx=1 female=0", "within": 0.1},
+    {"label": "tpl_seam1", "who": "thug_tpl", "kind": "retail_site", "site": "l0.voice.seam", "match": "arm=S2b value=9 group=Young_Thug\\Female_PC_Override idx=1 female=1", "within": 0.1},
+
+    {"label": "miss_cat", "who": "thug_miss", "kind": "retail_site", "site": "l0.voice.category", "match": "phase=write arm=1 at=0x1009d513", "by": 1.0},
+    {"label": "miss_group", "who": "thug_miss", "kind": "retail_site", "site": "folder_group", "match": "fn=FUN_101f42a0 va=0x101f42a0 phase=return name=Nobody found=0 index=0", "within": 0.1},
+    {"label": "miss_seam0", "who": "thug_miss", "kind": "retail_site", "site": "l0.voice.seam", "match": "arm=S2b value=0 group=Nobody idx=1 female=0", "within": 0.1},
+    {"label": "miss_seam1", "who": "thug_miss", "kind": "retail_site", "site": "l0.voice.seam", "match": "arm=S2b value=0 group=Nobody\\Female_PC_Override idx=1 female=1", "within": 0.1},
+
+    {"label": "sheriff_cat", "who": "sheriff", "kind": "retail_site", "site": "l0.voice.category", "match": "phase=write arm=2 at=0x1009d4f8", "by": 1.3},
+    {"label": "sheriff_seam0", "who": "sheriff", "kind": "retail_site", "site": "l0.voice.seam", "match": "arm=S2b value=2 group=Sheriff idx=2 female=0", "within": 0.1},
+    {"label": "sheriff_seam1", "who": "sheriff", "kind": "retail_site", "site": "l0.voice.seam", "match": "arm=S2b value=0 group=Sheriff\\Female_PC_Override idx=2 female=1", "within": 0.1}
+  ],
+  "never": [
+    {"who": "", "kind": "retail_site", "site": "l0.voice.seam", "match": "arm=badidx"},
+    {"who": "", "kind": "retail_site", "site": "l0.voice.seam", "match": "arm=S0", "from": 0.15},
+    {"who": "", "kind": "retail_site", "site": "l0.voice.category", "match": "arm=none"},
+    {"who": "", "kind": "retail_site", "site": "l0.voice.category", "match": "arm=3"},
+    {"who": "thug_m", "kind": "retail_site", "site": "folder_group", "match": "node=m_sabbat"}
+  ],
+  "probes": [
+    {"at": "end", "who": "thug_m", "probe": "entity_field", "field": "m_iVSoundTableIdx", "equals": 1},
+    {"at": "end", "who": "thug_m", "probe": "entity_field", "field": "m_iVSoundGroup", "equals": 3},
+    {"at": "end", "who": "thug_m", "probe": "entity_field", "field": "m_iVSoundGroupFemale", "equals": 9},
+    {"at": "end", "who": "thug_m", "probe": "entity_field", "field": "soundgroup", "equals": "Young_Thug"},
+    {"at": "end", "who": "thug_tpl", "probe": "entity_field", "field": "m_iVSoundTableIdx", "equals": 1},
+    {"at": "end", "who": "thug_tpl", "probe": "entity_field", "field": "m_iVSoundGroup", "equals": 3},
+    {"at": "end", "who": "thug_tpl", "probe": "entity_field", "field": "m_iVSoundGroupFemale", "equals": 9},
+    {"at": "end", "who": "thug_tpl", "probe": "entity_field", "field": "soundgroup", "equals": ""},
+    {"at": "end", "who": "thug_miss", "probe": "entity_field", "field": "m_iVSoundTableIdx", "equals": 1},
+    {"at": "end", "who": "thug_miss", "probe": "entity_field", "field": "m_iVSoundGroup", "equals": 0},
+    {"at": "end", "who": "thug_miss", "probe": "entity_field", "field": "m_iVSoundGroupFemale", "equals": 0},
+    {"at": "end", "who": "sheriff", "probe": "entity_field", "field": "m_iVSoundTableIdx", "equals": 2},
+    {"at": "end", "who": "sheriff", "probe": "entity_field", "field": "m_iVSoundGroup", "equals": 2},
+    {"at": "end", "who": "sheriff", "probe": "entity_field", "field": "m_iVSoundGroupFemale", "equals": 0},
+    {"at": "end", "who": "thug_pre", "probe": "entity_field", "field": "m_iVSoundTableIdx", "equals": 1},
+    {"at": "end", "who": "thug_pre", "probe": "entity_field", "field": "m_iVSoundGroup", "equals": 0},
+    {"at": "end", "who": "thug_pre", "probe": "entity_field", "field": "m_iVSoundGroupFemale", "equals": 0}
+  ],
+  "notes": "The female category (+0xbc = 0 through IsMale false) has no authored witness here: the port's NPC sheet seeding (`FElysiumNpc::SeedSheet` -> `SeedFrom`, at Spawn) resets the Gender stat to stats.txt's default 1 after the authored `gender` / `base_gender_` keys landed at Load, where retail seeds the stat list in the CBaseCombatCharacter constructor (0x10326de0) and keeps the keys -- an L2 planning fault reported with this run. The flag-1 path (+0xb8, `<group>\\Female_PC_Override`) runs for every entity and is witnessed on all four. thug_pre is a cast row: it precached during the stage, before the registry fixture was installed at zero, so its seam took S0 (retail's unloaded table) and its two group words read 0 with the category still written. The m_sabbat never: a sibling after the matching node is never visited on a hit (FUN_101f39d0 returns at the first non -1 child)."
+}

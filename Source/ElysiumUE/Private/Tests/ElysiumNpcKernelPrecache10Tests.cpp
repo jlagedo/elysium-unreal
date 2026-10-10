@@ -276,13 +276,14 @@ bool FElysiumNpcKernelPrecache10WerewolfTest::RunTest(const FString&)
 	Precache10CheckLog(*this, TEXT("CNPC_VWerewolf"), *Fix.Species, {});
 	// The sound-group triple, in retail's write order.
 	TestEqual(TEXT("+0x00bc m_iVSoundTableIdx takes the literal 2"),
-		Fix.Species->VSoundTableIndex, 2);
+		Fix.Species->VSoundTableIdx, 2);
 	TestEqual(TEXT("+0x00c0 m_iszVSoundGroup takes \"Werewolf\""),
-		Fix.Species->VSoundGroupName, FString(TEXT("Werewolf")));
-	// The SEAM: no VSound concept list is parsed in this runtime, so the group lookup takes
-	// retail's own count-zero miss. Asserted as the recovered refusal, not worked around.
-	TestEqual(TEXT("+0x00b4 m_iVSoundGroup takes the empty table's miss"),
-		Fix.Species->VSoundGroupRow, static_cast<int32>(INDEX_NONE));
+		Fix.Species->SoundGroup, FString(TEXT("Werewolf")));
+	// The seam `FUN_101f55a0` (L0-r007): the fixture's world holds no `SndScheme_Char` registry (the L2
+	// data hook unfilled), which the seam reads as `reg+0x20 == NULL` and answers 0 (S0, `XOR EAX,EAX`
+	// at 0x101f55b6) -- not -1. Asserted as retail's own unloaded-table arm.
+	TestEqual(TEXT("+0x00b4 m_iVSoundGroup takes the unloaded table's answer (S0)"),
+		Fix.Species->VSoundGroup, 0);
 	return Precache10CheckTroikaControl(*this, Fix);
 }
 

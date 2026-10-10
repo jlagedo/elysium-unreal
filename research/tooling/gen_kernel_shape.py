@@ -435,6 +435,17 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
     222: ("", "`CBaseEntity::GetSoundEmissionOrigin` 0x100a9eb0: the scope-trace label, then slot 192 "
               "`WorldSpaceCenter` through the dispatch, returned as the sound emission origin "
               "(L0.audio.sound-emission-origin, walks/L0-r006.md)"),
+    70: ("", "`CBaseEntity::IsMonster` 0x1009d820: with `m_pCombatCharacter` set, the char template "
+             "record's `Monster` byte (+0x8e, `FUN_101d5f10` -- the L2 hook `CharTemplateRecord`); "
+             "else false (L0.audio.voice-table-index, walks/L0-r007.md; `ElysiumEntityVSound.cpp`)"),
+    71: ("", "`CBaseEntity::PrecacheSoundTable` 0x1009d460: the category block over the three "
+             "self-caches (+0xbc = 3 animal / 2 monster via slot 70 / 1 `IsMale` / 0, unwritten with "
+             "neither cache), then `+0xb4` and `+0xb8` from the group seam `FUN_101f55a0` on "
+             "`SndScheme_Char` with flags 0 and 1 (L0.audio.voice-table-index, walks/L0-r007.md; "
+             "`ElysiumEntityVSound.cpp`)"),
+    104: ("", "`CBaseCombatCharacter::Precache` 0x10340360: the template model precache (the bake's), "
+              "then slot 71 `PrecacheSoundTable` through the dispatch; the AI-links diagnostic writes "
+              "nothing (L0.audio.voice-table-index, walks/L0-r007.md; `ElysiumCombatCharacter.cpp`)"),
     142: ("", "`CBaseCombatCharacter::OnTakeDamage` 0x1032ef60: the m_takedamage and team gates, the "
               "life-state split into slots 390/391/392 and the death arm (story 8 wave 2, L13)"),
     390: ("", "`CBaseCombatCharacter::OnTakeDamage_Alive` 0x103302e0: the resolver and the typed "
@@ -448,6 +459,7 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
 # A `CHAIN_HAND` slot whose hand body stands on ONE chain owner only; the other chain classes that
 # hold a body at the slot keep theirs as generated: slot -> the port owner.
 CHAIN_HAND_OWNER: dict[int, str] = {
+    104: "FElysiumCombatCharacter",
     142: "FElysiumCombatCharacter",
     390: "FElysiumCombatCharacter",
     144: "FElysiumCombatCharacter",

@@ -1,0 +1,25 @@
+{
+  "name": "l0_sound_script_defaults",
+  "about": "The sound-script descriptor's constructor FUN_101b30d0 (0x101b30d0; walks/L0-r007.md), the record CSoundEmitterSystem::AddSoundsFromFile 0x101b4240 builds per sound entry (0x101b4318) before the key parser overwrites the keys the entry carries, so an entry that omits a key keeps these: channel 0 (CHAN_AUTO) with the text \"CHAN_AUTO\" at +0x69; volume (1.0, 0) with \"VOL_NORM\" at +0x49; pitch (100.0, 0) -- the engine's pitch percentage -- with \"PITCH_NORM\" at +0xa9; sound level (75.0, 0) with \"SNDLVL_NORM\" at +0x89; play_to_owner_only +0x1c = 0; precache +0x1d = 1; +0x48 = 0; the two wave vectors (+0x20, +0x34) empty. Sixteen writes, no branches (0x101b30e2-0x101b3162). Then the `channel` setter FUN_101b2490 on such a record changes the channel word and its text only (`chan_voice` -> 2 keeping the typed text; `2` -> 2), every other default untouched. Reported as `fail` when a default, a name, a flag or a count differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 1.2,
+  "player": {"at": "start"},
+  "script": [
+    {"t": 0.2, "do": "entity_call", "target": "sndscript", "function": "SoundScript_New"},
+    {"t": 0.5, "do": "entity_call", "target": "sndscript", "function": "SoundScript_SetChannel", "args": ["chan_voice"]},
+    {"t": 0.8, "do": "entity_call", "target": "sndscript", "function": "SoundScript_SetChannel", "args": ["2"]}
+  ],
+  "expect": [
+    {"label": "defaults", "who": "sndscript", "kind": "retail_site", "site": "sndscript.defaults", "match": "fn=Global::FUN_101b30d0 va=0x101b30d0 phase=return channel=0 volume=1.0 pitch=100 level=75 flags=0,1,0", "by": 0.3},
+    {"label": "record", "who": "sndscript", "kind": "script", "match": "entity_call SoundScript_New done channel=0 channel_text=CHAN_AUTO volume=1.0,0.0 volume_text=VOL_NORM pitch=100,0 pitch_text=PITCH_NORM level=75,0 level_text=SNDLVL_NORM owner_only=0 precache=1 flag48=0 waves=0 second=0", "within": 0.1},
+    {"label": "defaults_again", "who": "sndscript", "kind": "retail_site", "site": "sndscript.defaults", "match": "channel=0 volume=1.0 pitch=100 level=75 flags=0,1,0", "by": 0.6},
+    {"label": "voice_parse", "who": "sndscript", "kind": "retail_site", "site": "sndchan.parse", "match": "text=chan_voice ret=2 warn=0", "within": 0.1},
+    {"label": "voice_record", "who": "sndscript", "kind": "script", "match": "entity_call SoundScript_SetChannel done channel=2 channel_text=chan_voice volume=1.0,0.0 volume_text=VOL_NORM pitch=100,0 pitch_text=PITCH_NORM level=75,0 level_text=SNDLVL_NORM owner_only=0 precache=1 flag48=0 waves=0 second=0", "within": 0.1},
+    {"label": "num_record", "who": "sndscript", "kind": "script", "match": "entity_call SoundScript_SetChannel done channel=2 channel_text=2 volume=1.0,0.0 volume_text=VOL_NORM pitch=100,0 pitch_text=PITCH_NORM level=75,0 level_text=SNDLVL_NORM owner_only=0 precache=1 flag48=0 waves=0 second=0", "by": 0.9}
+  ],
+  "never": [
+    {"who": "sndscript", "kind": "retail_site", "site": "sndchan.parse", "match": "warn=1"}
+  ],
+  "notes": "The reader that observes an omitted key in play (the entry of game_sounds_surfaceproperties.txt that carries no `channel`) is UNRECOVERED (walk open question 14); the descriptor is probed at its construction and through the one setter this run ports. The second vector's content and +0x48's reader are UNRECOVERED and asserted only as the constructor leaves them."
+}

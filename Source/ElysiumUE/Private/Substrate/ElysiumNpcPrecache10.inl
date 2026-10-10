@@ -47,17 +47,13 @@
 //     this runtime already spells it `ElysiumNpcLoadout::IsNoneSentinel`. `m_spawnEquipment` and
 //     `m_altEquipment` are precached only when they are neither null nor `"0"`.
 
-// --- The three `CAI_BaseNPCTroika` words slot 104's Werewolf arm writes ---------------------------
+// --- The three `CBaseEntity` words slot 104's Werewolf arm writes ---------------------------------
 //
-// `+0x00b4` / `+0x00bc` / `+0x00c0` are base words the port's shape map does not bind: family
-// **Sounds10** records that nothing in this runtime writes `m_iVSoundTableIdx` (`+0x00bc`) and that
-// the VSound concept list is never parsed. `CNPC_VWerewolf::Precache` is the one
-// body in the whole kernel closure that writes all three, so they are declared here — by offset and
-// retail name, the way family Lifecycle declares its unbound words.
-
-int32 VSoundGroupRow = 0;      // +0x00b4 m_iVSoundGroup — what `0x101f55a0` answered
-int32 VSoundTableIndex = 0;    // +0x00bc m_iVSoundTableIdx — the Werewolf writes the literal 2
-FString VSoundGroupName;       // +0x00c0 m_iszVSoundGroup — `"Werewolf"`, NULL when the literal is empty
+// `+0x00b4 m_iVSoundGroup`, `+0x00bc m_iVSoundTableIdx` and `+0x00c0 m_iszVSoundGroup` are
+// `CBaseEntity` words and live there since L0-r007 (`FElysiumEntity::VSoundGroup` / `VSoundTableIdx` /
+// `SoundGroup`, with `VSoundGroupFemale` beside them; `ElysiumEntityVSound.cpp` ports slot 71 and the
+// getters). The Werewolf and the two Zombie-line `SetModel` bodies write them through the base
+// entity's `VSoundGroupIndexFor`, retail's `thunk_FUN_101f55a0(&DAT_1073dc28, this, group, 0)`.
 
 // --- `CNPC_VMingXiaoTentacle`'s three model indices ----------------------------------------------
 //
@@ -99,12 +95,6 @@ void TroikaPrecache();
  *  finds nothing and the op is recorded whole (directory, extension, both flags) instead. */
 void PrecacheDirectory(const FString& Directory, const TCHAR* Extension, bool bStarPrefix,
 	int32 Flag);
-
-/** SEAM for `thunk_FUN_101f55a0(&DAT_1073dc28, this, group, 0)` — the VSound group-table row
- *  `CNPC_VWerewolf::Precache` stores into `m_iVSoundGroup` (`+0x00b4`). Family **Sounds10**
- *  recovered that this runtime parses no VSound concept list at all and takes retail's own
- *  count-zero miss, so this answers the same miss: `INDEX_NONE`. */
-static int32 VSoundGroupRowFor(const TCHAR* GroupName);
 
 /** SEAM for `FUN_10207e60`'s model name — `GetCharTemplate(this)` (`0x10207c40`) then the
  *  template's `+0x78` (`0x101d4f20`), which `FUN_10207e60` hands to `PrecacheModel` with preload 0.

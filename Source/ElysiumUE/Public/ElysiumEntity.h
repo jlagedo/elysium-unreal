@@ -11,6 +11,7 @@ struct FElysiumEntityDef;
 struct FElysiumClassDesc;
 struct FElysiumSaveArchive;
 class FElysiumEntityWorld;
+enum class EElysiumVSoundSex : uint8;   // Substrate/ElysiumVSoundGroup.h -- the group seam's flag
 class UElysiumBrushComponent;
 class FElysiumDoorBase;
 class FElysiumLockableEntity;
@@ -154,8 +155,18 @@ public:
 	float   LocalTime = 0.0f;                        // ltime
 	int32   WaterLevel = 0;
 	int32   WaterType = 0;
-	FString SoundGroup;                              // soundgroup
-	FString UseScript;                               // usescript — the level-script module
+	FString SoundGroup;                              // soundgroup -- `m_iszVSoundGroup` (+0xc0), the voice-table group name
+	// The voice-table words `CBaseEntity::PrecacheSoundTable` (slot 71, `0x1009d460`) writes and the
+	// three lazy getters read (`Substrate/ElysiumEntityVSound.cpp`; `walks/L0-r007.md`): `+0xb4
+	// m_iVSoundGroup` (the group's index in the category table), `+0xb8 m_iVSoundGroupFemale` (the
+	// `Female_PC_Override` form's), `+0xbc m_iVSoundTableIdx` (the `SndScheme_Char` category: Female 0,
+	// Male 1, Monster 2, Animal 3). The constructor `0x1009d980` sets all three to -2 (`0xfffffffe`);
+	// `GetVSoundTableIdx` re-runs slot 71 below 0, the two group getters below -1 (so the seam's
+	// explicit -1 miss does not retrigger). Not datamap rows; the ledger names them (`layout.tsv:20-22`).
+	int32   VSoundGroup = -2;
+	int32   VSoundGroupFemale = -2;
+	int32   VSoundTableIdx = -2;
+	FString UseScript;                             // usescript — the level-script module
 	bool    bNpcTransparent = false;                 // npc_transparent
 	bool    bBlocksTraces = false;                   // blocks_traces
 	FString DamageFilterName;                        // dmg_filter_name
@@ -545,6 +556,23 @@ public:
 	const class FElysiumTerminal* AsTerminal() const
 	{
 		return const_cast<FElysiumEntity*>(this)->AsTerminal();
+	}
+
+	// The same, for `CPropSwitch`: the `___RTDynamicCast(ent, CBaseEntity, CPropSwitch 0x105a6404)`
+	// the VSound group seam `FUN_101f55a0` makes (S1b-i). Base null; `FElysiumPropSwitch` overrides.
+	virtual class FElysiumPropSwitch* AsPropSwitch() { return nullptr; }
+	const class FElysiumPropSwitch* AsPropSwitch() const
+	{
+		return const_cast<FElysiumEntity*>(this)->AsPropSwitch();
+	}
+
+	// `+0xac m_pAnimal` (`layout.md:41`): the `CNPC_VAnimal*` self-cache the CBaseEntity constructor
+	// zeroes and `CNPC_VAnimal`'s constructor (0x1035eba0) sets to `this`; `PrecacheSoundTable`'s
+	// first arm reads it. Base null; `FElysiumNpcAnimal` overrides.
+	virtual class FElysiumNpcAnimal* AsAnimal() { return nullptr; }
+	const class FElysiumNpcAnimal* AsAnimal() const
+	{
+		return const_cast<FElysiumEntity*>(this)->AsAnimal();
 	}
 
 	// No-RTTI downcast to the combat character, for the callers that need the sheet or the

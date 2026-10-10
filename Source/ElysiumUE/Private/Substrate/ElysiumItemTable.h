@@ -159,6 +159,16 @@ struct FElysiumItemDef
 	int32 Bucket = 0;                   // `bucket`
 	int32 BucketPosition = 0;           // `bucket_position`
 
+	// `sound_group` (record `+0x24d4`, a 0x80-byte buffer, "" by default; `FUN_10259f80` at
+	// 0x1025a8e8): the weapon's VSound group name the seam `FUN_101f55a0` S1a reads when the
+	// weapon's own `soundgroup` is empty (`Substrate/ElysiumVSoundGroup.h`; `walks/L0-r007.md`).
+	FString SoundGroup;
+	// Record `+0x2554`: the group index S1a caches on the RECORD (shared by every instance of the
+	// classname). `FUN_10258b00` sets -2 before the record is parsed and nothing else writes it, so a
+	// loaded record stays -2 and the seam returns it unlooked. Mutable because the seam writes it
+	// through the const record a weapon reads.
+	mutable int32 VSoundGroupIndex = -2;
+
 	// `equip_mask`, parsed to its bits by `ElysiumEquipFlags::Parse`. The WEAPON half of
 	// `Inventory_Can_Wield` (0x10335a70): retail stores it on the record at +0x5eb1c through the
 	// same `ParseEquipFlag` (0x1025b740) the `ExcludedEquip` rows are read with. An absent key is

@@ -29,6 +29,7 @@
 #include "ElysiumNpcFlags.h"
 #include "Substrate/ElysiumNpcCombat10Shared.h"
 #include "Substrate/ElysiumNpcConditionsBodiesShared.h"
+#include "Substrate/ElysiumVSoundGroup.h"    // EElysiumVSoundSex: the group seam's flag
 #include "Substrate/ElysiumNpcKernelTunables.h"
 #include "Substrate/ElysiumNpcDamageShared.h"
 #include "Substrate/ElysiumNpcHintsShared.h"
@@ -240,10 +241,13 @@ void FElysiumNpcWerewolf::Precache()
 	// what a rule reads later, and stay.
 
 	// The sound-group binding, in retail's write order: the table index FIRST, then the group name,
-	// then the row the name resolves to. The same triple `CNPC_VZombie::SetModel` makes.
-	VSoundTableIndex = GWerewolfVSoundTableIndex;             // +0x00bc := 2
-	VSoundGroupName = GWerewolfSoundGroup;                    // +0x00c0 := "Werewolf"
-	VSoundGroupRow = VSoundGroupRowFor(*VSoundGroupName);     // +0x00b4 := 0x101f55a0(...)
+	// then the row the name resolves to. The same triple `CNPC_VZombie::SetModel` makes. The base
+	// `PrecacheSoundTable` ran inside `TroikaPrecache` above (slot 71 through `CBaseCombatCharacter::
+	// Precache`) and wrote all three plus `+0xb8`; these overwrite `+0xbc` and `+0xb4`, and `+0xb8`
+	// keeps the base body's answer (`walks/L0-r007.md` § species skip).
+	VSoundTableIdx = GWerewolfVSoundTableIndex;                                     // +0x00bc := 2
+	SoundGroup = GWerewolfSoundGroup;                                               // +0x00c0 := "Werewolf"
+	VSoundGroup = VSoundGroupIndexFor(*SoundGroup, EElysiumVSoundSex::Normal);     // +0x00b4 := 0x101f55a0(&DAT_1073dc28, this, group, 0)
 }
 
 // Slot 461: `0x103d0820`, chaining the Troika body directly.

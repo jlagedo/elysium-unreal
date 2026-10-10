@@ -1947,7 +1947,9 @@ public:
 //
 // The numbers are Source's own (`CHAN_AUTO` 0 ... `CHAN_STATIC` 6, with `CHAN_ITEM` 3 and
 // `CHAN_BODY` 4); footsteps use `Body`, both for the NPC event path (`vampire.dll 1026d460` passes
-// a literal 4) and for the player's clock (`CGameMovement::PlayStepSound`, `1011e430`).
+// a literal 4) and for the player's clock (`CGameMovement::PlayStepSound`, `1011e430`). `Stream` 5
+// is the seventh name the sound script's channel parser `FUN_101b24d0` (`0x101b24d0`) accepts
+// (`Audio/ElysiumSoundScript.h`; `walks/L0-r007.md`).
 enum class EElysiumSoundChannel : uint8
 {
 	Auto   = 0,
@@ -1955,6 +1957,7 @@ enum class EElysiumSoundChannel : uint8
 	Voice  = 2,
 	Item   = 3,
 	Body   = 4,
+	Stream = 5,
 	Static = 6,
 };
 
