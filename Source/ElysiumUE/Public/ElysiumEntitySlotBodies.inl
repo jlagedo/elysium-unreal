@@ -382,3 +382,26 @@ int32 VSoundGroupIndexFor(const TCHAR* Group, EElysiumVSoundSex Sex);
 // Port-only: slot 71 is running on this entity, so a lazy getter it reaches (through the seam's
 // `GetVSoundTableIdx`) must not re-dispatch it -- retail's arm 6 recursion, refused once here.
 bool bInPrecacheSoundTable = false;
+
+// --- The data-object registry (L0.entity_core.data-object-registry, `walks/L0-r019.md`) ---------
+// `m_fDataObjectTypes` (+0x444; the ledger's name, `layout.md:188` -- no class datamap has a row at
+// 0x444, so no save block carries it): one bit per data-object type, `1 << (type & 31)`. Written only
+// by `AddDataObjectType` and `RemoveDataObjectType`; the constructor's initialiser is UNRECOVERED
+// (the `CBaseEntity` ctor is unnamed in the corpus) and 0 is assumed. The blocks the bits stand for
+// live in the world's `CDataObjectAccessSystem` (`Substrate/ElysiumDataObjects.h`), keyed by this
+// entity. Every decompiled caller passes type 1, the touch-link list head: `PhysicsMarkEntityAsTouched`
+// 0x1003dc70 (Get, Create), `PhysicsCheckForEntityUntouch` 0x1003d490 / `PhysicsNotifyOtherOfUntouch`
+// 0x1003d640 / `PhysicsRemoveTouchedList` 0x1003d8f0 (Get, Destroy), and slot 207 `IsCurrentlyTouching`
+// 0x1003d3d0, which is `HasDataObjectType(this, 1)` -- the seam the touch-lifecycle story's slot body
+// reads. Definitions: `Private/Substrate/ElysiumDataObjects.cpp`.
+uint32 DataObjectTypes = 0;
+void AddDataObjectType(int32 Type);          // 0x1003cbc0: `mask |= 1 << (type & 31)`, no checks
+bool HasDataObjectType(int32 Type) const;    // 0x1003cb00: `(mask & (1 << (type & 31))) != 0`
+void RemoveDataObjectType(int32 Type);       // 0x1003cc80: `mask &= ~(1 << (type & 31))`
+// 0x1003cd50: bit gate, signed range 0..31, registered accessor, then the accessor's get; else 0.
+void* GetDataObject(int32 Type);
+// 0x1003cf50: `AddDataObjectType` FIRST (for every type, valid or not), then range, accessor, create; else 0.
+void* CreateDataObject(int32 Type);
+// 0x1003d130: bit gate (no clear when absent); range and accessor skips; the accessor's destroy with the
+// bit still set; then `RemoveDataObjectType` ALWAYS, after the dispatch or after either skip.
+void DestroyDataObject(int32 Type);

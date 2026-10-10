@@ -1,0 +1,44 @@
+{
+  "name": "l0_data_object_registry",
+  "about": "The entity data-object registry (`walks/L0-r019.md`): `CBaseEntity::HasDataObjectType` 0x1003cb00, `AddDataObjectType` 0x1003cbc0, `RemoveDataObjectType` 0x1003cc80, `GetDataObject` 0x1003cd50, `CreateDataObject` 0x1003cf50 and `DestroyDataObject` 0x1003d130 over the one type any map reaches, type 1 (the touch-link head), through a touch -- the only world entry that reaches them. `CDataObjectAccessSystem::Init` 0x1003c660 registers the touch-link accessor (vtable 0x10449390) in slot 1 at DLL init. The player teleports into `trig_in_this_room` (a `trigger_multiple` of sp_tutorial_1, enabled, clients, standing on the floor an unnamed `trigger_stealth_mod` slab also covers): `PhysicsMarkEntitiesAsTouching` 0x1003e2e0 -> `PhysicsMarkEntityAsTouched` 0x1003dc70 on the brush first: `GetDataObject(1)` finds no bit (`arm=nobit`, the mask born 0), `CreateDataObject(1)` writes bit 1 BEFORE validating (`mask_after=0x2`), passes the signed 0..31 range and the registered slot, and dispatches the accessor's create (slot 2), which hands back the zero-filled 0x14-byte head; the player gets its own head the same way, and its `Get` for the slab then takes `arm=dispatch` behind `HasDataObjectType` = 1. The map's own `OnTrigger -> trig_in_this_room.Disable` ends that pair 0.2 s later (`PhysicsCheckForEntityUntouch` 0x1003d490 -> `PhysicsNotifyOtherOfUntouch` 0x1003d640 -> `PhysicsRemoveToucher` 0x1003d770): the brush's `Get` dispatches, its node goes, its list is empty, so `DestroyDataObject(1)` dispatches the accessor's destroy (slot 3) with the bit still set and only then `RemoveDataObjectType` clears it (`mask_before=0x2 mask_after=0x0`); the player keeps its slab node, so its object is NOT destroyed (`H[+8] != H`). A second teleport into `trig_in_that_room` (the same authored self-Disable) creates that brush's head and, when its Disable ends the pair, destroys it; the player's list is then empty and its own object is destroyed after the loop. No arm takes `range` or `nullslot`: every caller passes 1 and slot 1 is registered. At the end both brushes and the player read `m_fDataObjectTypes` = 0. Reported as `fail`, a site is missing, out of order, or names other arms or masks than retail's, or the player's object is destroyed while a node remains.",
+  "stage": "map:sp_tutorial_1",
+  "seed": 1,
+  "duration": 20.0,
+  "script": [
+    { "t": 0, "do": "fresh_map", "map": "sp_tutorial_1" },
+    { "after": "fresh_ready", "delay": 1.0, "do": "player_teleport", "at": "trig_in_this_room" },
+    { "after": "fresh_ready", "delay": 4.0, "do": "player_teleport", "at": "trig_in_that_room" }
+  ],
+  "expect": [
+    { "label": "fresh_ready", "who": "", "kind": "script", "match": "fence=4", "within": 10 },
+    { "label": "this_nobit", "who": "trig_in_this_room", "kind": "retail_site", "site": "dobj_get", "match": "fn=CBaseEntity::GetDataObject va=0x1003cd50 phase=branch arm=nobit type=1 result=0", "within": 5.0 },
+    { "label": "this_add", "who": "trig_in_this_room", "kind": "retail_site", "site": "dobj_add", "match": "fn=CBaseEntity::AddDataObjectType va=0x1003cbc0 phase=write type=1 mask_before=0x0 mask_after=0x2", "within": 0.1 },
+    { "label": "this_create_write", "who": "trig_in_this_room", "kind": "retail_site", "site": "dobj_create", "match": "fn=CBaseEntity::CreateDataObject va=0x1003cf50 phase=write type=1 mask_after=0x2", "within": 0.1 },
+    { "label": "this_create_dispatch", "who": "trig_in_this_room", "kind": "retail_site", "site": "dobj_create", "match": "phase=branch arm=dispatch slot=2 acc=0x10449390 type=1", "within": 0.1 },
+    { "label": "this_create_return", "who": "trig_in_this_room", "kind": "retail_site", "site": "dobj_create", "match": "phase=return type=1 result=block", "within": 0.1 },
+    { "label": "player_create", "who": "player", "kind": "retail_site", "site": "dobj_create", "match": "fn=CBaseEntity::CreateDataObject va=0x1003cf50 phase=return type=1 result=block", "within": 0.1 },
+    { "label": "player_has", "who": "player", "kind": "retail_site", "site": "dobj_has", "match": "fn=CBaseEntity::HasDataObjectType va=0x1003cb00 phase=return type=1 mask=0x2 result=1", "within": 0.5 },
+    { "label": "player_get_dispatch", "who": "player", "kind": "retail_site", "site": "dobj_get", "match": "phase=branch arm=dispatch slot=1 acc=0x10449390 type=1 result=block", "within": 0.1 },
+    { "label": "this_get_end", "who": "trig_in_this_room", "kind": "retail_site", "site": "dobj_get", "match": "phase=branch arm=dispatch slot=1 acc=0x10449390 type=1 result=block", "within": 0.5 },
+    { "label": "this_destroy_dispatch", "who": "trig_in_this_room", "kind": "retail_site", "site": "dobj_destroy", "match": "fn=CBaseEntity::DestroyDataObject va=0x1003d130 phase=branch arm=dispatch slot=3 acc=0x10449390 type=1", "within": 0.1 },
+    { "label": "this_remove", "who": "trig_in_this_room", "kind": "retail_site", "site": "dobj_remove", "match": "fn=CBaseEntity::RemoveDataObjectType va=0x1003cc80 phase=write type=1 mask_before=0x2 mask_after=0x0", "within": 0.1 },
+    { "label": "this_destroy_write", "who": "trig_in_this_room", "kind": "retail_site", "site": "dobj_destroy", "match": "phase=write type=1 mask_after=0x0", "within": 0.1 },
+    { "label": "that_create_write", "who": "trig_in_that_room", "kind": "retail_site", "site": "dobj_create", "match": "fn=CBaseEntity::CreateDataObject va=0x1003cf50 phase=write type=1 mask_after=0x2", "within": 4.0 },
+    { "label": "that_destroy_dispatch", "who": "trig_in_that_room", "kind": "retail_site", "site": "dobj_destroy", "match": "fn=CBaseEntity::DestroyDataObject va=0x1003d130 phase=branch arm=dispatch slot=3 acc=0x10449390 type=1", "within": 1.0 },
+    { "label": "that_remove", "who": "trig_in_that_room", "kind": "retail_site", "site": "dobj_remove", "match": "fn=CBaseEntity::RemoveDataObjectType va=0x1003cc80 phase=write type=1 mask_before=0x2 mask_after=0x0", "within": 0.1 },
+    { "label": "player_destroy", "who": "player", "kind": "retail_site", "site": "dobj_destroy", "match": "fn=CBaseEntity::DestroyDataObject va=0x1003d130 phase=branch arm=dispatch slot=3 acc=0x10449390 type=1", "within": 0.1 },
+    { "label": "player_remove", "who": "player", "kind": "retail_site", "site": "dobj_remove", "match": "fn=CBaseEntity::RemoveDataObjectType va=0x1003cc80 phase=write type=1 mask_before=0x2 mask_after=0x0", "within": 0.1 }
+  ],
+  "never": [
+    { "who": "", "kind": "retail_site", "site": "dobj_get", "match": "arm=(range|nullslot)", "regex": true, "from": 0.0, "until": 18.0 },
+    { "who": "", "kind": "retail_site", "site": "dobj_create", "match": "arm=(range|nullslot)", "regex": true, "from": 0.0, "until": 18.0 },
+    { "who": "", "kind": "retail_site", "site": "dobj_destroy", "match": "arm=(range|nullslot)", "regex": true, "from": 0.0, "until": 18.0 },
+    { "who": "player", "kind": "retail_site", "site": "dobj_destroy", "match": "phase=branch", "after": "this_destroy_write", "within": 2.0 }
+  ],
+  "probes": [
+    { "at": "end", "who": "trig_in_this_room", "probe": "entity_field", "field": "m_fDataObjectTypes", "equals": 0 },
+    { "at": "end", "who": "trig_in_that_room", "probe": "entity_field", "field": "m_fDataObjectTypes", "equals": 0 },
+    { "at": "end", "who": "trig_in_that_room", "probe": "entity_field", "field": "m_fDataObjectTypes", "member": "0x2", "equals": false },
+    { "at": "end", "who": "player", "probe": "entity_field", "field": "m_fDataObjectTypes", "equals": 0 }
+  ]
+}

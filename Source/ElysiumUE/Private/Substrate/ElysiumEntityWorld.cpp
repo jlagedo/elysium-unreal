@@ -15,6 +15,7 @@
 #include "ElysiumStub.h"
 #include "Substrate/ElysiumAttackCoordinator.h"
 #include "Substrate/ElysiumCameraCinematic.h"
+#include "Substrate/ElysiumDataObjects.h"
 #include "Substrate/ElysiumDialogueSession.h"
 #include "Substrate/ElysiumEntityWorldShared.h"
 #include "Substrate/ElysiumGameSound.h"
@@ -137,6 +138,11 @@ FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumSessionSubsyst
 	LawEventBus = MakeUnique<ElysiumNpcWitness::FElysiumLawEventBus>();
 	// Empty until the map actor adopts the map's baked places; a headless world keeps it empty.
 	PlaceSet = MakeUnique<FElysiumPlaceSet>();
+	// `CDataObjectAccessSystem::Init` 0x1003c660 (L0-r019): the engine's `ServerGameDLL002` slot 1
+	// (1011a0c0) walks the auto-system array (`FUN_1042c4e0`) and this system registers its four
+	// accessors, before any entity exists. The world is the DLL lifetime this port has.
+	DataObjectSystem = MakeUnique<FElysiumDataObjectAccessSystem>();
+	DataObjectSystem->Init();
 	LineService = MakeUnique<FElysiumLineService>(WorldServices.Audio);
 	// The chokepoints are never uninstrumented: the ring buffer (always-on history) and
 	// the log/VLOG stream are installed before any entity spawns. The debug subsystem adds more sinks.
@@ -158,6 +164,14 @@ FElysiumEntityWorld::~FElysiumEntityWorld()
 		LineService->Shutdown();
 	}
 	Teardown();
+	// `CDataObjectAccessSystem::Shutdown` 0x1003c950 (L0-r019): `ServerGameDLL002` slot 8 (1011a330)
+	// walks the array in reverse (`FUN_1042c5b0`) and each accessor's deleting destructor runs, the
+	// slot zeroed. After Teardown's `~CBaseEntity` steps no block should be left; one that is would be
+	// an entity destroyed without `PhysicsRemoveTouchedList`.
+	if (DataObjectSystem)
+	{
+		DataObjectSystem->Shutdown();
+	}
 }
 
 void FElysiumEntityWorld::SetTriggerResolutionEnabled(bool bEnabled)
@@ -3156,6 +3170,24 @@ void FElysiumEntityWorld::Teardown()
 		{
 			OutgoingNpc->TroikaUpdateOnRemove(); // destructor uses Troika dispatch, not species slot180
 		}
+	}
+
+	// `~CBaseEntity` 0x1009df20 -> `PhysicsRemoveTouchedList` 0x1003d8f0 (L0-r019): every dying entity
+	// frees its touch-link nodes, notifies each node's other side and destroys its type-1 data object
+	// (`DestroyDataObject(this, 1)`, unconditional when one exists). Before the handles go stale, so
+	// the other side still resolves. Nothing on the server creates types 0, 2 or 3, so this leaves the
+	// registry empty; a block left behind is reported, not swept.
+	for (const TUniquePtr<FElysiumEntity>& Dying : EntityList)
+	{
+		if (Dying)
+		{
+			ReleaseTouchedList(*Dying);
+		}
+	}
+	if (DataObjectSystem && DataObjectSystem->NumLive() != 0)
+	{
+		UE_LOG(LogElysiumWorld, Warning, TEXT("data-object registry: %d block(s) outlive their entities at teardown"),
+			DataObjectSystem->NumLive());
 	}
 
 	// Epoch 0 matches no minted handle, so every outstanding handle goes stale at once.

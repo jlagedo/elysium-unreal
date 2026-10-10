@@ -1253,7 +1253,10 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 		const bool bVector = Probe.Field == TEXT("m_vecOrigin") || Probe.Field == TEXT("m_angRotation")
 			|| Probe.Field == TEXT("m_vecAbsOrigin") || Probe.Field == TEXT("m_angAbsRotation") || bBoxVector;
 		const bool bFlagWord = Probe.Field == TEXT("m_iEFlags");
-		if (!bVector && !bFlagWord && (!Probe.Index.IsEmpty() || !Probe.Member.IsEmpty()))
+		// L0-r019's: `m_fDataObjectTypes`, the data-object type mask `+0x444` (no datamap row exposes it;
+		// `member`: a bit mask in hex, `0x2` for type 1, answered as a bool; bare, the whole word).
+		const bool bDataObjectMask = Probe.Field == TEXT("m_fDataObjectTypes");
+		if (!bVector && !bFlagWord && !bDataObjectMask && (!Probe.Index.IsEmpty() || !Probe.Member.IsEmpty()))
 		{
 			OutError = FString::Printf(TEXT("field '%s' takes no index or member"), *Probe.Field);
 			return false;
@@ -1306,6 +1309,25 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 				}
 				OutAnswer.Type = FElysiumArenaValue::EType::Bool;
 				OutAnswer.bBool = (Entity->EFlagsWord() & Mask) == Mask;
+			}
+		}
+		else if (bDataObjectMask)
+		{
+			if (Probe.Member.IsEmpty())
+			{
+				OutAnswer.Type = FElysiumArenaValue::EType::Number;
+				OutAnswer.Number = static_cast<double>(Entity->DataObjectTypes);
+			}
+			else
+			{
+				const uint32 Mask = FParse::HexNumber(*Probe.Member);
+				if (Mask == 0)
+				{
+					OutError = TEXT("m_fDataObjectTypes `member` is a non-zero hex bit mask (`0x2`)");
+					return false;
+				}
+				OutAnswer.Type = FElysiumArenaValue::EType::Bool;
+				OutAnswer.bBool = (Entity->DataObjectTypes & Mask) == Mask;
 			}
 		}
 		else if (Probe.Field == TEXT("m_NetworkChangeState.m_bChanged"))
@@ -1410,7 +1432,7 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 					TEXT("m_MoveType, m_MoveCollide, m_NetworkChangeState.m_bChanged, m_iVSoundGroup, m_iVSoundGroupFemale, ")
 					TEXT("m_iVSoundTableIdx, m_touchStamp, m_Solid, m_usSolidFlags, m_vecMins, m_vecMaxs, m_vecSize, m_flRadius, ")
 					TEXT("m_flElasticity, m_CollisionGroup, m_clrRender, m_nSimulationTick, m_iCurrentThinkContext, m_flLastThink, ")
-					TEXT("m_hOwnerEntity, m_hGroundEntity, m_hUseActivator, or a datamap row the entity's class registers)"),
+					TEXT("m_hOwnerEntity, m_hGroundEntity, m_hUseActivator, m_fDataObjectTypes, or a datamap row the entity's class registers)"),
 					*Probe.Field);
 				return false;
 			}

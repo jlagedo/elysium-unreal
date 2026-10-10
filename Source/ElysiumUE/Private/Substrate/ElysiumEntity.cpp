@@ -300,13 +300,6 @@ void FElysiumEntity::Kill()
 	// CBaseCombatCharacter::UpdateOnRemove 0x10327790 removes one comfort
 	// entry before its handle is invalidated. Other entity classes have no entry.
 	if (FElysiumCombatCharacter* Character = AsCombatCharacter()) { Character->RemoveFromComfortList(); }
-	// `CEntityTouchManager::OnEntityDeleted` 0x100f8cf0 (vslot 1 of `DAT_107036b0`): an entity with
-	// the untouch-pending bit is fast-removed from the deferred untouch list. Retail runs it at the
-	// delete-queue purge; this port's removal is `Kill` itself (the slot is kept, the handle dies).
-	if (World != nullptr)
-	{
-		World->UntouchListOnEntityDeleted(*this);
-	}
 	bDead = true;
 	NextThink = ELYSIUM_NEVER_THINK;
 	if (!bHidden)
@@ -318,6 +311,21 @@ void FElysiumEntity::Kill()
 		// Already hidden (OnDormancyChanged is skipped), but the visual state still changed
 		// hidden -> dead, so a retained visualizer must still be told.
 		World->NotifyVisualChanged(*this);
+	}
+	// `~CBaseEntity` 0x1009df20 -> `PhysicsRemoveTouchedList` 0x1003d8f0 (L0-r019): the dying entity's
+	// touch-link nodes are freed, each node's other side released (the end edges above already ran
+	// through `RouteEntityTouch`, which cannot resolve a dead brush for its own side), and its type-1
+	// data object destroyed unconditionally. A dead entity resolves to nobody, so this is the one
+	// place its own list can still be reached.
+	if (World)
+	{
+		World->ReleaseTouchedList(*this);
+		// Then `~CBaseEntity`'s next call, `FUN_100f9f90(&DAT_106eb5d8, handle)` -> `FUN_100fa0f0`: the entity
+		// list's removal, whose `vslot1(ent, handle)` is the listener notice that reaches
+		// `CEntityTouchManager::OnEntityDeleted` 0x100f8cf0 (vslot 1 of `DAT_107036b0`): an entity with the
+		// untouch-pending bit is fast-removed from the deferred untouch list. Retail runs both at the
+		// delete-queue purge; this port's removal is `Kill` itself (the slot is kept, the handle dies).
+		World->UntouchListOnEntityDeleted(*this);
 	}
 	// 0x101cd940 actual removal, not Event_Killed: even an already hidden corpse owns physics.
 	if (FElysiumNpcBase* const RemovedNpc = AsNpcBase())

@@ -43,6 +43,8 @@ class USkeletalMeshComponent;
 class UStaticMeshComponent;
 class FElysiumTeamRegistry;
 class FElysiumEntityWorld;
+class FElysiumDataObjectAccessSystem;
+struct FElysiumTouchLink;
 
 // Source clamps `gpGlobals->frametime` and so does `FElysiumEntityWorld::FrameSeconds()`. The
 // floor keeps two ticks at the same clock (a fixture's `Tick(0.0); Tick(0.0);` admission pair)
@@ -377,6 +379,28 @@ public:
 	{
 		RouteEntityTouch(Brush, Activator, bBegin);
 	}
+	// The entity data-object registry (`CDataObjectAccessSystem` 0x106bd930; L0-r019,
+	// `Substrate/ElysiumDataObjects.h`): retail's one global, here owned by the world as the DLL
+	// lifetime this port has (`Init` 0x1003c660 in the constructor, `Shutdown` 0x1003c950 in the
+	// destructor). `FElysiumEntity::{Get,Create,Destroy}DataObject` dispatch through it.
+	FElysiumDataObjectAccessSystem& DataObjects() const { return *DataObjectSystem; }
+	// The type-1 (touch-link) data-object steps of the retail touch pass, at the port's touch edges
+	// (L0-r019; the node stamp is r015's `FElysiumEntity::TouchStamp`, `ElysiumEntityCollision.cpp`;
+	// `PhysicsTouch` and the `EndTouch` flag gate stay with the touch-lifecycle story):
+	// `TouchLinkBegin` -- `PhysicsMarkEntityAsTouched` 0x1003dc70: `GetDataObject(1)`, else
+	// `CreateDataObject(1)` and the head made circular; a node for `Other` linked at the head when none
+	// exists (`AllocTouchLink`, cap 0x200), its flag bit 1 set as the begin dispatches.
+	// `TouchLinkEnd` -- `PhysicsRemoveToucher` 0x1003d770's unlink of `Other`'s node, then the
+	// destroy-if-empty of `PhysicsCheckForEntityUntouch` 0x1003d490 / `PhysicsNotifyOtherOfUntouch` 0x1003d640.
+	// `ReleaseTouchedList` -- `PhysicsRemoveTouchedList` 0x1003d8f0 (`~CBaseEntity` 0x1009df20): each
+	// retained pair released through the end edge (the other side's `OnTouchEnd` when it is the live
+	// brush, both nodes, each side's destroy-if-empty), any keyless node freed with its other side's,
+	// this entity's object destroyed unconditionally, `m_touchStamp = 0`.
+	void TouchLinkBegin(FElysiumEntity& Entity, const FElysiumEntityHandle& Other);
+	void TouchLinkEnd(FElysiumEntity& Entity, const FElysiumEntityHandle& Other);
+	void ReleaseTouchedList(FElysiumEntity& Entity);
+	// `DAT_106bd9b8`: the live touch-link node count (`AllocTouchLink` errors at 0x200).
+	int32 TouchLinkCount() const { return LiveTouchLinks; }
 	// Deterministically release every retained pair owned by a brush before its physical collision
 	// is removed. Later engine end callbacks are harmless because the pairs are already absent.
 	void EndBrushTouches(const FElysiumEntityHandle& Brush);
@@ -385,9 +409,9 @@ public:
 	void ReconcilePlayerTouches(TConstArrayView<FElysiumEntityHandle> CurrentBrushes);
 
 	// --- The touchlink list and the deferred untouch check (`walks/L0-r015.md`) -------------------
-	// `HasDataObjectType(this, 1)`: the entity owns a touchlink list -- here, a retained pair names
-	// it on either side. `CBaseEntity::IsCurrentlyTouching` 0x1003d3d0 (slot 207) is this.
-	bool EntityHasTouchLinks(const FElysiumEntityHandle& Entity) const;
+	// `CBaseEntity::IsCurrentlyTouching` 0x1003d3d0 (slot 207) is `HasDataObjectType(this, 1)` over the
+	// registry above (`FElysiumEntity::IsCurrentlyTouching`, `ElysiumEntityCollision.cpp`); the stamped
+	// pairs below feed the untouch check only.
 	// `FUN_100f8e20` 0x100f8e20: append the entity to the touch manager's deferred list
 	// (`CEntityTouchManager` `DAT_107036b0`, a `CUtlVector<CBaseEntity*>`; count at `0x107036c0`)
 	// unless its slot 116 `IsMarkedForDeletion` answers true. Duplicates are not tested.
@@ -1196,6 +1220,9 @@ private:
 	TArray<FElysiumEntityHandle> UntouchCheckList;
 	int32 TouchBeginCount = 0;
 	int32 TouchEndCount = 0;
+	// `CDataObjectAccessSystem` (L0-r019): the 32 accessor slots and their per-entity blocks.
+	TUniquePtr<FElysiumDataObjectAccessSystem> DataObjectSystem;
+	int32 LiveTouchLinks = 0;   // `DAT_106bd9b8`
 
 	// This map's player entity, or Invalid when the map was built without one.
 	FElysiumEntityHandle Player;

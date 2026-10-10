@@ -1081,6 +1081,63 @@ frees the link directly, **without** `PhysicsRemoveToucher`. The dying entity ne
 `EndTouch`, so a `trigger_once` that removes itself produces no final `OnEndTouch` for occupants
 still standing inside it.
 
+### The data-object registry behind the touch lists
+
+The touch-link list head is not a `CBaseEntity` member: it is a *data object*, side data the entity
+reaches through a type number (L0-r019, `docs/specs/layers/L0-entity/walks/L0-r019.md`). On the
+entity, one dword `+0x444` (`m_fDataObjectTypes`; in no class datamap, so no save block carries it)
+holds bit `1 << (type & 31)` per type held. The blocks live in the global `CDataObjectAccessSystem`
+(`0x106bd930`): 32 accessor slots at `0x106bd938`, zeroed by its ctor `0x1003c5a0`, filled once by
+`Init` (`0x1003c660`, reached from `ServerGameDLL002` slot 1 `0x1011a0c0` through the auto-system
+walker `0x1042c4e0`) in this order: type 1 `touchlink_t` (accessor vtable `0x10449390`; get / create /
+destroy `0x10040880` / `0x10040970` / `0x10040b20`, a 0x40-bucket hash keyed by the `CBaseEntity*`,
+compare `0x10041b40`, hash `0x10041b70`; a 0x14-byte zero-filled block), type 0 `groundlink_t`
+(`0x10449378`, 0xC bytes), type 2 `StepSimulationData` (`0x10449360`, 0x6C bytes), and type 3
+`ModelWidthScale` (`0x10449348`, 0x10 bytes) through `AddDataAccessor` (`0x1003c9f0`: `0 <= t < 32`
+and the slot empty). `Shutdown` (`0x1003c950`, `ServerGameDLL002` slot 8 `0x1011a330` →
+`0x1042c5b0`) runs each slot's deleting destructor and zeroes it. Every decompiled caller passes type 1.
+
+The six `CBaseEntity` helpers, each under a diagnostic scope-trace frame that writes no state:
+
+- `AddDataObjectType` `0x1003cbc0`: `mask |= 1 << (type & 31)`, no check. Sole caller `CreateDataObject`.
+- `HasDataObjectType` `0x1003cb00`: `(mask & (1 << (type & 31))) != 0`, the result in AL only
+  (`SETNZ AL`; the upper bytes of EAX keep the shifted bit, and every caller tests AL).
+- `RemoveDataObjectType` `0x1003cc80`: `mask &= ~(1 << (type & 31))`. Sole caller `DestroyDataObject`.
+- `GetDataObject` `0x1003cd50`: `Has` or return 0; then the signed range `0..31` (`CMP ESI,0x20; JGE`)
+  or 0; then the slot or 0; then the accessor's vtable slot 1 (`CALL [EAX+4]`, callee pops), EAX as is.
+- `CreateDataObject` `0x1003cf50`: `AddDataObjectType` **first, unconditionally** — a type out of range
+  or with no accessor still gets its bit — then the same range and slot checks (0 on failure), then
+  vtable slot 2. The entity side has no existence check; the type-1 accessor is find-or-insert and
+  returns an existing block untouched.
+- `DestroyDataObject` `0x1003d130`: `Has` or return (no clear); range and slot checks skip the call;
+  vtable slot 3 with the bit **still set** during the callback; then `RemoveDataObjectType` **always**,
+  after the dispatch or after either skip.
+
+Aliasing follows: `Create(e, 32)` sets bit 0 and returns 0; `Destroy(e, 32)` clears bit 0 with no
+call; `Has(e, 33)` tests bit 1; `Create(e, 4)` sets bit 4 and returns 0 (slots 4–31 are empty).
+`IsCurrentlyTouching` (`0x1003d3d0`, slot 207) is `HasDataObjectType(this, 1)`; its one decompiled
+consumer is `FUN_100dc430`, which asks it when an entity turns non-solid and, if true, calls
+`SetCheckUntouch(true)`. `DestroyAllDataObjects` (`0x1003d300`: `for t in 0..3: if Has → Destroy`) has
+no vampire.dll caller; `~CBaseEntity` reaches only `PhysicsRemoveTouchedList`, which destroys type 1
+unconditionally after freeing the nodes and writes `m_touchStamp = 0`.
+
+Port: `FElysiumEntity::DataObjectTypes` and the six helpers (`Private/Substrate/ElysiumDataObjects.cpp`);
+the system is `FElysiumDataObjectAccessSystem`, owned by `FElysiumEntityWorld` (`Init` in its constructor,
+`Shutdown` in its destructor — the DLL lifetime the port has), its hash containers Unreal's `TMap`
+keyed by the entity pointer (a named modernization of the container only). The port's touch edges
+(`RouteEntityTouch`) make the type-1 calls the retail pass makes, in its order (brush first on a begin;
+on an untouch the other side's node and destroy-if-empty before the mover's; on a death the other side
+first, then the unconditional destroy). Slot 207 `IsCurrentlyTouching` is `HasDataObjectType(1)` over this
+registry (`FElysiumEntity::IsCurrentlyTouching`, `Private/Substrate/ElysiumEntityCollision.cpp`); each node's
+`[1]` is the owner's `m_touchStamp` (L0-r015's `TouchStamp`), written at link time and refreshed on a repeat
+begin, so the registry and the stamped pairs the untouch check reads describe the same links. A dying
+entity's `PhysicsRemoveTouchedList` releases each retained pair through the end edge (the live brush's
+`EndTouch`, retail's `PhysicsNotifyOtherOfUntouch` -> `PhysicsRemoveToucher` on the other side) and then
+`OnEntityDeleted` runs (`~CBaseEntity`: `0x1003d8f0`, then `FUN_100f9f90` -> `FUN_100fa0f0`'s list-removal
+`vslot1`). UNRECOVERED: the mask's constructor initialiser (0 assumed), the
+get / destroy bodies and compare / hash pairs of types 0, 2, 3, the pool bodies `thunk_FUN_1013dc60` /
+`thunk_FUN_1013dce0`, and whether any non-textual path reaches the server `DestroyAllDataObjects`.
+
 ### New begins precede old ends within a frame
 
 The `engine.dll` half is recovered. `PhysicsTouchTriggers` calls one `IVEngineServer` slot (122,

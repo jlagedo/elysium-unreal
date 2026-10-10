@@ -9,6 +9,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"   // ElysiumMove::U, the Source inch in cm
+#include "Substrate/ElysiumDataObjects.h"   // type 1, the touch-link head slot 207 asks for (L0-r019)
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumEntityCollision, Log, All);
 
@@ -513,12 +514,14 @@ void FElysiumEntity::SetCheckUntouch(bool bOn)
 }
 
 // slot 207 0x1003d3d0 `bool IsCurrentlyTouching() const`: the scope-trace frame
-// (`"CBaseEntity::IsCurrentlyTouching"` 0x1053bbb0), then `HasDataObjectType(this, 1)` -- true iff
-// the entity owns a touchlink list, the same type-1 data object `PhysicsCheckForEntityUntouch`
-// fetches with `GetDataObject(this, 1)`.
+// (`"CBaseEntity::IsCurrentlyTouching"` 0x1053bbb0), then `HasDataObjectType(this, 1)` (thunk 0x10003b02,
+// `TEST AL,AL` at 1003d43d) -- true iff the entity owns a type-1 data object, the touchlink list head
+// `PhysicsMarkEntityAsTouched` 0x1003dc70 creates and `PhysicsCheckForEntityUntouch` 0x1003d490 /
+// `PhysicsNotifyOtherOfUntouch` 0x1003d640 / `PhysicsRemoveTouchedList` 0x1003d8f0 destroy when the last
+// node goes (`walks/L0-r015.md`, `walks/L0-r019.md`; the registry is `Substrate/ElysiumDataObjects.cpp`).
 bool FElysiumEntity::IsCurrentlyTouching() const
 {
-	return World != nullptr && World->EntityHasTouchLinks(Handle);
+	return HasDataObjectType(FElysiumDataObjectAccessSystem::TouchLink);
 }
 
 void FElysiumEntity::PhysicsCheckForEntityUntouch()

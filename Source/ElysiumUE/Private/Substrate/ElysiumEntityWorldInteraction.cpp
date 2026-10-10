@@ -5,6 +5,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumUserCmd.h"   // EElysiumButton — the combat button field this file drains
 #include "ElysiumViewState.h"
+#include "Substrate/ElysiumDataObjects.h"   // the type-1 touch-link head the touch pass creates (L0-r019)
 #include "Substrate/ElysiumEntityWorldShared.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpc.h"
@@ -15,6 +16,10 @@
 void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 	const FElysiumEntityHandle& Activator, bool bBegin)
 {
+	// The pair lives in two stores, written at the same retail points: r015's stamped key (what the
+	// deferred untouch check `PhysicsCheckForEntityUntouch` 0x1003d490 compares against `m_touchStamp`)
+	// and r019's two type-1 touch-link lists (what slot 207 `IsCurrentlyTouching` 0x1003d3d0 reads as
+	// `HasDataObjectType(this, 1)`). A key is held exactly while both sides hold a node for each other.
 	const uint64 TouchKey = (static_cast<uint64>(static_cast<uint32>(Brush.Index)) << 32)
 		| static_cast<uint32>(Activator.Index);
 	if (!bBegin)
@@ -26,6 +31,50 @@ void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 		{
 			return;
 		}
+		// The end edge's data-object steps (L0-r019). A pair that was retained holds a type-1 touch
+		// link on each side, released here whatever the gates below answer:
+		// - a live brush is `PhysicsCheckForEntityUntouch` 0x1003d490 on the mover (the activator):
+		//   `PhysicsNotifyOtherOfUntouch` 0x1003d640 first unlinks the OTHER side's (the brush's) node
+		//   and destroys its object when the list is then empty; then the mover's own node goes
+		//   (`PhysicsRemoveToucher`) and, after the loop, the mover's object when its list is empty;
+		// - a dying brush is `~CBaseEntity` -> `PhysicsRemoveTouchedList` 0x1003d8f0 on the brush: the
+		//   other side (the activator) is notified first, then the brush's own nodes are freed and its
+		//   object destroyed unconditionally.
+		// `EndTouch` on the brush comes before its unlink (`PhysicsRemoveToucher` 0x1003d770: the
+		// EndTouch, then `N[2][3] = N[3]; N[3][2] = N[2]`), so the dispatch below runs first.
+		FElysiumEntity* Brushed = Resolve(Brush);
+		FElysiumEntity* Mover = Resolve(Activator);
+		const bool bDispatch = bActive && IsTriggerResolutionEnabled() && Brushed != nullptr && !Brushed->IsInert();
+		if (bDispatch)
+		{
+			++TouchEndCount;
+			Brushed->OnTouchEnd(Activator);
+			UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) touch end %s"), NowSeconds(), *Brushed->DebugString());
+		}
+		if (Brushed != nullptr && Brushed->IsInert())
+		{
+			// A dormant/dead brush cannot be touched. This is also the retail asymmetry: `~CBaseEntity`
+			// reaches PhysicsRemoveTouchedList, which notifies the OTHER side of each link and frees it
+			// without PhysicsRemoveToucher -- so a dying trigger never receives its own EndTouch, and a
+			// self-removing trigger_once emits no final OnEndTouch to occupants still inside it
+			// (entity_io.md). Kill() flips bDead before releasing contacts, which is what routes the
+			// release here (`Elysium.Substrate.DyingTriggerEndTouch`).
+			if (Mover != nullptr)
+			{
+				TouchLinkEnd(*Mover, Brush);
+			}
+			TouchLinkEnd(*Brushed, Activator);
+			return;
+		}
+		if (Brushed != nullptr)
+		{
+			TouchLinkEnd(*Brushed, Activator);
+		}
+		if (Mover != nullptr)
+		{
+			TouchLinkEnd(*Mover, Brush);
+		}
+		return;
 	}
 	// Engine overlap callbacks can arrive while procedural collision and the pawn placement are
 	// still settling. Dormant begins are deliberately forgotten: activation reconciles final
@@ -39,12 +88,7 @@ void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 	FElysiumEntity* E = Resolve(Brush);
 	if (!E || E->IsInert())
 	{
-		// A dormant/dead brush cannot be touched. On the end edge this is also the retail
-		// asymmetry: `~CBaseEntity` reaches PhysicsRemoveTouchedList, which notifies the OTHER side
-		// of each link and frees it without PhysicsRemoveToucher — so a dying trigger never receives
-		// its own EndTouch, and a self-removing trigger_once emits no final OnEndTouch to occupants
-		// still inside it (entity_io.md). Kill() flips bDead before releasing contacts, which is
-		// what routes the release here (`Elysium.Substrate.DyingTriggerEndTouch`).
+		// A dormant/dead brush cannot be touched.
 		return;
 	}
 
@@ -52,40 +96,199 @@ void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 	// one of each, but a teleport reconciliation also asks which brushes contain the player after
 	// the transform. Collapse that second observation here so an authored trigger never double-
 	// fires; an end releases the pair so a later genuine re-entry remains an edge.
-	if (bBegin)
+	if (!E->CanBeginTouch(Activator))
 	{
-		if (!E->CanBeginTouch(Activator))
+		return;
+	}
+	// Each side's touchlink carries its owner's `m_touchStamp` (+0x1ac): `PhysicsMarkEntityAsTouched`
+	// 0x1003dc70 writes it when the link is made (`node[1] = this->m_touchStamp`) and refreshes it
+	// when an existing pair is reported again (`entity_io.md` § The touch dispatch path), which is
+	// what keeps the link alive through `PhysicsCheckForEntityUntouch` 0x1003d490.
+	FElysiumEntity* Mover = Resolve(Activator);
+	FTouchLinkStamps Stamps;
+	Stamps.Brush = E->TouchStamp;
+	Stamps.Activator = Mover != nullptr ? Mover->TouchStamp : 0;
+	if (FTouchLinkStamps* Existing = ActiveTouches.Find(TouchKey))
+	{
+		// The existing node on each side has its stamp refreshed and `PhysicsTouch` runs (the
+		// lifecycle story's); no second node, no second StartTouch.
+		*Existing = Stamps;
+		TouchLinkBegin(*E, Activator);
+		if (Mover != nullptr)
 		{
-			return;
+			TouchLinkBegin(*Mover, Brush);
 		}
-		// Each side's touchlink carries its owner's `m_touchStamp` (+0x1ac): `PhysicsMarkEntityAsTouched`
-		// 0x1003dc70 writes it when the link is made and refreshes it when an existing pair is
-		// reported again (`entity_io.md` § The touch dispatch path), which is what keeps the link
-		// alive through `PhysicsCheckForEntityUntouch` 0x1003d490.
-		const FElysiumEntity* Toucher = Resolve(Activator);
-		FTouchLinkStamps Stamps;
-		Stamps.Brush = E->TouchStamp;
-		Stamps.Activator = Toucher != nullptr ? Toucher->TouchStamp : 0;
-		if (FTouchLinkStamps* Existing = ActiveTouches.Find(TouchKey))
+		return;
+	}
+	ActiveTouches.Add(TouchKey, Stamps);
+
+	// `PhysicsMarkEntitiesAsTouching` 0x1003e2e0 marks the pair in both directions, the enumerated
+	// element (the brush) first: `PhysicsMarkEntityAsTouched(brush, mover)` -- the brush's type-1 head
+	// and node, then its `PhysicsStartTouch` -- and then `(mover, brush)` (L0-r019; the early-outs
+	// and `PhysicsTouch` belong to the touch-lifecycle story).
+	TouchLinkBegin(*E, Activator);
+	++TouchBeginCount;
+	E->OnTouchStart(Activator);
+	if (Mover != nullptr)
+	{
+		TouchLinkBegin(*Mover, Brush);
+	}
+	UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) touch begin %s"), NowSeconds(), *E->DebugString());
+}
+
+namespace
+{
+	// `touchlink_t` list walk (0x1003dc70 / 0x1003d490 / 0x1003d640 / 0x1003d8f0): `H[+8]` is next,
+	// `H[+0xC]` prev; the head is its own neighbour when the list is empty.
+	FElysiumTouchLink* ElysiumWorldFindTouchLink(FElysiumTouchLink* Head, const FElysiumEntityHandle& Other)
+	{
+		for (FElysiumTouchLink* Node = Head->NextLink; Node != Head; Node = Node->NextLink)
 		{
-			*Existing = Stamps;
-			return;
+			if (Node->EntityTouched == Other)
+			{
+				return Node;
+			}
 		}
-		ActiveTouches.Add(TouchKey, Stamps);
+		return nullptr;
 	}
 
-	if (bBegin)
+	// Which side of a packed (brush, activator) pair names `Index`, and that side's link stamp.
+	bool TouchPairSide(uint64 Key, int32 Index, bool& bOutBrushSide)
 	{
-		++TouchBeginCount;
-		E->OnTouchStart(Activator);
+		const int32 BrushIndex = static_cast<int32>(static_cast<uint32>(Key >> 32));
+		const int32 ActivatorIndex = static_cast<int32>(static_cast<uint32>(Key));
+		if (BrushIndex == Index) { bOutBrushSide = true; return true; }
+		if (ActivatorIndex == Index) { bOutBrushSide = false; return true; }
+		return false;
 	}
-	else
+}
+
+void FElysiumEntityWorld::TouchLinkBegin(FElysiumEntity& Entity, const FElysiumEntityHandle& Other)
+{
+	// `PhysicsMarkEntityAsTouched` 0x1003dc70's data-object step: `H = GetDataObject(this, 1)`; when
+	// none, `H = CreateDataObject(this, 1)` and the zero-filled block becomes the empty circular head
+	// (`H[+0xC] = H; H[+8] = H`), with no null test on the create result.
+	FElysiumTouchLink* Head = static_cast<FElysiumTouchLink*>(Entity.GetDataObject(FElysiumDataObjectAccessSystem::TouchLink));
+	if (Head == nullptr)
 	{
-		++TouchEndCount;
-		E->OnTouchEnd(Activator);
+		Head = static_cast<FElysiumTouchLink*>(Entity.CreateDataObject(FElysiumDataObjectAccessSystem::TouchLink));
+		if (Head == nullptr)
+		{
+			// Retail would fault here (no accessor registered). The port's registry always has slot 1,
+			// so this is an entity outside a world: nothing to link.
+			return;
+		}
+		Head->PrevLink = Head;
+		Head->NextLink = Head;
 	}
-	UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) touch %s %s"),
-		NowSeconds(), bBegin ? TEXT("begin") : TEXT("end"), *E->DebugString());
+	// An existing link for the pair only refreshes its stamp (`node[1] = this->m_touchStamp`) and runs
+	// `PhysicsTouch`: never a second begin and never a second node.
+	if (FElysiumTouchLink* Existing = ElysiumWorldFindTouchLink(Head, Other))
+	{
+		Existing->TouchStamp = Entity.TouchStamp;
+		return;
+	}
+	// `AllocTouchLink` (pool `DAT_106bd904`, counter `DAT_106bd9b8`): the cap is 0x200 -- retail prints
+	// "AllocTouchLink: MAX_TOUCHLINKS limit" and answers no link. The pool bodies (`thunk_FUN_1013dc60`
+	// / `thunk_FUN_1013dce0`) are UNRECOVERED; `new` / `delete` stand in.
+	if (LiveTouchLinks >= 0x200)
+	{
+		UE_LOG(LogElysiumWorld, Error, TEXT("AllocTouchLink: MAX_TOUCHLINKS limit"));
+		return;
+	}
+	++LiveTouchLinks;
+	FElysiumTouchLink* Node = new FElysiumTouchLink();
+	Node->EntityTouched = Other;
+	// `[1]` = this entity's `m_touchStamp` (+0x1ac) at link time (`puVar9[1] = this->field_0x1ac`); the
+	// stamp's producer is `SetCheckUntouch` 0x100b11d0 (slot 6, `ElysiumEntityCollision.cpp`).
+	Node->TouchStamp = Entity.TouchStamp;
+	// Insert at the head: `node[2] = H[2]; node[3] = H; H[2] = node; node[2][3] = node`.
+	Node->NextLink = Head->NextLink;
+	Node->PrevLink = Head;
+	Head->NextLink = Node;
+	Node->NextLink->PrevLink = Node;
+	// `|= 1`: the begin dispatched (the bit `PhysicsRemoveToucher` tests before `EndTouch`).
+	Node->Flags |= 1;
+}
+
+void FElysiumEntityWorld::TouchLinkEnd(FElysiumEntity& Entity, const FElysiumEntityHandle& Other)
+{
+	// `GetDataObject(this, 1)`; a side with no head has nothing to release.
+	FElysiumTouchLink* Head = static_cast<FElysiumTouchLink*>(Entity.GetDataObject(FElysiumDataObjectAccessSystem::TouchLink));
+	if (Head == nullptr)
+	{
+		return;
+	}
+	if (FElysiumTouchLink* Node = ElysiumWorldFindTouchLink(Head, Other))
+	{
+		// `PhysicsRemoveToucher` 0x1003d770's unlink and free: `N[2][3] = N[3]; N[3][2] = N[2]`,
+		// `DAT_106bd9b8--`, the node back to the pool.
+		Node->NextLink->PrevLink = Node->PrevLink;
+		Node->PrevLink->NextLink = Node->NextLink;
+		delete Node;
+		--LiveTouchLinks;
+	}
+	// `PhysicsCheckForEntityUntouch` 0x1003d490 (after its loop) and `PhysicsNotifyOtherOfUntouch`
+	// 0x1003d640 (for the other side): `if (H[+8] == H && H[+0xC] == H) DestroyDataObject(this, 1)`.
+	if (Head->NextLink == Head && Head->PrevLink == Head)
+	{
+		Entity.DestroyDataObject(FElysiumDataObjectAccessSystem::TouchLink);
+	}
+}
+
+void FElysiumEntityWorld::ReleaseTouchedList(FElysiumEntity& Entity)
+{
+	// `PhysicsRemoveTouchedList` 0x1003d8f0 (`~CBaseEntity` 0x1009df20, `DAT_10735d38` cleared around
+	// it), arms in retail order:
+	// 1. `H = GetDataObject(this, 1)`; none -> arm 4.
+	// 2. Per node (the next captured first): `PhysicsNotifyOtherOfUntouch(this, other)` 0x1003d640 --
+	//    the OTHER side's node for this entity found and `PhysicsRemoveToucher(other, node)` 0x1003d770
+	//    run on it (`other->EndTouch(this)` through vslot 176 when `node[4] & 1` and the handle
+	//    resolves, then its unlink and free), the other's object destroyed when its list is then
+	//    empty; then this node freed to the pool (`DAT_106bd9b8--`) with NO `EndTouch` on this entity.
+	// 3. `DestroyDataObject(this, 1)`, unconditional.
+	// 4. `m_touchStamp (+0x1ac) = 0`.
+	// A pair whose key is retained is released through the end edge above, which is arm 2 for it in
+	// retail order: the key dropped, the other side's `OnTouchEnd` when it is the live brush (this
+	// entity's own never: a dying brush is inert there), then the two nodes with each side's
+	// destroy-if-empty. A node with no key (one made outside the touch pass) is freed below.
+	if (Entity.GetDataObject(FElysiumDataObjectAccessSystem::TouchLink) != nullptr)
+	{
+		TArray<uint64> Keys;
+		for (const TPair<uint64, FTouchLinkStamps>& Pair : ActiveTouches)
+		{
+			bool bBrushSide = false;
+			if (TouchPairSide(Pair.Key, Entity.Handle.Index, bBrushSide))
+			{
+				Keys.Add(Pair.Key);
+			}
+		}
+		Keys.Sort();   // the entity-index order every touch pass here uses in place of the list's
+		for (uint64 Key : Keys)
+		{
+			RouteEntityTouch(FElysiumEntityHandle(static_cast<int32>(static_cast<uint32>(Key >> 32)), Epoch),
+				FElysiumEntityHandle(static_cast<int32>(static_cast<uint32>(Key)), Epoch), /*bBegin*/ false);
+		}
+	}
+	if (FElysiumTouchLink* Head = static_cast<FElysiumTouchLink*>(Entity.GetDataObject(FElysiumDataObjectAccessSystem::TouchLink)))
+	{
+		while (Head->NextLink != Head)
+		{
+			FElysiumTouchLink* Node = Head->NextLink;
+			if (FElysiumEntity* OtherSide = Resolve(Node->EntityTouched))
+			{
+				// `PhysicsNotifyOtherOfUntouch` for a node no key names: the other side's node and its
+				// destroy-if-empty; no retained pair, so no `EndTouch` to dispatch.
+				TouchLinkEnd(*OtherSide, Entity.Handle);
+			}
+			Head->NextLink = Node->NextLink;
+			Node->NextLink->PrevLink = Head;
+			delete Node;
+			--LiveTouchLinks;
+		}
+		Entity.DestroyDataObject(FElysiumDataObjectAccessSystem::TouchLink);
+	}
+	Entity.TouchStamp = 0;
 }
 
 void FElysiumEntityWorld::EndBrushTouches(const FElysiumEntityHandle& Brush)
@@ -112,38 +315,6 @@ void FElysiumEntityWorld::EndBrushTouches(const FElysiumEntityHandle& Brush)
 }
 
 // --- The touchlink list and the deferred untouch check (`walks/L0-r015.md`) -------------------
-
-namespace
-{
-	// Which side of a packed (brush, activator) pair names `Index`, and that side's link stamp.
-	bool TouchPairSide(uint64 Key, int32 Index, bool& bOutBrushSide)
-	{
-		const int32 BrushIndex = static_cast<int32>(static_cast<uint32>(Key >> 32));
-		const int32 ActivatorIndex = static_cast<int32>(static_cast<uint32>(Key));
-		if (BrushIndex == Index) { bOutBrushSide = true; return true; }
-		if (ActivatorIndex == Index) { bOutBrushSide = false; return true; }
-		return false;
-	}
-}
-
-bool FElysiumEntityWorld::EntityHasTouchLinks(const FElysiumEntityHandle& Entity) const
-{
-	// `HasDataObjectType(this, 1)` -- the touchlink list exists while any link is held; `0x1003d490`
-	// destroys it (`DestroyDataObject(this, 1)`) when the last link goes.
-	if (!Entity.IsSet() || Entity.Epoch != Epoch)
-	{
-		return false;
-	}
-	for (const TPair<uint64, FTouchLinkStamps>& Pair : ActiveTouches)
-	{
-		bool bBrushSide = false;
-		if (TouchPairSide(Pair.Key, Entity.Index, bBrushSide))
-		{
-			return true;
-		}
-	}
-	return false;
-}
 
 void FElysiumEntityWorld::EnqueueUntouchCheck(FElysiumEntity& Entity)
 {
