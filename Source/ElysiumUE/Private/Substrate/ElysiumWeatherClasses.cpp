@@ -28,4 +28,13 @@ static FElysiumClassRegistrar GRegEnvParticle(
 		ElysiumAddClassField(D, TEXT("spawnbounds"), &FElysiumEnvParticle::SpawnBounds, EElysiumField::None);
 		ElysiumAddClassField(D, TEXT("ramp_scale"), &FElysiumEnvParticle::RampScale, EElysiumField::None);
 		ElysiumAddClassField(D, TEXT("ramp_time"), &FElysiumEnvParticle::RampTime, EElysiumField::None);
+		// The `DT_EnvParticle` words the datamap leaves unnamed (`walks/L0-r011.md`), registered under
+		// their SendTable names so a record reads them by retail name: `m_nParticle` (+0x454),
+		// `m_flActivationTime` (+0x488), `m_nRampFrame` (+0x494). Not keyable (no map authors them).
+		ElysiumAddClassField(D, TEXT("m_nParticle"), &FElysiumEnvParticle::ParticleIndex, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("m_flActivationTime"), &FElysiumEnvParticle::ActivationTime, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("m_nRampFrame"), &FElysiumEnvParticle::RampFrame, EElysiumField::None);
+		// `m_fRateScaleTarget` (+0x48c) is the `ramp_scale` key's word in retail; this port's `ramp_scale`
+		// seeds its CURRENT rate and Spawn copies it to the target, so the target is readable here too.
+		ElysiumAddClassField(D, TEXT("m_fRateScaleTarget"), &FElysiumEnvParticle::RampTargetScale, EElysiumField::None);
 	});

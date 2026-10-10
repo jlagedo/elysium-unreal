@@ -144,6 +144,16 @@ public:
 	 */
 	UDecalComponent* Lay(const FElysiumDecalRequest& Request);
 
+	/**
+	 * An `infodecal`'s submission (`StaticDecal` / `BSPDecal`, `walks/L0-r011.md`), reconciled with
+	 * the authored baseline: the bake already placed every map `infodecal` as an adopted component
+	 * (`_place_decals`, one per projector line), so a submission whose material and point match an
+	 * adopted decal within the engine's own 5-unit search box answers THAT component and lays nothing;
+	 * any other (an arena row, a runtime-created decal, a named decal's Use) goes through `Lay` and so
+	 * into the `DECALLIST` records a save keeps. Null when nothing resolves.
+	 */
+	UDecalComponent* SubmitStatic(const FElysiumDecalRequest& Request);
+
 	/** The `DECALLIST` shape for the save's reserved `Maps` slot: every persistent laid decal. */
 	TArray<FElysiumDecalRecord> Records() const;
 

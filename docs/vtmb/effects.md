@@ -764,6 +764,47 @@ unused.
 Decal VMTs use 18 distinct keys in total; the canonical unit is `$basetexture $translucent 1
 $decal 1 $decalscale 0.25`; no `vdecal_*` material exists in the corpus or the packs.
 
+**The server side of `infodecal` (`CDecal`), recovered L0-r011** (`docs/specs/layers/L0-entity/walks/
+L0-r011.md`). The `texture` key (`CDecal::vfunc110` `0x1023adb0`) writes `m_nTexture` (`+0x450`) =
+`VEngineServer014` slot 16 `PrecacheDecal(value, 1)` (`engine.dll 0x20108af0`), never negative (a failed
+lookup is `Host_Error`); the constructor `FUN_1023a6e0` leaves the word, so a decal with no key keeps the
+calloc 0 -- a valid index. `CDecal::Spawn` `0x1023a750`: `m_nTexture < 0` -> `UTIL_Remove`; `gpGlobals->+0x30
+!= 0 && (m_spawnflags & 0x800)` -> `UTIL_Remove` (the multiplayer byte is 0 in single player); `m_iName == 0`
+-> tail jump to the projector `FUN_1023aa30` `0x1023aa30`; else `ThinkSet(0x1000572c, 0.0, NULL)` (a
+bare `ret`, nothing scheduled) and `m_pfnUse = 0x1000c888` (`CDecal::Use`). The projector:
+`CTraceFilterValidForDecal` (`0x1023ac90` / `0x1023acc0`: an entity whose classname matches `weapon_*`,
+`item_*` (prefix, `__strnicmp`), `prop_ragdoll`, `prop_dynamic`, `prop_static`, `prop_physics` is passed
+over, else `CTraceFilterSimple::ShouldHitEntity` `0x101d31c0`), `GetAbsOrigin()`, `min = o - 5`, `max = o +
+5` (`_DAT_10454110`), `Ray_t::Init(min, max)` `0x1004f7a0` -- a LINE along the box diagonal (`IsRay = 1`,
+extents zero) -- traced with mask `0x200400b`; a debug line gated by the ConVar `DAT_10738964` (unidentified);
+`m_pEnt` tested with a 16-bit `TEST AX,AX`; a hit: `IndexOfEdict(m_pEnt->+0x2e0)` (slot 35; 0 for the world
+ends the path), `GetModelIndex()` (slot 8), `CalcAbsolutePosition` under EFL 0x800, `VectorITransform(origin,
+m_rgflCoordinateFrame)` `0x10138130`; then slot 63 `StaticDecal(point, m_nTexture, eidx, model)` (`engine.dll
+0x20109740`, written into the signon buffer) on EVERY path -- a miss or a world hit submits the world origin
+with `(0, 0)`; then `SUB_Remove` `0x101c0b10`. `CDecal::Use` `0x1023a7d0` (the named path): `GetOrigin()`
+(local), the same line, `CTraceFilterSimple`, mask `0x400b`, `IndexOfEdict(m_pEnt->+0x2e0)` with NO null
+test (a miss faults), a `CBroadcastRecipientFilter` of all players and `CTempEntsSystem::BSPDecal(filter,
+0.0, &origin, eidx, m_nTexture)` (slot 16 `0x10058ce0` -> `0x1005f550`, the `CTEBSPDecal` singleton) -- no
+StaticDecal, no model, no local transform -- then `ThinkSet(SUB_Remove)` and `m_flNextThink = curtime + 0.1`
+(the double `_DAT_104493d0`). The two witness maps carry 219 / 123 unnamed, flagless infodecals. Port:
+`Source/ElysiumUE/Private/Substrate/ElysiumDecal.cpp`; the submission is `IElysiumEmbodiment::
+SubmitStaticDecal` -> `UElysiumDecalSubsystem::SubmitStatic`, which answers the bake's adopted copy of the
+same decal when one stands within the 5-unit box (the authored baseline) and lays a new `UDecalComponent`
+otherwise (a runtime-created or named decal; persisted as a `DECALLIST` record).
+
+**The oriented-box clip's two primitives, recovered L0-r011.** `ClearTrace` `FUN_1023f3d0` `0x1023f3d0`:
+`startpos = start`, `endpos = start + delta` (copied, then added in place), `fraction = 1.0`, `contents = 0`,
+`allsolid = 0`, `startsolid = 0`; the plane, `m_pEnt` and everything from `+0x38` on are left unwritten. The
+segment/sphere early-out `FUN_1023ffa0` `0x1023ffa0`: `p = dot(C - A, D)` (summed x, z, y); `p > 0` -> `t =
+p <= |D|^2 ? p / |D|^2 : 1.0`, else `t = 0` (so `D = 0` gives the start); `Q = A + D t` (`0x10139500`);
+`(r1 + r2)^2 < |Q - C|^2` -> 0 else 1 -- a strict compare on the x87 stack (an exact touch overlaps, a NaN
+does not; the sum is squared with its sign). Its only caller is the hull path of `FUN_10241620`
+`0x10241620`, after `ClearTrace(ray.start + ray.startOffset, ray.delta)`, with `r1 = sqrt(|ray extents|^2) +
+sqrt(|box half|^2)` (two `fsqrt` `0x101371d0`) and `r2 = tolerance`; a failed test returns 0 with the clear
+trace. The separating-axis clip after a pass is not walked and stays engine-replaced. Port:
+`ElysiumRetailSweep` in `Source/ElysiumUE/Private/Map/ElysiumWorldGeometry.cpp` (`Trace` starts from
+`ClearTrace`; `HullClipPrelude` is the hull path as read).
+
 ### 4.15 Water surface
 
 Map water is a material / Single Layer Water problem, not a particle. Splashes, bubbles and

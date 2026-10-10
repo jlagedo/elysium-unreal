@@ -2027,6 +2027,12 @@ const TArray<FString>& EntityCallAllowlist()
 		// input, and the one a player's +use (`CHL2_Player::vfunc436` `0x10350830`) makes with its own
 		// use type -- so a record drives `CLight::Use` `0x10130580` with each USE_TYPE.
 		TEXT("Use"),
+		// L0.effects_world.world-sweep-query: the oriented-box clip `0x10241620`'s hull prelude --
+		// `ClearTrace 0x1023f3d0` then the segment/sphere early-out `0x1023ffa0` with `r1 = |extents| +
+		// |half|`, `r2 = tolerance` -- the query every hull sweep against an entity box ran first.
+		// Args: `[sx,sy,sz, ox,oy,oz, dx,dy,dz, ex,ey,ez, cx,cy,cz, hx,hy,hz, tolerance]` (ray start,
+		// start offset, delta, extents; box centre, half size; tolerance), pure numbers.
+		TEXT("Sweep_HullPrelude"),
 	};
 	return Allowed;
 }

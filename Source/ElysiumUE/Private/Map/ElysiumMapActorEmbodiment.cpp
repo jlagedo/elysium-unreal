@@ -1437,6 +1437,58 @@ bool AElysiumMapActor::LayShotImpactDecal(const FVector& FromCm, const FVector& 
 	return Decals->Lay(Request) != nullptr;
 }
 
+bool AElysiumMapActor::SubmitStaticDecal(const FElysiumStaticDecalSubmit& Submit)
+{
+	// The engine half of `VEngineServer014` slot 63 `StaticDecal` (`0x20109740`) and of the
+	// `CTEBSPDecal` temp entity: the client's `R_DecalShoot` finds the surface within the 5-unit box
+	// round the point and sticks the precached decal texture on it. Here: the surface is probed on the
+	// render-surface channel (`ElysiumImpactDecals::SurfaceTraceChannel`, the half that carries the
+	// face material), the texture is its `vtmb:material:` projector instance, and the subsystem
+	// reconciles the submission with the bake's own copy of the map's decals before laying one.
+	UWorld* World = GetWorld();
+	UElysiumDecalSubsystem* Decals = World ? World->GetSubsystem<UElysiumDecalSubsystem>() : nullptr;
+	if (!Decals || Submit.Texture.IsEmpty())
+	{
+		return false;
+	}
+	FElysiumDecalRequest Request;
+	Request.MaterialId = FString::Printf(TEXT("vtmb:material:%s"), *Submit.Texture.Replace(TEXT("\\"), TEXT("/")).ToLower());
+	Request.Location = Submit.WorldOriginCm;
+	Request.Normal = Submit.NormalHint;
+	constexpr double BoxHalfCm = 5.0 * 2.54;   // `_DAT_10454110`, 5.0 units
+	if (Request.Normal.IsNearlyZero())
+	{
+		// No surface from the entity's own trace (a miss, or a start inside the wall): the engine's
+		// search over the box. Six axis probes of the box half-extent; the nearest surface wins.
+		static const FName ProbeTag(TEXT("ElysiumStaticDecalProbe"));
+		FCollisionQueryParams Params(ProbeTag, /*bTraceComplex*/ true);
+		double BestDistance = TNumericLimits<double>::Max();
+		for (const FVector& Axis : { FVector::DownVector, FVector::UpVector, FVector::ForwardVector, FVector::BackwardVector, FVector::RightVector, FVector::LeftVector })
+		{
+			FHitResult Hit;
+			if (World->LineTraceSingleByChannel(Hit, Submit.WorldOriginCm, Submit.WorldOriginCm + Axis * BoxHalfCm,
+					ElysiumImpactDecals::SurfaceTraceChannel, Params) && Hit.bBlockingHit && Hit.Distance < BestDistance)
+			{
+				BestDistance = Hit.Distance;
+				Request.Normal = Hit.ImpactNormal;
+				Request.Location = Hit.ImpactPoint;
+			}
+		}
+		if (Request.Normal.IsNearlyZero())
+		{
+			return false;   // no surface inside the box: the engine lays nothing
+		}
+	}
+	Request.HalfSizeCm = ElysiumImpactDecals::HalfSizeCmFor(Request.MaterialId);
+	if (Submit.Entity.IsSet())
+	{
+		Request.EntityIndex = Submit.Entity.Index;
+		const FElysiumEntity* Entity = EntityWorld ? EntityWorld->Resolve(Submit.Entity) : nullptr;
+		Request.Attach = Entity ? Entity->GetAttachBody() : nullptr;
+	}
+	return Decals->SubmitStatic(Request) != nullptr;
+}
+
 void AElysiumMapActor::RequestLandmarkTravel(const FString& Map, const FString& Landmark,
 	const FVector& Offset, float Yaw)
 {

@@ -1,0 +1,36 @@
+{
+  "name": "l0_world_sweep_query",
+  "about": "The two primitives of the oriented-box clip `FUN_10241620` 0x10241620's hull path (`walks/L0-r011.md`): `ClearTrace` 0x1023f3d0 -- `startpos = start + startOffset`, `endpos = start + delta`, `fraction = 1`, `contents = 0`, `allsolid = startsolid = 0` -- then the segment/sphere early-out 0x1023ffa0 with `r1 = sqrt(|extents|^2) + sqrt(|half|^2)` and `r2 = tolerance`: `p = dot(C - A, D)`; `p > 0` gives `t = p <= |D|^2 ? p/|D|^2 : 1`, else `t = 0`; `Q = A + D t`; the answer is `(r1 + r2)^2 < |Q - C|^2 ? 0 : 1`, a STRICT compare. Cases, each one `entity_call Sweep_HullPrelude` on the utility `sweep`: (touch) a unit-radius box 2 units beside a ray of extent 1 -- `dist == r1 + r2`, overlap 1; (outside) the same box one unit further, 0; (negative) `r1 = 1`, tolerance -3 -> `rs = -2`, `rs^2 = 4`: a centre 1.5 units away still overlaps (the sum is squared with its sign); (behind) a centre behind the start gives `p < 0`, `t = 0`, the closest point is A; (zero D) a zero-length ray gives `p = 0`, `t = 0`; (past end) a centre past the end gives `p > |D|^2`, `t = 1`. Every call first writes the clear trace (`end = start + delta`). Reported as `fail`, a payload differs from retail's arithmetic.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 1.0,
+  "script": [
+    { "t": 0.1, "do": "entity_call", "target": "sweep", "function": "Sweep_HullPrelude",
+      "args": [0, 0, 0,  0, 0, 0,  10, 0, 0,  1, 0, 0,  5, 2, 0,  1, 0, 0,  0] },
+    { "t": 0.2, "do": "entity_call", "target": "sweep", "function": "Sweep_HullPrelude",
+      "args": [0, 0, 0,  0, 0, 0,  10, 0, 0,  1, 0, 0,  5, 2.001, 0,  1, 0, 0,  0] },
+    { "t": 0.3, "do": "entity_call", "target": "sweep", "function": "Sweep_HullPrelude",
+      "args": [0, 0, 0,  0, 0, 0,  10, 0, 0,  1, 0, 0,  5, 1.5, 0,  0, 0, 0,  -3] },
+    { "t": 0.4, "do": "entity_call", "target": "sweep", "function": "Sweep_HullPrelude",
+      "args": [0, 0, 0,  0, 0, 0,  10, 0, 0,  1, 0, 0,  -4, 0, 0,  1, 0, 0,  0] },
+    { "t": 0.5, "do": "entity_call", "target": "sweep", "function": "Sweep_HullPrelude",
+      "args": [2, 0, 0,  1, 0, 0,  0, 0, 0,  1, 0, 0,  3, 0, 0,  1, 0, 0,  0] },
+    { "t": 0.6, "do": "entity_call", "target": "sweep", "function": "Sweep_HullPrelude",
+      "args": [0, 0, 0,  0, 0, 0,  10, 0, 0,  1, 0, 0,  13, 0, 0,  1, 0, 0,  0] }
+  ],
+  "expect": [
+    { "label": "touch_clear", "who": "sweep", "kind": "retail_site", "site": "world_clear", "match": "va=0x1023f3d0 phase=write start=0,0,0 end=10,0,0 fraction=1 contents=0 allsolid=0 startsolid=0", "by": 0.15 },
+    { "label": "touch", "who": "sweep", "kind": "retail_site", "site": "segment_sphere", "match": "va=0x1023ffa0 phase=return p=50 t=0.5 dist2=4 rs2=4 result=1", "within": 0.05 },
+    { "label": "touch_done", "who": "sweep", "kind": "script", "match": "entity_call Sweep_HullPrelude done prelude=pass fraction=1 end=10,0,0", "within": 0.05 },
+    { "label": "outside", "who": "sweep", "kind": "retail_site", "site": "segment_sphere", "match": "^tag=segment_sphere fn=FUN_1023ffa0 va=0x1023ffa0 phase=return p=50 t=0\\.5 dist2=4\\.004 rs2=4 result=0", "regex": true, "by": 0.25 },
+    { "label": "outside_done", "who": "sweep", "kind": "script", "match": "entity_call Sweep_HullPrelude done prelude=miss fraction=1 end=10,0,0", "within": 0.05 },
+    { "label": "negative", "who": "sweep", "kind": "retail_site", "site": "segment_sphere", "match": "p=50 t=0.5 dist2=2.25 rs2=4 result=1", "by": 0.35 },
+    { "label": "behind", "who": "sweep", "kind": "retail_site", "site": "segment_sphere", "match": "p=-40 t=0 dist2=16 rs2=4 result=0", "by": 0.45 },
+    { "label": "zero_clear", "who": "sweep", "kind": "retail_site", "site": "world_clear", "match": "start=3,0,0 end=3,0,0 fraction=1", "by": 0.55 },
+    { "label": "zero", "who": "sweep", "kind": "retail_site", "site": "segment_sphere", "match": "p=0 t=0 dist2=1 rs2=4 result=1", "within": 0.05 },
+    { "label": "past_end", "who": "sweep", "kind": "retail_site", "site": "segment_sphere", "match": "p=130 t=1 dist2=9 rs2=4 result=0", "by": 0.65 }
+  ],
+  "probes": [
+    { "at": "end", "who": "player", "probe": "alive", "equals": true }
+  ]
+}

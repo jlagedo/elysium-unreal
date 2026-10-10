@@ -48,6 +48,27 @@ bool AElysiumMapActor::TraceRetail(const FElysiumRetailTrace& Trace, FElysiumRet
 			{
 				return false;
 			}
+			// `CDecal::CTraceFilterValidForDecal::ShouldHitEntity` 0x1023acc0 (`walks/L0-r011.md`): the
+			// classname against the six-entry table at `0x105c2648` -- an entry ending in `*` is a prefix
+			// (`__strnicmp`), the rest whole (`__strcmpi`), all case-insensitive; a match is refused.
+			// Every other entity falls to `CTraceFilterSimple::ShouldHitEntity` 0x101d31c0 (below).
+			if (Trace.Filter == EElysiumRetailTraceFilter::ValidForDecal && Entity->Def != nullptr)
+			{
+				static const TCHAR* const DecalTable[] = { TEXT("weapon_*"), TEXT("item_*"), TEXT("prop_ragdoll"),
+					TEXT("prop_dynamic"), TEXT("prop_static"), TEXT("prop_physics") };
+				const FString& Classname = Entity->Def->Classname;
+				for (const TCHAR* Entry : DecalTable)
+				{
+					const FString Row(Entry);
+					const bool bMatch = Row.EndsWith(TEXT("*"))
+						? Classname.StartsWith(Row.LeftChop(1), ESearchCase::IgnoreCase)
+						: Classname.Equals(Row, ESearchCase::IgnoreCase);
+					if (bMatch)
+					{
+						return true;
+					}
+				}
+			}
 			const FString* RenderMode = Entity->Def != nullptr ? Entity->Def->Keys.Find(TEXT("rendermode")) : nullptr;
 			return ElysiumRetailMask::EntityArmsReject(Trace.RetailMask,
 				RenderMode != nullptr ? FCString::Atoi(**RenderMode) : 0, Entity->RetailSolidFlags);

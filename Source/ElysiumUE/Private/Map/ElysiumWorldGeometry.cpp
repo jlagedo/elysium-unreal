@@ -4,6 +4,7 @@
 #include "ElysiumCollisionChannels.h"
 #include "ElysiumWorldCollisionActor.h"
 #include "Map/ElysiumRetailMaskRecipe.h"
+#include "ElysiumRetailSite.h"
 
 #include "CollisionQueryParams.h"
 #include "CollisionShape.h"
@@ -413,13 +414,87 @@ namespace ElysiumWorldGeometryDetail
 	};
 }
 
+namespace ElysiumRetailSweep
+{
+	void ClearTrace(const FVector& Start, const FVector& Delta, FElysiumRetailTraceResult& Out,
+		IElysiumRetailSiteSink* Sites)
+	{
+		// `FUN_1023f3d0` `0x1023f3d0`, straight-line (`walks/L0-r011.md`). The result's port-only
+		// defaults (normal, entity, signature) are what retail leaves unwritten; reset, then the writes.
+		Out = FElysiumRetailTraceResult();
+		Out.StartPosCm = Start;                      // out[0..2] = start
+		Out.EndPosCm = Start;                        // out[3..5] = start
+		Out.EndPosCm.X = Out.EndPosCm.X + Delta.X;   // then each component += delta, in place
+		Out.EndPosCm.Y = Delta.Y + Out.EndPosCm.Y;
+		Out.EndPosCm.Z = Delta.Z + Out.EndPosCm.Z;
+		Out.bStartSolid = false;                     // +0x37 = 0
+		Out.bAllSolid = false;                       // +0x36 = 0
+		Out.Fraction = 1.0f;                         // +0x2c = 0x3f800000
+		Out.Contents = 0;                            // +0x30 = 0
+		if (Sites)
+		{
+			Sites->Site(TEXT("world_clear"), TEXT("FUN_1023f3d0"), 0x1023f3d0u, TEXT("write"),
+				FString::Printf(TEXT("start=%g,%g,%g end=%g,%g,%g fraction=1 contents=0 allsolid=0 startsolid=0"),
+					Out.StartPosCm.X, Out.StartPosCm.Y, Out.StartPosCm.Z, Out.EndPosCm.X, Out.EndPosCm.Y, Out.EndPosCm.Z));
+		}
+	}
+
+	bool SegmentSphereOverlap(const FVector& A, const FVector& D, const FVector& C, double R1, double R2,
+		IElysiumRetailSiteSink* Sites)
+	{
+		// `FUN_1023ffa0` `0x1023ffa0` (`walks/L0-r011.md`), on the x87 stack: double here.
+		// 5 (first): `rs = r1 + r2`, stored over the r1 slot.
+		const double Rs = R1 + R2;
+		// 1. `p = dot(C - A, D)`, summed x, z, y as the asm orders it.
+		const double P = ((C.X - A.X) * D.X + (C.Z - A.Z) * D.Z) + (C.Y - A.Y) * D.Y;
+		double T = 0.0;
+		// 2. `p > 0.0` (`_DAT_104454c4`; a NaN takes this arm: `FCOMP; TEST AH,0x41; JP`).
+		if (!(P <= 0.0))
+		{
+			const double D2 = D.X * D.X + D.Y * D.Y + D.Z * D.Z;   // summed x, y, z
+			// `p <= d2 ? p / d2 : 1.0` (`FCOMP; AND EAX,0x4100; JNZ`); `d2 == 0` is reachable only with a
+			// non-finite `p` (a zero D gives `p == 0`, arm 3).
+			T = P <= D2 ? P / D2 : 1.0;
+		}
+		// 3. else `t = 0.0`: `p == 0` and `p < 0` alike.
+		// 4. `Q = A + D * t` (`thunk_FUN_10139500` `0x10139500`, VectorMA).
+		const double Qx = A.X + D.X * T;
+		const double Qy = A.Y + D.Y * T;
+		const double Qz = A.Z + D.Z * T;
+		// 5. `rs * rs < |Q - C|^2` (summed z, y, x) -> 0, else 1. Strict: an exact touch is 1, a NaN 0.
+		const double Dist2 = (Qz - C.Z) * (Qz - C.Z) + (Qy - C.Y) * (Qy - C.Y) + (Qx - C.X) * (Qx - C.X);
+		const bool bOverlap = !(Rs * Rs < Dist2);
+		if (Sites)
+		{
+			Sites->Site(TEXT("segment_sphere"), TEXT("FUN_1023ffa0"), 0x1023ffa0u, TEXT("return"),
+				FString::Printf(TEXT("p=%g t=%g dist2=%g rs2=%g result=%d"), P, T, Dist2, Rs * Rs, bOverlap ? 1 : 0));
+		}
+		return bOverlap;
+	}
+
+	bool HullClipPrelude(const FVector& RayStart, const FVector& RayStartOffset, const FVector& RayDelta,
+		const FVector& RayExtents, const FVector& BoxCentre, const FVector& BoxHalf, double Tolerance,
+		FElysiumRetailTraceResult& Out, IElysiumRetailSiteSink* Sites)
+	{
+		// `FUN_10241620` `0x10241620`, the hull path (`ray+0x30 == 0`), as far as the walk read it:
+		// `ClearTrace(ray.start + ray.startOffset, ray.delta, trace)`, then the sphere early-out with
+		// `r1 = sqrt(|extents|^2) + sqrt(|half|^2)` (two `fsqrt` `0x101371d0` calls, float) and
+		// `r2 = tolerance`; a failed test returns 0 with the trace as ClearTrace wrote it.
+		ClearTrace(RayStart + RayStartOffset, RayDelta, Out, Sites);
+		const float ExtentRadius = FMath::Sqrt(static_cast<float>(RayExtents.X * RayExtents.X + RayExtents.Y * RayExtents.Y + RayExtents.Z * RayExtents.Z));
+		const float HalfRadius = FMath::Sqrt(static_cast<float>(BoxHalf.X * BoxHalf.X + BoxHalf.Y * BoxHalf.Y + BoxHalf.Z * BoxHalf.Z));
+		return SegmentSphereOverlap(RayStart, RayDelta, BoxCentre, static_cast<double>(ExtentRadius + HalfRadius), Tolerance, Sites);
+	}
+}
+
 namespace ElysiumWorldGeometry
 {
 	bool Trace(UWorld& World, const FElysiumRetailTrace& Request, FElysiumRetailTraceResult& Out,
 		const AActor* IgnoreSelf, TFunctionRef<FElysiumEntityHandle(const AActor*)> ToHandle)
 	{
-		Out = FElysiumRetailTraceResult();
-		Out.EndPosCm = Request.EndCm;
+		// `ClearTrace` `0x1023f3d0` with `start = ray.start`, `delta = ray.delta`: the clear result
+		// every retail clip starts from (`endpos = start + delta`, which is the request's end).
+		ElysiumRetailSweep::ClearTrace(Request.StartCm, Request.EndCm - Request.StartCm, Out);
 		if (World.GetPhysicsScene() == nullptr)
 		{
 			return false;

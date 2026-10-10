@@ -1,0 +1,57 @@
+{
+  "name": "l0_runtime_decal",
+  "about": "`CDecal::Spawn` 0x1023a750, its unnamed projector `FUN_1023aa30` 0x1023aa30 and the named path's `CDecal::Use` 0x1023a7d0 (`walks/L0-r011.md`), over four `infodecal`s created at runtime (a map row's Spawn runs the same bodies at Load; the two witness maps carry only unnamed, flagless infodecals). The `texture` key (`CDecal::vfunc110` 0x1023adb0) writes `m_nTexture` (+0x450) = `PrecacheDecal`'s index, never negative; a decal with no key keeps the calloc 0, a VALID index. Spawn: `m_nTexture < 0` and the multiplayer arm (`gpGlobals->+0x30`, 0 in single player, with spawnflag 0x800) remove; `m_iName == 0` tail-jumps to the projector; a named decal gets `m_pfnThink` = 0x1000572c (a bare `ret`) through `ThinkSet(NULL context)` -- `m_flNextThink` untouched, nothing scheduled -- and `m_pfnUse` = 0x1000c888, then waits. Projector: `CTraceFilterValidForDecal` (passes over `weapon_*`, `item_*`, `prop_ragdoll/dynamic/static/physics`, else `CTraceFilterSimple`), `GetAbsOrigin`, the box `o +- 5` units, `Ray_t::Init(min, max)` -- a LINE along the diagonal -- traced with mask 0x200400b; a miss or a world hit (edict 0) submits `StaticDecal(world origin, m_nTexture, 0, 0)`; a hit on another entity submits `(VectorITransform(origin, m_rgflCoordinateFrame), m_nTexture, eidx, model)` -- `dec_npc`'s line runs into the NPC's hull from outside; then `SUB_Remove` 0x101c0b10 (no health warning at 0) -> `UTIL_Remove` 0x101cd940: the `removed` kind names it. Use: `GetOrigin` (local), mask 0x400b, `CTraceFilterSimple`, `IndexOfEdict(m_pEnt)` with no null test (a solid under `dec_named` keeps retail from faulting), a `CTEBSPDecal` broadcast to all players `(0.0, local origin, eidx, m_nTexture)` -- no StaticDecal, no model, no local transform -- then `ThinkSet(SUB_Remove)` and `m_flNextThink = curtime + 0.1`: removed 0.1 s after Use. Reported as `fail`, a stored word, a submit or a removal time differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 1.8,
+  "rows": [
+    { "classname": "npc_VHumanCombatant", "name": "dec_target", "at": [0.0, 400.0, 0.0], "face": 180, "body": "regular_cop",
+      "keys": { "stattemplate": "TutorialThug", "spawnflags": "4", "StartHidden": "0" } }
+  ],
+  "script": [
+    { "t": 0.1, "do": "spawn", "row": { "classname": "infodecal", "name": "", "at": [0.0, 0.0, 10.0], "keys": { "texture": "decals/stains/rusta" } } },
+    { "t": 0.3, "do": "spawn", "row": { "classname": "infodecal", "name": "", "at": [0.0, 430.0, 60.0], "keys": { "texture": "decals/stains/rusta" } } },
+    { "t": 0.5, "do": "spawn", "row": { "classname": "infodecal", "name": "dec_named", "at": [100.0, 0.0, 10.0], "keys": { "texture": "decals/stains/rustb" } } },
+    { "t": 0.9, "do": "fire", "target": "dec_named", "input": "Use" },
+    { "t": 1.3, "do": "spawn", "row": { "classname": "infodecal", "name": "", "at": [-100.0, 0.0, 10.0], "keys": {} } }
+  ],
+  "expect": [
+    { "label": "w_key", "who": "", "kind": "retail_site", "site": "decal_key", "match": "va=0x1023adb0 phase=write key=texture value=decals/stains/rusta m_nTexture=1", "by": 0.2 },
+    { "label": "w_entry", "who": "", "kind": "retail_site", "site": "decal_spawn", "match": "va=0x1023a750 phase=entry texture=1 spawnflags=0x0 mp_byte=0 path=unnamed", "within": 0.05 },
+    { "label": "w_trace", "who": "", "kind": "retail_site", "site": "decal_project", "match": "^tag=decal_project fn=FUN_1023aa30 va=0x1023aa30 phase=trace min=-5,-5,-1\\.06299 max=5,5,8\\.93701 mask=0x200400b fraction=[0-9.e-]+ startsolid=[01] hit=none eidx=0 model=0 local=0,-?0,3\\.93701", "regex": true, "within": 0.05 },
+    { "label": "w_submit", "who": "", "kind": "retail_site", "site": "decal_project", "match": "phase=submit fn=CVEngineServer::StaticDecal slot=63 point=0,0,3.93701 texture=1 eidx=0 model=0", "within": 0.05 },
+    { "label": "w_remove", "who": "", "kind": "retail_site", "site": "decal_remove", "match": "va=0x101c0b10 phase=entry m_iHealth=0 then fn=FUN_101cd940 va=0x101cd940", "within": 0.05 },
+
+    { "label": "n_trace", "who": "", "kind": "retail_site", "site": "decal_project", "match": "^tag=decal_project fn=FUN_1023aa30 va=0x1023aa30 phase=trace min=-5,-174\\.291,18\\.622 max=5,-164\\.291,28\\.622 mask=0x200400b fraction=0\\.[0-9]+ startsolid=0 hit=#[0-9]+ eidx=[1-9][0-9]* model=models/", "regex": true, "by": 0.45 },
+    { "label": "n_submit", "who": "", "kind": "retail_site", "site": "decal_project", "match": "^tag=decal_project fn=FUN_1023aa30 va=0x1023aa30 phase=submit fn=CVEngineServer::StaticDecal slot=63 point=(?!0,-169\\.291,)[-0-9.e]+,[-0-9.e]+,[-0-9.e]+ texture=1 eidx=[1-9][0-9]* model=models/", "regex": true, "within": 0.05 },
+    { "label": "n_remove", "who": "", "kind": "retail_site", "site": "decal_remove", "match": "va=0x101c0b10", "within": 0.05 },
+
+    { "label": "d_key", "who": "dec_named", "kind": "retail_site", "site": "decal_key", "match": "value=decals/stains/rustb m_nTexture=2", "by": 0.6 },
+    { "label": "d_arm", "who": "dec_named", "kind": "retail_site", "site": "decal_spawn", "match": "va=0x1023a750 phase=arm m_pfnThink=0x1000572c m_pfnUse=0x1000c888 m_flNextThink=untouched", "within": 0.05 },
+    { "label": "d_use", "who": "dec_named", "kind": "retail_site", "site": "decal_use", "match": "^tag=decal_use fn=CDecal::Use va=0x1023a7d0 phase=broadcast origin=39\\.3701,0,3\\.93701 mask=0x400b hit=none eidx=0 fn=CTempEntsSystem::BSPDecal va=0x10058ce0 delay=0 texture=2 recipients=all miss_fault=0", "regex": true, "by": 1.0 },
+    { "label": "d_use_arm", "who": "dec_named", "kind": "retail_site", "site": "decal_use", "match": "va=0x1023a7d0 phase=arm m_pfnThink=0x10015b68 m_flNextThink=2.0167 curtime=1.9167", "within": 0.05 },
+    { "label": "d_remove", "who": "dec_named", "kind": "retail_site", "site": "decal_remove", "match": "va=0x101c0b10 phase=entry m_iHealth=0", "within": 0.15 },
+    { "label": "d_removed", "who": "dec_named", "kind": "removed", "match": "", "within": 0.1 },
+
+    { "label": "t_entry", "who": "", "kind": "retail_site", "site": "decal_spawn", "match": "phase=entry texture=0 spawnflags=0x0 mp_byte=0 path=unnamed", "by": 1.4 },
+    { "label": "t_submit", "who": "", "kind": "retail_site", "site": "decal_project", "match": "phase=submit fn=CVEngineServer::StaticDecal slot=63 point=-39.3701,0,3.93701 texture=0 eidx=0 model=0", "within": 0.05 }
+  ],
+  "never": [
+    { "who": "", "kind": "retail_site", "site": "decal_spawn", "match": "phase=remove", "from": 0.0 },
+    { "who": "dec_named", "kind": "retail_site", "site": "decal_project", "match": "", "from": 0.0 },
+    { "who": "dec_named", "kind": "retail_site", "site": "decal_remove", "match": "", "from": 0.0, "until": 0.95 },
+    { "who": "dec_named", "kind": "retail_site", "site": "decal_use", "match": "miss_fault=1", "from": 0.0 }
+  ],
+  "probes": [
+    { "at": 0.7, "who": "dec_named", "probe": "exists", "equals": true },
+    { "at": 0.7, "who": "dec_named", "probe": "entity_field", "field": "texture", "equals": "decals/stains/rustb" },
+    { "at": 0.7, "who": "dec_named", "probe": "entity_field", "field": "m_nTexture", "equals": 2 },
+    { "at": 0.7, "who": "dec_named", "probe": "entity_field", "field": "m_pfnThink", "equals": 268457772 },
+    { "at": 0.7, "who": "dec_named", "probe": "entity_field", "field": "m_pfnUse", "equals": 268486792 },
+    { "at": 0.7, "who": "dec_named", "probe": "entity_field", "field": "m_iHealth", "equals": 0 },
+    { "at": 0.95, "who": "dec_named", "probe": "entity_field", "field": "m_pfnThink", "equals": 268524392 },
+    { "at": 0.95, "who": "dec_named", "probe": "exists", "equals": true },
+    { "at": 1.2, "who": "dec_named", "probe": "exists", "equals": false },
+    { "at": "end", "who": "dec_target", "probe": "alive", "equals": true }
+  ]
+}

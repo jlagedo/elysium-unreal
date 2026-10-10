@@ -1,6 +1,8 @@
-// env_particle's retail attachment (`walks/L0-r010.md`, story L0.effects_world.particle-attachment):
-// `CEnvParticle::Spawn` 0x100fb3d0, `CEnvParticle::AttachToEntity` 0x100fb110 and the attachment-index
-// resolver `FUN_100fafa0` 0x100fafa0. The class body and its I/O stay in `ElysiumEnvParticle.h`.
+// env_particle's retail spawn and attachment (`walks/L0-r010.md`, `walks/L0-r011.md`; stories
+// L0.effects_world.particle-emitter-spawn, particle-attachment, particle-rate-ramp): `CEnvParticle::Spawn`
+// 0x100fb3d0, `Precache` 0x100fb540, `UTIL_Extract_FileBase` 0x101cf7c0, `SetRampTime` 0x100fba40,
+// `SetRateScale` 0x100fb980, `AttachToEntity` 0x100fb110 and the attachment-index resolver `FUN_100fafa0`
+// 0x100fafa0. The class body and its I/O stay in `ElysiumEnvParticle.h`.
 
 #include "Substrate/ElysiumEnvParticle.h"
 
@@ -10,35 +12,247 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumEnvParticle, Log, All);
 
+FString FElysiumEnvParticle::ExtractFileBase(const FString& In)
+{
+	// `UTIL_Extract_FileBase(in, out, 0x104)` 0x101cf7c0 (`walks/L0-r011.md`): from the end, the
+	// first `.`, `/` or `\` is found; a `.` marks the extension's start; then the last `/` or `\`
+	// before it is the base's start. Case is not changed; an empty input gives an empty output.
+	if (In.IsEmpty())
+	{
+		return FString();
+	}
+	const int32 Last = In.Len() - 1;
+	int32 Dot = Last;
+	while (Dot != 0 && In[Dot] != TEXT('.') && In[Dot] != TEXT('/') && In[Dot] != TEXT('\\'))
+	{
+		--Dot;
+	}
+	const int32 End = In[Dot] == TEXT('.') ? Dot - 1 : Last;
+	int32 Start = Last;
+	while (Start >= 0 && In[Start] != TEXT('/') && In[Start] != TEXT('\\'))
+	{
+		--Start;
+	}
+	++Start;   // past the separator, or 0
+	return End >= Start ? In.Mid(Start, End - Start + 1) : FString();
+}
+
+void FElysiumEnvParticle::Precache()
+{
+	// `CEnvParticle::Precache` 0x100fb540 (slot 104): runs its body only while `m_nParticle` (+0x454)
+	// `< 0`; the constructor wrote -1, so it runs on the first Spawn.
+	if (ParticleIndex >= 0)
+	{
+		return;
+	}
+	// A NULL `m_sParticleDefinition` (no `particle_definition` key) writes -1 silently. The port's
+	// word is a string; the empty string stands for retail's NULL (a retail `""` key is interned
+	// non-NULL and reaches the engine's `*name < '!'` Host_Error -- a crash -- see `PrecacheParticle`).
+	if (ParticleDefinition.IsEmpty())
+	{
+		ParticleIndex = -1;
+	}
+	else
+	{
+		// `UTIL_Extract_FileBase(def, buffer, 0x104)` 0x101cf7c0, then `VEngineServer014` slot 17
+		// `PrecacheParticle(buffer, 1)` -> `m_nParticle`. Slot 17 never returns a negative (a failed
+		// lookup is Host_Error), so the `Warning("Can't find particle %s")` (`0x105675e0`) arm below is
+		// dead in practice; kept as retail wrote it.
+		const FString Base = ExtractFileBase(ParticleDefinition);
+		ParticleIndex = World ? World->PrecacheParticle(Base) : 1;
+		if (ParticleIndex < 0)
+		{
+			UE_LOG(LogElysiumEnvParticle, Warning, TEXT("Can't find particle %s"), *ParticleDefinition);
+		}
+	}
+	if (World)
+	{
+		World->EmitRetailSite(*this, TEXT("particle_precache"), TEXT("CEnvParticle::Precache"), 0x100fb540u, TEXT("write"),
+			FString::Printf(TEXT("def=%s base=%s m_nParticle=%d"), ParticleDefinition.IsEmpty() ? TEXT("null") : *ParticleDefinition,
+				*ExtractFileBase(ParticleDefinition), ParticleIndex));
+	}
+}
+
 void FElysiumEnvParticle::Spawn()
 {
-	// `CEnvParticle::Spawn` 0x100fb3d0: slot 104 `Precache` (the definition's own resolution; the
-	// port's visual layer resolves the root by name), `CPointEntity::Spawn`, then:
-	// `m_nAttachType < 0 || > 0x12` -> `Warning("entity %s has invalid attach type ...")` and 0.
+	// `CEnvParticle::Spawn` 0x100fb3d0 (`walks/L0-r011.md`), arms in retail order.
+	const double Now = World ? World->NowSeconds() : 0.0;
+	// The constructor `FUN_100fad50` wrote `+0x488 = curtime` at construction; the port constructs
+	// without a world, so that stamp lands here, the same frame, before Spawn's own conditional
+	// restamp (arm 4c) -- observably the constructor's value.
+	ActivationTime = static_cast<float>(Now);
+	if (World)
+	{
+		World->EmitRetailSite(*this, TEXT("particle_spawn"), TEXT("CEnvParticle::Spawn"), 0x100fb3d0u, TEXT("entry"),
+			FString::Printf(TEXT("def=%s m_nAttachType=%d m_fSpawnBounds=%g m_bActive=%d m_pParent=%s"),
+				ParticleDefinition.IsEmpty() ? TEXT("null") : *ParticleDefinition, AttachType, SpawnBounds, bActive ? 1 : 0,
+				ParentHandle.IsSet() ? *ParentHandle.ToString() : TEXT("-1")));
+	}
+	// 1. slot 104 `Precache` (`CALL [EAX+0x1a0]`) = `CEnvParticle::Precache` 0x100fb540.
+	Precache();
+	// 2. `CPointEntity::Spawn` 0x101c0820: `FUN_100dc480(&m_Collision, 0)` (`SetSolid(0)`, a no-op on a
+	//    fresh point entity whose solid word is already 0) and `CBaseEntity::Relink` (`0x1001514a`,
+	//    the partition re-insertion; the port's bodiless point entity has no partition entry).
+	// 3. `m_nAttachType < 0 || > 0x12` (`TEST EAX,EAX; JL` / `CMP EAX,0x13; JL`) ->
+	//    `Warning(0x105675b4 "entity %s has invalid attach type!", GetDebugName)` and 0. Before the
+	//    definition test, so it fires on an entity arm 5 then removes.
+	const int32 AttachIn = AttachType;
 	if (AttachType < 0 || AttachType > 0x12)
 	{
-		UE_LOG(LogElysiumEnvParticle, Warning, TEXT("entity %s has invalid attach type %d"), *DebugString(), AttachType);
+		UE_LOG(LogElysiumEnvParticle, Warning, TEXT("entity %s has invalid attach type!"), *DebugString());
 		AttachType = 0;
 	}
-	// `field_0x454 >= 0` (the resolved definition; a miss `UTIL_Remove`s -- that arm is the visual
-	// layer's "unresolved root places no actor" today): clamp `m_fSpawnBounds` between
-	// `_DAT_104454c4` (0.0) and `_DAT_104563b0` (upper bound not decoded here; the port keeps its floor).
-	ParticleDefinition = ParticleDefinition.Replace(TEXT("\\"), TEXT("/")).ToLower();
-	SpawnBounds = FMath::Max(0.0f, SpawnBounds);
-	RampTime = FMath::Max(0.0f, RampTime);
-	RampScale = FMath::Max(0.0f, RampScale);
+	if (World)
+	{
+		World->EmitRetailSite(*this, TEXT("particle_spawn"), TEXT("CEnvParticle::Spawn"), 0x100fb3d0u, TEXT("attach"),
+			FString::Printf(TEXT("attach_type=%d -> %d warned=%d"), AttachIn, AttachType, AttachIn != AttachType ? 1 : 0));
+	}
+	// The port's own ramp state (the client-side ramp retail networks `m_nRampFrame` to is
+	// unrecovered); initialised from the authored `ramp_scale`, never clamped here (retail's Spawn
+	// touches neither `ramp_time` nor `ramp_scale`).
 	RampStartScale = RampScale;
 	RampTargetScale = RampScale;
-	RampStartTime = World ? World->NowSeconds() : 0.0;
+	RampStartTime = Now;
 	RampDuration = 0.0f;
-	// `m_pParent` (+0x254) resolves (serial test, non-NULL pointer) -> `FUN_100faf60(this, parent)`:
-	// slot 243 `AttachToEntity(parent, m_nAttachType, m_sAttachName ? m_sAttachName : "")`.
-	if (FElysiumEntity* Parent = World != nullptr ? World->Resolve(ParentHandle) : nullptr)
+	// 4. `if (+0x454 >= 0)` (`TEST EAX,EAX; JGE`).
+	if (ParticleIndex >= 0)
 	{
-		AttachToEntity(Parent, AttachType, AttachBone);
+		// 4a. `m_fSpawnBounds` clamp: `> 4096.0` (`_DAT_104563b0`) gives 4096.0; `< 0.0`
+		//     (`_DAT_104454c4`) gives 0.0; else kept. Both compares fall to the keep arm on a NaN, so a
+		//     NaN passes through (retail's own behaviour).
+		const float BoundsIn = SpawnBounds;
+		float Clamped = 4096.0f;
+		if (SpawnBounds <= 4096.0f)
+		{
+			Clamped = 0.0f;
+			if (0.0f <= SpawnBounds)
+			{
+				Clamped = SpawnBounds;
+			}
+		}
+		if (FMath::IsNaN(SpawnBounds))
+		{
+			Clamped = SpawnBounds;
+		}
+		SpawnBounds = Clamped;
+		if (World)
+		{
+			World->EmitRetailSite(*this, TEXT("particle_spawn"), TEXT("CEnvParticle::Spawn"), 0x100fb3d0u, TEXT("bounds"),
+				FString::Printf(TEXT("bounds=%g -> %g m_nParticle=%d"), BoundsIn, SpawnBounds, ParticleIndex));
+		}
+		// 4b. `m_pParent` (+0x254): a set handle whose table entry (`PTR_DAT_10566458`, stride 0xc)
+		//     carries its serial and a non-null pointer -> `FUN_100faf60(this, entity)` -> slot 243
+		//     `AttachToEntity(parent, m_nAttachType, m_sAttachName or "")`. Retail re-reads the handle
+		//     and passes NULL when the ENTITY's own serial (+4) disagrees with the table's; this port's
+		//     handle table and entity serial are one word, so that arm cannot arise, and a handle that
+		//     does not resolve makes no call (retail's table-check failure).
+		FElysiumEntity* Parent = World != nullptr ? World->Resolve(ParentHandle) : nullptr;
+		if (World)
+		{
+			World->EmitRetailSite(*this, TEXT("particle_spawn"), TEXT("CEnvParticle::Spawn"), 0x100fb3d0u, TEXT("parent"),
+				FString::Printf(TEXT("m_pParent=%s parent=%s"), ParentHandle.IsSet() ? *ParentHandle.ToString() : TEXT("-1"),
+					Parent ? TEXT("resolved") : TEXT("none")));
+		}
+		if (Parent != nullptr)
+		{
+			AttachToEntity(Parent, AttachType, AttachBone);
+		}
+		// 4c. `m_bActive != 0` -> `+0x488 = gpGlobals->curtime` (`m_flActivationTime`; the client
+		//     rebuilds the emitter whenever it changes -- `TurnOnSerial` is this port's restart word).
+		if (bActive)
+		{
+			ActivationTime = static_cast<float>(Now);
+		}
+		if (World)
+		{
+			World->EmitRetailSite(*this, TEXT("particle_spawn"), TEXT("CEnvParticle::Spawn"), 0x100fb3d0u, TEXT("active"),
+				FString::Printf(TEXT("m_bActive=%d m_flActivationTime=%g"), bActive ? 1 : 0, ActivationTime));
+		}
+		// Not a retail write: the embodiment pull (the bake-placed actor reads the published state).
+		Publish();
+		return;
 	}
-	// `m_bActive != 0` -> `+0x488 = gpGlobals->curtime` (the activation stamp the client rebuilds on;
-	// `TurnOnSerial` is this port's equivalent, bumped by `TurnOn`).
+	// 5. `else` (`+0x454 < 0`): `FUN_101cd940(this)` = `UTIL_Remove` -- the kill-me bit, slot 180
+	//    `UpdateOnRemove`, `SetName(NULL)`, the deferred-deletion queue (`0x100f6bb0`; audit rows 788 /
+	//    706 file the port's `Kill` partial against it). No SUB_Remove warning on this path. Arms 4a-4c
+	//    do not run.
+	if (World)
+	{
+		World->EmitRetailSite(*this, TEXT("particle_spawn"), TEXT("CEnvParticle::Spawn"), 0x100fb3d0u, TEXT("remove"),
+			FString::Printf(TEXT("m_nParticle=%d fn=FUN_101cd940 va=0x101cd940"), ParticleIndex));
+	}
+	Kill();
+}
+
+void FElysiumEnvParticle::SetRampTime(float Duration)
+{
+	// `FUN_100fba40` 0x100fba40 (`walks/L0-r011.md`), `__thiscall (float)`.
+	// 1. `duration < 0.0` (`_DAT_104454c4`; `FCOM; TEST AH,5; JP skip`: a strict less-than, a NaN
+	//    skips) -> `Warning(0x1056765c "%s ramp time set to %.2f, must be >=0", GetDebugName, duration)`
+	//    and 0.0.
+	if (Duration < 0.0f)
+	{
+		UE_LOG(LogElysiumEnvParticle, Warning, TEXT("%s ramp time set to %.2f, must be >=0"), *DebugString(), Duration);
+		Duration = 0.0f;
+	}
+	// 2. `+0x490 = duration` (`m_fRampTime`).
+	RampTime = Duration;
+	// 3. `+0x494 = VEngineServer014 slot 120()` (`MOV [ESI+0x494],EAX`): the host frame counter, an
+	//    integer, unconditional. `m_nRampFrame`.
+	const int32 Prev = RampFrame;
+	RampFrame = World ? static_cast<int32>(World->HostFrame()) : 0;
+	if (World)
+	{
+		World->EmitRetailSite(*this, TEXT("particle_ramp"), TEXT("FUN_100fba40"), 0x100fba40u, TEXT("write"),
+			FString::Printf(TEXT("m_fRampTime=%g prev=%d m_nRampFrame=%d curtime=%.3f"), RampTime, Prev, RampFrame,
+				World->NowSeconds()));
+	}
+}
+
+void FElysiumEnvParticle::SetRateScale(float Rate)
+{
+	// `FUN_100fb980` 0x100fb980 (`walks/L0-r011.md`), `__thiscall (float)`, `RET 4`.
+	// 1. `rate < 0.0` (strict) -> `Warning(0x1056762c "%s rate scale set to %.2f, must be >=0")`, 0.0.
+	if (Rate < 0.0f)
+	{
+		UE_LOG(LogElysiumEnvParticle, Warning, TEXT("%s rate scale set to %.2f, must be >=0"), *DebugString(), Rate);
+		Rate = 0.0f;
+	}
+	// 2. `+0x48c = rate` (`m_fRateScaleTarget`).
+	RampTargetScale = Rate;
+	// 3. `+0x4a1 != 0` -> `mult = DAT_107083dc->vfunc1() ? 0.0 : *(float*)(DAT_107083dc + 0x28)` and
+	//    `+0x48c *= mult`. HOOK (L4, `hooks.tsv:402`; the byte's only writer is the Ghoul croucher's
+	//    `FUN_1038e9c0`, and the ConVar's identity is unrecovered): no map emitter has the byte set;
+	//    the arm is stated and reported, the multiplier is left at the ConVar's unread value 1.
+	if (bRateScaleByConVar && World)
+	{
+		World->EmitRetailSite(*this, TEXT("particle_ramp"), TEXT("FUN_100fb980"), 0x100fb980u, TEXT("hook"),
+			TEXT("arm=+0x4a1 convar=DAT_107083dc layer=L4"));
+	}
+	// 4. `+0x494 = VEngineServer014 slot 120()` -- the same frame stamp SetRampTime writes.
+	const int32 Prev = RampFrame;
+	RampFrame = World ? static_cast<int32>(World->HostFrame()) : 0;
+	if (World)
+	{
+		World->EmitRetailSite(*this, TEXT("particle_ramp"), TEXT("FUN_100fb980"), 0x100fb980u, TEXT("write"),
+			FString::Printf(TEXT("m_fRateScaleTarget=%g prev=%d m_nRampFrame=%d curtime=%.3f"), RampTargetScale, Prev, RampFrame,
+				World->NowSeconds()));
+	}
+	// The port's own linear ramp toward the target over `m_fRampTime` (the client consumer of
+	// `m_nRampFrame` is unrecovered; this is the visual-only stand-in that drives the emitter rate).
+	const double Now = World ? World->NowSeconds() : 0.0;
+	RampScale = RateAt(Now);
+	RampStartScale = RampScale;
+	RampStartTime = Now;
+	RampDuration = FMath::Max(0.0f, RampTime);
+	if (RampDuration <= 0.0f)
+	{
+		RampScale = RampTargetScale;
+	}
+	else
+	{
+		NextThink = static_cast<float>(Now);
+	}
 	Publish();
 }
 

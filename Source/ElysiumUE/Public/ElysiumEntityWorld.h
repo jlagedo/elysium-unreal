@@ -908,6 +908,20 @@ public:
 	// Not a service — nothing reads behaviour off it.
 	AActor* GetOwnerActor() const { return Owner; }
 	double NowSeconds() const;
+	// `VEngineServer014` slot 120 (`engine.dll 0x2010acf0`: `MOV EAX,[0x20b42980]; RET`): the HOST
+	// FRAME COUNTER, an integer `_Host_RunFrame` `0x2008e450` increments once per host frame
+	// (`0x2008e737`). Not a time. `CEnvParticle`'s `m_nRampFrame` (+0x494) is stamped from it by
+	// `SetRampTime` `0x100fba40` and `SetRateScale` `0x100fb980` (`walks/L0-r011.md`). Incremented
+	// once per `Tick` of an active world.
+	uint32 HostFrame() const { return HostFrameCounter; }
+	// `VEngineServer014` slot 17 `PrecacheParticle(name, flag)` (`engine.dll 0x20108930`) and slot 16
+	// `PrecacheDecal(name, preload)` (`0x20108af0`): a string-table index, never negative (a failed
+	// lookup is `Host_Error`). This port's table is per world and 1-based; the VALUE is the port's
+	// own numbering (the engine's string table is replaced by baked assets), what retail observes
+	// of it is `>= 0`. An empty name is the engine's `*name < '!'` Host_Error ("Bad string"), a
+	// crash in retail; here it answers -1 and says so once.
+	int32 PrecacheParticle(const FString& BaseName);
+	int32 PrecacheDecal(const FString& Name);
 	// `gpGlobals->frametime`. The NPC think cadence's due test is `(stamp - Now) <= FrameSeconds()`
 	// (`IsThinkDue` `0x10290660`), so this is the epsilon that decides whether a stamp landing
 	// between two ticks counts as due on the earlier one.
@@ -1354,6 +1368,11 @@ private:
 	// it would report every frame as zero-length.
 	double LastFrameMeasuredAt = 0.0;
 	bool bHasMeasuredFrame = false;
+	// Slot 120's word (see `HostFrame()`).
+	uint32 HostFrameCounter = 0;
+	// Slots 17 / 16's string tables (see `PrecacheParticle` / `PrecacheDecal`), 1-based.
+	TArray<FString> PrecachedParticles;
+	TArray<FString> PrecachedDecals;
 	// `g_AIDisabled` bit 0, inverted. A fresh world starts enabled, as retail's global does.
 	bool bAiEnabled = true;
 	bool bAiStepMode = false;

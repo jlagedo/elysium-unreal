@@ -1,0 +1,56 @@
+{
+  "name": "l0_particle_spawn",
+  "about": "`CEnvParticle::Spawn` 0x100fb3d0 (`walks/L0-r011.md`), every arm in retail order, over four emitters created at runtime (`CreateEntityByName` + `DispatchSpawn`, as a script's `CreateEntity` does; a map row's Spawn runs the same body at Load). 1. slot 104 `Precache` 0x100fb540: while `m_nParticle` (+0x454, constructor -1) is negative, a NULL `particle_definition` writes -1, else `UTIL_Extract_FileBase` 0x101cf7c0 (`effects/BarrelFireEmitter.txt` -> `BarrelFireEmitter`, case kept, directory and extension dropped) and `VEngineServer014` slot 17 `PrecacheParticle`, which never returns a negative (so `m_nParticle >= 0`). 2. `CPointEntity::Spawn` 0x101c0820. 3. `m_nAttachType` outside [0, 18] -> `Warning(\"entity %s has invalid attach type!\")` and 0 -- BEFORE the definition test, so `ps_nodef`'s -1 is warned and zeroed on an entity that is then removed. 4. Under `m_nParticle >= 0`: `m_fSpawnBounds` clamped to [0, 4096] (5000 -> 4096, -3 -> 0, 100 kept), the parent attach when `m_pParent` resolves (no `parentname` here: none), and `m_bActive != 0` -> `m_flActivationTime` (+0x488) = curtime (the spawn's own time; an inactive emitter keeps the constructor's stamp, written at creation in the same frame, so it reads the same). 5. `m_nParticle < 0` -> `UTIL_Remove` 0x101cd940 (no SUB_Remove warning): the emitter answers no name lookup (`exists` false; it died inside its own spawn, so the runner's between-frames `removed` sweep never saw it live); arms 4a-4c never run on it. Reported as `fail`, a stored word or a site payload differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 1.5,
+  "script": [
+    { "t": 0.1, "do": "spawn", "row": { "classname": "env_particle", "name": "ps_valid", "at": [0.0, 0.0, 50.0],
+      "keys": { "particle_definition": "effects/BarrelFireEmitter.txt", "attach_type": "19", "spawnbounds": "5000", "active": "1" } } },
+    { "t": 0.2, "do": "spawn", "row": { "classname": "env_particle", "name": "ps_neg", "at": [100.0, 0.0, 50.0],
+      "keys": { "particle_definition": "barrelfireemitter", "attach_type": "2", "spawnbounds": "-3", "active": "0" } } },
+    { "t": 0.3, "do": "spawn", "row": { "classname": "env_particle", "name": "ps_in", "at": [200.0, 0.0, 50.0],
+      "keys": { "particle_definition": "barrelfireemitter", "attach_type": "0", "spawnbounds": "100", "active": "1" } } },
+    { "t": 0.4, "do": "spawn", "row": { "classname": "env_particle", "name": "ps_nodef", "at": [300.0, 0.0, 50.0],
+      "keys": { "attach_type": "-1", "spawnbounds": "5000", "active": "1" } } }
+  ],
+  "expect": [
+    { "label": "precache", "who": "ps_valid", "kind": "retail_site", "site": "particle_precache", "match": "va=0x100fb540 phase=write def=effects/BarrelFireEmitter.txt base=BarrelFireEmitter m_nParticle=", "by": 0.5 },
+    { "label": "attach", "who": "ps_valid", "kind": "retail_site", "site": "particle_spawn", "match": "va=0x100fb3d0 phase=attach attach_type=19 -> 0 warned=1", "within": 0.1 },
+    { "label": "bounds", "who": "ps_valid", "kind": "retail_site", "site": "particle_spawn", "match": "phase=bounds bounds=5000 -> 4096 m_nParticle=", "within": 0.1 },
+    { "label": "parent", "who": "ps_valid", "kind": "retail_site", "site": "particle_spawn", "match": "phase=parent m_pParent=-1 parent=none", "within": 0.1 },
+    { "label": "active", "who": "ps_valid", "kind": "retail_site", "site": "particle_spawn", "match": "phase=active m_bActive=1 m_flActivationTime=1.1", "within": 0.1 },
+    { "label": "neg_bounds", "who": "ps_neg", "kind": "retail_site", "site": "particle_spawn", "match": "phase=bounds bounds=-3 -> 0 ", "by": 0.6 },
+    { "label": "neg_inactive", "who": "ps_neg", "kind": "retail_site", "site": "particle_spawn", "match": "phase=active m_bActive=0 m_flActivationTime=1.2", "within": 0.1 },
+    { "label": "in_bounds", "who": "ps_in", "kind": "retail_site", "site": "particle_spawn", "match": "phase=bounds bounds=100 -> 100 ", "by": 0.7 },
+    { "label": "nodef_precache", "who": "ps_nodef", "kind": "retail_site", "site": "particle_precache", "match": "phase=write def=null base= m_nParticle=-1", "by": 0.8 },
+    { "label": "nodef_attach", "who": "ps_nodef", "kind": "retail_site", "site": "particle_spawn", "match": "phase=attach attach_type=-1 -> 0 warned=1", "within": 0.1 },
+    { "label": "nodef_remove", "who": "ps_nodef", "kind": "retail_site", "site": "particle_spawn", "match": "phase=remove m_nParticle=-1 fn=FUN_101cd940 va=0x101cd940", "within": 0.1 }
+  ],
+  "never": [
+    { "who": "ps_nodef", "kind": "retail_site", "site": "particle_spawn", "match": "phase=bounds", "from": 0.0 },
+    { "who": "ps_nodef", "kind": "retail_site", "site": "particle_spawn", "match": "phase=active", "from": 0.0 },
+    { "who": "ps_valid", "kind": "retail_site", "site": "particle_spawn", "match": "phase=remove", "from": 0.0 },
+    { "who": "ps_neg", "kind": "retail_site", "site": "particle_spawn", "match": "warned=1", "from": 0.0 }
+  ],
+  "probes": [
+    { "at": 0.9, "who": "ps_valid", "probe": "entity_field", "field": "attach_type", "equals": 0 },
+    { "at": 0.9, "who": "ps_valid", "probe": "entity_field", "field": "spawnbounds", "equals": 4096 },
+    { "at": 0.9, "who": "ps_valid", "probe": "entity_field", "field": "m_nParticle", "greater": -1 },
+    { "at": 0.9, "who": "ps_valid", "probe": "entity_field", "field": "active", "equals": true },
+    { "at": 0.9, "who": "ps_valid", "probe": "entity_field", "field": "m_flActivationTime", "greater": 1.09 },
+    { "at": 0.9, "who": "ps_valid", "probe": "entity_field", "field": "m_flActivationTime", "less": 1.13 },
+    { "at": 0.9, "who": "ps_valid", "probe": "entity_field", "field": "m_pParent", "equals": "-1" },
+    { "at": 0.9, "who": "ps_valid", "probe": "entity_field", "field": "m_MoveType", "equals": 0 },
+    { "at": 0.9, "who": "ps_neg", "probe": "entity_field", "field": "spawnbounds", "equals": 0 },
+    { "at": 0.9, "who": "ps_neg", "probe": "entity_field", "field": "attach_type", "equals": 2 },
+    { "at": 0.9, "who": "ps_neg", "probe": "entity_field", "field": "active", "equals": false },
+    { "at": 0.9, "who": "ps_neg", "probe": "entity_field", "field": "m_flActivationTime", "greater": 1.19 },
+    { "at": 0.9, "who": "ps_neg", "probe": "entity_field", "field": "m_flActivationTime", "less": 1.23 },
+    { "at": 0.9, "who": "ps_in", "probe": "entity_field", "field": "spawnbounds", "equals": 100 },
+    { "at": 0.9, "who": "ps_in", "probe": "entity_field", "field": "m_nParticle", "greater": -1 },
+    { "at": 0.5, "who": "ps_nodef", "probe": "exists", "equals": false },
+    { "at": "end", "who": "ps_valid", "probe": "exists", "equals": true },
+    { "at": "end", "who": "ps_nodef", "probe": "exists", "equals": false }
+  ]
+}

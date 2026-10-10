@@ -1,0 +1,40 @@
+{
+  "name": "l0_particle_ramp_time",
+  "about": "`SetRampTime` (`FUN_100fba40` 0x100fba40, from `CEnvParticle::InputSetRampTime` 0x100fb8a0) and its sibling `SetRateScale` (`FUN_100fb980` 0x100fb980, from `InputSetRateScale` 0x100fb850), `walks/L0-r011.md`. SetRampTime(1.0) at frame F0: a strict `< 0.0` test (no warning), `m_fRampTime` (+0x490) = 1.0, and `m_nRampFrame` (+0x494) = `VEngineServer014` slot 120, the HOST FRAME COUNTER -- an integer `_Host_RunFrame` increments once per frame, NOT a time (the port's `+0x494` starts 0, the calloc value, so the first stamp reads > 0 and every payload shows an integer with its previous value). SetRateScale(0) at a later frame F1: `m_fRateScaleTarget` (+0x48c) = 0 and the SAME stamp rewritten, `m_nRampFrame` = F1 > F0 (last writer wins; `prev=` on the payload is the word SetRampTime left). SetRampTime(2.0) at F2: `m_fRampTime` = 2, `m_nRampFrame` = F2 > F1, `m_fRateScaleTarget` stays 0. SetRampTime(-1): `Warning(\"%s ramp time set to %.2f, must be >=0\")`, `m_fRampTime` = 0, and the stamp is still written. Each payload's `m_nRampFrame=<int>` differs from its `prev=<int>` (the ICU back-reference regex), and `curtime=` beside it shows the frame is not the clock. Reported as `fail`, a stored word or a stamp differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 2.0,
+  "rows": [
+    { "classname": "env_particle", "name": "rt", "at": [0.0, 0.0, 50.0],
+      "keys": { "particle_definition": "barrelfireemitter", "attach_type": "0", "active": "0", "ramp_time": "0", "ramp_scale": "1" } }
+  ],
+  "script": [
+    { "t": 0.2, "do": "fire", "target": "rt", "input": "SetRampTime", "param": 1.0 },
+    { "t": 0.6, "do": "fire", "target": "rt", "input": "SetRateScale", "param": 0 },
+    { "t": 1.0, "do": "fire", "target": "rt", "input": "SetRampTime", "param": 2.0 },
+    { "t": 1.4, "do": "fire", "target": "rt", "input": "SetRampTime", "param": -1.0 }
+  ],
+  "expect": [
+    { "label": "ramp1", "who": "rt", "kind": "retail_site", "site": "particle_ramp", "match": "^tag=particle_ramp fn=FUN_100fba40 va=0x100fba40 phase=write m_fRampTime=1 prev=0 m_nRampFrame=[1-9][0-9]* curtime=", "regex": true, "by": 0.5 },
+    { "label": "rate0", "who": "rt", "kind": "retail_site", "site": "particle_ramp", "match": "^tag=particle_ramp fn=FUN_100fb980 va=0x100fb980 phase=write m_fRateScaleTarget=0 prev=([0-9]+) m_nRampFrame=(?!\\1 )[0-9]+ curtime=", "regex": true, "by": 0.9 },
+    { "label": "ramp2", "who": "rt", "kind": "retail_site", "site": "particle_ramp", "match": "^tag=particle_ramp fn=FUN_100fba40 va=0x100fba40 phase=write m_fRampTime=2 prev=([0-9]+) m_nRampFrame=(?!\\1 )[0-9]+ curtime=", "regex": true, "by": 1.3 },
+    { "label": "rampneg", "who": "rt", "kind": "retail_site", "site": "particle_ramp", "match": "^tag=particle_ramp fn=FUN_100fba40 va=0x100fba40 phase=write m_fRampTime=0 prev=([0-9]+) m_nRampFrame=(?!\\1 )[0-9]+ curtime=", "regex": true, "by": 1.7 }
+  ],
+  "never": [
+    { "who": "rt", "kind": "retail_site", "site": "particle_ramp", "match": "phase=hook", "from": 0.0 },
+    { "who": "rt", "kind": "retail_site", "site": "particle_ramp", "match": "m_nRampFrame=0 ", "from": 0.0 }
+  ],
+  "probes": [
+    { "at": 0.1, "who": "rt", "probe": "entity_field", "field": "ramp_time", "equals": 0 },
+    { "at": 0.1, "who": "rt", "probe": "entity_field", "field": "m_nRampFrame", "equals": 0 },
+    { "at": 0.4, "who": "rt", "probe": "entity_field", "field": "ramp_time", "equals": 1 },
+    { "at": 0.4, "who": "rt", "probe": "entity_field", "field": "m_nRampFrame", "greater": 0 },
+    { "at": 0.4, "who": "rt", "probe": "entity_field", "field": "m_fRateScaleTarget", "equals": 1 },
+    { "at": 0.8, "who": "rt", "probe": "entity_field", "field": "m_fRateScaleTarget", "equals": 0 },
+    { "at": 0.8, "who": "rt", "probe": "entity_field", "field": "ramp_time", "equals": 1 },
+    { "at": 1.2, "who": "rt", "probe": "entity_field", "field": "ramp_time", "equals": 2 },
+    { "at": 1.2, "who": "rt", "probe": "entity_field", "field": "m_fRateScaleTarget", "equals": 0 },
+    { "at": "end", "who": "rt", "probe": "entity_field", "field": "ramp_time", "equals": 0 },
+    { "at": "end", "who": "rt", "probe": "entity_field", "field": "m_nRampFrame", "greater": 0 }
+  ]
+}

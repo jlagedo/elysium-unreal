@@ -732,6 +732,12 @@ enum class EElysiumRetailTraceFilter : uint8
 	// `CTraceFilterFVisible::ShouldHitEntity` `0x10107630`: also passes an entity whose
 	// `m_bNPCTransparent` (`+0xfc`, the `npc_transparent` keyfield) is set.
 	FVisible,
+	// `CDecal::CTraceFilterValidForDecal::ShouldHitEntity` `0x1023acc0` (`walks/L0-r011.md`): the
+	// entity whose classname matches the six-entry table at `0x105c2648` -- `weapon_*`, `item_*`
+	// (prefix, `__strnicmp`), `prop_ragdoll`, `prop_dynamic`, `prop_static`, `prop_physics`
+	// (`__strcmpi`) -- is passed over; everything else falls to `CTraceFilterSimple::ShouldHitEntity`
+	// `0x101d31c0` (`Simple`).
+	ValidForDecal,
 };
 
 // One retail `UTIL_TraceLine` / `UTIL_TraceHull`, as the kernel states it to `TraceRetail`.
@@ -773,7 +779,13 @@ struct FElysiumRetailTraceCharacter
 // `m_bForceNPCCheck`), and the kernel folds the one it keeps. The defaults are a clear trace.
 struct FElysiumRetailTraceResult
 {
+	// `tr.startpos` (+0x00): `ClearTrace` `0x1023f3d0` writes the ray's start here. The seam's
+	// callers hand the start in the request, so this is retail's word for a record to read.
+	FVector StartPosCm = FVector::ZeroVector;
 	float Fraction = 1.f;
+	// `tr.contents` (+0x30): `ClearTrace` writes 0. Unreal's queries answer no retail contents word, so
+	// a hit leaves it 0 too (the brush contents signature is `HitSignature`, debug only).
+	int32 Contents = 0;
 	// Source's two flags, kept apart (Unreal's `bStartPenetrating` is their union): the trace starts
 	// in solid, and the whole trace is in solid.
 	bool bStartSolid = false;
@@ -790,6 +802,56 @@ struct FElysiumRetailTraceResult
 	// Every character body the same query meets, nearest first. Only when the mask carries MONSTER
 	// `0x2000000`; empty otherwise.
 	TArray<FElysiumRetailTraceCharacter, TInlineAllocator<4>> Characters;
+};
+
+// The two primitives of the oriented-box clip `FUN_10241620` `0x10241620` (`walks/L0-r011.md`,
+// story L0.effects_world.world-sweep-query), pure, in whatever unit the caller is in. The clip
+// itself is engine-replaced (Unreal/Chaos answers `TraceRetail`); these are its prelude, which every
+// hull sweep ran before the separating-axis test, and which `Trace` uses for its clear result.
+struct IElysiumRetailSiteSink;
+namespace ElysiumRetailSweep
+{
+	// `FUN_1023f3d0(start, delta, trace)` `0x1023f3d0`: `startpos = start`, `endpos = start + delta`
+	// (copied, then each component added in place), `fraction = 1.0`, `contents = 0`, `allsolid = 0`,
+	// `startsolid = 0`. The plane, `m_pEnt` and everything from +0x38 on are NOT written; this port's
+	// result struct has defaults for those, so `Out` is reset first and the six retail writes follow.
+	ELYSIUMUE_API void ClearTrace(const FVector& Start, const FVector& Delta, FElysiumRetailTraceResult& Out,
+		IElysiumRetailSiteSink* Sites = nullptr);
+
+	// `FUN_1023ffa0(A, D, C, r1, r2)` `0x1023ffa0`: does the segment `A + D*t, t in [0,1]` come within
+	// `r1 + r2` of `C`? `p = dot(C - A, D)`; `p > 0` -> `t = p <= |D|^2 ? p / |D|^2 : 1`, else `t = 0`;
+	// `Q = A + D*t` (`0x10139500`); return `(r1 + r2)^2 < |Q - C|^2 ? 0 : 1` -- a strict compare, so
+	// an exact touch overlaps and a NaN does not; `r1 + r2` is squared with its sign. Evaluated in
+	// double (the x87 stack; its precision control is unrecovered).
+	ELYSIUMUE_API bool SegmentSphereOverlap(const FVector& A, const FVector& D, const FVector& C, double R1, double R2,
+		IElysiumRetailSiteSink* Sites = nullptr);
+
+	// `0x10241620`'s hull-path prelude (a ray with `IsRay == 0`): `ClearTrace(ray.start +
+	// ray.startOffset, ray.delta)` into `Out`, then `SegmentSphereOverlap(ray.start, ray.delta, box
+	// centre, sqrt(|extents|^2) + sqrt(|half|^2), tolerance)` (both roots through `fsqrt` `0x101371d0`
+	// in float). False = the sphere test failed and the clip returns 0 with `Out` as ClearTrace left
+	// it; true = the clip would go on to its separating-axis test (engine-replaced here).
+	ELYSIUMUE_API bool HullClipPrelude(const FVector& RayStart, const FVector& RayStartOffset, const FVector& RayDelta,
+		const FVector& RayExtents, const FVector& BoxCentre, const FVector& BoxHalf, double Tolerance,
+		FElysiumRetailTraceResult& Out, IElysiumRetailSiteSink* Sites = nullptr);
+}
+
+// One `infodecal` submission: `VEngineServer014` slot 63 `StaticDecal(origin, decalIndex, entityIndex,
+// modelIndex)` (`engine.dll 0x20109740`) from the projector `0x1023aa30`, or the `CTEBSPDecal` temp
+// entity `CDecal::Use` `0x1023a7d0` broadcasts (`walks/L0-r011.md`). The engine's half -- find the
+// surface inside the 5-unit box and stick the texture on it -- is the visual peripheral the world's
+// decal subsystem stands for.
+struct FElysiumStaticDecalSubmit
+{
+	// The point submitted: the decal's world origin for a miss or a world hit, the hit entity's LOCAL
+	// point otherwise (`VectorITransform` 0x10138130); `WorldOriginCm` is always the world point.
+	FVector WorldOriginCm = FVector::ZeroVector;
+	// The `texture` key (`m_nTexture` is its precache index): a `decals/...` material stem.
+	FString Texture;
+	// `entityIndex` / the hit entity, Invalid for the world (edict 0).
+	FElysiumEntityHandle Entity;
+	// The hit's surface normal when the trace met one (zero: the engine finds the surface itself).
+	FVector NormalHint = FVector::ZeroVector;
 };
 
 // What the kernel reads off one studio sequence descriptor (`mstudioseqdesc_t`) of a body's model,
@@ -1886,6 +1948,14 @@ public:
 	// decal subsystem — a stain nobody sees is never a failure.
 	virtual bool LayShotImpactDecal(const FVector& FromCm, const FVector& Direction, float RangeCm,
 		int32 Variation) { return false; }
+
+	// `infodecal`'s submission (`FElysiumStaticDecalSubmit`): `VEngineServer014` slot 63 `StaticDecal`
+	// and `CTempEntsSystem::BSPDecal` (`0x10058ce0`) both end in the client sticking the named decal on
+	// the surface within 5 units of the point -- here `UElysiumDecalSubsystem::SubmitStatic`, which
+	// reconciles with the bake's own copy of the map's decals (the authored baseline) before laying a
+	// new one. False: a headless run, no decal subsystem, or nothing to draw (a texture with no staged
+	// projector instance). A stain nobody sees is never a failure of the entity.
+	virtual bool SubmitStaticDecal(const FElysiumStaticDecalSubmit& Submit) { return false; }
 
 	// The legacy scripted-shot channel. `SetCamera(shotfile)`, `camera_keyframe`, and the feed
 	// camera push onto the player camera's one weight stack through here, and

@@ -184,6 +184,44 @@ double FElysiumEntityWorld::NowSeconds() const
 	return GameState ? GameState->GameClock().GetNow() : LastTickNow;
 }
 
+namespace
+{
+	// Slots 17 / 16 (`engine.dll 0x20108930` / `0x20108af0`): find-or-add in a string table; `*name <
+	// '!'` is `Host_Error("Bad string")`. 1-based here (the engine's own index is not reproduced).
+	int32 PrecacheStringTable(TArray<FString>& Table, const FString& Name, const TCHAR* Slot)
+	{
+		if (Name.IsEmpty() || Name[0] < TEXT('!'))
+		{
+			static TSet<FString> Said;
+			bool bAlready = false;
+			Said.Add(FString(Slot), &bAlready);
+			if (!bAlready)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("%s: Host_Error(\"Bad string\") in retail (an empty name reached the ")
+					TEXT("engine precache); this port answers -1"), Slot);
+			}
+			return -1;
+		}
+		const int32 Found = Table.IndexOfByPredicate([&Name](const FString& Row) { return Row.Equals(Name, ESearchCase::IgnoreCase); });
+		if (Found != INDEX_NONE)
+		{
+			return Found + 1;
+		}
+		Table.Add(Name);
+		return Table.Num();
+	}
+}
+
+int32 FElysiumEntityWorld::PrecacheParticle(const FString& BaseName)
+{
+	return PrecacheStringTable(PrecachedParticles, BaseName, TEXT("CVEngineServer::PrecacheParticle"));
+}
+
+int32 FElysiumEntityWorld::PrecacheDecal(const FString& Name)
+{
+	return PrecacheStringTable(PrecachedDecals, Name, TEXT("CVEngineServer::PrecacheDecal"));
+}
+
 bool FElysiumEntityWorld::IsNodeGraphLoaded() const
 {
 	return !bPlaceSetPending || PlaceSet->IsAdopted();
@@ -1966,6 +2004,9 @@ void FElysiumEntityWorld::Tick(double Now)
 		return;
 	}
 	LastTickNow = Now;
+	// `_Host_RunFrame` `0x2008e450`'s `INC [0x20b42980]` (`0x2008e737`): one per host frame, read
+	// back by `VEngineServer014` slot 120 (`HostFrame()`).
+	++HostFrameCounter;
 	// `gpGlobals->frametime`, measured before anything this frame can read it and clamped the way
 	// Source clamps its own. It sits above the trigger-resolution gate deliberately: a suppressed
 	// frame is still a frame, and letting the gap accumulate across a run of them would hand the

@@ -345,6 +345,34 @@ TArray<FElysiumDecalRecord> UElysiumDecalSubsystem::Records() const
 	return Out;
 }
 
+UDecalComponent* UElysiumDecalSubsystem::SubmitStatic(const FElysiumDecalRequest& Request)
+{
+	// The baseline: an adopted baked decal of the same projector instance within the 5-unit box
+	// (`_DAT_10454110`, 12.7 cm) round the submitted point is the bake's copy of this very
+	// submission, laid at bake time from the same `infodecal` row.
+	if (!Request.MaterialId.IsEmpty())
+	{
+		const FString Projector = FElysiumContentPaths::BakedDecalMaterial(Request.MaterialId);
+		constexpr double BoxHalfCm = 5.0 * 2.54;
+		for (int32 I = 0; I < AdoptedDecals.Num(); ++I)
+		{
+			UDecalComponent* Comp = AdoptedDecals[I];
+			UMaterialInstanceDynamic* Mid = I < AdoptedMids.Num() ? AdoptedMids[I].Get() : nullptr;
+			if (!IsValid(Comp) || !Mid || !Mid->Parent)
+			{
+				continue;
+			}
+			const FVector Delta = Comp->GetComponentLocation() - Request.Location;
+			if (FMath::Abs(Delta.X) <= BoxHalfCm && FMath::Abs(Delta.Y) <= BoxHalfCm && FMath::Abs(Delta.Z) <= BoxHalfCm
+				&& Mid->Parent->GetPathName().Equals(Projector, ESearchCase::IgnoreCase))
+			{
+				return Comp;
+			}
+		}
+	}
+	return Lay(Request);
+}
+
 int32 UElysiumDecalSubsystem::Restore(const TArray<FElysiumDecalRecord>& Records)
 {
 	int32 Laid = 0;

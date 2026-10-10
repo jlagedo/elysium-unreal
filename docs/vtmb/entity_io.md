@@ -1981,6 +1981,35 @@ mode <= 0 -> 0. Port: `Source/ElysiumUE/Private/Substrate/ElysiumEnvParticle.cpp
 parent's baked reference skeleton (exporter order; a static-reduced placed prop stands none), the
 `LookupAttachment` arm is the L1 hook (`hooks.tsv:21`) and answers 0 until L1 lands it.
 
+#### Spawn, Precache and the ramp words [decompiled, L0-r011]
+
+`CEnvParticle::Spawn` `0x100fb3d0` in full (`docs/specs/layers/L0-entity/walks/L0-r011.md`): (1) slot 104
+`CEnvParticle::Precache` `0x100fb540`, which runs only while `m_nParticle` (`+0x454`, the `DT_EnvParticle`
+name; constructor `FUN_100fad50` writes -1) is negative: a NULL `m_sParticleDefinition` writes -1, else
+`UTIL_Extract_FileBase` `0x101cf7c0` (the text after the last `/` or `\`, the extension dropped, case kept)
+and `VEngineServer014` slot 17 `PrecacheParticle(base, 1)` (`engine.dll 0x20108930`), which never returns a
+negative (a failed lookup is `Host_Error`), so the `Warning("Can't find particle %s")` arm is dead; (2)
+`CPointEntity::Spawn` `0x101c0820` (`SetSolid(0)`, `Relink`); (3) `m_nAttachType` outside `[0, 0x12]` ->
+`Warning("entity %s has invalid attach type!")` and 0, BEFORE the definition test; (4) under
+`m_nParticle >= 0`: `m_fSpawnBounds` clamped to `[0.0, 4096.0]` (`_DAT_104454c4`, `_DAT_104563b0`; a NaN
+passes), the parent attach when `m_pParent` resolves (above), and `m_bActive` -> `m_flActivationTime`
+(`+0x488`) = curtime; (5) else `UTIL_Remove` `0x101cd940`. The constructor also writes `+0x488 = curtime`,
+`m_fRateScaleTarget = 1.0`, `m_fSpawnBounds = 512.0`, `m_bActive = 1`, `m_nAttachPoint = -1`.
+
+`SetRampTime` `FUN_100fba40` `0x100fba40` (from `InputSetRampTime` `0x100fb8a0`, which hands the float of a
+FIELD_FLOAT variant and 0.0 otherwise) and `SetRateScale` `FUN_100fb980` `0x100fb980` (from `0x100fb850`):
+a STRICT `< 0.0` test warns (`"%s ramp time set to %.2f, must be >=0"` / `"%s rate scale set to %.2f, must
+be >=0"`) and clamps to 0; `m_fRampTime` (`+0x490`) or `m_fRateScaleTarget` (`+0x48c`) is written; then
+**both** write `m_nRampFrame` (`+0x494`) from `VEngineServer014` slot 120 (`engine.dll 0x2010acf0`), the
+**host frame counter** -- an integer `_Host_RunFrame` `0x2008e450` increments once per frame -- so the last
+caller's frame stands. It is NOT a time (an earlier story text said "engine time"). `SetRateScale` has one
+more arm: when the unnamed byte `+0x4a1` is set (only `FUN_1038e9c0`, the Ghoul croucher, sets it) the
+target is multiplied by the ConVar `DAT_107083dc`'s float (identity unrecovered). The client consumer of
+`m_nRampFrame` (`DT_EnvParticle` sends it) is unrecovered. Port: `ElysiumEnvParticle.cpp` (`Spawn`,
+`Precache`, `ExtractFileBase`, `SetRampTime`, `SetRateScale`); the frame counter is
+`FElysiumEntityWorld::HostFrame()`; the precache tables are per world and 1-based (the engine's index
+values are not reproduced, only their sign).
+
 ### `TurnOn` restarts; `TurnOff` only stops feeding
 
 Both inputs forward to adjacent virtual slots (`vtable + 0x3c4` / `+0x3c8`) on `CEnvParticle`'s own

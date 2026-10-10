@@ -630,6 +630,9 @@ public:
 	// UElysiumDecalSubsystem.
 	virtual bool LayShotImpactDecal(const FVector& FromCm, const FVector& Direction, float RangeCm,
 		int32 Variation) override;
+	// `infodecal`'s `StaticDecal` / `BSPDecal` submission (`walks/L0-r011.md`): the engine's surface
+	// search inside the 5-unit box, then `UElysiumDecalSubsystem::SubmitStatic`.
+	virtual bool SubmitStaticDecal(const FElysiumStaticDecalSubmit& Submit) override;
 	// The scripted-shot channel. The director resolves a `vdata/camerashots/` file against this
 	// map's entities and bodies and hands the values to the pawn's camera; the camera itself never
 	// learns what an entity is.

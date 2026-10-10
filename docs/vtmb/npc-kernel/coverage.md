@@ -11,8 +11,8 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
-| … cited by the oracle | 2823 |
-| … not cited by the oracle | 2364 |
+| … cited by the oracle | 2831 |
+| … not cited by the oracle | 2356 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |
@@ -580,7 +580,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x100f7f20` FUN_100f7f20 | `0x10135720` FUN_10135720 |
 | `0x100f7fe0` FUN_100f7fe0 | `0x101aa390` FUN_101aa390 |
 | `0x100faf60` FUN_100faf60 | `0x100fae90` CEnvParticle::InputSetAttachType, `0x100fb3d0` CEnvParticle::Spawn, `0x100fc570` CEnvParticleHUD::vfunc241, `0x103f0510` FUN_103f0510 |
-| `0x100fba40` FUN_100fba40 | `0x100fb8a0` CEnvParticle::InputSetRampTime |
 | `0x100fbac0` FUN_100fbac0 | `0x100fbc50` FUN_100fbc50, `0x10169960` CBasePlayer::FUN_10169960 |
 | `0x100fbaf0` FUN_100fbaf0 | `0x10213b70` CPropHaunted::UpdateOnRemove, `0x10214a20` FUN_10214a20 |
 | `0x101067e0` CBaseCombatCharacter::AddScriptedExpression | `0x10089860` FUN_10089860 |
@@ -597,10 +596,8 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x1012b080` FUN_1012b080 | `0x100f48f0` CGibShooter::vfunc241, `0x100f5880` CEnvShooter::vfunc241, `0x10129960` FUN_10129960, `0x1012a610` FUN_1012a610 |
 | `0x1012c9c0` FUN_1012c9c0 | `0x1002f1e0` CCollisionEvent::ShouldCollide, `0x10036fb0` CPhysicsPushedEntities::GenerateBlockingEntityList, `0x10037380` CPushBlockerEnum::vfunc0, `0x101d13a0` FUN_101d13a0 |
 | `0x10136ec0` FUN_10136ec0 | `0x102d7890` CNodeEnt::ParseMapData |
-| `0x101371d0` FUN_101371d0 | `0x1002c570` CPhysPulley::vfunc241, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1004d9a0` CPhysicsSpring::Spawn, `0x1004ec60` FUN_1004ec60, +119 more |
 | `0x10137e40` FUN_10137e40 | `0x100c3240` FUN_100c3240, `0x100c3ce0` FUN_100c3ce0, `0x1019c810` FUN_1019c810 |
 | `0x10137fe0` FUN_10137fe0 | `0x1002c400` CPhysPulley::DrawDebugGeometryOverlays, `0x1002c570` CPhysPulley::vfunc241, `0x100360a0` CPhysicsPushedEntities::ComputeRotationalPushDirection, `0x1006f080` FUN_1006f080, +11 more |
-| `0x10138130` FUN_10138130 | `0x100360a0` CPhysicsPushedEntities::ComputeRotationalPushDirection, `0x100dcc20` FUN_100dcc20, `0x100dcea0` FUN_100dcea0, `0x100dd1b0` FUN_100dd1b0, +4 more |
 | `0x101381b0` FUN_101381b0 | `0x10029940` CKeepUpright::vfunc0, `0x100b2010` CBaseEntity::ComputeAbsDirection, `0x100f19b0` CRotDoor::ComputeSwingData, `0x10139f00` FUN_10139f00, +8 more |
 | `0x10138460` FUN_10138460 | `0x100282e0` CPhysTorque::vfunc241, `0x100283f0` CMotorController::vfunc0, `0x10028d20` CPhysMotor::vfunc113, `0x10029940` CKeepUpright::vfunc0, +5 more |
 | `0x10138600` FUN_10138600 | `0x10155ae0` CRagdollProp::SetupBones, `0x10428ed0` FUN_10428ed0 |
@@ -608,7 +605,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x10138720` FUN_10138720 | `0x1002a210` FUN_1002a210, `0x100932a0` CBaseAnimating::GetAttachmentLocal02, `0x100b3490` CBaseEntity::SetLocalTransform, `0x10137dd0` FUN_10137dd0, +14 more |
 | `0x10138760` FUN_10138760 | `0x100c67b0` FUN_100c67b0, `0x100dc680` CCollisionProperty::vfunc10, `0x101388e0` FUN_101388e0, `0x10139ac0` FUN_10139ac0, +10 more |
 | `0x10138df0` FUN_10138df0 | `0x1002a210` FUN_1002a210, `0x1002bdc0` CPhysSlideConstraint::vfunc241, `0x1002c190` CPhysFixed::vfunc241, `0x100933b0` CBaseAnimating::GetAttachmentLocal03, +18 more |
-| `0x10139500` FUN_10139500 | `0x10034590` CBaseEntity::PhysicsTryMove, `0x100397c0` CBaseEntity::PhysicsNoclip, `0x1003f070` CBaseEntity::PerformFlyCollisionResolution, `0x10040390` CBaseEntity::PhysicsSimulate, +46 more |
 | `0x10139a90` FUN_10139a90 | `0x1002bdc0` CPhysSlideConstraint::vfunc241, `0x1002c190` CPhysFixed::vfunc241, `0x1009d980` FUN_1009d980, `0x100b2150` CBaseEntity::GetParentToWorldTransform, +6 more |
 | `0x10139b50` FUN_10139b50 | `0x1002a210` FUN_1002a210, `0x10037c10` CPhysicsPushedEntities::RotateRootEntity, `0x1006f080` FUN_1006f080, `0x100b2150` CBaseEntity::GetParentToWorldTransform, +4 more |
 | `0x10139b90` FUN_10139b90 | `0x100b7e40` CBasePlayer::FUN_100b7e40, `0x100f19b0` CRotDoor::ComputeSwingData, `0x101384e0` FUN_101384e0, `0x10138580` FUN_10138580, +12 more |
@@ -688,7 +684,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x101b78f0` FUN_101b78f0 | `0x101b2870` FUN_101b2870, `0x101b2e30` FUN_101b2e30, `0x101b66e0` FUN_101b66e0, `0x101b6bd0` FUN_101b6bd0, +6 more |
 | `0x101bb0f0` FUN_101bb0f0 | `0x10102890` CEnvMicrophone::Remove, `0x101bb370` FUN_101bb370 |
 | `0x101c01c0` FUN_101c01c0 | `0x101bfb00` FUN_101bfb00 |
-| `0x101c0820` CPointEntity::Spawn | `0x10028260` CPhysTorque::Spawn, `0x100fb3d0` CEnvParticle::Spawn, `0x100fcdd0` CParamsParticle::Spawn ‼, `0x101043a0` CParamsExplosion::Spawn ‼, +1 more |
 | `0x101c2690` FUN_101c2690 | `0x10031070` CCollisionEvent::AddDamageEvent, `0x10193ea0` CPropDestructable::InputRemoveHealth, `0x101c2b90` FUN_101c2b90, `0x1027c300` FUN_1027c300, +6 more |
 | `0x101c2910` FUN_101c2910 | `0x101c2720` FUN_101c2720, `0x101c2770` FUN_101c2770 |
 | `0x101c29b0` FUN_101c29b0 | `0x10110da0` CBreakableSurface::vfunc141, `0x10162c30` CBasePlayer::TraceAttack |
@@ -824,11 +819,9 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x10224100` FUN_10224100 | `0x100eef50` FUN_100eef50, `0x10208bf0` CItemContainer::FUN_10208bf0, `0x102241b0` FUN_102241b0, `0x102241f0` CBaseLockableEnt::InputUse, +8 more |
 | `0x1022f4f0` FUN_1022f4f0 | `0x1022f640` FUN_1022f640 |
 | `0x10230ed0` FUN_10230ed0 | `0x100cebb0` FUN_100cebb0, `0x100cf080` FUN_100cf080, `0x100cf420` FUN_100cf420, `0x100d4240` FUN_100d4240, +3 more |
-| `0x1023f3d0` FUN_1023f3d0 | `0x100b9c20` CBatSwarm::TestCollision |
 | `0x1023fd00` FUN_1023fd00 | `0x103e3930` FUN_103e3930 |
 | `0x10240cb0` FUN_10240cb0 | `0x10240fd0` FUN_10240fd0, `0x102414f0` FUN_102414f0 |
 | `0x10241100` FUN_10241100 | `0x102414f0` FUN_102414f0 |
-| `0x10241620` FUN_10241620 | `0x10242220` FUN_10242220 |
 | `0x102454e0` FUN_102454e0 | `0x102458a0` FUN_102458a0, `0x10245b10` FUN_10245b10, `0x10245b80` FUN_10245b80, `0x10245bd0` FUN_10245bd0 |
 | `0x102455c0` FUN_102455c0 | `0x10245540` FUN_10245540, `0x102459a0` ConCommand::vfunc7 |
 | `0x10245660` FUN_10245660 | `0x100e05f0` CDialog::Acquire, `0x1016fed0` FUN_1016fed0, `0x10180af0` FUN_10180af0, `0x101c7690` FUN_101c7690, +1 more |

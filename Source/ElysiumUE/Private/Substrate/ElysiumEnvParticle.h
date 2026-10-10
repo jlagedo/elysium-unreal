@@ -25,6 +25,23 @@ public:
 	float SpawnBounds = 512.0f;   // `spawnbounds`, Source inches; converted at the seam
 	float RampScale = 1.0f;
 	float RampTime = 0.0f;
+	// The three `DT_EnvParticle` words the datamap leaves unnamed (`walks/L0-r011.md`, builder
+	// `FUN_100fa840`): `m_nParticle` (+0x454), the precached definition index, constructor
+	// `FUN_100fad50` -1 (`< 0` = unresolved; `Precache` 0x100fb540 writes it); `m_flActivationTime`
+	// (+0x488), a curtime the constructor, `Spawn` (when active) and the TurnOn body 0x100fb7a0 stamp;
+	// `m_nRampFrame` (+0x494), the HOST FRAME COUNTER (`VEngineServer014` slot 120) `SetRampTime`
+	// 0x100fba40 and `SetRateScale` 0x100fb980 both stamp (last writer wins). Entity memory is
+	// `calloc` (engine `0x201092d0`), so +0x494 starts 0.
+	int32 ParticleIndex = -1;
+	float ActivationTime = 0.0f;
+	int32 RampFrame = 0;
+	// `m_fRateScaleTarget` (+0x48c): the `ramp_scale` key's word, `SetRateScale` 0x100fb980's write.
+	// Public so the class table can register it by its retail name.
+	float RampTargetScale = 1.0f;
+	// +0x4a1, an unnamed non-networked byte: constructor 0; `FUN_1038e9c0` (the Ghoul croucher's L4
+	// body, unread) sets it to 1, which makes `SetRateScale` multiply by the ConVar `DAT_107083dc`'s
+	// value. No map emitter reaches it; carried as the word the arm reads.
+	bool bRateScaleByConVar = false;
 
 	// An emitter is placed long before the thing it rides exists: `plus_impact` parents to `Sire2`,
 	// whose model the level script swaps at scene start, and the Embrace emitters parent to
@@ -32,32 +49,29 @@ public:
 	// never retried, so resolution is deferred to the first TurnOn instead, by which point every
 	// one of these parents exists. Every TurnOn bumps the serial: VtMB's client rebuilds the emitter
 	// whenever the activation timestamp changes, so a TurnOn on a live emitter restarts it.
-	void InputTurnOn()  { bActive = true; ++TurnOnSerial; Publish(); }
-	void InputTurnOff() { bActive = false; Publish(); }
-
-	void InputSetRateScale(const FElysiumVariant& Value)
+	// `InputTurnOn` 0x100fa690 -> slot 241 `0x100fb7a0`: `m_bActive = 1`, `+0x488 = curtime`; no
+	// already-active guard. Slot 242 `0x100fb7d0` (`TurnOff`): `m_bActive = 0`, no stamp.
+	void InputTurnOn()
 	{
-		const double Now = World ? World->NowSeconds() : 0.0;
-		RampScale = RateAt(Now);
-		RampStartScale = RampScale;
-		RampTargetScale = FMath::Max(0.0f, Value.ToFloat());
-		RampStartTime = Now;
-		RampDuration = FMath::Max(0.0f, RampTime);
-		if (RampDuration <= 0.0f)
-		{
-			RampScale = RampTargetScale;
-		}
-		else
-		{
-			NextThink = static_cast<float>(Now);
-		}
+		bActive = true;
+		ActivationTime = World ? static_cast<float>(World->NowSeconds()) : 0.0f;
+		++TurnOnSerial;
 		Publish();
 	}
+	void InputTurnOff() { bActive = false; Publish(); }
 
-	void InputSetRampTime(const FElysiumVariant& Value)
-	{
-		RampTime = FMath::Max(0.0f, Value.ToFloat());
-	}
+	// `CEnvParticle::InputSetRateScale` 0x100fb850 / `InputSetRampTime` 0x100fb8a0: `inputdata->+0x18
+	// == 1` (the variant is FIELD_FLOAT) takes the float at `+8`, any other type gives `0.0`; then the
+	// body (`FUN_100fb980` / `FUN_100fba40`) through a tail jump. The dispatcher `AcceptInput`
+	// 0x100abc90 converts the variant to the input's declared FIELD_FLOAT before the call (Source's
+	// `variant_t::Convert`), so the `0.0` arm is reached only by a value no conversion yields; this
+	// port's total `ToFloat()` is that conversion (a non-numeric string converts to 0).
+	void InputSetRateScale(const FElysiumVariant& Value) { SetRateScale(Value.ToFloat()); }
+	void InputSetRampTime(const FElysiumVariant& Value) { SetRampTime(Value.ToFloat()); }
+	// `FUN_100fb980` 0x100fb980 (SetRateScale) and `FUN_100fba40` 0x100fba40 (SetRampTime), the
+	// retail bodies: the strict `< 0.0` Warning and clamp, the word, the `+0x494` frame stamp.
+	void SetRateScale(float Rate);
+	void SetRampTime(float Duration);
 
 	void InputSetAttachType(const FElysiumVariant& Value)
 	{
@@ -78,10 +92,17 @@ public:
 		}
 	}
 
-	// `CEnvParticle::Spawn` 0x100fb3d0 (slot 103): the attach-type range check, the spawnbounds clamp
-	// and, when `m_pParent` already resolves (the map parse `0x10136650` ran `SetParent` before any
-	// Spawn), `FUN_100faf60` -> slot 243 `AttachToEntity(parent, m_nAttachType, m_sAttachName or "")`.
+	// `CEnvParticle::Spawn` 0x100fb3d0 (slot 103), every arm in retail order (`walks/L0-r011.md`):
+	// slot 104 `Precache`, `CPointEntity::Spawn` 0x101c0820, the attach-type range check, then under
+	// `m_nParticle >= 0` the spawnbounds clamp to [0, 4096], the parent attach (`FUN_100faf60` ->
+	// slot 243 when `m_pParent` resolves) and the active stamp; else `UTIL_Remove` 0x101cd940.
 	virtual void Spawn() override;
+	// `CEnvParticle::Precache` 0x100fb540 (slot 104): only while `m_nParticle < 0`; a NULL definition
+	// writes -1, else `UTIL_Extract_FileBase` 0x101cf7c0 and `VEngineServer014` slot 17.
+	virtual void Precache() override;
+	// `UTIL_Extract_FileBase(in, out, 0x104)` 0x101cf7c0: the text after the last `/` or `\`, without
+	// the extension that follows it; case kept; an empty input gives an empty output.
+	static FString ExtractFileBase(const FString& In);
 	// `CEnvParticle::AttachToEntity` 0x100fb110, CEnvParticle's slot 243 (`CAuspexAura::AttachToEntity`
 	// 0x10051d50 overrides it): `SetParent(parent, 0)`, `m_nAttachType`, `m_sAttachName`
 	// (`AllocPooledString` 0x1042bff0), `SetMoveType(11 MOVETYPE_FOLLOW, 0)`, `SetAimEnt(entity(m_pParent))`,
@@ -120,6 +141,7 @@ public:
 	virtual void Serialize(FElysiumSaveArchive& Ar) override
 	{
 		Ar << RampScale << RampStartScale << RampTargetScale << RampStartTime << RampDuration;
+		Ar << ParticleIndex << ActivationTime << RampFrame;
 		if (Ar.IsLoading())
 		{
 			Publish();
@@ -167,7 +189,9 @@ protected:
 		FElysiumWeatherEmitterState State;
 		State.Entity = Handle;
 		State.LocationCm = Def ? Def->Origin : FVector::ZeroVector;
-		State.ParticleDefinition = ParticleDefinition;
+		// The embodiment's resolution key (the bake lower-cases and forward-slashes its root names);
+		// the retail word `m_sParticleDefinition` above stays as authored.
+		State.ParticleDefinition = ParticleDefinition.Replace(TEXT("\\"), TEXT("/")).ToLower();
 		State.bActive = bActive && !IsInert();
 		State.bDead = IsDead();
 		State.TurnOnSerial = TurnOnSerial;
@@ -188,7 +212,6 @@ protected:
 
 	uint32 TurnOnSerial = 0;
 	float RampStartScale = 1.0f;
-	float RampTargetScale = 1.0f;
 	double RampStartTime = 0.0;
 	float RampDuration = 0.0f;
 };

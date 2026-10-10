@@ -2104,6 +2104,39 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 				return false;
 			}
 		}
+		if (Action.Function == TEXT("Sweep_HullPrelude"))
+		{
+			// `0x10241620`'s hull path up to its separating-axis clip (`ElysiumRetailSweep::HullClipPrelude`):
+			// 19 numbers, in the order the allowlist states. Sites `world_clear` / `segment_sphere` in the
+			// target's column; the result line states the early-out verdict.
+			double V[19];
+			if (Action.Args.Num() != 19)
+			{
+				OutError = TEXT("entity_call 'Sweep_HullPrelude' takes 19 numbers: ray start, start offset, delta, extents; box centre, half size; tolerance");
+				return false;
+			}
+			for (int32 I = 0; I < 19; ++I)
+			{
+				if (Action.Args[I].Value.Type != FElysiumArenaValue::EType::Number)
+				{
+					OutError = FString::Printf(TEXT("entity_call 'Sweep_HullPrelude' argument %d is not a number"), I);
+					return false;
+				}
+				V[I] = Action.Args[I].Value.Number;
+			}
+			FElysiumNamedRetailSites Sites(World, Action.Target);
+			FElysiumRetailTraceResult Trace;
+			const bool bPass = ElysiumRetailSweep::HullClipPrelude(FVector(V[0], V[1], V[2]), FVector(V[3], V[4], V[5]),
+				FVector(V[6], V[7], V[8]), FVector(V[9], V[10], V[11]), FVector(V[12], V[13], V[14]), FVector(V[15], V[16], V[17]),
+				V[18], Trace, &Sites);
+			FEvent& Done = Events.AddDefaulted_GetRef();
+			StampEvent(Done, World.NowSeconds());
+			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+			Done.Name = Action.Target;
+			Done.Text = FString::Printf(TEXT("entity_call Sweep_HullPrelude done prelude=%s fraction=%g end=%g,%g,%g"),
+				bPass ? TEXT("pass") : TEXT("miss"), Trace.Fraction, Trace.EndPosCm.X, Trace.EndPosCm.Y, Trace.EndPosCm.Z);
+			return true;
+		}
 		if (Action.Function == TEXT("KeyValues_Lex") || Action.Function == TEXT("KeyValues_Parse"))
 		{
 			// Argument 0: a `text` fixture, the buffer `0x101f2180` R3..R6 would have read from the file.
