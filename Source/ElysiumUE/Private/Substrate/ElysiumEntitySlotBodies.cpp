@@ -149,6 +149,30 @@ void* FElysiumEntity::WorldSpaceCenter() const
 	return &WorldSpaceCentreCacheCm;
 }
 
+FVector FElysiumEntity::GetSoundEmissionOrigin() const
+{
+	// `CBaseEntity::GetSoundEmissionOrigin` `0x100a9eb0` (134 B, slot 222, `RET 4`, returns `out`;
+	// `walks/L0-r006.md`). Straight line, no branches:
+	// G0. The scope-trace push: label `"CBaseEntity::GetSoundEmissionOrigin"` with `m_iName` or `""`
+	//     (`"NULL ENTITY"` for a NULL `this`, which then faults at the vtable read: the only NULL
+	//     handling, and a member call here cannot be reached on null).
+	// G1. `this->vslot 192 (+0x300)(out)`: `WorldSpaceCenter`, through the dispatch, so a class that
+	//     refills slot 192 answers here too. Retail's slot 192 is a non-const method called from this
+	//     const one (`CAISound::FUN_10027160`: `mins + (maxs - mins) * 0.5` on the collision origin,
+	//     or through the collision-to-world transform when the angles are non-zero and the solid type
+	//     is neither 0 nor 2); the port keeps both declarations as retail has them, hence the cast.
+	//     The port's slot-192 body measures Unreal's bounds (`ElysiumCameraShots::SurroundingBounds`),
+	//     a named modernization stated at that body.
+	const FVector Out = const_cast<FElysiumEntity*>(this)->WorldSpaceCenter();
+	if (World != nullptr)
+	{
+		World->EmitRetailSite(*this, TEXT("sound_origin"), TEXT("CBaseEntity::GetSoundEmissionOrigin"), 0x100a9eb0u, TEXT("return"),
+			FString::Printf(TEXT("origin=%.1f,%.1f,%.1f abs_origin=%.1f,%.1f,%.1f"), Out.X, Out.Y, Out.Z, Origin.X, Origin.Y, Origin.Z));
+	}
+	// G2. Return `out`.
+	return Out;
+}
+
 // --- Moved from `ElysiumNpcBaseDamage.cpp` (story 5 step 6) ---
 
 FVector FElysiumEntity::GetAttackExtents()

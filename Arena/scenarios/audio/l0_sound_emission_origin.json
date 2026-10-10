@@ -1,0 +1,103 @@
+{
+  "name": "l0_sound_emission_origin",
+  "about": "CBaseEntity::GetSoundEmissionOrigin 0x100a9eb0 (slot 222, walks/L0-r006.md): the scope-trace push, then slot 192 WorldSpaceCenter through the dispatch (CAISound::FUN_10027160: mins + (maxs - mins) * 0.5 on the collision origin, or through the collision-to-world transform for a rotated non-trivial solid), returned as the sound emission origin -- a point distinct from GetAbsOrigin (the feet) on any bodied entity. The retail path driven here is CBaseCombatCharacter::CreateCorpse 0x1032c0e0's burn arm: a Kindred's death (0x10207df0) builds CPASFilter(GetSoundEmissionOrigin()) and CPASAttenuationFilter(GetSoundEmissionOrigin(), 0.8) -- two dispatches of slot 222 -- around the EmitSound of character/vampire burning death.wav. sp_tutorial_1's sabbat_redshirt_1 (npc_VVampire) verbatim on the east pad, unhidden at 0.5 s, TakeDamage 10000 at 2 s: at the corpse, two slot-222 returns whose origin is not the entity's origin and not zero.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 4.0,
+  "player": {
+    "at": "start",
+    "face": "east"
+  },
+  "from_map": {
+    "map": "sp_tutorial_1",
+    "names": [
+      "sabbat_redshirt_1"
+    ],
+    "anchor": "sabbat_redshirt_1",
+    "at": "east"
+  },
+  "script": [
+    {
+      "t": 0.5,
+      "do": "fire",
+      "target": "sabbat_redshirt_1",
+      "input": "ScriptUnhide"
+    },
+    {
+      "t": 2.0,
+      "do": "fire",
+      "target": "sabbat_redshirt_1",
+      "input": "TakeDamage",
+      "param": 10000
+    }
+  ],
+  "expect": [
+    {
+      "label": "hit",
+      "who": "sabbat_redshirt_1",
+      "kind": "input",
+      "match": "TakeDamage",
+      "by": 2.5
+    },
+    {
+      "label": "dies",
+      "who": "sabbat_redshirt_1",
+      "kind": "death",
+      "match": "",
+      "within": 0.5
+    },
+    {
+      "label": "corpse",
+      "who": "sabbat_redshirt_1",
+      "kind": "corpse",
+      "match": "",
+      "within": 1.0
+    },
+    {
+      "label": "pas_filter",
+      "who": "sabbat_redshirt_1",
+      "kind": "retail_site",
+      "site": "sound_origin",
+      "match": "fn=CBaseEntity::GetSoundEmissionOrigin va=0x100a9eb0 phase=return origin=",
+      "within": 0.1
+    },
+    {
+      "label": "attenuation_filter",
+      "who": "sabbat_redshirt_1",
+      "kind": "retail_site",
+      "site": "sound_origin",
+      "match": "fn=CBaseEntity::GetSoundEmissionOrigin va=0x100a9eb0 phase=return origin=",
+      "within": 0.1
+    }
+  ],
+  "never": [
+    {
+      "who": "sabbat_redshirt_1",
+      "kind": "retail_site",
+      "site": "sound_origin",
+      "match": "origin=([^ ]+) abs_origin=\\1",
+      "regex": true
+    },
+    {
+      "who": "sabbat_redshirt_1",
+      "kind": "retail_site",
+      "site": "sound_origin",
+      "match": "origin=0.0,0.0,0.0 "
+    },
+    {
+      "who": "sabbat_redshirt_1",
+      "kind": "retail_site",
+      "site": "sound_origin",
+      "until": 2.0
+    }
+  ],
+  "probes": [
+    {
+      "at": "end",
+      "who": "sabbat_redshirt_1",
+      "probe": "alive",
+      "equals": false
+    }
+  ],
+  "notes": "The never with the back-reference fails the run if slot 222 ever answers the entity's own origin (the stub it replaces answered zero; the audit note's 'Entity->Origin'). The port's slot-192 body measures Unreal's body bounds rather than retail's collision box, so the record states the shape of the answer (a centre above the feet) and not its retail number. The port writes the corpse event before the burn arm's emit, so the two returns follow it in the trace within the same instant."
+}

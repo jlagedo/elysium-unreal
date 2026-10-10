@@ -11,8 +11,8 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
-| … cited by the oracle | 2782 |
-| … not cited by the oracle | 2405 |
+| … cited by the oracle | 2789 |
+| … not cited by the oracle | 2398 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |
@@ -780,7 +780,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x101f0b50` FUN_101f0b50 | `0x101f0ea0` FUN_101f0ea0 |
 | `0x101f18f0` FUN_101f18f0 | `0x10227c00` FUN_10227c00, `0x10227c90` FUN_10227c90 |
 | `0x101f1aa0` FUN_101f1aa0 | `0x100d7400` FUN_100d7400, `0x101f1d00` FUN_101f1d00, `0x101f1e20` FUN_101f1e20, `0x10227d20` FUN_10227d20, +2 more |
-| `0x101f2c60` FUN_101f2c60 | `0x101f20d0` FUN_101f20d0 |
 | `0x101f4530` FUN_101f4530 | `0x101f3ba0` FUN_101f3ba0, `0x101f3d00` FUN_101f3d00 |
 | `0x101f4c80` FUN_101f4c80 | `0x101f3e50` FUN_101f3e50, `0x101f4950` FUN_101f4950, `0x101f4b20` FUN_101f4b20, `0x101f5390` FUN_101f5390, +1 more |
 | `0x101f5b60` FUN_101f5b60 | `0x101f6130` FUN_101f6130, `0x10217d60` FUN_10217d60 |
@@ -860,7 +859,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x10245d80` ConVar::vfunc11 | `0x10245cf0` ConVar::vfunc7, `0x10245ed0` ConVar::vfunc8 |
 | `0x10245e60` ConVar::vfunc10 | `0x10245cf0` ConVar::vfunc7, `0x10245ed0` ConVar::vfunc8 |
 | `0x10245fe0` ConVar::vfunc12 | `0x10245b10` FUN_10245b10, `0x10245b80` FUN_10245b80, `0x10245bd0` FUN_10245bd0 |
-| `0x10247280` FUN_10247280 | `0x102482b0` FUN_102482b0 |
 | `0x10249940` FUN_10249940 | `0x102e9f70` FUN_102e9f70 |
 | `0x10249fc0` FUN_10249fc0 | `0x10412160` FUN_10412160, `0x10412260` FUN_10412260, `0x104123a0` FUN_104123a0 |
 | `0x1024a900` FUN_1024a900 | `0x10249980` FUN_10249980, `0x1024a480` FUN_1024a480, `0x1024aa70` FUN_1024aa70, `0x1024aca0` FUN_1024aca0 |
@@ -997,7 +995,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x10430ccc` ?FindCompleteObject@@YAPAXPAPAX@Z | `0x1043096f` ___RTCastToVoid |
 | `0x104312f0` __alloca_probe ‼ | `0x1002ea40` FUN_1002ea40, `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x10081190` FUN_10081190, `0x100c2bd0` FUN_100c2bd0, +33 more |
 | `0x10431351` _rand | `0x10032380` FUN_10032380, `0x100b87a0` CBatSwarm::Spawn, `0x100b8d50` FUN_100b8d50, `0x1010f8b0` FUN_1010f8b0, +7 more |
-| `0x104313bc` _atol | `0x10432f1a` __tzset |
 | `0x10431510` _strstr | `0x10056d70` CTempEntTester::Spawn, `0x1006e130` FUN_1006e130, `0x10071cd0` FUN_10071cd0, `0x10071e00` FUN_10071e00, +43 more |
 | `0x10431590` _calloc | `0x1043715b` staticinit_1043715b |
 | `0x10431641` _free | `0x100579f0` FUN_100579f0, `0x100bf600` FUN_100bf600, `0x100d00a0` CPyObjStrSaveRestoreDataOps::vfunc1, `0x100d0290` CVTSDependencySaveRestoreDataOps::vfunc1, +13 more |

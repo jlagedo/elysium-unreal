@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 219 generated slot bodies of `FElysiumEntity`: 72 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 39 are defined by hand in the substrate,
-// and 90 are still stubs — 88 29c, 2 unassigned. 18 are closed (0019/6) and answer the
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 40 are defined by hand in the substrate,
+// and 89 are still stubs — 87 29c, 2 unassigned. 18 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -1586,12 +1586,10 @@ void FElysiumEntity::SetAbsAngles(FRotator&)
 
 // slot 222 0x100a9eb0 (sdk) `Vector GetSoundEmissionOrigin() const`
 //   layer 0, story 29c
-FVector FElysiumEntity::GetSoundEmissionOrigin() const
-{
-	FireEntitySlot(TEXT("CBaseEntity::GetSoundEmissionOrigin"), TEXT("0x100a9eb0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::GetSoundEmissionOrigin`, written by hand in the substrate:
+// `CBaseEntity::GetSoundEmissionOrigin` 0x100a9eb0: the scope-trace label, then slot 192
+// `WorldSpaceCenter` through the dispatch, returned as the sound emission origin
+// (L0.audio.sound-emission-origin, walks/L0-r006.md). Declared here, defined there.
 
 // slot 223 0x100b5080 (walked) `bool CreateVPhysics()`
 //   layer 0, story 29c
@@ -2561,7 +2559,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, const FVector&()>::Test(&FElysiumEntity::GetAngles),
 				nullptr },
 			{ 222, TEXT("0x100a9eb0"), TEXT("CBaseEntity"), TEXT("GetSoundEmissionOrigin"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FVector() const>::Test(&FElysiumEntity::GetSoundEmissionOrigin),
 				nullptr },
 			{ 223, TEXT("0x100b5080"), TEXT("CBaseEntity"), TEXT("CreateVPhysics"),

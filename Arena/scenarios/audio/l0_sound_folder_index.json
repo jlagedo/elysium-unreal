@@ -1,0 +1,73 @@
+{
+  "name": "l0_sound_folder_index",
+  "about": "The VSound folder membership index (CVSoundFileFolder_t; walks/L0-r006.md). FUN_101f3ba0 0x101f3ba0, run by the owner's AddRange 0x101f4330 when counts[cat] < hi + 1 (counts[cat] <- hi + 1 first, then the insert with lo = old - 1): per node, total = FUN_101f4300 (the sum of the category counts), a = F(cat, lo), b = F(cat, hi) with F the L2 hook FUN_101f4530 (sum(counts[0..cat-1]) + idx); a new byte mask of `total` bytes keeps old[0..a], zeroes (a, b], moves old[a+1..] up by b - a, then every child is expanded the same way. The walk's worked example: counts [2, 3], AddRange(0, 3) -> counts [4, 3], lo 1, a 1, b 3, total 7, old [o0..o4] -> [o0, o1, 0, 0, o2, o3, o4]. FUN_101f3b00 0x101f3b00, run by Find 0x101f42d0 (key -1 -> NULL at once): on a key match the node and then EVERY sibling (+0x08) are tested on mask[F(cat, idx)] != 0 -- the loop's key test is a self-compare (asm 0x101f3b30), so a sibling of another key is tested too -- and the children are never searched; on a mismatch each child is searched in turn; else NULL. The hook F stays L2's: the fixture's owner answers it retail-shaped.",
+  "stage": "arena",
+  "seed": 0,
+  "duration": 2.0,
+  "player": {"at": "start"},
+  "fixtures": [
+    {"id": "T", "kind": "sound_folder", "config": {
+      "categories": 2,
+      "counts": [2, 3],
+      "root": {"label": "root", "key": 1, "mask": [1, 0, 1, 1, 0], "children": [
+        {"label": "a", "key": 5, "mask": [0, 1, 0, 0, 1], "siblings": [
+          {"label": "a2", "key": 6, "mask": [0, 0, 1, 0, 1]}
+        ]},
+        {"label": "b", "key": 7, "mask": [1, 1, 1, 1, 1]}
+      ]}
+    }}
+  ],
+  "script": [
+    {"t": 0.2, "do": "entity_call", "target": "vsound", "function": "VSoundFolder_Find", "args": [{"fixture": "T"}, 5, 1, 2]},
+    {"t": 0.3, "do": "entity_call", "target": "vsound", "function": "VSoundFolder_Find", "args": [{"fixture": "T"}, 5, 0, 0]},
+    {"t": 0.5, "do": "entity_call", "target": "vsound", "function": "VSoundFolder_AddRange", "args": [{"fixture": "T"}, 0, 3]},
+    {"t": 0.7, "do": "entity_call", "target": "vsound", "function": "VSoundFolder_Find", "args": [{"fixture": "T"}, 5, 1, 2]},
+    {"t": 0.8, "do": "entity_call", "target": "vsound", "function": "VSoundFolder_Find", "args": [{"fixture": "T"}, 5, 0, 2]},
+    {"t": 0.9, "do": "entity_call", "target": "vsound", "function": "VSoundFolder_Find", "args": [{"fixture": "T"}, 5, 1, 0]},
+    {"t": 1.0, "do": "entity_call", "target": "vsound", "function": "VSoundFolder_Find", "args": [{"fixture": "T"}, -1, 0, 0]},
+    {"t": 1.1, "do": "entity_call", "target": "vsound", "function": "VSoundFolder_Find", "args": [{"fixture": "T"}, 1, 0, 0]},
+    {"t": 1.3, "do": "entity_call", "target": "vsound", "function": "VSoundFolder_AddRange", "args": [{"fixture": "T"}, 0, 2]},
+    {"t": 1.5, "do": "entity_call", "target": "vsound", "function": "VSoundFolder_AddRange", "args": [{"fixture": "T"}, 1, 5]}
+  ],
+  "expect": [
+    {"label": "staged", "who": "", "kind": "script", "match": "fixture T sound_folder staged categories=2 counts=2 total=5 root=1,0,1,1,0", "by": 0.1},
+    {"label": "find1_root", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "fn=FUN_101f3b00 va=0x101f3b00 phase=branch node=root arm=children key=1 children=3", "by": 0.3},
+    {"label": "find1_a", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "phase=branch node=a arm=sibling key=5 flat=4 hit=1", "within": 0.1},
+    {"label": "find1", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "fn=FUN_101f42d0 va=0x101f42d0 phase=return key=5 cat=1 idx=2 node=a", "within": 0.1},
+    {"label": "find2_a", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "phase=branch node=a arm=sibling key=5 flat=0 hit=0", "by": 0.4},
+    {"label": "find2_a2", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "phase=branch node=a2 arm=sibling key=6 flat=0 hit=0", "within": 0.1},
+    {"label": "find2", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "phase=return key=5 cat=0 idx=0 node=null", "within": 0.1},
+    {"label": "grow", "who": "vsound", "kind": "retail_site", "site": "folder_addrange", "match": "fn=FUN_101f4330 va=0x101f4330 phase=branch cat=0 hi=3 count=2 grow=1 lo=1", "by": 0.6},
+    {"label": "insert_root", "who": "vsound", "kind": "retail_site", "site": "folder_insert", "match": "fn=FUN_101f3ba0 va=0x101f3ba0 phase=entry node=root cat=0 hi=3 lo=1 total=7 a=1 b=3 old=1,0,1,1,0", "within": 0.1},
+    {"label": "root_mask", "who": "vsound", "kind": "retail_site", "site": "folder_insert", "match": "phase=return node=root mask=1,0,0,0,1,1,0", "within": 0.1},
+    {"label": "a_mask", "who": "vsound", "kind": "retail_site", "site": "folder_insert", "match": "phase=return node=a mask=0,1,0,0,0,0,1", "within": 0.1},
+    {"label": "a2_mask", "who": "vsound", "kind": "retail_site", "site": "folder_insert", "match": "phase=return node=a2 mask=0,0,0,0,1,0,1", "within": 0.1},
+    {"label": "b_mask", "who": "vsound", "kind": "retail_site", "site": "folder_insert", "match": "phase=return node=b mask=1,1,0,0,1,1,1", "within": 0.1},
+    {"label": "addrange_done", "who": "vsound", "kind": "script", "match": "entity_call VSoundFolder_AddRange done cat=0 hi=3 count=4 total=7", "within": 0.1},
+    {"label": "find3", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "phase=return key=5 cat=1 idx=2 node=a", "by": 0.8},
+    {"label": "find4", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "phase=return key=5 cat=0 idx=2 node=null", "by": 0.9},
+    {"label": "find5_a", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "phase=branch node=a arm=sibling key=5 flat=4 hit=0", "by": 1.0},
+    {"label": "find5_a2", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "phase=branch node=a2 arm=sibling key=6 flat=4 hit=1", "within": 0.1},
+    {"label": "find5", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "phase=return key=5 cat=1 idx=0 node=a2", "within": 0.1},
+    {"label": "find_minus1", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "phase=return key=-1 cat=0 idx=0 node=null", "by": 1.1},
+    {"label": "find_root", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "phase=branch node=root arm=sibling key=1 flat=0 hit=1", "by": 1.2},
+    {"label": "find_root_ret", "who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "phase=return key=1 cat=0 idx=0 node=root", "within": 0.1},
+    {"label": "no_grow", "who": "vsound", "kind": "retail_site", "site": "folder_addrange", "match": "phase=branch cat=0 hi=2 count=4 grow=0 lo=3", "by": 1.4},
+    {"label": "grow_cat1", "who": "vsound", "kind": "retail_site", "site": "folder_addrange", "match": "phase=branch cat=1 hi=5 count=3 grow=1 lo=2", "by": 1.6},
+    {"label": "insert_cat1", "who": "vsound", "kind": "retail_site", "site": "folder_insert", "match": "phase=entry node=root cat=1 hi=5 lo=2 total=10 a=6 b=9 old=1,0,0,0,1,1,0", "within": 0.1},
+    {"label": "root_mask_cat1", "who": "vsound", "kind": "retail_site", "site": "folder_insert", "match": "phase=return node=root mask=1,0,0,0,1,1,0,0,0,0", "within": 0.1}
+  ],
+  "never": [
+    {"who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "node=b arm=sibling"},
+    {"who": "vsound", "kind": "retail_site", "site": "folder_insert", "match": "phase=warning"},
+    {"who": "vsound", "kind": "retail_site", "site": "folder_find", "match": "phase=branch", "from": 0.95, "until": 1.05},
+    {"who": "vsound", "kind": "retail_site", "site": "folder_insert", "from": 1.2, "until": 1.45}
+  ],
+  "probes": [
+    {"at": "end", "who": "fixture:T", "probe": "entity_field", "field": "count", "index": "0", "equals": 4},
+    {"at": "end", "who": "fixture:T", "probe": "entity_field", "field": "count", "index": "1", "equals": 6},
+    {"at": "end", "who": "fixture:T", "probe": "entity_field", "field": "mask", "index": "root", "equals": "1,0,0,0,1,1,0,0,0,0"},
+    {"at": "end", "who": "fixture:T", "probe": "entity_field", "field": "mask", "index": "a2", "equals": "0,0,0,0,1,0,1,0,0,0"}
+  ],
+  "notes": "Node b (key 7) is root's third child and never tested on a key-5 search: a's match pins the walk to a and its sibling a2, and the children are not searched on that path (the first never). a2's key is 6, not 5, and it is still tested and found (find5): the self-compare. The 1.5 s AddRange on category 1 shows the tail arm (nothing moves up when b + 1 == total)."
+}

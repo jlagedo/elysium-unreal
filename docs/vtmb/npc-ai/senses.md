@@ -448,9 +448,21 @@ that starts playback, after `EmitSound`:
 `if (m_nSoundEvent != 0)`: resolve the owner (`0x101ad9a0`); a null owner is legal only for
 `CARCASS 0x20` / `FLINCH 0x800`, otherwise `Warning("… invalid NPC sound event …")` and nothing is
 inserted; `lvl` outside `1..3` warns and clamps; `dur = GetSoundDuration(wav)` floored at 1.0;
-**`InsertSound(m_nSoundEvent /*raw type bitmask*/, owner origin, VolumeLevels[lvl], dur,
+**`InsertSound(m_nSoundEvent /*raw type bitmask*/, SOURCE origin, VolumeLevels[lvl], dur,
 bOccludable = 0, owner)`** — **once per activation, never per think**. Level 1 = 180, 2 = 240,
-3 = 1200 (`0x1072bccc + lvl*4`). `radius` plays no part.
+3 = 1200 (`0x1072bccc + lvl*4` = `SoundVolumeTable 0x1072bc20 + 0xAC`, loaded from
+`vdata/System/sound_volume_table.txt`). `radius` plays no part.
+
+CORRECTED 2026-10-10 (`docs/specs/layers/L0-entity/walks/L0-r006.md`, asm re-read): the insert's
+origin is the **source entity's** `GetAbsOrigin` — the entity `m_hSource` `+0x4c8` resolves to (the
+`SourceEntityName` entity, else the ambient itself), held in `EDI` through the Use body — not the
+owner's: `0x101ad85a MOV EAX,[EDI]; MOV ECX,EDI; CALL [EAX+0x364]` (slot 217 on `EDI`). The owner
+(`FUN_101ad9a0`, cached in `+0x4d8`) is the insert's sixth argument only. The owner lookup runs with
+`activator = this`, `caller = NULL`, so a `!activator` name is the ambient itself and `!caller` is
+NULL. Reached only through Use's start arm (U3 → U4): a PlaySound on an already-active looping
+ambient returns at U0 and never re-resolves the owner. Port:
+`Source/ElysiumUE/Private/Substrate/ElysiumAmbientGeneric.cpp` (`InsertAiSound`,
+`ResolveSoundEventOwner`); record `Arena/scenarios/audio/l0_ai_sound_owner.json`.
 
 **Every `ambient_generic` in `sp_tutorial_1` carries `sound_event "0"`** — `sound_combat_1..4`,
 `sound_jackflash`, `sound_window_break`, `sound_fire_2`, `sound_thugs_w_guns`, `sound_howl_2` —

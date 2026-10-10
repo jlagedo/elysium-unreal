@@ -73,6 +73,9 @@ struct FElysiumArenaFixture
 	FString Kind;
 	TMap<FString, FString> Values; // `keyvalues`: a controlled KeyValues table, text as a map row spells it
 	FString Text;                  // `text`: raw text handed whole to a reader (the KeyValues lexer / parser)
+	// `sound_folder`: the typed configuration of a structured fixture, kept as the record's own JSON
+	// object and read by the runner when it stages the fixture (a malformed one fails the staging).
+	TSharedPtr<class FJsonObject> Config;
 };
 
 // One argument of an `entity_call`: a typed scalar, or a staged fixture's handle.

@@ -1,0 +1,53 @@
+{
+  "name": "l0_ai_sound_owner",
+  "about": "FUN_101ad9a0 0x101ad9a0, the AI sound-event owner cache, and the one caller that reaches it: the toggle Use FUN_101ad470 0x101ad470, arm U4, inside the source-valid gate after the START emit (walks/L0-r006.md). PlaySound = Use(activator, caller, 1, 0), StopSound = Use(.., 0, 0). O1: the cached handle +0x4d8 is -1, stale or empty -> FindEntityByName(list, NULL, sound_event_owner, activator = this, caller = NULL), +0x4d8 <- the match's handle or -1; a valid cache skips the lookup. O2: a valid handle answers its entity, else NULL. U4: sound_event == 0 inserts nothing; a NULL owner with sound_event outside {0x20 CARCASS, 0x800 FLINCH} -> Warning('%s has invalid NPC sound event parameters'), no insert; sound_event_level outside [1, 3] -> Warning and clamp, written back; CSoundEnt::InsertSound(sound_event, the SOURCE entity's GetAbsOrigin (asm 0x101ad85a), VolumeLevels[level] (180 / 240 / 1200, sound_volume_table.txt), max(1.0, GetSoundDuration), 0, owner). A second PlaySound on an active looping ambient returns at U0 (ON while active) and never reaches U4; the owner is re-resolved only by a fresh start (StopSound then PlaySound).",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 5.5,
+  "player": {"at": "start"},
+  "rows": [
+    {"name": "owner_a", "classname": "ambient_generic", "at": "north",
+     "keys": {"health": "10", "spawnflags": "16", "message": "impact/physics/metal/hit_hard1.wav"}},
+    {"name": "amb_ai", "classname": "ambient_generic", "at": "start",
+     "keys": {"health": "10", "radius": "1250", "spawnflags": "16", "sound_event": "1", "sound_event_level": "2", "sound_event_owner": "owner_a", "message": "impact/physics/metal/hit_hard1.wav"}},
+    {"name": "amb_carcass", "classname": "ambient_generic", "at": "start",
+     "keys": {"health": "10", "radius": "1250", "spawnflags": "16", "sound_event": "32", "sound_event_level": "9", "sound_event_owner": "nobody", "message": "impact/physics/metal/hit_hard1.wav"}},
+    {"name": "amb_bad", "classname": "ambient_generic", "at": "start",
+     "keys": {"health": "10", "radius": "1250", "spawnflags": "16", "sound_event": "1", "sound_event_level": "2", "sound_event_owner": "nobody", "message": "impact/physics/metal/hit_hard1.wav"}}
+  ],
+  "script": [
+    {"t": 1.0, "do": "fire", "target": "amb_ai", "input": "PlaySound"},
+    {"t": 2.0, "do": "fire", "target": "amb_ai", "input": "PlaySound"},
+    {"t": 2.5, "do": "kill", "target": "owner_a"},
+    {"t": 3.0, "do": "fire", "target": "amb_ai", "input": "StopSound"},
+    {"t": 3.5, "do": "fire", "target": "amb_ai", "input": "PlaySound"},
+    {"t": 4.0, "do": "fire", "target": "amb_carcass", "input": "PlaySound"},
+    {"t": 4.5, "do": "fire", "target": "amb_bad", "input": "PlaySound"}
+  ],
+  "expect": [
+    {"label": "use_on", "who": "amb_ai", "kind": "retail_site", "site": "ambient_use", "match": "fn=CAmbientGeneric::Use va=0x101ad470 phase=entry useType=1 value=0 m_fActive=0 m_fLooping=1", "by": 1.2},
+    {"label": "start", "who": "amb_ai", "kind": "retail_site", "site": "ambient_emit", "match": "fn=CAmbientGeneric::Use va=0x101ad470 phase=emit flags=0x0 vol=1.00 level=70 pitch=100 origin=.* source=self", "regex": true, "within": 0.1},
+    {"label": "owner_found", "who": "amb_ai", "kind": "retail_site", "site": "ai_sound_owner", "match": "fn=FUN_101ad9a0 va=0x101ad9a0 phase=return owner=owner_a via=lookup name=owner_a", "within": 0.1},
+    {"label": "inserted", "who": "amb_ai", "kind": "retail_site", "site": "ai_sound_insert", "match": "fn=CAmbientGeneric::Use va=0x101ad470 phase=insert type=0x1 origin=.* source=self volume=240 level=2 duration=[0-9.]+ owner=owner_a", "regex": true, "within": 0.1},
+    {"label": "second_on_returns", "who": "amb_ai", "kind": "retail_site", "site": "ambient_use", "match": "phase=entry useType=1 value=0 m_fActive=1 m_fLooping=1", "by": 2.2},
+    {"label": "owner_gone", "who": "owner_a", "kind": "removed", "match": "", "by": 2.7},
+    {"label": "stop", "who": "amb_ai", "kind": "retail_site", "site": "ambient_emit", "match": "fn=CAmbientGeneric::Use va=0x101ad470 phase=emit flags=0x4 vol=0.00 level=0 pitch=0", "by": 3.2},
+    {"label": "owner_stale", "who": "amb_ai", "kind": "retail_site", "site": "ai_sound_owner", "match": "phase=return owner=null via=lookup name=owner_a", "by": 3.7},
+    {"label": "refused", "who": "amb_ai", "kind": "retail_site", "site": "ai_sound_insert", "match": "phase=branch refused=owner type=0x1", "within": 0.1},
+    {"label": "carcass_owner", "who": "amb_carcass", "kind": "retail_site", "site": "ai_sound_owner", "match": "phase=return owner=null via=lookup name=nobody", "by": 4.2},
+    {"label": "carcass_inserted", "who": "amb_carcass", "kind": "retail_site", "site": "ai_sound_insert", "match": "phase=insert type=0x20 origin=.* source=self volume=1200 level=3 duration=[0-9.]+ owner=null", "regex": true, "within": 0.1},
+    {"label": "bad_refused", "who": "amb_bad", "kind": "retail_site", "site": "ai_sound_insert", "match": "phase=branch refused=owner type=0x1", "by": 4.7}
+  ],
+  "never": [
+    {"who": "amb_ai", "kind": "retail_site", "site": "ai_sound_owner", "from": 1.5, "until": 3.4},
+    {"who": "amb_ai", "kind": "retail_site", "site": "ai_sound_insert", "from": 1.5, "until": 3.4},
+    {"who": "amb_ai", "kind": "retail_site", "site": "ai_sound_insert", "match": "phase=insert", "from": 3.4}
+  ],
+  "probes": [
+    {"at": "end", "who": "amb_carcass", "probe": "entity_field", "field": "sound_event_level", "equals": 3},
+    {"at": "end", "who": "amb_ai", "probe": "entity_field", "field": "sound_event_level", "equals": 2},
+    {"at": "end", "who": "amb_ai", "probe": "entity_field", "field": "m_fActive", "equals": true},
+    {"at": "end", "who": "amb_bad", "probe": "entity_field", "field": "m_fActive", "equals": true}
+  ],
+  "notes": "The ambients start silent (spawnflags 16) so the first PlaySound is the start that reaches U4; owner_a is a start-silent ambient standing in for any named entity. The insert's duration is the engine's GetSoundDuration floored at 1.0: in the headless host it is the floor, so the record matches any value."
+}

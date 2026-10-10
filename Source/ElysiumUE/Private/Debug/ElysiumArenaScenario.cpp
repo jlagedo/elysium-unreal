@@ -37,7 +37,7 @@ namespace ElysiumArenaScenarioParse
 	};
 
 	// The `fixtures` catalog's kinds. A story adds its own in the slice that stages it.
-	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues"), TEXT("text") };
+	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues"), TEXT("text"), TEXT("sound_folder") };
 
 	enum class ENeed : uint8 { Optional, Required };
 
@@ -1331,7 +1331,7 @@ namespace ElysiumArenaScenarioParse
 			TSharedPtr<FJsonObject> Item;
 			FElysiumArenaFixture& Fixture = Out.AddDefaulted_GetRef();
 			if (!ElementObject(R, (*Items)[Index], Path, Item)
-				|| !CheckFields(R, *Item, Path, { TEXT("id"), TEXT("kind"), TEXT("values"), TEXT("text") })
+				|| !CheckFields(R, *Item, Path, { TEXT("id"), TEXT("kind"), TEXT("values"), TEXT("text"), TEXT("config") })
 				|| !ReadString(R, *Item, TEXT("id"), Path, ENeed::Required, Fixture.Id)
 				|| !ReadString(R, *Item, TEXT("kind"), Path, ENeed::Required, Fixture.Kind))
 			{
@@ -1362,9 +1362,9 @@ namespace ElysiumArenaScenarioParse
 			if (Fixture.Kind == TEXT("text"))
 			{
 				// `text`: raw text a reader is handed whole (`entity_call KeyValues_Lex` / `KeyValues_Parse`).
-				if (FindValue(*Item, TEXT("values")) != nullptr)
+				if (FindValue(*Item, TEXT("values")) != nullptr || FindValue(*Item, TEXT("config")) != nullptr)
 				{
-					return R.Fail(Field(Path, TEXT("values")), TEXT("a `text` fixture takes `text`, not `values`"));
+					return R.Fail(Field(Path, TEXT("values")), TEXT("a `text` fixture takes `text`, not `values` or `config`"));
 				}
 				if (!ReadString(R, *Item, TEXT("text"), Path, ENeed::Required, Fixture.Text)) return false;
 				continue;
@@ -1372,6 +1372,27 @@ namespace ElysiumArenaScenarioParse
 			if (FindValue(*Item, TEXT("text")) != nullptr)
 			{
 				return R.Fail(Field(Path, TEXT("text")), TEXT("only a `text` fixture takes `text`"));
+			}
+			if (Fixture.Kind == TEXT("sound_folder"))
+			{
+				// `sound_folder`: the VSound folder index's owner `T` (`Audio/ElysiumSoundFolderIndex.h`),
+				// `config`: `{"categories": <n>, "counts": [<int>...], "root": <node>}`, a node being
+				// `{"label", "key", "mask": [<0|1>...], "children": [<node>...], "siblings": [<node>...]}`.
+				// The runner checks the shape when it stages the fixture.
+				if (FindValue(*Item, TEXT("values")) != nullptr)
+				{
+					return R.Fail(Field(Path, TEXT("values")), TEXT("a `sound_folder` fixture takes `config`, not `values`"));
+				}
+				if (!ReadObject(R, *Item, TEXT("config"), Path, Fixture.Config)) return false;
+				if (!Fixture.Config.IsValid())
+				{
+					return R.Fail(Field(Path, TEXT("config")), TEXT("required: the owner's categories, counts and root node"));
+				}
+				continue;
+			}
+			if (FindValue(*Item, TEXT("config")) != nullptr)
+			{
+				return R.Fail(Field(Path, TEXT("config")), TEXT("only a `sound_folder` fixture takes `config`"));
 			}
 			// `keyvalues`: a controlled KeyValues table, read back by `entity_field` on `fixture:<id>`.
 			TSharedPtr<FJsonObject> Values;
@@ -1961,6 +1982,16 @@ const TArray<FString>& EntityCallAllowlist()
 		TEXT("KeyValues_GetString"),
 		TEXT("KeyValues_SetString"),
 		TEXT("KeyValues_Chain"),
+		// L0.audio.ambient-source-resume: vslot 113 `Activate` on one live entity, as `ServerActivate`
+		// `0x1011aaf0` calls it once per level activation (the port's restore barrier runs the pass
+		// again): the second pass a record models to re-resolve `CAmbientGeneric`'s source handle.
+		TEXT("Activate"),
+		// L0.audio.sound-folder-index: the VSound folder index's two owner methods (`Audio/
+		// ElysiumSoundFolderIndex.h`) on a staged `sound_folder` fixture -- `AddRange` `0x101f4330`,
+		// which runs `FUN_101f3ba0` over the tree, and `Find` `0x101f42d0`, which runs `FUN_101f3b00`:
+		// the entry points L2's sound-name parser (`FUN_101f3d00`) and wav picker (`FUN_101f4600`) call.
+		TEXT("VSoundFolder_AddRange"),
+		TEXT("VSoundFolder_Find"),
 	};
 	return Allowed;
 }

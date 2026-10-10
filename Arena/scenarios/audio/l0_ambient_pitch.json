@@ -1,0 +1,44 @@
+{
+  "name": "l0_ambient_pitch",
+  "about": "CAmbientGeneric::InputPitch 0x101ac690, the datamap INPUT record Pitch (FIELD_FLOAT; walks/L0-r006.md). P0: the variant's float (AcceptInput has converted the parameter to the record's type; a non-numeric parameter is 0.0). P1: > 255.0f -> 255, else < 0.0f -> 0, then __ftol (truncation). P2: +0x494 (m_dpv[0x3c]) <- pitch, written whether or not a source is live and with no m_fActive gate. P3: the CACHED source handle +0x4c8 only (never re-resolved here): valid -> FUN_101cdac0 (edict, source GetAbsOrigin, name, +0x4a4 * 0.01, +0x454, m_nSndFlags | 0x2, pitch) -- so a stopped (start-silent) ambient still emits its pitch change, as retail does. Pitch 125 -> 125; 300 -> 255; 'abc' -> 0; -5 -> 0.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 3.5,
+  "player": {"at": "start"},
+  "rows": [
+    {"name": "amb_pitch", "classname": "ambient_generic", "at": "start",
+     "keys": {"health": "10", "radius": "1250", "pitch": "100", "message": "impact/physics/metal/hit_hard1.wav"}},
+    {"name": "amb_stopped", "classname": "ambient_generic", "at": "start",
+     "keys": {"health": "8", "radius": "1250", "spawnflags": "16", "message": "impact/physics/metal/hit_hard1.wav"}}
+  ],
+  "script": [
+    {"t": 1.0, "do": "fire", "target": "amb_pitch", "input": "Pitch", "param": 125},
+    {"t": 1.5, "do": "fire", "target": "amb_pitch", "input": "Pitch", "param": 300},
+    {"t": 2.0, "do": "fire", "target": "amb_pitch", "input": "Pitch", "param": "abc"},
+    {"t": 2.5, "do": "fire", "target": "amb_pitch", "input": "Pitch", "param": -5},
+    {"t": 3.0, "do": "fire", "target": "amb_stopped", "input": "Pitch", "param": 90.5}
+  ],
+  "expect": [
+    {"label": "started", "who": "amb_pitch", "kind": "retail_site", "site": "ambient_emit", "match": "fn=CAmbientGeneric::vfunc113 va=0x101ac9c0 phase=emit flags=0x8 vol=1.00 level=70 pitch=100", "by": 0.1},
+    {"label": "p125", "who": "amb_pitch", "kind": "retail_site", "site": "ambient_pitch", "match": "fn=CAmbientGeneric::InputPitch va=0x101ac690 phase=write field=m_dpv[0x3c] value=125", "by": 1.2},
+    {"label": "e125", "who": "amb_pitch", "kind": "retail_site", "site": "ambient_emit", "match": "fn=CAmbientGeneric::InputPitch va=0x101ac690 phase=emit flags=0x2 vol=1.00 level=70 pitch=125 origin=.* source=self", "regex": true, "within": 0.1},
+    {"label": "p255", "who": "amb_pitch", "kind": "retail_site", "site": "ambient_pitch", "match": "phase=write field=m_dpv[0x3c] value=255", "by": 1.7},
+    {"label": "e255", "who": "amb_pitch", "kind": "retail_site", "site": "ambient_emit", "match": "fn=CAmbientGeneric::InputPitch va=0x101ac690 phase=emit flags=0x2 vol=1.00 level=70 pitch=255", "within": 0.1},
+    {"label": "p0_text", "who": "amb_pitch", "kind": "retail_site", "site": "ambient_pitch", "match": "phase=write field=m_dpv[0x3c] value=0 param=", "by": 2.2},
+    {"label": "e0_text", "who": "amb_pitch", "kind": "retail_site", "site": "ambient_emit", "match": "fn=CAmbientGeneric::InputPitch va=0x101ac690 phase=emit flags=0x2 vol=1.00 level=70 pitch=0", "within": 0.1},
+    {"label": "p0_neg", "who": "amb_pitch", "kind": "retail_site", "site": "ambient_pitch", "match": "phase=write field=m_dpv[0x3c] value=0 param=", "by": 2.7},
+    {"label": "stopped_write", "who": "amb_stopped", "kind": "retail_site", "site": "ambient_pitch", "match": "phase=write field=m_dpv[0x3c] value=90", "by": 3.2},
+    {"label": "stopped_emit", "who": "amb_stopped", "kind": "retail_site", "site": "ambient_emit", "match": "fn=CAmbientGeneric::InputPitch va=0x101ac690 phase=emit flags=0x2 vol=0.80 level=70 pitch=90", "within": 0.1}
+  ],
+  "never": [
+    {"who": "amb_stopped", "kind": "retail_site", "site": "ambient_emit", "match": "fn=CAmbientGeneric::vfunc113"}
+  ],
+  "probes": [
+    {"at": 1.3, "who": "amb_pitch", "probe": "entity_field", "field": "m_dpv[0x3c]", "equals": 125},
+    {"at": 1.8, "who": "amb_pitch", "probe": "entity_field", "field": "m_dpv[0x3c]", "equals": 255},
+    {"at": "end", "who": "amb_pitch", "probe": "entity_field", "field": "m_dpv[0x3c]", "equals": 0},
+    {"at": "end", "who": "amb_stopped", "probe": "entity_field", "field": "m_dpv[0x3c]", "equals": 90},
+    {"at": "end", "who": "amb_stopped", "probe": "entity_field", "field": "m_fActive", "equals": false}
+  ],
+  "notes": "On the arena host instead of sp_tutorial_1's CityAmbience (the walk's suggestion): the same input on the same class, with the handle self-bound by the activation pass, and no map boot. amb_stopped's volume word is health 8 -> 80 -> vol=0.80 on the emit."
+}

@@ -806,40 +806,62 @@ bool FElysiumWeatherTimerSequenceTest::RunTest(const FString&)
 	World.Tick(0.0);
 	TestEqual(TEXT("rain-on emits one audio start"), Services.Count(TEXT("Submit ")), 1);
 	// `fadein 10` is the retail 8.8 ramp rate (`vfunc110 0x101ada80`: ftol(100/10 * 0.2) << 8 = 512
-	// per 0.2 s think), not seconds: `health 4` (ceiling 40, `FUN_101ad0f0` step A) ramps 0 -> 40 in
-	// 40 * 256 / 512 / 5 = 4 s (`walks/L0-r005.md`; the port's interim ramp, `InterimRampSeconds`).
-	TestTrue(TEXT("authored audio fade-in is applied"), Services.Saw(TEXT("Submit area/Santa_Monica/rain_light_loop.wav"))
+	// per 0.2 s think), not seconds: the START (`Use 0x101ad470` U3) is emitted at the floor, volume
+	// `+0x4a4` = volstart 0 (`FUN_101ad0f0` C2: fadein set), and the modulation think `FUN_101acb70`
+	// (`walks/L0-r006.md`) adds 512 to the 8.8 accumulator every 0.2 s: `health 4` (ceiling 40,
+	// `FUN_101ad0f0` step A) reaches 40 after 20 thinks, 4 s, each a change-volume emit.
+	TestTrue(TEXT("authored start is emitted at the fade floor"), Services.Saw(TEXT("Submit area/Santa_Monica/rain_light_loop.wav"))
 		&& Services.Calls.ContainsByPredicate([](const FString& Call)
 		{
-			return Call.StartsWith(TEXT("Submit ")) && Call.Contains(TEXT("fade=4.00"));
+			return Call.StartsWith(TEXT("Submit ")) && Call.Contains(TEXT("gain=0.00"));
 		}));
 	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : Services.Emitters)
 	{
 		TestTrue(TEXT("rain-on fans out once to each emitter"),
 			FMath::IsNearlyEqual(Pair.Value.RampTargetScale, 1.0f));
 	}
-	World.Tick(1.0);
+	// The think runs once per tick at most, so the clock is advanced in 0.1 s steps.
+	for (int32 Step = 1; Step <= 10; ++Step) { World.Tick(0.1 * Step); }
 	TestTrue(TEXT("rain-on disables after one second"), OnTimer->NextThink >= ELYSIUM_NEVER_THINK);
 	TestTrue(TEXT("rain duration is authored random 180-500 seconds"),
 		OffTimer->NextThink >= 181.0f && OffTimer->NextThink <= 501.0f);
-	World.Tick(10.0);
+	for (int32 Step = 11; Step <= 100; ++Step) { World.Tick(0.1 * Step); }
 	TestTrue(TEXT("delayed wetness-on reaches target one"),
 		FMath::IsNearlyEqual(Services.LastWetness.TargetWetness, 1.0f));
+	TestEqual(TEXT("the fade-in is 20 change-volume thinks (0 -> 40 at 2 points per 0.2 s)"),
+		Services.Count(TEXT("SetVoiceVolume ")), 20);
+	TestTrue(TEXT("the fade-in ends at the ceiling, health 4 -> 40 -> 0.40"),
+		Services.Calls.ContainsByPredicate([](const FString& Call)
+		{
+			return Call.StartsWith(TEXT("SetVoiceVolume ")) && Call.EndsWith(TEXT(" 0.40"));
+		}));
 
+	const int32 StopsBeforeOff = Services.Count(TEXT("StopVoice "));
 	World.AcceptInput(TEXT("rain_off_timer"), FName(TEXT("FireTimer")),
 		FElysiumVariant::Void(), FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
 	World.Tick(10.0);
-	TestTrue(TEXT("authored audio fade-out is applied"),
-		Services.Calls.ContainsByPredicate([](const FString& Call)
-		{
-			return Call.StartsWith(TEXT("StopVoice ")) && Call.Contains(TEXT("fade=4.00"));   // `fadeout 10`: 40 -> 0 at 512/think
-		}));
 	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : Services.Emitters)
 	{
 		TestTrue(TEXT("rain-off fans out once to each emitter"),
 			FMath::IsNearlyEqual(Pair.Value.RampTargetScale, 0.0f));
 	}
-	World.Tick(11.0);
+	// `fadeout 10`: `Use` U2 arms the running fadeout (512) and the think subtracts it, 40 -> 1 in 20
+	// thinks (the `[1, 100]` clamp holds the last step at 1), then the 21st reads below the floor and
+	// emits STOP (`0x4`, no fade) with no reschedule. (A float `m_flNextThink` lands one 0.1 s tick
+	// late here, so the ticks run well past the 4.3 s the ramp takes.)
+	for (int32 Step = 101; Step <= 180; ++Step) { World.Tick(0.1 * Step); }
+	TestEqual(TEXT("authored audio fade-out ends in one STOP (no fade)"),
+		Services.Count(TEXT("StopVoice ")), StopsBeforeOff + 1);
+	TestTrue(TEXT("the STOP carries no fade"),
+		Services.Calls.Last().StartsWith(TEXT("StopVoice ")) ? Services.Calls.Last().Contains(TEXT("fade=0.00"))
+			: Services.Calls.ContainsByPredicate([](const FString& Call)
+			{
+				return Call.StartsWith(TEXT("StopVoice ")) && Call.Contains(TEXT("fade=0.00"));
+			}));
+	// 21, not 20: the think that crossed the ceiling left the 8.8 accumulator at 42 << 8 (T2 clamps
+	// the emitted volume, not the accumulator), so the first down-think reads 42 -> 40 as a change.
+	TestEqual(TEXT("the fade-out is 21 more change-volume thinks (42 -> 40 -> ... -> 1)"),
+		Services.Count(TEXT("SetVoiceVolume ")), 41);
 	TestTrue(TEXT("rain-off disables after one second"), OffTimer->NextThink >= ELYSIUM_NEVER_THINK);
 	TestTrue(TEXT("dry timer re-arms without duplicate output"),
 		OnTimer->NextThink >= 191.0f && OnTimer->NextThink <= 311.0f);

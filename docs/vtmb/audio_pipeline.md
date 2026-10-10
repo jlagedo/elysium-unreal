@@ -426,6 +426,68 @@ Port: `Source/ElysiumUE/Private/Substrate/ElysiumAmbientGeneric.cpp`; record `Ar
   ambients; all 1,631 author `health`. The constructor `FUN_101ac230` never writes `m_iHealth` or `m_dpv`,
   so a keyless default assumes a zero-filled allocation (unrecovered).
 
+### Activate, the modulation think, Use, Pitch / Volume, the AI sound owner [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r006.md`]
+
+Port: `Source/ElysiumUE/Private/Substrate/ElysiumAmbientGeneric.cpp`; records
+`Arena/scenarios/audio/l0_ambient_source_resume.json`, `l0_ambient_pitch.json`, `l0_ai_sound_owner.json`
+(and `l0_ambient_init.json` for the activation pass on a runtime spawn).
+
+- **`vfunc113` `0x101ac9c0` is slot 113, `CBaseEntity::Activate`'s override**, run once per level
+  activation by `ServerActivate` (`CServerGameDLL::vfunc4` `0x1011aaf0`) — not a per-frame think (an
+  earlier reading). H0: the source handle `+0x4c8` is valid iff `≠ −1`, the handle table's serial matches
+  (`DAT_10566458`, 12-byte records, `h = index | serial << 13`) and the record holds an entity. H1:
+  invalid with `m_sSourceEntName` → `FindEntityByName` `0x100f7770` → the match's `GetRefEHandle`, else
+  −1. H2: still invalid → the ambient's own handle (self), unconditionally. H3: `m_fActive` → `Emit(edict,
+  source GetAbsOrigin, name, +0x4a4·0.01, +0x454, m_nSndFlags | 0x8, +0x494)` and `m_flNextThink =
+  curtime + 0.1`. H4: inactive → nothing emitted, no think. Nothing else re-resolves `+0x4c8`:
+  `InputPitch`, `InputVolume`, Use and the think read the cached handle, so a killed source silences them
+  until the next Activate pass (a save restore runs the pass again). Neither `+0x4c8` nor `+0x4d8` has a
+  datamap record (not saved, not keyed).
+- **The think `FUN_101acb70`** (`m_pfnThink` via `0x1000969c`; reschedules `curtime + 0.2`
+  (`0x10449198`)). Locals: `vol = +0x4a4`, `pitch = +0x494`, `flags = m_nSndFlags`, `changed = 0`.
+  T0: spinup, spindown, fadein, fadeout, lfotype (the running words) all 0 → return, no reschedule.
+  T1 (spinup or spindown ≠ 0): `+0x4a0 += spinup` (≥ 1) else `−= spindown` (> 0); `pitch = +0x4a0 >> 8`;
+  `> +0x45c` → spinup 0, pitch = ceiling; `< +0x460` → spindown 0, STOP emit `(…, 0.0, 0, 0x4, 0)` on a
+  valid handle, return (no reschedule); clamp `[1, 255]`; `changed |= old ≠ pitch`; `+0x494 = pitch`;
+  `flags |= 2`. T2 (fadein or fadeout ≠ 0): the same over `+0x4b0` / `+0x46c` / `+0x470`, clamp `[1,
+  100]`, `+0x4a4 = vol`, `flags |= 1`. The accumulator is not clamped: the think that crosses the
+  ceiling leaves it one step past, so the first down-think reads a change. T3 (`lfotype ≠ 0`): phase
+  `+0x4b4 += +0x480` (running signed rate; `> 0x6fffffff` zeroed first); `pos = phase >> 8`; `phase < 0`
+  → pos 0, phase 0, rate `|rate|`; `pos > 255` → pos 255, phase `0xff00`, rate `−|rate|` (a triangle);
+  output `+0x4b8`: type 1 square (`pos < 0x80 ? 255 : 0`), type 3 `RandomInt(0, 255)` only at
+  `pos == 255`, else `pos`; `lfomodpitch` → the EMITTED pitch `+= (out − 0x80)·modpitch / 100`, clamp
+  `[1, 255]`, not stored; `lfomodvol` likewise on the emitted volume, clamp `[0, 100]`. T4: `flags ≠ 0 ∧
+  changed` and a valid handle → emit `(…, vol·0.01, +0x454, m_nSndFlags | flags, pitch)` with pitch
+  100 → 101. T5: `m_flNextThink = curtime + 0.2`.
+- **Use `FUN_101ad470`** (`m_pfnUse` via `0x100131e2`): `(activator, caller, int useType, float value)`,
+  `useType` 0 OFF / 1 ON / 2 SET / 3 TOGGLE. U0: not TOGGLE → ON while active returns, OFF while
+  inactive returns. U1 SET while active: `v > 1.0 → 1.0f; v < 0.0 → 0.01f; +0x494 = ftol(v·255)`; emit
+  `(…, 0.0, 0, m_nSndFlags | 2, pitch)`; return (SET has no caller among the inputs). U2 OFF/TOGGLE while
+  active: `cspinup ≠ 0` → one more step (`+0x490 + 1`, spinup ← initial, ceiling `+0x45c = (255 −
+  floor) / cspinup · step + floor`, cap 255, `m_flNextThink = curtime + 0.1`, return); else `m_fActive =
+  0`, **`m_spawnflags |= 0x10`** (the start-silent bit, set at runtime), and with no spindown-initial
+  and no fadeout-initial → STOP emit, return; else spindown ← initial, spinup ← 0, fadeout ← initial,
+  fadein ← 0, tail. U3 start: `m_fLooping == 0` → STOP emit (a one-shot is never active: every start is
+  a STOP then a START); else `m_fActive = 1`; `FUN_101ad0f0`; valid handle → START emit `(…, +0x4a4·0.01,
+  +0x454, m_nSndFlags, +0x494)`, then U4. U4: the AI sound (`docs/vtmb/npc-ai/senses.md`, corrected:
+  the insert's origin is the SOURCE entity's). Tail: `m_flNextThink = curtime + 0.1`.
+- **`InputPitch` `0x101ac690`** (datamap INPUT `Pitch`, FIELD_FLOAT): `v = float variant or 0.0`;
+  `> 255 → 255` else `< 0 → 0` (NaN kept); `__ftol` → `+0x494`, with no `m_fActive` gate; cached handle
+  valid → emit `(…, +0x4a4·0.01, +0x454, m_nSndFlags | 2, pitch)`. **`InputVolume` `0x101ac7d0`**: clamp
+  `[0, 10.0f]`, `× 10.0f`, `__ftol` → `+0x4a4` (no `[1, 100]` clamp, no dpv pass); valid handle → emit with
+  `| 1`. The datamap has exactly five INPUT records (`PlaySound`, `StopSound`, `ToggleSound`, `Pitch`,
+  `Volume`): `FadeIn` / `FadeOut` wires are `AcceptInput` refusals (entity_io.md).
+- **`FUN_101ad9a0`**, the owner cache: `+0x4d8` invalid (−1, serial mismatch, empty) → `FindEntityByName(…,
+  name or "", activator = this, caller = NULL)`, `+0x4d8 ← handle or −1`; a valid cache is kept while it
+  lives (no re-lookup). Returns the entity or NULL.
+- **Emit `FUN_101cdac0`** (cdecl): `!`-prefixed name → sentence index (`VEngineServer014` vslot 53) →
+  `"!%d"` or nothing; else `VEngineServer014` vslot 49 with `flags | 0x80`. Flag words passed: `0x8`
+  Activate, `0x2` pitch / SET, `0x1` volume, `0x4` STOP (raw), `0x0` start (SDK `SND_*` names; the engine
+  side is UNRECOVERED). Port: the audio subsystem's voice pool — start/spawning submit a fresh voice at the
+  source entity's origin, attached to its body; change-volume / change-pitch re-level the live voice
+  (a change flag with no live voice is dropped, as `S_StartSound` drops it); STOP stops it. The `!`
+  sentence table is absent in the port (named gap).
+
 ### `PlaySound` and `StopSound` are edge-only, and the wired parameter is inert
 
 `InputPlaySound` `0x101ad3e0` (mode **1**), `InputStopSound` `0x101ad410` (mode **0**),

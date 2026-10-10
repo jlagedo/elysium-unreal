@@ -432,6 +432,9 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
     219: ("const FVector&", "`GetAbsAngles` 0x100b3280: `Angles`, Source degrees"),
     220: ("const FVector&", "`GetOrigin` 0x100b3070: `Origin`; the port has no local/abs split"),
     221: ("const FVector&", "`GetAngles` 0x100b3110: `Angles`; the port has no local/abs split"),
+    222: ("", "`CBaseEntity::GetSoundEmissionOrigin` 0x100a9eb0: the scope-trace label, then slot 192 "
+              "`WorldSpaceCenter` through the dispatch, returned as the sound emission origin "
+              "(L0.audio.sound-emission-origin, walks/L0-r006.md)"),
     142: ("", "`CBaseCombatCharacter::OnTakeDamage` 0x1032ef60: the m_takedamage and team gates, the "
               "life-state split into slots 390/391/392 and the death arm (story 8 wave 2, L13)"),
     390: ("", "`CBaseCombatCharacter::OnTakeDamage_Alive` 0x103302e0: the resolver and the typed "
@@ -529,6 +532,9 @@ def _load_slot_map() -> None:
          "class that carries the EF_NODRAW bit, the owner's wield model going with it"),
         (67, OVERRIDDEN_BELOW, "", "`FElysiumWeapon::Unhide()`: `CBaseEntity::Unhide` 0x1009d380, as "
          "slot 66"),
+        (104, OVERRIDDEN_BELOW, "", "`FElysiumAmbientGeneric::Precache()`: `CAmbientGeneric::Precache` "
+         "0x101ac930, the ambient's override of `CBaseEntity::Precache` 0x10026b90 (a bare `ret`), reached "
+         "as its Spawn's virtual tail `JMP [vtable + 0x1a0]` (L0.audio.ambient-init)"),
         (86, OVERRIDDEN_BELOW, "", "`FElysiumCameraCinematic::ShouldTransmit`: `CBaseCineCam::vfunc86` "
          "0x1006e6a0, the subject-only transmit, over the single player as recipient"),
         (123, OVERRIDDEN_BELOW, "", "`FElysiumCameraCinematic::DrawDebugGeometryOverlays`: "

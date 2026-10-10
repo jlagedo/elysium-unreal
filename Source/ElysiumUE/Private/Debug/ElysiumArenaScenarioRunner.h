@@ -4,6 +4,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Audio/ElysiumSoundFolderIndex.h"  // `sound_folder` fixtures: the staged owner `T`
 #include "Debug/ElysiumArenaScenario.h"
 #include "Debug/ElysiumArenaStage.h"
 #include "Delegates/IDelegateInstance.h"   // FDelegateHandle, the activation binding
@@ -247,6 +248,9 @@ private:
 	// with the target as its name (`0x10247ba0`) and kept for the run so later calls read what a load
 	// wrote and a chain can link two of them.
 	TMap<FString, TSharedPtr<ElysiumKeyValues::FKvNode>> StagedTrees;
+	// `sound_folder` fixtures: the owner `T` each one stages (`Audio/ElysiumSoundFolderIndex.h`), with
+	// the harness's retail-shaped answer to the L2 hook `FUN_101f4530`. By fixture id.
+	TMap<FString, TUniquePtr<ElysiumSoundFolder::FOwner>> StagedFolders;
 	TArray<bool> ActionFired;
 	TArray<bool> ProbeRead;
 

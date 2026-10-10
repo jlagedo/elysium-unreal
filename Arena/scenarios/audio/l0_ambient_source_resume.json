@@ -1,0 +1,53 @@
+{
+  "name": "l0_ambient_source_resume",
+  "about": "CAmbientGeneric::vfunc113 0x101ac9c0 is slot 113, CBaseEntity::Activate's override, run once per level activation by ServerActivate 0x1011aaf0 (walks/L0-r006.md), not a per-frame think. H0: the cached source handle +0x4c8 is valid iff it is not -1, its serial matches the handle table's record and the record holds an entity. H1: invalid with a SourceEntityName -> FindEntityByName 0x100f7770 -> the found entity's GetRefEHandle, else -1. H2: still invalid -> this entity's own handle (self), written without a test. H3: m_fActive -> the activation emission FUN_101cdac0 (flags m_nSndFlags | 0x8, volume +0x4a4 * 0.01, level +0x454, pitch +0x494, the SOURCE entity's GetAbsOrigin) and m_flNextThink = curtime + 0.1, the first run of the modulation think FUN_101acb70. H4: inactive -> the handle is resolved, nothing is emitted, no think is armed. Nothing else re-resolves the handle: InputPitch 0x101ac690 reads the cached handle only, so a killed anchor silences it (the pitch word is still written) until the next Activate pass, which finds no entity of that name, writes -1 and falls back to self. A later pass with a valid cached handle looks nothing up (H0 short-circuits).",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 3.0,
+  "player": {"at": "start"},
+  "rows": [
+    {"name": "anchor", "classname": "ambient_generic", "at": "north",
+     "keys": {"health": "10", "spawnflags": "16", "message": "impact/physics/metal/hit_hard1.wav"}},
+    {"name": "amb_src", "classname": "ambient_generic", "at": "start",
+     "keys": {"health": "10", "radius": "1250", "SourceEntityName": "anchor", "message": "impact/physics/metal/hit_hard1.wav"}},
+    {"name": "amb_self", "classname": "ambient_generic", "at": "start",
+     "keys": {"health": "10", "message": "impact/physics/metal/hit_hard1.wav"}},
+    {"name": "amb_silent", "classname": "ambient_generic", "at": "start",
+     "keys": {"health": "10", "spawnflags": "16", "SourceEntityName": "anchor", "message": "impact/physics/metal/hit_hard1.wav"}}
+  ],
+  "script": [
+    {"t": 1.0, "do": "kill", "target": "anchor"},
+    {"t": 1.3, "do": "fire", "target": "amb_src", "input": "Pitch", "param": 120},
+    {"t": 1.6, "do": "entity_call", "target": "amb_src", "function": "Activate"},
+    {"t": 2.0, "do": "spawn", "row": {"classname": "ambient_generic", "name": "anchor", "at": "north",
+      "keys": {"health": "10", "spawnflags": "16", "message": "impact/physics/metal/hit_hard1.wav"}}},
+    {"t": 2.4, "do": "entity_call", "target": "amb_src", "function": "Activate"}
+  ],
+  "expect": [
+    {"label": "src_bound", "who": "amb_src", "kind": "retail_site", "site": "ambient_activate", "match": "fn=CAmbientGeneric::vfunc113 va=0x101ac9c0 phase=write field=m_hSoundSource value=anchor via=lookup m_fActive=1", "by": 0.1},
+    {"label": "src_emit", "who": "amb_src", "kind": "retail_site", "site": "ambient_emit", "match": "fn=CAmbientGeneric::vfunc113 va=0x101ac9c0 phase=emit flags=0x8 vol=1.00 level=70 pitch=100 origin=.* source=anchor name=impact/physics/metal/hit_hard1.wav", "regex": true, "by": 0.1},
+    {"label": "src_think", "who": "amb_src", "kind": "retail_site", "site": "ambient_activate", "match": "field=m_flNextThink value=curtime+0.1", "by": 0.1},
+    {"label": "self_bound", "who": "amb_self", "kind": "retail_site", "site": "ambient_activate", "match": "field=m_hSoundSource value=self via=self m_fActive=1", "by": 0.1},
+    {"label": "self_emit", "who": "amb_self", "kind": "retail_site", "site": "ambient_emit", "match": "phase=emit flags=0x8 vol=1.00 level=70 pitch=100 origin=.* source=self", "regex": true, "by": 0.1},
+    {"label": "silent_bound", "who": "amb_silent", "kind": "retail_site", "site": "ambient_activate", "match": "field=m_hSoundSource value=anchor via=lookup m_fActive=0", "by": 0.1},
+    {"label": "anchor_gone", "who": "anchor", "kind": "removed", "match": "", "by": 1.2},
+    {"label": "pitch_written", "who": "amb_src", "kind": "retail_site", "site": "ambient_pitch", "match": "fn=CAmbientGeneric::InputPitch va=0x101ac690 phase=write field=m_dpv[0x3c] value=120", "by": 1.5},
+    {"label": "rebound_self", "who": "amb_src", "kind": "retail_site", "site": "ambient_activate", "match": "field=m_hSoundSource value=self via=self m_fActive=1", "by": 1.7},
+    {"label": "resume_emit", "who": "amb_src", "kind": "retail_site", "site": "ambient_emit", "match": "fn=CAmbientGeneric::vfunc113 va=0x101ac9c0 phase=emit flags=0x8 vol=1.00 level=70 pitch=120 origin=.* source=self", "regex": true, "by": 1.7},
+    {"label": "anchor_back", "who": "anchor", "kind": "retail_site", "site": "spawn_arm", "match": "", "by": 2.1},
+    {"label": "cached_holds", "who": "amb_src", "kind": "retail_site", "site": "ambient_activate", "match": "field=m_hSoundSource value=self via=cached m_fActive=1", "by": 2.5}
+  ],
+  "never": [
+    {"who": "amb_silent", "kind": "retail_site", "site": "ambient_emit"},
+    {"who": "amb_silent", "kind": "retail_site", "site": "ambient_activate", "match": "field=m_flNextThink"},
+    {"who": "amb_src", "kind": "retail_site", "site": "ambient_emit", "match": "fn=CAmbientGeneric::InputPitch", "from": 1.1, "until": 1.55},
+    {"who": "amb_src", "kind": "retail_site", "site": "ambient_activate", "match": "via=lookup", "from": 2.3}
+  ],
+  "probes": [
+    {"at": "end", "who": "amb_src", "probe": "entity_field", "field": "m_dpv[0x3c]", "equals": 120},
+    {"at": "end", "who": "amb_src", "probe": "entity_field", "field": "m_fActive", "equals": true},
+    {"at": "end", "who": "amb_silent", "probe": "entity_field", "field": "m_fActive", "equals": false},
+    {"at": "end", "who": "anchor", "probe": "exists", "equals": true}
+  ],
+  "notes": "The rows are activated by the stage's own pass at scenario zero (the arena host's ActivateRuntime), which is the ServerActivate pass itself; the two later entity_call Activate are the pass a save restore runs on the same entities. The anchor is itself a start-silent ambient_generic: any named entity serves as a source, and this one needs no body. The re-spawned anchor at 2.0 is not re-bound by the 2.4 pass: the cached self handle is valid, so H0 skips H1."
+}

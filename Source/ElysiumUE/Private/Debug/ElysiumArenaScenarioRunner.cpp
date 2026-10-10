@@ -774,6 +774,100 @@ void FElysiumArenaScenarioRunner::ReadDueProbes(double Now, FFailure& Out)
 	}
 }
 
+namespace ElysiumArenaRunnerDetail
+{
+	// A `sound_folder` fixture's owner `T`: the retail-shaped answer to the L2 hook `FUN_101f4530`
+	// (`0x101f4530`), `sum(counts[0..cat-1]) + idx` (`idx` for `cat <= 0`), as the walk read the body.
+	// The hook stays L2's in the port (`FOwner::FlatIndex` is pure virtual); the harness supplies the
+	// owner the two L0 rows are tested against, under the record's control.
+	struct FRetailShapedFolderOwner final : public ElysiumSoundFolder::FOwner
+	{
+		virtual int32 FlatIndex(int32 Category, int32 Index) const override
+		{
+			int32 Sum = Index;
+			for (int32 Cat = 0; Cat < Category; ++Cat)
+			{
+				Sum += Counts.IsValidIndex(Cat) ? Counts[Cat] : 0;
+			}
+			return Sum;
+		}
+	};
+
+	// One node of a `sound_folder` fixture's `root`: `{"label", "key", "mask": [...], "children": [...],
+	// "siblings": [...]}`. Siblings are owned by the parent's child list beside the node they follow.
+	bool BuildFolderNode(const FJsonObject& Json, ElysiumSoundFolder::FOwner& Owner, ElysiumSoundFolder::FNode& Node,
+		TArray<TUniquePtr<ElysiumSoundFolder::FNode>>* SiblingHome, FString& OutError)
+	{
+		Node.Owner = &Owner;
+		Json.TryGetStringField(TEXT("label"), Node.Label);
+		double Key = 0.0;
+		if (!Json.TryGetNumberField(TEXT("key"), Key))
+		{
+			OutError = FString::Printf(TEXT("node '%s' needs a `key`"), *Node.Label);
+			return false;
+		}
+		Node.Key = static_cast<int32>(Key);
+		Node.Mask.Reset();
+		const TArray<TSharedPtr<FJsonValue>>* Mask = nullptr;
+		if (Json.TryGetArrayField(TEXT("mask"), Mask))
+		{
+			for (const TSharedPtr<FJsonValue>& Byte : *Mask)
+			{
+				Node.Mask.Add(static_cast<uint8>(Byte.IsValid() && Byte->Type == EJson::Number ? Byte->AsNumber() : 0.0));
+			}
+		}
+		const TArray<TSharedPtr<FJsonValue>>* Children = nullptr;
+		if (Json.TryGetArrayField(TEXT("children"), Children))
+		{
+			for (const TSharedPtr<FJsonValue>& Child : *Children)
+			{
+				if (!Child.IsValid() || Child->Type != EJson::Object)
+				{
+					OutError = FString::Printf(TEXT("node '%s': a child must be an object"), *Node.Label);
+					return false;
+				}
+				TUniquePtr<ElysiumSoundFolder::FNode> Built = MakeUnique<ElysiumSoundFolder::FNode>();
+				ElysiumSoundFolder::FNode& Ref = *Built;
+				Node.Children.Add(MoveTemp(Built));
+				if (!BuildFolderNode(*Child->AsObject(), Owner, Ref, &Node.Children, OutError))
+				{
+					return false;
+				}
+			}
+		}
+		const TArray<TSharedPtr<FJsonValue>>* Siblings = nullptr;
+		if (Json.TryGetArrayField(TEXT("siblings"), Siblings))
+		{
+			if (SiblingHome == nullptr)
+			{
+				OutError = TEXT("the root node takes no `siblings`");
+				return false;
+			}
+			ElysiumSoundFolder::FNode* Previous = &Node;
+			for (const TSharedPtr<FJsonValue>& Sibling : *Siblings)
+			{
+				if (!Sibling.IsValid() || Sibling->Type != EJson::Object)
+				{
+					OutError = FString::Printf(TEXT("node '%s': a sibling must be an object"), *Node.Label);
+					return false;
+				}
+				TUniquePtr<ElysiumSoundFolder::FNode> Built = MakeUnique<ElysiumSoundFolder::FNode>();
+				ElysiumSoundFolder::FNode& Ref = *Built;
+				// The next child of the same parent (`+0x08` is the link `FUN_101f3b00` walks on a key
+				// match), owned by that parent's child list right after the node it follows.
+				SiblingHome->Add(MoveTemp(Built));
+				if (!BuildFolderNode(*Sibling->AsObject(), Owner, Ref, nullptr, OutError))
+				{
+					return false;
+				}
+				Previous->Sibling = &Ref;
+				Previous = &Ref;
+			}
+		}
+		return true;
+	}
+}
+
 void FElysiumArenaScenarioRunner::StageFixtures(FElysiumEntityWorld& World)
 {
 	for (const FElysiumArenaFixture& Fixture : Record.Fixtures)
@@ -782,6 +876,43 @@ void FElysiumArenaScenarioRunner::StageFixtures(FElysiumEntityWorld& World)
 		FEvent& Staged = Events.AddDefaulted_GetRef();
 		StampEvent(Staged, World.NowSeconds());
 		Staged.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+		if (Fixture.Kind == TEXT("sound_folder"))
+		{
+			// The owner `T` of `Audio/ElysiumSoundFolderIndex.h`, retail-shaped: `categories` is the
+			// category table's count (`*(T + 8) + 0x14`), `counts` the per-category array (`*(T + 0xc)`),
+			// `root` the node at `T + 0x10`. A malformed configuration stages nothing and says why.
+			TUniquePtr<ElysiumArenaRunnerDetail::FRetailShapedFolderOwner> Owner = MakeUnique<ElysiumArenaRunnerDetail::FRetailShapedFolderOwner>();
+			FString Error;
+			double Categories = 0.0;
+			const TArray<TSharedPtr<FJsonValue>>* Counts = nullptr;
+			const TSharedPtr<FJsonObject>* RootJson = nullptr;
+			if (!Fixture.Config.IsValid() || !Fixture.Config->TryGetNumberField(TEXT("categories"), Categories)
+				|| !Fixture.Config->TryGetArrayField(TEXT("counts"), Counts) || !Fixture.Config->TryGetObjectField(TEXT("root"), RootJson))
+			{
+				Error = TEXT("config needs `categories` (number), `counts` (array) and `root` (object)");
+			}
+			else
+			{
+				Owner->CategoryCount = static_cast<int32>(Categories);
+				for (const TSharedPtr<FJsonValue>& Count : *Counts)
+				{
+					Owner->Counts.Add(static_cast<int32>(Count.IsValid() && Count->Type == EJson::Number ? Count->AsNumber() : 0.0));
+				}
+				ElysiumArenaRunnerDetail::BuildFolderNode(**RootJson, *Owner, Owner->Root, nullptr, Error);
+			}
+			if (Error.IsEmpty())
+			{
+				Staged.Text = FString::Printf(TEXT("fixture %s %s staged categories=%d counts=%d total=%d root=%s"), *Fixture.Id, *Fixture.Kind,
+					Owner->CategoryCount, Owner->Counts.Num(), Owner->Total(), *ElysiumSoundFolder::MaskText(Owner->Root));
+				StagedFolders.Add(Fixture.Id, MoveTemp(Owner));
+			}
+			else
+			{
+				Staged.Text = FString::Printf(TEXT("fixture %s %s failed: %s"), *Fixture.Id, *Fixture.Kind, *Error);
+				StagedFixtures.Remove(Fixture.Id);
+			}
+			continue;
+		}
 		Staged.Text = Fixture.Kind == TEXT("text")
 			? FString::Printf(TEXT("fixture %s %s staged chars=%d"), *Fixture.Id, *Fixture.Kind, Fixture.Text.Len())
 			: FString::Printf(TEXT("fixture %s %s staged keys=%d"), *Fixture.Id, *Fixture.Kind, Fixture.Values.Num());
@@ -804,6 +935,48 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 		if (Fixture == nullptr)
 		{
 			OutError = FString::Printf(TEXT("fixture '%s' is not staged"), *Probe.Who.Mid(8));
+			return false;
+		}
+		// A `sound_folder` fixture answers `mask` (`index`: a node's label; the bytes joined by commas)
+		// and `count` (`index`: the category; a number) off its staged owner.
+		if (Fixture->Kind == TEXT("sound_folder"))
+		{
+			const TUniquePtr<ElysiumSoundFolder::FOwner>* Owner = StagedFolders.Find(Fixture->Id);
+			if (Owner == nullptr || !Owner->IsValid() || !Probe.Member.IsEmpty() || Probe.Index.IsEmpty())
+			{
+				OutError = FString::Printf(TEXT("fixture '%s': `mask` / `count` take `index` (a node label / a category) and no `member`"), *Fixture->Id);
+				return false;
+			}
+			if (Probe.Field == TEXT("count"))
+			{
+				const int32 Category = FCString::Atoi(*Probe.Index);
+				OutAnswer.Type = FElysiumArenaValue::EType::Number;
+				OutAnswer.Number = (*Owner)->Counts.IsValidIndex(Category) ? (*Owner)->Counts[Category] : 0;
+				return true;
+			}
+			if (Probe.Field != TEXT("mask"))
+			{
+				OutError = FString::Printf(TEXT("fixture '%s' has no field '%s' (mask, count)"), *Fixture->Id, *Probe.Field);
+				return false;
+			}
+			TArray<const ElysiumSoundFolder::FNode*> Pending;
+			Pending.Add(&(*Owner)->Root);
+			while (!Pending.IsEmpty())
+			{
+				const ElysiumSoundFolder::FNode* Node = Pending.Pop();
+				if (Node == nullptr) continue;
+				if (Node->Label == Probe.Index)
+				{
+					OutAnswer.Type = FElysiumArenaValue::EType::String;
+					OutAnswer.String = ElysiumSoundFolder::MaskText(*Node);
+					return true;
+				}
+				for (const TUniquePtr<ElysiumSoundFolder::FNode>& Child : Node->Children)
+				{
+					Pending.Add(Child.Get());
+				}
+			}
+			OutError = FString::Printf(TEXT("fixture '%s' has no node labelled '%s'"), *Fixture->Id, *Probe.Index);
 			return false;
 		}
 		// A `text` fixture answers its one field, `text`.
@@ -1806,6 +1979,84 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			ElysiumKeyValues::SetString(*Tree, *Key, Second, &Sites);
 			RecordDone(FString::Printf(TEXT("entity_call KeyValues_SetString done key=%s value=%s"), *Key,
 				*ElysiumKeyValues::Shown(Second)));
+			return true;
+		}
+		if (Action.Function == TEXT("Activate"))
+		{
+			// `ServerActivate` `0x1011aaf0`'s per-entity call: vslot 113 (`+0x1c4`) on one live entity,
+			// as the level's activation pass (and a save restore's second barrier) runs it. No arguments.
+			// Idempotence is the entity's own: the pass calls the slot on an already-activated entity too.
+			FElysiumEntity* Target = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
+			if (Target == nullptr || Target->IsDead())
+			{
+				OutError = FString::Printf(TEXT("entity_call 'Activate': no live entity named '%s'"), *Action.Target);
+				return false;
+			}
+			if (!Action.Args.IsEmpty())
+			{
+				OutError = TEXT("entity_call 'Activate' takes no arguments");
+				return false;
+			}
+			Target->Activate();
+			FEvent& Done = Events.AddDefaulted_GetRef();
+			StampEvent(Done, World.NowSeconds());
+			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+			Done.Name = Action.Target;
+			Done.Text = TEXT("entity_call Activate done");
+			return true;
+		}
+		if (Action.Function == TEXT("VSoundFolder_AddRange") || Action.Function == TEXT("VSoundFolder_Find"))
+		{
+			// The VSound folder index's two `T`-methods (`Audio/ElysiumSoundFolderIndex.h`): `AddRange`
+			// `0x101f4330` -> `FUN_101f3ba0`, `Find` `0x101f42d0` -> `FUN_101f3b00`. Argument 0 names a
+			// staged `sound_folder` fixture (the owner `T`); the rest are the retail integers.
+			const FElysiumArenaFixture* Source = Action.Args.Num() >= 1 && !Action.Args[0].Fixture.IsEmpty()
+				? StagedFixtures.Find(Action.Args[0].Fixture) : nullptr;
+			TUniquePtr<ElysiumSoundFolder::FOwner>* Owner = Source != nullptr ? StagedFolders.Find(Source->Id) : nullptr;
+			if (Source == nullptr || Source->Kind != TEXT("sound_folder") || Owner == nullptr || !Owner->IsValid())
+			{
+				OutError = FString::Printf(TEXT("entity_call '%s' takes a staged `sound_folder` fixture as its first argument"), *Action.Function);
+				return false;
+			}
+			auto IntArg = [&Action](int32 Index, int32& Out) -> bool
+			{
+				if (Action.Args.Num() <= Index || Action.Args[Index].Value.Type != FElysiumArenaValue::EType::Number) return false;
+				Out = static_cast<int32>(Action.Args[Index].Value.Number);
+				return true;
+			};
+			FElysiumNamedRetailSites Sites(World, Action.Target);
+			// The call's result is written after its sites (the sink appends to `Events` while the method
+			// runs, so the event is built last and added once).
+			auto RecordDone = [this, &World, &Action](const FString& Text)
+			{
+				FEvent& Done = Events.AddDefaulted_GetRef();
+				StampEvent(Done, World.NowSeconds());
+				Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+				Done.Name = Action.Target;
+				Done.Text = Text;
+			};
+			if (Action.Function == TEXT("VSoundFolder_AddRange"))
+			{
+				int32 Category = 0, Hi = 0;
+				if (!IntArg(1, Category) || !IntArg(2, Hi) || Action.Args.Num() != 3)
+				{
+					OutError = TEXT("entity_call 'VSoundFolder_AddRange' takes [{\"fixture\": id}, <category>, <hi>]");
+					return false;
+				}
+				(*Owner)->AddRange(Category, Hi, &Sites);
+				RecordDone(FString::Printf(TEXT("entity_call VSoundFolder_AddRange done cat=%d hi=%d count=%d total=%d"), Category, Hi,
+					(*Owner)->Counts.IsValidIndex(Category) ? (*Owner)->Counts[Category] : 0, (*Owner)->Total()));
+				return true;
+			}
+			int32 Key = 0, Category = 0, MemberIndex = 0;
+			if (!IntArg(1, Key) || !IntArg(2, Category) || !IntArg(3, MemberIndex) || Action.Args.Num() != 4)
+			{
+				OutError = TEXT("entity_call 'VSoundFolder_Find' takes [{\"fixture\": id}, <key>, <category>, <index>]");
+				return false;
+			}
+			const ElysiumSoundFolder::FNode* Found = (*Owner)->Find(Key, Category, MemberIndex, &Sites);
+			RecordDone(FString::Printf(TEXT("entity_call VSoundFolder_Find done key=%d cat=%d idx=%d node=%s"), Key, Category, MemberIndex,
+				Found != nullptr ? (Found->Label.IsEmpty() ? TEXT("?") : *Found->Label) : TEXT("null")));
 			return true;
 		}
 		OutError = FString::Printf(TEXT("entity_call '%s' is allowlisted but has no dispatch"), *Action.Function);

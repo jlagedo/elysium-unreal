@@ -1532,6 +1532,17 @@ void FElysiumCombatCharacter::CreateCorpse(const FVector& Force, void* InInfo)
 			}
 			if (bBurns) // 0x1032c3c1: audio follows the removal clock writes
 			{
+				// The recipient filter of the burning-death emit (`CreateCorpse` `0x1032c0e0`, burn arm):
+				// `CPASFilter(GetSoundEmissionOrigin())` then `CPASAttenuationFilter(GetSoundEmissionOrigin(),
+				// 0.8)` -- two dispatches of slot 222 (`+0x378`, `0x100a9eb0`: slot 192 `WorldSpaceCenter`;
+				// `walks/L0-r006.md`). The filter is a recipient cull that single-player never runs
+				// (`docs/vtmb/footsteps.md` §3.5), and the audible position is the engine's placement of the
+				// edict (`+0x2e0`, the entindex `EmitSound` takes), so the answers are not consumed here; the
+				// slot is dispatched as retail does, where retail does, so a class that refills it answers.
+				const FVector PasFilterOrigin = GetSoundEmissionOrigin();
+				const FVector AttenuationFilterOrigin = GetSoundEmissionOrigin();
+				(void)PasFilterOrigin;
+				(void)AttenuationFilterOrigin;
 				// 0x1032c3c1..0x1032c3d7: volume 1, attenuation 0.8 (= level 75), pitch 100, CHAN_AUTO.
 				if (IElysiumAudio* const BurnAudio = World != nullptr ? World->Audio() : nullptr)
 				{

@@ -154,6 +154,7 @@ is unique in the record, the kind one of `ElysiumArenaScenario::FixtureKinds()`.
 |---|---|---|
 | `keyvalues` | `values`: an object of keys to string, number or boolean values (read as a map row spells them) | a controlled KeyValues table, read back by `entity_field` on `who: "fixture:<id>"`, `field` the key |
 | `text` | `text`: a string, handed whole (JSON escapes spell newlines, quotes and backslashes) | raw text a reader is given as the buffer it would have read from a file: the argument of `entity_call KeyValues_Lex` / `KeyValues_Parse`, or the bytes a `KeyValues_LoadFile` name answers with; `entity_field` on `fixture:<id>` answers `field: "text"`. Staged as `fixture <id> text staged chars=<n>` |
+| `sound_folder` | `config`: `{"categories": <n>, "counts": [<int>...], "root": <node>}`, a node `{"label", "key", "mask": [<0|1>...], "children": [<node>...], "siblings": [<node>...]}` (a sibling is the parent's next child, linked through `+0x08`) | the VSound folder index's owner `T` (`Source/ElysiumUE/Private/Audio/ElysiumSoundFolderIndex.h`: `*(T + 8) + 0x14` the category count, `*(T + 0xc)` the counts, the root node at `T + 0x10`), with the harness's retail-shaped answer to the L2 hook `FUN_101f4530` (`sum(counts[0..cat-1]) + idx`); the argument of `entity_call VSoundFolder_AddRange` / `VSoundFolder_Find`; `entity_field` on `fixture:<id>` answers `field: "mask"` (`index`: a node label; the bytes joined by commas) and `field: "count"` (`index`: the category). Staged as `fixture <id> sound_folder staged categories= counts= total= root=<mask>`; a malformed `config` stages nothing (`fixture <id> sound_folder failed: <why>`) |
 
 A fixture is named by an `entity_call` argument (`{"fixture": "<id>"}`) or an `entity_field` `who`. An
 unknown kind, a duplicate id, or a reference to a fixture the record does not declare is a parse error.
@@ -178,6 +179,9 @@ ordinary record, a `script` failure on an `expect_fail` one. Traced as `script`:
 | `KeyValues_GetString` | as above | `["<key>", "<default>"]` | `0x10248cd0`: `kv.find`, `kv.getstr branch`, on a numeric node `kv.find` + `kv.setstr` (the writeback through `0x102490e0`), `kv.getstr return` | `entity_call KeyValues_GetString done key=<k> result=<text>` |
 | `KeyValues_SetString` | as above | `["<key>", "<value>"]` | `0x102490e0`: `kv.find` (create), `kv.setstr` | `entity_call KeyValues_SetString done key=<k> value=<text>` |
 | `KeyValues_Chain` | as above | `["<other target>"]` | the harness-built fallback link `+0x18` (`0x10248900` arm 3 searches it; the corpus shows no retail writer) | `entity_call KeyValues_Chain done chain=<other>` |
+| `Activate` | a live entity's targetname | none | vslot 113 `Activate` on that entity, as `ServerActivate` `0x1011aaf0` calls it once per level activation (the port's restore barrier runs the pass again): the second pass a record models to re-resolve a cached handle (`CAmbientGeneric::vfunc113` `0x101ac9c0`) | `entity_call Activate done` |
+| `VSoundFolder_AddRange` | a utility name (`vsound`), the `who` of its events | `[{"fixture": <sound_folder id>}, <category>, <hi>]` | the owner's `AddRange` `0x101f4330`: `counts[cat] < hi + 1` -> store, then `FUN_101f3ba0` over the tree (`folder_addrange`, `folder_insert` sites) | `entity_call VSoundFolder_AddRange done cat= hi= count= total=` |
+| `VSoundFolder_Find` | as above | `[{"fixture": <sound_folder id>}, <key>, <category>, <index>]` | the owner's `Find` `0x101f42d0`: `key == -1` -> NULL, else `FUN_101f3b00` (`folder_find` sites) | `entity_call VSoundFolder_Find done key= cat= idx= node=<label|null>` |
 
 **`entity_field`** (a `probes` entry: `who`, `field`, optional `to`, `index`, `member`, one comparison) --
 reads a retail field by its **retail name** (`m_iName`, `m_iHealth`, the datamap name or the ledger's
@@ -219,7 +223,24 @@ origin= level=`, before the warning and the removal), `spawn_arm` (`CAmbientGene
 `branch m_flNextThink=0 m_pfnThink= m_pfnUse= m_fActive= m_fLooping= m_nSndFlags= m_hSoundSource=`, the
 words at the tail jump), `precache_arm` (`CAmbientGeneric::Precache` `0x101ac930`: `branch precache=
 name=`, `write field=m_fActive value=`), `dpv_pass` (`FUN_101ad0f0` `0x101ad0f0`: `entry m_iHealth=
-preset=`, `return volrun= vol= pitchrun= pitch= spinup= fadein= pitchfrac= volfrac= cspincount=`). A
+preset=`, `return volrun= vol= pitchrun= pitch= spinup= fadein= pitchfrac= volfrac= cspincount=`); the
+ambient's playback (`walks/L0-r006.md`): `ambient_activate` (`CAmbientGeneric::vfunc113` `0x101ac9c0`,
+`write field=m_hSoundSource value=<targetname|self> via=<cached|lookup|self> m_fActive=`, `write
+field=m_flNextThink value=curtime+0.1`), `ambient_think` (`FUN_101acb70` `0x101acb70`: `branch idle=1`,
+`branch stop=<pitch|volume> ...`, `return vol= pitch= flags= changed= pitchfrac= volfrac=`), `ambient_use`
+(`CAmbientGeneric::Use` `0x101ad470`: `entry useType= value= m_fActive= m_fLooping=`, `branch
+arm=<set|cspinup|off|start> ...`), `ambient_pitch` (`CAmbientGeneric::InputPitch` `0x101ac690`, `write
+field=m_dpv[0x3c] value= param=`), `ambient_volume` (`CAmbientGeneric::InputVolume` `0x101ac7d0`, `write
+field=m_dpv[0x4c] value= param=`), `ambient_emit` (the `FUN_101cdac0` call, tagged with the CALLER's
+`fn=`/`va=`: `emit flags= vol= level= pitch= origin= source=<targetname|self> name=`), `ai_sound_owner`
+(`FUN_101ad9a0` `0x101ad9a0`, `return owner=<targetname|null> via=<cached|lookup> name=`),
+`ai_sound_insert` (`CAmbientGeneric::Use` `0x101ad470` U4: `insert type= origin= source= volume= level=
+duration= owner=`, `branch refused=owner type=`); `sound_origin` (`CBaseEntity::GetSoundEmissionOrigin`
+`0x100a9eb0`, `return origin= abs_origin=`); the VSound folder index (`Audio/ElysiumSoundFolderIndex.h`):
+`folder_addrange` (`FUN_101f4330` `0x101f4330`, `branch cat= hi= count= grow= lo=`), `folder_insert`
+(`FUN_101f3ba0` `0x101f3ba0`: `entry node= cat= hi= lo= total= a= b= old=`, `warning node= b= total=`,
+`return node= mask=`), `folder_find` (`FUN_101f3b00` `0x101f3b00`: `branch node= arm=<sibling|children>
+key= [flat= hit=|children=]`; `FUN_101f42d0` `0x101f42d0`: `return key= cat= idx= node=<label|null>`). A
 pure function reports through `IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a utility with no
 entity names its target in the entity column (`FElysiumNamedRetailSites`).
 
@@ -388,7 +409,12 @@ record — and a `reason`) and
 | `_selftest/selftest_entity_field_fails` | an `entity_field` probe on a field with no retail adapter fails the run |
 | `_selftest/selftest_retail_site_matches` | a `retail_site` event carries tag, retail function and address, and `expect` / `never` match on `site` |
 | `audio/l0_ambient_radius_level` | `0x101ac570` at `CAmbientGeneric::Spawn` (`0x101ac321` / `0x101ac326`): eleven radii (and one everywhere flag) to their `m_iSoundLevel`, each arm traced, the stored words probed (L0.audio.ambient-radius-level) |
-| `audio/l0_ambient_init` | `CAmbientGeneric` initialization: the dpv keys through `vfunc110` `0x101ada80` (clamps, spin/fade transforms, mirrors), `Spawn` `0x101ac310` (the empty-sound removal, `m_fLooping`, `m_nSndFlags`, the tail words), `Precache` `0x101ac930` (the engine-precache gate, `m_fActive`) and the dpv pass `FUN_101ad0f0` (health volume, preset 1, cspinup, the pitch 101 rule) over ten ambients, every `m_dpv` word probed by its offset (L0.audio.ambient-init) |
+| `audio/l0_ambient_init` | `CAmbientGeneric` initialization: the dpv keys through `vfunc110` `0x101ada80` (clamps, spin/fade transforms, mirrors), `Spawn` `0x101ac310` (the empty-sound removal, `m_fLooping`, `m_nSndFlags`, the tail words), `Precache` `0x101ac930` (the engine-precache gate, `m_fActive`) and the dpv pass `FUN_101ad0f0` (health volume, presets 1 and 7, cspinup, the pitch 101 rule, `fadein 2` -> 2560, `fadein 3` -> 1536, spawnflags 1 -> level 0) over fourteen ambients, every `m_dpv` word probed by its offset, and the activation pass `vfunc113` `0x101ac9c0` on a runtime spawn (L0.audio.ambient-init) |
+| `audio/l0_ambient_source_resume` | `CAmbientGeneric::vfunc113` `0x101ac9c0` is `Activate` (slot 113), run by `ServerActivate` `0x1011aaf0` once per activation: the named source bound by lookup, the self fallback, the flags-`0x8` emission and the first think only when active; a killed source silences the cached handle (a `Pitch` writes but emits nothing) until the next pass, which finds nothing and binds self; a valid cache looks nothing up (L0.audio.ambient-source-resume) |
+| `audio/l0_ambient_pitch` | `CAmbientGeneric::InputPitch` `0x101ac690`: the float clamp `[0, 255]` and truncation into `m_dpv[0x3c]`, the change-pitch emission through the cached handle with no `m_fActive` gate (a start-silent ambient emits its pitch change too); 125, 300 -> 255, `abc` -> 0, -5 -> 0 (L0.audio.ambient-pitch) |
+| `audio/l0_ai_sound_owner` | `FUN_101ad9a0` `0x101ad9a0` and Use `0x101ad470` U4: the owner resolved and cached on the first start, a second PlaySound on an active ambient returning at U0, the stale cache re-resolved only by a fresh start (StopSound, PlaySound), the refusal for a NULL owner outside CARCASS/FLINCH, the level clamp written back, the insert at the SOURCE entity's origin with `VolumeLevels[level]` (L0.audio.ai-sound-owner) |
+| `audio/l0_sound_emission_origin` | `CBaseEntity::GetSoundEmissionOrigin` `0x100a9eb0` (slot 222) answers slot 192 `WorldSpaceCenter` through the dispatch: `CreateCorpse` `0x1032c0e0`'s burn arm (a Kindred's death) dispatches it twice for its PAS filters, each return a centre above the entity's origin and never the origin itself (L0.audio.sound-emission-origin) |
+| `audio/l0_sound_folder_index` | the VSound folder index: `FUN_101f3ba0` `0x101f3ba0` through `AddRange` `0x101f4330` (the walk's worked example `[2, 3]` + `AddRange(0, 3)`, the tree expanded node by node, the no-grow arm, the tail arm) and `FUN_101f3b00` `0x101f3b00` through `Find` `0x101f42d0` (the sibling walk regardless of key, children never searched on a key match, `key -1`) on a `sound_folder` fixture (L0.audio.sound-folder-index) |
 | `audio/l0_keyvalues_lexer` | the tokenizer `0x10247280` through its wrapper `0x101f2f30`, tables `0x102473e0` / `0x1023eff0`: eighteen texts to their token, quote and cursor sequences (L0.audio.keyvalues-lexer) |
 | `audio/l0_keyvalues_tree` | the file reader `0x101f2180` and block parser `0x101f2360`: root reuse and chaining, the missing-brace error, the top-level `}`, the empty key, and the strtol/strtod leaf typing (L0.audio.keyvalues-tree) |
 | `audio/l0_scheme_file_load` | the KeyValues FILE loader `0x102480f0` (the `CSoundScheme::Precache` call), its wrapper `0x102482b0`, block parser `0x10248510` and text cache `0x102482f0`: the cache hit and miss, the loader's own open, no `.txt`, a missing file, every top-level token a root, the first-byte brace test, the typed leaves, and `sound/Schemes/SP_Tutorial_City.txt` itself (L0.audio.scheme-file-load) |
