@@ -587,6 +587,13 @@ record — and a `reason`) and
 
 ## The records
 
+`world/l0_physics_solid_mask` covers independent `PhysicsSolidMaskForEntity` `0x1003e7a0`
+(slot 237), called through the live entity virtual on a registered plain entity, spawned NPC and
+the actual player. `entity_call PhysicsSolidMaskForEntity` takes no arguments and reports the
+returned mask as `value=0x...`; it observes the real flags/self-downcast inputs, with no fixtures.
+Automation `Elysium.Substrate.PhysicsMaskProduction` adds runtime flag precedence and world
+recreation. This record does not close generic traces, object/shadow production or the STEP loop.
+
 | Record | Proves |
 |---|---|
 | `cover` | the tactical cover program through the shot (green since V3a) |

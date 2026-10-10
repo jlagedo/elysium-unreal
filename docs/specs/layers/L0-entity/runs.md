@@ -23,7 +23,10 @@ found below; these are scope boundaries, not authorization to dispatch frame-onl
    dispatch; split further only at a complete producer boundary. Engine partition query slots 12-15
    call the consumer before their mask gate; do not invent frame-end scheduling.
    Targeted recovery identifies DAT_1072393c as `VPhysicsCollision007`, loaded by
-   `CPhysicsHook::Init` `0x1002d7d0`; its actual implementation is outside the current corpus.
+   `CPhysicsHook::Init` `0x1002d7d0`. Fresh corpus inventory includes `vphysics.dll`;
+   factory `0x260099f0` exposes global `0x260f0698`, table `0x260c9550`, with service
+   slot 18 through `0x2600aad0` to `0x26021db0`. Geometry semantics remain open, rather
+   than blocked by an absent module.
    `0x100dd450` asm pushes literal 0, cp slot9 angles, cp slot8 origin, physics-object slot49
    geometry, out-maxs and out-mins before service slot18. Preserve these arguments and recover
    the service geometry contract rather than assuming a component's current world AABB is equal.
@@ -37,15 +40,28 @@ physics through absolute getters at its actual consumers. The candidate was pres
 and reverted after a real movement regression; its five passing bounded records did not cover
 that consumer. No new transform rows or original run closed.
 
-Next is targeted recovery of the live physics-object/shadow producer (`0x100a6490` /
-`0x100a68f0`, actual object/shadow construction and physics-object slot 46), slot 232
-`0x100a69e0`, and its necessary simulation/relink call timing (`0x100342c0`,
-`0x1003b190`, `0x100a53d0`, `0x10039ac0`, `0x10040390` / `0x1003ffa0`). These are L0
-physical consumers; partition queries are a separate dependency. The service implementation,
-construction/lifetime and smallest complete subset remain unrecovered; do not dispatch a
-coding packet that substitutes a UE teleport or frame-end refresh. Once that producer boundary
-is recovered, implement it with the frame cache it consumes, then the query-time bounds/partition
-lifecycle and absolute setters. Resume the saved candidate only after correcting this frontier.
+Targeted recovery now resolves the live physics-object/shadow service: object constructor
+`0x260168e0` installs table `0x260c9db0`; slot 46 is `0x260185b0 UpdateShadow`, which
+delegates to an existing controller rather than writing pose itself. Controller target writer
+`0x2601aad0` and simulation callback `0x2601aa50` / `0x2601a250` maintain separate target,
+arrival and velocity state. `PhysFrame` `0x1002ea40` runs after entity think, then dispatches
+active-object slot 226 and shadow-list slot 229 after simulation. NPC slot 229 is empty;
+its pose feedback instead occurs in `PhysicsStepTroika` `0x1003a610` before STEP traces and
+think modes 2 then 1, with target submission afterwards. Existing actor sampling is not that
+producer. The new walk `walks/L0-physics-producer.md` and `docs/vtmb/physics-interaction.md`
+record construction, simulation, lifetime and exact remaining dependencies.
+
+The first independent prerequisite packet is slot 237 `PhysicsSolidMaskForEntity`
+`0x1003e7a0`: real Flags and player self-downcast construction suffice; no body or query
+surrogate is needed. Its completion does not close collision query, r044/r045, or r022.
+Subsequent independent mask/filter/query producers must preserve collision group, custom
+collision dispatch, cylindrical hull state and retail veto order. A complete owned body/controller
+packet requires shape/collision identity, simulation clock, active enumeration and deferred deletion
+together; it can precede its STEP/pusher callers when its own inputs are complete. Then implement
+the required consumer loop with the cache it consumes, followed by query-time bounds/partition
+and absolute setters. Do not substitute UE teleport, frame-end refresh, target storage alone,
+or assume that the IVP solver must be copied. Resume the saved candidate only after that real
+producer boundary is built. Geometry and the complete body/controller environment remain open.
 
 Candidate/evidence: `E:/elysium-work/codex/l0-r022a-deferred-20261010/README.md`;
 durable recovery: `docs/vtmb/entity_io.md`, "Separate transform cache: physical consumer planning fault".

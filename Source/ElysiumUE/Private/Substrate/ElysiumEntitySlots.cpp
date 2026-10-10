@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 219 generated slot bodies of `FElysiumEntity`: 75 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 66 are defined by hand in the substrate,
-// and 60 are still stubs — 59 29c, 1 unassigned. 18 are closed (0019/6) and answer the
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 67 are defined by hand in the substrate,
+// and 59 are still stubs — 58 29c, 1 unassigned. 18 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -1692,15 +1692,7 @@ void FElysiumEntity::OnPhysGunDrop(FElysiumEntity*, bool)
 {
 }
 
-// slot 237 0x1003e7a0 (sdk) `unsignedint PhysicsSolidMaskForEntity() const`
-//   returns `unsignedint`
-//   layer 0, story 29c
-int32 FElysiumEntity::PhysicsSolidMaskForEntity() const
-{
-	FireEntitySlot(TEXT("CBaseEntity::PhysicsSolidMaskForEntity"), TEXT("0x1003e7a0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// slot 237 0x1003e7a0: hand body in ElysiumEntitySlotBodies.cpp.
 
 // slot 238 0x10039ff0 (sdk) `void PerformCustomPhysics(Vector*, Vector*, QAngle*, QAngle*)`
 //   layer 0, story 29c
@@ -2601,7 +2593,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*, bool)>::Test(&FElysiumEntity::OnPhysGunDrop),
 				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; bool Arg1{}; Receiver.OnPhysGunDrop(Arg0, Arg1); return 0; } },
 			{ 237, TEXT("0x1003e7a0"), TEXT("CBaseEntity"), TEXT("PhysicsSolidMaskForEntity"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32() const>::Test(&FElysiumEntity::PhysicsSolidMaskForEntity),
 				nullptr },
 			{ 238, TEXT("0x10039ff0"), TEXT("CBaseEntity"), TEXT("PerformCustomPhysics"),

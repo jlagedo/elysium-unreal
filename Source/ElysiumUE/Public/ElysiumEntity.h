@@ -829,6 +829,14 @@ public:
 		return const_cast<FElysiumEntity*>(this)->AsCombatCharacter();
 	}
 
+	// Retail's cached +0xa8 m_pPlayer: cleared by CBaseEntity construction 0x1009da80,
+	// filled with self by CBasePlayer construction 0x1015d7c0. The class chain supplies it.
+	virtual class FElysiumPlayer* AsPlayer() { return nullptr; }
+	const class FElysiumPlayer* AsPlayer() const
+	{
+		return const_cast<FElysiumEntity*>(this)->AsPlayer();
+	}
+
 	// The same, for the item leaf: an inventory holds handles, and resolving one has to
 	// recognise an item without reflection. Base returns null; FElysiumItem overrides.
 	virtual class FElysiumItem* AsItem() { return nullptr; }

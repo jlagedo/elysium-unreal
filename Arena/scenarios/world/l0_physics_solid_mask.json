@@ -1,0 +1,20 @@
+{
+  "name": "l0_physics_solid_mask",
+  "about": "Independent CBaseEntity slot 237 PhysicsSolidMaskForEntity vampire.dll 0x1003e7a0. Real registered logic_relay and npc_VPedestrian construction/Spawn plus the arena's real player supply the flags and +0xa8 self-downcast inputs. Flags bit 0x2000 selects 0x202400b first; otherwise nonnull player cache selects 0x201400b; otherwise 0x200400b. This record covers all three production type arms, while Elysium.Substrate.PhysicsMaskProduction covers runtime flag changes, first-arm precedence on the player and world recreation. No body, controller, trace or geometry fixture stands in for the function's inputs, and no broader physics or query closure is claimed.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 0.8,
+  "player": { "at": "start" },
+  "script": [
+    { "t": 0.1, "do": "spawn", "row": { "classname": "logic_relay", "name": "mask_base", "at": [0, 0, 50], "keys": {} } },
+    { "t": 0.1, "do": "spawn", "row": { "classname": "npc_VPedestrian", "name": "mask_npc", "at": [150, 0, 50], "keys": { "stattemplate": "TutorialThug" } } },
+    { "t": 0.2, "do": "entity_call", "target": "mask_base", "function": "PhysicsSolidMaskForEntity", "args": [] },
+    { "t": 0.3, "do": "entity_call", "target": "mask_npc", "function": "PhysicsSolidMaskForEntity", "args": [] },
+    { "t": 0.4, "do": "entity_call", "target": "player", "function": "PhysicsSolidMaskForEntity", "args": [] }
+  ],
+  "expect": [
+    { "label": "base_mask", "who": "mask_base", "kind": "script", "match": "entity_call PhysicsSolidMaskForEntity done value=0x200400b", "by": 0.25 },
+    { "label": "npc_mask", "who": "mask_npc", "kind": "script", "match": "entity_call PhysicsSolidMaskForEntity done value=0x202400b", "by": 0.35 },
+    { "label": "player_mask", "who": "player", "kind": "script", "match": "entity_call PhysicsSolidMaskForEntity done value=0x201400b", "by": 0.45 }
+  ]
+}

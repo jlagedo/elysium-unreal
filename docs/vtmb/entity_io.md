@@ -1135,7 +1135,8 @@ Who asks for an untouch pass, and when it runs (`docs/specs/layers/L0-entity/wal
   a change of `0x180` → `FUN_100dda20` (`owner->m_iEFlags |= 0x14000`, then `FUN_100ddd20`: with a
   non-zero `IndexOfEdict(+0x2e0)` and bit `0x8000` clear, set it and append to the dirty-partition list
   `DAT_106e8144`); a change of `0x4` with a non-NULL `m_pPhysicsObject` (`+0x36c`) → its slot 25 (name
-  unrecovered, `vphysics.dll` is not in the corpus); a change of `0xc` → `FUN_100ddc40` (the
+  unrecovered by this walk; `vphysics.dll` is now available, see the physics producer recovery
+  below); a change of `0xc` → `FUN_100ddc40` (the
   `SpatialPartition001` relink: `Remove(handle)`, then `Insert(0x10)` and `Insert(type)`; exits at once
   on handle `0xffff`) then `FUN_100dc430`. Callers (sample): `ScriptHide` `4`, `ScriptUnhide` the saved
   word, `CBasePlayer::Spawn` `0 | 1 | 0x10 | 0x40`, `CAI_BaseNPCTroika::Spawn` `0 | 1 | 0x40`,
@@ -3488,10 +3489,13 @@ pose-consuming service/call timing together with the required simulation/relink 
 separate the transform words. Do not repeat r022a against the same folded host callback. A
 frame-end refresh/drain or eager local-setter getter has not been accepted as a modernization.
 Start with the producer paths `0x100a6490` / `0x100a68f0` and the actual object/shadow
-construction, lifetime and physics-object slot 46 service. That service implementation and the
-smallest complete simulation/relink subset remain unrecovered. This is a recovery frontier,
-not a ready coding packet. The separate bounds service `VPhysicsCollision007` geometry remains
-outside the current corpus; neither service may be replaced by an assumed UE AABB/teleport.
+construction, lifetime and physics-object slot 46 service. The targeted physics producer walk
+below now identifies that service and its actual controller, construction, simulation and deletion
+chain. The complete implementation boundary remains open; target assignment alone does not
+supply solved pose, contact or simulation events. Both `VPhysics030` and `VPhysicsCollision007`
+are now available in the corpus/PE. Their factory, tables and bounds body were recovered; full
+geometry/parameter/clock contracts are not closed. Neither service may be replaced by an assumed
+UE AABB/teleport.
 
 Attempt evidence: build `20261010T221454.534588Z` passed; touched `Elysium.Substrate`
 `20261010T221709.252815Z` failed (57 logged errors), including ScriptedSequence after observation
@@ -3504,3 +3508,45 @@ actual mutation run was not completed and no mutation gate is claimed. The latch
 cannot prove a subsequent no-write. Attempted sources, tests, record and logs are preserved at
 `E:/elysium-work/codex/l0-r022a-deferred-20261010/` with a binary patch and SHA-256 manifest.
 No implementation or record remains active; no full r022, abs-setter or save closure is claimed.
+
+## Physics producer service and independent mask prerequisite [decompiled/asm, 2026-10-10]
+
+The focused recovery is `docs/specs/layers/L0-entity/walks/L0-physics-producer.md`; matching
+service facts are in `physics-interaction.md`. This is a new targeted read, not an independently
+confirmed r044/r045 walk (neither file exists). The current corpus includes `vphysics.dll`.
+Object table `0x260c9db0` slot 46 is `UpdateShadow 0x260185b0`, which queues target through a
+separate controller. Its public interface table `0x260ca098` belongs to an adjusted base+4
+subobject; its IVP table `0x260ca0c8` dispatches `0x2601aa50` on simulation events. Target, actual
+body pose and logical entity transform are separate state.
+
+The first complete producer boundary is real shape/parameter acquisition and owned body
+identity/lifetime, controller target **and simulation**, environment clock/activity/deletion
+and contact/events. It can land independently before caller thinks if those inputs are real.
+Current NPC CharacterMovement, player command movement and prop Chaos components do not
+already implement this boundary. An Unreal solver substitution is possible under the project's
+algorithm-modernization rule only while preserving the recovered contract/state/event order;
+this checkpoint neither requires an IVP copy nor accepts changed order.
+
+The NPC pose loop reads actual object slot 47 before STEP in `0x1003a610`, reconciles through
+entity trace `0x10035030`, then runs `0x1003b190` and primary think before submitting a new target.
+`0x10035030` needs custom collision or centered/cylindrical trace, collision group, ShouldCollide,
+game-rule pair and bilateral veto filters. The current trace seam lacks these inputs/arms.
+`0x10033f60` needs named-only mode 2 before STEP and primary-only mode 1 after, with current named
+index and stamps; r024a storage plus current RunThinks do not supply this timing. NPC slot 229 is
+the inherited empty `0x100273d0`; PhysFrame's shadow callback is not NPC pose publication.
+These exact L0 gaps block the consumer/cache packet; they do not prevent independently complete
+lower functions from landing first. Query-time partition remains a distinct prerequisite.
+
+One such independent function is `PhysicsSolidMaskForEntity 0x1003e7a0` (slot 237): its actual
+inputs are the real flags word and the player self-downcast. Asm `0x1003e80e..0x1003e848` proves
+priority and literals: flags bit `0x2000` -> `0x202400b`; else nonnull +0xa8 -> `0x201400b`; else
+`0x200400b`. Base construction clears +0xa8; player ctor `0x1015d7c0` sets `param_1[0x2a]=self`.
+The port supplies that cache through `AsPlayer` on the production class chain and implements all
+three selector arms. The tests load registered point/NPC classes and SpawnPlayer, exercise
+NPCInit's flag production and runtime changes, including the player's first-arm precedence.
+They also verify actual slot 237 virtual dispatch and rebuild the player after production world
+teardown/recreation: the port cache is class construction identity, never a serialized raw pointer.
+The bounded `l0_physics_solid_mask` record calls the live slot on registered relay/NPC/player
+receivers and checks the three return values without trace or physics-body fixtures.
+No generic position query, entity trace, shadow/body production or transform function closes
+with this selector. Gate results belong to the coordinator's progress checkpoint.

@@ -364,3 +364,80 @@ ScriptHide retain the body; terminal Kill, including already hidden removal, and
 release it. Chaos solving/collision tuning is the named presentation modernization; impulse,
 hitbox producer completion, prop_ragdoll/friction and BurnModel visuals remain 0014; save
 semantics remain V6. Coder arms record lifetime requests, not proof of a real Chaos solve.
+
+## L0 object and shadow service [decompiled/PE asm, 2026-10-10]
+
+This targeted recovery supersedes the earlier planning claim that the VPhysics implementation
+was outside the corpus. `vphysics.dll` is now available. It does not confer closure on the
+earlier Chaos presentation claim or the generic L0 service. The complete address/argument walk,
+port comparison and repaired dependencies are in
+`docs/specs/layers/L0-entity/walks/L0-physics-producer.md` (new read, not independently confirmed).
+
+`CPhysicsHook::Init vampire.dll 0x1002d7d0` requests `VPhysics030`, `VPhysicsCollision007` and
+`VPhysicsSurfaceProps001`, at `DAT_10723934/3c/44`. VPhysics factory `vphysics.dll 0x26001dd0`
+returns singleton `0x260e4d1c`, whose constructor installs table `0x260c91a8`. Slot 0
+`0x26001bd0 -> 0x260116b0 -> 0x2600f920` constructs an owned environment, table `0x260c9998`.
+The environment constructs IVP state and retains object, active and deferred-delete collections.
+`LevelInitPreEntity 0x1002d930` publishes the environment, configures timestep/gravity and event
+handlers, builds world physics and constructs the serial-handle shadow registry.
+
+Entity setters `VPhysicsSetObject 0x100a6490` and `VPhysicsSwapObject 0x100a68f0` only assign
+the reference with warning/null-swap registry semantics. The body producer is
+`VPhysicsInitShadow 0x100a6150`: require edict through `0x100a5ad0`, destroy/relink existing body,
+reject solid-none, read absolute origin/angles, construct a bbox for solid 2 or a model body,
+assign, configure shadow `(10000,10000,allowMove,allowRotate)`, submit `(origin,angles,false,0)`,
+then register the entity. Bbox uses `0x100a5d80 -> 0x1002dfe0 -> Collision007 slot 19`;
+model uses `0x1002e3a0`, engine model-collision slot 58 and parsed object/surface parameters.
+Environment creation `0x260104f0 -> 0x260189f0` creates shape/IVP body and object table
+`0x260c9db0`. An arbitrary existing actor is not this construction contract.
+
+| Object operation | Table slot / body | State and timing |
+|---|---|---|
+| SetShadow | 45 / `0x26018520` | Create controller or change existing limits; adjust gravity/drag and core ownership |
+| UpdateShadow | 46 / `0x260185b0` | Store bool/gravity mode and call controller target writer; no immediate pose copy |
+| GetShadowPosition | 47 / `0x26018640` | Read live body pose at environment simulation time |
+| GetShadowController | 48 / `0x260186d0` | Separate controller reference at object+0xc |
+| RemoveShadowController | 51 / `0x26018600` | Environment destroys controller before body destruction |
+| IsMarkedForDeletion | 4 / `0x26016cf0` | Object byte +0x35; this slot is not a sleep test |
+
+Environment slot 35 `0x26011360` allocates through `0x2601b0e0 -> 0x2601a670` and returns a
+public interface at controller base+4 (table `0x260ca098`), separate from IVP controller table
+`0x260ca0c8` at base. Interface slot 1 `0x2601aad0` writes target `(X,-Z,Y)*0.0254`, quaternion,
+nonnegative arrival interval and active bit, and wakes a changed target. Slot 2 `0x2601ac40`
+combines requested speed limits with actual core velocity. Slot 4 `0x2601aa40` stores teleport
+distance in metres. NPC `0x10272f40` supplies `(size.x+size.y)*0.25`, not damping or squared
+three-axis size; the current `BuildVPhysicsShadow` metadata does not implement that setting.
+
+IVP callback `0x2601aa50` calls `0x2601a250` on simulation-event dt, counts arrival time down,
+reads actual pose/velocity, applies teleport-threshold/collision arms and linear/angular velocity
+correction via `0x26019600`. Core attachment/restoration `0x2601a7e0/0x2601a920` is part of
+lifetime. Scheduler `0x2602d090` dispatches controller records backwards after priority sorting
+(`0x2602ccd0`, shadow priority 500 at `0x2601a6f0`). Target storage alone is not this service.
+
+`CPhysicsHook::FrameUpdatePostEntityThink 0x1002dd70 -> PhysFrame 0x1002ea40` owns publication:
+validate/cap frametime, apply the physics-scale cvar, simulate environment slot 26, then visit
+active bodies forwards (game data -> entity slot 226), shadow handles forwards (nonnull unmarked
+object -> slot 229), and collision FrameUpdate after clearing the in-simulation flag. Environment
+`0x26010900` owns its IVP clock and activity/deletion work. Generic `VPhysicsUpdate 0x100b4f30`
+publishes actual position for movetype 7 and sends movetypes 1/8 to pusher feedback
+`0x100a55b0`, which can rewind logical pose/localtime from solved pose/contact and report Blocked.
+NPC slot 229 is inherited empty; NPC pose reconciliation occurs before STEP in `0x1003a610`,
+with trace/think phases and target submission after logical movement. Current pre-think actor
+sampling is not this consumer order.
+
+`VPhysicsDestroyObject 0x100b5040` removes the shadow handle, forgets collision identity through
+`0x10158520`, asks environment slot 20 `0x26010f80` to destroy/queue the body, then clears the
+entity reference. The owned-list entry disappears immediately; environment flags +0x61/+0x62
+defer final deletion to `0x26011240`. The active list is repaired before the deleting destructor.
+Object destructor `0x26016c10` destroys controller through environment slot 36 before the IVP
+body; controller destruction restores core parameters and detaches scheduler state. Shutdown
+`0x1002dc50` clears events/collision state, destroys environment and frees the shadow registry.
+
+Collision007 factory `0x260099f0`/ctor `0x26009850` establishes singleton `0x260f0698`, table
+`0x260c9550`. Slot 18 `0x2600aad0` adjusts this by +4 and enters `CollideGetAABB 0x26021db0`
+(transformed support/ledge query and bounds expansion); slot 19 `0x2600a310` creates/caches bbox
+collision. The body is available; complete geometry and object-parameter conversion are still
+open. Exact clock limits/contact producers and damaged quaternion/parameter aliases also remain
+to be walked before an engine adapter is a complete service. Unreal may replace solver algorithms
+under AGENTS.md only with the retail contract/state/event sequence preserved. No such replacement
+acceptance or object/controller runtime implementation is claimed by this recovery.

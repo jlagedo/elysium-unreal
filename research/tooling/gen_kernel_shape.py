@@ -531,6 +531,9 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
     171: ("", "`CBaseEntity::SetMovedir` 0x100ad550: the exact up / down sentinels or `AngleVectors` "
               "0x10139610 into `m_vecMoveDir`, then slot 64 `SetAngles(vec3_angle)` (L0-r021; "
               "`ElysiumEntityVisualState.cpp`)"),
+    237: ("", "`CBaseEntity::PhysicsSolidMaskForEntity` 0x1003e7a0: FL_NPC first, then the real "
+              "m_pPlayer self-downcast, else the base mask (L0 physics producer checkpoint; "
+              "`ElysiumEntitySlotBodies.cpp`)"),
 }
 
 # A `CHAIN_HAND` slot whose hand body stands on ONE chain owner only; the other chain classes that

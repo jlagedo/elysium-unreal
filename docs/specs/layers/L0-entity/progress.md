@@ -36,8 +36,49 @@ evidence, not new validation or acceptance of the layer closing gate.
   baseline gates below. Candidate and failed-gate evidence remain in external scratch. This
   coordinator ends after the hash checkpoint with clean main and no push; the persistent Goal
   continues with a fresh coordinator on actual physics producer/service recovery.
+- Physics dependency packet: independent slot 237 `0x1003e7a0` is implemented with the real
+  Flags word and player self-downcast construction identity. The new producer walk resolves
+  actual VPhysics service/construction/controller/lifetime and post-think clocks; it does not
+  implement that body/controller environment or resume the rejected cache candidate. Only the
+  mask row closes; original runs remain 23/88, r022/r024/r044/r045 and broad query remain open.
+  Coordinator reviewed and gated the packet on main; build/default/17-record results below.
+  Commit is reported with the coordinator handoff; no push or modernization acceptance.
 - Layer closure remains open: 65 unlanded runs, rebakes, default/arm and full arena gate,
   intermittent records in three boot orders, audit/hooks and state-bearing replacement checks.
+
+### Independent physics mask and producer recovery gates (2026-10-10)
+
+Fresh Sol High worker implemented complete independent selector `0x1003e7a0` and the real
+player self-downcast class producer; no physics object, controller, query or cache surrogate
+was introduced. Production coverage includes registered point/NPC/player construction and Spawn,
+flag mutation and precedence, actual slot metadata/virtual routing, and world reset/recreation.
+Worker production report:
+`E:/elysium-work/reports/tests/20261010T224620.820596Z-elysium-substrate-physicsmaskproduction/index.json`
+(1/1 pass, zero errors, four existing NPC diagnostics). Coordinator reviewed source and new
+recovery walk, then built:
+`E:/elysium-work/logs/20261010T224710.693388Z-build.json` (succeeded, exit 0).
+Default report:
+`E:/elysium-work/reports/tests/20261010T224716.573636Z-elysium-session-elysium-substrate/index.json`
+(170/170 pass, failed 0, notRun 0). Bounded arena report:
+`E:/elysium-work/reports/arena/20261010T224740.071234Z/index.json` (17/17 pass, failed 0,
+both hosts exit 0): `l0_physics_solid_mask`, `l0_entity_parenting`, `l0_collision_bounds_size`,
+`l0_entity_constructor_defaults`, `l0_datamap_keyvalues`, `l0_eflags_word`,
+`l0_named_think_context_storage`, `l0_solid_touch_generation`, `l0_save_restore_blocks`,
+`l0_transition_state`, `control_sequence`, `corpse_fades`, `restore_place_invalid_marker`,
+and four fixture/retail-site/field/call selftests. The mask trace records the actual live
+base/NPC/player results `0x200400b` / `0x202400b` / `0x201400b`; the two failure selftests
+pass by inversion of their intentional first-unmet conditions. Selected historical passing
+records remain passing. Existing engine Python plugin startup errors remain in the arena log;
+the scenario JSON and process results were read. No arm/full-arena/mutation or layer closure
+gate ran. Original completed runs stay 23/88; only selector row 237 closes.
+
+Next frontier: complete independent trace/filter producers with collision-group/custom/cylinder
+and veto-order semantics, then the real owned box/body/controller service boundary (shape and
+parameter conversion, independent target/solved pose, environment clock/activity/contact/deletion).
+That service can precede its callers once its own inputs are complete. STEP/pusher/think/relink
+and cache publication follow. Reuse `walks/L0-physics-producer.md` and existing confirmed walks;
+recover the named gaps, not an assumed missing module or the entire engine again. The rejected
+r022a candidate stays external and deferred. No modernization was accepted.
 
 ### r022a recovery checkpoint and rollback gates (2026-10-10)
 
@@ -151,6 +192,13 @@ gated in the clone, cherry-picked onto `main`, and re-gated here (`decisions.md`
   recovered before a coherent cache packet can be dispatched. Absolute setters remain last.
   Query callbacks run before partition query slots 12-15, including zero-mask queries; a frame-end
   drain would diverge. Detail and remaining recovery: `docs/vtmb/entity_io.md` current r022 section.
+  Fresh corpus inventory now includes `vphysics.dll`: object slot 46 is `0x260185b0`, controller
+  target writer `0x2601aad0`, simulation `0x2601aa50` / `0x2601a250`, with construction and
+  lifetime recovered in `walks/L0-physics-producer.md`. Collision007 geometry is available but
+  its complete contract remains open. The body/controller boundary needs real shape/parameter
+  conversion, clock/activity/contact/deletion production; STEP additionally needs complete
+  trace/filter and named/primary think phases. Slot 237 is an independent completed dependency,
+  not proof that those services exist. Use the function boundaries in runs.md for next dispatch.
   Overlap-query equivalence is unproved. This checkpoint downgrades overstated audit closure;
   it accepts no modernization and completes no run. r024 proceeds independently next.
 

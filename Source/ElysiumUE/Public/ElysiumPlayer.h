@@ -1992,6 +1992,7 @@ ENUM_CLASS_FLAGS(EElysiumViewFlags)
 class FElysiumPlayer final : public FElysiumCombatCharacter
 {
 public:
+	FElysiumPlayer* AsPlayer() override { return this; } // 0x1015d7c0 m_pPlayer = self
 	FElysiumLawState Law;
 	// The response/Masquerade-timer/pursuit half of the same domain. Mirrored from the
 	// record for the map's lifetime exactly as `Law` is.

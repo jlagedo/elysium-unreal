@@ -2484,11 +2484,14 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 		if (Action.Function == TEXT("HasTarget") || Action.Function == TEXT("HasLinkedDoor")
 			|| Action.Function == TEXT("ShouldToggle") || Action.Function == TEXT("BodyTarget")
 			|| Action.Function == TEXT("GetStealthVisionScalar") || Action.Function == TEXT("GetStealthVisionCone")
-			|| Action.Function == TEXT("Illumination") || Action.Function == TEXT("IsMonster"))
+			|| Action.Function == TEXT("Illumination") || Action.Function == TEXT("IsMonster")
+			|| Action.Function == TEXT("PhysicsSolidMaskForEntity"))
 		{
 			// The L0-r020 base queries on a live entity (`walks/L0-r020.md`): slots 160 / 161 / 197 / 28 / 29 /
 			// 200 / 70 through the vtable (an override answers for its class) and the non-virtual
 			// `ShouldToggle` 0x100a98f0. Each `done` text states the retail return value.
+			// The independent physics prerequisite also queries actual virtual slot 237,
+			// PhysicsSolidMaskForEntity 0x1003e7a0, on the live registered receiver.
 			FElysiumEntity* Query = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
 			if (Query == nullptr || Query->IsDead())
 			{
@@ -2576,6 +2579,11 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 				else if (Action.Function == TEXT("Illumination"))
 				{
 					Text = FString::Printf(TEXT("entity_call Illumination done value=%d"), Query->Illumination());
+				}
+				else if (Action.Function == TEXT("PhysicsSolidMaskForEntity"))
+				{
+					Text = FString::Printf(TEXT("entity_call PhysicsSolidMaskForEntity done value=0x%x"),
+						static_cast<uint32>(Query->PhysicsSolidMaskForEntity()));
 				}
 				else
 				{

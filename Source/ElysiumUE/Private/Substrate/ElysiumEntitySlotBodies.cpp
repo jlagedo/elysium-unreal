@@ -608,6 +608,15 @@ bool FElysiumEntity::FireBulletsShooterIsPlayer() const
 	return false;
 }
 
+int32 FElysiumEntity::PhysicsSolidMaskForEntity() const
+{
+	// vampire.dll 0x1003e7a0: Flags (+0x434) takes precedence over m_pPlayer (+0xa8).
+	// The player self-pointer is supplied by the real class chain, independent of FL_CLIENT.
+	if ((Flags & 0x2000) != 0) return 0x202400b;
+	if (AsPlayer() != nullptr) return 0x201400b;
+	return 0x200400b;
+}
+
 FVector FElysiumEntity::BulletSpreadOffset(const FVector& SpreadUnits, const FVector& RightAxis,
 	const FVector& UpAxis)
 {
