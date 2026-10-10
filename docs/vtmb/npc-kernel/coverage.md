@@ -11,8 +11,8 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
-| … cited by the oracle | 2852 |
-| … not cited by the oracle | 2335 |
+| … cited by the oracle | 2869 |
+| … not cited by the oracle | 2318 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |
@@ -34,7 +34,7 @@ The porting stories' own measure. *Core* is this band's slice of the core set; t
 
 | Band | Core | `rule` | `mechanism` | `present` | `dead` | `unsettled` | No verdict | Cited by oracle | **Neither** | Reached by `sm_hub_1` | Reached by `sp_tutorial_1` |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 0–4 | 1468 | 669 | 207 | 105 | 484 | 3 | 0 | 768 | **0** | 704 (311) | 671 (295) |
+| 0–4 | 1468 | 669 | 207 | 105 | 484 | 3 | 0 | 778 | **0** | 704 (311) | 671 (295) |
 | 5–9 | 243 | 131 | 47 | 30 | 35 | 0 | 0 | 220 | **0** | 131 (60) | 120 (53) |
 | 10–18 | 355 | 178 | 108 | 10 | 59 | 0 | 0 | 282 | **0** | 151 (91) | 139 (84) |
 | 19–29 | 479 | 391 | 12 | 4 | 71 | 0 | 1 | 376 | **0** | 159 (129) | 132 (109) |
@@ -707,7 +707,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x101d3850` FUN_101d3850 | `0x101d5530` FUN_101d5530 |
 | `0x101d4e70` FUN_101d4e70 | `0x100d1d50` FUN_100d1d50 |
 | `0x101d4eb0` FUN_101d4eb0 | `0x100d1d50` FUN_100d1d50 |
-| `0x101d5f10` FUN_101d5f10 | `0x100d6210` FUN_100d6210, `0x10169660` CBasePlayer::LeaveGrappleState, `0x101d7fb0` FUN_101d7fb0, `0x1022f640` FUN_1022f640, +1 more |
 | `0x101d8720` FUN_101d8720 | `0x100d7040` FUN_100d7040 |
 | `0x101d8770` FUN_101d8770 | `0x1022f580` FUN_1022f580, `0x1022f640` FUN_1022f640 |
 | `0x101d8820` FUN_101d8820 | `0x10168910` FUN_10168910, `0x101e7ea0` FUN_101e7ea0, `0x101e8100` FUN_101e8100, `0x101e8330` FUN_101e8330, +2 more |
@@ -901,11 +900,9 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x10335470` CBaseCombatCharacter::Inventory_Remove | `0x10199240` FUN_10199240, `0x1021fb50` FUN_1021fb50, `0x1022d8a0` FUN_1022d8a0, `0x103352b0` CBaseCombatCharacter::InputInventory_Remove, +3 more |
 | `0x10335950` CBaseCombatCharacter::Inventory_Find | `0x100d2b30` FUN_100d2b30, `0x100d5f10` FUN_100d5f10 ‼, `0x100d8220` FUN_100d8220, `0x10108130` CFilterInventory::vfunc241, +31 more |
 | `0x10335ea0` CBaseCombatCharacter::Inventory_Unwield | `0x10253ca0` CBaseCombatWeapon::FUN_10253ca0 |
-| `0x10337860` CBaseCombatCharacter::GetCharTemplate | `0x100d6680` FUN_100d6680, `0x100fc1e0` FUN_100fc1e0, `0x100fd270` FUN_100fd270, `0x1016d260` CBasePlayer::Spawn, +13 more |
 | `0x10337980` CBaseCombatCharacter::SetVHistory | `0x100d6d40` FUN_100d6d40 |
 | `0x10337ca0` CBaseCombatCharacter::MemberSync | `0x10326de0` FUN_10326de0 |
 | `0x10337d80` CBaseCombatCharacter::PostConstructor | `0x1014f670` FUN_1014f670 |
-| `0x10337e40` CBaseCombatCharacter::IsKine | `0x1016be10` CBasePlayer::PostThink |
 | `0x10337f30` CBaseCombatCharacter::IsKindred | `0x100d51b0` FUN_100d51b0, `0x100d5360` FUN_100d5360, `0x10166120` FUN_10166120, `0x1016be10` CBasePlayer::PostThink, +2 more |
 | `0x10337ff0` CBaseCombatCharacter::IsSupernatural | `0x1022f640` FUN_1022f640, `0x1033d580` FUN_1033d580 |
 | `0x103380d0` CBaseCombatCharacter::IsBossMonster | `0x1033d580` FUN_1033d580 |

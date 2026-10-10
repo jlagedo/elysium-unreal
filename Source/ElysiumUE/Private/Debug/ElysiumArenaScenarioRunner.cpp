@@ -2268,6 +2268,114 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			Done.Text = FString::Printf(TEXT("entity_call Use done usetype=%d value=%g"), UseType, UseValue);
 			return true;
 		}
+		if (Action.Function == TEXT("HasTarget") || Action.Function == TEXT("HasLinkedDoor")
+			|| Action.Function == TEXT("ShouldToggle") || Action.Function == TEXT("BodyTarget")
+			|| Action.Function == TEXT("GetStealthVisionScalar") || Action.Function == TEXT("GetStealthVisionCone")
+			|| Action.Function == TEXT("Illumination") || Action.Function == TEXT("IsMonster"))
+		{
+			// The L0-r020 base queries on a live entity (`walks/L0-r020.md`): slots 160 / 161 / 197 / 28 / 29 /
+			// 200 / 70 through the vtable (an override answers for its class) and the non-virtual
+			// `ShouldToggle` 0x100a98f0. Each `done` text states the retail return value.
+			FElysiumEntity* Query = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
+			if (Query == nullptr || Query->IsDead())
+			{
+				OutError = FString::Printf(TEXT("no live entity named '%s'"), *Action.Target);
+				return false;
+			}
+			FString Text;
+			if (Action.Function == TEXT("HasTarget") || Action.Function == TEXT("HasLinkedDoor"))
+			{
+				// `[<name>|null]`: a string is the `string_t`'s text, `null` the NULL pointer (arm 2).
+				if (Action.Args.Num() != 1 || (Action.Args[0].Value.Type != FElysiumArenaValue::EType::String
+					&& Action.Args[0].Value.Type != FElysiumArenaValue::EType::None))
+				{
+					OutError = FString::Printf(TEXT("entity_call '%s' takes [<name string>|null]"), *Action.Function);
+					return false;
+				}
+				const bool bNull = Action.Args[0].Value.Type == FElysiumArenaValue::EType::None;
+				const FName Name = bNull ? NAME_None : FName(*Action.Args[0].Value.String);
+				const bool bResult = Action.Function == TEXT("HasTarget") ? Query->HasTarget(Name) : Query->HasLinkedDoor(Name);
+				Text = FString::Printf(TEXT("entity_call %s done result=%d name=%s"), *Action.Function, bResult ? 1 : 0,
+					bNull ? TEXT("NULL") : *Action.Args[0].Value.String);
+			}
+			else if (Action.Function == TEXT("ShouldToggle"))
+			{
+				if (Action.Args.Num() != 2 || Action.Args[0].Value.Type != FElysiumArenaValue::EType::Number
+					|| Action.Args[1].Value.Type != FElysiumArenaValue::EType::Number)
+				{
+					OutError = TEXT("entity_call 'ShouldToggle' takes [<useType>, <state>], numbers");
+					return false;
+				}
+				const int32 UseType = static_cast<int32>(Action.Args[0].Value.Number);
+				const int32 State = static_cast<int32>(Action.Args[1].Value.Number);
+				const bool bResult = Query->ShouldToggle(UseType, State);
+				Text = FString::Printf(TEXT("entity_call ShouldToggle done usetype=%d state=%d result=%d"), UseType, State, bResult ? 1 : 0);
+			}
+			else if (Action.Function == TEXT("BodyTarget"))
+			{
+				// `[x, y, z, noisy?, aimExact?]`: `posSrc` in cm on the Unreal axes (never read by the base
+				// body) and the two bools; beside it slot 192's own answer, which the base body returns bit-for-bit.
+				if (Action.Args.Num() < 3 || Action.Args.Num() > 5)
+				{
+					OutError = TEXT("entity_call 'BodyTarget' takes [x, y, z, noisy?, aimExact?]");
+					return false;
+				}
+				for (int32 I = 0; I < 3; ++I)
+				{
+					if (Action.Args[I].Value.Type != FElysiumArenaValue::EType::Number)
+					{
+						OutError = TEXT("entity_call 'BodyTarget' takes three numbers first");
+						return false;
+					}
+				}
+				for (int32 I = 3; I < Action.Args.Num(); ++I)
+				{
+					if (Action.Args[I].Value.Type != FElysiumArenaValue::EType::Bool)
+					{
+						OutError = TEXT("entity_call 'BodyTarget' takes booleans after the position");
+						return false;
+					}
+				}
+				const FVector PosSrc(Action.Args[0].Value.Number, Action.Args[1].Value.Number, Action.Args[2].Value.Number);
+				const bool bNoisy = Action.Args.Num() > 3 && Action.Args[3].Value.bBool;
+				const bool bAimExact = Action.Args.Num() > 4 && Action.Args[4].Value.bBool;
+				const FVector Center = Query->BodyTarget(PosSrc, bNoisy, bAimExact);
+				const FVector Reference = Query->WorldSpaceCenter();
+				Text = FString::Printf(TEXT("entity_call BodyTarget done center=%g,%g,%g world_space_center=%g,%g,%g equal=%d noisy=%d aim_exact=%d"),
+					Center.X, Center.Y, Center.Z, Reference.X, Reference.Y, Reference.Z, Center == Reference ? 1 : 0,
+					bNoisy ? 1 : 0, bAimExact ? 1 : 0);
+			}
+			else
+			{
+				if (Action.Args.Num() != 0)
+				{
+					OutError = FString::Printf(TEXT("entity_call '%s' takes no arguments"), *Action.Function);
+					return false;
+				}
+				if (Action.Function == TEXT("GetStealthVisionScalar"))
+				{
+					Text = FString::Printf(TEXT("entity_call GetStealthVisionScalar done value=%g"), Query->GetStealthVisionScalar());
+				}
+				else if (Action.Function == TEXT("GetStealthVisionCone"))
+				{
+					Text = FString::Printf(TEXT("entity_call GetStealthVisionCone done value=%g"), Query->GetStealthVisionCone());
+				}
+				else if (Action.Function == TEXT("Illumination"))
+				{
+					Text = FString::Printf(TEXT("entity_call Illumination done value=%d"), Query->Illumination());
+				}
+				else
+				{
+					Text = FString::Printf(TEXT("entity_call IsMonster done result=%d"), Query->IsMonster() ? 1 : 0);
+				}
+			}
+			FEvent& Done = Events.AddDefaulted_GetRef();
+			StampEvent(Done, World.NowSeconds());
+			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+			Done.Name = Action.Target;
+			Done.Text = Text;
+			return true;
+		}
 		if (Action.Function == TEXT("Blood_Spawn"))
 		{
 			// `FUN_102699e0` 0x102699e0 (`Substrate/ElysiumBloodEffects.h`): `[x, y, z, color, damage]`,

@@ -1240,6 +1240,39 @@ void FElysiumEntity::FireOutput(FName Output, const FElysiumEntityHandle& Activa
 	}
 }
 
+bool FElysiumEntity::ShouldToggle(int32 UseType, int32 State) const
+{
+	// `CBaseEntity::ShouldToggle` 0x100a98f0, the arms in retail's order (`100a995b`-`100a9994`):
+	//   1. `useType == 3` (USE_TOGGLE) -> 1            (`CMP EAX,3; JZ accept`)
+	//   2. `useType == 2` (USE_SET)    -> 1            (`CMP EAX,2; JZ accept`)
+	//   3. `state != 0`: `useType == 1` (USE_ON) -> 0, else 1   (`TEST ECX,ECX; JZ 4; CMP EAX,1; JZ reject`)
+	//   4. `state == 0`: `useType != 0` -> 1, `useType == 0` (USE_OFF) -> 0   (`TEST EAX,EAX; JNZ accept`)
+	// Accept is `MOV EAX,1; RET 8` (`100a997c`), reject `XOR EAX,EAX; RET 8` (`100a9992`). Nothing is
+	// written but the scope-trace frame; `state` is an input the caller computed (`CSprite::Use`:
+	// `m_fEffects != 0x40`; `CLight::Use`: `~m_spawnflags & 1`; `FUN_10159700`: `m_toggle_state == 1`).
+	bool bResult = true;
+	if (UseType != 3 && UseType != 2)
+	{
+		if (State != 0)
+		{
+			if (UseType == 1)
+			{
+				bResult = false;
+			}
+		}
+		else if (UseType == 0)
+		{
+			bResult = false;
+		}
+	}
+	if (World)
+	{
+		World->EmitRetailSite(*this, TEXT("should_toggle"), TEXT("CBaseEntity::ShouldToggle"), 0x100a98f0u,
+			TEXT("return"), FString::Printf(TEXT("usetype=%d state=%d result=%d"), UseType, State, bResult ? 1 : 0));
+	}
+	return bResult;
+}
+
 FString FElysiumEntity::DebugString() const
 {
 	const FString Name = TargetName.IsEmpty() ? TEXT("<noname>") : TargetName;

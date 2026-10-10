@@ -554,15 +554,14 @@ public:
 		Use(Activator);
 	}
 
-	// `CBaseEntity::ShouldToggle` `0x100a98f0` (thunk `0x100076a3`): 0 only for USE_OFF on an entity
-	// that is off, or USE_ON on one that is on; USE_SET and USE_TOGGLE always 1. (The retail body also
-	// writes a debug scope trace, which has no reader.)
-	static bool ShouldToggle(int32 UseType, bool bCurrentState)
-	{
-		if (UseType == ElysiumUseType::Off && !bCurrentState) { return false; }
-		if (UseType == ElysiumUseType::On && bCurrentState) { return false; }
-		return true;
-	}
+	// `CBaseEntity::ShouldToggle` `0x100a98f0` (`int ShouldToggle(int useType, int state)`, `RET 8`; not a
+	// vtable slot: `CLight::Use` `0x10130580`, `CSprite::Use` `0x1042f030` and `FUN_10159700` reach it
+	// through the thunk `0x100076a3`). The one acceptance rule every toggling `Use` runs: TOGGLE (3) and
+	// SET (2) are always accepted; a non-zero `state` (`TEST ECX,ECX`: any bit) rejects ON (1), a zero
+	// state rejects OFF (0); every other use value is accepted under either state. `this` is read only
+	// for the trace label, so the predicate is NULL-safe in retail. Defined in `Substrate/ElysiumEntity.cpp`;
+	// emits the `should_toggle` retail site (L0-r012 body, L0-r020 site).
+	bool ShouldToggle(int32 UseType, int32 State) const;
 
 	// The reticle icon this entity shows while it is the +use look-cursor target. VtMB's
 	// GetUseIcon (FUN_100c8940) returns locked_icon when the locked byte +0x5c4 is set, else

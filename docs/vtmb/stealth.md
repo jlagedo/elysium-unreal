@@ -47,6 +47,36 @@ does not change those tables or the cone matrix. It changes the high-Sneaking ta
 matrix and labels that section `changed by wesp`; for example, `Light10/Stealth10` is `0.00` in
 retail and `0.14` patch-first. This is a data-stack difference, not a different algorithm.
 
+## Base-entity perception defaults (`CBaseEntity`) [decompiled, L0-r020]
+
+What an entity that is neither an NPC nor the player answers the observer's queries with
+(`walks/L0-r020.md`; the overrides are their classes' rows):
+
+- **Slot 28 `GetStealthVisionScalar` `0x10026610`** and **slot 29 `GetStealthVisionCone` `0x10026630`**:
+  each `FLD dword [0x104454c0]; RET`, the pooled float **1.0**. Overrides: `CAI_BaseNPCTroika`
+  `0x101aa610` (`+0x63c4`) / `0x101aa630` (`+0x63c8`) and `CHL2_Player` `0x1034f370` (`+0x1c70`) /
+  `0x1034f390` (`+0x1c74`); `CBasePlayer` itself holds the base bodies. Slot 29's readers are
+  `CBaseCombatCharacter::FInViewCone` `0x10326750` (two sites), `DrawDebugGeometryOverlays` `0x1029ca50`
+  and `FUN_10150910`; slot 28's named reader is `CAI_BaseNPCTroika::FUN_102b4760` (the target's scalar
+  times `m_flSeekDistInspection`).
+- **Slot 200 `Illumination` `0x100ad6e0`**: the scope-trace push and pop, then `MOV EAX,0x80; RET` --
+  **128**, an int. One override: `CBasePlayer::Illumination` `0x10177bf0` returns `m_nLightLevel` (so
+  `signatures.md`'s "constant 0x80 on every class" is wrong for the player classes). No dispatch site
+  in the corpus reads the slot (`vtmb_slot 200`: 0 sites); whether anything consumes 128 is unrecovered.
+- **Slot 197 `BodyTarget(const Vector&, bool, bool)` `0x1009f2c0`** (`RET 0x10`): the trace push, then
+  `CALL [vtable+0x300]` -- slot 192 `WorldSpaceCenter()` -- into the hidden return pointer
+  (`1009f329`-`1009f330`), the trace pop; `posSrc` and both bools are never read. Overrides:
+  `CAI_BaseNPC` `0x102789c0`, `CBasePlayer` `0x10174e60`. Sixteen dispatch sites = ten bodies
+  (`FUN_10176930`, `FUN_102b5de0` at `0x102b5f88`, `DrawDebugGeometryOverlays`, `FUN_101eff70`,
+  `GatherAttackConditions` `0x1026dd10` at `0x1026de30`, `FUN_10278650`, `FUN_1004ec60`, `FUN_10128850`,
+  `CAI_BaseNPC::FUN_10326ae0`, `CNPC_VMingXiao::GatherConditions` `0x10394e40`) plus six thunk copies.
+
+Port: the two scalars and the illumination are generated one-constant bodies
+(`research/tooling/gen_kernel_shape.py` `RETAIL_DEFAULTS`, `ElysiumEntitySlots.cpp`); `BodyTarget` is
+`ElysiumEntitySlotBodies.cpp` and dispatches slot 192 virtually (slot 192's body measures Unreal bounds
+for the collision box -- that body's named modernization, `npc-ai/shape.md`). Record
+`Arena/scenarios/world/l0_base_perception_defaults.json`.
+
 ## Player target-surface update
 
 The player think at `0x10350830` runs the stealth-factor virtual at `0x103517e0` when `curtime`

@@ -1,0 +1,46 @@
+{
+  "name": "l0_is_monster_template_flag",
+  "about": "`CBaseEntity::IsMonster` 0x1009d820 (slot 70, 31 bytes, no scope-trace; `walks/L0-r020.md`): `[this+0x9c] == 0` -> 0 (`+0x9c m_pCombatCharacter`, the self-downcast cache the CBaseCombatCharacter ctor 0x10326de0 stores -- a non-character answers 0 before any template is looked at); else `thunk_FUN_101d5f10(&DAT_10738d10, +0x9c)` (0x100040b1 -> 0x101d5f10, the L2 hook of `hooks.tsv`) and `MOV AL,[EAX+0x8e]`: the char-template record's `Monster` byte, 0 or 1 (`FUN_101d4520` stores `VKeyValues::GetBool` 0x101f27b0's `SETNZ`). `FUN_101d5f10` never returns NULL: a template index in range answers `table[idx]`, anything else the default record `&DAT_10738e50` that `FUN_101d3850(-1)` initialised with `Monster` 0. Four witnesses on the arena host: `kanker`, an `npc_VVampire` wearing `BrotherKanker` (`npctemplate001.txt`: `General/Monster 1`; CNPC_VVampire holds the base body, unlike the nine species overrides CNPC_VGargoyle 0x10379470 ... CNPC_VWerewolf 0x103ccb50) -> `record=table monster=1`, `result=1`; `thug`, an `npc_VHumanCombatant` wearing `TutorialThug` (no `Monster` key, read 0) -> `record=table monster=0`, `result=0`; `nobody`, an `npc_VHumanCombatant` naming a template no file carries -> the default record, `record=default monster=0`, `result=0`; `plain`, a `logic_relay` created at runtime (no combat character) -> `result=0 arm=no_combat_character` and no template read at all. Reported as `fail`, a result, a record arm or a site payload differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 2.0,
+  "player": { "at": "start" },
+  "cast": [
+    { "name": "kanker", "classname": "npc_VVampire", "at": "far_ne", "face": "player", "body": "regular_cop",
+      "keys": { "stattemplate": "BrotherKanker", "spawnflags": "4", "StartHidden": "0" } },
+    { "name": "thug", "classname": "npc_VHumanCombatant", "at": "north", "face": "player", "body": "regular_cop",
+      "keys": { "stattemplate": "TutorialThug", "spawnflags": "4", "StartHidden": "0" } },
+    { "name": "nobody", "classname": "npc_VHumanCombatant", "at": "cover_behind", "face": "player", "body": "regular_cop",
+      "keys": { "stattemplate": "NoSuchTemplate_L0r020", "spawnflags": "4", "StartHidden": "0" } }
+  ],
+  "script": [
+    { "t": 0.1, "do": "spawn", "row": { "classname": "logic_relay", "name": "plain", "at": [0.0, 0.0, 50.0], "keys": {} } },
+    { "t": 0.5, "do": "entity_call", "target": "kanker", "function": "IsMonster", "args": [] },
+    { "t": 0.55, "do": "entity_call", "target": "thug", "function": "IsMonster", "args": [] },
+    { "t": 0.6, "do": "entity_call", "target": "nobody", "function": "IsMonster", "args": [] },
+    { "t": 0.65, "do": "entity_call", "target": "plain", "function": "IsMonster", "args": [] }
+  ],
+  "expect": [
+    { "label": "kanker_record", "who": "kanker", "kind": "retail_site", "site": "char_template", "match": "fn=FUN_101d5f10 va=0x101d5f10 phase=return record=table monster=1 template=BrotherKanker", "by": 0.55 },
+    { "label": "kanker_result", "who": "kanker", "kind": "retail_site", "site": "is_monster", "match": "fn=CBaseEntity::IsMonster va=0x1009d820 phase=return result=1 arm=template", "within": 0.0 },
+    { "label": "kanker_done", "who": "kanker", "kind": "script", "match": "entity_call IsMonster done result=1", "within": 0.01 },
+    { "label": "thug_record", "who": "thug", "kind": "retail_site", "site": "char_template", "match": "va=0x101d5f10 phase=return record=table monster=0 template=TutorialThug", "by": 0.6 },
+    { "label": "thug_result", "who": "thug", "kind": "retail_site", "site": "is_monster", "match": "va=0x1009d820 phase=return result=0 arm=template", "within": 0.0 },
+    { "label": "thug_done", "who": "thug", "kind": "script", "match": "entity_call IsMonster done result=0", "within": 0.01 },
+    { "label": "nobody_record", "who": "nobody", "kind": "retail_site", "site": "char_template", "match": "va=0x101d5f10 phase=return record=default monster=0 template=-", "by": 0.65 },
+    { "label": "nobody_result", "who": "nobody", "kind": "retail_site", "site": "is_monster", "match": "va=0x1009d820 phase=return result=0 arm=template", "within": 0.0 },
+    { "label": "nobody_done", "who": "nobody", "kind": "script", "match": "entity_call IsMonster done result=0", "within": 0.01 },
+    { "label": "plain_result", "who": "plain", "kind": "retail_site", "site": "is_monster", "match": "va=0x1009d820 phase=return result=0 arm=no_combat_character", "by": 0.7 },
+    { "label": "plain_done", "who": "plain", "kind": "script", "match": "entity_call IsMonster done result=0", "within": 0.01 }
+  ],
+  "never": [
+    { "who": "plain", "kind": "retail_site", "site": "char_template", "match": "", "from": 0.0 },
+    { "who": "thug", "kind": "retail_site", "site": "is_monster", "match": "result=1", "from": 0.0 },
+    { "who": "nobody", "kind": "retail_site", "site": "char_template", "match": "record=table", "from": 0.0 },
+    { "who": "kanker", "kind": "retail_site", "site": "is_monster", "match": "result=0", "from": 0.0 }
+  ],
+  "probes": [
+    { "at": 1.5, "who": "kanker", "probe": "exists", "equals": true },
+    { "at": 1.5, "who": "nobody", "probe": "exists", "equals": true }
+  ]
+}

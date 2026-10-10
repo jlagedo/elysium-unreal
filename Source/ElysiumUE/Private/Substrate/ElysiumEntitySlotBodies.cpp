@@ -972,6 +972,71 @@ FElysiumEntity* FElysiumEntity::GetGroundEntity()
 	return World != nullptr && RetailGroundEntity.IsSet() ? World->Resolve(RetailGroundEntity) : nullptr;
 }
 
+namespace
+{
+	// `CBaseEntity::HasTarget` 0x100a1b40 and `CBaseEntity::HasLinkedDoor` 0x100a1c30 are the same 177
+	// bytes +0xf0 apart (instruction-compared, `walks/L0-r020.md`); only the scope-trace label differs.
+	// Arms in retail's order, after the trace push:
+	//   2. `name == NULL`      -> 0   (`100a1baa`; an `FName` NAME_None is the NULL `string_t`: the datadesc
+	//                                 store `AllocPooledString` 0x1042bff0 writes NULL for an empty value,
+	//                                 so NULL and "" are one case on both sides)
+	//   3. `m_target == NULL`  -> 0   (`100a1bb2`; `+0x20c`, the `target` keyvalue; NULL when unauthored or
+	//                                 blank, 0x1042bff0 again)
+	//   4. `__strcmpi(name, m_target) == 0`  (`100a1bc5`, CRT `_stricmp` 0x1043e780: the C-locale ASCII
+	//                                 fold, byte-exact otherwise -- a trailing space differs)
+	// `m_iName` (+0x26c) is read for the trace label only and never decides the answer. Nothing is written.
+	bool TargetNamePredicate(const FElysiumEntity& Self, FName Name, const TCHAR* Tag, const TCHAR* Fn, uint32 Va)
+	{
+		bool bResult = false;
+		if (!Name.IsNone() && !Self.Target.IsEmpty())
+		{
+			bResult = Self.Target.Equals(Name.ToString(), ESearchCase::IgnoreCase);
+		}
+		if (Self.World)
+		{
+			Self.World->EmitRetailSite(Self, Tag, Fn, Va, TEXT("return"),
+				FString::Printf(TEXT("result=%d name=%s target=%s"), bResult ? 1 : 0,
+					Name.IsNone() ? TEXT("NULL") : *Name.ToString(),
+					Self.Target.IsEmpty() ? TEXT("NULL") : *Self.Target));
+		}
+		return bResult;
+	}
+}
+
+// slot 160 `CBaseEntity::HasTarget` 0x100a1b40 (sdk) -- the one dispatch site is `FUN_101331e0`, which asks
+// every `multi_manager` `HasTarget(this->m_iName)`: the argument is the CALLER's targetname, tested
+// against this entity's `m_target`.
+bool FElysiumEntity::HasTarget(FName Name)
+{
+	return TargetNamePredicate(*this, Name, TEXT("target_name"), TEXT("CBaseEntity::HasTarget"), 0x100a1b40u);
+}
+
+// slot 161 `CBaseEntity::HasLinkedDoor` 0x100a1c30 (walked) -- the dispatch site is `FUN_100efbf0` (the SDK
+// `CBaseDoor::UpdateAreaPortals`, with its thunk 0x100137d2): for each `func_areaportal`, `HasLinkedDoor(door
+// m_iName)` then `portal->Use(door, door, open ? USE_ON : USE_OFF, 0)` (slot 173). The port has no
+// `func_areaportal` body yet (a stub class), so the door-side caller is not wired here.
+bool FElysiumEntity::HasLinkedDoor(FName Name)
+{
+	return TargetNamePredicate(*this, Name, TEXT("target_name"), TEXT("CBaseEntity::HasLinkedDoor"), 0x100a1c30u);
+}
+
+// slot 197 `CBaseEntity::BodyTarget` 0x1009f2c0 (walked) -- the trace push, then `CALL [vtable+0x300]`
+// (slot 192, `WorldSpaceCenter()`) into the hidden return pointer (`1009f329`-`1009f330`), the trace pop,
+// `RET 0x10`. `posSrc` and both bools are never read. The dispatch is VIRTUAL, as retail's: the NPC
+// (`0x102789c0`) and the player (`0x10174e60`) override slot 197 itself, and a class that overrides slot
+// 192 is reached through it here. Slot 192's own body is `ElysiumEntitySlotBodies.cpp::WorldSpaceCenter`
+// (Unreal bounds for the collision box: that body's named modernization, not this one's).
+FVector FElysiumEntity::BodyTarget(const FVector& /*PosSrc*/, bool /*bNoisy*/, bool /*bAimAtEyeExactly*/)
+{
+	const FVector Center = WorldSpaceCenter();
+	if (World)
+	{
+		World->EmitRetailSite(*this, TEXT("body_target"), TEXT("CBaseEntity::BodyTarget"), 0x1009f2c0u, TEXT("return"),
+			FString::Printf(TEXT("center=%g,%g,%g fn=WorldSpaceCenter va=0x10027160 slot=192"), Center.X, Center.Y, Center.Z));
+	}
+	return Center;
+}
+
 void FElysiumEntity::SetMoveType(int32 MoveType, int32 MoveCollide)
 {
 	// `CBaseEntity::SetMoveType` `0x100aad70`, slot 93: `m_MoveType` and `m_MoveCollide` are written

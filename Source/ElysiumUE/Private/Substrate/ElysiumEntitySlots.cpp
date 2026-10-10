@@ -6,9 +6,9 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 219 generated slot bodies of `FElysiumEntity`: 72 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 55 are defined by hand in the substrate,
-// and 74 are still stubs — 73 29c, 1 unassigned. 18 are closed (0019/6) and answer the
+// 219 generated slot bodies of `FElysiumEntity`: 75 carry retail's one-constant default (story
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 58 are defined by hand in the substrate,
+// and 68 are still stubs — 67 29c, 1 unassigned. 18 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -254,20 +254,22 @@ void FElysiumEntity::Slot27(FElysiumEntity*)
 
 // slot 28 0x10026610 (walked) `float GetStealthVisionScalar()`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::GetStealthVisionScalar 0x10026610: `FLD
+// [0x104454c0]; RET`, the pooled float 1.0 (CAI_BaseNPCTroika 0x101aa610 and CHL2_Player 0x1034f370
+// override the slot)
 float FElysiumEntity::GetStealthVisionScalar()
 {
-	FireEntitySlot(TEXT("CBaseEntity::GetStealthVisionScalar"), TEXT("0x10026610"), TEXT("29c"),
-		DebugString());
-	return {};
+	return static_cast<float>(1.0);
 }
 
 // slot 29 0x10026630 (walked) `float GetStealthVisionCone()`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::GetStealthVisionCone 0x10026630: `FLD
+// [0x104454c0]; RET`, the pooled float 1.0 (CAI_BaseNPCTroika 0x101aa630 and CHL2_Player 0x1034f390
+// override the slot)
 float FElysiumEntity::GetStealthVisionCone()
 {
-	FireEntitySlot(TEXT("CBaseEntity::GetStealthVisionCone"), TEXT("0x10026630"), TEXT("29c"),
-		DebugString());
-	return {};
+	return static_cast<float>(1.0);
 }
 
 // slot 30 0x10026650 (walked) `float GetStealthHearingDist()`
@@ -1166,20 +1168,16 @@ bool FElysiumEntity::OnControls(FElysiumEntity*)
 
 // slot 160 0x100a1b40 (sdk) `bool HasTarget(string_t)`
 //   layer 0, story 29c
-bool FElysiumEntity::HasTarget(FName)
-{
-	FireEntitySlot(TEXT("CBaseEntity::HasTarget"), TEXT("0x100a1b40"), TEXT("29c"), DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::HasTarget`, written by hand in the substrate:
+// `CBaseEntity::HasTarget` 0x100a1b40: `name != NULL && m_target != NULL && strcmpi(name, m_target)
+// == 0` (L0-r020). Declared here, defined there.
 
 // slot 161 0x100a1c30 (walked) `bool HasLinkedDoor(string_t)`
 //   layer 0, story 29c
-bool FElysiumEntity::HasLinkedDoor(FName)
-{
-	FireEntitySlot(TEXT("CBaseEntity::HasLinkedDoor"), TEXT("0x100a1c30"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::HasLinkedDoor`, written by hand in the substrate:
+// `CBaseEntity::HasLinkedDoor` 0x100a1c30: the same predicate under its own trace label;
+// `UpdateAreaPortals` FUN_100efbf0 asks every `func_areaportal` it (L0-r020). Declared here,
+// defined there.
 
 // slot 162 0x10026f60 (walked) `bool IsPlayer()`
 //   layer 0, story 29c
@@ -1401,11 +1399,9 @@ void FElysiumEntity::SetDamage(float)
 
 // slot 197 0x1009f2c0 (walked) `Vector BodyTarget(const Vector&, bool, bool)`
 //   layer 0, story 29c
-FVector FElysiumEntity::BodyTarget(const FVector&, bool, bool)
-{
-	FireEntitySlot(TEXT("CBaseEntity::BodyTarget"), TEXT("0x1009f2c0"), TEXT("29c"), DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::BodyTarget`, written by hand in the substrate:
+// `CBaseEntity::BodyTarget` 0x1009f2c0: slot 192 `WorldSpaceCenter()` through the vtable, the three
+// arguments unread (L0-r020). Declared here, defined there.
 
 // slot 198 0x100274b0 (walked) `const Vector& GetLocalVelocity()`
 //   returns `const Vector&`
@@ -1428,11 +1424,12 @@ void FElysiumEntity::GetVelocity(FVector*, void*)
 
 // slot 200 0x100ad6e0 (walked) `int Illumination()`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::Illumination 0x100ad6e0: the scope-trace
+// push and pop, then `MOV EAX,0x80; RET` -- 128 for every non-player (CBasePlayer 0x10177bf0
+// answers `m_nLightLevel`)
 int32 FElysiumEntity::Illumination()
 {
-	FireEntitySlot(TEXT("CBaseEntity::Illumination"), TEXT("0x100ad6e0"), TEXT("29c"),
-		DebugString());
-	return {};
+	return static_cast<int32>(0x80);
 }
 
 // slot 201 0x100a6fa0 (walked) `bool FVisible(CBaseEntity*, int, CBaseEntity**, int)`
@@ -1857,13 +1854,13 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FElysiumEntity*)>::Test(&FElysiumEntity::Slot27),
 				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; Receiver.Slot27(Arg0); return 0; } },
 			{ 28, TEXT("0x10026610"), TEXT("CBaseEntity"), TEXT("GetStealthVisionScalar"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("1.0"), 1, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, float()>::Test(&FElysiumEntity::GetStealthVisionScalar),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { return static_cast<int64>(Receiver.GetStealthVisionScalar()); } },
 			{ 29, TEXT("0x10026630"), TEXT("CBaseEntity"), TEXT("GetStealthVisionCone"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("1.0"), 1, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, float()>::Test(&FElysiumEntity::GetStealthVisionCone),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { return static_cast<int64>(Receiver.GetStealthVisionCone()); } },
 			{ 30, TEXT("0x10026650"), TEXT("CBaseEntity"), TEXT("GetStealthHearingDist"),
 				EElysiumNpcSlotBody::Default, TEXT("0.0"), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, float()>::Test(&FElysiumEntity::GetStealthHearingDist),
@@ -2322,11 +2319,11 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::IsAlive),
 				nullptr },
 			{ 160, TEXT("0x100a1b40"), TEXT("CBaseEntity"), TEXT("HasTarget"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FName)>::Test(&FElysiumEntity::HasTarget),
 				nullptr },
 			{ 161, TEXT("0x100a1c30"), TEXT("CBaseEntity"), TEXT("HasLinkedDoor"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FName)>::Test(&FElysiumEntity::HasLinkedDoor),
 				nullptr },
 			{ 162, TEXT("0x10026f60"), TEXT("CBaseEntity"), TEXT("IsPlayer"),
@@ -2454,7 +2451,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FVector()>::Test(&FElysiumEntity::EarPosition),
 				nullptr },
 			{ 197, TEXT("0x1009f2c0"), TEXT("CBaseEntity"), TEXT("BodyTarget"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FVector(const FVector&, bool, bool)>::Test(&FElysiumEntity::BodyTarget),
 				nullptr },
 			{ 198, TEXT("0x100274b0"), TEXT("CBaseEntity"), TEXT("GetLocalVelocity"),
@@ -2466,9 +2463,9 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FVector*, void*)>::Test(&FElysiumEntity::GetVelocity),
 				nullptr },
 			{ 200, TEXT("0x100ad6e0"), TEXT("CBaseEntity"), TEXT("Illumination"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("0x80"), 128, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32()>::Test(&FElysiumEntity::Illumination),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { return static_cast<int64>(Receiver.Illumination()); } },
 			{ 201, TEXT("0x100a6fa0"), TEXT("CBaseEntity"), TEXT("FVisible"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FElysiumEntity*, int32, FElysiumEntity*, int32)>::Test(&FElysiumEntity::FVisible),

@@ -256,6 +256,16 @@ RETAIL_DEFAULTS: dict[str, tuple[str, str]] = {
     "100273d0": ("void", "CBaseEntity::VPhysicsShadowUpdate 0x100273d0: `ret 4`"),
     "10039ff0": ("void", "CBaseEntity::PerformCustomPhysics 0x10039ff0: the scope-trace push and "
                          "pop; the four out-arguments untouched"),
+    # L0-r020 (`walks/L0-r020.md`): the three one-constant perception bodies.
+    "10026610": ("1.0", "CBaseEntity::GetStealthVisionScalar 0x10026610: `FLD [0x104454c0]; RET`, "
+                        "the pooled float 1.0 (CAI_BaseNPCTroika 0x101aa610 and CHL2_Player 0x1034f370 "
+                        "override the slot)"),
+    "10026630": ("1.0", "CBaseEntity::GetStealthVisionCone 0x10026630: `FLD [0x104454c0]; RET`, the "
+                        "pooled float 1.0 (CAI_BaseNPCTroika 0x101aa630 and CHL2_Player 0x1034f390 "
+                        "override the slot)"),
+    "100ad6e0": ("0x80", "CBaseEntity::Illumination 0x100ad6e0: the scope-trace push and pop, then "
+                         "`MOV EAX,0x80; RET` -- 128 for every non-player (CBasePlayer 0x10177bf0 "
+                         "answers `m_nLightLevel`)"),
 }
 
 # The flattened table `FElysiumNpc` stands for. Species classes add words past its end; the census
@@ -495,6 +505,12 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
     218: ("", "`CBaseEntity::SetAbsAngles` 0x100b2510: slot 98, the EFL 0x800 / 0x3000 invalidation, the "
               "absolute word, the local word through the move parent's frame and `+0x1b1` "
               "(L0.entity_core.datamap-keyvalues, walks/L0-r017.md; `ElysiumEntity.cpp`)"),
+    160: ("", "`CBaseEntity::HasTarget` 0x100a1b40: `name != NULL && m_target != NULL && "
+              "strcmpi(name, m_target) == 0` (L0-r020)"),
+    161: ("", "`CBaseEntity::HasLinkedDoor` 0x100a1c30: the same predicate under its own trace label; "
+              "`UpdateAreaPortals` FUN_100efbf0 asks every `func_areaportal` it (L0-r020)"),
+    197: ("", "`CBaseEntity::BodyTarget` 0x1009f2c0: slot 192 `WorldSpaceCenter()` through the vtable, the "
+              "three arguments unread (L0-r020)"),
 }
 
 # A `CHAIN_HAND` slot whose hand body stands on ONE chain owner only; the other chain classes that

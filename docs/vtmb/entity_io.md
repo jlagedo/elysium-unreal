@@ -270,6 +270,58 @@ Two corrections to this document's own text, from the same measurement:
 They live on the base entity and reach subclasses through the datamap `baseMap`
 chain (`docs/vtmb/python_bridge.md`), so the port implements them once, not per class.
 
+## `ShouldToggle` -- the one use-acceptance rule (`CBaseEntity`) [decompiled, L0-r020]
+
+`CBaseEntity::ShouldToggle` `0x100a98f0`: `int __thiscall (int useType, int state)`, `RET 8`, 167 bytes, in
+no vtable (so no slot and no ledger row); the three callers reach it through the thunk `JMP 0x100a98f0` at
+`0x100076a3`: `CLight::Use` `0x10130580` (gated on `m_iStyle` `+0x450` `>= 0x20`; `state = ~m_spawnflags
+(+0x204) & 1`; on accept the Toggle thunk `0x100115fe`), `CSprite::Use` `0x1042f030` (`state = m_fEffects
+(+0x19c) != 0x40`) and `FUN_10159700` (unnamed, writes `m_pfnUse` `+0x1f0`; calls slot 241 `+0x3c4` first,
+then `state = m_toggle_state (+0x4f8) == 1`; on accept `m_toggle_state == 0` calls slot 243 `+0x3cc`, `== 1`
+slot 242 `+0x3c8` -- its owner class is unrecovered). `this` is read for the scope-trace label only, so the
+predicate is NULL-safe. Arms in order (`100a995b`-`100a9994`): `useType == 3` (TOGGLE) -> 1; `useType == 2`
+(SET) -> 1; `state != 0` (`TEST ECX,ECX`, any bit): `useType == 1` (ON) -> 0, else 1; `state == 0`:
+`useType != 0` -> 1, `useType == 0` (OFF) -> 0. Accept `MOV EAX,1; RET 8`, reject `XOR EAX,EAX; RET 8`;
+nothing is written but the trace frame.
+
+| useType | state == 0 | state != 0 |
+|---|---|---|
+| 0 OFF | 0 | 1 |
+| 1 ON | 1 | 0 |
+| 2 SET | 1 | 1 |
+| 3 TOGGLE | 1 | 1 |
+| other | 1 | 1 |
+
+Port: `FElysiumEntity::ShouldToggle` (`Source/ElysiumUE/Private/Substrate/ElysiumEntity.cpp`), the one
+predicate `FElysiumEnvSprite::UseTyped` runs; `ambient_generic`'s own gate (`FUN_101ad470`) gives the same
+table but is that class's switch, not a caller of this body. Record `Arena/scenarios/world/l0_should_toggle.json`.
+
+## `IsMonster` -- the char-template `Monster` byte (`CBaseEntity`) [decompiled, L0-r020]
+
+`CBaseEntity::IsMonster` `0x1009d820` (slot 70, `+0x118`, 31 bytes, name inferred, no scope trace):
+`[this+0x9c] == 0` -> 0 (`+0x9c m_pCombatCharacter`, the self-downcast cache the `CBaseCombatCharacter`
+ctor `0x10326de0` stores and the `CBaseEntity` ctor `0x1009d980` zeroes, `npc-kernel/layout.md`); else
+`thunk_FUN_101d5f10(&DAT_10738d10, +0x9c)` (`0x100040b1` -> `FUN_101d5f10` `0x101d5f10`, **L2 character**,
+`hooks.tsv`) and `MOV AL,[EAX+0x8e]; RET`. `FUN_101d5f10` (`RET 4`) answers `table[idx]` for `0 <= idx <
+count` (count at table+4, pointers at table+8) else the default record `&DAT_10738e50`; it never returns
+NULL. `idx` is `CBaseCombatCharacter::GetCharTemplate` `0x10337860` (`GetValue(stat list, 10)` over the first
+entry of the list at `+0x13c0` whose `+0x10` is 0, else the static list `DAT_109f0b40`; what stat 10 is
+remains unrecovered). The default record is `FUN_101d3850(this = &DAT_10738e50, -1)`: NOT all zero --
+`+0x8e` `Monster` 0, `+0x91` `GibsCollide` 1, `+0xbc/+0xc0/+0xc4` damage filters 1.0f, `+0xa4` -1, `+4` -1,
+`+0` -1. `+0x8e` is written by that init, the parent copy `FUN_101d3c10` and the loader `FUN_101d4520`,
+which stores `General` slot-12 `GetBool("Monster")` -> `VKeyValues` `0x101f31b0` -> `FUN_101f27b0`
+(`GetInt != 0`, ends `SETNZ AL`), so the byte is always 0 or 1 and the raw AL equals a `bool`. Nine species
+override the slot with constants (CNPC_VGargoyle `0x10379470`, CNPC_VHengeyokai `0x10380f70`, CNPC_VMingXiao
+`0x10396fb0`, CNPC_VMingXiaoTentacle `0x1039eb30`, CNPC_VSabbatLeader `0x103a5c80`, CNPC_VTzimisce
+`0x103b9020`, CNPC_VTzimisceHeadClaw `0x103c1520`, CNPC_VTzimisceRunner `0x103c32a0`, CNPC_VWerewolf
+`0x103ccb50`); `CBasePlayer` holds the base body (its template value is L3's row). Consumers:
+`CBaseEntity::PrecacheSoundTable` `0x1009d460` (slot 71; true selects VSound category 2) and
+`CBaseCombatCharacter::IsKine` `0x10337e40` (0 when slot 70 is true, then 0 when `IsKindred`, then 0 when
+`+0xac m_pAnimal` is set, else 1). `npctemplate001.txt` authors `Monster 1` on e.g. `SheriffMan` and
+`BrotherKanker`. Port: `FElysiumEntity::IsMonster` (`ElysiumEntitySlotBodies.cpp`) over the L2 hook
+`FElysiumCombatCharacter::CharTemplateRecord` (`ElysiumPlayer.h`; the NPC leaf resolves its `stattemplate`,
+the base answers the default record). Record `Arena/scenarios/world/l0_is_monster_template_flag.json`.
+
 ## `SetParent` / `ClearParent` and the move hierarchy (`CBaseEntity`) [decompiled, L0-r010]
 
 Walked in `docs/specs/layers/L0-entity/walks/L0-r010.md`; ported in
@@ -350,6 +402,29 @@ that traffic light is inert from both ends.
 
 A target that resolves to nothing and an input the target's class does not implement are separate
 conditions and worth counting separately: only the second is a gap in a reimplementation.
+
+### `HasTarget` / `HasLinkedDoor` -- the `m_target` predicates [decompiled, L0-r020]
+
+`CBaseEntity::HasTarget` `0x100a1b40` (slot 160, `+0x280`) and `CBaseEntity::HasLinkedDoor` `0x100a1c30`
+(slot 161, `+0x284`) are the same 177 bytes +0xf0 apart (instruction-compared); only the scope-trace label
+differs (`0x10555a6c` / `0x10555a88`). `bool __thiscall (string_t name)`, `RET 4`; after the trace push:
+`name == NULL` -> 0 (`100a1baa`); `m_target` (`+0x20c`) `== NULL` -> 0 (`100a1bb2`; the decompiler's inner
+`m_target == NULL -> ""` is dead, the `JNZ` at `100a1bbe` is always taken); else `__strcmpi(name, m_target)
+== 0` (`100a1bc5`, `SETZ AL`; CRT `_stricmp` `0x1043e780`, the C-locale ASCII fold, byte-exact otherwise -- a
+trailing space differs). `m_iName` (`+0x26c`) is read for the trace label only. Nothing is written. A NULL
+`this` faults at `100a1bb2` unless `name` is NULL. The datadesc string parse `AllocPooledString`
+`0x1042bff0` stores NULL for an empty value, so a blank `target` is NULL and `HasTarget("")` is 0; no code
+writes `+0x20c` (`vtmb_readers 0x20c`: the two predicates, `GetNextTarget` and `Dump` read it). The entries
+`0x1001172a` and `0x1000f62d` are 5-byte `JMP` thunks, not second bodies. No class overrides either slot.
+Dispatch sites, both passing the CALLER's own targetname: `FUN_101331e0` (slot 160; no caller, in no
+vtable) collects the entities `thunk_FUN_100f7930` finds by its `m_iName` and keeps every `multi_manager`
+whose `HasTarget(this->m_iName)` is 1, then clears `m_spawnflags` bit 0; `FUN_100efbf0` (slot 161; thunk
+`0x100137d2`; the SDK `CBaseDoor::UpdateAreaPortals`, `__thiscall(char open)`): when `m_iName != NULL`,
+for each `func_areaportal` (`0x10565398`, class iteration `0x10010168` -> `FUN_100f7380`) with
+`HasLinkedDoor(m_iName)` true, `portal->Use(this, this, open ? USE_ON : USE_OFF, 0)` (slot 173). Who
+reaches those two functions is unrecovered (no direct caller, no vtable entry). Port:
+`Source/ElysiumUE/Private/Substrate/ElysiumEntitySlotBodies.cpp` (`TargetNamePredicate`); record
+`Arena/scenarios/world/l0_target_name_predicates.json`.
 
 ### `!playercontroller` — the cinematic relationship entity
 

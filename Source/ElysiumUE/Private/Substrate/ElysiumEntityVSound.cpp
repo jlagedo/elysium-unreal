@@ -50,13 +50,31 @@ bool FElysiumEntity::IsMonster()
 	//
 	// Nine NPC classes override this slot (`CNPC_VGargoyle` 0x10379470 and `CNPC_VWerewolf` 0x103ccb50
 	// answer a constant true; the seven others are unread); those are their classes' rows, not this one.
+	//
+	// Sites (L0-r020, `walks/L0-r020.md`): `is_monster` at the return (`result= arm=<no_combat_character|
+	// template>`) and, on the template arm, `char_template` for the hook's answer (`record=<table|default>
+	// monster= template=<name|->`). Retail has no trace push here; the sites are the record's observation.
 	const FElysiumCombatCharacter* CombatCharacter = AsCombatCharacter();
 	if (CombatCharacter == nullptr)
 	{
+		if (World)
+		{
+			World->EmitRetailSite(*this, TEXT("is_monster"), TEXT("CBaseEntity::IsMonster"), 0x1009d820u, TEXT("return"),
+				TEXT("result=0 arm=no_combat_character"));
+		}
 		return false;
 	}
 	const FElysiumClanTemplate* Record = CombatCharacter->CharTemplateRecord();
-	return Record != nullptr && Record->GeneralInt(TEXT("Monster")) != 0;
+	const bool bMonster = Record != nullptr && Record->GeneralInt(TEXT("Monster")) != 0;
+	if (World)
+	{
+		World->EmitRetailSite(*this, TEXT("char_template"), TEXT("FUN_101d5f10"), 0x101d5f10u, TEXT("return"),
+			FString::Printf(TEXT("record=%s monster=%d template=%s"), Record != nullptr ? TEXT("table") : TEXT("default"),
+				bMonster ? 1 : 0, Record != nullptr ? *Record->TemplateName : TEXT("-")));
+		World->EmitRetailSite(*this, TEXT("is_monster"), TEXT("CBaseEntity::IsMonster"), 0x1009d820u, TEXT("return"),
+			FString::Printf(TEXT("result=%d arm=template"), bMonster ? 1 : 0));
+	}
+	return bMonster;
 }
 
 // -------------------------------------------------------------------------------------------------

@@ -1,0 +1,96 @@
+{
+  "name": "l0_should_toggle",
+  "about": "`CBaseEntity::ShouldToggle` 0x100a98f0 (`int ShouldToggle(int useType, int state)`, `RET 8`; not a vtable slot, reached through the thunk 0x100076a3 by `CLight::Use` 0x10130580, `CSprite::Use` 0x1042f030 and `FUN_10159700`; `walks/L0-r020.md`). After the scope-trace push the arms run in this order: `useType == 3` (TOGGLE) -> 1 (`100a995b`); `useType == 2` (SET) -> 1 (`100a9960`); `state != 0` (`TEST ECX,ECX`, any bit): `useType == 1` (ON) -> 0, else 1 (`100a9969`-`100a9970`); `state == 0`: `useType != 0` -> 1, `useType == 0` (OFF) -> 0 (`100a9984`-`100a9986`). Accept is `MOV EAX,1; RET 8`, reject `XOR EAX,EAX; RET 8`; nothing is written. The whole table over useType in {0, 1, 2, 3, 4, -1} and state in {0, 1, 2, -1} is probed on a `logic_relay` created at runtime (the predicate reads `this` for the trace label only); states 2 and -1 act as on. The in-play door is `CSprite::Use` on an `env_sprite` born on (`spawnflags 1`): `state = (m_fEffects != 0x40)`, so ON on the lit sprite is refused (`result=0`, `arm=refused`), OFF turns it off, OFF again is refused, TOGGLE turns it on. Reported as `fail`, a cell of the table or a sprite arm differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 1.6,
+  "fixtures": [
+    { "id": "glowa", "kind": "sprite_model", "model": "materials/sprites/glowa.vmt", "frames": 1 }
+  ],
+  "script": [
+    { "t": 0.1, "do": "spawn", "row": { "classname": "logic_relay", "name": "tog", "at": [0.0, 0.0, 50.0], "keys": {} } },
+    { "t": 0.1, "do": "spawn", "row": { "classname": "env_sprite", "name": "spr", "at": [50.0, 0.0, 80.0],
+      "keys": { "model": "materials/sprites/glowa.vmt", "spawnflags": "1", "framerate": "0", "scale": "1" } } },
+
+    { "t": 0.20, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [0, 0] },
+    { "t": 0.22, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [1, 0] },
+    { "t": 0.24, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [2, 0] },
+    { "t": 0.26, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [3, 0] },
+    { "t": 0.28, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [4, 0] },
+    { "t": 0.30, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [-1, 0] },
+
+    { "t": 0.40, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [0, 1] },
+    { "t": 0.42, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [1, 1] },
+    { "t": 0.44, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [2, 1] },
+    { "t": 0.46, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [3, 1] },
+    { "t": 0.48, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [4, 1] },
+    { "t": 0.50, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [-1, 1] },
+
+    { "t": 0.60, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [0, 2] },
+    { "t": 0.62, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [1, 2] },
+    { "t": 0.64, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [2, 2] },
+    { "t": 0.66, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [3, 2] },
+    { "t": 0.68, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [4, 2] },
+    { "t": 0.70, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [-1, 2] },
+
+    { "t": 0.80, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [0, -1] },
+    { "t": 0.82, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [1, -1] },
+    { "t": 0.84, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [2, -1] },
+    { "t": 0.86, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [3, -1] },
+    { "t": 0.88, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [4, -1] },
+    { "t": 0.90, "do": "entity_call", "target": "tog", "function": "ShouldToggle", "args": [-1, -1] },
+
+    { "t": 1.00, "do": "entity_call", "target": "spr", "function": "Use", "args": [1] },
+    { "t": 1.05, "do": "entity_call", "target": "spr", "function": "Use", "args": [0] },
+    { "t": 1.10, "do": "entity_call", "target": "spr", "function": "Use", "args": [0] },
+    { "t": 1.15, "do": "entity_call", "target": "spr", "function": "Use", "args": [3] }
+  ],
+  "expect": [
+    { "label": "s0_off", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "fn=CBaseEntity::ShouldToggle va=0x100a98f0 phase=return usetype=0 state=0 result=0", "by": 0.25 },
+    { "label": "s0_off_done", "who": "tog", "kind": "script", "match": "entity_call ShouldToggle done usetype=0 state=0 result=0", "within": 0.01 },
+    { "label": "s0_on", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=1 state=0 result=1", "within": 0.05 },
+    { "label": "s0_set", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=2 state=0 result=1", "within": 0.05 },
+    { "label": "s0_toggle", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=3 state=0 result=1", "within": 0.05 },
+    { "label": "s0_four", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=4 state=0 result=1", "within": 0.05 },
+    { "label": "s0_neg", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=-1 state=0 result=1", "within": 0.05 },
+
+    { "label": "s1_off", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=0 state=1 result=1", "by": 0.45 },
+    { "label": "s1_on", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=1 state=1 result=0", "within": 0.05 },
+    { "label": "s1_on_done", "who": "tog", "kind": "script", "match": "entity_call ShouldToggle done usetype=1 state=1 result=0", "within": 0.01 },
+    { "label": "s1_set", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=2 state=1 result=1", "within": 0.05 },
+    { "label": "s1_toggle", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=3 state=1 result=1", "within": 0.05 },
+    { "label": "s1_four", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=4 state=1 result=1", "within": 0.05 },
+    { "label": "s1_neg", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=-1 state=1 result=1", "within": 0.05 },
+
+    { "label": "s2_off", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=0 state=2 result=1", "by": 0.65 },
+    { "label": "s2_on", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=1 state=2 result=0", "within": 0.05 },
+    { "label": "s2_set", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=2 state=2 result=1", "within": 0.05 },
+    { "label": "s2_toggle", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=3 state=2 result=1", "within": 0.05 },
+    { "label": "s2_four", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=4 state=2 result=1", "within": 0.05 },
+    { "label": "s2_neg", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=-1 state=2 result=1", "within": 0.05 },
+
+    { "label": "sn_off", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=0 state=-1 result=1", "by": 0.85 },
+    { "label": "sn_on", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=1 state=-1 result=0", "within": 0.05 },
+    { "label": "sn_set", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=2 state=-1 result=1", "within": 0.05 },
+    { "label": "sn_toggle", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=3 state=-1 result=1", "within": 0.05 },
+    { "label": "sn_four", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=4 state=-1 result=1", "within": 0.05 },
+    { "label": "sn_neg", "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=-1 state=-1 result=1", "within": 0.05 },
+
+    { "label": "spr_on_refused_site", "who": "spr", "kind": "retail_site", "site": "should_toggle", "match": "va=0x100a98f0 phase=return usetype=1 state=1 result=0", "by": 1.05 },
+    { "label": "spr_on_refused", "who": "spr", "kind": "retail_site", "site": "sprite.use", "match": "va=0x1042f030 phase=branch arm=refused", "within": 0.01 },
+    { "label": "spr_off_site", "who": "spr", "kind": "retail_site", "site": "should_toggle", "match": "usetype=0 state=1 result=1", "by": 1.1 },
+    { "label": "spr_off_arm", "who": "spr", "kind": "retail_site", "site": "sprite.use", "match": "phase=branch arm=turnoff", "within": 0.01 },
+    { "label": "spr_off_again_site", "who": "spr", "kind": "retail_site", "site": "should_toggle", "match": "usetype=0 state=0 result=0", "by": 1.15 },
+    { "label": "spr_off_again", "who": "spr", "kind": "retail_site", "site": "sprite.use", "match": "phase=branch arm=refused", "within": 0.01 },
+    { "label": "spr_toggle_site", "who": "spr", "kind": "retail_site", "site": "should_toggle", "match": "usetype=3 state=0 result=1", "by": 1.2 },
+    { "label": "spr_toggle_arm", "who": "spr", "kind": "retail_site", "site": "sprite.use", "match": "phase=branch arm=turnon", "within": 0.01 }
+  ],
+  "never": [
+    { "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=(2|3) state=-?[0-9]+ result=0", "regex": true, "from": 0.0 },
+    { "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=0 state=(1|2|-1) result=0", "regex": true, "from": 0.0 },
+    { "who": "tog", "kind": "retail_site", "site": "should_toggle", "match": "usetype=1 state=0 result=0", "from": 0.0 }
+  ],
+  "probes": [
+    { "at": 1.4, "who": "spr", "probe": "entity_field", "field": "effects", "equals": 0 }
+  ]
+}

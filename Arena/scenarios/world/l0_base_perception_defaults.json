@@ -1,0 +1,35 @@
+{
+  "name": "l0_base_perception_defaults",
+  "about": "The four base-entity perception queries on a plain entity (`walks/L0-r020.md`), a `logic_relay` created at runtime: no NPC (CAI_BaseNPC 0x102789c0 overrides slot 197, CAI_BaseNPCTroika 0x101aa610 / 0x101aa630 slots 28 / 29) and not the player (CBasePlayer 0x10174e60 slot 197, 0x10177bf0 slot 200; CHL2_Player 0x1034f370 / 0x1034f390 slots 28 / 29). `CBaseEntity::BodyTarget` 0x1009f2c0 (slot 197, `RET 0x10`): the scope-trace push, then `CALL [vtable+0x300]` -- slot 192 `WorldSpaceCenter()` -- into the hidden return pointer (`1009f329`-`1009f330`); `posSrc` and both bools are never read, so `BodyTarget(v, true, false)` and `BodyTarget(0, false, false)` both equal `WorldSpaceCenter()` bit for bit (`equal=1`). `CBaseEntity::GetStealthVisionScalar` 0x10026610 (slot 28) and `GetStealthVisionCone` 0x10026630 (slot 29) are each `FLD [0x104454c0]; RET`: the pooled float 1.0. `CBaseEntity::Illumination` 0x100ad6e0 (slot 200): the trace push and pop, then `MOV EAX,0x80; RET`: 128, an int; no retail dispatch site reaches it, so its value is checked, not a use. Reported as `fail`, a value differs from retail's or BodyTarget differs from slot 192's answer.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 0.8,
+  "script": [
+    { "t": 0.1, "do": "spawn", "row": { "classname": "logic_relay", "name": "plain", "at": [0.0, 0.0, 50.0], "keys": {} } },
+    { "t": 0.2, "do": "entity_call", "target": "plain", "function": "BodyTarget", "args": [10.0, 20.0, 30.0, true, false] },
+    { "t": 0.22, "do": "entity_call", "target": "plain", "function": "BodyTarget", "args": [0.0, 0.0, 0.0, false, false] },
+    { "t": 0.24, "do": "entity_call", "target": "plain", "function": "BodyTarget", "args": [-500.0, 900.0, 12.5, false, true] },
+    { "t": 0.3, "do": "entity_call", "target": "plain", "function": "GetStealthVisionScalar", "args": [] },
+    { "t": 0.32, "do": "entity_call", "target": "plain", "function": "GetStealthVisionCone", "args": [] },
+    { "t": 0.34, "do": "entity_call", "target": "plain", "function": "Illumination", "args": [] }
+  ],
+  "expect": [
+    { "label": "bt_noisy_site", "who": "plain", "kind": "retail_site", "site": "body_target", "match": "fn=CBaseEntity::BodyTarget va=0x1009f2c0 phase=return center=[-0-9.e,]+ fn=WorldSpaceCenter va=0x10027160 slot=192", "regex": true, "by": 0.25 },
+    { "label": "bt_noisy", "who": "plain", "kind": "script", "match": "entity_call BodyTarget done center=([-0-9.e,]+) world_space_center=\\1 equal=1 noisy=1 aim_exact=0", "regex": true, "within": 0.01 },
+    { "label": "bt_plain_site", "who": "plain", "kind": "retail_site", "site": "body_target", "match": "va=0x1009f2c0 phase=return center=[-0-9.e,]+ fn=WorldSpaceCenter va=0x10027160 slot=192", "regex": true, "within": 0.05 },
+    { "label": "bt_plain", "who": "plain", "kind": "script", "match": "entity_call BodyTarget done center=([-0-9.e,]+) world_space_center=\\1 equal=1 noisy=0 aim_exact=0", "regex": true, "within": 0.01 },
+    { "label": "bt_exact_site", "who": "plain", "kind": "retail_site", "site": "body_target", "match": "va=0x1009f2c0 phase=return center=[-0-9.e,]+ fn=WorldSpaceCenter va=0x10027160 slot=192", "regex": true, "within": 0.05 },
+    { "label": "bt_exact", "who": "plain", "kind": "script", "match": "entity_call BodyTarget done center=([-0-9.e,]+) world_space_center=\\1 equal=1 noisy=0 aim_exact=1", "regex": true, "within": 0.01 },
+    { "label": "scalar", "who": "plain", "kind": "script", "match": "entity_call GetStealthVisionScalar done value=1", "by": 0.35 },
+    { "label": "cone", "who": "plain", "kind": "script", "match": "entity_call GetStealthVisionCone done value=1", "within": 0.05 },
+    { "label": "illumination", "who": "plain", "kind": "script", "match": "entity_call Illumination done value=128", "within": 0.05 }
+  ],
+  "never": [
+    { "who": "plain", "kind": "script", "match": "entity_call BodyTarget done .*equal=0", "regex": true, "from": 0.0 },
+    { "who": "plain", "kind": "script", "match": "entity_call GetStealthVision(Scalar|Cone) done value=0", "regex": true, "from": 0.0 },
+    { "who": "plain", "kind": "script", "match": "entity_call Illumination done value=0", "from": 0.0 }
+  ],
+  "probes": [
+    { "at": 0.6, "who": "plain", "probe": "exists", "equals": true }
+  ]
+}

@@ -1131,8 +1131,9 @@ namespace ElysiumArenaScenarioParse
 				}
 				else if ((*Args)[ArgIndex].IsValid() && (*Args)[ArgIndex]->Type == EJson::Null)
 				{
-					// `null`: a NULL pointer argument (the channel parser `FUN_101b24d0`'s first arm). Kept
-					// as `EType::None`, which no other argument reads as.
+					// `null`: a NULL pointer argument (the channel parser `FUN_101b24d0`'s first arm; the
+					// `string_t` a `HasTarget` 0x100a1b40 caller passes with no name, L0-r020). Kept as
+					// `EType::None`, which no other argument reads as.
 					Arg.Value = FElysiumArenaValue();
 				}
 				else if (!ReadValue(R, (*Args)[ArgIndex], ArgPath, Arg.Value) || Arg.Value.Type == FElysiumArenaValue::EType::None)
@@ -2079,6 +2080,22 @@ const TArray<FString>& EntityCallAllowlist()
 		// 0x10266780), on a utility target: `[x, y, z, color, damage]` in Source units -- the dispatcher
 		// `FUN_101cfb30` and the gate `FUN_101cf9b0` behind it, over the colours no witness NPC carries.
 		TEXT("Blood_Spawn"),
+		// L0.entity_core.target-name-predicates: slots 160 / 161 on a live entity, `[<name>|null]` -- the
+		// argument `FUN_101331e0` (a `multi_manager` sweep) and `FUN_100efbf0` (`UpdateAreaPortals`, over
+		// every `func_areaportal`) pass: the CALLER's own targetname, tested against this entity's `m_target`.
+		TEXT("HasTarget"),
+		TEXT("HasLinkedDoor"),
+		// L0.entity_core.toggle-acceptance: `CBaseEntity::ShouldToggle` 0x100a98f0 `[useType, state]` on a live
+		// entity -- the toggle-state probe the story names (no vtable slot; the in-play door is `Use`).
+		TEXT("ShouldToggle"),
+		// L0.entity_core.base-perception: slot 197 `BodyTarget(posSrc, noisy, aimExact)` `[x, y, z, noisy?,
+		// aimExact?]` (the result beside slot 192's own answer), slots 28 / 29 / 200 with no arguments.
+		TEXT("BodyTarget"),
+		TEXT("GetStealthVisionScalar"),
+		TEXT("GetStealthVisionCone"),
+		TEXT("Illumination"),
+		// L0.entity_core.monster-template: slot 70 `IsMonster()` on a live entity, no arguments.
+		TEXT("IsMonster"),
 	};
 	return Allowed;
 }

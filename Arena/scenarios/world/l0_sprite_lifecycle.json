@@ -69,15 +69,15 @@
     { "label": "u_arm", "who": "", "kind": "retail_site", "site": "sprite.spawn", "match": "phase=branch arm=turnon", "within": 0.05 },
 
     { "label": "a_use", "who": "spr_a", "kind": "retail_site", "site": "sprite.use", "match": "va=0x1042f030 phase=entry usetype=3 state=1 effects=0x0", "by": 0.6 },
-    { "label": "a_should", "who": "spr_a", "kind": "retail_site", "site": "sprite.should_toggle", "match": "va=0x100a98f0 phase=return usetype=3 state=1 result=1", "within": 0.05 },
+    { "label": "a_should", "who": "spr_a", "kind": "retail_site", "site": "should_toggle", "match": "va=0x100a98f0 phase=return usetype=3 state=1 result=1", "within": 0.05 },
     { "label": "a_use_arm", "who": "spr_a", "kind": "retail_site", "site": "sprite.use", "match": "phase=branch arm=turnoff", "within": 0.05 },
     { "label": "a_use_off", "who": "spr_a", "kind": "retail_site", "site": "sprite.turnoff", "match": "phase=return effects=0x40 next=0 m_pfnThink=0x10011757", "within": 0.05 },
 
     { "label": "b_use_off", "who": "spr_b", "kind": "retail_site", "site": "sprite.use", "match": "phase=entry usetype=0 state=0 effects=0x40", "by": 0.65 },
-    { "label": "b_should_off", "who": "spr_b", "kind": "retail_site", "site": "sprite.should_toggle", "match": "usetype=0 state=0 result=0", "within": 0.05 },
+    { "label": "b_should_off", "who": "spr_b", "kind": "retail_site", "site": "should_toggle", "match": "usetype=0 state=0 result=0", "within": 0.05 },
     { "label": "b_refused", "who": "spr_b", "kind": "retail_site", "site": "sprite.use", "match": "phase=branch arm=refused", "within": 0.05 },
     { "label": "b_use_on", "who": "spr_b", "kind": "retail_site", "site": "sprite.use", "match": "phase=entry usetype=1 state=0 effects=0x40", "by": 0.7 },
-    { "label": "b_should_on", "who": "spr_b", "kind": "retail_site", "site": "sprite.should_toggle", "match": "usetype=1 state=0 result=1", "within": 0.05 },
+    { "label": "b_should_on", "who": "spr_b", "kind": "retail_site", "site": "should_toggle", "match": "usetype=1 state=0 result=1", "within": 0.05 },
     { "label": "b_turnon", "who": "spr_b", "kind": "retail_site", "site": "sprite.turnon", "match": "phase=branch sched=flag2 effects=0x0 m_pfnThink=0x10011757 next=1.6000 last=1.6000 frame=0 framerate=10 max=0", "within": 0.05 },
     { "label": "b_animate", "who": "spr_b", "kind": "retail_site", "site": "sprite.animate", "match": "phase=entry df=", "within": 0.1 },
     { "label": "b_once_end", "who": "spr_b", "kind": "retail_site", "site": "sprite.frame", "match": "wrapped=0 once_end=1", "within": 0.1 },

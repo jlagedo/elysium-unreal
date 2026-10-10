@@ -1,0 +1,58 @@
+{
+  "name": "l0_target_name_predicates",
+  "about": "`CBaseEntity::HasTarget` 0x100a1b40 (slot 160) and `CBaseEntity::HasLinkedDoor` 0x100a1c30 (slot 161) are the same 177 bytes under two trace labels (`walks/L0-r020.md`): after the scope-trace push, `name == NULL` -> 0 (`100a1baa`), `m_target` (+0x20c) `== NULL` -> 0 (`100a1bb2`), else `__strcmpi(name, m_target) == 0` (`100a1bc5`, the CRT C-locale ASCII fold: case-blind, byte-exact otherwise). `m_iName` (+0x26c) is read for the trace label only and never decides the answer; nothing is written. An authored `target` that is blank is stored as NULL by the datadesc string parse `AllocPooledString` 0x1042bff0, so NULL and empty are one case. Their one dispatch site each passes the CALLER's own targetname: `FUN_101331e0` asks every `multi_manager` `HasTarget(this->m_iName)`; `FUN_100efbf0` (the SDK `UpdateAreaPortals`) asks every `func_areaportal` `HasLinkedDoor(door->m_iName)` and then `Use(door, door, open ? USE_ON : USE_OFF, 0)`. Three `logic_relay`s created at runtime stand for the asked entity: `Other` (target `Door_A`), `Door_A` (target `Door_A`, its own name) and `NoTarget` (no `target` key). The seven retail rows: Door_A/Other asked `Door_A` -> 1; Door_A/Door_A asked `door_a` -> 1 (the fold), `Door_B` -> 0, `Door_A ` (trailing space) -> 0, NULL -> 0; NoTarget asked `Door_A` -> 0 and NULL -> 0. Each row runs on both slots. Reported as `fail`, a result or a site payload differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 1.2,
+  "script": [
+    { "t": 0.1, "do": "spawn", "row": { "classname": "logic_relay", "name": "Other", "at": [0.0, 0.0, 50.0], "keys": { "target": "Door_A" } } },
+    { "t": 0.1, "do": "spawn", "row": { "classname": "logic_relay", "name": "Door_A", "at": [50.0, 0.0, 50.0], "keys": { "target": "Door_A" } } },
+    { "t": 0.1, "do": "spawn", "row": { "classname": "logic_relay", "name": "NoTarget", "at": [100.0, 0.0, 50.0], "keys": {} } },
+
+    { "t": 0.3, "do": "entity_call", "target": "Other", "function": "HasTarget", "args": ["Door_A"] },
+    { "t": 0.32, "do": "entity_call", "target": "Door_A", "function": "HasTarget", "args": ["door_a"] },
+    { "t": 0.34, "do": "entity_call", "target": "Door_A", "function": "HasTarget", "args": ["Door_B"] },
+    { "t": 0.36, "do": "entity_call", "target": "Door_A", "function": "HasTarget", "args": ["Door_A "] },
+    { "t": 0.38, "do": "entity_call", "target": "Door_A", "function": "HasTarget", "args": [null] },
+    { "t": 0.4, "do": "entity_call", "target": "NoTarget", "function": "HasTarget", "args": ["Door_A"] },
+    { "t": 0.42, "do": "entity_call", "target": "NoTarget", "function": "HasTarget", "args": [null] },
+
+    { "t": 0.6, "do": "entity_call", "target": "Other", "function": "HasLinkedDoor", "args": ["Door_A"] },
+    { "t": 0.62, "do": "entity_call", "target": "Door_A", "function": "HasLinkedDoor", "args": ["door_a"] },
+    { "t": 0.64, "do": "entity_call", "target": "Door_A", "function": "HasLinkedDoor", "args": ["Door_B"] },
+    { "t": 0.66, "do": "entity_call", "target": "Door_A", "function": "HasLinkedDoor", "args": ["Door_A "] },
+    { "t": 0.68, "do": "entity_call", "target": "Door_A", "function": "HasLinkedDoor", "args": [null] },
+    { "t": 0.7, "do": "entity_call", "target": "NoTarget", "function": "HasLinkedDoor", "args": ["Door_A"] },
+    { "t": 0.72, "do": "entity_call", "target": "NoTarget", "function": "HasLinkedDoor", "args": [null] }
+  ],
+  "expect": [
+    { "label": "ht_other", "who": "Other", "kind": "retail_site", "site": "target_name", "match": "fn=CBaseEntity::HasTarget va=0x100a1b40 phase=return result=1 name=Door_A target=Door_A", "by": 0.35 },
+    { "label": "ht_other_done", "who": "Other", "kind": "script", "match": "entity_call HasTarget done result=1 name=Door_A", "within": 0.01 },
+    { "label": "ht_fold", "who": "Door_A", "kind": "retail_site", "site": "target_name", "match": "va=0x100a1b40 phase=return result=1 name=door_a target=Door_A", "within": 0.05 },
+    { "label": "ht_other_name", "who": "Door_A", "kind": "retail_site", "site": "target_name", "match": "va=0x100a1b40 phase=return result=0 name=Door_B target=Door_A", "within": 0.05 },
+    { "label": "ht_space", "who": "Door_A", "kind": "retail_site", "site": "target_name", "match": "va=0x100a1b40 phase=return result=0 name=Door_A  target=Door_A", "within": 0.05 },
+    { "label": "ht_null_name", "who": "Door_A", "kind": "retail_site", "site": "target_name", "match": "va=0x100a1b40 phase=return result=0 name=NULL target=Door_A", "within": 0.05 },
+    { "label": "ht_null_name_done", "who": "Door_A", "kind": "script", "match": "entity_call HasTarget done result=0 name=NULL", "within": 0.01 },
+    { "label": "ht_null_target", "who": "NoTarget", "kind": "retail_site", "site": "target_name", "match": "va=0x100a1b40 phase=return result=0 name=Door_A target=NULL", "within": 0.05 },
+    { "label": "ht_null_both", "who": "NoTarget", "kind": "retail_site", "site": "target_name", "match": "va=0x100a1b40 phase=return result=0 name=NULL target=NULL", "within": 0.05 },
+
+    { "label": "ld_other", "who": "Other", "kind": "retail_site", "site": "target_name", "match": "fn=CBaseEntity::HasLinkedDoor va=0x100a1c30 phase=return result=1 name=Door_A target=Door_A", "by": 0.65 },
+    { "label": "ld_other_done", "who": "Other", "kind": "script", "match": "entity_call HasLinkedDoor done result=1 name=Door_A", "within": 0.01 },
+    { "label": "ld_fold", "who": "Door_A", "kind": "retail_site", "site": "target_name", "match": "va=0x100a1c30 phase=return result=1 name=door_a target=Door_A", "within": 0.05 },
+    { "label": "ld_other_name", "who": "Door_A", "kind": "retail_site", "site": "target_name", "match": "va=0x100a1c30 phase=return result=0 name=Door_B target=Door_A", "within": 0.05 },
+    { "label": "ld_space", "who": "Door_A", "kind": "retail_site", "site": "target_name", "match": "va=0x100a1c30 phase=return result=0 name=Door_A  target=Door_A", "within": 0.05 },
+    { "label": "ld_null_name", "who": "Door_A", "kind": "retail_site", "site": "target_name", "match": "va=0x100a1c30 phase=return result=0 name=NULL target=Door_A", "within": 0.05 },
+    { "label": "ld_null_target", "who": "NoTarget", "kind": "retail_site", "site": "target_name", "match": "va=0x100a1c30 phase=return result=0 name=Door_A target=NULL", "within": 0.05 },
+    { "label": "ld_null_both", "who": "NoTarget", "kind": "retail_site", "site": "target_name", "match": "va=0x100a1c30 phase=return result=0 name=NULL target=NULL", "within": 0.05 }
+  ],
+  "never": [
+    { "who": "NoTarget", "kind": "retail_site", "site": "target_name", "match": "result=1", "from": 0.0 },
+    { "who": "", "kind": "retail_site", "site": "target_name", "match": "name=Door_B target=Door_A result=1", "from": 0.0 }
+  ],
+  "probes": [
+    { "at": 1.0, "who": "Other", "probe": "entity_field", "field": "target", "equals": "Door_A" },
+    { "at": 1.0, "who": "Other", "probe": "entity_field", "field": "m_iName", "equals": "Other" },
+    { "at": 1.0, "who": "Door_A", "probe": "entity_field", "field": "target", "equals": "Door_A" },
+    { "at": 1.0, "who": "NoTarget", "probe": "entity_field", "field": "target", "equals": "" }
+  ]
+}

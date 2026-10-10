@@ -142,7 +142,6 @@ private:
 	void SetSpriteModel(const FString& Name); // CSprite::SetModel 0x1042e850
 	void AnimateThink(double Now);           // FUN_1042eca0
 	void AnimateFrame(float Df);             // FUN_1042ee50
-	bool ShouldToggle(int32 UseType, bool bCurrentState) const; // CBaseEntity::ShouldToggle 0x100a98f0
 	void Site(const TCHAR* Tag, const TCHAR* Fn, uint32 Va, const TCHAR* Phase, const FString& Payload) const
 	{
 		if (World)
@@ -390,24 +389,6 @@ void FElysiumEnvSprite::InputToggleSprite()
 	}
 }
 
-bool FElysiumEnvSprite::ShouldToggle(int32 UseType, bool bCurrentState) const
-{
-	// `CBaseEntity::ShouldToggle` 0x100a98f0 (thunk 0x100076a3): 0 only when `useType` is neither
-	// TOGGLE (3) nor SET (2) AND (`state == 0 && useType == OFF`) or (`state != 0 && useType == ON`);
-	// otherwise 1. OFF on->off, OFF off->no-op, ON off->on, ON on->no-op, TOGGLE and SET flip.
-	bool bResult = true;
-	if (UseType != USE_TOGGLE && UseType != USE_SET)
-	{
-		if ((!bCurrentState && UseType == USE_OFF) || (bCurrentState && UseType == USE_ON))
-		{
-			bResult = false;
-		}
-	}
-	Site(TEXT("sprite.should_toggle"), TEXT("CBaseEntity::ShouldToggle"), 0x100a98f0u, TEXT("return"),
-		FString::Printf(TEXT("usetype=%d state=%d result=%d"), UseType, bCurrentState ? 1 : 0, bResult ? 1 : 0));
-	return bResult;
-}
-
 void FElysiumEnvSprite::UseByType(const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller,
 	int32 UseType, float Value)
 {
@@ -420,7 +401,10 @@ void FElysiumEnvSprite::UseByType(const FElysiumEntityHandle& Activator, const F
 	Site(TEXT("sprite.use"), TEXT("CSprite::Use"), 0x1042f030u, TEXT("entry"),
 		FString::Printf(TEXT("usetype=%d state=%d effects=0x%x activator=%s"), UseType, bState ? 1 : 0, EffectsWord,
 			Activator.IsSet() ? *Activator.ToString() : TEXT("none")));
-	if (!ShouldToggle(UseType, bState))
+	// `ShouldToggle` is `FElysiumEntity`'s (`CBaseEntity::ShouldToggle` 0x100a98f0, the shared predicate
+	// all three retail callers reach through the thunk 0x100076a3; L0-r020). Its `should_toggle` site
+	// carries `usetype= state= result=`.
+	if (!ShouldToggle(UseType, bState ? 1 : 0))
 	{
 		Site(TEXT("sprite.use"), TEXT("CSprite::Use"), 0x1042f030u, TEXT("branch"), TEXT("arm=refused"));
 		return;
