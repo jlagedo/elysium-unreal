@@ -464,6 +464,15 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
               "grapple partner's feed teardown, the owner notice and slot 301 (story 8 wave 2, L13)"),
     301: ("", "`CBaseCombatCharacter::CreateCorpse` 0x1032c0e0: the ragdoll corpse, "
               "`BecomeClientRagdoll` (story 8 wave 2, L13)"),
+    6: ("", "`CBaseEntity::SetCheckUntouch` 0x100b11d0: the 0x200 EFlags bit and the untouch-check "
+            "enqueue `FUN_100f8e20` (L0.entity_core.collision-touch, walks/L0-r015.md; "
+            "`ElysiumEntityCollision.cpp`)"),
+    83: ("", "`CBaseEntity::GetEFlags` 0x100b4ef0: the EFlags word, bit 0 folded from the world's "
+             "pending kill (L0.entity_core.eflags-word, walks/L0-r015.md; `ElysiumEntityCollision.cpp`)"),
+    84: ("", "`CBaseEntity::SetEFlags` 0x100b4f10: the EFlags word store (L0.entity_core.eflags-word, "
+             "walks/L0-r015.md; `ElysiumEntityCollision.cpp`)"),
+    207: ("", "`CBaseEntity::IsCurrentlyTouching` 0x1003d3d0: `HasDataObjectType(this, 1)` "
+              "(L0.entity_core.collision-touch, walks/L0-r015.md; `ElysiumEntityCollision.cpp`)"),
 }
 
 # A `CHAIN_HAND` slot whose hand body stands on ONE chain owner only; the other chain classes that

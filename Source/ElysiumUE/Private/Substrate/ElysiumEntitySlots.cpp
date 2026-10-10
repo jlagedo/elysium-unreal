@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 219 generated slot bodies of `FElysiumEntity`: 72 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 44 are defined by hand in the substrate,
-// and 85 are still stubs — 83 29c, 2 unassigned. 18 are closed (0019/6) and answer the
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 48 are defined by hand in the substrate,
+// and 81 are still stubs — 79 29c, 2 unassigned. 18 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -97,11 +97,10 @@ void* FElysiumEntity::Slot5(uint32)
 
 // slot 6 0x100b11d0 (sdk) `void SetCheckUntouch(bool)`
 //   layer 0, story 29c
-void FElysiumEntity::SetCheckUntouch(bool)
-{
-	FireEntitySlot(TEXT("CBaseEntity::SetCheckUntouch"), TEXT("0x100b11d0"), TEXT("29c"),
-		DebugString());
-}
+// the body is `FElysiumEntity::SetCheckUntouch`, written by hand in the substrate:
+// `CBaseEntity::SetCheckUntouch` 0x100b11d0: the 0x200 EFlags bit and the untouch-check enqueue
+// `FUN_100f8e20` (L0.entity_core.collision-touch, walks/L0-r015.md; `ElysiumEntityCollision.cpp`).
+// Declared here, defined there.
 
 // slot 7 0x100b12e0 (walked) `void SetSentLastFrame(bool)`
 //   layer 0, story 29c
@@ -630,18 +629,16 @@ void* FElysiumEntity::GetDataDescMap()
 
 // slot 83 0x100b4ef0 (walked) `int GetEFlags()`
 //   layer 0, story 29c
-int32 FElysiumEntity::GetEFlags()
-{
-	FireEntitySlot(TEXT("CBaseEntity::GetEFlags"), TEXT("0x100b4ef0"), TEXT("29c"), DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::GetEFlags`, written by hand in the substrate:
+// `CBaseEntity::GetEFlags` 0x100b4ef0: the EFlags word, bit 0 folded from the world's pending kill
+// (L0.entity_core.eflags-word, walks/L0-r015.md; `ElysiumEntityCollision.cpp`). Declared here,
+// defined there.
 
 // slot 84 0x100b4f10 (walked) `void SetEFlags(int)`
 //   layer 0, story 29c
-void FElysiumEntity::SetEFlags(int32)
-{
-	FireEntitySlot(TEXT("CBaseEntity::SetEFlags"), TEXT("0x100b4f10"), TEXT("29c"), DebugString());
-}
+// the body is `FElysiumEntity::SetEFlags`, written by hand in the substrate:
+// `CBaseEntity::SetEFlags` 0x100b4f10: the EFlags word store (L0.entity_core.eflags-word,
+// walks/L0-r015.md; `ElysiumEntityCollision.cpp`). Declared here, defined there.
 
 // slot 85 0x100b3d10 (walked) `edict_t* GetEdict()`
 //   returns `edict_t*`
@@ -1487,12 +1484,10 @@ bool FElysiumEntity::Slot206(int32, int32, int32, int32, int32)
 
 // slot 207 0x1003d3d0 (sdk) `bool IsCurrentlyTouching() const`
 //   layer 0, story 29c
-bool FElysiumEntity::IsCurrentlyTouching() const
-{
-	FireEntitySlot(TEXT("CBaseEntity::IsCurrentlyTouching"), TEXT("0x1003d3d0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::IsCurrentlyTouching`, written by hand in the substrate:
+// `CBaseEntity::IsCurrentlyTouching` 0x1003d3d0: `HasDataObjectType(this, 1)`
+// (L0.entity_core.collision-touch, walks/L0-r015.md; `ElysiumEntityCollision.cpp`). Declared here,
+// defined there.
 
 // slot 208 0x100b1420 (sdk) `void SetGroundEntity(CBaseEntity*)`
 //   layer 0, story 29c
@@ -1786,7 +1781,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void*(uint32)>::Test(&FElysiumEntity::Slot5),
 				nullptr },
 			{ 6, TEXT("0x100b11d0"), TEXT("CBaseEntity"), TEXT("SetCheckUntouch"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(bool)>::Test(&FElysiumEntity::SetCheckUntouch),
 				nullptr },
 			{ 7, TEXT("0x100b12e0"), TEXT("CBaseEntity"), TEXT("SetSentLastFrame"),
@@ -2067,11 +2062,11 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void*()>::Test(&FElysiumEntity::GetDataDescMap),
 				nullptr },
 			{ 83, TEXT("0x100b4ef0"), TEXT("CBaseEntity"), TEXT("GetEFlags"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32()>::Test(&FElysiumEntity::GetEFlags),
 				nullptr },
 			{ 84, TEXT("0x100b4f10"), TEXT("CBaseEntity"), TEXT("SetEFlags"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(int32)>::Test(&FElysiumEntity::SetEFlags),
 				nullptr },
 			{ 85, TEXT("0x100b3d10"), TEXT("CBaseEntity"), TEXT("GetEdict"),
@@ -2503,7 +2498,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(int32, int32, int32, int32, int32)>::Test(&FElysiumEntity::Slot206),
 				[](FElysiumEntity& Receiver) -> int64 { int32 Arg0{}; int32 Arg1{}; int32 Arg2{}; int32 Arg3{}; int32 Arg4{}; return Receiver.Slot206(Arg0, Arg1, Arg2, Arg3, Arg4) ? 1 : 0; } },
 			{ 207, TEXT("0x1003d3d0"), TEXT("CBaseEntity"), TEXT("IsCurrentlyTouching"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool() const>::Test(&FElysiumEntity::IsCurrentlyTouching),
 				nullptr },
 			{ 208, TEXT("0x100b1420"), TEXT("CBaseEntity"), TEXT("SetGroundEntity"),
