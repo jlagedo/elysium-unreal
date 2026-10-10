@@ -178,6 +178,10 @@ static FElysiumClassRegistrar GRegBaseEntity(
 			{ E.SetSoundOverrideEnt(A.Param.ToString()); });
 		D.Input(TEXT("SetFakeSilence"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
 			{ E.SetFakeSilence(A.Param.ToInt() != 0); });
+		// `CBaseEntity::InputSetParent` 0x100ad030 -> the by-name `SetParent` 0x100a04e0 -> 0x100a0670;
+		// `CBaseEntity::InputClearParent` 0x100ad100 -> 0x1012c840 (L0-r010).
+		D.Input(TEXT("SetParent"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { E.InputSetParent(A); });
+		D.Input(TEXT("ClearParent"), [](FElysiumEntity& E, const FElysiumInputArgs&) { E.ClearParent(); });
 
 		// Base keyfields — the `CBaseEntity` datamap, generated from the replay by
 		// `gen_kernel_bindings` (0019 story 2 pass B). Every row retail declares, with retail's own

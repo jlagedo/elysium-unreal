@@ -415,8 +415,14 @@ SLOT_PORT_MAP: dict[int, tuple[str, str, str]] = {}
 # port return type where the lowering would lose it, the reason). A reference return the generator
 # lowers to `void*` is restored here, because the port has the value it refers to.
 CHAIN_HAND: dict[int, tuple[str, str]] = {
-    62: ("", "`CBaseEntity::SetOrigin` 0x100b2be0: writes through `SetRuntimeOrigin` when the origin "
-             "differs; the change-tracker byte `+0x1b1` stays the Slot88/89 refusal"),
+    62: ("", "`CBaseEntity::SetOrigin` 0x100b2be0: the changed-only write of the LOCAL origin word, the "
+             "EFL 0x10800 invalidation of this entity and its move children (0x100b5340) and the "
+             "change-tracker byte `+0x1b1` (L0-r010)"),
+    64: ("", "`CBaseEntity::SetAngles` 0x100b2d00: the changed-only write of the LOCAL angles word, the "
+             "EFL 0x800 / 0x3800 invalidation of this entity and its move children (0x100b5340) and the "
+             "change-tracker byte `+0x1b1` (L0-r010)"),
+    98: ("", "`CBaseEntity::CalcAbsolutePosition` 0x100b1ac0: clears EFL 0x800 and rebuilds the absolute "
+             "pose from the local words and the move parent's absolute pose (L0-r010)"),
     94: ("", "`CBaseEntity::GetMoveType` 0x100aac30: reads the `RetailMoveType` word slot 93 writes. Live check "
              "0019/6: the counting stub answered 0 and failed `CheckOnGround`'s `!= MOVETYPE_STEP` guard "
              "on every NPC, every think"),
@@ -428,10 +434,14 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
              "written only when the type differs; the physics-object notify is a refusal"),
     194: ("const FVector&", "`EyeAngles` 0x100b4bc0: slot 219's answer (hand body, verdict overlay)"),
     195: ("const FVector&", "`LocalEyeAngles` 0x100b4be0: slot 221's answer (hand body, verdict overlay)"),
-    217: ("const FVector&", "`GetAbsOrigin` 0x100b31b0: `Origin`, in port units"),
-    219: ("const FVector&", "`GetAbsAngles` 0x100b3280: `Angles`, Source degrees"),
-    220: ("const FVector&", "`GetOrigin` 0x100b3070: `Origin`; the port has no local/abs split"),
-    221: ("const FVector&", "`GetAngles` 0x100b3110: `Angles`; the port has no local/abs split"),
+    217: ("const FVector&", "`GetAbsOrigin` 0x100b31b0: `CalcAbsolutePosition` under EFL 0x800, then the "
+                            "absolute origin cache `Origin`, in port units"),
+    219: ("const FVector&", "`GetAbsAngles` 0x100b3280: `CalcAbsolutePosition` under EFL 0x800, then the "
+                            "absolute angles cache `Angles`, Source degrees"),
+    220: ("const FVector&", "`GetOrigin` 0x100b3070: `m_vecOrigin`, the LOCAL origin word (`LocalOrigin` "
+                            "while move-parented, else `Origin`; L0-r010)"),
+    221: ("const FVector&", "`GetAngles` 0x100b3110: `m_angRotation`, the LOCAL angles word (`LocalAngles` "
+                            "while move-parented, else `Angles`; L0-r010)"),
     222: ("", "`CBaseEntity::GetSoundEmissionOrigin` 0x100a9eb0: the scope-trace label, then slot 192 "
               "`WorldSpaceCenter` through the dispatch, returned as the sound emission origin "
               "(L0.audio.sound-emission-origin, walks/L0-r006.md)"),
@@ -490,6 +500,8 @@ def _load_slot_map() -> None:
         (78, PORT, "FElysiumEntity::ScriptUnhide", "its exact inverse"),
         (97, PORT, "FElysiumEntity::GetOwnerEntity", "the owner handle"),
         (103, PORT, "FElysiumNpc::Spawn", "the leaf's own spawn"),
+        (104, OVERRIDDEN_BELOW, "", "`FElysiumAmbientGeneric::Precache()`: `CAmbientGeneric::Precache` "
+         "0x101ac930, Spawn's tail (L0-r005), over `CBaseEntity::Precache` 0x10026b90 `ret`"),
         (113, PORT, "FElysiumNpc::Activate", "the leaf's own activate"),
         (117, PORT, "FElysiumEntity::ObjectCaps", "the `FCAP_*` bitfield the port reads one bit of"),
         (118, PORT, "FElysiumEntityWorld::AcceptInput",

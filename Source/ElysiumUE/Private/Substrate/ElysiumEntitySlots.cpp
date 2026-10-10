@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 219 generated slot bodies of `FElysiumEntity`: 72 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 42 are defined by hand in the substrate,
-// and 87 are still stubs — 85 29c, 2 unassigned. 18 are closed (0019/6) and answer the
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 44 are defined by hand in the substrate,
+// and 85 are still stubs — 83 29c, 2 unassigned. 18 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -476,8 +476,9 @@ void FElysiumEntity::Slot61(void*)
 // slot 62 0x100b2be0 (walked) `void SetOrigin(const Vector&)`
 //   layer 0, story 29c
 // the body is `FElysiumEntity::SetOrigin`, written by hand in the substrate:
-// `CBaseEntity::SetOrigin` 0x100b2be0: writes through `SetRuntimeOrigin` when the origin differs;
-// the change-tracker byte `+0x1b1` stays the Slot88/89 refusal. Declared here, defined there.
+// `CBaseEntity::SetOrigin` 0x100b2be0: the changed-only write of the LOCAL origin word, the EFL
+// 0x10800 invalidation of this entity and its move children (0x100b5340) and the change-tracker
+// byte `+0x1b1` (L0-r010). Declared here, defined there.
 
 // slot 63 0x10026a10 (walked) `void SetOrigin(float, float, float)`
 //   layer 1, story 29c
@@ -486,10 +487,10 @@ void FElysiumEntity::Slot61(void*)
 
 // slot 64 0x100b2d00 (walked) `void SetAngles(const QAngle&)`
 //   layer 0, story 29c
-void FElysiumEntity::SetAngles(const FRotator&)
-{
-	FireEntitySlot(TEXT("CBaseEntity::SetAngles"), TEXT("0x100b2d00"), TEXT("29c"), DebugString());
-}
+// the body is `FElysiumEntity::SetAngles`, written by hand in the substrate:
+// `CBaseEntity::SetAngles` 0x100b2d00: the changed-only write of the LOCAL angles word, the EFL
+// 0x800 / 0x3800 invalidation of this entity and its move children (0x100b5340) and the
+// change-tracker byte `+0x1b1` (L0-r010). Declared here, defined there.
 
 // slot 65 0x10026a50 (walked) `void SetAngles(float, float, float)`
 //   layer 1, story 29c
@@ -742,11 +743,9 @@ void* FElysiumEntity::GetAimEntEdict()
 
 // slot 98 0x100b1ac0 (sdk) `void CalcAbsolutePosition()`
 //   layer 0, story 29c
-void FElysiumEntity::CalcAbsolutePosition()
-{
-	FireEntitySlot(TEXT("CBaseEntity::CalcAbsolutePosition"), TEXT("0x100b1ac0"), TEXT("29c"),
-		DebugString());
-}
+// the body is `FElysiumEntity::CalcAbsolutePosition`, written by hand in the substrate:
+// `CBaseEntity::CalcAbsolutePosition` 0x100b1ac0: clears EFL 0x800 and rebuilds the absolute pose
+// from the local words and the move parent's absolute pose (L0-r010). Declared here, defined there.
 
 // slot 99 0x100aa900 (sdk) `bool TestCollision(Ray_t&, unsignedint, trace_t&)`
 //   takes `Ray_t&`
@@ -1560,7 +1559,8 @@ void FElysiumEntity::SetAbsOrigin(FVector&)
 // slot 217 0x100b31b0 (sdk) `Vector& GetAbsOrigin() const`
 //   layer 0, story 29c
 // the body is `FElysiumEntity::GetAbsOrigin`, written by hand in the substrate: `GetAbsOrigin`
-// 0x100b31b0: `Origin`, in port units. Declared here, defined there.
+// 0x100b31b0: `CalcAbsolutePosition` under EFL 0x800, then the absolute origin cache `Origin`, in
+// port units. Declared here, defined there.
 
 // slot 218 0x100b2510 (sdk) `void SetAbsAngles(QAngle&)`
 //   layer 0, story 29c
@@ -1573,17 +1573,20 @@ void FElysiumEntity::SetAbsAngles(FRotator&)
 // slot 219 0x100b3280 (sdk) `QAngle& GetAbsAngles() const`
 //   layer 0, story 29c
 // the body is `FElysiumEntity::GetAbsAngles`, written by hand in the substrate: `GetAbsAngles`
-// 0x100b3280: `Angles`, Source degrees. Declared here, defined there.
+// 0x100b3280: `CalcAbsolutePosition` under EFL 0x800, then the absolute angles cache `Angles`,
+// Source degrees. Declared here, defined there.
 
 // slot 220 0x100b3070 (walked) `const Vector& GetOrigin()`
 //   layer 0, story 29c
 // the body is `FElysiumEntity::GetOrigin`, written by hand in the substrate: `GetOrigin`
-// 0x100b3070: `Origin`; the port has no local/abs split. Declared here, defined there.
+// 0x100b3070: `m_vecOrigin`, the LOCAL origin word (`LocalOrigin` while move-parented, else
+// `Origin`; L0-r010). Declared here, defined there.
 
 // slot 221 0x100b3110 (walked) `const QAngle& GetAngles()`
 //   layer 0, story 29c
 // the body is `FElysiumEntity::GetAngles`, written by hand in the substrate: `GetAngles`
-// 0x100b3110: `Angles`; the port has no local/abs split. Declared here, defined there.
+// 0x100b3110: `m_angRotation`, the LOCAL angles word (`LocalAngles` while move-parented, else
+// `Angles`; L0-r010). Declared here, defined there.
 
 // slot 222 0x100a9eb0 (sdk) `Vector GetSoundEmissionOrigin() const`
 //   layer 0, story 29c
@@ -1995,7 +1998,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(float, float, float)>::Test(&FElysiumEntity::SetOrigin),
 				nullptr },
 			{ 64, TEXT("0x100b2d00"), TEXT("CBaseEntity"), TEXT("SetAngles"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(const FRotator&)>::Test(&FElysiumEntity::SetAngles),
 				nullptr },
 			{ 65, TEXT("0x10026a50"), TEXT("CBaseEntity"), TEXT("SetAngles"),
@@ -2120,7 +2123,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void*()>::Test(&FElysiumEntity::GetAimEntEdict),
 				nullptr },
 			{ 98, TEXT("0x100b1ac0"), TEXT("CBaseEntity"), TEXT("CalcAbsolutePosition"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::CalcAbsolutePosition),
 				nullptr },
 			{ 99, TEXT("0x100aa900"), TEXT("CBaseEntity"), TEXT("TestCollision"),

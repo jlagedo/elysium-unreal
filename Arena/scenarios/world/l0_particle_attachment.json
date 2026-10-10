@@ -1,0 +1,78 @@
+{
+  "name": "l0_particle_attachment",
+  "about": "`CEnvParticle::AttachToEntity` 0x100fb110 and the attachment-index resolver `FUN_100fafa0` 0x100fafa0 (`walks/L0-r010.md`). The map parse (0x10136650) parents every `env_particle` whose `parentname` resolves before any Spawn, and `CEnvParticle::Spawn` 0x100fb3d0 then calls slot 243 `AttachToEntity(parent, m_nAttachType, m_sAttachName)` when `m_pParent` resolves: `SetParent(parent, 0)`, `m_nAttachType` (+0x458) = the mode, `m_sAttachName` (+0x45c) = `AllocPooledString(bone)` 0x1042bff0 (non-empty iff the authored name is), `SetMoveType(11 MOVETYPE_FOLLOW, 0)` 0x100aad70, `SetAimEnt(entity(m_pParent))` 0x1009ee80, `SetOrigin(0,0,0)` through slot 63 0x10026a10 (the LOCAL origin, slot 220, reads zero) and `m_nAttachPoint` (+0x460) = the index: -1 for the tree modes 1 / 3 whatever the parent; for 6 / 17 `CBaseAnimating::LookupAttachment` 0x10092d50 on an animating parent (the L1 hook of `hooks.tsv:21`, not run here, answering retail's own no-model 0) and 0 on a bodiless one; for any other mode > 0 the first studio bone whose name matches case-insensitively (the NPC row spawns before the particles, so its skeleton stands when `Spawn` resolves `Bip01 Head`; the index is the baked reference skeleton's -- the walk's report names the studio-order gap), 0 when none matches or the parent has no studio model (`par_relay`); 0 for mode <= 0. An `env_particle` with no `parentname` is never attached: `m_MoveType` stays 0, `m_hAimEnt` -1, `m_pParent` -1. Reported as `fail`, a stored word or a site payload differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 1.0,
+  "rows": [
+    { "classname": "npc_VHumanCombatant", "name": "par_npc", "at": "north", "face": "player", "body": "regular_cop",
+      "keys": { "stattemplate": "TutorialThug", "spawnflags": "4", "StartHidden": "0" } },
+    { "classname": "logic_relay", "name": "par_relay", "at": [200.0, 0.0, 0.0] },
+    { "classname": "env_particle", "name": "pt_tree", "at": [0.0, 0.0, 50.0],
+      "keys": { "particle_definition": "barrelfireemitter", "attach_type": "1", "parentname": "par_npc", "active": "0" } },
+    { "classname": "env_particle", "name": "pt_bone", "at": [0.0, 0.0, 50.0],
+      "keys": { "particle_definition": "barrelfireemitter", "attach_type": "2", "bone": "bip01 head", "parentname": "par_npc", "active": "0" } },
+    { "classname": "env_particle", "name": "pt_bone_missing", "at": [0.0, 0.0, 50.0],
+      "keys": { "particle_definition": "barrelfireemitter", "attach_type": "2", "bone": "nosuchbone", "parentname": "par_npc", "active": "0" } },
+    { "classname": "env_particle", "name": "pt_attach", "at": [0.0, 0.0, 50.0],
+      "keys": { "particle_definition": "barrelfireemitter", "attach_type": "6", "bone": "muzzle", "parentname": "par_npc", "active": "0" } },
+    { "classname": "env_particle", "name": "pt_origin", "at": [0.0, 0.0, 50.0],
+      "keys": { "particle_definition": "barrelfireemitter", "attach_type": "0", "parentname": "par_npc", "active": "0" } },
+    { "classname": "env_particle", "name": "pt_tree_relay", "at": [220.0, 0.0, 50.0],
+      "keys": { "particle_definition": "barrelfireemitter", "attach_type": "3", "bone": "Bip01 Head", "parentname": "par_relay", "active": "0" } },
+    { "classname": "env_particle", "name": "pt_bone_relay", "at": [220.0, 0.0, 50.0],
+      "keys": { "particle_definition": "barrelfireemitter", "attach_type": "2", "bone": "Bip01 Head", "parentname": "par_relay", "active": "0" } },
+    { "classname": "env_particle", "name": "pt_attach_relay", "at": [220.0, 0.0, 50.0],
+      "keys": { "particle_definition": "barrelfireemitter", "attach_type": "17", "bone": "muzzle", "parentname": "par_relay", "active": "0" } },
+    { "classname": "env_particle", "name": "pt_none", "at": [300.0, 0.0, 50.0],
+      "keys": { "particle_definition": "barrelfireemitter", "attach_type": "2", "bone": "Bip01 Head", "active": "0" } }
+  ],
+  "probes": [
+    { "at": 0.1, "who": "pt_tree", "probe": "entity_field", "field": "attach_type", "equals": 1 },
+    { "at": 0.1, "who": "pt_tree", "probe": "entity_field", "field": "bone", "equals": "" },
+    { "at": 0.1, "who": "pt_tree", "probe": "entity_field", "field": "attach_point", "equals": -1 },
+    { "at": 0.1, "who": "pt_tree", "probe": "entity_field", "field": "m_MoveType", "equals": 11 },
+    { "at": 0.1, "who": "pt_tree", "probe": "entity_field", "field": "m_MoveCollide", "equals": 0 },
+    { "at": 0.1, "who": "pt_tree", "probe": "entity_field", "field": "m_hAimEnt", "to": "par_npc", "equals": true },
+    { "at": 0.1, "who": "pt_tree", "probe": "entity_field", "field": "m_pParent", "to": "par_npc", "equals": true },
+    { "at": 0.1, "who": "pt_tree", "probe": "entity_field", "field": "m_pMoveParent", "to": "par_npc", "equals": true },
+    { "at": 0.1, "who": "pt_tree", "probe": "entity_field", "field": "m_iParentAttachment", "equals": 0 },
+    { "at": 0.1, "who": "pt_tree", "probe": "entity_field", "field": "m_vecOrigin", "member": "x", "equals": 0 },
+    { "at": 0.1, "who": "pt_tree", "probe": "entity_field", "field": "m_vecOrigin", "member": "y", "equals": 0 },
+    { "at": 0.1, "who": "pt_tree", "probe": "entity_field", "field": "m_vecOrigin", "member": "z", "equals": 0 },
+
+    { "at": 0.1, "who": "pt_bone", "probe": "entity_field", "field": "attach_type", "equals": 2 },
+    { "at": 0.1, "who": "pt_bone", "probe": "entity_field", "field": "bone", "equals": "bip01 head" },
+    { "at": 0.1, "who": "pt_bone", "probe": "entity_field", "field": "attach_point", "greater": 0 },
+    { "at": 0.1, "who": "pt_bone", "probe": "entity_field", "field": "m_MoveType", "equals": 11 },
+    { "at": 0.1, "who": "pt_bone", "probe": "entity_field", "field": "m_hAimEnt", "to": "par_npc", "equals": true },
+    { "at": 0.1, "who": "pt_bone_missing", "probe": "entity_field", "field": "attach_point", "equals": 0 },
+    { "at": 0.1, "who": "pt_bone_missing", "probe": "entity_field", "field": "bone", "equals": "nosuchbone" },
+
+    { "at": 0.1, "who": "pt_attach", "probe": "entity_field", "field": "attach_type", "equals": 6 },
+    { "at": 0.1, "who": "pt_attach", "probe": "entity_field", "field": "attach_point", "equals": 0 },
+    { "at": 0.1, "who": "pt_attach", "probe": "entity_field", "field": "m_MoveType", "equals": 11 },
+
+    { "at": 0.1, "who": "pt_origin", "probe": "entity_field", "field": "attach_type", "equals": 0 },
+    { "at": 0.1, "who": "pt_origin", "probe": "entity_field", "field": "attach_point", "equals": 0 },
+    { "at": 0.1, "who": "pt_origin", "probe": "entity_field", "field": "m_MoveType", "equals": 11 },
+    { "at": 0.1, "who": "pt_origin", "probe": "entity_field", "field": "m_pMoveParent", "to": "par_npc", "equals": true },
+
+    { "at": 0.1, "who": "pt_tree_relay", "probe": "entity_field", "field": "attach_point", "equals": -1 },
+    { "at": 0.1, "who": "pt_tree_relay", "probe": "entity_field", "field": "m_hAimEnt", "to": "par_relay", "equals": true },
+    { "at": 0.1, "who": "pt_bone_relay", "probe": "entity_field", "field": "attach_point", "equals": 0 },
+    { "at": 0.1, "who": "pt_bone_relay", "probe": "entity_field", "field": "m_MoveType", "equals": 11 },
+    { "at": 0.1, "who": "pt_attach_relay", "probe": "entity_field", "field": "attach_point", "equals": 0 },
+
+    { "at": 0.1, "who": "pt_none", "probe": "entity_field", "field": "attach_type", "equals": 2 },
+    { "at": 0.1, "who": "pt_none", "probe": "entity_field", "field": "attach_point", "equals": 0 },
+    { "at": 0.1, "who": "pt_none", "probe": "entity_field", "field": "m_MoveType", "equals": 0 },
+    { "at": 0.1, "who": "pt_none", "probe": "entity_field", "field": "m_hAimEnt", "equals": "-1" },
+    { "at": 0.1, "who": "pt_none", "probe": "entity_field", "field": "m_pParent", "equals": "-1" },
+    { "at": 0.1, "who": "pt_none", "probe": "entity_field", "field": "m_pMoveParent", "equals": "-1" }
+  ],
+  "never": [
+    { "who": "pt_tree_relay", "kind": "retail_site", "site": "attach_index", "match": "phase=hook", "from": 0.0 },
+    { "who": "pt_bone", "kind": "retail_site", "site": "attach_index", "match": "arm=not_studio", "from": 0.0 }
+  ]
+}

@@ -65,7 +65,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10026b90` | CBaseEntity::Precache | 1 | 0 | 0 | `CAISound#104`, `CAI_Hint#104`, `CAI_InterestingPlace#104`, +1 more | 0d/0v/0c +6 outside | — | — | — | — |
 | `0x10026bb0` | CBaseEntity::MemberSync | 1 | 0 | 0 | `CAISound#111`, `CAI_Hint#111`, `CAI_InterestingPlace#111`, +2 more | 0d/1v/0c | — | — | — | — |
 | `0x10026bd0` | CAISound::FUN_10026bd0 | 3 | 0 | 0 | `CAISound#112`, `CAI_BaseHumanoid#112`, `CAI_BaseNPC#112`, +79 more | 0d/1v/0c | — | — | — | — |
-| `0x10026bf0` | CAISound::FUN_10026bf0 | 3 | 0 | 0 | `CAISound#115`, `CAI_BaseHumanoid#115`, `CAI_BaseNPC#115`, +79 more | 0d/0v/0c | — | — | — | — |
+| `0x10026bf0` | CAISound::FUN_10026bf0 | 3 | 0 | 0 | `CAISound#115`, `CAI_BaseHumanoid#115`, `CAI_BaseNPC#115`, +79 more | 0d/0v/0c | — | — | — | docs/vtmb/entity_io.md:261 |
 | `0x10026c10` | CAISound::FUN_10026c10 | 4 | 0 | 0 | `CAISound#131`, `CAI_BaseHumanoid#131`, `CAI_BaseNPC#131`, +79 more | 0d/0v/0c | — | — | — | — |
 | `0x10026c30` | CAISound::FUN_10026c30 | 1 | 0 | 0 | `CAISound#132`, `CAI_BaseHumanoid#132`, `CAI_BaseNPC#132`, +79 more | 0d/0v/0c | — | — | — | — |
 | `0x10026c50` | CAISound::FUN_10026c50 ‼ | 13 | 0 | 0 | `CAISound#133`, `CAI_Hint#133`, `CAI_InterestingPlace#133`, +2 more | 0d/0v/0c +3 outside | — | `+0x0114` | — | docs/vtmb/npc-ai/shape.md:243, docs/vtmb/npc-ai/shape.md:1416, docs/vtmb/npc-ai/shape.md:1432 |
@@ -117,7 +117,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10027610` | CBaseEntity::GetCollideable | 7 | 0 | 0 | `CAISound#2`, `CAI_BaseHumanoid#2`, `CAI_BaseNPC#2`, +79 more | 0d/0v/1c | — | `+0x0270` | — | — |
 | `0x10027630` | CAISound::FUN_10027630 | 7 | 0 | 0 | `CAISound#3`, `CAI_BaseHumanoid#3`, `CAI_BaseNPC#3`, +79 more | 0d/0v/2c | — | `+0x02d4` | — | — |
 | `0x10027650` | CAISound::FUN_10027650 | 3 | 0 | 0 | `CAISound#4`, `CAI_BaseHumanoid#4`, `CAI_BaseNPC#4`, +79 more | 0d/0v/0c +1 outside | — | — | — | — |
-| `0x100290c0` | FUN_100290c0 | 43 | 1 | 0 | — | 73d/0v/0c +80 outside | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:4955 |
+| `0x100290c0` | FUN_100290c0 | 43 | 1 | 0 | — | 73d/0v/0c +80 outside | — | — | — | docs/vtmb/entity_io.md:251, docs/vtmb/npc-ai/schedule-kernel.md:4955 |
 | `0x1002c900` | FUN_1002c900 | 3 | 1 | 0 | — | 1d/0v/0c | — | — | — | — |
 | `0x1002c920` | FUN_1002c920 | 23 | 3 | 0 | — | 2d/0v/0c +2 outside | `+0x0004`, `+0x0008` | — | — | — |
 | `0x1002ca10` | FUN_1002ca10 | 65 | 1 | 0 | — | 8d/0v/0c +38 outside | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010` | — | — | — |
@@ -237,8 +237,8 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1008c170` | CBaseAnimating::GetEventName | 2615 | 0 | 0 | `CAI_BaseHumanoid#241`, `CAI_BaseNPC#241`, `CAI_BaseNPCTroika#241`, +73 more | 1d/0v/0c +1 outside | — | `+0x026c` | `NULL ENTITY`, `**UNKNOWN**`, +67 more | docs/vtmb/animation_events.md:339 |
 | `0x1008cfc0` | CBaseAnimating::DisplayAnimEvent | 237 | 2 | 0 | — | 1d/0v/0c +1 outside | — | `+0x0048`, `+0x026c`, `+0x03c4` | `NULL ENTITY`, `Processing anim event at %5.2f %d( %s )`, +1 more | — |
 | `0x1008d230` | CBaseAnimating::SetPlaybackAndSpeedScalar | 180 | 1 | 0 | — | 2d/0v/0c +2 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseAnimating::SetPlaybackAndSpeedScala…` | docs/vtmb/animation_and_movers.md:1691, docs/vtmb/animation_and_movers.md:1722 |
-| `0x1008d5f0` | CBaseAnimating::SetSkinFadeTime | 164 | 1 | 0 | — | 3d/0v/0c +1 outside | `+0x0678` | `+0x026c` | `NULL ENTITY`, `CBaseAnimating::SetSkinFadeTime` | docs/vtmb/entity_io.md:2643 |
-| `0x1008d6d0` | CBaseAnimating::FadeToSkin | 178 | 1 | 0 | — | 3d/0v/0c +1 outside | `+0x0670`, `+0x0674` | `+0x026c`, `+0x0670`, `+0x0678` | `NULL ENTITY`, `Fading to skin %d over %.2f⏎`, +1 more | docs/vtmb/entity_io.md:2643 |
+| `0x1008d5f0` | CBaseAnimating::SetSkinFadeTime | 164 | 1 | 0 | — | 3d/0v/0c +1 outside | `+0x0678` | `+0x026c` | `NULL ENTITY`, `CBaseAnimating::SetSkinFadeTime` | docs/vtmb/entity_io.md:2722 |
+| `0x1008d6d0` | CBaseAnimating::FadeToSkin | 178 | 1 | 0 | — | 3d/0v/0c +1 outside | `+0x0670`, `+0x0674` | `+0x026c`, `+0x0670`, `+0x0678` | `NULL ENTITY`, `Fading to skin %d over %.2f⏎`, +1 more | docs/vtmb/entity_io.md:2722 |
 | `0x1008d990` | CBaseAnimating::GetSeqDesc | 240 | 1 | 0 | — | 23d/0v/0c +19 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseAnimating::GetSeqDesc` | — |
 | `0x1008dac0` | CBaseAnimating::GetSequencesForActivity | 293 | 1 | 0 | — | 1d/0v/0c +6 outside | — | `+0x0094`, `+0x00a8`, `+0x026c` | `NULL ENTITY`, `CBaseAnimating::GetSequencesForActivity` | — |
 | `0x1008dc40` | CBaseAnimating::SelectWeightedSequence | 192 | 1 | 0 | — | 32d/0v/0c +22 outside | — | — | `NULL ENTITY`, `CBaseAnimating::SelectWeightedSequence` | docs/vtmb/activity_enum.md:296, docs/vtmb/animation_and_movers.md:875, docs/vtmb/feeding.md:240, +5 more |
@@ -284,7 +284,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10092550` | CBaseAnimating::LookupBone | 141 | 1 | 0 | — | 12d/0v/0c +10 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseAnimating::LookupBone` | — |
 | `0x10092610` | CBaseAnimating::GetBonePosition01 | 147 | 1 | 0 | — | 5d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `CBaseAnimating::GetBonePosition01` | — |
 | `0x100926e0` | CBaseAnimating::GetBonePosition02 | 203 | 1 | 0 | — | 6d/0v/0c +8 outside | — | `+0x026c`, `+0x0400` | `NULL ENTITY`, `CBaseAnimating::GetBonePosition02` | — |
-| `0x100927f0` | CBaseAnimating::GetBoneTransform | 679 | 0 | 0 | `CAI_BaseHumanoid#256`, `CAI_BaseNPC#256`, `CAI_BaseNPCTroika#256`, +74 more | 0d/3v/2c +4 outside | — | `+0x0130`, `+0x0178`, `+0x0188`, `+0x0268`, `+0x026c`, `+0x037c` | `NULL ENTITY`, `CBaseAnimating::GetBoneTransform` | docs/vtmb/animation_and_movers.md:3349, docs/vtmb/entity_io.md:2621, docs/vtmb/secondary_motion.md:569, +1 more |
+| `0x100927f0` | CBaseAnimating::GetBoneTransform | 679 | 0 | 0 | `CAI_BaseHumanoid#256`, `CAI_BaseNPC#256`, `CAI_BaseNPCTroika#256`, +74 more | 0d/3v/2c +4 outside | — | `+0x0130`, `+0x0178`, `+0x0188`, `+0x0268`, `+0x026c`, `+0x037c` | `NULL ENTITY`, `CBaseAnimating::GetBoneTransform` | docs/vtmb/animation_and_movers.md:3349, docs/vtmb/entity_io.md:2700, docs/vtmb/secondary_motion.md:569, +1 more |
 | `0x10092b50` | CBaseAnimating::SetupBones | 251 | 0 | 0 | `CAI_BaseHumanoid#257`, `CAI_BaseNPC#257`, `CAI_BaseNPCTroika#257`, +74 more | 0d/1v/0c +4 outside | — | — | `NULL ENTITY`, `CBaseAnimating::SetupBones` | — |
 | `0x10092e20` | CBaseAnimating::GetAttachment01 | 148 | 1 | 0 | — | 5d/0v/0c +3 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseAnimating::GetAttachment01` | docs/vtmb/computer-terminals.md:507 |
 | `0x10092ef0` | CBaseAnimating::GetAttachment02 | 202 | 2 | 0 | — | 2d/0v/0c +6 outside | — | `+0x026c`, `+0x0418` | `NULL ENTITY`, `CBaseAnimating::GetAttachment02` | — |
@@ -309,7 +309,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10096b50` | CBaseAnimating::GetHitboxBone | 191 | 2 | 0 | — | 1d/0v/0c | — | `+0x026c`, `+0x0680` | `NULL ENTITY`, `CBaseAnimating::GetHitboxBone` | — |
 | `0x10096c40` | CBaseAnimating::ComputeHitboxSurroundingBox | 767 | 1 | 0 | — | 1d/0v/0c +1 outside | — | — | `NULL ENTITY`, `error/missing.mdl`, +1 more | — |
 | `0x10097000` | CBaseAnimating::GetBoneHitbox | 199 | 1 | 0 | — | 1d/0v/0c | — | `+0x026c`, `+0x0680` | `NULL ENTITY`, `CBaseAnimating::GetBoneHitbox` | — |
-| `0x10097310` | CBaseAnimating::CopyAnimationDataFrom | 278 | 1 | 0 | — | 6d/0v/0c +2 outside | `+0x0174`, `+0x019c`, `+0x0670`, `+0x067c`, `+0x0688`, `+0x068c`, +3 more | `+0x026c`, `+0x0350` | `NULL ENTITY`, `CBaseAnimating::CopyAnimationDataFrom` | docs/vtmb/entity_io.md:261, docs/vtmb/npc-ai/shape.md:4389 |
+| `0x10097310` | CBaseAnimating::CopyAnimationDataFrom | 278 | 1 | 0 | — | 6d/0v/0c +2 outside | `+0x0174`, `+0x019c`, `+0x0670`, `+0x067c`, `+0x0688`, `+0x068c`, +3 more | `+0x026c`, `+0x0350` | `NULL ENTITY`, `CBaseAnimating::CopyAnimationDataFrom` | docs/vtmb/entity_io.md:315, docs/vtmb/npc-ai/shape.md:4389 |
 | `0x100976e0` | CBaseAnimating::BlendTransformWithNextSequenceChange | 202 | 2 | 0 | — | 4d/0v/0c | `+0x019c` | `+0x019c`, `+0x026c`, `+0x0364`, `+0x036c`, `+0x0714`, `+0x0720` | `NULL ENTITY`, `CBaseAnimating::BlendTransformWithNextSe…` | — |
 | `0x10098830` | CAnimationLayer::StudioFrameAdvance | 349 | 1 | 1 | — | 1d/0v/0c | `+0x0004`, `+0x000c`, `+0x0014` | `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, `+0x001c`, +1 more | — | docs/vtmb/animation_and_movers.md:3933, docs/vtmb/animation_and_movers.md:3936, docs/vtmb/animation_events.md:160, +3 more |
 | `0x10098a40` | CAI_BaseNPC::FUN_10098a40 | 3 | 0 | 0 | `CAI_BaseHumanoid#267`, `CAI_BaseNPC#267`, `CAI_BaseNPCTroika#267`, +74 more | 0d/2v/2c | — | — | — | docs/vtmb/animation_and_movers.md:4026 |
@@ -376,7 +376,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1009ebb0` | CAISound::FUN_1009ebb0 | 190 | 0 | 10 | `CAISound#109`, `CAI_Hint#109`, `CAI_InterestingPlace#109`, +2 more | 1d/0v/0c | — | `+0x01b8`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::KeyValue` | docs/vtmb/npc-ai/senses.md:1080, docs/vtmb/npc-ai/senses.md:1086 |
 | `0x1009eca0` | CAISound::FUN_1009eca0 | 212 | 0 | 10 | `CAISound#108`, `CAI_Hint#108`, `CAI_InterestingPlace#108`, +2 more | 1d/0v/0c | — | `+0x01b8`, `+0x026c` | `NULL ENTITY`, `%f %f %f`, +1 more | docs/vtmb/npc-ai/senses.md:1080, docs/vtmb/npc-ai/senses.md:1086 |
 | `0x1009edc0` | CBaseEntity::SetCollisionBounds | 137 | 3 | 0 | — | 2d/0v/0c +7 outside | — | `+0x026c`, `+0x0270` | `NULL ENTITY`, `CBaseEntity::SetCollisionBounds` | — |
-| `0x1009ee80` | CBaseEntity::SetAimEnt | 159 | 4 | 0 | — | 2d/0v/0c +11 outside | `+0x037c` | `+0x026c` | `NULL ENTITY`, `CBaseEntity::SetAimEnt` | docs/vtmb/wielded_weapons.md:276 |
+| `0x1009ee80` | CBaseEntity::SetAimEnt | 159 | 4 | 0 | — | 2d/0v/0c +11 outside | `+0x037c` | `+0x026c` | `NULL ENTITY`, `CBaseEntity::SetAimEnt` | docs/vtmb/entity_io.md:1971, docs/vtmb/wielded_weapons.md:276 |
 | `0x1009f120` | CBaseEntity::SetClassname | 162 | 0 | 0 | `CAISound#122`, `CAI_BaseHumanoid#122`, `CAI_BaseNPC#122`, +79 more | 0d/1v/0c +4 outside | `+0x011c` | `+0x0034`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::SetClassname` | — |
 | `0x1009f200` | CBaseEntity::GetClassname | 133 | 1 | 0 | — | 34d/0v/0c +26 outside | — | `+0x011c`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::GetClassname` | — |
 | `0x1009f2c0` | CBaseEntity::BodyTarget | 134 | 0 | 0 | `CAISound#197`, `CAI_Hint#197`, `CAI_InterestingPlace#197`, +2 more | 0d/1v/0c | — | `+0x026c`, `+0x0300` | `NULL ENTITY`, `CBaseEntity::BodyTarget` | docs/vtmb/entity_visuals.md:272 |
@@ -387,10 +387,10 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x100a0130` | CBaseEntity::DrawDebugGeometryOverlays | 291 | 0 | 0 | `CAISound#123`, `CAI_Hint#123`, `CAI_InterestingPlace#123`, +2 more | 2d/0v/0c +8 outside | — | `+0x01f0`, `+0x01f4`, `+0x0224`, `+0x026c`, `+0x02e0` | `NULL ENTITY`, `CBaseEntity::DrawDebugGeometryOverlays` | — |
 | `0x100a02b0` | CBaseEntity::DrawDebugTextOverlays | 277 | 0 | 0 | `CAISound#124`, `CAI_InterestingPlace#124`, `CAI_InterestingPlaceConverstation#124`, +1 more | 3d/0v/0c +17 outside | — | `+0x0224`, `+0x026c`, `+0x02e0` | `NULL ENTITY`, `(%d) Name: %s (%s)`, +1 more | — |
 | `0x100a0420` | CBaseEntity::SetName | 141 | 1 | 0 | — | 6d/0v/0c +5 outside | `+0x026c` | `+0x002c`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::SetName` | — |
-| `0x100a0670` | FUN_100a0670 | 639 | 4 | 2 | — | 2d/0v/0c +10 outside | `+0x0124`, `+0x01b1`, `+0x0258` | `+0x0100`, `+0x011c`, `+0x0254`, `+0x025c`, `+0x026c`, `+0x02e0`, +1 more | `NULL ENTITY`, `CBaseEntity::SetParent`, +1 more | docs/vtmb/animation_events.md:609 |
-| `0x100a0990` | FUN_100a0990 | 88 | 5 | 0 | — | 1d/0v/0c | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, +5 more | — | — | — |
-| `0x100a0a10` | FUN_100a0a10 | 148 | 5 | 0 | — | 1d/0v/0c | — | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, +5 more | — | — |
-| `0x100a0ae0` | FUN_100a0ae0 | 38 | 1 | 0 | — | 10d/0v/0c +7 outside | — | — | — | — |
+| `0x100a0670` | FUN_100a0670 | 639 | 4 | 2 | — | 2d/0v/0c +10 outside | `+0x0124`, `+0x01b1`, `+0x0258` | `+0x0100`, `+0x011c`, `+0x0254`, `+0x025c`, `+0x026c`, `+0x02e0`, +1 more | `NULL ENTITY`, `CBaseEntity::SetParent`, +1 more | docs/vtmb/animation_events.md:609, docs/vtmb/entity_io.md:246, docs/vtmb/entity_io.md:249 |
+| `0x100a0990` | FUN_100a0990 | 88 | 5 | 0 | — | 1d/0v/0c | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, +5 more | — | — | docs/vtmb/entity_io.md:257 |
+| `0x100a0a10` | FUN_100a0a10 | 148 | 5 | 0 | — | 1d/0v/0c | — | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, +5 more | — | docs/vtmb/entity_io.md:255 |
+| `0x100a0ae0` | FUN_100a0ae0 | 38 | 1 | 0 | — | 10d/0v/0c +7 outside | — | — | — | docs/vtmb/entity_io.md:250 |
 | `0x100a0bc0` | CBaseEntity::Activate | 258 | 0 | 0 | `CAISound#113`, `CAI_BaseHumanoid#113`, `CAI_BaseNPC#113`, +11 more | 2d/0v/1c +41 outside | `+0x0218`, `+0x0220` | `+0x01e4`, `+0x0214`, `+0x021c`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::Activate` | docs/vtmb/camera-view-modes.md:1688 |
 | `0x100a0d20` | CBaseEntity::TakeHealth | 215 | 0 | 0 | `CAISound#143`, `CAI_Hint#143`, `CAI_InterestingPlace#143`, +2 more | 1d/0v/0c | `+0x0210` | `+0x01fc`, `+0x0208`, `+0x0210`, `+0x026c`, `+0x02e0` | `NULL ENTITY`, `CBaseEntity::TakeHealth` | — |
 | `0x100a0e40` | CBaseEntity::OnTakeDamage | 827 | 0 | 0 | `CAISound#142`, `CAI_Hint#142`, `CAI_InterestingPlace#142`, +2 more | 0d/0v/0c +3 outside | `+0x0210` | `+0x0178`, `+0x01fc`, `+0x0240`, `+0x026c`, `+0x02e0`, `+0x0300`, +3 more | `NULL ENTITY`, `CBaseEntity::IsSolidFlagSet`, +1 more | — |
@@ -431,8 +431,8 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x100a7de0` | CBaseEntity::TraceAttack | 512 | 0 | 0 | `CAISound#141`, `CAI_Hint#141`, `CAI_InterestingPlace#141`, +2 more | 0d/0v/0c +4 outside | — | `+0x01fc`, `+0x0244`, `+0x0248`, `+0x026c`, `+0x036c` | `NULL ENTITY`, `CBaseEntity::TraceAttack` | — |
 | `0x100a8060` | CBaseEntity::MakeDormant | 340 | 2 | 0 | — | 1d/0v/0c +3 outside | `+0x017c`, `+0x019c`, `+0x0268` | `+0x0174`, `+0x019c`, `+0x0268`, `+0x026c`, `+0x0270`, `+0x02b4`, +1 more | `NULL ENTITY`, `CBaseEntity::AddSolidFlags`, +1 more | docs/vtmb/npc-ai/lifecycle.md:86 |
 | `0x100a8400` | CBaseEntity::TakeDamageFromCollision | 613 | 0 | 0 | `CAISound#75`, `CAI_BaseHumanoid#75`, `CAI_BaseNPC#75`, +79 more | 0d/1v/0c +3 outside | — | `+0x00dc`, `+0x0128`, `+0x0208`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::TakeDamageFromCollision` | — |
-| `0x100a8710` | CBaseEntity::ScriptHide | 510 | 0 | 0 | `CAISound#77`, `CAI_BaseHumanoid#77`, `CAI_BaseNPC#77`, +14 more | 2d/1v/2c +8 outside | `+0x00e4`, `+0x00e8`, `+0x00ec`, `+0x00f0`, `+0x00f4`, `+0x00f6`, +3 more | `+0x00f4`, `+0x0118`, `+0x0170`, `+0x0174`, `+0x019c`, `+0x026c`, +4 more | `NULL ENTITY`, `CBaseEntity::SetSolid`, +2 more | docs/vtmb/audio_pipeline.md:632, docs/vtmb/entity_io.md:476, docs/vtmb/npc-ai/authored-control.md:736, +3 more |
-| `0x100a8990` | CBaseEntity::ScriptUnhide | 472 | 0 | 0 | `CAISound#78`, `CAI_BaseHumanoid#78`, `CAI_BaseNPC#78`, +14 more | 2d/0v/0c +7 outside | `+0x00f4`, `+0x017c`, `+0x019c` | `+0x00e4`, `+0x00e8`, `+0x00ec`, `+0x00f0`, `+0x00f4`, `+0x00f6`, +4 more | `NULL ENTITY`, `CBaseEntity::SetSolid`, +2 more | docs/vtmb/entity_io.md:477, docs/vtmb/npc-ai/conditions-and-states.md:1735, docs/vtmb/npc-ai/lifecycle.md:1299 |
+| `0x100a8710` | CBaseEntity::ScriptHide | 510 | 0 | 0 | `CAISound#77`, `CAI_BaseHumanoid#77`, `CAI_BaseNPC#77`, +14 more | 2d/1v/2c +8 outside | `+0x00e4`, `+0x00e8`, `+0x00ec`, `+0x00f0`, `+0x00f4`, `+0x00f6`, +3 more | `+0x00f4`, `+0x0118`, `+0x0170`, `+0x0174`, `+0x019c`, `+0x026c`, +4 more | `NULL ENTITY`, `CBaseEntity::SetSolid`, +2 more | docs/vtmb/audio_pipeline.md:632, docs/vtmb/entity_io.md:530, docs/vtmb/npc-ai/authored-control.md:736, +3 more |
+| `0x100a8990` | CBaseEntity::ScriptUnhide | 472 | 0 | 0 | `CAISound#78`, `CAI_BaseHumanoid#78`, `CAI_BaseNPC#78`, +14 more | 2d/0v/0c +7 outside | `+0x00f4`, `+0x017c`, `+0x019c` | `+0x00e4`, `+0x00e8`, `+0x00ec`, `+0x00f0`, `+0x00f4`, `+0x00f6`, +4 more | `NULL ENTITY`, `CBaseEntity::SetSolid`, +2 more | docs/vtmb/entity_io.md:531, docs/vtmb/npc-ai/conditions-and-states.md:1735, docs/vtmb/npc-ai/lifecycle.md:1299 |
 | `0x100a8ef0` | CBaseEntity::ResetScriptedSoundOverrideEnt | 149 | 2 | 0 | — | 1d/0v/0c | — | `+0x0108`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::ResetScriptedSoundOverrideE…` | — |
 | `0x100a9290` | CBaseEntity::SetNPCTransparent | 126 | 1 | 0 | — | 1d/0v/0c +1 outside | `+0x00fc` | `+0x026c` | `NULL ENTITY`, `CBaseEntity::SetNPCTransparent` | — |
 | `0x100a9470` | CBaseEntity::SetOccludesSound | 126 | 2 | 0 | — | 1d/0v/0c +10 outside | `+0x00fe` | `+0x026c` | `NULL ENTITY`, `CBaseEntity::SetOccludesSound` | — |
@@ -456,7 +456,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x100aac30` | CBaseEntity::GetMoveType | 121 | 0 | 0 | `CAISound#94`, `CAI_BaseHumanoid#94`, `CAI_BaseNPC#94`, +79 more | 0d/11v/6c +15 outside | — | `+0x026c`, `+0x035c` | `NULL ENTITY`, `CBaseEntity::GetMoveType` | — |
 | `0x100aacd0` | CBaseEntity::GetMoveCollide | 121 | 0 | 0 | `CAISound#95`, `CAI_BaseHumanoid#95`, `CAI_BaseNPC#95`, +79 more | 0d/3v/1c +1 outside | — | `+0x026c`, `+0x0360` | `NULL ENTITY`, `CBaseEntity::GetMoveCollide` | — |
 | `0x100aad70` | CBaseEntity::SetMoveType | 161 | 0 | 0 | `CAISound#93`, `CAI_BaseHumanoid#93`, `CAI_BaseNPC#93`, +79 more | 0d/18v/18c +68 outside | `+0x035c`, `+0x0360` | `+0x026c`, `+0x035c`, `+0x036c` | `NULL ENTITY`, `CBaseEntity::SetMoveType` | — |
-| `0x100aaf30` | CBaseEntity::PostSpawn | 181 | 2 | 0 | — | 1d/0v/0c +3 outside | — | `+0x002c`, `+0x0034`, `+0x00e0`, `+0x011c`, `+0x0134`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::PostSpawn` | docs/vtmb/camera-view-modes.md:1542, docs/vtmb/entity_io.md:1769 |
+| `0x100aaf30` | CBaseEntity::PostSpawn | 181 | 2 | 0 | — | 1d/0v/0c +3 outside | — | `+0x002c`, `+0x0034`, `+0x00e0`, `+0x011c`, `+0x0134`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::PostSpawn` | docs/vtmb/camera-view-modes.md:1542, docs/vtmb/entity_io.md:1823 |
 | `0x100ab020` | CBaseEntity::ShouldTransmit | 441 | 0 | 0 | `CAISound#86`, `CAI_Hint#86`, `CAI_InterestingPlace#86`, +2 more | 1d/0v/0c +4 outside | — | `+0x0020`, `+0x0024`, `+0x0090`, `+0x019c`, `+0x0268`, `+0x026c`, +1 more | `NULL ENTITY`, `CBaseEntity::Instance`, +1 more | docs/vtmb/camera-view-modes.md:128, docs/vtmb/camera-view-modes.md:1736, docs/vtmb/camera-view-modes.md:3250, +3 more |
 | `0x100ab250` | FUN_100ab250 ‼ | 23 | 1 | 0 | — | 7d/0v/0c +18 outside | — | — | — | — |
 | `0x100ab280` | CBaseEntity::SetTransmit | 322 | 0 | 0 | `CAISound#87`, `CAI_BaseHumanoid#87`, `CAI_BaseNPC#87`, +79 more | 0d/0v/0c +1 outside | — | `+0x025c`, `+0x026c`, `+0x02e0` | `NULL ENTITY`, `CBaseEntity::SetTransmit` | — |
@@ -470,7 +470,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x100ac720` | CBaseEntity::GetLastThink | 177 | 1 | 0 | — | 4d/0v/0c +3 outside | — | `+0x01cc`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::GetLastThink` | — |
 | `0x100acab0` | CBaseEntity::ReadKeyField | 273 | 0 | 0 | `CAISound#121`, `CAI_BaseHumanoid#121`, `CAI_BaseNPC#121`, +79 more | 0d/0v/0c | — | `+0x0000`, `+0x0148`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::ReadKeyField` | docs/vtmb/npc-ai/programs.md:1469, docs/vtmb/python_bridge.md:282 |
 | `0x100ace00` | CBaseEntity::GetInputDispatchEffectPosition | 177 | 0 | 0 | `CAISound#120`, `CAI_BaseHumanoid#120`, `CAI_BaseNPC#120`, +79 more | 0d/0v/0c | — | `+0x026c`, `+0x0364`, `+0x036c` | `NULL ENTITY`, `CBaseEntity::GetInputDispatchEffectPosit…` | — |
-| `0x100acf90` | CBaseEntity::Kill | 123 | 0 | 0 | `CAISound#119`, `CAI_InterestingPlace#119`, `CAI_InterestingPlaceConverstation#119`, +1 more | 1d/0v/0c +2 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseEntity::Kill` | docs/vtmb/entity_io.md:435, docs/vtmb/stealth.md:261 |
+| `0x100acf90` | CBaseEntity::Kill | 123 | 0 | 0 | `CAISound#119`, `CAI_InterestingPlace#119`, `CAI_InterestingPlaceConverstation#119`, +1 more | 1d/0v/0c +2 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseEntity::Kill` | docs/vtmb/entity_io.md:489, docs/vtmb/stealth.md:261 |
 | `0x100ad1a0` | CBaseEntity::GetVelocity | 292 | 0 | 0 | `CAISound#199`, `CAI_Hint#199`, `CAI_InterestingPlace#199`, +2 more | 0d/0v/0c +1 outside | — | `+0x026c`, `+0x036c`, `+0x03c8`, `+0x03d4` | `NULL ENTITY`, `CBaseEntity::GetVelocity` | docs/vtmb/secondary_motion.md:140, docs/vtmb/secondary_motion.md:143, docs/vtmb/secondary_motion.md:564, +1 more |
 | `0x100ad320` | CBaseEntity::GetVectors | 242 | 1 | 0 | — | 2d/0v/0c +4 outside | — | `+0x0130`, `+0x0188`, `+0x0268`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::GetVectors` | — |
 | `0x100ad460` | CBaseEntity::SetModel | 187 | 0 | 0 | `CAISound#105`, `CAI_Hint#105`, `CAI_InterestingPlace#105`, +2 more | 0d/2v/0c +24 outside | `+0x01b1` | `+0x026c` | `NULL ENTITY`, `Setting CBaseEntity to non-brush model %…`, +1 more | docs/vtmb/wielded_weapons.md:184 |
@@ -491,19 +491,19 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x100b17f0` | CBaseEntity::GetModelIndex | 121 | 0 | 0 | `CAISound#8`, `CAI_BaseHumanoid#8`, `CAI_BaseNPC#8`, +79 more | 0d/1v/4c +21 outside | — | `+0x01a4`, `+0x026c` | `NULL ENTITY`, `CBaseEntity::GetModelIndex` | — |
 | `0x100b1890` | CAISound::FUN_100b1890 | 146 | 0 | 0 | `CAISound#213`, `CAI_BaseHumanoid#213`, `CAI_BaseNPC#213`, +79 more | 0d/0v/0c | `+0x038c`, `+0x0390`, `+0x0394` | `+0x026c` | `NULL ENTITY`, `CBaseEntity::SetSize` | docs/vtmb/npc-ai/shape.md:4077 |
 | `0x100b1960` | CBaseEntity::GetSize | 123 | 0 | 0 | `CAISound#214`, `CAI_BaseHumanoid#214`, `CAI_BaseNPC#214`, +79 more | 0d/1v/1c +8 outside | — | `+0x026c`, `+0x038c` | `NULL ENTITY`, `CBaseEntity::GetSize` | — |
-| `0x100b1ac0` | CBaseEntity::CalcAbsolutePosition | 456 | 0 | 0 | `CAISound#98`, `CAI_BaseHumanoid#98`, `CAI_BaseNPC#98`, +79 more | 0d/1v/0c +12 outside | `+0x01b1`, `+0x0268`, `+0x0410`, `+0x0414`, `+0x0418` | `+0x0130`, `+0x025c`, `+0x0268`, `+0x026c`, `+0x0404`, `+0x0410`, +6 more | `NULL ENTITY`, `CBaseEntity::CalcAbsolutePosition` | — |
+| `0x100b1ac0` | CBaseEntity::CalcAbsolutePosition | 456 | 0 | 0 | `CAISound#98`, `CAI_BaseHumanoid#98`, `CAI_BaseNPC#98`, +79 more | 0d/1v/0c +12 outside | `+0x01b1`, `+0x0268`, `+0x0410`, `+0x0414`, `+0x0418` | `+0x0130`, `+0x025c`, `+0x0268`, `+0x026c`, `+0x0404`, `+0x0410`, +6 more | `NULL ENTITY`, `CBaseEntity::CalcAbsolutePosition` | docs/vtmb/entity_io.md:242 |
 | `0x100b1d10` | CBaseEntity::CalcAbsoluteVelocity | 349 | 1 | 0 | — | 12d/0v/0c +44 outside | `+0x0268`, `+0x03bc`, `+0x03c0`, `+0x03c4` | `+0x025c`, `+0x0268`, `+0x026c`, `+0x03bc`, `+0x03c0`, `+0x03c4`, +1 more | `NULL ENTITY`, `CBaseEntity::CalcAbsoluteVelocity` | — |
 | `0x100b2300` | CBaseEntity::SetAbsOrigin | 404 | 0 | 0 | `CAISound#216`, `CAI_BaseHumanoid#216`, `CAI_BaseNPC#216`, +79 more | 0d/10v/9c +10 outside | `+0x01b1`, `+0x0268`, `+0x041c`, `+0x0420`, `+0x0424` | `+0x0130`, `+0x0188`, `+0x025c`, `+0x0268`, `+0x026c`, `+0x0404`, +3 more | `NULL ENTITY`, `CBaseEntity::SetAbsOrigin` | — |
 | `0x100b2510` | CBaseEntity::SetAbsAngles | 467 | 0 | 0 | `CAISound#218`, `CAI_BaseHumanoid#218`, `CAI_BaseNPC#218`, +79 more | 0d/5v/2c +2 outside | `+0x01b1`, `+0x0268`, `+0x0410`, `+0x0414`, `+0x0418`, `+0x0428`, +2 more | `+0x0130`, `+0x0188`, `+0x025c`, `+0x0268`, `+0x026c`, `+0x0404`, +3 more | `NULL ENTITY`, `CBaseEntity::SetAbsAngles` | — |
 | `0x100b2770` | CBaseEntity::SetAbsVelocity | 389 | 1 | 0 | — | 16d/0v/0c +17 outside | `+0x0268`, `+0x03bc`, `+0x03c0`, `+0x03c4` | `+0x025c`, `+0x0268`, `+0x026c`, `+0x03d4` | `NULL ENTITY`, `CBaseEntity::SetAbsVelocity` | — |
-| `0x100b2be0` | CBaseEntity::SetOrigin | 221 | 0 | 0 | `CAISound#62`, `CAI_BaseHumanoid#62`, `CAI_BaseNPC#62`, +79 more | 0d/11v/9c +13 outside | `+0x01b1`, `+0x041c`, `+0x0420`, `+0x0424` | `+0x026c`, `+0x041c`, `+0x0420`, `+0x0424` | `NULL ENTITY`, `CBaseEntity::SetOrigin` | — |
-| `0x100b2d00` | CBaseEntity::SetAngles | 231 | 0 | 0 | `CAISound#64`, `CAI_BaseHumanoid#64`, `CAI_BaseNPC#64`, +79 more | 0d/5v/6c +23 outside | `+0x01b1`, `+0x0428`, `+0x042c`, `+0x0430` | `+0x026c`, `+0x0428`, `+0x042c`, `+0x0430` | `NULL ENTITY`, `CBaseEntity::SetAngles` | — |
+| `0x100b2be0` | CBaseEntity::SetOrigin | 221 | 0 | 0 | `CAISound#62`, `CAI_BaseHumanoid#62`, `CAI_BaseNPC#62`, +79 more | 0d/11v/9c +13 outside | `+0x01b1`, `+0x041c`, `+0x0420`, `+0x0424` | `+0x026c`, `+0x041c`, `+0x0420`, `+0x0424` | `NULL ENTITY`, `CBaseEntity::SetOrigin` | docs/vtmb/entity_io.md:278 |
+| `0x100b2d00` | CBaseEntity::SetAngles | 231 | 0 | 0 | `CAISound#64`, `CAI_BaseHumanoid#64`, `CAI_BaseNPC#64`, +79 more | 0d/5v/6c +23 outside | `+0x01b1`, `+0x0428`, `+0x042c`, `+0x0430` | `+0x026c`, `+0x0428`, `+0x042c`, `+0x0430` | `NULL ENTITY`, `CBaseEntity::SetAngles` | docs/vtmb/entity_io.md:279 |
 | `0x100b2e30` | CBaseEntity::SetLocalVelocity | 214 | 1 | 0 | — | 8d/0v/0c +32 outside | `+0x01b1` | `+0x026c`, `+0x03d4` | `NULL ENTITY`, `CBaseEntity::SetLocalVelocity` | — |
 | `0x100b2f50` | CBaseEntity::SetLocalAngularVelocity | 214 | 1 | 0 | — | 10d/0v/0c +28 outside | `+0x01b1` | `+0x026c`, `+0x03c8` | `NULL ENTITY`, `CBaseEntity::SetLocalAngularVelocity` | — |
-| `0x100b3070` | CBaseEntity::GetOrigin | 123 | 0 | 0 | `CAISound#220`, `CAI_BaseHumanoid#220`, `CAI_BaseNPC#220`, +79 more | 0d/60v/68c +64 outside | — | `+0x026c`, `+0x041c` | `NULL ENTITY`, `CBaseEntity::GetOrigin` | docs/vtmb/npc-ai/conditions-and-states.md:764 |
-| `0x100b3110` | CBaseEntity::GetAngles | 123 | 0 | 0 | `CAISound#221`, `CAI_BaseHumanoid#221`, `CAI_BaseNPC#221`, +79 more | 0d/20v/31c +43 outside | — | `+0x026c`, `+0x0428` | `NULL ENTITY`, `CBaseEntity::GetAngles` | docs/vtmb/wielded_weapons.md:478 |
-| `0x100b31b0` | CBaseEntity::GetAbsOrigin | 147 | 0 | 0 | `CAISound#217`, `CAI_BaseHumanoid#217`, `CAI_BaseNPC#217`, +79 more | 0d/115v/139c +72 outside | — | `+0x0188`, `+0x0268`, `+0x026c`, `+0x0404` | `NULL ENTITY`, `CBaseEntity::GetAbsOrigin` | docs/vtmb/npc-ai/conditions-and-states.md:763 |
-| `0x100b3280` | CBaseEntity::GetAbsAngles | 147 | 0 | 0 | `CAISound#219`, `CAI_BaseHumanoid#219`, `CAI_BaseNPC#219`, +79 more | 0d/19v/15c +28 outside | — | `+0x0188`, `+0x0268`, `+0x026c`, `+0x0410` | `NULL ENTITY`, `CBaseEntity::GetAbsAngles` | — |
+| `0x100b3070` | CBaseEntity::GetOrigin | 123 | 0 | 0 | `CAISound#220`, `CAI_BaseHumanoid#220`, `CAI_BaseNPC#220`, +79 more | 0d/60v/68c +64 outside | — | `+0x026c`, `+0x041c` | `NULL ENTITY`, `CBaseEntity::GetOrigin` | docs/vtmb/entity_io.md:241, docs/vtmb/npc-ai/conditions-and-states.md:764 |
+| `0x100b3110` | CBaseEntity::GetAngles | 123 | 0 | 0 | `CAISound#221`, `CAI_BaseHumanoid#221`, `CAI_BaseNPC#221`, +79 more | 0d/20v/31c +43 outside | — | `+0x026c`, `+0x0428` | `NULL ENTITY`, `CBaseEntity::GetAngles` | docs/vtmb/entity_io.md:241, docs/vtmb/wielded_weapons.md:478 |
+| `0x100b31b0` | CBaseEntity::GetAbsOrigin | 147 | 0 | 0 | `CAISound#217`, `CAI_BaseHumanoid#217`, `CAI_BaseNPC#217`, +79 more | 0d/115v/139c +72 outside | — | `+0x0188`, `+0x0268`, `+0x026c`, `+0x0404` | `NULL ENTITY`, `CBaseEntity::GetAbsOrigin` | docs/vtmb/entity_io.md:241, docs/vtmb/npc-ai/conditions-and-states.md:763 |
+| `0x100b3280` | CBaseEntity::GetAbsAngles | 147 | 0 | 0 | `CAISound#219`, `CAI_BaseHumanoid#219`, `CAI_BaseNPC#219`, +79 more | 0d/19v/15c +28 outside | — | `+0x0188`, `+0x0268`, `+0x026c`, `+0x0410` | `NULL ENTITY`, `CBaseEntity::GetAbsAngles` | docs/vtmb/entity_io.md:241 |
 | `0x100b3580` | CBaseEntity::AddFlag | 134 | 1 | 0 | — | 9d/0v/0c +43 outside | `+0x0434` | `+0x026c`, `+0x0434` | `NULL ENTITY`, `CBaseEntity::AddFlag` | — |
 | `0x100b3640` | CBaseEntity::RemoveFlag | 136 | 1 | 0 | — | 9d/0v/0c +39 outside | `+0x0434` | `+0x026c`, `+0x0434` | `NULL ENTITY`, `CBaseEntity::RemoveFlag` | — |
 | `0x100b3700` | CBaseEntity::GetFlags | 121 | 1 | 0 | — | 34d/0v/0c +79 outside | — | `+0x026c`, `+0x0434` | `NULL ENTITY`, `CBaseEntity::GetFlags` | docs/vtmb/animation_and_movers.md:1171 |
@@ -531,7 +531,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x100b50a0` | CAISound::FUN_100b50a0 | 76 | 0 | 1 | `CAISound#164`, `CAI_BaseHumanoid#164`, `CAI_BaseNPC#164`, +79 more | 0d/0v/0c | — | `+0x0170`, `+0x034c` | — | docs/vtmb/npc-ai/shape.md:1619, docs/vtmb/npc-ai/shape.md:3205, docs/vtmb/npc-ai/shape.md:3209 |
 | `0x100b5110` | FUN_100b5110 | 91 | 1 | 0 | — | 2d/0v/0c +4 outside | — | `+0x0020`?, `+0x0170`? | — | docs/vtmb/npc-ai/shape.md:1620, docs/vtmb/npc-ai/shape.md:1633, docs/vtmb/npc-ai/shape.md:3205, +1 more |
 | `0x100b5190` | FUN_100b5190 | 7 | 1 | 0 | — | 21d/0v/0c +16 outside | — | `+0x00f4`? | — | docs/vtmb/npc-ai/authored-control.md:638, docs/vtmb/npc-ai/conditions-and-states.md:1727, docs/vtmb/npc-ai/conditions-and-states.md:2740, +9 more |
-| `0x100b5340` | FUN_100b5340 | 141 | 5 | 0 | — | 1d/0v/0c +8 outside | `+0x0268` | `+0x0260`, `+0x0268` | — | — |
+| `0x100b5340` | FUN_100b5340 | 141 | 5 | 0 | — | 1d/0v/0c +8 outside | `+0x0268` | `+0x0260`, `+0x0268` | — | docs/vtmb/entity_io.md:256, docs/vtmb/entity_io.md:277 |
 | `0x100b5ab0` | CBaseFlex::SetModel | 57 | 1 | 0 | — | 1d/0v/0c | — | `+0x045c` | — | — |
 | `0x100b5b00` | CAI_BaseNPC::FUN_100b5b00 | 33 | 0 | 0 | `CAI_BaseNPC#277`, `CAI_BaseNPCTroika#277`, `CAI_ExpressiveNPC#277`, +73 more | 1d/2v/2c +1 outside | — | `+0x0848` | — | docs/vtmb/npc-ai/shape.md:559, docs/vtmb/npc-ai/shape.md:563, docs/vtmb/npc-ai/shape.md:2827 |
 | `0x100b5b40` | CBaseFlex::GetViewtarget | 7 | 0 | 0 | `CAI_BaseHumanoid#278`, `CAI_BaseNPC#278`, `CAI_BaseNPCTroika#278`, +74 more | 0d/1v/0c | — | `+0x0848` | — | — |
@@ -599,7 +599,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x100cd2d0` | FUN_100cd2d0 | 28 | 1 | 2 | — | 25d/0v/0c +115 outside | — | `+0x0014`? | — | — |
 | `0x100cd300` | FUN_100cd300 | 642 | 1 | 6 | — | 2d/0v/0c +24 outside | `+0x0014` | `+0x0014` | `output: (%s,%s) -> (%s,%s)⏎`, `output: (%s,%s) -> (%s,%s,%.1f)⏎`, +1 more | — |
 | `0x100cd640` | FUN_100cd640 | 12 | 1 | 0 | — | 2d/0v/0c +1 outside | — | — | — | — |
-| `0x100cd660` | FUN_100cd660 | 79 | 1 | 7 | — | 53d/0v/0c +152 outside | — | — | — | docs/vtmb/entity_io.md:1983, docs/vtmb/npc-ai/authored-control.md:662, docs/vtmb/npc-ai/lifecycle.md:1859, +3 more |
+| `0x100cd660` | FUN_100cd660 | 79 | 1 | 7 | — | 53d/0v/0c +152 outside | — | — | — | docs/vtmb/entity_io.md:2062, docs/vtmb/npc-ai/authored-control.md:662, docs/vtmb/npc-ai/lifecycle.md:1859, +3 more |
 | `0x100cddf0` | FUN_100cddf0 | 217 | 2 | 5 | — | 1d/0v/0c +1 outside | — | — | — | — |
 | `0x100cdf10` | FUN_100cdf10 | 225 | 3 | 5 | — | 2d/0v/0c +4 outside | — | — | — | — |
 | `0x100ce040` | FUN_100ce040 | 105 | 3 | 6 | — | 1d/0v/0c +3 outside | — | — | — | — |
@@ -710,12 +710,12 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x100f6e40` | FUN_100f6e40 | 92 | 2 | 1 | — | 1d/0v/0c +5 outside | `+0x18054` | `+0x18048`, `+0x18054` | — | docs/vtmb/npc-ai/schedule-kernel.md:2038, docs/vtmb/npc-ai/shape.md:3319, docs/vtmb/npc-ai/shape.md:3328 |
 | `0x100f7060` | FUN_100f7060 | 260 | 2 | 0 | — | 7d/0v/0c +35 outside | — | `+0x18004`, `+0x18010` | — | docs/vtmb/npc-ai/lifecycle.md:81 |
 | `0x100f7380` | FUN_100f7380 | 164 | 1 | 5 | — | 11d/0v/0c +24 outside | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:2058, docs/vtmb/npc-ai/shape.md:3694 |
-| `0x100f7460` | FUN_100f7460 | 614 | 2 | 7 | — | 1d/0v/0c | — | — | `CBaseEntity::Instance`, `picker`, +6 more | docs/vtmb/entity_io.md:1975 |
-| `0x100f7770` | FUN_100f7770 | 223 | 1 | 8 | — | 27d/0v/0c +84 outside | — | — | — | docs/vtmb/audio_pipeline.md:529, docs/vtmb/npc-ai/programs.md:1196, docs/vtmb/npc-ai/programs.md:1396, +6 more |
+| `0x100f7460` | FUN_100f7460 | 614 | 2 | 7 | — | 1d/0v/0c | — | — | `CBaseEntity::Instance`, `picker`, +6 more | docs/vtmb/entity_io.md:282, docs/vtmb/entity_io.md:2054 |
+| `0x100f7770` | FUN_100f7770 | 223 | 1 | 8 | — | 27d/0v/0c +84 outside | — | — | — | docs/vtmb/audio_pipeline.md:529, docs/vtmb/entity_io.md:245, docs/vtmb/npc-ai/programs.md:1196, +7 more |
 | `0x100f79b0` | FUN_100f79b0 | 273 | 1 | 1 | — | 3d/0v/0c +4 outside | — | — | — | — |
 | `0x100f7b20` | FUN_100f7b20 | 198 | 1 | 9 | — | 4d/0v/0c +1 outside | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:4324 |
 | `0x100f7c30` | FUN_100f7c30 | 217 | 3 | 9 | — | 1d/0v/0c +1 outside | — | — | — | docs/vtmb/npc-ai/authored-control.md:282 |
-| `0x100f7d50` | FUN_100f7d50 | 174 | 1 | 6 | — | 2d/0v/0c | — | — | — | docs/vtmb/entity_io.md:1787, docs/vtmb/npc-ai/lifecycle.md:1359 |
+| `0x100f7d50` | FUN_100f7d50 | 174 | 1 | 6 | — | 2d/0v/0c | — | — | — | docs/vtmb/entity_io.md:1841, docs/vtmb/npc-ai/lifecycle.md:1359 |
 | `0x100f7f20` | FUN_100f7f20 | 53 | 1 | 9 | — | 3d/0v/0c +1 outside | — | — | — | — |
 | `0x100f7fe0` | FUN_100f7fe0 | 61 | 1 | 10 | — | 1d/0v/0c +1 outside | — | — | — | — |
 | `0x100f81f0` | FUN_100f81f0 | 295 | 2 | 5 | — | 1d/0v/0c | — | — | `worldspawn`, `soundent` | — |
@@ -726,7 +726,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x100f9940` | FUN_100f9940 | 103 | 3 | 0 | — | 1d/0v/0c | `+0x0004` | `+0x0004`, `+0x0008` | — | — |
 | `0x100faf60` | FUN_100faf60 | 39 | 2 | 0 | — | 1d/0v/0c +4 outside | — | `+0x03cc`, `+0x0458`, `+0x045c` | — | — |
 | `0x100fb1f0` | FUN_100fb1f0 | 380 | 3 | 8 | — | 3d/0v/0c +2 outside | `+0x0458`, `+0x045c`, `+0x0460` | `+0x00fc`, `+0x0174`, `+0x0254`, `+0x037c`, `+0x0458` | — | docs/vtmb/camera-view-modes.md:2517, docs/vtmb/camera-view-modes.md:2518 |
-| `0x100fb7d0` | CDisciplineParticle::FUN_100fb7d0 | 11 | 3 | 0 | — | 0d/2v/0c +3 outside | — | — | — | docs/vtmb/entity_io.md:1913 |
+| `0x100fb7d0` | CDisciplineParticle::FUN_100fb7d0 | 11 | 3 | 0 | — | 0d/2v/0c +3 outside | — | — | — | docs/vtmb/entity_io.md:1992 |
 | `0x100fb980` | FUN_100fb980 | 136 | 1 | 1 | — | 2d/0v/0c +3 outside | `+0x048c`, `+0x0494` | `+0x048c`, `+0x04a1` | `%s rate scale set to %.2f, must be >=0⏎` | docs/vtmb/npc-ai/schedule-kernel.md:4849, docs/vtmb/npc-ai/schedule-kernel.md:4989 |
 | `0x100fba40` | FUN_100fba40 | 82 | 3 | 1 | — | 1d/0v/0c +1 outside | `+0x0490`, `+0x0494` | — | `%s ramp time set to %.2f, must be >=0⏎` | — |
 | `0x100fbac0` | FUN_100fbac0 | 29 | 2 | 2 | — | 2d/0v/0c +2 outside | — | — | — | — |
@@ -777,10 +777,10 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1012a1d0` | FUN_1012a1d0 | 850 | 2 | 5 | — | 1d/0v/0c +1 outside | `+0x0730` | `+0x00f8`, `+0x026c`, `+0x0270` | `CBaseEntity::SetSolid` | — |
 | `0x1012a6e0` | FUN_1012a6e0 | 211 | 1 | 8 | — | 1d/0v/0c +1 outside | — | — | `models/gibs/hgibs.mdl`, `classname %s used to create wrong class …`, +2 more | — |
 | `0x1012b080` | FUN_1012b080 | 416 | 2 | 5 | — | 2d/0v/0c +4 outside | `+0x01a3`? | `+0x00ad`?, `+0x0174`?, `+0x01a4`? | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags` | — |
-| `0x1012c6c0` | FUN_1012c6c0 | 162 | 6 | 0 | — | 1d/0v/0c +1 outside | — | — | — | — |
-| `0x1012c7a0` | FUN_1012c7a0 | 55 | 5 | 0 | — | 1d/0v/0c +1 outside | — | — | — | — |
-| `0x1012c7f0` | FUN_1012c7f0 | 62 | 6 | 0 | — | 1d/0v/0c +1 outside | — | — | — | — |
-| `0x1012c840` | FUN_1012c840 | 130 | 5 | 1 | — | 1d/0v/0c +4 outside | — | — | — | — |
+| `0x1012c6c0` | FUN_1012c6c0 | 162 | 6 | 0 | — | 1d/0v/0c +1 outside | — | — | — | docs/vtmb/entity_io.md:269 |
+| `0x1012c7a0` | FUN_1012c7a0 | 55 | 5 | 0 | — | 1d/0v/0c +1 outside | — | — | — | docs/vtmb/entity_io.md:252, docs/vtmb/entity_io.md:276 |
+| `0x1012c7f0` | FUN_1012c7f0 | 62 | 6 | 0 | — | 1d/0v/0c +1 outside | — | — | — | docs/vtmb/entity_io.md:270 |
+| `0x1012c840` | FUN_1012c840 | 130 | 5 | 1 | — | 1d/0v/0c +4 outside | — | — | — | docs/vtmb/entity_io.md:250, docs/vtmb/entity_io.md:267 |
 | `0x1012c9c0` | FUN_1012c9c0 | 106 | 2 | 0 | — | 1d/0v/0c +4 outside | — | — | — | — |
 | `0x1012f700` | FUN_1012f700 | 53 | 4 | 0 | — | 1d/0v/0c | — | — | — | — |
 | `0x101364e0` | CLogicRelay::InputTrigger | 124 | 2 | 8 | — | 1d/0v/0c | — | `+0x0204` | `EnableRefire` | — |
@@ -789,7 +789,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101371d0` | FUN_101371d0 | 7 | 1 | 0 | — | 126d/0v/0c +127 outside | — | — | — | — |
 | `0x10137220` | FUN_10137220 | 67 | 1 | 0 | — | 95d/0v/0c +150 outside | — | — | — | docs/vtmb/combat-and-damage.md:2712, docs/vtmb/npc-ai/schedule-kernel.md:1554, docs/vtmb/npc-ai/senses.md:1519, +3 more |
 | `0x10137e40` | FUN_10137e40 | 97 | 3 | 1 | — | 1d/0v/0c +3 outside | — | — | — | — |
-| `0x10137ed0` | FUN_10137ed0 | 196 | 4 | 0 | — | 3d/0v/0c +24 outside | — | — | — | — |
+| `0x10137ed0` | FUN_10137ed0 | 196 | 4 | 0 | — | 3d/0v/0c +24 outside | — | — | — | docs/vtmb/entity_io.md:257 |
 | `0x10137fe0` | FUN_10137fe0 | 92 | 1 | 0 | — | 11d/0v/0c +17 outside | — | — | — | — |
 | `0x10138130` | FUN_10138130 | 92 | 2 | 0 | — | 5d/0v/0c +9 outside | — | — | — | — |
 | `0x101381b0` | FUN_101381b0 | 83 | 1 | 0 | — | 3d/0v/0c +15 outside | — | — | — | — |
@@ -904,20 +904,20 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1015fbb0` | FUN_1015fbb0 | 224 | 6 | 0 | — | 1d/0v/0c +2 outside | `+0x0744`, `+0x14b0`, `+0x14b4` | `+0x0430`, `+0x1488`, `+0x14b0`, `+0x14b4` | — | docs/vtmb/npc-ai/lifecycle.md:3371, docs/vtmb/player-entity.md:595 |
 | `0x10160560` | FUN_10160560 | 224 | 1 | 12 | — | 1d/0v/0c | — | — | — | docs/vtmb/npc-ai/senses.md:1155 |
 | `0x10160680` | FUN_10160680 | 13 | 2 | 0 | — | 1d/0v/0c | — | `+0x1ddc`? | — | docs/vtmb/npc-ai/lifecycle.md:865 |
-| `0x101618a0` | FUN_101618a0 | 45 | 1 | 0 | — | 3d/0v/0c +8 outside | — | `+0x1db0`? | — | docs/vtmb/entity_io.md:1090, docs/vtmb/entity_io.md:1976 |
-| `0x101618e0` | FUN_101618e0 | 309 | 2 | 1 | — | 3d/0v/0c +4 outside | `+0x0174`, `+0x06f0`, `+0x06f4`, `+0x06f8`, `+0x1db0` | `+0x0734`, `+0x07f4`, `+0x1db0` | — | docs/vtmb/entity_io.md:303, docs/vtmb/npc-ai/lifecycle.md:1119, docs/vtmb/npc-ai/lifecycle.md:1146, +5 more |
-| `0x10161a70` | FUN_10161a70 | 534 | 5 | 7 | — | 2d/0v/0c +2 outside | `+0x1db0` | `+0x0024`, `+0x0364`, `+0x0374`, `+0x1db0` | `GetControllerNPC() created NULL Entity f…`, `⏎GetControllerNPC() asked for NPC class:…` | docs/vtmb/entity_io.md:264, docs/vtmb/entity_visuals.md:265, docs/vtmb/npc-ai/lifecycle.md:278, +8 more |
+| `0x101618a0` | FUN_101618a0 | 45 | 1 | 0 | — | 3d/0v/0c +8 outside | — | `+0x1db0`? | — | docs/vtmb/entity_io.md:1144, docs/vtmb/entity_io.md:2055 |
+| `0x101618e0` | FUN_101618e0 | 309 | 2 | 1 | — | 3d/0v/0c +4 outside | `+0x0174`, `+0x06f0`, `+0x06f4`, `+0x06f8`, `+0x1db0` | `+0x0734`, `+0x07f4`, `+0x1db0` | — | docs/vtmb/entity_io.md:357, docs/vtmb/npc-ai/lifecycle.md:1119, docs/vtmb/npc-ai/lifecycle.md:1146, +5 more |
+| `0x10161a70` | FUN_10161a70 | 534 | 5 | 7 | — | 2d/0v/0c +2 outside | `+0x1db0` | `+0x0024`, `+0x0364`, `+0x0374`, `+0x1db0` | `GetControllerNPC() created NULL Entity f…`, `⏎GetControllerNPC() asked for NPC class:…` | docs/vtmb/entity_io.md:318, docs/vtmb/entity_visuals.md:265, docs/vtmb/npc-ai/lifecycle.md:278, +8 more |
 | `0x10161ed0` | FUN_10161ed0 | 45 | 2 | 0 | — | 1d/0v/0c | — | `+0x1da4`? | — | — |
 | `0x10161f10` | FUN_10161f10 | 99 | 2 | 1 | — | 2d/0v/0c +1 outside | `+0x017c` | — | — | — |
 | `0x101644f0` | FUN_101644f0 | 541 | 5 | 5 | — | 2d/0v/0c +11 outside | `+0x06f0`, `+0x06f4`, `+0x06f8`, `+0x1c68` | `+0x03d4`, `+0x03d8`, `+0x0434`, `+0x04d8`, `+0x05e0`, `+0x05f4`, +5 more | — | docs/vtmb/activity_enum.md:441, docs/vtmb/animation_and_movers.md:874, docs/vtmb/animation_and_movers.md:981, +9 more |
 | `0x101671a0` | FUN_101671a0 | 115 | 1 | 12 | — | 4d/0v/0c +5 outside | — | `+0x1538`?, `+0x153c`?, `+0x1540`? | — | docs/vtmb/npc-ai/senses.md:172, docs/vtmb/npc-ai/senses.md:1376, docs/vtmb/stealth.md:395, +2 more |
 | `0x101672d0` | FUN_101672d0 | 58 | 2 | 1 | — | 1d/0v/0c +1 outside | — | — | — | docs/vtmb/npc-ai/conditions-and-states.md:579, docs/vtmb/npc-ai/senses.md:173, docs/vtmb/stealth.md:395, +1 more |
-| `0x10167fd0` | FUN_10167fd0 | 362 | 5 | 5 | — | 1d/0v/0c +18 outside | — | `+0x04cc` | — | docs/vtmb/entity_io.md:284 |
+| `0x10167fd0` | FUN_10167fd0 | 362 | 5 | 5 | — | 1d/0v/0c +18 outside | — | `+0x04cc` | — | docs/vtmb/entity_io.md:338 |
 | `0x101681a0` | FUN_101681a0 | 293 | 2 | 1 | — | 1d/0v/0c +5 outside | — | `+0x0fe8`?, `+0x1040`?, `+0x19c0`?, `+0x19cc`?, `+0x1eb8`? | — | docs/vtmb/npc-ai/shape.md:4402, docs/vtmb/stealth.md:394 |
-| `0x10170090` | FUN_10170090 | 537 | 4 | 21 | — | 1d/0v/0c +1 outside | — | `+0x03fe`?, `+0x067c`? | `Can't change levels while in dialog!⏎` | docs/vtmb/computer-terminals.md:685, docs/vtmb/entity_io.md:314, docs/vtmb/feeding.md:231, +2 more |
+| `0x10170090` | FUN_10170090 | 537 | 4 | 21 | — | 1d/0v/0c +1 outside | — | `+0x03fe`?, `+0x067c`? | `Can't change levels while in dialog!⏎` | docs/vtmb/computer-terminals.md:685, docs/vtmb/entity_io.md:368, docs/vtmb/feeding.md:231, +2 more |
 | `0x10172410` | FUN_10172410 | 476 | 2 | 4 | — | 1d/0v/0c +1 outside | — | — | — | — |
-| `0x10172710` | FUN_10172710 | 108 | 1 | 6 | — | 2d/0v/0c +18 outside | — | — | — | docs/vtmb/entity_io.md:1980, docs/vtmb/npc-ai/shape.md:6050 |
-| `0x10175180` | FUN_10175180 | 116 | 1 | 0 | — | 3d/0v/0c +5 outside | — | `+0x1db0`? | — | docs/vtmb/entity_io.md:1089, docs/vtmb/game_runtime.md:1552, docs/vtmb/npc-ai/conditions-and-states.md:1740, +7 more |
+| `0x10172710` | FUN_10172710 | 108 | 1 | 6 | — | 2d/0v/0c +18 outside | — | — | — | docs/vtmb/entity_io.md:2059, docs/vtmb/npc-ai/shape.md:6050 |
+| `0x10175180` | FUN_10175180 | 116 | 1 | 0 | — | 3d/0v/0c +5 outside | — | `+0x1db0`? | — | docs/vtmb/entity_io.md:1143, docs/vtmb/game_runtime.md:1552, docs/vtmb/npc-ai/conditions-and-states.md:1740, +7 more |
 | `0x10175400` | FUN_10175400 | 361 | 6 | 0 | — | 1d/0v/0c +2 outside | — | `+0x1478` | — | — |
 | `0x101764d0` | FUN_101764d0 | 57 | 5 | 0 | — | 2d/0v/0c | — | — | — | docs/vtmb/npc-ai/shape.md:3429 |
 | `0x10176520` | FUN_10176520 | 820 | 4 | 5 | — | 1d/0v/0c +4 outside | `+0x20a8`, `+0x22a8`, `+0x22ac`, `+0x22b0` | `+0x1efc`, `+0x1f00`, `+0x1f04`, `+0x206c`, `+0x2070`, `+0x2074`, +3 more | — | docs/vtmb/npc-ai/shape.md:3370, docs/vtmb/npc-ai/shape.md:3372 |
@@ -926,9 +926,9 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1017a2b0` | FUN_1017a2b0 | 520 | 4 | 8 | — | 1d/0v/0c +2 outside | `+0x0004`, `+0x0034` | `+0x0008`, `+0x0038` | — | — |
 | `0x1017b330` | FUN_1017b330 | 717 | 4 | 14 | — | 1d/0v/0c | — | `+0x0034`, `+0x0038` | — | — |
 | `0x1017c600` | FUN_1017c600 | 119 | 2 | 12 | — | 1d/0v/0c +1 outside | `+0x1eb8`, `+0x1ec0` | `+0x02e0` | `showloot⏎`, `showbarter⏎` | docs/vtmb/npc-ai/social.md:1207 |
-| `0x1017c6d0` | FUN_1017c6d0 | 268 | 2 | 1 | — | 1d/0v/0c +3 outside | `+0x1eb8`?, `+0x1ec0`? | `+0x1eb8`?, `+0x1ec0`? | `CBaseEntity::Instance` | docs/vtmb/entity_io.md:284, docs/vtmb/npc-ai/shape.md:3432 |
+| `0x1017c6d0` | FUN_1017c6d0 | 268 | 2 | 1 | — | 1d/0v/0c +3 outside | `+0x1eb8`?, `+0x1ec0`? | `+0x1eb8`?, `+0x1ec0`? | `CBaseEntity::Instance` | docs/vtmb/entity_io.md:338, docs/vtmb/npc-ai/shape.md:3432 |
 | `0x1017cef0` | SetCineCamera | 121 | 5 | 4 | — | 1d/0v/0c +18 outside | `+0x19b4`, `+0x1ec4` | — | — | docs/vtmb/footsteps.md:935, docs/vtmb/npc-ai/shape.md:4375 |
-| `0x1017cf90` | GetActiveCameraEntity | 111 | 1 | 0 | — | 4d/0v/0c +9 outside | — | `+0x19b4`?, `+0x1ec4`? | — | docs/vtmb/entity_io.md:1094, docs/vtmb/npc-ai/shape.md:4371, docs/vtmb/npc-ai/shape.md:4373, +1 more |
+| `0x1017cf90` | GetActiveCameraEntity | 111 | 1 | 0 | — | 4d/0v/0c +9 outside | — | `+0x19b4`?, `+0x1ec4`? | — | docs/vtmb/entity_io.md:1148, docs/vtmb/npc-ai/shape.md:4371, docs/vtmb/npc-ai/shape.md:4373, +1 more |
 | `0x1017d630` | FUN_1017d630 | 56 | 2 | 1 | — | 1d/0v/0c +5 outside | — | `+0x19c0`? | — | docs/vtmb/footsteps.md:63 |
 | `0x1017d680` | FUN_1017d680 | 56 | 2 | 1 | — | 1d/0v/0c +2 outside | — | `+0x19cc`? | — | docs/vtmb/npc-ai/shape.md:3445, docs/vtmb/npc-ai/shape.md:3454 |
 | `0x1017d900` | FUN_1017d900 | 416 | 3 | 0 | — | 2d/0v/0c +4 outside | `+0x19b8`?, `+0x19bc`?, `+0x19c0`?, `+0x19cc`?, `+0x19e4`? | `+0x19b8`?, `+0x19bc`?, `+0x19c0`?, `+0x19cc`? | — | docs/vtmb/npc-ai/shape.md:3445 |
@@ -1101,7 +1101,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101a6f10` | CCineNPC::Spawn | 435 | 0 | 5 | `CCineAI#103`, `CCineNPC#103` | 1d/0v/0c | `+0x017c`, `+0x1480`, `+0x1481`, `+0x5f74`, `+0x5f90`, `+0x5f91`, +2 more | `+0x0174`, `+0x0204`, `+0x026c`, `+0x0270`, `+0x02b4` | `NULL ENTITY`, `CBaseEntity::SetSolid`, +1 more | docs/vtmb/npc-ai/lifecycle.md:542, docs/vtmb/npc-ai/lifecycle.md:665, docs/vtmb/npc-ai/lifecycle.md:667, +2 more |
 | `0x101a7140` | CCineNPC::UpdateOnRemove | 19 | 0 | 20 | `CCineAI#180`, `CCineAISchedule#180`, `CCineNPC#180` | 0d/0v/1c | — | — | — | docs/vtmb/npc-ai/authored-control.md:577, docs/vtmb/npc-ai/authored-control.md:578 |
 | `0x101a7170` | FUN_101a7170 | 120 | 1 | 19 | — | 2d/0v/0c +1 outside | — | — | — | docs/vtmb/npc-ai/authored-control.md:578 |
-| `0x101a7210` | CCineNPC::vfunc585 | 12 | 0 | 0 | `CCineNPC#585` | 0d/0v/1c +2 outside | — | `+0x0204` | — | docs/vtmb/entity_io.md:2365 |
+| `0x101a7210` | CCineNPC::vfunc585 | 12 | 0 | 0 | `CCineNPC#585` | 0d/0v/1c +2 outside | — | `+0x0204` | — | docs/vtmb/entity_io.md:2444 |
 | `0x101a7230` | FUN_101a7230 | 88 | 1 | 8 | — | 1d/0v/0c | — | `+0x010c` | — | docs/vtmb/npc-ai/conditions-and-states.md:3589 |
 | `0x101a7540` | FUN_101a7540 | 42 | 1 | 0 | — | 1d/0v/0c | — | `+0x5f70`?, `+0x5f74`? | — | docs/vtmb/npc-ai/schedule-kernel.md:664, docs/vtmb/npc-ai/schedule-kernel.md:3852, docs/vtmb/npc-ai/shape.md:3501, +1 more |
 | `0x101a7580` | CCineNPC::Blocked | 3 | 0 | 0 | `CCineAI#178`, `CCineAISchedule#178`, `CCineNPC#178` | 0d/0v/0c | — | — | — | — |
@@ -1111,26 +1111,26 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101a8130` | FUN_101a8130 | 68 | 2 | 9 | — | 1d/0v/0c | — | `+0x5f5c`? | — | docs/vtmb/npc-ai/social.md:765 |
 | `0x101a81a0` | FUN_101a81a0 | 231 | 1 | 10 | — | 1d/0v/0c | `+0x06f4` | `+0x065c` | — | docs/vtmb/npc-ai/schedule-kernel.md:664, docs/vtmb/npc-ai/schedule-kernel.md:3853 |
 | `0x101a82d0` | CCineAISchedule::FUN_101a82d0 | 315 | 0 | 22 | `CCineAISchedule#584`, `CCineNPC#584` | 0d/0v/2c | `+0x5f91` | `+0x5ce4` | `**UNKNOWN**`, `Sequence %s targeting %s is starting⏎`, +1 more | docs/vtmb/animation_and_movers.md:2147, docs/vtmb/npc-ai/authored-control.md:698, docs/vtmb/npc-ai/authored-control.md:702, +2 more |
-| `0x101a8460` | SequenceDone | 371 | 1 | 21 | — | 3d/0v/0c | — | `+0x010c`, `+0x0920`, `+0x5ce4`, `+0x5f4c`, `+0x5f94`, `+0x5fb4` | `**UNKNOWN**`, `Sequence %s targeting %s is done⏎` | docs/vtmb/entity_io.md:2367, docs/vtmb/npc-ai/authored-control.md:654, docs/vtmb/npc-ai/authored-control.md:658, +6 more |
+| `0x101a8460` | SequenceDone | 371 | 1 | 21 | — | 3d/0v/0c | — | `+0x010c`, `+0x0920`, `+0x5ce4`, `+0x5f4c`, `+0x5f94`, `+0x5fb4` | `**UNKNOWN**`, `Sequence %s targeting %s is done⏎` | docs/vtmb/entity_io.md:2446, docs/vtmb/npc-ai/authored-control.md:654, docs/vtmb/npc-ai/authored-control.md:658, +6 more |
 | `0x101a8640` | FUN_101a8640 | 396 | 1 | 20 | — | 2d/0v/0c | `+0x017c` | `+0x0204`, `+0x0920`, `+0x0928`, `+0x5f4c`, `+0x5f94` | `Post Idle %s finished⏎` | docs/vtmb/npc-ai/authored-control.md:594, docs/vtmb/npc-ai/authored-control.md:598, docs/vtmb/npc-ai/authored-control.md:599, +12 more |
-| `0x101a8840` | CCineNPC::vfunc586 | 51 | 0 | 1 | `CCineNPC#586` | 0d/0v/6c | — | — | `E:\Vampire\main\dlls\scripted.cpp` | docs/vtmb/entity_io.md:2304, docs/vtmb/entity_io.md:2305, docs/vtmb/npc-ai/schedule-kernel.md:663, +2 more |
+| `0x101a8840` | CCineNPC::vfunc586 | 51 | 0 | 1 | `CCineNPC#586` | 0d/0v/6c | — | — | `E:\Vampire\main\dlls\scripted.cpp` | docs/vtmb/entity_io.md:2383, docs/vtmb/entity_io.md:2384, docs/vtmb/npc-ai/schedule-kernel.md:663, +2 more |
 | `0x101a8890` | FUN_101a8890 | 123 | 1 | 21 | — | 1d/0v/0c | `+0x5f90` | `+0x0204`, `+0x5ce4`, `+0x5f90` | — | docs/vtmb/npc-ai/authored-control.md:667, docs/vtmb/npc-ai/authored-control.md:671, docs/vtmb/npc-ai/authored-control.md:672, +3 more |
 | `0x101a8930` | FUN_101a8930 | 75 | 1 | 0 | — | 2d/0v/0c | — | `+0x5ce4`?, `+0x5f90`? | — | docs/vtmb/npc-ai/conditions-and-states.md:1167, docs/vtmb/npc-ai/conditions-and-states.md:1180, docs/vtmb/npc-ai/conditions-and-states.md:1580, +2 more |
 | `0x101a89a0` | CCineAISchedule::FUN_101a89a0 | 209 | 0 | 2 | `CCineAI#459`, `CCineAISchedule#459`, `CCineNPC#459` | 0d/0v/2c | — | `+0x5ce4` | — | docs/vtmb/npc-ai/conditions-and-states.md:1140, docs/vtmb/npc-ai/conditions-and-states.md:1165 |
-| `0x101a8ac0` | FUN_101a8ac0 | 278 | 1 | 1 | — | 5d/0v/0c | — | — | `%s is a priority script and cannot be ki…`, `%s is specified as the 'Next Script' and…` | docs/vtmb/entity_io.md:2368, docs/vtmb/npc-ai/shape.md:2288, docs/vtmb/npc-ai/shape.md:2667, +1 more |
+| `0x101a8ac0` | FUN_101a8ac0 | 278 | 1 | 1 | — | 5d/0v/0c | — | — | `%s is a priority script and cannot be ki…`, `%s is specified as the 'Next Script' and…` | docs/vtmb/entity_io.md:2447, docs/vtmb/npc-ai/shape.md:2288, docs/vtmb/npc-ai/shape.md:2667, +1 more |
 | `0x101a8c30` | FUN_101a8c30 | 130 | 1 | 19 | — | 6d/0v/0c +2 outside | — | `+0x026c`?, `+0x5f48`? | `Cancelling script: %s⏎` | docs/vtmb/game_runtime.md:1325, docs/vtmb/game_runtime.md:1563, docs/vtmb/npc-ai/authored-control.md:291, +12 more |
 | `0x101a8cf0` | DelayStart | 192 | 1 | 9 | — | 2d/0v/0c | — | `+0x026c` | `scripted_sequence` | — |
 | `0x101a8de0` | CCineAISchedule::FUN_101a8de0 | 390 | 0 | 15 | `CCineAI#113`, `CCineAISchedule#113`, `CCineNPC#113` | 0d/0v/1c | `+0x5f58`, `+0x5f94` | `+0x5f44`, `+0x5f48`, `+0x5f4c`, `+0x5f54`, `+0x5f58`, `+0x5f94` | `**********⏎`, `Could not find NPC %s in CCineNPC::Activ…`, +1 more | docs/vtmb/npc-ai/authored-control.md:292, docs/vtmb/npc-ai/lifecycle.md:1922, docs/vtmb/npc-ai/lifecycle.md:1926 |
 | `0x101a9060` | CCineAI::vfunc585 | 3 | 0 | 0 | `CCineAI#585` | 0d/0v/1c | — | — | — | — |
 | `0x101a9080` | CCineAI::vfunc583 | 899 | 0 | 21 | `CCineAI#583` | 0d/0v/1c | `+0x5f78`, `+0x5f7c`, `+0x5f80`, `+0x5f84`, `+0x5f88`, `+0x5f8c` | `+0x0004`, `+0x019c`, `+0x0204`, `+0x0370`, `+0x0374`, `+0x5ce4`, +1 more | `E:\Vampire\main\dlls\scripted.cpp`, `   Otherwise, talk to a programmer.⏎`, +11 more | docs/vtmb/animation_and_movers.md:1658, docs/vtmb/npc-ai/authored-control.md:678, docs/vtmb/npc-ai/authored-control.md:683, +5 more |
 | `0x101a9510` | CCineAI::vfunc584 | 139 | 0 | 22 | `CCineAI#584` | 0d/0v/2c | — | — | `%s: unknown aiscripted sequence "%s"⏎` | docs/vtmb/animation_and_movers.md:2147, docs/vtmb/npc-ai/authored-control.md:698, docs/vtmb/npc-ai/authored-control.md:702, +1 more |
-| `0x101a95d0` | CCineAI::vfunc586 | 56 | 0 | 8 | `CCineAI#586` | 0d/0v/6c | — | `+0x5f64` | `FixScriptNPCSchedule - no case!⏎` | docs/vtmb/entity_io.md:2303, docs/vtmb/entity_io.md:2355, docs/vtmb/npc-ai/schedule-kernel.md:663, +1 more |
+| `0x101a95d0` | CCineAI::vfunc586 | 56 | 0 | 8 | `CCineAI#586` | 0d/0v/6c | — | `+0x5f64` | `FixScriptNPCSchedule - no case!⏎` | docs/vtmb/entity_io.md:2382, docs/vtmb/entity_io.md:2434, docs/vtmb/npc-ai/schedule-kernel.md:663, +1 more |
 | `0x101a9620` | CCineAISchedule::vfunc82 | 6 | 0 | 0 | `CCineAISchedule#82` | 0d/0v/0c | — | — | — | — |
 | `0x101a9730` | CCineAISchedule::Spawn | 46 | 0 | 6 | `CCineAISchedule#103` | 0d/0v/0c | — | `+0x6090`, `+0x6094` | `aiscripted_schedule - no schedule or sta…` | docs/vtmb/npc-ai/authored-control.md:251, docs/vtmb/npc-ai/lifecycle.md:667 |
 | `0x101a9770` | CCineAISchedule::vfunc585 | 3 | 0 | 0 | `CCineAISchedule#585` | 0d/0v/1c | — | — | — | — |
 | `0x101a9790` | CCineAISchedule::vfunc583 | 233 | 0 | 23 | `CCineAISchedule#583` | 0d/0v/1c | — | `+0x0928`, `+0x5ce4`, `+0x5f90` | `   Otherwise, talk to a programmer.⏎`, `   scripted sequence.⏎`, +8 more | docs/vtmb/npc-ai/authored-control.md:289, docs/vtmb/npc-ai/authored-control.md:325, docs/vtmb/npc-ai/authored-control.md:690, +3 more |
-| `0x101a98c0` | CCineAISchedule::vfunc586 | 473 | 0 | 22 | `CCineAISchedule#586` | 0d/1v/6c | — | `+0x0204`, `+0x608c`, `+0x6090`, `+0x6094` | `ScheduledFollowPath to goal entity %s fa…`, `ScheduledMoveToGoalEntity to goal entity…`, +1 more | docs/vtmb/entity_io.md:2304, docs/vtmb/navigation-jump-links.md:723, docs/vtmb/navigation-jump-links.md:1868, +7 more |
-| `0x101aa5d0` | CAI_BaseNPCTroika::FUN_101aa5d0 | 15 | 0 | 0 | `CAI_BaseNPCTroika#586`, `CGeneric_NPC#586`, `CNPCMaker#586`, +61 more | 0d/2v/6c | — | `+0x6088` | — | docs/vtmb/entity_io.md:2303, docs/vtmb/npc-ai/conditions-and-states.md:568, docs/vtmb/npc-ai/programs.md:779 |
+| `0x101a98c0` | CCineAISchedule::vfunc586 | 473 | 0 | 22 | `CCineAISchedule#586` | 0d/1v/6c | — | `+0x0204`, `+0x608c`, `+0x6090`, `+0x6094` | `ScheduledFollowPath to goal entity %s fa…`, `ScheduledMoveToGoalEntity to goal entity…`, +1 more | docs/vtmb/entity_io.md:2383, docs/vtmb/navigation-jump-links.md:723, docs/vtmb/navigation-jump-links.md:1868, +7 more |
+| `0x101aa5d0` | CAI_BaseNPCTroika::FUN_101aa5d0 | 15 | 0 | 0 | `CAI_BaseNPCTroika#586`, `CGeneric_NPC#586`, `CNPCMaker#586`, +61 more | 0d/2v/6c | — | `+0x6088` | — | docs/vtmb/entity_io.md:2382, docs/vtmb/npc-ai/conditions-and-states.md:568, docs/vtmb/npc-ai/programs.md:779 |
 | `0x101aa5f0` | CAI_BaseNPCTroika::FUN_101aa5f0 | 7 | 0 | 0 | `CAI_BaseNPCTroika#476`, `CGeneric_NPC#476`, `CNPCMaker#476`, +61 more | 0d/1v/1c | — | `+0x63c0` | — | docs/vtmb/npc-ai/senses.md:300 |
 | `0x101aa610` | CAI_BaseNPCTroika::GetStealthVisionScalar | 7 | 0 | 0 | `CAI_BaseNPCTroika#28`, `CGeneric_NPC#28`, `CNPCMaker#28`, +61 more | 0d/0v/0c | — | `+0x63c4` | — | — |
 | `0x101aa630` | CAI_BaseNPCTroika::GetStealthVisionCone | 7 | 0 | 0 | `CAI_BaseNPCTroika#29`, `CGeneric_NPC#29`, `CNPCMaker#29`, +61 more | 0d/0v/0c | — | `+0x63c8` | — | docs/vtmb/npc-ai/senses.md:68, docs/vtmb/npc-ai/senses.md:79 |
@@ -1252,7 +1252,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101c4dd0` | FUN_101c4dd0 | 275 | 1 | 5 | — | 1d/0v/0c +4 outside | `+0x055c`? | `+0x026c`?, `+0x0270`?, `+0x02b4`? | `NULL ENTITY`, `CBaseEntity::IsSolidFlagSet`, +1 more | docs/vtmb/audio_pipeline.md:170 |
 | `0x101c7b80` | FUN_101c7b80 | 405 | 3 | 22 | — | 1d/0v/0c +1 outside | — | — | `CBaseEntity::Instance`, `info_landmark`, +2 more | — |
 | `0x101cc950` | FUN_101cc950 | 62 | 2 | 0 | — | 2d/0v/0c | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014` | — | — | — |
-| `0x101cca80` | FUN_101cca80 | 70 | 1 | 1 | — | 6d/0v/0c +8 outside | — | — | — | docs/vtmb/entity_io.md:1737, docs/vtmb/npc-ai/lifecycle.md:1330 |
+| `0x101cca80` | FUN_101cca80 | 70 | 1 | 1 | — | 6d/0v/0c +8 outside | — | — | — | docs/vtmb/entity_io.md:1791, docs/vtmb/npc-ai/lifecycle.md:1330 |
 | `0x101ccaf0` | FUN_101ccaf0 | 70 | 2 | 1 | — | 1d/0v/0c | — | — | — | — |
 | `0x101ccb60` | FUN_101ccb60 | 62 | 2 | 0 | — | 1d/0v/0c | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014` | — | — | — |
 | `0x101ccc80` | FUN_101ccc80 | 70 | 1 | 1 | — | 2d/0v/0c +1 outside | — | — | — | docs/vtmb/npc-ai/conditions-and-states.md:3476 |
@@ -1264,10 +1264,10 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101cd070` | FUN_101cd070 | 115 | 2 | 0 | — | 1d/0v/0c +1 outside | — | — | — | — |
 | `0x101cd110` | FUN_101cd110 | 94 | 1 | 2 | — | 3d/0v/0c +4 outside | — | — | — | docs/vtmb/npc-ai/shape.md:4713 |
 | `0x101cd250` | FUN_101cd250 | 191 | 2 | 3 | — | 1d/0v/0c +4 outside | — | — | — | — |
-| `0x101cd8c0` | FUN_101cd8c0 | 90 | 2 | 2 | — | 1d/0v/0c +1 outside | — | `+0x02d0` | — | docs/vtmb/entity_io.md:871, docs/vtmb/entity_io.md:1147, docs/vtmb/stealth.md:262 |
-| `0x101cd940` | FUN_101cd940 | 23 | 1 | 3 | — | 41d/0v/0c +99 outside | — | — | — | docs/vtmb/audio_pipeline.md:493, docs/vtmb/entity_io.md:1147, docs/vtmb/npc-ai/conditions-and-states.md:417, +9 more |
+| `0x101cd8c0` | FUN_101cd8c0 | 90 | 2 | 2 | — | 1d/0v/0c +1 outside | — | `+0x02d0` | — | docs/vtmb/entity_io.md:925, docs/vtmb/entity_io.md:1201, docs/vtmb/stealth.md:262 |
+| `0x101cd940` | FUN_101cd940 | 23 | 1 | 3 | — | 41d/0v/0c +99 outside | — | — | — | docs/vtmb/audio_pipeline.md:493, docs/vtmb/entity_io.md:1201, docs/vtmb/npc-ai/conditions-and-states.md:417, +9 more |
 | `0x101cd970` | FUN_101cd970 | 78 | 1 | 0 | — | 12d/0v/0c +8 outside | — | — | — | docs/vtmb/navigation-jump-links.md:3105 |
-| `0x101cd9e0` | FUN_101cd9e0 ‼ | 71 | 1 | 0 | — | 27d/0v/0c +91 outside | — | — | — | docs/vtmb/entity_io.md:1976, docs/vtmb/game_runtime.md:1313, docs/vtmb/navigation-jump-links.md:686, +2 more |
+| `0x101cd9e0` | FUN_101cd9e0 ‼ | 71 | 1 | 0 | — | 27d/0v/0c +91 outside | — | — | — | docs/vtmb/entity_io.md:2055, docs/vtmb/game_runtime.md:1313, docs/vtmb/navigation-jump-links.md:686, +2 more |
 | `0x101cda50` | FUN_101cda50 | 48 | 1 | 1 | — | 10d/0v/0c +8 outside | — | — | — | docs/vtmb/audio_pipeline.md:286, docs/vtmb/npc-ai/lifecycle.md:2033, docs/vtmb/npc-ai/senses.md:1138, +2 more |
 | `0x101cdba0` | FUN_101cdba0 | 528 | 1 | 2 | — | 10d/0v/0c +11 outside | — | `+0x0300` | — | docs/vtmb/npc-ai/shape.md:5854 |
 | `0x101cdfa0` | FUN_101cdfa0 | 83 | 6 | 0 | — | 1d/0v/0c +1 outside | — | — | — | — |
@@ -1284,7 +1284,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101cf2f0` | FUN_101cf2f0 | 101 | 1 | 0 | — | 19d/0v/0c +4 outside | — | — | — | docs/vtmb/npc-ai/lifecycle.md:1706, docs/vtmb/npc-ai/lifecycle.md:1711, docs/vtmb/npc-ai/senses.md:370, +1 more |
 | `0x101cf390` | FUN_101cf390 | 26 | 1 | 2 | — | 11d/0v/0c +22 outside | — | — | — | docs/vtmb/combat-and-damage.md:2255, docs/vtmb/npc-ai/lifecycle.md:2346, docs/vtmb/npc-ai/lifecycle.md:2382, +1 more |
 | `0x101cf3c0` | FUN_101cf3c0 | 167 | 2 | 1 | — | 1d/0v/0c +1 outside | — | — | `backwards mins/maxs` | — |
-| `0x101cf5c0` | FUN_101cf5c0 | 39 | 1 | 1 | — | 14d/0v/0c +25 outside | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:1832, docs/vtmb/npc-ai/schedule-kernel.md:1835 |
+| `0x101cf5c0` | FUN_101cf5c0 | 39 | 1 | 1 | — | 14d/0v/0c +25 outside | — | — | — | docs/vtmb/entity_io.md:260, docs/vtmb/npc-ai/schedule-kernel.md:1832, docs/vtmb/npc-ai/schedule-kernel.md:1835 |
 | `0x101cf600` | FUN_101cf600 | 9 | 1 | 1 | — | 11d/0v/0c +22 outside | — | — | — | docs/vtmb/npc-ai/lifecycle.md:2643, docs/vtmb/npc-ai/programs.md:1296, docs/vtmb/npc-ai/programs.md:1364 |
 | `0x101cf640` | FUN_101cf640 | 35 | 3 | 0 | — | 1d/0v/0c | — | — | — | — |
 | `0x101cf720` | FUN_101cf720 | 123 | 2 | 0 | — | 1d/0v/0c +5 outside | — | — | `UTIL_VarArgs` | — |
@@ -1306,9 +1306,9 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x101d1120` | FUN_101d1120 | 147 | 2 | 1 | — | 2d/0v/0c +2 outside | — | — | — | docs/vtmb/npc-ai/senses.md:1680 |
 | `0x101d1240` | FUN_101d1240 | 46 | 2 | 0 | — | 1d/0v/0c | — | — | — | — |
 | `0x101d1280` | DispatchSpawn | 224 | 1 | 6 | — | 13d/0v/0c +8 outside | — | — | — | docs/vtmb/npc-ai/lifecycle.md:70, docs/vtmb/npc-ai/lifecycle.md:86, docs/vtmb/npc-ai/shape.md:4393 |
-| `0x101d1530` | FUN_101d1530 | 144 | 5 | 1 | — | 1d/0v/0c +2 outside | — | — | — | — |
-| `0x101d15f0` | FUN_101d15f0 | 91 | 5 | 1 | — | 1d/0v/0c | — | — | — | — |
-| `0x101d1800` | FUN_101d1800 | 264 | 1 | 2 | — | 5d/0v/0c +1 outside | — | — | — | docs/vtmb/entity_io.md:1977, docs/vtmb/npc-ai/conditions-and-states.md:2864, docs/vtmb/npc-ai/schedule-kernel.md:3812 |
+| `0x101d1530` | FUN_101d1530 | 144 | 5 | 1 | — | 1d/0v/0c +2 outside | — | — | — | docs/vtmb/entity_io.md:253 |
+| `0x101d15f0` | FUN_101d15f0 | 91 | 5 | 1 | — | 1d/0v/0c | — | — | — | docs/vtmb/entity_io.md:255 |
+| `0x101d1800` | FUN_101d1800 | 264 | 1 | 2 | — | 5d/0v/0c +1 outside | — | — | — | docs/vtmb/entity_io.md:2056, docs/vtmb/npc-ai/conditions-and-states.md:2864, docs/vtmb/npc-ai/schedule-kernel.md:3812 |
 | `0x101d1960` | FUN_101d1960 | 235 | 2 | 1 | — | 1d/0v/0c | — | — | — | — |
 | `0x101d1a90` | FUN_101d1a90 | 468 | 1 | 8 | — | 6d/0v/0c +3 outside | — | — | — | docs/vtmb/combat-and-damage.md:2240, docs/vtmb/npc-ai/lifecycle.md:248, docs/vtmb/npc-ai/lifecycle.md:359, +4 more |
 | `0x101d2530` | FUN_101d2530 | 32 | 2 | 0 | — | 1d/0v/0c | — | — | — | — |
@@ -1608,7 +1608,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1020cc60` | FUN_1020cc60 | 122 | 1 | 2 | — | 2d/0v/0c | — | `+0x0364`, `+0x0374`, `+0x0798` | — | docs/vtmb/npc-ai/senses.md:1673 |
 | `0x1020cd00` | FUN_1020cd00 | 18 | 1 | 13 | — | 1d/0v/0c | — | — | — | docs/vtmb/npc-ai/senses.md:1671 |
 | `0x1020cd30` | FUN_1020cd30 | 637 | 2 | 12 | — | 1d/0v/0c +2 outside | — | `+0x0081`?, `+0x0364`? | — | docs/vtmb/npc-ai/senses.md:1672 |
-| `0x1020e060` | CPropSwitch::InputLock | 10 | 1 | 0 | — | 1d/0v/0c | — | — | — | docs/vtmb/entity_io.md:1413 |
+| `0x1020e060` | CPropSwitch::InputLock | 10 | 1 | 0 | — | 1d/0v/0c | — | — | — | docs/vtmb/entity_io.md:1467 |
 | `0x10217080` | FUN_10217080 | 170 | 2 | 1 | — | 1d/0v/0c +1 outside | `+0x0004`, `+0x000c`, `+0x0010` | `+0x0004`, `+0x0008`, `+0x000c` | — | — |
 | `0x1021e750` | FUN_1021e750 | 103 | 4 | 19 | — | 1d/0v/0c | — | — | — | — |
 | `0x1021e7e0` | FUN_1021e7e0 | 103 | 4 | 20 | — | 1d/0v/0c | — | — | — | — |
@@ -1617,7 +1617,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10224100` | FUN_10224100 | 20 | 3 | 0 | — | 1d/0v/0c +12 outside | — | `+0x0780`? | — | — |
 | `0x102271d0` | FUN_102271d0 | 40 | 3 | 8 | — | 1d/0v/0c | — | `+0x0450` | — | — |
 | `0x10227a30` | FUN_10227a30 | 182 | 2 | 9 | — | 5d/0v/0c +4 outside | `+0x0014` | `+0x0008`, `+0x0014` | — | docs/vtmb/npc-ai/senses.md:288 |
-| `0x10228350` | FUN_10228350 | 57 | 2 | 1 | — | 1d/0v/0c +6 outside | — | — | — | docs/vtmb/audio_pipeline.md:470, docs/vtmb/entity_io.md:2213, docs/vtmb/footsteps.md:51, +2 more |
+| `0x10228350` | FUN_10228350 | 57 | 2 | 1 | — | 1d/0v/0c +6 outside | — | — | — | docs/vtmb/audio_pipeline.md:470, docs/vtmb/entity_io.md:2292, docs/vtmb/footsteps.md:51, +2 more |
 | `0x1022dea0` | FUN_1022dea0 | 2134 | 2 | 23 | — | 1d/0v/0c +2 outside | — | — | `vloadtips "%s" %d %d %d`, `__main__.G.Story_State`, +4 more | docs/vtmb/npc-ai/conditions-and-states.md:3572 |
 | `0x1022f4f0` | FUN_1022f4f0 | 107 | 4 | 14 | — | 1d/0v/0c +1 outside | — | — | — | — |
 | `0x10230260` | FUN_10230260 | 9 | 5 | 1 | — | 2d/0v/0c | — | — | — | — |
@@ -1625,7 +1625,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10230ed0` | FUN_10230ed0 | 19 | 5 | 2 | — | 1d/0v/0c +7 outside | — | — | — | — |
 | `0x10230f00` | FUN_10230f00 | 31 | 3 | 2 | — | 1d/0v/0c +5 outside | — | — | — | docs/vtmb/npc-ai/social.md:1250 |
 | `0x1023b570` | FUN_1023b570 | 38 | 3 | 1 | — | 1d/0v/0c | — | `+0x04a9`? | — | — |
-| `0x1023bd00` | FUN_1023bd00 | 6 | 1 | 0 | — | 15d/0v/0c +25 outside | — | — | — | docs/vtmb/entity_io.md:1097, docs/vtmb/npc-ai/conditions-and-states.md:3571, docs/vtmb/npc-ai/schedule-kernel.md:4657, +3 more |
+| `0x1023bd00` | FUN_1023bd00 | 6 | 1 | 0 | — | 15d/0v/0c +25 outside | — | — | — | docs/vtmb/entity_io.md:1151, docs/vtmb/npc-ai/conditions-and-states.md:3571, docs/vtmb/npc-ai/schedule-kernel.md:4657, +3 more |
 | `0x1023dcd0` | FUN_1023dcd0 | 6 | 3 | 0 | — | 6d/0v/0c +4 outside | — | — | — | docs/vtmb/npc-ai/lifecycle.md:2283, docs/vtmb/player-entity.md:403 |
 | `0x1023e4b0` | FUN_1023e4b0 | 388 | 2 | 5 | — | 2d/0v/0c | — | — | — | docs/vtmb/npc-ai/lifecycle.md:3064, docs/vtmb/npc-ai/lifecycle.md:3072 |
 | `0x1023f040` | FUN_1023f040 | 11 | 1 | 0 | — | 2d/0v/0c +5 outside | — | — | — | docs/vtmb/npc-ai/lifecycle.md:1744, docs/vtmb/npc-ai/lifecycle.md:1745, docs/vtmb/npc-ai/lifecycle.md:2491, +1 more |
@@ -1674,8 +1674,8 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1024c400` | FUN_1024c400 | 448 | 5 | 1 | — | 1d/0v/0c | `+0x0010` | `+0x0004`, `+0x0010` | — | — |
 | `0x1024c630` | FUN_1024c630 | 59 | 6 | 0 | — | 2d/0v/0c +2 outside | — | — | — | — |
 | `0x1024cef0` | FUN_1024cef0 | 103 | 6 | 0 | — | 2d/0v/0c +3 outside | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, +9 more | — | — | — |
-| `0x1024cf80` | FUN_1024cf80 | 608 | 5 | 0 | — | 1d/0v/0c +1 outside | — | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, +9 more | — | — |
-| `0x1024da80` | FUN_1024da80 | 169 | 5 | 0 | — | 1d/0v/0c +1 outside | — | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, +9 more | — | — |
+| `0x1024cf80` | FUN_1024cf80 | 608 | 5 | 0 | — | 1d/0v/0c +1 outside | — | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, +9 more | — | docs/vtmb/entity_io.md:256 |
+| `0x1024da80` | FUN_1024da80 | 169 | 5 | 0 | — | 1d/0v/0c +1 outside | — | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, +9 more | — | docs/vtmb/entity_io.md:256 |
 | `0x1024ddf0` | FUN_1024ddf0 | 343 | 6 | 0 | — | 2d/0v/0c +2 outside | `+0x0004`, `+0x0008`, `+0x000c`, `+0x0010`, `+0x0014`, `+0x0018`, +9 more | — | — | — |
 | `0x1024f7b0` | FUN_1024f7b0 ‼ | 34 | 1 | 1 | — | 10d/0v/0c +6 outside | — | `+0x01dc`? | — | docs/vtmb/npc-ai/lifecycle.md:2579 |
 | `0x10251790` | FUN_10251790 | 12 | 3 | 2 | — | 1d/0v/0c | — | — | — | — |
@@ -1756,7 +1756,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102652d0` | FUN_102652d0 | 13 | 5 | 0 | — | 1d/0v/0c +3 outside | — | — | — | — |
 | `0x102652f0` | FUN_102652f0 | 4 | 5 | 0 | — | 1d/0v/0c +3 outside | — | `+0x000c`? | — | — |
 | `0x102653f0` | FUN_102653f0 | 81 | 2 | 1 | — | 1d/0v/0c | `+0x000c` | `+0x000c` | — | — |
-| `0x10265680` | SetAIEnabled ‼ | 292 | 1 | 2 | — | 2d/0v/0c +4 outside | — | — | `AI Disabled.⏎`, `AI Already Disabled.⏎`, +2 more | docs/vtmb/entity_io.md:1705, docs/vtmb/npc-ai/lifecycle.md:291, docs/vtmb/npc-ai/lifecycle.md:1234 |
+| `0x10265680` | SetAIEnabled ‼ | 292 | 1 | 2 | — | 2d/0v/0c +4 outside | — | — | `AI Disabled.⏎`, `AI Already Disabled.⏎`, +2 more | docs/vtmb/entity_io.md:1759, docs/vtmb/npc-ai/lifecycle.md:291, docs/vtmb/npc-ai/lifecycle.md:1234 |
 | `0x10265800` | IsAIEnabled | 10 | 1 | 0 | — | 1d/0v/0c | — | — | — | — |
 | `0x102658f0` | CAI_BaseNPC::FUN_102658f0 | 96 | 0 | 15 | `CAI_BaseHumanoid#402`, `CAI_BaseNPC#402`, `CAI_BaseNPCTroika#402`, +74 more | 0d/1v/1c | — | `+0x0134`, `+0x0628`, `+0x062c`, `+0x0638`, `+0x0fd0` | — | docs/vtmb/combat-and-damage.md:2245, docs/vtmb/npc-ai/senses.md:1617 |
 | `0x10265970` | FUN_10265970 | 127 | 1 | 1 | — | 1d/0v/0c | — | `+0x0374`? | — | docs/vtmb/npc-ai/schedule-kernel.md:2423 |
@@ -1781,7 +1781,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102695d0` | FUN_102695d0 | 210 | 1 | 5 | — | 4d/0v/0c | `+0x016c`?, `+0x017c`?, `+0x01a3`? | `+0x016c`?, `+0x026c`?, `+0x0270`?, `+0x02b4`? | `CBaseEntity::AddSolidFlags` | docs/vtmb/combat-and-damage.md:2216, docs/vtmb/npc-ai/lifecycle.md:2759, docs/vtmb/npc-ai/lifecycle.md:2767, +5 more |
 | `0x102699e0` | FUN_102699e0 | 34 | 1 | 5 | — | 1d/0v/0c +3 outside | — | — | — | — |
 | `0x10269a20` | SetCondition | 89 | 1 | 1 | — | 66d/0v/0c +10 outside | — | `+0x0910` | — | docs/vtmb/npc-ai/conditions-and-states.md:1032, docs/vtmb/npc-ai/conditions-and-states.md:1482, docs/vtmb/npc-ai/lifecycle.md:407, +6 more |
-| `0x10269aa0` | HasCondition | 98 | 1 | 1 | — | 133d/0v/0c +5 outside | — | `+0x0910` | — | docs/vtmb/entity_io.md:2011, docs/vtmb/npc-ai/conditions-and-states.md:68, docs/vtmb/npc-ai/conditions-and-states.md:535, +8 more |
+| `0x10269aa0` | HasCondition | 98 | 1 | 1 | — | 133d/0v/0c +5 outside | — | `+0x0910` | — | docs/vtmb/entity_io.md:2090, docs/vtmb/npc-ai/conditions-and-states.md:68, docs/vtmb/npc-ai/conditions-and-states.md:535, +8 more |
 | `0x10269b30` | FUN_10269b30 | 13 | 4 | 2 | — | 1d/0v/0c | — | — | — | — |
 | `0x10269b50` | FUN_10269b50 | 95 | 1 | 1 | — | 48d/0v/0c +1 outside | — | `+0x0910` | — | docs/vtmb/npc-ai/lifecycle.md:413, docs/vtmb/npc-ai/schedule-kernel.md:20, docs/vtmb/npc-ai/schedule-kernel.md:4543, +5 more |
 | `0x10269bd0` | FUN_10269bd0 | 122 | 1 | 1 | — | 3d/0v/0c | — | `+0x0910` | — | docs/vtmb/npc-ai/senses.md:1319 |
@@ -1843,7 +1843,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1026f110` | CAI_BaseNPC::RunAI | 756 | 0 | 24 | `CAI_BaseHumanoid#432`, `CAI_BaseNPC#432`, `CAI_ExpressiveNPC#432`, +8 more | 3d/1v/3c | `+0x1b4c`, `+0x5ca4` | `+0x026c`, `+0x06c4`, `+0x06c8`, `+0x0fe8`, `+0x5ca4`, `+0x5d34` | `NULL ENTITY`, `Unaccounted`, +4 more | docs/vtmb/animation_events.md:200, docs/vtmb/npc-ai/lifecycle.md:116, docs/vtmb/npc-ai/lifecycle.md:390, +21 more |
 | `0x1026f4d0` | FUN_1026f4d0 | 134 | 2 | 0 | — | 2d/0v/0c | — | `+0x0730`?, `+0x0734`? | `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | docs/vtmb/npc-ai/schedule-kernel.md:586 |
 | `0x1026f590` | CAI_BaseNPC::FUN_1026f590 | 150 | 0 | 21 | `CAI_BaseHumanoid#460`, `CAI_BaseNPC#460`, `CAI_ExpressiveNPC#460`, +10 more | 0d/0v/0c | `+0x1b38` | `+0x0098`, `+0x029c`, `+0x5bb0`, `+0x5cc0`, `+0x5da4` | — | docs/vtmb/npc-ai/shape.md:55, docs/vtmb/npc-ai/social.md:530 |
-| `0x1026f660` | CAI_BaseNPC::SelectIdealState | 953 | 0 | 21 | `CAI_BaseHumanoid#461`, `CAI_BaseNPC#461`, `CAI_ExpressiveNPC#461`, +10 more | 1d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5b80`, `+0x5cc4` | `+0x029c`, `+0x0738`, `+0x0768`, `+0x0874`, `+0x5cc0`, `+0x5cc4`, +1 more | `E:\Vampire\main\dlls\AI_BaseNPC.cpp`, `***Combat state with no enemy!⏎` | docs/vtmb/entity_io.md:2309, docs/vtmb/npc-ai/conditions-and-states.md:494, docs/vtmb/npc-ai/conditions-and-states.md:2770, +4 more |
+| `0x1026f660` | CAI_BaseNPC::SelectIdealState | 953 | 0 | 21 | `CAI_BaseHumanoid#461`, `CAI_BaseNPC#461`, `CAI_ExpressiveNPC#461`, +10 more | 1d/0v/1c | `+0x1b38`, `+0x1b3c`, `+0x1b40`, `+0x5b80`, `+0x5cc4` | `+0x029c`, `+0x0738`, `+0x0768`, `+0x0874`, `+0x5cc0`, `+0x5cc4`, +1 more | `E:\Vampire\main\dlls\AI_BaseNPC.cpp`, `***Combat state with no enemy!⏎` | docs/vtmb/entity_io.md:2388, docs/vtmb/npc-ai/conditions-and-states.md:494, docs/vtmb/npc-ai/conditions-and-states.md:2770, +4 more |
 | `0x1026fb40` | FUN_1026fb40 | 123 | 1 | 9 | — | 1d/0v/0c | — | `+0x0804`? | — | docs/vtmb/npc-ai/conditions-and-states.md:1606, docs/vtmb/npc-ai/conditions-and-states.md:1620, docs/vtmb/npc-ai/conditions-and-states.md:2875, +2 more |
 | `0x1026fbe0` | CAI_BaseNPC::FUN_1026fbe0 | 198 | 0 | 15 | `CAI_BaseHumanoid#562`, `CAI_BaseNPC#562`, `CAI_BaseNPCTroika#562`, +74 more | 0d/0v/0c | — | `+0x0804`, `+0x08f4` | — | docs/vtmb/navigation-jump-links.md:2205, docs/vtmb/npc-ai/conditions-and-states.md:1650, docs/vtmb/npc-ai/conditions-and-states.md:1657, +2 more |
 | `0x1026fcf0` | CAI_BaseNPC::FUN_1026fcf0 | 405 | 0 | 14 | `CAI_BaseHumanoid#573`, `CAI_BaseNPC#573`, `CAI_BaseNPCTroika#573`, +74 more | 0d/1v/1c | — | `+0x0184`, `+0x029c`, `+0x0650` | — | docs/vtmb/npc-ai/conditions-and-states.md:1655, docs/vtmb/npc-ai/rdata-cells.md:18, docs/vtmb/npc-ai/senses.md:1484, +1 more |
@@ -1967,7 +1967,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1027cfc0` | CAI_BaseNPC::FUN_1027cfc0 | 47 | 0 | 5 | `CAI_BaseHumanoid#430`, `CAI_BaseNPC#430`, `CAI_BaseNPCTroika#430`, +74 more | 0d/1v/1c | — | — | — | docs/vtmb/npc-ai/shape.md:3574 |
 | `0x1027d000` | CAI_Pathfinder::vfunc0 | 32 | 0 | 5 | `CAI_Pathfinder#0` | 0d/0v/0c | — | — | — | — |
 | `0x1027d0a0` | FUN_1027d0a0 | 153 | 1 | 20 | — | 2d/0v/0c | `+0x1b3c`?, `+0x1b40`?, `+0x5cc4`? | `+0x0200`?, `+0x5d74`? | `E:\Vampire\main\dlls\AI_BaseNPC.cpp` | docs/vtmb/npc-ai/authored-control.md:612, docs/vtmb/npc-ai/authored-control.md:616, docs/vtmb/npc-ai/authored-control.md:617, +8 more |
-| `0x1027d170` | CineCleanup | 1492 | 1 | 19 | — | 5d/0v/0c | — | — | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags`, +3 more | docs/vtmb/entity_io.md:2284, docs/vtmb/entity_io.md:2366, docs/vtmb/entity_io.md:2372, +11 more |
+| `0x1027d170` | CineCleanup | 1492 | 1 | 19 | — | 5d/0v/0c | — | — | `CBaseEntity::SetSolid`, `CBaseEntity::AddSolidFlags`, +3 more | docs/vtmb/entity_io.md:2363, docs/vtmb/entity_io.md:2445, docs/vtmb/entity_io.md:2451, +11 more |
 | `0x1027d990` | FUN_1027d990 | 10 | 1 | 0 | — | 29d/0v/0c | — | `+0x5d34`? | — | docs/vtmb/game_runtime.md:1325, docs/vtmb/navigation-jump-links.md:752, docs/vtmb/navigation-jump-links.md:1314, +11 more |
 | `0x1027d9b0` | FUN_1027d9b0 | 11 | 1 | 1 | — | 8d/0v/0c | — | `+0x5d34` | — | docs/vtmb/navigation-jump-links.md:1346, docs/vtmb/navigation-jump-links.md:1363, docs/vtmb/npc-ai/schedule-kernel.md:2905, +1 more |
 | `0x1027d9d0` | CAI_BaseNPC::FUN_1027d9d0 | 5 | 0 | 0 | `CAI_BaseHumanoid#514`, `CAI_BaseNPC#514`, `CAI_BaseNPCTroika#514`, +74 more | 0d/0v/0c | — | — | — | — |
@@ -2013,9 +2013,9 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10280a50` | CAI_BaseNPC::AutoMovement | 270 | 1 | 9 | — | 17d/0v/0c | — | `+0x0170`, `+0x0174`, `+0x0178`, `+0x026c`, `+0x03e8`, `+0x5d44` | `NULL ENTITY`, `CAI_BaseNPC::AutoMovement` | docs/vtmb/combat-and-damage.md:1201, docs/vtmb/npc-ai/conditions-and-states.md:259, docs/vtmb/npc-ai/schedule-kernel.md:1794, +7 more |
 | `0x10280bb0` | CAI_BaseNPC::MaxYawSpeed | 7 | 0 | 0 | `CAI_BaseNPC#516`, `CAI_ExpressiveNPC#516`, `CAI_TestHull#516`, +5 more | 0d/0v/0c | — | — | — | docs/vtmb/npc-ai/shape.md:1485, docs/vtmb/npc-ai/shape.md:1509 |
 | `0x10280c80` | FUN_10280c80 | 99 | 1 | 0 | — | 1d/0v/0c | — | — | `   %32s -- select %5.2f, start %5.2f, ru…`, ` Tasks timings:⏎` | — |
-| `0x10280d30` | ClearSchedule | 81 | 1 | 0 | — | 9d/0v/0c +3 outside | `+0x5c38`?, `+0x5c3c`?, `+0x5c40`?, `+0x5c44`?, `+0x5c48`?, `+0x5c4c`? | `+0x0098`?, `+0x5c38`? | — | docs/vtmb/entity_io.md:2295, docs/vtmb/entity_io.md:2311, docs/vtmb/game_runtime.md:1540, +7 more |
+| `0x10280d30` | ClearSchedule | 81 | 1 | 0 | — | 9d/0v/0c +3 outside | `+0x5c38`?, `+0x5c3c`?, `+0x5c40`?, `+0x5c44`?, `+0x5c48`?, `+0x5c4c`? | `+0x0098`?, `+0x5c38`? | — | docs/vtmb/entity_io.md:2374, docs/vtmb/entity_io.md:2390, docs/vtmb/game_runtime.md:1540, +7 more |
 | `0x10280db0` | FUN_10280db0 | 19 | 3 | 0 | — | 1d/0v/0c | — | `+0x5c38`?, `+0x5c40`? | — | docs/vtmb/npc-ai/schedule-kernel.md:971, docs/vtmb/npc-ai/schedule-kernel.md:973 |
-| `0x10280de0` | FUN_10280de0 | 70 | 1 | 7 | — | 11d/0v/0c +3 outside | `+0x5c3c` | `+0x0910` | — | docs/vtmb/entity_io.md:2293, docs/vtmb/navigation-jump-links.md:1868, docs/vtmb/npc-ai/authored-control.md:313, +8 more |
+| `0x10280de0` | FUN_10280de0 | 70 | 1 | 7 | — | 11d/0v/0c +3 outside | `+0x5c3c` | `+0x0910` | — | docs/vtmb/entity_io.md:2372, docs/vtmb/navigation-jump-links.md:1868, docs/vtmb/npc-ai/authored-control.md:313, +8 more |
 | `0x10280e50` | SetSchedule | 186 | 1 | 6 | — | 4d/0v/0c | `+0x5bb8`, `+0x5c38`, `+0x5c40`, `+0x5c44`, `+0x5c48`, `+0x5c4c`, +1 more | `+0x0098`, `+0x0224`, `+0x06cc`, `+0x5c5c`, `+0x5d34` | `Schedule: %s⏎` | docs/vtmb/game_runtime.md:1327, docs/vtmb/navigation-jump-links.md:829, docs/vtmb/npc-ai/conditions-and-states.md:238, +13 more |
 | `0x10280f40` | NextScheduledTask | 67 | 2 | 2 | — | 1d/0v/0c | `+0x5c40`?, `+0x5c44`?, `+0x5f38`?, `+0x5f3c`? | `+0x5c40`? | — | docs/vtmb/npc-ai/schedule-kernel.md:401, docs/vtmb/npc-ai/schedule-kernel.md:848, docs/vtmb/npc-ai/schedule-kernel.md:971, +1 more |
 | `0x10280fb0` | CAI_BaseNPC::BuildScheduleTestBits | 1 | 0 | 0 | `CAI_BaseHumanoid#453`, `CAI_BaseNPC#453`, `CAI_ExpressiveNPC#453`, +10 more | 2d/1v/1c | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:434, docs/vtmb/npc-ai/schedule-kernel.md:1128 |
@@ -2211,7 +2211,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1029f610` | FUN_1029f610 | 46 | 1 | 1 | — | 1d/0v/0c | — | `+0x5d34` | — | docs/vtmb/npc-ai/lifecycle.md:2505, docs/vtmb/npc-ai/lifecycle.md:2522 |
 | `0x1029f650` | FUN_1029f650 | 68 | 1 | 1 | — | 3d/0v/0c | `+0x65a0` | `+0x65a0` | — | docs/vtmb/navigation-jump-links.md:1891, docs/vtmb/navigation-jump-links.md:1977, docs/vtmb/npc-ai/population.md:2828, +11 more |
 | `0x1029f6c0` | FUN_1029f6c0 | 74 | 2 | 0 | — | 2d/0v/0c | — | `+0x5d34` | — | docs/vtmb/navigation-jump-links.md:227, docs/vtmb/navigation-jump-links.md:1891, docs/vtmb/npc-ai/programs.md:1382, +4 more |
-| `0x1029f730` | FUN_1029f730 | 51 | 1 | 1 | — | 2d/0v/0c | `+0x659c` | `+0x659c`, `+0x65a0` | — | docs/vtmb/entity_io.md:2198, docs/vtmb/navigation-jump-links.md:1891, docs/vtmb/npc-ai/population.md:2828, +6 more |
+| `0x1029f730` | FUN_1029f730 | 51 | 1 | 1 | — | 2d/0v/0c | `+0x659c` | `+0x659c`, `+0x65a0` | — | docs/vtmb/entity_io.md:2277, docs/vtmb/navigation-jump-links.md:1891, docs/vtmb/npc-ai/population.md:2828, +6 more |
 | `0x1029f780` | FUN_1029f780 | 85 | 1 | 9 | — | 2d/0v/0c | `+0x6300` | `+0x6300` | — | docs/vtmb/navigation-jump-links.md:1891, docs/vtmb/npc-ai/population.md:2813, docs/vtmb/npc-ai/population.md:2828, +7 more |
 | `0x1029f800` | CAI_BaseNPCTroika::FUN_1029f800 | 50 | 0 | 3 | `CAI_BaseNPCTroika#21`, `CGeneric_NPC#21`, `CNPCMaker#21`, +60 more | 0d/0v/0c | `+0x6064` | `+0x6064` | — | docs/vtmb/combat-and-damage.md:1068, docs/vtmb/npc-ai/conditions-and-states.md:1478, docs/vtmb/npc-ai/schedule-kernel.md:1597 |
 | `0x1029f850` | CAI_BaseNPCTroika::FUN_1029f850 | 37 | 0 | 3 | `CAI_BaseNPCTroika#22`, `CGeneric_NPC#22`, `CNPCMaker#22`, +60 more | 0d/0v/0c | — | — | — | docs/vtmb/npc-ai/conditions-and-states.md:1478 |
@@ -2291,8 +2291,8 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102a9ee0` | FUN_102a9ee0 | 4 | 1 | 0 | — | 1d/0v/0c | — | `+0x0030`? | — | — |
 | `0x102a9f00` | FUN_102a9f00 | 3 | 1 | 0 | — | 1d/0v/0c | — | — | — | — |
 | `0x102a9f20` | FUN_102a9f20 | 4 | 1 | 0 | — | 1d/0v/0c | — | `+0x0024`? | — | — |
-| `0x102a9f40` | FUN_102a9f40 | 572 | 1 | 19 | — | 1d/0v/0c | `+0x14b8`, `+0x5db4`, `+0x62e8`, `+0x6304`, `+0x63d4` | `+0x14b8`, `+0x5d44`, `+0x5f74` | `Can not find interest activity '%s' in t…`, `Can not find interest into activity '%s'…` | docs/vtmb/entity_io.md:2195, docs/vtmb/npc-ai/population.md:2813, docs/vtmb/npc-ai/population.md:2828, +8 more |
-| `0x102aa210` | FUN_102aa210 | 843 | 1 | 19 | — | 1d/0v/0c | `+0x14b8`, `+0x14bc`, `+0x5db4`, `+0x6304`, `+0x63d4` | `+0x03ec`, `+0x065c`, `+0x065d`, `+0x0fec`, `+0x14b8`, `+0x14bc`, +4 more | `Bip01`, `Can not find interest activity '%s' in t…`, +4 more | docs/vtmb/entity_io.md:2189, docs/vtmb/entity_io.md:2223, docs/vtmb/npc-ai/conditions-and-states.md:711, +8 more |
+| `0x102a9f40` | FUN_102a9f40 | 572 | 1 | 19 | — | 1d/0v/0c | `+0x14b8`, `+0x5db4`, `+0x62e8`, `+0x6304`, `+0x63d4` | `+0x14b8`, `+0x5d44`, `+0x5f74` | `Can not find interest activity '%s' in t…`, `Can not find interest into activity '%s'…` | docs/vtmb/entity_io.md:2274, docs/vtmb/npc-ai/population.md:2813, docs/vtmb/npc-ai/population.md:2828, +8 more |
+| `0x102aa210` | FUN_102aa210 | 843 | 1 | 19 | — | 1d/0v/0c | `+0x14b8`, `+0x14bc`, `+0x5db4`, `+0x6304`, `+0x63d4` | `+0x03ec`, `+0x065c`, `+0x065d`, `+0x0fec`, `+0x14b8`, `+0x14bc`, +4 more | `Bip01`, `Can not find interest activity '%s' in t…`, +4 more | docs/vtmb/entity_io.md:2268, docs/vtmb/entity_io.md:2302, docs/vtmb/npc-ai/conditions-and-states.md:711, +8 more |
 | `0x102aa640` | FUN_102aa640 | 432 | 1 | 21 | — | 1d/0v/0c | `+0x1b44`, `+0x1b48` | `+0x0700`, `+0x1568`, `+0x5d34` | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…`, `%s can't reach patrol point⏎` | docs/vtmb/navigation-jump-links.md:225, docs/vtmb/navigation-jump-links.md:724, docs/vtmb/navigation-jump-links.md:758, +9 more |
 | `0x102aa860` | FUN_102aa860 | 299 | 1 | 21 | — | 1d/0v/0c | `+0x1b44`, `+0x1b48` | `+0x0700`, `+0x1568`, `+0x5d34` | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | docs/vtmb/navigation-jump-links.md:724, docs/vtmb/navigation-jump-links.md:758, docs/vtmb/navigation-jump-links.md:1495, +6 more |
 | `0x102aa9e0` | FUN_102aa9e0 | 95 | 1 | 3 | — | 1d/0v/0c | `+0x1b44`, `+0x1b48` | `+0x0700` | `E:\Vampire\main\dlls\AI_BaseNPCTroika.cp…` | docs/vtmb/npc-ai/programs.md:535, docs/vtmb/npc-ai/programs.md:588, docs/vtmb/npc-ai/programs.md:1389, +4 more |
@@ -2527,7 +2527,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102ca780` | FUN_102ca780 | 868 | 2 | 9 | — | 1d/0v/0c | — | `+0x0004`, `+0x0a04` | — | docs/vtmb/npc-ai/population.md:225 |
 | `0x102cabd0` | FUN_102cabd0 | 136 | 2 | 9 | — | 1d/0v/0c | — | `+0x0a04` | — | docs/vtmb/npc-ai/conditions-and-states.md:2996, docs/vtmb/npc-ai/conditions-and-states.md:3032 |
 | `0x102cadb0` | FUN_102cadb0 | 16 | 5 | 1 | — | 1d/0v/0c +2 outside | — | — | — | docs/vtmb/npc-ai/programs.md:564, docs/vtmb/npc-ai/schedule-kernel.md:1239 |
-| `0x102cc080` | CAI_BaseNPC::TranslateSchedule | 259 | 0 | 20 | `CAI_BaseHumanoid#440`, `CAI_BaseNPC#440`, `CAI_ExpressiveNPC#440`, +10 more | 1d/0v/2c | — | `+0x06e0`, `+0x5d74` | `Script failed for %s⏎` | docs/vtmb/animation_and_movers.md:1659, docs/vtmb/entity_io.md:2366, docs/vtmb/npc-ai/schedule-kernel.md:605, +3 more |
+| `0x102cc080` | CAI_BaseNPC::TranslateSchedule | 259 | 0 | 20 | `CAI_BaseHumanoid#440`, `CAI_BaseNPC#440`, `CAI_ExpressiveNPC#440`, +10 more | 1d/0v/2c | — | `+0x06e0`, `+0x5d74` | `Script failed for %s⏎` | docs/vtmb/animation_and_movers.md:1659, docs/vtmb/entity_io.md:2445, docs/vtmb/npc-ai/schedule-kernel.md:605, +3 more |
 | `0x102cc1f0` | FUN_102cc1f0 | 68 | 1 | 0 | — | 16d/0v/0c +2 outside | — | `+0x06e0`, `+0x06f8` | `GetScheduleOfType(): No CASE for Schedul…` | docs/vtmb/game_runtime.md:1321, docs/vtmb/npc-ai/authored-control.md:315, docs/vtmb/npc-ai/conditions-and-states.md:121, +13 more |
 | `0x102cc260` | CAI_BaseNPC::GetScheduleOfType | 114 | 0 | 4 | `CAI_BaseHumanoid#446`, `CAI_BaseNPC#446`, `CAI_BaseNPCTroika#446`, +74 more | 0d/0v/1c | — | `+0x070c`, `+0x0910` | `ERROR: %s missing schedule!⏎` | docs/vtmb/npc-ai/schedule-kernel.md:14, docs/vtmb/npc-ai/schedule-kernel.md:596, docs/vtmb/npc-ai/schedule-kernel.md:1311 |
 | `0x102cc300` | CAI_BaseNPC::FUN_102cc300 | 52 | 0 | 3 | `CAI_BaseHumanoid#458`, `CAI_BaseNPC#458`, `CAI_BaseNPCTroika#458`, +74 more | 0d/2v/2c | — | `+0x0910` | — | docs/vtmb/npc-ai/conditions-and-states.md:1843, docs/vtmb/npc-ai/conditions-and-states.md:1848 |
@@ -2575,7 +2575,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102d1180` | FUN_102d1180 | 72 | 1 | 3 | — | 6d/0v/0c +1 outside | — | `+0x0364`, `+0x05e4` | — | docs/vtmb/navigation-jump-links.md:1909, docs/vtmb/navigation-jump-links.md:3137, docs/vtmb/npc-ai/population.md:2802, +8 more |
 | `0x102d11f0` | FUN_102d11f0 | 29 | 1 | 2 | — | 2d/0v/0c | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:3008 |
 | `0x102d1220` | FUN_102d1220 | 144 | 3 | 5 | — | 1d/0v/0c | — | `+0x026c`, `+0x05dc` | — | docs/vtmb/npc-ai/conditions-and-states.md:3780, docs/vtmb/npc-ai/conditions-and-states.md:3789 |
-| `0x102d12e0` | FUN_102d12e0 | 36 | 1 | 1 | — | 11d/0v/0c +1 outside | — | `+0x0374`? | — | docs/vtmb/entity_io.md:2197, docs/vtmb/navigation-jump-links.md:3137, docs/vtmb/npc-ai/programs.md:607, +5 more |
+| `0x102d12e0` | FUN_102d12e0 | 36 | 1 | 1 | — | 11d/0v/0c +1 outside | — | `+0x0374`? | — | docs/vtmb/entity_io.md:2276, docs/vtmb/navigation-jump-links.md:3137, docs/vtmb/npc-ai/programs.md:607, +5 more |
 | `0x102d1320` | CAI_Hint::IsViewable | 24 | 0 | 0 | `CAI_Hint#163` | 0d/0v/0c | — | `+0x05dc`, `+0x05e8` | — | docs/vtmb/npc-ai/senses.md:869 |
 | `0x102d1350` | FUN_102d1350 | 148 | 1 | 0 | — | 6d/0v/0c | `+0x05e0` | `+0x05e0` | — | docs/vtmb/navigation-jump-links.md:2059, docs/vtmb/navigation-jump-links.md:2214, docs/vtmb/npc-ai/programs.md:712, +5 more |
 | `0x102d1420` | FUN_102d1420 | 31 | 1 | 0 | — | 8d/0v/0c | `+0x05e0`, `+0x05ec` | — | — | docs/vtmb/npc-ai/population.md:2803, docs/vtmb/npc-ai/schedule-kernel.md:380, docs/vtmb/npc-ai/schedule-kernel.md:2435, +3 more |
@@ -2633,31 +2633,31 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102d9ed0` | FUN_102d9ed0 | 156 | 2 | 0 | — | 1d/0v/0c | `+0x0604` | `+0x0604` | — | — |
 | `0x102d9fa0` | FUN_102d9fa0 | 226 | 2 | 0 | — | 1d/0v/0c | — | `+0x0370`, `+0x054c`, `+0x0550`, `+0x0554`, `+0x0558`, `+0x055c`, +1 more | — | — |
 | `0x102da0d0` | PickSpotFor | 1044 | 1 | 6 | — | 1d/0v/0c | `+0x058c` | `+0x0370`, `+0x057c`, `+0x0584`, `+0x0588`, `+0x058c` | `Interesting Place at (%d, %d, %d) is cro…`, `Trouble choosing an unoccupied location …`, +1 more | docs/vtmb/navigation-jump-links.md:1892, docs/vtmb/npc-ai/programs.md:50, docs/vtmb/npc-ai/schedule-kernel.md:2735, +1 more |
-| `0x102da600` | FUN_102da600 | 337 | 1 | 8 | — | 2d/0v/0c | `+0x0564`, `+0x0580`, `+0x0588` | `+0x0468`, `+0x0564`, `+0x0580`, `+0x0588` | — | docs/vtmb/entity_io.md:2164, docs/vtmb/entity_io.md:2172, docs/vtmb/npc-ai/lifecycle.md:1858, +7 more |
-| `0x102da7c0` | ClaimMarker | 128 | 2 | 8 | — | 1d/0v/0c | `+0x0564` | `+0x0450`, `+0x0564`, `+0x0580`, `+0x0588` | — | docs/vtmb/entity_io.md:2169, docs/vtmb/npc-ai/population.md:2813, docs/vtmb/npc-ai/programs.md:200, +1 more |
+| `0x102da600` | FUN_102da600 | 337 | 1 | 8 | — | 2d/0v/0c | `+0x0564`, `+0x0580`, `+0x0588` | `+0x0468`, `+0x0564`, `+0x0580`, `+0x0588` | — | docs/vtmb/entity_io.md:2243, docs/vtmb/entity_io.md:2251, docs/vtmb/npc-ai/lifecycle.md:1858, +7 more |
+| `0x102da7c0` | ClaimMarker | 128 | 2 | 8 | — | 1d/0v/0c | `+0x0564` | `+0x0450`, `+0x0564`, `+0x0580`, `+0x0588` | — | docs/vtmb/entity_io.md:2248, docs/vtmb/npc-ai/population.md:2813, docs/vtmb/npc-ai/programs.md:200, +1 more |
 | `0x102da860` | FUN_102da860 | 241 | 2 | 1 | — | 1d/0v/0c | `+0x0588` | `+0x0580`, `+0x0584`, `+0x0588` | `**UNKNOWN**`, `AddMarker failed to add NPC '%s'⏎` | — |
 | `0x102da9a0` | FUN_102da9a0 | 46 | 2 | 0 | — | 2d/0v/0c | — | `+0x0580`, `+0x0588` | — | docs/vtmb/npc-ai/programs.md:1496 |
-| `0x102da9e0` | FUN_102da9e0 | 161 | 2 | 0 | — | 1d/0v/0c | — | `+0x0580`, `+0x0588` | — | docs/vtmb/entity_io.md:2231 |
-| `0x102daac0` | FUN_102daac0 | 514 | 2 | 2 | — | 1d/0v/0c +1 outside | — | `+0x0580`, `+0x0588` | `E:\Vampire\main\dlls\AI_InterestingPlace…` | docs/vtmb/entity_io.md:2140, docs/vtmb/navigation-jump-links.md:2671, docs/vtmb/npc-ai/lifecycle.md:274, +2 more |
+| `0x102da9e0` | FUN_102da9e0 | 161 | 2 | 0 | — | 1d/0v/0c | — | `+0x0580`, `+0x0588` | — | docs/vtmb/entity_io.md:2310 |
+| `0x102daac0` | FUN_102daac0 | 514 | 2 | 2 | — | 1d/0v/0c +1 outside | — | `+0x0580`, `+0x0588` | `E:\Vampire\main\dlls\AI_InterestingPlace…` | docs/vtmb/entity_io.md:2219, docs/vtmb/navigation-jump-links.md:2671, docs/vtmb/npc-ai/lifecycle.md:274, +2 more |
 | `0x102dad60` | FUN_102dad60 | 199 | 3 | 0 | — | 1d/0v/0c | — | `+0x0370`, `+0x0574`, `+0x057c`, `+0x057d`, `+0x0584`, `+0x0588`, +1 more | — | docs/vtmb/navigation-jump-links.md:1892, docs/vtmb/npc-ai/authored-control.md:557, docs/vtmb/npc-ai/population.md:2812, +3 more |
 | `0x102dae70` | FUN_102dae70 | 21 | 2 | 2 | — | 1d/0v/0c | — | `+0x0548`? | — | docs/vtmb/npc-ai/programs.md:201 |
-| `0x102daea0` | FUN_102daea0 | 53 | 2 | 3 | — | 2d/0v/0c | — | `+0x0548`?, `+0x0590`? | — | docs/vtmb/entity_io.md:2181 |
+| `0x102daea0` | FUN_102daea0 | 53 | 2 | 3 | — | 2d/0v/0c | — | `+0x0548`?, `+0x0590`? | — | docs/vtmb/entity_io.md:2260 |
 | `0x102daef0` | FUN_102daef0 | 21 | 2 | 2 | — | 1d/0v/0c | — | `+0x0548`? | — | — |
 | `0x102daf20` | FUN_102daf20 | 21 | 1 | 2 | — | 1d/0v/0c | — | `+0x0548`? | — | docs/vtmb/npc-ai/conditions-and-states.md:3235 |
 | `0x102daf50` | FUN_102daf50 | 18 | 1 | 1 | — | 1d/0v/0c | — | `+0x0548`? | — | docs/vtmb/npc-ai/conditions-and-states.md:3234 |
 | `0x102db3e0` | FUN_102db3e0 | 40 | 1 | 8 | — | 1d/0v/0c | — | — | — | docs/vtmb/npc-ai/conditions-and-states.md:3590 |
-| `0x102db470` | BuildCandidates | 210 | 2 | 1 | — | 1d/0v/0c | — | `+0x0540`, `+0x0578` | — | docs/vtmb/entity_io.md:2176, docs/vtmb/npc-ai/programs.md:53, docs/vtmb/npc-ai/programs.md:215, +2 more |
+| `0x102db470` | BuildCandidates | 210 | 2 | 1 | — | 1d/0v/0c | — | `+0x0540`, `+0x0578` | — | docs/vtmb/entity_io.md:2255, docs/vtmb/npc-ai/programs.md:53, docs/vtmb/npc-ai/programs.md:215, +2 more |
 | `0x102db590` | PickRandomInterestingPlace | 57 | 1 | 2 | — | 1d/0v/0c | — | — | — | docs/vtmb/navigation-jump-links.md:1892, docs/vtmb/npc-ai/programs.md:49, docs/vtmb/npc-ai/programs.md:215, +2 more |
 | `0x102db5e0` | FUN_102db5e0 | 59 | 1 | 0 | — | 1d/0v/0c | — | — | — | docs/vtmb/npc-ai/lifecycle.md:2507, docs/vtmb/npc-ai/lifecycle.md:2513 |
-| `0x102db740` | FUN_102db740 | 13 | 1 | 0 | — | 1d/0v/0c | `+0x0608` | — | — | docs/vtmb/entity_io.md:2187 |
-| `0x102db760` | FUN_102db760 | 7 | 2 | 0 | — | 1d/0v/0c | — | `+0x0608`? | — | docs/vtmb/entity_io.md:2189 |
+| `0x102db740` | FUN_102db740 | 13 | 1 | 0 | — | 1d/0v/0c | `+0x0608` | — | — | docs/vtmb/entity_io.md:2266 |
+| `0x102db760` | FUN_102db760 | 7 | 2 | 0 | — | 1d/0v/0c | — | `+0x0608`? | — | docs/vtmb/entity_io.md:2268 |
 | `0x102db7f0` | CAI_InterestingPlaceConverstation::vfunc82 | 6 | 0 | 0 | `CAI_InterestingPlaceConverstation#82` | 0d/0v/0c | — | — | — | — |
 | `0x102dbbc0` | CAI_InterestingPlaceConverstation::vfunc5 | 132 | 0 | 3 | `CAI_InterestingPlaceConverstation#5` | 0d/0v/0c | — | `+0x046c`, `+0x0484`, `+0x049c`, `+0x04b4`, `+0x04cc`, `+0x04e4` | — | docs/vtmb/npc-ai/lifecycle.md:704, docs/vtmb/npc-ai/lifecycle.md:723 |
 | `0x102dbc80` | CAI_InterestingPlaceConverstation::Spawn ‼ | 19 | 0 | 6 | `CAI_InterestingPlaceConverstation#103` | 0d/0v/0c | — | `+0x01a0` | — | docs/vtmb/npc-ai/lifecycle.md:665, docs/vtmb/npc-ai/lifecycle.md:696, docs/vtmb/npc-ai/shape.md:249 |
-| `0x102dbcb0` | CAI_InterestingPlaceConverstation::Precache | 123 | 0 | 1 | `CAI_InterestingPlaceConverstation#104` | 0d/1v/0c | — | `+0x0454`, `+0x0458` | `%s has an invalid sound file⏎` | docs/vtmb/entity_io.md:2160, docs/vtmb/npc-ai/lifecycle.md:646, docs/vtmb/npc-ai/lifecycle.md:648 |
+| `0x102dbcb0` | CAI_InterestingPlaceConverstation::Precache | 123 | 0 | 1 | `CAI_InterestingPlaceConverstation#104` | 0d/1v/0c | — | `+0x0454`, `+0x0458` | `%s has an invalid sound file⏎` | docs/vtmb/entity_io.md:2239, docs/vtmb/npc-ai/lifecycle.md:646, docs/vtmb/npc-ai/lifecycle.md:648 |
 | `0x102dbd50` | CAI_InterestingPlaceConverstation::Save | 53 | 0 | 1 | `CAI_InterestingPlaceConverstation#126` | 0d/0v/0c | — | `+0x0460` | — | — |
 | `0x102dbda0` | CAI_InterestingPlaceConverstation::vfunc127 | 40 | 0 | 1 | `CAI_InterestingPlaceConverstation#127` | 0d/0v/0c | — | `+0x0460` | — | — |
-| `0x102dbde0` | CAI_InterestingPlaceConverstation::vfunc113 | 353 | 0 | 9 | `CAI_InterestingPlaceConverstation#113` | 0d/0v/0c | `+0x04fc` | `+0x0450` | `%s(%s) is not a valid target for %s. Mus…` | docs/vtmb/entity_io.md:2116, docs/vtmb/entity_io.md:2187, docs/vtmb/npc-ai/lifecycle.md:734 |
+| `0x102dbde0` | CAI_InterestingPlaceConverstation::vfunc113 | 353 | 0 | 9 | `CAI_InterestingPlaceConverstation#113` | 0d/0v/0c | `+0x04fc` | `+0x0450` | `%s(%s) is not a valid target for %s. Mus…` | docs/vtmb/entity_io.md:2195, docs/vtmb/entity_io.md:2266, docs/vtmb/npc-ai/lifecycle.md:734 |
 | `0x102dc3e0` | FUN_102dc3e0 | 39 | 1 | 1 | — | 1d/0v/0c +2 outside | `+0x017c`? | — | — | — |
 | `0x102dcc20` | FUN_102dcc20 | 119 | 2 | 1 | — | 1d/0v/0c | — | `+0x0504`?, `+0x0518`? | — | docs/vtmb/npc-ai/programs.md:1496 |
 | `0x102dcd30` | FUN_102dcd30 | 170 | 3 | 1 | — | 1d/0v/0c | `+0x0004`, `+0x000c`, `+0x0010` | `+0x0004`, `+0x0008`, `+0x000c` | — | — |
@@ -2773,7 +2773,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102ea020` | FUN_102ea020 | 28 | 1 | 2 | — | 60d/0v/0c +1 outside | — | — | `<<null>>` | docs/vtmb/npc-ai/conditions-and-states.md:1852, docs/vtmb/npc-ai/social.md:645 |
 | `0x102ea050` | FUN_102ea050 | 7 | 6 | 0 | — | 1d/0v/0c +3 outside | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:1282 |
 | `0x102ea280` | FUN_102ea280 | 56 | 1 | 0 | — | 8d/0v/0c +5 outside | — | `+0x0004`, `+0x000c`, `+0x0010` | — | docs/vtmb/npc-ai/schedule-kernel.md:15, docs/vtmb/npc-ai/schedule-kernel.md:1284, docs/vtmb/npc-ai/shape.md:3287, +1 more |
-| `0x102ea2d0` | FUN_102ea2d0 | 55 | 1 | 0 | — | 70d/0v/0c +4 outside | — | `+0x0004`, `+0x0008`, `+0x0010` | — | docs/vtmb/entity_io.md:2012, docs/vtmb/npc-ai/conditions-and-states.md:1850, docs/vtmb/npc-ai/lifecycle.md:409, +5 more |
+| `0x102ea2d0` | FUN_102ea2d0 | 55 | 1 | 0 | — | 70d/0v/0c +4 outside | — | `+0x0004`, `+0x0008`, `+0x0010` | — | docs/vtmb/entity_io.md:2091, docs/vtmb/npc-ai/conditions-and-states.md:1850, docs/vtmb/npc-ai/lifecycle.md:409, +5 more |
 | `0x102eca50` | FUN_102eca50 | 147 | 1 | 5 | — | 2d/0v/0c | `+0x0004`, `+0x000c`, `+0x0010`, `+0x0018`, `+0x001c`, `+0x0020`, +12 more | — | — | docs/vtmb/navigation-jump-links.md:701, docs/vtmb/navigation-jump-links.md:1242, docs/vtmb/navigation-jump-links.md:1712, +3 more |
 | `0x102ecb20` | CAI_Navigator::vfunc0 | 30 | 0 | 6 | `CAI_Navigator#0` | 0d/0v/0c | — | — | — | — |
 | `0x102ecb50` | CAI_Navigator::FUN_102ecb50 | 40 | 0 | 0 | `CAI_Navigator#3` | 0d/0v/0c | `+0x0020`, `+0x0024`, `+0x0028`, `+0x002c` | `+0x0004` | — | docs/vtmb/npc-ai/shape.md:1259, docs/vtmb/npc-ai/shape.md:1270 |
@@ -2909,7 +2909,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x102fe9a0` | FUN_102fe9a0 | 50 | 3 | 6 | — | 5d/0v/0c +1 outside | `+0x0002`, `+0x0008` | — | — | docs/vtmb/navigation-jump-links.md:3009 |
 | `0x102fe9f0` | FUN_102fe9f0 ‼ | 1071 | 5 | 15 | — | 1d/0v/0c | — | `+0x0004`, `+0x0008` | — | docs/vtmb/navigation-jump-links.md:127, docs/vtmb/navigation-jump-links.md:190, docs/vtmb/navigation-jump-links.md:262, +7 more |
 | `0x102ff3e0` | FUN_102ff3e0 | 1120 | 3 | 15 | — | 1d/0v/0c | — | `+0x0004` | — | docs/vtmb/navigation-jump-links.md:447, docs/vtmb/navigation-jump-links.md:3005, docs/vtmb/navigation-jump-links.md:3170 |
-| `0x102ff960` | FUN_102ff960 | 481 | 2 | 14 | — | 9d/0v/0c +2 outside | — | `+0x0004`, `+0x0008` | — | docs/vtmb/entity_io.md:2090, docs/vtmb/navigation-jump-links.md:23, docs/vtmb/navigation-jump-links.md:74, +18 more |
+| `0x102ff960` | FUN_102ff960 | 481 | 2 | 14 | — | 9d/0v/0c +2 outside | — | `+0x0004`, `+0x0008` | — | docs/vtmb/entity_io.md:2169, docs/vtmb/navigation-jump-links.md:23, docs/vtmb/navigation-jump-links.md:74, +18 more |
 | `0x102ffbd0` | FUN_102ffbd0 | 156 | 4 | 7 | — | 2d/0v/0c | — | `+0x0004` | — | docs/vtmb/navigation-jump-links.md:2820 |
 | `0x10300010` | FUN_10300010 | 109 | 3 | 1 | — | 1d/0v/0c | — | — | — | docs/vtmb/navigation-jump-links.md:662 |
 | `0x103000a0` | FUN_103000a0 | 117 | 3 | 0 | — | 1d/0v/0c | — | — | — | docs/vtmb/navigation-jump-links.md:659 |
@@ -2921,10 +2921,10 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10300b50` | FUN_10300b50 | 613 | 3 | 15 | — | 1d/0v/0c | — | `+0x0004`, `+0x0008` | — | docs/vtmb/navigation-jump-links.md:448, docs/vtmb/navigation-jump-links.md:1882, docs/vtmb/navigation-jump-links.md:1895, +4 more |
 | `0x10300e60` | FUN_10300e60 | 335 | 3 | 0 | — | 1d/0v/0c | — | — | — | docs/vtmb/navigation-jump-links.md:867 |
 | `0x10301010` | FUN_10301010 ‼ | 1428 | 2 | 15 | — | 1d/0v/0c | — | `+0x0004`, `+0x0008` | `FindBackAwayNodeAStar() - %s has no near…`, `Graph not ready for FindBackAwayNodeASta…` | docs/vtmb/navigation-jump-links.md:448, docs/vtmb/navigation-jump-links.md:450, docs/vtmb/navigation-jump-links.md:859, +1 more |
-| `0x10301720` | FUN_10301720 | 2160 | 2 | 8 | — | 1d/0v/0c | — | `+0x0004`, `+0x0008` | `FindCover() - %s has no nearest node (%f…` | docs/vtmb/entity_io.md:2091, docs/vtmb/navigation-jump-links.md:450, docs/vtmb/navigation-jump-links.md:1882, +8 more |
+| `0x10301720` | FUN_10301720 | 2160 | 2 | 8 | — | 1d/0v/0c | — | `+0x0004`, `+0x0008` | `FindCover() - %s has no nearest node (%f…` | docs/vtmb/entity_io.md:2170, docs/vtmb/navigation-jump-links.md:450, docs/vtmb/navigation-jump-links.md:1882, +8 more |
 | `0x103021b0` | FUN_103021b0 | 273 | 3 | 4 | — | 2d/0v/0c | — | — | — | — |
-| `0x10302320` | FUN_10302320 | 2288 | 2 | 8 | — | 1d/0v/0c | — | `+0x0004`, `+0x0008` | `FindCover() - %s has no nearest node (%f…` | docs/vtmb/entity_io.md:2091, docs/vtmb/navigation-jump-links.md:450, docs/vtmb/navigation-jump-links.md:1894, +3 more |
-| `0x10302e50` | FUN_10302e50 | 1824 | 2 | 8 | — | 1d/0v/0c | — | `+0x0004` | `FindShootNode() - %s has no nearest node…` | docs/vtmb/entity_io.md:2091, docs/vtmb/navigation-jump-links.md:451, docs/vtmb/navigation-jump-links.md:1882, +5 more |
+| `0x10302320` | FUN_10302320 | 2288 | 2 | 8 | — | 1d/0v/0c | — | `+0x0004`, `+0x0008` | `FindCover() - %s has no nearest node (%f…` | docs/vtmb/entity_io.md:2170, docs/vtmb/navigation-jump-links.md:450, docs/vtmb/navigation-jump-links.md:1894, +3 more |
+| `0x10302e50` | FUN_10302e50 | 1824 | 2 | 8 | — | 1d/0v/0c | — | `+0x0004` | `FindShootNode() - %s has no nearest node…` | docs/vtmb/entity_io.md:2170, docs/vtmb/navigation-jump-links.md:451, docs/vtmb/navigation-jump-links.md:1882, +5 more |
 | `0x10303740` | FUN_10303740 | 203 | 3 | 10 | — | 2d/0v/0c | — | `+0x0004` | — | — |
 | `0x10303850` | FUN_10303850 | 852 | 3 | 12 | — | 2d/0v/0c | — | `+0x0004` | — | docs/vtmb/navigation-jump-links.md:482, docs/vtmb/navigation-jump-links.md:528, docs/vtmb/navigation-jump-links.md:531, +3 more |
 | `0x10303c90` | FUN_10303c90 | 47 | 2 | 11 | — | 1d/0v/0c | — | — | — | docs/vtmb/navigation-jump-links.md:1405 |
@@ -3029,13 +3029,13 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x10314000` | FUN_10314000 | 185 | 4 | 0 | — | 1d/0v/0c +1 outside | — | `+0x0004` | — | — |
 | `0x10315170` | FUN_10315170 | 434 | 4 | 1 | — | 1d/0v/0c | `+0x0004`, `+0x0010` | `+0x0004`, `+0x0010` | — | — |
 | `0x103153a0` | FUN_103153a0 | 437 | 4 | 1 | — | 1d/0v/0c +1 outside | `+0x0004`, `+0x0010` | `+0x0004`, `+0x0010` | — | — |
-| `0x10315790` | FUN_10315790 | 69 | 1 | 5 | — | 2d/0v/0c +2 outside | — | — | — | docs/vtmb/entity_io.md:2024, docs/vtmb/npc-ai/social.md:658 |
+| `0x10315790` | FUN_10315790 | 69 | 1 | 5 | — | 2d/0v/0c +2 outside | — | — | — | docs/vtmb/entity_io.md:2103, docs/vtmb/npc-ai/social.md:658 |
 | `0x10315800` | FindCreateSquad | 183 | 1 | 7 | — | 3d/0v/0c | — | — | `Error!! Squad %s is too big!!! Replacing…` | docs/vtmb/npc-ai/population.md:2833, docs/vtmb/npc-ai/social.md:503, docs/vtmb/npc-ai/social.md:655 |
 | `0x103158f0` | RemoveFromSquad | 171 | 1 | 1 | — | 4d/0v/0c | `+0x005c` | `+0x001c`, `+0x005c` | `ERROR: Attempting to remove non-existing…` | docs/vtmb/npc-ai/conditions-and-states.md:660, docs/vtmb/npc-ai/lifecycle.md:2870, docs/vtmb/npc-ai/population.md:2834, +2 more |
 | `0x10315a80` | FUN_10315a80 | 227 | 3 | 1 | — | 1d/0v/0c | — | `+0x001c`, `+0x005c` | — | — |
 | `0x10315ec0` | FUN_10315ec0 | 113 | 1 | 0 | — | 1d/0v/0c | — | `+0x001c`, `+0x005c` | — | docs/vtmb/npc-ai/social.md:577 |
 | `0x103160a0` | FUN_103160a0 | 4 | 2 | 0 | — | 4d/0v/0c +1 outside | — | `+0x005c`? | — | docs/vtmb/npc-ai/population.md:2835, docs/vtmb/npc-ai/shape.md:677, docs/vtmb/npc-ai/shape.md:685, +1 more |
-| `0x103160c0` | FUN_103160c0 | 170 | 2 | 0 | — | 3d/0v/0c +1 outside | — | `+0x001c`, `+0x005c` | — | docs/vtmb/entity_io.md:2034, docs/vtmb/npc-ai/population.md:2836, docs/vtmb/npc-ai/social.md:507, +1 more |
+| `0x103160c0` | FUN_103160c0 | 170 | 2 | 0 | — | 3d/0v/0c +1 outside | — | `+0x001c`, `+0x005c` | — | docs/vtmb/entity_io.md:2113, docs/vtmb/npc-ai/population.md:2836, docs/vtmb/npc-ai/social.md:507, +1 more |
 | `0x103161a0` | SquadNewEnemy | 236 | 1 | 20 | — | 7d/0v/0c | — | `+0x0008`, `+0x001c`, `+0x005c` | `ERROR: SquadNewEnemy() - pEnemy is NULL!…` | docs/vtmb/npc-ai/authored-control.md:543, docs/vtmb/npc-ai/conditions-and-states.md:75, docs/vtmb/npc-ai/conditions-and-states.md:660, +3 more |
 | `0x103164c0` | FUN_103164c0 | 115 | 2 | 6 | — | 1d/0v/0c | `+0x0064`, `+0x0066`, `+0x006c`, `+0x0070` | `+0x0008`, `+0x001c`, `+0x0064`, `+0x0066`, `+0x006c` | — | docs/vtmb/npc-ai/social.md:491 |
 | `0x103165f0` | FUN_103165f0 | 76 | 3 | 0 | — | 1d/0v/0c +1 outside | `+0x0004`, `+0x000c`, `+0x0010`, `+0x005c`, `+0x0060`, `+0x0070`, +1 more | `+0x001c` | — | docs/vtmb/npc-ai/social.md:491 |
@@ -3229,7 +3229,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1033c830` | CBaseCombatCharacter::ToggleMiscFlag | 158 | 5 | 0 | — | 2d/0v/0c | `+0x0fe4` | `+0x026c`, `+0x0fe4` | `NULL ENTITY`, `CBaseCombatCharacter::ToggleMiscFlag` | — |
 | `0x1033c900` | CBaseCombatCharacter::HasMiscFlag | 135 | 1 | 0 | — | 5d/0v/0c +8 outside | — | `+0x026c`, `+0x0fe4` | `NULL ENTITY`, `CBaseCombatCharacter::HasMiscFlag` | — |
 | `0x1033c9c0` | CBaseCombatCharacter::GetMiscFlags | 121 | 1 | 0 | — | 5d/0v/0c +2 outside | — | `+0x026c`, `+0x0fe4` | `NULL ENTITY`, `CBaseCombatCharacter::GetMiscFlags` | — |
-| `0x1033cb90` | CBaseCombatCharacter::Kill | 116 | 0 | 1 | `CAI_BaseHumanoid#119`, `CAI_BaseNPC#119`, `CAI_BaseNPCTroika#119`, +74 more | 0d/1v/1c | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::Kill` | docs/vtmb/entity_io.md:436 |
+| `0x1033cb90` | CBaseCombatCharacter::Kill | 116 | 0 | 1 | `CAI_BaseHumanoid#119`, `CAI_BaseNPC#119`, `CAI_BaseNPCTroika#119`, +74 more | 0d/1v/1c | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::Kill` | docs/vtmb/entity_io.md:490 |
 | `0x1033cc30` | CBaseCombatCharacter::AddPreDisciplineEffect | 113 | 0 | 0 | `CAI_BaseHumanoid#338`, `CAI_BaseNPC#338`, `CAI_BaseNPCTroika#338`, +74 more | 0d/0v/0c +1 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::AddPreDisciplineEf…` | — |
 | `0x1033ccd0` | CBaseCombatCharacter::RemovePreDisciplineEffects | 113 | 0 | 0 | `CAI_BaseHumanoid#340`, `CAI_BaseNPC#340`, `CAI_BaseNPCTroika#340`, +74 more | 0d/0v/0c +1 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::RemovePreDisciplin…` | — |
 | `0x1033cd70` | CBaseCombatCharacter::AddDisciplineEffect | 113 | 0 | 0 | `CAI_BaseHumanoid#339`, `CAI_BaseNPC#339`, `CAI_BaseNPCTroika#339`, +74 more | 0d/0v/0c +1 outside | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::AddDisciplineEffec…` | — |
@@ -3253,7 +3253,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1033e4a0` | CBaseCombatCharacter::DrawDebugTextOverlays | 655 | 1 | 13 | — | 1d/0v/0c +1 outside | — | `+0x0094`, `+0x009c`, `+0x0224`, `+0x026c`, `+0x02e0` | `NULL ENTITY`, `NPC: %s`, +2 more | — |
 | `0x1033e7e0` | CBaseCombatCharacter::DrawMuzzleOverlay | 289 | 0 | 4 | `CAI_BaseHumanoid#125`, `CAI_BaseNPC#125`, `CAI_BaseNPCTroika#125`, +74 more | 0d/0v/0c | — | `+0x026c`, `+0x0364` | `NULL ENTITY`, `muzzleflash`, +1 more | docs/vtmb/wielded_weapons.md:475 |
 | `0x1033eb60` | CBaseCombatCharacter::FrenzyCheck | 1270 | 2 | 19 | — | 1d/0v/0c +5 outside | `+0x146c`, `+0x1470` | `+0x00a8`, `+0x026c`, `+0x05a0`, `+0x0fe8`, `+0x13bc`, `+0x13c0`, +6 more | `NULL ENTITY`, `FrenzyUpdate`, +5 more | — |
-| `0x1033f6d0` | FUN_1033f6d0 | 90 | 1 | 20 | — | 2d/0v/0c +3 outside | — | — | — | docs/vtmb/entity_io.md:314, docs/vtmb/npc-ai/lifecycle.md:1115, docs/vtmb/npc-ai/lifecycle.md:1123, +1 more |
+| `0x1033f6d0` | FUN_1033f6d0 | 90 | 1 | 20 | — | 2d/0v/0c +3 outside | — | — | — | docs/vtmb/entity_io.md:368, docs/vtmb/npc-ai/lifecycle.md:1115, docs/vtmb/npc-ai/lifecycle.md:1123, +1 more |
 | `0x10340360` | CBaseCombatCharacter::Precache | 313 | 1 | 12 | — | 1d/0v/0c +3 outside | — | `+0x011c`, `+0x026c`, `+0x0544`, `+0x1568` | `NULL ENTITY`, `****ERROR***⏎⏎`, +6 more | docs/vtmb/audio_pipeline.md:797 |
 | `0x103404f0` | CBaseCombatCharacter::ReceivesImpactDamage | 118 | 0 | 0 | `CAI_BaseHumanoid#74`, `CAI_BaseNPC#74`, `CAI_BaseNPCTroika#74`, +72 more | 0d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::ReceivesImpactDama…` | — |
 | `0x10340590` | CBaseCombatCharacter::CausesImpactDamage | 139 | 0 | 1 | `CAI_BaseHumanoid#73`, `CAI_BaseNPC#73`, `CAI_BaseNPCTroika#73`, +74 more | 0d/0v/0c | — | `+0x026c` | `NULL ENTITY`, `CBaseCombatCharacter::CausesImpactDamage` | — |
@@ -3358,7 +3358,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1034c020` | CNPCMaker_Fleshpile::Spawn | 261 | 0 | 15 | `CNPCMaker_Fleshpile#103` | 0d/0v/0c | `+0x017c`, `+0x66b0`, `+0x66b8`, `+0x66c2` | `+0x01a0`, `+0x026c`, `+0x0270`, `+0x6664`, `+0x66c0`, `+0x66c3` | `NULL ENTITY`, `CBaseEntity::SetSolid` | docs/vtmb/npc-ai/lifecycle.md:1223, docs/vtmb/npc-ai/lifecycle.md:2078, docs/vtmb/npc-ai/lifecycle.md:2125, +1 more |
 | `0x1034c180` | CNPCMaker_Fleshpile::Precache | 169 | 0 | 14 | `CNPCMaker_Fleshpile#104` | 0d/1v/11c | — | `+0x0024`, `+0x0370`, `+0x665c` | `%s at %.0f %.0f %0.f missing modelname⏎` | docs/vtmb/npc-ai/lifecycle.md:1224, docs/vtmb/npc-ai/lifecycle.md:1658, docs/vtmb/npc-ai/lifecycle.md:1676, +1 more |
 | `0x1034c260` | CNPCMaker_Fleshpile::vfunc130 | 68 | 0 | 23 | `CNPCMaker_Fleshpile#130` | 0d/0v/0c | — | — | `npc_VAndreiBlood` | — |
-| `0x1034c2d0` | FUN_1034c2d0 | 1186 | 0 | 8 | `CNPCMaker_Fleshpile#617` | 0d/0v/9c | `+0x66b8` | `+0x0024`, `+0x0364`, `+0x0374`, `+0x0670`, `+0x09ac`, `+0x09b0`, +29 more | `Non Troika Ent in NPCMaker!⏎`, `NULL Ent in NPCMaker!⏎`, +1 more | docs/vtmb/entity_io.md:1782, docs/vtmb/npc-ai/authored-control.md:474, docs/vtmb/npc-ai/lifecycle.md:1307, +4 more |
+| `0x1034c2d0` | FUN_1034c2d0 | 1186 | 0 | 8 | `CNPCMaker_Fleshpile#617` | 0d/0v/9c | `+0x66b8` | `+0x0024`, `+0x0364`, `+0x0374`, `+0x0670`, `+0x09ac`, `+0x09b0`, +29 more | `Non Troika Ent in NPCMaker!⏎`, `NULL Ent in NPCMaker!⏎`, +1 more | docs/vtmb/entity_io.md:1836, docs/vtmb/npc-ai/authored-control.md:474, docs/vtmb/npc-ai/lifecycle.md:1307, +4 more |
 | `0x1034c8e0` | CNPCMaker_Fleshpile::vfunc139 | 122 | 0 | 9 | `CNPCMaker_Fleshpile#139` | 0d/0v/0c | — | — | — | docs/vtmb/npc-ai/lifecycle.md:1254, docs/vtmb/npc-ai/lifecycle.md:1307, docs/vtmb/npc-ai/lifecycle.md:1317, +3 more |
 | `0x1034c9f0` | CNPCMaker_Zombie::vfunc82 | 6 | 0 | 0 | `CNPCMaker_Zombie#82` | 0d/0v/0c | — | — | — | — |
 | `0x1034cad0` | CNPCMaker_Zombie::HeadDirection2D | 20 | 0 | 4 | `CNPCMaker_Zombie#370` | 0d/0v/1c | — | `+0x05c0` | — | docs/vtmb/npc-ai/shape.md:503 |
@@ -3494,7 +3494,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x1035d010` | CNPC_VAndreiBlood::SelectSchedule | 218 | 0 | 1 | `CNPC_VAndreiBlood#438` | 0d/0v/0c | `+0x1b2c` | `+0x66cc`, `+0x66cd`, `+0x66d4`, `+0x66d8`, `+0x66dc` | `CNPC_VAndreiBlood::SelectSchedule` | docs/vtmb/npc-ai/programs.md:1269, docs/vtmb/npc-ai/schedule-kernel.md:1141, docs/vtmb/npc-ai/schedule-kernel.md:1143 |
 | `0x1035d150` | CNPC_VAndreiBlood::vfunc461 | 25 | 0 | 0 | `CNPC_VAndreiBlood#461` | 0d/0v/1c +1 outside | `+0x1b38` | `+0x66cc` | — | — |
 | `0x1035d180` | CNPC_VAndreiBlood::GatherConditions | 19 | 0 | 25 | `CNPC_VAndreiBlood#433` | 0d/0v/2c | — | — | — | docs/vtmb/npc-ai/conditions-and-states.md:3037, docs/vtmb/npc-ai/conditions-and-states.md:3045 |
-| `0x1035d1b0` | CNPC_VAndreiBlood::StartTask | 1366 | 0 | 29 | `CNPC_VAndreiBlood#442` | 0d/0v/2c | `+0x019c`, `+0x1b44`, `+0x1b48`, `+0x5ddc`, `+0x66ce`, `+0x66d0` | `+0x00f8`, `+0x019c`, `+0x026c`, `+0x0270`, `+0x02b4`, `+0x02d4`, +8 more | `CBaseEntity::RemoveSolidFlags`, `npc_maker_fleshpile`, +8 more | docs/vtmb/entity_io.md:1786, docs/vtmb/npc-ai/lifecycle.md:1357, docs/vtmb/npc-ai/programs.md:1305, +1 more |
+| `0x1035d1b0` | CNPC_VAndreiBlood::StartTask | 1366 | 0 | 29 | `CNPC_VAndreiBlood#442` | 0d/0v/2c | `+0x019c`, `+0x1b44`, `+0x1b48`, `+0x5ddc`, `+0x66ce`, `+0x66d0` | `+0x00f8`, `+0x019c`, `+0x026c`, `+0x0270`, `+0x02b4`, `+0x02d4`, +8 more | `CBaseEntity::RemoveSolidFlags`, `npc_maker_fleshpile`, +8 more | docs/vtmb/entity_io.md:1840, docs/vtmb/npc-ai/lifecycle.md:1357, docs/vtmb/npc-ai/programs.md:1305, +1 more |
 | `0x1035d8b0` | CNPC_VAndreiBlood::RunTask | 430 | 0 | 26 | `CNPC_VAndreiBlood#444` | 0d/0v/2c | `+0x01fc`, `+0x66ce`, `+0x66d4`, `+0x66d8` | `+0x010c`, `+0x03ec`, `+0x06f8`, `+0x66ce`, `+0x66d0`, `+0x66d4`, +2 more | `CNPC_VAndreiBlood::RunTask` | docs/vtmb/npc-ai/schedule-kernel.md:4037 |
 | `0x1035db00` | CNPC_VAndreiBlood::FValidateHintType | 5 | 0 | 0 | `CNPC_VAndreiBlood#566` | 0d/0v/5c | — | — | — | docs/vtmb/npc-ai/shape.md:1047 |
 | `0x1035db20` | CNPC_VAndreiBlood::NPCThink | 90 | 0 | 28 | `CNPC_VAndreiBlood#431` | 0d/0v/0c | — | — | `CNPC_VAndreiBlood::NPCThink` | docs/vtmb/npc-ai/schedule-kernel.md:5060, docs/vtmb/npc-ai/schedule-kernel.md:5064 |
@@ -5030,7 +5030,7 @@ Every function the kernel reaches: the family's slot bodies, `NPCThink` and `Run
 | `0x104287d0` | FUN_104287d0 | 88 | 6 | 0 | — | 1d/0v/0c | — | — | `Unknown`, `Null model in GetSequenceActivityName() …`, +1 more | — |
 | `0x10428850` | FUN_10428850 | 27 | 2 | 0 | — | 1d/0v/0c | — | — | — | — |
 | `0x10428880` | FUN_10428880 | 190 | 1 | 14 | — | 1d/0v/0c | — | — | `Bad sound event %d in sequence %s :: %s …` | docs/vtmb/npc-ai/lifecycle.md:1940, docs/vtmb/npc-ai/lifecycle.md:1945 |
-| `0x1042bff0` | FUN_1042bff0 | 46 | 1 | 7 | — | 11d/0v/0c +30 outside | — | — | — | docs/vtmb/entity_io.md:1768, docs/vtmb/npc-ai/lifecycle.md:2022 |
+| `0x1042bff0` | FUN_1042bff0 | 46 | 1 | 7 | — | 11d/0v/0c +30 outside | — | — | — | docs/vtmb/entity_io.md:1822, docs/vtmb/entity_io.md:1969, docs/vtmb/npc-ai/lifecycle.md:2022 |
 | `0x1042fb50` | FUN_1042fb50 | 54 | 1 | 0 | — | 2d/0v/0c +3 outside | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:3384, docs/vtmb/npc-ai/shape.md:2359 |
 | `0x1042fbf0` | FUN_1042fbf0 | 46 | 1 | 0 | — | 5d/0v/0c +2 outside | — | — | — | docs/vtmb/npc-ai/schedule-kernel.md:1155, docs/vtmb/npc-ai/schedule-kernel.md:4425, docs/vtmb/npc-ai/shape.md:2357 |
 | `0x1042fc90` | FUN_1042fc90 | 54 | 2 | 0 | — | 1d/0v/0c +4 outside | — | — | — | — |

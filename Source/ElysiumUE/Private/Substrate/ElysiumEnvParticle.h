@@ -78,18 +78,20 @@ public:
 		}
 	}
 
-	virtual void Spawn() override
-	{
-		ParticleDefinition = ParticleDefinition.Replace(TEXT("\\"), TEXT("/")).ToLower();
-		SpawnBounds = FMath::Max(0.0f, SpawnBounds);
-		RampTime = FMath::Max(0.0f, RampTime);
-		RampScale = FMath::Max(0.0f, RampScale);
-		RampStartScale = RampScale;
-		RampTargetScale = RampScale;
-		RampStartTime = World ? World->NowSeconds() : 0.0;
-		RampDuration = 0.0f;
-		Publish();
-	}
+	// `CEnvParticle::Spawn` 0x100fb3d0 (slot 103): the attach-type range check, the spawnbounds clamp
+	// and, when `m_pParent` already resolves (the map parse `0x10136650` ran `SetParent` before any
+	// Spawn), `FUN_100faf60` -> slot 243 `AttachToEntity(parent, m_nAttachType, m_sAttachName or "")`.
+	virtual void Spawn() override;
+	// `CEnvParticle::AttachToEntity` 0x100fb110, CEnvParticle's slot 243 (`CAuspexAura::AttachToEntity`
+	// 0x10051d50 overrides it): `SetParent(parent, 0)`, `m_nAttachType`, `m_sAttachName`
+	// (`AllocPooledString` 0x1042bff0), `SetMoveType(11 MOVETYPE_FOLLOW, 0)`, `SetAimEnt(entity(m_pParent))`,
+	// `SetOrigin(0, 0, 0)` (slot 63), then `m_nAttachPoint` <- `FUN_100fafa0(parent, mode, name)`.
+	virtual void AttachToEntity(FElysiumEntity* Parent, int32 Mode, const FString& Name);
+	// `FUN_100fafa0(parent, mode, name)` 0x100fafa0: -1 for the tree modes 1 / 3; `LookupAttachment`
+	// (L1 hook, `hooks.tsv:21`) for the attachment modes 6 / 17 on a `CBaseAnimating`, else 0; for any
+	// other mode > 0 the index of the first studio bone whose name matches case-insensitively, else 0;
+	// 0 for mode <= 0. `Site` names the entity the `attach_index` site is emitted for.
+	static int32 ResolveAttachIndex(FElysiumEntity* Parent, int32 Mode, const FString& Name, const FElysiumEntity& Site);
 
 	virtual void Think() override
 	{

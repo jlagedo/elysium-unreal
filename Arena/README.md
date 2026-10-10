@@ -197,7 +197,14 @@ the known ones). Read-only. Adapters: `m_iName`, `m_iClassname`, `m_iHealth`, `m
 class datamap by the name the class registers it under** (`ElysiumAddClassField`: the retail key, as
 `radius`, or the retail member, as `m_iSoundLevel`), typed by the row (Int/Float a number, Bool a bool,
 String/Handle a string). A story adds a named adapter in `FElysiumArenaScenarioRunner::ReadEntityField`
-only for a retail value no datamap row or witness exposes.
+only for a retail value no datamap row or witness exposes. The move hierarchy's (`walks/L0-r010.md`):
+the handles `m_pParent`, `m_pMoveParent`, `m_pMoveChild`, `m_pMovePeer`, `m_hAimEnt` (a string, `#<index>`
+or `-1`; with `to: <targetname>` a bool, whether the handle resolves to that entity), `m_iParentAttachment`,
+`m_MoveType`, `m_MoveCollide` (numbers), `m_iEFlags` (a number; with `member: "0x800"`, a hex bit mask, a
+bool), `m_NetworkChangeState.m_bChanged` (a bool), the LOCAL pose words `m_vecOrigin` / `m_angRotation`
+(slots 220 / 221) and the absolute ones `m_vecAbsOrigin` / `m_angAbsRotation` (slots 217 / 219: the read
+recomputes under EFL 0x800 and clears it, as every retail reader of the pose does), each with `member`
+`x` / `y` / `z` -- origins in cm on the Unreal axes, angles in Source degrees (pitch, yaw, roll).
 
 **`retail_site`** (a trace kind) -- emitted at the port line that carries a retail address, by
 `FElysiumEntityWorld::EmitRetailSite(Entity, Tag, RetailFn, RetailVa, Phase, Payload)`, at the semantic
@@ -272,9 +279,23 @@ the port's refusal of a category index the table array does not hold), `folder_g
 node= component= key=`; `FUN_101f42a0` `0x101f42a0`: `return name= found= index=`); the sound script
 (`Audio/ElysiumSoundScript.h`): `sndscript.defaults` (`Global::FUN_101b30d0` `0x101b30d0`: `return
 channel=0 volume=1.0 pitch=100 level=75 flags=<+1c>,<+1d>,<+48>`), `sndchan.parse`
-(`Global::FUN_101b24d0` `0x101b24d0`: `return text=<name|null> ret= warn=<0|1>`). A pure function
-reports through `IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a utility with no entity names its
-target in the entity column (`FElysiumNamedRetailSites`).
+(`Global::FUN_101b24d0` `0x101b24d0`: `return text=<name|null> ret= warn=<0|1>`); entity parenting (`walks/L0-r010.md`): `set_parent` (`CBaseEntity::SetParent`
+`0x100a0670`: `entry this= parent= attach= dirty=`, `bad_parent this= m_pParent= m_iParent=0`, `pose
+local_origin=[inches] local_angles=[deg]`, `link m_pMoveParent= m_pMovePeer= parent.m_pMoveChild=
+m_iParentAttachment= m_iEFlags=`, `notify parent= fn=CAISound::FUN_10026bf0 va=0x10026bf0`),
+`set_parent_name` (the by-name overload `0x100a04e0`: `bad_parent name=`, `ambiguous name= matches=`),
+`unlink` (`FUN_1012c840` `0x1012c840`, `unlink old_parent= m_pMovePeer= dirty=`), `prepend`
+(`FUN_1012c7a0` `0x1012c7a0`, `link parent= child.m_pMovePeer= parent.m_pMoveChild=`), `parent_pose`
+(`FUN_101d1530` `0x101d1530`: `return parent= M=[12 words]`, and `hook` for the discarded
+`GetAttachment02` sample an attach byte other than 0 would take), `set_origin` (`CBaseEntity::SetOrigin`
+`0x100b2be0`, `write m_vecOrigin=[cm] m_iEFlags= local=`), `set_angles` (`CBaseEntity::SetAngles`
+`0x100b2d00`, `write m_angRotation=[deg] m_iEFlags= local=`); particle attachment: `particle_attach`
+(`CEnvParticle::AttachToEntity` `0x100fb110`, `return parent= m_nAttachType= m_sAttachName= m_MoveType=
+m_hAimEnt= m_pParent= m_nAttachPoint=`), `attach_index` (`FUN_100fafa0` `0x100fafa0`: `return mode=
+name= index= arm=<tree|lookup_attachment_hook|not_animating|null_parent|not_studio|no_bones|bone|
+bone_missing|mode_le_0>`, and `hook fn=CBaseAnimating::LookupAttachment va=0x10092d50` for modes 6 / 17
+on an animating parent). A pure function reports through `IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a
+utility with no entity names its target in the entity column (`FElysiumNamedRetailSites`).
 
 Rules: `entity_call` drives only what retail exposes to the world; `retail_site` events are emitted where
 the retail address they name is ported and state retail values; `entity_field` reads retail names;
@@ -455,6 +476,8 @@ record — and a `reason`) and
 | `audio/l0_voice_table_index` | `CBaseEntity::PrecacheSoundTable` `0x1009d460` from the NPC's Spawn (through `CBaseCombatCharacter::Precache` `0x10340360`): the category block (`IsMonster` `0x1009d820` on the template's `Monster` byte, `IsMale` `0x10336920`), the two tail calls into the group seam `FUN_101f55a0` `0x101f55a0` (S2b, the template `SoundGroup`, the `Female_PC_Override` form, S0 before the table exists) and the folder lookup `FUN_101f42a0` / `FUN_101f39d0` (the component walk, the root-key miss) on a staged `SndScheme_Char`, the three words probed (L0.audio.voice-table-index) |
 | `audio/l0_sound_channel_parse` | the channel parser `FUN_101b24d0` `0x101b24d0` through the `channel` setter `FUN_101b2490`: NULL, the `atoi` fallback, the seven case-insensitive names, the unknown-name warning, the text kept as typed (L0.audio.sound-channel-parse) |
 | `audio/l0_sound_script_defaults` | the sound-script descriptor's constructor `FUN_101b30d0` `0x101b30d0`: channel 0 / `CHAN_AUTO`, volume (1, 0) / `VOL_NORM`, pitch (100, 0) / `PITCH_NORM`, level (75, 0) / `SNDLVL_NORM`, `play_to_owner_only` 0, `precache` 1, `+0x48` 0, both vectors empty, and that the channel setter leaves the rest alone (L0.audio.sound-script-defaults) |
+| `world/l0_entity_parenting` | `CBaseEntity::SetParent` `0x100a0670` and its chain: the map parse's pre-Spawn parenting (`0x10136650`), the `SetParent` input (`0x100ad030` -> `0x100a04e0`), the unlink (`0x1012c840` / `0x1012c6c0` / `0x1012c7f0`), the prepend (`0x1012c7a0`), the retail matrix conversion of the world pose into a parent-local one (`0x101d1530`, `0x101d15f0`, `0x100a0a10`, `0x1024da80`, `0x1024cf80`, `0x100a0990`, `0x10137ed0`, slots 62 / 64 / 98 / 217-221), `ClearParent` (`0x100ad100`) with its detach bug under a rotated parent and with the dirty bit SetParent left, the bad-parent Msg (L0.effects_world.entity-parenting) |
+| `world/l0_particle_attachment` | `CEnvParticle::AttachToEntity` `0x100fb110` from `CEnvParticle::Spawn` `0x100fb3d0` (parent, type, name, `MOVETYPE_FOLLOW`, aim entity, zero local origin, index) and `FUN_100fafa0`'s arms (tree -1, the `LookupAttachment` L1 hook, the studio-bone scan, the zero fallbacks) over an NPC and a bodiless parent (L0.effects_world.particle-attachment) |
 | `_selftest/never_after_ignores` | a `never` opened `after` a label does not count a match before it |
 | `_selftest/never_within_holds`, `never_within_trips` | a `never` closed `within` seconds of its label ignores a match after the window and fails the run on one inside it |
 | `combat/cover_move_shoot` | the run-and-gun: a gunman running to cover fires from an overlay layer's own 3031 (`0x102e8560` -> `AddGesture 0x100991b0` -> `0x10098cd0` -> `Shot 0x102387b0`; spec 0002 V4o) |

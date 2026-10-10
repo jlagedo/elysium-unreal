@@ -5,7 +5,7 @@ L0 entity	L1 animation	0x1006f080	Global::FUN_1006f080	108	ported	0x10093000	CBa
 L0 entity	L1 animation	0x10070470	Global::FUN_10070470	108	ported	0x1006ef50	Global::FUN_1006ef50
 L0 entity	L1 animation	0x10090180	CBaseAnimating::BecomeClientRagdoll	108	ported	0x10090950	Global::FUN_10090950
 L0 entity	L1 animation	0x10090180	CBaseAnimating::BecomeClientRagdoll	108	ported	0x1008dc40	CBaseAnimating::SelectWeightedSequence
-L0 entity	L1 animation	0x100a0670	Global::FUN_100a0670	108	settled:partial	0x101d1530	Global::FUN_101d1530
+L0 entity	L1 animation	0x100a0670	Global::FUN_100a0670	108	ported	0x101d1530	Global::FUN_101d1530
 L0 entity	L1 animation	0x100b2150	CBaseEntity::GetParentToWorldTransform	108	missing	0x10093000	CBaseAnimating::GetAttachment03
 L0 entity	L1 animation	0x100c3600	Global::FUN_100c3600	108	ported	0x1013b090	Global::FUN_1013b090
 L0 entity	L1 animation	0x1013af60	Global::QuaternionMult	108	ported	0x1013a9f0	Global::FUN_1013a9f0
@@ -18,7 +18,7 @@ L0 entity	L1 animation	0x101906c0	CDynamicProp::vfunc113	106	ported	0x1008f7b0	C
 L0 entity	L1 animation	0x10190a00	CDynamicProp::InputSetAnimation	106	ported	0x1008f7b0	CBaseAnimating::LookupSequence
 L0 entity	L1 animation	0x10190a00	CDynamicProp::InputSetAnimation	106	ported	0x100963d0	CBaseAnimating::ResetClientsideFrame
 L0 entity	L1 animation	0x10190a00	CDynamicProp::InputSetAnimation	106	ported	0x10090950	Global::FUN_10090950
-L0 entity	L1 animation	0x100fafa0	Global::FUN_100fafa0	99	settled:partial	0x10092d50	CBaseAnimating::LookupAttachment
+L0 entity	L1 animation	0x100fafa0	Global::FUN_100fafa0	99	ported	0x10092d50	CBaseAnimating::LookupAttachment
 L0 entity	L1 animation	0x102259e0	CPropDoorknob::Spawn	77	missing	0x10093b10	CBaseAnimating::SetBodygroup
 L0 entity	L1 animation	0x10225bc0	CPropDoorknob::Remove	77	missing	0x1008f120	CBaseAnimating::StudioFrameAdvance
 L0 entity	L1 animation	0x101914a0	CPhysicsProp::ShouldIgnoreCollision	73	named-in-port	0x1008bfe0	CBaseAnimating::ShouldIgnoreCollision
@@ -160,7 +160,7 @@ L0 entity	L2 character	0x101905e0	CDynamicProp::Spawn	106	ported	0x1018f280	CBas
 L0 entity	L2 character	0x102e4160	Global::FUN_102e4160	104	ported	0x102e3450	Global::FUN_102e3450
 L0 entity	L2 character	0x100f14a0	CBaseDoor::Blocked	103	missing	0x100a1250	CBaseEntity::TakeDamage
 L0 entity	L2 character	0x1028e060	Global::FUN_1028e060	103	trivial:no caller	0x1032e7b0	CBaseCombatCharacter::GetActiveWeapon
-L0 entity	L2 character	0x100fb110	CEnvParticle::AttachToEntity	99	missing	0x1042bff0	Global::FUN_1042bff0
+L0 entity	L2 character	0x100fb110	CEnvParticle::AttachToEntity	99	ported	0x1042bff0	Global::FUN_1042bff0
 L0 entity	L2 character	0x100fb7f0	CEnvParticle::ScriptHide	99	named-in-port	0x100fb7d0	CDisciplineParticle::FUN_100fb7d0
 L0 entity	L2 character	0x100fb820	CEnvParticle::ScriptUnhide	99	named-in-port	0x100fb7a0	CDisciplineParticle::FUN_100fb7a0
 L0 entity	L2 character	0x100ce040	Global::FUN_100ce040	95	settled:carried	0x100cdf10	Global::FUN_100cdf10

@@ -360,6 +360,25 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 	// at the map's count, as retail's map parse spawns only the map's own entities.
 	const bool bBuildBodies = CVarBrushBodies.GetValueOnGameThread() != 0;
 	const int32 MapEntityCount = EntityList.Num();
+	// `MapEntity_ParseAllEntities` `0x10136650` (L0-r010): after every row is created and BEFORE any
+	// `DispatchSpawn`, the rows are walked from the last to the first and each one's `m_iParent`
+	// (+0x124, the `parentname` key) is resolved with `FindEntityByName` (`0x100f7770`); a parent that
+	// resolves and has an edict (+0x2e0 -- every live port entity) gets `SetParent(this, parent, 0)`
+	// (`0x100a0670`) directly: no Msg for a missing parent, not the by-name overload. The walk order is
+	// the CRT's `qsort` over equal keys (comparator `0x10136860` reads a word every row leaves 0), so
+	// retail's permutation is the CRT's own; this port walks reverse def order. Only the order of
+	// siblings in a parent's child chain depends on it, and nothing in the corpus reads that order.
+	for (int32 Index = MapEntityCount - 1; Index >= 0; --Index)
+	{
+		FElysiumEntity* const Ent = EntityList[Index].Get();
+		if (Ent != nullptr && !Ent->ParentName.IsEmpty())
+		{
+			if (FElysiumEntity* Parent = FindByName(Ent->ParentName))
+			{
+				Ent->SetParent(Parent, 0);
+			}
+		}
+	}
 	for (int32 Index = 0; Index < MapEntityCount; ++Index)
 	{
 		FElysiumEntity* const Ent = EntityList[Index].Get();

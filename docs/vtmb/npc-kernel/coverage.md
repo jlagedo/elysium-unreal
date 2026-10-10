@@ -11,8 +11,8 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
-| … cited by the oracle | 2795 |
-| … not cited by the oracle | 2392 |
+| … cited by the oracle | 2813 |
+| … not cited by the oracle | 2374 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |
@@ -24,7 +24,7 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | `CAI_BaseNPC` slots whose body is unnamed | 299 |
 | … with the naming pass's reason recorded (`unsettled`) | 299 |
 | Troika fields | 835 |
-| … cited by the oracle | 592 |
+| … cited by the oracle | 593 |
 | Closure edges | 17596 |
 | Build layers | 30 |
 
@@ -34,7 +34,7 @@ The porting stories' own measure. *Core* is this band's slice of the core set; t
 
 | Band | Core | `rule` | `mechanism` | `present` | `dead` | `unsettled` | No verdict | Cited by oracle | **Neither** | Reached by `sm_hub_1` | Reached by `sp_tutorial_1` |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 0–4 | 1468 | 669 | 207 | 105 | 484 | 3 | 0 | 766 | **0** | 704 (311) | 671 (295) |
+| 0–4 | 1468 | 669 | 207 | 105 | 484 | 3 | 0 | 767 | **0** | 704 (311) | 671 (295) |
 | 5–9 | 243 | 131 | 47 | 30 | 35 | 0 | 0 | 220 | **0** | 131 (60) | 120 (53) |
 | 10–18 | 355 | 178 | 108 | 10 | 59 | 0 | 0 | 282 | **0** | 151 (91) | 139 (84) |
 | 19–29 | 479 | 391 | 12 | 4 | 71 | 0 | 1 | 376 | **0** | 159 (129) | 132 (109) |
@@ -467,7 +467,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x100a0130` CBaseEntity::DrawDebugGeometryOverlays | `0x1002b920` CPhysHinge::DrawDebugGeometryOverlays, `0x1002c400` CPhysPulley::DrawDebugGeometryOverlays, `0x1004d420` CPhysicsSpring::DrawDebugGeometryOverlays, `0x10109a60` CFire::DrawDebugGeometryOverlays, +4 more |
 | `0x100a02b0` CBaseEntity::DrawDebugTextOverlays | `0x1004d290` CPhysicsSpring::DrawDebugTextOverlays, `0x10096100` CBaseAnimating::DrawDebugTextOverlays, `0x100bc200` CBeam::DrawDebugTextOverlays, `0x100c0d10` CFuncRotating::DrawDebugTextOverlays, +12 more |
 | `0x100a0420` CBaseEntity::SetName | `0x100502b0` CPhysConvert::InputConvertTarget, `0x100af010` FUN_100af010, `0x1010e750` CBreakable::FUN_1010e750, `0x101978b0` FUN_101978b0, +1 more |
-| `0x100a0ae0` FUN_100a0ae0 | `0x101213b0` CGameMovement::vfunc11, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101a3470` FUN_101a3470, `0x1020fad0` FUN_1020fad0, +3 more |
 | `0x100a0e40` CBaseEntity::OnTakeDamage | `0x10155920` CRagdollProp::OnTakeDamage, `0x1018f400` CBreakableProp::OnTakeDamage |
 | `0x100a1580` CBaseEntity::VPhysicsTakeDamage | `0x1004e970` CPhysBox::OnTakeDamage |
 | `0x100a19c0` FUN_100a19c0 | `0x1011d980` FUN_1011d980, `0x10145980` FUN_10145980, `0x10150910` FUN_10150910, `0x10151150` FUN_10151150, +3 more |
@@ -517,16 +516,12 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x100b1750` CBaseEntity::SetModelIndex | `0x1009d980` FUN_1009d980, `0x101c70d0` CTriggerVolume::Spawn, `0x1023bba0` CWorld::Spawn ‼ |
 | `0x100b17f0` CBaseEntity::GetModelIndex | `0x1008d7c0` CBaseAnimating::GetAnimFlags, `0x100a5bb0` CBaseEntity::VPhysicsInitStatic, `0x100b1a00` CBaseEntity::GetModel, `0x100ef6f0` CBaseDoor::vfunc223, +9 more |
 | `0x100b1960` CBaseEntity::GetSize | `0x100c8d60` CBaseButton::Spawn, `0x100ef260` CBaseDoor::vfunc103, `0x100f0a40` CBaseDoor::vfunc245, `0x1010e100` CBreakable::OnTakeDamage, +3 more |
-| `0x100b1ac0` CBaseEntity::CalcAbsolutePosition | `0x100933b0` CBaseAnimating::GetAttachmentLocal03, `0x10155e40` CRagdollProp::Teleport, `0x101eec30` CVampireProjectile::vfunc266 |
 | `0x100b1d10` CBaseEntity::CalcAbsoluteVelocity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10035490` CBaseEntity::PhysicsAddHalfGravity, `0x10038180` CPhysicsPushedEntities::LinearlyMoveRootEntity, `0x10038cb0` CBaseEntity::PhysicsPusher, +38 more |
 | `0x100b2300` CBaseEntity::SetAbsOrigin | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x100397c0` CBaseEntity::PhysicsNoclip, `0x1003a610` CBaseEntity::PhysicsStepTroika, +5 more |
 | `0x100b2510` CBaseEntity::SetAbsAngles | `0x100568a0` CDynamicLight::vfunc110, `0x101303c0` CLight::vfunc110 |
 | `0x100b2770` CBaseEntity::SetAbsVelocity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10035490` CBaseEntity::PhysicsAddHalfGravity, `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, +13 more |
-| `0x100b2be0` CBaseEntity::SetOrigin | `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x100b3490` CBaseEntity::SetLocalTransform, `0x100f14a0` CBaseDoor::Blocked, `0x1016be10` CBasePlayer::PostThink, +6 more |
-| `0x100b2d00` CBaseEntity::SetAngles | `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f810` CBaseEntity::SimulateAngles, `0x100b3490` CBaseEntity::SetLocalTransform, `0x100bf760` CFuncIllusionary::Spawn, +17 more |
 | `0x100b2e30` CBaseEntity::SetLocalVelocity | `0x1004e260` CPhysBox::Spawn, `0x1006d620` FUN_1006d620, `0x100adbd0` FUN_100adbd0, `0x100c0010` FUN_100c0010, +28 more |
 | `0x100b2f50` CBaseEntity::SetLocalAngularVelocity | `0x10033820` CPhysicsMovedEntities::RestoreEntities, `0x10036bd0` CPhysicsPushedEntities::FinishRotPushedEntity, `0x1006d620` FUN_1006d620, `0x100c0420` FUN_100c0420, +24 more |
-| `0x100b3280` CBaseEntity::GetAbsAngles | `0x10038cb0` CBaseEntity::PhysicsPusher, `0x10039ac0` CBaseEntity::PhysicsParent, `0x100568a0` CDynamicLight::vfunc110, `0x100a5bb0` CBaseEntity::VPhysicsInitStatic, +14 more |
 | `0x100b3580` CBaseEntity::AddFlag | `0x1003f070` CBaseEntity::PerformFlyCollisionResolution, `0x10040220` CBaseEntity::UpdateBaseVelocity, `0x10071220` FUN_10071220, `0x10071660` FUN_10071660, +37 more |
 | `0x100b3640` CBaseEntity::RemoveFlag | `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003f920` CBaseEntity::PhysicsToss, `0x10040390` CBaseEntity::PhysicsSimulate, `0x10071550` FUN_10071550, +33 more |
 | `0x100b3840` CBaseEntity::AddFlag2 | `0x1004e260` CPhysBox::Spawn, `0x100502b0` CPhysConvert::InputConvertTarget, `0x10154e40` CRagdollProp::Spawn, `0x10191450` CPhysicsProp::Spawn ‼, +5 more |
@@ -535,7 +530,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x100b3b00` CBaseEntity::Relink | `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x1004e260` CPhysBox::Spawn, `0x10056a90` CDynamicLight::Spawn, `0x1006e8e0` FUN_1006e8e0, +73 more |
 | `0x100b4340` CAISound::FUN_100b4340 | `0x1004ea30` CPhysExplosion::vfunc117, `0x1004ee90` CPhysImpact::vfunc117, `0x10051630` CDisciplineParticle::FUN_10051630, `0x101a9d40` CScriptedSentence::vfunc117, +1 more |
 | `0x100b5040` CAISound::FUN_100b5040 | `0x1009df20` CBaseEntity::~CBaseEntity, `0x100a5ad0` CBaseEntity::VPhysicsInitSetup, `0x1010e750` CBreakable::FUN_1010e750, `0x1017be50` CBasePlayer::vfunc468, +5 more |
-| `0x100b5340` FUN_100b5340 | `0x100b2970` CBaseEntity::ApplyLocalVelocityImpulse |
 | `0x100b62a0` FUN_100b62a0 | `0x100b65b0` CBaseFlex::AddSceneExpressions |
 | `0x100b6480` FUN_100b6480 | `0x100b5970` FUN_100b5970 |
 | `0x100b6510` FUN_100b6510 | `0x100b65b0` CBaseFlex::AddSceneExpressions |
@@ -603,15 +597,10 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x1012a1d0` FUN_1012a1d0 | `0x1012a610` FUN_1012a610 |
 | `0x1012a6e0` FUN_1012a6e0 | `0x10172e60` CBasePlayer::vfunc451 |
 | `0x1012b080` FUN_1012b080 | `0x100f48f0` CGibShooter::vfunc241, `0x100f5880` CEnvShooter::vfunc241, `0x10129960` FUN_10129960, `0x1012a610` FUN_1012a610 |
-| `0x1012c6c0` FUN_1012c6c0 | `0x1012c600` FUN_1012c600 |
-| `0x1012c7a0` FUN_1012c7a0 | `0x1012c600` FUN_1012c600 |
-| `0x1012c7f0` FUN_1012c7f0 | `0x1012c900` FUN_1012c900 |
-| `0x1012c840` FUN_1012c840 | `0x100502b0` CPhysConvert::InputConvertTarget, `0x100a0b20` CBaseEntity::ClearParent, `0x100ad100` CBaseEntity::InputClearParent |
 | `0x1012c9c0` FUN_1012c9c0 | `0x1002f1e0` CCollisionEvent::ShouldCollide, `0x10036fb0` CPhysicsPushedEntities::GenerateBlockingEntityList, `0x10037380` CPushBlockerEnum::vfunc0, `0x101d13a0` FUN_101d13a0 |
 | `0x10136ec0` FUN_10136ec0 | `0x102d7890` CNodeEnt::ParseMapData |
 | `0x101371d0` FUN_101371d0 | `0x1002c570` CPhysPulley::vfunc241, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1004d9a0` CPhysicsSpring::Spawn, `0x1004ec60` FUN_1004ec60, +119 more |
 | `0x10137e40` FUN_10137e40 | `0x100c3240` FUN_100c3240, `0x100c3ce0` FUN_100c3ce0, `0x1019c810` FUN_1019c810 |
-| `0x10137ed0` FUN_10137ed0 | `0x1002a210` FUN_1002a210, `0x100932a0` CBaseAnimating::GetAttachmentLocal02, `0x100934e0` CBaseAnimating::GetEyeballs, `0x100b3490` CBaseEntity::SetLocalTransform, +15 more |
 | `0x10137fe0` FUN_10137fe0 | `0x1002c400` CPhysPulley::DrawDebugGeometryOverlays, `0x1002c570` CPhysPulley::vfunc241, `0x100360a0` CPhysicsPushedEntities::ComputeRotationalPushDirection, `0x1006f080` FUN_1006f080, +11 more |
 | `0x10138130` FUN_10138130 | `0x100360a0` CPhysicsPushedEntities::ComputeRotationalPushDirection, `0x100dcc20` FUN_100dcc20, `0x100dcea0` FUN_100dcea0, `0x100dd1b0` FUN_100dd1b0, +4 more |
 | `0x101381b0` FUN_101381b0 | `0x10029940` CKeepUpright::vfunc0, `0x100b2010` CBaseEntity::ComputeAbsDirection, `0x100f19b0` CRotDoor::ComputeSwingData, `0x10139f00` FUN_10139f00, +8 more |
@@ -734,7 +723,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x101d0570` FUN_101d0570 | `0x1020e290` CGameText::vfunc110 |
 | `0x101d08e0` FUN_101d08e0 | `0x101d0a00` FUN_101d0a00 |
 | `0x101d1070` FUN_101d1070 | `0x100e34d0` CDialog::audit_asset_files, `0x100e37d0` CDialog::dump_script_file, `0x1016ea00` CBasePlayer::Save, `0x1016f2a0` FUN_1016f2a0, +1 more |
-| `0x101d1530` FUN_101d1530 | `0x10027de0` CPhysThruster::vfunc241, `0x101d1460` FUN_101d1460 |
 | `0x101d2560` FUN_101d2560 | `0x103f1950` CVampireProjectile_MingXiaoSpit::vfunc266 |
 | `0x101d26b0` FUN_101d26b0 | `0x1039a256` FUN_1039a256, `0x103f1950` CVampireProjectile_MingXiaoSpit::vfunc266 |
 | `0x101d2850` FUN_101d2850 | `0x10081e00` CSceneEntity::InputStart, `0x1019a4e0` PyServerSystem::LevelInitPostEntity, `0x101c7890` FUN_101c7890, `0x10212200` CPropSign::LoadSignData, +2 more |
@@ -863,8 +851,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x1024bf80` FUN_1024bf80 | `0x1024b880` FUN_1024b880 |
 | `0x1024c630` FUN_1024c630 | `0x1014eef0` FUN_1014eef0, `0x1024c760` FUN_1024c760 |
 | `0x1024cef0` FUN_1024cef0 | `0x1014eef0` FUN_1014eef0, `0x1024c760` FUN_1024c760, `0x1024d630` FUN_1024d630 |
-| `0x1024cf80` FUN_1024cf80 | `0x1024d280` FUN_1024d280 |
-| `0x1024da80` FUN_1024da80 | `0x1024d630` FUN_1024d630 |
 | `0x1024ddf0` FUN_1024ddf0 | `0x1024cc50` FUN_1024cc50, `0x1024e000` FUN_1024e000 |
 | `0x10252240` FUN_10252240 | `0x1014abe0` FUN_1014abe0, `0x1014d7c0` FUN_1014d7c0, `0x1014dd50` CWeaponGravityGun::SecondaryAttack, `0x1021f3e0` FUN_1021f3e0, +25 more |
 | `0x10252410` FUN_10252410 | `0x102252f0` FUN_102252f0, `0x1024f670` CBaseCombatWeapon::FUN_1024f670, `0x103ee8f0` CWeaponThrown_Grenade_Frag::vfunc271 |

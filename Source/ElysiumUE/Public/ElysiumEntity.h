@@ -215,10 +215,79 @@ public:
 	// reached its final frozen placement and the complete entity graph is available.
 	bool  bActivateCalled = false;
 	float NextThink = ELYSIUM_NEVER_THINK;
-	// The resolved logical move parent. ParentName remains the authored key; the handle exists even
-	// when either entity is deliberately bodiless, because gameplay parenting (for example the
-	// point_teleport refusal) is independent of whether Unreal has components to attach.
+
+	// --- The move hierarchy: `CBaseEntity::SetParent` 0x100a0670 and its helpers (L0-r010) ---
+	// `m_pParent` (+0x254): the handle `SetParent` was handed (`0x100a0ae0`: the parent's own handle,
+	// or -1 for a NULL parent). Kept as written even when it fails to resolve: the "set bad parent"
+	// arm leaves it, and `ClearParent` (`0x1012c840`) never touches it.
+	FElysiumEntityHandle ParentHandle;
+	// `m_iParentAttachment` (+0x258): SetParent's attach byte. Every one of its 12 corpus callers
+	// passes 0 (`walks/L0-r010.md`).
+	uint8 ParentAttachment = 0;
+	// `m_pMoveParent` (+0x25c): the live link, written by the prepend `0x1012c7a0` and cleared (-1)
+	// by `0x1012c7f0`. Unlike `ParentName`, which is the authored key, this is what the hierarchy
+	// walks read.
 	FElysiumEntityHandle MoveParent;
+	// `m_pMoveChild` (+0x260) / `m_pMovePeer` (+0x264): the singly linked child chain. The parent
+	// holds its FIRST child; each child holds the next peer. `0x1012c7a0` prepends, `0x1012c6c0`
+	// unlinks one child, `0x100b5340` walks it to mark descendants.
+	FElysiumEntityHandle MoveChild;
+	FElysiumEntityHandle MovePeer;
+	// `m_iEFlags` (+0x268), every bit but `EFL_DORMANT` (`0x2`, carried by `bEflDormant` above):
+	// `0x800` abs transform dirty (`CalcAbsolutePosition` 0x100b1ac0 clears it), `0x1000` / `0x2000`
+	// abs velocity, `0x10000` spatial partition (`SetOrigin` 0x100b2be0 sets it). The corpus names
+	// none of these; the values match Source's `EFL_DIRTY_*` / `EFL_DIRTY_SPATIAL_PARTITION`.
+	uint32 EFlags = 0;
+	// `m_hAimEnt` (+0x37c): `CBaseEntity::SetAimEnt` 0x1009ee80, the entity a `MOVETYPE_FOLLOW` (11)
+	// body copies its absolute pose from each tick (`PhysicsFollow` 0x10039470).
+	FElysiumEntityHandle AimEnt;
+	// `m_NetworkChangeState.m_bChanged` (+0x1b1): written 1 by `SetOrigin`, `SetAngles`,
+	// `CalcAbsolutePosition` and `SetParent`. Nothing here consumes it (it is the network layer's);
+	// it is carried because retail writes it and a record can read it.
+	bool bNetworkChanged = false;
+	// `m_vecOrigin` (+0x41c) / `m_angRotation` (+0x428), the LOCAL pose, while move-parented.
+	// `Origin` / `Angles` are `m_vecAbsOrigin` (+0x404) / `m_angAbsRotation` (+0x410), the absolute
+	// cache every reader here uses. Retail keeps both words always; for an entity with no move parent
+	// they are equal by construction (`CalcAbsolutePosition`'s no-parent arm copies local to abs), so
+	// this port stores ONE word for that case and switches to the local pair only while a link
+	// exists (`bParentLocalPose`: raised by `SetParent` step 6, dropped at the end of `0x1012c7f0`
+	// after its SetAngles/SetOrigin ran, where the two words are folded back into one). Slots 220/221
+	// (`GetOrigin` / `GetAngles`) answer `LocalOriginWord()` / `LocalAnglesWord()`.
+	FVector LocalOrigin = FVector::ZeroVector;
+	FVector LocalAngles = FVector::ZeroVector;
+	bool bParentLocalPose = false;
+	const FVector& LocalOriginWord() const { return bParentLocalPose ? LocalOrigin : Origin; }
+	const FVector& LocalAnglesWord() const { return bParentLocalPose ? LocalAngles : Angles; }
+
+	// `CBaseEntity::SetParent(CBaseEntity*, byte)` 0x100a0670 (`walks/L0-r010.md`): unlink
+	// (`0x1012c840`), `m_pParent`, the bad-parent Msg arm, `m_iParent`, then under the edict gate the
+	// prepend (`0x1012c7a0`), the attach byte, the retail matrix path that converts the world pose to
+	// a parent-local one (`0x101d1530` -> `0x101d15f0` -> `0x100a0a10` -> `0x1024da80` -> `0x1024cf80`
+	// -> `0x100a0990` -> `0x10137ed0` -> slot 64 / `0x101cf5c0`), and the parent's slot-115 notify.
+	void SetParent(FElysiumEntity* Parent, uint8 Attachment);
+	// `CBaseEntity::SetParent(const char*, CBaseEntity* activator)` 0x100a04e0: the by-name overload
+	// (`FindEntityByName` 0x100f7770, the "has bad parent" and "has ambigious parent" Msgs), what the
+	// `SetParent` input (`0x100ad030`) reaches.
+	void SetParentByName(const TCHAR* Name, const FElysiumEntityHandle& Activator);
+	void InputSetParent(const FElysiumInputArgs& Args);                 // 0x100ad030
+	// `CBaseEntity::ClearParent` 0x100a0b20 and `InputClearParent` 0x100ad100: each is only `0x1012c840`.
+	void ClearParent();
+	// `0x1012c840`: when `m_pMoveParent` resolves, unlink from its chain (`0x1012c6c0`) and clear the
+	// links while preserving the pose (`0x1012c7f0`). A stale or invalid link is left as it is.
+	void UnlinkFromMoveParent();
+	static void UnlinkMoveChild(FElysiumEntity& Parent, FElysiumEntity& Child);   // 0x1012c6c0
+	void ClearMoveLinks();                                                         // 0x1012c7f0
+	static void LinkMoveChild(FElysiumEntity& Parent, FElysiumEntity& Child);     // 0x1012c7a0
+	// `0x100b5340(this, selfBits, childBits)`: `m_iEFlags |= selfBits`, then every descendant
+	// (`m_pMoveChild`, then each `m_pMovePeer`, recursing) `|= selfBits | childBits`.
+	void InvalidateTransform(uint32 SelfBits, uint32 ChildBits);
+	void SetAimEnt(FElysiumEntity* Aim);                                           // 0x1009ee80
+	// `CalcAbsolutePosition` 0x100b1ac0's arithmetic with no write: the absolute pose the move
+	// parent's absolute pose and this entity's local words compose to.
+	void ComputeAbsolutePose(FVector& OutOrigin, FVector& OutAngles) const;
+	// The Unreal half of an unlink: a body hung under the old parent's body comes off it, keeping
+	// its world transform (the pose words already agree).
+	void DetachBodyFromParent(const FElysiumEntity& OldParent);
 
 	// CBaseEntity ownership reduced to the lifecycle seam gameplay needs. The owner is assigned only
 	// after a runtime child has spawned, and the notification latch makes death followed by Kill a
@@ -688,13 +757,15 @@ public:
 	void Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass);
 	virtual void Spawn() {}
 
-	// Second-phase construction, run after EVERY entity on the map has Spawn()'d. The base resolves
-	// parentname and attaches this entity's body while preserving its
-	// exported world pose; constraints and other leaves extend this after every body exists.
+	// Second-phase construction, run after EVERY entity on the map has Spawn()'d. The base hangs
+	// this entity's body under its move parent's body (the logical link is retail's: the map parse
+	// `0x10136650` ran `SetParent` before any `Spawn`); constraints and other leaves extend this
+	// after every body exists.
 	virtual void PostSpawn();
-	// Re-resolve logical parenting and attach bodies when both are available. The initial PostSpawn
-	// pass is quiet because maker-owned parents can appear during Activate; the world calls this
-	// again at that lifecycle barrier with diagnostics enabled.
+	// The Unreal half of the link: attach this entity's body under `MoveParent`'s body, keeping the
+	// world transform (the pose words already agree through the retail local words). True when
+	// there is nothing to do or it is done; false when a body is still missing (the world retries
+	// at the Activate barrier with diagnostics enabled). It resolves no name and writes no link.
 	bool ResolveParentAttachment(bool bWarnIfPending);
 
 	// Source's late Activate pass. The entity world calls this exactly once after the player has been

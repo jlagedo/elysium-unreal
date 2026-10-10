@@ -981,7 +981,11 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 	FElysiumArenaValue& OutAnswer, FString& OutError) const
 {
 	OutAnswer = FElysiumArenaValue();
-	if (Probe.To.bSet)
+	// A handle word (`m_pParent`, `m_pMoveParent`, `m_pMoveChild`, `m_pMovePeer`, `m_hAimEnt`) alone
+	// takes `to`: the probe then answers whether the handle resolves to the entity `to` names.
+	const bool bHandleField = Probe.Field == TEXT("m_pParent") || Probe.Field == TEXT("m_pMoveParent")
+		|| Probe.Field == TEXT("m_pMoveChild") || Probe.Field == TEXT("m_pMovePeer") || Probe.Field == TEXT("m_hAimEnt");
+	if (Probe.To.bSet && !bHandleField)
 	{
 		OutError = FString::Printf(TEXT("field '%s' takes no `to`"), *Probe.Field);
 		return false;
@@ -1060,13 +1064,74 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 		}
 		// The retail field names (datamap / ledger), not the port's members, so a probe survives a rename.
 		// A story adds an adapter here only for a retail value the current witnesses do not expose.
-		const bool bVector = Probe.Field == TEXT("m_vecOrigin");
-		if (!bVector && (!Probe.Index.IsEmpty() || !Probe.Member.IsEmpty()))
+		// L0-r010's: the move hierarchy's handles, `m_iParentAttachment`, `m_iEFlags` (`member`: a bit
+		// mask in hex, answered as a bool), `m_MoveType` / `m_MoveCollide`, `m_NetworkChangeState.m_bChanged`,
+		// the local pose words `m_vecOrigin` / `m_angRotation` and the absolute ones `m_vecAbsOrigin` /
+		// `m_angAbsRotation` (read through slots 217 / 219, which recompute under EFL 0x800 as retail's do).
+		const bool bVector = Probe.Field == TEXT("m_vecOrigin") || Probe.Field == TEXT("m_angRotation")
+			|| Probe.Field == TEXT("m_vecAbsOrigin") || Probe.Field == TEXT("m_angAbsRotation");
+		const bool bFlagWord = Probe.Field == TEXT("m_iEFlags");
+		if (!bVector && !bFlagWord && (!Probe.Index.IsEmpty() || !Probe.Member.IsEmpty()))
 		{
 			OutError = FString::Printf(TEXT("field '%s' takes no index or member"), *Probe.Field);
 			return false;
 		}
-		if (Probe.Field == TEXT("m_iName"))
+		if (bHandleField)
+		{
+			const FElysiumEntityHandle Word = Probe.Field == TEXT("m_pParent") ? Entity->ParentHandle
+				: Probe.Field == TEXT("m_pMoveParent") ? Entity->MoveParent
+				: Probe.Field == TEXT("m_pMoveChild") ? Entity->MoveChild
+				: Probe.Field == TEXT("m_pMovePeer") ? Entity->MovePeer : Entity->AimEnt;
+			if (Probe.To.bSet)
+			{
+				const FElysiumEntity* Other = Probe.To.bCoordinates ? nullptr : ElysiumArenaRunnerDetail::FindEntity(World, Probe.To.Name);
+				if (Other == nullptr)
+				{
+					OutError = FString::Printf(TEXT("`to` names no live entity ('%s')"), *Probe.To.Name);
+					return false;
+				}
+				OutAnswer.Type = FElysiumArenaValue::EType::Bool;
+				OutAnswer.bBool = Word.IsSet() && World.Resolve(Word) == Other;
+			}
+			else
+			{
+				// The retail word: `#<index>` for a set handle, `-1` (0xFFFFFFFF) for the invalid one.
+				OutAnswer.Type = FElysiumArenaValue::EType::String;
+				OutAnswer.String = Word.IsSet() ? Word.ToString() : FString(TEXT("-1"));
+			}
+		}
+		else if (Probe.Field == TEXT("m_iParentAttachment") || Probe.Field == TEXT("m_MoveType")
+			|| Probe.Field == TEXT("m_MoveCollide"))
+		{
+			OutAnswer.Type = FElysiumArenaValue::EType::Number;
+			OutAnswer.Number = Probe.Field == TEXT("m_iParentAttachment") ? Entity->ParentAttachment
+				: Probe.Field == TEXT("m_MoveType") ? Entity->GetMoveType() : Entity->GetMoveCollide();
+		}
+		else if (bFlagWord)
+		{
+			if (Probe.Member.IsEmpty())
+			{
+				OutAnswer.Type = FElysiumArenaValue::EType::Number;
+				OutAnswer.Number = static_cast<double>(Entity->EFlags | (Entity->IsEflDormant() ? 0x2u : 0u));
+			}
+			else
+			{
+				const uint32 Mask = FParse::HexNumber(*Probe.Member);
+				if (Mask == 0)
+				{
+					OutError = TEXT("m_iEFlags `member` is a non-zero hex bit mask (`0x800`)");
+					return false;
+				}
+				OutAnswer.Type = FElysiumArenaValue::EType::Bool;
+				OutAnswer.bBool = ((Entity->EFlags | (Entity->IsEflDormant() ? 0x2u : 0u)) & Mask) == Mask;
+			}
+		}
+		else if (Probe.Field == TEXT("m_NetworkChangeState.m_bChanged"))
+		{
+			OutAnswer.Type = FElysiumArenaValue::EType::Bool;
+			OutAnswer.bBool = Entity->bNetworkChanged;
+		}
+		else if (Probe.Field == TEXT("m_iName"))
 		{
 			OutAnswer.Type = FElysiumArenaValue::EType::String;
 			OutAnswer.String = Entity->TargetName;
@@ -1098,12 +1163,18 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 		{
 			if (Probe.Member != TEXT("x") && Probe.Member != TEXT("y") && Probe.Member != TEXT("z"))
 			{
-				OutError = TEXT("m_vecOrigin needs `member`: x, y or z");
+				OutError = FString::Printf(TEXT("%s needs `member`: x, y or z"), *Probe.Field);
 				return false;
 			}
+			// `m_vecOrigin` / `m_angRotation` are the LOCAL words (slots 220 / 221); `m_vecAbsOrigin` /
+			// `m_angAbsRotation` the absolute ones through slots 217 / 219 (a retail read: it recomputes
+			// and clears EFL 0x800 exactly as any retail reader of the pose does). Port units: cm on the
+			// Unreal axes for the origins, Source degrees (pitch, yaw, roll) for the angles.
+			const FVector Word = Probe.Field == TEXT("m_vecOrigin") ? Entity->LocalOriginWord()
+				: Probe.Field == TEXT("m_angRotation") ? Entity->LocalAnglesWord()
+				: Probe.Field == TEXT("m_vecAbsOrigin") ? Entity->GetAbsOrigin() : Entity->GetAbsAngles();
 			OutAnswer.Type = FElysiumArenaValue::EType::Number;
-			OutAnswer.Number = Probe.Member == TEXT("x") ? Entity->Origin.X
-				: Probe.Member == TEXT("y") ? Entity->Origin.Y : Entity->Origin.Z;
+			OutAnswer.Number = Probe.Member == TEXT("x") ? Word.X : Probe.Member == TEXT("y") ? Word.Y : Word.Z;
 		}
 		else
 		{
@@ -1115,7 +1186,9 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 			if (Row == nullptr || !Row->Get)
 			{
 				OutError = FString::Printf(TEXT("no retail field adapter named '%s' (m_iName, m_iClassname, m_iHealth, ")
-					TEXT("m_spawnflags, m_nRenderMode, m_lifeState, m_vecOrigin, m_iVSoundGroup, m_iVSoundGroupFemale, ")
+					TEXT("m_spawnflags, m_nRenderMode, m_lifeState, m_vecOrigin, m_angRotation, m_vecAbsOrigin, m_angAbsRotation, ")
+					TEXT("m_pParent, m_pMoveParent, m_pMoveChild, m_pMovePeer, m_hAimEnt, m_iParentAttachment, m_iEFlags, ")
+					TEXT("m_MoveType, m_MoveCollide, m_NetworkChangeState.m_bChanged, m_iVSoundGroup, m_iVSoundGroupFemale, ")
 					TEXT("m_iVSoundTableIdx, or a datamap row the entity's class registers)"),
 					*Probe.Field);
 				return false;

@@ -842,15 +842,94 @@ void FElysiumEntity::VectorVectors(const FVector& Forward, FVector& OutRight, FV
 
 void FElysiumEntity::SetOrigin(const FVector& NewOrigin)
 {
-	// `CBaseEntity::SetOrigin` `0x100b2be0`, slot 62: past its scope-trace push it acts only when the
-	// vector differs from `m_vecOrigin` (+0x41c) -- then it invalidates (`0x100b5340(this, 0x10800,
-	// 0)`, `0x100b52a0`), copies, and sets the change-tracker byte `+0x1b1`. The port has one origin,
-	// so the write is `SetRuntimeOrigin`, which moves the body with it. The change-tracker byte is
-	// network state (`m_NetworkChangeState +0x1b0`, slots 88 / 89): Unreal replication, nothing here.
-	if (NewOrigin != Origin)
+	// `CBaseEntity::SetOrigin` `0x100b2be0`, slot 62 (`walks/L0-r010.md`): past its scope-trace push it
+	// acts only when one component differs from `m_vecOrigin` (+0x41c, the LOCAL word) -- then
+	// `0x100b5340(this, 0x10800, 0)` (this entity and every move descendant get EFL 0x800 | 0x10000),
+	// `0x100b52a0` (the collision property's invalidation walk; its name is UNRECOVERED and this
+	// substrate carries no collision property), the three words, and the change-tracker byte `+0x1b1`.
+	// The absolute cache is left for `CalcAbsolutePosition` (slot 98) to refresh; an entity with no
+	// move parent stores one word for both (`bParentLocalPose`), so its write goes through
+	// `SetRuntimeOrigin`, which is what the lazy recompute would answer and moves the body with it.
+	const FVector& Local = LocalOriginWord();
+	if (NewOrigin.X != Local.X || NewOrigin.Y != Local.Y || NewOrigin.Z != Local.Z)
 	{
-		SetRuntimeOrigin(NewOrigin);
+		InvalidateTransform(0x10800u, 0u);
+		if (bParentLocalPose)
+		{
+			LocalOrigin = NewOrigin;
+		}
+		else
+		{
+			SetRuntimeOrigin(NewOrigin);
+		}
+		bNetworkChanged = true;
+		if (World)
+		{
+			World->EmitRetailSite(*this, TEXT("set_origin"), TEXT("CBaseEntity::SetOrigin"), 0x100b2be0u, TEXT("write"),
+				FString::Printf(TEXT("m_vecOrigin=[%g %g %g] m_iEFlags=0x%x local=%d"), NewOrigin.X, NewOrigin.Y, NewOrigin.Z,
+					EFlags, bParentLocalPose ? 1 : 0));
+		}
 	}
+}
+
+void FElysiumEntity::SetAngles(const FRotator& NewAngles)
+{
+	// `CBaseEntity::SetAngles` `0x100b2d00`, slot 64 (`walks/L0-r010.md`): the `FRotator` carries the
+	// retail QAngle verbatim (Pitch = x, Yaw = y, Roll = z, Source degrees), as slot 65's packing and
+	// `Angles` do. Changed-only against `m_angRotation` (+0x428, the LOCAL word): `0x100b5340(this,
+	// 0x800, 0x3000)` (this entity EFL 0x800, every move descendant 0x3800), `0x100b51b0` and
+	// `0x100b52a0` (the two collision-property walks, names UNRECOVERED, no port equivalent), the three
+	// words, `+0x1b1 = 1`.
+	const FVector New(NewAngles.Pitch, NewAngles.Yaw, NewAngles.Roll);
+	const FVector& Local = LocalAnglesWord();
+	if (New.X != Local.X || New.Y != Local.Y || New.Z != Local.Z)
+	{
+		InvalidateTransform(0x800u, 0x3000u);
+		if (bParentLocalPose)
+		{
+			LocalAngles = New;
+		}
+		else
+		{
+			SetRuntimeAngles(New);
+		}
+		bNetworkChanged = true;
+		if (World)
+		{
+			World->EmitRetailSite(*this, TEXT("set_angles"), TEXT("CBaseEntity::SetAngles"), 0x100b2d00u, TEXT("write"),
+				FString::Printf(TEXT("m_angRotation=[%g %g %g] m_iEFlags=0x%x local=%d"), New.X, New.Y, New.Z, EFlags,
+					bParentLocalPose ? 1 : 0));
+		}
+	}
+}
+
+void FElysiumEntity::CalcAbsolutePosition()
+{
+	// `CBaseEntity::CalcAbsolutePosition` `0x100b1ac0`, slot 98: only under EFL 0x800, which it clears
+	// first. With no move parent (`0x100290c0` on `m_pMoveParent` fails) the absolute words are the
+	// local ones and the body returns before `+0x1b1`; with one, the composed pose (`ComputeAbsolutePose`)
+	// and `+0x1b1 = 1`. `m_rgflCoordinateFrame` (+0x130) is rebuilt by retail on the way; this port
+	// keeps no cached frame and recomputes it inside `ComputeAbsolutePose`.
+	if ((EFlags & 0x800u) == 0)
+	{
+		return;
+	}
+	EFlags &= ~0x800u;
+	FElysiumEntity* P = World != nullptr ? World->Resolve(MoveParent) : nullptr;
+	if (P == nullptr)
+	{
+		if (bParentLocalPose)
+		{
+			Origin = LocalOrigin;
+			Angles = LocalAngles;
+		}
+		return;
+	}
+	FVector AbsOrigin, AbsAngles;
+	ComputeAbsolutePose(AbsOrigin, AbsAngles);
+	Origin = AbsOrigin;
+	Angles = AbsAngles;
+	bNetworkChanged = true;
 }
 
 // slot 94 `CBaseEntity::GetMoveType` 0x100aac30 -- `return m_MoveType` (`+0x158`), the word slot 93 writes.
@@ -887,29 +966,39 @@ void FElysiumEntity::SetMoveType(int32 MoveType, int32 MoveCollide)
 
 const FVector& FElysiumEntity::GetAbsOrigin() const
 {
-	// `0x100b31b0`, slot 217: the absolute origin. The port's `Origin`, in port units (cm, Unreal axes).
+	// `0x100b31b0`, slot 217: under EFL 0x800, slot 98 `CalcAbsolutePosition` (vtable +0x188) first;
+	// then `m_vecAbsOrigin` (+0x404), the port's `Origin` in port units (cm, Unreal axes). The cache
+	// refresh inside a const getter is retail's own.
+	if ((EFlags & 0x800u) != 0)
+	{
+		const_cast<FElysiumEntity*>(this)->CalcAbsolutePosition();
+	}
 	return Origin;
 }
 
 const FVector& FElysiumEntity::GetAbsAngles() const
 {
-	// `0x100b3280`, slot 219: the absolute angles. The port's `Angles`, Source degrees (pitch, yaw, roll).
+	// `0x100b3280`, slot 219: as 217, then `m_angAbsRotation` (+0x410), the port's `Angles`, Source
+	// degrees (pitch, yaw, roll).
+	if ((EFlags & 0x800u) != 0)
+	{
+		const_cast<FElysiumEntity*>(this)->CalcAbsolutePosition();
+	}
 	return Angles;
 }
 
 const FVector& FElysiumEntity::GetOrigin()
 {
-	// `0x100b3070`, slot 220, returns `&m_vecOrigin`, the LOCAL origin. **Modernization (named)**: the
-	// port keeps one origin and no parent-relative one, so for a parented entity this answers the
-	// absolute origin 217 answers.
-	return Origin;
+	// `0x100b3070`, slot 220, returns `&m_vecOrigin` (+0x41c), the LOCAL origin: `LocalOrigin` while
+	// move-parented, the one shared word otherwise (L0-r010 retired the named modernization that
+	// answered the absolute origin here).
+	return LocalOriginWord();
 }
 
 const FVector& FElysiumEntity::GetAngles()
 {
-	// `0x100b3110`, slot 221, returns `&m_angRotation`, the LOCAL angles; the port has no local/abs
-	// split (as 220).
-	return Angles;
+	// `0x100b3110`, slot 221, returns `&m_angRotation` (+0x428), the LOCAL angles (as 220).
+	return LocalAnglesWord();
 }
 
 // V6 shared readers: represented retail primitive words and the target-name successor.

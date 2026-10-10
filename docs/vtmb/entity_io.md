@@ -227,6 +227,60 @@ Two corrections to this document's own text, from the same measurement:
 They live on the base entity and reach subclasses through the datamap `baseMap`
 chain (`docs/vtmb/python_bridge.md`), so the port implements them once, not per class.
 
+## `SetParent` / `ClearParent` and the move hierarchy (`CBaseEntity`) [decompiled, L0-r010]
+
+Walked in `docs/specs/layers/L0-entity/walks/L0-r010.md`; ported in
+`Source/ElysiumUE/Private/Substrate/ElysiumEntity.cpp` (`FElysiumEntity::SetParent` and kin).
+
+- **Words.** `m_pParent` +0x254 (the handle given, -1 for NULL, kept even when it fails), `m_iParentAttachment`
+  +0x258 (byte), `m_pMoveParent` +0x25c, `m_pMoveChild` +0x260 (the FIRST child), `m_pMovePeer` +0x264 (the
+  next sibling), `m_iEFlags` +0x268 (`0x800` abs transform dirty, `0x1000`/`0x2000` abs velocity, `0x10000`
+  spatial partition -- unnamed in the corpus, Source's `EFL_DIRTY_*` values), `m_hAimEnt` +0x37c,
+  `m_NetworkChangeState.m_bChanged` +0x1b1, the LOCAL pose `m_vecOrigin` +0x41c / `m_angRotation` +0x428 and
+  the absolute cache `m_vecAbsOrigin` +0x404 / `m_angAbsRotation` +0x410. Slots 220/221 (`GetOrigin` /
+  `GetAngles`, `0x100b3070` / `0x100b3110`) return the LOCAL words; 217/219 (`0x100b31b0` / `0x100b3280`)
+  run slot 98 `CalcAbsolutePosition` `0x100b1ac0` under `0x800` and return the cache.
+- **Who parents at map load.** `MapEntity_ParseAllEntities` `0x10136650`: every row created, then -- before
+  any `DispatchSpawn` -- the rows walked from the last to the first, each `m_iParent` (+0x124, the
+  `parentname` key) resolved with `FindEntityByName` `0x100f7770`; a parent that resolves and has an edict
+  (+0x2e0) gets `SetParent(this, parent, 0)` `0x100a0670` directly. No Msg for a missing parent. The walk order
+  is the CRT's `qsort` over equal keys (`0x10136860` compares a word every row leaves 0): unrecovered
+  permutation; only sibling order in a child chain depends on it.
+- **`SetParent(CBaseEntity*, byte attach)` `0x100a0670`** (12 callers, every one passes `attach = 0`): (1)
+  `0x1012c840` unlink; (2) `+0x1b1 = 1`; (3) `m_pParent` <- `0x100a0ae0(parent)`; (4) the handle must resolve
+  (`0x100290c0`), else `Msg("Entity %s(%s) set bad parent\n")` `0x105558ec`, `m_iParent = 0`, exit; (5)
+  `m_iParent` <- the parent's `m_iName`; (6) under `+0x2e0 != 0`: `0x1012c7a0` prepend, `+0x258` <- attach,
+  `M = 0x101d1530(entity(+0x25c), attach)` (identity for NULL; the `attach != 0` `GetAttachment02` sample is
+  discarded by the unconditional `AngleMatrix(GetAbsOrigin(), GetAbsAngles())` that follows),
+  `C = 0x101d15f0(this)` (`AngleMatrix(GetOrigin(), GetAngles())`, local), `o = 0x100a0a10(M, GetOrigin())`
+  = `R^T (c - t)`, `0x100b5340(this, 0x800, 0)`, `M := transpose(M) (0x1024da80) * C (0x1024cf80, output
+  aliasing M)`, `0x100a0990` the first twelve words, `A = 0x10137ed0(Q)` (MatrixAngles: `xy = sqrt(Q0^2+Q4^2)`,
+  `0.001f < xy` -> yaw `atan2(Q4, Q0)`, pitch `atan2(-Q8, xy)`, roll `atan2(Q9, Q10)`; else yaw
+  `atan2(-Q1, Q5)`, roll 0; times 57.29578f), slot 64 `SetAngles(A)`, `UTIL_SetOrigin(this, o, bTouch = 0)`
+  `0x101cf5c0` (slot 62, NO `PhysicsTouchTriggers`); (7) `entity(m_pParent)->vfn[115](this)`: every one of the
+  497 classes filling slot 115 holds the empty `0x10026bf0`. Constants: `_DAT_1044eb08` 0.017453292f,
+  `_DAT_10446758` 57.29578f, `_DAT_10454b8c` 0.001f (`pe.py const`).
+- **The by-name overload `0x100a04e0`** (`InputSetParent` `0x100ad030`: the string value when the variant
+  type is 2, else NULL; `FUN_10140330`, the keyframe track): `FindEntityByName(NULL, name or "")`; a non-NULL
+  name that finds nothing -> `Msg("Entity %s(%s) has bad parent %s\n")` `0x105558a8` and return (no SetParent);
+  a second match -> `Msg("... has ambigious parent %s\n")` `0x10555878` and continue; `SetParent(found, 0)`.
+- **Unlink `0x1012c840`** (`ClearParent` `0x100a0b20` and `InputClearParent` `0x100ad100` are only this):
+  `m_pMoveParent` must be a non -1 handle that resolves, else nothing changes (the stale link is left);
+  `0x1012c6c0(parent, this)` walks the parent's chain and writes the successor's re-read handle (or -1 when
+  it does not resolve) into the predecessor's link, never clearing the child's own peer; `0x1012c7f0(this)`:
+  `m_pMoveParent = -1`, `m_pMovePeer = -1`, `SetAngles(GetAbsAngles())`, `SetOrigin(GetAbsOrigin())`. Because
+  the link is already cleared, a dirty `0x800` bit makes the getters recompute with no parent (abs := local)
+  -- and `SetAngles` SETS that bit whenever the local angles differ from the absolute ones (any rotated
+  parent), so `GetAbsOrigin()` then answers the LOCAL origin and the detached entity keeps its parent-relative
+  offset as its world position. A retail defect the port reproduces (`l0_entity_parenting`).
+- **Prepend `0x1012c7a0`**: child peer <- parent's first child (raw copy); parent's first child <- child's
+  handle; child's move parent <- parent's handle. **`0x100b5340(ent, self, children)`**: `m_iEFlags |= self`,
+  every descendant (`+0x260`, then `+0x264`) `|= self | children`. `SetOrigin` `0x100b2be0` uses `(0x10800,
+  0)`, `SetAngles` `0x100b2d00` `(0x800, 0x3000)`, both changed-only against the LOCAL word, both then
+  `0x100b52a0` (`SetAngles` also `0x100b51b0`: collision-property walks, names unrecovered) and `+0x1b1`.
+- **Unrecovered:** which classes hold `+0x2e0 == 0`; the names of `0x100b51b0` / `0x100b52a0`;
+  `FindEntityByName` for an empty name; the leading-`!` finder `0x100f7460`'s arms.
+
 ## Entity-name matching
 
 `CGlobalEntityList::FindEntityByName` (`vampire.dll` `FUN_100f7770`) uses one small matching rule
@@ -1901,6 +1955,31 @@ Corpus usage over 1,304 rows: `0` 1,085 · `1` 111 · `2` 45 · `-1` 29 (the swi
 INFERRED) · `11` 14 · `6` 11 · `17` 5 · `10` 2 · `9` 1 · `5` 1. Modes 4, 7, 8, 12–14, 16 and 18 are
 placed nowhere and reachable only from code that passes 1, 2 or 6. `Activate` removes the entity
 when the definition does not resolve.
+
+#### The attach sequence [decompiled, L0-r010]
+
+`CEnvParticle::Spawn` `0x100fb3d0`: slot 104 `Precache`, `CPointEntity::Spawn`, `m_nAttachType` outside
+`[0, 0x12]` -> `Warning("entity %s has invalid attach type ...")` and 0; with a resolved definition
+(`+0x454 >= 0`, else `UTIL_Remove`) the `m_fSpawnBounds` clamp, then -- when `m_pParent` (+0x254, written by
+the map parse's pre-Spawn `SetParent`, see "`SetParent` / `ClearParent`") resolves -- `FUN_100faf60` ->
+slot 243 `AttachToEntity(parent, m_nAttachType, m_sAttachName or "")`; `m_bActive` -> `+0x488 = curtime`.
+
+`CEnvParticle::AttachToEntity(parent, mode, name)` `0x100fb110` (slot 243; `CAuspexAura::AttachToEntity`
+`0x10051d50` overrides it), straight-line: `SetParent(this, parent, 0)`; `m_nAttachType` (+0x458) <- mode;
+`m_sAttachName` (+0x45c) <- `AllocPooledString(name)` `0x1042bff0` (0 for ""; a pooled `char*` otherwise);
+slot 93 `SetMoveType(11, 0)` -- `MOVETYPE_FOLLOW`, `PhysicsFollow` `0x10039470` then copies the aim
+entity's absolute pose each tick; `SetAimEnt(entity(m_pParent))` `0x1009ee80`; slot 63 `SetOrigin(0,0,0)`
+(the LOCAL origin); `m_nAttachPoint` (+0x460) <- `FUN_100fafa0(parent, mode, name)`.
+
+`FUN_100fafa0(parent, mode, name)` `0x100fafa0`: mode 1 or 3 -> -1 (the parent is not read); mode 6 or 17 ->
+`RTDynamicCast(parent -> CBaseAnimating)` non-null -> `CBaseAnimating::LookupAttachment(name)` `0x10092d50`
+(1-based, 0 with no model) else 0; any other mode > 0 -> `VEngineServer014` slot 21 (model type of
+`GetModelIndex()`) == 3 (studio) -> slot 18 `GetModelPtr`; with a header and `hdr[+0xf0] > 0` the bone table
+at `hdr + hdr[+0xf4]` (0xa0-byte records, name at `entry + *(int*)entry`) scanned with `__strcmpi`: the first
+match's index, else 0 (so 0 is both "not found" and "first bone"); a NULL parent is dereferenced (crash);
+mode <= 0 -> 0. Port: `Source/ElysiumUE/Private/Substrate/ElysiumEnvParticle.cpp`; the bone scan reads the
+parent's baked reference skeleton (exporter order; a static-reduced placed prop stands none), the
+`LookupAttachment` arm is the L1 hook (`hooks.tsv:21`) and answers 0 until L1 lands it.
 
 ### `TurnOn` restarts; `TurnOff` only stops feeding
 
