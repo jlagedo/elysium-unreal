@@ -149,9 +149,8 @@ void FElysiumEntity::ConstructBaseEntity()
 	SetMoveType(0, 0);                                              // 1009dc5f -> 0x100aad70
 	SetOwnerEntity(FElysiumEntityHandle::Invalid());                // 1009dc6c -> 0x100aab10
 	SetCheckUntouch(false);                                         // 1009dc79 -> 0x100b11d0
-	// `SetModelIndex(0)` (`1009dc8a`): `m_nModelIndex` is the engine's precache slot; this port
-	// resolves a model by name and carries no index word (the binding is UNBOUND), so the write has
-	// no word to land on. The slot-10 stub is not called: it is a censused refusal, not the write.
+	// `SetModelIndex(0)` (`1009dc8a`): `m_nModelIndex` (+0x1a4), the model-table index (L0-r021).
+	SetModelIndex(0);                                               // 1009dc8a -> 0x100b1750
 	Model.Reset();                                                  // 1009dc97 -> 0x100b15f0
 	// 25. `SetCollisionBounds(this, &DAT_1070d1b0, &DAT_1070d1b0)` (`1009dca4` -> 0x1009edc0 -> 0x100dc770):
 	//     mins = maxs = 0, radius 0.0, then `FUN_100dda20`'s `|= 0x14000`; `FUN_100ddd20` finds the NULL
@@ -215,6 +214,7 @@ void FElysiumEntity::ScriptHide()
 	bSavedPhysicalWordsAvailable = ReadScriptPhysicalWords(ScriptSavedSolid, ScriptSavedMoveType,
 		ScriptSavedMoveCollide, ScriptSavedSolidFlags, ScriptSavedEffects); // 0x100a8710; false until reader exists
 	if (bSavedPhysicalWordsAvailable) WriteScriptPhysicalWords(0, 0, 0, 4, 0xe0); // 0x100a8710
+	ForceTransmit(); // 0x100a8710: Relink (0x1001514a, an empty profiler hook), then ForceTransmit 0x1009d1e0, before the latch
 	bHidden = true;
 	SavedNextThink = NextThink;
 	NextThink = ELYSIUM_NEVER_THINK;
@@ -255,6 +255,7 @@ void FElysiumEntity::ScriptUnhide()
 	NextThink = World ? static_cast<float>(World->NowSeconds()) : 0.0f; // 0x100a8990 due NOW
 	if (bSavedPhysicalWordsAvailable) WriteScriptPhysicalWords(ScriptSavedSolid, ScriptSavedMoveType,
 		ScriptSavedMoveCollide, ScriptSavedSolidFlags, ScriptSavedEffects); // 0x100a8990
+	ForceTransmit(); // 0x100a8990: Relink, then ForceTransmit 0x1009d1e0
 	OnDormancyChanged();
 }
 
@@ -1208,6 +1209,13 @@ void FElysiumEntity::SetRuntimeTransform(const FVector& NewOrigin, const FVector
 void FElysiumEntity::SetRuntimeModel(const FString& NewModel)
 {
 	Model = NewModel;
+	// The character tier's model write (`TroikaSetModel` 0x10298ce0 -> `CBaseCombatCharacter::SetModel`
+	// -> `CBaseAnimating::SetModel` 0x10095030, L1/L2) ends in `UTIL_SetModel` 0x101cf4a0, whose index
+	// store (slot 12's lookup, slot 10 at `101cf505`) is the L0 word `IsViewable` 0x100a9800 reads.
+	if (!NewModel.IsEmpty() && World != nullptr)
+	{
+		SetModelIndex(World->ModelTableIndex(NewModel));
+	}
 	OnRuntimeModelChanged();
 }
 

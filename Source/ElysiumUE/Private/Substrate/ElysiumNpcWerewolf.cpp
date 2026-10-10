@@ -2157,13 +2157,9 @@ void FElysiumNpcWerewolf::WerewolfCheckStuck(EStuckEscape Escape)
 	// body tested `fraction < 1` where retail tests `startsolid`, ran `SetHullSizeSmall(1)` on exits
 	// retail leaves alone, repeated one probe three times and gated the teleport on COND 0x77 alone.
 	//
-	// `103cb994`: slot 163 (`+0x28c`), `CBaseEntity::IsViewable` (`0x100a9800`), over this runtime's
-	// words: `m_fEffects` (`+0x19c`) bit `0x40` clear, and a model. `IsBSPModel` (`0x100b5110`) is
-	// false for an NPC's bbox solid, so the model arm is slot 8's model pointer, which a spawned
-	// NPC's `Model` stands for. The Werewolf does not override slot 163; the generated slot-163 row
-	// stays another story's, and this is the one caller that needs its answer.
-	constexpr uint32 GEffectsBit0x40 = 0x40;
-	if ((EffectsWord & GEffectsBit0x40) != 0 || Model.IsEmpty())
+	// `103cb994`: slot 163 (`+0x28c`), `CBaseEntity::IsViewable` (`0x100a9800`), through the dispatch
+	// (the Werewolf does not override it; L0-r021 ported the base body).
+	if (!IsViewable())
 	{
 		return;
 	}

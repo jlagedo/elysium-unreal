@@ -237,6 +237,46 @@ int32 FElysiumEntityWorld::PrecacheDecal(const FString& Name)
 	return PrecacheStringTable(PrecachedDecals, Name, TEXT("CVEngineServer::PrecacheDecal"));
 }
 
+int32 FElysiumEntityWorld::ModelTableIndex(const FString& Name)
+{
+	// `VEngineServer014` slot 20 / `VModelInfoServer001` slot 12, the model-precache table lookup
+	// (engine `0x200c5150` -> table vfunc6 `0x200c27b0`, -1 when absent). An empty name is no row (-1);
+	// a name not yet in the table is admitted (the named modernization in the header).
+	if (Name.IsEmpty())
+	{
+		return -1;
+	}
+	const int32 Found = PrecachedModels.IndexOfByPredicate([&Name](const FString& Row) { return Row.Equals(Name, ESearchCase::IgnoreCase); });
+	if (Found != INDEX_NONE)
+	{
+		return Found + 1;
+	}
+	PrecachedModels.Add(Name);
+	return PrecachedModels.Num();
+}
+
+int32 FElysiumEntityWorld::ModelTypeOfName(const FString& Name)
+{
+	// The engine's model loader types by name: `*N` a brush submodel (`mod_brush` 1), `.spr` / `.vmt` a
+	// sprite (2), `.mdl` a studio model (3); anything else loads nothing (0).
+	if (Name.StartsWith(TEXT("*"))) return ModelTypeBrush;
+	if (Name.EndsWith(TEXT(".vmt"), ESearchCase::IgnoreCase) || Name.EndsWith(TEXT(".spr"), ESearchCase::IgnoreCase)) return 2;
+	if (Name.EndsWith(TEXT(".mdl"), ESearchCase::IgnoreCase)) return 3;
+	return 0;
+}
+
+bool FElysiumEntityWorld::ModelTableHasModel(int32 Index) const
+{
+	// `VModelInfoServer001` slot 2 (`FUN_200f8510`): index 0 -> NULL; else the table's string, loaded.
+	return Index > 0 && Index <= PrecachedModels.Num() && ModelTypeOfName(PrecachedModels[Index - 1]) != 0;
+}
+
+int32 FElysiumEntityWorld::ModelTableType(int32 Index) const
+{
+	// slot 6 over slot 2: `model ? model->+0x88 : -1`.
+	return ModelTableHasModel(Index) ? ModelTypeOfName(PrecachedModels[Index - 1]) : -1;
+}
+
 int32 FElysiumEntityWorld::SpriteModelFrameCount(const FString& Model, int32 EntityIndex) const
 {
 	// `VEngineServer014` slot 26 (L0-r013): the staged model table first (a runtime-created sprite

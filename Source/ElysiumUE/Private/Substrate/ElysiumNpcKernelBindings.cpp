@@ -142,10 +142,13 @@ namespace ElysiumNpcKernelBindings
 		// UNBOUND +0x11c m_iClassname "classname" — the def's identity:
 		// `FElysiumEntityDef::Classname` is hoisted out of the keys and the registry keys the
 		// descriptor on it, so there is no member a write could land on
-		// UNBOUND +0x1a4 m_nModelIndex "modelindex" — `m_nModelIndex` is the engine's precache slot
-		// for `model`, an index into Source's own model table; this port resolves a model by name
-		// UNBOUND +0x190 m_vecMoveDir "movedir" — `m_vecMoveDir` is the mover's authored direction,
-		// which this port keeps on `FElysiumMoverBase`; no shipped map authors it on a character
+		// UNBOUND +0x1a4 m_nModelIndex "modelindex" — `m_nModelIndex`
+		// (`FElysiumEntity::ModelIndex`) is the world model table's index for `model`, which
+		// `UTIL_SetModel` 0x101cf4a0 re-derives from the name (L0-r021); the table is per world, so
+		// a saved index would not survive a load, and no shipped map authors the key
+		// UNBOUND +0x190 m_vecMoveDir "movedir" — `m_vecMoveDir` (`FElysiumEntity::MoveDir`) is
+		// what slot 171 `SetMovedir` 0x100ad550 derives from the angles at a mover's Spawn
+		// (L0-r021); no shipped map authors the key, and a restore re-runs the Spawn that writes it
 		// UNBOUND +0x168 m_nRenderFX "renderfx" — a render word: `m_nRenderFX`'s effect table is
 		// Source's, and Unreal renders
 		// UNBOUND +0x16c m_nRenderMode "rendermode" — a render word: `m_nRenderMode`'s blend modes

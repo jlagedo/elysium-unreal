@@ -1062,7 +1062,9 @@ private:
 	bool PreparePropAndWieldModels(const FElysiumEntityDefs& Definitions, FString& OutError,
 		bool bAdmitWholeCatalogue = false);
 	void ReleasePropAndWieldModels();
-	// Late admission: the modern form of retail's synchronous precache inside SetModel. A model no
+	// Late admission, a named MODERNIZATION: retail's `SetModel` never precaches (`UTIL_SetModel`
+	// 0x101cf4a0's `VModelInfoServer001` slot 12 is a lookup; a name the entity's own Precache did not
+	// put in the table is fatal there, `walks/L0-r021.md`). A model no
 	// entity declared at load (a script's SetModel literal, a restored runtime entity) is loaded
 	// asynchronously, admitted into this map's prepared context, and every live entity standing on
 	// it is rebuilt. False means the caller's build must stand down until that completion.

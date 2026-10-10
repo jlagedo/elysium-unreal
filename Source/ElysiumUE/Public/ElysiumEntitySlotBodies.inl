@@ -176,14 +176,11 @@ TArray<FRangedDamagePerVictimCall> RangedDamagePerVictimCalls;
  *  dispatches slot 166 with 0 — the SAME call retail makes, not a refusal of it. */
 FElysiumEntity* EntityOfEdict(const void* Edict) const;
 
-/** `IPhysics`'s "is this vphysics object static/asleep" query — `(*DAT_1070b250 + 0x18)(index)`,
- *  the second arm of `0x100b5110`. **SEAM**: answers false, so a `SOLID_VPHYSICS` entity is not
- *  standable, which is retail's answer for a moving one. */
-bool PhysicsObjectIsStandable(const FElysiumEntity& Entity) const;
-
-/** `FUN_100b5110` (`0x100b5110`) — the shared standability helper slots 159 and 164 both end in.
- *  `GetSolid() == 1` (`SOLID_BSP`) is standable outright; `SOLID_VPHYSICS` (6) asks the physics
- *  object; everything else is not. NAMED from what it does, not from a recovered symbol. */
+/** `FUN_100b5110` (`0x100b5110`) — the SDK's `CBaseEntity::IsBSPModel` (`walks/L0-r021.md`), the
+ *  helper slots 159, 163 (`IsViewable`) and 164 end in. `GetSolid() == 1` (`SOLID_BSP`) answers true
+ *  outright; else `m = VModelInfoServer001 slot 2 GetModel(GetModelIndex())`, and a second
+ *  `GetSolid() == 6` (`SOLID_VPHYSICS`) with `slot 6 GetModelType(m) == 1` (brush) answers true;
+ *  everything else false. (`DAT_1070b250` is `VModelInfoServer001`, not a physics interface.) */
 bool IsStandableSolid() const;
 
 /** `FUN_10160680` — `*(float*)(this+0x1ddc) * DAT_10725c9c`. **Unrecovered**: one direct caller, no
@@ -327,9 +324,23 @@ void UtilSetSize(const FVector& MinsUnits, const FVector& MaxsUnits);
 // a NULL or empty name returns untouched; else the model index (slot 10) and name (slot 212) are
 // re-set and the collision box is the model's bounds -- `UTIL_SetSize(this, mins, maxs, 1)`
 // (`101cf54f`), or `UTIL_SetSize(this, vec3_origin, vec3_origin, 1)` (`101cf56a`) when the engine has
-// no model for the name. The engine's model table is the def's hulls here (`FElysiumEntityDef::Hulls`,
-// the brush bake, cm on the Unreal axes), so a def with none takes the NULL-model arm.
+// no model for the name. The index is the world's model table (`FElysiumEntityWorld::ModelTableIndex`);
+// the model's bounds are the def's hulls (`FElysiumEntityDef::Hulls`, the brush bake, cm on the Unreal
+// axes), so a def with none takes the NULL-model arm.
 void UtilSetModel(const FString& Name);
+// `CBaseEntity::ForceTransmit` 0x1009d1e0: `m_flForceTransmitUntil (+0x90) = gpGlobals->curtime +
+// 1.0f` (`_DAT_104454c0`). Hide 0x1009d2a0, ScriptHide 0x100a8710 and ScriptUnhide 0x100a8990 call it.
+void ForceTransmit();
+// `CBaseEntity::SimulateAngles` 0x1003f810 (not a slot; its callers are `PhysicsNoclip` 0x100397c0,
+// `PhysicsToss` 0x1003f920 and `PhysicsStepRunTimestep` 0x1003b190): `T = interval * m_vecAngVelocity +
+// GetAngles()` per component, each stored to f32, then slot 64 `SetAngles(T)`.
+void SimulateAngles(float Interval);
+// `FUN_100b51b0` 0x100b51b0 (`__fastcall`, `SetAngles` 0x100b2d00's second walk): per node, a switch on
+// `m_Collision.m_nSurroundType` (+0x28c) through the 7-entry jump table at 0x100b5254 -- 0, 1, 6 test
+// (`m_usSolidFlags` bit 0x80 clear and `m_Solid` neither SOLID_BBOX 2 nor SOLID_NONE 0), 2, 4 and > 6
+// always, 3 and 5 never call `FUN_100dda20` (`MarkCollisionBoundsDirty`) -- then every move child
+// (`m_pMoveChild`, each `m_pMovePeer`, recursing).
+void MarkSurroundingBoundsTreeDirty();
 // A retail vector as a site payload spells it: `x,y,z`, each as the f32 `%g`.
 static FString RetailVectorText(const FVector& V);
 // `FUN_100dda20` 0x100dda20: `owner->m_iEFlags |= 0x14000`, then tail-jumps into `FUN_100ddd20`.

@@ -94,12 +94,16 @@ public:
 	{
 		bLocked = (SpawnFlags & SF_LOCKED) != 0;
 		ButtonState = EState::Rest;
-		// `CBaseButton::Spawn` 0x100c8d60: after `SetSolid(SOLID_BSP)`, `SetModel(STRING(GetModelName())
-		// or "")` (slot 105, `100c8e20` -> 0x100ad460 -> `UTIL_SetModel` 0x101cf4a0): the collision box
-		// and `m_vecSize` are the brush model's bounds, read back through slot 214 by the press-travel
-		// sum below. Then the zero defaults (`_DAT_104454c4` = 0.0f): `m_flSpeed` 0 -> 40.0 (`0x42200000`),
-		// `m_flWait` 0 -> 1.0 (`0x3f800000`), `m_flLip` 0 -> 4.0 (`0x40800000`) (`walks/L0-r016.md`).
-		UtilSetModel(Model);
+		// `CBaseButton::Spawn` 0x100c8d60: slot 104 Precache, then slot 171 `SetMovedir` (`[EAX+0x2ac]`,
+		// 0x100ad550: `m_vecMoveDir` from the angles, then `SetAngles(0)`, L0-r021), slot 93, then after
+		// `SetSolid(SOLID_BSP)`, `SetModel(STRING(GetModelName()) or "")` (slot 105, `100c8e20` ->
+		// 0x100ad460 -> `UTIL_SetModel` 0x101cf4a0): the collision box and `m_vecSize` are the brush
+		// model's bounds, read back through slot 214 by the press-travel sum below. Then the zero
+		// defaults (`_DAT_104454c4` = 0.0f): `m_flSpeed` 0 -> 40.0 (`0x42200000`), `m_flWait` 0 -> 1.0
+		// (`0x3f800000`), `m_flLip` 0 -> 4.0 (`0x40800000`) (`walks/L0-r016.md`).
+		SetMovedir();                                                            // 0x100c8d60 [vtbl+0x2ac]
+		FString ModelArg = Model;
+		SetModel(ModelArg.GetCharArray().GetData() != nullptr ? ModelArg.GetCharArray().GetData() : const_cast<TCHAR*>(TEXT("")));
 		if (Speed == 0.0f) { Speed = 40.0f; }
 		if (Wait == 0.0f)  { Wait = 1.0f; }
 		if (Lip == 0.0f)   { Lip = 4.0f; }
@@ -251,9 +255,9 @@ private:
 		}
 		bPositionsCached = true;
 		RestLoc = Body->GetRelativeLocation();                                   // m_vecPosition1 = GetAbsOrigin()
-		// movedir from `angles` (Unreal space) — the same shared helper the sliding door derives
-		// its slide direction through, sentinels and the Source→Unreal Y reflection included.
-		const FVector Dir = SourceAnglesToUnrealDir(Angles);
+		// `m_vecMoveDir` (+0x190), written by Spawn's slot-171 `SetMovedir` 0x100ad550, on the Unreal
+		// axes (the Y reflection) -- the word the sliding door reads too.
+		const FVector Dir = ElysiumMoveDirToUnreal(MoveDir);
 		// `T = sum |(size_i - 2.0) * movedir_i| - lip` over slot 214 `GetSize` (the model bounds Spawn's
 		// `UtilSetModel` wrote), no clamp; `m_vecPosition2 = m_vecPosition1 + movedir * T`.
 		const double TravelUnits = ElysiumRetailMoverTravelUnits(*this, Dir, Lip);

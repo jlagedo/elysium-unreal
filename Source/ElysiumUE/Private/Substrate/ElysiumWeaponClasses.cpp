@@ -791,6 +791,11 @@ void FElysiumWeapon::Hide()
 	// stays the owner's ACTIVE weapon — nothing about the transaction, the mode or the magazine
 	// changes — it stops being drawn, and with it stops translating the body's activities
 	// (0x10327ec0 / 0x103854f0 both gate on the bit).
+	// The weapon has no slot-66 body of its own in retail: the words are `CBaseEntity::Hide`'s (the
+	// live or script-saved `m_fEffects` bit and the `ForceTransmit` stamp, L0-r021). The weapon-leaf
+	// `bHidden` below stands for the bit the translation gate reads; it is not the entity's script-
+	// hidden latch `FElysiumEntity::bHidden` (+0xf4), which this class shadows.
+	FElysiumEntity::Hide();
 	bHidden = true;
 	// The hand follows the bit. Retail's NODRAW is what stops the model rendering at all; here the
 	// wield model is a separate attached component, so it is taken off explicitly. The trail goes
@@ -808,7 +813,9 @@ void FElysiumWeapon::Hide()
 
 void FElysiumWeapon::Unhide()
 {
-	// `CBaseEntity::Unhide` (0x1009d380), vtable `+0x10c`: clear `m_fEffects &= ~EF_NODRAW`.
+	// `CBaseEntity::Unhide` (0x1009d380), vtable `+0x10c`: clear `m_fEffects &= ~EF_NODRAW` -- the
+	// base body's words (L0-r021), then the weapon-leaf bit and the hand.
+	FElysiumEntity::Unhide();
 	bHidden = false;
 	// The wield model is re-installed only for the wielder that is actually holding this weapon: an
 	// unhide on a weapon some other equip has since replaced must not put its model back in the hand.

@@ -1786,7 +1786,8 @@ destination.
 _Recovered 2026-09-14, story 29d._
 
 Scope-traced and gated on slot 163 (`+0x28c`) `IsViewable` (`0x100a9800`: `m_fEffects & 0x40`
-clear and a model). Its one argument is a **bool** (`[ESP+0xdc]` at `103cbd8f`), and both callers,
+clear, then `IsBSPModel` 0x100b5110 false for the bbox body, so `m_nModelIndex != 0`; L0-r021,
+`docs/vtmb/entity_io.md`). Its one argument is a **bool** (`[ESP+0xdc]` at `103cbd8f`), and both callers,
 `TaskFail` `0x103ce750` (`103ce900 PUSH 0`) and `StartTask` `0x103ccda0` (task `0x15b`), pass false.
 Every test below reads `trace.startsolid` (`+0x37`); the fraction matters only on the re-probe.
 

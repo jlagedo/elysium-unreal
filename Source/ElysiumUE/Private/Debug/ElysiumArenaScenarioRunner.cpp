@@ -1387,8 +1387,11 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 		// (+0x370), `m_CollisionGroup` (+0x368), `m_clrRender` (+0x1a0, the dword), `m_nSimulationTick`
 		// (+0x22c), `m_iCurrentThinkContext` (+0x1cc), `m_flLastThink` (+0x178), and the handles
 		// `m_hOwnerEntity` (+0x364), `m_hGroundEntity` (+0x384), `m_hUseActivator` (+0x8c).
+		// L0-r021's: `m_vecMoveDir` (+0x190, Source axes, raw f32 words `SetMovedir` 0x100ad550 wrote),
+		// `m_nModelIndex` (+0x1a4), `m_flForceTransmitUntil` (+0x90, the ledger's name), the script-hidden
+		// latch `m_bScriptHidden` (+0xf4) and `m_fScriptSavedEffects` (+0xf8; `member` as `m_fEffects`).
 		const bool bBoxVector = Probe.Field == TEXT("m_vecMins") || Probe.Field == TEXT("m_vecMaxs")
-			|| Probe.Field == TEXT("m_vecSize");
+			|| Probe.Field == TEXT("m_vecSize") || Probe.Field == TEXT("m_vecMoveDir");
 		const bool bVector = Probe.Field == TEXT("m_vecOrigin") || Probe.Field == TEXT("m_angRotation") || Probe.Field == TEXT("m_vecVelocity")
 			|| Probe.Field == TEXT("m_vecAbsOrigin") || Probe.Field == TEXT("m_angAbsRotation") || bBoxVector;
 		const bool bFlagWord = Probe.Field == TEXT("m_iEFlags");
@@ -1399,7 +1402,7 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 		// word), and the two base output lists `m_OnUseBegin` (+0x5c) / `m_OnUseEnd` (+0x74): bare, the
 		// count of actions the datamap walker parsed at run time; `index`, that action head-first as
 		// `target,input,param,delay,times,python`.
-		const bool bEffectsWord = Probe.Field == TEXT("m_fEffects");
+		const bool bEffectsWord = Probe.Field == TEXT("m_fEffects") || Probe.Field == TEXT("m_fScriptSavedEffects");
 		const bool bOutputList = Probe.Field == TEXT("m_OnUseBegin") || Probe.Field == TEXT("m_OnUseEnd");
 		if (!bVector && !bFlagWord && !bDataObjectMask && !bEffectsWord && !bOutputList
 			&& (!Probe.Index.IsEmpty() || !Probe.Member.IsEmpty()))
@@ -1478,10 +1481,12 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 		}
 		else if (bEffectsWord)
 		{
+			const uint32 EffectsBits = Probe.Field == TEXT("m_fEffects") ? Entity->EffectsWord
+				: static_cast<uint32>(Entity->ScriptSavedEffects);
 			if (Probe.Member.IsEmpty())
 			{
 				OutAnswer.Type = FElysiumArenaValue::EType::Number;
-				OutAnswer.Number = static_cast<double>(Entity->EffectsWord);
+				OutAnswer.Number = static_cast<double>(EffectsBits);
 			}
 			else
 			{
@@ -1492,8 +1497,19 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 					return false;
 				}
 				OutAnswer.Type = FElysiumArenaValue::EType::Bool;
-				OutAnswer.bBool = (Entity->EffectsWord & Mask) == Mask;
+				OutAnswer.bBool = (EffectsBits & Mask) == Mask;
 			}
+		}
+		else if (Probe.Field == TEXT("m_nModelIndex") || Probe.Field == TEXT("m_flForceTransmitUntil"))
+		{
+			OutAnswer.Type = FElysiumArenaValue::EType::Number;
+			OutAnswer.Number = Probe.Field == TEXT("m_nModelIndex") ? static_cast<double>(Entity->ModelIndex)
+				: static_cast<double>(Entity->ForceTransmitUntil);
+		}
+		else if (Probe.Field == TEXT("m_bScriptHidden"))
+		{
+			OutAnswer.Type = FElysiumArenaValue::EType::Bool;
+			OutAnswer.bBool = Entity->bHidden;
 		}
 		else if (bOutputList)
 		{
@@ -1604,6 +1620,7 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 				: Probe.Field == TEXT("m_vecMins") ? Entity->CollMins
 				: Probe.Field == TEXT("m_vecMaxs") ? Entity->CollMaxs
 				: Probe.Field == TEXT("m_vecSize") ? Entity->SizeUnits
+				: Probe.Field == TEXT("m_vecMoveDir") ? Entity->MoveDir
 				: Probe.Field == TEXT("m_vecVelocity") ? Entity->Velocity   // +0x3d4, the datamap `velocity` row, read raw (L0-r017)
 				: Probe.Field == TEXT("m_vecAbsOrigin") ? Entity->GetAbsOrigin() : Entity->GetAbsAngles();
 			OutAnswer.Type = FElysiumArenaValue::EType::Number;
@@ -1624,7 +1641,8 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 					TEXT("m_MoveType, m_MoveCollide, m_NetworkChangeState.m_bChanged, m_iVSoundGroup, m_iVSoundGroupFemale, ")
 					TEXT("m_iVSoundTableIdx, m_touchStamp, m_Solid, m_usSolidFlags, m_vecMins, m_vecMaxs, m_vecSize, m_flRadius, ")
 					TEXT("m_flElasticity, m_CollisionGroup, m_clrRender, m_nSimulationTick, m_iCurrentThinkContext, m_flLastThink, ")
-					TEXT("m_hOwnerEntity, m_hGroundEntity, m_hUseActivator, m_fDataObjectTypes, or a datamap row the entity's class registers)"),
+					TEXT("m_hOwnerEntity, m_hGroundEntity, m_hUseActivator, m_fDataObjectTypes, m_vecMoveDir, m_nModelIndex, ")
+					TEXT("m_flForceTransmitUntil, m_bScriptHidden, m_fScriptSavedEffects, or a datamap row the entity's class registers)"),
 					*Probe.Field);
 				return false;
 			}

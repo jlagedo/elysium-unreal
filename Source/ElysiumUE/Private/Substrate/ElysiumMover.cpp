@@ -29,34 +29,14 @@
 
 DEFINE_LOG_CATEGORY(LogElysiumMover);
 
-// Source movedir from raw-Source `angles` (pitch,yaw,roll degrees), returned in Unreal space.
-// Mirrors Source's SetMovedir: the sentinels (0,-1,0)=up and (0,-2,0)=down, else the forward of
-// `angles`. The exporter leaves `angles` in raw Source space in the `.ents` keys (only geometry is
-// converted), so the forward is computed in Source and then Y-negated into Unreal (source_dir_to_
-// unreal), matching how the hulls were converted — the reflection preserves axis-aligned lengths.
-FVector SourceAnglesToUnrealDir(const FVector& AnglesDeg)
+// `m_vecMoveDir` (Source axes, the words `CBaseEntity::SetMovedir` 0x100ad550 wrote) on the Unreal axes:
+// the Source->Unreal Y reflection, no scale and no renormalization (retail uses the words as written;
+// `AngleVectors`' forward is unit to an ulp). The exporter leaves `angles` in raw Source space in the
+// `.ents` keys (only geometry is converted), so SetMovedir reads Source angles and this reflects its
+// output the way the hulls were converted.
+FVector ElysiumMoveDirToUnreal(const FVector& SourceMoveDir)
 {
-	FVector SrcDir;
-	if (AnglesDeg.Equals(FVector(0.f, -1.f, 0.f)))
-	{
-		SrcDir = FVector(0.f, 0.f, 1.f);    // straight up
-	}
-	else if (AnglesDeg.Equals(FVector(0.f, -2.f, 0.f)))
-	{
-		SrcDir = FVector(0.f, 0.f, -1.f);   // straight down
-	}
-	else
-	{
-		// Source AngleVectors forward: pitch=X, yaw=Y, roll=Z (degrees).
-		const float Pitch = FMath::DegreesToRadians(AnglesDeg.X);
-		const float Yaw   = FMath::DegreesToRadians(AnglesDeg.Y);
-		SrcDir = FVector(
-			FMath::Cos(Yaw) * FMath::Cos(Pitch),
-			FMath::Sin(Yaw) * FMath::Cos(Pitch),
-			-FMath::Sin(Pitch));
-	}
-	// source_dir_to_unreal: negate Y (no scale), then normalize.
-	return FVector(SrcDir.X, -SrcDir.Y, SrcDir.Z).GetSafeNormal();
+	return FVector(SourceMoveDir.X, -SourceMoveDir.Y, SourceMoveDir.Z);
 }
 
 namespace
@@ -367,12 +347,19 @@ void FElysiumDoorBase::Spawn()
 	// seated there by BuildBrushBody). Open is leaf-computed from the keyvalues + spawnflags.
 	ClosedLoc = Body ? Body->GetRelativeLocation() : (Def ? Def->Origin : FVector::ZeroVector);
 	ClosedRot = Body ? Body->GetRelativeRotation() : FRotator::ZeroRotator;
-	// `CBaseDoor::vfunc103` 0x100ef260 (Spawn), `100ef298`: `SetModel(STRING(GetModelName()) or "")`
-	// (slot 105 -> `CBaseEntity::SetModel` 0x100ad460 -> `UTIL_SetModel` 0x101cf4a0): the collision
-	// box and `m_vecSize` become the brush model's bounds -- what the open-pose arithmetic below reads
-	// through slot 214 `GetSize` (`walks/L0-r016.md`). The brush body is built after Spawn, so the
-	// bounds come from the def's hulls, as `UtilSetModel` reads them.
-	UtilSetModel(Model);
+	// `CBaseDoor::vfunc103` 0x100ef260 (Spawn): slot 104 Precache (empty), then slot 171 `SetMovedir`
+	// (`[EAX+0x2ac]`, 0x100ad550: `m_vecMoveDir` from the angles, then `SetAngles(0)`, L0-r021) on the
+	// sliding leaf, then `SetModel(STRING(GetModelName()) or "")` (slot 105 -> `CBaseEntity::SetModel`
+	// 0x100ad460 -> `UTIL_SetModel` 0x101cf4a0): the collision box and `m_vecSize` become the brush
+	// model's bounds -- what the open-pose arithmetic below reads through slot 214 `GetSize`
+	// (`walks/L0-r016.md`). The brush body is built after Spawn, so the bounds come from the def's
+	// hulls, as `UtilSetModel` reads them.
+	if (SpawnRunsSetMovedir())
+	{
+		SetMovedir();                                                          // 0x100ef260 [vtbl+0x2ac]
+	}
+	FString ModelArg = Model;
+	SetModel(ModelArg.GetCharArray().GetData() != nullptr ? ModelArg.GetCharArray().GetData() : const_cast<TCHAR*>(TEXT("")));
 	ComputeOpenTransform(OpenLoc, OpenRot);
 
 	// Mover sounds: open/close/swing/locked from usable/openable/<soundgroup>/. SF_DOOR_SILENT
@@ -1318,6 +1305,8 @@ protected:
 
 	// A rotating door resolves its endpoint from body angles (retail CRotDoor::ResolveToggleStateFromTransform).
 	virtual bool ResolvesEndpointFromRotation() const override { return true; }
+	// `CRotDoor::Spawn` 0x100f1c60 never dispatches slot 171.
+	virtual bool SpawnRunsSetMovedir() const override { return false; }
 
 	virtual FElysiumDoorNpcOpenData GetNPCOpenData(const FElysiumEntity* Npc, bool bOpening) const override;
 	virtual FBox ComputeCloseBounds() const override;
@@ -1526,8 +1515,9 @@ class FElysiumFuncDoor final : public FElysiumDoorBase
 protected:
 	virtual void ComputeOpenTransform(FVector& OutOpenLoc, FRotator& OutOpenRot) const override
 	{
-		// movedir from `angles` (Unreal space), REVERSE (0x2) negates it.
-		FVector Dir = SourceAnglesToUnrealDir(Angles);
+		// `m_vecMoveDir` (+0x190), which Spawn's slot-171 `SetMovedir` 0x100ad550 wrote (Source axes,
+		// raw f32 words), on the Unreal axes (the Y reflection). REVERSE (0x2) negates it.
+		FVector Dir = ElysiumMoveDirToUnreal(MoveDir);
 		if (SpawnFlags & SF_DOOR_REVERSE)
 		{
 			Dir = -Dir;

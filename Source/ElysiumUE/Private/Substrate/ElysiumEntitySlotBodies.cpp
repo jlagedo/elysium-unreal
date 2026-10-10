@@ -405,36 +405,32 @@ FElysiumEntity* FElysiumEntity::EntityOfEdict(const void* Edict) const
 	return nullptr;
 }
 
-bool FElysiumEntity::PhysicsObjectIsStandable(const FElysiumEntity& Entity) const
-{
-	// SEAM for `(*DAT_1070b250 + 0x18)(entityIndex)`, the physics-environment query `0x100b5110`
-	// makes for a `SOLID_VPHYSICS` entity. False is retail's answer for an object that is awake and
-	// moving, which is what an unmodelled physics world stands for.
-	(void)Entity;
-	return false;
-}
-
 bool FElysiumEntity::IsStandableSolid() const
 {
-	// 0x100b5110, the helper slots 159 and 164 both end in.
+	// `FUN_100b5110` 0x100b5110, the SDK's `CBaseEntity::IsBSPModel` (`walks/L0-r021.md`), the helper
+	// slots 159, 163 (`IsViewable` 0x100a9800) and 164 end in. `DAT_1070b250` is `VModelInfoServer001`:
 	//
-	//   GetSolid() == SOLID_BSP                          -> true
-	//   GetSolid() == SOLID_VPHYSICS and the physics
-	//     environment says the object is standable       -> true
-	//   anything else                                    -> false  (retail returns the movetype
-	//                                                       word with its low byte zeroed, which
-	//                                                       IS false and nothing else)
-	//
-	// Retail re-dispatches slot 92 for the second test rather than caching the first answer; the
-	// port keeps the two calls so a species that answered differently on the second would be read
-	// differently here too.
-	if (GetSolid() == NpcKernelEntityChainShared::GChainSolidBsp)
+	//   GetSolid() == SOLID_BSP (slot 92)                                  -> true
+	//   m = slot 2 GetModel(GetModelIndex() slot 8)   (the call runs whatever the solid)
+	//   GetSolid() == SOLID_VPHYSICS (a second slot-92 dispatch) and
+	//     slot 6 GetModelType(m) == 1 (brush)                              -> true
+	//   anything else                                                      -> false (retail returns
+	//                                                       the word with its low byte zeroed, which IS
+	//                                                       false and nothing else)
+	if (GetSolid() == NpcKernelEntityChainShared::GChainSolidBsp)                       // 100b5118
 	{
 		return true;
 	}
-	if (GetSolid() == NpcKernelEntityChainShared::GChainSolidVPhysics)
+	const int32 ModelIdx = GetModelIndex();                                              // [vtbl+0x20]
+	const bool bHasModel = World != nullptr && World->ModelTableHasModel(ModelIdx);       // slot 2 (+0x08)
+	if (GetSolid() == NpcKernelEntityChainShared::GChainSolidVPhysics)                   // second slot 92
 	{
-		return PhysicsObjectIsStandable(*this);
+		// slot 6 (+0x18) GetModelType: `model ? model->+0x88 : -1` (engine 0x200b5c10).
+		const int32 Type = bHasModel ? World->ModelTableType(ModelIdx) : -1;
+		if (Type == FElysiumEntityWorld::ModelTypeBrush)
+		{
+			return true;
+		}
 	}
 	return false;
 }
@@ -897,14 +893,19 @@ void FElysiumEntity::SetAngles(const FRotator& NewAngles)
 	// `CBaseEntity::SetAngles` `0x100b2d00`, slot 64 (`walks/L0-r010.md`): the `FRotator` carries the
 	// retail QAngle verbatim (Pitch = x, Yaw = y, Roll = z, Source degrees), as slot 65's packing and
 	// `Angles` do. Changed-only against `m_angRotation` (+0x428, the LOCAL word): `0x100b5340(this,
-	// 0x800, 0x3000)` (this entity EFL 0x800, every move descendant 0x3800), `0x100b51b0` and
-	// `0x100b52a0` (the two collision-property walks, names UNRECOVERED, no port equivalent), the three
-	// words, `+0x1b1 = 1`.
+	// 0x800, 0x3000)` (this entity EFL 0x800, every move descendant 0x3800), the two collision-property
+	// walks `FUN_100b51b0` (`MarkSurroundingBoundsTreeDirty`: the surround-type switch over
+	// `FUN_100dda20`, EFL 0x14000) and `FUN_100b52a0` (`MarkPartitionTreeDirty`: `FUN_100ddd20`, EFL
+	// 0x8000 and the dirty-partition append when `IndexOfEdict` is non-zero), each over every move
+	// descendant (`walks/L0-r021.md`), then the three words (after the walks), `+0x1b1 = 1`. The gate is
+	// IEEE `!=` per component (`TEST AH,0x44; JP`): -0.0 equals +0.0, a NaN counts as changed.
 	const FVector New(NewAngles.Pitch, NewAngles.Yaw, NewAngles.Roll);
 	const FVector& Local = LocalAnglesWord();
 	if (New.X != Local.X || New.Y != Local.Y || New.Z != Local.Z)
 	{
-		InvalidateTransform(0x800u, 0x3000u);
+		InvalidateTransform(0x800u, 0x3000u);                                    // thunk 0x1000f05b -> 0x100b5340
+		MarkSurroundingBoundsTreeDirty();                                        // thunk 0x10004ade -> 0x100b51b0
+		MarkPartitionTreeDirty();                                                // thunk 0x1000e881 -> 0x100b52a0
 		if (bParentLocalPose)
 		{
 			LocalAngles = New;

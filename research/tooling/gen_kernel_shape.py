@@ -511,6 +511,26 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
               "`UpdateAreaPortals` FUN_100efbf0 asks every `func_areaportal` it (L0-r020)"),
     197: ("", "`CBaseEntity::BodyTarget` 0x1009f2c0: slot 192 `WorldSpaceCenter()` through the vtable, the "
               "three arguments unread (L0-r020)"),
+    8: ("", "`CBaseEntity::GetModelIndex` 0x100b17f0: `return m_nModelIndex` (+0x1a4), the model-table "
+            "index `UTIL_SetModel` 0x101cf4a0 stores (L0-r021; `ElysiumEntityVisualState.cpp`)"),
+    10: ("", "`CBaseEntity::SetModelIndex` 0x100b1750: `m_nModelIndex` (+0x1a4) = arg (L0-r021; "
+             "`ElysiumEntityVisualState.cpp`)"),
+    212: ("", "`CBaseEntity::SetModelName` 0x100b15f0: `m_ModelName` (+0x388) = arg (L0-r021; "
+              "`ElysiumEntityVisualState.cpp`)"),
+    66: ("", "`CBaseEntity::Hide` 0x1009d2a0: EF_NODRAW (0x40) into `m_fScriptSavedEffects` when "
+             "script-hidden, else into `m_fEffects`; then `ForceTransmit` 0x1009d1e0 (L0-r021; "
+             "`ElysiumEntityVisualState.cpp`)"),
+    67: ("", "`CBaseEntity::Unhide` 0x1009d380: EF_NODRAW cleared from `m_fScriptSavedEffects` when "
+             "script-hidden, else from `m_fEffects`; no transmit stamp (L0-r021; "
+             "`ElysiumEntityVisualState.cpp`)"),
+    105: ("", "`CBaseEntity::SetModel` 0x100ad460: the model-table lookup and type (`VEngineServer014` "
+              "slots 20 / 21), the non-brush `Msg`, `UTIL_SetModel` 0x101cf4a0, `+0x1b1` (L0-r021; "
+              "`ElysiumEntityVisualState.cpp`)"),
+    163: ("", "`CBaseEntity::IsViewable` 0x100a9800: EF_NODRAW refuses; else `IsBSPModel` 0x100b5110 picks "
+              "`GetMoveType() != 0` or `GetModelIndex() != 0` (L0-r021; `ElysiumEntityVisualState.cpp`)"),
+    171: ("", "`CBaseEntity::SetMovedir` 0x100ad550: the exact up / down sentinels or `AngleVectors` "
+              "0x10139610 into `m_vecMoveDir`, then slot 64 `SetAngles(vec3_angle)` (L0-r021; "
+              "`ElysiumEntityVisualState.cpp`)"),
 }
 
 # A `CHAIN_HAND` slot whose hand body stands on ONE chain owner only; the other chain classes that
@@ -521,6 +541,7 @@ CHAIN_HAND_OWNER: dict[int, str] = {
     390: "FElysiumCombatCharacter",
     144: "FElysiumCombatCharacter",
     301: "FElysiumCombatCharacter",
+    105: "FElysiumEntity",
 }
 
 

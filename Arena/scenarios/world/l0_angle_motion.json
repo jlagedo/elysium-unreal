@@ -1,0 +1,330 @@
+{
+  "name": "l0_angle_motion",
+  "about": "`CBaseEntity::SetMovedir` 0x100ad550 (slot 171) and `CBaseEntity::SetAngles` 0x100b2d00 (slot 64), reached by the Spawn of runtime `func_door`s (`CBaseDoor::vfunc103` 0x100ef260: Precache, then `[vtbl+0x2ac]` SetMovedir, then SetModel) and a `func_button` (`CBaseButton::Spawn` 0x100c8d60). SetMovedir: angles exactly (0, -1.0, 0) -- x and z compared to 0.0f with `FCOMP` (-0.0 passes), y as the dword 0xbf800000 -- give `m_vecMoveDir` (+0x190) = (0, 0, 1); exactly (0, -2.0, 0) (0xc0000000) give (0, 0, -1); anything else is `AngleVectors` 0x10139610's forward (radians = f32(angle * 0x3c8efa35), sin / cos each rounded to f32, (cp*cy, cp*sy, -sp)), so yaw -1.00001 (0xbf800054) is NOT the up sentinel and yaw 90 gives the bits (0xb33bbd2e, 0x3f800000, 0x80000000); every path ends in slot 64 `SetAngles(vec3_angle)` 0x1070d9d0. SetAngles writes only when a component differs under IEEE `!=` (`TEST AH,0x44; JP`; -0.0 equals +0.0): then `FUN_100b5340(0x800, 0x3000)`, the surround walk `FUN_100b51b0` (jump table 0x100b5254: types 0, 1, 6 test `m_usSolidFlags` bit 0x80 and `m_Solid` not 0 / 2), the partition walk `FUN_100b52a0` (`FUN_100ddd20`), the three words after the walks, `+0x1b1 = 1`. The doors' and the button's open / pressed poses are then computed from `m_vecMoveDir`. Reported as `fail`, a word or site payload differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 1.5,
+  "script": [
+    {
+      "t": 0.1,
+      "do": "spawn",
+      "row": {
+        "classname": "func_door",
+        "name": "md_up",
+        "at": [
+          0.0,
+          200.0,
+          50.0
+        ],
+        "face": 1,
+        "keys": {
+          "model": "*5",
+          "speed": "100",
+          "wait": "4",
+          "lip": "0"
+        }
+      }
+    },
+    {
+      "t": 0.2,
+      "do": "spawn",
+      "row": {
+        "classname": "func_door",
+        "name": "md_down",
+        "at": [
+          100.0,
+          200.0,
+          50.0
+        ],
+        "face": 2,
+        "keys": {
+          "model": "*5",
+          "speed": "100",
+          "wait": "4",
+          "lip": "0"
+        }
+      }
+    },
+    {
+      "t": 0.3,
+      "do": "spawn",
+      "row": {
+        "classname": "func_door",
+        "name": "md_near",
+        "at": [
+          200.0,
+          200.0,
+          50.0
+        ],
+        "face": 1.00001,
+        "keys": {
+          "model": "*5",
+          "speed": "100",
+          "wait": "4",
+          "lip": "0"
+        }
+      }
+    },
+    {
+      "t": 0.4,
+      "do": "spawn",
+      "row": {
+        "classname": "func_door",
+        "name": "md_90",
+        "at": [
+          300.0,
+          200.0,
+          50.0
+        ],
+        "face": -90,
+        "keys": {
+          "model": "*5",
+          "speed": "100",
+          "wait": "4",
+          "lip": "0"
+        }
+      }
+    },
+    {
+      "t": 0.5,
+      "do": "spawn",
+      "row": {
+        "classname": "func_door",
+        "name": "md_zero",
+        "at": [
+          400.0,
+          200.0,
+          50.0
+        ],
+        "keys": {
+          "model": "*5",
+          "speed": "100",
+          "wait": "4",
+          "lip": "0"
+        }
+      }
+    },
+    {
+      "t": 0.6,
+      "do": "spawn",
+      "row": {
+        "classname": "func_button",
+        "name": "mb_90",
+        "at": [
+          500.0,
+          200.0,
+          50.0
+        ],
+        "face": -90,
+        "keys": {
+          "model": "*5",
+          "spawnflags": "1025"
+        }
+      }
+    }
+  ],
+  "expect": [
+    {
+      "who": "md_up",
+      "kind": "retail_site",
+      "site": "set_movedir",
+      "match": "va=0x100ad550 phase=branch arm=up angles=0,-1,0 m_vecMoveDir=0,0,1 bits=0x00000000,0x00000000,0x3f800000$",
+      "regex": true,
+      "by": 0.2
+    },
+    {
+      "who": "md_up",
+      "kind": "retail_site",
+      "site": "surround_dirty",
+      "match": "va=0x100b51b0 phase=branch m_nSurroundType=0 arm=test m_Solid=0 m_usSolidFlags=0x[0-9a-f]+ called=0$",
+      "regex": true,
+      "within": 0.01
+    },
+    {
+      "who": "md_up",
+      "kind": "retail_site",
+      "site": "bounds_dirty",
+      "match": "fn=FUN_100ddd20 va=0x100ddd20 phase=branch eidx=[1-9][0-9]* arm=(mark|already_dirty) m_iEFlags=0x[0-9a-f]*[89a-f][0-9a-f]{3}$",
+      "regex": true,
+      "within": 0.01
+    },
+    {
+      "who": "md_up",
+      "kind": "retail_site",
+      "site": "set_angles",
+      "match": "va=0x100b2d00 phase=write m_angRotation=\\[0 0 0\\] m_iEFlags=0x[0-9a-f]*[89a-f][0-9a-f]{2} local=0$",
+      "regex": true,
+      "within": 0.01
+    },
+    {
+      "who": "md_down",
+      "kind": "retail_site",
+      "site": "set_movedir",
+      "match": "phase=branch arm=down angles=0,-2,0 m_vecMoveDir=0,0,-1 bits=0x00000000,0x00000000,0xbf800000$",
+      "regex": true,
+      "by": 0.3
+    },
+    {
+      "who": "md_down",
+      "kind": "retail_site",
+      "site": "set_angles",
+      "match": "phase=write m_angRotation=\\[0 0 0\\]",
+      "regex": true,
+      "within": 0.01
+    },
+    {
+      "who": "md_near",
+      "kind": "retail_site",
+      "site": "set_movedir",
+      "match": "phase=branch arm=angle_vectors angles=0,-1\\.00001001,0 m_vecMoveDir=0\\.99984771,-0\\.0174525809,-0 bits=0x3f7ff605,0xbc8ef8b7,0x80000000$",
+      "regex": true,
+      "by": 0.4
+    },
+    {
+      "who": "md_near",
+      "kind": "retail_site",
+      "site": "set_angles",
+      "match": "phase=write m_angRotation=\\[0 0 0\\]",
+      "regex": true,
+      "within": 0.01
+    },
+    {
+      "who": "md_90",
+      "kind": "retail_site",
+      "site": "set_movedir",
+      "match": "phase=branch arm=angle_vectors angles=0,90,0 m_vecMoveDir=-4\\.37113883e-08,1,-0 bits=0xb33bbd2e,0x3f800000,0x80000000$",
+      "regex": true,
+      "by": 0.5
+    },
+    {
+      "who": "md_90",
+      "kind": "retail_site",
+      "site": "set_angles",
+      "match": "phase=write m_angRotation=\\[0 0 0\\]",
+      "regex": true,
+      "within": 0.01
+    },
+    {
+      "who": "md_zero",
+      "kind": "retail_site",
+      "site": "set_movedir",
+      "match": "phase=branch arm=angle_vectors angles=0,-0,0 m_vecMoveDir=1,-0,-0 bits=0x3f800000,0x80000000,0x80000000$",
+      "regex": true,
+      "by": 0.6,
+      "label": "zero_movedir"
+    },
+    {
+      "who": "mb_90",
+      "kind": "retail_site",
+      "site": "set_movedir",
+      "match": "phase=branch arm=angle_vectors angles=0,90,0 m_vecMoveDir=-4\\.37113883e-08,1,-0 bits=0xb33bbd2e,0x3f800000,0x80000000$",
+      "regex": true,
+      "by": 0.7
+    },
+    {
+      "who": "mb_90",
+      "kind": "retail_site",
+      "site": "set_angles",
+      "match": "phase=write m_angRotation=\\[0 0 0\\]",
+      "regex": true,
+      "within": 0.01
+    }
+  ],
+  "never": [
+    {
+      "who": "md_zero",
+      "kind": "retail_site",
+      "site": "set_angles",
+      "match": "",
+      "from": 0.0
+    },
+    {
+      "who": "md_zero",
+      "kind": "retail_site",
+      "site": "surround_dirty",
+      "match": "",
+      "after": "zero_movedir"
+    }
+  ],
+  "probes": [
+    {
+      "at": 1.0,
+      "who": "md_up",
+      "probe": "entity_field",
+      "field": "m_vecMoveDir",
+      "member": "z",
+      "equals": 1
+    },
+    {
+      "at": 1.0,
+      "who": "md_up",
+      "probe": "entity_field",
+      "field": "m_vecMoveDir",
+      "member": "x",
+      "equals": 0
+    },
+    {
+      "at": 1.0,
+      "who": "md_up",
+      "probe": "entity_field",
+      "field": "m_angRotation",
+      "member": "y",
+      "equals": 0
+    },
+    {
+      "at": 1.0,
+      "who": "md_up",
+      "probe": "entity_field",
+      "field": "m_NetworkChangeState.m_bChanged",
+      "equals": true
+    },
+    {
+      "at": 1.0,
+      "who": "md_down",
+      "probe": "entity_field",
+      "field": "m_vecMoveDir",
+      "member": "z",
+      "equals": -1
+    },
+    {
+      "at": 1.0,
+      "who": "md_90",
+      "probe": "entity_field",
+      "field": "m_vecMoveDir",
+      "member": "y",
+      "equals": 1
+    },
+    {
+      "at": 1.0,
+      "who": "md_90",
+      "probe": "entity_field",
+      "field": "m_angRotation",
+      "member": "y",
+      "equals": 0
+    },
+    {
+      "at": 1.0,
+      "who": "md_zero",
+      "probe": "entity_field",
+      "field": "m_vecMoveDir",
+      "member": "x",
+      "equals": 1
+    },
+    {
+      "at": 1.0,
+      "who": "mb_90",
+      "probe": "entity_field",
+      "field": "m_vecMoveDir",
+      "member": "y",
+      "equals": 1
+    },
+    {
+      "at": 1.0,
+      "who": "mb_90",
+      "probe": "entity_field",
+      "field": "m_angRotation",
+      "member": "y",
+      "equals": 0
+    }
+  ]
+}

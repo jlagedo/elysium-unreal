@@ -35,11 +35,10 @@ DECLARE_LOG_CATEGORY_EXTERN(LogElysiumMover, Log, All);
 // geometry in cm (the UE_ convention). Linear travel must convert; angular (degrees) does not.
 inline constexpr float MoverInchToCm = 2.54f;
 
-// Source movedir from raw-Source `angles`, returned in Unreal space — the one shared SetMovedir
-// derivation (sentinels + the Source→Unreal Y reflection) for every mover that slides along its
-// authored angles: the sliding door and the button. Defined (with the full semantics comment) in
-// ElysiumMover.cpp.
-FVector SourceAnglesToUnrealDir(const FVector& AnglesDeg);
+// `m_vecMoveDir` on the Unreal axes: the words slot 171 `SetMovedir` (0x100ad550,
+// `FElysiumEntity::SetMovedir`) wrote at Spawn, Y-reflected, for every mover that slides along its
+// authored angles: the sliding door and the button. Defined in ElysiumMover.cpp.
+FVector ElysiumMoveDirToUnreal(const FVector& SourceMoveDir);
 
 // The sliding movers' travel, `T = sum_i |(size_i - 2.0) * movedir_i| - lip` over slot 214 `GetSize`
 // (three calls), with no clamp at zero -- the sum `CBaseDoor::vfunc103` 0x100ef260, `CBaseDoor::vfunc245`
@@ -350,6 +349,11 @@ protected:
 	// CRotDoor comparing m_vecAngle1/m_vecAngle2) or its ORIGIN (a sliding door, retail CBaseDoor
 	// comparing m_vecPosition1/m_vecPosition2)? Read only by ResolveToggleStateFromTransform.
 	virtual bool ResolvesEndpointFromRotation() const = 0;
+
+	// Leaf hook: does this door's Spawn dispatch slot 171 `SetMovedir` (0x100ad550)? `CBaseDoor::vfunc103`
+	// 0x100ef260 does (`CALL [EAX+0x2ac]`, after Precache and before SetModel); `CRotDoor::Spawn`
+	// 0x100f1c60 does not (it reads its own axis from the angles), so the rotating leaf answers false.
+	virtual bool SpawnRunsSetMovedir() const { return true; }
 
 	virtual void MoveDone() override;               // HitTop / HitBottom
 	virtual void OnMoveBlocked(const FHitResult& Hit) override;

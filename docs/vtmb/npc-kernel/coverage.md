@@ -11,8 +11,8 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
-| … cited by the oracle | 2869 |
-| … not cited by the oracle | 2318 |
+| … cited by the oracle | 2873 |
+| … not cited by the oracle | 2314 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |
@@ -457,7 +457,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x1009c390` FUN_1009c390 | `0x1015e140` CBasePlayer::Dump |
 | `0x1009c850` CBaseEntity::DumpEhandleArray | `0x1015e140` CBasePlayer::Dump |
 | `0x1009c980` CBaseEntity::Dump | `0x101c0ec0` CBaseToggle::Dump |
-| `0x1009d1e0` CBaseEntity::ForceTransmit | `0x100a8fc0` CBaseEntity::SetFakeSilence, `0x101772b0` CBasePlayer::Weapon_Switch, `0x101a2e40` CEntitySaveRestoreBlockHandler::vfunc7, `0x101a3380` FUN_101a3380, +5 more |
 | `0x1009e120` CBaseEntity::PostConstructor | `0x10027bb0` FUN_10027bb0, `0x100281f0` FUN_100281f0, `0x100289e0` FUN_100289e0, `0x10029ea0` FUN_10029ea0, +346 more |
 | `0x1009f120` CBaseEntity::SetClassname | `0x1016d260` CBasePlayer::Spawn, `0x101905e0` CDynamicProp::Spawn ‼, `0x10190f20` COrnamentProp::Spawn |
 | `0x1009f200` CBaseEntity::GetClassname | `0x1002f100` CCollisionEvent::vfunc4, `0x10032720` FUN_10032720, `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x1003eb50` CBaseEntity::PhysicsCheckVelocity, +21 more |
@@ -502,13 +501,10 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x100ac610` CBaseEntity::SetNextThink | `0x100278e0` FUN_100278e0, `0x10027a70` FUN_10027a70 ‼, `0x10028b20` FUN_10028b20 ‼, `0x10028b80` CPhysMotor::InputTurnOff, +8 more |
 | `0x100ac720` CBaseEntity::GetLastThink | `0x1003aca0` CBaseEntity::PhysicsStep, `0x10081020` CSceneEntity::FUN_10081020, `0x10084c80` CInstancedSceneEntity::Remove ‼ |
 | `0x100ad320` CBaseEntity::GetVectors | `0x10029700` CKeepUpright::Spawn, `0x1009fb80` CBaseEntity::SendDebugPivotOverlay, `0x1018cf20` FUN_1018cf20, `0x101b06a0` FUN_101b06a0 |
-| `0x100ad550` CBaseEntity::SetMovedir | `0x100c8d60` CBaseButton::Spawn, `0x100ef260` CBaseDoor::vfunc103, `0x10116030` CFuncMoveLinear::Spawn, `0x1013e820` CTriggerBrush::Spawn, +1 more |
 | `0x100ada20` CBaseEntity::Teleport | `0x10155e40` CRagdollProp::Teleport, `0x101606a0` CBasePlayer::Teleport |
 | `0x100b12e0` CBaseEntity::SetSentLastFrame | `0x1009d980` FUN_1009d980 |
 | `0x100b1420` CBaseEntity::SetGroundEntity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1003f070` CBaseEntity::PerformFlyCollisionResolution, `0x10252a90` CBaseCombatWeapon::FUN_10252a90, +1 more |
-| `0x100b15f0` CBaseEntity::SetModelName | `0x1004eae0` CPhysExplosion::Spawn, `0x1004ef60` CPhysImpact::Spawn, `0x1009d980` FUN_1009d980, `0x100b87a0` CBatSwarm::Spawn, +5 more |
 | `0x100b1690` CBaseEntity::GetModelName | `0x1004e260` CPhysBox::Spawn, `0x1004f900` CSimplePhysicsBrush::Spawn, `0x10071330` CCameraAnimated::Spawn, `0x10071400` CCameraAnimated::Precache, +46 more |
-| `0x100b1750` CBaseEntity::SetModelIndex | `0x1009d980` FUN_1009d980, `0x101c70d0` CTriggerVolume::Spawn, `0x1023bba0` CWorld::Spawn ‼ |
 | `0x100b17f0` CBaseEntity::GetModelIndex | `0x1008d7c0` CBaseAnimating::GetAnimFlags, `0x100a5bb0` CBaseEntity::VPhysicsInitStatic, `0x100b1a00` CBaseEntity::GetModel, `0x100ef6f0` CBaseDoor::vfunc223, +9 more |
 | `0x100b1d10` CBaseEntity::CalcAbsoluteVelocity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10035490` CBaseEntity::PhysicsAddHalfGravity, `0x10038180` CPhysicsPushedEntities::LinearlyMoveRootEntity, `0x10038cb0` CBaseEntity::PhysicsPusher, +38 more |
 | `0x100b2770` CBaseEntity::SetAbsVelocity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10035490` CBaseEntity::PhysicsAddHalfGravity, `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, +13 more |

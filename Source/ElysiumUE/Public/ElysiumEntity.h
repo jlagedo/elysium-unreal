@@ -279,6 +279,19 @@ public:
 	// and `CBaseEntity::ShouldTransmit` 0x100ab020's read. Unreal renders, so the bits drive no
 	// drawing here; the word is carried because retail writes and reads it (L0-r017).
 	uint32 EffectsWord = 0;
+	// `m_nModelIndex` (+0x1a4): the model-table index `UTIL_SetModel` 0x101cf4a0 stores through slot 10
+	// (`VModelInfoServer001` slot 12's lookup of the name); 0 from the constructor (`SetModelIndex(0)`,
+	// `1009dc8a`). Slot 8 answers it; `IsViewable` 0x100a9800 and `IsBSPModel` 0x100b5110 read it. The
+	// table is the world's (`FElysiumEntityWorld::ModelTableIndex`). L0-r021.
+	int32 ModelIndex = 0;
+	// `m_flForceTransmitUntil` (+0x90, the ledger's `layout.md:35`): `CBaseEntity::ForceTransmit`
+	// 0x1009d1e0 writes `curtime + 1.0f`; `ShouldTransmit` 0x100ab020 sends unconditionally before it.
+	// Network state: Unreal's replication replaces the send, the word is carried (L0-r021).
+	float ForceTransmitUntil = 0.0f;
+	// `m_vecMoveDir` (+0x190, datamap `movedir`): `SetMovedir` 0x100ad550's output, Source axes, raw
+	// f32 words -- the mover spawns (`CBaseDoor` 0x100ef260, `CBaseButton` 0x100c8d60) read it for
+	// `m_vecPosition2`. L0-r021.
+	FVector MoveDir = FVector::ZeroVector;
 	// The `CServerNetworkProperty` edict word (+0x2e0): NULL for the whole base constructor
 	// (`FUN_101ab590` zeroes it twice, `1009da5e` / `1009db12`), attached by `CreateEntityByName` after
 	// the constructor returns and before the keyvalues. `EdictIndex()` answers 0 until it is set.
@@ -894,8 +907,8 @@ public:
 	// `m_MoveCollide`, `GetSolidFlags` slot 211, `m_fEffects`) and writes as `SetMoveType(0, 0)`,
 	// `SetSolid(0)` (`FUN_100dc480`), `SetSolidFlags(4)` (`FUN_100dc580`), `m_fEffects = 0xe0`; and
 	// `ScriptUnhide` 0x100a8990 restores as `SetSolid(saved)`, `SetMoveType(saved, saved)`,
-	// `SetSolidFlags(saved)`, `m_fEffects = saved`. The base carries every word but `m_fEffects`
-	// (the NPC kernel's `EffectsWord`; the NPC override adds it and its think restore).
+	// `SetSolidFlags(saved)`, `m_fEffects = saved`. The base carries every word, `m_fEffects` as
+	// `EffectsWord` (L0-r017); the NPC override adds its think restore.
 	virtual bool ReadScriptPhysicalWords(int32& OutSolid, int32& OutMoveType, int32& OutMoveCollide,
 		int32& OutSolidFlags, int32& OutEffects) const;
 	virtual void WriteScriptPhysicalWords(int32 InSolid, int32 InMoveType, int32 InMoveCollide,

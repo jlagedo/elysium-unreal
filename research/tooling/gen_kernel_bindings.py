@@ -269,11 +269,13 @@ CHAIN_UNBOUND: dict[tuple[str, int], str] = {
         "`m_vecViewOffset` is the eye height every sight test starts from; this port takes an "
         "NPC's eye from its body (0018 story 6), and no shipped map authors the key",
     ("CBaseEntity", 0x0190):
-        "`m_vecMoveDir` is the mover's authored direction, which this port keeps on "
-        "`FElysiumMoverBase`; no shipped map authors it on a character",
+        "`m_vecMoveDir` (`FElysiumEntity::MoveDir`) is what slot 171 `SetMovedir` 0x100ad550 derives "
+        "from the angles at a mover's Spawn (L0-r021); no shipped map authors the key, and a restore "
+        "re-runs the Spawn that writes it",
     ("CBaseEntity", 0x01A4):
-        "`m_nModelIndex` is the engine's precache slot for `model`, an index into Source's own "
-        "model table; this port resolves a model by name",
+        "`m_nModelIndex` (`FElysiumEntity::ModelIndex`) is the world model table's index for "
+        "`model`, which `UTIL_SetModel` 0x101cf4a0 re-derives from the name (L0-r021); the table is "
+        "per world, so a saved index would not survive a load, and no shipped map authors the key",
     ("CBaseEntity", 0x038C):
         "`m_vecSize` is the brush extent Source derives at spawn; this port takes it from the "
         "baked hulls (`FElysiumEntityDef::Hulls`), and no shipped map authors the key",

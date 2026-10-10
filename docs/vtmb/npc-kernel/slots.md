@@ -13,11 +13,11 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 3 | `0x10027630` CAISound::FUN_10027630 | — | — | 531 | — |
 | 4 | `0x10027650` CAISound::FUN_10027650 | — | — | 671 | — |
 | 5 | `0x1027c7f0` CAI_BaseNPC::vfunc5 | `0x1028d5e0` CAI_BaseNPCTroika::vfunc5 | `0x101a6e40` CCineNPC::vfunc5 (CCineNPC), `0x101ab060` CCineAI::vfunc5 (CCineAI), `0x101ab0e0` CCineAISchedule::vfunc5 (CCineAISchedule), `0x101ab1b0` CPayphone::vfunc5 (CPayphone), `0x10260d70` CAI_ExpressiveNPC::vfunc5 (CAI_ExpressiveNPC), `0x10260de0` CAI_BaseHumanoid::vfunc5 (CAI_BaseHumanoid), +69 more | 202 | docs/vtmb/npc-ai/lifecycle.md:4034 |
-| 6 | `0x100b11d0` CBaseEntity::SetCheckUntouch | — | — | 197 | docs/vtmb/entity_io.md:1067 |
+| 6 | `0x100b11d0` CBaseEntity::SetCheckUntouch | — | — | 197 | docs/vtmb/entity_io.md:1109 |
 | 7 | `0x100b12e0` CBaseEntity::SetSentLastFrame | — | — | 139 | — |
 | 8 | `0x100b17f0` CBaseEntity::GetModelIndex | — | — | 181 | — |
 | 9 | `0x100b1690` CBaseEntity::GetModelName | — | — | 293 | — |
-| 10 | `0x100b1750` CBaseEntity::SetModelIndex | — | — | 216 | — |
+| 10 | `0x100b1750` CBaseEntity::SetModelIndex | — | — | 216 | docs/vtmb/entity_io.md:337 |
 | 11 | `0x1009ac80` CBaseEntity::DebugSetEntityName | — | — | 93 | — |
 | 12 | `0x1009ad70` CBaseEntity::DebugGetEntityName | — | — | 154 | — |
 | 13 | `0x1009ae10` CBaseEntity::DebugSetClassName | — | — | 276 | — |
@@ -69,29 +69,29 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 59 | `0x100269b0` CAISound::FUN_100269b0 | `0x102b51e0` CAI_BaseNPCTroika::FUN_102b51e0 | — | 19 | docs/vtmb/npc-ai/shape.md:2760, docs/vtmb/npc-ai/shape.md:2781 |
 | 60 | `0x100269d0` CAISound::FUN_100269d0 | `0x102b5220` CAI_BaseNPCTroika::FUN_102b5220 | — | 6 | docs/vtmb/npc-ai/shape.md:2760, docs/vtmb/npc-ai/shape.md:2781 |
 | 61 | `0x100269f0` CAISound::FUN_100269f0 | `0x102b5260` CAI_BaseNPCTroika::FUN_102b5260 | — | 9 | docs/vtmb/npc-ai/shape.md:2760, docs/vtmb/npc-ai/shape.md:2781 |
-| 62 | `0x100b2be0` CBaseEntity::SetOrigin | — | — | 142 | docs/vtmb/entity_io.md:398 |
+| 62 | `0x100b2be0` CBaseEntity::SetOrigin | — | — | 142 | docs/vtmb/entity_io.md:440 |
 | 63 | `0x10026a10` CAISound::FUN_10026a10 | — | — | 5 | — |
-| 64 | `0x100b2d00` CBaseEntity::SetAngles | — | — | 123 | docs/vtmb/entity_io.md:399, docs/vtmb/entity_visuals.md:281 |
+| 64 | `0x100b2d00` CBaseEntity::SetAngles | — | — | 123 | docs/vtmb/entity_io.md:351, docs/vtmb/entity_io.md:441, docs/vtmb/entity_visuals.md:281 |
 | 65 | `0x10026a50` CAISound::FUN_10026a50 | — | — | 152 | — |
-| 66 | `0x1009d2a0` CBaseEntity::Hide | — | — | 193 | docs/vtmb/animation_and_movers.md:4692, docs/vtmb/npc-ai/rebuild.md:253, docs/vtmb/npc-ai/shape.md:90 |
-| 67 | `0x1009d380` CBaseEntity::Unhide | — | — | 147 | docs/vtmb/animation_and_movers.md:4693, docs/vtmb/npc-ai/rebuild.md:255, docs/vtmb/npc-ai/shape.md:90 |
+| 66 | `0x1009d2a0` CBaseEntity::Hide | — | — | 193 | docs/vtmb/animation_and_movers.md:4692, docs/vtmb/entity_io.md:346, docs/vtmb/npc-ai/rebuild.md:253, +1 more |
+| 67 | `0x1009d380` CBaseEntity::Unhide | — | — | 147 | docs/vtmb/animation_and_movers.md:4693, docs/vtmb/entity_io.md:348, docs/vtmb/npc-ai/rebuild.md:255, +1 more |
 | 68 | `0x10340650` CBaseCombatCharacter::ShouldIgnoreCollision | `0x1029afc0` CAI_BaseNPCTroika::ShouldIgnoreCollision | `0x1039eb50` CNPC_VMingXiaoTentacle::ShouldIgnoreCollision (CNPC_VMingXiaoTentacle), `0x103ad6d0` CNPC_VRat::ShouldIgnoreCollision (CNPC_VRat), `0x103d9ab0` CNPC_VWerewolf::ShouldIgnoreCollision (CNPC_VWerewolf) | 20 | docs/vtmb/navigation-jump-links.md:2389, docs/vtmb/npc-ai/shape.md:1443, docs/vtmb/npc-ai/shape.md:1447, +3 more |
 | 69 | `0x10026ab0` CBaseEntity::NavIgnoreCollision | `0x1029b180` CAI_BaseNPCTroika::NavIgnoreCollision | `0x10379490` CNPC_VGargoyle::NavIgnoreCollision (CNPC_VGargoyle), `0x10380f90` CNPC_VHengeyokai::NavIgnoreCollision (CNPC_VHengeyokai), `0x10396fd0` CNPC_VMingXiao::NavIgnoreCollision (CNPC_VMingXiao), `0x1039eb90` CNPC_VMingXiaoTentacle::NavIgnoreCollision (CNPC_VMingXiaoTentacle), `0x103bfa00` CNPC_VTzimisce::NavIgnoreCollision (CNPC_VTzimisce), `0x103d9ba0` CNPC_VWerewolf::NavIgnoreCollision (CNPC_VWerewolf) | 35 | docs/vtmb/navigation-jump-links.md:2389, docs/vtmb/npc-ai/shape.md:1443, docs/vtmb/npc-ai/shape.md:1448, +5 more |
-| 70 | `0x1009d820` CBaseEntity::IsMonster | — | `0x10379470` CNPC_VGargoyle::IsMonster (CNPC_VGargoyle), `0x10380f70` CNPC_VHengeyokai::IsMonster (CNPC_VHengeyokai), `0x10396fb0` CNPC_VMingXiao::IsMonster (CNPC_VMingXiao), `0x1039eb30` CNPC_VMingXiaoTentacle::IsMonster (CNPC_VMingXiaoTentacle), `0x103a5c80` CNPC_VSabbatLeader::IsMonster (CNPC_VSabbatLeader), `0x103b9020` CNPC_VTzimisce::IsMonster (CNPC_VTzimisce), +3 more | 7 | docs/vtmb/audio_pipeline.md:875, docs/vtmb/entity_io.md:326, docs/vtmb/entity_io.md:339, +3 more |
-| 71 | `0x1009d460` CBaseEntity::PrecacheSoundTable | — | — | 50 | docs/vtmb/audio_pipeline.md:866, docs/vtmb/entity_io.md:343, docs/vtmb/npc-ai/senses.md:124, +1 more |
+| 70 | `0x1009d820` CBaseEntity::IsMonster | — | `0x10379470` CNPC_VGargoyle::IsMonster (CNPC_VGargoyle), `0x10380f70` CNPC_VHengeyokai::IsMonster (CNPC_VHengeyokai), `0x10396fb0` CNPC_VMingXiao::IsMonster (CNPC_VMingXiao), `0x1039eb30` CNPC_VMingXiaoTentacle::IsMonster (CNPC_VMingXiaoTentacle), `0x103a5c80` CNPC_VSabbatLeader::IsMonster (CNPC_VSabbatLeader), `0x103b9020` CNPC_VTzimisce::IsMonster (CNPC_VTzimisce), +3 more | 7 | docs/vtmb/audio_pipeline.md:875, docs/vtmb/entity_io.md:368, docs/vtmb/entity_io.md:381, +3 more |
+| 71 | `0x1009d460` CBaseEntity::PrecacheSoundTable | — | — | 50 | docs/vtmb/audio_pipeline.md:866, docs/vtmb/entity_io.md:385, docs/vtmb/npc-ai/senses.md:124, +1 more |
 | 72 | `0x1015dc20` CAI_BaseNPC::FUN_1015dc20 | — | `0x101a6e20` CCineAISchedule::FUN_101a6e20 (CCineAI, CCineAISchedule, CCineNPC), `0x101aa930` CPayphone::vfunc72 (CPayphone), `0x1034aef0` CNPCMaker::FUN_1034aef0 (CNPCMaker, CNPCMaker_Fleshpile, CNPCMaker_Zombie), `0x10368390` CNPC_VCamera::FUN_10368390 (CNPC_VCamera, CNPC_VCameraSecurity), `0x103751a0` CNPC_VFrenzyShadow::FUN_103751a0 (CNPC_VFrenzyShadow, CNPC_VPlayerController, CNPC_VWolfMorph), `0x103a0250` CNPC_VNewscaster::vfunc72 (CNPC_VNewscaster), +2 more | 43 | docs/vtmb/npc-ai/lifecycle.md:1227 |
 | 73 | `0x10340590` CBaseCombatCharacter::CausesImpactDamage | — | — | 1 | — |
 | 74 | `0x103404f0` CBaseCombatCharacter::ReceivesImpactDamage | — | `0x1037a610` CNPC_VGargoyle::ReceivesImpactDamage (CNPC_VGargoyle), `0x10383540` CNPC_VHengeyokai::ReceivesImpactDamage (CNPC_VHengeyokai) | 4 | — |
 | 75 | `0x100a8400` CBaseEntity::TakeDamageFromCollision | — | — | 26 | — |
 | 76 | `0x102775e0` CAI_BaseNPC::DrawDebugStatOverlays | `0x1029c010` CAI_BaseNPCTroika::DrawDebugStatOverlays | `0x10366290` CNPC_VBaseBoss::DrawDebugStatOverlays (CNPC_VBaseBoss, CNPC_VMingXiao, CNPC_VTzimisce, CNPC_VTzimisceHeadClaw, CNPC_VTzimisceRunner), `0x103d5130` CNPC_VWerewolf::DrawDebugStatOverlays (CNPC_VWerewolf) | 3 | docs/vtmb/npc-ai/schedule-kernel.md:887, docs/vtmb/npc-ai/shape.md:3840, docs/vtmb/npc-ai/shape.md:4471, +5 more |
-| 77 | `0x100a8710` CBaseEntity::ScriptHide | `0x102c1ce0` CAI_BaseNPCTroika::ScriptHide ‼ | `0x1037c1c0` CNPC_VGhoulCroucher::ScriptHide (CNPC_VGhoulCroucher) | 39 | docs/vtmb/audio_pipeline.md:715, docs/vtmb/entity_io.md:673, docs/vtmb/npc-ai/authored-control.md:709, +8 more |
-| 78 | `0x100a8990` CBaseEntity::ScriptUnhide | `0x102c1ec0` CAI_BaseNPCTroika::ScriptUnhide | `0x1037c2f0` CNPC_VGhoulCroucher::ScriptUnhide (CNPC_VGhoulCroucher), `0x103d4a20` CNPC_VWerewolf::ScriptUnhide (CNPC_VWerewolf) | 50 | docs/vtmb/entity_io.md:674, docs/vtmb/npc-ai/conditions-and-states.md:1735, docs/vtmb/npc-ai/lifecycle.md:205, +8 more |
+| 77 | `0x100a8710` CBaseEntity::ScriptHide | `0x102c1ce0` CAI_BaseNPCTroika::ScriptHide ‼ | `0x1037c1c0` CNPC_VGhoulCroucher::ScriptHide (CNPC_VGhoulCroucher) | 39 | docs/vtmb/audio_pipeline.md:715, docs/vtmb/entity_io.md:349, docs/vtmb/entity_io.md:715, +9 more |
+| 78 | `0x100a8990` CBaseEntity::ScriptUnhide | `0x102c1ec0` CAI_BaseNPCTroika::ScriptUnhide | `0x1037c2f0` CNPC_VGhoulCroucher::ScriptUnhide (CNPC_VGhoulCroucher), `0x103d4a20` CNPC_VWerewolf::ScriptUnhide (CNPC_VWerewolf) | 50 | docs/vtmb/entity_io.md:349, docs/vtmb/entity_io.md:716, docs/vtmb/npc-ai/conditions-and-states.md:1735, +9 more |
 | 79 | `0x10321670` CAI_BaseNPC::FUN_10321670 | — | — | 1 | — |
 | 80 | `0x10321960` CAI_BaseNPC::FUN_10321960 | `0x102c5870` CAI_BaseNPCTroika::FUN_102c5870 | — | 4 | — |
 | 81 | `0x10321980` CAI_BaseNPC::FUN_10321980 | `0x102c5890` CAI_BaseNPCTroika::FUN_102c5890 | — | 1 | — |
 | 82 | `0x1027a7c0` CAI_BaseNPC::FUN_1027a7c0 | `0x1028cd10` CAI_BaseNPCTroika::FUN_1028cd10 | `0x101a5db0` CCineNPC::FUN_101a5db0 (CCineAI, CCineNPC), `0x101a9620` CCineAISchedule::vfunc82 (CCineAISchedule), `0x1025e450` CAI_BaseHumanoid::vfunc82 (CAI_BaseHumanoid), `0x1034ab50` CNPCMaker::vfunc82 (CNPCMaker), `0x1034bdc0` CNPCMaker_Fleshpile::vfunc82 (CNPCMaker_Fleshpile), `0x1034c9f0` CNPCMaker_Zombie::vfunc82 (CNPCMaker_Zombie), +44 more | 27 | — |
-| 83 | `0x100b4ef0` CBaseEntity::GetEFlags | — | — | 7 | docs/vtmb/entity_io.md:1110 |
-| 84 | `0x100b4f10` CBaseEntity::SetEFlags | — | — | 128 | docs/vtmb/entity_io.md:1110 |
+| 83 | `0x100b4ef0` CBaseEntity::GetEFlags | — | — | 7 | docs/vtmb/entity_io.md:1152 |
+| 84 | `0x100b4f10` CBaseEntity::SetEFlags | — | — | 128 | docs/vtmb/entity_io.md:1152 |
 | 85 | `0x100b3d10` CBaseEntity::GetEdict | — | — | 61 | — |
 | 86 | `0x103407b0` CBaseCombatCharacter::ShouldTransmit | `0x102c0420` CAI_BaseNPCTroika::FUN_102c0420 | `0x1034af10` CNPCMaker::FUN_1034af10 (CNPCMaker, CNPCMaker_Fleshpile, CNPCMaker_Zombie) | 5 | docs/vtmb/entity_visuals.md:321, docs/vtmb/npc-ai/lifecycle.md:1101, docs/vtmb/npc-ai/lifecycle.md:1226 |
 | 87 | `0x100ab280` CBaseEntity::SetTransmit | — | — | 13 | — |
@@ -105,14 +105,14 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 95 | `0x100aacd0` CBaseEntity::GetMoveCollide | — | — | 12 | — |
 | 96 | `0x100a9ba0` CBaseEntity::GetAimEntEdict | — | — | 1 | — |
 | 97 | `0x100a9c90` CBaseEntity::GetOwnerEntity | — | — | 40 | — |
-| 98 | `0x100b1ac0` CBaseEntity::CalcAbsolutePosition | — | — | 50 | docs/vtmb/entity_io.md:362 |
+| 98 | `0x100b1ac0` CBaseEntity::CalcAbsolutePosition | — | — | 50 | docs/vtmb/entity_io.md:404 |
 | 99 | `0x100956e0` CBaseAnimating::TestCollision | — | — | 6 | — |
 | 100 | `0x10095a20` CBaseAnimating::TestHitboxes | — | `0x10399fe0` CNPC_VMingXiao::TestHitboxes (CNPC_VMingXiao) | 6 | docs/vtmb/npc-ai/lifecycle.md:1036, docs/vtmb/npc-ai/lifecycle.md:1045 |
 | 101 | `0x100ab430` CAISound::FUN_100ab430 | — | — | 6 | — |
 | 102 | `0x100ab450` CAISound::FUN_100ab450 | — | `0x1038fb20` CNPC_VManBat::vfunc102 (CNPC_VManBat) | 7 | docs/vtmb/npc-ai/shape.md:2432, docs/vtmb/npc-ai/shape.md:2436, docs/vtmb/npc-ai/shape.md:4705, +1 more |
 | 103 | `0x10273200` CAI_BaseNPC::Spawn | `0x10298d30` CAI_BaseNPCTroika::Spawn | `0x101a6f10` CCineNPC::Spawn (CCineAI, CCineNPC), `0x101a9730` CCineAISchedule::Spawn (CCineAISchedule), `0x101aa9c0` CPayphone::Spawn (CPayphone), `0x102d72f0` CAI_TestHull::Spawn ‼ (CAI_TestHull), `0x1034a6d0` CGenericNPC::Spawn (CGenericNPC), `0x1034afe0` CNPCMaker::Spawn (CNPCMaker), +45 more | 132 | docs/vtmb/animation_events.md:296, docs/vtmb/facial_animation.md:638, docs/vtmb/navigation-jump-links.md:2312, +61 more |
 | 104 | `0x1027bb50` CAI_BaseNPC::Precache | `0x10298ad0` CAI_BaseNPCTroika::Precache | `0x1034aa40` CGenericNPC::Precache (CGenericNPC), `0x1034b160` CNPCMaker::Precache (CNPCMaker), `0x1034c180` CNPCMaker_Fleshpile::Precache (CNPCMaker_Fleshpile), `0x1034cde0` CNPCMaker_Zombie::Precache (CNPCMaker_Zombie), `0x10358ec0` CNPC_Crow::Precache (CNPC_Crow), `0x10359f70` CGeneric_NPC::Precache (CGeneric_NPC), +22 more | 88 | docs/vtmb/audio_pipeline.md:881, docs/vtmb/footsteps.md:902, docs/vtmb/npc-ai/lifecycle.md:646, +42 more |
-| 105 | `0x103409a0` CBaseCombatCharacter::SetModel | `0x10298ce0` CAI_BaseNPCTroika::SetModel | `0x1025e510` CAI_BaseHumanoid::SetModel (CAI_BaseHumanoid), `0x1037b1f0` CNPC_VGhoulCroucher::SetModel (CNPC_VGhoulCroucher), `0x103e0540` CNPC_VZombie::SetModel (CNPC_VZombie) | 145 | docs/vtmb/animation_and_movers.md:715, docs/vtmb/entity_io.md:1163, docs/vtmb/facial_animation.md:629, +12 more |
+| 105 | `0x103409a0` CBaseCombatCharacter::SetModel | `0x10298ce0` CAI_BaseNPCTroika::SetModel | `0x1025e510` CAI_BaseHumanoid::SetModel (CAI_BaseHumanoid), `0x1037b1f0` CNPC_VGhoulCroucher::SetModel (CNPC_VGhoulCroucher), `0x103e0540` CNPC_VZombie::SetModel (CNPC_VZombie) | 145 | docs/vtmb/animation_and_movers.md:715, docs/vtmb/entity_io.md:1205, docs/vtmb/facial_animation.md:629, +12 more |
 | 106 | `0x1027bb20` CAI_BaseNPC::PostConstructor | — | — | 2234 | docs/vtmb/npc-ai/lifecycle.md:1695, docs/vtmb/npc-ai/lifecycle.md:1886 |
 | 107 | `0x1009e280` CBaseEntity::ParseMapData | — | `0x1034b3c0` CNPCMaker::ParseMapData (CNPCMaker, CNPCMaker_Fleshpile, CNPCMaker_Zombie) | 6 | docs/vtmb/audio_pipeline.md:566, docs/vtmb/entity_io.md:129, docs/vtmb/entity_io.md:269, +2 more |
 | 108 | `0x1004fbb0` CAI_BaseNPC::FUN_1004fbb0 | — | — | 0 | docs/vtmb/npc-ai/senses.md:1080, docs/vtmb/npc-ai/senses.md:1084 |
@@ -122,17 +122,17 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 112 | `0x10026bd0` CAISound::FUN_10026bd0 | — | — | 5 | — |
 | 113 | `0x100a0bc0` CBaseEntity::Activate | `0x1028e310` CAI_BaseNPCTroika::FUN_1028e310 | `0x101a8de0` CCineAISchedule::FUN_101a8de0 (CCineAI, CCineAISchedule, CCineNPC), `0x1034b140` CNPCMaker::FUN_1034b140 (CNPCMaker, CNPCMaker_Fleshpile, CNPCMaker_Zombie), `0x1035dc30` CNPC_VAndreiBlood::Activate (CNPC_VAndreiBlood), `0x103cb200` CNPC_VWerewolf::Activate (CNPC_VWerewolf) | 6 | docs/vtmb/camera-view-modes.md:1688, docs/vtmb/npc-ai/authored-control.md:292, docs/vtmb/npc-ai/conditions-and-states.md:3544, +6 more |
 | 114 | `0x100ad780` CBaseEntity::PostClientMessagesSent | — | — | 4 | — |
-| 115 | `0x10026bf0` CAISound::FUN_10026bf0 | — | — | 3 | docs/vtmb/entity_io.md:381 |
+| 115 | `0x10026bf0` CAISound::FUN_10026bf0 | — | — | 3 | docs/vtmb/entity_io.md:423 |
 | 116 | `0x10027490` CAISound::FUN_10027490 | — | — | 31 | — |
 | 117 | `0x100b4320` CAI_BaseNPC::FUN_100b4320 | — | `0x101a6d20` CCineAISchedule::FUN_101a6d20 (CCineAI, CCineAISchedule, CCineNPC), `0x101aa7d0` CPayphone::vfunc117 (CPayphone), `0x102d7290` CAI_TestHull::vfunc117 (CAI_TestHull), `0x1034d410` CScriptedTarget::vfunc117 (CScriptedTarget), `0x1035ad50` CGeneric_NPC_bathack::vfunc117 (CGeneric_NPC_bathack) | 21 | docs/vtmb/camera-view-modes.md:1740 |
 | 118 | `0x100abc90` CBaseEntity::AcceptInput | — | — | 14 | docs/vtmb/lighting.md:109, docs/vtmb/python_bridge.md:283 |
-| 119 | `0x1033cb90` CBaseCombatCharacter::Kill | — | — | 62 | docs/vtmb/entity_io.md:633 |
+| 119 | `0x1033cb90` CBaseCombatCharacter::Kill | — | — | 62 | docs/vtmb/entity_io.md:675 |
 | 120 | `0x100ace00` CBaseEntity::GetInputDispatchEffectPosition | — | — | 53 | — |
 | 121 | `0x100acab0` CBaseEntity::ReadKeyField | — | — | 7 | docs/vtmb/entity_io.md:186, docs/vtmb/npc-ai/programs.md:1470, docs/vtmb/python_bridge.md:282 |
 | 122 | `0x1009f120` CBaseEntity::SetClassname | — | — | 14 | — |
 | 123 | `0x10275760` CAI_BaseNPC::DrawDebugGeometryOverlays | `0x1029ca50` CAI_BaseNPCTroika::DrawDebugGeometryOverlays | `0x1034bd30` CNPCMaker::DrawDebugGeometryOverlays (CNPCMaker, CNPCMaker_Fleshpile, CNPCMaker_Zombie), `0x1034e070` CScriptedTarget::DrawDebugGeometryOverlays (CScriptedTarget), `0x10372f00` CNPC_VCop::DrawDebugGeometryOverlays (CNPC_VCop), `0x10399d40` CNPC_VMingXiao::DrawDebugGeometryOverlays (CNPC_VMingXiao) | 6 | docs/vtmb/navigation-jump-links.md:449, docs/vtmb/npc-ai/senses.md:1714, docs/vtmb/npc-ai/shape.md:4513, +6 more |
 | 124 | `0x102767d0` CAI_BaseNPC::DrawDebugTextOverlays | `0x1029d4e0` CAI_BaseNPCTroika::DrawDebugTextOverlays | `0x1034ddf0` CScriptedTarget::DrawDebugTextOverlays (CScriptedTarget), `0x10358f90` CNPC_Crow::DrawDebugTextOverlays (CNPC_Crow), `0x10383560` CNPC_VHengeyokai::DrawDebugTextOverlays (CNPC_VHengeyokai), `0x103a1250` CNPC_VNewscaster::DrawDebugTextOverlays (CNPC_VNewscaster), `0x103c08d0` CNPC_VTzimisce::DrawDebugTextOverlays (CNPC_VTzimisce), `0x103e0e80` CNPC_VZombie::DrawDebugTextOverlays (CNPC_VZombie) | 4 | docs/vtmb/npc-ai/shape.md:4579, docs/vtmb/npc-ai/shape.md:4591, docs/vtmb/npc-ai/shape.md:4745, +9 more |
-| 125 | `0x1033e7e0` CBaseCombatCharacter::DrawMuzzleOverlay | — | — | 2 | docs/vtmb/wielded_weapons.md:475 |
+| 125 | `0x1033e7e0` CBaseCombatCharacter::DrawMuzzleOverlay | — | — | 2 | docs/vtmb/wielded_weapons.md:482 |
 | 126 | `0x1027bc60` CAI_BaseNPC::Save | `0x102993c0` CAI_BaseNPCTroika::Save | `0x1034e320` CScriptedTarget::Save (CScriptedTarget), `0x10395f80` CNPC_VMingXiao::Save (CNPC_VMingXiao), `0x1039ed50` CNPC_VMingXiaoTentacle::Save (CNPC_VMingXiaoTentacle), `0x103c2810` CNPC_VTzimisceHeadClaw::Save (CNPC_VTzimisceHeadClaw) | 2 | docs/vtmb/navigation-jump-links.md:2873, docs/vtmb/npc-ai/lifecycle.md:1695, docs/vtmb/npc-ai/lifecycle.md:1730, +14 more |
 | 127 | `0x1027c160` CAI_BaseNPC::Restore | `0x10299700` CAI_BaseNPCTroika::Restore | `0x1034e370` CScriptedTarget::Restore (CScriptedTarget), `0x1035cf80` CNPC_VAndreiBlood::Restore (CNPC_VAndreiBlood), `0x10360e10` CNPC_VAsianVampire::restore (CNPC_VAsianVampire), `0x1036b170` CNPC_VChangBros::Restore (CNPC_VChangBros, CNPC_VChangBrosBlade, CNPC_VChangBrosClaw), `0x10396000` CNPC_VMingXiao::vfunc127 (CNPC_VMingXiao), `0x1039eda0` CNPC_VMingXiaoTentacle::vfunc127 (CNPC_VMingXiaoTentacle), +4 more | 5 | docs/vtmb/navigation-jump-links.md:2874, docs/vtmb/npc-ai/lifecycle.md:755, docs/vtmb/npc-ai/lifecycle.md:1695, +25 more |
 | 128 | `0x101a6520` CAI_BaseNPC::ShouldSavePhysics | — | — | 2 | — |
@@ -167,10 +167,10 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 157 | `0x10026f00` CAISound::FUN_10026f00 | — | — | 1 | — |
 | 158 | `0x100b4dc0` CAISound::FUN_100b4dc0 | — | — | 143 | docs/vtmb/npc-ai/programs.md:1265, docs/vtmb/npc-ai/senses.md:218, docs/vtmb/npc-ai/shape.md:95, +1 more |
 | 159 | `0x10026f20` CAISound::FUN_10026f20 | — | — | 0 | docs/vtmb/npc-ai/shape.md:3205, docs/vtmb/npc-ai/shape.md:3213 |
-| 160 | `0x100a1b40` CBaseEntity::HasTarget | — | — | 1 | docs/vtmb/entity_io.md:433 |
-| 161 | `0x100a1c30` CBaseEntity::HasLinkedDoor | — | — | 2 | docs/vtmb/entity_io.md:433 |
+| 160 | `0x100a1b40` CBaseEntity::HasTarget | — | — | 1 | docs/vtmb/entity_io.md:475 |
+| 161 | `0x100a1c30` CBaseEntity::HasLinkedDoor | — | — | 2 | docs/vtmb/entity_io.md:475 |
 | 162 | `0x10026f60` CAISound::FUN_10026f60 | — | — | 12 | — |
-| 163 | `0x100a9800` CBaseEntity::IsViewable | — | — | 9 | docs/vtmb/npc-ai/senses.md:1788 |
+| 163 | `0x100a9800` CBaseEntity::IsViewable | — | — | 9 | docs/vtmb/entity_io.md:341, docs/vtmb/npc-ai/senses.md:1788 |
 | 164 | `0x100b50a0` CAISound::FUN_100b50a0 | — | — | 4 | docs/vtmb/npc-ai/shape.md:1619, docs/vtmb/npc-ai/shape.md:3205, docs/vtmb/npc-ai/shape.md:3209 |
 | 165 | `0x10026fb0` CAISound::FUN_10026fb0 | — | — | 0 | docs/vtmb/npc-ai/shape.md:3205, docs/vtmb/npc-ai/shape.md:3215 |
 | 166 | `0x10026f80` CAISound::FUN_10026f80 | — | `0x10397000` CNPC_VMingXiao::vfunc166 (CNPC_VMingXiao), `0x1039ebd0` CNPC_VMingXiaoTentacle::vfunc166 (CNPC_VMingXiaoTentacle) | 8 | docs/vtmb/navigation-jump-links.md:1085, docs/vtmb/npc-ai/lifecycle.md:1036, docs/vtmb/npc-ai/lifecycle.md:1038, +4 more |
@@ -178,7 +178,7 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 168 | `0x10027020` CAISound::FUN_10027020 ‼ | `0x102b5360` CAI_BaseNPCTroika::FUN_102b5360 | — | 31 | docs/vtmb/npc-ai/lifecycle.md:553, docs/vtmb/npc-ai/population.md:2840, docs/vtmb/npc-ai/programs.md:885, +5 more |
 | 169 | `0x10027040` CAISound::FUN_10027040 | — | — | 15 | — |
 | 170 | `0x10027060` CAISound::FUN_10027060 | — | — | 8 | — |
-| 171 | `0x100ad550` CBaseEntity::SetMovedir | — | — | 8 | — |
+| 171 | `0x100ad550` CBaseEntity::SetMovedir | — | — | 8 | docs/vtmb/entity_io.md:360 |
 | 172 | `0x100a1d20` CBaseEntity::GetNextTarget | — | — | 8 | docs/vtmb/npc-ai/authored-control.md:328 |
 | 173 | `0x100a4e70` CBaseEntity::Use | — | — | 16 | — |
 | 174 | `0x100a49d0` CBaseEntity::StartTouch | — | `0x1037bf60` CNPC_VGhoulCroucher::StartTouch (CNPC_VGhoulCroucher) | 5 | docs/vtmb/npc-ai/lifecycle.md:2078, docs/vtmb/npc-ai/lifecycle.md:2218 |
@@ -214,21 +214,21 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 204 | `0x100a1470` CBaseEntity::GetReceivedDamageScale | — | — | 2 | — |
 | 205 | `0x10027330` CAISound::FUN_10027330 | — | — | 0 | — |
 | 206 | `0x10027350` CAISound::FUN_10027350 | — | — | 0 | — |
-| 207 | `0x1003d3d0` CBaseEntity::IsCurrentlyTouching | — | — | 2 | docs/vtmb/entity_io.md:1087, docs/vtmb/entity_io.md:1261 |
+| 207 | `0x1003d3d0` CBaseEntity::IsCurrentlyTouching | — | — | 2 | docs/vtmb/entity_io.md:1129, docs/vtmb/entity_io.md:1303 |
 | 208 | `0x100b1420` CBaseEntity::SetGroundEntity | — | — | 28 | — |
 | 209 | `0x100b1510` CBaseEntity::GetGroundEntity | — | — | 61 | docs/vtmb/npc-ai/conditions-and-states.md:224 |
 | 210 | `0x10027370` CAISound::FUN_10027370 | — | — | 4 | docs/vtmb/npc-ai/shape.md:1614, docs/vtmb/npc-ai/shape.md:1628 |
 | 211 | `0x100274d0` CBaseEntity::GetSolidFlags | — | — | 43 | — |
-| 212 | `0x100b15f0` CBaseEntity::SetModelName | — | — | 47 | — |
-| 213 | `0x100b1890` CAISound::FUN_100b1890 | — | — | 1 | docs/vtmb/entity_io.md:1154, docs/vtmb/npc-ai/shape.md:4077 |
-| 214 | `0x100b1960` CBaseEntity::GetSize | — | — | 30 | docs/vtmb/entity_io.md:1143 |
+| 212 | `0x100b15f0` CBaseEntity::SetModelName | — | — | 47 | docs/vtmb/entity_io.md:338 |
+| 213 | `0x100b1890` CAISound::FUN_100b1890 | — | — | 1 | docs/vtmb/entity_io.md:1196, docs/vtmb/npc-ai/shape.md:4077 |
+| 214 | `0x100b1960` CBaseEntity::GetSize | — | — | 30 | docs/vtmb/entity_io.md:1185 |
 | 215 | `0x100b4c30` CAISound::FUN_100b4c30 | — | — | 18 | docs/vtmb/npc-ai/shape.md:4635, docs/vtmb/npc-ai/shape.md:4639 |
 | 216 | `0x100b2300` CBaseEntity::SetAbsOrigin | — | — | 81 | docs/vtmb/entity_io.md:175 |
-| 217 | `0x100b31b0` CBaseEntity::GetAbsOrigin | — | — | 1126 | docs/vtmb/entity_io.md:361, docs/vtmb/npc-ai/conditions-and-states.md:763 |
+| 217 | `0x100b31b0` CBaseEntity::GetAbsOrigin | — | — | 1126 | docs/vtmb/entity_io.md:403, docs/vtmb/npc-ai/conditions-and-states.md:763 |
 | 218 | `0x100b2510` CBaseEntity::SetAbsAngles | — | — | 55 | docs/vtmb/entity_io.md:175, docs/vtmb/lighting.md:90 |
-| 219 | `0x100b3280` CBaseEntity::GetAbsAngles | — | — | 228 | docs/vtmb/entity_io.md:361 |
-| 220 | `0x100b3070` CBaseEntity::GetOrigin | — | — | 634 | docs/vtmb/entity_io.md:361, docs/vtmb/npc-ai/conditions-and-states.md:764 |
-| 221 | `0x100b3110` CBaseEntity::GetAngles | — | — | 225 | docs/vtmb/entity_io.md:361, docs/vtmb/wielded_weapons.md:478 |
+| 219 | `0x100b3280` CBaseEntity::GetAbsAngles | — | — | 228 | docs/vtmb/entity_io.md:403 |
+| 220 | `0x100b3070` CBaseEntity::GetOrigin | — | — | 634 | docs/vtmb/entity_io.md:403, docs/vtmb/npc-ai/conditions-and-states.md:764 |
+| 221 | `0x100b3110` CBaseEntity::GetAngles | — | — | 225 | docs/vtmb/entity_io.md:403, docs/vtmb/wielded_weapons.md:485 |
 | 222 | `0x100a9eb0` CBaseEntity::GetSoundEmissionOrigin | — | — | 176 | — |
 | 223 | `0x10273720` CAI_BaseNPC::FUN_10273720 | — | — | 31 | docs/vtmb/npc-ai/senses.md:1630 |
 | 224 | `0x100273b0` CAISound::FUN_100273b0 | — | — | 2 | — |
@@ -263,13 +263,13 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 253 | `0x10325440` CBaseCombatCharacter::SelectHeaviestSequenceForStat | — | — | 2 | — |
 | 254 | `0x10325300` CBaseCombatCharacter::SelectSameSequenceForStat | — | — | 1 | — |
 | 255 | `0x10098eb0` CAI_BaseNPC::FUN_10098eb0 | — | — | 4 | docs/vtmb/animation_rig_resolution.md:725 |
-| 256 | `0x100927f0` CBaseAnimating::GetBoneTransform | — | — | 20 | docs/vtmb/wielded_weapons.md:410 |
+| 256 | `0x100927f0` CBaseAnimating::GetBoneTransform | — | — | 20 | docs/vtmb/wielded_weapons.md:417 |
 | 257 | `0x10092b50` CBaseAnimating::SetupBones | — | — | 13 | — |
 | 258 | `0x10098c80` CBaseAnimatingOverlay::DispatchAnimEvents | — | — | 8 | docs/vtmb/animation_events.md:151, docs/vtmb/npc-ai/lifecycle.md:4070, docs/vtmb/npc-ai/shape.md:1331 |
 | 259 | `0x10274e30` CAI_BaseNPC::HandleAnimEvent | `0x1029b290` CAI_BaseNPCTroika::HandleAnimEvent | `0x1034a680` CGenericNPC::HandleAnimEvent (CGenericNPC), `0x10357820` CNPC_Crow::HandleAnimEvent (CNPC_Crow), `0x10368ec0` CNPC_VCamera::HandleAnimEvent (CNPC_VCamera, CNPC_VCameraSecurity), `0x10374280` CNPC_VDog::HandleAnimEvent (CNPC_VDog), `0x103786c0` CNPC_VGargoyle::HandleAnimEvent (CNPC_VGargoyle), `0x1037fb60` CNPC_VHengeyokai::HandleAnimEvent (CNPC_VHengeyokai), +7 more | 5 | docs/vtmb/animation_and_movers.md:2222, docs/vtmb/animation_and_movers.md:2223, docs/vtmb/animation_and_movers.md:2225, +46 more |
 | 260 | `0x10091fe0` CBaseAnimating::SetPoseParameter02 | — | — | 4 | docs/vtmb/animation_and_movers.md:712, docs/vtmb/npc-ai/shape.md:4697 |
 | 261 | `0x10091f10` CBaseAnimating::SetPoseParameter01 | — | — | 2 | — |
-| 262 | `0x10093000` CBaseAnimating::GetAttachment03 | — | — | 7 | docs/vtmb/wielded_weapons.md:429 |
+| 262 | `0x10093000` CBaseAnimating::GetAttachment03 | — | — | 7 | docs/vtmb/wielded_weapons.md:436 |
 | 263 | `0x10094870` CBaseAnimating::GetGroundSpeedVelocity | — | — | 5 | — |
 | 264 | `0x10096980` CBaseAnimating::DrawServerHitboxes | — | — | 4 | — |
 | 265 | `0x10099690` CAI_BaseNPC::FUN_10099690 | — | — | 27 | docs/vtmb/animation_and_movers.md:4066, docs/vtmb/npc-ai/lifecycle.md:3371 |
@@ -390,12 +390,12 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 380 | `0x1026ce30` CAI_BaseNPC::LeaveGrappleState | `0x102b5d90` CAI_BaseNPCTroika::LeaveGrappleState ‼ | — | 6 | docs/vtmb/feeding.md:227, docs/vtmb/npc-ai/lifecycle.md:251, docs/vtmb/npc-ai/lifecycle.md:252, +6 more |
 | 381 | `0x10327ec0` CBaseCombatCharacter::Weapon_TranslateActivity | — | — | 24 | docs/vtmb/activity_enum.md:348, docs/vtmb/animation_and_movers.md:1178, docs/vtmb/animation_and_movers.md:4697, +2 more |
 | 382 | `0x1032d9b0` CBaseCombatCharacter::Weapon_CanUse | — | — | 17 | — |
-| 383 | `0x1032d380` CBaseCombatCharacter::Weapon_Equip | — | — | 31 | docs/vtmb/npc-ai/conditions-and-states.md:1705, docs/vtmb/wielded_weapons.md:303, docs/vtmb/wielded_weapons.md:928 |
+| 383 | `0x1032d380` CBaseCombatCharacter::Weapon_Equip | — | — | 31 | docs/vtmb/npc-ai/conditions-and-states.md:1705, docs/vtmb/wielded_weapons.md:310, docs/vtmb/wielded_weapons.md:935 |
 | 384 | `0x1032d6e0` CBaseCombatCharacter::Weapon_EquipAmmoOnly | — | — | 2 | — |
 | 385 | `0x1032d0c0` CAI_BaseNPC::FUN_1032d0c0 | — | — | 16 | docs/vtmb/combat-and-damage.md:2533, docs/vtmb/combat-and-damage.md:2627 |
 | 386 | `0x1032ce40` CAI_BaseNPC::FUN_1032ce40 | — | — | 5 | docs/vtmb/combat-and-damage.md:2532, docs/vtmb/combat-and-damage.md:2603 |
 | 387 | `0x1032d2e0` CBaseCombatCharacter::Weapon_Drop_All | — | — | 2 | — |
-| 388 | `0x1032dde0` CBaseCombatCharacter::Weapon_Switch | — | — | 27 | docs/vtmb/npc-ai/shape.md:108, docs/vtmb/wielded_weapons.md:303, docs/vtmb/wielded_weapons.md:929 |
+| 388 | `0x1032dde0` CBaseCombatCharacter::Weapon_Switch | — | — | 27 | docs/vtmb/npc-ai/shape.md:108, docs/vtmb/wielded_weapons.md:310, docs/vtmb/wielded_weapons.md:936 |
 | 389 | `0x103338c0` CBaseCombatCharacter::Weapon_ShootPosition | — | `0x103bfd80` CNPC_VTzimisce::vfunc389 (CNPC_VTzimisce) | 30 | docs/vtmb/npc-ai/convars.md:56, docs/vtmb/npc-ai/convars.md:57, docs/vtmb/npc-ai/convars.md:58, +4 more |
 | 390 | `0x10265ed0` CAI_BaseNPC::OnTakeDamage_Alive | `0x102beda0` CAI_BaseNPCTroika::OnTakeDamage | `0x1035e6d0` CNPC_VAndreiBlood::OnTakeDamage_Alive (CNPC_VAndreiBlood), `0x103601a0` CNPC_VAnimal::FUN_103601a0 (CNPC_VAnimal, CNPC_VDog, CNPC_VRat, CNPC_VScurrying, CNPC_VZombie), `0x10363c70` CNPC_VBach::vfunc390 (CNPC_VBach), `0x10369240` CNPC_VCamera::FUN_10369240 (CNPC_VCamera, CNPC_VCameraSecurity), `0x10376b10` CNPC_VFrenzyShadow::vfunc390 (CNPC_VFrenzyShadow), `0x10378c10` CNPC_VGargoyle::vfunc390 (CNPC_VGargoyle), +8 more | 4 | docs/vtmb/combat-and-damage.md:1305, docs/vtmb/combat-and-damage.md:2020, docs/vtmb/combat-and-damage.md:2035, +31 more |
 | 391 | `0x103315e0` CBaseCombatCharacter::OnTakeDamage_Dying | — | — | 2 | — |
@@ -447,7 +447,7 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 437 | `0x1028a2a0` CAI_BaseNPC::PreSelectSchedule | `0x102ae920` CAI_BaseNPCTroika::PreSelectSchedule | `0x10368f20` CNPC_VCamera::PreSelectSchedule (CNPC_VCamera, CNPC_VCameraSecurity), `0x10394120` CNPC_VMingXiao::PreSelectSchedule (CNPC_VMingXiao), `0x1039de00` CNPC_VMingXiaoTentacle::PreSelectSchedule (CNPC_VMingXiaoTentacle), `0x103a43f0` CNPC_VPlaceholder::PreSelectSchedule (CNPC_VPlaceholder), `0x103a46b0` CNPC_VPlayerController::PreSelectSchedule (CNPC_VFrenzyShadow, CNPC_VPlayerController, CNPC_VWolfMorph), `0x103aa510` CNPC_VSabbatLeader::PreSelectSchedule (CNPC_VSabbatLeader) | 4 | docs/vtmb/npc-ai/authored-control.md:461, docs/vtmb/npc-ai/authored-control.md:465, docs/vtmb/npc-ai/authored-control.md:523, +36 more |
 | 438 | `0x1028a380` CAI_BaseNPC::SelectSchedule | `0x102af660` CAI_BaseNPCTroika::SelectSchedule | `0x10358ce0` CNPC_Crow::SelectSchedule (CNPC_Crow), `0x1035d010` CNPC_VAndreiBlood::SelectSchedule (CNPC_VAndreiBlood), `0x1035fb50` CNPC_VAnimal::SelectSchedule (CNPC_VAnimal), `0x10360eb0` CNPC_VAsianVampire::SelectSchedule (CNPC_VAsianVampire), `0x10363a10` CNPC_VBach::SelectSchedule (CNPC_VBach), `0x10367460` CNPC_VBatSwarm::SelectSchedule (CNPC_VBatSwarm), +33 more | 2 | docs/vtmb/feeding.md:538, docs/vtmb/navigation-jump-links.md:1280, docs/vtmb/navigation-jump-links.md:1281, +75 more |
 | 439 | `0x1028abe0` CAI_BaseNPC::SelectFailSchedule | — | — | 2 | docs/vtmb/npc-ai/programs.md:344, docs/vtmb/npc-ai/schedule-kernel.md:591 |
-| 440 | `0x102cc080` CAI_BaseNPC::TranslateSchedule | `0x102b12f0` CAI_BaseNPCTroika::TranslateSchedule | `0x10362910` CNPC_VAsianVampire::TranslateSchedule (CNPC_VAsianVampire), `0x10363a30` CNPC_VBach::TranslateSchedule (CNPC_VBach), `0x1036b460` CNPC_VChangBros::TranslateSchedule (CNPC_VChangBros, CNPC_VChangBrosBlade, CNPC_VChangBrosClaw), `0x10372150` CNPC_VCop::TranslateSchedule (CNPC_VCop), `0x10374370` CNPC_VDog::TranslateSchedule (CNPC_VDog), `0x10375f20` CNPC_VFrenzyShadow::TranslateSchedule (CNPC_VFrenzyShadow), +14 more | 4 | docs/vtmb/animation_and_movers.md:1659, docs/vtmb/entity_io.md:2809, docs/vtmb/npc-ai/programs.md:544, +19 more |
+| 440 | `0x102cc080` CAI_BaseNPC::TranslateSchedule | `0x102b12f0` CAI_BaseNPCTroika::TranslateSchedule | `0x10362910` CNPC_VAsianVampire::TranslateSchedule (CNPC_VAsianVampire), `0x10363a30` CNPC_VBach::TranslateSchedule (CNPC_VBach), `0x1036b460` CNPC_VChangBros::TranslateSchedule (CNPC_VChangBros, CNPC_VChangBrosBlade, CNPC_VChangBrosClaw), `0x10372150` CNPC_VCop::TranslateSchedule (CNPC_VCop), `0x10374370` CNPC_VDog::TranslateSchedule (CNPC_VDog), `0x10375f20` CNPC_VFrenzyShadow::TranslateSchedule (CNPC_VFrenzyShadow), +14 more | 4 | docs/vtmb/animation_and_movers.md:1659, docs/vtmb/entity_io.md:2851, docs/vtmb/npc-ai/programs.md:544, +19 more |
 | 441 | `0x101a65a0` CAI_BaseNPC::FUN_101a65a0 | — | — | 2 | — |
 | 442 | `0x102827f0` CAI_BaseNPC::StartTask | `0x102a1910` CAI_BaseNPCTroika::StartTask | `0x10358330` CNPC_Crow::StartTask (CNPC_Crow), `0x1035d1b0` CNPC_VAndreiBlood::StartTask (CNPC_VAndreiBlood), `0x1035f650` CNPC_VAnimal::StartTask (CNPC_VAnimal), `0x103611a0` CNPC_VAsianVampire::StartTask (CNPC_VAsianVampire), `0x103645a0` CNPC_VBach::StartTask (CNPC_VBach), `0x1036b750` CNPC_VChangBros::StartTask (CNPC_VChangBros, CNPC_VChangBrosBlade, CNPC_VChangBrosClaw), +21 more | 10 | docs/vtmb/animation_and_movers.md:1468, docs/vtmb/animation_and_movers.md:1869, docs/vtmb/animation_and_movers.md:1873, +113 more |
 | 443 | `0x101a65e0` CAI_BaseNPC::FUN_101a65e0 | — | — | 6 | — |
@@ -468,7 +468,7 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 458 | `0x102cc300` CAI_BaseNPC::FUN_102cc300 | — | — | 5 | docs/vtmb/npc-ai/conditions-and-states.md:1843, docs/vtmb/npc-ai/conditions-and-states.md:1848 |
 | 459 | `0x1026d7f0` CAI_BaseNPC::FUN_1026d7f0 ‼ | — | `0x101a89a0` CCineAISchedule::FUN_101a89a0 (CCineAI, CCineAISchedule, CCineNPC) | 15 | docs/vtmb/npc-ai/conditions-and-states.md:1140, docs/vtmb/npc-ai/conditions-and-states.md:1160, docs/vtmb/npc-ai/conditions-and-states.md:1165, +1 more |
 | 460 | `0x1026f590` CAI_BaseNPC::FUN_1026f590 | `0x102ad340` CAI_BaseNPCTroika::FUN_102ad340 | `0x10368f80` CNPC_VCamera::FUN_10368f80 (CNPC_VCamera, CNPC_VCameraSecurity), `0x10374d80` CNPC_VDog::vfunc460 (CNPC_VDog) | 3 | docs/vtmb/npc-ai/conditions-and-states.md:1298, docs/vtmb/npc-ai/conditions-and-states.md:2530, docs/vtmb/npc-ai/population.md:258, +2 more |
-| 461 | `0x1026f660` CAI_BaseNPC::SelectIdealState | `0x102ad660` CAI_BaseNPCTroika::SelectIdealState | `0x1035d150` CNPC_VAndreiBlood::vfunc461 (CNPC_VAndreiBlood), `0x1035fe80` CNPC_VAnimal::FUN_1035fe80 (CNPC_VAnimal, CNPC_VRat, CNPC_VScurrying), `0x10361060` CNPC_VAsianVampire::SelectIdealState (CNPC_VAsianVampire), `0x10363b40` CNPC_VBach::vfunc461 (CNPC_VBach), `0x103674a0` CNPC_VBatSwarm::vfunc461 (CNPC_VBatSwarm), `0x10369060` CNPC_VCamera::FUN_10369060 (CNPC_VCamera, CNPC_VCameraSecurity), +22 more | 6 | docs/vtmb/animation_and_movers.md:1540, docs/vtmb/combat-and-damage.md:1304, docs/vtmb/entity_io.md:2752, +41 more |
+| 461 | `0x1026f660` CAI_BaseNPC::SelectIdealState | `0x102ad660` CAI_BaseNPCTroika::SelectIdealState | `0x1035d150` CNPC_VAndreiBlood::vfunc461 (CNPC_VAndreiBlood), `0x1035fe80` CNPC_VAnimal::FUN_1035fe80 (CNPC_VAnimal, CNPC_VRat, CNPC_VScurrying), `0x10361060` CNPC_VAsianVampire::SelectIdealState (CNPC_VAsianVampire), `0x10363b40` CNPC_VBach::vfunc461 (CNPC_VBach), `0x103674a0` CNPC_VBatSwarm::vfunc461 (CNPC_VBatSwarm), `0x10369060` CNPC_VCamera::FUN_10369060 (CNPC_VCamera, CNPC_VCameraSecurity), +22 more | 6 | docs/vtmb/animation_and_movers.md:1540, docs/vtmb/combat-and-damage.md:1304, docs/vtmb/entity_io.md:2794, +41 more |
 | 462 | `0x101a6700` CAI_BaseNPC::ShouldGoToIdleState | `0x101aa6b0` CAI_BaseNPCTroika::ShouldGoToIdleState | — | 12 | — |
 | 463 | `0x1026e3e0` CAI_BaseNPC::OnStateChange | `0x102ae140` CAI_BaseNPCTroika::OnStateChange | `0x10260630` CAI_BaseHumanoid::OnStateChange (CAI_BaseHumanoid), `0x103639b0` CNPC_VBach::OnStateChange (CNPC_VBach), `0x10368ea0` CNPC_VCamera::OnStateChange (CNPC_VCamera, CNPC_VCameraSecurity), `0x10371c20` CNPC_VCop::OnStateChange (CNPC_VCop), `0x1037d020` CNPC_VGuard1::OnStateChange (CNPC_VGuard1), `0x103871c0` CNPC_VHumanCombatant::OnStateChange (CNPC_ProneDialog, CNPC_VGhoulCroucher, CNPC_VHumanCombatPatrol, CNPC_VHumanCombatant, CNPC_VSabbatGunman, CNPC_VStalker, CNPC_VYukie), +3 more | 4 | docs/vtmb/animation_and_movers.md:1568, docs/vtmb/npc-ai/conditions-and-states.md:470, docs/vtmb/npc-ai/conditions-and-states.md:1222, +29 more |
 | 464 | `0x101a6720` CAI_BaseNPC::GetState | — | `0x1038fb00` CNPC_VManBat::GetState (CNPC_VManBat) | 39 | — |
@@ -592,8 +592,8 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 582 | `0x10277d90` CAI_BaseNPC::FUN_10277d90 | — | — | 2 | — |
 | 583 | — | `0x1028d860` CAI_BaseNPCTroika::FUN_1028d860 | `0x101a7880` CCineNPC::vfunc583 (CCineNPC), `0x101a9080` CCineAI::vfunc583 (CCineAI), `0x101a9790` CCineAISchedule::vfunc583 (CCineAISchedule), `0x10312d40` FUN_10312d40 (CAI_BaseHumanoid, CAI_ExpressiveNPC) | 8 | docs/vtmb/animation_and_movers.md:1658, docs/vtmb/npc-ai/authored-control.md:289, docs/vtmb/npc-ai/authored-control.md:325, +7 more |
 | 584 | — | `0x1028d910` CAI_BaseNPCTroika::FUN_1028d910 | `0x101a82d0` CCineAISchedule::FUN_101a82d0 (CCineAISchedule, CCineNPC), `0x101a9510` CCineAI::vfunc584 (CCineAI), `0x10260dc0` FUN_10260dc0 (CAI_BaseHumanoid, CAI_ExpressiveNPC) | 12 | docs/vtmb/animation_and_movers.md:2147, docs/vtmb/navigation-jump-links.md:1851, docs/vtmb/navigation-jump-links.md:1876, +4 more |
-| 585 | — | `0x1029aa10` CAI_BaseNPCTroika::ProcessTweakParam | `0x101a7210` CCineNPC::vfunc585 (CCineNPC), `0x101a9060` CCineAI::vfunc585 (CCineAI), `0x101a9770` CCineAISchedule::vfunc585 (CCineAISchedule), `0x1025f1c0` CAI_BaseHumanoid::vfunc585 (CAI_BaseHumanoid) | 6 | docs/vtmb/entity_io.md:2808, docs/vtmb/navigation-jump-links.md:102, docs/vtmb/navigation-jump-links.md:1294, +8 more |
-| 586 | — | `0x101aa5d0` CAI_BaseNPCTroika::FUN_101aa5d0 | `0x101a8840` CCineNPC::vfunc586 (CCineNPC), `0x101a95d0` CCineAI::vfunc586 (CCineAI), `0x101a98c0` CCineAISchedule::vfunc586 (CCineAISchedule), `0x1025f1a0` CAI_BaseHumanoid::vfunc586 (CAI_BaseHumanoid) | 19 | docs/vtmb/entity_io.md:2746, docs/vtmb/entity_io.md:2747, docs/vtmb/entity_io.md:2748, +17 more |
+| 585 | — | `0x1029aa10` CAI_BaseNPCTroika::ProcessTweakParam | `0x101a7210` CCineNPC::vfunc585 (CCineNPC), `0x101a9060` CCineAI::vfunc585 (CCineAI), `0x101a9770` CCineAISchedule::vfunc585 (CCineAISchedule), `0x1025f1c0` CAI_BaseHumanoid::vfunc585 (CAI_BaseHumanoid) | 6 | docs/vtmb/entity_io.md:2850, docs/vtmb/navigation-jump-links.md:102, docs/vtmb/navigation-jump-links.md:1294, +8 more |
+| 586 | — | `0x101aa5d0` CAI_BaseNPCTroika::FUN_101aa5d0 | `0x101a8840` CCineNPC::vfunc586 (CCineNPC), `0x101a95d0` CCineAI::vfunc586 (CCineAI), `0x101a98c0` CCineAISchedule::vfunc586 (CCineAISchedule), `0x1025f1a0` CAI_BaseHumanoid::vfunc586 (CAI_BaseHumanoid) | 19 | docs/vtmb/entity_io.md:2788, docs/vtmb/entity_io.md:2789, docs/vtmb/entity_io.md:2790, +17 more |
 | 587 | — | `0x1028ef20` CAI_BaseNPCTroika::FUN_1028ef20 | `0x1025e920` CAI_BaseHumanoid::vfunc587 (CAI_BaseHumanoid), `0x1034aed0` CNPCMaker::FUN_1034aed0 (CNPCMaker, CNPCMaker_Fleshpile, CNPCMaker_Zombie), `0x1035ebf0` CNPC_VAnimal::FUN_1035ebf0 (CNPC_VAnimal, CNPC_VDog, CNPC_VRat, CNPC_VScurrying, CNPC_VZombie), `0x10391010` CNPC_VMingXiao::FUN_10391010 (CNPC_VBaseBoss, CNPC_VMingXiao, CNPC_VTzimisce, CNPC_VTzimisceHeadClaw, CNPC_VTzimisceRunner, CNPC_VWerewolf), `0x103a01d0` CNPC_VNewscaster::vfunc587 (CNPC_VNewscaster), `0x103a4220` CNPC_VPlaceholder::vfunc587 (CNPC_VPlaceholder) | 4 | docs/vtmb/npc-ai/conditions-and-states.md:1991, docs/vtmb/npc-ai/lifecycle.md:1227, docs/vtmb/npc-ai/schedule-kernel.md:300, +5 more |
 | 588 | — | `0x10293e50` CAI_BaseNPCTroika::FUN_10293e50 | `0x1025ea00` CAI_BaseHumanoid::vfunc588 (CAI_BaseHumanoid), `0x103c3fd0` CNPC_VTzimisceRunner::vfunc588 (CNPC_VTzimisceRunner), `0x103dcf00` CNPC_VWolfMorph::vfunc588 (CNPC_VWolfMorph) | 3 | docs/vtmb/animation_and_movers.md:1865, docs/vtmb/animation_and_movers.md:1881, docs/vtmb/npc-ai/programs.md:809, +7 more |
 | 589 | — | `0x102c2ec0` CAI_BaseNPCTroika::FUN_102c2ec0 | `0x10260540` CAI_BaseHumanoid::vfunc589 (CAI_BaseHumanoid) | 3 | docs/vtmb/combat-and-damage.md:2652, docs/vtmb/npc-ai/shape.md:2819, docs/vtmb/npc-ai/shape.md:2832 |
@@ -624,7 +624,7 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 614 | — | `0x102c23f0` FUN_102c23f0 | — | 53 | docs/vtmb/feeding.md:491, docs/vtmb/feeding.md:500, docs/vtmb/npc-ai/lifecycle.md:174, +6 more |
 | 615 | — | `0x102ad0c0` CAI_BaseNPCTroika::CanBeSetOnFire | `0x101aa8f0` CPayphone::CanBeSetOnFire (CPayphone), `0x10377ae0` CNPC_VGargoyle::CanBeSetOnFire (CNPC_VGargoyle), `0x1037c420` CNPC_VGhoulCroucher::CanBeSetOnFire (CNPC_VGhoulCroucher), `0x1037e7f0` CNPC_VHengeyokai::CanBeSetOnFire (CNPC_VHengeyokai), `0x103ad790` CNPC_VRat::CanBeSetOnFire (CNPC_VRat), `0x103ca6b0` CNPC_VWerewolf::CanBeSetOnFire (CNPC_VWerewolf) | 3 | docs/vtmb/combat-and-damage.md:2410, docs/vtmb/combat-and-damage.md:2414, docs/vtmb/npc-ai/conditions-and-states.md:293, +3 more |
 | 616 | — | `0x102ad110` FUN_102ad110 | — | 2 | docs/vtmb/npc-ai/conditions-and-states.md:287, docs/vtmb/npc-ai/schedule-kernel.md:659 |
-| 617 | — | — | `0x101aa910` FUN_101aa910 (CPayphone), `0x1034b7b0` FUN_1034b7b0 (CNPCMaker), `0x1034c2d0` FUN_1034c2d0 (CNPCMaker_Fleshpile), `0x1034d140` FUN_1034d140 (CNPCMaker_Zombie), `0x10366510` CNPC_VBaseBoss::EnemyCouldSeeHull (CNPC_VBaseBoss, CNPC_VMingXiao, CNPC_VTzimisce, CNPC_VTzimisceHeadClaw, CNPC_VTzimisceRunner), `0x10379f90` FUN_10379f90 (CNPC_VGargoyle), +3 more | 25 | docs/vtmb/entity_io.md:2171, docs/vtmb/footsteps.md:192, docs/vtmb/footsteps.md:977, +20 more |
+| 617 | — | — | `0x101aa910` FUN_101aa910 (CPayphone), `0x1034b7b0` FUN_1034b7b0 (CNPCMaker), `0x1034c2d0` FUN_1034c2d0 (CNPCMaker_Fleshpile), `0x1034d140` FUN_1034d140 (CNPCMaker_Zombie), `0x10366510` CNPC_VBaseBoss::EnemyCouldSeeHull (CNPC_VBaseBoss, CNPC_VMingXiao, CNPC_VTzimisce, CNPC_VTzimisceHeadClaw, CNPC_VTzimisceRunner), `0x10379f90` FUN_10379f90 (CNPC_VGargoyle), +3 more | 25 | docs/vtmb/entity_io.md:2213, docs/vtmb/footsteps.md:192, docs/vtmb/footsteps.md:977, +20 more |
 | 618 | — | — | `0x1034b580` FUN_1034b580 (CNPCMaker, CNPCMaker_Fleshpile), `0x1034d0a0` FUN_1034d0a0 (CNPCMaker_Zombie), `0x1037a100` FUN_1037a100 (CNPC_VGargoyle), `0x10381960` FUN_10381960 (CNPC_VHengeyokai), `0x103ab310` CNPC_VSabbatLeader::TransformationStart (CNPC_VSabbatLeader), `0x103b9440` FUN_103b9440 (CNPC_VTzimisce), +4 more | 10 | docs/vtmb/navigation-jump-links.md:2382, docs/vtmb/npc-ai/convars.md:40, docs/vtmb/npc-ai/lifecycle.md:282, +8 more |
 | 619 | — | — | `0x1034af30` FUN_1034af30 (CNPCMaker), `0x1034bf70` FUN_1034bf70 (CNPCMaker_Fleshpile), `0x1034cbb0` FUN_1034cbb0 (CNPCMaker_Zombie), `0x1035dba0` CNPC_VAndreiBlood::SetSchedule (CNPC_VAndreiBlood), `0x10361530` CNPC_VAsianVampire::SetSchedule (CNPC_VAsianVampire), `0x1036c760` CNPC_VChangBros::SetSchedule (CNPC_VChangBros, CNPC_VChangBrosBlade, CNPC_VChangBrosClaw), +6 more | 7 | docs/vtmb/footsteps.md:193, docs/vtmb/footsteps.md:910, docs/vtmb/footsteps.md:978, +5 more |
 | 620 | — | — | `0x1034af50` FUN_1034af50 (CNPCMaker), `0x1034bf90` FUN_1034bf90 (CNPCMaker_Fleshpile), `0x1034cbd0` FUN_1034cbd0 (CNPCMaker_Zombie), `0x103aa5e0` CNPC_VSabbatLeader::FootstepSound (CNPC_VSabbatLeader), `0x103b9810` FUN_103b9810 (CNPC_VTzimisce), `0x103d5050` CNPC_VWerewolf::DrawBBoxOverlay (CNPC_VWerewolf) | 6 | docs/vtmb/footsteps.md:171, docs/vtmb/footsteps.md:980, docs/vtmb/npc-ai/lifecycle.md:2016, +4 more |

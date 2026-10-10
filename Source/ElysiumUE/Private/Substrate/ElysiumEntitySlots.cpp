@@ -7,8 +7,8 @@
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
 // 219 generated slot bodies of `FElysiumEntity`: 75 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 58 are defined by hand in the substrate,
-// and 68 are still stubs — 67 29c, 1 unassigned. 18 are closed (0019/6) and answer the
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 66 are defined by hand in the substrate,
+// and 60 are still stubs — 59 29c, 1 unassigned. 18 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -112,12 +112,10 @@ void FElysiumEntity::SetSentLastFrame(bool)
 
 // slot 8 0x100b17f0 (sdk) `int GetModelIndex() const`
 //   layer 0, story 29c
-int32 FElysiumEntity::GetModelIndex() const
-{
-	FireEntitySlot(TEXT("CBaseEntity::GetModelIndex"), TEXT("0x100b17f0"), TEXT("29c"),
-		DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::GetModelIndex`, written by hand in the substrate:
+// `CBaseEntity::GetModelIndex` 0x100b17f0: `return m_nModelIndex` (+0x1a4), the model-table index
+// `UTIL_SetModel` 0x101cf4a0 stores (L0-r021; `ElysiumEntityVisualState.cpp`). Declared here,
+// defined there.
 
 // slot 9 0x100b1690 (sdk) `string_t GetModelName() const`
 //   layer 0, story 29c
@@ -130,11 +128,9 @@ FName FElysiumEntity::GetModelName() const
 
 // slot 10 0x100b1750 (sdk) `void SetModelIndex(int)`
 //   layer 0, story 29c
-void FElysiumEntity::SetModelIndex(int32)
-{
-	FireEntitySlot(TEXT("CBaseEntity::SetModelIndex"), TEXT("0x100b1750"), TEXT("29c"),
-		DebugString());
-}
+// the body is `FElysiumEntity::SetModelIndex`, written by hand in the substrate:
+// `CBaseEntity::SetModelIndex` 0x100b1750: `m_nModelIndex` (+0x1a4) = arg (L0-r021;
+// `ElysiumEntityVisualState.cpp`). Declared here, defined there.
 
 // slot 11 0x1009ac80 (walked) `void DebugSetEntityName(const char*)`
 //   layer 0, story 29c
@@ -500,17 +496,17 @@ void FElysiumEntity::Slot61(void*)
 
 // slot 66 0x1009d2a0 (walked) `void Hide()`
 //   layer 0, story 29c
-void FElysiumEntity::Hide()
-{
-	FireEntitySlot(TEXT("CBaseEntity::Hide"), TEXT("0x1009d2a0"), TEXT("29c"), DebugString());
-}
+// the body is `FElysiumEntity::Hide`, written by hand in the substrate: `CBaseEntity::Hide`
+// 0x1009d2a0: EF_NODRAW (0x40) into `m_fScriptSavedEffects` when script-hidden, else into
+// `m_fEffects`; then `ForceTransmit` 0x1009d1e0 (L0-r021; `ElysiumEntityVisualState.cpp`). Declared
+// here, defined there.
 
 // slot 67 0x1009d380 (walked) `void Unhide()`
 //   layer 0, story 29c
-void FElysiumEntity::Unhide()
-{
-	FireEntitySlot(TEXT("CBaseEntity::Unhide"), TEXT("0x1009d380"), TEXT("29c"), DebugString());
-}
+// the body is `FElysiumEntity::Unhide`, written by hand in the substrate: `CBaseEntity::Unhide`
+// 0x1009d380: EF_NODRAW cleared from `m_fScriptSavedEffects` when script-hidden, else from
+// `m_fEffects`; no transmit stamp (L0-r021; `ElysiumEntityVisualState.cpp`). Declared here, defined
+// there.
 
 // slot 68 0x10026a90 (walked) `bool ShouldIgnoreCollision(CBaseEntity*)`
 //   layer 0, story 29c
@@ -796,10 +792,10 @@ void FElysiumEntity::Precache()
 
 // slot 105 0x100ad460 (sdk) `void SetModel(char*)`
 //   layer 0, story 29c
-void FElysiumEntity::SetModel(TCHAR*)
-{
-	FireEntitySlot(TEXT("CBaseEntity::SetModel"), TEXT("0x100ad460"), TEXT("29c"), DebugString());
-}
+// the body is `FElysiumEntity::SetModel`, written by hand in the substrate: `CBaseEntity::SetModel`
+// 0x100ad460: the model-table lookup and type (`VEngineServer014` slots 20 / 21), the non-brush
+// `Msg`, `UTIL_SetModel` 0x101cf4a0, `+0x1b1` (L0-r021; `ElysiumEntityVisualState.cpp`). Declared
+// here, defined there.
 
 // slot 106 0x1009e120 (sdk) `void PostConstructor(char*)`
 //   layer 0, story 29c
@@ -1189,11 +1185,10 @@ bool FElysiumEntity::IsPlayer()
 
 // slot 163 0x100a9800 (sdk) `bool IsViewable()`
 //   layer 0, story 29c
-bool FElysiumEntity::IsViewable()
-{
-	FireEntitySlot(TEXT("CBaseEntity::IsViewable"), TEXT("0x100a9800"), TEXT("29c"), DebugString());
-	return {};
-}
+// the body is `FElysiumEntity::IsViewable`, written by hand in the substrate:
+// `CBaseEntity::IsViewable` 0x100a9800: EF_NODRAW refuses; else `IsBSPModel` 0x100b5110 picks
+// `GetMoveType() != 0` or `GetModelIndex() != 0` (L0-r021; `ElysiumEntityVisualState.cpp`).
+// Declared here, defined there.
 
 // slot 164 0x100b50a0 (walked) `bool IsStandable()`
 //   layer 1, story 29c
@@ -1237,10 +1232,10 @@ void FElysiumEntity::VelocityPunch(const FVector&)
 
 // slot 171 0x100ad550 (walked) `void SetMovedir()`
 //   layer 0, story 29c
-void FElysiumEntity::SetMovedir()
-{
-	FireEntitySlot(TEXT("CBaseEntity::SetMovedir"), TEXT("0x100ad550"), TEXT("29c"), DebugString());
-}
+// the body is `FElysiumEntity::SetMovedir`, written by hand in the substrate:
+// `CBaseEntity::SetMovedir` 0x100ad550: the exact up / down sentinels or `AngleVectors` 0x10139610
+// into `m_vecMoveDir`, then slot 64 `SetAngles(vec3_angle)` (L0-r021;
+// `ElysiumEntityVisualState.cpp`). Declared here, defined there.
 
 // slot 172 0x100a1d20 (sdk) `CBaseEntity* GetNextTarget()`
 //   layer 0, story 29c
@@ -1509,11 +1504,9 @@ void FElysiumEntity::GetGroundVelocityToApply(FVector&)
 
 // slot 212 0x100b15f0 (sdk) `void SetModelName(string_t)`
 //   layer 0, story 29c
-void FElysiumEntity::SetModelName(FName)
-{
-	FireEntitySlot(TEXT("CBaseEntity::SetModelName"), TEXT("0x100b15f0"), TEXT("29c"),
-		DebugString());
-}
+// the body is `FElysiumEntity::SetModelName`, written by hand in the substrate:
+// `CBaseEntity::SetModelName` 0x100b15f0: `m_ModelName` (+0x388) = arg (L0-r021;
+// `ElysiumEntityVisualState.cpp`). Declared here, defined there.
 
 // slot 213 0x100b1890 (walked) `void SetSize(const Vector&)`
 //   layer 0, story 29c
@@ -1778,7 +1771,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(bool)>::Test(&FElysiumEntity::SetSentLastFrame),
 				nullptr },
 			{ 8, TEXT("0x100b17f0"), TEXT("CBaseEntity"), TEXT("GetModelIndex"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32() const>::Test(&FElysiumEntity::GetModelIndex),
 				nullptr },
 			{ 9, TEXT("0x100b1690"), TEXT("CBaseEntity"), TEXT("GetModelName"),
@@ -1786,7 +1779,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, FName() const>::Test(&FElysiumEntity::GetModelName),
 				nullptr },
 			{ 10, TEXT("0x100b1750"), TEXT("CBaseEntity"), TEXT("SetModelIndex"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(int32)>::Test(&FElysiumEntity::SetModelIndex),
 				nullptr },
 			{ 11, TEXT("0x1009ac80"), TEXT("CBaseEntity"), TEXT("DebugSetEntityName"),
@@ -1989,12 +1982,12 @@ namespace ElysiumNpcKernelShape
 				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(float, float, float)>::Test(&FElysiumEntity::SetAngles),
 				nullptr },
-			{ 66, TEXT("0x1009d2a0"), TEXT("CBaseEntity"), TEXT("Hide"), EElysiumNpcSlotBody::Stub,
+			{ 66, TEXT("0x1009d2a0"), TEXT("CBaseEntity"), TEXT("Hide"), EElysiumNpcSlotBody::Hand,
 				TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::Hide),
 				nullptr },
 			{ 67, TEXT("0x1009d380"), TEXT("CBaseEntity"), TEXT("Unhide"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::Unhide),
 				nullptr },
 			{ 68, TEXT("0x10026a90"), TEXT("CBaseEntity"), TEXT("ShouldIgnoreCollision"),
@@ -2131,7 +2124,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::Precache),
 				[](FElysiumEntity& Receiver) -> int64 { Receiver.Precache(); return 0; } },
 			{ 105, TEXT("0x100ad460"), TEXT("CBaseEntity"), TEXT("SetModel"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(TCHAR*)>::Test(&FElysiumEntity::SetModel),
 				nullptr },
 			{ 106, TEXT("0x1009e120"), TEXT("CBaseEntity"), TEXT("PostConstructor"),
@@ -2331,7 +2324,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::IsPlayer),
 				[](FElysiumEntity& Receiver) -> int64 { return Receiver.IsPlayer() ? 1 : 0; } },
 			{ 163, TEXT("0x100a9800"), TEXT("CBaseEntity"), TEXT("IsViewable"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::IsViewable),
 				nullptr },
 			{ 164, TEXT("0x100b50a0"), TEXT("CBaseEntity"), TEXT("IsStandable"),
@@ -2359,7 +2352,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(const FVector&)>::Test(&FElysiumEntity::VelocityPunch),
 				[](FElysiumEntity& Receiver) -> int64 { FVector Arg0{}; Receiver.VelocityPunch(Arg0); return 0; } },
 			{ 171, TEXT("0x100ad550"), TEXT("CBaseEntity"), TEXT("SetMovedir"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::SetMovedir),
 				nullptr },
 			{ 172, TEXT("0x100a1d20"), TEXT("CBaseEntity"), TEXT("GetNextTarget"),
@@ -2507,7 +2500,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32() const>::Test(&FElysiumEntity::GetSolidFlags),
 				nullptr },
 			{ 212, TEXT("0x100b15f0"), TEXT("CBaseEntity"), TEXT("SetModelName"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(FName)>::Test(&FElysiumEntity::SetModelName),
 				nullptr },
 			{ 213, TEXT("0x100b1890"), TEXT("CBaseEntity"), TEXT("SetSize"),

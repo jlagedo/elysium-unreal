@@ -321,6 +321,48 @@ Port: `FElysiumEntity::ShouldToggle` (`Source/ElysiumUE/Private/Substrate/Elysiu
 predicate `FElysiumEnvSprite::UseTyped` runs; `ambient_generic`'s own gate (`FUN_101ad470`) gives the same
 table but is that class's switch, not a caller of this body. Record `Arena/scenarios/world/l0_should_toggle.json`.
 
+## Model, visibility and angle motion (`CBaseEntity`) [decompiled, L0-r021]
+
+Walked in `docs/specs/layers/L0-entity/walks/L0-r021.md` (confirmed; engine bodies read). Port:
+`Source/ElysiumUE/Private/Substrate/ElysiumEntityVisualState.cpp`, `SetAngles` in
+`ElysiumEntitySlotBodies.cpp`, `UTIL_SetModel` in `ElysiumEntityCollision.cpp`, the model table in
+`FElysiumEntityWorld::ModelTableIndex`. Records `l0_entity_visual_state`, `l0_angle_motion`.
+
+- **`SetModel` 0x100ad460 (slot 105)**: `t = VEngineServer014 slot 20(name)` (a model-precache-table
+  LOOKUP, -1 absent), `u = slot 21(t)` (the model type, 0 for no model); `u != 1` (`100ad4e7`) prints
+  `Msg("Setting CBaseEntity to non-brush model %s\n")` (0x105573c8) -- for "" too -- and carries on;
+  `UTIL_SetModel(this, name)` (`100ad4fd`); `+0x1b1 = 1` (`100ad502`).
+- **`UTIL_SetModel` 0x101cf4a0 never precaches.** "" or NULL returns; `VModelInfoServer001` slot 12 is a
+  lookup (`0x200b5ea0`), negative -> `Error("no precache: %s")` (fatal: TIER0 `Error` -> `_exit`); a `va()`
+  ring name is fatal too; slot 10 `SetModelIndex` (0x100b1750, `m_nModelIndex` +0x1a4), slot 212
+  `SetModelName` (0x100b15f0, `m_ModelName` +0x388, the pointer); slot 2 `GetModel`, slot 3 bounds ->
+  `UTIL_SetSize` 0x101cf3c0, or `vec3_origin` twice for no model. The port's table admits a name at its
+  first lookup (named modernization: the bake owns acquisition), so the two fatal arms have no input.
+- **`IsViewable` 0x100a9800 (slot 163)**: `m_fEffects & 0x40` -> false; `IsBSPModel` 0x100b5110 (the SDK
+  function: `GetSolid() == 1`, or a second `GetSolid() == 6` with `VModelInfoServer001` slot 6
+  `GetModelType(GetModel(GetModelIndex())) == 1`; `DAT_1070b250` is model info, not physics) ->
+  `GetMoveType() != 0`, else `GetModelIndex() != 0`. Callers are the werewolf family (CheckStuck,
+  UpdateConditionCanTeleport, NPCThink, SelectSchedule), `CAI_BaseHumanoid` slot 585, `FUN_101c5f40`.
+- **`Hide` 0x1009d2a0 (slot 66)**: `m_bScriptHidden` (+0xf4) ? `m_fScriptSavedEffects |= 0x40` (+0xf8) :
+  `m_fEffects |= 0x40`; then `ForceTransmit` 0x1009d1e0 (`m_flForceTransmitUntil` +0x90 = curtime + 1.0f).
+  **`Unhide` 0x1009d380 (slot 67)**: the same bit cleared on the same path, no `ForceTransmit`. No world
+  input reaches either; `ScriptHide` 0x100a8710 / `ScriptUnhide` 0x100a8990 (slots 77 / 78) save the live
+  word and write 0xe0, then restore it, each with `ForceTransmit` -- a Hide before the pair survives it.
+- **`SetAngles` 0x100b2d00 (slot 64)**: IEEE `!=` gate per component (-0.0 == +0.0, NaN changes); then
+  `FUN_100b5340(0x800, 0x3000)`, `FUN_100b51b0` (per node: `m_nSurroundType` +0x28c through the jump table
+  0x100b5254 -- 0, 1, 6: call `FUN_100dda20` unless `m_usSolidFlags` bit 0x80 or `m_Solid` is 2 / 0; 2, 4,
+  > 6: call; 3, 5: skip -- then the move children), `FUN_100b52a0` (`FUN_100ddd20` on every node), the
+  three words AFTER the walks, `+0x1b1 = 1`.
+- **`SimulateAngles` 0x1003f810** (no slot; `PhysicsNoclip` 0x100397c0, `PhysicsToss` 0x1003f920 with
+  frametime, `PhysicsStepRunTimestep` 0x1003b190 with its timestep): per component `FLD interval; FMUL
+  vel; FADD [GetAngles()]; FSTP float`, then slot 64. The port has no caller yet (those physics bodies are
+  `L0.physics` stories / the engine-replaced STEP motor).
+- **`SetMovedir` 0x100ad550 (slot 171)**: exact sentinels (x, z `FCOMP` 0.0f; y the dword 0xbf800000 up ->
+  (0,0,1), 0xc0000000 down -> (0,0,-1)), else `AngleVectors` 0x10139610 forward (radians f32(angle *
+  0x3c8efa35), sin / cos rounded to f32, (cp*cy, cp*sy, -sp)); then slot 64 `SetAngles(vec3_angle)`. Called
+  by `CBaseDoor::vfunc103` 0x100ef260 and `CBaseButton::Spawn` 0x100c8d60 (both before SetModel), not by
+  `CRotDoor::Spawn` 0x100f1c60.
+
 ## `IsMonster` -- the char-template `Monster` byte (`CBaseEntity`) [decompiled, L0-r020]
 
 `CBaseEntity::IsMonster` `0x1009d820` (slot 70, `+0x118`, 31 bytes, name inferred, no scope trace):

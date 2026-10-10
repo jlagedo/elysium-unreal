@@ -170,10 +170,23 @@ void FElysiumEntity::UtilSetModel(const FString& Name)
 		}
 		return;
 	}
-	// 2. `VModelInfoServer001` slot 12 (`+0x30`): the model index; negative -> `Error("no precache: %s")`.
-	//    3. the "passed a va string" check (`0x10002383`). 4. `SetModelIndex(idx)` (slot 10, `101cf505`)
-	//    and `SetModelName(name)` (slot 212, `101cf515`). The index is the engine's precache slot (no
-	//    port word, UNBOUND); the name is `Model`, already the authored key.
+	// 2. `VModelInfoServer001` slot 12 (`+0x30`): the model-table LOOKUP of the name (`0x200b5ea0`; it
+	//    never precaches); negative -> `Error("no precache: %s")`, fatal (TIER0 `Error` 0x10001064 never
+	//    returns). The world's table admits a name at its first lookup (the named modernization at
+	//    `FElysiumEntityWorld::ModelTableIndex`), so a non-empty name always has a row here and the
+	//    fatal arm has no input.
+	const int32 Index = World != nullptr ? World->ModelTableIndex(Name) : -1;
+	// 3. `FUN_101d37a0(name)`: a name that is one of the four `va()` ring buffers (0x10737960..) is
+	//    fatal too. This port has no `va()` ring: no name can be one, so the arm has no input.
+	// 4. `SetModelIndex(idx)` (slot 10, `CALL [EDX+0x28]`, `101cf505`), then `SetModelName(name)` (slot
+	//    212, `CALL [EDX+0x350]`, `101cf515`), both through the dispatch.
+	SetModelIndex(Index);                                                              // 101cf505 slot 10
+	SetModelName(FName(*Name));                                                        // 101cf515 slot 212
+	if (World != nullptr)
+	{
+		World->EmitRetailSite(*this, TEXT("util_setmodel"), TEXT("FUN_101cf4a0"), 0x101cf515u, TEXT("write"),
+			FString::Printf(TEXT("m_nModelIndex=%d m_ModelName=%s"), ModelIndex, *Model));
+	}
 	// 5. `modelinfo->GetModel(idx)` (slot 2, `101cf524`): non-NULL -> `GetModelBounds(model, mins, maxs)`
 	//    (slot 3, `101cf53f`) and `UTIL_SetSize(this, mins, maxs, 1)` (`101cf54f`); NULL ->
 	//    `UTIL_SetSize(this, vec3_origin, vec3_origin, 1)` (`101cf56a`). The model table here is the
@@ -549,13 +562,12 @@ bool FElysiumEntity::ReadScriptPhysicalWords(int32& OutSolid, int32& OutMoveType
 	// `CBaseEntity::ScriptHide` 0x100a8710: `m_ScriptSavedSolid = GetSolid()` (slot 92, `[vtbl+0x170]`),
 	// `m_ScriptSavedMoveCollide = m_MoveCollide`, `m_ScriptSavedMoveType = m_MoveType`,
 	// `m_ScriptSavedSolidFlags = GetSolidFlags()` (slot 211, `[vtbl+0x34c]`), `m_fScriptSavedEffects =
-	// m_fEffects`. The base carries no `m_fEffects` word (the NPC kernel's `EffectsWord` does; its
-	// override answers it), so that one reads 0 here.
+	// m_fEffects` -- the base word `EffectsWord` (+0x19c, L0-r017).
 	OutSolid = RetailSolidType;
 	OutMoveType = GetMoveType();
 	OutMoveCollide = RetailMoveCollide;
 	OutSolidFlags = static_cast<int32>(RetailSolidFlags & 0xffffu);
-	OutEffects = 0;
+	OutEffects = static_cast<int32>(EffectsWord);
 	return true;
 }
 
@@ -567,9 +579,9 @@ void FElysiumEntity::WriteScriptPhysicalWords(int32 InSolid, int32 InMoveType, i
 	// `SetSolid(saved)`, `SetMoveType(saved, saved)`, `SetSolidFlags(saved)`, `m_fEffects = saved`.
 	// The two collision setters run their change tails (the `0x100dc430` untouch gate among them);
 	// `SetMoveType` touches neither word, so its place in the order has no observable here.
-	(void)InEffects;   // no base `m_fEffects` word (above)
 	SetSolid(InSolid);                                                    // 0x100dc480
 	RetailMoveType = InMoveType;                                          // slot 93's +0x158 word
 	RetailMoveCollide = InMoveCollide;                                    // +0x159
 	SetSolidFlags(static_cast<uint16>(static_cast<uint32>(InSolidFlags) & 0xffffu));   // 0x100dc580
+	EffectsWord = static_cast<uint32>(InEffects);                         // m_fEffects (+0x19c): 0xe0 / saved
 }

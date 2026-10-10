@@ -188,8 +188,8 @@ actually applied is selected from the live strings instead.
 
 ```
 if (name == NULL || *name == '\0') return;            // the ONLY early out
-index = modelinfo->PrecacheModel(name);               // [DAT_1070b250 + 0x30], synchronous
-if (index < 0) Error();                               // fatal — never returned from
+index = modelinfo->GetModelIndex(name);               // [DAT_1070b250 + 0x30]: a LOOKUP (L0-r021)
+if (index < 0) Error("no precache: %s");              // fatal — never returned from
 ...
 if (studio_model != NULL)  SetMinsMaxs(ent, model_bounds);
 else                       SetMinsMaxs(ent, vec3_origin, vec3_origin);   // zero-extent bbox
@@ -197,8 +197,15 @@ else                       SetMinsMaxs(ent, vec3_origin, vec3_origin);   // zero
 
 Three facts follow, and all three matter to a port:
 
-1. **Precache is synchronous and inside `SetModel`.** There is no asynchronous admission and
-   nothing for a caller to wait on. A model is resident by the time `SetModel` returns.
+1. **`SetModel` never precaches** (corrected by `walks/L0-r021.md`, from the engine bodies).
+   `VModelInfoServer001` slot 12 (`engine.dll 0x200b5ea0` -> `FUN_200f8600`) and `CBaseEntity::SetModel`'s
+   `VEngineServer014` slot 20 (`0x20108d00` -> `FUN_200f7fe0`) are string-table LOOKUPS in the
+   model-precache table (container vfunc8 `0x200c5150` -> table vfunc6 `0x200c27b0`, -1 when absent);
+   insertion is the engine's precache wrapper (container vfunc3 -> table vfunc1 `0x200c2240`), reached
+   from an entity's own `Precache` before `SetModel`. A name not in the table is fatal in
+   `UTIL_SetModel` (`Error` -> `FUN_10002910` -> the engine spew handler `FUN_200fa610` -> `_exit`).
+   Slot 2 (`GetModel`, `0x200b5e90`) may still load the model file on a cache miss: that loads, it
+   does not precache. There is no asynchronous admission and nothing for a caller to wait on.
 2. **A named model that carries no geometry is a success, not a failure.** It takes the
    `vec3_origin/vec3_origin` arm and the entity keeps the model it was given, with a zero-extent
    bounding box. `CBaseAnimating::SetModel` is even softer: when `modelinfo->GetModelType(index)`

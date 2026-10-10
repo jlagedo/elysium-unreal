@@ -975,6 +975,24 @@ public:
 	// crash in retail; here it answers -1 and says so once.
 	int32 PrecacheParticle(const FString& BaseName);
 	int32 PrecacheDecal(const FString& Name);
+	// The engine's model-precache string table (L0-r021, `walks/L0-r021.md` § Engine slots). Retail's
+	// `VEngineServer014` slot 20 (`0x20108d00`) and `VModelInfoServer001` slot 12 (`0x200b5ea0`) are
+	// LOOKUPS of a name in it (-1 when absent; `UTIL_SetModel` 0x101cf4a0 then dies in `Error("no
+	// precache: %s")`); the table is filled by the entities' own `Precache` bodies and the map load.
+	// MODERNIZATION (named): this port's assets are the bake's, so the table admits a non-empty name at
+	// its first lookup instead -- the index is the admission order, 1-based, per world; index 0 is the
+	// engine's reserved empty row. An empty name answers -1 (no row). What retail observes of an index
+	// is `>= 0` / `!= 0` (`IsViewable` 0x100a9800).
+	int32 ModelTableIndex(const FString& Name);
+	// `VModelInfoServer001` slot 2 `GetModel(index)` (`0x200b5e90` -> `FUN_200f8510`): NULL for index 0,
+	// an index outside the table, or a model the engine cannot type (a failed load, type 0).
+	bool ModelTableHasModel(int32 Index) const;
+	// `VModelInfoServer001` slot 6 `GetModelType(model)` (`0x200b5c10`: `model ? model->+0x88 : -1`) over
+	// slot 2's answer; `VEngineServer014` slot 21 (`0x20108c60`) is the same read with 0 for no model.
+	// The engine types a model by its name: `*N` brush (1), `.spr` / `.vmt` sprite (2), `.mdl` studio (3).
+	int32 ModelTableType(int32 Index) const;
+	static int32 ModelTypeOfName(const FString& Name);
+	static constexpr int32 ModelTypeBrush = 1;
 	// `VEngineServer014` slot 26 (`engine.dll 0x20108d10`), the model frame count `CSprite::Spawn`
 	// 0x1042e550 reads for `m_flMaxFrame = frames - 1` (L0-r013): a sprite model answers
 	// `*(model+0xb4)` (its texture's frame count), an index outside (0, 0x400) logs "Bad model index"
@@ -1450,6 +1468,8 @@ private:
 	// Slots 17 / 16's string tables (see `PrecacheParticle` / `PrecacheDecal`), 1-based.
 	TArray<FString> PrecachedParticles;
 	TArray<FString> PrecachedDecals;
+	// The model-precache table `ModelTableIndex` admits into (1-based; row 0 is the engine's empty one).
+	TArray<FString> PrecachedModels;
 	// L0-r013: the staged sprite model table (lower-cased model key -> frame count), the arena's
 	// stand-in for the engine's model info on a runtime-created sprite. Per world; empty in the game.
 	TMap<FString, int32> StagedSpriteModelFrames;

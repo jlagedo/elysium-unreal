@@ -265,8 +265,10 @@ bool AElysiumMapActor::EnsurePlacedModelAdmitted(const FString& ModelPath)
 	// Nothing to stream is not a failure, so a model with no asset at all is admitted here and now
 	// rather than routed through an async load that could never acquire a handle. This is retail's
 	// own answer: `UTIL_SetModel` (`0x101cf4a0`, reached from `CBaseEntity::SetModel` `0x100ad460`
-	// and `CBaseAnimating::SetModel` `0x10095030`, vtable slot 105 = `+0x1a4`) precaches the named
-	// model synchronously and carries on — a model with no studio data merely takes the
+	// and `CBaseAnimating::SetModel` `0x10095030`, vtable slot 105 = `+0x1a4`) looks the named model
+	// up in the precache table its entity's own Precache filled (slot 12 is a lookup, never a
+	// precache; an absent name is fatal -- `walks/L0-r021.md`; admitting it late here is the named
+	// modernization at `EnsurePlacedModelAdmitted`) and carries on — a model with no studio data merely takes the
 	// `SetMinsMaxs(vec3_origin, vec3_origin)` arm and gets a zero-extent bbox, and a non-studio
 	// type costs a `Msg` and nothing else. The ONLY input it declines is an EMPTY string.
 	// `models/weapons/w_null.mdl` is a real shipped, precached model with zero bones and zero
