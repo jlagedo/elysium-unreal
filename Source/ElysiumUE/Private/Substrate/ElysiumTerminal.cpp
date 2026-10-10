@@ -8,6 +8,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSessionSubsystem.h"
 #include "ElysiumKeyValues.h"
+#include "ElysiumKeyValuesLoader.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "ElysiumSaveArchive.h"
@@ -31,8 +32,24 @@ bool FElysiumTerminalDefinition::ParseText(const FString& Text,
 {
 	Out = FElysiumTerminalDefinition();
 	OutError.Reset();
-	const TSharedPtr<ElysiumKeyValues::FKvNode> Parsed = ElysiumKeyValues::ParseText(Text);
-	const ElysiumKeyValues::FKvNode* Root = Parsed ? Parsed->Child(TEXT("TerminalDefinition")) : nullptr;
+	// `CPropHacking::LoadFromFile` (`0x1021cba0`) is one of the sixteen callers of the KeyValues file
+	// loader `0x102480f0` (`ElysiumKeyValuesLoader.h`): its root loop over the file's text, the caller's
+	// node renamed by the first root, every top-level token a root; the fields below are read with the
+	// loader class's typed accessors (`GetString 0x10248cd0`, `GetInt 0x10248bb0`).
+	const TSharedPtr<ElysiumKeyValues::FKvNode> Target = MakeShared<ElysiumKeyValues::FKvNode>();
+	Target->Name = TEXT("TerminalDefinition");
+	ElysiumKeyValues::FKvReader Reader(Text);
+	TArray<TSharedPtr<ElysiumKeyValues::FKvNode>> Roots;
+	ElysiumKeyValuesLoader::ParseRoots(Target, Reader, Roots);
+	ElysiumKeyValues::FKvNode* Root = nullptr;
+	for (const TSharedPtr<ElysiumKeyValues::FKvNode>& Candidate : Roots)
+	{
+		if (Candidate->Name.Equals(TEXT("TerminalDefinition"), ESearchCase::IgnoreCase))
+		{
+			Root = Candidate.Get();
+			break;
+		}
+	}
 	if (!Root)
 	{
 		OutError = TEXT("missing TerminalDefinition root block");
@@ -45,12 +62,12 @@ bool FElysiumTerminalDefinition::ParseText(const FString& Text,
 	// same three-argument call into a fixed field (`ElysiumTerminalCaps`), and `brackets` is the one
 	// of them that carries an `.rdata` default (`0x105b083c` = "[]", `1021cc8a`): a file that omits
 	// the line is bracketed, and only a file that authors `""` — as the tutorial does — is not.
-	Out.ScreenSaver = Root->Str(TEXT("screen saver"), FString()).Left(ElysiumTerminalCaps::ScreenSaver);
-	Out.Brackets = Root->Str(TEXT("brackets"), ElysiumTerminalCaps::DefaultBrackets)
+	Out.ScreenSaver = ElysiumKeyValues::GetString(*Root, TEXT("screen saver"), FString()).Left(ElysiumTerminalCaps::ScreenSaver);
+	Out.Brackets = ElysiumKeyValues::GetString(*Root, TEXT("brackets"), ElysiumTerminalCaps::DefaultBrackets)
 		.Left(ElysiumTerminalCaps::Brackets);
-	Out.EmailPassword = Root->Str(TEXT("email_password"), FString())
+	Out.EmailPassword = ElysiumKeyValues::GetString(*Root, TEXT("email_password"), FString())
 		.Left(ElysiumTerminalCaps::EmailPassword);
-	Out.EmailUsername = Root->Str(TEXT("email_username"), FString())
+	Out.EmailUsername = ElysiumKeyValues::GetString(*Root, TEXT("email_username"), FString())
 		.Left(ElysiumTerminalCaps::EmailUsername);
 
 	for (const TPair<FString, TSharedPtr<ElysiumKeyValues::FKvNode>>& Child : Root->Kids)
@@ -78,15 +95,15 @@ bool FElysiumTerminalDefinition::ParseText(const FString& Text,
 			// default, so a nameless block answers to `name` and a description-less one draws the word
 			// `description` in its title box — both are what the glass shows in retail.
 			FElysiumTerminalDirectory Directory;
-			Directory.Name = Child.Value->Str(TEXT("name"), ElysiumTerminalCaps::DefaultName)
+			Directory.Name = ElysiumKeyValues::GetString(*Child.Value, TEXT("name"), ElysiumTerminalCaps::DefaultName)
 				.Left(ElysiumTerminalCaps::Name);
-			Directory.Password = Child.Value->Str(TEXT("password"), FString())
+			Directory.Password = ElysiumKeyValues::GetString(*Child.Value, TEXT("password"), FString())
 				.Left(ElysiumTerminalCaps::Password);
-			Directory.Description = Child.Value->Str(TEXT("description"),
+			Directory.Description = ElysiumKeyValues::GetString(*Child.Value, TEXT("description"),
 				ElysiumTerminalCaps::DefaultDescription).Left(ElysiumTerminalCaps::Description);
-			Directory.Dependency = Child.Value->Str(TEXT("dependency"), FString())
+			Directory.Dependency = ElysiumKeyValues::GetString(*Child.Value, TEXT("dependency"), FString())
 				.Left(ElysiumTerminalCaps::Dependency);
-			Directory.Difficulty = Child.Value->Int(TEXT("difficulty"), 0);
+			Directory.Difficulty = ElysiumKeyValues::GetInt(*Child.Value, TEXT("difficulty"), 0);
 			for (const TPair<FString, TSharedPtr<ElysiumKeyValues::FKvNode>>& Grandchild
 				: Child.Value->Kids)
 			{
@@ -104,17 +121,17 @@ bool FElysiumTerminalDefinition::ParseText(const FString& Text,
 				// key whose default is its own literal, so a `Function` that authors none prints
 				// `runtext` when it runs.
 				FElysiumTerminalFunction Function;
-				Function.Name = Grandchild.Value->Str(TEXT("name"), ElysiumTerminalCaps::DefaultName)
+				Function.Name = ElysiumKeyValues::GetString(*Grandchild.Value, TEXT("name"), ElysiumTerminalCaps::DefaultName)
 					.Left(ElysiumTerminalCaps::Name);
-				Function.Description = Grandchild.Value->Str(TEXT("description"),
+				Function.Description = ElysiumKeyValues::GetString(*Grandchild.Value, TEXT("description"),
 					ElysiumTerminalCaps::DefaultDescription).Left(ElysiumTerminalCaps::Description);
-				Function.RunText = Grandchild.Value->Str(TEXT("runtext"),
+				Function.RunText = ElysiumKeyValues::GetString(*Grandchild.Value, TEXT("runtext"),
 					ElysiumTerminalCaps::DefaultRunText).Left(ElysiumTerminalCaps::RunText);
-				Function.Dependency = Grandchild.Value->Str(TEXT("dependency"), FString())
+				Function.Dependency = ElysiumKeyValues::GetString(*Grandchild.Value, TEXT("dependency"), FString())
 					.Left(ElysiumTerminalCaps::Dependency);
-				Function.RunScript = Grandchild.Value->Str(TEXT("runscript"), FString())
+				Function.RunScript = ElysiumKeyValues::GetString(*Grandchild.Value, TEXT("runscript"), FString())
 					.Left(ElysiumTerminalCaps::RunScript);
-				Function.Trigger = Grandchild.Value->Int(TEXT("trigger"), INDEX_NONE);
+				Function.Trigger = ElysiumKeyValues::GetInt(*Grandchild.Value, TEXT("trigger"), INDEX_NONE);
 				if (Function.Trigger < INDEX_NONE || Function.Trigger > 7)
 				{
 					OutError = FString::Printf(TEXT("Function '%s' has trigger %d outside -1..7"),
@@ -133,17 +150,17 @@ bool FElysiumTerminalDefinition::ParseText(const FString& Text,
 			// string — so an `Email` block with no `subject` prints retail's stand-in on the glass
 			// and not a blank line. Both halves are content-visible and both are reproduced.
 			FElysiumTerminalEmail Email;
-			Email.Subject = Child.Value->Str(TEXT("subject"),
+			Email.Subject = ElysiumKeyValues::GetString(*Child.Value, TEXT("subject"),
 				ElysiumTerminalEmailCaps::DefaultSubject).Left(ElysiumTerminalEmailCaps::Subject);
-			Email.Sender = Child.Value->Str(TEXT("sender"),
+			Email.Sender = ElysiumKeyValues::GetString(*Child.Value, TEXT("sender"),
 				ElysiumTerminalEmailCaps::DefaultSender).Left(ElysiumTerminalEmailCaps::Sender);
-			Email.Body = Child.Value->Str(TEXT("body"),
+			Email.Body = ElysiumKeyValues::GetString(*Child.Value, TEXT("body"),
 				ElysiumTerminalEmailCaps::DefaultBody).Left(ElysiumTerminalEmailCaps::Body);
-			Email.Dependency = Child.Value->Str(TEXT("dependency"), FString())
+			Email.Dependency = ElysiumKeyValues::GetString(*Child.Value, TEXT("dependency"), FString())
 				.Left(ElysiumTerminalEmailCaps::Dependency);
-			Email.RunScript = Child.Value->Str(TEXT("runscript"), FString())
+			Email.RunScript = ElysiumKeyValues::GetString(*Child.Value, TEXT("runscript"), FString())
 				.Left(ElysiumTerminalEmailCaps::RunScript);
-			Email.bAutoDelete = Child.Value->Bool(TEXT("autodelete"), false);
+			Email.bAutoDelete = ElysiumKeyValues::GetInt(*Child.Value, TEXT("autodelete"), 0) != 0;
 			Out.Emails.Add(MoveTemp(Email));
 		}
 	}

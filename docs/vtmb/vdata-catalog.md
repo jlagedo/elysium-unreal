@@ -228,3 +228,77 @@ The retail grammar every `vdata/`, `.res` and `.vmt` text is read with; the walk
   NUL, not the heap. The lookup index (`Values`/`Pairs`/`Kids`, lowercase keys) stands for the
   case-insensitive compare; `Children` is the retail child list with the retail types. No keycache: every
   load reads the file.
+
+## The KeyValues file loader (the second class, `0x102480f0`, `vampire.dll`) [recovered 2026-10-10]
+
+vampire.dll carries a SECOND KeyValues class over the same tokenizer `0x10247280`: the 0x1C-byte node of
+the file loader `FUN_102480f0`, read by the sound schemes (`CSoundScheme::Precache 0x1022a4b0` ->
+`FUN_1022a930`), the soundscapes (`CSoundscapeSystem::Init 0x101ae050`), the signs, keypads, terminals
+(`CPropHacking::LoadFromFile 0x1021cba0`), radios, quest journal, sound-volume table, disposition table,
+interesting places and stealth-kill rules (16 callers, all pathID 0 and cache 1). Walk
+`docs/specs/layers/L0-entity/walks/L0-r004.md`; port `Source/ElysiumUE/Private/ElysiumKeyValuesLoader.{h,cpp}`
+and the accessors in `ElysiumKeyValues.{h,cpp}`; records `Arena/scenarios/audio/l0_scheme_file_load.json`,
+`l0_keyvalues_access.json`.
+
+- **Node** (0x1C bytes, `operator_new`, not zeroed): `+0x00` name, `+0x04` value text, `+0x08` int or float
+  bits, `+0x0C` type **0 string / 1 int / 2 float / 3** (formatted as int by GetString), `+0x10` next sibling,
+  `+0x14` first child, `+0x18` fallback chain. The layout and the type codes are the 2003 vgui2 `KeyValues`
+  (`m_sValue`, `m_iValue`/`m_flValue`, `m_iDataType` `TYPE_STRING, TYPE_INT, TYPE_FLOAT, TYPE_PTR`, `m_pPeer`,
+  `m_pSub`, `m_pChain`); the class name is not in the corpus. The ctor `0x10247ba0` and the name setter
+  `0x10247cf0` (copy the name; zero `+0x14 +0x10 +0x04 +0x18`; clear `DAT_10753f68[0]`, the FindNext name)
+  never write `+0x08` / `+0x0C`: a block's type word is heap garbage. `CreateChild 0x10248870` appends at the
+  tail of `+0x14` through `+0x10`.
+- **Wrapper `FUN_102482b0`** `(char** cursor, char* quoted)`: the tokenizer over `*cursor` into the shared
+  buffer `0x10754fa8` (distinct from `VKeyValues`' `0x1073AA80`), cursor written back, returns the buffer.
+- **Block parser `FUN_10248510`** `(node, cursor, fs)` (`fs` forwarded, never read): `key = read(NULL)`; empty
+  (EOF, or a quoted `""`) or `"}"` (`0x10547b64`) returns; `child = CreateChild(key)` BEFORE the value;
+  `val = read(&quoted)`; `"{"` (`0x10547b78`, 2-byte compare, quote ignored) recurses; else `+0x04 = copy(val)`
+  and: quoted -> type 0; else `ei = strtol(val, &end_i, 10)`, `ef = strtod(val, &end_f)`, unsigned compares:
+  `end_f > end_i` -> `+0x08 = (float)ef`, type 2; `end_i > val` -> `+0x08 = ei`, type 1; else type 0. `strtol`
+  saturates (`10000000000` -> 2147483647, type 1), `strtod` is decimal-only (`0x10` -> int 0; `1d3` -> float
+  1000). A `}` in value position is a string value; a key at EOF is a `""` string leaf.
+- **File loader `FUN_102480f0`** `(this, filename, fs, pathID, cache)` -> AL 1|0: `cache && strstr(filename,
+  ".txt")` (`0x10546e4c`) -> the text cache `FUN_102482f0`; a pointer skips the loader's own open. Else
+  `fs->Open(filename, "rb" 0x105596cc, pathID)` (slot `+0x00`), fail -> return 0; `Size` (`+0x18`),
+  `malloc(n+1)`, `Read` (`+0x08`), `Close` (`+0x04`), `buf[n] = 0`. Then EVERY top-level token is a root: the
+  first renames the caller's node (name setter: children, value and chain dropped, type word kept), each next
+  is `new` + ctor, linked after the previous through `+0x10` (`0x10248a50`); the token after a root opens a
+  block when its FIRST BYTE is `{` (`CMP byte [EAX],0x7B` at `0x10248211`, so `"{abc"` qualifies) and is
+  dropped otherwise (`Name "x" { k v }` yields roots `Name`, `{`, `v`). Returns 1 after any successful text
+  source, empty text included (zero roots, node unrenamed); parse success is not reported. `fs` is
+  `DAT_1070b238` (written once by `CServerGameDLL::vfunc1 0x1011a0c0`); which engine method each slot is stays
+  unrecovered. `FUN_10248430` is the buffer twin (same root loop over text in hand; no caller).
+- **Text cache `FUN_102482f0`** `(name, fs)` -> text|NULL: **CRC-32 of the name** (`0x1023f040` init
+  `0xffffffff`, `0x1023f0c0` table step with the standard table at `0x10496f58` -- entry 1 `0x77073096`, the
+  reflected IEEE polynomial --, `0x1023f060` final complement); linear search of `DAT_10753768[0..DAT_10856fa8)`,
+  hit -> `DAT_107547a8[i]` (the key is the hash alone: a second load of the name returns the first text
+  whatever the file now holds); miss -> `Open(name, "rb", 0)` (pathID 0, not the caller's), fail -> NULL;
+  `n+1 >= DAT_105c530c` (the 1 MiB arena, initial `0x100000`) -> `Close`, NULL; else `Read` into the arena,
+  NUL, record, `remaining -= n+1`. Tables of 1040 hashes / 512 pointers, no bound check. It touches only `fs`
+  and its own statics -- nothing above L0 -- although `hooks.tsv:325` classes it as an L0 -> L4 hook and
+  `audit.tsv` calls it a string pool; the port builds it at L0.
+- **Accessors.** `FindKey FUN_10248900` `(this, key, create)`: first child of `+0x14` whose name matches by
+  `__strcmpi`, in list order; else `FindKey(+0x18, key, 0)` (the chain, recursive, never creating); else, when
+  `create`, `CreateChild(this, key)`; else NULL. No non-NULL writer of `+0x18` was found (the vgui2
+  `ChainKeyValue`). `SetString FUN_102490e0` `(this, key, value)`: `FindKey(key, 1)`; `free(+0x04)`, `+0x04 =
+  copy(value)`, `+0x0C = 0`; `+0x08` untouched. `GetString FUN_10248cd0` `(this, key, default)`: `key` NULL ->
+  `this`, else `FindKey(key, 0)`; absent -> `default`; type 1 or 3 -> `Q_snprintf(buf[64], 0x40, "%d"
+  0x105461f0, +0x08)`, type 2 -> `"%f"` (`0x10554f28`) of the float as double, then `SetString(this, key,
+  buf)` (the same search, the text written back, type 0); returns `+0x04` (NULL for a block). `GetInt
+  FUN_10248bb0` `(this, key, default)`: same lookup; type 0 -> `atoi(+0x04)` (`_atol 0x104313bc`: wraps in 32
+  bits, no clamp); type 2 -> `__ftol(float +0x08)` (`0x10431320`, truncate, low dword; `1e10` -> 1410065408);
+  else `+0x08` raw. The typed setters `FUN_10249160 / 102491a0 / 102491e0` (not ported) store the number into
+  the child and the TYPE into `this` (retail bug; asm `0x1024917a`, `0x102491fa`).
+- **`FUN_1022a930`** (the scheme parser, not this run's) reads the first root's children in order, matching
+  each name with `strstr` against `SchemeParams`, `Ambient`, `Music`, `Combat`, `Alert`, `RandomSound`, and
+  reads with `GetString("Filename")`, `GetFloat("Volume")` (`0x10248c60`), `GetInt("Dry", 1)`,
+  `GetInt("NoPause", 1|0)`, `GetInt("Frequency", 10)`, `GetInt("PitchMin|Max", 100)`,
+  `GetInt("RandomSoundCount", 2)` clamped 0..6, `GetInt("RoomDSP", 0)` clamped 0..255.
+- **Port.** `ElysiumKeyValuesLoader` shares `FKvNode` with the `VKeyValues` reader (the type is semantic;
+  `FileTypeCode` spells 0/1/2/unset at the sites); a block's unwritten type reads as `Block`; the engine file
+  system is `IKvFileSystem` (slots Open/Close/Read/Size) over the deployed corpus with ONE search path (named
+  modernization: every retail caller passes pathID 0); the cache is process-global and CRC-32 keyed as retail's;
+  its two tables grow instead of overrunning. `GetString` of a block returns `""` where retail returns NULL;
+  `FindKey` with a NULL key compares `""` where retail would fault on a node with children. UNRECOVERED: the
+  engine methods behind the four `fs` slots, the token buffer's declared size (ceiling 0x2000), who links
+  `+0x18`, the reach of `FUN_10248430`.

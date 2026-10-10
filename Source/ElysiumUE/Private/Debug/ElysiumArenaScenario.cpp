@@ -1948,6 +1948,19 @@ const TArray<FString>& EntityCallAllowlist()
 		// L0.audio.keyvalues-tree: `0x101f2180`'s root loop over a `text` fixture (the file's bytes),
 		// with an optional second argument naming the target node `0x101f2e20` hands it.
 		TEXT("KeyValues_Parse"),
+		// L0.audio.scheme-file-load: the KeyValues FILE loader `0x102480f0` (`ElysiumKeyValuesLoader.h`)
+		// on the node `target` names, over a file name whose bytes a `text` fixture supplies (or the
+		// deployed corpus when none does), with the cache flag -- the call `CSoundScheme::Precache`
+		// makes through `0x1022a930`.
+		TEXT("KeyValues_LoadFile"),
+		// L0.audio.keyvalues-access: the loader class's typed accessors on a loaded node --
+		// `GetInt 0x10248bb0`, `GetString 0x10248cd0`, `SetString 0x102490e0` (each through
+		// `FindKey 0x10248900`) -- what every one of the loader's sixteen callers reads with; and the
+		// harness-built fallback link (`+0x18`, whose retail writer the corpus does not show).
+		TEXT("KeyValues_GetInt"),
+		TEXT("KeyValues_GetString"),
+		TEXT("KeyValues_SetString"),
+		TEXT("KeyValues_Chain"),
 	};
 	return Allowed;
 }

@@ -28,12 +28,24 @@
 // Two representation choices, named: the lexer runs on TCHARs where retail runs on bytes (a byte >= 0x80
 // and a TCHAR >= 0x80 are classified alike, and a quoted string keeps either verbatim), and a cursor past
 // the terminating NUL (retail: after an unterminated quote) reads NUL here where retail reads the heap.
+//
+// vampire.dll carries a SECOND KeyValues class over the same tokenizer: the 0x1C-byte node of the
+// `0x102480f0` file loader (`+0x00` name, `+0x04` value text, `+0x08` int/float, `+0x0C` type 0 string /
+// 1 int / 2 float / 3 ptr, `+0x10` next sibling, `+0x14` first child, `+0x18` fallback chain) -- the
+// 2003 vgui2 `KeyValues` layout (`m_sValue`, `m_iValue`, `m_iDataType`, `m_pPeer`, `m_pSub`, `m_pChain`)
+// -- read by the sound schemes, the soundscapes, the signs, the keypads, the terminals, the radios, the
+// quest journal and the sound-volume table (`docs/specs/layers/L0-entity/walks/L0-r004.md`). Its loader
+// lives in `ElysiumKeyValuesLoader.h`; its accessors (`FindKey`, `GetInt`, `GetString`, `SetString`)
+// are below. Both classes share `FKvNode` here: `Type` is the SEMANTIC type and each class's numeric
+// code is spelled where a retail site reports it (`FileTypeCode`).
 
 struct IElysiumRetailSiteSink;   // ElysiumRetailSite.h: the `retail_site` tap the reader reports through
 
 namespace ElysiumKeyValues
 {
-	// Node `+0x10`.
+	// Node `+0x10` of `VKeyValues`. The file loader's class spells the same kinds 0 string / 1 int /
+	// 2 float (`FileTypeCode`), and leaves a block's type word UNWRITTEN (heap garbage; the port says
+	// `Block`).
 	enum class EKvType : uint8
 	{
 		Block = 0,   // a `{ }` child, or a node whose value was never read (SetName/Clear zero the type)
@@ -41,6 +53,10 @@ namespace ElysiumKeyValues
 		Int = 2,     // strtol consumed as much as strtod: `+0x08` holds the int
 		Float = 3,   // strtod consumed more: `+0x08` holds the float
 	};
+
+	// The file loader's class code for a type (`0x10248510` arms 7/8 write 0 / 1 / 2; `0x10248cd0` and
+	// `0x10248bb0` dispatch on it). A block's word is never written in retail: `unset`.
+	const TCHAR* FileTypeCode(EKvType Type);
 
 	struct FKvNode
 	{
@@ -52,6 +68,11 @@ namespace ElysiumKeyValues
 		float FloatValue = 0.f;         // `+0x08` read as float bits (Type == Float)
 		// `+0x1C` first child, each child's `+0x18` next sibling: leaves and blocks in file order.
 		TArray<TSharedPtr<FKvNode>> Children;
+		// The file loader's class only: `+0x18`, the fallback chain `0x10248900` arm 3 searches when a
+		// key is not in the own list. Zeroed by the name setter `0x10247cf0`; no non-NULL writer was
+		// found in the corpus (walk L0-r004 open question 6: the vgui2 `ChainKeyValue`), so only the
+		// harness links one.
+		TWeakPtr<FKvNode> Chain;
 
 		// --- The port's lookup index over `Children`, keys folded to lower ------------------------
 		// Retail compares names with `__strcmpi` (`0x1043E780`): a lowercase index answers the same
@@ -151,4 +172,66 @@ namespace ElysiumKeyValues
 	// Parse a whole text with no target node and return the roots view; null when the text has no
 	// roots (empty or whitespace only).
 	TSharedPtr<FKvNode> ParseText(const FString& Text, IElysiumRetailSiteSink* Sites = nullptr);
+
+	// --- Shared CRT models (VC6 SP5 libc, in-image) ------------------------------------------------
+
+	// `_strtol` (`0x104319A8` -> `_strtoxl`), base 10: leading `isspace`, one sign, digits; `OutEnd`
+	// is the end pointer as an index, 0 when nothing was consumed; overflow saturates to LONG_MAX /
+	// LONG_MIN.
+	int32 RetailStrtol(const FString& S, int32& OutEnd);
+	// `_strtod` (`0x1043190E` -> `__fltin` -> `___strgtold12`): sign, digits, `.`, an `e E d D`
+	// exponent; no hex, no inf/nan; `OutEnd` as above.
+	double RetailStrtod(const FString& S, int32& OutEnd);
+	// `_atoi` -> `_atol` (`0x10431447` -> `0x104313bc`): leading `isspace`, one sign, digits
+	// accumulated in 32 bits with wraparound (no clamp), stopping at the first non-digit.
+	int32 RetailAtol(const FString& S);
+	// `__ftol` (`0x10431320`): truncate toward zero to int64 under a truncating control word, EAX =
+	// the low 32 bits; a value outside int64 (+-Inf, NaN, |x| >= 2^63) stores the integer indefinite
+	// `0x8000000000000000`, low word 0.
+	int32 RetailFtol(double X);
+	// A token or value as a one-line trace payload (controls escaped).
+	FString Shown(const FString& S);
+
+	// --- The file loader's class: lookup and typed access (`0x10248900` family) ---------------------
+	//
+	// `this` is a container node (a root the loader filled, or any block); the key is compared with
+	// `__strcmpi` against each child in list order, first match wins.
+
+	// `0x10248900`'s third argument.
+	enum class EKvCreate : uint8 { No, Yes };
+
+	// Where `0x10248900` found (or made) the node, for the `kv.find` site.
+	enum class EKvFound : uint8 { None, Own, Chain, Created };
+
+	// `0x10248870`: a new node named `Name`, appended at the tail of `Parent`'s `+0x14` list (walks
+	// `+0x10` to the last sibling). `+0x08` and `+0x0C` are NOT written (the port's `Block` default
+	// stands for the unwritten word); the FindNext buffer `DAT_10753f68` byte 0 is cleared.
+	TSharedPtr<FKvNode> CreateChild(FKvNode& Parent, const FString& Name);
+
+	// `0x10248900` `(this, key, create)`: the first child of `this` whose name matches `key`
+	// case-insensitively; else the fallback chain (`+0x18`, recursive, never creating); else, when
+	// `create`, a new child of `this`; else NULL. `Key` NULL compares as `""` (retail `strcmpi(name,
+	// NULL)` faults on a node with children; the one caller that passes NULL, `0x101b2c60`, does so
+	// on leaves). `OutFound` says which arm answered.
+	FKvNode* FindKey(FKvNode& Node, const TCHAR* Key, EKvCreate Create, EKvFound* OutFound = nullptr,
+		IElysiumRetailSiteSink* Sites = nullptr);
+
+	// `0x102490e0` `(this, key, value)`: `FindKey(key, create)`; free and replace the node's text
+	// (`+0x04`) with a copy of `value`; type (`+0x0C`) = 0 string. `+0x08` is untouched.
+	void SetString(FKvNode& Node, const TCHAR* Key, const FString& Value, IElysiumRetailSiteSink* Sites = nullptr);
+
+	// `0x10248cd0` `(this, key, default)`: `key` NULL -> the node is `this`, else `FindKey(key, no
+	// create)`; absent -> `default`. Type 1 or 3 -> `Q_snprintf(buf, 0x40, "%d", +0x08)`
+	// (`0x105461f0`); type 2 -> `"%f"` of the float widened to double (`0x10554f28`); then
+	// `SetString(this, key, buf)` writes the text back and resets the type to 0. Returns the node's
+	// text (`+0x04`) after any writeback -- NULL for a block (no text) reads as `""` here.
+	FString GetString(FKvNode& Node, const TCHAR* Key, const FString& Default, IElysiumRetailSiteSink* Sites = nullptr);
+
+	// `0x10248bb0` `(this, key, default)`: as above for the lookup; type 0 -> `atoi(+0x04)` (wrapping
+	// `_atol`); type 2 -> `__ftol(float +0x08)`; any other type -> `+0x08` as int. No writes.
+	int32 GetInt(FKvNode& Node, const TCHAR* Key, int32 Default, IElysiumRetailSiteSink* Sites = nullptr);
+
+	// Rebuild the port's lookup index (`Kids` / `Values` / `Pairs`) over `Children` after a mutation
+	// (`SetString`, `CreateChild`). The index is a port view of the retail list, never retail state.
+	void Reindex(FKvNode& Node);
 }

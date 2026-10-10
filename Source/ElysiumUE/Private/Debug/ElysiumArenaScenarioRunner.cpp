@@ -9,7 +9,9 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumKeyValues.h"                // `entity_call KeyValues_Lex` / `KeyValues_Parse`
+#include "ElysiumContentPaths.h"             // `KeyValues_LoadFile`: the corpus behind the fixture file system
+#include "ElysiumKeyValues.h"                // `entity_call KeyValues_Lex` / `KeyValues_Parse` / the accessors
+#include "ElysiumKeyValuesLoader.h"          // `entity_call KeyValues_LoadFile`
 #include "ElysiumRetailSite.h"               // the named sink those calls report through
 #include "ElysiumInputRouter.h"              // `player_walk`: the input replay door `gr_walk` drives
 #include "ElysiumMapActor.h"
@@ -89,6 +91,69 @@ namespace ElysiumArenaRunnerDetail
 		static const FName Kind(TEXT("script"));
 		return Kind;
 	}
+
+	// The engine file system a `KeyValues_LoadFile` hands `0x102480f0` (and its text cache `0x102482f0`):
+	// one file name bound to a `text` fixture's bytes for this call, every other name the deployed
+	// corpus through the scheme resolver (`FElysiumContentPaths::SchemeFile`) -- so a record loads
+	// the controlled texts it stages and the witness `sound/Schemes/SP_Tutorial_City.txt` itself.
+	struct FKvFixtureFileSystem final : public ElysiumKeyValuesLoader::IKvFileSystem
+	{
+		FKvFixtureFileSystem()
+			: Disk([](const FString& Name) { return FElysiumContentPaths::SchemeFile(Name); }) {}
+
+		struct FOpenText
+		{
+			TArray<uint8> Bytes;
+		};
+
+		virtual ElysiumKeyValuesLoader::FKvFileHandle Open(const FString& Name, const ANSICHAR* Mode, int32 PathID) override
+		{
+			if (const FString* Text = Texts.Find(Name))
+			{
+				// The fixture's text as the file's bytes: each TCHAR narrowed to the byte it spells (the
+				// inverse of the loader's widening).
+				TUniquePtr<FOpenText> File = MakeUnique<FOpenText>();
+				File->Bytes.Reserve(Text->Len());
+				for (const TCHAR C : *Text)
+				{
+					File->Bytes.Add(static_cast<uint8>(C));
+				}
+				FOpenText* Raw = File.Get();
+				OpenTexts.Add(Raw, MoveTemp(File));
+				return reinterpret_cast<ElysiumKeyValuesLoader::FKvFileHandle>(Raw);
+			}
+			return Disk.Open(Name, Mode, PathID);
+		}
+		virtual void Close(ElysiumKeyValuesLoader::FKvFileHandle Handle) override
+		{
+			if (OpenTexts.Remove(reinterpret_cast<FOpenText*>(Handle)) == 0)
+			{
+				Disk.Close(Handle);
+			}
+		}
+		virtual int32 Read(uint8* Out, int32 Count, ElysiumKeyValuesLoader::FKvFileHandle Handle) override
+		{
+			if (const TUniquePtr<FOpenText>* File = OpenTexts.Find(reinterpret_cast<FOpenText*>(Handle)))
+			{
+				const int32 N = FMath::Min(Count, (*File)->Bytes.Num());
+				FMemory::Memcpy(Out, (*File)->Bytes.GetData(), N);
+				return N;
+			}
+			return Disk.Read(Out, Count, Handle);
+		}
+		virtual int32 Size(ElysiumKeyValuesLoader::FKvFileHandle Handle) override
+		{
+			if (const TUniquePtr<FOpenText>* File = OpenTexts.Find(reinterpret_cast<FOpenText*>(Handle)))
+			{
+				return (*File)->Bytes.Num();
+			}
+			return Disk.Size(Handle);
+		}
+
+		TMap<FString, FString> Texts;
+		TMap<FOpenText*, TUniquePtr<FOpenText>> OpenTexts;
+		ElysiumKeyValuesLoader::FKvDiskFileSystem Disk;
+	};
 
 	FElysiumVariant ToVariant(const FElysiumArenaValue& Value)
 	{
@@ -1615,6 +1680,132 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			RecordDone(FString::Printf(TEXT("entity_call KeyValues_Parse done roots=%d [%s] target=%s"), Roots.Num(),
 				*FString::Join(RootNames, TEXT(" ")),
 				Target.IsValid() ? *FString::Printf(TEXT("%s(%d)"), *Target->Name, Target->Children.Num()) : TEXT("null")));
+			return true;
+		}
+		if (Action.Function == TEXT("KeyValues_LoadFile") || Action.Function == TEXT("KeyValues_GetInt")
+			|| Action.Function == TEXT("KeyValues_GetString") || Action.Function == TEXT("KeyValues_SetString")
+			|| Action.Function == TEXT("KeyValues_Chain"))
+		{
+			using ElysiumKeyValues::FKvNode;
+			FElysiumNamedRetailSites Sites(World, Action.Target);
+			auto RecordDone = [this, &World, &Action](const FString& Text)
+			{
+				FEvent& Done = Events.AddDefaulted_GetRef();
+				StampEvent(Done, World.NowSeconds());
+				Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+				Done.Name = Action.Target;
+				Done.Text = Text;
+			};
+			auto StringArg = [&Action](int32 Index, FString& Out) -> bool
+			{
+				if (Action.Args.Num() <= Index || Action.Args[Index].Value.Type != FElysiumArenaValue::EType::String) return false;
+				Out = Action.Args[Index].Value.String;
+				return true;
+			};
+			auto NumberArg = [&Action](int32 Index, double& Out) -> bool
+			{
+				if (Action.Args.Num() <= Index) return false;
+				const FElysiumArenaValue& V = Action.Args[Index].Value;
+				if (V.Type == FElysiumArenaValue::EType::Number) { Out = V.Number; return true; }
+				if (V.Type == FElysiumArenaValue::EType::Bool) { Out = V.bBool ? 1.0 : 0.0; return true; }
+				return false;
+			};
+			// The caller's node (`0x102480f0`'s ECX): named by `target`, made on first use (`0x10247ba0`).
+			TSharedPtr<FKvNode>& Tree = StagedTrees.FindOrAdd(Action.Target);
+			if (!Tree.IsValid())
+			{
+				Tree = MakeShared<FKvNode>();
+				Tree->Name = Action.Target;
+			}
+			if (Action.Function == TEXT("KeyValues_LoadFile"))
+			{
+				// `["<file name>", <cache>, {"fixture": <text id>}?]`: the name `0x102480f0` receives, its
+				// fifth argument, and the bytes the engine file system answers for that name (absent: the
+				// deployed corpus, or no such file).
+				FString FileName;
+				double Cache = 0.0;
+				if (!StringArg(0, FileName) || !NumberArg(1, Cache))
+				{
+					OutError = TEXT("entity_call 'KeyValues_LoadFile' takes [\"<file name>\", <cache 0|1>, {\"fixture\": id}?]");
+					return false;
+				}
+				ElysiumArenaRunnerDetail::FKvFixtureFileSystem Fs;
+				if (Action.Args.Num() >= 3 && !Action.Args[2].Fixture.IsEmpty())
+				{
+					const FElysiumArenaFixture* Source = StagedFixtures.Find(Action.Args[2].Fixture);
+					if (Source == nullptr || Source->Kind != TEXT("text"))
+					{
+						OutError = TEXT("entity_call 'KeyValues_LoadFile' takes a `text` fixture as its third argument");
+						return false;
+					}
+					Fs.Texts.Add(FileName, Source->Text);
+				}
+				ElysiumKeyValuesLoader::FKvLoadArgs Args;
+				Args.FileName = FileName;
+				Args.Fs = &Fs;
+				Args.PathID = 0;
+				Args.Cache = Cache != 0.0 ? 1 : 0;
+				Args.Sites = &Sites;
+				TArray<TSharedPtr<FKvNode>> Roots;
+				const bool bResult = ElysiumKeyValuesLoader::LoadFile(Tree, Args, Roots);
+				TArray<FString> RootNames;
+				for (const TSharedPtr<FKvNode>& Root : Roots)
+				{
+					RootNames.Add(FString::Printf(TEXT("%s(%d)"), *ElysiumKeyValues::Shown(Root->Name), Root->Children.Num()));
+				}
+				RecordDone(FString::Printf(TEXT("entity_call KeyValues_LoadFile done result=%d roots=%d [%s] target=%s(%d)"),
+					bResult ? 1 : 0, Roots.Num(), *FString::Join(RootNames, TEXT(" ")), *ElysiumKeyValues::Shown(Tree->Name),
+					Tree->Children.Num()));
+				return true;
+			}
+			if (Action.Function == TEXT("KeyValues_Chain"))
+			{
+				// `["<other target>"]`: `target->+0x18 = other` (the vgui2 `ChainKeyValue`; no retail writer in
+				// the corpus, walk L0-r004 open question 6 -- the harness builds the chain `0x10248900` searches).
+				FString Other;
+				if (!StringArg(0, Other) || !StagedTrees.Contains(Other) || !StagedTrees[Other].IsValid())
+				{
+					OutError = TEXT("entity_call 'KeyValues_Chain' takes [\"<other target>\"], a node an earlier call made");
+					return false;
+				}
+				Tree->Chain = StagedTrees[Other];
+				RecordDone(FString::Printf(TEXT("entity_call KeyValues_Chain done chain=%s"), *Other));
+				return true;
+			}
+			FString Key;
+			if (!StringArg(0, Key))
+			{
+				OutError = FString::Printf(TEXT("entity_call '%s' takes [\"<key>\", <default or value>]"), *Action.Function);
+				return false;
+			}
+			if (Action.Function == TEXT("KeyValues_GetInt"))
+			{
+				double Default = 0.0;
+				if (!NumberArg(1, Default))
+				{
+					OutError = TEXT("entity_call 'KeyValues_GetInt' takes [\"<key>\", <default>]");
+					return false;
+				}
+				const int32 IntResult = ElysiumKeyValues::GetInt(*Tree, *Key, static_cast<int32>(Default), &Sites);
+				RecordDone(FString::Printf(TEXT("entity_call KeyValues_GetInt done key=%s result=%d"), *Key, IntResult));
+				return true;
+			}
+			FString Second;
+			if (!StringArg(1, Second))
+			{
+				OutError = FString::Printf(TEXT("entity_call '%s' takes [\"<key>\", \"<default or value>\"]"), *Action.Function);
+				return false;
+			}
+			if (Action.Function == TEXT("KeyValues_GetString"))
+			{
+				const FString TextResult = ElysiumKeyValues::GetString(*Tree, *Key, Second, &Sites);
+				RecordDone(FString::Printf(TEXT("entity_call KeyValues_GetString done key=%s result=%s"), *Key,
+					*ElysiumKeyValues::Shown(TextResult)));
+				return true;
+			}
+			ElysiumKeyValues::SetString(*Tree, *Key, Second, &Sites);
+			RecordDone(FString::Printf(TEXT("entity_call KeyValues_SetString done key=%s value=%s"), *Key,
+				*ElysiumKeyValues::Shown(Second)));
 			return true;
 		}
 		OutError = FString::Printf(TEXT("entity_call '%s' is allowlisted but has no dispatch"), *Action.Function);

@@ -15,6 +15,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumKeyValues.h"
+#include "ElysiumKeyValuesLoader.h"
 #include "ElysiumWorldServices.h"
 
 #include "HAL/IConsoleManager.h"
@@ -48,14 +49,17 @@ namespace
 
 	// Parse a Music/Combat/Alert/Ambient block, applying the retail defaults. bDryDefault /
 	// bNoPauseDefault differ per block (Ambient NoPause defaults 0; the music trio default 1).
-	FElysiumSchemeSound ReadSound(const FKvNode* Block, bool bDryDefault, bool bNoPauseDefault)
+	// `FUN_1022a930`'s per-block reads: `GetString("Filename", default)` (`0x10248cd0`), `GetFloat("Volume",
+	// 50)` (`0x10248c60`, not in this run: `Flt` stands in), `GetInt("Dry", 1) != 0`, `GetInt("NoPause",
+	// 1|0) != 0` (`0x10248bb0`).
+	FElysiumSchemeSound ReadSound(FKvNode* Block, bool bDryDefault, bool bNoPauseDefault)
 	{
 		FElysiumSchemeSound S;
 		if (!Block) { return S; }
-		S.Filename = Block->Str(TEXT("Filename"), FString()).Replace(TEXT("\\"), TEXT("/"));
+		S.Filename = ElysiumKeyValues::GetString(*Block, TEXT("Filename"), FString()).Replace(TEXT("\\"), TEXT("/"));
 		S.Volume = FMath::Clamp(Block->Flt(TEXT("Volume"), 50.f) / 100.f, 0.f, 1.f);
-		S.bDry = Block->Bool(TEXT("Dry"), bDryDefault);
-		S.bNoPause = Block->Bool(TEXT("NoPause"), bNoPauseDefault);
+		S.bDry = ElysiumKeyValues::GetInt(*Block, TEXT("Dry"), bDryDefault ? 1 : 0) != 0;
+		S.bNoPause = ElysiumKeyValues::GetInt(*Block, TEXT("NoPause"), bNoPauseDefault ? 1 : 0) != 0;
 		S.bValid = true;
 		return S;
 	}
@@ -63,60 +67,67 @@ namespace
 
 // FElysiumSoundScheme::ParseFile.
 
-bool FElysiumSoundScheme::ParseFile(const FString& AbsPath, FElysiumSoundScheme& Out)
+bool FElysiumSoundScheme::ParseFile(const FString& SchemeRel, FElysiumSoundScheme& Out)
 {
-	FString Text;
-	if (!FFileHelper::LoadFileToString(Text, *AbsPath))
+	// `CSoundScheme::Precache` (`0x1022a4b0`) -> `FUN_1022a930(this, m_sSchemeFile)`: a node named
+	// `SoundScheme` (`0x105a63f4`), then the KeyValues file loader `0x102480f0(node, file, DAT_1070b238,
+	// pathID 0, cache 1)` -- the `.txt` name takes the text cache `0x102482f0` (pathID 0 open, interned
+	// for the process; a second load of the name is a hit). The engine file system resolves the retail
+	// name against the deployed corpus (`FElysiumContentPaths::SchemeFile`: `sound/` stripped, lower
+	// case). A failed load returns 0 and the scheme stays unparsed.
+	ElysiumKeyValuesLoader::FKvDiskFileSystem Fs([](const FString& Name) { return FElysiumContentPaths::SchemeFile(Name); });
+	ElysiumKeyValuesLoader::FKvLoadArgs Args;
+	Args.FileName = SchemeRel;
+	Args.Fs = &Fs;
+	Args.PathID = 0;
+	Args.Cache = 1;
+	const TSharedPtr<FKvNode> Node = MakeShared<FKvNode>();
+	Node->Name = TEXT("SoundScheme");
+	TArray<TSharedPtr<FKvNode>> Roots;
+	if (!ElysiumKeyValuesLoader::LoadFile(Node, Args, Roots))
 	{
 		return false;
 	}
-
-	// The file through the retail reader (`0x101f2180`): its roots, of which `SoundScheme { ... }` is
-	// the one `CSoundScheme`'s parser (`0x1022a930`) walks; a file whose first root is named
-	// otherwise is read from that first root, as before.
-	const TSharedPtr<FKvNode> Roots = ElysiumKeyValues::ParseText(Text);
-	if (!Roots.IsValid())
-	{
-		return false;
-	}
-	const FKvNode* Root = Roots->Child(TEXT("SoundScheme"));
-	if (Root == nullptr && !Roots->Kids.IsEmpty())
-	{
-		Root = Roots->Kids[0].Value.Get();
-	}
-	if (Root == nullptr)
+	// `FUN_1022a930` then walks the FIRST root's children (`0x10248a10`, then `0x10248a30`), matching each
+	// name with `strstr` against `SchemeParams`, `Ambient`, `Music`, `Combat`, `Alert`, `RandomSound`;
+	// no children (an empty file, or a first token with no brace) reads nothing and the call returns 0.
+	FKvNode* Root = Node.Get();
+	if (Root->Children.IsEmpty())
 	{
 		return false;
 	}
 
 	Out = FElysiumSoundScheme();
-	Out.SourcePath = AbsPath;
+	Out.SourcePath = FElysiumContentPaths::SchemeFile(SchemeRel);
 
-	if (const FKvNode* Params = Root->Child(TEXT("SchemeParams")))
+	// `SchemeParams`: `GetInt("RandomSoundCount", 2)` clamped 0..6, `GetInt("RoomDSP", 0)` clamped 0..255
+	// (`0x10248bb0` with the retail defaults).
+	if (FKvNode* Params = ElysiumKeyValues::FindKey(*Root, TEXT("SchemeParams"), ElysiumKeyValues::EKvCreate::No))
 	{
-		Out.RandomSoundCount = FMath::Clamp(Params->Int(TEXT("RandomSoundCount"), 2), 0, 6);
-		Out.RoomDSP = FMath::Clamp(Params->Int(TEXT("RoomDSP"), 0), 0, 255);
+		Out.RandomSoundCount = FMath::Clamp(ElysiumKeyValues::GetInt(*Params, TEXT("RandomSoundCount"), 2), 0, 6);
+		Out.RoomDSP = FMath::Clamp(ElysiumKeyValues::GetInt(*Params, TEXT("RoomDSP"), 0), 0, 255);
 	}
 
 	// The music trio + ambient bed default Dry=1; only Ambient defaults NoPause=0 (the trio default 1).
-	Out.Music   = ReadSound(Root->Child(TEXT("Music")),   /*Dry*/ true, /*NoPause*/ true);
-	Out.Combat  = ReadSound(Root->Child(TEXT("Combat")),  /*Dry*/ true, /*NoPause*/ true);
-	Out.Alert   = ReadSound(Root->Child(TEXT("Alert")),   /*Dry*/ true, /*NoPause*/ true);
-	Out.Ambient = ReadSound(Root->Child(TEXT("Ambient")), /*Dry*/ true, /*NoPause*/ false);
+	Out.Music   = ReadSound(ElysiumKeyValues::FindKey(*Root, TEXT("Music"), ElysiumKeyValues::EKvCreate::No),   /*Dry*/ true, /*NoPause*/ true);
+	Out.Combat  = ReadSound(ElysiumKeyValues::FindKey(*Root, TEXT("Combat"), ElysiumKeyValues::EKvCreate::No),  /*Dry*/ true, /*NoPause*/ true);
+	Out.Alert   = ReadSound(ElysiumKeyValues::FindKey(*Root, TEXT("Alert"), ElysiumKeyValues::EKvCreate::No),   /*Dry*/ true, /*NoPause*/ true);
+	Out.Ambient = ReadSound(ElysiumKeyValues::FindKey(*Root, TEXT("Ambient"), ElysiumKeyValues::EKvCreate::No), /*Dry*/ true, /*NoPause*/ false);
 
-	for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : Root->Kids)
+	for (const TSharedPtr<FKvNode>& Kid : Root->Children)
 	{
-		if (Kid.Key != TEXT("randomsound") || !Kid.Value.IsValid())
+		if (!Kid.IsValid() || Kid->Type != ElysiumKeyValues::EKvType::Block
+			|| !Kid->Name.Equals(TEXT("RandomSound"), ESearchCase::IgnoreCase))
 		{
 			continue;
 		}
-		const FKvNode& B = *Kid.Value;
+		FKvNode& B = *Kid;
 		FElysiumRandomSound R;
-		R.Filename = B.Str(TEXT("Filename"), FString()).Replace(TEXT("\\"), TEXT("/"));
+		R.Filename = ElysiumKeyValues::GetString(B, TEXT("Filename"), FString()).Replace(TEXT("\\"), TEXT("/"));
 		R.Volume = FMath::Clamp(B.Flt(TEXT("Volume"), 20.f) / 100.f, 0.f, 1.f);
-		R.Frequency = B.Int(TEXT("Frequency"), 10);
-		R.PitchMin = B.Int(TEXT("PitchMin"), 100);
-		R.PitchMax = B.Int(TEXT("PitchMax"), 100);
+		R.Frequency = ElysiumKeyValues::GetInt(B, TEXT("Frequency"), 10);
+		R.PitchMin = ElysiumKeyValues::GetInt(B, TEXT("PitchMin"), 100);
+		R.PitchMax = ElysiumKeyValues::GetInt(B, TEXT("PitchMax"), 100);
 		R.AudibleRadius = B.Flt(TEXT("AudibleRadius"), 1600.f);
 		R.DistMin = B.Flt(TEXT("DistMin"), 800.f);
 		R.DistMax = B.Flt(TEXT("DistMax"), 1400.f);
@@ -124,8 +135,8 @@ bool FElysiumSoundScheme::ParseFile(const FString& AbsPath, FElysiumSoundScheme&
 		R.HeightMax = B.Flt(TEXT("HeightMax"), 20.f);
 		R.AngleMin = B.Flt(TEXT("AngleMin"), 0.f);
 		R.AngleMax = B.Flt(TEXT("AngleMax"), 360.f);
-		R.bDry = B.Bool(TEXT("Dry"), false);
-		R.bNoPause = B.Bool(TEXT("NoPause"), false);
+		R.bDry = ElysiumKeyValues::GetInt(B, TEXT("Dry"), 0) != 0;
+		R.bNoPause = ElysiumKeyValues::GetInt(B, TEXT("NoPause"), 0) != 0;
 		if (!R.Filename.IsEmpty())
 		{
 			Out.RandomSounds.Add(MoveTemp(R));
@@ -148,14 +159,13 @@ const FElysiumSoundScheme* FElysiumSoundSchemeManager::LoadScheme(const FString&
 	// raw `scheme_file` keyvalue ("sound/Schemes/SP_Tutorial_City.txt"); SchemeFile() strips the
 	// leading "sound/" the way retail's own table builder does (FUN_101f3690 @0x101f3690) and folds
 	// the rest to the deployed lower-case spelling.
-	const FString AbsPath = FElysiumContentPaths::SchemeFile(SchemeRel);
 	FElysiumSoundScheme Parsed;
-	const bool bOk = FElysiumSoundScheme::ParseFile(AbsPath, Parsed);
+	const bool bOk = FElysiumSoundScheme::ParseFile(SchemeRel, Parsed);
 	if (!bOk)
 	{
 		UE_LOG(LogElysiumScheme, Warning,
 			TEXT("scheme '%s' not in the corpus at %s (run `uv run elysium import sound-schemes`)"),
-			*SchemeRel, *AbsPath);
+			*SchemeRel, *FElysiumContentPaths::SchemeFile(SchemeRel));
 	}
 	const FElysiumSoundScheme& Stored = SchemeCache.Add(SchemeRel, MoveTemp(Parsed));
 	return Stored.bParsed ? &Stored : nullptr;

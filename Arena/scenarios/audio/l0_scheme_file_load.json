@@ -1,0 +1,829 @@
+{
+  "name": "l0_scheme_file_load",
+  "about": "The KeyValues FILE loader FUN_102480f0 (0x102480f0) -- the call CSoundScheme::Precache (0x1022a4b0) makes through FUN_1022a930 on a node named SoundScheme (0x105a63f4) for sound/Schemes/SP_Tutorial_City.txt with pathID 0 and cache 1 -- with its token wrapper FUN_102482b0 (0x102482b0, buffer 0x10754fa8), its block parser FUN_10248510 (0x10248510) and the whole-file text cache FUN_102482f0 (0x102482f0). Cache set and `.txt` in the name (strstr, 0x10546e4c): the cache is asked first; its CRC-32 of the name (0x1023f040/0c0/060, table 0x10496f58) misses -> it opens the file itself (`rb` 0x105596cc, pathID 0), interns the text (1 MiB arena 0x105c530c) and returns it; a hit returns the interned text whatever the file now holds; a NULL (open failed, arena full, no `.txt`, cache 0) sends the loader to its own Open/Size/Read/Close, and only a failed open there returns 0. Then every top-level token is a root: the first renames the caller's node (0x10247cf0: children, value and chain dropped), each next is a new node linked after the previous (+0x10); the token after a root opens a block when its FIRST byte is `{` (CMP byte [EAX],0x7B; a quoted \"{abc\" qualifies) and is dropped otherwise. In a block (0x10248510): an empty key (EOF or quoted \"\") or `}` (0x10547b64) returns; the child is created (0x10248870) before its value is read; `{` (0x10547b78, 2-byte compare) recurses; a quoted value is type 0; an unquoted one is typed by _strtol (0x104319a8, base 10, saturating) against _strtod (0x1043190e, decimal-only, `d`/`e` exponents): strtod consuming more -> type 2 float, strtol consuming anything -> type 1 int, else type 0. `}` in value position is a value; a key at EOF is a \"\" string leaf. Returns 1 for empty text (zero roots, the node unrenamed). Reported as `fail` when a cache arm, a root arm, a leaf type or value or the return differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 3.1,
+  "fixtures": [
+    {
+      "id": "t_typed",
+      "kind": "text",
+      "text": "SoundScheme { q \"50\" i 50 f 0.5 e 1.5e3 m 3abc s abc h 0x10 big 10000000000 neg -3 plus +5 dot .5 trail 5. d 1d3 dash - }"
+    },
+    {
+      "id": "t_empty",
+      "kind": "text",
+      "text": "  // only a comment\n/* and a block comment */\n"
+    },
+    {
+      "id": "t_pairs",
+      "kind": "text",
+      "text": "Name \"x\" { k v }"
+    },
+    {
+      "id": "t_qbrace",
+      "kind": "text",
+      "text": "Root \"{abc\" k 1 }"
+    },
+    {
+      "id": "t_multi",
+      "kind": "text",
+      "text": "A { x 1 } A { a:b 1 } } R"
+    },
+    {
+      "id": "t_tail",
+      "kind": "text",
+      "text": "R { k } z 1 } T { t"
+    },
+    {
+      "id": "t_emptykey",
+      "kind": "text",
+      "text": "R { \"\" x 1 }"
+    },
+    {
+      "id": "t_cache_a",
+      "kind": "text",
+      "text": "A { v 1 }"
+    },
+    {
+      "id": "t_cache_b",
+      "kind": "text",
+      "text": "B { v 2 }"
+    },
+    {
+      "id": "t_nocache",
+      "kind": "text",
+      "text": "N { v 1 }"
+    },
+    {
+      "id": "t_noext",
+      "kind": "text",
+      "text": "E { v 1 }"
+    }
+  ],
+  "script": [
+    {
+      "t": 0.2,
+      "do": "entity_call",
+      "target": "kv_typed",
+      "function": "KeyValues_LoadFile",
+      "args": [
+        "f_typed.txt",
+        true,
+        {
+          "fixture": "t_typed"
+        }
+      ]
+    },
+    {
+      "t": 0.4,
+      "do": "entity_call",
+      "target": "kv_empty",
+      "function": "KeyValues_LoadFile",
+      "args": [
+        "f_empty.txt",
+        true,
+        {
+          "fixture": "t_empty"
+        }
+      ]
+    },
+    {
+      "t": 0.6,
+      "do": "entity_call",
+      "target": "kv_pairs",
+      "function": "KeyValues_LoadFile",
+      "args": [
+        "f_pairs.txt",
+        true,
+        {
+          "fixture": "t_pairs"
+        }
+      ]
+    },
+    {
+      "t": 0.8,
+      "do": "entity_call",
+      "target": "kv_qbrace",
+      "function": "KeyValues_LoadFile",
+      "args": [
+        "f_qbrace.txt",
+        true,
+        {
+          "fixture": "t_qbrace"
+        }
+      ]
+    },
+    {
+      "t": 1.0,
+      "do": "entity_call",
+      "target": "kv_multi",
+      "function": "KeyValues_LoadFile",
+      "args": [
+        "f_multi.txt",
+        true,
+        {
+          "fixture": "t_multi"
+        }
+      ]
+    },
+    {
+      "t": 1.2,
+      "do": "entity_call",
+      "target": "kv_tail",
+      "function": "KeyValues_LoadFile",
+      "args": [
+        "f_tail.txt",
+        true,
+        {
+          "fixture": "t_tail"
+        }
+      ]
+    },
+    {
+      "t": 1.4,
+      "do": "entity_call",
+      "target": "kv_emptykey",
+      "function": "KeyValues_LoadFile",
+      "args": [
+        "f_emptykey.txt",
+        true,
+        {
+          "fixture": "t_emptykey"
+        }
+      ]
+    },
+    {
+      "t": 1.6,
+      "do": "entity_call",
+      "target": "kv_cache",
+      "function": "KeyValues_LoadFile",
+      "args": [
+        "f_cache.txt",
+        true,
+        {
+          "fixture": "t_cache_a"
+        }
+      ]
+    },
+    {
+      "t": 1.8,
+      "do": "entity_call",
+      "target": "kv_cache",
+      "function": "KeyValues_LoadFile",
+      "args": [
+        "f_cache.txt",
+        true,
+        {
+          "fixture": "t_cache_b"
+        }
+      ]
+    },
+    {
+      "t": 2.0,
+      "do": "entity_call",
+      "target": "kv_nocache",
+      "function": "KeyValues_LoadFile",
+      "args": [
+        "f_nocache.txt",
+        false,
+        {
+          "fixture": "t_nocache"
+        }
+      ]
+    },
+    {
+      "t": 2.2,
+      "do": "entity_call",
+      "target": "kv_noext",
+      "function": "KeyValues_LoadFile",
+      "args": [
+        "noext",
+        true,
+        {
+          "fixture": "t_noext"
+        }
+      ]
+    },
+    {
+      "t": 2.4,
+      "do": "entity_call",
+      "target": "kv_missing",
+      "function": "KeyValues_LoadFile",
+      "args": [
+        "missing_file.txt",
+        true
+      ]
+    },
+    {
+      "t": 2.6,
+      "do": "entity_call",
+      "target": "SoundScheme",
+      "function": "KeyValues_LoadFile",
+      "args": [
+        "sound/Schemes/SP_Tutorial_City.txt",
+        true
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=entry file=f_typed.txt cache=1",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102482f0 va=0x102482f0 phase=open ok=1 size=",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=hook needle=1 result=1",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=0 name=SoundScheme reused=1 brace=1",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=q value=50 quoted=1 type=0",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=i value=50 quoted=0 ei=50 ef=50 type=1",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=f value=0.5 quoted=0 ei=0 ef=0.5 type=2",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=e value=1.5e3 quoted=0 ei=1 ef=1500 type=2",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=m value=3abc quoted=0 ei=3 ef=3 type=1",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=s value=abc quoted=0 ei=0 ef=0 type=0",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=h value=0x10 quoted=0 ei=0 ef=0 type=1",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=big value=10000000000 quoted=0 ei=2147483647 ef=1e+10 type=1",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=neg value=-3 quoted=0 ei=-3 ef=-3 type=1",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=plus value=+5 quoted=0 ei=5 ef=5 type=1",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=dot value=.5 quoted=0 ei=0 ef=0.5 type=2",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=trail value=5. quoted=0 ei=5 ef=5 type=2",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=d value=1d3 quoted=0 ei=1 ef=1000 type=2",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=dash value=- quoted=0 ei=0 ef=0 type=0",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=return result=1 roots=1",
+      "by": 0.35
+    },
+    {
+      "who": "kv_typed",
+      "kind": "script",
+      "match": "entity_call KeyValues_LoadFile done result=1 roots=1 [SoundScheme(14)] target=SoundScheme(14)",
+      "by": 0.35
+    },
+    {
+      "who": "kv_empty",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102482f0 va=0x102482f0 phase=open ok=1 size=",
+      "by": 0.55
+    },
+    {
+      "who": "kv_empty",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=hook needle=1 result=1",
+      "by": 0.55
+    },
+    {
+      "who": "kv_empty",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=return result=1 roots=0",
+      "by": 0.55
+    },
+    {
+      "who": "kv_empty",
+      "kind": "script",
+      "match": "entity_call KeyValues_LoadFile done result=1 roots=0 [] target=kv_empty(0)",
+      "by": 0.55
+    },
+    {
+      "who": "kv_pairs",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=0 name=Name reused=1 brace=0 dropped=x",
+      "by": 0.75
+    },
+    {
+      "who": "kv_pairs",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=1 name={ reused=0 brace=0 dropped=k",
+      "by": 0.75
+    },
+    {
+      "who": "kv_pairs",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=2 name=v reused=0 brace=0 dropped=}",
+      "by": 0.75
+    },
+    {
+      "who": "kv_pairs",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=return result=1 roots=3",
+      "by": 0.75
+    },
+    {
+      "who": "kv_qbrace",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=0 name=Root reused=1 brace=1",
+      "by": 0.9500000000000001
+    },
+    {
+      "who": "kv_qbrace",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=k value=1 quoted=0 ei=1 ef=1 type=1",
+      "by": 0.9500000000000001
+    },
+    {
+      "who": "kv_qbrace",
+      "kind": "script",
+      "match": "entity_call KeyValues_LoadFile done result=1 roots=1 [Root(1)] target=Root(1)",
+      "by": 0.9500000000000001
+    },
+    {
+      "who": "kv_multi",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=0 name=A reused=1 brace=1",
+      "by": 1.15
+    },
+    {
+      "who": "kv_multi",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=x value=1 quoted=0 ei=1 ef=1 type=1",
+      "by": 1.15
+    },
+    {
+      "who": "kv_multi",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=1 name=A reused=0 brace=1",
+      "by": 1.15
+    },
+    {
+      "who": "kv_multi",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=a value=: quoted=0 ei=0 ef=0 type=0",
+      "by": 1.15
+    },
+    {
+      "who": "kv_multi",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=b value=1 quoted=0 ei=1 ef=1 type=1",
+      "by": 1.15
+    },
+    {
+      "who": "kv_multi",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=2 name=} reused=0 brace=0 dropped=R",
+      "by": 1.15
+    },
+    {
+      "who": "kv_multi",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=return result=1 roots=3",
+      "by": 1.15
+    },
+    {
+      "who": "kv_multi",
+      "kind": "script",
+      "match": "entity_call KeyValues_LoadFile done result=1 roots=3 [A(1) A(2) }(0)] target=A(1)",
+      "by": 1.15
+    },
+    {
+      "who": "kv_tail",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=0 name=R reused=1 brace=1",
+      "by": 1.3499999999999999
+    },
+    {
+      "who": "kv_tail",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=k value=} quoted=0 ei=0 ef=0 type=0",
+      "by": 1.3499999999999999
+    },
+    {
+      "who": "kv_tail",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=z value=1 quoted=0 ei=1 ef=1 type=1",
+      "by": 1.3499999999999999
+    },
+    {
+      "who": "kv_tail",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=1 name=T reused=0 brace=1",
+      "by": 1.3499999999999999
+    },
+    {
+      "who": "kv_tail",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=t value= quoted=0 ei=0 ef=0 type=0",
+      "by": 1.3499999999999999
+    },
+    {
+      "who": "kv_tail",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=return result=1 roots=2",
+      "by": 1.3499999999999999
+    },
+    {
+      "who": "kv_emptykey",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=0 name=R reused=1 brace=1",
+      "by": 1.5499999999999998
+    },
+    {
+      "who": "kv_emptykey",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=1 name=x reused=0 brace=0 dropped=1",
+      "by": 1.5499999999999998
+    },
+    {
+      "who": "kv_emptykey",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=2 name=} reused=0 brace=0 dropped=",
+      "by": 1.5499999999999998
+    },
+    {
+      "who": "kv_emptykey",
+      "kind": "script",
+      "match": "entity_call KeyValues_LoadFile done result=1 roots=3 [R(0) x(0) }(0)] target=R(0)",
+      "by": 1.5499999999999998
+    },
+    {
+      "label": "cache_first",
+      "who": "kv_cache",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102482f0 va=0x102482f0 phase=open ok=1 size=9 interned=1",
+      "by": 1.75
+    },
+    {
+      "who": "kv_cache",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=hook needle=1 result=1",
+      "by": 1.75
+    },
+    {
+      "who": "kv_cache",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=0 name=A reused=1 brace=1",
+      "by": 1.75
+    },
+    {
+      "who": "kv_cache",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=entry file=f_cache.txt cache=1",
+      "by": 1.95
+    },
+    {
+      "who": "kv_cache",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=hook needle=1 result=1",
+      "by": 1.95
+    },
+    {
+      "who": "kv_cache",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=0 name=A reused=1 brace=1",
+      "by": 1.95
+    },
+    {
+      "who": "kv_cache",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=v value=1 quoted=0 ei=1 ef=1 type=1",
+      "by": 1.95
+    },
+    {
+      "who": "kv_nocache",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=entry file=f_nocache.txt cache=0",
+      "by": 2.15
+    },
+    {
+      "who": "kv_nocache",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=open ok=1 size=9",
+      "by": 2.15
+    },
+    {
+      "who": "kv_nocache",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=0 name=N reused=1 brace=1",
+      "by": 2.15
+    },
+    {
+      "who": "kv_noext",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=hook needle=0 result=0",
+      "by": 2.35
+    },
+    {
+      "who": "kv_noext",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=open ok=1 size=9",
+      "by": 2.35
+    },
+    {
+      "who": "kv_noext",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=0 name=E reused=1 brace=1",
+      "by": 2.35
+    },
+    {
+      "who": "kv_missing",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102482f0 va=0x102482f0 phase=open ok=0 size=0 interned=0",
+      "by": 2.55
+    },
+    {
+      "who": "kv_missing",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=hook needle=1 result=0",
+      "by": 2.55
+    },
+    {
+      "who": "kv_missing",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=open ok=0 size=0",
+      "by": 2.55
+    },
+    {
+      "who": "kv_missing",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=return result=0 roots=0",
+      "by": 2.55
+    },
+    {
+      "who": "kv_missing",
+      "kind": "script",
+      "match": "entity_call KeyValues_LoadFile done result=0 roots=0 [] target=kv_missing(0)",
+      "by": 2.55
+    },
+    {
+      "who": "SoundScheme",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=entry file=sound/Schemes/SP_Tutorial_City.txt cache=1",
+      "by": 2.75
+    },
+    {
+      "who": "SoundScheme",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=hook needle=1 result=1",
+      "by": 2.75
+    },
+    {
+      "who": "SoundScheme",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=branch index=0 name=SoundScheme reused=1 brace=1",
+      "by": 2.75
+    },
+    {
+      "who": "SoundScheme",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=Music value={ quoted=0 block=1 type=unset",
+      "by": 2.75
+    },
+    {
+      "who": "SoundScheme",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=Filename value=music/Downtown Hub (Unused Alternate).mp3 quoted=1 type=0",
+      "by": 2.75
+    },
+    {
+      "who": "SoundScheme",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=Volume value=20 quoted=1 type=0",
+      "by": 2.75
+    },
+    {
+      "who": "SoundScheme",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=RandomSound value={ quoted=0 block=1 type=unset",
+      "by": 2.75
+    },
+    {
+      "who": "SoundScheme",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=Filename value=Whispers\\Lying\\Asps.wav quoted=1 type=0",
+      "by": 2.75
+    },
+    {
+      "who": "SoundScheme",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": "fn=FUN_10248510 va=0x10248510 phase=branch key=Frequency value=0 quoted=1 type=0",
+      "by": 2.75
+    },
+    {
+      "who": "SoundScheme",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=return result=1 roots=1",
+      "by": 2.75
+    }
+  ],
+  "never": [
+    {
+      "who": "kv_typed",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=open"
+    },
+    {
+      "who": "kv_empty",
+      "kind": "retail_site",
+      "site": "kv.root",
+      "match": ""
+    },
+    {
+      "who": "kv_pairs",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": ""
+    },
+    {
+      "who": "kv_emptykey",
+      "kind": "retail_site",
+      "site": "kv.pair",
+      "match": ""
+    },
+    {
+      "who": "kv_cache",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102482f0 va=0x102482f0 phase=open",
+      "at_most": 1
+    },
+    {
+      "who": "kv_cache",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=open"
+    },
+    {
+      "who": "kv_nocache",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "phase=hook"
+    },
+    {
+      "who": "kv_nocache",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102482f0 va=0x102482f0"
+    },
+    {
+      "who": "kv_noext",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102482f0 va=0x102482f0"
+    },
+    {
+      "who": "SoundScheme",
+      "kind": "retail_site",
+      "site": "kv.load",
+      "match": "fn=FUN_102480f0 va=0x102480f0 phase=open"
+    }
+  ],
+  "notes": "Each entity_call KeyValues_LoadFile is 0x102480f0 on the node `target` names (the record's SoundScheme / kv_* nodes stand for the node the caller allocates), over an engine file system whose named file is the `text` fixture's bytes and whose other names are the deployed corpus (sound/Schemes/SP_Tutorial_City.txt) or nothing (missing_file.txt). The text cache is process-global, as retail's statics are: names are unique to this record so the hit is the one the record makes (f_cache.txt twice)."
+}

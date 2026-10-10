@@ -15,6 +15,7 @@ class AElysiumMapActor;
 class FElysiumEntityWorld;
 class FJsonObject;
 struct FElysiumAiTraceEvent;
+namespace ElysiumKeyValues { struct FKvNode; }
 
 // What one run concluded, in the shape `seam.md`'s `index.json` scenario entry takes.
 struct FElysiumArenaScenarioResult
@@ -241,6 +242,11 @@ private:
 	TArray<int32> NeverCounts;
 
 	TMap<FString, FElysiumArenaFixture> StagedFixtures;   // by id, filled by StageFixtures
+	// The KeyValues nodes the `KeyValues_LoadFile` / `_GetInt` / `_GetString` / `_SetString` /
+	// `_Chain` calls address by `target`: the caller's node of `0x102480f0` (ECX), made on first use
+	// with the target as its name (`0x10247ba0`) and kept for the run so later calls read what a load
+	// wrote and a chain can link two of them.
+	TMap<FString, TSharedPtr<ElysiumKeyValues::FKvNode>> StagedTrees;
 	TArray<bool> ActionFired;
 	TArray<bool> ProbeRead;
 

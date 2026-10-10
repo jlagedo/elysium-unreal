@@ -153,7 +153,7 @@ is unique in the record, the kind one of `ElysiumArenaScenario::FixtureKinds()`.
 | `kind` | Configuration | Staged as |
 |---|---|---|
 | `keyvalues` | `values`: an object of keys to string, number or boolean values (read as a map row spells them) | a controlled KeyValues table, read back by `entity_field` on `who: "fixture:<id>"`, `field` the key |
-| `text` | `text`: a string, handed whole (JSON escapes spell newlines, quotes and backslashes) | raw text a reader is given as the buffer it would have read from a file: the argument of `entity_call KeyValues_Lex` / `KeyValues_Parse`; `entity_field` on `fixture:<id>` answers `field: "text"`. Staged as `fixture <id> text staged chars=<n>` |
+| `text` | `text`: a string, handed whole (JSON escapes spell newlines, quotes and backslashes) | raw text a reader is given as the buffer it would have read from a file: the argument of `entity_call KeyValues_Lex` / `KeyValues_Parse`, or the bytes a `KeyValues_LoadFile` name answers with; `entity_field` on `fixture:<id>` answers `field: "text"`. Staged as `fixture <id> text staged chars=<n>` |
 
 A fixture is named by an `entity_call` argument (`{"fixture": "<id>"}`) or an `entity_field` `who`. An
 unknown kind, a duplicate id, or a reference to a fixture the record does not declare is a parse error.
@@ -173,6 +173,11 @@ ordinary record, a `script` failure on an `expect_fail` one. Traced as `script`:
 |---|---|---|---|---|
 | `KeyValues_Lex` | a utility name (`keyvalues`), the `who` of its events | `[{"fixture": <text id>}]` | the token wrapper `0x101f2f30` over the text until the cursor it writes back is NULL -- how `0x101f2360` / `0x101f2180` consume a buffer; each token is a `kv_token` site | `entity_call KeyValues_Lex done calls=<wrapper calls>` |
 | `KeyValues_Parse` | as above | `[{"fixture": <text id>}, "<target name>"]`; the second argument optional: the node `0x101f2e20` names after the file and hands `0x101f2180` in ECX; absent, no target | `0x101f2180`'s root loop (R7 on; the file arms are the loader's) with `kv_root` sites and `kv_leaf` sites from `0x101f2360` | `entity_call KeyValues_Parse done roots=<n> [<name>(<children>) ...] target=<name>(<children>)|null` |
+| `KeyValues_LoadFile` | the NAME of the caller's node (`0x102480f0`'s ECX: `SoundScheme` for `FUN_1022a930`), made on first use and kept for the run; the `who` of its events | `["<file name>", <cache 0|1>, {"fixture": <text id>}?]`: the name the loader receives, its `cache` argument, and the bytes the engine file system answers for that name -- absent, the deployed corpus through the scheme resolver, or no such file | the KeyValues FILE loader `0x102480f0` (`ElysiumKeyValuesLoader.h`) with pathID 0: the text cache `0x102482f0` when `cache` and `.txt`, else its own open; then the root loop (`kv.root` sites) and `0x10248510` (`kv.pair` sites) | `entity_call KeyValues_LoadFile done result=<0|1> roots=<n> [<name>(<children>) ...] target=<name>(<children>)` |
+| `KeyValues_GetInt` | a node an earlier `KeyValues_LoadFile` filled | `["<key>", <default>]` | `0x10248bb0` (through `FindKey 0x10248900`): `kv.find`, `kv.getint` sites | `entity_call KeyValues_GetInt done key=<k> result=<n>` |
+| `KeyValues_GetString` | as above | `["<key>", "<default>"]` | `0x10248cd0`: `kv.find`, `kv.getstr branch`, on a numeric node `kv.find` + `kv.setstr` (the writeback through `0x102490e0`), `kv.getstr return` | `entity_call KeyValues_GetString done key=<k> result=<text>` |
+| `KeyValues_SetString` | as above | `["<key>", "<value>"]` | `0x102490e0`: `kv.find` (create), `kv.setstr` | `entity_call KeyValues_SetString done key=<k> value=<text>` |
+| `KeyValues_Chain` | as above | `["<other target>"]` | the harness-built fallback link `+0x18` (`0x10248900` arm 3 searches it; the corpus shows no retail writer) | `entity_call KeyValues_Chain done chain=<other>` |
 
 **`entity_field`** (a `probes` entry: `who`, `field`, optional `to`, `index`, `member`, one comparison) --
 reads a retail field by its **retail name** (`m_iName`, `m_iHealth`, the datamap name or the ledger's
@@ -199,9 +204,17 @@ field=m_iSoundLevel value=`); `kv_token` (`FUN_10247280` `0x10247280`: `entry se
 `return token= quoted= cursor=<offset|null>`; `return cursor=null out=untouched quoted=0` for a NULL
 cursor in); `kv_leaf` (`FUN_101f2360` `0x101f2360`, `write key= type=<0..3> [num=] [str=]`); `kv_root`
 (`FUN_101f2180` `0x101f2180`: `entry file= target=<set|null>`, `branch arm=<reuse|new> name=`, `error
-file= expecting={ got={ dropped=<token>`, `return result=1 roots=`). A pure function reports through
-`IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a utility with no entity names its target in the
-entity column (`FElysiumNamedRetailSites`).
+file= expecting={ got={ dropped=<token>`, `return result=1 roots=`); the KeyValues FILE loader's
+family (`ElysiumKeyValuesLoader.h`): `kv.load` (`FUN_102480f0` `0x102480f0`: `entry file= cache=`, `hook
+needle= result=`, `open ok= size=`, `return result= roots=`; and `FUN_102482f0` `0x102482f0` `open ok=
+size= interned=`, the cache's own open on a miss), `kv.root` (`FUN_102480f0`: `branch index= name=
+reused= brace= [dropped=]`), `kv.pair` (`FUN_10248510` `0x10248510`: `branch key= value= quoted= [ei=
+ef=] type=<0|1|2|unset> [block=1]`), `kv.find` (`FUN_10248900` `0x10248900`: `return key= create=
+source=<own|chain|created|none> name=`), `kv.getint` (`FUN_10248bb0` `0x10248bb0`: `return key= type=
+default= result=`), `kv.getstr` (`FUN_10248cd0` `0x10248cd0`: `branch key= type= formatted=`, `return
+key= result= default=<0|1>`), `kv.setstr` (`FUN_102490e0` `0x102490e0`: `write key= new= type=0`). A
+pure function reports through `IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a utility with no
+entity names its target in the entity column (`FElysiumNamedRetailSites`).
 
 Rules: `entity_call` drives only what retail exposes to the world; `retail_site` events are emitted where
 the retail address they name is ported and state retail values; `entity_field` reads retail names;
@@ -370,6 +383,8 @@ record — and a `reason`) and
 | `audio/l0_ambient_radius_level` | `0x101ac570` at `CAmbientGeneric::Spawn` (`0x101ac321` / `0x101ac326`): eleven radii (and one everywhere flag) to their `m_iSoundLevel`, each arm traced, the stored words probed (L0.audio.ambient-radius-level) |
 | `audio/l0_keyvalues_lexer` | the tokenizer `0x10247280` through its wrapper `0x101f2f30`, tables `0x102473e0` / `0x1023eff0`: eighteen texts to their token, quote and cursor sequences (L0.audio.keyvalues-lexer) |
 | `audio/l0_keyvalues_tree` | the file reader `0x101f2180` and block parser `0x101f2360`: root reuse and chaining, the missing-brace error, the top-level `}`, the empty key, and the strtol/strtod leaf typing (L0.audio.keyvalues-tree) |
+| `audio/l0_scheme_file_load` | the KeyValues FILE loader `0x102480f0` (the `CSoundScheme::Precache` call), its wrapper `0x102482b0`, block parser `0x10248510` and text cache `0x102482f0`: the cache hit and miss, the loader's own open, no `.txt`, a missing file, every top-level token a root, the first-byte brace test, the typed leaves, and `sound/Schemes/SP_Tutorial_City.txt` itself (L0.audio.scheme-file-load) |
+| `audio/l0_keyvalues_access` | the loader class's accessors `0x10248900` / `0x10248bb0` / `0x10248cd0` / `0x102490e0`: first match, case folding, the fallback chain, `atoi` and `__ftol` conversions, the `%d` / `%f` writeback and the create arm (L0.audio.keyvalues-access) |
 | `_selftest/never_after_ignores` | a `never` opened `after` a label does not count a match before it |
 | `_selftest/never_within_holds`, `never_within_trips` | a `never` closed `within` seconds of its label ignores a match after the window and fails the run on one inside it |
 | `combat/cover_move_shoot` | the run-and-gun: a gunman running to cover fires from an overlay layer's own 3031 (`0x102e8560` -> `AddGesture 0x100991b0` -> `0x10098cd0` -> `Shot 0x102387b0`; spec 0002 V4o) |

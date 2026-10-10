@@ -27,128 +27,9 @@ namespace
 		return static_cast<uint32>(C) < 0x80u && Table[static_cast<int32>(C)] != 0;
 	}
 
-	// A token or value as a one-line trace payload: the controls a quoted value may carry are shown
-	// escaped so the trace stays one event per line.
-	FString Shown(const FString& S)
-	{
-		FString Out;
-		Out.Reserve(S.Len());
-		for (const TCHAR C : S)
-		{
-			switch (C)
-			{
-			case TEXT('\n'): Out += TEXT("\\n"); break;
-			case TEXT('\r'): Out += TEXT("\\r"); break;
-			case TEXT('\t'): Out += TEXT("\\t"); break;
-			default: Out.AppendChar(C); break;
-			}
-		}
-		return Out;
-	}
-
 	FString CursorText(int32 Cursor)
 	{
 		return Cursor == INDEX_NONE ? FString(TEXT("null")) : FString::Printf(TEXT("%d"), Cursor);
-	}
-
-	// `_strtol` (`0x104319A8` -> `_strtoxl`, VC6 SP5 libc), base 10: leading `isspace` (space, \t \n
-	// \v \f \r), an optional sign, decimal digits. `OutEnd` is the end pointer as an index: 0 when
-	// nothing was consumed (a sign with no digit consumes nothing). Overflow clamps to LONG_MAX /
-	// LONG_MIN.
-	int32 RetailStrtol(const FString& S, int32& OutEnd)
-	{
-		int32 I = 0;
-		const int32 N = S.Len();
-		auto At = [&S, N](int32 Index) -> TCHAR { return Index < N ? S[Index] : TEXT('\0'); };
-		while (At(I) == TEXT(' ') || At(I) == TEXT('\t') || At(I) == TEXT('\n') || At(I) == TEXT('\v')
-			|| At(I) == TEXT('\f') || At(I) == TEXT('\r'))
-		{
-			++I;
-		}
-		bool bNegative = false;
-		if (At(I) == TEXT('+') || At(I) == TEXT('-'))
-		{
-			bNegative = At(I) == TEXT('-');
-			++I;
-		}
-		const int32 DigitsStart = I;
-		uint64 Acc = 0;
-		bool bOverflow = false;
-		while (At(I) >= TEXT('0') && At(I) <= TEXT('9'))
-		{
-			if (!bOverflow)
-			{
-				Acc = Acc * 10 + static_cast<uint64>(At(I) - TEXT('0'));
-				if (Acc > static_cast<uint64>(MAX_int32) + (bNegative ? 1u : 0u))
-				{
-					bOverflow = true;
-				}
-			}
-			++I;
-		}
-		if (I == DigitsStart)
-		{
-			OutEnd = 0;
-			return 0;
-		}
-		OutEnd = I;
-		if (bOverflow)
-		{
-			return bNegative ? MIN_int32 : MAX_int32;
-		}
-		return bNegative ? static_cast<int32>(0u - static_cast<uint32>(Acc)) : static_cast<int32>(Acc);
-	}
-
-	// `_strtod` (`0x1043190E`, VC6 SP5 libc, `__fltin` -> `___strgtold12` at `0x1043B1BD`): leading
-	// space / tab / LF / CR, an optional sign, digits with an optional `.` (the locale decimal point
-	// `DAT_106b0d60`), an optional exponent introduced by `D`, `E`, `d` or `e` with an optional sign
-	// and at least one digit (fewer: the exponent is not consumed). There is NO hex state and NO
-	// `inf`/`nan` state: `0x1A` consumes `0`, `inf` and `nan` consume nothing. `OutEnd` as above.
-	double RetailStrtod(const FString& S, int32& OutEnd)
-	{
-		int32 I = 0;
-		const int32 N = S.Len();
-		auto At = [&S, N](int32 Index) -> TCHAR { return Index < N ? S[Index] : TEXT('\0'); };
-		auto IsDigit = [](TCHAR C) { return C >= TEXT('0') && C <= TEXT('9'); };
-		while (At(I) == TEXT(' ') || At(I) == TEXT('\t') || At(I) == TEXT('\n') || At(I) == TEXT('\r'))
-		{
-			++I;
-		}
-		const int32 NumberStart = I;
-		if (At(I) == TEXT('+') || At(I) == TEXT('-'))
-		{
-			++I;
-		}
-		int32 Digits = 0;
-		while (IsDigit(At(I))) { ++I; ++Digits; }
-		if (At(I) == TEXT('.'))
-		{
-			++I;
-			while (IsDigit(At(I))) { ++I; ++Digits; }
-		}
-		if (Digits == 0)
-		{
-			OutEnd = 0;
-			return 0.0;
-		}
-		int32 End = I;
-		if (At(I) == TEXT('D') || At(I) == TEXT('E') || At(I) == TEXT('d') || At(I) == TEXT('e'))
-		{
-			int32 J = I + 1;
-			if (At(J) == TEXT('+') || At(J) == TEXT('-')) { ++J; }
-			if (IsDigit(At(J)))
-			{
-				while (IsDigit(At(J))) { ++J; }
-				End = J;
-			}
-		}
-		OutEnd = End;
-		// The consumed text in the C grammar (`D`/`d` is VC's own exponent letter): the value is the
-		// double `_strtod` returns, which the caller rounds to float (`FSTP float`).
-		FString Number = S.Mid(NumberStart, End - NumberStart);
-		Number.ReplaceInline(TEXT("D"), TEXT("e"));
-		Number.ReplaceInline(TEXT("d"), TEXT("e"));
-		return FCString::Atod(*Number);
 	}
 
 	// The lookup index over `Parent.Children` for one child whose type is final.
@@ -182,6 +63,125 @@ namespace
 		}
 		R.Sites->Site(TEXT("kv_leaf"), TEXT("FUN_101f2360"), 0x101f2360u, TEXT("write"), Payload);
 	}
+}
+
+// A token or value as a one-line trace payload: the controls a quoted value may carry are shown
+// escaped so the trace stays one event per line.
+FString Shown(const FString& S)
+{
+	FString Out;
+	Out.Reserve(S.Len());
+	for (const TCHAR C : S)
+	{
+		switch (C)
+		{
+		case TEXT('\n'): Out += TEXT("\\n"); break;
+		case TEXT('\r'): Out += TEXT("\\r"); break;
+		case TEXT('\t'): Out += TEXT("\\t"); break;
+		default: Out.AppendChar(C); break;
+		}
+	}
+	return Out;
+}
+
+// `_strtol` (`0x104319A8` -> `_strtoxl`, VC6 SP5 libc), base 10: leading `isspace` (space, \t \n
+// \v \f \r), an optional sign, decimal digits. `OutEnd` is the end pointer as an index: 0 when
+// nothing was consumed (a sign with no digit consumes nothing). Overflow clamps to LONG_MAX /
+// LONG_MIN.
+int32 RetailStrtol(const FString& S, int32& OutEnd)
+{
+	int32 I = 0;
+	const int32 N = S.Len();
+	auto At = [&S, N](int32 Index) -> TCHAR { return Index < N ? S[Index] : TEXT('\0'); };
+	while (At(I) == TEXT(' ') || At(I) == TEXT('\t') || At(I) == TEXT('\n') || At(I) == TEXT('\v')
+		|| At(I) == TEXT('\f') || At(I) == TEXT('\r'))
+	{
+		++I;
+	}
+	bool bNegative = false;
+	if (At(I) == TEXT('+') || At(I) == TEXT('-'))
+	{
+		bNegative = At(I) == TEXT('-');
+		++I;
+	}
+	const int32 DigitsStart = I;
+	uint64 Acc = 0;
+	bool bOverflow = false;
+	while (At(I) >= TEXT('0') && At(I) <= TEXT('9'))
+	{
+		if (!bOverflow)
+		{
+			Acc = Acc * 10 + static_cast<uint64>(At(I) - TEXT('0'));
+			if (Acc > static_cast<uint64>(MAX_int32) + (bNegative ? 1u : 0u))
+			{
+				bOverflow = true;
+			}
+		}
+		++I;
+	}
+	if (I == DigitsStart)
+	{
+		OutEnd = 0;
+		return 0;
+	}
+	OutEnd = I;
+	if (bOverflow)
+	{
+		return bNegative ? MIN_int32 : MAX_int32;
+	}
+	return bNegative ? static_cast<int32>(0u - static_cast<uint32>(Acc)) : static_cast<int32>(Acc);
+}
+
+// `_strtod` (`0x1043190E`, VC6 SP5 libc, `__fltin` -> `___strgtold12` at `0x1043B1BD`): leading
+// space / tab / LF / CR, an optional sign, digits with an optional `.` (the locale decimal point
+// `DAT_106b0d60`), an optional exponent introduced by `D`, `E`, `d` or `e` with an optional sign
+// and at least one digit (fewer: the exponent is not consumed). There is NO hex state and NO
+// `inf`/`nan` state: `0x1A` consumes `0`, `inf` and `nan` consume nothing. `OutEnd` as above.
+double RetailStrtod(const FString& S, int32& OutEnd)
+{
+	int32 I = 0;
+	const int32 N = S.Len();
+	auto At = [&S, N](int32 Index) -> TCHAR { return Index < N ? S[Index] : TEXT('\0'); };
+	auto IsDigit = [](TCHAR C) { return C >= TEXT('0') && C <= TEXT('9'); };
+	while (At(I) == TEXT(' ') || At(I) == TEXT('\t') || At(I) == TEXT('\n') || At(I) == TEXT('\r'))
+	{
+		++I;
+	}
+	const int32 NumberStart = I;
+	if (At(I) == TEXT('+') || At(I) == TEXT('-'))
+	{
+		++I;
+	}
+	int32 Digits = 0;
+	while (IsDigit(At(I))) { ++I; ++Digits; }
+	if (At(I) == TEXT('.'))
+	{
+		++I;
+		while (IsDigit(At(I))) { ++I; ++Digits; }
+	}
+	if (Digits == 0)
+	{
+		OutEnd = 0;
+		return 0.0;
+	}
+	int32 End = I;
+	if (At(I) == TEXT('D') || At(I) == TEXT('E') || At(I) == TEXT('d') || At(I) == TEXT('e'))
+	{
+		int32 J = I + 1;
+		if (At(J) == TEXT('+') || At(J) == TEXT('-')) { ++J; }
+		if (IsDigit(At(J)))
+		{
+			while (IsDigit(At(J))) { ++J; }
+			End = J;
+		}
+	}
+	OutEnd = End;
+	// The consumed text in the C grammar (`D`/`d` is VC's own exponent letter): the value is the
+	// double `_strtod` returns, which the caller rounds to float (`FSTP float`).
+	FString Number = S.Mid(NumberStart, End - NumberStart);
+	Number.ReplaceInline(TEXT("D"), TEXT("e"));
+	Number.ReplaceInline(TEXT("d"), TEXT("e"));
+	return FCString::Atod(*Number);
 }
 
 void BuildDelimiterTable(uint8 (&Table)[256], const ANSICHAR* Delims)
@@ -577,6 +577,296 @@ TSharedPtr<FKvNode> ParseText(const FString& Text, IElysiumRetailSiteSink* Sites
 	TArray<TSharedPtr<FKvNode>> Roots;
 	ParseRoots(Reader, TEXT("(text)"), nullptr, Roots);
 	return RootsView(Roots);
+}
+
+// --- Shared CRT models -------------------------------------------------------------------------------
+
+int32 RetailAtol(const FString& S)
+{
+	// `_atol` (`0x104313bc`, VC6): `while (isspace(c)) c = *++p;` one sign; `total = 10 * total + digit`
+	// in a 32-bit long (wraps, never clamps); stops at the first non-digit; `sign ? -total : total`.
+	int32 I = 0;
+	const int32 N = S.Len();
+	auto At = [&S, N](int32 Index) -> TCHAR { return Index < N ? S[Index] : TEXT('\0'); };
+	while (At(I) == TEXT(' ') || At(I) == TEXT('\t') || At(I) == TEXT('\n') || At(I) == TEXT('\v')
+		|| At(I) == TEXT('\f') || At(I) == TEXT('\r'))
+	{
+		++I;
+	}
+	bool bNegative = false;
+	if (At(I) == TEXT('+') || At(I) == TEXT('-'))
+	{
+		bNegative = At(I) == TEXT('-');
+		++I;
+	}
+	uint32 Total = 0;
+	while (At(I) >= TEXT('0') && At(I) <= TEXT('9'))
+	{
+		Total = Total * 10u + static_cast<uint32>(At(I) - TEXT('0'));
+		++I;
+	}
+	return static_cast<int32>(bNegative ? (0u - Total) : Total);
+}
+
+int32 RetailFtol(double X)
+{
+	// `__ftol` (`0x10431320`): control word rounding = truncate, `FISTP qword`; EAX = the low dword.
+	// Outside int64 (NaN, +-Inf, |x| >= 2^63) the store is the integer indefinite, low dword 0.
+	if (!FMath::IsFinite(X) || FMath::Abs(X) >= 9223372036854775808.0)
+	{
+		return 0;
+	}
+	const int64 Truncated = static_cast<int64>(X);
+	return static_cast<int32>(static_cast<uint32>(static_cast<uint64>(Truncated) & 0xffffffffull));
+}
+
+// --- The file loader's class: lookup and typed access ---------------------------------------------
+
+const TCHAR* FileTypeCode(EKvType Type)
+{
+	switch (Type)
+	{
+	case EKvType::String: return TEXT("0");
+	case EKvType::Int:    return TEXT("1");
+	case EKvType::Float:  return TEXT("2");
+	default:              return TEXT("unset");
+	}
+}
+
+void Reindex(FKvNode& Node)
+{
+	Node.Kids.Reset();
+	Node.Values.Reset();
+	Node.Pairs.Reset();
+	for (const TSharedPtr<FKvNode>& Child : Node.Children)
+	{
+		IndexChild(Node, Child);
+	}
+}
+
+TSharedPtr<FKvNode> CreateChild(FKvNode& Parent, const FString& Name)
+{
+	// `0x10248870`: `operator_new(0x1c)`, ctor `0x10247ba0` (`*node = 0; 0x10247cf0(node, name)`: copy the
+	// name, zero `+0x14 +0x10 +0x04 +0x18`, clear `DAT_10753f68[0]`); `+0x08` / `+0x0C` never written.
+	// Then append: `+0x14` empty -> first child; else walk `+0x10` (`0x10248a30`) to the tail and link
+	// (`0x10248a50`); the new node's `+0x10 = 0`.
+	TSharedPtr<FKvNode> Child = MakeShared<FKvNode>();
+	Child->Name = Name;
+	Parent.Children.Add(Child);
+	return Child;
+}
+
+namespace
+{
+	// `0x10248900` with the owning list reported, so the port's index over that list can be rebuilt by
+	// a writer (`SetString`); `Depth` is the chain recursion (`create` is 0 below the first level).
+	FKvNode* FindKeyIn(FKvNode& Node, const FString& Key, EKvCreate Create, FKvNode*& OutOwner, EKvFound& OutFound)
+	{
+		// 1-2. `p = this->+0x14; while (p) { if (!strcmpi(name(p), key)) return p; p = p->+0x10; }`.
+		for (const TSharedPtr<FKvNode>& Child : Node.Children)
+		{
+			if (Child->Name.Equals(Key, ESearchCase::IgnoreCase))
+			{
+				OutOwner = &Node;
+				OutFound = EKvFound::Own;
+				return Child.Get();
+			}
+		}
+		// 3-4. Not in the own list: `this->+0x18` set -> `FindRec(chain, key, 0)` (own list, then its
+		// chain; never creates); found -> return it, nothing created.
+		if (TSharedPtr<FKvNode> Chain = Node.Chain.Pin())
+		{
+			FKvNode* InChain = FindKeyIn(*Chain, Key, EKvCreate::No, OutOwner, OutFound);
+			if (InChain != nullptr)
+			{
+				OutFound = EKvFound::Chain;
+				return InChain;
+			}
+		}
+		// 5. `create` -> `CreateChild(this, key)` (`0x10248870`, appended at the tail of `this`).
+		if (Create == EKvCreate::Yes)
+		{
+			OutOwner = &Node;
+			OutFound = EKvFound::Created;
+			TSharedPtr<FKvNode> Made = CreateChild(Node, Key);
+			Reindex(Node);
+			return Made.Get();
+		}
+		// 6. NULL.
+		OutOwner = nullptr;
+		OutFound = EKvFound::None;
+		return nullptr;
+	}
+
+	const TCHAR* FoundText(EKvFound Found)
+	{
+		switch (Found)
+		{
+		case EKvFound::Own:     return TEXT("own");
+		case EKvFound::Chain:   return TEXT("chain");
+		case EKvFound::Created: return TEXT("created");
+		default:                return TEXT("none");
+		}
+	}
+
+	// `strcmpi(name, NULL)`: the one retail caller passing a NULL key (`0x101b2c60`) reads leaves,
+	// whose child list is empty, so the compare never runs; the port compares `""` instead of faulting.
+	FString KeyText(const TCHAR* Key)
+	{
+		return Key != nullptr ? FString(Key) : FString();
+	}
+}
+
+FKvNode* FindKey(FKvNode& Node, const TCHAR* Key, EKvCreate Create, EKvFound* OutFound, IElysiumRetailSiteSink* Sites)
+{
+	// `0x10248900`.
+	FKvNode* Owner = nullptr;
+	EKvFound Found = EKvFound::None;
+	const FString KeyString = KeyText(Key);
+	FKvNode* Result = FindKeyIn(Node, KeyString, Create, Owner, Found);
+	if (OutFound != nullptr)
+	{
+		*OutFound = Found;
+	}
+	if (Sites != nullptr)
+	{
+		Sites->Site(TEXT("kv.find"), TEXT("FUN_10248900"), 0x10248900u, TEXT("return"),
+			FString::Printf(TEXT("key=%s create=%d source=%s name=%s"), *Shown(KeyString), Create == EKvCreate::Yes ? 1 : 0,
+				FoundText(Found), Result != nullptr ? *Shown(Result->Name) : TEXT("null")));
+	}
+	return Result;
+}
+
+void SetString(FKvNode& Node, const TCHAR* Key, const FString& Value, IElysiumRetailSiteSink* Sites)
+{
+	// `0x102490e0`. 1. `p = FindRec(this, key, 1)`: own list, chain, or a new child of `this`.
+	FKvNode* Owner = nullptr;
+	EKvFound Found = EKvFound::None;
+	const FString KeyString = KeyText(Key);
+	FKvNode* P = FindKeyIn(Node, KeyString, EKvCreate::Yes, Owner, Found);
+	if (Sites != nullptr)
+	{
+		Sites->Site(TEXT("kv.find"), TEXT("FUN_10248900"), 0x10248900u, TEXT("return"),
+			FString::Printf(TEXT("key=%s create=1 source=%s name=%s"), *Shown(KeyString), FoundText(Found),
+				P != nullptr ? *Shown(P->Name) : TEXT("null")));
+	}
+	// 2. `p == NULL` -> return (allocation failure only).
+	if (P == nullptr)
+	{
+		return;
+	}
+	// 3. `free(p->+0x04)`; `p->+0x04 = copy(value)`; `p->+0x0C = 0`. `+0x08` keeps its bits.
+	P->StringValue = Value;
+	P->Type = EKvType::String;
+	if (Sites != nullptr)
+	{
+		Sites->Site(TEXT("kv.setstr"), TEXT("FUN_102490e0"), 0x102490e0u, TEXT("write"),
+			FString::Printf(TEXT("key=%s new=%s type=0"), *Shown(KeyString), *Shown(Value)));
+	}
+	if (Owner != nullptr)
+	{
+		Reindex(*Owner);
+	}
+}
+
+FString GetString(FKvNode& Node, const TCHAR* Key, const FString& Default, IElysiumRetailSiteSink* Sites)
+{
+	// `0x10248cd0`. 1. `node = this; if (key) node = FindRec(this, key, 0)`.
+	FKvNode* Found = &Node;
+	if (Key != nullptr)
+	{
+		Found = FindKey(Node, Key, EKvCreate::No, nullptr, Sites);
+	}
+	const FString KeyString = KeyText(Key);
+	// 2. `node == NULL` -> return `default`.
+	if (Found == nullptr)
+	{
+		if (Sites != nullptr)
+		{
+			Sites->Site(TEXT("kv.getstr"), TEXT("FUN_10248cd0"), 0x10248cd0u, TEXT("return"),
+				FString::Printf(TEXT("key=%s result=%s default=1"), *Shown(KeyString), *Shown(Default)));
+		}
+		return Default;
+	}
+	// 3. Dispatch on `+0x0C`: 1 -> "%d" (`0x105461f0`); 2 -> "%f" (`0x10554f28`) of `(double)(float)`;
+	//    3 -> "%d"; anything else -> the text with no writeback. `Q_snprintf(buf[64], 0x40, ...)`: an
+	//    int32 or a float32 under `%f` is at most 46 characters, so the bound never cuts.
+	FString Formatted;
+	bool bFormatted = false;
+	switch (Found->Type)
+	{
+	case EKvType::Int:
+		Formatted = FString::Printf(TEXT("%d"), Found->IntValue);
+		bFormatted = true;
+		break;
+	case EKvType::Float:
+		Formatted = FString::Printf(TEXT("%f"), static_cast<double>(Found->FloatValue));
+		bFormatted = true;
+		break;
+	default:
+		break;
+	}
+	if (Sites != nullptr)
+	{
+		Sites->Site(TEXT("kv.getstr"), TEXT("FUN_10248cd0"), 0x10248cd0u, TEXT("branch"),
+			FString::Printf(TEXT("key=%s type=%s formatted=%s"), *Shown(KeyString), FileTypeCode(Found->Type),
+				bFormatted ? *Shown(Formatted) : TEXT("none")));
+	}
+	if (bFormatted)
+	{
+		// 6. `FUN_102490e0(this, key, buf)`: the ORIGINAL `this` and `key` (the same search finds the
+		//    same node, in `this`'s list or its chain); its text becomes `buf`, its type 0.
+		SetString(Node, Key, Formatted, Sites);
+	}
+	// 7. `return node->+0x04`, re-read after the writeback.
+	const FString& Result = Found->StringValue;
+	if (Sites != nullptr)
+	{
+		Sites->Site(TEXT("kv.getstr"), TEXT("FUN_10248cd0"), 0x10248cd0u, TEXT("return"),
+			FString::Printf(TEXT("key=%s result=%s default=0"), *Shown(KeyString), *Shown(Result)));
+	}
+	return Result;
+}
+
+int32 GetInt(FKvNode& Node, const TCHAR* Key, int32 Default, IElysiumRetailSiteSink* Sites)
+{
+	// `0x10248bb0`. 1. `if (key) node = FindRec(this, key, 0)`.
+	FKvNode* Found = &Node;
+	if (Key != nullptr)
+	{
+		Found = FindKey(Node, Key, EKvCreate::No, nullptr, Sites);
+	}
+	const FString KeyString = KeyText(Key);
+	auto Return = [&KeyString, Default, Sites](const TCHAR* Type, int32 Result) -> int32
+	{
+		if (Sites != nullptr)
+		{
+			Sites->Site(TEXT("kv.getint"), TEXT("FUN_10248bb0"), 0x10248bb0u, TEXT("return"),
+				FString::Printf(TEXT("key=%s type=%s default=%d result=%d"), *Shown(KeyString), Type, Default, Result));
+		}
+		return Result;
+	};
+	// 2. `node == NULL` -> `default`.
+	if (Found == nullptr)
+	{
+		return Return(TEXT("none"), Default);
+	}
+	switch (Found->Type)
+	{
+	case EKvType::String:
+		// 3. Type 0: `atoi(+0x04)` (`_atol`, wrapping).
+		return Return(FileTypeCode(Found->Type), RetailAtol(Found->StringValue));
+	case EKvType::Float:
+		// 4. Type 2: `__ftol(float +0x08)`, the low 32 bits.
+		return Return(FileTypeCode(Found->Type), RetailFtol(static_cast<double>(Found->FloatValue)));
+	case EKvType::Int:
+		// 5. Otherwise (1, 3, others): `+0x08` as int.
+		return Return(FileTypeCode(Found->Type), Found->IntValue);
+	default:
+		// A block: retail's `+0x0C` is heap garbage here (UNRECOVERED), its `+0x04` NULL. The port's
+		// block reads as type 0 with `""`, `atoi("") = 0`.
+		return Return(FileTypeCode(Found->Type), 0);
+	}
 }
 
 } // namespace ElysiumKeyValues

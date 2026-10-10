@@ -70,9 +70,11 @@ struct FElysiumSoundScheme
 
 	bool bParsed = false;
 
-	// Parse a scheme .txt (Source KeyValues) from disk under out/sound/. Returns false (Out left
-	// bParsed=false) if the file is missing or has no SoundScheme block. Applies the retail defaults.
-	static bool ParseFile(const FString& AbsPath, FElysiumSoundScheme& Out);
+	// `FUN_1022a930` (`CSoundScheme::Precache 0x1022a4b0`): load the scheme file named as the entity
+	// names it (`sound/Schemes/X.txt`) through the KeyValues file loader `0x102480f0` (cache 1, pathID
+	// 0) and read the first root's blocks with the retail defaults. Returns false (Out left
+	// bParsed=false) when the file cannot be opened or its first root has no children.
+	static bool ParseFile(const FString& SchemeRel, FElysiumSoundScheme& Out);
 };
 
 // Owns the live scheme playback for one map: the active scheme's ambient bed + music-stem trio + the
