@@ -3442,3 +3442,65 @@ prerequisite in r022a; this checkpoint does not claim a new pre-clear ordering d
 Act-copy/swap/sweep `0x102c9da0` / `0x102ca460` / `0x102ca630`
 and predictable-list remover `0x10099b00` were re-read but not implemented into an incomplete
 removal chain. Removal and `l0_entity_remove_cleanup` remain open. No no-op physics hook was added.
+
+
+## Separate transform cache: physical consumer planning fault [decompiled/asm, L0-r022a 2026-10-10]
+
+The attempted bounded split of local/absolute words and stored raw frame was deferred and all
+runtime, test and arena edits restored to HEAD. Neither `0x100b2150` nor `0x100b1ac0` is closed.
+Their math has no partition call, but replacing the old folded words exposes another existing
+same-layer dependency: the host had moved physical bodies from the local setter itself.
+
+Fresh `0x100b2be0 SetOrigin` reads confirm its entire changed arm: invalidate through
+`0x100b5340`, mark the partition tree through `0x100b52a0`, write local origin, set network byte.
+It never moves a physics body. Calling an absolute getter there would clear 0x800 and change
+retail's stale-cache/network-write boundary. The old port's `SetRuntimeOrigin/Angles` callback
+teleports player pawns and NPC motors and moves other components; these bodies carry collision,
+so preserving that callback as a nominal visual-only swap is not established.
+
+Physical publication has its own recovered L0 chain, independently of the partition callback:
+
+- `UpdatePhysicsShadowToCurrentPosition` `0x100a69e0` (slot 232) reads movetype and refuses 7 or
+  a null `m_pPhysicsObject` (+0x36c). Otherwise it calls absolute angles (slot 219), absolute
+  origin (slot 217), then physics-object slot 46 (`+0xb8`) with origin, angles, false and supplied
+  interval. Asm `0x100a6a64..0x100a6a86` fixes the decompiler's omitted arguments.
+- `PhysicsRelinkChildren` `0x100342c0` serial-resolves child/peer handles. A solid child
+  (solid type nonzero and no flag 4), or a trigger child (flag 8), gets `PhysicsTouchTriggers`
+  first; a child whose movetype is not 7 then gets slot 232 with frame time. Recurse through
+  its children before advancing to its peer. `FinishPushers` `0x10036b10` and `FinishPush`
+  `0x10036d40` also touch each pushed entity before slot 232(0); FinishPush then performs impact
+  and optional rotational completion. Their vectors are visited last to first.
+- `PhysicsParent` `0x10039ac0` runs its think/move-time/velocity movement arms, then, on its
+  nonzero-interval physics-object path, reads absolute angles/origin and makes the same `+0xb8`
+  update. `PhysicsSimulate` `0x10040390` dispatches movetypes (1 -> PhysicsParent, 4 -> PhysicsStep,
+  8 -> PhysicsPusher, among others), then `PhysicsSimulateChildren` `0x1003ffa0` recursively
+  simulates serial-resolved child/peer rows. These are L0 consumers, not L2/L3/L4 hooks.
+- `PhysicsStepRunTimestep` `0x1003b190` consumes pose through slot 217 around its collision
+  bounds/trace pass and later calls `PhysicsTouchTriggers` `0x100a53d0`; that body hands +0x2e0
+  to engine slot 122 (`+0x1e8`) when non-null. It is not a setter-side body teleport.
+
+The port's slot 232 still only tallies; the physics object producer, timed shadow service,
+simulation dispatch and child relink are unfinished. Ownership is L0
+`L0.physics.physics-shadow-relations` / simulation work. The prior paragraph's dirty-partition
+query-time chain remains a separate prerequisite, not proof of physical publication.
+The smallest next frontier is to recover the actual physics-object/shadow producer and its
+pose-consuming service/call timing together with the required simulation/relink subset, then
+separate the transform words. Do not repeat r022a against the same folded host callback. A
+frame-end refresh/drain or eager local-setter getter has not been accepted as a modernization.
+Start with the producer paths `0x100a6490` / `0x100a68f0` and the actual object/shadow
+construction, lifetime and physics-object slot 46 service. That service implementation and the
+smallest complete simulation/relink subset remain unrecovered. This is a recovery frontier,
+not a ready coding packet. The separate bounds service `VPhysicsCollision007` geometry remains
+outside the current corpus; neither service may be replaced by an assumed UE AABB/teleport.
+
+Attempt evidence: build `20261010T221454.534588Z` passed; touched `Elysium.Substrate`
+`20261010T221709.252815Z` failed (57 logged errors), including ScriptedSequence after observation
+was changed to the real absolute getter. Earlier touched run failed with 60 errors. Bounded arena
+`20261010T221125.341713Z` passed cache/parenting/particle/save-blocks/transition, which did not
+cover this physical consumer. The attempted cache witness used a real hierarchy and local
+setters/getters: pitch 89.95/yaw 40/roll 60 preserves raw m21 about 0.0007557; a leaf local Y=1000
+observes absolute Z about 0.7557 inches. Euler reconstruction mathematically gives zero, but an
+actual mutation run was not completed and no mutation gate is claimed. The latched network byte
+cannot prove a subsequent no-write. Attempted sources, tests, record and logs are preserved at
+`E:/elysium-work/codex/l0-r022a-deferred-20261010/` with a binary patch and SHA-256 manifest.
+No implementation or record remains active; no full r022, abs-setter or save closure is claimed.

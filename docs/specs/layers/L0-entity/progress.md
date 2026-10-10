@@ -16,18 +16,56 @@ evidence, not new validation or acceptance of the layer closing gate.
 - Start: `47b6f780`, clean `main`; r001-r021, r029, r030 landed (23/88).
 - r022 deferred before runtime edits: its absolute-origin partition walk needs the unfinished
   bounds/physics/partition lifecycle. Docs-only recovery checkpoint; no code gate or new record.
-- Approved dependency repair: r022a cached frame/accessor -> complete bounds/physics/partition
-  prerequisite -> r022b absolute setters/full parented record. Original r022 remains open.
+- Initial dependency repair attempted r022a cached frame/accessor before bounds/physics/partition.
+  The integration gate below disproved that split: recover the actual L0 physical publication
+  producer first, implement it with the cache it consumes, then bounds/partition and r022b.
+  Original r022 remains open.
 - r024a gated: independent named-think registration/lookup and context storage, fresh Sol High
   worker reusing the confirmed walk. Only 0x100ac250 / 0x100ac360 close. Original r024 stays open:
   scheduler and stamp producers, plus Spawn/removal's physics/partition inputs, remain deferred.
-- Next ready packet: r022a stored frame/local state and parent accessor, bounded by
-  `l0_parent_frame_cache`; then recover/implement the actual bounds/physics/partition producers.
+- r022a deferred after attempted integration: separate cache words exposed missing L0 physical
+  publication; the candidate and record are saved externally and all runtime edits reverted.
+  Neither transform row closed. Recover the actual physics-object/shadow producer and its
+  pose-consuming service/simulation/relink timing before retrying the stored frame packet.
+  Query-time bounds/partition remains a separate prerequisite; no eager getter or UE teleport
+  surrogate was accepted. See the r022a recovery checkpoint below.
 - Deferred recovery checkpoint: `a3aac976` (docs only, no runtime gate); clean checkout at dispatch.
 - r024a implementation: `741fe3c3`, gated on main, no push. This coordinator session ends after
   the hash checkpoint; the persistent L0 Goal continues with a fresh Sol Medium coordinator.
 - Layer closure remains open: 65 unlanded runs, rebakes, default/arm and full arena gate,
   intermittent records in three boot orders, audit/hooks and state-bearing replacement checks.
+
+### r022a recovery checkpoint and rollback gates (2026-10-10)
+
+One fresh Sol High worker attempted the cache packet. Its build passed, but the touched
+Substrate run failed with 57 logged errors, including real getter-observed scripted movement;
+five bounded records passed without exposing the physical publication gap. The coordinator
+rejected the runtime packet. All Source/test/arena edits were reverted exactly; the proposed
+cache record is absent. Candidate source, record, binary patch and failed-gate logs survive in
+`E:/elysium-work/codex/l0-r022a-deferred-20261010/`; all 23 saved-file SHA-256 values were
+independently verified. No actual mutation run was completed, so no mutation gate is claimed.
+
+Restored-source coordinator build: `E:/elysium-work/logs/20261010T222018.836763Z-build.json`
+(succeeded, exit 0). Default report:
+`E:/elysium-work/reports/tests/20261010T222256.999406Z-elysium-session-elysium-substrate/index.json`
+(169/169, failed 0, notRun 0). Bounded aggregate arena report:
+`E:/elysium-work/reports/arena/20261010T222326.335188Z/index.json` (16/16 pass, failed 0):
+`l0_entity_parenting`, `l0_particle_attachment`, `l0_angle_motion`, `l0_datamap_keyvalues`,
+`l0_eflags_word`, `l0_entity_constructor_defaults`, `l0_named_think_context_storage`,
+`l0_save_restore_blocks`, `l0_transition_state`, `control_sequence`, `corpse_fades`,
+`restore_place_invalid_marker`, and the four fixture/retail-site/field/call selftests.
+The two failure selftests report their intentional first-unmet condition and pass by inversion.
+Engine plugin startup errors remain in the arena log; both hosts exited 0 and scenario results
+were read. These gates validate the restored baseline, not the rejected candidate.
+
+Recovery and frontier are recorded in `entity_io.md` and `runs.md`: actual L0 object/shadow
+producer `0x100a6490` / `0x100a68f0`, slot 46 service/construction/lifetime, pose consumer
+`0x100a69e0`, and required relink/simulation/touch timing including `0x100342c0`, `0x1003b190`
+and `0x100a53d0`. Exact service and smallest complete subset remain unrecovered. Audit corrects
+the two local setters' folded-word/body-publication claims and STEP/touch overclaims; neither
+frame row closes. Original runs remain 23/88, r022/r024 open; no modernization accepted.
+No arm/full-arena or layer closure gate ran. Fresh coordinator starts with targeted producer
+recovery, not another frame-only implementation against the same host coupling.
 
 ### r024a gate evidence (2026-10-10)
 
@@ -104,8 +142,9 @@ gated in the clone, cherry-picked onto `main`, and re-gated here (`decisions.md`
   0x100dbc60 -> query callback 0x100dbd70 -> update 0x100ddd90 -> surrounding bounds
   0x100ddae0 / 0x100dd780. Ordinary bounds need 0x100dcd90 and the stored absolute frame;
   physics-selected bounds need the live object at +0x36c, slots 4/49 and collision-service slot 18.
-  Those r044/r045 prerequisites were incorrectly scheduled after r022. Root approved splitting
-  cached frame/accessor first, complete producer lifecycle second, absolute setters last.
+  Those r044/r045 prerequisites were incorrectly scheduled after r022. The initial frame-first
+  split was subsequently rejected by the r022a integration gate; physical publication must be
+  recovered before a coherent cache packet can be dispatched. Absolute setters remain last.
   Query callbacks run before partition query slots 12-15, including zero-mask queries; a frame-end
   drain would diverge. Detail and remaining recovery: `docs/vtmb/entity_io.md` current r022 section.
   Overlap-query equivalence is unproved. This checkpoint downgrades overstated audit closure;
@@ -117,8 +156,8 @@ gated in the clone, cherry-picked onto `main`, and re-gated here (`decisions.md`
   VPhysicsDestroyObject, currently empty, plus move-tree unlink pose handling. Approved r024a
   closes only independent named-think registration/lookup and context storage; Spawn/removal
   remain deferred, and the original 23/88 completed-run count does not increase for that subset.
-  After r024a's gate/checkpoint, the next packet is r022a cached frames/accessor, then the actual
-  physics/partition prerequisites, rather than numerically advancing through dependent consumers.
+  After r024a, the attempted r022a packet exposed missing physical publication. The next packet
+  recovers actual physics-object/shadow production and consumer timing before retrying cache work.
 
 - r024 scheduling: retail `PhysicsRunSpecificThink` 0x10033de0 requires deadline >0, clears it to0,
   dispatches at max(deadline,curtime) under a temporary clock and stamps last-think after return.

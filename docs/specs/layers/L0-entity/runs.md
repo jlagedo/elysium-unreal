@@ -7,9 +7,10 @@ consecutive slices of one subsystem up to ~1.5 KB of retail code or 8 functions.
 ## Active dependency correction (2026-10-10)
 
 Original r022 remains open. Its absolute setters need a partition lifecycle that was omitted from
-the coarse r022 -> r044/r045 ordering. Approved sequence:
+the coarse r022 -> r044/r045 ordering. Initial sequence (superseded by the physical prerequisite
+found below; these are scope boundaries, not authorization to dispatch frame-only code):
 
-1. r022a: stored frame and separate local state, parent accessor `0x100b2150`, dirty rebuild
+1. r022a (deferred after attempted integration): stored frame and separate local state, parent accessor `0x100b2150`, dirty rebuild
    `0x100b1ac0`. Bounded record `l0_parent_frame_cache` plus existing parenting regressions;
    this does not close r022's absolute setters or full `l0_parented_transforms` record.
 2. Prerequisite packet: ordinary bounds `0x100dcd90` / `0x100dc850` / `0x100dc680`, surrounding
@@ -30,8 +31,25 @@ the coarse r022 -> r044/r045 ordering. Approved sequence:
    `l0_parented_transforms` record including matrix preservation and SetAbsAngles' absent partition
    walk. Re-read all original r022 rows and gate before marking that run complete.
 
-These are planned packets and records, not implementation or validation. Current next ready
-coding packet is r022a. r024a has gated only GetIndexForContext `0x100ac250` and
+The r022a attempt exposed a second prerequisite: the existing host teleports collision bodies
+from folded local setters. Separate words remove that feedback, while retail instead publishes
+physics through absolute getters at its actual consumers. The candidate was preserved externally
+and reverted after a real movement regression; its five passing bounded records did not cover
+that consumer. No new transform rows or original run closed.
+
+Next is targeted recovery of the live physics-object/shadow producer (`0x100a6490` /
+`0x100a68f0`, actual object/shadow construction and physics-object slot 46), slot 232
+`0x100a69e0`, and its necessary simulation/relink call timing (`0x100342c0`,
+`0x1003b190`, `0x100a53d0`, `0x10039ac0`, `0x10040390` / `0x1003ffa0`). These are L0
+physical consumers; partition queries are a separate dependency. The service implementation,
+construction/lifetime and smallest complete subset remain unrecovered; do not dispatch a
+coding packet that substitutes a UE teleport or frame-end refresh. Once that producer boundary
+is recovered, implement it with the frame cache it consumes, then the query-time bounds/partition
+lifecycle and absolute setters. Resume the saved candidate only after correcting this frontier.
+
+Candidate/evidence: `E:/elysium-work/codex/l0-r022a-deferred-20261010/README.md`;
+durable recovery: `docs/vtmb/entity_io.md`, "Separate transform cache: physical consumer planning fault".
+r024a has gated only GetIndexForContext `0x100ac250` and
 RegisterThinkContext `0x100ac360`, with `l0_named_think_context_storage` and constructor/harness
 regressions; exact report paths are in progress.md. Full r024 remains open: GetLastThink needs
 the live scheduler/stamp producers, base Spawn needs partition handle/margin production, and
