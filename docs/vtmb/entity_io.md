@@ -249,6 +249,31 @@ a shipped map can tell the difference on:
 | a key with trailing ASCII spaces | **0** |
 | a written 7th field (dropped) | 24,114 rows carry one; retail reads none of them |
 
+**Re-measured on the raw lumps, L0-r018** (all 108 maps, patch-first, with a re-implementation of
+`0x10136ce0` / `0x10136ee0`'s rules: signed compares, so a byte `>= 0x80` would be whitespace outside
+quotes and end a bare token). The rules the exporter's lexer states differently from retail never
+fire on shipped data: no lump carries a byte `>= 0x80`; no token reaches 256 characters; no key is
+spelled `RenderColor` / `RenderAmt` / `RenderColor32` (the case-sensitive `key[0] == 'r'` guard of
+`0x1009e430` decides nothing on a shipped map); no key carries `#`. A plain (non-output) key repeated
+in one block occurs twice, both with identical values (`la_hospital_1`'s `npc_VPedestrian`
+`allow_alert_lookaround "0"` twice; a `la_hub_1` `logic_relay` with an empty key twice), so the
+exporter's last-wins fold of `keys` matches retail's in-order application there; the repeats that
+matter are output keys, which travel as ordered `outputs[]` rows.
+
+**The one malformed block: `sp_giovanni_2b`'s `events_world`** (`targetname world`). A stray bare
+token `mop` follows the `OnUseBegin` value (`"OnUseBegin" ",,,0,-1,OnUseBegin(),"mop`), so every
+later token pairs one place off: `mop` / `OnUseEnd`, `,,,0,-1,OnUseEnd(),` / `OnCombatMusicStart`,
+`Relay_Boched_Level,Trigger,,0,-1,,` / `OnCombatMusicEnd`, `Precog_Cams,ScriptHide,,0,-1,,` /
+`OnCombatMusicStart`, and finally the key `Precog_Cams,ScriptUnhide,,0,-1,,` meets `}` as its value:
+`GetNextKey` warns "closing brace without data" (`0x105795d8`) and answers 0 **before** `ParseMapData
+0x1009e280` dispatches it, ending the block (the cursor is already past the `}`, so the next entity
+loads normally). The four shifted pairs reach `KeyValue 0x1009e430`, match no arm and no datamap row,
+and write nothing. In retail this world therefore never registers its `OnUseEnd()` Python call nor
+the three authored `Relay_Boched_Level` / `Precog_Cams` actions on `OnCombatMusicStart` / `End`.
+The exporter's `outputs[]` agrees (it ends at `OnUseBegin`); its `keys` used to carry the brace pair
+as `"Precog_Cams,ScriptUnhide,,0,-1,,": "None"` (a null value stringified), now dropped by
+`UE_map_sidecars.dispatched_pairs`.
+
 Two corrections to this document's own text, from the same measurement:
 
 * **`lilly_trunk.OnOpen` is not in the corpus.** It is real in the SHIPPED `sm_hub_1.bsp` (line

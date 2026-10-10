@@ -232,6 +232,27 @@ def test_entity_pair_blocks_keeps_the_embedded_quote_the_legacy_regex_tripped_on
     ]]
 
 
+def test_a_pair_whose_value_is_the_closing_brace_is_never_dispatched():
+    # sp_giovanni_2b's events_world: a stray bare `mop` after the OnUseBegin value shifts every
+    # later pair, and the last key, `Precog_Cams,ScriptUnhide,,0,-1,,`, meets `}` as its value.
+    # `CEntityMapData::GetNextKey 0x10136ee0` warns "closing brace without data" (0x105795d8) and
+    # answers 0 before ParseMapData 0x1009e280 calls KeyValue, so that pair is never applied. The
+    # unit keeps it with a null value; it must not reach `keys` as the text "None".
+    row = _row(("classname", "events_world"),
+               ("mop", "OnUseEnd"),
+               ("Precog_Cams,ScriptHide,,0,-1,,", "OnCombatMusicStart"),
+               ("Precog_Cams,ScriptUnhide,,0,-1,,", None))
+
+    _outputs, keys = collect_entity_fields(row)
+    assert keys == {"classname": "events_world", "mop": "OnUseEnd",
+                    "Precog_Cams,ScriptHide,,0,-1,,": "OnCombatMusicStart"}
+    assert entity_pair_blocks([row]) == [[
+        ("classname", "events_world"),
+        ("mop", "OnUseEnd"),
+        ("Precog_Cams,ScriptHide,,0,-1,,", "OnCombatMusicStart"),
+    ]]
+
+
 def test_first_of_class_is_the_first_block_in_lump_order():
     # `FindEntityByName(NULL, ...)`'s rule, and the reason la_malkavian_4's two sky_cameras
     # resolve the way they do. The classname is matched as a classname, not as a string appearing

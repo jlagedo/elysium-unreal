@@ -349,9 +349,28 @@ def collect_entity_fields(
 ) -> tuple[list[dict[str, Any]], dict[str, str]]:
     """One entity's output rows and its `keys` catch-all -- the read `write_entities` performs."""
 
-    pairs = [(str(kv.get("sourceKey", kv.get("key", ""))), str(kv.get("value", "")))
-             for kv in entity_row.get("keyValues") or []]
+    pairs = dispatched_pairs(entity_row)
     return entity_outputs(entity_row), entity_keys(pairs, output_pair_indexes(entity_row))
+
+
+def dispatched_pairs(entity_row: dict[str, Any]) -> list[tuple[str, str]]:
+    """One block's `(authored key, value)` pairs that `CEntityMapData::GetNextKey 0x10136ee0` hands
+    `ParseMapData 0x1009e280`'s slot-110 `KeyValue` call.
+
+    A key whose value token is `}` (`"CEntityMapData::GetNextKey: closing brace without data
+"`,
+    0x105795d8) or the end of the lump (`"... EOF without closing brace
+"`, 0x1057961c) makes
+    GetNextKey answer 0 BEFORE the dispatch, so that last pair is never applied. The unit keeps it
+    with `value` null (the lexer's `Pair(key, None)`); it is dropped here instead of reaching `keys`
+    as the text `"None"` (the shipped case: `sp_giovanni_2b`'s `events_world`, whose stray bare
+    `mop` token shifts every later pair until `"Precog_Cams,ScriptUnhide,,0,-1,,"` meets the brace).
+    Such a pair only ever ends its block, so every earlier `keyValues[]` position -- the ones
+    `output_pair_indexes` names -- is unchanged.
+    """
+
+    return [(str(kv.get("sourceKey", kv.get("key", ""))), str(kv["value"]))
+            for kv in entity_row.get("keyValues") or [] if kv.get("value") is not None]
 
 
 #: The value tests the lump's own readers apply, at the same width they always had. Before 0018
@@ -380,13 +399,7 @@ def entity_pair_blocks(
     corpus carry an embedded quote and all nine are read correctly here.
     """
 
-    return [
-        [
-            (str(kv.get("sourceKey", kv.get("key", ""))), str(kv.get("value", "")))
-            for kv in (row.get("keyValues") or [])
-        ]
-        for row in entity_rows
-    ]
+    return [dispatched_pairs(row) for row in entity_rows]
 
 
 def folded_keys(pairs: Sequence[tuple[str, str]]) -> dict[str, str]:
