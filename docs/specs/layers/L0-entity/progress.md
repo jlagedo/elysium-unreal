@@ -32,6 +32,10 @@ evidence, not new validation or acceptance of the layer closing gate.
 - Deferred recovery checkpoint: `a3aac976` (docs only, no runtime gate); clean checkout at dispatch.
 - r024a implementation: `741fe3c3`, gated on main, no push. This coordinator session ends after
   the hash checkpoint; the persistent L0 Goal continues with a fresh Sol Medium coordinator.
+- r022a recovery: `632ed8f`, docs only after exact-owned runtime rollback, build/default/16-record
+  baseline gates below. Candidate and failed-gate evidence remain in external scratch. This
+  coordinator ends after the hash checkpoint with clean main and no push; the persistent Goal
+  continues with a fresh coordinator on actual physics producer/service recovery.
 - Layer closure remains open: 65 unlanded runs, rebakes, default/arm and full arena gate,
   intermittent records in three boot orders, audit/hooks and state-bearing replacement checks.
 
