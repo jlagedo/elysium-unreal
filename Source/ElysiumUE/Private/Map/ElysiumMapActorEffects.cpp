@@ -17,6 +17,7 @@
 
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
+#include "TimerManager.h"
 
 namespace
 {
@@ -274,4 +275,57 @@ void AElysiumMapActor::KillParticleRoot(const FElysiumEffectHandle& Handle)
 			Actor->Destroy();
 		}
 	}
+}
+
+namespace
+{
+	// The roots that stand for the two Source temp entities (`IElysiumEmbodiment::EmitTempEntitySparks`
+	// / `EmitTempEntitySmoke`, `walks/L0-r014.md` 0x101cfb30 arm 7). The client draws (`CTESparks`,
+	// `CTESmoke`) are UNRECOVERED; the stand-ins are Troika's own corpus bursts -- the metal-impact
+	// burst `particleimpacttable.txt` names for every metal surface, and the muzzle-smoke puff the
+	// weapon records name (`docs/vtmb/effects.md` §3.4, §4.8). A named visual modernization.
+	const TCHAR* TempEntitySparksRoot = TEXT("Impact_Metal_Emitter");
+	const TCHAR* TempEntitySmokeRoot = TEXT("MuzzleSmoke_Emitter");
+	// Both are sub-second bursts; `SpawnParticleRoot` has no reaper (the water splash carries the
+	// same fixed life, `ElysiumMapActor.cpp`), so the root is killed by a timer after this.
+	constexpr float TempEntityLifetimeSeconds = 3.f;
+}
+
+FElysiumEffectHandle AElysiumMapActor::SpawnTempEntityRoot(const TCHAR* Root, const FVector& OriginCm)
+{
+	const FElysiumEffectHandle Handle = SpawnParticleRoot(
+		Root, nullptr, 0, NAME_None, 0, OriginCm, FRotator::ZeroRotator);
+	if (Handle.IsValid())
+	{
+		if (UWorld* World = GetWorld())
+		{
+			FTimerHandle Timer;
+			World->GetTimerManager().SetTimer(Timer,
+				FTimerDelegate::CreateWeakLambda(this, [this, Handle] { KillParticleRoot(Handle); }),
+				TempEntityLifetimeSeconds, false);
+		}
+	}
+	return Handle;
+}
+
+FElysiumEffectHandle AElysiumMapActor::EmitTempEntitySparks(const FVector& OriginCm, int32 Magnitude,
+	int32 TrailLength, const FVector& Direction)
+{
+	// `CEffectsServer::vfunc3` 0x100f6050 -> `CTempEntsSystem::vfunc35` 0x10059860 -> `FUN_10067b70`
+	// (magnitude, trail length and the direction into the `CTESparks` statics) -> `CTESparks::Create`
+	// 0x100677e0. The dispatcher's only call is `(pos, 1, 1, NULL)`; the three values have no reader
+	// this side of the UNRECOVERED client draw, so the burst is stood as authored.
+	(void)Magnitude; (void)TrailLength; (void)Direction;
+	return SpawnTempEntityRoot(TempEntitySparksRoot, OriginCm);
+}
+
+FElysiumEffectHandle AElysiumMapActor::EmitTempEntitySmoke(const FVector& OriginCm, int32 ModelIndex,
+	float Scale, int32 Framerate)
+{
+	// `CEffectsServer::vfunc2` 0x100f5e80 -> `CTempEntsSystem::vfunc34` 0x100597d0 -> `FUN_100675b0`
+	// -> `CTESmoke::Create` 0x10067200, with `scale` already x0.1 and the framerate `_ftol`ed by the
+	// caller. The model index (`DAT_1088ae52`, no writer) names a Source sprite the port has no
+	// counterpart of; scale and framerate have no reader this side of the UNRECOVERED client draw.
+	(void)ModelIndex; (void)Scale; (void)Framerate;
+	return SpawnTempEntityRoot(TempEntitySmokeRoot, OriginCm);
 }

@@ -11,8 +11,8 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
-| … cited by the oracle | 2841 |
-| … not cited by the oracle | 2346 |
+| … cited by the oracle | 2842 |
+| … not cited by the oracle | 2345 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |

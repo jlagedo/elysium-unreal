@@ -294,14 +294,15 @@ void FElysiumNpcBase::SpawnBlood(const FVector& PositionUnits, int32 BloodColor,
 	// `thunk_FUN_102699e0` -> `FUN_102699e0` 0x102699e0 -- `SpawnBlood(ptr->endpos, BloodColor(),
 	// damage)`: the `__ftol` of the damage, the attack-direction global, then the dispatcher
 	// `FUN_101cfb30` 0x101cfb30 behind the admission gate `FUN_101cf9b0` 0x101cf9b0
-	// (`Substrate/ElysiumBloodEffects.h`, `walks/L0-r013.md`). Recorded as well, for the arm tests.
+	// (`Substrate/ElysiumBloodEffects.h`, `walks/L0-r013.md`, `walks/L0-r014.md`); the world carries the
+	// recipients and the embodiment the mechanical arm's temp entities draw through. Recorded as well.
 	FSpawnBloodCall Call;
 	Call.PositionUnits = PositionUnits;
 	Call.BloodColor = BloodColor;
 	Call.Damage = Damage;
 	SpawnBloodCalls.Add(Call);
 	FElysiumEntityRetailSites Sites(World, *this);
-	ElysiumBlood::SpawnBlood(PositionUnits, static_cast<uint32>(BloodColor), Damage, &Sites);
+	ElysiumBlood::SpawnBlood(PositionUnits, static_cast<uint32>(BloodColor), Damage, World, &Sites);
 }
 
 void FElysiumNpcBase::AddMultiDamage(const FElysiumTakeDamageInfo& SubInfo)

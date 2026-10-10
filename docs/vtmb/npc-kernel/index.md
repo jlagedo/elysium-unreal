@@ -542,6 +542,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x101cf390` | FUN_101cf390 | docs/vtmb/combat-and-damage.md § Corpse construction and the solid-body policy, docs/vtmb/npc-ai/lifecycle.md § V4c C2 recovery and serial integration (2026-10-04), docs/vtmb/npc-ai/lifecycle.md § `CNPC_Bullseye::Spawn` `0x103567e0`, docs/vtmb/npc-ai/lifecycle.md § `CNPC_VPedestrian::CreateCorpse` `0x103a38c0` |
 | `0x101cf5c0` | FUN_101cf5c0 | docs/vtmb/entity_io.md § `SetParent` / `ClearParent` and the move hierarchy (`CBaseEntity`) [decompiled, L0-r010], docs/vtmb/npc-ai/schedule-kernel.md § `CAI_Motor::MoveGroundStep` `0x102e1760` |
 | `0x101cf600` | FUN_101cf600 | docs/vtmb/npc-ai/lifecycle.md § `CNPC_VPedestrian::OnRestore` `0x103a25a0`, docs/vtmb/npc-ai/programs.md § The boss transformation programs — task `0x14e` `TASK_VVAMPIREBOSS_SET_AS_MONSTER` (2026-09-20) |
+| `0x101cf640` | FUN_101cf640 | docs/vtmb/effects.md § 4.6 Blood, feeding, vomit |
 | `0x101cfef0` | FUN_101cfef0 | docs/vtmb/combat-and-damage.md § Reverse-engineered mechanics (RE40), docs/vtmb/npc-ai/shape.md § Story 29c-1, family EntityChain — the unnamed bodies of the chain below the NPC |
 | `0x101d03e0` | FUN_101d03e0 | docs/vtmb/entity_io.md § The keyvalue dispatch |
 | `0x101d0630` | FUN_101d0630 | docs/vtmb/entity_io.md § The keyvalue dispatch |
@@ -1001,7 +1002,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10291230` | CalcNextAIThink | docs/vtmb/npc-ai/lifecycle.md § The think cadence, decoded (2026-09-08), docs/vtmb/npc-ai/senses.md § Sense and investigate leftovers, closed (2026-09-08), docs/vtmb/npc-ai/senses.md § The sense pass for a hated player, walked (2026-09-08) |
 | `0x10291610` | CAI_BaseNPCTroika::SetPlayerLOS | docs/vtmb/facial_animation.md § 2026-09-07 — three further eye-gaze facts recovered, docs/vtmb/npc-ai/conditions-and-states.md § The port's NPC-core guesses, settled (2026-09-21), docs/vtmb/npc-ai/lifecycle.md § The think cadence, decoded (2026-09-08), docs/vtmb/npc-ai/rdata-cells.md § `.rdata` cells the NPC oracle had left unread, +5 more |
 | `0x10292500` | CAI_BaseNPCTroika::NPCThinkDebugPre | docs/vtmb/npc-ai/schedule-kernel.md § `0x10292de0` `CAI_BaseNPCTroika::NPCThink()` (2552 bytes, slot 431), docs/vtmb/npc-ai/shape.md § `CAI_BaseNPCTroika::NPCThinkDebugPre` — `0x10292500` |
-| `0x10292de0` | CAI_BaseNPCTroika::NPCThink | docs/vtmb/animation_and_movers.md § Sequence events and native dispatch [data-verified, VtMB decompiled], docs/vtmb/animation_events.md § Overlay layers dispatch their own timelines; autolayers never do, docs/vtmb/animation_events.md § The server dispatcher — and its 0.1 s look-ahead, docs/vtmb/audio_pipeline.md § Initialization: `vfunc110`, `Spawn`, `Precache`, the dpv pass [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r005.md`], +70 more |
+| `0x10292de0` | CAI_BaseNPCTroika::NPCThink | docs/vtmb/animation_and_movers.md § Sequence events and native dispatch [data-verified, VtMB decompiled], docs/vtmb/animation_events.md § Overlay layers dispatch their own timelines; autolayers never do, docs/vtmb/animation_events.md § The server dispatcher — and its 0.1 s look-ahead, docs/vtmb/audio_pipeline.md § Initialization: `vfunc110`, `Spawn`, `Precache`, the dpv pass [VtMB, recovered 2026-10-10, `docs/specs/layers/L0-entity/walks/L0-r005.md`], +71 more |
 | `0x10293a80` | SetClosestPlayer | docs/vtmb/npc-ai/conditions-and-states.md § The disturbed latch — `0x1037bb20`, `0x1037b6e0` (2026-09-13), docs/vtmb/npc-ai/lifecycle.md § The think cadence, decoded (2026-09-08), docs/vtmb/npc-ai/lifecycle.md § `CAI_BaseNPCTroika::StartNPC` `0x1029a8b0`, docs/vtmb/npc-ai/population.md § The law transaction's guesses, settled (2026-09-21), +2 more |
 | `0x10293d90` | FUN_10293d90 | docs/vtmb/npc-ai/population.md § The law transaction's guesses, settled (2026-09-21) |
 | `0x10293df0` | FUN_10293df0 | docs/vtmb/npc-ai/population.md § The law transaction's guesses, settled (2026-09-21) |
@@ -2868,7 +2869,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10002cd4` | docs/vtmb/entity_io.md:701 |
 | `0x10003a71` | docs/vtmb/audio_pipeline.md:331, docs/vtmb/audio_pipeline.md:372 |
 | `0x10004656` | docs/vtmb/navigation-jump-links.md:2453 |
-| `0x1000572c` | docs/vtmb/effects.md:801, docs/vtmb/npc-ai/lifecycle.md:2140 |
+| `0x1000572c` | docs/vtmb/effects.md:813, docs/vtmb/npc-ai/lifecycle.md:2140 |
 | `0x10006429` | docs/vtmb/python_bridge.md:491 |
 | `0x1000696a` | docs/vtmb/entity_io.md:1857, docs/vtmb/npc-ai/lifecycle.md:1246, docs/vtmb/npc-ai/lifecycle.md:2138 |
 | `0x10008bde` | docs/vtmb/entity_io.md:523 |
@@ -2879,7 +2880,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x1000a443` | docs/vtmb/python_bridge.md:188 |
 | `0x1000c496` | docs/vtmb/activity_enum.md:43, docs/vtmb/animation_and_movers.md:855 |
 | `0x1000c554` | docs/vtmb/navigation-jump-links.md:2453 |
-| `0x1000c888` | docs/vtmb/effects.md:802 |
+| `0x1000c888` | docs/vtmb/effects.md:814 |
 | `0x1000d6c0` | docs/vtmb/entity_io.md:2475 |
 | `0x10010dd4` | docs/vtmb/npc-ai/lifecycle.md:2150 |
 | `0x10010f0f` | docs/vtmb/entity_io.md:2732, docs/vtmb/entity_io.md:2754, docs/vtmb/npc-ai/lifecycle.md:42 |
@@ -3039,7 +3040,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x103cb746` | docs/vtmb/npc-ai/schedule-kernel.md:5132 |
 | `0x103cb754` | docs/vtmb/navigation-jump-links.md:915, docs/vtmb/npc-ai/lifecycle.md:223, docs/vtmb/npc-ai/schedule-kernel.md:5129 |
 | `0x10445000` | docs/vtmb/animation_rig_resolution.md:771, docs/vtmb/npc-ai/lifecycle.md:1713, docs/vtmb/npc-ai/shape.md:3710, +1 more |
-| `0x104454c0` | docs/vtmb/animation_and_movers.md:659, docs/vtmb/animation_events.md:242, docs/vtmb/feeding.md:212, +3 more |
+| `0x104454c0` | docs/vtmb/animation_and_movers.md:659, docs/vtmb/animation_events.md:242, docs/vtmb/effects.md:680, +4 more |
 | `0x104454c4` | docs/vtmb/animation_events.md:222, docs/vtmb/animation_events.md:242, docs/vtmb/audio_pipeline.md:152, +13 more |
 | `0x104454d0` | docs/vtmb/audio_pipeline.md:362, docs/vtmb/camera-view-modes.md:667, docs/vtmb/entity_io.md:2354, +5 more |
 | `0x10445e08` | docs/vtmb/entity_io.md:2549 |
@@ -3049,7 +3050,7 @@ Every closure function a `docs/vtmb` file mentions — by its start address or b
 | `0x10449154` | docs/vtmb/npc-ai/rdata-cells.md:16 |
 | `0x10449198` | docs/vtmb/audio_pipeline.md:528, docs/vtmb/audio_pipeline.md:620, docs/vtmb/footsteps.md:364, +6 more |
 | `0x104491a8` | docs/vtmb/navigation-jump-links.md:322, docs/vtmb/navigation-jump-links.md:1841, docs/vtmb/npc-ai/rdata-cells.md:62, +2 more |
-| `0x104491b4` | docs/vtmb/animation_and_movers.md:2201, docs/vtmb/animation_events.md:46, docs/vtmb/audio_pipeline.md:373, +5 more |
+| `0x104491b4` | docs/vtmb/animation_and_movers.md:2201, docs/vtmb/animation_events.md:46, docs/vtmb/audio_pipeline.md:373, +6 more |
 | `0x10449258` | docs/vtmb/camera-view-modes.md:701, docs/vtmb/entity_io.md:465 |
 | `0x10449260` | docs/vtmb/animation_events.md:212, docs/vtmb/animation_events.md:221, docs/vtmb/footsteps.md:362, +4 more |
 | `0x10449270` | docs/vtmb/entity_io.md:463, docs/vtmb/footsteps.md:364, docs/vtmb/footsteps.md:1000, +8 more |

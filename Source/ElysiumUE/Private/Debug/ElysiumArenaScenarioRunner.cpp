@@ -2177,7 +2177,7 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			const uint32 BloodColor = static_cast<uint32>(static_cast<int32>(Action.Args[3].Value.Number));
 			const float BloodDamage = static_cast<float>(Action.Args[4].Value.Number);
 			FElysiumNamedRetailSites BloodSites(World, Action.Target);
-			ElysiumBlood::SpawnBlood(BloodPos, BloodColor, BloodDamage, &BloodSites);
+			ElysiumBlood::SpawnBlood(BloodPos, BloodColor, BloodDamage, &World, &BloodSites);
 			FEvent& Done = Events.AddDefaulted_GetRef();
 			StampEvent(Done, World.NowSeconds());
 			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();

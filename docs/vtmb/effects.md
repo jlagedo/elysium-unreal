@@ -658,7 +658,7 @@ Sprays, drips, trails, explosions, splash decals. Feeding uses
 authored set (blood strike / shot / boil / shield). Impact on flesh is
 `Impact_Flesh_Emitter` and friends. Several collide-blocks lay a blood decal.
 
-**The `SpawnBlood` chain [decompiled, L0-r013]** (`walks/L0-r013.md`; port
+**The `SpawnBlood` chain [decompiled, L0-r013, confirmed L0-r014]** (`walks/L0-r013.md`, `walks/L0-r014.md`; port
 `Source/ElysiumUE/Private/Substrate/ElysiumBloodEffects.cpp`, record `Arena/scenarios/world/l0_blood_effects.json`).
 Every `TraceAttack` (`CBaseEntity` `0x100a7de0`, `CBasePlayer` `0x10162c30` / `0x10162fa0`, `CAI_BaseNPC`
 `0x10266780`) calls **`FUN_102699e0`**`(pos, color, damage)`: `amount = __ftol(damage)` (truncation), `dir =
@@ -673,18 +673,30 @@ Every `TraceAttack` (`CBaseEntity` `0x100a7de0`, `CBasePlayer` `0x10162c30` / `0
 4. `DAT_1070ba34 == 1 && color == 0xF7` -> `color = 0` -- the flag has **no writer** in the corpus, so never;
 5. `g_pGameRules->vslot21()` (IsMultiplayer; `CHalfLife2` `FUN_101abcc0` returns 0) -> `amount *= 5`, dead in
    single player; 6. `amount > 255` -> 255;
-7. `color == 0x14` (mechanical): `IEffects`-shaped `vslot3(pos, 1, 1, NULL)` (Sparks); `RandomFloat(0, 2) < 1`
-   returns; else `RandomInt(10, 15)` -> `FUN_101cf640(pos, n, 10.0f)` -> `vslot2(pos, (int16)DAT_1088ae52, n, 10.0f)`
-   (Smoke; the model index has no writer, UNRECOVERED);
+7. `color == 0x14` (mechanical) [L0-r014]: `PTR_DAT_10566258->vslot3(pos, 1, 1, NULL)` -- `PTR_DAT_10566258` is the
+   static `CEffectsServer` `DAT_106eb584` (vtable `0x10455e18`, ctor `FUN_100f5b20`), slot 3 `0x100f6050` = Sparks: a
+   `CPVSFilter(pos)`, the suppress-host test (`+0xc`/`+0x10` written by the ctor alone, so dead), then `CTempEntsSystem`
+   (`PTR_DAT_10540528` -> `DAT_106be9e4`) slot 35 `0x10059860` -> `FUN_10067b70` (NULL dir -> `vec3_origin`) ->
+   `CTESparks::Create 0x100677e0`, a REAL networked temp entity; `RandomFloat(0, 2) < 1.0f` (`0x104454c0`) returns
+   (about half); else `RandomInt(10, 15)` (vstdlib, INCLUSIVE) -> `FUN_101cf640(pos, n, 10.0f)` `0x101cf640` ->
+   slot 2 `0x100f5e80` = Smoke`(pos, (int16)DAT_1088ae52, n, 10.0f)`: filter, then slot 34 `0x100597d0` with
+   `scale * 0.1f` (`0x104491b4`) and `_ftol(framerate)` -> `FUN_100675b0` -> `CTESmoke::Create 0x10067200`. The
+   model index `DAT_1088ae52` has 12 readers and no writer (0 in the image; runtime value UNRECOVERED);
 8. the triple: `0xC3` -> `(128, 128, 0)`; else rules slot 21 again: 0 -> `(64, 0, 0)`, non-zero -> `(255, 32, 32)` (dead);
-9. `CPVSFilter(pos)`; 10. `nAmount = clamp(amount / 10, 3, 16)` (signed, truncating; a negative gives 3);
+9. `CPVSFilter(pos)` (`FUN_1019ce00` ctor, `FUN_1019d210`: with one client slot `FUN_1019cff0` adds every seated
+   player, so the PVS of `pos` is never consulted in the shipped game); 10. `nAmount = clamp(amount / 10, 3, 16)`
+   (signed, truncating; a negative gives 3);
 11. `CTempEntsSystem` **slot 14** `0x10058ba0` `(filter, 0.0, pos, dir, r, g, b, 255, nAmount)` -> after the
     recipient check `thunk_FUN_1005df40` -> **`FUN_1005df40`, a bare `ret`: the spray emits nothing** (slot 13
     `0x10058b00` is the `CTEBloodStream` body, which this call does not reach).
 
 `CBaseEntity::BloodColor` `0x10026d90` answers -1; every Troika NPC `Spawn` writes `m_bloodColor (+0x1570) = 0xF7`,
 so the only live arm on the witness maps is the human colour under `violence_hblood` -- and it draws nothing in
-retail. The Sparks/Smoke client effects of the mechanical arm have no Unreal visual yet (client look unrecovered).
+retail. The mechanical arm's Sparks / Smoke are real temp entities; their client draws (`CTESparks` / `CTESmoke`,
+client.dll) are UNRECOVERED, and the port stands Troika's own corpus bursts for them (`Impact_Metal_Emitter`,
+`MuzzleSmoke_Emitter`) through `IElysiumEmbodiment::EmitTempEntitySparks` / `EmitTempEntitySmoke` -- a named visual
+modernization [L0-r014]. The gate `FUN_101cf9b0` answers in AL only; its two sibling callers are `FUN_101cfa40`
+(dead: no thunk, no caller) and `FUN_101cfe10` (five callers, the decal-shaped helper `FUN_101cfea0`, not walked).
 
 ### 4.7 Muzzle flash, tracers, shells
 

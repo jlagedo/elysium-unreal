@@ -490,6 +490,12 @@ public:
 		const FVector& OriginCm, const FRotator& Angles) override;
 	virtual void StopParticleRoot(const FElysiumEffectHandle& Handle) override;
 	virtual void KillParticleRoot(const FElysiumEffectHandle& Handle) override;
+	// `CEffectsServer` slots 3 / 2 (`0x100f6050` Sparks, `0x100f5e80` Smoke; `walks/L0-r014.md`): one
+	// transient root each through `SpawnParticleRoot`, killed after a fixed life by a world timer.
+	virtual FElysiumEffectHandle EmitTempEntitySparks(const FVector& OriginCm, int32 Magnitude,
+		int32 TrailLength, const FVector& Direction) override;
+	virtual FElysiumEffectHandle EmitTempEntitySmoke(const FVector& OriginCm, int32 ModelIndex,
+		float Scale, int32 Framerate) override;
 	virtual bool GetPhonemeFilter(USkeletalMeshComponent* Body, float& OutMin,
 		float& OutMax) const override;
 	virtual bool SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget) override;
@@ -1010,6 +1016,8 @@ private:
 	// kills it — so the burst's own lifetime is carried here.
 	TArray<TPair<FElysiumEffectHandle, float>> PendingWaterSplashes;
 	void ReapWaterSplashes(float DeltaSeconds);
+	// One temp-entity burst root (`EmitTempEntitySparks` / `EmitTempEntitySmoke`), killed by timer.
+	FElysiumEffectHandle SpawnTempEntityRoot(const TCHAR* Root, const FVector& OriginCm);
 
 	// The player's water state across frames: the level the last pass settled (which is what the
 	// transition is measured against), the pass's own clock, and the two splash timers D2 keeps per

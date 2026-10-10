@@ -1341,6 +1341,21 @@ public:
 	virtual void StopParticleRoot(const FElysiumEffectHandle& Handle) {}   // TurnOff: let finish
 	virtual void KillParticleRoot(const FElysiumEffectHandle& Handle) {}   // remove now
 
+	// The two server-side temp entities `CEffectsServer` (the static `DAT_106eb584`, vtable `0x10455e18`,
+	// ctor `FUN_100f5b20`) sends to a `CPVSFilter(origin)`'s recipients (`walks/L0-r014.md`): slot 3
+	// `0x100f6050` Sparks(origin, magnitude, trailLength, dir) -> `CTempEntsSystem` slot 35 `0x10059860`
+	// -> `FUN_10067b70` -> `CTESparks::Create 0x100677e0`; slot 2 `0x100f5e80` Smoke(origin, modelIndex,
+	// scale, framerate) -> slot 34 `0x100597d0` -> `FUN_100675b0` -> `CTESmoke::Create 0x10067200`, the
+	// TE carrying `scale * 0.1f` and `_ftol(framerate)`. The client-side draw (`CTESparks` / `CTESmoke`
+	// in client.dll) is UNRECOVERED; the realisation is the port's own (a named visual modernization:
+	// Troika's corpus burst emitters stood for the Source sparks and smoke sprites). `Direction` is
+	// Source's `dir` (zero for a NULL dir); `OriginCm` is Unreal cm. An invalid handle is headless,
+	// or a root the effects lane has not generated -- an effect nobody sees is never a failure.
+	virtual FElysiumEffectHandle EmitTempEntitySparks(const FVector& OriginCm, int32 Magnitude,
+		int32 TrailLength, const FVector& Direction) { return FElysiumEffectHandle(); }
+	virtual FElysiumEffectHandle EmitTempEntitySmoke(const FVector& OriginCm, int32 ModelIndex,
+		float Scale, int32 Framerate) { return FElysiumEffectHandle(); }
+
 	// 12.5 — this body's own phoneme filter (`studiohdr` +232/+236), the bounds a `.lip` phoneme's
 	// span is clamped to for the viseme envelope's blend width. A read rather than a write, and the
 	// only one on this interface: the pair is a property of the model, so the substrate's lipsync
