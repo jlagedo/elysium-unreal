@@ -60,6 +60,36 @@ namespace
 	// bails — catches a zero-delay output ring feeding itself (retail data has cycles).
 	constexpr int32 GElysiumMaxDrainPerFrame = 10000;
 
+	// `variant_t::Convert(fieldtype_t)` `0x100d05d0`, as `CBaseEntity::AcceptInput` `0x100abc90` runs
+	// it on a datamap input row with a declared type (L0-r012). True: the variant now has the row's
+	// type (or Convert reported success without changing it); false: the input is refused. Decoded:
+	//   - a VOID target always succeeds (the untyped rows never reach here);
+	//   - a STRING target: VOID -> a NULL string (here the empty one), STRING as is, EHANDLE -> success
+	//     with the variant UNCHANGED (type stays 12), FLOAT / INTEGER / BOOLEAN / VECTOR / COLOR32 -> failure.
+	// Other target types are not declared by any row the port registers yet; they pass unchanged
+	// until a story decodes their arms.
+	bool ElysiumVariantConvert(FElysiumVariant& Variant, EElysiumVariantType Target)
+	{
+		if (Variant.Type == Target || Target == EElysiumVariantType::Void)
+		{
+			return true;
+		}
+		if (Target == EElysiumVariantType::String)
+		{
+			switch (Variant.Type)
+			{
+			case EElysiumVariantType::Void:
+				Variant = FElysiumVariant::String(FString());
+				return true;
+			case EElysiumVariantType::Handle:
+				return true;
+			default:
+				return false;
+			}
+		}
+		return true;
+	}
+
 	const TCHAR* const GCallerTarget = TEXT("!caller");
 	const TCHAR* const GActivatorTarget = TEXT("!activator");
 
@@ -2580,6 +2610,22 @@ void FElysiumEntityWorld::DeliverInputTo(
 	Args.Activator = Event.Activator;
 	Args.Caller = Event.Caller;
 	Args.Input = Event.Input;
+	// `CBaseEntity::AcceptInput` `0x100abc90`: a row with a declared parameter type runs only when
+	// `variant.type == row.type` or `variant_t::Convert(row.type)` `0x100d05d0` succeeds; otherwise
+	// `DevWarning("!!! ERROR: bad input/output link ...")` and the function is never called (L0-r012).
+	if (const EElysiumVariantType* Declared = Target.Class ? Reg.FindInputType(*Target.Class, Event.Input) : nullptr)
+	{
+		if (!ElysiumVariantConvert(Args.Param, *Declared))
+		{
+			UE_LOG(LogElysiumWorld, Warning, TEXT("!!! ERROR: bad input/output link: %s.%s(%s) declares type %d, got %s"),
+				*Target.Def->Classname, *Event.Input.ToString(), *Target.TargetName, static_cast<int32>(*Declared),
+				*Event.Param.Describe());
+			EmitRetailSite(Target, TEXT("accept_input"), TEXT("CBaseEntity::AcceptInput"), 0x100abc90u, TEXT("refuse"),
+				FString::Printf(TEXT("input=%s param=%s declared=%d"), *Event.Input.ToString(), *Event.Param.Describe(),
+					static_cast<int32>(*Declared)));
+			return;
+		}
+	}
 	// The AI trace's `input` event, as the receiver accepts it and before its thunk runs (debug output
 	// only, behind its sink).
 	if (AiTraceSink)

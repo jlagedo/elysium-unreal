@@ -73,13 +73,55 @@ treatment; gameplay uses the discrete value from the same pattern and clock. Sty
 unanimated 12–31 are constant; 32+ are switchable (held at a fixed level until toggled by
 entity I/O — see `docs/vtmb/entity_io.md` for the light-toggling inputs).
 
-`CLight` (`client.dll`) implements the switched/pattern behaviour: `Spawn` `0x10130460`
+`CLight` (`vampire.dll`; the bare addresses `0x10130800` / `0x101308d0` also name unrelated
+`client.dll` functions) implements the switched/pattern behaviour: `Spawn` `0x10130460`
 (`START_OFF` -> pattern `"a"`, else the authored pattern, else `"m"`), `On` `0x10130610` (the
 pattern only if it has >= 2 letters and does not start with `'a'`, else `"m"`), `Off`
 `0x10130690` (`"a"`), `Toggle` `0x101306f0`, `SetPattern` `0x10130780`, `FadeToPattern`
 `0x10130800`, `FadeThink` `0x101308d0` (one letter per step towards the target's first letter,
 re-thinking every `fade_time` — `0.05` on every corpus light). `CDynamicLight::Spawn`
 `0x10056a90` turns the light on.
+
+Recovered in full by walk `docs/specs/layers/L0-entity/walks/L0-r012.md` (port:
+`Source/ElysiumUE/Private/Substrate/ElysiumLightClasses.cpp`, record `l0_switchable_light`):
+
+- **KeyValue** `CLight::vfunc110` `0x101303c0` (slot 110): `strcmpi(key, "pitch")` -> X of
+  `GetAngles` (slot 221, the local word) := `atof(value)`, written back through `SetAbsAngles`
+  (slot 218 `0x100b2510`), return 1; every other key is `CBaseEntity::KeyValue` `0x1009e430`.
+  Keys apply in lump order (`ParseMapData` `0x1009e280`), and every light that authors `pitch`
+  in `sp_tutorial_1` (211) and `sm_hub_1` (375) authors `angles` before it, so the pitch stands.
+- **Spawn** `0x10130460`: `m_iName == 0` -> `UTIL_RemoveImmediate` `0x1000e255` -> `0x101cd970`
+  (KILLME, `UpdateOnRemove`, the destructor; no publish, no floor); else `m_flFadeTime =
+  max(0.05, m_flFadeTime)` with the literal at `0x10453b74` (not a cvar); `m_iStyle < 32` ->
+  return; `START_OFF` -> `LightStyle("a")` and `m_iszPattern = "a"` (the authored pattern is
+  lost); else the pattern if non-NULL; else `"m"` and `m_iszPattern = "m"`. `pattern ""` is NULL
+  (`AllocPooledString` `0x1042bff0`). Only Spawn and **Use** test style 32: the inputs and the
+  helpers never do.
+- **Use** `0x10130580` (slot 173): style < 32 -> nothing; `ShouldToggle(useType, !START_OFF)`
+  (`0x100a98f0`: OFF on an off light and ON on an on light refuse; SET and TOGGLE always pass)
+  -> `Toggle`. The `Use` input is `CBaseEntity::InputUse` `0x100ac9f0` with USE_TOGGLE; the
+  `Toggle` / `TurnOn` / `TurnOff` inputs (`0x10130760` / `0x10130720` / `0x10130740`) call the
+  helpers directly and bypass Use.
+- **Kill** `0x101306d0` (slot 119): `TurnOff` (publishes `"a"`, sets START_OFF, hidden or not),
+  then `CBaseEntity::Kill` `0x100acf90` (the deferred `UTIL_Remove` `0x101cd940`). **ScriptHide**
+  `0x101305d0` is `TurnOff` then the base; **ScriptUnhide** `0x101305f0` is `TurnOn` then the base.
+- **SetPattern** `0x10130780` / **FadeToPattern** `0x10130800` are FIELD_STRING rows (datamap
+  `0x105754f8`, rows 6 / 7): `AcceptInput` `0x100abc90` refuses a float / int / bool / vector /
+  color parameter through `variant_t::Convert` `0x100d05d0` before either runs, converts a VOID
+  one to a NULL string, and passes an EHANDLE unconverted. SetPattern stores the string (NULL
+  allowed), publishes it (NULL as `""`), clears START_OFF. FadeToPattern stores the OLD pattern's
+  first byte as `m_iCurrentFade`, the target's first byte as `m_iTargetFade` (a NULL target gives
+  0: a parameterless fade from `"m"` steps 109 times down to `""`), the new pattern (NULL for a
+  non-string), installs `FadeThink` (`ThinkSet` `0x100ac4e0`), sets `m_flNextThink = curtime`,
+  clears START_OFF; it publishes nothing itself.
+- **FadeThink** `0x101308d0`: signed-byte compare, one step towards the target, the single
+  letter published and `m_flNextThink = m_flFadeTime + curtime` (curtime rebound by the
+  dispatcher `0x10033de0` to `max(scheduled, curtime)`); at `cur == tgt` the whole pattern and
+  `m_flNextThink = 0.0`, which the dispatcher treats as no think; `m_pfnThink` stays installed.
+- **LightStyle** is `VEngineServer014` slot 62 (`0x1070b22c` +0xf8): engine.dll `0x201096d0`
+  stores the pattern pointer in `lightstyles[style]` and sends message `0x0c` to every client.
+  Unrecovered: the client's handling of an empty pattern; which slot-173 callers other than
+  `InputUse` reach a light; the class name of the `+0x2d4` sub-object base Kill marks.
 
 ## The `$envmap` reflection term
 

@@ -2022,6 +2022,11 @@ const TArray<FString>& EntityCallAllowlist()
 		// `0x101b1a00`, `0x101b06a0`, `0x101b1dd0`, `0x101b40a0`, `0x101b4170`), with the callers' preset
 		// `CSoundParameters`. A `null` argument is `EmitAmbientSound`'s NULL name.
 		TEXT("SoundScript_GetParameters"),
+		// L0.effects_world.switchable-light: slot 173 `Use(activator, caller, useType, value)` on one
+		// live entity -- the call `CBaseEntity::InputUse` `0x100ac9f0` makes with `(3, 0)` for the `Use`
+		// input, and the one a player's +use (`CHL2_Player::vfunc436` `0x10350830`) makes with its own
+		// use type -- so a record drives `CLight::Use` `0x10130580` with each USE_TYPE.
+		TEXT("Use"),
 	};
 	return Allowed;
 }

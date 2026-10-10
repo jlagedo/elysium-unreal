@@ -39,6 +39,18 @@ namespace ElysiumEntityCaps
 	// that recorded it and no runtime path read).
 }
 
+// The `USE_TYPE` slot 173 `Use(activator, caller, useType, value)` switches on. Source's numbering,
+// read off the switches of `CBaseEntity::ShouldToggle` `0x100a98f0` and `CAmbientGeneric::Use`
+// `0x101ad470` (`CMP ECX, 3 / 1 / 0 / 2`). `CBaseEntity::InputUse` `0x100ac9f0` -- the base datamap row
+// `Use` -- calls the slot with `(activator, caller, 3, 0)`: a `Use` input is always USE_TOGGLE.
+namespace ElysiumUseType
+{
+	inline constexpr int32 Off = 0;
+	inline constexpr int32 On = 1;
+	inline constexpr int32 Set = 2;
+	inline constexpr int32 Toggle = 3;
+}
+
 // Why an owned entity left its owner's live set. `npc_maker` is the first user: a dead child
 // consumes its finite slot and fires OnNPCDied, while removing a still-live child refunds it.
 enum class EElysiumOwnedEntityTermination : uint8
@@ -310,7 +322,9 @@ public:
 	bool IsInert() const { return bDead || bHidden; }
 
 	// --- Base inputs (reach every class through the chain) ---
-	void Kill();          // terminal: mark dead + go inert (world reaps the slot)
+	// Slot 119, virtual as retail's (`vt+0x1dc`): `CLight::Kill` `0x101306d0` turns the light off before
+	// the base body runs, and `CBaseEntity::InputKill` `0x100acef0` dispatches through the slot.
+	virtual void Kill();  // terminal: mark dead + go inert (world reaps the slot)
 	// Slots 77 / 78, virtual as retail's (`vt+0x134` / `+0x138`): a species replaces them
 	// (`CNPC_VGhoulCroucher` `0x1037c1c0` / `0x1037c2f0`), and every dispatch reaches that body.
 	virtual void ScriptHide();    // whole-entity OFF (saves prior think; body collision gated)
@@ -426,6 +440,29 @@ public:
 	virtual void OnUseCursorEnter() {}                                  // look-cursor entered (OnIn)
 	virtual void OnUseCursorLeave() {}                                  // look-cursor left (OnOut)
 	virtual void Use(const FElysiumEntityHandle& Activator) {}          // +use / Press pressed it
+
+	// Slot 173 in retail's shape, `void Use(CBaseEntity* activator, CBaseEntity* caller, USE_TYPE,
+	// float value)` (base `CBaseEntity::Use` `0x100a4e70`): the body `CBaseEntity::InputUse` `0x100ac9f0`
+	// reaches with `(activator, caller, USE_TOGGLE, 0)` and the one a leaf whose retail `Use` switches
+	// on the type (`CLight::Use` `0x10130580`) overrides. A separate name rather than an overload of
+	// `Use`, for the reason `ThinkAt` gives: every leaf that overrides the one-argument `Use` would hide
+	// this one. The base forwards to that one-argument `Use`, which is the slot-173 body every other
+	// leaf ported without a use type.
+	virtual void UseByType(const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller,
+		int32 UseType, float Value)
+	{
+		Use(Activator);
+	}
+
+	// `CBaseEntity::ShouldToggle` `0x100a98f0` (thunk `0x100076a3`): 0 only for USE_OFF on an entity
+	// that is off, or USE_ON on one that is on; USE_SET and USE_TOGGLE always 1. (The retail body also
+	// writes a debug scope trace, which has no reader.)
+	static bool ShouldToggle(int32 UseType, bool bCurrentState)
+	{
+		if (UseType == ElysiumUseType::Off && !bCurrentState) { return false; }
+		if (UseType == ElysiumUseType::On && bCurrentState) { return false; }
+		return true;
+	}
 
 	// The reticle icon this entity shows while it is the +use look-cursor target. VtMB's
 	// GetUseIcon (FUN_100c8940) returns locked_icon when the locked byte +0x5c4 is set, else

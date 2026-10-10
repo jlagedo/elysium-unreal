@@ -114,7 +114,7 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 104 | `0x1027bb50` CAI_BaseNPC::Precache | `0x10298ad0` CAI_BaseNPCTroika::Precache | `0x1034aa40` CGenericNPC::Precache (CGenericNPC), `0x1034b160` CNPCMaker::Precache (CNPCMaker), `0x1034c180` CNPCMaker_Fleshpile::Precache (CNPCMaker_Fleshpile), `0x1034cde0` CNPCMaker_Zombie::Precache (CNPCMaker_Zombie), `0x10358ec0` CNPC_Crow::Precache (CNPC_Crow), `0x10359f70` CGeneric_NPC::Precache (CGeneric_NPC), +22 more | 88 | docs/vtmb/audio_pipeline.md:881, docs/vtmb/footsteps.md:902, docs/vtmb/npc-ai/lifecycle.md:646, +42 more |
 | 105 | `0x103409a0` CBaseCombatCharacter::SetModel | `0x10298ce0` CAI_BaseNPCTroika::SetModel | `0x1025e510` CAI_BaseHumanoid::SetModel (CAI_BaseHumanoid), `0x1037b1f0` CNPC_VGhoulCroucher::SetModel (CNPC_VGhoulCroucher), `0x103e0540` CNPC_VZombie::SetModel (CNPC_VZombie) | 145 | docs/vtmb/animation_and_movers.md:715, docs/vtmb/facial_animation.md:629, docs/vtmb/facial_animation.md:1203, +11 more |
 | 106 | `0x1027bb20` CAI_BaseNPC::PostConstructor | — | — | 2234 | docs/vtmb/npc-ai/lifecycle.md:1695, docs/vtmb/npc-ai/lifecycle.md:1886 |
-| 107 | `0x1009e280` CBaseEntity::ParseMapData | — | `0x1034b3c0` CNPCMaker::ParseMapData (CNPCMaker, CNPCMaker_Fleshpile, CNPCMaker_Zombie) | 6 | docs/vtmb/audio_pipeline.md:566, docs/vtmb/entity_io.md:129, docs/vtmb/npc-ai/lifecycle.md:856 |
+| 107 | `0x1009e280` CBaseEntity::ParseMapData | — | `0x1034b3c0` CNPCMaker::ParseMapData (CNPCMaker, CNPCMaker_Fleshpile, CNPCMaker_Zombie) | 6 | docs/vtmb/audio_pipeline.md:566, docs/vtmb/entity_io.md:129, docs/vtmb/lighting.md:91, +1 more |
 | 108 | `0x1004fbb0` CAI_BaseNPC::FUN_1004fbb0 | — | — | 0 | docs/vtmb/npc-ai/senses.md:1080, docs/vtmb/npc-ai/senses.md:1084 |
 | 109 | `0x1004fbf0` CAI_BaseNPC::FUN_1004fbf0 | — | — | 0 | docs/vtmb/npc-ai/senses.md:1080, docs/vtmb/npc-ai/senses.md:1085 |
 | 110 | `0x101c1480` CAI_BaseNPC::FUN_101c1480 | — | — | 10 | docs/vtmb/npc-ai/senses.md:1080, docs/vtmb/npc-ai/senses.md:1092 |
@@ -125,7 +125,7 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 115 | `0x10026bf0` CAISound::FUN_10026bf0 | — | — | 3 | docs/vtmb/entity_io.md:261 |
 | 116 | `0x10027490` CAISound::FUN_10027490 | — | — | 31 | — |
 | 117 | `0x100b4320` CAI_BaseNPC::FUN_100b4320 | — | `0x101a6d20` CCineAISchedule::FUN_101a6d20 (CCineAI, CCineAISchedule, CCineNPC), `0x101aa7d0` CPayphone::vfunc117 (CPayphone), `0x102d7290` CAI_TestHull::vfunc117 (CAI_TestHull), `0x1034d410` CScriptedTarget::vfunc117 (CScriptedTarget), `0x1035ad50` CGeneric_NPC_bathack::vfunc117 (CGeneric_NPC_bathack) | 21 | docs/vtmb/camera-view-modes.md:1740 |
-| 118 | `0x100abc90` CBaseEntity::AcceptInput | — | — | 14 | docs/vtmb/python_bridge.md:283 |
+| 118 | `0x100abc90` CBaseEntity::AcceptInput | — | — | 14 | docs/vtmb/lighting.md:109, docs/vtmb/python_bridge.md:283 |
 | 119 | `0x1033cb90` CBaseCombatCharacter::Kill | — | — | 62 | docs/vtmb/entity_io.md:490 |
 | 120 | `0x100ace00` CBaseEntity::GetInputDispatchEffectPosition | — | — | 53 | — |
 | 121 | `0x100acab0` CBaseEntity::ReadKeyField | — | — | 7 | docs/vtmb/npc-ai/programs.md:1469, docs/vtmb/python_bridge.md:282 |
@@ -225,7 +225,7 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 215 | `0x100b4c30` CAISound::FUN_100b4c30 | — | — | 18 | docs/vtmb/npc-ai/shape.md:4635, docs/vtmb/npc-ai/shape.md:4639 |
 | 216 | `0x100b2300` CBaseEntity::SetAbsOrigin | — | — | 81 | — |
 | 217 | `0x100b31b0` CBaseEntity::GetAbsOrigin | — | — | 1126 | docs/vtmb/entity_io.md:241, docs/vtmb/npc-ai/conditions-and-states.md:763 |
-| 218 | `0x100b2510` CBaseEntity::SetAbsAngles | — | — | 55 | — |
+| 218 | `0x100b2510` CBaseEntity::SetAbsAngles | — | — | 55 | docs/vtmb/lighting.md:90 |
 | 219 | `0x100b3280` CBaseEntity::GetAbsAngles | — | — | 228 | docs/vtmb/entity_io.md:241 |
 | 220 | `0x100b3070` CBaseEntity::GetOrigin | — | — | 634 | docs/vtmb/entity_io.md:241, docs/vtmb/npc-ai/conditions-and-states.md:764 |
 | 221 | `0x100b3110` CBaseEntity::GetAngles | — | — | 225 | docs/vtmb/entity_io.md:241, docs/vtmb/wielded_weapons.md:478 |

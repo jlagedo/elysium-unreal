@@ -88,6 +88,18 @@ FElysiumInputThunk FElysiumClassRegistry::FindInput(const FElysiumClassDesc& Des
 	return nullptr;
 }
 
+const EElysiumVariantType* FElysiumClassRegistry::FindInputType(const FElysiumClassDesc& Desc, FName Input) const
+{
+	for (const FElysiumClassDesc* D = &Desc; D != nullptr; D = D->BaseName.IsNone() ? nullptr : Find(D->BaseName))
+	{
+		if (D->Inputs.Contains(Input))
+		{
+			return D->InputTypes.Find(Input);   // the row that shadows decides; its own declaration or none
+		}
+	}
+	return nullptr;
+}
+
 const FElysiumFieldAccessor* FElysiumClassRegistry::FindField(const FElysiumClassDesc& Desc, FName Field) const
 {
 	for (const FElysiumClassDesc* D = &Desc; D != nullptr; D = D->BaseName.IsNone() ? nullptr : Find(D->BaseName))

@@ -541,9 +541,10 @@ log now reports `N animated, M switched` (styles >= 32) so a boot log witnesses 
 (vampire.dll `10130460` Spawn, `10130610` on, `10130690` off, `101306f0` toggle, `10130780`
 SetPattern, `10130800` FadeToPattern, `101308d0` FadeThink), read off the corpus:
 
-| Input | Writes (style >= 32 only; a style < 32 light takes no input, as in retail) |
+| Input | Writes. Retail tests style 32 in exactly two places, `Spawn` (`0x101304aa`) and `Use` (`0x10130583`); the inputs and the helpers publish whatever the style is (walk L0-r012) |
 |---|---|
-| Spawn | `START_OFF` (spawnflags 1) -> `"a"`, and the pattern becomes `"a"`; else the authored `pattern` if any, else `"m"` (and the pattern becomes `"m"`). An unnamed light is removed in retail; here it stays inert (nothing can reach it) |
+| Spawn | an unnamed light (`m_iName == 0`) is removed through `UTIL_RemoveImmediate` `0x1000e255` -> `0x101cd970` with no write (the port's stand-in is the base `Kill`); a named one floors `fade_time`, then: style < 32 -> nothing; `START_OFF` (spawnflags 1) -> `"a"`, and the pattern becomes `"a"`; else the authored `pattern` if any (`pattern ""` is NULL, so it counts as none); else `"m"` (and the pattern becomes `"m"`) |
+| `Use` (the input: `CBaseEntity::InputUse` `0x100ac9f0`, USE_TOGGLE) | style < 32 -> nothing; `ShouldToggle(useType, !START_OFF)` (`0x100a98f0`) then `Toggle`. The `Toggle` / `TurnOn` / `TurnOff` inputs bypass `Use` |
 | `TurnOn` | the pattern if it is at least two characters and does not start with `'a'`, else `"m"`; clears `START_OFF` |
 | `TurnOff` | `"a"`; sets `START_OFF` |
 | `Toggle` | `START_OFF` set -> `TurnOn`, else `TurnOff` |
@@ -552,8 +553,11 @@ SetPattern, `10130800` FadeToPattern, `101308d0` FadeThink), read off the corpus
 | `FadeThink` | steps `current` one letter towards `target`; if it arrives, writes the **whole** pattern and stops, else writes the single letter and re-thinks after `fade_time` seconds |
 | `ScriptHide` / `Kill` | `TurnOff` first, then the base input; `ScriptUnhide` is `TurnOn` then the base |
 
-`fade_time` is VtMB's own key (every corpus light authors `0.05`); retail floors it against a
-cvar the corpus does not name, so the floor here is `0.05` and never bites on shipped data. The
+`fade_time` is VtMB's own key (every corpus light authors `0.05`); retail floors it against the
+literal `0.05` at `0x10453b74` (`CLight::Spawn` `0x1013047e`; a `.rdata` constant, not a cvar),
+for every NAMED light, before the style test. `SetPattern` / `FadeToPattern` are FIELD_STRING rows:
+`AcceptInput` `0x100abc90` refuses a float / int / bool / vector parameter before either runs and
+hands a parameterless one over as a NULL string (`variant_t::Convert` `0x100d05d0`). The
 pattern and the on/off bit are saved in the leaf's block and re-published on load. Every write
 goes through `IElysiumEmbodiment::SetLightStylePattern` -- the map actor forwards to the rig; the
 headless default is a no-op and the recording double keeps a table the Substrate tests read.

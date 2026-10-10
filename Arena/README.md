@@ -187,6 +187,7 @@ ordinary record, a `script` failure on an `expect_fail` one. Traced as `script`:
 | `SoundScript_New` | a utility name (`sndscript`), the `who` of its events | none | the sound-script descriptor's constructor `FUN_101b30d0` `0x101b30d0` on a fresh record (`Audio/ElysiumSoundScript.h`), as `AddSoundsFromFile` `0x101b4240` builds one per sound entry (`sndscript.defaults` site) | `entity_call SoundScript_New done channel= channel_text= volume=<start>,<range> volume_text= pitch=, pitch_text= level=, level_text= owner_only= precache= flag48= waves= second=` |
 | `SoundScript_GetParameters` | as above | `[{"fixture": <sound_script id>}, "<sound name>"]` or `[{"fixture": <id>}, null]` (`EmitAmbientSound` `0x101b1a00`'s NULL name) | `CSoundEmitterSystemBase::GetParametersForSound` `FUN_101b33f0` `0x101b33f0` on the staged table, as its ten callers (the EmitSound / StopSound workers `0x101b0dc0`, `0x101b1040`, `0x101b1120`, `0x101b14d0`, `0x101b1880`, `0x101b1a00`, `0x101b06a0`, the wrapper `0x101b1dd0`, the lookups `0x101b40a0` / `0x101b4170`) make it, with their preset `CSoundParameters` (channel 0, volume 1.0, pitch 100/100/100, level 75, count 0, name ""): `FindSound` `0x101b2f60` (`sndscript.find`), the interval samples `0x1012f700` (`sndscript.interval`), the wave pick `0x101b3240` (`sndscript.pick`) and the resolver's own arms (`sndscript.resolve`); the draws through the session's `VEngineRandom001` (the `SoundScript` stream) | `entity_call SoundScript_GetParameters done result=<0|1> channel= volume=<%.3f> pitch= pitch_low= pitch_high= level= owner_only= count= wave=<name> draws=<generator calls>` |
 | `SoundScript_SetChannel` | as above | `["<channel text>"]` or `[null]` | `FUN_101b30d0` on a fresh record, then the `channel` key's setter `FUN_101b2490` `0x101b2490` (the key parser `FUN_101b3bb0`'s call at 0x101b3bfe), which runs the channel parser `FUN_101b24d0` `0x101b24d0` (`sndchan.parse` site) and keeps the text at `+0x69` | `entity_call SoundScript_SetChannel done channel= channel_text= ...` (the same words) |
+| `Use` | a live entity's targetname | `[<useType 0..3>, <value>?]` (0 OFF, 1 ON, 2 SET, 3 TOGGLE; `value` 0 when absent) | slot 173 `Use(activator, caller, useType, value)` on that entity (`FElysiumEntity::UseByType`), with invalid activator and caller handles: the call `CBaseEntity::InputUse` `0x100ac9f0` makes with `(3, 0)` for the `Use` input (which `fire` drives), and the one a player's +use or an ambient's PlaySound / StopSound make with their own type. `CLight::Use` `0x10130580` is the first leaf to switch on it | `entity_call Use done use_type=<n> value=<v>` |
 
 **`entity_field`** (a `probes` entry: `who`, `field`, optional `to`, `index`, `member`, one comparison) --
 reads a retail field by its **retail name** (`m_iName`, `m_iHealth`, the datamap name or the ledger's
@@ -311,7 +312,23 @@ m_iParentAttachment= m_iEFlags=`, `notify parent= fn=CAISound::FUN_10026bf0 va=0
 m_hAimEnt= m_pParent= m_nAttachPoint=`), `attach_index` (`FUN_100fafa0` `0x100fafa0`: `return mode=
 name= index= arm=<tree|lookup_attachment_hook|not_animating|null_parent|not_studio|no_bones|bone|
 bone_missing|mode_le_0>`, and `hook fn=CBaseAnimating::LookupAttachment va=0x10092d50` for modes 6 / 17
-on an animating parent). A pure function reports through `IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a
+on an animating parent); the switchable light (`walks/L0-r012.md`, `ElysiumLightClasses.cpp`):
+`light_keyvalue` (`CLight::vfunc110` `0x101303c0`, `return key=pitch value= angles=[p y r] result=1`,
+reported at Spawn's entry for the key pass), `light_spawn` (`CLight::Spawn` `0x10130460`: `branch
+arm=name_zero hook=0x1000e255 fn=UTIL_RemoveImmediate va=0x101cd970 style=`, `write field=m_flFadeTime
+value=`, `branch arm=style_lt_32 style=`, `write arm=<start_off|full> field=m_iszPattern value="…"`,
+`return arm=authored m_iszPattern="…"`), `light_publish` (every `LightStyle` call, tagged with the
+CALLER's `fn=` / `va=`: Spawn `0x101304c7` / `0x10130502` / `0x10130518`, TurnOn `FUN_10130610`
+`0x10130651`, TurnOff `FUN_10130690` `0x101306a7`, SetPattern `0x101307bd`, FadeThink `FUN_101308d0`
+`0x1013091b` arrival / `0x1013094b` step; `write style= pattern="…"`, the empty pattern as `""`),
+`light_use` (`CLight::Use` `0x10130580`, `branch use_type= state_on= should_toggle=`; none for a style
+below 32), `light_setpattern` (`CLight::InputSetPattern` `0x10130780`, `write m_iszPattern="…"
+m_spawnflags= param_type=`), `light_fade` (`CLight::InputFadeToPattern` `0x10130800`, `write cur= tgt=
+m_iszPattern="…" m_pfnThink=CLightFadeThink m_flNextThink= m_spawnflags=`), `light_fadethink`
+(`FUN_101308d0` `0x101308d0`, `step cur= tgt= arrived=<0|1> m_flNextThink=`), `light_kill` (`CLight::Kill`
+`0x101306d0`, `entry m_spawnflags= hidden=`); and `accept_input` gains `phase=refuse input= param=
+declared=` (`CBaseEntity::AcceptInput` `0x100abc90` refusing a parameter `variant_t::Convert`
+`0x100d05d0` cannot make the row's declared type, before the row's function runs). A pure function reports through `IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a
 utility with no entity names its target in the entity column (`FElysiumNamedRetailSites`).
 
 Rules: `entity_call` drives only what retail exposes to the world; `retail_site` events are emitted where
@@ -496,6 +513,7 @@ record — and a `reason`) and
 | `audio/l0_sound_script_defaults` | the sound-script descriptor's constructor `FUN_101b30d0` `0x101b30d0`: channel 0 / `CHAN_AUTO`, volume (1, 0) / `VOL_NORM`, pitch (100, 0) / `PITCH_NORM`, level (75, 0) / `SNDLVL_NORM`, `play_to_owner_only` 0, `precache` 1, `+0x48` 0, both vectors empty, and that the channel setter leaves the rest alone (L0.audio.sound-script-defaults) |
 | `world/l0_entity_parenting` | `CBaseEntity::SetParent` `0x100a0670` and its chain: the map parse's pre-Spawn parenting (`0x10136650`), the `SetParent` input (`0x100ad030` -> `0x100a04e0`), the unlink (`0x1012c840` / `0x1012c6c0` / `0x1012c7f0`), the prepend (`0x1012c7a0`), the retail matrix conversion of the world pose into a parent-local one (`0x101d1530`, `0x101d15f0`, `0x100a0a10`, `0x1024da80`, `0x1024cf80`, `0x100a0990`, `0x10137ed0`, slots 62 / 64 / 98 / 217-221), `ClearParent` (`0x100ad100`) with its detach bug under a rotated parent and with the dirty bit SetParent left, the bad-parent Msg (L0.effects_world.entity-parenting) |
 | `world/l0_particle_attachment` | `CEnvParticle::AttachToEntity` `0x100fb110` from `CEnvParticle::Spawn` `0x100fb3d0` (parent, type, name, `MOVETYPE_FOLLOW`, aim entity, zero local origin, index) and `FUN_100fafa0`'s arms (tree -1, the `LookupAttachment` L1 hook, the studio-bone scan, the zero fallbacks) over an NPC and a bodiless parent (L0.effects_world.particle-attachment) |
+| `world/l0_switchable_light` | `CLight`: the `pitch` key `0x101303c0` after the `angles` key (lump order), Spawn `0x10130460` (the unnamed removal through `0x1000e255`, the 0.05 floor on every named light, the style-32 gate, START_OFF overwriting the authored pattern with `"a"`, the authored / `""` / absent pattern arms), Use `0x10130580` with each USE_TYPE through `entity_call Use` and the `Use` input's USE_TOGGLE, the inputs that bypass Use, SetPattern `0x10130780` (a string, a NULL string, a refused float), FadeToPattern `0x10130800` and FadeThink `0x101308d0` (`m` -> `n` -> `o` -> `pq` on the 0.05 grid, the stop), ScriptHide and Kill `0x101306d0` turning the light off first, hidden or not (L0.effects_world.switchable-light) |
 | `_selftest/never_after_ignores` | a `never` opened `after` a label does not count a match before it |
 | `_selftest/never_within_holds`, `never_within_trips` | a `never` closed `within` seconds of its label ignores a match after the window and fails the run on one inside it |
 | `combat/cover_move_shoot` | the run-and-gun: a gunman running to cover fires from an overlay layer's own 3031 (`0x102e8560` -> `AddGesture 0x100991b0` -> `0x10098cd0` -> `Shot 0x102387b0`; spec 0002 V4o) |

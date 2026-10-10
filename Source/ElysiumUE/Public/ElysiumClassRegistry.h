@@ -102,11 +102,25 @@ struct FElysiumClassDesc
 
 	TMap<FName, FElysiumInputThunk> Inputs;
 	TMap<FName, FElysiumFieldAccessor> Fields;
+	// The datamap row's declared parameter type for the inputs that state one (`TypedInput`).
+	// `CBaseEntity::AcceptInput` `0x100abc90` runs a row's function only when the variant is of the
+	// row's type or `variant_t::Convert` (`0x100d05d0`) makes it so; otherwise it refuses the input. An
+	// input registered with no declared type is retail's FIELD_VOID row, which `Convert` always admits.
+	TMap<FName, EElysiumVariantType> InputTypes;
 
 	// --- Registration helpers (called inside a class's Build callback) ---
 	FElysiumClassDesc& Input(FName Name, FElysiumInputThunk Thunk)
 	{
 		Inputs.Add(Name, Thunk);
+		return *this;
+	}
+
+	// An input whose datamap row declares a parameter type (`CLight`'s `SetPattern` / `FadeToPattern`
+	// are FIELD_STRING, rows 6 / 7 of `0x105754f8`). The thunk sees the variant AFTER `Convert`.
+	FElysiumClassDesc& TypedInput(FName Name, EElysiumVariantType DeclaredType, FElysiumInputThunk Thunk)
+	{
+		Inputs.Add(Name, Thunk);
+		InputTypes.Add(Name, DeclaredType);
 		return *this;
 	}
 
@@ -200,6 +214,9 @@ public:
 
 	// Chain walk (derived shadows base): resolve an input/field by name up the base chain.
 	FElysiumInputThunk FindInput(const FElysiumClassDesc& Desc, FName Input) const;
+	// The declared parameter type of the row `FindInput` resolves to (the same descriptor's), or null
+	// for a row that declares none.
+	const EElysiumVariantType* FindInputType(const FElysiumClassDesc& Desc, FName Input) const;
 	const FElysiumFieldAccessor* FindField(const FElysiumClassDesc& Desc, FName Field) const;
 
 	// The chain-resolved `Save`-flagged field names for a class, **sorted**. Sorted rather than in

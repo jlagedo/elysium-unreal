@@ -11,8 +11,8 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
-| … cited by the oracle | 2821 |
-| … not cited by the oracle | 2366 |
+| … cited by the oracle | 2823 |
+| … not cited by the oracle | 2364 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |
@@ -502,7 +502,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x100aad70` CBaseEntity::SetMoveType | `0x10029700` CKeepUpright::Spawn, `0x100332c0` CBaseEntity::PhysicsCarried, `0x10039470` CBaseEntity::PhysicsFollow, `0x1004e260` CPhysBox::Spawn, +58 more |
 | `0x100ab250` FUN_100ab250 ‼ | `0x100d1650` FUN_100d1650, `0x10102030` CMessage::InputShowMessage, `0x1011c060` CServerGameClients::vfunc3, `0x1011c8c0` CServerGameClients::vfunc8, +13 more |
 | `0x100ab280` CBaseEntity::SetTransmit | `0x100bc130` CBeam::FUN_100bc130 |
-| `0x100ac4e0` CBaseEntity::ThinkSet | `0x100278e0` FUN_100278e0, `0x10027a70` FUN_10027a70 ‼, `0x1006bb30` CTestTraceline::Spawn, `0x1006e770` FUN_1006e770, +175 more |
 | `0x100ac610` CBaseEntity::SetNextThink | `0x100278e0` FUN_100278e0, `0x10027a70` FUN_10027a70 ‼, `0x10028b20` FUN_10028b20 ‼, `0x10028b80` CPhysMotor::InputTurnOff, +8 more |
 | `0x100ac720` CBaseEntity::GetLastThink | `0x1003aca0` CBaseEntity::PhysicsStep, `0x10081020` CSceneEntity::FUN_10081020, `0x10084c80` CInstancedSceneEntity::Remove ‼ |
 | `0x100ad320` CBaseEntity::GetVectors | `0x10029700` CKeepUpright::Spawn, `0x1009fb80` CBaseEntity::SendDebugPivotOverlay, `0x1018cf20` FUN_1018cf20, `0x101b06a0` FUN_101b06a0 |
@@ -518,7 +517,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x100b1960` CBaseEntity::GetSize | `0x100c8d60` CBaseButton::Spawn, `0x100ef260` CBaseDoor::vfunc103, `0x100f0a40` CBaseDoor::vfunc245, `0x1010e100` CBreakable::OnTakeDamage, +3 more |
 | `0x100b1d10` CBaseEntity::CalcAbsoluteVelocity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10035490` CBaseEntity::PhysicsAddHalfGravity, `0x10038180` CPhysicsPushedEntities::LinearlyMoveRootEntity, `0x10038cb0` CBaseEntity::PhysicsPusher, +38 more |
 | `0x100b2300` CBaseEntity::SetAbsOrigin | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10036270` CPhysicsPushedEntities::SpeculativelyCheckPush, `0x100397c0` CBaseEntity::PhysicsNoclip, `0x1003a610` CBaseEntity::PhysicsStepTroika, +5 more |
-| `0x100b2510` CBaseEntity::SetAbsAngles | `0x100568a0` CDynamicLight::vfunc110, `0x101303c0` CLight::vfunc110 |
 | `0x100b2770` CBaseEntity::SetAbsVelocity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x10035490` CBaseEntity::PhysicsAddHalfGravity, `0x1003a090` CBaseEntity::PhysicsCustom, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, +13 more |
 | `0x100b2e30` CBaseEntity::SetLocalVelocity | `0x1004e260` CPhysBox::Spawn, `0x1006d620` FUN_1006d620, `0x100adbd0` FUN_100adbd0, `0x100c0010` FUN_100c0010, +28 more |
 | `0x100b2f50` CBaseEntity::SetLocalAngularVelocity | `0x10033820` CPhysicsMovedEntities::RestoreEntities, `0x10036bd0` CPhysicsPushedEntities::FinishRotPushedEntity, `0x1006d620` FUN_1006d620, `0x100c0420` FUN_100c0420, +24 more |
