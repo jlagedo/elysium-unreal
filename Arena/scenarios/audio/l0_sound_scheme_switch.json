@@ -1,0 +1,445 @@
+{
+  "name": "l0_sound_scheme_switch",
+  "about": "SoundScheme activation and track switching, `walks/L0-r009.md`. Activate `CSoundScheme::vfunc113` 0x1022a300 registers the scheme's EHANDLE with the manager (FUN_102289e0, no dedupe) and, with `start_enabled`, runs FUN_1022b590 with the code literal 2.0; otherwise ThinkSet(0). FUN_1022b590 0x1022b590 floors the duration at 0.5 (0x104454d0; a 0 input fades for 0.5 s), returns at the per-entity playing flag +0x455, writes the scheme's handle at player+0x1e04 (FUN_10175360, the L3 hook), then FUN_10229270 0x10229270: prune invalid handles, FUN_1022b660 on every listed scheme, and FUN_10229430 on Ambient (+0x14), Combat (+0xc4), Music (+0x6c), Alert (+0x11c) in that order -- a zero volume or empty name retires the slot (FUN_10229550: target 0, rate authored/duration, append to the retiring list, clear), a same filename retargets in place (rate volume/duration, channel kept), a different filename retires the old record and takes the first free channel of 1..6 (FUN_102297a0; the retired record keeps its channel). Then m_pfnThink = 0x10003a71, +0x455 = 1, m_flNextThink = curtime + 0.1. With the shipped `sp_tutorial_city.txt` (Ambient 0.3, Music 0.2, Combat 0.4, no Alert) and `sp_tutorial_underground.txt` (Ambient 0.3, Music empty, same Combat): City's start configures Ambient ch1 rate 0.15, Combat ch2 rate 0.2, Music ch3 rate 0.1, Alert retire-sentinel on an empty slot; Underground's FadeIn(2) retires City's Ambient (rate 0.15, ch1) and takes ch4, retargets Combat in place (ch2 kept, nothing retired), retires City's Music (rate 0.1, ch3) and leaves the slot empty, two retiring records, no eviction; the retiring records leave the list when their ramped level reaches 0.01 (0x10228d00, about 1.9 s later); a repeated FadeIn returns at the guard with no manager call. Reported as `fail` when an arm, an order, a channel, a rate, a count or a flag differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 6.5,
+  "script": [
+    {
+      "t": 0.1,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_soundscheme",
+        "name": "City Soundscheme",
+        "at": "start",
+        "keys": {
+          "scheme_file": "sound/Schemes/SP_Tutorial_City.txt",
+          "start_enabled": "1"
+        }
+      }
+    },
+    {
+      "t": 0.2,
+      "do": "spawn",
+      "row": {
+        "classname": "ambient_soundscheme",
+        "name": "TutorialUnderground",
+        "at": "north",
+        "keys": {
+          "scheme_file": "sound/Schemes/SP_Tutorial_Underground.txt",
+          "start_enabled": "0"
+        }
+      }
+    },
+    {
+      "t": 3.5,
+      "do": "fire",
+      "target": "TutorialUnderground",
+      "input": "FadeIn",
+      "param": 2
+    },
+    {
+      "t": 4.0,
+      "do": "fire",
+      "target": "TutorialUnderground",
+      "input": "FadeIn",
+      "param": 2
+    },
+    {
+      "t": 5.0,
+      "do": "fire",
+      "target": "City Soundscheme",
+      "input": "FadeIn",
+      "param": 0
+    }
+  ],
+  "expect": [
+    {
+      "label": "city_registered",
+      "who": "City Soundscheme",
+      "kind": "retail_site",
+      "site": "scheme_activate",
+      "match": "fn=CSoundScheme::vfunc113 va=0x1022a300 phase=register count=1 m_bStartEnabled=1",
+      "by": 0.3
+    },
+    {
+      "who": "City Soundscheme",
+      "kind": "retail_site",
+      "site": "scheme_activate",
+      "match": "fn=CSoundScheme::vfunc113 va=0x1022a300 phase=start duration=2",
+      "by": 0.3
+    },
+    {
+      "who": "City Soundscheme",
+      "kind": "retail_site",
+      "site": "scheme_fadein",
+      "match": "fn=FUN_1022b590 va=0x1022b590 phase=entry duration=2 +0x455=0",
+      "by": 0.3
+    },
+    {
+      "who": "City Soundscheme",
+      "kind": "retail_site",
+      "site": "scheme_fadein",
+      "match": "fn=FUN_1022b590 va=0x1022b590 phase=player_write fn=FUN_10175360 va=0x10175360 field=+0x1e04 handle=#",
+      "by": 0.3
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "mgr_prune",
+      "match": "fn=FUN_10229270 va=0x10229270 phase=disable handle=#",
+      "by": 0.3
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_set",
+      "match": "fn=FUN_10229430 va=0x10229430 phase=replace slot=0x14 name=area/Downtown/Downtown_Main.wav volume=0.3 duration=2 rate=0.15 channel=1 flags=0x800",
+      "by": 0.3
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_set",
+      "match": "fn=FUN_10229430 va=0x10229430 phase=replace slot=0xc4 name=music/Creepy_Ambience_Combat.mp3 volume=0.4 duration=2 rate=0.2 channel=2 flags=0x800",
+      "by": 0.3
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_set",
+      "match": "fn=FUN_10229430 va=0x10229430 phase=replace slot=0x6c name=music/Downtown Hub (Unused Alternate).mp3 volume=0.2 duration=2 rate=0.1 channel=3 flags=0x800",
+      "by": 0.3
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_set",
+      "match": "fn=FUN_10229430 va=0x10229430 phase=retire_sentinel slot=0x11c name= volume=0 duration=2",
+      "by": 0.3
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_retire",
+      "match": "fn=FUN_10229550 va=0x10229550 phase=empty slot=0x11c retiring=0",
+      "by": 0.3
+    },
+    {
+      "label": "city_armed",
+      "who": "City Soundscheme",
+      "kind": "retail_site",
+      "site": "scheme_fadein",
+      "match": "fn=FUN_1022b590 va=0x1022b590 phase=arm m_pfnThink=0x10003a71 +0x455=1 m_flNextThink=",
+      "by": 0.3
+    },
+    {
+      "who": "TutorialUnderground",
+      "kind": "retail_site",
+      "site": "scheme_activate",
+      "match": "fn=CSoundScheme::vfunc113 va=0x1022a300 phase=register count=2 m_bStartEnabled=0",
+      "by": 0.4
+    },
+    {
+      "who": "TutorialUnderground",
+      "kind": "retail_site",
+      "site": "scheme_activate",
+      "match": "fn=CSoundScheme::vfunc113 va=0x1022a300 phase=clear_think m_pfnThink=0 +0x455=0",
+      "by": 0.4
+    },
+    {
+      "label": "underground_fadein",
+      "who": "TutorialUnderground",
+      "kind": "retail_site",
+      "site": "scheme_fadein",
+      "match": "fn=FUN_1022b590 va=0x1022b590 phase=entry duration=2 +0x455=0",
+      "by": 3.7
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "mgr_prune",
+      "match": "fn=FUN_10229270 va=0x10229270 phase=disable handle=#",
+      "by": 3.7
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "mgr_prune",
+      "match": "phase=disable handle=#",
+      "by": 3.7
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_retire",
+      "match": "fn=FUN_10229550 va=0x10229550 phase=append slot=0x14 name=area/Downtown/Downtown_Main.wav current=0.3 authored=0.3 rate=0.15 channel=1 retiring=1",
+      "by": 3.7
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "chan_alloc",
+      "match": "fn=FUN_102297a0 va=0x102297a0 phase=free channel=4 retiring=1",
+      "by": 3.7
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_set",
+      "match": "fn=FUN_10229430 va=0x10229430 phase=replace slot=0x14 name=Area\\Special\\Tutorial\\Basement_Ambience.wav volume=0.3 duration=2 rate=0.15 channel=4 flags=0x800",
+      "by": 3.7
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_set",
+      "match": "fn=FUN_10229430 va=0x10229430 phase=same slot=0xc4 name=music/Creepy_Ambience_Combat.mp3 volume=0.4 duration=2 rate=0.2 channel=2 current=0 flags=0x800",
+      "by": 3.7
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_set",
+      "match": "fn=FUN_10229430 va=0x10229430 phase=retire_sentinel slot=0x6c name= volume=0.5 duration=2",
+      "by": 3.7
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_retire",
+      "match": "fn=FUN_10229550 va=0x10229550 phase=append slot=0x6c name=music/Downtown Hub (Unused Alternate).mp3 current=0.2 authored=0.2 rate=0.1 channel=3 retiring=2",
+      "by": 3.7
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_set",
+      "match": "fn=FUN_10229430 va=0x10229430 phase=retire_sentinel slot=0x11c name= volume=0 duration=2",
+      "by": 3.7
+    },
+    {
+      "label": "underground_armed",
+      "who": "TutorialUnderground",
+      "kind": "retail_site",
+      "site": "scheme_fadein",
+      "match": "fn=FUN_1022b590 va=0x1022b590 phase=arm m_pfnThink=0x10003a71 +0x455=1 m_flNextThink=",
+      "by": 3.7
+    },
+    {
+      "label": "repeat_guard",
+      "who": "TutorialUnderground",
+      "kind": "retail_site",
+      "site": "scheme_fadein",
+      "match": "fn=FUN_1022b590 va=0x1022b590 phase=guard +0x455=1",
+      "by": 4.2
+    },
+    {
+      "label": "city_zero_clamped",
+      "who": "City Soundscheme",
+      "kind": "retail_site",
+      "site": "scheme_fadein",
+      "match": "fn=FUN_1022b590 va=0x1022b590 phase=entry duration=0.5 +0x455=0",
+      "by": 5.2
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_retire",
+      "match": "fn=FUN_10229550 va=0x10229550 phase=append slot=0x14 name=Area\\Special\\Tutorial\\Basement_Ambience.wav",
+      "by": 5.2
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "chan_alloc",
+      "match": "fn=FUN_102297a0 va=0x102297a0 phase=free channel=5 retiring=3",
+      "by": 5.2
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_set",
+      "match": "fn=FUN_10229430 va=0x10229430 phase=replace slot=0x14 name=area/Downtown/Downtown_Main.wav volume=0.3 duration=0.5 rate=0.6 channel=5 flags=0x800",
+      "by": 5.2
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_set",
+      "match": "fn=FUN_10229430 va=0x10229430 phase=same slot=0xc4 name=music/Creepy_Ambience_Combat.mp3 volume=0.4 duration=0.5 rate=0.8 channel=2 current=0 flags=0x800",
+      "by": 5.2
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_retire",
+      "match": "fn=FUN_10229550 va=0x10229550 phase=empty slot=0x6c retiring=3",
+      "by": 5.2
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "chan_alloc",
+      "match": "fn=FUN_102297a0 va=0x102297a0 phase=free channel=6 retiring=3",
+      "by": 5.2
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_set",
+      "match": "fn=FUN_10229430 va=0x10229430 phase=replace slot=0x6c name=music/Downtown Hub (Unused Alternate).mp3 volume=0.2 duration=0.5 rate=0.4 channel=6 flags=0x800",
+      "by": 5.2
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "mgr_frame",
+      "match": "fn=CSoundSchemeManager::FrameUpdatePostEntityThink va=0x10228d00 phase=remove name=music/Downtown Hub (Unused Alternate).mp3 channel=3",
+      "by": 5.7
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "mgr_frame",
+      "match": "fn=CSoundSchemeManager::FrameUpdatePostEntityThink va=0x10228d00 phase=remove name=area/Downtown/Downtown_Main.wav channel=1",
+      "by": 5.7
+    }
+  ],
+  "never": [
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "chan_alloc",
+      "match": "phase=evict"
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "mgr_prune",
+      "match": "phase=prune"
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_set",
+      "match": "phase=skip"
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_retire",
+      "match": "phase=append slot=0xc4"
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "mgr_prune",
+      "match": "",
+      "after": "repeat_guard",
+      "within": 0.5
+    },
+    {
+      "who": "CSoundSchemeManager",
+      "kind": "retail_site",
+      "site": "track_set",
+      "match": "",
+      "after": "repeat_guard",
+      "within": 0.5
+    }
+  ],
+  "probes": [
+    {
+      "at": 3.0,
+      "who": "City Soundscheme",
+      "probe": "entity_field",
+      "field": "+0x455",
+      "equals": true
+    },
+    {
+      "at": 3.0,
+      "who": "City Soundscheme",
+      "probe": "entity_field",
+      "field": "m_pfnThink",
+      "equals": 268450417
+    },
+    {
+      "at": 3.0,
+      "who": "TutorialUnderground",
+      "probe": "entity_field",
+      "field": "+0x455",
+      "equals": false
+    },
+    {
+      "at": 3.0,
+      "who": "TutorialUnderground",
+      "probe": "entity_field",
+      "field": "m_pfnThink",
+      "equals": 0
+    },
+    {
+      "at": 4.5,
+      "who": "City Soundscheme",
+      "probe": "entity_field",
+      "field": "+0x455",
+      "equals": false
+    },
+    {
+      "at": 4.5,
+      "who": "City Soundscheme",
+      "probe": "entity_field",
+      "field": "m_pfnThink",
+      "equals": 0
+    },
+    {
+      "at": 4.5,
+      "who": "TutorialUnderground",
+      "probe": "entity_field",
+      "field": "+0x455",
+      "equals": true
+    },
+    {
+      "at": 4.5,
+      "who": "TutorialUnderground",
+      "probe": "entity_field",
+      "field": "m_pfnThink",
+      "equals": 268450417
+    },
+    {
+      "at": "end",
+      "who": "City Soundscheme",
+      "probe": "entity_field",
+      "field": "+0x455",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "TutorialUnderground",
+      "probe": "entity_field",
+      "field": "+0x455",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "TutorialUnderground",
+      "probe": "entity_field",
+      "field": "m_pfnThink",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "City Soundscheme",
+      "probe": "entity_field",
+      "field": "start_enabled",
+      "equals": true
+    },
+    {
+      "at": "end",
+      "who": "TutorialUnderground",
+      "probe": "entity_field",
+      "field": "scheme_file",
+      "equals": "sound/Schemes/SP_Tutorial_Underground.txt"
+    }
+  ],
+  "notes": "Arena host: each `spawn` is a runtime spawn, which receives Activate (vfunc113) right after PostSpawn, so the two Activate passes are the two spawns (the map's six ambient_soundscheme would count to 6). Manager events name `CSoundSchemeManager` (DAT_10750d78, a global with no entity). `fire FadeIn 2` is an integer parameter: AcceptInput converts it to the input's FIELD_FLOAT before InputFadeIn (0x1022b480) reads it. `fire FadeIn 0` on City at t=5 is the 0-input case: InputFadeIn hands 0.0 and FUN_1022b590 floors it to 0.5 (docs said `0 is instant`; the code floors). At t=5 City's +0x455 was cleared by Underground's switch, so the fade proceeds: Underground's Ambient retires (ch4), City's Ambient takes ch5 (1, 3 and 4 retiring, 2 live), Combat retargets in place with rate 0.8, the empty Music slot has nothing to retire and City's Music takes ch6. The two City records retired at 3.5 reach 0.01 at about 5.4 s (Music: 0.19/0.1) and 5.43 s (Ambient: 0.29/0.15) and are removed by 0x10228d00; the retire-sentinel for Underground's Music block carries the parser default volume 0.5 of an empty block with an empty name."
+}

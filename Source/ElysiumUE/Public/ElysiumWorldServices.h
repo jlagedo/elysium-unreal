@@ -2029,11 +2029,17 @@ public:
 	virtual void SetVoiceVolume(FElysiumAudioVoiceHandle Handle, float Volume) = 0;
 	virtual bool IsVoicePlaying(FElysiumAudioVoiceHandle Handle) const = 0;
 
-	// 6.3 — crossfade a SoundScheme in as the active one (bed + music stems + random scheduler),
-	// or fade it out if it is the one running. Anchor is the ambient_soundscheme entity's origin.
+	// The SoundScheme manager (`CSoundSchemeManager`, `DAT_10750d78`), as `CSoundScheme` reaches it
+	// (`walks/L0-r009.md`). `RegisterScheme` is `FUN_102289e0` (`0x102289e0`), the EHANDLE append
+	// `vfunc113 0x1022a300` makes on every Activate; `FadeInScheme` is `FUN_10229270` (`0x10229270`),
+	// the manager switch `FUN_1022b590` makes after its guard (SchemeRel names the scheme whose four
+	// records are configured, Anchor its origin for the polar random scheduler, FadeSeconds the
+	// clamped duration); `FadeOutScheme` is `FUN_102293f0` (`0x102293f0`), the four-slot retire
+	// `FUN_1022b520` makes. The default registration is a no-op for a world with no manager.
+	virtual int32 RegisterScheme(const FElysiumEntity& Scheme) { return 0; }   // returns the list count `+0x1a8`
 	virtual void FadeInScheme(const FString& SchemeRel, const FVector& Anchor, float FadeSeconds) = 0;
 	virtual void FadeOutScheme(const FString& SchemeRel, float FadeSeconds) = 0;
-	// The scheme currently running, or empty. What an ambient_soundscheme reports as its own state.
+	// The scheme the manager last switched to, or empty. A debug read (the Cog window, the MCP tools).
 	virtual FString ActiveSchemeRel() const = 0;
 
 	// 12.2b — how far ahead of an authored instant a cue must be submitted for its first sample to

@@ -661,6 +661,7 @@ public:
 	virtual void SetVoiceVolume(FElysiumAudioVoiceHandle Handle, float Volume) override;
 	virtual bool IsVoicePlaying(FElysiumAudioVoiceHandle Handle) const override;
 	virtual float SoundDurationSeconds(const FString& Rel) const override;
+	virtual int32 RegisterScheme(const FElysiumEntity& Scheme) override;
 	virtual void FadeInScheme(const FString& SchemeRel, const FVector& Anchor, float FadeSeconds) override;
 	virtual void FadeOutScheme(const FString& SchemeRel, float FadeSeconds) override;
 	virtual FString ActiveSchemeRel() const override;
@@ -836,15 +837,11 @@ private:
 	void IndexDoorLinks();
 
 	// The SoundScheme manager (plain C++, owned here). Constructed alongside EntityWorld so the
-	// ambient_soundscheme entities can reach it during their spawn pass; ticked from Tick with the
-	// player location; its voices are stopped on unload (EndPlay).
+	// ambient_soundscheme entities can reach it from their Activate pass (`vfunc113 0x1022a300`, run
+	// by `FElysiumEntityWorld::Activate` before `RuntimePhase` turns Active, as retail's Activate pass
+	// runs before the first frame); ticked from Tick with the player location; its voices are
+	// stopped on unload (EndPlay).
 	TPimplPtr<FElysiumSoundSchemeManager> SchemeManager;
-	// A start_enabled ambient_soundscheme asks for its bed during the construction Spawn pass. Keep
-	// that request as data until the activation transaction reaches its audio step.
-	bool bHasDeferredSchemeFadeIn = false;
-	FString DeferredSchemeRel;
-	FVector DeferredSchemeAnchor = FVector::ZeroVector;
-	float DeferredSchemeFadeSeconds = 0.0f;
 
 	// A2 (footsteps): the body-sound channel ledger — Source's "one voice per (entity, channel)".
 	// `PlayBodySound` stops whatever this holds for the key before it plays, which is why two

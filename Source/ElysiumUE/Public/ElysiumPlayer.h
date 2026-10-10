@@ -1997,6 +1997,18 @@ public:
 	// use-begin/use-end, and the record is written back when the world is torn down.
 	TArray<FElysiumGlobalEmailRecord> GlobalEmail;
 
+	// `+0x1e04`: the EHANDLE of the `ambient_soundscheme` that last faded in, written by
+	// `FUN_10175360` (`0x10175360`) from `FUN_1022b590` (`0x1022b590`, L0 audio) through
+	// `UTIL_GetLocalPlayer` (`0x101cda50`). Read by the RoomDSP fallback (`docs/vtmb/audio_pipeline.md`
+	// § 4, item 3), which has no port yet. The L0 -> L3 edge is an upward hook not yet listed in
+	// `docs/specs/layers/hooks.tsv` (`decisions.md` D6, `L0-audio`).
+	FElysiumEntityHandle SoundScheme;
+	// `FUN_10175360(player, scheme)`: `+0x1e04 = scheme ? *scheme->GetRefEHandle() : 0xffffffff`.
+	void SetSoundScheme(const FElysiumEntity* Scheme)
+	{
+		SoundScheme = Scheme != nullptr ? Scheme->Handle : FElysiumEntityHandle::Invalid();
+	}
+
 	// `CBasePlayer::RetrieveGlobalEmailFlags` `0x1016eec0`. Copies the named terminal's saved flag
 	// array over `InOutFlags` — **global wins** — creating a zeroed record when the name is new.
 	// Lookup is `Q_strncmp` over `MAX(strlen(a), strlen(b))`, i.e. an exact, case-sensitive name

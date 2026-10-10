@@ -176,12 +176,12 @@ void FElysiumCogWindow_SoundScheme::RenderContent()
 				ImGui::PushID(E->Handle.Index);
 				if (ImGui::SmallButton("Fade in"))
 				{
-					Mgr->FadeInScheme(Audio, Rel, Anchor, 2.f);
+					Mgr->FadeInScheme(Audio, Map->GetEntityWorld(), Rel, Anchor, 2.f);
 				}
 				ImGui::SameLine();
 				if (ImGui::SmallButton("Fade out"))
 				{
-					Mgr->FadeOutScheme(Audio, Rel, 2.f);
+					Mgr->FadeOutScheme(Audio, Map->GetEntityWorld(), Rel, 2.f);
 				}
 				ImGui::SameLine();
 				if (bActive) { ImGui::TextColored(ElysiumCogStyle::ColOk, "%s", COG_TCHAR_TO_CHAR(*Rel)); }

@@ -249,22 +249,87 @@ Ambient/Music/Combat/Alert stem set (slots `+0x14`, `+0x6c`, `+0xc4`, `+0x11c`,
 stride `0x58`). Two full schemes do not overlap.
 
 `InputFadeIn` `0x1022b480` / `InputFadeOut` `0x1022b4d0` read
-`inputdata.variant.fieldType == 1` (float) then `flVal`; otherwise **0.0**. Values
-**strictly below 0** clamp to **0.5 s**; **0 is instant**; a positive float is that
-many seconds. There is **no `Disable` / `Enable` input**.
+`inputdata.variant.fieldType == 1` (float) then `flVal`; otherwise **0.0**. Both
+bodies then floor the duration: `FUN_1022b590` at `0x1022b594-0x1022b5a4` and
+`FUN_1022b520` likewise compare against `0x104454d0` (`0.5f`) with `FCOMP; TEST AH,5;
+JP` and store `0.5` when the value is **below 0.5** -- so `0`, a negative, and any
+`(0, 0.5)` all fade for **0.5 s**; `0.5` and above are that many seconds; a NaN
+passes unchanged. **There is no instant fade** (an earlier revision of this page said
+`0 is instant`; the listing says otherwise). There is **no `Disable` / `Enable` input**.
 
-`FUN_1022b590` (FadeIn): if `this+0x455` (playing flag) is already 1, **return**.
-Else walk every registered scheme and `FUN_1022b660` (clear think, `+0x455 = 0`),
-replace the four stems (`FUN_10229270` → `FUN_10229430`, same filename retargets
-volume, different filename fades the old slot into `+0x174` then starts the new),
-install PlayingThink, set `+0x455 = 1`, and store this scheme's EHANDLE at
-`player+0x1e04` (RoomDSP fallback). FadeOut (`FUN_1022b520`): if `+0x455 == 0`,
-**return**; else fade all four live slots (`FUN_102293f0`) and clear think/flag.
+`FUN_1022b590` (FadeIn), in order: the floor above; if `this+0x455` (playing flag)
+is already 1, **return**; `UTIL_GetLocalPlayer` (`0x101cda50`) and, with a player,
+`FUN_10175360(player, this)` stores this scheme's EHANDLE at `player+0x1e04` (the
+RoomDSP fallback; an L0 -> L3 edge); `FUN_10229270(&DAT_10750d78, duration, +0x460,
++0x4f0, +0x4a8, +0x538)` (below); `ThinkSet(0x10003a71)` (PlayingThink `FUN_1022b300`);
+`+0x455 = 1`; `+0x17c = curtime + 0.1f` (`0x104491b4`, a float store at `0x1022b60f`).
+FadeOut (`FUN_1022b520`): the same floor; if `+0x455 == 0`, **return**; else retire all
+four live slots (`FUN_102293f0`, slot order `+0x14`, `+0x6c`, `+0xc4`, `+0x11c`),
+`ThinkSet(0)`, `+0x455 = 0`.
 
-Activate (`vfunc113` `0x1022a300`) registers the EHANDLE (`FUN_102289e0`) then, if
-`start_enabled`, FadeIns with a **hardcoded 2.0 s**. `start_enabled 0` waits for
-`InputFadeIn`. OnSave (`vfunc129` `0x1022a350`) copies the playing flag into
-`start_enabled` so restore Activate FadeIns again.
+**The manager switch `FUN_10229270` `0x10229270`** [walked and confirmed, L0-r009]:
+(1) the prune loop over the EHANDLE list (`+0x19c` base, `+0x1a8` count): a handle of
+`0xffffffff`, a serial mismatch against `PTR_DAT_10566458[h & 0x1fff].serial`
+(`+0x8`) `!= h >> 13`, or a NULL entity pointer (`+0x4`) is removed (memmove, count
+`-1`, index held); every other listed scheme gets `FUN_1022b660` (`ThinkSet(0)`,
+`+0x455 = 0`) -- the one just fading in included, when it is listed. (2) Four
+`FUN_10229430(this, name, volume, flags, duration, slot)` calls in **scheme-record
+order**: `+0x14` from `+0x460` (Ambient), `+0xc4` from `+0x4a8` (Combat), `+0x6c`
+from `+0x4f0` (Music), `+0x11c` from `+0x538` (Alert).
+
+`FUN_10229430` `0x10229430`: `volume == 0.0` (double `0x1044fab0`, equal only) or an
+empty name -> `FUN_10229550` (retire) and return; else, with `0.0f < volume`
+(`0x104454c4`), `Q_strnicmp(name, slot, 0x40) == 0` retargets in place (`+0x48 =
++0x40 = volume`, `+0x54 = flags`, `+0x4c = volume / duration`; channel, name and
+`+0x44` kept, nothing retired), a different name retires the old record first, then
+`Q_strncpy(slot, name, 0x40)`, `+0x48`, `+0x40`, `+0x4c = volume / duration`, `+0x50 =
+FUN_102297a0(this)`, `+0x54 = flags`. A negative or NaN volume writes nothing. `+0x44`
+is never written here: the new record ramps from 0.
+
+Track record (`0x58`): `+0x00` name `char[64]`, `+0x40` target, `+0x44` ramped level
+(the emitted volume; written only by `FUN_10229090`), `+0x48` authored volume (the
+ramp's ceiling and what the state gate restores), `+0x4c` rate (units/s), `+0x50`
+channel, `+0x54` flags (`0x800` `Dry`, `0x2000` `NoPause`, from the parser).
+
+`FUN_10229550` `0x10229550` (retire): an empty slot (`slot[0] == 0`) returns; else
+`+0x40 = 0`, `+0x4c = +0x48 / duration` (the **authored** volume over the **incoming**
+duration, so a record at level `L` fades out in `duration * L / authored` seconds),
+append the whole record to the retiring list (`+0x174` base, `+0x178` capacity: 1,
+then doubling, `Plat_Alloc` / `Plat_Realloc`; `+0x180` count; `+0x184` base copy),
+then zero the slot's 22 dwords.
+
+`FUN_102297a0` `0x102297a0` (channel): channels `1..6` in order, the first held by no
+retiring record (`+0x50`) and no live slot (`+0x64`, `+0xbc`, `+0x114`, `+0x16c`). All
+six held: the **quietest** retiring record -- smallest `+0x44` strictly below `1.1`
+(`0x1048dd2c`), first on ties, index 0 when none qualifies -- is stopped through
+`IEngineSoundServer003` slot 7 `(0, channel, record)`, removed, and its channel
+returned.
+
+`CSoundSchemeManager::FrameUpdatePostEntityThink` `0x10228d00` (every frame): `dt =
+curtime - [+0x0c]`; `state = FUN_10228a80()` (1 explore, 2 combat, 3 alert; the
+conditions are not walked); `FUN_10228e80(this, state)` sets the Music (`+0xac`),
+Combat (`+0x104`) and Alert (`+0x15c`) **targets** -- the state's own to its `+0x48`,
+the other two to 0; Ambient is never gated -- records the state at `+0x10` and calls
+engine vfn `+0x1ec` (`1.0`; `0.92` for state 2) and, on a change, `FUN_100cd660` on
+`FUN_1023dcd0()`'s members (not walked). Then `FUN_10229090(record, dt)` on the four
+live slots and on each retiring record: only when `+0x44 != +0x40`, move `+0x44`
+toward `+0x40` by `+0x4c * dt` (`FUN_102283a0`), clamp to `[0, +0x48]`; if `+0x44 <=
+0.01` and `+0x40 <= 0.01` (`0x10450aa4`) stop the sound (slot 7), else emit through
+slot 2 on a reliable single-user filter (channel `+0x50`, the record as the name,
+volume `+0x44`, flags `+0x54 | 0x101`). A retiring record is removed when its `+0x44
+<= 0.01` (double `0x1044e658`). With `sp_tutorial_city.txt` playing (Ambient ch1,
+Combat ch2, Music ch3) a 2 s FadeIn of `sp_tutorial_underground.txt` retires City's
+Ambient (rate 0.15) and takes ch4, retargets the shared Combat in place, retires
+City's Music (rate 0.1) and leaves the Music slot empty: two retiring records, no
+eviction, both gone about 1.9 s later.
+
+Activate (`vfunc113` `0x1022a300`, slot 113; it does **not** chain
+`CBaseEntity::Activate`) registers the EHANDLE (`FUN_102289e0` `0x102289e0`: grow
+through `FUN_1022d380`, append, **no duplicate check**) then, if `start_enabled`,
+FadeIns with a **hardcoded 2.0 s**; else `ThinkSet(0)` (`m_pfnThink = 0` only;
+`m_flNextThink` and `+0x455` untouched). `start_enabled 0` waits for `InputFadeIn`.
+OnSave (`vfunc129` `0x1022a350`) copies the playing flag into `start_enabled` so
+restore Activate FadeIns again.
 
 A typical map pair `A.FadeOut` + `B.FadeIn` on one trigger: FadeIn B first already
 cleared A's flag, so A's FadeOut is a no-op; FadeOut A first fades the global stems

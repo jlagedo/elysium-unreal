@@ -2501,7 +2501,7 @@ void AElysiumMapActor::TickAudio(float DeltaSeconds)
 			PC->GetPlayerViewPoint(VLoc, VRot);
 			ListenerLoc = VLoc;
 		}
-		SchemeManager->Tick(Audio, ListenerLoc, DeltaSeconds);
+		SchemeManager->Tick(Audio, EntityWorld.Get(), ListenerLoc, DeltaSeconds);
 	}
 }
 

@@ -319,8 +319,6 @@ bool AElysiumMapActor::RebuildStageWorld(FElysiumEntityDefs&& Defs, TArray<FElys
 			SchemeManager->StopAll(Audio);
 		}
 	}
-	bHasDeferredSchemeFadeIn = false;
-	DeferredSchemeRel.Reset();
 	NpcMotors.RemoveAll([](const TObjectPtr<AElysiumNpcBody>& Motor) { return !IsValid(Motor); });
 
 	// BuildStageWorld's scaffolding, with the seat the caller names in place of the world origin.
@@ -1250,13 +1248,6 @@ void AElysiumMapActor::ActivateRuntime()
 		// and every zero-delay event they produce before the partial world is ever shown.
 		EntityWorld->RunPlayerThink(Now);
 		EntityWorld->Tick(Now);
-	}
-	if (bHasDeferredSchemeFadeIn && SchemeManager)
-	{
-		SchemeManager->FadeInScheme(GetAudioSubsystem(), DeferredSchemeRel,
-			DeferredSchemeAnchor, DeferredSchemeFadeSeconds);
-		bHasDeferredSchemeFadeIn = false;
-		DeferredSchemeRel.Reset();
 	}
 	TickAudio(0.0f);
 

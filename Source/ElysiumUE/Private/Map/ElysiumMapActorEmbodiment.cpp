@@ -1380,36 +1380,28 @@ float AElysiumMapActor::SoundDurationSeconds(const FString& Rel) const
 	return Row ? Row->DurationSeconds : 0.f;
 }
 
+// The three `CSoundScheme` -> `CSoundSchemeManager` edges (`walks/L0-r009.md`), forwarded to this
+// map's manager with the entity world it prunes and reports through. No deferral: retail's Activate
+// pass configures the manager's slots before the first frame, and `FElysiumEntityWorld::Activate`
+// runs the scheme's `vfunc113` at the same point of this map's activation.
+int32 AElysiumMapActor::RegisterScheme(const FElysiumEntity& Scheme)
+{
+	return SchemeManager ? SchemeManager->RegisterScheme(Scheme, EntityWorld.Get()) : 0;   // `FUN_102289e0` `0x102289e0`
+}
+
 void AElysiumMapActor::FadeInScheme(const FString& SchemeRel, const FVector& Anchor, float FadeSeconds)
 {
-	if (RuntimePhase != EElysiumMapRuntimePhase::Active)
-	{
-		if (SchemeManager)
-		{
-			SchemeManager->PrimeScheme(GetAudioSubsystem(), SchemeRel);
-		}
-		bHasDeferredSchemeFadeIn = true;
-		DeferredSchemeRel = SchemeRel;
-		DeferredSchemeAnchor = Anchor;
-		DeferredSchemeFadeSeconds = FadeSeconds;
-		return;
-	}
 	if (SchemeManager)
 	{
-		SchemeManager->FadeInScheme(GetAudioSubsystem(), SchemeRel, Anchor, FadeSeconds);
+		SchemeManager->FadeInScheme(GetAudioSubsystem(), EntityWorld.Get(), SchemeRel, Anchor, FadeSeconds);   // `FUN_10229270` `0x10229270`
 	}
 }
 
 void AElysiumMapActor::FadeOutScheme(const FString& SchemeRel, float FadeSeconds)
 {
-	if (bHasDeferredSchemeFadeIn && DeferredSchemeRel == SchemeRel)
-	{
-		bHasDeferredSchemeFadeIn = false;
-		DeferredSchemeRel.Reset();
-	}
 	if (SchemeManager)
 	{
-		SchemeManager->FadeOutScheme(GetAudioSubsystem(), SchemeRel, FadeSeconds);
+		SchemeManager->FadeOutScheme(GetAudioSubsystem(), EntityWorld.Get(), SchemeRel, FadeSeconds);   // `FUN_102293f0` `0x102293f0`
 	}
 }
 

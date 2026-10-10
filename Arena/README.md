@@ -240,9 +240,24 @@ duration= owner=`, `branch refused=owner type=`); `sound_origin` (`CBaseEntity::
 `folder_addrange` (`FUN_101f4330` `0x101f4330`, `branch cat= hi= count= grow= lo=`), `folder_insert`
 (`FUN_101f3ba0` `0x101f3ba0`: `entry node= cat= hi= lo= total= a= b= old=`, `warning node= b= total=`,
 `return node= mask=`), `folder_find` (`FUN_101f3b00` `0x101f3b00`: `branch node= arm=<sibling|children>
-key= [flat= hit=|children=]`; `FUN_101f42d0` `0x101f42d0`: `return key= cat= idx= node=<label|null>`). A
-pure function reports through `IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a utility with no
-entity names its target in the entity column (`FElysiumNamedRetailSites`).
+key= [flat= hit=|children=]`; `FUN_101f42d0` `0x101f42d0`: `return key= cat= idx= node=<label|null>`); the
+SoundScheme switch (`walks/L0-r009.md`), the scheme entity's sites in its own entity column and the
+manager's (`CSoundSchemeManager`, `DAT_10750d78`, a global) under that name: `scheme_activate`
+(`CSoundScheme::vfunc113` `0x1022a300`: `register count= m_bStartEnabled=`, `start duration=2`,
+`clear_think m_pfnThink=0 +0x455=`), `scheme_fadein` (`FUN_1022b590` `0x1022b590`: `entry duration=
++0x455=` after the 0.5 floor, `guard +0x455=1`, `player_write fn=FUN_10175360 va=0x10175360
+field=+0x1e04 handle=#<n>` -- the L3 hook, only with a player --, `arm m_pfnThink=0x10003a71 +0x455=1
+m_flNextThink=`), `scheme_fadeout` (`FUN_1022b520` `0x1022b520`: `entry duration= +0x455=`),
+`mgr_prune` (`FUN_10229270` `0x10229270`: `prune handle=#<n> count=`, `disable handle=#<n> name=
+count=`), `track_set` (`FUN_10229430` `0x10229430`: `retire_sentinel slot=0x<off> name= volume=
+duration=`, `same slot= name= volume= duration= rate= channel= current= flags=`, `replace slot= name=
+volume= duration= rate= channel= flags=`, `skip slot= name= volume=`), `track_retire` (`FUN_10229550`
+`0x10229550`: `empty slot= retiring=`, `append slot= name= current= authored= rate= channel=
+retiring=`, `clear slot=`), `chan_alloc` (`FUN_102297a0` `0x102297a0`: `free channel= retiring=`,
+`evict channel= index= name= current= retiring=`), `mgr_frame`
+(`CSoundSchemeManager::FrameUpdatePostEntityThink` `0x10228d00`: `remove name= channel= current=
+retiring=`). A pure function reports through `IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a
+utility with no entity names its target in the entity column (`FElysiumNamedRetailSites`).
 
 Rules: `entity_call` drives only what retail exposes to the world; `retail_site` events are emitted where
 the retail address they name is ported and state retail values; `entity_field` reads retail names;
@@ -419,6 +434,7 @@ record — and a `reason`) and
 | `audio/l0_keyvalues_tree` | the file reader `0x101f2180` and block parser `0x101f2360`: root reuse and chaining, the missing-brace error, the top-level `}`, the empty key, and the strtol/strtod leaf typing (L0.audio.keyvalues-tree) |
 | `audio/l0_scheme_file_load` | the KeyValues FILE loader `0x102480f0` (the `CSoundScheme::Precache` call), its wrapper `0x102482b0`, block parser `0x10248510` and text cache `0x102482f0`: the cache hit and miss, the loader's own open, no `.txt`, a missing file, every top-level token a root, the first-byte brace test, the typed leaves, and `sound/Schemes/SP_Tutorial_City.txt` itself (L0.audio.scheme-file-load) |
 | `audio/l0_keyvalues_access` | the loader class's accessors `0x10248900` / `0x10248bb0` / `0x10248cd0` / `0x102490e0`: first match, case folding, the fallback chain, `atoi` and `__ftol` conversions, the `%d` / `%f` writeback and the create arm (L0.audio.keyvalues-access) |
+| `audio/l0_sound_scheme_switch` | SoundScheme activation and switching: Activate `0x1022a300` (register, the 2.0 s start, `ThinkSet(0)`), FadeIn `0x1022b590` (the 0.5 floor, the per-entity guard, the player write, think and flag), the manager switch `0x10229270` -> `0x10229430` / `0x10229550` / `0x102297a0` over the shipped City and Underground schemes (slot order, same-name retarget, retire rate and channel, channel 4, no eviction) and the retiring records' removal at 0.01 (`0x10228d00`) (L0.audio.sound-scheme-switch) |
 | `_selftest/never_after_ignores` | a `never` opened `after` a label does not count a match before it |
 | `_selftest/never_within_holds`, `never_within_trips` | a `never` closed `within` seconds of its label ignores a match after the window and fails the run on one inside it |
 | `combat/cover_move_shoot` | the run-and-gun: a gunman running to cover fires from an overlay layer's own 3031 (`0x102e8560` -> `AddGesture 0x100991b0` -> `0x10098cd0` -> `Shot 0x102387b0`; spec 0002 V4o) |
