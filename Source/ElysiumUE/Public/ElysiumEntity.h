@@ -455,14 +455,6 @@ public:
 	virtual void OnUseCursorEnter() {}                                  // look-cursor entered (OnIn)
 	virtual void OnUseCursorLeave() {}                                  // look-cursor left (OnOut)
 	virtual void Use(const FElysiumEntityHandle& Activator) {}          // +use / Press pressed it
-	// Slot 173's whole signature, `Use(activator, caller, USE_TYPE useType, float value)` (`RET 0x10`):
-	// the form the entity I/O and the trigger family dispatch with a use type -- USE_OFF 0, USE_ON 1,
-	// USE_SET 2, USE_TOGGLE 3 (`CBaseEntity::ShouldToggle` 0x100a98f0's integers). A leaf whose
-	// retail body reads the type (`CSprite::Use` 0x1042f030) overrides this; the base forwards to the
-	// one-argument `Use`, the +use press, which every other leaf here answers.
-	virtual void UseTyped(const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller,
-		int32 UseType, float Value) { Use(Activator); }
-
 	// Slot 173 in retail's shape, `void Use(CBaseEntity* activator, CBaseEntity* caller, USE_TYPE,
 	// float value)` (base `CBaseEntity::Use` `0x100a4e70`): the body `CBaseEntity::InputUse` `0x100ac9f0`
 	// reaches with `(activator, caller, USE_TOGGLE, 0)` and the one a leaf whose retail `Use` switches

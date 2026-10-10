@@ -2148,7 +2148,7 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			const float UseValue = Action.Args.Num() == 2 ? static_cast<float>(Action.Args[1].Value.Number) : 0.0f;
 			const FElysiumEntity* UsePlayer = World.FindPlayer();
 			const FElysiumEntityHandle UseActivator = UsePlayer ? UsePlayer->Handle : FElysiumEntityHandle::Invalid();
-			UseTarget->UseTyped(UseActivator, UseActivator, UseType, UseValue);
+			UseTarget->UseByType(UseActivator, UseActivator, UseType, UseValue);
 			FEvent& Done = Events.AddDefaulted_GetRef();
 			StampEvent(Done, World.NowSeconds());
 			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
@@ -2425,36 +2425,6 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
 			Done.Name = Action.Target;
 			Done.Text = TEXT("entity_call Activate done");
-			return true;
-		}
-		if (Action.Function == TEXT("Use"))
-		{
-			// Slot 173 (`+0x2b4`) `Use(activator, caller, useType, value)` on one live entity, with the
-			// use type a record states: `[<useType 0..3>, <value>?]` (`ElysiumUseType`: 0 OFF, 1 ON,
-			// 2 SET, 3 TOGGLE). The `Use` INPUT is `fire` (`CBaseEntity::InputUse` `0x100ac9f0`, always
-			// 3 / 0); this is the slot itself, as the player's +use and the ambient's PlaySound /
-			// StopSound (1 / 0) reach it. No entity stands behind the call: activator and caller are
-			// invalid handles.
-			FElysiumEntity* Target = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
-			if (Target == nullptr || Target->IsDead())
-			{
-				OutError = FString::Printf(TEXT("entity_call 'Use': no live entity named '%s'"), *Action.Target);
-				return false;
-			}
-			if (Action.Args.IsEmpty() || Action.Args.Num() > 2 || Action.Args[0].Value.Type != FElysiumArenaValue::EType::Number
-				|| (Action.Args.Num() == 2 && Action.Args[1].Value.Type != FElysiumArenaValue::EType::Number))
-			{
-				OutError = TEXT("entity_call 'Use' takes [<useType 0..3>, <value>?]");
-				return false;
-			}
-			const int32 UseType = static_cast<int32>(Action.Args[0].Value.Number);
-			const float UseValue = Action.Args.Num() == 2 ? static_cast<float>(Action.Args[1].Value.Number) : 0.f;
-			Target->UseByType(FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid(), UseType, UseValue);
-			FEvent& Done = Events.AddDefaulted_GetRef();
-			StampEvent(Done, World.NowSeconds());
-			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
-			Done.Name = Action.Target;
-			Done.Text = FString::Printf(TEXT("entity_call Use done use_type=%d value=%g"), UseType, UseValue);
 			return true;
 		}
 		if (Action.Function == TEXT("GetEFlags") || Action.Function == TEXT("SetEFlags"))

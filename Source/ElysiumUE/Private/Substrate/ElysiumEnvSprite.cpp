@@ -93,9 +93,9 @@ public:
 	virtual void Use(const FElysiumEntityHandle& Activator) override
 	{
 		// The +use press: `CBasePlayer::PlayerUse` dispatches slot 173 with USE_TOGGLE.
-		UseTyped(Activator, Activator, USE_TOGGLE, 0.0f);
+		UseByType(Activator, Activator, USE_TOGGLE, 0.0f);
 	}
-	virtual void UseTyped(const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller,
+	virtual void UseByType(const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller,
 		int32 UseType, float Value) override;
 
 	void TurnOn();            // FUN_1042ef70
@@ -408,7 +408,7 @@ bool FElysiumEnvSprite::ShouldToggle(int32 UseType, bool bCurrentState) const
 	return bResult;
 }
 
-void FElysiumEnvSprite::UseTyped(const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller,
+void FElysiumEnvSprite::UseByType(const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller,
 	int32 UseType, float Value)
 {
 	// `CSprite::Use` 0x1042f030 (slot 173, `RET 0x10`): `state = (m_fEffects != 0x40)` -- the exact
