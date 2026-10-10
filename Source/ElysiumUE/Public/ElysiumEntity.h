@@ -245,11 +245,26 @@ public:
 	// unlinks one child, `0x100b5340` walks it to mark descendants.
 	FElysiumEntityHandle MoveChild;
 	FElysiumEntityHandle MovePeer;
-	// `m_iEFlags` (+0x268), every bit but `EFL_DORMANT` (`0x2`, carried by `bEflDormant` above):
-	// `0x800` abs transform dirty (`CalcAbsolutePosition` 0x100b1ac0 clears it), `0x1000` / `0x2000`
-	// abs velocity, `0x10000` spatial partition (`SetOrigin` 0x100b2be0 sets it). The corpus names
-	// none of these; the values match Source's `EFL_DIRTY_*` / `EFL_DIRTY_SPATIAL_PARTITION`.
+	// `m_iEFlags` (+0x268), every bit but `EFL_DORMANT` (`0x2`, carried by `bEflDormant` above) and
+	// `EFL_KILLME` (`0x1`, carried by `bDead`): `0x800` abs transform dirty (`CalcAbsolutePosition`
+	// 0x100b1ac0 clears it), `0x1000` / `0x2000` abs velocity, `0x4000` surrounding bounds dirty and
+	// `0x10000` spatial partition (both ORed by `FUN_100dda20` 0x100dda20; `SetOrigin` 0x100b2be0 sets
+	// `0x10000`), `0x8000` partition handle dirty (`FUN_100ddd20` 0x100ddd20), `0x40000` (tested by
+	// `FUN_100ddc40`, set by the base constructor), `0x1000000` untouch check pending (`SetCheckUntouch`
+	// 0x100b11d0). The corpus names none of these; the values match Source's `EFL_*`. The base
+	// constructor `0x1009d980` leaves `0x54000` in the word (`walks/L0-r015.md`, `L0-r016.md`): its
+	// `SetCollisionBounds(zero, zero)` -> `0x100dc770` -> `0x100dda20` ORs `0x14000`, then `1009dcdc`
+	// ORs `0x50000`; `Construct` seeds that. Slots 83 / 84 (`GetEFlags` / `SetEFlags`, `walks/L0-r015.md`)
+	// read and replace the WHOLE word, folding the two carried bits in and out.
 	uint32 EFlags = 0;
+	// The complete `m_iEFlags` as an inline read of `+0x268` sees it (the 47 typed in-function reads):
+	// the word with the two carried bits folded in. Slot 83 `GetEFlags` answers this and traces it.
+	uint32 EFlagsWord() const { return EFlags | (bEflDormant ? 0x2u : 0u) | (bDead ? 0x1u : 0u); }
+	// `m_touchStamp` (+0x1ac; `touchStamp` in the kernel field table, no datamap row): the untouch
+	// generation. `SetCheckUntouch(true)` 0x100b11d0 increments it (`100b1251`) before testing the
+	// pending bit; `PhysicsCheckForEntityUntouch` 0x1003d490 expires every touchlink whose stamp
+	// differs from it. A touchlink's stamp is the owner's word when the link was made or refreshed.
+	int32 TouchStamp = 0;
 	// `m_hAimEnt` (+0x37c): `CBaseEntity::SetAimEnt` 0x1009ee80, the entity a `MOVETYPE_FOLLOW` (11)
 	// body copies its absolute pose from each tick (`PhysicsFollow` 0x10039470).
 	FElysiumEntityHandle AimEnt;
@@ -776,11 +791,16 @@ public:
 	FName ThinkCallback = TEXT("EntityThink");
 	FName SavedThinkCallback;
 	virtual void RebaseSavedReferences(FElysiumEntityWorld& InWorld) {} // 0x101a2e40, before OnRestore
-	// Physical primitives have no common substrate reader yet: explicit no-input seams (0x100a8710).
+	// The physical words `CBaseEntity::ScriptHide` 0x100a8710 saves (`GetSolid` slot 92, `m_MoveType`,
+	// `m_MoveCollide`, `GetSolidFlags` slot 211, `m_fEffects`) and writes as `SetMoveType(0, 0)`,
+	// `SetSolid(0)` (`FUN_100dc480`), `SetSolidFlags(4)` (`FUN_100dc580`), `m_fEffects = 0xe0`; and
+	// `ScriptUnhide` 0x100a8990 restores as `SetSolid(saved)`, `SetMoveType(saved, saved)`,
+	// `SetSolidFlags(saved)`, `m_fEffects = saved`. The base carries every word but `m_fEffects`
+	// (the NPC kernel's `EffectsWord`; the NPC override adds it and its think restore).
 	virtual bool ReadScriptPhysicalWords(int32& OutSolid, int32& OutMoveType, int32& OutMoveCollide,
-		int32& OutSolidFlags, int32& OutEffects) const { return false; }
+		int32& OutSolidFlags, int32& OutEffects) const;
 	virtual void WriteScriptPhysicalWords(int32 InSolid, int32 InMoveType, int32 InMoveCollide,
-		int32 InSolidFlags, int32 InEffects) {} // 0x100a8990
+		int32 InSolidFlags, int32 InEffects); // 0x100a8710 / 0x100a8990
 	bool bSavedPhysicalWordsAvailable = false;
 	int32 ScriptSavedSolid = 0, ScriptSavedMoveType = 0, ScriptSavedMoveCollide = 0;
 	int32 ScriptSavedSolidFlags = 0, ScriptSavedEffects = 0; // 0x100a8710

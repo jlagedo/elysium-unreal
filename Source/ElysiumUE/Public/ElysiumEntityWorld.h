@@ -384,6 +384,28 @@ public:
 	// observation. Ends are emitted before begins; both groups are stable by entity index.
 	void ReconcilePlayerTouches(TConstArrayView<FElysiumEntityHandle> CurrentBrushes);
 
+	// --- The touchlink list and the deferred untouch check (`walks/L0-r015.md`) -------------------
+	// `HasDataObjectType(this, 1)`: the entity owns a touchlink list -- here, a retained pair names
+	// it on either side. `CBaseEntity::IsCurrentlyTouching` 0x1003d3d0 (slot 207) is this.
+	bool EntityHasTouchLinks(const FElysiumEntityHandle& Entity) const;
+	// `FUN_100f8e20` 0x100f8e20: append the entity to the touch manager's deferred list
+	// (`CEntityTouchManager` `DAT_107036b0`, a `CUtlVector<CBaseEntity*>`; count at `0x107036c0`)
+	// unless its slot 116 `IsMarkedForDeletion` answers true. Duplicates are not tested.
+	void EnqueueUntouchCheck(FElysiumEntity& Entity);
+	// `CEntityTouchManager::OnEntityDeleted` 0x100f8cf0: if the entity carries `0x1000000`, find it
+	// in the list and copy the last element over it (a fast remove).
+	void UntouchListOnEntityDeleted(const FElysiumEntity& Entity);
+	// `CEntityListSystem::FrameUpdatePostEntityThink` 0x100f9160 -> `FUN_100f8ec0`: copy the list,
+	// empty it (`100f8f09`), then `PhysicsCheckForEntityUntouch` on every copied entity whose
+	// `0x1000000` bit is still set (`100f8f13` / `100f8f1b`). Step 4 of `CServerGameDLL::GameFrame`
+	// `0x1011abc0`: after the think pass, before `CEventQueue::ServiceEvents` (`entity_io.md`).
+	void FrameUpdatePostEntityThinkUntouch();
+	// `PhysicsCheckForEntityUntouch` 0x1003d490's link walk on this world's pairs: every pair naming
+	// the entity whose entity-side stamp differs from its `m_touchStamp` ends (`PhysicsNotifyOtherOfUntouch`
+	// + `PhysicsRemoveToucher`, here one `RouteEntityTouch(.., false)`). Returns how many ended.
+	int32 ExpireStaleTouchLinks(FElysiumEntity& Entity);
+	int32 UntouchCheckCount() const { return UntouchCheckList.Num(); }
+
 	// Player interaction: command edges queue in the controller's pre-move sample and are consumed
 	// only after this frame's post-move focus query. The focused entity and any captured session are
 	// world state; candidates are an ephemeral embodiment result.
@@ -1150,7 +1172,19 @@ private:
 	// UE may report the same overlap once from its movement update and once from the explicit
 	// post-teleport reconciliation. Keep touch edges idempotent at the engine-neutral terminus;
 	// the packed key is (brush index, activator index), sufficient within this world's epoch.
-	TSet<uint64> ActiveTouches;
+	// The value is retail's pair of touchlinks: each side's link carries the stamp its owner's
+	// `m_touchStamp` (+0x1ac) had when `PhysicsMarkEntityAsTouched` 0x1003dc70 made or refreshed it;
+	// `PhysicsCheckForEntityUntouch` 0x1003d490 expires the link whose stamp no longer matches.
+	struct FTouchLinkStamps
+	{
+		int32 Brush = 0;
+		int32 Activator = 0;
+	};
+	TMap<uint64, FTouchLinkStamps> ActiveTouches;
+	// `CEntityTouchManager`'s vector (`0x107036b4` base, `0x107036c0` count): the entities whose
+	// untouch check is pending this frame. Emptied by the frame pass and at level shutdown
+	// (`CEntityListSystem::LevelShutdownPostEntity` 0x100f90a0).
+	TArray<FElysiumEntityHandle> UntouchCheckList;
 	int32 TouchBeginCount = 0;
 	int32 TouchEndCount = 0;
 

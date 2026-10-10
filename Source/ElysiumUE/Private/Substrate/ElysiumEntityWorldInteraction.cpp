@@ -58,11 +58,20 @@ void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 		{
 			return;
 		}
-		if (ActiveTouches.Contains(TouchKey))
+		// Each side's touchlink carries its owner's `m_touchStamp` (+0x1ac): `PhysicsMarkEntityAsTouched`
+		// 0x1003dc70 writes it when the link is made and refreshes it when an existing pair is
+		// reported again (`entity_io.md` § The touch dispatch path), which is what keeps the link
+		// alive through `PhysicsCheckForEntityUntouch` 0x1003d490.
+		const FElysiumEntity* Toucher = Resolve(Activator);
+		FTouchLinkStamps Stamps;
+		Stamps.Brush = E->TouchStamp;
+		Stamps.Activator = Toucher != nullptr ? Toucher->TouchStamp : 0;
+		if (FTouchLinkStamps* Existing = ActiveTouches.Find(TouchKey))
 		{
+			*Existing = Stamps;
 			return;
 		}
-		ActiveTouches.Add(TouchKey);
+		ActiveTouches.Add(TouchKey, Stamps);
 	}
 
 	if (bBegin)
@@ -86,8 +95,9 @@ void FElysiumEntityWorld::EndBrushTouches(const FElysiumEntityHandle& Brush)
 		return;
 	}
 	TArray<int32> ActivatorIndices;
-	for (uint64 Key : ActiveTouches)
+	for (const TPair<uint64, FTouchLinkStamps>& Pair : ActiveTouches)
 	{
+		const uint64 Key = Pair.Key;
 		const int32 BrushIndex = static_cast<int32>(static_cast<uint32>(Key >> 32));
 		if (BrushIndex == Brush.Index)
 		{
@@ -99,6 +109,156 @@ void FElysiumEntityWorld::EndBrushTouches(const FElysiumEntityHandle& Brush)
 	{
 		RouteBrushTouch(Brush, FElysiumEntityHandle(ActivatorIndex, Epoch), /*bBegin*/ false);
 	}
+}
+
+// --- The touchlink list and the deferred untouch check (`walks/L0-r015.md`) -------------------
+
+namespace
+{
+	// Which side of a packed (brush, activator) pair names `Index`, and that side's link stamp.
+	bool TouchPairSide(uint64 Key, int32 Index, bool& bOutBrushSide)
+	{
+		const int32 BrushIndex = static_cast<int32>(static_cast<uint32>(Key >> 32));
+		const int32 ActivatorIndex = static_cast<int32>(static_cast<uint32>(Key));
+		if (BrushIndex == Index) { bOutBrushSide = true; return true; }
+		if (ActivatorIndex == Index) { bOutBrushSide = false; return true; }
+		return false;
+	}
+}
+
+bool FElysiumEntityWorld::EntityHasTouchLinks(const FElysiumEntityHandle& Entity) const
+{
+	// `HasDataObjectType(this, 1)` -- the touchlink list exists while any link is held; `0x1003d490`
+	// destroys it (`DestroyDataObject(this, 1)`) when the last link goes.
+	if (!Entity.IsSet() || Entity.Epoch != Epoch)
+	{
+		return false;
+	}
+	for (const TPair<uint64, FTouchLinkStamps>& Pair : ActiveTouches)
+	{
+		bool bBrushSide = false;
+		if (TouchPairSide(Pair.Key, Entity.Index, bBrushSide))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void FElysiumEntityWorld::EnqueueUntouchCheck(FElysiumEntity& Entity)
+{
+	// `FUN_100f8e20` 0x100f8e20, arms in retail order.
+	// 1. `100f8e29`: `ent->vslot116()` (`IsMarkedForDeletion`, `m_iEFlags & 1`). True -> `100f8e31`
+	//    -> return, no append.
+	if (Entity.IsMarkedForDeletion())
+	{
+		EmitRetailSite(Entity, TEXT("untouch_enqueue"), TEXT("FUN_100f8e20"), 0x100f8e31u, TEXT("branch"),
+			FString::Printf(TEXT("arm=marked_for_deletion count=%d"), UntouchCheckList.Num()));
+		return;
+	}
+	// 2. `100f8e45`: grow when `count + 1 > capacity` (`FUN_100b4a40`: 8, then doubling) -- the
+	//    container's own. 3. `100f8e63`: `count = old + 1`; `100f8e6b`: the base mirror. 4. The shift
+	//    of `(old + 1) - old - 1 = 0` elements: `JLE` always taken, the memmove dead. 5. `100f8e9c`:
+	//    `base[old] = ent`. Duplicates are not tested.
+	UntouchCheckList.Add(Entity.Handle);
+	EmitRetailSite(Entity, TEXT("untouch_enqueue"), TEXT("FUN_100f8e20"), 0x100f8e9cu, TEXT("write"),
+		FString::Printf(TEXT("arm=append index=%d count=%d"), UntouchCheckList.Num() - 1, UntouchCheckList.Num()));
+}
+
+void FElysiumEntityWorld::UntouchListOnEntityDeleted(const FElysiumEntity& Entity)
+{
+	// `CEntityTouchManager::vfunc1` 0x100f8cf0: `ent+0x26b & 1` clear -> nothing. Else the linear
+	// search from 0; found at `i` (with `0 <= i < count`, `count > 0`): copy the LAST element over it
+	// (`FUN_10430fa0(base + i*4, base + (count-1)*4, 4)`), `count -= 1`. Only the first match.
+	if ((Entity.EFlags & 0x1000000u) == 0)
+	{
+		return;
+	}
+	const int32 Index = UntouchCheckList.IndexOfByKey(Entity.Handle);
+	if (Index != INDEX_NONE && UntouchCheckList.Num() > 0)
+	{
+		UntouchCheckList[Index] = UntouchCheckList.Last();
+		UntouchCheckList.Pop(EAllowShrinking::No);
+		EmitRetailSite(Entity, TEXT("untouch_enqueue"), TEXT("CEntityTouchManager::vfunc1"), 0x100f8cf0u, TEXT("write"),
+			FString::Printf(TEXT("arm=fast_remove index=%d count=%d"), Index, UntouchCheckList.Num()));
+	}
+}
+
+void FElysiumEntityWorld::FrameUpdatePostEntityThinkUntouch()
+{
+	// `FUN_100f8ec0` 0x100f8ec0 on `DAT_107036b0`, arms in retail order.
+	// 1. `n = count`; `n == 0` -> return.
+	if (UntouchCheckList.IsEmpty())
+	{
+		return;
+	}
+	// 2. The `n` pointers copied onto the stack. 3. `100f8f09`: `count = 0` -- the list is emptied
+	//    before any check runs, so a check that re-enqueues lands in NEXT frame's pass.
+	const TArray<FElysiumEntityHandle> Pending = UntouchCheckList;
+	UntouchCheckList.Reset();
+	static const FString GManagerName(TEXT("CEntityTouchManager"));
+	EmitRetailSite(GManagerName, TEXT("untouch_drain"), TEXT("FUN_100f8ec0"), 0x100f8f09u, TEXT("write"),
+		FString::Printf(TEXT("count=0 drained=%d"), Pending.Num()));
+	// 4. For `i = 0 .. n-1`: `TEST byte [ent+0x26b], 1` (`100f8f13`); set -> `PhysicsCheckForEntityUntouch`
+	//    (`100f8f1b`); clear (a `SetCheckUntouch(false)` meanwhile) -> skip (`100f8f19`). A deleted
+	//    entry was already fast-removed by `OnEntityDeleted` (retail holds raw pointers; a handle that
+	//    no longer resolves is the same absence).
+	for (const FElysiumEntityHandle& Handle : Pending)
+	{
+		FElysiumEntity* Entity = Handle.IsSet() && Handle.Epoch == Epoch && EntityList.IsValidIndex(Handle.Index)
+			? EntityList[Handle.Index].Get() : nullptr;
+		if (Entity == nullptr)
+		{
+			continue;
+		}
+		if ((Entity->EFlags & 0x1000000u) == 0)
+		{
+			EmitRetailSite(*Entity, TEXT("untouch_drain"), TEXT("FUN_100f8ec0"), 0x100f8f19u, TEXT("branch"),
+				FString::Printf(TEXT("arm=not_pending m_iEFlags=0x%x"), Entity->EFlagsWord()));
+			continue;
+		}
+		EmitRetailSite(*Entity, TEXT("untouch_drain"), TEXT("FUN_100f8ec0"), 0x100f8f1bu, TEXT("call"),
+			FString::Printf(TEXT("fn=CBaseEntity::PhysicsCheckForEntityUntouch m_iEFlags=0x%x m_touchStamp=%d"),
+				Entity->EFlagsWord(), Entity->TouchStamp));
+		Entity->PhysicsCheckForEntityUntouch();
+	}
+}
+
+int32 FElysiumEntityWorld::ExpireStaleTouchLinks(FElysiumEntity& Entity)
+{
+	// `0x1003d490`'s loop over `GetDataObject(this, 1)`: a link whose stamp is `-1` re-fires
+	// `PhysicsTouch` (no port writer makes one); a link whose stamp is not `m_touchStamp` (`1003d4f0`)
+	// is untouched -- `PhysicsNotifyOtherOfUntouch(other, this)` (the other side's EndTouch and its
+	// link) then `PhysicsRemoveToucher(this, link)` (this side's EndTouch and the link). The pair's
+	// one routed end here does both: it drops the pair and calls the brush side's `OnTouchEnd`.
+	TArray<uint64> Stale;
+	for (const TPair<uint64, FTouchLinkStamps>& Pair : ActiveTouches)
+	{
+		bool bBrushSide = false;
+		if (!TouchPairSide(Pair.Key, Entity.Handle.Index, bBrushSide))
+		{
+			continue;
+		}
+		const int32 LinkStamp = bBrushSide ? Pair.Value.Brush : Pair.Value.Activator;
+		if (LinkStamp != Entity.TouchStamp)
+		{
+			Stale.Add(Pair.Key);
+		}
+	}
+	Stale.Sort();   // the entity-index order every touch pass here uses in place of the list's
+	for (uint64 Key : Stale)
+	{
+		const FElysiumEntityHandle Brush(static_cast<int32>(static_cast<uint32>(Key >> 32)), Epoch);
+		const FElysiumEntityHandle Activator(static_cast<int32>(static_cast<uint32>(Key)), Epoch);
+		const FElysiumEntity* Other = Resolve(Brush.Index == Entity.Handle.Index ? Activator : Brush);
+		EmitRetailSite(Entity, TEXT("untouch_check"), TEXT("CBaseEntity::PhysicsCheckForEntityUntouch"), 0x1003d4f0u,
+			TEXT("untouch"), FString::Printf(TEXT("other=%s link_stamp=%d m_touchStamp=%d"),
+				*AiTraceName(Other),
+				Brush.Index == Entity.Handle.Index ? ActiveTouches[Key].Brush : ActiveTouches[Key].Activator,
+				Entity.TouchStamp));
+		RouteEntityTouch(Brush, Activator, /*bBegin*/ false);
+	}
+	return Stale.Num();
 }
 
 // --- Player interaction ----------------------------------------------------------------
@@ -134,8 +294,9 @@ void FElysiumEntityWorld::ReconcilePlayerTouches(TConstArrayView<FElysiumEntityH
 	}
 
 	TArray<int32> Ends;
-	for (uint64 Key : ActiveTouches)
+	for (const TPair<uint64, FTouchLinkStamps>& Pair : ActiveTouches)
 	{
+		const uint64 Key = Pair.Key;
 		const int32 ActivatorIndex = static_cast<int32>(static_cast<uint32>(Key));
 		const int32 BrushIndex = static_cast<int32>(static_cast<uint32>(Key >> 32));
 		if (ActivatorIndex == Player.Index && !CurrentIndices.Contains(BrushIndex))

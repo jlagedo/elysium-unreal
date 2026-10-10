@@ -22,6 +22,26 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 	Handle = InHandle;
 	Class = &InClass;
 	TargetName = InDef.TargetName;
+	// The base constructor `FUN_1009d980` 0x1009d980's collision and flag-word steps, in its order
+	// (`walks/L0-r015.md` "Shared layout", `L0-r016.md`); the rest of that constructor is
+	// `L0.entity_core.base-construction`'s. `1009da53`: the member constructor `FUN_100dc190`.
+	// `1009db06`: `FUN_100dc300(this)`. `1009dbe3` / `1009dc53`: `SetSolid(0)` / `SetSolidFlags(0)`,
+	// both no-ops on the zeroed words. `1009dc79`: `SetCheckUntouch(false)`. `1009dca4`:
+	// `SetCollisionBounds(zero, zero)` -> `0x100dc770` -> `FUN_100dda20` (`|= 0x14000`, and
+	// `FUN_100ddd20` finds a NULL edict, so no `0x8000`). `1009dcdc`: `|= 0x50000`. A fresh entity
+	// reads `0x54000`.
+	ConstructCollisionProperty();                     // 1009da53 -> 0x100dc190
+	InitCollisionProperty(this);                      // 1009db06 -> 0x100dc300
+	SetSolid(0);                                      // 1009dbe3 -> 0x100dc480, no change
+	SetSolidFlags(0);                                 // 1009dc53 -> 0x100dc580, no change
+	SetCheckUntouch(false);                           // 1009dc79 -> 0x100b11d0
+	// `FUN_100dda20`'s OR, written out: inside the constructor the edict pointer `+0x2e0` is still
+	// NULL (`FUN_101ab590` zeroed it at `1009da5e`; the engine attaches the edict after
+	// construction), so the tail `FUN_100ddd20` reads `IndexOfEdict(NULL) == 0` and exits. Calling
+	// `MarkCollisionBoundsDirty()` here would read this port's edict index (the handle) as already
+	// attached and set `0x8000` early.
+	EFlags |= 0x14000u;                               // 1009dca4 -> 0x1009edc0 -> 0x100dc770 -> 0x100dda23
+	EFlags |= 0x50000u;                               // 1009dcdc OR EDX,0x50000
 	Origin = InDef.Origin;   // the live copy; the def's is immutable (SetOrigin moves this one)
 	// The producer hoists `StartHidden` out of the keys, so seed the member from the def before
 	// the keyvalue walk below: an authored key still wins, and a def that carries only the
@@ -127,6 +147,13 @@ void FElysiumEntity::Kill()
 	// CBaseCombatCharacter::UpdateOnRemove 0x10327790 removes one comfort
 	// entry before its handle is invalidated. Other entity classes have no entry.
 	if (FElysiumCombatCharacter* Character = AsCombatCharacter()) { Character->RemoveFromComfortList(); }
+	// `CEntityTouchManager::OnEntityDeleted` 0x100f8cf0 (vslot 1 of `DAT_107036b0`): an entity with
+	// the untouch-pending bit is fast-removed from the deferred untouch list. Retail runs it at the
+	// delete-queue purge; this port's removal is `Kill` itself (the slot is kept, the handle dies).
+	if (World != nullptr)
+	{
+		World->UntouchListOnEntityDeleted(*this);
+	}
 	bDead = true;
 	NextThink = ELYSIUM_NEVER_THINK;
 	if (!bHidden)

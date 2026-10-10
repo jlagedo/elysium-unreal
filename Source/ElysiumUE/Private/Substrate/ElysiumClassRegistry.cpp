@@ -210,6 +210,13 @@ static FElysiumClassRegistrar GRegBaseEntity(
 		// not a recovered row — so it stays hand-written where the generated table cannot claim it.
 		D.Field(TEXT("use_icon"),        &FElysiumEntity::UseIcon);
 		D.Field(TEXT("locked_icon"),     &FElysiumEntity::LockedIcon);
+		// The embedded `CCollisionProperty` map's one key row (`datamap_t` `0x10560c20`, record
+		// `0x10560cbc`: `INTEGER m_Solid off=0x40 KEY|SAVE ext=solid`, reached from `CBaseEntity`'s
+		// `m_Collision` FIELD_EMBEDDED at `+0x270`, so `+0x2b0`; `docs/vtmb/phy_vphysics.md`): the
+		// `solid` key a map row authors lands on the word itself at parse, not through `SetSolid`
+		// (`walks/L0-r015.md`). The replay's base table does not descend into the embedded map, so the
+		// row is hand-written here; `FElysiumProp` still reads the raw key for its body build.
+		D.Field(TEXT("solid"),           &FElysiumEntity::RetailSolidType);
 	});
 
 // --- Verification command ---------------------------------------------------------------

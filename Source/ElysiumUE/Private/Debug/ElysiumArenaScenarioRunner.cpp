@@ -1278,7 +1278,7 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 			if (Probe.Member.IsEmpty())
 			{
 				OutAnswer.Type = FElysiumArenaValue::EType::Number;
-				OutAnswer.Number = static_cast<double>(Entity->EFlags | (Entity->IsEflDormant() ? 0x2u : 0u));
+				OutAnswer.Number = static_cast<double>(Entity->EFlagsWord());
 			}
 			else
 			{
@@ -1289,13 +1289,22 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 					return false;
 				}
 				OutAnswer.Type = FElysiumArenaValue::EType::Bool;
-				OutAnswer.bBool = ((Entity->EFlags | (Entity->IsEflDormant() ? 0x2u : 0u)) & Mask) == Mask;
+				OutAnswer.bBool = (Entity->EFlagsWord() & Mask) == Mask;
 			}
 		}
 		else if (Probe.Field == TEXT("m_NetworkChangeState.m_bChanged"))
 		{
 			OutAnswer.Type = FElysiumArenaValue::EType::Bool;
 			OutAnswer.bBool = Entity->bNetworkChanged;
+		}
+		else if (Probe.Field == TEXT("m_touchStamp") || Probe.Field == TEXT("m_Solid") || Probe.Field == TEXT("m_usSolidFlags"))
+		{
+			// L0-r015's: `m_touchStamp` (+0x1ac, the untouch generation), and the collision property's
+			// `m_Solid` (coll+0x40) / `m_usSolidFlags` (coll+0x44) datamap rows, read raw.
+			OutAnswer.Type = FElysiumArenaValue::EType::Number;
+			OutAnswer.Number = Probe.Field == TEXT("m_touchStamp") ? Entity->TouchStamp
+				: Probe.Field == TEXT("m_Solid") ? Entity->RetailSolidType
+				: static_cast<double>(Entity->RetailSolidFlags & 0xffffu);
 		}
 		else if (Probe.Field == TEXT("m_iName"))
 		{
@@ -1355,7 +1364,7 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 					TEXT("m_spawnflags, m_nRenderMode, m_lifeState, m_vecOrigin, m_angRotation, m_vecAbsOrigin, m_angAbsRotation, ")
 					TEXT("m_pParent, m_pMoveParent, m_pMoveChild, m_pMovePeer, m_hAimEnt, m_iParentAttachment, m_iEFlags, ")
 					TEXT("m_MoveType, m_MoveCollide, m_NetworkChangeState.m_bChanged, m_iVSoundGroup, m_iVSoundGroupFemale, ")
-					TEXT("m_iVSoundTableIdx, or a datamap row the entity's class registers)"),
+					TEXT("m_iVSoundTableIdx, m_touchStamp, m_Solid, m_usSolidFlags, or a datamap row the entity's class registers)"),
 					*Probe.Field);
 				return false;
 			}
@@ -2374,6 +2383,76 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
 			Done.Name = Action.Target;
 			Done.Text = FString::Printf(TEXT("entity_call Use done use_type=%d value=%g"), UseType, UseValue);
+			return true;
+		}
+		if (Action.Function == TEXT("GetEFlags") || Action.Function == TEXT("SetEFlags"))
+		{
+			// Slots 83 / 84 on one live entity, as `CServerNetworkProperty::vfunc2` / `vfunc3` forward the
+			// engine's call (`walks/L0-r015.md`). `GetEFlags` takes no argument and reports the word;
+			// `SetEFlags` takes the whole word as one number.
+			FElysiumEntity* Target = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
+			if (Target == nullptr || Target->IsDead())
+			{
+				OutError = FString::Printf(TEXT("entity_call '%s': no live entity named '%s'"), *Action.Function, *Action.Target);
+				return false;
+			}
+			const bool bSet = Action.Function == TEXT("SetEFlags");
+			if (bSet ? (Action.Args.Num() != 1 || Action.Args[0].Value.Type != FElysiumArenaValue::EType::Number)
+				: !Action.Args.IsEmpty())
+			{
+				OutError = bSet ? TEXT("entity_call 'SetEFlags' takes [<word>]") : TEXT("entity_call 'GetEFlags' takes no arguments");
+				return false;
+			}
+			FString Text;
+			if (bSet)
+			{
+				const uint32 Word = static_cast<uint32>(static_cast<int64>(Action.Args[0].Value.Number));
+				Target->SetEFlags(static_cast<int32>(Word));
+				Text = FString::Printf(TEXT("entity_call SetEFlags done m_iEFlags=0x%x"), Word);
+			}
+			else
+			{
+				const uint32 Word = static_cast<uint32>(Target->GetEFlags());
+				Text = FString::Printf(TEXT("entity_call GetEFlags done m_iEFlags=0x%x"), Word);
+			}
+			FEvent& Done = Events.AddDefaulted_GetRef();
+			StampEvent(Done, World.NowSeconds());
+			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+			Done.Name = Action.Target;
+			Done.Text = Text;
+			return true;
+		}
+		if (Action.Function == TEXT("MarkEntitiesAsTouching"))
+		{
+			// `CServerGameEnts::MarkEntitiesAsTouching` `0x1011be20` -> `PhysicsMarkEntitiesAsTouching`
+			// `0x1003e2e0` -> `PhysicsMarkEntityAsTouched` `0x1003dc70` once in each direction: the pair
+			// the engine's move found, handed to the server. The port's terminus is `RouteEntityTouch`
+			// (the touched entity, the toucher, begin), which makes the pair's two stamped links and
+			// fires the touched side's StartTouch (`entity_io.md` § The touch dispatch path).
+			FElysiumEntity* Target = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
+			if (Target == nullptr || Target->IsDead())
+			{
+				OutError = FString::Printf(TEXT("entity_call 'MarkEntitiesAsTouching': no live entity named '%s'"), *Action.Target);
+				return false;
+			}
+			if (Action.Args.Num() != 1 || Action.Args[0].Value.Type != FElysiumArenaValue::EType::String)
+			{
+				OutError = TEXT("entity_call 'MarkEntitiesAsTouching' takes [\"<toucher targetname>\"]");
+				return false;
+			}
+			FElysiumEntity* Toucher = ElysiumArenaRunnerDetail::FindEntity(World, Action.Args[0].Value.String);
+			if (Toucher == nullptr || Toucher->IsDead())
+			{
+				OutError = FString::Printf(TEXT("entity_call 'MarkEntitiesAsTouching': no live entity named '%s'"), *Action.Args[0].Value.String);
+				return false;
+			}
+			World.RouteEntityTouch(Target->Handle, Toucher->Handle, /*bBegin*/ true);
+			FEvent& Done = Events.AddDefaulted_GetRef();
+			StampEvent(Done, World.NowSeconds());
+			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+			Done.Name = Action.Target;
+			Done.Text = FString::Printf(TEXT("entity_call MarkEntitiesAsTouching done toucher=%s touching=%d"),
+				*Action.Args[0].Value.String, Target->IsCurrentlyTouching() ? 1 : 0);
 			return true;
 		}
 		if (Action.Function == TEXT("VSoundFolder_AddRange") || Action.Function == TEXT("VSoundFolder_Find"))

@@ -254,17 +254,80 @@ int32 RetailMoveType = 0;
 FElysiumEntityHandle RetailGroundEntity;
 int32 RetailMoveCollide = 0;
 
-// SEAM for `m_Collision` (`+0x270`, `CCollisionProperty`) and its solid-flag word `+0x2b4` — the
-// `CBaseEntity` words `SetSolid` / `SetSolidFlags` / `AddSolidFlags` write, each under a
-// `"CBaseEntity::SetSolid"`-style scope-trace frame. This substrate carries no solid type and no
-// solid flags, so these three record what was asked:
-// `RetailSolidType` the last `SetSolid` value, `RetailSolidFlags` the flag word as the
-// read-OR-pass-back writers leave it, `RetailSolidSets` how many `SetSolid` calls ran. Writers:
-// `CAI_TestHull::Spawn` `0x102d72f0`, `CNPC_VPedestrian::OnRestore` `0x103a25a0`, `CNPCMaker::Spawn`
-// `0x1034afe0`. Independent of `RetailMoveType` above: retail's `SetMoveType` touches neither.
+// `m_Collision` (`+0x270`, the embedded `CCollisionProperty`, `0x64` bytes; `walks/L0-r015.md`
+// "Shared layout"), flat on the entity. Offsets are `coll+N` (= entity `+0x270+N`). The datamap
+// names (`vtmb_fields CCollisionProperty`) are retail's; `coll+0x3c` (the owner) and `coll+0x46` (the
+// spatial-partition handle) have no datamap row and no recovered name. `FUN_100dc190` 0x100dc190 is
+// the member constructor (vftable, handle `0xffff`, then `FUN_100dc300(this, 0)`); `FUN_100dc300`
+// 0x100dc300 the initializer the base constructor runs again with `owner = this`
+// (`ConstructCollisionProperty` / `InitCollisionProperty` below).
+FElysiumEntity* CollisionOwner = nullptr;                  // coll+0x3c, the owner entity
+FVector CollMins = FVector::ZeroVector;               // coll+0x04 m_vecMins
+FVector CollMaxs = FVector::ZeroVector;               // coll+0x10 m_vecMaxs
+uint8 SurroundType = 0;                                    // coll+0x1c m_nSurroundType
+float TriggerBloat = 0.f;                                  // coll+0x20 m_flTriggerBloat
+FVector SpecifiedSurroundingMins = FVector::ZeroVector;    // coll+0x24 m_vecSpecifiedSurroundingMins
+FVector SpecifiedSurroundingMaxs = FVector::ZeroVector;    // coll+0x30 m_vecSpecifiedSurroundingMaxs
+// coll+0x40 `m_Solid` (abs `+0x2b0`, SolidType_t: NONE 0, BSP 1, BBOX 2, OBB 3, OBB_YAW 4, CUSTOM 5,
+// VPHYSICS 6) and coll+0x44 `m_usSolidFlags` (abs `+0x2b4`, a SHORT; `FSOLID_NOT_SOLID 0x4`,
+// `FSOLID_TRIGGER 0x8`; `0x1`, `0x10`, `0x40`, `0x80`, `0x100` unnamed in the retail docs). Kept under
+// their historical port names: `RetailSolidType` / `RetailSolidFlags`. The setters are `SetSolid`
+// (`FUN_100dc480` 0x100dc480) and `SetSolidFlags` (`FUN_100dc580` 0x100dc580) below; several NPC
+// Spawn bodies still write the words directly with their own retail citations (`ElysiumNpcSpawn.cpp`,
+// `ElysiumNpcSpawnSpecies.cpp`, `ElysiumNpcTestHull.cpp`, `ElysiumNpcPedestrian.cpp`), which skips
+// the setters' change tails. `RetailSolidSets` counts the `SetSolid` calls (port-only, for
+// `IsRetailNotSolid`). Independent of `RetailMoveType` above: retail's `SetMoveType` touches neither.
 int32 RetailSolidType = 0;
 uint32 RetailSolidFlags = 0;
 int32 RetailSolidSets = 0;
+// coll+0x46: the spatial-partition handle, `0xffff` = none. Written `0xffff` by `FUN_100dc190` and
+// never anything else here: the engine's `CreateHandle` (the relink) is the one writer of a real
+// handle, and that partition is engine-replaced (Unreal's overlap queries). `FUN_100ddc40` 0x100ddc40
+// therefore always takes its first exit.
+uint16 PartitionHandle = 0xffff;
+float CollisionRadius = 0.f;                               // coll+0x48 m_flRadius
+FVector SurroundingMins = FVector::ZeroVector;             // coll+0x4c m_vecSurroundingMins
+FVector SurroundingMaxs = FVector::ZeroVector;             // coll+0x58 m_vecSurroundingMaxs
+
+// `FUN_100dc190` 0x100dc190: the `CCollisionProperty` member constructor the base constructor
+// `0x1009d980` runs first (`1009da53`): vftable, `coll+0x46 = 0xffff`, `FUN_100dc300(this, 0)`.
+void ConstructCollisionProperty();
+// `FUN_100dc300` 0x100dc300: owner, then every field zeroed in retail's store order, the two
+// surrounding vectors from the zero-vector global `DAT_1070d1b0`. Runs twice per construction
+// (owner 0 from `FUN_100dc190`, then owner `this` from the base constructor at `1009db06`).
+void InitCollisionProperty(FElysiumEntity* Owner);
+// `FUN_100dc480` 0x100dc480 (`"CBaseEntity::SetSolid"` is its scope-trace label): the solid-type
+// setter. Returns early on no change; `FUN_100dda20`; `SOLID_BSP` under a live move parent becomes
+// `SOLID_VPHYSICS`; the store; the physics object's slot 25; `FUN_100ddc40`; and `FUN_100dc430` only
+// when the "solid" boolean (`m_Solid != 0 && !(flags & 4)`) flipped.
+void SetSolid(int32 Type);
+// `FUN_100dc580` 0x100dc580 (`"CBaseEntity::SetSolidFlags"` 0x10548fb4 is its scope-trace label):
+// the solid-word setter. Store first; nothing else on no change; `FUN_100dda20` on a change of
+// `0x180`; the physics object's slot 25 on a change of `0x4`; `FUN_100ddc40` then `FUN_100dc430` on a
+// change of `0xc`.
+void SetSolidFlags(uint16 Word);
+// `FUN_100dda20` 0x100dda20: `owner->m_iEFlags |= 0x14000`, then tail-jumps into `FUN_100ddd20`.
+// SDK analogue `MarkSurroundingBoundsDirty` (inference).
+void MarkCollisionBoundsDirty();
+// `FUN_100ddd20` 0x100ddd20: when `IndexOfEdict(owner->+0x2e0)` is non-zero and bit `0x8000` is
+// clear, set it and append the owner to the dirty-partition list `DAT_106e8144`. SDK analogue
+// `MarkPartitionHandleDirty` (inference). The list's consumer (`FUN_100dbac0`) is engine-replaced.
+void MarkPartitionHandleDirty();
+// `FUN_100ddc40` 0x100ddc40: remove the handle from every partition list, then re-insert it by the
+// solid words (`0x10` always; `1` / `2` / `3` by `FSOLID_NOT_SOLID` / `FSOLID_TRIGGER`). Engine-
+// replaced (`SpatialPartition001`): with no handle it exits at its first test, as it does here.
+void UpdatePartitionMembership();
+// `FUN_100dc430` 0x100dc430: when the entity is not solid (`m_Solid == 0 || flags & 4`) and not a
+// trigger (`flags & 8` clear) and `IsCurrentlyTouching()` (slot 207), `SetCheckUntouch(true)` (slot 6).
+void CheckForUntouchOnSolidChange();
+// `IndexOfEdict(this->+0x2e0)` (`VEngineServer014` slot 35) as `FElysiumDecal::EdictIndex` answers it:
+// 0 for the world, else the entity's index. There are no edicts here; every non-world entity is
+// networked, as every `CreateEntityByName` entity is in retail.
+int32 EdictIndex() const;
+// `CBaseEntity::PhysicsCheckForEntityUntouch` 0x1003d490: expire every touchlink whose stamp is not
+// `m_touchStamp` (the other side's EndTouch, the link freed), then `SetCheckUntouch(false)`
+// (`1003d5c9`). Run by the touch manager's frame pass `FUN_100f8ec0`.
+void PhysicsCheckForEntityUntouch();
 
 // `CBaseEntity::IsSolid()` inverted, as far as this port records it: `m_nSolidType == SOLID_NONE ||
 // (flags & FSOLID_NOT_SOLID 0x4)`. A trace or a hull test never reports such an entity. The port's

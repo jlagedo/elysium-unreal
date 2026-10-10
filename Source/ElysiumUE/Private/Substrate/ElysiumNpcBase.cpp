@@ -190,7 +190,7 @@ bool FElysiumNpcBase::BecomeClientRagdoll(const FVector& Force, int32 Bone, bool
 		ResetSequenceInfo(); // 0x10090950
 	}
 	// 0x10090180 slot225: physics destruction input absent, not fabricated.
-	if (!bRetainEntity) { RetailSolidFlags |= 4u; } // 0x10090180 rig branch only
+	if (!bRetainEntity) { SetSolidFlags(static_cast<uint16>(GetSolidFlags() | 4)); } // 0x10090180 rig branch only: `|4` through FUN_100dc580 (0x100015dc)
 	CompleteDeathHandoff(); // 0x10090180 TriggerClientRagdoll visual seam, once per drawn body
 	(void)Force; // 0x1008b800 force/bone latch and impulse producer remain 0014
 	if (TroikaRagdoll != nullptr) { TroikaRagdoll->RenderFxWord = 0x17; } // 0x10090180

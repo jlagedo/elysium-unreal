@@ -2033,6 +2033,17 @@ const TArray<FString>& EntityCallAllowlist()
 		// Args: `[sx,sy,sz, ox,oy,oz, dx,dy,dz, ex,ey,ez, cx,cy,cz, hx,hy,hz, tolerance]` (ray start,
 		// start offset, delta, extents; box centre, half size; tolerance), pure numbers.
 		TEXT("Sweep_HullPrelude"),
+		// L0.entity_core.eflags-word: slots 83 / 84 (`GetEFlags` 0x100b4ef0, `SetEFlags` 0x100b4f10) as
+		// the engine reaches them -- `CServerNetworkProperty::vfunc2` / `vfunc3` (`0x101ab690` /
+		// `0x101ab6b0`) forward the engine's call to the owner's slot (`walks/L0-r015.md`). `SetEFlags`
+		// takes one integer, the whole word.
+		TEXT("GetEFlags"),
+		TEXT("SetEFlags"),
+		// L0.entity_core.collision-touch: `CServerGameEnts::MarkEntitiesAsTouching` `0x1011be20`, the
+		// engine -> server touch entry (interface slot at `0x1001017c`; `entity_io.md` § The touch dispatch
+		// path): a pair the engine's move found is handed to the server, which makes the two touchlinks
+		// and fires StartTouch. `target` is the touched entity, the one argument the toucher's name.
+		TEXT("MarkEntitiesAsTouching"),
 	};
 	return Allowed;
 }

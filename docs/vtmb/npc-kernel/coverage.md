@@ -11,8 +11,8 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
-| … cited by the oracle | 2831 |
-| … not cited by the oracle | 2356 |
+| … cited by the oracle | 2838 |
+| … not cited by the oracle | 2349 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |
@@ -507,7 +507,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x100ad320` CBaseEntity::GetVectors | `0x10029700` CKeepUpright::Spawn, `0x1009fb80` CBaseEntity::SendDebugPivotOverlay, `0x1018cf20` FUN_1018cf20, `0x101b06a0` FUN_101b06a0 |
 | `0x100ad550` CBaseEntity::SetMovedir | `0x100c8d60` CBaseButton::Spawn, `0x100ef260` CBaseDoor::vfunc103, `0x10116030` CFuncMoveLinear::Spawn, `0x1013e820` CTriggerBrush::Spawn, +1 more |
 | `0x100ada20` CBaseEntity::Teleport | `0x10155e40` CRagdollProp::Teleport, `0x101606a0` CBasePlayer::Teleport |
-| `0x100b11d0` CBaseEntity::SetCheckUntouch | `0x1003d490` CBaseEntity::PhysicsCheckForEntityUntouch, `0x1009d980` FUN_1009d980 |
 | `0x100b12e0` CBaseEntity::SetSentLastFrame | `0x1009d980` FUN_1009d980 |
 | `0x100b1420` CBaseEntity::SetGroundEntity | `0x10034590` CBaseEntity::PhysicsTryMove, `0x1003b190` CBaseEntity::PhysicsStepRunTimestep, `0x1003f070` CBaseEntity::PerformFlyCollisionResolution, `0x10252a90` CBaseCombatWeapon::FUN_10252a90, +1 more |
 | `0x100b15f0` CBaseEntity::SetModelName | `0x1004eae0` CPhysExplosion::Spawn, `0x1004ef60` CPhysImpact::Spawn, `0x1009d980` FUN_1009d980, `0x100b87a0` CBatSwarm::Spawn, +5 more |
@@ -553,8 +552,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x100d0390` FUN_100d0390 | `0x100cae20` FUN_100cae20, `0x100ce0d0` FUN_100ce0d0, `0x100d05d0` FUN_100d05d0, `0x100d0f00` CVariantSaveDataOps::vfunc1, +24 more |
 | `0x100d1210` FUN_100d1210 | `0x100d1250` FUN_100d1250 |
 | `0x100d15d0` FUN_100d15d0 | `0x100cebb0` FUN_100cebb0, `0x100efc90` CBaseDoor::Use |
-| `0x100dc480` FUN_100dc480 | `0x1004d9a0` CPhysicsSpring::Spawn, `0x1004e260` CPhysBox::Spawn, `0x1004e500` CPhysBox::vfunc241, `0x1004eae0` CPhysExplosion::Spawn, +81 more |
-| `0x100dc580` FUN_100dc580 | `0x1004e500` CPhysBox::vfunc241, `0x10081b60` CSceneEntity::OnSceneFinished, `0x10081ed0` FUN_10081ed0, `0x1009d980` FUN_1009d980, +49 more |
 | `0x100dd990` FUN_100dd990 | `0x100b87a0` CBatSwarm::Spawn, `0x10155fb0` CRagdollProp::FUN_10155fb0 |
 | `0x100dda20` FUN_100dda20 | `0x100b51b0` FUN_100b51b0, `0x100b8b50` FUN_100b8b50, `0x10155fb0` CRagdollProp::FUN_10155fb0 |
 | `0x100ddd20` FUN_100ddd20 | `0x100b52a0` FUN_100b52a0 |

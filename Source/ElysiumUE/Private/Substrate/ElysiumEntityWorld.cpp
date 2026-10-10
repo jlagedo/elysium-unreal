@@ -2063,6 +2063,10 @@ void FElysiumEntityWorld::Tick(double Now)
 	if (FElysiumPlayer* PlayerEnt = FindPlayer()) PlayerEnt->PostThinkAnimation();
 	RunNetworkManagerFirstThink();
 	RunThinks(Now);
+	// `CEntityListSystem::FrameUpdatePostEntityThink` 0x100f9160: `GameFrame` `0x1011abc0` step 4,
+	// after the think pass and before the event queue drains (`entity_io.md` § The touch dispatch
+	// path; `walks/L0-r015.md`). The deferred untouch checks run here.
+	FrameUpdatePostEntityThinkUntouch();
 	ServiceEvents(Now);
 	// Auto-Link/Auto-End observes the exact submitted voice handle after world events have had their
 	// chance to replace or close the session. A stale completion therefore cannot advance a newer turn.
@@ -3077,6 +3081,7 @@ void FElysiumEntityWorld::Teardown()
 
 	bActive = false;
 	ActiveTouches.Empty();
+	UntouchCheckList.Empty();   // CEntityListSystem::LevelShutdownPostEntity 0x100f90a0: the manager's vector emptied
 
 	// The player's live state goes back into the session record before the entity holding it
 	// dies. This is the only dehydrate point, and it covers every way a map epoch ends: a travel, a

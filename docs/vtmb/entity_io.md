@@ -916,6 +916,59 @@ whose stamp differs from the owner's `m_touchStamp`; a link stamped `0xffffffff`
 carries the `0x1` bit that `PhysicsMarkEntityAsTouched` set when it dispatched the begin** — ends are
 paired to begins by construction, not by a liveness test. Neither function tests `EFL_KILLME`.
 
+### The deferred untouch check and the solid words (L0-r015, decompiled)
+
+Who asks for an untouch pass, and when it runs (`docs/specs/layers/L0-entity/walks/L0-r015.md`; port
+`Source/ElysiumUE/Private/Substrate/ElysiumEntityCollision.cpp`, `ElysiumEntityWorldInteraction.cpp`):
+
+- **`CBaseEntity::SetCheckUntouch(bool)`** `0x100b11d0` (slot 6). `false`: `m_iEFlags &= ~0x1000000`
+  (`100b127d`), the stamp untouched. `true`: `m_touchStamp` (`+0x1ac`) `+= 1` always (`100b1251`), then
+  if byte `+0x26b & 1` (the `0x1000000` pending bit) is already set, exit (`100b1257` → `100b1287`,
+  no enqueue); else set it (`100b1259`) and `FUN_100f8e20(this)` (`100b126b`). Callers: the base
+  constructor `0x1009d980` (`false`), `PhysicsCheckForEntityUntouch`'s closing call (`1003d5c9`,
+  `false`), `CAISound::OnRestore` `0x100aa5a0` (always `false`), `FUN_100dc430` (`true`), and the
+  engine's relink `FUN_20111f30` on each mover (`true`).
+- **`FUN_100f8e20`** `0x100f8e20` — the enqueue: `ent->vslot116()` (`IsMarkedForDeletion`, `m_iEFlags & 1`)
+  true → return (`100f8e31`); else a `CUtlVector` AddToTail onto `CEntityTouchManager` `DAT_107036b0`
+  (base `0x107036b4`, capacity `0x107036b8`, count `0x107036c0`; grow 8 then double, `FUN_100b4a40`).
+  Duplicates are not tested; the memmove at `100f8e75` moves zero elements.
+- **The consumer** is `CEntityListSystem::FrameUpdatePostEntityThink` `0x100f9160` → `FUN_100f8ec0`
+  (`GameFrame` `0x1011abc0` step 4, after the think pass, before `CEventQueue::ServiceEvents`): copy
+  the `n` pointers, `count = 0` (`100f8f09`), then for each entity whose pending bit is still set
+  (`100f8f13`) `PhysicsCheckForEntityUntouch` (`100f8f1b`), which ends with `SetCheckUntouch(false)`.
+  `CEntityTouchManager::OnEntityDeleted` `0x100f8cf0` (vslot 1) fast-removes a pending entity at
+  delete time (copy the last element over it, `count -= 1`). `LevelInitPreEntity` `0x100f8fb0` /
+  `LevelShutdownPostEntity` `0x100f90a0` empty the vector.
+- **`FUN_100dc430`** `0x100dc430` — the gate on the collision property (`this = +0x270`): when
+  `m_Solid == 0 || m_usSolidFlags & 0x4` (not solid) and `m_usSolidFlags & 0x8` clear (not a trigger)
+  and the owner's slot 207 `IsCurrentlyTouching` `0x1003d3d0` (`HasDataObjectType(this, 1)`, the
+  touchlink list exists) answers true → `owner->SetCheckUntouch(true)` (`100dc460`). Exits:
+  `100dc43e` (solid), `100dc448` (trigger), `100dc457` (not touching).
+- **`FUN_100dc580`** `0x100dc580` (`"CBaseEntity::SetSolidFlags"` `0x10548fb4` labels its wrapper) —
+  the `m_usSolidFlags` (`+0x2b4`) setter: store (`100dc58e`); `old == new` → nothing else (`100dc599`);
+  a change of `0x180` → `FUN_100dda20` (`owner->m_iEFlags |= 0x14000`, then `FUN_100ddd20`: with a
+  non-zero `IndexOfEdict(+0x2e0)` and bit `0x8000` clear, set it and append to the dirty-partition list
+  `DAT_106e8144`); a change of `0x4` with a non-NULL `m_pPhysicsObject` (`+0x36c`) → its slot 25 (name
+  unrecovered, `vphysics.dll` is not in the corpus); a change of `0xc` → `FUN_100ddc40` (the
+  `SpatialPartition001` relink: `Remove(handle)`, then `Insert(0x10)` and `Insert(type)`; exits at once
+  on handle `0xffff`) then `FUN_100dc430`. Callers (sample): `ScriptHide` `4`, `ScriptUnhide` the saved
+  word, `CBasePlayer::Spawn` `0 | 1 | 0x10 | 0x40`, `CAI_BaseNPCTroika::Spawn` `0 | 1 | 0x40`,
+  `CBaseAnimating::BecomeClientRagdoll` `|4`, `CRagdollProp` `|0x80`.
+- **`FUN_100dc480`** `0x100dc480` (`"CBaseEntity::SetSolid"`) — the `m_Solid` (`+0x2b0`) setter: no
+  change → return; `was = solid?`; `FUN_100dda20`; `SOLID_BSP` under a live move parent becomes
+  `SOLID_VPHYSICS` (6); the store; slot 25 when the physics object exists; `FUN_100ddc40`; `FUN_100dc430`
+  only when the solid boolean flipped. So `ScriptHide` on a solid, touching entity asks twice
+  (`SetSolid(0)` then `SetSolidFlags(4)`): the stamp rises by 2, the enqueue happens once.
+- **`FUN_100dc300`** `0x100dc300` — the collision property initializer (`owner` at `coll+0x3c`, then
+  `m_vecMins`/`m_vecMaxs`, `m_flRadius`, `m_flTriggerBloat`, `m_usSolidFlags`, `m_Solid`,
+  `m_nSurroundType` zero, `m_vecSurroundingMins/Maxs` from the zero-vector global `DAT_1070d1b0`, the
+  specified surrounding pair zero); run by the member constructor `FUN_100dc190` (vftable, handle
+  `coll+0x46 = 0xffff`, owner 0) and again by the base constructor with `owner = this`.
+- **The flag word.** `GetEFlags` `0x100b4ef0` / `SetEFlags` `0x100b4f10` (slots 83 / 84) read and replace
+  the whole `m_iEFlags`; the base constructor leaves `0x54000` in it (`SetCollisionBounds(zero, zero)`
+  → `FUN_100dc770` → `FUN_100dda20`'s `0x14000`, with a NULL edict so no `0x8000`; then `|= 0x50000`).
+  The 124 slot-83/84 dispatches on `*DAT_1070b22c` in the corpus are `VEngineServer014`'s, not these.
+
 ### `OnStartTouch` still fires inside the `wait == -1` removal window
 
 `ActivateMultiTrigger` (`FUN_101c68e0`) writes exactly three things on the `wait == -1` branch:

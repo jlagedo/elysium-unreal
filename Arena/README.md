@@ -189,6 +189,9 @@ ordinary record, a `script` failure on an `expect_fail` one. Traced as `script`:
 | `SoundScript_SetChannel` | as above | `["<channel text>"]` or `[null]` | `FUN_101b30d0` on a fresh record, then the `channel` key's setter `FUN_101b2490` `0x101b2490` (the key parser `FUN_101b3bb0`'s call at 0x101b3bfe), which runs the channel parser `FUN_101b24d0` `0x101b24d0` (`sndchan.parse` site) and keeps the text at `+0x69` | `entity_call SoundScript_SetChannel done channel= channel_text= ...` (the same words) |
 | `Use` | a live entity's targetname | `[<useType 0..3>, <value>?]` (0 OFF, 1 ON, 2 SET, 3 TOGGLE; `value` 0 when absent) | slot 173 `Use(activator, caller, useType, value)` on that entity (`FElysiumEntity::UseByType`), with invalid activator and caller handles: the call `CBaseEntity::InputUse` `0x100ac9f0` makes with `(3, 0)` for the `Use` input (which `fire` drives), and the one a player's +use or an ambient's PlaySound / StopSound make with their own type. `CLight::Use` `0x10130580` is the first leaf to switch on it | `entity_call Use done use_type=<n> value=<v>` |
 | `Sweep_HullPrelude` | a utility name (`sweep`), the `who` of its events | 19 numbers: ray start, start offset, delta, extents (3 each); box centre, half size (3 each); tolerance -- `0x10241620`'s arguments, pure, any unit | the oriented-box clip's hull-path prelude (`ElysiumRetailSweep::HullClipPrelude`): `ClearTrace 0x1023f3d0` (`world_clear`), then the segment/sphere early-out `0x1023ffa0` (`segment_sphere`) with `r1 = sqrt(|extents|^2) + sqrt(|half|^2)`, `r2 = tolerance`; the separating-axis clip after a pass is engine-replaced | `entity_call Sweep_HullPrelude done prelude=<pass|miss> fraction=1 end=<x,y,z>` |
+| `GetEFlags` | a live entity's targetname | none | slot 83 `CBaseEntity::GetEFlags` `0x100b4ef0` on that entity, as the engine reaches it through `CServerNetworkProperty::vfunc2` `0x101ab690` (`walks/L0-r015.md`): the whole `m_iEFlags` word (`eflags_word` site) | `entity_call GetEFlags done m_iEFlags=0x<word>` |
+| `SetEFlags` | as above | `[<word>]`, one integer | slot 84 `CBaseEntity::SetEFlags` `0x100b4f10`, as `CServerNetworkProperty::vfunc3` `0x101ab6b0` forwards it: the whole-dword replace, no mask and no OR | `entity_call SetEFlags done m_iEFlags=0x<word>` |
+| `MarkEntitiesAsTouching` | the TOUCHED entity's targetname | `["<toucher targetname>"]` | `CServerGameEnts::MarkEntitiesAsTouching` `0x1011be20` (the engine -> server touch entry, interface slot `0x1001017c`) -> `PhysicsMarkEntitiesAsTouching` `0x1003e2e0` -> `PhysicsMarkEntityAsTouched` `0x1003dc70` once each way: the pair's two touchlinks stamped with each owner's `m_touchStamp` (an existing pair is refreshed), the touched side's StartTouch. The port's terminus `FElysiumEntityWorld::RouteEntityTouch` | `entity_call MarkEntitiesAsTouching done toucher=<name> touching=<0|1>` |
 
 **`entity_field`** (a `probes` entry: `who`, `field`, optional `to`, `index`, `member`, one comparison) --
 reads a retail field by its **retail name** (`m_iName`, `m_iHealth`, the datamap name or the ledger's
@@ -205,7 +208,9 @@ only for a retail value no datamap row or witness exposes. The move hierarchy's 
 the handles `m_pParent`, `m_pMoveParent`, `m_pMoveChild`, `m_pMovePeer`, `m_hAimEnt` (a string, `#<index>`
 or `-1`; with `to: <targetname>` a bool, whether the handle resolves to that entity), `m_iParentAttachment`,
 `m_MoveType`, `m_MoveCollide` (numbers), `m_iEFlags` (a number; with `member: "0x800"`, a hex bit mask, a
-bool), `m_NetworkChangeState.m_bChanged` (a bool), the LOCAL pose words `m_vecOrigin` / `m_angRotation`
+bool), `m_NetworkChangeState.m_bChanged` (a bool), `m_touchStamp` (+0x1ac, the untouch generation), the
+collision property's `m_Solid` (coll+0x40) and `m_usSolidFlags` (coll+0x44) (numbers; `walks/L0-r015.md`),
+the LOCAL pose words `m_vecOrigin` / `m_angRotation`
 (slots 220 / 221) and the absolute ones `m_vecAbsOrigin` / `m_angAbsRotation` (slots 217 / 219: the read
 recomputes under EFL 0x800 and clears it, as every retail reader of the pose does), each with `member`
 `x` / `y` / `z` -- origins in cm on the Unreal axes, angles in Source degrees (pitch, yaw, roll).
@@ -347,7 +352,27 @@ fraction= startsolid= hit=<none|#n> eidx= model= local=` and `submit fn=CVEngine
 point= texture= eidx= model=`; Source inches), `decal_use` (`CDecal::Use` `0x1023a7d0`: `broadcast origin=
 mask=0x400b hit= eidx= fn=CTempEntsSystem::BSPDecal va=0x10058ce0 delay=0 texture= recipients=all
 miss_fault= activator=` and `arm m_pfnThink=0x10015b68 m_flNextThink= curtime=`), `decal_remove`
-(`CBaseEntity::SUB_Remove` `0x101c0b10`, `entry m_iHealth= then fn=FUN_101cd940`). A pure function reports
+(`CBaseEntity::SUB_Remove` `0x101c0b10`, `entry m_iHealth= then fn=FUN_101cd940`); the collision property and
+the untouch check (`walks/L0-r015.md`, `Substrate/ElysiumEntityCollision.cpp`): `eflags_word`
+(`CBaseEntity::GetEFlags` `0x100b4ef0` `return m_iEFlags=0x<word>`; `CBaseEntity::SetEFlags` `0x100b4f14`
+`write m_iEFlags=0x<word>`), `set_solid` (`FUN_100dc480` `0x100dc4e7`, `write old= new= m_Solid= was_solid=
+is_solid=`, only on a change), `solid_flags` (`FUN_100dc580`: `0x100dc58e` `write old= new=`, `0x100dc599`
+`branch arm=unchanged`, `0x100dc5a4` `call arm=bounds_dirty fn=FUN_100dda20 changed=`, `0x100dc5c3` `branch
+arm=no_physics_object`, `0x100dc5d9` `call arm=relink_and_gate fn=FUN_100ddc40 then=FUN_100dc430 changed=`),
+`bounds_dirty` (`FUN_100dda20` `0x100dda23` `write m_iEFlags=`; `FUN_100ddd20` `0x100ddd20` `branch eidx=
+arm=<world|already_dirty|mark> m_iEFlags=`), `partition_relink` (`FUN_100ddc40` `0x100ddc40`: `branch
+handle=0xffff arm=no_handle`, the one arm reached here), `untouch_gate` (`FUN_100dc430`: `0x100dc43e` `branch
+arm=solid`, `0x100dc448` `arm=trigger`, `0x100dc457` `arm=not_touching`, `0x100dc460` `call arm=request
+fn=CBaseEntity::SetCheckUntouch on=1`, each with `m_Solid= m_usSolidFlags=`), `check_untouch`
+(`CBaseEntity::SetCheckUntouch`: `0x100b1251` `write m_touchStamp=`, `0x100b1287` `branch arm=pending`,
+`0x100b126b` `call arm=enqueue fn=FUN_100f8e20`, `0x100b127d` `write arm=clear`, each with `m_iEFlags=`),
+`untouch_enqueue` (`FUN_100f8e20`: `0x100f8e31` `branch arm=marked_for_deletion count=`, `0x100f8e9c` `write
+arm=append index= count=`; `CEntityTouchManager::vfunc1` `0x100f8cf0` `write arm=fast_remove index= count=`),
+`untouch_drain` (`FUN_100f8ec0`: `0x100f8f09` `write count=0 drained=` in the `CEntityTouchManager` column;
+per entity `0x100f8f19` `branch arm=not_pending` or `0x100f8f1b` `call fn=CBaseEntity::PhysicsCheckForEntityUntouch
+m_iEFlags= m_touchStamp=`), `untouch_check` (`CBaseEntity::PhysicsCheckForEntityUntouch`: `0x1003d4f0`
+`untouch other= link_stamp= m_touchStamp=` per expired link, `0x1003d5c9` `call fn=CBaseEntity::SetCheckUntouch
+on=0 expired= touching= m_touchStamp=`). A pure function reports
 through `IElysiumRetailSiteSink` (`ElysiumRetailSite.h`); a utility with no entity names its target in the
 entity column (`FElysiumNamedRetailSites`).
 
@@ -543,6 +568,8 @@ record — and a `reason`) and
 | `world/l0_runtime_decal` | `CDecal::Spawn` `0x1023a750`, the projector `0x1023aa30` (the `texture` key `0x1023adb0`, the 5-unit line, a world hit and an NPC hit with `IndexOfEdict` / model / `VectorITransform`, `StaticDecal` on every path, `SUB_Remove`), the named decal's arming and `CDecal::Use` `0x1023a7d0` (the `CTEBSPDecal` broadcast, removal at use + 0.1 s), and a decal with no `texture` key (index 0) (L0.effects_world.runtime-decal) |
 | `world/l0_particle_attachment` | `CEnvParticle::AttachToEntity` `0x100fb110` from `CEnvParticle::Spawn` `0x100fb3d0` (parent, type, name, `MOVETYPE_FOLLOW`, aim entity, zero local origin, index) and `FUN_100fafa0`'s arms (tree -1, the `LookupAttachment` L1 hook, the studio-bone scan, the zero fallbacks) over an NPC and a bodiless parent (L0.effects_world.particle-attachment) |
 | `world/l0_switchable_light` | `CLight`: the `pitch` key `0x101303c0` after the `angles` key (lump order), Spawn `0x10130460` (the unnamed removal through `0x1000e255`, the 0.05 floor on every named light, the style-32 gate, START_OFF overwriting the authored pattern with `"a"`, the authored / `""` / absent pattern arms), Use `0x10130580` with each USE_TYPE through `entity_call Use` and the `Use` input's USE_TOGGLE, the inputs that bypass Use, SetPattern `0x10130780` (a string, a NULL string, a refused float), FadeToPattern `0x10130800` and FadeThink `0x101308d0` (`m` -> `n` -> `o` -> `pq` on the 0.05 grid, the stop), ScriptHide and Kill `0x101306d0` turning the light off first, hidden or not (L0.effects_world.switchable-light) |
+| `world/l0_eflags_word` | `CBaseEntity::GetEFlags` `0x100b4ef0` and `SetEFlags` `0x100b4f10` (slots 83 / 84): the constructor's `0x54000` on a fresh entity, the whole-dword replace (`0x01014000`, then `0x2`), bit 24 in the argument running no untouch enqueue (L0.entity_core.eflags-word) |
+| `world/l0_solid_touch_generation` | the collision property (`FUN_100dc300` `0x100dc300`'s zeroed words) and the untouch chain: `SetSolid` `0x100dc480` and `SetSolidFlags` `0x100dc580` from `ScriptHide` / `ScriptUnhide` (the store, the `0x180` / `0x4` / `0xc` arms, `FUN_100ddc40`'s no-handle exit), the gate `FUN_100dc430` (solid, not-touching and request arms), `SetCheckUntouch` `0x100b11d0` (the stamp +1 on every true, the pending bit set once and the second call while pending, the clear on false), the enqueue `FUN_100f8e20` and the frame pass `0x100f9160` -> `FUN_100f8ec0` -> `PhysicsCheckForEntityUntouch` `0x1003d490` (the stale link untouched, a refreshed one kept) over a pair the engine entry `MarkEntitiesAsTouching` made (L0.entity_core.collision-touch) |
 | `_selftest/never_after_ignores` | a `never` opened `after` a label does not count a match before it |
 | `_selftest/never_within_holds`, `never_within_trips` | a `never` closed `within` seconds of its label ignores a match after the window and fails the run on one inside it |
 | `combat/cover_move_shoot` | the run-and-gun: a gunman running to cover fires from an overlay layer's own 3031 (`0x102e8560` -> `AddGesture 0x100991b0` -> `0x10098cd0` -> `Shot 0x102387b0`; spec 0002 V4o) |

@@ -2276,21 +2276,18 @@ void FElysiumNpc::RebaseSavedReferences(FElysiumEntityWorld& InWorld)
 bool FElysiumNpc::ReadScriptPhysicalWords(int32& OutSolid, int32& OutMoveType, int32& OutMoveCollide,
 	int32& OutSolidFlags, int32& OutEffects) const
 {
-	OutSolid = RetailSolidType; // 0x100a8710 / 0x10027570 represented collision word; shared getter body is still owed
-	OutMoveType = GetMoveType();
-	OutMoveCollide = RetailMoveCollide; // 0x100aacd0 +0x159
-	OutSolidFlags = static_cast<int32>(RetailSolidFlags); // 0x100274d0 collision flags
-	OutEffects = static_cast<int32>(EffectsWord);
+	FElysiumEntity::ReadScriptPhysicalWords(OutSolid, OutMoveType, OutMoveCollide, OutSolidFlags, OutEffects); // 0x100a8710
+	OutEffects = static_cast<int32>(EffectsWord); // the kernel's m_fEffects word (+0x19c)
 	return true;
 }
 
 void FElysiumNpc::WriteScriptPhysicalWords(int32 InSolid, int32 InMoveType, int32 InMoveCollide,
 	int32 InSolidFlags, int32 InEffects)
 {
-	RetailSolidType = InSolid; // 0x100a8990 primitive writes, no guessed bit values
-	RetailMoveType = InMoveType;
-	RetailMoveCollide = InMoveCollide;
-	RetailSolidFlags = static_cast<uint32>(InSolidFlags);
+	// `ScriptHide` 0x100a8710 / `ScriptUnhide` 0x100a8990: the base's writes (`SetSolid` `FUN_100dc480`,
+	// the two move words, `SetSolidFlags` `FUN_100dc580`, each with its change tail), then the kernel's
+	// `m_fEffects` and the think restore the base has no word for.
+	FElysiumEntity::WriteScriptPhysicalWords(InSolid, InMoveType, InMoveCollide, InSolidFlags, InEffects);
 	EffectsWord = static_cast<uint32>(InEffects);
 	RestoreThinkCallback(); // saved FUNCTION restored by base ScriptUnhide before this hook
 }
