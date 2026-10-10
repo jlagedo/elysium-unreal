@@ -269,3 +269,31 @@ pair-hash10158b90/service#3 26011b70; its mutation notifications need that same 
 No fake setter/pair producer or full filter implementation was added; the shared helper still
 uses nav tester-first veto order. The special-mask production test deliberately bypasses that
 unfinished tail exactly as retail does. Neither broad trace row nor original run closes.
+
+## Independent complete bbox geometry prerequisite (2026-10-10)
+
+`Collision007#19 2600a310` is implemented by `FElysiumPhysicsCollision::BBoxToCollide` with
+real Source float endpoints, actual immutable compact surface output and explicit allocation
+lifetime. Exact reverse cache2600a480, bootstrap2600a1a0, clone/ordered rewrite2600a050,
+surface builder26009fd0 and append2600a3e0 are complete for this single-box operation.
+Full point degeneracy alone rejects; plane/line/reversed/tiny/NaN arms retain retail geometry.
+Seed Qhull output permutation/triangle features are retrieved bytes, not invented feature IDs.
+The source representation includes the full412-byte surface/header/ledge/triangle/point/tree,
+with construction-derived mass/inertia/radius/quantized bounds. No solver cooking clamps thin
+boxes. Cache borrows raw pointers; DestroyCollide leaves stale identity and cache teardown does
+not own shapes. No safe lifetime modernization was introduced.
+
+Read-only x86 retail probe provenance, shape layout, arithmetic/store order and bounded36/36
+full-byte comparisons are in physics-interaction.md, "Independent BBoxToCollide geometry
+construction". Durable16-output goldens and the public operation/cache lifetime automation
+are production witnesses for this independent constructor. There is no internal helper arena
+action and no new entity/body construction record: the actual upper caller is still absent.
+
+This prerequisite may precede body callers because all its own producers are complete.
+It does **not** close vampire1002dfe0/100a5d80, their surface/default/callback/body arms,
+Collision007#18 world AABB, geometry query, group recheck or ignored-pair mutation. Next:
+260104f0 ->260189f0 template26018ba0, shape26009a00, IVP260397c0/core26030f20,
+wrapper260168e0/init26016930 with actual materials/parameters, followed by the real
+broadphase26048b00 candidate refresh and reverse obsolete-pair/insertion notifications.
+Owned activity/deletion/clock and shadow controller remain part of the body service frontier.
+The saved r022a frame/cache packet remains deferred and original run counts stay23/88.

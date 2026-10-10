@@ -6,6 +6,20 @@ consecutive slices of one subsystem up to ~1.5 KB of retail code or 8 functions.
 
 ## Active dependency correction (2026-10-10)
 
+Independent box-construction packet (coordinator reviewed and gated): Collision007#19
+`2600a310`, exact cache2600a480, seed2600a1a0, clone2600a050, surface construction26009fd0,
+append2600a3e0 and explicit geometry destruction2600a520 are implemented as a complete
+prerequisite with real endpoint producers and full compact collision output. Native arithmetic
+retains the recovered branch/store/quantization contract;36 bounded read-only retail execution
+comparisons match all412bytes, with16 durable UE operation goldens. No new helper arena action;
+existing bounded records gate regression only. This is not the entity wrapper, owned body,
+contact/hash, solver/controller, Collision007#18 query or physical publication boundary.
+No original run closes (23/88); the saved r022a candidate remains deferred. See the targeted
+physics producer walk and matching oracle for provenance and concrete next constructor/core/
+broadphase inputs. Coordinator evidence in progress.md: build succeeded, default173/173,
+motor/sight6/6 and bounded arena18/18; actual UE full-byte goldens pass. Audit1002dfe0 was
+downgraded to partial because its callback/body wrapper remains absent. No broad row closed.
+
 Original r022 remains open. Its absolute setters need a partition lifecycle that was omitted from
 the coarse r022 -> r044/r045 ordering. Initial sequence (superseded by the physical prerequisite
 found below; these are scope boundaries, not authorization to dispatch frame-only code):

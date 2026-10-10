@@ -442,6 +442,105 @@ to be walked before an engine adapter is a complete service. Unreal may replace 
 under AGENTS.md only with the retail contract/state/event sequence preserved. No such replacement
 acceptance or object/controller runtime implementation is claimed by this recovery.
 
+### Independent BBoxToCollide geometry construction [PE/execution, 2026-10-10]
+
+`Collision007#19 0x2600a310` is now implemented independently by
+`FElysiumPhysicsCollision::BBoxToCollide`. Its real inputs are the two Source-space float
+endpoints. It returns allocated, immutable compact collision geometry, with the full ledge,
+packed triangle/edge features, point array, surface header and single-leaf bounds tree.
+No caller-created geometry record, body pointer, solver object or fixture supplies these inputs.
+The later entity wrapper/body creation is still absent; this closes only the complete box
+geometry prerequisite. It does not implement Collision007#18 world AABB or contact queries.
+
+The operation rejects **only** three equal endpoint components, looks backwards through the
+exact-component cache (`0x2600a480`), bootstraps its seed on the first miss (`0x2600a1a0`),
+clones its ledge and rewrites eight point XYZs (`0x2600a050`), builds the surface through slot4
+`0x26009fd0 -> 0x2606d290`, then appends the borrowed pointer (`0x2600a3e0`). Signed zero
+matches; NaN never matches. Plane and line boxes survive. Reversed endpoints are not sorted.
+Even a first request equal to the seed endpoints creates the internal seed and a separate
+returned clone, with the newest record winning the next lookup.
+
+Seed endpoints are `(-16,-16,0)/(16,16,72)`. Corner `0x2600a140` ordinal bits1/2/4 choose
+maxX/maxY/maxZ. The Qhull producer `0x26009b10 -> 0x2606c640 -> 0x2606bec0` uses
+`qhull Qs Pp C-0 W1e-14 E1.0e-18` (retry QJ) before ledge builder `0x2606ba80`.
+Read-only retail execution recovered the exact resulting permutation **7,2,6,3,5,4,0,1** and
+all 12 packed triangle records, including opposite-edge offsets and triangle feature IDs.
+The native constructor retains those bytes rather than introducing a six-face feature numbering.
+XYZ becomes `(X,-Z,Y)*0.0254f`, each product stored as float; W remains zero.
+
+The returned surface is 412 bytes: header48, ledge48, triangles64 (12*16), points256 (8*16),
+leaf384 (28). Ledge point offset208, packed flags/size `0x1504`, triangle count12; header
+size is high24 bits of +28, root offset384, zero dummies and magic `0x53505649` at +44.
+The leaf has right offset0, ledge offset-336, float center/radius and three quantized extents.
+All these bytes, including feature words and padding, are checked against the retrieved outputs.
+
+Header construction preserves the retail mass/inertia algorithm, not textbook box inertia:
+`0x2607fd80` accumulates signed volume and float first moments; its Z first addition remains
+double through the second before rounding for the third. The apparent +2c alias in the decompile
+is **not** a bug: `pop edi` at `0x2607fe76` shifts the following read to saved NormalX.
+`0x260800f0` uses the positive-volume/area gate with promoted float `1e-9`; negative, tiny-gate,
+degenerate and unordered cases take bbox-center/half-diagonal fallback. Otherwise directed-edge
+integration `0x2607f9f0` supplies second moments; the per-axis low-volume arm substitutes1,
+then the final inertia components are norms of pairs of second moments. Thus the tested tiny
+nondegenerate box has inertia `sqrt(2)`, while the reversed odd-axis box takes bbox fallback.
+`0x26031e60` ignores unordered point comparisons when accumulating bounds.
+
+Radius/deviation `0x260320f0` and leaf construction `0x2606d810` feed byte quantization.
+`0x2606f92a` keeps radius*.004 and division in x87 precision until `__ftol 0x260b4bc4`,
+which truncates via **fistp qword**, then stores its low byte. A native rounded double would
+turn 1/.004 into250 and change planar deviation/line extents. The implementation recovers the
+product/division residual before truncation, and cancels the sole nonzero axis-aligned box
+normal component before rounding tangent length. This is a native arithmetic implementation
+of the retrieved box contract. It preserves the observed byte boundary; no tolerance is used
+for the checked goldens. It is not a generic convex constructor or a claim of all-input x87 parity.
+
+Ownership deliberately retains the retail defect. `DestroyCollide#7 0x2600a520` frees geometry
+through aligned allocator `0x2602bf10` **without** removing its cache record. Service destructor
+`0x26009930` frees only cache storage; shapes, including the bootstrap seed, remain allocated
+until explicitly destroyed. A later equal bbox lookup can therefore return a dangling identity.
+The native service has the same borrowed raw-pointer lifetime; tests compare stale identity
+without dereferencing it. No safe-cache or automatic-shape-deletion modernization was added.
+
+Provenance: installed `Bin/vphysics.dll` SHA256
+`b8bbbf306b939055ce49548ace707cabc719783026d4044950b204de73d3ae10`;
+the durable x86 probe is `research/tooling/vphysics_box_probe.cpp`, SHA256
+`18db88f5fd9b105346ab5ca5db0928fab4fb53d5d8215dd47b6f1ba330e4c561`.
+It loads the installed DLL read-only, calls `CreateInterface("VPhysicsCollision007")`, invokes
+slot19 using the actual x86 `__thiscall` signature, and dumps `header[+28]>>8` bytes.
+The public capture command is `uv run elysium research vphysics_box`, or
+`uv run elysium research vphysics_box --coords -3 2 7 19 34 55` for the asymmetric case.
+The wrapper loads configured roots, finds VS x86 tools, compiles with `/EHsc /W4`, then supplies
+`ELYSIUM_VTMB_ROOT/Bin` and a fresh scratch output to the instrument. `--out` must stay under
+`ELYSIUM_WORK_ROOT`; no outputs overwrite the corpus. No coordinates means seed endpoints.
+The public wrapper's asymmetric capture independently reproduced SHA256
+`95190e2b82033e775eccb846d7874c6c8228cb0968f852c8b82366b58f34f630` at
+`E:/elysium-work/research/vphysics-box/20261010T232238.982357Z/box.bin`.
+The original exploratory probe hardcoded only the DLL path; its preserved scratch source hash
+is `a0d82711d1c487622de43b3b672d84045cead535965a1f1ff955c9589bd3db63`.
+Captured seed SHA256
+`8f58c8627e5802b3542da9bc69044ea1a98adc7a55c67b549dd94726db1f835a`.
+
+Scratch evidence lives at `E:/elysium-work/codex/l0-body-shape-20261010/`.
+Seven primary captures are seed, asymmetric `(-3,2,7)/(19,34,55)`, plane and line with equalX
+and equalXY, reversedX, tiny `(0,0,0)/(1e-7,2e-7,3e-7)`, and minX NaN (x86 atof bits
+`0x7fffffff`). Full-byte native comparisons also cover20 deterministic shifted nonuniform boxes
+(`random.Random(26000310)`, each min uniform[-500,500], each extent uniform[.1,150]) and
+plane/line/reversed arms for each axis of `(-3.25,2.5,7.75)/(19.125,34.625,55.875)`.
+All **36/36** reconstructed 412-byte outputs matched the retail probe after the documented
+arithmetic corrections. This is bounded constructor evidence, not downstream body/query parity.
+The 16 primary/axis outputs are durable full-byte goldens in
+`Private/Tests/ElysiumPhysicsBoxGolden.inl`; automation calls the actual public construction
+operation. `PhysicsBoxLifetime` checks explicit allocation lifetime through cache teardown.
+
+The next concrete producer is environment `0x260104f0 -> 0x260189f0`: template `0x26018ba0`
+uses real object parameters/surface material, shape `0x26009a00`, IVP construction
+`0x260397c0 -> 0x2605ad10 -> 0x2602dcf0` (core `0x26030f20`) and wrapper
+`0x260168e0 -> 0x26016930`. Broadphase/recheck `object#25 0x26016da0 -> 0x2602e320 ->
+0x26048b00` refreshes actual candidates and core lookahead, filters static/same-core/disabled
+arms, removes obsolete pairs in reverse, then inserts pairs and invokes listeners in reverse
+candidate/listener order. Its live broadphase, owned pair hash and deletion/insertion callbacks
+remain required; a standalone ignored-pair boolean/hash fixture cannot close that boundary.
+
 ### Independent trace selectors and actual single-player collision rules (2026-10-10)
 
 All `0x100...` / `0x101...` / `0x103...` / `0x104...` addresses here are vampire.dll;

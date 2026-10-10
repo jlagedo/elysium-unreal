@@ -13,6 +13,12 @@ evidence, not new validation or acceptance of the layer closing gate.
 
 ## Current checkpoint
 
+- Independent complete box geometry prerequisite (2026-10-10): Collision007#19 construction
+  and borrowed-cache lifetime are implemented with complete native compact surface geometry;
+  read-only retail execution yielded36/36 matching full412-byte outputs. Coordinator-reviewed UE
+  goldens/lifetime tests, build/default and bounded regression gates pass below. No caller/body/contact,
+  bounds-query or original run closes;23/88 remains unchanged. The recovered exact next
+  environment/core/broadphase frontier is recorded in the targeted producer walk and oracle.
 - Start: `47b6f780`, clean `main`; r001-r021, r029, r030 landed (23/88).
 - r022 deferred before runtime edits: its absolute-origin partition walk needs the unfinished
   bounds/physics/partition lifecycle. Docs-only recovery checkpoint; no code gate or new record.
@@ -45,6 +51,40 @@ evidence, not new validation or acceptance of the layer closing gate.
   Commit is reported with the coordinator handoff; no push or modernization acceptance.
 - Layer closure remains open: 65 unlanded runs, rebakes, default/arm and full arena gate,
   intermittent records in three boot orders, audit/hooks and state-bearing replacement checks.
+
+### Independent box geometry coordinator gates (2026-10-10)
+
+Reviewed the constructor/cache/lifetime against the recovered retail chain and executable
+outputs. Full packed topology and arithmetic/store ordering are preserved; the 16 golden
+surfaces match all 412 bytes in the actual compiled Unreal tests. The standalone reconstruction
+also matched 36/36 bounded retail outputs. No tolerance or native feature-ID replacement was
+accepted. Cache destruction and DestroyCollide preserve retail's borrowed/dangling identity.
+
+Build: `E:/elysium-work/logs/20261010T232314.489507Z-build.json`
+(succeeded, exit 0). Default:
+`E:/elysium-work/reports/tests/20261010T232419.857569Z-elysium-session-elysium-substrate/index.json`
+(173/173 Success, failed 0, notRun 0; PhysicsBoxConstruction and PhysicsBoxLifetime have zero
+warnings/errors). Selected motor regressions:
+`E:/elysium-work/reports/tests/20261010T232555.448732Z-elysium-arm-npckernelmotor-tracefiltersh-41416d4d/index.json`
+(3/3 Success, zero errors). That command exited 7 because the coordinator omitted `Arm` from
+the Sight prefix; its empty selection was corrected with `Elysium.Arm.Geometry.Sight`:
+`E:/elysium-work/reports/tests/20261010T232639.511913Z-elysium-arm-geometry-sight/index.json`
+(3/3 Success, zero errors). These are bounded regressions, not complete filter/body witnesses.
+
+Arena: `E:/elysium-work/reports/arena/20261010T232702.171817Z/index.json`
+(18/18 pass, failed 0, both arena and sm_hub_1 hosts exit 0). All scenario and both host JSONs
+were read; the same 18 records listed in the prior rules checkpoint remain passing, with no
+regression. The two intentional failure selftests pass by inversion. Existing Unreal Python
+AgentSkill startup errors recur; no new runtime error acceptance follows. No new internal
+construction-helper arena action was added.
+
+Audit 0x1002dfe0 is downgraded from overstated engine_replaced to partial: this real shape
+prerequisite does not implement PhysCreateBbox's callback or actual entity/environment bodies.
+Original completed runs remain 23/88. Next is actual environment/body construction
+260104f0 -> 260189f0, parameter/material conversion, shape/core/wrapper initialization and
+owned activity/deletion/clock, then live contact/hash notifications. Group change, complete
+filter/query, shadow/controller, partition/cache and saved r022a remain open. No full arm,
+full arena or layer closure gate ran; no modernization accepted; no push.
 
 ### Independent damage selector and collision rules coordinator gates (2026-10-10)
 
