@@ -13,6 +13,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumStub.h"
+#include "ElysiumTransitionState.h" // L0-r030: DispatchSpawn's globalname arm
 #include "Substrate/ElysiumAttackCoordinator.h"
 #include "Substrate/ElysiumCameraCinematic.h"
 #include "Substrate/ElysiumDataObjects.h"
@@ -502,6 +503,12 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		if (Ent && !Ent->IsDead())
 		{
 			Ent->PostSpawn();
+			// `DispatchSpawn` 0x101d1280, after `CBaseEntity::PostSpawn`: the `globalname` arm over the
+			// global-entity table (L0-r030); -1 is the GLOBAL_DEAD removal the caller performs.
+			if (ElysiumTransitionState::DispatchSpawnGlobalArm(*this, *Ent) < 0)
+			{
+				Ent->Kill(); // UTIL_Remove on a DispatchSpawn < 0 (the engine's spawn loop)
+			}
 		}
 	}
 
@@ -847,6 +854,12 @@ void FElysiumEntityWorld::CallEntitySpawn(FElysiumEntity& Ent)
 	// A runtime-spawned entity has no "all entities" barrier to wait on; its attach targets (if any)
 	// already exist, so run its second-phase init immediately after Spawn().
 	Ent.PostSpawn();
+	// `DispatchSpawn` 0x101d1280's `globalname` arm (L0-r030); -1 removes the entity (GLOBAL_DEAD).
+	if (ElysiumTransitionState::DispatchSpawnGlobalArm(*this, Ent) < 0)
+	{
+		Ent.Kill();
+		return;
+	}
 	if (bActive)
 	{
 		CallEntityActivate(Ent);

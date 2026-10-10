@@ -221,6 +221,9 @@ public:
 	// same reason `G` does: session lifetime, not map lifetime. The entity world writes one at every
 	// teardown and reads one back at every build, which is why travel and save cannot drift apart.
 	const FElysiumMapSnapshot* FindMapSnapshot(const FString& Map) const;
+	// The stored snapshot a level transition writes its `.HL3` back into (the engine's
+	// EntityPatchWrite 0x200973c0 beside the saved map; L0-r030). Null when the map was never frozen.
+	FElysiumMapSnapshot* MutableMapSnapshot(const FString& Map) { return Snapshots.Find(Map); }
 	void StoreMapSnapshot(FElysiumMapSnapshot&& Snapshot);
 	const TMap<FString, FElysiumMapSnapshot>& MapSnapshots() const { return Snapshots; }
 	void SetMapSnapshots(TMap<FString, FElysiumMapSnapshot>&& In);

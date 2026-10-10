@@ -123,3 +123,41 @@ captures the player's source-landmark offset and view yaw, defers the travel to 
 `AElysiumMapActor::ResolveLandmarkSpawn` seats the player at `dest_landmark + offset` on the far
 side (roadmap 4.6), except for the owner-directed theatre exit above. A bare `map` command still
 bypasses this and spawns at `info_player_start`.
+
+## What crosses with the player (the server's transition state)
+
+Recovered by L0-r030 (`docs/specs/layers/L0-entity/walks/L0-r030.md`; the save-side layout is
+`savegame_format.md` § "The transition state at run time"). vampire.dll unless engine.dll is named.
+
+- **The departing map's save** (`CSaveRestore::vfunc13` 0x20096470) calls CServerGameDLL slot 17,
+  then slot 23 `BuildAdjacentMapList(NULL, NULL)` 0x1011b9f0, then slots 18 and 19. Slot 23 ->
+  `FUN_101c7ff0` walks every `trigger_changelevel`, finds its `info_landmark` (`FUN_101c7690`) and
+  writes one ADJACENCY row per distinct (landmark entity, map) pair (`FUN_101c7e00`); then, for each
+  row `j`, every entity whose `ObjectCaps` carries `FCAP_ACROSS_TRANSITION` and that the player
+  carries gets `FENTTABLE_MOVEABLE`, every non-dormant `globalname` entity `FENTTABLE_GLOBAL`, and
+  both get bit `j` of the entity-table row (`1 << (j & 31)`, sign-extended: 32 transitions or more
+  alias). sm_hub_1 has 23 rows, sp_tutorial_1 12.
+- **The arriving map** (engine `CSaveRestore::vfunc10` 0x20097d00, Source's `LoadAdjacentEnts`
+  shape): slot 23 again, now with `(oldLevel, landmarkName)`. When the landmark is `taxi_landmark`
+  or `sewer_map_landmark`, every trigger whose own landmark is that name has its `m_szMapName`
+  rewritten to the level being left -- the hub's placeholder destinations (`taxi`, `la_hub_1`,
+  `sewer_map`) become the real previous map, so an ADJACENCY row names where the carried entities
+  come from (and the duplicate collapses: 22 rows on sm_hub_1). Then, for each adjacent map with a
+  save: slot 20 reads its directory and entity table, the mask is the saved ADJACENCY rows naming
+  the current map, and slot 22 `CreateEntityTransitionList` 0x1011b590 -> `FUN_101a3c40` creates
+  and restores the selected rows: player rows on their edict, others by classname, kept when a
+  restored player's inventory owns them (`Inventory_Find`, the carried list), otherwise
+  `"Suppressing %s"` and removed; a `globalname` row goes through the global table (added when
+  unknown, dormant when another map's, removed when GLOBAL_DEAD; `FENTTABLE_GLOBAL` rows merge
+  through the Entities handler). A transferred row's flags become `(0, FENTTABLE_REMOVED)`; when
+  any row moved, the EventQueue, Physics, AI and Python blocks' slot 7 run with the adapter, their
+  slot 8 always, and the engine writes the `.HL3` (EntityPatchWrite 0x200973c0): the REMOVED rows,
+  which a revisit skips.
+- **Port** (`Source/ElysiumUE/Public/ElysiumTransitionState.h`): the departure's slot 23 runs inside
+  `Freeze`; the arrival's chain runs at the map actor's pre-activation fence after the destination's
+  own snapshot (`ElysiumMapActorLifecycle.cpp`), over the session's stored snapshots, and writes the
+  REMOVED rows into the departed snapshot's `AbsentEntities` (its `.HL3`). Named modernization: the
+  Player block (`Hydrate`) has already made the destination's player and carried items, so slot 22's
+  create / restore steps resolve to those copies instead of creating a second set; the suppressed
+  arm therefore removes nothing (nothing was created). The one FENTTABLE_MOVEABLE predicate arm the
+  walk recovered is the player's carried set; two `+0xa8` arms stay unrecovered.

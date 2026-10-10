@@ -75,8 +75,16 @@ Six fields, and they are the entire save-slot header:
 | `GLOBAL` | int | `CGlobalState` entry count — **always 0 in VtMB** |
 
 `userName` is a VtMB addition to Source's `GAME_HEADER`. `GLOBAL` being permanently zero is the
-structural tell that **VtMB does not use Source's global-entity state at all**: the persistent
-story layer lives in the Python block instead (see below).
+structural tell that **no shipped map uses Source's global-entity state**: the persistent
+story layer lives in the Python block instead (see below). The mechanism is nonetheless in the
+binary and is written on every save: `GLOBAL` is the `m_listCount` field of the global-entity table
+`DAT_106be530`, and `m_listCount` "GENT" records follow it -- `name[64]`, `levelName[32]`, `state`
+(typedescription 0x1053fc80, flags SAVE, stride 0x2c), written head first by `FUN_10057850` through
+CServerGameDLL slot 15 (`0x1011b040` -> `FUN_10057a30`, called by the engine right after this group,
+`CSaveRestore::vfunc12` 0x20095980) and read back by slot 16 (`0x1011b060` -> `FUN_10057ac0` ->
+`FUN_100578e0`: clear, header, count := 0, one prepend per record -- so a restore reverses the
+order). A `globalname` entity joins the table at its first `DispatchSpawn` 0x101d1280 (state 1,
+the current map); see § "The transition state at run time". L0-r030.
 
 ## The field-stream primitive
 
@@ -293,10 +301,71 @@ cursor and Warns `"Save/Restore overflow!"` (offset := size, nothing written) pa
 
 Port: `Source/ElysiumUE/Public/ElysiumSaveRestoreBlocks.h` (the set, the adapters, the five slots, the
 engine order), `Private/Substrate/ElysiumSaveRestoreGame.cpp` (the "Game" set's five handlers over a
-map snapshot; `Freeze` runs 17/18/19, `ApplySnapshot` 20 and 21 or 20 alone). Unrecovered after the
+map snapshot; `Freeze` runs 17/23/18/19, `ApplySnapshot` 20 and 21 or 20 alone). Unrecovered after the
 walk: the element encoding of the datamap writer (`CSave::vfunc2 0x1019f930`; the port writes a record
 as its 0x28 raw bytes — a named modernization), the handlers' own slot bodies, the adapter's `+0x04`
 vector, and the engine helpers around the calls.
+
+### The transition state at run time
+
+Recovered by L0-r030 (`docs/specs/layers/L0-entity/walks/L0-r030.md`); the port is
+`Source/ElysiumUE/Public/ElysiumTransitionState.h`. The save data (`CSaveRestoreData`, allocated by
+server slot 12 `FUN_101a3b20` and kept at `pGlobals+0x20`) carries three transition words beside the
+buffer: `+0x18` connectionCount, `+0x1c` sixty ADJACENCY rows of 0x50 bytes (`mapName[32]`,
+`landmarkName[32]`, `pentLandmark` +0x40, `vecLandmarkOrigin` +0x44), and the entity table at
+`+0x1330` / `+0x1334` (0x30-byte rows: id +0x00, edict index +0x04, result edict +0x0c, handle +0x10,
+location +0x14, size +0x18, flags +0x20 / +0x24, classname +0x28), built by the Entities handler's slot 1
+`FUN_101a2c30` at PreSave.
+
+- **ADJACENCY** is written by CServerGameDLL slot 23 `BuildAdjacentMapList(oldLevel, landmarkName)`
+  0x1011b9f0 -> `FUN_101c7ff0` (about 1.6 KB; the corpus record stops at its first RET): for every
+  `trigger_changelevel` (an RTTI cast to CChangeLevel; `m_szMapName` +0x598, `m_szLandmarkName`
+  +0x5b8) its `info_landmark` (`FUN_101c7690`, `DevWarning("%s can't find landmark %s")` on a miss),
+  then `FUN_101c7e00` writes the row unless an earlier row already pairs that landmark entity with
+  that map (`__strcmpi`); `Error("Too many level transitions on this map, possible corruption.")`
+  past 60. **The taxi / sewer rewrite:** with a landmark argument equal to `taxi_landmark` or
+  `sewer_map_landmark` and a non-NULL `oldLevel`, every trigger whose own landmark is that name has
+  `m_szMapName` overwritten (`Q_strncpy`, 0x20) with `oldLevel` before its row is made, and the
+  write persists on the entity. The engine calls slot 23 with `(NULL, NULL)` inside every save
+  (`CSaveRestore::vfunc13` 0x20096470, between slots 17 and 18) and with the real strings at a
+  level transition (`CSaveRestore::vfunc10` 0x20097d00). sm_hub_1: 23 rows (22 under the taxi
+  rewrite -- `taxi_trigger` and `to_downtown` share `taxi_landmark`); sp_tutorial_1: 12.
+- **The entity-table flags** come from the same walk's second pass, run only when the entity table
+  exists: for each row `j` every entity whose `ObjectCaps()` has bit 31 (`FCAP_DONT_SAVE`) clear is
+  classified -- `FCAP_ACROSS_TRANSITION` (0x2) plus a carried-by-the-player test (the player's
+  `+0x1c64` handle or `+0x14c0` list; two `+0xa8` arms unrecovered) gives `FENTTABLE_MOVEABLE`
+  0x20000000, a non-dormant `m_iGlobalname` gives `FENTTABLE_GLOBAL` 0x10000000 -- and up to 0x200
+  candidates (`Warning("Too many entities across a transition!")`) have `1 << (j & 31)` ORed into
+  their row (`FUN_101a08f0` finds the row, `FUN_101a0980` writes it, admitting `idx == count`). The
+  shift is 32-bit and sign-extended (`CDQ`): transition 31 sets bit 31 and the whole high word,
+  transitions 32..59 alias bits 0..27 -- the engine's mask builder (0x20098130) has the same shape.
+- **The transition list**: slot 22 `CreateEntityTransitionList(save, maskLo, maskHi)` 0x1011b590 ->
+  `FUN_101a3c40` selects rows with `(flags.lo & maskLo) || (flags.hi & maskHi)` in three passes:
+  create (a client edict's row -> the player on that edict, `FUN_1015d790`, joining the player
+  list, `Warning("ENTITY IS NOT A PLAYER: %d")` without `FENTTABLE_PLAYER`; any other -> `FUN_10136580`
+  by classname; `Warning("Entity with data saved, but with no classname")`), player rows (restore
+  `FUN_101a3380`, the global-name branch, flags := `(0, 0x40000000)`, `FUN_1011a580`), and other
+  rows (restore; non-global rows kept only when a listed player's `Inventory_Find(classname)`, a
+  second player handle, or its `+0x14c0` list owns the entity -- else `"Suppressing %s"` and
+  `FUN_101cd970`; `FENTTABLE_GLOBAL` rows `"Merging changes for global: %s"` through `FUN_101a3470`).
+  The global-name branch: `FindGlobal`; unknown -> `Warning("Global Entity %s (%s) not in table!!!")`
+  and `AddGlobal(name, mapname, 1)`; known and not GLOBAL_DEAD -> `MakeDormant` when the record's
+  level is another map; GLOBAL_DEAD -> removed. Then, when rows moved, a CRestore over the save and
+  slot 7 of the EventQueue (`0x100cff70`), Physics (`0x100440c0`), AI (`0x1030c210`) and Python
+  (`0x1019b130`) blocks with `(adapter, 0, 0)`; slot 8 of the four always (`0x10043c00` is empty for
+  three; Physics `0x100447f0` acts). The engine then writes the `.HL3` (EntityPatchWrite 0x200973c0):
+  the rows flagged `FENTTABLE_REMOVED` 0x40000000. The row seeks leave the adapter's cursor at the end
+  of the last row's data -- the start of the EventQueue body in the data section -- which is where
+  `FUN_100cfda0` (clear the queue, the "EventQueue" header, `count` "PEvent" records) reads.
+- **Port:** the departure's slot 23 runs inside `Freeze`; the Entities handler's table lives on the
+  save data and its header carries the two flag words and the classname; the snapshot keeps the
+  ADJACENCY rows beside the stream; the arrival runs `EngineLoadAdjacentEnts` (slot 23 with the two
+  strings, per adjacent snapshot slot 20, the mask, slot 22, the `.HL3` into `AbsentEntities`).
+  Named modernizations: the Player block's `Hydrate` stands for slot 22's create and restore of the
+  player row and the owned rows (the destination's copies already exist; nothing is created, so the
+  suppressed arm removes nothing); the byte encoding of the GLOBAL / GENT / ETABLE words is the
+  port's (D6). Unported, reported as planning faults: `FUN_101a3470` (the global merge) and the
+  EventQueue / Physics slot-7 bodies on the transition path (dispatched, not applied).
 
 ### `EventQueue`
 

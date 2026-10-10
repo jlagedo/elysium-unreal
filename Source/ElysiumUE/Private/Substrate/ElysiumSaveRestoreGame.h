@@ -38,11 +38,23 @@ namespace ElysiumSaveRestore
 		double RestoreBase = 0.0;
 		int32 AppliedRows = INDEX_NONE;   // what `ApplyRestoredEntities` answered; INDEX_NONE until it ran
 		bool bRowDecodeFailed = false;    // a row's bytes did not read back
+		// The transition path (CreateEntityTransitionList 0x1011b590's slot-7 calls; L0-r030): the
+		// handlers' Restore bodies run over another map's save with the destination world.
+		bool bLevelTransition = false;
 	};
 
-	// Freeze's tail: the engine's save order (vfunc13 0x20096470: slots 17, 18, 19) over the Game set,
-	// encoding the snapshot's arrays into `Snapshot.BlockStream` / `BlockHeaderStart`.
-	void EncodeMapBlocks(FElysiumMapSnapshot& Snapshot, IElysiumRetailSiteSink* Sites);
+	// The five registered handlers by retail object (L0-r030: the getters 0x1011b590 reaches them by).
+	enum class EGameBlock : uint8 { Entities, EventQueue, Physics, Ai, Python };
+	IBlockHandler& GameBlockHandler(EGameBlock Block);
+	// Bind / release the transition context on the handlers that read it (the port's way for a slot-7
+	// call outside the set's dispatch to reach its world).
+	void BindTransitionContext(FSaveRestoreData& Data, FGameContext& Context);
+	void UnbindTransitionContext();
+
+	// Freeze's tail: the engine's save order (vfunc13 0x20096470: slots 17, 23, 18, 19) over the Game
+	// set, encoding the snapshot's arrays into `Snapshot.BlockStream` / `BlockHeaderStart` and the
+	// ADJACENCY rows slot 23 built over `World` into `Snapshot.Adjacency` (null: no rows).
+	void EncodeMapBlocks(FElysiumMapSnapshot& Snapshot, IElysiumRetailSiteSink* Sites, FElysiumEntityWorld* World);
 
 	// The file reader's decode: the engine's restore order (vfunc9 0x200975f0: slots 20, 21) with no
 	// world, so the rows land in the arrays without applying. False when the stream did not read back.

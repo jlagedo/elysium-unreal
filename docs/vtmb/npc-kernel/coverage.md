@@ -24,7 +24,7 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | `CAI_BaseNPC` slots whose body is unnamed | 299 |
 | … with the naming pass's reason recorded (`unsettled`) | 299 |
 | Troika fields | 835 |
-| … cited by the oracle | 595 |
+| … cited by the oracle | 598 |
 | Closure edges | 17596 |
 | Build layers | 30 |
 

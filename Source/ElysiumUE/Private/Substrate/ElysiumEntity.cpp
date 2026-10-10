@@ -221,6 +221,27 @@ void FElysiumEntity::ScriptHide()
 	OnDormancyChanged();
 }
 
+void FElysiumEntity::MakeDormant()
+{
+	// CBaseEntity::MakeDormant 0x100a8060 (L0-r030): `m_iEFlags |= 2` (EFL_DORMANT); `ThinkSet(this, 0,
+	// 0.0, NULL)` -- the think function cleared; then, with an edict (+0x2e0 != 0): `m_iEFlags |= 2`
+	// again, `AddSolidFlags(FSOLID_NOT_SOLID 0x4)` (FUN_100dc580 on m_Collision), slot 93 `(0, 0)`,
+	// `m_flNextThink = 0`, `m_fEffects |= 0x40` (EF_NODRAW), `Relink`. The port's one non-solid +
+	// undrawn switch is `bHidden` (the body reads it in OnDormancyChanged); `m_flNextThink = 0` is
+	// retail's "never" for a think with no function, so the port writes its own never.
+	bEflDormant = true;
+	ThinkCallback = NAME_None;
+	if (bSavedPhysicalWordsAvailable || ReadScriptPhysicalWords(ScriptSavedSolid, ScriptSavedMoveType,
+		ScriptSavedMoveCollide, ScriptSavedSolidFlags, ScriptSavedEffects))
+	{
+		bSavedPhysicalWordsAvailable = true;
+		WriteScriptPhysicalWords(ScriptSavedSolid, 0, ScriptSavedMoveCollide, ScriptSavedSolidFlags | 4, ScriptSavedEffects | 0x40);
+	}
+	bHidden = true;
+	NextThink = ELYSIUM_NEVER_THINK;
+	OnDormancyChanged();
+}
+
 void FElysiumEntity::ScriptUnhide()
 {
 	// The exact inverse: restore the saved think and clear the hidden flag; the body restores

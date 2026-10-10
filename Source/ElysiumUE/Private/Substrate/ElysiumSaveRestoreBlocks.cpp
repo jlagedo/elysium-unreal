@@ -1,5 +1,6 @@
 #include "ElysiumSaveRestoreBlocks.h"
 #include "ElysiumRetailSite.h"
+#include "ElysiumTransitionState.h" // L0-r030: slot 23 inside the engine's save and transition orders
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumSaveBlocks, Log, All);
 
@@ -33,6 +34,10 @@ namespace ElysiumSaveRestore
 	{
 		Bytes.Reset();
 		Offset = 0;
+		ConnectionCount = 0;      // +0x18 and the rows: FUN_101a3b20 allocates the struct zeroed (L0-r030)
+		Adjacency.Reset();
+		EntityTable.Reset();
+		TransferredEntities.Reset();
 		bReadPastEnd = false;
 		bGrowable = Capacity <= 0;
 		if (!bGrowable) Bytes.SetNumZeroed(Capacity);
@@ -461,6 +466,10 @@ namespace ElysiumSaveRestore
 		// The data section ends where slot 3's t0 begins: the header section the engine later moves
 		// ahead of the data in the file (`Rebase`; `docs/vtmb/savegame_format.md` § `.HL1`).
 		PreSave(Set, &Data);
+		// Slot 23 at 0x200964ae: `PUSH 0; PUSH 0; CALL [EAX+0x5c]` -- BuildAdjacentMapList(NULL, NULL) over
+		// the save data slot 17 just filled (its entity table exists, so the transition flags land on the
+		// rows the header slot writes next). L0-r030.
+		ElysiumTransitionState::BuildAdjacentMapList(Data, nullptr, nullptr);
 		const int32 SaveResult = Save(Set, &Data);
 		if (SaveResult == 0)
 		{
@@ -485,11 +494,14 @@ namespace ElysiumSaveRestore
 		Restore(Set, &Data, P2, P3);
 	}
 
-	void EngineLevelTransition(FBlockSet& Set, FSaveRestoreData& Data, int32 HeaderStart)
+	void EngineLevelTransition(FBlockSet& Set, FSaveRestoreData& Data, int32 HeaderStart,
+		const char* OldLevel, const char* LandmarkName)
 	{
-		// CSaveRestore::vfunc10 0x20097d00: slot20 (0x20097e25 and 0x20098173) and never slot 21, so
-		// the PostRestore purge does not run on this path: the header vector keeps its memory until
-		// the next slot 1 / slot 6 / slot 8.
+		// CSaveRestore::vfunc10 0x20097d00: slot 23 first, with the level being left and the landmark
+		// crossed (0x20097d63-0x20097d73: `PUSH [ESP+0x1504]; PUSH [ESP+0x1500]; CALL [EDX+0x5c]`; L0-r030),
+		// then slot20 (0x20097e25 and 0x20098173) and never slot 21, so the PostRestore purge does not run
+		// on this path: the header vector keeps its memory until the next slot 1 / slot 6 / slot 8.
+		ElysiumTransitionState::BuildAdjacentMapList(Data, OldLevel, LandmarkName);
 		FRestore Position(&Data);
 		Position.Seek(HeaderStart);
 		ReadRestoreHeaders(Set, &Data);

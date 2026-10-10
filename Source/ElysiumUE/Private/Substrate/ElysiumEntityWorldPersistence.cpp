@@ -157,14 +157,17 @@ void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
 	Out.Weather.TransitionStart -= Out.SaveBase; // TIME; durations stay FLOAT
 
 	// L0-r029: the engine's save (CSaveRestore::vfunc13 0x20096470) hands the buffer to the registered
-	// block set -- CServerGameDLL slot 17 PreSave (0x1011b890), slot 18 Save (0x1011b080), slot 19
-	// WriteSaveHeaders + PostSave (0x1011b8b0) -- whose Entities and EventQueue handlers write the rows
-	// captured above into the section's stream. Retail runs it at exactly this point of a save and of
-	// a departing map's freeze; the tap names the set ("Game", set slot 0) in the entity column.
+	// block set -- CServerGameDLL slot 17 PreSave (0x1011b890), slot 23 BuildAdjacentMapList(NULL, NULL)
+	// (0x1011b9f0, L0-r030: the ADJACENCY rows and the entity table's transition flags over this
+	// world's trigger_changelevels), slot 18 Save (0x1011b080), slot 19 WriteSaveHeaders + PostSave
+	// (0x1011b8b0) -- whose Entities and EventQueue handlers write the rows captured above into the
+	// section's stream. Retail runs it at exactly this point of a save and of a departing map's
+	// freeze; the tap names the set ("Game", set slot 0) in the entity column. Slot 23 with NULL
+	// strings rewrites no trigger; the world is handed in as the entity list it scans.
 	{
 		FElysiumEntityWorld& TraceWorld = const_cast<FElysiumEntityWorld&>(*this); // the trace sink is debug output, never state
 		FElysiumNamedRetailSites Sites(TraceWorld, TEXT("Game"));
-		ElysiumSaveRestore::EncodeMapBlocks(Out, HasAiTraceSink() ? &Sites : nullptr);
+		ElysiumSaveRestore::EncodeMapBlocks(Out, HasAiTraceSink() ? &Sites : nullptr, &TraceWorld);
 	}
 
 	UE_LOG(LogElysiumWorld, Log,

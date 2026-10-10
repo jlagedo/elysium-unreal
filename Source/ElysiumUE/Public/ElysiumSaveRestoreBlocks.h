@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumEntityHandle.h"
 
 // The save/restore block framework (L0-r029, `docs/specs/layers/L0-entity/walks/L0-r029.md`): the
 // registered-block protocol `CServerGameDLL` runs a map's save and restore through. All vampire.dll.
@@ -28,9 +29,36 @@
 // a header record is written as its 0x28 raw bytes so slot 3's in-place overwrite lines up.
 
 struct IElysiumRetailSiteSink;
+class FElysiumEntityWorld;
 
 namespace ElysiumSaveRestore
 {
+	// One ADJACENCY row of the save data (`save+0x1c`, stride 0x50, capacity 0x3c; L0-r030
+	// `walks/L0-r030.md` 0x1011b9f0): what `FUN_101c7e00` writes.
+	struct FAdjacencyRow
+	{
+		char MapName[32];                 // +0x00, Q_strncpy(.., 0x20) of the trigger's m_szMapName
+		char LandmarkName[32];            // +0x20, the trigger's m_szLandmarkName
+		FElysiumEntityHandle Landmark;    // +0x40 pentLandmark: the info_landmark's edict
+		FVector LandmarkOrigin = FVector::ZeroVector; // +0x44 vecLandmarkOrigin: the landmark's slot-220 origin
+	};
+	constexpr int32 AdjacencyCapacity = 0x3c;   // 60 rows; `Error("Too many level transitions ...")` past it
+
+	// One entity-table row (`save+0x1334`, stride 0x30, count `save+0x1330`), as the Entities block's
+	// slot 1 `FUN_101a2c30` lays it out and the Save / header slots and `FUN_101a3c40` fill it.
+	struct FEntityTableRow
+	{
+		int32 Id = INDEX_NONE;            // +0x00: the row index (the save id)
+		int32 EdictIndex = 0;             // +0x04: the entity's index (slot 131 entindex)
+		int32 RestoredEdictIndex = -1;    // +0x0c: := -1 by slot 1; the edict index after a transfer
+		FElysiumEntityHandle Handle;      // +0x10: the entity's handle (slot 1), or the created one (FUN_101a3c40 pass 1)
+		int32 Location = 0;               // +0x14: body offset of the entity's data
+		int32 Size = 0;                   // +0x18: its byte size (0: no data)
+		uint32 FlagsLo = 0;               // +0x20: one bit a transition (FUN_101c7ff0)
+		uint32 FlagsHi = 0;               // +0x24: FENTTABLE_PLAYER / REMOVED / MOVEABLE / GLOBAL
+		FString Classname;                // +0x28: the classname string
+	};
+
 	// The engine's save-data struct the adapters wrap (CSave::ctor FUN_1019f870 / CRestore::ctor
 	// FUN_101a12a0 store it at A+0x18). Dwords as the walk reads them: [0] base, [1] cursor,
 	// [2] offset, [3] size; [4]/[5] the token table (unused here: the datamap writer's, not ported).
@@ -39,6 +67,18 @@ namespace ElysiumSaveRestore
 		TArray<uint8> Bytes;           // [0] base: the buffer; the cursor [1] is base + Offset
 		int32 Offset = 0;              // [2]
 		int32 Size = 0;                // [3]: the allocation; `Seek` is valid below it
+		// The level-transition words (L0-r030): `+0x18` connectionCount and the `+0x1c` ADJACENCY rows
+		// (BuildAdjacentMapList 0x1011b9f0 writes them), and the entity table `+0x1330` / `+0x1334`
+		// the Entities block's slot 1 (FUN_101a2c30) allocates and FUN_101c7ff0 / FUN_101a3c40 flag.
+		int32 ConnectionCount = 0;
+		TArray<FAdjacencyRow> Adjacency;
+		TArray<FEntityTableRow> EntityTable;
+		// FUN_1011a580's list (DAT_1070b0d0): the handles of the entities a transition transferred,
+		// appended per row by FUN_101a3c40; its reader is unrecovered.
+		TArray<FElysiumEntityHandle> TransferredEntities;
+		// The server's entity list (`DAT_106eb5d8`) the transition walks scan: engine-side, the one
+		// world; here the world this save data is about (null: no entities, as a bare buffer has).
+		FElysiumEntityWorld* World = nullptr;
 		// Engine-side buffer policy: the engine allocates a fixed buffer (its size is engine.dll's,
 		// unrecovered). With no pinned capacity the port grows the buffer on write; a pinned capacity
 		// reproduces `CSave::vfunc12`'s overflow arm (Warning, offset := size, nothing written).
@@ -158,9 +198,15 @@ namespace ElysiumSaveRestore
 	// calls -- BuildAdjacentMapList slot 23, FUN_200962c0, FUN_20097070/20097280/20097520 -- is
 	// unrecovered and not here). `OutHeaderStart` is where slot 3 began: the engine moves the two
 	// sections into the file's header and data areas from it (`docs/vtmb/savegame_format.md`).
+	// vfunc13 also calls slot 23 `BuildAdjacentMapList(NULL, NULL)` between slots 17 and 18 (0x200964ae;
+	// L0-r030), over `Data.World`.
 	bool EngineSaveGameState(FBlockSet& Set, FSaveRestoreData& Data, int32& OutHeaderStart);          // vfunc13 0x20096470
 	void EngineLoadGameState(FBlockSet& Set, FSaveRestoreData& Data, int32 HeaderStart, int32 DataStart, int32 P2, int32 P3); // vfunc9 0x200975f0
-	void EngineLevelTransition(FBlockSet& Set, FSaveRestoreData& Data, int32 HeaderStart);            // vfunc10 0x20097d00
+	// vfunc10's two slot calls over one save: slot 23 with the two transition strings (0x20097d73), then
+	// slot 20 (0x20097e25). The adjacent-map loop and slot 22 around them are
+	// `ElysiumTransitionState::EngineLoadAdjacentEnts`.
+	void EngineLevelTransition(FBlockSet& Set, FSaveRestoreData& Data, int32 HeaderStart,
+		const char* OldLevel = nullptr, const char* LandmarkName = nullptr);                            // vfunc10 0x20097d00
 
 	// The static set 0x1072bae8 with retail's five handlers appended in DLLInit order
 	// (CServerGameDLL::vfunc1 0x1011a0c0, asm 0x1011a20b–0x1011a279): Entities, EventQueue, Physics,

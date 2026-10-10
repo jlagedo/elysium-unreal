@@ -105,6 +105,10 @@ public:
 	// offset already carries capsule height) from a direct/console landmark entry (false: face the
 	// landmark, lift onto it). Returns false for a plain info_player_start load.
 	bool ConsumeLandmarkSpawn(FString& OutLandmark, FVector& OutOffset, float& OutYaw, bool& bOutHasYaw);
+	// A real landmark transition's two strings before the placement is consumed (the engine's
+	// `LoadAdjacentEnts(oldLevel, landmarkName)` 0x20097d00 arguments; L0-r030). False on a plain
+	// load or a direct landmark entry.
+	bool PeekLandmarkTransition(FString& OutFromMap, FString& OutLandmark) const;
 
 	// A loaded save places the player where they were standing, which is neither
 	// info_player_start nor a landmark offset but an absolute pose the World block carried. Set by
@@ -218,6 +222,10 @@ private:
 		FVector Offset = FVector::ZeroVector;
 		float   Yaw = 0.0f;
 		bool    bHasYaw = false;   // true: transition (keep view yaw); false: direct entry (face landmark)
+		// The map the transition left (engine 0x20097d00's `oldLevel`; L0-r030): what the arrival's
+		// BuildAdjacentMapList(oldLevel, landmarkName) and the adjacent-map load read. Empty on a
+		// direct entry.
+		FString FromMap;
 	};
 	FLandmarkSpawn NextLandmarkSpawn;
 

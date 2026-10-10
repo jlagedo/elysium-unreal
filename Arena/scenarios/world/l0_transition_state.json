@@ -1,0 +1,109 @@
+{
+  "name": "l0_transition_state",
+  "about": "Map-transition save state on sm_hub_1 (L0-r030). The global-entity table 0x106be530: DispatchSpawn 0x101d1280 adds a `globalname` entity on its first spawn (FUN_10057740 prepends: name[64], levelName[32] = the current map, state 1) and finds it (FUN_100576a0, case-insensitive) on a second spawn in the same map; CServerGameDLL slot 15 0x1011b040 -> FUN_10057a30 -> FUN_10057850 writes the GLOBAL header (m_listCount) and one GENT record per node, head first (CSave::vfunc3 always answers 1, so the result is 1); slot 16 0x1011b060 -> FUN_10057ac0 -> FUN_100578e0 clears the table, reads the header, zeroes the count and re-adds each record by prepending, so the restored order is the saved order reversed. Slot 23 BuildAdjacentMapList 0x1011b9f0 -> FUN_101c7ff0 over the map's 23 trigger_changelevels and 22 info_landmarks writes 23 ADJACENCY rows (FUN_101c7e00: Q_strncpy of map and landmark, the landmark edict, its origin) on the save, and with (oldLevel, landmarkName) = (sm_pawnshop_1, taxi_landmark) rewrites both triggers whose landmark is taxi_landmark (taxi_trigger `taxi`, to_downtown `la_hub_1`) to the level being left, so FUN_101c7e00 de-duplicates the second on (landmark edict, map): 22 rows. Slot 22 CreateEntityTransitionList 0x1011b590 -> FUN_101a3c40 over the saved entity table with mask bit 0: the one FENTTABLE_MOVEABLE row (the player's carried item; its bit 0 came from FUN_101c7ff0's second pass) is transferred -- flags := (0, 0x40000000), rc 1 -- then the four non-entity blocks' slot 7 with (adapter, 0, 0) and their slot 8; EntityPatchWrite 0x200973c0 lists the row in the `.HL3`. A mask naming no row (bit 23 of 23 transitions) moves nothing: no slot 7, the four slot 8 still run. Neither witness map authors globalname or env_global, so the two global entities are spawned by the record.",
+  "stage": "map:sm_hub_1",
+  "seed": 1,
+  "duration": 3.5,
+  "player": { "armed": "item_w_tire_iron" },
+  "cast": [
+    { "name": "taxi_trigger" },
+    { "name": "to_downtown" }
+  ],
+  "fixtures": [
+    { "id": "level", "kind": "save_blocks", "game": true }
+  ],
+  "script": [
+    { "t": 0.20, "do": "spawn", "row": { "name": "g_alpha_ent", "classname": "logic_relay", "at": [0, 0, 0], "keys": { "globalname": "g_alpha" } } },
+    { "t": 0.25, "do": "spawn", "row": { "name": "g_beta_ent", "classname": "logic_relay", "at": [0, 0, 0], "keys": { "globalname": "g_beta" } } },
+    { "t": 0.30, "do": "spawn", "row": { "name": "g_alpha_again", "classname": "logic_relay", "at": [0, 0, 0], "keys": { "globalname": "G_ALPHA" } } },
+    { "t": 0.50, "do": "entity_call", "target": "level", "function": "SaveRestore_Save", "args": [ { "fixture": "level" } ] },
+    { "t": 0.70, "do": "entity_call", "target": "level", "function": "SaveRestore_SaveGlobalState", "args": [ { "fixture": "level" } ] },
+    { "t": 0.90, "do": "entity_call", "target": "level", "function": "SaveRestore_RestoreGlobalState", "args": [ { "fixture": "level" } ] },
+    { "t": 1.10, "do": "entity_call", "target": "level", "function": "SaveRestore_LevelTransition", "args": [ { "fixture": "level" }, "sm_pawnshop_1", "taxi_landmark" ] },
+    { "t": 1.30, "do": "entity_call", "target": "level", "function": "SaveRestore_CreateEntityTransitionList", "args": [ { "fixture": "level" }, 1, 0 ] },
+    { "t": 1.50, "do": "entity_call", "target": "level", "function": "SaveRestore_CreateEntityTransitionList", "args": [ { "fixture": "level" }, 8388608, 0 ] }
+  ],
+  "expect": [
+    { "label": "alpha_added", "who": "g_alpha_ent", "kind": "retail_site", "site": "global_add", "match": "fn=FUN_10057740 va=0x10057740 phase=entry name=g_alpha level=sm_hub_1 state=1", "by": 0.4 },
+    { "who": "g_alpha_ent", "kind": "retail_site", "site": "global_add", "match": "phase=return count=1", "by": 0.4 },
+    { "who": "g_alpha_ent", "kind": "retail_site", "site": "global_spawn", "match": "fn=DispatchSpawn va=0x101d1280 phase=branch globalname=g_alpha arm=add level=sm_hub_1 state=1", "by": 0.4 },
+    { "who": "g_beta_ent", "kind": "retail_site", "site": "global_add", "match": "phase=return count=2", "by": 0.4 },
+    { "label": "alpha_found", "who": "g_alpha_again", "kind": "retail_site", "site": "global_spawn", "match": "phase=branch globalname=G_ALPHA arm=same_level level=sm_hub_1 state=1", "by": 0.45 },
+
+    { "label": "adjacent_entry", "who": "Game", "kind": "retail_site", "site": "adjacent_build", "match": "fn=CServerGameDLL::BuildAdjacentMapList va=0x1011b9f0 phase=entry save=set oldLevel=NULL landmarkName=NULL", "by": 0.7 },
+    { "who": "Game", "kind": "retail_site", "site": "adjacent_row", "match": "va=0x101c7e00 phase=write row=0 map=sm_diner_1 landmark=diner1 pent=#", "by": 0.7 },
+    { "who": "Game", "kind": "retail_site", "site": "adjacent_row", "match": "phase=write row=14 map=taxi landmark=taxi_landmark", "by": 0.7 },
+    { "who": "Game", "kind": "retail_site", "site": "adjacent_row", "match": "phase=write row=15 map=la_hub_1 landmark=taxi_landmark", "by": 0.7 },
+    { "who": "Game", "kind": "retail_site", "site": "adjacent_row", "match": "phase=write row=22 map=sm_smoke_1 landmark=smoke", "by": 0.7 },
+    { "label": "adjacent_23", "who": "Game", "kind": "retail_site", "site": "adjacent_build", "match": "phase=return connectionCount=23", "by": 0.7 },
+    { "who": "Game", "kind": "retail_site", "site": "transition_flags", "match": "fn=FUN_101c7ff0 va=0x101c7ff0 phase=candidate j=0 entity=item_w_tire_iron lo=0x00000000 hi=0x20000000", "by": 0.7 },
+    { "who": "Game", "kind": "retail_site", "site": "transition_flags", "match": "phase=candidate j=0 entity=g_alpha_ent lo=0x00000000 hi=0x10000000", "by": 0.7 },
+    { "who": "Game", "kind": "retail_site", "site": "transition_flags", "match": "phase=candidate j=22 entity=item_w_tire_iron lo=0x00000000 hi=0x20000000", "by": 0.7 },
+    { "label": "frozen", "who": "level", "kind": "script", "match": "entity_call SaveRestore_Save done result=1 game=1 rows=[0-9]+ connectionCount=23 absent=0", "regex": true, "by": 0.7 },
+
+    { "label": "global_save_entry", "who": "level", "kind": "retail_site", "site": "global_save_entry", "match": "fn=Global::FUN_10057a30 va=0x10057a30 phase=entry save=set", "by": 0.9 },
+    { "who": "level", "kind": "retail_site", "site": "global_save", "match": "fn=Global::FUN_10057850 va=0x10057850 phase=entry count=2 head=set", "by": 0.9 },
+    { "who": "level", "kind": "retail_site", "site": "global_save", "match": "phase=header result=1", "by": 0.9 },
+    { "who": "level", "kind": "retail_site", "site": "global_save", "match": "phase=record name=g_beta level=sm_hub_1 state=1", "by": 0.9 },
+    { "who": "level", "kind": "retail_site", "site": "global_save", "match": "phase=record name=g_alpha level=sm_hub_1 state=1", "by": 0.9 },
+    { "who": "level", "kind": "retail_site", "site": "global_save", "match": "phase=return result=1", "by": 0.9 },
+    { "label": "global_saved", "who": "level", "kind": "script", "match": "entity_call SaveRestore_SaveGlobalState done count=2 start=[0-9]+ bytes=204", "regex": true, "by": 0.9 },
+
+    { "who": "level", "kind": "retail_site", "site": "global_restore", "match": "fn=Global::FUN_10057ac0 va=0x10057ac0 phase=entry restore=set", "by": 1.1 },
+    { "who": "level", "kind": "retail_site", "site": "global_restore", "match": "fn=Global::FUN_100578e0 va=0x100578e0 phase=clear count_before=2", "by": 1.1 },
+    { "who": "level", "kind": "retail_site", "site": "global_restore", "match": "phase=header read=1 count=2", "by": 1.1 },
+    { "who": "level", "kind": "retail_site", "site": "global_add", "match": "phase=entry name=g_beta level=sm_hub_1 state=1", "by": 1.1 },
+    { "who": "level", "kind": "retail_site", "site": "global_restore", "match": "phase=record i=0 name=g_beta level=sm_hub_1 state=1 count=1", "by": 1.1 },
+    { "who": "level", "kind": "retail_site", "site": "global_restore", "match": "phase=record i=1 name=g_alpha level=sm_hub_1 state=1 count=2", "by": 1.1 },
+    { "who": "level", "kind": "retail_site", "site": "global_restore", "match": "phase=return result=1", "by": 1.1 },
+    { "label": "global_restored", "who": "level", "kind": "script", "match": "entity_call SaveRestore_RestoreGlobalState done count=2 head=g_alpha", "by": 1.1 },
+
+    { "who": "level", "kind": "retail_site", "site": "adjacent_build", "match": "phase=entry save=set oldLevel=sm_pawnshop_1 landmarkName=taxi_landmark", "by": 1.3 },
+    { "who": "level", "kind": "retail_site", "site": "adjacent_rewrite", "match": "fn=FUN_101c7ff0 va=0x101c7ff0 phase=write trigger=taxi_trigger landmark=taxi_landmark m_szMapName=taxi -> sm_pawnshop_1", "by": 1.3 },
+    { "who": "level", "kind": "retail_site", "site": "adjacent_row", "match": "phase=write row=14 map=sm_pawnshop_1 landmark=taxi_landmark", "by": 1.3 },
+    { "who": "level", "kind": "retail_site", "site": "adjacent_rewrite", "match": "phase=write trigger=to_downtown landmark=taxi_landmark m_szMapName=la_hub_1 -> sm_pawnshop_1", "by": 1.3 },
+    { "who": "level", "kind": "retail_site", "site": "adjacent_row", "match": "phase=dup row=14 map=sm_pawnshop_1 landmark=taxi_landmark", "by": 1.3 },
+    { "label": "adjacent_22", "who": "level", "kind": "retail_site", "site": "adjacent_build", "match": "phase=return connectionCount=22", "by": 1.3 },
+    { "who": "level", "kind": "retail_site", "site": "restore_read", "match": "va=0x101a4cb0 phase=lookup i=0 name=Entities j=0", "by": 1.3 },
+    { "label": "transition_read", "who": "level", "kind": "script", "match": "entity_call SaveRestore_LevelTransition done cursor=[0-9]+ N=5 connectionCount=22 rows=[0-9]+", "regex": true, "by": 1.3 },
+
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "fn=CServerGameDLL::CreateEntityTransitionList va=0x1011b590 phase=entry save=set maskLo=0x00000001 maskHi=0x00000000", "by": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "transition_row", "match": "fn=FUN_101a3c40 va=0x101a3c40 phase=transfer id=[0-9]+ classname=item_w_tire_iron arm=transferred rows=1", "regex": true, "by": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "entity_rows", "match": "phase=return rows=1", "by": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=branch rows=1", "by": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=block tag=restore idx=A name=EventQueue slot=7 va=0x100cff70 args=(r,0,0)", "by": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "eq_restore", "match": "fn=CEQ_SaveRestoreBlockHandler::vfunc7 va=0x100cff70 phase=hook", "by": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=block tag=restore idx=B name=Physics slot=7 va=0x100440c0", "by": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=block tag=restore idx=C name=AI slot=7 va=0x1030c210", "by": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=block tag=restore idx=D name=Python slot=7 va=0x1019b130", "by": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=block tag=post idx=A name=EventQueue slot=8 va=0x10043c00", "by": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=block tag=post idx=B name=Physics slot=8 va=0x100447f0", "by": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=block tag=post idx=D name=Python slot=8 va=0x10043c00", "by": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=return rc=1", "by": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "transition_load", "match": "fn=CSaveRestore::vfunc10 va=0x20097d00 phase=hl3 map=sm_hub_1 fn=EntityPatchWrite va=0x200973c0 written=1 absent=1", "by": 1.5 },
+    { "label": "moved", "who": "level", "kind": "script", "match": "entity_call SaveRestore_CreateEntityTransitionList done maskLo=0x00000001 maskHi=0x00000000 rc=1 written=1 absent=1", "by": 1.5 },
+
+    { "label": "empty_entry", "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=entry save=set maskLo=0x00800000 maskHi=0x00000000", "by": 1.7 },
+    { "who": "level", "kind": "retail_site", "site": "entity_rows", "match": "phase=return rows=0", "by": 1.7 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=branch rows=0", "by": 1.7 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=block tag=post idx=A name=EventQueue slot=8", "by": 1.7 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=block tag=post idx=D name=Python slot=8", "by": 1.7 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "phase=return rc=0", "by": 1.7 },
+    { "label": "empty_done", "who": "level", "kind": "script", "match": "entity_call SaveRestore_CreateEntityTransitionList done maskLo=0x00800000 maskHi=0x00000000 rc=0 written=0 absent=1", "by": 1.7 }
+  ],
+  "never": [
+    { "who": "", "kind": "retail_site", "site": "global_spawn", "match": "arm=dormant" },
+    { "who": "", "kind": "retail_site", "site": "global_spawn", "match": "arm=dead" },
+    { "who": "", "kind": "retail_site", "site": "global_restore", "match": "result=0" },
+    { "who": "", "kind": "retail_site", "site": "adjacent_row", "match": "phase=dup", "from": 0.1, "until": 1.0 },
+    { "who": "level", "kind": "retail_site", "site": "transition_mask", "match": "tag=restore", "after": "empty_entry", "within": 1.5 },
+    { "who": "level", "kind": "retail_site", "site": "transition_row", "match": "arm=suppressed" }
+  ],
+  "probes": [
+    { "who": "taxi_trigger", "probe": "entity_field", "field": "map", "equals": "sm_pawnshop_1", "at": 1.2 },
+    { "who": "to_downtown", "probe": "entity_field", "field": "map", "equals": "sm_pawnshop_1", "at": 1.2 },
+    { "who": "g_alpha_ent", "probe": "entity_field", "field": "globalname", "equals": "g_alpha", "at": 1.2 },
+    { "who": "g_alpha_again", "probe": "entity_field", "field": "m_iEFlags", "member": "0x2", "equals": false, "at": 1.2 }
+  ],
+  "notes": "Lump 0 of Unofficial_Patch/maps/sm_hub_1.bsp: the 23 trigger_changelevels in entity order are DinerTeleport1 (sm_diner_1 @ diner1), BailBondsTeleport1, JunkyardTeleport1, AsylumTeleport1, GalleryTeleport1, GalleryTeleport2, PawnshopTeleport1, HavenTeleport1, MedicalTeleport2, MedicalTeleport1, pierteleport1, BasementTeleport1, ApartmentTeleport1, warehouseteleport, taxi_trigger (taxi @ taxi_landmark), to_downtown (la_hub_1 @ taxi_landmark), transition, vamparenatransition, shreknetenter, sewer_map_trigger (sewer_map @ sewer_map_landmark), oceantrans, coffee_transition, smoke_transition (sm_smoke_1 @ smoke); every landmark resolves and the 23 (landmark, map) pairs are distinct. The GLOBAL group is one dword plus two 0x64-byte GENT records: 204 bytes. The carried item is the one FENTTABLE_MOVEABLE row (the recovered arms of the predicate are the player's carried set; the two +0xa8 arms are unrecovered, walk Open 6). The record's logic_relays carry FENTTABLE_GLOBAL and the transition bits but no destination copy answers for them at slot 22, so they are neither merged nor suppressed (the merge body FUN_101a3470 is unported: a reported planning fault)."
+}

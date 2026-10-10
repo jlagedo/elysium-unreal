@@ -15,6 +15,9 @@
 #include "ElysiumRetailSite.h"               // the named sink those calls report through
 #include "Audio/ElysiumSoundScript.h"        // `entity_call SoundScript_New` / `SoundScript_SetChannel`
 #include "ElysiumSaveRestoreBlocks.h"         // `save_blocks` fixtures and `entity_call SaveRestore_*` (L0-r029)
+#include "ElysiumSaveTypes.h"                 // the `game` fixture's snapshot (L0-r030)
+#include "ElysiumTransitionState.h"           // slots 15 / 16 / 22 / 23 behind `entity_call SaveRestore_*` (L0-r030)
+#include "Substrate/ElysiumSaveRestoreGame.h" // the static Game set a `game` fixture drives (L0-r030)
 #include "Misc/ScopeExit.h"
 #include "Substrate/ElysiumBloodEffects.h"   // `entity_call Blood_Spawn`: `FUN_102699e0` on a utility target
 #include "ElysiumInputRouter.h"              // `player_walk`: the input replay door `gr_walk` drives
@@ -943,6 +946,15 @@ struct FElysiumArenaStagedSaveBlocks
 	int32 HeaderStart = 0;
 	bool bSaved = false;
 	int32 NextSeed = 1;
+	// `game: true` (L0-r030): the static Game set over the host world. `SaveRestore_Save` is the world's
+	// Freeze; the snapshot keeps its stream, ADJACENCY rows and the `.HL3` a transition writes back.
+	bool bGame = false;
+	FElysiumMapSnapshot Snapshot;
+	// Where `SaveRestore_SaveGlobalState` wrote the GLOBAL group (the engine writes it after the
+	// GameHeader group; here at the cursor), so `SaveRestore_RestoreGlobalState` reads the same bytes.
+	int32 GlobalStart = -1;
+
+	ElysiumSaveRestore::FBlockSet& ActiveSet() { return bGame ? ElysiumSaveRestore::GameBlockSet() : Set; }
 
 	FElysiumArenaSaveBlockHandler* FindRegistered(const FString& Name) const
 	{
@@ -1009,6 +1021,7 @@ void FElysiumArenaScenarioRunner::StageFixtures(FElysiumEntityWorld& World)
 			TSharedPtr<FElysiumArenaStagedSaveBlocks> Staged = MakeShared<FElysiumArenaStagedSaveBlocks>();
 			Staged->Capacity = Fixture.Capacity;
 			Staged->Patches = Fixture.Patches;
+			Staged->bGame = Fixture.bGame; // L0-r030: retail's five handlers, already registered on the static set
 			FElysiumNamedRetailSites Sites(World, Fixture.Id);
 			for (const FElysiumArenaFixture::FSaveBlock& Block : Fixture.Blocks)
 			{
@@ -2518,7 +2531,8 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			FElysiumArenaStagedSaveBlocks& Staged = **StagedPtr;
 			FElysiumNamedRetailSites Sites(World, Action.Target);
 			Staged.Data.Sites = &Sites;
-			ON_SCOPE_EXIT { Staged.Data.Sites = nullptr; Staged.Set.Sites = nullptr; };
+			Staged.Data.World = &World; // the entity list slot 23 scans and slot 22 arrives in (L0-r030)
+			ON_SCOPE_EXIT { Staged.Data.Sites = nullptr; Staged.Set.Sites = nullptr; Staged.Data.World = nullptr; };
 			auto RecordDone = [this, &World, &Action](const FString& Text)
 			{
 				FEvent& Done = Events.AddDefaulted_GetRef();
@@ -2542,10 +2556,34 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 					if (Handler->bHeaderOk && Handler->bBodyOk) ++OutOk;
 				}
 			};
+			auto StringAt = [&Action](int32 Index) -> const FString*
+			{
+				return Action.Args.Num() > Index && Action.Args[Index].Value.Type == FElysiumArenaValue::EType::String
+					&& !Action.Args[Index].Value.String.IsEmpty() ? &Action.Args[Index].Value.String : nullptr;
+			};
 			if (Action.Function == TEXT("SaveRestore_Save"))
 			{
-				// CSaveRestore::vfunc13 0x20096470: slot 17, slot 18, the return test, slot 19 -- over a fresh
-				// buffer of the fixture's capacity (0: grows). The header section begins where slot 2 ended.
+				if (Staged.bGame)
+				{
+					// L0-r030: the world's own save -- `Freeze` runs CSaveRestore::vfunc13's order (17, 23, 18, 19)
+					// with the static Game set; its sites name "Game". The fixture keeps the snapshot and reads
+					// its stream as the engine's buffer.
+					World.Freeze(Staged.Snapshot);
+					Staged.Data.Reset();
+					Staged.Data.Bytes = Staged.Snapshot.BlockStream;
+					Staged.Data.Size = Staged.Data.Bytes.Num();
+					Staged.Data.bGrowable = true; // the GLOBAL group may follow at the cursor
+					Staged.Data.Offset = Staged.Data.Size;
+					Staged.HeaderStart = Staged.Snapshot.BlockHeaderStart;
+					Staged.bSaved = true;
+					RecordDone(FString::Printf(TEXT("entity_call SaveRestore_Save done result=1 game=1 rows=%d connectionCount=%d absent=%d hdr_start=%d bytes=%d"),
+						Staged.Snapshot.Entities.Num(), Staged.Snapshot.Adjacency.Num(), Staged.Snapshot.AbsentEntities.Num(),
+						Staged.HeaderStart, Staged.Data.Bytes.Num()));
+					return true;
+				}
+				// CSaveRestore::vfunc13 0x20096470: slot 17, slot 23 (L0-r030), slot 18, the return test, slot 19
+				// -- over a fresh buffer of the fixture's capacity (0: grows). The header section begins where
+				// slot 2 ended.
 				Staged.Data.Reset(Staged.Capacity);
 				int32 HeaderStart = 0;
 				const bool bWroteHeaders = ElysiumSaveRestore::EngineSaveGameState(Staged.Set, Staged.Data, HeaderStart);
@@ -2556,7 +2594,36 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 					Staged.Data.Bytes.Num(), Staged.Set.HeaderCount()));
 				return true;
 			}
-			if (Action.Function == TEXT("SaveRestore_Restore") || Action.Function == TEXT("SaveRestore_LevelTransition"))
+			if (Action.Function == TEXT("SaveRestore_SaveGlobalState"))
+			{
+				// CServerGameDLL slot 15 0x1011b040 -> FUN_10057a30 (L0-r030): the GLOBAL group written at the
+				// cursor through a CSave over the fixture's save data; the engine calls it after slot 13's
+				// GameHeader group (CSaveRestore::vfunc12 0x20095980).
+				Staged.GlobalStart = Staged.Data.Offset;
+				ElysiumTransitionState::SaveGlobalState(&Staged.Data);
+				const ElysiumTransitionState::FGlobalState& Table = ElysiumTransitionState::GlobalStateTable();
+				RecordDone(FString::Printf(TEXT("entity_call SaveRestore_SaveGlobalState done count=%d start=%d bytes=%d"),
+					Table.Count(), Staged.GlobalStart, Staged.Data.Offset - Staged.GlobalStart));
+				return true;
+			}
+			if (Action.Function == TEXT("SaveRestore_RestoreGlobalState"))
+			{
+				// CServerGameDLL slot 16 0x1011b060 -> FUN_10057ac0 (L0-r030) over the bytes slot 15 wrote.
+				if (Staged.GlobalStart < 0)
+				{
+					OutError = TEXT("entity_call 'SaveRestore_RestoreGlobalState': the fixture has no GLOBAL group (run SaveRestore_SaveGlobalState first)");
+					return false;
+				}
+				Staged.Data.Offset = Staged.GlobalStart;
+				ElysiumTransitionState::RestoreGlobalState(&Staged.Data);
+				const ElysiumTransitionState::FGlobalState& Table = ElysiumTransitionState::GlobalStateTable();
+				const TArray<ElysiumTransitionState::FGlobalRecord>& Nodes = Table.Nodes();
+				RecordDone(FString::Printf(TEXT("entity_call SaveRestore_RestoreGlobalState done count=%d head=%s cursor=%d"),
+					Table.Count(), Nodes.IsEmpty() ? TEXT("none") : ANSI_TO_TCHAR(Nodes[0].Name), Staged.Data.Offset));
+				return true;
+			}
+			if (Action.Function == TEXT("SaveRestore_Restore") || Action.Function == TEXT("SaveRestore_LevelTransition")
+				|| Action.Function == TEXT("SaveRestore_CreateEntityTransitionList"))
 			{
 				if (!Staged.bSaved)
 				{
@@ -2566,6 +2633,11 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 				if (!Staged.ApplyPatches(OutError)) return false;
 				if (Action.Function == TEXT("SaveRestore_Restore"))
 				{
+					if (Staged.bGame)
+					{
+						OutError = TEXT("entity_call 'SaveRestore_Restore': a `game` fixture restores through the map's own load, not here");
+						return false;
+					}
 					// CSaveRestore::vfunc9 0x200975f0: slot 20 on the header section, slot 21 (p2, p3) on the data section.
 					const int32 P2 = NumberAt(1, 0);
 					const int32 P3 = NumberAt(2, 0);
@@ -2576,10 +2648,40 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 						P2, P3, Staged.Data.Offset, Restored, Ok, Staged.Set.HandlerCount(), Staged.Set.HeaderCount()));
 					return true;
 				}
-				// CSaveRestore::vfunc10 0x20097d00: slot 20 only; the header vector keeps its records.
-				ElysiumSaveRestore::EngineLevelTransition(Staged.Set, Staged.Data, Staged.HeaderStart);
-				RecordDone(FString::Printf(TEXT("entity_call SaveRestore_LevelTransition done cursor=%d N=%d"),
-					Staged.Data.Offset, Staged.Set.HeaderCount()));
+				// The transition path reads through the Game handlers with the host world as the destination.
+				ElysiumSaveRestore::FGameContext TransitionContext;
+				FElysiumMapSnapshot TransitionDecoded;
+				TransitionContext.World = &World;
+				TransitionContext.Decoded = &TransitionDecoded;
+				void* const PriorContext = Staged.Data.Context;
+				if (Staged.bGame) ElysiumSaveRestore::BindTransitionContext(Staged.Data, TransitionContext);
+				ON_SCOPE_EXIT { if (Staged.bGame) { ElysiumSaveRestore::UnbindTransitionContext(); Staged.Data.Context = PriorContext; } };
+				if (Action.Function == TEXT("SaveRestore_LevelTransition"))
+				{
+					// CSaveRestore::vfunc10 0x20097d00: slot 23 with (oldLevel, landmarkName) -- the two optional
+					// string arguments (L0-r030) -- then slot 20 only; the header vector keeps its records.
+					const FString* OldLevel = StringAt(1);
+					const FString* LandmarkName = StringAt(2);
+					const auto OldLevelAnsi = StringCast<ANSICHAR>(OldLevel ? **OldLevel : TEXT(""));
+					const auto LandmarkAnsi = StringCast<ANSICHAR>(LandmarkName ? **LandmarkName : TEXT(""));
+					ElysiumSaveRestore::EngineLevelTransition(Staged.ActiveSet(), Staged.Data, Staged.HeaderStart,
+						OldLevel ? OldLevelAnsi.Get() : nullptr, LandmarkName ? LandmarkAnsi.Get() : nullptr);
+					if (Staged.bGame) ElysiumTransitionState::EntityPatchRead(Staged.Data, Staged.Snapshot);
+					RecordDone(FString::Printf(TEXT("entity_call SaveRestore_LevelTransition done cursor=%d N=%d connectionCount=%d rows=%d"),
+						Staged.Data.Offset, Staged.ActiveSet().HeaderCount(), Staged.Data.ConnectionCount, Staged.Data.EntityTable.Num()));
+					return true;
+				}
+				// CServerGameDLL slot 22 0x1011b590 over the fixture's entity table (read by the slot 20 of a
+				// `SaveRestore_LevelTransition` before it), the mask the record states, the host world as the
+				// destination; then the engine's EntityPatchWrite 0x200973c0 into the fixture's snapshot when
+				// rows moved (L0-r030).
+				const uint32 MaskLo = static_cast<uint32>(static_cast<int64>(NumberAt(1, 0)));
+				const uint32 MaskHi = static_cast<uint32>(static_cast<int64>(NumberAt(2, 0)));
+				const int32 Rc = ElysiumTransitionState::CreateEntityTransitionList(Staged.Data, MaskLo, MaskHi, World);
+				int32 Written = 0;
+				if (Rc != 0 && Staged.bGame) Written = ElysiumTransitionState::EntityPatchWrite(Staged.Data, Staged.Snapshot);
+				RecordDone(FString::Printf(TEXT("entity_call SaveRestore_CreateEntityTransitionList done maskLo=0x%08x maskHi=0x%08x rc=%d written=%d absent=%d"),
+					MaskLo, MaskHi, Rc, Written, Staged.Snapshot.AbsentEntities.Num()));
 				return true;
 			}
 			if (Action.Function == TEXT("SaveRestore_AddBlockHandler") || Action.Function == TEXT("SaveRestore_RemoveBlockHandler"))

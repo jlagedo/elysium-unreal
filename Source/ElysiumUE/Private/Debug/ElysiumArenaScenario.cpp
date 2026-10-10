@@ -1338,8 +1338,7 @@ namespace ElysiumArenaScenarioParse
 			TSharedPtr<FJsonObject> Item;
 			FElysiumArenaFixture& Fixture = Out.AddDefaulted_GetRef();
 			if (!ElementObject(R, (*Items)[Index], Path, Item)
-				|| !CheckFields(R, *Item, Path, { TEXT("id"), TEXT("kind"), TEXT("values"), TEXT("text"), TEXT("config"), TEXT("model"), TEXT("frames"),
-						TEXT("blocks"), TEXT("capacity"), TEXT("patch") })
+				|| !CheckFields(R, *Item, Path, { TEXT("id"), TEXT("kind"), TEXT("values"), TEXT("text"), TEXT("config"), TEXT("model"), TEXT("frames"), TEXT("blocks"), TEXT("capacity"), TEXT("patch"), TEXT("game") })
 				|| !ReadString(R, *Item, TEXT("id"), Path, ENeed::Required, Fixture.Id)
 				|| !ReadString(R, *Item, TEXT("kind"), Path, ENeed::Required, Fixture.Kind))
 			{
@@ -1368,7 +1367,7 @@ namespace ElysiumArenaScenarioParse
 					*Fixture.Kind, *FString::Join(Names, TEXT(", "))));
 			}
 			const bool bSaveBlockFields = FindValue(*Item, TEXT("blocks")) != nullptr || FindValue(*Item, TEXT("capacity")) != nullptr
-				|| FindValue(*Item, TEXT("patch")) != nullptr;
+				|| FindValue(*Item, TEXT("patch")) != nullptr || FindValue(*Item, TEXT("game")) != nullptr;
 			if (Fixture.Kind == TEXT("save_blocks"))
 			{
 				// `save_blocks` (L0-r029): a `CSaveRestoreBlockSet` (0x1072bae8's shape) of the record's own
@@ -1381,14 +1380,30 @@ namespace ElysiumArenaScenarioParse
 				if (FindValue(*Item, TEXT("values")) != nullptr || FindValue(*Item, TEXT("text")) != nullptr
 					|| FindValue(*Item, TEXT("model")) != nullptr || FindValue(*Item, TEXT("frames")) != nullptr)
 				{
-					return R.Fail(Path, TEXT("a `save_blocks` fixture takes `blocks`, `capacity` and `patch` only"));
+					return R.Fail(Path, TEXT("a `save_blocks` fixture takes `blocks`, `capacity`, `patch` and `game` only"));
+				}
+				// `game` (L0-r030): the static "Game" set over the host world instead of the record's own
+				// handlers; `blocks` is then refused (the five handlers are retail's).
+				if (const TSharedPtr<FJsonValue>* GameValue = FindValue(*Item, TEXT("game")))
+				{
+					FElysiumArenaValue GameRead;
+					if (!ReadValue(R, *GameValue, Field(Path, TEXT("game")), GameRead) || GameRead.Type != FElysiumArenaValue::EType::Bool)
+					{
+						return R.Fail(Field(Path, TEXT("game")), TEXT("a bool: true for the static Game set over the host world"));
+					}
+					Fixture.bGame = GameRead.bBool;
 				}
 				const TArray<TSharedPtr<FJsonValue>>* Blocks = nullptr;
 				if (!ReadArray(R, *Item, TEXT("blocks"), Path, Blocks)) return false;
-				if (Blocks == nullptr || Blocks->IsEmpty())
+				if (Fixture.bGame && Blocks != nullptr)
 				{
-					return R.Fail(Field(Path, TEXT("blocks")), TEXT("required: the registered blocks, in order"));
+					return R.Fail(Field(Path, TEXT("blocks")), TEXT("a `game` fixture registers retail's five handlers; `blocks` is refused"));
 				}
+				if (!Fixture.bGame && (Blocks == nullptr || Blocks->IsEmpty()))
+				{
+					return R.Fail(Field(Path, TEXT("blocks")), TEXT("required: the registered blocks, in order (or `game: true`)"));
+				}
+				if (Blocks != nullptr)
 				for (int32 BlockIndex = 0; BlockIndex < Blocks->Num(); ++BlockIndex)
 				{
 					const FString BlockPath = Field(Path, *Indexed(TEXT("blocks"), BlockIndex));
@@ -2204,6 +2219,18 @@ const TArray<FString>& EntityCallAllowlist()
 		TEXT("SaveRestore_LevelTransition"),
 		TEXT("SaveRestore_AddBlockHandler"),
 		TEXT("SaveRestore_RemoveBlockHandler"),
+		// L0.entity_core.transition-state (L0-r030): the engine's other calls into CServerGameDLL over a
+		// `save_blocks` fixture. `SaveRestore_SaveGlobalState [fixture]`: slot 15 0x1011b040 -> FUN_10057a30,
+		// the GLOBAL group at the cursor (CSaveRestore::vfunc12 0x20095980 after the GameHeader group).
+		// `SaveRestore_RestoreGlobalState [fixture]`: slot 16 0x1011b060 -> FUN_10057ac0 over those bytes.
+		// `SaveRestore_LevelTransition [fixture, oldLevel?, landmarkName?]` now carries vfunc10's two
+		// strings into slot 23 0x1011b9f0 (the taxi / sewer rewrite) before slot 20.
+		// `SaveRestore_CreateEntityTransitionList [fixture, maskLo, maskHi]`: slot 22 0x1011b590 over the
+		// fixture's entity table with the host world as the destination, then EntityPatchWrite 0x200973c0
+		// into the fixture's snapshot (a `game` fixture; the record's own handlers carry no table).
+		TEXT("SaveRestore_SaveGlobalState"),
+		TEXT("SaveRestore_RestoreGlobalState"),
+		TEXT("SaveRestore_CreateEntityTransitionList"),
 	};
 	return Allowed;
 }

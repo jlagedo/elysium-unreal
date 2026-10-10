@@ -454,10 +454,23 @@ FArchive& operator<<(FArchive& Ar, FElysiumMapSnapshot& M)
 	// are the section's own words outside the block set (its global preamble and `.HL3`).
 	if (Ar.IsSaving() && M.BlockStream.IsEmpty())
 	{
-		ElysiumSaveRestore::EncodeMapBlocks(M, nullptr);
+		ElysiumSaveRestore::EncodeMapBlocks(M, nullptr, nullptr); // off-world: slot 23 has no entity list to scan
 	}
 	Ar << M.BlockStream << M.BlockHeaderStart;
 	Ar << M.AbsentEntities;
+	// The global preamble's ADJACENCY rows (L0-r030): `connectionCount` rows of mapName, landmarkName,
+	// the landmark's index and its origin -- what the engine wrote ahead of the block set.
+	if (Ar.IsSaving() || Ar.CustomVer(FElysiumSaveVersion::GUID) >= FElysiumSaveVersion::TransitionState)
+	{
+		int32 ConnectionCount = M.Adjacency.Num();
+		Ar << ConnectionCount;
+		if (Ar.IsLoading()) M.Adjacency.SetNum(FMath::Clamp(ConnectionCount, 0, 0x3c));
+		for (int32 Row = 0; Row < M.Adjacency.Num(); ++Row)
+		{
+			FElysiumSavedAdjacency& A = M.Adjacency[Row];
+			Ar << A.MapName << A.LandmarkName << A.LandmarkIndex << A.LandmarkOrigin;
+		}
+	}
 	Ar << M.Fade;
 	Ar << M.Weather;
 	// The schema the snapshot's opaque leaf blobs were written at. It has to be recorded rather than

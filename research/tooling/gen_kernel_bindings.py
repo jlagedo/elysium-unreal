@@ -196,6 +196,7 @@ CHAIN_MEMBER_MAPS: dict[str, dict[int, tuple[str, str]]] = {
         0x00E0: ("FElysiumEntity", "bStartHidden"),
         0x00FC: ("FElysiumEntity", "bNpcTransparent"),
         0x00FD: ("FElysiumEntity", "bBlocksTraces"),
+        0x0120: ("FElysiumEntity", "GlobalName"),
         0x0124: ("FElysiumEntity", "ParentName"),
         0x0128: ("FElysiumEntity", "DialogName"),
         0x0164: ("FElysiumEntity", "AuthoredSpeed"),
@@ -257,10 +258,6 @@ CHAIN_UNBOUND: dict[tuple[str, int], str] = {
     ("CBaseEntity", 0x011C):
         "the def's identity: `FElysiumEntityDef::Classname` is hoisted out of the keys and the "
         "registry keys the descriptor on it, so there is no member a write could land on",
-    ("CBaseEntity", 0x0120):
-        "`m_iGlobalname` is retail's FTYPEDESC_GLOBAL carry across a `trigger_changelevel`; this "
-        "port carries state across a level change in the map snapshot, and no shipped map "
-        "authors the key",
     ("CBaseEntity", 0x012C):
         "`m_bBlocked` is the blocked-by-a-mover latch `CBaseToggle`'s movers set; this port's "
         "movers carry their own, and no shipped map authors the key",

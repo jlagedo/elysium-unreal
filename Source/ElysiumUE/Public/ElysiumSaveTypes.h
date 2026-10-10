@@ -119,6 +119,11 @@ struct FElysiumSaveVersion
 		// whole-record change, so the floor moves.
 		SaveBlocks = 44,
 
+		// L0-r030: the snapshot carries the global preamble's ADJACENCY rows beside the stream, and
+		// the Entities block's table rows carry the two FENTTABLE flag words and the classname. A
+		// whole-record change, so the floor moves.
+		TransitionState = 45,
+
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
 	};
@@ -152,7 +157,7 @@ struct FElysiumSaveVersion
 	//
 	// `SaveBlocks` moves the entity and queue rows into the block set's stream (L0-r029); saves are
 	// disposable (no migration) and the floor moves with it.
-	static constexpr int32 MinSupported = SaveBlocks;
+	static constexpr int32 MinSupported = TransitionState; // L0-r030: the ETABLE rows gained the flag words and the classname (a whole-record change)
 
 	static const FGuid GUID;
 };
@@ -217,6 +222,16 @@ struct FElysiumEntityState
 	bool bCaptured = false;
 };
 
+// One ADJACENCY row as the snapshot keeps it (the save data's 0x50-byte row, `ElysiumSaveRestoreBlocks.h`
+// `FAdjacencyRow`, with the landmark edict as its def index; L0-r030).
+struct FElysiumSavedAdjacency
+{
+	FString MapName;        // mapName[32]
+	FString LandmarkName;   // landmarkName[32]
+	int32 LandmarkIndex = INDEX_NONE; // pentLandmark: the info_landmark's entity index
+	FVector LandmarkOrigin = FVector::ZeroVector; // vecLandmarkOrigin
+};
+
 // The `env_fade` screen fade — world state with the map epoch's lifetime, so it is the map's.
 struct FElysiumSavedFade
 {
@@ -264,7 +279,15 @@ struct FElysiumMapSnapshot
 	// everything carried). On restore the build skips them, because they now live wherever the
 	// player is — without it, walking back re-materialises the whole inventory. Retail writes the
 	// `.HL3` outside the block set, and so does the port: a scalar of the section, not a block body.
+	// Written by the arrival's transition load (`ElysiumTransitionState::EntityPatchWrite`, the
+	// engine's 0x200973c0: every entity-table row FENTTABLE_REMOVED marks; L0-r030).
 	TArray<int32> AbsentEntities;
+
+	// The global preamble's `connectionCount` ADJACENCY rows (`docs/vtmb/savegame_format.md`): what
+	// CServerGameDLL slot 23 `BuildAdjacentMapList` 0x1011b9f0 built over this map's
+	// trigger_changelevels when it was frozen (L0-r030). A transition into another map reads them to
+	// select the rows that cross: row j's map is the destination -> entity-table bit j.
+	TArray<FElysiumSavedAdjacency> Adjacency;
 
 	// The one time-sorted queue, FireTime/guard stored relative to SaveBase (0x101a0a80): the
 	// EventQueue block's decoded rows, with the two words its body carries beside them.

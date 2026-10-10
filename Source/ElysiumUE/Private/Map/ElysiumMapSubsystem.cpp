@@ -620,7 +620,7 @@ void UElysiumMapSubsystem::RequestLandmarkTravel(const FString& Map, const FStri
 	// player's view yaw). Travel below won't overwrite it (its direct-entry fallback only fires when
 	// NextLandmarkSpawn is empty), then OpenLevels — safe from inside the tick (teardown is deferred).
 	NextLandmarkSpawn = FLandmarkSpawn{
-		true, DestLandmark, DestOffset, PlayerYaw, bHasYaw
+		true, DestLandmark, DestOffset, PlayerYaw, bHasYaw, SourceMap
 	};
 	UE_LOG(LogElysiumMap, Log, TEXT("landmark travel -> %s @ %s (offset %s)"),
 		*DestMap, *DestLandmark, *DestOffset.ToString());
@@ -632,6 +632,17 @@ void UElysiumMapSubsystem::RequestLandmarkTravel(const FString& Map, const FStri
 		UE_LOG(LogElysiumMap, Warning,
 			TEXT("landmark travel to '%s' failed (map not exported)"), *DestMap);
 	}
+}
+
+bool UElysiumMapSubsystem::PeekLandmarkTransition(FString& OutFromMap, FString& OutLandmark) const
+{
+	if (!NextLandmarkSpawn.bValid || !NextLandmarkSpawn.bHasYaw || NextLandmarkSpawn.FromMap.IsEmpty())
+	{
+		return false;
+	}
+	OutFromMap = NextLandmarkSpawn.FromMap;
+	OutLandmark = NextLandmarkSpawn.Landmark;
+	return true;
 }
 
 bool UElysiumMapSubsystem::ConsumeLandmarkSpawn(FString& OutLandmark, FVector& OutOffset,

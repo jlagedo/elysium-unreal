@@ -90,6 +90,11 @@ struct FElysiumArenaFixture
 	TArray<FSaveBlock> Blocks;
 	TArray<FSaveBlockPatch> Patches;
 	int32 Capacity = 0;
+	// `game: true` (L0-r030): the set is the static "Game" set over the host world -- `SaveRestore_Save`
+	// is the world's own Freeze (slots 17, 23, 18, 19 with the five retail handlers), so the stream
+	// carries the entity table, its transition flags and the ADJACENCY rows a `SaveRestore_
+	// CreateEntityTransitionList` selects from. `blocks` is refused with it.
+	bool bGame = false;
 };
 
 // One argument of an `entity_call`: a typed scalar, or a staged fixture's handle.

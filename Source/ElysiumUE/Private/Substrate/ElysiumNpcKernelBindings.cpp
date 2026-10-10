@@ -92,6 +92,8 @@ namespace ElysiumNpcKernelBindings
 			EElysiumField::Save | EElysiumField::MapKey);  // +0x434 m_fFlags
 		ElysiumAddClassField(D, TEXT("friction"), &FElysiumEntity::Friction,
 			EElysiumField::Save | EElysiumField::MapKey);  // +0x3f0 m_flFriction
+		ElysiumAddClassField(D, TEXT("globalname"), &FElysiumEntity::GlobalName,
+			EElysiumField::Save | EElysiumField::MapKey);  // +0x120 m_iGlobalname
 		ElysiumAddClassField(D, TEXT("gravity"), &FElysiumEntity::Gravity,
 			EElysiumField::Save | EElysiumField::MapKey);  // +0x3ec m_flGravity
 		ElysiumAddClassField(D, TEXT("health"), &FElysiumEntity::Health,
@@ -140,9 +142,6 @@ namespace ElysiumNpcKernelBindings
 		// UNBOUND +0x11c m_iClassname "classname" — the def's identity:
 		// `FElysiumEntityDef::Classname` is hoisted out of the keys and the registry keys the
 		// descriptor on it, so there is no member a write could land on
-		// UNBOUND +0x120 m_iGlobalname "globalname" — `m_iGlobalname` is retail's FTYPEDESC_GLOBAL
-		// carry across a `trigger_changelevel`; this port carries state across a level change in
-		// the map snapshot, and no shipped map authors the key
 		// UNBOUND +0x1a4 m_nModelIndex "modelindex" — `m_nModelIndex` is the engine's precache slot
 		// for `model`, an index into Source's own model table; this port resolves a model by name
 		// UNBOUND +0x190 m_vecMoveDir "movedir" — `m_vecMoveDir` is the mover's authored direction,
@@ -3300,7 +3299,7 @@ namespace ElysiumNpcKernelBindings
 		switch (Class)
 		{
 			case EClass::BaseEntity:
-				return {29, 9, 2, 10, 1};
+				return {30, 8, 2, 10, 1};
 			case EClass::Toggle:
 				return {0, 9, 2, 4, 0};
 			case EClass::Animating:

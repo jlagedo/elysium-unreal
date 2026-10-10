@@ -23,6 +23,8 @@
 #include "ElysiumMapSubsystem.h"          // epochs, backdrop state, landmark/restore placements
 #include "ElysiumPlayerBody.h"            // IElysiumPlayerBody — placement and the movement freeze
 #include "ElysiumPresentationSubsystem.h" // the fourth world service
+#include "ElysiumRetailSite.h"            // the transition load's `retail_site` sink (L0-r030)
+#include "ElysiumTransitionState.h"       // EngineLoadAdjacentEnts -- the arrival's slot 23 / 22 chain (L0-r030)
 #include "Audio/ElysiumSoundScheme.h"     // FElysiumSoundSchemeManager — built at load, stopped at EndPlay
 #include "Map/ElysiumMapCollision.h"      // the walkable-surface build and its readiness states
 #include "Map/ElysiumMapLog.h"
@@ -747,6 +749,36 @@ void AElysiumMapActor::LoadMap()
 							if (AppliedRows != SnapshotCopy.Entities.Num()) { GameState->NotifyRestoreFailed(TEXT("snapshot entity decode failed")); return false; }
 							return true;
 						};
+					}
+
+					// A landmark transition (L0-r030): the engine's level-transition load, CSaveRestore::vfunc10
+					// 0x20097d00, after the destination's own entities exist -- CServerGameDLL slot 23
+					// BuildAdjacentMapList(oldLevel, landmarkName) 0x1011b9f0 over this world, then for each
+					// adjacent map with a saved state: slot 20 over it, the mask of its ADJACENCY rows naming
+					// this map, slot 22 CreateEntityTransitionList 0x1011b590, and the `.HL3` write-back
+					// (EntityPatchWrite 0x200973c0) into the stored snapshot. Runs at the same pre-activation
+					// fence as the snapshot apply, after it (Source: LoadGameState, then LoadAdjacentEnts).
+					if (UElysiumMapSubsystem* TransitionMaps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr)
+					{
+						FString FromMap, TransitionLandmark;
+						if (TransitionMaps->PeekLandmarkTransition(FromMap, TransitionLandmark))
+						{
+							TFunction<bool()> ApplyBefore = MoveTemp(RestoreBeforeActivation);
+							RestoreBeforeActivation = [this, GameState, ApplyBefore, FromMap, TransitionLandmark]()
+							{
+								if (ApplyBefore && !ApplyBefore()) return false;
+								struct FSessionSnapshotStore final : public ElysiumTransitionState::ISnapshotStore
+								{
+									explicit FSessionSnapshotStore(UElysiumSessionSubsystem* InState) : State(InState) {}
+									virtual FElysiumMapSnapshot* FindMutable(const FString& Map) override { return State ? State->MutableMapSnapshot(Map) : nullptr; }
+									UElysiumSessionSubsystem* State;
+								} Store(GameState);
+								FElysiumNamedRetailSites Sites(*EntityWorld, TEXT("Game"));
+								ElysiumTransitionState::EngineLoadAdjacentEnts(*EntityWorld, Store, FromMap, TransitionLandmark,
+									EntityWorld->HasAiTraceSink() ? &Sites : nullptr);
+								return true;
+							};
+						}
 					}
 #if !UE_BUILD_SHIPPING
 					if (!RestoreBeforeActivation) ElysiumArenaStage::NotifyWorldApplied(this); // fresh boundary; saved apply waits for actual prerequisites

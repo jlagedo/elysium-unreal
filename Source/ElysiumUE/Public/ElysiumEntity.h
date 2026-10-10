@@ -33,6 +33,10 @@ namespace ElysiumEntityCaps
 	// across a `trigger_changelevel`.
 	inline constexpr int32 AcrossTransition = 0x2;
 
+	// `FCAP_DONT_SAVE` `0x80000000` (bit 31): the save loop `0x101a37c0` and the transition walk
+	// `FUN_101c7ff0` (`ObjectCaps() < 0`) skip the entity. No port class sets it yet (L0-r030).
+	inline constexpr int32 DontSave = static_cast<int32>(0x80000000u);
+
 	// The slot-117 overrides of the `CAI_BaseNPC` line's family are their classes' own
 	// (`FElysiumNpcTestHull`, `FElysiumScriptedSequence`); each chains
 	// `CBaseEntity::ObjectCaps` `0x100b4320` and clears this bit. `CAI_Hint`'s `0x102d2ee0` (the same
@@ -150,6 +154,11 @@ public:
 	FString TargetName;
 	FString Target;
 	FString ParentName;                            // parentname — carry this body with another entity
+	// `m_iGlobalname` (+0x120, datamap `globalname`, FTYPEDESC_GLOBAL|SAVE|KEY): the name the global-
+	// entity table 0x106be530 keys an entity on across maps (L0-r030, `ElysiumTransitionState.h`).
+	// `DispatchSpawn` 0x101d1280 adds it on first spawn, `FUN_101c7ff0` flags its table row
+	// FENTTABLE_GLOBAL, `FUN_101a3c40` merges it on a transition. No shipped map authors the key.
+	FString GlobalName;
 	FString Model;
 	int32   SpawnFlags = 0;
 	int32   Health = 0;
@@ -235,8 +244,9 @@ public:
 	// (`0x100a8060`). Not the ScriptHide switch above: retail's ScriptHide never sets it, and the one
 	// thing that reads it here is `ServerActivate`'s skip (`0x100a8220`, `FElysiumEntityWorld::
 	// Activate`). Its writers are `camera_animated`'s `EndCamera` and the `globalname`-owned-by-
-	// another-map rule in `DispatchSpawn` (`0x101d1280`) and the two restores (`0x101a2e40`,
-	// `0x101a3c40`); no shipped map authors a `globalname`, so that rule is an unbuilt seam.
+	// another-map rule in `DispatchSpawn` (`0x101d1280`, `ElysiumTransitionState::DispatchSpawnGlobalArm`)
+	// and the transition restore (`0x101a3c40`, L0-r030); the ordinary restore's arm (`0x101a2e40`)
+	// is still unported. No shipped map authors a `globalname`.
 	bool  bEflDormant = false;
 	// Spawn() has run. The world's spawn pass and the two-phase runtime create (CreateEntityNoSpawn
 	// → CallEntitySpawn) both gate on this so an entity is never Spawn()'d twice.
@@ -426,6 +436,11 @@ public:
 	// Slot 119, virtual as retail's (`vt+0x1dc`): `CLight::Kill` `0x101306d0` turns the light off before
 	// the base body runs, and `CBaseEntity::InputKill` `0x100acef0` dispatches through the slot.
 	virtual void Kill();  // terminal: mark dead + go inert (world reaps the slot)
+	// `CBaseEntity::MakeDormant` 0x100a8060 (L0-r030): `m_iEFlags |= EFL_DORMANT`; `ThinkSet(0, 0, NULL)`;
+	// with an edict: `AddSolidFlags(FSOLID_NOT_SOLID)`, slot 93 `(0, 0)` (the move type cleared),
+	// `m_flNextThink = 0`, `m_fEffects |= EF_NODRAW (0x40)`, `Relink`. The port's non-solid + undrawn
+	// switch is `bHidden` (the body reads it); the think words are the two the port keeps.
+	void MakeDormant();
 	// Slots 77 / 78, virtual as retail's (`vt+0x134` / `+0x138`): a species replaces them
 	// (`CNPC_VGhoulCroucher` `0x1037c1c0` / `0x1037c2f0`), and every dispatch reaches that body.
 	virtual void ScriptHide();    // whole-entity OFF (saves prior think; body collision gated)

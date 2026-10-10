@@ -46,30 +46,48 @@ namespace ElysiumSaveRestore
 		class FEntitiesBlockHandler final : public IBlockHandler
 		{
 		public:
-			struct FTableRow { int32 Index = INDEX_NONE; int32 Location = 0; int32 Size = 0; };
+			using FTableRow = FEntityTableRow;
 
 			virtual const char* GetBlockName() const override { return "Entities"; } // 0x1059317c
 
 			virtual void PreSave(FSaveRestoreData* Arg) override
 			{
+				// Slot 1 (CEntitySaveRestoreBlockHandler::vfunc1 0x101a2c30; L0-r030): `+0x1330 := the
+				// entity count`, `+0x1334 := calloc(count * 0x30)`, then one row an entity in list order --
+				// +0x00 := i, +0x04 := entindex, +0x0c := -1, +0x10 := the handle, and +0x14/+0x18/+0x20/
+				// +0x24/+0x28 zeroed. Here the rows are the snapshot's (the player and the camera exclusions
+				// are `Freeze`'s own); the table lives on the save data so slot 23's second pass
+				// (FUN_101c7ff0) flags it before slot 2 runs.
 				Context = GameContextOf(Arg);
-				Table.Reset();
+				Data = Arg;
+				if (Data == nullptr) return;
+				Data->EntityTable.Reset();
+				if (Context == nullptr || Context->Source == nullptr) return;
+				for (const FElysiumEntityState& Row : Context->Source->Entities)
+				{
+					FTableRow& Entry = Data->EntityTable.AddDefaulted_GetRef();
+					Entry.Id = Data->EntityTable.Num() - 1;
+					Entry.EdictIndex = Row.Index;
+					Entry.RestoredEdictIndex = -1;
+					Entry.Handle = FElysiumEntityHandle(Row.Index, 0);
+					Entry.Classname = Row.ClassName.IsNone() ? FString() : Row.ClassName.ToString();
+				}
 			}
 
 			virtual void Save(FSave& S) override
 			{
 				// Slot 2 (retail 0x101a37c0, unwalked here): the rows back to back from the block's start;
-				// the table remembers where each landed, for the header slot 3 writes next.
-				Table.Reset();
-				if (Context == nullptr || Context->Source == nullptr) return;
+				// the table remembers where each landed (+0x14 / +0x18), for the header slot 3 writes next.
+				if (Context == nullptr || Context->Source == nullptr || Data == nullptr) return;
 				const FElysiumMapSnapshot& Source = *Context->Source;
 				const int32 BlockStart = S.Tell();
 				TArray<uint8> Bytes;
+				int32 RowIndex = 0;
 				for (const FElysiumEntityState& Row : Source.Entities)
 				{
+					if (!Data->EntityTable.IsValidIndex(RowIndex)) break;
 					GameRowToBytes(const_cast<FElysiumEntityState&>(Row), Source.SchemaVersion, Source.SaveBase, Bytes);
-					FTableRow& Entry = Table.AddDefaulted_GetRef();
-					Entry.Index = Row.Index;
+					FTableRow& Entry = Data->EntityTable[RowIndex++];
 					Entry.Location = S.Tell() - BlockStart;
 					Entry.Size = Bytes.Num();
 					S.WriteData(Bytes.GetData(), Bytes.Num());
@@ -78,31 +96,55 @@ namespace ElysiumSaveRestore
 
 			virtual void WriteSaveHeaders(FSave& S) override
 			{
-				// Slot 3: the table -- dword count, then (index, location, size) per row.
-				const int32 Count = Table.Num();
+				// Slot 3: the table (retail's ETABLE group) -- dword count, then per row the words a
+				// transition reads back: edict index, location, size, the two flag words, and the
+				// classname (dword length, bytes). Encoding the port's (decisions.md D6).
+				const int32 Count = Data ? Data->EntityTable.Num() : 0;
 				S.WriteInt(&Count, 1);
-				for (const FTableRow& Entry : Table)
+				for (int32 I = 0; I < Count; ++I)
 				{
-					const int32 Words[3] = { Entry.Index, Entry.Location, Entry.Size };
-					S.WriteInt(Words, 3);
+					const FTableRow& Entry = Data->EntityTable[I];
+					const int32 Words[5] = { Entry.EdictIndex, Entry.Location, Entry.Size,
+						static_cast<int32>(Entry.FlagsLo), static_cast<int32>(Entry.FlagsHi) };
+					S.WriteInt(Words, 5);
+					const FTCHARToUTF8 Ansi(*Entry.Classname);
+					const int32 Len = Ansi.Length();
+					S.WriteInt(&Len, 1);
+					if (Len > 0) S.WriteData(Ansi.Get(), Len);
 				}
 			}
 
-			virtual void PostSave() override { Table.Reset(); Context = nullptr; }
+			virtual void PostSave() override { Context = nullptr; Data = nullptr; }
 
 			virtual void ReadRestoreHeaders(FRestore& R) override
 			{
-				// Slot 6: the table back, from the set's seek to locHeader.
-				Table.Reset();
+				// Slot 6: the table back onto the save data, from the set's seek to locHeader.
 				Context = GameContextOf(R.Data);
+				Data = R.Data;
+				if (Data == nullptr) return;
+				Data->EntityTable.Reset();
 				const int32 Count = R.ReadInt();
-				if (Count < 0 || R.Data == nullptr || Count > R.Data->Size / 12) { if (Context) Context->bRowDecodeFailed = true; return; }
-				Table.AddDefaulted(Count);
-				for (FTableRow& Entry : Table)
+				if (Count < 0 || Count > R.Data->Size / 24) { if (Context) Context->bRowDecodeFailed = true; return; }
+				Data->EntityTable.AddDefaulted(Count);
+				for (int32 I = 0; I < Count; ++I)
 				{
-					int32 Words[3] = { 0, 0, 0 };
-					R.ReadInt(Words, 3, 0);
-					Entry.Index = Words[0]; Entry.Location = Words[1]; Entry.Size = Words[2];
+					FTableRow& Entry = Data->EntityTable[I];
+					int32 Words[5] = { 0, 0, 0, 0, 0 };
+					R.ReadInt(Words, 5, 0);
+					Entry.Id = I;
+					Entry.EdictIndex = Words[0]; Entry.Location = Words[1]; Entry.Size = Words[2];
+					Entry.FlagsLo = static_cast<uint32>(Words[3]); Entry.FlagsHi = static_cast<uint32>(Words[4]);
+					Entry.RestoredEdictIndex = -1;
+					Entry.Handle = FElysiumEntityHandle(Entry.EdictIndex, 0);
+					const int32 Len = R.ReadInt();
+					if (Len < 0 || Len > R.Data->Size - R.Tell()) { if (Context) Context->bRowDecodeFailed = true; return; }
+					if (Len > 0)
+					{
+						TArray<ANSICHAR> Chars;
+						Chars.SetNumZeroed(Len + 1);
+						R.ReadData(Chars.GetData(), Len);
+						Entry.Classname = FString(UTF8_TO_TCHAR(Chars.GetData()));
+					}
 				}
 			}
 
@@ -118,21 +160,22 @@ namespace ElysiumSaveRestore
 				}
 			}
 
-			virtual void PostRestore() override { Table.Reset(); Context = nullptr; }
+			virtual void PostRestore() override { Context = nullptr; Data = nullptr; }
 
 			// The body read alone: the engine-side transition path (vfunc10) reads the entity data
 			// itself after slot 20 (its loop is unrecovered); the port's stand-in reuses this reader.
 			bool ReadRows(FRestore& R)
 			{
-				if (Context == nullptr || Context->Decoded == nullptr) return false;
+				if (Context == nullptr || Context->Decoded == nullptr || R.Data == nullptr) return false;
 				FElysiumMapSnapshot& Decoded = *Context->Decoded;
+				const TArray<FTableRow>& Table = R.Data->EntityTable;
 				const int32 BlockStart = R.Tell();
 				Decoded.Entities.Reset();
 				Decoded.Entities.Reserve(Table.Num());
 				TArray<uint8> Bytes;
 				for (const FTableRow& Entry : Table)
 				{
-					if (Entry.Size < 0 || R.Data == nullptr || Entry.Location < 0 || BlockStart + Entry.Location + Entry.Size > R.Data->Size)
+					if (Entry.Size < 0 || Entry.Location < 0 || BlockStart + Entry.Location + Entry.Size > R.Data->Size)
 					{
 						Context->bRowDecodeFailed = true;
 						return false;
@@ -141,7 +184,7 @@ namespace ElysiumSaveRestore
 					Bytes.SetNumUninitialized(Entry.Size);
 					R.ReadData(Bytes.GetData(), Entry.Size);
 					FElysiumEntityState& Row = Decoded.Entities.AddDefaulted_GetRef();
-					if (!GameRowFromBytes(Bytes, Decoded.SchemaVersion, Decoded.SaveBase, Row) || Row.Index != Entry.Index)
+					if (!GameRowFromBytes(Bytes, Decoded.SchemaVersion, Decoded.SaveBase, Row) || Row.Index != Entry.EdictIndex)
 					{
 						Context->bRowDecodeFailed = true;
 						return false;
@@ -151,7 +194,7 @@ namespace ElysiumSaveRestore
 			}
 
 			FGameContext* Context = nullptr;
-			TArray<FTableRow> Table;
+			FSaveRestoreData* Data = nullptr;   // the save data whose +0x1330 table this handler fills
 		};
 
 		// --- "EventQueue" (CEQ_SaveRestoreBlockHandler 0x10454060, object 0x106e70a8) ------------------
@@ -188,6 +231,24 @@ namespace ElysiumSaveRestore
 
 			virtual void Restore(FRestore& R, int32 /*P2*/, int32 /*P3*/) override
 			{
+				if (Context && Context->bLevelTransition)
+				{
+					// The transition path (CreateEntityTransitionList 0x1011b590 calls this slot with
+					// (adapter, 0, 0) when rows moved; L0-r030). Retail's body CEQ_SaveRestoreBlockHandler::
+					// vfunc7 0x100cff70 -> FUN_100cfda0: clear the queue (FUN_100cdda0), read the "EventQueue"
+					// header and `count` "PEvent" records (12 fields) at the adapter's cursor, AddEvent each
+					// (FUN_100ce1c0). The cursor it reads at is wherever FUN_101a3c40's last row seek left it,
+					// and a restored event's EHANDLEs resolve through the entity table's +0x10 handles -- the
+					// cross-map handle remap the Entities block's 0x101a2e40 machinery performs is not ported.
+					// PLANNING FAULT (reported): the body is L0 (r029 Open 10) and is not reproduced on this
+					// path; the dispatch is, so the slot order a record observes is retail's.
+					if (R.Data && R.Data->Sites)
+					{
+						R.Data->Sites->Site(TEXT("eq_restore"), TEXT("CEQ_SaveRestoreBlockHandler::vfunc7"), 0x100cff70u, TEXT("hook"),
+							FString::Printf(TEXT("cursor=%d body=FUN_100cfda0 va=0x100cfda0 applied=0"), R.Tell()));
+					}
+					return;
+				}
 				if (!ReadRows(R)) return;
 				if (Context && Context->World && Context->Decoded)
 				{
@@ -259,6 +320,39 @@ namespace ElysiumSaveRestore
 		FPythonBlockHandler& GamePythonHandler() { static FPythonBlockHandler H; return H; }
 	}
 
+	IBlockHandler& GameBlockHandler(EGameBlock Block)
+	{
+		// The four getters CreateEntityTransitionList 0x1011b590 reaches its blocks through (each a
+		// `MOV EAX, imm; RET` behind a JMP thunk): FUN_100cffa0 -> 0x106e70a8 (EventQueue), FUN_10045700 ->
+		// 0x106bda60 (Physics), FUN_1030c390 -> 0x10936b5c (AI), FUN_1019b360 -> 0x1072b354 (Python);
+		// the Entities object 0x1072bb44 is FUN_101a3b00's. L0-r030.
+		switch (Block)
+		{
+		case EGameBlock::EventQueue: return GameEventQueueHandler();
+		case EGameBlock::Physics: return GamePhysicsHandler();
+		case EGameBlock::Ai: return GameAiHandler();
+		case EGameBlock::Python: return GamePythonHandler();
+		case EGameBlock::Entities:
+		default: return GameEntitiesHandler();
+		}
+	}
+
+	void BindTransitionContext(FSaveRestoreData& Data, FGameContext& Context)
+	{
+		// The handlers read their world through the save data's Context on every slot; the transition
+		// path hands them this one so the EventQueue body knows which path it is on.
+		Context.bLevelTransition = true;
+		Data.Context = &Context;
+		GameEventQueueHandler().Context = &Context;
+		GameEntitiesHandler().Context = &Context;
+	}
+
+	void UnbindTransitionContext()
+	{
+		GameEventQueueHandler().Context = nullptr;
+		GameEntitiesHandler().Context = nullptr;
+	}
+
 	FBlockSet& GameBlockSet()
 	{
 		// The static set (ctor FUN_101a47b0 at static init, "Game") with the five `AddBlockHandler`
@@ -277,7 +371,7 @@ namespace ElysiumSaveRestore
 		return Set;
 	}
 
-	void EncodeMapBlocks(FElysiumMapSnapshot& Snapshot, IElysiumRetailSiteSink* Sites)
+	void EncodeMapBlocks(FElysiumMapSnapshot& Snapshot, IElysiumRetailSiteSink* Sites, FElysiumEntityWorld* World)
 	{
 		FGameContext Context;
 		Context.Source = &Snapshot;
@@ -285,10 +379,25 @@ namespace ElysiumSaveRestore
 		Data.Reset();
 		Data.Sites = Sites;
 		Data.Context = &Context;
+		Data.World = World; // the entity list slot 23 scans (L0-r030); null for a snapshot re-encoded off-world
 		int32 HeaderStart = 0;
-		EngineSaveGameState(GameBlockSet(), Data, HeaderStart); // vfunc13 0x20096470: 17, 18, 19
+		EngineSaveGameState(GameBlockSet(), Data, HeaderStart); // vfunc13 0x20096470: 17, 23, 18, 19
 		Snapshot.BlockStream = MoveTemp(Data.Bytes);
 		Snapshot.BlockHeaderStart = HeaderStart;
+		// The global preamble's `connectionCount` and ADJACENCY rows (`docs/vtmb/savegame_format.md`):
+		// written by the engine before the block set's sections, kept beside the stream here.
+		if (World != nullptr)
+		{
+			Snapshot.Adjacency.Reset();
+			for (const FAdjacencyRow& Row : Data.Adjacency)
+			{
+				FElysiumSavedAdjacency& Saved = Snapshot.Adjacency.AddDefaulted_GetRef();
+				Saved.MapName = FString(ANSI_TO_TCHAR(Row.MapName));
+				Saved.LandmarkName = FString(ANSI_TO_TCHAR(Row.LandmarkName));
+				Saved.LandmarkIndex = Row.Landmark.Index;
+				Saved.LandmarkOrigin = Row.LandmarkOrigin;
+			}
+		}
 	}
 
 	namespace
@@ -307,6 +416,7 @@ namespace ElysiumSaveRestore
 			To.Weather = From.Weather;
 			To.ComfortTargets = From.ComfortTargets;
 			To.BlockHeaderStart = From.BlockHeaderStart;
+			To.Adjacency = From.Adjacency; // the global preamble's ADJACENCY rows (L0-r030)
 		}
 
 		void GameLoadStream(const FElysiumMapSnapshot& Snapshot, FSaveRestoreData& Data)
@@ -357,7 +467,7 @@ namespace ElysiumSaveRestore
 			Encoded.Queue = Snapshot.Queue;
 			Encoded.QueueNextSerial = Snapshot.QueueNextSerial;
 			Encoded.QueueLastEnqueue = Snapshot.QueueLastEnqueue;
-			EncodeMapBlocks(Encoded, nullptr);
+			EncodeMapBlocks(Encoded, nullptr, nullptr);
 			Data.Reset();
 			Data.Bytes = MoveTemp(Encoded.BlockStream);
 			Data.Size = Data.Bytes.Num();
@@ -406,6 +516,7 @@ namespace ElysiumSaveRestore
 				GameEventQueueHandler().Context = nullptr;
 			}
 			GameEntitiesHandler().Context = nullptr;
+			GameEntitiesHandler().Data = nullptr;
 		}
 		if (Context.bRowDecodeFailed || Data.bReadPastEnd) return INDEX_NONE;
 		return Context.AppliedRows;
