@@ -1023,6 +1023,13 @@ void AElysiumMapActor::DestroyDynamicLight(ULightComponent* Light)
 	Light->DestroyComponent();
 }
 
+int32 AElysiumMapActor::BakedSpriteFrameCount(int32 EntityIndex) const
+{
+	// L0-r013: `VEngineServer014` slot 26's answer for the sprite model `CSprite::Spawn` 0x1042e550
+	// set -- the baked billboard's `Frames`; no billboard, the engine's "Bad model index" 1.
+	return Visuals ? Visuals->SpriteFrameCount(EntityIndex) : 1;
+}
+
 void AElysiumMapActor::SetBakedSpriteVisible(int32 EntityIndex, bool bVisible)
 {
 	if (!Visuals)

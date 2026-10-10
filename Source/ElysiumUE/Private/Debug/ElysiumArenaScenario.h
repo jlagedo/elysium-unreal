@@ -76,6 +76,10 @@ struct FElysiumArenaFixture
 	// `sound_folder`: the typed configuration of a structured fixture, kept as the record's own JSON
 	// object and read by the runner when it stages the fixture (a malformed one fails the staging).
 	TSharedPtr<class FJsonObject> Config;
+	// `sprite_model`: one row of the engine's model table a runtime-created sprite's `CSprite::Spawn`
+	// asks (`VEngineServer014` slot 26): the model name and its frame count (L0-r013).
+	FString Model;
+	int32 Frames = 0;
 };
 
 // One argument of an `entity_call`: a typed scalar, or a staged fixture's handle.

@@ -1482,6 +1482,10 @@ def sprite_row(record: SpriteRecord, material: dict[str, Any], texture: dict[str
         "texture": str(texture.get("assetPath") or ""),
         "width": int(texture.get("width") or 0),
         "height": int(texture.get("height") or 0),
+        # The sprite model's frame count (`VEngineServer014` slot 26's answer for a sprite model,
+        # `*(model+0xb4)`): the base texture's TTH frame count, what `CSprite::Spawn` 0x1042e550
+        # writes `m_flMaxFrame = frames - 1` from (L0-r013). Absent in an older texture sidecar: 1.
+        "frames": int(texture.get("frames") or 1),
         "position": list(record.position),
         "scale": record.scale,
         "mode": record.mode,

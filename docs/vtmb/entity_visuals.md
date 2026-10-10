@@ -109,6 +109,50 @@ Two `env_sprite`-specific facts a renderer needs:
 `scale × texture` with no `19000/dist^2` and no screen-constant scaling. `kRenderWorldGlow`
 (mode 9, `0x100c3197`) keeps its world-space size too; only mode 3 scales.
 
+### `CSprite`'s server lifecycle [decompiled, L0-r013]
+
+The server half of an `env_sprite` (`walks/L0-r013.md`; port `Source/ElysiumUE/Private/Substrate/ElysiumEnvSprite.cpp`,
+record `Arena/scenarios/world/l0_sprite_lifecycle.json`):
+
+- **`CSprite::Spawn` `0x1042e550`** (no stack argument), in order: `SetSolid(&m_Collision, 0)`
+  (`0x100dc480`, acts only on change), `SetMoveType(0, 0)` (slot 93 `0x100aad70`; live words `+0x35c`/`+0x360`),
+  `m_flFrame (+0x45c) = 0`, `Precache` (slot 104, `0x1042e8c0`: `PrecacheModel` when the model name is set; a live
+  `m_hAimEnt (+0x37c)` writes `m_hAttachedToEntity (+0x450)`, `SetAimEnt`, `SetMoveType(0xb, 0)`, otherwise `-1` and
+  `m_nAttachment (+0x454) = 0`), `CSprite::SetModel` (slot 105, `0x1042e850`: `VEngineServer014` slots 20/21 type the
+  model, `!= 2` only `Msg("Setting CSprite to non-sprite model %s")`, then `FUN_101cf4a0` for a non-empty name),
+  **`m_flMaxFrame (+0x478) = frames - 1.0f`** (`VEngineServer014` slot 26 over slot 8's index: a sprite model's
+  `*(model+0xb4)`, its texture's frame count -- `sprites/candle` 8, `glowa` 1 -- a bad index 1), then
+  `m_iName == 0 || spawnflags & 1` -> TurnOn else TurnOff. The **angle arm**: `p = GetAngles()` (slot 221); if
+  `p.yaw != 0 && p.roll == 0` -> `SetAngles((pitch, 0, yaw))` -- the yaw moves into the roll slot and is observable
+  (`+0x428..+0x430` rewritten, `+0x1b1 = 1`); every witness-map sprite is authored `0 0 0`. The **scale clamp** on a
+  copy of `m_flSpriteScale (+0x46c)`: outside `[0.0f, 8.0f]` -> `DevMsg(1, "LEVEL DESIGN ERROR: Sprite %s with bad
+  scale %.f [0..%.f]")` and 0 / 8; an authored 0 stays 0 (the bake's 0 -> 1 read is the client draw's, not Spawn's;
+  UNRECOVERED). Then `0x1042eee0`: `m_nBrightness (+0x464) = m_clrRender.a`, `m_flBrightnessTime (+0x468) = 0`;
+  `0x1042ef10`: `m_flSpriteScale = clamped`, `m_flScaleTime (+0x470) = 0`.
+- **TurnOn `FUN_1042ef70`** (`__fastcall`): `m_fEffects (+0x19c) &= ~0x40`; `S = (m_flSpriteFramerate (+0x458) != 0.0f
+  && (double)m_flMaxFrame > 1.0) || (m_spawnflags & 2)` -- the comparand is the **double 1.0** at `0x10449280`, so a
+  2-frame sprite never schedules; `S` -> `ThinkSet(0x10011757 /* jmp 0x1042eca0 */, NULL)`, `m_flNextThink (+0x17c) =
+  m_flLastTime (+0x474) = curtime`; always `m_flFrame = 0`; tail jump to `ForceTransmit` (`+0x90 = curtime + 1.0f`,
+  networking, not carried).
+- **TurnOff `FUN_1042ef40`**: `m_flNextThink = 0` (no think), `m_fEffects |= 0x40`; the think word, the frame and
+  the stamp untouched.
+- **`CSprite::Use` `0x1042f030`** (slot 173, `RET 0x10`): `state = (m_fEffects != 0x40)` -- an exact compare --
+  then `CBaseEntity::ShouldToggle` `0x100a98f0` (0 only for OFF on an off sprite or ON on an on one; SET and TOGGLE
+  always pass); admitted: `state` ? TurnOff : TurnOn.
+- **Inputs**: `HideSprite` `0x1042f080` -> TurnOff, `ShowSprite` `0x1042f0a0` -> TurnOn, `TurnOn` `0x1042f110`,
+  `TurnOff` `0x1042f130` (each `CALL` + `RET 4`); `ToggleSprite` `0x1042f0c0` is `m_fEffects != 0x40 ? TurnOff :
+  TurnOn` on the WHOLE word, so an authored `effects 96` (NODRAW|NOSHADOW) always takes TurnOff and never shows.
+- **AnimateThink `FUN_1042eca0`**: `AnimateFrame((curtime - m_flLastTime) * m_flSpriteFramerate)`, then
+  `m_flNextThink = m_flLastTime = curtime` -- AFTER the frame step, so a once-sprite (flag 2) that TurnOff'd inside
+  AnimateFrame is re-armed and keeps thinking every tick while hidden, its frame growing. **AnimateFrame
+  `FUN_1042ee50`**: `m_flFrame += df`; past `m_flMaxFrame`: flag 2 -> TurnOff and return (no wrap), else
+  `m_flMaxFrame > 0.0f` -> `fmod(m_flFrame, m_flMaxFrame)` (`0x10431eea`, the CRT `fmod` entry `0x106b0a70`).
+
+The port carries every word above on the leaf; the frame count comes from the baked billboard's `Frames`
+(the texture lane's TTH frame count, `pipeline/unreal/bake_map_v2.py` `_place_sprites`) or, for a sprite created at
+runtime in a record, the `sprite_model` fixture. The frame itself (`m_flFrame`) is not yet drawn by the billboard
+(visual-only, open).
+
 ---
 
 ## 5. `keyframe_rope` / `move_rope` — cables
@@ -229,6 +273,21 @@ whose `use_icon` resolves through the use-cursor system. Nothing about signs is 
 rendering problem.
 
 ---
+
+## 7a. `func_illusionary` -- `CFuncIllusionary::Spawn` `0x100bf760` [decompiled, L0-r013]
+
+The class's one body (`walks/L0-r013.md`; port `Source/ElysiumUE/Private/Substrate/ElysiumFuncIllusionary.cpp`,
+record `Arena/scenarios/world/l0_illusionary_spawn.json`), 196 bytes, no stack argument, in order:
+`SetAngles(&DAT_1070d9d0)` (slot 64 `0x100b2d00`; the static is `(0,0,0)`, zeroed by `staticinit_10137100`;
+written only when the stored angles differ), `SetMoveType(0, 0)` (slot 93), `SetSolid(&m_Collision, 0)`
+(`0x100dc480`, under a `"CBaseEntity::SetSolid"` scope frame), `SetModel(GetModelName() or "")` through
+**`CBaseEntity::SetModel` `0x100ad460`** (slot 105: `VEngineServer014` slots 20/21, a type other than brush (1)
+only `Msg("Setting CBaseEntity to non-brush model %s")`; `FUN_101cf4a0` re-sets index, `m_ModelName (+0x388)` and
+the collision bounds from a non-empty name, nothing for an empty one; then `+0x1b1 = 1` unconditionally), and
+`FUN_101466e0(this + 0x1b0, 1)` -- `m_NetworkChangeState` byte 0 (`npc-kernel/layout.md:86`), replication state.
+Slot 104 `Precache` is the inherited `ret` and Spawn does not call it. The 108 maps' illusionaries are unnamed and
+authored `angles "0 0 0"`; the port's brush body (`EElysiumBrushSolidity::None`, the def's hulls and mesh) is what
+the solid, the movetype and the bounds stand for.
 
 ## 8. Render and shadow keyfields (`CBaseEntity`) [VtMB — decompiled]
 

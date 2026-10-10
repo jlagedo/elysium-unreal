@@ -117,6 +117,10 @@ public:
 	// R6.1: CSprite's draw switch for the sprite standing for `EntityIndex`. False when this map
 	// bakes no such sprite (a legacy-lane map, or an index that is not an env_sprite).
 	bool SetSpriteVisible(int32 EntityIndex, bool bShown);
+	// L0-r013: the baked billboard's `Frames` (the sprite model's TTH frame count) for the entity
+	// index, or 1 when no billboard carries the index -- the engine's answer for a model it cannot
+	// resolve (`VEngineServer014` slot 26, "Bad model index").
+	int32 SpriteFrameCount(int32 EntityIndex) const;
 	// R7.3: one per effects entity (`elysium.effect`), bucketed by the entity index its tag
 	// carries; the leaf's publishes reach it through `FindEffectActor`. Null when this map bakes
 	// no such actor (a legacy-lane map, or an index that is not an effects entity).

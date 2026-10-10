@@ -222,6 +222,24 @@ int32 FElysiumEntityWorld::PrecacheDecal(const FString& Name)
 	return PrecacheStringTable(PrecachedDecals, Name, TEXT("CVEngineServer::PrecacheDecal"));
 }
 
+int32 FElysiumEntityWorld::SpriteModelFrameCount(const FString& Model, int32 EntityIndex) const
+{
+	// `VEngineServer014` slot 26 (L0-r013): the staged model table first (a runtime-created sprite
+	// has no billboard), then the baked billboard's `Frames`; a model the engine cannot resolve
+	// answers 1 ("Bad model index").
+	if (const int32* Staged = StagedSpriteModelFrames.Find(Model.ToLower()))
+	{
+		return FMath::Max(1, *Staged);
+	}
+	const int32 Baked = WorldServices.Embodiment ? WorldServices.Embodiment->BakedSpriteFrameCount(EntityIndex) : 1;
+	return FMath::Max(1, Baked);
+}
+
+void FElysiumEntityWorld::StageSpriteModelFrames(const FString& Model, int32 Frames)
+{
+	StagedSpriteModelFrames.Add(Model.ToLower(), Frames);
+}
+
 bool FElysiumEntityWorld::IsNodeGraphLoaded() const
 {
 	return !bPlaceSetPending || PlaceSet->IsAdopted();

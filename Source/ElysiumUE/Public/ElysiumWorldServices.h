@@ -1807,6 +1807,11 @@ public:
 	// `bOn && !IsInert()` here on spawn, on every input and on load. Headless, and on a map with
 	// no baked sprites: nothing.
 	virtual void SetBakedSpriteVisible(int32 EntityIndex, bool bVisible) {}
+	// The sprite model's frame count as the engine's model info answers `CSprite::Spawn` 0x1042e550
+	// (`VEngineServer014` slot 26, `engine.dll 0x20108d10`: a sprite model's `*(model+0xb4)`, a bad
+	// index 1): the baked billboard's `Frames` for the entity's index (L0-r013). Headless, or no
+	// billboard for the index: 1, the engine's own answer for a model it cannot resolve.
+	virtual int32 BakedSpriteFrameCount(int32 EntityIndex) const { return 1; }
 
 	// Is the player's body in the sneak posture? (13.1, `docs/vtmb/stealth.md` -> "Player
 	// target-surface update", step 3.)

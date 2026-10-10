@@ -183,7 +183,7 @@ TAG_ENTITY_PREFIX = "elysium.ent="
 #: The shape `_place_sprites` writes a row as -- bumped when the writer changes what it puts on
 #: the actor for the same staged row (2: the BGRA colour fix; 3: the R6.7 scope marker), so the
 #: level re-authors.
-SPRITE_ACTOR_SHAPE = 3
+SPRITE_ACTOR_SHAPE = 4
 #: `BlendMode` member per staged blend name (`import_materials.BLEND_MODE_MEMBERS`, restated).
 #: `AlphaComposite` is the one row this table carries beyond the material lane's own: only
 #: `$spriterendermode` 8 (`kRenderTransAlphaAdd`, `ONE, INV_SRC_ALPHA` at `stdshader_dx8.dll`
@@ -977,6 +977,10 @@ def _build_class():
                     "color": unreal.Color(b=row.color[2], g=row.color[1], r=row.color[0],
                                           a=row.alpha),
                     "upright": row.upright,
+                    # L0-r013: the frame count `CSprite::Spawn` 0x1042e550 reads through the
+                    # engine's model info (`VEngineServer014` slot 26) -- the leaf's
+                    # `m_flMaxFrame = frames - 1`.
+                    "frames": row.frames,
                 })
                 actor.set_editor_property("entity_index", row.index)
                 if values["scale"] != 1.0:
@@ -2077,9 +2081,9 @@ class _DetailPlacement(object):
 class _SpriteRow(object):
     """One staged `sprites[]` row (R6.1), in the shape `map_geometry.sprite_row` publishes."""
 
-    __slots__ = ("index", "name", "material", "asset", "texture", "width", "height", "position",
-                 "scale", "mode", "blend", "glow", "color", "alpha", "fx", "upright", "hidden",
-                 "sky")
+    __slots__ = ("index", "name", "material", "asset", "texture", "width", "height", "frames",
+                 "position", "scale", "mode", "blend", "glow", "color", "alpha", "fx", "upright",
+                 "hidden", "sky")
 
     def __init__(self, row):
         self.index = int(row["index"])
@@ -2089,6 +2093,9 @@ class _SpriteRow(object):
         self.texture = str(row.get("texture") or "")
         self.width = int(row["width"])
         self.height = int(row["height"])
+        # The sprite model's frame count (L0-r013): `CSprite::Spawn`'s `m_flMaxFrame = frames - 1`
+        # input; an older manifest without the key is a one-frame sprite.
+        self.frames = int(row.get("frames") or 1)
         self.position = tuple(float(v) for v in row["position"])
         self.scale = float(row["scale"])
         self.mode = int(row["mode"])
@@ -2105,7 +2112,8 @@ class _SpriteRow(object):
         return {
             "index": self.index, "name": self.name, "material": self.material,
             "asset": self.asset, "texture": self.texture, "width": self.width,
-            "height": self.height, "position": list(self.position), "scale": self.scale,
+            "height": self.height, "frames": self.frames,
+            "position": list(self.position), "scale": self.scale,
             "mode": self.mode, "blend": self.blend, "glow": self.glow,
             "color": list(self.color), "alpha": self.alpha, "fx": self.fx,
             "upright": self.upright, "hidden": self.hidden, "sky": self.sky,

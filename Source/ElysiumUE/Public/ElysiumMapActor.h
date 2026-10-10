@@ -605,6 +605,8 @@ public:
 	virtual void DestroyDynamicLight(ULightComponent* Light) override;
 	// R6.1: the baked sprite actor's hidden state, through the visuals' entity-index bucket.
 	virtual void SetBakedSpriteVisible(int32 EntityIndex, bool bVisible) override;
+	// L0-r013: the baked sprite actor's `Frames` (the model's TTH frame count), 1 with no billboard.
+	virtual int32 BakedSpriteFrameCount(int32 EntityIndex) const override;
 	virtual bool IsPlayerSneaking() const override;
 	virtual bool IsPlayerOnGround() const override;
 	// A1, footsteps: the mover's whole published record, for the substrate's step clock.

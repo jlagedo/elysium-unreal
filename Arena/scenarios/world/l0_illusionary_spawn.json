@@ -1,0 +1,46 @@
+{
+  "name": "l0_illusionary_spawn",
+  "about": "`CFuncIllusionary::Spawn` 0x100bf760 (`walks/L0-r013.md`) over three `func_illusionary`s created at runtime (a map row's Spawn runs the same body at Load, before the trace sink; sp_tutorial_1's seventeen are unnamed). Arms in retail order: `SetAngles(&DAT_1070d9d0)` 0x100b2d00 with the static (0,0,0) -- written, with the EFL invalidation and `+0x1b1`, only when the stored angles differ (`ill_b` is authored at yaw -90 and ends at 0,0,0; `ill_a` at 0,0,0 writes nothing); `SetMoveType(0, 0)` 0x100aad70 (MOVETYPE_NONE, movecollide 0); `SetSolid(&m_Collision, 0)` 0x100dc480 (SOLID_NONE); `CBaseEntity::SetModel` 0x100ad460 over `GetModelName()` or \"\" -- `VEngineServer014` slots 20/21 type a model by its name and a type other than brush (1) only `Msg`s \"Setting CBaseEntity to non-brush model %s\"; `FUN_101cf4a0` re-sets index, name and collision bounds from a non-empty name and does nothing for an empty one; `+0x1b1` (`m_NetworkChangeState.m_bChanged`) is set unconditionally; then `FUN_101466e0(this + 0x1b0, 1)`, the `m_NetworkChangeState` byte 0. The body and visual of a map's illusionary are the world's (`EElysiumBrushSolidity::None`, the brush mesh, the hulls' bounds), what these words stand for. Reported as `fail`, a stored word or a site payload differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 0.8,
+  "script": [
+    { "t": 0.1, "do": "spawn", "row": { "classname": "func_illusionary", "name": "ill_a", "at": [0.0, 0.0, 50.0], "keys": { "model": "*5" } } },
+    { "t": 0.2, "do": "spawn", "row": { "classname": "func_illusionary", "name": "ill_b", "at": [100.0, 0.0, 50.0], "face": 90, "keys": { "model": "models/scenery/misc/test_prop.mdl" } } },
+    { "t": 0.3, "do": "spawn", "row": { "classname": "func_illusionary", "name": "ill_c", "at": [200.0, 0.0, 50.0], "keys": {} } }
+  ],
+  "expect": [
+    { "label": "a_entry", "who": "ill_a", "kind": "retail_site", "site": "brush.spawn", "match": "va=0x100bf760 phase=entry model=*5 angles=0,0,0 m_MoveType=0 m_MoveCollide=0 m_nSolidType=0", "by": 0.2 },
+    { "label": "a_setmodel", "who": "ill_a", "kind": "retail_site", "site": "brush.setmodel", "match": "va=0x100ad460 phase=write model=*5 type=1 msg=0 set=1 m_bChanged=1", "within": 0.05 },
+    { "label": "a_return", "who": "ill_a", "kind": "retail_site", "site": "brush.spawn", "match": "phase=return angles=0,0,0 m_MoveType=0 m_MoveCollide=0 m_nSolidType=0 m_NetworkChangeState=1 m_bChanged=1 model=*5", "within": 0.05 },
+
+    { "label": "b_entry", "who": "ill_b", "kind": "retail_site", "site": "brush.spawn", "match": "phase=entry model=models/scenery/misc/test_prop.mdl angles=0,-90,0 m_MoveType=0 m_MoveCollide=0 m_nSolidType=0", "by": 0.3 },
+    { "label": "b_set_angles", "who": "ill_b", "kind": "retail_site", "site": "set_angles", "match": "va=0x100b2d00", "within": 0.05 },
+    { "label": "b_setmodel", "who": "ill_b", "kind": "retail_site", "site": "brush.setmodel", "match": "phase=write model=models/scenery/misc/test_prop.mdl type=3 msg=1 set=1 m_bChanged=1", "within": 0.05 },
+    { "label": "b_return", "who": "ill_b", "kind": "retail_site", "site": "brush.spawn", "match": "phase=return angles=0,0,0 m_MoveType=0 m_MoveCollide=0 m_nSolidType=0 m_NetworkChangeState=1 m_bChanged=1", "within": 0.05 },
+
+    { "label": "c_entry", "who": "ill_c", "kind": "retail_site", "site": "brush.spawn", "match": "phase=entry model=(empty) angles=0,0,0", "by": 0.4 },
+    { "label": "c_setmodel", "who": "ill_c", "kind": "retail_site", "site": "brush.setmodel", "match": "phase=write model=(empty) type=0 msg=1 set=0 m_bChanged=1", "within": 0.05 },
+    { "label": "c_return", "who": "ill_c", "kind": "retail_site", "site": "brush.spawn", "match": "phase=return angles=0,0,0 m_MoveType=0 m_MoveCollide=0 m_nSolidType=0 m_NetworkChangeState=1 m_bChanged=1 model=(empty)", "within": 0.05 }
+  ],
+  "never": [
+    { "who": "ill_a", "kind": "retail_site", "site": "set_angles", "match": "", "from": 0.0 },
+    { "who": "ill_c", "kind": "retail_site", "site": "set_angles", "match": "", "from": 0.0 }
+  ],
+  "probes": [
+    { "at": 0.6, "who": "ill_a", "probe": "exists", "equals": true },
+    { "at": 0.6, "who": "ill_a", "probe": "entity_field", "field": "m_MoveType", "equals": 0 },
+    { "at": 0.6, "who": "ill_a", "probe": "entity_field", "field": "m_MoveCollide", "equals": 0 },
+    { "at": 0.6, "who": "ill_a", "probe": "entity_field", "field": "m_nSolidType", "equals": 0 },
+    { "at": 0.6, "who": "ill_a", "probe": "entity_field", "field": "m_NetworkChangeState", "equals": true },
+    { "at": 0.6, "who": "ill_a", "probe": "entity_field", "field": "m_NetworkChangeState.m_bChanged", "equals": true },
+    { "at": 0.6, "who": "ill_a", "probe": "entity_field", "field": "model", "equals": "*5" },
+    { "at": 0.6, "who": "ill_a", "probe": "entity_field", "field": "m_angRotation", "member": "y", "equals": 0 },
+    { "at": 0.6, "who": "ill_b", "probe": "entity_field", "field": "m_angRotation", "member": "x", "equals": 0 },
+    { "at": 0.6, "who": "ill_b", "probe": "entity_field", "field": "m_angRotation", "member": "y", "equals": 0 },
+    { "at": 0.6, "who": "ill_b", "probe": "entity_field", "field": "m_angRotation", "member": "z", "equals": 0 },
+    { "at": 0.6, "who": "ill_b", "probe": "entity_field", "field": "m_NetworkChangeState", "equals": true },
+    { "at": 0.6, "who": "ill_c", "probe": "entity_field", "field": "m_nSolidType", "equals": 0 },
+    { "at": 0.6, "who": "ill_c", "probe": "entity_field", "field": "m_NetworkChangeState", "equals": true }
+  ]
+}

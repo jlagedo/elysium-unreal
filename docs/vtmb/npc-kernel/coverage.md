@@ -11,8 +11,8 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | Slots | 628 |
 | Slots with a single body across the family | 358 |
 | Closure functions | 5187 |
-| … cited by the oracle | 2838 |
-| … not cited by the oracle | 2349 |
+| … cited by the oracle | 2841 |
+| … not cited by the oracle | 2346 |
 | … damaged decompilation | 80 |
 | … still unnamed (`FUN_` / `vfuncN`) | 3268 |
 | Core functions (family or helper method, or an NPC-range offset) | 2545 |
@@ -24,7 +24,7 @@ What the oracle already walks and the verdicts settle, what nothing does, and wh
 | `CAI_BaseNPC` slots whose body is unnamed | 299 |
 | … with the naming pass's reason recorded (`unsettled`) | 299 |
 | Troika fields | 835 |
-| … cited by the oracle | 593 |
+| … cited by the oracle | 595 |
 | Closure edges | 17596 |
 | Build layers | 30 |
 
@@ -485,7 +485,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x100a65a0` CBaseEntity::VPhysicsShadowCollision | `0x10213dd0` CPropHaunted::VPhysicsShadowCollision |
 | `0x100a7a80` CBaseEntity::Classify | `0x10168320` CBasePlayer::Replenish, `0x10169660` CBasePlayer::LeaveGrappleState, `0x1016be10` CBasePlayer::PostThink |
 | `0x100a7aa0` CBaseEntity::PassesDamageFilter | `0x10110da0` CBreakableSurface::vfunc141 |
-| `0x100a7de0` CBaseEntity::TraceAttack | `0x1010dea0` CBreakable::FUN_1010dea0, `0x10150870` CPhysicsCannister::vfunc141, `0x10155a70` CRagdollProp::FUN_10155a70 |
 | `0x100a8400` CBaseEntity::TakeDamageFromCollision | `0x1004e8d0` CPhysBox::VPhysicsCollision, `0x1010e5c0` CBreakable::VPhysicsCollision, `0x1018fe80` CBreakableProp::VPhysicsCollision |
 | `0x100a9290` CBaseEntity::SetNPCTransparent | `0x101942e0` CPropLargeHullIgnore::Spawn |
 | `0x100a9470` CBaseEntity::SetOccludesSound | `0x100ef260` CBaseDoor::vfunc103, `0x100f1c60` CRotDoor::Spawn, `0x101134f0` CBreakableSurface::Spawn, `0x1018df70` CBaseProp::Spawn, +6 more |
@@ -499,7 +498,6 @@ Closure functions with an outside caller that the oracle does not mention: the c
 | `0x100aab10` CBaseEntity::SetOwnerEntity | `0x1009d980` FUN_1009d980, `0x101efa30` CDisciplineProjectile::FUN_101efa30, `0x10252a90` CBaseCombatWeapon::FUN_10252a90, `0x10252ea0` CBaseCombatWeapon::FUN_10252ea0 |
 | `0x100aac30` CBaseEntity::GetMoveType | `0x1003f920` CBaseEntity::PhysicsToss, `0x10040390` CBaseEntity::PhysicsSimulate, `0x1004ec60` FUN_1004ec60, `0x100fbdc0` CEnvParticle::FUN_100fbdc0, +5 more |
 | `0x100aacd0` CBaseEntity::GetMoveCollide | `0x1003f070` CBaseEntity::PerformFlyCollisionResolution |
-| `0x100aad70` CBaseEntity::SetMoveType | `0x10029700` CKeepUpright::Spawn, `0x100332c0` CBaseEntity::PhysicsCarried, `0x10039470` CBaseEntity::PhysicsFollow, `0x1004e260` CPhysBox::Spawn, +58 more |
 | `0x100ab250` FUN_100ab250 ‼ | `0x100d1650` FUN_100d1650, `0x10102030` CMessage::InputShowMessage, `0x1011c060` CServerGameClients::vfunc3, `0x1011c8c0` CServerGameClients::vfunc8, +13 more |
 | `0x100ab280` CBaseEntity::SetTransmit | `0x100bc130` CBeam::FUN_100bc130 |
 | `0x100ac610` CBaseEntity::SetNextThink | `0x100278e0` FUN_100278e0, `0x10027a70` FUN_10027a70 ‼, `0x10028b20` FUN_10028b20 ‼, `0x10028b80` CPhysMotor::InputTurnOff, +8 more |

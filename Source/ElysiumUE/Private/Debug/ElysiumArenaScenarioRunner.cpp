@@ -14,6 +14,7 @@
 #include "ElysiumKeyValuesLoader.h"          // `entity_call KeyValues_LoadFile`
 #include "ElysiumRetailSite.h"               // the named sink those calls report through
 #include "Audio/ElysiumSoundScript.h"        // `entity_call SoundScript_New` / `SoundScript_SetChannel`
+#include "Substrate/ElysiumBloodEffects.h"   // `entity_call Blood_Spawn`: `FUN_102699e0` on a utility target
 #include "ElysiumInputRouter.h"              // `player_walk`: the input replay door `gr_walk` drives
 #include "ElysiumMapActor.h"
 #include "ElysiumMovementComponent.h"        // `player_crouch`: the duck's heading, read off the mover
@@ -885,6 +886,12 @@ void FElysiumArenaScenarioRunner::StageFixtures(FElysiumEntityWorld& World)
 	for (const FElysiumArenaFixture& Fixture : Record.Fixtures)
 	{
 		StagedFixtures.Add(Fixture.Id, Fixture);
+		if (Fixture.Kind == TEXT("sprite_model"))
+		{
+			// L0-r013: one row of the engine's model table (`VEngineServer014` slot 26's frame count),
+			// staged into the world so a sprite the record creates reads it in `CSprite::Spawn`.
+			World.StageSpriteModelFrames(Fixture.Model, Fixture.Frames);
+		}
 		FEvent& Staged = Events.AddDefaulted_GetRef();
 		StampEvent(Staged, World.NowSeconds());
 		Staged.Kind = ElysiumArenaRunnerDetail::ScriptKind();
@@ -1107,6 +1114,8 @@ void FElysiumArenaScenarioRunner::StageFixtures(FElysiumEntityWorld& World)
 		}
 		Staged.Text = Fixture.Kind == TEXT("text")
 			? FString::Printf(TEXT("fixture %s %s staged chars=%d"), *Fixture.Id, *Fixture.Kind, Fixture.Text.Len())
+			: Fixture.Kind == TEXT("sprite_model")
+			? FString::Printf(TEXT("fixture %s %s staged model=%s frames=%d"), *Fixture.Id, *Fixture.Kind, *Fixture.Model, Fixture.Frames)
 			: FString::Printf(TEXT("fixture %s %s staged keys=%d"), *Fixture.Id, *Fixture.Kind, Fixture.Values.Num());
 	}
 }
@@ -1382,9 +1391,14 @@ bool FElysiumArenaScenarioRunner::ReadEntityField(const FElysiumArenaProbeSpec& 
 				OutAnswer.bBool = Word.ToInt() != 0;
 				break;
 			case EElysiumVariantType::String:
-			case EElysiumVariantType::Handle:
 				OutAnswer.Type = FElysiumArenaValue::EType::String;
 				OutAnswer.String = Word.ToString();
+				break;
+			case EElysiumVariantType::Handle:
+				// The retail word: `#<index>` for a set handle, `-1` (0xFFFFFFFF) for the invalid one, as
+				// the base handle adapters above spell it.
+				OutAnswer.Type = FElysiumArenaValue::EType::String;
+				OutAnswer.String = Word.ToHandle().IsSet() ? Word.ToHandle().ToString() : FString(TEXT("-1"));
 				break;
 			default:
 				OutError = FString::Printf(TEXT("field '%s' is a %s row; read its members"), *Probe.Field,
@@ -2112,6 +2126,64 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 				OutError = FString::Printf(TEXT("fixture '%s' is not staged"), *Arg.Fixture);
 				return false;
 			}
+		}
+		if (Action.Function == TEXT("Use"))
+		{
+			// Slot 173 with its USE_TYPE (`CSprite::Use` 0x1042f030 reads it; `ShouldToggle` 0x100a98f0
+			// judges it): `[useType, value?]`, both numbers. The activator and caller are the player when
+			// the stage seats one (the +use press's provenance), else invalid, as a hand-fired input's.
+			FElysiumEntity* UseTarget = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
+			if (UseTarget == nullptr || UseTarget->IsDead())
+			{
+				OutError = FString::Printf(TEXT("no live entity named '%s'"), *Action.Target);
+				return false;
+			}
+			if (Action.Args.Num() < 1 || Action.Args.Num() > 2 || Action.Args[0].Value.Type != FElysiumArenaValue::EType::Number
+				|| (Action.Args.Num() == 2 && Action.Args[1].Value.Type != FElysiumArenaValue::EType::Number))
+			{
+				OutError = TEXT("entity_call 'Use' takes [<useType 0..3>, <value>?], numbers");
+				return false;
+			}
+			const int32 UseType = static_cast<int32>(Action.Args[0].Value.Number);
+			const float UseValue = Action.Args.Num() == 2 ? static_cast<float>(Action.Args[1].Value.Number) : 0.0f;
+			const FElysiumEntity* UsePlayer = World.FindPlayer();
+			const FElysiumEntityHandle UseActivator = UsePlayer ? UsePlayer->Handle : FElysiumEntityHandle::Invalid();
+			UseTarget->UseTyped(UseActivator, UseActivator, UseType, UseValue);
+			FEvent& Done = Events.AddDefaulted_GetRef();
+			StampEvent(Done, World.NowSeconds());
+			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+			Done.Name = Action.Target;
+			Done.Text = FString::Printf(TEXT("entity_call Use done usetype=%d value=%g"), UseType, UseValue);
+			return true;
+		}
+		if (Action.Function == TEXT("Blood_Spawn"))
+		{
+			// `FUN_102699e0` 0x102699e0 (`Substrate/ElysiumBloodEffects.h`): `[x, y, z, color, damage]`,
+			// Source units; the colour as the `int` `BloodColor()` answers (-1 is DONT_BLEED).
+			if (Action.Args.Num() != 5)
+			{
+				OutError = TEXT("entity_call 'Blood_Spawn' takes [x, y, z, color, damage], numbers");
+				return false;
+			}
+			for (int32 I = 0; I < 5; ++I)
+			{
+				if (Action.Args[I].Value.Type != FElysiumArenaValue::EType::Number)
+				{
+					OutError = FString::Printf(TEXT("entity_call 'Blood_Spawn' argument %d is not a number"), I);
+					return false;
+				}
+			}
+			const FVector BloodPos(Action.Args[0].Value.Number, Action.Args[1].Value.Number, Action.Args[2].Value.Number);
+			const uint32 BloodColor = static_cast<uint32>(static_cast<int32>(Action.Args[3].Value.Number));
+			const float BloodDamage = static_cast<float>(Action.Args[4].Value.Number);
+			FElysiumNamedRetailSites BloodSites(World, Action.Target);
+			ElysiumBlood::SpawnBlood(BloodPos, BloodColor, BloodDamage, &BloodSites);
+			FEvent& Done = Events.AddDefaulted_GetRef();
+			StampEvent(Done, World.NowSeconds());
+			Done.Kind = ElysiumArenaRunnerDetail::ScriptKind();
+			Done.Name = Action.Target;
+			Done.Text = FString::Printf(TEXT("entity_call Blood_Spawn done color=%d damage=%g"), static_cast<int32>(BloodColor), BloodDamage);
+			return true;
 		}
 		if (Action.Function == TEXT("Sweep_HullPrelude"))
 		{

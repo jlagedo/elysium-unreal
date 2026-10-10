@@ -37,7 +37,7 @@ namespace ElysiumArenaScenarioParse
 	};
 
 	// The `fixtures` catalog's kinds. A story adds its own in the slice that stages it.
-	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues"), TEXT("text"), TEXT("sound_folder"), TEXT("vsound_registry"), TEXT("sound_script") };
+	const TCHAR* const GFixtureKinds[] = { TEXT("keyvalues"), TEXT("text"), TEXT("sound_folder"), TEXT("vsound_registry"), TEXT("sound_script"), TEXT("sprite_model") };
 
 	enum class ENeed : uint8 { Optional, Required };
 
@@ -1337,7 +1337,7 @@ namespace ElysiumArenaScenarioParse
 			TSharedPtr<FJsonObject> Item;
 			FElysiumArenaFixture& Fixture = Out.AddDefaulted_GetRef();
 			if (!ElementObject(R, (*Items)[Index], Path, Item)
-				|| !CheckFields(R, *Item, Path, { TEXT("id"), TEXT("kind"), TEXT("values"), TEXT("text"), TEXT("config") })
+				|| !CheckFields(R, *Item, Path, { TEXT("id"), TEXT("kind"), TEXT("values"), TEXT("text"), TEXT("config"), TEXT("model"), TEXT("frames") })
 				|| !ReadString(R, *Item, TEXT("id"), Path, ENeed::Required, Fixture.Id)
 				|| !ReadString(R, *Item, TEXT("kind"), Path, ENeed::Required, Fixture.Kind))
 			{
@@ -1364,6 +1364,32 @@ namespace ElysiumArenaScenarioParse
 				}
 				return R.Fail(Field(Path, TEXT("kind")), FString::Printf(TEXT("'%s' is not a fixture kind (%s)"),
 					*Fixture.Kind, *FString::Join(Names, TEXT(", "))));
+			}
+			if (Fixture.Kind == TEXT("sprite_model"))
+			{
+				// `sprite_model` (L0-r013): one row of the engine's model table -- `model`, the name a sprite
+				// row's `model` key spells, and `frames`, the count `VEngineServer014` slot 26 answers for it
+				// (a sprite model's texture frame count). Staged into the world's table, read by
+				// `CSprite::Spawn`'s `m_flMaxFrame = frames - 1` for a sprite created at runtime.
+				if (FindValue(*Item, TEXT("values")) != nullptr || FindValue(*Item, TEXT("text")) != nullptr)
+				{
+					return R.Fail(Path, TEXT("a `sprite_model` fixture takes `model` and `frames`, not `values` or `text`"));
+				}
+				if (!ReadString(R, *Item, TEXT("model"), Path, ENeed::Required, Fixture.Model)) return false;
+				const TSharedPtr<FJsonValue>* FramesValue = FindValue(*Item, TEXT("frames"));
+				FElysiumArenaValue FramesRead;
+				if (FramesValue == nullptr || !ReadValue(R, *FramesValue, Field(Path, TEXT("frames")), FramesRead)
+					|| FramesRead.Type != FElysiumArenaValue::EType::Number || FramesRead.Number < 1
+					|| FMath::FloorToDouble(FramesRead.Number) != FramesRead.Number)
+				{
+					return R.Fail(Field(Path, TEXT("frames")), TEXT("required: a whole number >= 1, the model's frame count"));
+				}
+				Fixture.Frames = static_cast<int32>(FramesRead.Number);
+				continue;
+			}
+			if (FindValue(*Item, TEXT("model")) != nullptr || FindValue(*Item, TEXT("frames")) != nullptr)
+			{
+				return R.Fail(Path, TEXT("only a `sprite_model` fixture takes `model` and `frames`"));
 			}
 			if (Fixture.Kind == TEXT("text"))
 			{
@@ -2044,6 +2070,11 @@ const TArray<FString>& EntityCallAllowlist()
 		// path): a pair the engine's move found is handed to the server, which makes the two touchlinks
 		// and fires StartTouch. `target` is the touched entity, the one argument the toucher's name.
 		TEXT("MarkEntitiesAsTouching"),
+		// L0.effects_world.blood-effects: the `SpawnBlood` wrapper `FUN_102699e0` 0x102699e0 every
+		// `TraceAttack` body calls (`CBaseEntity` 0x100a7de0, `CBasePlayer` 0x10162c30, `CAI_BaseNPC`
+		// 0x10266780), on a utility target: `[x, y, z, color, damage]` in Source units -- the dispatcher
+		// `FUN_101cfb30` and the gate `FUN_101cf9b0` behind it, over the colours no witness NPC carries.
+		TEXT("Blood_Spawn"),
 	};
 	return Allowed;
 }

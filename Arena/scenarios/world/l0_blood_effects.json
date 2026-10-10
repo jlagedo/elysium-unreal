@@ -1,0 +1,70 @@
+{
+  "name": "l0_blood_effects",
+  "about": "The blood effect chain (`walks/L0-r013.md`): the `SpawnBlood` wrapper `FUN_102699e0` 0x102699e0 every `TraceAttack` body calls -- `amount = __ftol(damage)` (25.7 -> 25, 300.9 -> 300), `dir = &DAT_1070ba40` (the attack direction the `OnTakeDamage` family writes) -- then the dispatcher `FUN_101cfb30` 0x101cfb30 behind the gate `FUN_101cf9b0` 0x101cf9b0. The gate: colour -1 refuses; 247 asks `violence_hblood`, every other colour `violence_ablood` (engine cvars, both default \"1\"): admitted iff the cvar exists, is no command and its INT value is non-zero. The dispatcher, in order: the gate; `color == -1` (dead after it); `amount == 0` refuses -- an EQUALITY test, so -30 passes; the `DAT_1070ba34 == 1` remap of 247 -> 0 never fires (no writer); the rules' `IsMultiplayer` x5 never fires (`CHalfLife2` slot 21 returns 0); `amount > 255` clamps to 255; colour 0x14 is the mechanical arm (`IEffects` Sparks always, `RandomFloat(0, 2) < 1` ends it, else `RandomInt(10, 15)` smoke at framerate 10 with the unrecovered `DAT_1088ae52` model index); otherwise the triple -- 0xC3 (128,128,0), every other colour (64,0,0) in single player -- a PVS filter, `nAmount = clamp(amount / 10, 3, 16)` (25 -> 3, 80 -> 8, 200 -> 16, -30 -> 3) and `CTempEntsSystem` slot 14 0x10058ba0, whose body `FUN_1005df40` is a bare `ret`: the spray emits nothing. Driven on the utility `blood` with the colours no witness NPC carries (every NPC's `m_bloodColor` is 0xf7); the cvars are set and restored through the console. Reported as `fail`, a gate verdict, an arm or a payload differs from retail's.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 1.2,
+  "script": [
+    { "t": 0.1, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [10, 20, 30, 247, 25.7] },
+    { "t": 0.15, "do": "console", "command": "violence_hblood 0" },
+    { "t": 0.2, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [0, 0, 0, 247, 25] },
+    { "t": 0.25, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [0, 0, 0, 195, 25] },
+    { "t": 0.3, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [0, 0, 0, -1, 25] },
+    { "t": 0.35, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [0, 0, 0, 195, 0] },
+    { "t": 0.4, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [0, 0, 0, 195, 200] },
+    { "t": 0.45, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [0, 0, 0, 195, 300.9] },
+    { "t": 0.5, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [0, 0, 0, 0, 80] },
+    { "t": 0.55, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [0, 0, 0, 20, 50] },
+    { "t": 0.6, "do": "console", "command": "violence_hblood 1" },
+    { "t": 0.65, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [0, 0, 0, 247, 25] },
+    { "t": 0.68, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [0, 0, 0, 195, -30] },
+    { "t": 0.7, "do": "console", "command": "violence_ablood 0" },
+    { "t": 0.75, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [0, 0, 0, 195, 25] },
+    { "t": 0.8, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [0, 0, 0, 247, 25] },
+    { "t": 0.9, "do": "console", "command": "violence_ablood 1" },
+    { "t": 0.95, "do": "entity_call", "target": "blood", "function": "Blood_Spawn", "args": [0, 0, 0, 195, 25] }
+  ],
+  "expect": [
+    { "label": "h_spawn", "who": "blood", "kind": "retail_site", "site": "blood.spawn", "match": "va=0x102699e0 phase=entry color=247 damage=25.7 int_amount=25 dir=", "by": 0.15 },
+    { "label": "h_dispatch", "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "va=0x101cfb30 phase=entry color=247 amount=25 pos=10,20,30 dir=", "within": 0.05 },
+    { "label": "h_gate", "who": "blood", "kind": "retail_site", "site": "blood.gate", "match": "va=0x101cf9b0 phase=return color=247 cvar=violence_hblood cvar_int=1 admit=1", "within": 0.05 },
+    { "label": "h_spray", "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "phase=branch arm=spray color_after_remap=247 amount_after=25 rgb=64,0,0 nAmount=3", "within": 0.05 },
+    { "label": "h_emit", "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "phase=emit fn=CTempEntsSystem::vfunc14 va=0x10058ba0 body=FUN_1005df40 ret delay=0 rgb=64,0,0 a=255 nAmount=3 drawn=0", "within": 0.05 },
+
+    { "label": "h_off_gate", "who": "blood", "kind": "retail_site", "site": "blood.gate", "match": "color=247 cvar=violence_hblood cvar_int=0 admit=0", "by": 0.25 },
+    { "label": "h_off_refused", "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "phase=branch arm=refused_gate", "within": 0.05 },
+
+    { "label": "y_gate", "who": "blood", "kind": "retail_site", "site": "blood.gate", "match": "color=195 cvar=violence_ablood cvar_int=1 admit=1", "by": 0.3 },
+    { "label": "y_spray", "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "arm=spray color_after_remap=195 amount_after=25 rgb=128,128,0 nAmount=3", "within": 0.05 },
+
+    { "label": "n_gate", "who": "blood", "kind": "retail_site", "site": "blood.gate", "match": "color=-1 cvar=none cvar_int=0 admit=0", "by": 0.35 },
+    { "label": "n_refused", "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "arm=refused_gate", "within": 0.05 },
+
+    { "label": "z_gate", "who": "blood", "kind": "retail_site", "site": "blood.gate", "match": "color=195 cvar=violence_ablood cvar_int=1 admit=1", "by": 0.4 },
+    { "label": "z_refused", "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "arm=refused_amount", "within": 0.05 },
+
+    { "label": "big_spray", "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "arm=spray color_after_remap=195 amount_after=200 rgb=128,128,0 nAmount=16", "by": 0.45 },
+    { "label": "clamp_spawn", "who": "blood", "kind": "retail_site", "site": "blood.spawn", "match": "color=195 damage=300.9 int_amount=300", "by": 0.5 },
+    { "label": "clamp_spray", "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "arm=spray color_after_remap=195 amount_after=255 rgb=128,128,0 nAmount=16", "within": 0.05 },
+    { "label": "zero_gate", "who": "blood", "kind": "retail_site", "site": "blood.gate", "match": "color=0 cvar=violence_ablood cvar_int=1 admit=1", "by": 0.55 },
+    { "label": "zero_spray", "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "arm=spray color_after_remap=0 amount_after=80 rgb=64,0,0 nAmount=8", "within": 0.05 },
+    { "label": "mech_gate", "who": "blood", "kind": "retail_site", "site": "blood.gate", "match": "color=20 cvar=violence_ablood cvar_int=1 admit=1", "by": 0.6 },
+    { "label": "mech", "who": "blood", "kind": "retail_site", "site": "blood.mech", "match": "va=0x101cfb30 phase=branch arm=mech color_after_remap=20 amount_after=50 sparks=1 rand=", "within": 0.05 },
+
+    { "label": "h_on_gate", "who": "blood", "kind": "retail_site", "site": "blood.gate", "match": "color=247 cvar=violence_hblood cvar_int=1 admit=1", "by": 0.7 },
+    { "label": "neg_spray", "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "arm=spray color_after_remap=195 amount_after=-30 rgb=128,128,0 nAmount=3", "by": 0.75 },
+    { "label": "a_off_gate", "who": "blood", "kind": "retail_site", "site": "blood.gate", "match": "color=195 cvar=violence_ablood cvar_int=0 admit=0", "by": 0.8 },
+    { "label": "a_off_refused", "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "arm=refused_gate", "within": 0.05 },
+    { "label": "h_still_on", "who": "blood", "kind": "retail_site", "site": "blood.gate", "match": "color=247 cvar=violence_hblood cvar_int=1 admit=1", "by": 0.85 },
+    { "label": "a_restored", "who": "blood", "kind": "retail_site", "site": "blood.gate", "match": "color=195 cvar=violence_ablood cvar_int=1 admit=1", "by": 1.0 }
+  ],
+  "never": [
+    { "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "arm=refused_color", "from": 0.0 },
+    { "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "rgb=255,32,32", "from": 0.0 },
+    { "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "color_after_remap=0 amount_after=25", "from": 0.0 },
+    { "who": "blood", "kind": "retail_site", "site": "blood.dispatch", "match": "drawn=1", "from": 0.0 }
+  ],
+  "probes": [
+    { "at": "end", "who": "player", "probe": "alive", "equals": true }
+  ]
+}

@@ -658,6 +658,34 @@ Sprays, drips, trails, explosions, splash decals. Feeding uses
 authored set (blood strike / shot / boil / shield). Impact on flesh is
 `Impact_Flesh_Emitter` and friends. Several collide-blocks lay a blood decal.
 
+**The `SpawnBlood` chain [decompiled, L0-r013]** (`walks/L0-r013.md`; port
+`Source/ElysiumUE/Private/Substrate/ElysiumBloodEffects.cpp`, record `Arena/scenarios/world/l0_blood_effects.json`).
+Every `TraceAttack` (`CBaseEntity` `0x100a7de0`, `CBasePlayer` `0x10162c30` / `0x10162fa0`, `CAI_BaseNPC`
+`0x10266780`) calls **`FUN_102699e0`**`(pos, color, damage)`: `amount = __ftol(damage)` (truncation), `dir =
+&DAT_1070ba40` (the file-static attack direction the `OnTakeDamage` family writes; the port's
+`NpcKernelDamageShared::GDeathThrowImpulse`), then the dispatcher **`FUN_101cfb30`**`(pos, dir, color, amount)`
+(the shape of `UTIL_BloodDrips`; retail name UNRECOVERED):
+
+1. the gate **`FUN_101cf9b0`**`(color)`: `-1` refuses; `0xF7` asks `violence_hblood`, any other colour
+   `violence_ablood` (engine cvars, `staticinit_200ed990` / `_200ed9d0`, both default `"1"`): `FindVar` null
+   refuses, else admit iff not a command and the cvar's **int** value (`+0x2c`) is non-zero;
+2. `color == -1` (dead after the gate); 3. `amount == 0` refuses -- an equality test, negatives pass;
+4. `DAT_1070ba34 == 1 && color == 0xF7` -> `color = 0` -- the flag has **no writer** in the corpus, so never;
+5. `g_pGameRules->vslot21()` (IsMultiplayer; `CHalfLife2` `FUN_101abcc0` returns 0) -> `amount *= 5`, dead in
+   single player; 6. `amount > 255` -> 255;
+7. `color == 0x14` (mechanical): `IEffects`-shaped `vslot3(pos, 1, 1, NULL)` (Sparks); `RandomFloat(0, 2) < 1`
+   returns; else `RandomInt(10, 15)` -> `FUN_101cf640(pos, n, 10.0f)` -> `vslot2(pos, (int16)DAT_1088ae52, n, 10.0f)`
+   (Smoke; the model index has no writer, UNRECOVERED);
+8. the triple: `0xC3` -> `(128, 128, 0)`; else rules slot 21 again: 0 -> `(64, 0, 0)`, non-zero -> `(255, 32, 32)` (dead);
+9. `CPVSFilter(pos)`; 10. `nAmount = clamp(amount / 10, 3, 16)` (signed, truncating; a negative gives 3);
+11. `CTempEntsSystem` **slot 14** `0x10058ba0` `(filter, 0.0, pos, dir, r, g, b, 255, nAmount)` -> after the
+    recipient check `thunk_FUN_1005df40` -> **`FUN_1005df40`, a bare `ret`: the spray emits nothing** (slot 13
+    `0x10058b00` is the `CTEBloodStream` body, which this call does not reach).
+
+`CBaseEntity::BloodColor` `0x10026d90` answers -1; every Troika NPC `Spawn` writes `m_bloodColor (+0x1570) = 0xF7`,
+so the only live arm on the witness maps is the human colour under `violence_hblood` -- and it draws nothing in
+retail. The Sparks/Smoke client effects of the mechanical arm have no Unreal visual yet (client look unrecovered).
+
 ### 4.7 Muzzle flash, tracers, shells
 
 Per-gun first- and third-person bursts from animation events + item records; the chain,

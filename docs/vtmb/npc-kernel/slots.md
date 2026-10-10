@@ -71,7 +71,7 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 61 | `0x100269f0` CAISound::FUN_100269f0 | `0x102b5260` CAI_BaseNPCTroika::FUN_102b5260 | — | 9 | docs/vtmb/npc-ai/shape.md:2760, docs/vtmb/npc-ai/shape.md:2781 |
 | 62 | `0x100b2be0` CBaseEntity::SetOrigin | — | — | 142 | docs/vtmb/entity_io.md:278 |
 | 63 | `0x10026a10` CAISound::FUN_10026a10 | — | — | 5 | — |
-| 64 | `0x100b2d00` CBaseEntity::SetAngles | — | — | 123 | docs/vtmb/entity_io.md:279 |
+| 64 | `0x100b2d00` CBaseEntity::SetAngles | — | — | 123 | docs/vtmb/entity_io.md:279, docs/vtmb/entity_visuals.md:281 |
 | 65 | `0x10026a50` CAISound::FUN_10026a50 | — | — | 152 | — |
 | 66 | `0x1009d2a0` CBaseEntity::Hide | — | — | 193 | docs/vtmb/animation_and_movers.md:4692, docs/vtmb/npc-ai/rebuild.md:253, docs/vtmb/npc-ai/shape.md:90 |
 | 67 | `0x1009d380` CBaseEntity::Unhide | — | — | 147 | docs/vtmb/animation_and_movers.md:4693, docs/vtmb/npc-ai/rebuild.md:255, docs/vtmb/npc-ai/shape.md:90 |
@@ -93,14 +93,14 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 83 | `0x100b4ef0` CBaseEntity::GetEFlags | — | — | 7 | docs/vtmb/entity_io.md:967 |
 | 84 | `0x100b4f10` CBaseEntity::SetEFlags | — | — | 128 | docs/vtmb/entity_io.md:967 |
 | 85 | `0x100b3d10` CBaseEntity::GetEdict | — | — | 61 | — |
-| 86 | `0x103407b0` CBaseCombatCharacter::ShouldTransmit | `0x102c0420` CAI_BaseNPCTroika::FUN_102c0420 | `0x1034af10` CNPCMaker::FUN_1034af10 (CNPCMaker, CNPCMaker_Fleshpile, CNPCMaker_Zombie) | 5 | docs/vtmb/entity_visuals.md:262, docs/vtmb/npc-ai/lifecycle.md:1101, docs/vtmb/npc-ai/lifecycle.md:1226 |
+| 86 | `0x103407b0` CBaseCombatCharacter::ShouldTransmit | `0x102c0420` CAI_BaseNPCTroika::FUN_102c0420 | `0x1034af10` CNPCMaker::FUN_1034af10 (CNPCMaker, CNPCMaker_Fleshpile, CNPCMaker_Zombie) | 5 | docs/vtmb/entity_visuals.md:321, docs/vtmb/npc-ai/lifecycle.md:1101, docs/vtmb/npc-ai/lifecycle.md:1226 |
 | 87 | `0x100ab280` CBaseEntity::SetTransmit | — | — | 13 | — |
 | 88 | `0x10026b50` CAISound::FUN_10026b50 | — | — | 2 | — |
 | 89 | `0x10026b70` CAISound::FUN_10026b70 | — | — | 3 | — |
 | 90 | `0x100aa840` CBaseEntity::IsTransparent | — | — | 7 | — |
 | 91 | `0x100b4de0` CAISound::FUN_100b4de0 | — | — | 17 | docs/vtmb/npc-ai/senses.md:1225 |
 | 92 | `0x10027570` CBaseEntity::GetSolid | — | — | 36 | docs/vtmb/phy_vphysics.md:336 |
-| 93 | `0x100aad70` CBaseEntity::SetMoveType | — | — | 197 | — |
+| 93 | `0x100aad70` CBaseEntity::SetMoveType | — | — | 197 | docs/vtmb/entity_visuals.md:118 |
 | 94 | `0x100aac30` CBaseEntity::GetMoveType | — | — | 115 | — |
 | 95 | `0x100aacd0` CBaseEntity::GetMoveCollide | — | — | 12 | — |
 | 96 | `0x100a9ba0` CBaseEntity::GetAimEntEdict | — | — | 1 | — |
@@ -148,7 +148,7 @@ One row per primary-vtable slot of the family. *Base* is `CAI_BaseNPC`'s body, *
 | 138 | `0x100a7a80` CBaseEntity::Classify | `0x10299d80` CAI_BaseNPCTroika::Classify | `0x101aabd0` CPayphone::Classify (CPayphone), `0x1034a2d0` CGenericNPC::Classify (CGenericNPC), `0x10357660` CNPC_Crow::Classify (CNPC_Crow), `0x1035a850` CGeneric_NPC::Classify (CGeneric_NPC), `0x1035b0c0` CGeneric_NPC_bathack::Classify (CGeneric_NPC_bathack), `0x1035bec0` CGenericSabbat_NPC::Classify (CGenericSabbat_NPC), +41 more | 27 | docs/vtmb/npc-ai/senses.md:1566, docs/vtmb/stealth.md:807 |
 | 139 | `0x10026d70` CAISound::FUN_10026d70 | — | `0x1034bc90` CNPCMaker::FUN_1034bc90 (CNPCMaker, CNPCMaker_Zombie), `0x1034c8e0` CNPCMaker_Fleshpile::vfunc139 (CNPCMaker_Fleshpile) | 4 | docs/vtmb/npc-ai/lifecycle.md:1251, docs/vtmb/npc-ai/lifecycle.md:1254, docs/vtmb/npc-ai/lifecycle.md:1307, +5 more |
 | 140 | `0x100a7aa0` CBaseEntity::PassesDamageFilter | — | — | 7 | — |
-| 141 | `0x10266780` CAI_BaseNPC::TraceAttack | — | `0x10356f60` CNPC_Bullseye::vfunc141 (CNPC_Bullseye), `0x103ccbf0` CNPC_VWerewolf::TraceAttack (CNPC_VWerewolf), `0x103e0430` CNPC_VZombie::vfunc141 (CNPC_VZombie) | 7 | docs/vtmb/combat-and-damage.md:2101, docs/vtmb/combat-and-damage.md:2275, docs/vtmb/combat-and-damage.md:2310, +6 more |
+| 141 | `0x10266780` CAI_BaseNPC::TraceAttack | — | `0x10356f60` CNPC_Bullseye::vfunc141 (CNPC_Bullseye), `0x103ccbf0` CNPC_VWerewolf::TraceAttack (CNPC_VWerewolf), `0x103e0430` CNPC_VZombie::vfunc141 (CNPC_VZombie) | 7 | docs/vtmb/combat-and-damage.md:2101, docs/vtmb/combat-and-damage.md:2275, docs/vtmb/combat-and-damage.md:2310, +7 more |
 | 142 | `0x10265e90` CAI_BaseNPC::OnTakeDamage | `0x102bed30` CNPC_VVampire::OnTakeDamage | `0x10356ff0` CNPC_Bullseye::OnTakeDamage (CNPC_Bullseye), `0x10376ae0` CNPC_VFrenzyShadow::OnTakeDamage (CNPC_VFrenzyShadow), `0x103b3910` CNPC_VTaxiDriver::OnTakeDamage (CNPC_VTaxiDriver), `0x103cccc0` CNPC_VWerewolf::OnTakeDamage (CNPC_VWerewolf), `0x103e06d0` CNPC_VZombie::OnTakeDamage (CNPC_VZombie) | 14 | docs/vtmb/combat-and-damage.md:2330, docs/vtmb/combat-and-damage.md:2472, docs/vtmb/npc-ai/conditions-and-states.md:3152, +13 more |
 | 143 | `0x1032ebc0` CBaseCombatCharacter::TakeHealth | — | — | 4 | — |
 | 144 | `0x10265ad0` CAI_BaseNPC::Event_Killed | `0x102bf340` CAI_BaseNPCTroika::Event_Killed | `0x10356b50` CNPC_Bullseye::Event_Killed (CNPC_Bullseye), `0x1035a980` CGeneric_NPC::Event_Killed (CGeneric_NPC), `0x1035c010` CGenericSabbat_NPC::Event_Killed (CGenericSabbat_NPC), `0x10376b50` CNPC_VFrenzyShadow::Event_Killed (CNPC_VFrenzyShadow), `0x10378da0` CNPC_VGargoyle::Event_Killed (CNPC_VGargoyle), `0x10380390` CNPC_VHengeyokai::Event_Killed (CNPC_VHengeyokai), +7 more | 24 | docs/vtmb/combat-and-damage.md:2123, docs/vtmb/combat-and-damage.md:2135, docs/vtmb/navigation-jump-links.md:2750, +21 more |

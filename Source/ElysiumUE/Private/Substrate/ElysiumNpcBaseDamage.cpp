@@ -6,8 +6,10 @@
 #include "ElysiumDecalSubsystem.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
+#include "ElysiumRetailSite.h"
 #include "ElysiumRng.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumBloodEffects.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -289,13 +291,17 @@ bool FElysiumNpcBase::TraceAttackEvadeCheck(const FElysiumDmg* Dmg) const
 
 void FElysiumNpcBase::SpawnBlood(const FVector& PositionUnits, int32 BloodColor, float Damage)
 {
-	// SEAM for `thunk_FUN_102699e0` — `SpawnBlood(ptr->endpos, BloodColor(), damage)`. Recorded;
-	// there is no authored blood spray root to hand the particle seam yet.
+	// `thunk_FUN_102699e0` -> `FUN_102699e0` 0x102699e0 -- `SpawnBlood(ptr->endpos, BloodColor(),
+	// damage)`: the `__ftol` of the damage, the attack-direction global, then the dispatcher
+	// `FUN_101cfb30` 0x101cfb30 behind the admission gate `FUN_101cf9b0` 0x101cf9b0
+	// (`Substrate/ElysiumBloodEffects.h`, `walks/L0-r013.md`). Recorded as well, for the arm tests.
 	FSpawnBloodCall Call;
 	Call.PositionUnits = PositionUnits;
 	Call.BloodColor = BloodColor;
 	Call.Damage = Damage;
 	SpawnBloodCalls.Add(Call);
+	FElysiumEntityRetailSites Sites(World, *this);
+	ElysiumBlood::SpawnBlood(PositionUnits, static_cast<uint32>(BloodColor), Damage, &Sites);
 }
 
 void FElysiumNpcBase::AddMultiDamage(const FElysiumTakeDamageInfo& SubInfo)

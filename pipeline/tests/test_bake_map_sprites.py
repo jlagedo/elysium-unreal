@@ -155,6 +155,10 @@ def test_resolve_sprite_table_joins_the_material_and_texture_sidecars():
     assert row["asset"] == "/ElysiumBaked/Materials/sprites/MI_glowa"
     assert row["texture"] == "/ElysiumBaked/Textures/sprites/T_glowa"
     assert (row["width"], row["height"]) == (128, 64)
+    # The model's frame count (L0-r013): the texture sidecar's `frames`, 1 when an older sidecar lacks it.
+    assert row["frames"] == 1
+    assert MG.sprite_row(records[0], _material_sidecar(), dict(_texture_sidecar(64, 64), frames=8),
+                         "/x/MI_x")["frames"] == 8
     assert row["blend"] == "Additive" and row["glow"] is True
     assert row["upright"] is False
     assert row["color"] == [255, 200, 100] and row["alpha"] == 180

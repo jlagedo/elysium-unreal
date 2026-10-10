@@ -841,6 +841,17 @@ bool UElysiumMapVisuals::SetSpriteVisible(int32 EntityIndex, bool bShown)
 	return true;
 }
 
+int32 UElysiumMapVisuals::SpriteFrameCount(int32 EntityIndex) const
+{
+	const TWeakObjectPtr<AElysiumSpriteActor>* Found = SpritesByEntity.Find(EntityIndex);
+	const AElysiumSpriteActor* Actor = Found ? Found->Get() : nullptr;
+	if (Actor == nullptr || Actor->Sprite == nullptr)
+	{
+		return 1;
+	}
+	return FMath::Max(1, Actor->Sprite->Frames);
+}
+
 void UElysiumMapVisuals::ToggleProps()
 {
 	bPropsVisible = !bPropsVisible;

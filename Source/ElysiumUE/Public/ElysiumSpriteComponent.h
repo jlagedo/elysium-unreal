@@ -50,6 +50,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Elysium")
 	bool bUpright = false;
 
+	/**
+	 * The sprite model's frame count: the base texture's TTH frames, what `VEngineServer014` slot 26
+	 * answers `CSprite::Spawn` 0x1042e550 for a sprite model (`*(model+0xb4)`), so the leaf writes
+	 * `m_flMaxFrame = Frames - 1` (L0-r013). A bake older than the field reads 1, a one-frame sprite.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Elysium")
+	int32 Frames = 1;
+
 	bool IsGlow() const;
 
 	//~ UPrimitiveComponent

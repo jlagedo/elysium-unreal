@@ -944,6 +944,15 @@ public:
 	// crash in retail; here it answers -1 and says so once.
 	int32 PrecacheParticle(const FString& BaseName);
 	int32 PrecacheDecal(const FString& Name);
+	// `VEngineServer014` slot 26 (`engine.dll 0x20108d10`), the model frame count `CSprite::Spawn`
+	// 0x1042e550 reads for `m_flMaxFrame = frames - 1` (L0-r013): a sprite model answers
+	// `*(model+0xb4)` (its texture's frame count), an index outside (0, 0x400) logs "Bad model index"
+	// and answers 1. The engine's model table is replaced by the bake: the answer is the baked
+	// billboard's `Frames` for the entity's index (`IElysiumEmbodiment::BakedSpriteFrameCount`), or a
+	// model table a record staged (`sprite_model` fixture, `Arena/README.md`) for a sprite created at
+	// runtime, which has no billboard; neither: 1.
+	int32 SpriteModelFrameCount(const FString& Model, int32 EntityIndex) const;
+	void StageSpriteModelFrames(const FString& Model, int32 Frames);
 	// `gpGlobals->frametime`. The NPC think cadence's due test is `(stamp - Now) <= FrameSeconds()`
 	// (`IsThinkDue` `0x10290660`), so this is the epsilon that decides whether a stamp landing
 	// between two ticks counts as due on the earlier one.
@@ -1407,6 +1416,9 @@ private:
 	// Slots 17 / 16's string tables (see `PrecacheParticle` / `PrecacheDecal`), 1-based.
 	TArray<FString> PrecachedParticles;
 	TArray<FString> PrecachedDecals;
+	// L0-r013: the staged sprite model table (lower-cased model key -> frame count), the arena's
+	// stand-in for the engine's model info on a runtime-created sprite. Per world; empty in the game.
+	TMap<FString, int32> StagedSpriteModelFrames;
 	// `g_AIDisabled` bit 0, inverted. A fresh world starts enabled, as retail's global does.
 	bool bAiEnabled = true;
 	bool bAiStepMode = false;
