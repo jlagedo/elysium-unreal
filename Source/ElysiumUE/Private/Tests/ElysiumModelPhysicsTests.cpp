@@ -297,6 +297,15 @@ bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
 	TestNotNull(TEXT("actual successful model creation registered recipe"), ElysiumModelPhysics::RecipeFor(Moving->VPhysicsGetObject()));
 	TestTrue(TEXT("base retail physics admission"), Moving->ShouldSavePhysics());
 	FBodyInstance* MovingBody = ElysiumModelPhysics::Identity(Moving->Visual);
+	FElysiumSavedPhysicsBody BeforeController;
+	if (!ElysiumModelPhysics::Capture(Moving->VPhysicsGetObject(),BeforeController)) return false;
+	TestTrue(TEXT("production native body admits temporary shadow attachment"),ElysiumModelPhysics::SetShadow(Moving->VPhysicsGetObject(),10000.f,10000.f,false,false));
+	ElysiumModelPhysics::RemoveShadow(Moving->VPhysicsGetObject());
+	FElysiumSavedPhysicsBody AfterController;
+	if (!ElysiumModelPhysics::Capture(Moving->VPhysicsGetObject(),AfterController)) return false;
+	TestTrue(TEXT("removed-controller save producer retains original Chaos pair and mass frame"),
+		AfterController.CurrentInertia==BeforeController.CurrentInertia && AfterController.CurrentInverseInertia==BeforeController.CurrentInverseInertia &&
+		AfterController.CurrentMassFrame.Equals(BeforeController.CurrentMassFrame,1.e-6));
 	Moving->Visual->SetEnableGravity(false);
 	Moving->Visual->SetLinearDamping(.75f); // actual runtime setter also used by water's damping observer
 	const FTransform NativePose(FRotator(19, 37, 11), FVector(5000, 4000, 3000), Moving->Visual->GetComponentScale());
@@ -375,6 +384,9 @@ bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
 	TestTrue(TEXT("final entity reconnect preserves native pose"), RestoredState.Pose.Equals(NativeState.Pose, .001));
 	TestTrue(TEXT("native linear velocity persisted"), RestoredState.LinearVelocity.Equals(NativeState.LinearVelocity, .001));
 	TestTrue(TEXT("native angular velocity persisted in radians"), RestoredState.AngularVelocityRadians.Equals(NativeState.AngularVelocityRadians, .001));
+	TestTrue(TEXT("dynamic Physics reconstruction retains selected native inertia pair and principal frame"),
+		RestoredState.CurrentInertia == NativeState.CurrentInertia && RestoredState.CurrentInverseInertia == NativeState.CurrentInverseInertia &&
+		RestoredState.CurrentMassFrame.Equals(NativeState.CurrentMassFrame, 1.e-6));
 	TestFalse(TEXT("gravity state persisted"), RestoredState.bGravity);
 	TestEqual(TEXT("current runtime damping persisted independently from creation recipe"), RestoredState.CurrentLinearDamping, .75f);
 	TestFalse(TEXT("awake state persisted"), RestoredState.bAsleep);
@@ -590,6 +602,8 @@ bool FElysiumStaticBboxCallerTest::RunTest(const FString&)
 	if (!Absent) return false;
 	const int32 AbsentIndex = Absent->Handle.Index;
 	Absent->VPhysicsDestroyObject();
+	FElysiumSavedPhysicsBody StaticMechanics;
+	if (!TestTrue(TEXT("static native mass properties captured before persistence"), ElysiumModelPhysics::Capture(Prop->VPhysicsGetObject(), StaticMechanics))) return false;
 	FElysiumMapSnapshot Snapshot; Source.Freeze(Snapshot);
 	if (!TestFalse(TEXT("actual static Physics save admitted"), Snapshot.bPhysicsSaveFailed)) return false;
 	TArray<uint8> Bytes; FMemoryWriter Writer(Bytes, true); FElysiumSaveArchive SaveAr(Writer, FElysiumSaveVersion::Latest); SaveAr << Snapshot;
@@ -614,6 +628,11 @@ bool FElysiumStaticBboxCallerTest::RunTest(const FString&)
 	TestEqual(TEXT("actual restored raw material lookup"), RestoredMaterial->SourceName, Destination.PhysicsSurfaces().GetSurfaceName(SurfaceIndex));
 	TestEqual(TEXT("actual restored native friction"), RestoredMaterial->Friction, Surface->Friction());
 	TestTrue(TEXT("actual restored static backend state"), ElysiumModelPhysics::ActorIdentity(Component)->GetGameThreadAPI().ObjectState() == Chaos::EObjectStateType::Static);
+	FElysiumSavedPhysicsBody RestoredStatic;
+	TestTrue(TEXT("static Physics reconstruction captures live selected pair/frame"), ElysiumModelPhysics::Capture(Restored->VPhysicsGetObject(), RestoredStatic));
+	TestTrue(TEXT("static Physics reconstruction retains native mass frame and inertia producers"),
+		RestoredStatic.CurrentInertia == StaticMechanics.CurrentInertia && RestoredStatic.CurrentInverseInertia == StaticMechanics.CurrentInverseInertia &&
+		RestoredStatic.CurrentMassFrame.Equals(StaticMechanics.CurrentMassFrame, 1.e-6));
 	TestEqual(TEXT("reconnect preserves actual saved shape enabled state"), Body->GetShapeCollisionEnabled(0), ECollisionEnabled::NoCollision);
 	TestFalse(TEXT("restored native query honors saved response"), TraceBody(SavedPose.GetLocation()));
 	Body->SetShapeCollisionEnabled(0, ECollisionEnabled::QueryAndPhysics);
@@ -1033,14 +1052,21 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  else AddInfo(FString::Printf(TEXT("shadow saved missing: eligible=%d rows=%d"), ShadowChild->ShouldSavePhysics(), Snapshot.PhysicsBodies.Num()));
  if (!TestTrue(TEXT("save retains original controller body state and membership"), Saved && Saved->Shadow.bInstalled && Saved->bShadowMember && FMath::IsNearlyEqual(Saved->Shadow.SavedMassKg, 85.f, .001f))) return false;
  const FTransform Submitted = Saved->Shadow.Target; const FTransform Solved = Saved->Pose;
+ const FElysiumSavedPhysicsBody SavedMechanics = *Saved;
 	const float PersistedOriginalLinearDamping = Saved->Shadow.SavedLinearDamping, PersistedOriginalAngularDamping = Saved->Shadow.SavedAngularDamping;
- for (int32 InvalidArm = 0; InvalidArm < 4; ++InvalidArm)
+ for (int32 InvalidArm = 0; InvalidArm < 10; ++InvalidArm)
  {
   FElysiumSavedPhysicsBody Invalid = *Saved;
   if (InvalidArm == 0) Invalid.Shadow.RemainingSeconds = -1.f;
   if (InvalidArm == 1) Invalid.Shadow.RemainingSeconds = std::numeric_limits<float>::quiet_NaN();
   if (InvalidArm == 2) Invalid.Recipe.bStatic = true;
   if (InvalidArm == 3) Invalid.Shadow.bInstalled = false;
+  if (InvalidArm == 4) Invalid.CurrentInertia.X = std::numeric_limits<double>::infinity();
+  if (InvalidArm == 5) Invalid.CurrentInverseInertia.Y = -1.;
+  if (InvalidArm == 6) Invalid.CurrentMassFrame.SetRotation(FQuat(0,0,0,0));
+  if (InvalidArm == 7) Invalid.Shadow.SavedInverseInertia.Z = std::numeric_limits<double>::quiet_NaN();
+  if (InvalidArm == 8) Invalid.Shadow.SavedMassFrame.SetRotation(FQuat(0,0,0,0));
+  if (InvalidArm == 9) Invalid.CurrentMassFrame.SetTranslation(FVector(std::numeric_limits<double>::infinity(),0,0));
   TArray<uint8> InvalidBytes; FMemoryWriter InvalidWriter(InvalidBytes, true); InvalidWriter << Invalid;
   FElysiumSavedPhysicsBody InvalidRead; FMemoryReader InvalidReader(InvalidBytes, true); InvalidReader << InvalidRead;
   TestTrue(TEXT("malformed persisted shadow state refuses archive read"), InvalidReader.IsError());
@@ -1091,6 +1117,11 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
 	TestEqual(TEXT("actual Physics reconstruction retains absent linear damping input"),ElysiumModelPhysics::ComponentFor(Object)->GetLinearDamping(),0.f);
 	TestEqual(TEXT("actual Physics reconstruction retains absent angular damping input"),ElysiumModelPhysics::ComponentFor(Object)->GetAngularDamping(),0.f);
 	TestTrue(TEXT("actual Physics reconstruction retains originals independently of current zero inputs"),State && State->SavedLinearDamping==PersistedOriginalLinearDamping && State->SavedAngularDamping==PersistedOriginalAngularDamping);
+	FElysiumSavedPhysicsBody RestoredMechanics;
+	TestTrue(TEXT("restored shadow captures actual native mechanics producers"), ElysiumModelPhysics::Capture(Object,RestoredMechanics));
+	TestTrue(TEXT("restored shadow retains finite current I and reciprocal separately from originals"),
+		RestoredMechanics.CurrentInertia == SavedMechanics.CurrentInertia && RestoredMechanics.CurrentInverseInertia == SavedMechanics.CurrentInverseInertia &&
+		RestoredMechanics.CurrentMassFrame.Equals(SavedMechanics.CurrentMassFrame,1.e-6));
  TestTrue(TEXT("reconnect restores owner registry membership"), World->PhysicsShadows().Contains(ShadowChild->Handle));
  const float BeforeRestoredCountdown = State->RemainingSeconds;
  auto* RestoredSolver = Native->GetPhysicsActor()->GetSolver<Chaos::FPBDRigidsSolver>();
@@ -1111,6 +1142,7 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  const float OriginalMass = State->SavedMassKg;
 	const float OriginalLinearDamping = State->SavedLinearDamping, OriginalAngularDamping = State->SavedAngularDamping;
  const FVector OriginalInertia = State->SavedInertia; const bool bOriginalGravity = State->bSavedGravity;
+ const FVector OriginalInverseInertia = State->SavedInverseInertia; const FTransform OriginalMassFrame = State->SavedMassFrame;
  bool bObservedRetirement = false;
  World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
  {
@@ -1120,6 +1152,11 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
   TestFalse(TEXT("225 removes owner membership before callback"), World->PhysicsShadows().Contains(ShadowChild->Handle));
   TestTrue(TEXT("controller teardown restores original native mass before release"), RetiringBody->IsValidBodyInstance() && FMath::IsNearlyEqual(RetiringBody->GetBodyMass(), OriginalMass, .001f));
   TestTrue(TEXT("controller teardown restores original native inertia and gravity"), RetiringBody->GetBodyInertiaTensor().Equals(OriginalInertia, .001) && RetiringBody->bEnableGravity == bOriginalGravity);
+  FVector RetiringInverse;
+  FPhysicsCommand::ExecuteRead(RetiringBody->GetPhysicsActor(),[&](const FPhysicsActorHandle& ReadActor)
+  { RetiringInverse=FVector(ReadActor->GetGameThreadAPI().InvI()); }); //recipe retired; native handle is still live before release
+  TestTrue(TEXT("controller teardown restores original paired inverse and principal frame before release"),
+   RetiringInverse==OriginalInverseInertia && RetiringBody->GetMassSpaceLocal().Equals(OriginalMassFrame,1.e-6));
 	 TestEqual(TEXT("persisted shadow teardown restores original linear damping"),Component->GetLinearDamping(),OriginalLinearDamping);
 	 TestEqual(TEXT("persisted shadow teardown restores original angular damping"),Component->GetAngularDamping(),OriginalAngularDamping);
  });

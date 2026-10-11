@@ -1,5 +1,66 @@
 # Reached pusher feedback and required producer plan (2026-10-11)
 
+## Forbidden-rotation inertia packet contract before code (2026-10-11)
+
+Actual callers remain Pusher617/Prop815 SetShadow(10000,10000,false,false).
+Confirmed45/26018520 ->2601a7e0 saves original mechanics; forbidden rotation
+writes FLOAT1e15 kg m² before mass26031710 rescales by new/original mass.
+The adapter converts the finite diagonal to kg cm² (multiply10000), preserving
+native geometry-derived original I and InvI independently. Chaos owns geometry,
+force/contact solving, integration and scheduling. No Source tensor algorithm or
+packed coefficient equality is required. Named observers are contact torque and
+solved angular motion, completed47, actual226 ->100a55b0 (.5degree, strict1in²,
+full rewind and44 ->178 order), Remove51/2601a920, and ordered Physics save/restore.
+Logical Source FLOAT inches/full Euler, submitted target, native solved cm/radians,
+body principal frame, actual solver delta and Source local/start/deadline are distinct.
+No correction formula, threshold, cadence, encounter ordering or callback changes.
+
+Installed UE5.8 ChaosEngineInterface.h451/452 and .cpp772/781 public locked GT
+Get/SetLocalInertiaTensor read/write I only. ParticleHandle.h3650..3659 public GT
+I()/InvI()/SetI(FVec3f,bool=true)/SetInvI(FVec3f,bool=true) dirty MassProps;
+SingleParticlePhysicsProxy.cpp160..162 transfers it through SetParticleMassProps.
+Use FPhysicsCommand ExecuteRead/ExecuteWrite on live registered BodyInstance handles,
+with no PT pointer retained. BodyInstance.h GetMassSpaceLocal/SetMassSpaceLocal
+preserves the native principal frame alongside the selected I/InvI producer pair;
+mass override can regenerate those properties, so explicit pair/frame writes follow
+it. Save retains current pair/frame even after RemoveShadow, separately from the
+controller's saved originals. Dispose old schema: append schema/floor50 and refuse
+malformed finite/nonnegative tensors and invalid frames before reconstruction.
+
+First prove the existing NativeMovingFirstContact fixture reaches real blocker
+constraints, advancing native simulation, completed47 and active226 before adding
+repair assertions. Then pair consistency and solved angular/contact effects, normal
+door angular/handedness/START_OPEN/arrival, removal, alias restore and first restored
+event are tested together. Repeated SetShadow retains originals/permissions; MIN
+caps, zero/nonpositive clamp semantics, prediction/countdown/revision/incarnation,
+queued retirement and the prior detached zero-damping producer remain unchanged.
+Current/removal/save mass-frame coverage prevents geometry regeneration from
+inventing a new original mechanics producer. Public moving replay is refreshed if
+the input prefix changes. Material/pair-combine and movement-allowed L4 producers
+remain separate open contracts. No new upward hook; full L0/original23/88 stay OPEN.
+
+Frozen packet validation: final arm132955.250834Z exit0/31.9s; original affected54
+plus SavePayload133036.143508Z passes35clean20warned0failed/notRun/inProcess.
+All9 native ModelPhysics and16 Mover are clean. Original scenario2 at
+E:/elysium-work/reports/arena/20261011T133112.091634Z/index.json and arena/index.json
+passes290/81events/nullfirst_unmet, wrapper133111.808925Z exit0/26.3s; existing
+27startup errors29warnings separate. Contact absolute angular delta<1e-8rad/s;
+independent inactive/contact-free impulseω9.9999996826552254e-20 versus identical
+post-removalω62.831851959228516. The retirement-query test correction and pre-change
+snapshot/hash are recorded in physics-interaction.md; no original assertion weakened.
+Fresh public moving133142.188960Z both modes exit0/contact CSV bytes identical,
+common99-input prefix af9c86a... unchanged. Native44f20/178f32²1.0639106887965433
+versus retail44f26/f32².57965414909080337/no178 remains OPEN.
+
+Six C++/test/header functional paths remain frozen; final exact paths, hashes, patch
+and retention-safe receipt original/copy paths are in
+E:/elysium-work/codex/l0-inertia-consistency-20261011/final-manifest.json.
+Generator/annotations, corpus/content/goldens, maps/audit/hooks and public probe code
+unchanged. Pipeline54-final-annotation.xml SHA914c5b6e2df1972ae46cd96cffe2e0d907d0667f28a269fffe955bac4ba05b44
+is reused after this input inventory. Coordinator owns default189/bounded19bothhosts/
+doctor/review/exact-path commit; worker stops after handoff. Material/pair-response,
+movement-allowed producer and full L0/original23/88 remain OPEN.
+
 ## Angular effect packet contract and recovered membership (2026-10-11)
 
 Use the existing actual RotatingDoorHandedness Spawn/Open/AngularMove/232 producer,

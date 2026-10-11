@@ -458,13 +458,31 @@ namespace
 			&& FMath::IsFinite(State.AngularDampingLimitRadians) && FMath::IsFinite(State.AngularDesiredLimitRadians)
 			&& FMath::IsFinite(State.TeleportDistanceCm) && FMath::IsFinite(State.SavedMassKg) && State.SavedMassKg > 0.f
 			&& !State.SavedInertia.ContainsNaN() && State.SavedInertia.GetMin() >= 0.f
+			&& !State.SavedInverseInertia.ContainsNaN() && State.SavedInverseInertia.GetMin() >= 0.f
+			&& !State.SavedMassFrame.ContainsNaN() && State.SavedMassFrame.GetRotation().IsNormalized()
 			&& FMath::IsFinite(State.SavedLinearDamping) && State.SavedLinearDamping >= 0.f
 			&& FMath::IsFinite(State.SavedAngularDamping) && State.SavedAngularDamping >= 0.f);
 	}
-	void SetInertia(FBodyInstance& Body, const FVector& Tensor)
+	void ReadInertia(const FBodyInstance& Body, FVector& Tensor, FVector& Inverse)
 	{
-		FPhysicsCommand::ExecuteWrite(Body.GetPhysicsActor(), [&Tensor](const FPhysicsActorHandle& Handle)
-		{ FPhysicsInterface::SetLocalInertiaTensor_AssumesLocked(Handle, Tensor); });
+		FPhysicsCommand::ExecuteRead(Body.GetPhysicsActor(), [&Tensor, &Inverse](const FPhysicsActorHandle& Handle)
+		{ Tensor = FVector(Handle->GetGameThreadAPI().I()); Inverse = FVector(Handle->GetGameThreadAPI().InvI()); });
+	}
+	void SetInertia(FBodyInstance& Body, const FVector& Tensor, const FVector& Inverse)
+	{
+		FPhysicsCommand::ExecuteWrite(Body.GetPhysicsActor(), [&Tensor, &Inverse](const FPhysicsActorHandle& Handle)
+		{
+			FPhysicsInterface::SetLocalInertiaTensor_AssumesLocked(Handle, Tensor);
+			Handle->GetGameThreadAPI().SetInvI(Chaos::FVec3f(Inverse)); //paired public MassProps producer, transferred before callbacks
+		});
+	}
+	void SetShadowInertia(FBodyInstance& Body, const FElysiumPhysicsShadowState& State)
+	{
+		//2601a7e0 finite FLOAT kg m²;26031710 rescales after forbidden movement mass.
+		const float RetailMoment = static_cast<float>(static_cast<double>(1.0e15f) *
+			(State.bAllowMovement ? 1. : 1.0e6 / State.SavedMassKg));
+		const FVector Tensor(static_cast<double>(RetailMoment) * 10000.); //native kg cm²
+		SetInertia(Body, Tensor, FVector(1. / Tensor.X));
 	}
 	bool CreatePhysicsRecipe(UPrimitiveComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
 		const FElysiumPhysicsBodyRecipe& Recipe, bool bStartAsleep, FString& OutError);
@@ -494,18 +512,23 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State)
 	Ar << State.Recipe.RotInertiaLimit << State.Recipe.Volume << State.Recipe.Drag << State.Recipe.RollingDrag << State.Recipe.SolidPairsJson;
 	Ar << State.Pose << State.LinearVelocity << State.AngularVelocityRadians << State.bAsleep << State.bGravity;
 	Ar << State.CurrentMassKg << State.CurrentLinearDamping << State.CurrentAngularDamping;
+	Ar << State.CurrentInertia << State.CurrentInverseInertia << State.CurrentMassFrame;
 	Ar << State.CollisionProfile << State.CollisionMask << State.CollisionResponses << State.BboxCollisionEnabled;
 	Ar << State.Shadow.bInstalled << State.Shadow.bActive << State.Shadow.bAllowMovement << State.Shadow.bAllowRotation << State.Shadow.bGravityMode;
 	Ar << State.Shadow.Target << State.Shadow.PredictedPosition << State.Shadow.RemainingSeconds;
 	Ar << State.Shadow.LinearDampingLimitCm << State.Shadow.LinearDesiredLimitCm << State.Shadow.AngularDampingLimitRadians << State.Shadow.AngularDesiredLimitRadians;
 	Ar << State.Shadow.TeleportDistanceCm << State.Shadow.SavedMassKg << State.Shadow.SavedInertia << State.Shadow.bSavedGravity << State.bShadowMember;
 	Ar << State.Shadow.SavedLinearDamping << State.Shadow.SavedAngularDamping;
+	Ar << State.Shadow.SavedInverseInertia << State.Shadow.SavedMassFrame;
 	if (Ar.IsLoading() && (!ValidShadow(State.Shadow) || (State.Shadow.bInstalled && State.Recipe.bStatic)
 		|| (State.bShadowMember && (!State.bHasObject || !State.Shadow.bInstalled)))) Ar.SetError();
 	if (Ar.IsLoading() && State.bHasObject && (State.CollisionResponses.Num() != NativeResponseChannelCount
 		|| State.CollisionResponses.ContainsByPredicate([](uint8 Response) { return Response > ECR_Block; })
 		|| (State.Recipe.Kind == EElysiumPhysicsRecipeKind::Bbox && State.BboxCollisionEnabled > ECollisionEnabled::QueryAndProbe)))
 		Ar.SetError();
+	if (Ar.IsLoading() && State.bHasObject && (State.CurrentInertia.ContainsNaN() || State.CurrentInertia.GetMin() < 0.
+		|| State.CurrentInverseInertia.ContainsNaN() || State.CurrentInverseInertia.GetMin() < 0.
+		|| State.CurrentMassFrame.ContainsNaN() || !State.CurrentMassFrame.GetRotation().IsNormalized())) Ar.SetError();
 	return Ar;
 }
 
@@ -929,6 +952,8 @@ bool ElysiumModelPhysics::Capture(void* Actor, FElysiumSavedPhysicsBody& OutStat
 	OutState.bAsleep = !Recipe->bStatic && !NativeBody->IsInstanceAwake();
 	OutState.bGravity = NativeBody->bEnableGravity;
 	OutState.CurrentMassKg = Recipe->bStatic ? Recipe->MassKg : NativeBody->GetBodyMass();
+	ReadInertia(*NativeBody, OutState.CurrentInertia, OutState.CurrentInverseInertia);
+	OutState.CurrentMassFrame = NativeBody->GetMassSpaceLocal();
 	OutState.CurrentLinearDamping = NativeBody->LinearDamping;
 	OutState.CurrentAngularDamping = NativeBody->AngularDamping;
 	OutState.CollisionProfile = Component->GetCollisionProfileName();
@@ -981,7 +1006,8 @@ void ElysiumModelPhysics::RemoveShadow(void* Actor)
 		if (FBodyInstance* Body = Identity(Component))
 		{
 			Component->SetMassOverrideInKg(NAME_None, State.SavedMassKg, true);
-			SetInertia(*Body, State.SavedInertia);
+			Body->SetMassSpaceLocal(State.SavedMassFrame);
+			SetInertia(*Body, State.SavedInertia, State.SavedInverseInertia);
 			Component->SetEnableGravity(State.bSavedGravity);
 			Component->SetLinearDamping(State.SavedLinearDamping);
 			Component->SetAngularDamping(State.SavedAngularDamping); //2601a860 restores original damping; this packet leaves material unchanged
@@ -1003,17 +1029,19 @@ bool ElysiumModelPhysics::SetShadow(void* Actor, float LinearSpeedInches, float 
 		Entry = &ShadowAssociations.AddDefaulted_GetRef(); Entry->Actor = Actor;
 		auto& State = Entry->State;
 		State.bInstalled = true; State.bAllowMovement = bAllowMovement; State.bAllowRotation = bAllowRotation;
-		State.SavedMassKg = Body->GetBodyMass(); State.SavedInertia = Body->GetBodyInertiaTensor(); State.bSavedGravity = Body->bEnableGravity;
+		State.SavedMassKg = Body->GetBodyMass(); State.bSavedGravity = Body->bEnableGravity;
+		ReadInertia(*Body, State.SavedInertia, State.SavedInverseInertia);
+		State.SavedMassFrame = Body->GetMassSpaceLocal();
 		State.SavedLinearDamping = Component->GetLinearDamping(); State.SavedAngularDamping = Component->GetAngularDamping();
 		if (!bAllowMovement)
 		{
 			Component->SetMassOverrideInKg(NAME_None, 1.0e6f, true); Component->SetEnableGravity(false);
+			Body->SetMassSpaceLocal(State.SavedMassFrame); //26031710 rescales mechanics without replacing the mass frame
 			//2601a7e0 ->26016ea0(false) removes the shared gravity/damping producer.
 			// Public native mechanics input; native integration/forces/contact solve retain ownership.
 			Component->SetLinearDamping(0.f); Component->SetAngularDamping(0.f);
 		}
-		//2601a7e0 forbidden rotation remains an incomplete tensor mapping: zero I does not clear native inverse I.
-		if (!bAllowRotation) SetInertia(*Body, FVector::ZeroVector);
+		if (!bAllowRotation) SetShadowInertia(*Body, State);
 	}
 	//2601ac40: speed changes retain permissions and original body state.
 	const float RequestedLinear = LinearSpeedInches * 2.54f;
@@ -1409,6 +1437,9 @@ bool ElysiumModelPhysics::Restore(UPrimitiveComponent* Component, FElysiumPhysic
 	if (!Component || !ValidShadow(State.Shadow) || (State.Shadow.bInstalled && State.Recipe.bStatic)
 		|| (State.bShadowMember && !State.Shadow.bInstalled)
 		|| State.Pose.ContainsNaN() || State.LinearVelocity.ContainsNaN() || State.AngularVelocityRadians.ContainsNaN()
+		|| State.CurrentInertia.ContainsNaN() || State.CurrentInertia.GetMin() < 0.
+		|| State.CurrentInverseInertia.ContainsNaN() || State.CurrentInverseInertia.GetMin() < 0.
+		|| State.CurrentMassFrame.ContainsNaN() || !State.CurrentMassFrame.GetRotation().IsNormalized()
 		|| static_cast<uint8>(State.Recipe.Kind) > static_cast<uint8>(EElysiumPhysicsRecipeKind::Brush)
 		|| !FMath::IsFinite(State.CurrentMassKg) || State.CurrentMassKg <= 0.f
 		|| !FMath::IsFinite(State.CurrentLinearDamping) || State.CurrentLinearDamping < 0.f
@@ -1432,18 +1463,13 @@ bool ElysiumModelPhysics::Restore(UPrimitiveComponent* Component, FElysiumPhysic
 	if (State.Recipe.Kind == EElysiumPhysicsRecipeKind::Bbox)
 		Body->SetShapeCollisionEnabled(0, static_cast<ECollisionEnabled::Type>(State.BboxCollisionEnabled));
 	Component->SetMassOverrideInKg(NAME_None, State.CurrentMassKg, true);
-	if (State.Recipe.bMassCenter)
-	{
-		FTransform MassSpace = Body->GetMassSpaceLocal();
-		MassSpace.SetTranslation(State.Recipe.MassCenterCm * Component->GetComponentScale());
-		Body->SetMassSpaceLocal(MassSpace); // native mass update can reset the explicit authored COM
-	}
+	Body->SetMassSpaceLocal(State.CurrentMassFrame); //selected native producer, including authored COM/principal frame
+	SetInertia(*Body, State.CurrentInertia, State.CurrentInverseInertia);
 	Component->SetLinearDamping(State.CurrentLinearDamping);
 	Component->SetAngularDamping(State.CurrentAngularDamping);
 	if (State.Shadow.bInstalled)
 	{
 		ShadowAssociations.Add({ ActorIdentity(Component), State.Shadow });
-		if (!State.Shadow.bAllowRotation) SetInertia(*Body, FVector::ZeroVector);
 	}
 	if (!State.Recipe.bStatic)
 	{

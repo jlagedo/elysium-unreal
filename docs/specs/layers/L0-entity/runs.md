@@ -1,5 +1,56 @@
 # Worker runs — L0-entity
 
+## Finite forbidden-rotation inertia and native lifecycle — 2026-10-11 (after00539cb05)
+
+Precode confirmed oracle/API contract names45/2601a7e0 finite moment,26031710 mass
+scaling, contact angular/solved47 and actual226/100a55b0/44/178, Remove51 and Physics
+save. Production branch proof preceded assertions. Paired public GT I/InvI and
+original/current native principal frames replace I-only zero mapping; mass updates
+are followed by frame/pair restoration. Schema/floor50 keeps saved selected mechanics
+including removed controllers. No Source geometry/integration algorithm, private
+layout or cross-engine coefficient identity. Prior MIN caps/zero drags, full Euler,
+clock/prediction/strict gates/incarnation/revision/queued retirement are preserved.
+
+Final arm132955.250834Z exit0/31.9s and original affected54+SavePayload55
+133036.143508Z pass35clean20warned0failed/notRun/inProcess, all9ModelPhysics/16Mover
+clean. Contact absolute Δω<1e-8rad/s; inactive/contact-free same native impulse
+ω9.9999996826552254e-20 versus post-removal62.831851959228516. Static/dynamic/current/
+original/shadow/removed pair-frame save, aliases, first event and malformed refusal pass.
+Retirement-query invalid stimulus failed2 new assertions; pre-correction exact snapshot/
+hash retained, then supported locked live-native read corrected the test without
+runtime rollback or changing original assertions. Production lifetime order unchanged.
+
+Original scenario133112.091634Z passes2/nullfirst_unmet/events290/81/hostexit0;
+wrapper133111.808925Z exit0/26.3s, existing27startup errors29warnings separate.
+Fresh public moving133142.188960Z both exits0/contact byte equality; common99-prefix
+SHAaf9c86a... unchanged. Nativefirst44f20/178f32²1.0639106887965433 versus retail
+44f26/f32².57965414909080337/no178 remains OPEN. Exact absolute receipts, final
+ten paths/six functional hashes and retention-safe manifest are in progress.md and
+E:/elysium-work/codex/l0-inertia-consistency-20261011/final-manifest.json.
+Unchanged pipeline54 reused after generator/map/content/probe assumption inventory.
+Coordinator default/bounded19bothhosts/doctor/review/commit pending; worker stops
+without jobs/commit/push/next packet. Material/pair-response and higher movement
+producer remain open; original23/88/fullL0/audit391core165stories are not closed.
+
+Coordinator reviewed/frozen-source gates: default133421.838783Z passes189
+(110clean79warned), bounded133456.520832Z passes19 across both hosts exit0, and
+doctor133619.794322Z passes with21 existing warnings. Aggregate/bothhost indexes
+were read; ordinary first_unmet null/refusal selftests inverted pass. Original
+wrappers and retention-safe copies/hashes are in final-manifest.json. Unchanged
+pipeline54 and preserved map2 rerun131346 are reused after the assumptions inventory.
+Ten exact paths are committed; no push, next worker or functional edit after freeze.
+
+Reconciliation: **0 original packages newly closed;23/88 complete,65 remaining**.
+The completed implementation contract is finite paired forbidden-rotation inertia
+plus original/current native principal-frame removal/save lifecycle within still-open
+physics packages. Diagnostics answered its branch/input/effect questions and stopped.
+Next consuming closure: normal false,false shadow body/contact inputs used by actual
+pusher226/100a55b0/44/178. Outstanding inputs are reserved shadow material semantics,
+removal retention and native pair-response effects; first44 timing/candidate encounter
+and event equivalence remain required before feedback closure. Broader r044/r045,
+generic controller/contact/fluid persistence, higher movement-allowed producers and
+the full L0 gate remain open. No headline or broad audit status is inflated.
+
 ## Angular effect, shared membership and MIN caps — 2026-10-11 (after1c7bb85f)
 
 One bounded worker recovered controller membership before functional repair. Normal

@@ -745,6 +745,8 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 						const auto& PostSolve = SimEvent.PostSolve[SubstepIndex];
 						TestTrue(TEXT("completed47 publishes literal native postconstraint P"),NativePosition==PostSolve.SolvedPosition);
 						TestTrue(TEXT("completed47 publishes literal native postconstraint Q"),NativeRotation==PostSolve.SolvedRotation);
+						TestTrue(TEXT("finite forbidden-rotation inertia suppresses contact-generated angular motion"),
+							(PostSolve.AngularVelocity-SimEvent.CorrectedAngularVelocity).Size()<1.e-8);
 						const bool bPostQualifying = PostSolve.Contacts.ContainsByPredicate([](const auto& Contact) { return Contact.bQualified && Contact.bModifierObserved; });
 						TestEqual(TEXT("normal native44 retains postconstraint qualification presence"),bContact,bPostQualifying);
 						if (bContact) TestTrue(TEXT("selected44 has actual qualified generation-fenced postconstraint partner"),PostSolve.Contacts.ContainsByPredicate([&](const auto& Contact)
@@ -950,6 +952,35 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 				TestTrue(TEXT("first event strict teleport restores every native shape before solve"),FirstEvent.bTeleported && FirstEvent.bCollisionRestored);
 			}
 			TestTrue(TEXT("first-event teleport preserves preteleport correction displacement"),FMath::IsNearlyEqual(PeerNative->GetUnrealWorldTransform().GetLocation().X,FirstTarget.X+10.,.05));
+			// Reuse this proven live native producer, remote from contacts, with an inactive
+			// new controller so the controller cannot erase the impulse under observation.
+			ElysiumModelPhysics::RemoveShadow(PeerObject);
+			PeerNative->SetBodyTransform(FTransform(FQuat::Identity,FVector(5000,0,5000)),ETeleportType::TeleportPhysics);
+			PeerNative->SetLinearVelocity(FVector::ZeroVector,false); PeerNative->SetAngularVelocityInRadians(FVector::ZeroVector,false);
+			FElysiumSavedPhysicsBody OriginalMechanics; ElysiumModelPhysics::Capture(PeerObject,OriginalMechanics);
+			ElysiumModelPhysics::SetShadow(PeerObject,10000.f,10000.f,false,false);
+			FElysiumSavedPhysicsBody ForbiddenMechanics; ElysiumModelPhysics::Capture(PeerObject,ForbiddenMechanics);
+			TestTrue(TEXT("forbidden rotation uses positive finite native I and InvI"),ForbiddenMechanics.CurrentInertia.GetMin()>0. && ForbiddenMechanics.CurrentInverseInertia.GetMin()>0.);
+			TestTrue(TEXT("finite forbidden tensor reciprocal is consistent in native units"),FMath::Abs(ForbiddenMechanics.CurrentInertia.X*ForbiddenMechanics.CurrentInverseInertia.X-1.)<1.e-6);
+			TestTrue(TEXT("attachment mass override preserves original mass frame"),ForbiddenMechanics.CurrentMassFrame.Equals(OriginalMechanics.CurrentMassFrame,1.e-6));
+			const FVector AngularImpulse(0,0,1000000.);
+			PeerNative->AddAngularImpulseInRadians(AngularImpulse,false);
+			ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld,.01f,1.f,true); TestWorld.TickTestWorld(.01f);
+			const auto ImpulseEvents=ElysiumModelPhysics::ShadowEvents(PeerObject);
+			TestTrue(TEXT("finite inertia impulse reaches native event on inactive controller"),!ImpulseEvents.IsEmpty());
+			for (const auto& ImpulseEvent : ImpulseEvents) TestFalse(TEXT("inactive controller cannot replace native impulse outcome"),ImpulseEvent.bSimulated);
+			TestFalse(TEXT("finite impulse witness remains actually contact-free"),ElysiumModelPhysics::GetContactPoint(PeerObject,LifecyclePartner));
+			const double ForbiddenSpeed=PeerNative->GetUnrealWorldAngularVelocityInRadians().Size();
+			TestTrue(TEXT("finite forbidden inertia suppresses angular impulse in actual solve"),ForbiddenSpeed<1.e-8);
+			ElysiumModelPhysics::RemoveShadow(PeerObject);
+			FElysiumSavedPhysicsBody RemovedMechanics; ElysiumModelPhysics::Capture(PeerObject,RemovedMechanics);
+			TestTrue(TEXT("removal restores native paired original inertia and mass frame"),RemovedMechanics.CurrentInertia==OriginalMechanics.CurrentInertia && RemovedMechanics.CurrentInverseInertia==OriginalMechanics.CurrentInverseInertia && RemovedMechanics.CurrentMassFrame.Equals(OriginalMechanics.CurrentMassFrame,1.e-6));
+			PeerNative->SetAngularVelocityInRadians(FVector::ZeroVector,false);
+			PeerNative->AddAngularImpulseInRadians(AngularImpulse,false);
+			ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld,.01f,1.f,true); TestWorld.TickTestWorld(.01f);
+			const double RemovedSpeed=PeerNative->GetUnrealWorldAngularVelocityInRadians().Size();
+			AddInfo(FString::Printf(TEXT("INERTIA_EFFECT,forbiddenW=%.17g removedW=%.17g inertia=%.17g inverse=%.17g"),ForbiddenSpeed,RemovedSpeed,ForbiddenMechanics.CurrentInertia.Z,ForbiddenMechanics.CurrentInverseInertia.Z));
+			TestTrue(TEXT("same native impulse has ordinary angular effect after removal"),RemovedSpeed>1.);
 		}
 		return true;
 	}

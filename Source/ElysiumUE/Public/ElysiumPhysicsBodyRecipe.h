@@ -47,6 +47,8 @@ struct FElysiumPhysicsShadowState
 	float TeleportDistanceCm = 0.f;
 	float SavedMassKg = 1.f;
 	FVector SavedInertia = FVector::ZeroVector;
+	FVector SavedInverseInertia = FVector::ZeroVector;
+	FTransform SavedMassFrame = FTransform::Identity;
 	float SavedLinearDamping = .1f;
 	float SavedAngularDamping = .1f;
 	bool bSavedGravity = true;
@@ -64,6 +66,9 @@ struct FElysiumSavedPhysicsBody
 	bool bAsleep = false;
 	bool bGravity = true;
 	float CurrentMassKg = 1.f;
+	FVector CurrentInertia = FVector::ZeroVector;
+	FVector CurrentInverseInertia = FVector::ZeroVector;
+	FTransform CurrentMassFrame = FTransform::Identity;
 	float CurrentLinearDamping = .1f;
 	float CurrentAngularDamping = .1f;
 	FName CollisionProfile;

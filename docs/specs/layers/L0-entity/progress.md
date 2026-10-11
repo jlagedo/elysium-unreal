@@ -1,5 +1,81 @@
 # L0 progress — the orchestrator's log
 
+## Finite forbidden-rotation inertia/lifecycle checkpoint — 2026-10-11
+
+One bounded packet after00539cb05 repairs the proved native I-only input divergence:
+finite retail45/2601a7e0 moment and26031710 mass scaling map to paired supported
+Chaos I/InvI setters. Chaos remains original geometry/mechanics/solver owner.
+Original native pair/principal frame are retained; attachment/removal/restore write
+frame and pair after mass override. Physics schema/floor50 saves selected current
+pair/frame independently, including after removal, plus controller originals.
+Precode contract/API/thread/lifetime and named observers are in the pusher walk;
+oracle and measured effects in physics-interaction.md. No new hook/divergence.
+
+Production proof132207.045527Z passed before new assertions. Final coherent arm
+E:/elysium-work/logs/20261011T132955.250834Z-build.json exits0/31.9s. Frozen original
+affected54 plus SavePayload55 at
+E:/elysium-work/reports/tests/20261011T133036.143508Z-elysium-substrate-modelphysics-elysium-s-6d3a2e53/index.json
+passes35clean20warned0failed/notRun/inProcess; all9 ModelPhysics/16 Mover clean.
+Wrapper E:/elysium-work/logs/20261011T133034.614420Z-test.json exits0/25.1s,
+14 runtime warnings separate. Contact angular absolute delta<1e-8rad/s; isolated
+inactive/contact-free native impulse solvedω9.9999996826552254e-20 versus identical
+post-removalω62.831851959228516. Static/dynamic/shadow/removed and alias save mechanics,
+first restored event, malformed finite/frame and original angular/door/arrival gates pass.
+
+One new retirement query initially called Capture after recipe retirement and failed
+exactly2 assertions in132858.636929Z; runtime908..923 proves native release pending
+while recipe/references are already retired. The observer now uses locked public
+native read on the still-live BodyInstance. Exact failed source/diff/hash before its
+correction is retained in invalid-retirement-query-trial/manifest.json; no runtime
+rollback or original assertion change. Final affected55 rerun above is authoritative.
+
+Original scenario2 E:/elysium-work/reports/arena/20261011T133112.091634Z/index.json
+and arena/index.json pass2/nullfirst_unmet/events290/81/process0; wrapper
+E:/elysium-work/logs/20261011T133111.808925Z-arena.json exits0/26.3s. Existing27startup
+errors29warnings separate. Fresh public paired replay
+E:/elysium-work/research/vphysics-contacts/20261011T133142.188960Z/index.json exits0
+both modes/contact CSV byte equality. Common99 inputs throughf32 SHAaf9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515
+is unchanged. Native first44f20/178f32²1.0639106887965433 versus retail44f26/f32²
+.57965414909080337/no178 remains OPEN. Finite I now1.0000000714945031e21kg m² and
+InvI9.9999995791172316e-22; no packed cross-engine coefficient equality claim.
+
+Six functional paths frozen; ten exact paths including four docs, final patch/hashes
+and retention-safe receipt original/copy inventory:
+E:/elysium-work/codex/l0-inertia-consistency-20261011/final-manifest.json.
+Generator/map/corpus/content/goldens/audit/hooks/probe inputs unchanged; pipeline54
+SHA914c5b6e2df1972ae46cd96cffe2e0d907d0667f28a269fffe955bac4ba05b44 reused after
+inventory. Coordinator owns default189/bounded19bothhosts/doctor/review/exact-path commit.
+Worker stops after handoff; no jobs/commit/push/next packet. Material/pair response,
+movement-allowed/L4 producers, original23/88,391core/165stories and full L0 remain OPEN.
+
+Coordinator reviewed the complete functional diff and independently verified the six
+frozen source hashes. Default189 at
+E:/elysium-work/reports/tests/20261011T133421.838783Z-elysium-session-elysium-substrate/index.json
+passes110clean79warned0failed/notRun/inProcess; wrapper133421.683678Z exits0.
+Original bounded19 at E:/elysium-work/reports/arena/20261011T133456.520832Z/index.json
+passes19 across arena and sm_hub_1 hosts, both exit0. Aggregate and both host indexes
+were read; ordinary first_unmet is null, and the two refusal selftests retain their
+inverted diagnostic pass. Wrapper133456.315742Z exits0; existing27startup errors535
+warnings remain separate. Doctor133619.794322Z exits0/21 existing warnings.
+Retention-safe copies and exact original paths/hashes are in the final manifest.
+Unchanged pipeline54 and the preserved coordinator map2 rerun131346 are reused after
+the generator/map/query/content assumption inventory. Only checkpoint docs follow
+the functional freeze; coordinator commits ten exact paths and terminates, no push.
+
+Progress reconciliation: original packages newly closed **0**; original headline
+remains **23/88**, with **65 packages remaining**. Completed implementation inside
+the still-open physics packages is the normal false,false shadow finite I/InvI
+input and original/current Chaos pair/frame lifecycle through removal and Physics
+save/restore. Branch/readback diagnostics support that contract; their test counts
+do not close another package. No broad audit row or higher-layer hook is changed.
+The next consuming closure is the normal false,false shadow body/contact input
+contract used by pusher226 ->100a55b0 ->44/178. Its remaining required dependency is
+reserved shadow material semantic mapping, removal retention and native pair-response
+effects. After those inputs are coherent, first44 timing and native-retail candidate
+encounter/event equivalence still require a bounded witness before pusher feedback
+closure. Full r044/r045, generic controller/contact/fluid save lifetimes, the higher
+movement-allowed producer, and all five full-L0 closing conditions remain open.
+
 One row per worker run (`runs.md`). Current operating policy (2026-10-10): GPT-6.1 Sol Medium
 coordinates fresh GPT-6.1 Sol High coding workers, one worker and one run at a time on `main`
 in this checkout. Reuse confirmed walks; make targeted retail lookups when facts remain uncertain.

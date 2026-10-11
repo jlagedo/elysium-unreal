@@ -1,5 +1,78 @@
 # VtMB's rigid-body world — ragdolls, the physics hands, and the placed physics surface
 
+## Finite forbidden-rotation inertia adapter and lifecycle (2026-10-11)
+
+The settled public45/26018520 ->2601a7e0 ->26031710 contract is finite FLOAT
+1e15 kg m² before forbidden-movement new/original mass scaling. Only the finite
+shadow input is reproduced; Chaos remains the original geometry-derived mechanics
+producer. Native public SetLocalInertiaTensor writes I alone (.cpp781), so a paired
+GT particle SetInvI is required to supply the same selected mechanics to solving.
+Both setters dirty MassProps and the public proxy transfers it before callbacks.
+The adapter uses kg cm² at this boundary (retail moment times10000), with no native
+contact/integration/conditioning algorithm, private body layout, or Source tensor
+formula. Different original geometry coefficients and mass reciprocal precision are
+not defects absent a reached observer.
+
+Remove51/26018600 ->2601a920 restores the saved native I/InvI pair and mass frame
+after native mass override, alongside prior gravity and detached-producer damping.
+The public installed BodyInstance GetMassSpaceLocal/SetMassSpaceLocal uses locked
+GT reads/writes; its TODO explicitly warns that subsequent mass updates forget the
+frame. Retail26031710 rescales inertia without replacing the mass frame. Attachment,
+removal and reconstruction therefore write the retained frame after mass override.
+No geometry recipe recalculation is accepted as the original mechanics producer.
+The ordered Physics block saves current native pair/frame independently from shadow
+originals, including bodies saved after removal, and reconstructs them after all mass
+updates. Disposable save schema/floor50 refuses malformed nonfinite/negative tensors
+and invalid frames. No raw Source byte format or packed native tensor equality is
+required across engines. Native pair preservation across its own lifecycle is required.
+
+The named gameplay observers remain contact-generated angular motion, native target
+rotation, completed47, actual226/100a55b0 strict angular/linear boundaries and full
+rewind/44 ->178 ordering, normal rotating-door handedness and arrival, and removal/
+save restoration. Existing production NativeMovingFirstContact branch proof precedes
+the new assertions: receipt132207.045527Z has36 normal frames, native blocker f20
+activePoints4/qualified1/selected44, completed47/current226 and actual178f32. The
+same proven remote peer isolates an inactive-controller native angular impulse from
+contacts and target correction, followed by the same impulse after removal; ordinary
+contact and target-rotation witnesses stay separate. Final effects/receipts below are
+recorded only after validation. Movement-allowed/L4 damping, semantic shadow material
+and pair-combine remain separate open work. No new upward hook or gameplay divergence;
+original23/88 and full L0 remain OPEN.
+
+Final frozen native55 receipt133036.143508Z passes35clean/20warned/0fail;
+all9 ModelPhysics and16 Mover observers pass, as does SavePayload. The normal
+contact fixture keeps absolute solved-minus-corrected angular velocity below1e-8
+rad/s. Its separate inactive/controller/contact-free angular impulse of1e6 native
+units produces9.9999996826552254e-20rad/s while the identical impulse after removal
+produces62.831851959228516rad/s. The actual native finite tensor is
+1.0000000714945031e21kg m² with inverse9.9999995791172316e-22. Original native pair/
+principal-frame preservation, static/dynamic/removed-controller and installed shadow
+save roundtrips, aliases, first restored event, and malformed tensor/frame refusal
+are checked. No cross-engine geometry coefficient equality is asserted.
+
+The new retirement observer initially used Capture after producer retirement;
+affected132858.636929Z failed exactly2 new assertions. Runtime908..923 deliberately
+retires recipe/references before physics_retire while the BodyInstance native release
+is pending. The corrected observer uses supported locked ExecuteRead on the retained
+live BodyInstance handle, preserving the original retirement order and assertions.
+Exact pre-correction source/diff/hash are retained at
+E:/elysium-work/codex/l0-inertia-consistency-20261011/invalid-retirement-query-trial/manifest.json
+(SHA256b1ff8bbac8d79a016f5847c0b51f29e9e459d8043f944c71f64979478f4e5e03).
+No runtime repair was rolled back. This is a query-lifetime correction, not a weakened
+retail oracle. Final build132955.250834Z and affected55 rerun133034.614420Z pass.
+
+Original scenario2 receipt133112.091634Z passes with290/81events/nullfirst_unmet;
+existing27startup errors29warnings remain separate. Fresh guarded public moving
+replay133142.188960Z exits0 in both modes with byte-identical contact CSVs. Its99
+creation/normal46 lines throughf32 retain normalized SHAaf9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515
+and physical CSV SHA409a4ab7ababe123c94905bb5b49ba67757b9ffa32152dab4a08d8162530edba.
+Native first44f20/178f32 remains, now squared error1.0639106887965433; retailfirst44f26/
+f32 squared.57965414909080337/no178 remains. This packet repairs the proved finite
+inertia/inverse and lifecycle adapter input; it does not establish moving-contact or
+material-response parity. Six functional source hashes, exact final diff and copied
+authoritative receipts with original paths/hashes are indexed by
+E:/elysium-work/codex/l0-inertia-consistency-20261011/final-manifest.json.
+
 ## Angular damping effect and controller order (2026-10-11)
 
 ### Live membership and MIN-cap correction (before functional edits)
