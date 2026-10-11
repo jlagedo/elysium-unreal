@@ -20,11 +20,14 @@ def main() -> None:
     parser.add_argument("--arrival", choices=("frame", "zero"), default="frame")
     parser.add_argument("--moving-log", type=Path, help="Replay NativeMovingFirstContact's ordinary creation/submission rows; comparison uses actual47, not37.")
     parser.add_argument("--observe-event-dt", action="store_true", help="Pair unchanged moving replay with public zero-force MotionEvent dt observation.")
+    parser.add_argument("--readback", action="store_true", help="Pair unchanged replay with supported public shape/material/body read-only queries.")
     args = parser.parse_args()
     if args.moving_log and args.variants != ["baseline"]:
         parser.error("moving replay requires the recorded baseline geometry")
     if args.observe_event_dt and not args.moving_log:
         parser.error("event observation requires --moving-log")
+    if args.readback and (not args.moving_log or args.observe_event_dt):
+        parser.error("readback requires moving replay without event observer")
     work = Path(os.environ["ELYSIUM_WORK_ROOT"]).resolve()
     game = Path(os.environ["ELYSIUM_VTMB_ROOT"]).resolve()
     scratch = work / "research/vphysics-contacts" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
@@ -57,15 +60,19 @@ def main() -> None:
     variants = [(variant, False) for variant in args.variants]
     if args.observe_event_dt:
         variants.append(("baseline", True))
+    if args.readback:
+        variants.append(("readback", False))
     for variant, observe_events in variants:
         label = f"{variant}-events" if observe_events else variant
         output = scratch / f"contacts-{label}.csv"
         try:
-            command = [str(exe), str(game / "Bin"), str(surfaces), str(output), variant, args.clock, args.arrival]
+            command = [str(exe), str(game / "Bin"), str(surfaces), str(output), "baseline" if variant == "readback" else variant, args.clock, args.arrival]
             if moving_input:
                 command.append(str(moving_input))
             if observe_events:
                 command.append("events")
+            if variant == "readback":
+                command.append("readback")
             result = subprocess.run(command, cwd=scratch, capture_output=True, text=True, timeout=30)
         except subprocess.TimeoutExpired as error:
             result = subprocess.CompletedProcess(error.cmd, -1, (error.stdout or b"").decode() if isinstance(error.stdout, bytes) else error.stdout or "", "bounded public probe timeout")
@@ -74,7 +81,7 @@ def main() -> None:
         runs.append({"variant": variant, "clock": "recorded admitted host/native frames" if moving_input else args.clock,
                      "arrival": "recorded normal object46 submissions" if moving_input else args.arrival,
                      "comparisonThroughNativeFirst178Frame": native_blocked_frame, "eventObserver": observe_events,
-                     "exitCode": result.returncode, "csv": str(output), "stdout": result.stdout})
+                     "exitCode": result.returncode, "csv": str(output), "readbackCsv": str(output)+".readback.csv" if variant == "readback" else None, "stdout": result.stdout})
         if result.returncode:
             break
     provenance_paths = [Path(__file__), source, game / "Bin/vphysics.dll", surfaces]
@@ -93,6 +100,10 @@ def main() -> None:
             for control, observed in zip(control_rows, event_rows, strict=True))
         if not summary["eventObserverPreservedAllOtherColumns"]:
             summary["exitCode"] = 18
+    if args.readback and summary["exitCode"] == 0:
+        summary["readbackPreservedAllContactColumns"] = Path(runs[0]["csv"]).read_bytes() == Path(runs[1]["csv"]).read_bytes()
+        if not summary["readbackPreservedAllContactColumns"]:
+            summary["exitCode"] = 23
     report = scratch / "index.json"; report.write_text(json.dumps(summary,indent=2)+"\n")
     print(json.dumps(summary,indent=2)); print(f"Report {report}")
     if summary["exitCode"]:

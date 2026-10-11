@@ -13,6 +13,16 @@ evidence, not new validation or acceptance of the layer closing gate.
 
 ## Current checkpoint
 
+- Supported shape/body readback packet (2026-10-11; coordinator reviewed/gated):
+  exact public ABI/lifetime and paired read-only calls establish authored cube support,
+  separate AABB padding, shadow material/damping/finite tensor and removal semantics.
+  Precise native I0/nonzeroInvI exposes an adapter inconsistency; angular/material
+  effects remain open. Rejected combined repair is fully reverted. Diagnostic build,
+  affected54/scenario2/default189/bounded19 pass; exact receipts below. Next starts
+  isolated force/contact-free angular effect and controller phase recovery before
+  coherent body/removal/save mapping. Pair-combine is separately queued. Native44f20/
+  178f32 versus retail44f26/f32no178, original23/88 and full L0 remain OPEN.
+
 - Contact sample meaning packet (2026-10-11; coordinator reviewed and gated):
   SAME normal moving fixture measures public current/stored/modifier shape poses,
   geometry/margins, pointflags, fresh pointnormal separation and native pointSDF.
@@ -20,8 +30,9 @@ evidence, not new validation or acceptance of the layer closing gate.
   admission defect is evidenced. f26/f32 storedPhi differs from postsolve retained
   pointnormal separation, but both qualify. Nativefirst44f20/178f32 versus retailf26/
   f32no178 remains OPEN; no qualification/mechanics policy changed. Finalbuild114002,
-  affected54/2scenarios/default189/bounded19 pass below. Next publicretail geometry/material/readback
-  query contract and all full L0 requirements remain OPEN; original23/88 unchanged.
+  affected54/2scenarios/default189/bounded19 pass below. Supported geometry/material/body
+  readback is now measured in the newer checkpoint; all full L0 requirements and
+  original23/88 remain OPEN.
 
 - Completed47/native postsolve observer (2026-10-11; coordinator reviewed/gated):
   public opt-in PostSolve measurement proves completed GT47 equals native solved
@@ -1353,3 +1364,61 @@ parity, gameplay divergence, full arm/full arena/three boot-order closure or ori
 run closure is claimed. Next supported public retail shape/material/body-state
 readback comparison requires exact public ABI and read-only lifetime verification
 before use. Original23/88 and all five full L0 closing requirements remain OPEN.
+
+### Supported shape/body readback checkpoint — 2026-10-11
+
+One fresh bounded worker independently verified the public retail AABB/support/body
+ABI and read-only lifetime, then measured the SAME normal46/completed47/44/226/178
+observer. Authored cube support remains ±10cm; retail AABB separately adds .03125in.
+Precise native I is zero while InvI remains .00014999999464748726kg·m^-2 per axis.
+Retail shadow attachment exposes finite I/InvI, angular damping100 and reserved
+surface restitution0; removal restores original mechanics while retaining material.
+Native angular drag remains .1/default restitution.5; f20 native pair restitution.5.
+Chaos owns original geometry-derived inertia. Details and addresses are in the oracle
+and pusher walk. A combined mechanical/save trial failed12 cases/42 assertions and
+was fully reverted; its suspected angular phase cause was not isolated. Invalid raw
+surface assertions and removed-tensor reconstruction gap are recorded separately.
+No exact trial source snapshot was preserved; the final diagnostic source is frozen.
+
+Final coherent --arm build E:/elysium-work/logs/20261011T121348.362684Z-build.json exits0.
+Affected54 E:/elysium-work/reports/tests/20261011T121442.233840Z-elysium-substrate-modelphysics-elysium-s-31ef1b4b/index.json
+passes34 clean/20 warned/0failed/notRun/inProcess; wrapper121440.763070Z-test.json exits0.
+Scenario2 E:/elysium-work/reports/arena/20261011T121524.214533Z/index.json and arena/index.json
+pass2/nullfirst_unmet/events290/81. Public paired
+E:/elysium-work/research/vphysics-contacts/20261011T121621.517059Z/index.json exits0 in
+both modes, preserving all contact CSV bytes. Coordinator independently rehashed the
+99-line f1..32 prefix: af9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515.
+First native44f20/178f32 squared1.0501758925050075 and retail44f26/f32squared
+.57965414909080337/no calculated178 remain unchanged and OPEN.
+
+Coordinator independently reviewed all seven source/oracle/probe paths and verified
+the five functional hashes. Final default189 passes110clean/79warned/0failed/notRun/inProcess:
+E:/elysium-work/reports/tests/20261011T121838.965395Z-elysium-session-elysium-substrate/index.json;
+wrapper E:/elysium-work/logs/20261011T121838.814750Z-test.json exits0/26.6s.
+Original bounded19 E:/elysium-work/reports/arena/20261011T121926.357016Z/index.json
+passes19/19 in two hosts, both exit0; aggregate and both host indexes were read.
+Ordinary first_unmet values are null; deliberate refusal selftests retain inverted
+passes. Wrapper E:/elysium-work/logs/20261011T121926.158895Z-arena.json exits0/64s.
+Startup27errors/535warnings remain separate. Doctor
+E:/elysium-work/logs/20261011T122038.351856Z-doctor.json exits0/21 existing warnings.
+
+Functional SHA256: cpp E60076C1D7E2B0644FA6D57AA3C4D28171B6361898249358F129013BD885BF24;
+h4223F6AB344AC7F2F8FCDE889DD8722B2C12A42DDFD0E4A407DB20AA6CDD6214;
+MoverTests4FDAE6502A989F50FABEC9851F933CB8244E03B84D902D7A32FBE24DE7F02260;
+probePython083891A04D7B7FEE809BC497AA3C55A8CB4CF9745B45BC5C7EC6315A24F0D568;
+probeCpp35C8D9C0CF2DD3CA1AA5B8505AF8834DA7D56B6CE12267868F85FF86E37F4410.
+Only progress/runs checkpoint bookkeeping follows freeze. Exact nine paths are the
+three runtime/test diagnostics, two public probe files, oracle, pusher walk and these
+two checkpoints. Generator/map/content/corpus/goldens/audit/hooks unchanged; applicable
+pipeline54-final-annotation.xml and v3map2-clean074423.155641Z evidence is reused.
+
+Next bounded complete observer begins with recovered damping EFFECT/controller event
+order and an isolated force/contact-free angular production branch: public simulation
+events -> shadow correction -> native angular integration -> completed47 ->100a55b0
+angular .5degree/full-rewind/178 gate. Establish phase and units before mapping a Chaos
+parameter. Preserve original angular/arrival/restore assertions; integrate only its
+required body/removal/save producers coherently. Finite inertia/inverse and semantic
+material lifecycle remain required evidence; pair-combine is separately queued until
+the reached branch requires it. No five-variable combined trial or Source mechanics
+clone. Coordinator commits exact paths and stops; no jobs, push or next worker.
+Original23/88 and all five full L0 closing requirements remain OPEN.

@@ -26,6 +26,7 @@
 #include "PhysicsProxy/SingleParticlePhysicsProxy.h"
 #include "PBDRigidsSolver.h"
 #include "Chaos/Collision/PBDCollisionConstraint.h"
+#include "Chaos/CastingUtilities.h"
 #include <cmath>
 
 static constexpr EAutomationTestFlags GElysiumMoverTestFlags =
@@ -613,6 +614,50 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		auto SourceWords = [](const FVector& Cm)
 		{ return FVector(static_cast<float>(Cm.X/2.54),static_cast<float>(-Cm.Y/2.54),static_cast<float>(Cm.Z/2.54)); };
 		TFunction<void(const TCHAR*)> MovingObserver;
+		auto MovingReadback = [&](FElysiumEntity* Observed, const TCHAR* Phase, const FTransform& QueryPose)
+		{
+			FBodyInstance* ReadBody = ElysiumModelPhysics::Identity(Observed->Body);
+			if (!ReadBody) return;
+			if (auto* ReadSolver = ReadBody->GetPhysicsActor()->GetSolver<Chaos::FPBDRigidsSolver>()) ReadSolver->WaitOnPendingTasks_External();
+			// Completed GT public read lock. Geometry/shape references never escape this scope.
+			FPhysicsCommand::ExecuteRead(ReadBody->GetPhysicsActor(), [&](const FPhysicsActorHandle& ReadActor)
+			{
+				const FBox QueryBounds = FPhysicsInterface::GetBounds_AssumesLocked(ReadActor,QueryPose);
+				const FVector BoundsMin = SourceWords(FVector(QueryBounds.Min.X,QueryBounds.Max.Y,QueryBounds.Min.Z));
+				const FVector BoundsMax = SourceWords(FVector(QueryBounds.Max.X,QueryBounds.Min.Y,QueryBounds.Max.Z));
+				const auto& ReadApi = ReadActor->GetGameThreadAPI();
+				const FVector BodyInertia = FPhysicsInterface::GetLocalInertiaTensor_AssumesLocked(ReadActor) / 10000.;
+				const FVector BodyInverse = FVector(ReadApi.InvI()) * 10000.;
+				const auto* ReadMaterial = Cast<UElysiumPhysicalMaterial>(ReadBody->GetSimplePhysicalMaterial());
+				auto Precise = [](const FVector& Value) { return FString::Printf(TEXT("%.17g/%.17g/%.17g"),Value.X,Value.Y,Value.Z); };
+				AddInfo(FString::Printf(TEXT("MOVING_READBACK,%d,%s,%s,min=%s,max=%s,mass=%.17g,invMass=%.17g,inertiaKgM2=%s,inverseKgM2=%s,linearDamping=%.17g,angularDamping=%.17g,gravity=%d,asleep=%d,material=%s,friction=%.17g,elasticity=%.17g,velocity=%s,angularRadians=%s"),
+					MovingFrames,Phase,Observed==Subject?TEXT("subject"):Observed==Blocker?TEXT("blocker"):TEXT("peer"),*BoundsMin.ToString(),*BoundsMax.ToString(),
+					FPhysicsInterface::GetMass_AssumesLocked(ReadActor),ReadApi.InvM(),*Precise(BodyInertia),*Precise(BodyInverse),ReadApi.LinearEtherDrag(),ReadApi.AngularEtherDrag(),
+					ReadBody->bEnableGravity,!ReadBody->IsInstanceAwake(),ReadMaterial?*ReadMaterial->SourceName:TEXT("untyped"),ReadMaterial?ReadMaterial->Friction:0.,ReadMaterial?ReadMaterial->Restitution:0.,
+					*ReadBody->GetUnrealWorldVelocity().ToString(),*ReadBody->GetUnrealWorldAngularVelocityInRadians().ToString()));
+				TArray<FPhysicsShapeHandle> ReadShapes;
+				FPhysicsInterface::GetAllShapes_AssumedLocked(ReadActor,ReadShapes);
+				for (int32 ShapeOrdinal=0; ShapeOrdinal<ReadShapes.Num(); ++ShapeOrdinal)
+				{
+					if (!ReadShapes[ShapeOrdinal].Shape || !ReadShapes[ShapeOrdinal].Shape->GetGeometry()) continue;
+					const auto ReadCollection = FPhysicsInterface::GetGeometryCollection(ReadShapes[ShapeOrdinal]);
+					const auto& ReadGeometry = ReadCollection.GetGeometry();
+					if (!ReadGeometry.HasBoundingBox() || !ReadGeometry.IsConvex()) continue;
+					Chaos::Utilities::CastHelper(ReadGeometry,Chaos::FRigidTransform3(QueryPose),[&](const auto& Concrete,const auto& ShapePose)
+					{
+						for (int32 Axis=0; Axis<3; ++Axis) for (int32 Sign : {-1,1})
+						{
+							FVector Direction=FVector::ZeroVector; Direction[Axis]=Axis==1?-Sign:Sign;
+							int32 VertexIndex=INDEX_NONE;
+							const FVector Support=ShapePose.TransformPosition(Concrete.Support(ShapePose.InverseTransformVector(Direction),0.,VertexIndex));
+							const FVector Words=SourceWords(Support);
+							AddInfo(FString::Printf(TEXT("MOVING_SUPPORT,%d,%s,%s,shape=%d,axis=%d,sign=%d,projection=%.17g"),MovingFrames,Phase,
+								Observed==Subject?TEXT("subject"):Observed==Blocker?TEXT("blocker"):TEXT("peer"),ShapeOrdinal,Axis,Sign,Words[Axis]));
+						}
+					});
+				}
+			});
+		};
 		if (Parameters == TEXT("NativeMovingFirstContact"))
 		{
 			ElysiumModelPhysics::ObservePostSolve(*EngineWorld);
@@ -628,8 +673,12 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 				TestTrue(TEXT("paired native creation has zero linear/angular velocity"),ElysiumModelPhysics::Identity(MovingBody->Body)->GetUnrealWorldVelocity().IsZero()
 					&& ElysiumModelPhysics::Identity(MovingBody->Body)->GetUnrealWorldAngularVelocityInRadians().IsZero());
 				const FVector InitialSource=SourceWords(InitialPosition);
+				MovingReadback(MovingBody,TEXT("shadow"),FTransform(InitialRotation,InitialPosition));
 				AddInfo(FString::Printf(TEXT("MOVING_CREATE,%s,%.9g,%.9g,%.9g"),MovingBody==Subject?TEXT("subject"):MovingBody==Blocker?TEXT("blocker"):TEXT("peer"),InitialSource.X,InitialSource.Y,InitialSource.Z));
 				const auto* CreationShadow=ElysiumModelPhysics::ShadowFor(MovingBody->VPhysicsGetObject());
+				if (CreationShadow) AddInfo(FString::Printf(TEXT("MOVING_ORIGINAL_PARAMETERS,%s,mass=%.17g,inertiaKgM2=%.17g/%.17g/%.17g,gravity=%d"),
+					MovingBody==Subject?TEXT("subject"):MovingBody==Blocker?TEXT("blocker"):TEXT("peer"),CreationShadow->SavedMassKg,
+					CreationShadow->SavedInertia.X/10000.,CreationShadow->SavedInertia.Y/10000.,CreationShadow->SavedInertia.Z/10000.,CreationShadow->bSavedGravity));
 				const auto* NativeMaterial=Cast<UElysiumPhysicalMaterial>(ElysiumModelPhysics::Identity(MovingBody->Body)->GetSimplePhysicalMaterial());
 				TestTrue(TEXT("moving native body retains authored default material"),NativeMaterial && NativeMaterial->SourceName==TEXT("default"));
 				TestTrue(TEXT("moving native body retains forbidden movement/rotation permissions"),CreationShadow && !CreationShadow->bAllowMovement && !CreationShadow->bAllowRotation && !CreationShadow->bGravityMode && CreationShadow->TeleportDistanceCm==0.f);
@@ -650,6 +699,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 					const auto* MovingShadow = ElysiumModelPhysics::ShadowFor(MovingBody->VPhysicsGetObject());
 					if (!MovingShadow) { AddError(TEXT("ordinary moving body lost its installed shadow")); continue; }
 					const FVector TargetSource=SourceWords(MovingShadow->Target.GetLocation());
+					MovingReadback(MovingBody,TEXT("target"),MovingShadow->Target);
 					const FVector LogicalSource=SourceWords(MovingBody->GetAbsOrigin());
 					const FVector VelocitySource=SourceWords(MovingBody->Velocity);
 					AddInfo(FString::Printf(TEXT("MOVING_INPUT,%d,%.17g,%.9g,%s,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g"),
@@ -666,6 +716,12 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 			}
 			if (FCString::Strcmp(Stage,TEXT("after_solve")) == 0)
 			{
+				for (FElysiumEntity* ReadEntity : {Subject,Blocker,static_cast<FElysiumEntity*>(Peer)})
+				{
+					FVector ReadPosition; FQuat ReadRotation;
+					if (ElysiumModelPhysics::GetShadowPosition(ReadEntity->VPhysicsGetObject(),&ReadPosition,&ReadRotation))
+						MovingReadback(ReadEntity,TEXT("solved"),FTransform(ReadRotation,ReadPosition));
+				}
 				const auto SimEvents=ElysiumModelPhysics::ShadowEvents(Subject->VPhysicsGetObject());
 				TestTrue(TEXT("normal moving fixture reaches actual public Chaos simulation event"),!SimEvents.IsEmpty());
 				for (const auto& SimEvent : SimEvents)
@@ -733,6 +789,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 							(CompletedBody->GetUnrealWorldVelocity()-PostSolve.Velocity).SizeSquared(),(CompletedBody->GetUnrealWorldAngularVelocityInRadians()-PostSolve.AngularVelocity).SizeSquared()));
 						for (const auto& PostContact : PostSolve.Contacts)
 						{
+							AddInfo(FString::Printf(TEXT("MOVING_PAIR_MATERIAL,%d,%d,id=%d,staticFriction=%.17g,dynamicFriction=%.17g,restitution=%.17g"),MovingFrames,SubstepIndex,PostContact.PartnerUniqueIdx,PostContact.StaticFriction,PostContact.DynamicFriction,PostContact.Restitution));
 							AddInfo(FString::Printf(TEXT("MOVING_POST_CONTACT,%d,%d,partner=%s,id=%d,generation=%llu,phi=%.17g,activePoints=%d,disabled=%d,probe=%d,qualified=%d,modifierObserved=%d,selected44=%d"),
 								MovingFrames,SubstepIndex,*FElysiumEntityWorld::AiTraceName(ElysiumModelPhysics::GameDataForObject(const_cast<void*>(PostContact.Partner))),
 								PostContact.PartnerUniqueIdx,PostContact.PartnerGeneration,PostContact.Phi,PostContact.ActivePoints,

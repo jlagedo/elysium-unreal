@@ -1,5 +1,92 @@
 # Reached pusher feedback and required producer plan (2026-10-11)
 
+## Public shape/body readback contract before code (2026-10-11)
+
+Bounded observer remains SAME NativeMovingFirstContact creation/normal46/completed47
+and active226100b4f30 ->100a55b0 strict1in²/full rewind ->44/260184a0 ->178.
+Unchanged99 creation/input lines throughf32 must retain SHA256af9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515.
+Capture read-only public shape AABB and six axial support projections at creation,
+submitted46 pose and actual47 pose; compare dimensions separately from query padding.
+Source positions/angles are FLOAT inches/full degrees with Y reflection; native cm,
+kg and body-frame kg·cm² inertia convert explicitly to retail kg·m². Engine event
+clock and Source local/start/deadline remain separate. Record current material semantics,
+mass/inverse inertia/damping/gravity/activity/velocities, not only authored recipe.
+No geometry/cadence/threshold/tolerance matching or equivalence claim follows.
+
+Independent installed retail PE/table and corpus checks establish Collision007
+table260c9550#18 thunk2600aad0 ->26021db0: void __thiscall(min*,max*,shape,origin*,angles*),
+five words ret20. #17 thunk2600aae0 ->26021fe0: hidden-vector-return/output-first
+float* __thiscall(out*,shape,origin*,angles*,direction*), ret20; output is support
+point, never halfextents. #18 expands bounds by Sourcefloat.03125 (260ca288),
+while #17 does not. Shape is borrowed and retained until after body/environment
+destruction; calls are serial after public simulation and never dereference retired
+objects. Repeated AABB and actual axial-support smoke precede full capture;
+exact control/readback contact-column equality verifies the completed replay.
+Object table260c9db0: mass#12/260173f0 and inverse mass#13/26017400 float return;
+inertia#14/26017410 and inverse inertia#15/26017460 void(outVector*) ret4;
+damping#18/26017500 void(linear*,angular*)
+ret8; material#19/26019540 int return; velocity#40/26017f50 void(linear*,angular*)
+ret8 (in/s and deg/s); contents#65/26019570 int return. SurfaceProps001#4/26014fb0
+void(index,density*,thickness*,friction*,elasticity*) ret20; #7/26014f30 semantic name.
+No cross-engine raw material-index equality or private body/layout reads are used.
+
+Installed UE5.8 public PhysicsCore ChaosEngineInterface.h408/450/453..455 exposes
+GT FPhysicsCommand::ExecuteRead mass/body inertia and local/explicit-transform bounds.
+ParticleHandle.h623/1221..1260/1303 exposes callback-owned geometry, raw body inertia,
+inverse inertia, mass, linear/angular drag and gravity. CastingUtilities.h87 exposes
+typed support dispatch including instanced/scaled convex and transformed wrappers;
+only bounded convex shapes use Support(direction,0,index), no Box.h assumption.
+Public shape transforms compose with logical/target/completed pose. Geometry pointers
+remain callback/locked-read local; only POD copies leave. Existing PT UniqueIdx before
+dereference and completed incarnation/revision fences, nullable bounds guards, opt-in
+world cleanup including Observe-before-Prepare, tombstones and sleeping skip remain.
+Confirmed2601a7e0 attachment changes material to reserved shadow and angular damping
+to100; executable readback is required before classifying current native input mapping.
+Original callback/contact/save/clock assertions, Spawn order and L3 yaw/L2 projectile
+hooks remain. Repair only proved input/output divergence with full reached lifecycle;
+otherwise report gap. Full L0 and original23/88 stay OPEN.
+
+## Frozen diagnostic checkpoint (2026-10-11)
+
+Public ABI smoke and guarded paired replay121621.517059Z pass with byte-identical
+original contact CSVs. The same99 creation/normal46 lines through f32 retain
+SHA256af9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515, so the
+older102350.497103Z paired evidence is reusable only on that unchanged prefix.
+No mechanics/save repair is retained: the combined trial failed12 cases and was
+rolled back, including all repair assertions. See physics-interaction.md for the
+discarded ABI captures, invalid authored-surface stimulus, suspected damping phase
+mismatch and removed-tensor reconstruction gap; none establishes a sole cause.
+
+Final installed native shadow state has I=0 but InvI=.00014999999464748726kg·m^-2
+per axis, mass1000000.0625/InvM9.999999375000038e-7, angular drag.10000000149011612,
+default restitution.5. Retail exposes finite I1.00000002e21/InvI9.99999968e-22,
+angular damping100 and reserved shadow restitution0. Native f20 public constraint
+friction is .80000001192092896 and restitution.5. Authored±10cm supports and public
+AABB padding are recorded separately; implementation type72/margin1 remain diagnostic.
+Native first44f20/178f32 squared error1.0501758925050075 and retail first44f26/
+f32 error.57965414909080337/no178 remain unchanged. No accepted gameplay divergence.
+
+Final coherent arm build E:/elysium-work/logs/20261011T121348.362684Z-build.json
+passes. Affected54 E:/elysium-work/reports/tests/20261011T121442.233840Z-elysium-substrate-modelphysics-elysium-s-31ef1b4b/index.json
+passes34 clean/20 with warnings/0 failed. Scenario2
+E:/elysium-work/reports/arena/20261011T121524.214533Z/arena/index.json passes both
+original scenarios (290/81 events, first_unmet null). Paired public receipt
+E:/elysium-work/research/vphysics-contacts/20261011T121621.517059Z/index.json exits0
+in both modes and preserves all contact columns. The unchanged pipeline54 and map2
+receipts remain reusable after the seven-path diff inspection. Exact file/receipt
+hashes and patch are frozen under E:/elysium-work/codex/l0-readback-20261011/.
+
+Next complete observable: connected shadow mechanics mapping and damping EFFECT/
+controller phase through supported Chaos APIs, public finite I+InvI/M+InvM,
+semantic material/pair-response observation and reached removal/save reconstruction
+together. Keep original authored mass/inertia/gravity distinct from current damping/
+material after removal. Chaos owns base geometry inertia; no Source tensor algorithm.
+Begin with pre-code damping effect/order recovery and an isolated force/contact-free
+angular production-branch witness before body/material/save integration. Queue pair
+combine separately until the reached branch requires it; isolate variables in trials.
+Coordinator owns final default/original bounded19/doctor/review and exact-path commit.
+No worker jobs remain; no next packet starts here. Full L0/original23/88 stay OPEN.
+
 ## Contact sample contract before measurement (2026-10-11)
 
 This bounded packet uses the confirmed normal NativeMovingFirstContact witness,

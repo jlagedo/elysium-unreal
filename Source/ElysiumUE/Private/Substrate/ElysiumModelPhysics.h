@@ -84,6 +84,7 @@ namespace ElysiumModelPhysics
 		bool bDisabled = false, bProbe = false, bQualified = false, bModifierObserved = false;
 		bool bInitial = false;
 		double ModifierSeparation = TNumericLimits<double>::Max();
+		double StaticFriction = 0., DynamicFriction = 0., Restitution = 0.; //public native pair readback
 		FVector ModifierPose[2] = {FVector::ZeroVector,FVector::ZeroVector}, StoredPose[2] = {FVector::ZeroVector,FVector::ZeroVector}, SolvedPose[2] = {FVector::ZeroVector,FVector::ZeroVector};
 		FVector BoundsMin[2] = {FVector::ZeroVector,FVector::ZeroVector}, BoundsMax[2] = {FVector::ZeroVector,FVector::ZeroVector};
 		FQuat SolvedRotation[2] = {FQuat::Identity,FQuat::Identity}; bool bGeometry[2] = {false,false}, bBounds[2] = {false,false};

@@ -181,6 +181,7 @@ namespace
 						Evidence.SolvedPose[Side] = CurrentShapes[Side].GetLocation(); Evidence.SolvedRotation[Side] = CurrentShapes[Side].GetRotation();
 					}
 					Evidence.CollisionMargin[0] = Contact.GetCollisionMargin0(); Evidence.CollisionMargin[1] = Contact.GetCollisionMargin1();
+					Evidence.StaticFriction = Contact.GetStaticFriction(); Evidence.DynamicFriction = Contact.GetDynamicFriction(); Evidence.Restitution = Contact.GetRestitution();
 					for (int32 PointIndex = 0; PointIndex < Contact.NumManifoldPoints(); ++PointIndex)
 						if (Contact.IsManifoldPointActive(PointIndex) && Contact.GetManifoldPoint(PointIndex).ContactPoint.IsSet())
 						{

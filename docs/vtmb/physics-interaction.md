@@ -1,5 +1,101 @@
 # VtMB's rigid-body world — ragdolls, the physics hands, and the placed physics surface
 
+## Supported shape and shadow mechanical readback (2026-10-11)
+
+The bounded observer remains normal START_OPEN/InputClose active226 ->100a55b0,
+completed47 and strict1in²/full-rewind44 ->178 on NativeMovingFirstContact. No
+material/body index or geometry implementation type is itself a gameplay rule.
+Independent installed PE and executable table checks establish Collision007 table
+260c9550#17/2600aae0 ->26021fe0 as hidden-vector-return/output-first support-point
+query (five arguments, ret20), and#18/2600aad0 ->26021db0 as min/max AABB query
+(five arguments, ret20). Six identity support projections equal the FLOAT authored
+±10cm surfaces exactly; repeated AABB reads agree. AABB separately expands every
+axis by .03125 Source inches260ca288. Support does not apply that query padding.
+
+Correct object table260c9db0 slots are12/260173f0 GetMass(float),13/26017400
+GetInverseMass(float),14/26017410 GetInertia(outVector*),15/26017460 inverse inertia
+(both ret4),18/26017500 damping(two optional float*,ret8),19/26019540 material(int),
+40/26017f50 velocities(two optional vector*,ret8),65/26019570 contents(int) and
+4/26016cf0 inactivity(bool). Getter14/15 apply axis permutation/sign and absolute
+values only: there is no hidden distance scale. Vertex producer2606ba80 stores
+SourceXYZ as (X,-Z,Y)*.0254 metres; the header2607f9f0/260800f0 supplies second-moment
+pair norms to2602ea60. The actual mass1, halfwidth.1m cube public inertia is
+.00471404521kg·m² (=sqrt(2)/3*.1² after FLOAT storage), inverse212.132034.
+The wall's anisotropic outputs corroborate body-axis readback. This establishes
+public units without adopting the retail geometry-derived tensor algorithm.
+Native public body tensor is kg·cm² and its reciprocal converts by10000, with
+body/mass frame kept distinct from world pose; Chaos continues to own base inertia.
+
+SetShadow45/26018520 ->2601a7e0 saves original tensor/mass/angular damping/gravity,
+selects reserved material0xf000, sets angular damping100, sets forbidden rotation
+to FLOAT1e15kg·m², then forbidden movement mass1e6 through26031710, which scales
+the tensor by new/original mass. The mass1 fixture therefore reads finite
+1.00000002e21kg·m² and9.99999968e-22 inverse. This is not zero/infinite inertia.
+SurfaceProps001#4/26014fb0 and#7/26014f30 read semantic properties/name;26014f60
+->260150f0 explicitly resolves reserved0xf000 to the once-created shadow row.
+That row copies the first parser default then replaces friction.8/elasticity0
+(2601598c), yielding `$MATERIAL_INDEX_SHADOW`,density2000,thickness0 here.
+The actual RemoveShadowController51/26018600 ->environment36 ->2601a920 restores
+mass/tensor/angular damping/gravity but retains the reserved material. Terminal
+public readbacks prove that reached lifecycle after the complete32-frame replay.
+
+Initial captures115431.402368Z/115539.073457Z are discarded: an off-by-one vector
+getter call invoked scalar inverse mass and left an x87 result unconsumed. Their
+mechanics/output are non-authoritative. Final corrected guarded paired121621.517059Z
+exits0 and preserves every original contact CSV byte. The baseline makes no extra
+body47 calls; only readback mode adds serial live-body/shape queries and terminal
+removal. Handler, bodies, shapes and environment remain live through all calls.
+Retail original first44f26 andf32².57965414909080337/no178 are unchanged.
+
+Final native public readback121442.233840Z passes the original moving observer and
+measures unpadded supports±10cm, angular damping.10000000149011612, default
+restitution.5, actual mass1000000.0625 and inverse mass9.999999375000038e-7.
+Its body tensor is zero but inverse tensor is .00014999999464748726kg·m^-2 on
+each axis. Earlier FVector::ToString rounded that inverse to zero; it did not prove
+zero inverse inertia. The installed SetLocalInertiaTensor_AssumesLocked writes I
+without updating InvI, exposing a current adapter input inconsistency. These are
+mapping gaps, not proof of a sole cause for the reached gameplay discrepancy.
+An unaccepted combined trial mapped the typed reserved row/angular100/finite inertia,
+updated explicit native reciprocal writes and added removal/save schema49 state.
+Wrapper120807.148269Z / automation120808.667021Z failed42 assertions across12 cases: original angular/door
+observers, DynamicPublication roster and a new removed-body tensor reconstruction
+assertion. Direct Chaos angular100 drag versus retail controller/damping effect and
+phase is a suspected cause, not isolated from the other simultaneous changes.
+The new authored-surface assertion was an invalid stimulus: the creation recipe's
+empty surface legitimately resolves to default; raw string equality was wrong.
+The new reconstruction assertion also exposed native regenerated tensor differing
+from the retained original; no retail tensor algorithm replacement follows.
+All trial behavioral/save-format changes and added repair assertions were reverted.
+Trial sources were not hash-frozen before rollback; tool-edit history and failed
+build/test receipts remain, without a claim of exact trial source provenance.
+Final changes are read-only diagnostics, with every original assertion preserved.
+No subset of this unaccepted mapping is retained. The next complete observable is
+connected shadow mechanics: damping EFFECT/controller event sequencing through
+supported native APIs, finite tensor/material input mapping and reached removal/save
+reconstruction together. Original mass/inertia/gravity and current angular damping/
+material must remain separately observable, including after controller removal.
+Begin effect/order recovery with an isolated force/contact-free angular production
+branch witness before integrating body/material/save. Queue pair combine separately
+until required by the reached branch; do not repeat a combined multi-variable trial.
+Pair friction/restitution combine and contact dampening remain unrecovered adapter
+gaps; there is no combine override or claimed material-response parity. Opt-in
+public native constraint coefficients are observations only. No contact qualification,
+skin, cadence, order, threshold or tolerance changes follow from this readback.
+
+Final native first44 remains f20 and first178 f32 with Source-float squared error
+1.0501758925050075; retail first44 f26/f32 error .57965414909080337/no178 remains.
+The creation and normal46 common prefix is the same99 lines through f32, SHA256
+af9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515.
+Creation support surfaces agree on the authored±10cm cube, with explicit FLOAT
+conversion differences (subject X minimum retail1.93700778/native1.9370079040527344
+inches; Z minimum389.763763/389.7637939453125); AABB query padding remains separate.
+Native f20 public constraint coefficients are static/dynamic friction.80000001192092896
+and restitution.5. The retail shadow surface has restitution0; pair-response policy
+is still open. Final build121348.362684Z passes; affected54 report121442.233840Z is
+34 succeeded/20 succeededWithWarnings/0 failed; arena121524.214533Z passes both
+original scenarios. Full L0/original23/88 remain OPEN. Exact paths and hashes are in
+E:/elysium-work/codex/l0-readback-20261011/final-manifest.json.
+
 The `.phy` container itself is `docs/vtmb/phy_vphysics.md`. This document owns the **behaviour**:
 which models carry a ragdoll rig, where a ragdoll appears at all, how the player picks an object up
 and throws it, and what the maps place. The death transaction that *produces* a corpse ragdoll —

@@ -8,6 +8,7 @@
 #include <iterator>
 #include <vector>
 #include <sstream>
+#include <cstring>
 
 template<class T> static T Method(void* Object, int Slot)
 { return reinterpret_cast<T>((*reinterpret_cast<void***>(Object))[Slot]); }
@@ -39,6 +40,15 @@ using GameData = void* (__thiscall*)(void*);
 using Pose = void (__thiscall*)(void*, float*, float*);
 using ShadowPose = int (__thiscall*)(void*, float*, float*);
 using DestroyBody = void (__thiscall*)(void*, void*);
+using Aabb = void (__thiscall*)(void*,float*,float*,void*,const float*,const float*);
+// MSVC x86 Vector return is a hidden first output argument; installed thunk ret20.
+using Extent = float* (__thiscall*)(void*,float*,void*,const float*,const float*,const float*);
+using Scalar = float (__thiscall*)(void*);
+using Integer = int (__thiscall*)(void*);
+using VectorRead = void (__thiscall*)(void*,float*);
+using PairRead = void (__thiscall*)(void*,float*,float*);
+using NameRead = const char* (__thiscall*)(void*,int);
+using SurfaceRead = void (__thiscall*)(void*,int,float*,float*,float*,float*);
 
 struct Body { const char* Name; void* Object = nullptr; float Target[3] = {}; unsigned Incarnation = 0, UpdateCalls = 0; float LastArrival = 0.f; };
 struct MovingInput {
@@ -65,7 +75,8 @@ int main(int argc, char** argv)
   if (argc < 4 || argc > 9) return 2;
   const bool MovingReplay=argc>=8;
   const bool ObserveEvents=argc==9 && std::string(argv[8])=="events";
-  if (argc==9 && !ObserveEvents) return 2;
+  const bool ObserveReadback=argc==9 && std::string(argv[8])=="readback";
+  if (argc==9 && !ObserveEvents && !ObserveReadback) return 2;
   if (argc >= 5) Variant=argv[4];
   const std::string Clock = argc >= 6 ? argv[5] : "raw";
   const std::string Arrival = argc >= 7 ? argv[6] : "frame";
@@ -115,6 +126,48 @@ int main(int argc, char** argv)
   if (!Hull) return 8;
   void* Shape = Method<ConvertConvex>(Collision,ConvertSlot)(Collision,&Hull,1);
   if (!Shape) return 8;
+  FILE* Readback=nullptr;
+  if (ObserveReadback) {
+    // ABI smoke at identity: six support projections expose actual +/-10cm surfaces.
+    // Query AABB's separate .03125-inch expansion is not collision surface inflation.
+    float Min[3]={},Max[3]={},AgainMin[3]={},AgainMax[3]={};
+    Method<Aabb>(Collision,18)(Collision,Min,Max,Shape,Zero,Zero);
+    Method<Aabb>(Collision,18)(Collision,AgainMin,AgainMax,Shape,Zero,Zero);
+    if (memcmp(Min,AgainMin,sizeof(Min)) || memcmp(Max,AgainMax,sizeof(Max))) return 19;
+    for (int Axis=0;Axis<3;++Axis) for (int Sign : {-1,1}) {
+      float Direction[3]={},Point[3]={}; Direction[Axis]=static_cast<float>(Sign);
+      if (Method<Extent>(Collision,17)(Collision,Point,Shape,Zero,Zero,Direction)!=Point) return 20;
+      if (!std::isfinite(Point[Axis]) || Point[Axis]!=Sign*SourceInches(10.)) return 21;
+      printf("readback ABI smoke axis%d sign%d support=%.9g aabb=[%.9g,%.9g]\n",Axis,Sign,Point[Axis],Min[Axis],Max[Axis]);
+    }
+    const std::string ReadbackPath=std::string(argv[3])+".readback.csv";
+    fopen_s(&Readback,ReadbackPath.c_str(),"w"); if (!Readback) return 22;
+    fprintf(Readback,"frame,phase,body,px,py,pz,pitch,yaw,roll,minx,miny,minz,maxx,maxy,maxz,supportNX,supportPX,supportNY,supportPY,supportNZ,supportPZ,mass,invMass,inertiaX,inertiaY,inertiaZ,invInertiaX,invInertiaY,invInertiaZ,linearDamping,angularDamping,materialIndex,materialName,density,thickness,friction,elasticity,contents,asleep,vx,vy,vz,wx,wy,wz\n");
+  }
+  auto ObserveBody=[&](int Frame,const char* Phase,const char* Name,void* Object,void* QueryShape,const float* Position,const float* Angles) {
+    if (!Readback) return;
+    float Min[3]={},Max[3]={},Supports[6]={},Inertia[3]={},Inverse[3]={},Velocity[3]={},Angular[3]={};
+    float Damping=0.f,RotDamping=0.f,Density=0.f,Thickness=0.f,Friction=0.f,Elasticity=0.f;
+    Method<Aabb>(Collision,18)(Collision,Min,Max,QueryShape,Position,Angles);
+    for(int Axis=0;Axis<3;++Axis) for(int Sign : {-1,1}) {
+      float Direction[3]={},Point[3]={};Direction[Axis]=static_cast<float>(Sign);
+      Method<Extent>(Collision,17)(Collision,Point,QueryShape,Position,Angles,Direction);
+      Supports[Axis*2+(Sign>0)]=Point[Axis];
+    }
+    Method<VectorRead>(Object,14)(Object,Inertia); Method<VectorRead>(Object,15)(Object,Inverse);
+    Method<PairRead>(Object,18)(Object,&Damping,&RotDamping);Method<PairRead>(Object,40)(Object,Velocity,Angular);
+    const int Index=Method<Integer>(Object,19)(Object);
+    Method<SurfaceRead>(Surfaces,4)(Surfaces,Index,&Density,&Thickness,&Friction,&Elasticity);
+    fprintf(Readback,"%d,%s,%s",Frame,Phase,Name);
+    for(const float* Values : std::initializer_list<const float*>{Position,Angles,Min,Max}) for(int Axis=0;Axis<3;++Axis) fprintf(Readback,",%.9g",Values[Axis]);
+    for(float Value : Supports) fprintf(Readback,",%.9g",Value);
+    fprintf(Readback,",%.9g,%.9g",Method<Scalar>(Object,12)(Object),Method<Scalar>(Object,13)(Object));
+    for(const float* Values : std::initializer_list<const float*>{Inertia,Inverse}) for(int Axis=0;Axis<3;++Axis) fprintf(Readback,",%.9g",Values[Axis]);
+    fprintf(Readback,",%.9g,%.9g,%d,%s,%.9g,%.9g,%.9g,%.9g,%d,%d",Damping,RotDamping,Index,
+      Method<NameRead>(Surfaces,7)(Surfaces,Index),Density,Thickness,Friction,Elasticity,Method<Integer>(Object,65)(Object),Method<bool (__thiscall*)(void*)>(Object,4)(Object));
+    for(const float* Values : std::initializer_list<const float*>{Velocity,Angular}) for(int Axis=0;Axis<3;++Axis) fprintf(Readback,",%.9g",Values[Axis]);
+    fprintf(Readback,"\n");
+  };
   Body Subject{"subject"}, First{"first"}, Second{"second"};
   Target(Subject,0,0,1000); Target(First,19,0,1000); Target(Second,-100,0,1000);
   Body* Bodies[] = {&Subject,&First,&Second};
@@ -147,9 +200,13 @@ int main(int argc, char** argv)
     ObjectParams Params; Params.Name = Item.Name; Params.GameData = &Item;
     Item.Object = Method<CreateBody>(Environment, 7)(Environment, Shape, Material, Item.Target, Zero, &Params);
     if (!Item.Object) return false;
+    if (ObserveReadback) for(int ReadSlot : {12,13,14,15,18,19,40,65})
+      printf("actual public object slot%d offset=%08x\n",ReadSlot,static_cast<unsigned>(reinterpret_cast<uintptr_t>((*reinterpret_cast<void***>(Item.Object))[ReadSlot])-reinterpret_cast<uintptr_t>(Dll)));
     Method<SetInt>(Item.Object, 66)(Item.Object, 1);
+    ObserveBody(0,"created",Item.Name,Item.Object,Shape,Item.Target,Zero);
     Method<SetShadow>(Item.Object, 45)(Item.Object, 10000.f, 10000.f, false, false);
     Method<UpdateShadow>(Item.Object, 46)(Item.Object, Item.Target, Zero, false, 0.f);
+    ObserveBody(0,"shadow",Item.Name,Item.Object,Shape,Item.Target,Zero);
     ++Item.Incarnation; ++Item.UpdateCalls; Item.LastArrival=0.f;
     printf("shadow create body=%s incarnation=%u SetShadow45=(10000,10000,false,false) contents=1 mass=1 surface=default UpdateShadow46=(target,false,0)\n",Item.Name,Item.Incarnation);
     return true;
@@ -171,6 +228,7 @@ int main(int argc, char** argv)
     void* Wall=Method<CreateBody>(Environment,8)(Environment,WallShape,Material,WallPosition,Zero,&WallParams);
     if (!Wall) return 15;
     Method<SetInt>(Wall,66)(Wall,1);
+    ObserveBody(0,"created","pinned_world_wall",Wall,WallShape,WallPosition,Zero);
     for (Body* Item : CreationOrder) if (!Create(*Item)) return 9;
     MotionEventObserver EventObserver; void* MotionController=nullptr;
     if (ObserveEvents) {
@@ -188,6 +246,7 @@ int main(int argc, char** argv)
         const auto& Submitted=MovingInputs[Base+Offset]; Body* Item=Bodies[Offset];
         if (Submitted.Frame!=Feedback.Frame || Submitted.Name!=Item->Name) return 16;
         Method<UpdateShadow>(Item->Object,46)(Item->Object,Submitted.Target,Zero,false,Submitted.Arrival);
+        ObserveBody(Feedback.Frame,"target",Item->Name,Item->Object,Shape,Submitted.Target,Zero);
       }
       const float NativeDt=std::fmin(Feedback.HostDt,.1f); //1002ea40, phys_timescale1.
       using ClockValue=float (__thiscall*)(void*);
@@ -197,6 +256,10 @@ int main(int argc, char** argv)
       Method<Simulate>(Environment,26)(Environment,NativeDt);
       const float OrdinaryAfter=Method<ClockValue>(Environment,30)(Environment);
       float Position[3], Angles[3]; Method<ShadowPose>(Subject.Object,47)(Subject.Object,Position,Angles);
+      if (Readback) for(Body* Item : Bodies) {
+        float BodyPosition[3]={},BodyAngles[3]={};Method<ShadowPose>(Item->Object,47)(Item->Object,BodyPosition,BodyAngles);
+        ObserveBody(Feedback.Frame,"solved",Item->Name,Item->Object,Shape,BodyPosition,BodyAngles);
+      }
       void* Partner=nullptr; const bool Present=Method<Contact>(Subject.Object,44)(Subject.Object,nullptr,&Partner);
       Body* PartnerOwner=Partner?static_cast<Body*>(Method<GameData>(Partner,6)(Partner)):nullptr;
       // Match the adapter's separate Source-float operand stores then double FVector arithmetic.
@@ -221,7 +284,16 @@ int main(int argc, char** argv)
       printf("moving frame=%d time=%.9g dt=%.9g arrival=%.9g interval=%.9g dist2=%.9g contact=%d partner=%s rollback=%.9g blocked=%d\n",
         Feedback.Frame,Feedback.HostTime,NativeDt,Feedback.Arrival,Interval,DistanceSquared,Present,PartnerOwner?PartnerOwner->Name:"null",Rollback,Blocked);
     }
+    // Terminal lifecycle readback follows the entire unchanged contact replay.
+    if (Readback) for (Body* Item : Bodies) {
+      using RemoveShadow=void (__thiscall*)(void*); // object#51/26018600, no arguments.
+      Method<RemoveShadow>(Item->Object,51)(Item->Object);
+      float BodyPosition[3]={},BodyAngles[3]={};
+      Method<ShadowPose>(Item->Object,47)(Item->Object,BodyPosition,BodyAngles);
+      ObserveBody(0,"removed",Item->Name,Item->Object,Shape,BodyPosition,BodyAngles);
+    }
     fclose(Output);
+    if (Readback) fclose(Readback);
     if (MotionController) { using DestroyMotion=void (__thiscall*)(void*,void*); Method<DestroyMotion>(Environment,40)(Environment,MotionController); }
     using DestroyEnv=void (__thiscall*)(void*,void*); Method<DestroyEnv>(Physics,1)(Physics,Environment);
     return 0;

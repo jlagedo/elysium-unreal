@@ -563,3 +563,34 @@ follow freeze; coordinator commits exact seven paths and terminates with no push
 or next worker. No mechanics/contact equivalence, accepted divergence or full L0
 closure is claimed. Next public retail readback contract remains queued, with ABI/
 read-only lifetime proof required before execution. Original23/88/full L0 OPEN.
+
+### Supported shape/body readback observer — 2026-10-11
+
+One fresh bounded worker recovered exact public shape/body/material ABI, verified
+smoke calls, lifetime and guarded paired CSV equality, then copied supported native
+GT geometry/body and opt-in pair coefficients on unchanged normal46/47/44/226/178.
+Precise native I0/nonzeroInvI exposes a mapping inconsistency; retail finite shadow
+tensor/angular100/reserved material and removal behavior are recovered input evidence.
+Chaos original tensor algorithm remains native. Combined mechanics/save trial failed
+12cases/42assertions and was completely reverted; no isolated causal claim or exact
+trial source hash. Invalid surface assertion and tensor reconstruction gap are recorded.
+All original gameplay/contact assertions remain; no behavioral repair is retained.
+
+Frozen build121348.362684Z exits0; affected121442.233840Z passes54(34clean20warned),
+scenario121524.214533Z passes2/nullfirst_unmet/events290/81. Final paired121621.517059Z
+has both probe exits0/exact contact CSV equality; common99line f1..32 SHA unchanged.
+Coordinator default121838.965395Z passes189(110clean79warned),0failed/notRun/inProcess;
+original bounded121926.357016Z passes19/19 in two hosts exit0. Aggregate and both host
+indexes read; ordinary first_unmet null/refusal selftests inverted passes retained.
+Startup27errors535warnings separate. Doctor122038.351856Z exits0/21existingwarnings.
+Authoritative absolute paths, exact functional hashes and next contract in progress.md.
+Applicable unchanged pipeline54/v3map2 receipts reused after exact diff inventory.
+Root independently reviewed frozen source/oracle and five functional hashes.
+
+Next complete observable starts with isolated force/contact-free angular branch effect/
+event-order recovery before connected finite tensor/material/removal/save integration.
+Pair-combine stays queued until required by that branch; no literal damping equality
+or five-variable trial substitutes for gameplay effect. Exactly nine paths committed;
+only checkpoint bookkeeping follows freeze. No jobs/push/next worker, accepted gameplay
+divergence or equivalence claim. Native44f20/178f32 versus retail44f26/f32no178,
+original23/88 and all five full L0 closing requirements remain OPEN.
