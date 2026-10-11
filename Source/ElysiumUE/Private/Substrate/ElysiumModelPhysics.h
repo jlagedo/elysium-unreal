@@ -1,10 +1,12 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "ElysiumPhysicsBodyRecipe.h"
+#include "ElysiumEntityHandle.h"
 class UStaticMeshComponent;
 struct FBodyInstance;
 class FElysiumPhysicsSurfaceProps;
 class FElysiumEntity;
+class FElysiumEntityWorld;
 class UWorld;
 namespace Chaos { class FSingleParticlePhysicsProxy; }
 
@@ -25,6 +27,17 @@ namespace ElysiumModelPhysics
 	void RetireRecipe(UStaticMeshComponent* Component);
 	// Native collection and referencing fields are independent of saved recipe eligibility.
 	void BindReference(FElysiumEntity* Entity, void* Actor);
+	// Creation game data is independent of aliases and remains attached to the incarnation.
+	void SetGameData(void* Actor, FElysiumEntity& Entity);
+	void ForgetGameData(FElysiumEntity& Entity);
+	struct FNativeOutput { void* Actor; uint64 Incarnation; };
+	TArray<FNativeOutput> ActiveOutputs(FElysiumEntityWorld& World);
+	bool IsCurrentOutput(const FNativeOutput& Output);
+	FElysiumEntity* GameDataFor(const FNativeOutput& Output, FElysiumEntityWorld& World);
+	void RecordNativeOutput(UStaticMeshComponent* Component);
+	void RecordNativeActivity(UStaticMeshComponent* Component, bool bAwake);
+	void Wake(UStaticMeshComponent* Component);
+	bool GetPosition(void* Actor, FVector& OriginCm, FRotator& SourceAngles);
 	void RetireNative(UStaticMeshComponent* Component);
 	void DestroyActor(void* Actor);
 	FBodyInstance* Identity(UStaticMeshComponent* Component);

@@ -93,7 +93,7 @@ the serial-handle shadow registry through `0x100d1230`, published at `DAT_106b89
 | Environment | 36 | `0x26011380` | Destroy shadow controller |
 | Environment | 44 / 45 | `0x26011440` / `0x26011450` | Active count / objects |
 | Environment | 46 / 47 | `0x260114c0` / `0x260121f0` | Delete-list cleanup / gate |
-| Object `0x260c9db0` | 4 | `0x26016cf0` | Marked-for-deletion byte `+0x35`, **not sleep** |
+| Object `0x260c9db0` | 4 | `0x26016cf0` | Inactivity byte `+0x35`, nonzero asleep; deletion is `+0x3d` bit4 |
 | Object | 6 | `0x260173c0` | Entity game-data pointer |
 | Object | 11 | `0x260173d0` | Mass setter |
 | Object | 22 / 23 | `0x26016ea0` / `0x26016ee0` | Gravity / drag enable |
@@ -189,10 +189,10 @@ It replaces dt outside [0,1] with zero, caps dt at 0.1, multiplies the cvar read
 It sets `DAT_106b8814`, calls environment slot 26, obtains slots 44/45 active objects and visits
 them forwards: nonnull object game data gets entity slot 226 (`VPhysicsUpdate`). Next it visits
 the shadow linked list forwards, serial-resolves handles, and calls slot 229 only when the entity
-has an object and object slot 4 is not marked for deletion. Finally it clears the in-simulation
+has an object and object slot 4 reports awake. Finally it clears the in-simulation
 flag and calls `CCollisionEvent::FrameUpdate`.
 
-Environment simulation `0x26010900` first removes marked bodies from activity, checks its own
+Environment simulation `0x26010900` first removes inactive bodies from activity, checks its own
 dt limits, caps at 0.1, marks environment+0x61 during IVP work, and advances through
 `0x26039610` or `0x26039650`. It drains deferred deletion when environment+0x62 permits.
 Exact fixed-step/clock constants, subsequent contact-event production and activity transitions

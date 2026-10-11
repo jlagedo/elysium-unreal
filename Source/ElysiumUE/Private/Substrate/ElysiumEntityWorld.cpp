@@ -2111,16 +2111,21 @@ void FElysiumEntityWorld::FinishNativePhysicsFrame()
 	if (!bNativeFramePending) return;
 	bNativeFramePending = false; // consume before callbacks, including reentrant/deletion paths
 	if (!bActive || bApplyingSnapshot || bDetached) return;
-	//1002ea40: shadow registry is serial-aware and independent of an object's recipe/reference.
-	// This reached parent-bbox branch inherits229's literal empty body;226 move0 also returns.
+	//1002ea40: object game data receives226, even when its current field is an alias or null.
+	const auto ActiveSnapshot = ElysiumModelPhysics::ActiveOutputs(*this);
+	for (const auto& Output : ActiveSnapshot)
+		if (ElysiumModelPhysics::IsCurrentOutput(Output))
+			if (FElysiumEntity* Entity = ElysiumModelPhysics::GameDataFor(Output, *this)) Entity->VPhysicsUpdate(Output.Actor);
+	// The shadow roster is read after226; callbacks can add/remove/reassign it.
 	const TArray<FElysiumEntityHandle> ShadowSnapshot = PhysicsShadowHandles;
 	for (const FElysiumEntityHandle& ShadowHandle : ShadowSnapshot)
 		if (FElysiumEntity* Entity = Resolve(ShadowHandle))
 			if (void* Object = Entity->VPhysicsGetObject())
-				if (ElysiumModelPhysics::IsActive(ElysiumModelPhysics::ComponentFor(Object))) Entity->VPhysicsUpdate(Object);
-	for (const FElysiumEntityHandle& ShadowHandle : ShadowSnapshot)
-		if (FElysiumEntity* Entity = Resolve(ShadowHandle))
-			if (void* Object = Entity->VPhysicsGetObject()) Entity->VPhysicsShadowUpdate(Object);
+				if (ElysiumModelPhysics::IsActive(ElysiumModelPhysics::ComponentFor(Object)))
+				{
+					EmitRetailSite(*Entity, TEXT("shadow_feedback"), TEXT("PhysFrame"), 0x1002ea40u, TEXT("dispatch"), TEXT("slot=229 awake=1"));
+					Entity->VPhysicsShadowUpdate(Object);
+				}
 	FinishFrame(NativeFrameNow);
 }
 

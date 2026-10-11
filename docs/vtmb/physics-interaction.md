@@ -398,7 +398,7 @@ Environment creation `0x260104f0 -> 0x260189f0` creates shape/IVP body and objec
 | GetShadowPosition | 47 / `0x26018640` | Read live body pose at environment simulation time |
 | GetShadowController | 48 / `0x260186d0` | Separate controller reference at object+0xc |
 | RemoveShadowController | 51 / `0x26018600` | Environment destroys controller before body destruction |
-| IsMarkedForDeletion | 4 / `0x26016cf0` | Object byte +0x35; this slot is not a sleep test |
+| IsAsleep | 4 / `0x26016cf0` | Object inactivity byte +0x35 is nonzero; distinct from deletion +0x3d bit4 |
 
 Environment slot 35 `0x26011360` allocates through `0x2601b0e0 -> 0x2601a670` and returns a
 public interface at controller base+4 (table `0x260ca098`), separate from IVP controller table
@@ -416,7 +416,7 @@ lifetime. Scheduler `0x2602d090` dispatches controller records backwards after p
 
 `CPhysicsHook::FrameUpdatePostEntityThink 0x1002dd70 -> PhysFrame 0x1002ea40` owns publication:
 validate/cap frametime, apply the physics-scale cvar, simulate environment slot 26, then visit
-active bodies forwards (game data -> entity slot 226), shadow handles forwards (nonnull unmarked
+active bodies forwards (game data -> entity slot 226), shadow handles forwards (nonnull awake
 object -> slot 229), and collision FrameUpdate after clearing the in-simulation flag. Environment
 `0x26010900` owns its IVP clock and activity/deletion work. Generic `VPhysicsUpdate 0x100b4f30`
 publishes actual position for movetype 7 and sends movetypes 1/8 to pusher feedback
@@ -656,7 +656,7 @@ then publishes table `0x260c9b7c`. Slot 3 `0x26011b70` asks embedded pair-hash t
 `0x10158af0` and service slots 1/2 `0x26011780` / `0x26011920` also call `0x10158ab0`:
 for each physics object whose slot 1 predicate is clear, invoke the same real object slot 25
 recheck. Slot 1 `0x26016d60` tests bits `0x0c` on the word reached through wrapper+8 then
-IVP object+0xa4; this is not the deletion predicate at object slot 4 `0x26016cf0`.
+IVP object+0xa4; this is distinct from the inactivity predicate at object slot 4 `0x26016cf0`.
 Identity lifetime, complete ignored-pair mutations and their body/contact notifications remain open;
 Unreal containers/Chaos replace internal hash allocation and mechanical pair maintenance.
 An always-empty ignored-pair set would stub same-L0 state, not provide an upward hook.
@@ -1084,3 +1084,34 @@ retained preteleport prediction, and separately verifies full Source angular sub
 Actual native scene dt, restored collision state, saved target/countdown/original mechanics and
 first scheduled restore tick pass in final030355. See L0-entity/progress.md for authoritative JSON.
 These narrow production witnesses do not close full retail functions or the L0 closing gate.
+
+### Native dynamic publication recovery (2026-10-11)
+
+Fresh `PhysFrame1002ea40` and vphysics.dll walks establish creation-owned game data, a frozen
+native object snapshot and live per-entry game-data resolution for slot226. Object4 `26016cf0`
+is inactivity, not deletion. Wake `2600fbb0` appends an absent nonstatic body, or cancels pending
+sleep while retaining its position. Sleep `2600fc70` marks it pending. Simulation `26010900`
+removes pending entries backwards before its `.0001 < dt < 1` solve gate; removal `26010c20`
+replaces the removed slot with the last entry. A final native sleeping output therefore receives
+226 once, then disappears on the next simulation. Awake226 still runs for zero/rejected dt.
+The following fresh shadow roster resolves each current object and admits229 only when object4
+is false. The subsequent collision FrameUpdate remains outside this packet's closure.
+
+Generic226 `100b4f30` move7 reads object37 `26017eb0`, then216 origin,218 angles, physical touch
+and child relink `100342c0`. Move0 is empty; moves1/8 pusher feedback `100a55b0` remains partial.
+The x/y/x angle finite diagnostic warns and continues. Object37 uses `26001310`, whose double
+`.001` threshold and atan2+180 roll differ from entity MatrixAngles `10137ed0` (degenerate roll0).
+Independent IVP-to-Source bridge `260012a0` maps rows `(r0,r2,-r1)`, `(r8,r10,-r9)`,
+`(-r4,-r6,r5)`; native reflected basis conversion retains these branches without UE Euler
+canonicalization. Raw stored parent frames from `100b2150` compose through `100b1ac0`; absolute
+writers216/218 publish raw fields before inverse-parent local writes. Actual native creation
+enables separate local/absolute cache words so later host prethink cannot teleport that body.
+
+The native adapter uses Chaos EndPhysics dirty output and native wake/sleep events for activity,
+with semantic wake append/pending cancellation/backwards last-entry removal and actor incarnation
+validation. Creation ownership survives current-field null/aliases. Physical query `100a53d0`
+uses actual edict geometry; trigger `101c5460/101c5420` admits reached movetype7 under spawnflag8
+after pair links. Child232 `100a69e0` reads angles before origin and submits object46(false,dt).
+Deferred untouch and EventQueue follow existing postphysics sequencing. Detailed recovery,
+native witnesses and explicit unrecovered frontier are in
+`docs/specs/layers/L0-entity/walks/L0-native-publication.md`. Original23/88 remains open.

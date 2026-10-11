@@ -231,6 +231,7 @@ CONSTANT_BODY_RE = re.compile(
 # `StudioFrameAdvance` and `DispatchAnimEvents`) answer a field, a pointer or real work and stay
 # stubs. address -> (literal, the reading).
 RETAIL_DEFAULTS: dict[str, tuple[str, str]] = {
+    "100aa680": ("1", "CBaseEntity::ShouldSavePhysics 0x100aa680: whole body returns true; derived classes own their false overrides (L0-physics-producer)"),
     "10026590": ("void", "CBaseEntity::OnVictimHitByMe 0x10026590: `ret 4`"),
     "100266b0": ("0", "CBaseEntity::GetHighlightMaterial 0x100266b0: `return 0;`"),
     "10026a90": ("0", "CBaseEntity::ShouldIgnoreCollision 0x10026a90: `return false;`"),
@@ -531,8 +532,10 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
     171: ("", "`CBaseEntity::SetMovedir` 0x100ad550: the exact up / down sentinels or `AngleVectors` "
               "0x10139610 into `m_vecMoveDir`, then slot 64 `SetAngles(vec3_angle)` (L0-r021; "
               "`ElysiumEntityVisualState.cpp`)"),
-    226: ("", "`CBaseEntity::VPhysicsUpdate` 0x100b4f30: reached move0 is literally empty; move7/1/8 retain explicit unfinished diagnostics (`ElysiumEntitySlotBodies.cpp`)"),
+    225: ("", "`CBaseEntity::VPhysicsDestroyObject` 0x100b5040: current object null exits; unregister, retire native producer and aliases, then clear field (L0-physics-producer; `ElysiumEntitySlotBodies.cpp`)"),
+    226: ("", "`CBaseEntity::VPhysicsUpdate` 0x100b4f30: move7 native object37 ->216/218 ->physical touch ->child232; move0 empty, moves1/8 unfinished diagnostics (`ElysiumEntitySlotBodies.cpp`)"),
     232: ("", "`CBaseEntity::UpdatePhysicsShadowToCurrentPosition` 0x100a69e0: move7/null return; abs angles then origin, object46 target submission (`ElysiumEntitySlotBodies.cpp`)"),
+    233: ("", "`CBaseEntity::VPhysicsGetObjectList` 0x100a6ad0: nonnull current object and signed positive capacity write only element zero and return one, otherwise zero (`ElysiumEntitySlotBodies.cpp`)"),
     237: ("", "`CBaseEntity::PhysicsSolidMaskForEntity` 0x1003e7a0: FL_NPC first, then the real "
               "m_pPlayer self-downcast, else the base mask (L0 physics producer checkpoint; "
               "`ElysiumEntitySlotBodies.cpp`)"),

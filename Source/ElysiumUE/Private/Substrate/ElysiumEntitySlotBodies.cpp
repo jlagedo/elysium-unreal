@@ -888,7 +888,8 @@ void FElysiumEntity::SetOrigin(const FVector& NewOrigin)
 	if (NewOrigin.X != Local.X || NewOrigin.Y != Local.Y || NewOrigin.Z != Local.Z)
 	{
 		InvalidateTransform(0x10800u, 0u);
-		if (bParentLocalPose)
+		MarkPartitionTreeDirty();
+		if (bParentLocalPose || bNativeLocalPose)
 		{
 			LocalOrigin = NewOrigin;
 		}
@@ -924,7 +925,7 @@ void FElysiumEntity::SetAngles(const FRotator& NewAngles)
 		InvalidateTransform(0x800u, 0x3000u);                                    // thunk 0x1000f05b -> 0x100b5340
 		MarkSurroundingBoundsTreeDirty();                                        // thunk 0x10004ade -> 0x100b51b0
 		MarkPartitionTreeDirty();                                                // thunk 0x1000e881 -> 0x100b52a0
-		if (bParentLocalPose)
+		if (bParentLocalPose || bNativeLocalPose)
 		{
 			LocalAngles = New;
 		}
@@ -940,35 +941,6 @@ void FElysiumEntity::SetAngles(const FRotator& NewAngles)
 					bParentLocalPose ? 1 : 0));
 		}
 	}
-}
-
-void FElysiumEntity::CalcAbsolutePosition()
-{
-	// `CBaseEntity::CalcAbsolutePosition` `0x100b1ac0`, slot 98: only under EFL 0x800, which it clears
-	// first. With no move parent (`0x100290c0` on `m_pMoveParent` fails) the absolute words are the
-	// local ones and the body returns before `+0x1b1`; with one, the composed pose (`ComputeAbsolutePose`)
-	// and `+0x1b1 = 1`. `m_rgflCoordinateFrame` (+0x130) is rebuilt by retail on the way; this port
-	// keeps no cached frame and recomputes it inside `ComputeAbsolutePose`.
-	if ((EFlags & 0x800u) == 0)
-	{
-		return;
-	}
-	EFlags &= ~0x800u;
-	FElysiumEntity* P = World != nullptr ? World->Resolve(MoveParent) : nullptr;
-	if (P == nullptr)
-	{
-		if (bParentLocalPose)
-		{
-			Origin = LocalOrigin;
-			Angles = LocalAngles;
-		}
-		return;
-	}
-	FVector AbsOrigin, AbsAngles;
-	ComputeAbsolutePose(AbsOrigin, AbsAngles);
-	Origin = AbsOrigin;
-	Angles = AbsAngles;
-	bNetworkChanged = true;
 }
 
 // slot 94 `CBaseEntity::GetMoveType` 0x100aac30 -- `return m_MoveType` (`+0x158`), the word slot 93 writes.
@@ -1114,16 +1086,52 @@ FElysiumEntity* FElysiumEntity::GetNextTarget()
 	return World != nullptr && !Target.IsEmpty() ? World->FindByName(Target) : nullptr; // 0x100a1d20 -> 0x100f7770
 }
 
-// CBaseEntity::VPhysicsUpdate100b4f30, slot226; only the reached move0 arm is complete.
-void FElysiumEntity::VPhysicsUpdate(void*)
+// CBaseEntity::VPhysicsUpdate100b4f30, slot226; reached move7 native publication and move0 empty.
+void FElysiumEntity::VPhysicsUpdate(void* Object)
 {
-	//100b4f30: the reached parented prop's MOVETYPE_NONE arm is literally empty.
-	if (GetMoveType() == 0) return;
-	// Other reached arms remain unfinished: move7 solved pose/touch/children, moves1/8 pusher feedback.
+	const int32 Move = GetMoveType();
+	if (Move == 7)
+	{
+		FVector SolvedOrigin; FRotator SolvedAngles;
+		if (!ElysiumModelPhysics::GetPosition(Object, SolvedOrigin, SolvedAngles)) return;
+		//100b4f72..4fb6 checks angle x,y,x, not roll/position. Warning never aborts.
+		if (!FMath::IsFinite(static_cast<float>(SolvedAngles.Pitch)) || !FMath::IsFinite(static_cast<float>(SolvedAngles.Yaw)))
+			UE_LOG(LogTemp, Log, TEXT("Infinite values from vphysics!"));
+		SetAbsOrigin(SolvedOrigin); //216 before218
+		SetAbsAngles(SolvedAngles);
+		PhysicsTouchTriggers(); //100b4fe8
+		PhysicsRelinkChildren(World ? static_cast<float>(World->FrameSeconds()) : 0.f); //100342c0/232
+		return;
+	}
+	if (Move == 0) return;
+
+	// Moves1/8 pusher feedback and other diagnostic arms remain unfinished.
 	ElysiumStub::FSurface Missing;
 	Missing.Kind = TEXT("slot"); Missing.Surface = TEXT("CBaseEntity::VPhysicsUpdate");
 	Missing.Address = TEXT("0x100b4f30"); Missing.Story = TEXT("29c");
 	ElysiumStub::Fired(Missing, DebugString(), FString(), TEXT("the NPC kernel"));
+}
+
+//100b5040: null exits. Membership/aliases/recipe retire before native deletion, then field0.
+void FElysiumEntity::VPhysicsDestroyObject()
+{
+	if (void* Object = VPhysicsGetObject())
+	{
+		if (World) World->RemovePhysicsShadow(*this);
+		ElysiumModelPhysics::DestroyActor(Object);
+		VPhysicsSetObject(nullptr);
+	}
+}
+
+//100a6ad0: rejected arms never touch output; success writes element zero only.
+int32 FElysiumEntity::VPhysicsGetObjectList(void* OutputObjects, int32 Capacity)
+{
+	if (VPhysicsGetObject() && Capacity > 0)
+	{
+		*static_cast<void**>(OutputObjects) = VPhysicsGetObject();
+		return 1;
+	}
+	return 0;
 }
 
 // CBaseEntity::UpdatePhysicsShadowToCurrentPosition100a69e0, slot232.

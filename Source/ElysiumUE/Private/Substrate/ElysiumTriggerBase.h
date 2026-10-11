@@ -29,16 +29,17 @@ public:
 
 	// CBaseTrigger::PassesTriggerFilters (RE1, entity_io.md) reads the ALLOW_* spawnflag bits
 	// against the toucher's flags. This leaf currently implements the ALLOW_CLIENTS consumer: the
-	// player fires a client trigger, while a native NPC body retains its own entity handle and is
-	// rejected instead of masquerading as !player. ALLOW_NPCS and physics grow this test when those
-	// trigger consumers are implemented.
+	// player fires a client trigger. Reached native MOVETYPE_VPHYSICS is admitted independently
+	// of m_pPhysicsObject aliases (101c5420). Derived-type pushable/physics fallback arms remain open.
 	bool PlayerPasses(const FElysiumEntityHandle& Activator) const
 	{
 		return World && Activator == World->PlayerHandle() && (SpawnFlags & 0x1) != 0;
 	} // 0x1 = ALLOW_CLIENTS
 	bool BasePassesTriggerFilters(const FElysiumEntityHandle& Activator) const
 	{
-		if (!PlayerPasses(Activator)) return false;
+		const FElysiumEntity* Toucher = World ? World->Resolve(Activator) : nullptr;
+		const bool bNativePhysics = Toucher && (SpawnFlags & 8) != 0 && Toucher->GetMoveType() == 7;
+		if (!PlayerPasses(Activator) && !bNativePhysics) return false;
 		const FElysiumEntity* Filter = World ? World->Resolve(FilterHandle) : nullptr;
 		return !Filter || Filter->PassesFilter(Activator);
 	}

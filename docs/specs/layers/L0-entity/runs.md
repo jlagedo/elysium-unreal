@@ -342,3 +342,33 @@ The broad pusher/dispatcher, speculative multi-entity rollback/contact, nonbbox/
 creator arms, NPC producers/feedback, dynamic226/RelinkChildren publication, collision-frame
 notification/filtering, fluid/controller/pointer graphs and full L0 closing gates remain open.
 No worker commit/push, full arm test or full arena run.
+
+### Native dynamic publication — 2026-10-11 (next packet after29f36060)
+
+Worker recovered PhysFrame1002ea40 and native activity/lifetime/order, generic move7
+100b4f30/object37 angle conversion26017eb0/26001310 with independent260012a0 basis bridge,
+216/218 raw cache writes, parent-frame composition, physical move7 trigger admission and child232.
+Actual native production chain now publishes solved pose through physical touch/relink before
+postthink deferred untouch/EventQueue, preserving per-environment semantic callback order and
+creation ownership independently of current aliases. Raw cached parent frames preserve actual
+near-gimbal grandchild target. Chaos retains all solve/geometry/broadphase/contact mechanics.
+
+Source-frozen final arm build034820 passed28.2s; final selected27 run034911 passed27/27
+(22clean,5existingwarnings),0failed/notRun; all7native clean. Authoritative build/run/index paths,
+test scope, intermediate stale-generation/native-save crash and auxiliary-session fixture crash
+are recorded in progress.md and `walks/L0-native-publication.md`. Generator preservation repair
+passes45/45 pipeline tests at `E:/elysium-work/reports/tests/20261011-l0-publication-generator.xml`.
+No kernel ledger regeneration, audit closure, tracked content/golden change or worker commit/push.
+Coordinator owns independent default/bounded arena and commit gates. Original23/88 and full L0
+remain open; moves1/8, collision-event delivery, NPC/other creators/fluids/multiobject graphs,
+all child removal callbacks and broader deferred r022 cache scope remain outside this packet.
+
+Coordinator accepted the selected native publication dependency after independent source/oracle,
+complete generated-diff and final JSON review. Frozen-source default035041 passed180/180
+(101clean,79existingwarnings), all7native clean; bounded18 arena035200 passed18/18 in two boots,
+both hosts exit0, with ordinary first_unmet null and two refusal selftests passing by inversion.
+Exact report paths and baseline27startupErrors/534warnings are recorded in progress.md.
+Final native27/generator45 were reused unchanged after inspection. Exact23-path coordinator
+commit includes this checkpoint; no content/goldens/audit closure/push. Original23/88 and full
+L0 remain open. Next actual dependency is moves1/8 pusher feedback with necessary producers;
+other unfinished contracts remain listed above, and broader deferred r022 scope stays deferred.

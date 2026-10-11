@@ -55,6 +55,7 @@ bool FElysiumEntity::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, 
 	if (!ElysiumModelPhysics::Restore(Component, World->PhysicsSurfaces(), State, OutError))
 	{ Component->DestroyComponent(); return false; }
 	ReconstructedPhysics = Component;
+	ElysiumModelPhysics::SetGameData(ElysiumModelPhysics::ActorIdentity(Component), *this);
 	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Component));
 	if (State.bShadowMember) World->AddPhysicsShadow(*this);
 	return true; // type1 restore26019483-260194bc allocates once per owner field, even aliases
@@ -75,6 +76,7 @@ FElysiumEntity::~FElysiumEntity()
 	FElysiumEntity::VPhysicsDestroyObject(); //1009df20 dispatch225 during base destruction
 	RetireReconstructedPhysics(); // world teardown deletes base leaves without calling Kill
 	ElysiumModelPhysics::BindReference(this, nullptr);
+	ElysiumModelPhysics::ForgetGameData(*this);
 }
 
 void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass)
@@ -914,7 +916,7 @@ void FElysiumEntity::ClearMoveLinks()
 	// the local word (the dirty bit is set when a write ran, and `CalcAbsolutePosition`'s no-parent
 	// arm copies local to abs; when none ran the two already agree). The bit itself stays as the
 	// writes left it, as retail's does.
-	if (bParentLocalPose)
+	if (bParentLocalPose && !bNativeLocalPose)
 	{
 		const FVector FoldOrigin = LocalOrigin;
 		const FVector FoldAngles = LocalAngles;
@@ -991,6 +993,76 @@ void FElysiumEntity::SetAimEnt(FElysiumEntity* Aim)
 	AimEnt = Aim != nullptr ? Aim->Handle : FElysiumEntityHandle::Invalid();
 }
 
+const float* FElysiumEntity::GetParentToWorldTransform(float* Scratch)
+{
+	using namespace ElysiumRetailMatrix;
+	// CBaseEntity::GetParentToWorldTransform 0x100b2150: serial-checked parent, attachment,
+	// dirty-parent slot 98, then return parent+0x130. Never reconstruct the frame from abs Euler.
+	FElysiumEntity* P = World != nullptr ? World->Resolve(MoveParent) : nullptr;
+	if (P == nullptr)
+	{
+		for (int32 I = 0; I < 12; ++I) Scratch[I] = 0.0f;
+		Scratch[0] = Scratch[5] = Scratch[10] = 1.0f; // FUN_10139a90
+		if (World) World->EmitRetailSite(*this, TEXT("parent_xform"), TEXT("CBaseEntity::GetParentToWorldTransform"),
+			0x100b2150u, TEXT("return"), TEXT("arm=identity"));
+		return Scratch;
+	}
+	if (ParentAttachment != 0 && P->GetBaseAnimating() != nullptr)
+	{
+		// L1 hook 0x10092ef0 GetAttachment02 -> slot 262 / 0x10093000 GetAttachment03.
+		// No shipped map reaches it: constructor byte 0, all 12 SetParent callers pass 0.
+		// Attachment success and its AngleMatrix output remain unimplemented; fall through.
+		if (World) World->EmitRetailSite(*this, TEXT("parent_xform"), TEXT("CBaseEntity::GetParentToWorldTransform"),
+			0x100b2150u, TEXT("hook"), TEXT("fn=CBaseAnimating::GetAttachment02 va=0x10092ef0 layer=L1"));
+	}
+	if ((P->EFlags & 0x800u) != 0) P->CalcAbsolutePosition();
+	if (!P->bCoordinateFrameValid) P->RefreshRuntimeFrame();
+	if (World) World->EmitRetailSite(*this, TEXT("parent_xform"), TEXT("CBaseEntity::GetParentToWorldTransform"),
+		0x100b2150u, TEXT("return"), TEXT("arm=frame"));
+	return P->CoordinateFrame;
+}
+
+void FElysiumEntity::CalcAbsolutePosition()
+{
+	using namespace ElysiumRetailMatrix;
+	// CBaseEntity::CalcAbsolutePosition 0x100b1ac0. Gate/clear precede the unconditional
+	// local frame rebuild; unresolved parent copies both words and returns without +0x1b1.
+	if ((EFlags & 0x800u) == 0) return;
+	EFlags &= ~0x800u;
+	float LocalSrc[3], LocalAng[3] = { static_cast<float>(LocalAnglesWord().X), static_cast<float>(LocalAnglesWord().Y),
+		static_cast<float>(LocalAnglesWord().Z) };
+	ToSourceInches(LocalOriginWord(), LocalSrc);
+	float LocalFrame[16];
+	AngleMatrix4(LocalFrame, LocalSrc, LocalAng); // 0x10139b90 + 0x10138760
+	Copy4(CoordinateFrame, LocalFrame);
+	bCoordinateFrameValid = true;
+	FElysiumEntity* P = World != nullptr ? World->Resolve(MoveParent) : nullptr;
+	const bool bZeroAngles = LocalAng[0] == 0.0f && LocalAng[1] == 0.0f && LocalAng[2] == 0.0f;
+	if (P == nullptr)
+	{
+		Origin = LocalOriginWord();
+		Angles = LocalAnglesWord();
+	}
+	else
+	{
+		float Scratch[16], Product[16];
+		Concat4(GetParentToWorldTransform(Scratch), LocalFrame, Product); // 0x10138df0 / 0x10138600
+		Copy4(CoordinateFrame, Product);
+		Origin = FromSourceInches(CoordinateFrame[3], CoordinateFrame[7], CoordinateFrame[11]);
+		if (bZeroAngles) Angles = P->GetAbsAngles(); // exact zero: parent's words copied verbatim
+		else
+		{
+			float ResultAngles[3];
+			MatrixAngles(CoordinateFrame, ResultAngles); // 0x10137ed0: xy <= 0.001 forces roll 0
+			Angles = FVector(ResultAngles[0], ResultAngles[1], ResultAngles[2]);
+		}
+		bNetworkChanged = true; // +0x1b1, resolved path only
+	}
+	if (World) World->EmitRetailSite(*this, TEXT("calc_abs"), TEXT("CBaseEntity::CalcAbsolutePosition"), 0x100b1ac0u,
+		TEXT("write"), FString::Printf(TEXT("parent=%d zero_angles=%d network_write=%d"),
+			P != nullptr ? 1 : 0, bZeroAngles ? 1 : 0, P != nullptr ? 1 : 0));
+}
+
 void FElysiumEntity::ComputeAbsolutePose(FVector& OutOrigin, FVector& OutAngles) const
 {
 	using namespace ElysiumRetailMatrix;
@@ -1008,18 +1080,15 @@ void FElysiumEntity::ComputeAbsolutePose(FVector& OutOrigin, FVector& OutAngles)
 		OutAngles = LocalAnglesWord();
 		return;
 	}
-	const FVector ParentAbsOrigin = P->GetAbsOrigin();
 	const FVector ParentAbsAngles = P->GetAbsAngles();
+	if (!P->bCoordinateFrameValid) P->RefreshRuntimeFrame();
 	const FVector& Local = LocalOriginWord();
 	const FVector& LocalAng = LocalAnglesWord();
-	float ParentSrc[3], ParentAng[3] = { static_cast<float>(ParentAbsAngles.X), static_cast<float>(ParentAbsAngles.Y),
-		static_cast<float>(ParentAbsAngles.Z) };
 	float LocalSrc[3], LocalAngF[3] = { static_cast<float>(LocalAng.X), static_cast<float>(LocalAng.Y),
 		static_cast<float>(LocalAng.Z) };
-	ToSourceInches(ParentAbsOrigin, ParentSrc);
 	ToSourceInches(Local, LocalSrc);
 	float ParentToWorld[16], LocalFrame[16], World4[16];
-	AngleMatrix4(ParentToWorld, ParentSrc, ParentAng);
+	Copy4(ParentToWorld, P->CoordinateFrame);
 	AngleMatrix4(LocalFrame, LocalSrc, LocalAngF);
 	Concat4(ParentToWorld, LocalFrame, World4);
 	OutOrigin = FromSourceInches(World4[3], World4[7], World4[11]);
@@ -1045,8 +1114,7 @@ void FElysiumEntity::SetAbsOrigin(FVector& NewOrigin)
 	// descendant get EFL 0x800 | 0x10000); `FUN_100b52a0` (`MarkPartitionTreeDirty`: `FUN_100ddd20` on
 	// this entity's collision property and on every move descendant -- EFL 0x8000 and the dirty-list
 	// append when `IndexOfEdict` is non-zero, r018); `m_iEFlags &= ~0x800`; `m_vecAbsOrigin` (+0x404) := v;
-	// `FUN_10138760(v, 3, m_rgflCoordinateFrame)` (the frame's translation column -- this port keeps no
-	// cached frame); then the LOCAL word: no valid move parent -> local := v, else `VectorITransform(v,
+	// `FUN_10138760(v, 3, m_rgflCoordinateFrame)` (the stored frame's translation); then the LOCAL word: no valid move parent -> local := v, else `VectorITransform(v,
 	// GetParentToWorldTransform(), local)` (`FUN_10138130`: `R^T (v - t)` of the parent's frame); a
 	// changed-only store of `m_vecOrigin` (+0x41c) with `+0x1b1 = 1`.
 	CalcAbsolutePosition();                                                      // 100b2353 slot 98
@@ -1054,31 +1122,27 @@ void FElysiumEntity::SetAbsOrigin(FVector& NewOrigin)
 	MarkPartitionTreeDirty();                                                    // 100b236a -> 0x100b52a0
 	EFlags &= ~0x800u;                                                           // 100b2373
 	const FVector Abs = NewOrigin;
+	const FVector OldLocal = LocalOriginWord(); // before absolute writes: folded host compatibility
+	Origin = Abs; // 100b2389-100b2395, before resolving/converting the parent
+	float AbsFrameOrigin[3];
+	ToSourceInches(Abs, AbsFrameOrigin);
+	CoordinateFrame[3] = AbsFrameOrigin[0]; CoordinateFrame[7] = AbsFrameOrigin[1]; CoordinateFrame[11] = AbsFrameOrigin[2];
 	FElysiumEntity* P = World != nullptr ? World->Resolve(MoveParent) : nullptr;
 	FVector Local = Abs;                                                         // 100b23f1: no parent -> the value itself
 	if (P != nullptr)
 	{
-		const FVector ParentAbsAngles = P->GetAbsAngles();
-		const FVector ParentAbsOrigin = P->GetAbsOrigin();
-		float M[16], ParentSrc[3], AbsSrc[3], O[3];
-		float ParentAng[3] = { static_cast<float>(ParentAbsAngles.X), static_cast<float>(ParentAbsAngles.Y),
-			static_cast<float>(ParentAbsAngles.Z) };
-		ToSourceInches(ParentAbsOrigin, ParentSrc);
-		AngleMatrix4(M, ParentSrc, ParentAng);                                   // GetParentToWorldTransform, attachment 0
+		float Scratch[12], AbsSrc[3], O[3];
+		const float* M = GetParentToWorldTransform(Scratch);
 		ToSourceInches(Abs, AbsSrc);
 		InverseTransformPoint(M, AbsSrc, O);                                     // 100b23e2 -> 0x10138130
 		Local = FromSourceInches(O[0], O[1], O[2]);
 	}
-	const FVector OldLocal = LocalOriginWord();
 	const bool bLocalChanged = Local.X != OldLocal.X || Local.Y != OldLocal.Y || Local.Z != OldLocal.Z;   // 100b2405-100b2423
-	SetRuntimeOrigin(Abs);                                                       // 100b2389-100b2395 m_vecAbsOrigin (the body follows)
-	if (bParentLocalPose)
-	{
-		if (bLocalChanged)
-		{
-			LocalOrigin = Local;                                                 // 100b2425-100b2431 m_vecOrigin
-		}
-	}
+	if (bLocalChanged && (bParentLocalPose || bNativeLocalPose)) LocalOrigin = Local; // +0x41c, changed-only
+	bCoordinateFrameValid = true;
+	if (bNativeLocalPose)
+	{ if (World) World->NotifyVisualChanged(*this); }
+	else OnRuntimeTransformChanged();
 	if (bLocalChanged)
 	{
 		bNetworkChanged = true;                                                  // 100b2435 +0x1b1
@@ -1110,6 +1174,12 @@ void FElysiumEntity::SetAbsAngles(FRotator& NewAngles)
 	InvalidateTransform(0x800u, 0x3000u);                                        // 100b2572 -> 0x100b5340
 	EFlags &= ~0x800u;                                                           // 100b2581
 	const FVector Abs(NewAngles.Pitch, NewAngles.Yaw, NewAngles.Roll);
+	const FVector OldLocal = LocalAnglesWord();
+	Angles = Abs; // +0x410 and frame before resolving/converting the parent
+	float AbsFrame[16], AbsSrc[3], AbsAng[3] = { static_cast<float>(Abs.X), static_cast<float>(Abs.Y), static_cast<float>(Abs.Z) };
+	ToSourceInches(Origin, AbsSrc);
+	AngleMatrix4(AbsFrame, AbsSrc, AbsAng);
+	Store3x4(CoordinateFrame, AbsFrame);
 	FElysiumEntity* P = World != nullptr ? World->Resolve(MoveParent) : nullptr;
 	FVector Local = Abs;                                                         // 100b2621: no parent -> the value itself
 	if (P != nullptr)
@@ -1118,15 +1188,9 @@ void FElysiumEntity::SetAbsAngles(FRotator& NewAngles)
 		{
 			P->CalcAbsolutePosition();                                           // 100b2600 parent slot 98
 		}
-		const FVector ParentAbsAngles = P->GetAbsAngles();
-		const FVector ParentAbsOrigin = P->GetAbsOrigin();
-		float M[16], T[16], F[16], R[16], ParentSrc[3], AbsSrc[3], Q[12], A[3];
-		float ParentAng[3] = { static_cast<float>(ParentAbsAngles.X), static_cast<float>(ParentAbsAngles.Y),
-			static_cast<float>(ParentAbsAngles.Z) };
-		float AbsAng[3] = { static_cast<float>(Abs.X), static_cast<float>(Abs.Y), static_cast<float>(Abs.Z) };
-		ToSourceInches(ParentAbsOrigin, ParentSrc);
-		ToSourceInches(Origin, AbsSrc);
-		AngleMatrix4(M, ParentSrc, ParentAng);                                   // the parent's frame
+		float M[16], T[16], F[16], R[16], Q[12], A[3];
+		Identity4(M);
+		Store3x4(M, P->CoordinateFrame); // retail reads parent's raw frame, no attachment accessor
 		AngleMatrix4(F, AbsSrc, AbsAng);                                         // 100b258e-100b25b5 this frame
 		Transpose4(M, T);                                                        // 100b2655 MatrixInvert (rotation part)
 		Concat4(T, F, R);                                                        // 100b2666 ConcatTransforms
@@ -1134,16 +1198,12 @@ void FElysiumEntity::SetAbsAngles(FRotator& NewAngles)
 		MatrixAngles(Q, A);                                                      // 100b267a MatrixAngles
 		Local = FVector(A[0], A[1], A[2]);
 	}
-	const FVector OldLocal = LocalAnglesWord();
 	const bool bLocalChanged = Local.X != OldLocal.X || Local.Y != OldLocal.Y || Local.Z != OldLocal.Z;   // 100b2687-100b26a5
-	SetRuntimeAngles(Abs);                                                       // 100b2597-100b25a3 m_angAbsRotation (the body follows)
-	if (bParentLocalPose)
-	{
-		if (bLocalChanged)
-		{
-			LocalAngles = Local;                                                 // 100b26a7-100b26b3 m_angRotation
-		}
-	}
+	if (bLocalChanged && (bParentLocalPose || bNativeLocalPose)) LocalAngles = Local; // +0x428, changed-only
+	bCoordinateFrameValid = true;
+	if (bNativeLocalPose)
+	{ if (World) World->NotifyVisualChanged(*this); }
+	else OnRuntimeTransformChanged();
 	if (bLocalChanged)
 	{
 		bNetworkChanged = true;                                                  // 100b26b7 +0x1b1
@@ -1251,15 +1311,33 @@ void FElysiumEntity::RefreshBrushBodyState()
 	}
 }
 
+void FElysiumEntity::EnableNativeLocalPose()
+{
+	if (!bNativeLocalPose && !bParentLocalPose) { LocalOrigin = Origin; LocalAngles = Angles; }
+	bNativeLocalPose = true;
+	if (!bCoordinateFrameValid) RefreshRuntimeFrame();
+}
+
+void FElysiumEntity::RefreshRuntimeFrame()
+{
+	using namespace ElysiumRetailMatrix;
+	float Position[3], Rotation[3] = { static_cast<float>(Angles.X), static_cast<float>(Angles.Y), static_cast<float>(Angles.Z) };
+	ToSourceInches(Origin, Position); AngleMatrix4(CoordinateFrame, Position, Rotation);
+	bCoordinateFrameValid = true;
+	if (bNativeLocalPose && (!World || !World->Resolve(MoveParent))) { LocalOrigin = Origin; LocalAngles = Angles; }
+}
+
 void FElysiumEntity::SetRuntimeOrigin(const FVector& NewOrigin)
 {
 	Origin = NewOrigin;
+	RefreshRuntimeFrame();
 	OnRuntimeTransformChanged();
 }
 
 void FElysiumEntity::SetRuntimeAngles(const FVector& NewAngles)
 {
 	Angles = NewAngles;
+	RefreshRuntimeFrame();
 	OnRuntimeTransformChanged();
 }
 
@@ -1267,6 +1345,7 @@ void FElysiumEntity::SetRuntimeTransform(const FVector& NewOrigin, const FVector
 {
 	Origin = NewOrigin;
 	Angles = NewAngles;
+	RefreshRuntimeFrame();
 	OnRuntimeTransformChanged();
 }
 

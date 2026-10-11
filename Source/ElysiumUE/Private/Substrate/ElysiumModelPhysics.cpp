@@ -26,8 +26,17 @@ namespace
 	// Semantic manager#2/model and manager#1/bbox associations (10044db0/10044f60).
 	// No Source hash/tree layout; identity is the actual successful Chaos incarnation.
 	TArray<FPhysicsRecipeAssociation> PhysicsRecipeAssociations;
-	struct FNativeAssociation { void* Actor; TWeakObjectPtr<UStaticMeshComponent> Component; UStaticMeshComponent* Producer; };
+	struct FNativeAssociation
+	{
+		void* Actor; TWeakObjectPtr<UStaticMeshComponent> Component; UStaticMeshComponent* Producer;
+		uint64 Incarnation; FElysiumEntityWorld* World = nullptr; FElysiumEntityHandle Owner;
+		bool bCollectNativeOutput = false;
+		bool bPendingInactive = false;
+	};
 	TArray<FNativeAssociation> NativeAssociations;
+	uint64 NextNativeIncarnation = 0;
+	TArray<uint64> NativeSolveOutputs;
+	TMap<UWorld*, TArray<uint64>> NativeActiveOrders; // each native environment has its observable order
 	struct FNativeReference { FElysiumEntity* Entity; void* Actor; };
 	TArray<FNativeReference> NativeReferences;
 	struct FShadowAssociation { void* Actor; FElysiumPhysicsShadowState State; };
@@ -106,6 +115,127 @@ void ElysiumModelPhysics::BindReference(FElysiumEntity* Entity, void* Actor)
 	if (Actor) NativeReferences.Add({ Entity, Actor });
 }
 
+void ElysiumModelPhysics::SetGameData(void* Actor, FElysiumEntity& Entity)
+{
+	for (FNativeAssociation& Entry : NativeAssociations)
+		if (Entry.Actor == Actor)
+		{
+			Entry.World = Entity.World; Entry.Owner = Entity.Handle;
+			Entity.EnableNativeLocalPose();
+			return;
+		}
+}
+
+void ElysiumModelPhysics::ForgetGameData(FElysiumEntity& Entity)
+{
+	for (FNativeAssociation& Entry : NativeAssociations)
+		if (Entry.World == Entity.World && Entry.Owner == Entity.Handle)
+		{ Entry.World = nullptr; Entry.Owner = FElysiumEntityHandle::Invalid(); }
+}
+
+void ElysiumModelPhysics::RecordNativeOutput(UStaticMeshComponent* Component)
+{
+	const UWorld* NativeWorld = Component ? Component->GetWorld() : nullptr;
+	// OnSyncBodies publishes in the engine's EndPhysics tick. SkipPhysicsUpdate alone also
+	// occurs in game-side presentation calls; require the admitted scene phase and actual body pose.
+	const FBodyInstance* Body = Identity(Component);
+	if (!NativeWorld || !NativeWorld->bInTick || NativeWorld->TickGroup != TG_EndPhysics || !Body) return;
+	const FTransform NativePose = Body->GetUnrealWorldTransform();
+	if (!Component->GetComponentLocation().Equals(NativePose.GetLocation(), .001)
+		|| !Component->GetComponentQuat().Equals(NativePose.GetRotation(), .00001)) return;
+	for (const FNativeAssociation& Entry : NativeAssociations)
+		if (Entry.Producer == Component && Entry.bCollectNativeOutput && Component->IsSimulatingPhysics())
+		{
+			NativeSolveOutputs.AddUnique(Entry.Incarnation);
+			NativeActiveOrders.FindOrAdd(Component->GetWorld()).AddUnique(Entry.Incarnation); // includes final sleeping output
+			RecordNativeActivity(Component, IsActive(Component)); return;
+		}
+}
+
+void ElysiumModelPhysics::RecordNativeActivity(UStaticMeshComponent* Component, bool bAwake)
+{
+	for (FNativeAssociation& Entry : NativeAssociations)
+		if (Entry.Producer == Component && Component->IsSimulatingPhysics())
+		{
+			//2600fbb0: a pending sleep canceled before removal keeps its position.
+			Entry.bPendingInactive = !bAwake;
+			if (bAwake) NativeActiveOrders.FindOrAdd(Component->GetWorld()).AddUnique(Entry.Incarnation);
+			return;
+		}
+}
+
+void ElysiumModelPhysics::Wake(UStaticMeshComponent* Component)
+{
+	if (FBodyInstance* Body = Identity(Component)) { Body->WakeInstance(); RecordNativeActivity(Component, true); }
+}
+
+TArray<ElysiumModelPhysics::FNativeOutput> ElysiumModelPhysics::ActiveOutputs(FElysiumEntityWorld& World)
+{
+	//1002ea40/26011450: freeze native outputs before game callbacks, visit forwards.
+	// Native wake/sleep output supplies activity; semantic append/fast-removal order is observable.
+	TArray<FNativeOutput> Result;
+	auto Append = [&](const FNativeAssociation& Entry)
+	{
+		if (Entry.World == &World && ComponentFor(Entry.Actor)) Result.Add({ Entry.Actor, Entry.Incarnation });
+	};
+	for (const auto& ActiveWorld : NativeActiveOrders)
+		for (uint64 Incarnation : ActiveWorld.Value)
+			if (const auto* Entry = NativeAssociations.FindByPredicate([Incarnation](const FNativeAssociation& Item) { return Item.Incarnation == Incarnation; })) Append(*Entry);
+	for (FNativeAssociation& Entry : NativeAssociations)
+		if (Entry.World == &World) Entry.bCollectNativeOutput = false;
+	NativeSolveOutputs.RemoveAll([&](uint64 Incarnation)
+	{
+		const auto* Entry = NativeAssociations.FindByPredicate([Incarnation](const FNativeAssociation& Item) { return Item.Incarnation == Incarnation; });
+		return !Entry || Entry->World == &World;
+	});
+	return Result;
+}
+
+bool ElysiumModelPhysics::IsCurrentOutput(const FNativeOutput& Output)
+{
+	return NativeAssociations.ContainsByPredicate([&](const FNativeAssociation& Entry)
+	{ return Entry.Actor == Output.Actor && Entry.Incarnation == Output.Incarnation && ComponentFor(Entry.Actor); });
+}
+
+FElysiumEntity* ElysiumModelPhysics::GameDataFor(const FNativeOutput& Output, FElysiumEntityWorld& World)
+{
+	//1002ea40 reads object#6 after freezing objects, not entity fields/owners before callbacks.
+	for (const FNativeAssociation& Entry : NativeAssociations)
+		if (Entry.Actor == Output.Actor && Entry.Incarnation == Output.Incarnation && Entry.World == &World && ComponentFor(Entry.Actor))
+			return World.Resolve(Entry.Owner);
+	return nullptr;
+}
+
+bool ElysiumModelPhysics::GetPosition(void* Actor, FVector& OriginCm, FRotator& SourceAngles)
+{
+	const FBodyInstance* Body = Identity(ComponentFor(Actor));
+	if (!Body) return false;
+	const FTransform Pose = Body->GetUnrealWorldTransform(); // object37 26017eb0
+	OriginCm = Pose.GetLocation();
+	//26017eb0 ->26001310: reflected native basis, float32 components, double xy threshold.
+	// This object's converter differs from entity MatrixAngles: roll is atan2+180,
+	// and the degenerate arm returns literal180 rather than0. UE Rotator has different arms.
+	const FVector X = Pose.GetRotation().RotateVector(FVector::ForwardVector);
+	const FVector Y = Pose.GetRotation().RotateVector(FVector::RightVector);
+	const FVector Z = Pose.GetRotation().RotateVector(FVector::UpVector);
+	const float Q0 = static_cast<float>(X.X), Q4 = static_cast<float>(-X.Y), Q8 = static_cast<float>(X.Z);
+	const float Q1 = static_cast<float>(-Y.X), Q5 = static_cast<float>(Y.Y), Q9 = static_cast<float>(-Y.Z), Q10 = static_cast<float>(Z.Z);
+	const double Xy = FMath::Sqrt(static_cast<double>(Q0) * Q0 + static_cast<double>(Q4) * Q4);
+	constexpr float Degrees = 57.29578f; //260c919c
+	SourceAngles.Pitch = static_cast<float>(FMath::Atan2(-static_cast<double>(Q8), Xy) * Degrees);
+	if (.001 < Xy)
+	{
+		SourceAngles.Yaw = static_cast<float>(FMath::Atan2(static_cast<double>(Q4), static_cast<double>(Q0)) * Degrees);
+		SourceAngles.Roll = static_cast<float>(FMath::Atan2(-static_cast<double>(Q9), -static_cast<double>(Q10)) * Degrees + 180.);
+	}
+	else
+	{
+		SourceAngles.Yaw = static_cast<float>(FMath::Atan2(static_cast<double>(Q1), -static_cast<double>(Q5)) * Degrees);
+		SourceAngles.Roll = 180.f;
+	}
+	return true;
+}
+
 void ElysiumModelPhysics::RetireNative(UStaticMeshComponent* Component)
 {
 	// Called before Super::OnDestroyPhysicsState releases Chaos. No field may retain a dead actor.
@@ -114,9 +244,11 @@ void ElysiumModelPhysics::RetireNative(UStaticMeshComponent* Component)
 	{
 		if (NativeAssociations[Index].Producer != Component) continue;
 		RemoveShadow(NativeAssociations[Index].Actor);
+		if (auto* Order = NativeActiveOrders.Find(Component->GetWorld())) Order->RemoveSingleSwap(NativeAssociations[Index].Incarnation);
 		RetiringActors.Add(NativeAssociations[Index].Actor);
 		NativeAssociations.RemoveAt(Index);
 	}
+	if (const auto* Order = NativeActiveOrders.Find(Component->GetWorld()); Order && Order->IsEmpty()) NativeActiveOrders.Remove(Component->GetWorld());
 	RetireRecipe(Component); //10158520 ->10045110 precedes native deletion and observer callbacks.
 	for (void* Actor : RetiringActors)
 	{
@@ -244,7 +376,7 @@ bool ElysiumModelPhysics::UpdateShadow(void* Actor, const FVector& OriginCm, con
 	State.Target = FTransform(Rotation, OriginCm);
 	State.RemainingSeconds = FMath::Max(ArrivalSeconds, 0.f);
 	State.bActive = true;
-	if (bChanged) Body->WakeInstance(); //2601aad0: repeated target still replaces countdown, no wake.
+	if (bChanged) Wake(Component); //2601aad0: repeated target still replaces countdown, no wake.
 	return true;
 }
 
@@ -315,9 +447,25 @@ namespace
 float ElysiumModelPhysics::PreparePhysicsFrame(UWorld& World, float FrameSeconds, float TimeScale, bool bSimulating)
 {
 	FPhysScene* Scene = World.GetPhysicsScene(); if (!Scene) return 0.f;
+	auto& NativeActiveOrder = NativeActiveOrders.FindOrAdd(&World);
+	//26010900/26010c20: remove prior pending inactivity before solving, last-entry replacement.
+	for (int32 Index = NativeActiveOrder.Num() - 1; Index >= 0; --Index)
+	{
+		const auto* Entry = NativeAssociations.FindByPredicate([&](const FNativeAssociation& Item) { return Item.Incarnation == NativeActiveOrder[Index]; });
+		if (!Entry || (Entry->Component.IsValid() && Entry->Component->GetWorld() == &World
+			&& (Entry->bPendingInactive || !IsActive(Entry->Component.Get())))) NativeActiveOrder.RemoveAtSwap(Index);
+	}
+	// Discard prior unconsumed output before each native frame, including paused/zero-dt frames.
+	NativeSolveOutputs.RemoveAll([&](uint64 Incarnation)
+	{
+		const auto* Entry = NativeAssociations.FindByPredicate([Incarnation](const FNativeAssociation& Item) { return Item.Incarnation == Incarnation; });
+		return !Entry || (Entry->Component.IsValid() && Entry->Component->GetWorld() == &World);
+	});
 	float Delta = (FrameSeconds < 0.f || FrameSeconds > 1.f) ? 0.f : FMath::Min(FrameSeconds, .1f);
 	Delta = FMath::Min(Delta * TimeScale, .1f); //1002ea40: real console-store value supplied by map host
 	if (!bSimulating || !FMath::IsFinite(Delta) || !(Delta > .0001f && Delta < 1.f)) Delta = 0.f; //26010900
+	for (FNativeAssociation& Entry : NativeAssociations)
+		if (Entry.Component.IsValid() && Entry.Component->GetWorld() == &World) Entry.bCollectNativeOutput = Delta > 0.f;
 	const FVector Gravity(0., 0., World.GetGravityZ());
 	Scene->SetUpForFrame(&Gravity, Delta, 0.f, .1f, .1f, 1, false);
 	if (Delta > 0.f)
@@ -472,6 +620,9 @@ bool CreatePhysicsRecipe(UStaticMeshComponent* Component, FElysiumPhysicsSurface
 	// Unreal's tensor scale is geometric (squared at fixed mass), so convert the input.
 	Component->BodyInstance.InertiaTensorScale = FVector(FMath::Sqrt(Recipe.InertiaScale < 0.f ? 1.f : Recipe.InertiaScale));
 	Component->BodyInstance.bStartAwake = !bStartAsleep;
+	Component->BodyInstance.bGenerateWakeEvents = true;
+	Proxy->OnComponentWake.AddUniqueDynamic(Proxy, &UElysiumPhysicsPropComponent::NativeWake);
+	Proxy->OnComponentSleep.AddUniqueDynamic(Proxy, &UElysiumPhysicsPropComponent::NativeSleep);
 	Component->SetLinearDamping(Recipe.LinearDamping);
 	Component->SetAngularDamping(Recipe.AngularDamping);
 	Component->SetMassOverrideInKg(NAME_None, Mass, true);
@@ -492,7 +643,8 @@ bool CreatePhysicsRecipe(UStaticMeshComponent* Component, FElysiumPhysicsSurface
 		if (bStartAsleep) Body->PutInstanceToSleep();
 		else Body->WakeInstance();
 	}
-	NativeAssociations.Add({ ElysiumModelPhysics::ActorIdentity(Component), Component, Component });
+	NativeAssociations.Add({ ElysiumModelPhysics::ActorIdentity(Component), Component, Component, ++NextNativeIncarnation });
+	if (!Recipe.bStatic && !bStartAsleep) ElysiumModelPhysics::RecordNativeActivity(Component, true);
 	FPhysicsRecipeAssociation& Entry = PhysicsRecipeAssociations.AddDefaulted_GetRef();
 	Entry.Actor = ElysiumModelPhysics::ActorIdentity(Component);
 	Entry.Producer = Component;

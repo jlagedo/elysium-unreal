@@ -37,8 +37,8 @@ void FElysiumEntity::PhysicsTouchTriggers(const FVector* OldOriginCm)
 {
 	//100a53d0 ->VEngineServer014#122 (20111f30): edict/solid gate then real geometry.
 	if (!World || EdictIndex() == 0 || (IsRetailNotSolid() && !(RetailSolidFlags & 8u))) return;
-	UPrimitiveComponent* Native = Body ? static_cast<UPrimitiveComponent*>(Body)
-		: static_cast<UPrimitiveComponent*>(ElysiumModelPhysics::ComponentFor(VPhysicsGetObject()));
+	// Engine touch geometry belongs to the edict, independently of mutable m_pPhysicsObject aliases.
+	UPrimitiveComponent* Native = Body ? static_cast<UPrimitiveComponent*>(Body) : GetAttachBody();
 	UWorld* NativeWorld = Native ? Native->GetWorld() : nullptr;
 	if (!NativeWorld) return; // no native environment exists for an unembodied entity
 	SetCheckUntouch(true); // deferred EndTouch, before callback enumeration
@@ -49,7 +49,7 @@ void FElysiumEntity::PhysicsTouchTriggers(const FVector* OldOriginCm)
 	const FCollisionObjectQueryParams Objects(FCollisionObjectQueryParams::AllObjects);
 	FComponentQueryParams ComponentParams(SCENE_QUERY_STAT(ElysiumPhysicsTouch));
 	ComponentParams.AddIgnoredComponent(Native);
-	if (RetailSolidType != 2 && Body)
+	if (RetailSolidType != 2)
 	{
 		NativeWorld->ComponentOverlapMulti(Overlaps, Native, AbsoluteOrigin, Rotation, ComponentParams, Objects);
 		if (OldOriginCm) NativeWorld->ComponentSweepMulti(Hits, Native, *OldOriginCm, AbsoluteOrigin, Rotation, ComponentParams);
@@ -73,6 +73,8 @@ void FElysiumEntity::PhysicsTouchTriggers(const FVector* OldOriginCm)
 	};
 	for (const FOverlapResult& Overlap : Overlaps) Collect(Overlap.GetComponent());
 	for (const FHitResult& Hit : Hits) Collect(Hit.GetComponent());
+	World->EmitRetailSite(*this, TEXT("physics_touch_query"), TEXT("CBaseEntity::PhysicsTouchTriggers"),
+		0x100a53d0u, TEXT("query"), FString::Printf(TEXT("solid=%d overlaps=%d triggers=%d flags=0x%x"), RetailSolidType, Overlaps.Num(), Triggers.Num(), Flags));
 	// Existing named native-partition modernization: entity-index callback order (entity_io.md).
 	Triggers.Sort([](const FElysiumEntityHandle& A, const FElysiumEntityHandle& B) { return A.Index < B.Index; });
 	const FElysiumEntityHandle MoverHandle = Handle;

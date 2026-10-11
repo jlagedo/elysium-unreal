@@ -14,4 +14,7 @@ public:
 	UPROPERTY(Transient) TObjectPtr<UBodySetup> RecipeBody;
 	virtual UBodySetup* GetBodySetup() override;
 	virtual void OnDestroyPhysicsState() override;
+	virtual void OnUpdateTransform(EUpdateTransformFlags Flags, ETeleportType Teleport = ETeleportType::None) override;
+	UFUNCTION() void NativeWake(UPrimitiveComponent* Component, FName BoneName);
+	UFUNCTION() void NativeSleep(UPrimitiveComponent* Component, FName BoneName);
 };

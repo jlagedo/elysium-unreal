@@ -2948,7 +2948,7 @@ namespace
 			TEXT("mechanism"), TEXT("") },
 		{ 226, TEXT(""), TEXT("VPhysicsUpdate"), TEXT("void VPhysicsUpdate(IPhysicsObject*)"),
 			TEXT("VPhysicsUpdate"), ETier::Walked, TEXT("0x100b4f30"), 1, TEXT("29c"), false,
-			TEXT("mechanism"), TEXT("") },
+			TEXT("rule"), TEXT("") },
 		{ 227, TEXT(""), TEXT("VPhysicsTakeDamage"),
 			TEXT("int VPhysicsTakeDamage(CTakeDamageInfo&)"), TEXT("VPhysicsTakeDamage"),
 			ETier::Sdk, TEXT("0x100a1580"), 0, TEXT("29c"), false, TEXT(""), TEXT("") },
@@ -8943,7 +8943,7 @@ const FElysiumNpcShapeCensus& Census()
 		/* DefaultSlots     */ 82,
 		/* VerdictedOverrides */ 2302,
 		/* RegistryValues   */ 218,
-		/* RowDigest        */ 0x9863accec2a3d85dull,
+		/* RowDigest        */ 0x5e9065e0a733edbeull,
 	};
 	return GCensus;
 }

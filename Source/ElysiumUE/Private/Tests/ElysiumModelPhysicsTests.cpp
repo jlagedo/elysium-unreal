@@ -3,6 +3,7 @@
 #include "ElysiumPlayerWorldFixture.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumMapPlaces.h"
 #include "ElysiumModelCatalogues.h"
 #include "ElysiumModelPhysicsInputs.h"
 #include "ElysiumPhysicsPropComponent.h"
@@ -960,6 +961,267 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  TestNull(TEXT("225 leaves owner null"), ShadowChild->VPhysicsGetObject());
  TestNotNull(TEXT("independent saved alias survives owner deletion"), Alias ? Alias->VPhysicsGetObject() : nullptr);
  TestEqual(TEXT("deleted shadow47 fails and returns0"), ElysiumModelPhysics::GetShadowPosition(Object, nullptr, nullptr), 0);
+ return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDynamicPublicationFrameTest, "Elysium.Substrate.ModelPhysics.DynamicPublicationFrame",
+ EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumDynamicPublicationFrameTest::RunTest(const FString&)
+{
+ const FString PreviousTimeScale = ElysiumCommandBus::Console().GetCvar(TEXT("phys_timescale"));
+ ON_SCOPE_EXIT { ElysiumCommandBus::Console().Execute(FString(TEXT("phys_timescale ")) + PreviousTimeScale); };
+ ElysiumCommandBus::Console().Execute(TEXT("phys_timescale 1"));
+ FPlayerWorldFixture Fixture;
+ if (!Fixture.CreateWorld(*this)) return false;
+ Fixture.SpawnPlayerControllerAndPawn(FVector(-1000,0,1000)); Fixture.PlayerController->Possess(Fixture.Pawn);
+ auto* Map = Fixture.SpawnMapActorDeferred(); Map->bStageOnly = true; Map->bStageWithoutCatalogue = true;
+ Map->FinishSpawning(FTransform::Identity);
+ auto Tick = [&]() { return Fixture.TestWorld.TickTestWorld(.02f); };
+ for (int32 Frame = 0; Frame < 20 && !Map->IsRuntimeActive(); ++Frame) Tick();
+ if (!TestTrue(TEXT("initial production stage active"), Map->IsRuntimeActive())) return false;
+ FElysiumEntityDefs Defs; Defs.MapName = TEXT("dynamic_publication_native");
+ FElysiumEntityDef WorldDef; WorldDef.Classname = TEXT("worldspawn"); Defs.Defs.Add(WorldDef);
+ auto Parent = ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"), TEXT("dynamic"));
+ Parent.Origin = FVector(3000,4000,3000); Defs.Defs.Add(Parent);
+ auto SecondDef = Parent; SecondDef.TargetName = TEXT("second"); SecondDef.Origin += FVector(0,2000,0); Defs.Defs.Add(SecondDef);
+ auto ThirdDef = Parent; ThirdDef.TargetName = TEXT("third"); ThirdDef.Origin += FVector(0,3000,0); Defs.Defs.Add(ThirdDef);
+ auto Child = Parent; Child.TargetName = TEXT("child"); Child.Classname = TEXT("prop_dynamic");
+ Child.Origin += FVector(0,500,0); Child.Keys.Add(TEXT("parentname"), TEXT("dynamic"));
+ Child.Keys.Add(TEXT("solid"), TEXT("2")); Child.Keys.Add(TEXT("spawnflags"), TEXT("0")); Defs.Defs.Add(Child);
+ auto GrandchildDef = Child; GrandchildDef.TargetName = TEXT("grandchild");
+ GrandchildDef.Origin += FVector(0,500,0); GrandchildDef.Keys[TEXT("parentname")] = TEXT("child"); Defs.Defs.Add(GrandchildDef);
+ FElysiumEntityDef Trigger; Trigger.Classname = TEXT("trigger_multiple"); Trigger.TargetName = TEXT("observer");
+ Trigger.Model = 1; Trigger.Origin = Parent.Origin; Trigger.Keys.Add(TEXT("model"), TEXT("*1")); Trigger.Keys.Add(TEXT("spawnflags"), TEXT("8"));
+ FElysiumConvexHull Hull;
+ for (float X : { -150.f,150.f }) for (float Y : { -150.f,150.f }) for (float Z : { -150.f,150.f }) Hull.Vertices.Add(FVector(X,Y,Z));
+ Trigger.Hulls.Add(Hull); Defs.Defs.Add(Trigger);
+ auto AliasDef = Parent; AliasDef.Classname = TEXT("info_target"); AliasDef.TargetName = TEXT("alias"); Defs.Defs.Add(AliasDef);
+ FElysiumStageSeat Seat; Seat.FeetCm = FVector(-1000,0,1000); FString Error;
+ if (!Map->RebuildStageWorld(MoveTemp(Defs), {}, Seat, Error)) { AddError(Error); return false; }
+ for (int32 Frame = 0; Frame < 20 && !Map->IsRuntimeActive(); ++Frame) Tick();
+ if (!TestTrue(TEXT("rebuilt production stage active"), Map->IsRuntimeActive())) return false;
+ auto* World = Map->GetEntityWorld(); auto* Dynamic = World->FindByName(TEXT("dynamic"));
+ auto* ShadowChild = World->FindByName(TEXT("child")); auto* Alias = World->FindByName(TEXT("alias"));
+ auto* Grandchild = World->FindByName(TEXT("grandchild"));
+ auto* PhysicalTrigger = static_cast<FElysiumTriggerBase*>(World->FindByName(TEXT("observer")));
+ if (!Dynamic || !ShadowChild || !Grandchild || !Alias || !PhysicalTrigger) return false;
+ void* Object = Dynamic->VPhysicsGetObject(); auto* Component = ElysiumModelPhysics::ComponentFor(Object);
+ auto* Native = ElysiumModelPhysics::Identity(Component);
+ if (!TestNotNull(TEXT("actual Chaos body"), Native)) return false;
+ AddInfo(FString::Printf(TEXT("native bounds=%s actor=%s logical=%s solid=%d flags=%u attach=%s"), *Component->Bounds.GetBox().ToString(), *Native->GetUnrealWorldTransform().GetLocation().ToString(), *Dynamic->GetAbsOrigin().ToString(), Dynamic->GetSolid(), Dynamic->RetailSolidFlags, *GetNameSafe(Dynamic->GetAttachBody())));
+ Component->SetEnableGravity(false);
+ // SetObject aliases do not replace creation-owned native game data.
+ Alias->VPhysicsSetObject(Object); Dynamic->VPhysicsSetObject(nullptr);
+ const FQuat FullRotation = ElysiumModelPhysics::SourceRotation(FVector(10,20,30));
+ Native->SetBodyTransform(FTransform(FullRotation, Native->GetUnrealWorldTransform().GetLocation()), ETeleportType::TeleportPhysics);
+ FVector PoseOrigin; FRotator PoseAngles;
+ TestTrue(TEXT("live object37 outputs"), ElysiumModelPhysics::GetPosition(Object, PoseOrigin, PoseAngles));
+ TestTrue(TEXT("retail object converter full pitch yaw roll"), FMath::IsNearlyEqual(PoseAngles.Pitch,10.,.001) && FMath::IsNearlyEqual(PoseAngles.Yaw,20.,.001) && FMath::IsNearlyEqual(PoseAngles.Roll,30.,.001));
+ // Independent known Source rotations: normal roll remains [0,360], yaw retains its quadrant.
+ for (const FVector& InputAngles : { FVector(-35,-140,-70), FVector(45,140,170), FVector(89.9,40,60) })
+ {
+  const FQuat NativeRotation(FRotator(-InputAngles.X,-InputAngles.Y,InputAngles.Z));
+  Native->SetBodyTransform(FTransform(NativeRotation, PoseOrigin), ETeleportType::TeleportPhysics);
+  ElysiumModelPhysics::GetPosition(Object, PoseOrigin, PoseAngles);
+  const double ExpectedRoll = InputAngles.Z < 0 ? InputAngles.Z + 360. : InputAngles.Z;
+  TestTrue(TEXT("live object37 negative angles quadrants and above gimbal threshold"),
+   FMath::IsNearlyEqual(PoseAngles.Pitch,InputAngles.X,.003) && FMath::IsNearlyEqual(PoseAngles.Yaw,InputAngles.Y,.003) && FMath::IsNearlyEqual(PoseAngles.Roll,ExpectedRoll,.003));
+ }
+ Native->SetBodyTransform(FTransform(FQuat::Identity, PoseOrigin), ETeleportType::TeleportPhysics);
+ ElysiumModelPhysics::GetPosition(Object, PoseOrigin, PoseAngles);
+ TestEqual(TEXT("identity object37 preserves signed-zero roll result"), PoseAngles.Roll, 360.);
+ Native->SetBodyTransform(FTransform(FullRotation, PoseOrigin), ETeleportType::TeleportPhysics);
+ Native->SetLinearVelocity(FVector(300,0,0), false); Native->WakeInstance();
+ const FVector Initial = Native->GetUnrealWorldTransform().GetLocation();
+ int32 Origins = 0, Angles = 0, Targets = 0, Observers = 0, UntouchObservers = 0;
+ bool bQueuedUntouchObserver = false;
+ World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+ {
+  if (Event.Entity == Dynamic->Handle && Event.Kind == TEXT("retail_site"))
+  {
+   if (Origins < 2 && Event.Text.Contains(TEXT("tag=physics_touch_query"))) AddInfo(Event.Text);
+   if (!bQueuedUntouchObserver && Event.Text.Contains(TEXT("tag=physics_touch_query"))
+    && Event.Text.Contains(TEXT("triggers=0")) && Dynamic->IsCurrentlyTouching())
+   {
+    bQueuedUntouchObserver = true;
+    World->EnqueueInput(TEXT("observer"), FName(TEXT("Disable")), FElysiumVariant::Void(), 0., FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+   }
+   if (Event.Text.Contains(TEXT("tag=set_abs_origin"))) ++Origins;
+   if (Event.Text.Contains(TEXT("tag=set_abs_angles"))) { ++Angles; TestEqual(TEXT("216 precedes218"), Origins, Angles); }
+  }
+  if (Event.Entity == ShadowChild->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=shadow_target")))
+  { ++Targets; TestTrue(TEXT("child232 follows solved angles"), Angles > 0); }
+  if (Event.Name == TEXT("observer") && Event.Kind == TEXT("input") && Event.Text.StartsWith(TEXT("Enable ")))
+  {
+   ++Observers;
+   TestTrue(TEXT("queued observer sees actual solved pose"), Dynamic->GetAbsOrigin().Equals(Native->GetUnrealWorldTransform().GetLocation(), .001));
+   TestTrue(TEXT("queued observer follows touch and child232"), Dynamic->IsCurrentlyTouching() && Targets > 0);
+   const auto* Shadow = ElysiumModelPhysics::ShadowFor(ShadowChild->VPhysicsGetObject());
+   TestTrue(TEXT("child target is current inherited pose"), Shadow && Shadow->Target.GetLocation().Equals(ShadowChild->GetAbsOrigin(), .001));
+  }
+  if (Event.Name == TEXT("observer") && Event.Kind == TEXT("input") && Event.Text.StartsWith(TEXT("Disable ")))
+  {
+   ++UntouchObservers;
+   TestFalse(TEXT("same-frame queued observer follows deferred untouch"), Dynamic->IsCurrentlyTouching());
+   TestTrue(TEXT("untouch observer sees current native solved pose"), Dynamic->GetAbsOrigin().Equals(Native->GetUnrealWorldTransform().GetLocation(), .001));
+  }
+ });
+ World->EnqueueInput(TEXT("observer"), FName(TEXT("Enable")), FElysiumVariant::Void(), 0., FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+ Tick(); Tick();
+ TestEqual(TEXT("two native frames dispatch owner despite null current field"), Origins, 2);
+ TestEqual(TEXT("two angle publications"), Angles, 2); TestEqual(TEXT("two child targets"), Targets, 2);
+ TestEqual(TEXT("queued observer once"), Observers, 1);
+ TestTrue(TEXT("native solve advances pose on following frame"), Native->GetUnrealWorldTransform().GetLocation().X > Initial.X + 6.);
+ TestTrue(TEXT("following frame retains solved absolute and local words"), Dynamic->GetAbsOrigin().Equals(Native->GetUnrealWorldTransform().GetLocation(), .001) && Dynamic->GetOrigin().Equals(Dynamic->GetAbsOrigin(), .001));
+ TestNull(TEXT("publication did not repopulate current object field"), Dynamic->VPhysicsGetObject());
+ TestTrue(TEXT("null field publication preserves native full rotation"), Native->GetUnrealWorldTransform().GetRotation().Equals(FullRotation,.00001));
+ TestTrue(TEXT("published full source angle words"), Dynamic->GetAbsAngles().Equals(FVector(10,20,30),.001));
+ TestTrue(TEXT("physical move7 passes trigger eligibility"), PhysicalTrigger->LastTriggerTime > -1.0e15);
+ Native->SetLinearVelocity(FVector(1000,0,0), false); ElysiumModelPhysics::Wake(Component);
+ for (int32 Frame = 0; Frame < 40; ++Frame) Tick();
+ TestFalse(TEXT("native geometry left candidate; deferred untouch clears pair"), Dynamic->IsCurrentlyTouching());
+ TestEqual(TEXT("actual leaving frame queued observer dispatched once"), UntouchObservers, 1);
+ World->SetAiTraceSink({});
+ // Actual child/grandchild target: reduced near-gimbal angle words must not replace the raw frame.
+ Native->SetLinearVelocity(FVector::ZeroVector, false); Native->SetAngularVelocityInRadians(FVector::ZeroVector, false);
+ const FQuat ParentRotation = ElysiumModelPhysics::SourceRotation(FVector(10,0,0));
+ const FQuat NearGimbal = ElysiumModelPhysics::SourceRotation(FVector(89.95,40,60));
+ Native->SetBodyTransform(FTransform(ParentRotation, Native->GetUnrealWorldTransform().GetLocation()), ETeleportType::TeleportPhysics);
+ const FRotator LocalNative = (ParentRotation.Inverse() * NearGimbal).Rotator();
+ FVector ZeroLocal = FVector::ZeroVector; ShadowChild->SetOrigin(ZeroLocal);
+ FRotator LocalSource(-LocalNative.Pitch,-LocalNative.Yaw,LocalNative.Roll); ShadowChild->SetAngles(LocalSource);
+ FVector LongLocal(100000,0,0); Grandchild->SetOrigin(LongLocal); FRotator ZeroAngles = FRotator::ZeroRotator; Grandchild->SetAngles(ZeroAngles);
+ ElysiumModelPhysics::Wake(Component); Tick();
+ const FVector ExpectedPoint = Dynamic->GetAbsOrigin() + NearGimbal.RotateVector(LongLocal);
+ const auto* GrandShadow = ElysiumModelPhysics::ShadowFor(Grandchild->VPhysicsGetObject());
+ TestTrue(TEXT("near-gimbal child publishes reduced roll word"), FMath::Abs(ShadowChild->GetAbsAngles().Z) < .001);
+ TestTrue(TEXT("grandchild reads raw parent frame, not reduced Euler rebuild"), Grandchild->GetAbsOrigin().Equals(ExpectedPoint,.1));
+ TestTrue(TEXT("actual232 submits raw-frame grandchild point"), GrandShadow && GrandShadow->Target.GetLocation().Equals(ExpectedPoint,.1));
+ const FTransform RegularPose = Native->GetUnrealWorldTransform();
+ Native->SetBodyTransform(FTransform(NearGimbal, RegularPose.GetLocation()), ETeleportType::TeleportPhysics);
+ ElysiumModelPhysics::GetPosition(Object, PoseOrigin, PoseAngles);
+ TestTrue(TEXT("object37 near-gimbal converter literal180/alternate yaw"), FMath::IsNearlyEqual(PoseAngles.Pitch,89.95,.001) && FMath::IsNearlyEqual(PoseAngles.Yaw,160.,.001) && PoseAngles.Roll == 180.);
+ Native->SetBodyTransform(RegularPose, ETeleportType::TeleportPhysics);
+ // The solver, not a synthetic activity flag, decides the final sleeping step.
+ auto* SleepMaterial = DuplicateObject<UPhysicalMaterial>(Native->GetSimplePhysicalMaterial(), Component);
+ SleepMaterial->SleepLinearVelocityThreshold = 1.f; SleepMaterial->SleepAngularVelocityThreshold = 1.f;
+ SleepMaterial->SleepCounterThreshold = 2; Component->SetPhysMaterialOverride(SleepMaterial);
+ Native->SetShapeCollisionEnabled(0, ECollisionEnabled::NoCollision); // isolate sleep from moving child contacts
+ Native->SetResponseToAllChannels(ECR_Ignore);
+ Native->GetPhysicsActor()->GetGameThreadAPI().SetSleepThresholdMultiplier(1.f);
+ Native->SetLinearVelocity(FVector(.05,0,0), false); ElysiumModelPhysics::Wake(Component);
+ bool bFinalSleep = false; int32 FinalSleepWrites = 0;
+ World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+ { if (Event.Entity == Dynamic->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=set_abs_origin"))) ++FinalSleepWrites; });
+ for (int32 Frame = 0; Frame < 120 && !bFinalSleep; ++Frame)
+ {
+  const bool bWasAwake = Native->IsInstanceAwake(); const int32 BeforeWrites = FinalSleepWrites; Tick();
+  if (bWasAwake && !Native->IsInstanceAwake())
+  {
+   bFinalSleep = true; TestEqual(TEXT("native final sleeping solve publishes226 once"), FinalSleepWrites, BeforeWrites + 1);
+   TestTrue(TEXT("final sleeping logical pose matches native output"), Dynamic->GetAbsOrigin().Equals(Native->GetUnrealWorldTransform().GetLocation(), .001));
+  }
+ }
+ TestTrue(TEXT("actual Chaos reaches automatic sleep"), bFinalSleep);
+ const int32 BeforeSleepingFrame = FinalSleepWrites; Tick(); Tick();
+ TestEqual(TEXT("sleeping body does not repeat final226"), FinalSleepWrites, BeforeSleepingFrame);
+ World->SetAiTraceSink({});
+ Native->PutInstanceToSleep();
+ // A game-side SkipPhysicsUpdate notification cannot masquerade as native solve output.
+ ElysiumModelPhysics::PreparePhysicsFrame(*Fixture.World, .02f, 1.f, true);
+ Component->OnUpdateTransform(EUpdateTransformFlags::SkipPhysicsUpdate, ETeleportType::None);
+ int32 SleepingWrites = 0;
+ World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+ { if (Event.Entity == Dynamic->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=set_abs_origin"))) ++SleepingWrites; });
+ ElysiumCommandBus::Console().Execute(TEXT("phys_timescale 0")); Tick(); Tick();
+ TestEqual(TEXT("sleeping body has no stale or presentation-produced226"), SleepingWrites, 0);
+ World->SetAiTraceSink({});
+ // Freeze three actual native actors in wake order. A callback retires/recreates the later one.
+ auto* Second = World->FindByName(TEXT("second")); auto* Third = World->FindByName(TEXT("third"));
+ auto* SecondComponent = ElysiumModelPhysics::ComponentFor(Second ? Second->VPhysicsGetObject() : nullptr);
+ auto* ThirdComponent = ElysiumModelPhysics::ComponentFor(Third ? Third->VPhysicsGetObject() : nullptr);
+ if (!SecondComponent || !ThirdComponent) return false;
+ FElysiumSavedPhysicsBody RecreatedState;
+ if (!ElysiumModelPhysics::Capture(Object, RecreatedState)) return false;
+ RecreatedState.FieldName = TEXT("m_pPhysicsObject"); RecreatedState.bAsleep = false;
+ SecondComponent->SetEnableGravity(false); ThirdComponent->SetEnableGravity(false);
+ ElysiumModelPhysics::Identity(SecondComponent)->SetLinearVelocity(FVector(10,0,0), false, false);
+ ElysiumModelPhysics::Identity(ThirdComponent)->SetLinearVelocity(FVector(10,0,0), false, false);
+ ElysiumCommandBus::Console().Execute(TEXT("phys_timescale 1"));
+ ElysiumModelPhysics::Wake(SecondComponent); ElysiumModelPhysics::Wake(Component); ElysiumModelPhysics::Wake(ThirdComponent);
+ TArray<FString> OrderedOwners; bool bRecreated = false;
+ World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+ {
+  if (Event.Kind != TEXT("retail_site") || !Event.Text.Contains(TEXT("tag=set_abs_origin"))) return;
+  if (Event.Entity != Dynamic->Handle && Event.Entity != Second->Handle && Event.Entity != Third->Handle) return;
+  OrderedOwners.Add(Event.Name);
+  if (Event.Entity == Second->Handle && !bRecreated)
+  {
+   bRecreated = true; Alias->VPhysicsDestroyObject();
+   TestTrue(TEXT("callback restores actual native incarnation"), Dynamic->RestoreSavedPhysics(RecreatedState, Error));
+  }
+ });
+ Tick(); World->SetAiTraceSink({});
+ TestTrue(TEXT("first native callback performed alias retirement/recreation"), bRecreated);
+ TestEqual(TEXT("retired frozen native incarnation is skipped"), OrderedOwners.Num(), 2);
+ if (OrderedOwners.Num() == 2)
+ { TestEqual(TEXT("wake append order first"), OrderedOwners[0], FString(TEXT("second"))); TestEqual(TEXT("later surviving native callback"), OrderedOwners[1], FString(TEXT("third"))); }
+ const auto CurrentObjects = ElysiumModelPhysics::ActiveOutputs(*World);
+ TestTrue(TEXT("new incarnation remains registered"), CurrentObjects.ContainsByPredicate([&](const ElysiumModelPhysics::FNativeOutput& Output) { return ElysiumModelPhysics::GameDataFor(Output,*World) == Dynamic; }));
+ int32 RecreatedWrites = 0;
+ World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+ { if (Event.Entity == Dynamic->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=set_abs_origin"))) ++RecreatedWrites; });
+ Tick(); World->SetAiTraceSink({});
+ TestEqual(TEXT("new native incarnation publishes on following frame"), RecreatedWrites, 1);
+ auto* NewNative = ElysiumModelPhysics::Identity(ElysiumModelPhysics::ComponentFor(Dynamic->VPhysicsGetObject()));
+ auto* Solver = NewNative->GetPhysicsActor()->GetSolver<Chaos::FPBDRigidsSolver>();
+ auto* ChildComponent = ElysiumModelPhysics::ComponentFor(ShadowChild->VPhysicsGetObject());
+ // A real second native environment must never supply this environment's last swapped entry.
+ FTestWorldWrapper OtherFixture;
+ if (!OtherFixture.CreateTestWorld(EWorldType::EditorPreview)) { OtherFixture.ForwardErrorMessages(this); return false; }
+ auto* OtherOwner = OtherFixture.GetTestWorld()->SpawnActor<AActor>();
+ auto* OtherBody = NewObject<UElysiumPhysicsPropComponent>(OtherOwner);
+ OtherBody->SetStaticMesh(Component->GetStaticMesh()); OtherBody->RegisterComponent(); OtherOwner->AddInstanceComponent(OtherBody);
+ FElysiumPhysicsSurfaceProps OtherSurfaces;
+ OtherSurfaces.ParseSurfaceData(TEXT("other-native-world"), TEXT("default { friction 0.8 elasticity 0.2 density 1000 } metal { friction 0.4 elasticity 0.7 density 7800 }"));
+ if (!TestTrue(TEXT("second environment has real awake native producer"), ElysiumModelPhysics::Create(OtherBody,OtherSurfaces,0.f,0.f,false,Error))) return false;
+ FString BeforeSleepRoster;
+ for (const auto& Output : ElysiumModelPhysics::ActiveOutputs(*World))
+  if (auto* Owner = ElysiumModelPhysics::GameDataFor(Output,*World)) BeforeSleepRoster += Owner->TargetName + TEXT(" ");
+ AddInfo(FString(TEXT("active roster before pending child removal: ")) + BeforeSleepRoster);
+ ElysiumModelPhysics::Identity(ChildComponent)->PutInstanceToSleep();
+ int32 SleepingFeedback = 0;
+ for (const TCHAR* Scale : { TEXT("0"), TEXT("0.005"), TEXT("-1") })
+ {
+  ElysiumCommandBus::Console().Execute(FString(TEXT("phys_timescale ")) + Scale);
+  const double BeforeTime = Solver->GetSolverTime(); const FVector BeforePose = NewNative->GetUnrealWorldTransform().GetLocation();
+  OrderedOwners.Reset();
+  World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+  {
+   if (Event.Entity == ShadowChild->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=shadow_feedback"))) ++SleepingFeedback;
+   if (Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=set_abs_origin"))
+    && (Event.Entity == Dynamic->Handle || Event.Entity == Second->Handle || Event.Entity == Third->Handle)) OrderedOwners.Add(Event.Name);
+  });
+  Tick(); World->SetAiTraceSink({});
+  TestEqual(TEXT("rejected native dt retains three awake226 callbacks"), OrderedOwners.Num(), 3);
+  if (OrderedOwners.Num() == 3)
+  { TestEqual(TEXT("zero dt last incarnation replaces removed child"), OrderedOwners[0], FString(TEXT("dynamic"))); TestEqual(TEXT("zero dt next surviving owner"), OrderedOwners[1], FString(TEXT("second"))); TestEqual(TEXT("zero dt final surviving owner"), OrderedOwners[2], FString(TEXT("third"))); }
+  TestEqual(TEXT("rejected native dt does not advance actual scene"), Solver->GetSolverTime(), BeforeTime);
+  TestTrue(TEXT("rejected native dt preserves native body pose"), NewNative->GetUnrealWorldTransform().GetLocation().Equals(BeforePose,.001));
+ }
+ TestEqual(TEXT("sleeping shadow excluded from229 even with owner226"), SleepingFeedback, 0);
+ ElysiumModelPhysics::Wake(ChildComponent);
+ World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+ { if (Event.Entity == ShadowChild->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=shadow_feedback"))) ++SleepingFeedback; });
+ Tick(); World->SetAiTraceSink({});
+ TestEqual(TEXT("real native shadow wake admits229 on rejected dt"), SleepingFeedback, 1);
+ TestTrue(TEXT("other environment native producer remains active"), ElysiumModelPhysics::IsActive(OtherBody));
+ TestTrue(TEXT("auxiliary native world cleanup succeeds"), OtherFixture.DestroyTestWorld(false));
+ TestTrue(TEXT("main production session remains active after auxiliary cleanup"), Map->IsRuntimeActive() && Map->GetEntityWorld() == World);
+ TestTrue(TEXT("main native incarnation survives auxiliary cleanup"), ElysiumModelPhysics::IsActive(ElysiumModelPhysics::ComponentFor(Dynamic->VPhysicsGetObject())));
+ TestEqual(TEXT("auxiliary cleanup preserves main physics cvar"), ElysiumCommandBus::Console().GetCvar(TEXT("phys_timescale")), FString(TEXT("-1")));
+ Dynamic->VPhysicsDestroyObject();
+ Alias->VPhysicsDestroyObject();
+ TestNull(TEXT("alias225 retires native actor"), ElysiumModelPhysics::ComponentFor(Object));
  return true;
 }
 #endif

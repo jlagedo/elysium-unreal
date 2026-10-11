@@ -381,8 +381,15 @@ public:
 	FVector LocalOrigin = FVector::ZeroVector;
 	FVector LocalAngles = FVector::ZeroVector;
 	bool bParentLocalPose = false;
-	const FVector& LocalOriginWord() const { return bParentLocalPose ? LocalOrigin : Origin; }
-	const FVector& LocalAnglesWord() const { return bParentLocalPose ? LocalAngles : Angles; }
+	// Native body producers need local/cache/solved separation even without a parent.
+	bool bNativeLocalPose = false;
+	const FVector& LocalOriginWord() const { return bParentLocalPose || bNativeLocalPose ? LocalOrigin : Origin; }
+	const FVector& LocalAnglesWord() const { return bParentLocalPose || bNativeLocalPose ? LocalAngles : Angles; }
+	float CoordinateFrame[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+	bool bCoordinateFrameValid = false;
+	void EnableNativeLocalPose();
+	void RefreshRuntimeFrame();
+	const float* GetParentToWorldTransform(float* Scratch);
 
 	// `CBaseEntity::SetParent(CBaseEntity*, byte)` 0x100a0670 (`walks/L0-r010.md`): unlink
 	// (`0x1012c840`), `m_pParent`, the bad-parent Msg arm, `m_iParent`, then under the edict gate the

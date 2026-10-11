@@ -373,6 +373,20 @@ def test_check_mode_matches_the_committed_files(model):
                          gks.render_slots_cpp(model, gks.kl.MODULE, owner), True) == 0
 
 
+@pytest.mark.corpus
+def test_native_physics_prerequisites_survive_regeneration(model):
+    rendered = gks.render_slots_cpp(model, gks.kl.MODULE, "FElysiumEntity")
+    assert 'bool FElysiumEntity::ShouldSavePhysics()\n{\n\treturn true;' in rendered
+    # Every existing hand body must remain outside the generated definitions, including the
+    # producer packet's lifetime/list bodies that previously lived in this generated file.
+    for row in gks._layer_rows(model, "FElysiumEntity"):
+        if row.hand:
+            assert f"FElysiumEntity::{row.port_name}(" not in rendered.split("namespace ElysiumNpcKernelShape")[0]
+    for slot in (225, 226, 232, 233):
+        row = next(row for row in gks._layer_rows(model, "FElysiumEntity") if row.slot == slot)
+        assert row.hand == f"FElysiumEntity::{row.port_name}"
+
+
 def test_the_slot_surface_splits_by_layer():
     # Story 0019/5 step 5: a slot the CAI_BaseNPC table holds is the base's declaration with the
     # base body; the Troika overrides it when its table holds another body, and keeps the base's

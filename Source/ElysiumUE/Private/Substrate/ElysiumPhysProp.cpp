@@ -52,6 +52,7 @@ bool FElysiumPhysProp::CreateModelBody(FString& OutError)
 	if (!ElysiumModelPhysics::Create(Visual, World->PhysicsSurfaces(),
 		MassBias, MassOverride, (SpawnFlags & 1) != 0, OutError)) return false;
 	// 0x100a5ea0 / 0x100a6490: publish only the successfully created actual body.
+	ElysiumModelPhysics::SetGameData(ElysiumModelPhysics::ActorIdentity(Visual), *this);
 	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Visual));
 	return true;
 }
@@ -63,6 +64,7 @@ bool FElysiumPhysProp::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State
 	{ OutError = TEXT("saved physics prop has no live admitted field/component"); return false; }
 	if (!ElysiumModelPhysics::Restore(Visual, World->PhysicsSurfaces(), State, OutError))
 	{ bSimulating = false; return false; }
+	ElysiumModelPhysics::SetGameData(ElysiumModelPhysics::ActorIdentity(Visual), *this);
 	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Visual));
 	bSimulating = true;
 	bRestoredNativePhysics = true;
@@ -115,7 +117,7 @@ void FElysiumPhysProp::InputWake(const FElysiumInputArgs&)
 {
 	if (Visual && bSimulating)
 	{
-		Visual->WakeAllRigidBodies();
+		ElysiumModelPhysics::Wake(Visual);
 	}
 }
 

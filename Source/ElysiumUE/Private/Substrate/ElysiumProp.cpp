@@ -808,6 +808,7 @@ void FElysiumProp::BuildBoxCollisionProxy(UPrimitiveComponent* Mesh)
 	BoxCollisionProxy = Box;
 	bBboxRetired = false;
 	bRestoredBbox = false;
+	ElysiumModelPhysics::SetGameData(ElysiumModelPhysics::ActorIdentity(Box), *this);
 	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Box));
 	if (bShadow)
 	{

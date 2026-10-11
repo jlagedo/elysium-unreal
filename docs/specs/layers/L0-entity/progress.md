@@ -885,3 +885,79 @@ for226/232. The expected census now includes existing104, with no runtime/native
 Coordinator's final rerun passed23/23 in1.41s (JUnit suite1.371s),0 failed/error/skipped.
 Durable evidence: `E:/elysium-work/reports/tests/20261011-l0-shadow-generator.xml`, independently
 read. Runtime/native test sources remain frozen; the stale assertion is the additional26th path.
+
+## Native dynamic publication packet — 2026-10-11, worker source freeze
+
+Against main29f36060, the next dependency is implemented for actual registered movetype7 bodies:
+native activity -> frozen identity list/live creation-owned game data -> generic226 ->216/218 ->
+physical trigger pairs/filter -> child232 -> existing postthink deferred untouch/EventQueue.
+Recovery is in `walks/L0-native-publication.md` and `docs/vtmb/physics-interaction.md`.
+Chaos remains the solver/geometry/contact/mechanics owner; semantic active membership preserves
+retail append/pending-cancellation/backwards last-entry removal order separately per native world.
+Native identity/serial validation suppresses retired snapshot entries and preserves current-field
+null/aliases. Raw local/absolute caches prevent next prethink from overwriting the native result;
+raw parent frames retain near-gimbal child/grandchild output. No angle normalization or new
+nonfinite rejection replaces the recovered object37 converter/warning.
+
+Final worker `uv run elysium build --arm` passed28.2s:
+`E:/elysium-work/logs/20261011T034820.422401Z-build.json`.
+Final selected native/affected27 passed27/27 (22clean,5existing-warning results),0failed/notRun:
+`E:/elysium-work/reports/tests/20261011T034912.527056Z-elysium-substrate-modelphysics-elysium-s-73c9aee2/index.json`;
+run `E:/elysium-work/logs/20261011T034911.017139Z-test.json`,23.5s.
+All7 ModelPhysics witnesses are clean, including inherited6 and new DynamicPublicationFrame.
+The new production witness covers full native Euler output/identity/negative quadrants/gimbal,
+null-current owner/alias, consecutive native frames, physical touch, same-frame queue after
+deferred untouch, raw near-gimbal child/grandchild232 target, actual automatic final sleep226
+once/no repeat, sleeping229 exclusion/native wake, wake/removal callback order, deletion/recreation
+inside an earlier callback, stale-incarnation skip, per-native-world removal isolation and
+auxiliary-world cleanup preserving main session/native body/cvar. Zero/.0001/negative scaled dt
+retain awake226 while actual solver time/body pose do not advance. Host original frametime is
+already bounded, so this does not claim an unreachable invalid original-dt host arm.
+Affected20 cover save/schema, generated shape/defaults, data-object links, frame/queue ordering,
+touch/filter/refusal, physics masks/collision rules and existing origin/chain integration.
+
+Registered `uv run elysium research gen_kernel_shape` passed and changed only intended generated
+EntitySlots/Shape output. It exposed stale mapping which erased pre-existing128/225/233 bodies;
+033539 native/save failures and a witness crash are retained as failed intermediate evidence.
+RETAIL_DEFAULTS128 and CHAIN_HAND225/233 now preserve those bodies, moved unchanged to SlotBodies;
+225's verdict names its hand lifetime adapter,226's verdict names its observable partial rule.
+No retail ledger was regenerated. Generator/closed tests passed45/45,0failed/error/skipped:
+`uv run pytest pipeline/tests/test_gen_kernel_shape.py pipeline/tests/test_kernel_closed.py -q
+--junitxml E:/elysium-work/reports/tests/20261011-l0-publication-generator.xml`.
+The preservation assertion checks all hand rows and explicit128/225/226/232/233.
+034445's auxiliary game-session fixture triggered front-end teardown and crashed; the final
+fixture uses a real preview physics scene without another Elysium session. Subsequent gates pass.
+
+Runtime/test/generator sources are frozen. Coordinator owns independent review, default/bounded
+arena gates and exact-path commit. Worker made no commit/push/full arm/full arena run, changed no
+tracked game content/goldens or audit row. Original23/88 and full L0 closing gates remain open.
+Moves1/8 pusher feedback, broad unparented NPC host/cache sampling, collision-event FrameUpdate,
+all child removal callback arms, nonbbox/default/explicit creators, NPC/fluids/multiobject graphs
+and the broad deferred r022 candidate remain unrecovered or unverified beyond stated witnesses.
+
+### Coordinator acceptance checkpoint — native publication, 2026-10-11
+
+Coordinator independently reviewed recovered retail raw bytes/control flow, the selected native
+producer/lifetime/order implementation, complete generated diff and unchanged executable225/233
+bodies, and authoritative final build/native27/generator45 evidence. The selected move7 native
+publication dependency is accepted; this is one packet, not original run or L0 closure.
+Runtime/test/generator sources remained frozen through coordinator gates.
+
+Coordinator default `uv run elysium test` passed180/180 (101clean,79existing-warning results),
+0failed/notRun/inProcess, all7ModelPhysics clean, host exit0,26.0s:
+`E:/elysium-work/reports/tests/20261011T035041.979542Z-elysium-session-elysium-substrate/index.json`;
+run `E:/elysium-work/logs/20261011T035041.829179Z-test.json`.
+Coordinator registered bounded18 arena passed18/18 in two boots, both host exit0,65.7s:
+`E:/elysium-work/reports/arena/20261011T035200.481411Z/index.json`;
+hosts `arena/index.json` and `map-sm_hub_1-l0_transition_state/index.json` beneath that directory;
+run `E:/elysium-work/logs/20261011T035200.246297Z-arena.json`.
+Ordinary first_unmet fields are null; two deliberate field/call-refusal selftests pass by inversion.
+Existing27startup errors/534warnings remain; no scenario failure is waived. Unchanged final
+45/45generator JUnit was inspected and reused rather than repeated. All7946audit lines remain
+16columns; no audit row changed, no full arm/full arena/required boot-order closure claimed.
+
+The exact23-path commit includes this checkpoint, recovery, runtime, native witness and generator
+preservation repair. No tracked game content/goldens changed, and no push is authorized/performed.
+Original23/88 remains unchanged and full Goal/L0 stays open. Next dependency is recovered
+moves1/8 pusher feedback and its actual needed producers, while collision-event delivery, broader
+NPC/cache/creator/child-removal/fluids/multiobject contracts remain explicitly unfinished.

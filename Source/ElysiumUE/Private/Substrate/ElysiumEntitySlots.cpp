@@ -6,9 +6,9 @@
 // classnames each class claims) and `slots.md` (the bodies per class). It is the census
 // the port's own shape is asserted against; it carries no behaviour and no rule.
 //
-// 219 generated slot bodies of `FElysiumEntity`: 75 carry retail's one-constant default (story
-// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 67 are defined by hand in the substrate,
-// and 59 are still stubs — 58 29c, 1 unassigned. 18 are closed (0019/6) and answer the
+// 219 generated slot bodies of `FElysiumEntity`: 76 carry retail's one-constant default (story
+// 29c's verdicts, the L0 re-check's `RETAIL_DEFAULTS`), 72 are defined by hand in the substrate,
+// and 55 are still stubs — 54 29c, 1 unassigned. 16 are closed (0019/6) and answer the
 // value-initialised default without tallying.
 //
 // vampire.dll sha256 `c546f4de2003624d…`; the ledger's own provenance line is in every table under
@@ -25,8 +25,6 @@
 // through, on a receiver typed to this class.
 
 #include "ElysiumEntity.h"
-#include "ElysiumEntityWorld.h"
-#include "Substrate/ElysiumModelPhysics.h"
 
 #include "ElysiumStub.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -925,9 +923,11 @@ int32 FElysiumEntity::Restore(void*)
 
 // slot 128 0x100aa680 (sdk) `bool ShouldSavePhysics()`
 //   layer 0, story 29c
+// retail default (L0.tooling.default-stubs): CBaseEntity::ShouldSavePhysics 0x100aa680: whole body
+// returns true; derived classes own their false overrides (L0-physics-producer)
 bool FElysiumEntity::ShouldSavePhysics()
 {
-	return true; // 100aa680: whole retail body returns 1; NPCs/movers/player own false overrides.
+	return true;
 }
 
 // slot 129 0x100aa4e0 (walked) `void OnSave()`
@@ -1348,8 +1348,12 @@ bool FElysiumEntity::IsLockedByMaster()
 	return false;
 }
 
-// slot 189 0x100ad850: hand body in ElysiumEntitySlotBodies.cpp. Physics trace 0x10035030
-// reads this damage-type return to select rules slot 76; it is not a custom-collision predicate.
+// slot 189 0x100ad850 (sdk) `int GetDamageType() const`
+//   layer 0, story 29c
+// the body is `FElysiumEntity::GetDamageType`, written by hand in the substrate:
+// `CBaseEntity::GetDamageType` 0x100ad850: constant zero after diagnostic scope; physics trace
+// 0x10035030 reads the actual damage-type slot (`ElysiumEntitySlotBodies.cpp`). Declared here,
+// defined there.
 
 // slot 190 0x10027120 (walked) `float GetDamage()`
 //   layer 0, story 29c
@@ -1585,22 +1589,14 @@ bool FElysiumEntity::ForceVPhysicsCollide(FElysiumEntity*)
 
 // slot 225 0x100b5040 (walked) `void VPhysicsDestroyObject()`
 //   layer 4, story 29c
-void FElysiumEntity::VPhysicsDestroyObject()
-{
-	//100b5040: null exits. Remove membership ->10158520 recipe/native deletion ->field0.
-	if (void* Object = VPhysicsGetObject())
-	{
-		if (World) World->RemovePhysicsShadow(*this);
-		ElysiumModelPhysics::DestroyActor(Object);
-		VPhysicsSetObject(nullptr);
-	}
-	// Registered model/bbox native lifetimes are covered; other physics producers remain open.
-}
+// verdict `mechanism`: the body is `FElysiumEntity::VPhysicsDestroyObject`, written by hand in the
+// substrate. Declared here, defined there.
 
 // slot 226 0x100b4f30 (walked) `void VPhysicsUpdate(IPhysicsObject*)`
 //   takes `IPhysicsObject*`
 //   layer 1, story 29c
-// Hand body in ElysiumEntitySlotBodies.cpp: reached move0 is empty; other arms remain explicit gaps.
+// verdict `rule`: the body is `FElysiumEntity::VPhysicsUpdate`, written by hand in the substrate.
+// Declared here, defined there.
 
 // slot 227 0x100a1580 (sdk) `int VPhysicsTakeDamage(CTakeDamageInfo&)`
 //   takes `CTakeDamageInfo&`
@@ -1649,22 +1645,18 @@ void FElysiumEntity::VPhysicsFriction(void*, float, int32, int32)
 
 // slot 232 0x100a69e0 (sdk) `void UpdatePhysicsShadowToCurrentPosition(float)`
 //   layer 0, story 29c
-// Hand body: ElysiumEntitySlotBodies.cpp, actual object slot46 submission.
+// the body is `FElysiumEntity::UpdatePhysicsShadowToCurrentPosition`, written by hand in the
+// substrate: `CBaseEntity::UpdatePhysicsShadowToCurrentPosition` 0x100a69e0: move7/null return; abs
+// angles then origin, object46 target submission (`ElysiumEntitySlotBodies.cpp`). Declared here,
+// defined there.
 
 // slot 233 0x100a6ad0 (sdk) `int VPhysicsGetObjectList(IPhysicsObject**, int)`
 //   takes `IPhysicsObject**`
 //   layer 0, story 29c
-int32 FElysiumEntity::VPhysicsGetObjectList(void* OutputObjects, int32 Capacity)
-{
-	// vampire.dll 0x100a6ad0: test the stored reference, then signed positive capacity.
-	// The successful arm writes only element zero; rejected arms never touch the output.
-	if (VPhysicsGetObject() && Capacity > 0)
-	{
-		*static_cast<void**>(OutputObjects) = VPhysicsGetObject();
-		return 1;
-	}
-	return 0;
-}
+// the body is `FElysiumEntity::VPhysicsGetObjectList`, written by hand in the substrate:
+// `CBaseEntity::VPhysicsGetObjectList` 0x100a6ad0: nonnull current object and signed positive
+// capacity write only element zero and return one, otherwise zero (`ElysiumEntitySlotBodies.cpp`).
+// Declared here, defined there.
 
 // slot 234 0x10035780 (sdk) `void PhysicsPushEntity(Vector&, trace_t*)`
 //   takes `trace_t*`
@@ -1689,7 +1681,13 @@ void FElysiumEntity::OnPhysGunDrop(FElysiumEntity*, bool)
 {
 }
 
-// slot 237 0x1003e7a0: hand body in ElysiumEntitySlotBodies.cpp.
+// slot 237 0x1003e7a0 (sdk) `unsignedint PhysicsSolidMaskForEntity() const`
+//   returns `unsignedint`
+//   layer 0, story 29c
+// the body is `FElysiumEntity::PhysicsSolidMaskForEntity`, written by hand in the substrate:
+// `CBaseEntity::PhysicsSolidMaskForEntity` 0x1003e7a0: FL_NPC first, then the real m_pPlayer
+// self-downcast, else the base mask (L0 physics producer checkpoint;
+// `ElysiumEntitySlotBodies.cpp`). Declared here, defined there.
 
 // slot 238 0x10039ff0 (sdk) `void PerformCustomPhysics(Vector*, Vector*, QAngle*, QAngle*)`
 //   layer 0, story 29c
@@ -2541,7 +2539,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool(FElysiumEntity*)>::Test(&FElysiumEntity::ForceVPhysicsCollide),
 				[](FElysiumEntity& Receiver) -> int64 { FElysiumEntity* Arg0{}; return Receiver.ForceVPhysicsCollide(Arg0) ? 1 : 0; } },
 			{ 225, TEXT("0x100b5040"), TEXT("CBaseEntity"), TEXT("VPhysicsDestroyObject"),
-				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::VPhysicsDestroyObject),
 				nullptr },
 			{ 226, TEXT("0x100b4f30"), TEXT("CBaseEntity"), TEXT("VPhysicsUpdate"),
