@@ -972,3 +972,115 @@ ECC_MAX also includes a deprecated pseudochannel with no container entry. Persis
 the actual container extent, never the enum's end; native sleeping-body evidence caught and
 corrected an initial out-of-bounds capture. Swap's reference-only arms are covered, but its
 membership removal has no complete production shadow witness and the whole function stays partial.
+
+### Recovered shadow/frame prerequisite chain (2026-10-11; implementation open)
+
+The first reached observer is a parented `prop_dynamic` solid2: InitStatic100a5bb0
+delegates InitShadow100a6150(false,false,null). It requires a dynamic bbox body, not
+a static replacement. InitShadow runs Setup/225, obtains absolute pose and collision
+bounds, creates the body, assigns it, installs SetShadow10000/10000 permissions,
+submits UpdateShadow(false,0), then registers serial shadow membership1002edd0.
+232100a69e0 ignores movetype7/null body; otherwise it reads absolute angles then
+origin and submits the supplied interval. Neither submission teleports native pose.
+
+SetShadow26018520 creates a controller only once; later calls change speed limits
+without changing its permissions. Movement forbidden installs mass1e6 and disables
+gravity; rotation forbidden zeroes rotational response. Controller teardown restores
+the saved body mass/inertia/gravity. UpdateShadow260185b0 changes gravity mode before
+target submission; forbidden movement retains disabled gravity. Target2601aad0 stores
+position/quaternion, clamps arrival at zero, activates the controller and wakes only
+when target changes beyond its small position/quaternion comparisons.
+
+Callback2601aa50 invokes2601a250 with actual native simulation delta. Arrival fraction
+is one for nonpositive remaining, otherwise min(dt/remaining,1); remaining counts down
+to zero. Linear26019600 removes velocity below squared1e-6, adds displacement times
+fraction/dt, and damps the existing velocity with factor1, subject to separately stored
+positive speed caps. SetMaxSpeed2601ac40 retains max(current speed,requested speed)
+and requested-minus-that-maximum. Threshold2601aa40 converts inches to meters;
+2601a250 compares strict distance-squared against threshold-squared, using target
+distance before a predicted pose exists and prediction error afterward. Teleport
+temporarily disables collision, restores it, and preserves the preteleport delta for
+the velocity calculation. GetShadowPosition26018640 samples native pose at environment
+simulation time; it never returns the submitted target. NPC10272f40 supplies
+(sizeX+sizeY)*.25 inches as threshold, not a damping parameter.
+
+PhysFrame1002ea40 rejects dt outside[0,1], caps .1, multiplies phys_timescale (default1,
+flags0), caps .1 again, then simulates after entity thinks. Environment26010900 advances
+only for dt strictly above .0001 and below1. Active objects receive226 in native order;
+registered live shadows receive229 afterward, skipping deleted objects. Base229 is
+empty, so this parented bbox observer does not require generic226 solved publication.
+Collision frame callbacks follow both loops. Unreal's native scene owns geometry,
+contacts and solving; its gameplay-before-StartPhysics and PostPhysics ticks supply
+the production submit/solve/sample ordering, rather than a second IVP scheduler.
+
+Required parent producer remains open: PhysicsParent10039ac0 runs think0 and interval
+clipping, then linear10038710 and/or rotation transactions. FinishPushers10036b10 runs
+in reverse pusher order: TouchTriggers(saved origin), then232(0). FinishPush10036d40
+does that before reverse pushed-entity touch/submission/impact work. RelinkChildren
+100342c0 processes each live child's solid/trigger touch,232(frame interval) unless
+movetype7, descendants, then rereads MovePeer after callbacks. TouchTriggers100a53d0
+hands engine slot122 the edict and optional old origin; its recovered native-query
+consumer and begin-before-deferred-end contract are in entity_io.md. Setter submission
+would bypass this observable callback order. Existing absolute/native/logical poses
+must remain distinct through this chain, deletion and saved Physics reconstruction.
+
+This is recovery evidence and dependency order, not a port-status closure. Explicit
+parameter/nonbbox creator arms, NPC movement, other movetypes, generic226, collision
+frame notification/filtering and fluid/controller pointer graphs remain open.
+
+The reached child has MOVETYPE_NONE. PhysicsSimulate10040390 dispatches it to
+PhysicsNone, so the successful parent transaction has only FinishPushers' reverse
+captured hierarchy TouchTriggers(old origin),232(0). RelinkChildren100342c0 belongs
+to generic226's other arms; appending it here would replace the observable zero
+arrival with a second frame interval. A refused native movement transaction restores
+the parent pose and publishes neither child touch nor a target. Full speculative
+pushed-object rollback/contact and the broad parent dispatcher remain unfinished.
+
+SetMaxSpeed2601ac40 receives the secondary controller interface at allocation+4;
+callback2601aa50 passes allocation+8 as state. Consequently the retained maximum
+is the damping cap, while requested-minus-maximum is the desired cap. Nonpositive
+desired caps do not clamp. GetShadowPosition26018640 literally returns1 after optional
+native-pose reads. Teleport prediction2601a3f8..2601a43a uses the retained preteleport
+current position plus the computed velocity times native dt.
+
+Postthink order is explicit, not inferred from auto-registration: server initializer
+1011a0c0 obtains PhysicsHook through1002d750 (106b88ec) and appends it via1042c310
+before1042c4e0 appends the auto-system list. EntityListSystem100f8f80 prepends itself
+to that auto-list with1042c260. Forward step4 dispatch1042c700/slot7 therefore runs
+PhysFrame before EntityListSystem's deferred untouch; EventQueue follows both.
+
+Native touch discovery is not trigger activation. PhysicsMarkEntityAsTouched1003dc70
+admits self/parent/flag/solid gates and creates physical links before StartTouch.
+Trigger101c5460/101c53d0/101c5420 reads +4c m_edtDerivedType: pushables bit8 or
+SOLID_BSP with movetype8; physics movetype7 or bit0x2000. InitShadow writes neither
+derived bit. The selected prop_dynamic movetype0 bbox is therefore a genuine native
+geometric candidate with physical links, but cannot activate ALLOW_PHYSICS. EndTouch
+101c55d0 repeats PassesTriggerFilters independently; no per-pair activation latch exists.
+
+Implementation checkpoint: first arm build failed on the component-query constructor
+(20261011T023126.845373Z-build.json); the second found a local shadowing error and
+test-only solver template/origin lvalue errors (20261011T024024.690394Z-build.json).
+The next arm build passed (20261011T024112.908599Z-build.json). The first actual map
+frame test verified native scaled/zero/negative time and positive arrival displacement,
+then failed its saved-controller assertion (20261011T024153.786488Z-test.json).
+At that checkpoint the packet remained under implementation and verification; these were not
+closure gates.
+
+Implementation checkpoint after recovery: the resolved-parent studio bbox observer now reaches
+actual native creation, controller installation, owner membership and target submission. Its
+successful existing native mover transaction uses FinishPushers' reverse captured child touch/
+232(0), then actual production postthink scene solve and native result; generic RelinkChildren
+is not additionally reached for childmove0. Refusal publishes no child target. Collision-frame
+notification, broad active226, full pusher/contact and other creator/NPC arms remain open.
+
+Native controller tests distinguish linear velocity from actor-origin displacement under an
+angular target. Interim030049/030213 threshold assertion
+had nativevelocity999, predictionX3043.062, targetX3133.062, solvedX3139.453 and Y/Z motion;
+it selected teleport but combined angular motion with a linear displacement assertion.
+Offset-hull rotation about Chaos's center of mass is an inference from these native outputs,
+not a recovered retail fact or a proven gameplay divergence.
+The final witness holds current native rotation for the threshold arm, observes target+10 and
+retained preteleport prediction, and separately verifies full Source angular submission/solve.
+Actual native scene dt, restored collision state, saved target/countdown/original mechanics and
+first scheduled restore tick pass in final030355. See L0-entity/progress.md for authoritative JSON.
+These narrow production witnesses do not close full retail functions or the L0 closing gate.

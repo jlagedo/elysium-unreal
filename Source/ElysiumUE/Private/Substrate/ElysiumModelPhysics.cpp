@@ -9,6 +9,9 @@
 #include "Misc/ScopeExit.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityWorld.h"
+#include "Engine/World.h"
+#include "Physics/PhysicsInterfaceCore.h"
+#include "Physics/Experimental/PhysScene_Chaos.h"
 
 namespace
 {
@@ -27,6 +30,26 @@ namespace
 	TArray<FNativeAssociation> NativeAssociations;
 	struct FNativeReference { FElysiumEntity* Entity; void* Actor; };
 	TArray<FNativeReference> NativeReferences;
+	struct FShadowAssociation { void* Actor; FElysiumPhysicsShadowState State; };
+	TArray<FShadowAssociation> ShadowAssociations;
+	FShadowAssociation* FindShadow(void* Actor)
+	{
+		return ShadowAssociations.FindByPredicate([Actor](const FShadowAssociation& Entry) { return Entry.Actor == Actor; });
+	}
+	bool ValidShadow(const FElysiumPhysicsShadowState& State)
+	{
+		return !State.bInstalled || (!State.Target.ContainsNaN() && !State.PredictedPosition.ContainsNaN()
+			&& State.Target.GetRotation().IsNormalized() && FMath::IsFinite(State.RemainingSeconds) && State.RemainingSeconds >= 0.f
+			&& FMath::IsFinite(State.LinearDampingLimitCm) && FMath::IsFinite(State.LinearDesiredLimitCm)
+			&& FMath::IsFinite(State.AngularDampingLimitRadians) && FMath::IsFinite(State.AngularDesiredLimitRadians)
+			&& FMath::IsFinite(State.TeleportDistanceCm) && FMath::IsFinite(State.SavedMassKg) && State.SavedMassKg > 0.f
+			&& !State.SavedInertia.ContainsNaN() && State.SavedInertia.GetMin() >= 0.f);
+	}
+	void SetInertia(FBodyInstance& Body, const FVector& Tensor)
+	{
+		FPhysicsCommand::ExecuteWrite(Body.GetPhysicsActor(), [&Tensor](const FPhysicsActorHandle& Handle)
+		{ FPhysicsInterface::SetLocalInertiaTensor_AssumesLocked(Handle, Tensor); });
+	}
 	bool CreatePhysicsRecipe(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
 		const FElysiumPhysicsBodyRecipe& Recipe, bool bStartAsleep, FString& OutError);
 }
@@ -45,6 +68,12 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State)
 	Ar << State.Pose << State.LinearVelocity << State.AngularVelocityRadians << State.bAsleep << State.bGravity;
 	Ar << State.CurrentMassKg << State.CurrentLinearDamping << State.CurrentAngularDamping;
 	Ar << State.CollisionProfile << State.CollisionMask << State.CollisionResponses << State.BboxCollisionEnabled;
+	Ar << State.Shadow.bInstalled << State.Shadow.bActive << State.Shadow.bAllowMovement << State.Shadow.bAllowRotation << State.Shadow.bGravityMode;
+	Ar << State.Shadow.Target << State.Shadow.PredictedPosition << State.Shadow.RemainingSeconds;
+	Ar << State.Shadow.LinearDampingLimitCm << State.Shadow.LinearDesiredLimitCm << State.Shadow.AngularDampingLimitRadians << State.Shadow.AngularDesiredLimitRadians;
+	Ar << State.Shadow.TeleportDistanceCm << State.Shadow.SavedMassKg << State.Shadow.SavedInertia << State.Shadow.bSavedGravity << State.bShadowMember;
+	if (Ar.IsLoading() && (!ValidShadow(State.Shadow) || (State.Shadow.bInstalled && State.Recipe.bStatic)
+		|| (State.bShadowMember && (!State.bHasObject || !State.Shadow.bInstalled)))) Ar.SetError();
 	if (Ar.IsLoading() && State.bHasObject && (State.CollisionResponses.Num() != NativeResponseChannelCount
 		|| State.CollisionResponses.ContainsByPredicate([](uint8 Response) { return Response > ECR_Block; })
 		|| (State.Recipe.Kind == EElysiumPhysicsRecipeKind::Bbox && State.BboxCollisionEnabled > ECollisionEnabled::QueryAndProbe)))
@@ -84,12 +113,14 @@ void ElysiumModelPhysics::RetireNative(UStaticMeshComponent* Component)
 	for (int32 Index = NativeAssociations.Num() - 1; Index >= 0; --Index)
 	{
 		if (NativeAssociations[Index].Producer != Component) continue;
+		RemoveShadow(NativeAssociations[Index].Actor);
 		RetiringActors.Add(NativeAssociations[Index].Actor);
 		NativeAssociations.RemoveAt(Index);
 	}
 	RetireRecipe(Component); //10158520 ->10045110 precedes native deletion and observer callbacks.
 	for (void* Actor : RetiringActors)
 	{
+		ShadowAssociations.RemoveAll([Actor](const FShadowAssociation& Entry) { return Entry.Actor == Actor; });
 		TArray<FElysiumEntity*> Referencing;
 		for (const FNativeReference& Entry : NativeReferences)
 			if (Entry.Actor == Actor) Referencing.Add(Entry.Entity);
@@ -141,7 +172,162 @@ bool ElysiumModelPhysics::Capture(void* Actor, FElysiumSavedPhysicsBody& OutStat
 		OutState.CollisionResponses.Add(static_cast<uint8>(Component->GetCollisionResponseToChannel(static_cast<ECollisionChannel>(Channel))));
 	if (Recipe->Kind == EElysiumPhysicsRecipeKind::Bbox)
 		OutState.BboxCollisionEnabled = static_cast<uint8>(NativeBody->GetShapeCollisionEnabled(0));
+	OutState.Shadow = ShadowFor(Actor) ? *ShadowFor(Actor) : FElysiumPhysicsShadowState();
 	return true;
+}
+
+const FElysiumPhysicsShadowState* ElysiumModelPhysics::ShadowFor(void* Actor)
+{
+	const FShadowAssociation* Entry = FindShadow(Actor);
+	return Entry && ComponentFor(Actor) ? &Entry->State : nullptr;
+}
+
+void ElysiumModelPhysics::RemoveShadow(void* Actor)
+{
+	const FShadowAssociation* Entry = FindShadow(Actor);
+	if (!Entry) return;
+	const FElysiumPhysicsShadowState State = Entry->State;
+	if (UStaticMeshComponent* Component = ComponentFor(Actor))
+		if (FBodyInstance* Body = Identity(Component))
+		{
+			Component->SetMassOverrideInKg(NAME_None, State.SavedMassKg, true);
+			SetInertia(*Body, State.SavedInertia);
+			Component->SetEnableGravity(State.bSavedGravity);
+		}
+	ShadowAssociations.RemoveAll([Actor](const FShadowAssociation& Item) { return Item.Actor == Actor; });
+}
+
+bool ElysiumModelPhysics::SetShadow(void* Actor, float LinearSpeedInches, float AngularSpeedDegrees,
+	bool bAllowMovement, bool bAllowRotation)
+{
+	UStaticMeshComponent* Component = ComponentFor(Actor);
+	FBodyInstance* Body = Identity(Component);
+	if (!Body || !Component->IsSimulatingPhysics() || !FMath::IsFinite(LinearSpeedInches) || !FMath::IsFinite(AngularSpeedDegrees)) return false;
+	FShadowAssociation* Entry = FindShadow(Actor);
+	if (!Entry)
+	{
+		Entry = &ShadowAssociations.AddDefaulted_GetRef(); Entry->Actor = Actor;
+		auto& State = Entry->State;
+		State.bInstalled = true; State.bAllowMovement = bAllowMovement; State.bAllowRotation = bAllowRotation;
+		State.SavedMassKg = Body->GetBodyMass(); State.SavedInertia = Body->GetBodyInertiaTensor(); State.bSavedGravity = Body->bEnableGravity;
+		if (!bAllowMovement) { Component->SetMassOverrideInKg(NAME_None, 1.0e6f, true); Component->SetEnableGravity(false); }
+		//2601a7e0: prevent contact torque, while controller angular velocity remains writable.
+		if (!bAllowRotation) SetInertia(*Body, FVector::ZeroVector);
+	}
+	//2601ac40: speed changes retain permissions and original body state.
+	const float RequestedLinear = LinearSpeedInches * 2.54f;
+	Entry->State.LinearDampingLimitCm = FMath::Max(static_cast<float>(Body->GetUnrealWorldVelocity().Size()), RequestedLinear);
+	Entry->State.LinearDesiredLimitCm = RequestedLinear - Entry->State.LinearDampingLimitCm;
+	const float RequestedAngular = FMath::DegreesToRadians(AngularSpeedDegrees);
+	Entry->State.AngularDampingLimitRadians = FMath::Max(static_cast<float>(Body->GetUnrealWorldAngularVelocityInRadians().Size()), RequestedAngular);
+	Entry->State.AngularDesiredLimitRadians = RequestedAngular - Entry->State.AngularDampingLimitRadians;
+	return true;
+}
+
+bool ElysiumModelPhysics::UpdateShadow(void* Actor, const FVector& OriginCm, const FQuat& Rotation,
+	bool bGravityMode, float ArrivalSeconds)
+{
+	UStaticMeshComponent* Component = ComponentFor(Actor); FBodyInstance* Body = Identity(Component);
+	if (!Body || OriginCm.ContainsNaN() || Rotation.ContainsNaN() || !Rotation.IsNormalized() || !FMath::IsFinite(ArrivalSeconds)) return false;
+	FShadowAssociation* Entry = FindShadow(Actor);
+	if (!Entry) return false;
+	auto& State = Entry->State;
+	if (State.bGravityMode != bGravityMode)
+	{
+		State.bGravityMode = bGravityMode;
+		if (State.bAllowMovement) Component->SetEnableGravity(!bGravityMode); //260185b0
+	}
+	const FQuat Prior = State.Target.GetRotation();
+	const double QuaternionChange = FMath::Abs(Prior.X - Rotation.X) + FMath::Abs(Prior.Y - Rotation.Y)
+		+ FMath::Abs(Prior.Z - Rotation.Z) + FMath::Abs(Prior.W - Rotation.W);
+	const bool bChanged = FVector::DistSquared(State.Target.GetLocation(), OriginCm) > 1.0e-4 || QuaternionChange > 1.0e-8;
+	State.Target = FTransform(Rotation, OriginCm);
+	State.RemainingSeconds = FMath::Max(ArrivalSeconds, 0.f);
+	State.bActive = true;
+	if (bChanged) Body->WakeInstance(); //2601aad0: repeated target still replaces countdown, no wake.
+	return true;
+}
+
+bool ElysiumModelPhysics::SetShadowTeleportDistance(void* Actor, float DistanceInches)
+{
+	FShadowAssociation* Entry = FindShadow(Actor);
+	if (!Entry || !ComponentFor(Actor) || !FMath::IsFinite(DistanceInches)) return false;
+	Entry->State.TeleportDistanceCm = DistanceInches * 2.54f; return true; //2601aa40
+}
+
+int32 ElysiumModelPhysics::GetShadowPosition(void* Actor, FVector* OriginCm, FQuat* Rotation)
+{
+	const FBodyInstance* Body = Identity(ComponentFor(Actor));
+	if (!Body) return 0;
+	const FTransform Solved = Body->GetUnrealWorldTransform(); //26018640: native sample, optional outputs.
+	if (OriginCm) *OriginCm = Solved.GetLocation();
+	if (Rotation) *Rotation = Solved.GetRotation();
+	return 1;
+}
+
+namespace
+{
+	FVector ShadowVelocity(FVector Actual, const FVector& Delta, float FractionOverDelta,
+		float MaximumSpeed, float MaximumDampingSpeed, double ZeroSpeedSquared)
+	{
+		if (Actual.SizeSquared() < ZeroSpeedSquared) Actual = FVector::ZeroVector; //26019600
+		FVector Desired = Delta * FractionOverDelta;
+		if (MaximumSpeed > 0.f && Desired.SizeSquared() > FMath::Square(MaximumSpeed)) Desired = Desired.GetSafeNormal() * MaximumSpeed;
+		FVector Damping = -Actual; //constructor2601a670 dampingfactor1
+		if (MaximumDampingSpeed > 0.f && Damping.SizeSquared() > FMath::Square(MaximumDampingSpeed)) Damping = Damping.GetSafeNormal() * MaximumDampingSpeed;
+		return Actual + Damping + Desired;
+	}
+	void PrepareShadow(FBodyInstance& Body, FElysiumPhysicsShadowState& State, float DeltaSeconds)
+	{
+		if (!State.bActive) { State.PredictedPosition = FVector::ZeroVector; return; }
+		const float Fraction = State.RemainingSeconds <= 0.f ? 1.f : FMath::Min(DeltaSeconds / State.RemainingSeconds, 1.f);
+		State.RemainingSeconds = FMath::Max(State.RemainingSeconds - DeltaSeconds, 0.f); //2601aa50
+		if (Fraction <= 0.f) return;
+		const FTransform Current = Body.GetUnrealWorldTransform();
+		const FVector Displacement = State.Target.GetLocation() - Current.GetLocation();
+		if (State.TeleportDistanceCm > 0.f)
+		{
+			const bool bNoPrediction = State.PredictedPosition.X == 0. && State.PredictedPosition.Y == 0. && State.PredictedPosition.Z == 0.;
+			const FVector Error = bNoPrediction ? Displacement : Current.GetLocation() - State.PredictedPosition;
+			if (Error.SizeSquared() > FMath::Square(State.TeleportDistanceCm))
+			{
+				const auto Collision = Body.GetShapeCollisionEnabled(0);
+				Body.SetShapeCollisionEnabled(0, ECollisionEnabled::NoCollision);
+				Body.SetBodyTransform(State.Target, ETeleportType::TeleportPhysics);
+				Body.SetShapeCollisionEnabled(0, Collision); //2601a250 retains preteleport displacement.
+			}
+		}
+		const FVector Linear = ShadowVelocity(Body.GetUnrealWorldVelocity(), Displacement, Fraction / DeltaSeconds,
+			State.LinearDesiredLimitCm, State.LinearDampingLimitCm, .01);
+		Body.SetLinearVelocity(Linear, false);
+		State.PredictedPosition = Current.GetLocation() + Linear * DeltaSeconds;
+		FQuat Relative = Current.GetRotation().Inverse() * State.Target.GetRotation(); Relative.Normalize();
+		float Angle = 2.f * FMath::Acos(FMath::Clamp(static_cast<float>(Relative.W), -1.f, 1.f));
+		if (Angle > PI) Angle -= 2.f * PI;
+		const FVector Axis = FVector(Relative.X, Relative.Y, Relative.Z).GetSafeNormal();
+		const FVector LocalActual = Current.GetRotation().UnrotateVector(Body.GetUnrealWorldAngularVelocityInRadians());
+		const FVector LocalAngular = ShadowVelocity(LocalActual, Axis * Angle, Fraction / DeltaSeconds,
+			State.AngularDesiredLimitRadians, State.AngularDampingLimitRadians, 1.0e-6);
+		Body.SetAngularVelocityInRadians(Current.GetRotation().RotateVector(LocalAngular), false);
+	}
+}
+
+float ElysiumModelPhysics::PreparePhysicsFrame(UWorld& World, float FrameSeconds, float TimeScale, bool bSimulating)
+{
+	FPhysScene* Scene = World.GetPhysicsScene(); if (!Scene) return 0.f;
+	float Delta = (FrameSeconds < 0.f || FrameSeconds > 1.f) ? 0.f : FMath::Min(FrameSeconds, .1f);
+	Delta = FMath::Min(Delta * TimeScale, .1f); //1002ea40: real console-store value supplied by map host
+	if (!bSimulating || !FMath::IsFinite(Delta) || !(Delta > .0001f && Delta < 1.f)) Delta = 0.f; //26010900
+	const FVector Gravity(0., 0., World.GetGravityZ());
+	Scene->SetUpForFrame(&Gravity, Delta, 0.f, .1f, .1f, 1, false);
+	if (Delta > 0.f)
+		for (FShadowAssociation& Entry : ShadowAssociations)
+		{
+			UStaticMeshComponent* Component = ComponentFor(Entry.Actor);
+			if (Component && Component->GetWorld() == &World)
+				if (FBodyInstance* Body = Identity(Component)) PrepareShadow(*Body, Entry.State, Delta);
+		}
+	return Delta;
 }
 
 FBodyInstance* ElysiumModelPhysics::Identity(UStaticMeshComponent* Component)
@@ -321,7 +507,9 @@ bool ElysiumModelPhysics::Restore(UStaticMeshComponent* Component, FElysiumPhysi
 	const FElysiumSavedPhysicsBody& State, FString& OutError)
 {
 	Destroy(Component);
-	if (!Component || State.Pose.ContainsNaN() || State.LinearVelocity.ContainsNaN() || State.AngularVelocityRadians.ContainsNaN()
+	if (!Component || !ValidShadow(State.Shadow) || (State.Shadow.bInstalled && State.Recipe.bStatic)
+		|| (State.bShadowMember && !State.Shadow.bInstalled)
+		|| State.Pose.ContainsNaN() || State.LinearVelocity.ContainsNaN() || State.AngularVelocityRadians.ContainsNaN()
 		|| static_cast<uint8>(State.Recipe.Kind) > static_cast<uint8>(EElysiumPhysicsRecipeKind::Bbox)
 		|| !FMath::IsFinite(State.CurrentMassKg) || State.CurrentMassKg <= 0.f
 		|| !FMath::IsFinite(State.CurrentLinearDamping) || State.CurrentLinearDamping < 0.f
@@ -352,6 +540,11 @@ bool ElysiumModelPhysics::Restore(UStaticMeshComponent* Component, FElysiumPhysi
 	}
 	Component->SetLinearDamping(State.CurrentLinearDamping);
 	Component->SetAngularDamping(State.CurrentAngularDamping);
+	if (State.Shadow.bInstalled)
+	{
+		ShadowAssociations.Add({ ActorIdentity(Component), State.Shadow });
+		if (!State.Shadow.bAllowRotation) SetInertia(*Body, FVector::ZeroVector);
+	}
 	if (!State.Recipe.bStatic)
 	{
 		Body->SetLinearVelocity(State.LinearVelocity, false);

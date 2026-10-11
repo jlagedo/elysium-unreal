@@ -465,4 +465,5 @@ def test_no_slot_is_an_accepted_hide():
     # Slot 158 left the set: retail's CBasePlayer and CHL2_Player fill slot 158 with the base
     # CBaseEntity::IsAlive 0x100b4dc0 (vtmb_slot 158), so the player's override is gone and the one
     # base body reads m_lifeState (+0x200) for every class.
-    assert {s for s, (k, _, _) in gks.SLOT_PORT_MAP.items() if k == gks.OVERRIDDEN_BELOW} == {66, 67, 86, 123, 133, 153}
+    # AmbientGeneric::Precache 0x101ac930 already overrides base slot 104 (L0.audio.ambient-init).
+    assert {s for s, (k, _, _) in gks.SLOT_PORT_MAP.items() if k == gks.OVERRIDDEN_BELOW} == {66, 67, 86, 104, 123, 133, 153}

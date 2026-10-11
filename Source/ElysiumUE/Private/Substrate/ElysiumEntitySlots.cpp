@@ -1600,11 +1600,7 @@ void FElysiumEntity::VPhysicsDestroyObject()
 // slot 226 0x100b4f30 (walked) `void VPhysicsUpdate(IPhysicsObject*)`
 //   takes `IPhysicsObject*`
 //   layer 1, story 29c
-void FElysiumEntity::VPhysicsUpdate(void*)
-{
-	// Unfinished L0 solved-pose publication: 100b4f30 publishes movetype 7 pose,
-	// then touches triggers/relinks children; movetypes 1/8 consume pusher feedback.
-}
+// Hand body in ElysiumEntitySlotBodies.cpp: reached move0 is empty; other arms remain explicit gaps.
 
 // slot 227 0x100a1580 (sdk) `int VPhysicsTakeDamage(CTakeDamageInfo&)`
 //   takes `CTakeDamageInfo&`
@@ -1653,11 +1649,7 @@ void FElysiumEntity::VPhysicsFriction(void*, float, int32, int32)
 
 // slot 232 0x100a69e0 (sdk) `void UpdatePhysicsShadowToCurrentPosition(float)`
 //   layer 0, story 29c
-void FElysiumEntity::UpdatePhysicsShadowToCurrentPosition(float)
-{
-	FireEntitySlot(TEXT("CBaseEntity::UpdatePhysicsShadowToCurrentPosition"), TEXT("0x100a69e0"),
-		TEXT("29c"), DebugString());
-}
+// Hand body: ElysiumEntitySlotBodies.cpp, actual object slot46 submission.
 
 // slot 233 0x100a6ad0 (sdk) `int VPhysicsGetObjectList(IPhysicsObject**, int)`
 //   takes `IPhysicsObject**`
@@ -2553,7 +2545,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::VPhysicsDestroyObject),
 				nullptr },
 			{ 226, TEXT("0x100b4f30"), TEXT("CBaseEntity"), TEXT("VPhysicsUpdate"),
-				EElysiumNpcSlotBody::Closed, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(void*)>::Test(&FElysiumEntity::VPhysicsUpdate),
 				nullptr },
 			{ 227, TEXT("0x100a1580"), TEXT("CBaseEntity"), TEXT("VPhysicsTakeDamage"),
@@ -2577,7 +2569,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(void*, float, int32, int32)>::Test(&FElysiumEntity::VPhysicsFriction),
 				nullptr },
 			{ 232, TEXT("0x100a69e0"), TEXT("CBaseEntity"),
-				TEXT("UpdatePhysicsShadowToCurrentPosition"), EElysiumNpcSlotBody::Stub, TEXT(""),
+				TEXT("UpdatePhysicsShadowToCurrentPosition"), EElysiumNpcSlotBody::Hand, TEXT(""),
 				0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(float)>::Test(&FElysiumEntity::UpdatePhysicsShadowToCurrentPosition),
 				nullptr },

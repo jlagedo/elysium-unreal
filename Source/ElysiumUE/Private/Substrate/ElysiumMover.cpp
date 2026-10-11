@@ -24,6 +24,7 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumClassFields.h"
+#include "Substrate/ElysiumModelPhysics.h"
 
 #include "GameFramework/Pawn.h"
 
@@ -183,10 +184,26 @@ void FElysiumMoverBase::TickMove(double Now)
 	// Swept so a solid kinematic body pushes the pawn and reports a blocker. SetDormant-gated
 	// bodies don't reach here (an inert mover doesn't think).
 	FHitResult Hit;
+	const FTransform PreviousBodyTransform = Body->GetRelativeTransform();
+	struct FHierarchyPose { FElysiumEntityHandle Entity; FVector Origin; };
+	TArray<FHierarchyPose> Hierarchy;
+	if (World)
+	{
+		//100379e0 SetupAllInHierarchy: depth-first root/children/peers, capture before mutation.
+		TFunction<void(FElysiumEntity&)> Collect = [&](FElysiumEntity& Entity)
+		{
+			Hierarchy.Add({ Entity.Handle, Entity.GetAbsOrigin() });
+			for (FElysiumEntity* Child = World->Resolve(Entity.MoveChild); Child; Child = World->Resolve(Child->MovePeer)) Collect(*Child);
+		};
+		Collect(*this);
+	}
 	Body->SetRelativeLocationAndRotation(Loc, Rot, /*bSweep*/ true, &Hit);
 
 	if (Hit.bBlockingHit)
 	{
+		//10036a20 refuses the whole transaction. A clamped native sweep must not leave a
+		// different parent transform behind, nor publish any child target/touch callback.
+		Body->SetRelativeTransform(PreviousBodyTransform, false, nullptr, ETeleportType::TeleportPhysics);
 		const EMoveKind Before = CurrentMove;
 		OnMoveBlocked(Hit);
 		// If the block handler didn't start a fresh move (e.g. reverse), keep retrying this one
@@ -196,6 +213,33 @@ void FElysiumMoverBase::TickMove(double Now)
 			NextThink = Now;
 		}
 		return;
+	}
+	// Successful10038180/10038400 root publication uses the absolute logical setters, which
+	// invalidate descendant caches. Shadow objects retain their prior solved native position.
+	FVector AbsoluteOrigin = Body->GetComponentLocation();
+	FRotator NativeAngles = Body->GetComponentRotation();
+	FRotator AbsoluteAngles(-NativeAngles.Pitch, -NativeAngles.Yaw, NativeAngles.Roll);
+	SetAbsOrigin(AbsoluteOrigin);
+	SetAbsAngles(AbsoluteAngles);
+	if (World)
+	{
+		FElysiumEntityWorld* EntityWorld = World;
+		const FElysiumEntityHandle RootHandle = Handle;
+		//10036b10 FinishPushers: reverse hierarchy, synchronous touch before slot232(0).
+		for (int32 PoseIndex = Hierarchy.Num() - 1; PoseIndex >= 0; --PoseIndex)
+		{
+			const FHierarchyPose& Pose = Hierarchy[PoseIndex];
+			FElysiumEntity* Entity = EntityWorld->Resolve(Pose.Entity);
+			if (!Entity) continue;
+			Entity->PhysicsTouchTriggers(&Pose.Origin);
+			if (EntityWorld->Resolve(RootHandle) != this) return;
+			Entity = EntityWorld->Resolve(Pose.Entity);
+			//10036b10 retains its captured entries even if a live child was reparented;
+			//232 reads its current absolute frame. Removed entries fail serial resolution.
+			if (Entity) Entity->UpdatePhysicsShadowToCurrentPosition(0.f);
+		}
+		//10040390 subsequently dispatches the reached movetype0 children to PhysicsNone:
+		// no second target/frame countdown. Generic226's100342c0 relink is a separate path.
 	}
 
 	if (bArrived)

@@ -10,6 +10,11 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"   // ElysiumMove::U, the Source inch in cm
 #include "Substrate/ElysiumDataObjects.h"   // type 1, the touch-link head slot 207 asks for (L0-r019)
+#include "Substrate/ElysiumModelPhysics.h"
+#include "ElysiumBrushComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/OverlapResult.h"
+#include "Engine/World.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumEntityCollision, Log, All);
 
@@ -25,6 +30,75 @@ namespace
 	bool RetailIsSolid(int32 SolidType, uint32 SolidFlags)
 	{
 		return SolidType != 0 && (SolidFlags & 0x4u) == 0;
+	}
+}
+
+void FElysiumEntity::PhysicsTouchTriggers(const FVector* OldOriginCm)
+{
+	//100a53d0 ->VEngineServer014#122 (20111f30): edict/solid gate then real geometry.
+	if (!World || EdictIndex() == 0 || (IsRetailNotSolid() && !(RetailSolidFlags & 8u))) return;
+	UPrimitiveComponent* Native = Body ? static_cast<UPrimitiveComponent*>(Body)
+		: static_cast<UPrimitiveComponent*>(ElysiumModelPhysics::ComponentFor(VPhysicsGetObject()));
+	UWorld* NativeWorld = Native ? Native->GetWorld() : nullptr;
+	if (!NativeWorld) return; // no native environment exists for an unembodied entity
+	SetCheckUntouch(true); // deferred EndTouch, before callback enumeration
+	const FVector AbsoluteOrigin = GetAbsOrigin();
+	const FQuat Rotation = ElysiumModelPhysics::SourceRotation(GetAbsAngles());
+	TArray<FOverlapResult> Overlaps;
+	TArray<FHitResult> Hits;
+	const FCollisionObjectQueryParams Objects(FCollisionObjectQueryParams::AllObjects);
+	FComponentQueryParams ComponentParams(SCENE_QUERY_STAT(ElysiumPhysicsTouch));
+	ComponentParams.AddIgnoredComponent(Native);
+	if (RetailSolidType != 2 && Body)
+	{
+		NativeWorld->ComponentOverlapMulti(Overlaps, Native, AbsoluteOrigin, Rotation, ComponentParams, Objects);
+		if (OldOriginCm) NativeWorld->ComponentSweepMulti(Hits, Native, *OldOriginCm, AbsoluteOrigin, Rotation, ComponentParams);
+	}
+	else
+	{
+		// SOLID_BBOX's Source bounds remain axis-aligned for the engine touch query.
+		const FVector Min(CollMins.X, -CollMaxs.Y, CollMins.Z);
+		const FVector Max(CollMaxs.X, -CollMins.Y, CollMaxs.Z);
+		const FVector Center = (Min + Max) * (ElysiumMove::U * .5);
+		const FCollisionShape Shape = FCollisionShape::MakeBox((Max - Min) * (ElysiumMove::U * .5));
+		NativeWorld->OverlapMultiByObjectType(Overlaps, AbsoluteOrigin + Center, FQuat::Identity, Objects, Shape, ComponentParams);
+		if (OldOriginCm) NativeWorld->SweepMultiByObjectType(Hits, *OldOriginCm + Center,
+			AbsoluteOrigin + Center, FQuat::Identity, Objects, Shape, ComponentParams);
+	}
+	TArray<FElysiumEntityHandle> Triggers;
+	auto Collect = [&Triggers](UPrimitiveComponent* Component)
+	{
+		if (UElysiumBrushComponent* Brush = Cast<UElysiumBrushComponent>(Component))
+			if (Brush->GetSolidity() == EElysiumBrushSolidity::Trigger) Triggers.AddUnique(Brush->GetOwningEntity());
+	};
+	for (const FOverlapResult& Overlap : Overlaps) Collect(Overlap.GetComponent());
+	for (const FHitResult& Hit : Hits) Collect(Hit.GetComponent());
+	// Existing named native-partition modernization: entity-index callback order (entity_io.md).
+	Triggers.Sort([](const FElysiumEntityHandle& A, const FElysiumEntityHandle& B) { return A.Index < B.Index; });
+	const FElysiumEntityHandle MoverHandle = Handle;
+	FElysiumEntityWorld* EntityWorld = World;
+	for (const FElysiumEntityHandle& Trigger : Triggers)
+	{
+		if (!EntityWorld->Resolve(MoverHandle)) break;
+		EntityWorld->RouteEntityTouch(Trigger, MoverHandle, true, true);
+	}
+}
+
+void FElysiumEntity::PhysicsRelinkChildren(float Interval)
+{
+	if (!World) return;
+	FElysiumEntityWorld* EntityWorld = World;
+	FElysiumEntityHandle ChildHandle = MoveChild;
+	while (FElysiumEntity* Child = EntityWorld->Resolve(ChildHandle))
+	{
+		if (!Child->IsRetailNotSolid() || (Child->RetailSolidFlags & 8u)) Child->PhysicsTouchTriggers();
+		Child = EntityWorld->Resolve(ChildHandle);
+		if (!Child) break;
+		if (Child->GetMoveType() != 7) Child->UpdatePhysicsShadowToCurrentPosition(Interval);
+		Child->PhysicsRelinkChildren(Interval);
+		Child = EntityWorld->Resolve(ChildHandle);
+		if (!Child) break;
+		ChildHandle = Child->MovePeer; //100344cb: live peer reread after callbacks and recursion
 	}
 }
 

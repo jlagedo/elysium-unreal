@@ -505,3 +505,52 @@ Shadow registry add has no complete production controller caller yet. Full InitS
 model, game-data flags, deferred/native frame timing, pair/contact rules, solved226/touch/child
 publication and downstream restore graphs stay open. No full100a5bb0/100a5d80/1002e7e0 or
 original layer run closes. Original23/88 and the L0 closing gate remain unchanged.
+
+## Reached parent shadow dependency order (2026-10-11; work in progress)
+
+Recovered controller/target/countdown/native feedback and postthink frame facts now live
+in physics-interaction.md's recovered-shadow section. Root authorizes the required same-L0
+movement/query inputs for a real parented bbox witness: native trigger query and existing
+reciprocal touch consumers, parent movement transaction, mutation-safe ordered child relink,
+232 submission, actual InitShadow creation, Chaos scene delta/phys_timescale, native feedback,
+then deletion/aliases/saved reconnect. No setter teleport or helper-only controller closes it.
+Movetype0 and inherited-empty229 separate this observer from generic226/NPC publication;
+unrequired dispatcher arms stay open. Preserve prior phase and event contracts, and reuse
+confirmed r026/r027 query facts without cloning Source partition/IVP architecture.
+No original run or full physics packet closes at this recovery checkpoint.
+
+## Reached parent bbox shadow implementation (2026-10-11; coordinator accepted)
+
+The selected resolved-parent studio solid2 Spawn now reaches actual InitShadow through
+Setup225, authored bounds/surface/null defaults, native dynamic bbox, SetObject, installed
+controller caps/permissions, initial target and serial owner membership. Successful existing
+parent movement consumes a real native swept transaction, then reverse captured hierarchy
+TouchTriggers(old origin) and232(0). Live reparented entries retain the captured callback order;
+removed handles cannot resolve. Refused native movement restores the parent and emits no
+child target. This is FinishPushers' reached path, not a claimed generic226 RelinkChildren arm.
+
+Production map thinks submit before native StartPhysics; PostMove samples after the actual
+Chaos solve, then deferred untouch and EventQueue run once. The real console phys_timescale
+store controls native scene time for all actors; zero, negative, strict .0001 and .1 cap arms
+are witnessed by actual solver time. Logical, submitted and native solved frames stay distinct.
+Controller arrival, repeated target/wake, existing-permission retention, desired/damping caps,
+full Source rotation and prediction-error teleport use recovered formulas. Native touch creates
+physical links before the selected prop's ALLOW_PHYSICS activation rejection, and deferred loss
+cleans those links without an invented accepted latch.
+
+Physics schema48 persists native solved state and controller target/countdown/caps/permissions/
+prediction/original mass/inertia/gravity plus per-owner membership. Actual inactive map restore
+preserves these before activation and the first scheduled native tick consumes its saved arrival.
+Aliases independently reconstruct; reference-only clear preserves the producer. Actual225 retires
+controller/registry/all references before native release and restores original native mechanics.
+Malformed arrival, static-controller and member-without-controller fields refuse archive/restore.
+
+Final build, selected22/22, default179/179, bounded18/18 arena and generator23/23 evidence are
+in progress.md. Coordinator independently accepted this reached prerequisite; runtime/native
+test sources stay frozen and its exact26-path commit is owned by the coordinator.
+The broad pusher dispatcher,
+speculative multi-entity push/rollback/contact, nonbbox/default/explicit parameter arms, NPC
+producer/feedback, dynamic226/RelinkChildren publication, collision-frame notification/filtering,
+fluid and controller/pointer graphs remain open. Synchronous EntityWorld::Tick deliberately
+does not invoke a native solver; production solve ordering belongs to the map frame split.
+No full retail creator/mover row or original run closes;23/88 remains unchanged.

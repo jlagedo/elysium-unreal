@@ -340,6 +340,9 @@ public:
 	// unlinks one child, `0x100b5340` walks it to mark descendants.
 	FElysiumEntityHandle MoveChild;
 	FElysiumEntityHandle MovePeer;
+	//100a53d0/native geometry, then100342c0 live child traversal and slot232 submission.
+	void PhysicsTouchTriggers(const FVector* OldOriginCm = nullptr);
+	void PhysicsRelinkChildren(float Interval);
 	// `m_iEFlags` (+0x268), every bit but `EFL_DORMANT` (`0x2`, carried by `bEflDormant` above) and
 	// `EFL_KILLME` (`0x1`, carried by `bDead`): `0x800` abs transform dirty (`CalcAbsolutePosition`
 	// 0x100b1ac0 clears it), `0x1000` / `0x2000` abs velocity, `0x4000` surrounding bounds dirty and

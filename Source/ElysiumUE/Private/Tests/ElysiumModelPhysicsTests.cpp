@@ -20,6 +20,16 @@
 #include "ElysiumSaveArchive.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
+#include "PBDRigidsSolver.h"
+#include "Player/ElysiumCommandBus.h"
+#include "Debug/ElysiumConsole.h"
+#include "ElysiumSessionSubsystem.h"
+#include "Substrate/ElysiumMover.h"
+#include "Substrate/ElysiumTriggerBase.h"
+#include "ElysiumBrushComponent.h"
+#include "Misc/ScopeExit.h"
+#include "Components/BoxComponent.h"
+#include <limits>
 
 namespace ElysiumModelPhysicsTest
 {
@@ -653,17 +663,303 @@ bool FElysiumStaticBboxCallerTest::RunTest(const FString&)
 	auto RealChild = MakeDef(TEXT("resolved_child")); RealChild.Keys.Add(TEXT("parentname"), TEXT("real_parent")); ParentDefs.Defs.Add(RealChild);
 	auto MissingChild = MakeDef(TEXT("unresolved_child")); MissingChild.Keys.Add(TEXT("parentname"), TEXT("absent_parent")); ParentDefs.Defs.Add(MissingChild);
 	FElysiumEntityWorld ParentWorld(Map, nullptr, Services);
-	AddExpectedError(TEXT("requires unfinished VPhysicsInitShadow100a6150"), EAutomationExpectedErrorFlags::Contains, 1);
 	ParentWorld.Load(MoveTemp(ParentDefs));
 	auto* Resolved = ParentWorld.FindByName(TEXT("resolved_child"));
 	auto* Unresolved = ParentWorld.FindByName(TEXT("unresolved_child"));
 	if (!Resolved || !Unresolved) return false;
 	TestNotNull(TEXT("map parent resolver supplies actual moveparent before Spawn"), ParentWorld.Resolve(Resolved->MoveParent));
-	TestTrue(TEXT("real SetModel hull fields are produced before parent shadow planning gap"),
+	TestTrue(TEXT("real SetModel hull fields precede shadow creation"),
 		(FVector(Resolved->CollMins.X, -Resolved->CollMaxs.Y, Resolved->CollMins.Z) * 2.54).Equals(Inputs->StudioMinsCm, .001));
-	TestNull(TEXT("reached resolved-parent shadow planning gap does not fabricate static body"), Resolved->VPhysicsGetObject());
+	TestNotNull(TEXT("resolved parent creates actual native shadow"), Resolved->VPhysicsGetObject());
+	const auto* Shadow = ElysiumModelPhysics::ShadowFor(Resolved->VPhysicsGetObject());
+	TestTrue(TEXT("real installed controller retains forbidden movement/rotation"), Shadow && !Shadow->bAllowMovement && !Shadow->bAllowRotation);
+	TestTrue(TEXT("actual owner registry membership"), ParentWorld.PhysicsShadows().Contains(Resolved->Handle));
 	TestNull(TEXT("authored unresolved name has no resolved moveparent"), ParentWorld.Resolve(Unresolved->MoveParent));
 	TestNotNull(TEXT("authored unresolved parent name takes real static bbox branch"), Unresolved->VPhysicsGetObject());
 	return true;
+}
+
+// Actual production map tick groups: native body/controller creation, moving parent transaction,
+// one232 target, configured Chaos time, feedback before the queue, and saved reconnect.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumParentShadowFrameTest, "Elysium.Substrate.ModelPhysics.ParentShadowFrame",
+ EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumParentShadowFrameTest::RunTest(const FString&)
+{
+ const FString PreviousTimeScale = ElysiumCommandBus::Console().GetCvar(TEXT("phys_timescale"));
+ ON_SCOPE_EXIT { ElysiumCommandBus::Console().Execute(FString(TEXT("phys_timescale ")) + PreviousTimeScale); };
+ FPlayerWorldFixture Fixture;
+ if (!Fixture.CreateWorld(*this)) return false;
+ Fixture.SpawnPlayerControllerAndPawn(FVector(-1000,0,1000));
+ Fixture.PlayerController->Possess(Fixture.Pawn);
+ auto* Map = Fixture.SpawnMapActorDeferred();
+ Map->bStageOnly = true; Map->bStageWithoutCatalogue = true;
+ Map->FinishSpawning(FTransform::Identity);
+ auto Tick = [&]() { return Fixture.TestWorld.TickTestWorld(.02f); };
+ for (int32 Frame = 0; Frame < 20 && !Map->IsRuntimeActive(); ++Frame) Tick();
+ if (!TestTrue(TEXT("production activation barrier admits initial stage"), Map->IsRuntimeActive()))
+ { AddError(Map->GetMissingRuntimePrerequisites()); return false; }
+ FElysiumEntityDefs Defs; Defs.MapName = TEXT("parent_shadow_native");
+ FElysiumEntityDef Parent; Parent.Classname = TEXT("func_door"); Parent.TargetName = TEXT("parent");
+ Parent.Model = 1; Parent.Origin = FVector(3000,4000,3000);
+ Parent.Keys.Add(TEXT("model"), TEXT("*1")); Parent.Keys.Add(TEXT("speed"), TEXT("100"));
+ Parent.Keys.Add(TEXT("lip"), TEXT("0")); Parent.Keys.Add(TEXT("wait"), TEXT("-1"));
+ FElysiumConvexHull Hull;
+ for (float X : { 0.f, 120.f }) for (float Y : { -10.f, 10.f }) for (float Z : { -10.f, 10.f }) Hull.Vertices.Add(FVector(X,Y,Z));
+ Parent.Hulls.Add(Hull); Defs.Defs.Add(Parent);
+ auto Child = ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"), TEXT("child"));
+ Child.Classname = TEXT("prop_dynamic"); Child.Origin = FVector(3000,4500,3000);
+ Child.Keys.Add(TEXT("parentname"), TEXT("parent")); Child.Keys.Add(TEXT("solid"), TEXT("2"));
+ Child.Keys.Add(TEXT("spawnflags"), TEXT("0")); Defs.Defs.Add(Child);
+ FElysiumEntityDef Trigger; Trigger.Classname = TEXT("trigger_multiple"); Trigger.TargetName = TEXT("native_candidate");
+ Trigger.Model = 2; Trigger.Origin = FVector(3000,4500,3000); Trigger.Keys.Add(TEXT("model"), TEXT("*2"));
+ Trigger.Keys.Add(TEXT("spawnflags"), TEXT("8"));
+ FElysiumConvexHull TriggerHull;
+ for (float X : { -15.f, 15.f }) for (float Y : { -100.f, 100.f }) for (float Z : { -100.f, 100.f }) TriggerHull.Vertices.Add(FVector(X,Y,Z));
+ Trigger.Hulls.Add(TriggerHull); Defs.Defs.Add(Trigger);
+ FElysiumStageSeat Seat; Seat.FeetCm = FVector(-1000,0,1000);
+ FElysiumEntityDefs RestoreDefs = Defs;
+ FString Error;
+ if (!TestTrue(TEXT("actual scenario rebuild prepares props and parser hierarchy"), Map->RebuildStageWorld(MoveTemp(Defs), {}, Seat, Error)))
+ { AddError(Error); return false; }
+ for (int32 Frame = 0; Frame < 20 && !Map->IsRuntimeActive(); ++Frame) Tick();
+ if (!TestTrue(TEXT("production rebuilt map becomes Active"), Map->IsRuntimeActive())) { AddError(Map->GetMissingRuntimePrerequisites()); return false; }
+ auto* World = Map->GetEntityWorld();
+ auto* MovingParent = World->FindByName(TEXT("parent")); auto* ShadowChild = World->FindByName(TEXT("child"));
+ if (!MovingParent || !ShadowChild || !TestNotNull(TEXT("production child native incarnation"), ShadowChild->VPhysicsGetObject())) return false;
+ void* Object = ShadowChild->VPhysicsGetObject();
+ auto* Component = ElysiumModelPhysics::ComponentFor(Object); auto* Native = ElysiumModelPhysics::Identity(Component);
+ if (!Native) return false;
+ auto* Solver = Native->GetPhysicsActor()->GetSolver<Chaos::FPBDRigidsSolver>();
+ if (!TestNotNull(TEXT("real scene solver exists"), Solver)) return false;
+ TestTrue(TEXT("native membership from production creation"), World->PhysicsShadows().Contains(ShadowChild->Handle));
+ const FVector InitialLogical = ShadowChild->GetAbsOrigin();
+ World->AcceptInput(MovingParent->Handle, FName(TEXT("Open")), FElysiumVariant::Void(),
+  FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+ ElysiumCommandBus::Console().Execute(TEXT("phys_timescale 0.5"));
+ const double PriorTime = Solver->GetSolverTime();
+ const FVector PriorNative = Native->GetUnrealWorldTransform().GetLocation();
+ int32 QueuedObservers = 0; int32 TransactionTargets = 0;
+ World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+ {
+  if (Event.Entity == ShadowChild->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=shadow_target"))) ++TransactionTargets;
+  if (Event.Name != TEXT("native_candidate") || Event.Kind != TEXT("input") || !Event.Text.StartsWith(TEXT("Enable "))) return;
+  ++QueuedObservers;
+  TestTrue(TEXT("production EventQueue input observes completed native solve"), Solver->GetSolverTime() > PriorTime && Native->GetUnrealWorldTransform().GetLocation().X > PriorNative.X);
+ });
+ World->EnqueueInput(TEXT("native_candidate"), FName(TEXT("Enable")), FElysiumVariant::Void(), 0.,
+  FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+ Tick(); Tick();
+ World->SetAiTraceSink({});
+ TestEqual(TEXT("production pending queue is serviced exactly once"), QueuedObservers, 1);
+ TestEqual(TEXT("each successful native mover transaction has one232 target"), TransactionTargets, 2);
+ const double SolvedDelta = Solver->GetSolverTime() - PriorTime;
+ TestTrue(TEXT("actual two native solves use .02*.5, exactly once per frame"), FMath::IsNearlyEqual(SolvedDelta, .02, .00001));
+ const auto* State = ElysiumModelPhysics::ShadowFor(Object);
+ if (!State) return false;
+ TestTrue(TEXT("successful parent movement changes logical inherited child origin"), ShadowChild->GetAbsOrigin().X > InitialLogical.X);
+ TestTrue(TEXT("232 submits logical target after parent transaction"), State->Target.GetLocation().Equals(ShadowChild->GetAbsOrigin(), .001));
+ TestEqual(TEXT("FinishPushers submits zero arrival, no extra relink target"), State->RemainingSeconds, 0.f);
+ auto* NativeCandidate = static_cast<FElysiumTriggerBase*>(World->FindByName(TEXT("native_candidate")));
+ TestTrue(TEXT("native bbox query retains physical candidate pair before eligibility"), ShadowChild->IsCurrentlyTouching() && NativeCandidate && NativeCandidate->IsCurrentlyTouching());
+ TestTrue(TEXT("move0 shadow prop fails retail ALLOW_PHYSICS activation"), NativeCandidate && NativeCandidate->LastTriggerTime < -1.0e15);
+ FVector NativeSample;
+ TestEqual(TEXT("native slot47 returns literal1"), ElysiumModelPhysics::GetShadowPosition(Object, &NativeSample, nullptr), 1);
+ TestTrue(TEXT("actual native solve moved from previous native position"), NativeSample.X > PriorNative.X);
+ TestTrue(TEXT("zero-arrival native controller reaches submitted position"), NativeSample.Equals(State->Target.GetLocation(), .1));
+ // Finish the actual parent transaction, then submit a positive-arrival target through232.
+ for (int32 Frame = 0; Frame < 90; ++Frame) Tick();
+ TestFalse(TEXT("lost native candidate expires physical pair in deferred untouch"), ShadowChild->IsCurrentlyTouching());
+ // A real static scene obstacle refuses the next closing transaction before publication.
+ AActor* Obstacle = Fixture.World->SpawnActor<AActor>();
+ UBoxComponent* ObstacleShape = NewObject<UBoxComponent>(Obstacle);
+ Obstacle->SetRootComponent(ObstacleShape); Obstacle->AddInstanceComponent(ObstacleShape);
+ const FBox ParentBounds = MovingParent->Body->Bounds.GetBox();
+ ObstacleShape->SetBoxExtent(FVector(1,100,100));
+ ObstacleShape->SetWorldLocation(FVector(ParentBounds.Min.X - 2., ParentBounds.GetCenter().Y, ParentBounds.GetCenter().Z));
+ ObstacleShape->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+ ObstacleShape->SetCollisionObjectType(ECC_WorldStatic); ObstacleShape->SetCollisionResponseToAllChannels(ECR_Block);
+ ObstacleShape->RegisterComponent();
+ const FVector BeforeBlockedParent = MovingParent->GetAbsOrigin();
+ const FTransform BeforeBlockedTarget = ElysiumModelPhysics::ShadowFor(Object)->Target;
+ int32 BlockedTargets = 0;
+ World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+ { if (Event.Entity == ShadowChild->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=shadow_target"))) ++BlockedTargets; });
+ World->AcceptInput(MovingParent->Handle, FName(TEXT("Close")), FElysiumVariant::Void(), FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+ Tick(); World->SetAiTraceSink({});
+ TestTrue(TEXT("native blocker refuses whole logical parent transaction"), MovingParent->GetAbsOrigin().Equals(BeforeBlockedParent, .001));
+ TestTrue(TEXT("blocked transaction leaves submitted child target unchanged"), ElysiumModelPhysics::ShadowFor(Object)->Target.Equals(BeforeBlockedTarget, .001));
+ TestEqual(TEXT("blocked transaction emits no232 submission"), BlockedTargets, 0);
+ Obstacle->Destroy();
+ for (int32 Frame = 0; Frame < 90; ++Frame) Tick();
+ const FVector BeforeArrival = ElysiumModelPhysics::Identity(Component)->GetUnrealWorldTransform().GetLocation();
+ FVector ArrivalTarget = ShadowChild->GetAbsOrigin() + FVector(100,0,0);
+ ShadowChild->SetAbsOrigin(ArrivalTarget);
+ ShadowChild->UpdatePhysicsShadowToCurrentPosition(.1f);
+ Tick();
+ State = ElysiumModelPhysics::ShadowFor(Object);
+ ElysiumModelPhysics::GetShadowPosition(Object, &NativeSample, nullptr);
+ TestTrue(TEXT("positive arrival uses actual .01 native delta for displacement"), FMath::IsNearlyEqual(NativeSample.X - BeforeArrival.X, 10., .2));
+ TestTrue(TEXT("positive arrival countdown consumes native delta"), State && FMath::IsNearlyEqual(State->RemainingSeconds, .09f, .0001f));
+ Native->SetLinearVelocity(FVector(200,0,0), false);
+ TestTrue(TEXT("existing native controller changes caps"), ElysiumModelPhysics::SetShadow(Object, 10.f, 10.f, true, true));
+ State = ElysiumModelPhysics::ShadowFor(Object);
+ TestTrue(TEXT("existing controller retains false permissions"), State && !State->bAllowMovement && !State->bAllowRotation);
+ TestTrue(TEXT("current speed above requested leaves negative desired cap and positive damping cap"), State &&
+  FMath::IsNearlyEqual(State->LinearDesiredLimitCm, -174.6f, .001f) && FMath::IsNearlyEqual(State->LinearDampingLimitCm, 200.f, .001f));
+ FVector SecondTarget = NativeSample + FVector(100,0,0);
+ TestTrue(TEXT("second actual target admitted"), ElysiumModelPhysics::UpdateShadow(Object, SecondTarget, FQuat::Identity, false, .1f));
+ Tick(); ElysiumModelPhysics::GetShadowPosition(Object, &NativeSample, nullptr);
+ TestTrue(TEXT("nonpositive desired cap does not clamp native displacement"), FMath::IsNearlyEqual(NativeSample.X, SecondTarget.X - 90., .2));
+ Native->PutInstanceToSleep();
+ TestTrue(TEXT("repeated target replaces countdown"), ElysiumModelPhysics::UpdateShadow(Object, SecondTarget, FQuat::Identity, false, .2f));
+ TestFalse(TEXT("repeated target does not wake native body"), Native->IsInstanceAwake());
+ State = ElysiumModelPhysics::ShadowFor(Object);
+ TestEqual(TEXT("repeated target retains new arrival"), State->RemainingSeconds, .2f);
+ TestTrue(TEXT("negative arrival clamps at actual submission"), ElysiumModelPhysics::UpdateShadow(Object, SecondTarget, FQuat::Identity, false, -.5f));
+ TestEqual(TEXT("negative arrival stores zero"), ElysiumModelPhysics::ShadowFor(Object)->RemainingSeconds, 0.f);
+ const FQuat PriorRotation = Native->GetUnrealWorldTransform().GetRotation();
+ FRotator SourceAngles(17,23,31); ShadowChild->SetAbsAngles(SourceAngles);
+ const FQuat FullTargetRotation = ElysiumModelPhysics::SourceRotation(ShadowChild->GetAbsAngles());
+ ShadowChild->UpdatePhysicsShadowToCurrentPosition(.1f);
+ TestTrue(TEXT("pitch/roll target submission uses full Source frame"), ElysiumModelPhysics::ShadowFor(Object)->Target.GetRotation().Equals(FullTargetRotation, .0001));
+ TestTrue(TEXT("logical angle setter does not teleport native rotation"), Native->GetUnrealWorldTransform().GetRotation().Equals(PriorRotation, .0001));
+ Tick();
+ TestTrue(TEXT("actual native angular solve follows full target frame"), Native->GetUnrealWorldTransform().GetRotation().AngularDistance(FQuat::Slerp(PriorRotation, FullTargetRotation, .1f)) < .002);
+ // Prediction error, not distance to target, selects the installed threshold arm.
+ ElysiumModelPhysics::SetShadowTeleportDistance(Object, 1.f);
+ const auto* ThresholdState = ElysiumModelPhysics::ShadowFor(Object);
+ FTransform DisplacedNativePose = Native->GetUnrealWorldTransform();
+ DisplacedNativePose.SetLocation(ThresholdState->PredictedPosition + FVector(ThresholdState->TeleportDistanceCm * 2.,0,0));
+ Native->SetBodyTransform(DisplacedNativePose, ETeleportType::TeleportPhysics);
+ Native->SetLinearVelocity(FVector::ZeroVector, false);
+ Native->SetAngularVelocityInRadians(FVector::ZeroVector, false);
+ FVector ThresholdTarget = DisplacedNativePose.GetLocation() + FVector(100,0,0);
+ // Hold rotation fixed here: Chaos rotates the offset hull about its native center of mass,
+ // so actor-origin translation during a simultaneous turn is not linear velocity times dt.
+ ElysiumModelPhysics::UpdateShadow(Object, ThresholdTarget, DisplacedNativePose.GetRotation(), false, .1f);
+ const auto BeforeTeleportCollision = Native->GetShapeCollisionEnabled(0);
+ Tick();
+ State = ElysiumModelPhysics::ShadowFor(Object);
+ TestTrue(TEXT("prediction error above threshold teleports then retains preteleport velocity delta"),
+  FMath::IsNearlyEqual(Native->GetUnrealWorldTransform().GetLocation().X, ThresholdTarget.X + 10., .2));
+ TestTrue(TEXT("teleport prediction retains old current rather than target"), State && State->PredictedPosition.X < ThresholdTarget.X);
+ TestEqual(TEXT("threshold teleport restores native shape collision"), Native->GetShapeCollisionEnabled(0), BeforeTeleportCollision);
+ ElysiumModelPhysics::SetShadowTeleportDistance(Object, 0.f);
+ // No clock/controller advance on zero/negative scale; logical mover may continue to submit.
+ ElysiumCommandBus::Console().Execute(TEXT("phys_timescale 0"));
+ const double PausedTime = Solver->GetSolverTime(); Tick();
+ TestTrue(TEXT("zero scale advances no actual native time"), FMath::IsNearlyEqual(Solver->GetSolverTime(), PausedTime, .00001));
+ ElysiumCommandBus::Console().Execute(TEXT("phys_timescale -1")); Tick();
+ TestTrue(TEXT("negative scale rejected by actual environment gate"), FMath::IsNearlyEqual(Solver->GetSolverTime(), PausedTime, .00001));
+ ElysiumCommandBus::Console().Execute(TEXT("phys_timescale 0.005")); Tick();
+ TestTrue(TEXT("actual dt at .0001 strict environment boundary does not advance"), FMath::IsNearlyEqual(Solver->GetSolverTime(), PausedTime, .00001));
+ ElysiumCommandBus::Console().Execute(TEXT("phys_timescale 20")); Tick();
+ TestTrue(TEXT("scaled native delta is capped at .1 after multiplication"), FMath::IsNearlyEqual(Solver->GetSolverTime() - PausedTime, .1, .00001));
+ ElysiumCommandBus::Console().Execute(TEXT("phys_timescale 1"));
+ FElysiumEntityDef AliasDef; AliasDef.Classname = TEXT("info_target"); AliasDef.TargetName = TEXT("shadow_alias");
+ FElysiumEntity* Alias = World->Resolve(World->SpawnRuntimeEntity(AliasDef));
+ if (!Alias) return false;
+ Alias->VPhysicsSetObject(Object); Alias->VPhysicsSwapObject(nullptr);
+ TestTrue(TEXT("reference-only clear preserves producer controller and registry"), ShadowChild->VPhysicsGetObject() == Object &&
+  ElysiumModelPhysics::ShadowFor(Object) && World->PhysicsShadows().Contains(ShadowChild->Handle));
+ Alias->VPhysicsSetObject(Object);
+ const int32 AliasIndex = Alias->Handle.Index;
+ ElysiumModelPhysics::UpdateShadow(Object, SecondTarget, FullTargetRotation, false, .2f);
+ FElysiumMapSnapshot Snapshot; World->Freeze(Snapshot);
+ if (!TestFalse(TEXT("actual shadow Physics save admitted"), Snapshot.bPhysicsSaveFailed)) return false;
+ const auto Saved = Snapshot.PhysicsBodies.FindByPredicate([ShadowChild](const FElysiumSavedPhysicsBody& Body) { return Body.EntityIndex == ShadowChild->Handle.Index; });
+ if (Saved) AddInfo(FString::Printf(TEXT("shadow saved installed=%d member=%d originalmass=%.9g"), Saved->Shadow.bInstalled, Saved->bShadowMember, Saved->Shadow.SavedMassKg));
+ else AddInfo(FString::Printf(TEXT("shadow saved missing: eligible=%d rows=%d"), ShadowChild->ShouldSavePhysics(), Snapshot.PhysicsBodies.Num()));
+ if (!TestTrue(TEXT("save retains original controller body state and membership"), Saved && Saved->Shadow.bInstalled && Saved->bShadowMember && FMath::IsNearlyEqual(Saved->Shadow.SavedMassKg, 85.f, .001f))) return false;
+ const FTransform Submitted = Saved->Shadow.Target; const FTransform Solved = Saved->Pose;
+ for (int32 InvalidArm = 0; InvalidArm < 4; ++InvalidArm)
+ {
+  FElysiumSavedPhysicsBody Invalid = *Saved;
+  if (InvalidArm == 0) Invalid.Shadow.RemainingSeconds = -1.f;
+  if (InvalidArm == 1) Invalid.Shadow.RemainingSeconds = std::numeric_limits<float>::quiet_NaN();
+  if (InvalidArm == 2) Invalid.Recipe.bStatic = true;
+  if (InvalidArm == 3) Invalid.Shadow.bInstalled = false;
+  TArray<uint8> InvalidBytes; FMemoryWriter InvalidWriter(InvalidBytes, true); InvalidWriter << Invalid;
+  FElysiumSavedPhysicsBody InvalidRead; FMemoryReader InvalidReader(InvalidBytes, true); InvalidReader << InvalidRead;
+  TestTrue(TEXT("malformed persisted shadow state refuses archive read"), InvalidReader.IsError());
+  auto* InvalidComponent = NewObject<UElysiumPhysicsPropComponent>(Map);
+  Map->AddInstanceComponent(InvalidComponent); InvalidComponent->RegisterComponent();
+  FString InvalidError;
+  TestFalse(TEXT("malformed shadow state refuses actual native reconstruction"), ElysiumModelPhysics::Restore(InvalidComponent, World->PhysicsSurfaces(), Invalid, InvalidError));
+  TestNull(TEXT("failed shadow reconstruction leaves no native incarnation"), ElysiumModelPhysics::ActorIdentity(InvalidComponent));
+  TestTrue(TEXT("failed reconstruction leaves live owner and membership intact"), ShadowChild->VPhysicsGetObject() == Object && World->PhysicsShadows().Contains(ShadowChild->Handle));
+  InvalidComponent->DestroyComponent();
+ }
+ TArray<uint8> PhysicsArchive; FMemoryWriter PhysicsWriter(PhysicsArchive, true);
+ FElysiumSaveArchive PhysicsSave(PhysicsWriter, FElysiumSaveVersion::Latest); PhysicsSave << Snapshot;
+ if (!TestFalse(TEXT("actual shadow snapshot archive writes"), PhysicsWriter.IsError())) return false;
+ FElysiumMapSnapshot PersistedSnapshot; FMemoryReader PhysicsReader(PhysicsArchive, true);
+ FElysiumSaveArchive PhysicsLoad(PhysicsReader, FElysiumSaveVersion::Latest); PhysicsLoad << PersistedSnapshot;
+ if (!TestFalse(TEXT("actual shadow snapshot archive reads"), PhysicsReader.IsError())) return false;
+ Snapshot = MoveTemp(PersistedSnapshot); Snapshot.PhysicsBodies.Reset(); // restore must consume Physics block bytes
+ const int32 ChildIndex = ShadowChild->Handle.Index;
+ bool bRestoredThroughStage = false;
+ bool bRestoredNativePose = false; bool bRestoredController = false;
+ if (!TestTrue(TEXT("production rebuild creates inactive restore world"), Map->RebuildStageWorld(MoveTemp(RestoreDefs), {}, Seat, Error))) return false;
+ Map->RestoreBeforeActivation = [&]()
+ {
+  World = Map->GetEntityWorld();
+  bRestoredThroughStage = World && World->ApplySnapshot(Snapshot) >= 0;
+  if (bRestoredThroughStage)
+  {
+   FElysiumEntity* RestoredChild = World->Resolve(FElysiumEntityHandle(ChildIndex, World->GetEpoch()));
+   void* RestoredObject = RestoredChild ? RestoredChild->VPhysicsGetObject() : nullptr;
+   const auto* RestoredController = ElysiumModelPhysics::ShadowFor(RestoredObject);
+   const FBodyInstance* RestoredNative = ElysiumModelPhysics::Identity(ElysiumModelPhysics::ComponentFor(RestoredObject));
+   bRestoredNativePose = RestoredNative && RestoredNative->GetUnrealWorldTransform().Equals(Solved, .001);
+   bRestoredController = RestoredController && RestoredController->Target.Equals(Submitted, .001) &&
+    FMath::IsNearlyEqual(RestoredController->RemainingSeconds, .2f, .0001f);
+  }
+  return bRestoredThroughStage;
+ };
+ for (int32 Frame = 0; Frame < 20 && !Map->IsRuntimeActive(); ++Frame) Tick();
+ if (!TestTrue(TEXT("actual restore barrier reconnects before activation"), bRestoredThroughStage && Map->IsRuntimeActive())) return false;
+ ShadowChild = World->Resolve(FElysiumEntityHandle(ChildIndex, World->GetEpoch()));
+ if (!ShadowChild) return false;
+ Object = ShadowChild->VPhysicsGetObject(); State = ElysiumModelPhysics::ShadowFor(Object);
+ TestTrue(TEXT("restore barrier preserves submitted target and countdown before first simulation"), bRestoredController);
+ TestTrue(TEXT("reconnect preserves submitted target without resubmitting"), State && State->Target.Equals(Submitted, .001));
+ Native = ElysiumModelPhysics::Identity(ElysiumModelPhysics::ComponentFor(Object));
+ TestTrue(TEXT("restore barrier preserves actual solved pose independently"), bRestoredNativePose);
+ TestTrue(TEXT("reconnect restores owner registry membership"), World->PhysicsShadows().Contains(ShadowChild->Handle));
+ const float BeforeRestoredCountdown = State->RemainingSeconds;
+ auto* RestoredSolver = Native->GetPhysicsActor()->GetSolver<Chaos::FPBDRigidsSolver>();
+ const double BeforeRestoredTime = RestoredSolver->GetSolverTime();
+ const FVector BeforeRestoredPose = Native->GetUnrealWorldTransform().GetLocation();
+ Tick();
+ State = ElysiumModelPhysics::ShadowFor(Object);
+ const double RestoredNativeDelta = RestoredSolver->GetSolverTime() - BeforeRestoredTime;
+ TestTrue(TEXT("first scheduled restored native frame advances actual scene"), RestoredNativeDelta > 0.);
+ TestTrue(TEXT("first restored native frame preserves target and consumes persisted countdown"), State && State->Target.Equals(Submitted, .001) &&
+  FMath::IsNearlyEqual(State->RemainingSeconds, FMath::Max(0.f, BeforeRestoredCountdown - static_cast<float>(RestoredNativeDelta)), .0001f));
+ TestTrue(TEXT("first restored native frame solves from saved native pose and velocity"), !Native->GetUnrealWorldTransform().GetLocation().Equals(BeforeRestoredPose, .001));
+ Alias = World->Resolve(FElysiumEntityHandle(AliasIndex, World->GetEpoch()));
+ TestTrue(TEXT("saved alias reconstructs independent controller without owner membership"), Alias && Alias->VPhysicsGetObject() != Object &&
+  ElysiumModelPhysics::ShadowFor(Alias->VPhysicsGetObject()) && !World->PhysicsShadows().Contains(Alias->Handle));
+ Component = ElysiumModelPhysics::ComponentFor(Object);
+ FBodyInstance* RetiringBody = ElysiumModelPhysics::Identity(Component);
+ const float OriginalMass = State->SavedMassKg;
+ const FVector OriginalInertia = State->SavedInertia; const bool bOriginalGravity = State->bSavedGravity;
+ bool bObservedRetirement = false;
+ World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
+ {
+  if (Event.Kind != TEXT("physics_retire") || Event.Entity != ShadowChild->Handle) return;
+  bObservedRetirement = true;
+  TestNull(TEXT("225 retires controller before callback/native release"), ElysiumModelPhysics::ShadowFor(Object));
+  TestFalse(TEXT("225 removes owner membership before callback"), World->PhysicsShadows().Contains(ShadowChild->Handle));
+  TestTrue(TEXT("controller teardown restores original native mass before release"), RetiringBody->IsValidBodyInstance() && FMath::IsNearlyEqual(RetiringBody->GetBodyMass(), OriginalMass, .001f));
+  TestTrue(TEXT("controller teardown restores original native inertia and gravity"), RetiringBody->GetBodyInertiaTensor().Equals(OriginalInertia, .001) && RetiringBody->bEnableGravity == bOriginalGravity);
+ });
+ ShadowChild->VPhysicsDestroyObject(); World->SetAiTraceSink({});
+ TestTrue(TEXT("actual production225 exposes pre-release observer"), bObservedRetirement);
+ TestNull(TEXT("225 leaves owner null"), ShadowChild->VPhysicsGetObject());
+ TestNotNull(TEXT("independent saved alias survives owner deletion"), Alias ? Alias->VPhysicsGetObject() : nullptr);
+ TestEqual(TEXT("deleted shadow47 fails and returns0"), ElysiumModelPhysics::GetShadowPosition(Object, nullptr, nullptr), 0);
+ return true;
 }
 #endif

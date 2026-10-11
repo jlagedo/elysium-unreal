@@ -6,6 +6,7 @@
 #include "ElysiumCollisionChannels.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityWorld.h"
+#include "Substrate/ElysiumModelPhysics.h"
 #include "ElysiumSessionSubsystem.h"
 #include "ElysiumMovementComponent.h"   // the gait-speed push
 #include "ElysiumMoveSolve.h"           // ElysiumMove::U — the one Source-unit conversion
@@ -2475,7 +2476,11 @@ void AElysiumMapActor::GameplayTick(float DeltaSeconds)
 				{
 					ReconcilePlayerBrushTouches(ResolvePlayerPawn());
 				}
-				EntityWorld->Tick(GameState->GameClock().GetNow());
+				EntityWorld->BeginNativePhysicsFrame(GameState->GameClock().GetNow());
+				if (UWorld* NativeWorld = GetWorld())
+					ElysiumModelPhysics::PreparePhysicsFrame(*NativeWorld,
+						DeltaSeconds, FCString::Atof(*ElysiumCommandBus::Console().GetCvar(TEXT("phys_timescale"))),
+						!GameState->GameClock().IsPaused());
 			}
 
 			TickAudio(DeltaSeconds);
@@ -2614,6 +2619,9 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 	// `now` advanced by the pre-move pass and service on the next frame like any zero-delay wire.
 	if (EntityWorld)
 	{
+		//1002dd70: actual native solve has completed at TG_PostPhysics; postthink feedback and
+		// reached native shadow feedback precedes GameFrame's step6 queued outputs.
+		EntityWorld->FinishNativePhysicsFrame();
 		EntityWorld->UpdatePlayerInteraction();
 		// The feed request is acquired against the same settled frame the use focus is, and for the
 		// same reason: retail's victim search is a trace off the player's final view position.

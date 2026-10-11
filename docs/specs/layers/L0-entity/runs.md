@@ -310,3 +310,35 @@ Coordinator accepted this prerequisite after independent source/report review: f
 build/native5/5, default178/178, touched14/14 and prior bounded18/18 in two boots passed.
 Exact gate paths, existing warnings/errors and remaining contracts are in progress.md.
 Original23/88 unchanged; full shadow/controller/226 and the L0 closing gate remain open.
+
+## Reached parent bbox shadow prerequisite (2026-10-11; coordinator accepted)
+
+The selected resolved-parent studio solid2 InitShadow producer reaches actual native controller,
+target and owner membership. Actual native parent transaction -> reverse captured child touch/
+232(0) -> postthink Chaos scene solve -> native feedback is witnessed through production map
+ticks, including blocked no-target, queued postsolve observation and physical trigger links before
+retail activation rejection. Real console phys_timescale controls actual native delta. Controller
+formula/permission/wake/rotation/threshold arms, deletion/reference-only aliases and schema48
+inactive restore plus first scheduled tick are covered. No immediate setter native teleport.
+
+Final worker arm build030319 passed28.4s; affected22/22 tests030355 passed (19clean,3existing
+warning results), all6 native tests clean. Exact authoritative paths, intermediate mass/restore/
+threshold fixture failures and their evidence-based corrections are in progress.md. Runtime/test
+sources are frozen. Coordinator independently reviewed the code, all authoritative selected/
+default/arena aggregate and host JSON, and all7946 audit lines; the reached prerequisite is accepted.
+Coordinator default then passed179/179 (100clean,79existingwarnings),0 failed/notRun, all6
+native results clean. Coordinator bounded18 arena030512 passed18/18 in two boots with both
+hosts exit0. Aggregate and both host indices are recorded in progress.md; ordinary first_unmet
+values are null and two deliberate refusal selftests pass by inversion. Existing27startupErrors/
+534warnings remain outside authoritative passing scenario results. Generator mapping gate
+initially found22pass/1 stale assertion: slot104 AmbientGeneric::Precache101ac930 was already
+OVERRIDDEN_BELOW in HEAD, and its expected census now includes104. Final coordinator generator
+rerun passed23/23 in1.41s,0 failed/error/skipped; durable JUnit evidence at
+E:/elysium-work/reports/tests/20261011-l0-shadow-generator.xml is read. Exact26-path commit
+belongs to the coordinator; its hash is unknown at this documentation freeze.
+All7946 audit lines remain16 columns; no audit row or original run closes,23/88 unchanged.
+
+The broad pusher/dispatcher, speculative multi-entity rollback/contact, nonbbox/default/explicit
+creator arms, NPC producers/feedback, dynamic226/RelinkChildren publication, collision-frame
+notification/filtering, fluid/controller/pointer graphs and full L0 closing gates remain open.
+No worker commit/push, full arm test or full arena run.

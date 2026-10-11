@@ -323,6 +323,7 @@ namespace ElysiumSaveRestore
 							continue;
 						}
 						State.EntityIndex = Row.Index;
+						State.bShadowMember = CaptureWorld->PhysicsShadows().Contains(Entity->Handle);
 						Snapshot.PhysicsBodies.Add(MoveTemp(State));
 					}
 				}

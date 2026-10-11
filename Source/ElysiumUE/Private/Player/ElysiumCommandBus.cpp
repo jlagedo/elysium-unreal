@@ -39,6 +39,8 @@ FElysiumConsole& ElysiumCommandBus::Console()
 	if (!bDeclaredEngineCvars)
 	{
 		bDeclaredEngineCvars = true;
+		// vampire.dll1002d260: flags0, default1; PhysFrame1002ea40 reads the float after thinks.
+		Store.DeclareCvar(TEXT("phys_timescale"), TEXT("1"));
 		for (const ElysiumCam::FCvarDef& Def : ElysiumCam::CvarDefs())
 		{
 			Store.DeclareCvar(Def.Name, Def.Default);

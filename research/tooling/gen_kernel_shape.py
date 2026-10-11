@@ -531,6 +531,8 @@ CHAIN_HAND: dict[int, tuple[str, str]] = {
     171: ("", "`CBaseEntity::SetMovedir` 0x100ad550: the exact up / down sentinels or `AngleVectors` "
               "0x10139610 into `m_vecMoveDir`, then slot 64 `SetAngles(vec3_angle)` (L0-r021; "
               "`ElysiumEntityVisualState.cpp`)"),
+    226: ("", "`CBaseEntity::VPhysicsUpdate` 0x100b4f30: reached move0 is literally empty; move7/1/8 retain explicit unfinished diagnostics (`ElysiumEntitySlotBodies.cpp`)"),
+    232: ("", "`CBaseEntity::UpdatePhysicsShadowToCurrentPosition` 0x100a69e0: move7/null return; abs angles then origin, object46 target submission (`ElysiumEntitySlotBodies.cpp`)"),
     237: ("", "`CBaseEntity::PhysicsSolidMaskForEntity` 0x1003e7a0: FL_NPC first, then the real "
               "m_pPlayer self-downcast, else the base mask (L0 physics producer checkpoint; "
               "`ElysiumEntitySlotBodies.cpp`)"),

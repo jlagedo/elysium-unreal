@@ -36,6 +36,12 @@ public:
 	{
 		return World && Activator == World->PlayerHandle() && (SpawnFlags & 0x1) != 0;
 	} // 0x1 = ALLOW_CLIENTS
+	bool BasePassesTriggerFilters(const FElysiumEntityHandle& Activator) const
+	{
+		if (!PlayerPasses(Activator)) return false;
+		const FElysiumEntity* Filter = World ? World->Resolve(FilterHandle) : nullptr;
+		return !Filter || Filter->PassesFilter(Activator);
+	}
 	virtual void Activate() override
 	{
 		FilterHandle = FElysiumEntityHandle::Invalid();
@@ -49,12 +55,7 @@ public:
 	}
 	virtual bool CanBeginTouch(const FElysiumEntityHandle& Activator) const override
 	{
-		if (bDisabled || IsInert() || !PlayerPasses(Activator))
-		{
-			return false;
-		}
-		const FElysiumEntity* Filter = World ? World->Resolve(FilterHandle) : nullptr;
-		return !Filter || Filter->PassesFilter(Activator);
+		return !bDisabled && !IsInert() && BasePassesTriggerFilters(Activator);
 	}
 	virtual bool IsBrushBodyEnabled() const override
 	{
@@ -85,7 +86,7 @@ public:
 		// The disabled/inert half of that test is retail's solidity, not an extra rule: a disabled
 		// trigger has no FSOLID_TRIGGER to link against, which here is the dormant brush body that
 		// already turned the begin away in CanBeginTouch.
-		if (bDisabled || IsInert() || !PlayerPasses(Activator))
+		if (bDisabled || IsInert() || !BasePassesTriggerFilters(Activator))
 		{
 			return;
 		}
@@ -118,7 +119,8 @@ public:
 
 	virtual void OnTouchEnd(const FElysiumEntityHandle& Activator) override
 	{
-		if (bDisabled || IsInert() || !PlayerPasses(Activator))
+		//101c55d0 repeats PassesTriggerFilters, independently of prior activation.
+		if (bDisabled || IsInert() || !BasePassesTriggerFilters(Activator))
 		{
 			return;
 		}

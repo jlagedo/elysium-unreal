@@ -209,6 +209,9 @@ public:
 	// The frame's POST-move drive (map actor Tick), which is retail's `GameFrame`: sample the moved
 	// body into the player entity, then think-first — RunThinks(Now) then ServiceEvents(Now).
 	void Tick(double Now);
+	// Actual map host splits GameFrame step4 around Chaos Start/EndPhysics.
+	void BeginNativePhysicsFrame(double Now);
+	void FinishNativePhysicsFrame();
 
 	// --- Chokepoints ---
 	// Deliver an input to a target: resolve `!self`/`!activator`, fan out over the name index,
@@ -386,7 +389,7 @@ public:
 	// Overlap routing: a brush body's begin/end overlap lands here. Resolve the brush
 	// entity, skip if inert, and call its OnTouchStart/OnTouchEnd (triggers override).
 	void RouteEntityTouch(const FElysiumEntityHandle& Touched, const FElysiumEntityHandle& Activator,
-		bool bBegin);
+		bool bBegin, bool bPhysicalContact = false);
 	void RouteBrushTouch(const FElysiumEntityHandle& Brush, const FElysiumEntityHandle& Activator,
 		bool bBegin)
 	{
@@ -1123,6 +1126,10 @@ private:
 	// The per-frame NPC record sync -- a named divergence, documented at the definition.
 	void SyncMovingNpcRecords();
 	void RunThinks(double Now);
+	void TickFrame(double Now, bool bDeferPhysics);
+	void FinishFrame(double Now);
+	bool bNativeFramePending = false;
+	double NativeFrameNow = 0.0;
 	// The network manager's one-shot think `0x102f6a50` at `BuildStampSeconds()` + 0.8 s: its call
 	// `0x1028d8d0` runs vslot 584 (`FElysiumNpc::Slot584`, the full think-stamp reset `0x1028d910`) on
 	// every NPC of the Troika line at the same curtime, once per build stamp.

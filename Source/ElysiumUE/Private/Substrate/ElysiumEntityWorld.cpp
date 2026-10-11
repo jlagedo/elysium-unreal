@@ -1,4 +1,5 @@
 #include "ElysiumEntityWorld.h"
+#include "Substrate/ElysiumModelPhysics.h"
 #include "Substrate/ElysiumTeamRegistry.h"
 
 #include "ElysiumBrushComponent.h"
@@ -2097,6 +2098,36 @@ void FElysiumEntityWorld::RunPlayerThink(double Now)
 
 void FElysiumEntityWorld::Tick(double Now)
 {
+	TickFrame(Now, false);
+}
+
+void FElysiumEntityWorld::BeginNativePhysicsFrame(double Now)
+{
+	TickFrame(Now, true);
+}
+
+void FElysiumEntityWorld::FinishNativePhysicsFrame()
+{
+	if (!bNativeFramePending) return;
+	bNativeFramePending = false; // consume before callbacks, including reentrant/deletion paths
+	if (!bActive || bApplyingSnapshot || bDetached) return;
+	//1002ea40: shadow registry is serial-aware and independent of an object's recipe/reference.
+	// This reached parent-bbox branch inherits229's literal empty body;226 move0 also returns.
+	const TArray<FElysiumEntityHandle> ShadowSnapshot = PhysicsShadowHandles;
+	for (const FElysiumEntityHandle& ShadowHandle : ShadowSnapshot)
+		if (FElysiumEntity* Entity = Resolve(ShadowHandle))
+			if (void* Object = Entity->VPhysicsGetObject())
+				if (ElysiumModelPhysics::IsActive(ElysiumModelPhysics::ComponentFor(Object))) Entity->VPhysicsUpdate(Object);
+	for (const FElysiumEntityHandle& ShadowHandle : ShadowSnapshot)
+		if (FElysiumEntity* Entity = Resolve(ShadowHandle))
+			if (void* Object = Entity->VPhysicsGetObject()) Entity->VPhysicsShadowUpdate(Object);
+	FinishFrame(NativeFrameNow);
+}
+
+void FElysiumEntityWorld::TickFrame(double Now, bool bDeferPhysics)
+{
+	// A new admitted host frame cannot retain a tail from a retired/paused frame.
+	bNativeFramePending = false;
 	if (!bActive || bApplyingSnapshot || bDetached) // 0x1011a620: no simulation inside restore fence
 	{
 		return;
@@ -2161,6 +2192,17 @@ void FElysiumEntityWorld::Tick(double Now)
 	if (FElysiumPlayer* PlayerEnt = FindPlayer()) PlayerEnt->PostThinkAnimation();
 	RunNetworkManagerFirstThink();
 	RunThinks(Now);
+	if (bDeferPhysics)
+	{
+		NativeFrameNow = Now;
+		bNativeFramePending = true;
+		return;
+	}
+	FinishFrame(Now);
+}
+
+void FElysiumEntityWorld::FinishFrame(double Now)
+{
 	// `CEntityListSystem::FrameUpdatePostEntityThink` 0x100f9160: `GameFrame` `0x1011abc0` step 4,
 	// after the think pass and before the event queue drains (`entity_io.md` § The touch dispatch
 	// path; `walks/L0-r015.md`). The deferred untouch checks run here.

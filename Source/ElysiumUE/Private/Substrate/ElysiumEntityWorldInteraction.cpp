@@ -14,7 +14,7 @@
 #include "Substrate/ElysiumWeaponClasses.h"
 
 void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
-	const FElysiumEntityHandle& Activator, bool bBegin)
+	const FElysiumEntityHandle& Activator, bool bBegin, bool bPhysicalContact)
 {
 	// The pair lives in two stores, written at the same retail points: r015's stamped key (what the
 	// deferred untouch check `PhysicsCheckForEntityUntouch` 0x1003d490 compares against `m_touchStamp`)
@@ -96,7 +96,13 @@ void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 	// one of each, but a teleport reconciliation also asks which brushes contain the player after
 	// the transform. Collapse that second observation here so an authored trigger never double-
 	// fires; an end releases the pair so a later genuine re-entry remains an edge.
-	if (!E->CanBeginTouch(Activator))
+	FElysiumEntity* Mover = Resolve(Activator);
+	if (bPhysicalContact && (!Mover || E == Mover || E->MoveParent == Activator || Mover->MoveParent == Brush
+		|| ((E->Flags | Mover->Flags) & 0x400000) != 0
+		|| ((E->RetailSolidFlags & Mover->RetailSolidFlags & 8u) != 0 && E->IsRetailNotSolid() && Mover->IsRetailNotSolid()))) return;
+	//1003dc70 allocates/refreshes physical links before101c5590 activation filtering.
+	// Existing callback-only callers retain their admission seam until their producers are walked.
+	if (!bPhysicalContact && !E->CanBeginTouch(Activator))
 	{
 		return;
 	}
@@ -104,7 +110,6 @@ void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 	// 0x1003dc70 writes it when the link is made (`node[1] = this->m_touchStamp`) and refreshes it
 	// when an existing pair is reported again (`entity_io.md` § The touch dispatch path), which is
 	// what keeps the link alive through `PhysicsCheckForEntityUntouch` 0x1003d490.
-	FElysiumEntity* Mover = Resolve(Activator);
 	FTouchLinkStamps Stamps;
 	Stamps.Brush = E->TouchStamp;
 	Stamps.Activator = Mover != nullptr ? Mover->TouchStamp : 0;
@@ -129,11 +134,13 @@ void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 	TouchLinkBegin(*E, Activator);
 	++TouchBeginCount;
 	E->OnTouchStart(Activator);
-	if (Mover != nullptr)
+	Mover = Resolve(Activator); // synchronous callbacks can remove either side or release the pair
+	if (Mover != nullptr && ActiveTouches.Contains(TouchKey))
 	{
 		TouchLinkBegin(*Mover, Brush);
 	}
-	UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) touch begin %s"), NowSeconds(), *E->DebugString());
+	if (FElysiumEntity* LiveBrush = Resolve(Brush))
+		UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) touch begin %s"), NowSeconds(), *LiveBrush->DebugString());
 }
 
 namespace

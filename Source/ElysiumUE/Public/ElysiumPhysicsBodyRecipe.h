@@ -25,6 +25,28 @@ struct FElysiumPhysicsBodyRecipe
 	FVector MassCenterCm = FVector::ZeroVector;
 };
 
+// 2601a670/2601aad0/2601a250: authored controller state around a Chaos-owned body.
+// Submitted target is independent of both logical entity pose and native solved pose.
+struct FElysiumPhysicsShadowState
+{
+	bool bInstalled = false;
+	bool bActive = false;
+	bool bAllowMovement = false;
+	bool bAllowRotation = false;
+	bool bGravityMode = false;
+	FTransform Target = FTransform::Identity;
+	FVector PredictedPosition = FVector::ZeroVector;
+	float RemainingSeconds = 0.f;
+	float LinearDampingLimitCm = 0.f;
+	float LinearDesiredLimitCm = 0.f;
+	float AngularDampingLimitRadians = 0.f;
+	float AngularDesiredLimitRadians = 0.f;
+	float TeleportDistanceCm = 0.f;
+	float SavedMassKg = 1.f;
+	FVector SavedInertia = FVector::ZeroVector;
+	bool bSavedGravity = true;
+};
+
 struct FElysiumSavedPhysicsBody
 {
 	int32 EntityIndex = INDEX_NONE;
@@ -43,5 +65,7 @@ struct FElysiumSavedPhysicsBody
 	uint8 CollisionMask = 0;
 	TArray<uint8> CollisionResponses; // native query response channels, observed by sight/traces
 	uint8 BboxCollisionEnabled = 3; // ECollisionEnabled::QueryAndPhysics; one analytic shape
+	FElysiumPhysicsShadowState Shadow;
+	bool bShadowMember = false; // serial entity registry belongs to owner field, not native alias
 };
 FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State);

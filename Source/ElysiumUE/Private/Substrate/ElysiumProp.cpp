@@ -237,7 +237,8 @@ void FElysiumProp::OnRuntimeTransformChanged()
 	{
 		AnimatedVisual->SetWorldLocationAndRotation(Origin, Rot);
 	}
-	if (BoxCollisionProxy && !bBboxRetired && !(bRestoredBbox && World && World->IsApplyingSnapshot()))
+	if (BoxCollisionProxy && !bBboxRetired && !ElysiumModelPhysics::ShadowFor(VPhysicsGetObject())
+		&& !(bRestoredBbox && World && World->IsApplyingSnapshot()))
 	{
 		//100a5d80 supplies vec3_angle=0; bbox is an independent world-axis body.
 		if (FBodyInstance* NativeBody = ElysiumModelPhysics::Identity(BoxCollisionProxy))
@@ -247,8 +248,8 @@ void FElysiumProp::OnRuntimeTransformChanged()
 
 bool FElysiumProp::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, FString& OutError)
 {
-	if (State.Recipe.Kind != EElysiumPhysicsRecipeKind::Bbox || !State.Recipe.bStatic)
-	{ OutError = TEXT("dynamic prop Physics restore requires its supported static bbox recipe"); return false; }
+	if (State.Recipe.Kind != EElysiumPhysicsRecipeKind::Bbox || (!State.Recipe.bStatic && !State.Shadow.bInstalled))
+	{ OutError = TEXT("dynamic prop Physics restore requires its supported bbox or shadow recipe"); return false; }
 	if (BoxCollisionProxy) { BoxCollisionProxy->DestroyComponent(); BoxCollisionProxy = nullptr; }
 	if (!FElysiumEntity::RestoreSavedPhysics(State, OutError)) return false;
 	BoxCollisionProxy = ReconstructedPhysics.Get();
@@ -777,14 +778,13 @@ void FElysiumProp::BuildBoxCollisionProxy(UPrimitiveComponent* Mesh)
 	VPhysicsDestroyObject();
 	//100a5b5e CALL1001514a ->Relink100b3b00: scope-trace push/pop only, no state or callbacks.
 	// Map parse resolves move parents before Spawn; an unresolved authored name is not a parent.
-	if (World->Resolve(MoveParent))
-	{
-		UE_LOG(LogElysiumProp, Error, TEXT("%s: parented solid2 requires unfinished VPhysicsInitShadow100a6150; L0 planning gap"), *DebugString());
-		return;
-	}
+	const bool bShadow = World->Resolve(MoveParent) != nullptr;
+	if (bShadow) VPhysicsDestroyObject(); //InitStatic delegates InitShadow, which runs Setup225 again.
+	const FVector AbsoluteOrigin = GetAbsOrigin();
+	const FVector AbsoluteAngles = GetAbsAngles();
 	FElysiumPhysicsBodyRecipe Recipe;
 	Recipe.Kind = EElysiumPhysicsRecipeKind::Bbox;
-	Recipe.bStatic = true;
+	Recipe.bStatic = !bShadow;
 	Recipe.BboxMin = FVector(CollMins.X, -CollMaxs.Y, CollMins.Z) * ElysiumMove::U;
 	Recipe.BboxMax = FVector(CollMaxs.X, -CollMins.Y, CollMaxs.Z) * ElysiumMove::U;
 	Recipe.Surface = Inputs->StudioSurfaceProperty; //100a5d80 modeltype3 raw studio+392, not .phy.
@@ -794,7 +794,7 @@ void FElysiumProp::BuildBoxCollisionProxy(UPrimitiveComponent* Mesh)
 	Recipe.LinearDamping = .1f; Recipe.AngularDamping = .1f;
 	Recipe.RotInertiaLimit = .5f; Recipe.Drag = 1.f; Recipe.RollingDrag = 0.f;
 	auto* Box = NewObject<UElysiumPhysicsPropComponent>(Owner);
-	Box->SetWorldLocationAndRotation(Origin, FQuat::Identity);
+	Box->SetWorldLocationAndRotation(AbsoluteOrigin, FQuat::Identity); //bbox creation zero angles
 	Box->SetCollisionProfileName(TEXT("PhysicsActor"));
 	ElysiumPropTraceBody::Apply(Box, Def);
 	Box->RegisterComponent();
@@ -809,6 +809,17 @@ void FElysiumProp::BuildBoxCollisionProxy(UPrimitiveComponent* Mesh)
 	bBboxRetired = false;
 	bRestoredBbox = false;
 	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Box));
+	if (bShadow)
+	{
+		if (!ElysiumModelPhysics::SetShadow(VPhysicsGetObject(), 10000.f, 10000.f, false, false)
+			|| !ElysiumModelPhysics::UpdateShadow(VPhysicsGetObject(), AbsoluteOrigin,
+				ElysiumModelPhysics::SourceRotation(AbsoluteAngles), false, 0.f))
+		{
+			VPhysicsDestroyObject(); Box->DestroyComponent(); BoxCollisionProxy = nullptr;
+			UE_LOG(LogElysiumProp, Error, TEXT("%s: native bbox shadow creation failed"), *DebugString()); return;
+		}
+		World->AddPhysicsShadow(*this); //100a6150 success tail1002edd0
+	}
 }
 
 void FElysiumProp::GateVisual()

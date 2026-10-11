@@ -56,6 +56,7 @@ bool FElysiumEntity::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, 
 	{ Component->DestroyComponent(); return false; }
 	ReconstructedPhysics = Component;
 	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Component));
+	if (State.bShadowMember) World->AddPhysicsShadow(*this);
 	return true; // type1 restore26019483-260194bc allocates once per owner field, even aliases
 }
 

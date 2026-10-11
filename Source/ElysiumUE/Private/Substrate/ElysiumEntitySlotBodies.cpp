@@ -3,6 +3,8 @@
 // `ElysiumEntitySlots.inl` (a slot body) or in `ElysiumEntitySlotBodies.inl`.
 
 #include "ElysiumEntity.h"
+#include "ElysiumStub.h"
+#include "Substrate/ElysiumModelPhysics.h"
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumDecalSubsystem.h"
@@ -1110,4 +1112,28 @@ int32 FElysiumEntity::GetSolidFlags() const { return static_cast<int32>(RetailSo
 FElysiumEntity* FElysiumEntity::GetNextTarget()
 {
 	return World != nullptr && !Target.IsEmpty() ? World->FindByName(Target) : nullptr; // 0x100a1d20 -> 0x100f7770
+}
+
+// CBaseEntity::VPhysicsUpdate100b4f30, slot226; only the reached move0 arm is complete.
+void FElysiumEntity::VPhysicsUpdate(void*)
+{
+	//100b4f30: the reached parented prop's MOVETYPE_NONE arm is literally empty.
+	if (GetMoveType() == 0) return;
+	// Other reached arms remain unfinished: move7 solved pose/touch/children, moves1/8 pusher feedback.
+	ElysiumStub::FSurface Missing;
+	Missing.Kind = TEXT("slot"); Missing.Surface = TEXT("CBaseEntity::VPhysicsUpdate");
+	Missing.Address = TEXT("0x100b4f30"); Missing.Story = TEXT("29c");
+	ElysiumStub::Fired(Missing, DebugString(), FString(), TEXT("the NPC kernel"));
+}
+
+// CBaseEntity::UpdatePhysicsShadowToCurrentPosition100a69e0, slot232.
+void FElysiumEntity::UpdatePhysicsShadowToCurrentPosition(float Interval)
+{
+	if (GetMoveType() == 7 || !VPhysicsGetObject()) return;
+	const FVector AbsoluteAngles = GetAbsAngles(); //219 before217
+	const FVector AbsoluteOrigin = GetAbsOrigin();
+	if (World) World->EmitRetailSite(*this, TEXT("shadow_target"), TEXT("CBaseEntity::UpdatePhysicsShadowToCurrentPosition"),
+		0x100a69e0u, TEXT("submit"), FString::Printf(TEXT("arrival=%.9g origin=%s"), Interval, *AbsoluteOrigin.ToString()));
+	ElysiumModelPhysics::UpdateShadow(VPhysicsGetObject(), AbsoluteOrigin,
+		ElysiumModelPhysics::SourceRotation(AbsoluteAngles), false, Interval);
 }

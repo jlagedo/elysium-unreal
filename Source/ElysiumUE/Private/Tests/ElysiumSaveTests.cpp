@@ -667,8 +667,8 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `NpcAmbientExecutorRetired` (0002 V3b) took the ambient executor's two timers out of the middle
 	// of the NPC's patrol block, which moved it again. `NpcMindOwnerRetired` (0002 V3d) took the
 	// body-owner byte out of the NPC's mind block, which moved it once more.
-	TestEqual(TEXT("the disposable floor is the native Physics recipe schema"),
-		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::PhysicsRecipes);
+	TestEqual(TEXT("the disposable floor retains native shadow controller state"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::PhysicsShadowState);
 	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
 	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
 	// being refused, and the floor stays where the last breaking schema left it.
@@ -751,7 +751,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `m_hTargetEnt` to the END of the NPC leaf behind its own version. Additive: a `SeeUnknownSweep`
 	// payload restores a sweep due at once and no target, the spawn defaults.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::MapTimeContext);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::PhysicsShadowState);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),

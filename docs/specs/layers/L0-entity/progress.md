@@ -797,3 +797,91 @@ producer/controller target-versus-solved, permission/speed/gravity/arrival/thres
 contract with post-think timing, then ordered solved226/touch/child publication. Static model,
 nonstudio/default box, explicit params, contact/fluid/multiobject/restore graph, model migration
 and full L0 arm/arena/contracts/audit/boot-order closing gates remain open.
+
+## Reached parent bbox shadow prerequisite (2026-10-11; coordinator accepted)
+
+Actual resolved-parent studio prop_dynamic solid2 Spawn creates an installed native Chaos
+shadow controller, submits its initial target and registers serial owner membership. The
+production witness opens/closes a real parent mover; successful native swept transactions
+publish reverse captured child touch then232(0), while a blocking native wall refuses the
+whole transform and leaves the previous target unchanged. Reparented live captured entries
+retain retail order; serial removal prevents stale references. The selected child move0 base226
+and inherited229 are recovered no-ops; other226 branches retain explicit unfinished diagnostics.
+
+Gameplay submits after thinks; native StartPhysics advances the actual configured scene delta;
+PostMove consumes native solved feedback before deferred untouch and exactly-once EventQueue.
+Actual console phys_timescale parsing/store supplies the scene, with zero/negative, strict
+.0001 boundary, multiplication and .1 cap witnessed against Chaos solver time. Logical pose,
+submitted target and solved native pose are independent; setter teleport is absent for shadows.
+Controller target/arrival/wake, permissions, gravity mode, desired/damping speed caps, full
+rotation, threshold prediction and temporary collision disable/restore have actual native tests.
+Chaos owns geometry, broadphase, contacts and rigid mechanics; no IVP scheduler/layout clone.
+
+Native bbox query discovers a real trigger candidate and creates reciprocal physical touch
+links before the selected prop's retail ALLOW_PHYSICS rejection. Deferred separation cleans
+the pair; no positive output or accepted-bit latch is fabricated. Recovered physical native
+routes use this contract; older callback-only seams retain their previous scope. Base trigger
+filter dispatch remains nonvirtual, preserving specialized trigger overrides.
+
+Disposable Physics schema48 saves native solved state and controller target/countdown/caps/
+permissions/prediction/original mass/inertia/gravity and per-owner membership. Actual inactive
+map restoration witnesses unchanged state before activation, then one scheduled native tick
+consumes persisted arrival. Aliases reconstruct independently, reference-only clear preserves
+the producer, and actual225 retires every registry/reference before native release, restoring
+original mass/inertia/gravity. Negative/NaN arrival, static+controller and member-without-controller
+archives/restores refuse cleanly without affecting live membership. Prior count0 coverage remains.
+
+Frozen worker evidence, authoritative JSON read:
+- `uv run elysium build --arm`: success28.4s;
+  `E:/elysium-work/logs/20261011T030319.931892Z-build.json`.
+- Selected13 prefixes:22/22 success (19 clean,3 existing warning results),0 failed/notRun;
+  all6 ModelPhysics results clean, including ParentShadowFrame;
+  `E:/elysium-work/reports/tests/20261011T030357.330627Z-elysium-substrate-modelphysics-elysium-s-6e8f06ec/index.json`.
+  Run JSON `E:/elysium-work/logs/20261011T030355.764683Z-test.json`, automation9.751s,
+  total22.938s. Selected ModelPhysics, SaveSchema, SaveRoundTrip, NpcKernelSlots.Defaults,
+  Arm.PropSolid, Arm.Geometry.Sight, Arm.SavePayload, DisabledTouchAdmission,
+  EnvironmentalAudioTouchAdmission, FilteredTouchAdmission, TouchReconcileOrder,
+  L0DataObjectRegistry.TouchLink and Substrate.DyingTriggerEndTouch.
+- Coordinator default:179/179 (100 clean,79 existing warning results),0 failed/notRun;
+  all6 native results clean;
+  `E:/elysium-work/reports/tests/20261011T030442.140530Z-elysium-session-elysium-substrate/index.json`.
+  Command JSON `E:/elysium-work/logs/20261011T030441.983841Z-test.json`.
+- Coordinator bounded18 arena:18 pass,0 failed/error/other outcomes, both hosts exit0;
+  `E:/elysium-work/reports/arena/20261011T030512.887077Z/index.json`, plus host indices
+  `E:/elysium-work/reports/arena/20261011T030512.887077Z/arena/index.json` (17 pass) and
+  `E:/elysium-work/reports/arena/20261011T030512.887077Z/map-sm_hub_1-l0_transition_state/index.json`
+  (1 pass). Ordinary first_unmet values are null; two intentional refusal selftests pass by
+  inversion. Command JSON `E:/elysium-work/logs/20261011T030512.652579Z-arena.json`.
+  Existing experimental Python AgentSkill startup errors/unrelated warnings remain in the
+  log (27 error lines,534 warnings); authoritative scenario results contain no failures.
+- Runtime/native test sources frozen after the selected gate; no repeated worker native run.
+  Diff check clean; audit.tsv remains7946 lines, all16 columns, unchanged. No assets/goldens/push.
+
+Intermediate failures were corrected, not waived. Builds023126/024024 fixed API/shadowing
+and test solver/lvalue errors;025327 fixed test angle type;025655 restored explicit226
+diagnostics without relying on a generated anonymous helper. Native024153 exposed actual
+mass84.9999924, verified float drift and tested with .001 tolerance. Native024739 exposed
+ApplySnapshot's active-world refusal; the fixture now uses the actual inactive restore barrier.
+Native030049 and diagnostic030213 failed only a supplemental threshold expectation under a
+continuing angular target (velocity999, nativeX3139.453 versus target3133.062, with Y/Z motion).
+Offset-hull rotation about Chaos's center of mass is an inference from those outputs, not a
+recovered retail fact or proven gameplay divergence. Holding native rotation fixed isolates the
+recovered teleport/preteleport linear contract; exact target+10, prediction and restored shape
+collision pass in final030355. Separate full-angle native solve coverage remains intact.
+
+Coordinator independently reviewed the code, authoritative selected/default JSON, arena aggregate
+and both host indices, and all7946 audit lines. The reached prerequisite is accepted; coordinator
+owns the exact26-path commit. Its hash is not available at this documentation freeze. The supported
+parent-bbox chain does not close full InitShadow/nonbbox creators or the broad pusher dispatcher.
+NPC producers/feedback, other movetypes, dynamic226/touch/RelinkChildren publication,
+collision-frame notification/filtering, multi-entity push/rollback/contact, fluid/controller/
+pointer graphs, model migration and full L0 closing gates remain open. Original23/88 unchanged.
+
+Generator mapping gate initially found22 passed/1 stale census assertion in
+pipeline/tests/test_gen_kernel_shape.py::test_no_slot_is_an_accepted_hide. HEAD already had
+AmbientGeneric::Precache101ac930 as slot104 OVERRIDDEN_BELOW; audio_pipeline.md's initialization
+section records the recovered virtual Spawn tail. This packet changes generator mappings only
+for226/232. The expected census now includes existing104, with no runtime/native test edit.
+Coordinator's final rerun passed23/23 in1.41s (JUnit suite1.371s),0 failed/error/skipped.
+Durable evidence: `E:/elysium-work/reports/tests/20261011-l0-shadow-generator.xml`, independently
+read. Runtime/native test sources remain frozen; the stale assertion is the additional26th path.
