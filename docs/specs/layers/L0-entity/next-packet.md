@@ -1,39 +1,37 @@
-# Next bounded packet — P1 body/lifetime closing witness
+# Next bounded packet — remaining P1 producer
 
-Read [goal.md](goal.md) and [checkpoint.md](checkpoint.md). Base GetVelocity199 `0x100ad1a0`
-is implemented and accepted; reuse its packet/receipts at
-`E:/elysium-work/codex/l0-p1-velocity-20261011/`. Do not replay that recovery or add P2 to it.
+Read [goal.md](goal.md) and [checkpoint.md]. Reuse accepted velocity/static-model receipts;
+do not repeat their recovery or rewrite their adapters. P1 remains active.
 
-## Select the remaining P1 contract
+## First concrete gap to reconcile
 
-P1 maps `L0.physics.physics-object-contract-1` (SetObject/Swap) and
-`L0.physics.physics-object-contract-6` (owned native saved state). Its closing obligation also
-joins actual body creation, identity, enumeration/velocity, replacement/removal and stale
-callback/alias fences across reached model, static bbox and shadow caller arms.
+Current FElysiumProp::BuildBody selects registered static .phy creation only for unparented
+nonbbox solids. A resolved-parent nonbbox model still has a generic render collider without
+the corresponding current physics object/native save recipe. Review retained parent ->
+InitShadow recovery and current consumers. Identify the shipped parent/model/solid observer
+and authentic selected geometry witness; stale metadata is a producer fault, not no body.
 
-First inspect the current code and retained walk sections/receipts. Existing native tests
-NativeInputs, PlacedCaller, SavedBody, BboxRecipeService, StaticBboxCaller and ParentShadowFrame
-already prove selected arms. Separate accepted contracts from older open historical prose;
-internal IVP differences alone do not establish a missing producer. Name every remaining
-requirement's authored field, caller, native save field or gameplay/event observer.
+Return a compact precode packet for required model-shadow creation/reference/lifetime/native
+save. Reuse selected model service, controller/membership, frame conversions and retirement.
+Parent bbox is an accepted control, not proof of the model arm. Recover only material missing
+facts. If evidence changes the first unmet contract, explain the concrete producer dependency.
 
-Return a compact precode packet identifying the first actual gap, its same/lower producers,
-units/frames/phase/state/failure/lifetime contract, permitted files and real closing witness.
-If implemented contracts suffice, assemble a coherent P1 integration acceptance record with
-production bodies and native save/reconstruction instead of rewriting them. Missing required
-producer behavior is implemented with its consumer. A record cannot close by omitting an
-unsupported required body. Keep contact filters/results, GetCollideable and full shadow motion,
-clock/pose/bounds publication in E2/P2/P3 unless this P1 observer demonstrably requires an arm.
+## Acceptance and boundaries
 
-## Evidence and stop boundary
+Name mapped briefs/service rows, real callers/producers, units/frames, creation phase,
+null/failure behavior, controller membership, callback order and saved/rebuilt state.
+Verify installed public APIs and genuine imported inputs. Prove the production branch first,
+then reference/list, independent saved fields, hidden/absence and removal/stale fences.
+Use actual typed Physics archive/inactive reconstruction; no fabricated recipes, generic
+state setters, visual fallback geometry or IVP clone.
 
-Reuse [walks/L0-physics-producer.md](walks/L0-physics-producer.md), targeted physics-interaction.md
-sections and actual native tests. Use public APIs and current producer paths; no duplicate
-body registry, target substituted for solved pose, save recipe manufactured to pass a query,
-IVP clone or empty same-layer seam. Any remaining higher-layer reconstruction obligation names
-its explicit handoff. Existing gameplay divergence is not silently accepted.
+Other old reached assets missing body metadata are a real deployment coverage fault.
+Determine required core/witness selection before additional public importer runs; no arbitrary
+whole-corpus refresh or corpus-support claim from CopCar alone. Full shadow motion/clock/pose/
+bounds and P2 query/filter/contact stay in existing milestones unless a specific P1 observer
+needs an arm. No higher gameplay or retail-save importing. Reconcile remaining P1 arms and its
+full closing record after required producers/coverage; this candidate is not P1 closure.
 
-One fresh Sol High worker, one run, no nested workers, no staging/commit/push. Prove the
-production branch first; focused development checks, then freeze for main's independent
-review/build/default/affected arena and baseline gates. Main commits/checkpoints before
-proceeding. This packet is a selection/reconciliation boundary, not a claim P1/D02/L0 is closed.
+One fresh Sol High worker, one run, no nested workers, staging, commits or pushes. Precode
+review first; focused implementation checks/freeze; main independently gates, commits and
+checkpoints before the next run. No owner decision is pending for routine faithful repair.

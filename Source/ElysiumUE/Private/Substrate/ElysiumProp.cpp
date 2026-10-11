@@ -244,10 +244,26 @@ void FElysiumProp::OnRuntimeTransformChanged()
 		if (FBodyInstance* NativeBody = ElysiumModelPhysics::Identity(BoxCollisionProxy))
 			NativeBody->SetBodyTransform(FTransform(FQuat::Identity, Origin), ETeleportType::TeleportPhysics);
 	}
+	if (StaticModelPhysics && !bStaticModelRetired && !(bRestoredStaticModel && World && World->IsApplyingSnapshot()))
+	{
+		if (FBodyInstance* NativeBody = ElysiumModelPhysics::Identity(StaticModelPhysics))
+			NativeBody->SetBodyTransform(FTransform(ElysiumModelPhysics::SourceRotation(GetAbsAngles()),
+				GetAbsOrigin(), StaticModelPhysics->GetComponentScale()), ETeleportType::TeleportPhysics);
+	}
 }
 
 bool FElysiumProp::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, FString& OutError)
 {
+	if (State.Recipe.Kind == EElysiumPhysicsRecipeKind::Model && State.Recipe.bStatic && !State.Shadow.bInstalled)
+	{
+		if (StaticModelPhysics) ElysiumModelPhysics::Destroy(StaticModelPhysics);
+		if (!FElysiumEntity::RestoreSavedPhysics(State, OutError)) return false;
+		StaticModelPhysics = Cast<UElysiumPhysicsPropComponent>(ReconstructedPhysics.Get());
+		bStaticModelRequested = true;
+		bStaticModelRetired = false;
+		bRestoredStaticModel = true;
+		return true; //100440c0/100443e0: actual Model+static reconstruction before entity reconnect.
+	}
 	if (State.Recipe.Kind != EElysiumPhysicsRecipeKind::Bbox || (!State.Recipe.bStatic && !State.Shadow.bInstalled))
 	{ OutError = TEXT("dynamic prop Physics restore requires its supported bbox or shadow recipe"); return false; }
 	if (BoxCollisionProxy) { BoxCollisionProxy->DestroyComponent(); BoxCollisionProxy = nullptr; }
@@ -256,6 +272,13 @@ bool FElysiumProp::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, FS
 	bBboxRetired = false;
 	bRestoredBbox = true;
 	return true;
+}
+
+void FElysiumProp::OnPhysicsActorRetired()
+{
+	bBboxRetired = true;
+	if (StaticModelPhysics && !ElysiumModelPhysics::ComponentFor(ElysiumModelPhysics::ActorIdentity(StaticModelPhysics)))
+		bStaticModelRetired = true; // an unrelated borrowed field's retirement does not delete our former producer.
 }
 
 void FElysiumProp::OnRuntimeModelChanged()
@@ -439,6 +462,7 @@ bool FElysiumProp::PlayRandomAnimation()
 void FElysiumProp::DestroyBody()
 {
 	VPhysicsDestroyObject();
+	if (StaticModelPhysics && StaticModelPhysics == ReconstructedPhysics.Get()) RetireReconstructedPhysics();
 	if (Visual) { Visual->DestroyComponent(); Visual = nullptr; }
 	if (AnimatedVisual) { AnimatedVisual->DestroyComponent(); AnimatedVisual = nullptr; }
 	// CollisionProxy is AnimatedVisual's parent on the catalogue path (BuildPlacedModelBody
@@ -448,6 +472,8 @@ void FElysiumProp::DestroyBody()
 	if (BoxCollisionProxy) { BoxCollisionProxy->DestroyComponent(); BoxCollisionProxy = nullptr; }
 	bBboxRetired = false;
 	bRestoredBbox = false;
+	StaticModelPhysics = nullptr;
+	bStaticModelRequested = bStaticModelRetired = bRestoredStaticModel = false;
 	SolidValue = 0;
 	AnimatedStem.Reset();
 	VisualStem.Reset();
@@ -658,9 +684,8 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 		Request.PlacementToken = Handle.Index;
 		Request.Skin = Skin;
 		// VPhysicsInitStatic: solid 0 -> no collision, solid 2 -> a box (built separately below,
-		// no existing builder bakes one), any other nonzero value -> the model's `.phy` hulls,
-		// which CollisionProxy already builds (the same PhysicsActor-profile, non-simulating body
-		// prop_physics's own static case uses).
+		// no existing builder bakes one), any other nonzero value -> a physics component carrier.
+		// BuildStaticModelBody below retires its generic baseline and selects the actual .phy cook.
 		Request.Physics = (Solid != 0 && Solid != 2)
 			? EElysiumPlacedModelPhysics::CollisionProxy
 			: EElysiumPlacedModelPhysics::None;
@@ -742,6 +767,11 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 		}
 	}
 
+	//101907e0 ->100a5bb0: reached unparented nonbbox solids use1002e580, not a render collider.
+	// The resolved-parent model-shadow caller remains outside this static model contract.
+	if (Solid != 0 && Solid != 2 && !World->Resolve(MoveParent))
+		BuildStaticModelBody(Visual ? Visual : CollisionProxy);
+
 	if (Visual || AnimatedVisual)
 	{
 		if (Skin != 0) { ApplySkin(); }
@@ -749,8 +779,34 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 	}
 }
 
+void FElysiumProp::BuildStaticModelBody(UStaticMeshComponent* Mesh)
+{
+	if (!Mesh || !World || !bEdictAttached) return; //100a5ad0 failed Setup preserves its prior field.
+	VPhysicsDestroyObject(); //Setup225 precedes absolute pose/model creation.
+	StaticModelPhysics = Cast<UElysiumPhysicsPropComponent>(Mesh);
+	bStaticModelRequested = true;
+	bStaticModelRetired = true;
+	bRestoredStaticModel = false;
+	Mesh->SetWorldLocationAndRotation(GetAbsOrigin(), ElysiumModelPhysics::SourceRotation(GetAbsAngles()));
+	FString Error;
+	const bool bCreated = ElysiumModelPhysics::CreateStaticModel(Mesh, World->PhysicsSurfaces(), Error);
+	void* NativeActor = bCreated ? ElysiumModelPhysics::ActorIdentity(Mesh) : nullptr;
+	if (NativeActor) ElysiumModelPhysics::SetGameData(NativeActor, *this);
+	VPhysicsSetObject(NativeActor); //100a5bb0 assigns even null;1002e580 registers only successful env#8.
+	bStaticModelRetired = !NativeActor;
+	if (!NativeActor)
+	{
+		const auto* Inputs = UElysiumModelPhysicsInputs::Find(Mesh->GetStaticMesh());
+		if (Inputs && !Inputs->bSourceBody)
+		{ UE_LOG(LogElysiumProp, Log, TEXT("%s static model has no VPhysics body"), *DebugString()); }
+		else
+		{ UE_LOG(LogElysiumProp, Error, TEXT("%s static model creation failed: %s"), *DebugString(), *Error); }
+	}
+}
+
 // Reached unparented solid2 arm only:101905e0 ->223101907e0 ->100a5bb0 ->100a5d80.
-// Parented static delegates full shadow; static model solids use1002e580. Both remain open.
+// Resolved-parent bbox delegates full shadow; unparented static model solids use1002e580 above.
+// Resolved-parent model-shadow creation remains an explicit separate requirement.
 void FElysiumProp::BuildBoxCollisionProxy(UPrimitiveComponent* Mesh)
 {
 	AActor* Owner = Mesh ? Mesh->GetOwner() : nullptr;
@@ -836,7 +892,7 @@ void FElysiumProp::GateVisual()
 		// Only the fallback path's solid-driven Visual owns collision worth regating; solid 0
 		// left it NoCollision at BuildBody and must stay that way rather than being turned solid
 		// here.
-		if (SolidValue != 0 && SolidValue != 2)
+		if (SolidValue != 0 && SolidValue != 2 && !bStaticModelRequested)
 		{
 			Visual->SetCollisionProfileName(bShown ? TEXT("PhysicsActor") : TEXT("NoCollision"));
 			if (bShown)
@@ -868,7 +924,7 @@ void FElysiumProp::GateVisual()
 	// same way FElysiumPhysProp::GateBody gates its own static case: NoCollision when down,
 	// restored PhysicsActor collision when live again. Neither ever simulates, so there is no
 	// SetSimulatePhysics call to mirror.
-	if (CollisionProxy)
+	if (CollisionProxy && !bStaticModelRequested)
 	{
 		CollisionProxy->SetCollisionEnabled(bShown ? ECollisionEnabled::QueryAndPhysics
 			: ECollisionEnabled::NoCollision);
@@ -878,5 +934,11 @@ void FElysiumProp::GateVisual()
 		if (bRestoredBbox && World && World->IsApplyingSnapshot()) return;
 		if (FBodyInstance* NativeBody = ElysiumModelPhysics::Identity(BoxCollisionProxy))
 			NativeBody->SetShapeCollisionEnabled(0, bShown ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
+	}
+	if (StaticModelPhysics && !bStaticModelRetired)
+	{
+		// ScriptHide100a8710/Unhide100a8990 change physical words without destroying the object.
+		// Per-shape query enable follows that saved entity state; do not recreate/republish the actor.
+		ElysiumModelPhysics::GateStaticModelCollision(StaticModelPhysics, bShown);
 	}
 }

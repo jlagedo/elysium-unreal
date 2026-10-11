@@ -37,6 +37,9 @@
 #include "Substrate/ElysiumItemClasses.h"    // `player_weapon`: the active item's classname
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumModelPhysics.h"
+#include "PhysicsEngine/BodyInstance.h"
+#include "Physics/PhysicsInterfaceCore.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Visual/ElysiumNpcBody.h"           // `on_ground`: the motor's floor answer
 
@@ -2481,6 +2484,29 @@ bool FElysiumArenaScenarioRunner::RunAction(int32 Index, FElysiumEntityWorld& Wo
 			Done.Text = FString::Printf(TEXT("entity_call Use done usetype=%d value=%g"), UseType, UseValue);
 			return true;
 		}
+		if (Action.Function == TEXT("VPhysicsSetObject") || Action.Function == TEXT("VPhysicsSwapObject"))
+		{
+			FElysiumEntity* Receiver = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
+			if (!Receiver || Receiver->IsDead()) { OutError = TEXT("physics reference receiver is unavailable"); return false; }
+			if (Action.Args.Num() != 1 || (Action.Args[0].Value.Type != FElysiumArenaValue::EType::String
+				&& Action.Args[0].Value.Type != FElysiumArenaValue::EType::None))
+			{ OutError = TEXT("physics reference call takes [live producer name|null]"); return false; }
+			FElysiumEntity* Producer = nullptr;
+			if (Action.Args[0].Value.Type == FElysiumArenaValue::EType::String)
+			{
+				Producer = ElysiumArenaRunnerDetail::FindEntity(World, Action.Args[0].Value.String);
+				if (!Producer || Producer->IsDead()) { OutError = TEXT("physics reference producer is unavailable"); return false; }
+			}
+			void* Object = Producer ? Producer->VPhysicsGetObject() : nullptr;
+			if (Action.Function == TEXT("VPhysicsSetObject")) Receiver->VPhysicsSetObject(Object); //100a6490
+			else Receiver->VPhysicsSwapObject(Object); //100a68f0
+			FEvent& ReferenceDone = Events.AddDefaulted_GetRef(); StampEvent(ReferenceDone, World.NowSeconds());
+			ReferenceDone.Kind = ElysiumArenaRunnerDetail::ScriptKind(); ReferenceDone.Name = Action.Target;
+			void* ListedReference = nullptr;
+			ReferenceDone.Text = FString::Printf(TEXT("entity_call %s done object=%d list=%d"), *Action.Function,
+				Receiver->VPhysicsGetObject() != nullptr, Receiver->VPhysicsGetObjectList(&ListedReference, 1));
+			return true;
+		}
 		if (Action.Function == TEXT("GetVelocity") || Action.Function == TEXT("VPhysicsDestroyObject"))
 		{
 			FElysiumEntity* VelocityReceiver = ElysiumArenaRunnerDetail::FindEntity(World, Action.Target);
@@ -3954,7 +3980,54 @@ bool FElysiumArenaScenarioRunner::ReadWitness(const FString& Who, const FString&
 	{
 		FElysiumEntity* Entity = ElysiumArenaRunnerDetail::FindEntity(*World, Who);
 		FElysiumNpc* Npc = Entity ? Entity->AsNpc() : nullptr;
-		if (Field == TEXT("identity") && Entity) Out.String = Entity->Handle.ToString();
+		if (Field.StartsWith(TEXT("physics.")) && Entity)
+		{
+			void* Object = Entity->VPhysicsGetObject();
+			if (Field == TEXT("physics.present")) Out.bBool = Object != nullptr;
+			else if (Field == TEXT("physics.list_count"))
+			{
+				void* Listed = nullptr; Out.Number = Entity->VPhysicsGetObjectList(&Listed, 1); //actual233
+			}
+			else if (Field == TEXT("physics.native_owned"))
+			{
+				Out.Number = 0;
+				for (UPrimitiveComponent* NativeComponent : ElysiumModelPhysics::WorldComponents(*World))
+					if (ElysiumModelPhysics::GameDataForObject(ElysiumModelPhysics::ActorIdentity(NativeComponent)) == Entity) ++Out.Number;
+			}
+			else if (Field == TEXT("physics.shadow_member")) Out.bBool = World->PhysicsShadows().Contains(Entity->Handle);
+			else if (Field == TEXT("physics.query_shapes"))
+			{
+				auto* Body = ElysiumModelPhysics::Identity(ElysiumModelPhysics::ComponentFor(Object));
+				if (!Body) { OutError = FString::Printf(TEXT("%s %s: no registered native body"), *Who, *Field); return false; }
+				Out.Number = 0;
+				FPhysicsCommand::ExecuteRead(Body->GetPhysicsActor(), [&](const FPhysicsActorHandle&)
+				{
+					TArray<FPhysicsShapeHandle> Shapes; Body->GetAllShapes_AssumesLocked(Shapes);
+					for (const auto& Shape : Shapes) if (FPhysicsInterface::IsQueryShape(Shape)) ++Out.Number;
+				});
+			}
+			else
+			{
+				FElysiumSavedPhysicsBody State;
+				if (!ElysiumModelPhysics::Capture(Object, State)) { OutError = FString::Printf(TEXT("%s %s: cannot capture current registered body"), *Who, *Field); return false; }
+				if (Field == TEXT("physics.static")) Out.bBool = State.Recipe.bStatic;
+				else if (Field == TEXT("physics.kind"))
+				{
+					switch (State.Recipe.Kind)
+					{
+					case EElysiumPhysicsRecipeKind::Model: Out.String = TEXT("model"); break;
+					case EElysiumPhysicsRecipeKind::Bbox: Out.String = TEXT("bbox"); break;
+					case EElysiumPhysicsRecipeKind::Brush: Out.String = TEXT("brush"); break;
+					}
+				}
+				else if (Field == TEXT("physics.surface")) Out.String = State.CurrentSurface;
+				else if (Field == TEXT("physics.mass")) Out.Number = State.CurrentMassKg;
+				else if (Field == TEXT("physics.pose.x")) Out.Number = State.Pose.GetLocation().X;
+				else if (Field == TEXT("physics.pose.y")) Out.Number = State.Pose.GetLocation().Y;
+				else Out.Number = State.Pose.GetLocation().Z;
+			}
+		}
+		else if (Field == TEXT("identity") && Entity) Out.String = Entity->Handle.ToString();
 		else if (Field == TEXT("hidden") && Entity) Out.bBool = Entity->IsHidden();
 		else if (Field == TEXT("callback") && Entity) Out.String = Entity->ThinkCallback.ToString();
 		else if (Field == TEXT("callback.saved") && Entity) Out.String = Entity->SavedThinkCallback.ToString();

@@ -1853,3 +1853,24 @@ Full collision-event dispatcher recovery remains unrecovered here; no address is
 production binding, runtime geometry/cadence policy change, corpus/content/golden/audit/
 hook/ledger edit, push or next worker. Final manifest/checkpoint records the proportional
 policy gate and exact-path reviewed local commit; this one run then terminates.
+
+### Reached static model body checkpoint — 2026-10-11
+
+D02/P1 unparented solid3/6 now uses selected .phy Chaos body creation with retail semantic
+inputs/postparse inertia1, real current/list and success-only ownership. Genuine no-binary and
+solid0 stay bodyless. Native save/restore joins hidden state, solved pose, independent aliases,
+reference replacement/clear, borrowed225 and stale/removal fences. Shadow-owner null Swap is
+proved;100a68f0 ported. An analytic carrier admission/compilation-callback prerequisite was
+repaired without waiting on renderer compilation or changing model behavior.
+
+Main reviewed oracle/APIs/diff/retained failures and exact12 frozen source/6 artifact hashes.
+Build214529 passed; default196/196; affected arena6/6 including preserved anim_prop_event and
+entity_visual_state. Worker ModelPhysics11/11. Intentional warnings/startup Toolsets errors
+remain separate from green predicates. Receipt E:/elysium-work/codex/l0-p1-body-closure-20261011/acceptance-checkpoint.json
+records exact local commit/tree/blobs/gates and no push. No full arm/full arena/boot-order gate.
+
+P1 remains active: parented model-shadow, required imported body metadata coverage and remaining
+creator/caller reconciliation precede full P1 witness.100a5bb0/1002e580/101907e0 remain partial;
+generic render proxies never proved the service. Next packet identifies that actual dependency;
+P2/P3 remain in order, no IVP prerequisite. No owner decision or accepted gameplay divergence.
+Full L0 closing gate stays open. See checkpoint.md for compact restart and next-packet.md.

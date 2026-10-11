@@ -28,6 +28,8 @@ namespace ElysiumModelPhysics
 	FElysiumEntity* GameDataForObject(void* Actor); //object6 creation-owned serial game data
 	bool Create(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
 		float MassBias, float OverrideMass, bool bStartAsleep, FString& OutError);
+	bool CreateStaticModel(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
+		FString& OutError); //1002e580: selected .phy, parsed parameters then inertia=1, env#8
 	// 1002dfe0/1002e7e0: bounds are authored local-space inputs, never visual mesh bounds.
 	bool CreateBbox(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
 		const FElysiumPhysicsBodyRecipe& Recipe, bool bStartAsleep, FString& OutError);
@@ -63,6 +65,7 @@ namespace ElysiumModelPhysics
 	Chaos::FSingleParticlePhysicsProxy* ActorIdentity(UPrimitiveComponent* Component);
 	bool IsActive(UPrimitiveComponent* Component);
 	void Destroy(UPrimitiveComponent* Component);
+	void GateStaticModelCollision(UPrimitiveComponent* Component, bool bEnabled); //ScriptHide/Unhide, actual native shapes
 	// 26018520/260185b0: object slots45/46, no immediate native pose write.
 	bool SetShadow(void* Actor, float LinearSpeedInches, float AngularSpeedDegrees,
 		bool bAllowMovement, bool bAllowRotation);

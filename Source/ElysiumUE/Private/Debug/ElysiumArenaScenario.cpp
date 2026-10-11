@@ -1989,7 +1989,8 @@ bool WitnessType(const FString& Field, FElysiumArenaValue::EType& Out)
 		TEXT("place.releases"), TEXT("senses.pass"), TEXT("los.cache"),
 		TEXT("los.last_clear"), TEXT("coordinator.normal.count"), TEXT("coordinator.player.count"),
 		TEXT("coordinator.boss.count"), TEXT("coordinator.normal.cap"), TEXT("coordinator.player.cap"),
-		TEXT("coordinator.boss.cap")
+		TEXT("coordinator.boss.cap"), TEXT("physics.list_count"), TEXT("physics.native_owned"),
+		TEXT("physics.query_shapes"), TEXT("physics.mass")
 	})
 		if (Field == Name) { Out = FElysiumArenaValue::EType::Number; return true; }
 	for (const TCHAR* Name : {
@@ -1997,7 +1998,7 @@ bool WitnessType(const FString& Field, FElysiumArenaValue::EType& Out)
 		TEXT("move_shoot.active"), TEXT("weapon.reload"), TEXT("weapon.jam"),
 		TEXT("weapon.interrupt"), TEXT("senses.can_sense"), TEXT("senses.gathered"),
 		TEXT("dialog.open"), TEXT("dialog.partner_live"), TEXT("los.player"),
-		TEXT("los.pvs")
+		TEXT("los.pvs"), TEXT("physics.present"), TEXT("physics.static"), TEXT("physics.shadow_member")
 	})
 		if (Field == Name) { Out = FElysiumArenaValue::EType::Bool; return true; }
 	for (const TCHAR* Name : {
@@ -2005,10 +2006,11 @@ bool WitnessType(const FString& Field, FElysiumArenaValue::EType& Out)
 		TEXT("callback.saved"), TEXT("script.owner"), TEXT("weapon.owner"),
 		TEXT("nav.target"), TEXT("memory.enemy"), TEXT("damage.attacker"),
 		TEXT("place.identity"), TEXT("senses.sighted"), TEXT("dialog.partner"),
-		TEXT("coordinator.normal.members"), TEXT("coordinator.player.members"), TEXT("coordinator.boss.members")
+		TEXT("coordinator.normal.members"), TEXT("coordinator.player.members"), TEXT("coordinator.boss.members"),
+		TEXT("physics.kind"), TEXT("physics.surface")
 	})
 		if (Field == Name) { Out = FElysiumArenaValue::EType::String; return true; }
-	for (const TCHAR* Prefix : { TEXT("origin"), TEXT("nav.goal"), TEXT("memory.position"), TEXT("damage.position"), TEXT("place.destination"), TEXT("place.bounds_min"), TEXT("place.bounds_max") })
+	for (const TCHAR* Prefix : { TEXT("origin"), TEXT("physics.pose"), TEXT("nav.goal"), TEXT("memory.position"), TEXT("damage.position"), TEXT("place.destination"), TEXT("place.bounds_min"), TEXT("place.bounds_max") })
 		for (const TCHAR* Axis : { TEXT("x"), TEXT("y"), TEXT("z") })
 			if (Field == FString(Prefix) + TEXT(".") + Axis) { Out = FElysiumArenaValue::EType::Number; return true; }
 	for (int32 LayerIndex = 0; LayerIndex < 4; ++LayerIndex)
@@ -2243,6 +2245,8 @@ const TArray<FString>& EntityCallAllowlist()
 		TEXT("GetVelocity"),
 		// Actual225 removal, followed by199 fallback on the same live receiver.
 		TEXT("VPhysicsDestroyObject"),
+		// P1 current-reference calls take one named live producer or null, never native recipes.
+		TEXT("VPhysicsSetObject"), TEXT("VPhysicsSwapObject"),
 		// L0.entity_core.monster-template: slot 70 `IsMonster()` on a live entity, no arguments.
 		TEXT("IsMonster"),
 		// L0.entity_core.save-block-framework (L0-r029): the engine's calls into CServerGameDLL's save

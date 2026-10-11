@@ -42,7 +42,7 @@ public:
 	void InputSkin(const FElysiumInputArgs& Args);
 	void SetSkin(int32 Family);
 	bool RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, FString& OutError) override;
-	void OnPhysicsActorRetired() override { bBboxRetired = true; }
+	void OnPhysicsActorRetired() override;
 	void InputSetAnimation(const FElysiumInputArgs& Args);
 
 protected:
@@ -95,6 +95,7 @@ private:
 	bool StartLoopSequence();
 	void BuildBody(bool bFromSetModel);
 	void BuildBoxCollisionProxy(UPrimitiveComponent* Mesh);
+	void BuildStaticModelBody(UStaticMeshComponent* Mesh);
 	void GateVisual();
 
 	// Exactly one representation is live. Ordinary props retain the baked static mesh; a model in
@@ -114,6 +115,12 @@ private:
 	UElysiumPhysicsPropComponent* BoxCollisionProxy = nullptr;
 	bool bBboxRetired = false;
 	bool bRestoredBbox = false;
+	// Creation-owned static .phy service is independent of the mutable entity reference.
+	// Restore owns a separate invisible carrier so art reconnect cannot overwrite its saved pose.
+	UElysiumPhysicsPropComponent* StaticModelPhysics = nullptr;
+	bool bStaticModelRequested = false;
+	bool bStaticModelRetired = false;
+	bool bRestoredStaticModel = false;
 	// The resolved `solid` keyfield, kept so GateVisual can tell whether the fallback-path `Visual`'s
 	// collision is solid-driven (and must be regated with it) or was always NoCollision (solid 0).
 	int32 SolidValue = 0;

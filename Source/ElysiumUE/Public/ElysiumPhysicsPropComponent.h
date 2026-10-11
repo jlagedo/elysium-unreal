@@ -15,6 +15,12 @@ public:
 	virtual UBodySetup* GetBodySetup() override;
 	virtual void OnDestroyPhysicsState() override;
 	virtual void OnUpdateTransform(EUpdateTransformFlags Flags, ETeleportType Teleport = ETeleportType::None) override;
+#if WITH_EDITOR
+	virtual void PreStaticMeshCompilation() override;
+	virtual void PostStaticMeshCompilation() override;
+#endif
 	UFUNCTION() void NativeWake(UPrimitiveComponent* Component, FName BoneName);
 	UFUNCTION() void NativeSleep(UPrimitiveComponent* Component, FName BoneName);
+protected:
+	virtual bool ShouldCreatePhysicsState() const override;
 };

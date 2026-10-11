@@ -1678,6 +1678,79 @@ the actual container extent, never the enum's end; native sleeping-body evidence
 corrected an initial out-of-bounds capture. Swap's reference-only arms are covered, but its
 membership removal has no complete production shadow witness and the whole function stays partial.
 
+## Reached unparented static .phy model body [PE asm/decompiled, 2026-10-11]
+
+This later bounded contract supplements the historical bbox packet above. The accepted
+parent-bbox/shadow producers are also newer than that packet's open prose; neither paragraph
+defines the current implementation status of those producers. Parented model-shadow creation
+and the complete P1/P2/P3 contracts remain separate requirements.
+
+The reached caller is `prop_dynamic::CreateVPhysics101907e0` -> static initializer100a5bb0:
+after successful Setup100a5ad0/225, an unparented solid3/6 reads its absolute origin and full
+angles, calls static model1002e580, then SetObject100a6490 even for null. In1002e580, model-info
+collision slot58 must supply binary collision data; absent data returns null. Parameters begin
+from the default template and the first `solid` block updates them. Asm1002e695/1002e69d enables
+collisions and overrides inertia to1 **after** parsing. Raw surface lookup yields its index or
+-1/default. Environment slot8 creates the first binary solid as static; successful creation
+alone reaches manager slot2. Dynamic prop massbias/overridemass precedence is not this caller.
+The retained C/asm is in `E:/elysium-work/codex/l0-p1-body-closure-20261011/1002e580.{c,asm}.txt`.
+
+The real producer is persisted `UElysiumModelPhysicsInputs::SelectedBody`, not the generic
+render mesh BodySetup. Runtime retires the builder's baseline, creates Model+bStatic through
+the existing native recipe service, and publishes the actual actor/creation game data only on
+success. It reuses UElysiumPhysicsPropComponent's pre-release retirement callback. No selected
+geometry or missing input is replaced by visual collision. A missing persisted input/cook is
+an explicit producer failure; a genuine no-binary model is a successful null-body arm.
+
+ScriptHide100a8710 saves the entity's physical words and makes it SOLID_NONE/FSOLID_NOT_SOLID;
+ScriptUnhide100a8990 restores them (`entity_io.md`, Hidden state). Static-model gating therefore
+updates every actual native shape handle, preserves actor identity, and disables both query
+and simulation shapes when hidden. The same saved entity words drive native reconnect;
+there is no new archive field for arbitrary native shape internals. Static solved pose remains
+independent of logical/render pose. The existing Physics block reconstructs Model+bStatic
+before activation, including each independently admitted alias; real count0 remains absent.
+Borrowed225, failed/successful SetModel replacement, Kill and teardown retire current references,
+recipe and incarnation before native release. Later visibility/transform gates cannot resurrect
+a retired producer. Reference-only SetObject replacement/Swap clear preserve former producers.
+
+The authentic branch is sm_hub_1 `cop_car_1` (CopCar.mdl): selected native setup differs from
+generic setup, exactly one native convex shape, mass680, metal, damping.01/angular1, inertia1,
+full reflected Source rotation and actual simple Sight query. Current source census reads108
+map chunks/1033 hashed JSON chunks:3428 prop_dynamic solid3/6 placements,914 normalized model
+identities,726 binary+first-solid and199 no-binary spellings. It observes no binary-present
+without first solid; this is not a general parser exhaustion claim. The genuine shipped society
+chair supplies the negative no-binary control. Solid0 stays nonphysical.
+
+Resident CopCar lacked body metadata and predated its producer. The coordinator approved one
+real `import models --units vtmb:model:scenery/vehicles/omnishpere/copcar` prerequisite refresh:
+exactly one merged manifest entry changed,3460 others and unselected chair/trashcan unchanged.
+Other old static assets lacking metadata remain an explicit coverage fault, requiring their
+actual import producer; this one-asset witness does not claim corpus support.
+
+`ModelPhysics.StaticModelCaller` joins actual Freeze -> typed archive -> decoded PhysicsBodies
+reset -> inactive ApplySnapshot/reconnect, saved solved pose differing from art, hidden/unhidden
+state, explicit absence, failed replacement, independent aliases, stale-incarnation rejection,
+and dynamic/static-bbox/shadow controls. Actual shadow-owner Swap(null) removes membership while
+retaining controller/native producer. Its native census counts three registered selected saved
+fields; three unregistered editor art allocations are inert (zero query/simulation, no recipe or
+game data, retail Sight/Visibility/character-object queries miss). Native allocation topology is
+not a duplicate gameplay body. `l0_physics_static_model_body` witnesses the bounded production
+creation/reference/list/native-save/lifetime slice through the existing map-host transaction.
+Its initial-row Load exposed an analytic bbox prerequisite: the invisible Cube carrier was
+still compiling although its actual RecipeBody already contained the box geometry. Installed
+UE5.8 StaticMeshComponent.cpp2310-2313 refuses physics creation while the render mesh compiles;
+StaticMeshCompiler.cpp419-422 later dispatches PostStaticMeshCompilation, whose base
+implementation (StaticMeshComponent.cpp3322-3339) recreates collision. That recreation retired
+the published bbox/shadow actor before native save. RecipeBody now uses the public primitive
+physics admission guards; invisible analytic carriers also bypass the unrelated render
+compilation Pre/Post callbacks. Model/render paths retain Super. A live public callback test
+checks identity, borrowed alias, recipe, controller and membership preservation plus an actual
+Sight query. Arena capture/apply retains native bbox/shadow query-shape state without depending
+on nondeterministic editor compilation timing. Failure receipts retain literal Cube compiling1
+and the later retirement/save refusal; no render cook, cvar or archive field was added.
+Chaos owns geometry and solve; this does not claim full creator mechanics, filtering, shadow
+motion, pose publication, P1, D02 or L0 closure.
+
 ### Recovered shadow/frame prerequisite chain (2026-10-11; implementation open)
 
 #### Public moving-event observation (2026-10-11; bounded service contract)

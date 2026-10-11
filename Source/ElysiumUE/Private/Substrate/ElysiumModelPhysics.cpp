@@ -1436,6 +1436,27 @@ void ElysiumModelPhysics::Destroy(UPrimitiveComponent* Component)
 	}
 }
 
+void ElysiumModelPhysics::GateStaticModelCollision(UPrimitiveComponent* Component, bool bEnabled)
+{
+	FBodyInstance* Body = Identity(Component);
+	if (!Body) return;
+	// Restore authored simple/complex collision policy without changing native identity.
+	// SetShapeCollisionEnabled only indexes AggGeom; a cook can also carry complex shapes.
+	Body->UpdatePhysicsFilterData();
+	if (bEnabled) return;
+	FPhysicsCommand::ExecuteWrite(Body->GetPhysicsActor(), [&](const FPhysicsActorHandle& NativeActor)
+	{
+		TArray<FPhysicsShapeHandle> Shapes;
+		Body->GetAllShapes_AssumesLocked(Shapes);
+		for (const FPhysicsShapeHandle& Shape : Shapes)
+		{
+			FPhysicsInterface::SetIsQueryShape(Shape, false);
+			FPhysicsInterface::SetIsSimulationShape(Shape, false);
+		}
+		if (FPhysScene* Scene = Body->GetPhysicsScene()) Scene->UpdateActorInAccelerationStructure(NativeActor);
+	});
+}
+
 bool ElysiumModelPhysics::Create(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
 	float MassBias, float OverrideMass, bool bStartAsleep, FString& OutError)
 {
@@ -1469,6 +1490,39 @@ bool ElysiumModelPhysics::Create(UStaticMeshComponent* Component, FElysiumPhysic
 	Recipe.RollingDrag = Inputs->RollingDrag;
 	Recipe.SolidPairsJson = Inputs->SolidPairsJson;
 	return CreatePhysicsRecipe(Component, Surfaces, Recipe, bStartAsleep, OutError);
+}
+
+bool ElysiumModelPhysics::CreateStaticModel(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
+	FString& OutError)
+{
+	OutError.Reset();
+	if (!Component) { OutError = TEXT("missing placed static model component"); return false; }
+	Destroy(Component); // retire the render builder's generic collider before selecting retail geometry.
+	const UStaticMesh* Mesh = Component->GetStaticMesh();
+	const auto* Inputs = UElysiumModelPhysicsInputs::Find(Mesh);
+	if (!Inputs || !Inputs->bSourceBody || !Inputs->SelectedBody || Inputs->SelectedBody->AggGeom.GetElementCount() == 0)
+	{
+		OutError = !Inputs ? TEXT("static model requires body-input reimport: uv run elysium import models")
+			: !Inputs->bSourceBody ? TEXT("model has no source VPhysics body")
+			: TEXT("static source body has missing selected native collision cook: reimport model");
+		return false; //1002e5f1/5fc: absent model collision returns null, never visual fallback geometry.
+	}
+	FElysiumPhysicsBodyRecipe Recipe;
+	Recipe.bStatic = true;
+	Recipe.ModelAsset = Mesh->GetPathName();
+	Recipe.Surface = Inputs->SurfaceProperty;
+	Recipe.MassKg = Inputs->MassKg; // no prop_physics massbias/override on1002e580.
+	Recipe.InertiaScale = 1.f; //1002e69d overwrites the parsed inertia AFTER the first solid block.
+	Recipe.LinearDamping = Inputs->LinearDamping;
+	Recipe.AngularDamping = Inputs->AngularDamping;
+	Recipe.bMassCenter = Inputs->bMassCenter;
+	Recipe.MassCenterCm = Inputs->MassCenterCm;
+	Recipe.RotInertiaLimit = Inputs->RotInertiaLimit;
+	Recipe.Volume = Inputs->Volume;
+	Recipe.Drag = Inputs->Drag;
+	Recipe.RollingDrag = Inputs->RollingDrag;
+	Recipe.SolidPairsJson = Inputs->SolidPairsJson;
+	return CreatePhysicsRecipe(Component, Surfaces, Recipe, false, OutError); //env#8; success manager#2.
 }
 
 bool ElysiumModelPhysics::CreateBbox(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
@@ -1576,7 +1630,11 @@ bool CreatePhysicsRecipe(UPrimitiveComponent* Component, FElysiumPhysicsSurfaceP
 	Component->SetSimulatePhysics(!Recipe.bStatic);
 	if (Recipe.Kind != EElysiumPhysicsRecipeKind::Model) Component->RecreatePhysicsState();
 	FBodyInstance* Body = ElysiumModelPhysics::Identity(Component);
-	if (!Body) { ElysiumModelPhysics::Destroy(Component); OutError = TEXT("Chaos body creation failed"); return false; }
+	if (!Body)
+	{
+		OutError = TEXT("Chaos body creation failed");
+		ElysiumModelPhysics::Destroy(Component); return false;
+	}
 	if (Recipe.bMassCenter)
 	{
 		FTransform MassSpace = Body->GetMassSpaceLocal();

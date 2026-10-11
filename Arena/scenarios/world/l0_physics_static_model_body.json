@@ -1,0 +1,1550 @@
+{
+  "name": "l0_physics_static_model_body",
+  "about": "Bounded D02/P1 reached unparented static .phy model body (1002e580 via prop_dynamic solid6/3): authentic prepared CopCar geometry, current-reference replacement/clear/borrowed225, body list, selected native state and real map-host Physics save/load before first think. Hidden entity state drives native reconnect; genuine no-binary chair, solid0, saved absence and accepted dynamic/bbox/parent-shadow controls join this slice. Native StaticModelCaller separately proves selected setup/shape/query, solved pose differing from art, independent saved aliases and stale incarnations. Other stale model assets still require real import metadata; parented model-shadow, P2 filtering and P3 motion remain open. No full P1/D02 closure.",
+  "stage": "arena",
+  "seed": 1,
+  "duration": 12,
+  "player": {
+    "at": "start"
+  },
+  "rows": [
+    {
+      "classname": "prop_dynamic",
+      "name": "static_shown",
+      "at": [
+        5000,
+        5000,
+        1000
+      ],
+      "keys": {
+        "model": "models/scenery/vehicles/OmniShpere/CopCar.mdl",
+        "spawnflags": "0",
+        "solid": "6"
+      }
+    },
+    {
+      "classname": "prop_dynamic",
+      "name": "static_hidden",
+      "at": [
+        8000,
+        5000,
+        1000
+      ],
+      "keys": {
+        "model": "models/scenery/vehicles/OmniShpere/CopCar.mdl",
+        "spawnflags": "0",
+        "solid": "3"
+      }
+    },
+    {
+      "classname": "prop_dynamic",
+      "name": "static_absent",
+      "at": [
+        11000,
+        5000,
+        1000
+      ],
+      "keys": {
+        "model": "models/scenery/vehicles/OmniShpere/CopCar.mdl",
+        "spawnflags": "0",
+        "solid": "6"
+      }
+    },
+    {
+      "classname": "prop_dynamic",
+      "name": "no_binary",
+      "at": [
+        14000,
+        5000,
+        1000
+      ],
+      "keys": {
+        "model": "models/scenery/structural/society/chair.mdl",
+        "spawnflags": "0",
+        "solid": "6"
+      }
+    },
+    {
+      "classname": "prop_dynamic",
+      "name": "solid0",
+      "at": [
+        17000,
+        5000,
+        1000
+      ],
+      "keys": {
+        "model": "models/scenery/vehicles/OmniShpere/CopCar.mdl",
+        "spawnflags": "0",
+        "solid": "0"
+      }
+    },
+    {
+      "classname": "prop_physics",
+      "name": "dynamic",
+      "at": [
+        20000,
+        5000,
+        1000
+      ],
+      "keys": {
+        "model": "models/scenery/street/trashcan1/trashcan1_base.mdl",
+        "spawnflags": "0"
+      }
+    },
+    {
+      "classname": "prop_dynamic",
+      "name": "bbox",
+      "at": [
+        23000,
+        5000,
+        1000
+      ],
+      "keys": {
+        "model": "models/scenery/vehicles/OmniShpere/CopCar.mdl",
+        "spawnflags": "0",
+        "solid": "2"
+      }
+    },
+    {
+      "classname": "info_target",
+      "name": "parent",
+      "at": [
+        5000,
+        5000,
+        1000
+      ],
+      "keys": {}
+    },
+    {
+      "classname": "prop_dynamic",
+      "name": "shadow",
+      "at": [
+        26000,
+        5000,
+        1000
+      ],
+      "keys": {
+        "parentname": "parent",
+        "model": "models/scenery/vehicles/OmniShpere/CopCar.mdl",
+        "spawnflags": "0",
+        "solid": "2"
+      }
+    },
+    {
+      "classname": "info_target",
+      "name": "alias",
+      "at": [
+        5000,
+        5000,
+        1000
+      ],
+      "keys": {}
+    },
+    {
+      "classname": "info_target",
+      "name": "borrower",
+      "at": [
+        5000,
+        5000,
+        1000
+      ],
+      "keys": {}
+    },
+    {
+      "classname": "info_target",
+      "name": "shadow_holder",
+      "at": [
+        5000,
+        5000,
+        1000
+      ],
+      "keys": {}
+    }
+  ],
+  "script": [
+    {
+      "t": 0.1,
+      "do": "fire",
+      "target": "static_hidden",
+      "input": "ScriptHide"
+    },
+    {
+      "t": 0.15,
+      "do": "entity_call",
+      "target": "alias",
+      "function": "VPhysicsSetObject",
+      "args": [
+        "static_shown"
+      ]
+    },
+    {
+      "t": 0.2,
+      "do": "entity_call",
+      "target": "alias",
+      "function": "VPhysicsSetObject",
+      "args": [
+        "dynamic"
+      ]
+    },
+    {
+      "t": 0.25,
+      "do": "entity_call",
+      "target": "alias",
+      "function": "VPhysicsSwapObject",
+      "args": [
+        null
+      ]
+    },
+    {
+      "t": 0.3,
+      "do": "entity_call",
+      "target": "alias",
+      "function": "VPhysicsSetObject",
+      "args": [
+        "static_shown"
+      ]
+    },
+    {
+      "t": 0.35,
+      "do": "entity_call",
+      "target": "borrower",
+      "function": "VPhysicsSetObject",
+      "args": [
+        "static_absent"
+      ]
+    },
+    {
+      "t": 0.4,
+      "do": "entity_call",
+      "target": "borrower",
+      "function": "VPhysicsDestroyObject",
+      "args": []
+    },
+    {
+      "t": 0.45,
+      "do": "entity_call",
+      "target": "shadow_holder",
+      "function": "VPhysicsSetObject",
+      "args": [
+        "shadow"
+      ]
+    },
+    {
+      "t": 0.5,
+      "do": "entity_call",
+      "target": "shadow",
+      "function": "VPhysicsSwapObject",
+      "args": [
+        null
+      ]
+    },
+    {
+      "t": 0.55,
+      "do": "entity_call",
+      "target": "shadow",
+      "function": "VPhysicsSetObject",
+      "args": [
+        "shadow_holder"
+      ]
+    },
+    {
+      "t": 0.6,
+      "do": "entity_call",
+      "target": "shadow_holder",
+      "function": "VPhysicsSwapObject",
+      "args": [
+        null
+      ]
+    },
+    {
+      "t": 0.8,
+      "do": "save",
+      "slot": "l0_physics_static_model_body",
+      "checkpoint": "static_body",
+      "fields": [
+        {
+          "who": "static_shown",
+          "field": "physics.present"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.static"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.kind"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.surface"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.present"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.static"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.kind"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.surface"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "alias",
+          "field": "physics.present"
+        },
+        {
+          "who": "alias",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "alias",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "alias",
+          "field": "physics.static"
+        },
+        {
+          "who": "alias",
+          "field": "physics.kind"
+        },
+        {
+          "who": "alias",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "alias",
+          "field": "physics.surface"
+        },
+        {
+          "who": "alias",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "alias",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "alias",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "alias",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "bbox",
+          "field": "physics.present"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.static"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.kind"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "bbox",
+          "field": "physics.surface"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "bbox",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "bbox",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_absent",
+          "field": "physics.present"
+        },
+        {
+          "who": "static_absent",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "static_absent",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.present"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "solid0",
+          "field": "physics.present"
+        },
+        {
+          "who": "solid0",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "solid0",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "borrower",
+          "field": "physics.present"
+        },
+        {
+          "who": "borrower",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "borrower",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "shadow_holder",
+          "field": "physics.present"
+        },
+        {
+          "who": "shadow_holder",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "shadow_holder",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "static_hidden",
+          "field": "hidden"
+        },
+        {
+          "who": "dynamic",
+          "field": "physics.present"
+        },
+        {
+          "who": "dynamic",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "dynamic",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "dynamic",
+          "field": "physics.static"
+        },
+        {
+          "who": "dynamic",
+          "field": "physics.kind"
+        },
+        {
+          "who": "shadow",
+          "field": "physics.present"
+        },
+        {
+          "who": "shadow",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "shadow",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "shadow",
+          "field": "physics.static"
+        },
+        {
+          "who": "shadow",
+          "field": "physics.kind"
+        },
+        {
+          "who": "shadow",
+          "field": "physics.shadow_member"
+        }
+      ]
+    },
+    {
+      "after": "written",
+      "do": "load",
+      "slot": "l0_physics_static_model_body",
+      "checkpoint": "static_body"
+    },
+    {
+      "after": "ready",
+      "do": "restore_compare",
+      "checkpoint": "static_body",
+      "fields": [
+        {
+          "who": "static_shown",
+          "field": "physics.present"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.static"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.kind"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.surface"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_shown",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.present"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.static"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.kind"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.surface"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_hidden",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "alias",
+          "field": "physics.present"
+        },
+        {
+          "who": "alias",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "alias",
+          "field": "physics.static"
+        },
+        {
+          "who": "alias",
+          "field": "physics.kind"
+        },
+        {
+          "who": "alias",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "alias",
+          "field": "physics.surface"
+        },
+        {
+          "who": "alias",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "alias",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "alias",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "alias",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "bbox",
+          "field": "physics.present"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.static"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.kind"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.mass",
+          "tolerance": 0.001
+        },
+        {
+          "who": "bbox",
+          "field": "physics.surface"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.query_shapes"
+        },
+        {
+          "who": "bbox",
+          "field": "physics.pose.x",
+          "tolerance": 0.001
+        },
+        {
+          "who": "bbox",
+          "field": "physics.pose.y",
+          "tolerance": 0.001
+        },
+        {
+          "who": "bbox",
+          "field": "physics.pose.z",
+          "tolerance": 0.001
+        },
+        {
+          "who": "static_absent",
+          "field": "physics.present"
+        },
+        {
+          "who": "static_absent",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "static_absent",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.present"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "no_binary",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "solid0",
+          "field": "physics.present"
+        },
+        {
+          "who": "solid0",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "solid0",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "borrower",
+          "field": "physics.present"
+        },
+        {
+          "who": "borrower",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "borrower",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "shadow_holder",
+          "field": "physics.present"
+        },
+        {
+          "who": "shadow_holder",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "shadow_holder",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "static_hidden",
+          "field": "hidden"
+        },
+        {
+          "who": "dynamic",
+          "field": "physics.present"
+        },
+        {
+          "who": "dynamic",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "dynamic",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "dynamic",
+          "field": "physics.static"
+        },
+        {
+          "who": "dynamic",
+          "field": "physics.kind"
+        },
+        {
+          "who": "shadow",
+          "field": "physics.present"
+        },
+        {
+          "who": "shadow",
+          "field": "physics.list_count"
+        },
+        {
+          "who": "shadow",
+          "field": "physics.native_owned"
+        },
+        {
+          "who": "shadow",
+          "field": "physics.static"
+        },
+        {
+          "who": "shadow",
+          "field": "physics.kind"
+        },
+        {
+          "who": "shadow",
+          "field": "physics.shadow_member"
+        }
+      ]
+    },
+    {
+      "after": "ready",
+      "delay": 0.1,
+      "do": "fire",
+      "target": "static_hidden",
+      "input": "ScriptUnhide"
+    },
+    {
+      "after": "ready",
+      "delay": 0.2,
+      "do": "entity_call",
+      "target": "borrower",
+      "function": "VPhysicsSetObject",
+      "args": [
+        "static_shown"
+      ]
+    },
+    {
+      "after": "ready",
+      "delay": 0.25,
+      "do": "entity_call",
+      "target": "borrower",
+      "function": "VPhysicsDestroyObject",
+      "args": []
+    },
+    {
+      "after": "ready",
+      "delay": 0.3,
+      "do": "fire",
+      "target": "static_shown",
+      "input": "ScriptHide"
+    },
+    {
+      "after": "ready",
+      "delay": 0.35,
+      "do": "fire",
+      "target": "static_shown",
+      "input": "ScriptUnhide"
+    }
+  ],
+  "expect": [
+    {
+      "label": "alias_replace",
+      "who": "alias",
+      "kind": "script",
+      "match": "entity_call VPhysicsSetObject done object=1 list=1",
+      "by": 0.23
+    },
+    {
+      "label": "alias_clear",
+      "who": "alias",
+      "kind": "script",
+      "match": "entity_call VPhysicsSwapObject done object=0 list=0",
+      "by": 0.29
+    },
+    {
+      "label": "borrowed_remove",
+      "who": "borrower",
+      "kind": "script",
+      "match": "entity_call VPhysicsDestroyObject done object=0",
+      "by": 0.44
+    },
+    {
+      "label": "shadow_owner_clear",
+      "who": "shadow",
+      "kind": "script",
+      "match": "entity_call VPhysicsSwapObject done object=0 list=0",
+      "by": 0.54
+    },
+    {
+      "label": "written",
+      "who": "",
+      "kind": "script",
+      "match": "fence=2",
+      "within": 10
+    },
+    {
+      "label": "ready",
+      "who": "",
+      "kind": "script",
+      "match": "fence=4",
+      "within": 10
+    }
+  ],
+  "probes": [
+    {
+      "at": "captured",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "captured",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.mass",
+      "equals": 680
+    },
+    {
+      "at": "captured",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.surface",
+      "equals": "metal"
+    },
+    {
+      "at": "captured",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "captured",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.mass",
+      "equals": 680
+    },
+    {
+      "at": "captured",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.surface",
+      "equals": "metal"
+    },
+    {
+      "at": "captured",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "captured",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.mass",
+      "equals": 680
+    },
+    {
+      "at": "captured",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.surface",
+      "equals": "metal"
+    },
+    {
+      "at": "captured",
+      "who": "static_absent",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "static_absent",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "solid0",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "solid0",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "borrower",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "borrower",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "shadow_holder",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "shadow_holder",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "captured",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "captured",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "bbox",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "bbox"
+    },
+    {
+      "at": "captured",
+      "who": "shadow",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "bbox"
+    },
+    {
+      "at": "captured",
+      "who": "shadow",
+      "probe": "witness",
+      "field": "physics.shadow_member",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "dynamic",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "applied",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.mass",
+      "equals": 680
+    },
+    {
+      "at": "applied",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.surface",
+      "equals": "metal"
+    },
+    {
+      "at": "applied",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "applied",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.mass",
+      "equals": 680
+    },
+    {
+      "at": "applied",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.surface",
+      "equals": "metal"
+    },
+    {
+      "at": "applied",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "model"
+    },
+    {
+      "at": "applied",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.mass",
+      "equals": 680
+    },
+    {
+      "at": "applied",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.surface",
+      "equals": "metal"
+    },
+    {
+      "at": "applied",
+      "who": "static_absent",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "static_absent",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "no_binary",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "solid0",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "solid0",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "borrower",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "borrower",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "shadow_holder",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "shadow_holder",
+      "probe": "witness",
+      "field": "physics.list_count",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": true
+    },
+    {
+      "at": "applied",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 0
+    },
+    {
+      "at": "applied",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "bbox",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "bbox"
+    },
+    {
+      "at": "applied",
+      "who": "shadow",
+      "probe": "witness",
+      "field": "physics.kind",
+      "equals": "bbox"
+    },
+    {
+      "at": "applied",
+      "who": "shadow",
+      "probe": "witness",
+      "field": "physics.shadow_member",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "dynamic",
+      "probe": "witness",
+      "field": "physics.static",
+      "equals": false
+    },
+    {
+      "at": "applied",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 1
+    },
+    {
+      "at": "end",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "hidden",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "static_hidden",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 1
+    },
+    {
+      "at": "end",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "static_shown",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 0
+    },
+    {
+      "at": "end",
+      "who": "borrower",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "end",
+      "who": "static_absent",
+      "probe": "witness",
+      "field": "physics.present",
+      "equals": false
+    },
+    {
+      "at": "captured",
+      "who": "bbox",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "shadow",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "bbox",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 1
+    },
+    {
+      "at": "applied",
+      "who": "shadow",
+      "probe": "witness",
+      "field": "physics.query_shapes",
+      "equals": 1
+    },
+    {
+      "at": "captured",
+      "who": "alias",
+      "probe": "witness",
+      "field": "physics.native_owned",
+      "equals": 0
+    }
+  ]
+}

@@ -808,3 +808,14 @@ receivers to witness base slot 189 `0x100ad850` returning zero. Complete statele
 rules and the existing special-mask character-filter caller are covered separately by
 `Elysium.Substrate.CollisionRulesProduction`. The record proves the selector only: nonzero
 overrides, trace geometry, group mutation and the complete filter remain open.
+
+`l0_physics_static_model_body` is the bounded reached unparented prop_dynamic solid3/6 .phy
+body slice (1002e580). Actual prepared CopCar, real no-binary chair and solid0 controls exercise
+current-reference/list and borrowed225, then the normal save/load transaction restores static
+state, hidden shape gating, explicit absence and independent aliases. Existing dynamic/bbox/
+shadow bodies are controls; actual shadow-owner Swap(null) removes owner membership.
+`entity_call VPhysicsSetObject`/`VPhysicsSwapObject` take one named live producer or null.
+Closed `physics.*` witnesses read actual current/list/creation-owner registration, captured native
+recipe/material/mass/pose, actual query shapes and shadow-owner membership. Missing native state
+fails admission/read; no generic state setters or fabricated recipes are provided. Other stale
+static asset metadata, parented model-shadow, P2 and P3 remain open; this record cannot close P1.

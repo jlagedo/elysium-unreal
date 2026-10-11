@@ -1,77 +1,80 @@
 # L0 restart checkpoint
 
-Updated 2026-10-11 by main. Full L0 closing gate remains open; the supported Goal is active.
-Read [goal.md](goal.md) at every continuation. Main directly coordinates and accepts each run;
-one fresh Sol High worker at a time, no nested coordinators, no worker commits, never push.
+Updated 2026-10-11 by main. Full L0 closing gate remains open; Goal active.
+Read [goal.md](goal.md) each continuation. Main Sol Medium reviews/gates/commits;
+one fresh Sol High worker per run, no nested workers, never push.
 
 ## Accepted state
 
-- Accepted base-velocity packet: the local commit containing this checkpoint, parent
-  `5b48bb61fc19cadcc599d0107a12ddfc10777bfc` (34-path plan acceptance).
-  Its exact accepted HEAD/tree/blob receipt is
-  `E:/elysium-work/codex/l0-p1-velocity-20261011/acceptance-checkpoint.json`.
-  Plan parent `8f8aea1b0619b5b07711b2174218cba40a1847f8` is the sound prerequisite.
-- Plan receipt: `E:/elysium-work/codex/l0-delivery-plan-20261011/acceptance-checkpoint.json`.
-  Main independently verified structural coverage, committed blobs and the clean tree.
-- Sound receipt:
-  `E:/elysium-work/codex/l0-sound-producer-implementation-20261011/final-review-r1/checkpoint.json`.
-  Its build, pipeline 191, native 2, affected 21, default 194 and six sound/KV arena records passed.
-  Reuse the accepted evidence; generic sound emission and impact consumers remain open.
-- Supported Goal recovery: `get_goal` returned null; owner-authorized `create_goal` then
-  confirmed active. No internal app storage or prior completion state was edited.
+- Static-model packet: local commit containing this checkpoint, parent
+  fe247856ecd34b9ca26d0a4e172ab537a90699b8 (accepted base velocity).
+  Exact HEAD/tree/blob receipt:
+  E:/elysium-work/codex/l0-p1-body-closure-20261011/acceptance-checkpoint.json.
+- Worker freeze/recovery and independent main review:
+  E:/elysium-work/codex/l0-p1-body-closure-20261011/freeze-receipt.json,
+  freeze-summary.md, main-acceptance-notes.md and root-review/.
+- Reuse accepted velocity receipt in l0-p1-velocity-20261011/acceptance-checkpoint.json;
+  plan5b48bb61 in l0-delivery-plan-20261011/acceptance-checkpoint.json;
+  sound8f8aea1b in l0-sound-producer-implementation-20261011/final-review-r1/checkpoint.json
+  (all under E:/elysium-work/codex/). No sound/velocity recovery replay.
 
-## Contract closed — D02/P1 base velocity
+## Contract closed — reached unparented static .phy body
 
-Fresh worker `/root/l0_p1_velocity` implemented the getter portion of
-`L0.physics.physics-object-contract-2`, retail base slot199 `0x100ad1a0`.
-Packet and oracle: `E:/elysium-work/codex/l0-p1-velocity-20261011/packet.md`.
-Main approved the precode contract after independent oracle and installed public API review.
+Fresh worker /root/l0_p1_body_closure completed the bounded static-model production,
+reference/native-save/lifetime slice; P1 brief-1/-6 traceability is retained.
+Retail1002e580 selects first binary .phy geometry/parsed semantic inputs, overrides inertia1
+and collision enable after parsing, resolves raw surface/default and associates only success.
+Chaos supplies geometry/mechanics. Unparented solid3/6 Spawn -> InitStatic now publishes actual
+selected native body; solid0/genuine no-binary remain bodyless without visual fallback collision.
 
-The initial production branch passed 1/1:
-`E:/elysium-work/codex/l0-p1-velocity-20261011/initial-branch-report/index.json`.
-A spawned .phy prop moved 2.38273955 cm; actual native/query world velocity was (101,-53,17)
-cm/s and body-local QAngle rate was (28.648,-42.972,-14.324) degrees/s. This proves the selected
-native getter branch, not P1 or cross-engine trajectory equivalence. Expanded native tests prove
-nullable outputs, angular-last alias ordering, literal rotated QAngle axes independent of inertia
-axes, parented fallback without dirty writes, replacement/clear, recipe independence and alias
-retirement before native release. The original arena failure/source was retained: runtime fixture
-spawn omitted required model annotation/preparation. A bounded initial-row harness repair mirrors
-the baked static annotation and uses the existing production model preparation barrier.
+Authentic sm_hub_1 cop_car_1 required one exact-one real importer refresh of stale metadata.
+Only CopCar's manifest entry changed,3460 others unchanged. Main verified all twelve frozen
+sources and six source/artifact/provenance hashes. Other stale assets remain a coverage fault.
 
-Main independently reviewed the oracle, installed APIs and all changed paths. Build passed
-(`20261011T201857.936745Z-build.json`); default 195/195 with zero failures/not-run/abstentions
-(`reports/tests/20261011T201903.093487Z-elysium-session-elysium-substrate/index.json`).
-Affected arena 5/5 in one boot (`reports/arena/20261011T201945.195623Z/index.json`): velocity,
-solid mask, damage type, baseline anim_prop_event and visual-state regression. All first_unmet
-values are null. Worker ModelPhysics 10/10 and native branch receipts remain in packet scratch.
-Port generator --check and repo policy passed. Only base199's audit row is promoted; broad brief,
-P1/D02 and higher animating/NPC consumers remain open. Full arm/full arena/repeated boot-order
-gates are still required at their closing scope; no full story closure is claimed here.
+Proof joins solved pose independent of art, Freeze -> typed archive -> PhysicsBodies reset ->
+inactive ApplySnapshot, hidden/unhide query gating, saved absence, independent aliases,
+replacement/clear, borrowed225, stale incarnation, Kill and teardown. Three registered selected
+saved fields are required; inert editor art allocations have zero query/simulation/association.
+Internal allocation count is not gameplay. Actual shadow-owner null Swap removes membership
+while retaining native/controller; rebind does not restore membership.100a68f0 is now ported.
 
-## Remaining foundation and next witness
+Real arena exposed analytic bbox carrier prerequisites: compiling Cube render metadata blocked
+ready FKBox geometry, then compilation completion could recreate its published actor. Narrow
+primitive-admission and WITH_EDITOR callbacks preserve invisible analytic native identity;
+model/render paths retain Unreal behavior. Actual callback dispatch checks identity/aliases/
+recipe/controller/membership/query. No cvar or nondeterministic compilation timing gate.
 
-Next packet: [next-packet.md](next-packet.md). Reconcile P1's existing body ownership/lifetime evidence:
-model, static bbox and shadow caller arms; real enumeration/replacement/removal; stale callback
-and alias fences; required native saved state. Select the first concrete unmet consumer contract
-from source and retained receipts. Do not append GetCollideable/P2 to this run.
+Main independently reviewed retail/API/diff and failures. Build214529.983886Z passed;
+default196/196, failed/not-run/in-process0 (reports/tests/20261011T214534.893302Z-elysium-session-elysium-substrate/index.json).
+Affected arena6/6 in one boot (reports/arena/20261011T214609.335968Z/arena/index.json):
+static_model_body, velocity, solid_mask, damage_type, anim_prop_event and entity_visual_state;
+all first_unmet null. Worker family11/11 includes actual compilation callbacks. Report roots
+are E:/elysium-work/. Intentional overwrite warnings and existing Unreal Toolsets startup errors
+are retained; passing predicates are not a log-clean claim. Generator/policy receipts are in
+acceptance manifest. No full arm/full arena/repeated closing boot orders yet.
 
-Then close E2/P2 and integrated P3: actual filters/query results/material association, mutation
-phase, think/removal fences, shadow targets versus solved poses, publication timing and
-parent/local/absolute/bounds through the required live caller. Existing contact/frame/material
-discrepancies remain unaccepted. An IVP clone is never a prerequisite.
+## Remaining milestone requirements → next closing witness
 
-## Authority and scope
+P1 active. First candidate: resolved-parent nonbbox model-shadow lacks registered creation/
+native-save producer. [next-packet.md](next-packet.md) requests bounded precode reconciliation
+with retained walks/authentic inputs. Required core/witness metadata coverage needs actual
+selected import producers. Reconcile remaining creator/caller arms and full P1 integration;
+100a5bb0/1002e580/101907e0 remain partial. No broad mixed-story closure claimed.
 
-- [delivery-plan.md](delivery-plan.md), [milestones.tsv](milestones.tsv),
-  [delivery-map.tsv](delivery-map.tsv), [service-contract-map.tsv](service-contract-map.tsv).
-- [handoffs.md](handoffs.md) for higher layers; [spec.md](spec.md) for the full closing gate.
-- Retained walks/history: [walks/L0-physics-producer.md](walks/L0-physics-producer.md),
-  [walks/L0-sound-producer.md](walks/L0-sound-producer.md), [progress.md](progress.md),
-  [runs.md](runs.md). Read only relevant sections; historical run counts are not progress percentages.
-- Retail-save import/dry runs/retail roster conversion excluded. Native save/load/travel and
-  faithful L0 state remain required. Account for the four retained scope-review briefs before
-  full closure. No gameplay divergence is approved. No owner decision is currently pending.
+Then E2/P2 and integrated P3: real filter/query/material/mutation, think/removal fences,
+shadow target versus solved pose, timing/publication and parent/bounds through required callers.
+Existing contact/frame/material divergences are unaccepted. No IVP clone prerequisite.
 
-Full closure still requires every active record in one arena run, required repeated boot orders,
-default and arm zero failures, baseline preservation, owned audit verdicts, observable engine
-contracts, registered higher hooks and disposition of every mapped requirement.
+## Authority and full closing gate
+
+[delivery-plan.md](delivery-plan.md), [milestones.tsv](milestones.tsv),
+[delivery-map.tsv](delivery-map.tsv), [service-contract-map.tsv](service-contract-map.tsv),
+[handoffs.md](handoffs.md), [spec.md](spec.md). Recovery/history:
+[walks/L0-physics-producer.md](walks/L0-physics-producer.md), [progress.md](progress.md),
+[runs.md](runs.md). Historical bundle counts are not progress or ETA.
+
+Native save/load/travel required; retail-save import/migration excluded. Four scope-review
+briefs still need disposition. Higher gameplay stays hooks/handoffs. No owner decision or
+approved gameplay divergence. Full gate requires every active record in one full arena,
+repeated boot orders, default+arm zero failures, baseline preservation, audit verdicts,
+observable engine contracts, hooks and complete disposition. Full L0 remains open.
