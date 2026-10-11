@@ -1488,3 +1488,90 @@ first_unmet empty. Wrapper110326.548571Z-arena.json exit0;27 error/29 warning li
 include installed toolset Python AgentSkill startup failures and runtime diagnostics,
 separate from successful scenario assertions. l0_angle_motion Spawn literals/order unchanged.
 Coordinator owns final default/bounded arena and commit; worker has no remaining engine job.
+
+## Completed47/postconstraint44 observation contract (2026-10-11; before code)
+
+The unchanged normal START_OPEN/InputClose fixture observes active226 ->100a55b0,
+object46 targets, completed47/26018640 and qualifying44 before strict1in-squared178.
+Retail47 samples the environment simulation time via26019580 ->2602e700 (confirmed
+public moving-event recovery), not ordinary-clock object37. Preserve Source FLOAT
+inches/full Euler reflection, native cm/rad/s, target/countdown/event correction,
+creation generation/revision fences, save state and original branch assertions.
+
+Installed public SimCallbackObject.h options PostSolve=1<<14 and OnPostSolve_Internal
+specify one call per substep on the internal thread. Its time/delta accessors describe
+the simulation step, not a newly inferred substep clock. PBDRigidsSolver.cpp's registered
+postsolve dispatch and PBDRigidsEvolutionGBF.cpp place this after island solve/CCD
+projection and before SavePostSolve/sleep. Public proxy GetPhysicsThreadAPI is nullable;
+resolve UniqueIdx before proxy dereference. Read X/R/V/W there; the public proxy's
+GetHandle_LowLevel ->CastToRigidParticle ->GetP/GetQ supplies diagnostic solved P/Q
+that the higher proxy API does not expose. This is supported bookkeeping observation,
+not a private layout or an implementation dependency. ParticleCollisions public
+VisitConstCollisions reads surviving native constraints after detection/solve, with
+disabled/probe/active-point/Phi and immutable input identity provenance. No UObject
+or mutable GT owner access occurs on PT. Outputs use existing marshaling, generation/
+revision admission and queued callback/controller retirement; no new save field/hook.
+
+Capture both native pose representations and contact qualification, then compare with
+the SAME completed GT47/44. Prove the production callback/actual contact branch before
+adding literal assertions. Repair projection/input only if measured evidence establishes
+it. Otherwise retain mechanics/contact equivalence OPEN and name the next observable
+service seam; no cadence, delay, ordering, threshold or tolerance alteration.
+
+### Measured branch and freeze outcome
+
+PostSolve observation is GT-world opt-in, marshaled as immutable input and off by
+default. World cleanup is registered at opt-in as well as Prepare, so even an
+unprepared diagnostic world retires its key. Callback/controller/output lifetime
+and generation/revision admission reuse the existing production fences. No PT
+UObject access, solver write, new save word or upward hook is introduced.
+
+Diagnostic111457 proves36 actual calls (one/frame) and actual blocker constraints.
+Assertions then preserve exact completedGT P/Q components, one normal fixture
+substep, actual creation generation and same-step modifier provenance. Literal
+f19 unqualified/f20 qualified and active set/nonprobe/nondisabled points are
+asserted; point count4 remains measured diagnostic topology. Original moving,
+teleport equality4032.25, absent prediction10000, sleeping/retirement, arrival,
+linked receiver and Spawn-order observers remain intact. Added topology assertion
+was removed before final freeze because retail observes qualification, not count.
+
+All36 completedGT positions equal solvedP and all V/W squared differences are0;
+exact Q component assertions pass. Raw quaternion AngularDistance diagnostic
+self-dot can be nonzero even when components match. Postsolve X remains older:
+f20X2.7076270580291748/P2.5409605503082275 Sourcein. No projection/input repair is
+evidenced. f19/f20 retained native Phi2.8773729801177979/2.4540395736694336cm
+brackets the unchanged strict qualification threshold; actual blocker first44f20,
+178f32 and distSquared1.0501758925050075 remain. This manifold observation is not
+a fresh surface-separation query or proof of retail distance equivalence.
+
+Final common creation/input prefix is99 lines, SHA256
+af9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515,
+so paired public102350.497103Z remains authoritative for f1..32. Retailfirst44f26,
+f32.57965414909080337/no178 remains different. No native-altered suffix reuse.
+Next bounded complete observable:44/260184a0 friction-link qualification/birth/
+retirement service2603e6d0/2603e880, proving native public shape pose/margins/
+separation and retained manifold Phi meanings on this same prefix. No global
+margin inference, threshold change, mechanical reconstruction or closure claim.
+
+Final coherent --arm build E:/elysium-work/logs/20261011T112047.842830Z-build.json
+exits0 in23.047s. Final affected54 at
+E:/elysium-work/reports/tests/20261011T112149.936389Z-elysium-substrate-modelphysics-elysium-s-31ef1b4b/index.json
+has34 clean/20 warned,0 failed/notRun/inProcess; all9 ModelPhysics and16 Mover clean.
+Wrapper112148.399801Z-test.json exits0/24.563s with14 runtime warning lines,
+separate from warned automation cases. Final log records36 postsolve samples,
+GT-minus-P0 and completedV/W differences0, original first44f20/178f32 and
+unchanged99line prefix. Exact Q component assertions all pass.
+
+Final scenario2 receipts (merged and host checked):
+E:/elysium-work/reports/arena/20261011T112222.656231Z/index.json and arena/index.json,
+pass2/2, first_unmet null, l0_angle_motion290/l0_physics_solid_mask81events.
+Wrapper112222.453014Z-arena.json exits0/24.2s. Existing27 error/29 warning lines,
+including installed Python AgentSkill startup failures, are separate from scenario
+assertions. Runtime/tests are frozen; only receipt bookkeeping follows. Functional
+SHA256: ModelPhysics.cpp620D91CD201156AB73D38A90829B80F62F8D8A2306985F3ED38CBF63DB5CC333;
+ModelPhysics.h4AB903EB06A5917EF295323E004DA2447CA84C5F2F55FAE734EF927366A2B6E4;
+MoverTests.cppB6987ACA7511B3B0B91C8301A16C3E1538C1B214BF8971D5FCD7B50ECCA42499.
+Generator, map/native content, corpus, goldens, audit and hook files are unchanged;
+prior pipeline54-final-annotation.xml and map2-clean074423.155641Z evidence is
+reused after diff inspection. Coordinator owns default/bounded19/review/commit.
+Original23/88 and all five full L0 closing requirements remain OPEN. No push.

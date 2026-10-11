@@ -69,7 +69,8 @@ namespace
 	{
 		TArray<FSolveFilterIdentity> Identities;
 		TArray<FShadowEventInput> Shadows;
-		void Reset() { Identities.Reset(); Shadows.Reset(); }
+		bool bObservePostSolve = false;
+		void Reset() { Identities.Reset(); Shadows.Reset(); bObservePostSolve = false; }
 	};
 	double FrictionContactSkinCm();
 	struct FNativeContactOutput
@@ -90,7 +91,7 @@ namespace
 		void Reset() { Contacts.Reset(); Shadows.Reset(); }
 	};
 	class FSolveFilterCallback final : public Chaos::TSimCallbackObject<FSolveFilterInput,
-		FSolveFilterOutput, Chaos::ESimCallbackOptions::ContactModification | Chaos::ESimCallbackOptions::Presimulate>
+		FSolveFilterOutput, Chaos::ESimCallbackOptions::ContactModification | Chaos::ESimCallbackOptions::Presimulate | Chaos::ESimCallbackOptions::PostSolve>
 	{
 		TArray<FShadowEventInput> Controllers; //PT-owned countdown/prediction, never a mutable GT association
 		TSharedRef<TMap<uint64,uint64>, ESPMode::ThreadSafe> RetiredControllers = MakeShared<TMap<uint64,uint64>, ESPMode::ThreadSafe>();
@@ -132,6 +133,52 @@ namespace
 				GetProducerOutputData_Internal().Shadows.Add({Proxy,Entry.UniqueIdx,Entry.Generation,Entry.Revision,Controller->State,Sample});
 			}
 		}
+		virtual void OnPostSolve_Internal() override
+		{
+			const auto* Input = GetConsumerInput_Internal(); if (!Input || !Input->bObservePostSolve) return;
+			auto* NativeSolver = static_cast<Chaos::FPBDRigidsSolver*>(GetSolver());
+			auto& Output = GetProducerOutputData_Internal();
+			for (const auto& Controller : Controllers)
+			{
+				if (Controller.Revision <= RetiredControllers->FindRef(Controller.Generation)) continue;
+				auto* Proxy = NativeSolver->GetParticleProxy_PT(Controller.UniqueIdx);
+				if (!Proxy || Proxy != Controller.Proxy) continue;
+				const auto* Particle = Proxy->GetPhysicsThreadAPI(); if (!Particle) continue;
+				const auto* Rigid = Proxy->GetHandle_LowLevel()->CastToRigidParticle(); if (!Rigid) continue;
+				const int32 EventIndex = Output.Shadows.FindLastByPredicate([&](const auto& Item)
+				{ return Item.Proxy == Proxy && Item.UniqueIdx == Controller.UniqueIdx && Item.Generation == Controller.Generation && Item.Revision == Controller.Revision; });
+				if (EventIndex == INDEX_NONE) continue;
+				auto& Observation = Output.Shadows[EventIndex].Sample.PostSolve.AddDefaulted_GetRef();
+				Observation.StepTime = GetSimTime_Internal(); Observation.StepDelta = GetDeltaTime_Internal();
+				Observation.Position = Particle->X(); Observation.Rotation = Particle->R();
+				Observation.SolvedPosition = Rigid->GetP(); Observation.SolvedRotation = Rigid->GetQ();
+				Observation.Velocity = Particle->V(); Observation.AngularVelocity = Particle->W();
+				Rigid->ParticleCollisions().VisitConstCollisions([&](const Chaos::FPBDCollisionConstraint& Contact)
+				{
+					const auto* Partner = Contact.GetParticle0() == Rigid ? Contact.GetParticle1() : Contact.GetParticle0();
+					if (!Partner) return Chaos::ECollisionVisitorResult::Continue;
+					auto& Evidence = Observation.Contacts.AddDefaulted_GetRef();
+					Evidence.Partner = Partner->PhysicsProxy(); Evidence.PartnerUniqueIdx = Partner->UniqueIdx().Idx;
+					if (const auto* Identity = Input->Identities.FindByPredicate([&](const auto& Item)
+						{ return Item.Proxy == Evidence.Partner && Item.UniqueIdx == Partner->UniqueIdx(); })) Evidence.PartnerGeneration = Identity->Generation;
+					Evidence.bDisabled = Contact.GetDisabled(); Evidence.bProbe = Contact.GetIsProbe();
+					for (int32 PointIndex = 0; PointIndex < Contact.NumManifoldPoints(); ++PointIndex)
+						if (Contact.IsManifoldPointActive(PointIndex) && Contact.GetManifoldPoint(PointIndex).ContactPoint.IsSet())
+						{
+							++Evidence.ActivePoints;
+							Evidence.Phi = FMath::Min(Evidence.Phi,static_cast<double>(Contact.GetManifoldPoint(PointIndex).ContactPoint.Phi));
+						}
+					Evidence.bQualified = !Evidence.bDisabled && !Evidence.bProbe && Evidence.ActivePoints > 0
+						&& FMath::Max(Evidence.Phi,0.) < FrictionContactSkinCm();
+					Evidence.bModifierObserved = Output.Contacts.ContainsByPredicate([&](const auto& Item)
+					{ return Item.Shapes[0] == Contact.GetShape0() && Item.Shapes[1] == Contact.GetShape1()
+						&& Item.Geometry[0] == Contact.GetImplicit0() && Item.Geometry[1] == Contact.GetImplicit1()
+						&& Item.Proxies[0] == Contact.GetParticle0()->PhysicsProxy() && Item.Proxies[1] == Contact.GetParticle1()->PhysicsProxy()
+						&& Item.UniqueIds[0] == Contact.GetParticle0()->UniqueIdx() && Item.UniqueIds[1] == Contact.GetParticle1()->UniqueIdx(); });
+					return Chaos::ECollisionVisitorResult::Continue;
+				});
+			}
+		}
 		virtual void OnContactModification_Internal(Chaos::FCollisionContactModifier& Modifier) override
 		{
 			const FSolveFilterInput* Input = GetConsumerInput_Internal();
@@ -161,11 +208,13 @@ namespace
 	};
 	struct FSolveFilterRegistration { Chaos::FPBDRigidsSolver* Solver; FSolveFilterCallback* Callback; bool bAdmitted = false; };
 	TMap<UWorld*, FSolveFilterRegistration> SolveFilters;
+	TSet<UWorld*> PostSolveObservationWorlds; //GT diagnostic opt-in; never accessed on PT
 	void CleanupSolveFilter(UWorld* World, bool, bool)
 	{
 		if (const FSolveFilterRegistration* Registration = SolveFilters.Find(World))
 			Registration->Solver->UnregisterAndFreeSimCallbackObject_External(Registration->Callback);
 		SolveFilters.Remove(World);
+		PostSolveObservationWorlds.Remove(World);
 		ForgetCompletedWorld(World);
 		ForgetShadowWorld(World); //callback destructor runs on PT and never touches UObjects
 		WorldCreationAssociations.RemoveAll([World](const FWorldCreationAssociation& Entry)
@@ -175,15 +224,20 @@ namespace
 			return bRemove;
 		});
 	}
-	void PrepareSolveFilter(UWorld& World, FPhysScene& Scene)
+	void EnsureSolveFilterCleanup()
 	{
 		static const FDelegateHandle CleanupHandle = FWorldDelegates::OnWorldCleanup.AddStatic(&CleanupSolveFilter);
 		(void)CleanupHandle;
+	}
+	void PrepareSolveFilter(UWorld& World, FPhysScene& Scene)
+	{
+		EnsureSolveFilterCleanup();
 		auto* Solver = Scene.GetSolver(); if (!Solver) return;
 		FSolveFilterRegistration* Registration = SolveFilters.Find(&World);
 		if (!Registration)
 			Registration = &SolveFilters.Add(&World, { Solver, Solver->CreateAndRegisterSimCallbackObject_External<FSolveFilterCallback>() });
 		FSolveFilterInput* Input = Registration->Callback->GetProducerInputData_External();
+		Input->bObservePostSolve = PostSolveObservationWorlds.Contains(&World);
 		Input->Identities.Reset();
 		for (const FNativeAssociation& Entry : NativeAssociations)
 			if (UPrimitiveComponent* Component = Entry.Component.Get(); Component && Component->GetWorld() == &World
@@ -843,6 +897,12 @@ TArray<ElysiumModelPhysics::FShadowEventSample> ElysiumModelPhysics::ShadowEvent
 	ConsumeContactOutputs(Component->GetWorld());
 	for (const auto& Event : CompletedShadowEvents) if (Event.Proxy == Actor) Result.Add(Event.Sample);
 	return Result;
+}
+
+void ElysiumModelPhysics::ObservePostSolve(UWorld& World)
+{
+	EnsureSolveFilterCleanup(); //also retire an opt-in world that never reaches its first Prepare
+	PostSolveObservationWorlds.Add(&World); //retired at actual world cleanup; takes effect at Prepare
 }
 
 void ElysiumModelPhysics::RemoveShadow(void* Actor)

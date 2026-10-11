@@ -70,6 +70,20 @@ namespace ElysiumModelPhysics
 	const FElysiumPhysicsShadowState* ShadowFor(void* Actor);
 	void RemoveShadow(void* Actor); //2601a920 restores the native body before controller deletion
 	int32 GetShadowPosition(void* Actor, FVector* OriginCm, FQuat* Rotation);
+	struct FPostSolveContactSample
+	{
+		const void* Partner = nullptr; int32 PartnerUniqueIdx = INDEX_NONE; uint64 PartnerGeneration = 0;
+		double Phi = TNumericLimits<double>::Max(); int32 ActivePoints = 0;
+		bool bDisabled = false, bProbe = false, bQualified = false, bModifierObserved = false;
+	};
+	struct FPostSolveSample
+	{
+		double StepTime = 0., StepDelta = 0.;
+		FVector Position = FVector::ZeroVector, SolvedPosition = FVector::ZeroVector;
+		FQuat Rotation = FQuat::Identity, SolvedRotation = FQuat::Identity;
+		FVector Velocity = FVector::ZeroVector, AngularVelocity = FVector::ZeroVector;
+		TArray<FPostSolveContactSample> Contacts;
+	};
 	struct FShadowEventSample
 	{
 		double Time = 0., Delta = 0.; float RemainingBefore = 0.f, Remaining = 0.f, Fraction = 0.f;
@@ -77,8 +91,10 @@ namespace ElysiumModelPhysics
 		FVector PredictionBefore = FVector::ZeroVector, Target = FVector::ZeroVector;
 		double TeleportErrorSquared = 0.;
 		bool bTeleported = false, bCollisionRestored = true, bSleeping = false, bSimulated = false;
+		TArray<FPostSolveSample> PostSolve; //read-only per-substep native observation, same revision/incarnation
 	};
 	TArray<FShadowEventSample> ShadowEvents(void* Actor); //completed, incarnation-fenced PT observations
+	void ObservePostSolve(UWorld& World); //diagnostic opt-in at next Prepare, automatically retired with world
 	// Called by the production Gameplay tick after thinks, before UE StartPhysics.
 	// Unreal owns the scene, scheduling, contacts and solve; substrate owns retail dt/controller.
 	float PreparePhysicsFrame(UWorld& World, float FrameSeconds, float TimeScale, bool bSimulating);

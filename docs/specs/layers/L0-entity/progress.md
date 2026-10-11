@@ -13,6 +13,17 @@ evidence, not new validation or acceptance of the layer closing gate.
 
 ## Current checkpoint
 
+- Completed47/native postsolve observer (2026-10-11; coordinator reviewed/gated):
+  public opt-in PostSolve measurement proves completed GT47 equals native solved
+  P/Q components on all36 normal frames, with completed V/W differences0. X/R
+  at that phase is older; no projection repair is evidenced. Actual generation-qualified
+  blocker changes from unqualified f19 to qualified f20. Native first44f20/178f32
+  remains different from retail first44f26/f32no178. Common99 input lines are unchanged.
+  Final build/affected54/scenario2/default189/original bounded19 pass; receipts below.
+  Next observable seam is44 friction-contact admission/birth/retirement with actual
+  public shape pose/margins/separation and manifold sample meaning established first.
+  Original23/88 and every full L0 closing requirement remain OPEN.
+
 - Public Chaos event adapter packet (2026-10-11; coordinator reviewed/gated):
   actual presimulate now owns native pose/velocity/event-delta correction and PT
   countdown/prediction. Public current-proxy lookup precedes dereference; generation
@@ -1210,3 +1221,57 @@ confirmed target/filter/surface/lifecycle/threshold rules; do not reconstruct IV
 force cadence/delay/sorting, or infer mechanical parity from configuration names. Independent
 contact mechanics/candidate encounter equivalence remains OPEN if outputs disagree even
 with correct supported service inputs. No next worker dispatched by this coordinator.
+
+### Completed47/native postsolve observer checkpoint — 2026-10-11
+
+One bounded worker packet verifies public per-substep PostSolve and captures both
+XR/PQ, V/W and surviving native contact qualification on the SAME normal fixture.
+Observation is off by default, immutable-input opt-in with actual-world cleanup.
+No solved-state/contact/mechanical write changed. Branch proof precedes new literal
+native-publication assertions; all original gameplay observers remain. All36 completed
+GT samples equal solvedP/Q components; V/W differences0. f19 native blocker is
+unqualified/Phi2.8773729801177979cm;f20 qualifies/Phi2.4540395736694336cm.
+Native first44f20/178f32 remain versus retail first44f26/f32no178. No GT projection
+defect or repair is evidenced. Native manifold Phi is not established as a fresh
+solved-surface distance. Contract/evidence: pusher walk and physics-interaction.md.
+99line prefix retains SHA256af9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515;
+paired public102350.497103Z remains reusable only throughf32.
+
+Final --arm build E:/elysium-work/logs/20261011T112047.842830Z-build.json exit0/23.047s.
+Affected54: E:/elysium-work/reports/tests/20261011T112149.936389Z-elysium-substrate-modelphysics-elysium-s-31ef1b4b/index.json,
+34clean20warned0failed/notRun/inProcess; wrapper112148.399801Z-test.json exit0/24.563s.
+Scenario2: E:/elysium-work/reports/arena/20261011T112222.656231Z/index.json,
+pass2, host index checked, first_unmet null,290/81events; wrapper112222.453014Z-arena.json
+exit0/24.2s, existing27errors29warnings separate. Source/tests freeze; coordinator
+owns default/bounded19 and exact-path review/commit. Generator/map2 prior evidence
+unchanged. Next bounded complete observable:44/260184a0 friction-contact qualification/
+birth/retirement service2603e6d0/2603e880, with actual native public shape pose/margins/
+separation and manifold sample meaning proved before adapter repair. No threshold/
+cadence/sorting/equivalence change. Full L0 and original23/88 remain OPEN;
+no worker commit/push or next packet.
+
+Coordinator independently reviewed the complete seven-path diff, public API/lifetime
+contract, literal observer assertions and authoritative final affected/scenario JSONs.
+Functional sources stayed frozen through final coordinator gates. Default189 passes
+110clean/79warned/0failed/notRun/inProcess:
+E:/elysium-work/reports/tests/20261011T112312.696765Z-elysium-session-elysium-substrate/index.json;
+wrapper E:/elysium-work/logs/20261011T112312.545132Z-test.json exit0/26.562s.
+Original bounded19 passes19/19 in two boots, both hosts exit0; merged plus arena and
+map-sm_hub_1-l0_transition_state host JSONs read:
+E:/elysium-work/reports/arena/20261011T112349.793230Z/index.json;
+wrapper E:/elysium-work/logs/20261011T112349.586005Z-arena.json exit0/64.156s.
+Ordinary first_unmet values are null; two deliberate refusal selftests retain inverted
+passes. Existing startup27 errors/535 warnings remain separate from passing records.
+Doctor E:/elysium-work/logs/20261011T112457.540862Z-doctor.json exits0/21 existing warnings.
+Unchanged pipeline54-final-annotation.xml and actual v3 map2-clean074423.155641Z are
+reused after exact diff inventory confirms no generator/map/content input changes.
+No ledger regeneration/kernel --check, audit or hook change, gameplay divergence,
+full arm/full arena/three boot-order closure or push. Exact seven paths only are committed.
+
+Frozen functional SHA256 after coordinator gates:
+ModelPhysics.cpp 620D91CD201156AB73D38A90829B80F62F8D8A2306985F3ED38CBF63DB5CC333
+ModelPhysics.h 4AB903EB06A5917EF295323E004DA2447CA84C5F2F55FAE734EF927366A2B6E4
+MoverTests.cpp B6987ACA7511B3B0B91C8301A16C3E1538C1B214BF8971D5FCD7B50ECCA42499
+Only this checkpoint bookkeeping follows freeze. Coordinator terminates after commit;
+no next worker dispatched. Native contact/mechanics/candidate encounter equivalence,
+original23/88 and all five full L0 closing requirements remain OPEN.

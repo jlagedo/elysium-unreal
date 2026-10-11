@@ -615,6 +615,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		TFunction<void(const TCHAR*)> MovingObserver;
 		if (Parameters == TEXT("NativeMovingFirstContact"))
 		{
+			ElysiumModelPhysics::ObservePostSolve(*EngineWorld);
 			// The paired public wall uses the same authored default surface as the brushes.
 			// Give the ordinary native static box that actual material instead of UE's default.
 			FBodyInstance* SubjectNativeBody=ElysiumModelPhysics::Identity(Subject->Body);
@@ -679,6 +680,45 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 				FVector NativePosition; FQuat NativeRotation; void* ContactPartner=nullptr; FString ContactProvenance;
 				const int32 ShadowResult=ElysiumModelPhysics::GetShadowPosition(Subject->VPhysicsGetObject(),&NativePosition,&NativeRotation);
 				const bool bContact=ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),ContactPartner,&ContactProvenance);
+				const auto* CompletedBody = ElysiumModelPhysics::Identity(Subject->Body);
+				for (const auto& SimEvent : SimEvents)
+				{
+					TestEqual(TEXT("normal production fixture reaches one native postconstraint substep"),SimEvent.PostSolve.Num(),1);
+					for (int32 SubstepIndex = 0; SubstepIndex < SimEvent.PostSolve.Num(); ++SubstepIndex)
+					{
+						const auto& PostSolve = SimEvent.PostSolve[SubstepIndex];
+						TestTrue(TEXT("completed47 publishes literal native postconstraint P"),NativePosition==PostSolve.SolvedPosition);
+						TestTrue(TEXT("completed47 publishes literal native postconstraint Q"),NativeRotation==PostSolve.SolvedRotation);
+						const bool bPostQualifying = PostSolve.Contacts.ContainsByPredicate([](const auto& Contact) { return Contact.bQualified && Contact.bModifierObserved; });
+						TestEqual(TEXT("normal native44 retains postconstraint qualification presence"),bContact,bPostQualifying);
+						if (bContact) TestTrue(TEXT("selected44 has actual qualified generation-fenced postconstraint partner"),PostSolve.Contacts.ContainsByPredicate([&](const auto& Contact)
+						{ return Contact.Partner==ContactPartner && Contact.bQualified && Contact.bModifierObserved && Contact.PartnerGeneration==ElysiumModelPhysics::CaptureIdentity(ContactPartner).Incarnation; }));
+						if (MovingFrames==19 || MovingFrames==20)
+						{
+							const auto* BoundaryContact = PostSolve.Contacts.FindByPredicate([&](const auto& Contact)
+							{ return Contact.Partner==Blocker->VPhysicsGetObject() && Contact.PartnerGeneration==ElysiumModelPhysics::CaptureIdentity(Blocker->VPhysicsGetObject()).Incarnation; });
+							if (TestNotNull(TEXT("qualification boundary reaches actual generation-fenced blocker constraint"),BoundaryContact))
+							{
+								TestTrue(TEXT("boundary blocker constraint was observed by public contact modifier"),BoundaryContact->bModifierObserved);
+								TestTrue(TEXT("boundary blocker has actual active set points for qualification"),BoundaryContact->ActivePoints>0 && !BoundaryContact->bDisabled && !BoundaryContact->bProbe);
+								TestEqual(TEXT("frame19 is unqualified and frame20 qualifies without changed threshold"),BoundaryContact->bQualified,MovingFrames==20);
+							}
+						}
+						const FVector PostSource = SourceWords(PostSolve.Position), PostSolvedSource = SourceWords(PostSolve.SolvedPosition);
+						AddInfo(FString::Printf(TEXT("MOVING_POST_SOLVE,%d,%d,stepTime=%.17g,stepDelta=%.9g,x=%.17g,%.17g,%.17g,p=%.17g,%.17g,%.17g,v=%.17g,%.17g,%.17g,w=%.17g,%.17g,%.17g,gtMinusP=%.17g,rotationGtP=%.17g,rotationXRQ=%.17g,contacts=%d"),
+							MovingFrames,SubstepIndex,PostSolve.StepTime,PostSolve.StepDelta,PostSource.X,PostSource.Y,PostSource.Z,
+							PostSolvedSource.X,PostSolvedSource.Y,PostSolvedSource.Z,PostSolve.Velocity.X,PostSolve.Velocity.Y,PostSolve.Velocity.Z,
+							PostSolve.AngularVelocity.X,PostSolve.AngularVelocity.Y,PostSolve.AngularVelocity.Z,(NativePosition-PostSolve.SolvedPosition).SizeSquared(),
+							NativeRotation.AngularDistance(PostSolve.SolvedRotation),PostSolve.Rotation.AngularDistance(PostSolve.SolvedRotation),PostSolve.Contacts.Num()));
+						AddInfo(FString::Printf(TEXT("MOVING_POST_COMPLETED_VELOCITY,%d,%d,linearSquared=%.17g,angularSquared=%.17g"),MovingFrames,SubstepIndex,
+							(CompletedBody->GetUnrealWorldVelocity()-PostSolve.Velocity).SizeSquared(),(CompletedBody->GetUnrealWorldAngularVelocityInRadians()-PostSolve.AngularVelocity).SizeSquared()));
+						for (const auto& PostContact : PostSolve.Contacts)
+							AddInfo(FString::Printf(TEXT("MOVING_POST_CONTACT,%d,%d,partner=%s,id=%d,generation=%llu,phi=%.17g,activePoints=%d,disabled=%d,probe=%d,qualified=%d,modifierObserved=%d,selected44=%d"),
+								MovingFrames,SubstepIndex,*FElysiumEntityWorld::AiTraceName(ElysiumModelPhysics::GameDataForObject(const_cast<void*>(PostContact.Partner))),
+								PostContact.PartnerUniqueIdx,PostContact.PartnerGeneration,PostContact.Phi,PostContact.ActivePoints,
+								PostContact.bDisabled,PostContact.bProbe,PostContact.bQualified,PostContact.bModifierObserved,bContact && PostContact.Partner==ContactPartner));
+					}
+				}
 				void* RepeatedPartner=nullptr; FString RepeatedProvenance;
 				TestEqual(TEXT("same completed solve repeated44 preserves presence"),ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),RepeatedPartner,&RepeatedProvenance),bContact);
 				TestTrue(TEXT("same completed solve repeated44 preserves selected native incarnation"),RepeatedPartner==ContactPartner);
@@ -723,6 +763,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, .6,&PreparedInterval,MovingObserver);
 		if (Parameters == TEXT("NativeMovingFirstContact"))
 		{
+			TestEqual(TEXT("ordinary fixture observed all thirty-six native postconstraint calls"),MovingFrames,36);
 			TestTrue(TEXT("ordinary moving fixture reaches first qualifying native44"),FirstContactFrame>0);
 			TestTrue(TEXT("ordinary moving fixture reaches actual178 on a normal frame"),FirstBlockedFrame>=FirstContactFrame);
 			AddInfo(FString::Printf(TEXT("MOVING_FIRST,contactFrame=%d blockedFrame=%d interval=%.9g distanceSquared=%.9g"),FirstContactFrame,FirstBlockedFrame,FirstContactInterval,FirstContactDistanceSquared));

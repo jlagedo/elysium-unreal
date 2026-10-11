@@ -1002,6 +1002,64 @@ ordinary time (+128), so it cannot identify47's sample time. Object37 is a separ
 ordinary-clock interpolation read. The replay uses47, never substitutes37 and never
 reads either private time field. These layout facts explain the contract only.
 
+Completed47/postconstraint observation contract (2026-10-11): the installed UE5.8
+public PostSolve option (SimCallbackObject.h, bit14) invokes OnPostSolve_Internal per
+substep on PT. Native phase follows constraint solve/CCD projection and precedes
+SavePostSolve/sleep; time/delta accessors remain simulation-step values. X/R and solved
+P/Q must be measured separately. Public nullable GetPhysicsThreadAPI reads X/R/V/W;
+the proxy's public bookkeeping handle CastToRigidParticle/GetP/GetQ reads solved pose.
+VisitConstCollisions provides native surviving constraint/active point/Phi evidence
+after detection. Immutable identity inputs and completed generation/revision admission
+fence publication; GT44 retains its recovered filtering, qualification and birth order.
+This observer changes no mechanic or retail gate. The actual consumer remains
+active226 ->100a55b0's strict1in-squared feedback with real46 and completed47.
+
+Diagnostic111457 reaches36 actual PostSolve calls on the unchanged normal fixture,
+one per frame. After that branch proof, literal native P/Q equality and actual
+generation-qualified blocker/44 assertions were added. Final112149.936389 affected
+receipt supersedes intermediate111908 after opt-in cleanup lifetime repair.
+Completed FBodyInstance position/rotation components equal postconstraint P/Q on
+all36; completed V/W squared differences are zero on all36. Postsolve X is the
+previous pose: f20 SourceX2.7076270580291748 versus solvedP2.5409605503082275.
+Thus switching completed47 to callback X would introduce an older sample. No
+projection repair is evidenced. AngularDistance diagnostics can be nonzero for
+component-identical raw quaternions because of their self-dot/norm; exact component
+assertions, not an added angular tolerance, establish publication equality.
+
+The real blocker has active set native points, is neither disabled nor probe, and
+matches the same step's ContactModification shape/geometry/proxy/UniqueIdx output.
+Its retained manifold Phi is2.8773729801177979cm at f19 (unqualified),
+2.4540395736694336cm at f20 (qualified and selected44), -.08596058189868927cm at
+f26 and -2.6223978996276855cm at f32. Four points were measured, but no gameplay
+observer requires four and no assertion fixes native manifold topology. These
+are native manifold values read after solving, not a fresh solved-geometry
+separation query. Qualification is observed at the same phase as completed GT44;
+no claim that native Phi equals the retail friction-link distance is established.
+
+Native first44f20/actual178f32 remain, with f32 discrepancy squared
+1.0501758925050075 versus matched public retail.57965414909080337/no calculated178;
+retail first44f26. Ordered creation+inputs f1..32 remain99 identical UTF8/LF lines,
+SHA256af9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515.
+The paired102350.497103Z public receipt is reused only for that common prefix.
+This rules out completedGT projection as the observed mismatch; solve/contact
+equivalence and full L0 remain OPEN. The next complete observable candidate is
+object44/260184a0's friction-link admission/retirement/birth service (2603e6d0,
+2603e880), comparing actual native shape transforms/margins/separation inputs
+and retained manifold Phi against the same public retail44/47 prefix. Establish
+the supported query/sample meaning before repairing the adapter. One Phi sample
+does not justify a margin change, global geometry equivalence or changing the
+strict2.8563570231199265cm recovered threshold. Unreal continues to own mechanics.
+
+Authoritative frozen worker gates: build
+E:/elysium-work/logs/20261011T112047.842830Z-build.json exit0/23.047s;
+E:/elysium-work/reports/tests/20261011T112149.936389Z-elysium-substrate-modelphysics-elysium-s-31ef1b4b/index.json
+54 Success (34clean20warned),0failed/notRun/inProcess, wrapper112148.399801Z-test.json
+exit0/24.563s; E:/elysium-work/reports/arena/20261011T112222.656231Z/index.json
+and arena/index.json pass2/2/first_unmet null,290/81events, wrapper112222.453014Z-arena.json
+exit0/24.2s. Existing27 startup error/29 warning lines remain separate from
+scenario assertions. Final log repeats36 postsolve samples, exact P/Q component
+assertions, completedV/W differences0 and the unchanged99line input hash.
+
 Controller2601aa50 receives the simulation-event pointer as its second explicit
 argument. It loads the event double delta, stores a float argument for2601a250,
 then subtracts the event double from its FLOAT remaining-arrival value and clamps

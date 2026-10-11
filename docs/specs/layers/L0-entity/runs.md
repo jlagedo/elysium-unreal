@@ -489,3 +489,34 @@ before the executable L0 angular write; higher consumption/persistence remain un
 Stale226 mapping description now names verified pusher routing and open timing/encounter
 limits, with no generated executable change. Final pipeline annotation gate reran54/54
 passing in1.65s at `E:/elysium-work/codex/l0-pusher-freeze-20261011/pipeline54-final-annotation.xml`.
+
+### Completed47/native postsolve observer — 2026-10-11
+
+Bounded worker packet checks installed public PostSolve/PT/substep and supported
+XR/PQ/native contact APIs before code, then measures SAME normal moving fixture.
+Diagnostic111457 proves36 callbacks and real blocker constraint. Literal completed
+P/Q and generation-qualified f19/f20 assertions follow; topology4 remains diagnostic.
+All36 completedV/W differences0. Unchanged common99lines reuse public102350 receipt.
+Native first44f20/178f32 and retail first44f26/f32no178 remain OPEN. No supported
+projection mismatch or mechanical repair is evidenced. Details/hashes in pusher walk.
+Observer opt-in cleanup covers world ending before first Prepare; no new save/hook.
+
+Final coherent arm build112047.842830 exits0/23.047s; affected112149.936389 executes
+54,34clean20warned0failed/notRun/inProcess; wrapper112148.399801 exits0/24.563s.
+Final scenario112222.656231 passes2/2, first_unmet null,290/81events; wrapper112222.453014
+exits0/24.2s; startup27errors29warnings separate. Authoritative absolute paths are
+in progress.md and pusher walk. Runtime/tests frozen; coordinator default/bounded19/
+review/commit pending. Corpus/content/goldens/audit/hooks/generator unchanged.
+Next complete observable is44 friction-link service actual native separation/
+qualification/birth/retirement, with public sample meaning proved before repair.
+No worker next packet, commit or push. Original23/88/full L0 remain OPEN.
+
+Coordinator accepts this observation packet after independent exact diff/API/receipt
+review. Frozen-source default112312.696765Z passes189 (110clean79warned),0failed/
+notRun/inProcess; bounded19 arena112349.793230Z passes19/19 across two hosts exit0.
+Aggregate/host JSONs read, ordinary first_unmet null, refusal selftests inverted passes;
+27 startup errors/535 warnings separate. Doctor112457.540862Z exits0/21 existing warnings.
+Absolute authoritative wrapper/index paths and unchanged functional hashes are in
+progress.md. Pipeline54/v3map2 evidence reused unchanged after exact-path inventory.
+No mechanics, threshold, cadence or ordering repair was justified. Coordinator commits
+exact seven paths and terminates; no next worker, push or full L0 closure claim.
