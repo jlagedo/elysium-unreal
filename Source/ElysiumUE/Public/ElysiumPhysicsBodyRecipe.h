@@ -47,6 +47,8 @@ struct FElysiumPhysicsShadowState
 	float TeleportDistanceCm = 0.f;
 	float SavedMassKg = 1.f;
 	FVector SavedInertia = FVector::ZeroVector;
+	float SavedLinearDamping = .1f;
+	float SavedAngularDamping = .1f;
 	bool bSavedGravity = true;
 };
 

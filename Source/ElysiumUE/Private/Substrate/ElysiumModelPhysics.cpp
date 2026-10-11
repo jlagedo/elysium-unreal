@@ -129,9 +129,12 @@ namespace
 				Sample.bSleeping = Particle->ObjectState() == Chaos::EObjectStateType::Sleeping;
 				Sample.RemainingBefore = Controller->State.RemainingSeconds; Sample.Position = Particle->X(); Sample.Velocity = Particle->V();
 				Sample.PredictionBefore = Controller->State.PredictedPosition; Sample.Target = Controller->State.Target.GetLocation();
+				Sample.Rotation = Particle->R(); Sample.TargetRotation = Controller->State.Target.GetRotation(); Sample.AngularVelocity = Particle->W();
+				Sample.LinearDrag = Particle->LinearEtherDrag(); Sample.AngularDrag = Particle->AngularEtherDrag();
 				if (Particle->ObjectState() == Chaos::EObjectStateType::Dynamic)
 					SimulateShadow(*Particle,Controller->State,*Proxy,*NativeSolver,GetDeltaTime_Internal(),Sample);
 				Sample.Remaining = Controller->State.RemainingSeconds; Sample.CorrectedVelocity = Particle->V();
+				Sample.CorrectedAngularVelocity = Particle->W(); //POD observation; no solver input change
 				GetProducerOutputData_Internal().Shadows.Add({Proxy,Entry.UniqueIdx,Entry.Generation,Entry.Revision,Controller->State,Sample});
 			}
 		}
@@ -454,7 +457,9 @@ namespace
 			&& FMath::IsFinite(State.LinearDampingLimitCm) && FMath::IsFinite(State.LinearDesiredLimitCm)
 			&& FMath::IsFinite(State.AngularDampingLimitRadians) && FMath::IsFinite(State.AngularDesiredLimitRadians)
 			&& FMath::IsFinite(State.TeleportDistanceCm) && FMath::IsFinite(State.SavedMassKg) && State.SavedMassKg > 0.f
-			&& !State.SavedInertia.ContainsNaN() && State.SavedInertia.GetMin() >= 0.f);
+			&& !State.SavedInertia.ContainsNaN() && State.SavedInertia.GetMin() >= 0.f
+			&& FMath::IsFinite(State.SavedLinearDamping) && State.SavedLinearDamping >= 0.f
+			&& FMath::IsFinite(State.SavedAngularDamping) && State.SavedAngularDamping >= 0.f);
 	}
 	void SetInertia(FBodyInstance& Body, const FVector& Tensor)
 	{
@@ -494,6 +499,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State)
 	Ar << State.Shadow.Target << State.Shadow.PredictedPosition << State.Shadow.RemainingSeconds;
 	Ar << State.Shadow.LinearDampingLimitCm << State.Shadow.LinearDesiredLimitCm << State.Shadow.AngularDampingLimitRadians << State.Shadow.AngularDesiredLimitRadians;
 	Ar << State.Shadow.TeleportDistanceCm << State.Shadow.SavedMassKg << State.Shadow.SavedInertia << State.Shadow.bSavedGravity << State.bShadowMember;
+	Ar << State.Shadow.SavedLinearDamping << State.Shadow.SavedAngularDamping;
 	if (Ar.IsLoading() && (!ValidShadow(State.Shadow) || (State.Shadow.bInstalled && State.Recipe.bStatic)
 		|| (State.bShadowMember && (!State.bHasObject || !State.Shadow.bInstalled)))) Ar.SetError();
 	if (Ar.IsLoading() && State.bHasObject && (State.CollisionResponses.Num() != NativeResponseChannelCount
@@ -977,6 +983,8 @@ void ElysiumModelPhysics::RemoveShadow(void* Actor)
 			Component->SetMassOverrideInKg(NAME_None, State.SavedMassKg, true);
 			SetInertia(*Body, State.SavedInertia);
 			Component->SetEnableGravity(State.bSavedGravity);
+			Component->SetLinearDamping(State.SavedLinearDamping);
+			Component->SetAngularDamping(State.SavedAngularDamping); //2601a860 restores original damping; this packet leaves material unchanged
 		}
 	ShadowAssociations.RemoveAll([Actor](const FShadowAssociation& Item) { return Item.Actor == Actor; });
 	CompletedShadowEvents.RemoveAll([Actor](const auto& Item) { return Item.Proxy == Actor; });
@@ -996,16 +1004,23 @@ bool ElysiumModelPhysics::SetShadow(void* Actor, float LinearSpeedInches, float 
 		auto& State = Entry->State;
 		State.bInstalled = true; State.bAllowMovement = bAllowMovement; State.bAllowRotation = bAllowRotation;
 		State.SavedMassKg = Body->GetBodyMass(); State.SavedInertia = Body->GetBodyInertiaTensor(); State.bSavedGravity = Body->bEnableGravity;
-		if (!bAllowMovement) { Component->SetMassOverrideInKg(NAME_None, 1.0e6f, true); Component->SetEnableGravity(false); }
-		//2601a7e0: prevent contact torque, while controller angular velocity remains writable.
+		State.SavedLinearDamping = Component->GetLinearDamping(); State.SavedAngularDamping = Component->GetAngularDamping();
+		if (!bAllowMovement)
+		{
+			Component->SetMassOverrideInKg(NAME_None, 1.0e6f, true); Component->SetEnableGravity(false);
+			//2601a7e0 ->26016ea0(false) removes the shared gravity/damping producer.
+			// Public native mechanics input; native integration/forces/contact solve retain ownership.
+			Component->SetLinearDamping(0.f); Component->SetAngularDamping(0.f);
+		}
+		//2601a7e0 forbidden rotation remains an incomplete tensor mapping: zero I does not clear native inverse I.
 		if (!bAllowRotation) SetInertia(*Body, FVector::ZeroVector);
 	}
 	//2601ac40: speed changes retain permissions and original body state.
 	const float RequestedLinear = LinearSpeedInches * 2.54f;
-	Entry->State.LinearDampingLimitCm = FMath::Max(static_cast<float>(Body->GetUnrealWorldVelocity().Size()), RequestedLinear);
+	Entry->State.LinearDampingLimitCm = FMath::Min(static_cast<float>(Body->GetUnrealWorldVelocity().Size()), RequestedLinear); //2601ac40 FCOM/JNP retains MIN
 	Entry->State.LinearDesiredLimitCm = RequestedLinear - Entry->State.LinearDampingLimitCm;
 	const float RequestedAngular = FMath::DegreesToRadians(AngularSpeedDegrees);
-	Entry->State.AngularDampingLimitRadians = FMath::Max(static_cast<float>(Body->GetUnrealWorldAngularVelocityInRadians().Size()), RequestedAngular);
+	Entry->State.AngularDampingLimitRadians = FMath::Min(static_cast<float>(Body->GetUnrealWorldAngularVelocityInRadians().Size()), RequestedAngular);
 	Entry->State.AngularDesiredLimitRadians = RequestedAngular - Entry->State.AngularDampingLimitRadians;
 	Entry->Revision = ++NextShadowRevision;
 	RefreshShadowInput(*Entry);

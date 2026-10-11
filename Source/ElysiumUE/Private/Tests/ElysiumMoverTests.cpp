@@ -1295,7 +1295,82 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 
 		Normal->InputOpen(FElysiumEntityHandle());
 		Reversed->InputOpen(FElysiumEntityHandle());
-		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, 1.0);
+		// Observe the ordinary AngularMove/232 producer without changing its body or target.
+		// The two separated authored leaves have no gravity or contact-force producer.
+		ElysiumModelPhysics::ObservePostSolve(*EngineWorld);
+		int32 AngularFrame = 0; int32 AngularActiveFrames = 0;
+		float AngularLocalBefore = 0.f, AngularStartBefore = 0.f, AngularDeadlineBefore = 0.f;
+		bool bAngularMovingFrame = false;
+		for (FElysiumDoorBase* AngularDoor : {Normal,Reversed})
+		{
+			const FVector CreatedOrigin = AngularDoor->GetAbsOrigin(); const FVector CreatedAngles = AngularDoor->GetAbsAngles();
+			AddInfo(FString::Printf(TEXT("ANGULAR_CREATE,%s,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g"),*AngularDoor->TargetName,
+				static_cast<float>(CreatedOrigin.X/2.54),static_cast<float>(-CreatedOrigin.Y/2.54),static_cast<float>(CreatedOrigin.Z/2.54),CreatedAngles.X,CreatedAngles.Y,CreatedAngles.Z));
+		}
+		auto ObserveAngular = [&](const TCHAR* Stage)
+		{
+			if (FCString::Strcmp(Stage,TEXT("after_prepare"))==0)
+			{
+				++AngularFrame;
+				AngularLocalBefore=Normal->LocalTime; AngularStartBefore=Normal->StartFrameLocalTime; AngularDeadlineBefore=Normal->PhysicsMoveDoneTime;
+				bAngularMovingFrame=!Normal->AngularVelocity.IsZero() && AngularLocalBefore>AngularStartBefore;
+				for (FElysiumDoorBase* AngularDoor : {Normal,Reversed})
+				{
+					const auto* AngularShadow=ElysiumModelPhysics::ShadowFor(AngularDoor->VPhysicsGetObject());
+					if (!TestNotNull(TEXT("ordinary angular producer has installed shadow"),AngularShadow)) continue;
+					const FVector LogicalAngles=AngularDoor->GetAbsAngles(); const FVector TargetOrigin=AngularShadow->Target.GetLocation();
+					if (!AngularDoor->AngularVelocity.IsZero()) TestTrue(TEXT("normal angular232 submitted full logical Source rotation"),AngularShadow->Target.GetRotation().Equals(ElysiumModelPhysics::SourceRotation(LogicalAngles),0.));
+					const FRotator TargetNativeAngles=AngularShadow->Target.GetRotation().Rotator();
+					TestFalse(TEXT("ordinary angular shadow disables gravity"),ElysiumModelPhysics::Identity(AngularDoor->Body)->bEnableGravity);
+					AddInfo(FString::Printf(TEXT("ANGULAR_INPUT,%d,%.17g,%.9g,%s,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g"),
+						AngularFrame,World.NowSeconds(),static_cast<float>(World.FrameSeconds()),*AngularDoor->TargetName,
+						static_cast<float>(TargetOrigin.X/2.54),static_cast<float>(-TargetOrigin.Y/2.54),static_cast<float>(TargetOrigin.Z/2.54),
+						static_cast<float>(-TargetNativeAngles.Pitch),static_cast<float>(-TargetNativeAngles.Yaw),static_cast<float>(TargetNativeAngles.Roll),AngularShadow->RemainingSeconds,AngularDoor->LocalTime,AngularDoor->StartFrameLocalTime,
+						AngularDoor->PhysicsMoveDoneTime,AngularDoor->AngularVelocity.X,AngularDoor->AngularVelocity.Y,AngularDoor->AngularVelocity.Z));
+				}
+			}
+			else if (FCString::Strcmp(Stage,TEXT("after_solve"))==0)
+			{
+				if (bAngularMovingFrame)
+				{
+					const auto AngularOutputs=ElysiumModelPhysics::ActiveOutputs(World);
+					TestTrue(TEXT("ordinary advancing angular frame reaches actual active226"),AngularOutputs.ContainsByPredicate([&](const auto& Entry)
+					{ return ElysiumModelPhysics::IsCurrentOutput(Entry) && ElysiumModelPhysics::GameDataFor(Entry,World)==Normal; }));
+					++AngularActiveFrames;
+				}
+				for (FElysiumDoorBase* AngularDoor : {Normal,Reversed})
+				{
+					FVector CompletedOrigin; FQuat CompletedRotation; FRotator CompletedAngles; FVector EulerOrigin;
+					TestEqual(TEXT("angular observer reads completed47"),ElysiumModelPhysics::GetShadowPosition(AngularDoor->VPhysicsGetObject(),&CompletedOrigin,&CompletedRotation),1);
+					TestTrue(TEXT("angular feedback obtains actual native full Euler pose"),ElysiumModelPhysics::GetPosition(AngularDoor->VPhysicsGetObject(),EulerOrigin,CompletedAngles));
+					void* AngularPartner=nullptr;
+					TestFalse(TEXT("ordinary angular witness is contact free"),ElysiumModelPhysics::GetContactPoint(AngularDoor->VPhysicsGetObject(),AngularPartner));
+					for (const auto& AngularEvent : ElysiumModelPhysics::ShadowEvents(AngularDoor->VPhysicsGetObject()))
+					{
+						AddInfo(FString::Printf(TEXT("ANGULAR_EVENT,%d,%s,%.17g,%.17g,%.9g,%.9g,%.9g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g"),
+							AngularFrame,*AngularDoor->TargetName,AngularEvent.Time,AngularEvent.Delta,AngularEvent.RemainingBefore,AngularEvent.Remaining,AngularEvent.Fraction,
+							AngularEvent.AngularVelocity.X,AngularEvent.AngularVelocity.Y,AngularEvent.AngularVelocity.Z,
+							AngularEvent.CorrectedAngularVelocity.X,AngularEvent.CorrectedAngularVelocity.Y,AngularEvent.CorrectedAngularVelocity.Z));
+						for (const auto& AngularSolve : AngularEvent.PostSolve)
+						{
+							TestTrue(TEXT("angular postsolve actually has no native constraints"),AngularSolve.Contacts.IsEmpty());
+							TestTrue(TEXT("angular completed47 is the solved native quaternion"),CompletedRotation.Equals(AngularSolve.SolvedRotation,0.));
+							AddInfo(FString::Printf(TEXT("ANGULAR_SOLVED,%d,%s,%.9g,%.9g,%.9g,%.17g,%.17g,%.17g,%.17g,%.17g"),
+								AngularFrame,*AngularDoor->TargetName,CompletedAngles.Pitch,CompletedAngles.Yaw,CompletedAngles.Roll,
+								AngularSolve.AngularVelocity.X,AngularSolve.AngularVelocity.Y,AngularSolve.AngularVelocity.Z,AngularSolve.StepTime,AngularSolve.StepDelta));
+						}
+					}
+				}
+			}
+			else if (FCString::Strcmp(Stage,TEXT("after_feedback"))==0 && bAngularMovingFrame)
+			{
+				TestEqual(TEXT("force-free angular226 preserves normal local clock"),Normal->LocalTime,AngularLocalBefore);
+				TestEqual(TEXT("force-free angular226 stamps start with completed local clock"),Normal->StartFrameLocalTime,AngularLocalBefore); //100a55b0 unconditional tail
+				if (AngularLocalBefore<AngularDeadlineBefore) TestEqual(TEXT("force-free angular226 preserves in-flight arrival deadline"),Normal->PhysicsMoveDoneTime,AngularDeadlineBefore);
+			}
+		};
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, 1.0,nullptr,ObserveAngular);
+		TestTrue(TEXT("normal authored angular move has advancing active226 frames"),AngularActiveFrames>0);
 		AddInfo(FString::Printf(TEXT("handedness clock local=%.9g start=%.9g deadline=%.9g angles=%s native=%s"),
 			Normal->LocalTime, Normal->StartFrameLocalTime, Normal->PhysicsMoveDoneTime,
 			*Normal->GetAngles().ToString(), *Normal->Body->GetRelativeRotation().ToString()));
@@ -1310,11 +1385,82 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 			Normal->LocalTime < Normal->PhysicsMoveDoneTime && Reversed->LocalTime < Reversed->PhysicsMoveDoneTime);
 		TestEqual(TEXT("deadline has not completed before the float clock reaches it"), Normal->State(),
 			FElysiumDoorBase::EToggleState::GoingUp);
-		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, 1.02);
+		ElysiumDoorCaseTests::AdvanceNativeFrames(World, TestWorld, 1.02,nullptr,ObserveAngular);
 		TestEqual(TEXT("normal door reaches its open state"), Normal->State(),
 			FElysiumDoorBase::EToggleState::AtTop);
 		TestEqual(TEXT("reversed door reaches its open state"), Reversed->State(),
 			FElysiumDoorBase::EToggleState::AtTop);
+
+		// Separate service witnesses follow every original production/arrival assertion.
+		// Genuine creation-owned body and native velocity producer; no injected game feedback.
+		void* AngularObject = Normal->VPhysicsGetObject();
+		FBodyInstance* AngularNative = ElysiumModelPhysics::Identity(Normal->Body);
+		const auto OriginalShadow = *ElysiumModelPhysics::ShadowFor(AngularObject);
+		ElysiumModelPhysics::RemoveShadow(AngularObject);
+		TestEqual(TEXT("angular removal restores original damping"),Normal->Body->GetAngularDamping(),OriginalShadow.SavedAngularDamping);
+		TestEqual(TEXT("shared removal restores original linear damping"),Normal->Body->GetLinearDamping(),OriginalShadow.SavedLinearDamping);
+		ElysiumModelPhysics::SetShadow(AngularObject,10000.f,10000.f,false,false);
+		auto SolveAngularService = [&]()
+		{
+			ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld,.01f,1.f,true);
+			TestWorld.TickTestWorld(.01f);
+			return ElysiumModelPhysics::ShadowEvents(AngularObject);
+		};
+		AngularNative->SetAngularVelocityInRadians(FVector(0,0,-FMath::DegreesToRadians(200.f)),false);
+		AngularNative->SetLinearVelocity(FVector(508,0,0),false);
+		const auto InactiveAngularEvents = SolveAngularService();
+		TestTrue(TEXT("inactive shadow reaches actual native event"),!InactiveAngularEvents.IsEmpty());
+		for (const auto& Event : InactiveAngularEvents)
+		{
+			TestFalse(TEXT("inactive target applies no correction/countdown"),Event.bSimulated);
+			TestEqual(TEXT("public component angular input marshaled before first consumed shadow event"),Event.AngularDrag,0.);
+			TestEqual(TEXT("public shared linear input marshaled before first consumed shadow event"),Event.LinearDrag,0.);
+		}
+		TestTrue(TEXT("detached inactive oldW retains actual native angular motion"),FMath::IsNearlyEqual(AngularNative->GetUnrealWorldAngularVelocityInRadians().Z,-FMath::DegreesToRadians(200.f),.00001));
+		TestTrue(TEXT("detached shared producer retains actual native linear motion"),FMath::IsNearlyEqual(AngularNative->GetUnrealWorldVelocity().X,508.,.0001));
+		for (float Requested : {0.f,10.f,20.f,45.f})
+		{
+			AngularNative->SetAngularVelocityInRadians(FVector(0,0,-FMath::DegreesToRadians(20.f)),false);
+			AngularNative->SetLinearVelocity(FVector(50.8,0,0),false);
+			ElysiumModelPhysics::SetShadow(AngularObject,Requested,Requested,false,false);
+			AngularNative->SetAngularVelocityInRadians(FVector(0,0,-FMath::DegreesToRadians(200.f)),false);
+			AngularNative->SetLinearVelocity(FVector(508,0,0),false);
+			const FTransform ActualPose = AngularNative->GetUnrealWorldTransform();
+			ElysiumModelPhysics::UpdateShadow(AngularObject,ActualPose.GetLocation()+FVector(25.4,0,0),
+				ActualPose.GetRotation()*FQuat(FVector::UpVector,FMath::DegreesToRadians(-10.f)),false,.1f);
+			const float Retained = FMath::Min(20.f,Requested), DesiredCap = Requested-Retained;
+			const float Expected = (Retained>0.f?200.f-Retained:0.f)+(DesiredCap>0.f?FMath::Min(100.f,DesiredCap):100.f);
+			const auto CappedEvents = SolveAngularService();
+			TestTrue(TEXT("MIN cap branch reaches actual native correction"),!CappedEvents.IsEmpty());
+			for (const auto& Event : CappedEvents)
+			{
+				TestEqual(TEXT("managed PT angular drag remains absent at correction"),Event.AngularDrag,0.);
+				TestEqual(TEXT("managed PT linear drag remains absent at correction"),Event.LinearDrag,0.);
+				TestTrue(TEXT("MIN angular correction matches live public below/equal/above/zero witness"),FMath::IsNearlyEqual(-FMath::RadiansToDegrees(Event.CorrectedAngularVelocity.Z),Expected,.03));
+				TestTrue(TEXT("MIN linear correction matches shared live public cap witness"),FMath::IsNearlyEqual(Event.CorrectedVelocity.X/2.54,Expected,.001));
+				TestEqual(TEXT("matched native service event is literal .01"),Event.Delta,static_cast<double>(.01f));
+				AddInfo(FString::Printf(TEXT("ANGULAR_NATIVE_CASE,%.9g,%.17g,%.17g,%.17g,%.17g,%.17g"),Requested,Event.Delta,
+					-FMath::RadiansToDegrees(Event.CorrectedAngularVelocity.Z),-FMath::RadiansToDegrees(AngularNative->GetUnrealWorldAngularVelocityInRadians().Z),
+					Event.CorrectedVelocity.X/2.54,AngularNative->GetUnrealWorldVelocity().X/2.54));
+			}
+			TestTrue(TEXT("corrected angular velocity reaches native integration without duplicate drag"),FMath::IsNearlyEqual(-FMath::RadiansToDegrees(AngularNative->GetUnrealWorldAngularVelocityInRadians().Z),Expected,.03));
+			void* AngularContactPartner = nullptr;
+			TestFalse(TEXT("matched service fixture has no qualifying44"),ElysiumModelPhysics::GetContactPoint(AngularObject,AngularContactPartner,nullptr));
+		}
+		const FTransform LastAngularTarget = ElysiumModelPhysics::ShadowFor(AngularObject)->Target;
+		AngularNative->PutInstanceToSleep();
+		ElysiumModelPhysics::UpdateShadow(AngularObject,LastAngularTarget.GetLocation(),LastAngularTarget.GetRotation(),false,.2f);
+		SolveAngularService();
+		TestFalse(TEXT("repeated sleeping target leaves actual native body asleep"),AngularNative->IsInstanceAwake());
+		TestEqual(TEXT("sleeping correction consumes no countdown"),ElysiumModelPhysics::ShadowFor(AngularObject)->RemainingSeconds,.2f);
+		ElysiumModelPhysics::RemoveShadow(AngularObject);
+		TestEqual(TEXT("live controller removal restores angular drag after sleeping/capped motion"),Normal->Body->GetAngularDamping(),OriginalShadow.SavedAngularDamping);
+		TestEqual(TEXT("live controller removal restores shared linear drag"),Normal->Body->GetLinearDamping(),OriginalShadow.SavedLinearDamping);
+		AngularNative->SetAngularVelocityInRadians(FVector(0,0,-1),false);
+		AngularNative->SetLinearVelocity(FVector(100,0,0),false);
+		SolveAngularService();
+		TestTrue(TEXT("removed controller original angular drag reaches ordinary native integration"),FMath::IsNearlyEqual(AngularNative->GetUnrealWorldAngularVelocityInRadians().Z,-FMath::Max(0.,1.-OriginalShadow.SavedAngularDamping*static_cast<double>(.01f)),.00001));
+		TestTrue(TEXT("removed controller original linear drag reaches ordinary native integration"),FMath::IsNearlyEqual(AngularNative->GetUnrealWorldVelocity().X,100.*FMath::Max(0.,1.-OriginalShadow.SavedLinearDamping*static_cast<double>(.01f)),.0001));
 
 		return true;
 	}

@@ -743,16 +743,38 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  const double PriorTime = Solver->GetSolverTime();
  const FVector PriorNative = Native->GetUnrealWorldTransform().GetLocation();
  int32 QueuedObservers = 0; int32 TransactionTargets = 0;
+ FVector LastTransactionLogicalTarget = InitialLogical;
  World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
  {
-  if (Event.Entity == ShadowChild->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=shadow_target"))) ++TransactionTargets;
+  if (Event.Entity == ShadowChild->Handle && Event.Kind == TEXT("retail_site") && Event.Text.Contains(TEXT("tag=shadow_target")))
+  { ++TransactionTargets; LastTransactionLogicalTarget=ShadowChild->GetAbsOrigin(); }
   if (Event.Name != TEXT("native_candidate") || Event.Kind != TEXT("input") || !Event.Text.StartsWith(TEXT("Enable "))) return;
   ++QueuedObservers;
   TestTrue(TEXT("production EventQueue input observes completed native solve"), Solver->GetSolverTime() > PriorTime && Native->GetUnrealWorldTransform().GetLocation().X > PriorNative.X);
  });
  World->EnqueueInput(TEXT("native_candidate"), FName(TEXT("Enable")), FElysiumVariant::Void(), 0.,
   FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
- Tick(); Tick();
+ for (int32 ParentWitnessFrame=0;ParentWitnessFrame<2;++ParentWitnessFrame)
+ {
+  const float ParentWitnessStart=MovingParent->LocalTime;
+  Tick();
+  void* ParentWitnessObject=MovingParent->VPhysicsGetObject();
+  const auto* ParentWitnessShadow=ElysiumModelPhysics::ShadowFor(ParentWitnessObject);
+  const auto* ParentWitnessBody=ElysiumModelPhysics::Identity(ElysiumModelPhysics::ComponentFor(ParentWitnessObject));
+  TestTrue(TEXT("each232 transaction submits captured logical child target"),ElysiumModelPhysics::ShadowFor(Object)->Target.GetLocation().Equals(LastTransactionLogicalTarget,.001)); //retail-site emits just before public46; later feedback retains it
+  AddInfo(FString::Printf(TEXT("PARENT_FRAME,%d,logicalX=%.17g,solvedX=%.17g,targetX=%.17g,local=%.9g,start=%.9g,childLogicalX=%.17g,childTargetX=%.17g"),ParentWitnessFrame,
+   MovingParent->GetAbsOrigin().X,ParentWitnessBody->GetUnrealWorldTransform().GetLocation().X,ParentWitnessShadow->Target.GetLocation().X,MovingParent->LocalTime,MovingParent->StartFrameLocalTime,
+   ShadowChild->GetAbsOrigin().X,ElysiumModelPhysics::ShadowFor(Object)->Target.GetLocation().X));
+  if (ParentWitnessFrame==1)
+  {
+   TestEqual(TEXT("strict1in gate full-rewinds second parent feedback interval"),MovingParent->LocalTime,ParentWitnessStart);
+   TestEqual(TEXT("full rewind stamps parent start with corrected local clock"),MovingParent->StartFrameLocalTime,ParentWitnessStart);
+   TestTrue(TEXT("full rewind retains earlier child232 target without relink"),ElysiumModelPhysics::ShadowFor(Object)->Target.GetLocation().Equals(LastTransactionLogicalTarget,.001));
+   TestTrue(TEXT("later parent full rewind separates logical child from already submitted target"),!LastTransactionLogicalTarget.Equals(ShadowChild->GetAbsOrigin(),.001));
+  }
+  for (const auto& ParentWitnessEvent:ElysiumModelPhysics::ShadowEvents(ParentWitnessObject))
+   AddInfo(FString::Printf(TEXT("PARENT_EVENT,dt=%.17g,x=%.17g,target=%.17g,v=%.17g,corrected=%.17g,drag=%.17g,fraction=%.9g"),ParentWitnessEvent.Delta,ParentWitnessEvent.Position.X,ParentWitnessEvent.Target.X,ParentWitnessEvent.Velocity.X,ParentWitnessEvent.CorrectedVelocity.X,ParentWitnessEvent.LinearDrag,ParentWitnessEvent.Fraction));
+ }
  World->SetAiTraceSink({});
  TestEqual(TEXT("production pending queue is serviced exactly once"), QueuedObservers, 1);
  TestEqual(TEXT("each successful native mover transaction has one232 target"), TransactionTargets, 2);
@@ -760,8 +782,9 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  TestTrue(TEXT("actual two native solves use .02*.5, exactly once per frame"), FMath::IsNearlyEqual(SolvedDelta, .02, .00001));
  const auto* State = ElysiumModelPhysics::ShadowFor(Object);
  if (!State) return false;
+ AddInfo(FString::Printf(TEXT("PARENT_SHADOW_TARGET targetX=%.17g logicalX=%.17g solvedX=%.17g difference=%.17g"),State->Target.GetLocation().X,ShadowChild->GetAbsOrigin().X,Native->GetUnrealWorldTransform().GetLocation().X,State->Target.GetLocation().X-ShadowChild->GetAbsOrigin().X));
  TestTrue(TEXT("successful parent movement changes logical inherited child origin"), ShadowChild->GetAbsOrigin().X > InitialLogical.X);
- TestTrue(TEXT("232 submits logical target after parent transaction"), State->Target.GetLocation().Equals(ShadowChild->GetAbsOrigin(), .001));
+ TestTrue(TEXT("232 submits logical target after parent transaction"), State->Target.GetLocation().Equals(LastTransactionLogicalTarget, .001)); //100a69e0 submission precedes100a55b0 later parent rewind; no232 at its tail
  TestEqual(TEXT("FinishPushers submits zero arrival, no extra relink target"), State->RemainingSeconds, 0.f);
  auto* NativeCandidate = static_cast<FElysiumTriggerBase*>(World->FindByName(TEXT("native_candidate")));
  TestTrue(TEXT("native bbox query retains physical candidate pair before eligibility"), ShadowChild->IsCurrentlyTouching() && NativeCandidate && NativeCandidate->IsCurrentlyTouching());
@@ -917,12 +940,12 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  TestTrue(TEXT("existing native controller changes caps"), ElysiumModelPhysics::SetShadow(Object, 10.f, 10.f, true, true));
  State = ElysiumModelPhysics::ShadowFor(Object);
  TestTrue(TEXT("existing controller retains false permissions"), State && !State->bAllowMovement && !State->bAllowRotation);
- TestTrue(TEXT("current speed above requested leaves negative desired cap and positive damping cap"), State &&
-  FMath::IsNearlyEqual(State->LinearDesiredLimitCm, -174.6f, .001f) && FMath::IsNearlyEqual(State->LinearDampingLimitCm, 200.f, .001f));
+ TestTrue(TEXT("2601ac40 MIN retains requested damping cap and zero desired cap above requested speed"), State &&
+  FMath::IsNearlyEqual(State->LinearDesiredLimitCm, 0.f, .001f) && FMath::IsNearlyEqual(State->LinearDampingLimitCm, 25.4f, .001f));
  FVector SecondTarget = NativeSample + FVector(100,0,0);
  TestTrue(TEXT("second actual target admitted"), ElysiumModelPhysics::UpdateShadow(Object, SecondTarget, FQuat::Identity, false, .1f));
  Tick(); ElysiumModelPhysics::GetShadowPosition(Object, &NativeSample, nullptr);
- TestTrue(TEXT("nonpositive desired cap does not clamp native displacement"), FMath::IsNearlyEqual(NativeSample.X, SecondTarget.X - 90., .2));
+ TestTrue(TEXT("zero desired cap skips desired clamp while positive damping cap retains old velocity remainder"), FMath::IsNearlyEqual(NativeSample.X, SecondTarget.X - 88.254, .2)); //200-25.4+1000 cm/s, actual .01 event
  Native->PutInstanceToSleep();
  TestTrue(TEXT("repeated target replaces countdown"), ElysiumModelPhysics::UpdateShadow(Object, SecondTarget, FQuat::Identity, false, .2f));
  TestFalse(TEXT("repeated target does not wake native body"), Native->IsInstanceAwake());
@@ -931,6 +954,7 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  TestTrue(TEXT("negative arrival clamps at actual submission"), ElysiumModelPhysics::UpdateShadow(Object, SecondTarget, FQuat::Identity, false, -.5f));
  TestEqual(TEXT("negative arrival stores zero"), ElysiumModelPhysics::ShadowFor(Object)->RemainingSeconds, 0.f);
  const FQuat PriorRotation = Native->GetUnrealWorldTransform().GetRotation();
+ ElysiumModelPhysics::SetShadow(Object,10000.f,10000.f,false,false); //independent full-frame/teleport witnesses use ordinary high caps
  FRotator SourceAngles(17,23,31); ShadowChild->SetAbsAngles(SourceAngles);
  const FQuat FullTargetRotation = ElysiumModelPhysics::SourceRotation(ShadowChild->GetAbsAngles());
  ShadowChild->UpdatePhysicsShadowToCurrentPosition(.1f);
@@ -1009,6 +1033,7 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  else AddInfo(FString::Printf(TEXT("shadow saved missing: eligible=%d rows=%d"), ShadowChild->ShouldSavePhysics(), Snapshot.PhysicsBodies.Num()));
  if (!TestTrue(TEXT("save retains original controller body state and membership"), Saved && Saved->Shadow.bInstalled && Saved->bShadowMember && FMath::IsNearlyEqual(Saved->Shadow.SavedMassKg, 85.f, .001f))) return false;
  const FTransform Submitted = Saved->Shadow.Target; const FTransform Solved = Saved->Pose;
+	const float PersistedOriginalLinearDamping = Saved->Shadow.SavedLinearDamping, PersistedOriginalAngularDamping = Saved->Shadow.SavedAngularDamping;
  for (int32 InvalidArm = 0; InvalidArm < 4; ++InvalidArm)
  {
   FElysiumSavedPhysicsBody Invalid = *Saved;
@@ -1063,6 +1088,9 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  TestTrue(TEXT("reconnect preserves submitted target without resubmitting"), State && State->Target.Equals(Submitted, .001));
  Native = ElysiumModelPhysics::Identity(ElysiumModelPhysics::ComponentFor(Object));
  TestTrue(TEXT("restore barrier preserves actual solved pose independently"), bRestoredNativePose);
+	TestEqual(TEXT("actual Physics reconstruction retains absent linear damping input"),ElysiumModelPhysics::ComponentFor(Object)->GetLinearDamping(),0.f);
+	TestEqual(TEXT("actual Physics reconstruction retains absent angular damping input"),ElysiumModelPhysics::ComponentFor(Object)->GetAngularDamping(),0.f);
+	TestTrue(TEXT("actual Physics reconstruction retains originals independently of current zero inputs"),State && State->SavedLinearDamping==PersistedOriginalLinearDamping && State->SavedAngularDamping==PersistedOriginalAngularDamping);
  TestTrue(TEXT("reconnect restores owner registry membership"), World->PhysicsShadows().Contains(ShadowChild->Handle));
  const float BeforeRestoredCountdown = State->RemainingSeconds;
  auto* RestoredSolver = Native->GetPhysicsActor()->GetSolver<Chaos::FPBDRigidsSolver>();
@@ -1081,6 +1109,7 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  Component = ElysiumModelPhysics::ComponentFor(Object);
  FBodyInstance* RetiringBody = ElysiumModelPhysics::Identity(Component);
  const float OriginalMass = State->SavedMassKg;
+	const float OriginalLinearDamping = State->SavedLinearDamping, OriginalAngularDamping = State->SavedAngularDamping;
  const FVector OriginalInertia = State->SavedInertia; const bool bOriginalGravity = State->bSavedGravity;
  bool bObservedRetirement = false;
  World->SetAiTraceSink([&](const FElysiumAiTraceEvent& Event)
@@ -1091,6 +1120,8 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
   TestFalse(TEXT("225 removes owner membership before callback"), World->PhysicsShadows().Contains(ShadowChild->Handle));
   TestTrue(TEXT("controller teardown restores original native mass before release"), RetiringBody->IsValidBodyInstance() && FMath::IsNearlyEqual(RetiringBody->GetBodyMass(), OriginalMass, .001f));
   TestTrue(TEXT("controller teardown restores original native inertia and gravity"), RetiringBody->GetBodyInertiaTensor().Equals(OriginalInertia, .001) && RetiringBody->bEnableGravity == bOriginalGravity);
+	 TestEqual(TEXT("persisted shadow teardown restores original linear damping"),Component->GetLinearDamping(),OriginalLinearDamping);
+	 TestEqual(TEXT("persisted shadow teardown restores original angular damping"),Component->GetAngularDamping(),OriginalAngularDamping);
  });
  ShadowChild->VPhysicsDestroyObject(); World->SetAiTraceSink({});
  TestTrue(TEXT("actual production225 exposes pre-release observer"), bObservedRetirement);

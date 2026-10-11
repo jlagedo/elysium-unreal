@@ -127,6 +127,7 @@ struct FElysiumSaveVersion
 		PhysicsRecipes = 46, // actual selected body recipes/state in the ordered Physics block
 		StaticPhysicsRecipes = 47, // static mode and native channel/shape query filters
 		PhysicsShadowState = 48, // submitted target/controller countdown and serial membership
+		PhysicsShadowDamping = 49, // original shared damping retained through controller removal
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -161,7 +162,7 @@ struct FElysiumSaveVersion
 	//
 	// `SaveBlocks` moves the entity and queue rows into the block set's stream (L0-r029); saves are
 	// disposable (no migration) and the floor moves with it.
-	static constexpr int32 MinSupported = PhysicsShadowState; // disposable saves: controller state contract
+	static constexpr int32 MinSupported = PhysicsShadowDamping; // disposable saves: original damping/controller state contract
 
 	static const FGuid GUID;
 };

@@ -70,6 +70,129 @@ static void Target(Body& Item, double X, double Y, double Z)
   Item.Target[0] = SourceInches(X); Item.Target[1] = SourceInches(-Y); Item.Target[2] = SourceInches(Z);
 }
 
+// Isolated ordinary rotating-door submissions: public object45/46/47, no contacts/forces.
+// Borrowed shape and optional zero-force handler outlive all bodies and the environment.
+static int AngularReplay(void* Physics,void* Collision,void* Environment,int Material,
+                         const char* InputPath,const char* OutputPath,bool ObserveEvents)
+{
+  MotionEventObserver Observer;
+  struct EnvironmentLifetime {
+    void* Physics; void* Environment; void* MotionController=nullptr;
+    ~EnvironmentLifetime() {
+      if(MotionController) {using DestroyMotion=void (__thiscall*)(void*,void*);Method<DestroyMotion>(Environment,40)(Environment,MotionController);}
+      using DestroyEnv=void (__thiscall*)(void*,void*);Method<DestroyEnv>(Physics,1)(Physics,Environment);
+    }
+  } Lifetime{Physics,Environment}; //destroyed before the borrowed handler, including error arms
+  struct AngularBody { std::string Name; void* Object=nullptr; float Position[3]={},Angles[3]={}; };
+  struct AngularInput { int Frame=0; double Time=0.; float Dt=0.f; std::string Name; float Position[3]={},Angles[3]={},Arrival=0.f; };
+  std::vector<AngularBody> Bodies; std::vector<AngularInput> Inputs;
+  float MatchedDelta=0.f;
+  std::ifstream Input(InputPath); std::string Row;
+  while(std::getline(Input,Row)) {
+    for(char& Ch:Row) if(Ch==',') Ch=' ';
+    std::istringstream Stream(Row); std::string Tag; Stream>>Tag;
+    if(Tag=="ANGULAR_EVENT_DT") {Stream>>MatchedDelta;if(Stream.fail() || !(MatchedDelta>0.f)) return 24;
+    } else if(Tag=="ANGULAR_CREATE") {
+      AngularBody Item; Stream>>Item.Name;for(float& Value:Item.Position) Stream>>Value;for(float& Value:Item.Angles) Stream>>Value;
+      if(Stream.fail()) return 24; Bodies.push_back(Item);
+    } else if(Tag=="ANGULAR_INPUT") {
+      AngularInput Item;Stream>>Item.Frame>>Item.Time>>Item.Dt>>Item.Name;for(float& Value:Item.Position) Stream>>Value;
+      for(float& Value:Item.Angles) Stream>>Value;Stream>>Item.Arrival;if(Stream.fail()) return 24;Inputs.push_back(Item);
+    }
+  }
+  if(Bodies.size()!=2 || Inputs.empty() || Inputs.size()%2) return 24;
+  if(MatchedDelta>0.f) Method<SetFloat>(Environment,29)(Environment,MatchedDelta); //public event input; default host witness remains .015
+  float Vertices[8][3];const float* Pointers[8];int Index=0;
+  for(double X:{0.,100.}) for(double Y:{-5.,5.}) for(double Z:{-100.,100.}) {
+    Vertices[Index][0]=SourceInches(X);Vertices[Index][1]=SourceInches(-Y);Vertices[Index][2]=SourceInches(Z);Pointers[Index]=Vertices[Index];++Index;
+  }
+  void* Hull=Method<Convex>(Collision,1)(Collision,Pointers,8); //installed26009b10, same proven ABI as contact replay
+  void* Shape=Hull?Method<ConvertConvex>(Collision,4)(Collision,&Hull,1):nullptr; if(!Shape) return 25;
+  for(auto& Item:Bodies) {
+    ObjectParams Params;Params.Name=Item.Name.c_str();Params.GameData=&Item;
+    Item.Object=Method<CreateBody>(Environment,7)(Environment,Shape,Material,Item.Position,Item.Angles,&Params);if(!Item.Object) return 25;
+    Method<SetInt>(Item.Object,66)(Item.Object,1);
+    Method<SetShadow>(Item.Object,45)(Item.Object,10000.f,10000.f,false,false);
+    Method<UpdateShadow>(Item.Object,46)(Item.Object,Item.Position,Item.Angles,false,0.f);
+  }
+  if(ObserveEvents) {
+    using CreateMotion=void* (__thiscall*)(void*,MotionEventObserver*);using AttachMotion=void (__thiscall*)(void*,void*);
+    Lifetime.MotionController=Method<CreateMotion>(Environment,39)(Environment,&Observer);if(!Lifetime.MotionController) return 26;
+    Method<AttachMotion>(Lifetime.MotionController,2)(Lifetime.MotionController,Bodies[0].Object);
+  }
+  FILE* Output=nullptr;fopen_s(&Output,OutputPath,"w");if(!Output) return 27;
+  fprintf(Output,"frame,time,host_dt,body,targetPitch,targetYaw,targetRoll,arrival,actualPitch,actualYaw,actualRoll,wx,wy,wz,angularDamping,present,event_count,event_min,event_max,event_sum\n");
+  for(size_t Base=0;Base<Inputs.size();Base+=2) {
+    Observer.Deltas.clear();
+    for(size_t Offset=0;Offset<2;++Offset) {
+      const auto& Submitted=Inputs[Base+Offset];auto& Item=Bodies[Offset];
+      if(Submitted.Name!=Item.Name || Submitted.Frame!=Inputs[Base].Frame) return 24;
+      Method<UpdateShadow>(Item.Object,46)(Item.Object,Submitted.Position,Submitted.Angles,false,Submitted.Arrival);
+    }
+    Method<Simulate>(Environment,26)(Environment,std::fmin(Inputs[Base].Dt,.1f));
+    float Minimum=0.f,Maximum=0.f,Sum=0.f;
+    for(float Delta:Observer.Deltas) {if(Minimum==0.f || Delta<Minimum) Minimum=Delta;if(Delta>Maximum) Maximum=Delta;Sum+=Delta;}
+    for(size_t Offset=0;Offset<2;++Offset) {
+      const auto& Submitted=Inputs[Base+Offset];auto& Item=Bodies[Offset];float Position[3]={},Angles[3]={},Angular[3]={},Damping=0.f;
+      if(Method<ShadowPose>(Item.Object,47)(Item.Object,Position,Angles)!=1) return 28;
+      Method<PairRead>(Item.Object,40)(Item.Object,nullptr,Angular);Method<PairRead>(Item.Object,18)(Item.Object,nullptr,&Damping);
+      void* Partner=nullptr;const bool Present=Method<Contact>(Item.Object,44)(Item.Object,nullptr,&Partner);
+      fprintf(Output,"%d,%.17g,%.9g,%s,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%d,%zu,%.9g,%.9g,%.9g\n",
+        Submitted.Frame,Submitted.Time,Submitted.Dt,Item.Name.c_str(),Submitted.Angles[0],Submitted.Angles[1],Submitted.Angles[2],Submitted.Arrival,
+        Angles[0],Angles[1],Angles[2],Angular[0],Angular[1],Angular[2],Damping,Present,Observer.Deltas.size(),Minimum,Maximum,Sum);
+      if(Present) return 29; //fixture proof: contact response cannot explain angular effect
+    }
+  }
+  fclose(Output);
+  if(MatchedDelta>0.f) {
+    // Separate public old-W/cap/inactive/removal observations. No force/acceleration callback.
+    const std::string CasesPath=std::string(OutputPath)+".cases.csv";
+    FILE* Cases=nullptr;fopen_s(&Cases,CasesPath.c_str(),"w");if(!Cases) return 27;
+    fprintf(Cases,"case,event_dt,requested,current_at_install,old_w,seed_readback_w,solved_w,old_v,solved_v,angular_damping,linear_damping,contact,event_count,event_min,event_max\n");
+    for(const float Delta:{.003f,.004f,.005f,.01f}) for(const float Requested:{0.f,10.f,20.f,45.f}) for(const bool Attached:{false,true}) for(const bool Active:{false,true}) {
+      void* CaseEnv=Method<CreateEnv>(Physics,0)(Physics);if(!CaseEnv) return 25;
+      EnvironmentLifetime CaseLifetime{Physics,CaseEnv};
+      const float Zero[3]={},Seed[3]={0.f,0.f,200.f},LinearSeed[3]={200.f,0.f,0.f},Initial[3]={0.f,0.f,20.f},InitialLinear[3]={20.f,0.f,0.f};
+      Method<SetVector>(CaseEnv,3)(CaseEnv,Zero);Method<SetFloat>(CaseEnv,29)(CaseEnv,Delta);
+      ObjectParams Params;void* Object=Method<CreateBody>(CaseEnv,7)(CaseEnv,Shape,Material,Zero,Zero,&Params);if(!Object) return 25;
+      Method<SetShadow>(Object,45)(Object,10000.f,10000.f,false,false); //same installed normal producer before warming actual20; no ordinary-body gyro/drag
+      using SetVelocity=void (__thiscall*)(void*,const float*,const float*); //object39/260183b0, ret8; wakes and clears increments
+      Method<SetVelocity>(Object,39)(Object,InitialLinear,Initial);Method<Simulate>(CaseEnv,26)(CaseEnv,Delta*.5f);
+      float InstallAngular[3]={};Method<PairRead>(Object,40)(Object,nullptr,InstallAngular);if(!std::isfinite(InstallAngular[2])) return 30;
+      const float ActualRequested=Requested==20.f?InstallAngular[2]:Requested;
+      Method<SetShadow>(Object,45)(Object,ActualRequested,ActualRequested,false,false); //below/equal/above actual completed speed, not authored seed
+      Method<SetVelocity>(Object,39)(Object,LinearSeed,Seed);
+      float Before[3]={};Method<PairRead>(Object,40)(Object,nullptr,Before);
+      if(Before[2]!=200.f) {fprintf(stderr,"pending angular %.9g\n",Before[2]);return 30;} //public live ABI round trip before integration
+      Observer.Deltas.clear();
+      if(ObserveEvents) {using CreateMotion=void* (__thiscall*)(void*,MotionEventObserver*);using AttachMotion=void (__thiscall*)(void*,void*);
+        CaseLifetime.MotionController=Method<CreateMotion>(CaseEnv,39)(CaseEnv,&Observer);if(!CaseLifetime.MotionController) return 26;
+        Method<AttachMotion>(CaseLifetime.MotionController,2)(CaseLifetime.MotionController,Object);}
+      Method<Simulate>(CaseEnv,26)(CaseEnv,Delta); //one actual event, proved by paired callback below
+      if(ObserveEvents && (Observer.Deltas.size()!=1 || Observer.Deltas[0]!=Delta)) return 32;
+      // Seed goes to pending increments. First event makes it actual old-W; second event tests damping/order.
+      Method<PairRead>(Object,40)(Object,nullptr,Before);if(Before[2]!=200.f) {fprintf(stderr,"warm angular %.9g\n",Before[2]);return 30;}
+      if(Attached) Method<SetInt>(Object,22)(Object,1); //public gravity/damping membership, environment gravity is zero
+      float TargetPosition[3]={},TargetAngle[3]={};Method<ShadowPose>(Object,47)(Object,TargetPosition,TargetAngle);
+      TargetPosition[0]+=10.f;TargetAngle[1]+=10.f;
+      if(Active) Method<UpdateShadow>(Object,46)(Object,TargetPosition,TargetAngle,false,.1f);
+      Method<PairRead>(Object,40)(Object,nullptr,Before);
+      Observer.Deltas.clear();Method<Simulate>(CaseEnv,26)(CaseEnv,Delta);
+      if(ObserveEvents && (Observer.Deltas.size()!=1 || Observer.Deltas[0]!=Delta)) return 32;
+      float Angular[3]={},Linear[3]={},Position[3]={},Angles[3]={},Damping=0.f,LinearDamping=0.f;
+      Method<PairRead>(Object,40)(Object,Linear,Angular);Method<ShadowPose>(Object,47)(Object,Position,Angles);Method<PairRead>(Object,18)(Object,&LinearDamping,&Damping);
+      const bool Present=Method<Contact>(Object,44)(Object,nullptr,nullptr);
+      float Minimum=0.f,Maximum=0.f;for(float Observed:Observer.Deltas) {if(Minimum==0.f || Observed<Minimum) Minimum=Observed;if(Observed>Maximum) Maximum=Observed;}
+      fprintf(Cases,"%s_%s,%.9g,%.9g,%.9g,200,%.9g,%.9g,200,%.9g,%.9g,%.9g,%d,%zu,%.9g,%.9g\n",Attached?"attached":"detached",Active?"capped":"inactive",Delta,ActualRequested,InstallAngular[2],Before[2],Angular[2],Linear[0],Damping,LinearDamping,Present,Observer.Deltas.size(),Minimum,Maximum);
+      if(Present) return 29;
+      using RemoveShadow=void (__thiscall*)(void*);Method<RemoveShadow>(Object,51)(Object);
+      Method<PairRead>(Object,18)(Object,&LinearDamping,&Damping);if(Damping!=.1f || LinearDamping!=.1f) return 31;
+    }
+    fclose(Cases);
+  }
+  return 0;
+}
+
 int main(int argc, char** argv)
 {
   if (argc < 4 || argc > 9) return 2;
@@ -82,8 +205,10 @@ int main(int argc, char** argv)
   const std::string Arrival = argc >= 7 ? argv[6] : "frame";
   if (Clock!="raw" && Clock!="admitted") return 2;
   if (Arrival!="frame" && Arrival!="zero") return 2;
-  if (Variant!="baseline" && Variant!="swapped" && Variant!="mirror" && Variant!="swizzle") return 2;
-  if (MovingReplay) printf("moving replay: recorded admitted frames/normal object46 arrival; prefix ends at first native178; eventObserver=%d\n",ObserveEvents);
+  if (Variant!="baseline" && Variant!="swapped" && Variant!="mirror" && Variant!="swizzle" && Variant!="angular") return 2;
+  if(Variant=="angular" && argc<8) return 2;
+  if (Variant=="angular") printf("angular replay: production object46 rows, force/contact-free; eventObserver=%d\n",ObserveEvents);
+  else if (MovingReplay) printf("moving replay: recorded admitted frames/normal object46 arrival; prefix ends at first native178; eventObserver=%d\n",ObserveEvents);
   else printf("variant=%s clock=%s arrival=%s; second recreation remains at .45\n",Variant.c_str(),Clock.c_str(),Arrival.c_str());
   const std::string Bin = argv[1]; SetDllDirectoryA(Bin.c_str());
   HMODULE Dll = LoadLibraryA((Bin + "/vphysics.dll").c_str());
@@ -106,6 +231,7 @@ int main(int argc, char** argv)
   const float Zero[3] = {};
   Method<SetVector>(Environment, 3)(Environment, Zero);
   Method<SetFloat>(Environment, 29)(Environment, .015f);
+  if(Variant=="angular") return AngularReplay(Physics,Collision,Environment,Material,argv[7],argv[3],ObserveEvents);
   float Vertices[8][3]; const float* Pointers[8]; int Vertex=0;
   for (double X : {-10.,10.}) for(double Y : {-10.,10.}) for(double Z : {-10.,10.}) {
     Vertices[Vertex][0] = SourceInches(X); Vertices[Vertex][1] = SourceInches(-Y); Vertices[Vertex][2] = SourceInches(Z);

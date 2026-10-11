@@ -104,6 +104,9 @@ namespace ElysiumModelPhysics
 		double Time = 0., Delta = 0.; float RemainingBefore = 0.f, Remaining = 0.f, Fraction = 0.f;
 		FVector Position = FVector::ZeroVector, Velocity = FVector::ZeroVector, CorrectedVelocity = FVector::ZeroVector;
 		FVector PredictionBefore = FVector::ZeroVector, Target = FVector::ZeroVector;
+		FQuat Rotation = FQuat::Identity, TargetRotation = FQuat::Identity;
+		double LinearDrag = 0., AngularDrag = 0.;
+		FVector AngularVelocity = FVector::ZeroVector, CorrectedAngularVelocity = FVector::ZeroVector;
 		double TeleportErrorSquared = 0.;
 		bool bTeleported = false, bCollisionRestored = true, bSleeping = false, bSimulated = false;
 		TArray<FPostSolveSample> PostSolve; //read-only per-substep native observation, same revision/incarnation

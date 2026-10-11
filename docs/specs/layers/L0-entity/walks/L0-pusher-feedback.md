@@ -1,5 +1,37 @@
 # Reached pusher feedback and required producer plan (2026-10-11)
 
+## Angular effect packet contract and recovered membership (2026-10-11)
+
+Use the existing actual RotatingDoorHandedness Spawn/Open/AngularMove/232 producer,
+two separated native authored leaves, saved production permissions and no gravity.
+Prove actual native constraints absent, normal advancing LocalTime>Start/nonzero
+AngularVelocity, normal arrival deadline and actual active226 before literal effects.
+Capture target/actual full Source Euler separately from PT before/correctedW and
+native solved47; do not inject feedback, arrival, pose or clocks. Keep all existing
+angular/door/START_OPEN/restore assertions. The matching physics-interaction.md
+section records conditional1000-before500 order and installed public API/lifetime.
+Normal false,false shadow removes the shared gravity/damping producer; readable
+angular100 has no angular or linear damping effect. Installed public component
+setters marshal both native drag inputs to zero before the first consumed shadow
+event. Original values persist through repeated settings, removal and Physics save
+schema/floor49. Live public warmed20/old200 requested0/10/20/45 proves MIN caps and
+normal outputs100/290/280/205, including unlimited-zero-cap behavior. Original
+wrong MAX oracle assertions are corrected; independent full-frame/teleport stimuli
+restore high caps first. No cadence/threshold/order/geometry change or new hook.
+Attached-mode damping/pending-force mapping, finite tensor, shadow material and
+pair combination remain open, as do original23/88/full L0.
+
+Final worker witnesses: arm130747/focused130828 (including SavePayload), affected
+13091954=34clean/20warned and original scenario1310212=290/81events all pass.
+Public normal angular131022.104742 and matched131022.135741 preserve every paired
+non-observer column;64 case rows prove actual configured count1/min=max=dt.
+Removal/save retains originals and ordinary post-removal native attenuation proves
+restored PT inputs. Fresh moving/readback131022.138743 preserves every contact byte
+and the same99-input prefix af9c86a... normalized LF/no final LF, yet native44f20/
+178f32²1.0501432049677004 versus retail44f26/f32².57965414909080337/no178 stays OPEN.
+Exact frozen paths/hash and retention-safe receipt copies are indexed out of repo
+at E:/elysium-work/codex/l0-angular-effect-20261011/final-manifest.json.
+
 ## Public shape/body readback contract before code (2026-10-11)
 
 Bounded observer remains SAME NativeMovingFirstContact creation/normal46/completed47
@@ -47,6 +79,10 @@ hooks remain. Repair only proved input/output divergence with full reached lifec
 otherwise report gap. Full L0 and original23/88 stay OPEN.
 
 ## Frozen diagnostic checkpoint (2026-10-11)
+
+Historical readback baseline before the angular membership packet above. Its
+angular-damping suspicion is superseded by live detached-producer evidence; its
+finite tensor/material/pair-contact limitations remain open.
 
 Public ABI smoke and guarded paired replay121621.517059Z pass with byte-identical
 original contact CSVs. The same99 creation/normal46 lines through f32 retain

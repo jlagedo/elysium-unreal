@@ -1,5 +1,133 @@
 # VtMB's rigid-body world — ragdolls, the physics hands, and the placed physics surface
 
+## Angular damping effect and controller order (2026-10-11)
+
+### Live membership and MIN-cap correction (before functional edits)
+
+The generic1000-before500 order below is conditional on membership. Normal
+object45(false,false)26018520 ->2601a7e0 calls EnableGravity#22/26016ea0(false),
+which removes the gravity/damping controller through2602cb20. IsGravityEnabled
+26016e00/26016dc0 tests controller membership. Thus normal shadow angular100
+is readable but applies **no angular or linear damping**. Public reattachment in
+a zero-gravity environment isolates the shared producer: detached inactive oldW200
+stays200; attached oldW200 becomes140/120.000008/121.306145/73.5758896 for actual
+.003/.004/.005/.01 events. The .005 case crosses angular norm(100*dt)^2>=.5.
+Receipt E:/elysium-work/research/vphysics-contacts/20261011T124549.235718Z/index.json
+proves all paired columns unchanged and one configured event per case. SetVelocity
+is object39/260183b0 (two optional vector pointers, ret8), not AddVelocity41/26018140.
+It writes pending increments; a warmup event is required before calling the result
+oldW. First-event receipt124100's unchanged200 therefore is retained as pending-input
+evidence; second-event124229 and membership-toggle124549 prove actual oldW.
+
+SetMaxSpeed2601ac40 retains **MIN(current speed, requested)**. FCOM current/requested,
+TEST AH,5, JNP retains current for current<requested, otherwise loads requested.
+Factory2601b0e0 returns allocation+4; callback2601aa50 receives allocation and passes
+state allocation+8. Interface+68 maps state+64 damping cap; interface+64 maps state+60
+desired cap. The stack slot overwritten with converted requested angular speed at
+2601ac9b is read at2601acb9 after POP EDI; it is not the original linear argument.
+Both desired caps are requested-minus-retained; zero/nonpositive caps skip clamping.
+Public completed20 seed, requested0/below10/equalcompleted/above45, shared linear
+and angular seeds200, active/inactive and attached/detached witnesses are retained
+in125648.946437Z. Its warmup runs with normal shadow already installed, so actual
+completed linear/angular speed20 is exact, separately recorded from authored seed.
+Detached active outputs are100/290/280/205 for requested0/10/20/45; attached outputs
+remain distinct. Every paired case column agrees and each observed event count is1
+with minimum=maximum=configured actual dt. Historical124956 warmed an ordinary body
+before installation and recorded its ordinary-body warmed speed separately.
+
+The bounded adapter repair uses public native component damping setters to suppress
+both drags for the installed movement-disallowed shadow whose damping producer is
+absent. It saves/restores both original damping values through removal and the
+existing Physics save block (schema/floor49), and corrects MIN cap producers together. Chaos keeps
+force integration, contact solving and pose integration. Movement-allowed attached
+controller exponential damping/order and pending-force service remain open; no
+general attached-controller mapping or IVP dispatcher/integration is introduced.
+Original MAX-based cap expectations are corrected using this live MIN evidence;
+independent full-frame/teleport tests restore normal high caps before their stimuli.
+
+ParentShadowFrame's original232 equality used a later postfeedback logical pose.
+Actual130451.095532Z event samples explain its failure after shared drag removal:
+first targetX3005.0799998864532, actualX3002.5399999432266, actualdt.0099999997764825821,
+arrival.02/fraction.5, correctedV254. Source FLOAT discrepancy is exactly1inch,
+so strict squared>1 does not rewind. Next target3010.1599997729063 versus actual
+3006.3499998580664 exceeds1inch and100a55b0 fully rewinds the parent interval.
+Child retained submittedX3010.1601391601562/solved3010.1601389330626 versus logical
+3005.0801391601562 differs5.08cm. Recovered62/64 tail has no child232/relink.
+The same232 target/logical equality is now checked against its captured submission
+pose; separate postfeedback assertions preserve corrected LocalTime/StartFrame and
+retained target. No runtime retarget, threshold/tolerance change or changed order.
+Failed130004/130225/130451 receipts record the invalid observation phase explicitly.
+
+Final worker arm130747/focused130828 (SavePayload included), affected13091954 and
+scenario1310212 pass. Final normal angular public receipt131022.104742 preserves
+all paired non-observer columns; separate matched131022.135741 preserves all case
+columns and64 count1/min=max=configured-dt rows. Actual native corrected/solved
+angular100/290/280/205 outputs differ from public by under.0003deg/s for the bounded
+axis; existing gameplay .5-degree gate is unchanged. Both first-event PT drags0,
+inactive oldW/V, capped correction, sleep/countdown, save/reconstruction and ordinary
+post-removal native drag attenuation are verified. This does not prove attached mode.
+Fresh moving/readback131022.138743 retains original99 normal inputs throughf32:
+normalized UTF8 LF/no-final-LF SHAaf9c86a..., physicalCRLFfileSHA409a4ab7...;
+paired contact CSVs are byte-identical. Native first44f20/178f32²1.0501432049677004
+versus retail44f26/f32².57965414909080337/no178 remains a gameplay parity gap.
+Copied authoritative receipts, original paths/hashes and exact final diff live in
+E:/elysium-work/codex/l0-angular-effect-20261011/final-manifest.json.
+
+The named observer is the normal rotating door AngularMove/232 target and arrival,
+completed47/ordinary native Euler, active226 ->100a55b0's .5-degree/full-rewind gate,
+then qualifying44 ->178. Source full Euler degrees and float local/start/deadline
+remain separate from native cm/rad/s and actual simulation-event time/delta. Logical,
+submitted and solved poses remain distinct. The existing RotatingDoorHandedness
+creation/Open producer is the isolated force/contact-free witness, preserving its
+literal handedness and one-second float deadline assertions. No native damping
+coefficient alone is the observable, and zero external forces do not mean zero oldW.
+
+Installed object18/26017500 reads linear damping from core+44 and angular from+24.
+Gravity/damping controller table260c9530 slot4=2602cf10 and slot5=26009760 returns1000;
+shadow table260ca0c8 slot4=2601aa50 and slot5=2601a6f0 returns500. Controller attachment
+2602cb90 ->2602cbe0 sorts via2602ccd0 ascending priority. Active-unit2602d090 walks
+that array backward, so an attached gravity/damping1000 runs before shadow500.
+2602cf10 calls2602fc80 ->2602fda0 on old velocities before pending velocity increments
+26030600 and gravity, followed by shadow2601aa50 ->2601a250's target correction.
+This recovers an observable order; it does not authorize an IVP dispatcher clone.
+
+Angular2602fda0 uses each axis product dAxis*dt: if their squared norm is >=double.5
+(260c9370), multipliers are exp(-dAxis*dt); otherwise each is1-dAxis*dt. The comparison
+is about damping-times-dt, not angular velocity. Scalar linear damping switches at
+d*dt>=double.25 (260ca3f8). For an attached shadow angular100 and .015 seconds, oldW is multiplied
+by exp(-1.5); subsequent controller factor1 removes admitted oldW below its damping cap and writes desired
+target displacement/arrival/eventdt, subject to the existing speed-cap branches.
+Nonzero oldW, cap saturation, wake/sleep and multiple-event coverage remain required
+before accepting a general adapter mapping. Existing countdown/revision/lifetime and
+removal/save mechanics contracts are retained; original damping words are appended
+to the Physics block with the disposable-save schema/floor49. No new upward hook is introduced.
+
+Installed UE5.8 SimCallbackObject.h322/332/398 declares Presimulate once per step,
+PreIntegrate and PostSolve once per substep. Current solver-resolved UniqueIdx/proxy
+and nullable PT API guard every callback read; immutable inputs and POD outputs retain
+incarnation/revision fences and queued engine cleanup. PBDRigidsEvolutionGBF.cpp932
+applies max(0,1-angularDrag*dt) after forces/impulses and before native pose integration.
+Current Presimulate shadow correction precedes this drag, whereas retail damping
+precedes shadow correction. PreIntegrate is also before the combined integration,
+and PostIntegrate already follows native predicted pose. Neither establishes a safe
+postdrag/prepose adapter for the attached-controller branch. The normal detached
+membership instead proves that both native drag inputs must be absent before
+correction/integration. PrimitiveComponentPhysics.cpp630/658 ->BodyInstance.cpp3568
+ExecuteWrite ->ChaosEngineInterface.cpp832/840 ->SingleParticlePhysicsProxy.h1039/1063
+uses the public setters. ParticleHandle.h3696..3705 dirties DynamicMisc;
+SingleParticlePhysicsProxy.cpp171..174 transfers it via SetParticleDynamicMisc.
+PBDRigidsSolver.cpp2154 processes pushed data before commands/callbacks, as its2160
+comment explicitly records. Actual live PT EtherDrag samples before correction
+verify both zeros on the first consumed input and subsequent active/inactive events.
+No extra PT drag write, W division, predicted-pose rewrite or custom integration is used.
+Actual non-test SetShadow callers are ElysiumPusher.cpp617 and ElysiumProp.cpp815,
+both10000/10000,false,false. NPC movement-allowed InitShadow is an L4 upward producer,
+not a current runtime caller. UpdateShadow's bAllowMovement guard matches260185c6:
+controller public#5 false skips object22 toggle at260185df. Attached-mode effect/order
+and pending forced increments remain open. Chaos retains solver, geometry, mechanics
+and scheduling ownership. Finite tensor and semantic material remain unresolved;
+pair combine is independently queued. Full L0 and original23/88 remain OPEN.
+
 ## Supported shape and shadow mechanical readback (2026-10-11)
 
 The bounded observer remains normal START_OPEN/InputClose active226 ->100a55b0,

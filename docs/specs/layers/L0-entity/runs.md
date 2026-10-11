@@ -1,5 +1,67 @@
 # Worker runs — L0-entity
 
+## Angular effect, shared membership and MIN caps — 2026-10-11 (after1c7bb85f)
+
+One bounded worker recovered controller membership before functional repair. Normal
+public45(false,false)26018520 ->2601a7e0 ->26016ea0(false)/2602cb20 removes the shared
+gravity/damping producer. Priority1000-before500 applies only when attached; getter
+angular100 alone proves no effect. Public warmed20/old200 requested0/10/20/45 and
+actual .003/.004/.005/.01 event cases recover detached/attached active/inactive
+outputs, MIN caps2601ac40, unlimited zero-cap behavior and shared linear semantics.
+Full interface allocation+4/state+8 and FCOM/TEST/JNP walks fix the prior MAX oracle.
+Actual non-test callers Pusher617/Prop815 are false,false; attached NPC producer is L4.
+
+The public native component setters suppress both drags for normal absent membership.
+DynamicMisc transfers before callbacks; live PT samples verify zeros before first
+correction. Chaos owns force/contact/pose integration. Saved original drags persist
+across repeated caps and Physics block reconstruction; disposable schema/floor49.
+Removal GT restoration and a subsequent ordinary solved W/V attenuation both pass.
+No private layout, IVP dispatcher/damping clone, cadence, threshold, compensation,
+predicted-pose rewrite, finite tensor or material repair is introduced.
+
+Production RotatingDoorHandedness retains every original Open/arrival/full-frame/
+handedness gate. Supplemental native .01 cases produce corrected/solved angular
+99.9997068079/289.9996961580/279.9996981565/205.0000000128deg/s and shared linear
+100/289.9999903882/280.0000048059/205.0000048059in/s, matching public MIN outcomes.
+Sleeping/repeated target/countdown and removal/save observers pass. Existing parent
+232 equality is retained against actual submission logical pose: later100a55b0
+strict1in² feedback rewinds parent without child resubmission. Exact first1in and
+next1.5in measurements justify added clock/retained-target/fullrewind assertions.
+Failed130004/130225/130451 are invalid postfeedback observation phase, not accepted
+runtime divergences. Earlier wrong added angular observer assertions and compile
+C2664 were repaired; exact rejected diff/hash captures remain out of repo.
+
+Functional freeze11-path diff SHAa98e82dd7e356309db8b37b4c3e38ee97ef9d46e9efbcf83cfba3f0a3b714ffb.
+Final arm build E:/elysium-work/logs/20261011T130747.201122Z-build.json exits0;
+focused E:/elysium-work/logs/20261011T130828.407575Z-test.json passes3 including SavePayload.
+Unchanged affected54 wrapper E:/elysium-work/logs/20261011T130919.238292Z-test.json
+passes54 (34 clean/20 warned/0 failed). Original scenario2 wrapper
+E:/elysium-work/logs/20261011T131021.990306Z-arena.json passes290/81events with
+first_unmet null; installed toolset startup errors remain classified infrastructure
+output, with no scenario failure. Final public normal angular131022.104742 and
+matched131022.135741 receipts exit0 with every non-observer column equal;64 matched
+case rows each prove count1/min=max=configured dt. Fresh moving/readback131022.138743
+has byte-identical contact CSVs and identical99 creation/input lines throughf32 to
+121621: normalized UTF8 LF join without trailing LF SHAaf9c86a...; physical CRLF CSV
+SHA409a4ab7ababe123c94905bb5b49ba67757b9ffa32152dab4a08d8162530edba.
+Native first44f20/first178f32²1.0501432049677004 versus retail44f26/f32².57965414909080337/
+no178 remains OPEN. Attached-mode damping/pending forces, finite I/nonzero nativeInvI,
+semantic shadow material and separately queued pair-combine remain unresolved.
+Original23/88/full L0 are not closed. Coordinator completed default189131157
+(110 clean/79 warned/0 failed/notRun/inProcess), original bounded19131232 across
+both hosts (all ordinary first_unmet null; two expected-refusal selftests retain
+their expected nonnull observations), exact map2 rerun1313462clean, and doctor131418
+exit0/21 existing policy warnings. Old074423 map2 index was pruned, while its wrapper
+survives. Pipeline54 XML is unchanged after diff assumption review. Coordinator
+reviewed the frozen implementation and terminal checkpoint; worker made no commit/push.
+The next bounded contract is forbidden-rotation inertia/inverse consistency and
+body-state lifecycle through supported Chaos setters, with contact torque, solved
+angular motion, feedback, removal and save observers. Material pair response remains
+separately queued; no next worker is part of this run.
+
+Retention-safe original-path/hash receipt copies and final13-path diff are indexed by
+E:/elysium-work/codex/l0-angular-effect-20261011/final-manifest.json.
+
 ## Public Chaos simulation-event adapter — 2026-10-11 (after c2899b6b)
 
 One fresh Sol High worker with no inherited history implemented the public simulation

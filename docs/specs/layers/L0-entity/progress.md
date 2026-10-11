@@ -13,6 +13,38 @@ evidence, not new validation or acceptance of the layer closing gate.
 
 ## Current checkpoint
 
+- Angular effect/shared membership packet (2026-10-11; coordinator reviewed/gated):
+  live public normal false,false shadow detaches
+  the shared gravity/damping producer; both native drags are absent before correction
+  and native integration. Public warmed20/old200 zero/below/equal/above cases prove
+  MIN damping caps and requested-minus-retained desired caps. Both original damping
+  inputs restore through removal/save schema49; installed marshalling and actual PT
+  zeros plus ordinary post-removal attenuation are verified. Production angular
+  target/arrival/handedness and all valid original gates remain intact. Incorrect
+  MAX oracle assertions and a postfeedback232 equality are corrected at their
+  literal observed phase, with full-rewind/retained-target assertions added.
+  Final arm build130747 and focused130828 (including SavePayload) pass; affected
+  130919 passes54 (34 clean/20 warned), scenario131021 passes both290/81-event
+  scenarios. Final normal angular131022.104742 and matched131022.135741 paired
+  public receipts pass; refreshed moving131022.138743 retains the99-input prefix
+  SHAaf9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515
+  (UTF8 LF join without terminal LF). Native44f20/178f32²1.0501432049677004 versus
+  retail44f26/f32².57965414909080337/no178 remains OPEN. Attached movement-allowed
+  damping/pending-force mapping, finite tensor, semantic shadow material, pair
+  combination, original23/88 and full L0 remain OPEN. Final exact-path diff/hash
+  and retention-safe copied receipts are under
+  E:/elysium-work/codex/l0-angular-effect-20261011/final-manifest.json.
+  Pipeline54 is unchanged; historical map2 index was pruned by automatic retention.
+  Coordinator exact map2 rerun131346 passes2 clean; default131157 passes189
+  (110 clean/79 warned), original bounded131232 passes19 across both hosts, and
+  doctor131418 exits0 with21 existing policy warnings.
+  Next bounded contract: recover forbidden-rotation native inertia/inverse consistency
+  and body-state lifecycle through supported Chaos setters, reusing the confirmed
+  finite rule/unit walk. Named observers are contact torque, solved angular motion,
+  pusher feedback, removal and Physics save/restore. Chaos owns original geometry
+  inertia. Material pair response remains separately queued until required; this
+  prerequisite does not claim generalized physics parity.
+
 - Supported shape/body readback packet (2026-10-11; coordinator reviewed/gated):
   exact public ABI/lifetime and paired read-only calls establish authored cube support,
   separate AABB padding, shadow material/damping/finite tensor and removal semantics.
