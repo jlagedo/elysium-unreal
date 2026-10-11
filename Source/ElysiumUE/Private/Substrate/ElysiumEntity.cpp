@@ -16,6 +16,18 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumEntityBase, Log, All);
 
+void FElysiumEntity::VPhysicsSetObject(void* Object)
+{
+	// vampire.dll 0x100a6490: nonnull-over-nonnull warns, including the same identity.
+	// Clearing/replacement are reference writes, not destruction or shadow registration.
+	if (PhysicsObject && Object)
+	{
+		UE_LOG(LogElysiumEntityBase, Warning, TEXT("Overwriting physics object for %s"),
+			Def ? *Def->Classname : TEXT(""));
+	}
+	PhysicsObject = Object;
+}
+
 void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass)
 {
 	Def = &InDef;

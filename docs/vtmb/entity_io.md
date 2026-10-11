@@ -3433,9 +3433,13 @@ skip this same-layer chain. Base Spawn and `l0_base_spawn_defaults` remain open.
 
 **Removal prerequisite, exact chain.** `UpdateOnRemove` `0x100a47d0` reaches virtual slot 225
 `0x100b5040`: non-null `m_pPhysicsObject` (+0x36c) calls `PhysRemoveShadow` `0x1002ee60`, then
-destroy helper `0x10158520`, then clears the pointer. Current slot 225 is empty; the live
-physics-reference producer (`VPhysicsSetObject` `0x100a6490` / `VPhysicsSwapObject` `0x100a68f0`)
-and shadow/object lifetime are unfinished L0 pieces, not an upward hook. Also, move unlink
+destroy helper `0x10158520`, then clears the pointer. The helper first calls the saved-physics
+recipe manager slot3 (`1000ed68->10045110`), then environment deletion. It is not a collision-pair
+cleanup. Current base slot225 is empty; the selected real model adapter retires its native actor
+and reference, but generic saved-recipe/shadow lifetime remains open. Independent SetObject
+`0x100a6490` and base object-list `0x100a6ad0` now consume the real selected native actor identity.
+SwapObject `0x100a68f0` and complete shadow/object lifetime are unfinished L0 pieces, not an
+upward hook. Also, move unlink
 `0x1012c840` -> `0x1012c7f0` clears links BEFORE `SetAngles(GetAbsAngles())` and
 `SetOrigin(GetAbsOrigin())`; current `ClearMoveLinks` already clears before its getters, but
 folds unparented local/absolute words afterwards. Full cache equivalence needs the cached-transform

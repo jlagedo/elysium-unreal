@@ -33,8 +33,26 @@ void FElysiumPhysProp::Spawn()
 
 void FElysiumPhysProp::VPhysicsDestroyObject()
 {
-    ElysiumModelPhysics::Destroy(Visual);
+    RetireModelBody();
     bSimulating = false;
+}
+
+void FElysiumPhysProp::RetireModelBody()
+{
+	// Selected model adapter lifetime only: generic 0x100b5040's shadow/save-recipe
+	// cleanup remains open. The native body goes away before its entity reference clears.
+	ElysiumModelPhysics::Destroy(Visual);
+	VPhysicsSetObject(nullptr);
+}
+
+bool FElysiumPhysProp::CreateModelBody(FString& OutError)
+{
+	RetireModelBody();
+	if (!ElysiumModelPhysics::Create(Visual, World->PhysicsSurfaces(),
+		MassBias, MassOverride, (SpawnFlags & 1) != 0, OutError)) return false;
+	// 0x100a5ea0 / 0x100a6490: publish only the successfully created actual body.
+	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Visual));
+	return true;
 }
 
 void FElysiumPhysProp::Kill()
@@ -210,8 +228,7 @@ void FElysiumPhysProp::BuildBody()
         SetSolidFlags(0); // 100a5ea0 writes these before calling the model creator.
     }
     bSimulating = !Def->bSky && CVarPhysicsProps.GetValueOnGameThread() != 0 &&
-        ElysiumModelPhysics::Create(Visual, World->PhysicsSurfaces(),
-            MassBias, MassOverride, (SpawnFlags & 1) != 0, BodyError);
+        CreateModelBody(BodyError);
     if (!bSimulating)
     {
         Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -266,10 +283,11 @@ void FElysiumPhysProp::GateBody()
 	}
 	if (bDown)
 	{
-		ElysiumModelPhysics::Destroy(Visual);
+		RetireModelBody();
 	}
 	else if (bSimulating)
 	{
+		RetireModelBody(); // the profile/collision changes below may recreate a native actor.
 		Visual->SetCollisionProfileName(TEXT("PhysicsActor"));
 		// 0018 story 6: the profile reset the body's responses. A moving prop is still an entity
 		// prop to `StandardFilterRules 0x101d3080` (R2 section 2): met only under MONSTER
@@ -279,8 +297,7 @@ void FElysiumPhysProp::GateBody()
 		Visual->SetMaskFilterOnBodyInstance(PropMaskBits());
 		Visual->SetCollisionResponseToChannel(ElysiumCollision::SightChannel, ECR_Block);
 		FString BodyError;
-		bSimulating = ElysiumModelPhysics::Create(Visual, World->PhysicsSurfaces(),
-			MassBias, MassOverride, (SpawnFlags & 1) != 0, BodyError);
+		bSimulating = CreateModelBody(BodyError);
 	}
 }
 

@@ -19,6 +19,12 @@ bool ElysiumModelPhysics::IsActive(UStaticMeshComponent* Component)
 	return Body && Body->IsInstanceAwake();
 }
 
+Chaos::FSingleParticlePhysicsProxy* ElysiumModelPhysics::ActorIdentity(UStaticMeshComponent* Component)
+{
+	const FBodyInstance* NativeBody = Identity(Component);
+	return NativeBody ? NativeBody->GetPhysicsActor() : nullptr;
+}
+
 void ElysiumModelPhysics::Destroy(UStaticMeshComponent* Component)
 {
 	if (Component)

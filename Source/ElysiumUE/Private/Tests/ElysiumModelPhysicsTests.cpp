@@ -10,6 +10,7 @@
 #include "ElysiumPhysicsSurfaceProps.h"
 #include "Substrate/ElysiumModelPhysics.h"
 #include "Substrate/ElysiumPhysProp.h"
+#include "Substrate/ElysiumNpcKernelShape.h"
 #include "Visual/ElysiumPreparedPropModels.h"
 #include "Engine/StaticMesh.h"
 #include "PhysicsEngine/BodySetup.h"
@@ -125,6 +126,50 @@ bool FElysiumModelPhysicsCallerTest::RunTest(const FString&)
 	auto* Prop = static_cast<FElysiumPhysProp*>(EntityWorld.Resolve(EntityWorld.SpawnRuntimeEntity(MoveTemp(BodyDef))));
 	if (!TestNotNull(TEXT("actual entity factory and Spawn caller"), Prop)
 		|| !TestNotNull(TEXT("actual prepared factory Chaos body"), ElysiumModelPhysics::Identity(Prop->Visual))) return false;
+	TestTrue(TEXT("entity reference is actual native actor, not component/body storage"),
+		Prop->VPhysicsGetObject() == ElysiumModelPhysics::ActorIdentity(Prop->Visual));
+	FElysiumEntityDef PointDef;
+	PointDef.Classname = TEXT("info_target"); PointDef.TargetName = TEXT("identity_alias");
+	auto* Point = EntityWorld.Resolve(EntityWorld.SpawnRuntimeEntity(MoveTemp(PointDef)));
+	auto* Other = static_cast<FElysiumPhysProp*>(EntityWorld.Resolve(EntityWorld.SpawnRuntimeEntity(
+		ElysiumModelPhysicsTest::Def(TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl"), TEXT("other_body")))));
+	if (!TestNotNull(TEXT("registered base receiver"), Point)
+		|| !TestNotNull(TEXT("second real native producer"), Other)
+		|| !TestNotNull(TEXT("second actual actor identity"), Other->VPhysicsGetObject())) return false;
+	void* OutputObjects[2] = { Other->VPhysicsGetObject(), Other->VPhysicsGetObject() };
+	TestEqual(TEXT("base absent body returns zero with positive capacity"), Point->VPhysicsGetObjectList(OutputObjects, 2), 0);
+	TestTrue(TEXT("absent output untouched"), OutputObjects[0] == Other->VPhysicsGetObject());
+	TestEqual(TEXT("absent body does not dereference null output"), Point->VPhysicsGetObjectList(nullptr, 1), 0);
+	Point->VPhysicsSetObject(Prop->VPhysicsGetObject());
+	TestEqual(TEXT("actual base list returns exactly one"), Point->VPhysicsGetObjectList(OutputObjects, 2), 1);
+	TestTrue(TEXT("base output aliases actual producer"), OutputObjects[0] == Prop->VPhysicsGetObject());
+	TestTrue(TEXT("base list never writes element one"), OutputObjects[1] == Other->VPhysicsGetObject());
+	TestEqual(TEXT("zero capacity preserves output"), Point->VPhysicsGetObjectList(OutputObjects, 0), 0);
+	TestEqual(TEXT("negative capacity never dereferences null output"), Point->VPhysicsGetObjectList(nullptr, -1), 0);
+	TestTrue(TEXT("rejected output still retains prior value"), OutputObjects[0] == Prop->VPhysicsGetObject());
+	AddExpectedError(TEXT("Overwriting physics object for info_target"), EAutomationExpectedErrorFlags::Contains, 2);
+	Point->VPhysicsSetObject(Other->VPhysicsGetObject());
+	Point->VPhysicsSetObject(Other->VPhysicsGetObject()); // identical nonnull assignment also warns.
+	TestTrue(TEXT("replacement changes actual alias"), Point->VPhysicsGetObject() == Other->VPhysicsGetObject());
+	TestNotNull(TEXT("overwrite does not destroy first producer"), ElysiumModelPhysics::ActorIdentity(Prop->Visual));
+	Point->VPhysicsSetObject(nullptr);
+	Point->VPhysicsSetObject(nullptr); // absent-to-absent is silent.
+	TestNotNull(TEXT("clear does not destroy replacement producer"), ElysiumModelPhysics::ActorIdentity(Other->Visual));
+	TestEqual(TEXT("cleared base list is empty"), Point->VPhysicsGetObjectList(nullptr, MAX_int32), 0);
+	for (const auto& Row : ElysiumNpcKernelShape::EntitySlotRows())
+	{
+		if (Row.Slot == 233) TestTrue(TEXT("complete base list is a hand body in census"), Row.Body == EElysiumNpcSlotBody::Hand);
+	}
+	Other->ScriptHide();
+	TestNull(TEXT("actual ScriptHide retirement clears entity reference"), Other->VPhysicsGetObject());
+	TestNull(TEXT("actual ScriptHide retires native actor"), ElysiumModelPhysics::ActorIdentity(Other->Visual));
+	Other->ScriptUnhide();
+	TestNotNull(TEXT("actual ScriptUnhide recreates native actor"), ElysiumModelPhysics::ActorIdentity(Other->Visual));
+	TestTrue(TEXT("unhide publishes current live identity, regardless of allocator reuse"),
+		Other->VPhysicsGetObject() == ElysiumModelPhysics::ActorIdentity(Other->Visual));
+	Other->InputBreak(FElysiumInputArgs());
+	TestNull(TEXT("actual Break retirement clears entity reference"), Other->VPhysicsGetObject());
+	TestNull(TEXT("actual Break retires native actor"), ElysiumModelPhysics::ActorIdentity(Other->Visual));
 	TestEqual(TEXT("production caller mass precedence"), Prop->Visual->GetMass(), 9.f);
 	TestEqual(TEXT("real datamap massbias field"), Prop->MassBias, 2.f);
 	TestEqual(TEXT("real datamap override_mass field"), Prop->MassOverride, 9.f);
@@ -133,6 +178,9 @@ bool FElysiumModelPhysicsCallerTest::RunTest(const FString&)
 	TestEqual(TEXT("production authored physics solid word"), Prop->GetSolid(), 6);
 	TestEqual(TEXT("production physics movetype word"), Prop->GetMoveType(), 7);
 	TestFalse(TEXT("production authored sleep flag"), ElysiumModelPhysics::IsActive(Prop->Visual));
+	void* SleepingObject = nullptr;
+	TestEqual(TEXT("live asleep body remains enumerable"), Prop->VPhysicsGetObjectList(&SleepingObject, 1), 1);
+	TestTrue(TEXT("sleep does not retire native identity"), SleepingObject == ElysiumModelPhysics::ActorIdentity(Prop->Visual));
 	Prop->InputWake(FElysiumInputArgs()); TestTrue(TEXT("real Wake input"), ElysiumModelPhysics::IsActive(Prop->Visual));
 	Prop->SetRuntimeOrigin(FVector(44,55,66));
 	TWeakObjectPtr<UStaticMeshComponent> OldComponent = Prop->Visual;
@@ -141,16 +189,21 @@ bool FElysiumModelPhysicsCallerTest::RunTest(const FString&)
 	Prop->SetModel(AbsentPath.GetCharArray().GetData());
 	TestTrue(TEXT("model replacement retires component"), !OldComponent.IsValid() || OldComponent->IsBeingDestroyed());
 	TestNull(TEXT("replacement no-phy model has no dynamic identity"), ElysiumModelPhysics::Identity(Prop->Visual));
+	TestNull(TEXT("failed replacement clears entity reference"), Prop->VPhysicsGetObject());
 	Prop->SetModel(BodyPath.GetCharArray().GetData());
 	TestNotNull(TEXT("replacement production native identity"), ElysiumModelPhysics::Identity(Prop->Visual));
+	TestTrue(TEXT("replacement entity reference is the current live native actor"),
+		Prop->VPhysicsGetObject() == ElysiumModelPhysics::ActorIdentity(Prop->Visual));
 	TestTrue(TEXT("replacement uses current entity pose"), Prop->Visual->GetComponentLocation().Equals(Prop->Origin));
 	Prop->Kill(); TestNull(TEXT("entity Kill retires native identity"), ElysiumModelPhysics::Identity(Prop->Visual));
+	TestNull(TEXT("Kill clears entity reference"), Prop->VPhysicsGetObject());
 	auto AbsentDef = ElysiumModelPhysicsTest::Def(TEXT("models/scenery/structural/society/chair.mdl"), TEXT("absent"));
 	AbsentDef.Origin = FVector(10000, 10000, 10000);
 	auto* Absent = static_cast<FElysiumPhysProp*>(EntityWorld.Resolve(EntityWorld.SpawnRuntimeEntity(MoveTemp(AbsentDef))));
 	if (!TestNotNull(TEXT("real no-phy prop remains entity"), Absent) || !TestNotNull(TEXT("real no-phy visual remains"), Absent->Visual)) return false;
 	TestTrue(TEXT("no-phy visual has native fallback geometry"), Absent->Visual->GetStaticMesh()->GetBodySetup()->AggGeom.GetElementCount() > 0);
 	TestNull(TEXT("fallback geometry does not invent source body"), ElysiumModelPhysics::Identity(Absent->Visual));
+	TestNull(TEXT("no-phy entity has no reference"), Absent->VPhysicsGetObject());
 	TestFalse(TEXT("no-phy has no backend static actor either"), Absent->Visual->GetBodyInstance()->IsValidBodyInstance());
 	TestFalse(TEXT("no-phy production caller inert"), Absent->bSimulating);
 	TestEqual(TEXT("no-phy production collision admission"), Absent->Visual->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
@@ -167,6 +220,15 @@ bool FElysiumModelPhysicsCallerTest::RunTest(const FString&)
 	TestEqual(TEXT("calloc default massbias"), Live->MassBias, 0.f);
 	TestEqual(TEXT("calloc default mass override"), Live->MassOverride, 0.f);
 	TWeakObjectPtr<UStaticMeshComponent> LastComponent = Live->Visual;
+	// Exercise explicit adapter retirement, then leave an actual live actor for world teardown.
+	Live->VPhysicsDestroyObject();
+	TestNull(TEXT("explicit adapter retirement clears entity reference"), Live->VPhysicsGetObject());
+	TestEqual(TEXT("retired production list empty"), Live->VPhysicsGetObjectList(nullptr, 1), 0);
+	Live->SetModel(AbsentPath.GetCharArray().GetData());
+	Live->SetModel(BodyPath.GetCharArray().GetData());
+	TestTrue(TEXT("model replacement creates a current actual actor"), Live->VPhysicsGetObject() != nullptr
+		&& Live->VPhysicsGetObject() == ElysiumModelPhysics::ActorIdentity(Live->Visual));
+	LastComponent = Live->Visual;
 	EntityWorld.Teardown();
 	TestTrue(TEXT("world teardown retires live backend body"), !LastComponent.IsValid()
 		|| !LastComponent->GetBodyInstance()->IsValidBodyInstance());

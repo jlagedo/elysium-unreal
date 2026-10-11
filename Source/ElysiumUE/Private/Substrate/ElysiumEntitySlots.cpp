@@ -1656,11 +1656,16 @@ void FElysiumEntity::UpdatePhysicsShadowToCurrentPosition(float)
 // slot 233 0x100a6ad0 (sdk) `int VPhysicsGetObjectList(IPhysicsObject**, int)`
 //   takes `IPhysicsObject**`
 //   layer 0, story 29c
-int32 FElysiumEntity::VPhysicsGetObjectList(void*, int32)
+int32 FElysiumEntity::VPhysicsGetObjectList(void* OutputObjects, int32 Capacity)
 {
-	FireEntitySlot(TEXT("CBaseEntity::VPhysicsGetObjectList"), TEXT("0x100a6ad0"), TEXT("29c"),
-		DebugString());
-	return {};
+	// vampire.dll 0x100a6ad0: test the stored reference, then signed positive capacity.
+	// The successful arm writes only element zero; rejected arms never touch the output.
+	if (VPhysicsGetObject() && Capacity > 0)
+	{
+		*static_cast<void**>(OutputObjects) = VPhysicsGetObject();
+		return 1;
+	}
+	return 0;
 }
 
 // slot 234 0x10035780 (sdk) `void PhysicsPushEntity(Vector&, trace_t*)`
@@ -2571,7 +2576,7 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void(float)>::Test(&FElysiumEntity::UpdatePhysicsShadowToCurrentPosition),
 				nullptr },
 			{ 233, TEXT("0x100a6ad0"), TEXT("CBaseEntity"), TEXT("VPhysicsGetObjectList"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Hand, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32(void*, int32)>::Test(&FElysiumEntity::VPhysicsGetObjectList),
 				nullptr },
 			{ 234, TEXT("0x10035780"), TEXT("CBaseEntity"), TEXT("PhysicsPushEntity"),

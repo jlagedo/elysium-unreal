@@ -425,7 +425,7 @@ NPC slot 229 is inherited empty; NPC pose reconciliation occurs before STEP in `
 with trace/think phases and target submission after logical movement. Current pre-think actor
 sampling is not this consumer order.
 
-`VPhysicsDestroyObject 0x100b5040` removes the shadow handle, forgets collision identity through
+`VPhysicsDestroyObject 0x100b5040` removes the shadow handle, forgets the saved body recipe through
 `0x10158520`, asks environment slot 20 `0x26010f80` to destroy/queue the body, then clears the
 entity reference. The owned-list entry disappears immediately; environment flags +0x61/+0x62
 defer final deletion to `0x26011240`. The active list is repaired before the deleting destructor.
@@ -441,6 +441,32 @@ open. Exact clock limits/contact producers and damaged quaternion/parameter alia
 to be walked before an engine adapter is a complete service. Unreal may replace solver algorithms
 under AGENTS.md only with the retail contract/state/event sequence preserved. No such replacement
 acceptance or object/controller runtime implementation is claimed by this recovery.
+
+### Actual entity body identity and saved-recipe removal [decompiled/PE, 2026-10-11]
+
+Vampire.dll100a6490 SetObject warns on nonnull-over-nonnull, even identical pointer, then assigns
+on every arm. It performs no old-body destruction or shadow registration. Base233100a6ad0 tests
+nonnull stored body and signed capacity >0; it writes only output[0] and returns1. Other arms
+return0 without output writes. The real selected PhysProp producer now supplies the actual live
+Chaos actor pointer rather than component/FBodyInstance storage, with reference retirement on
+every existing native lifecycle path. Tests use imported real bodies and actual registered base
+and prop operations. No fabricated presence word, target or historical address-uniqueness rule.
+
+Fresh PE read1053c5e0 yields106bda64. Ctor10043a00 installs saved-physics manager table10449420
+there. Helper10158520 calls manager#3 thunk1000ed68->10045110 before environment#20. It removes
+the first matching body in its model-recipe map, returning immediately, otherwise searches/removes
+the bbox-recipe map. Model create1002e3a0's success calls manager#2 thunk10012f12->10044db0 with
+body/model, inserting the recipe association. This corrects the older claim that helper10158520
+forgot collision-pair state. The observable is saved-body geometry reconstruction/association
+lifetime; Source red-black trees and free lists are mechanics, not required substrate layout.
+This packet implements neither recipe registration/save consumer nor generic destruction225.
+
+Null Swap100a68f0 removes shadow membership first, warns when old body absent, then assigns;
+generic225 removes shadow membership, saved recipe, requests deletion and clears reference.
+Those complete chains remain open. Actual selected model props have no shadow membership, so
+their native retirement does not invent registry state. Chaos owns native contact/body removal.
+Solved226 remains open through absolute setters, trigger touch, child relink and pusher feedback;
+no component-to-Origin shortcut or transform-cache candidate is accepted. Original runs remain23/88.
 
 ### Historical BBoxToCollide geometry construction [PE/execution, 2026-10-10; runtime removed]
 

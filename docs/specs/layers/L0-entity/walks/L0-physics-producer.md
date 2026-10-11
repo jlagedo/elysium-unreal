@@ -203,8 +203,8 @@ solved body pose to the proposed entity motion, can rewind local pose/time, and 
 slot 44 to obtain the blocking entity before Blocked/MoveDone. Copying the target would hide
 this blocked state. NPC slot 229 is inherited empty `0x100273d0`; it is not an NPC pose writer.
 
-`VPhysicsDestroyObject 0x100b5040` removes the shadow entry, calls `0x10158520` to forget collision
-identity and invoke environment slot 20, then clears the entity reference. `0x26010f80` removes
+`VPhysicsDestroyObject 0x100b5040` removes the shadow entry, calls `0x10158520` to forget the saved
+body recipe and invoke environment slot 20, then clears the entity reference. `0x26010f80` removes
 the owned-list entry immediately; if environment+0x61 or +0x62 is set it marks object+0x3d bit 4
 (literal OR 4) and queues destruction. Otherwise it removes the active entry, repairs the
 swapped active index, and invokes the deleting destructor. `0x26011240` drains queued objects.
@@ -214,6 +214,41 @@ Object destructor `0x26016c10` first removes its controller (`0x26018600 -> env 
 through VPhysics service slot 1, clears its global, and destroys/frees the shadow registry.
 
 ## Exact lower inputs and repaired implementation boundaries
+
+### Independent actual model-body reference packet (2026-10-11)
+
+Only `VPhysicsSetObject 0x100a6490` and base `VPhysicsGetObjectList 0x100a6ad0` are selected
+complete contracts. Set warns whenever both references are nonnull, including identical references;
+it assigns on every arm and neither destroys the old body nor registers a shadow. The list tests
+stored nonnull identity then signed capacity >0; success writes only output[0] and returns1. Failure
+returns0 without touching output. Null output with admitted body/capacity is not a safe retail arm.
+
+The actual prepared PhysProp factory supplies a live Chaos actor (`FSingleParticlePhysicsProxy*`),
+not the component or the reusable FBodyInstance address. Successful native creation publishes it;
+failed recreation, source absence, model replacement, hide/break, Kill and world teardown retire it.
+Reference clearing alone never destroys an aliased actor. No identity assertion requires allocator
+addresses to differ across recreation. Map `prop_physics`'s authored model/first solid and gameplay
+Wake/Break/constraint attachment supply the current observer; base list is the actual single-body
+enumeration used by physics/save consumers. Remaining save admission/serializer remains open.
+
+**Correction to the older destruction description:** `PTR_DAT_1053c5e0` points to106bda64, whose
+constructor10043a00 installs `CPhysSaveRestoreBlockHandler_at4` table10449420. Destroy helper
+10158520 calls this IPhysSaveRestoreManager slot3 thunk1000ed68->10045110, then environment#20.
+It is not collision-pair removal. Model creation1002e3a0 registers (body,model) on success through
+manager#2 thunk10012f12->10044db0. Removal10045110 searches the model map first and removes its
+first matching body entry, returning; absent model entry it searches/removes the bbox map. Pointer
+comparators/tree/free-list internals are not substrate requirements. The saved model/bbox recipe
+association and its lifetime are the observable requirement for reconstructing saved body geometry;
+that physics-save registration/consumer chain is not implemented by this reference-only packet.
+
+Swap100a68f0 and generic225 remain open: null Swap removes shadow membership before warning on
+absent old reference and assigning;225 with body removes shadow membership, retires saved recipe,
+requests body deletion and clears reference. The selected actual model producer has no shadow
+controller/membership; missing generic shadow callers are not required to fake one for it. Chaos
+owns contact removal/body release mechanics. No Source registry/tree/hash/allocator reconstruction,
+fake pair cleanup or full generic225 closure is implied. Solved226 still requires the complete
+absolute-setter, trigger-touch, child-relink and pusher feedback chains in retail order; direct
+component-to-Origin publication and the deferred r022a candidate are not introduced.
 
 The existing components are useful engine algorithms, but do not already implement this service:
 

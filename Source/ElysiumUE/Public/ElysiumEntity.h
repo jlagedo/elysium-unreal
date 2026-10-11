@@ -148,6 +148,14 @@ public:
 	// Static counterpart retains the same point-entity ownership and lifecycle.
 	UPrimitiveComponent* GenericStaticModelBody = nullptr;
 
+	// m_pPhysicsObject (+0x36c): the actual backend actor identity, independent of the
+	// embodiment/component and logical pose. Assignment never destroys the previous body.
+	void VPhysicsSetObject(void* Object); // vampire.dll 0x100a6490
+	void* VPhysicsGetObject() const { return PhysicsObject; }
+private:
+	void* PhysicsObject = nullptr;
+public:
+
 	// --- Base keyfields — the CBaseEntity contract (python_bridge.md) ---
 	// Registered once on the base class field table; every subclass inherits them through
 	// the chain walk. These are the live, writable copies (TargetName/Model mirror the def).

@@ -13,6 +13,14 @@ evidence, not new validation or acceptance of the layer closing gate.
 
 ## Current checkpoint
 
+- Independent actual body reference packet (2026-10-11; coordinator accepted): only SetObject
+  100a6490 and base object-list233100a6ad0 are complete. Real selected model-prop creation
+  publishes current Chaos actor identity; existing native retirement paths clear it. Sleeping
+  live bodies remain enumerable. Set/list neither own nor destroy aliased actors. Generic Swap,
+  slot225, saved-physics recipe registration/serialization and solved226 remain open; no body,
+  contact, timing or dormancy equivalence is claimed. Newly recovered10158520 first dispatch is
+  saved-recipe manager#3->10045110, not collision-pair cleanup. Original23/88 unchanged.
+
 - Selected model adapter prerequisite (2026-10-11): public first-solid importer and real
   PhysProp factory now transfer authored body inputs to Chaos and retire the native identity
   on source absence, replacement/removal/failure. Coordinator gates below pass. Older assets
@@ -81,6 +89,38 @@ evidence, not new validation or acceptance of the layer closing gate.
   Commit is reported with the coordinator handoff; no push or modernization acceptance.
 - Layer closure remains open: 65 unlanded runs, rebakes, default/arm and full arena gate,
   intermittent records in three boot orders, audit/hooks and state-bearing replacement checks.
+
+### Actual body reference worker evidence (2026-10-11)
+
+Stable runtime/test source frozen after final authored sleep/list assertions. Only SetObject
+100a6490 and base list233100a6ad0 close; actual selected model-prop actor publication/retirement
+supports their production inputs. PhysProp's pre-existing hide/break destruction is covered as
+an actual host lifecycle path, not accepted as complete retail dormancy behavior. No Source
+shadow/hash/tree reconstruction, solver, generic225/Swap, saved-physics consumer or226 closure.
+New oracle evidence corrects10158520 to saved body recipe removal before environment deletion.
+
+Final worker `uv run elysium build` succeeded, exit0,21.9s:
+`E:/elysium-work/logs/20261011T005517.939821Z-build.json`.
+`uv run elysium test Elysium.Substrate.ModelPhysics Elysium.Substrate.NpcKernelShape Elysium.Substrate.NpcKernelSlots`
+passed7/7, failed/notRun0 (6clean,1with the existing NPC-stuck warning in Defaults):
+`E:/elysium-work/reports/tests/20261011T005617.292284Z-elysium-substrate-modelphysics-elysium-s-52983098/index.json`.
+Both actual model production tests have0errors/0warnings. The two expected overwrite warnings
+are consumed and logged Verbose, proving different and identical nonnull replacement warnings.
+The tests cover actual native output, registered base aliases, clear/overwrite leaving producers
+alive, rejected/null outputs, element0-only write, asleep enumeration, hide/unhide/break, failed
+replacement, model recreation, explicit retirement, Kill and teardown. No allocator address
+uniqueness or manufactured physics-presence pointer is assumed.
+
+Bounded worker command
+`uv run elysium arena l0_entity_constructor_defaults l0_entity_parenting l0_collision_bounds_size l0_named_think_context_storage`
+passed4/4; all first_unmet values null and the only host exited0. Merged and host JSON read:
+`E:/elysium-work/reports/arena/20261011T005657.204909Z/index.json` and `arena/index.json`.
+These are regressions, not a complete body/publication record. Existing Unreal Python AgentSkill
+startup errors and unrelated NPC/stub warnings remain. No default/full-arm/full-arena, arm
+family, packaged cook or layer-close gate ran by this worker. Earlier005150build and005452tests
+preceded final source freeze and are not the final evidence. Coordinator gates are separate.
+Original23/88 unchanged. Next: actual saved-physics model/bbox recipe/save-consumer lifetime,
+generic shadow/lifetime and ordered solved publication, then bounds/cache. No assets migrated.
 
 ### Compact reconstruction removal worker evidence (2026-10-10)
 
@@ -538,3 +578,32 @@ Inspected inherited base225/226 no-op comments and exact CAISound audit rows now
 retail removal clears shadow/identity and solved movetype7 pose publishes before touch/relink;
 selected prop override is narrower. No runtime callback metadata or behavior changed in this
 review correction. git diff --check passed. No original run closes;23/88 remains unchanged.
+
+## Actual body reference coordinator acceptance (2026-10-11)
+
+Reviewed all runtime/test paths, complete SetObject/base233 arms and actual imported producer
+outputs/lifetime. No transform shortcut or engine internal reconstruction was added. Corrected
+10158520 saved-recipe recovery is persisted. Generic Swap/225/226 and recipe/save consumers
+remain open; original23/88 unchanged. Runtime/tests frozen before coordinator gates.
+Build passed: logs/20261011T005716.857665Z-build.json.
+Default175/175 (96Success,79SuccessWithWarnings,failed/notRun0):
+reports/tests/20261011T005727.431677Z-elysium-session-elysium-substrate/index.json.
+Touched ModelPhysics/census/motor/Sight13/13 (7clean,6existingwarnings,failed/notRun0):
+reports/tests/20261011T005909.261420Z-elysium-substrate-modelphysics-elysium-s-eb68c02a/index.json.
+That command exited7 due the empty incorrect Elysium.Arm.Geometry.PropSolid prefix.
+Corrected Elysium.Arm.PropSolid3/3clean passed:
+reports/tests/20261011T005931.764454Z-elysium-arm-propsolid/index.json.
+Both ModelPhysics tests remain zero errors/warnings. All test JSONs were read.
+
+Bounded18arena18/18passed, both hosts exit0, merged/host JSON read:
+reports/arena/20261011T005953.953500Z/index.json. Ordinary first_unmet values null;
+the two expected-refusal selftests pass by inversion. Existing experimental Python AgentSkill
+startup errors and unrelated warnings remain. An earlier guessed harness_*_selftest command
+was rejected before boot in0.1s (logs/20261011T005949.430103Z-arena.json); actual records from
+listing were used for the successful gate. No regression and no full layer gate attempted.
+Gate reminder: verify registered names with rg before commands. Exact test prefixes are
+Elysium.Arm.PropSolid and Elysium.Arm.Geometry.Sight. Actual selftests are
+selftest_fixture_stages, selftest_retail_site_matches, selftest_entity_field_fails,
+selftest_entity_call_refused. All audit rows16columns; git diff --check clean.
+Next precise frontier: actual model/bbox saved recipe registration and its save reconstruction
+consumer/lifetime, then complete generic shadow/Swap/225 and solved publication chains.

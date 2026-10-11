@@ -74,6 +74,8 @@ public:
 
 private:
 	void BuildBody();
+	void RetireModelBody();
+	bool CreateModelBody(FString& OutError);
 
 	// Hidden/broken → undrawn, non-colliding, not simulating. Live → restore draw + (if enabled)
 	// simulation. Mirrors the whole-entity dormancy switch onto the physics body.

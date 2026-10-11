@@ -244,3 +244,20 @@ Selected prerequisite accepted by coordinator2026-10-11; exact evidence and the 
 correction are in progress.md. Next gate uses Elysium.Arm.Geometry.Sight. Generic identity
 callbacks/ordered lifetime and solved publication are the next concrete producer frontier;
 contact/dynamics/timing equivalence and model migration remain open.23/88 unchanged.
+
+## Actual native actor reference prerequisite (2026-10-11; broad run remains open)
+
+Complete independent functions: SetObject100a6490 and base233 object-list100a6ad0, with actual
+selected model-prop Chaos actor identity and all existing native retirement paths. Registered
+base aliases real model bodies; overwrite and clear leave the old producer alive. Live asleep
+bodies enumerate; no historical actor-pointer inequality is required across recreation.
+This does not close generic Swap/225/226, shadow, body/contact, timing or dormancy behavior.
+The actual saved model/bbox recipe manager removal10045110 before environment deletion is
+newly recovered;10158520 was previously mislabeled collision-pair cleanup. No Source hash/tree
+or allocator mechanism is a prerequisite. Next is real saved-physics recipe registration and
+save-consumer lifetime, then complete generic lifetime/shadow and ordered solved publication.
+Original completed runs remain23/88; worker evidence follows in progress.md. No r022a reapply.
+
+Coordinator accepted this independent prerequisite on2026-10-11: build/default175/175,
+touched13/13 plus corrected exact PropSolid3/3, bounded18/18 in two boots passed. Evidence
+and command-name corrections are in progress.md.23/88 unchanged; generic physics remains open.

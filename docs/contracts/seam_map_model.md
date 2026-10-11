@@ -1298,3 +1298,13 @@ an obsolete host bake, diagnosed for reimport; it is not source absence. The new
 recipe input invalidates selected model bakes without a global manifest version migration.
 The two validation witnesses were publicly reimported; unselected old assets are not claimed
 ready for the new adapter. No runtime source corpus or scratch-file reads are introduced.
+
+The entity's `m_pPhysicsObject` seam now receives the actual native Chaos actor identity after
+successful selected model creation, distinct from reusable FBodyInstance/component storage.
+SetObject100a6490 assigns (nonnull overwrite warns) without destroying or owning a previous
+actor. Base object-list233100a6ad0 returns that stored identity only for signed positive capacity,
+writes just element0, and leaves rejected output untouched. Existing selected adapter retirement
+clears the reference after native release on hide/break, SetModel, failure, Kill and teardown;
+recreation publishes the current live actor regardless of address reuse. Generic Swap/225, saved
+model/bbox recipe registration and serialization, shadow lifetime and solved226 publication stay
+open. The Source/IVP tree/hash/body allocator is not part of this seam; Chaos owns native mechanics.

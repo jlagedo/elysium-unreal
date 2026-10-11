@@ -3264,6 +3264,13 @@ void FElysiumEntityWorld::Teardown()
 	}
 
 	// Epoch 0 matches no minted handle, so every outstanding handle goes stale at once.
+	// Retire selected model-prop references before their components and entity slots disappear.
+	// Only the selected model-prop adapter currently supplies an actual physics identity;
+	// this does not complete base UpdateOnRemove or generic slot 225's missing services.
+	for (const TUniquePtr<FElysiumEntity>& Dying : EntityList)
+	{
+		if (Dying && Dying->VPhysicsGetObject()) Dying->VPhysicsDestroyObject();
+	}
 	Epoch = 0;
 	ComfortTargetList.Reset();
 	EventQueue.Reset();
