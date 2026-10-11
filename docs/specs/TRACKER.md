@@ -1,6 +1,8 @@
 # Tracker — the layer sequence (2026-10-06)
 
-**What's next = the first unfinished layer, then its first open story.** The order and why:
+**What's next = the first unfinished layer, then its next ready delivery milestone.** L0 uses
+[`delivery-plan.md`](layers/L0-entity/delivery-plan.md), with its compact
+[`checkpoint.md`](layers/L0-entity/checkpoint.md). The order and why:
 [`layers/README.md`](layers/README.md). The rules: `AGENTS.md` § Project rules (layer order) and
 § When a problem is reported (missing inputs, upward hooks). What still needs a READ:
 [RE-BACKLOG.md](RE-BACKLOG.md).
@@ -9,9 +11,12 @@ The previous tracker — 0002's character-AI sequence, steps 1–3 — is
 [`0002-npc-ai/tracker-record-2026-10-06.md`](0002-npc-ai/tracker-record-2026-10-06.md); 0002 and
 0003–0017 are parked, their open work mapped to layers in `layers/README.md`.
 
-- [ ] **L0 entity** — [`layers/L0-entity/spec.md`](layers/L0-entity/spec.md): 165 stories, 264 briefs in
-  88 worker runs (`runs.md`). First: story 0, the test instrument (`layers/harness.md`), and the two
-  tooling stories; then the stories in `stories-table.md` order. Witnesses `sp_tutorial_1` + `sm_hub_1`.
+- [ ] **L0 entity** — [`layers/L0-entity/spec.md`](layers/L0-entity/spec.md): subsystem deliverables
+  D01–D11 plus retained harness/tooling, traced to all 264 original briefs. Owner authorized
+  resume under [`goal.md`](layers/L0-entity/goal.md); main first reviews/commits the plan and
+  reuses its sound checkpoint at `8f8aea1b`. Next foundation:
+  D02 bodies/queries/transforms, using accepted work. The historical 23/88 count is not percent
+  complete. Retail-save importing is excluded. Witnesses `sp_tutorial_1` + `sm_hub_1`.
 - [ ] **L1 animation** — [`layers/L1-animation/spec.md`](layers/L1-animation/spec.md)
 - [ ] **L2 character** — [`layers/L2-character/spec.md`](layers/L2-character/spec.md): the combat character with stats, disciplines, feeding; weapons; inventory
 - [ ] **L3 player** — [`layers/L3-player/spec.md`](layers/L3-player/spec.md)

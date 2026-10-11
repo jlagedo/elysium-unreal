@@ -1,5 +1,11 @@
 # 0017 save-game — complete save/load and import a VtMB run
 
+> **Scope correction, 2026-10-11:** retail-save importing is an explicit non-goal. The importer,
+> dry-run decoder, retail roster conversion and import acceptance passages below are historical,
+> excluded requirements. Native Elysium save/load and gameplay-state restoration remain in scope;
+> saves are disposable and require no version migration. Follow the active
+> [L0 delivery plan](../layers/L0-entity/delivery-plan.md), not this parked witness's import arm.
+
 > **Parked 2026-10-06.** Work proceeds by layers ([`docs/specs/layers/README.md`](../layers/README.md)); this spec's open stories are mapped there and its witness is an acceptance scenario.
 
 

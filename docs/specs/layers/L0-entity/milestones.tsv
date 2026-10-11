@@ -1,0 +1,29 @@
+id	deliverable	depends_on	gate
+H1	D00		Harness/tooling baseline retained; observations use real named contracts
+E1	D01	H1	Construction identity keyfields registries base slots and model metadata
+P1	D02	E1,S1	Production body inputs identity lifecycle velocity/replacement and owned native saved state
+S1	D11	E1	Native block registry archive identity/fixup and ordered restore phases
+E2	D01	E1,P1,S1	Think modes/deadlines stamps clock/RNG state spawn/remove and physical deletion fences
+P2	D02	P1	Real query/filter/result material-selection and mutation notification contracts
+P3	D02	P2,E2	Integrated shadow/pose/frame/parent/bounds contract including required live caller arms
+A1	D04	E1	Authored sound source resolution and actual Unreal asset readiness/lifetime
+A2	D04	A1,P3,E2,S1	Real sound emission update/stop ambient/scheme lifetime and owned saved state
+G1	D05	E2	Actual stimulus service identity admission slots capacity retention and expiry
+Q1	D06	E1,E2	Input variants names global/rule/configuration values and definitions
+Q2	D06	Q1,E2,P3,S1	Ordered queue timers outputs and native pending-delivery restoration
+M1	D03	P3,E2	Motion/water/conveyor and touch admission/enter/leave lifetime
+M2	D03	M1	Every required noclip parent custom STEP fly/toss rule arm
+M3	D03	M2,Q1,G1,S1	Push transaction rollback blocked feedback and complete movetype/child dispatch
+T1	D07	M1,Q2,S1	Trigger admission/rearm outputs and restore without duplicate touches
+T2	D07	M3,Q2,A2,G1,S1	Door/mover/knob/switch movement arrival blocked output/sound and saved phases
+I1	D08	P3,E2	Real prop/brush bodies and authored shape/admission contracts
+I2	D08	I1,M1,A2,G1,Q1	Contact-to-damage/material/audio/stimulus rules with actual attribution
+I3	D08	I2,Q2,S1	Break/debris/fade removal and owned saved state
+G2	D05	G1,I2,S1	Real L0 stimulus producer readback and saved pending stimulus state
+C1	D09	P3,E2,Q2	Constraint/rope endpoint resolution creation and cleanup
+C2	D09	C1,A2,I2,S1	Limits force/impact-entity break/disable outputs and constraint/rope saved state
+C3	D09	P1	Generic physics-asset bake positive/absent-source controls; higher gameplay handed off
+V1	D10	P3,Q2,S1	Effects activation/current transforms and owned L0 saved state
+E3	D01	E2,M3,Q2,A2,G1	World startup full L0 frame dispatch and teardown ordering
+S2	D11	S1,E3,T1,T2,I3,G2,C2,C3,V1	All L0 state owners restore with correct references clocks and no event replay
+S3	D11	S2	Safe native slot storage/admission cross-process load/travel and all L0 closing gates/scope accounting

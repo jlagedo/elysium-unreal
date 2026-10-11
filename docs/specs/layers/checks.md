@@ -1,5 +1,12 @@
 # Consistency checks
 
+The table below records the original 2026-10-06 static planning checks; it does not establish
+current producer readiness or acceptance coverage. The L0 replan adds
+[brief ownership](L0-entity/delivery-map.tsv), a [milestone graph](L0-entity/milestones.tsv)
+and [scope/handoff accounting](L0-entity/delivery-plan.md). Acyclic declared edges alone do not
+prove real runtime dependencies are complete. Old record existence did not prove coverage of
+appended parked requirements; fresh packets must close that gap.
+
 | check | failures | of | |
 |---|---|---|---|
 | every open core row is in exactly one story, or recorded as not work (done, engine, unreachable) | 0 | 1236 | pass |

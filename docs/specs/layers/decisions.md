@@ -46,25 +46,28 @@ the slot generator marks them `default:` like the other retail-default bodies. *
 The read-only planners that turned each subsystem into stories raised these. Each is about a
 modernization boundary or a scope cut; the stories proceed on retail's behaviour until decided.
 
-### L0
+### L0 — reconciled 2026-10-11
 
-- `L0-audio` — Owner decision: classify/register the 0x1022b590 -> 0x10175360 write to player+0x1e04 as an L3 upward hook, or explicitly reassign its ownership; hooks.tsv has no entry, so the SoundScheme story cannot close as an unlisted hook.
-- `L0-entity_core` — Owner decision: retain the existing single-origin and angle transform simplification as a named modernization, or restore retail local/absolute frame state and parent-inverse conversion at 0x100b2150, 0x100b1ac0, 0x100b2300, and 0x100b2510. The current port explicitly collapses these values.
-- `L0-entity_core` — Owner decision: define the Unreal replacement boundary for Source networking and edict services used by these rows, including ForceTransmit, dirty-state notification, and edict-backed PostConstructor paths; retain their game-visible flags and lifecycle effects either way.
-- `L0-entity_core` — Owner decision: choose whether to reproduce 0x101d1960's cyclic multi-client selection and cluster cache or keep the current one-player PVS seam as an explicit single-player scope cut.
-- `L0-entity_core` — Owner decision: 0x1023fd00 is marked engine-replaced in the layer audit; decide how Unreal collision queries preserve its strict squared-distance '< radius squared' boundary before accepting that replacement. 
-- `L0-movers_doors` — Scope decision: keep 0x1013dea0 CFuncBrush::Spawn in L0 brush/solidity work rather than widening this movers_doors packet to generic func_brush behavior.
-- `L0-movers_doors` — Modernization decision: retain and name the existing renderer replacement for Source visibility-portal updates at 0x100ef990, 0x100ef630 and 0x100f21d0 as a visual-only modernization; implement each row's remaining handle or restore semantics.
-- `L0-physics` — Owner decision: name whether UE/Chaos collision may replace Source movement simulation. If chosen, preserve retail trace results, callback order, blocked-time rollback, and contact gates as a named modernization boundary.
-- `L0-physics` — Owner decision: confirm the existing contact-tolerance and all-solid mappings as named geometry modernizations, or require retail parity before accepting the trace story.
-- `L0-physics` — Owner decision: accept UE asset/material loading as the rope Precache modernization while retaining retail base Spawn reset and endpoint initialization order.
-- `L0-physics` — Owner scope decision: keep physcannon acquisition/drop rows in L3, ragdoll/physics-chain rows in L1, player spawn placement in L3, NPC forget cleanup in L4, and dynamic-prop skin input outside L0 physics.
-- `L0-rules_cvars` — Scope: keep the stock single-player cut or explicitly add a Counter-Bite/multiplayer restoration. docs/vtmb/multiplayer.md says maxplayers is 1 and no multiplayer rules class ships; the rows below stay unplaced under the current scope despite the packet's static 108-map reach.
-- `L0-rules_cvars` — Law divergences: decide whether the 2-second floor, low-level 0..5 clamp, and extra PublishLawEvent are intentional named modernizations. Without that decision, restore the retail cvar and field-write behavior.
-- `L0-save_restore` — Choose whether exact Source token/size words from `0x101a05f0` are required, or whether the existing Unreal archive is the named wire-format replacement; save files are disposable, so this is a behavior-versus-format boundary.
-- `L0-save_restore` — Choose the Unreal physics-state serializer that preserves the `ShouldSavePhysics == true` admission and the save handler's timing; the current base slot returns false.
-- `L0-save_restore` — Choose the Unreal asset-loading replacement for `MODELNAME` and `SOUNDNAME` precaching in `0x101a2820`, preserving its restore ordering.
-- `L0-sound_list` — The owner must choose whether the 128-event serial/cursor bus is a named modernization for the retail 64-slot and reserved-client-index behavior, or whether the port will expose that retail lookup contract. The current bus does not establish equivalent slot identity, bounds or null-pool lifetime.
+The owner has already selected the Unreal-service/substrate-rule boundary and explicitly excluded
+retail-save importing. Follow [the active delivery plan](L0-entity/delivery-plan.md). The former
+list mixed scope choices with routine implementation and stale status; it is not an approval queue.
+
+- **Settled direction:** Unreal owns engine mechanisms. Preserve observable rules, native save
+  state, lifecycle and event order. Do not clone Source wire layouts, pools or IVP internals.
+- **Settled non-goals:** retail-save import, its dry-run decoder/roster conversion, migration of
+  disposable saves, and adding multiplayer to the single-player project.
+- **Routine work:** faithful parent frames, strict query thresholds, slot/retention semantics,
+  law cvar/state behavior, resource loading, renderer services, serializers and registration of
+  known L1–L5 hooks. No new owner permission is needed to implement the established contract.
+- **Potential owner decisions:** only an evidenced gameplay difference that the implementation
+  proposes to retain, or an actual scope change. Contact tolerances/all-solid mappings, callback
+  timing/material selection and law-event changes have no blanket approval.
+- **Retained scope accounting:** non-core constraint/animation-link family and generic physics
+  asset bake must be tied to a required core producer or explicitly dispositioned before L0
+  closes. The delivery map keeps them visible; it does not silently remove them.
+
+Existing runtime evidence and partial acceptance are in L0 `runs.md`/`progress.md`. This planning
+correction does not change implementation verdicts or resume the Goal.
 
 ### L1
 

@@ -5,6 +5,12 @@ the order of the beat specs (0001–0017), which cut through the layers and kept
 subsystem another spec owned (44 recorded stops in 0002 alone). The rules are in `AGENTS.md`
 § Project rules and § When a problem is reported.
 
+**L0 execution was replanned on 2026-10-11:**
+[`L0-entity/delivery-plan.md`](L0-entity/delivery-plan.md) defines subsystem deliverables,
+observable contracts and milestone dependencies. Its map accounts for every original brief,
+excludes retail-save importing and separates higher-layer remainders. Read its checkpoint before
+dispatch. The original numbers and bundles below are historical, not current readiness or ETA.
+
 | file | what |
 |---|---|
 | `README.md` | this: the layer map, how it was measured, the parked specs mapped to layers |
@@ -20,7 +26,7 @@ subsystem another spec owned (44 recorded stops in 0002 alone). The rules are in
 | `audit.tsv` | every retail function the 108 maps need: layer, subsystem, band (core / mid / tail), port status, the maps that reach it, a one-line role, the port lines that carry it, what is missing, and its plan (the story, or why it is not work) |
 | `hooks.tsv` | the upward hooks: a lower layer's function that calls into a higher layer (694 calls from 451 functions) |
 
-## The plan in numbers
+## Original plan in numbers (historical)
 
 | stage | stories | briefs | worker runs | worker-hours | stories ready now |
 |---|---|---|---|---|---|
@@ -122,13 +128,13 @@ layer it crosses is finished.
 | 0014 ragdoll | physics asset, death impulse, `prop_ragdoll` | L0 |
 | 0015 weapon-overlays | the overlay stack | L1; weapon side L2 |
 | 0016 input-pads | pad input | L3 |
-| 0017 save-game | run persistence, the retail-save importer | L0 (framework, transitions); each layer saves its own words with its stories |
+| 0017 save-game | native run persistence; retail-save importer excluded by owner | L0 (framework, transitions); each layer saves its own words with its stories |
 
 ## The sequence
 
 L0 entity → L1 animation → L2 character → L3 player → L4 NPC + L5 scripting → the map-specific
 tails, per hub group (`la`, `hw`, `sm`, `sp`, `ch`). What is next = the first unfinished layer, then
-its first open story (`TRACKER.md`).
+its next ready delivery milestone (L0 `delivery-plan.md`; `TRACKER.md`).
 
 ## Known gaps (2026-10-06)
 

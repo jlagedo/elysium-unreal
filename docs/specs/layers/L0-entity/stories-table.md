@@ -1,3 +1,10 @@
+# Original L0 story index
+
+This is the historical 165-story index. Its `ready` column only measured lower-layer calls;
+it is not dispatch authorization or a current dependency check. Use
+[delivery-plan.md](delivery-plan.md) and [delivery-map.tsv](delivery-map.tsv) for active scope,
+subsystem ownership, higher-layer handoffs and exclusions. Original files/IDs remain for evidence.
+
 | # | story | subsystem | size | rows | records | depends on | ready |
 |---|---|---|---|---|---|---|---|
 | 1 | [The test instrument: fixtures, entity_call, entity_field, retail_site](stories/L0.harness.test-instrument.md) | harness | L | 0 | 3 | — | yes |
@@ -159,8 +166,8 @@
 | 157 | [Prop switch sound events and reset state](stories/L0.movers_doors.l0-entity-io-prop-switch-sound-and-reset.md) | movers_doors | S | 2 | 1 | Map entity construction, Restore base entity transforms and runtime state, Sound | yes |
 | 158 | [Save content compatibility preflight](stories/L0.parked.l0-save-restore-content-compatibility-preflight.md) | parked | M | 0 | 1 | Save and restore blocks, Restore base entity transforms and runtime state, The t | yes |
 | 159 | [Semantic save and import diagnostics](stories/L0.parked.l0-save-restore-semantic-save-diagnostics.md) | parked | M | 0 | 1 | Save and restore blocks, Restore base entity transforms and runtime state, Map t | yes |
-| 160 | [Match retail ETABLE roster to native map definitions](stories/L0.parked.l0-save-restore-retail-save-roster-match.md) | parked | L | 0 | 1 | Restore a named datamap block, Restore base entity transforms and runtime state, | yes |
-| 161 | [Import a retail save into one native slot](stories/L0.parked.l0-save-restore-retail-save-native-slot-import.md) | parked | M | 0 | 1 | Save and restore blocks, Restore base entity transforms and runtime state, Map t | yes |
+| 160 | [Match retail ETABLE roster to native map definitions](stories/L0.parked.l0-save-restore-retail-save-roster-match.md) | parked | L | 0 | 1 | Restore a named datamap block, Restore base entity transforms and runtime state, | excluded |
+| 161 | [Import a retail save into one native slot](stories/L0.parked.l0-save-restore-retail-save-native-slot-import.md) | parked | M | 0 | 1 | Save and restore blocks, Restore base entity transforms and runtime state, Map t | excluded |
 | 162 | [Game frame simulation](stories/L0.entity_core.gameframe-simulation.md) | entity_core | L | 2 | 1 | Deferred entity deletion, Registered system callbacks, Entity physics simulation | yes |
 | 163 | [Surface impact feedback](stories/L0.physics.surface-impact-feedback.md) | physics | L | 6 | 1 | Physics friction sound, Physics attacker attribution, Physics object and collisi | yes |
 | 164 | [Breakable collision and death](stories/L0.physics.breakable-collision-lifecycle.md) | physics | L | 3 | 1 | Impact damage eligibility, Impact damage resolution, Surface impact feedback, Th | yes |

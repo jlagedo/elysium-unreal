@@ -1,5 +1,10 @@
 # Schedule
 
+> **Historical estimate, not a current schedule.** L0 now follows
+> [its delivery plan](L0-entity/delivery-plan.md). Same-layer producer gaps and inherited scope
+> corrections invalidate the L0 and aggregate hour estimates below. Do not derive a finish date
+> or cost from retail byte size or the original 88 bundles. Execution remains one run/worker.
+
 478 stories, 736 slice briefs, bundled into **337 worker runs** (`<layer>/runs.md`): one
 worker per run (`method.md`), one build at a time per checkout. Durations: 25 min fixed + 20 min per KB of
 retail code per run, a 5-min gate after each, 45 min to close each layer (measured in 0002,

@@ -1,5 +1,11 @@
 # Worker runs — L0-entity
 
+> **Historical bundles and implementation receipts.** Since 2026-10-11, dispatch follows
+> [delivery-plan.md](delivery-plan.md), [delivery-map.tsv](delivery-map.tsv) and the milestone
+> graph. The old `ready` flags, 88-run denominator and byte-based durations are not current
+> readiness, remaining-work or ETA measures. Keep accepted receipts; do not dispatch the
+> original bundles directly. Retail-save import is excluded, including its r088 entries.
+
 ## Declared raw material producer/effect — 2026-10-11 (after dc6c25bf)
 
 Fresh serial worker/root-reviewed precode contract and installed public API permit unchanged raw

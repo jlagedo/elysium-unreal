@@ -1,5 +1,14 @@
 # Contract checks — engine-replaced rows that bear state or event order (L0-entity)
 
+**Dispatch/acceptance correction, 2026-10-11:** each state-bearing row belongs to the service
+deliverable in [delivery-plan.md](delivery-plan.md), including rows without an open-function
+brief. Attach observer, input/output/event-order proof and the actual engine-backed consumer.
+The complete 77-row ownership/classification index is [service-contract-map.tsv](service-contract-map.tsv).
+Old blanket classifications are evidence to review, not proof. Do not copy Source memory layout
+or storage algorithms to satisfy an old note; preserve observable identity, capacity and failure
+semantics. Native saved-state meaning remains required; retail-save importing and wire compatibility
+do not. No verdict in this historical table is promoted to completed by the replan.
+
 `decisions.md` D3: Unreal does these jobs instead of the Source mechanism. The modernization rule admits
 that only with the retail contract kept — the same inputs, outputs and event order. Each row is checked
 before the layer closes (gate item 5): a record shows the contract holds, or the row becomes a named

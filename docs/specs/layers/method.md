@@ -1,5 +1,14 @@
 # Method — how a layer is executed
 
+**L0 scheduling override (2026-10-11):** use
+[`L0-entity/delivery-plan.md`](L0-entity/delivery-plan.md) and its brief/milestone maps.
+One bounded run advances an explicit subsystem closing requirement. The original L0 bundles,
+ready flags and direct briefs are reference material, not dispatch instructions. Reuse confirmed
+walks; interpret the retail-arm rule below through the vision's ownership test, not as an order
+to clone engine mechanisms. The coordinator's per-run gates, exact-path commit and no-push rule
+below still apply. The owner subsequently authorized resume under
+[`L0-entity/goal.md`](L0-entity/goal.md); main accepts the plan before code dispatch.
+
 The unit of work is a **run** (`<layer>/runs.md`): consecutive slice briefs of one subsystem that one
 worker finishes in one go. What follows replaces 0002's "method per story" (parked).
 
