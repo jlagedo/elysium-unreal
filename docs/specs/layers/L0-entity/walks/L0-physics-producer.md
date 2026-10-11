@@ -52,7 +52,9 @@ friction/elasticity/density/thickness/damping affect physical feel/body paramete
 gamematerial flags feed game rules, and sound slots/matrix choose audible authored events.
 Implicit defaults, base position and repeated keys govern interpretation of those authored
 inputs. Keep these as typed fields/names/indices, not an IVP memory-layout API. Existing audible
-consumers remain on the older divergent assets; body consumers are still unwired. Native row
+consumers remain on the older divergent assets. The selected-model body adapter now consumes
+typed friction/elasticity/density/thickness and authored body parameters; contact response,
+movement and audio consumers remain open. Native row
 bytes/template pointers are research evidence only and do not establish full material/body
 closure. Shipped expected data must be generated into ignored deployed artifacts; tracked tests
 contain only project-authored boundary inputs and code.
@@ -442,3 +444,41 @@ registration callbacks, game-data flags, active enumeration/deferred deletion, b
 callers, contact dampening/drag/rotinertialimit response and controller/timing consumers remain
 open. Real native input checks prove configuration/conversion, not retail angular/contact feel.
 r022a remains deferred. No original run closes (23/88 unchanged).
+
+## Selected saved-recipe prerequisite (2026-10-11)
+
+Confirmed1002e3a0 successful live creation ->manager#2 thunk10012f12 ->10044db0 model association;
+1002dfe0 BBoxToCollide ->10044c20 bounds,1002e7e0 successful custom body ->10044f60 bbox association.
+Removal10158520 ->manager#3 thunk1000ed68 ->10045110 removes first model match, otherwise bbox,
+before environment deletion. These maps feed Physics Save10043c70/Restore100440c0, one-object
+type1 reconstruction100443e0; physics-interaction.md/savegame_format.md record narrowed arms.
+
+Actual selected model Spawn now registers owned inputs on actual Chaos output; ordered Physics
+Save captures runtime body state, typed disposable archive persists it, and Physics Restore
+recreates native geometry/state before final reconnect. Sleeping retains recipe; replacement,
+failure, Kill/component destruction and teardown retire it. Base true eligibility and confirmed
+false overrides are implemented. Eligible aliases reconstruct independently per field; missing native recipes fence persistence
+with an explicit error. Downstream pointer graph fixups remain open. Save10043c70 itself does not deduplicate
+registered headers. Native mass/current damping join pose/velocities/activity/gravity as state;
+fluid enter/exit/cache restoration remains open.
+
+Root scoped the finite bbox native service prerequisite independently of retail Spawn: explicit
+min/max, surface and body parameters produce actual Chaos geometry, identity, saved reconstruction
+and retirement. No guessed default object record or CalcBounds producer is used. Actual bbox
+caller remains100a6150 ->InitSetup/225 +217/219 ->100a5d80 model type/surface/default ->
+1002dfe0/1002e7e0 ->SetObject/shadow caps/permissions/update registry. Static/shadow selection
+is unresolved. Generic Swap/225, solved226/touch/relink, contact/controller/multiobject state and
+r022a cache matrix stay open. Original23/88 unchanged; coordinator owns acceptance gates.
+
+Type1 env#50=26025400 dispatches26019450; PE26019483-260194bc allocates a new body per
+destination owner field. Only afterward is old/new mapping26025280 registered (#49 initialises
+at26025240). Thus eligible aliases independently reconstruct real native bodies, rather than
+coalescing one body's ownership by entity iteration. Base leaves own invisible service components
+and saved query profile/mask; SetObject clear remains non-destructive, selected225/Kill/destructor
+retire owned reconstruction only. Downstream controller/pointer graph fixups remain open.
+
+Saved-null arm100440c0 invokes225 for count<1. Null eligible fields persist presence=false/count0
+instead of being omitted. Physics restore retires baseline Spawn's body; prop225 sets bSimulating
+false and final GateBody leaves it absent. Actual Destroy ->Freeze ->archive ->ApplySnapshot checks
+null field/no native actor after reconnect. Generic shadow225 stays open. Revised opening now
+distinguishes completed selected-model material inputs from open contact/movement/audio consumers.

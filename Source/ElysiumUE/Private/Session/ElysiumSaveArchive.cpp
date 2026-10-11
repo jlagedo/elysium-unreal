@@ -446,6 +446,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedFade& F)
 
 FArchive& operator<<(FArchive& Ar, FElysiumMapSnapshot& M)
 {
+	if (Ar.IsSaving() && M.bPhysicsSaveFailed) { Ar.SetError(); return Ar; }
 	Ar << M.MapName << M.DefCount << M.FrozenAt << M.SaveBase; // 0x200962c0/0x101a0a80
 	// L0-r029: the Entities and EventQueue rows travel as the block set's stream (`.HL1`'s header and
 	// data areas, `docs/vtmb/savegame_format.md`), written by `Freeze` through CServerGameDLL slots
@@ -456,6 +457,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumMapSnapshot& M)
 	{
 		ElysiumSaveRestore::EncodeMapBlocks(M, nullptr, nullptr); // off-world: slot 23 has no entity list to scan
 	}
+	if (Ar.IsSaving() && M.bPhysicsSaveFailed) { Ar.SetError(); return Ar; }
 	Ar << M.BlockStream << M.BlockHeaderStart;
 	Ar << M.AbsentEntities;
 	// The global preamble's ADJACENCY rows (L0-r030): `connectionCount` rows of mapName, landmarkName,

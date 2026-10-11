@@ -13,11 +13,19 @@ evidence, not new validation or acceptance of the layer closing gate.
 
 ## Current checkpoint
 
+- Selected saved-recipe packet (2026-10-11; coordinator accepted):
+  actual model Spawn registers owned authored inputs on successful Chaos identity. Ordered Physics
+  block saves/reconstructs native pose/velocities/sleep/gravity/current mass/damping and recipes;
+  existing selected replacement/removal/failure paths retire them. Base true plus recovered false
+  eligibility overrides are carried. Unsupported live recipe state refuses saving; eligible source aliases reconstruct per field.
+  Finite explicit-input bbox service is covered separately; retail bbox Spawn/static/shadow caller
+  and downstream pointer-fixup/multiobject/controller/contact/fluid lifetimes remain open. Original23/88 unchanged.
+
 - Independent actual body reference packet (2026-10-11; coordinator accepted): only SetObject
   100a6490 and base object-list233100a6ad0 are complete. Real selected model-prop creation
   publishes current Chaos actor identity; existing native retirement paths clear it. Sleeping
   live bodies remain enumerable. Set/list neither own nor destroy aliased actors. Generic Swap,
-  slot225, saved-physics recipe registration/serialization and solved226 remain open; no body,
+  slot225 and solved226 remain open; selected recipe serialization is accepted below; no body,
   contact, timing or dormancy equivalence is claimed. Newly recovered10158520 first dispatch is
   saved-recipe manager#3->10045110, not collision-pair cleanup. Original23/88 unchanged.
 
@@ -607,3 +615,88 @@ selftest_fixture_stages, selftest_retail_site_matches, selftest_entity_field_fai
 selftest_entity_call_refused. All audit rows16columns; git diff --check clean.
 Next precise frontier: actual model/bbox saved recipe registration and its save reconstruction
 consumer/lifetime, then complete generic shadow/Swap/225 and solved publication chains.
+
+## Selected saved-recipe worker evidence (2026-10-11; gates pending)
+
+Implemented actual selected model registration with owned recipe inputs, retirement before native
+release, and a real ordered Physics-block capture/serialized reconstruction consumer. Final entity
+reconnect preserves native pose/state. Current mass/damping are separate from creation inputs;
+the water damping setter is preserved, but fluid entry/cache lifecycle remains open. Every eligible recipe-backed field is saved; source aliases reconstruct independently. Admitted
+objects without a supported recipe log and fence saving; downstream generic pointer fixups remain open.
+
+SavedBody test uses actual Spawn, native body state, Freeze, persisted outer archive, Physics-block
+ApplySnapshot, sleeping identity and Kill/save retirement. A real info_target alias to the live model
+actor proves independent per-field reconstruction and owned base Kill/teardown lifetime. BboxRecipeService proves actual explicit-input Chaos
+box creation, saved reconstruction and retirement/failure; retail bbox Spawn/static/shadow producer
+selection is not claimed. Disposable schema floor46 and stale floor test are updated.
+
+Worker git diff --check passed. Coordinator initial compilation found duplicate IsApplyingSnapshot
+and two rvalue Load test inputs, corrected before refreeze. No worker gates run. Proposed coordinator
+names were checked by rg: Elysium.Substrate.ModelPhysics, Elysium.Arm.PropSolid,
+Elysium.Arm.Geometry.Sight, plus save/slot census families and coordinator default/bounded arena.
+Actual results belong in separate acceptance evidence. Original23/88 and r022a deferred unchanged.
+
+Final source refinement recovered env#50=26025400 ->type1 26019450 allocation26019483-260194bc:
+each owner field independently recreates a body, including aliases; old/new mapping is afterward
+for downstream fixups. Removed the provisional alias-refusal fence. Two actual base aliases now
+roundtrip to independent invisible native bodies with state/profile/mask and owned225/Kill/teardown
+cleanup. Source aliases never own/destroy original producers; SetObject reference clear stays
+non-destructive. Missing native recipe still refuses save. Actual malformed/truncated persisted
+Physics rows propagate reader errors; late invalid-inertia native restore refuses ApplySnapshot
+and retires all earlier reconstructed fields. Writer errors propagate through the snapshot fence.
+Final paths refrozen for coordinator rebuild and native tests; no worker gate claimed.
+
+Coordinator intermediate native family reported3/4: NativeInputs, PlacedCaller and SavedBody
+passed cleanly (including alias, malformed/truncated and native-failure cleanup witnesses).
+BboxRecipeService failed actual Chaos creation, so service completion was not accepted. Corrected
+analytic FKBoxElem setup using native UBoxComponent's no-cook flag and explicit physics-state
+recreation after recipe setup; latest coordinator rebuild/native rerun pending. Added early
+ApplySnapshot refusal for an in-memory snapshot carrying failed Physics admission. Final gate
+evidence remains coordinator-owned; no broad gate or original run completion is claimed here.
+
+Final review found reachable null-field resurrection: bSimulating is runtime-only and omitted
+Physics rows would leave baseline Spawn's body. Confirmed100440c0 count<1 invokes225. Eligible
+null fields now persist presence=false/count0; restore destroys the current selected body. Prop225
+sets bSimulating=false, and GateBody leaves it absent. SavedBody includes real Spawn ->Destroy
+->Freeze ->archive ->ApplySnapshot and field/native absence after reconnect. Source refrozen;
+coordinator final --arm build/native/default/touched/bounded18 pending. Earlier passing gates
+precede this correction and are not final acceptance. Original23/88 unchanged.
+
+## Selected saved-recipe coordinator acceptance (2026-10-11)
+
+Reviewed actual Spawn -> successful Chaos actor -> owned recipe -> ordered Physics Save/Restore
+-> final entity reconnect, with source aliases saved independently and reconstructed per field
+(type1 26019483-260194bc). Selected native lifetime removes recipes/references before release.
+Base reconstructed service components are explicitly owned and retired by225/Kill/teardown;
+SetObject overwrite/clear itself remains nondestructive. Eligible null fields carry count0 and
+retire baseline Spawn bodies through100440c0/225; final reconnect leaves them bodyless. Actual
+archive malformed/truncated rows and unsupported recipes refuse Load/Apply/save, and late native
+restore failure retires earlier reconstructed fields. Native solved pose, velocity/activity,
+authored COM, current mass/damping/profile/mask survive the real persisted roundtrip.
+Finite explicit-input bbox service is verified with real Chaos geometry; retail bbox caller
+selection/defaults/static/shadow are not closed. No Source topology or allocator clone added.
+
+Final gates all follow the saved-null correction and final source freeze:
+- `uv run elysium build --arm`: succeeded, exit0,148.078s.
+  `E:/elysium-work/logs/20261011T013311.031995Z-build.json`.
+- `uv run elysium test Elysium.Substrate.ModelPhysics`:4/4 clean,0 failed/notRun.
+  `E:/elysium-work/reports/tests/20261011T013544.166155Z-elysium-substrate-modelphysics/index.json`.
+- `uv run elysium test`:177/177 (98 clean,79 existing warning results),0 failed/notRun.
+  `E:/elysium-work/reports/tests/20261011T013603.650781Z-elysium-session-elysium-substrate/index.json`.
+- Touched ModelPhysics/SaveSchema/SaveRoundTrip/NpcKernelSlots.Defaults/PropSolid/Geometry.Sight:
+  13/13 (10 clean,3 existing warning results),0 failed/notRun.
+  `E:/elysium-work/reports/tests/20261011T013721.443702Z-elysium-substrate-modelphysics-elysium-s-2564d20f/index.json`.
+- Prior bounded18 arena in two boots:18 pass,0 failed/error. Read merged and both host indices;
+  every ordinary first_unmet is null, two deliberate refusal selftests pass by expected inversion.
+  `E:/elysium-work/reports/arena/20261011T013745.509671Z/index.json`;
+  `arena/index.json` and `map-sm_hub_1-l0_transition_state/index.json` beneath it.
+  Existing experimental Python AgentSkill startup errors and unrelated stub/content warnings
+  remain recorded in the run log; no scenario failure is waived.
+
+Earlier duplicate getter/rvalue-input compilation failure and initial native bbox3/4 failure
+were corrected before this frozen gate set. Diff check clean; audit7946 rows all16 columns.
+No assets/goldens added and no push. Original23/88 unchanged. Next precise frontier is the
+observable generic Swap/225 shadow/membership/submission/removal chain, with actual bbox
+Spawn/static/shadow input selection where reached, then ordered solved226 pose/touch/relink.
+Downstream pointerfixups/multiobject/controller/contact/fluid lifecycle and full closing audit,
+contracts/default+arm/fullarena/bootorders remain open. Only two model assets migrated.

@@ -39,8 +39,9 @@ void FElysiumPhysProp::VPhysicsDestroyObject()
 
 void FElysiumPhysProp::RetireModelBody()
 {
-	// Selected model adapter lifetime only: generic 0x100b5040's shadow/save-recipe
-	// cleanup remains open. The native body goes away before its entity reference clears.
+	// 10158520/10045110: the adapter removes its saved recipe before native deletion;
+	// generic 100b5040's shadow membership remains a separate unfinished contract.
+	bRestoredNativePhysics = false;
 	ElysiumModelPhysics::Destroy(Visual);
 	VPhysicsSetObject(nullptr);
 }
@@ -52,6 +53,19 @@ bool FElysiumPhysProp::CreateModelBody(FString& OutError)
 		MassBias, MassOverride, (SpawnFlags & 1) != 0, OutError)) return false;
 	// 0x100a5ea0 / 0x100a6490: publish only the successfully created actual body.
 	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Visual));
+	return true;
+}
+
+bool FElysiumPhysProp::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, FString& OutError)
+{
+	RetireModelBody(); // the port's spawned baseline is retired before Physics reconstruction.
+	if (!Visual || IsInert() || bBroken || State.FieldName != TEXT("m_pPhysicsObject"))
+	{ OutError = TEXT("saved physics prop has no live admitted field/component"); return false; }
+	if (!ElysiumModelPhysics::Restore(Visual, World->PhysicsSurfaces(), State, OutError))
+	{ bSimulating = false; return false; }
+	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Visual));
+	bSimulating = true;
+	bRestoredNativePhysics = true;
 	return true;
 }
 
@@ -75,7 +89,7 @@ void FElysiumPhysProp::OnDormancyChanged()
 void FElysiumPhysProp::OnRuntimeTransformChanged()
 {
 	FElysiumEntity::OnRuntimeTransformChanged();
-	if (Visual)
+	if (Visual && !(bRestoredNativePhysics && World && World->IsApplyingSnapshot()))
 	{
 		Visual->SetWorldLocationAndRotation(Origin, FQuat(FRotator(0.0f, -Angles.Y, 0.0f)), /*bSweep=*/false);
 	}
@@ -287,6 +301,8 @@ void FElysiumPhysProp::GateBody()
 	}
 	else if (bSimulating)
 	{
+		// Final entity reconnect follows the Physics block. Keep its reconstructed solved state.
+		if (bRestoredNativePhysics && World && World->IsApplyingSnapshot()) return;
 		RetireModelBody(); // the profile/collision changes below may recreate a native actor.
 		Visual->SetCollisionProfileName(TEXT("PhysicsActor"));
 		// 0018 story 6: the profile reset the body's responses. A moving prop is still an entity

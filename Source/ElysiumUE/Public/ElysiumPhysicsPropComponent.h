@@ -11,5 +11,7 @@ class ELYSIUMUE_API UElysiumPhysicsPropComponent : public UStaticMeshComponent
 	GENERATED_BODY()
 public:
 	bool bUseSelectedBody = false;
+	UPROPERTY(Transient) TObjectPtr<UBodySetup> RecipeBody;
 	virtual UBodySetup* GetBodySetup() override;
+	virtual void OnDestroyPhysicsState() override;
 };

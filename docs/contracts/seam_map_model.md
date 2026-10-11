@@ -1305,6 +1305,37 @@ SetObject100a6490 assigns (nonnull overwrite warns) without destroying or owning
 actor. Base object-list233100a6ad0 returns that stored identity only for signed positive capacity,
 writes just element0, and leaves rejected output untouched. Existing selected adapter retirement
 clears the reference after native release on hide/break, SetModel, failure, Kill and teardown;
-recreation publishes the current live actor regardless of address reuse. Generic Swap/225, saved
-model/bbox recipe registration and serialization, shadow lifetime and solved226 publication stay
-open. The Source/IVP tree/hash/body allocator is not part of this seam; Chaos owns native mechanics.
+recreation publishes the current live actor regardless of address reuse. Selected-model recipe
+registration and Physics-block serialization/reconstruction are described below. Generic
+Swap/225, shadow lifetime and solved226 publication stay open. The Source/IVP tree/hash/body
+allocator is not part of this seam; Chaos owns native mechanics.
+
+### Saved selected body reconstruction inputs (2026-10-11)
+
+Successful model creation owns a semantic recipe associated with the actual Chaos actor: model
+asset path, surface name, mass after massbias/override, inertia/damping, explicit COM, and retained
+ordered solid pairs/volume/drag/rollingdrag/rotinertialimit. These strings/scalars outlive borrowed
+asset input pointers. Sleeping retains the association. Selected adapter retirement removes the
+first model association, otherwise bbox, before native release; component destruction does too.
+
+Disposable save schema46 stores rows only in the ordered Physics block, after Entities/EventQueue.
+A row identifies entity index plus m_pPhysicsObject and owns the recipe alongside actual native
+pose, linear/angular velocity in radians, sleep/gravity, current mass and linear/angular damping.
+Current damping is distinct from creation damping because the water service can change it.
+Reconstruction creates real Chaos geometry from the existing selected cook and reapplies native
+state; final entity reconnect preserves that body pose/state. It does not copy entity Origin as
+the native saved pose. Missing/invalid entities do not create bodies; false eligibility destroys
+the restored entity's current body. Eligible null fields persist an explicit count0 presence flag;
+restore destroys the baseline Spawn body so explicit destruction survives final reconnect.
+Every eligible recipe-backed field is saved independently, including source aliases. Type1
+restore creates one actual body per field; base leaves own an invisible reconstruction component.
+SetObject clear/overwrite still does not destroy it. Base225/Kill/teardown retire only that owned
+producer. Admitted live objects without a supported recipe log an error and fence persistence.
+
+The finite native bbox service takes explicit converted min/max, surface and body parameters,
+creates an actual Chaos box, registers its recipe, and reconstructs saved native state. The
+invisible stock cube is a component carrier; its render bounds do not supply collision inputs.
+No retail bbox Spawn/static/shadow producer is wired by this prerequisite. Its caller's model
+type/surface/default selection, static flag, shadow permissions and lifetime are still open.
+Contact/controller/multiobject state and fluid entry/cache restoration are also open. Capturing
+current damping does not close the fluid lifecycle; only two model assets remain migrated.

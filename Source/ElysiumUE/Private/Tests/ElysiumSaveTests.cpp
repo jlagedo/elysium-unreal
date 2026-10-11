@@ -667,8 +667,8 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `NpcAmbientExecutorRetired` (0002 V3b) took the ambient executor's two timers out of the middle
 	// of the NPC's patrol block, which moved it again. `NpcMindOwnerRetired` (0002 V3d) took the
 	// body-owner byte out of the NPC's mind block, which moved it once more.
-	TestEqual(TEXT("the floor is the map TIME-context schema"),
-		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::MapTimeContext);
+	TestEqual(TEXT("the disposable floor is the native Physics recipe schema"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::PhysicsRecipes);
 	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
 	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
 	// being refused, and the floor stays where the last breaking schema left it.

@@ -15,6 +15,9 @@
 #include "Engine/StaticMesh.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "PhysicsProxy/SingleParticlePhysicsProxy.h"
+#include "ElysiumSaveArchive.h"
+#include "Serialization/MemoryReader.h"
+#include "Serialization/MemoryWriter.h"
 
 namespace ElysiumModelPhysicsTest
 {
@@ -233,6 +236,225 @@ bool FElysiumModelPhysicsCallerTest::RunTest(const FString&)
 	TestTrue(TEXT("world teardown retires live backend body"), !LastComponent.IsValid()
 		|| !LastComponent->GetBodyInstance()->IsValidBodyInstance());
 	ElysiumPreparedProps::Release(Map);
+	return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelPhysicsSaveTest, "Elysium.Substrate.ModelPhysics.SavedBody",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumModelPhysicsSaveTest::RunTest(const FString&)
+{
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	auto* Map = Fixture.SpawnMapActorDeferred();
+	auto* Placed = LoadObject<UElysiumPlacedModelCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
+	auto* Skins = LoadObject<UElysiumPropSkinCatalogue>(nullptr, TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
+	TSet<FSoftObjectPath> Paths; FString Error;
+	if (!TestTrue(TEXT("actual model catalogue"), FElysiumPreparedPropModels::GatherPaths(Placed, Skins,
+		{ ElysiumModelPhysicsTest::BodyId }, Paths, Error))) return false;
+	TArray<UObject*> Assets;
+	for (const auto& Path : Paths) Assets.Add(Path.TryLoad());
+	auto Prepared = FElysiumPreparedPropModels::Create(Map, 1, Placed, Skins,
+		{ ElysiumModelPhysicsTest::BodyId }, Assets, Error);
+	if (!TestTrue(TEXT("production model preparation"), Prepared.IsValid())) return false;
+	FElysiumWorldServices Services; Services.Embodiment = Map;
+	FElysiumEntityDefs Defs; Defs.MapName = TEXT("model_physics_save");
+	FElysiumEntityDefs SourceDefs = Defs;
+	FElysiumEntityWorld Source(Map, nullptr, Services); Source.Load(MoveTemp(SourceDefs));
+	const TCHAR* Model = TEXT("models/scenery/street/trashcan1/trashcan1_base.mdl");
+	auto* Moving = static_cast<FElysiumPhysProp*>(Source.Resolve(Source.SpawnRuntimeEntity(ElysiumModelPhysicsTest::Def(Model, TEXT("moving")))));
+	auto* Sleeping = static_cast<FElysiumPhysProp*>(Source.Resolve(Source.SpawnRuntimeEntity(ElysiumModelPhysicsTest::Def(Model, TEXT("sleeping")))));
+	auto* Removed = static_cast<FElysiumPhysProp*>(Source.Resolve(Source.SpawnRuntimeEntity(ElysiumModelPhysicsTest::Def(Model, TEXT("removed")))));
+	if (!Moving || !Sleeping || !Removed || !TestNotNull(TEXT("real Spawn actor"), Moving->VPhysicsGetObject())) return false;
+	TestNotNull(TEXT("actual successful model creation registered recipe"), ElysiumModelPhysics::RecipeFor(Moving->VPhysicsGetObject()));
+	TestTrue(TEXT("base retail physics admission"), Moving->ShouldSavePhysics());
+	FBodyInstance* MovingBody = ElysiumModelPhysics::Identity(Moving->Visual);
+	Moving->Visual->SetEnableGravity(false);
+	Moving->Visual->SetLinearDamping(.75f); // actual runtime setter also used by water's damping observer
+	const FTransform NativePose(FRotator(19, 37, 11), FVector(5000, 4000, 3000), Moving->Visual->GetComponentScale());
+	MovingBody->SetBodyTransform(NativePose, ETeleportType::TeleportPhysics);
+	MovingBody->SetLinearVelocity(FVector(75, -20, 8), false);
+	MovingBody->SetAngularVelocityInRadians(FVector(.2, -.4, .6), false);
+	Sleeping->Visual->SetWorldLocation(FVector(-5000, -4000, 3000));
+	ElysiumModelPhysics::Identity(Sleeping->Visual)->PutInstanceToSleep();
+	Removed->Kill();
+	auto* Bodyless = static_cast<FElysiumPhysProp*>(Source.Resolve(Source.SpawnRuntimeEntity(ElysiumModelPhysicsTest::Def(Model, TEXT("bodyless")))));
+	if (!Bodyless || !TestNotNull(TEXT("bodyless witness initially has actual Spawn body"), Bodyless->VPhysicsGetObject())) return false;
+	const int32 BodylessIndex = Bodyless->Handle.Index;
+	Bodyless->VPhysicsDestroyObject(); // actual retail operation, not a serializer helper
+	TestNull(TEXT("explicit destruction leaves current field null"), Bodyless->VPhysicsGetObject());
+	FElysiumSavedPhysicsBody NativeState;
+	if (!TestTrue(TEXT("real native output captured"), ElysiumModelPhysics::Capture(Moving->VPhysicsGetObject(), NativeState))) return false;
+	TestFalse(TEXT("native pose differs from entity creation pose"), NativeState.Pose.GetLocation().Equals(Moving->Origin));
+	FElysiumEntityDef AliasDef; AliasDef.Classname = TEXT("info_target");
+	FElysiumEntity* Alias = Source.Resolve(Source.SpawnRuntimeEntity(AliasDef));
+	if (!Alias) return false;
+	Alias->VPhysicsSetObject(Moving->VPhysicsGetObject());
+	const int32 AliasIndex = Alias->Handle.Index;
+	FElysiumEntity* TeardownAlias = Source.Resolve(Source.SpawnRuntimeEntity(AliasDef));
+	if (!TeardownAlias) return false;
+	TeardownAlias->VPhysicsSetObject(Moving->VPhysicsGetObject());
+	const int32 TeardownAliasIndex = TeardownAlias->Handle.Index;
+	FElysiumEntity* RemovedAlias = Source.Resolve(Source.SpawnRuntimeEntity(AliasDef));
+	if (!RemovedAlias) return false;
+	RemovedAlias->VPhysicsSetObject(Moving->VPhysicsGetObject()); RemovedAlias->Kill();
+	TestNotNull(TEXT("source alias Kill leaves referenced model producer alive"), ElysiumModelPhysics::Identity(Moving->Visual));
+	FElysiumMapSnapshot Snapshot; Source.Freeze(Snapshot);
+	TestEqual(TEXT("Physics saves eligible fields including aliases and absent body"), Snapshot.PhysicsBodies.Num(), 5);
+	const FElysiumSavedPhysicsBody* AbsentField = Snapshot.PhysicsBodies.FindByPredicate(
+		[BodylessIndex](const FElysiumSavedPhysicsBody& State) { return State.EntityIndex == BodylessIndex; });
+	TestTrue(TEXT("actual Physics save carries count0 field state"), AbsentField && !AbsentField->bHasObject);
+	TestFalse(TEXT("registered source alias admitted"), Snapshot.bPhysicsSaveFailed);
+	TArray<uint8> Bytes;
+	FMemoryWriter Writer(Bytes, true); FElysiumSaveArchive SaveAr(Writer, FElysiumSaveVersion::Latest);
+	SaveAr << Snapshot;
+	FElysiumMapSnapshot Decoded;
+	FMemoryReader Reader(Bytes, true); FElysiumSaveArchive LoadAr(Reader, FElysiumSaveVersion::Latest);
+	LoadAr << Decoded;
+	if (!TestFalse(TEXT("actual map archive/Physics block read"), Reader.IsError())
+		|| !TestEqual(TEXT("persisted Physics rows decode"), Decoded.PhysicsBodies.Num(), 5)) return false;
+	const int32 MovingIndex = Moving->Handle.Index;
+	const int32 SleepingIndex = Sleeping->Handle.Index;
+	Source.Teardown();
+	FElysiumEntityDefs DestinationDefs = Defs;
+	FElysiumEntityWorld Destination(Map, nullptr, Services); Destination.Load(MoveTemp(DestinationDefs));
+	// The consumer must read the persisted block; no decoded-array handoff can satisfy this.
+	Decoded.PhysicsBodies.Reset();
+	if (!TestTrue(TEXT("actual ApplySnapshot reconstructs through Physics block"), Destination.ApplySnapshot(Decoded) >= 0)) return false;
+	auto* Restored = static_cast<FElysiumPhysProp*>(Destination.Resolve(FElysiumEntityHandle(MovingIndex, Destination.GetEpoch())));
+	auto* RestoredSleep = static_cast<FElysiumPhysProp*>(Destination.Resolve(FElysiumEntityHandle(SleepingIndex, Destination.GetEpoch())));
+	FElysiumEntity* RestoredAlias = Destination.Resolve(FElysiumEntityHandle(AliasIndex, Destination.GetEpoch()));
+	auto* RestoredBodyless = static_cast<FElysiumPhysProp*>(Destination.Resolve(FElysiumEntityHandle(BodylessIndex, Destination.GetEpoch())));
+	if (!RestoredBodyless) return false;
+	TestNull(TEXT("Destroy Freeze archive ApplySnapshot remains bodyless"), RestoredBodyless->VPhysicsGetObject());
+	TestFalse(TEXT("count0 restore retires baseline Spawn native actor through final reconnect"),
+		RestoredBodyless->Visual->GetBodyInstance()->IsValidBodyInstance());
+	if (!Restored || !RestoredSleep || !TestNotNull(TEXT("restored actual native actor"), Restored->VPhysicsGetObject())) return false;
+	FElysiumSavedPhysicsBody RestoredState;
+	if (!TestTrue(TEXT("restored output has live recipe association"), ElysiumModelPhysics::Capture(Restored->VPhysicsGetObject(), RestoredState))) return false;
+	TestTrue(TEXT("final entity reconnect preserves native pose"), RestoredState.Pose.Equals(NativeState.Pose, .001));
+	TestTrue(TEXT("native linear velocity persisted"), RestoredState.LinearVelocity.Equals(NativeState.LinearVelocity, .001));
+	TestTrue(TEXT("native angular velocity persisted in radians"), RestoredState.AngularVelocityRadians.Equals(NativeState.AngularVelocityRadians, .001));
+	TestFalse(TEXT("gravity state persisted"), RestoredState.bGravity);
+	TestEqual(TEXT("current runtime damping persisted independently from creation recipe"), RestoredState.CurrentLinearDamping, .75f);
+	TestFalse(TEXT("awake state persisted"), RestoredState.bAsleep);
+	TestFalse(TEXT("sleeping identity retained"), ElysiumModelPhysics::IsActive(RestoredSleep->Visual));
+	TestNotNull(TEXT("sleeping recipe retained"), ElysiumModelPhysics::RecipeFor(RestoredSleep->VPhysicsGetObject()));
+	TestEqual(TEXT("owned model identity persisted"), RestoredState.Recipe.ModelAsset, NativeState.Recipe.ModelAsset);
+	TestEqual(TEXT("owned authored pairs persisted"), RestoredState.Recipe.SolidPairsJson, NativeState.Recipe.SolidPairsJson);
+	TestEqual(TEXT("real reconstructed mass"), Restored->Visual->GetMass(), NativeState.Recipe.MassKg);
+	if (!RestoredAlias || !TestNotNull(TEXT("base alias field reconstructed actual actor"), RestoredAlias->VPhysicsGetObject())) return false;
+	TestTrue(TEXT("type1 allocates separate current native identities per saved field"), RestoredAlias->VPhysicsGetObject() != Restored->VPhysicsGetObject());
+	FElysiumSavedPhysicsBody AliasState;
+	TestTrue(TEXT("base reconstructed output registered"), ElysiumModelPhysics::Capture(RestoredAlias->VPhysicsGetObject(), AliasState));
+	TestTrue(TEXT("base alias native pose persists"), AliasState.Pose.Equals(NativeState.Pose, .001));
+	TestTrue(TEXT("base alias native velocity persists"), AliasState.LinearVelocity.Equals(NativeState.LinearVelocity, .001));
+	TestEqual(TEXT("base alias native collision profile persists"), AliasState.CollisionProfile, NativeState.CollisionProfile);
+	UStaticMeshComponent* AliasComponent = ElysiumModelPhysics::ComponentFor(RestoredAlias->VPhysicsGetObject());
+	TestFalse(TEXT("reconstructed alias service duplicates no rendered art"), AliasComponent->IsVisible());
+	TestFalse(TEXT("nonnull restored base field rejects a second reconstruction"), RestoredAlias->RestoreSavedPhysics(AliasState, Error));
+	TestTrue(TEXT("rejected restore retains current actor"), ElysiumModelPhysics::Identity(AliasComponent) != nullptr);
+	RestoredAlias->VPhysicsSetObject(nullptr); // SetObject clears only reference, not the owned producer
+	TestNotNull(TEXT("reference clear retains native saved-field producer"), ElysiumModelPhysics::Identity(AliasComponent));
+	RestoredAlias->VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(AliasComponent));
+	RestoredAlias->Kill();
+	TestFalse(TEXT("actual base Kill retires reconstructed native body"), AliasComponent->GetBodyInstance()->IsValidBodyInstance());
+	FElysiumEntity* RestoredTeardownAlias = Destination.Resolve(FElysiumEntityHandle(TeardownAliasIndex, Destination.GetEpoch()));
+	if (!RestoredTeardownAlias) return false;
+	TWeakObjectPtr<UStaticMeshComponent> TeardownComponent = ElysiumModelPhysics::ComponentFor(RestoredTeardownAlias->VPhysicsGetObject());
+	Restored->Kill();
+	FElysiumMapSnapshot AfterKill; Destination.Freeze(AfterKill);
+	TestEqual(TEXT("actual Kill recipe retirement plus retained absent field observed by save"), AfterKill.PhysicsBodies.Num(), 3);
+	Destination.Teardown();
+	TestTrue(TEXT("world teardown retires base reconstructed body"), !TeardownComponent.IsValid()
+		|| !TeardownComponent->GetBodyInstance()->IsValidBodyInstance());
+	FElysiumMapSnapshot Malformed = Snapshot;
+	TArray<uint8> RowBytes; FMemoryWriter RowWriter(RowBytes, true); RowWriter << Snapshot.PhysicsBodies[0];
+	int32 RowOffset = INDEX_NONE;
+	for (int32 Offset = 4; Offset + RowBytes.Num() <= Malformed.BlockStream.Num(); ++Offset)
+		if (FMemory::Memcmp(Malformed.BlockStream.GetData() + Offset, RowBytes.GetData(), RowBytes.Num()) == 0)
+		{ RowOffset = Offset; break; }
+	if (!TestTrue(TEXT("actual persisted Physics row located"), RowOffset != INDEX_NONE)) return false;
+	FMemoryReader PrefixReader(RowBytes, true); int32 SavedIndex; FString SavedField;
+	PrefixReader << SavedIndex << SavedField;
+	Malformed.BlockStream[RowOffset + PrefixReader.Tell()] = 255; // corrupt the actual persisted kind byte
+	TArray<uint8> MalformedBytes; FMemoryWriter MalformedWriter(MalformedBytes, true);
+	FElysiumSaveArchive MalformedSave(MalformedWriter, FElysiumSaveVersion::Latest); MalformedSave << Malformed;
+	FElysiumMapSnapshot MalformedRead;
+	FMemoryReader MalformedReader(MalformedBytes, true);
+	FElysiumSaveArchive MalformedLoad(MalformedReader, FElysiumSaveVersion::Latest); MalformedLoad << MalformedRead;
+	TestTrue(TEXT("malformed Physics recipe propagates outer archive read failure"), MalformedReader.IsError());
+	FElysiumMapSnapshot Truncated = Snapshot;
+	const int32 TruncatedSize = RowBytes.Num() - 1;
+	FMemory::Memcpy(Truncated.BlockStream.GetData() + RowOffset - 4, &TruncatedSize, sizeof(TruncatedSize));
+	TArray<uint8> TruncatedBytes; FMemoryWriter TruncatedWriter(TruncatedBytes, true);
+	FElysiumSaveArchive TruncatedSave(TruncatedWriter, FElysiumSaveVersion::Latest); TruncatedSave << Truncated;
+	FElysiumMapSnapshot TruncatedRead; FMemoryReader TruncatedReader(TruncatedBytes, true);
+	FElysiumSaveArchive TruncatedLoad(TruncatedReader, FElysiumSaveVersion::Latest); TruncatedLoad << TruncatedRead;
+	TestTrue(TEXT("truncated Physics row propagates outer archive read failure"), TruncatedReader.IsError());
+	FElysiumMapSnapshot NativeFailure = Snapshot;
+	NativeFailure.BlockStream.Reset();
+	NativeFailure.PhysicsBodies.Last().Recipe.InertiaScale = 0.f;
+	FElysiumEntityDefs FailureDefs = Defs;
+	FElysiumEntityWorld FailedDestination(Map, nullptr, Services); FailedDestination.Load(MoveTemp(FailureDefs));
+	AddExpectedError(TEXT("Physics restore"), EAutomationExpectedErrorFlags::Contains, 1);
+	TestEqual(TEXT("late actual native reconstruction failure refuses ApplySnapshot"), FailedDestination.ApplySnapshot(NativeFailure), INDEX_NONE);
+	FElysiumEntity* PreviouslyRestored = FailedDestination.Resolve(FElysiumEntityHandle(MovingIndex, FailedDestination.GetEpoch()));
+	FElysiumEntity* PreviouslyRestoredAlias = FailedDestination.Resolve(FElysiumEntityHandle(AliasIndex, FailedDestination.GetEpoch()));
+	if (!PreviouslyRestored || !PreviouslyRestoredAlias) return false;
+	TestNull(TEXT("failed packet retires earlier reconstructed model actor"), PreviouslyRestored->VPhysicsGetObject());
+	TestNull(TEXT("failed packet retires earlier reconstructed base actor"), PreviouslyRestoredAlias->VPhysicsGetObject());
+	FailedDestination.Teardown();
+	ElysiumPreparedProps::Release(Map);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicsBboxRecipeTest, "Elysium.Substrate.ModelPhysics.BboxRecipeService",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FElysiumPhysicsBboxRecipeTest::RunTest(const FString&)
+{
+	// Finite native service evidence only. No VPhysicsInitShadow/static/Spawn caller is claimed.
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this)) return false;
+	auto* Owner = Fixture.World->SpawnActor<AActor>();
+	auto* Component = NewObject<UElysiumPhysicsPropComponent>(Owner);
+	Component->RegisterComponent(); Owner->AddInstanceComponent(Component);
+	FElysiumPhysicsSurfaceProps Surfaces;
+	Surfaces.ParseSurfaceData(TEXT("bbox-service-authored"), TEXT("default { friction 0.8 elasticity 0.2 density 1000 }"));
+	FElysiumPhysicsBodyRecipe Recipe;
+	Recipe.Kind = EElysiumPhysicsRecipeKind::Bbox;
+	Recipe.BboxMin = FVector(-11, -23, -7); Recipe.BboxMax = FVector(31, 17, 29);
+	Recipe.Surface = TEXT("default"); Recipe.MassKg = 6.f;
+	Recipe.InertiaScale = 2.f; Recipe.LinearDamping = .25f; Recipe.AngularDamping = .5f;
+	Recipe.bMassCenter = true; Recipe.MassCenterCm = FVector(3, 2, 1);
+	Component->SetWorldLocationAndRotation(FVector(70, 80, 90), FRotator(12, 34, 56));
+	FString Error;
+	if (!TestTrue(TEXT("actual native box creation from explicit authored fields"), ElysiumModelPhysics::CreateBbox(Component, Surfaces, Recipe, true, Error)))
+	{ AddError(Error); return false; }
+	void* Actor = ElysiumModelPhysics::ActorIdentity(Component);
+	TestNotNull(TEXT("bbox actual actor output"), Actor);
+	TestNotNull(TEXT("bbox recipe registers only successful native output"), ElysiumModelPhysics::RecipeFor(Actor));
+	const FKBoxElem& Shape = Component->GetBodySetup()->AggGeom.BoxElems[0];
+	TestTrue(TEXT("native shape uses authored center"), Shape.Center.Equals((Recipe.BboxMin + Recipe.BboxMax) * .5));
+	TestTrue(TEXT("native shape uses authored dimensions"), FVector(Shape.X, Shape.Y, Shape.Z).Equals(Recipe.BboxMax - Recipe.BboxMin));
+	TestEqual(TEXT("actual bbox mass"), Component->GetMass(), 6.f);
+	FElysiumSavedPhysicsBody Captured;
+	if (!ElysiumModelPhysics::Capture(Actor, Captured)) return false;
+	TArray<uint8> Bytes; FMemoryWriter Writer(Bytes, true); Writer << Captured;
+	FElysiumSavedPhysicsBody Persisted; FMemoryReader Reader(Bytes, true); Reader << Persisted;
+	ElysiumModelPhysics::Destroy(Component);
+	TestNull(TEXT("removal retires bbox recipe"), ElysiumModelPhysics::RecipeFor(Actor));
+	TestFalse(TEXT("removal has no surviving static native actor"), Component->GetBodyInstance()->IsValidBodyInstance());
+	if (!TestTrue(TEXT("persisted native bbox reconstruction"), ElysiumModelPhysics::Restore(Component, Surfaces, Persisted, Error))) return false;
+	FElysiumSavedPhysicsBody Rebuilt;
+	TestTrue(TEXT("rebuilt box has real saved recipe"), ElysiumModelPhysics::Capture(ElysiumModelPhysics::ActorIdentity(Component), Rebuilt));
+	TestTrue(TEXT("reconstructed authored bbox"), Rebuilt.Recipe.BboxMin.Equals(Recipe.BboxMin) && Rebuilt.Recipe.BboxMax.Equals(Recipe.BboxMax));
+	TestTrue(TEXT("reconstructed native pose"), Rebuilt.Pose.Equals(Captured.Pose, .001));
+	TestTrue(TEXT("reconstructed sleeping state"), Rebuilt.bAsleep);
+	TestTrue(TEXT("current-mass restore retains authored native COM"),
+		ElysiumModelPhysics::Identity(Component)->GetMassSpaceLocal().GetTranslation().Equals(Recipe.MassCenterCm, .001));
+	Recipe.BboxMax = Recipe.BboxMin;
+	TestFalse(TEXT("invalid dimensions reject actual create"), ElysiumModelPhysics::CreateBbox(Component, Surfaces, Recipe, false, Error));
+	TestNull(TEXT("failed replacement has no registered actual actor"), ElysiumModelPhysics::ActorIdentity(Component));
+	TestFalse(TEXT("failed replacement has no native static actor"), Component->GetBodyInstance()->IsValidBodyInstance());
 	return true;
 }
 #endif

@@ -809,3 +809,56 @@ The task cursor is INT +0x5c40, status INT +0x5c44, schedule/task starts TIME +0
 TIME0x101a0a80/0x101a2a30 stores source-base deltas and adds the destination base once. Native sentinel policies stay field-specific: zero waits, -1 attention/expiry clocks and FLT_MAX deferred clocks are not blanket-shifted. Base animation LastEventCheck is TIME; layer LastEventCheck, weapon +0x730/+0x734 attack stamps and player-LOS caches are FLOAT. Weapon idle and owner NextAttack are TIME. Native base phase, four layer records, three flinch records, move/shoot +0x10..2c, selected callback FUNCTION +0x118 and saved callback +0xe4 are separate retained words. Serialization is not proof of an event-free presentation seek or a live producer.
 
 Place custom ops0x102d9240/0x102d9320 carry allocation/used count, EHANDLE and both absolute POSITION bounds of each used row; spare rows clear on decode. In-use +0x564 and failed-box ring have no SAVE rows. Current carriers use the same explicit-base codec, identity fixup and common applier; complete transition-set/global import remains0017/3 and/9.
+
+### Selected native Physics block adapter (2026-10-11)
+
+The registered Physics handler1044943c saves at10043c70, after Entities and EventQueue in the
+existing Game block dispatch. Its valid owner PhysObjectHeader identifies the field/subobjects;
+environment save receives each actual body pointer. This loop does not deduplicate pointers
+across registered owner headers. PreSave10043c40 resets counters, header10043f70 writes version5
+and PhysBlockHeader; heap entries are consumed after saving. Restore100440c0 validates owner,
+eligibility and object count. False eligibility/count<1 destroys the current object through225;
+one-object type1 reaches100443e0. That reconstruction arm rejects a preexisting body, resolves
+saved model/solid or bbox bounds, restores through the environment and re-registers success.
+Other types and multiple-object/controller state are not implemented by the selected adapter.
+
+The port uses disposable schema46 and a typed archive modernization inside this actual Physics
+block. Selected prop_physics creation owns model/surface/scalars/ordered authored inputs only
+after successful live Chaos output; sleeping keeps its identity and recipe. Physics Save captures
+native pose, linear/angular velocity in radians, sleep/gravity and current mass/damping, alongside
+creation inputs. Physics Restore reconstructs actual selected native geometry and reinstates
+state; final entity reconnect does not overwrite it with entity creation Origin. Current damping
+includes a runtime water damping setter, but fluid enter/exit/cache state remains unfinished.
+
+Base100aa680 now returns true. Recovered false Door/Brush/Rotating/Button/Player overrides remain
+false. Null fields produce explicit semantic count0 records. Every eligible recipe-backed field is saved, including aliases; type1 reconstruction allocates
+independent actual bodies for these fields. Admitted live objects without a supported recipe log
+an error, mark a transient failure and cause archive saving to fail instead of dropping state.
+Downstream pointer graph fixups remain open. Missing entity
+on restore is ignored; false eligibility retires its body; native reconstruction failure logs
+and refuses application. Malformed row lengths/kinds/field names or duplicate entity keys refuse
+decode. No cross-version migration or Source binary wire compatibility is required.
+
+Finite bbox service tests exercise explicit authored bounds/parameters, live Chaos shape and
+registration, persisted native-state reconstruction and removal. They do not wire a retail bbox
+Spawn/static/shadow caller or prove its default/surface/static selection. Contact/controller,
+downstream pointer-fixup/multiobject state, generic225 shadow removal and226 ordered pose/touch/relink remain
+open. The service does not recover IVP solver, geometry or allocator internals.
+
+Confirmed type1 duplicate-owner behavior: env#50 at26025400 dispatches26019450 and
+26019483-260194bc unconditionally allocates/constructs/writes/restores a new object for each
+destination field. Old/new registration26025280 happens afterward; #49 at26025240 initializes
+the downstream fixup map. The finite adapter therefore reconstructs independent bodies for source
+aliases, with base-owned invisible native components. It preserves saved profile/mask as query
+inputs. Reference clear/overwrite does not destroy; selected base225/Kill/destructor/teardown owns
+the reconstructed component's retirement. Complete downstream pointer/controller graph fixups
+remain open. A later native reconstruction error retires earlier selected reconstructed fields
+before returning failed application. Persisted malformed-kind/truncated-row tests use the actual
+outer archive; invalid native inertia tests actual ApplySnapshot error cleanup.
+
+The absent-body arm is observable:100440c0 calls owner225 when saved count<1. The selected
+port records an eligible null m_pPhysicsObject as bHasObject=false. Restore retires the baseline
+Spawn body through225 and skips reconstruction. Omitting this row would resurrect an explicitly
+destroyed body because prop bSimulating is runtime-only. Actual Spawn ->VPhysicsDestroyObject
+->Freeze ->archive ->ApplySnapshot checks null field/no native actor after final reconnect. Prop225
+sets bSimulating=false, preventing GateBody recreation. Null-row recipe/state words are unused.

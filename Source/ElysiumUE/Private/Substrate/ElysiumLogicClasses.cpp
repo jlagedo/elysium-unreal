@@ -492,6 +492,7 @@ private:
 class FElysiumFuncBrush final : public FElysiumEntity
 {
 public:
+	bool ShouldSavePhysics() override { return false; } // CFuncBrush10114d90
 	static constexpr int32 SOLIDITY_TOGGLE = 0;
 	static constexpr int32 SOLIDITY_NEVER  = 1;
 	static constexpr int32 SOLIDITY_ALWAYS = 2;

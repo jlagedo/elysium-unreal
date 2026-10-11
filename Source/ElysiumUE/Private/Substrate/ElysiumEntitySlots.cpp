@@ -925,9 +925,7 @@ int32 FElysiumEntity::Restore(void*)
 //   layer 0, story 29c
 bool FElysiumEntity::ShouldSavePhysics()
 {
-	FireEntitySlot(TEXT("CBaseEntity::ShouldSavePhysics"), TEXT("0x100aa680"), TEXT("29c"),
-		DebugString());
-	return {};
+	return true; // 100aa680: whole retail body returns 1; NPCs/movers/player own false overrides.
 }
 
 // slot 129 0x100aa4e0 (walked) `void OnSave()`
@@ -1587,6 +1585,8 @@ bool FElysiumEntity::ForceVPhysicsCollide(FElysiumEntity*)
 //   layer 4, story 29c
 void FElysiumEntity::VPhysicsDestroyObject()
 {
+	RetireReconstructedPhysics();
+	VPhysicsSetObject(nullptr); // selected saved-field cleanup; source alias does not own its producer
 	// Unfinished L0 identity/shadow lifetime: 100b5040 removes shadow, retires the
 	// owned physics object and clears its reference. The selected prop override is narrower.
 }
@@ -2183,9 +2183,9 @@ namespace ElysiumNpcKernelShape
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, int32(void*)>::Test(&FElysiumEntity::Restore),
 				nullptr },
 			{ 128, TEXT("0x100aa680"), TEXT("CBaseEntity"), TEXT("ShouldSavePhysics"),
-				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
+				EElysiumNpcSlotBody::Default, TEXT("1"), 1, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, bool()>::Test(&FElysiumEntity::ShouldSavePhysics),
-				nullptr },
+				[](FElysiumEntity& Receiver) -> int64 { return Receiver.ShouldSavePhysics() ? 1 : 0; } },
 			{ 129, TEXT("0x100aa4e0"), TEXT("CBaseEntity"), TEXT("OnSave"),
 				EElysiumNpcSlotBody::Stub, TEXT(""), 0, false, false,
 				ElysiumNpcKernelShape::TDeclaredOn<FElysiumEntity, void()>::Test(&FElysiumEntity::OnSave),

@@ -120,7 +120,7 @@ class FElysiumEntity
 {
 public:
 	FElysiumEntity() = default;
-	virtual ~FElysiumEntity() = default;
+	virtual ~FElysiumEntity();
 
 	// Identity is a world slot; an entity is neither copied nor moved.
 	FElysiumEntity(const FElysiumEntity&) = delete;
@@ -151,6 +151,9 @@ public:
 	// m_pPhysicsObject (+0x36c): the actual backend actor identity, independent of the
 	// embodiment/component and logical pose. Assignment never destroys the previous body.
 	void VPhysicsSetObject(void* Object); // vampire.dll 0x100a6490
+	virtual bool RestoreSavedPhysics(const struct FElysiumSavedPhysicsBody& State, FString& OutError);
+	void RetireReconstructedPhysics(); // finite saved-field producer, not generic shadow225
+	TWeakObjectPtr<class UElysiumPhysicsPropComponent> ReconstructedPhysics;
 	void* VPhysicsGetObject() const { return PhysicsObject; }
 private:
 	void* PhysicsObject = nullptr;

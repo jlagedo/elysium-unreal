@@ -8,6 +8,9 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
+#include "ElysiumPhysicsPropComponent.h"
+#include "Substrate/ElysiumModelPhysics.h"
+#include "GameFramework/Actor.h"
 #include "Substrate/ElysiumNpcBase.h"
 #include "Visual/ElysiumNpcVisual.h"   // GateLeaderCloth -- a native placed model's garments
 
@@ -26,6 +29,38 @@ void FElysiumEntity::VPhysicsSetObject(void* Object)
 			Def ? *Def->Classname : TEXT(""));
 	}
 	PhysicsObject = Object;
+}
+
+bool FElysiumEntity::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, FString& OutError)
+{
+	if (!World || !World->GetOwnerActor() || State.FieldName != TEXT("m_pPhysicsObject") || PhysicsObject)
+	{ OutError = TEXT("saved physics field has no owner or already has an object"); return false; }
+	RetireReconstructedPhysics();
+	AActor* NativeOwner = World->GetOwnerActor();
+	auto* Component = NewObject<UElysiumPhysicsPropComponent>(NativeOwner);
+	Component->RegisterComponent();
+	NativeOwner->AddInstanceComponent(Component);
+	Component->SetVisibility(false); // service only; entity renderer still owns its art
+	if (!ElysiumModelPhysics::Restore(Component, World->PhysicsSurfaces(), State, OutError))
+	{ Component->DestroyComponent(); return false; }
+	ReconstructedPhysics = Component;
+	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Component));
+	return true; // type1 restore26019483-260194bc allocates once per owner field, even aliases
+}
+
+void FElysiumEntity::RetireReconstructedPhysics()
+{
+	if (UElysiumPhysicsPropComponent* Component = ReconstructedPhysics.Get())
+	{
+		ElysiumModelPhysics::Destroy(Component);
+		Component->DestroyComponent();
+	}
+	ReconstructedPhysics.Reset();
+}
+
+FElysiumEntity::~FElysiumEntity()
+{
+	RetireReconstructedPhysics(); // world teardown deletes base leaves without calling Kill
 }
 
 void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass)
@@ -275,6 +310,11 @@ void FElysiumEntity::ScriptUnhide()
 
 void FElysiumEntity::Kill()
 {
+	if (ReconstructedPhysics.IsValid())
+	{
+		RetireReconstructedPhysics();
+		VPhysicsSetObject(nullptr);
+	}
 	// Terminal: mark dead and go inert immediately (a killed-but-not-yet-reaped entity must
 	// not touch, trace, or think). The slot removal + handle invalidation is the world's job;
 	// this only flips the entity's own state.

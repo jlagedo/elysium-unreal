@@ -19,6 +19,7 @@
 class FElysiumButton final : public FElysiumMoverBase
 {
 public:
+	bool ShouldSavePhysics() override { return false; } // CBaseButton100c8740
 	// Button spawnflags (B.5 — decompiled, per-bit confirmed in FUN_100c8d60).
 	static constexpr int32 SF_DONTMOVE = 0x1;      // pressed pose == rest pose (no physical slide)
 	static constexpr int32 SF_TOGGLE   = 0x20;     // stays pressed until re-used (toggle up<->down)

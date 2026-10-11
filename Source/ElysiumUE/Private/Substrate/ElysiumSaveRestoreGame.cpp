@@ -3,6 +3,8 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumRetailSite.h"
 #include "ElysiumSaveArchive.h"
+#include "Substrate/ElysiumModelPhysics.h"
+#include "Substrate/ElysiumEntityWorldShared.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
 
@@ -22,12 +24,13 @@ namespace ElysiumSaveRestore
 		// One row's bytes through the port's archive (named modernization: the datamap writer's
 		// encoding, CSave::vfunc2 0x1019f930, is unrecovered).
 		template <typename T>
-		void GameRowToBytes(T& Row, int32 Version, double Base, TArray<uint8>& OutBytes)
+		bool GameRowToBytes(T& Row, int32 Version, double Base, TArray<uint8>& OutBytes)
 		{
 			OutBytes.Reset();
 			FMemoryWriter Writer(OutBytes, /*bIsPersistent*/ true);
 			FElysiumSaveArchive Ar(Writer, Version, Base, Base);
 			Ar << Row;
+			return !Writer.IsError();
 		}
 
 		template <typename T>
@@ -285,13 +288,106 @@ namespace ElysiumSaveRestore
 		};
 
 		// --- "Physics" (CPhysSaveRestoreBlockHandler 0x1044943c, object 0x106bda60) --------------------
-		// VPhysics object state keyed by entity and field. No port body: decisions.md D6 leaves the
-		// physics serializer to the owner (the base slot answers `ShouldSavePhysics == false`). The
-		// handler is registered so the dispatch order is retail's; every slot is the default no-op.
+		// Selected native body state keyed by entity and field (10043c70/100440c0/100443e0).
+		// Port wire format replaces the vphysics blob; Chaos owns solving and collision cooking.
+		// Model-prop consumer complete here; other object types/controllers/contacts remain open.
 		class FPhysicsBlockHandler final : public IBlockHandler
 		{
 		public:
 			virtual const char* GetBlockName() const override { return "Physics"; } // 0x10539b54
+			void PreSave(FSaveRestoreData* Arg) override
+			{
+				Context = GameContextOf(Arg);
+				CaptureWorld = Arg ? Arg->World : nullptr;
+			}
+			void Save(FSave& S) override
+			{
+				if (!Context || !Context->Source) return;
+				FElysiumMapSnapshot& Snapshot = *const_cast<FElysiumMapSnapshot*>(Context->Source);
+				if (CaptureWorld)
+				{
+					Snapshot.PhysicsBodies.Reset();
+					Snapshot.bPhysicsSaveFailed = false;
+					// 10043c70: native state is read in Physics Save, after Entities/EventQueue Save.
+					for (const FElysiumEntityState& Row : Snapshot.Entities)
+					{
+						FElysiumEntity* Entity = CaptureWorld->Resolve(FElysiumEntityHandle(Row.Index, CaptureWorld->GetEpoch()));
+						if (!Entity || !Entity->ShouldSavePhysics()) continue;
+						void* Actor = Entity->VPhysicsGetObject();
+						FElysiumSavedPhysicsBody State;
+						State.bHasObject = Actor != nullptr;
+						if (Actor && !ElysiumModelPhysics::Capture(Actor, State))
+						{
+							UE_LOG(LogElysiumWorld, Error, TEXT("Physics save #%d: admitted object has no supported native recipe"), Row.Index);
+							Snapshot.bPhysicsSaveFailed = true;
+							continue;
+						}
+						State.EntityIndex = Row.Index;
+						Snapshot.PhysicsBodies.Add(MoveTemp(State));
+					}
+				}
+				const int32 Count = Snapshot.PhysicsBodies.Num();
+				S.WriteInt(&Count, 1);
+				for (const FElysiumSavedPhysicsBody& State : Snapshot.PhysicsBodies)
+				{
+					TArray<uint8> Bytes;
+					if (!GameRowToBytes(const_cast<FElysiumSavedPhysicsBody&>(State), Snapshot.SchemaVersion, Snapshot.SaveBase, Bytes))
+					{ Snapshot.bPhysicsSaveFailed = true; return; }
+					const int32 Size = Bytes.Num();
+					S.WriteInt(&Size, 1);
+					S.WriteData(Bytes.GetData(), Size);
+				}
+			}
+			void PostSave() override { Context = nullptr; CaptureWorld = nullptr; }
+			void ReadRestoreHeaders(FRestore& R) override { Context = GameContextOf(R.Data); }
+			void Restore(FRestore& R, int32, int32) override
+			{
+				if (!ReadRows(R) || !Context->World) return;
+				TArray<FElysiumEntity*> Reconstructed;
+				for (const FElysiumSavedPhysicsBody& State : Context->Decoded->PhysicsBodies)
+				{
+					FElysiumEntity* Entity = Context->World->Resolve(FElysiumEntityHandle(State.EntityIndex, Context->World->GetEpoch()));
+					if (!Entity) continue; // removed/invalid entity does not reconstruct a body (100440c0).
+					if (!Entity->ShouldSavePhysics() || !State.bHasObject)
+					{ Entity->VPhysicsDestroyObject(); continue; } // 100440c0: false eligibility or saved count<1
+					FString Error;
+					if (!Entity->RestoreSavedPhysics(State, Error))
+					{
+						UE_LOG(LogElysiumWorld, Error, TEXT("Physics restore %d.%s: %s"), State.EntityIndex, *State.FieldName, *Error);
+						Context->bRowDecodeFailed = true;
+						for (FElysiumEntity* Created : Reconstructed) Created->VPhysicsDestroyObject();
+						return;
+					}
+					Reconstructed.Add(Entity);
+				}
+			}
+			bool ReadRows(FRestore& R)
+			{
+				if (!Context || !Context->Decoded || !R.Data) return false;
+				TArray<FElysiumSavedPhysicsBody>& Rows = Context->Decoded->PhysicsBodies;
+				Rows.Reset();
+				const int32 Count = R.ReadInt();
+				if (Count < 0 || Count > (R.Data->Size - R.Tell()) / 4)
+				{ Context->bRowDecodeFailed = true; return false; }
+				TSet<int32> Seen;
+				for (int32 Index = 0; Index < Count; ++Index)
+				{
+					const int32 Size = R.ReadInt();
+					if (Size <= 0 || Size > R.Data->Size - R.Tell())
+					{ Context->bRowDecodeFailed = true; return false; }
+					TArray<uint8> Bytes; Bytes.SetNumUninitialized(Size);
+					R.ReadData(Bytes.GetData(), Size);
+					FElysiumSavedPhysicsBody& State = Rows.AddDefaulted_GetRef();
+					if (!GameRowFromBytes(Bytes, Context->Decoded->SchemaVersion, Context->Decoded->SaveBase, State)
+						|| State.EntityIndex < 0 || State.FieldName != TEXT("m_pPhysicsObject") || Seen.Contains(State.EntityIndex))
+					{ Context->bRowDecodeFailed = true; return false; }
+					Seen.Add(State.EntityIndex);
+				}
+				return true;
+			}
+			void PostRestore() override { Context = nullptr; }
+			FGameContext* Context = nullptr;
+			FElysiumEntityWorld* CaptureWorld = nullptr;
 		};
 
 		// --- "AI" (CAI_SaveRestoreBlockHandler 0x1049dfb0, object 0x10936b5c) -------------------------
@@ -440,6 +536,7 @@ namespace ElysiumSaveRestore
 		EngineLoadGameState(GameBlockSet(), Data, Snapshot.BlockHeaderStart, 0, 0, 0); // vfunc9 0x200975f0: 20, 21; no world
 		if (Context.bRowDecodeFailed || Data.bReadPastEnd) return false;
 		Snapshot.Entities = MoveTemp(Decoded.Entities);
+		Snapshot.PhysicsBodies = MoveTemp(Decoded.PhysicsBodies);
 		Snapshot.Queue = MoveTemp(Decoded.Queue);
 		Snapshot.QueueNextSerial = Decoded.QueueNextSerial;
 		Snapshot.QueueLastEnqueue = Decoded.QueueLastEnqueue;
@@ -449,6 +546,7 @@ namespace ElysiumSaveRestore
 	int32 RestoreMapBlocks(const FElysiumMapSnapshot& Snapshot, FElysiumEntityWorld& World, FElysiumMapSnapshot& Decoded,
 		double RestoreBase, bool bLevelTransition, IElysiumRetailSiteSink* Sites)
 	{
+		if (Snapshot.bPhysicsSaveFailed) return INDEX_NONE;
 		GameCopyScalars(Snapshot, Decoded);
 		FGameContext Context;
 		Context.Decoded = &Decoded;
@@ -464,6 +562,7 @@ namespace ElysiumSaveRestore
 			FElysiumMapSnapshot Encoded;
 			GameCopyScalars(Snapshot, Encoded);
 			Encoded.Entities = Snapshot.Entities;
+			Encoded.PhysicsBodies = Snapshot.PhysicsBodies;
 			Encoded.Queue = Snapshot.Queue;
 			Encoded.QueueNextSerial = Snapshot.QueueNextSerial;
 			Encoded.QueueLastEnqueue = Snapshot.QueueLastEnqueue;
@@ -517,6 +616,13 @@ namespace ElysiumSaveRestore
 			}
 			GameEntitiesHandler().Context = nullptr;
 			GameEntitiesHandler().Data = nullptr;
+			if (const FBlockHeader* Physics = FindRecord("Physics"); Physics && Physics->locBody != -1)
+			{
+				R.Seek(T0 + Physics->locBody);
+				GamePhysicsHandler().Context = &Context;
+				GamePhysicsHandler().Restore(R, 0, 0);
+				GamePhysicsHandler().Context = nullptr;
+			}
 		}
 		if (Context.bRowDecodeFailed || Data.bReadPastEnd) return INDEX_NONE;
 		return Context.AppliedRows;

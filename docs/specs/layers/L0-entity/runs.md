@@ -261,3 +261,30 @@ Original completed runs remain23/88; worker evidence follows in progress.md. No 
 Coordinator accepted this independent prerequisite on2026-10-11: build/default175/175,
 touched13/13 plus corrected exact PropSolid3/3, bounded18/18 in two boots passed. Evidence
 and command-name corrections are in progress.md.23/88 unchanged; generic physics remains open.
+
+## Selected saved-recipe prerequisite (2026-10-11; coordinator accepted)
+
+Actual model Spawn registers owned model/surface/body inputs only on live Chaos success. The
+ordered Physics block captures and persists native runtime pose/velocities/sleep/gravity/current
+mass/damping; its real restore consumer reconstructs geometry/state and retains it through final
+entity reconnect. Selected failure/replacement/removal retires recipes before native release.
+Base true and confirmed false eligibility overrides are implemented. Admitted live objects without supported recipes explicitly refuse save rather than losing state.
+Eligible aliases reconstruct independently per field and own invisible native service components.
+
+Finite native bbox service uses explicit authored bounds/parameters, actual Chaos identity and
+saved reconstruction/removal evidence; retail bbox Spawn/static/shadow input selection stays open.
+Downstream pointer fixups, multiobject/controller/contact/fluid state, Swap/225/shadow and solved226
+publication/touch/relink remain open. No original run closes;23/88 unchanged. Worker tests/docs are
+reviewable; coordinator compilation/tests/default/bounded arena results are pending in progress.md.
+
+Selected saved-null refinement preserves eligible absence as count0, following100440c0's225 arm.
+Actual Destroy ->Freeze ->archive ->ApplySnapshot stays bodyless after reconnect. Earlier broad
+gates precede this correction; final coordinator rebuild/native/default/touched/bounded18 pending.
+Original23/88 unchanged.
+
+Coordinator accepted the selected saved-recipe prerequisite after final null-arm correction:
+--arm build148.078s, native4/4 clean, default177/177, touched13/13, bounded18/18 in two boots.
+Authoritative JSON paths/counts and reviewed error/alias/null/lifetime contracts are recorded in
+progress.md's acceptance entry. Audit7946 rows retain16columns; diff check clean. Original23/88
+unchanged; this prerequisite does not close generic225/shadow, authored bbox callers, solved226
+or the full L0 closing gate. Exact29 paths committed by coordinator; never pushed.

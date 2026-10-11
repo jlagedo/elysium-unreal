@@ -838,3 +838,68 @@ Contact dampening is retained by the process surface service but has no Chaos re
 Drag/rollingdrag/volume and rotinertialimit are retained, not mechanically implemented.
 Configured damping/material values do not establish retail motion/contact feel equivalence;
 restitution range, pair combine rules and contact dampening remain explicit adapter gaps.
+
+### Saved body recipe observer and selected Chaos adapter [decompiled, 2026-10-11]
+
+The observer of manager associations is Physics saving/reconstruction, not body allocation.
+Model creator1002e3a0 admits only a nonnull environment#7 result, then manager#2
+thunk10012f12->10044db0 associates body/model. Bbox1002dfe0 obtains collision#19
+BBoxToCollide(min,max), and manager#0->10044c20 records bounds for a successful collide.
+Custom creator1002e7e0 uses object parameters then manager#1->10044f60 associates successful
+body/collide. Its absent-parameter default record is not inferred by the new native service.
+Removal10158520 calls manager#3 thunk1000ed68->10045110 before environment#20: first matching
+model body is removed and returns; otherwise first matching bbox body is removed. The collide
+bounds map is not removed in this function. Semantic owned associations suffice; no Source
+tree/hash/allocator layout is part of the port contract.
+
+Physics handler vtable1044943c reaches PreSave10043c40, Save10043c70, header10043f70,
+Restore100440c0 and PostRestore100447f0. Save writes each valid owner PhysObjectHeader and a
+block for each saved object, passing the actual object to environment saving; registered lists
+are cleared after each. Restore validates owner/header, calls ShouldSavePhysics, destroys the
+current object when eligibility is false or count<1, and dispatches the one-object type1 arm
+to100443e0. That arm rejects an existing object, rebuilds bbox using saved min/max or model
+using saved model name/solid, and re-registers successful reconstruction. Missing geometry or
+failed environment restore reports DevMsg. Other object types and multiobject environment
+restoration remain outside this adapter. Base100aa680 returns true; false constant overrides
+include Door100ee3e0, FuncBrush10114d90, FuncRotating100bf900, Button100c8740 and
+Player1017be30. NPC101a6520 already returns false. FuncMoveLinear10115be0 has no concrete
+port leaf; its independent caller remains open.
+
+The named modernization is a typed Unreal archive in the existing Physics block instead of
+the opaque vphysics blob. Actual prop_physics Spawn creates/registers its first-solid native
+recipe only after successful Chaos output. Physics Save captures real native pose, velocity,
+angular velocity in radians, activity/gravity and current mass/damping, with owned creation
+inputs. Restore reconstructs the actual selected Chaos body, then preserves its saved native
+state across final entity reconnect. Sleeping is not removal. All replacement/failure/removal
+paths retire recipe before native release, including component destruction. Eligible source aliases are saved as independent fields and reconstructed independently, as
+the type1 environment allocation requires. Missing supported recipes explicitly fence persistence.
+
+Finite bbox native-service evidence uses explicit authored min/max/parameters and actual Chaos
+box output, saved reconstruction and retirement. It is not a retail Spawn producer. The
+remaining chain is VPhysicsInitShadow100a6150 -> InitSetup/225, pose217 and params219 ->
+box helper100a5d80 model type/surface/default selection ->1002dfe0/1002e7e0 -> SetObject,
+shadow caps/permissions/update registration. Static/shadow/default caller selection is open.
+No visual CalcBounds input substitutes for saved authored bounds. Generic Swap/225, solved226
+pose/touch/relink ordering, contact/controller/multiobject and fluid enter/exit/cache save state
+remain open. Current damping capture covers the real water setter, not complete fluid restore.
+
+Type1 aliases do not coalesce native bodies in this reconstruction arm. Environment table
+260c9998#50=26025400 dispatches type1 through260d2ca0=26019450. Its read-only PE body
+26019483-260194bc unconditionally allocates0x5c, calls ctor260168e0, writes the new pointer to
+the destination field and restores26019070. Only afterward does26025400 register old/new through
+26025280. Environment#49=26025240 initializes that reference map. This is downstream reference
+fixup machinery, not a pre-allocation body reuse lookup. Thus the finite port saves every eligible
+recipe-backed owner field, including aliases, and reconstructs independent actual bodies. Base
+leaves own invisible service components for these outputs, with native collision profile/mask
+preserved. SetObject clear/overwrite remain reference-only; base225/Kill/destructor retire only
+the owned reconstructed producer, while original source aliases do not own their producer.
+Full downstream pointer/controller fixups remain open. If any native reconstruction fails, earlier
+successful fields in this selected Physics packet are retired and application fails; malformed or
+truncated rows fail decode and propagate outer archive failure. Unsupported native recipes fence
+saving explicitly. This does not close generic225 shadow/ownership semantics.
+
+Saved absence uses100440c0's count<1 observer invoking owner225. Eligible null fields retain
+a semantic count0 row; restore destroys baseline Spawn's body and skips reconstruction. Prop225
+sets runtime bSimulating=false, so final GateBody does not resurrect it. Actual Destroy ->Freeze
+->archive ->ApplySnapshot observes null field/no native actor after reconnect. Generic shadow225
+remains unfinished.

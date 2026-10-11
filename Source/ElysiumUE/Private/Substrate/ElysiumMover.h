@@ -170,6 +170,7 @@ struct FElysiumDoorLinkWords
 class FElysiumDoorBase : public FElysiumMoverBase
 {
 public:
+	bool ShouldSavePhysics() override { return false; } // CBaseDoor100ee3e0
 	// --- The NPC-failure words (0018/7) ---------------------------------------------------------
 	// `+0x644` `m_bfNpcFailedFlags` (datamap, FIELD_INTEGER) -- the NPC-failure flag word. Bits by their writers: 1 squad-focus door (slot 531
 	// arm 2), 2 `StartBlocked`'s activator, 4 slot 531 arm 4 (`0x1027f550` refused), 8 no `0xd00`

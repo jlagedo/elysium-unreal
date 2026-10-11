@@ -13,10 +13,10 @@
 //   | 3 | 0x10936b5c  | CAI_SaveRestoreBlockHandler (0x1049dfb0)     | "AI"         0x106129e0 |
 //   | 4 | 0x1072b354  | CPython_SaveRestoreBlockHandler (0x10476ac8) | "Python"     0x1055e570 |
 //
-// The handlers' own slot bodies are NOT walked by L0-r029 (its Open 10). What each port handler
-// writes is the port's existing capture of that block -- the entity rows, the queue -- in the
-// port's archive encoding (decisions.md D6, a named modernization); `Physics` has no port body
-// (D6: the physics serializer is an owner decision; the base slot answers false); `AI` and
+// L0-r029 left the handlers' own bodies open. Entities/EventQueue use the port archive encoding
+// (decisions.md D6). Physics now saves actual selected-model Chaos recipes/runtime state in its
+// ordered block; native bbox reconstruction is a finite service prerequisite, not a Spawn caller.
+// Generic aliases/multiobject/controller/contact/fluid and shadow/publication remain open. `AI` and
 // `Python` are the L4 / L5 upward hooks of a lower layer's registration: registered in retail's
 // order with empty bodies, so the dispatch order they will fill is already the retail one.
 

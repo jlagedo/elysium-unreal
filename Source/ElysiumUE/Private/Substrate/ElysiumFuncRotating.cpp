@@ -66,6 +66,7 @@ namespace
 class FElysiumFuncRotating final : public FElysiumEntity
 {
 public:
+	bool ShouldSavePhysics() override { return false; } // CFuncRotating100bf900
 	float MaxSpeed = 0.0f;      // `maxspeed`, degrees/second (the authored rate)
 	float FanFriction = 0.0f;   // `fanfriction`, spin-down percent — stored, no ramp implemented
 	float Volume = 0.0f;        // `volume`  — the running-sound loudness (no rotating sound yet)

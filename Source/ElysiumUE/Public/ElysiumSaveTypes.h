@@ -8,6 +8,7 @@
 #include "ElysiumRng.h"
 #include "ElysiumVariant.h"
 #include "ElysiumWeatherState.h"
+#include "ElysiumPhysicsBodyRecipe.h"
 
 // The four blocks a save holds, as plain C++ structs we own.
 // None of this is UPROPERTY-reflected and none of it should become so: the substrate is plain C++
@@ -123,6 +124,7 @@ struct FElysiumSaveVersion
 		// the Entities block's table rows carry the two FENTTABLE flag words and the classname. A
 		// whole-record change, so the floor moves.
 		TransitionState = 45,
+		PhysicsRecipes = 46, // actual selected body recipes/state in the ordered Physics block
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -157,7 +159,7 @@ struct FElysiumSaveVersion
 	//
 	// `SaveBlocks` moves the entity and queue rows into the block set's stream (L0-r029); saves are
 	// disposable (no migration) and the floor moves with it.
-	static constexpr int32 MinSupported = TransitionState; // L0-r030: the ETABLE rows gained the flag words and the classname (a whole-record change)
+	static constexpr int32 MinSupported = PhysicsRecipes; // disposable saves: Physics gained actual body recipes/state
 
 	static const FGuid GUID;
 };
@@ -274,6 +276,8 @@ struct FElysiumMapSnapshot
 	// stream only, and the reader decodes these back. A snapshot built or edited by hand (the
 	// harness) must leave `BlockStream` empty so the writer re-encodes it.
 	TArray<FElysiumEntityState> Entities;
+	TArray<FElysiumSavedPhysicsBody> PhysicsBodies; // decoded only; persisted by the Physics block
+	bool bPhysicsSaveFailed = false; // transient admission fence; an unsupported live body cannot be silently lost
 
 	// The `.HL3` equivalent: def indices that left the map with the player (the player plus
 	// everything carried). On restore the build skips them, because they now live wherever the
