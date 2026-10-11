@@ -1370,3 +1370,121 @@ OnStartTouch -> ChangeNow chain. No command or view conversion change is justifi
 These fixes reuse installed/tested native GT frame and restore APIs. Only the generator/save-entry
 and the three affected test consumers unfreeze. Build coherently, run the failed registered prefixes,
 then the affected save/native families; default and bounded arena remain coordinator-owned.
+
+## Public Chaos simulation-event packet contract (2026-10-11; before code)
+
+Observer is the actual START_OPEN/InputClose door:101c1520 ->10038cb0 ->10038710
+submits object46 target/arrival; completed47 plus creation-owned active226 ->100a55b0
+observes the unchanged strict1in-squared blocked gate and ordered178 consequence.
+Reuse the confirmed moving walk and public2601aa50/2601a250 controller recovery.
+GT producers own logical pose, Source-inch float/full Source Euler conversion (+Y reflection),
+arrival and permissions. Chaos owns simulation clock, solve, geometry and contacts.
+The controller must read actual native pose/linear cm/s/angular rad/s and actual event delta,
+apply fraction=remaining<=0?1:min(dt/remaining,1), clamp FLOAT countdown to zero,
+then existing prediction/strict teleport/speed/damping/angular formulas; target submission
+is distinct from solved pose. No fixed.015 schedule or requested-delta surrogate is permitted.
+GT gameplay/contact outputs remain after completed solve, generation fenced and ordered.
+Same/lower producers must be real; no new upward hook. Existing L3 pending-view and L2
+projectile hooks remain named; FLOAT save fields and load-native retirement are preserved.
+
+Installed UE5.8 public SimCallbackObject.h supplies TSimCallbackObject, Presimulate,
+GetDeltaTime_Internal (simulation-step delta), GetSimTime_Internal (step-start time),
+immutable marshaled input and internal-thread output; destructor is internal-thread.
+OnPreSimulate_Internal is once per simulation step, explicitly not every substep.
+SingleParticlePhysicsProxy.h documents GetGameThreadAPI for GT and GetPhysicsThreadAPI
+for callbacks; nullable internal handle and UniqueIdx/generation must fence identity.
+PhysicsSolverBase.h supplies external registration and queued unregister/free.
+Existing ElysiumModelPhysics FSolveFilterCallback marshals identities, publishes contact
+outputs and unregisters on world cleanup; it is the local lifecycle precedent.
+Worker must verify exact supported pose/velocity writes and teleport collision handling,
+measure event count/delta/target/countdown/correction phase and completed47 on the SAME
+normal NativeMovingFirstContact production fixture, then implement the service-input
+adapter where this supported contract is established. Callback name/configuration alone
+is not parity. Native-retail contact/feedback mismatch remains independently OPEN.
+
+### Event packet implementation and bounded stimulus classification
+
+The production contact callback now consumes immutable target/controller revisions at
+actual Chaos presimulate, with PT-owned countdown/prediction and completed GT publication.
+Resolve UniqueIdx through current GetParticleProxy_PT before comparing/dereferencing the
+proxy; generation plus revision fences output. Queued removal carries a shared PT fence,
+kept until callback/world retirement so an older marshaled input cannot resurrect a removed
+controller. Producer mutations after Prepare refresh that same producer snapshot. All
+diagnostic events are bounded to the prepared frame and retired with controller/world state.
+Physics save reads the completed state through ShadowFor; its FLOAT layout is unchanged.
+
+Installed public evolution SetParticleTransform(bIsTeleport=true) performs native movement,
+island and cached-contact notifications. Every PT shape's simulation/query flags are saved,
+temporarily disabled and restored before native contact generation. The strict squared gate,
+preteleport displacement, rotation and prediction remain the recovered2601a250 formulas.
+Oracle physics-interaction.md records public API lifetime and retail active-core evidence.
+
+Instrumentation103708 is1 clean; event adapter103957 is25 clean. Both preserve the SAME normal
+NativeMovingFirstContact prefix:36 frames, one native event each, delta.0166666675; first44f20,
+first178f32, completed47 discrepancy squared1.0501758925050075. Initial instrumentation still
+observed GT-corrected velocity/countdown0; the adapter applies correction on PT from actual
+event pose/velocity/delta and publishes countdown/prediction after completion. Delta/phase
+ownership is corrected, without claiming the retail .015 cadence or contact result reproduced.
+
+The104354 and105335/105536 focused failures were added stimulus assertions, not weakened
+retail observers. Their supposed force-free linked peer was still beside the wall with real
+native contacts and velocity:105536 sleeping presim skipped correction/retained.100000001,
+but completed velocity was(50.225,19.355,-26.900); the surviving-body removal then completed
+with(78.703,31.112,-26.888), so neither completed wake nor pose proved controller correction.
+Creation removal restored saved gravity=true. After all original contact/IO observers, the
+same production body is now teleported remotely, flushed, checked contact-free, and installed
+with saved gravity=false and an unchanged entire target.105737 is2 clean: sleeping presim
+does not simulate or consume countdown; completed body stays asleep; removal after Prepare
+leaves identical pose and zero velocities; update after Prepare uses newest target in that
+same solve. No normal production fixture input, collision observer or retail expectation changed.
+
+The failed reciprocal1cm equality stimulus reached errorSquared=1 but teleported. FLOAT
+reconstruction of1.f/2.54f then*2.54f is inches.3937007784843445, distance.9999999403953552,
+FLOAT squared.9999998807907104: this was actually a strict greater-than input. The final
+25in/63.5cm stimulus requires literal errorSquared==4032.25, correction admitted, no teleport,
+and completed ordinary movement.105737 measured exactly4032.25 and no teleport. The existing
+greater-than teleport and completed pose/collision observers remain intact; no threshold or
+tolerance change was made to runtime.
+
+### Frozen adapter validation receipts
+
+Final arm build: E:/elysium-work/logs/20261011T110118.245490Z-build.json,
+exit0,76.125s. Earlier build103513 C4458 was an inherited member-name collision;
+104150 C2247/C2248 was the protected inherited particle-handle accessor. Both are
+implementation compile errors, repaired using NativeSolver and the current resolved
+proxy's public base accessor; neither is a failed installed engine service.
+
+Affected production/arm batch:
+E:/elysium-work/reports/tests/20261011T110259.508081Z-elysium-substrate-modelphysics-elysium-s-31ef1b4b/index.json
+has54 Success:34 succeeded,20 succeededWithWarnings,0 failed/notRun/inProcess.
+ModelPhysics9 and Mover16 are clean, including both event witnesses. Remaining families:
+NpcKernelShape4, NpcKernelSlots1, Arm.NpcDoorLink8, GeometryAndClocks1,
+NpcKernelSpeciesLifecycle10, NormalNotDue1, FullPass1, DoorElevator1, Movement1,
+WorldFrameSeconds1. Wrapper E:/elysium-work/logs/20261011T110257.977865Z-test.json
+exit0,25.5s;14 runtime warning lines are separate from20 warned automation tests.
+The first-event missing-prediction branch reaches errorSquared10000, teleports and restores
+all shape flags, then completes nativeX5139.960 from target5129.970 using preserved
+preteleport displacement. Equality literal4032.25 does not teleport. Lifecycle observations
+match105737, including newest-target same-solve velocity2000cm/s.
+
+Final normal presim frame32 starts.51666669361293316 with actualdelta.0166666675,
+arrival.0166666675->0, fraction1, eventSourceX1.56677413; native velocity before
+(47.607,2.977,1.688)cm/s becomes(-156.376,-1.943,-1.685)cm/s. Completed47 frame32
+time.53333333333333333 remains Source(1.56526852,-.0151009932,393.713837), discrepancy
+squared1.0501758925050075 and actual178. The unchanged paired public retail probe102350
+instead gives squared.57965414909080337/no178 with .0149999997 events:28 single,
+4 double atframes1/9/18/27; decisive20/26/32 are single. This service mismatch is OPEN.
+
+Ordered normal MOVING_CREATE3 plus MOVING_INPUT96(f1..32) is identical between original
+E:/elysium-work/logs/20261011T102220.558901Z-test.log and final110257.977865 test.log.
+Both99-line UTF8 sequences, LF joined/no trailing LF, have SHA256
+af9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515.
+Therefore E:/elysium-work/research/vphysics-contacts/20261011T102350.497103Z/index.json
+is reused for this common prefix. No native callback-altered suffix is retail evidence.
+
+Scenario E:/elysium-work/reports/arena/20261011T110326.781621Z/arena/index.json
+passes2/2: l0_angle_motion290events and l0_physics_solid_mask81events;0failed,
+first_unmet empty. Wrapper110326.548571Z-arena.json exit0;27 error/29 warning lines
+include installed toolset Python AgentSkill startup failures and runtime diagnostics,
+separate from successful scenario assertions. l0_angle_motion Spawn literals/order unchanged.
+Coordinator owns final default/bounded arena and commit; worker has no remaining engine job.

@@ -1045,6 +1045,69 @@ lag or contact-order repair follows from this evidence. Actual moving consequenc
 and native-retail contact service equivalence remain open; the matched normal prefix
 and feedback thresholds are recorded in the L0 pusher walk.
 
+#### Public Chaos event adapter verification (2026-10-11)
+
+Installed UE5.8 public `Chaos/SimCallbackObject.h` exposes immutable consumer
+inputs, PT-owned pooled outputs, `GetSimTime_Internal` and `GetDeltaTime_Internal`.
+`OnPreSimulate_Internal` is once per simulation step, explicitly not once per
+substep; `OnPreIntegrate_Internal` is the distinct per-substep hook. The native
+fixture uses its existing scene configuration; neither a fixed retail scheduler
+nor a change to Chaos's substep policy follows from this oracle.
+
+`PBDRigidsSolver.h::GetParticleProxy_PT(FUniqueIdx)` resolves the current PT proxy.
+Compare that result to the marshaled pointer before calling
+`SingleParticlePhysicsProxy.h::GetPhysicsThreadAPI` (which can return null).
+The latter enforces PT context and provides X/R/V/W and supported velocity writes;
+GT APIs, UObjects and FBodyInstances stay outside the callback. Native incarnation
+and target/controller revision fence completed output. Countdown and prediction
+persist on PT when immutable input is reused; only a new GT revision replaces
+them. `PhysicsSolverBase.h` queues registration/removal and owns internal-thread
+destruction. A shared PT revision fence permits a queued controller removal to
+outlive callback cleanup safely; it captures no UObject or retired proxy.
+
+Retail active-core applicability is confirmed by the targeted chain, without
+recreating its scheduler:2602d450 traverses manager+18;2602cfe0 removes a sleeping
+unit through2602ce60, writes unit state8, then2602ce10 selects manager+1a8 for
+states above7. Thus a global engine callback must not apply shadow correction to
+a sleeping native core merely because that callback ran.2601aa83..2601aa95 loads
+FLOAT remaining, subtracts the event DOUBLE, then stores FLOAT; the decompilation's
+cast of the subtraction operand is lossy, whereas2601aa6d..2601aa70 deliberately
+passes FLOAT delta to2601a250 for the fraction/velocity calculation.
+
+Teleport keeps the strict squared-distance comparison and the preteleport
+displacement, rotation and prediction base. The native adapter brackets every
+public PT shape's simulation/query collision flags, uses public
+`FPBDRigidsEvolutionGBF::SetParticleTransform(...,bIsTeleport=true)`, then restores
+the flags before contact generation/solve. Its installed implementation updates
+the particle transform, island state and cached collision transforms through
+`OnParticleMoved`; raw proxy pose setters alone would omit that service. The
+handle passed to this API comes from the current solver-resolved proxy, never
+from an external body or a stale input pointer. Completed47 still samples the
+GT body projection after the actual solve, independently of the submitted target.
+
+Initial same-fixture observation receipt
+`E:/elysium-work/reports/tests/20261011T103708.678505Z-elysium-substrate-mover-nativemovingfirs-94abc7a0/index.json`
+is1 clean. All36 native frames have one simulation event with delta.0166666675;
+presim observes the previously GT-corrected velocity and already-zero arrival.
+Its first44 frame20 and first178 frame32/discrepancy squared1.0501758925050075
+exactly retain the preceding fixture's observations. An initial event-controller
+integration also retains those outputs in the25-clean affected receipt
+`E:/elysium-work/reports/tests/20261011T103957.755068Z-elysium-substrate-modelphysics-elysium-s-0822eee6/index.json`.
+This fixes controller input ownership/phase only; measured retail cadence and
+native contact/feedback differences remain independent open service contracts.
+
+Frozen adapter receipt110259.508081Z is54 Success (34 succeeded,20 warned,
+zero failed/notRun/inProcess); ModelPhysics9/Mover16 are clean. Actual moving presim
+frame32 receives remaining.0166666675 and eventdelta.0166666675, publishes0 after
+correction; completed47 remains discrepancy squared1.0501758925050075/actual178.
+The unchanged99-line creation/input prefix through frame32 permits reuse of the
+paired public retail102350 receipt, squared.57965414909080337/no178. This packet
+does not close the cadence/contact service mismatch. Same production bodies prove
+sleeping skip, controller removal after Prepare, newest target after Prepare,
+literal strict equality4032.25/no teleport, and first-event prediction-zero
+errorSquared10000/teleport with restored all-shape flags and completed native pose.
+The L0 pusher walk records exact build/affected/scenario receipts and classifications.
+
 The first reached observer is a parented `prop_dynamic` solid2: InitStatic100a5bb0
 delegates InitShadow100a6150(false,false,null). It requires a dynamic bbox body, not
 a static replacement. InitShadow runs Setup/225, obtains absolute pose and collision

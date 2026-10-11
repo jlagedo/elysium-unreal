@@ -70,6 +70,15 @@ namespace ElysiumModelPhysics
 	const FElysiumPhysicsShadowState* ShadowFor(void* Actor);
 	void RemoveShadow(void* Actor); //2601a920 restores the native body before controller deletion
 	int32 GetShadowPosition(void* Actor, FVector* OriginCm, FQuat* Rotation);
+	struct FShadowEventSample
+	{
+		double Time = 0., Delta = 0.; float RemainingBefore = 0.f, Remaining = 0.f, Fraction = 0.f;
+		FVector Position = FVector::ZeroVector, Velocity = FVector::ZeroVector, CorrectedVelocity = FVector::ZeroVector;
+		FVector PredictionBefore = FVector::ZeroVector, Target = FVector::ZeroVector;
+		double TeleportErrorSquared = 0.;
+		bool bTeleported = false, bCollisionRestored = true, bSleeping = false, bSimulated = false;
+	};
+	TArray<FShadowEventSample> ShadowEvents(void* Actor); //completed, incarnation-fenced PT observations
 	// Called by the production Gameplay tick after thinks, before UE StartPhysics.
 	// Unreal owns the scene, scheduling, contacts and solve; substrate owns retail dt/controller.
 	float PreparePhysicsFrame(UWorld& World, float FrameSeconds, float TimeScale, bool bSimulating);

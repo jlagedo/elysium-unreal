@@ -1,5 +1,31 @@
 # Worker runs — L0-entity
 
+## Public Chaos simulation-event adapter — 2026-10-11 (after c2899b6b)
+
+One fresh Sol High worker with no inherited history implemented the public simulation
+event seam after the coordinator's concise contract/API review. Actual native event pose,
+velocity and delta now drive correction; PT countdown/prediction persist across reused
+inputs. Current solver lookup, generation/revision fences, queued removal lifetime and
+completed save publication preserve the service boundary. Public evolution teleport
+maintains bounds/contact state and restores all shape flags before solve.
+
+Same production fixture proves sleeping skip, controller removal and target replacement
+after Prepare; exact squared threshold4032.25 does not teleport, initial missing prediction
+errorSquared10000 does. Failed added stimuli were classified using actual contact/gravity
+and FLOAT evidence before replacement; original normal contact/receiver assertions remain.
+Native one event/frame at.0166666675 and first44f20/first178f32/discrepancy squared
+1.0501758925050075 are unchanged. The matched retail.015 event and frame32 below-gate
+result remain OPEN; no scheduler clone, tolerance waiver or divergence is accepted.
+
+Frozen --arm build110118 exit0/76.125s; affected11025954Success=34clean/20warned,
+no failed/notRun/inProcess; worker two scenarios110326 pass. Coordinator default110420
+189Success=110clean/79warned; bounded11045519/19 in two hosts, both exit0, startup
+27errors/535warnings separate. Doctor110624 exit0. Ordered99 creation/input prefix
+lines match prior probe inputs exactly (SHA256af9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515).
+Unchanged public102350, generator54 and map2 evidence reused. Full receipts/hashes and
+remaining observer plan are in progress.md and the pusher walk. Original23/88/fullL0 OPEN;
+no content/golden/corpus edits, ledger regeneration/kernel --check, push or next worker.
+
 ## Normal moving contact evidence — 2026-10-11 (after28c40da1)
 
 Sole fresh Sol High worker, no inherited history, proved normal START_OPEN/InputClose

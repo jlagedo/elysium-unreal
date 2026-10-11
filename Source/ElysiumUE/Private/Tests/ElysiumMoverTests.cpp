@@ -665,6 +665,17 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 			}
 			if (FCString::Strcmp(Stage,TEXT("after_solve")) == 0)
 			{
+				const auto SimEvents=ElysiumModelPhysics::ShadowEvents(Subject->VPhysicsGetObject());
+				TestTrue(TEXT("normal moving fixture reaches actual public Chaos simulation event"),!SimEvents.IsEmpty());
+				for (const auto& SimEvent : SimEvents)
+				{
+					TestEqual(TEXT("actual simulation event owns FLOAT arrival countdown"),SimEvent.Remaining,
+						static_cast<float>(FMath::Max(static_cast<double>(SimEvent.RemainingBefore)-SimEvent.Delta,0.)));
+					TestTrue(TEXT("ordinary sliding event does not take teleport branch"),!SimEvent.bTeleported);
+					const FVector EventSource=SourceWords(SimEvent.Position);
+					AddInfo(FString::Printf(TEXT("MOVING_SIM_EVENT,%d,%.17g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%s,%s"),MovingFrames,SimEvent.Time,SimEvent.Delta,
+						SimEvent.RemainingBefore,SimEvent.Remaining,SimEvent.Fraction,EventSource.X,EventSource.Y,EventSource.Z,*SimEvent.Velocity.ToString(),*SimEvent.CorrectedVelocity.ToString()));
+				}
 				FVector NativePosition; FQuat NativeRotation; void* ContactPartner=nullptr; FString ContactProvenance;
 				const int32 ShadowResult=ElysiumModelPhysics::GetShadowPosition(Subject->VPhysicsGetObject(),&NativePosition,&NativeRotation);
 				const bool bContact=ElysiumModelPhysics::GetContactPoint(Subject->VPhysicsGetObject(),ContactPartner,&ContactProvenance);
@@ -730,6 +741,87 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("blocked sliding door retains its closing state"), Door->State(), FElysiumDoorBase::EToggleState::GoingDown);
 		TestTrue(TEXT("actual native Blocked receiver advances the linked peer"), Peer->State() == FElysiumDoorBase::EToggleState::GoingDown || Peer->State() == FElysiumDoorBase::EToggleState::AtBottom);
 		AddInfo(FString::Printf(TEXT("native door local=%.9g start=%.9g deadline=%.9g pose=%s outputs=%s"), Door->LocalTime, Door->StartFrameLocalTime, Door->PhysicsMoveDoneTime, *Door->GetOrigin().ToString(), *Sink->Log()));
+		if (Parameters == TEXT("NativeMovingFirstContact"))
+		{
+			// After the unchanged ordinary callback observers, use this same production-created
+			// remote peer to prove sleeping and controller retirement at the marshaling boundary.
+			void* PeerObject=Peer->VPhysicsGetObject(); auto* PeerNative=ElysiumModelPhysics::Identity(Peer->Body);
+			const auto PeerIdentity=ElysiumModelPhysics::CaptureIdentity(PeerObject);
+			// The creation controller saved gravity=true; removal must restore that value.
+			// Install this lifecycle controller with an explicitly force-free native producer.
+			ElysiumModelPhysics::RemoveShadow(PeerObject);
+			TestTrue(TEXT("ordinary creation controller restores saved native gravity"),PeerNative->bEnableGravity);
+			Peer->Body->SetEnableGravity(false); ElysiumModelPhysics::SetShadow(PeerObject,10000.f,10000.f,false,false);
+			// The normal linked peer has also encountered the wall by the suffix. Establish
+			// an actual remote, noncontact native lifecycle stimulus after all contact observers.
+			PeerNative->SetBodyTransform(FTransform(FQuat::Identity,FVector(5000,0,5000)),ETeleportType::TeleportPhysics);
+			FTransform PeerPose=PeerNative->GetUnrealWorldTransform();
+			PeerNative->SetLinearVelocity(FVector::ZeroVector,false); PeerNative->SetAngularVelocityInRadians(FVector::ZeroVector,false);
+			ElysiumModelPhysics::UpdateShadow(PeerObject,PeerPose.GetLocation()+FVector(100,0,0),PeerPose.GetRotation(),false,.1f);
+			ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld,.01f,1.f,true); TestWorld.TickTestWorld(.01f);
+			PeerPose=PeerNative->GetUnrealWorldTransform();
+			void* LifecyclePartner=nullptr;
+			TestFalse(TEXT("lifecycle peer actually has no native contact"),ElysiumModelPhysics::GetContactPoint(PeerObject,LifecyclePartner));
+			const FTransform SleepTarget=ElysiumModelPhysics::ShadowFor(PeerObject)->Target;
+			PeerNative->SetLinearVelocity(FVector::ZeroVector,false); PeerNative->SetAngularVelocityInRadians(FVector::ZeroVector,false);
+			ElysiumModelPhysics::UpdateShadow(PeerObject,SleepTarget.GetLocation(),SleepTarget.GetRotation(),false,.1f); //unchanged target, no pending wake
+			TestTrue(TEXT("sleep witness retains entire submitted target"),ElysiumModelPhysics::ShadowFor(PeerObject)->Target.Equals(SleepTarget,0.));
+			PeerNative->PutInstanceToSleep();
+			ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld,.01f,1.f,true); TestWorld.TickTestWorld(.01f);
+			const auto SleepEvents=ElysiumModelPhysics::ShadowEvents(PeerObject);
+			TestTrue(TEXT("global simulation callback observes production-created sleeping peer"),!SleepEvents.IsEmpty());
+			for (const auto& SleepEvent : SleepEvents)
+			{
+				AddInfo(FString::Printf(TEXT("SHADOW_SLEEP,sleeping=%d simulated=%d remaining=%.9g before=%s solved=%s velocity=%s awake=%d gravity=%d"),
+					SleepEvent.bSleeping,SleepEvent.bSimulated,SleepEvent.Remaining,*SleepEvent.Position.ToString(),*PeerNative->GetUnrealWorldTransform().GetLocation().ToString(),
+					*PeerNative->GetUnrealWorldVelocity().ToString(),PeerNative->IsInstanceAwake(),PeerNative->bEnableGravity));
+				TestTrue(TEXT("actual PT sleeping core skips shadow correction"),SleepEvent.bSleeping && !SleepEvent.bSimulated);
+			}
+			TestFalse(TEXT("global simulation callback cannot wake a sleeping shadow"),PeerNative->IsInstanceAwake());
+			TestEqual(TEXT("sleeping native core does not consume shadow arrival"),ElysiumModelPhysics::ShadowFor(PeerObject)->RemainingSeconds,.1f);
+			ElysiumModelPhysics::Wake(Peer->Body);
+			ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld,.01f,1.f,true);
+			ElysiumModelPhysics::RemoveShadow(PeerObject); //after producer snapshot, before actual solve
+			TestFalse(TEXT("lifecycle controller restores its force-free saved gravity"),PeerNative->bEnableGravity);
+			TestWorld.TickTestWorld(.01f);
+			AddInfo(FString::Printf(TEXT("SHADOW_REMOVED,expected=%s solved=%s velocity=%s angular=%s gravity=%d"),*PeerPose.GetLocation().ToString(),
+				*PeerNative->GetUnrealWorldTransform().GetLocation().ToString(),*PeerNative->GetUnrealWorldVelocity().ToString(),*PeerNative->GetUnrealWorldAngularVelocityInRadians().ToString(),PeerNative->bEnableGravity));
+			TestTrue(TEXT("controller removal retains real native body incarnation"),ElysiumModelPhysics::IsCurrentOutput(PeerIdentity));
+			TestNull(TEXT("removed controller cannot be republished by old PT output"),ElysiumModelPhysics::ShadowFor(PeerObject));
+			TestTrue(TEXT("removed submitted controller produces no correction event"),ElysiumModelPhysics::ShadowEvents(PeerObject).IsEmpty());
+			TestTrue(TEXT("removed submitted controller cannot move surviving native body"),PeerNative->GetUnrealWorldTransform().GetLocation().Equals(PeerPose.GetLocation(),.0001));
+			ElysiumModelPhysics::SetShadow(PeerObject,10000.f,10000.f,false,false);
+			ElysiumModelPhysics::UpdateShadow(PeerObject,PeerPose.GetLocation()+FVector(100,0,0),PeerPose.GetRotation(),false,.1f);
+			ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld,.01f,1.f,true);
+			ElysiumModelPhysics::UpdateShadow(PeerObject,PeerPose.GetLocation()+FVector(200,0,0),PeerPose.GetRotation(),false,.1f); //new submission after snapshot
+			TestWorld.TickTestWorld(.01f);
+			for (const auto& RevisedEvent : ElysiumModelPhysics::ShadowEvents(PeerObject))
+				AddInfo(FString::Printf(TEXT("SHADOW_REVISED,event=%s target=%s remainingBefore=%.9g fraction=%.9g corrected=%s expectedX=%.17g actual=%s"),
+					*RevisedEvent.Position.ToString(),*RevisedEvent.Target.ToString(),RevisedEvent.RemainingBefore,RevisedEvent.Fraction,*RevisedEvent.CorrectedVelocity.ToString(),
+					PeerPose.GetLocation().X+20.,*PeerNative->GetUnrealWorldTransform().GetLocation().ToString()));
+			TestTrue(TEXT("new controller revision on surviving body receives actual event"),!ElysiumModelPhysics::ShadowEvents(PeerObject).IsEmpty());
+			TestTrue(TEXT("new controller revision uses newest submission before same native solve"),FMath::IsNearlyEqual(PeerNative->GetUnrealWorldTransform().GetLocation().X,PeerPose.GetLocation().X+20.,.05));
+			// A new controller has no prediction: retail uses target displacement for its strict gate.
+			ElysiumModelPhysics::RemoveShadow(PeerObject);
+			ElysiumModelPhysics::SetShadow(PeerObject,10000.f,10000.f,false,false);
+			ElysiumModelPhysics::SetShadowTeleportDistance(PeerObject,25.f);
+			PeerPose=PeerNative->GetUnrealWorldTransform();
+			PeerNative->SetLinearVelocity(FVector::ZeroVector,false); PeerNative->SetAngularVelocityInRadians(FVector::ZeroVector,false);
+			const FVector FirstTarget=PeerPose.GetLocation()+FVector(100,0,0);
+			ElysiumModelPhysics::UpdateShadow(PeerObject,FirstTarget,PeerPose.GetRotation(),false,.1f);
+			ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld,.01f,1.f,true); TestWorld.TickTestWorld(.01f);
+			const auto FirstEvents=ElysiumModelPhysics::ShadowEvents(PeerObject);
+			TestTrue(TEXT("new production controller reaches first actual event"),!FirstEvents.IsEmpty());
+			for (const auto& FirstEvent : FirstEvents)
+			{
+				AddInfo(FString::Printf(TEXT("SHADOW_FIRST,event=%s target=%s prediction=%s error2=%.17g teleported=%d restored=%d actual=%s"),
+					*FirstEvent.Position.ToString(),*FirstEvent.Target.ToString(),*FirstEvent.PredictionBefore.ToString(),FirstEvent.TeleportErrorSquared,
+					FirstEvent.bTeleported,FirstEvent.bCollisionRestored,*PeerNative->GetUnrealWorldTransform().GetLocation().ToString()));
+				TestTrue(TEXT("first event uses missing-prediction target displacement"),FirstEvent.PredictionBefore.IsZero() && FirstEvent.TeleportErrorSquared==10000.);
+				TestTrue(TEXT("first event strict teleport restores every native shape before solve"),FirstEvent.bTeleported && FirstEvent.bCollisionRestored);
+			}
+			TestTrue(TEXT("first-event teleport preserves preteleport correction displacement"),FMath::IsNearlyEqual(PeerNative->GetUnrealWorldTransform().GetLocation().X,FirstTarget.X+10.,.05));
+		}
 		return true;
 	}
 	if (Parameters == TEXT("NativeContactLifetimeEvidence") || Parameters == TEXT("NativeContactMirrorEvidence") || Parameters == TEXT("NativeContactSwizzleEvidence"))

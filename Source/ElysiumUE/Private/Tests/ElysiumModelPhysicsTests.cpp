@@ -939,6 +939,26 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  Tick();
  TestTrue(TEXT("actual native angular solve follows full target frame"), Native->GetUnrealWorldTransform().GetRotation().AngularDistance(FQuat::Slerp(PriorRotation, FullTargetRotation, .1f)) < .002);
  // Prediction error, not distance to target, selects the installed threshold arm.
+ ElysiumModelPhysics::SetShadowTeleportDistance(Object,25.f);
+ const auto* EqualityState=ElysiumModelPhysics::ShadowFor(Object);
+ TestTrue(TEXT("strict threshold witness supplies exact binary native distance"),EqualityState->TeleportDistanceCm==63.5f);
+ FTransform EqualityPose=Native->GetUnrealWorldTransform();
+ EqualityPose.SetLocation(EqualityState->PredictedPosition+FVector(63.5,0,0));
+ Native->SetBodyTransform(EqualityPose,ETeleportType::TeleportPhysics);
+ Native->SetLinearVelocity(FVector::ZeroVector,false); Native->SetAngularVelocityInRadians(FVector::ZeroVector,false);
+ ElysiumModelPhysics::UpdateShadow(Object,EqualityPose.GetLocation()+FVector(100,0,0),EqualityPose.GetRotation(),false,.1f);
+ Tick();
+ const auto EqualityEvents=ElysiumModelPhysics::ShadowEvents(Object);
+ TestTrue(TEXT("strict teleport equality reaches actual simulation correction"),!EqualityEvents.IsEmpty());
+ for (const auto& EqualityEvent : EqualityEvents)
+ {
+  TestTrue(TEXT("strict teleport comparison receives literal equality"),EqualityEvent.TeleportErrorSquared==4032.25);
+  AddInfo(FString::Printf(TEXT("SHADOW_EQUALITY,eventX=%.17g predictionX=%.17g error2=%.17g simulated=%d teleport=%d actual=%s expected=%s"),
+   EqualityEvent.Position.X,EqualityEvent.PredictionBefore.X,EqualityEvent.TeleportErrorSquared,EqualityEvent.bSimulated,EqualityEvent.bTeleported,
+   *Native->GetUnrealWorldTransform().GetLocation().ToString(),*(EqualityPose.GetLocation()+FVector(10,0,0)).ToString()));
+  TestTrue(TEXT("prediction error exactly threshold does not teleport"),EqualityEvent.bSimulated && !EqualityEvent.bTeleported);
+ }
+ TestTrue(TEXT("strict threshold equality completes ordinary velocity solve"),FMath::IsNearlyEqual(Native->GetUnrealWorldTransform().GetLocation().X,EqualityPose.GetLocation().X+10.,.2));
  ElysiumModelPhysics::SetShadowTeleportDistance(Object, 1.f);
  const auto* ThresholdState = ElysiumModelPhysics::ShadowFor(Object);
  FTransform DisplacedNativePose = Native->GetUnrealWorldTransform();
@@ -952,6 +972,10 @@ bool FElysiumParentShadowFrameTest::RunTest(const FString&)
  ElysiumModelPhysics::UpdateShadow(Object, ThresholdTarget, DisplacedNativePose.GetRotation(), false, .1f);
  const auto BeforeTeleportCollision = Native->GetShapeCollisionEnabled(0);
  Tick();
+ const auto TeleportEvents=ElysiumModelPhysics::ShadowEvents(Object);
+ TestTrue(TEXT("strict greater prediction error reaches actual PT teleport"),!TeleportEvents.IsEmpty());
+ for (const auto& TeleportEvent : TeleportEvents)
+  TestTrue(TEXT("actual PT teleport restores every native shape flag before solve"),TeleportEvent.bSimulated && TeleportEvent.bTeleported && TeleportEvent.bCollisionRestored);
  State = ElysiumModelPhysics::ShadowFor(Object);
  TestTrue(TEXT("prediction error above threshold teleports then retains preteleport velocity delta"),
   FMath::IsNearlyEqual(Native->GetUnrealWorldTransform().GetLocation().X, ThresholdTarget.X + 10., .2));

@@ -13,6 +13,18 @@ evidence, not new validation or acceptance of the layer closing gate.
 
 ## Current checkpoint
 
+- Public Chaos event adapter packet (2026-10-11; coordinator reviewed/gated):
+  actual presimulate now owns native pose/velocity/event-delta correction and PT
+  countdown/prediction. Public current-proxy lookup precedes dereference; generation
+  and submission revisions fence completed state/save publication and removal.
+  Public evolution teleport restores every shape collision flag before solve.
+  Same production fixture proves sleeping skip, removal and replacement after Prepare,
+  strict equality and first-event teleport. Normal first44f20/first178f32 and discrepancy
+  squared1.0501758925050075 remain unchanged; retail frame32 .57965414909080337/no178
+  remains an OPEN service mismatch. Native one-event .0166666675 cadence is measured,
+  not retail .015 equivalence. Final --arm build, affected54, default189 and bounded19
+  pass; detailed receipts below. Original23/88 and the full L0 closing gate remain OPEN.
+
 - Normal moving first-contact evidence packet (2026-10-11; coordinator gated):
   actual START_OPEN/InputClose produces normal object46 arrival, positive local interval
   and linear velocity, then completed47/active226/100a55b0/178 without injected state.
@@ -1120,3 +1132,81 @@ no push, full arm/full arena/boot-order closure or original run closure is claim
 Next fresh packet verifies public Chaos per-event delta/count/phase and safe callback
 lifetime/output/sample boundary before implementation. Moving178 mismatch and independent
 candidate encounter/mechanical equivalence remain required open observers.
+
+### Frozen gate checkpoint — public Chaos event adapter, 2026-10-11
+
+Coordinator reviewed the sole fresh Sol High packet against the pre-code contract,
+installed public UE5.8 API and confirmed retail walk. Four runtime/test sources froze
+before final --arm validation and remained byte-identical through coordinator gates.
+Contact callback now owns simulation-event correction, with immutable input and PT
+countdown/prediction; current UniqueIdx proxy resolution precedes dereference.
+Incarnation/revision guards prevent stale completed save state or retired controller
+resurrection. Same-event producer refresh preserves target/settings changes after Prepare.
+Public evolution teleport updates bounds/cached contacts and restores every shape flag;
+strict gate, preteleport displacement, full Source-angle/unit conversions and original
+l0_angle_motion Spawn ordering remain unchanged. No new hook or lower-layer stub.
+
+The normal production fixture measures one Chaos event in each of36 frames at delta
+.0166666675. At frame32 presim starts .51666669361293316, arrival .0166666675->0,
+fraction1; completed47 and actual178 remain unchanged. Native first44f20 and first178f32
+have discrepancy squared1.0501758925050075. Matched public retail frame32 instead has
+.57965414909080337/no calculated178 with .0149999997 events. This packet corrects
+service input ownership/phase; it does NOT establish timing/contact equivalence or
+sole causal responsibility. Ordered99 creation plus normal input lines through f32 are
+exactly identical before/after, SHA256af9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515
+(UTF8/LF/no trailing LF). Reuse public paired receipt102350.497103Z for that prefix;
+never claim native callback-altered suffix is independent retail gameplay.
+
+Actual branch witnesses include sleeping presim skipping correction/countdown, removed
+prepared controller leaving surviving incarnation/pose/zero velocity intact, latest
+post-Prepare target applied in the same solve, exact errorSquared==4032.25/no teleport,
+and first-event prediction absent/errorSquared10000/teleport with restored collision.
+Failed added stimuli were corrected using measured contact/gravity and exact FLOAT
+threshold evidence, not waived failures; classifications/receipts are in the pusher walk.
+
+Final --arm build exit0/76.125s:
+E:/elysium-work/logs/20261011T110118.245490Z-build.json.
+Affected54 Success (34clean,20warned), failed/notRun/inProcess0; ModelPhysics9 and
+Mover16 clean including the new witnesses:
+E:/elysium-work/reports/tests/20261011T110259.508081Z-elysium-substrate-modelphysics-elysium-s-31ef1b4b/index.json.
+Worker scenario2 passes, first_unmet null, l0_angle_motion290/l0_physics_solid_mask81events:
+E:/elysium-work/reports/arena/20261011T110326.781621Z/index.json.
+Coordinator default189 Success (110clean,79warned), failed/notRun/inProcess0:
+E:/elysium-work/reports/tests/20261011T110420.498641Z-elysium-session-elysium-substrate/index.json;
+wrapper E:/elysium-work/logs/20261011T110420.320884Z-test.json exit0/26.703s.
+Coordinator original bounded19 passes in two hosts, both exit0; merged and host JSONs
+read (arena18 plus sm_hub_1 transition1):
+E:/elysium-work/reports/arena/20261011T110455.899105Z/index.json;
+wrapper E:/elysium-work/logs/20261011T110455.692320Z-arena.json exit0/64.141s.
+Ordinary first_unmet values null; two deliberate refusal selftests retain inverted passes.
+Startup27 errors/535 warnings remain separate; no scenario failure waived.
+Doctor E:/elysium-work/logs/20261011T110624.435425Z-doctor.json exit0/21 existing warnings.
+
+Unchanged generator/map evidence reused after diff inventory: pipeline54 at
+E:/elysium-work/codex/l0-pusher-freeze-20261011/pipeline54-final-annotation.xml and
+map2-clean E:/elysium-work/reports/tests/20261011T074423.155641Z-elysium-content-mapcollision-tutorial-el-7fec4772/index.json.
+Actual shadow/NPC/door native consumers reran in affected54 rather than reusing preadapter
+validation. Audit/hooks, generator, map/content/corpus/goldens unchanged; no ledger
+regeneration/kernel --check. Exact8path packet is four runtime/tests, oracle, pusher walk,
+progress and runs. Original23/88 and all five full L0 closing requirements remain OPEN;
+no full-arm tier/full arena/three boot-order closure, gameplay divergence or push.
+
+Frozen functional SHA256:
+ModelPhysics.cpp B4B1AA4A7CEFE6418621BDCFCB3F385BBC9A6565E9950C71EE2C145EC3C865C9
+ModelPhysics.h 6765E0A806F876BEB632788BA879F647757CF3631916AA6EA832801B49781307
+ModelPhysicsTests.cpp F216FF2C9FA7AA6A9D5C1E6F0CF9CC1EB073C378DAD231EACEECBA6C3FCCDC19
+MoverTests.cpp 214D20CD5BA59A2974E4CD8E64BE727C646DCAD9B73AD73E5B9761618911EEC6
+
+Next bounded complete-observer candidate: completed47 native projection and44 contact
+qualification under the unchanged normal common prefix. Actual consumer is active226
+->100a55b0 strict1in-squared feedback, with real object46 targets, public native event
+correction, actual solved pose and generation-fenced qualifying contact. Installed public
+SimCallbackObject.h has PostSolve/OnPostSolve_Internal (per substep); verify this with
+native output and existing callback lifetime before instrumenting postconstraint native
+pose/velocity/contact provenance versus completed GT projection/47 at the SAME fixture.
+That can distinguish a projection/sample mismatch from actual solve/contact behavior and
+support a concrete public-service adapter repair where evidence establishes one. Reuse
+confirmed target/filter/surface/lifecycle/threshold rules; do not reconstruct IVP clocks,
+force cadence/delay/sorting, or infer mechanical parity from configuration names. Independent
+contact mechanics/candidate encounter equivalence remains OPEN if outputs disagree even
+with correct supported service inputs. No next worker dispatched by this coordinator.

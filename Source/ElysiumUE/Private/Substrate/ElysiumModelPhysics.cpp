@@ -54,14 +54,22 @@ namespace
 	uint64 NextWorldGeneration = 0;
 	void RetireWorldContact(void* Actor);
 	void ForgetCompletedWorld(UWorld* World);
+	void ForgetShadowWorld(UWorld* World);
 	struct FSolveFilterIdentity
 	{
 		const void* Proxy; Chaos::FUniqueIdx UniqueIdx; bool bWorld; bool bCommonSolid; bool bBaseMask; uint64 Generation;
 	};
+	struct FShadowEventInput
+	{
+		const void* Proxy; Chaos::FUniqueIdx UniqueIdx; uint64 Generation; uint64 Revision; FElysiumPhysicsShadowState State;
+	};
+	void SimulateShadow(Chaos::FRigidBodyHandle_Internal& Particle, FElysiumPhysicsShadowState& State,
+		Chaos::FSingleParticlePhysicsProxy& Proxy, Chaos::FPBDRigidsSolver& NativeSolver, double EventDelta, ElysiumModelPhysics::FShadowEventSample& Sample);
 	struct FSolveFilterInput : Chaos::FSimCallbackInput
 	{
 		TArray<FSolveFilterIdentity> Identities;
-		void Reset() { Identities.Reset(); }
+		TArray<FShadowEventInput> Shadows;
+		void Reset() { Identities.Reset(); Shadows.Reset(); }
 	};
 	double FrictionContactSkinCm();
 	struct FNativeContactOutput
@@ -76,13 +84,54 @@ namespace
 	struct FSolveFilterOutput : Chaos::FSimCallbackOutput
 	{
 		TArray<FNativeContactOutput> Contacts;
-		void Reset() { Contacts.Reset(); }
+		struct FShadowSample { const void* Proxy; Chaos::FUniqueIdx UniqueIdx; uint64 Generation; uint64 Revision;
+			FElysiumPhysicsShadowState State; ElysiumModelPhysics::FShadowEventSample Sample; };
+		TArray<FShadowSample> Shadows;
+		void Reset() { Contacts.Reset(); Shadows.Reset(); }
 	};
 	class FSolveFilterCallback final : public Chaos::TSimCallbackObject<FSolveFilterInput,
 		FSolveFilterOutput, Chaos::ESimCallbackOptions::ContactModification | Chaos::ESimCallbackOptions::Presimulate>
 	{
+		TArray<FShadowEventInput> Controllers; //PT-owned countdown/prediction, never a mutable GT association
+		TSharedRef<TMap<uint64,uint64>, ESPMode::ThreadSafe> RetiredControllers = MakeShared<TMap<uint64,uint64>, ESPMode::ThreadSafe>();
+	public:
+		void RetireShadow_External(uint64 Generation, uint64 Revision)
+		{
+			// The command owns its fence independently of callback destruction/world cleanup.
+			GetSolver()->EnqueueCommandImmediate([Fence = RetiredControllers,Generation,Revision]()
+			{ auto& Prior = Fence->FindOrAdd(Generation); Prior = FMath::Max(Prior,Revision); });
+		}
+	private:
 		virtual FName GetFNameForStatId() const override { return FName(TEXT("ElysiumContentsPairFilter")); }
-		virtual void OnPreSimulate_Internal() override {} //public output finalization registration
+		virtual void OnPreSimulate_Internal() override
+		{
+			const auto* Input = GetConsumerInput_Internal(); if (!Input) return;
+			auto* NativeSolver = static_cast<Chaos::FPBDRigidsSolver*>(GetSolver());
+			Controllers.RemoveAll([&](const auto& Controller)
+			{ return !Input->Shadows.ContainsByPredicate([&](const auto& Entry)
+				{ return Entry.Proxy == Controller.Proxy && Entry.UniqueIdx == Controller.UniqueIdx && Entry.Generation == Controller.Generation; }); });
+			for (const FShadowEventInput& Entry : Input->Shadows)
+			{
+				if (Entry.Revision <= RetiredControllers->FindRef(Entry.Generation)) continue;
+				// Resolve current PT identity first; never dereference a marshaled proxy pointer.
+				auto* Proxy = NativeSolver->GetParticleProxy_PT(Entry.UniqueIdx);
+				if (!Proxy || Proxy != Entry.Proxy) continue;
+				auto* Particle = Proxy->GetPhysicsThreadAPI(); if (!Particle) continue;
+				auto* Controller = Controllers.FindByPredicate([&](const auto& Item)
+				{ return Item.Proxy == Entry.Proxy && Item.UniqueIdx == Entry.UniqueIdx && Item.Generation == Entry.Generation; });
+				if (!Controller) Controller = &Controllers.Add_GetRef(Entry);
+				else if (Controller->Revision != Entry.Revision) *Controller = Entry;
+				ElysiumModelPhysics::FShadowEventSample Sample;
+				Sample.Time = GetSimTime_Internal(); Sample.Delta = GetDeltaTime_Internal();
+				Sample.bSleeping = Particle->ObjectState() == Chaos::EObjectStateType::Sleeping;
+				Sample.RemainingBefore = Controller->State.RemainingSeconds; Sample.Position = Particle->X(); Sample.Velocity = Particle->V();
+				Sample.PredictionBefore = Controller->State.PredictedPosition; Sample.Target = Controller->State.Target.GetLocation();
+				if (Particle->ObjectState() == Chaos::EObjectStateType::Dynamic)
+					SimulateShadow(*Particle,Controller->State,*Proxy,*NativeSolver,GetDeltaTime_Internal(),Sample);
+				Sample.Remaining = Controller->State.RemainingSeconds; Sample.CorrectedVelocity = Particle->V();
+				GetProducerOutputData_Internal().Shadows.Add({Proxy,Entry.UniqueIdx,Entry.Generation,Entry.Revision,Controller->State,Sample});
+			}
+		}
 		virtual void OnContactModification_Internal(Chaos::FCollisionContactModifier& Modifier) override
 		{
 			const FSolveFilterInput* Input = GetConsumerInput_Internal();
@@ -110,7 +159,7 @@ namespace
 			}
 		}
 	};
-	struct FSolveFilterRegistration { Chaos::FPBDRigidsSolver* Solver; FSolveFilterCallback* Callback; };
+	struct FSolveFilterRegistration { Chaos::FPBDRigidsSolver* Solver; FSolveFilterCallback* Callback; bool bAdmitted = false; };
 	TMap<UWorld*, FSolveFilterRegistration> SolveFilters;
 	void CleanupSolveFilter(UWorld* World, bool, bool)
 	{
@@ -118,6 +167,7 @@ namespace
 			Registration->Solver->UnregisterAndFreeSimCallbackObject_External(Registration->Callback);
 		SolveFilters.Remove(World);
 		ForgetCompletedWorld(World);
+		ForgetShadowWorld(World); //callback destructor runs on PT and never touches UObjects
 		WorldCreationAssociations.RemoveAll([World](const FWorldCreationAssociation& Entry)
 		{
 			const bool bRemove = !Entry.Component.IsValid() || Entry.Component->GetWorld() == World;
@@ -191,11 +241,14 @@ namespace
 			Roster.Value.RemoveAll([Actor](const FObservedContact& Contact) { return Contact.Partner == Actor; });
 	}
 	uint64 NextContactBirth = 0;
+	void ConsumeShadowOutputs(UWorld* World, const FSolveFilterOutput& Output);
 	void ConsumeContactOutputs(UWorld* World)
 	{
 		const FSolveFilterRegistration* Registration = SolveFilters.Find(World);
 		if (!Registration) return;
 		while (auto Output = Registration->Callback->PopOutputData_External())
+		{
+			ConsumeShadowOutputs(World, *Output);
 			for (const FNativeContactOutput& Contact : Output->Contacts)
 			{
 				if (RetiredNativeActors.Contains(const_cast<void*>(Contact.Proxies[0])) || RetiredNativeActors.Contains(const_cast<void*>(Contact.Proxies[1]))) continue;
@@ -233,6 +286,7 @@ namespace
 					Prior->OutputTime = Output->InternalTime;
 				}
 			}
+		}
 	}
 	// Environment2600f920 ->2603a730 ->260477d0/26050c20/2603e880.
 	// The authored default is stored through float108 before its final float11c store.
@@ -249,11 +303,41 @@ namespace
 	TMap<UWorld*, TArray<uint64>> NativeActiveOrders; // each native environment has its observable order
 	struct FNativeReference { FElysiumEntity* Entity; void* Actor; };
 	TArray<FNativeReference> NativeReferences;
-	struct FShadowAssociation { void* Actor; FElysiumPhysicsShadowState State; };
+	uint64 NextShadowRevision = 0;
+	struct FShadowAssociation { void* Actor; FElysiumPhysicsShadowState State; uint64 Revision = ++NextShadowRevision; };
 	TArray<FShadowAssociation> ShadowAssociations;
+	TArray<FSolveFilterOutput::FShadowSample> CompletedShadowEvents;
+	void ForgetShadowWorld(UWorld* World)
+	{
+		CompletedShadowEvents.RemoveAll([World](const auto& Event)
+		{ UPrimitiveComponent* Component = ElysiumModelPhysics::ComponentFor(const_cast<void*>(Event.Proxy)); return !Component || Component->GetWorld() == World; });
+	}
+	void ConsumeShadowOutputs(UWorld* World, const FSolveFilterOutput& Output)
+	{
+		for (const auto& Event : Output.Shadows)
+		{
+			const auto* Native = NativeAssociations.FindByPredicate([&](const FNativeAssociation& Entry)
+			{ return Entry.Actor == Event.Proxy && Entry.Incarnation == Event.Generation; });
+			UPrimitiveComponent* Component = Native ? Native->Component.Get() : nullptr;
+			auto* Proxy = ElysiumModelPhysics::ActorIdentity(Component);
+			if (Component && Component->GetWorld() == World && Proxy == Event.Proxy && Proxy->GetGameThreadAPI().UniqueIdx() == Event.UniqueIdx)
+				if (auto* Shadow = ShadowAssociations.FindByPredicate([&](const auto& Entry) { return Entry.Actor == Proxy && Entry.Revision == Event.Revision; }))
+				{ Shadow->State = Event.State; CompletedShadowEvents.Add(Event); }
+		}
+	}
 	FShadowAssociation* FindShadow(void* Actor)
 	{
 		return ShadowAssociations.FindByPredicate([Actor](const FShadowAssociation& Entry) { return Entry.Actor == Actor; });
+	}
+	void RefreshShadowInput(const FShadowAssociation& Entry)
+	{
+		UPrimitiveComponent* Component = ElysiumModelPhysics::ComponentFor(Entry.Actor); if (!Component) return;
+		const auto* Registration = SolveFilters.Find(Component->GetWorld()); if (!Registration || !Registration->bAdmitted) return;
+		auto* Proxy = ElysiumModelPhysics::ActorIdentity(Component); if (!Proxy) return;
+		auto& Shadows = Registration->Callback->GetProducerInputData_External()->Shadows;
+		FShadowEventInput Value {Proxy,Proxy->GetGameThreadAPI().UniqueIdx(),ElysiumModelPhysics::CaptureIdentity(Entry.Actor).Incarnation,Entry.Revision,Entry.State};
+		if (auto* Submitted = Shadows.FindByPredicate([&](const auto& Item) { return Item.Proxy == Proxy; })) *Submitted = Value;
+		else Shadows.Add(Value);
 	}
 	bool ValidShadow(const FElysiumPhysicsShadowState& State)
 	{
@@ -747,14 +831,31 @@ bool ElysiumModelPhysics::Capture(void* Actor, FElysiumSavedPhysicsBody& OutStat
 
 const FElysiumPhysicsShadowState* ElysiumModelPhysics::ShadowFor(void* Actor)
 {
+	if (UPrimitiveComponent* Component = ComponentFor(Actor)) ConsumeContactOutputs(Component->GetWorld());
 	const FShadowAssociation* Entry = FindShadow(Actor);
 	return Entry && ComponentFor(Actor) ? &Entry->State : nullptr;
 }
 
+TArray<ElysiumModelPhysics::FShadowEventSample> ElysiumModelPhysics::ShadowEvents(void* Actor)
+{
+	TArray<FShadowEventSample> Result;
+	UPrimitiveComponent* Component = ComponentFor(Actor); if (!Component) return Result;
+	ConsumeContactOutputs(Component->GetWorld());
+	for (const auto& Event : CompletedShadowEvents) if (Event.Proxy == Actor) Result.Add(Event.Sample);
+	return Result;
+}
+
 void ElysiumModelPhysics::RemoveShadow(void* Actor)
 {
+	if (UPrimitiveComponent* Component = ComponentFor(Actor)) ConsumeContactOutputs(Component->GetWorld());
 	const FShadowAssociation* Entry = FindShadow(Actor);
 	if (!Entry) return;
+	if (UPrimitiveComponent* Component = ComponentFor(Actor))
+		if (const auto* Registration = SolveFilters.Find(Component->GetWorld()))
+		{
+			Registration->Callback->RetireShadow_External(CaptureIdentity(Actor).Incarnation,Entry->Revision);
+			Registration->Callback->GetProducerInputData_External()->Shadows.RemoveAll([Actor](const auto& Input) { return Input.Proxy == Actor; });
+		}
 	const FElysiumPhysicsShadowState State = Entry->State;
 	if (UPrimitiveComponent* Component = ComponentFor(Actor))
 		if (FBodyInstance* Body = Identity(Component))
@@ -764,6 +865,7 @@ void ElysiumModelPhysics::RemoveShadow(void* Actor)
 			Component->SetEnableGravity(State.bSavedGravity);
 		}
 	ShadowAssociations.RemoveAll([Actor](const FShadowAssociation& Item) { return Item.Actor == Actor; });
+	CompletedShadowEvents.RemoveAll([Actor](const auto& Item) { return Item.Proxy == Actor; });
 }
 
 bool ElysiumModelPhysics::SetShadow(void* Actor, float LinearSpeedInches, float AngularSpeedDegrees,
@@ -772,6 +874,7 @@ bool ElysiumModelPhysics::SetShadow(void* Actor, float LinearSpeedInches, float 
 	UPrimitiveComponent* Component = ComponentFor(Actor);
 	FBodyInstance* Body = Identity(Component);
 	if (!Body || !Component->IsSimulatingPhysics() || !FMath::IsFinite(LinearSpeedInches) || !FMath::IsFinite(AngularSpeedDegrees)) return false;
+	ConsumeContactOutputs(Component->GetWorld());
 	FShadowAssociation* Entry = FindShadow(Actor);
 	if (!Entry)
 	{
@@ -790,6 +893,8 @@ bool ElysiumModelPhysics::SetShadow(void* Actor, float LinearSpeedInches, float 
 	const float RequestedAngular = FMath::DegreesToRadians(AngularSpeedDegrees);
 	Entry->State.AngularDampingLimitRadians = FMath::Max(static_cast<float>(Body->GetUnrealWorldAngularVelocityInRadians().Size()), RequestedAngular);
 	Entry->State.AngularDesiredLimitRadians = RequestedAngular - Entry->State.AngularDampingLimitRadians;
+	Entry->Revision = ++NextShadowRevision;
+	RefreshShadowInput(*Entry);
 	return true;
 }
 
@@ -798,6 +903,7 @@ bool ElysiumModelPhysics::UpdateShadow(void* Actor, const FVector& OriginCm, con
 {
 	UPrimitiveComponent* Component = ComponentFor(Actor); FBodyInstance* Body = Identity(Component);
 	if (!Body || OriginCm.ContainsNaN() || Rotation.ContainsNaN() || !Rotation.IsNormalized() || !FMath::IsFinite(ArrivalSeconds)) return false;
+	ConsumeContactOutputs(Component->GetWorld());
 	FShadowAssociation* Entry = FindShadow(Actor);
 	if (!Entry) return false;
 	auto& State = Entry->State;
@@ -813,15 +919,18 @@ bool ElysiumModelPhysics::UpdateShadow(void* Actor, const FVector& OriginCm, con
 	State.Target = FTransform(Rotation, OriginCm);
 	State.RemainingSeconds = FMath::Max(ArrivalSeconds, 0.f);
 	State.bActive = true;
+	Entry->Revision = ++NextShadowRevision;
+	RefreshShadowInput(*Entry);
 	if (bChanged) Wake(Component); //2601aad0: repeated target still replaces countdown, no wake.
 	return true;
 }
 
 bool ElysiumModelPhysics::SetShadowTeleportDistance(void* Actor, float DistanceInches)
 {
+	if (UPrimitiveComponent* Component = ComponentFor(Actor)) ConsumeContactOutputs(Component->GetWorld());
 	FShadowAssociation* Entry = FindShadow(Actor);
 	if (!Entry || !ComponentFor(Actor) || !FMath::IsFinite(DistanceInches)) return false;
-	Entry->State.TeleportDistanceCm = DistanceInches * 2.54f; return true; //2601aa40
+	Entry->State.TeleportDistanceCm = DistanceInches * 2.54f; Entry->Revision = ++NextShadowRevision; RefreshShadowInput(*Entry); return true; //2601aa40
 }
 
 int32 ElysiumModelPhysics::GetShadowPosition(void* Actor, FVector* OriginCm, FQuat* Rotation)
@@ -846,44 +955,65 @@ namespace
 		if (MaximumDampingSpeed > 0.f && Damping.SizeSquared() > FMath::Square(MaximumDampingSpeed)) Damping = Damping.GetSafeNormal() * MaximumDampingSpeed;
 		return Actual + Damping + Desired;
 	}
-	void PrepareShadow(FBodyInstance& Body, FElysiumPhysicsShadowState& State, float DeltaSeconds)
+	void SimulateShadow(Chaos::FRigidBodyHandle_Internal& Particle, FElysiumPhysicsShadowState& State,
+		Chaos::FSingleParticlePhysicsProxy& Proxy, Chaos::FPBDRigidsSolver& NativeSolver, double EventDelta, ElysiumModelPhysics::FShadowEventSample& Sample)
 	{
 		if (!State.bActive) { State.PredictedPosition = FVector::ZeroVector; return; }
+		const float DeltaSeconds = static_cast<float>(EventDelta); //2601aa50 passes FLOAT to2601a250
+		if (!(DeltaSeconds > 0.f) || !FMath::IsFinite(DeltaSeconds)) return;
+		Sample.bSimulated = true;
 		const float Fraction = State.RemainingSeconds <= 0.f ? 1.f : FMath::Min(DeltaSeconds / State.RemainingSeconds, 1.f);
-		State.RemainingSeconds = FMath::Max(State.RemainingSeconds - DeltaSeconds, 0.f); //2601aa50
+		Sample.Fraction = Fraction;
+		State.RemainingSeconds = static_cast<float>(FMath::Max(static_cast<double>(State.RemainingSeconds) - EventDelta, 0.)); //2601aa50
 		if (Fraction <= 0.f) return;
-		const FTransform Current = Body.GetUnrealWorldTransform();
+		const FTransform Current(Particle.R(), Particle.X());
 		const FVector Displacement = State.Target.GetLocation() - Current.GetLocation();
 		if (State.TeleportDistanceCm > 0.f)
 		{
 			const bool bNoPrediction = State.PredictedPosition.X == 0. && State.PredictedPosition.Y == 0. && State.PredictedPosition.Z == 0.;
 			const FVector Error = bNoPrediction ? Displacement : Current.GetLocation() - State.PredictedPosition;
+			Sample.TeleportErrorSquared = Error.SizeSquared();
 			if (Error.SizeSquared() > FMath::Square(State.TeleportDistanceCm))
 			{
-				const auto Collision = Body.GetShapeCollisionEnabled(0);
-				Body.SetShapeCollisionEnabled(0, ECollisionEnabled::NoCollision);
-				Body.SetBodyTransform(State.Target, ETeleportType::TeleportPhysics);
-				Body.SetShapeCollisionEnabled(0, Collision); //2601a250 retains preteleport displacement.
+				// Public PT shape flags bracket an immediate unswept pose write. Restore before
+				// Chaos generates/solves contacts; never hold collision off for a simulation step.
+				TArray<TPair<bool,bool>, TInlineAllocator<8>> Collision;
+				for (const auto& Shape : Particle.ShapesArray())
+				{
+					Collision.Emplace(Shape->GetSimEnabled(),Shape->GetQueryEnabled());
+					Shape->SetSimEnabled(false); Shape->SetQueryEnabled(false);
+				}
+				// Public evolution teleport maintains bounds, cached contacts and island state.
+				NativeSolver.GetEvolution()->SetParticleTransform(Proxy.GetHandle_LowLevel(),State.Target.GetLocation(),State.Target.GetRotation(),true);
+				int32 ShapeIndex = 0;
+				for (const auto& Shape : Particle.ShapesArray())
+				{
+					Shape->SetSimEnabled(Collision[ShapeIndex].Key); Shape->SetQueryEnabled(Collision[ShapeIndex].Value);
+					Sample.bCollisionRestored &= Shape->GetSimEnabled() == Collision[ShapeIndex].Key && Shape->GetQueryEnabled() == Collision[ShapeIndex].Value;
+					++ShapeIndex;
+				}
+				Sample.bTeleported = true; //2601a250 retains preteleport displacement/current rotation.
 			}
 		}
-		const FVector Linear = ShadowVelocity(Body.GetUnrealWorldVelocity(), Displacement, Fraction / DeltaSeconds,
+		const FVector Linear = ShadowVelocity(Particle.V(), Displacement, Fraction / DeltaSeconds,
 			State.LinearDesiredLimitCm, State.LinearDampingLimitCm, .01);
-		Body.SetLinearVelocity(Linear, false);
+		Particle.SetV(Linear);
 		State.PredictedPosition = Current.GetLocation() + Linear * DeltaSeconds;
 		FQuat Relative = Current.GetRotation().Inverse() * State.Target.GetRotation(); Relative.Normalize();
 		float Angle = 2.f * FMath::Acos(FMath::Clamp(static_cast<float>(Relative.W), -1.f, 1.f));
 		if (Angle > PI) Angle -= 2.f * PI;
 		const FVector Axis = FVector(Relative.X, Relative.Y, Relative.Z).GetSafeNormal();
-		const FVector LocalActual = Current.GetRotation().UnrotateVector(Body.GetUnrealWorldAngularVelocityInRadians());
+		const FVector LocalActual = Current.GetRotation().UnrotateVector(Particle.W());
 		const FVector LocalAngular = ShadowVelocity(LocalActual, Axis * Angle, Fraction / DeltaSeconds,
 			State.AngularDesiredLimitRadians, State.AngularDampingLimitRadians, 1.0e-6);
-		Body.SetAngularVelocityInRadians(Current.GetRotation().RotateVector(LocalAngular), false);
+		Particle.SetW(Current.GetRotation().RotateVector(LocalAngular));
 	}
 }
 
 float ElysiumModelPhysics::PreparePhysicsFrame(UWorld& World, float FrameSeconds, float TimeScale, bool bSimulating)
 {
 	FPhysScene* Scene = World.GetPhysicsScene(); if (!Scene) return 0.f;
+	ConsumeContactOutputs(&World); //publish completed controller state before replacing any input
 	// A component physics rebuild retains its creation owner, but never the retired proxy.
 	for (int32 Index = WorldCreationAssociations.Num() - 1; Index >= 0; --Index)
 	{
@@ -922,13 +1052,19 @@ float ElysiumModelPhysics::PreparePhysicsFrame(UWorld& World, float FrameSeconds
 		if (Entry.Component.IsValid() && Entry.Component->GetWorld() == &World) Entry.bCollectNativeOutput = Delta > 0.f;
 	const FVector Gravity(0., 0., World.GetGravityZ());
 	Scene->SetUpForFrame(&Gravity, Delta, 0.f, .1f, .1f, 1, false);
-	if (Delta > 0.f)
-		for (FShadowAssociation& Entry : ShadowAssociations)
-		{
-			UPrimitiveComponent* Component = ComponentFor(Entry.Actor);
-			if (Component && Component->GetWorld() == &World)
-				if (FBodyInstance* Body = Identity(Component)) PrepareShadow(*Body, Entry.State, Delta);
-		}
+	CompletedShadowEvents.RemoveAll([&](const auto& Event)
+	{ UPrimitiveComponent* Component = ComponentFor(const_cast<void*>(Event.Proxy)); return !Component || Component->GetWorld() == &World; });
+	if (auto* Registration = SolveFilters.Find(&World))
+	{
+		Registration->bAdmitted = Delta > 0.f;
+		auto* Input = Registration->Callback->GetProducerInputData_External(); Input->Shadows.Reset();
+		if (Delta > 0.f) for (const FShadowAssociation& Entry : ShadowAssociations)
+			if (UPrimitiveComponent* Component = ComponentFor(Entry.Actor); Component && Component->GetWorld() == &World)
+			{
+				auto* Proxy = ActorIdentity(Component);
+				Input->Shadows.Add({Proxy,Proxy->GetGameThreadAPI().UniqueIdx(),CaptureIdentity(Entry.Actor).Incarnation,Entry.Revision,Entry.State});
+			}
+	}
 	return Delta;
 }
 
