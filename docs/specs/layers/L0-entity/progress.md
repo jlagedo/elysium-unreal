@@ -1,5 +1,44 @@
 # L0 progress — the orchestrator's log
 
+## Declared raw material input/product/native effect — 2026-10-11 (after dc6c25bf)
+
+One serial worker closes the bounded declared JSON material producer/effect contract, including
+authored FLOAT2. Retail26015170/26015b30 has no clamp;26041aa0 multiplies elasticity and26041a70
+friction. FromJson now submits declared raw elasticity unchanged and owns both explicit Multiply
+modes; one authored mu feeds both native friction inputs. Existing missing/null defaults remain
+independent. This corrects the prior unapproved clamp/Average input divergence, not a modernization.
+Exact prechange clamp-specific assertions/source/diff/SHA remain retained; valid old tests remain.
+
+Independent actual typed1 x typed2 and JSON1 x JSON2 reach the modifier with native elasticity2,
+static/dynamic mu.24000000953674316 and identical completed velocity/angular/pose/frame. The matched
+JSON1 x JSON1 control stores1 and rebounds less. Both setter and whole-stimulus checks preserve
+paired mass/inverse mass, inertia/inverse inertia, principal frame, geometry, pose, gravity, sleep,
+damping, linear/angular velocity and query filters for BOTH dynamic body and static floor. The
+observed XY/trajectory/frame is not a retail requirement. No custom solve or callback writes.
+
+Final six-path functional freeze final-prejob/manifest.json SHA
+ddf6e9781230214a7311100168c4ef1394f3dd59e7dc6d4249bea8686ddbad37 under
+E:/elysium-work/codex/l0-impact-contract-20261011. Pipeline21 and --arm build87s pass. Focused2
+at163855.326074Z and affected35 at164031.427191Z pass clean (ModelPhysics9, Mover20, material arm6).
+Property serialization is an editor-only-filtered archive roundtrip, not packaged cook proof.
+Public import163946.421549Z reauthors63/reuses0/fails0; installed content1 at164010.306529Z checks
+all63 v3/Multiply/single-mu inputs and PM_gargoyle raw/native2. No gargoyle reached-map contact claim.
+Scenario2 merged+host164140.238714Z passes with null first_unmet and290/81 events. Existing27 arena
+startup errors/29 warnings and one layout warning per test wrapper remain separate from assertions.
+All source/API/recipe/report/package originals and copied SHA receipts are in final-manifest.json.
+
+Coordinator default194 at164249.855049Z passes115 clean79 warned,0 failed/notRun/inProcess.
+Bounded19 at164343.337566Z passes both hosts exit0; ordinary first_unmet is null and two refusal
+selftests retain their inverted passes. Wrapper exits0/66s; existing27 startup errors535 warnings
+remain separate. Doctor164505.373191Z exits0/21 existing warnings; repo-only policy164524.321701Z
+exits0/0 warnings. All six functional hashes still match the reviewed freeze. Coordinator owns
+exact-path review before local commit; worker has no active job, commit, push or next packet.
+This closes only raw input/product/
+uniform native effect and regenerated installed PM inputs. Compatible shipped/moving association,
+overall contact/trajectory/callback parity, selected-surface event/response adapter, retail.015
+cadence and full100a6640 impact dispatcher/feedback remain OPEN. No IVP geometry/manifold/clock/
+layout clone or ordinal join. Original0 newly closed;23/88 complete,65 remaining; full-L0 gates OPEN.
+
 ## Production authored material query diagnostic — 2026-10-11 (after bd132e64)
 
 Reviewed bounded diagnostic reaches the actual native contact modifier before Chaos

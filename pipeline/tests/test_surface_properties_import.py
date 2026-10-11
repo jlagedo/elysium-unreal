@@ -13,6 +13,8 @@ not resolve.
 from __future__ import annotations
 
 import json
+import importlib.util
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -397,6 +399,42 @@ def test_a_second_run_over_an_unchanged_corpus_writes_nothing(tmp_path):
     assert second.staged == 0 and second.unchanged == 4
     assert second.pruned == 0
     assert _manifest(first) == _manifest(second)
+
+
+def test_raw_product_version_invalidates_existing_material_recipes(tmp_path, monkeypatch):
+    """Unchanged unit bytes must reauthor v2 packages carrying clamped/Average inputs."""
+    _metal_chain(tmp_path)
+    with monkeypatch.context() as old:
+        old.setattr(importer, "SETTINGS_VERSION", "elysium-surfaceproperty-import-v2")
+        before = _manifest(_stage(tmp_path))
+    result = _stage(tmp_path)
+    after = _manifest(result)
+    assert importer.SETTINGS_VERSION == "elysium-surfaceproperty-import-v3"
+    assert result.staged == 4 and result.unchanged == 0
+    # Call the editor's actual fingerprint function; this fake only satisfies its import-time
+    # factories, and no editor asset operations execute.
+    import sys
+    fake_unreal = SimpleNamespace(
+        AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: None),
+        MaterialEditingLibrary=None, GeometryScript_Collision=None)
+    spec = importlib.util.spec_from_file_location(
+        "elysium_surface_recipe_test", REPO / "pipeline/unreal/bake_lib.py")
+    assert spec and spec.loader
+    bake = importlib.util.module_from_spec(spec)
+    with monkeypatch.context() as editor:
+        editor.setitem(sys.modules, "unreal", fake_unreal)
+        spec.loader.exec_module(bake)
+    for previous, current in zip(before["assets"], after["assets"], strict=True):
+        assert previous["assetPath"] == current["assetPath"]
+        assert previous["recipe"]["unitSha256"] == current["recipe"]["unitSha256"]
+        assert previous["recipe"]["chainSha256"] == current["recipe"]["chainSha256"]
+        assert previous["recipe"]["surfaceType"] == current["recipe"]["surfaceType"]
+        assert bake.recipe_fingerprint("surface-properties", previous["assetPath"],
+                                       previous["recipe"]) != bake.recipe_fingerprint(
+                                           "surface-properties", current["assetPath"],
+                                           current["recipe"])
+    repeated = _stage(tmp_path)
+    assert repeated.staged == 0 and repeated.unchanged == 4
 
 
 def test_an_ancestor_changing_changes_the_descendants_recipe(tmp_path):

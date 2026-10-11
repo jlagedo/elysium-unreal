@@ -55,7 +55,8 @@ PACKAGE_ROOT = "/ElysiumBaked/SurfaceProperties"
 #: authored kg/m3 value moves to `physics.rawDensity`; every physics/movement scalar is emitted
 #: always, `null` when no unit in the chain declares it, so a re-import resets a scalar the source
 #: stops declaring instead of leaving it stale.
-SETTINGS_VERSION = "elysium-surfaceproperty-import-v2"
+#: v3: reauthor native raw elasticity and explicit retail friction/restitution Multiply modes.
+SETTINGS_VERSION = "elysium-surfaceproperty-import-v3"
 MANIFEST_SCHEMA = "1.0.0"
 MANIFEST_NAME = "manifest.json"
 #: Written by the editor phase; read back by the CLI for its summary.

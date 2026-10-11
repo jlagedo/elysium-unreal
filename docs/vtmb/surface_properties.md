@@ -55,9 +55,14 @@ The file's own header comment documents these, and the values bear it out.
 | `thickness` | when present the material is **not volumetrically solid** — volume is surface area × this, and the space beneath it is air | 10 | 0.04 … 1 |
 
 `elasticity` and `friction` exceed their documented 0–1 ranges on a few entries. Retail's IVP
-material reads the raw floats without clamping (`26015b20/26015b30`). The existing Unreal
-physical-material bake clamps elasticity as a presentation/Chaos lane divergence; it is not the
-constructor's retail material producer.
+material reads the raw floats without clamping (`26015b20/26015b30`). The declared JSON material
+input now submits that raw FLOAT unchanged, including shipped `gargoyle` elasticity2. Both native
+combine modes are explicitly Multiply (`26041a70/26041aa0`), and the one authored friction value
+supplies both native friction inputs. Import recipe v3 reauthors the63 installed physical
+materials; the installed contract check verifies their modes/provenance and gargoyle raw/native2.
+This repairs the prior unapproved clamp/Average input divergence. It proves a uniform material
+input/product/native-effect seam, not reached gargoyle map contact or overall contact trajectory
+and callback parity. See `physics-interaction.md`'s declared JSON material checkpoint.
 
 `density`'s unit is the table's own, kg/m³; `UPhysicalMaterial::Density` is g/cm³, so
 `uv run elysium import surface-properties` converts on the way in and keeps the authored kg/m³

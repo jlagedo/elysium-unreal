@@ -48,9 +48,11 @@ struct FElysiumImpactOutcomes
  * unit in the chain supplied each one is in the attached `UElysiumSurfacePropertyProvenance`.
  *
  * Native slots this fills from the unit: `Friction` ← `friction`, `Restitution` ← `elasticity`
- * (clamped to 0–1; the raw value stays in `RawElasticity`), `Density` ← `density`, already
+ * (raw FLOAT, also retained in `RawElasticity`), `Density` ← `density`, already
  * converted at the stage from the table's kg/m³ to this engine property's own g/cm³ (the raw
- * authored value stays in `RawDensity`, mirroring `RawElasticity`).
+ * authored value stays in `RawDensity`, mirroring `RawElasticity`). Native friction and
+ * restitution use explicit Multiply modes (26041a70/26041aa0); the one authored friction
+ * value supplies both native static and dynamic inputs.
  */
 UCLASS(BlueprintType)
 class ELYSIUMUE_API UElysiumPhysicalMaterial : public UPhysicalMaterial, public IInterface_AssetUserData
@@ -66,8 +68,8 @@ public:
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Elysium|Surface") float Thickness = 0.0f;
 	/**
-	 * `elasticity` exactly as the table wrote it. The shipped range is 0.001–2, and `Restitution`
-	 * is the 0–1 clamp of this, so a value the engine cannot hold is recorded rather than lost.
+	 * `elasticity` exactly as the table wrote it. The shipped range is 0.001–2; a declared value
+	 * supplies Restitution unchanged, as retail26015b30/26041aa0 require.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Elysium|Surface") float RawElasticity = 0.0f;
 	/**

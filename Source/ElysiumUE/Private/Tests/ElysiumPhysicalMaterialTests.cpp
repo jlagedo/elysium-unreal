@@ -11,6 +11,9 @@
 #include "ElysiumSurfacePropertyProvenance.h"
 #include "Misc/Guid.h"
 #include "UObject/Package.h"
+#include "Serialization/MemoryReader.h"
+#include "Serialization/MemoryWriter.h"
+#include "Serialization/ObjectAndNameAsStringProxyArchive.h"
 #if WITH_EDITORONLY_DATA
 #include "UObject/MetaData.h"
 #endif
@@ -23,7 +26,7 @@ namespace
 	// A sidecar in the shape the offline stage writes for `canister`, the deepest chain in the
 	// table (canister -> metalpanel -> metalgrate -> metal): every section present so each parser
 	// branch is exercised, with values that are not the class defaults. `elasticity` is above the
-	// engine's 0-1 restitution range on purpose, and the impact matrix carries a two-deep
+	// engine's editor restitution range on purpose, and the impact matrix carries a two-deep
 	// variation pool.
 	const TCHAR* GSidecar = TEXT(R"json({
   "assetId": "vtmb:surface-property:canister",
@@ -33,7 +36,7 @@ namespace
   "unitGlb": "surface-properties/canister.glb",
   "unitSchemaVersion": "1.0.0",
   "unitSha256": "unit-sha",
-  "settingsVersion": "elysium-surfaceproperty-import-v2",
+  "settingsVersion": "elysium-surfaceproperty-import-v3",
   "baseChain": ["metal", "metalgrate", "metalpanel"],
   "gameMaterial": "M",
   "surfaceType": "SurfaceType7",
@@ -148,7 +151,7 @@ bool FElysiumPhysicalMaterialApplyJsonTest::RunTest(const FString&)
 	TestEqual(TEXT("record UnitGlb"), Record->UnitGlb, FString(TEXT("surface-properties/canister.glb")));
 	TestEqual(TEXT("record UnitSha256"), Record->UnitSha256, FString(TEXT("unit-sha")));
 	TestEqual(TEXT("record SettingsVersion"), Record->SettingsVersion,
-		FString(TEXT("elysium-surfaceproperty-import-v2")));
+		FString(TEXT("elysium-surfaceproperty-import-v3")));
 	TestEqual(TEXT("record BaseChain"), Record->BaseChain.Num(), 3);
 	TestEqual(TEXT("record Anomalies"), Record->Anomalies.Num(), 1);
 	TestEqual(TEXT("record CoveragePercent"), Record->CoveragePercent, 100.0f);
@@ -172,26 +175,39 @@ bool FElysiumPhysicalMaterialApplyJsonTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicalMaterialClampsTest,
-	"Elysium.Arm.PhysicalMaterial.Clamps", GElysiumPhysicalMaterialTestFlags)
-bool FElysiumPhysicalMaterialClampsTest::RunTest(const FString&)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicalMaterialRawInputsTest,
+	"Elysium.Arm.PhysicalMaterial.RawInputs", GElysiumPhysicalMaterialTestFlags)
+bool FElysiumPhysicalMaterialRawInputsTest::RunTest(const FString&)
 {
-	// `elasticity` runs to 2 in the shipped table and down to 0.001, and the engine's Restitution
-	// is a 0-1 bounciness. The asset carries the clamp the solver can use and the number the entry
-	// actually wrote, so a value outside the range is recorded rather than lost.
+	//26015170/26015b30 preserve raw FLOAT;26041aa0 multiplies it. The former clamp assertions
+	//encoded a port assumption, not retail: shipped gargoyle declares2. Original source is retained.
 	UElysiumPhysicalMaterial* Surface = NewSurface();
 	bool bOk = false;
 	FString Error;
 
 	UElysiumPhysicalMaterial::ApplyJson(Surface, GSidecar, bOk, Error);
 	TestTrue(TEXT("the sidecar applied"), bOk);
-	TestEqual(TEXT("Restitution clamps down to 1"), Surface->Restitution, 1.0f);
+	TestEqual(TEXT("Restitution keeps the declared raw 2"), Surface->Restitution, 2.0f);
 	TestEqual(TEXT("RawElasticity keeps the authored 2"), Surface->RawElasticity, 2.0f);
 
 	UElysiumPhysicalMaterial::ApplyJson(Surface, TEXT("{\"physics\": {\"elasticity\": -0.5}}"), bOk, Error);
 	TestTrue(TEXT("the negative sidecar applied"), bOk);
-	TestEqual(TEXT("Restitution clamps up to 0"), Surface->Restitution, 0.0f);
+	TestEqual(TEXT("Restitution keeps the declared raw -0.5"), Surface->Restitution, -0.5f);
 	TestEqual(TEXT("RawElasticity keeps the authored -0.5"), Surface->RawElasticity, -0.5f);
+	for (float Elasticity : {0.f,.001f,1.f,2.f,-.5f})
+	{
+		const FString Json=FString::Printf(TEXT("{\"physics\":{\"elasticity\":%.9g,\"friction\":0.6}}"),Elasticity);
+		Surface->bOverrideFrictionCombineMode=false; Surface->bOverrideRestitutionCombineMode=false;
+		Surface->FrictionCombineMode=EFrictionCombineMode::Average; Surface->RestitutionCombineMode=EFrictionCombineMode::Average;
+		UElysiumPhysicalMaterial::ApplyJson(Surface,Json,bOk,Error);
+		TestTrue(TEXT("declared boundary sidecar applied"),bOk);
+		TestEqual(TEXT("declared boundary survives raw FLOAT storage"),Surface->RawElasticity,Elasticity);
+		TestEqual(TEXT("declared boundary supplies native input unchanged"),Surface->Restitution,Elasticity);
+		TestEqual(TEXT("single authored friction supplies dynamic input"),Surface->Friction,.6f);
+		TestEqual(TEXT("single authored friction supplies static input"),Surface->StaticFriction,.6f);
+		TestTrue(TEXT("each apply explicitly selects friction Multiply"),Surface->bOverrideFrictionCombineMode && Surface->FrictionCombineMode==EFrictionCombineMode::Multiply);
+		TestTrue(TEXT("each apply explicitly selects restitution Multiply"),Surface->bOverrideRestitutionCombineMode && Surface->RestitutionCombineMode==EFrictionCombineMode::Multiply);
+	}
 
 	// A friction of 100 is in the table too; it is not clamped, because Unreal's Friction is not a
 	// 0-1 quantity and clamping it would quietly change a surface the table meant to be extreme.
@@ -214,6 +230,15 @@ bool FElysiumPhysicalMaterialClampsTest::RunTest(const FString&)
 		Defaults->Restitution);
 	TestEqual(TEXT("RawElasticity resets to the class default"), Surface->RawElasticity,
 		Defaults->RawElasticity);
+	UElysiumPhysicalMaterial::ApplyJson(Surface,TEXT("{\"physics\":{\"elasticity\":2}}"),bOk,Error);
+	TestTrue(TEXT("raw2 reapplied before null"),bOk);
+	UElysiumPhysicalMaterial::ApplyJson(Surface,TEXT("{\"physics\":{\"elasticity\":null,\"friction\":null}}"),bOk,Error);
+	TestTrue(TEXT("null sidecar applied"),bOk);
+	TestEqual(TEXT("null resets independent native elasticity default"),Surface->Restitution,Defaults->Restitution);
+	TestEqual(TEXT("null resets independent raw elasticity default"),Surface->RawElasticity,Defaults->RawElasticity);
+	TestEqual(TEXT("null friction keeps the older lane default"),Surface->Friction,Defaults->Friction);
+	TestEqual(TEXT("null friction duplicates the lane's one mu"),Surface->StaticFriction,Surface->Friction);
+	TestTrue(TEXT("null input still explicitly selects both Multiply modes"),Surface->bOverrideFrictionCombineMode && Surface->bOverrideRestitutionCombineMode && Surface->FrictionCombineMode==EFrictionCombineMode::Multiply && Surface->RestitutionCombineMode==EFrictionCombineMode::Multiply);
 
 	// An entry with no `gamematerial` anywhere in its chain gets the default row, not a guess.
 	UElysiumPhysicalMaterial* Weapon = NewSurface();
@@ -230,6 +255,32 @@ bool FElysiumPhysicalMaterialClampsTest::RunTest(const FString&)
 	TestEqual(TEXT("an unknown row is SurfaceType_Default"),
 		int32(Weapon->SurfaceType.GetValue()), int32(SurfaceType_Default));
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhysicalMaterialRawSerializationTest,
+	"Elysium.Arm.PhysicalMaterial.RawSerialization",GElysiumPhysicalMaterialTestFlags)
+bool FElysiumPhysicalMaterialRawSerializationTest::RunTest(const FString&)
+{
+	UElysiumPhysicalMaterial* Surface=NewSurface();
+	bool bOk=false; FString Error;
+	UElysiumPhysicalMaterial::ApplyJson(Surface,GSidecar,bOk,Error);
+	if (!TestTrue(TEXT("serialization source sidecar applied"),bOk)) return false;
+	TArray<uint8> Bytes;
+	{
+		FMemoryWriter Buffer(Bytes,true); FObjectAndNameAsStringProxyArchive Archive(Buffer,false);
+		Archive.SetFilterEditorOnly(true); Surface->Serialize(Archive);
+	}
+	UElysiumPhysicalMaterial* Restored=NewSurface();
+	{
+		FMemoryReader Buffer(Bytes,true); FObjectAndNameAsStringProxyArchive Archive(Buffer,false);
+		Archive.SetFilterEditorOnly(true); Restored->Serialize(Archive);
+	}
+	TestEqual(TEXT("cooked-property serialization preserves raw2"),Restored->RawElasticity,2.f);
+	TestEqual(TEXT("cooked-property serialization preserves native2"),Restored->Restitution,2.f);
+	TestEqual(TEXT("cooked-property serialization preserves dynamic mu"),Restored->Friction,.8f);
+	TestEqual(TEXT("cooked-property serialization preserves static mu"),Restored->StaticFriction,.8f);
+	TestTrue(TEXT("cooked-property serialization preserves both explicit Multiply modes"),Restored->bOverrideFrictionCombineMode && Restored->bOverrideRestitutionCombineMode && Restored->FrictionCombineMode==EFrictionCombineMode::Multiply && Restored->RestitutionCombineMode==EFrictionCombineMode::Multiply);
 	return true;
 }
 

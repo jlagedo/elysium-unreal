@@ -1,5 +1,32 @@
 # Worker runs — L0-entity
 
+## Declared raw material producer/effect — 2026-10-11 (after dc6c25bf)
+
+Fresh serial worker/root-reviewed precode contract and installed public API permit unchanged raw
+declared elasticity, explicit native Multiply for both coefficients, single authored mu and v3
+recipe invalidation. Actual JSON x JSON branch was admitted and proved before expanding controls.
+Independent typed2/JSON2 actual contacts store2/.24 and complete identical linear/angular/pose/frame;
+matched JSON1 stores1 and rebounds less. Paired mechanics guards run before/after BOTH setters and
+full stimuli match. No retail XY/trajectory/frame inference, custom solve or native callback writes.
+
+Final functional six-path manifest SHA ddf6e9781230214a7311100168c4ef1394f3dd59e7dc6d4249bea8686ddbad37.
+Pipeline21/build --arm/focused2/affected35 pass; material arm6 includes editor-only-filtered property
+archive roundtrip, not packaged cook. Public importer authors63/reuses0/fails0. Installed content1
+verifies all63 v3/Multiply/single-mu inputs plus PM_gargoyle raw/native2; no reached gargoyle map
+contact is claimed. Scenario2 passes/null first_unmet/events290/81. Existing arena27 startup errors/
+29 warnings and test wrapper layout warnings are separate. Exact original/copy SHA receipts,
+source, APIs and regenerated package bytes: E:/elysium-work/codex/l0-impact-contract-20261011.
+
+Coordinator default194 passes115 clean79 warned0 failed; bounded19 passes across two hosts exit0
+with ordinary first_unmet null and the two intentional refusal selftests retaining inverted passes.
+Existing arena27 startup errors535 warnings remain separate. Doctor exits0/21 existing warnings;
+repo-only policy exits0/0 warnings. Original/copy receipts are under coordinator-receipts in the
+same packet root; all six functional hashes remain frozen. No job remains. Coordinator owns
+final exact-path review/local commit. Raw input/product/
+uniform native effect and installed PM inputs close only this bounded contract; overall contact/
+trajectory/callback parity, shipped/moving selected association and impact dispatcher/feedback stay
+OPEN. Original0 newly closed,23/88 complete65remaining. No push, next worker or IVP mechanism clone.
+
 ## Production semantic query diagnostic — 2026-10-11 (after bd132e64)
 
 Actual production cooked-convex contacts prove independent project-authored interior

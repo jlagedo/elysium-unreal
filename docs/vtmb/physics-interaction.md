@@ -1336,7 +1336,8 @@ Rows borrow the service vector and may relocate on a later parse; service teardo
 rows/strings, while the process service survives world/level teardown. No external install/export
 path is opened by the game. The dedicated GLB/import input and packaging path are documented in
 `docs/contracts/seam_physics_surfaces.md`. Existing flattened material/audio pools, recursive
-explicit-base resolution and Chaos clamps remain a documented separate consumer divergence.
+explicit-base resolution remain a documented separate consumer divergence. The declared JSON
+material input/product repair is recorded below; it does not migrate those other semantics.
 
 Read-only executable research `uv run elysium research vphysics_surfaces --source <file>` loads
 the retail DLL, calls actual factory/parser/#3/#10/#7, captures every116 payload byte and actual
@@ -1373,6 +1374,51 @@ ordered physical timing, followed by contact filtering/notifications and shadow 
 Internal IVP shape/core/scheduler/packed topology is not a requirement absent an authored observer.
 The known named observers and staged seams are in the producer walk. No original run or broad
 entity/body/trace row closes, and the saved r022a frame/cache candidate stays deferred.
+
+## Declared JSON material input/product/native effect checkpoint (2026-10-11)
+
+Retail parser26015170 stores the declared atof result as FLOAT without an elasticity clamp;
+getter26015b30 retains it, and contact2604ec00 ->2604eb60 ->26041aa0 multiplies the two selected
+elasticities. Friction26015bd0/26041a70 supplies one authored mu product. The shipped `gargoyle`
+entry declares elasticity2 (deployed source lines352..368, value at363), not a computed exception.
+Its source SHA is3219d190cfb3eadb65159a4f48373c5ac3bd5f999cb960262abc87a6e09c4570.
+
+UElysiumPhysicalMaterial::FromJson previously clamped declared elasticity and left JSON x JSON
+combine modes at Average. This prior unapproved input divergence is repaired: declared raw FLOAT
+supplies both RawElasticity and Restitution unchanged; authored friction supplies Friction and
+StaticFriction; both override flags and Multiply modes are owned by every apply. Older absent/null
+defaults remain independent Raw0/Restitution.3; no full retail parser/default/inheritance closure
+is claimed for this flattened asset lane. The prior2->1 and-.5->0 assertions were port assumptions,
+not retail oracles; their exact baseline source/diff/hash was retained before replacing those
+expectations. All valid defaults/reapply/rejection/provenance and old native fixture assertions
+remain. Negative native solve parity is not claimed.
+
+The installed public UE5.8 material path copies Restitution unchanged. Supported native Multiply
+stores A*B into the pair; editor ClampMin/ClampMax metadata does not clamp that runtime input.
+The test-local supported material setter preserves paired M/InvM, I/InvI and principal frame.
+Before/after checks cover BOTH body and static floor, then full geometry/pose/velocity/gravity/
+sleep/damping/query-filter stimuli match across independent typed1 x typed2, JSON1 x JSON2 and
+JSON1 x JSON1. No custom solve, callback coefficient/velocity writes, geometry/cadence switch or
+gameplay association policy was added. Chaos continues to own mechanics and scheduling.
+
+Actual modifier/completed response at frame4/time.050000002607703209: typed2 and JSON2 both
+store static/dynamic mu.24000000953674316 and elasticity2, with identical linear/angular response,
+pose and completion frame. Their linear velocity is(-56.410678863525391,13.496726989746094,
+1218.10498046875)cm/s. The matched JSON1 floor stores elasticity1 and returns Z610.86297607421875.
+These are fixture observations and native-effect equivalence, not retail trajectory/XY/frame
+requirements. `NativeRawMaterialEffect` and unchanged `NativeMaterialEffect` pass2 clean at
+E:/elysium-work/reports/tests/20261011T163855.326074Z-elysium-substrate-mover-nativerawmateria-5895b618/index.json.
+
+Import SETTINGS_VERSION v3 changes actual editor recipe fingerprints without changing unit/chain
+bytes. Public `uv run elysium import surface-properties` reauthors63/reuses0/fails0. Installed
+`Elysium.Content.SurfaceMaterialContract` checks all63 explicit Multiply/single-mu/v3 inputs and
+PM_gargoyle raw/native2. PhysicalMaterial arm6 includes raw boundaries and editor-only-filtered
+property archive roundtrip; this is not packaged cook proof. Input/product/native effect and
+installed PM inputs close this bounded contract, with0 original packages closed (23/88,65 remain).
+Shipped/moving selected-surface association, overall contact/trajectory and callback parity,
+retail.015 cadence and full VPhysicsCollision100a6640 dispatcher/feedback remain OPEN. No reached
+gargoyle map contact is asserted. Exact source/API/report/package originals and copied SHA receipts
+are retained under E:/elysium-work/codex/l0-impact-contract-20261011/final-manifest.json.
 
 ## Selected model body authored input adapter (2026-10-11)
 

@@ -1,5 +1,28 @@
 # Reached pusher feedback and required producer plan (2026-10-11)
 
+## Declared raw material input/product/effect prerequisite (2026-10-11)
+
+The earliest ready material producer now preserves authored raw FLOAT elasticity, explicitly
+multiplies both native pair coefficients and supplies one authored mu to static/dynamic slots.
+Retail26015170/26015b30/26041aa0/26041a70 and shipped gargoyle2 justify the input repair. Exact
+prior clamp test assumptions are preserved; no valid retail oracle was weakened. Missing/null
+lane defaults and its other flattened/inheritance/audio semantics are outside this closure.
+
+Independent typed1 x typed2 and JSON1 x JSON2 actual production contacts store restitution2 and
+static/dynamic mu.24000000953674316 and complete identical velocity/angular/pose/frame. JSON1 x
+JSON1 stores1 and rebounds less. Before/after paired mass/inverse mass, inertia/inverse inertia,
+principal frame and full stimulus guards pass BOTH body/floor. Public v3 recipe reauthor replaces
+all63 installed PM inputs; content checks both Multiply modes/single-mu/provenance plus raw/native2
+gargoyle. No reached gargoyle map contact, retail XY/frame/trajectory or packaged cook is claimed.
+
+This completes a bounded prerequisite, not pusher/impact parity: overall contact, selected material
+event/response adapter, compatible shipped/moving association and100a6640 feedback dispatcher remain
+OPEN. The full dispatcher is UNRECOVERED; no address or policy is invented. Existing sound/shake/
+effects same-L0 producers must close with their future consumer. Retail.015 cadence, earlier
+44/178 timing and contact-skin questions remain separately OPEN. No custom solve/callback writes,
+manifold/geometry/clock changes or IVP clone.0 original closure;23/88 complete65remaining.
+Retained contract/API/source/report/package receipts: E:/elysium-work/codex/l0-impact-contract-20261011.
+
 ## Bounded production material association diagnostic (2026-10-11)
 
 Contract/recovery/installed API evidence and production-finding.md are retained in

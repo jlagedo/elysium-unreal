@@ -59,12 +59,18 @@ void UElysiumPhysicalMaterial::FromJson(const TSharedRef<FJsonObject>& Object)
 	const TSharedRef<FJsonObject> Physics = PhysicsBlock.IsValid() ? PhysicsBlock.ToSharedRef()
 		: MakeShared<FJsonObject>();
 	Friction = Float(Physics, TEXT("friction"), Defaults->Friction);
+	//2604ec00 ->26015bd0/26041a70 consumes one authored mu product. Chaos has two inputs.
+	StaticFriction = Friction;
+	bOverrideFrictionCombineMode = true;
+	FrictionCombineMode = EFrictionCombineMode::Multiply;
+	bOverrideRestitutionCombineMode = true;
+	RestitutionCombineMode = EFrictionCombineMode::Multiply;
 	Density = Float(Physics, TEXT("density"), Defaults->Density);
 	RawDensity = Float(Physics, TEXT("rawDensity"), Defaults->RawDensity);
 	Thickness = Float(Physics, TEXT("thickness"), Defaults->Thickness);
-	// `elasticity` runs to 2 in the shipped table and the engine's Restitution is a 0-1 bounciness,
-	// so a declared value drives both: the clamp the solver can use, and the number the entry
-	// actually wrote. An undeclared elasticity resets each independently to its own class default
+	//26015170/26015b30 retain raw FLOAT elasticity;26041aa0 multiplies those raw values.
+	//UE5.8 copies Restitution to Chaos unchanged; its 0-1 editor metadata is not a runtime clamp.
+	//An undeclared elasticity resets each independently to its own class default
 	// rather than deriving Restitution from RawElasticity's default -- the two are unrelated
 	// engine properties (Restitution's own default is 0.3; RawElasticity's is 0.0) and only a
 	// declared value ties them together.
@@ -72,7 +78,7 @@ void UElysiumPhysicalMaterial::FromJson(const TSharedRef<FJsonObject>& Object)
 	if (Physics->TryGetNumberField(TEXT("elasticity"), ElasticityValue))
 	{
 		RawElasticity = static_cast<float>(ElasticityValue);
-		Restitution = FMath::Clamp(RawElasticity, 0.0f, 1.0f);
+		Restitution = RawElasticity;
 	}
 	else
 	{

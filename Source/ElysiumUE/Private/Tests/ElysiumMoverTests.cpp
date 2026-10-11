@@ -11,6 +11,8 @@
 #include "ElysiumWorldCollisionActor.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumPhysicalMaterial.h"
+#include "ElysiumSurfacePropertyProvenance.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "ElysiumPhysicsSurfaceProps.h"
 #include "ElysiumPhysicsPropComponent.h"
 #include "Substrate/ElysiumLockable.h"
@@ -2703,6 +2705,199 @@ bool FElysiumNativeMaterialEffectTest::RunTest(const FString&)
 	}
 	return true;
 }
+namespace ElysiumRawMaterialTests
+{
+	struct FMechanics
+	{
+		FElysiumSavedPhysicsBody State;
+		Chaos::FReal Mass = 0., InverseMass = 0.;
+	};
+	bool ReadMechanics(UPrimitiveComponent& Component, FMechanics& Out)
+	{
+		if (!ElysiumModelPhysics::Capture(ElysiumModelPhysics::ActorIdentity(&Component),Out.State)) return false;
+		FBodyInstance* NativeBody = ElysiumModelPhysics::Identity(&Component);
+		FPhysicsCommand::ExecuteRead(NativeBody->GetPhysicsActor(), [&](const FPhysicsActorHandle& NativeActor)
+		{
+			const auto& NativeApi = NativeActor->GetGameThreadAPI();
+			Out.Mass = NativeApi.M(); Out.InverseMass = NativeApi.InvM();
+		});
+		return true;
+	}
+	void CheckMechanics(FAutomationTestBase& Test, const FString& Label, const FMechanics& Actual, const FMechanics& Expected)
+	{
+		Test.TestTrue(Label+TEXT(" preserves paired mass and inverse mass"),Actual.Mass==Expected.Mass && Actual.InverseMass==Expected.InverseMass && Actual.State.CurrentMassKg==Expected.State.CurrentMassKg);
+		Test.TestTrue(Label+TEXT(" preserves paired inertia and inverse inertia"),Actual.State.CurrentInertia==Expected.State.CurrentInertia && Actual.State.CurrentInverseInertia==Expected.State.CurrentInverseInertia);
+		Test.TestTrue(Label+TEXT(" preserves principal frame and pose"),Actual.State.CurrentMassFrame.Equals(Expected.State.CurrentMassFrame,0.) && Actual.State.Pose.Equals(Expected.State.Pose,0.));
+		Test.TestTrue(Label+TEXT(" preserves gravity, sleep and damping"),Actual.State.bGravity==Expected.State.bGravity && Actual.State.bAsleep==Expected.State.bAsleep && Actual.State.CurrentLinearDamping==Expected.State.CurrentLinearDamping && Actual.State.CurrentAngularDamping==Expected.State.CurrentAngularDamping);
+		Test.TestTrue(Label+TEXT(" preserves linear and angular stimulus"),Actual.State.LinearVelocity==Expected.State.LinearVelocity && Actual.State.AngularVelocityRadians==Expected.State.AngularVelocityRadians);
+		Test.TestTrue(Label+TEXT(" preserves collision profile, mask and responses"),Actual.State.CollisionProfile==Expected.State.CollisionProfile && Actual.State.CollisionMask==Expected.State.CollisionMask && Actual.State.CollisionResponses==Expected.State.CollisionResponses && Actual.State.BboxCollisionEnabled==Expected.State.BboxCollisionEnabled && Actual.State.Recipe.BrushContentsSignature==Expected.State.Recipe.BrushContentsSignature);
+		Test.TestTrue(Label+TEXT(" preserves authored geometry and static state"),Actual.State.Recipe.Kind==Expected.State.Recipe.Kind && Actual.State.Recipe.bStatic==Expected.State.Recipe.bStatic && Actual.State.Recipe.BboxMin==Expected.State.Recipe.BboxMin && Actual.State.Recipe.BboxMax==Expected.State.Recipe.BboxMax);
+	}
+	void SetMaterialPreservingMechanics(UPrimitiveComponent& Component, UElysiumPhysicalMaterial& Material)
+	{
+		//The same supported setter boundary as production SetSurfaceMaterial; no solver changes.
+		FBodyInstance* NativeBody = ElysiumModelPhysics::Identity(&Component);
+		const FTransform MassFrame = NativeBody->GetMassSpaceLocal();
+		Chaos::FReal Mass = 0., InverseMass = 0.;
+		Chaos::FVec3f Inertia, InverseInertia;
+		FPhysicsCommand::ExecuteRead(NativeBody->GetPhysicsActor(), [&](const FPhysicsActorHandle& NativeActor)
+		{
+			const auto& NativeApi = NativeActor->GetGameThreadAPI();
+			Mass = NativeApi.M(); InverseMass = NativeApi.InvM();
+			Inertia = NativeApi.I(); InverseInertia = NativeApi.InvI();
+		});
+		Component.SetPhysMaterialOverride(&Material);
+		FPhysicsCommand::ExecuteWrite(NativeBody->GetPhysicsActor(), [&](const FPhysicsActorHandle& NativeActor)
+		{
+			auto& NativeApi = NativeActor->GetGameThreadAPI();
+			NativeApi.SetM(Mass); NativeApi.SetInvM(InverseMass);
+			NativeApi.SetI(Inertia); NativeApi.SetInvI(InverseInertia);
+		});
+		NativeBody->SetMassSpaceLocal(MassFrame);
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNativeRawMaterialEffectTest, "Elysium.Substrate.Mover.NativeRawMaterialEffect", GElysiumMoverTestFlags)
+bool FElysiumNativeRawMaterialEffectTest::RunTest(const FString&)
+{
+	ElysiumRawMaterialTests::FMechanics TypedBodyInitial, TypedFloorInitial;
+	FVector TypedImpact = FVector::ZeroVector, TypedAngularImpact = FVector::ZeroVector;
+	FTransform TypedImpactPose;
+	int32 TypedImpactFrame = 0;
+	for (int32 Mode : {0,1,2}) //independent typed1 x typed2, JSON1 x JSON2, JSON1 x JSON1
+	{
+	FTestWorldWrapper Fixture;
+	if (!ElysiumDoorCaseTests::OpenEngineWorld(Fixture,this)) return false;
+	UWorld* EngineWorld = Fixture.GetTestWorld();
+	auto* Owner = EngineWorld->SpawnActor<AActor>();
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(Owner,nullptr,Services.Bundle());
+	FElysiumEntityDefs Defs; Defs.MapName = TEXT("__native_raw_material_effect__"); World.Load(MoveTemp(Defs));
+	FElysiumEntityDef Def; Def.Classname = TEXT("info_target");
+	auto* Dynamic = World.Resolve(World.SpawnRuntimeEntity(Def));
+	auto* FloorEntity = World.Resolve(World.SpawnRuntimeEntity(Def));
+	FElysiumPhysicsSurfaceProps Surfaces;
+	Surfaces.ParseSurfaceData(TEXT("raw-material-fixture"),TEXT("default { friction 0.6 elasticity 1 density 1000 } floor { friction 0.4 elasticity 2 density 3000 }"));
+	auto* Body = NewObject<UElysiumPhysicsPropComponent>(Owner); Owner->AddInstanceComponent(Body); Body->RegisterComponent();
+	auto* Floor = NewObject<UElysiumPhysicsPropComponent>(Owner); Owner->AddInstanceComponent(Floor); Floor->RegisterComponent();
+	Body->SetWorldLocation(FVector(0,0,50));
+	FElysiumPhysicsBodyRecipe Recipe; Recipe.Kind = EElysiumPhysicsRecipeKind::Bbox;
+	Recipe.BboxMin = FVector(-10); Recipe.BboxMax = FVector(10); Recipe.MassKg = 1.f;
+	Recipe.LinearDamping = 0.f; Recipe.AngularDamping = 0.f;
+	FString Error;
+	if (!TestTrue(TEXT("raw fixture creates actual native dynamic bbox"),ElysiumModelPhysics::CreateBbox(Body,Surfaces,Recipe,false,Error))) return false;
+	Recipe.bStatic = true; Recipe.Surface = TEXT("floor"); Recipe.BboxMin = FVector(-100,-100,-5); Recipe.BboxMax = FVector(100,100,5);
+	if (!TestTrue(TEXT("raw fixture creates actual native static floor"),ElysiumModelPhysics::CreateBbox(Floor,Surfaces,Recipe,false,Error))) return false;
+	if (Mode != 0)
+	{
+	ElysiumRawMaterialTests::FMechanics BodyBefore, FloorBefore, BodyAfter, FloorAfter;
+	if (!TestTrue(TEXT("read both mechanical inputs before JSON setters"),ElysiumRawMaterialTests::ReadMechanics(*Body,BodyBefore) && ElysiumRawMaterialTests::ReadMechanics(*Floor,FloorBefore))) return false;
+	auto* BodyMaterial = NewObject<UElysiumPhysicalMaterial>(Body);
+	auto* FloorMaterial = NewObject<UElysiumPhysicalMaterial>(Floor);
+	bool bApplied = false;
+	UElysiumPhysicalMaterial::ApplyJson(BodyMaterial,TEXT("{\"sourceName\":\"default\",\"physics\":{\"friction\":0.6,\"elasticity\":1,\"density\":1,\"rawDensity\":1000}}"),bApplied,Error);
+	if (!TestTrue(TEXT("body uses the actual JSON material producer"),bApplied)) return false;
+	const FString FloorJson = FString::Printf(TEXT("{\"sourceName\":\"floor\",\"physics\":{\"friction\":0.4,\"elasticity\":%d,\"density\":3,\"rawDensity\":3000}}"),Mode==1?2:1);
+	UElysiumPhysicalMaterial::ApplyJson(FloorMaterial,FloorJson,bApplied,Error);
+	if (!TestTrue(TEXT("floor uses the actual JSON material producer"),bApplied)) return false;
+	ElysiumRawMaterialTests::SetMaterialPreservingMechanics(*Body,*BodyMaterial);
+	ElysiumRawMaterialTests::SetMaterialPreservingMechanics(*Floor,*FloorMaterial);
+	if (!TestTrue(TEXT("read both mechanical inputs after JSON setters"),ElysiumRawMaterialTests::ReadMechanics(*Body,BodyAfter) && ElysiumRawMaterialTests::ReadMechanics(*Floor,FloorAfter))) return false;
+	ElysiumRawMaterialTests::CheckMechanics(*this,TEXT("dynamic JSON setter"),BodyAfter,BodyBefore);
+	ElysiumRawMaterialTests::CheckMechanics(*this,TEXT("static JSON setter"),FloorAfter,FloorBefore);
+	}
+	void* Actor = ElysiumModelPhysics::ActorIdentity(Body); void* FloorActor = ElysiumModelPhysics::ActorIdentity(Floor);
+	ElysiumModelPhysics::SetGameData(Actor,*Dynamic); ElysiumModelPhysics::SetGameData(FloorActor,*FloorEntity);
+	Dynamic->VPhysicsSetObject(Actor); FloorEntity->VPhysicsSetObject(FloorActor);
+	Body->SetEnableGravity(false);
+	ElysiumModelPhysics::Identity(Body)->SetLinearVelocity(FVector(0,0,-600),false);
+	ElysiumRawMaterialTests::FMechanics BodyInitial, FloorInitial;
+	if (!TestTrue(TEXT("capture both whole stimuli before contact"),ElysiumRawMaterialTests::ReadMechanics(*Body,BodyInitial) && ElysiumRawMaterialTests::ReadMechanics(*Floor,FloorInitial))) return false;
+	if (Mode==0) { TypedBodyInitial=BodyInitial; TypedFloorInitial=FloorInitial; }
+	else
+	{
+		ElysiumRawMaterialTests::CheckMechanics(*this,TEXT("dynamic independent control"),BodyInitial,TypedBodyInitial);
+		ElysiumRawMaterialTests::CheckMechanics(*this,TEXT("static independent control"),FloorInitial,TypedFloorInitial);
+	}
+	AddInfo(FString::Printf(TEXT("RAW_MATERIAL_STIMULUS,mode=%d,bodyMass=%.17g,bodyInvMass=%.17g,floorMass=%.17g,floorInvMass=%.17g"),Mode,BodyInitial.Mass,BodyInitial.InverseMass,FloorInitial.Mass,FloorInitial.InverseMass));
+	ElysiumModelPhysics::ObservePostSolve(*EngineWorld);
+	bool bReached = false;
+	bool bSolved = false;
+	double LastPairTime = -1.;
+	for (int32 Frame = 1; Frame <= 10; ++Frame)
+	{
+		World.BeginNativePhysicsFrame(Frame/60.,1./60.);
+		ElysiumModelPhysics::PreparePhysicsFrame(*EngineWorld,1.f/60.f,1.f,true); Fixture.TickTestWorld(1.f/60.f);
+		const FVector Velocity = ElysiumModelPhysics::Identity(Body)->GetUnrealWorldVelocity();
+		for (const auto& Pair : ElysiumModelPhysics::PairMaterials(Actor))
+			if (Pair.Partner == FloorActor && Pair.Time > LastPairTime)
+			{
+				LastPairTime = Pair.Time; bReached = true;
+				const double ExpectedFriction = static_cast<double>(static_cast<float>(static_cast<double>(.6f)*static_cast<double>(.4f)));
+				TestEqual(TEXT("raw uniform pair stores the static single-mu product"),Pair.StaticFriction,ExpectedFriction);
+				TestEqual(TEXT("raw uniform pair stores the dynamic single-mu product"),Pair.DynamicFriction,ExpectedFriction);
+				TestEqual(TEXT("raw uniform pair stores the declared elasticity product"),Pair.Restitution,Mode==2?1.:2.);
+				TestTrue(TEXT("raw pair observation belongs to the just-completed native frame"),Pair.Time>=(Frame-1)/60.-1.e-7 && Pair.Time<Frame/60.);
+				const auto* BodyMaterial = Cast<UElysiumPhysicalMaterial>(ElysiumModelPhysics::Identity(Body)->GetSimplePhysicalMaterial());
+				const auto* FloorMaterial = Cast<UElysiumPhysicalMaterial>(ElysiumModelPhysics::Identity(Floor)->GetSimplePhysicalMaterial());
+				AddInfo(FString::Printf(TEXT("RAW_MATERIAL_BRANCH,mode=%d,frame=%d,time=%.17g,bodyRaw=%.17g,floorRaw=%.17g,staticMu=%.17g,dynamicMu=%.17g,restitution=%.17g,velocity=%.17g/%.17g/%.17g"),Mode,Frame,Pair.Time,BodyMaterial->RawElasticity,FloorMaterial->RawElasticity,Pair.StaticFriction,Pair.DynamicFriction,Pair.Restitution,Velocity.X,Velocity.Y,Velocity.Z));
+				if (!bSolved && Velocity.Z>=0.)
+				{
+					bSolved=true;
+					const FVector AngularImpact = ElysiumModelPhysics::Identity(Body)->GetUnrealWorldAngularVelocityInRadians();
+					const FTransform ImpactPose = ElysiumModelPhysics::Identity(Body)->GetUnrealWorldTransform();
+					if (Mode==0) { TypedImpact=Velocity; TypedAngularImpact=AngularImpact; TypedImpactPose=ImpactPose; TypedImpactFrame=Frame; }
+					else if (Mode==1)
+					{
+						TestTrue(TEXT("JSON2 and independent typed2 have identical completed linear and angular response"),Velocity==TypedImpact && AngularImpact==TypedAngularImpact);
+						TestTrue(TEXT("JSON2 and typed2 have identical completed pose"),ImpactPose.Equals(TypedImpactPose,0.));
+						TestEqual(TEXT("JSON2 and typed2 complete impact in the same native frame"),Frame,TypedImpactFrame);
+					}
+					else TestTrue(TEXT("raw2 increases actual positive rebound relative to matched raw1 control"),TypedImpact.Z>Velocity.Z && Velocity.Z>0.);
+				}
+			}
+		World.FinishNativePhysicsFrame();
+	}
+	TestTrue(TEXT("JSONxJSON fixture reaches the actual production modifier pair"),bReached);
+	TestTrue(TEXT("JSONxJSON fixture reaches a completed native impact response"),bSolved);
+	ElysiumModelPhysics::Destroy(Body); ElysiumModelPhysics::Destroy(Floor);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSurfaceMaterialContractTest,"Elysium.Content.SurfaceMaterialContract",GElysiumMoverTestFlags)
+bool FElysiumSurfaceMaterialContractTest::RunTest(const FString&)
+{
+	//Only installed material inputs are claimed; this does not assert a reached gargoyle map contact.
+	auto& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
+	Registry.ScanPathsSynchronous({TEXT("/ElysiumBaked/SurfaceProperties")});
+	TArray<FAssetData> Assets;
+	Registry.GetAssetsByPath(TEXT("/ElysiumBaked/SurfaceProperties"),Assets,true,true);
+	if (!TestTrue(TEXT("installed surface-property package family is present"),Assets.Num()>0)) return false;
+	bool bFoundGargoyle=false;
+	for (const FAssetData& Asset : Assets)
+	{
+		const auto* Surface = Cast<UElysiumPhysicalMaterial>(Asset.GetAsset());
+		if (!TestNotNull(TEXT("published surface asset loads as a physical material"),Surface)) continue;
+		const FString Label=Asset.AssetName.ToString();
+		TestTrue(Label+TEXT(" has explicit friction Multiply"),Surface->bOverrideFrictionCombineMode && Surface->FrictionCombineMode==EFrictionCombineMode::Multiply);
+		TestTrue(Label+TEXT(" has explicit restitution Multiply"),Surface->bOverrideRestitutionCombineMode && Surface->RestitutionCombineMode==EFrictionCombineMode::Multiply);
+		TestEqual(Label+TEXT(" carries single authored mu in both native slots"),Surface->StaticFriction,Surface->Friction);
+		const auto* Record=UElysiumPhysicalMaterial::FindProvenance(Surface);
+		if (TestNotNull(Label+TEXT(" has published provenance"),Record))
+			TestEqual(Label+TEXT(" has the regenerated raw/product recipe"),Record->SettingsVersion,FString(TEXT("elysium-surfaceproperty-import-v3")));
+		if (Asset.AssetName==TEXT("PM_gargoyle"))
+		{
+			bFoundGargoyle=true;
+			TestEqual(TEXT("shipped gargoyle retains declared raw FLOAT2"),Surface->RawElasticity,2.f);
+			TestEqual(TEXT("shipped gargoyle submits declared native FLOAT2"),Surface->Restitution,2.f);
+		}
+	}
+	TestTrue(TEXT("installed authored2 witness PM_gargoyle was checked"),bFoundGargoyle);
+	AddInfo(FString::Printf(TEXT("SURFACE_MATERIAL_CONTRACT,assets=%d,gargoyle=%d,settings=elysium-surfaceproperty-import-v3"),Assets.Num(),bFoundGargoyle));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNativeMaterialAssociationTest, "Elysium.Substrate.Mover.NativeMaterialAssociation", GElysiumMoverTestFlags)
 bool FElysiumNativeMaterialAssociationTest::RunTest(const FString&)
 {
