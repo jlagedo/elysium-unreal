@@ -13,6 +13,16 @@ evidence, not new validation or acceptance of the layer closing gate.
 
 ## Current checkpoint
 
+- Contact sample meaning packet (2026-10-11; coordinator reviewed and gated):
+  SAME normal moving fixture measures public current/stored/modifier shape poses,
+  geometry/margins, pointflags, fresh pointnormal separation and native pointSDF.
+  f19/f20 storedPhi equals freshgap after native floatstorage, so no stale/margin
+  admission defect is evidenced. f26/f32 storedPhi differs from postsolve retained
+  pointnormal separation, but both qualify. Nativefirst44f20/178f32 versus retailf26/
+  f32no178 remains OPEN; no qualification/mechanics policy changed. Finalbuild114002,
+  affected54/2scenarios/default189/bounded19 pass below. Next publicretail geometry/material/readback
+  query contract and all full L0 requirements remain OPEN; original23/88 unchanged.
+
 - Completed47/native postsolve observer (2026-10-11; coordinator reviewed/gated):
   public opt-in PostSolve measurement proves completed GT47 equals native solved
   P/Q components on all36 normal frames, with completed V/W differences0. X/R
@@ -1275,3 +1285,71 @@ MoverTests.cpp B6987ACA7511B3B0B91C8301A16C3E1538C1B214BF8971D5FCD7B50ECCA42499
 Only this checkpoint bookkeeping follows freeze. Coordinator terminates after commit;
 no next worker dispatched. Native contact/mechanics/candidate encounter equivalence,
 original23/88 and all five full L0 closing requirements remain OPEN.
+
+### Contact sample meaning checkpoint — 2026-10-11
+
+Precode contract and installed public API/thread/lifetime checks are in
+walks/L0-pusher-feedback.md; detailed native measurements in physics-interaction.md.
+Actual normal46/completed47/generation-fenced44/active226/178 observer stays unchanged.
+Only opt-in copied diagnostics and measured boundary/nativefloat mapping assertions
+were added. Actual cooked instancedConvex type/margins/pointbits/count are logs only.
+Authoredbounds, geometry availability, finite service inputs, current/stored phase
+mapping and strict unchanged retailqualification19/20 are asserted. No marginfix,
+cadence/delay/sort/threshold/tolerance/mechanics or save/hook change. Same/lower
+producers and native lifetime/sleep/noadvance/contactretirement regressions pass.
+
+Final coherent --arm build E:/elysium-work/logs/20261011T114002.227743Z-build.json
+exit0/29.438s. Frozen affected54:
+E:/elysium-work/reports/tests/20261011T114048.568374Z-elysium-substrate-modelphysics-elysium-s-31ef1b4b/index.json
+34clean20warned0failed/notRun/inProcess; native9/Mover16clean. Wrapper
+E:/elysium-work/logs/20261011T114047.046624Z-test.json exit0/31.609s,14 runtimewarnings
+separate. Final scenario2 aggregate and host:
+E:/elysium-work/reports/arena/20261011T114135.510979Z/index.json and arena/index.json,
+2pass/nullfirst_unmet/events290/81/process0; wrapper
+E:/elysium-work/logs/20261011T114135.234149Z-arena.json exit0/25.328s.
+Existing27startuperrors29warnings separate. Original angleMotionspawn literals unchanged.
+
+Final99line prefix f1..32 SHA256af9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515
+reuses public E:/elysium-work/research/vphysics-contacts/20261011T102350.497103Z/index.json.
+Nativefirst44f20/178f32 squared1.0501758925050075 versus retailfirst44f26/f32squared
+.57965414909080337/no calculated178 remains OPEN. No projectionrepair is justified.
+Next bounded executable observable: recover supported publicretail shapeAABB/extent
+and bodymaterial/mechanical readback signatures, compare actual queryoutputs at
+creation and normal46/47poses with native publicgeometry/material/state on this prefix.
+No private geometry/scheduler/allocator topology follows. Original23/88/fullL0 OPEN.
+
+FunctionalSHA256: cpp1D4F6579402793BC24C0BC79BF29727F7B80EBCEFAE3B285D0EBCBC8776FACF4;
+h73205DF8851C1E5AA3B0B627FEDF80D71C5A6D484E29F18D85D839909A553207;
+tests7CBC9B632EEA1F280DA60F8528C37734454D0DA2EA83BE851A5741459F02D3BA.
+Exactlysevenpaths: ModelPhysics.cpp/.h, MoverTests.cpp, physics-interaction.md,
+L0-pusher-feedback.md, progress.md, runs.md; full manifest in walk. No corpus/content/
+goldens/audit/hooks/generator/map changed; applicable pipeline54/v3map2 receipts reused.
+Worker nojobs/commit/push/nextpacket; coordinator default/bounded19/doctor/review pending.
+
+Coordinator independently reviewed the full seven-path diff, installed public API
+mapping, diagnostic lifetime/availability/provenance and literal observer assertions.
+Native representation type, margins, point flags and counts remain diagnostics only.
+Functional sources stayed frozen through final gates; all three SHA256 values above
+were independently rechecked. The common99-line input prefix was independently
+rehashed with the same result; public102350 replay remains reusable through f32 only.
+
+Final default189: E:/elysium-work/reports/tests/20261011T114401.225047Z-elysium-session-elysium-substrate/index.json,
+110 clean/79 warned/0 failed/notRun/inProcess; wrapper
+E:/elysium-work/logs/20261011T114401.068767Z-test.json exit0/26.610s.
+Original bounded19: E:/elysium-work/reports/arena/20261011T114433.238670Z/index.json,
+19/19 pass in two boots, both hosts exit0. Aggregate and arena18 plus
+map-sm_hub_1-l0_transition_state host JSONs were read. Ordinary first_unmet values
+are null; two deliberate refusal selftests retain inverted passes. Wrapper
+E:/elysium-work/logs/20261011T114433.028318Z-arena.json exit0/64.734s.
+Startup27 errors/534 warnings remain separate from passing records (prior run535);
+no failure was waived. Doctor E:/elysium-work/logs/20261011T114541.682399Z-doctor.json
+exits0/21 existing warnings. Exact inventory confirms unchanged generator/map/content
+inputs, so pipeline54-final-annotation.xml and actual v3map2-clean074423.155641Z
+evidence are reused. No ledger regeneration/kernel --check or audit/hook change.
+
+Only this progress/runs checkpoint follows source freeze. Coordinator commits the
+exact seven paths and terminates; no push or next worker. No contact/mechanics
+parity, gameplay divergence, full arm/full arena/three boot-order closure or original
+run closure is claimed. Next supported public retail shape/material/body-state
+readback comparison requires exact public ABI and read-only lifetime verification
+before use. Original23/88 and all five full L0 closing requirements remain OPEN.

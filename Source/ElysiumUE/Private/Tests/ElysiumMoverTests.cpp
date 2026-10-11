@@ -702,6 +702,25 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 								TestTrue(TEXT("boundary blocker constraint was observed by public contact modifier"),BoundaryContact->bModifierObserved);
 								TestTrue(TEXT("boundary blocker has actual active set points for qualification"),BoundaryContact->ActivePoints>0 && !BoundaryContact->bDisabled && !BoundaryContact->bProbe);
 								TestEqual(TEXT("frame19 is unqualified and frame20 qualifies without changed threshold"),BoundaryContact->bQualified,MovingFrames==20);
+								for (int32 Side=0; Side<2; ++Side)
+								{
+									TestTrue(TEXT("boundary public service exposes live bounded geometry"),BoundaryContact->bGeometry[Side] && BoundaryContact->bBounds[Side]);
+									TestTrue(TEXT("actual boundary hull bounds preserve authored ten-centimetre halfextents"),BoundaryContact->BoundsMin[Side]==FVector(-10.) && BoundaryContact->BoundsMax[Side]==FVector(10.));
+									TestTrue(TEXT("public geometry and collision margins are finite diagnostic inputs"),FMath::IsFinite(BoundaryContact->GeometryMargin[Side]) && FMath::IsFinite(BoundaryContact->CollisionMargin[Side]));
+									TestTrue(TEXT("boundary current solved shape equals modifier and stored pose"),BoundaryContact->SolvedPose[Side]==BoundaryContact->StoredPose[Side] && BoundaryContact->SolvedPose[Side]==BoundaryContact->ModifierPose[Side] && BoundaryContact->SolvedRotation[Side]==FQuat::Identity);
+								}
+								TestTrue(TEXT("boundary public modifier separation preserves recovered strict admission band"),(BoundaryContact->ModifierSeparation<2.8563570231199265)==(MovingFrames==20));
+								for (const auto& Point : BoundaryContact->Points)
+								{
+									TestEqual(TEXT("boundary stored Phi is current point separation after native float storage"),static_cast<float>(Point.SolvedSeparation),static_cast<float>(Point.Phi));
+									TestEqual(TEXT("boundary public modifier and stored separation have equal native float word"),static_cast<float>(BoundaryContact->ModifierSeparation),static_cast<float>(Point.StoredSeparation));
+									for (int32 Side=0; Side<2; ++Side)
+									{
+										TestTrue(TEXT("boundary point reaches actual public surface service"),Point.bSurfaceSample[Side]);
+										TestEqual(TEXT("retained native point lies on actual convex surface"),static_cast<float>(Point.OwnSurfacePhi[Side]),0.f);
+										TestEqual(TEXT("boundary surface SDF is gap after native float storage, with no margin subtraction"),static_cast<float>(Point.SurfacePhi[Side]),static_cast<float>(Point.Phi));
+									}
+								}
 							}
 						}
 						const FVector PostSource = SourceWords(PostSolve.Position), PostSolvedSource = SourceWords(PostSolve.SolvedPosition);
@@ -713,10 +732,22 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 						AddInfo(FString::Printf(TEXT("MOVING_POST_COMPLETED_VELOCITY,%d,%d,linearSquared=%.17g,angularSquared=%.17g"),MovingFrames,SubstepIndex,
 							(CompletedBody->GetUnrealWorldVelocity()-PostSolve.Velocity).SizeSquared(),(CompletedBody->GetUnrealWorldAngularVelocityInRadians()-PostSolve.AngularVelocity).SizeSquared()));
 						for (const auto& PostContact : PostSolve.Contacts)
+						{
 							AddInfo(FString::Printf(TEXT("MOVING_POST_CONTACT,%d,%d,partner=%s,id=%d,generation=%llu,phi=%.17g,activePoints=%d,disabled=%d,probe=%d,qualified=%d,modifierObserved=%d,selected44=%d"),
 								MovingFrames,SubstepIndex,*FElysiumEntityWorld::AiTraceName(ElysiumModelPhysics::GameDataForObject(const_cast<void*>(PostContact.Partner))),
 								PostContact.PartnerUniqueIdx,PostContact.PartnerGeneration,PostContact.Phi,PostContact.ActivePoints,
 								PostContact.bDisabled,PostContact.bProbe,PostContact.bQualified,PostContact.bModifierObserved,bContact && PostContact.Partner==ContactPartner));
+							for (int32 Side=0; Side<2; ++Side)
+								AddInfo(FString::Printf(TEXT("MOVING_CONTACT_SHAPE,%d,%d,id=%d,side=%d,type=%d,geometryMargin=%.17g,collisionMargin=%.17g,boundsMin=%s,boundsMax=%s,modifierPose=%s,storedPose=%s,solvedPose=%s,solvedRotation=%s,initial=%d,modifierSeparation=%.17g,hasGeometry=%d,hasBounds=%d"),
+									MovingFrames,SubstepIndex,PostContact.PartnerUniqueIdx,Side,PostContact.GeometryType[Side],PostContact.GeometryMargin[Side],PostContact.CollisionMargin[Side],
+									*PostContact.BoundsMin[Side].ToString(),*PostContact.BoundsMax[Side].ToString(),*PostContact.ModifierPose[Side].ToString(),*PostContact.StoredPose[Side].ToString(),*PostContact.SolvedPose[Side].ToString(),*PostContact.SolvedRotation[Side].ToString(),PostContact.bInitial,PostContact.ModifierSeparation,PostContact.bGeometry[Side],PostContact.bBounds[Side]));
+							for (int32 PointIndex=0; PointIndex<PostContact.Points.Num(); ++PointIndex)
+							{
+								const auto& Point = PostContact.Points[PointIndex];
+								AddInfo(FString::Printf(TEXT("MOVING_CONTACT_POINT,%d,%d,id=%d,point=%d,flags=%u,phi=%.17g,storedSeparation=%.17g,solvedSeparation=%.17g,surfacePhi0=%.17g,surfacePhi1=%.17g,normal=%s,ownPhi0=%.17g,ownPhi1=%.17g,surfaceSample0=%d,surfaceSample1=%d"),
+									MovingFrames,SubstepIndex,PostContact.PartnerUniqueIdx,PointIndex,Point.Flags,Point.Phi,Point.StoredSeparation,Point.SolvedSeparation,Point.SurfacePhi[0],Point.SurfacePhi[1],*Point.Normal.ToString(),Point.OwnSurfacePhi[0],Point.OwnSurfacePhi[1],Point.bSurfaceSample[0],Point.bSurfaceSample[1]));
+							}
+						}
 					}
 				}
 				void* RepeatedPartner=nullptr; FString RepeatedProvenance;

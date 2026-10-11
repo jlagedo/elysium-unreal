@@ -72,9 +72,23 @@ namespace ElysiumModelPhysics
 	int32 GetShadowPosition(void* Actor, FVector* OriginCm, FQuat* Rotation);
 	struct FPostSolveContactSample
 	{
+		struct FPoint
+		{
+			double Phi = 0., StoredSeparation = 0., SolvedSeparation = 0.;
+			double SurfacePhi[2] = {0.,0.}, OwnSurfacePhi[2] = {0.,0.}; uint32 Flags = 0;
+			bool bSurfaceSample[2] = {false,false};
+			FVector Normal = FVector::ZeroVector;
+		};
 		const void* Partner = nullptr; int32 PartnerUniqueIdx = INDEX_NONE; uint64 PartnerGeneration = 0;
 		double Phi = TNumericLimits<double>::Max(); int32 ActivePoints = 0;
 		bool bDisabled = false, bProbe = false, bQualified = false, bModifierObserved = false;
+		bool bInitial = false;
+		double ModifierSeparation = TNumericLimits<double>::Max();
+		FVector ModifierPose[2] = {FVector::ZeroVector,FVector::ZeroVector}, StoredPose[2] = {FVector::ZeroVector,FVector::ZeroVector}, SolvedPose[2] = {FVector::ZeroVector,FVector::ZeroVector};
+		FVector BoundsMin[2] = {FVector::ZeroVector,FVector::ZeroVector}, BoundsMax[2] = {FVector::ZeroVector,FVector::ZeroVector};
+		FQuat SolvedRotation[2] = {FQuat::Identity,FQuat::Identity}; bool bGeometry[2] = {false,false}, bBounds[2] = {false,false};
+		int32 GeometryType[2] = {0,0}; float GeometryMargin[2] = {0.f,0.f}; double CollisionMargin[2] = {0.,0.};
+		TArray<FPoint> Points; //diagnostic copies only; no borrowed native geometry escapes PT
 	};
 	struct FPostSolveSample
 	{

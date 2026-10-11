@@ -1308,6 +1308,52 @@ native witnesses and explicit unrecovered frontier are in
 `docs/specs/layers/L0-entity/walks/L0-native-publication.md`. Original23/88 remains open.
 ## Pusher contact selection and qualification recovery (2026-10-11)
 
+### Native sample meaning measurement (2026-10-11; bounded moving witness)
+
+This retains the recovered260184a0/2603e6d0/2603e880 contract below. Normal moving
+active226 ->100a55b0 ->178 is the shipped observer; no engine topology or native
+margin is itself a retail rule. Before coding, public UE5.8 ContactModification.h
+GetShapeToWorld, GetSeparation, GetWorldContactLocations and GetWorldNormal were
+checked against their installed implementations. Current rigidPQ supplies shape pose;
+stored constraint transforms supply the public contact locations/normal/separation.
+The latter is dot(world0-world1,normal), normal away from second body. Public
+constraint relative transforms compose with currentPQ (staticXR); geometry queries
+remain callback-owned, copied as diagnostic values, not retained dereferenceable pointers.
+
+The SAME moving fixture measures actual instancedConvex geometry (public type72),
+bounds[-10,+10]cm on each axis, geometry and collision margins1cm on both sides.
+ImplicitObjectScaled.h140's instanced PhiWithNormal delegates to FConvex; Convex.h229
+provides the native point-to-surface query. No wrapper/plane/topology is reconstructed.
+Both native retained points are on their own surfaces (Phi0) at f19/f20, with identity
+rotations and modifier/stored/current shape poses equal. Opposite-point SDF and
+fresh point-normal separation both measure2.8773729131879522cm at f19 and
+2.4540395613732429cm at f20. Stored manifold floatPhi is respectively
+2.8773729801177979 and2.4540395736694336, exactly the fresh separation after native
+float storage. This preserves unqualified19/qualified20 under strict unchanged
+2.8563570231199265cm. No stale pose or missing margin subtraction causes this
+admission boundary. Type/margins/flagbits are diagnostic engine choices, not new rules.
+
+At f26/f32 stored contact transforms and current solved poses diverge. Stored minimum
+Phi is-.08596058189868927/-2.6223978996276855cm; fresh retained point-normal ranges
+are[-.00052878152103878642,.00029674545361094753] and
+[-.0123475094308786,.0074156925898196157]cm. These all retain qualification. This
+proves storedPhi is not generally postsolve separation; it does not establish generic
+minimum convex-pair separation. Rotated edge/corner point-SDF queries are only local
+samples. No admission or lifecycle correction is supported by these measurements.
+
+Final native log E:/elysium-work/logs/20261011T114047.046624Z-test.log retains native
+first44f20/178f32, discrepancy²1.0501758925050075. Identical99-line common input
+SHA256af9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515
+permits reuse of public102350.497103Z throughf32 only: retailfirst44f26,
+f32discrepancy².57965414909080337/no calculated178. Mechanics/timing/encounter
+equivalence remains OPEN. Next bounded executable contract: recover the supported
+retail Collision007 public shape AABB/extent query signatures and body material/
+mechanical readback, then capture actual query outputs at creation and normal46/47
+poses on this identical prefix beside native public geometry/material/state queries.
+Prove any input/projection mismatch before repair; otherwise retain the solved
+mechanics disagreement and identify its next observable. No fixedcadence, margin
+compensation, altered threshold, contact sort or private IVP machinery follows.
+
 This is a recovered observable contract, not an acceptance claim for the provisional
 Chaos adapter. `vphysics.dll` object44 `260184a0` reads the owner body's friction-link
 head at `+28` directly. Constructor `2603b4f0` prepends a newly created link to both

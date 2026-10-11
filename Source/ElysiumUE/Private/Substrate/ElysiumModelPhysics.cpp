@@ -81,6 +81,8 @@ namespace
 		Chaos::FUniqueIdx UniqueIds[2];
 		uint64 Generations[2];
 		bool bInitial;
+		double ObservedSeparation = TNumericLimits<double>::Max();
+		FVector ObservedPose[2] = {FVector::ZeroVector,FVector::ZeroVector};
 	};
 	struct FSolveFilterOutput : Chaos::FSimCallbackOutput
 	{
@@ -162,11 +164,46 @@ namespace
 					if (const auto* Identity = Input->Identities.FindByPredicate([&](const auto& Item)
 						{ return Item.Proxy == Evidence.Partner && Item.UniqueIdx == Partner->UniqueIdx(); })) Evidence.PartnerGeneration = Identity->Generation;
 					Evidence.bDisabled = Contact.GetDisabled(); Evidence.bProbe = Contact.GetIsProbe();
+					const Chaos::FRigidTransform3 CurrentShapes[2] = {
+						Contact.GetShapeRelativeTransform0() * (Contact.GetParticle0()->CastToRigidParticle() ? Contact.GetParticle0()->CastToRigidParticle()->GetTransformPQ() : Contact.GetParticle0()->GetTransformXR()),
+						Contact.GetShapeRelativeTransform1() * (Contact.GetParticle1()->CastToRigidParticle() ? Contact.GetParticle1()->CastToRigidParticle()->GetTransformPQ() : Contact.GetParticle1()->GetTransformXR())};
+					for (int32 Side = 0; Side < 2; ++Side)
+					{
+						const auto* Geometry = Contact.GetImplicit(Side);
+						Evidence.bGeometry[Side] = Geometry != nullptr;
+						if (Geometry)
+						{
+							Evidence.GeometryType[Side] = static_cast<int32>(Geometry->GetType()); Evidence.GeometryMargin[Side] = Geometry->GetMarginf();
+							Evidence.bBounds[Side] = Geometry->HasBoundingBox();
+							if (Evidence.bBounds[Side]) { Evidence.BoundsMin[Side] = Geometry->BoundingBox().Min(); Evidence.BoundsMax[Side] = Geometry->BoundingBox().Max(); }
+						}
+						Evidence.StoredPose[Side] = Contact.GetShapeWorldTransform(Side).GetLocation();
+						Evidence.SolvedPose[Side] = CurrentShapes[Side].GetLocation(); Evidence.SolvedRotation[Side] = CurrentShapes[Side].GetRotation();
+					}
+					Evidence.CollisionMargin[0] = Contact.GetCollisionMargin0(); Evidence.CollisionMargin[1] = Contact.GetCollisionMargin1();
 					for (int32 PointIndex = 0; PointIndex < Contact.NumManifoldPoints(); ++PointIndex)
 						if (Contact.IsManifoldPointActive(PointIndex) && Contact.GetManifoldPoint(PointIndex).ContactPoint.IsSet())
 						{
 							++Evidence.ActivePoints;
-							Evidence.Phi = FMath::Min(Evidence.Phi,static_cast<double>(Contact.GetManifoldPoint(PointIndex).ContactPoint.Phi));
+							const auto& Point = Contact.GetManifoldPoint(PointIndex);
+							Evidence.Phi = FMath::Min(Evidence.Phi,static_cast<double>(Point.ContactPoint.Phi));
+							auto& PointEvidence = Evidence.Points.AddDefaulted_GetRef();
+							PointEvidence.Phi = Point.ContactPoint.Phi; PointEvidence.Flags = Point.Flags.Bits;
+							const Chaos::FVec3 StoredNormal = Contact.GetShapeWorldTransform1().TransformVectorNoScale(Chaos::FVec3(Point.ContactPoint.ShapeContactNormal));
+							PointEvidence.Normal = CurrentShapes[1].TransformVectorNoScale(Chaos::FVec3(Point.ContactPoint.ShapeContactNormal));
+							const Chaos::FVec3 Stored0 = Contact.GetShapeWorldTransform0().TransformPositionNoScale(Chaos::FVec3(Point.ContactPoint.ShapeContactPoints[0]));
+							const Chaos::FVec3 Stored1 = Contact.GetShapeWorldTransform1().TransformPositionNoScale(Chaos::FVec3(Point.ContactPoint.ShapeContactPoints[1]));
+							const Chaos::FVec3 Current0 = CurrentShapes[0].TransformPositionNoScale(Chaos::FVec3(Point.ContactPoint.ShapeContactPoints[0]));
+							const Chaos::FVec3 Current1 = CurrentShapes[1].TransformPositionNoScale(Chaos::FVec3(Point.ContactPoint.ShapeContactPoints[1]));
+							PointEvidence.StoredSeparation = Chaos::FVec3::DotProduct(Stored0-Stored1,StoredNormal);
+							PointEvidence.SolvedSeparation = Chaos::FVec3::DotProduct(Current0-Current1,Chaos::FVec3(PointEvidence.Normal));
+							Chaos::FVec3 SurfaceNormal;
+							for (int32 Side = 0; Side < 2; ++Side) if (const auto* Geometry = Contact.GetImplicit(Side))
+							{
+								PointEvidence.bSurfaceSample[Side] = true;
+								PointEvidence.SurfacePhi[Side] = Geometry->PhiWithNormal(CurrentShapes[Side].InverseTransformPositionNoScale(Side == 0 ? Current1 : Current0),SurfaceNormal);
+								PointEvidence.OwnSurfacePhi[Side] = Geometry->PhiWithNormal(Chaos::FVec3(Point.ContactPoint.ShapeContactPoints[Side]),SurfaceNormal);
+							}
 						}
 					Evidence.bQualified = !Evidence.bDisabled && !Evidence.bProbe && Evidence.ActivePoints > 0
 						&& FMath::Max(Evidence.Phi,0.) < FrictionContactSkinCm();
@@ -175,6 +212,15 @@ namespace
 						&& Item.Geometry[0] == Contact.GetImplicit0() && Item.Geometry[1] == Contact.GetImplicit1()
 						&& Item.Proxies[0] == Contact.GetParticle0()->PhysicsProxy() && Item.Proxies[1] == Contact.GetParticle1()->PhysicsProxy()
 						&& Item.UniqueIds[0] == Contact.GetParticle0()->UniqueIdx() && Item.UniqueIds[1] == Contact.GetParticle1()->UniqueIdx(); });
+					if (const auto* Modified = Output.Contacts.FindByPredicate([&](const auto& Item)
+						{ return Item.Shapes[0] == Contact.GetShape0() && Item.Shapes[1] == Contact.GetShape1()
+							&& Item.Geometry[0] == Contact.GetImplicit0() && Item.Geometry[1] == Contact.GetImplicit1()
+							&& Item.Proxies[0] == Contact.GetParticle0()->PhysicsProxy() && Item.Proxies[1] == Contact.GetParticle1()->PhysicsProxy()
+							&& Item.UniqueIds[0] == Contact.GetParticle0()->UniqueIdx() && Item.UniqueIds[1] == Contact.GetParticle1()->UniqueIdx(); }))
+					{
+						Evidence.bInitial = Modified->bInitial; Evidence.ModifierSeparation = Modified->ObservedSeparation;
+						Evidence.ModifierPose[0] = Modified->ObservedPose[0]; Evidence.ModifierPose[1] = Modified->ObservedPose[1];
+					}
 					return Chaos::ECollisionVisitorResult::Continue;
 				});
 			}
@@ -203,6 +249,13 @@ namespace
 				Output.Contacts.Add({{Pair.GetShape(0),Pair.GetShape(1)}, {Pair.GetContactGeometry(0),Pair.GetContactGeometry(1)},
 					{First->PhysicsProxy(),Second->PhysicsProxy()}, {First->UniqueIdx(),Second->UniqueIdx()},
 					{Identities[0] ? Identities[0]->Generation : 0, Identities[1] ? Identities[1]->Generation : 0}, Pair.GetIsInitialContact()});
+				if (Input->bObservePostSolve)
+				{
+					auto& Observation = Output.Contacts.Last();
+					Observation.ObservedPose[0] = Pair.GetShapeToWorld(0).GetLocation(); Observation.ObservedPose[1] = Pair.GetShapeToWorld(1).GetLocation();
+					for (int32 PointIndex = 0; PointIndex < Pair.GetNumContacts(); ++PointIndex)
+						Observation.ObservedSeparation = FMath::Min(Observation.ObservedSeparation,static_cast<double>(Pair.GetSeparation(PointIndex)));
+				}
 			}
 		}
 	};

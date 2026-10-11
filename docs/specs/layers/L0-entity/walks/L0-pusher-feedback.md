@@ -1,5 +1,112 @@
 # Reached pusher feedback and required producer plan (2026-10-11)
 
+## Contact sample contract before measurement (2026-10-11)
+
+This bounded packet uses the confirmed normal NativeMovingFirstContact witness,
+not a new target or replay. Shipped observer active226100b4f30 ->100a55b0 reads
+actual47 and, after its strict1in²/full-rewind gate,44/260184a0 ->178. Actual
+START_OPEN/InputClose, normal46 target/arrival and authored10in/s supply the input;
+the native solver supplies geometry/contact/solved pose. Separately stored Source
+float inches and reflected Y feed double squared subtraction; native geometry is
+centimetres. LocalTime/StartFrame/deadline stay Source floats; simulation event delta
+and native birth time stay the engine clock. No .015 scheduler substitution.
+
+The confirmed44 oracle selects newest created surviving qualifying friction link,
+including null GameData;2603e6d0 admits distance strictly below initialized
+2.8563570231199265cm after wake flags3000/c000 exclusion.2603e880/2605fc40 retire
+distance>=threshold or flags300==100.26050c20 requires status&3c0000==c0000;
+feature identity reuses existing births. Native disabled/probe/active points and
+actual237 contents filters remain the adapter inputs, not an IVP topology clone.
+Birth/retirement exposed by44 affect the authored178 receiver before LocalTime,
+StartFrame and deadline/133 writes. Sleep/noadvance retain live survivors; retirement,
+UniqueIdx/incarnation and output revision fences remain unchanged. No new save field
+or higher hook: L3 pendingyaw10036bd0 and L2 projectile91 stay owned upward.
+
+Installed UE5.8 public API inspection precedes design: Chaos/ContactModification.h
+GetContactGeometry(int32)->const FImplicitObject*, GetShapeToWorld(int32) const
+->FRigidTransform3, GetSeparation(int32) const->FReal, GetWorldContactLocations
+(int32,FVec3&,FVec3&) const and GetWorldNormal(int32) const->FVec3 are supported
+callback services. Their implementation uses current rigidPQ for GetShapeToWorld,
+but stored constraint transforms for world contact locations/normal/separation.
+Separation is dot(world0-world1,normal), normal away from second body. Public
+PBDCollisionConstraint.h365/366 and685..691 expose collision margins and relative/
+stored transforms. ImplicitObject.h212/251/266 expose GetMarginf, PhiWithNormal and
+BoundingBox; Box.h PhiWithNormal delegates to its actual AABB, negative inside.
+Scaled/transformed wrappers expose their own PhiWithNormal; no guessed wrapper
+layout is read. Margin getter alone does not mean physical surface inflation.
+
+Existing public PostSolve runs once per native substep; diagnostic opt-in input,
+callback-owned geometry lifetime, POD output copy and generation/revision publication
+are retained. No native pointer is dereferenced after callback publication. First
+measure type/bounds/margins, modifier/currentPQ/stored pose, active point flags,
+storedPhi, point-normal separation at stored/current pose and public surface queries.
+Those point-to-surface queries establish local planar witness meaning, not generic
+convex-pair distance or refreshed contact generation. Literal assertions follow
+branch/geometry proof. Only a proved input/output projection defect permits repair;
+native mechanics disagreements,44 timing/order and original23/88/full L0 stay OPEN.
+
+### Measured native contact boundary and frozen gates
+
+Diagnostic build113036.159642Z and moving test113150.734110Z first establish actual
+contact geometry/phase. The authored boxes are cooked instancedConvex (publictype72),
+not FBox; actual bounds are[-10,+10]cm. Public instanced PhiWithNormal in
+ImplicitObjectScaled.h140 forwards to Convex.h229's native point-to-surface service.
+At f19/f20 identity rotation/currentPQ/stored/modifier poses coincide; native points
+have own-surface SDF0. Opposite-point SDF and point-normal separation agree as native
+float words with storedPhi2.8773729801177979/2.4540395736694336cm. Double separation
+is2.8773729131879522/2.4540395613732429cm. Thus strict unchanged threshold brackets
+unqualified19/qualified20. Geometry/collision margins1cm, flags8, initial0 and count4
+are measurements only, never topology or engine-default acceptance assertions.
+No margin subtraction or solved-state/contact policy changed.
+
+At f26/f32 stored transform contactPhi is-.08596058189868927/-2.6223978996276855cm;
+fresh retained-point normal separation ranges[-.00052878152103878642,.00029674545361094753]
+and[-.0123475094308786,.0074156925898196157]cm. Both phases remain admitted. Retained
+point-SDF at rotated edge/corners is a local native query, not generic pair-minimum
+distance. No admission projection defect is evidenced, and44/178 timing parity stays
+OPEN. This diagnostic confirms branch/geometry reach before literal authoredbounds,
+finite service inputs, exact nativefloat mapping and retailqualification assertions.
+No exact native type/margin/flagbit/count assertion remains. Null geometry/bounds
+availability and initialized outputs are explicit. Modifier provenance matches exact
+shapes, geometry, proxies and UniqueIdx. Only copied diagnostic values escape PT;
+existing generation/revision/lifetime and opt-in cleanup remain unchanged.
+
+Functional source froze after final --arm build
+E:/elysium-work/logs/20261011T114002.227743Z-build.json exit0/29.438s.
+Affected54: E:/elysium-work/reports/tests/20261011T114048.568374Z-elysium-substrate-modelphysics-elysium-s-31ef1b4b/index.json,
+34clean20warned0failed/notRun/inProcess; ModelPhysics9 and Mover16 clean.
+Wrapper E:/elysium-work/logs/20261011T114047.046624Z-test.json exit0/31.609s,
+14 runtime warnings separate. Original lifetime/survivor/null/skinreentry/noadvance/
+retirement, shadowevent/teleport/sleep, receiver/save/clock observers all retain their
+assertions. Final log proves ownSDF0 and exactfloat separation/SDF mapping19/20.
+Final scenario2: E:/elysium-work/reports/arena/20261011T114135.510979Z/index.json
+and arena/index.json pass2, first_unmetnull, events290/81, process0. Wrapper
+E:/elysium-work/logs/20261011T114135.234149Z-arena.json exit0/25.328s;
+existing27startup errors29warnings separate. Spawn literals/order are unchanged.
+
+Final99-line creation/input prefix f1..32 UTF8LFnoTrailingLF SHA256
+af9c86a0604324106decd6d6a356db41c45034eee80229ba2c0346cdca3d6515 permits reuse of
+E:/elysium-work/research/vphysics-contacts/20261011T102350.497103Z/index.json only
+on that prefix. Nativefirst44f20/178f32 squared1.0501758925050075 remains versus
+retailfirst44f26/f32squared.57965414909080337/no calculated178. Next executable
+bounded contract is supported publicretail Collision007 shapeAABB/extent and body
+material/mechanical readback versus native public queries at creation and normal46/47
+poses on these identical inputs; recover signatures/support before use. No generic
+contact-distance parity, full mechanics equivalence, original23/88 or L0 closure.
+
+Frozen SHA256 cpp1D4F6579402793BC24C0BC79BF29727F7B80EBCEFAE3B285D0EBCBC8776FACF4;
+h73205DF8851C1E5AA3B0B627FEDF80D71C5A6D484E29F18D85D839909A553207;
+tests7CBC9B632EEA1F280DA60F8528C37734454D0DA2EA83BE851A5741459F02D3BA.
+Only docs/receipt bookkeeping follows; no worker jobs, commit/push or nextpacket.
+Exact changed paths: Source/ElysiumUE/Private/Substrate/ElysiumModelPhysics.cpp,
+Source/ElysiumUE/Private/Substrate/ElysiumModelPhysics.h,
+Source/ElysiumUE/Private/Tests/ElysiumMoverTests.cpp, docs/vtmb/physics-interaction.md,
+docs/specs/layers/L0-entity/walks/L0-pusher-feedback.md,
+docs/specs/layers/L0-entity/progress.md, docs/specs/layers/L0-entity/runs.md.
+No corpus/content/goldens/audit/hooks/generator/map inputs changed. Prior applicable
+pipeline54/v3map2 receipts stay reusable; coordinator owns default/bounded19/doctor/
+review/exactpathcommit. Original23/88 and every full L0 requirement remain OPEN.
+
 ## Moving observer checkpoint (2026-10-11 10:26:40 UTC)
 
 This evidence packet adds a normal moving observer and matched public replay; runtime

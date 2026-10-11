@@ -520,3 +520,46 @@ Absolute authoritative wrapper/index paths and unchanged functional hashes are i
 progress.md. Pipeline54/v3map2 evidence reused unchanged after exact-path inventory.
 No mechanics, threshold, cadence or ordering repair was justified. Coordinator commits
 exact seven paths and terminates; no next worker, push or full L0 closure claim.
+
+### Contact sample meaning observer — 2026-10-11
+
+One bounded worker from f66dec0b reuses the confirmed44/260184a0/2603e6d0/2603e880
+oracle and checks installed UE5.8 public services/thread/lifetime before diagnostic code.
+The SAME normal moving fixture measures actual cooked instanced convex geometry,
+authored bounds, native margins/flags/currentPQ/stored poses and public pointSDF/
+separation. At f19/f20 fresh gap equals storedPhi after native float storage; no stale
+pose or margin projection defect justifies a qualification policy repair. At f26/f32
+stored contactPhi differs from solved retained point-normal separation; both remain
+admitted. Native first44f20/178f32 versus public retail first44f26/f32no178 stays OPEN.
+Native type/margins/bitflags/point count are diagnostics only; authored bounds/API
+availability/float mapping and literal retail qualification are asserted. Existing
+sleep/lifecycle/retirement/receiver and clock/save guards remain unchanged; no private
+IVP machinery or solve write is added.
+
+Functional source freeze after final coherent --arm build114002.227743Z exit0/29.438s.
+Affected114048.568374Z passes54,34clean20warned0failed/notRun/inProcess; wrapper
+114047.046624Z-test.json exit0/31.609s. Scenario114135.510979Z passes2, bothnull
+first_unmet/events290/81/process0; wrapper114135.234149Z-arena.json exit0/25.328s,
+existing27 startup errors/29 warnings separate. Absolute authoritative paths, seven-path
+manifest and freeze hashes are in progress.md and walk. Common99-line input hash is
+unchanged; public102350.497103Z is reused through f32 only. No corpus/content/goldens/
+audit/hooks/generator/map input changes, no worker jobs/commit/push/next packet. Coordinator
+default/bounded19/doctor/review pending. Next bounded observable is supported
+public retail shape AABB/extent and body material/mechanical readback versus native
+queries on matched creation/46/47 poses; signatures/support must be recovered first.
+Original23/88 and all full L0 requirements remain OPEN.
+
+Coordinator reviewed the complete seven-path packet and independently rechecked
+frozen functional hashes and the unchanged common99-line input hash. Default
+114401.225047Z passes189 (110 clean/79 warned), zero failed/notRun/inProcess;
+wrapper114401.068767Z-test.json exits0/26.610s. Original bounded19 arena
+114433.238670Z passes19/19 across two hosts exit0; aggregate and both host JSONs
+read, ordinary first_unmet null and two deliberate refusal selftests inverted passes.
+Wrapper114433.028318Z-arena.json exits0/64.734s; startup27 errors/534 warnings
+remain separate (prior535). Doctor114541.682399Z exits0/21 existing warnings.
+Absolute receipt paths are in progress.md. Applicable pipeline54/v3map2 evidence
+is reused after exact inventory confirms unchanged inputs. Only checkpoint docs
+follow freeze; coordinator commits exact seven paths and terminates with no push
+or next worker. No mechanics/contact equivalence, accepted divergence or full L0
+closure is claimed. Next public retail readback contract remains queued, with ABI/
+read-only lifetime proof required before execution. Original23/88/full L0 OPEN.
