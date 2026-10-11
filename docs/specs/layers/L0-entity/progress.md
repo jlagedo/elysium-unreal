@@ -700,3 +700,100 @@ observable generic Swap/225 shadow/membership/submission/removal chain, with act
 Spawn/static/shadow input selection where reached, then ordered solved226 pose/touch/relink.
 Downstream pointerfixups/multiobject/controller/contact/fluid lifecycle and full closing audit,
 contracts/default+arm/fullarena/bootorders remain open. Only two model assets migrated.
+
+
+## Static bbox/current-object prerequisite — worker freeze (2026-10-11; acceptance pending)
+
+Packet reaches actual unparented prop_dynamic solid2 Spawn101905e0 ->223101907e0 ->
+InitStatic100a5bb0 with raw MDL hull bounds180/192 and raw surface392, zero native angles,
+static=true and null-param1046ecb4/85/1e24. Bounds chain/modeltype/default selection and
+scope-only Setup Relink1001514a ->100b3b00 are recovered in physics-interaction.md.
+Map-load resolved parents explicitly remain the unfinished shadow planning arm; unresolved
+names take the static branch. Other solids/static model, nonstudio/default box and full shadow
+controller/submission are unclosed. No invented target-only controller or solver clone added.
+
+Native discovery now tracks actual model/bbox incarnations independently of simulation and
+recipes. Generic225 deletes the pointed registered actor even through a borrowed reference,
+retires all live references/recipes before native release, and null225 is nondestructive.
+Selected leaf225 preserves an unrelated former Visual after SetObject clear/overwrite;
+explicit native owner cleanup remains separate. Swap reference-only warning/assignment arms
+are verified; semantic membership removal exists but real shadow producer witness is open,
+so Swap and broad225 audit rows stay partial. Native callbacks only invalidate producer flags;
+registries are detached before callbacks and all references clear before observer events.
+
+Static Physics recipes persist actual static mode, native pose, material/raw surface, damping,
+gravity, profile/mask,64 actual response entries and one-shape enabled state. Snapshot guards
+preserve pose/filter state differing from logical Origin/shown state, and count0 remains absent.
+Strict response count/enum and shape-enabled validation refuses malformed archive/restore.
+Actual queries isolate saved response Ignore from saved disabled shape; native lifecycle events
+observe recipe/reference retirement before still-valid native actor release. Actual map Spawn
+witnesses resolved/unresolved parent, static backend state, source-axis bounds, zero rotation,
+material lookup, hide/unhide incarnation retention, borrowed225 and persistence.
+
+Worker evidence on frozen runtime/pipeline sources:
+- `uv run elysium build --arm`: success25.5s;
+  `E:/elysium-work/logs/20261011T020348.348784Z-build.json`.
+- `uv run elysium test Elysium.Substrate.ModelPhysics.`:5/5 clean,0 failed/notRun;
+  `E:/elysium-work/reports/tests/20261011T020426.674648Z-elysium-substrate-modelphysics/index.json`.
+- `uv run pytest pipeline/tests/test_importers_models.py -q -k 'body_input or static_bbox_inputs'`:
+  4 passed in2.16s. Includes MDL hull versus view/.phy and reflected-axis/raw-surface provenance.
+- Public targeted model import trashcan1_base and society/chair:2 imported,0 failed/pruned;
+  `E:/elysium-work/logs/20261011T015429.743666Z-import-models.json` and
+  `E:/elysium-work/import/models/import_report.json`. Only ignored witness bakes changed.
+- Diff check clean; audit7946 rows remain16 columns. No commit/push/full arena/full arm test.
+
+Intermediate build/test failures are not waived: a first new test compile used incorrect public
+method/channel names and was corrected. Native020125 corrected failures015724/015907: initial
+ECC_MAX iteration read the deprecated pseudochannel outside UE5.8's64-byte response container;
+a sleeping-body capture exposed it. Capture/restore/validation now use the actual container
+extent (EngineTypes.h1745/1762), and all5 native tests passed. A final review then found the reached SetModel bounds writes
+were ordered after InitSetup instead of before it. CBasePropSpawn1018df70 proves105 precedes223;
+source ordering was repaired, parent-arm bounds output was added, and latest native020426 passes5/5.
+No repeated worker test after that final pass. Existing editor-layout warning is outside the clean automation results.
+
+Coordinator owns independent review/build/default/touched/bounded arena acceptance. Registered
+families verified before commands: ModelPhysics5; Substrate.SaveSchema, SaveRoundTrip,
+Substrate.NpcKernelSlots.Defaults; exact Arm.PropSolid3 and Arm.Geometry.Sight3.
+Original23/88 unchanged; r022/r044/r045, broad shadow/contact/fluid/controller/multiobject and
+solved226/touch/child publication, model migration and the full L0 closing gate remain open.
+
+## Static bbox/current-object coordinator acceptance (2026-10-11)
+
+Independent review accepted the supported unparented studio solid2 Spawn chain: authored hull
+bounds are produced by SetModel/UtilSetSize before InitSetup225 and resolved-parent selection;
+raw studio surface and recovered null parameters create a real zero-angle Chaos static body.
+Static/native identity is distinct from dynamic activity. Queries, hide/unhide identity,
+material input, current-object alias deletion and recipe/reference-before-native-release order
+are witnessed against actual production bodies. Reference-only clear/overwrite and null225
+preserve unrelated former producers. Persisted Physics reconstruction retains static mode,
+native pose/filter state differing from logical state, and count0 through final reconnect.
+Malformed new query fields refuse archive/restore. Full shadow membership production remains
+unwitnessed; Swap225 and broader creator audit rows remain partial.
+
+Final frozen gates, with every authoritative JSON independently read:
+- Latest `uv run elysium build --arm`: exit0,25.454s;
+  `E:/elysium-work/logs/20261011T020348.348784Z-build.json`.
+- Latest native ModelPhysics:5/5 clean,0 failed/notRun;
+  `E:/elysium-work/reports/tests/20261011T020426.674648Z-elysium-substrate-modelphysics/index.json`.
+  Runtime/test sources remained unchanged afterward; these successful gates were not duplicated.
+- Coordinator default:178/178 (99 clean,79 existing warning results),0 failed/notRun;
+  `E:/elysium-work/reports/tests/20261011T020530.430902Z-elysium-session-elysium-substrate/index.json`.
+- Coordinator touched ModelPhysics/SaveSchema/SaveRoundTrip/NpcKernelSlots.Defaults,
+  exact Arm.PropSolid and Arm.Geometry.Sight:14/14 (11 clean,3 existing warning results),
+  all5 native results clean,0 failed/notRun;
+  `E:/elysium-work/reports/tests/20261011T020557.316226Z-elysium-substrate-modelphysics-elysium-s-2564d20f/index.json`.
+- Coordinator prior bounded18 arena:18 pass,0 failed/error, both hosts exit0;
+  `E:/elysium-work/reports/arena/20261011T020626.632760Z/index.json` and both
+  `arena/index.json` and `map-sm_hub_1-l0_transition_state/index.json` beneath it were read.
+  Every ordinary first_unmet is null; the two deliberate refusal selftests pass by inversion.
+  Existing experimental Python AgentSkill startup errors and unrelated warnings remain in the
+  log (27 error lines,534 warnings); no scenario failure is waived.
+
+Focused importer4/4 and public targeted ignored bakes2/2 are recorded above. The intermediate
+response-container and SetModel ordering defects were corrected before this frozen gate set.
+Diff check clean; all7946 audit rows retain16 columns. Exact25 tracked paths form this packet;
+no assets/goldens or push. Original23/88 remains unchanged. Next is the genuine InitShadow
+producer/controller target-versus-solved, permission/speed/gravity/arrival/threshold/feedback
+contract with post-think timing, then ordered solved226/touch/child publication. Static model,
+nonstudio/default box, explicit params, contact/fluid/multiobject/restore graph, model migration
+and full L0 arm/arena/contracts/audit/boot-order closing gates remain open.

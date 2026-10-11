@@ -29,6 +29,17 @@ void FElysiumEntity::VPhysicsSetObject(void* Object)
 			Def ? *Def->Classname : TEXT(""));
 	}
 	PhysicsObject = Object;
+	ElysiumModelPhysics::BindReference(this, Object);
+}
+
+void FElysiumEntity::VPhysicsSwapObject(void* Object)
+{
+	//100a68f0: removal first, warning tests OLD null, assignment always; no destruction.
+	if (!Object && World) World->RemovePhysicsShadow(*this);
+	if (!PhysicsObject)
+		UE_LOG(LogElysiumEntityBase, Warning, TEXT("Bad vphysics swap for %s"), Def ? *Def->Classname : TEXT(""));
+	PhysicsObject = Object;
+	ElysiumModelPhysics::BindReference(this, Object);
 }
 
 bool FElysiumEntity::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, FString& OutError)
@@ -60,7 +71,9 @@ void FElysiumEntity::RetireReconstructedPhysics()
 
 FElysiumEntity::~FElysiumEntity()
 {
+	FElysiumEntity::VPhysicsDestroyObject(); //1009df20 dispatch225 during base destruction
 	RetireReconstructedPhysics(); // world teardown deletes base leaves without calling Kill
+	ElysiumModelPhysics::BindReference(this, nullptr);
 }
 
 void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass)
@@ -310,11 +323,7 @@ void FElysiumEntity::ScriptUnhide()
 
 void FElysiumEntity::Kill()
 {
-	if (ReconstructedPhysics.IsValid())
-	{
-		RetireReconstructedPhysics();
-		VPhysicsSetObject(nullptr);
-	}
+	VPhysicsDestroyObject(); //225 owns supplied actor even if another entity produced it.
 	// Terminal: mark dead and go inert immediately (a killed-but-not-yet-reaped entity must
 	// not touch, trace, or think). The slot removal + handle invalidation is the world's job;
 	// this only flips the entity's own state.

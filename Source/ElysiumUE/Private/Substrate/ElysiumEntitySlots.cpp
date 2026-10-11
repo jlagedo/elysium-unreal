@@ -25,6 +25,8 @@
 // through, on a receiver typed to this class.
 
 #include "ElysiumEntity.h"
+#include "ElysiumEntityWorld.h"
+#include "Substrate/ElysiumModelPhysics.h"
 
 #include "ElysiumStub.h"
 #include "Substrate/ElysiumNpcKernelShape.h"
@@ -1585,10 +1587,14 @@ bool FElysiumEntity::ForceVPhysicsCollide(FElysiumEntity*)
 //   layer 4, story 29c
 void FElysiumEntity::VPhysicsDestroyObject()
 {
-	RetireReconstructedPhysics();
-	VPhysicsSetObject(nullptr); // selected saved-field cleanup; source alias does not own its producer
-	// Unfinished L0 identity/shadow lifetime: 100b5040 removes shadow, retires the
-	// owned physics object and clears its reference. The selected prop override is narrower.
+	//100b5040: null exits. Remove membership ->10158520 recipe/native deletion ->field0.
+	if (void* Object = VPhysicsGetObject())
+	{
+		if (World) World->RemovePhysicsShadow(*this);
+		ElysiumModelPhysics::DestroyActor(Object);
+		VPhysicsSetObject(nullptr);
+	}
+	// Registered model/bbox native lifetimes are covered; other physics producers remain open.
 }
 
 // slot 226 0x100b4f30 (walked) `void VPhysicsUpdate(IPhysicsObject*)`

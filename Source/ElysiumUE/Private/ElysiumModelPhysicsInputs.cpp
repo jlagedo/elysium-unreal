@@ -24,6 +24,26 @@ void UElysiumModelPhysicsInputs::ApplyJson(UStaticMesh* Mesh, const FString& Jso
 	}
 	auto* Inputs = NewObject<UElysiumModelPhysicsInputs>(Mesh);
 	Inputs->bSourceBody = bPresent;
+	if (Document->HasField(TEXT("studioMinsCm")) || Document->HasField(TEXT("studioMaxsCm")))
+	{
+		const auto ReadBounds = [&Document](const TCHAR* Name, FVector& Out)
+		{
+			const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
+			if (!Document->TryGetArrayField(Name, Values) || Values->Num() != 3) return false;
+			for (int32 Axis = 0; Axis < 3; ++Axis)
+			{
+				double Number = 0;
+				if (!(*Values)[Axis]->TryGetNumber(Number) || !FMath::IsFinite(Number)) return false;
+				Out[Axis] = Number;
+			}
+			return true;
+		};
+		if (!ReadBounds(TEXT("studioMinsCm"), Inputs->StudioMinsCm)
+			|| !ReadBounds(TEXT("studioMaxsCm"), Inputs->StudioMaxsCm)
+			|| !Document->TryGetStringField(TEXT("studioSurfaceProperty"), Inputs->StudioSurfaceProperty))
+		{ OutError = TEXT("studio bbox inputs require finite bounds and raw MDL surface"); return; }
+		Inputs->bStudioBounds = true;
+	}
 	// ParseSolid 260238f0 processes ordered pairs; numeric duplicates overwrite, no inheritance.
 	for (const auto& Value : *Pairs)
 	{

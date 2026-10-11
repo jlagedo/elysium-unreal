@@ -299,3 +299,16 @@ def test_body_input_absence_is_distinct_from_bbox_visual_collision():
 
 def test_body_input_requires_authored_solid_block_even_with_binary_geometry():
     assert importer._body_inputs({"physics": {"solids": [{"hulls": [1]}]}})["sourceBody"] is False
+
+
+def test_static_bbox_inputs_use_raw_mdl_hull_bounds_and_surface():
+    extension = {"mdl": {"header": {"hullMin": [-1, -2, -3], "hullMax": [4, 5, 6],
+                                      "viewMin": [-100, -200, -300], "viewMax": [400, 500, 600],
+                                      "surfaceProperty": "raw-studio"}},
+                 "physics": {"solids": [{"hulls": [1]}], "keyValues": [
+                     {"type": "solid", "pairs": [{"key": "surfaceprop", "value": "phy-surface"}]}]}}
+    inputs = importer._body_inputs(extension)
+    assert inputs["studioMinsCm"] == pytest.approx([-2.54, -12.7, -7.62])
+    assert inputs["studioMaxsCm"] == pytest.approx([10.16, 5.08, 15.24])
+    assert inputs["studioSurfaceProperty"] == "raw-studio"
+    assert inputs["solidPairs"][0]["value"] == "phy-surface"

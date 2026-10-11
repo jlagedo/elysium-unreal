@@ -482,3 +482,26 @@ instead of being omitted. Physics restore retires baseline Spawn's body; prop225
 false and final GateBody leaves it absent. Actual Destroy ->Freeze ->archive ->ApplySnapshot checks
 null field/no native actor after reconnect. Generic shadow225 stays open. Revised opening now
 distinguishes completed selected-model material inputs from open contact/movement/audio consumers.
+
+
+## Reached static bbox/current-object prerequisite (2026-10-11; acceptance pending)
+
+physics-interaction.md's reached-static section records raw MDL hull producer200a3c90 ->
+modelinfo200b5920 ->SetModel101cf4a0/SetSize101cf3c0, raw studio surface+392/modeltype3,
+zero bbox angles and null parameters1046ecb4/85/1e24. Recovered Setup100a5b5e's Relink
+thunk1001514a resolves to111byte100b3b00 scope-trace-only; it requires no partition clone.
+Actual unparented prop_dynamic Spawn101905e0/223101907e0 solid2 now consumes these inputs
+and creates registered static Chaos geometry. Real resolved parents still require the open
+InitShadow service; unresolvable authored names take the static branch. Static-model arms stay open.
+
+Swap's exact old-null warning/nullable removal/nondestructive assignment and generic225's
+pointed-object deletion cover registered model/bbox incarnations, aliases and recipe-before-
+native-release order. All references retire, and native actor discovery no longer assumes
+simulation or a recipe. Static Physics roundtrip persists actual query responses/shape state,
+mode, native pose/gravity/damping; saved count0 survives reconnect. New malformed fields refuse
+archive/restore. Native tests observe real query output and retirement before native release.
+
+Shadow registry add has no complete production controller caller yet. Full InitShadow, static
+model, game-data flags, deferred/native frame timing, pair/contact rules, solved226/touch/child
+publication and downstream restore graphs stay open. No full100a5bb0/100a5d80/1002e7e0 or
+original layer run closes. Original23/88 and the L0 closing gate remain unchanged.

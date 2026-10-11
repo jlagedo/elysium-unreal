@@ -16,6 +16,6 @@ UBodySetup* UElysiumPhysicsPropComponent::GetBodySetup()
 
 void UElysiumPhysicsPropComponent::OnDestroyPhysicsState()
 {
-	ElysiumModelPhysics::RetireRecipe(this);
+	ElysiumModelPhysics::RetireNative(this);
 	Super::OnDestroyPhysicsState();
 }

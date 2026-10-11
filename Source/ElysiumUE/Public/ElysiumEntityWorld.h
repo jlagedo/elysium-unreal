@@ -159,6 +159,11 @@ public:
 		const FElysiumWorldServices& InServices = FElysiumWorldServices());
 	~FElysiumEntityWorld();
 	void Teardown(); // explicit level shutdown for fixture/owner lifecycle, also called by destructor
+	//1002edd0/100d1290 and1002ee60/100d13d0: ordered serial-valid entity membership.
+	// Full InitShadow producer and post-think dispatch remain open; registration is not a solver.
+	void AddPhysicsShadow(FElysiumEntity& Entity);
+	void RemovePhysicsShadow(FElysiumEntity& Entity);
+	const TArray<FElysiumEntityHandle>& PhysicsShadows() const { return PhysicsShadowHandles; }
 
 	FElysiumEntityWorld(const FElysiumEntityWorld&) = delete;
 	FElysiumEntityWorld& operator=(const FElysiumEntityWorld&) = delete;
@@ -1081,6 +1086,7 @@ public:
 		const TCHAR* Note) const;
 
 private:
+	TArray<FElysiumEntityHandle> PhysicsShadowHandles;
 	// `FocusCandidate` is the slot-32 answer and owns `FocusedUsable` (and therefore what a `+use`
 	// press can act on); `IconCandidate` is the union of slots 32/34/35 and owns the reticle prompt,
 	// because retail's `PlayerUseIconFilter` draws the icon on any of the three

@@ -32,6 +32,7 @@ public:
 	virtual void Spawn() override;
 	virtual void Kill() override;
 	virtual void VPhysicsDestroyObject() override;
+	void OnPhysicsActorRetired() override { bSimulating = false; bRestoredNativePhysics = false; }
 	bool RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, FString& OutError) override;
 
 	// A constraint (phys_hinge) attaches to the simulating body, not the brush body.

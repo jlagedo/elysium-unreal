@@ -125,6 +125,7 @@ struct FElysiumSaveVersion
 		// whole-record change, so the floor moves.
 		TransitionState = 45,
 		PhysicsRecipes = 46, // actual selected body recipes/state in the ordered Physics block
+		StaticPhysicsRecipes = 47, // static mode and native channel/shape query filters
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -159,7 +160,7 @@ struct FElysiumSaveVersion
 	//
 	// `SaveBlocks` moves the entity and queue rows into the block set's stream (L0-r029); saves are
 	// disposable (no migration) and the floor moves with it.
-	static constexpr int32 MinSupported = PhysicsRecipes; // disposable saves: Physics gained actual body recipes/state
+	static constexpr int32 MinSupported = StaticPhysicsRecipes; // disposable saves: native static/query recipe contract
 
 	static const FGuid GUID;
 };

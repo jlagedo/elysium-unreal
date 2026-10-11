@@ -7,6 +7,7 @@ enum class EElysiumPhysicsRecipeKind : uint8 { Model, Bbox };
 struct FElysiumPhysicsBodyRecipe
 {
 	EElysiumPhysicsRecipeKind Kind = EElysiumPhysicsRecipeKind::Model;
+	bool bStatic = false; // 1002e7e0 sixth argument selects env#8, independently of surface.
 	FString ModelAsset;
 	FString Surface;
 	FVector BboxMin = FVector::ZeroVector;
@@ -40,5 +41,7 @@ struct FElysiumSavedPhysicsBody
 	float CurrentAngularDamping = .1f;
 	FName CollisionProfile;
 	uint8 CollisionMask = 0;
+	TArray<uint8> CollisionResponses; // native query response channels, observed by sight/traces
+	uint8 BboxCollisionEnabled = 3; // ECollisionEnabled::QueryAndPhysics; one analytic shape
 };
 FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State);

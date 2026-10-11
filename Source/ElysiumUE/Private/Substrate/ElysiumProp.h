@@ -5,7 +5,7 @@
 #include "ElysiumEntity.h"
 #include "Logging/LogMacros.h"
 
-class UBoxComponent;
+class UElysiumPhysicsPropComponent;
 class UPrimitiveComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
@@ -41,6 +41,8 @@ public:
 	void InputBreak(const FElysiumInputArgs& Args);
 	void InputSkin(const FElysiumInputArgs& Args);
 	void SetSkin(int32 Family);
+	bool RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, FString& OutError) override;
+	void OnPhysicsActorRetired() override { bBboxRetired = true; }
 	void InputSetAnimation(const FElysiumInputArgs& Args);
 
 protected:
@@ -109,7 +111,9 @@ private:
 	// `BoxCollisionProxy` backs `solid 2` (SOLID_BBOX) on either path, since neither builder bakes a
 	// box shape onto the mesh asset the way `.phy` hulls are baked for the other solid values.
 	UStaticMeshComponent* CollisionProxy = nullptr;
-	UBoxComponent* BoxCollisionProxy = nullptr;
+	UElysiumPhysicsPropComponent* BoxCollisionProxy = nullptr;
+	bool bBboxRetired = false;
+	bool bRestoredBbox = false;
 	// The resolved `solid` keyfield, kept so GateVisual can tell whether the fallback-path `Visual`'s
 	// collision is solid-driven (and must be regated with it) or was always NoCollision (solid 0).
 	int32 SolidValue = 0;

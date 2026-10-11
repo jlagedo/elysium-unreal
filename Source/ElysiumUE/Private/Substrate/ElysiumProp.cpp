@@ -9,11 +9,17 @@
 #include "ElysiumWorldServices.h"
 #include "Map/ElysiumRetailMaskRecipe.h"   // PropBodyMaskBits -- which retail filters meet an entity prop
 #include "Visual/ElysiumNpcVisual.h"   // GateLeaderCloth -- a native placed model's garments
+#include "ElysiumPhysicsPropComponent.h"
+#include "ElysiumModelPhysicsInputs.h"
+#include "Substrate/ElysiumModelPhysics.h"
+#include "Visual/ElysiumPreparedPropModels.h"
+#include "ElysiumMoveSolve.h"
+#include "PhysicsEngine/BodyInstance.h"
 
-#include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/StaticMesh.h"
 #include "GameFramework/Actor.h"
 #include "HAL/IConsoleManager.h"
 #include "Math/BoxSphereBounds.h"
@@ -231,6 +237,24 @@ void FElysiumProp::OnRuntimeTransformChanged()
 	{
 		AnimatedVisual->SetWorldLocationAndRotation(Origin, Rot);
 	}
+	if (BoxCollisionProxy && !bBboxRetired && !(bRestoredBbox && World && World->IsApplyingSnapshot()))
+	{
+		//100a5d80 supplies vec3_angle=0; bbox is an independent world-axis body.
+		if (FBodyInstance* NativeBody = ElysiumModelPhysics::Identity(BoxCollisionProxy))
+			NativeBody->SetBodyTransform(FTransform(FQuat::Identity, Origin), ETeleportType::TeleportPhysics);
+	}
+}
+
+bool FElysiumProp::RestoreSavedPhysics(const FElysiumSavedPhysicsBody& State, FString& OutError)
+{
+	if (State.Recipe.Kind != EElysiumPhysicsRecipeKind::Bbox || !State.Recipe.bStatic)
+	{ OutError = TEXT("dynamic prop Physics restore requires its supported static bbox recipe"); return false; }
+	if (BoxCollisionProxy) { BoxCollisionProxy->DestroyComponent(); BoxCollisionProxy = nullptr; }
+	if (!FElysiumEntity::RestoreSavedPhysics(State, OutError)) return false;
+	BoxCollisionProxy = ReconstructedPhysics.Get();
+	bBboxRetired = false;
+	bRestoredBbox = true;
+	return true;
 }
 
 void FElysiumProp::OnRuntimeModelChanged()
@@ -413,6 +437,7 @@ bool FElysiumProp::PlayRandomAnimation()
 
 void FElysiumProp::DestroyBody()
 {
+	VPhysicsDestroyObject();
 	if (Visual) { Visual->DestroyComponent(); Visual = nullptr; }
 	if (AnimatedVisual) { AnimatedVisual->DestroyComponent(); AnimatedVisual = nullptr; }
 	// CollisionProxy is AnimatedVisual's parent on the catalogue path (BuildPlacedModelBody
@@ -420,6 +445,8 @@ void FElysiumProp::DestroyBody()
 	// down explicitly rather than assumed gone.
 	if (CollisionProxy) { CollisionProxy->DestroyComponent(); CollisionProxy = nullptr; }
 	if (BoxCollisionProxy) { BoxCollisionProxy->DestroyComponent(); BoxCollisionProxy = nullptr; }
+	bBboxRetired = false;
+	bRestoredBbox = false;
 	SolidValue = 0;
 	AnimatedStem.Reset();
 	VisualStem.Reset();
@@ -721,28 +748,67 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 	}
 }
 
-// solid 2 (SOLID_BBOX): retail derives a static box straight from the model's mins/maxs
-// (PhysModelCreateBox) rather than parsing a `.phy`. Neither builder bakes a box shape onto the
-// mesh asset, so this is the one solid value with no existing collision to switch on — attach a
-// sibling box sized to the mesh's own local bounds instead, the same AABB-in-model-space retail
-// derives.
+// Reached unparented solid2 arm only:101905e0 ->223101907e0 ->100a5bb0 ->100a5d80.
+// Parented static delegates full shadow; static model solids use1002e580. Both remain open.
 void FElysiumProp::BuildBoxCollisionProxy(UPrimitiveComponent* Mesh)
 {
 	AActor* Owner = Mesh ? Mesh->GetOwner() : nullptr;
-	if (!Owner)
+	if (!Owner || !World) return;
+	const UStaticMesh* StudioMesh = Cast<UStaticMeshComponent>(Mesh) ? Cast<UStaticMeshComponent>(Mesh)->GetStaticMesh() : nullptr;
+	if (!StudioMesh)
 	{
+		if (const auto Prepared = ElysiumPreparedProps::ForOwner(Owner))
+		{
+			FString Error;
+			StudioMesh = Prepared->StaticMesh(ElysiumPreparedProps::ModelId(Model), Error);
+		}
+	}
+	const auto* Inputs = UElysiumModelPhysicsInputs::Find(StudioMesh);
+	if (!Inputs || !Inputs->bStudioBounds)
+	{
+		UE_LOG(LogElysiumProp, Error, TEXT("%s: studio bbox inputs missing; uv run elysium import models (target this model)"), *DebugString());
 		return;
 	}
-	const FBoxSphereBounds LocalBounds = Mesh->CalcBounds(FTransform::Identity);
-	UBoxComponent* Box = NewObject<UBoxComponent>(Owner);
-	Box->SetBoxExtent(LocalBounds.BoxExtent);
+	//1018df70 dispatch105SetModel precedes223InitStatic:200a3c90 ->200b5920 ->101cf4a0
+	// ->101cf3c0 produces live collision/size fields before setup retirement or parent selection.
+	UtilSetSize(FVector(Inputs->StudioMinsCm.X, -Inputs->StudioMaxsCm.Y, Inputs->StudioMinsCm.Z) / ElysiumMove::U,
+		FVector(Inputs->StudioMaxsCm.X, -Inputs->StudioMinsCm.Y, Inputs->StudioMaxsCm.Z) / ElysiumMove::U);
+	if (!bEdictAttached) return; //100a5b3a: failed setup does not retire the existing object.
+	VPhysicsDestroyObject();
+	//100a5b5e CALL1001514a ->Relink100b3b00: scope-trace push/pop only, no state or callbacks.
+	// Map parse resolves move parents before Spawn; an unresolved authored name is not a parent.
+	if (World->Resolve(MoveParent))
+	{
+		UE_LOG(LogElysiumProp, Error, TEXT("%s: parented solid2 requires unfinished VPhysicsInitShadow100a6150; L0 planning gap"), *DebugString());
+		return;
+	}
+	FElysiumPhysicsBodyRecipe Recipe;
+	Recipe.Kind = EElysiumPhysicsRecipeKind::Bbox;
+	Recipe.bStatic = true;
+	Recipe.BboxMin = FVector(CollMins.X, -CollMaxs.Y, CollMins.Z) * ElysiumMove::U;
+	Recipe.BboxMax = FVector(CollMaxs.X, -CollMins.Y, CollMaxs.Z) * ElysiumMove::U;
+	Recipe.Surface = Inputs->StudioSurfaceProperty; //100a5d80 modeltype3 raw studio+392, not .phy.
+	//1002e7e0 copies1046ecb4 and overrides mass/inertia. These are authored service rules.
+	Recipe.MassKg = 85.f;
+	Recipe.InertiaScale = 1.0e24f;
+	Recipe.LinearDamping = .1f; Recipe.AngularDamping = .1f;
+	Recipe.RotInertiaLimit = .5f; Recipe.Drag = 1.f; Recipe.RollingDrag = 0.f;
+	auto* Box = NewObject<UElysiumPhysicsPropComponent>(Owner);
+	Box->SetWorldLocationAndRotation(Origin, FQuat::Identity);
 	Box->SetCollisionProfileName(TEXT("PhysicsActor"));
 	ElysiumPropTraceBody::Apply(Box, Def);
-	Box->SetupAttachment(Mesh);
-	Box->SetRelativeLocation(LocalBounds.Origin);
 	Box->RegisterComponent();
 	Owner->AddInstanceComponent(Box);
+	FString Error;
+	if (!ElysiumModelPhysics::CreateBbox(Box, World->PhysicsSurfaces(), Recipe, false, Error))
+	{
+		UE_LOG(LogElysiumProp, Error, TEXT("%s: static bbox creation failed: %s"), *DebugString(), *Error);
+		Box->DestroyComponent(); return;
+	}
 	BoxCollisionProxy = Box;
+	bBboxRetired = false;
+	bRestoredBbox = false;
+	VPhysicsSetObject(ElysiumModelPhysics::ActorIdentity(Box));
 }
 
 void FElysiumProp::GateVisual()
@@ -795,9 +861,10 @@ void FElysiumProp::GateVisual()
 		CollisionProxy->SetCollisionEnabled(bShown ? ECollisionEnabled::QueryAndPhysics
 			: ECollisionEnabled::NoCollision);
 	}
-	if (BoxCollisionProxy)
+	if (BoxCollisionProxy && !bBboxRetired)
 	{
-		BoxCollisionProxy->SetCollisionEnabled(bShown ? ECollisionEnabled::QueryAndPhysics
-			: ECollisionEnabled::NoCollision);
+		if (bRestoredBbox && World && World->IsApplyingSnapshot()) return;
+		if (FBodyInstance* NativeBody = ElysiumModelPhysics::Identity(BoxCollisionProxy))
+			NativeBody->SetShapeCollisionEnabled(0, bShown ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
 	}
 }

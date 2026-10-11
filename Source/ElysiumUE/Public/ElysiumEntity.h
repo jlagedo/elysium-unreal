@@ -151,6 +151,8 @@ public:
 	// m_pPhysicsObject (+0x36c): the actual backend actor identity, independent of the
 	// embodiment/component and logical pose. Assignment never destroys the previous body.
 	void VPhysicsSetObject(void* Object); // vampire.dll 0x100a6490
+	void VPhysicsSwapObject(void* Object); //100a68f0, reference operation, never destroys
+	virtual void OnPhysicsActorRetired() {} // native release invalidates producer gameplay state
 	virtual bool RestoreSavedPhysics(const struct FElysiumSavedPhysicsBody& State, FString& OutError);
 	void RetireReconstructedPhysics(); // finite saved-field producer, not generic shadow225
 	TWeakObjectPtr<class UElysiumPhysicsPropComponent> ReconstructedPhysics;

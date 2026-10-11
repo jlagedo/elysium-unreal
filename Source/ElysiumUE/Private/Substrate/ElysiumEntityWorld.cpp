@@ -3264,14 +3264,14 @@ void FElysiumEntityWorld::Teardown()
 	}
 
 	// Epoch 0 matches no minted handle, so every outstanding handle goes stale at once.
-	// Retire selected model-prop references before their components and entity slots disappear.
-	// Only the selected model-prop adapter currently supplies an actual physics identity;
-	// this does not complete base UpdateOnRemove or generic slot 225's missing services.
+	// Retire registered model/bbox references before their components and entity slots disappear.
+	// Other physics producers and base UpdateOnRemove remain open.
 	for (const TUniquePtr<FElysiumEntity>& Dying : EntityList)
 	{
 		if (Dying && Dying->VPhysicsGetObject()) Dying->VPhysicsDestroyObject();
 	}
 	Epoch = 0;
+	PhysicsShadowHandles.Reset();
 	ComfortTargetList.Reset();
 	EventQueue.Reset();
 	NameIndex.Empty();
@@ -3309,3 +3309,21 @@ void FElysiumEntityWorld::Teardown()
 
 FElysiumTeamRegistry& FElysiumEntityWorld::TeamRegistry() const
 { if (GameState) return GameState->TeamRegistry(); check(HeadlessTeamRegistry); return *HeadlessTeamRegistry; } // 0x10751140
+
+void FElysiumEntityWorld::AddPhysicsShadow(FElysiumEntity& Entity)
+{
+	//100d1290 deduplicates resolved entities; stale entries are retained until removal.
+	for (const FElysiumEntityHandle& ShadowHandle : PhysicsShadowHandles)
+		if (Resolve(ShadowHandle) == &Entity) return;
+	PhysicsShadowHandles.Add(Entity.Handle);
+}
+
+void FElysiumEntityWorld::RemovePhysicsShadow(FElysiumEntity& Entity)
+{
+	//100d13d0 removes every matching entity and every stale serial/null handle, preserving order.
+	PhysicsShadowHandles.RemoveAll([this, &Entity](const FElysiumEntityHandle& ShadowHandle)
+	{
+		const FElysiumEntity* Resolved = Resolve(ShadowHandle);
+		return !Resolved || Resolved == &Entity;
+	});
+}

@@ -26,6 +26,11 @@ public:
 	UPROPERTY(VisibleAnywhere) bool bMassCenter = false;
 	UPROPERTY(VisibleAnywhere) FVector MassCenterCm = FVector::ZeroVector;
 	UPROPERTY(VisibleAnywhere) FString SurfaceProperty;
+	// engine200a3c90 ->model_t bounds ->200b5920; independent of .phy and render bounds.
+	UPROPERTY(VisibleAnywhere) bool bStudioBounds = false;
+	UPROPERTY(VisibleAnywhere) FVector StudioMinsCm = FVector::ZeroVector;
+	UPROPERTY(VisibleAnywhere) FVector StudioMaxsCm = FVector::ZeroVector;
+	UPROPERTY(VisibleAnywhere) FString StudioSurfaceProperty;
 	UPROPERTY(VisibleAnywhere) FString SolidPairsJson;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UBodySetup> SelectedBody;
 	UFUNCTION(BlueprintCallable, Category="Elysium|Physics")

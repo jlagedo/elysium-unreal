@@ -288,3 +288,25 @@ Authoritative JSON paths/counts and reviewed error/alias/null/lifetime contracts
 progress.md's acceptance entry. Audit7946 rows retain16columns; diff check clean. Original23/88
 unchanged; this prerequisite does not close generic225/shadow, authored bbox callers, solved226
 or the full L0 closing gate. Exact29 paths committed by coordinator; never pushed.
+
+
+## Reached static bbox/current-object prerequisite (2026-10-11; coordinator acceptance pending)
+
+Actual unparented prop_dynamic solid2 Spawn uses recovered raw MDL hull/surface inputs,
+static null defaults and zero-angle native bbox creation. Static native/query/lifecycle and
+persisted Physics output are witnessed, including saved pose/filter differences and count0.
+Generic225 deletes the pointed registered actor through aliases; all references/recipes retire
+before native release. SetObject clear/overwrite and null225 leave former producers alive.
+Swap reference-only arms are covered; semantic membership removal still lacks the full real
+shadow producer and the audit row stays partial. InitStatic parent/static-model and broad bbox/
+custom-body/default/shadow/controller/frame/contact/publication contracts remain unclosed.
+
+Worker final --arm build25.5s/native5/5clean, focused importer4/4 and targeted ignored bakes2/2
+passed. Exact evidence, corrected response-container failure and freeze details are in
+progress.md. Coordinator authoritative gates remain pending. No original run closes;23/88
+unchanged, no full arm/full arena run or commit/push by worker.
+
+Coordinator accepted this prerequisite after independent source/report review: final --arm
+build/native5/5, default178/178, touched14/14 and prior bounded18/18 in two boots passed.
+Exact gate paths, existing warnings/errors and remaining contracts are in progress.md.
+Original23/88 unchanged; full shadow/controller/226 and the L0 closing gate remain open.

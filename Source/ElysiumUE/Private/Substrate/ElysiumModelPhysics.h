@@ -4,6 +4,7 @@
 class UStaticMeshComponent;
 struct FBodyInstance;
 class FElysiumPhysicsSurfaceProps;
+class FElysiumEntity;
 namespace Chaos { class FSingleParticlePhysicsProxy; }
 
 /** Native adapter used by the placed physics-prop leaf; no simulation clock or solver here. */
@@ -21,6 +22,10 @@ namespace ElysiumModelPhysics
 	const FElysiumPhysicsBodyRecipe* RecipeFor(void* Actor);
 	// 10158520 ->10045110: remove the association before any native destruction.
 	void RetireRecipe(UStaticMeshComponent* Component);
+	// Native collection and referencing fields are independent of saved recipe eligibility.
+	void BindReference(FElysiumEntity* Entity, void* Actor);
+	void RetireNative(UStaticMeshComponent* Component);
+	void DestroyActor(void* Actor);
 	FBodyInstance* Identity(UStaticMeshComponent* Component);
 	// Unlike FBodyInstance storage, this identifies the actual native actor incarnation.
 	Chaos::FSingleParticlePhysicsProxy* ActorIdentity(UStaticMeshComponent* Component);

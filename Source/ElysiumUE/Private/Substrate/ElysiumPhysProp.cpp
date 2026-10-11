@@ -33,14 +33,14 @@ void FElysiumPhysProp::Spawn()
 
 void FElysiumPhysProp::VPhysicsDestroyObject()
 {
-    RetireModelBody();
-    bSimulating = false;
+    //225 owns the current field only; SetObject clear/overwrite did not transfer producer ownership.
+    FElysiumEntity::VPhysicsDestroyObject();
 }
 
 void FElysiumPhysProp::RetireModelBody()
 {
 	// 10158520/10045110: the adapter removes its saved recipe before native deletion;
-	// generic 100b5040's shadow membership remains a separate unfinished contract.
+	// generic 100b5040 also retires all registered references to the supplied actor.
 	bRestoredNativePhysics = false;
 	ElysiumModelPhysics::Destroy(Visual);
 	VPhysicsSetObject(nullptr);
@@ -295,9 +295,13 @@ void FElysiumPhysProp::GateBody()
 	{
 		PosedVisual->SetVisibility(!bDown);
 	}
+	// Bare field clear/overwrite leaves a detached former producer alive. Art gating does not own225.
+	if (void* NativeActor = ElysiumModelPhysics::ActorIdentity(Visual); NativeActor && NativeActor != VPhysicsGetObject()) return;
 	if (bDown)
 	{
+		const bool bResumeSimulation = bSimulating;
 		RetireModelBody();
+		bSimulating = bResumeSimulation; // dormancy keeps the selected producer's resume permission.
 	}
 	else if (bSimulating)
 	{

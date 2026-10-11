@@ -371,7 +371,7 @@ This targeted recovery supersedes the earlier planning claim that the VPhysics i
 was outside the corpus. `vphysics.dll` is now available. It does not confer closure on the
 earlier Chaos presentation claim or the generic L0 service. The complete address/argument walk,
 port comparison and repaired dependencies are in
-`docs/specs/layers/L0-entity/walks/L0-physics-producer.md` (new read, not independently confirmed).
+`docs/specs/layers/L0-entity/walks/L0-physics-producer.md` (address map, not independently confirmed as a whole; selected caller details below are newly confirmed).
 
 `CPhysicsHook::Init vampire.dll 0x1002d7d0` requests `VPhysics030`, `VPhysicsCollision007` and
 `VPhysicsSurfaceProps001`, at `DAT_10723934/3c/44`. VPhysics factory `vphysics.dll 0x26001dd0`
@@ -903,3 +903,72 @@ a semantic count0 row; restore destroys baseline Spawn's body and skips reconstr
 sets runtime bSimulating=false, so final GateBody does not resurrect it. Actual Destroy ->Freeze
 ->archive ->ApplySnapshot observes null field/no native actor after reconnect. Generic shadow225
 remains unfinished.
+
+
+## Reached static bbox and current-object lifetime [PE asm/decompiled, 2026-10-11]
+
+`prop_dynamic::Spawn101905e0` tail10190680 dispatches223 `CreateVPhysics101907e0`;
+solid nonzero calls `VPhysicsInitStatic100a5bb0`. Setup100a5ad0 first tests edict+2e0,
+then225 at100a5b56, thenCALL1001514a at100a5b5e. This thunk resolves to
+Relink100b3b00: its111 bytes only push/pop a scope trace. It has no bounds dirty,
+touch, spatial query, gameplay callback or entity-state write. There is no omitted
+partition subsystem dependency at this reached call.
+
+Static100a5bb0 tests the **resolved moveparent handle**, not authored parentname presence.
+A resolved parent delegates InitShadow(false,false,null); solid0 returns null;
+unparented solid2 reads collision-property mins/maxs and absolute origin, calls
+PhysModelCreateBox100a5d80 with static=true, thenSetObject even on null output.
+Other solids call static model1002e580; that arm remains outside this packet.
+Map parser resolves parents before DispatchSpawn (10136650 ->SetParent100a0670),
+so an unresolved authored parent name legitimately reaches the unparented bbox arm.
+
+Bounds producer is not visual CalcBounds or first-solid .phy geometry. Engine studio
+loader200a3c90 copies MDL header dwords0x2d..0x32 (bytes180..203, hullMin/hullMax,
+not view bounds204/216) into model_t+90..a4. CModelInfoServer#3=200b5920 copies those
+six floats. UTIL_SetModel101cf4a0 ->UTIL_SetSize101cf3c0 ->SetCollisionBounds and213
+produces live collision/size fields. Source inches become cm; Y reflection swaps min/max.
+`CBaseProp::Spawn1018df70` dispatches105SetModel before the dynamic leaf's223InitStatic;
+these size/bounds writes precede InitSetup225/Relink and the resolved-parent shadow branch.
+Box100a5d80 starts surface=`flesh`; when model exists and modeltype3, studio accessor
+10428eb0 supplies the raw string at MDL+392, including an empty string. 1002dfe0
+registers explicit bounds; 1002e7e0 receives absolute origin and zero angles1070d9d0.
+
+1002e7e0 asm distinguishes static argument6 from the surface argument despite folded
+C aliasing. Null params copy48 bytes1046ecb4, override mass85 (42aa0000) and inertia
+1e24 (6753c21c). Template semantic inputs: masscenter=null, linear/angular damping=.1,
+rotinertialimit=.5, volume=0, drag=1, rollingdrag=0, collisions=true. Static mass/inertia
+are retained creation inputs, not claimed native dynamic mass/tensor observations.
+Raw surface lookup precedes default fallback26018ba0; native material receives typed
+friction/elasticity/density. Full retained drag/rotinertialimit response remains open.
+
+Swap100a68f0 removes shadow membership only when incoming=null, warns only when OLD
+object=null, then assigns; it never destroys either producer. Generic225100b5040 null
+exits, otherwise removes membership, calls10158520 (recipe10045110 before native deletion),
+then clears the field. The pointed producer is deleted even when borrowed from another
+entity. Bare SetObject clear/overwrite does not retire its previous producer. Registered
+native model/bbox incarnations retire all live references and recipes before native release;
+selected leaf225 must not also delete an unrelated former Visual producer.
+
+Current narrow port reaches actual unparented prop_dynamic solid2 Spawn with authored MDL
+inputs and a genuine Chaos static identity. Native shape filter updates preserve incarnation
+through hide/unhide; logical visual rotation does not rotate the bbox. Persisted Physics
+recipes carry static mode, actual native pose, response container, mask/profile, shape query
+enabled state, gravity and damping. Reconnect preserves native pose/filter state differing
+from logical Origin/shown state and eligible count0 absence. New saved response count/byte
+and shape-enabled enum validation refuses malformed data before native setters.
+
+This does not complete VPhysicsInitStatic's parent/static-model arms, full box helper's
+nonstudio/default arms, explicit-params1002e7e0, game-data flags, pair/contact filtering,
+shadow controller/submission, frame enumeration/deferred deletion, solved226/touch/child
+publication, fluid/controller restore graphs or broad model migration. A reached resolved
+parent currently reports the existing L0 shadow planning gap and creates no substitute static
+body; this is an unclosed arm, not a named gameplay modernization. Semantic shadow handle
+add/remove exists as a lifetime prerequisite, but no full InitShadow producer consumes add
+and no fake membership setter witness claims closure. Chaos owns solving and native geometry;
+configuration and query/lifetime witnesses do not establish retail dynamic equivalence.
+
+Unreal5.8 EngineTypes.h1745/1762 defines64 response bytes and an unchecked channel lookup.
+ECC_MAX also includes a deprecated pseudochannel with no container entry. Persistence uses
+the actual container extent, never the enum's end; native sleeping-body evidence caught and
+corrected an initial out-of-bounds capture. Swap's reference-only arms are covered, but its
+membership removal has no complete production shadow witness and the whole function stays partial.

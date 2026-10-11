@@ -7,9 +7,12 @@
 #include "Engine/StaticMesh.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "Misc/ScopeExit.h"
+#include "ElysiumEntity.h"
+#include "ElysiumEntityWorld.h"
 
 namespace
 {
+	constexpr int32 NativeResponseChannelCount = sizeof(FCollisionResponseContainer().EnumArray);
 	struct FPhysicsRecipeAssociation
 	{
 		void* Actor = nullptr;
@@ -20,6 +23,10 @@ namespace
 	// Semantic manager#2/model and manager#1/bbox associations (10044db0/10044f60).
 	// No Source hash/tree layout; identity is the actual successful Chaos incarnation.
 	TArray<FPhysicsRecipeAssociation> PhysicsRecipeAssociations;
+	struct FNativeAssociation { void* Actor; TWeakObjectPtr<UStaticMeshComponent> Component; UStaticMeshComponent* Producer; };
+	TArray<FNativeAssociation> NativeAssociations;
+	struct FNativeReference { FElysiumEntity* Entity; void* Actor; };
+	TArray<FNativeReference> NativeReferences;
 	bool CreatePhysicsRecipe(UStaticMeshComponent* Component, FElysiumPhysicsSurfaceProps& Surfaces,
 		const FElysiumPhysicsBodyRecipe& Recipe, bool bStartAsleep, FString& OutError);
 }
@@ -31,13 +38,17 @@ FArchive& operator<<(FArchive& Ar, FElysiumSavedPhysicsBody& State)
 	if (Kind > static_cast<uint8>(EElysiumPhysicsRecipeKind::Bbox)) Ar.SetError();
 	State.Recipe.Kind = static_cast<EElysiumPhysicsRecipeKind>(Kind);
 	Ar << State.bHasObject;
-	Ar << State.Recipe.ModelAsset << State.Recipe.Surface << State.Recipe.BboxMin << State.Recipe.BboxMax;
+	Ar << State.Recipe.bStatic << State.Recipe.ModelAsset << State.Recipe.Surface << State.Recipe.BboxMin << State.Recipe.BboxMax;
 	Ar << State.Recipe.MassKg << State.Recipe.InertiaScale << State.Recipe.LinearDamping << State.Recipe.AngularDamping;
 	Ar << State.Recipe.bMassCenter << State.Recipe.MassCenterCm;
 	Ar << State.Recipe.RotInertiaLimit << State.Recipe.Volume << State.Recipe.Drag << State.Recipe.RollingDrag << State.Recipe.SolidPairsJson;
 	Ar << State.Pose << State.LinearVelocity << State.AngularVelocityRadians << State.bAsleep << State.bGravity;
 	Ar << State.CurrentMassKg << State.CurrentLinearDamping << State.CurrentAngularDamping;
-	Ar << State.CollisionProfile << State.CollisionMask;
+	Ar << State.CollisionProfile << State.CollisionMask << State.CollisionResponses << State.BboxCollisionEnabled;
+	if (Ar.IsLoading() && State.bHasObject && (State.CollisionResponses.Num() != NativeResponseChannelCount
+		|| State.CollisionResponses.ContainsByPredicate([](uint8 Response) { return Response > ECR_Block; })
+		|| (State.Recipe.Kind == EElysiumPhysicsRecipeKind::Bbox && State.BboxCollisionEnabled > ECollisionEnabled::QueryAndProbe)))
+		Ar.SetError();
 	return Ar;
 }
 
@@ -55,9 +66,47 @@ void ElysiumModelPhysics::RetireRecipe(UStaticMeshComponent* Component)
 UStaticMeshComponent* ElysiumModelPhysics::ComponentFor(void* Actor)
 {
 	if (!Actor) return nullptr;
-	for (const FPhysicsRecipeAssociation& Entry : PhysicsRecipeAssociations)
+	for (const FNativeAssociation& Entry : NativeAssociations)
 		if (Entry.Actor == Actor && ActorIdentity(Entry.Component.Get()) == Actor) return Entry.Component.Get();
 	return nullptr;
+}
+
+void ElysiumModelPhysics::BindReference(FElysiumEntity* Entity, void* Actor)
+{
+	NativeReferences.RemoveAll([Entity](const FNativeReference& Entry) { return Entry.Entity == Entity; });
+	if (Actor) NativeReferences.Add({ Entity, Actor });
+}
+
+void ElysiumModelPhysics::RetireNative(UStaticMeshComponent* Component)
+{
+	// Called before Super::OnDestroyPhysicsState releases Chaos. No field may retain a dead actor.
+	TArray<void*> RetiringActors;
+	for (int32 Index = NativeAssociations.Num() - 1; Index >= 0; --Index)
+	{
+		if (NativeAssociations[Index].Producer != Component) continue;
+		RetiringActors.Add(NativeAssociations[Index].Actor);
+		NativeAssociations.RemoveAt(Index);
+	}
+	RetireRecipe(Component); //10158520 ->10045110 precedes native deletion and observer callbacks.
+	for (void* Actor : RetiringActors)
+	{
+		TArray<FElysiumEntity*> Referencing;
+		for (const FNativeReference& Entry : NativeReferences)
+			if (Entry.Actor == Actor) Referencing.Add(Entry.Entity);
+		for (FElysiumEntity* Entity : Referencing)
+			Entity->VPhysicsSwapObject(nullptr);
+		for (FElysiumEntity* Entity : Referencing)
+		{
+			Entity->OnPhysicsActorRetired();
+			if (Entity->World)
+				Entity->World->EmitAiTrace(*Entity, TEXT("physics_retire"), TEXT("references=0 recipe=0 native_release=pending"));
+		}
+	}
+}
+
+void ElysiumModelPhysics::DestroyActor(void* Actor)
+{
+	Destroy(ComponentFor(Actor)); // generic225 destroys the supplied object, including an alias.
 }
 
 const FElysiumPhysicsBodyRecipe* ElysiumModelPhysics::RecipeFor(void* Actor)
@@ -79,26 +128,32 @@ bool ElysiumModelPhysics::Capture(void* Actor, FElysiumSavedPhysicsBody& OutStat
 	OutState.Pose = NativeBody->GetUnrealWorldTransform();
 	OutState.LinearVelocity = NativeBody->GetUnrealWorldVelocity();
 	OutState.AngularVelocityRadians = NativeBody->GetUnrealWorldAngularVelocityInRadians();
-	OutState.bAsleep = !NativeBody->IsInstanceAwake();
+	OutState.bAsleep = !Recipe->bStatic && !NativeBody->IsInstanceAwake();
 	OutState.bGravity = NativeBody->bEnableGravity;
-	OutState.CurrentMassKg = NativeBody->GetBodyMass();
+	OutState.CurrentMassKg = Recipe->bStatic ? Recipe->MassKg : NativeBody->GetBodyMass();
 	OutState.CurrentLinearDamping = NativeBody->LinearDamping;
 	OutState.CurrentAngularDamping = NativeBody->AngularDamping;
 	OutState.CollisionProfile = Component->GetCollisionProfileName();
 	OutState.CollisionMask = NativeBody->GetMaskFilter();
+	OutState.CollisionResponses.Reset();
+	// EngineTypes.h: only the 64 response-container entries; deprecated pseudochannel has no entry.
+	for (int32 Channel = 0; Channel < NativeResponseChannelCount; ++Channel)
+		OutState.CollisionResponses.Add(static_cast<uint8>(Component->GetCollisionResponseToChannel(static_cast<ECollisionChannel>(Channel))));
+	if (Recipe->Kind == EElysiumPhysicsRecipeKind::Bbox)
+		OutState.BboxCollisionEnabled = static_cast<uint8>(NativeBody->GetShapeCollisionEnabled(0));
 	return true;
 }
 
 FBodyInstance* ElysiumModelPhysics::Identity(UStaticMeshComponent* Component)
 {
 	FBodyInstance* Body = Component && !Component->IsBeingDestroyed() ? Component->GetBodyInstance() : nullptr;
-	return Body && Body->IsValidBodyInstance() && Component->IsSimulatingPhysics() ? Body : nullptr;
+	return Body && Body->IsValidBodyInstance() ? Body : nullptr;
 }
 
 bool ElysiumModelPhysics::IsActive(UStaticMeshComponent* Component)
 {
 	const FBodyInstance* Body = Identity(Component);
-	return Body && Body->IsInstanceAwake();
+	return Body && Component->IsSimulatingPhysics() && Body->IsInstanceAwake();
 }
 
 Chaos::FSingleParticlePhysicsProxy* ElysiumModelPhysics::ActorIdentity(UStaticMeshComponent* Component)
@@ -111,7 +166,7 @@ void ElysiumModelPhysics::Destroy(UStaticMeshComponent* Component)
 {
 	if (Component)
 	{
-		RetireRecipe(Component); // 10158520: recipe removal precedes environment/native deletion.
+		RetireNative(Component); // fields and recipe retire before environment/native deletion.
 		Component->SetSimulatePhysics(false);
 		Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		// Collision changes can create a native static actor even for a non-simulating component.
@@ -235,7 +290,8 @@ bool CreatePhysicsRecipe(UStaticMeshComponent* Component, FElysiumPhysicsSurface
 	Component->SetAngularDamping(Recipe.AngularDamping);
 	Component->SetMassOverrideInKg(NAME_None, Mass, true);
 	Component->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	Component->SetSimulatePhysics(true);
+	Component->SetMobility(Recipe.bStatic ? EComponentMobility::Static : EComponentMobility::Movable);
+	Component->SetSimulatePhysics(!Recipe.bStatic);
 	if (Recipe.Kind == EElysiumPhysicsRecipeKind::Bbox) Component->RecreatePhysicsState();
 	FBodyInstance* Body = ElysiumModelPhysics::Identity(Component);
 	if (!Body) { ElysiumModelPhysics::Destroy(Component); OutError = TEXT("Chaos body creation failed"); return false; }
@@ -245,8 +301,12 @@ bool CreatePhysicsRecipe(UStaticMeshComponent* Component, FElysiumPhysicsSurface
 		MassSpace.SetTranslation(Recipe.MassCenterCm * Component->GetComponentScale());
 		Body->SetMassSpaceLocal(MassSpace);
 	}
-	if (bStartAsleep) Body->PutInstanceToSleep();
-	else Body->WakeInstance();
+	if (!Recipe.bStatic)
+	{
+		if (bStartAsleep) Body->PutInstanceToSleep();
+		else Body->WakeInstance();
+	}
+	NativeAssociations.Add({ ElysiumModelPhysics::ActorIdentity(Component), Component, Component });
 	FPhysicsRecipeAssociation& Entry = PhysicsRecipeAssociations.AddDefaulted_GetRef();
 	Entry.Actor = ElysiumModelPhysics::ActorIdentity(Component);
 	Entry.Producer = Component;
@@ -267,12 +327,22 @@ bool ElysiumModelPhysics::Restore(UStaticMeshComponent* Component, FElysiumPhysi
 		|| !FMath::IsFinite(State.CurrentLinearDamping) || State.CurrentLinearDamping < 0.f
 		|| !FMath::IsFinite(State.CurrentAngularDamping) || State.CurrentAngularDamping < 0.f)
 	{ OutError = TEXT("invalid saved native body state"); return false; }
+	if (State.CollisionResponses.Num() != NativeResponseChannelCount
+		|| State.CollisionResponses.ContainsByPredicate([](uint8 Response) { return Response > ECR_Block; })
+		|| (State.Recipe.Kind == EElysiumPhysicsRecipeKind::Bbox && State.BboxCollisionEnabled > ECollisionEnabled::QueryAndProbe))
+	{ OutError = TEXT("invalid saved native query filter state"); return false; }
+	Component->SetMobility(EComponentMobility::Movable);
 	Component->SetWorldTransform(State.Pose, false, nullptr, ETeleportType::TeleportPhysics);
 	Component->SetEnableGravity(State.bGravity);
 	if (!State.CollisionProfile.IsNone()) Component->SetCollisionProfileName(State.CollisionProfile);
 	Component->SetMaskFilterOnBodyInstance(State.CollisionMask);
 	if (!CreatePhysicsRecipe(Component, Surfaces, State.Recipe, State.bAsleep, OutError)) return false;
+	if (State.CollisionResponses.Num() == NativeResponseChannelCount)
+		for (int32 Channel = 0; Channel < NativeResponseChannelCount; ++Channel)
+			Component->SetCollisionResponseToChannel(static_cast<ECollisionChannel>(Channel), static_cast<ECollisionResponse>(State.CollisionResponses[Channel]));
 	FBodyInstance* Body = Identity(Component);
+	if (State.Recipe.Kind == EElysiumPhysicsRecipeKind::Bbox)
+		Body->SetShapeCollisionEnabled(0, static_cast<ECollisionEnabled::Type>(State.BboxCollisionEnabled));
 	Component->SetMassOverrideInKg(NAME_None, State.CurrentMassKg, true);
 	if (State.Recipe.bMassCenter)
 	{
@@ -282,9 +352,12 @@ bool ElysiumModelPhysics::Restore(UStaticMeshComponent* Component, FElysiumPhysi
 	}
 	Component->SetLinearDamping(State.CurrentLinearDamping);
 	Component->SetAngularDamping(State.CurrentAngularDamping);
-	Body->SetLinearVelocity(State.LinearVelocity, false);
-	Body->SetAngularVelocityInRadians(State.AngularVelocityRadians, false);
-	if (State.bAsleep) Body->PutInstanceToSleep();
-	else Body->WakeInstance();
+	if (!State.Recipe.bStatic)
+	{
+		Body->SetLinearVelocity(State.LinearVelocity, false);
+		Body->SetAngularVelocityInRadians(State.AngularVelocityRadians, false);
+		if (State.bAsleep) Body->PutInstanceToSleep();
+		else Body->WakeInstance();
+	}
 	return true; // 100443e0 re-registers only the actual successful reconstructed object.
 }

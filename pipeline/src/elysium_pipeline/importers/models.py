@@ -605,6 +605,14 @@ def _body_inputs(extension: dict) -> dict:
     result = {"version": 1, "sourceBody": bool(physics.get("solids") and first is not None),
               "solidPairs": pairs,
               "firstSolidHullCount": len((physics.get("solids") or [{}])[0].get("hulls") or ())}
+    header = (extension.get("mdl") or {}).get("header") or {}
+    if "hullMin" in header and "hullMax" in header:
+        # engine200a3c90 copies MDL180/192 into model bounds; not view or .phy bounds.
+        lo = source_to_unreal(*header["hullMin"])
+        hi = source_to_unreal(*header["hullMax"])
+        result["studioMinsCm"] = [lo[0], hi[1], lo[2]]
+        result["studioMaxsCm"] = [hi[0], lo[1], hi[2]]
+        result["studioSurfaceProperty"] = header.get("surfaceProperty", "")
     for pair in pairs:
         if pair["key"].lower() == "masscenter":
             parts = pair["value"].split()
